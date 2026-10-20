@@ -86,12 +86,12 @@
     sanctuary: { name: 'Sanctuary', cd: 11, icon: 'sun', desc: 'Heal nearby allies 25% and consecrate the ground: allies inside take 35% less damage, foes burn.' },
     legion: { name: 'Raise Legion', cd: 12, icon: 'skull', desc: 'Summon 3 skeletal minions for 12 seconds. Kills may also raise minions.' },
     // Second skill (L): one per class, cooldown reduction applies like the first.
-    bulwark: { name: 'Bulwark', cd: 9, icon: 'shieldgold', desc: 'Raise your shield toward your aim for 1.4s, moving at half speed. Blocks up to 6 hits from the front and turns arrows back (15 + weapon damage). On release, bash for 20 + 1.2x weapon damage, +25% per block.' },
-    rain: { name: 'Rain of Arrows', cd: 10, icon: 'arrow', desc: 'Mark a point within 260. After 0.35s arrows fall for 2s over radius 80, hitting every foe inside each 0.25s for 4 + 0.45x weapon damage.' },
-    meteor: { name: 'Meteor', cd: 12, icon: 'star', desc: 'Call a meteor to a point within 300. After 0.9s it lands (radius 95) for 30 + 3.5x weapon damage, knocks foes back, adds Burn worth 50% of the impact and leaves a burning crater for 3s.' },
-    vanish: { name: 'Vanish', cd: 11, icon: 'mask', desc: 'Drop smoke (radius 75, 3s): foes inside are slowed 40% and cannot start attacks. Foes lose track of you for 2.5s; your next attack is an Ambush, a guaranteed crit for +150% damage. Attacking ends stealth.' },
-    judgment: { name: 'Judgment', cd: 9, icon: 'axe', desc: 'Throw a hammer that flies out for 0.55s and returns, piercing. Each leg hits a foe once for 18 + 1.4x weapon damage and Judges it for 4s (+20% damage taken). A judged foe dying heals allies within 160 by 3% max HP.' },
-    harvest: { name: 'Bone Harvest', cd: 10, icon: 'blades', desc: 'Each of your minions explodes (radius 60, 24 + 1.8x weapon damage) and heals you 3% max HP. Then raise 1 minion for 12s, or 2 if you had none.' },
+    bulwark: { name: 'Bulwark', cd: 9, icon: 'bulwark', desc: 'Raise your shield toward your aim for 1.4s, moving at half speed. Blocks up to 6 hits from the front and turns arrows back (15 + weapon damage). On release, bash for 20 + 1.2x weapon damage, +25% per block.' },
+    rain: { name: 'Rain of Arrows', cd: 10, icon: 'rain', desc: 'Mark a point within 260. After 0.35s arrows fall for 2s over radius 80, hitting every foe inside each 0.25s for 4 + 0.45x weapon damage.' },
+    meteor: { name: 'Meteor', cd: 12, icon: 'meteor', desc: 'Call a meteor to a point within 300. After 0.9s it lands (radius 95) for 30 + 3.5x weapon damage, knocks foes back, adds Burn worth 50% of the impact and leaves a burning crater for 3s.' },
+    vanish: { name: 'Vanish', cd: 11, icon: 'vanish', desc: 'Drop smoke (radius 75, 3s): foes inside are slowed 40% and cannot start attacks. Foes lose track of you for 2.5s; your next attack is an Ambush, a guaranteed crit for +150% damage. Attacking ends stealth.' },
+    judgment: { name: 'Judgment', cd: 9, icon: 'hammer', desc: 'Throw a hammer that flies out for 0.55s and returns, piercing. Each leg hits a foe once for 18 + 1.4x weapon damage and Judges it for 4s (+20% damage taken). A judged foe dying heals allies within 160 by 3% max HP.' },
+    harvest: { name: 'Bone Harvest', cd: 10, icon: 'harvest', desc: 'Each of your minions explodes (radius 60, 24 + 1.8x weapon damage) and heals you 3% max HP. Then raise 1 minion for 12s, or 2 if you had none.' },
   };
 
   ED.weaponUnlocked = (cls, idx, masteryLevel) => idx === 0 || (idx === 1 && masteryLevel >= 3) || (idx === 2 && masteryLevel >= 6);

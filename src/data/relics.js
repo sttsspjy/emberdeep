@@ -39,7 +39,7 @@
     chalice: { name: 'Blood Chalice', rar: 'l', icon: 'chalice', desc: '+1 max health per 3 kills this descent (max +60).', mods: { chalice: 1 }, cost: 115, req: { boss: 4 } },
     skull: { name: 'Cursed Skull', rar: 'l', icon: 'skull', desc: 'Take 30% more damage. Earn 50% more embers this descent.', mods: { vuln: 0.3, emberBonus: 0.5 }, cost: 90 },
     ledger: { name: "Merchant's Ledger", rar: 'r', icon: 'scroll', desc: 'Shop prices are 25% lower.', mods: { discount: 0.25 }, cost: 50 },
-    stone: { name: "Philosopher's Stone", rar: 'l', icon: 'gem', desc: '+5% damage and +5 max health per relic held.', mods: { stone: 1 }, cost: 130, req: { boss: 5 } },
+    stone: { name: "Philosopher's Stone", rar: 'l', icon: 'gem', desc: '+2% damage and +2 max health per relic held.', mods: { stone: 1 }, cost: 130, req: { boss: 5 } },
     clover: { name: 'Four-Leaf Clover', rar: 'r', icon: 'clover', desc: '+1 boon reroll each stratum and better rarity.', mods: { cloverRerolls: 1, luck: 0.1 }, cost: 60 },
     aegis: { name: 'Aegis Charm', rar: 'e', icon: 'shieldgold', desc: 'Every 10 seconds, block the next hit completely.', mods: { aegis: 1 }, cost: 85 },
     // appended: the save code indexes non-start relics by position

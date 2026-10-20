@@ -33,7 +33,7 @@
 
   // Called once per hero from enterStratum (after downed/dead heroes are restored).
   W.onStratumBuild = function (p, s) {
-    const prov = 0.15 * ((p.meta.up && p.meta.up[ED.UPGRADE_IDX.provisions]) || 0);
+    const prov = 0.1 * ((p.meta.up && p.meta.up[ED.UPGRADE_IDX.provisions]) || 0);
     const heal = prov + (p.stats.strataHeal || 0);
     if (s > 1 && heal > 0) this.healPlayer(p, p.maxHp * heal);
     p.angelUsed = false;
@@ -95,13 +95,13 @@
   W.affinity = function (p, path) { return ED.pathAffinity(p.boons, path); };
   W.pathsOf = function (p) { return ED.gatePaths(p.boons); };
 
-  // Evolution paths the hero may take now: affinity >= 5, keystone owned, no evolution yet.
+  // Evolution paths the hero may take now: affinity >= EVO_AFFINITY, keystone owned, no evolution yet.
   W.evoPaths = function (p) {
     const out = [];
     if (p.evo) return out;
     for (const k of ED.PATH_IDS) {
       const id = 'evo_' + k;
-      if (!ED.BOONS[id] || p.boons[id] || ED.pathAffinity(p.boons, k) < 5) continue;
+      if (!ED.BOONS[id] || p.boons[id] || ED.pathAffinity(p.boons, k) < ED.EVO_AFFINITY) continue;
       if (Object.keys(p.boons).some(b => ED.BOONS[b] && ED.BOONS[b].key && ED.BOONS[b].path === k)) out.push(k);
     }
     return out;
@@ -123,7 +123,7 @@
       if ((p.boons[id] || 0) >= (b.max || 5)) return false;
       if (b.duo) return b.duo.every(k => owned.includes(k));
       if (b.gate) return owned.length < ED.MAX_GATES && !owned.includes(b.path);
-      if (b.path) return owned.includes(b.path) && (!b.key || aff[b.path] >= 3);
+      if (b.path) return owned.includes(b.path) && (!b.key || aff[b.path] >= ED.KEY_AFFINITY);
       return true;
     };
     const weight = (id) => {

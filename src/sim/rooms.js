@@ -43,7 +43,7 @@
     const s = this.stratum, n = this.partySize(), dr = this.dread;
     const biome = ED.biomeFor(s), isElite = room.type === 'elite';
     const nW = 2 + (this.pact >= 10 ? 1 : 0);
-    const budget = (7 + 2 * s) * (1 + 0.35 * (n - 1)) * (this.tutorial && s === 1 ? 0.75 : 1) * (room.danger || 1) * dr.wave * (isElite ? 0.85 : 1);
+    const budget = (7 + 2 * s) * this.threat().wave * (1 + 0.6 * (n - 1) + 0.2 * (n - 1) * (n - 2)) * (this.tutorial && s === 1 ? 0.75 : 1) * (room.danger || 1) * dr.wave;
     let roster = rosterOf(biome);
     if (s >= 2 && this.rng.chance(0.35)) {
       const prev = rosterOf(ED.biomeFor(s - 1)).map(([id, w]) => [id, w * 0.35]);
@@ -235,7 +235,7 @@
   W.priceOf = function (it) {
     const s = this.stratum;
     let base;
-    if (it.type === 'oil') base = 25 + 10 * s;
+    if (it.type === 'oil') base = 30 + 12 * s;
     else if (it.type === 'forge') base = 60 + 15 * s;
     else base = (it.type === 'relic' ? ED.RELIC_PRICE[ED.RELICS[it.item].rar] : it.type === 'boon' ? 75 : 30) * (1 + 0.12 * (s - 1));
     let favor = 0, discount = 0;
@@ -278,8 +278,8 @@
           if (allClaimed(this, pr.group)) pr.state = 1;
         } else {
           pr.state = 1;
-          if (item === 'gold') this.dropGold(pr.x, pr.y + 18, (15 + 8 * s) * this.dread.gold);
-          else if (item === 'oil') this.addLight(25, pr.x, pr.y);
+          if (item === 'gold') this.dropGold(pr.x, pr.y + 18, ED.World.rewardGold(s, this.dread.gold), true);
+          else if (item === 'oil') this.addLight(15, pr.x, pr.y);
           else if (item === 'relic') this.spawnRelicChoices(pr.x, pr.y + 46, 'r');
         }
         this.emit({ t: 'claim', pid, item, x: pr.x, y: pr.y });
@@ -318,7 +318,7 @@
         else if (pr.stype === 'potion') this.healPlayer(p, p.maxHp * 0.4);
         else if (pr.stype === 'boon') offer(this, p, { src: 'epic' });
         else if (pr.stype === 'forge') offer(this, p, { src: 'forge' });
-        else if (pr.stype === 'oil') this.addLight(30, pr.x, pr.y);
+        else if (pr.stype === 'oil') this.addLight(15, pr.x, pr.y);
         break;
       }
       case 'fountain': {

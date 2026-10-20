@@ -99,18 +99,21 @@
     return { stratum, seed, rooms, start: 0, boss: boss.id };
   };
 
-  // Rewards are fixed per floor and shown before entry. Normal combat: boon:<path> (each path <= 2x), gold, vigor, forge, oil, class
-  // with >= 3 boon rooms and >= 1 oil. Elite: relic / epic, alternating from a random start.
+  // Rewards are fixed per floor and shown before entry. Normal combat: boon:<path> (each path <= 2x), gold, vigor, forge, oil, class,
+  // each kind getting its REWARD_ODDS share of the floor's combat rooms (rounded by weighted draw on the remainders). Elite: relic / epic, alternating from a random start.
   function assignRewards(rooms, stratum, seed) {
     const rng = U.RNG((seed ^ 0x5bd1e995) + stratum * 15485863);
     const combat = rooms.filter(r => r.type === 'combat'), elites = rooms.filter(r => r.type === 'elite');
-    for (const r of combat) r.reward = rng.weighted(REWARD_ODDS, o => o[1])[0];
-    const count = (k) => combat.filter(r => r.reward === k).length;
-    while (count('boon') < 3) rng.pick(combat.filter(r => r.reward !== 'boon' && !(r.reward === 'oil' && count('oil') === 1))).reward = 'boon';
-    if (!count('oil')) {
-      const spare = combat.filter(r => r.reward !== 'boon');
-      rng.pick(spare.length ? spare : combat).reward = 'oil'; // all-boon floor has >= 5 boon rooms, so one can turn into oil
+    const total = REWARD_ODDS.reduce((a, o) => a + o[1], 0);
+    const quota = REWARD_ODDS.map(o => combat.length * o[1] / total), counts = quota.map(Math.floor);
+    const rest = quota.map((q, i) => ({ i, f: q - counts[i] }));
+    for (let left = combat.length - counts.reduce((a, c) => a + c, 0); left > 0; left--) {
+      const p = rng.weighted(rest, x => x.f); counts[p.i]++; p.f = 0;
     }
+    const bag = [];
+    counts.forEach((c, i) => { for (let k = 0; k < c; k++) bag.push(REWARD_ODDS[i][0]); });
+    rng.shuffle(bag);
+    combat.forEach((r, i) => { r.reward = bag[i]; });
     const used = {};
     for (const r of combat) {
       if (r.reward !== 'boon') continue;

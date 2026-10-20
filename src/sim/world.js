@@ -126,19 +126,25 @@
     this.tutorial = !!opts.tutorial;
     for (const pd of opts.players) this.addPlayer(pd);
   };
-  W.xpFor = (L) => Math.round(24 + 10 * (L - 1) + 1.2 * (L - 1) * (L - 1));
+  W.xpFor = (L) => Math.round(30 + 3 * (L - 1) + 6 * (L - 1) * (L - 1)); // xp from level L to L+1
   // Dread tiers by light fraction (>= 0.5, >= 0.25, > 0, 0): foe hp/damage, elite chance, wave budget, room gold & embers.
   W.DREAD = [
     { tier: 0, hp: 1, dmg: 1, elite: 0, wave: 1, gold: 1 },
-    { tier: 1, hp: 1.12, dmg: 1.12, elite: 0.1, wave: 1.05, gold: 1.5 },
-    { tier: 2, hp: 1.25, dmg: 1.25, elite: 0.2, wave: 1.15, gold: 2 },
-    { tier: 3, hp: 1.4, dmg: 1.4, elite: 0.35, wave: 1.25, gold: 2 },
+    { tier: 1, hp: 1.2, dmg: 1, elite: 0.12, wave: 1.08, gold: 1.5 },
+    { tier: 2, hp: 1.45, dmg: 1.1, elite: 0.25, wave: 1.2, gold: 2 },
+    { tier: 3, hp: 1.8, dmg: 1.25, elite: 0.4, wave: 1.3, gold: 2 },
   ];
-  W.DRAIN_SECS = [270, 280, 290, 300, 310, 320]; // seconds for a full unupgraded lantern to burn out, per stratum
+  // Per-stratum threat on top of the base scales: foe HP, wave budget, extra cooldown recovery (0.2 = attack timers tick 20% faster, -0.2 = 20% slower) and the boss pause between attacks (x).
+  W.THREAT = [{ hp: 3, dmg: 0.5, wave: 1, cd: -0.4, pause: 2 }, { hp: 3, dmg: 0.6, wave: 1, cd: -0.3, pause: 1.7 }, { hp: 3, dmg: 1, wave: 1.05, cd: -0.1, pause: 1.4 }, { hp: 1.6, dmg: 1, wave: 1.1, cd: 0, pause: 1.2 }, { hp: 4, dmg: 1, wave: 1.2, cd: 0.15, pause: 1 }, { hp: 2.55, dmg: 1, wave: 1.3, cd: 0.3, pause: 0.9 }];
+  W.DRAIN_SECS = [250, 220, 205, 200, 200, 200]; // seconds for a full unupgraded lantern to burn out, per stratum
 
+  // Gold dropped by a 'gold' room reward (shared with the UI): 15 + 8 per stratum, times the dread gold bonus and the global gold multiplier.
+  W.rewardGold = (stratum, dreadGold) => Math.round((15 + 8 * stratum) * (dreadGold || 1) * W.GOLD_MUL);
+  W.GOLD_MUL = 0.65; // every gold drop (kills, rooms, chests, rewards) is scaled by this; shops sell at full price
+  W.prototype.threat = function () { return W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, this.stratum - 1))]; };
   W.prototype.emit = function (ev) { this.fx.push(ev); };
   W.prototype.partySize = function () { return Math.max(1, this.players.size); };
-  W.prototype.partyHpMul = function () { return 1 + 0.65 * (this.partySize() - 1); };
+  W.prototype.partyHpMul = function () { const n = this.partySize() - 1; return 1 + 1.1 * n + 0.35 * n * (n - 1); };
   W.prototype.alive = function (p) { return p && !p.downed && !p.dead; };
   W.prototype.alivePlayers = function () { const out = []; for (const p of this.players.values()) if (!p.downed && !p.dead) out.push(p); return out; };
   W.prototype.hostiles = function () { let n = 0; for (const e of this.enemies) if (e.hp > 0 && !e.def.gloom) n++; return n; };
@@ -323,7 +329,7 @@
 
   W.prototype.summary = function () {
     const players = {};
-    for (const p of this.players.values()) players[p.pid] = { cls: p.cls, name: p.name, kills: p.kills, dealt: Math.round(p.dealt), emberBonus: p.stats.emberBonus || 0, relics: p.relics.length };
+    for (const p of this.players.values()) players[p.pid] = { cls: p.cls, name: p.name, kills: p.kills, dealt: Math.round(p.dealt), emberBonus: p.stats.emberBonus || 0, relics: p.relics.length, evo: p.stats.evo || null };
     return {
       victory: this.victory, retreat: !!this.retreat, abandoned: !!this.abandoned, stratum: this.stratum, time: Math.round(this.time), kills: this.run.kills,
       roomsCleared: this.run.roomsCleared, elitesKilled: this.run.elitesKilled, bosses: this.run.bosses, bossCount: this.run.bossCount,
@@ -395,7 +401,7 @@
       p.hzT = (p.hzT || 0) - dt;
       if (p.hzT <= 0) {
         const s = this.stratum;
-        const dmg = hz === 'spikes' ? 6 : hz === 'poison' ? 4 : hz === 'lava' ? 9 : hz === 'void' ? 8 : 0;
+        const dmg = hz === 'spikes' ? 6 : hz === 'poison' ? 4 : hz === 'lava' ? 6 : hz === 'void' ? 6 : 0; // damage per tick; every floor hazard stays near 7-10 damage per second
         if (dmg) this.hurtPlayer(p, dmg * (1 + 0.2 * (s - 1)), { hazard: true });
         p.hzT = hz === 'spikes' ? 0.9 : 0.6;
       }
@@ -515,8 +521,8 @@
     this.pickups.push({ id: U.uid(), kind, x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, val, t: 0 });
   };
 
-  W.prototype.dropGold = function (x, y, total) {
-    total = Math.round(total);
+  W.prototype.dropGold = function (x, y, total, exact) {
+    total = Math.round(exact ? total : total * W.GOLD_MUL);
     while (total > 0) { const v = Math.min(total, total > 30 ? 10 : total > 8 ? 4 : 1); this.spawnPickup('gold', x, y, v); total -= v; }
   };
   W.prototype.dropXp = function (x, y, total) {
@@ -563,7 +569,7 @@
   W.prototype.lanternMax = function () {
     let rank = 0;
     for (const p of this.players.values()) rank = Math.max(rank, (p.meta.up && p.meta.up[ED.UPGRADE_IDX.deepwick]) || 0);
-    return 100 * (1 + 0.1 * rank);
+    return 100 * (1 + 0.06 * rank);
   };
 
   // Burns the lantern outside boss rooms (the boss room freezes the tier) and, Lightless, stalks regular rooms with a Gloom.

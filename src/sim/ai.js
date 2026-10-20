@@ -18,6 +18,7 @@
   const hasLos = (w, e) => Sim.los(w.room, e.x, e.y, e.target.x, e.target.y, w.locked);
   const aimAt = (e) => Math.atan2(e.target.y - e.y, e.target.x - e.x);
   const rate = (e) => (e.elite === 'swift' ? 0.7 : 1);
+  const wind = (e, t) => Math.max(t * rate(e), Math.min(t, 0.4)); // swift foes shorten wind-ups but never below 0.4 s
   const tw = (e, t) => t * (e.windMul || 1);
   const blind = (e) => e.blind > 0;
 
@@ -79,7 +80,7 @@
   // Telegraphed dive (state 'dive'): fixed aim line, then a straight body-hit dash.
   const diveStart = (w, e, V) => {
     e.aimA = aimAt(e); e.face = Math.cos(e.aimA) > 0 ? 1 : -1;
-    e.st = 'windup'; e.t = V.windup * rate(e) * (e.windMul || 1);
+    e.st = 'windup'; e.t = wind(e, V.windup) * (e.windMul || 1);
     fixedLine(w, e, V.speed * V.dur + e.r, e.r * 2, e.t);
   };
   const diveTick = (w, e, dt, V) => {
@@ -111,7 +112,7 @@
     }
     const d = distT(e);
     if (L && e.cd <= 0 && d < L.range + e.r && hasLos(w, e) && !blind(e)) {
-      e.st = 'windup'; e.t = L.windup * rate(e) * (e.windMul || 1); e.aimA = Math.atan2(e.target.y - e.y, e.target.x - e.x);
+      e.st = 'windup'; e.t = wind(e, L.windup) * (e.windMul || 1); e.aimA = Math.atan2(e.target.y - e.y, e.target.x - e.x);
       e.face = Math.cos(e.aimA) > 0 ? 1 : -1;
       return;
     }
@@ -289,7 +290,7 @@
       return;
     }
     if (e.cd <= 0 && d < C.range && d > 50 && hasLos(w, e) && !blind(e)) {
-      e.st = 'windup'; e.t = C.windup * rate(e) * (e.windMul || 1);
+      e.st = 'windup'; e.t = wind(e, C.windup) * (e.windMul || 1);
       e.aimA = Math.atan2(e.target.y - e.y, e.target.x - e.x);
       e.face = Math.cos(e.aimA) > 0 ? 1 : -1;
       w.addZone({ kind: 'teleLine', x: e.x, y: e.y, a: e.aimA, len: C.speed * C.dur + e.r, w: e.r * 2, dur: e.t, team: 1, src: e, warnOnly: true, follow: e.id });
@@ -335,14 +336,14 @@
     }
     const d = distT(e);
     if (B && e.vars.bcd <= 0 && d < B.range && d > B.min && hasLos(w, e) && !blind(e)) {
-      e.st = 'windup'; e.vars.atk = 'bash'; e.t = B.windup * rate(e) * (e.windMul || 1);
+      e.st = 'windup'; e.vars.atk = 'bash'; e.t = wind(e, B.windup) * (e.windMul || 1);
       e.aimA = aimAt(e); e.guardA = e.aimA; e.face = Math.cos(e.aimA) > 0 ? 1 : -1;
       fixedLine(w, e, B.speed * B.dur + e.r, e.r * 2, e.t);
       return;
     }
     if (e.cd <= 0 && d < S.range + e.r && !blind(e)) {
       const claw = K && (e.vars.n = (e.vars.n || 0) + 1) % 2 === 0; // claw cone every other attack
-      e.st = 'windup'; e.vars.atk = claw ? 'claw' : 'slam'; e.t = (claw ? K.windup : S.windup) * rate(e) * (e.windMul || 1);
+      e.st = 'windup'; e.vars.atk = claw ? 'claw' : 'slam'; e.t = wind(e, claw ? K.windup : S.windup) * (e.windMul || 1);
       if (claw) {
         w.addZone({ kind: 'teleCone', x: e.x, y: e.y, a: aimAt(e), r: K.r, arc: K.arc, dur: e.t, dmg: e.dmg * K.mul, team: 1, src: e });
       } else {
@@ -527,7 +528,7 @@
     const d = distT(e);
     if (!blind(e)) {
       if (e.vars.lcd <= 0 && d > Lp.min && d < Lp.range && hasLos(w, e)) {
-        const total = Lp.total * rate(e) * (e.windMul || 1);
+        const total = wind(e, Lp.total) * (e.windMul || 1);
         e.st = 'windup'; e.vars.atk = 'leap'; e.t = Math.max(0.2, total - Lp.flight); e.vars.lcd = Lp.cd * rate(e);
         e.vars.to = { x: e.target.x, y: e.target.y };
         e.aimA = aimAt(e); e.face = Math.cos(e.aimA) > 0 ? 1 : -1;
@@ -535,7 +536,7 @@
         return;
       }
       if (e.cd <= 0 && d < Cl.range + e.r) {
-        e.st = 'windup'; e.vars.atk = 'cleave'; e.t = tw(e, Cl.windup) * rate(e);
+        e.st = 'windup'; e.vars.atk = 'cleave'; e.t = wind(e, Cl.windup) * (e.windMul || 1);
         e.aimA = aimAt(e); e.face = Math.cos(e.aimA) > 0 ? 1 : -1;
         w.addZone({ kind: 'teleCone', x: e.x, y: e.y, a: e.aimA, r: Cl.r, arc: Cl.arc, dur: e.t, dmg: e.dmg * Cl.mul, team: 1, src: e });
         return;

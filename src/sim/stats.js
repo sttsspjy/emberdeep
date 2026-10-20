@@ -29,14 +29,14 @@
     s.hp = cls.hp; s.armor = cls.armor; s.crit = cls.crit;
     const meta = build.meta || { up: [], mastery: 1 };
     const rk = (id) => (meta.up && meta.up[ED.UPGRADE_IDX[id]]) || 0;
-    s.hp += 10 * rk('vitality');
-    s.dmg += 0.05 * rk('might');
+    s.hp += 6 * rk('vitality');
+    s.dmg += 0.04 * rk('might');
     s.gold += 0.1 * rk('fortune');
     s.spd += 0.04 * rk('fleet');
-    s.armor += 3 * rk('bulwark');
-    s.crit += 0.03 * rk('precision');
-    s.xp += 0.1 * rk('wisdom');
-    s.cdr += 0.06 * rk('alacrity');
+    s.armor += 2 * rk('bulwark');
+    s.crit += 0.02 * rk('precision');
+    s.xp += 0.05 * rk('wisdom');
+    s.cdr += 0.04 * rk('alacrity');
     const ml = meta.mastery || 1;
     if (ml >= 2) s.dmg += 0.05;
     if (ml >= 4) s.hp += 10;
@@ -49,7 +49,7 @@
     for (const id in boons) if (ED.BOONS[id]) add(ED.BOONS[id].mods, boons[id]);
     const relics = build.relics || [];
     for (const id of relics) if (ED.RELICS[id]) add(ED.RELICS[id].mods, 1);
-    if (s.stone) { s.dmg += 0.05 * relics.length; s.hp += 5 * relics.length; }
+    if (s.stone) { s.dmg += 0.02 * relics.length; s.hp += 2 * relics.length; }
     s.hp += (build.chaliceHp || 0) + (build.bonusHp || 0);
 
     const out = s;

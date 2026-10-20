@@ -10,7 +10,7 @@
   const line = (w, e, x, y, a, len, width, dur, mul, warnOnly) => w.addZone({ kind: 'teleLine', x, y, a, len, w: width, dur, dmg: e.dmg * mul, team: 1, src: e, warnOnly });
   const cone = (w, e, a, r, arc, dur, mul, onEnd) => w.addZone({ kind: 'teleCone', x: e.x, y: e.y, a, r, arc, dur, dmg: e.dmg * mul, team: 1, src: e, onEnd });
   const ring = (w, e, n, speed, kind, off, mul, r) => { for (let i = 0; i < n; i++) w.enemyShoot(e, off + i * TAU / n, speed, kind, mul, r); w.emit({ t: 'shoot', x: Math.round(e.x), y: Math.round(e.y), k: kind }); };
-  const aim = (e) => Math.atan2(e.target.y - e.y, e.target.x - e.x);
+  const aim = (e) => (e.target ? Math.atan2(e.target.y - e.y, e.target.x - e.x) : e.aimA || 0); // late tele callbacks can fire with every hero down
   const mv = (w, e, dx, dy, speed, dt) => { const hit = Sim.moveCircle(e, dx * speed * dt, dy * speed * dt, w.room, w.locked, false); if (Math.abs(dx) > 0.1) e.face = dx > 0 ? 1 : -1; return hit; };
   // Queues telegraphed spawn zones; returns how long the attack should last.
   const summon = (w, e, list) => {
@@ -29,7 +29,7 @@
   };
 
   const runner = (attacks, opts) => (w, e, dt) => {
-    const phases = opts.phases || [0.5];
+    const phases = opts.phases || [0.66, 0.33]; // three phases: the last third attacks at the fastest tempo
     while (e.phase - 1 < phases.length && e.hp / e.maxHp < phases[e.phase - 1]) {
       e.phase++; e.invulnT = 1.0; e.st = 'idle'; e.t = 1.3; e.pose = 'roar';
       w.emit({ t: 'phase', p: e.phase, x: Math.round(e.x), y: Math.round(e.y), type: e.type });
@@ -41,7 +41,7 @@
       e.t += dt;
       if (attacks[e.atk].update(w, e, dt, e.t)) {
         e.st = 'idle'; e.pose = 'idle';
-        e.t = (e.phase >= 3 ? 0.45 : e.phase === 2 ? 0.7 : 1.05) * (w.pact >= 5 ? 0.8 : 1);
+        e.t = (e.phase >= 3 ? 0.45 : e.phase === 2 ? 0.7 : 1.05) * (w.pact >= 5 ? 0.8 : 1) * w.threat().pause;
       }
       return;
     }

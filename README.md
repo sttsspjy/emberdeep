@@ -32,7 +32,7 @@ Aiming is automatic by default. Switch to mouse aiming in Settings. Gamepads als
 
 ### The lantern and Dread
 
-Your lantern burns while you explore (not in boss rooms): a full lantern lasts roughly 4.5 to 5.5 minutes per stratum and refills when you enter the next one. Exploring more rooms means more power, but as the light drops the Deep grows stronger. Lantern oil (room rewards, shops) and the **Deep Wick** Hearth upgrade give more light.
+Your lantern burns while you explore (not in boss rooms): a full lantern lasts about 4 minutes in the first stratum and about 3 1/3 minutes from the fourth on and refills when you enter the next one. Exploring more rooms means more power, but as the light drops the Deep grows stronger. Lantern oil (room rewards, shops) and the **Deep Wick** Hearth upgrade give more light.
 
 | Light left | Tier | Foe health and damage | Elite chance | Room gold and embers |
 | --- | --- | --- | --- | --- |
@@ -61,7 +61,7 @@ Boons belong to six **paths**. A hero follows at most **three** paths per run. A
 - **Duo boons:** owning the gates of two paths unlocks boons that combine them (Thermal Shock, Plasma, Superconductor, Hemorrhage, Static Edge, Serrated Frost, Soulfire, Spirit Feast).
 - **Forge:** picking a forge card ranks an owned boon up by one.
 - A room that rewards "a boon of Pyre" offers Pyre boons (or the Pyre gate, if you have not opened that path). Level-ups offer neutral boons, boons of your paths, keystones, duos and your hero's class boons. The start of a descent lets you choose your first path from three gates.
-- Life steal exists only in the Blood path, and heals at most 2% of your max health per second. Damage over time never leeches.
+- Life steal exists only in the Blood path, and heals at most 1.2% of your max health per second. Damage over time never leeches.
 
 ### Elemental weaknesses
 
@@ -104,7 +104,7 @@ You start with the **Knight**, **Ranger** and **Pyromancer**. Each hero has thre
 
 ## Between descents (the Hearth)
 
-- **Embers** are earned on every descent that clears at least one room, win or lose. Spend them on 16 permanent upgrades, including **Deep Wick** (+10% lantern light per rank). Deeper strata reveal new upgrades.
+- **Embers** are earned on every descent that clears at least one room, win or lose. Spend them on 16 permanent upgrades, including **Deep Wick** (+6% lantern light per rank). Deeper strata reveal new upgrades.
 - **Relic Codex:** 42 relics. 16 are available from the start; unlock the other 26 so they can appear in runs.
 - **Heroes:** every descent trains the hero you took, up to mastery 10. Mastery unlocks weapons and permanent bonuses.
 - **Deeds:** 26 achievements with ember rewards (including Evolved, Into the Dark and Cartographer).
@@ -188,6 +188,7 @@ The simulation code runs headless in Node, so balance can be measured with bot p
 node tools/sim.js 1 12 0.75 none      # 12 solo runs, fresh profile
 node tools/sim.js 1 12 0.75 max - 5   # fully upgraded, every hero ("-"), Pact 5
 node tools/journey.js 0.7 1           # a whole player journey from a fresh save
+node tools/simpool.js 1 384 0.75 none,mid,max --pick=smart   # same bots in parallel, one line per profile
 ```
 
-Balance figures: see docs/GAME-DESIGN.md §10
+Current bot results (skill 0.75, smart picks, 384 runs each): fresh profile 1% wins, half-upgraded 31%, fully upgraded 71%, fully upgraded with Pact 5 24%; mid-profile parties of 2 and 3 win 58% and 64%. A winning descent takes about 27 minutes. Targets live in docs/GAME-DESIGN.md §10.

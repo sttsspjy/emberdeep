@@ -11,10 +11,25 @@ Canonical rules and numbers. Code follows this file; balance passes may retune n
 
 ## 1. Damage model
 
-- Enemy HP scale by stratum `s`: `1 + 0.65(s−1) + 0.08(s−1)²` (unchanged). Enemy damage scale: `1 + 0.22(s−1) + 0.03(s−1)²`.
+- Foe HP = base × `1 + 0.65(s−1) + 0.08(s−1)²` × **threat HP** (table below) × party multiplier. Foe damage = base × `1 + 0.22(s−1) + 0.03(s−1)²` × **threat damage** (below 1 only in strata I–III). Boss HP is absolute (table below), scaled by party, pact and dread.
+- **Threat** per stratum (`World.THREAT`): HP ×, damage ×, wave budget ×, attack-cooldown rate (foe cooldowns tick faster by this fraction, negative = slower; wind-ups never change), boss pause × (time between boss attacks):
+
+| Stratum | HP × | Damage × | Wave × | Cooldown rate | Boss pause × |
+|---|---|---|---|---|---|
+| I | 3 | 0.5 | 1 | −40% | 2 |
+| II | 3 | 0.6 | 1 | −30% | 1.7 |
+| III | 3 | 1 | 1.05 | −10% | 1.4 |
+| IV | 1.6 | 1 | 1.1 | 0 | 1.2 |
+| V | 4 | 1 | 1.2 | +15% | 1 |
+| VI | 2.55 | 1 | 1.3 | +30% | 0.9 |
+
+- Boss HP: Bone Warden 4,700 · Sporemother 8,500 · Rimeheart 23,500 · Forgelord 33,500 · Drowned King 107,000 · Hollow King 145,000. Fights last 50–110 s; the exposed timers (45 s foes, 78 s bosses) still end stalled fights.
+- Elite HP × `2.8 + 0.6(s−1)` (damage ×1.25 as before). Elite rooms use the normal wave budget.
+- Party multiplier (n = other heroes): HP `1 + 1.1n + 0.35n(n−1)`, wave budget `1 + 0.6n + 0.2n(n−1)`; a downed hero bleeds out in 18 s when no ally revives them.
+- HP-relative statuses (chill build-up, Conflagration threshold, Wildfire) measure against foe HP before the stratum HP lever (bosses: `refHp`, the design HP 800–7,800), so inflating HP does not weaken Rime or Pyre.
 - Contact damage: touching a foe outside an attack state = `0.4 × dmg`, contact cooldown 1.0 s. Attack states (`lunge`, `charge`, leaps) = `1.0 × dmg`.
 - No weapon deflects projectiles passively (`deflect` removed). Projectiles are only stopped by: Knight's Bulwark, Spirit "Guardian Spirits" blades, Mirror Shard relic (chance).
-- Lifesteal exists only in the Blood path. Leech healing per hero is capped at **2% max HP per second** (rolling 1 s window). DoT ticks never leech.
+- Lifesteal exists only in the Blood path. Leech healing per hero is capped at **1.2% max HP per second** (rolling 1 s window). DoT ticks never leech.
 - Heart drop chance 4% (elites 40%).
 - Every hit's damage is the same no matter how it was produced; statuses build from **damage dealt, never from hit count**, so attack speed and damage scale them equally.
 
@@ -92,7 +107,7 @@ Six paths. A hero owns at most **3 gates** (path slots) per run. `affinity(path)
 ### Storm — `#ffe66b`, icon `bolt`
 | id | name | rar | max | effect |
 |---|---|---|---|---|
-| staticcharge | Static Charge (gate) | r | 1 | Hits charge foes with 50% of their damage; every second charged foes discharge to themselves and 3 nearby foes. `stormInfuse 0.5` |
+| staticcharge | Static Charge (gate) | r | 1 | Hits charge foes with 35% of their damage; every second charged foes discharge to themselves and 3 nearby foes. `stormInfuse 0.35` |
 | conductor | Conductor | r | 2 | +1 arc target, +30% arc range. `arcs 1, arcRange 0.3` |
 | highvoltage | High Voltage | r | 3 | Discharges deal +25%. `shockMul 0.25` |
 | thunderstep | Thunderstep | r | 1 | Foes you dash through take 100% weapon damage (infused). `dashShock 1` |
@@ -103,7 +118,7 @@ Six paths. A hero owns at most **3 gates** (path slots) per run. `affinity(path)
 ### Steel — `#d9dfe8`, icon `sword`
 | id | name | rar | max | effect |
 |---|---|---|---|---|
-| honededge | Honed Edge (gate) | r | 1 | +8% crit chance; crits make foes Bleed for 40% of the hit. `crit 0.08, bleed 0.4` |
+| honededge | Honed Edge (gate) | r | 1 | +6% crit chance; crits make foes Bleed for 30% of the hit. `crit 0.06, bleed 0.3` |
 | brutal | Brutality | r | 3 | +35% crit damage. `critDmg 0.35` |
 | keen | Keen Eye | c | 2 | +6% crit chance. `crit 0.06` |
 | lacerate | Lacerate | r | 2 | +15% damage to bleeding foes. `lacerate 0.15` |
@@ -114,9 +129,9 @@ Six paths. A hero owns at most **3 gates** (path slots) per run. `affinity(path)
 ### Blood — `#d43a5a`, icon `drop`
 | id | name | rar | max | effect |
 |---|---|---|---|---|
-| bloodpact | Blood Pact (gate) | r | 1 | Kills heal 1% max HP. Below 50% HP deal +15% damage. `killHealPct 0.01, berserk 0.15` |
-| leech | Leech | r | 2 | Heal 2.5% of damage dealt (cap 2% max HP/s). `leech 0.025` |
-| bloodrush | Bloodrush | r | 2 | Below 50% HP: +15% attack speed, +10% move speed. `bloodrush 0.15` |
+| bloodpact | Blood Pact (gate) | r | 1 | Kills heal 1% max HP. +20% damage, and +20% more below 50% HP. `killHealPct 0.01, berserk 0.2, dmg 0.2` |
+| leech | Leech | r | 2 | Heal 1.5% of damage dealt (cap 1.2% max HP/s). `leech 0.015` |
+| bloodrush | Bloodrush | r | 2 | +8% attack speed; below 50% HP: +15% attack speed, +10% move speed. `bloodrush 0.15, atk 0.08` |
 | transfusion | Transfusion | c | 1 | Kills drop a blood orb 20% of the time (heals 4% max HP). `bloodOrb 0.2` |
 | hemomancy | Hemomancy | r | 2 | Skills cost 4% current HP but deal +35%. `hemomancy 0.35` |
 | crimsontide | Crimson Tide (key) | e | 1 | Overhealing becomes a blood shield (max 25% max HP) that absorbs damage first. `bloodShield 0.25` |
@@ -196,27 +211,28 @@ Controls: K / X / right mouse = skill 1; L / C / E / middle mouse = skill 2; gam
 
 Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat `[5,5,6,6,6,6][s−1]`, elite combat `[1,1,1,2,2,2][s−1]` → 12–14 rooms. Grid bounds ±4, tree layout. Boss = farthest dead end, BFS distance ≥ 4. Utility rooms prefer dead ends; elite rooms prefer distance ≥ 3.
 
-- Wave budget × `danger = 1 + 0.05 × distance`. Elite rooms: 2 waves + 2 elites guaranteed (3 waves under Pact 10).
+- Wave budget = `(7 + 2s)` × threat wave × party × `danger = 1 + 0.05 × distance` × dread wave. Elite rooms: same budget, 2 waves + 2 elites guaranteed (3 waves under Pact 10).
 - **Rewards** are fixed at generation (deterministic from the floor seed) and shown on doors and the map before entering:
-  - normal combat: `boon:<path>` 50% (each path at most twice per floor) · `gold` 12% · `vigor` 10% · `forge` 10% · `oil` 10% · `class` 8%. Each floor has ≥ 3 `boon:*` and ≥ 1 `oil`.
+  - normal combat: `boon:<path>` 50% (each path at most twice per floor) · `gold` 12% · `vigor` 10% · `forge` 10% · `oil` 10% · `class` 8%. Each kind gets its share of the floor's combat rooms (shares rounded by a weighted draw on the remainders), so averages match the percentages: no minimum of boon or oil rooms.
   - elite: `relic` 50% · `epic` 50%.
-- On clear, a `reward` prop appears at the room centre. Per-hero claims: `boon:<path>` → room offer, `class`, `forge`, `epic`, `vigor` (+12 max HP via `p.bonusHp`, heal 20%). Party claims (once): `gold` (15 + 8s, × dread bonus), `oil` (+25 light), `relic` (relic hoard as from a chest).
+- On clear, a `reward` prop appears at the room centre. Per-hero claims: `boon:<path>` → room offer, `class`, `forge`, `epic`, `vigor` (+12 max HP via `p.bonusHp`, heal 20%). Party claims (once): `gold` (`round((15 + 8s) × dread bonus × 0.65)`), `oil` (+15 light), `relic` (relic hoard as from a chest).
 - **Rest site**: a campfire (heal 35%) and an anvil (forge offer); each hero uses one.
-- **Shop**: 2 relics (+1 with Merchant's Favor 2), epic boon, healing draught (40%), lantern oil (+30 light, `25 + 10s` gold), forge (`60 + 15s` gold).
-- XP per level: `round(24 + 10(L−1) + 1.2(L−1)²)`. Level-ups grant `level` offers.
+- **Shop**: 2 relics (+1 with Merchant's Favor 2), epic boon, healing draught (40%), lantern oil (+15 light, `30 + 12s` gold), forge (`60 + 15s` gold).
+- XP from level L to L+1: `round(30 + 3(L−1) + 6(L−1)²)` (a winning descent ends around level 17). Level-ups grant `level` offers.
+- Every gold drop (kills, room clears, chests, rewards, bosses) is scaled by ×0.65 (`World.GOLD_MUL`); shop prices are unchanged.
 
 ## 7. Lantern and Dread
 
-- `w.light` ∈ [0, lightMax]; `lightMax = 100 × (1 + 0.1 × Deep Wick rank)` (best in party). Refills to max at each stratum.
-- Drain per second = `100 / [270, 280, 290, 300, 310, 320][s−1]`, only while playing, not in the boss room, not during stratum transition (solo boon picking already freezes the world).
+- `w.light` ∈ [0, lightMax]; `lightMax = 100 × (1 + 0.06 × Deep Wick rank)` (best in party). Refills to max at each stratum.
+- Drain per second = `100 / [250, 220, 205, 200, 200, 200][s−1]`, only while playing, not in the boss room, not during stratum transition (solo boon picking already freezes the world).
 - **Dread tier** by `light / lightMax`: ≥ 0.5 Bright (0) · ≥ 0.25 Dim (1) · > 0 Dark (2) · 0 Lightless (3).
 
 | Tier | Foe HP & damage | Elite chance | Wave budget | Gold & embers from rooms |
 |---|---|---|---|---|
 | Bright | ×1 | +0 | ×1 | ×1 |
-| Dim | ×1.12 | +0.10 | ×1.05 | ×1.5 |
-| Dark | ×1.25 | +0.20 | ×1.15 | ×2 |
-| Lightless | ×1.4 | +0.35 | ×1.25 | ×2 |
+| Dim | HP ×1.2, damage ×1 | +0.12 | ×1.08 | ×1.5 |
+| Dark | HP ×1.45, damage ×1.1 | +0.25 | ×1.2 | ×2 |
+| Lightless | HP ×1.8, damage ×1.25 | +0.40 | ×1.3 | ×2 |
 
 - Applied at spawn through `w.dread = {hp, dmg}`. The boss takes the multiplier of the tier when its room is entered (light does not drain there).
 - **Lightless**: 4 s after entering a non-boss, non-start room, a telegraphed **Gloom** stalker spawns: invulnerable, passes through walls, speed 50, contact damage 35 × stratum damage scale, ignored by room-clear checks; despawns when you leave the room.
@@ -235,22 +251,30 @@ Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat
   - V **Drowned Reaver** (leaper): leaps to the hero's position (landing circle), cleaving cone on landing.
   - VI **Rift Caller** (summoner): opens a telegraphed rift that spawns 2 starspawn every 6 s.
   - **Gloom** (Lightless stalker, any stratum).
-- Each boss gains one new telegraphed attack.
+- Each boss gains one new telegraphed attack. Bosses have three phases (HP 66% / 33%; the Hollow King 60% / 30%); the pause between attacks is 1.05 / 0.7 / 0.45 s by phase × the stratum's boss pause. Swift elites shorten wind-ups but never below 0.4 s.
+- Floor hazards (spikes, poison, lava, void) hurt for 4-6 per tick (about 7-10 per second), scaled by 20% per stratum.
 
 ## 9. Hearth (meta)
 
-- New upgrade **Deep Wick** (tier 1): +10% lantern light per rank, costs 40/90/160.
+- New upgrade **Deep Wick** (tier 1): +6% lantern light per rank, costs 40/90/160.
+- Retuned steps: Vitality +6 max health, Might +4% damage, Provisions heal 10%, Bulwark +2 armor, Precision +2% crit, Wisdom +5% experience, Alacrity +4% skill recharge.
 - New deeds: Evolved (evolve a weapon, 40) · Into the Dark (defeat a boss while Lightless, 50) · Cartographer (clear every room of a stratum, 40).
 - Profile key `wickdeep.profile.v1`, save code prefix `WD1-`, peer prefix `wickdeep-v1-`. Old Emberdeep saves are not imported.
 
 ## 10. Balance targets (bots, `tools/sim.js`, skill 0.75)
 
-| Profile | Win rate | Avg depth |
-|---|---|---|
-| Fresh | ≤ 5% | 2.5–3.5 |
-| Half-upgraded | 25–40% | — |
-| Fully upgraded | 65–80% | — |
-| Fully upgraded, Pact 5 | 20–35% | — |
+Smart pick policy unless noted; 384 runs each, six heroes in rotation, `node tools/simpool.js 1 384 0.75 none,mid,max --pick=smart`.
 
-- Winning descent 22–32 min game time with ~70% of rooms explored.
-- No single boon or relic forced from the start raises the fresh-profile win rate by more than 15 points.
+| Profile | Target win | Measured | Target depth | Measured |
+|---|---|---|---|---|
+| Fresh, random picks | ≤ 5% | 1% | 2.5–3.5 | 2.4 |
+| Fresh, smart picks | ≤ 12% | 1% | 2.5–3.5 | 2.6 |
+| Half-upgraded | 25–40% | 31% | — | 4.8 |
+| Fully upgraded | 65–80% | 71% | — | 5.7 |
+| Fully upgraded, Pact 5 | 20–35% | 24% | — | 4.3 |
+| Two heroes, half-upgraded | 45–70% | 58% | — | 5.6 |
+| Three heroes, half-upgraded | 45–70% | 64% | — | 5.4 |
+
+- Pacing (half-upgraded): normal combat rooms 16 / 22 / 21 / 20 / 26 / 25 s per stratum (fresh 19 / 25 / 26 / 26 / 37 / 38 s), elite rooms 24-36 s (fresh 31-45 s), bosses 49 / 65 / 72 / 81 / 89 / 92 s (fresh 64-107 s). Strata I-II are the on-ramp: a fresh hero has 1-4 boons there, and longer rooms there fail the depth target.
+- Winning descent 25-28 min, final level 16-18. The lantern ends exploration on 44-66% of floors (rooms visited 77-91%); a bot that never turns back (explore-everything) wins 26% instead of 31% and reaches Lightless on 14% of floors instead of 6%.
+- Forced from the start (half-upgraded, smart, 384 runs): no gate raises the win rate above 39% (Pyre 37, Rime 32, Storm 35, Steel 39, Blood 28, Spirit 36; random start 31); no relic above +15 points (Hourglass 41%).

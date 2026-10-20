@@ -183,7 +183,7 @@
       ghost.boss = ghost.boss === undefined || ghost.bossId !== boss.id ? fr : Math.max(fr, ghost.boss - dt * 0.2); ghost.bossId = boss.id;
       panel(c, bx2 - 3 * k, by2 - 3 * k, bw2 + 6 * k, 18 * k, 4 * k, 'rgba(0,0,0,0.75)', '#5a4232');
       bar(c, bx2, by2, bw2, 12 * k, fr, boss.exposed ? '#ff9a3a' : '#c0392b', 'rgba(30,10,10,0.9)', ghost.boss);
-      const marks = boss.type === 'hollowking' ? [0.6, 0.3] : [0.5];
+      const marks = boss.type === 'hollowking' ? [0.6, 0.3] : [0.66, 0.33];
       for (const m of marks) { c.fillStyle = '#e6c27a'; c.fillRect(bx2 + bw2 * m - 1, by2 - 2 * k, 2, 16 * k); }
     }
 
