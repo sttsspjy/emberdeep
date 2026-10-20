@@ -6,8 +6,8 @@
   const W = ED.World.prototype;
 
   // ---------------- hooks called by world.js ----------------
-  // Called from addPlayer before the first recalc: add build-only fields to the hero.
-  W.initBuild = function (p) { p.offers = []; p.evo = null; p.bladeT = []; p.picks = 0; };
+  // Called from addPlayer before the first recalc: add build-only fields to the hero (offer queue, companion and dash-boon state).
+  W.initBuild = function (p) { p.offers = []; p.picks = 0; p.bladeT = []; p.orbHit = {}; p.wispT = 0; p.dashHit = null; p.dashTrail = 0; };
 
   // Queue an offer spec {src:'level'|'room'|'class'|'start'|'forge'|'epic', path?}; p.picks mirrors the queue length.
   W.grantOffer = function (p, spec) {
@@ -43,7 +43,6 @@
   // Called every tick from updatePlayer for a living, standing hero (after hazards).
   W.updatePlayerBuild = function (p, dt) {
     const st = p.stats;
-    if (st.regen > 0) this.healPlayer(p, st.regen * dt, true);
     if (st.aegis) p.aegisT = Math.max(0, p.aegisT - dt);
     p.guardCd -= dt; p.guardT -= dt; p.frozenCd -= dt; p.tranceT -= dt; p.wallT -= dt;
     this.updateSkills(p, dt);
@@ -92,13 +91,10 @@
     this.msgs.push({ to: p.pid, t: 'offer', boons: p.offer, rerolls: p.rerolls, picks: p.picks, src: sp.src, path: sp.path || null, forge: sp.src === 'forge' });
   };
 
-  W.affinity = function (p, path) { return ED.pathAffinity(p.boons, path); };
-  W.pathsOf = function (p) { return ED.gatePaths(p.boons); };
-
   // Evolution paths the hero may take now: affinity >= EVO_AFFINITY, keystone owned, no evolution yet.
   W.evoPaths = function (p) {
     const out = [];
-    if (p.evo) return out;
+    if (p.stats.evo) return out;
     for (const k of ED.PATH_IDS) {
       const id = 'evo_' + k;
       if (!ED.BOONS[id] || p.boons[id] || ED.pathAffinity(p.boons, k) < ED.EVO_AFFINITY) continue;
@@ -170,7 +166,6 @@
     if (spec.src === 'forge') return out;
     return this.evoPaths(p).map(k => 'evo_' + k).concat(out);
   };
-  W.rollBoons = function (p) { return this.rollOffer(p, { src: 'level' }); };
 
   W.pickBoon = function (pid, idx) {
     const p = this.players.get(pid);
@@ -178,7 +173,6 @@
     const id = p.offer[U.clamp(idx | 0, 0, p.offer.length - 1)];
     const b = ED.BOONS[id];
     p.boons[id] = (p.boons[id] || 0) + 1;
-    if (b.evo) p.evo = b.evo;
     this.recalc(p, false);
     if (b.heal) this.healPlayer(p, b.heal);
     if (b.mods.charges) p.chargeBonus = true;

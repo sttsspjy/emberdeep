@@ -32,7 +32,7 @@
   W.initSkills = function (p) {
     p.bulwarkT = 0; p.bulwarkEnd = 0; p.blocks = 0; p.blockSeen = {};
     p.stealthT = 0; p.ambush = false; p.ambushT = 0;
-    p.hammers = []; p.sipN = 4; p.sipT = 0;
+    p.hammers = []; p.sipN = 4; p.sipT = 0; p.critStacks = 0;
   };
 
   // Called from hurtPlayer before damage lands. Return true when a skill fully blocks the hit.

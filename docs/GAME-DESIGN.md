@@ -12,9 +12,9 @@ Canonical rules and numbers. Code follows this file; balance passes may retune n
 ## 1. Damage model
 
 - Foe HP = base × `1 + 0.65(s−1) + 0.08(s−1)²` × **threat HP** (table below) × party multiplier. Foe damage = base × `1 + 0.22(s−1) + 0.03(s−1)²` × **threat damage** (below 1 only in strata I–III). Boss HP is absolute (table below), scaled by party, pact and dread.
-- **Threat** per stratum (`World.THREAT`): HP ×, damage ×, wave budget ×, attack-cooldown rate (foe cooldowns tick faster by this fraction, negative = slower; wind-ups never change), boss pause × (time between boss attacks):
+- **Threat** per stratum (`World.THREAT`: `hp`, `dmg`, `wave`, `cdRate`, `pause`): HP ×, damage ×, wave budget ×, attack-cooldown rate `cdRate` (foe cooldowns tick faster by this fraction, negative = slower; wind-ups never change), boss pause × (time between boss attacks):
 
-| Stratum | HP × | Damage × | Wave × | Cooldown rate | Boss pause × |
+| Stratum | HP × | Damage × | Wave × | `cdRate` | Boss pause × |
 |---|---|---|---|---|---|
 | I | 3 | 0.5 | 1 | −40% | 2 |
 | II | 3 | 0.6 | 1 | −30% | 1.7 |
@@ -23,14 +23,14 @@ Canonical rules and numbers. Code follows this file; balance passes may retune n
 | V | 4 | 1 | 1.2 | +15% | 1 |
 | VI | 2.55 | 1 | 1.3 | +30% | 0.9 |
 
-- Boss HP: Bone Warden 4,700 · Sporemother 8,500 · Rimeheart 23,500 · Forgelord 33,500 · Drowned King 107,000 · Hollow King 145,000. Fights last 50–110 s; the exposed timers (45 s foes, 78 s bosses) still end stalled fights.
-- Elite HP × `2.8 + 0.6(s−1)` (damage ×1.25 as before). Elite rooms use the normal wave budget.
+- Boss HP: Bone Warden 4,700 · Sporemother 8,500 · Rimeheart 23,500 · Forgelord 33,500 · Drowned King 107,000 · Hollow King 145,000. Fights last 50–110 s; the exposed timers (45 s foes, 78 s bosses) end stalled fights.
+- Elite HP × `2.8 + 0.6(s−1)` (damage ×1.25). Elite rooms use the normal wave budget.
 - Party multiplier (n = other heroes): HP `1 + 1.1n + 0.35n(n−1)`, wave budget `1 + 0.6n + 0.2n(n−1)`; a downed hero bleeds out in 18 s when no ally revives them.
 - HP-relative statuses (chill build-up, Conflagration threshold, Wildfire) measure against foe HP before the stratum HP lever (bosses: `refHp`, the design HP 800–7,800), so inflating HP does not weaken Rime or Pyre.
-- Contact damage: touching a foe outside an attack state = `0.4 × dmg`, contact cooldown 1.0 s. Attack states (`lunge`, `charge`, leaps) = `1.0 × dmg`.
-- No weapon deflects projectiles passively (`deflect` removed). Projectiles are only stopped by: Knight's Bulwark, Spirit "Guardian Spirits" blades, Mirror Shard relic (chance).
+- Contact damage: touching a foe outside an attack state = `0.4 × dmg`, contact cooldown 1.0 s. Attack states (`lunge`, `charge`, `leap`, `bash`, `dive`) and the Gloom = `1.0 × dmg`. Boss contact damage is × 0.8.
+- No weapon deflects projectiles passively. Projectiles are only stopped by: Knight's Bulwark, Spirit "Guardian Spirits" blades, Mirror Shard relic (chance).
 - Lifesteal exists only in the Blood path. Leech healing per hero is capped at **1.2% max HP per second** (rolling 1 s window). DoT ticks never leech.
-- Heart drop chance 4% (elites 40%).
+- Hearts heal 22% max HP + 6. A kill drops one with 4% (elites 40%); a cleared room drops one with 30%; a boss drops two.
 - Every hit's damage is the same no matter how it was produced; statuses build from **damage dealt, never from hit count**, so attack speed and damage scale them equally.
 
 ## 2. Elements and statuses
@@ -69,14 +69,14 @@ Elements: `pyre`, `rime`, `storm`. Physical paths (`steel`, `blood`, `spirit`) i
 - Critical hit by a hero with `bleed`: `e.bleedPool += hitDmg × bleed`. Drains like Burn (20% per 0.5 s). Physical, no affinity.
 
 ### Damage taken by foes (order)
-1. Hero multiplier (dmg stat, conditionals: execute, searing, lacerate, berserk, momentum, idol, banner).
+1. Hero multiplier (dmg stat, conditionals: execute, searing, lacerate, berserk, idol, banner).
 2. Crit ×critMult.
 3. Foe vulnerability `1 + Σ(mark 0.25, judged 0.2, frozen 0.25, sunder stacks × 0.04)`.
 4. Element affinity (elemental damage only).
 5. `e.exposed` ×1.5.
 6. Guard: if `e.def.guard = {arc, mul}` and the attack comes from within `arc/2` of `e.guardA` → ×mul (DoT, discharges and explosions ignore guard). Emits `guardhit`.
 7. `e.dmgTakenMul` (default 1). `e.def.invuln`, `e.burrowed`, `e.invulnT > 0` → 0.
-8. Ward absorbs as before.
+8. Ward (warded elites) absorbs up to 75% of each hit until it breaks; the rest hits HP.
 
 ## 3. Paths
 
@@ -163,11 +163,9 @@ Six paths. A hero owns at most **3 gates** (path slots) per run. `affinity(path)
 ### Neutral boons (no path; low caps)
 vigor (c,3: +15 max HP, heal 15) · plating (c,2: +5 armor) · fleet (c,2: +7% move) · focus (c,3: skills −10% cd) · lightstep (c,2: dash −20% cd) · magnet (c,2: +40% pickup, +10% xp) · edge (c,2: +10% damage) · quick (c,2: +10% attack speed) · wide (r,2: +15% area) · bounty (c,2: +25% gold) · evade (r,2: +6% dodge) · thorns (r,2: attackers take 10, +4 armor) · pierce (r,2, ranged: +1 pierce) · split (r,2, ranged: +1 projectile, −8% damage) · bladedash (r,1: dashing through foes deals 120% weapon damage) · echo (e,1: K skill holds 2 charges) · laststand (e,1) · glass (e,1: +30% damage, −15% max HP) · trance (e,1: a skill grants +30% attack speed 4 s) · overcharge (e,1: skills release a shockwave).
 
-Removed from the old pool: leech/keen/brutal/execute (moved to paths), kindle/frost/static (now gates), mend, twin, burst, thirst, momentum, bulwark.
-
 ## 4. Offers
 
-- A hero holds a queue `p.offers` of offer specs; `p.picks === p.offers.length`. Offers open only when the room is safe (as before). API: `W.grantOffer(p, spec)`.
+- A hero holds a queue `p.offers` of offer specs; `p.picks === p.offers.length`. Offers open only when the room is safe. API: `W.grantOffer(p, spec)`.
 - Spec `src`: `level` · `room` (with `path`) · `class` · `start` · `forge` · `epic`.
 - Cards: 3 (+1 with Crown of Choice).
 - **level**: eligible pool = neutral + non-gate boons of owned paths + gates while slots are free + keystones at affinity ≥ 3 + duos with both gates + class boons. Weight = rarity weight (c 60, r 30 + 2.5s + 60·luck, e 10 + 2s + 40·luck, d 12) × (owned path 2.5) × (gate 0.8) × (class 1.4).
@@ -176,12 +174,12 @@ Removed from the old pool: leech/keen/brutal/execute (moved to paths), kindle/fr
 - **start**: 3 gates of distinct random paths (granted once at run start).
 - **forge**: up to 3 owned boons below max; picking ranks one up. None → level offer.
 - **epic**: level pool, rarity ≥ r, 4 cards, keystones ×2.
-- **Evolution**: when a path has affinity ≥ 5 and its keystone is owned and the hero has no evolution, every non-forge offer adds that path's `evo_*` card first. Picking sets `p.evo = path`, emits `{t:'evolve', pid, path}`. One evolution per run. Weapon display name: `Cinder | Glacial | Tempest | Masterwork | Sanguine | Ascendant` + weapon name.
+- **Evolution**: when a path has affinity ≥ 5 and its keystone is owned and the hero has no evolution, every non-forge offer adds that path's `evo_*` card first. Picking one makes `stats.evo` = path (derived from the owned boons by `ED.evoOf`) and emits `{t:'evolve', pid, path}`. One evolution per run. Weapon display name: `Cinder | Glacial | Tempest | Masterwork | Sanguine | Ascendant` + weapon name.
 - Offer message to client: `{t:'offer', boons, rerolls, picks, src, path}`. Rerolls work on every offer except forge.
 
 ## 5. Skills (K = slot 0, L = slot 1)
 
-Slot 0 skills unchanged (charge, volley, nova, step, sanctuary, legion). Slot 1:
+Slot 0 skills: charge, volley, nova, step, sanctuary, legion. Slot 1:
 
 | Class | Skill | cd | Effect |
 |---|---|---|---|
@@ -194,10 +192,10 @@ Slot 0 skills unchanged (charge, volley, nova, step, sanctuary, legion). Slot 1:
 
 Skill cooldown reduction applies to both slots. Class boons (2 per skill, 4 per class):
 
-| Class | Existing | New |
+| Class | K skill boons | L skill boons |
 |---|---|---|
 | Knight | shieldwall, quake | **bastion** (r): Bulwark lasts 50% longer, bash stuns 1.2 s · **mirrorguard** (e): Bulwark blocks from every side and reflects at 250% |
-| Ranger | mark, arrowstorm (was `storm`) | **barrage** (r): Rain +40% radius, +1 s · **hailthorns** (e): foes inside Rain are slowed 50% and take +20% damage |
+| Ranger | mark, arrowstorm | **barrage** (r): Rain +40% radius, +1 s · **hailthorns** (e): foes inside Rain are slowed 50% and take +20% damage |
 | Pyromancer | combust, phoenixnova | **twinmeteor** (e): a second Meteor lands 0.6 s later on the nearest foe · **moltencore** (r): crater lasts 3× longer, burns 2× hotter |
 | Shade | assassin, decoy | **smokescreen** (r): smoke +40% radius, +2 s, foes inside take +20% · **nightsedge** (e): an Ambush kill refunds Vanish |
 | Cleric | wrath, blessed | **twinhammer** (r): Judgment throws two hammers in a V · **verdict** (e): judged foes explode on death (60 + 150% weapon, r70) |
@@ -219,12 +217,12 @@ Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat
 - **Rest site**: a campfire (heal 35%) and an anvil (forge offer); each hero uses one.
 - **Shop**: 2 relics (+1 with Merchant's Favor 2), epic boon, healing draught (40%), lantern oil (+15 light, `30 + 12s` gold), forge (`60 + 15s` gold).
 - XP from level L to L+1: `round(30 + 3(L−1) + 6(L−1)²)` (a winning descent ends around level 17). Level-ups grant `level` offers.
-- Every gold drop (kills, room clears, chests, rewards, bosses) is scaled by ×0.65 (`World.GOLD_MUL`); shop prices are unchanged.
+- Every gold drop (kills, room clears, chests, rewards, bosses) is scaled by ×0.65 (`World.GOLD_MUL`); shop prices are not scaled.
 
 ## 7. Lantern and Dread
 
 - `w.light` ∈ [0, lightMax]; `lightMax = 100 × (1 + 0.06 × Deep Wick rank)` (best in party). Refills to max at each stratum.
-- Drain per second = `100 / [250, 220, 205, 200, 200, 200][s−1]`, only while playing, not in the boss room, not during stratum transition (solo boon picking already freezes the world).
+- Drain per second = `100 / [250, 220, 205, 200, 200, 200][s−1]`, only while playing, not in the boss room, not during stratum transition (solo boon picking freezes the world).
 - **Dread tier** by `light / lightMax`: ≥ 0.5 Bright (0) · ≥ 0.25 Dim (1) · > 0 Dark (2) · 0 Lightless (3).
 
 | Tier | Foe HP & damage | Elite chance | Wave budget | Gold & embers from rooms |
@@ -234,16 +232,15 @@ Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat
 | Dark | HP ×1.45, damage ×1.1 | +0.25 | ×1.2 | ×2 |
 | Lightless | HP ×1.8, damage ×1.25 | +0.40 | ×1.3 | ×2 |
 
-- Applied at spawn through `w.dread = {hp, dmg}`. The boss takes the multiplier of the tier when its room is entered (light does not drain there).
-- **Lightless**: 4 s after entering a non-boss, non-start room, a telegraphed **Gloom** stalker spawns: invulnerable, passes through walls, speed 50, contact damage 35 × stratum damage scale, ignored by room-clear checks; despawns when you leave the room.
+- `w.dread` holds the tier's `{hp, dmg, elite, wave, gold}`: `hp` and `dmg` apply at spawn (not to minions, allies or the Gloom), `elite` adds to a room's elite chance, `wave` multiplies the wave budget, `gold` multiplies room-clear gold and embers and the `gold` reward. The boss takes the tier of the moment its room is entered (light does not drain there).
+- **Lightless**: 4 s after entering a non-boss, non-start room, a telegraphed **Gloom** stalker spawns: invulnerable, passes through walls, speed 50, contact damage `35 × (1 + 0.22(s−1) + 0.03(s−1)²) × threat damage` (pact multipliers apply, dread does not), ignored by room-clear checks; despawns when you leave the room.
 - Emits `{t:'dread', tier}` on tier change. Renderer darkens the world and shrinks hero light with the light fraction.
-- The global 20-minute lantern is removed.
 
 ## 8. Enemies
 
 - Every telegraphed wind-up is multiplied by `e.windMul` (default 1). Foes with `e.blind > 0` cannot start attacks. Stunned/frozen foes do nothing.
-- **No untelegraphed teleports.** Casters lose the random blink; instead, when a hero is within 80 and the step is off cooldown (7 s), they telegraph 0.6 s (marker at origin and destination) and step 150 away.
-- Every biome gets new attack patterns on existing foes and at least one new foe:
+- **No untelegraphed teleports.** When a hero is within 80 and the step is off cooldown (7 s), casters telegraph 0.6 s (marker at origin and destination) and step 150 away.
+- Signature foe per biome:
   - I **Bone Priest** (support): raises a dead skeleton (telegraphed), wards an ally.
   - II **Mire Worm** (burrower): travels under ground (untargetable, visible trail), erupts under the hero after a 0.8 s ground telegraph, spore ring.
   - III **Frost Sentinel** (guard): frontal shield `guard {arc 2.2, mul 0.2}` blocks projectiles from the front, shield-bash charge.
@@ -251,15 +248,15 @@ Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat
   - V **Drowned Reaver** (leaper): leaps to the hero's position (landing circle), cleaving cone on landing.
   - VI **Rift Caller** (summoner): opens a telegraphed rift that spawns 2 starspawn every 6 s.
   - **Gloom** (Lightless stalker, any stratum).
-- Each boss gains one new telegraphed attack. Bosses have three phases (HP 66% / 33%; the Hollow King 60% / 30%); the pause between attacks is 1.05 / 0.7 / 0.45 s by phase × the stratum's boss pause. Swift elites shorten wind-ups but never below 0.4 s.
+- Bosses use telegraphed attacks in three phases (HP 66% / 33%; the Hollow King 60% / 30%); the pause between attacks is 1.05 / 0.7 / 0.45 s by phase × 0.8 under Pact 5+ × the stratum's boss pause. Swift elites shorten wind-ups but never below 0.4 s.
 - Floor hazards (spikes, poison, lava, void) hurt for 4-6 per tick (about 7-10 per second), scaled by 20% per stratum.
 
 ## 9. Hearth (meta)
 
-- New upgrade **Deep Wick** (tier 1): +6% lantern light per rank, costs 40/90/160.
-- Retuned steps: Vitality +6 max health, Might +4% damage, Provisions heal 10%, Bulwark +2 armor, Precision +2% crit, Wisdom +5% experience, Alacrity +4% skill recharge.
-- New deeds: Evolved (evolve a weapon, 40) · Into the Dark (defeat a boss while Lightless, 50) · Cartographer (clear every room of a stratum, 40).
-- Profile key `wickdeep.profile.v1`, save code prefix `WD1-`, peer prefix `wickdeep-v1-`. Old Emberdeep saves are not imported.
+- **Deep Wick** (tier 1): +6% lantern light per rank, costs 40/90/160.
+- Steps per rank: Vitality +6 max health, Might +4% damage, Provisions heal 10%, Bulwark +2 armor, Precision +2% crit, Wisdom +5% experience, Alacrity +4% skill recharge.
+- Deeds include Evolved (evolve a weapon, 40) · Into the Dark (defeat a boss while Lightless, 50) · Cartographer (clear every room of a stratum, 40).
+- Profile key `wickdeep.profile.v1`, save code prefix `WD1-`, peer prefix `wickdeep-v1-`. No other profile key is imported.
 
 ## 10. Balance targets (bots, `tools/sim.js`, skill 0.75)
 

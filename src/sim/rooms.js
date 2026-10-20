@@ -12,9 +12,6 @@
     'The skull on your map marks the stratum boss. Tab shows the map.',
   ];
 
-  // Queues a boon offer; plain picks stand in until build.js provides grantOffer.
-  const offer = (w, p, spec) => { if (w.grantOffer) w.grantOffer(p, spec); else { p.picks++; if (spec.src === 'epic') p.epicNext = true; } };
-
   // Regular foes of a biome that exist in the enemy table (rosters may name foes whose definitions land later).
   const rosterOf = (biome) => biome.enemies.filter(r => { const d = ED.ENEMIES[r[0]]; return d && !d.boss && !d.gloom && !d.ally && !d.minion; });
 
@@ -173,7 +170,7 @@
     }
     const c = D.center(this.room);
     if (s % 2 === 0) this.spawnRelicChoices(c.x, c.y + 40, 'r');
-    else for (const p of this.players.values()) offer(this, p, { src: 'epic' });
+    else for (const p of this.players.values()) this.grantOffer(p, { src: 'epic' });
     this.props.push({ id: U.uid(), kind: 'portal', x: c.x, y: c.y - 60, state: 0 });
   };
 
@@ -231,7 +228,7 @@
     return props;
   };
 
-  // Lantern oil is 25 + 10s and a forge is 60 + 15s; everything else scales 12% per stratum. Favor, discounts and Greed apply to all.
+  // Lantern oil is 30 + 12s and a forge is 60 + 15s; everything else scales 12% per stratum. Favor (-10% per rank), the discount stat and the Pact 7 markup (x1.4) apply to all; rounded to 5, minimum 5.
   W.priceOf = function (it) {
     const s = this.stratum;
     let base;
@@ -271,9 +268,9 @@
           // every hero claims once; the prop stays until all have
           if (p.claimed[pr.group]) { this.msgs.push({ to: pid, t: 'toast', text: 'You already claimed this reward.' }); return; }
           p.claimed[pr.group] = true;
-          if (item.startsWith('boon:')) offer(this, p, { src: 'room', path: item.slice(5) });
+          if (item.startsWith('boon:')) this.grantOffer(p, { src: 'room', path: item.slice(5) });
           else if (item === 'vigor') { p.bonusHp += 12; this.recalc(p, false); this.healPlayer(p, p.maxHp * 0.2); this.sendBuild(p); }
-          else offer(this, p, { src: item });
+          else this.grantOffer(p, { src: item });
           this.msgs.push({ to: pid, t: 'claimed', group: pr.group });
           if (allClaimed(this, pr.group)) pr.state = 1;
         } else {
@@ -291,7 +288,7 @@
         if (p.claimed[pr.group]) { this.msgs.push({ to: pid, t: 'toast', text: 'You already used this rest site.' }); return; }
         p.claimed[pr.group] = true;
         if (pr.kind === 'campfire') this.healPlayer(p, p.maxHp * 0.35);
-        else offer(this, p, { src: 'forge' });
+        else this.grantOffer(p, { src: 'forge' });
         this.msgs.push({ to: pid, t: 'claimed', group: pr.group });
         this.emit({ t: 'claim', pid, item: pr.kind, x: pr.x, y: pr.y });
         if (allClaimed(this, pr.group)) for (const o of this.props) if (o.group === pr.group) o.state = 1;
@@ -316,8 +313,8 @@
         this.emit({ t: 'buy', pid, x: pr.x, y: pr.y });
         if (pr.stype === 'relic') this.giveRelic(p, pr.item);
         else if (pr.stype === 'potion') this.healPlayer(p, p.maxHp * 0.4);
-        else if (pr.stype === 'boon') offer(this, p, { src: 'epic' });
-        else if (pr.stype === 'forge') offer(this, p, { src: 'forge' });
+        else if (pr.stype === 'boon') this.grantOffer(p, { src: 'epic' });
+        else if (pr.stype === 'forge') this.grantOffer(p, { src: 'forge' });
         else if (pr.stype === 'oil') this.addLight(15, pr.x, pr.y);
         break;
       }
@@ -331,7 +328,7 @@
         pr.state = 1;
         const cost = Math.round(p.maxHp * 0.2);
         p.hp = Math.max(1, p.hp - cost);
-        offer(this, p, { src: 'epic' });
+        this.grantOffer(p, { src: 'epic' });
         this.emit({ t: 'altar', pid, x: pr.x, y: pr.y, v: cost });
         break;
       }

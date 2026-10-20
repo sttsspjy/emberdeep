@@ -467,7 +467,7 @@
     const rows = [
       ['Health', `${Math.ceil(me.hp)} / ${me.maxHp}`], ['Damage', U.pct(st.dmg)], ['Attack speed', U.pct(st.atk)], ['Critical', `${Math.round(st.crit * 100)}% ×${st.critMult.toFixed(2)}`],
       ['Armor', Math.round(st.armor) + ` (−${Math.round((1 - ED.Stats.armorMul(st.armor)) * 100)}%)`], ['Move speed', Math.round(st.moveSpeed)], ['Skills K · L', `${st.skillCd.toFixed(1)}s · ${(st.skill2Cd || 0).toFixed(1)}s`], ['Dodge', Math.round(st.dodge * 100) + '%'],
-      ['Life steal', Math.round(st.leech * 1000) / 10 + '%'], ['Regen', st.regen.toFixed(1) + '/s'], ['Level', view.level], ['Gold', view.gold],
+      ['Life steal', Math.round(st.leech * 1000) / 10 + '%'], ['Level', view.level], ['Gold', view.gold],
     ];
     if (shieldCap > 0) rows.push(['Blood shield', `${Math.ceil(me.shield || 0)} / ${shieldCap}`]);
     $('sheet-dl').innerHTML = rows.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
@@ -541,7 +541,7 @@
     const A = ED.App;
     // title
     $('btn-begin').onclick = () => A.createProfile($('inp-name').value);
-    $('inp-name').addEventListener('keydown', (e) => { if (e.key === 'Enter') A.createProfile($('inp-name').value); });
+    $('inp-name').addEventListener('keydown', (e) => { if (e.code === 'Enter' || e.code === 'NumpadEnter') A.createProfile($('inp-name').value); });
     $('inp-name').addEventListener('input', () => nameHint($('inp-name'), $('name-msg')));
     $('btn-have-code').onclick = () => { $('title-load').hidden = !$('title-load').hidden; if (!$('title-load').hidden) $('inp-title-code').focus(); };
     $('btn-title-code').onclick = () => {
@@ -558,7 +558,7 @@
     $('btn-host').onclick = () => A.hostParty();
     $('btn-join').onclick = () => { $('join-row').hidden = !$('join-row').hidden; if (!$('join-row').hidden) $('inp-join').focus(); };
     $('btn-join-go').onclick = () => A.joinParty($('inp-join').value);
-    $('inp-join').addEventListener('keydown', (e) => { if (e.key === 'Enter') A.joinParty($('inp-join').value); });
+    $('inp-join').addEventListener('keydown', (e) => { if (e.code === 'Enter' || e.code === 'NumpadEnter') A.joinParty($('inp-join').value); });
     // save tab
     $('btn-copy-code').onclick = () => copy($('save-code').textContent, $('btn-copy-code'));
     $('btn-load-code').onclick = () => {
@@ -599,7 +599,7 @@
     window.addEventListener('resize', () => { if (!$('ov-boon').hidden) paintDense(); });
     // Esc closes menu overlays outside a run (in a run the frame loop owns Esc)
     window.addEventListener('keydown', (e) => {
-      if (e.key !== 'Escape' || A.inRun()) return;
+      if (e.code !== 'Escape' || A.inRun()) return;
       if (!$('modal').hidden) $('modal').hidden = true;
       else if (!$('ov-settings').hidden) $('ov-settings').hidden = true;
       else if (!$('ov-hearth').hidden) $('btn-ph-close').click();

@@ -308,7 +308,7 @@
       s.O = w.props.map(p => [p.id, p.kind, r(p.x), r(p.y), p.state | 0, p.item || '', p.price || 0, p.group || 0, p.stype || '', p.text || '']);
       s.RS = w.floor.rooms.map(rm => { const st = w.roomState[rm.id]; return (st.visited ? 1 : 0) | (st.known ? 2 : 0) | (st.cleared ? 4 : 0); });
       s.RUN = { kills: w.run.kills, roomsCleared: w.run.roomsCleared, elitesKilled: w.run.elitesKilled, bosses: w.run.bosses, bossCount: w.run.bossCount, embers: w.run.embers, revives: w.run.revives, maxGold: w.run.maxGold, maxRelics: w.run.maxRelics, pact: w.pact,
-        flawlessBoss: !!w.run.flawlessBoss, roomsVisited: w.run.roomsVisited, roomsTotal: w.run.roomsTotal, lightAtBoss: w.run.lightAtBoss.slice(), lightlessBoss: !!w.run.lightlessBoss, fullClear: !!w.run.fullClear, evolved: [...w.players.values()].some(p => !!p.evo) };
+        flawlessBoss: !!w.run.flawlessBoss, roomsVisited: w.run.roomsVisited, roomsTotal: w.run.roomsTotal, lightAtBoss: w.run.lightAtBoss.slice(), lightlessBoss: !!w.run.lightlessBoss, fullClear: !!w.run.fullClear, evolved: [...w.players.values()].some(p => !!p.stats.evo) };
     }
     return s;
   };

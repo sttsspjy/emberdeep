@@ -34,12 +34,12 @@ Aiming is automatic by default. Switch to mouse aiming in Settings. Gamepads als
 
 Your lantern burns while you explore (not in boss rooms): a full lantern lasts about 4 minutes in the first stratum and about 3 1/3 minutes from the fourth on and refills when you enter the next one. Exploring more rooms means more power, but as the light drops the Deep grows stronger. Lantern oil (room rewards, shops) and the **Deep Wick** Hearth upgrade give more light.
 
-| Light left | Tier | Foe health and damage | Elite chance | Room gold and embers |
-| --- | --- | --- | --- | --- |
-| 50% or more | Bright | x1 | normal | x1 |
-| 25% to 50% | Dim | x1.12 | +10% | x1.5 |
-| Under 25% | Dark | x1.25 | +20% | x2 |
-| 0% | Lightless | x1.4 | +35% | x2 |
+| Light left | Tier | Foe health | Foe damage | Elite chance | Wave size | Room gold and embers |
+| --- | --- | --- | --- | --- | --- | --- |
+| 50% or more | Bright | x1 | x1 | normal | x1 | x1 |
+| 25% to 50% | Dim | x1.2 | x1 | +12% | x1.08 | x1.5 |
+| Under 25% | Dark | x1.45 | x1.1 | +25% | x1.2 | x2 |
+| 0% | Lightless | x1.8 | x1.25 | +40% | x1.3 | x2 |
 
 When the lantern is empty, a **Gloom** stalks you in every room: it cannot be hurt, walks through walls and hits hard, so keep moving or leave the room. The boss takes the tier you carried into its room. Running dry never ends a descent.
 
