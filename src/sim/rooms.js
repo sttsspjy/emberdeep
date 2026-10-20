@@ -231,7 +231,7 @@
     return props;
   };
 
-  // Lantern oil is 25 + 10s and a forge is 60 + 15s; everything else scales 12% per stratum. Favor, discounts and Greed apply to all.
+  // Lantern oil is 30 + 12s and a forge is 60 + 15s; everything else scales 12% per stratum. Favor (-10% per rank), the discount stat and the Pact 7 markup (x1.4) apply to all; rounded to 5, minimum 5.
   W.priceOf = function (it) {
     const s = this.stratum;
     let base;

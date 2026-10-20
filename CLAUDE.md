@@ -30,7 +30,7 @@ src/net.js               transports, host/client sessions, snapshot encoding
 src/game.js              run session: local hero control, client mirror, network routing
 src/client/              input · audio · icons · sprites · tiles · fx · render · post (WebGL) · hud · camp · ui
 src/main.js              app state machine + frame loop
-tools/                   sim.js (headless bot runs), journey.js (whole-profile simulation)
+tools/                   sim.js (headless bot runs) · simpool.js (parallel bot batches across worker processes) · journey.js (whole-profile simulation)
 docs/                    GAME-DESIGN.md · MASTERPLAN.md · MASTERPLAN-AGENT.md · HANDOFF-*.md
 ```
 
@@ -40,11 +40,11 @@ docs/                    GAME-DESIGN.md · MASTERPLAN.md · MASTERPLAN-AGENT.md 
 2. **Clients only see what snapshots carry** — any state the renderer/HUD needs must be encoded in `net.js` (or derived from floor gen / build events). Bump `N.VERSION` when snapshots or floor generation change.
 3. **Sim and data run in Node** (`tools/sim.js` vm) — no DOM/window in `src/data`, `src/sim`, `src/util.js`, `src/save.js`.
 4. **Script order lives twice** — a new data/sim file goes into `index.html` AND the `tools/sim.js` file list.
-5. **world.js ↔ build.js/skills.js talk through hooks** (`initBuild`, `onRunStartBuild`, `onStratumBuild`, `updatePlayerBuild`, `initSkills`, `skillBlock`). Keep the boundary.
+5. **world.js/combat.js/rooms.js ↔ build.js/skills.js talk through hooks** — world.js calls `initBuild`, `initSkills`, `onRunStartBuild`, `onStratumBuild`, `updatePlayerBuild` (which calls `updateSkills` and combat.js `updatePlayerCombat`), `updateOffers`, `updateAllies`, `updateCompanions`, `addXp`; combat.js calls `skillBlock`, `onEnemyKilledSkill`, `spawnMinion`; rooms.js calls `grantOffer`. Per-hero build/skill fields are created in `initBuild`/`initSkills`, not in `addPlayer`. Keep the boundary.
 6. **Statuses build from damage dealt, never hit count** — attack speed must not out-scale damage.
 7. **All hotkeys use `e.code`** — `e.key` breaks on non-Latin layouts.
 8. **Save code is positional** (UPGRADES, non-start RELIC_IDS, DEEDS order) — append only; reorder/removal bumps `CODE_VERSION`.
-9. **Balance claims need numbers** — run `tools/sim.js` before/after and report win rate, depth, time.
+9. **Balance claims need numbers** — run `tools/sim.js` (or `tools/simpool.js` for batches) before/after and report win rate, depth, time.
 10. **Low quality must stay fast** — WebGL post-process is optional; the 2D path must work without it.
 11. **Rules and numbers follow [docs/GAME-DESIGN.md](docs/GAME-DESIGN.md)** — change the doc and the code together.
 
