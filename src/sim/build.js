@@ -58,12 +58,14 @@
   };
 
   // ---------------- xp, levels and boons ----------------
+  // Every even level grants a level offer; odd levels only raise the level.
   W.addXp = function (v) {
     this.xp += v;
     while (this.xp >= this.xpNext) {
       this.xp -= this.xpNext; this.level++; this.xpNext = ED.World.xpFor(this.level);
-      for (const p of this.players.values()) this.grantOffer(p, { src: 'level' });
-      this.emit({ t: 'levelup', level: this.level });
+      const boon = this.level % 2 === 0;
+      if (boon) for (const p of this.players.values()) this.grantOffer(p, { src: 'level' });
+      this.emit({ t: 'levelup', level: this.level, boon });
     }
   };
 

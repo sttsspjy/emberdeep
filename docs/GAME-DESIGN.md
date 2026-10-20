@@ -80,7 +80,7 @@ Elements: `pyre`, `rime`, `storm`. Physical paths (`steel`, `blood`, `spirit`) i
 
 ## 3. Paths
 
-Six paths. A hero owns at most **3 gates** (path slots) per run. `affinity(path)` = sum of ranks of that hero's boons in the path. Boon data: `path`, `gate: true`, `key: true` (needs affinity ≥ 3), `evo: '<path>'`, `duo: [a, b]` (needs both gates). Rarity: `c` common, `r` rare, `e` epic (keystones), `l` legendary (evolutions), `d` duo.
+Six paths. A hero owns at most **3 gates** (path slots) per run. `affinity(path)` = sum of ranks of that hero's boons in the path. Boon data: `path`, `gate: true`, `key: true` (needs affinity ≥ `KEY_AFFINITY` = 4), `evo: '<path>'`, `duo: [a, b]` (needs both gates). Rarity: `c` common, `r` rare, `e` epic (keystones), `l` legendary (evolutions), `d` duo.
 
 ### Pyre — `#ff7a2a`, icon `flame`
 | id | name | rar | max | effect |
@@ -168,14 +168,15 @@ vigor (c,3: +15 max HP, heal 15) · plating (c,2: +5 armor) · fleet (c,2: +7% m
 - A hero holds a queue `p.offers` of offer specs; `p.picks === p.offers.length`. Offers open only when the room is safe. API: `W.grantOffer(p, spec)`.
 - Spec `src`: `level` · `room` (with `path`) · `class` · `start` · `forge` · `epic`.
 - Cards: 3 (+1 with Crown of Choice).
-- **level**: eligible pool = neutral + non-gate boons of owned paths + gates while slots are free + keystones at affinity ≥ 3 + duos with both gates + class boons. Weight = rarity weight (c 60, r 30 + 2.5s + 60·luck, e 10 + 2s + 40·luck, d 12) × (owned path 2.5) × (gate 0.8) × (class 1.4).
+- **level**: granted at every even level (2, 4, 6, …); odd levels grant none. Eligible pool = neutral + non-gate boons of owned paths + gates while slots are free + keystones at affinity ≥ 4 + duos with both gates + class boons. Weight = rarity weight (c 60, r 30 + 2.5s + 60·luck, e 10 + 2s + 40·luck, d 12) × (owned path 2.5) × (gate 0.8) × (class 1.4).
 - **room(path X)**: X owned → 3 cards from X (non-gates, keystone if eligible, duos involving X). X not owned and a slot free → card 1 = X's gate, cards 2–3 from the level pool. Slots full and X not owned → level offer with rarity ≥ r.
 - **class**: 3 class boons of the hero (fill from level pool if fewer).
 - **start**: 3 gates of distinct random paths (granted once at run start).
-- **forge**: up to 3 owned boons below max; picking ranks one up. None → level offer.
-- **epic**: level pool, rarity ≥ r, 4 cards, keystones ×2.
-- **Evolution**: when a path has affinity ≥ 5 and its keystone is owned and the hero has no evolution, every non-forge offer adds that path's `evo_*` card first. Picking one makes `stats.evo` = path (derived from the owned boons by `ED.evoOf`) and emits `{t:'evolve', pid, path}`. One evolution per run. Weapon display name: `Cinder | Glacial | Tempest | Masterwork | Sanguine | Ascendant` + weapon name.
+- **forge**: up to 3 owned boons below max; picking ranks one up. None → level offer. Sources: normal-room reward (5%), rest-site anvil (odd strata), shop (even strata).
+- **epic**: level pool, rarity ≥ r, 4 cards, keystones ×2. Sources: elite-room reward (25%), boss of stratum III and V, shop (odd strata), blood altar.
+- **Evolution**: when a path has affinity ≥ `EVO_AFFINITY` = 8 (a path holds 9–11 ranks, evolution card excluded) and its keystone is owned and the hero has no evolution, every non-forge offer adds that path's `evo_*` card first. Picking one makes `stats.evo` = path (derived from the owned boons by `ED.evoOf`) and emits `{t:'evolve', pid, path}`. One evolution per run. Weapon display name: `Cinder | Glacial | Tempest | Masterwork | Sanguine | Ascendant` + weapon name.
 - Offer message to client: `{t:'offer', boons, rerolls, picks, src, path}`. Rerolls work on every offer except forge.
+- **Pacing targets** (smart bots, `tools/sim.js` pacing line): about 6 offers per stratum; median evolution in stratum III–IV; at least 60% of runs that reach stratum IV have evolved; most runs end with at most two paths at affinity ≥ 4 and a clearly deepest path.
 
 ## 5. Skills (K = slot 0, L = slot 1)
 
@@ -211,12 +212,13 @@ Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat
 
 - Wave budget = `(7 + 2s)` × threat wave × party × `danger = 1 + 0.05 × distance` × dread wave. Elite rooms: same budget, 2 waves + 2 elites guaranteed (3 waves under Pact 10).
 - **Rewards** are fixed at generation (deterministic from the floor seed) and shown on doors and the map before entering:
-  - normal combat: `boon:<path>` 50% (each path at most twice per floor) · `gold` 12% · `vigor` 10% · `forge` 10% · `oil` 10% · `class` 8%. Each kind gets its share of the floor's combat rooms (shares rounded by a weighted draw on the remainders), so averages match the percentages: no minimum of boon or oil rooms.
-  - elite: `relic` 50% · `epic` 50%.
+  - normal combat: `boon:<path>` 50% (each path at most twice per floor) · `gold` 14% · `vigor` 13% · `forge` 5% · `oil` 10% · `class` 8%. Each kind gets its share of the floor's combat rooms (shares rounded by a weighted draw on the remainders), so averages match the percentages: no minimum of boon or oil rooms.
+  - elite: `relic` 75% · `epic` 25% (drawn per room).
 - On clear, a `reward` prop appears at the room centre. Per-hero claims: `boon:<path>` → room offer, `class`, `forge`, `epic`, `vigor` (+12 max HP via `p.bonusHp`, heal 20%). Party claims (once): `gold` (`round((15 + 8s) × dread bonus × 0.65)`), `oil` (+15 light), `relic` (relic hoard as from a chest).
-- **Rest site**: a campfire (heal 35%) and an anvil (forge offer); each hero uses one.
-- **Shop**: 2 relics (+1 with Merchant's Favor 2), epic boon, healing draught (40%), lantern oil (+15 light, `30 + 12s` gold), forge (`60 + 15s` gold).
-- XP from level L to L+1: `round(30 + 3(L−1) + 6(L−1)²)` (a winning descent ends around level 17). Level-ups grant `level` offers.
+- **Boss**: 2 hearts and gold. Stratum II and IV: a relic hoard (rarity ≥ r). Stratum III and V: an `epic` offer per hero. Stratum I: nothing more. Stratum VI ends the run.
+- **Rest site**: a campfire (heal 35%) and, on odd strata only, an anvil (forge offer); each hero uses one.
+- **Shop**: 2 relics (+1 with Merchant's Favor 2), healing draught (40%), lantern oil (+15 light, `30 + 12s` gold) and one build item: an epic boon on odd strata, a forge (`60 + 15s` gold) on even strata.
+- XP from level L to L+1: `round(30 + 3(L−1) + 6(L−1)²)` (a winning descent ends around level 17). Even levels grant a `level` offer; the level-up event carries `boon` (true on even levels).
 - Every gold drop (kills, room clears, chests, rewards, bosses) is scaled by ×0.65 (`World.GOLD_MUL`); shop prices are not scaled.
 
 ## 7. Lantern and Dread
