@@ -124,7 +124,7 @@
   // Post parameters from the FX state (chromatic aberration, flashes) and the lantern.
   R.postOpts = (biome, t, extra) => {
     const F = ED.FX;
-    return Object.assign({ biome, t, aberr: F.aberr || 0, flash: F.kick > 0.01 ? [1, 0.92, 0.8, F.kick * 0.22] : null, lightLevel: R.lightLevel }, extra);
+    return Object.assign({ biome, t, aberr: F.aberr || 0, flash: F.kick > 0.01 ? [1, 0.92, 0.8, F.kick * 0.22] : null, lightLevel: 0.6 + 0.4 * R.lightLevel }, extra); // post-process darkening (saturation, vignette) stays mild
   };
 
   // ---------------- light buffer (device-pixel space, reused by the camp) ----------------
@@ -729,13 +729,13 @@
     return { icon: ri[0], color: ri[1], badge: rm.type === 'elite' ? 'skull' : null };
   };
 
-  // Reward previews over the doors of the current room: neighbours not yet cleared, bobbing in front of each doorway.
+  // Reward previews over the doors of the current room: neighbours not yet cleared, bobbing in front of each doorway, with the lantern light the room costs (boss door: the heal on offer).
   const dpList = [], dpPool = [];
   function doorPreviews(view, room, t) {
     const out = dpList; let n = 0; // pooled: the list is consumed before the next call
     out.length = 0;
     if (view.locked || !view.floor) return out;
-    const me = view.players.get(R.local), cls = me ? me.cls : null, h = room.h * T, w = room.w * T;
+    const me = view.players.get(R.local), cls = me ? me.cls : null, h = room.h * T, w = room.w * T, Wd = ED.World, lm = view.lightMax, lf = lm > 0 ? U.clamp(view.light / lm, 0, 1) : 0;
     for (const d in room.doors) {
       const id = room.doors[d]; if (id < 0) continue;
       const nb = view.floor.rooms[id], st = view.roomState && view.roomState[id];
@@ -744,8 +744,13 @@
       const r = ED.Dungeon.doorRect(room, d), cx = (r.x0 + r.x1 + 1) / 2 * T, cy = (r.y0 + r.y1 + 1) / 2 * T;
       let x = cx, y = cy;
       if (d === 'n') y = T - 2; else if (d === 's') y = h - T - 6; else if (d === 'w') x = T * 0.5 + 6; else x = w - T * 0.5 - 6;
-      let o = dpPool[n]; if (!o) o = dpPool[n] = { x: 0, y: 0, color: '', ri: null };
-      o.x = x; o.y = y + Math.sin(t * 2.2 + x * 0.03 + y * 0.02) * 1.8; o.color = ri.color; o.ri = ri; out[n++] = o;
+      let o = dpPool[n]; if (!o) o = dpPool[n] = { x: 0, y: 0, color: '', ri: null, d: '', lab: '', lc: '' };
+      o.x = x; o.y = y + Math.sin(t * 2.2 + x * 0.03 + y * 0.02) * 1.8; o.color = ri.color; o.ri = ri; o.d = d; o.lab = ''; o.lc = '';
+      if (lm > 0) { // lantern label: the light an unvisited room costs (red when it drops the tier), or the boss-door heal
+        if (nb.type === 'boss') { const hp = Math.round(Wd.bossLight(lf, view.stratum).heal * 100); if (hp > 0) { o.lab = '+' + hp + '%'; o.lc = '#86d38f'; } }
+        else if (!(st && st.visited)) { const cost = Wd.roomCost(nb.type); if (cost > 0) { o.lab = '−' + cost; o.lc = Wd.tierOf(Math.max(0, view.light - cost) / lm) > Wd.tierOf(lf) ? '#ff7a5a' : '#ffd9a0'; } }
+      }
+      out[n++] = o;
     }
     return out;
   }
@@ -754,9 +759,17 @@
     const list = doorPreviews(view, room, t); if (!list.length) return;
     for (const pv of list) {
       let near = 1e9; for (const p of view.players.values()) if (!p.dead) near = Math.min(near, Math.hypot(p.x - pv.x, p.y - pv.y));
-      c.globalAlpha = U.clamp((near - 22) / 46, 0.22, 0.95);
+      const a = U.clamp((near - 22) / 46, 0.22, 0.95);
+      c.globalAlpha = a;
       c.drawImage(ED.Icons.canvas(pv.ri.icon, pv.color, 64), pv.x - 11, pv.y - 11, 22, 22);
       if (pv.ri.badge) c.drawImage(ED.Icons.canvas('skull', '#ff7a3a', 64), pv.x + 3, pv.y + 2, 12, 12);
+      if (pv.lab) { // lantern label on the room side of the icon; stays readable up close
+        c.save(); c.globalAlpha = Math.max(a, 0.7);
+        c.font = '800 8px "Alegreya Sans", sans-serif'; c.textAlign = 'left'; c.textBaseline = 'middle';
+        const tw = c.measureText(pv.lab).width, lx = pv.x - (tw + 11) / 2, ly = pv.d === 's' ? pv.y - 17 : pv.y + 17;
+        c.drawImage(ED.Icons.canvas('lantern', pv.lc, 64), lx, ly - 4.5, 9, 9);
+        c.lineWidth = 2.5; c.strokeStyle = 'rgba(0,0,0,0.85)'; c.strokeText(pv.lab, lx + 11, ly); c.fillStyle = pv.lc; c.fillText(pv.lab, lx + 11, ly); c.restore();
+      }
     }
     c.globalAlpha = 1;
   }
@@ -1178,16 +1191,16 @@
   function rimAdd(x, y, r, col, k) { if (rimN < 40) { let L = rimSrc[rimN]; if (!L) L = rimSrc[rimN] = { x: 0, y: 0, r: 0, c: '', k: 0 }; L.x = x; L.y = y; L.r = r; L.c = col; L.k = k; rimN++; } }
   function drawLighting(c, view, room, biome, local, t, ox, oy) {
     const P = biome.pal, ll = R.lightLevel, s = R.scale;
-    const amb = R.ambient(biome, (1 - ll) * 0.32, view.pact > 0 ? Math.min(0.5, view.pact * 0.05) : 0);
+    const amb = R.ambient(biome, (1 - ll) * 0.1, view.pact > 0 ? Math.min(0.5, view.pact * 0.05) : 0);
     R.lightBegin(amb);
     const gm = ED.Tiles.glowmap(room, s);
     if (gm) { lctx.globalAlpha = 0.5; lctx.drawImage(gm, ox / R.lightDiv, oy / R.lightDiv, gm.width / gm.px * s / R.lightDiv, gm.height / gm.px * s / R.lightDiv); lctx.globalAlpha = 1; }
     rimN = 0;
     const src = rimAdd;
-    // hero lanterns: warm core plus a wider tinted fill; radius shrinks and flickers as the lantern fails
+    // hero lanterns: warm core plus a wider tinted fill; radius shrinks by at most 15% and flickers as the lantern fails
     for (const p of view.players.values()) {
       if (p.dead) continue;
-      const base = (p.stats ? p.stats.lightR : 175) * (p.downed ? 0.6 : 1) * (0.55 + 0.45 * ll);
+      const base = (p.stats ? p.stats.lightR : 175) * (p.downed ? 0.6 : 1) * (0.85 + 0.15 * ll);
       const fl = 1 + Math.sin(t * 7 + (p.slot || 0)) * 0.03 + Math.sin(t * 19 + (p.slot || 0) * 2) * 0.02 * (1 + (1 - ll) * 3);
       const col = U.mix('#ffc27a', ED.PLAYER_COLORS[p.slot] || '#ffc27a', 0.12);
       R.lightAdd(p.x * s + ox, (p.y - 10) * s + oy, base * 1.05 * fl * s, U.mix(col, P.light, 0.2), 0.95);

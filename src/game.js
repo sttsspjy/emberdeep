@@ -161,6 +161,7 @@
       case 'atk': w.playerAttack(p, +a.a || 0); break;
       case 'skill': if ((a.slot | 0) === 0 || (a.slot | 0) === 1) w.playerSkill(p, +a.a || 0, a.data, a.slot | 0); break;
       case 'dash': w.playerDash(p, +a.dx || 0, +a.dy || 0); break;
+      case 'flare': w.flare(p); break;
       case 'interact': w.interact(pid, a.id); break;
       case 'pick': w.pickBoon(pid, a.i | 0); break;
       case 'reroll': w.reroll(pid); break;
@@ -334,6 +335,7 @@
         ctl.skill2Cd = st.skill2Cd ?? ED.SKILLS[sk2].cd * Math.max(0.35, 1 - st.cdr);
         if (st.trance) { ctl.tranceT = 4; if (s.mode === 'client') me.tranceT = 4; }
       }
+      if (inp.flare && view.light >= ED.World.FLARE.cost && view.room.type !== 'boss') G.act({ t: 'flare' }); // host checks light, room and cooldown
       if (inp.dash && ctl.dashCd <= 0 && !me.skillMove) {
         let dx = mx, dy = my;
         if (Math.hypot(dx, dy) < 0.2) { dx = Math.cos(aim); dy = Math.sin(aim); }

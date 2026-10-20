@@ -23,7 +23,7 @@
   H.txt = txt;
   const ghost = {};
   const TIER = [['Bright', '#ffd36b'], ['Dim', '#e6a050'], ['Dark', '#c0603a'], ['Lightless', '#8a2a2a']];
-  const TIER_HINT = ['The lantern burns bright.', 'The Deep grows bolder.', 'Darkness gathers. Foes grow fierce.', 'Lightless! A Gloom stalks the rooms.'];
+  const TIER_HINT = ['The lantern burns bright.', 'Elites stir. The Deep pays more.', 'The Gloom hunts. Flare (F) or oil.', 'Lightless! Flare (F) or oil, now.'];
   const lantern = { view: null, tier: 0, hint: '', t: 99 };
   // Weapon name with its evolution prefix ('Cinder Longsword'); falls back to the class name before stats exist.
   H.weaponName = (p) => {
@@ -99,6 +99,10 @@
     }
     const dcd = ctl.dashCd > 0 ? ctl.dashCd / me.stats.dashCd : 0;
     ability(pad + slot++ * (as + 8 * k), 'Dash', 'Spc', dcd, dcd <= 0, 'wing', '#bfe9ff', 0);
+    // lantern flare: spends light (the cost shows top-left), ready while the lantern holds it and the room is not the boss room
+    const FL = ED.World.FLARE, fx0 = pad + slot++ * (as + 8 * k), canFlare = view.lightMax > 0 && view.light >= FL.cost && !(view.room && view.room.type === 'boss');
+    ability(fx0, 'Flare', 'F', 0, canFlare, 'lantern', '#ffb35c', 0);
+    txt(c, '−' + FL.cost, fx0 + 8 * k, ay + 9 * k, 10 * k, canFlare ? '#ffd9a0' : '#8a7a6a', FB, 'left', 800);
     // path pips: each owned gate with its affinity; a star on the evolved path
     const gates = me.boons ? ED.gatePaths(me.boons) : [];
     gates.forEach((pa, i) => {
@@ -122,7 +126,7 @@
 
     // ---------- minimap & stratum ----------
     const mw = 184 * k, mh = 116 * k, mx = W - pad - mw, my = pad;
-    panel(c, mx, my, mw, 214 * k, 10 * k, 'rgba(14,10,8,0.72)', 'rgba(90,66,50,0.8)');
+    panel(c, mx, my, mw, 240 * k, 10 * k, 'rgba(14,10,8,0.72)', 'rgba(90,66,50,0.8)');
     const biome = ED.biomeFor(view.stratum);
     txt(c, biome.name, mx + mw / 2, my + 13 * k, 12 * k, biome.pal.ui, FD, 'center', 700);
     // stratum affinity: foes are weak to one element and resist another
@@ -153,10 +157,14 @@
       c.fillStyle = 'rgba(255,255,255,0.45)'; c.fillRect(lx + lw * 0.5 - 0.5, lby - 1, 1, 9 * k); c.fillRect(lx + lw * 0.25 - 0.5, lby - 1, 1, 9 * k);
       if (tier === 3) { c.strokeStyle = U.rgba('#ff4a3a', 0.35 + 0.5 * pl); c.lineWidth = 1.5; c.strokeRect(lx - 1.5, lby - 1.5, lw + 3, 9 * k + 1); }
       const hint = lantern.t < 6 && lantern.hint, D = ED.World.DREAD && ED.World.DREAD[tier], parts = [];
-      if (D) { if (D.hp > 1) parts.push(`Foes +${Math.round((D.hp - 1) * 100)}%`); if (D.elite > 0) parts.push(`Elites +${Math.round(D.elite * 100)}%`); if (D.gold > 1) parts.push(`Gold ×${D.gold}`); }
+      if (D) { if (D.elite > 0) parts.push(`Elites +${Math.round(D.elite * 100)}%`); if (D.gold > 1) parts.push(`Gold ×${D.gold}`); if (D.dmg > 1) parts.push(`Dmg +${Math.round((D.dmg - 1) * 100)}%`); }
       c.globalAlpha = hint ? U.clamp(6 - lantern.t, 0, 1) : 1;
       txt(c, hint || (parts.length ? parts.join(' · ') : 'Foes at normal strength'), mx + mw / 2, ly + 28 * k, 9.5 * k, hint ? tc : '#a99886', FB, 'center', 700);
       c.globalAlpha = 1;
+      // what the light is worth: each unvisited room costs light (numbers on the doors and map); light left at the boss door heals the party
+      const Wd = ED.World, bl = Wd.bossLight(lf, view.stratum);
+      txt(c, `New room: ${Wd.ROOM_COST.combat} light · elite ${Wd.ROOM_COST.elite} · other ${Wd.ROOM_COST.shop}`, mx + mw / 2, ly + 41 * k, 9.5 * k, '#ffd9a0', FB, 'center', 700);
+      txt(c, bl.heal > 0 ? `Boss door: heal ${Math.round(bl.heal * 100)}% · shield ${Math.round(bl.shield * 100)}% · +${bl.gold}g` : 'Boss door: no light left to spare', mx + mw / 2, ly + 54 * k, 9.5 * k, bl.heal > 0 ? '#86d38f' : '#a99886', FB, 'center', 700);
     }
 
     // ---------- xp & gold (bottom centre) ----------
@@ -269,6 +277,11 @@
       if (open && r.reward && (r.type === 'combat' || r.type === 'elite')) { // reward preview: whole icon in plain combat rooms, a corner badge in elite rooms
         const ri = ED.Render.rewardIcon(r.reward, cls), big = r.type === 'combat', z = big ? s * 0.76 : s * 0.5;
         c.drawImage(ED.Icons.canvas(ri[0], ri[1], 64), big ? rx + s * 0.12 : rx + s - z * 0.9, big ? ry + s * 0.12 : ry + s - z * 0.9, z, z);
+      }
+      const cost = st.visited ? 0 : ED.World.roomCost(r.type); // light the unvisited room costs, bottom-right of its cell
+      if (cost > 0) {
+        c.save(); c.font = `800 ${Math.max(8, cell * 0.4)}px ${FB}`; c.textAlign = 'right'; c.textBaseline = 'alphabetic';
+        c.lineWidth = 3; c.strokeStyle = 'rgba(0,0,0,0.9)'; c.strokeText(cost, rx + s + 1, ry + s + 1); c.fillStyle = '#ffd9a0'; c.fillText(cost, rx + s + 1, ry + s + 1); c.restore();
       }
     }
   };
