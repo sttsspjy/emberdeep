@@ -449,14 +449,15 @@
   // ---------------- foe flipbooks ----------------
   // Foes are painted once per (look frame, pose, tint, size, facing) into small canvases at R.scale (Sp.FOE) and blitted: one drawImage replaces ~120 path ops.
   // Float bob and the windup shake apply at blit time; aimed parts and shield arcs are live overlays. Frames bake lazily on the shared per-frame budget: until a frame exists
-  // the nearest baked one stands in and a group with none yet is drawn live. Foe pixels have their own cap; the cache is cleared on stratum change and whenever the shared cache is.
+  // the nearest baked one stands in and a group with none yet is drawn live. Foe pixels have their own cap (least recently used looks go first); the cache is cleared on stratum change and whenever the shared cache is.
   const foeTC = new Map(), FOE_PX_MAX = 16e6, FOE_WARM = 4;
-  let foePx = 0, foeGen = 0, foeStratum = 0, warmQ = [], warmI = 0;
+  let foePx = 0, foeGen = 0, foeStratum = 0, foeFr = 0, warmQ = [], warmI = 0;
   R.foeCache = true;
   function foeClear() { foeTC.clear(); foePx = 0; warmQ.length = 0; warmI = 0; }
   function foeFrames(e, spec, state, tint) {
     if (foeGen !== sprGen) { foeGen = sprGen; foeClear(); }
-    let tc = foeTC.get(e.def); if (!tc) foeTC.set(e.def, tc = []);
+    let tc = foeTC.get(e.def); if (!tc) { foeTC.set(e.def, tc = []); tc.px = 0; }
+    tc.u = foeFr;
     const v = (((e.r * 3 + tint) * spec.ns + state) << 1) | (spec.face && e.face < 0 ? 1 : 0);
     return tc[v] || (tc[v] = []);
   }
@@ -465,7 +466,7 @@
     const x0 = Math.floor((b[0] * s - pad) * Q) / Q, y0 = Math.floor((b[1] * s - pad) * Q) / Q; // origin on the pixel grid: the blit copies texels 1:1
     let halos = null;
     const sp = bake(x0, y0, x0 + Math.ceil((b[2] * s + pad) * Q - x0 * Q) / Q, y0 + Math.ceil((b[3] * s + pad) * Q - y0 * Q) / Q, false, (g) => { halos = Sp.paintFoe(g, e, spec, state, tint, f); });
-    const px = sp.cv.width * sp.cv.height; foePx += px; sprPx -= px; // foe pixels are budgeted apart from the shared cache
+    const px = sp.cv.width * sp.cv.height; foePx += px; sprPx -= px; foeTC.get(e.def).px += px; // foe pixels are budgeted apart from the shared cache
     sp.halos = halos; // big soft glows of the frame, drawn live under it
     return sp;
   }
@@ -528,7 +529,10 @@
       const defs = [];
       for (const [id] of ED.biomeFor(stratum).enemies) { const d = ED.ENEMIES[id]; if (d && Sp.FOE[d.look] && defs.indexOf(d) < 0) defs.push(d); }
       for (let f = 0; f < 40; f++) for (const d of defs) if (f < Sp.FOE[d.look].N) warmQ.push({ def: d, r: d.r, face: 1, id: 0, st: 'move', f });
-    } else if (foePx >= FOE_PX_MAX) foeClear();
+    } else if (foePx >= FOE_PX_MAX) { // over the cap: drop the least recently used looks down to 70%
+      for (const [d, tc] of [...foeTC].sort((a, b) => a[1].u - b[1].u)) { if (foePx < FOE_PX_MAX * 0.7) break; foeTC.delete(d); foePx -= tc.px; }
+    }
+    foeFr++;
     for (let k = 0; k < FOE_WARM && warmI < warmQ.length; k++, warmI++) {
       const w = warmQ[warmI], spec = Sp.FOE[w.def.look], grp = foeFrames(w, spec, 0, 0);
       if (!grp[w.f]) grp[w.f] = foeBake(w, spec, 0, 0, w.f);
