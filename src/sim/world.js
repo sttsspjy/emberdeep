@@ -178,9 +178,9 @@
       hp: 1, maxHp: 1, dashT: 0, dashDx: 0, dashDy: 0, dashing: false, skillMove: null,
       invuln: 0, hurtT: 0, downed: false, bleed: 0, revive: 0, dead: false,
       phoenixUsed: false, secondWind: 0, swPct: 0.4, angelUsed: false, aegisT: 0, guardCd: 0, guardT: 0,
-      frozenCd: 0, tranceT: 0, wallT: 0, critStacks: 0, atkCount: 0, chaliceKills: 0, chaliceHp: 0, bonusHp: 0,
+      frozenCd: 0, tranceT: 0, wallT: 0, atkCount: 0, chaliceKills: 0, chaliceHp: 0, bonusHp: 0,
       picks: 0, offer: null, offerT: 0, rerolls: 0, claimed: {}, shield: 0,
-      kills: 0, dealt: 0, hitThisBoss: false, dashHit: null, dashTrail: 0, orbHit: {}, wispT: 0,
+      kills: 0, dealt: 0, hitThisBoss: false,
       remote: !!pd.remote, connected: true,
     };
     this.initBuild(p);
@@ -335,7 +335,7 @@
       roomsCleared: this.run.roomsCleared, elitesKilled: this.run.elitesKilled, bosses: this.run.bosses, bossCount: this.run.bossCount,
       embers: Object.assign({}, this.run.embers), pact: this.pact, party: this.partySize(), level: this.level,
       revives: this.run.revives, flawlessBoss: this.run.flawlessBoss, maxGold: this.run.maxGold, maxRelics: this.run.maxRelics, players,
-      evolved: [...this.players.values()].some(p => !!p.evo), lightlessBoss: this.run.lightlessBoss, fullClear: this.run.fullClear,
+      evolved: [...this.players.values()].some(p => !!p.stats.evo), lightlessBoss: this.run.lightlessBoss, fullClear: this.run.fullClear,
       roomsVisited: this.run.roomsVisited, roomsTotal: this.run.roomsTotal, lightAtBoss: this.run.lightAtBoss.slice(),
     };
   };

@@ -6,12 +6,12 @@
   const St = ED.Stats = {};
 
   const BASE = () => ({
-    hp: 0, hpMul: 1, armor: 0, spd: 1, dmg: 1, atk: 1, crit: 0, critDmg: 0, cdr: 0, leech: 0, regen: 0,
+    hp: 0, hpMul: 1, armor: 0, spd: 1, dmg: 1, atk: 1, crit: 0, critDmg: 0, cdr: 0, leech: 0,
     pickup: 0, xp: 0, gold: 0, luck: 0, heal: 0, projN: 0, pierce: 0, area: 0, dodge: 0, thorns: 0,
-    burn: 0, chill: 0, chain: 0, dashcdr: 0, dashDmg: 0, dashFire: 0, dashBomb: 0, execute: 0, momentum: 0,
-    hearts: 0, orbit: 0, wisp: 0, burst: 0, twin: 0, overcharge: 0, guardian: 0, trance: 0, killHeal: 0,
-    charges: 0, shieldwall: 0, quake: 0, mark: 0, storm: 0, combust: 0, phoenixNova: 0, decoy: 0, wrath: 0,
-    blessed: 0, minions: 0, minionDmg: 0, boneSpikes: 0, phoenix: 0, critChain: 0, strataHeal: 0, wardrum: 0,
+    dashcdr: 0, dashDmg: 0, dashFire: 0, dashBomb: 0, execute: 0,
+    hearts: 0, orbit: 0, wisp: 0, overcharge: 0, guardian: 0, trance: 0, killHeal: 0,
+    charges: 0, shieldwall: 0, quake: 0, mark: 0, combust: 0, phoenixNova: 0, decoy: 0, wrath: 0,
+    blessed: 0, minions: 0, minionDmg: 0, boneSpikes: 0, phoenix: 0, strataHeal: 0, wardrum: 0,
     homing: 0, meleeReach: 0, mirror: 0, choices: 0, idol: 0, vuln: 0, banner: 0, angel: 0, gauntlet: 0,
     frozenHeart: 0, chalice: 0, emberBonus: 0, discount: 0, stone: 0, cloverRerolls: 0, aegis: 0, light: 0,
     // path infusions, statuses and path/duo effects

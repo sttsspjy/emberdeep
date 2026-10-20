@@ -467,7 +467,7 @@
     const rows = [
       ['Health', `${Math.ceil(me.hp)} / ${me.maxHp}`], ['Damage', U.pct(st.dmg)], ['Attack speed', U.pct(st.atk)], ['Critical', `${Math.round(st.crit * 100)}% ×${st.critMult.toFixed(2)}`],
       ['Armor', Math.round(st.armor) + ` (−${Math.round((1 - ED.Stats.armorMul(st.armor)) * 100)}%)`], ['Move speed', Math.round(st.moveSpeed)], ['Skills K · L', `${st.skillCd.toFixed(1)}s · ${(st.skill2Cd || 0).toFixed(1)}s`], ['Dodge', Math.round(st.dodge * 100) + '%'],
-      ['Life steal', Math.round(st.leech * 1000) / 10 + '%'], ['Regen', st.regen.toFixed(1) + '/s'], ['Level', view.level], ['Gold', view.gold],
+      ['Life steal', Math.round(st.leech * 1000) / 10 + '%'], ['Level', view.level], ['Gold', view.gold],
     ];
     if (shieldCap > 0) rows.push(['Blood shield', `${Math.ceil(me.shield || 0)} / ${shieldCap}`]);
     $('sheet-dl').innerHTML = rows.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
