@@ -156,8 +156,8 @@
       s.seen = F.time;
       const a = F.time - s.ht;
       if (a >= 0 && a < 0.34) {
-        const m = s.m, d = Math.exp(-a * 12), u = d * Math.cos(a * 30), ax = s.ax, ay = s.ay, q = 0.24 * m * d * Math.cos(a * 20);
-        X.rot += (ax >= 0 ? 1 : -1) * 0.28 * m * u * (0.5 + 0.5 * Math.abs(ax)); X.dx += ax * 3.8 * m * u; X.dy += ay * 1.6 * m * u;
+        const m = s.m, d = Math.exp(-a * 12), u = d * Math.cos(a * 30), ax = s.ax, ay = s.ay, q = 0.3 * m * d * Math.cos(a * 20);
+        X.rot += (ax >= 0 ? 1 : -1) * 0.34 * m * u * (0.5 + 0.5 * Math.abs(ax)); X.dx += ax * 5 * m * u; X.dy += ay * 2 * m * u;
         X.sx += q * (Math.abs(ay) - Math.abs(ax)); X.sy += q * (Math.abs(ax) - Math.abs(ay));
         if (s.crit) { const pp = 0.2 * Math.exp(-a * 14) * (e.boss ? 0.3 : 1); X.sx += pp; X.sy += pp; }
         any = true;
@@ -205,11 +205,11 @@
     if (F.parts.length > MAXP * 0.85) return;
     const col = e ? e.def.col : null;
     if (col) {
-      F.burst(x, gy, cnt(Math.min(2 + Math.round(3 * w * k), 6)), { kind: 'shard', color: col.a, a, spread: 2, sp: sp * 0.75, life: 0.55, size: 2.2 + 1.2 * w, vz: 70 + 60 * w, z: z0 });
+      F.burst(x, gy, cnt(Math.min(3 + Math.round(4 * w * k), 8)), { kind: 'shard', color: col.a, a, spread: 2, sp: sp * 0.8, life: 0.6, size: 2.6 + 1.4 * w, vz: 80 + 70 * w, z: z0 });
       if (w > 0.5) F.burst(x, gy, cnt(2), { kind: 'shard', color: col.b, a, spread: 2.6, sp: sp * 0.6, life: 0.5, size: 1.6 + w, vz: 60, z: z0 });
     }
     F.part(x, gy, { kind: 'streak', color: crit ? '#fff0b0' : ec, a, spread: 0.12, life: 0.1, size: 2.2 + 1.3 * w, z: z0, drag: 0 }, 430 + 220 * w); // one long impact ray along the blow
-    F.burst(x, gy, cnt(Math.round(3 + 4 * w * k)), { kind: 'streak', color: crit ? '#fff0b0' : ec, a, spread: 0.9, sp: sp * 1.7, life: 0.2, size: 1.2 + 0.8 * w * k, z: z0 });
+    F.burst(x, gy, cnt(Math.round(4 + 5 * w * k)), { kind: 'streak', color: crit ? '#fff0b0' : ec, a, spread: 0.9, sp: sp * 1.8, life: 0.22, size: 1.4 + 0.9 * w * k, z: z0 });
     if (el === 1) {
       for (let i = 0, m = cnt(2 + Math.round(3 * w * k)); i < m; i++) F.part(x, gy, { kind: 'ember', color: i & 1 ? '#ffcf4a' : '#ff8a2a', a, spread: 2.6, life: 0.9, size: 1.8, drag: 1.6, z: z0, vz: 40, lt: i === 0 ? '#ff8a2a' : null, ltr: 24 }, 50 + Math.random() * 60, 0.6 + Math.random() * 0.5);
       F.burst(x, gy, cnt(2 + Math.round(2 * w)), { kind: 'spark', color: '#ffb347', a, spread: 1.4, sp: sp * 1.4, life: 0.2, size: 1.5, drag: 5, z: z0 });
@@ -308,13 +308,13 @@
     const dirSp = 120 + 90 * w;
     switch (fam) {
       case 'bone':
-        F.burst(x, y, cnt(Math.round(8 * k)), { kind: 'shard', color: col.a, a, spread: 2.6, sp: dirSp, life: 0.8, size: 2.6, vz: 120, z: z0 });
+        F.burst(x, y, cnt(Math.round(11 * k)), { kind: 'shard', color: col.a, a, spread: 2.6, sp: dirSp, life: 0.85, size: 3, vz: 130, z: z0 });
         F.burst(x, y, cnt(Math.round(4 * k)), { kind: 'shard', color: col.b, a, spread: 3, sp: dirSp * 0.7, life: 0.7, size: 2, vz: 90, z: z0 });
         F.burst(x, y, cnt(3), { kind: 'smoke', color: '#8a8070', sp: 30, life: 0.6, size: 5, drag: 3, z: 2 });
         addStain(x, y, r * 1.1, '#1c1814', 0.4);
         break;
       case 'goo':
-        F.burst(x, y, cnt(Math.round(12 * k)), { kind: 'drop', color: col.a, sp: 105, life: 0.9, size: 2.8, vz: 110, z: z0, drag: 1.1 });
+        F.burst(x, y, cnt(Math.round(14 * k)), { kind: 'drop', color: col.a, sp: 115, life: 0.9, size: 3, vz: 120, z: z0, drag: 1.1 });
         F.burst(x, y, cnt(Math.round(5 * k)), { kind: 'drop', color: col.b, sp: 70, life: 0.9, size: 2.2, vz: 80, z: z0, drag: 1.1 });
         addStain(x, y, r * 1.6, col.a, 0.62);
         break;
@@ -331,7 +331,7 @@
         addStain(x, y, r * 1.0, '#0c0a0e', 0.45);
         break;
       default:
-        F.burst(x, y, cnt(Math.round(9 * k)), { kind: 'shard', color: col.a, a, spread: 2.4, sp: dirSp, life: 0.75, size: 2.5, vz: 110, z: z0 });
+        F.burst(x, y, cnt(Math.round(12 * k)), { kind: 'shard', color: col.a, a, spread: 2.4, sp: dirSp, life: 0.8, size: 2.9, vz: 120, z: z0 });
         F.burst(x, y, cnt(Math.round(5 * k)), { kind: 'drop', color: DARK(col.a), a, spread: 2.2, sp: dirSp * 0.8, life: 0.9, size: 2.2, vz: 90, z: z0 });
         F.burst(x, y, cnt(3), { kind: 'smoke', color: '#6a5a4a', sp: 30, life: 0.6, size: 5, drag: 3, z: 2 });
         addStain(x, y, r * 1.3, DARK(col.a), 0.5);
@@ -378,7 +378,7 @@
           const w = e ? U.clamp(Math.sqrt(ev.v / Math.max(1, e.maxHp)) * 1.6, 0.25, 1.4) : 0.5;
           const a = p ? Math.atan2(gy - r * 0.6 - (p.y - 10), ev.x - p.x) : Math.random() * TAU;
           if (e) hitReact(e, Math.cos(a), Math.sin(a), w, ev.c);
-          const hm = hitMem[hitN++ & 7]; hm.x = ev.x; hm.y = gy; hm.a = a; hm.w = w; hm.t = F.time;
+          const hm = hitMem[hitN++ & 7]; hm.x = ev.x; hm.y = gy; hm.a = a; hm.w = w; hm.t = F.time; hm.mine = mine;
           hitSplash(ev, e, r, gy, a, w, el, p);
           A.play(ev.c ? 'crit' : 'hit', mine ? 1 : 0.5, { w, el });
           if (mine && (ev.c || ev.v >= 60)) F.hitStop(ev.c ? 0.06 : 0.04);
@@ -398,6 +398,7 @@
           spawnGhost(ev, d, fam, a, foeAt(ev.x, ev.y - (ev.r || d.r)));
         }
         F.pop(ev.x, ev.y - 8, big ? 26 : 14, col, 0.2);
+        if (mem && mem.mine) { if (big || ev.r >= 10) F.hitStop(0.035); F.addShake(big ? 1.6 : 0.7); }
         A.play('die', 0.7, ev.r);
         if (big) { F.ring(ev.x, ev.y, 30, col, 0.4); F.addShake(3); F.hitStop(0.06); }
         break;
