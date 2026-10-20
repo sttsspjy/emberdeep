@@ -380,6 +380,8 @@
   }
 
   // ---------------- per-frame ----------------
+  // Mirrors World.isSafe: calm room, no live foe except the invulnerable Gloom, no descent pending (clients see no pendingStratum).
+  const isSafe = (v) => !v.locked && !v.pendingStratum && !v.enemies.some(e => e.hp > 0 && !e.def.gloom);
   G.update = (dt, inp) => {
     const s = G.s; if (!s) return;
     const now = performance.now() / 1000;
@@ -389,7 +391,7 @@
     const sdt = alone ? dt * ED.FX.timeScale : dt; // hit-stop slows only a world nobody else shares; effects keep real time
     if (!frozen) {
       if (s.offer) {
-        const safe = !s.view.locked && !s.view.enemies.some(e => e.hp > 0);
+        const safe = isSafe(s.view);
         if (!safe && s.offerOpen) { ED.UI.hideBoons(); s.offerOpen = false; s.offerHidden = true; }
         else if (safe && !s.offerOpen && s.offerHidden) { s.offerHidden = false; s.offerOpen = true; ED.UI.showBoons(s.offer); }
       }
