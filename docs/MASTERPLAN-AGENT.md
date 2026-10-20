@@ -2,13 +2,11 @@
 
 ## Todo
 - After Perf A/B merge: overhead labels (hero names, DOWN/REVIVE, elite names) are 7 px world-space — make readable; minimap fits its panel to the floor bounds (cells small at 1440p) and the right column fades when the hero or a foe is under it; combined perf check at 2560 High: solo peak ≤ 4 ms, 4P peak ≤ 8 ms.
-- Balance (after F2-A merge; one worker, whole CPU): fast trash (regular foes 2–4 hits early, elites 5–8 s, normal rooms 10–15 s, softer hits), fresh smart 5–10%, then R7 power curve (DPS-per-stratum metric, IV→V spike, monotone HP curve, Storm arcs, CDR soft cap, Hemomancy cost by rank). Acceptance: GAME-DESIGN §10 (update fresh target), explore sweep peak 70–80% rooms, every sustain source ≤ +5 win points, party gate spread ≤ 15, determinism.
 - User playtest 2, then PR `feat/wickdeep-rework` → `main` (merge commit).
 
 ## In-progress
-- F2-A detail: shared sustain cap (~0.5% max HP/s) over leech/steal/blessed/on-kill heals; each sustain source ≤ +5 win points; Gloom hit ≤ 25% max HP.
 - Perf B `fix/perf-draw-b` (wt-pb): enemy sprite cache, crowd LOD, FX text/glow, roundRect, Low without GPU.
-- F2-A `fix/f2-sustain` (wt-sa).
+- Balance `feat/balance-f2` (wt-bal): metrics (hits-to-kill, elite TTK, room time, DPS/stratum, damage share, CDR); fast trash (2–4 hits, elites 5–8 s, rooms 10–15 s, bosses 45–90 s, monotone HP curves); Storm arcs, CDR soft cap, Hemomancy cost by rank; Blood parity (gate spread ≤ 15); explore sweep peak 70–80% with Gloom ≥ 15% of damage when greedy; §10 targets (fresh smart 5–10%, winners 22–28 min); determinism.
 
 ## Done
 - Prep refactor: build.js / skills.js / classboons.js split behind hooks.
@@ -20,6 +18,7 @@
 - F2-C lantern: ROOM_COST 10/14/7 (first entry), drain ×4 slower, DREAD hp/wave 1 with elites +15/30/45%, gold ×1.5/2/2.5, reward upgrade 25/40% and Dark+ affix pool, Gloom hunter (8 s Dark, 3 s Lightless; 0.9× hero speed, 0.7 s wind-up lunge, touch 22% max HP), flare F (8 light, Gloom away 12 s, blind 1.5 s r160), oil +35 banishes, boss-door heal/shield/gold/embers, drain and Gloom delay paused during safe-room offers, N.VERSION 6. Explore sweep still monotone (more rooms = more wins): balance must fix.
 - HUD: own `#hud` canvas at device resolution, u-scaled from style.css tokens; anchors hero bottom-left, party top-left, map + lantern top-right, xp bottom-centre, boss top-centre, messages above hero; key labels via `ED.Input.hint/fill`; sim sign strings carry `{action}` tokens.
 - Juice: foe hit pose `F.xform` (lean/squash/crit pop) applied around `Sprites.enemy`, wind-up crouch + glow, element impact sprays, per-family death ghosts (cached snapshot), swing anticipation/smear/follow-through, emissive outlined pickups (XP mint diamond, gold coin), softer light falloff, layered hit/crit/die audio. Paint ops +<2%.
+- F2-A sustain: SUSTAIN_CAP 1% max HP/s sliding window (`sustainHeal`) over leech, Blessed Strikes, hemorrhage, kill heals, feast, Sanguine steal, Judgment, Soul Siphon; Chalice +20 HP cap (1 per 4 kills); Gloom touch ≤ 25% max HP (GLOOM_CAP). Single sources ≤ +5 win points; Blood gate −12 vs random (balance fixes). Bots alone: none 1% · mid 22% · max 62%.
 - Perf A: baked-sprite cache in render.js (16M px, lazy flipbook, bake budget 10/frame, dropped on resize) for tele rings/lines/cones, fire/poison, status overlays, projectiles, HP bars and labels; memoised U.rgba/hexToRgb/mix; High renders native up to 3.7 MP. Paint ops −71% solo peak, −75% at 80 foes; solo peak 7.1 → 5.1 ms, 80 foes 10.8 → 9.8 ms.
 - Menus: design tokens in style.css (1u scales with viewport), title Descend/Hearth/Heroes/Settings, binding table `ED.Input.ACTIONS/DEFAULTS` + rebinding (skill1 Q/RMB, skill2 E, flare F) saved in settings.
 - Perf profile (2560×1440, RTX 4070S, background bots running): cost = canvas draw ops rasterized in the GPU process (~34 paint + 82 state ops per foe); not sim (0.66 ms/step at 80 foes), resolution, post or lighting. Solo peak scene mean 7.9–9.0 ms, p95 22; 80 foes 12.3 ms (sprites 6.3–7.2, status 2.2–2.7, FX 1.5); at solo peak zones −2.7, projectiles −1.4, sprites −1.9. Harnesses: scratchpad `perf/` (bench, crowd.js, ablation switches).
