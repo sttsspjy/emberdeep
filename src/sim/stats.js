@@ -14,6 +14,11 @@
     blessed: 0, minions: 0, minionDmg: 0, boneSpikes: 0, phoenix: 0, critChain: 0, strataHeal: 0, wardrum: 0,
     homing: 0, meleeReach: 0, mirror: 0, choices: 0, idol: 0, vuln: 0, banner: 0, angel: 0, gauntlet: 0,
     frozenHeart: 0, chalice: 0, emberBonus: 0, discount: 0, stone: 0, cloverRerolls: 0, aegis: 0, light: 0,
+    // path infusions, statuses and path/duo effects
+    pyreInfuse: 0, burnMul: 0, searing: 0, wildfire: 0, conflag: 0, rimeInfuse: 0, chillMul: 0, shatter: 0, dashFrost: 0, freezeDur: 0, chillWeaken: 0,
+    frostNova: 0, stormInfuse: 0, arcs: 0, arcRange: 0, shockMul: 0, dashShock: 0, arcStun: 0, thunderbolt: 0, bleed: 0, lacerate: 0, sunder: 0,
+    killHealPct: 0, berserk: 0, bloodrush: 0, bloodOrb: 0, hemomancy: 0, bloodShield: 0, compDmg: 0, compInfuse: 0, bladeBlock: 0, critCharge: 0, twinEvery: 0,
+    thermal: 0, plasma: 0, supercond: 0, hemorrhage: 0, staticEdge: 0, serrated: 0, soulfire: 0, feast: 0,
   });
 
   // build: { cls, weapon, boons: {id: n}, relics: [id], meta: { up: [], mastery }, pact, chaliceHp, bonusHp }
@@ -52,6 +57,7 @@
     out.moveSpeed = cls.spd * U.clamp(s.spd, 0.5, 2.2);
     out.atkInterval = wpn.rate / Math.max(0.3, s.atk);
     out.skillCd = ED.SKILLS[cls.skill].cd * Math.max(0.35, 1 - s.cdr);
+    out.skill2Cd = cls.skill2 && ED.SKILLS[cls.skill2] ? ED.SKILLS[cls.skill2].cd * Math.max(0.35, 1 - s.cdr) : 0;
     out.dashCd = 1.1 * Math.max(0.3, 1 - s.dashcdr);
     out.pickupR = 46 * (1 + s.pickup);
     out.critMult = 1.75 + s.critDmg;
@@ -61,6 +67,7 @@
     out.maxCharges = 1 + (s.charges > 0 ? 1 : 0);
     out.maxMinions = 3 + s.minions;
     out.lightR = 200 * (1 + s.light);
+    out.evo = ED.evoOf ? ED.evoOf(boons) : null;
     out.weapon = wpn;
     out.kind = wpn.kind;
     out.melee = wpn.kind === 'melee';
@@ -69,4 +76,12 @@
 
   // Damage-reduction from armor: 60 armor halves incoming damage.
   St.armorMul = (armor) => 60 / (60 + Math.max(0, armor));
+
+  // Dynamic rates. Attack interval = stats.atkInterval / attackRate(p); movement speed = stats.moveSpeed * moveRate(p).
+  const lowHp = (p) => p.hp < p.maxHp * 0.5;
+  St.attackRate = (p) => {
+    const s = p.stats;
+    return 1 + (p.tranceT > 0 ? s.trance : 0) + (lowHp(p) ? s.wardrum + s.bloodrush : 0);
+  };
+  St.moveRate = (p) => 1 + (lowHp(p) ? p.stats.bloodrush * (2 / 3) : 0);
 })(globalThis.ED || (globalThis.ED = {}));
