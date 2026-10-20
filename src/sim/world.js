@@ -134,8 +134,8 @@
     { tier: 2, hp: 1.45, dmg: 1.1, elite: 0.25, wave: 1.2, gold: 2 },
     { tier: 3, hp: 1.8, dmg: 1.25, elite: 0.4, wave: 1.3, gold: 2 },
   ];
-  // Per-stratum threat on top of the base scales: foe HP, wave budget, extra cooldown recovery (0.2 = attack timers tick 20% faster, -0.2 = 20% slower) and the boss pause between attacks (x).
-  W.THREAT = [{ hp: 3, dmg: 0.5, wave: 1, cd: -0.4, pause: 2 }, { hp: 3, dmg: 0.6, wave: 1, cd: -0.3, pause: 1.7 }, { hp: 3, dmg: 1, wave: 1.05, cd: -0.1, pause: 1.4 }, { hp: 1.6, dmg: 1, wave: 1.1, cd: 0, pause: 1.2 }, { hp: 4, dmg: 1, wave: 1.2, cd: 0.15, pause: 1 }, { hp: 2.55, dmg: 1, wave: 1.3, cd: 0.3, pause: 0.9 }];
+  // Per-stratum threat on top of the base scales: foe HP, wave budget, `cdRate` = extra cooldown recovery (0.2 = attack timers tick 20% faster, -0.2 = 20% slower) and the boss pause between attacks (x).
+  W.THREAT = [{ hp: 3, dmg: 0.5, wave: 1, cdRate: -0.4, pause: 2 }, { hp: 3, dmg: 0.6, wave: 1, cdRate: -0.3, pause: 1.7 }, { hp: 3, dmg: 1, wave: 1.05, cdRate: -0.1, pause: 1.4 }, { hp: 1.6, dmg: 1, wave: 1.1, cdRate: 0, pause: 1.2 }, { hp: 4, dmg: 1, wave: 1.2, cdRate: 0.15, pause: 1 }, { hp: 2.55, dmg: 1, wave: 1.3, cdRate: 0.3, pause: 0.9 }];
   W.DRAIN_SECS = [250, 220, 205, 200, 200, 200]; // seconds for a full unupgraded lantern to burn out, per stratum
 
   // Gold dropped by a 'gold' room reward (shared with the UI): 15 + 8 per stratum, times the dread gold bonus and the global gold multiplier.

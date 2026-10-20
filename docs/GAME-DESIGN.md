@@ -12,7 +12,7 @@ Canonical rules and numbers. Code follows this file; balance passes may retune n
 ## 1. Damage model
 
 - Foe HP = base × `1 + 0.65(s−1) + 0.08(s−1)²` × **threat HP** (table below) × party multiplier. Foe damage = base × `1 + 0.22(s−1) + 0.03(s−1)²` × **threat damage** (below 1 only in strata I–III). Boss HP is absolute (table below), scaled by party, pact and dread.
-- **Threat** per stratum (`World.THREAT`: `hp`, `dmg`, `wave`, `cdRate`, `pause`): HP ×, damage ×, wave budget ×, attack-cooldown rate `cdRate` (foe cooldowns tick faster by this fraction, negative = slower; wind-ups never change), boss pause × (time between boss attacks):
+- **Threat** per stratum (`World.THREAT`: `hp`, `dmg`, `wave`, `cdRate`, `pause`): HP ×, damage ×, wave budget ×, attack-cooldown rate `cdRate` (foe cooldowns tick faster by this fraction, negative = slower, only while the foe can act; wind-ups never change), boss pause × (time between boss attacks):
 
 | Stratum | HP × | Damage × | Wave × | `cdRate` | Boss pause × |
 |---|---|---|---|---|---|
@@ -55,7 +55,7 @@ Elements: `pyre`, `rime`, `storm`. Physical paths (`steel`, `blood`, `spirit`) i
 - Tick every 0.5 s: deal `max(1, pool × 0.2) × (1 + burnMul)`, reduce pool by `max(1, pool × 0.2)`. Pyre damage, credited to `e.burnOwner`, never crits.
 
 ### Chill / Freeze (rime)
-- Infused hit: `e.chill += ((dmg / e.maxHp) × 260 + 2) × rimeInfuse × (1 + chillMul) × aff × (boss 0.35 | elite 0.7 | 1)`.
+- Infused hit: `e.chill += (dmg / foeHp) × 340 × rimeInfuse × (1 + chillMul) × aff × (boss 0.35 | elite 0.7 | 1)`; `foeHp` is HP before the stratum lever (bosses: `refHp`). No per-hit term.
 - Decay: 1.5 s after the last gain, chill drops 25/s.
 - While chilled: move speed × `1 − min(0.45, chill/180)`; attack wind-ups × `e.windMul = 1 + chill/220`; foe damage × `1 − chillWeaken`.
 - At chill ≥ `100 × (1 + 0.5 × e.freezeRes)`: frozen for `1.6 × (1 + freezeDur)` s (elite ×0.75; boss flat 0.6 s), chill → 0, `freezeRes += 1` (decays 1 per 6 s).
@@ -69,9 +69,9 @@ Elements: `pyre`, `rime`, `storm`. Physical paths (`steel`, `blood`, `spirit`) i
 - Critical hit by a hero with `bleed`: `e.bleedPool += hitDmg × bleed`. Drains like Burn (20% per 0.5 s). Physical, no affinity.
 
 ### Damage taken by foes (order)
-1. Hero multiplier (dmg stat, conditionals: execute, searing, lacerate, berserk, idol, banner).
+1. Hero multiplier (dmg stat, conditionals: execute, searing, lacerate, berserk, hemomancy, idol, banner).
 2. Crit ×critMult.
-3. Foe vulnerability `1 + Σ(mark 0.25, judged 0.2, frozen 0.25, sunder stacks × 0.04)`.
+3. Foe vulnerability `1 + Σ(mark 0.25, judged|vulnT 0.2 (once), frozen 0.25, sunder stacks × 0.04)`. Judgment sets `judged`; Hailthorns and Smokescreen set `vulnT` (no ring, no kill-heal).
 4. Element affinity (elemental damage only).
 5. `e.exposed` ×1.5.
 6. Guard: if `e.def.guard = {arc, mul}` and the attack comes from within `arc/2` of `e.guardA` → ×mul (DoT, discharges and explosions ignore guard). Emits `guardhit`.
@@ -91,7 +91,7 @@ Six paths. A hero owns at most **3 gates** (path slots) per run. `affinity(path)
 | wildfire | Wildfire | r | 2 | A burning foe that dies sets foes within 80 alight for 15% of its max HP per rank. `wildfire 0.15` |
 | cindertrail | Cinder Trail | r | 1 | Your dash leaves burning ground. `dashFire 1` |
 | conflag | Conflagration (key) | e | 1 | When a foe's Burn pool exceeds 30% of its current HP it combusts: the whole pool hits it and foes within 70 at once. `conflag 1` |
-| evo_pyre | Cinder Arms (evolution) | l | 1 | Melee swings also launch a piercing flame crescent (60% weapon damage); projectiles explode on hit (50%, r40). Burn +25%. |
+| evo_pyre | Cinder Arms (evolution) | l | 1 | Melee swings also launch a piercing flame crescent (60% weapon damage); projectiles explode on hit (50%, r40); exploding weapons (Fire Staff, Inferno Tome) get a 30% wider blast and leave a burning patch at each impact (r 60% of the blast, 2 s, `0.4 × weapon damage` per second, one per shot). Burn +25%. |
 
 ### Rime — `#7fe3ff`, icon `snow`
 | id | name | rar | max | effect |
@@ -123,7 +123,7 @@ Six paths. A hero owns at most **3 gates** (path slots) per run. `affinity(path)
 | keen | Keen Eye | c | 2 | +6% crit chance. `crit 0.06` |
 | lacerate | Lacerate | r | 2 | +15% damage to bleeding foes. `lacerate 0.15` |
 | execute | Executioner | r | 2 | +40% damage to foes below 30% HP. `execute 0.4` |
-| sunder | Sunder (key) | e | 1 | Each crit makes that foe take +4% damage from you (max +40%). `sunder 1` |
+| sunder | Sunder (key) | e | 1 | Each crit makes that foe take +4% damage from you per stack (max 10 stacks, +40%). A crit adds `(dmg / foeHp) × 60` stacks, at most 2: about 1 for a typical crit on an elite or boss. `sunder 1` |
 | evo_steel | Masterwork Arms (evolution) | l | 1 | Crits release a spectral strike (repeat swing or spectral projectile) at 60%. +10% crit chance. |
 
 ### Blood — `#d43a5a`, icon `drop`
@@ -156,7 +156,7 @@ Six paths. A hero owns at most **3 gates** (path slots) per run. `affinity(path)
 | superconductor | rime+storm | Discharges add 25 chill; frozen foes arc to 2 extra targets. |
 | hemorrhage | steel+blood | Bleed heals you 10% of its damage (counts toward the leech cap). |
 | staticedge | steel+storm | Crits discharge the foe's charge instantly at +50%. |
-| serrated | steel+rime | Crits on chilled foes add 35 chill; frozen foes take +50% crit damage. |
+| serrated | steel+rime | Crits on chilled foes add `(dmg / foeHp) × 2000` chill, at most 70 (35 for the median crit on a chilled foe); frozen foes take +50% crit damage. |
 | soulfire | spirit+pyre | Companion hits add Burn equal to 60% of their damage. |
 | feast | spirit+blood | Companion kills heal you 1% max HP; companions +20% damage. |
 
@@ -186,7 +186,7 @@ Slot 0 skills: charge, volley, nova, step, sanctuary, legion. Slot 1:
 | Knight | **Bulwark** | 9 | Raise a shield 1.4 s toward your aim; move ×0.5. Hits from within ±75° of facing are blocked (≤ 6 counted); projectiles from the front are reflected (friendly, 15 + 100% weapon damage). On release: bash cone r70 arc 1.6 for `(20 + 1.2 × weapon) × (1 + 0.25 × blocks)`, knock 220. |
 | Ranger | **Rain of Arrows** | 10 | Target point (≤ 260). After 0.35 s, arrows fall for 2 s in r80: every 0.25 s all foes inside take `4 + 0.45 × weapon` (infused). |
 | Pyromancer | **Meteor** | 12 | Target point (≤ 300). 0.9 s telegraph, impact r95: `30 + 3.5 × weapon`, knock 220, adds Burn = 50% of the impact (even without Kindle), crater (pfire r60, 3 s). |
-| Shade | **Vanish** | 11 | Smoke r75 for 3 s (foes inside slowed 40%, cannot start attacks). Stealth 2.5 s: foes cannot target you. Next attack within stealth (+0.5 s) is an Ambush: guaranteed crit, +150%. Attacking ends stealth. |
+| Shade | **Vanish** | 11 | Smoke r75 for 3 s (foes inside slowed 40%, cannot start attacks). Stealth 2.5 s: foes cannot see you, so they keep acting against the spot where they last saw you (attacks still hit by position). Next attack within stealth (+0.5 s) is an Ambush: guaranteed crit, +150%. Attacking ends stealth. |
 | Cleric | **Judgment** | 9 | A hammer flies 0.55 s out and returns, piercing; each leg hits a foe once for `18 + 1.4 × weapon` and Judges it 4 s (+20% damage taken). A judged foe dying heals allies within 160 by 3% max HP. |
 | Necromancer | **Bone Harvest** | 10 | Each of your minions explodes (r60, `24 + 1.8 × weapon`); heal 3% max HP per minion; then raise 1 minion (12 s). No minions: raise 2. |
 
@@ -195,9 +195,9 @@ Skill cooldown reduction applies to both slots. Class boons (2 per skill, 4 per 
 | Class | K skill boons | L skill boons |
 |---|---|---|
 | Knight | shieldwall, quake | **bastion** (r): Bulwark lasts 50% longer, bash stuns 1.2 s · **mirrorguard** (e): Bulwark blocks from every side and reflects at 250% |
-| Ranger | mark, arrowstorm | **barrage** (r): Rain +40% radius, +1 s · **hailthorns** (e): foes inside Rain are slowed 50% and take +20% damage |
+| Ranger | mark, arrowstorm | **barrage** (r): Rain +40% radius, +1 s · **hailthorns** (e): foes inside Rain are slowed 50% and take +20% damage (`vulnT`) |
 | Pyromancer | combust, phoenixnova | **twinmeteor** (e): a second Meteor lands 0.6 s later on the nearest foe · **moltencore** (r): crater lasts 3× longer, burns 2× hotter |
-| Shade | assassin, decoy | **smokescreen** (r): smoke +40% radius, +2 s, foes inside take +20% · **nightsedge** (e): an Ambush kill refunds Vanish |
+| Shade | assassin, decoy | **smokescreen** (r): smoke +40% radius, +2 s, foes inside take +20% (`vulnT`) · **nightsedge** (e): an Ambush kill refunds Vanish |
 | Cleric | wrath, blessed | **twinhammer** (r): Judgment throws two hammers in a V · **verdict** (e): judged foes explode on death (60 + 150% weapon, r70) |
 | Necromancer | legionplus, bonespikes | **grimharvest** (r): Harvest explosions +50%, raise 2 · **soulsiphon** (e): minion hits heal you 1 (≤ 4/s) |
 
@@ -238,7 +238,8 @@ Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat
 
 ## 8. Enemies
 
-- Every telegraphed wind-up is multiplied by `e.windMul` (default 1). Foes with `e.blind > 0` cannot start attacks. Stunned/frozen foes do nothing.
+- Every telegraphed wind-up (lob flights included) lasts `max(t × rate, min(t, 0.4)) × e.windMul`: `rate` 0.7 for swift elites, 1 otherwise; `windMul` default 1. Foes with `e.blind > 0` cannot start attacks. Stunned/frozen foes do nothing.
+- A wind-up telegraph (zone with `src`) stalls while its caster is frozen or stunned and is cancelled, without hitting, when it dies. Ground bursts placed on their own (lobbed globs, web, boss spikes, spore fields, mire, fire rain) are `detached`: they resolve on their own clock.
 - **No untelegraphed teleports.** When a hero is within 80 and the step is off cooldown (7 s), casters telegraph 0.6 s (marker at origin and destination) and step 150 away.
 - Signature foe per biome:
   - I **Bone Priest** (support): raises a dead skeleton (telegraphed), wards an ally.
@@ -248,7 +249,7 @@ Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat
   - V **Drowned Reaver** (leaper): leaps to the hero's position (landing circle), cleaving cone on landing.
   - VI **Rift Caller** (summoner): opens a telegraphed rift that spawns 2 starspawn every 6 s.
   - **Gloom** (Lightless stalker, any stratum).
-- Bosses use telegraphed attacks in three phases (HP 66% / 33%; the Hollow King 60% / 30%); the pause between attacks is 1.05 / 0.7 / 0.45 s by phase × 0.8 under Pact 5+ × the stratum's boss pause. Swift elites shorten wind-ups but never below 0.4 s.
+- Bosses use telegraphed attacks in three phases (HP 66% / 33%; the Hollow King 60% / 30%); the pause between attacks is 1.05 / 0.7 / 0.45 s by phase × 0.8 under Pact 5+ × the stratum's boss pause. Swift elites shorten every wind-up by 30%, never below 0.4 s.
 - Floor hazards (spikes, poison, lava, void) hurt for 4-6 per tick (about 7-10 per second), scaled by 20% per stratum.
 
 ## 9. Hearth (meta)

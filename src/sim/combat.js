@@ -9,6 +9,8 @@
   const NO_GUARD = { dot: 1, chain: 1, explode: 1 }; // hit kinds that ignore a foe's frontal guard
   const FULL_CONTACT = new Set(['lunge', 'charge', 'leap', 'bash', 'dive']); // attack states whose body contact deals full damage
   const NO_STATS = {};
+  const hpFrac = (e, dmg) => dmg / (e.maxHp / e.hpLever); // damage as a fraction of the foe's HP before the stratum lever (bosses: refHp): the unit of HP-relative build-up
+  const WINDUP = { tele: 1, teleLine: 1, teleCone: 1 }; // zone kinds that telegraph their caster's attack
   const evoOf = (p) => p.evo || p.stats.evo || null;
 
   // ---------------- enemies ----------------
@@ -30,11 +32,11 @@
       kbx: 0, kby: 0, st: 'move', t: 0, cd: this.rng.range(0.6, 1.6), face: 1, flash: 0, stun: 0, frozen: 0, elite: null, ward: 0, wardMax: 0,
       boss: !!def.boss, fly: !!def.fly, target: null, tgtT: 0, aimA: 0, guardA: 0, contactCd: 0, spawnT: opts.spawnT || 0,
       phase: 1, vars: {}, strafe: this.rng.sign(), wob: this.rng.range(0, 6.28), exposed: false, recoil: 0,
-      // statuses: burn/bleed pools, chill, charge, hero debuffs; slow/windMul/dmgTakenMul are read by ai.js and hitEnemy
+      // statuses: burn/bleed pools, chill, charge, hero debuffs (judged = Cleric Judgment, vulnT = Rain/Smoke vulnerability); slow/windMul/dmgTakenMul are read by ai.js and hitEnemy
       burn: 0, burnPool: 0, burnTick: 0, burnOwner: null, bleedPool: 0, bleedTick: 0, bleedOwner: null,
       chill: 0, chillT: 0, chillOwner: null, freezeRes: 0, freezeResT: 0, charge: 0, chargeOwner: null, dischargeT: 0,
-      hpMul: def.boss ? def.hp / def.refHp : this.threat().hp, // HP-relative statuses (chill, Conflagration, Wildfire) ignore this stratum lever
-      mark: 0, judged: 0, blind: 0, sunder: 0, sunderOwner: null, slow: 1, slowAmt: 0, slowT: 0, windMul: 1, dmgTakenMul: 1, invulnT: 0, killed: false,
+      hpLever: def.boss ? def.hp / def.refHp : this.threat().hp, // HP-relative statuses (chill, Conflagration, Wildfire) ignore this stratum lever
+      mark: 0, judged: 0, vulnT: 0, blind: 0, sunder: 0, sunderOwner: null, slow: 1, slowAmt: 0, slowT: 0, windMul: 1, dmgTakenMul: 1, invulnT: 0, killed: false,
     };
     if (opts.elite) this.makeElite(e, opts.affix);
     this.enemies.push(e);
@@ -75,7 +77,6 @@
     if (p && !src.raw) {
       crit = src.crit === undefined ? this.rng.chance(st.crit) : !!src.crit;
       let mul = st.dmg;
-      if (st.momentum && p.moving) mul += st.momentum;
       if (st.execute && e.hp < e.maxHp * 0.3) mul += st.execute;
       if (st.searing && e.burnPool > 0) mul += st.searing;
       if (st.lacerate && e.bleedPool > 0) mul += st.lacerate;
@@ -94,7 +95,7 @@
     if (p && !src.noProc && st.shatter && e.frozen > 0 && !src.noShatter) { dmg *= 1 + st.shatter; shatter = true; }
     let vuln = 1;
     if (e.mark > 0) vuln += 0.25;
-    if (e.judged > 0) vuln += 0.2;
+    if (e.judged > 0 || e.vulnT > 0) vuln += 0.2; // Judgment and skill-granted vulnerability share one +20%
     if (e.frozen > 0) vuln += 0.25;
     if (e.sunder && p && e.sunderOwner === p.pid) vuln += 0.04 * e.sunder;
     dmg *= vuln;
@@ -135,9 +136,9 @@
     if (src.burn) this.addBurn(e, dmg * src.burn, p);
     if (crit) {
       if (st.bleed) { if (e.bleedPool <= 0) e.bleedTick = 0.5; e.bleedPool += dmg * st.bleed; e.bleedOwner = p; }
-      if (st.sunder) { if (e.sunderOwner !== p.pid) { e.sunderOwner = p.pid; e.sunder = 0; } e.sunder = Math.min(10, e.sunder + 1); }
+      if (st.sunder) { if (e.sunderOwner !== p.pid) { e.sunderOwner = p.pid; e.sunder = 0; } e.sunder = Math.min(10, e.sunder + Math.min(2, hpFrac(e, dmg) * 60)); } // stacks from crit damage: 60 per foe HP, <= 2 per crit
       if (st.critCharge) this.addCharge(e, dmg * st.critCharge, p);
-      if (st.serrated && e.chill > 0) this.addChill(e, 35, p);
+      if (st.serrated && e.chill > 0) this.addChill(e, Math.min(70, hpFrac(e, dmg) * 2000), p); // chill from crit damage: 2000 per foe HP, <= 70 per crit
       if (st.mark) e.mark = 4;
       if (st.staticEdge && e.charge > 0) this.discharge(e, e.chargeOwner || p, 1.5);
     }
@@ -152,7 +153,7 @@
   W.applyInfusions = function (e, dmg, p) {
     const st = p.stats;
     if (st.pyreInfuse) this.addBurn(e, dmg * st.pyreInfuse, p);
-    if (st.rimeInfuse) this.addChill(e, ((dmg / (e.maxHp / e.hpMul)) * 260 + 2) * st.rimeInfuse, p);
+    if (st.rimeInfuse) this.addChill(e, hpFrac(e, dmg) * 340 * st.rimeInfuse, p);
     if (st.stormInfuse) this.addCharge(e, dmg * st.stormInfuse, p);
   };
 
@@ -181,13 +182,10 @@
     if (p && p.stats.conflag) this.checkCombust(e, p);
   };
 
-  // Legacy dps-style burn (pool = dps x 3 s).
-  W.applyBurn = function (e, p, dps) { this.addBurn(e, dps * 3, p); };
-
   // A pool above 30% of current HP combusts: the whole pool hits the foe and every foe within 70.
   W.checkCombust = function (e, p) {
     const pool = e.burnPool;
-    if (e.hp <= 0 || pool < 5 || pool <= e.hp / e.hpMul * 0.3) return;
+    if (e.hp <= 0 || pool < 5 || pool <= e.hp / e.hpLever * 0.3) return;
     e.burnPool = 0; e.burn = 0;
     const dmg = pool * (1 + p.stats.burnMul), r = 70;
     this.emit({ t: 'combust', x: Math.round(e.x), y: Math.round(e.y), r });
@@ -330,6 +328,7 @@
     if (e.frozen > 0) e.frozen -= dt;
     if (e.stun > 0) e.stun -= dt;
     if (e.judged > 0) e.judged -= dt;
+    if (e.vulnT > 0) e.vulnT -= dt;
     if (e.blind > 0) e.blind -= dt;
     let slow = 1 - Math.min(0.45, e.chill / 180);
     if (e.slowT > 0) { e.slowT -= dt; slow *= 1 - e.slowAmt; } else e.slowAmt = 0;
@@ -349,7 +348,7 @@
     if (p && p.stats.wildfire && e.burnPool > 0) {
       for (let i = 0, n = this.enemies.length; i < n; i++) {
         const o = this.enemies[i];
-        if (o !== e && o.hp > 0 && o.spawnT <= 0 && U.dist2(o.x, o.y, e.x, e.y) < (80 + o.r) ** 2) this.addBurn(o, e.maxHp / e.hpMul * p.stats.wildfire, p);
+        if (o !== e && o.hp > 0 && o.spawnT <= 0 && U.dist2(o.x, o.y, e.x, e.y) < (80 + o.r) ** 2) this.addBurn(o, e.maxHp / e.hpLever * p.stats.wildfire, p);
       }
       this.emit({ t: 'boom', x: Math.round(e.x), y: Math.round(e.y), r: 80, k: 'fire' });
     }
@@ -561,7 +560,8 @@
     const st = p.stats, evo = evoOf(p), area = 1 + st.area * 0.5;
     const n = w.n + st.projN;
     const sp = n > 1 ? Math.max(w.spread || 0, 0.13) : 0;
-    const ex = w.explode ? { r: w.explode.r * area * (st.combust ? 1.4 : 1), mul: w.explode.mul } : evo === 'pyre' && !o.twin ? { r: 40 * area, mul: 0.5 } : null;
+    const pyre = evo === 'pyre' && !o.twin; // Cinder Arms: plain shots explode (r40, 50%); exploding weapons get a 30% wider blast and a burning patch
+    const ex = w.explode ? { r: w.explode.r * area * (st.combust ? 1.4 : 1) * (pyre ? 1.3 : 1), mul: w.explode.mul, patch: pyre } : pyre ? { r: 40 * area, mul: 0.5 } : null;
     const spec = evo === 'steel' && !o.spectral && !o.twin;
     for (let i = 0; i < n; i++) {
       const ang = a + (i - (n - 1) / 2) * sp + (w.jitter ? this.rng.range(-w.jitter, w.jitter) : 0);
@@ -682,6 +682,7 @@
     const owner = this.players.get(pr.owner);
     if (!owner) return;
     this.explode(pr.x, pr.y, pr.explode.r, pr.dmg * (pr.mul || 1) * pr.explode.mul, 0, owner, pr.kind === 'fireball' ? 'bigfire' : 'fire', false);
+    if (pr.explode.patch) this.addZone({ kind: 'pfire', x: pr.x, y: pr.y, r: pr.explode.r * 0.6, dur: 2, dps: pr.dmg * 0.4, owner: pr.owner, team: 0 }); // one burning patch per shot
   };
 
   // ---------------- zones: telegraphs, clouds, fire, sanctuary ----------------
@@ -694,6 +695,11 @@
   W.updateZones = function (dt) {
     const keep = [];
     for (const z of this.zones) {
+      const s = z.src;
+      if (s && WINDUP[z.kind] && !z.detached) { // a wind-up telegraph follows its caster: stalled while it is frozen or stunned, dropped (no hit, no onEnd) when it dies
+        if (s.hp <= 0) continue;
+        if (s.frozen > 0 || s.stun > 0) { if (z.update) z.update(this, z, 0); keep.push(z); continue; }
+      }
       z.t += dt;
       if (z.update) z.update(this, z, dt);
       const done = z.t >= z.dur;
@@ -769,7 +775,6 @@
     if (e.spawnT > 0) { e.spawnT -= dt; return; }
     this.tickStatuses(e, dt);
     if (e.hp <= 0) return;
-    if (e.cd > 0 && !e.boss) e.cd -= dt * this.threat().cd; // attack cooldowns recover faster; wind-ups are untouched
     if (e.kbx || e.kby) {
       Sim.moveCircle(e, e.kbx * dt, e.kby * dt, this.room, this.locked, e.fly);
       const f = Math.max(0, 1 - 9 * dt); e.kbx *= f; e.kby *= f;
@@ -779,8 +784,17 @@
     if (e.exposed && !e.def.invuln) e.hp -= e.maxHp * (e.boss ? 0.012 : 0.04) * dt;
     if (e.hp <= 0) { this.killEnemy(e, null, {}); return; }
     if (e.frozen > 0 || e.stun > 0) return;
+    if (e.cd > 0 && !e.boss) e.cd -= dt * this.threat().cdRate; // attack cooldowns recover faster; wind-ups are untouched
     e.tgtT -= dt;
-    if (e.tgtT <= 0 || !this.alive(e.target) || e.target.stealthT > 0) { e.target = this.nearestPlayer(e.x, e.y); e.tgtT = 0.6; }
+    const t = e.target;
+    if (e.tgtT <= 0 || !t || t.ghost || t.stealthT > 0 || !this.alive(t)) {
+      const n = this.nearestPlayer(e.x, e.y);
+      e.tgtT = 0.6;
+      // no visible hero: AI runs against a position-only stand-in {x, y, vx, vy, ghost} at the last seen spot (ai.js/bosses.js read only those fields); nobody up = idle
+      if (n) e.target = n;
+      else if (t && this.alivePlayers().length) { if (!t.ghost) e.target = { x: t.x, y: t.y, vx: 0, vy: 0, ghost: true }; }
+      else e.target = null;
+    }
     if (!e.target) return;
     const ai = ED.AI[e.def.ai];
     if (ai) ai(this, e, dt);

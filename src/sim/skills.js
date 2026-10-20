@@ -192,7 +192,7 @@
           if (tick) k++;
           for (const e of world.enemies) {
             if (e.hp <= 0 || e.spawnT > 0 || U.dist2(e.x, e.y, z.x, z.y) >= (z.r + e.r) ** 2) continue;
-            if (hail) { world.slowEnemy(e, 0.5, 0.3); e.judged = Math.max(e.judged || 0, 0.3); }
+            if (hail) { world.slowEnemy(e, 0.5, 0.3); e.vulnT = Math.max(e.vulnT || 0, 0.3); }
             if (tick) world.hitEnemy(e, dmg, { p: o, kind: 'skill', noGuard: true, x: z.x, y: z.y });
           }
         } });
@@ -212,7 +212,7 @@
             if (e.hp <= 0 || e.spawnT > 0 || U.dist2(e.x, e.y, z.x, z.y) >= (z.r + e.r) ** 2) continue;
             world.slowEnemy(e, 0.4, 0.3);
             e.blind = Math.max(e.blind || 0, 0.3);
-            if (smoke) e.judged = Math.max(e.judged || 0, 0.3);
+            if (smoke) e.vulnT = Math.max(e.vulnT || 0, 0.3);
           }
         } });
       for (let i = 0; i < 6; i++) { const an = i * U.TAU / 6; this.emit({ t: 'puff', x: Math.round(p.x + Math.cos(an) * r * 0.5), y: Math.round(p.y + Math.sin(an) * r * 0.5), c: '#8a86a0' }); }
@@ -274,7 +274,7 @@
       for (const e of this.enemies) {
         if (e.hp <= 0) continue;
         const d = Math.hypot(e.x - p.x, e.y - p.y);
-        if (d < r + e.r) { this.hitEnemy(e, 22 + w.dmg * 2.5, { p, kind: 'skill', knock: 200, kx: (e.x - p.x) / (d || 1), ky: (e.y - p.y) / (d || 1) }); if (e.hp > 0) this.applyBurn(e, p, w.dmg * 0.8 + 4); }
+        if (d < r + e.r) { this.hitEnemy(e, 22 + w.dmg * 2.5, { p, kind: 'skill', knock: 200, kx: (e.x - p.x) / (d || 1), ky: (e.y - p.y) / (d || 1) }); if (e.hp > 0) this.addBurn(e, (w.dmg * 0.8 + 4) * 3, p); }
       }
       this.emit({ t: 'nova', x: p.x, y: p.y, r, c: '#ff7a2a' });
       if (st.phoenixNova) { this.healPlayer(p, p.maxHp * 0.12); this.addZone({ kind: 'pfire', x: p.x, y: p.y, r: r * 0.8, dur: 3, dps: 8 + w.dmg, owner: p.pid, team: 0 }); }
