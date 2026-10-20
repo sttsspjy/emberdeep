@@ -18,20 +18,28 @@
   F.setQuality = (q) => { MAXP = q === 'low' ? 180 : 500; };
 
   // opts: a (angle), spread (random +- around a), sp, life, size, color, kind (dot|shard|smoke|streak|ember|drop|ash|spark), add, lt (light colour), ltr (light radius)
-  F.part = (x, y, o) => {
-    if (F.parts.length >= MAXP) F.parts.shift();
-    const a = o.a !== undefined ? o.a + (o.spread ? (Math.random() - 0.5) * o.spread : 0) : Math.random() * TAU, sp = o.sp !== undefined ? o.sp : 40 + Math.random() * 80;
-    const kind = o.kind || 'dot';
-    F.parts.push({ x, y, vx: Math.cos(a) * sp + (o.vx || 0), vy: Math.sin(a) * sp + (o.vy || 0), life: o.life || 0.5, max: o.life || 0.5, size: o.size || 2,
-      color: o.color || '#fff', kind, grav: o.grav || 0, drag: o.drag !== undefined ? o.drag : 3, add: o.add !== undefined ? o.add : (kind === 'streak' || kind === 'ember' || kind === 'spark'),
-      z: o.z || 0, vz: o.vz || 0, rot: Math.random() * 6, lt: o.lt || null, ltr: o.ltr || 28 });
+  // spOv/lifeOv replace o.sp/o.life (burst jitter). Dead particles are recycled through ppool; when full, a rotating slot is overwritten.
+  const ppool = []; let evict = 0;
+  F.part = (x, y, o, spOv, lifeOv) => {
+    const ps = F.parts; let p;
+    if (ps.length >= MAXP) { evict = (evict + 1) % ps.length; p = ps[evict]; }
+    else { p = ppool.pop() || { x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 0, size: 0, color: '', kind: '', grav: 0, drag: 0, add: false, z: 0, vz: 0, rot: 0, lt: null, ltr: 0 }; ps.push(p); }
+    const a = o.a !== undefined ? o.a + (o.spread ? (Math.random() - 0.5) * o.spread : 0) : Math.random() * TAU;
+    const sp = spOv !== undefined ? spOv : o.sp !== undefined ? o.sp : 40 + Math.random() * 80;
+    const life = lifeOv !== undefined ? lifeOv : (o.life || 0.5), kind = o.kind || 'dot';
+    p.x = x; p.y = y; p.vx = Math.cos(a) * sp + (o.vx || 0); p.vy = Math.sin(a) * sp + (o.vy || 0);
+    p.life = life; p.max = life; p.size = o.size || 2; p.color = o.color || '#fff'; p.kind = kind; p.grav = o.grav || 0; p.drag = o.drag !== undefined ? o.drag : 3;
+    p.add = o.add !== undefined ? o.add : (kind === 'streak' || kind === 'ember' || kind === 'spark');
+    p.z = o.z || 0; p.vz = o.vz || 0; p.rot = Math.random() * 6; p.lt = o.lt || null; p.ltr = o.ltr || 28;
   };
-  F.burst = (x, y, n, o) => { const k = MAXP < 300 ? Math.ceil(n / 2) : n; for (let i = 0; i < k; i++) F.part(x, y, Object.assign({}, o, { sp: (o.sp || 90) * (0.4 + Math.random() * 0.8), life: (o.life || 0.5) * (0.6 + Math.random() * 0.6) })); };
+  F.burst = (x, y, n, o) => { const k = MAXP < 300 ? Math.ceil(n / 2) : n, sp = o.sp || 90, life = o.life || 0.5; for (let i = 0; i < k; i++) F.part(x, y, o, sp * (0.4 + Math.random() * 0.8), life * (0.6 + Math.random() * 0.6)); };
+  const NO_OPTS = {};
   F.text = (x, y, s, color, size, opts) => {
     if (F.texts.length > 80) F.texts.shift();
     // numbers born in the same spot stack upward instead of overprinting
     let yy = y; for (const t of F.texts) if (t.max - t.life < 0.3 && Math.abs(t.x - x) < 24 && Math.abs(t.y - yy) < 9) yy = t.y - 9;
-    F.texts.push(Object.assign({ x: x + (Math.random() - 0.5) * 10, y: yy, s: String(s), color, size: size || 10, life: 0.9, max: 0.9, vy: -42 }, opts || {}));
+    const o = opts || NO_OPTS; // opts: crit, pop, life, max, vy
+    F.texts.push({ x: x + (Math.random() - 0.5) * 10, y: yy, s: String(s), color, size: size || 10, life: o.life ?? 0.9, max: o.max ?? 0.9, vy: o.vy ?? -42, crit: !!o.crit, pop: !!o.pop });
   };
   F.ring = (x, y, r, color, life, width) => F.rings.push({ x, y, r, color, life: life || 0.4, max: life || 0.4, w: width || 3 });
   F.slash = (x, y, a, r, arc, color, life) => F.slashes.push({ x, y, a, r, arc, color, life: life || 0.16, max: life || 0.16 });
@@ -45,38 +53,36 @@
   F.msg = (text, color) => { F.msgs.push({ text, color: color || '#f0e5d3', t: 4 }); if (F.msgs.length > 5) F.msgs.shift(); };
   F.showBanner = (title, sub, style, dur) => { F.banner = { title, sub: sub || '', style: style || 'small', t: 0, dur: dur || 2.6 }; };
 
+  // Ages every entry by dt and drops the expired ones in place (order and array identity kept, nothing allocated).
+  const tick = (a, dt) => { let n = 0; for (let i = 0; i < a.length; i++) { const o = a[i]; o.life -= dt; if (o.life > 0) a[n++] = o; } a.length = n; };
+
   F.update = (dt) => {
     F.time += dt;
     F.shake = Math.max(0, F.shake - dt * (10 + F.shake * 3));
     F.aberr = Math.max(0, F.aberr - dt * 2.4);
     F.kick = Math.max(0, F.kick - dt * 3.6);
     if (F.flash) { F.flash.t -= dt; if (F.flash.t <= 0) F.flash = null; }
-    for (const p of F.parts) {
+    const ps = F.parts; let n = 0;
+    for (let i = 0; i < ps.length; i++) {
+      const p = ps[i];
       p.life -= dt;
+      if (p.life <= 0) { if (ppool.length < 600) ppool.push(p); continue; }
       const d = Math.max(0, 1 - p.drag * dt);
       p.vx *= d; p.vy *= d; p.vy += p.grav * dt;
       if (p.kind === 'ember') { p.vx += Math.sin(F.time * 9 + p.rot * 3) * 70 * dt; p.vy -= 34 * dt; }
       p.x += p.vx * dt; p.y += p.vy * dt;
       if (p.vz || p.z) { p.vz -= 300 * dt; p.z += p.vz * dt; if (p.z < 0) { p.z = 0; p.vz *= -0.35; p.vx *= 0.6; p.vy *= 0.6; } }
       p.rot += dt * 6;
+      ps[n++] = p;
     }
-    F.parts = F.parts.filter(p => p.life > 0);
-    for (const t of F.texts) { t.life -= dt; t.y += t.vy * dt; t.vy *= Math.max(0, 1 - 2.5 * dt); }
-    F.texts = F.texts.filter(t => t.life > 0);
-    for (const s of F.slashes) s.life -= dt;
-    F.slashes = F.slashes.filter(s => s.life > 0);
-    for (const r of F.rings) r.life -= dt;
-    F.rings = F.rings.filter(r => r.life > 0);
-    for (const b of F.bolts) b.life -= dt;
-    F.bolts = F.bolts.filter(b => b.life > 0);
-    for (const p of F.pops) p.life -= dt;
-    F.pops = F.pops.filter(p => p.life > 0);
-    for (const g of F.ghosts) g.life -= dt;
-    F.ghosts = F.ghosts.filter(g => g.life > 0);
-    for (const s of F.stains) s.life -= dt;
-    F.stains = F.stains.filter(s => s.life > 0);
-    for (const m of F.msgs) m.t -= dt;
-    F.msgs = F.msgs.filter(m => m.t > 0);
+    ps.length = n;
+    const ts = F.texts; n = 0;
+    for (let i = 0; i < ts.length; i++) { const t = ts[i]; t.life -= dt; if (t.life <= 0) continue; t.y += t.vy * dt; t.vy *= Math.max(0, 1 - 2.5 * dt); ts[n++] = t; }
+    ts.length = n;
+    tick(F.slashes, dt); tick(F.rings, dt); tick(F.bolts, dt); tick(F.pops, dt); tick(F.ghosts, dt); tick(F.stains, dt);
+    const ms = F.msgs; n = 0;
+    for (let i = 0; i < ms.length; i++) { const m = ms[i]; m.t -= dt; if (m.t > 0) ms[n++] = m; }
+    ms.length = n;
     if (F.banner) { F.banner.t += dt; if (F.banner.t > F.banner.dur) F.banner = null; }
     for (const k in F.anim) F.anim[k].atkT = (F.anim[k].atkT || 9) + dt;
     if (F.fade > 0) F.fade = Math.max(0, F.fade - dt * 2.2);
@@ -365,7 +371,7 @@
     for (const b of F.bolts) {
       const k = b.life / b.max;
       c.lineJoin = 'round'; c.beginPath();
-      b.pts.forEach((pt, i) => { const jx = i && i < b.pts.length - 1 ? (Math.random() - 0.5) * 10 : 0, jy = i && i < b.pts.length - 1 ? (Math.random() - 0.5) * 10 : 0; if (i === 0) c.moveTo(pt[0], pt[1] - 10); else c.lineTo(pt[0] + jx, pt[1] - 10 + jy); });
+      for (let i = 0; i < b.pts.length; i++) { const pt = b.pts[i], mid = i && i < b.pts.length - 1, jx = mid ? (Math.random() - 0.5) * 10 : 0, jy = mid ? (Math.random() - 0.5) * 10 : 0; if (i === 0) c.moveTo(pt[0], pt[1] - 10); else c.lineTo(pt[0] + jx, pt[1] - 10 + jy); }
       c.strokeStyle = U.rgba(b.color, 0.35 * k); c.lineWidth = 6; c.stroke();
       c.strokeStyle = U.rgba(b.color, k); c.lineWidth = 2.4; c.stroke();
       c.strokeStyle = U.rgba('#ffffff', k); c.lineWidth = 1; c.stroke();
@@ -373,8 +379,9 @@
     }
     // ghosts: dash afterimages (hero sprite, additive) and death silhouettes (white flash drifting up and fading)
     for (const g of F.ghosts) {
-      const k = g.life / g.max, fake = g.k === 'dash' ? { cls: g.cls, slot: g.slot, weapon: g.weapon, face: g.face, moving: true, hp: 1, flash: 0 } : { def: ED.ENEMIES[g.type], r: g.r, id: 0, st: 'move', face: 1, flash: 1, frozen: 0, elite: null, hp: 1, maxHp: 1, t: 0, pose: '', aimA: 0, phase: 0 };
-      if (!ghostOK(g, fake)) continue;
+      const k = g.life / g.max, fake = g.fake || (g.fake = g.k === 'dash' ? { cls: g.cls, slot: g.slot, weapon: g.weapon, face: g.face, moving: true, hp: 1, flash: 0 } : { def: ED.ENEMIES[g.type], r: g.r, id: 0, st: 'move', face: 1, flash: 1, frozen: 0, elite: null, hp: 1, maxHp: 1, t: 0, pose: '', aimA: 0, phase: 0 });
+      if (g.ok === undefined) g.ok = ghostOK(g, fake);
+      if (!g.ok) continue;
       c.save(); c.translate(g.x, g.y);
       if (g.k === 'dash') { c.globalAlpha = 0.32 * k; Sp.hero(c, fake, t, null); }
       else { c.translate(0, -(1 - k) * 9); c.scale(1 + (1 - k) * 0.12, 1 - (1 - k) * 0.1); c.globalAlpha = Math.min(1, k * 1.4) * 0.85; Sp.enemy(c, fake, t); }

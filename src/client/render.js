@@ -7,7 +7,8 @@
   const R = ED.Render = { cam: { x: 0, y: 0 }, scale: 2, W: 0, H: 0, dpr: 1, quality: 'high', lightLevel: 1, posting: false, stats: { n: 0, world: 0, post: 0 } };
   const glowCache = {}, lightCache = {}, trailCache = {};
   let lightCv, lctx, vignette, shadowCv, rimCv, rimCtx, lightN = 0;
-  const lights = [], rimSrc = [], glowQ = [];
+  const lights = [], rimSrc = [], glowQ = [], rimOut = { dx: 0, dy: 0, col: '', s: 0 };
+  let rimN = 0; // live entries of rimSrc (filled by last frame's lighting pass)
   let nl = 0, ng = 0, stN = 0, shDX = 0, shDY = 0; // lights/glows queued this frame (stN: status lights); shadow skew away from the nearest light
 
   R.init = (canvas) => {
@@ -158,7 +159,7 @@
     c.restore();
   };
   // Ambient colour: palette darkColor gives the hue, darkness gives the level; a lower lantern deepens it.
-  const ambCache = {};
+  const ambCache = {}, ambOut = [0, 0, 0];
   R.ambient = (biome, extraDark, redden) => {
     const P = biome.pal;
     let tint = ambCache[biome.id];
@@ -168,10 +169,11 @@
       tint = ambCache[biome.id] = n.map(v => v / lum);
     }
     const dark = U.clamp(P.darkness + extraDark, 0, 0.92);
-    const lum = (R.quality === 'low' ? 0.16 : 0.12) + 0.52 * (1 - dark);
-    const o = tint.map(v => U.clamp(v * lum, 0, 1));
+    const lum = (R.quality === 'low' ? 0.16 : 0.12) + 0.52 * (1 - dark), o = ambOut; // shared result: consumed by lightBegin right away
+    for (let i = 0; i < 3; i++) o[i] = U.clamp(tint[i] * lum, 0, 1);
     if (redden > 0) { o[0] = o[0] * (1 + redden * 0.5); o[1] *= 1 - redden * 0.45; o[2] *= 1 - redden * 0.45; }
-    return o.map(v => U.clamp(v, 0, 1) * 255);
+    for (let i = 0; i < 3; i++) o[i] = U.clamp(o[i], 0, 1) * 255;
+    return o;
   };
 
   // ---------------- main frame ----------------
@@ -182,6 +184,7 @@
     c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
     c.fillStyle = P.void; c.fillRect(0, 0, R.W, R.H);
     nl = 0; ng = 0; stN = 0; R.local = local;
+    R.simT = view.renderT || view.time || 0; // sim-time clock for hazards drawn from sim state: interpolated host time on clients, world time otherwise
     if (!room) { R.endWorld(R.postOpts(biome, t)); return; }
     let sx = 0, sy = 0;
     if (F.shake > 0) { const a = F.shake * R.scale * 0.55; sx = (Math.sin(t * 71) + Math.sin(t * 43 + 1.7) * 0.6) * a * 0.62; sy = (Math.cos(t * 67) + Math.sin(t * 51 + 0.4) * 0.6) * a * 0.62; }
@@ -196,12 +199,12 @@
     drawZones(c, view, t, 0);
     drawPickups(c, view, t);
     drawProps(c, view, local, t);
-    const list = [];
-    for (const p of view.players.values()) list.push({ y: p.y, k: 0, o: p });
-    for (const e of view.enemies) if (e.hp > 0) list.push({ y: e.y, k: 1, o: e });
-    for (const a of view.allies) list.push({ y: a.y, k: 2, o: a });
-    list.sort((a, b) => a.y - b.y);
-    for (const it of list) {
+    let dn = 0;
+    for (const p of view.players.values()) qDraw(dn++, p.y, 0, p);
+    for (const e of view.enemies) if (e.hp > 0) qDraw(dn++, e.y, 1, e);
+    for (const a of view.allies) qDraw(dn++, a.y, 2, a);
+    drawList.length = dn; drawList.sort(byY);
+    for (const it of drawList) {
       const o = it.o, rim = low ? null : rimLight(o.x, o.y, it.k === 0 ? 16 : 0);
       if (rim) { shDX = -rim.dx * 0.28; shDY = -rim.dy * 0.12; } else { shDX = 0; shDY = 0; }
       if (it.k === 0 && rim && !o.dead) drawHeroRim(c, o, view, t, ox, oy, rim);
@@ -246,6 +249,10 @@
     R.endWorld(R.postOpts(biome, t, view.pact > 0 ? { vig: 0.42 + Math.min(0.2, view.pact * 0.02) } : null));
   };
 
+  // Y-sorted entity list: items are pooled by index, so a frame allocates nothing.
+  const drawList = [], drawPool = [], byY = (a, b) => a.y - b.y;
+  const qDraw = (i, y, k, o) => { let it = drawPool[i]; if (!it) it = drawPool[i] = { y: 0, k: 0, o: null }; it.y = y; it.k = k; it.o = o; drawList[i] = it; };
+
   // One-shot additive-style glow drawn at an offset (rim-light stand-in for plain enemies).
   R.glowOnce = (c, x, y, r, color, a, dx, dy) => {
     const prev = c.globalCompositeOperation; c.globalCompositeOperation = 'lighter';
@@ -255,7 +262,8 @@
   // Strongest nearby light as seen from (x, y): direction toward it, colour and strength 0..1 (null when none).
   function rimLight(x, y, skip) {
     let best = null, bs = 0.12;
-    for (const L of rimSrc) {
+    for (let i = 0; i < rimN; i++) {
+      const L = rimSrc[i];
       const dx = L.x - x, dy = L.y - y, d2 = dx * dx + dy * dy;
       if (d2 < skip * skip || d2 < 400) continue;
       const s = Math.min(1.2, L.k) * L.r * L.r / (d2 + L.r * L.r) - 0.12;
@@ -263,7 +271,8 @@
     }
     if (!best) return null;
     const dx = best.x - x, dy = best.y - y, d = Math.hypot(dx, dy) || 1;
-    return { dx: dx / d, dy: dy / d, col: best.c, s: Math.min(1, bs * 1.6) };
+    rimOut.dx = dx / d; rimOut.dy = dy / d; rimOut.col = best.c; rimOut.s = Math.min(1, bs * 1.6);
+    return rimOut; // shared: consumed before the next call
   }
 
   // Heroes render into a scratch canvas so a lit-side rim can be composited with 'source-atop' onto the sprite only.
@@ -721,8 +730,10 @@
   };
 
   // Reward previews over the doors of the current room: neighbours not yet cleared, bobbing in front of each doorway.
+  const dpList = [], dpPool = [];
   function doorPreviews(view, room, t) {
-    const out = [];
+    const out = dpList; let n = 0; // pooled: the list is consumed before the next call
+    out.length = 0;
     if (view.locked || !view.floor) return out;
     const me = view.players.get(R.local), cls = me ? me.cls : null, h = room.h * T, w = room.w * T;
     for (const d in room.doors) {
@@ -733,7 +744,8 @@
       const r = ED.Dungeon.doorRect(room, d), cx = (r.x0 + r.x1 + 1) / 2 * T, cy = (r.y0 + r.y1 + 1) / 2 * T;
       let x = cx, y = cy;
       if (d === 'n') y = T - 2; else if (d === 's') y = h - T - 6; else if (d === 'w') x = T * 0.5 + 6; else x = w - T * 0.5 - 6;
-      out.push({ x, y: y + Math.sin(t * 2.2 + x * 0.03 + y * 0.02) * 1.8, color: ri.color, ri });
+      let o = dpPool[n]; if (!o) o = dpPool[n] = { x: 0, y: 0, color: '', ri: null };
+      o.x = x; o.y = y + Math.sin(t * 2.2 + x * 0.03 + y * 0.02) * 1.8; o.color = ri.color; o.ri = ri; out[n++] = o;
     }
     return out;
   }
@@ -900,6 +912,7 @@
 
   // ---------------- status overlays (foes) and hero effects ----------------
   const LOOK_H = { priest: 44, rift: 44, sentinel: 48, knight: 34, golem: 36, hulk: 30, robed: 30, wraith: 36, reaver: 34, drone: 24, worm: 40, horror: 36, shade: 30, imp: 24, totem: 30, skeleton: 28, zombie: 28, wolf: 20, crab: 20, spider: 14, slime: 18, spitter: 28, shroom: 26, eel: 18 }; // approximate sprite heights at def.r
+  const BURN_K = [0, 0.85, 1.1, 1.4]; // flame scale per burn level
   const hash1 = (n) => { const s = Math.sin(n * 127.1) * 43758.5453; return s - Math.floor(s); };
   // Status light + halo, capped per frame (fewer on low quality).
   const stLight = (x, y, r, col, k) => { if (stN < (R.quality === 'low' ? 8 : 26)) { stN++; R.light(x, y, r, col, k); R.emit(x, y, r * 0.45, col, k * 0.5); } };
@@ -927,8 +940,9 @@
       for (let i = 0; i < n; i++) { const a = i * 2.4 + id, x = Math.cos(a) * r * 0.95, y = cy + Math.sin(a) * hh * 0.95, s = 1.8 + ch * 2; c.beginPath(); c.moveTo(x, y - s * 1.6); c.lineTo(x + s * 0.8, y + s * 0.5); c.lineTo(x - s * 0.8, y + s * 0.5); c.closePath(); c.fill(); c.stroke(); }
       stLight(e.x, e.y + cy, r * 2.6, '#7fe3ff', 0.15 + 0.35 * ch);
     }
-    if (e.burn > 0 || e.burnPool > 0) {
-      const k = e.burnPool > 1 ? U.clamp(0.7 + e.burnPool / Math.max(1, e.maxHp) * 2.5, 0.7, 1.5) : 0.9, n = R.quality === 'low' ? 3 : 5;
+    const bl = e.burnLvl !== undefined ? e.burnLvl : ED.Net.burnLevel(e); // clients get the level in the snapshot, host/solo derive it from the pool: same flames
+    if (bl > 0) {
+      const k = BURN_K[bl], n = R.quality === 'low' ? 3 : 5;
       for (let i = 0; i < n; i++) {
         const a = i * 1.9 + id, fx = Math.cos(a) * r * 0.8, fy = -bh * 0.12 - (i % 3) * bh * 0.2 + Math.sin(a) * r * 0.1;
         const ph = t * 12 + i * 2.1 + id, h = (r * 0.8 + 3 + Math.sin(ph) * 1.6) * k, w = r * 0.34 + 1.5;
@@ -961,6 +975,16 @@
       for (let i = 0; i < 3; i++) { const a = -rot + i * U.TAU / 3; c.lineTo(Math.cos(a) * rr * 0.62, Math.sin(a) * rr * 0.62); }
       c.closePath(); c.stroke(); c.restore();
       stLight(e.x, e.y, r * 2.4, '#ffd36b', 0.35);
+    }
+    if (e.vulnT > 0) { // takes +20% damage (Hailthorns, Smokescreen): two pink chevrons dripping down beside the body, apart from the Judgment ring
+      const x = r * 0.95 + 5, hv = hh * 1.1;
+      c.strokeStyle = '#ff8ed0'; c.lineWidth = 1.3; c.lineJoin = 'round'; c.lineCap = 'round';
+      for (let i = 0; i < 2; i++) {
+        const ph = (t * 1.3 + i * 0.5 + id * 0.17) % 1, y = cy - hh * 0.55 + ph * hv;
+        c.globalAlpha = Math.sin(ph * Math.PI) * 0.8;
+        c.beginPath(); c.moveTo(x - 3.2, y - 2.6); c.lineTo(x, y + 0.6); c.lineTo(x + 3.2, y - 2.6); c.stroke();
+      }
+      c.globalAlpha = 1;
     }
     if (e.blind > 0) { // smoke curling off the head and dim motes circling it
       const hy = cy - hh * 0.95;
@@ -1151,14 +1175,15 @@
   }
 
   // ---------------- lighting ----------------
+  function rimAdd(x, y, r, col, k) { if (rimN < 40) { let L = rimSrc[rimN]; if (!L) L = rimSrc[rimN] = { x: 0, y: 0, r: 0, c: '', k: 0 }; L.x = x; L.y = y; L.r = r; L.c = col; L.k = k; rimN++; } }
   function drawLighting(c, view, room, biome, local, t, ox, oy) {
     const P = biome.pal, ll = R.lightLevel, s = R.scale;
     const amb = R.ambient(biome, (1 - ll) * 0.32, view.pact > 0 ? Math.min(0.5, view.pact * 0.05) : 0);
     R.lightBegin(amb);
     const gm = ED.Tiles.glowmap(room, s);
     if (gm) { lctx.globalAlpha = 0.5; lctx.drawImage(gm, ox / R.lightDiv, oy / R.lightDiv, gm.width / gm.px * s / R.lightDiv, gm.height / gm.px * s / R.lightDiv); lctx.globalAlpha = 1; }
-    rimSrc.length = 0;
-    const src = (x, y, r, col, k) => { if (rimSrc.length < 40) rimSrc.push({ x, y, r, c: col, k }); };
+    rimN = 0;
+    const src = rimAdd;
     // hero lanterns: warm core plus a wider tinted fill; radius shrinks and flickers as the lantern fails
     for (const p of view.players.values()) {
       if (p.dead) continue;

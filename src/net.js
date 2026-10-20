@@ -7,7 +7,7 @@
   const N = ED.Net = {};
   const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const PREFIX = 'wickdeep-v1-';
-  N.VERSION = 4; // bump whenever snapshots or floor generation change: mixed versions would desync
+  N.VERSION = 5; // bump whenever snapshots or floor generation change: mixed versions would desync
   // Heartbeat: PeerJS 'close' does not fire when a tab crashes or a network drops, so both ends ping and
   // treat a few seconds of silence as a disconnect (longer in the lobby, where little else is sent).
   const PING_MS = 2000, TIMEOUT_RUN = 6000, TIMEOUT_LOBBY = 10000;
@@ -271,6 +271,21 @@
   const PK_IDX = U.indexer(PK);
   N.ST = ST; N.ZK = ZK; N.PK = PK;
   const r = Math.round, r2 = (v) => Math.round(v * 100) / 100;
+  // Burn flame level 0..3 from the burn pool relative to max HP (clients never see the pool); sent in flags bits 11-12.
+  N.burnLevel = (e) => {
+    if (!(e.burn > 0 || e.burnPool > 0)) return 0;
+    if (e.burnPool <= 1) return 1;
+    const k = 0.7 + e.burnPool / Math.max(1, e.maxHp) * 2.5;
+    return k < 0.95 ? 1 : k < 1.25 ? 2 : 3;
+  };
+  const HIT_CAP = 24; // 'hit' FX events kept per snapshot; extras are dropped
+  const capHits = (fx) => {
+    let n = 0; for (let i = 0; i < fx.length; i++) if (fx[i].t === 'hit') n++;
+    if (n <= HIT_CAP) return fx;
+    const out = []; n = 0;
+    for (let i = 0; i < fx.length; i++) { if (fx[i].t === 'hit' && ++n > HIT_CAP) continue; out.push(fx[i]); }
+    return out;
+  };
 
   N.encodeSnap = (w, fx, full) => {
     const P = [], E = [], B = [], K = [], Z = [], A = [];
@@ -280,7 +295,7 @@
     }
     for (const e of w.enemies) {
       if (e.hp <= 0) continue;
-      const fl = (e.flash > 0 ? 1 : 0) | (e.frozen > 0 ? 2 : 0) | (e.stun > 0 ? 4 : 0) | (e.burn > 0 ? 8 : 0) | (e.chill > 0 ? 16 : 0) | (e.exposed ? 32 : 0) | (e.charge > 0 ? 64 : 0) | (e.bleedPool > 0 ? 128 : 0) | (e.judged > 0 ? 256 : 0) | (e.blind > 0 ? 512 : 0);
+      const fl = (e.flash > 0 ? 1 : 0) | (e.frozen > 0 ? 2 : 0) | (e.stun > 0 ? 4 : 0) | (e.chill > 0 ? 16 : 0) | (e.exposed ? 32 : 0) | (e.charge > 0 ? 64 : 0) | (e.bleedPool > 0 ? 128 : 0) | (e.judged > 0 ? 256 : 0) | (e.blind > 0 ? 512 : 0) | (e.vulnT > 0 ? 1024 : 0) | (N.burnLevel(e) << 11);
       E.push([e.id, ED.ENEMY_IDX[e.type], r(e.x), r(e.y), Math.ceil(e.hp), r(e.maxHp), e.r, fl, ST_IDX[e.boss ? (e.pose || 'idle') : e.st] | 0, r2(e.aimA || 0), e.elite ? ED.AFFIX_IDS.indexOf(e.elite) : -1, r(e.ward || 0), r(e.wardMax || 0), e.phase | 0, e.face < 0 ? -1 : 1, r2(e.t || 0), r(e.chill || 0)]);
     }
     for (const pr of w.projs) B.push([pr.id, ED.PROJ_IDX[pr.kind] | 0, r(pr.x), r(pr.y), r(pr.vx), r(pr.vy), pr.r, pr.team]);
@@ -288,7 +303,7 @@
     for (const z of w.zones) Z.push([z.id, ZK_IDX[z.kind] | 0, r(z.x), r(z.y), r(z.r || 0), r2(z.t), r2(z.dur), r2(z.a || 0), r(z.len || 0), r(z.w || 0), r2(z.arc || 0), z.team | 0, z.elite ? 1 : 0, z.lob ? z.lob[0] : -99999, z.lob ? z.lob[1] : 0, r2(z.warm || 0), r(z.str || 0)]);
     for (const a of w.allies) A.push([a.id, a.owner, r(a.x), r(a.y), a.face]);
     const s = { t: 's', T: r2(w.time), s: w.stratum, fs: w.floorSeed, r: w.roomId, ep: w.roomEpoch | 0, L: w.locked ? 1 : 0, g: w.gold, x: Math.floor(w.xp), n: w.xpNext, l: w.level, li: Math.round(w.light * 10) / 10, lm: r(w.lightMax), dr: w.dread.tier | 0,
-      wm: w.waitMsg || '', P, E, B, K, Z, A, F: fx };
+      wm: w.waitMsg || '', P, E, B, K, Z, A, F: capHits(fx) };
     if (full) {
       s.O = w.props.map(p => [p.id, p.kind, r(p.x), r(p.y), p.state | 0, p.item || '', p.price || 0, p.group || 0, p.stype || '', p.text || '']);
       s.RS = w.floor.rooms.map(rm => { const st = w.roomState[rm.id]; return (st.visited ? 1 : 0) | (st.known ? 2 : 0) | (st.cleared ? 4 : 0); });
