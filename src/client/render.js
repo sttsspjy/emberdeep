@@ -85,12 +85,11 @@
   };
 
   // Soft cached contact shadow at the current origin; replaces the hard ellipse every sprite used.
-  R.shadow = (c, r, a = 0.35) => {
+  R.shadow = (c, r, a = 0.35, lite) => {
     const w = r * 2.7, h = r * 1.25, y = r * 0.6;
     c.globalAlpha = Math.min(1, a * 1.9);
     c.drawImage(shadowCv, -w / 2 + shDX * r, y - h / 2 + shDY * r, w, h);
-    c.globalAlpha = Math.min(1, a * 1.1);
-    c.drawImage(shadowCv, -w * 0.3 + shDX * r * 0.4, y - h * 0.3 + shDY * r * 0.4, w * 0.6, h * 0.6);
+    if (!lite) { c.globalAlpha = Math.min(1, a * 1.1); c.drawImage(shadowCv, -w * 0.3 + shDX * r * 0.4, y - h * 0.3 + shDY * r * 0.4, w * 0.6, h * 0.6); }
     c.globalAlpha = 1;
   };
 
@@ -182,6 +181,7 @@
   R.frame = (view, local, t, dt) => {
     const t0 = performance.now(), c = R.beginWorld(), room = view.room, F = ED.FX;
     const biome = ED.biomeFor(view.stratum || 1), P = biome.pal;
+    foeTick(view.stratum || 1);
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
     c.fillStyle = P.void; c.fillRect(0, 0, R.W, R.H);
@@ -201,19 +201,28 @@
     drawZones(c, view, t, 0);
     drawPickups(c, view, t, 0);
     drawProps(c, view, local, t);
-    let dn = 0;
+    let dn = 0, nFoe = 0;
     for (const p of view.players.values()) qDraw(dn++, p.y, 0, p);
-    for (const e of view.enemies) if (e.hp > 0) qDraw(dn++, e.y, 1, e);
+    for (const e of view.enemies) if (e.hp > 0) { qDraw(dn++, e.y, 1, e); nFoe++; }
     for (const a of view.allies) qDraw(dn++, a.y, 2, a);
+    crowdLod(view, local, nFoe, dn);
     drawList.length = dn; drawList.sort(byY);
+    const S = R.scale;
     for (const it of drawList) {
       const o = it.o, rim = low ? null : rimLight(o.x, o.y, it.k === 0 ? 16 : 0);
       if (rim) { shDX = -rim.dx * 0.28; shDY = -rim.dy * 0.12; } else { shDX = 0; shDY = 0; }
       if (it.k === 0 && rim && !o.dead) drawHeroRim(c, o, view, t, ox, oy, rim);
-      else {
+      else if (it.k === 1) { // foe: feet on the device pixel grid so cached frames blit texel for texel; pose offset, lean and squash (F.xform) go into one matrix
+        const X = F.xform(o), px = Math.round(o.x * S + ox), py = Math.round(o.y * S + oy), m = o.face < 0 ? -1 : 1;
+        if (X) { const cr = Math.cos(X.rot) * S, sr = Math.sin(X.rot) * S; c.setTransform(m * cr * X.sx, m * sr * X.sx, -sr * X.sy, cr * X.sy, px + X.dx * S, py + X.dy * S); } else c.setTransform(m * S, 0, 0, S, px, py);
+        foe(c, o, t, !it.full);
+        c.setTransform(S, 0, 0, S, px, py);
+        if (rim && rim.s > 0.35 && it.full) R.glowOnce(c, 0, -o.r * 1.2, o.r * 1.5, rim.col, 0.14 * rim.s, rim.dx * o.r * 0.55, rim.dy * o.r * 0.4);
+        drawStatus(c, o, t);
+        c.setTransform(S, 0, 0, S, ox, oy);
+      } else {
         c.save(); c.translate(o.x, o.y);
         if (it.k === 0) { drawCompanions(c, o, view, t, true); Sp.hero(c, o, t, F.anim[o.pid]); drawCompanions(c, o, view, t, false); }
-        else if (it.k === 1) { const X = F.xform(o); if (X) { c.save(); c.translate(X.dx, X.dy); c.rotate(X.rot); c.scale(X.sx, X.sy); Sp.enemy(c, o, t); c.restore(); } else Sp.enemy(c, o, t); if (rim && rim.s > 0.35) R.glowOnce(c, 0, -o.r * 1.2, o.r * 1.5, rim.col, 0.14 * rim.s, rim.dx * o.r * 0.55, rim.dy * o.r * 0.4); drawStatus(c, o, t); }
         else Sp.minion(c, o, t);
         c.restore();
       }
@@ -239,8 +248,9 @@
     drawProjectiles(c, view, t, 1);
     if (!low) drawMotes(c, view, room, biome, t, dt, 1);
     const eyeA = 0.2 + P.darkness * 0.5;
-    for (const e of view.enemies) if (e.hp > 0 && !e.burrowed) {
-      R.glow(c, e.x, e.y - e.r * (e.def.fly ? 2.2 : 1.7), 5 + e.r * 0.5, e.def.col.c, eyeA);
+    for (let i = 0; i < dn; i++) {
+      const it = drawList[i], e = it.o; if (it.k !== 1 || e.burrowed) continue;
+      if (it.full) R.glow(c, e.x, e.y - e.r * (e.def.fly ? 2.2 : 1.7), 5 + e.r * 0.5, e.def.col.c, eyeA);
       const wp = F.windupP(e); if (wp > 0.05) R.glow(c, e.x, e.y - e.r * 1.2, e.r * (1.5 + wp), wp > 0.8 ? '#ffd0a0' : '#ff5a3a', 0.12 + 0.5 * wp * wp);
     }
     for (let i = 0; i < ng; i++) { const g = glowQ[i]; R.glow(c, g.x, g.y, g.r, g.c, g.a); }
@@ -257,7 +267,7 @@
 
   // Y-sorted entity list: items are pooled by index, so a frame allocates nothing.
   const drawList = [], drawPool = [], byY = (a, b) => a.y - b.y;
-  const qDraw = (i, y, k, o) => { let it = drawPool[i]; if (!it) it = drawPool[i] = { y: 0, k: 0, o: null }; it.y = y; it.k = k; it.o = o; drawList[i] = it; };
+  const qDraw = (i, y, k, o) => { let it = drawPool[i]; if (!it) it = drawPool[i] = { y: 0, k: 0, o: null, full: true, d: 0 }; it.y = y; it.k = k; it.o = o; it.full = true; drawList[i] = it; };
 
   // One-shot additive-style glow drawn at an offset (rim-light stand-in for plain enemies).
   R.glowOnce = (c, x, y, r, color, a, dx, dy) => {
@@ -428,6 +438,107 @@
   function flameFill(g, fx, fy, h, w, ph, wb, tipK, i1, i2, ca, cb, aa, ab) {
     g.fillStyle = U.rgba(ca, aa); g.beginPath(); g.moveTo(fx - w, fy); g.quadraticCurveTo(fx - w * 0.6 + Math.sin(ph * 1.3), fy - h * 0.7, fx + Math.sin(ph) * wb, fy - h * tipK); g.quadraticCurveTo(fx + w * 0.6, fy - h * 0.7, fx + w, fy); g.fill();
     g.fillStyle = U.rgba(cb, ab); g.beginPath(); g.moveTo(fx - w * 0.5, fy); g.quadraticCurveTo(fx, fy - h * i1, fx + Math.sin(ph) * 0.8, fy - h * i2); g.quadraticCurveTo(fx + w * 0.3, fy - h * 0.4, fx + w * 0.5, fy); g.fill();
+  }
+
+  // ---------------- foe flipbooks ----------------
+  // Foes are painted once per (look frame, pose, tint, size, facing) into small canvases at R.scale (Sp.FOE) and blitted: one drawImage replaces ~120 path ops.
+  // Float bob and the windup shake apply at blit time; aimed parts and shield arcs are live overlays. Frames bake lazily on the shared per-frame budget: until a frame exists
+  // the nearest baked one stands in and a group with none yet is drawn live. Foe pixels have their own cap; the cache is cleared on stratum change and whenever the shared cache is.
+  const foeTC = new Map(), FOE_PX_MAX = 16e6, FOE_WARM = 4;
+  let foePx = 0, foeGen = 0, foeStratum = 0, warmQ = [], warmI = 0;
+  R.foeCache = true;
+  function foeClear() { foeTC.clear(); foePx = 0; warmQ.length = 0; warmI = 0; }
+  function foeFrames(e, spec, state, tint) {
+    if (foeGen !== sprGen) { foeGen = sprGen; foeClear(); }
+    let tc = foeTC.get(e.def); if (!tc) foeTC.set(e.def, tc = []);
+    const v = (((e.r * 3 + tint) * spec.ns + state) << 1) | (spec.face && e.face < 0 ? 1 : 0);
+    return tc[v] || (tc[v] = []);
+  }
+  function foeBake(e, spec, state, tint, f) {
+    const Q = R.scale, s = e.r / e.def.r, b = spec.box, pad = 1.2;
+    const x0 = Math.floor((b[0] * s - pad) * Q) / Q, y0 = Math.floor((b[1] * s - pad) * Q) / Q; // origin on the pixel grid: the blit copies texels 1:1
+    let halos = null;
+    const sp = bake(x0, y0, x0 + Math.ceil((b[2] * s + pad) * Q - x0 * Q) / Q, y0 + Math.ceil((b[3] * s + pad) * Q - y0 * Q) / Q, false, (g) => { halos = Sp.paintFoe(g, e, spec, state, tint, f); });
+    const px = sp.cv.width * sp.cv.height; foePx += px; sprPx -= px; // foe pixels are budgeted apart from the shared cache
+    sp.halos = halos; // big soft glows of the frame, drawn live under it
+    return sp;
+  }
+  function foeSprite(e, spec, state, tint, f) {
+    const grp = foeFrames(e, spec, state, tint);
+    let sp = grp[f];
+    if (sp) return sp;
+    if (bakeLeft > 0 && foePx < FOE_PX_MAX) { bakeLeft--; return (grp[f] = foeBake(e, spec, state, tint, f)); }
+    const n = spec.N;
+    for (let d = 1; d <= n >> 1; d++) { sp = grp[(f + n - d) % n] || grp[(f + d) % n]; if (sp) return sp; }
+    return null;
+  }
+  function foeHalos(c, hs, dy) {
+    for (const h of hs) { c.globalAlpha = h.a; c.drawImage(R.glowSprite(h.col), h.x - h.r, h.y + dy - h.r, h.r * 2, h.r * 2); }
+    c.globalAlpha = 1;
+  }
+  // Draws foe e at the current transform (its feet, x mirrored when it faces left): the cached frame when there is one, else the live sprite. lite: single shadow layer.
+  // The transform is left changed (shake, mirror): the caller resets it.
+  function foe(c, e, t, lite) {
+    const spec = R.foeCache ? Sp.foeSpec(e) : null;
+    if (spec && e.st !== 'fade' && e.st !== 'burrow' && e.r === (e.r | 0)) {
+      const state = spec.st(e);
+      if (state >= 0) {
+        const tint = e.flash > 0 ? 1 : e.frozen > 0 ? 2 : 0; // a frozen foe holds its pose
+        let f = tint === 2 ? 0 : Sp.foeFrame(spec, state, e, t);
+        if (tint === 1) f -= f % (spec.N >> 4 || 1); // a hit flash lasts ~0.1 s: slightly coarser frames bake fewer variants
+        const sp = foeSprite(e, spec, state, tint, f);
+        if (sp) {
+          const mir = e.face < 0;
+          if (mir) shDX = -shDX; // the shadow skew is in screen space
+          Sp.foeBack(c, e, t, lite);
+          if (mir) shDX = -shDX;
+          const s = e.r / e.def.r, fl = spec.fl, dy = fl ? Math.sin(t * fl[0] + e.id) * fl[1] * (fl[2] ? s : 1) : 0;
+          let tq = 0, C = null;
+          if (spec.pre || spec.post) { tq = Sp.foeTq(spec, state, f); C = Sp.foePal(e, tint); }
+          const sx = (e.st === 'windup' || e.st === 'aim' || e.st === 'cast' || e.pose === 'wind') && Math.floor(t * 14) % 2 === 0 ? Math.sin(t * 60) * 0.8 : 0;
+          if (sx) c.translate(mir ? -sx : sx, 0); // telegraph shake
+          if (mir && spec.face) c.scale(-1, 1); // the frames of this look carry their facing
+          if (sp.halos && !spec.over) foeHalos(c, sp.halos, dy);
+          if (spec.pre) spec.pre(c, e, C, tq, s, dy);
+          c.drawImage(sp.cv, sp.x, sp.y + dy, sp.w, sp.h);
+          if (sp.halos && spec.over) foeHalos(c, sp.halos, dy);
+          if (spec.post) spec.post(c, e, C, tq, s, dy);
+          return;
+        }
+      }
+    }
+    if (e.face < 0) c.scale(-1, 1); // Sp.enemy mirrors itself
+    Sp.enemy(c, e, t);
+  }
+  R.drawFoe = (c, e, t, lite) => { c.save(); if (e.face < 0) c.scale(-1, 1); foe(c, e, t, lite); c.restore(); };
+  R.sprite = sprite;
+  R.bakeBudget = (n) => { bakeLeft = n; }; // frames the shared cache may bake before the next frame resets it
+  // Entering a stratum drops the old roster's frames and queues the new roster's idle frames, FOE_WARM baked per rendered frame.
+  function foeTick(stratum) {
+    if (foeGen !== sprGen) { foeGen = sprGen; foeStratum = 0; } // the shared cache was dropped (resize, overflow): frames are rebuilt
+    if (stratum !== foeStratum) {
+      foeStratum = stratum; foeClear();
+      const defs = [];
+      for (const [id] of ED.biomeFor(stratum).enemies) { const d = ED.ENEMIES[id]; if (d && Sp.FOE[d.look] && defs.indexOf(d) < 0) defs.push(d); }
+      for (let f = 0; f < 40; f++) for (const d of defs) if (f < Sp.FOE[d.look].N) warmQ.push({ def: d, r: d.r, face: 1, id: 0, st: 'move', f });
+    } else if (foePx >= FOE_PX_MAX) foeClear();
+    for (let k = 0; k < FOE_WARM && warmI < warmQ.length; k++, warmI++) {
+      const w = warmQ[warmI], spec = Sp.FOE[w.def.look], grp = foeFrames(w, spec, 0, 0);
+      if (!grp[w.f]) grp[w.f] = foeBake(w, spec, 0, 0, w.f);
+    }
+  }
+  // Above CROWD_N live foes only elites, bosses and the NEAR_N foes nearest the hero keep full detail (rim light, second shadow layer, eye glow) and FX bursts thin out.
+  const CROWD_N = 30, NEAR_N = 12;
+  let nearD = new Float64Array(128);
+  function crowdLod(view, local, n, dn) {
+    ED.FX.crowd = n > CROWD_N ? Math.max(0.5, CROWD_N / n) : 1;
+    if (n <= CROWD_N) return;
+    const me = view.players.get(local), cx = me ? me.x : R.cam.x, cy = me ? me.y : R.cam.y;
+    if (nearD.length < n) nearD = new Float64Array(n * 2);
+    let m = 0;
+    for (let i = 0; i < dn; i++) { const it = drawList[i]; if (it.k !== 1) continue; const dx = it.o.x - cx, dy = it.o.y - cy; it.d = dx * dx + dy * dy; nearD[m++] = it.d; }
+    const thr = nearD.subarray(0, m).sort()[NEAR_N - 1];
+    for (let i = 0; i < dn; i++) { const it = drawList[i]; if (it.k === 1) it.full = !!(it.o.elite || it.o.boss) || it.d <= thr; }
   }
 
   // ---------------- zones ----------------

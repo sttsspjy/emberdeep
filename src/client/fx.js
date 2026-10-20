@@ -6,7 +6,7 @@
   const U = ED.U, TAU = U.TAU;
   let hsUntil = 0; // wall-clock end of the current hit-stop
   const F = ED.FX = {
-    parts: [], texts: [], slashes: [], rings: [], bolts: [], pops: [], ghosts: [], stains: [], msgs: [], banner: null, shake: 0, flash: null, fade: 0, anim: {}, hitstop: 0, time: 0, aberr: 0, kick: 0, dread: 0,
+    parts: [], texts: [], slashes: [], rings: [], bolts: [], pops: [], ghosts: [], stains: [], msgs: [], banner: null, shake: 0, flash: null, fade: 0, anim: {}, hitstop: 0, time: 0, aberr: 0, kick: 0, dread: 0, crowd: 1, // crowd: burst-count factor, set by the renderer (below 1 with many live foes)
     // 1 normally, ~0.06 during a hit-stop; consumers (game loop) multiply their dt by it. Wall-clock based, so it is safe however dt is scaled.
     get timeScale() { return performance.now() / 1000 < hsUntil ? 0.06 : 1; },
     set timeScale(v) { /* derived value; assignments are ignored */ },
@@ -17,7 +17,7 @@
   F.reset = () => { F.parts.length = 0; F.texts.length = 0; F.slashes.length = 0; F.rings.length = 0; F.bolts.length = 0; F.pops.length = 0; releaseGhosts(); F.stains.length = 0; F.msgs.length = 0; F.banner = null; F.shake = 0; F.flash = null; F.anim = {}; F.aberr = 0; F.kick = 0; F.dread = 0; hsUntil = 0; ent.clear(); hitN = 0; };
   F.setQuality = (q) => { MAXP = q === 'low' ? 180 : 500; };
   const lowFx = () => MAXP < 300;
-  const cnt = (n) => (MAXP < 300 ? Math.ceil(n / 2) : n);
+  const cnt = (n) => Math.ceil(n * (MAXP < 300 ? 0.5 : 1) * F.crowd);
 
   // opts: a (angle), spread (random +- around a), sp, life, size, color, kind (dot|shard|smoke|streak|ember|drop|ash|spark), add, lt (light colour), ltr (light radius)
   // spOv/lifeOv replace o.sp/o.life (burst jitter). Dead particles are recycled through ppool; when full, a rotating slot is overwritten.
@@ -34,7 +34,7 @@
     p.add = o.add !== undefined ? o.add : (kind === 'streak' || kind === 'ember' || kind === 'spark');
     p.z = o.z || 0; p.vz = o.vz || 0; p.land = false; p.rot = Math.random() * 6; p.lt = o.lt || null; p.ltr = o.ltr || 28;
   };
-  F.burst = (x, y, n, o) => { const k = MAXP < 300 ? Math.ceil(n / 2) : n, sp = o.sp || 90, life = o.life || 0.5; for (let i = 0; i < k; i++) F.part(x, y, o, sp * (0.4 + Math.random() * 0.8), life * (0.6 + Math.random() * 0.6)); };
+  F.burst = (x, y, n, o) => { const k = cnt(n), sp = o.sp || 90, life = o.life || 0.5; for (let i = 0; i < k; i++) F.part(x, y, o, sp * (0.4 + Math.random() * 0.8), life * (0.6 + Math.random() * 0.6)); };
   const NO_OPTS = {};
   F.text = (x, y, s, color, size, opts) => {
     if (F.texts.length > 80) F.texts.shift();
@@ -278,7 +278,7 @@
     g.setTransform(S, 0, 0, S, hw * S, top * S);
     const sh = Sp.shadow; Sp.shadow = NOP;
     let ok = true;
-    try { Sp.enemy(g, fk, F.time); } catch (err) { ok = false; } finally { Sp.shadow = sh; }
+    try { Rn.drawFoe(g, fk, F.time); } catch (err) { ok = false; } finally { Sp.shadow = sh; }
     g.setTransform(1, 0, 0, 1, 0, 0);
     if (!ok) { snapPool.splice(snapPool.indexOf(sn), 1); return; } // an unbalanced context is never reused
     g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
