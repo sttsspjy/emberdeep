@@ -182,6 +182,7 @@
     c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
     c.fillStyle = P.void; c.fillRect(0, 0, R.W, R.H);
     nl = 0; ng = 0; stN = 0; R.local = local;
+    R.simT = view.renderT || view.time || 0; // sim-time clock for hazards drawn from sim state: interpolated host time on clients, world time otherwise
     if (!room) { R.endWorld(R.postOpts(biome, t)); return; }
     let sx = 0, sy = 0;
     if (F.shake > 0) { const a = F.shake * R.scale * 0.55; sx = (Math.sin(t * 71) + Math.sin(t * 43 + 1.7) * 0.6) * a * 0.62; sy = (Math.cos(t * 67) + Math.sin(t * 51 + 0.4) * 0.6) * a * 0.62; }

@@ -778,7 +778,7 @@
       poly(c, [x - 2.5, y + 4, x, y - 7, x + 2.5, y + 4], Math.sin(a) > 0 ? '#ffd8f4' : '#c98bff');
     }
     if (e.phase >= 3) for (let i = 0; i < 3; i++) {
-      const a = (e.renderT || t) * 2.2 + i * U.TAU / 3;
+      const a = (ED.Render.simT ?? t) * 2.2 + i * U.TAU / 3; // sim-time phase: matches hkShards damage in bosses.js
       const x = Math.cos(a) * 74, y = Math.sin(a) * 74 + 6;
       glow(c, x, y, 18, C.c, 0.5); poly(c, [x - 6, y + 6, x, y - 10, x + 6, y + 6], '#ffb8ec');
     }

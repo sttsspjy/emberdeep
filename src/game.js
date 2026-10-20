@@ -99,7 +99,6 @@
       if (e.boss) { e.pose = st; e.st = 'atk'; } else e.st = st;
       e.burrowed = st === 'burrow' && !e.boss;
       e.aimA = rb[9]; e.elite = rb[10] >= 0 ? ED.AFFIX_IDS[rb[10]] : null; e.ward = rb[11]; e.wardMax = rb[12]; e.phase = rb[13]; e.face = rb[14]; e.t = rb[15];
-      e.renderT = this.renderT;
       out.push(e);
     }
     if (this.eMap.size > out.length * 2 + 40) { const keep = new Map(); for (const e of out) keep.set(e.id, e); this.eMap = keep; }
