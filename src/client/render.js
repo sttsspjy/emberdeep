@@ -674,7 +674,7 @@
     if (p.kind === 'relic') return 'Take ' + ED.RELICS[p.item].name;
     if (p.kind === 'shop') { const name = p.stype === 'relic' ? ED.RELICS[p.item].name : p.stype === 'boon' ? 'Epic boon' : p.stype === 'oil' ? 'Lantern oil' : p.stype === 'forge' ? 'Forge' : 'Healing draught'; return `Buy ${name} — ${p.price}g`; }
     if (p.kind === 'reward') {
-      if (p.item === 'gold') { const amt = ED.World.rewardGold ? ED.World.rewardGold(view.stratum, view.dread ? view.dread.tier | 0 : 0) : 0; return amt ? `Claim: ${amt} gold` : 'Claim: Gold'; }
+      if (p.item === 'gold') { const amt = ED.World.rewardGold ? ED.World.rewardGold(view.stratum, ED.World.DREAD[view.dread ? view.dread.tier | 0 : 0].gold) : 0; return amt ? `Claim: ${amt} gold` : 'Claim: Gold'; }
       return 'Claim: ' + R.rewardLabel(p.item);
     }
     if (p.kind === 'campfire') return 'Rest at the campfire';
