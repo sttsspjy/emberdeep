@@ -7,7 +7,8 @@
   const R = ED.Render = { cam: { x: 0, y: 0 }, scale: 2, W: 0, H: 0, dpr: 1, quality: 'high', lightLevel: 1, posting: false, stats: { n: 0, world: 0, post: 0 } };
   const glowCache = {}, lightCache = {}, trailCache = {};
   let lightCv, lctx, vignette, shadowCv, rimCv, rimCtx, lightN = 0;
-  const lights = [], rimSrc = [], glowQ = [];
+  const lights = [], rimSrc = [], glowQ = [], rimOut = { dx: 0, dy: 0, col: '', s: 0 };
+  let rimN = 0; // live entries of rimSrc (filled by last frame's lighting pass)
   let nl = 0, ng = 0, stN = 0, shDX = 0, shDY = 0; // lights/glows queued this frame (stN: status lights); shadow skew away from the nearest light
 
   R.init = (canvas) => {
@@ -158,7 +159,7 @@
     c.restore();
   };
   // Ambient colour: palette darkColor gives the hue, darkness gives the level; a lower lantern deepens it.
-  const ambCache = {};
+  const ambCache = {}, ambOut = [0, 0, 0];
   R.ambient = (biome, extraDark, redden) => {
     const P = biome.pal;
     let tint = ambCache[biome.id];
@@ -168,10 +169,11 @@
       tint = ambCache[biome.id] = n.map(v => v / lum);
     }
     const dark = U.clamp(P.darkness + extraDark, 0, 0.92);
-    const lum = (R.quality === 'low' ? 0.16 : 0.12) + 0.52 * (1 - dark);
-    const o = tint.map(v => U.clamp(v * lum, 0, 1));
+    const lum = (R.quality === 'low' ? 0.16 : 0.12) + 0.52 * (1 - dark), o = ambOut; // shared result: consumed by lightBegin right away
+    for (let i = 0; i < 3; i++) o[i] = U.clamp(tint[i] * lum, 0, 1);
     if (redden > 0) { o[0] = o[0] * (1 + redden * 0.5); o[1] *= 1 - redden * 0.45; o[2] *= 1 - redden * 0.45; }
-    return o.map(v => U.clamp(v, 0, 1) * 255);
+    for (let i = 0; i < 3; i++) o[i] = U.clamp(o[i], 0, 1) * 255;
+    return o;
   };
 
   // ---------------- main frame ----------------
@@ -197,12 +199,12 @@
     drawZones(c, view, t, 0);
     drawPickups(c, view, t);
     drawProps(c, view, local, t);
-    const list = [];
-    for (const p of view.players.values()) list.push({ y: p.y, k: 0, o: p });
-    for (const e of view.enemies) if (e.hp > 0) list.push({ y: e.y, k: 1, o: e });
-    for (const a of view.allies) list.push({ y: a.y, k: 2, o: a });
-    list.sort((a, b) => a.y - b.y);
-    for (const it of list) {
+    let dn = 0;
+    for (const p of view.players.values()) qDraw(dn++, p.y, 0, p);
+    for (const e of view.enemies) if (e.hp > 0) qDraw(dn++, e.y, 1, e);
+    for (const a of view.allies) qDraw(dn++, a.y, 2, a);
+    drawList.length = dn; drawList.sort(byY);
+    for (const it of drawList) {
       const o = it.o, rim = low ? null : rimLight(o.x, o.y, it.k === 0 ? 16 : 0);
       if (rim) { shDX = -rim.dx * 0.28; shDY = -rim.dy * 0.12; } else { shDX = 0; shDY = 0; }
       if (it.k === 0 && rim && !o.dead) drawHeroRim(c, o, view, t, ox, oy, rim);
@@ -247,6 +249,10 @@
     R.endWorld(R.postOpts(biome, t, view.pact > 0 ? { vig: 0.42 + Math.min(0.2, view.pact * 0.02) } : null));
   };
 
+  // Y-sorted entity list: items are pooled by index, so a frame allocates nothing.
+  const drawList = [], drawPool = [], byY = (a, b) => a.y - b.y;
+  const qDraw = (i, y, k, o) => { let it = drawPool[i]; if (!it) it = drawPool[i] = { y: 0, k: 0, o: null }; it.y = y; it.k = k; it.o = o; drawList[i] = it; };
+
   // One-shot additive-style glow drawn at an offset (rim-light stand-in for plain enemies).
   R.glowOnce = (c, x, y, r, color, a, dx, dy) => {
     const prev = c.globalCompositeOperation; c.globalCompositeOperation = 'lighter';
@@ -256,7 +262,8 @@
   // Strongest nearby light as seen from (x, y): direction toward it, colour and strength 0..1 (null when none).
   function rimLight(x, y, skip) {
     let best = null, bs = 0.12;
-    for (const L of rimSrc) {
+    for (let i = 0; i < rimN; i++) {
+      const L = rimSrc[i];
       const dx = L.x - x, dy = L.y - y, d2 = dx * dx + dy * dy;
       if (d2 < skip * skip || d2 < 400) continue;
       const s = Math.min(1.2, L.k) * L.r * L.r / (d2 + L.r * L.r) - 0.12;
@@ -264,7 +271,8 @@
     }
     if (!best) return null;
     const dx = best.x - x, dy = best.y - y, d = Math.hypot(dx, dy) || 1;
-    return { dx: dx / d, dy: dy / d, col: best.c, s: Math.min(1, bs * 1.6) };
+    rimOut.dx = dx / d; rimOut.dy = dy / d; rimOut.col = best.c; rimOut.s = Math.min(1, bs * 1.6);
+    return rimOut; // shared: consumed before the next call
   }
 
   // Heroes render into a scratch canvas so a lit-side rim can be composited with 'source-atop' onto the sprite only.
@@ -722,8 +730,10 @@
   };
 
   // Reward previews over the doors of the current room: neighbours not yet cleared, bobbing in front of each doorway.
+  const dpList = [], dpPool = [];
   function doorPreviews(view, room, t) {
-    const out = [];
+    const out = dpList; let n = 0; // pooled: the list is consumed before the next call
+    out.length = 0;
     if (view.locked || !view.floor) return out;
     const me = view.players.get(R.local), cls = me ? me.cls : null, h = room.h * T, w = room.w * T;
     for (const d in room.doors) {
@@ -734,7 +744,8 @@
       const r = ED.Dungeon.doorRect(room, d), cx = (r.x0 + r.x1 + 1) / 2 * T, cy = (r.y0 + r.y1 + 1) / 2 * T;
       let x = cx, y = cy;
       if (d === 'n') y = T - 2; else if (d === 's') y = h - T - 6; else if (d === 'w') x = T * 0.5 + 6; else x = w - T * 0.5 - 6;
-      out.push({ x, y: y + Math.sin(t * 2.2 + x * 0.03 + y * 0.02) * 1.8, color: ri.color, ri });
+      let o = dpPool[n]; if (!o) o = dpPool[n] = { x: 0, y: 0, color: '', ri: null };
+      o.x = x; o.y = y + Math.sin(t * 2.2 + x * 0.03 + y * 0.02) * 1.8; o.color = ri.color; o.ri = ri; out[n++] = o;
     }
     return out;
   }
@@ -1164,14 +1175,15 @@
   }
 
   // ---------------- lighting ----------------
+  function rimAdd(x, y, r, col, k) { if (rimN < 40) { let L = rimSrc[rimN]; if (!L) L = rimSrc[rimN] = { x: 0, y: 0, r: 0, c: '', k: 0 }; L.x = x; L.y = y; L.r = r; L.c = col; L.k = k; rimN++; } }
   function drawLighting(c, view, room, biome, local, t, ox, oy) {
     const P = biome.pal, ll = R.lightLevel, s = R.scale;
     const amb = R.ambient(biome, (1 - ll) * 0.32, view.pact > 0 ? Math.min(0.5, view.pact * 0.05) : 0);
     R.lightBegin(amb);
     const gm = ED.Tiles.glowmap(room, s);
     if (gm) { lctx.globalAlpha = 0.5; lctx.drawImage(gm, ox / R.lightDiv, oy / R.lightDiv, gm.width / gm.px * s / R.lightDiv, gm.height / gm.px * s / R.lightDiv); lctx.globalAlpha = 1; }
-    rimSrc.length = 0;
-    const src = (x, y, r, col, k) => { if (rimSrc.length < 40) rimSrc.push({ x, y, r, c: col, k }); };
+    rimN = 0;
+    const src = rimAdd;
     // hero lanterns: warm core plus a wider tinted fill; radius shrinks and flickers as the lantern fails
     for (const p of view.players.values()) {
       if (p.dead) continue;
