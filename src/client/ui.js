@@ -38,6 +38,14 @@
 
   const portrait = (cls, size, slot, weapon) => { const cv = document.createElement('canvas'); cv.width = cv.height = size * 2; ED.Sprites.portrait(cv, cls, slot || 0, weapon); return cv; };
 
+  // Path helpers: elements share ids with their paths (pyre, rime, storm); thresholds fall back to the design values when data does not export them.
+  const KEY_AFF = () => ED.KEY_AFFINITY || 3, EVO_AFF = () => ED.EVO_AFFINITY || 5, LEECH_CAP = () => (ED.CONST && ED.CONST.LEECH_CAP) || 0.02;
+  const pathIcon = (k) => ED.Icons.url(ED.PATHS[k].icon, ED.PATHS[k].color);
+  const pathName = (k, wrap) => (ED.PATHS[k] ? (wrap ? `<i style="color:${ED.PATHS[k].color}">${ED.PATHS[k].name}</i>` : ED.PATHS[k].name) : '');
+  UI.evoName = (path, weaponId) => (ED.PATHS[path] ? ED.PATHS[path].evo : '') + (ED.WEAPONS[weaponId] ? ' ' + ED.WEAPONS[weaponId].name : ' Arms');
+  const affChip = (el, kind, small) => (el && ED.PATHS[el] ? `<span class="aff-chip ${kind}${small ? ' sm' : ''}" style="--pc:${ED.PATHS[el].color}"><img alt="" src="${pathIcon(el)}">${kind === 'weak' ? 'Weak to' : 'Resists'} ${ED.PATHS[el].name}</span>` : '');
+  const affChips = (biome, small) => affChip(biome.weak, 'weak', small) + affChip(biome.resist, 'resist', small);
+
   // ---------------- title ----------------
   UI.renderTitle = () => {
     const A = ED.App;
@@ -113,19 +121,18 @@
     const cls = A.sel.cls, c = ED.CLASSES[cls];
     classCards($('class-list'), cls, (id) => { A.selectClass(id); renderDescend(); });
     const st = ED.Stats.compute({ cls, weapon: A.sel.weapon, boons: {}, relics: [], meta: S.metaBundle(p, cls), pact: A.sel.pact });
-    const sk = ED.SKILLS[c.skill];
+    const skills = [[c.skill, 'K', st.skillCd], [c.skill2, 'L', st.skill2Cd]].filter(x => ED.SKILLS[x[0]]);
     const ml = S.masteryLevel(p, cls);
     const hd = $('hero-detail');
     hd.innerHTML = `
-      <div class="hd-top"><div id="hd-port"></div><div><div class="hd-name">${c.name}</div><div class="hd-title">${c.title} · Mastery ${ml}</div></div></div>
-      <p class="hd-desc">${esc(c.desc)}</p>
+      <div class="hd-top"><div id="hd-port"></div><div><div class="hd-name">${c.name}</div><div class="hd-title">${c.title} · Mastery ${ml}</div><p class="hd-desc">${esc(c.desc)}</p></div></div>
       <div class="hd-stats">
         <div class="hd-stat"><b>${st.maxHp}</b><span>Health</span></div>
         <div class="hd-stat"><b>${Math.round(st.armor)}</b><span>Armor</span></div>
         <div class="hd-stat"><b>${Math.round(st.moveSpeed)}</b><span>Speed</span></div>
         <div class="hd-stat"><b>${Math.round(st.crit * 100)}%</b><span>Crit</span></div>
       </div>
-      <div class="hd-skill"><img alt="" src="${ED.Icons.url(sk.icon, c.col.c)}"><div><b>${sk.name}</b> <small>(K · ${st.skillCd.toFixed(1)}s)</small><p>${esc(sk.desc)}</p></div></div>
+      <div class="hd-skills">${skills.map(([id, key, cd]) => { const sk = ED.SKILLS[id]; return `<div class="hd-skill"><img alt="" src="${ED.Icons.url(sk.icon, c.col.c)}"><div><b>${sk.name}</b> <small><kbd>${key}</kbd> ${cd.toFixed(1)}s cooldown</small><p>${esc(sk.desc)}</p></div></div>`; }).join('')}</div>
       <div class="weapon-row" id="weapon-row"></div>`;
     $('hd-port').appendChild(portrait(cls, 84, 0, A.sel.weapon));
     weaponChips($('weapon-row'), cls, A.sel.weapon, (wid) => { A.sel.weapon = wid; A.saveSel(); renderDescend(); });
@@ -135,7 +142,7 @@
     if (p.pactMax > 0) {
       const r = $('asc-range'); r.max = p.pactMax; r.value = Math.min(A.sel.pact, p.pactMax);
       $('asc-val').textContent = r.value;
-      $('asc-desc').textContent = pactText(+r.value);
+      $('asc-desc').textContent = +r.value ? pactText(+r.value) : ''; // empty hides the line (keeps the column short)
     }
     $('btn-host').disabled = !ED.Net.available();
     $('btn-join').disabled = !ED.Net.available();
@@ -148,17 +155,20 @@
     return v ? lines.join(' ') + ` Embers +${Math.round(ED.PACT_EMBER_BONUS * v * 100)}%.` : 'No pact sworn. The Deep as it is.';
   }
 
+  // Two lines for the descent loop (paths, lantern), then the single most useful next goal.
   function goalText(p) {
     const next = ED.CLASS_IDS.find(c => !S.classUnlocked(p, c));
-    const deep = p.stats.deepest;
-    const tips = [];
-    if (p.stats.runs === 0) tips.push('<b>First descent:</b> clear rooms, pick boons, and reach the Bone Warden at the end of the Ossuary. Every descent pays out embers, win or lose.');
-    if (next) tips.push(`<b>Next hero:</b> ${ED.CLASSES[next].name} (${esc(ED.CLASSES[next].unlock.text)}).`);
-    const tierNext = ED.UPGRADES.find(u => u.tier > deep);
-    if (tierNext) tips.push(`<b>Reach stratum ${U.roman(tierNext.tier)}</b> to reveal new Hearth upgrades.`);
-    if (p.stats.wins > 0 && p.pactMax < 10) tips.push(`<b>Pacts:</b> complete a descent under Pact ${p.pactMax} to unlock Pact ${p.pactMax + 1}.`);
-    if (!tips.length) tips.push('<b>Every relic, hero and pact is yours.</b> The Deep still has deeds to earn.');
-    return tips.slice(0, 2).join('<br>');
+    const tierNext = ED.UPGRADES.find(u => u.tier > p.stats.deepest);
+    const lines = [
+      `<b>Paths:</b> follow up to ${ED.MAX_GATES} of ${ED.PATH_IDS.map(k => pathName(k, true)).join(', ')}. Each stratum is weak to one element.`,
+      '<b>Lantern:</b> exploring burns light. The dimmer it gets, the harder foes hit and the more they pay.',
+    ];
+    if (p.stats.runs === 0) lines.push('<b>First goal:</b> reach the Bone Warden at the end of the Ossuary. Every descent pays embers, win or lose.');
+    else if (next) lines.push(`<b>Next hero:</b> ${ED.CLASSES[next].name} (${esc(ED.CLASSES[next].unlock.text)}).`);
+    else if (tierNext) lines.push(`<b>Reach stratum ${U.roman(tierNext.tier)}</b> to reveal new Hearth upgrades.`);
+    else if (p.stats.wins > 0 && p.pactMax < 10) lines.push(`<b>Pacts:</b> complete a descent under Pact ${p.pactMax} to unlock Pact ${p.pactMax + 1}.`);
+    else lines.push('<b>Every relic, hero and pact is yours.</b> The Deep still has deeds to earn.');
+    return lines.join('<br>');
   }
 
   function renderUpgrades(grid) {
@@ -256,7 +266,7 @@
     const sl = $('strata-list'); sl.innerHTML = '';
     ED.BIOMES.forEach((b, i) => {
       const seen = st.deepest > i, slain = !!(p.bosses & (1 << i));
-      sl.insertAdjacentHTML('beforeend', `<div class="stratum${seen ? '' : ' unseen'}"><i style="background:radial-gradient(circle at 40% 35%, ${b.pal.accent}, ${b.pal.floorA})"></i><div><b>${U.roman(i + 1)}. ${seen ? b.name : '???'}</b><small>${seen ? esc(slain ? ED.LORE[i] : b.blurb) : 'Undiscovered'}</small></div></div>`);
+      sl.insertAdjacentHTML('beforeend', `<div class="stratum${seen ? '' : ' unseen'}"><i style="background:radial-gradient(circle at 40% 35%, ${b.pal.accent}, ${b.pal.floorA})"></i><div><b>${U.roman(i + 1)}. ${seen ? b.name : '???'}</b><small>${seen ? esc(slain ? ED.LORE[i] : b.blurb) : 'Undiscovered'}</small><div class="aff-list">${affChips(b, true)}</div></div></div>`);
     });
   }
 
@@ -336,32 +346,76 @@
   // Cards ignore input for a moment after they appear, so a key or click meant for combat never picks one.
   let boonFocus = 0, boonOffer = null, boonLock = 0;
   const BOON_LOCK_MS = 700;
+  const OFFER_HEAD = { start: 'Choose your first path', level: 'Choose a boon', epic: 'An epic boon', forge: 'Temper — rank up a boon' };
+
+  // [header, subtitle, path colour key] for an offer message { src, path, forge }.
+  function offerHead(offer, me) {
+    const src = offer.forge ? 'forge' : (offer.src || 'level');
+    const owned = me && me.boons ? ED.gatePaths(me.boons) : [];
+    const P = ED.PATHS[offer.path];
+    if (src === 'room' && P) {
+      if (owned.includes(offer.path)) return [`Boon of ${P.name}`, `Your ${P.name} affinity: ${ED.pathAffinity(me.boons, offer.path)}`, offer.path];
+      if (owned.length < ED.MAX_GATES) return [`Boon of ${P.name}`, `A new path (${owned.length}/${ED.MAX_GATES} slots used)`, offer.path];
+      return [OFFER_HEAD.level, `${P.name} is out of reach: your ${ED.MAX_GATES} path slots are full`, null];
+    }
+    if (src === 'class') return [`${me && ED.CLASSES[me.cls] ? ED.CLASSES[me.cls].name : 'Class'} technique`, '', null];
+    if (src === 'start') return [OFFER_HEAD.start, `Paths gate your boons. A hero follows up to ${ED.MAX_GATES}.`, null];
+    if (src === 'forge') return [OFFER_HEAD.forge, 'The boon you pick gains one rank.', null];
+    return [OFFER_HEAD[src] || OFFER_HEAD.level, '', null];
+  }
+
+  // Small label under the name: path and role, duo pair, evolution weapon, class or neutral.
+  function boonLabel(b, me) {
+    if (b.evo) return `Evolution · ${esc(UI.evoName(b.evo, me && me.weapon))}`;
+    if (b.duo) return `Duo · ${pathName(b.duo[0], true)} + ${pathName(b.duo[1], true)}`;
+    if (b.path) return pathName(b.path, true) + (b.gate ? ' · Gate' : b.key ? ' · Keystone' : '');
+    if (b.cls) return esc(ED.CLASSES[b.cls].name);
+    return 'Neutral';
+  }
+
+  function boonCard(id, i, offer, me) {
+    const b = ED.BOONS[id], max = b.max || 5;
+    const have = me && me.boons ? (me.boons[id] || 0) : 0;
+    const path = b.path || (b.duo && b.duo[0]) || null, path2 = b.duo ? b.duo[1] : null;
+    const el = document.createElement('button'); el.type = 'button';
+    el.className = ['boon-card', path && 'path-' + path, path2 && 'path2-' + path2, path2 && 'duo', b.key && 'key', b.evo && 'evo', offer.forge && 'forge'].filter(Boolean).join(' ');
+    el.style.setProperty('--rc', ED.RARITY[b.rar].color);
+    if (path && ED.PATHS[path]) el.style.setProperty('--pc', ED.PATHS[path].color);
+    if (path2 && ED.PATHS[path2]) el.style.setProperty('--pc2', ED.PATHS[path2].color);
+    const rank = have ? (have < max ? `Rank ${have} → ${have + 1} (max ${max})` : `Rank ${have} (max)`) : max > 1 ? `Max rank ${max}` : '';
+    el.innerHTML = `<img alt="" src="${ED.Icons.boonUrl(id)}"><div class="bx"><div class="bn">${esc(b.name)}</div><div class="bm"><span class="br">${ED.RARITY[b.rar].name}</span><span class="bl">${boonLabel(b, me)}</span></div><div class="bd">${esc(b.desc)}</div>${rank ? `<div class="bk${have ? ' own' : ''}">${rank}</div>` : ''}</div>`;
+    el.onclick = () => { if (performance.now() >= boonLock) UI.pickBoon(i); };
+    el.onmouseenter = () => { boonFocus = i; paintFocus(); };
+    return el;
+  }
+
+  // Five or six cards, or a phone-width screen, use the compact card layout.
+  const paintDense = () => { $('boon-cards').classList.toggle('dense', !!boonOffer && (boonOffer.boons.length > 4 || window.innerWidth <= 560)); };
+
   UI.showBoons = (offer) => {
     boonOffer = offer; boonFocus = 0; boonLock = performance.now() + BOON_LOCK_MS;
     const wrap = $('boon-cards'); wrap.innerHTML = '';
     const me = ED.Game.s && ED.Game.s.me;
-    offer.boons.forEach((id, i) => {
-      const b = ED.BOONS[id], col = ED.RARITY[b.rar].color;
-      const have = me && me.boons ? (me.boons[id] || 0) : 0;
-      const el = document.createElement('button'); el.type = 'button';
-      el.className = 'boon-card'; el.style.setProperty('--rc', col);
-      el.innerHTML = `${have ? `<span class="bs">Owned ×${have}</span>` : ''}<img alt="" src="${ED.Icons.boonUrl(id)}"><div class="bn">${b.name}</div><div class="br">${ED.RARITY[b.rar].name}${b.cls ? ' · ' + ED.CLASSES[b.cls].name : ''}</div><div class="bd">${esc(b.desc)}</div>`;
-      el.onclick = () => { if (performance.now() >= boonLock) UI.pickBoon(i); };
-      el.onmouseenter = () => { boonFocus = i; paintFocus(); };
-      wrap.appendChild(el);
-    });
+    offer.boons.forEach((id, i) => wrap.appendChild(boonCard(id, i, offer, me)));
+    paintDense();
+    const [head, sub, hp] = offerHead(offer, me);
+    $('boon-head').textContent = head;
+    $('boon-head').style.color = hp ? ED.PATHS[hp].color : '';
+    $('boon-sub').textContent = sub; $('boon-sub').hidden = !sub;
     $('boon-count').textContent = offer.picks > 1 ? `(${offer.picks} waiting)` : '';
-    const rr = $('btn-reroll');
-    rr.hidden = !(offer.rerolls > 0); rr.innerHTML = `<kbd>K</kbd> Reroll (${offer.rerolls})`;
+    const rr = $('btn-reroll'), canRe = offer.rerolls > 0 && !offer.forge;
+    rr.hidden = !canRe; rr.innerHTML = `<kbd>K</kbd> Reroll (${offer.rerolls})`;
+    $('boon-hint-rr').hidden = !canRe;
     rr.onclick = () => UI.boonReroll(false);
     $('ov-boon').hidden = false;
+    $('ov-boon').scrollTop = 0;
     paintFocus();
   };
   const paintFocus = () => { [...$('boon-cards').children].forEach((el, i) => el.classList.toggle('focus', i === boonFocus)); };
   UI.boonMove = (d) => { if (!boonOffer) return; boonFocus = (boonFocus + d + boonOffer.boons.length) % boonOffer.boons.length; paintFocus(); ED.Audio.play('hover'); };
   UI.boonConfirm = () => { if (!boonOffer || performance.now() < boonLock) return; UI.pickBoon(boonFocus); };
   UI.boonReroll = (byKey) => {
-    if (!boonOffer || !(boonOffer.rerolls > 0) || performance.now() < boonLock) return;
+    if (!boonOffer || !(boonOffer.rerolls > 0) || boonOffer.forge || performance.now() < boonLock) return;
     boonLock = performance.now() + BOON_LOCK_MS; // the fresh hand arrives in a moment; don't send twice
     if (byKey) ED.Audio.play('click');
     ED.Game.act({ t: 'reroll' });
@@ -376,6 +430,32 @@
   UI.hideBoons = () => { boonOffer = null; $('ov-boon').hidden = true; };
 
   // ---------------- character sheet (Tab) ----------------
+  // One path row: icon, affinity, keystone and evolution status.
+  function pathRow(k, me, evoPath) {
+    const P = ED.PATHS[k], boons = me.boons || {}, aff = ED.pathAffinity(boons, k);
+    const keyId = ED.BOON_IDS.find(id => ED.BOONS[id].key && ED.BOONS[id].path === k);
+    const hasKey = !!(keyId && boons[keyId]);
+    const keyLine = hasKey ? `Keystone: ${esc(ED.BOONS[keyId].name)}` : aff >= KEY_AFF() ? 'Keystone available in your offers' : `Keystone ready at ${KEY_AFF()}`;
+    let evoLine;
+    if (evoPath === k) evoLine = `Evolved: ${esc(UI.evoName(k, me.weapon))}`;
+    else if (evoPath) evoLine = 'Evolution already taken';
+    else if (hasKey && aff >= EVO_AFF()) evoLine = 'Evolution ready — it will appear in your next offer';
+    else evoLine = `Evolves at ${EVO_AFF()} with keystone`;
+    return `<div class="path-row${evoPath === k ? ' evolved' : ''}" style="--pc:${P.color}"><img alt="" src="${pathIcon(k)}"><div><div class="pr-head"><b>${P.name}</b><span>Affinity ${aff}</span></div><div class="pr-line${hasKey ? ' ok' : ''}">${keyLine}</div><div class="pr-line${evoPath === k ? ' ok' : ''}">${evoLine}</div></div></div>`;
+  }
+
+  // Boons grouped by path (pick order), then duo, class and neutral.
+  function boonGroups(me) {
+    const boons = me.boons || {}, ids = Object.keys(boons).filter(id => ED.BOONS[id] && boons[id] > 0);
+    const chip = (id) => { const b = ED.BOONS[id]; return `<span class="chip${b.key ? ' key' : ''}${b.evo ? ' evo' : ''}" style="--rc:${ED.RARITY[b.rar].color}" title="${esc(b.desc)}"><img alt="" src="${ED.Icons.boonUrl(id)}">${esc(b.name)}${boons[id] > 1 ? ' ×' + boons[id] : ''}</span>`; };
+    const groups = ED.gatePaths(boons).map(k => [`<span style="color:${ED.PATHS[k].color}">${ED.PATHS[k].name}</span> <small>${ED.pathAffinity(boons, k)}</small>`, ids.filter(id => ED.BOONS[id].path === k), ED.PATHS[k].color]);
+    groups.push(['Duo', ids.filter(id => ED.BOONS[id].duo), '']);
+    groups.push([`${ED.CLASSES[me.cls].name} technique`, ids.filter(id => ED.BOONS[id].cls), '']);
+    groups.push(['Neutral', ids.filter(id => { const b = ED.BOONS[id]; return !b.path && !b.duo && !b.cls; }), '']);
+    const html = groups.filter(g => g[1].length).map(([h, list, col]) => `<div class="bg"${col ? ` style="--pc:${col}"` : ''}><div class="bg-h">${h}</div><div class="chip-list">${list.map(chip).join('')}</div></div>`).join('');
+    return html || '<span class="chip none">None yet</span>';
+  }
+
   UI.toggleSheet = (on) => {
     const s = ED.Game.s; if (!s) return;
     const el = $('ov-sheet');
@@ -383,17 +463,27 @@
     if (el.hidden) return;
     const me = s.me, st = me.stats, view = s.view;
     $('sheet-hero').textContent = `${me.name} · ${ED.CLASSES[me.cls].name}`;
+    const shieldCap = Math.round(me.maxHp * (st.bloodShield || 0));
     const rows = [
       ['Health', `${Math.ceil(me.hp)} / ${me.maxHp}`], ['Damage', U.pct(st.dmg)], ['Attack speed', U.pct(st.atk)], ['Critical', `${Math.round(st.crit * 100)}% ×${st.critMult.toFixed(2)}`],
-      ['Armor', Math.round(st.armor) + ` (−${Math.round((1 - ED.Stats.armorMul(st.armor)) * 100)}%)`], ['Move speed', Math.round(st.moveSpeed)], ['Skill cooldown', st.skillCd.toFixed(1) + 's'], ['Dodge', Math.round(st.dodge * 100) + '%'],
-      ['Life steal', Math.round(st.leech * 100) + '%'], ['Regen', st.regen.toFixed(1) + '/s'], ['Level', view.level], ['Gold', view.gold],
+      ['Armor', Math.round(st.armor) + ` (−${Math.round((1 - ED.Stats.armorMul(st.armor)) * 100)}%)`], ['Move speed', Math.round(st.moveSpeed)], ['Skills K · L', `${st.skillCd.toFixed(1)}s · ${(st.skill2Cd || 0).toFixed(1)}s`], ['Dodge', Math.round(st.dodge * 100) + '%'],
+      ['Life steal', Math.round(st.leech * 1000) / 10 + '%'], ['Regen', st.regen.toFixed(1) + '/s'], ['Level', view.level], ['Gold', view.gold],
     ];
+    if (shieldCap > 0) rows.push(['Blood shield', `${Math.ceil(me.shield || 0)} / ${shieldCap}`]);
     $('sheet-dl').innerHTML = rows.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
+    const note = $('sheet-note');
+    note.hidden = !(st.leech > 0 || st.hemorrhage);
+    note.textContent = `Leech heals at most ${Math.round(LEECH_CAP() * 100)}% max health per second (${(me.maxHp * LEECH_CAP()).toFixed(1)} for you). Damage over time never leeches.`;
     $('sheet-relics').innerHTML = me.relics.length ? me.relics.map(id => { const r = ED.RELICS[id]; return `<span class="chip" style="--rc:${ED.RARITY[r.rar].color}" title="${esc(r.desc)}"><img alt="" src="${ED.Icons.relicUrl(id)}">${r.name}</span>`; }).join('') : '<span class="chip none">None yet</span>';
-    const bk = Object.keys(me.boons || {});
-    $('sheet-boons').innerHTML = bk.length ? bk.map(id => { const b = ED.BOONS[id]; return `<span class="chip" style="--rc:${ED.RARITY[b.rar].color}" title="${esc(b.desc)}"><img alt="" src="${ED.Icons.boonUrl(id)}">${b.name}${me.boons[id] > 1 ? ' ×' + me.boons[id] : ''}</span>`; }).join('') : '<span class="chip none">None yet</span>';
-    const biome = ED.biomeFor(view.stratum);
+    $('sheet-boons').innerHTML = boonGroups(me);
+    // paths: slots used, affinity, keystone and evolution
+    const owned = ED.gatePaths(me.boons || {}), evoPath = ED.evoOf(me.boons || {});
+    $('sheet-slots').textContent = `${owned.length}/${ED.MAX_GATES}`;
+    $('sheet-paths').innerHTML = owned.map(k => pathRow(k, me, evoPath)).join('') + '<div class="path-row empty">Open path slot</div>'.repeat(Math.max(0, ED.MAX_GATES - owned.length));
+    // stratum affinity: now and next
+    const biome = ED.biomeFor(view.stratum), nb = view.stratum < ED.BIOMES.length ? ED.biomeFor(view.stratum + 1) : null;
     $('sheet-strat').textContent = `Stratum ${U.roman(view.stratum)} · ${biome.name}`;
+    $('sheet-aff').innerHTML = `<div class="aff-row">${affChips(biome)}</div>` + (nb ? `<div class="aff-row next"><span class="lbl">Next · ${nb.short}</span>${affChips(nb, true)}</div>` : '');
     const mc = $('map-canvas'), c = mc.getContext('2d');
     c.clearRect(0, 0, mc.width, mc.height);
     ED.HUD.drawMap(c, view, 10, 10, mc.width - 20, mc.height - 20, 1.6, 0);
@@ -404,17 +494,26 @@
     const A = ED.App, p = A.profile;
     const win = sum.victory;
     const banner = $('res-banner');
-    banner.textContent = win ? 'Victory' : sum.retreat ? 'The lantern fades' : sum.abandoned ? 'Retreat' : note ? 'Disconnected' : 'Fallen';
+    banner.textContent = win ? 'Victory' : sum.abandoned ? 'Retreat' : note ? 'Disconnected' : 'Fallen';
     banner.classList.toggle('win', !!win);
     const biome = ED.biomeFor(sum.stratum || 1);
     const tail = res.rewards.total > 0 ? 'The embers you carried still count.' : 'Clear at least one room for a descent to pay out.';
-    $('res-sub').textContent = note || (win ? 'The Hollow King is broken. The Deep remembers your name.' : sum.retreat ? 'Your light ran out. You climb back to the Hearth with everything you earned.'
+    $('res-sub').textContent = note || (win ? 'The Hollow King is broken. The Deep remembers your name.'
       : sum.abandoned ? `${sum.party > 1 ? 'Your party' : 'You'} turned back in ${biome.name}. ${tail}` : `You fell in ${biome.name}. ${tail}`);
+    // world-summary fields below may be missing from a client's partial summary
+    const total = sum.roomsTotal | 0, seen = Math.min(total, sum.roomsVisited | 0);
+    const lights = Array.isArray(sum.lightAtBoss) ? sum.lightAtBoss.filter(v => typeof v === 'number') : [];
     $('res-stats').innerHTML = [
       ['Deepest stratum', `${U.roman(sum.stratum || 1)} · ${biome.short}`], ['Time', U.fmtTime(sum.time || 0)], ['Level reached', sum.level || 1],
-      ['Rooms cleared', sum.roomsCleared || 0], ['Foes slain', sum.kills || 0], ['Bosses slain', sum.bossCount || 0], ['Party', (sum.party || 1) + (sum.party > 1 ? ' heroes' : ' hero')],
+      ['Rooms cleared', sum.roomsCleared || 0], total > 0 ? ['Rooms explored', `${seen} / ${total} (${Math.round(seen / total * 100)}%)`] : null,
+      lights.length ? ['Average light at boss', Math.round(lights.reduce((a, b) => a + b, 0) / lights.length * 100) + '%'] : null,
+      ['Foes slain', sum.kills || 0], ['Bosses slain', sum.bossCount || 0], ['Party', (sum.party || 1) + (sum.party > 1 ? ' heroes' : ' hero')],
       sum.pact ? ['Pact', sum.pact] : null,
     ].filter(Boolean).map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
+    const evo = sum.myEvo && ED.PATHS[sum.myEvo.path] ? sum.myEvo : null, evoEl = $('res-evo');
+    evoEl.hidden = !evo && !sum.evolved;
+    evoEl.style.setProperty('--pc', evo ? ED.PATHS[evo.path].color : 'var(--r-legend)');
+    evoEl.innerHTML = evo ? `<img alt="" src="${pathIcon(evo.path)}"><span>Evolved: <b>${esc(UI.evoName(evo.path, evo.weapon))}</b> <small>${ED.PATHS[evo.path].name} path</small></span>` : sum.evolved ? '<span>A hero in your party evolved their weapon.</span>' : '';
     $('res-embers').innerHTML = res.rewards.lines.map(([a, b]) => `<dt>${esc(a)}</dt><dd>+${b}</dd>`).join('') || '<dt>Nothing this time</dt><dd>0</dd>';
     $('res-ember-total').textContent = res.rewards.total;
     const ci = ED.CLASS_IDS.indexOf(sum.cls);
@@ -497,6 +596,7 @@
     };
     for (const id of ['set-master', 'set-music', 'set-sfx', 'set-aim', 'set-quality', 'set-shake', 'set-dmg']) $(id).addEventListener('input', setChange);
     $('btn-settings-close').onclick = () => { $('ov-settings').hidden = true; };
+    window.addEventListener('resize', () => { if (!$('ov-boon').hidden) paintDense(); });
     // Esc closes menu overlays outside a run (in a run the frame loop owns Esc)
     window.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape' || A.inRun()) return;

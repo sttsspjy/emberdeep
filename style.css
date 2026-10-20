@@ -1,4 +1,4 @@
-/* Emberdeep UI — lantern-lit charcoal, ember orange, tarnished gold.
+/* Wickdeep UI — lantern-lit charcoal, ember orange, tarnished gold.
    Layout: full-bleed canvas world; DOM screens float above it as framed panels. */
 :root {
   --ink: #0d0a09;
@@ -123,7 +123,7 @@ input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--ember); }
 
 .descend-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 22px; align-items: start; max-width: 1080px; }
 .class-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.class-list.compact { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.class-list.compact { grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); }
 .class-card { display: grid; grid-template-columns: 56px minmax(0,1fr); gap: 10px; align-items: center; text-align: left; padding: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; color: var(--text); font: inherit; transition: border-color .15s, background .15s, transform .1s; }
 .class-card:hover { border-color: var(--line-hi); background: var(--panel-hi); }
 .class-card.on { border-color: var(--ember); box-shadow: 0 0 0 1px var(--ember-lo), 0 0 22px rgba(255,120,40,0.18); background: var(--panel-hi); }
@@ -285,7 +285,7 @@ input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--ember); }
 .overlay.sheet { background: rgba(5,3,2,0.78); }
 .boon-wrap { width: min(980px, 100%); display: flex; flex-direction: column; align-items: center; gap: 16px; }
 .boon-title { font: 900 30px var(--f-display); color: var(--gold); letter-spacing: 0.06em; text-shadow: 0 2px 0 #000; }
-.boon-title span { font-size: 18px; color: var(--ember-hi); }
+#boon-count { font-size: 18px; color: var(--ember-hi); }
 .boon-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 250px)); gap: 14px; justify-content: center; width: 100%; }
 .boon-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 22px 16px 18px; text-align: center; background: linear-gradient(180deg, #2a1e18, #17110e); border: 1px solid var(--line-hi); border-top: 3px solid var(--rc, var(--r-common)); border-radius: 10px; cursor: pointer; color: var(--text); font: inherit; transition: transform .12s, box-shadow .15s, border-color .15s; animation: cardIn .35s backwards; }
 .boon-card:nth-child(2) { animation-delay: .06s; }
@@ -481,3 +481,109 @@ input[type=range], input[type=checkbox] { box-shadow: none; }
   .btn-primary, .logo-word, .logo-rule i, .boon-card.key::after, .boon-card.evo, .boon-card.evo::after, .unlock-pill, .overlay { animation: none; }
   .btn:hover, .class-card:hover, .up-card:hover, .weapon-chip:hover, .icon-btn:hover { transform: none; }
 }
+
+/* ---------- Wickdeep: hero skills, run goal, strata affinity, boon header and compact cards, paths panel, results ---------- */
+.descend-grid { grid-template-rows: auto 1fr; }
+.col-classes { grid-column: 1; grid-row: 1; }
+.col-detail { grid-column: 2; grid-row: 1 / span 2; }
+.descend-grid > .run-goal { grid-column: 1; grid-row: 2; align-self: start; margin-top: 4px; }
+@media (max-width: 900px) { .col-classes, .col-detail, .descend-grid > .run-goal { grid-column: auto; grid-row: auto; } .descend-grid { grid-template-rows: none; } }
+
+.run-goal i { font-style: normal; font-weight: 700; }
+/* the descend buttons stay on screen while a tall hero panel scrolls */
+@media (min-width: 901px) { .descend-actions { position: sticky; bottom: 0; z-index: 2; padding: 12px 0 4px; margin-top: 6px; background: linear-gradient(180deg, transparent, rgba(8, 6, 5, 0.92) 28%); } }
+/* compact hero panel and pact row so the whole Descend column fits a 720 px screen */
+.hero-detail { padding: 14px 16px; }
+.hd-top { margin-bottom: 10px; align-items: flex-start; }
+.hd-top canvas { width: 72px; height: 72px; }
+.hd-desc { margin: 4px 0 0; font-size: 14px; line-height: 1.3; }
+.asc-desc:empty { display: none; }
+.hd-stats { margin-bottom: 10px; }
+.asc-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 12px; align-items: center; padding: 8px 14px; margin-top: 10px; }
+.asc-head { display: contents; }
+.asc-head .lbl { grid-column: 1; grid-row: 1; }
+.asc-head .asc-val { grid-column: 3; grid-row: 1; font-size: 20px; line-height: 1; }
+.asc-row input { grid-column: 2; grid-row: 1; margin: 0; }
+.asc-desc { grid-column: 1 / -1; grid-row: 2; margin-top: 4px; font-size: 12.5px; }
+.hd-skills { display: grid; gap: 8px; margin-bottom: 12px; }
+.hd-skills .hd-skill { margin-bottom: 0; grid-template-columns: 36px minmax(0, 1fr); padding: 7px 8px; }
+.hd-skills .hd-skill img { width: 36px; height: 36px; }
+.hd-skill small { color: var(--muted); font-size: 12px; }
+.hd-skill small kbd { min-width: 1.4em; padding: 0 4px; margin: 0 2px 0 0; font-size: 11px; }
+.hd-skills .hd-skill p { font-size: 13px; line-height: 1.3; }
+
+/* elemental affinity chips (strata list, sheet) */
+.aff-list { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.aff-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px 2px 4px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; color: var(--pc, var(--text)); border: 1px solid color-mix(in srgb, var(--pc, #999) 50%, transparent); background: color-mix(in srgb, var(--pc, #999) 13%, #120c09); }
+.aff-chip img { width: 18px; height: 18px; }
+.aff-chip.resist { color: var(--muted); border-style: dashed; background: rgba(0, 0, 0, 0.25); }
+.aff-chip.sm { font-size: 11px; padding: 1px 7px 1px 3px; }
+.aff-chip.sm img { width: 14px; height: 14px; }
+.stratum small + .aff-list { margin-top: 5px; }
+
+/* boon picker */
+#ov-boon { display: flex; overflow-y: auto; }
+#ov-boon .boon-wrap { margin: auto; }
+.boon-sub { color: var(--muted); font-size: 14px; margin-top: -8px; text-align: center; }
+.boon-cards { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }
+.boon-card { flex: 0 1 232px; }
+.boon-card .bx { display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 0; width: 100%; }
+.boon-card .bm { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; justify-content: center; }
+.boon-card .bl { font-size: 12px; letter-spacing: 0.05em; color: var(--muted); font-weight: 700; }
+.boon-card .bl i { font-style: normal; font-weight: 800; }
+.boon-card .bk { font-size: 13px; font-weight: 800; color: var(--faint); }
+.boon-card .bk.own { color: var(--ember-hi); }
+.boon-card.forge .bk { padding: 3px 10px; border-radius: 999px; font-size: 14px; color: var(--gold); background: rgba(230, 194, 122, 0.08); border: 1px solid var(--gold-lo); }
+.boon-card.evo .bl { color: var(--r-legend); }
+.boon-cards.dense { gap: 10px; }
+.boon-cards.dense .boon-card { flex: 0 0 min(250px, 100%); display: grid; grid-template-columns: 48px minmax(0, 1fr); grid-template-rows: auto auto; align-content: start; column-gap: 10px; row-gap: 6px; align-items: center; text-align: left; padding: 14px 14px 12px; }
+.boon-cards.dense .boon-card img { grid-row: 1 / span 2; width: 48px; height: 48px; }
+.boon-cards.dense .bx { display: contents; }
+.boon-cards.dense .bn { grid-column: 2; font-size: 16px; align-self: end; }
+.boon-cards.dense .bm { grid-column: 2; justify-content: flex-start; align-self: start; }
+.boon-cards.dense .bd { grid-column: 1 / -1; font-size: 14px; }
+.boon-cards.dense .bk { grid-column: 1 / -1; justify-self: start; }
+@media (max-width: 560px) {
+  .boon-title { font-size: 22px; text-align: center; }
+  .boon-wrap { gap: 12px; }
+  .boon-cards.dense { gap: 8px; }
+  .boon-cards.dense .boon-card { flex-basis: 100%; padding: 10px 12px 9px; column-gap: 10px; row-gap: 4px; grid-template-columns: 40px minmax(0, 1fr); }
+  .boon-cards.dense .boon-card img { width: 40px; height: 40px; }
+  .boon-cards.dense .bn { font-size: 15px; }
+  .boon-cards.dense .bd { font-size: 13px; line-height: 1.3; }
+  .boon-cards.dense .bk { font-size: 12px; }
+  .boon-foot { flex-wrap: wrap; justify-content: center; gap: 10px; }
+}
+
+/* character sheet: stratum affinity, paths panel, grouped boons */
+.sheet-map h3 { align-self: stretch; margin: 8px 0 0; font: 700 13px var(--f-body); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.sheet-map h3 small { color: var(--gold); font-size: 13px; letter-spacing: 0.06em; margin-left: 4px; }
+.sheet-map canvas { max-width: 330px; }
+.sheet-note { margin: 0 0 8px; font-size: 12px; color: var(--muted); }
+.sheet-aff { align-self: stretch; margin-top: 6px; }
+.aff-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; }
+.aff-row + .aff-row { margin-top: 5px; }
+.aff-row.next { opacity: 0.85; }
+.aff-row .lbl { font-size: 10px; }
+.path-list { align-self: stretch; display: grid; gap: 6px; }
+.path-row { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; align-items: center; padding: 6px 10px; border-radius: 8px; border: 1px solid color-mix(in srgb, var(--pc) 38%, var(--line)); border-left: 3px solid var(--pc); background: linear-gradient(90deg, color-mix(in srgb, var(--pc) 13%, transparent), transparent 75%), var(--ink-2); box-shadow: var(--bevel); }
+.path-row img { width: 30px; height: 30px; }
+.pr-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.pr-head b { font: 700 14px var(--f-display); color: var(--pc); }
+.pr-head span { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pr-line { font-size: 12px; line-height: 1.3; color: var(--muted); }
+.pr-line.ok { color: var(--gold); }
+.path-row.evolved { border-color: var(--r-legend); border-left-color: var(--r-legend); box-shadow: var(--bevel), 0 0 16px rgba(255, 176, 46, 0.22); }
+.path-row.empty { display: block; padding: 9px 10px; text-align: center; font-size: 13px; color: var(--faint); border: 1px dashed var(--line-hi); background: none; box-shadow: none; }
+.boon-groups { display: grid; gap: 8px; }
+.bg-h { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; font: 700 12px var(--f-body); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.bg-h small { color: var(--faint); font-size: 12px; }
+.bg .chip-list { margin-bottom: 0; }
+.chip.key { border-color: color-mix(in srgb, var(--rc) 55%, transparent); box-shadow: var(--bevel), 0 0 10px -3px var(--rc); }
+.chip.evo { border-color: var(--r-legend); box-shadow: var(--bevel), 0 0 12px -2px var(--r-legend); }
+
+/* results */
+.res-evo { display: flex; align-items: center; justify-content: center; gap: 10px; max-width: 100%; padding: 8px 18px; border-radius: 18px; border: 1px solid color-mix(in srgb, var(--r-legend) 55%, transparent); background: linear-gradient(180deg, rgba(255, 176, 46, 0.16), rgba(255, 176, 46, 0.04)); box-shadow: var(--bevel), 0 0 24px rgba(255, 176, 46, 0.14); text-align: center; }
+.res-evo img { width: 30px; height: 30px; flex: none; }
+.res-evo b { font: 700 17px var(--f-display); color: var(--r-legend); letter-spacing: 0.04em; }
+.res-evo small { color: var(--pc, var(--muted)); font-weight: 700; margin-left: 4px; }

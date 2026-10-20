@@ -119,7 +119,9 @@
     if (A.state !== 'run') return;
     const myPid = ED.Game.s ? ED.Game.s.localPid : A.myPid;
     const mine = summary.players && summary.players[myPid];
-    const run = Object.assign({}, summary, { cls: A.runCls, emberBonus: mine ? mine.emberBonus : 0 });
+    const hero = ED.Game.s && ED.Game.s.me; // the local hero's evolution, read before the session is dropped
+    const myEvo = hero && hero.stats && hero.stats.evo ? { path: hero.stats.evo, weapon: hero.weapon } : null;
+    const run = Object.assign({}, summary, { cls: A.runCls, emberBonus: mine ? mine.emberBonus : 0, myEvo });
     const latest = A.storeOk !== false && S.load(); // another tab may have saved meanwhile (trust storage only if our own writes land)
     if (latest) A.profile = latest;
     const res = S.applyRun(A.profile, run);
