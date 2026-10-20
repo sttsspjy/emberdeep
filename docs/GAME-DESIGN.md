@@ -241,7 +241,7 @@ Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat
 
 ## 8. Enemies
 
-- Every telegraphed wind-up is multiplied by `e.windMul` (default 1). Foes with `e.blind > 0` cannot start attacks. Stunned/frozen foes do nothing.
+- Every telegraphed wind-up (lob flights included) lasts `max(t × 0.7 if swift, min(t, 0.4)) × e.windMul` (`windMul` default 1). Foes with `e.blind > 0` cannot start attacks. Stunned/frozen foes do nothing.
 - **No untelegraphed teleports.** Casters lose the random blink; instead, when a hero is within 80 and the step is off cooldown (7 s), they telegraph 0.6 s (marker at origin and destination) and step 150 away.
 - Every biome gets new attack patterns on existing foes and at least one new foe:
   - I **Bone Priest** (support): raises a dead skeleton (telegraphed), wards an ally.
@@ -251,7 +251,7 @@ Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat
   - V **Drowned Reaver** (leaper): leaps to the hero's position (landing circle), cleaving cone on landing.
   - VI **Rift Caller** (summoner): opens a telegraphed rift that spawns 2 starspawn every 6 s.
   - **Gloom** (Lightless stalker, any stratum).
-- Each boss gains one new telegraphed attack. Bosses have three phases (HP 66% / 33%; the Hollow King 60% / 30%); the pause between attacks is 1.05 / 0.7 / 0.45 s by phase × the stratum's boss pause. Swift elites shorten wind-ups but never below 0.4 s.
+- Each boss gains one new telegraphed attack. Bosses have three phases (HP 66% / 33%; the Hollow King 60% / 30%); the pause between attacks is 1.05 / 0.7 / 0.45 s by phase × the stratum's boss pause. Swift elites shorten every wind-up by 30%, never below 0.4 s.
 - Floor hazards (spikes, poison, lava, void) hurt for 4-6 per tick (about 7-10 per second), scaled by 20% per stratum.
 
 ## 9. Hearth (meta)

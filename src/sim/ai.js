@@ -1,5 +1,5 @@
 // Enemy behaviours. Every attack is telegraphed (wind-up pose, line, circle or cone) so damage feels fair.
-// Wind-ups scale with e.windMul (chill); blinded foes (e.blind) keep moving but never start an attack.
+// Wind-ups scale with e.windMul (chill) and shrink for swift elites; blinded foes (e.blind) keep moving but never start an attack.
 // Body-hit states (full contact damage): lunge, charge, leap, bash, dive.
 (function (ED) {
   'use strict';
@@ -18,8 +18,7 @@
   const hasLos = (w, e) => Sim.los(w.room, e.x, e.y, e.target.x, e.target.y, w.locked);
   const aimAt = (e) => Math.atan2(e.target.y - e.y, e.target.x - e.x);
   const rate = (e) => (e.elite === 'swift' ? 0.7 : 1);
-  const wind = (e, t) => Math.max(t * rate(e), Math.min(t, 0.4)); // swift foes shorten wind-ups but never below 0.4 s
-  const tw = (e, t) => t * (e.windMul || 1);
+  const wind = (e, t) => Math.max(t * rate(e), Math.min(t, 0.4)) * (e.windMul || 1); // every wind-up: swift foes shorten it but never below 0.4 s, chill (windMul) stretches it
   const blind = (e) => e.blind > 0;
 
   // Warn-only line that follows the foe's aim while it winds up.
@@ -80,7 +79,7 @@
   // Telegraphed dive (state 'dive'): fixed aim line, then a straight body-hit dash.
   const diveStart = (w, e, V) => {
     e.aimA = aimAt(e); e.face = Math.cos(e.aimA) > 0 ? 1 : -1;
-    e.st = 'windup'; e.t = wind(e, V.windup) * (e.windMul || 1);
+    e.st = 'windup'; e.t = wind(e, V.windup);
     fixedLine(w, e, V.speed * V.dur + e.r, e.r * 2, e.t);
   };
   const diveTick = (w, e, dt, V) => {
@@ -112,12 +111,12 @@
     }
     const d = distT(e);
     if (L && e.cd <= 0 && d < L.range + e.r && hasLos(w, e) && !blind(e)) {
-      e.st = 'windup'; e.t = wind(e, L.windup) * (e.windMul || 1); e.aimA = Math.atan2(e.target.y - e.y, e.target.x - e.x);
+      e.st = 'windup'; e.t = wind(e, L.windup); e.aimA = Math.atan2(e.target.y - e.y, e.target.x - e.x);
       e.face = Math.cos(e.aimA) > 0 ? 1 : -1;
       return;
     }
     if (P && e.cd <= 0 && d < P.range + e.r && !blind(e)) {
-      e.st = 'cast'; e.t = tw(e, P.windup);
+      e.st = 'cast'; e.t = wind(e, P.windup);
       w.addZone({ kind: 'tele', x: e.x, y: e.y, r: P.r, dur: e.t, dmg: e.dmg * P.mul, team: 1, src: e, boom: 'shock', update: (ww, z) => { z.x = e.x; z.y = e.y; } });
       return;
     }
@@ -171,7 +170,7 @@
       e.vars.orb = (e.vars.orb ?? w.rng.range(O.t[0], O.t[1])) - dt;
       if (e.vars.orb <= 0 && e.cd <= 0 && d > V.min && d < V.range && hasLos(w, e)) { e.vars.orb = w.rng.range(O.t[0], O.t[1]); diveStart(w, e, V); }
     } else if (B && e.cd <= 0 && d < 420 && hasLos(w, e)) {
-      e.st = 'aim'; e.t = tw(e, B.windup); e.aimA = aimAt(e);
+      e.st = 'aim'; e.t = wind(e, B.windup); e.aimA = aimAt(e);
       aimLine(w, e, 380, 8, e.t);
     }
   };
@@ -194,7 +193,7 @@
     if (e.cd <= 0 && hasLos(w, e) && distT(e) < 360 && !blind(e)) {
       e.vars.shots = (e.vars.shots || 0) + 1;
       e.vars.fan = !!S.fan && e.vars.shots % S.fan.every === 0;
-      e.st = 'aim'; e.t = tw(e, S.windup * (e.vars.fan ? 1.2 : 1));
+      e.st = 'aim'; e.t = wind(e, S.windup * (e.vars.fan ? 1.2 : 1));
       if (e.vars.fan) {
         const arc = S.fan.spread * (S.fan.n - 1) + 0.16;
         w.addZone({ kind: 'teleCone', x: e.x, y: e.y, a: aimAt(e), r: 230, arc, dur: e.t, dmg: 0, team: 1, src: e, warnOnly: true, update: (ww, z) => { z.x = e.x; z.y = e.y; z.a = e.aimA; } });
@@ -213,7 +212,7 @@
         if (P.type === 'spread' && e.vars.glob) {
           // lobbed spore glob: telegraphed landing circle, leaves a slowing mire
           const G = P.glob, tx = e.target.x + (e.target.vx || 0) * 0.3, ty = e.target.y + (e.target.vy || 0) * 0.3;
-          w.addZone({ kind: 'tele', x: tx, y: ty, r: G.radius, dur: tw(e, G.flight), dmg: e.dmg, team: 1, src: e, boom: 'spore', lob: [Math.round(e.x), Math.round(e.y - 10)],
+          w.addZone({ kind: 'tele', x: tx, y: ty, r: G.radius, dur: wind(e, G.flight), dmg: e.dmg, team: 1, src: e, boom: 'spore', lob: [Math.round(e.x), Math.round(e.y - 10)],
             onEnd: (ww, z) => ww.addZone({ kind: 'mire', x: z.x, y: z.y, r: G.radius * 0.9, dur: G.mire, team: 1 }) });
           e.st = 'move'; e.cd = P.cd * rate(e);
         } else if (P.type === 'spread') {
@@ -239,7 +238,7 @@
       return;
     }
     if (e.cd <= 0 && distT(e) < 420 && hasLos(w, e) && !blind(e)) {
-      e.st = 'aim'; e.t = tw(e, P.windup);
+      e.st = 'aim'; e.t = wind(e, P.windup);
       e.aimA = Math.atan2(e.target.y - e.y, e.target.x - e.x);
       if (P.glob) e.vars.glob = (e.vars.n = (e.vars.n || 0) + 1) % 2 === 0; // spread, glob, spread, ...
       if (P.type === 'laser') w.addZone({ kind: 'teleLine', x: e.x, y: e.y, a: e.aimA, len: P.len, w: P.w, dur: e.t, dmg: 0, team: 1, src: e, warnOnly: true });
@@ -286,11 +285,11 @@
     }
     const d = distT(e);
     if (Wb && e.vars.wcd <= 0 && d > Wb.range[0] && d < Wb.range[1] && hasLos(w, e) && !blind(e)) {
-      e.st = 'aim'; e.t = tw(e, Wb.windup); e.aimA = aimAt(e); e.face = Math.cos(e.aimA) > 0 ? 1 : -1;
+      e.st = 'aim'; e.t = wind(e, Wb.windup); e.aimA = aimAt(e); e.face = Math.cos(e.aimA) > 0 ? 1 : -1;
       return;
     }
     if (e.cd <= 0 && d < C.range && d > 50 && hasLos(w, e) && !blind(e)) {
-      e.st = 'windup'; e.t = wind(e, C.windup) * (e.windMul || 1);
+      e.st = 'windup'; e.t = wind(e, C.windup);
       e.aimA = Math.atan2(e.target.y - e.y, e.target.x - e.x);
       e.face = Math.cos(e.aimA) > 0 ? 1 : -1;
       w.addZone({ kind: 'teleLine', x: e.x, y: e.y, a: e.aimA, len: C.speed * C.dur + e.r, w: e.r * 2, dur: e.t, team: 1, src: e, warnOnly: true, follow: e.id });
@@ -300,7 +299,7 @@
       let mates = 0;
       for (const o of w.enemies) if (o !== e && o.hp > 0 && o.type === e.type && U.dist2(o.x, o.y, e.x, e.y) < H.r * H.r) mates++;
       if (mates) {
-        e.st = 'cast'; e.t = tw(e, H.windup); e.face = e.target.x > e.x ? 1 : -1;
+        e.st = 'cast'; e.t = wind(e, H.windup); e.face = e.target.x > e.x ? 1 : -1;
         w.addZone({ kind: 'tele', x: e.x, y: e.y, r: 54, dur: e.t, dmg: 0, team: 1, src: e, warnOnly: true, update: (ww, z) => { z.x = e.x; z.y = e.y; } });
         return;
       }
@@ -336,14 +335,14 @@
     }
     const d = distT(e);
     if (B && e.vars.bcd <= 0 && d < B.range && d > B.min && hasLos(w, e) && !blind(e)) {
-      e.st = 'windup'; e.vars.atk = 'bash'; e.t = wind(e, B.windup) * (e.windMul || 1);
+      e.st = 'windup'; e.vars.atk = 'bash'; e.t = wind(e, B.windup);
       e.aimA = aimAt(e); e.guardA = e.aimA; e.face = Math.cos(e.aimA) > 0 ? 1 : -1;
       fixedLine(w, e, B.speed * B.dur + e.r, e.r * 2, e.t);
       return;
     }
     if (e.cd <= 0 && d < S.range + e.r && !blind(e)) {
       const claw = K && (e.vars.n = (e.vars.n || 0) + 1) % 2 === 0; // claw cone every other attack
-      e.st = 'windup'; e.vars.atk = claw ? 'claw' : 'slam'; e.t = wind(e, claw ? K.windup : S.windup) * (e.windMul || 1);
+      e.st = 'windup'; e.vars.atk = claw ? 'claw' : 'slam'; e.t = wind(e, claw ? K.windup : S.windup);
       if (claw) {
         w.addZone({ kind: 'teleCone', x: e.x, y: e.y, a: aimAt(e), r: K.r, arc: K.arc, dur: e.t, dmg: e.dmg * K.mul, team: 1, src: e });
       } else {
@@ -366,7 +365,7 @@
       }
       return;
     }
-    if (distT(e) < 38 + e.r && !blind(e)) { e.st = 'fuse'; e.t = tw(e, e.def.fuse); w.addZone({ kind: 'tele', x: e.x, y: e.y, r: e.def.boom, dur: e.t, dmg: 0, team: 1, warnOnly: true }); return; }
+    if (distT(e) < 38 + e.r && !blind(e)) { e.st = 'fuse'; e.t = wind(e, e.def.fuse); w.addZone({ kind: 'tele', x: e.x, y: e.y, r: e.def.boom, dur: e.t, dmg: 0, team: 1, warnOnly: true }); return; }
     const d = w.pathDir(e, e.target.x, e.target.y);
     e.wob += dt * 4;
     move(w, e, d[0] + Math.sin(e.wob) * 0.25, d[1] + Math.cos(e.wob) * 0.25, sp(e), dt);
@@ -395,7 +394,7 @@
       if (d > bd) { bd = d; best = pt; }
     }
     if (!best || Math.hypot(best.x - e.x, best.y - e.y) < 60) { e.vars.stepCd = 1.2; return false; }
-    e.st = 'fade'; e.t = tw(e, S.windup); e.vars.dest = best;
+    e.st = 'fade'; e.t = wind(e, S.windup); e.vars.dest = best;
     w.addZone({ kind: 'tele', x: best.x, y: best.y, r: e.r + 8, dur: e.t, dmg: 0, team: 1, src: e, warnOnly: true });
     w.addZone({ kind: 'tele', x: e.x, y: e.y, r: e.r + 8, dur: e.t, dmg: 0, team: 1, src: e, warnOnly: true });
     return true;
@@ -421,7 +420,7 @@
     }
     if (S && e.vars.stepCd <= 0 && distT(e) < S.near && stepStart(w, e, S)) return;
     kite(w, e, dt, [100, 230]);
-    if (e.cd <= 0 && hasLos(w, e) && !blind(e)) { e.st = 'cast'; e.t = tw(e, C.windup); }
+    if (e.cd <= 0 && hasLos(w, e) && !blind(e)) { e.st = 'cast'; e.t = wind(e, C.windup); }
   };
 
   // Bone Priest: raises skeletons beside itself (telegraphed spawn) or wards the most-hurt ally.
@@ -447,14 +446,14 @@
       if (f < low) { low = f; ally = x; }
     }
     if (ally) {
-      e.st = 'cast'; e.vars.ally = ally; e.t = tw(e, P.windup * 0.7);
+      e.st = 'cast'; e.vars.ally = ally; e.t = wind(e, P.windup * 0.7);
       w.addZone({ kind: 'tele', x: ally.x, y: ally.y, r: ally.r + 10, dur: e.t, dmg: 0, team: 1, src: e, warnOnly: true, update: (ww, z) => { z.x = ally.x; z.y = ally.y; } });
       return;
     }
     if (owned(w, e, 'raisedBy') < P.max && (e.vars.raised || 0) < P.total) {
       const pt = spotNear(w, e, 64, [], 0);
       if (pt) {
-        e.st = 'cast'; e.t = tw(e, P.windup); e.vars.raised = (e.vars.raised || 0) + 1;
+        e.st = 'cast'; e.t = wind(e, P.windup); e.vars.raised = (e.vars.raised || 0) + 1;
         w.addZone({ kind: 'spawn', x: pt.x, y: pt.y, r: 12, dur: e.t, type: 'skeleton', by: e.id, after: (en) => { en.raisedBy = e.id; } });
         return;
       }
@@ -484,7 +483,7 @@
     if (distT(e) > B.near || e.vars.dig > 0 || blind(e) || !hasLos(w, e)) { toward(w, e, t.x, t.y, sp(e), dt); return; }
     const mark = { x: t.x, y: t.y };
     e.vars.spot = mark;
-    w.addZone({ kind: 'tele', x: mark.x, y: mark.y, r: B.radius, dur: tw(e, B.tele), dmg: e.dmg * 1.2, team: 1, src: e, boom: 'slam',
+    w.addZone({ kind: 'tele', x: mark.x, y: mark.y, r: B.radius, dur: wind(e, B.tele), dmg: e.dmg * 1.2, team: 1, src: e, boom: 'slam',
       onEnd: (ww) => {
         if (e.hp <= 0) return;
         e.x = mark.x; e.y = mark.y; Sim.resolve(e, ww.room, ww.locked, e.fly);
@@ -514,21 +513,21 @@
       if (e.t <= 0) {
         e.x = to.x; e.y = to.y; Sim.resolve(e, w.room, w.locked, e.fly);
         e.aimA = aimAt(e); e.face = Math.cos(e.aimA) > 0 ? 1 : -1;
-        e.st = 'idle'; e.t = tw(e, Cl.pause);
-        w.addZone({ kind: 'teleCone', x: e.x, y: e.y, a: e.aimA, r: Cl.r, arc: Cl.arc, dur: e.t + tw(e, Cl.post), dmg: e.dmg * Cl.mul, team: 1, src: e });
+        e.st = 'idle'; e.t = wind(e, Cl.pause);
+        w.addZone({ kind: 'teleCone', x: e.x, y: e.y, a: e.aimA, r: Cl.r, arc: Cl.arc, dur: e.t + wind(e, Cl.post), dmg: e.dmg * Cl.mul, team: 1, src: e });
       }
       return;
     }
     if (e.st === 'idle') { // landing pause, then the cleave swing
       e.t -= dt;
-      if (e.t <= 0) { e.st = 'windup'; e.vars.atk = 'cleave'; e.t = tw(e, Cl.post); }
+      if (e.t <= 0) { e.st = 'windup'; e.vars.atk = 'cleave'; e.t = wind(e, Cl.post); }
       return;
     }
     if (e.recoil > 0) { e.recoil -= dt; const a = Math.atan2(e.y - e.target.y, e.x - e.target.x); move(w, e, Math.cos(a), Math.sin(a), sp(e) * 0.6, dt); return; }
     const d = distT(e);
     if (!blind(e)) {
       if (e.vars.lcd <= 0 && d > Lp.min && d < Lp.range && hasLos(w, e)) {
-        const total = wind(e, Lp.total) * (e.windMul || 1);
+        const total = wind(e, Lp.total);
         e.st = 'windup'; e.vars.atk = 'leap'; e.t = Math.max(0.2, total - Lp.flight); e.vars.lcd = Lp.cd * rate(e);
         e.vars.to = { x: e.target.x, y: e.target.y };
         e.aimA = aimAt(e); e.face = Math.cos(e.aimA) > 0 ? 1 : -1;
@@ -536,7 +535,7 @@
         return;
       }
       if (e.cd <= 0 && d < Cl.range + e.r) {
-        e.st = 'windup'; e.vars.atk = 'cleave'; e.t = wind(e, Cl.windup) * (e.windMul || 1);
+        e.st = 'windup'; e.vars.atk = 'cleave'; e.t = wind(e, Cl.windup);
         e.aimA = aimAt(e); e.face = Math.cos(e.aimA) > 0 ? 1 : -1;
         w.addZone({ kind: 'teleCone', x: e.x, y: e.y, a: e.aimA, r: Cl.r, arc: Cl.arc, dur: e.t, dmg: e.dmg * Cl.mul, team: 1, src: e });
         return;
@@ -562,7 +561,7 @@
     if (blind(e)) return;
     if (e.vars.rcd <= 0 && owned(w, e, 'summonedBy') <= R.cap - R.n) {
       const heroes = w.alivePlayers();
-      e.st = 'cast'; e.vars.kind = 'rift'; e.t = tw(e, R.windup); e.vars.rcd = R.cd * rate(e);
+      e.st = 'cast'; e.vars.kind = 'rift'; e.t = wind(e, R.windup); e.vars.rcd = R.cd * rate(e);
       for (let i = 0; i < R.n; i++) {
         const pt = spotNear(w, e, 110, heroes, 90) || D.randomFloor(w.room, w.rng, heroes, 100);
         w.addZone({ kind: 'spawn', x: pt.x, y: pt.y, r: 14, dur: e.t, type: R.type, by: e.id, after: (en) => { en.summonedBy = e.id; } });
@@ -570,7 +569,7 @@
       }
       return;
     }
-    if (e.cd <= 0 && hasLos(w, e)) { e.st = 'cast'; e.vars.kind = 'orb'; e.t = tw(e, C.windup); }
+    if (e.cd <= 0 && hasLos(w, e)) { e.st = 'cast'; e.vars.kind = 'orb'; e.t = wind(e, C.windup); }
   };
 
   // The Gloom: invulnerable stalker that drifts straight through walls and only hurts by touch.
@@ -589,14 +588,14 @@
       e.t -= dt;
       if (e.t <= 0) {
         const tx = e.target.x + (e.target.vx || 0) * 0.3, ty = e.target.y + (e.target.vy || 0) * 0.3;
-        w.addZone({ kind: 'tele', x: tx, y: ty, r: L.radius, dur: tw(e, L.flight), dmg: e.dmg, team: 1, src: e, boom: 'fire', lob: [Math.round(e.x), Math.round(e.y - 10)],
+        w.addZone({ kind: 'tele', x: tx, y: ty, r: L.radius, dur: wind(e, L.flight), dmg: e.dmg, team: 1, src: e, boom: 'fire', lob: [Math.round(e.x), Math.round(e.y - 10)],
           onEnd: (ww, z) => ww.addZone({ kind: 'fire', x: z.x, y: z.y, r: L.radius * 0.6, dur: L.fire, dps: e.dmg * 0.45, team: 1 }) });
         e.st = 'move'; e.cd = L.cd * rate(e);
       }
       return;
     }
     kite(w, e, dt, e.def.keep);
-    if (e.cd <= 0 && distT(e) < 300 && !blind(e)) { e.st = 'aim'; e.t = tw(e, L.windup); }
+    if (e.cd <= 0 && distT(e) < 300 && !blind(e)) { e.st = 'aim'; e.t = wind(e, L.windup); }
   };
 
   AI.boss = (w, e, dt) => { const b = ED.Bosses[e.type]; if (b) b(w, e, dt); };
