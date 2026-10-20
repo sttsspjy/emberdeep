@@ -85,7 +85,7 @@
     step: { name: 'Shadowstep', cd: 4.5, icon: 'cloak', desc: 'Blink forward, cutting through foes. Your next 3 attacks are critical hits.' },
     sanctuary: { name: 'Sanctuary', cd: 11, icon: 'sun', desc: 'Heal nearby allies 25% and consecrate the ground: allies inside take 35% less damage, foes burn.' },
     legion: { name: 'Raise Legion', cd: 12, icon: 'skull', desc: 'Summon 3 skeletal minions for 12 seconds. Kills may also raise minions.' },
-    // Second skill (L): one per class, cooldown reduction applies like the first.
+    // Second skill (skill2 binding): one per class, cooldown reduction applies like the first.
     bulwark: { name: 'Bulwark', cd: 9, icon: 'bulwark', desc: 'Raise your shield toward your aim for 1.4s, moving at half speed. Blocks up to 6 hits from the front and turns arrows back (15 + weapon damage). On release, bash for 20 + 1.2x weapon damage, +25% per block.' },
     rain: { name: 'Rain of Arrows', cd: 10, icon: 'rain', desc: 'Mark a point within 260. After 0.35s arrows fall for 2s over radius 80, hitting every foe inside each 0.25s for 4 + 0.45x weapon damage.' },
     meteor: { name: 'Meteor', cd: 12, icon: 'meteor', desc: 'Call a meteor to a point within 300. After 0.9s it lands (radius 95) for 30 + 3.5x weapon damage, knocks foes back, adds Burn worth 50% of the impact and leaves a burning crater for 3s.' },

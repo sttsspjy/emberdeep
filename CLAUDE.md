@@ -25,7 +25,7 @@ src/util.js              constants, math, seeded RNG, colour helpers
 src/data/                biomes (palette, roster, affinity) · enemies · classes (heroes, weapons, skills) · boons · classboons · relics · meta (Hearth upgrades, pacts, deeds)
 src/save.js              profile storage + save code
 src/sim/                 dungeon (floor gen) · stats (stat block) · world (run flow, rooms, light, pickups) · combat (damage, statuses, projectiles, zones)
-                         build (offers, paths, evolutions, companions) · skills (K/L class skills) · ai (enemy brains) · bosses · rooms (encounters, rewards, props)
+                         build (offers, paths, evolutions, companions) · skills (class skills 1 and 2) · ai (enemy brains) · bosses · rooms (encounters, rewards, props)
 src/net.js               transports, host/client sessions, snapshot encoding
 src/game.js              run session: local hero control, client mirror, network routing
 src/client/              input · audio · icons · sprites · tiles · fx · render · post (WebGL) · hud · camp · ui
