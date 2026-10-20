@@ -7,7 +7,7 @@
 
   // ---------------- hooks called by world.js ----------------
   // Called from addPlayer before the first recalc: add build-only fields to the hero (offer queue, companion and dash-boon state).
-  W.initBuild = function (p) { p.offers = []; p.picks = 0; p.bladeT = []; p.orbHit = {}; p.wispT = 0; p.dashHit = null; p.dashTrail = 0; };
+  W.initBuild = function (p) { p.offers = []; p.picks = 0; p.bladeT = []; p.orbHit = {}; p.wispT = 0; p.dashHit = null; p.dashTrail = 0; p.boltAt = 0; };
 
   // Queue an offer spec {src:'level'|'room'|'class'|'start'|'forge'|'epic', path?}; p.picks mirrors the queue length.
   W.grantOffer = function (p, spec) {
@@ -54,7 +54,7 @@
     const st = p.stats, area = 1 + st.area * 0.5;
     if (st.overcharge) this.explode(p.x, p.y, 85 * area, st.weapon.dmg * 1.5 * st.overcharge + 10, 0, p, 'shock', true);
     if (st.trance) p.tranceT = 4;
-    if (st.hemomancy) p.hp = Math.max(1, p.hp - Math.floor(p.hp * 0.04));
+    if (st.hemoCost) p.hp = Math.max(1, p.hp - Math.floor(p.hp * st.hemoCost)); // cost scales with Hemomancy rank, like its damage bonus
   };
 
   // ---------------- xp, levels and boons ----------------

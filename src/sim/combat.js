@@ -6,6 +6,9 @@
 
   ED.CONST.SUSTAIN_CAP = 0.01; // max HP fraction a hero regains per second from on-hit and on-kill combat heals (read by the UI)
   ED.CONST.GLOOM_CAP = 0.25; // max HP fraction one Gloom touch may take
+  ED.CONST.ARC_MUL = 0.6; // a discharge's arc targets take this fraction of what the charged foe takes
+  ED.CONST.BOLT_CD = 0.6; // seconds between one hero's Thunderhead bolts
+  ED.CONST.SPLASH_MUL = 0.6; // foes next to a combusting foe take this fraction of the pool
   const EL_IDX = { pyre: 1, rime: 2, storm: 3 };
   const NO_GUARD = { dot: 1, chain: 1, explode: 1 }; // hit kinds that ignore a foe's frontal guard
   const FULL_CONTACT = new Set(['lunge', 'charge', 'leap', 'bash', 'dive']); // attack states whose body contact deals full damage
@@ -184,7 +187,7 @@
     if (p && p.stats.conflag) this.checkCombust(e, p);
   };
 
-  // A pool above 30% of current HP combusts: the whole pool hits the foe and every foe within 70.
+  // A pool above 30% of current HP combusts: the whole pool hits the foe and, at SPLASH_MUL, every foe within 70.
   W.checkCombust = function (e, p) {
     const pool = e.burnPool;
     if (e.hp <= 0 || pool < 5 || pool <= e.hp / e.hpLever * 0.3) return;
@@ -194,7 +197,7 @@
     for (let i = 0, n = this.enemies.length; i < n; i++) {
       const o = this.enemies[i];
       if (o.hp <= 0 || o.spawnT > 0 || o.def.invuln || (o !== e && U.dist2(o.x, o.y, e.x, e.y) > (r + o.r) ** 2)) continue;
-      this.hitEnemy(o, dmg, { p, kind: 'explode', raw: true, noProc: true, crit: false, noGuard: true, el: 'pyre', affDone: true });
+      this.hitEnemy(o, o === e ? dmg : dmg * ED.CONST.SPLASH_MUL, { p, kind: 'explode', raw: true, noProc: true, crit: false, noGuard: true, el: 'pyre', affDone: true });
     }
   };
 
@@ -272,13 +275,14 @@
     if (tg.length > 1) { pts.pop(); this.emit({ t: 'chain', pts }); } else this.emit({ t: 'chain', pts: [[hx, hy], [hx, hy - 24]] });
     for (const t of tg) {
       if (t.hp <= 0) continue;
-      const got = this.hitEnemy(t, dmg, { p, kind: 'chain', raw: true, noProc: true, crit: false, el: 'storm', affDone: true, x: e.x, y: e.y });
+      const got = this.hitEnemy(t, t === e ? dmg : dmg * ED.CONST.ARC_MUL, { p, kind: 'chain', raw: true, noProc: true, crit: false, el: 'storm', affDone: true, x: e.x, y: e.y });
       if (t.hp <= 0 || !p) continue;
       if (st.supercond) this.addChill(t, 25, p);
       if (st.plasma) this.addBurn(t, got * 0.4, p);
       if (st.arcStun && !t.boss) t.stun = Math.max(t.stun, st.arcStun);
     }
-    if (p && st.thunderbolt && e.hp > 0 && this.rng.chance(st.thunderbolt)) {
+    if (p && st.thunderbolt && e.hp > 0 && this.time >= p.boltAt && this.rng.chance(st.thunderbolt)) {
+      p.boltAt = this.time + ED.CONST.BOLT_CD;
       this.emit({ t: 'bolt', x: Math.round(e.x), y: Math.round(e.y) });
       this.explode(e.x, e.y, 60, st.weapon.dmg * 2, 0, p, 'bolt', true, { el: 'storm' });
     }
