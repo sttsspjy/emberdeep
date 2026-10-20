@@ -114,6 +114,30 @@
     else if (el === 4) F.burst(x, y, 5 * n, { kind: 'drop', color: '#a8142c', a, spread: 2.2, sp: 100, life: 0.5, size: 1.8, grav: 220, drag: 2 });
   }
 
+  // Jagged lightning arm between two points (interior points are fixed at birth; the renderer adds shimmer).
+  F.zap = (x0, y0, x1, y1, color, life) => {
+    const dx = x1 - x0, dy = y1 - y0, d = Math.hypot(dx, dy) || 1, n = U.clamp(Math.floor(d / 24), 2, 6), nx = -dy / d, ny = dx / d, pts = [[x0, y0]];
+    for (let i = 1; i < n; i++) { const k = i / n, o = (Math.random() - 0.5) * 14; pts.push([x0 + dx * k + nx * o, y0 + dy * k + ny * o]); }
+    pts.push([x1, y1]);
+    if (F.bolts.length < 24) F.bolts.push({ pts, life: life || 0.22, max: life || 0.22, color: color || '#bfe9ff' });
+  };
+
+  // Second-skill (L) cast visuals. ev: { pid, k, a, x, y, tx?, ty? } at the hero.
+  function skill2Fx(ev, mine, A) {
+    const x = ev.x, y = ev.y, a = ev.a || 0, ca = Math.cos(a), sa = Math.sin(a);
+    switch (ev.k) {
+      case 'bulwark': F.ring(x, y - 6, 34, '#ffe9a0', 0.3, 3); F.slash(x, y - 10, a, 36, 2.4, '#ffe9a0', 0.22); F.burst(x + ca * 18, y - 10 + sa * 18, 8, { kind: 'spark', color: '#fff3c4', a, spread: 1.6, sp: 130, life: 0.3, size: 1.6, drag: 5 }); F.pop(x + ca * 16, y - 10 + sa * 16, 20, '#ffe9a0', 0.2); A.play('block', mine ? 0.8 : 0.4); break;
+      case 'rain': F.burst(x, y - 12, 10, { kind: 'streak', color: '#e8d8b0', a: -1.57, spread: 0.9, sp: 300, life: 0.4, size: 1.8 }); if (ev.tx !== undefined) { F.ring(ev.tx, ev.ty, 30, '#e8d8b0', 0.4, 2); F.pop(ev.tx, ev.ty - 4, 16, '#e8d8b0', 0.3); } A.play('shoot', mine ? 0.8 : 0.4); break;
+      case 'meteor': { const ta = ev.tx !== undefined ? Math.atan2(ev.ty - y, ev.tx - x) : a;
+        F.burst(x, y - 12, 12, { kind: 'streak', color: '#ffb347', a: ta, spread: 0.4, sp: 340, life: 0.35, size: 2.2 }); F.burst(x, y - 12, 7, { kind: 'ember', color: '#ff8a2a', a: -1.57, spread: 3, sp: 60, life: 0.9, size: 2, drag: 1.5, lt: '#ff8a2a', ltr: 24 });
+        F.pop(x, y - 14, 26, '#ff9a3a', 0.25); F.ring(x, y - 6, 30, '#ff9a3a', 0.3, 3); A.play('fire', mine ? 0.9 : 0.5); break; }
+      case 'vanish': F.burst(x, y - 8, 14, { kind: 'smoke', color: '#6c6784', sp: 70, life: 0.9, size: 8, drag: 2.5 }); F.burst(x, y - 10, 12, { color: '#b78cff', sp: 90, life: 0.5, size: 2.2, add: true }); F.ring(x, y, 60, '#8a86a0', 0.5, 3); F.pop(x, y - 10, 30, '#b78cff', 0.25); A.play('dash', mine ? 0.8 : 0.4); break;
+      case 'judgment': F.slash(x, y - 10, a, 44, 1.3, '#ffe9a0', 0.2); F.burst(x + ca * 20, y - 10 + sa * 20, 6, { kind: 'streak', color: '#fff3c4', a, spread: 0.5, sp: 260, life: 0.25, size: 1.8 }); F.pop(x + ca * 18, y - 10 + sa * 18, 16, '#ffe9a0', 0.18); A.play('heavy', mine ? 0.8 : 0.4); break;
+      case 'harvest': F.burst(x, y - 8, 18, { kind: 'shard', color: '#e6dfc9', sp: 130, life: 0.7, size: 2.6, vz: 100, z: 6 }); F.burst(x, y - 8, 10, { color: '#7dffd9', sp: 70, vy: -40, life: 0.6, size: 2.2, add: true }); F.ring(x, y, 50, '#7dffd9', 0.45, 3); F.pop(x, y - 10, 26, '#7dffd9', 0.25); A.play('magic', mine ? 0.9 : 0.4); break;
+      default: break;
+    }
+  }
+
   // Translate one world event into effects. local: the viewing player's pid.
   F.handle = (ev, ctx) => {
     const local = ctx.localPid, A = ED.Audio, set = ED.App ? ED.App.settings : { dmg: true };
@@ -180,13 +204,19 @@
       }
       case 'atk': if (ev.pid !== local) { F.playerAttackAnim(ev.pid, ev.a); const p = ctx.player(ev.pid); if (p && p.stats && !p.stats.melee) A.play('shoot', 0.3); } break;
       case 'spark': { const c = F.projColor(ED.PROJ_KINDS[ev.k]); F.burst(ev.x, ev.y, 4, { color: c, sp: 80, life: 0.25, size: 1.8, add: true }); F.burst(ev.x, ev.y, 3, { kind: 'streak', color: c, sp: 130, life: 0.2, size: 1.3 }); F.pop(ev.x, ev.y, 7, c, 0.1); A.play('spark', 0.4); break; }
-      case 'chain': { F.bolts.push({ pts: ev.pts, life: 0.22, max: 0.22, color: '#bfe9ff' }); for (const pt of ev.pts) F.pop(pt[0], pt[1] - 6, 9, '#cfeaff', 0.14); A.play('bolt', 0.5); break; }
+      case 'chain': { // star (hub, t1, hub, t2, ...): one forked arm per target; otherwise a plain polyline
+        const pts = ev.pts, star = pts.length >= 3 && pts[2][0] === pts[0][0] && pts[2][1] === pts[0][1];
+        if (star) for (let i = 1; i < pts.length; i += 2) F.zap(pts[0][0], pts[0][1], pts[i][0], pts[i][1], '#bfe9ff');
+        else F.bolts.push({ pts, life: 0.22, max: 0.22, color: '#bfe9ff' });
+        for (let i = star ? 1 : 0; i < pts.length; i += star ? 2 : 1) F.pop(pts[i][0], pts[i][1] - 6, 9, '#cfeaff', 0.14);
+        if (star) F.pop(pts[0][0], pts[0][1] - 6, 12, '#ffffff', 0.16);
+        A.play('bolt', 0.5); break; }
       case 'bolt': F.bolts.push({ pts: [[ev.x + 10, ev.y - 220], [ev.x - 8, ev.y - 120], [ev.x + 6, ev.y - 50], [ev.x, ev.y]], life: 0.3, max: 0.3, color: '#ffffff' }); F.pop(ev.x, ev.y - 6, 38, '#e8f4ff', 0.28); F.ring(ev.x, ev.y, 42, '#bfe9ff', 0.3, 3); F.punch(0.8, 0.5); A.play('bolt'); F.addShake(3); break;
       case 'nova': F.ring(ev.x, ev.y, ev.r, ev.c || '#ff7a2a', 0.45, 6); F.ring(ev.x, ev.y, ev.r * 0.6, '#ffffff', 0.3, 2); F.burst(ev.x, ev.y, 26, { color: ev.c || '#ff7a2a', sp: ev.r * 3, life: 0.45, size: 3, add: true }); F.pop(ev.x, ev.y - 6, ev.r * 0.7, ev.c || '#ff7a2a', 0.25); F.punch(0.4, 0); A.play('boom', 0.6); F.addShake(4); break;
       case 'levelup': F.showBanner('Level ' + ev.level, 'A boon awaits when the room is clear', 'level', 2.2); A.play('level'); for (const p of ctx.players()) { F.burst(p.x, p.y - 10, 18, { color: '#ffd36b', sp: 80, vy: -60, life: 0.9, size: 2.2, add: true, drag: 1.5 }); F.ring(p.x, p.y, 36, '#ffd36b', 0.5, 3); F.pop(p.x, p.y - 12, 26, '#ffd36b', 0.3); } break;
       case 'gold': if (ev.pid === local) A.play('gold', 0.6); break;
       case 'xp': if (ev.pid === local) A.play('xp', 0.5); break;
-      case 'boon': { const p = ctx.player(ev.pid); if (p) { const col = ED.RARITY[ED.BOONS[ev.id].rar].color; F.burst(p.x, p.y - 12, 22, { color: col, sp: 70, vy: -50, life: 0.8, size: 2.4, add: true, drag: 1.2 }); F.ring(p.x, p.y, 30, col, 0.45, 3); F.pop(p.x, p.y - 14, 22, col, 0.25); } if (ev.pid === local) A.play('boon'); break; }
+      case 'boon': { const p = ctx.player(ev.pid), b = ED.BOONS[ev.id]; if (p && b) { const col = b.path ? PATH_COL[b.path] : ED.RARITY[b.rar].color; F.burst(p.x, p.y - 12, b.gate ? 32 : 22, { color: col, sp: 70, vy: -50, life: 0.8, size: 2.4, add: true, drag: 1.2 }); F.ring(p.x, p.y, b.gate ? 42 : 30, col, 0.45, 3); F.pop(p.x, p.y - 14, 22, col, 0.25); if (b.path) F.burst(p.x, p.y - 12, 8, { kind: 'ember', color: col, sp: 40, a: -1.57, spread: 2.4, life: 1.0, size: 1.8, drag: 1.4, lt: col, ltr: 22 }); } if (ev.pid === local) A.play('boon'); break; }
       case 'relic': { const p = ctx.player(ev.pid); const r = ED.RELICS[ev.id]; if (p) { F.text(p.x, p.y - 40, r.name, ED.RARITY[r.rar].color, 11, { life: 1.8, max: 1.8 }); F.burst(p.x, p.y - 12, 24, { color: ED.RARITY[r.rar].color, sp: 80, vy: -40, life: 0.9, size: 2.4, add: true }); F.ring(p.x, p.y, 34, ED.RARITY[r.rar].color, 0.5, 3); } if (ev.pid === local) { A.play('relic'); ED.UI && ED.UI.toast(`<b>${r.name}</b> — ${r.desc}`, ED.Icons.relicUrl(ev.id)); } else if (p) F.msg(`${p.name} found ${r.name}`); break; }
       case 'lock': A.play('lock'); F.addShake(4); break;
       case 'clear': A.play('unlock'); F.showBanner(ev.trial ? 'Trial complete' : 'Room cleared', '', 'small', 1.4); break;
@@ -201,11 +231,12 @@
       case 'dead': { const p = ctx.player(ev.pid); if (p) F.msg(`${p.name} has fallen. They return at the next stratum.`, '#ff8a7a'); break; }
       case 'rise': { const p = ctx.player(ev.pid); const name = { phoenix: 'Phoenix Feather', angel: 'Guardian Angel', wind: 'Second Wind' }[ev.k]; F.showBanner(name, p ? p.name + ' refuses to fall' : '', 'small', 2); F.burst(ev.x, ev.y - 10, 40, { color: '#ffd36b', sp: 150, life: 0.9, size: 3, add: true }); F.ring(ev.x, ev.y, 70, '#ffd36b', 0.6, 4); F.pop(ev.x, ev.y - 12, 50, '#ffd36b', 0.4); F.punch(0.8, 0.4); A.play('revive'); break; }
       case 'dash': A.play('dash', ev.pid === local ? 0.8 : 0.3); F.burst(ev.x, ev.y, 6, { color: '#ffffff', sp: 40, life: 0.3, size: 3, kind: 'smoke', drag: 4 }); F.ring(ev.x, ev.y, 18, '#ffffff', 0.18, 2); break;
-      case 'skill': { A.play('skill', ev.pid === local ? 1 : 0.5); const p = ctx.player(ev.pid); if (p && ev.k === 'volley') F.ring(p.x, p.y, 30, '#e8d8b0', 0.25); if (ev.k === 'legion' || ev.k === 'sanctuary') F.ring(ev.x, ev.y, ev.k === 'sanctuary' ? 100 : 40, ev.k === 'sanctuary' ? '#ffe9a0' : '#7dffd9', 0.5, 4); break; }
+      case 'skill': { A.play('skill', ev.pid === local ? 1 : 0.5); const p = ctx.player(ev.pid); if (p && ev.k === 'volley') F.ring(p.x, p.y, 30, '#e8d8b0', 0.25); if (ev.k === 'legion' || ev.k === 'sanctuary') F.ring(ev.x, ev.y, ev.k === 'sanctuary' ? 100 : 40, ev.k === 'sanctuary' ? '#ffe9a0' : '#7dffd9', 0.5, 4); if (ev.slot === 1) skill2Fx(ev, ev.pid === local, A); break; }
       case 'blink': for (let i = 0; i <= 8; i++) { const k = i / 8; F.part(U.lerp(ev.x0, ev.x1, k), U.lerp(ev.y0, ev.y1, k) - 10, { color: '#b78cff', sp: 20, life: 0.5, size: 4, add: true, kind: 'smoke' }); } break;
       case 'blinkfx': F.burst(ev.x0, ev.y0 - 12, 14, { color: '#b78cff', sp: 60, life: 0.5, size: 3, add: true }); F.burst(ev.x1, ev.y1 - 12, 14, { color: '#b78cff', sp: 60, life: 0.5, size: 3, add: true }); F.pop(ev.x0, ev.y0 - 12, 20, '#b78cff', 0.2); F.pop(ev.x1, ev.y1 - 12, 20, '#b78cff', 0.2); break;
       case 'deflect': F.burst(ev.x, ev.y, 8, { color: '#ffffff', sp: 120, life: 0.25, size: 2, add: true }); F.burst(ev.x, ev.y, 4, { kind: 'streak', color: '#ffffff', sp: 200, life: 0.2, size: 1.4 }); F.pop(ev.x, ev.y, 10, '#ffffff', 0.12, true); A.play('deflect', 0.6); break;
-      case 'block': F.text(ev.x, ev.y - 30, { dodge: 'Dodge', mirror: 'Shrugged off', aegis: 'Blocked' }[ev.k], '#bfe9ff', 9, { pop: true }); A.play('deflect', 0.5); break;
+      case 'block': F.text(ev.x, ev.y - 30, { dodge: 'Dodge', mirror: 'Shrugged off', aegis: 'Blocked', bulwark: 'Blocked' }[ev.k] || 'Blocked', ev.k === 'bulwark' ? '#ffe9a0' : '#bfe9ff', 9, { pop: true });
+        if (ev.k === 'bulwark') { const p = ctx.player(ev.pid), a = p ? p.face : 0; F.burst(ev.x + Math.cos(a) * 18, ev.y - 10 + Math.sin(a) * 18, 7, { kind: 'spark', color: '#fff3c4', a, spread: 1.8, sp: 200, life: 0.25, size: 1.6, drag: 5 }); F.pop(ev.x + Math.cos(a) * 18, ev.y - 10 + Math.sin(a) * 18, 12, '#ffffff', 0.14, true); A.play('block', 0.8); } else A.play('deflect', 0.5); break;
       case 'spawned': F.burst(ev.x, ev.y, ev.el ? 18 : 8, { color: ev.el ? '#ffb13a' : '#b8a0ff', sp: 70, life: 0.4, size: 2.4, add: true }); F.pop(ev.x, ev.y - 8, ev.el ? 30 : 20, ev.el ? '#ffb13a' : '#b8a0ff', 0.25); A.play('spawn', 0.5); break;
       case 'raise': F.burst(ev.x, ev.y, 14, { color: '#7dffd9', sp: 60, vy: -40, life: 0.6, size: 2.4, add: true }); F.ring(ev.x, ev.y, 26, '#7dffd9', 0.4, 2); break;
       case 'puff': F.burst(ev.x, ev.y - 8, 10, { color: ev.c || '#cccccc', sp: 50, life: 0.5, size: 3, kind: 'smoke' }); break;
@@ -222,21 +253,28 @@
       case 'expose': F.text(ev.x, ev.y - 30, ev.boss ? 'WEAKENED' : 'EXPOSED', '#ff6a5a', ev.boss ? 13 : 9, { pop: true }); break;
       case 'wardbreak': F.ring(ev.x, ev.y - 10, 26, '#7fc8ff', 0.3, 3); F.burst(ev.x, ev.y - 10, 10, { kind: 'streak', color: '#bfe3ff', sp: 160, life: 0.3, size: 1.4 }); F.pop(ev.x, ev.y - 10, 20, '#7fc8ff', 0.18); A.play('deflect'); break;
       case 'guard': A.play('skill', 0.6); break;
-      case 'lantern': F.showBanner('Your lantern gutters', 'Three minutes of light remain', 'small', 3); A.play('lock', 0.6); break;
       case 'cone': F.slash(ev.x, ev.y - 6, ev.a, ev.r, ev.arc, '#ff5a3a', 0.25); break;
       case 'left': F.msg(`${ev.name} left the party`, '#ffab70'); break;
       // ---- Wickdeep events (visuals only) ----
-      case 'freeze': F.burst(ev.x, ev.y - 10, 12, { kind: 'streak', color: '#c8f6ff', sp: 150, life: 0.35, size: 1.6 }); F.burst(ev.x, ev.y - 10, 8, { kind: 'shard', color: '#bfeaff', sp: 70, life: 0.7, size: 2.6, vz: 70, z: 8 }); F.ring(ev.x, ev.y - 6, 28, '#9fefff', 0.35, 3); F.pop(ev.x, ev.y - 10, 22, '#bfeaff', 0.22, true); break;
-      case 'shatter': F.burst(ev.x, ev.y - 8, 24, { kind: 'shard', color: '#d8f8ff', sp: (ev.r || 60) * 2.4, life: 0.7, size: 3, vz: 110, z: 8, add: true }); F.burst(ev.x, ev.y - 8, 14, { kind: 'streak', color: '#ffffff', sp: (ev.r || 60) * 3.4, life: 0.3, size: 1.8 }); F.ring(ev.x, ev.y, ev.r || 60, '#9fefff', 0.4, 4); F.pop(ev.x, ev.y - 8, (ev.r || 60) * 0.6, '#d8f8ff', 0.25, true); F.punch(0.45, 0); F.addShake(3); A.play('deflect', 0.6); break;
-      case 'combust': F.burst(ev.x, ev.y - 8, 18, { kind: 'ember', color: '#ffb347', sp: 90, a: -1.57, spread: 5, life: 1.0, size: 2, drag: 1.5, lt: '#ff8a2a', ltr: 26 }); F.burst(ev.x, ev.y, 16, { color: '#ff7a2a', sp: (ev.r || 70) * 2.4, life: 0.4, size: 3, add: true }); F.ring(ev.x, ev.y, ev.r || 70, '#ff8a3a', 0.4, 4); F.pop(ev.x, ev.y - 8, (ev.r || 70) * 0.7, '#ffd36b', 0.25); F.punch(0.4, 0); F.addShake(3); A.play('boom', 0.5); break;
-      case 'guardhit': F.burst(ev.x, ev.y - 8, 8, { kind: 'spark', color: '#ffe9b0', sp: 220, life: 0.25, size: 1.6, drag: 5 }); F.pop(ev.x, ev.y - 8, 12, '#ffffff', 0.14, true); F.ring(ev.x, ev.y - 8, 16, '#e8e2c8', 0.18, 2); A.play('deflect', 0.7); break;
-      case 'ambush': { const p = ctx.player(ev.pid); const x = ev.x !== undefined ? ev.x : (p ? p.x : 0), y = ev.y !== undefined ? ev.y : (p ? p.y : 0); F.slash(x, y - 8, 0.8, 34, 0.5, '#d9c8ff', 0.2); F.slash(x, y - 8, -0.8, 34, 0.5, '#d9c8ff', 0.2); F.burst(x, y - 8, 14, { color: '#b78cff', sp: 130, life: 0.4, size: 2.6, add: true }); F.pop(x, y - 8, 30, '#b78cff', 0.25, true); F.punch(0.6, 0.3); if (ev.pid === local) F.hitStop(0.07); break; }
+      case 'freeze': F.burst(ev.x, ev.y - 10, 12, { kind: 'streak', color: '#c8f6ff', sp: 150, life: 0.35, size: 1.6 }); F.burst(ev.x, ev.y - 10, 8, { kind: 'shard', color: '#bfeaff', sp: 70, life: 0.7, size: 2.6, vz: 70, z: 8 }); F.ring(ev.x, ev.y - 6, 28, '#9fefff', 0.35, 3); F.pop(ev.x, ev.y - 10, 22, '#bfeaff', 0.22, true); A.play('freeze', 0.7); break;
+      case 'shatter': F.burst(ev.x, ev.y - 8, 24, { kind: 'shard', color: '#d8f8ff', sp: (ev.r || 60) * 2.4, life: 0.7, size: 3, vz: 110, z: 8, add: true }); F.burst(ev.x, ev.y - 8, 14, { kind: 'streak', color: '#ffffff', sp: (ev.r || 60) * 3.4, life: 0.3, size: 1.8 }); F.ring(ev.x, ev.y, ev.r || 60, '#9fefff', 0.4, 4); F.pop(ev.x, ev.y - 8, (ev.r || 60) * 0.6, '#d8f8ff', 0.25, true); F.punch(0.45, 0); F.addShake(3); A.play('shatter', 0.8); break;
+      case 'combust': F.burst(ev.x, ev.y - 8, 18, { kind: 'ember', color: '#ffb347', sp: 90, a: -1.57, spread: 5, life: 1.0, size: 2, drag: 1.5, lt: '#ff8a2a', ltr: 26 }); F.burst(ev.x, ev.y, 16, { color: '#ff7a2a', sp: (ev.r || 70) * 2.4, life: 0.4, size: 3, add: true }); F.ring(ev.x, ev.y, ev.r || 70, '#ff8a3a', 0.4, 4); F.pop(ev.x, ev.y - 8, (ev.r || 70) * 0.7, '#ffd36b', 0.25); F.punch(0.4, 0); F.addShake(3); A.play('combust', 0.8); break;
+      case 'guardhit': F.burst(ev.x, ev.y - 8, 8, { kind: 'spark', color: '#ffe9b0', sp: 220, life: 0.25, size: 1.6, drag: 5 }); F.pop(ev.x, ev.y - 8, 12, '#ffffff', 0.14, true); F.ring(ev.x, ev.y - 8, 16, '#e8e2c8', 0.18, 2); A.play('guardhit', 0.7); break;
+      case 'ambush': { const p = ctx.player(ev.pid); const x = ev.x !== undefined ? ev.x : (p ? p.x : 0), y = ev.y !== undefined ? ev.y : (p ? p.y : 0); F.slash(x, y - 8, 0.8, 34, 0.5, '#d9c8ff', 0.2); F.slash(x, y - 8, -0.8, 34, 0.5, '#d9c8ff', 0.2); F.burst(x, y - 8, 14, { color: '#b78cff', sp: 130, life: 0.4, size: 2.6, add: true }); F.pop(x, y - 8, 30, '#b78cff', 0.25, true); F.punch(0.6, 0.3); A.play('ambush', ev.pid === local ? 0.9 : 0.5); if (ev.pid === local) F.hitStop(0.07); break; }
       case 'evolve': { const p = ctx.player(ev.pid), col = PATH_COL[ev.path] || '#ffd36b', x = ev.x !== undefined ? ev.x : (p ? p.x : 0), y = ev.y !== undefined ? ev.y : (p ? p.y : 0);
         F.ring(x, y, 120, col, 0.8, 5); F.ring(x, y, 70, '#ffffff', 0.55, 3); F.ring(x, y, 40, col, 0.4, 2);
         F.burst(x, y - 12, 44, { color: col, sp: 110, a: -1.57, spread: 4.4, life: 1.2, size: 2.6, add: true, drag: 1.2 });
         F.burst(x, y - 12, 14, { kind: 'streak', color: '#ffffff', sp: 320, life: 0.5, size: 2 });
-        F.pop(x, y - 14, 80, col, 0.5, true); F.punch(1.2, 0.9); F.addShake(5); if (ev.pid === local) { F.flash = { color: col, t: 0.3, a: 0.3 }; A.play('boon'); } break; }
-      case 'dread': F.dread = ev.tier | 0; F.punch(0.7, 0); F.addShake(2 + (ev.tier | 0)); if (!calm()) F.flash = { color: '#02010a', t: 0.5, a: 0.55 }; break;
+        F.pop(x, y - 14, 80, col, 0.5, true); F.punch(1.2, 0.9); F.addShake(5); A.play('evolve', ev.pid === local ? 1 : 0.6); if (ev.pid === local) F.flash = { color: col, t: 0.3, a: 0.3 }; break; }
+      case 'dread': { const tier = ev.tier | 0, worse = tier > F.dread; F.dread = tier; A.play('dread', worse ? 0.9 : 0.5, tier);
+        if (worse) { F.punch(0.7, 0); F.addShake(2 + tier); if (!calm()) F.flash = { color: '#02010a', t: 0.5, a: 0.55 }; } break; }
+      case 'howl': F.ring(ev.x, ev.y - 8, ev.r || 200, '#e8d8b0', 0.6, 4); F.ring(ev.x, ev.y - 8, (ev.r || 200) * 0.5, '#ffffff', 0.4, 2); F.burst(ev.x, ev.y - 14, 10, { kind: 'streak', color: '#e8d8b0', sp: (ev.r || 200) * 1.4, life: 0.4, size: 1.6 }); F.pop(ev.x, ev.y - 14, 24, '#e8d8b0', 0.25); F.addShake(2); A.play('howl', 0.7); break;
+      case 'rift': F.burst(ev.x, ev.y - 12, 16, { color: '#b78cff', sp: 90, life: 0.6, size: 2.6, add: true }); F.burst(ev.x, ev.y - 12, 8, { kind: 'streak', color: '#e8c8ff', a: -1.57, spread: 3.1, sp: 200, life: 0.35, size: 1.6 }); F.burst(ev.x, ev.y - 6, 5, { kind: 'smoke', color: '#1a0830', sp: 30, life: 0.8, size: 7 }); F.ring(ev.x, ev.y, 30, '#b78cff', 0.45, 3); F.pop(ev.x, ev.y - 14, 34, '#c98bff', 0.3, true); A.play('rift', 0.6); break;
+      case 'claim': { const col = R().rewardColor(ev.item), mine = ev.pid === local, y = ev.y - 18; F.burst(ev.x, y, mine ? 22 : 14, { color: col, sp: 80, vy: -50, life: 0.9, size: 2.4, add: true, drag: 1.3 }); F.ring(ev.x, ev.y - 8, 34, col, 0.5, 3); F.pop(ev.x, y, 28, col, 0.3);
+        if (ev.item === 'campfire') F.burst(ev.x, y, 8, { kind: 'ember', color: '#ffb347', a: -1.57, spread: 2.4, sp: 50, life: 1.1, size: 2, drag: 1.4, lt: '#ff8a2a', ltr: 24 });
+        if (mine) F.text(ev.x, y - 14, R().rewardLabel(ev.item), col, 10, { life: 1.3, max: 1.3 });
+        A.play('claim', mine ? 0.9 : 0.4); break; }
+      case 'oil': F.burst(ev.x, ev.y - 14, 20, { kind: 'ember', color: '#ffc27a', a: -1.57, spread: 4.4, sp: 70, life: 1.3, size: 2, drag: 1.3, lt: '#ffb35c', ltr: 26 }); F.ring(ev.x, ev.y - 10, 60, '#ffb35c', 0.6, 4); F.pop(ev.x, ev.y - 16, 70, '#ffc27a', 0.6, true); F.text(ev.x, ev.y - 40, '+' + Math.round(ev.v || 0) + ' light', '#ffd36b', 11, { life: 1.4, max: 1.4 }); if (!calm()) F.flash = { color: '#ffb35c', t: 0.3, a: 0.2 }; A.play('oil', 0.9); break;
       case 'ward': F.ring(ev.x, ev.y - 10, 24, '#7fc8ff', 0.4, 3); F.burst(ev.x, ev.y - 10, 8, { color: '#bfe3ff', sp: 50, vy: -30, life: 0.6, size: 2, add: true, drag: 1.5 }); F.pop(ev.x, ev.y - 12, 22, '#7fc8ff', 0.25); break;
       default: break;
     }

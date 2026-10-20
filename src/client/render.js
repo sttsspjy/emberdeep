@@ -8,7 +8,7 @@
   const glowCache = {}, lightCache = {}, trailCache = {};
   let lightCv, lctx, vignette, shadowCv, rimCv, rimCtx, lightN = 0;
   const lights = [], rimSrc = [], glowQ = [];
-  let nl = 0, ng = 0, shDX = 0, shDY = 0; // lights/glows queued this frame; shadow skew away from the nearest light
+  let nl = 0, ng = 0, stN = 0, shDX = 0, shDY = 0; // lights/glows queued this frame (stN: status lights); shadow skew away from the nearest light
 
   R.init = (canvas) => {
     R.canvas = canvas;
@@ -181,7 +181,7 @@
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
     c.fillStyle = P.void; c.fillRect(0, 0, R.W, R.H);
-    nl = 0; ng = 0;
+    nl = 0; ng = 0; stN = 0; R.local = local;
     if (!room) { R.endWorld(R.postOpts(biome, t)); return; }
     let sx = 0, sy = 0;
     if (F.shake > 0) { const a = F.shake * R.scale * 0.55; sx = (Math.sin(t * 71) + Math.sin(t * 43 + 1.7) * 0.6) * a * 0.62; sy = (Math.cos(t * 67) + Math.sin(t * 51 + 0.4) * 0.6) * a * 0.62; }
@@ -208,10 +208,11 @@
       else {
         c.save(); c.translate(o.x, o.y);
         if (it.k === 0) { drawCompanions(c, o, view, t, true); Sp.hero(c, o, t, F.anim[o.pid]); drawCompanions(c, o, view, t, false); }
-        else if (it.k === 1) { Sp.enemy(c, o, t); if (rim && rim.s > 0.35) R.glowOnce(c, 0, -o.r * 1.2, o.r * 1.5, rim.col, 0.14 * rim.s, rim.dx * o.r * 0.55, rim.dy * o.r * 0.4); }
+        else if (it.k === 1) { Sp.enemy(c, o, t); if (rim && rim.s > 0.35) R.glowOnce(c, 0, -o.r * 1.2, o.r * 1.5, rim.col, 0.14 * rim.s, rim.dx * o.r * 0.55, rim.dy * o.r * 0.4); drawStatus(c, o, t); }
         else Sp.minion(c, o, t);
         c.restore();
       }
+      if (it.k === 0) { c.save(); c.translate(o.x, o.y); drawHeroFx(c, o, t); c.restore(); }
       if (it.k === 0 && !o.dead && !low) F.dashTrail && F.dashTrail(o, t);
     }
     shDX = shDY = 0;
@@ -232,7 +233,7 @@
     drawProjectiles(c, view, t, 1);
     if (!low) drawMotes(c, view, room, biome, t, dt, 1);
     const eyeA = 0.2 + P.darkness * 0.5;
-    for (const e of view.enemies) if (e.hp > 0) R.glow(c, e.x, e.y - e.r * (e.def.fly ? 2.2 : 1.7), 5 + e.r * 0.5, e.def.col.c, eyeA);
+    for (const e of view.enemies) if (e.hp > 0 && !e.burrowed) R.glow(c, e.x, e.y - e.r * (e.def.fly ? 2.2 : 1.7), 5 + e.r * 0.5, e.def.col.c, eyeA);
     for (let i = 0; i < ng; i++) { const g = glowQ[i]; R.glow(c, g.x, g.y, g.r, g.c, g.a); }
     F.drawGlow(c, t);
     c.globalCompositeOperation = 'source-over';
@@ -340,6 +341,7 @@
         const r = ED.Dungeon.doorRect(room, d), cx = (r.x0 + r.x1 + 1) / 2 * T, cy = (r.y0 + r.y1 + 1) / 2 * T, k = 0.7 + Math.sin(t * 1.8 + cx * 0.01) * 0.1;
         R.light(cx, cy, 80, P.accent, 0.3 * k); R.emit(cx, cy, 30, P.accent, 0.16 * k);
       }
+      for (const pv of doorPreviews(view, room, t)) { R.light(pv.x, pv.y, 62, pv.color, 0.55); R.emit(pv.x, pv.y, 22, pv.color, 0.32 + Math.sin(t * 2.4 + pv.x * 0.02) * 0.08); }
       return;
     }
     for (const d in room.doors) {
@@ -534,6 +536,63 @@
           c.stroke(); c.restore();
           break;
         }
+        case 'rain': { // Rain of Arrows: faint ground disc, then arrows falling inside the circle
+          const fade = Math.min(1, (z.dur - z.t) * 2.5, z.t * 4), warm = z.t < 0.35;
+          if (pass === 0) {
+            c.fillStyle = U.rgba('#e8d8b0', (warm ? 0.05 : 0.09) * fade); c.beginPath(); c.arc(z.x, z.y, z.r, 0, U.TAU); c.fill();
+            if (!warm) R.light(z.x, z.y - 8, z.r * 1.5, '#d8c890', 0.32 * fade);
+            break;
+          }
+          c.strokeStyle = U.rgba('#e8d8b0', 0.7 * fade); c.lineWidth = 1.3; c.setLineDash([6, 5]); c.lineDashOffset = -t * 14; c.beginPath(); c.arc(z.x, z.y, warm ? Math.max(0.1, z.r * (1.4 - z.t / 0.35 * 0.4)) : z.r, 0, U.TAU); c.stroke(); c.setLineDash([]);
+          if (warm) break;
+          const n = R.quality === 'low' ? 7 : Math.max(8, Math.round(z.r / 5));
+          c.lineCap = 'round';
+          for (let i = 0; i < n; i++) {
+            const kk = (t * 2.3 + i * 0.381 + z.id * 0.17) % 1, a = i * 2.39996 + z.id, rr = Math.sqrt((i + 0.5) / n) * z.r * 0.94;
+            const gx = z.x + Math.cos(a) * rr, gy = z.y + Math.sin(a) * rr, hy = gy - 70 * (1 - kk) * (1 - kk) - 4, hx = gx + 6 * (1 - kk);
+            c.strokeStyle = U.rgba('#f2ead0', 0.85 * fade * Math.min(1, kk * 4)); c.lineWidth = 1.4; c.beginPath(); c.moveTo(hx, hy); c.lineTo(hx - 3.2, hy - 15); c.stroke();
+            c.fillStyle = U.rgba('#ffffff', 0.9 * fade * Math.min(1, kk * 4)); c.fillRect(hx - 1, hy - 1, 2, 2.4);
+            if (kk > 0.9) { c.strokeStyle = U.rgba('#e8d8b0', (1 - kk) * 8 * fade); c.lineWidth = 0.9; c.beginPath(); c.ellipse(gx, gy, 2 + (kk - 0.9) * 40, 1 + (kk - 0.9) * 18, 0, 0, U.TAU); c.stroke(); }
+          }
+          c.lineCap = 'butt';
+          break;
+        }
+        case 'meteor': { // friendly telegraph: growing shadow and ring on the ground, a fireball plunging from above
+          const q = U.clamp(z.t / Math.max(0.1, z.dur), 0, 1), fx = z.x + (1 - q) * (1 - q) * 70, fy = z.y - (1 - q) * (1 - q) * 280;
+          if (pass === 0) {
+            c.fillStyle = U.rgba('#ff7a2a', 0.07 + 0.12 * q); c.beginPath(); c.arc(z.x, z.y, z.r, 0, U.TAU); c.fill();
+            c.fillStyle = 'rgba(0,0,0,' + (0.15 + 0.3 * q) + ')'; c.beginPath(); c.ellipse(z.x, z.y, 5 + q * q * z.r * 0.5, 2.5 + q * q * z.r * 0.26, 0, 0, U.TAU); c.fill();
+            R.light(fx, fy, 60 + 90 * q, '#ff8a2a', 0.55 + 0.5 * q); R.light(z.x, z.y, z.r * 1.4, '#ff6a1a', 0.2 + 0.4 * q * q);
+            break;
+          }
+          c.strokeStyle = U.rgba('#ff8a2a', 0.25); c.lineWidth = 6; c.beginPath(); c.arc(z.x, z.y, z.r, 0, U.TAU); c.stroke();
+          c.strokeStyle = U.rgba('#ffc27a', 0.9); c.lineWidth = 1.5; c.beginPath(); c.arc(z.x, z.y, z.r, 0, U.TAU); c.stroke();
+          c.strokeStyle = U.rgba('#ff6a1a', 0.55 + (q > 0.8 ? 0.4 * Math.sin(t * 40) : 0)); c.beginPath(); c.arc(z.x, z.y, Math.max(0.1, z.r * q), 0, U.TAU); c.stroke();
+          const rad = 7 + 11 * q;
+          c.strokeStyle = U.rgba('#ff7a2a', 0.5); c.lineWidth = rad * 0.9; c.lineCap = 'round'; c.beginPath(); c.moveTo(fx, fy); c.lineTo(fx - (z.x - fx) * 0.5 - 6, fy - (z.y - fy) * 0.5 - 30); c.stroke(); c.lineCap = 'butt';
+          R.glow(c, fx, fy, rad * 3.2, '#ff6a1a', 0.85);
+          c.fillStyle = '#ffd88a'; c.beginPath(); c.arc(fx, fy, rad * 0.85, 0, U.TAU); c.fill();
+          c.fillStyle = '#ff6a1a'; c.beginPath(); c.arc(fx + rad * 0.15, fy + rad * 0.15, rad * 0.6, 0, U.TAU); c.fill();
+          c.fillStyle = '#ffffff'; c.beginPath(); c.arc(fx - rad * 0.2, fy - rad * 0.2, rad * 0.28, 0, U.TAU); c.fill();
+          break;
+        }
+        case 'smoke': { // Vanish cloud: billowing grey-violet puffs, translucent so the hero inside stays readable
+          const fade = Math.min(1, (z.dur - z.t) * 1.5, z.t * 3);
+          if (pass === 0) {
+            const n = R.quality === 'low' ? 6 : 10;
+            c.fillStyle = U.rgba('#3a3552', 0.3 * fade); c.beginPath(); c.ellipse(z.x, z.y - 2, z.r * 0.95, z.r * 0.66, 0, 0, U.TAU); c.fill();
+            for (let i = 0; i < n; i++) {
+              const a = i * 0.83 + z.id, wob = 0.55 + 0.3 * Math.sin(t * 0.8 + i * 1.7), rr = z.r * wob * 0.7, px = z.x + Math.cos(a + t * 0.2) * rr, py = z.y - 8 + Math.sin(a + t * 0.2) * rr * 0.62;
+              const pr = z.r * (0.3 + 0.07 * Math.sin(t * 1.3 + i * 2.1));
+              c.fillStyle = U.rgba(i % 2 ? '#6a6484' : '#8f89a8', 0.42 * fade); c.beginPath(); c.ellipse(px, py, pr, pr * 0.75, 0, 0, U.TAU); c.fill();
+              c.fillStyle = U.rgba('#c4bedc', 0.16 * fade); c.beginPath(); c.ellipse(px - pr * 0.2, py - pr * 0.3, pr * 0.6, pr * 0.4, 0, 0, U.TAU); c.fill();
+            }
+            break;
+          }
+          R.glow(c, z.x, z.y - 6, z.r * 0.95, '#8a7cc0', 0.1 * fade);
+          c.strokeStyle = U.rgba('#b4a8dc', 0.35 * fade); c.lineWidth = 1; c.setLineDash([3, 6]); c.lineDashOffset = t * 6; c.beginPath(); c.arc(z.x, z.y, z.r, 0, U.TAU); c.stroke(); c.setLineDash([]);
+          break;
+        }
         case 'pull': {
           if (pass === 0) break;
           c.save(); c.translate(z.x, z.y);
@@ -579,6 +638,14 @@
         L(pk.x, pk.y - 4, 26, '#7dffd9', 0.5); E(pk.x, pk.y - 4, 11, '#7dffd9', 0.7);
         c.fillStyle = '#b6fff0'; c.beginPath(); c.moveTo(pk.x, pk.y - 8 + bob); c.lineTo(pk.x + 3, pk.y - 4 + bob); c.lineTo(pk.x, pk.y + bob); c.lineTo(pk.x - 3, pk.y - 4 + bob); c.fill();
         c.fillStyle = '#ffffff'; c.beginPath(); c.moveTo(pk.x, pk.y - 8 + bob); c.lineTo(pk.x + 1.4, pk.y - 5 + bob); c.lineTo(pk.x - 0.6, pk.y - 4.5 + bob); c.fill();
+      } else if (pk.kind === 'orb') {
+        L(pk.x, pk.y - 6, 34, '#ff2a4a', 0.65); E(pk.x, pk.y - 6, 15, '#ff2a4a', 0.7);
+        c.fillStyle = 'rgba(0,0,0,0.25)'; c.beginPath(); c.ellipse(pk.x, pk.y, 3.5, 1.5, 0, 0, U.TAU); c.fill();
+        c.save(); c.translate(pk.x, pk.y - 7 + bob); c.scale(0.9 + Math.sin(t * 6 + pk.id) * 0.06, 0.9);
+        c.fillStyle = '#d4142e'; c.strokeStyle = '#3a0610'; c.lineWidth = 1.2;
+        c.beginPath(); c.moveTo(0, -7.5); c.quadraticCurveTo(5.5, -1, 4.6, 2.6); c.quadraticCurveTo(3.6, 6, 0, 6); c.quadraticCurveTo(-3.6, 6, -4.6, 2.6); c.quadraticCurveTo(-5.5, -1, 0, -7.5); c.fill(); c.stroke();
+        c.fillStyle = 'rgba(255,255,255,0.65)'; c.beginPath(); c.ellipse(-1.7, 1.2, 1.1, 2.2, 0.3, 0, U.TAU); c.fill();
+        c.restore();
       } else if (pk.kind === 'heart') {
         L(pk.x, pk.y - 6, 36, '#ff4a5a', 0.6); E(pk.x, pk.y - 6, 16, '#ff4a5a', 0.6);
         c.save(); c.translate(pk.x, pk.y - 6 + bob); c.scale(0.28, 0.28);
@@ -596,8 +663,28 @@
   };
   R.propPrompt = (p, view) => {
     if (p.kind === 'relic') return 'Take ' + ED.RELICS[p.item].name;
-    if (p.kind === 'shop') { const name = p.stype === 'relic' ? ED.RELICS[p.item].name : p.stype === 'boon' ? 'Epic boon' : 'Healing draught (45%)'; return `Buy ${name} — ${p.price}g`; }
+    if (p.kind === 'shop') { const name = p.stype === 'relic' ? ED.RELICS[p.item].name : p.stype === 'boon' ? 'Epic boon' : p.stype === 'oil' ? 'Lantern oil' : p.stype === 'forge' ? 'Forge' : 'Healing draught'; return `Buy ${name} — ${p.price}g`; }
+    if (p.kind === 'reward') {
+      if (p.item === 'gold') { const amt = ED.World.rewardGold ? ED.World.rewardGold(view.stratum, view.dread ? view.dread.tier | 0 : 0) : 0; return amt ? `Claim: ${amt} gold` : 'Claim: Gold'; }
+      return 'Claim: ' + R.rewardLabel(p.item);
+    }
+    if (p.kind === 'campfire') return 'Rest at the campfire';
+    if (p.kind === 'anvil') return 'Temper at the anvil';
     return PROP_LABEL[p.kind] ? PROP_LABEL[p.kind](p) : null;
+  };
+  const REWARD_DESC = { gold: 'Gold for the whole party, more when the lantern is low.', vigor: 'Permanently raises your maximum health and heals you.', forge: 'Rank up one of your boons.', oil: 'Refills part of the lantern for the whole party.', class: 'Choose a technique unique to your hero.', epic: 'Choose from epic boons.', relic: 'A hoard of relics: each hero takes one.' };
+  const SHOP_DESC = { boon: 'Grants an extra boon pick with no common options.', oil: 'Lantern oil: refills part of the lantern for the whole party.', forge: 'Forge: rank up one of your boons.', potion: 'Heals a good chunk of your health.' };
+  // Longer explanation shown above the prompt (null when there is none).
+  R.propDesc = (p) => {
+    if (p.kind === 'reward') {
+      const s = String(p.item);
+      if (s.indexOf('boon:') === 0) { const pa = ED.PATHS[s.slice(5)]; return pa ? `Choose a ${pa.name} boon. Opens the path if you have a free slot.` : null; }
+      return REWARD_DESC[s] || null;
+    }
+    if (p.kind === 'campfire') return 'Rest: recover a chunk of your health. One use per hero.';
+    if (p.kind === 'anvil') return 'Temper: rank up one of your boons. One use per hero.';
+    if (p.kind === 'shop') return SHOP_DESC[p.stype] || null;
+    return null;
   };
   R.interactable = (p) => !p.state && p.kind !== 'sign' && p.kind !== 'merchant';
 
@@ -606,13 +693,68 @@
   function rewardColor(s) {
     s = String(s || '');
     if (s.indexOf('boon:') === 0) return PATH_COL[s.slice(5)] || '#ffe9a0';
-    return { gold: '#ffd36b', vigor: '#ff4a5a', forge: '#ff9a3a', oil: '#ffb35c', class: '#c98bff', epic: '#c98bff', relic: '#ffb02e' }[s] || '#ffe9a0';
+    return { gold: '#ffd36b', vigor: '#ff4a5a', forge: '#ff9a3a', oil: '#ffb35c', class: '#c98bff', epic: '#c98bff', relic: '#ffb02e', campfire: '#ff9a3a', anvil: '#ffb066' }[s] || '#ffe9a0';
+  }
+  R.rewardColor = rewardColor;
+  const REWARD_LABEL = { gold: 'Gold', vigor: 'Vigor', forge: 'Forge', oil: 'Lantern oil', class: 'Class technique', relic: 'Relic hoard', epic: 'Epic boon', campfire: 'Rest', anvil: 'Temper' };
+  // Short name of a reward string: 'boon:pyre' -> 'Boon of Pyre'.
+  R.rewardLabel = (s) => {
+    s = String(s || '');
+    if (s.indexOf('boon:') === 0) { const pa = ED.PATHS[s.slice(5)]; return 'Boon of ' + (pa ? pa.name : 'the Deep'); }
+    return REWARD_LABEL[s] || 'Reward';
+  };
+  // [icon, colour] for a reward string; cls (a hero class id) picks the glyph of 'class' rewards.
+  R.rewardIcon = (s, cls) => {
+    s = String(s || '');
+    if (s.indexOf('boon:') === 0) { const pa = ED.PATHS[s.slice(5)]; return pa ? [pa.icon, pa.color] : ['star', '#ffe9a0']; }
+    if (s === 'class') { const k = ED.CLASSES[cls]; return k ? [k.icon, k.col.c] : ['scroll', '#c98bff']; }
+    return { gold: ['coin', '#ffd36b'], vigor: ['heart', '#ff4a5a'], forge: ['anvil', '#ff9a3a'], oil: ['oil', '#ffb35c'], epic: ['star', '#c98bff'], relic: ['chest', '#ffb02e'], campfire: ['campfire', '#ff9a3a'], anvil: ['anvil', '#ffb066'] }[s] || ['star', '#ffe9a0'];
+  };
+  // Map/door glyph of a floor room: { icon, color, badge? } (null for plain rooms). Elite rooms add a skull badge.
+  R.roomIcon = (rm, cls) => {
+    if (!rm) return null;
+    const T2 = { boss: ['skull', '#ff5a3a'], shop: ['coin', '#ffd36b'], treasure: ['chest', '#ffd36b'], event: ['star', '#7dffd9'], rest: ['campfire', '#ff9a3a'] }[rm.type];
+    if (T2) return { icon: T2[0], color: T2[1] };
+    if (!rm.reward) return rm.type === 'elite' ? { icon: 'skull', color: '#ff7a3a' } : null;
+    const ri = R.rewardIcon(rm.reward, cls);
+    return { icon: ri[0], color: ri[1], badge: rm.type === 'elite' ? 'skull' : null };
+  };
+
+  // Reward previews over the doors of the current room: neighbours not yet cleared, bobbing in front of each doorway.
+  function doorPreviews(view, room, t) {
+    const out = [];
+    if (view.locked || !view.floor) return out;
+    const me = view.players.get(R.local), cls = me ? me.cls : null, h = room.h * T, w = room.w * T;
+    for (const d in room.doors) {
+      const id = room.doors[d]; if (id < 0) continue;
+      const nb = view.floor.rooms[id], st = view.roomState && view.roomState[id];
+      if (!nb || (st && st.cleared)) continue;
+      const ri = R.roomIcon(nb, cls); if (!ri) continue;
+      const r = ED.Dungeon.doorRect(room, d), cx = (r.x0 + r.x1 + 1) / 2 * T, cy = (r.y0 + r.y1 + 1) / 2 * T;
+      let x = cx, y = cy;
+      if (d === 'n') y = T - 2; else if (d === 's') y = h - T - 6; else if (d === 'w') x = T * 0.5 + 6; else x = w - T * 0.5 - 6;
+      out.push({ x, y: y + Math.sin(t * 2.2 + x * 0.03 + y * 0.02) * 1.8, color: ri.color, ri });
+    }
+    return out;
+  }
+  // Icon pass of the door previews (screen-space-sized, unlit); fades when a hero walks up to the doorway.
+  function drawDoorPreviews(c, view, room, t) {
+    const list = doorPreviews(view, room, t); if (!list.length) return;
+    for (const pv of list) {
+      let near = 1e9; for (const p of view.players.values()) if (!p.dead) near = Math.min(near, Math.hypot(p.x - pv.x, p.y - pv.y));
+      c.globalAlpha = U.clamp((near - 22) / 46, 0.22, 0.95);
+      c.drawImage(ED.Icons.canvas(pv.ri.icon, pv.color, 64), pv.x - 11, pv.y - 11, 22, 22);
+      if (pv.ri.badge) c.drawImage(ED.Icons.canvas('skull', '#ff7a3a', 64), pv.x + 3, pv.y + 2, 12, 12);
+    }
+    c.globalAlpha = 1;
   }
 
   function drawProps(c, view, local, t) {
     for (const p of view.props) {
-      const G = (dx, dy, r, col, a) => R.emit(p.x + dx, p.y + dy, r, col, a), L = (dx, dy, r, col, k) => R.light(p.x + dx, p.y + dy, r, col, k);
+      const done = !!(R.claimed && p.group && R.claimed[p.group] && (p.kind === 'campfire' || p.kind === 'anvil' || (p.kind === 'reward' && /^(boon:|class$|forge$|epic$|vigor$)/.test(p.item)))); // this hero already used it
+      const G = done ? () => {} : (dx, dy, r, col, a) => R.emit(p.x + dx, p.y + dy, r, col, a), L = done ? () => {} : (dx, dy, r, col, k) => R.light(p.x + dx, p.y + dy, r, col, k);
       c.save(); c.translate(p.x, p.y);
+      if (done) c.globalAlpha = 0.4;
       c.lineWidth = 1.5; c.strokeStyle = '#0b0806';
       switch (p.kind) {
         case 'chest': {
@@ -636,6 +778,8 @@
             let col = '#ffffff', icon = null;
             if (p.kind === 'relic' || p.stype === 'relic') { const r = ED.RELICS[p.item]; col = ED.RARITY[r.rar].color; icon = ED.Icons.relicCanvas(p.item, 64); }
             else if (p.stype === 'boon') { col = ED.RARITY.e.color; icon = ED.Icons.canvas('star', col, 64); }
+            else if (p.stype === 'oil') { col = '#ffb35c'; icon = ED.Icons.canvas('oil', col, 64); }
+            else if (p.stype === 'forge') { col = '#ff9a3a'; icon = ED.Icons.canvas('anvil', col, 64); }
             else { col = '#ff4a5a'; icon = ED.Icons.canvas('potion', col, 64); }
             G(0, -22 + bob, 24, col, 0.65); L(0, -22, 80, col, 0.8);
             c.drawImage(icon, -10, -32 + bob, 20, 20);
@@ -727,11 +871,8 @@
           c.fillStyle = '#3a3330'; c.fillRect(-11, -7, 22, 9); c.strokeRect(-11, -7, 22, 9);
           c.fillStyle = '#524a44'; c.fillRect(-13, -10, 26, 4); c.strokeRect(-13, -10, 26, 4);
           G(0, -26 + bob, 34, col, 0.7); L(0, -24, 120, col, 0.95);
-          c.save(); c.translate(0, -26 + bob); c.rotate(Math.sin(t * 1.3) * 0.15);
-          c.fillStyle = col; c.strokeStyle = '#0b0806'; c.lineWidth = 1.4;
-          c.beginPath(); c.moveTo(0, -10); c.lineTo(7, 0); c.lineTo(0, 10); c.lineTo(-7, 0); c.closePath(); c.fill(); c.stroke();
-          c.fillStyle = 'rgba(255,255,255,0.55)'; c.beginPath(); c.moveTo(0, -10); c.lineTo(3, -1); c.lineTo(0, 1); c.lineTo(-4, -1); c.closePath(); c.fill();
-          c.restore();
+          const me = view.players.get(local), ri = R.rewardIcon(p.item, me ? me.cls : null);
+          c.drawImage(ED.Icons.canvas(ri[0], ri[1], 64), -12, -38 + bob, 24, 24);
           for (let i = 0; i < 3; i++) { const a = t * 1.5 + i * 2.1; G(Math.cos(a) * 15, -26 + bob + Math.sin(a) * 6, 5, col, 0.8); }
           break;
         }
@@ -755,6 +896,108 @@
       }
       c.restore();
     }
+  }
+
+  // ---------------- status overlays (foes) and hero effects ----------------
+  const LOOK_H = { priest: 44, rift: 44, sentinel: 48, knight: 34, golem: 36, hulk: 30, robed: 30, wraith: 36, reaver: 34, drone: 24, worm: 40, horror: 36, shade: 30, imp: 24, totem: 30, skeleton: 28, zombie: 28, wolf: 20, crab: 20, spider: 14, slime: 18, spitter: 28, shroom: 26, eel: 18 }; // approximate sprite heights at def.r
+  const hash1 = (n) => { const s = Math.sin(n * 127.1) * 43758.5453; return s - Math.floor(s); };
+  // Status light + halo, capped per frame (fewer on low quality).
+  const stLight = (x, y, r, col, k) => { if (stN < (R.quality === 'low' ? 8 : 26)) { stN++; R.light(x, y, r, col, k); R.emit(x, y, r * 0.45, col, k * 0.5); } };
+  // Drawn at the foe's origin right after its sprite. Colours follow the path colours: burn Pyre, chill/freeze Rime, charge Storm, bleed Blood.
+  function drawStatus(c, e, t) {
+    if (e.burrowed || e.hp <= 0) return;
+    const r = e.r, id = e.id | 0, fly = !!e.def.fly, bh = fly ? r * 2.6 : (LOOK_H[e.def.look] || r * 2.7) * (r / e.def.r), cy = fly ? -r * 1.7 : -bh * 0.5, hh = bh * 0.56; // bh: sprite height; cy/hh: body centre and half-height
+    if (e.ward > 0) {
+      const sh = 0.22 + 0.12 * Math.sin(t * 4 + id);
+      c.fillStyle = U.rgba('#7fc8ff', sh * 0.35); c.strokeStyle = U.rgba('#bfe3ff', sh + 0.2); c.lineWidth = 1.2;
+      c.beginPath(); c.ellipse(0, cy, r * 1.35, hh * 1.2, 0, 0, U.TAU); c.fill(); c.stroke();
+      c.strokeStyle = U.rgba('#ffffff', 0.5); c.beginPath(); c.arc(0, cy, r * 1.3, t * 2 + id, t * 2 + id + 0.9); c.stroke();
+    }
+    if (e.frozen > 0) {
+      const w = r * 1.5, h = hh;
+      c.fillStyle = U.rgba('#bfeaff', 0.4); c.strokeStyle = U.rgba('#f0fdff', 0.95); c.lineWidth = 1.5; c.lineJoin = 'round';
+      c.beginPath(); c.moveTo(-w, cy - h * 0.7); c.lineTo(-w * 0.55, cy - h); c.lineTo(w * 0.6, cy - h * 0.95); c.lineTo(w, cy - h * 0.6); c.lineTo(w * 0.9, cy + h * 0.8); c.lineTo(w * 0.4, cy + h); c.lineTo(-w * 0.5, cy + h * 0.95); c.lineTo(-w, cy + h * 0.6); c.closePath(); c.fill(); c.stroke();
+      c.strokeStyle = U.rgba('#ffffff', 0.55); c.lineWidth = 1; c.beginPath(); c.moveTo(-w * 0.6, cy - h * 0.7); c.lineTo(-w * 0.2, cy + h * 0.5); c.moveTo(w * 0.2, cy - h * 0.8); c.lineTo(w * 0.55, cy - h * 0.1); c.stroke();
+      c.fillStyle = U.rgba('#ffffff', 0.4); c.fillRect(-w * 0.8, cy - h * 0.5, 2, h * 0.9);
+      stLight(e.x, e.y + cy, r * 3.2, '#8fe8ff', 0.5);
+    } else if (e.chill > 0) {
+      const ch = U.clamp(e.chill / 100, 0.1, 1), n = 2 + Math.round(ch * 5);
+      c.fillStyle = U.rgba('#9fefff', 0.1 + 0.26 * ch); c.beginPath(); c.ellipse(0, cy, r * 1.0, hh * 0.9, 0, 0, U.TAU); c.fill();
+      c.fillStyle = U.rgba('#e8fbff', 0.85); c.strokeStyle = U.rgba('#7fe3ff', 0.9); c.lineWidth = 0.8;
+      for (let i = 0; i < n; i++) { const a = i * 2.4 + id, x = Math.cos(a) * r * 0.95, y = cy + Math.sin(a) * hh * 0.95, s = 1.8 + ch * 2; c.beginPath(); c.moveTo(x, y - s * 1.6); c.lineTo(x + s * 0.8, y + s * 0.5); c.lineTo(x - s * 0.8, y + s * 0.5); c.closePath(); c.fill(); c.stroke(); }
+      stLight(e.x, e.y + cy, r * 2.6, '#7fe3ff', 0.15 + 0.35 * ch);
+    }
+    if (e.burn > 0 || e.burnPool > 0) {
+      const k = e.burnPool > 1 ? U.clamp(0.7 + e.burnPool / Math.max(1, e.maxHp) * 2.5, 0.7, 1.5) : 0.9, n = R.quality === 'low' ? 3 : 5;
+      for (let i = 0; i < n; i++) {
+        const a = i * 1.9 + id, fx = Math.cos(a) * r * 0.8, fy = -bh * 0.12 - (i % 3) * bh * 0.2 + Math.sin(a) * r * 0.1;
+        const ph = t * 12 + i * 2.1 + id, h = (r * 0.8 + 3 + Math.sin(ph) * 1.6) * k, w = r * 0.34 + 1.5;
+        c.fillStyle = U.rgba('#ff5a14', 0.88); c.beginPath(); c.moveTo(fx - w, fy); c.quadraticCurveTo(fx - w * 0.6 + Math.sin(ph * 1.3), fy - h * 0.7, fx + Math.sin(ph) * 1.4, fy - h * 1.6); c.quadraticCurveTo(fx + w * 0.6, fy - h * 0.7, fx + w, fy); c.fill();
+        c.fillStyle = U.rgba('#ffd36b', 0.92); c.beginPath(); c.moveTo(fx - w * 0.5, fy); c.quadraticCurveTo(fx, fy - h * 0.85, fx + Math.sin(ph) * 0.8, fy - h); c.quadraticCurveTo(fx + w * 0.3, fy - h * 0.4, fx + w * 0.5, fy); c.fill();
+      }
+      stLight(e.x, e.y - r, r * 3.2, '#ff7a2a', 0.5 * k);
+    }
+    if (e.charge > 0) {
+      const sd = Math.floor(t * 18) + id * 7;
+      c.lineJoin = 'round';
+      for (let i = 0; i < 3; i++) {
+        const a = hash1(sd * 0.7 + i * 3.1) * U.TAU, x0 = Math.cos(a) * r * 0.75, y0 = cy + Math.sin(a) * hh * 0.9, a2 = a + (hash1(sd + i) - 0.5) * 1.2, len = 6 + hash1(sd * 1.3 + i) * 6;
+        const x1 = x0 + Math.cos(a2) * len * 0.5 + (hash1(sd + i * 9) - 0.5) * 5, y1 = y0 + Math.sin(a2) * len * 0.5 + (hash1(sd + i * 5) - 0.5) * 5, x2 = x0 + Math.cos(a2) * len, y2 = y0 + Math.sin(a2) * len;
+        c.strokeStyle = U.rgba('#ffe66b', 0.95); c.lineWidth = 1.3; c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+        c.strokeStyle = '#ffffff'; c.lineWidth = 0.5; c.stroke();
+      }
+      stLight(e.x, e.y + cy, r * 2.6, '#ffe66b', 0.45);
+    }
+    if (e.bleedPool > 0) {
+      c.strokeStyle = U.rgba('#a8142c', 0.9); c.lineWidth = 1.2; c.beginPath(); c.moveTo(-r * 0.5, cy - hh * 0.4); c.lineTo(r * 0.1, cy + hh * 0.05); c.moveTo(-r * 0.15, cy - hh * 0.5); c.lineTo(r * 0.45, cy - hh * 0.05); c.stroke();
+      for (let i = 0; i < 3; i++) { const ph = (t * 1.6 + i * 0.37 + id * 0.13) % 1; c.fillStyle = U.rgba('#c4182e', 1 - ph * 0.6); c.beginPath(); c.ellipse((i - 1) * r * 0.55, cy - hh * 0.2 + ph * hh * 1.1, 1.1, 1.8 + ph * 1.5, 0, 0, U.TAU); c.fill(); }
+    }
+    if (e.judged > 0) {
+      c.save(); c.translate(0, -1); c.scale(1, 0.5);
+      const rr = r * 1.5, rot = t * 1.2;
+      c.strokeStyle = U.rgba('#ffd36b', 0.85); c.lineWidth = 1.5; c.beginPath(); c.arc(0, 0, rr, 0, U.TAU); c.stroke();
+      c.strokeStyle = U.rgba('#fff3c4', 0.8); c.lineWidth = 1.1; c.beginPath();
+      for (let i = 0; i < 6; i++) { const a = rot + i * U.TAU / 6; c.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); c.lineTo(Math.cos(a) * rr * 1.18, Math.sin(a) * rr * 1.18); }
+      for (let i = 0; i < 3; i++) { const a = -rot + i * U.TAU / 3; c.lineTo(Math.cos(a) * rr * 0.62, Math.sin(a) * rr * 0.62); }
+      c.closePath(); c.stroke(); c.restore();
+      stLight(e.x, e.y, r * 2.4, '#ffd36b', 0.35);
+    }
+    if (e.blind > 0) { // smoke curling off the head and dim motes circling it
+      const hy = cy - hh * 0.95;
+      for (let i = 0; i < 3; i++) { const ph = (t * 0.8 + i / 3 + id * 0.1) % 1; c.fillStyle = U.rgba('#a09ac0', 0.85 * (1 - ph)); c.strokeStyle = U.rgba('#2a2540', 0.6 * (1 - ph)); c.lineWidth = 0.8; c.beginPath(); c.arc(Math.sin(ph * 6.28 + i * 2) * r * 0.5, hy - ph * 10, 2.2 + ph * 3.4, 0, U.TAU); c.fill(); c.stroke(); }
+      for (let i = 0; i < 3; i++) { const a = t * 3 + i * U.TAU / 3 + id; c.fillStyle = U.rgba('#cfc8f0', 0.9); c.fillRect(Math.cos(a) * r * 0.9 - 1, hy + 2 + Math.sin(a) * 3 - 1, 2, 2); }
+    }
+  }
+
+  // Drawn at the hero's origin after the sprite: evolution aura, blood shield, ambush glint, Bulwark.
+  function drawHeroFx(c, p, t) {
+    if (p.dead) return;
+    const st = p.stats, evo = st && st.evo, low = R.quality === 'low', a0 = p.stealthT > 0 ? (p.pid === R.local ? 0.45 : 0.2) : 1;
+    if (a0 < 1) c.globalAlpha = a0;
+    if (evo && !p.downed && PATH_COL[evo]) {
+      const col = PATH_COL[evo];
+      c.strokeStyle = U.rgba(col, 0.55); c.lineWidth = 1.2; c.setLineDash([4, 5]); c.lineDashOffset = -t * 10; c.beginPath(); c.ellipse(0, 1, 15, 6.5, 0, 0, U.TAU); c.stroke(); c.setLineDash([]);
+      if (!low) for (let i = 0; i < 3; i++) { const a = t * 1.8 + i * U.TAU / 3, x = Math.cos(a) * 17, y = -11 + Math.sin(a) * 7; c.fillStyle = U.rgba(col, 0.95); c.beginPath(); c.moveTo(x, y - 2.4); c.lineTo(x + 1.6, y); c.lineTo(x, y + 2.4); c.lineTo(x - 1.6, y); c.closePath(); c.fill(); }
+      R.emit(p.x, p.y - 10, 24, col, 0.2 + Math.sin(t * 3 + (p.slot || 0)) * 0.05); R.light(p.x, p.y - 10, 62, col, 0.28);
+    }
+    if (p.shield > 0) {
+      const fr = U.clamp(p.shield / Math.max(1, p.maxHp * 0.25), 0.15, 1), rr = 12 + 9 * fr, wob = Math.sin(t * 4 + (p.slot || 0)) * 0.6;
+      c.fillStyle = U.rgba('#d43a5a', 0.1 + 0.14 * fr); c.strokeStyle = U.rgba('#ffc4d0', 0.5 + 0.3 * fr); c.lineWidth = 1.3;
+      c.beginPath(); c.ellipse(0, -12, rr + wob, rr * 1.2 - wob, 0, 0, U.TAU); c.fill(); c.stroke();
+      c.strokeStyle = U.rgba('#ffffff', 0.55); c.beginPath(); c.arc(0, -12, rr * 0.8, -2.5, -1.6); c.stroke();
+    }
+    if (p.ambush && !p.downed) R.emit(p.x, p.y - 12, 22, '#b78cff', 0.3 + Math.sin(t * 9) * 0.12);
+    if (p.bulwarkT > 0 && !p.downed) {
+      const a = p.face || 0, mir = st && st.mirrorguard, rr = 22, half = mir ? Math.PI : 1.309, fl = p.bulwarkT < 0.25 && p.bulwarkT !== 1 ? 0.5 + 0.5 * Math.sin(t * 40) : 1;
+      c.save(); c.translate(0, -10); c.globalAlpha = (a0 < 1 ? a0 : 1) * fl; c.lineCap = 'round';
+      c.strokeStyle = '#0b0806'; c.lineWidth = 8; c.beginPath(); c.arc(0, 0, rr, a - half, a + half); c.stroke();
+      c.strokeStyle = '#d9b44a'; c.lineWidth = 5.4; c.beginPath(); c.arc(0, 0, rr, a - half, a + half); c.stroke();
+      c.strokeStyle = '#fff3c4'; c.lineWidth = 1.6; c.beginPath(); c.arc(0, 0, rr + 1.4, a - half * 0.92, a + half * 0.92); c.stroke();
+      c.fillStyle = '#fff6c8'; for (const q of [-half * 0.85, 0, half * 0.85]) { c.beginPath(); c.arc(Math.cos(a + q) * rr, Math.sin(a + q) * rr, 1.6, 0, U.TAU); c.fill(); }
+      c.restore();
+      R.emit(p.x + Math.cos(a) * rr, p.y - 10 + Math.sin(a) * rr, 22, '#ffe9a0', 0.4 * fl); R.light(p.x + Math.cos(a) * rr, p.y - 10 + Math.sin(a) * rr, 56, '#ffe9a0', 0.45);
+    }
+    c.globalAlpha = 1;
   }
 
   // ---------------- companions (orbit blades / wisps drawn around heroes) ----------------
@@ -952,9 +1195,10 @@
   // ---------------- overhead info (names, bars, prompts) ----------------
   function drawOverheads(c, view, local, t) {
     c.textAlign = 'center'; c.textBaseline = 'middle';
+    if (view.room) drawDoorPreviews(c, view, view.room, t);
     // enemy bars
     for (const e of view.enemies) {
-      if (e.hp <= 0 || e.boss) continue;
+      if (e.hp <= 0 || e.boss || e.burrowed) continue;
       const frac = e.hp / e.maxHp;
       if (frac >= 0.999 && !e.elite) continue;
       const w = e.elite ? 30 : 18, y = e.y - e.r * 2.6 - (e.def.fly ? 14 : 4);

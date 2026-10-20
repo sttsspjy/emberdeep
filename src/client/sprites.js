@@ -81,6 +81,7 @@
     }
     if (p.invuln > 0 && !p.dashing && Math.floor(t * 20) % 2 === 0) c.globalAlpha = 0.55;
     if (p.dashing) c.globalAlpha = 0.7;
+    if (p.stealthT > 0) c.globalAlpha *= p.pid === (ED.Render && ED.Render.local) ? 0.45 : 0.2; // Vanish: readable to yourself, nearly gone to allies
     const bob = p.moving ? Math.abs(Math.sin(t * 12 + (p.slot || 0))) * 2.2 : Math.sin(t * 2.4) * 0.6;
     drawBody(c, p, C, pc, cls, t, bob, dir, anim);
     c.restore();
@@ -102,7 +103,9 @@
     const behind = Math.sin(wa) < -0.25;
     const drawWeapon = () => {
       c.save(); c.translate(0, -11 - bob); c.rotate(wa); c.scale(reach, Math.cos(wa) < 0 ? -1 : 1);
-      (WEAPON[w.look] || WEAPON.sword)(c, Object.assign({}, C, { c: cls.col.c }), t);
+      const ec = p.stats && p.stats.evo && ED.PATHS[p.stats.evo] ? ED.PATHS[p.stats.evo].color : null; // evolved weapons glow in their path colour
+      (WEAPON[w.look] || WEAPON.sword)(c, Object.assign({}, C, { c: ec || cls.col.c }), t);
+      if (ec) { glow(c, 20, 0, 24, ec, 0.5 + Math.sin(t * 5) * 0.1); c.strokeStyle = U.rgba(ec, 0.6); c.lineWidth = 2.2; c.beginPath(); c.moveTo(6, 0); c.lineTo(32, 0); c.stroke(); }
       c.restore();
     };
     if (behind) drawWeapon();

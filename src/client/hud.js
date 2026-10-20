@@ -22,6 +22,14 @@
   };
   H.txt = txt;
   const ghost = {};
+  const TIER = [['Bright', '#ffd36b'], ['Dim', '#e6a050'], ['Dark', '#c0603a'], ['Lightless', '#8a2a2a']];
+  const TIER_HINT = ['The lantern burns bright.', 'The Deep grows bolder.', 'Darkness gathers. Foes grow fierce.', 'Lightless! A Gloom stalks the rooms.'];
+  const lantern = { view: null, tier: 0, hint: '', t: 99 };
+  // Weapon name with its evolution prefix ('Cinder Longsword'); falls back to the class name before stats exist.
+  H.weaponName = (p) => {
+    const st = p.stats, w = st && st.weapon, ep = st && st.evo && ED.PATHS[st.evo];
+    return w ? (ep ? ep.evo + ' ' : '') + w.name : ED.CLASSES[p.cls].name;
+  };
 
   H.draw = (c, view, me, ctl, t, dt, extra) => {
     const R = ED.Render, W = R.W, Hh = R.H;
@@ -46,11 +54,18 @@
     c.drawImage(icon, px - 20 * k, py - 20 * k, 40 * k, 40 * k);
     const bx = pad + 66 * k, bw = pw - 78 * k;
     txt(c, me.name, bx, pad + 15 * k, 15 * k, '#e6c27a', FD, 'left', 700);
-    txt(c, cls.name, bx + bw, pad + 15 * k, 11 * k, '#a99886', FB, 'right', 700);
+    const evoP = me.stats && me.stats.evo && ED.PATHS[me.stats.evo];
+    txt(c, evoP ? H.weaponName(me) : cls.name, bx + bw, pad + 15 * k, 11 * k, evoP ? evoP.color : '#a99886', FB, 'right', 700);
     const frac = me.hp / me.maxHp;
     const gk = 'p' + me.pid; ghost[gk] = ghost[gk] === undefined ? frac : Math.max(frac, ghost[gk] - dt * 0.35);
     bar(c, bx, pad + 28 * k, bw, 16 * k, frac, frac > 0.35 ? '#d9443a' : '#ff2a1a', 'rgba(0,0,0,0.7)', ghost[gk]);
-    txt(c, `${Math.ceil(me.hp)} / ${me.maxHp}`, bx + bw / 2, pad + 36.5 * k, 11 * k, '#ffffff', FB, 'center', 800);
+    const shield = me.shield || 0;
+    if (shield > 0) { // blood shield: a pale segment after the health (clipped to the bar end), absorbs damage first
+      const sf = U.clamp(shield / me.maxHp, 0.03, 1), s0 = Math.min(U.clamp(frac, 0, 1), 1 - sf);
+      c.fillStyle = 'rgba(214,232,255,0.92)'; c.fillRect(bx + bw * s0, pad + 28 * k, bw * sf, 16 * k);
+      c.fillStyle = 'rgba(255,255,255,0.4)'; c.fillRect(bx + bw * s0, pad + 28 * k, bw * sf, 5 * k);
+    }
+    txt(c, `${Math.ceil(me.hp)} / ${me.maxHp}` + (shield > 0 ? ` +${Math.ceil(shield)}` : ''), bx + bw / 2, pad + 36.5 * k, 11 * k, '#ffffff', FB, 'center', 800);
     // status chips
     let sx = bx;
     const chip = (label, col) => { c.font = `800 ${10 * k}px ${FB}`; const w = c.measureText(label).width + 10 * k; panel(c, sx, pad + 50 * k, w, 14 * k, 7 * k, U.rgba(col, 0.2), U.rgba(col, 0.8)); txt(c, label, sx + w / 2, pad + 57.5 * k, 10 * k, col, FB, 'center', 800); sx += w + 4 * k; };
@@ -76,8 +91,22 @@
     const sk = ED.SKILLS[cls.skill];
     const scd = ctl.skillCd > 0 ? ctl.skillCd / me.stats.skillCd : 0;
     ability(pad, sk.name, 'K', ctl.charges > 0 ? 0 : scd, ctl.charges > 0, sk.icon, cls.col.c, ctl.charges);
+    const s2 = cls.skill2 && ED.SKILLS[cls.skill2];
+    let slot = 1;
+    if (s2) {
+      const cd2 = ctl.skill2Cd > 0 ? ctl.skill2Cd / Math.max(0.1, me.stats.skill2Cd || s2.cd) : 0, up = me.bulwarkT > 0;
+      ability(pad + slot++ * (as + 8 * k), s2.name, 'L', cd2, cd2 <= 0 && !up, s2.icon, up ? '#ffe9a0' : cls.col.c, 0);
+    }
     const dcd = ctl.dashCd > 0 ? ctl.dashCd / me.stats.dashCd : 0;
-    ability(pad + as + 8 * k, 'Dash', 'Spc', dcd, dcd <= 0, 'wing', '#bfe9ff', 0);
+    ability(pad + slot++ * (as + 8 * k), 'Dash', 'Spc', dcd, dcd <= 0, 'wing', '#bfe9ff', 0);
+    // path pips: each owned gate with its affinity; a star on the evolved path
+    const gates = me.boons ? ED.gatePaths(me.boons) : [];
+    gates.forEach((pa, i) => {
+      const P = ED.PATHS[pa], gx = pad + slot * (as + 8 * k) + 4 * k + i * 38 * k, gy = ay + as / 2, evolved = me.stats.evo === pa;
+      c.drawImage(ED.Icons.canvas(P.icon, P.color, 64), gx, gy - 12 * k, 24 * k, 24 * k);
+      txt(c, String(ED.pathAffinity(me.boons, pa)), gx + 26 * k, gy + 2 * k, 13 * k, P.color, FB, 'left', 800);
+      if (evolved) { c.drawImage(ED.Icons.canvas('star', '#ffd36b', 64), gx + 13 * k, gy - 17 * k, 13 * k, 13 * k); }
+    });
 
     // ---------- party ----------
     let ty = ay + as + 14 * k;
@@ -92,19 +121,43 @@
     }
 
     // ---------- minimap & stratum ----------
-    const mw = 168 * k, mh = 120 * k, mx = W - pad - mw, my = pad;
-    panel(c, mx, my, mw, mh + 40 * k, 10 * k, 'rgba(14,10,8,0.72)', 'rgba(90,66,50,0.8)');
+    const mw = 184 * k, mh = 116 * k, mx = W - pad - mw, my = pad;
+    panel(c, mx, my, mw, 214 * k, 10 * k, 'rgba(14,10,8,0.72)', 'rgba(90,66,50,0.8)');
     const biome = ED.biomeFor(view.stratum);
-    txt(c, biome.name, mx + mw / 2, my + 14 * k, 12 * k, biome.pal.ui, FD, 'center', 700);
-    H.drawMap(c, view, mx + 6 * k, my + 24 * k, mw - 12 * k, mh - 4 * k, k, t);
-    const left = Math.max(0, ED.World.LANTERN - (view.time || 0));
-    const low = left < 180;
-    txt(c, 'Stratum ' + U.roman(view.stratum), mx + 10 * k, my + mh + 28 * k, 11 * k, '#a99886', FB, 'left', 700);
-    // the lantern: light left in this descent (it counts down; at zero the party retreats)
-    const lcol = low && Math.floor(t * 2) % 2 ? '#ff6a4a' : '#e6c27a', ltxt = U.fmtTime(Math.ceil(left));
-    txt(c, ltxt, mx + mw - 10 * k, my + mh + 28 * k, 12 * k, lcol, FB, 'right', 800);
-    c.drawImage(ED.Icons.canvas('flame', low ? '#ff6a4a' : '#ffb347', 64), mx + mw - 10 * k - c.measureText(ltxt).width - 15 * k, my + mh + 21 * k, 13 * k, 13 * k);
-    if (view.pact > 0) txt(c, 'Pact ' + view.pact, mx + mw / 2, my + mh + 28 * k, 11 * k, '#ff6b4a', FD, 'center', 700);
+    txt(c, biome.name, mx + mw / 2, my + 13 * k, 12 * k, biome.pal.ui, FD, 'center', 700);
+    // stratum affinity: foes are weak to one element and resist another
+    const wkE = ED.PATHS[biome.weak], rsE = ED.PATHS[biome.resist];
+    if (wkE && rsE) {
+      const segs = [['Weak: ', '#a99886'], [wkE.name, wkE.color], [' · Resists: ', '#a99886'], [rsE.name, rsE.color]];
+      c.font = `700 ${10 * k}px ${FB}`;
+      let ax = mx + mw / 2 - segs.reduce((n, s) => n + c.measureText(s[0]).width, 0) / 2;
+      for (const s of segs) { txt(c, s[0], ax, my + 27 * k, 10 * k, s[1], FB, 'left', 700); ax += c.measureText(s[0]).width; }
+    }
+    H.drawMap(c, view, mx + 6 * k, my + 36 * k, mw - 12 * k, mh - 4 * k, k, t);
+    txt(c, 'Stratum ' + U.roman(view.stratum), mx + 10 * k, my + 158 * k, 11 * k, '#a99886', FB, 'left', 700);
+    if (view.pact > 0) txt(c, 'Pact ' + view.pact, mx + mw - 10 * k, my + 158 * k, 11 * k, '#ff6b4a', FD, 'right', 700);
+    // the lantern: light left on this floor; its tier sets how hard the Deep bites
+    if (view.lightMax > 0) {
+      const tier = U.clamp((view.dread && view.dread.tier) | 0, 0, 3), lf = U.clamp(view.light / view.lightMax, 0, 1), pl = tier === 3 ? 0.5 + 0.5 * Math.sin(t * 5) : 1;
+      if (lantern.view !== view) { lantern.view = view; lantern.tier = tier; lantern.hint = ''; lantern.t = 99; }
+      else if (tier !== lantern.tier) { lantern.hint = tier > lantern.tier ? TIER_HINT[tier] : (tier === 0 ? TIER_HINT[0] : 'The light pushes the dark back.'); lantern.t = 0; lantern.tier = tier; }
+      lantern.t += dt;
+      const tc = tier === 3 ? U.mix('#8a2a2a', '#ff5a40', pl) : TIER[tier][1], ly = my + 175 * k;
+      c.drawImage(ED.Icons.canvas('lantern', tc, 64), mx + 8 * k, ly - 9 * k, 18 * k, 18 * k);
+      txt(c, TIER[tier][0], mx + 30 * k, ly, 12 * k, tc, FD, 'left', 700);
+      txt(c, Math.round(lf * 100) + '%', mx + mw - 10 * k, ly, 11 * k, tc, FB, 'right', 800);
+      const lx = mx + 10 * k, lw = mw - 20 * k, lby = ly + 11 * k;
+      c.fillStyle = 'rgba(0,0,0,0.75)'; c.fillRect(lx - 1, lby - 1, lw + 2, 9 * k);
+      c.fillStyle = tc; c.fillRect(lx, lby, lw * lf, 7 * k);
+      c.fillStyle = 'rgba(255,255,255,0.22)'; c.fillRect(lx, lby, lw * lf, 2 * k);
+      c.fillStyle = 'rgba(255,255,255,0.45)'; c.fillRect(lx + lw * 0.5 - 0.5, lby - 1, 1, 9 * k); c.fillRect(lx + lw * 0.25 - 0.5, lby - 1, 1, 9 * k);
+      if (tier === 3) { c.strokeStyle = U.rgba('#ff4a3a', 0.35 + 0.5 * pl); c.lineWidth = 1.5; c.strokeRect(lx - 1.5, lby - 1.5, lw + 3, 9 * k + 1); }
+      const hint = lantern.t < 6 && lantern.hint, D = ED.World.DREAD && ED.World.DREAD[tier], parts = [];
+      if (D) { if (D.hp > 1) parts.push(`Foes +${Math.round((D.hp - 1) * 100)}%`); if (D.elite > 0) parts.push(`Elites +${Math.round(D.elite * 100)}%`); if (D.gold > 1) parts.push(`Gold ×${D.gold}`); }
+      c.globalAlpha = hint ? U.clamp(6 - lantern.t, 0, 1) : 1;
+      txt(c, hint || (parts.length ? parts.join(' · ') : 'Foes at normal strength'), mx + mw / 2, ly + 28 * k, 9.5 * k, hint ? tc : '#a99886', FB, 'center', 700);
+      c.globalAlpha = 1;
+    }
 
     // ---------- xp & gold (bottom centre) ----------
     const xw = Math.min(520 * k, W * 0.45), xh = 10 * k, xx = (W - xw) / 2, xy = Hh - pad - xh - 4 * k;
@@ -202,7 +255,8 @@
       const st = rs[r.id]; if (!st || !st.known) continue;
       for (const d of ['e', 's']) { const n = r.doors[d]; if (n >= 0 && rs[n] && rs[n].known) { c.strokeStyle = 'rgba(200,180,150,0.45)'; c.beginPath(); c.moveTo(cx(r), cy(r)); c.lineTo(cx(fl.rooms[n]), cy(fl.rooms[n])); c.stroke(); } }
     }
-    const ICON = { boss: ['skull', '#ff5a3a'], shop: ['coin', '#ffd36b'], treasure: ['chest', '#ffd36b'], event: ['star', '#7dffd9'] };
+    const ICON = { boss: ['skull', '#ff5a3a'], shop: ['coin', '#ffd36b'], treasure: ['chest', '#ffd36b'], event: ['star', '#7dffd9'], elite: ['skull', '#ff7a3a'], rest: ['campfire', '#ff9a3a'] };
+    const meP = ED.Game.s && ED.Game.s.me, cls = meP ? meP.cls : null;
     for (const r of fl.rooms) {
       const st = rs[r.id]; if (!st || !st.known) continue;
       const s = cell * 0.78, rx = cx(r) - s / 2, ry = cy(r) - s / 2;
@@ -210,8 +264,12 @@
       c.fillStyle = cur ? '#e6c27a' : st.visited ? (st.cleared ? '#5a4a3c' : '#8a3a2a') : 'rgba(60,48,40,0.6)';
       c.fillRect(rx, ry, s, s);
       c.strokeStyle = cur ? '#fff3c4' : 'rgba(0,0,0,0.6)'; c.lineWidth = 1; c.strokeRect(rx + 0.5, ry + 0.5, s - 1, s - 1);
-      const ic = ICON[r.type];
-      if (ic) c.drawImage(ED.Icons.canvas(ic[0], ic[1], 64), rx + s * 0.12, ry + s * 0.12, s * 0.76, s * 0.76);
+      const ic = ICON[r.type], open = !st.cleared; // utility rooms keep their glyph; a cleared elite room loses it
+      if (ic && (open || r.type !== 'elite')) c.drawImage(ED.Icons.canvas(ic[0], ic[1], 64), rx + s * 0.12, ry + s * 0.12, s * 0.76, s * 0.76);
+      if (open && r.reward && (r.type === 'combat' || r.type === 'elite')) { // reward preview: whole icon in plain combat rooms, a corner badge in elite rooms
+        const ri = ED.Render.rewardIcon(r.reward, cls), big = r.type === 'combat', z = big ? s * 0.76 : s * 0.5;
+        c.drawImage(ED.Icons.canvas(ri[0], ri[1], 64), big ? rx + s * 0.12 : rx + s - z * 0.9, big ? ry + s * 0.12 : ry + s - z * 0.9, z, z);
+      }
     }
   };
 })(globalThis.ED || (globalThis.ED = {}));

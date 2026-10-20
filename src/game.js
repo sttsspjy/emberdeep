@@ -4,6 +4,7 @@
   'use strict';
   const U = ED.U, Sim = ED.Sim, N = ED.Net;
   const G = ED.Game = { s: null };
+  const HERO_REWARD = /^(boon:|class$|forge$|epic$|vigor$)/; // reward items every hero claims separately
 
   // ---------------- client-side mirror of the host's world ----------------
   function Mirror(cfg, localPid) {
@@ -21,6 +22,7 @@
     this.floor = null; this.room = null; this.roomId = -1; this.roomState = {}; this.stratum = 0; this.floorSeed = 0;
     this.gold = 0; this.level = 1; this.xp = 0; this.xpNext = 20; this.time = 0; this.locked = false; this.waitMsg = '';
     this.snaps = []; this.renderT = 0; this.run = null; this.eMap = new Map();
+    this.light = 100; this.lightMax = 100; this.dread = { tier: 0 };
   }
   Mirror.prototype.recalc = function (p) {
     p.stats = ED.Stats.compute({ cls: p.cls, weapon: p.weapon, boons: p.boons, relics: p.relics, meta: p.meta, pact: this.pact, chaliceHp: p.chaliceHp, bonusHp: p.bonusHp });
@@ -35,6 +37,7 @@
     }
     if (d.r !== this.roomId) { this.roomId = d.r; this.room = this.floor.rooms[d.r]; this.snaps.length = 0; this.firstInRoom = true; }
     this.locked = !!d.L; this.gold = d.g; this.xp = d.x; this.xpNext = d.n; this.level = d.l; this.waitMsg = d.wm; this.time = d.T;
+    this.light = d.li; this.lightMax = d.lm || 100; this.dread = { tier: d.dr | 0 };
     if (d.O) this.props = d.O.map(a => ({ id: a[0], kind: a[1], x: a[2], y: a[3], state: a[4], item: a[5], price: a[6], group: a[7], stype: a[8], text: a[9] }));
     if (d.RS) d.RS.forEach((b, i) => { this.roomState[i] = { visited: !!(b & 1), known: !!(b & 2), cleared: !!(b & 4) }; });
     if (d.RUN) this.run = d.RUN;
@@ -51,7 +54,8 @@
       p.hp = a[4]; p.maxHp = a[5]; const fl = a[6];
       p.downed = !!(fl & 4); p.dead = !!(fl & 8); p.invuln = fl & 16 ? 0.2 : 0; p.revive = a[7];
       p.critStacks = a[8]; p.aegisT = a[9] ? 0 : 1; p.guardT = a[10] ? 1 : 0; p.secondWind = a[11]; p.phoenixUsed = !!a[12]; p.picks = a[13]; p.rerolls = a[14];
-      if (p.pid !== this.localPid) { p.moving = !!(fl & 1); p.dashing = !!(fl & 2); p.face = a[3]; }
+      p.shield = a[15] || 0; p.stealthT = fl & 128 ? 1 : 0; p.ambush = !!(fl & 256);
+      if (p.pid !== this.localPid) { p.moving = !!(fl & 1); p.dashing = !!(fl & 2); p.face = a[3]; p.bulwarkT = fl & 64 ? 1 : 0; } // the local hero runs its own Bulwark timer
       else if (this.firstInRoom) { p.x = a[1]; p.y = a[2]; }
     }
     this.firstInRoom = false;
@@ -88,10 +92,12 @@
       const xy = lerpXY(ra, rb);
       e.x = xy[0]; e.y = xy[1]; e.hp = rb[4]; e.maxHp = rb[5]; e.r = rb[6];
       const fl = rb[7];
-      e.flash = fl & 1 ? 0.05 : 0; e.frozen = fl & 2 ? 1 : 0; e.stun = fl & 4 ? 1 : 0; e.burn = fl & 8 ? 1 : 0; e.chill = fl & 16 ? 1 : 0; e.exposed = !!(fl & 32);
+      e.flash = fl & 1 ? 0.05 : 0; e.frozen = fl & 2 ? 1 : 0; e.stun = fl & 4 ? 1 : 0; e.burn = e.burnPool = fl & 8 ? 1 : 0; e.chill = rb[16] || 0; e.exposed = !!(fl & 32);
+      e.charge = fl & 64 ? 1 : 0; e.bleedPool = fl & 128 ? 1 : 0; e.judged = fl & 256 ? 1 : 0; e.blind = fl & 512 ? 1 : 0;
       e.boss = !!e.def.boss;
       const st = N.ST[rb[8]] || 'move';
       if (e.boss) { e.pose = st; e.st = 'atk'; } else e.st = st;
+      e.burrowed = st === 'burrow' && !e.boss;
       e.aimA = rb[9]; e.elite = rb[10] >= 0 ? ED.AFFIX_IDS[rb[10]] : null; e.ward = rb[11]; e.wardMax = rb[12]; e.phase = rb[13]; e.face = rb[14]; e.t = rb[15];
       e.renderT = this.renderT;
       out.push(e);
@@ -117,6 +123,7 @@
   // ---------------- session lifecycle ----------------
   G.start = (mode, cfg) => {
     ED.FX.reset();
+    ED.Render.lightLevel = 1;
     U.resetUid(1);
     const s = G.s = { mode, cfg, localPid: cfg.localPid, net: cfg.net || null, fxBuf: [], snapT: 0, snapN: 0, inT: 0, epoch: 0, offer: null, offerOpen: false, ended: false, paused: false, prompt: null, sig: '', claimed: {} };
     if (mode === 'client') {
@@ -273,7 +280,7 @@
     for (const p of view.props) {
       if (!ED.Render.interactable(p)) continue;
       if (view.locked && p.kind !== 'trial') continue;
-      if (p.kind === 'relic' && s.claimed[p.group]) continue;
+      if (s.claimed[p.group] && (p.kind === 'relic' || p.kind === 'campfire' || p.kind === 'anvil' || (p.kind === 'reward' && HERO_REWARD.test(p.item)))) continue;
       const d = U.dist2(p.x, p.y, me.x, me.y);
       if (d < nd) { nd = d; near = p; }
     }
@@ -281,9 +288,10 @@
       const text = ED.Render.propPrompt(near, view);
       let desc = null, color = null;
       if (near.kind === 'relic' || near.stype === 'relic') { const r = ED.RELICS[near.item]; desc = r.desc; color = ED.RARITY[r.rar].color; }
-      else if (near.stype === 'boon') desc = 'Grants an extra boon pick with no common options.';
       else if (near.kind === 'portal') desc = 'Step down into ' + ED.biomeFor(view.stratum + 1).name + '.';
-      s.prompt = { x: near.x, y: near.y, text, desc, color, can: near.kind === 'shop' || near.kind === 'gamble' ? view.gold >= near.price : true };
+      else { desc = ED.Render.propDesc(near, view); if (near.kind === 'reward') color = ED.Render.rewardColor(near.item); }
+      const full = near.stype === 'oil' && view.light >= view.lightMax - 0.5;
+      s.prompt = { x: near.x, y: near.y, text, desc, color, can: near.kind === 'shop' || near.kind === 'gamble' ? view.gold >= near.price && !full : true };
     }
     if (!s.offerOpen) {
       if (inp.atkPressed && near) { G.act({ t: 'interact', id: near.id }); ctl.latch = true; ctl.atkCd = Math.max(ctl.atkCd, 0.25); }
@@ -379,6 +387,7 @@
     const alone = G.alone(), frozen = alone && s.paused;
     // Alone, the world waits while you read boon cards (offers only open in a safe room), so picking never costs lantern time.
     const hold = alone && s.offerOpen;
+    const sdt = alone ? dt * ED.FX.timeScale : dt; // hit-stop slows only a world nobody else shares; effects keep real time
     if (!frozen) {
       if (s.offer) {
         const safe = !s.view.locked && !s.view.enemies.some(e => e.hp > 0);
@@ -391,12 +400,12 @@
         if (inp.confirm) ED.UI.boonConfirm();
         if (inp.skill) ED.UI.boonReroll(true);
       }
-      control(s, inp, dt);
+      control(s, inp, sdt);
       if (s.mode !== 'client') {
         const w = s.world;
         if (!hold) {
-          const steps = Math.max(1, Math.ceil(dt / (1 / 60)));
-          for (let i = 0; i < steps; i++) w.update(dt / steps);
+          const steps = Math.max(1, Math.ceil(sdt / (1 / 60)));
+          for (let i = 0; i < steps; i++) w.update(sdt / steps);
         }
         G.drainWorld();
         if (s.mode === 'host') {
@@ -428,7 +437,11 @@
   G.render = (t, dt) => {
     const s = G.s; if (!s) return;
     const c = ED.Render.ctx;
-    ED.Render.frame(s.view, s.localPid, t, dt);
-    ED.HUD.draw(c, s.view, s.me, Object.assign({}, s.ctl, { picks: s.me.picks || 0, offerOpen: s.offerOpen }), t, dt, { prompt: s.prompt, offerOpen: s.offerOpen });
+    const v = s.view, R = ED.Render, lit = v.room && v.lightMax > 0 ? U.clamp(v.light / v.lightMax, 0, 1) : 1;
+    R.lightLevel += (lit - R.lightLevel) * Math.min(1, dt * 2.5); // eased so a refill or a tier drop never pops
+    R.claimed = s.claimed;
+    R.frame(s.view, s.localPid, t, dt);
+    const ob = document.getElementById('ov-boon'), cover = s.offerOpen || !!(ob && !ob.hidden); // the boon overlay owns the screen: no banners or prompts under it
+    ED.HUD.draw(c, s.view, s.me, Object.assign({}, s.ctl, { picks: s.me.picks || 0, offerOpen: s.offerOpen }), t, dt, { prompt: cover ? null : s.prompt, offerOpen: cover });
   };
 })(globalThis.ED || (globalThis.ED = {}));

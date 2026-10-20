@@ -55,8 +55,9 @@
     s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.05);
   };
 
-  const GAP = { hit: 0.035, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1 };
-  A.play = (name, vol) => {
+  const GAP = { hit: 0.035, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1, freeze: 0.05, shatter: 0.06, combust: 0.06, guardhit: 0.06, block: 0.05 };
+  // arg: cue-specific parameter (dread: the new tier)
+  A.play = (name, vol, arg) => {
     if (!A.ready || A.ctx.state !== 'running') return;
     const now = A.ctx.currentTime;
     if (GAP[name] && now - (A.last[name] || 0) < GAP[name]) return;
@@ -101,6 +102,24 @@
       case 'victory': [523, 659, 784, 1046, 1318, 1568].forEach((f, i) => tone('triangle', f, f, 0.6, 0.1 * v, null, A.ctx.currentTime + i * 0.12)); break;
       case 'defeat': [392, 349, 311, 262].forEach((f, i) => tone('triangle', f, f * 0.98, 0.7, 0.1 * v, null, A.ctx.currentTime + i * 0.22)); break;
       case 'spawn': noise('bandpass', 300, 1200, 0.3, 0.05 * v, 2); break;
+      case 'freeze': tone('sine', 1900, 2900, 0.1, 0.08 * v); tone('triangle', 3100, 2400, 0.16, 0.05 * v, null, A.ctx.currentTime + 0.04); noise('highpass', 6500, 3500, 0.12, 0.07 * v); break;
+      case 'shatter': noise('highpass', 3800, 1400, 0.3, 0.26 * v, 0.7); tone('square', 3200, 800, 0.1, 0.06 * v); [2600, 3400, 4100].forEach((f, i) => tone('sine', f, f * 0.7, 0.12, 0.04 * v, null, A.ctx.currentTime + 0.03 + i * 0.045)); break;
+      case 'combust': noise('lowpass', 2000, 180, 0.4, 0.3 * v); tone('sawtooth', 170, 45, 0.32, 0.12 * v); tone('sine', 80, 32, 0.3, 0.22 * v); break;
+      case 'guardhit': tone('square', 1700, 1450, 0.05, 0.07 * v); tone('sine', 2650, 2550, 0.2, 0.05 * v); noise('bandpass', 2200, 1200, 0.06, 0.1 * v, 3); break;
+      case 'ambush': noise('bandpass', 3200, 700, 0.1, 0.2 * v, 2); tone('sawtooth', 720, 140, 0.13, 0.1 * v); tone('sine', 90, 45, 0.12, 0.18 * v); break;
+      case 'evolve': [262, 330, 392, 523, 659].forEach((f, i) => { tone('triangle', f, f * 1.005, 0.9, 0.08 * v, null, A.ctx.currentTime + i * 0.07); tone('sine', f * 2, f * 2, 0.7, 0.03 * v, null, A.ctx.currentTime + i * 0.07); }); tone('sine', 131, 131, 1.0, 0.12 * v); noise('highpass', 7000, 4000, 0.6, 0.03 * v, 1, null, A.ctx.currentTime + 0.3); break;
+      case 'dread': { // low bell, deeper and more dissonant per tier
+        const tier = arg | 0, f = [196, 147, 110, 73][Math.min(3, tier)];
+        tone('sine', f, f, 1.8, 0.2 * v); tone('sine', f * 2.76, f * 2.76, 1.2, 0.07 * v); tone('sine', f * 5.4, f * 5.4, 0.7, 0.03 * v);
+        if (tier >= 2) tone('sine', f * 0.5, f * 0.47, 1.8, 0.18 * v);
+        if (tier >= 3) { tone('sine', f * 1.414, f * 1.414, 1.6, 0.08 * v); noise('lowpass', 260, 60, 1.6, 0.14 * v); }
+        break;
+      }
+      case 'claim': [784, 1175, 1568].forEach((f, i) => tone('sine', f, f, 0.3, 0.06 * v, null, A.ctx.currentTime + i * 0.05)); noise('highpass', 6000, 4000, 0.25, 0.025 * v); break;
+      case 'oil': noise('lowpass', 400, 1800, 0.3, 0.12 * v); tone('sine', 220, 440, 0.4, 0.08 * v); [660, 880].forEach((f, i) => tone('sine', f, f, 0.4, 0.05 * v, null, A.ctx.currentTime + 0.08 + i * 0.07)); break;
+      case 'block': tone('sine', 150, 70, 0.14, 0.26 * v); noise('bandpass', 900, 300, 0.1, 0.16 * v, 1.5); tone('square', 1250, 900, 0.05, 0.05 * v); break;
+      case 'howl': tone('sawtooth', 300, 185, 0.9, 0.09 * v); tone('sawtooth', 312, 192, 0.9, 0.07 * v); tone('sine', 150, 90, 0.9, 0.12 * v); noise('lowpass', 600, 150, 0.8, 0.08 * v); break;
+      case 'rift': tone('sine', 950, 110, 0.55, 0.1 * v); tone('triangle', 60, 40, 0.6, 0.18 * v); noise('bandpass', 200, 3200, 0.45, 0.1 * v, 4); break;
       default: break;
     }
   };
