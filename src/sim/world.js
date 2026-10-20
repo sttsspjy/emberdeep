@@ -161,7 +161,7 @@
       hp: 1, maxHp: 1, dashT: 0, dashDx: 0, dashDy: 0, dashing: false, skillMove: null,
       invuln: 0, hurtT: 0, downed: false, bleed: 0, revive: 0, dead: false,
       phoenixUsed: false, secondWind: 0, swPct: 0.4, angelUsed: false, aegisT: 0, guardCd: 0, guardT: 0,
-      frozenCd: 0, tranceT: 0, wallT: 0, critStacks: 0, atkCount: 0, chaliceKills: 0, chaliceHp: 0,
+      frozenCd: 0, tranceT: 0, wallT: 0, critStacks: 0, atkCount: 0, chaliceKills: 0, chaliceHp: 0, bonusHp: 0,
       picks: 0, offer: null, offerT: 0, epicNext: false, rerolls: 0, claimed: {},
       kills: 0, dealt: 0, hitThisBoss: false, dashHit: null, dashTrail: 0, orbHit: {}, wispT: 0,
       remote: !!pd.remote, connected: true,
@@ -183,14 +183,14 @@
 
   W.prototype.recalc = function (p, fill) {
     const prev = p.maxHp;
-    p.stats = ED.Stats.compute({ cls: p.cls, weapon: p.weapon, boons: p.boons, relics: p.relics, meta: p.meta, pact: this.pact, chaliceHp: p.chaliceHp });
+    p.stats = ED.Stats.compute({ cls: p.cls, weapon: p.weapon, boons: p.boons, relics: p.relics, meta: p.meta, pact: this.pact, chaliceHp: p.chaliceHp, bonusHp: p.bonusHp });
     p.maxHp = p.stats.maxHp;
     if (fill) p.hp = p.maxHp;
     else if (p.maxHp > prev && !p.downed && !p.dead) p.hp += p.maxHp - prev;
     p.hp = Math.min(p.hp, p.maxHp);
   };
 
-  W.prototype.buildOf = function (p) { return { pid: p.pid, boons: Object.assign({}, p.boons), relics: p.relics.slice(), chaliceHp: p.chaliceHp }; };
+  W.prototype.buildOf = function (p) { return { pid: p.pid, boons: Object.assign({}, p.boons), relics: p.relics.slice(), chaliceHp: p.chaliceHp, bonusHp: p.bonusHp }; };
   W.prototype.sendBuild = function (p) { this.emit({ t: 'build', b: this.buildOf(p) }); };
 
   W.prototype.healPlayer = function (p, amt, silent) {

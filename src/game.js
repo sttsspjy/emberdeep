@@ -23,7 +23,7 @@
     this.snaps = []; this.renderT = 0; this.run = null; this.eMap = new Map();
   }
   Mirror.prototype.recalc = function (p) {
-    p.stats = ED.Stats.compute({ cls: p.cls, weapon: p.weapon, boons: p.boons, relics: p.relics, meta: p.meta, pact: this.pact, chaliceHp: p.chaliceHp });
+    p.stats = ED.Stats.compute({ cls: p.cls, weapon: p.weapon, boons: p.boons, relics: p.relics, meta: p.meta, pact: this.pact, chaliceHp: p.chaliceHp, bonusHp: p.bonusHp });
   };
   Mirror.prototype.apply = function (d, now) {
     if (d.s !== this.stratum || d.fs !== this.floorSeed) {
@@ -197,7 +197,7 @@
       const p = s.mirror.players.get(ev.b.pid);
       if (p) {
         const hadEcho = p.stats.maxCharges;
-        p.boons = ev.b.boons; p.relics = ev.b.relics; p.chaliceHp = ev.b.chaliceHp; s.mirror.recalc(p);
+        p.boons = ev.b.boons; p.relics = ev.b.relics; p.chaliceHp = ev.b.chaliceHp; p.bonusHp = ev.b.bonusHp || 0; s.mirror.recalc(p);
         if (p === s.me && p.stats.maxCharges > hadEcho) s.ctl.charges++;
       }
     } else if (ev.t === 'boon' && s.mode !== 'client' && ev.pid === s.localPid) {

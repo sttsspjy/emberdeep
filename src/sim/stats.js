@@ -16,7 +16,7 @@
     frozenHeart: 0, chalice: 0, emberBonus: 0, discount: 0, stone: 0, cloverRerolls: 0, aegis: 0, light: 0,
   });
 
-  // build: { cls, weapon, boons: {id: n}, relics: [id], meta: { up: [], mastery }, pact, chaliceHp }
+  // build: { cls, weapon, boons: {id: n}, relics: [id], meta: { up: [], mastery }, pact, chaliceHp, bonusHp }
   St.compute = (build) => {
     const cls = ED.CLASSES[build.cls];
     const wpn = ED.WEAPONS[build.weapon];
@@ -45,7 +45,7 @@
     const relics = build.relics || [];
     for (const id of relics) if (ED.RELICS[id]) add(ED.RELICS[id].mods, 1);
     if (s.stone) { s.dmg += 0.05 * relics.length; s.hp += 5 * relics.length; }
-    s.hp += build.chaliceHp || 0;
+    s.hp += (build.chaliceHp || 0) + (build.bonusHp || 0);
 
     const out = s;
     out.maxHp = Math.max(20, Math.round(s.hp * Math.max(0.3, s.hpMul)));
