@@ -425,7 +425,9 @@
     let qh = 0, qt = 0;
     for (const p of this.players.values()) {
       if (p.downed || p.dead) continue;
-      const tx = Math.floor(p.x / T), ty = Math.floor(p.y / T);
+      // a stealthed hero seeds the field from the last spot seen in this room (none: not at all)
+      if (p.stealthT > 0) { if (p.seenEp !== this.roomEpoch) continue; } else { p.seenX = p.x; p.seenY = p.y; p.seenEp = this.roomEpoch; }
+      const tx = Math.floor(p.seenX / T), ty = Math.floor(p.seenY / T);
       if (tx < 0 || ty < 0 || tx >= w || ty >= h) continue;
       const i = ty * w + tx;
       if (f[i] === -1) { f[i] = 0; q[qt++] = i; }

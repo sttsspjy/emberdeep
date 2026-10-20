@@ -11,7 +11,7 @@
   const NO_STATS = {};
   const hpFrac = (e, dmg) => dmg / (e.maxHp / e.hpLever); // damage as a fraction of the foe's HP before the stratum lever (bosses: refHp): the unit of HP-relative build-up
   const WINDUP = { tele: 1, teleLine: 1, teleCone: 1 }; // zone kinds that telegraph their caster's attack
-  const evoOf = (p) => p.evo || p.stats.evo || null;
+  const evoOf = (p) => p.stats.evo || null;
 
   // ---------------- enemies ----------------
   W.spawnEnemy = function (type, x, y, opts) {

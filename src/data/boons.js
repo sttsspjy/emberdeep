@@ -46,7 +46,7 @@
     wildfire: { name: 'Wildfire', rar: 'r', icon: 'flame', path: 'pyre', desc: 'A burning foe that dies sets foes within 80 alight for 15% of its max health.', mods: { wildfire: 0.15 }, max: 2 },
     cindertrail: { name: 'Cinder Trail', rar: 'r', icon: 'wing', path: 'pyre', desc: 'Your dash leaves burning ground.', mods: { dashFire: 1 }, max: 1 },
     conflag: { name: 'Conflagration', rar: 'e', icon: 'bomb', path: 'pyre', key: true, desc: 'A foe whose Burn exceeds 30% of its health combusts, hitting it and foes within 70 for the whole pool.', mods: { conflag: 1 }, max: 1 },
-    evo_pyre: { name: 'Cinder Arms', rar: 'l', icon: 'flame', path: 'pyre', evo: 'pyre', desc: 'Melee swings launch a piercing flame crescent (60%); projectiles explode on hit (50%). Burn +25%.', mods: { burnMul: 0.25 }, max: 1 },
+    evo_pyre: { name: 'Cinder Arms', rar: 'l', icon: 'flame', path: 'pyre', evo: 'pyre', desc: 'Melee swings launch a piercing flame crescent (60%); projectiles explode on hit (50%); exploding weapons blast 30% wider and leave burning ground. Burn +25%.', mods: { burnMul: 0.25 }, max: 1 },
 
     // ---- Rime ----
     frostbite: { name: 'Frostbite', rar: 'r', icon: 'snow', path: 'rime', gate: true, desc: 'Hits chill; full chill freezes foes for 1.6s. Frozen foes take +25% damage.', mods: { rimeInfuse: 1 }, max: 1 },
