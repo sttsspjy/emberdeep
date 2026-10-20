@@ -143,6 +143,8 @@
   W.REWARD_UP = { gold: 'vigor', vigor: 'forge', forge: 'epic', class: 'epic' }; // darkness upgrades a room reward one step (boon:<path> -> epic)
   // Per-stratum threat on top of the base scales: foe HP, wave budget, `cdRate` = extra cooldown recovery (0.2 = attack timers tick 20% faster, -0.2 = 20% slower) and the boss pause between attacks (x).
   W.THREAT = [{ hp: 3, dmg: 0.5, wave: 1, cdRate: -0.4, pause: 2 }, { hp: 3, dmg: 0.6, wave: 1, cdRate: -0.3, pause: 1.7 }, { hp: 3, dmg: 1, wave: 1.05, cdRate: -0.1, pause: 1.4 }, { hp: 1.6, dmg: 1, wave: 1.1, cdRate: 0, pause: 1.2 }, { hp: 4, dmg: 1, wave: 1.2, cdRate: 0.15, pause: 1 }, { hp: 2.55, dmg: 1, wave: 1.3, cdRate: 0.3, pause: 0.9 }];
+  // Foe HP multiplier of stratum s: the depth curve times the threat HP.
+  W.hpScale = (s) => (1 + 0.65 * (s - 1) + 0.08 * (s - 1) * (s - 1)) * W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, s - 1))].hp;
   W.DRAIN_SECS = [1000, 880, 820, 800, 800, 800]; // seconds for a full unupgraded lantern to burn out on the slow per-second drain, per stratum
   // Entering a room not yet visited costs this much light (of 100, not scaled by Deep Wick); revisits, the start room and the boss room are free. Shown on doors and the map.
   W.ROOM_COST = { combat: 10, elite: 14, treasure: 7, shop: 7, event: 7, rest: 7 };

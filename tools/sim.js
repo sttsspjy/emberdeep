@@ -139,6 +139,32 @@ function pickIndex(p, spec, policy, rng, force) {
   return best;
 }
 
+// Damage-report bucket of a hero hit: companions, class skills, Storm arcs (discharges, thunderbolts, lightning), status payouts (burn/bleed ticks, combust, shatter, thermal), ground fields, else weapon (swings, shots, blasts, dashes, evolution strikes).
+function dmgSource(src, k) {
+  if (src.comp || k === 'orbit' || k === 'wisp' || k === 'minion') return 'comp';
+  if (k === 'skill') return 'skill';
+  if (k === 'chain' || src.el === 'storm') return 'storm';
+  if (k === 'dot') return src.raw ? 'status' : 'field';
+  if (k === 'explode' && src.raw) return 'status';
+  return 'weapon';
+}
+
+const median = (a) => { if (!a.length) return NaN; a = a.slice().sort((x, y) => x - y); return a[a.length >> 1]; };
+
+// Weapon hits to kill a regular foe of stratum s: median over the roster (weighted) of ceil(foe HP / expected hit), expected hit = weapon damage x damage stat x crit factor (party and pact excluded).
+function hitsToKill(w, p, s) {
+  const st = p.stats, per = st.weapon.dmg * st.dmg * (1 + st.crit * (st.critMult - 1));
+  const rows = ED.biomeFor(s).enemies.filter(([id]) => { const d = ED.ENEMIES[id]; return d && !d.boss && !d.gloom && !d.ally && !d.minion; })
+    .map(([id, wt]) => ({ h: Math.ceil(ED.ENEMIES[id].hp * ED.World.hpScale(s) / per), wt })).sort((a, b) => a.h - b.h);
+  const tot = rows.reduce((a, r) => a + r.wt, 0);
+  let acc = 0;
+  for (const r of rows) { acc += r.wt; if (acc >= tot / 2) return r.h; }
+  return NaN;
+}
+
+// Damage per second of the starting weapon with no boons (every attack hits once).
+const bareDps = (cls, weapon) => { const wp = ED.WEAPONS[weapon]; return wp.dmg * (wp.n || 1) / wp.rate; };
+
 function runBot(opts) {
   U.resetUid(1);
   const brng = U.RNG((opts.seed ^ 0xb07b07) >>> 0), policy = opts.pick || process.env.PICK || 'random';
@@ -151,6 +177,7 @@ function runBot(opts) {
   }
   const w = new ED.World({ seed: opts.seed, pact: opts.pact || 0, players, tutorial: opts.tutorial });
   w.startRun();
+  const htkBare = hitsToKill(w, w.players.values().next().value, 1);
   for (const id of opts.force || []) {
     for (const p of w.players.values()) {
       if (ED.RELICS[id]) w.giveRelic(p, id);
@@ -160,6 +187,22 @@ function runBot(opts) {
   const rec = { flares: 0, gloomHits: 0, gloomSecs: 0, turn: {}, clears: [], bossTimes: [], dmgBy: {}, downedBy: [], dealtStrata: [], heal: {}, dmgByS: {}, spawns: {}, offers: {}, relicsBy: {}, goldIn: 0, roomDmg: 0, dmgStrata: [], healSrc: 'other' };
   rec.evoAt = null; // { s: stratum, lvl: team level } when hero 0 takes its evolution
   const p0id = w.players.keys().next().value;
+  // damage metrics: hero damage by source per stratum, combat seconds, observed hits/time to kill, analytic hits to kill, cooldown reduction
+  Object.assign(rec, { src: [], combatS: [0, 0, 0, 0, 0, 0], hits: [[], [], [], [], [], []], ttk: [[], [], [], [], [], []], ttkElite: [[], [], [], [], [], []], htk: [[], [], [], [], [], []], htkBare });
+  const hit0 = w.hitEnemy;
+  w.hitEnemy = function (e, base, src) {
+    const d = hit0.call(this, e, base, src);
+    if (!(d > 0)) return d;
+    const k = (src && src.kind) || 'weapon', bucket = rec.src[this.stratum - 1] || (rec.src[this.stratum - 1] = { weapon: 0, skill: 0, storm: 0, status: 0, comp: 0, field: 0 });
+    const direct = k !== 'dot' && k !== 'chain' && !(src && src.raw && k === 'explode');
+    if (src && src.p) bucket[dmgSource(src, k)] += d;
+    if (!e.boss && !e.def.minion) {
+      if (e._t0 === undefined) { e._t0 = this.time; e._n = 0; }
+      if (direct) e._n++;
+      if (e.killed) { (e.elite ? rec.ttkElite : rec.ttk)[this.stratum - 1].push(this.time - e._t0); if (!e.elite) rec.hits[this.stratum - 1].push(e._n); }
+    }
+    return d;
+  };
   // wrap hurtPlayer to attribute the damage that landed (armor, shield and dodge already applied) to the source foe
   const hurt0 = w.hurtPlayer;
   w.hurtPlayer = function (p, amount, src) {
@@ -270,9 +313,11 @@ function runBot(opts) {
       ED.Sim.movePlayer(p, { mx, my }, dt, w.room, w.locked, w.zones);
     }
     if (w.enemies.some(e => e.def.gloom && e.hp > 0)) rec.gloomSecs += dt;
+    if (w.locked && w.stratum >= 1 && w.hostiles() > 0) rec.combatS[w.stratum - 1] += dt;
     w.update(dt);
     for (const ev of w.fx) {
       if (ev.t === 'room') rec.roomDmg = 0;
+      if (ev.t === 'clear' && !ev.trial && w.room && w.room.type === 'combat') rec.htk[w.stratum - 1].push(hitsToKill(w, w.players.values().next().value, w.stratum));
       if (ev.t === 'evolve' && ev.pid === p0id && !rec.evoAt) rec.evoAt = { s: w.stratum, lvl: w.level };
       if (ev.t === 'bossSpawn') bossStart = w.time;
       if (ev.t === 'bossDown') { rec.bossTimes[w.stratum] = Math.round(w.time - bossStart); log.push(`  boss ${ev.type} down in ${(w.time - bossStart).toFixed(0)}s (t=${U.fmtTime(w.time)}, lvl ${w.level})`); }
@@ -295,6 +340,7 @@ function runBot(opts) {
     rooms: { visited: w.run.roomsVisited, total: w.run.roomsTotal }, lightAtBoss: w.run.lightAtBoss.slice(), strata, light: w.light / w.lightMax,
     clears: rec.clears, dmgByS: rec.dmgByS, spawns: rec.spawns, heal: rec.heal, offers: rec.offers, relicsBy: rec.relicsBy, goldIn: rec.goldIn, dmgStrata: rec.dmgStrata, bossTimes: rec.bossTimes.slice(), turn: rec.turn, dmgBy: rec.dmgBy, downedBy: rec.downedBy, dealtStrata: rec.dealtStrata,
     evoAt: rec.evoAt, aff: ED.PATH_IDS.map(k => ED.pathAffinity(p0.boons, k)).sort((a, b) => b - a),
+    cls: p0.cls, main: ED.PATH_IDS.map(k => [k, ED.pathAffinity(p0.boons, k)]).sort((a, b) => b[1] - a[1])[0][0], heroes: players.length, bare: avg(players.map(p => bareDps(p.cls, p.weapon))), src: rec.src, combatS: rec.combatS, hits: rec.hits, ttk: rec.ttk, ttkElite: rec.ttkElite, htk: rec.htk, htkBare: rec.htkBare, cdr: p0.stats.cdr, cdrAfter: ED.Stats.cdrEff ? ED.Stats.cdrEff(p0.stats.cdr) : p0.stats.cdr,
     endRoom: w.room ? w.room.type : '', evo: p0.stats.evo || null, gates: ED.gatePaths(p0.boons), boonCount: Object.values(p0.boons).reduce((a, b) => a + b, 0), keystones: Object.keys(p0.boons).filter(id => ED.BOONS[id].key).length };
 }
 
@@ -327,6 +373,23 @@ function summarize(results) {
   lines.push(`wins ${wins.length}/${n} (${(100 * wins.length / n).toFixed(0)}%) avg depth ${(avg(results.map(r => r.stratum))).toFixed(2)} avg time ${U.fmtTime(avg(results.map(r => r.time)))} winners ${wins.length ? U.fmtTime(avg(wins.map(r => r.time))) : '-'} lvl ${f1(avg(results.map(r => r.level)))} (winners ${wins.length ? f1(avg(wins.map(r => r.level))) : '-'})`);
   lines.push(`rooms visited ${(100 * vis / Math.max(1, tot)).toFixed(0)}% (${(vis / n).toFixed(1)}/run) light at boss ${nBoss ? (bossLight / nBoss).toFixed(2) : '-'} (Lightless ${bossLightless}/${nBoss}) light when heading for boss ${turns.length ? avg(turns).toFixed(2) : '-'} (lantern ended exploration on ${floors ? Math.round(100 * lanternEnded / floors) : 0}% of floors) avg stratum time [${strataSum.map((t, k) => U.fmtTime(t / strataN[k])).join(' ')}]`);
   lines.push(`clear s  combat [${S.map(s => f1(clear('combat', s))).join(' ')}] all ${f1(clear('combat', 0))}  elite [${S.map(s => f1(clear('elite', s))).join(' ')}] all ${f1(clear('elite', 0))}  boss [${S.map(s => f1(bossT(s))).join(' ')}]`);
+  const flat = (key, s) => results.flatMap(r => r[key][s - 1]);
+  const medClear = (type, s) => median(results.flatMap(r => r.clears.filter(c => c.type === type && c.s === s).map(c => c.t)));
+  lines.push(`clear s median combat [${S.map(s => f1(medClear('combat', s))).join(' ')}] elite [${S.map(s => f1(medClear('elite', s))).join(' ')}]`);
+  lines.push(`regular foe: weapon hits to kill [${S.map(s => f1(avg(flat('htk', s)))).join(' ')}] (start weapon, no boons, stratum I: ${f1(avg(results.map(r => r.htkBare)))}) | observed direct hits per kill [${S.map(s => f1(avg(flat('hits', s)))).join(' ')}] | time to kill s [${S.map(s => f1(median(flat('ttk', s)))).join(' ')}] | elite time to kill s median [${S.map(s => f1(median(flat('ttkElite', s)))).join(' ')}] mean [${S.map(s => f1(avg(flat('ttkElite', s)))).join(' ')}]`);
+  const dpsRatio = (r, s) => { const d = r.src[s - 1] ? Object.values(r.src[s - 1]).reduce((a, b) => a + b, 0) : 0; return r.combatS[s - 1] >= 5 ? d / r.combatS[s - 1] / r.heroes / r.bare : NaN; };
+  const dpsOf = (rs, s) => median(rs.map(r => dpsRatio(r, s)).filter(v => Number.isFinite(v)));
+  lines.push(`hero dps x bare weapon (median, combat seconds only, overkill included) by stratum [${S.map(s => f1(dpsOf(results, s))).join(' ')}] | ${[...new Set(results.map(r => r.cls))].map(c => c + ' [' + S.map(s => f1(dpsOf(results.filter(r => r.cls === c), s))).join(' ') + ']').join(' ')}`);
+  const share = (rs, from) => {
+    const t = {}; let tot = 0;
+    for (const r of rs) for (let i = from; i < 6; i++) if (r.src[i]) for (const k in r.src[i]) { t[k] = (t[k] || 0) + r.src[i][k]; tot += r.src[i][k]; }
+    return ['weapon', 'skill', 'storm', 'status', 'comp', 'field'].map(k => k + ' ' + Math.round(100 * (t[k] || 0) / (tot || 1)) + '%').join(' ');
+  };
+  const stormRuns = results.filter(r => r.main === 'storm'), otherRuns = results.filter(r => r.main !== 'storm');
+  lines.push(`damage share (all strata | strata IV-VI): all ${share(results, 0)} | ${share(results, 3)}`);
+  lines.push(`  Storm-main builds (${stormRuns.length}) ${share(stormRuns, 0)} | ${share(stormRuns, 3)}; other builds (${otherRuns.length}) ${share(otherRuns, 0)} | ${share(otherRuns, 3)}`);
+  const cd = results.map(r => r.cdr);
+  lines.push(`cooldown reduction at run end (raw stat): mean ${f2(avg(cd))} max ${f2(Math.max(...cd))} above 0.4 in ${Math.round(100 * cd.filter(v => v > 0.4).length / n)}% above 0.65 in ${Math.round(100 * cd.filter(v => v > 0.65).length / n)}% | effective after the soft cap mean ${f2(avg(results.map(r => r.cdrAfter)))}`);
   lines.push(`dealt/stratum [${S.map(s => Math.round(avg(results.map(r => r.dealtStrata[s - 1]).filter(v => v !== undefined)))).join(' ')}]  evo ${(100 * results.filter(r => r.evo).length / n).toFixed(0)}% keystones ${f1(avg(results.map(r => r.keystones)))} boons ${f1(avg(results.map(r => r.boonCount)))} relics ${f1(avg(results.map(r => r.relics)))}`);
   const dmgTot = {}, healTot = {};
   for (const r of results) { r.dmgStrata.forEach((v, i) => { dmgTot[i] = (dmgTot[i] || 0) + v; }); for (const k in r.heal) healTot[k] = (healTot[k] || 0) + r.heal[k]; }

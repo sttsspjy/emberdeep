@@ -20,7 +20,7 @@
     const def = ED.ENEMIES[type];
     const s = this.stratum, pact = this.pact;
     let hp = def.hp, dmg = def.dmg;
-    if (!def.boss) hp *= (1 + 0.65 * (s - 1) + 0.08 * (s - 1) * (s - 1)) * this.threat().hp;
+    if (!def.boss) hp *= ED.World.hpScale(s);
     hp *= this.partyHpMul();
     if (pact >= 1) hp *= 1.25;
     if (def.boss && pact >= 5) hp *= 1.35;
