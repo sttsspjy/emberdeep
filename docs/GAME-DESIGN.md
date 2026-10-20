@@ -91,7 +91,7 @@ Six paths. A hero owns at most **3 gates** (path slots) per run. `affinity(path)
 | wildfire | Wildfire | r | 2 | A burning foe that dies sets foes within 80 alight for 15% of its max HP per rank. `wildfire 0.15` |
 | cindertrail | Cinder Trail | r | 1 | Your dash leaves burning ground. `dashFire 1` |
 | conflag | Conflagration (key) | e | 1 | When a foe's Burn pool exceeds 30% of its current HP it combusts: the whole pool hits it and foes within 70 at once. `conflag 1` |
-| evo_pyre | Cinder Arms (evolution) | l | 1 | Melee swings also launch a piercing flame crescent (60% weapon damage); projectiles explode on hit (50%, r40). Burn +25%. |
+| evo_pyre | Cinder Arms (evolution) | l | 1 | Melee swings also launch a piercing flame crescent (60% weapon damage); projectiles explode on hit (50%, r40); exploding weapons (Fire Staff, Inferno Tome) get a 30% wider blast and leave a burning patch at each impact (r 60% of the blast, 2 s, `0.4 × weapon damage` per second, one per shot). Burn +25%. |
 
 ### Rime — `#7fe3ff`, icon `snow`
 | id | name | rar | max | effect |

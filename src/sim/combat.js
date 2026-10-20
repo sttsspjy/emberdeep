@@ -560,7 +560,8 @@
     const st = p.stats, evo = evoOf(p), area = 1 + st.area * 0.5;
     const n = w.n + st.projN;
     const sp = n > 1 ? Math.max(w.spread || 0, 0.13) : 0;
-    const ex = w.explode ? { r: w.explode.r * area * (st.combust ? 1.4 : 1), mul: w.explode.mul } : evo === 'pyre' && !o.twin ? { r: 40 * area, mul: 0.5 } : null;
+    const pyre = evo === 'pyre' && !o.twin; // Cinder Arms: plain shots explode (r40, 50%); exploding weapons get a 30% wider blast and a burning patch
+    const ex = w.explode ? { r: w.explode.r * area * (st.combust ? 1.4 : 1) * (pyre ? 1.3 : 1), mul: w.explode.mul, patch: pyre } : pyre ? { r: 40 * area, mul: 0.5 } : null;
     const spec = evo === 'steel' && !o.spectral && !o.twin;
     for (let i = 0; i < n; i++) {
       const ang = a + (i - (n - 1) / 2) * sp + (w.jitter ? this.rng.range(-w.jitter, w.jitter) : 0);
@@ -681,6 +682,7 @@
     const owner = this.players.get(pr.owner);
     if (!owner) return;
     this.explode(pr.x, pr.y, pr.explode.r, pr.dmg * (pr.mul || 1) * pr.explode.mul, 0, owner, pr.kind === 'fireball' ? 'bigfire' : 'fire', false);
+    if (pr.explode.patch) this.addZone({ kind: 'pfire', x: pr.x, y: pr.y, r: pr.explode.r * 0.6, dur: 2, dps: pr.dmg * 0.4, owner: pr.owner, team: 0 }); // one burning patch per shot
   };
 
   // ---------------- zones: telegraphs, clouds, fire, sanctuary ----------------
