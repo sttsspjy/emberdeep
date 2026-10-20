@@ -137,7 +137,7 @@
   // Meteor: friendly telegraph zone, then impact r95, Burn 50% of the impact, crater; Twin Meteor chains one more.
   W.castMeteor = function (p, x, y, delay, twin) {
     const area = 1 + p.stats.area * 0.5;
-    this.addZone({ kind: 'tele', x, y, r: 95 * area, dur: delay, team: 0, owner: p.pid, custom: true,
+    this.addZone({ kind: 'meteor', x, y, r: 95 * area, dur: delay, team: 0, owner: p.pid, custom: true,
       onEnd: (w, z) => {
         const o = w.players.get(z.owner); if (!o) return;
         const st = o.stats, dmg = 30 + 3.5 * st.weapon.dmg;
@@ -184,7 +184,7 @@
       const r = 80 * area * (st.barrage ? 1.4 : 1), dur = 2 + (st.barrage ? 1 : 0), dmg = 4 + 0.45 * w.dmg, hail = !!st.hailthorns;
       const n = Math.round(dur / 0.25);
       let k = 0;
-      this.addZone({ kind: 'tele', x: t.x, y: t.y, r, dur: 0.35 + dur, team: 0, owner: p.pid, custom: true,
+      this.addZone({ kind: 'rain', x: t.x, y: t.y, r, dur: 0.35 + dur, team: 0, owner: p.pid, custom: true,
         update: (world, z) => {
           if (z.t < 0.35) return;
           const o = world.players.get(z.owner); if (!o) return;
@@ -206,7 +206,7 @@
     vanish(p, a, data, st, w, area) {
       const smoke = !!st.smokescreen, r = 75 * area * (smoke ? 1.4 : 1);
       p.stealthT = 2.5; p.ambush = true; p.ambushT = 3;
-      this.addZone({ kind: 'tele', x: p.x, y: p.y, r, dur: 3 + (smoke ? 2 : 0), team: 0, owner: p.pid, custom: true,
+      this.addZone({ kind: 'smoke', x: p.x, y: p.y, r, dur: 3 + (smoke ? 2 : 0), team: 0, owner: p.pid, custom: true,
         update: (world, z) => {
           for (const e of world.enemies) {
             if (e.hp <= 0 || e.spawnT > 0 || U.dist2(e.x, e.y, z.x, z.y) >= (z.r + e.r) ** 2) continue;
