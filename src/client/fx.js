@@ -183,7 +183,7 @@
       }
       case 'hurt': {
         if (ev.pid === local) { F.flash = { color: '#ff2a2a', t: 0.25, a: 0.32 }; F.addShake(6); F.punch(1.1, 0); A.play('hurt'); }
-        F.text(ev.x, ev.y - 26, '-' + ev.v, '#ff5a4a', 11, { pop: true, life: 1, max: 1 });
+        F.text(ev.x, ev.y - 26, '-' + Math.max(1, Math.round(ev.v)), '#ff5a4a', 11, { pop: true, life: 1, max: 1 });
         F.burst(ev.x, ev.y - 10, 8, { color: '#d22a2a', sp: 90, life: 0.4, size: 2.2 });
         F.burst(ev.x, ev.y - 10, 5, { kind: 'streak', color: '#ff5a4a', sp: 170, life: 0.25, size: 1.6 });
         F.pop(ev.x, ev.y - 10, 16, '#ff5a4a', 0.18);
