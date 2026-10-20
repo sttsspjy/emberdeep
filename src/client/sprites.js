@@ -197,8 +197,9 @@
 
   LOOK.jelly = (c, e, C, t, s) => {
     const r = e.def.r * s, bob = Math.sin(t * 3 + e.id) * 2;
+    const pulse = e.st === 'cast';
     c.save(); c.translate(0, -r - 6 + bob);
-    glow(c, 0, 0, r * 2.2, C.a, 0.25);
+    glow(c, 0, 0, pulse ? r * 3.6 : r * 2.2, pulse ? '#ffffff' : C.a, pulse ? 0.7 : 0.25);
     c.strokeStyle = U.rgba(C.a, 0.8); c.lineWidth = 1.5;
     for (let i = 0; i < 5; i++) { const x = (i - 2) * r * 0.35; c.beginPath(); c.moveTo(x, 0); c.quadraticCurveTo(x + Math.sin(t * 4 + i) * 4, r * 0.8, x + Math.sin(t * 3 + i) * 3, r * 1.4); c.stroke(); }
     c.strokeStyle = OUT; c.lineWidth = 1.4;
@@ -212,6 +213,8 @@
     const wind = e.st === 'windup';
     const bob = Math.abs(Math.sin(t * 7 + e.id)) * 1.2;
     const step = Math.sin(t * 7 + e.id) * 2.5;
+    const g = !!e.def.guard, behind = g && Math.sin(faceAngle(e)) < -0.3;
+    if (behind) guardArc(c, e, '#8f98a3', 14 * s, 5, '#dfe6ee');
     c.save(); c.scale(s, s); c.lineWidth = 1.6;
     rrect(c, -6 + step * 0.3, -6, 5, 7, 1.5, C.b); rrect(c, 1 - step * 0.3, -6, 5, 7, 1.5, C.b);
     c.translate(0, -bob);
@@ -224,6 +227,7 @@
     glow(c, 0, -28, 8, C.c, wind ? 0.6 : 0.3);
     c.save(); c.translate(10, -15); c.rotate(wind ? -2.2 : 0.5); rrect(c, -1, -1.5, 22, 3, 1, '#4a4a4a'); poly(c, [16, -6, 26, -2, 26, 2, 16, 6], '#b9c0c8'); c.restore();
     c.restore();
+    if (g && !behind) guardArc(c, e, '#8f98a3', 14 * s, 5, '#dfe6ee');
   };
 
   LOOK.shroom = (c, e, C, t, s) => {
@@ -283,8 +287,9 @@
   };
 
   LOOK.spider = (c, e, C, t, s) => {
-    const wind = e.st === 'windup';
+    const wind = e.st === 'windup', web = e.st === 'aim';
     c.save(); c.scale(s, s); c.lineWidth = 1.6;
+    if (web) { c.translate(0, -3); c.rotate(-0.28); glow(c, -9, -8, 11, '#ffffff', 0.7); }
     c.strokeStyle = C.b;
     for (let i = 0; i < 4; i++) for (const sd of [-1, 1]) {
       const ph = Math.sin(t * 16 + i + (sd > 0 ? 1.5 : 0)) * 2;
@@ -304,16 +309,22 @@
     poly(c, [-10, -12, -16, -16 + Math.sin(ph) * 2, -12, -9], C.b);
     ell(c, 0, -11, 11, 5.5, C.a);
     if (e.def.charge && e.def.charge.trail) { c.strokeStyle = '#ff8a2a'; c.lineWidth = 1; c.beginPath(); c.moveTo(-6, -13); c.lineTo(-1, -9); c.lineTo(4, -13); c.stroke(); c.strokeStyle = OUT; c.lineWidth = 1.5; }
+    const howl = e.st === 'cast';
+    c.save(); if (howl) { c.translate(7, -10); c.rotate(-0.75); c.translate(-7, 10); }
     poly(c, [7, -16, 16, -13, 18, -9, 10, -7, 6, -10], C.a);
     poly(c, [8, -15, 9, -21, 12, -15], C.a);
     c.fillStyle = C.c; c.beginPath(); c.arc(12.5, -12.5, 1.2, 0, U.TAU); c.fill();
-    glow(c, 12.5, -12.5, 4, C.c, e.st === 'windup' ? 0.8 : 0.35);
+    glow(c, 12.5, -12.5, howl ? 9 : 4, C.c, e.st === 'windup' || howl ? 0.8 : 0.35);
+    c.restore();
+    if (howl) { c.strokeStyle = U.rgba(C.c, 0.55); c.lineWidth = 1.2; for (let i = 0; i < 2; i++) { c.beginPath(); c.arc(14, -24, 6 + i * 5 + (t * 20 % 4), -2.2, -0.6); c.stroke(); } c.strokeStyle = OUT; c.lineWidth = 1.5; }
     c.restore();
   };
 
   LOOK.wisp = (c, e, C, t, s) => {
+    const dive = e.st === 'dive', wind = e.st === 'windup';
     c.save(); c.translate(0, -16 + Math.sin(t * 4 + e.id) * 3); c.scale(s, s);
-    glow(c, 0, 0, 18, C.b, 0.45);
+    if (dive) { const la = faceAngle(e); c.strokeStyle = U.rgba(C.a, 0.7); c.lineWidth = 5; c.lineCap = 'round'; c.beginPath(); c.moveTo(0, 0); c.lineTo(-Math.cos(la) * 22, -Math.sin(la) * 22); c.stroke(); c.lineCap = 'butt'; c.strokeStyle = OUT; c.lineWidth = 1.6; }
+    glow(c, 0, 0, wind || dive ? 26 : 18, wind ? '#ffffff' : C.b, wind || dive ? 0.8 : 0.45);
     c.fillStyle = U.rgba(C.a, 0.85);
     c.beginPath(); c.moveTo(-6, 0); c.quadraticCurveTo(-4, 10 + Math.sin(t * 9) * 2, 0, 14); c.quadraticCurveTo(4, 10 + Math.cos(t * 9) * 2, 6, 0); c.closePath(); c.fill();
     c.fillStyle = C.a; c.beginPath(); c.arc(0, -1, 6.5, 0, U.TAU); c.fill();
@@ -417,7 +428,8 @@
   };
 
   LOOK.crab = (c, e, C, t, s) => {
-    const wind = e.st === 'windup';
+    const wind = e.st === 'windup', behind = Math.sin(faceAngle(e)) < -0.3;
+    if (behind) guardArc(c, e, C.b, 9 * s, 4.5, U.shade(C.a, 0.35));
     c.save(); c.scale(s, s); c.lineWidth = 1.6;
     c.strokeStyle = C.b;
     for (let i = 0; i < 3; i++) for (const sd of [-1, 1]) { c.beginPath(); c.moveTo(sd * 6, -5); c.lineTo(sd * (12 + i * 2), -8 + i * 3 + Math.sin(t * 14 + i) * 1.5); c.lineTo(sd * (14 + i * 2), 0); c.stroke(); }
@@ -428,14 +440,18 @@
     c.beginPath(); c.moveTo(-3, -15); c.lineTo(-4, -20); c.moveTo(3, -15); c.lineTo(4, -20); c.stroke();
     circ(c, -4, -21, 1.8, C.c); circ(c, 4, -21, 1.8, C.c);
     c.restore();
+    if (!behind) guardArc(c, e, C.b, 9 * s, 4.5, U.shade(C.a, 0.35));
   };
 
   LOOK.star = (c, e, C, t, s) => {
-    c.save(); c.translate(0, -14 + Math.sin(t * 4 + e.id) * 2); c.scale(s, s); c.rotate(t * 2 + e.id);
-    glow(c, 0, 0, 16, C.b, 0.45);
+    const dive = e.st === 'dive', wind = e.st === 'windup', spin = wind ? 9 : dive ? 14 : 2;
+    c.save(); c.translate(0, -14 + Math.sin(t * 4 + e.id) * 2); c.scale(s, s);
+    if (dive) { const la = faceAngle(e); c.strokeStyle = U.rgba(C.b, 0.75); c.lineWidth = 6; c.lineCap = 'round'; c.beginPath(); c.moveTo(0, 0); c.lineTo(-Math.cos(la) * 26, -Math.sin(la) * 26); c.stroke(); c.lineCap = 'butt'; c.strokeStyle = OUT; c.lineWidth = 1.3; }
+    c.rotate(t * spin + e.id);
+    glow(c, 0, 0, wind || dive ? 24 : 16, wind ? '#ffffff' : C.b, wind || dive ? 0.85 : 0.45);
     c.lineWidth = 1.3;
     c.beginPath(); for (let i = 0; i < 10; i++) { const r = i % 2 ? 3.6 : 9, a = i * Math.PI / 5; c.lineTo(Math.cos(a) * r, Math.sin(a) * r); } c.closePath(); c.fillStyle = C.a; c.fill(); c.stroke();
-    c.rotate(-(t * 2 + e.id));
+    c.rotate(-(t * spin + e.id));
     circ(c, 0, 0, 3, '#ffffff', false); c.fillStyle = '#3a1a6a'; c.beginPath(); c.arc(0.6, 0, 1.5, 0, U.TAU); c.fill();
     c.restore();
   };
@@ -462,6 +478,194 @@
     c.lineWidth = 1.7; c.strokeStyle = OUT;
     ell(c, 0, -18 + (wind ? -4 : 0), 15, 14, C.a);
     for (const [x, y, r] of [[-6, -22, 2.6], [5, -24, 3.2], [0, -16, 2], [9, -16, 1.8], [-9, -15, 1.6]]) eyes(c, x, y + (wind ? -4 : 0), 0, r, C.c);
+    c.restore();
+  };
+
+  // ---------- guard foes: shield arc faces e.aimA (synced); sprite space is mirrored when face < 0 ----------
+  const faceAngle = (e) => (e.face < 0 ? Math.PI - (e.aimA || 0) : (e.aimA || 0));
+  const guardArc = (c, e, col, lift, width, hi) => {
+    const G = e.def.guard, la = faceAngle(e), h = Math.min(G.arc, 2.8) / 2, r = e.r + 4;
+    c.save(); c.translate(0, -lift); c.lineCap = 'butt';
+    c.strokeStyle = OUT; c.lineWidth = width + 2.6; c.beginPath(); c.arc(0, 0, r, la - h, la + h); c.stroke();
+    c.strokeStyle = col; c.lineWidth = width; c.beginPath(); c.arc(0, 0, r, la - h, la + h); c.stroke();
+    c.strokeStyle = hi; c.lineWidth = Math.max(1, width * 0.28); c.beginPath(); c.arc(0, 0, r + width * 0.18, la - h * 0.9, la + h * 0.9); c.stroke();
+    for (const sd of [-1, 1]) circ(c, Math.cos(la + sd * h) * r, Math.sin(la + sd * h) * r, width * 0.38, hi, false);
+    c.restore();
+  };
+
+  LOOK.priest = (c, e, C, t, s) => {
+    const cast = e.st === 'cast';
+    c.save(); c.scale(s, s); c.translate(0, Math.sin(t * 3 + e.id) * -1); c.lineWidth = 1.5;
+    poly(c, [-7, -17, 7, -17, 11, 0, 5, -2, 0, 1, -5, -2, -11, 0], C.a);
+    poly(c, [-2.5, -17, 2.5, -17, 3.5, -1, -3.5, -1], '#d9d2b8', false);
+    rrect(c, -7.5, -19.5, 15, 3.5, 1.5, C.b, false);
+    ell(c, 0.5, -24.5, 5.4, 5.8, '#e6dfc9');
+    c.fillStyle = '#120a08'; c.fillRect(-2.6, -26, 2.4, 2.8); c.fillRect(2.2, -26, 2.4, 2.8);
+    eyes(c, 0.8, -25, 2, 0.8, C.c);
+    poly(c, [-6.5, -28.5, 7.5, -28.5, 4.5, -40, 0.5, -44, -3.5, -40], C.b);
+    poly(c, [-1, -41, 2, -41, 2, -29, -1, -29], '#d9c96a', false);
+    // arms: raised while casting
+    const ay = cast ? -26 : -14;
+    c.strokeStyle = C.a; c.lineWidth = 3.4; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(-6, -16); c.lineTo(-10, ay); c.moveTo(6, -16); c.lineTo(10, ay); c.stroke();
+    c.strokeStyle = OUT; c.lineWidth = 1.5;
+    glow(c, 0, cast ? -32 : -20, cast ? 22 : 8, C.c, cast ? 0.6 : 0.2);
+    // crook staff with a bone-green orb
+    c.save(); c.translate(12, -1); rrect(c, -1.3, -26, 2.6, 27, 1, '#5a4a32');
+    c.beginPath(); c.arc(0, -28, 3.6, Math.PI * 0.2, Math.PI * 1.9); c.strokeStyle = '#5a4a32'; c.lineWidth = 2.2; c.stroke(); c.strokeStyle = OUT; c.lineWidth = 1.5;
+    glow(c, 0, -29, cast ? 15 : 9, C.c, cast ? 0.8 : 0.4); circ(c, 0, -29, cast ? 3.4 : 2.4, C.c, false);
+    c.restore();
+    c.restore();
+  };
+
+  // burrowed worm: dirt mound plus a fading dirt trail (positions kept on the entity as it moves)
+  const drawMound = (c, e, t) => {
+    const tr = e._trail || (e._trail = []), last = tr[tr.length - 1];
+    if (!last || Math.hypot(last[0] - e.x, last[1] - e.y) > 9) { tr.push([e.x, e.y, t]); if (tr.length > 10) tr.shift(); }
+    const dirt = '#6b5238', lite = '#9a7c58', dark = '#3a2b1d';
+    c.save();
+    for (const p of tr) {
+      const age = t - p[2]; if (age > 1.8) continue;
+      const k = 1 - age / 1.8;
+      c.globalAlpha = 0.7 * k; ell(c, p[0] - e.x, p[1] - e.y + 2, 4 + 5 * k, 2 + 2.4 * k, dirt, false);
+      c.globalAlpha = 0.5 * k; ell(c, p[0] - e.x - 2, p[1] - e.y, 2 + 2 * k, 1 + k, lite, false);
+    }
+    c.globalAlpha = 1;
+    const r = e.r, rise = Math.sin(t * 9 + e.id) * 0.8;
+    c.strokeStyle = dark; c.lineWidth = 1.3;
+    for (let i = 0; i < 6; i++) { const a = i * 1.07 + 0.4; c.beginPath(); c.moveTo(Math.cos(a) * r * 1.0, 1 + Math.sin(a) * r * 0.42); c.lineTo(Math.cos(a) * r * 1.6, 1 + Math.sin(a) * r * 0.7); c.stroke(); }
+    ell(c, 0, 1, r * 1.3, r * 0.55, dark, false);
+    c.lineWidth = 1.6; c.strokeStyle = OUT;
+    c.beginPath(); c.moveTo(-r * 1.15, 1); c.bezierCurveTo(-r * 1.1, -r * 0.5, -r * 0.7, -r * 0.95 - rise, -r * 0.15, -r * 1.0 - rise); c.bezierCurveTo(r * 0.35, -r * 1.2 - rise, r * 0.95, -r * 0.55, r * 1.15, 1); c.quadraticCurveTo(0, r * 0.5, -r * 1.15, 1); c.closePath();
+    c.fillStyle = dirt; c.fill(); c.stroke();
+    ell(c, -r * 0.3, -r * 0.62, r * 0.45, r * 0.2, lite, false, -0.25);
+    c.fillStyle = dark; for (const [x, y, q] of [[r * 0.35, -r * 0.5, 1.8], [-r * 0.1, -r * 0.2, 1.4], [r * 0.7, -r * 0.2, 1.2]]) { c.beginPath(); c.arc(x, y, q, 0, U.TAU); c.fill(); }
+    c.fillStyle = lite; for (const [x, y, q] of [[-r * 1.15, 4, 1.8], [r * 1.05, 5, 1.5], [r * 0.45, 7, 1.2], [-r * 0.6, 7, 1.1]]) { c.beginPath(); c.arc(x, y, q, 0, U.TAU); c.fill(); }
+    glow(c, 0, -r * 0.9, r * 1.2, e.def.col.c, 0.18);
+    c.restore();
+  };
+
+  LOOK.worm = (c, e, C, t, s) => {
+    const B = e.def.burrow, t0 = e.t || 0;
+    const rise = U.clamp((B.expose - t0) / 0.25, 0, 1), sink = U.clamp(t0 / 0.35, 0, 1), h = Math.min(rise, sink);
+    const r = e.def.r * s;
+    c.save(); c.lineWidth = 1.6;
+    ell(c, 0, 1, r * 1.5, r * 0.65, '#1a120c', false);
+    const segs = 5;
+    for (let i = 0; i < segs; i++) {
+      const k = i / (segs - 1), y = -2 - h * (6 + i * 7.5), x = Math.sin(t * 2.6 + e.id + i * 0.8) * (1.5 + i * 0.9) * h;
+      ell(c, x, y, r * (0.95 - k * 0.12), r * 0.62, i % 2 ? C.b : C.a);
+    }
+    const hy = -2 - h * (6 + segs * 7.5), hx = Math.sin(t * 2.6 + e.id + segs * 0.8) * (1.5 + segs * 0.9) * h;
+    ell(c, hx, hy, r * 1.2, r * 0.8, C.a);
+    ell(c, hx, hy - 1, r * 0.8, r * 0.46, '#2a0f1c', false);
+    glow(c, hx, hy - 1, r * 1.4, C.c, 0.45);
+    for (let i = 0; i < 7; i++) {
+      const a = i / 7 * U.TAU;
+      poly(c, [hx + Math.cos(a) * r * 0.86, hy + Math.sin(a) * r * 0.5, hx + Math.cos(a + 0.2) * r * 0.5, hy - 1 + Math.sin(a + 0.2) * r * 0.28, hx + Math.cos(a - 0.2) * r * 0.5, hy - 1 + Math.sin(a - 0.2) * r * 0.28], '#f4efe0', false);
+    }
+    circ(c, hx - r * 0.7, hy - r * 0.55, 1.5, C.c, false); circ(c, hx + r * 0.7, hy - r * 0.55, 1.5, C.c, false);
+    c.restore();
+  };
+
+  LOOK.sentinel = (c, e, C, t, s) => {
+    const wind = e.st === 'windup', bash = e.st === 'bash', la = faceAngle(e), behind = Math.sin(la) < -0.3;
+    const bob = bash ? 0 : Math.abs(Math.sin(t * 5 + e.id)) * 1.2, step = Math.sin(t * 5 + e.id) * 2.5;
+    if (behind) guardArc(c, e, C.a, 14 * s, 9, '#eaf8ff');
+    c.save(); c.scale(s, s); c.lineWidth = 1.7;
+    rrect(c, -8 + step * 0.3, -7, 6, 8, 2, C.b); rrect(c, 2 - step * 0.3, -7, 6, 8, 2, C.b);
+    c.translate(0, -bob);
+    poly(c, [-12, -26, 12, -26, 14, -6, -14, -6], U.shade(C.b, -0.15));
+    rrect(c, -11, -28, 22, 20, 5, C.a);
+    rrect(c, -11, -17, 22, 3, 1, C.b, false);
+    circ(c, -12, -25, 5.5, C.b); circ(c, 12, -25, 5.5, C.b);
+    rrect(c, -7, -41, 14, 14, 5, C.a);
+    rrect(c, -5.5, -35, 11, 3, 1, '#0b0806', false);
+    c.fillStyle = C.c; c.fillRect(-4.5, -34.6, 3.4, 2); c.fillRect(1.1, -34.6, 3.4, 2);
+    glow(c, 0, -34, 10, C.c, wind || bash ? 0.8 : 0.3);
+    poly(c, [-2.5, -41, 0, -50, 2.5, -41], C.c);
+    c.restore();
+    if (!behind) guardArc(c, e, C.a, 14 * s, 9, '#eaf8ff');
+    if (wind || bash) glow(c, Math.cos(la) * (e.r + 4), -14 * s + Math.sin(la) * (e.r + 4), 14, C.c, 0.55);
+  };
+
+  LOOK.drone = (c, e, C, t, s) => {
+    const aim = e.st === 'aim', fire = e.st === 'cast', la = faceAngle(e);
+    c.save(); c.translate(0, -17 + Math.sin(t * 5 + e.id) * 2); c.scale(s, s); c.lineWidth = 1.5;
+    glow(c, 0, 0, 20, C.c, aim || fire ? 0.6 : 0.22);
+    // spinning rotor discs either side
+    for (const sd of [-1, 1]) {
+      const bx = sd * 11, spin = Math.sin(t * 40 + e.id + sd);
+      c.strokeStyle = C.b; c.beginPath(); c.moveTo(sd * 6, -1); c.lineTo(bx, -5); c.stroke(); c.strokeStyle = OUT;
+      ell(c, bx, -6, 7, 2 + Math.abs(spin) * 1.2, U.rgba('#d9cdb8', 0.55), false);
+      circ(c, bx, -5, 1.6, C.b);
+    }
+    ell(c, 0, 0, 9, 7.5, C.a);
+    rrect(c, -9, -1, 18, 3, 1.5, C.b, false);
+    poly(c, [-4, 6, 4, 6, 2, 11, -2, 11], C.b);
+    circ(c, 0, -1, 5, '#17100c');
+    circ(c, Math.cos(la) * 1.6, -1 + Math.sin(la) * 1.6, 2.6, aim || fire ? '#ffd36b' : C.c, false);
+    c.save(); c.translate(0, 1); c.rotate(la); rrect(c, 4, -1.6, 9, 3.2, 1, '#3d3128'); if (fire) glow(c, 14, 0, 9, '#ffcf6a', 0.9); c.restore();
+    c.restore();
+  };
+
+  LOOK.reaver = (c, e, C, t, s) => {
+    const wind = e.st === 'windup', leap = e.st === 'leap', idle = e.st === 'idle';
+    const k = leap ? 1 - U.clamp((e.t || 0) / 0.35, 0, 1) : 0, lift = leap ? Math.sin(k * Math.PI) * 26 : 0;
+    const step = Math.sin(t * 7 + e.id) * 2.2, bob = Math.abs(Math.sin(t * 7 + e.id)) * 1.2;
+    c.save(); c.scale(s, s); c.translate(0, -lift); c.lineWidth = 1.6;
+    if (wind || idle) c.scale(1.06, 0.92);
+    rrect(c, -6 + step * 0.3, -7, 5, 8, 1.5, C.b); rrect(c, 1 - step * 0.3, -7, 5, 8, 1.5, C.b);
+    c.translate(0, -bob);
+    c.strokeStyle = C.b; c.lineWidth = 2.2;
+    for (let i = 0; i < 3; i++) { c.beginPath(); c.moveTo(-5 + i * 5, -9); c.quadraticCurveTo(-6 + i * 5 + Math.sin(t * 3 + i) * 2, -3, -5 + i * 5 + Math.sin(t * 2 + i) * 2, 3); c.stroke(); }
+    c.strokeStyle = OUT; c.lineWidth = 1.6;
+    rrect(c, -9, -24, 18, 17, 5, C.a);
+    rrect(c, -9, -13, 18, 3, 1, C.b, false);
+    for (const [x, y, q] of [[-4, -20, 2], [3, -17, 1.6], [5, -22, 1.3]]) circ(c, x, y, q, U.shade(C.a, 0.3), false);
+    circ(c, 0, -29, 6.5, C.a);
+    rrect(c, -6, -30, 12, 3, 1, '#0b0806', false);
+    c.fillStyle = C.c; c.fillRect(-4.5, -29.6, 3, 2); c.fillRect(1.5, -29.6, 3, 2);
+    glow(c, 0, -29, 8, C.c, wind || leap ? 0.8 : 0.3);
+    poly(c, [-6, -33, -9, -38, -3, -34], C.b); poly(c, [6, -33, 9, -38, 3, -34], C.b);
+    c.save(); c.translate(8, -17); c.rotate(wind ? -2.1 : leap ? -0.8 : idle ? 0.7 : 0.35);
+    rrect(c, -1, -1.4, 6, 2.8, 1, '#4a3a2a'); poly(c, [5, -2.4, 24, -1.2, 28, 2.4, 5, 2.4], '#bfc7c9'); c.restore();
+    c.restore();
+  };
+
+  LOOK.rift = (c, e, C, t, s) => {
+    const cast = e.st === 'cast';
+    c.save(); c.scale(s, s); c.translate(0, Math.sin(t * 2.5 + e.id) * -1.5); c.lineWidth = 1.5;
+    poly(c, [-7, -18, 7, -18, 11, 0, 5, -3, 0, 0, -5, -3, -11, 0], C.a);
+    poly(c, [-2, -18, 2, -18, 3, -1, -3, -1], C.b, false);
+    c.beginPath(); c.moveTo(-8, -17); c.quadraticCurveTo(-9, -32, 0, -33); c.quadraticCurveTo(9, -32, 8, -17); c.closePath(); c.fillStyle = C.a; c.fill(); c.stroke();
+    ell(c, 1, -23, 4.8, 5, '#07030f', false);
+    eyes(c, 1.2, -23.5, 2, 1, C.c);
+    // floating rift: a vertical tear that widens while the caller channels
+    const w = cast ? 7 + Math.sin(t * 24) * 1.2 : 3.4, hy = -43 + Math.sin(t * 3 + e.id) * 1.5, hh = cast ? 13 : 9;
+    glow(c, 0, hy, cast ? 26 : 14, C.c, cast ? 0.75 : 0.35);
+    c.beginPath(); c.moveTo(0, hy - hh); c.quadraticCurveTo(w, hy, 0, hy + hh); c.quadraticCurveTo(-w, hy, 0, hy - hh); c.closePath();
+    c.fillStyle = '#05010c'; c.fill(); c.strokeStyle = C.c; c.stroke(); c.strokeStyle = OUT;
+    c.fillStyle = '#ffffff'; for (let i = 0; i < 3; i++) { const a = t * 2 + i * 2.1; c.fillRect(Math.cos(a) * w * 0.4 - 0.5, hy + Math.sin(a * 1.3) * hh * 0.6 - 0.5, 1.2, 1.2); }
+    circ(c, 9, -14, 2.4, C.b);
+    c.restore();
+  };
+
+  LOOK.gloom = (c, e, C, t, s) => {
+    c.save(); c.scale(s, s); c.lineWidth = 1.2;
+    glow(c, 0, -26, 38, '#1b0b2e', 0.55);
+    // tall shroud with a ragged, swaying hem
+    c.globalAlpha = 0.93;
+    c.beginPath(); c.moveTo(-10, -2); c.quadraticCurveTo(-14, -34, -4, -50); c.quadraticCurveTo(0, -56, 4, -50); c.quadraticCurveTo(14, -34, 10, -2);
+    for (let i = 0; i <= 7; i++) c.lineTo(10 - i * 2.9, 4 + Math.sin(t * 4 + i * 1.4 + e.id) * 3.5 + (i % 2) * 4);
+    c.closePath(); c.fillStyle = C.a; c.fill(); c.strokeStyle = C.b; c.stroke();
+    // trailing wisps behind the drift direction
+    c.globalAlpha = 0.5; c.strokeStyle = C.b; c.lineWidth = 3; c.lineCap = 'round';
+    for (let i = 0; i < 4; i++) { const y = -12 - i * 9, sw = Math.sin(t * 3 + i * 1.7 + e.id) * 5; c.beginPath(); c.moveTo(-e.face * 8, y); c.quadraticCurveTo(-e.face * (18 + sw), y + 3, -e.face * (28 + i * 3 + sw), y + 9 + Math.sin(t * 5 + i) * 3); c.stroke(); }
+    c.globalAlpha = 1; c.lineCap = 'butt';
+    // burning eyes
+    const ey = -38;
+    for (const sd of [-1, 1]) { glow(c, sd * 4 + 1, ey, 9, C.c, 0.85); poly(c, [sd * 4 - 1.4, ey - 1.6, sd * 4 + 4.4, ey + 0.8, sd * 4 - 1, ey + 2.2], '#ffd9a0', false); }
     c.restore();
   };
 
@@ -536,9 +740,9 @@
   };
 
   LOOK.b_king = (c, e, C, t, s) => {
-    const wind = e.pose === 'wind', cast = e.pose === 'cast';
+    const wind = e.pose === 'wind' || e.pose === 'slam', cast = e.pose === 'cast', air = e.pose === 'air';
     c.save(); c.lineWidth = 2;
-    c.translate(0, Math.sin(t * 2) * -1.5);
+    c.translate(0, Math.sin(t * 2) * -1.5 - (air ? Math.sin(Math.min(1, (e.t || 0) / 1.0) * Math.PI) * 38 : 0));
     poly(c, [-14, -44, 14, -44, 22, 0, 8, -4, 0, 2, -8, -4, -22, 0], C.a);
     poly(c, [-4, -44, 4, -44, 6, 0, -6, 0], '#e8c66b', false);
     rrect(c, -10, -60, 20, 18, 6, '#8fb5a8');
@@ -584,7 +788,9 @@
     const s = e.r / def.r;
     c.save();
     c.lineWidth = 1.6; c.strokeStyle = OUT; c.lineJoin = 'round'; c.lineCap = 'round';
-    Sp.shadow(c, e.r, def.fly ? 0.22 : 0.35);
+    if (e.st === 'burrow') { drawMound(c, e, t); c.restore(); return; }
+    Sp.shadow(c, e.r, def.fly || def.gloom ? 0.22 : 0.35);
+    if (e.st === 'fade') c.globalAlpha = 0.4 + Math.sin(t * 34) * 0.18;
     if (e.elite) { const col = ED.AFFIXES[e.elite].color; glow(c, 0, -e.r, e.r * 2.6, col, 0.32 + Math.sin(t * 5) * 0.08); }
     if (e.exposed) glow(c, 0, -e.r, e.r * 2.2, '#ff3a3a', 0.25 + Math.sin(t * 9) * 0.1);
     if ((e.st === 'windup' || e.st === 'aim' || e.st === 'cast' || e.pose === 'wind') && Math.floor(t * 14) % 2 === 0) c.translate(Math.sin(t * 60) * 0.8, 0);

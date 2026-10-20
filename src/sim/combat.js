@@ -540,7 +540,7 @@
     const arc = Math.min(6.3, w.arc * (1 + st.area * 0.4));
     let anyCrit = false;
     for (const e of this.enemies) {
-      if (e.hp <= 0 || e.spawnT > 0) continue;
+      if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed) continue;
       const d = Math.hypot(e.x - p.x, e.y - p.y);
       if (d - e.r > reach) continue;
       const ang = Math.atan2(e.y - p.y, e.x - p.x);
@@ -636,7 +636,7 @@
       if (pr.team === 0) {
         const owner = this.players.get(pr.owner);
         for (const e of this.enemies) {
-          if (e.hp <= 0 || e.spawnT > 0) continue;
+          if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed) continue;
           if (pr.hit && pr.hit.has(e.id)) continue;
           const rr = e.r + pr.r;
           if (U.dist2(pr.x, pr.y, e.x, e.y) > rr * rr) continue;

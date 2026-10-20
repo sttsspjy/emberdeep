@@ -468,9 +468,9 @@
   W.prototype.separate = function () {
     const es = this.enemies, n = es.length;
     for (let i = 0; i < n; i++) {
-      const a = es[i]; if (a.hp <= 0) continue;
+      const a = es[i]; if (a.hp <= 0 || a.def.gloom) continue;
       for (let j = i + 1; j < n; j++) {
-        const b = es[j]; if (b.hp <= 0) continue;
+        const b = es[j]; if (b.hp <= 0 || b.def.gloom) continue;
         const dx = b.x - a.x, dy = b.y - a.y, rr = (a.r + b.r) * 0.9;
         const d2 = dx * dx + dy * dy;
         if (d2 >= rr * rr || d2 < 1e-4) continue;
