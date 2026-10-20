@@ -4,7 +4,8 @@
    Mood     Bold dark fantasy, lantern-lit: near-black soot panels, brass frames, ember orange as the one live colour.
             Large, centred, high contrast. Nothing tilted. Selection = ember diamond markers + a warm light pool.
    Unit     1u = 1rem = clamp(13px, min(100vw / 110, 100vh / 62), 36px)   -> 17.4px at 1920x1080, 23.2px at 2560x1440, 13px at 1280x720.
-            Canvas HUD: u = clamp(13, min(W / 110, H / 62), 36) with W, H in CSS px, then multiply by devicePixelRatio.
+            Canvas HUD (own #hud canvas at device resolution, hud.js): u = clamp(13, min(W / 110, H / 62), 36) with W, H in CSS px, then multiply by the HUD canvas ratio.
+            HUD anchors: hero block bottom-left, party top-left, map + lantern top-right, xp bottom-centre, relics bottom-right, boss bar top-centre, messages above the hero block.
    Fonts    Display "Cinzel" 700/900 (hero names, titles, buttons, big numbers). Body "Alegreya Sans" 400-800 (all other text, tabular numerals).
             Fallbacks: Georgia / "Segoe UI", system-ui.
    Type     minimum text 0.85u. 0.95u small · 1.08u body · 1.3u subhead · 1.75u title · 2.4u banner · 5-7u wordmark.
@@ -80,6 +81,7 @@ h1, h2, h3, p { margin: 0; }
 
 #post { position: fixed; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
 #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; background: transparent; }
+#hud { position: fixed; inset: 0; width: 100%; height: 100%; display: none; pointer-events: none; }
 #ui { position: fixed; inset: 0; pointer-events: none; }
 .screen, .overlay { position: absolute; inset: 0; pointer-events: auto; }
 .screen { display: flex; flex-direction: column; overflow-y: auto; padding: max(1rem, env(safe-area-inset-top)) max(1.2rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1.2rem, env(safe-area-inset-left)); }

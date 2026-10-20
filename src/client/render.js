@@ -765,10 +765,10 @@
       if (pv.ri.badge) c.drawImage(ED.Icons.canvas('skull', '#ff7a3a', 64), pv.x + 3, pv.y + 2, 12, 12);
       if (pv.lab) { // lantern label on the room side of the icon; stays readable up close
         c.save(); c.globalAlpha = Math.max(a, 0.7);
-        c.font = '800 8px "Alegreya Sans", sans-serif'; c.textAlign = 'left'; c.textBaseline = 'middle';
-        const tw = c.measureText(pv.lab).width, lx = pv.x - (tw + 11) / 2, ly = pv.d === 's' ? pv.y - 17 : pv.y + 17;
-        c.drawImage(ED.Icons.canvas('lantern', pv.lc, 64), lx, ly - 4.5, 9, 9);
-        c.lineWidth = 2.5; c.strokeStyle = 'rgba(0,0,0,0.85)'; c.strokeText(pv.lab, lx + 11, ly); c.fillStyle = pv.lc; c.fillText(pv.lab, lx + 11, ly); c.restore();
+        c.font = '800 9.5px "Alegreya Sans", sans-serif'; c.textAlign = 'left'; c.textBaseline = 'middle';
+        const tw = c.measureText(pv.lab).width, lx = pv.x - (tw + 13) / 2, ly = pv.d === 's' ? pv.y - 18 : pv.y + 18;
+        c.drawImage(ED.Icons.canvas('lantern', pv.lc, 64), lx, ly - 5.5, 11, 11);
+        c.lineJoin = 'round'; c.lineWidth = 3; c.strokeStyle = 'rgba(0,0,0,0.9)'; c.strokeText(pv.lab, lx + 13, ly); c.fillStyle = pv.lc; c.fillText(pv.lab, lx + 13, ly); c.restore();
       }
     }
     c.globalAlpha = 1;
@@ -1268,26 +1268,10 @@
         c.font = '800 7px "Alegreya Sans", sans-serif'; c.fillStyle = '#ff8a7a'; c.fillText(p.pid === local ? 'DOWN' : 'REVIVE', p.x, p.y - 34);
       }
     }
-    // sign text when close (only the nearest sign, so neighbouring panels never overlap)
+    // nearest sign within reach (one at a time); the HUD draws its text in screen space with the current key bindings
     const me = view.players.get(local);
     let sign = null, sd = 90 * 90;
     if (me) for (const p of view.props) { if (p.kind === 'sign') { const d = U.dist2(p.x, p.y, me.x, me.y); if (d < sd) { sd = d; sign = p; } } }
-    if (sign) {
-      c.font = '600 8px "Alegreya Sans", sans-serif';
-      const lines = wrap(c, sign.text, 120);
-      const h = lines.length * 10 + 8, w = 130, x = sign.x, y = sign.y - 34 - h;
-      c.fillStyle = 'rgba(14,10,8,0.9)'; c.fillRect(x - w / 2, y, w, h);
-      c.strokeStyle = '#5a4232'; c.lineWidth = 1; c.strokeRect(x - w / 2, y, w, h);
-      c.fillStyle = 'rgba(230,194,122,0.5)'; c.fillRect(x - w / 2, y, w, 1);
-      c.fillStyle = '#f0e5d3'; lines.forEach((ln, i) => c.fillText(ln, x, y + 9 + i * 10));
-    }
+    R.sign = sign;
   }
-
-  function wrap(c, text, maxW) {
-    const words = String(text).split(' '); const lines = []; let cur = '';
-    for (const w of words) { const test = cur ? cur + ' ' + w : w; if (c.measureText(test).width > maxW && cur) { lines.push(cur); cur = w; } else cur = test; }
-    if (cur) lines.push(cur);
-    return lines;
-  }
-  R.wrap = wrap;
 })(globalThis.ED || (globalThis.ED = {}));

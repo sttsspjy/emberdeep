@@ -41,8 +41,8 @@
 
   const portrait = (cls, size, slot, weapon) => { const cv = document.createElement('canvas'); cv.width = cv.height = size * 2; ED.Sprites.portrait(cv, cls, slot || 0, weapon); return cv; };
 
-  // Path helpers: elements share ids with their paths (pyre, rime, storm); thresholds fall back to the design values when data does not export them.
-  const KEY_AFF = () => ED.KEY_AFFINITY || 3, EVO_AFF = () => ED.EVO_AFFINITY || 5, LEECH_CAP = () => (ED.CONST && ED.CONST.LEECH_CAP) || 0.02;
+  // Path helpers: elements share ids with their paths (pyre, rime, storm).
+  const KEY_AFF = () => ED.KEY_AFFINITY, EVO_AFF = () => ED.EVO_AFFINITY, LEECH_CAP = () => ED.CONST.LEECH_CAP;
   const pathIcon = (k) => ED.Icons.url(ED.PATHS[k].icon, ED.PATHS[k].color);
   const pathName = (k, wrap) => (ED.PATHS[k] ? (wrap ? `<i style="color:${ED.PATHS[k].color}">${ED.PATHS[k].name}</i>` : ED.PATHS[k].name) : '');
   UI.evoName = (path, weaponId) => (ED.PATHS[path] ? ED.PATHS[path].evo : '') + (ED.WEAPONS[weaponId] ? ' ' + ED.WEAPONS[weaponId].name : ' Arms');
@@ -529,7 +529,7 @@
     mc.width = Math.round(w * dpr); mc.height = Math.round(w * dpr * 5 / 6);
     c.clearRect(0, 0, mc.width, mc.height);
     const pad = 10 * dpr;
-    ED.HUD.drawMap(c, view, pad, pad, mc.width - 2 * pad, mc.height - 2 * pad, 1.6 * mc.width / 360, 0);
+    ED.HUD.drawMap(c, view, pad, pad, mc.width - 2 * pad, mc.height - 2 * pad, (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16) * dpr, 0);
   };
 
   // ---------------- results ----------------

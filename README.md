@@ -23,6 +23,10 @@ Every key and mouse button can be changed in **Settings > Controls**: click an a
 
 Aiming is automatic by default. Switch to mouse aiming in Settings. Gamepads also work (fixed layout): left stick moves, right stick aims, `X` or right trigger attacks, `B` or right bumper is skill 1, `Y` or left trigger is skill 2, `A` or left bumper dashes, pressing the left stick fires the lantern flare.
 
+### The screen
+
+The interface scales with your window (larger on big and 4K screens). Bottom-left is your hero: portrait, health bar (a pale segment is your shield), and above it the skill, dash and flare slots with the key bound to each, a cooldown sweep with the seconds left, and your path rings (a ring fills toward evolution). Messages appear above the hero block. Party members are listed top-left. Top-right shows the stratum, its weakness and resistance, the map (the number on a room is the light it costs) and the lantern: its tier, a meter with ticks at 50% and 25%, what the tier does, what a new room costs and what light at the boss door is worth. Level, experience and gold are bottom-centre, relics bottom-right, the boss bar top-centre. Prompts and signs always show your current keys.
+
 ## A descent
 
 - Six strata in a fixed order: the Ossuary, Glowmire Grotto, Rimefrost Halls, the Cinderforge, the Drowned Sanctum and the Starless Abyss. Each has its own palette, lighting, hazards, music, enemy roster, boss and elemental weakness.

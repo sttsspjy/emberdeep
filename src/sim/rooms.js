@@ -4,12 +4,13 @@
   const U = ED.U, D = ED.Dungeon, T = ED.CONST.TILE;
   const W = ED.World.prototype;
 
+  // {action} tokens are replaced with the player's key bindings when the sign is drawn (ED.Input.fill); the sim never reads bindings.
   const SIGNS = [
-    'Hold J (or click) to attack. Your hero aims for you.',
-    'Press K (or right-click) for your skill. Space dashes through danger.',
+    'Hold {attack} to attack. Your hero aims for you.',
+    'Press {skill1} for your first skill and {skill2} for your second. {dash} dashes through danger.',
     'Clear a room to open its doors. The reward inside is shown on the door.',
-    'Every new room costs lantern light (shown on its door). In the dark the Gloom hunts: press F to flare it away.',
-    'The skull on your map marks the stratum boss. Tab shows the map.',
+    'Every new room costs lantern light (shown on its door). In the dark the Gloom hunts: press {flare} to flare it away.',
+    'The skull on your map marks the stratum boss. {map} shows the map.',
   ];
 
   // Regular foes of a biome that exist in the enemy table (rosters may name foes whose definitions land later).

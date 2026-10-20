@@ -88,6 +88,7 @@
     Backquote: '`', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Backslash: '\\',
     NumpadAdd: 'Num +', NumpadSubtract: 'Num -', NumpadMultiply: 'Num *', NumpadDivide: 'Num /', NumpadDecimal: 'Num .', NumpadEnter: 'Num Enter',
     Mouse0: 'LMB', Mouse1: 'MMB', Mouse2: 'RMB', Mouse3: 'MB4', Mouse4: 'MB5',
+    NumLock: 'NumLk', ScrollLock: 'ScrLk', PrintScreen: 'PrtSc', Pause: 'Pause', IntlBackslash: '\\', IntlRo: '\\', IntlYen: '¥',
   };
   let layout = null; // physical key -> printed character on the player's layout (Chromium only)
   const PRINTED = /^(Key[A-Z]|Digit\d|Backquote|Minus|Equal|Bracket(Left|Right)|Semicolon|Quote|Comma|Period|Slash|Backslash)$/;
@@ -108,6 +109,10 @@
     const c = list.find(x => !isMouse(x)) || list[0];
     return c ? I.keyName(c) : '—';
   };
+  // Every bound key of an action, at most two ('LMB / J'): what the interact prompt and tutorial signs show.
+  I.hint = (action) => { const l = I.labels(action); return l.length ? l.slice(0, 2).join(' / ') : '—'; };
+  // Replaces {action} tokens in a text with the action's current key hint (unknown tokens stay).
+  I.fill = (text) => String(text).replace(/\{(\w+)\}/g, (m, a) => (ACTION[a] ? I.hint(a) : m));
 
   // ---------------- capture (rebinding screen) ----------------
   let stopCap = null;

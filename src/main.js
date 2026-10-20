@@ -296,6 +296,7 @@
       ED.Game.update(dt, blocked ? EMPTY : inp);
       if (ED.Game.s) ED.Game.render(t, dt);
     } else {
+      ED.HUD.clear();
       ED.Camp.draw(ED.Render.ctx, A.profile, t, dt, A.state === 'hearth' || A.state === 'lobby' || (A.state === 'title' && A.hasProfile) ? A.sel.cls : null);
     }
     ED.Input.endFrame();
