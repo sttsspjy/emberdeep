@@ -6,7 +6,7 @@
   const U = ED.U, TAU = U.TAU;
   let hsUntil = 0; // wall-clock end of the current hit-stop
   const F = ED.FX = {
-    parts: [], texts: [], slashes: [], rings: [], bolts: [], pops: [], ghosts: [], stains: [], msgs: [], banner: null, shake: 0, flash: null, fade: 0, anim: {}, hitstop: 0, time: 0, aberr: 0, kick: 0, dread: 0,
+    parts: [], texts: [], slashes: [], rings: [], bolts: [], pops: [], ghosts: [], stains: [], msgs: [], banner: null, shake: 0, flash: null, fade: 0, anim: {}, hitstop: 0, time: 0, aberr: 0, kick: 0, dread: 0, crowd: 1, // crowd: burst-count factor, set by the renderer (below 1 with many live foes)
     // 1 normally, ~0.06 during a hit-stop; consumers (game loop) multiply their dt by it. Wall-clock based, so it is safe however dt is scaled.
     get timeScale() { return performance.now() / 1000 < hsUntil ? 0.06 : 1; },
     set timeScale(v) { /* derived value; assignments are ignored */ },
@@ -17,7 +17,7 @@
   F.reset = () => { F.parts.length = 0; F.texts.length = 0; F.slashes.length = 0; F.rings.length = 0; F.bolts.length = 0; F.pops.length = 0; releaseGhosts(); F.stains.length = 0; F.msgs.length = 0; F.banner = null; F.shake = 0; F.flash = null; F.anim = {}; F.aberr = 0; F.kick = 0; F.dread = 0; hsUntil = 0; ent.clear(); hitN = 0; };
   F.setQuality = (q) => { MAXP = q === 'low' ? 180 : 500; };
   const lowFx = () => MAXP < 300;
-  const cnt = (n) => (MAXP < 300 ? Math.ceil(n / 2) : n);
+  const cnt = (n) => Math.ceil(n * (MAXP < 300 ? 0.5 : 1) * F.crowd);
 
   // opts: a (angle), spread (random +- around a), sp, life, size, color, kind (dot|shard|smoke|streak|ember|drop|ash|spark), add, lt (light colour), ltr (light radius)
   // spOv/lifeOv replace o.sp/o.life (burst jitter). Dead particles are recycled through ppool; when full, a rotating slot is overwritten.
@@ -34,7 +34,7 @@
     p.add = o.add !== undefined ? o.add : (kind === 'streak' || kind === 'ember' || kind === 'spark');
     p.z = o.z || 0; p.vz = o.vz || 0; p.land = false; p.rot = Math.random() * 6; p.lt = o.lt || null; p.ltr = o.ltr || 28;
   };
-  F.burst = (x, y, n, o) => { const k = MAXP < 300 ? Math.ceil(n / 2) : n, sp = o.sp || 90, life = o.life || 0.5; for (let i = 0; i < k; i++) F.part(x, y, o, sp * (0.4 + Math.random() * 0.8), life * (0.6 + Math.random() * 0.6)); };
+  F.burst = (x, y, n, o) => { const k = cnt(n), sp = o.sp || 90, life = o.life || 0.5; for (let i = 0; i < k; i++) F.part(x, y, o, sp * (0.4 + Math.random() * 0.8), life * (0.6 + Math.random() * 0.6)); };
   const NO_OPTS = {};
   F.text = (x, y, s, color, size, opts) => {
     if (F.texts.length > 80) F.texts.shift();
@@ -278,7 +278,7 @@
     g.setTransform(S, 0, 0, S, hw * S, top * S);
     const sh = Sp.shadow; Sp.shadow = NOP;
     let ok = true;
-    try { Sp.enemy(g, fk, F.time); } catch (err) { ok = false; } finally { Sp.shadow = sh; }
+    try { Rn.drawFoe(g, fk, F.time); } catch (err) { ok = false; } finally { Sp.shadow = sh; }
     g.setTransform(1, 0, 0, 1, 0, 0);
     if (!ok) { snapPool.splice(snapPool.indexOf(sn), 1); return; } // an unbalanced context is never reused
     g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
@@ -522,7 +522,8 @@
     const Rn = R();
     for (const s of F.stains) { const w = s.r * 3.6; c.globalAlpha = s.a * Math.min(1, s.life / 2); c.drawImage(s.spr, s.x - w / 2, s.y - w * 0.31 + 2, w, w * 0.62); }
     c.globalAlpha = 1;
-    let nl = 0;
+    let nl = 0, rot = false;
+    const m = c.getTransform(), S = m.a, bx = m.e, by = m.f; // base transform: rotated rects set a full matrix
     for (const p of F.parts) {
       const k = p.life / p.max;
       if (p.lt && nl < 14) { nl++; Rn.light(p.x, p.y - p.z, p.ltr, p.lt, 0.75 * Math.min(1, k * 1.5)); }
@@ -530,11 +531,17 @@
       c.globalAlpha = p.kind === 'smoke' ? k * 0.35 : p.kind === 'ash' ? Math.min(1, k * 2) * 0.8 : Math.min(1, k * 1.5);
       c.fillStyle = p.color;
       const sz = p.kind === 'smoke' ? p.size * (2 - k) : p.size * (0.4 + 0.6 * k);
-      if (p.kind === 'shard') { c.save(); c.translate(p.x, p.y - p.z); c.rotate(p.rot); c.fillRect(-sz, -sz * 0.5, sz * 2, sz); c.restore(); }
-      else if (p.kind === 'ash') { c.save(); c.translate(p.x, p.y - p.z); c.rotate(p.rot); c.fillRect(-sz, -sz * 0.4, sz * 2, sz * 0.8); c.restore(); }
-      else if (p.kind === 'smoke') { c.drawImage(Rn.glowSprite(p.color), p.x - sz * 1.6, p.y - p.z - sz * 1.6, sz * 3.2, sz * 3.2); }
+      if (p.kind === 'shard' || p.kind === 'ash') {
+        const co = Math.cos(p.rot) * S, si = Math.sin(p.rot) * S; rot = true;
+        c.setTransform(co, si, -si, co, p.x * S + bx, (p.y - p.z) * S + by);
+        if (p.kind === 'shard') c.fillRect(-sz, -sz * 0.5, sz * 2, sz); else c.fillRect(-sz, -sz * 0.4, sz * 2, sz * 0.8);
+        continue;
+      }
+      if (rot) { c.setTransform(S, 0, 0, S, bx, by); rot = false; }
+      if (p.kind === 'smoke') { c.drawImage(Rn.glowSprite(p.color), p.x - sz * 1.6, p.y - p.z - sz * 1.6, sz * 3.2, sz * 3.2); }
       else { c.beginPath(); c.arc(p.x, p.y - p.z, sz, 0, TAU); c.fill(); }
     }
+    if (rot) c.setTransform(S, 0, 0, S, bx, by);
     c.globalAlpha = 1;
     // dying foes: the posed snapshot (white silhouette for the first frames); spirit-family ghosts are drawn additively in drawGlow instead
     for (const g of F.ghosts) {
@@ -552,6 +559,23 @@
     for (const s of F.slashes) Rn.light(s.x + Math.cos(s.a) * s.r * 0.6, s.y + Math.sin(s.a) * s.r * 0.6, s.r * 1.1, s.color, 0.5 * (s.life / s.max));
   };
 
+  // Additive line particles (streaks, sparks) are collected per (colour, width step 0.5, alpha step 1/8) and stroked as one path each; the pass is additive, so order does not matter.
+  const lineB = new Map();
+  function lineAdd(col, w, a, x0, y0, x1, y1) {
+    const wq = Math.max(0.5, Math.round(w * 2) / 2), aq = Math.round(a * 8) / 8, key = col + wq + '|' + aq;
+    let b = lineB.get(key); if (!b) lineB.set(key, b = { col, w: wq, a: aq, n: 0, p: [] });
+    const i = b.n * 4; b.p[i] = x0; b.p[i + 1] = y0; b.p[i + 2] = x1; b.p[i + 3] = y1; b.n++;
+  }
+  function lineFlush(c) {
+    c.lineCap = 'round';
+    for (const b of lineB.values()) {
+      if (!b.n) continue;
+      c.globalAlpha = b.a; c.strokeStyle = b.col; c.lineWidth = b.w; c.beginPath();
+      for (let i = 0, m = b.n * 4; i < m; i += 4) { c.moveTo(b.p[i], b.p[i + 1]); c.lineTo(b.p[i + 2], b.p[i + 3]); }
+      c.stroke(); b.n = 0;
+    }
+    if (lineB.size > 80) lineB.clear();
+  }
   // Emissive pass (context is in 'lighter'): slashes, rings, glowing particles, streaks, pops, bolts, ghosts.
   F.drawGlow = (c, t) => {
     const Rn = R(), Sp = ED.Sprites;
@@ -589,30 +613,34 @@
         c.moveTo(p.x - sz * 1.5, p.y); c.lineTo(p.x + sz * 1.5, p.y); c.moveTo(p.x, p.y - sz * 1.5); c.lineTo(p.x, p.y + sz * 1.5); c.stroke();
       }
     }
+    const gm = c.getTransform(), gS = gm.a, gX = gm.e, gY = gm.f; let grot = false;
     for (const p of F.parts) {
       if (!p.add) continue;
       const k = p.life / p.max;
-      c.globalAlpha = Math.min(1, k * 1.5);
+      if (grot && p.kind !== 'shard' && p.kind !== 'streak' && p.kind !== 'spark') { c.setTransform(gS, 0, 0, gS, gX, gY); grot = false; }
       if (p.kind === 'streak') {
-        const sp = Math.hypot(p.vx, p.vy), l = Math.min(26, sp * 0.05 + 2), ux = sp > 1 ? p.vx / sp : 0, uy = sp > 1 ? p.vy / sp : 0;
-        c.strokeStyle = p.color; c.lineWidth = p.size * (0.4 + 0.6 * k); c.lineCap = 'round';
-        c.beginPath(); c.moveTo(p.x, p.y - p.z); c.lineTo(p.x - ux * l, p.y - p.z - uy * l); c.stroke();
-        c.strokeStyle = '#ffffff'; c.lineWidth = p.size * 0.35; c.beginPath(); c.moveTo(p.x, p.y - p.z); c.lineTo(p.x - ux * l * 0.5, p.y - p.z - uy * l * 0.5); c.stroke();
+        const sp = Math.hypot(p.vx, p.vy), l = Math.min(26, sp * 0.05 + 2), ux = sp > 1 ? p.vx / sp : 0, uy = sp > 1 ? p.vy / sp : 0, a = Math.min(1, k * 1.5), y = p.y - p.z;
+        lineAdd(p.color, p.size * (0.4 + 0.6 * k), a, p.x, y, p.x - ux * l, y - uy * l);
+        lineAdd('#ffffff', p.size * 0.35, a, p.x, y, p.x - ux * l * 0.5, y - uy * l * 0.5);
       } else if (p.kind === 'spark') {
-        const sp = Math.hypot(p.vx, p.vy), l = Math.min(10, sp * 0.03 + 1), ux = sp > 1 ? p.vx / sp : 0, uy = sp > 1 ? p.vy / sp : 0;
-        c.strokeStyle = p.color; c.lineWidth = p.size; c.lineCap = 'round'; c.beginPath(); c.moveTo(p.x, p.y - p.z); c.lineTo(p.x - ux * l, p.y - p.z - uy * l); c.stroke();
+        const sp = Math.hypot(p.vx, p.vy), l = Math.min(10, sp * 0.03 + 1), ux = sp > 1 ? p.vx / sp : 0, uy = sp > 1 ? p.vy / sp : 0, y = p.y - p.z;
+        lineAdd(p.color, p.size, Math.min(1, k * 1.5), p.x, y, p.x - ux * l, y - uy * l);
       } else if (p.kind === 'ember') {
         const fl = 0.6 + 0.4 * Math.sin(p.rot * 5);
         c.globalAlpha = Math.min(1, k * 1.6) * fl; c.fillStyle = p.color; c.fillRect(p.x - p.size * 0.5, p.y - p.z - p.size * 0.5, p.size, p.size);
         Rn.glow(c, p.x, p.y - p.z, p.size * 3, p.color, 0.6);
       } else if (p.kind === 'shard') {
-        c.save(); c.translate(p.x, p.y - p.z); c.rotate(p.rot); c.fillStyle = p.color; c.fillRect(-p.size, -p.size * 0.4, p.size * 2, p.size * 0.8); c.restore();
+        const co = Math.cos(p.rot) * gS, si = Math.sin(p.rot) * gS;
+        c.globalAlpha = Math.min(1, k * 1.5); grot = true;
+        c.setTransform(co, si, -si, co, p.x * gS + gX, (p.y - p.z) * gS + gY); c.fillStyle = p.color; c.fillRect(-p.size, -p.size * 0.4, p.size * 2, p.size * 0.8);
       } else {
         const sz = p.size * (0.4 + 0.6 * k);
-        c.fillStyle = p.color; c.beginPath(); c.arc(p.x, p.y - p.z, sz, 0, TAU); c.fill();
+        c.globalAlpha = Math.min(1, k * 1.5); c.fillStyle = p.color; c.beginPath(); c.arc(p.x, p.y - p.z, sz, 0, TAU); c.fill();
         if (sz > 1.6) Rn.glow(c, p.x, p.y - p.z, sz * 3, p.color, 0.35);
       }
     }
+    if (grot) c.setTransform(gS, 0, 0, gS, gX, gY);
+    lineFlush(c);
     c.globalAlpha = 1;
     // lightning
     for (const b of F.bolts) {
@@ -654,21 +682,17 @@
     return dashChecked[key];
   }
 
+  // Damage numbers: one blit of a baked sprite (Render.numSprite) scaled to the animated size.
   F.drawTexts = (c) => {
     const Rn = R();
-    c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
     for (const t of F.texts) {
       const k = t.life / t.max, age = t.max - t.life;
       const pop = t.pop ? 1 + 0.75 * Math.exp(-age * 15) * (t.crit ? 1.3 : 1) : 1;
       const sc = t.crit ? pop * (1 + 0.07 * Math.sin(age * 42) * Math.exp(-age * 5)) : pop;
-      const a = Math.min(1, k * 2.2);
-      const fs = Math.round(t.size * sc);
+      const a = Math.min(1, k * 2.2), fs = t.size * sc;
       if (t.crit) { c.globalCompositeOperation = 'lighter'; Rn.glow(c, t.x, t.y, fs * 1.7, t.color, 0.5 * a); c.globalCompositeOperation = 'source-over'; }
-      c.globalAlpha = a;
-      c.font = `800 ${fs}px "Alegreya Sans", system-ui, sans-serif`;
-      c.lineWidth = t.crit ? 4 : 3; c.strokeStyle = t.crit ? 'rgba(40,10,0,0.95)' : 'rgba(0,0,0,0.85)'; c.strokeText(t.s, t.x, t.y);
-      c.fillStyle = t.color; c.fillText(t.s, t.x, t.y);
-      if (t.crit) { c.fillStyle = 'rgba(255,255,255,0.4)'; c.save(); c.beginPath(); c.rect(t.x - fs * 3, t.y - fs * 0.6, fs * 6, fs * 0.55); c.clip(); c.fillText(t.s, t.x, t.y); c.restore(); }
+      const sp = Rn.numSprite(t.s, t.color, t.size, t.crit), q = fs / sp.fs;
+      c.globalAlpha = a; c.drawImage(sp.cv, t.x + sp.x * q, t.y + sp.y * q, sp.w * q, sp.h * q);
     }
     c.globalAlpha = 1;
   };
