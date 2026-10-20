@@ -169,8 +169,8 @@
       return;
     }
     const c = D.center(this.room);
-    if (s % 2 === 0) this.spawnRelicChoices(c.x, c.y + 40, 'r');
-    else for (const p of this.players.values()) this.grantOffer(p, { src: 'epic' });
+    if (s % 2 === 0) this.spawnRelicChoices(c.x, c.y + 40, 'r'); // even strata: relic hoard; strata III and V: epic offer; stratum I: none
+    else if (s > 1) for (const p of this.players.values()) this.grantOffer(p, { src: 'epic' });
     this.props.push({ id: U.uid(), kind: 'portal', x: c.x, y: c.y - 60, state: 0 });
   };
 
@@ -202,8 +202,9 @@
       props.push({ id: id(), kind: 'chest', x: c.x, y: c.y, state: 0 });
     } else if (room.type === 'rest') {
       const group = U.uid();
-      props.push({ id: id(), kind: 'campfire', x: c.x - 44, y: c.y, group, state: 0 });
-      props.push({ id: id(), kind: 'anvil', x: c.x + 44, y: c.y, group, state: 0 });
+      const anvil = s % 2 === 1; // the anvil stands at rest sites of odd strata only
+      props.push({ id: id(), kind: 'campfire', x: c.x - (anvil ? 44 : 0), y: c.y, group, state: 0 });
+      if (anvil) props.push({ id: id(), kind: 'anvil', x: c.x + 44, y: c.y, group, state: 0 });
     } else if (room.type === 'shop') {
       props.push({ id: id(), kind: 'merchant', x: c.x, y: c.y - 70, state: 0 });
       let favor = 0;
@@ -212,10 +213,9 @@
       const taken = new Set();
       const nRelics = 2 + (favor >= 2 ? 1 : 0);
       for (let i = 0; i < nRelics; i++) { const r = this.rollRelic('c', taken); taken.add(r); items.push({ type: 'relic', item: r }); }
-      items.push({ type: 'boon' });
+      items.push({ type: s % 2 ? 'boon' : 'forge' }); // one build item per shop: epic boon on odd strata, forge on even
       items.push({ type: 'potion' });
       items.push({ type: 'oil' });
-      items.push({ type: 'forge' });
       items.forEach((it, i) => {
         props.push({ id: id(), kind: 'shop', x: c.x + (i - (items.length - 1) / 2) * 62, y: c.y + 24, item: it.item || it.type, stype: it.type, price: this.priceOf(it), state: 0 });
       });

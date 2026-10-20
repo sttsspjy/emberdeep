@@ -148,6 +148,8 @@ function runBot(opts) {
     }
   }
   const rec = { turn: {}, clears: [], bossTimes: [], dmgBy: {}, downedBy: [], dealtStrata: [], heal: {}, dmgByS: {}, spawns: {}, offers: {}, relicsBy: {}, goldIn: 0, roomDmg: 0, dmgStrata: [], healSrc: 'other' };
+  rec.evoAt = null; // { s: stratum, lvl: team level } when hero 0 takes its evolution
+  const p0id = w.players.keys().next().value;
   // wrap hurtPlayer to attribute the damage that landed (armor, shield and dodge already applied) to the source foe
   const hurt0 = w.hurtPlayer;
   w.hurtPlayer = function (p, amount, src) {
@@ -250,6 +252,7 @@ function runBot(opts) {
     w.update(dt);
     for (const ev of w.fx) {
       if (ev.t === 'room') rec.roomDmg = 0;
+      if (ev.t === 'evolve' && ev.pid === p0id && !rec.evoAt) rec.evoAt = { s: w.stratum, lvl: w.level };
       if (ev.t === 'bossSpawn') bossStart = w.time;
       if (ev.t === 'bossDown') { rec.bossTimes[w.stratum] = Math.round(w.time - bossStart); log.push(`  boss ${ev.type} down in ${(w.time - bossStart).toFixed(0)}s (t=${U.fmtTime(w.time)}, lvl ${w.level})`); }
       if (ev.t === 'clear' && !ev.trial && w.room && (w.room.type === 'combat' || w.room.type === 'elite')) rec.clears.push({ s: w.stratum, type: w.room.type, t: Math.round(w.roomTime * 10) / 10, d: Math.round(100 * rec.roomDmg / Math.max(1, w.players.values().next().value.maxHp)) / 100 });
@@ -270,6 +273,7 @@ function runBot(opts) {
   return { state: w.state, victory: w.victory, stratum: w.stratum, time: w.time, level: w.level, kills: w.run.kills, relics: p0.relics.length, log, sum, hp: p0.hp | 0, maxHp: p0.maxHp,
     rooms: { visited: w.run.roomsVisited, total: w.run.roomsTotal }, lightAtBoss: w.run.lightAtBoss.slice(), strata, light: w.light / w.lightMax,
     clears: rec.clears, dmgByS: rec.dmgByS, spawns: rec.spawns, heal: rec.heal, offers: rec.offers, relicsBy: rec.relicsBy, goldIn: rec.goldIn, dmgStrata: rec.dmgStrata, bossTimes: rec.bossTimes.slice(), turn: rec.turn, dmgBy: rec.dmgBy, downedBy: rec.downedBy, dealtStrata: rec.dealtStrata,
+    evoAt: rec.evoAt, aff: ED.PATH_IDS.map(k => ED.pathAffinity(p0.boons, k)).sort((a, b) => b - a),
     endRoom: w.room ? w.room.type : '', evo: p0.stats.evo || null, gates: ED.gatePaths(p0.boons), boonCount: Object.values(p0.boons).reduce((a, b) => a + b, 0), keystones: Object.keys(p0.boons).filter(id => ED.BOONS[id].key).length };
 }
 
@@ -310,6 +314,12 @@ function summarize(results) {
   const sumBy = (key) => { const o = {}; for (const r of results) for (const k in r[key]) o[k] = (o[k] || 0) + r[key][k] / n; return o; };
   const fmtO = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => k + ' ' + v.toFixed(1)).join(', ');
   lines.push(`offers/run: ${fmtO(sumBy('offers'))} | relics by room: ${fmtO(sumBy('relicsBy'))} | gold earned ${Math.round(avg(results.map(r => r.goldIn)))}`);
+  // build pacing: total offers, when the evolution lands (stratum / team level quartiles), evolved share of the runs that reach stratum IV, affinity spread
+  const qs = (a) => { a = a.slice().sort((x, y) => x - y); return a.length ? [0.25, 0.5, 0.75].map(q => a[Math.min(a.length - 1, Math.floor(q * a.length))]).join(' ') : '-'; };
+  const evolved = results.filter(r => r.evoAt), reachIV = results.filter(r => r.stratum >= 4), pct = (a, b) => (b ? Math.round(100 * a / b) : 0);
+  const avgOffers = avg(results.map(r => Object.values(r.offers).reduce((a, b) => a + b, 0)));
+  const deep = (r, t) => r.aff.filter(v => v >= t).length, spread = (f) => [0, 1, 2, 3].map(k => pct(results.filter(r => f(r) === k).length, n)).join('/');
+  lines.push(`pacing: offers/run ${f1(avgOffers)} (${f1(avgOffers / Math.max(1, avg(results.map(r => r.stratum))))} per stratum) | evolved ${pct(evolved.length, n)}% (${ED.PATH_IDS.map(k => k + " " + results.filter(r => r.evo === k).length).join(", ")}) at stratum [${qs(evolved.map(r => r.evoAt.s))}] team lvl [${qs(evolved.map(r => r.evoAt.lvl))}] | of ${reachIV.length} runs reaching IV: evolved ${pct(reachIV.filter(r => r.evo).length, reachIV.length)}% (by IV entry ${pct(reachIV.filter(r => r.evoAt && r.evoAt.s < 4).length, reachIV.length)}%) | affinity median top3 [${[0, 1, 2].map(i => qs(results.map(r => r.aff[i])).split(' ')[1]).join(' ')}] main-path lead (top - 2nd) quartiles [${qs(results.map(r => r.aff[0] - r.aff[1]))}] | runs with 0/1/2/3 paths at aff>=4: ${spread(r => deep(r, 4))}% at aff>=6: ${spread(r => deep(r, 6))}% | gates 0/1/2/3: ${spread(r => r.gates.length)}%`);
   lines.push(`damage taken ${top(dmg, 5).map(([k, v]) => `${k} ${(100 * v / dTot).toFixed(0)}%`).join(', ')}; first downed by ${top(downed, 5).map(([k, v]) => `${k} ${v}`).join(', ')}`);
   return lines.join('\n');
 }

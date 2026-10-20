@@ -1,6 +1,6 @@
 // Boons: level-up choices. mods are added per stack to the stat block (see sim/stats.js).
 // rar: c common, r rare, e epic (keystones), l legendary (evolutions), d duo. need: 'proj' | 'melee' restricts by weapon kind. cls restricts to a hero (class boons live in classboons.js).
-// Path boons: path = owning path, gate (opens the path, 3 gates per hero), key (keystone, needs path affinity >= 3), evo (evolution card), duo [a, b] (needs both gates).
+// Path boons: path = owning path, gate (opens the path, 3 gates per hero), key (keystone, needs path affinity >= KEY_AFFINITY), evo (evolution card), duo [a, b] (needs both gates).
 (function (ED) {
   'use strict';
   ED.PATHS = {
@@ -13,8 +13,8 @@
   };
   ED.PATH_IDS = Object.keys(ED.PATHS);
   ED.MAX_GATES = 3;
-  ED.KEY_AFFINITY = 3; // path affinity a keystone needs
-  ED.EVO_AFFINITY = 5; // path affinity (with its keystone owned) that unlocks the evolution card
+  ED.KEY_AFFINITY = 4; // path affinity a keystone needs
+  ED.EVO_AFFINITY = 8; // path affinity (with its keystone owned) that unlocks the evolution card
 
   const B = ED.BOONS = {
     // ---- neutral ----

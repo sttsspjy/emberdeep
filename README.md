@@ -24,10 +24,10 @@ Aiming is automatic by default. Switch to mouse aiming in Settings. Gamepads als
 
 - Six strata in a fixed order: the Ossuary, Glowmire Grotto, Rimefrost Halls, the Cinderforge, the Drowned Sanctum and the Starless Abyss. Each has its own palette, lighting, hazards, music, enemy roster, boss and elemental weakness.
 - Each stratum is a floor of 12 to 14 rooms: combat rooms, an elite room (two from stratum IV on), a treasure room, a shop, an event shrine (fountain, blood altar, gamble shrine or champion's trial), a rest site and the boss. Every door shows what waits inside before you open it.
-- **Room rewards.** A normal fight pays a boon of one path (the door shows which), gold, a Vigor blessing (+max health), a forge (rank up one boon), lantern oil or a class boon. Elite rooms pay a relic or an epic boon. Rewards appear in the middle of the room once it is clear; boons and forges are claimed by each hero, gold, oil and relics are shared.
-- **Rest sites** have a campfire (heal 35%) and an anvil (forge one boon); each hero uses one of them. **Shops** sell relics, an epic boon, a healing draught, lantern oil and a forge.
+- **Room rewards.** A normal fight pays a boon of one path (the door shows which), gold, a Vigor blessing (+max health), a forge (rank up one boon), lantern oil or a class boon. Elite rooms usually pay a relic and sometimes an epic boon. Rewards appear in the middle of the room once it is clear; boons and forges are claimed by each hero, gold, oil and relics are shared.
+- **Rest sites** have a campfire (heal 35%) and, in strata I, III and V, an anvil (forge one boon); each hero uses one of them. **Shops** sell relics, a healing draught, lantern oil and one build item: an epic boon in strata I, III and V, a forge in strata II, IV and VI. The bosses of strata III and V also grant an epic boon.
 - **Relics** are run-long items from elite rooms, chests, shops, shrines and bosses.
-- You level up from kills and gain a boon at each level. Offers open only when the room is safe. Playing alone, the world waits while the boon cards are open (and while paused).
+- You level up from kills and gain a boon at every second level (2, 4, 6, ...). Offers open only when the room is safe. Playing alone, the world waits while the boon cards are open (and while paused).
 - A winning descent is designed to take 22 to 32 minutes.
 
 ### The lantern and Dread
@@ -56,8 +56,8 @@ Boons belong to six **paths**. A hero follows at most **three** paths per run. A
 | **Blood** | Physical | Sustain by risk: heal from kills, hit harder when hurt, trade health for skill damage. |
 | **Spirit** | Physical | Companions: wisps and orbiting blades fight for you, and bonds share your element. |
 
-- **Keystone:** at affinity 3 a path can offer its keystone, a build-defining epic boon.
-- **Evolution:** at affinity 5 with the keystone, your next offers include the path's legendary weapon evolution. One evolution per run.
+- **Keystone:** at affinity 4 a path can offer its keystone, a build-defining epic boon.
+- **Evolution:** at affinity 8 with the keystone, your next offers include the path's legendary weapon evolution. A path holds 9 to 11 ranks, so this takes a real commitment. One evolution per run.
 - **Duo boons:** owning the gates of two paths unlocks boons that combine them (Thermal Shock, Plasma, Superconductor, Hemorrhage, Static Edge, Serrated Frost, Soulfire, Spirit Feast).
 - **Forge:** picking a forge card ranks an owned boon up by one.
 - A room that rewards "a boon of Pyre" offers Pyre boons (or the Pyre gate, if you have not opened that path). Level-ups offer neutral boons, boons of your paths, keystones, duos and your hero's class boons. The start of a descent lets you choose your first path from three gates.
