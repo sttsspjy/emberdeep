@@ -522,7 +522,8 @@
     const Rn = R();
     for (const s of F.stains) { const w = s.r * 3.6; c.globalAlpha = s.a * Math.min(1, s.life / 2); c.drawImage(s.spr, s.x - w / 2, s.y - w * 0.31 + 2, w, w * 0.62); }
     c.globalAlpha = 1;
-    let nl = 0;
+    let nl = 0, rot = false;
+    const m = c.getTransform(), S = m.a, bx = m.e, by = m.f; // base transform: rotated rects set a full matrix
     for (const p of F.parts) {
       const k = p.life / p.max;
       if (p.lt && nl < 14) { nl++; Rn.light(p.x, p.y - p.z, p.ltr, p.lt, 0.75 * Math.min(1, k * 1.5)); }
@@ -530,11 +531,17 @@
       c.globalAlpha = p.kind === 'smoke' ? k * 0.35 : p.kind === 'ash' ? Math.min(1, k * 2) * 0.8 : Math.min(1, k * 1.5);
       c.fillStyle = p.color;
       const sz = p.kind === 'smoke' ? p.size * (2 - k) : p.size * (0.4 + 0.6 * k);
-      if (p.kind === 'shard') { c.save(); c.translate(p.x, p.y - p.z); c.rotate(p.rot); c.fillRect(-sz, -sz * 0.5, sz * 2, sz); c.restore(); }
-      else if (p.kind === 'ash') { c.save(); c.translate(p.x, p.y - p.z); c.rotate(p.rot); c.fillRect(-sz, -sz * 0.4, sz * 2, sz * 0.8); c.restore(); }
-      else if (p.kind === 'smoke') { c.drawImage(Rn.glowSprite(p.color), p.x - sz * 1.6, p.y - p.z - sz * 1.6, sz * 3.2, sz * 3.2); }
+      if (p.kind === 'shard' || p.kind === 'ash') {
+        const co = Math.cos(p.rot) * S, si = Math.sin(p.rot) * S; rot = true;
+        c.setTransform(co, si, -si, co, p.x * S + bx, (p.y - p.z) * S + by);
+        if (p.kind === 'shard') c.fillRect(-sz, -sz * 0.5, sz * 2, sz); else c.fillRect(-sz, -sz * 0.4, sz * 2, sz * 0.8);
+        continue;
+      }
+      if (rot) { c.setTransform(S, 0, 0, S, bx, by); rot = false; }
+      if (p.kind === 'smoke') { c.drawImage(Rn.glowSprite(p.color), p.x - sz * 1.6, p.y - p.z - sz * 1.6, sz * 3.2, sz * 3.2); }
       else { c.beginPath(); c.arc(p.x, p.y - p.z, sz, 0, TAU); c.fill(); }
     }
+    if (rot) c.setTransform(S, 0, 0, S, bx, by);
     c.globalAlpha = 1;
     // dying foes: the posed snapshot (white silhouette for the first frames); spirit-family ghosts are drawn additively in drawGlow instead
     for (const g of F.ghosts) {
@@ -589,6 +596,7 @@
         c.moveTo(p.x - sz * 1.5, p.y); c.lineTo(p.x + sz * 1.5, p.y); c.moveTo(p.x, p.y - sz * 1.5); c.lineTo(p.x, p.y + sz * 1.5); c.stroke();
       }
     }
+    const gm = c.getTransform(), gS = gm.a, gX = gm.e, gY = gm.f;
     for (const p of F.parts) {
       if (!p.add) continue;
       const k = p.life / p.max;
@@ -606,7 +614,8 @@
         c.globalAlpha = Math.min(1, k * 1.6) * fl; c.fillStyle = p.color; c.fillRect(p.x - p.size * 0.5, p.y - p.z - p.size * 0.5, p.size, p.size);
         Rn.glow(c, p.x, p.y - p.z, p.size * 3, p.color, 0.6);
       } else if (p.kind === 'shard') {
-        c.save(); c.translate(p.x, p.y - p.z); c.rotate(p.rot); c.fillStyle = p.color; c.fillRect(-p.size, -p.size * 0.4, p.size * 2, p.size * 0.8); c.restore();
+        const co = Math.cos(p.rot) * gS, si = Math.sin(p.rot) * gS;
+        c.setTransform(co, si, -si, co, p.x * gS + gX, (p.y - p.z) * gS + gY); c.fillStyle = p.color; c.fillRect(-p.size, -p.size * 0.4, p.size * 2, p.size * 0.8); c.setTransform(gS, 0, 0, gS, gX, gY);
       } else {
         const sz = p.size * (0.4 + 0.6 * k);
         c.fillStyle = p.color; c.beginPath(); c.arc(p.x, p.y - p.z, sz, 0, TAU); c.fill();
@@ -654,21 +663,17 @@
     return dashChecked[key];
   }
 
+  // Damage numbers: one blit of a baked sprite (Render.numSprite) scaled to the animated size.
   F.drawTexts = (c) => {
     const Rn = R();
-    c.textAlign = 'center'; c.textBaseline = 'middle'; c.lineJoin = 'round';
     for (const t of F.texts) {
       const k = t.life / t.max, age = t.max - t.life;
       const pop = t.pop ? 1 + 0.75 * Math.exp(-age * 15) * (t.crit ? 1.3 : 1) : 1;
       const sc = t.crit ? pop * (1 + 0.07 * Math.sin(age * 42) * Math.exp(-age * 5)) : pop;
-      const a = Math.min(1, k * 2.2);
-      const fs = Math.round(t.size * sc);
+      const a = Math.min(1, k * 2.2), fs = t.size * sc;
       if (t.crit) { c.globalCompositeOperation = 'lighter'; Rn.glow(c, t.x, t.y, fs * 1.7, t.color, 0.5 * a); c.globalCompositeOperation = 'source-over'; }
-      c.globalAlpha = a;
-      c.font = `800 ${fs}px "Alegreya Sans", system-ui, sans-serif`;
-      c.lineWidth = t.crit ? 4 : 3; c.strokeStyle = t.crit ? 'rgba(40,10,0,0.95)' : 'rgba(0,0,0,0.85)'; c.strokeText(t.s, t.x, t.y);
-      c.fillStyle = t.color; c.fillText(t.s, t.x, t.y);
-      if (t.crit) { c.fillStyle = 'rgba(255,255,255,0.4)'; c.save(); c.beginPath(); c.rect(t.x - fs * 3, t.y - fs * 0.6, fs * 6, fs * 0.55); c.clip(); c.fillText(t.s, t.x, t.y); c.restore(); }
+      const sp = Rn.numSprite(t.s, t.color, t.size, t.crit), q = fs / sp.fs;
+      c.globalAlpha = a; c.drawImage(sp.cv, t.x + sp.x * q, t.y + sp.y * q, sp.w * q, sp.h * q);
     }
     c.globalAlpha = 1;
   };

@@ -1,5 +1,5 @@
 // World renderer: camera, cached room art, coloured light accumulation, zones, props, entities, projectiles and the
-// hand-off to the WebGL post pass. The world is drawn to an offscreen canvas (R.wctx) when post is active, else straight
+// hand-off to the WebGL post pass. The world is drawn to one of two alternating offscreen canvases when post is active, else straight
 // to the visible canvas (R.ctx); either way R.ctx ends the frame as the layer the HUD draws on.
 (function (ED) {
   'use strict';
@@ -10,13 +10,13 @@
   let lightCv, lctx, vignette, shadowCv, rimCv, rimCtx, lightN = 0;
   const lights = [], rimSrc = [], glowQ = [], rimOut = { dx: 0, dy: 0, col: '', s: 0 };
   let rimN = 0; // live entries of rimSrc (filled by last frame's lighting pass)
+  const worlds = [], wctxs = []; let wi = 0, wPrev = false; // two world canvases: post reads the previous frame's while the next is drawn, so nothing waits on the canvas just drawn
   let nl = 0, ng = 0, stN = 0, shDX = 0, shDY = 0; // lights/glows queued this frame (stN: status lights); shadow skew away from the nearest light
 
   R.init = (canvas) => {
     R.canvas = canvas;
     R.ctx = canvas.getContext('2d', { alpha: true });
-    R.world = document.createElement('canvas');
-    R.wctx = R.world.getContext('2d', { alpha: false });
+    for (let i = 0; i < 2; i++) { const w = document.createElement('canvas'); worlds.push(w); wctxs.push(w.getContext('2d', { alpha: false })); }
     lightCv = document.createElement('canvas');
     lctx = lightCv.getContext('2d');
     rimCv = document.createElement('canvas'); rimCtx = rimCv.getContext('2d');
@@ -42,7 +42,8 @@
     R.dpr = dpr;
     R.canvas.width = Math.round(cssW * dpr); R.canvas.height = Math.round(cssH * dpr);
     R.W = R.canvas.width; R.H = R.canvas.height;
-    R.world.width = R.W; R.world.height = R.H;
+    for (const w of worlds) { w.width = R.W; w.height = R.H; }
+    wPrev = false;
     R.scale = Math.min(R.W / ED.CONST.VIEW_W, R.H / ED.CONST.VIEW_H);
     const div = R.quality === 'low' ? 5 : 3;
     lightCv.width = Math.ceil(R.W / div); lightCv.height = Math.ceil(R.H / div);
@@ -107,18 +108,21 @@
     else { const k = Math.min(1, dt * 8); R.cam.x += (tx - R.cam.x) * k; R.cam.y += (ty - R.cam.y) * k; }
   };
 
-  // Target context for this frame's world drawing: the offscreen canvas when post is active, else the visible one.
+  // Target context for this frame's world drawing: an offscreen canvas (alternating) when post is active, else the visible one.
   R.beginWorld = () => {
     R.posting = R.usePost();
-    if (R.posting && (R.world.width !== R.W || R.world.height !== R.H)) { R.world.width = R.W; R.world.height = R.H; }
-    return R.posting ? R.wctx : R.ctx;
+    if (!R.posting) { wPrev = false; return R.ctx; }
+    if (worlds[0].width !== R.W || worlds[0].height !== R.H) { for (const w of worlds) { w.width = R.W; w.height = R.H; } wPrev = false; }
+    wi ^= 1;
+    return wctxs[wi];
   };
-  // Hands the finished world to post; the visible canvas is left transparent for the HUD (or holds the world on fallback).
+  // Hands the finished world to post, which shows the previous frame's canvas (one frame of added latency; the first frame after a reset uses the current one); the visible canvas is left transparent for the HUD (or holds the world on fallback).
   R.endWorld = (o) => {
     if (!R.posting) return;
     const c = R.ctx, t0 = performance.now(); c.setTransform(1, 0, 0, 1, 0, 0);
-    if (ED.Post.render(R.world, o)) c.clearRect(0, 0, R.W, R.H);
-    else { c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.drawImage(R.world, 0, 0); }
+    if (ED.Post.render(wPrev ? worlds[wi ^ 1] : worlds[wi], o)) c.clearRect(0, 0, R.W, R.H);
+    else { c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.drawImage(worlds[wi], 0, 0); }
+    wPrev = true;
     R.stats.post += performance.now() - t0;
     R.posting = false;
   };
@@ -373,15 +377,17 @@
       if (room.doors[d] < 0) continue;
       const r = ED.Dungeon.doorRect(room, d);
       const x0 = r.x0 * T, y0 = r.y0 * T, x1 = (r.x1 + 1) * T, y1 = (r.y1 + 1) * T;
-      const pulse = 0.55 + Math.sin(t * 4) * 0.2;
-      c.fillStyle = 'rgba(14,8,6,0.92)'; c.fillRect(x0, y0, x1 - x0, y1 - y0);
-      const bar = (a, b, c2, d2) => {
-        c.strokeStyle = '#1a1412'; c.lineWidth = 4.2; c.beginPath(); c.moveTo(a, b); c.lineTo(c2, d2); c.stroke();
-        c.strokeStyle = '#6a5a50'; c.lineWidth = 2.4; c.stroke();
-        c.strokeStyle = 'rgba(255,255,255,0.22)'; c.lineWidth = 0.8; c.beginPath(); c.moveTo(a - 0.8, b); c.lineTo(c2 - 0.8, d2); c.stroke();
-      };
-      if (d === 'n' || d === 's') { for (let x = x0 + 8; x < x1; x += 12) bar(x, y0, x, y1); }
-      else { for (let y = y0 + 8; y < y1; y += 12) bar(x0, y, x1, y); }
+      const pulse = 0.55 + Math.sin(t * 4) * 0.2, w = x1 - x0, h = y1 - y0, ns = d === 'n' || d === 's';
+      const ds = sprite('dr' + (ns ? 'h' : 'v') + w + '|' + h, 0, 0, w, h, false, (g) => { // dark gate with iron bars, baked per size
+        g.fillStyle = 'rgba(14,8,6,0.92)'; g.fillRect(0, 0, w, h);
+        const bar = (a, b, c2, d2) => {
+          g.strokeStyle = '#1a1412'; g.lineWidth = 4.2; g.beginPath(); g.moveTo(a, b); g.lineTo(c2, d2); g.stroke();
+          g.strokeStyle = '#6a5a50'; g.lineWidth = 2.4; g.stroke();
+          g.strokeStyle = 'rgba(255,255,255,0.22)'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(a - 0.8, b); g.lineTo(c2 - 0.8, d2); g.stroke();
+        };
+        if (ns) { for (let x = 8; x < w; x += 12) bar(x, 0, x, h); } else { for (let y = 8; y < h; y += 12) bar(0, y, w, y); }
+      });
+      c.drawImage(ds.cv, x0, y0, ds.w, ds.h);
       R.light((x0 + x1) / 2, (y0 + y1) / 2, 70, P.accent, 0.35 * pulse);
       R.emit((x0 + x1) / 2, (y0 + y1) / 2, 42, P.accent, 0.5 * pulse);
     }
@@ -393,8 +399,9 @@
   const spr = new Map(), txtCache = new Map();
   let sprPx = 0, sprGen = 0, bakeLeft = 0, bS = 1, bX = 0, bY = 0;
   const SPR_PX_MAX = 16e6, BAKE_PER_FRAME = 10, NF_FIRE = 8, NF_POISON = 16;
-  function sprClear() { spr.clear(); txtCache.clear(); sprPx = 0; sprGen++; }
-  if (typeof document !== 'undefined' && document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => txtCache.clear()); // text baked with a fallback face is rebuilt once the webfont arrives
+  const numC = new Map();
+  function sprClear() { spr.clear(); txtCache.clear(); numC.clear(); sprPx = 0; sprGen++; }
+  if (typeof document !== 'undefined' && document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => { txtCache.clear(); numC.clear(); }); // text baked with a fallback face is rebuilt once the webfont arrives
   // Bakes paint(g) into a canvas covering the box [x0,x1] x [y0,y1] of the painter's local space (add: additive compositing, so the blit equals drawing the parts additively).
   // Returns { cv, x, y, w, h }: the draw rectangle in the same local space (1 texel = 1 device pixel at R.scale).
   function bake(x0, y0, x1, y1, add, paint) {
@@ -1609,6 +1616,25 @@
     txtCache.set(key, s);
     return s;
   }
+  // Floating damage number baked once per (string, colour, size, crit) at 1.25x its base size; FX.drawTexts scales it to the animated size. Sprite origin = text centre, .fs = baked font size.
+  R.numSprite = (str, color, size, crit) => {
+    const bs = Math.round(size * 1.25), key = bs + (crit ? 'c' : 'n') + color + str;
+    let s = numC.get(key);
+    if (s) return s;
+    if (!mctx) mctx = document.createElement('canvas').getContext('2d');
+    const font = '800 ' + bs + 'px "Alegreya Sans", system-ui, sans-serif'; mctx.font = font;
+    const hw = mctx.measureText(str).width / 2 + bs * 0.4, hh = bs * 0.75;
+    s = bake(-hw, -hh, hw, hh, false, (g) => {
+      g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+      g.lineWidth = crit ? 4 : 3; g.strokeStyle = crit ? 'rgba(40,10,0,0.95)' : 'rgba(0,0,0,0.85)'; g.strokeText(str, 0, 0);
+      g.fillStyle = color; g.fillText(str, 0, 0);
+      if (crit) { g.fillStyle = 'rgba(255,255,255,0.4)'; g.save(); g.beginPath(); g.rect(-bs * 3, -bs * 0.6, bs * 6, bs * 0.55); g.clip(); g.fillText(str, 0, 0); g.restore(); }
+    });
+    s.fs = bs;
+    if (numC.size > 160) numC.clear();
+    numC.set(key, s);
+    return s;
+  };
   // HP bar (frame, dark base, fill, sheen) baked per colour / width / fill step (half pixels); sprite origin = bar left-top.
   function barSprite(bc, w, fw2) {
     return sprite('hb' + bc + '|' + w + '|' + fw2, -1, -1, w + 1, 3, false, (g) => {
