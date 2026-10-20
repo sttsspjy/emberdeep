@@ -19,6 +19,7 @@
     { id: 'attunement', name: 'Ember Attunement', icon: 'ember', tier: 3, desc: r => `+${10 * r}% embers earned`, step: '+10% embers earned', costs: [80, 160, 255, 385] },
     { id: 'favor', name: "Merchant's Favor", icon: 'scroll', tier: 3, desc: r => (r >= 2 ? 'Shops stock +1 relic and are 20% cheaper' : 'Shops are 10% cheaper'), step: 'Cheaper shops (rank 2: +1 relic)', costs: [95, 225] },
     { id: 'secondwind', name: 'Second Wind', icon: 'feather', tier: 4, desc: r => (r ? `Once per descent, revive at ${r >= 2 ? 70 : 40}% health` : 'Once per descent, revive'), step: 'Revive once per descent', costs: [240, 560] },
+    { id: 'deepwick', name: 'Deep Wick', icon: 'lantern', tier: 1, desc: r => `+${10 * r}% lantern light`, step: '+10% lantern light', costs: [40, 90, 160] },
   ];
   ED.UPGRADE_IDX = ED.U.indexer(ED.UPGRADES.map(u => u.id));
 
@@ -80,6 +81,9 @@
     { id: 'manyfaces', name: 'Many Faces', desc: 'Unlock all six heroes', icon: 'mask', reward: 60, check: p => ED.CLASS_IDS.every(c => ED.Save.classUnlocked(p, c)) },
     { id: 'archivist', name: 'Archivist', desc: 'Unlock every relic', icon: 'scroll', reward: 100, check: p => ED.RELIC_IDS.every(r => ED.Save.relicUnlocked(p, r)) },
     { id: 'hearthkeeper', name: 'Hearthkeeper', desc: 'Buy 25 Hearth upgrade ranks', icon: 'ember', reward: 80, check: p => p.up.reduce((a, b) => a + b, 0) >= 25 },
+    { id: 'evolved', name: 'Evolved', desc: 'Evolve a weapon', icon: 'wing', reward: 40, check: (p, run) => run && run.evolved },
+    { id: 'intothedark', name: 'Into the Dark', desc: 'Defeat a boss while Lightless', icon: 'eye', reward: 50, check: (p, run) => run && run.lightlessBoss },
+    { id: 'cartographer', name: 'Cartographer', desc: 'Clear every room of a stratum', icon: 'scroll', reward: 40, check: (p, run) => run && run.fullClear },
   ];
   ED.DEED_IDX = ED.U.indexer(ED.DEEDS.map(d => d.id));
 

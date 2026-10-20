@@ -1,6 +1,6 @@
 // Authoritative simulation. Runs on the host (or locally in solo play); clients mirror it from snapshots.
 // Split across files by prototype extension: combat.js (damage, attacks, skills), ai.js (enemy brains),
-// bosses.js (boss scripts), rooms.js (encounters, props, interactions).
+// bosses.js (boss scripts), rooms.js (encounters, props, interactions). This file also owns the lantern and dread tiers.
 (function (ED) {
   'use strict';
   const U = ED.U, T = ED.CONST.TILE, D = ED.Dungeon;
@@ -67,7 +67,7 @@
   // Hero movement: walking, dash, skill-move, hazards and pull zones.
   Sim.movePlayer = (p, inp, dt, room, locked, zones) => {
     if (p.downed || p.dead) { p.moving = false; return; }
-    const speed = p.stats.moveSpeed;
+    const speed = p.stats.moveSpeed * (ED.Stats.moveRate ? ED.Stats.moveRate(p) : 1);
     if (p.skillMove) {
       const m = p.skillMove;
       Sim.moveCircle(p, m.dx * m.speed * dt, m.dy * m.speed * dt, room, locked, false);
@@ -89,6 +89,7 @@
     let sp = speed;
     if (hz === 'water') sp *= 0.62;
     if (hz === 'poison') sp *= 0.85;
+    if (zones) for (const z of zones) if (z.kind === 'mire' && z.team === 1 && U.dist2(z.x, z.y, p.x, p.y) < z.r * z.r) { sp *= 0.55; break; }
     const accel = hz === 'ice' ? 3.2 : 22;
     p.vx = (p.vx || 0) + (mx * sp - (p.vx || 0)) * Math.min(1, accel * dt);
     p.vy = (p.vy || 0) + (my * sp - (p.vy || 0)) * Math.min(1, accel * dt);
@@ -115,22 +116,32 @@
     this.time = 0; this.roomTime = 0; this.state = 'play'; this.stratum = 0; this.floorSeed = 0;
     this.locked = false; this.enc = null; this.boss = null; this.pendingStratum = null;
     this.run = { kills: 0, roomsCleared: 0, elitesKilled: 0, bosses: 0, bossCount: 0, revives: 0, maxGold: 0, maxRelics: 0, flawlessBoss: false,
+      lightlessBoss: false, fullClear: false, roomsVisited: 0, roomsTotal: 0, lightAtBoss: [],
       embers: { rooms: 0, elites: 0, bosses: 0, victory: 0 } };
+    this.light = 100; this.lightMax = 100; this.dread = Object.assign({}, W.DREAD[0]); // lantern and dread tier (see updateLantern)
+    this.gloomT = null; this.gloomOut = false; this.bossTier = 0; this.fullClearDone = 0;
     this.roomState = {};
     this.endTimer = -1; this.result = null; this.victory = false;
     this.flowT = 0; this.flow = null; this.tick = 0; this.waitMsg = '';
     this.tutorial = !!opts.tutorial;
     for (const pd of opts.players) this.addPlayer(pd);
   };
-  W.LANTERN = 1200;
-  W.xpFor = (L) => Math.round(20 + 8 * (L - 1) + 0.8 * (L - 1) * (L - 1));
+  W.xpFor = (L) => Math.round(24 + 10 * (L - 1) + 1.2 * (L - 1) * (L - 1));
+  // Dread tiers by light fraction (>= 0.5, >= 0.25, > 0, 0): foe hp/damage, elite chance, wave budget, room gold & embers.
+  W.DREAD = [
+    { tier: 0, hp: 1, dmg: 1, elite: 0, wave: 1, gold: 1 },
+    { tier: 1, hp: 1.12, dmg: 1.12, elite: 0.1, wave: 1.05, gold: 1.5 },
+    { tier: 2, hp: 1.25, dmg: 1.25, elite: 0.2, wave: 1.15, gold: 2 },
+    { tier: 3, hp: 1.4, dmg: 1.4, elite: 0.35, wave: 1.25, gold: 2 },
+  ];
+  W.DRAIN_SECS = [270, 280, 290, 300, 310, 320]; // seconds for a full unupgraded lantern to burn out, per stratum
 
   W.prototype.emit = function (ev) { this.fx.push(ev); };
   W.prototype.partySize = function () { return Math.max(1, this.players.size); };
   W.prototype.partyHpMul = function () { return 1 + 0.65 * (this.partySize() - 1); };
   W.prototype.alive = function (p) { return p && !p.downed && !p.dead; };
   W.prototype.alivePlayers = function () { const out = []; for (const p of this.players.values()) if (!p.downed && !p.dead) out.push(p); return out; };
-  W.prototype.hostiles = function () { let n = 0; for (const e of this.enemies) if (e.hp > 0) n++; return n; };
+  W.prototype.hostiles = function () { let n = 0; for (const e of this.enemies) if (e.hp > 0 && !e.def.gloom) n++; return n; };
 
   W.prototype.nearestPlayer = function (x, y) {
     let best = null, bd = Infinity;
@@ -144,7 +155,7 @@
   W.prototype.nearestEnemy = function (x, y, maxD, exclude) {
     let best = null, bd = maxD * maxD;
     for (const e of this.enemies) {
-      if (e.hp <= 0 || e.spawnT > 0 || (exclude && exclude.has(e.id))) continue;
+      if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed || (exclude && exclude.has(e.id))) continue;
       const d = U.dist2(x, y, e.x, e.y);
       if (d < bd) { bd = d; best = e; }
     }
@@ -162,7 +173,7 @@
       invuln: 0, hurtT: 0, downed: false, bleed: 0, revive: 0, dead: false,
       phoenixUsed: false, secondWind: 0, swPct: 0.4, angelUsed: false, aegisT: 0, guardCd: 0, guardT: 0,
       frozenCd: 0, tranceT: 0, wallT: 0, critStacks: 0, atkCount: 0, chaliceKills: 0, chaliceHp: 0, bonusHp: 0,
-      picks: 0, offer: null, offerT: 0, epicNext: false, rerolls: 0, claimed: {},
+      picks: 0, offer: null, offerT: 0, rerolls: 0, claimed: {}, shield: 0,
       kills: 0, dealt: 0, hitThisBoss: false, dashHit: null, dashTrail: 0, orbHit: {}, wispT: 0,
       remote: !!pd.remote, connected: true,
     };
@@ -193,10 +204,14 @@
   W.prototype.buildOf = function (p) { return { pid: p.pid, boons: Object.assign({}, p.boons), relics: p.relics.slice(), chaliceHp: p.chaliceHp, bonusHp: p.bonusHp }; };
   W.prototype.sendBuild = function (p) { this.emit({ t: 'build', b: this.buildOf(p) }); };
 
+  // Heals up to max HP; healing beyond it feeds the blood shield (cap maxHp x bloodShield). Returns the HP actually restored.
   W.prototype.healPlayer = function (p, amt, silent) {
-    if (!p || p.downed || p.dead || p.hp >= p.maxHp) return 0;
-    const v = Math.min(p.maxHp - p.hp, amt * p.stats.healMul);
+    if (!p || p.downed || p.dead) return 0;
+    const raw = amt * p.stats.healMul, cap = p.maxHp * (p.stats.bloodShield || 0);
+    if (p.hp >= p.maxHp && !(cap > 0 && raw > 0)) return 0;
+    const v = Math.min(p.maxHp - p.hp, raw);
     p.hp += v;
+    if (cap > 0 && raw > v) p.shield = Math.min(cap, (p.shield || 0) + raw - v);
     if (!silent && v >= 1) this.emit({ t: 'heal', pid: p.pid, v: Math.round(v), x: p.x, y: p.y });
     return v;
   };
@@ -244,6 +259,8 @@
     this.floor = D.generate(s, this.floorSeed);
     this.roomState = {};
     for (const r of this.floor.rooms) this.roomState[r.id] = { visited: false, known: false, cleared: false, props: null };
+    this.run.roomsTotal += this.floor.rooms.length;
+    this.lightMax = this.lanternMax(); this.light = this.lightMax; this.updateDread();
     this.allies.length = 0;
     for (const p of this.players.values()) {
       if (p.dead) { p.dead = false; p.downed = false; p.hp = Math.round(p.maxHp * 0.3); p.invuln = 2; }
@@ -262,7 +279,10 @@
     this.roomEpoch = (this.roomEpoch || 0) + 1;
     const room = this.room = this.floor.rooms[id];
     const rs = this.roomState[id];
+    if (!rs.visited) this.run.roomsVisited++;
     rs.visited = true; rs.known = true;
+    this.gloomT = null; this.gloomOut = false;
+    if (room.type === 'boss' && !rs.cleared) { this.bossTier = this.dread.tier; this.run.lightAtBoss.push(Math.round(this.light / this.lightMax * 100) / 100); }
     for (const d in room.doors) if (room.doors[d] >= 0) this.roomState[room.doors[d]].known = true;
     let k = 0;
     const pos = [];
@@ -278,6 +298,7 @@
     this.roomTime = 0;
     this.locked = false;
     if (!rs.cleared) this.beginEncounter(room, rs);
+    this.checkFullClear();
     this.computeFlow();
     this.emit({ t: 'room', id, from: fromDir || '', pos, locked: this.locked, ep: this.roomEpoch });
   };
@@ -308,6 +329,8 @@
       roomsCleared: this.run.roomsCleared, elitesKilled: this.run.elitesKilled, bosses: this.run.bosses, bossCount: this.run.bossCount,
       embers: Object.assign({}, this.run.embers), pact: this.pact, party: this.partySize(), level: this.level,
       revives: this.run.revives, flawlessBoss: this.run.flawlessBoss, maxGold: this.run.maxGold, maxRelics: this.run.maxRelics, players,
+      evolved: [...this.players.values()].some(p => !!p.evo), lightlessBoss: this.run.lightlessBoss, fullClear: this.run.fullClear,
+      roomsVisited: this.run.roomsVisited, roomsTotal: this.run.roomsTotal, lightAtBoss: this.run.lightAtBoss.slice(),
     };
   };
 
@@ -321,14 +344,12 @@
       return;
     }
     this.tick++; this.time += dt; this.roomTime += dt;
-    // The lantern: a round can never exceed 20 minutes. Running out is a retreat that keeps every ember earned.
-    if (this.time >= W.LANTERN && this.state === 'play') { this.retreat = true; this.endRun(false); return; }
-    if (this.time >= W.LANTERN - 180 && !this.lanternWarned) { this.lanternWarned = true; this.emit({ t: 'lantern', left: 180 }); }
     if (this.pendingStratum) {
       this.pendingStratum.t -= dt;
       if (this.pendingStratum.t <= 0) { const s = this.pendingStratum.s; this.pendingStratum = null; this.enterStratum(s); }
       return;
     }
+    this.updateLantern(dt);
     for (const p of this.players.values()) this.updatePlayer(p, dt);
     this.flowT -= dt;
     if (this.flowT <= 0) { this.computeFlow(); this.flowT = 0.25; }
@@ -512,10 +533,11 @@
       let target = null, bd = Infinity;
       for (const p of this.players.values()) {
         if (p.downed || p.dead) continue;
-        if (pk.kind === 'heart' && p.hp >= p.maxHp) continue;
+        const heal = pk.kind === 'heart' || pk.kind === 'orb';
+        if (heal && p.hp >= p.maxHp) continue;
         const d = U.dist2(pk.x, pk.y, p.x, p.y);
-        const range = (pk.kind === 'heart' ? 34 : p.stats.pickupR);
-        if ((d < range * range || (safe && pk.kind !== 'heart' && pk.t > 0.6)) && d < bd) { bd = d; target = p; }
+        const range = (heal ? 34 : p.stats.pickupR);
+        if ((d < range * range || (safe && !heal && pk.t > 0.6)) && d < bd) { bd = d; target = p; }
       }
       if (target && pk.t > 0.25) {
         const d = Math.sqrt(bd) || 1, sp = 260 + pk.t * 120;
@@ -533,6 +555,65 @@
     if (pk.kind === 'gold') { const v = Math.max(1, Math.round(pk.val * (1 + p.stats.gold))); this.gold += v; this.emit({ t: 'gold', v, pid: p.pid }); }
     else if (pk.kind === 'xp') { this.addXp(pk.val * (1 + p.stats.xp)); this.emit({ t: 'xp', pid: p.pid }); }
     else if (pk.kind === 'heart') { this.healPlayer(p, p.maxHp * 0.22 + 6); }
+    else if (pk.kind === 'orb') { this.healPlayer(p, p.maxHp * pk.val); }
+  };
+
+  // ---------------- lantern and dread ----------------
+  // Best Deep Wick rank in the party sets the lantern capacity.
+  W.prototype.lanternMax = function () {
+    let rank = 0;
+    for (const p of this.players.values()) rank = Math.max(rank, (p.meta.up && p.meta.up[ED.UPGRADE_IDX.deepwick]) || 0);
+    return 100 * (1 + 0.1 * rank);
+  };
+
+  // Burns the lantern outside boss rooms (the boss room freezes the tier) and, Lightless, stalks regular rooms with a Gloom.
+  W.prototype.updateLantern = function (dt) {
+    const room = this.room;
+    if (!room) return;
+    if (room.type !== 'boss') {
+      this.light = Math.max(0, this.light - dt * 100 / (W.DRAIN_SECS[this.stratum - 1] || 300));
+      this.updateDread();
+    }
+    if (this.dread.tier === 3 && room.type !== 'boss' && room.type !== 'start' && !this.gloomOut && ED.ENEMIES.gloom) {
+      this.gloomT = (this.gloomT === null ? 4 : this.gloomT) - dt;
+      if (this.gloomT <= 0) { this.gloomOut = true; this.spawnGloom(); }
+    } else if (this.dread.tier < 3) this.gloomT = null;
+  };
+
+  // Recomputes the dread tier from the light fraction; w.dread carries the multipliers read at spawn and at room rewards.
+  W.prototype.updateDread = function () {
+    const f = this.lightMax > 0 ? this.light / this.lightMax : 0;
+    const tier = f >= 0.5 ? 0 : f >= 0.25 ? 1 : f > 0 ? 2 : 3;
+    if (tier === this.dread.tier) return;
+    this.dread = Object.assign({}, W.DREAD[tier]);
+    this.emit({ t: 'dread', tier });
+  };
+
+  W.prototype.addLight = function (amt, x, y) {
+    this.light = Math.min(this.lightMax, this.light + amt);
+    this.updateDread();
+    this.emit({ t: 'oil', x, y, v: amt });
+  };
+
+  // Telegraphed spawn at the floor point farthest from every living hero.
+  W.prototype.spawnGloom = function () {
+    const room = this.room, heroes = this.alivePlayers();
+    let best = null, bd = -1;
+    for (let ty = 2; ty < room.h - 1; ty++) for (let tx = 1; tx < room.w - 1; tx++) {
+      if (room.tiles[ty * room.w + tx] !== 0) continue;
+      const x = (tx + 0.5) * T, y = (ty + 0.5) * T;
+      let d = Infinity;
+      for (const p of heroes) d = Math.min(d, U.dist2(x, y, p.x, p.y));
+      if (d > bd) { bd = d; best = { x, y }; }
+    }
+    if (best) this.addZone({ kind: 'spawn', x: best.x, y: best.y, r: ED.ENEMIES.gloom.r + 4, dur: 1.5, type: 'gloom', elite: false, gloom: true });
+  };
+
+  // Marks the stratum fully explored once every non-boss room has been cleared (non-combat rooms clear on entry).
+  W.prototype.checkFullClear = function () {
+    if (this.fullClearDone === this.stratum) return;
+    for (const r of this.floor.rooms) if (r.type !== 'boss' && !this.roomState[r.id].cleared) return;
+    this.fullClearDone = this.stratum; this.run.fullClear = true;
   };
 
 })(globalThis.ED || (globalThis.ED = {}));

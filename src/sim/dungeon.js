@@ -10,26 +10,39 @@
   const D = ED.Dungeon = { DIRS, OPP };
 
   const COMBAT_SIZES = [[17, 13], [19, 13], [21, 13], [21, 15], [23, 15], [19, 15], [25, 15]];
-  const SIZE = { start: [15, 11], treasure: [13, 11], shop: [17, 13], event: [15, 11], boss: [27, 19] };
-  const COMBAT_COUNT = [3, 3, 2, 2, 2, 1]; // kept short so a full descent fits the 20-minute lantern with room to spare
+  const SIZE = { start: [15, 11], treasure: [13, 11], shop: [17, 13], event: [15, 11], rest: [15, 11], boss: [27, 19] };
+  const COMBAT_COUNT = [5, 5, 6, 6, 6, 6]; // normal combat rooms per stratum
+  const ELITE_COUNT = [1, 1, 1, 2, 2, 2]; // elite combat rooms per stratum
   const EVENTS = ['fountain', 'altar', 'gamble', 'trial'];
+  const PATHS = ['pyre', 'rime', 'storm', 'steel', 'blood', 'spirit'];
+  const REWARD_ODDS = [['boon', 50], ['gold', 12], ['vigor', 10], ['forge', 10], ['oil', 10], ['class', 8]]; // normal combat reward weights
+  const BOUND = 4; // grid cells span -BOUND..BOUND on both axes
+  const MIN_BOSS_DIST = 4;
+  const ATTEMPTS = 120;
 
   D.isSolid = (t, locked) => t === 1 || t === 2 || (t === 5 && locked);
   D.blocksShots = (t, locked) => t === 1 || t === 2 || (t === 5 && locked);
   D.walkable = (t) => t === 0 || t === 4 || t === 5;
 
-  D.generate = (stratum, seed) => {
-    const rng = U.RNG(seed ^ (stratum * 7919));
-    const nCombat = COMBAT_COUNT[stratum - 1] || 3;
-    const specials = ['treasure', 'event'];
-    if (stratum >= 2) specials.push('shop');
-    const total = 1 + nCombat + specials.length + 1;
-    let cells = null;
-    for (let attempt = 0; attempt < 50 && !cells; attempt++) cells = grow(rng, total);
+  const key = (x, y) => x + ',' + y;
+  const neighborCount = (cells, c) => Object.keys(DIRS).filter(d => cells[key(c.gx + DIRS[d][0], c.gy + DIRS[d][1])]).length;
+
+  // Floor layout: a tree of `total` cells from (0,0) whose boss is a dead end at BFS distance >= MIN_BOSS_DIST.
+  // Late attempts force a spine of that depth first, which always satisfies it (the deepest node of a tree is a dead end).
+  function layout(rng, total) {
+    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+      const cells = grow(rng, total, attempt >= ATTEMPTS / 2 ? MIN_BOSS_DIST : 0);
+      const lay = cells && analyse(rng, cells);
+      if (lay) return lay;
+    }
+    return analyse(null, combCells(total));
+  }
+
+  // BFS distance from the start for every cell; boss = farthest qualifying dead end (ties broken by rng).
+  function analyse(rng, cells) {
     const list = Object.values(cells);
-    // distances from start
-    const key = (x, y) => x + ',' + y;
-    const dist = {}; const q = [list[0]]; dist[key(0, 0)] = 0;
+    const dist = {};
+    const q = [list[0]]; dist[key(0, 0)] = 0;
     while (q.length) {
       const c = q.shift();
       for (const d in DIRS) {
@@ -37,16 +50,39 @@
         if (cells[nk] && dist[nk] === undefined) { dist[nk] = dist[key(c.gx, c.gy)] + 1; q.push(cells[nk]); }
       }
     }
-    const neighbors = (c) => Object.keys(DIRS).filter(d => cells[key(c.gx + DIRS[d][0], c.gy + DIRS[d][1])]).length;
-    const others = list.slice(1);
-    const deadEnds = others.filter(c => neighbors(c) === 1).sort((a, b) => dist[key(b.gx, b.gy)] - dist[key(a.gx, a.gy)] || rng.next() - 0.5);
-    const boss = deadEnds.length ? deadEnds[0] : others.sort((a, b) => dist[key(b.gx, b.gy)] - dist[key(a.gx, a.gy)])[0];
+    for (const c of list) c.dist = dist[key(c.gx, c.gy)];
+    let ends = list.slice(1).filter(c => neighborCount(cells, c) === 1 && c.dist >= MIN_BOSS_DIST);
+    if (!ends.length) return null;
+    if (rng) ends = rng.shuffle(ends);
+    ends.sort((a, b) => b.dist - a.dist);
+    return { cells, list, boss: ends[0] };
+  }
+
+  // Deterministic last resort: a spine along +x with teeth above and below (still a tree, inside the bounds).
+  function combCells(total) {
+    const cells = {};
+    const add = (x, y) => { if (Object.keys(cells).length < total) cells[key(x, y)] = { gx: x, gy: y }; };
+    for (let x = 0; x <= BOUND; x++) add(x, 0);
+    for (const y of [1, -1, 2, -2]) for (const x of [1, 3]) add(x, y);
+    add(-1, 0);
+    return cells;
+  }
+
+  D.generate = (stratum, seed) => {
+    const rng = U.RNG(seed ^ (stratum * 7919));
+    const nCombat = COMBAT_COUNT[stratum - 1] || 5, nElite = ELITE_COUNT[stratum - 1] || 1;
+    const specials = ['treasure', 'shop', 'event', 'rest'];
+    const total = 2 + specials.length + nCombat + nElite;
+    const { cells, list, boss } = layout(rng, total);
+    const others = list.slice(1).filter(c => c !== boss);
     boss.type = 'boss';
     list[0].type = 'start';
-    const pool = deadEnds.filter(c => c !== boss).concat(rng.shuffle(others.filter(c => c !== boss && neighbors(c) !== 1)));
-    for (const sp of specials) { const c = pool.find(x => !x.type); if (c) c.type = sp; }
-    for (const c of list) if (!c.type) c.type = 'combat';
-    // boss room must not hang off a special room directly behind the start: fine either way, but keep start safe.
+    // utility rooms prefer dead ends, elite rooms prefer distance >= 3
+    const isLeaf = (c) => neighborCount(cells, c) === 1;
+    const pool = rng.shuffle(others.filter(isLeaf)).concat(rng.shuffle(others.filter(c => !isLeaf(c))));
+    for (const sp of specials) pool.shift().type = sp;
+    const near = pool.filter(c => c.dist < 3).sort((a, b) => b.dist - a.dist);
+    pool.filter(c => c.dist >= 3).concat(near).forEach((c, i) => { c.type = i < nElite ? 'elite' : 'combat'; });
     const rooms = [];
     list.forEach((c, i) => { c.id = i; });
     for (const c of list) {
@@ -57,22 +93,53 @@
       }
       rooms.push(room);
     }
+    assignRewards(rooms, stratum, seed);
     for (const r of rooms) carveDoors(r);
     for (const r of rooms) { finalizeInterior(r, stratum); decorate(r, stratum); }
     return { stratum, seed, rooms, start: 0, boss: boss.id };
   };
 
-  function grow(rng, total) {
+  // Rewards are fixed per floor and shown before entry. Normal combat: boon:<path> (each path <= 2x), gold, vigor, forge, oil, class
+  // with >= 3 boon rooms and >= 1 oil. Elite: relic / epic, alternating from a random start.
+  function assignRewards(rooms, stratum, seed) {
+    const rng = U.RNG((seed ^ 0x5bd1e995) + stratum * 15485863);
+    const combat = rooms.filter(r => r.type === 'combat'), elites = rooms.filter(r => r.type === 'elite');
+    for (const r of combat) r.reward = rng.weighted(REWARD_ODDS, o => o[1])[0];
+    const count = (k) => combat.filter(r => r.reward === k).length;
+    while (count('boon') < 3) rng.pick(combat.filter(r => r.reward !== 'boon' && !(r.reward === 'oil' && count('oil') === 1))).reward = 'boon';
+    if (!count('oil')) {
+      const spare = combat.filter(r => r.reward !== 'boon');
+      rng.pick(spare.length ? spare : combat).reward = 'oil'; // all-boon floor has >= 5 boon rooms, so one can turn into oil
+    }
+    const used = {};
+    for (const r of combat) {
+      if (r.reward !== 'boon') continue;
+      const path = rng.weighted(PATHS, p => ((used[p] || 0) >= 2 ? 0 : (used[p] || 0) === 0 ? 3 : 1));
+      used[path] = (used[path] || 0) + 1;
+      r.reward = 'boon:' + path;
+    }
+    const flip = rng.chance(0.5) ? 1 : 0;
+    elites.forEach((r, i) => { r.reward = (i + flip) % 2 ? 'relic' : 'epic'; });
+  }
+
+  // Grid growth: each new cell touches exactly one existing cell. `spine` > 0 first lays a straight corridor of that length.
+  function grow(rng, total, spine) {
     const cells = {};
-    const key = (x, y) => x + ',' + y;
     cells[key(0, 0)] = { gx: 0, gy: 0 };
-    let list = [cells[key(0, 0)]];
+    const list = [cells[key(0, 0)]];
+    if (spine) {
+      const d = rng.pick(Object.keys(DIRS));
+      for (let i = 1; i <= spine; i++) {
+        const c = { gx: DIRS[d][0] * i, gy: DIRS[d][1] * i };
+        cells[key(c.gx, c.gy)] = c; list.push(c);
+      }
+    }
     let guard = 0;
     while (list.length < total && guard++ < 2000) {
       const base = rng.pick(list);
       const d = rng.pick(Object.keys(DIRS));
       const nx = base.gx + DIRS[d][0], ny = base.gy + DIRS[d][1];
-      if (Math.abs(nx) > 3 || Math.abs(ny) > 3 || cells[key(nx, ny)]) continue;
+      if (Math.abs(nx) > BOUND || Math.abs(ny) > BOUND || cells[key(nx, ny)]) continue;
       let occ = 0;
       for (const dd in DIRS) if (cells[key(nx + DIRS[dd][0], ny + DIRS[dd][1])]) occ++;
       if (occ !== 1) continue;
@@ -85,7 +152,7 @@
   }
 
   function buildRoom(c, stratum, seed, rng) {
-    const size = c.type === 'combat' ? rng.pick(COMBAT_SIZES) : SIZE[c.type];
+    const size = c.type === 'combat' || c.type === 'elite' ? rng.pick(COMBAT_SIZES) : SIZE[c.type];
     const w = size[0], h = size[1];
     const tiles = new Uint8Array(w * h);
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
@@ -93,6 +160,7 @@
     }
     return {
       id: c.id, gx: c.gx, gy: c.gy, type: c.type, w, h, tiles, seed, stratum,
+      dist: c.dist, danger: 1 + 0.05 * c.dist, reward: null,
       doors: { n: -1, s: -1, e: -1, w: -1 },
       decor: [], torches: [],
       event: c.type === 'event' ? EVENTS[seed % EVENTS.length] : null,
@@ -128,12 +196,27 @@
   };
   D.center = (room) => ({ x: room.w * T / 2, y: (room.h / 2 + 0.5) * T });
 
+  // Nearest open floor to (wx,wy) whose 3x3 surroundings are all floor (props must never sit inside pillars, chasms or hazards).
+  D.clearSpot = (room, wx, wy) => {
+    const cx = Math.floor(wx / T), cy = Math.floor(wy / T);
+    const free = (x, y) => x >= 1 && y >= 2 && x < room.w - 1 && y < room.h - 1 && room.tiles[y * room.w + x] === 0;
+    for (let r = 0; r < 8; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+      let ok = true;
+      for (let j = -1; j <= 1 && ok; j++) for (let i = -1; i <= 1; i++) if (!free(cx + dx + i, cy + dy + j)) { ok = false; break; }
+      if (ok) return r === 0 ? { x: wx, y: wy } : { x: (cx + dx + 0.5) * T, y: (cy + dy + 0.5) * T };
+    }
+    return { x: wx, y: wy };
+  };
+
   // ---------------- interior layout ----------------
   const PATTERNS = ['open', 'pillars4', 'grid', 'center', 'chasm', 'pools', 'cross', 'scatter', 'pools', 'pillars4'];
+  const ELITE_PATTERNS = ['pillars4', 'grid', 'center', 'chasm', 'pools', 'cross', 'scatter']; // elites always get cover
 
   function finalizeInterior(room, stratum) {
     const rng = U.RNG(room.seed);
     if (room.type === 'combat') room.pattern = rng.pick(PATTERNS);
+    else if (room.type === 'elite') room.pattern = rng.pick(ELITE_PATTERNS);
     else if (room.type === 'boss') room.pattern = rng.pick(['bossPillars', 'open', 'bossPools']);
     else room.pattern = 'open';
     const backup = room.tiles.slice();

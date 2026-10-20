@@ -4,7 +4,7 @@ const { runBot, ED } = require('./sim.js');
 const S = ED.Save, U = ED.U;
 const skill = +(process.argv[2] || 0.7), seed0 = +(process.argv[3] || 1);
 const p = S.defaultProfile();
-let total = 0, runs = 0; const marks = {};
+let total = 0, runs = 0, rooms = 0, roomsTotal = 0; const marks = {};
 const mark = (k) => { if (!marks[k]) marks[k] = `run ${runs} @ ${(total / 3600).toFixed(2)}h`; };
 const HUMAN = 1.35; // menus, reading, shopping, walking: humans take longer than the bot
 while (runs < 140) {
@@ -18,10 +18,14 @@ while (runs < 140) {
   const r = runBot({ seed: seed0 * 1000 + runs * 13, n: 1, cls: [cls], weapon: wi, skill, up: p.up.slice(), mastery: ml, pact, tutorial: p.stats.runs < 2 });
   runs++; total += r.time * HUMAN + 45; // + time in the Hearth between runs
   const sum = r.sum; sum.cls = cls;
+  rooms += r.rooms.visited; roomsTotal += r.rooms.total;
   const res = S.applyRun(p, sum); if (process.env.V) console.log(`  run ${runs} ${cls} s${sum.stratum}${sum.victory ? " WIN" : ""} +${res.rewards.total} embers (${res.rewards.lines.map(l => l[0].slice(0, 6) + ":" + l[1]).join(" ")}) deeds +${res.deeds.reduce((a, d) => a + d.reward, 0)} ups ${p.up.reduce((a, b) => a + b, 0)}`);
   if (sum.bosses & 1) mark('first Bone Warden kill');
   if (sum.bosses & 4) mark('first Rimeheart kill');
   if (sum.victory) mark('first victory');
+  if (p.deeds & (1 << ED.DEED_IDX.evolved)) mark('first evolution');
+  if (p.deeds & (1 << ED.DEED_IDX.cartographer)) mark('first full clear');
+  if (p.deeds & (1 << ED.DEED_IDX.intothedark)) mark('first Lightless boss');
   if (p.pactWin >= 3) mark('won pact 3');
   if (p.pactWin >= 6) mark('won pact 6');
   // spend: cheapest available upgrade or relic first
@@ -43,4 +47,4 @@ while (runs < 140) {
 }
 console.log('\nMILESTONES'); for (const k in marks) console.log(' ', k.padEnd(26), marks[k]);
 console.log(' mastery', ED.CLASS_IDS.map((c, i) => c + ':' + ED.masteryLevel(p.mastery[i])).join(' '));
-console.log(' total', (total / 3600).toFixed(2), 'h over', runs, 'runs');
+console.log(' total', (total / 3600).toFixed(2), 'h over', runs, 'runs; rooms visited', Math.round(100 * rooms / Math.max(1, roomsTotal)) + '%');
