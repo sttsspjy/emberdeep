@@ -14,7 +14,9 @@ North-star: a co-op browser roguelite where builds are chosen, not rolled. Rules
 - [x] New enemies and attack patterns, no untelegraphed teleports
 - [x] Visual overhaul: colored lighting, bloom, richer tiles and effects
 - [x] Balance pass with bots (win rates on target)
-- [ ] Dual code review (Opus + Sonnet) and fixes
+- [x] Dual code review (Opus + Sonnet)
+- [ ] Review fixes: bugs and cleanup
+- [ ] Review fixes: sustain, build pacing, lantern cost, Gloom, power curve
 - [ ] Balance: fight length and explored-room share into target
 - [ ] Your playtest
 - [ ] Merge to main
