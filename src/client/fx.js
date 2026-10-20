@@ -559,6 +559,23 @@
     for (const s of F.slashes) Rn.light(s.x + Math.cos(s.a) * s.r * 0.6, s.y + Math.sin(s.a) * s.r * 0.6, s.r * 1.1, s.color, 0.5 * (s.life / s.max));
   };
 
+  // Additive line particles (streaks, sparks) are collected per (colour, width step 0.5, alpha step 1/8) and stroked as one path each; the pass is additive, so order does not matter.
+  const lineB = new Map();
+  function lineAdd(col, w, a, x0, y0, x1, y1) {
+    const wq = Math.max(0.5, Math.round(w * 2) / 2), aq = Math.round(a * 8) / 8, key = col + wq + '|' + aq;
+    let b = lineB.get(key); if (!b) lineB.set(key, b = { col, w: wq, a: aq, n: 0, p: [] });
+    const i = b.n * 4; b.p[i] = x0; b.p[i + 1] = y0; b.p[i + 2] = x1; b.p[i + 3] = y1; b.n++;
+  }
+  function lineFlush(c) {
+    c.lineCap = 'round';
+    for (const b of lineB.values()) {
+      if (!b.n) continue;
+      c.globalAlpha = b.a; c.strokeStyle = b.col; c.lineWidth = b.w; c.beginPath();
+      for (let i = 0, m = b.n * 4; i < m; i += 4) { c.moveTo(b.p[i], b.p[i + 1]); c.lineTo(b.p[i + 2], b.p[i + 3]); }
+      c.stroke(); b.n = 0;
+    }
+    if (lineB.size > 80) lineB.clear();
+  }
   // Emissive pass (context is in 'lighter'): slashes, rings, glowing particles, streaks, pops, bolts, ghosts.
   F.drawGlow = (c, t) => {
     const Rn = R(), Sp = ED.Sprites;
@@ -596,32 +613,34 @@
         c.moveTo(p.x - sz * 1.5, p.y); c.lineTo(p.x + sz * 1.5, p.y); c.moveTo(p.x, p.y - sz * 1.5); c.lineTo(p.x, p.y + sz * 1.5); c.stroke();
       }
     }
-    const gm = c.getTransform(), gS = gm.a, gX = gm.e, gY = gm.f;
+    const gm = c.getTransform(), gS = gm.a, gX = gm.e, gY = gm.f; let grot = false;
     for (const p of F.parts) {
       if (!p.add) continue;
       const k = p.life / p.max;
-      c.globalAlpha = Math.min(1, k * 1.5);
+      if (grot && p.kind !== 'shard' && p.kind !== 'streak' && p.kind !== 'spark') { c.setTransform(gS, 0, 0, gS, gX, gY); grot = false; }
       if (p.kind === 'streak') {
-        const sp = Math.hypot(p.vx, p.vy), l = Math.min(26, sp * 0.05 + 2), ux = sp > 1 ? p.vx / sp : 0, uy = sp > 1 ? p.vy / sp : 0;
-        c.strokeStyle = p.color; c.lineWidth = p.size * (0.4 + 0.6 * k); c.lineCap = 'round';
-        c.beginPath(); c.moveTo(p.x, p.y - p.z); c.lineTo(p.x - ux * l, p.y - p.z - uy * l); c.stroke();
-        c.strokeStyle = '#ffffff'; c.lineWidth = p.size * 0.35; c.beginPath(); c.moveTo(p.x, p.y - p.z); c.lineTo(p.x - ux * l * 0.5, p.y - p.z - uy * l * 0.5); c.stroke();
+        const sp = Math.hypot(p.vx, p.vy), l = Math.min(26, sp * 0.05 + 2), ux = sp > 1 ? p.vx / sp : 0, uy = sp > 1 ? p.vy / sp : 0, a = Math.min(1, k * 1.5), y = p.y - p.z;
+        lineAdd(p.color, p.size * (0.4 + 0.6 * k), a, p.x, y, p.x - ux * l, y - uy * l);
+        lineAdd('#ffffff', p.size * 0.35, a, p.x, y, p.x - ux * l * 0.5, y - uy * l * 0.5);
       } else if (p.kind === 'spark') {
-        const sp = Math.hypot(p.vx, p.vy), l = Math.min(10, sp * 0.03 + 1), ux = sp > 1 ? p.vx / sp : 0, uy = sp > 1 ? p.vy / sp : 0;
-        c.strokeStyle = p.color; c.lineWidth = p.size; c.lineCap = 'round'; c.beginPath(); c.moveTo(p.x, p.y - p.z); c.lineTo(p.x - ux * l, p.y - p.z - uy * l); c.stroke();
+        const sp = Math.hypot(p.vx, p.vy), l = Math.min(10, sp * 0.03 + 1), ux = sp > 1 ? p.vx / sp : 0, uy = sp > 1 ? p.vy / sp : 0, y = p.y - p.z;
+        lineAdd(p.color, p.size, Math.min(1, k * 1.5), p.x, y, p.x - ux * l, y - uy * l);
       } else if (p.kind === 'ember') {
         const fl = 0.6 + 0.4 * Math.sin(p.rot * 5);
         c.globalAlpha = Math.min(1, k * 1.6) * fl; c.fillStyle = p.color; c.fillRect(p.x - p.size * 0.5, p.y - p.z - p.size * 0.5, p.size, p.size);
         Rn.glow(c, p.x, p.y - p.z, p.size * 3, p.color, 0.6);
       } else if (p.kind === 'shard') {
         const co = Math.cos(p.rot) * gS, si = Math.sin(p.rot) * gS;
-        c.setTransform(co, si, -si, co, p.x * gS + gX, (p.y - p.z) * gS + gY); c.fillStyle = p.color; c.fillRect(-p.size, -p.size * 0.4, p.size * 2, p.size * 0.8); c.setTransform(gS, 0, 0, gS, gX, gY);
+        c.globalAlpha = Math.min(1, k * 1.5); grot = true;
+        c.setTransform(co, si, -si, co, p.x * gS + gX, (p.y - p.z) * gS + gY); c.fillStyle = p.color; c.fillRect(-p.size, -p.size * 0.4, p.size * 2, p.size * 0.8);
       } else {
         const sz = p.size * (0.4 + 0.6 * k);
-        c.fillStyle = p.color; c.beginPath(); c.arc(p.x, p.y - p.z, sz, 0, TAU); c.fill();
+        c.globalAlpha = Math.min(1, k * 1.5); c.fillStyle = p.color; c.beginPath(); c.arc(p.x, p.y - p.z, sz, 0, TAU); c.fill();
         if (sz > 1.6) Rn.glow(c, p.x, p.y - p.z, sz * 3, p.color, 0.35);
       }
     }
+    if (grot) c.setTransform(gS, 0, 0, gS, gX, gY);
+    lineFlush(c);
     c.globalAlpha = 1;
     // lightning
     for (const b of F.bolts) {

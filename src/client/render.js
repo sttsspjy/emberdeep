@@ -6,7 +6,7 @@
   const U = ED.U, T = ED.CONST.TILE, Sp = ED.Sprites;
   const R = ED.Render = { cam: { x: 0, y: 0 }, scale: 2, W: 0, H: 0, dpr: 1, quality: 'high', lightLevel: 1, posting: false, stats: { n: 0, world: 0, post: 0 } };
   const glowCache = {}, lightCache = {}, trailCache = {};
-  const PIX_HIGH = 3.7e6, PIX_LOW = 2.8e6; // canvas pixel caps per quality (2560x1440 = 3.69 MP renders native on High)
+  const PIX_HIGH = 3.7e6, PIX_LOW = 2.8e6, PIX_SOFT = 1.1e6; // canvas pixel caps per quality (2560x1440 = 3.69 MP renders native on High); PIX_SOFT: software-rasterised canvases (no GPU)
   let lightCv, lctx, vignette, shadowCv, rimCv, rimCtx, lightN = 0;
   const lights = [], rimSrc = [], glowQ = [], rimOut = { dx: 0, dy: 0, col: '', s: 0 };
   let rimN = 0; // live entries of rimSrc (filled by last frame's lighting pass)
@@ -32,13 +32,13 @@
   };
 
   R.setQuality = (q) => { R.quality = q; R.resize(); };
-  R.usePost = () => !!(ED.Post && ED.Post.ready && R.quality !== 'low');
+  R.usePost = () => !!(ED.Post && ED.Post.ready && R.quality !== 'low' && !ED.Post.soft); // post on a software GL context costs more than the whole frame
 
   R.resize = () => {
     const cssW = window.innerWidth, cssH = window.innerHeight;
     const low = R.quality === 'low';
     let dpr = Math.min(window.devicePixelRatio || 1, low ? 1 : 1.5);
-    dpr = Math.max(0.6, Math.min(dpr, Math.sqrt((low ? PIX_LOW : PIX_HIGH) / (cssW * cssH)))); // pixel cap: native 2560x1440 on High, 2.8 MP on Low
+    dpr = Math.max(0.5, Math.min(dpr, Math.sqrt((ED.Post && ED.Post.soft ? PIX_SOFT : low ? PIX_LOW : PIX_HIGH) / (cssW * cssH)))); // pixel cap: native 2560x1440 on High, 2.8 MP on Low, 1.1 MP without a GPU
     R.dpr = dpr;
     R.canvas.width = Math.round(cssW * dpr); R.canvas.height = Math.round(cssH * dpr);
     R.W = R.canvas.width; R.H = R.canvas.height;
@@ -52,7 +52,7 @@
     const v = vignette.getContext('2d'), vg = v.createRadialGradient(128, 128, 60, 128, 128, 182);
     vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.55)');
     v.fillStyle = vg; v.fillRect(0, 0, 256, 256);
-    if (ED.Post) { ED.Post.setVisible(R.quality !== 'low'); ED.Post.resize(R.W, R.H); }
+    if (ED.Post) { ED.Post.setVisible(R.quality !== 'low' && !ED.Post.soft); ED.Post.resize(R.W, R.H); }
     ED.Tiles.clear(); sprClear();
   };
 
@@ -240,7 +240,6 @@
     // ---- lighting ----
     c.setTransform(1, 0, 0, 1, 0, 0);
     drawLighting(c, view, room, biome, local, t, ox, oy);
-    if (!R.posting) c.drawImage(vignette, 0, 0, R.W, R.H);
     // ---- emissive pass (unlit, additive: bloom catches it) ----
     c.setTransform(R.scale, 0, 0, R.scale, ox, oy);
     c.globalCompositeOperation = 'lighter';
@@ -517,6 +516,7 @@
     if (e.face < 0) c.scale(-1, 1); // Sp.enemy mirrors itself
     Sp.enemy(c, e, t);
   }
+  R.foeStats = () => { let n = 0; for (const tc of foeTC.values()) for (const g of tc) if (g) n += g.filter(Boolean).length; return { frames: n, px: foePx, mb: +(foePx * 4 / 1048576).toFixed(1), sharedPx: sprPx }; };
   R.drawFoe = (c, e, t, lite) => { c.save(); if (e.face < 0) c.scale(-1, 1); foe(c, e, t, lite); c.restore(); };
   R.sprite = sprite;
   R.bakeBudget = (n) => { bakeLeft = n; }; // frames the shared cache may bake before the next frame resets it
@@ -1597,6 +1597,7 @@
       R.lightAdd(L.x * s + ox, L.y * s + oy, L.r * s, L.c, L.k);
       if (L.k * L.r >= 60) src(L.x, L.y, L.r, L.c, L.k);
     }
+    if (!R.posting) { lctx.globalCompositeOperation = 'source-over'; lctx.globalAlpha = 1; lctx.drawImage(vignette, 0, 0, lightCv.width, lightCv.height); } // vignette (black, alpha) darkens the light buffer: same result as a full-screen overlay at buffer cost
     R.lightEnd(c);
   }
 
@@ -1616,9 +1617,9 @@
     txtCache.set(key, s);
     return s;
   }
-  // Floating damage number baked once per (string, colour, size, crit) at 1.25x its base size; FX.drawTexts scales it to the animated size. Sprite origin = text centre, .fs = baked font size.
+  // Floating damage number baked once per (string, colour, size in half units, crit); FX.drawTexts scales it to the animated size. Sprite origin = text centre, .fs = baked font size.
   R.numSprite = (str, color, size, crit) => {
-    const bs = Math.round(size * 1.25), key = bs + (crit ? 'c' : 'n') + color + str;
+    const bs = Math.round(size * 2) / 2, key = bs + (crit ? 'c' : 'n') + color + str;
     let s = numC.get(key);
     if (s) return s;
     if (!mctx) mctx = document.createElement('canvas').getContext('2d');

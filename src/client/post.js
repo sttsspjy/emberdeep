@@ -5,7 +5,7 @@
 (function (ED) {
   'use strict';
   const U = ED.U;
-  const Post = ED.Post = { ready: false, wanted: false, canvas: null, lost: false, error: '', ms: 0, frames: 0 };
+  const Post = ED.Post = { ready: false, wanted: false, canvas: null, lost: false, error: '', ms: 0, frames: 0, soft: false }; // soft: the GL context is software-rasterised (no GPU)
   const syncBuf = new Uint8Array(4);
   let gl = null, glc = null, quad = null, tex = null, texW = 0, texH = 0, fb = [], qW = 1, qH = 1, P = {};
   const grades = {};
@@ -111,6 +111,8 @@ void main(){
       glc.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;display:none;pointer-events:none';
       gl = glc.getContext('webgl', { alpha: false, antialias: false, depth: false, stencil: false, premultipliedAlpha: false, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
       if (!gl) throw new Error('webgl unavailable');
+      const di = gl.getExtension('WEBGL_debug_renderer_info');
+      Post.soft = /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(di ? String(gl.getParameter(di.UNMASKED_RENDERER_WEBGL)) : '');
       hud.parentNode.insertBefore(glc, hud);
       Post.canvas = glc;
       glc.addEventListener('webglcontextlost', (e) => { e.preventDefault(); Post.ready = false; Post.lost = true; glc.style.display = 'none'; });

@@ -918,9 +918,9 @@
     px.id = 0; px.st = spec.rep[state]; px.aimA = 0; px.t = 0; px.flash = 0; px.frozen = 0; px.exposed = false; px.elite = null; px.face = spec.face ? e.face : 1;
     g.lineWidth = 1.6; g.strokeStyle = OUT; g.lineJoin = 'round'; g.lineCap = 'round';
     if (px.face < 0) g.scale(-1, 1);
+    let h = null;
     baking = true;
-    try { LOOK[def.look](g, px, Sp.foePal(e, tint), Sp.foeTq(spec, state, f), e.r / def.r); } finally { baking = false; }
-    const h = halos.length ? halos : null; halos = null;
+    try { LOOK[def.look](g, px, Sp.foePal(e, tint), Sp.foeTq(spec, state, f), e.r / def.r); h = halos.length ? halos : null; } finally { baking = false; halos = null; }
     return h;
   };
 

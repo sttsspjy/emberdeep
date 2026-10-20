@@ -193,7 +193,7 @@ tools/                    headless balance simulators (Node)
 docs/                     game design spec (rules and numbers), roadmap and agent notes
 ```
 
-All art is drawn procedurally on canvas, and all sound is synthesized with WebAudio, so the game ships no image or audio files. The WebGL post-process (lighting, bloom) is optional: the Low quality setting uses plain 2D.
+All art is drawn procedurally on canvas, and all sound is synthesized with WebAudio, so the game ships no image or audio files. The WebGL post-process (lighting, bloom) is optional: the Low quality setting uses plain 2D, and a browser without GPU acceleration (software WebGL) switches to it automatically at a reduced render resolution.
 
 ### Balance tools
 
