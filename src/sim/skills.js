@@ -4,25 +4,254 @@
   const U = ED.U;
   const W = ED.World.prototype;
 
-  // Called from addPlayer: per-hero skill state.
-  W.initSkills = function (p) { /* no extra fields yet */ };
+  const BULWARK_HALF = 1.309; // ±75°
+  const HAMMER_OUT = 0.55, HAMMER_SPEED = 360, HAMMER_BACK = 420;
+  const NO_HIT = { has: () => true, add: () => {} }; // hammer pr.hit: updateProjectiles never collides with it, updateHammers does
+
+  // Area hit on foes (kind 'skill': infusions and hemomancy apply; ground blasts ignore guard). Calls onHit(e, dealt) per foe struck.
+  function blast(world, p, x, y, r, dmg, knock, onHit) {
+    for (const e of world.enemies) {
+      if (e.hp <= 0 || e.spawnT > 0) continue;
+      const d = Math.hypot(e.x - x, e.y - y);
+      if (d >= r + e.r) continue;
+      const dealt = world.hitEnemy(e, dmg, { p, kind: 'skill', knock, kx: (e.x - x) / (d || 1), ky: (e.y - y) / (d || 1), noGuard: true, x, y });
+      if (onHit) onHit(e, dealt);
+    }
+  }
+
+  // Target point of a ranged skill: the client's {x, y} clamped to range, else the aim direction at 200.
+  function targetPoint(p, a, data, range) {
+    let dx = Math.cos(a) * 200, dy = Math.sin(a) * 200;
+    if (typeof data.x === 'number' && typeof data.y === 'number' && isFinite(data.x) && isFinite(data.y)) { dx = data.x - p.x; dy = data.y - p.y; }
+    const d = Math.hypot(dx, dy);
+    if (d > range) { dx *= range / d; dy *= range / d; }
+    return { x: p.x + dx, y: p.y + dy };
+  }
+
+  // Called from addPlayer: per-hero skill state (p.stats is not built yet).
+  W.initSkills = function (p) {
+    p.bulwarkT = 0; p.bulwarkEnd = 0; p.blocks = 0; p.blockSeen = {};
+    p.stealthT = 0; p.ambush = false; p.ambushT = 0;
+    p.hammers = []; p.sipN = 4; p.sipT = 0;
+  };
 
   // Called from hurtPlayer before damage lands. Return true when a skill fully blocks the hit.
-  W.skillBlock = function (p, amount, src) { return false; };
+  // Bulwark blocks hits whose origin lies within ±75° of p.face (all sides with mirrorguard); hazards never.
+  W.skillBlock = function (p, amount, src) {
+    if (!(p.bulwarkT > 0) || !src || src.hazard) return false;
+    const pr = src.pr, foe = src.e;
+    let ox, oy;
+    if (typeof src.x === 'number' && typeof src.y === 'number') { ox = src.x; oy = src.y; }
+    else if (pr) { ox = pr.x; oy = pr.y; }
+    else if (foe) { ox = foe.x; oy = foe.y; }
+    else return false;
+    if (U.dist2(ox, oy, p.x, p.y) < 16) return false; // no usable direction
+    const st = p.stats;
+    if (!st.mirrorguard && Math.abs(U.angDiff(p.face, Math.atan2(oy - p.y, ox - p.x))) > BULWARK_HALF) return false;
+    // repeated hits from one non-projectile source (contact, beams) count once per 0.6 s
+    if (!pr) {
+      const key = foe ? foe.id : 0;
+      if (foe) foe.contactCd = Math.max(foe.contactCd || 0, 1.0);
+      if ((p.blockSeen[key] || 0) > this.time) return true;
+      p.blockSeen[key] = this.time + 0.6;
+    }
+    if (p.blocks < 6) p.blocks++;
+    if (pr && pr.team === 1) { // reflect: the projectile turns friendly and flies back
+      pr.team = 0; pr.owner = p.pid; pr.vx = -pr.vx; pr.vy = -pr.vy;
+      pr.dmg = (15 + st.weapon.dmg) * (st.mirrorguard ? 2.5 : 1);
+      pr.hit = null; pr.life = 2; pr.pierce = 0; pr.src = null; pr.crit = false;
+      pr.explode = null; pr.cloud = null; pr.boom = null; pr.homing = 0; pr.turn = 0; pr.accel = 0; pr.burn = 0; pr.healAlly = 0;
+    }
+    this.emit({ t: 'block', x: Math.round(p.x), y: Math.round(p.y), k: 'bulwark' });
+    return true;
+  };
 
   // Called every tick from updatePlayerBuild for a living, standing hero.
-  W.updateSkills = function (p, dt) { /* no timed skill state yet */ };
+  W.updateSkills = function (p, dt) {
+    if (p.bulwarkT > 0) {
+      if (this.time - p.bulwarkEnd > 0.25) p.bulwarkT = 0; // stale: the hero was down, no bash
+      else if ((p.bulwarkT -= dt) <= 0) { p.bulwarkT = 0; this.bulwarkBash(p); }
+    }
+    if (p.stealthT > 0) p.stealthT = Math.max(0, p.stealthT - dt);
+    if (p.ambush && (p.ambushT -= dt) <= 0) p.ambush = false;
+    if (p.hammers.length) this.updateHammers(p, dt);
+  };
+
+  // Bulwark release: cone r70 arc 1.6 toward p.face, +25% per counted block, knock 220 (bastion stuns 1.2 s).
+  W.bulwarkBash = function (p) {
+    const st = p.stats, w = st.weapon, a = p.face, r = 70 * (1 + st.area * 0.5), arc = 1.6;
+    const dmg = (20 + 1.2 * w.dmg) * (1 + 0.25 * p.blocks);
+    for (const e of this.enemies) {
+      if (e.hp <= 0 || e.spawnT > 0) continue;
+      const d = Math.hypot(e.x - p.x, e.y - p.y);
+      if (d - e.r > r) continue;
+      const ang = Math.atan2(e.y - p.y, e.x - p.x);
+      if (Math.abs(U.angDiff(a, ang)) > arc / 2 + Math.atan2(e.r, Math.max(d, 1))) continue;
+      this.hitEnemy(e, dmg, { p, kind: 'skill', knock: 220, kx: Math.cos(ang), ky: Math.sin(ang) });
+      if (st.bastion && e.hp > 0 && !e.boss) e.stun = Math.max(e.stun, 1.2);
+    }
+    p.blocks = 0;
+    this.emit({ t: 'cone', x: Math.round(p.x), y: Math.round(p.y), r: Math.round(r), a, arc });
+  };
+
+  // Judgment hammers: flight out for 0.55 s, then back to the hero; each leg hits a foe once (own hit set, pr.hit is blanked).
+  W.throwHammer = function (p, a) {
+    const st = p.stats, area = 1 + st.area * 0.5;
+    const pr = this.spawnProj({ team: 0, kind: 'hammer', x: p.x, y: p.y - 4, a, speed: HAMMER_SPEED, r: 18 * area, dmg: 0, life: 2.2, pierce: 999, owner: p.pid });
+    pr.hit = NO_HIT;
+    p.hammers.push({ pr, leg: 0, t: 0, hit: new Set(), x: p.x, y: p.y, room: this.room });
+  };
+
+  W.updateHammers = function (p, dt) {
+    const st = p.stats, dmg = 18 + 1.4 * st.weapon.dmg, keep = [];
+    for (const h of p.hammers) {
+      if (h.room !== this.room) continue; // room changed: projectiles were cleared
+      if (this.projs.indexOf(h.pr) < 0) { // wall hit on the way out: turn around from the last free position
+        if (h.leg !== 0) continue;
+        const a = Math.atan2(p.y - h.y, p.x - h.x);
+        h.pr = this.spawnProj({ team: 0, kind: 'hammer', x: h.x, y: h.y, a, speed: HAMMER_BACK, r: h.pr.r, dmg: 0, life: 2.2, pierce: 999, owner: p.pid });
+        h.pr.hit = NO_HIT; h.leg = 1; h.hit.clear();
+      }
+      const pr = h.pr;
+      h.t += dt;
+      if (h.leg === 0 && h.t >= HAMMER_OUT) { h.leg = 1; h.hit.clear(); }
+      if (h.leg === 1) {
+        const dx = p.x - pr.x, dy = p.y - 4 - pr.y, d = Math.hypot(dx, dy) || 1;
+        if (d < p.r + 8 || h.t > 2.1) { pr.life = 0; continue; }
+        pr.vx = dx / d * HAMMER_BACK; pr.vy = dy / d * HAMMER_BACK;
+      }
+      const sp = Math.hypot(pr.vx, pr.vy) || 1;
+      for (const e of this.enemies) {
+        if (e.hp <= 0 || e.spawnT > 0 || h.hit.has(e.id)) continue;
+        if (U.dist2(pr.x, pr.y, e.x, e.y) > (e.r + pr.r) ** 2) continue;
+        h.hit.add(e.id);
+        e.judged = Math.max(e.judged || 0, 4); e.judgeUntil = this.time + 4; e.judgeOwner = p.pid;
+        this.hitEnemy(e, dmg, { p, kind: 'skill', knock: 90, kx: pr.vx / sp, ky: pr.vy / sp, x: pr.x, y: pr.y });
+      }
+      h.x = pr.x; h.y = pr.y;
+      keep.push(h);
+    }
+    p.hammers = keep;
+  };
+
+  // Meteor: friendly telegraph zone, then impact r95, Burn 50% of the impact, crater; Twin Meteor chains one more.
+  W.castMeteor = function (p, x, y, delay, twin) {
+    const area = 1 + p.stats.area * 0.5;
+    this.addZone({ kind: 'tele', x, y, r: 95 * area, dur: delay, team: 0, owner: p.pid, custom: true,
+      onEnd: (w, z) => {
+        const o = w.players.get(z.owner); if (!o) return;
+        const st = o.stats, dmg = 30 + 3.5 * st.weapon.dmg;
+        blast(w, o, z.x, z.y, z.r, dmg, 220, (e, dealt) => { if (e.hp > 0 && dealt > 0) w.addBurn(e, dealt * 0.5, o); });
+        w.emit({ t: 'boom', x: Math.round(z.x), y: Math.round(z.y), r: Math.round(z.r), k: 'bigfire' });
+        w.addZone({ kind: 'pfire', x: z.x, y: z.y, r: 60 * (1 + st.area * 0.5), dur: st.moltenCore ? 9 : 3, dps: (8 + 0.8 * st.weapon.dmg) * (st.moltenCore ? 2 : 1), owner: o.pid, team: 0 });
+        if (st.twinMeteor && !twin) {
+          const t = w.nearestEnemy(z.x, z.y, 500);
+          if (t) w.castMeteor(o, t.x, t.y, 0.6, true);
+        }
+      } });
+  };
 
   // Called from killEnemy for every slain foe (p = credited hero or null).
-  W.onEnemyKilledSkill = function (e, p, src) { /* no kill reactions yet */ };
+  W.onEnemyKilledSkill = function (e, p, src) {
+    if (e.judgeUntil > this.time) { // Judged foe: heals allies within 160 by 3% max HP; Verdict explodes it
+      for (const q of this.players.values()) if (!q.downed && !q.dead && U.dist2(q.x, q.y, e.x, e.y) < 160 * 160) this.healPlayer(q, q.maxHp * 0.03);
+      const o = this.players.get(e.judgeOwner);
+      if (o && o.stats.verdict) {
+        const r = 70 * (1 + o.stats.area * 0.5);
+        blast(this, o, e.x, e.y, r, 60 + 1.5 * o.stats.weapon.dmg, 90);
+        this.emit({ t: 'boom', x: Math.round(e.x), y: Math.round(e.y), r: Math.round(r), k: 'shock' });
+      }
+    }
+    if (p && src && src.ambush && p.stats.nightsEdge) this.msgs.push({ to: p.pid, t: 'refund', slot: 1 });
+  };
 
-  // data: { x0, y0, x1, y1 } for movement skills (performed by the hero's own client)
-  W.playerSkill = function (p, a, data) {
+  // Soul Siphon: a minion hit heals its owner 1 (token bucket, 4 per second). Called by updateAllies.
+  W.soulSiphon = function (p) {
+    p.sipN = Math.min(4, p.sipN + (this.time - p.sipT) * 4); p.sipT = this.time;
+    if (p.sipN >= 1) { p.sipN--; this.healPlayer(p, 1, true); }
+  };
+
+  // Slot 1 skills. Each returns false to reject the cast (no cost) or an object of extra event fields.
+  const SLOT2 = {
+    bulwark(p, a, data, st) {
+      if (p.bulwarkT > 0) return false;
+      const dur = 1.4 * (st.bastion ? 1.5 : 1);
+      p.face = a; p.bulwarkT = dur; p.bulwarkEnd = this.time + dur; p.blocks = 0; p.blockSeen = {};
+      return {};
+    },
+    rain(p, a, data, st, w, area) {
+      const t = targetPoint(p, a, data, 260);
+      const r = 80 * area * (st.barrage ? 1.4 : 1), dur = 2 + (st.barrage ? 1 : 0), dmg = 4 + 0.45 * w.dmg, hail = !!st.hailthorns;
+      const n = Math.round(dur / 0.25);
+      let k = 0;
+      this.addZone({ kind: 'tele', x: t.x, y: t.y, r, dur: 0.35 + dur, team: 0, owner: p.pid, custom: true,
+        update: (world, z) => {
+          if (z.t < 0.35) return;
+          const o = world.players.get(z.owner); if (!o) return;
+          const tick = k < n && z.t >= 0.35 + 0.25 * k;
+          if (tick) k++;
+          for (const e of world.enemies) {
+            if (e.hp <= 0 || e.spawnT > 0 || U.dist2(e.x, e.y, z.x, z.y) >= (z.r + e.r) ** 2) continue;
+            if (hail) { world.slowEnemy(e, 0.5, 0.3); e.judged = Math.max(e.judged || 0, 0.3); }
+            if (tick) world.hitEnemy(e, dmg, { p: o, kind: 'skill', noGuard: true, x: z.x, y: z.y });
+          }
+        } });
+      return { tx: Math.round(t.x), ty: Math.round(t.y) };
+    },
+    meteor(p, a, data) {
+      const t = targetPoint(p, a, data, 300);
+      this.castMeteor(p, t.x, t.y, 0.9, false);
+      return { tx: Math.round(t.x), ty: Math.round(t.y) };
+    },
+    vanish(p, a, data, st, w, area) {
+      const smoke = !!st.smokescreen, r = 75 * area * (smoke ? 1.4 : 1);
+      p.stealthT = 2.5; p.ambush = true; p.ambushT = 3;
+      this.addZone({ kind: 'tele', x: p.x, y: p.y, r, dur: 3 + (smoke ? 2 : 0), team: 0, owner: p.pid, custom: true,
+        update: (world, z) => {
+          for (const e of world.enemies) {
+            if (e.hp <= 0 || e.spawnT > 0 || U.dist2(e.x, e.y, z.x, z.y) >= (z.r + e.r) ** 2) continue;
+            world.slowEnemy(e, 0.4, 0.3);
+            e.blind = Math.max(e.blind || 0, 0.3);
+            if (smoke) e.judged = Math.max(e.judged || 0, 0.3);
+          }
+        } });
+      for (let i = 0; i < 6; i++) { const an = i * U.TAU / 6; this.emit({ t: 'puff', x: Math.round(p.x + Math.cos(an) * r * 0.5), y: Math.round(p.y + Math.sin(an) * r * 0.5), c: '#8a86a0' }); }
+      return {};
+    },
+    judgment(p, a, data, st) {
+      if (st.twinHammer) { this.throwHammer(p, a - 0.2); this.throwHammer(p, a + 0.2); } else this.throwHammer(p, a);
+      return {};
+    },
+    harvest(p, a, data, st, w, area) {
+      const mine = this.allies.filter(q => q.owner === p.pid);
+      const r = 60 * area, dmg = (24 + 1.8 * w.dmg) * (st.grimHarvest ? 1.5 : 1);
+      for (const m of mine) {
+        blast(this, p, m.x, m.y, r, dmg, 90);
+        this.emit({ t: 'boom', x: Math.round(m.x), y: Math.round(m.y), r: Math.round(r), k: 'bone' });
+      }
+      if (mine.length) { const gone = new Set(mine); this.allies = this.allies.filter(q => !gone.has(q)); this.healPlayer(p, p.maxHp * 0.03 * mine.length); }
+      const n = st.grimHarvest ? 2 : mine.length ? 1 : 2;
+      for (let i = 0; i < n; i++) { const an = a + (i - (n - 1) / 2) * 0.9; this.spawnMinion(p, p.x + Math.cos(an) * 26, p.y + Math.sin(an) * 26, 12); }
+      return {};
+    },
+  };
+
+  // slot 0: data = { x0, y0, x1, y1 } for movement skills (performed by the hero's own client).
+  // slot 1: data = { x, y } target point for Rain of Arrows and Meteor.
+  W.playerSkill = function (p, a, data, slot) {
     if (!p || p.downed || p.dead) return;
-    const st = p.stats, w = st.weapon, skill = ED.CLASSES[p.cls].skill;
+    slot = slot === 1 ? 1 : 0;
+    const cls = ED.CLASSES[p.cls];
+    const skill = slot ? cls.skill2 : cls.skill;
+    if (!skill || (slot && !SLOT2[skill])) return;
+    const st = p.stats, w = st.weapon;
     const area = 1 + st.area * 0.5;
     data = data || {};
-    if (skill === 'charge') {
+    let extra = null;
+    if (slot === 1) {
+      extra = SLOT2[skill].call(this, p, a, data, st, w, area);
+      if (!extra) return;
+    } else if (skill === 'charge') {
       const x0 = data.x0 ?? p.x, y0 = data.y0 ?? p.y, x1 = data.x1 ?? p.x + Math.cos(a) * 150, y1 = data.y1 ?? p.y + Math.sin(a) * 150;
       for (const e of this.enemies) {
         if (e.hp <= 0) continue;
@@ -35,10 +264,10 @@
       if (st.quake) this.addZone({ kind: 'tele', x: x1, y: y1, r: 95 * area, dur: 0.3, team: 0, owner: p.pid, dmg: w.dmg * 2.5, boom: 'shock' });
       p.invuln = Math.max(p.invuln, 0.35);
     } else if (skill === 'volley') {
-      const n = 7 + (st.storm ? 5 : 0), spread = 1.2;
+      const n = 7 + (st.arrowStorm ? 5 : 0), spread = 1.2;
       for (let i = 0; i < n; i++) {
         const ang = a + (i / (n - 1) - 0.5) * spread;
-        this.spawnProj({ team: 0, kind: 'arrow', x: p.x, y: p.y - 4, a: ang, speed: 480, r: 5, dmg: w.dmg * 1.2 * (st.storm ? 1.5 : 1) + 4, life: 0.8, pierce: 1 + st.pierce, owner: p.pid, knock: 60 });
+        this.spawnProj({ team: 0, kind: 'arrow', x: p.x, y: p.y - 4, a: ang, speed: 480, r: 5, dmg: w.dmg * 1.2 * (st.arrowStorm ? 1.5 : 1) + 4, life: 0.8, pierce: 1 + st.pierce, owner: p.pid, knock: 60 });
       }
     } else if (skill === 'nova') {
       const r = 105 * area * (st.combust ? 1.2 : 1);
@@ -66,7 +295,7 @@
     } else if (skill === 'legion') {
       for (let i = 0; i < 3; i++) { const an = a + (i - 1) * 0.9; this.spawnMinion(p, p.x + Math.cos(an) * 26, p.y + Math.sin(an) * 26, 12); }
     }
-    this.onSkillCast(p, 0);
-    this.emit({ t: 'skill', pid: p.pid, k: skill, a: Math.round(a * 100) / 100, x: Math.round(p.x), y: Math.round(p.y) });
+    this.onSkillCast(p, slot);
+    this.emit(Object.assign({ t: 'skill', pid: p.pid, k: skill, a: Math.round(a * 100) / 100, x: Math.round(p.x), y: Math.round(p.y), slot }, extra));
   };
 })(globalThis.ED || (globalThis.ED = {}));

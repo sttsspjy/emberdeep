@@ -1,8 +1,9 @@
-// Keyboard, mouse and gamepad. Game controls: WASD move, J attack, K skill (+ Space dash, Tab map).
+// Keyboard, mouse and gamepad. Game controls: WASD move, J / left mouse attack, K / X / right mouse skill 1,
+// L / C / E / middle mouse skill 2, Space dash, Tab map; gamepad: B/RB skill 1, Y/LT skill 2.
 (function (ED) {
   'use strict';
   const I = ED.Input = {
-    keys: new Set(), pressed: new Set(), mouse: { x: 0, y: 0, l: false, r: false, moved: 0, lPressed: false, rPressed: false },
+    keys: new Set(), pressed: new Set(), mouse: { x: 0, y: 0, l: false, r: false, moved: 0, lPressed: false, rPressed: false, mPressed: false },
     pad: null, padPrev: [], enabled: true,
   };
   const GAME_KEYS = new Set(['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
@@ -20,8 +21,10 @@
     canvas.addEventListener('mousemove', (e) => { I.mouse.x = e.clientX; I.mouse.y = e.clientY; I.mouse.moved = performance.now(); });
     canvas.addEventListener('mousedown', (e) => {
       if (e.button === 0) { I.mouse.l = true; I.mouse.lPressed = true; }
+      if (e.button === 1) { e.preventDefault(); I.mouse.mPressed = true; } // middle click: skill 2, no autoscroll
       if (e.button === 2) { I.mouse.r = true; I.mouse.rPressed = true; }
     });
+    canvas.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); });
     window.addEventListener('mouseup', (e) => { if (e.button === 0) I.mouse.l = false; if (e.button === 2) I.mouse.r = false; });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   };
@@ -31,7 +34,7 @@
 
   // Snapshot of intent for this frame.
   I.read = () => {
-    const out = { mx: 0, my: 0, atk: false, skill: false, dash: false, atkPressed: false, tab: false, esc: false, confirm: false, left: false, right: false, aimX: null, aimY: null };
+    const out = { mx: 0, my: 0, atk: false, skill: false, dash: false, atkPressed: false, tab: false, esc: false, confirm: false, left: false, right: false, aimX: null, aimY: null, skill2: false };
     if (down('KeyW', 'ArrowUp')) out.my -= 1;
     if (down('KeyS', 'ArrowDown')) out.my += 1;
     if (down('KeyA', 'ArrowLeft')) out.mx -= 1;
@@ -39,6 +42,7 @@
     out.atk = down('KeyJ', 'KeyZ') || I.mouse.l;
     out.atkPressed = hit('KeyJ', 'KeyZ') || I.mouse.lPressed;
     out.skill = hit('KeyK', 'KeyX') || I.mouse.rPressed;
+    out.skill2 = hit('KeyL', 'KeyC', 'KeyE') || I.mouse.mPressed;
     out.dash = hit('Space', 'ShiftLeft', 'ShiftRight');
     out.tab = hit('Tab');
     out.esc = hit('Escape');
@@ -59,7 +63,8 @@
       const bp = (i) => b(i) && !I.padPrev[i];
       out.atk = out.atk || b(2) || b(7);
       out.atkPressed = out.atkPressed || bp(2) || bp(7);
-      out.skill = out.skill || bp(3) || bp(1) || bp(6) || bp(5);
+      out.skill = out.skill || bp(1) || bp(5);
+      out.skill2 = out.skill2 || bp(3) || bp(6);
       out.dash = out.dash || bp(0) || bp(4);
       out.esc = out.esc || bp(9);
       out.tab = out.tab || bp(8);
@@ -74,5 +79,5 @@
     return out;
   };
 
-  I.endFrame = () => { I.pressed.clear(); I.mouse.lPressed = false; I.mouse.rPressed = false; };
+  I.endFrame = () => { I.pressed.clear(); I.mouse.lPressed = false; I.mouse.rPressed = false; I.mouse.mPressed = false; };
 })(globalThis.ED || (globalThis.ED = {}));

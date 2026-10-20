@@ -131,7 +131,7 @@
       for (const p of s.world.players.values()) p.mastery10 = p.meta && p.meta.mastery >= 10;
     }
     s.view.pact = cfg.pact;
-    s.ctl = { atkCd: 0, skillCd: 0, charges: s.me.stats.maxCharges, dashCd: 0, tranceT: 0, latch: false, target: null };
+    s.ctl = { atkCd: 0, skillCd: 0, skill2Cd: 0, charges: s.me.stats.maxCharges, dashCd: 0, tranceT: 0, latch: false, target: null };
     s.fxCtx = {
       localPid: s.localPid,
       player: (pid) => s.view.players.get(pid),
@@ -153,7 +153,7 @@
     if (!p || !a) return;
     switch (a.t) {
       case 'atk': w.playerAttack(p, +a.a || 0); break;
-      case 'skill': w.playerSkill(p, +a.a || 0, a.data); break;
+      case 'skill': if ((a.slot | 0) === 0 || (a.slot | 0) === 1) w.playerSkill(p, +a.a || 0, a.data, a.slot | 0); break;
       case 'dash': w.playerDash(p, +a.dx || 0, +a.dy || 0); break;
       case 'interact': w.interact(pid, a.id); break;
       case 'pick': w.pickBoon(pid, a.i | 0); break;
@@ -225,6 +225,7 @@
     else if (m.t === 'offerDone') { s.offer = null; s.offerOpen = false; ED.UI.hideBoons(); }
     else if (m.t === 'claimed') s.claimed[m.group] = true;
     else if (m.t === 'toast') { ED.UI.toast(m.text); ED.Audio.play('deny'); }
+    else if (m.t === 'refund') s.ctl.skill2Cd = 0; // Night's Edge: an Ambush kill refunds the second skill
   };
 
   // Network handlers.
@@ -245,14 +246,15 @@
       const fx = s.mirror.apply(d, performance.now() / 1000);
       for (const ev of fx) G.localEvent(ev);
     } else if (d.t === 'end') G.localEvent({ t: 'end', summary: d.summary });
-    else if (d.t === 'offer' || d.t === 'offerDone' || d.t === 'claimed' || d.t === 'toast') G.message(d);
+    else if (d.t === 'offer' || d.t === 'offerDone' || d.t === 'claimed' || d.t === 'toast' || d.t === 'refund') G.message(d);
   };
   G.onPeerLeft = (pid) => { const s = G.s; if (s && s.mode === 'host') { s.world.removePlayer(pid); } };
 
   // ---------------- local hero control ----------------
   function control(s, inp, dt) {
     const me = s.me, view = s.view, ctl = s.ctl, st = me.stats;
-    ctl.atkCd -= dt; ctl.dashCd -= dt; ctl.tranceT -= dt;
+    ctl.atkCd -= dt; ctl.dashCd -= dt; ctl.tranceT -= dt; ctl.skill2Cd -= dt;
+    if (s.mode === 'client') { if (me.bulwarkT > 0) me.bulwarkT -= dt; if (me.tranceT > 0) me.tranceT -= dt; } // a mirror hero has no world tick
     if (ctl.charges < st.maxCharges) { ctl.skillCd -= dt; if (ctl.skillCd <= 0) { ctl.charges++; if (ctl.charges < st.maxCharges) ctl.skillCd = st.skillCd; else ctl.skillCd = 0; } }
     if (me.downed || me.dead || !view.room) { s.prompt = null; if (s.mode !== 'client') me.dashing = false; return; }
     let mx = inp.mx, my = inp.my;
@@ -288,7 +290,7 @@
       if (!inp.atk) ctl.latch = false;
       if (inp.atk && !ctl.latch && ctl.atkCd <= 0 && !near) {
         G.act({ t: 'atk', a: aim });
-        const ws = 1 + (ctl.tranceT > 0 ? st.trance : 0) + (st.wardrum && me.hp < me.maxHp * 0.5 ? st.wardrum : 0);
+        const ws = ED.Stats.attackRate ? ED.Stats.attackRate(me) : 1 + (ctl.tranceT > 0 ? st.trance : 0) + (st.wardrum && me.hp < me.maxHp * 0.5 ? st.wardrum : 0);
         ctl.atkCd = st.atkInterval / ws;
         ED.FX.playerAttackAnim(s.localPid, aim);
         const w = st.weapon;
@@ -314,7 +316,16 @@
         G.act({ t: 'skill', a: aim, data });
         if (ctl.charges === st.maxCharges) ctl.skillCd = st.skillCd;
         ctl.charges--;
-        if (st.trance) ctl.tranceT = 4;
+        if (st.trance) { ctl.tranceT = 4; if (s.mode === 'client') me.tranceT = 4; }
+      }
+      const sk2 = ED.CLASSES[me.cls].skill2;
+      if (inp.skill2 && sk2 && ctl.skill2Cd <= 0 && !(me.bulwarkT > 0)) {
+        let data = null;
+        if (sk2 === 'rain' || sk2 === 'meteor') { const tp = skillPoint(s, me, aim, inp, sk2 === 'rain' ? 260 : 300); data = { x: Math.round(tp.x), y: Math.round(tp.y) }; }
+        else if (sk2 === 'bulwark' && s.mode === 'client') me.bulwarkT = 1.4 * (st.bastion ? 1.5 : 1); // host sets the authoritative timer
+        G.act({ t: 'skill', a: aim, data, slot: 1 });
+        ctl.skill2Cd = st.skill2Cd ?? ED.SKILLS[sk2].cd * Math.max(0.35, 1 - st.cdr);
+        if (st.trance) { ctl.tranceT = 4; if (s.mode === 'client') me.tranceT = 4; }
       }
       if (inp.dash && ctl.dashCd <= 0 && !me.skillMove) {
         let dx = mx, dy = my;
@@ -325,8 +336,22 @@
         G.act({ t: 'dash', dx, dy });
       }
     }
+    if (me.bulwarkT > 0) { mx *= 0.5; my *= 0.5; }
     Sim.movePlayer(me, { mx, my }, dt, view.room, view.locked, view.zones);
     if (s.mode !== 'client') me.dashing = me.dashT > 0 || !!me.skillMove;
+  }
+
+  // Target point of Rain of Arrows / Meteor: cursor (mouse aim), else the auto-target, else 200 along the aim; clamped to range.
+  function skillPoint(s, me, aim, inp, range) {
+    let tx = me.x + Math.cos(aim) * 200, ty = me.y + Math.sin(aim) * 200;
+    if (inp.padAim === undefined) {
+      const tgt = s.ctl.target;
+      if (ED.App.settings.aim === 'mouse') { const wpt = ED.Render.toWorld(ED.Input.mouse.x * ED.Render.dpr, ED.Input.mouse.y * ED.Render.dpr); tx = wpt.x; ty = wpt.y; }
+      else if (tgt && tgt.hp > 0) { tx = tgt.x; ty = tgt.y; }
+    }
+    const d = Math.hypot(tx - me.x, ty - me.y);
+    if (d > range) { tx = me.x + (tx - me.x) * range / d; ty = me.y + (ty - me.y) * range / d; }
+    return { x: tx, y: ty };
   }
 
   function autoAim(s, me, view) {
@@ -334,7 +359,7 @@
     let best = null, bs = Infinity;
     const fx = me.mvx || 0, fy = me.mvy || 0;
     for (const e of view.enemies) {
-      if (e.hp <= 0) continue;
+      if (e.hp <= 0 || e.def.invuln || e.burrowed) continue;
       const dx = e.x - me.x, dy = e.y - me.y, d = Math.hypot(dx, dy);
       if (d > range) continue;
       const dot = (dx * fx + dy * fy) / (d || 1);

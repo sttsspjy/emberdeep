@@ -228,7 +228,8 @@
         if (a.cd <= 0) {
           a.cd = 0.7;
           // minion hits infuse only with Elemental Bond
-          this.hitEnemy(tgt, a.dmg * compMul(owner.stats), { p: owner, kind: 'minion', comp: true, noProc: !owner.stats.compInfuse, knock: 40, kx: (tx - a.x) / (d || 1), ky: (ty - a.y) / (d || 1), raw: true });
+          const got = this.hitEnemy(tgt, a.dmg * compMul(owner.stats), { p: owner, kind: 'minion', comp: true, noProc: !owner.stats.compInfuse, knock: 40, kx: (tx - a.x) / (d || 1), ky: (ty - a.y) / (d || 1), raw: true });
+          if (got > 0 && owner.stats.soulSiphon) this.soulSiphon(owner);
         }
       } else if (d > 6) {
         const dir = this.pathDir(a, tx, ty);
