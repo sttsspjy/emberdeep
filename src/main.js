@@ -39,11 +39,11 @@
     A.hasProfile = true;
     A.persist();
     A.loadSel();
-    A.enterHearth();
+    A.goHome();
   };
   A.replaceProfile = (p) => { A.profile = S.normalize(p); A.hasProfile = true; A.persist(); A.loadSel(); ED.UI.renderHearth(); };
   // First visit on a new device: restore a save code straight from the title screen.
-  A.importProfile = (p) => { A.profile = S.normalize(p); A.hasProfile = true; A.persist(); A.loadSel(); A.enterHearth(); ED.UI.toast('Welcome back, <b>' + UIe(A.profile.name) + '</b>. Your progress is restored.'); };
+  A.importProfile = (p) => { A.profile = S.normalize(p); A.hasProfile = true; A.persist(); A.loadSel(); A.goHome(); ED.UI.toast('Welcome back, <b>' + UIe(A.profile.name) + '</b>. Your progress is restored.'); };
   A.resetProfile = () => { S.erase(); A.profile = S.defaultProfile(); A.hasProfile = false; A.loadSel(); A.state = 'title'; ED.UI.renderTitle(); ED.UI.show('title'); };
   A.afterMetaChange = () => {
     const deeds = S.checkDeeds(A.profile, null);
@@ -70,15 +70,26 @@
     if (A.state === 'hearth' || A.state === 'lobby') ED.UI.toast('Progress updated from another tab.');
   };
 
-  A.enterHearth = () => {
-    if (!A.hasProfile) { A.state = 'title'; ED.UI.renderTitle(); ED.UI.show('title'); return; }
+  // The main menu (state 'title'): Descend, Hearth, Heroes, Settings.
+  A.goHome = () => {
+    A.closeNet();
+    A.state = 'title';
+    $('ov-hearth').hidden = true;
+    ED.UI.renderTitle();
+    ED.UI.show('title');
+    ED.Audio.music('camp');
+  };
+
+  // A menu section (state 'hearth'): 'descend', 'upgrades', 'relics', 'chronicle' or 'heroes'.
+  A.enterHearth = (tab) => {
+    if (!A.hasProfile) { A.goHome(); return; }
     A.closeNet();
     A.state = 'hearth';
     $('ov-hearth').hidden = true;
     ED.UI.show('hearth');
-    ED.UI.setTab(ED.UI.tab || 'descend');
+    ED.UI.setTab(tab || 'descend');
     ED.Audio.music('camp');
-    if (A.pendingJoin) {
+    if (A.pendingJoin && (!tab || tab === 'descend')) {
       $('join-row').hidden = false; $('inp-join').value = A.pendingJoin;
       const code = A.pendingJoin; A.pendingJoin = null;
       if (ED.Net.available()) A.joinParty(code);
@@ -130,7 +141,7 @@
     A.state = 'results';
     for (const id of ['ov-boon', 'ov-sheet', 'ov-pause', 'ov-settings']) $(id).hidden = true;
     ED.UI.renderResults(run, res, note);
-    $('btn-res-back').textContent = (A.host || (A.client && A.client.conn)) ? 'Back to the party' : 'Return to the Hearth';
+    $('btn-res-back').textContent = (A.host || (A.client && A.client.conn)) ? 'Back to the party' : 'Return to camp';
     $('btn-res-back').onclick = () => A.resultsBack();
     ED.UI.show('results');
     ED.Audio.music('camp');
@@ -140,7 +151,7 @@
   A.resultsBack = () => {
     if (A.host) { A.state = 'lobby'; ED.UI.show('lobby'); A.host.broadcastLobby(); return; }
     if (A.client && A.client.conn && !A.client.dead) { A.state = 'lobby'; ED.UI.show('lobby'); if (A.lobbyState) ED.UI.renderLobby(A.lobbyState, A.myPid, false); return; }
-    A.enterHearth();
+    A.goHome();
   };
 
   A.abandonRun = () => {
@@ -285,7 +296,7 @@
       ED.Game.update(dt, blocked ? EMPTY : inp);
       if (ED.Game.s) ED.Game.render(t, dt);
     } else {
-      ED.Camp.draw(ED.Render.ctx, A.profile, t, dt, A.state === 'hearth' || A.state === 'lobby' ? A.sel.cls : null);
+      ED.Camp.draw(ED.Render.ctx, A.profile, t, dt, A.state === 'hearth' || A.state === 'lobby' || (A.state === 'title' && A.hasProfile) ? A.sel.cls : null);
     }
     ED.Input.endFrame();
     requestAnimationFrame(frame);
@@ -311,6 +322,7 @@
     ED.Input.init(canvas);
     ED.Render.init(canvas);
     A.settings = S.loadSettings();
+    ED.Input.setBinds(A.settings.binds);
     ED.Render.setQuality(A.settings.quality);
     ED.FX.setQuality(A.settings.quality);
     const p = S.load();

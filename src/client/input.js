@@ -1,56 +1,189 @@
-// Keyboard, mouse and gamepad. Game controls: WASD move, J / left mouse attack, K / X / right mouse skill 1,
-// L / C / E / middle mouse skill 2, Space dash, Tab map; gamepad: B/RB skill 1, Y/LT skill 2.
+// Keyboard, mouse and gamepad. One binding table maps every action to two slots, each a KeyboardEvent.code or Mouse0..Mouse4.
+// Defaults: WASD move (arrows alternate), attack LMB / J, skill 1 Q / RMB, skill 2 E, dash Space, flare F, map Tab, pause Esc.
+// Gamepad (fixed): left stick move, right stick aim, X / RT attack, B / RB skill 1, Y / LT skill 2, A / LB dash, L3 flare, Start pause, Back map.
 (function (ED) {
   'use strict';
   const I = ED.Input = {
-    keys: new Set(), pressed: new Set(), mouse: { x: 0, y: 0, l: false, r: false, moved: 0, lPressed: false, rPressed: false, mPressed: false },
-    pad: null, padPrev: [], enabled: true,
+    keys: new Set(), pressed: new Set(), mouse: { x: 0, y: 0, moved: 0 },
+    pad: null, padPrev: [], enabled: true, binds: {},
   };
-  const GAME_KEYS = new Set(['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 
+  // ---------------- binding table ----------------
+  I.ACTIONS = [
+    { id: 'up', label: 'Move up', group: 'Movement' }, { id: 'down', label: 'Move down', group: 'Movement' },
+    { id: 'left', label: 'Move left', group: 'Movement' }, { id: 'right', label: 'Move right', group: 'Movement' },
+    { id: 'attack', label: 'Attack', group: 'Combat' }, { id: 'skill1', label: 'Skill 1', group: 'Combat' },
+    { id: 'skill2', label: 'Skill 2', group: 'Combat' }, { id: 'dash', label: 'Dash', group: 'Combat' },
+    { id: 'flare', label: 'Lantern flare', group: 'Combat' },
+    { id: 'map', label: 'Map and build', group: 'Interface' }, { id: 'pause', label: 'Pause', group: 'Interface' },
+  ];
+  I.DEFAULTS = {
+    up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'],
+    attack: ['Mouse0', 'KeyJ'], skill1: ['KeyQ', 'Mouse2'], skill2: ['KeyE', null], dash: ['Space', null],
+    flare: ['KeyF', null], map: ['Tab', null], pause: ['Escape', null],
+  };
+  const ACTION = {}; for (const a of I.ACTIONS) ACTION[a.id] = a;
+  const CODE_RE = /^(Mouse[0-4]|[A-Za-z][A-Za-z0-9]{1,24})$/;
+  const RESERVED = new Set(['Escape', 'Enter', 'NumpadEnter', 'MetaLeft', 'MetaRight', 'ContextMenu']); // not assignable by the user
+  let codes = {}; // action -> non-empty codes, rebuilt whenever a slot changes
+
+  const rebuild = () => {
+    codes = {};
+    for (const a of I.ACTIONS) codes[a.id] = I.binds[a.id].filter(Boolean);
+    I.boundCodes = new Set([].concat(...Object.values(codes)));
+  };
+  const clone = (o) => { const r = {}; for (const k in o) r[k] = o[k].slice(); return r; };
+
+  // Load saved bindings: unknown actions, malformed or duplicate codes and actions left without a key fall back to defaults.
+  I.setBinds = (saved) => {
+    const b = clone(I.DEFAULTS), used = new Set();
+    if (saved && typeof saved === 'object') {
+      for (const a of I.ACTIONS) {
+        const s = saved[a.id];
+        if (!Array.isArray(s)) continue;
+        const ok = (c) => typeof c === 'string' && CODE_RE.test(c) && (!RESERVED.has(c) || (c === 'Escape' && a.id === 'pause'));
+        const pair = [0, 1].map(i => (ok(s[i]) ? s[i] : null));
+        if (pair[0] && pair[0] === pair[1]) pair[1] = null;
+        if (pair.some(Boolean)) b[a.id] = pair;
+      }
+    }
+    for (const a of I.ACTIONS) for (let i = 0; i < 2; i++) { const c = b[a.id][i]; if (c && used.has(c)) b[a.id][i] = null; else if (c) used.add(c); }
+    for (const a of I.ACTIONS) if (!b[a.id][0] && !b[a.id][1]) b[a.id] = I.DEFAULTS[a.id].slice();
+    I.binds = b; rebuild();
+  };
+  I.exportBinds = () => clone(I.binds);
+  I.resetBinds = () => { I.binds = clone(I.DEFAULTS); rebuild(); };
+  I.isDefault = () => I.ACTIONS.every(a => I.binds[a.id][0] === I.DEFAULTS[a.id][0] && I.binds[a.id][1] === I.DEFAULTS[a.id][1]);
+  I.reserved = (code) => RESERVED.has(code);
+
+  // Bind `code` to slot 0/1 of `action`. A code already used elsewhere is swapped into the slot it replaces.
+  // Returns { ok, msg }: refused changes leave the table untouched and say why.
+  I.rebind = (action, slot, code) => {
+    const b = I.binds, cur = b[action][slot];
+    if (RESERVED.has(code)) return { ok: false, msg: `${I.keyName(code)} is reserved for menus.` };
+    if (code === cur) return { ok: true, msg: '' };
+    let hitA = null, hitS = -1;
+    for (const a of I.ACTIONS) for (let s = 0; s < 2; s++) if (b[a.id][s] === code && !(a.id === action && s === slot)) { hitA = a.id; hitS = s; }
+    if (hitA && hitA !== action && !cur && b[hitA].filter(Boolean).length < 2) return { ok: false, msg: `${ACTION[hitA].label} would be left with no key.` };
+    b[action][slot] = code;
+    if (!hitA) { rebuild(); return { ok: true, msg: `${ACTION[action].label}: ${I.keyName(code)}` }; }
+    b[hitA][hitS] = cur;
+    rebuild();
+    if (hitA === action) return { ok: true, msg: `${I.keyName(code)} is now the ${slot ? 'alternate' : 'primary'} key for ${ACTION[action].label}.` };
+    return { ok: true, msg: cur ? `${I.keyName(code)} moved here; ${ACTION[hitA].label} now uses ${I.keyName(cur)}.` : `${I.keyName(code)} moved here; ${ACTION[hitA].label} keeps its other key.` };
+  };
+  I.clearSlot = (action, slot) => {
+    const b = I.binds[action];
+    if (!b[slot]) return { ok: true, msg: '' };
+    if (b.filter(Boolean).length < 2) return { ok: false, msg: `${ACTION[action].label} needs at least one key.` };
+    b[slot] = null; rebuild();
+    return { ok: true, msg: `${ACTION[action].label}: slot cleared.` };
+  };
+
+  // ---------------- labels ----------------
+  const NAMES = {
+    Space: 'Space', Tab: 'Tab', Escape: 'Esc', Enter: 'Enter', Backspace: 'Backspace', Delete: 'Del', Insert: 'Ins', Home: 'Home', End: 'End', PageUp: 'PgUp', PageDown: 'PgDn', CapsLock: 'Caps',
+    ShiftLeft: 'L-Shift', ShiftRight: 'R-Shift', ControlLeft: 'L-Ctrl', ControlRight: 'R-Ctrl', AltLeft: 'L-Alt', AltRight: 'R-Alt',
+    ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→',
+    Backquote: '`', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Backslash: '\\',
+    NumpadAdd: 'Num +', NumpadSubtract: 'Num -', NumpadMultiply: 'Num *', NumpadDivide: 'Num /', NumpadDecimal: 'Num .', NumpadEnter: 'Num Enter',
+    Mouse0: 'LMB', Mouse1: 'MMB', Mouse2: 'RMB', Mouse3: 'MB4', Mouse4: 'MB5',
+  };
+  let layout = null; // physical key -> printed character on the player's layout (Chromium only)
+  const PRINTED = /^(Key[A-Z]|Digit\d|Backquote|Minus|Equal|Bracket(Left|Right)|Semicolon|Quote|Comma|Period|Slash|Backslash)$/;
+  I.keyName = (code) => {
+    if (!code) return '';
+    if (PRINTED.test(code)) { const ch = layout && layout.get(code); if (ch && ch.length === 1) return ch.toUpperCase(); }
+    if (NAMES[code]) return NAMES[code];
+    if (/^Key[A-Z]$/.test(code)) return code.slice(3);
+    if (/^Digit\d$/.test(code)) return code.slice(5);
+    if (/^Numpad\d$/.test(code)) return 'Num ' + code.slice(6);
+    return code;
+  };
+  const isMouse = (c) => /^Mouse/.test(c);
+  I.labels = (action) => (codes[action] || []).map(I.keyName);
+  // Primary label for HUD hints: the first keyboard binding, else the first mouse button.
+  I.label = (action) => {
+    const list = codes[action] || [];
+    const c = list.find(x => !isMouse(x)) || list[0];
+    return c ? I.keyName(c) : '—';
+  };
+
+  // ---------------- capture (rebinding screen) ----------------
+  let stopCap = null;
+  // The next key or mouse button goes to cb(code); Esc cancels with cb(null). Events are swallowed so the game never sees them.
+  I.capture = (cb) => {
+    I.stopCapture();
+    const kill = (e) => { e.preventDefault(); e.stopImmediatePropagation(); };
+    const done = (code) => { I.stopCapture(); cb(code); };
+    const onKey = (e) => { kill(e); if (!e.repeat) done(e.code === 'Escape' ? null : e.code); };
+    const onMouse = (e) => {
+      kill(e);
+      // the click that follows this press must not reach the page; stop eating just after the button comes up
+      const eat = (ev) => { ev.preventDefault(); ev.stopImmediatePropagation(); };
+      const off = () => { for (const t of ['click', 'auxclick']) window.removeEventListener(t, eat, true); window.removeEventListener('mouseup', onUp, true); };
+      const onUp = () => setTimeout(off, 40);
+      for (const t of ['click', 'auxclick']) window.addEventListener(t, eat, true);
+      window.addEventListener('mouseup', onUp, true);
+      setTimeout(off, 5000);
+      done('Mouse' + e.button);
+    };
+    window.addEventListener('keydown', onKey, true);
+    window.addEventListener('mousedown', onMouse, true);
+    window.addEventListener('contextmenu', kill, true);
+    stopCap = () => { window.removeEventListener('keydown', onKey, true); window.removeEventListener('mousedown', onMouse, true); setTimeout(() => window.removeEventListener('contextmenu', kill, true), 300); stopCap = null; };
+  };
+  I.stopCapture = () => { if (stopCap) stopCap(); };
+  I.capturing = () => !!stopCap;
+
+  // ---------------- devices ----------------
   I.init = (canvas) => {
+    try { if (navigator.keyboard && navigator.keyboard.getLayoutMap) navigator.keyboard.getLayoutMap().then(m => { layout = m; }, () => {}); } catch (e) { /* label from the code instead */ }
     window.addEventListener('keydown', (e) => {
       const typing = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT');
       if (typing) return;
-      if (GAME_KEYS.has(e.code) && ED.App && ED.App.inRun()) e.preventDefault(); // menus keep Tab/Space for keyboard navigation
+      if (ED.App && ED.App.inRun() && (I.boundCodes.has(e.code) || e.code === 'Space')) e.preventDefault(); // menus keep Tab/Space for keyboard navigation
       if (!I.keys.has(e.code)) I.pressed.add(e.code);
       I.keys.add(e.code);
     });
     window.addEventListener('keyup', (e) => { I.keys.delete(e.code); });
-    window.addEventListener('blur', () => { I.keys.clear(); I.mouse.l = I.mouse.r = false; });
+    window.addEventListener('blur', () => { I.keys.clear(); });
     canvas.addEventListener('mousemove', (e) => { I.mouse.x = e.clientX; I.mouse.y = e.clientY; I.mouse.moved = performance.now(); });
     canvas.addEventListener('mousedown', (e) => {
-      if (e.button === 0) { I.mouse.l = true; I.mouse.lPressed = true; }
-      if (e.button === 1) { e.preventDefault(); I.mouse.mPressed = true; } // middle click: skill 2, no autoscroll
-      if (e.button === 2) { I.mouse.r = true; I.mouse.rPressed = true; }
+      if (e.button === 1 || e.button > 2) e.preventDefault(); // no autoscroll, no history navigation
+      const c = 'Mouse' + e.button;
+      if (!I.keys.has(c)) I.pressed.add(c);
+      I.keys.add(c);
     });
-    canvas.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); });
-    window.addEventListener('mouseup', (e) => { if (e.button === 0) I.mouse.l = false; if (e.button === 2) I.mouse.r = false; });
+    canvas.addEventListener('auxclick', (e) => { if (e.button !== 0) e.preventDefault(); });
+    window.addEventListener('mouseup', (e) => { I.keys.delete('Mouse' + e.button); if (e.button > 2) e.preventDefault(); });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   };
 
-  const down = (...codes) => codes.some(c => I.keys.has(c));
-  const hit = (...codes) => codes.some(c => I.pressed.has(c));
+  const down = (a) => codes[a].some(c => I.keys.has(c));
+  const hit = (a) => codes[a].some(c => I.pressed.has(c));
+  const hitCode = (...cs) => cs.some(c => I.pressed.has(c));
 
   // Snapshot of intent for this frame.
   I.read = () => {
-    const out = { mx: 0, my: 0, atk: false, skill: false, dash: false, atkPressed: false, tab: false, esc: false, confirm: false, left: false, right: false, aimX: null, aimY: null, skill2: false };
-    if (down('KeyW', 'ArrowUp')) out.my -= 1;
-    if (down('KeyS', 'ArrowDown')) out.my += 1;
-    if (down('KeyA', 'ArrowLeft')) out.mx -= 1;
-    if (down('KeyD', 'ArrowRight')) out.mx += 1;
-    out.atk = down('KeyJ', 'KeyZ') || I.mouse.l;
-    out.atkPressed = hit('KeyJ', 'KeyZ') || I.mouse.lPressed;
-    out.skill = hit('KeyK', 'KeyX') || I.mouse.rPressed;
-    out.skill2 = hit('KeyL', 'KeyC', 'KeyE') || I.mouse.mPressed;
-    out.dash = hit('Space', 'ShiftLeft', 'ShiftRight');
-    out.tab = hit('Tab');
-    out.esc = hit('Escape');
-    out.confirm = hit('KeyJ', 'KeyZ', 'Enter'); // not Space: a dash mashed in combat must never pick a boon
-    out.left = hit('KeyA', 'ArrowLeft');
-    out.right = hit('KeyD', 'ArrowRight');
-    out.up = hit('KeyW', 'ArrowUp');
-    out.down = hit('KeyS', 'ArrowDown');
+    const out = { mx: 0, my: 0, atk: false, skill: false, dash: false, atkPressed: false, tab: false, esc: false, confirm: false, left: false, right: false, aimX: null, aimY: null, skill2: false, flare: false };
+    if (down('up')) out.my -= 1;
+    if (down('down')) out.my += 1;
+    if (down('left')) out.mx -= 1;
+    if (down('right')) out.mx += 1;
+    out.atk = down('attack');
+    out.atkPressed = hit('attack');
+    out.skill = hit('skill1');
+    out.skill2 = hit('skill2');
+    out.dash = hit('dash');
+    out.flare = hit('flare');
+    out.tab = hit('map');
+    out.esc = hit('pause') || hitCode('Escape'); // Esc always backs out of a menu, whatever pause is bound to
+    out.confirm = codes.attack.some(c => !isMouse(c) && c !== 'Space' && I.pressed.has(c)) || hitCode('Enter', 'NumpadEnter'); // never Space: a dash mashed in combat must not pick a boon
+    out.left = hit('left');
+    out.right = hit('right');
+    out.up = hit('up');
+    out.down = hit('down');
     // gamepad
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
     const gp = pads && [...pads].find(p => p && p.connected);
@@ -66,6 +199,7 @@
       out.skill = out.skill || bp(1) || bp(5);
       out.skill2 = out.skill2 || bp(3) || bp(6);
       out.dash = out.dash || bp(0) || bp(4);
+      out.flare = out.flare || bp(10);
       out.esc = out.esc || bp(9);
       out.tab = out.tab || bp(8);
       out.confirm = out.confirm || bp(2);
@@ -79,5 +213,6 @@
     return out;
   };
 
-  I.endFrame = () => { I.pressed.clear(); I.mouse.lPressed = false; I.mouse.rPressed = false; I.mouse.mPressed = false; };
+  I.endFrame = () => { I.pressed.clear(); };
+  I.setBinds(null);
 })(globalThis.ED || (globalThis.ED = {}));
