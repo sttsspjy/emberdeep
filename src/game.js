@@ -124,7 +124,7 @@
     ED.FX.reset();
     ED.Render.lightLevel = 1;
     U.resetUid(1);
-    const s = G.s = { mode, cfg, localPid: cfg.localPid, net: cfg.net || null, fxBuf: [], snapT: 0, snapN: 0, inT: 0, acc: 0, epoch: 0, offer: null, offerOpen: false, ended: false, paused: false, prompt: null, sig: '', claimed: {} };
+    const s = G.s = { mode, cfg, localPid: cfg.localPid, net: cfg.net || null, fxBuf: [], snapT: 0, snapN: 0, inT: 0, acc: 0, alpha: 1, epoch: 0, offer: null, offerOpen: false, ended: false, paused: false, prompt: null, sig: '', claimed: {} };
     if (mode === 'client') {
       s.mirror = new Mirror(cfg, cfg.localPid);
       s.view = s.mirror;
@@ -381,6 +381,23 @@
 
   // ---------------- per-frame ----------------
   const STEP = 1 / 60, MAX_STEPS = 8; // the world advances in fixed 1/60 s steps at any frame rate
+  // Render interpolation (solo/host): the sim records each mover's position before a step (px/py, never read by the sim);
+  // G.render draws the foes, allies, shots and pickups at px + (x - px) * alpha, alpha = unspent frame time / STEP, then restores x/y exactly.
+  // Heroes are not interpolated: the local hero is moved per frame by control(), remote ones by network input.
+  const MOVERS = ['enemies', 'allies', 'projs', 'pickups'], JUMP2 = 48 * 48; // a larger step (blink, teleport) is drawn unsmoothed
+  const markPrev = (w) => { for (const k of MOVERS) { const a = w[k]; for (let i = 0; i < a.length; i++) { const o = a[i]; o.px = o.x; o.py = o.y; } } };
+  const interp = (w, al) => {
+    for (const k of MOVERS) {
+      const a = w[k];
+      for (let i = 0; i < a.length; i++) {
+        const o = a[i]; o.rx = o.x; o.ry = o.y;
+        if (o.px === undefined) continue; // born this step: drawn at its current position
+        const dx = o.x - o.px, dy = o.y - o.py;
+        if (dx * dx + dy * dy <= JUMP2) { o.x = o.px + dx * al; o.y = o.py + dy * al; }
+      }
+    }
+  };
+  const unterp = (w) => { for (const k of MOVERS) { const a = w[k]; for (let i = 0; i < a.length; i++) { const o = a[i]; if (o.rx !== undefined) { o.x = o.rx; o.y = o.ry; } } } };
   // Mirrors World.isSafe: calm room, no live foe except the invulnerable Gloom, no descent pending (clients see no pendingStratum).
   const isSafe = (v) => !v.locked && !v.pendingStratum && !v.enemies.some(e => e.hp > 0 && !e.def.gloom);
   G.update = (dt, inp) => {
@@ -389,6 +406,7 @@
     const alone = G.alone(), frozen = alone && s.paused;
     // Alone, the world waits while you read boon cards (offers only open in a safe room), so picking never costs lantern time.
     const hold = alone && s.offerOpen;
+    s.alpha = 1; // frozen, held or client: draw the newest state
     const sdt = alone ? dt * ED.FX.timeScale : dt; // hit-stop slows only a world nobody else shares; effects keep real time
     if (!frozen) {
       if (s.offer) {
@@ -408,8 +426,9 @@
         if (!hold) {
           s.acc += sdt;
           let n = 0;
-          while (s.acc >= STEP - 1e-9 && n < MAX_STEPS) { w.update(STEP); s.acc -= STEP; n++; }
+          while (s.acc >= STEP - 1e-9 && n < MAX_STEPS) { markPrev(w); w.update(STEP); s.acc -= STEP; n++; }
           if (s.acc >= STEP) s.acc = 0; // step cap hit: drop the backlog instead of spiralling
+          s.alpha = s.acc > 0 ? s.acc / STEP : 0;
         }
         G.drainWorld();
         if (s.mode === 'host') {
@@ -438,8 +457,15 @@
     ED.Render.updateCamera(s.view, s.me.dead ? ([...s.view.players.values()].find(p => !p.dead) || s.me) : s.me, dt, false);
   };
 
+  // Solo/host draw one step behind the sim, interpolated; the world clock shifts the same way so orbiting hazards stay in phase.
   G.render = (t, dt) => {
     const s = G.s; if (!s) return;
+    if (s.mode === 'client' || s.alpha >= 1) { drawFrame(s, t, dt); return; }
+    const w = s.world, tm = w.time;
+    try { interp(w, s.alpha); w.time = tm - (1 - s.alpha) * STEP; drawFrame(s, t, dt); }
+    finally { unterp(w); w.time = tm; }
+  };
+  const drawFrame = (s, t, dt) => {
     const c = ED.Render.ctx;
     const v = s.view, R = ED.Render, lit = v.room && v.lightMax > 0 ? U.clamp(v.light / v.lightMax, 0, 1) : 1;
     R.lightLevel += (lit - R.lightLevel) * Math.min(1, dt * 2.5); // eased so a refill or a tier drop never pops
