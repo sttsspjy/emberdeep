@@ -212,7 +212,7 @@
         if (P.type === 'spread' && e.vars.glob) {
           // lobbed spore glob: telegraphed landing circle, leaves a slowing mire
           const G = P.glob, tx = e.target.x + (e.target.vx || 0) * 0.3, ty = e.target.y + (e.target.vy || 0) * 0.3;
-          w.addZone({ kind: 'tele', x: tx, y: ty, r: G.radius, dur: wind(e, G.flight), dmg: e.dmg, team: 1, src: e, boom: 'spore', lob: [Math.round(e.x), Math.round(e.y - 10)],
+          w.addZone({ kind: 'tele', x: tx, y: ty, r: G.radius, dur: wind(e, G.flight), dmg: e.dmg, team: 1, src: e, detached: true, boom: 'spore', lob: [Math.round(e.x), Math.round(e.y - 10)],
             onEnd: (ww, z) => ww.addZone({ kind: 'mire', x: z.x, y: z.y, r: G.radius * 0.9, dur: G.mire, team: 1 }) });
           e.st = 'move'; e.cd = P.cd * rate(e);
         } else if (P.type === 'spread') {
@@ -267,7 +267,7 @@
         const pt = Sim.castMove(w.room, e.x, e.y, e.aimA, Math.min(distT(e) + (e.target.vx || 0) * 0.2, Wb.range[1]), 4, true);
         const dd = Math.max(40, Math.hypot(pt.x - e.x, pt.y - e.y)), fl = dd / Wb.speed;
         w.enemyShoot(e, e.aimA, Wb.speed, 'web', 0.35, 6, { life: fl });
-        w.addZone({ kind: 'tele', x: pt.x, y: pt.y, r: Wb.r, dur: fl, dmg: 0, team: 1, src: e, warnOnly: true,
+        w.addZone({ kind: 'tele', x: pt.x, y: pt.y, r: Wb.r, dur: fl, dmg: 0, team: 1, src: e, detached: true, warnOnly: true,
           onEnd: (ww, z) => ww.addZone({ kind: 'mire', x: z.x, y: z.y, r: Wb.r, dur: Wb.mire, team: 1 }) });
         w.emit({ t: 'shoot', x: Math.round(e.x), y: Math.round(e.y), k: 'web' });
         e.st = 'move'; e.vars.wcd = Wb.cd * rate(e);
@@ -365,7 +365,7 @@
       }
       return;
     }
-    if (distT(e) < 38 + e.r && !blind(e)) { e.st = 'fuse'; e.t = wind(e, e.def.fuse); w.addZone({ kind: 'tele', x: e.x, y: e.y, r: e.def.boom, dur: e.t, dmg: 0, team: 1, warnOnly: true }); return; }
+    if (distT(e) < 38 + e.r && !blind(e)) { e.st = 'fuse'; e.t = wind(e, e.def.fuse); w.addZone({ kind: 'tele', x: e.x, y: e.y, r: e.def.boom, dur: e.t, dmg: 0, team: 1, src: e, warnOnly: true }); return; }
     const d = w.pathDir(e, e.target.x, e.target.y);
     e.wob += dt * 4;
     move(w, e, d[0] + Math.sin(e.wob) * 0.25, d[1] + Math.cos(e.wob) * 0.25, sp(e), dt);
@@ -588,7 +588,7 @@
       e.t -= dt;
       if (e.t <= 0) {
         const tx = e.target.x + (e.target.vx || 0) * 0.3, ty = e.target.y + (e.target.vy || 0) * 0.3;
-        w.addZone({ kind: 'tele', x: tx, y: ty, r: L.radius, dur: wind(e, L.flight), dmg: e.dmg, team: 1, src: e, boom: 'fire', lob: [Math.round(e.x), Math.round(e.y - 10)],
+        w.addZone({ kind: 'tele', x: tx, y: ty, r: L.radius, dur: wind(e, L.flight), dmg: e.dmg, team: 1, src: e, detached: true, boom: 'fire', lob: [Math.round(e.x), Math.round(e.y - 10)],
           onEnd: (ww, z) => ww.addZone({ kind: 'fire', x: z.x, y: z.y, r: L.radius * 0.6, dur: L.fire, dps: e.dmg * 0.45, team: 1 }) });
         e.st = 'move'; e.cd = L.cd * rate(e);
       }

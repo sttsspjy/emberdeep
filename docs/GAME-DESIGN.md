@@ -12,7 +12,7 @@ Canonical rules and numbers. Code follows this file; balance passes may retune n
 ## 1. Damage model
 
 - Foe HP = base × `1 + 0.65(s−1) + 0.08(s−1)²` × **threat HP** (table below) × party multiplier. Foe damage = base × `1 + 0.22(s−1) + 0.03(s−1)²` × **threat damage** (below 1 only in strata I–III). Boss HP is absolute (table below), scaled by party, pact and dread.
-- **Threat** per stratum (`World.THREAT`): HP ×, damage ×, wave budget ×, attack-cooldown rate `cdRate` (foe cooldowns tick faster by this fraction, negative = slower; wind-ups never change), boss pause × (time between boss attacks):
+- **Threat** per stratum (`World.THREAT`): HP ×, damage ×, wave budget ×, attack-cooldown rate `cdRate` (foe cooldowns tick faster by this fraction, negative = slower, only while the foe can act; wind-ups never change), boss pause × (time between boss attacks):
 
 | Stratum | HP × | Damage × | Wave × | Cooldown rate | Boss pause × |
 |---|---|---|---|---|---|
@@ -242,6 +242,7 @@ Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat
 ## 8. Enemies
 
 - Every telegraphed wind-up (lob flights included) lasts `max(t × 0.7 if swift, min(t, 0.4)) × e.windMul` (`windMul` default 1). Foes with `e.blind > 0` cannot start attacks. Stunned/frozen foes do nothing.
+- A wind-up telegraph (zone with `src`) stalls while its caster is frozen or stunned and is cancelled, without hitting, when it dies. Ground bursts already launched (lobbed globs, web, boss spikes, spore fields, mire, fire rain) are `detached`: they resolve on their own clock.
 - **No untelegraphed teleports.** Casters lose the random blink; instead, when a hero is within 80 and the step is off cooldown (7 s), they telegraph 0.6 s (marker at origin and destination) and step 150 away.
 - Every biome gets new attack patterns on existing foes and at least one new foe:
   - I **Bone Priest** (support): raises a dead skeleton (telegraphed), wards an ally.

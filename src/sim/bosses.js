@@ -7,6 +7,8 @@
 
   // ---------- helpers ----------
   const tele = (w, e, x, y, r, dur, mul, boom, onEnd) => w.addZone({ kind: 'tele', x, y, r, dur, dmg: e.dmg * mul, team: 1, src: e, boom, onEnd });
+  // Ground burst the boss has already launched (spikes, spore fields, mire, fire rain): runs on its own clock, ignores the boss being frozen or dead.
+  const drop = (...a) => { const z = tele(...a); z.detached = true; return z; };
   const line = (w, e, x, y, a, len, width, dur, mul, warnOnly) => w.addZone({ kind: 'teleLine', x, y, a, len, w: width, dur, dmg: e.dmg * mul, team: 1, src: e, warnOnly });
   const cone = (w, e, a, r, arc, dur, mul, onEnd) => w.addZone({ kind: 'teleCone', x: e.x, y: e.y, a, r, arc, dur, dmg: e.dmg * mul, team: 1, src: e, onEnd });
   const ring = (w, e, n, speed, kind, off, mul, r) => { for (let i = 0; i < n; i++) w.enemyShoot(e, off + i * TAU / n, speed, kind, mul, r); w.emit({ t: 'shoot', x: Math.round(e.x), y: Math.round(e.y), k: kind }); };
@@ -106,7 +108,7 @@
           for (let i = 1; i <= 9; i++) {
             const x = e.x + Math.cos(a) * (e.r + i * 40), y = e.y + Math.sin(a) * (e.r + i * 40);
             if (D.blocksShots(D.tileAt(w.room, x, y), true)) break;
-            tele(w, e, x, y, 24, (0.85 + i * 0.07) * k, 0.9, 'bone');
+            drop(w, e, x, y, 24, (0.85 + i * 0.07) * k, 0.9, 'bone');
           }
         }
       },
@@ -132,7 +134,7 @@
         for (const p of w.alivePlayers()) pts.push({ x: p.x, y: p.y });
         const n = e.phase >= 2 ? 7 : 5;
         while (pts.length < n) pts.push(D.randomFloor(w.room, w.rng, null, 0));
-        for (const pt of pts) tele(w, e, pt.x, pt.y, 54, 1.25 * e.vars.wm, 0.8, 'spore', (ww, z) => ww.addZone({ kind: 'poison', x: z.x, y: z.y, r: 54, dur: 6, dps: e.dmg * 0.5, team: 1 }));
+        for (const pt of pts) drop(w, e, pt.x, pt.y, 54, 1.25 * e.vars.wm, 0.8, 'spore', (ww, z) => ww.addZone({ kind: 'poison', x: z.x, y: z.y, r: 54, dur: 6, dps: e.dmg * 0.5, team: 1 }));
       },
       update(w, e, dt, t) { return t > 1.6 * e.vars.wm; },
     },
@@ -159,7 +161,7 @@
         for (const p of w.alivePlayers()) pts.push({ x: p.x, y: p.y });
         const n = e.phase >= 2 ? 4 : 3;
         while (pts.length < n) pts.push(D.randomFloor(w.room, w.rng, null, 0));
-        for (const pt of pts) tele(w, e, pt.x, pt.y, 58, 1.2 * e.vars.wm, 0.7, 'spore', (ww, z) => ww.addZone({ kind: 'mire', x: z.x, y: z.y, r: 58, dur: 7, team: 1 }));
+        for (const pt of pts) drop(w, e, pt.x, pt.y, 58, 1.2 * e.vars.wm, 0.7, 'spore', (ww, z) => ww.addZone({ kind: 'mire', x: z.x, y: z.y, r: 58, dur: 7, team: 1 }));
       },
       update(w, e, dt, t) { return t > 1.5 * e.vars.wm; },
     },
@@ -199,7 +201,7 @@
           for (let i = 1; i <= 8; i++) {
             const x = e.x + Math.cos(a) * (e.r + i * 38), y = e.y + Math.sin(a) * (e.r + i * 38);
             if (D.blocksShots(D.tileAt(w.room, x, y), true)) break;
-            tele(w, e, x, y, 26, (0.6 + i * 0.09) * e.vars.wm, 0.9, 'ice');
+            drop(w, e, x, y, 26, (0.6 + i * 0.09) * e.vars.wm, 0.9, 'ice');
           }
         }
       },
@@ -316,7 +318,7 @@
           const p = ps[i % ps.length];
           const x = p.x + w.rng.range(-110, 110), y = p.y + w.rng.range(-90, 90);
           if (D.tileAt(w.room, x, y) === 1) continue;
-          tele(w, e, x, y, 40, w.rng.range(1.0, 1.7) * e.vars.wm, 0.9, 'fire', (ww, z) => ww.addZone({ kind: 'fire', x: z.x, y: z.y, r: 34, dur: 4, dps: e.dmg * 0.45, team: 1 }));
+          drop(w, e, x, y, 40, w.rng.range(1.0, 1.7) * e.vars.wm, 0.9, 'fire', (ww, z) => ww.addZone({ kind: 'fire', x: z.x, y: z.y, r: 34, dur: 4, dps: e.dmg * 0.45, team: 1 }));
         }
       },
       update(w, e, dt, t) { return t > 1.9 * e.vars.wm; },
@@ -454,7 +456,7 @@
           const pt = Sim.castMove(w.room, p.x, p.y, a, 70, e.r, true);
           e.vars.pending = { x: pt.x, y: pt.y, at: t + 0.6 * k };
           e.pose = 'fade';
-          w.addZone({ kind: 'tele', x: pt.x, y: pt.y, r: e.r + 6, dur: 0.6 * k, dmg: 0, team: 1, warnOnly: true });
+          w.addZone({ kind: 'tele', x: pt.x, y: pt.y, r: e.r + 6, dur: 0.6 * k, dmg: 0, team: 1, src: e, warnOnly: true });
         }
         const pd = e.vars.pending;
         if (pd && t >= pd.at && !pd.done) {

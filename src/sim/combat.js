@@ -9,6 +9,7 @@
   const NO_GUARD = { dot: 1, chain: 1, explode: 1 }; // hit kinds that ignore a foe's frontal guard
   const FULL_CONTACT = new Set(['lunge', 'charge', 'leap', 'bash', 'dive']); // attack states whose body contact deals full damage
   const NO_STATS = {};
+  const WINDUP = { tele: 1, teleLine: 1, teleCone: 1 }; // zone kinds that telegraph their caster's attack
   const evoOf = (p) => p.evo || p.stats.evo || null;
 
   // ---------------- enemies ----------------
@@ -690,6 +691,11 @@
   W.updateZones = function (dt) {
     const keep = [];
     for (const z of this.zones) {
+      const s = z.src;
+      if (s && WINDUP[z.kind] && !z.detached) { // a wind-up telegraph follows its caster: stalled while it is frozen or stunned, dropped (no hit, no onEnd) when it dies
+        if (s.hp <= 0) continue;
+        if (s.frozen > 0 || s.stun > 0) { if (z.update) z.update(this, z, 0); keep.push(z); continue; }
+      }
       z.t += dt;
       if (z.update) z.update(this, z, dt);
       const done = z.t >= z.dur;
@@ -765,7 +771,6 @@
     if (e.spawnT > 0) { e.spawnT -= dt; return; }
     this.tickStatuses(e, dt);
     if (e.hp <= 0) return;
-    if (e.cd > 0 && !e.boss) e.cd -= dt * this.threat().cdRate; // attack cooldowns recover faster; wind-ups are untouched
     if (e.kbx || e.kby) {
       Sim.moveCircle(e, e.kbx * dt, e.kby * dt, this.room, this.locked, e.fly);
       const f = Math.max(0, 1 - 9 * dt); e.kbx *= f; e.kby *= f;
@@ -775,6 +780,7 @@
     if (e.exposed && !e.def.invuln) e.hp -= e.maxHp * (e.boss ? 0.012 : 0.04) * dt;
     if (e.hp <= 0) { this.killEnemy(e, null, {}); return; }
     if (e.frozen > 0 || e.stun > 0) return;
+    if (e.cd > 0 && !e.boss) e.cd -= dt * this.threat().cdRate; // attack cooldowns recover faster; wind-ups are untouched
     e.tgtT -= dt;
     if (e.tgtT <= 0 || !this.alive(e.target) || e.target.stealthT > 0) { e.target = this.nearestPlayer(e.x, e.y); e.tgtT = 0.6; }
     if (!e.target) return;
