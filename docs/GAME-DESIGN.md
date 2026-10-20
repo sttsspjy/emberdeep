@@ -12,7 +12,7 @@ Canonical rules and numbers. Code follows this file; balance passes may retune n
 ## 1. Damage model
 
 - Foe HP = base × `1 + 0.65(s−1) + 0.08(s−1)²` × **threat HP** (table below) × party multiplier. Foe damage = base × `1 + 0.22(s−1) + 0.03(s−1)²` × **threat damage** (below 1 only in strata I–III). Boss HP is absolute (table below), scaled by party, pact and dread.
-- **Threat** per stratum (`World.THREAT`): HP ×, damage ×, wave budget ×, attack-cooldown rate (foe cooldowns tick faster by this fraction, negative = slower; wind-ups never change), boss pause × (time between boss attacks):
+- **Threat** per stratum (`World.THREAT`): HP ×, damage ×, wave budget ×, attack-cooldown rate `cdRate` (foe cooldowns tick faster by this fraction, negative = slower; wind-ups never change), boss pause × (time between boss attacks):
 
 | Stratum | HP × | Damage × | Wave × | Cooldown rate | Boss pause × |
 |---|---|---|---|---|---|
@@ -69,7 +69,7 @@ Elements: `pyre`, `rime`, `storm`. Physical paths (`steel`, `blood`, `spirit`) i
 - Critical hit by a hero with `bleed`: `e.bleedPool += hitDmg × bleed`. Drains like Burn (20% per 0.5 s). Physical, no affinity.
 
 ### Damage taken by foes (order)
-1. Hero multiplier (dmg stat, conditionals: execute, searing, lacerate, berserk, momentum, idol, banner).
+1. Hero multiplier (dmg stat, conditionals: execute, searing, lacerate, berserk, hemomancy, idol, banner).
 2. Crit ×critMult.
 3. Foe vulnerability `1 + Σ(mark 0.25, judged 0.2, frozen 0.25, sunder stacks × 0.04)`.
 4. Element affinity (elemental damage only).

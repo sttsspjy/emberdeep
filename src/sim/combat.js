@@ -33,7 +33,7 @@
       // statuses: burn/bleed pools, chill, charge, hero debuffs; slow/windMul/dmgTakenMul are read by ai.js and hitEnemy
       burn: 0, burnPool: 0, burnTick: 0, burnOwner: null, bleedPool: 0, bleedTick: 0, bleedOwner: null,
       chill: 0, chillT: 0, chillOwner: null, freezeRes: 0, freezeResT: 0, charge: 0, chargeOwner: null, dischargeT: 0,
-      hpMul: def.boss ? def.hp / def.refHp : this.threat().hp, // HP-relative statuses (chill, Conflagration, Wildfire) ignore this stratum lever
+      hpLever: def.boss ? def.hp / def.refHp : this.threat().hp, // HP-relative statuses (chill, Conflagration, Wildfire) ignore this stratum lever
       mark: 0, judged: 0, blind: 0, sunder: 0, sunderOwner: null, slow: 1, slowAmt: 0, slowT: 0, windMul: 1, dmgTakenMul: 1, invulnT: 0, killed: false,
     };
     if (opts.elite) this.makeElite(e, opts.affix);
@@ -75,7 +75,6 @@
     if (p && !src.raw) {
       crit = src.crit === undefined ? this.rng.chance(st.crit) : !!src.crit;
       let mul = st.dmg;
-      if (st.momentum && p.moving) mul += st.momentum;
       if (st.execute && e.hp < e.maxHp * 0.3) mul += st.execute;
       if (st.searing && e.burnPool > 0) mul += st.searing;
       if (st.lacerate && e.bleedPool > 0) mul += st.lacerate;
@@ -152,7 +151,7 @@
   W.applyInfusions = function (e, dmg, p) {
     const st = p.stats;
     if (st.pyreInfuse) this.addBurn(e, dmg * st.pyreInfuse, p);
-    if (st.rimeInfuse) this.addChill(e, ((dmg / (e.maxHp / e.hpMul)) * 260 + 2) * st.rimeInfuse, p);
+    if (st.rimeInfuse) this.addChill(e, ((dmg / (e.maxHp / e.hpLever)) * 260 + 2) * st.rimeInfuse, p);
     if (st.stormInfuse) this.addCharge(e, dmg * st.stormInfuse, p);
   };
 
@@ -181,13 +180,10 @@
     if (p && p.stats.conflag) this.checkCombust(e, p);
   };
 
-  // Legacy dps-style burn (pool = dps x 3 s).
-  W.applyBurn = function (e, p, dps) { this.addBurn(e, dps * 3, p); };
-
   // A pool above 30% of current HP combusts: the whole pool hits the foe and every foe within 70.
   W.checkCombust = function (e, p) {
     const pool = e.burnPool;
-    if (e.hp <= 0 || pool < 5 || pool <= e.hp / e.hpMul * 0.3) return;
+    if (e.hp <= 0 || pool < 5 || pool <= e.hp / e.hpLever * 0.3) return;
     e.burnPool = 0; e.burn = 0;
     const dmg = pool * (1 + p.stats.burnMul), r = 70;
     this.emit({ t: 'combust', x: Math.round(e.x), y: Math.round(e.y), r });
@@ -349,7 +345,7 @@
     if (p && p.stats.wildfire && e.burnPool > 0) {
       for (let i = 0, n = this.enemies.length; i < n; i++) {
         const o = this.enemies[i];
-        if (o !== e && o.hp > 0 && o.spawnT <= 0 && U.dist2(o.x, o.y, e.x, e.y) < (80 + o.r) ** 2) this.addBurn(o, e.maxHp / e.hpMul * p.stats.wildfire, p);
+        if (o !== e && o.hp > 0 && o.spawnT <= 0 && U.dist2(o.x, o.y, e.x, e.y) < (80 + o.r) ** 2) this.addBurn(o, e.maxHp / e.hpLever * p.stats.wildfire, p);
       }
       this.emit({ t: 'boom', x: Math.round(e.x), y: Math.round(e.y), r: 80, k: 'fire' });
     }
@@ -769,7 +765,7 @@
     if (e.spawnT > 0) { e.spawnT -= dt; return; }
     this.tickStatuses(e, dt);
     if (e.hp <= 0) return;
-    if (e.cd > 0 && !e.boss) e.cd -= dt * this.threat().cd; // attack cooldowns recover faster; wind-ups are untouched
+    if (e.cd > 0 && !e.boss) e.cd -= dt * this.threat().cdRate; // attack cooldowns recover faster; wind-ups are untouched
     if (e.kbx || e.kby) {
       Sim.moveCircle(e, e.kbx * dt, e.kby * dt, this.room, this.locked, e.fly);
       const f = Math.max(0, 1 - 9 * dt); e.kbx *= f; e.kby *= f;

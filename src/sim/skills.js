@@ -274,7 +274,7 @@
       for (const e of this.enemies) {
         if (e.hp <= 0) continue;
         const d = Math.hypot(e.x - p.x, e.y - p.y);
-        if (d < r + e.r) { this.hitEnemy(e, 22 + w.dmg * 2.5, { p, kind: 'skill', knock: 200, kx: (e.x - p.x) / (d || 1), ky: (e.y - p.y) / (d || 1) }); if (e.hp > 0) this.applyBurn(e, p, w.dmg * 0.8 + 4); }
+        if (d < r + e.r) { this.hitEnemy(e, 22 + w.dmg * 2.5, { p, kind: 'skill', knock: 200, kx: (e.x - p.x) / (d || 1), ky: (e.y - p.y) / (d || 1) }); if (e.hp > 0) this.addBurn(e, (w.dmg * 0.8 + 4) * 3, p); }
       }
       this.emit({ t: 'nova', x: p.x, y: p.y, r, c: '#ff7a2a' });
       if (st.phoenixNova) { this.healPlayer(p, p.maxHp * 0.12); this.addZone({ kind: 'pfire', x: p.x, y: p.y, r: r * 0.8, dur: 3, dps: 8 + w.dmg, owner: p.pid, team: 0 }); }
