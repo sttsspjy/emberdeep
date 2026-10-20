@@ -23,7 +23,7 @@
   W.beginEncounter = function (room, rs) {
     if (room.type === 'combat' || room.type === 'elite') {
       this.locked = true;
-      this.enc = { kind: 'waves', waves: this.planWaves(room), wave: -1, t: 0.8 };
+      this.enc = { kind: 'waves', waves: this.planWaves(room), wave: -1, t: ED.World.PACE.first };
       this.emit({ t: 'lock' });
     } else if (room.type === 'boss') {
       this.locked = true;
@@ -81,15 +81,15 @@
   W.updateEncounter = function (dt) {
     const enc = this.enc;
     if (!enc) return;
-    enc.t -= dt;
+    enc.t -= dt; enc.age = (enc.age || 0) + dt;
     const pending = pendingSpawns(this);
     if (enc.kind === 'waves') {
       const alive = this.hostiles();
       const last = enc.wave >= enc.waves.length - 1;
-      if (!last && enc.t <= 0 && !pending && (enc.wave < 0 || alive <= Math.max(1, Math.floor(enc.waves[enc.wave].length * 0.3)))) {
-        enc.wave++;
+      if (!last && enc.t <= 0 && !pending && (enc.wave < 0 || enc.age >= ED.World.PACE.maxAge || alive <= Math.max(1, Math.floor(enc.waves[enc.wave].length * ED.World.PACE.nextAt)))) {
+        enc.wave++; enc.age = 0;
         this.spawnWave(enc.waves[enc.wave]);
-        enc.t = 1.2;
+        enc.t = ED.World.PACE.gap;
       } else if (last && alive === 0 && !pending && enc.t <= 0) {
         this.roomCleared();
       }
@@ -123,8 +123,8 @@
     const avoid = this.alivePlayers();
     for (const it of list) {
       const def = ED.ENEMIES[it.type];
-      const pt = D.randomFloor(this.room, this.rng, avoid, def.ai === 'turret' ? 150 : 120);
-      this.addZone({ kind: 'spawn', x: pt.x, y: pt.y, r: def.r + 4, dur: 0.85 + this.rng.range(0, 0.35), type: it.type, elite: !!it.elite, affix: it.affix });
+      const pt = D.randomFloor(this.room, this.rng, avoid, def.ai === 'turret' ? ED.World.PACE.avoidTurret : ED.World.PACE.avoid);
+      this.addZone({ kind: 'spawn', x: pt.x, y: pt.y, r: def.r + 4, dur: ED.World.PACE.spawn + this.rng.range(0, ED.World.PACE.spawnVar), type: it.type, elite: !!it.elite, affix: it.affix });
     }
   };
 
