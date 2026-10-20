@@ -29,7 +29,7 @@ Canonical rules and numbers. Code follows this file; balance passes may retune n
 - HP-relative statuses (chill build-up, Conflagration threshold, Wildfire) measure against foe HP before the stratum HP lever (bosses: `refHp`, the design HP 800–7,800), so inflating HP does not weaken Rime or Pyre.
 - Contact damage: touching a foe outside an attack state = `0.4 × dmg`, contact cooldown 1.0 s. Attack states (`lunge`, `charge`, `leap`, `bash`, `dive`) and the Gloom = `1.0 × dmg`. Boss contact damage is × 0.8.
 - No weapon deflects projectiles passively. Projectiles are only stopped by: Knight's Bulwark, Spirit "Guardian Spirits" blades, Mirror Shard relic (chance).
-- Lifesteal exists only in the Blood path. Leech healing per hero is capped at **1.2% max HP per second** (rolling 1 s window). DoT ticks never leech.
+- Lifesteal exists only in the Blood path. **Sustain cap**: every heal a hero gets from hits and kills goes through one rolling 1 s window per receiving hero (`sustainHeal`), capped at **1% max HP per second**. Under the cap: Leech, Hemorrhage, Sanguine scythes, kill heals (Fang Pendant, Blood Pact, Spirit Feast, Sanguine ×2), Blessed Strikes, Soul Siphon, Judgment's kill heal. Outside it: hearts, blood orbs, campfire, shop draught, Vigor, Elixir and Provisions (between-strata heals), revive, class-skill heals on a cooldown (Sanctuary, Phoenix Nova, Bone Harvest) and the Sacred Lantern's ally heal. DoT ticks never leech.
 - Hearts heal 22% max HP + 6. A kill drops one with 4% (elites 40%); a cleared room drops one with 30%; a boss drops two.
 - Every hit's damage is the same no matter how it was produced; statuses build from **damage dealt, never from hit count**, so attack speed and damage scale them equally.
 
@@ -129,13 +129,13 @@ Six paths. A hero owns at most **3 gates** (path slots) per run. `affinity(path)
 ### Blood — `#d43a5a`, icon `drop`
 | id | name | rar | max | effect |
 |---|---|---|---|---|
-| bloodpact | Blood Pact (gate) | r | 1 | Kills heal 1% max HP. +20% damage, and +20% more below 50% HP. `killHealPct 0.01, berserk 0.2, dmg 0.2` |
-| leech | Leech | r | 2 | Heal 1.5% of damage dealt (cap 1.2% max HP/s). `leech 0.015` |
+| bloodpact | Blood Pact (gate) | r | 1 | Kills heal 1% max HP (sustain cap). +20% damage, and +20% more below 50% HP. `killHealPct 0.01, berserk 0.2, dmg 0.2` |
+| leech | Leech | r | 2 | Heal 1.5% of damage dealt (sustain cap). `leech 0.015` |
 | bloodrush | Bloodrush | r | 2 | +8% attack speed; below 50% HP: +15% attack speed, +10% move speed. `bloodrush 0.15, atk 0.08` |
 | transfusion | Transfusion | c | 1 | Kills drop a blood orb 20% of the time (heals 4% max HP). `bloodOrb 0.2` |
 | hemomancy | Hemomancy | r | 2 | Skills cost 4% current HP but deal +35%. `hemomancy 0.35` |
 | crimsontide | Crimson Tide (key) | e | 1 | Overhealing becomes a blood shield (max 25% max HP) that absorbs damage first. `bloodShield 0.25` |
-| evo_blood | Sanguine Arms (evolution) | l | 1 | Every attack also launches a blood scythe/shard (50%) that heals 15% of its damage (uncapped). Kill heals ×2. |
+| evo_blood | Sanguine Arms (evolution) | l | 1 | Every attack also launches a blood scythe/shard (50%) that heals 15% of its damage. Kill heals ×2. Both go through the sustain cap. |
 
 ### Spirit — `#b78cff`, icon `orb`
 | id | name | rar | max | effect |
@@ -154,11 +154,11 @@ Six paths. A hero owns at most **3 gates** (path slots) per run. `affinity(path)
 | thermalshock | pyre+rime | When a burning foe freezes, its Burn pool is dealt instantly ×2. |
 | plasma | pyre+storm | Discharges add Burn equal to 40% of their damage. |
 | superconductor | rime+storm | Discharges add 25 chill; frozen foes arc to 2 extra targets. |
-| hemorrhage | steel+blood | Bleed heals you 10% of its damage (counts toward the leech cap). |
+| hemorrhage | steel+blood | Bleed heals you 10% of its damage (sustain cap). |
 | staticedge | steel+storm | Crits discharge the foe's charge instantly at +50%. |
 | serrated | steel+rime | Crits on chilled foes add `(dmg / foeHp) × 2000` chill, at most 70 (35 for the median crit on a chilled foe); frozen foes take +50% crit damage. |
 | soulfire | spirit+pyre | Companion hits add Burn equal to 60% of their damage. |
-| feast | spirit+blood | Companion kills heal you 1% max HP; companions +20% damage. |
+| feast | spirit+blood | Companion kills heal you 1% max HP (sustain cap); companions +20% damage. |
 
 ### Neutral boons (no path; low caps)
 vigor (c,3: +15 max HP, heal 15) · plating (c,2: +5 armor) · fleet (c,2: +7% move) · focus (c,3: skills −10% cd) · lightstep (c,2: dash −20% cd) · magnet (c,2: +40% pickup, +10% xp) · edge (c,2: +10% damage) · quick (c,2: +10% attack speed) · wide (r,2: +15% area) · bounty (c,2: +25% gold) · evade (r,2: +6% dodge) · thorns (r,2: attackers take 10, +4 armor) · pierce (r,2, ranged: +1 pierce) · split (r,2, ranged: +1 projectile, −8% damage) · bladedash (r,1: dashing through foes deals 120% weapon damage) · echo (e,1: K skill holds 2 charges) · laststand (e,1) · glass (e,1: +30% damage, −15% max HP) · trance (e,1: a skill grants +30% attack speed 4 s) · overcharge (e,1: skills release a shockwave).
@@ -187,7 +187,7 @@ Slot 0 skills: charge, volley, nova, step, sanctuary, legion. Slot 1:
 | Ranger | **Rain of Arrows** | 10 | Target point (≤ 260). After 0.35 s, arrows fall for 2 s in r80: every 0.25 s all foes inside take `4 + 0.45 × weapon` (infused). |
 | Pyromancer | **Meteor** | 12 | Target point (≤ 300). 0.9 s telegraph, impact r95: `30 + 3.5 × weapon`, knock 220, adds Burn = 50% of the impact (even without Kindle), crater (pfire r60, 3 s). |
 | Shade | **Vanish** | 11 | Smoke r75 for 3 s (foes inside slowed 40%, cannot start attacks). Stealth 2.5 s: foes cannot see you, so they keep acting against, and path toward, the spot where they last saw you (attacks still hit by position). Next attack within stealth (+0.5 s) is an Ambush: guaranteed crit, +150%. Attacking ends stealth. |
-| Cleric | **Judgment** | 9 | A hammer flies 0.55 s out and returns, piercing; each leg hits a foe once for `18 + 1.4 × weapon` and Judges it 4 s (+20% damage taken). A judged foe dying heals allies within 160 by 3% max HP. |
+| Cleric | **Judgment** | 9 | A hammer flies 0.55 s out and returns, piercing; each leg hits a foe once for `18 + 1.4 × weapon` and Judges it 4 s (+20% damage taken). A judged foe dying heals allies within 160 by 3% max HP (sustain cap). |
 | Necromancer | **Bone Harvest** | 10 | Each of your minions explodes (r60, `24 + 1.8 × weapon`); heal 3% max HP per minion; then raise 1 minion (12 s). No minions: raise 2. |
 
 Skill cooldown reduction applies to both slots. Class boons (2 per skill, 4 per class):
@@ -199,7 +199,7 @@ Skill cooldown reduction applies to both slots. Class boons (2 per skill, 4 per 
 | Pyromancer | combust, phoenixnova | **twinmeteor** (e): a second Meteor lands 0.6 s later on the nearest foe · **moltencore** (r): crater lasts 3× longer, burns 2× hotter |
 | Shade | assassin, decoy | **smokescreen** (r): smoke +40% radius, +2 s, foes inside take +20% (`vulnT`) · **nightsedge** (e): an Ambush kill refunds Vanish |
 | Cleric | wrath, blessed | **twinhammer** (r): Judgment throws two hammers in a V · **verdict** (e): judged foes explode on death (60 + 150% weapon, r70) |
-| Necromancer | legionplus, bonespikes | **grimharvest** (r): Harvest explosions +50%, raise 2 · **soulsiphon** (e): minion hits heal you 1 (≤ 4/s) |
+| Necromancer | legionplus, bonespikes | **grimharvest** (r): Harvest explosions +50%, raise 2 · **soulsiphon** (e): minion hits heal you 0.15% max HP (sustain cap) |
 
 Controls: K / X / right mouse = skill 1; L / C / E / middle mouse = skill 2; gamepad skill 1 = B/RB, skill 2 = Y/LT.
 
@@ -235,6 +235,7 @@ Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat
 - `w.dread` holds the tier's `{hp, dmg, elite, wave, gold}`: `hp` and `dmg` apply at spawn (not to minions, allies or the Gloom), `elite` adds to a room's elite chance, `wave` multiplies the wave budget, `gold` multiplies room-clear gold and embers and the `gold` reward. The boss takes the tier of the moment its room is entered (light does not drain there).
 - **Lightless**: 4 s after entering a non-boss, non-start room, a telegraphed **Gloom** stalker spawns: invulnerable, passes through walls, speed 50, contact damage `35 × (1 + 0.22(s−1) + 0.03(s−1)²) × threat damage` (pact multipliers apply, dread does not), ignored by room-clear checks; despawns when you leave the room.
 - Emits `{t:'dread', tier}` on tier change. Renderer darkens the world and shrinks hero light with the light fraction.
+- A Gloom touch takes at most 25% of the victim's max HP (after armor, before the blood shield); contact cooldown stays 1.0 s.
 
 ## 8. Enemies
 
@@ -276,3 +277,4 @@ Smart pick policy unless noted; 384 runs each, six heroes in rotation, `node too
 - Pacing (half-upgraded): normal combat rooms 16 / 22 / 21 / 20 / 26 / 25 s per stratum (fresh 19 / 25 / 26 / 26 / 37 / 38 s), elite rooms 24-36 s (fresh 31-45 s), bosses 49 / 65 / 72 / 81 / 89 / 92 s (fresh 64-107 s). Strata I-II are the on-ramp: a fresh hero has 1-4 boons there, and longer rooms there fail the depth target.
 - Winning descent 25-28 min, final level 16-18. The lantern ends exploration on 44-66% of floors (rooms visited 77-91%); a bot that never turns back (explore-everything) wins 26% instead of 31% and reaches Lightless on 14% of floors instead of 6%.
 - Forced from the start (half-upgraded, smart, 384 runs): no gate raises the win rate above 39% (Pyre 37, Rime 32, Storm 35, Steel 39, Blood 28, Spirit 36; random start 31); no relic above +15 points (Hourglass 41%).
+- Sustain check (half-upgraded, smart, 192 runs, random start 23%): each heal boon or relic forced alone adds about +5 points at most (Leech +4, Hemorrhage +4, Elixir +4, Transfusion +3, Feast +2, Fang +1, Crest −2, Chalice +5, Sanguine Arms +5, Soul Siphon +5 on the Necromancer, Blessed Strikes −2 on the Cleric). Blood Pact + Leech forced: 16% against 22% unforced (384 runs); the Blood gate alone is 12 points below a random gate.

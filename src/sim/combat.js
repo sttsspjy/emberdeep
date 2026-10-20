@@ -4,7 +4,8 @@
   const U = ED.U, Sim = ED.Sim, D = ED.Dungeon;
   const W = ED.World.prototype;
 
-  ED.CONST.LEECH_CAP = 0.012; // max HP fraction a hero may leech per second (read by the UI)
+  ED.CONST.SUSTAIN_CAP = 0.01; // max HP fraction a hero regains per second from on-hit and on-kill combat heals (read by the UI)
+  ED.CONST.GLOOM_CAP = 0.25; // max HP fraction one Gloom touch may take
   const EL_IDX = { pyre: 1, rime: 2, storm: 3 };
   const NO_GUARD = { dot: 1, chain: 1, explode: 1 }; // hit kinds that ignore a foe's frontal guard
   const FULL_CONTACT = new Set(['lunge', 'charge', 'leap', 'bash', 'dive']); // attack states whose body contact deals full damage
@@ -131,7 +132,7 @@
   // On-hit effects of a direct hero hit: leech, infusions, crit effects, heals.
   W.heroProcs = function (e, p, dmg, crit, comp, src) {
     const st = p.stats;
-    if (st.leech && !comp) this.leechHeal(p, dmg * st.leech);
+    if (st.leech && !comp) this.sustainHeal(p, dmg * st.leech);
     if (!comp || st.compInfuse) this.applyInfusions(e, dmg, p);
     if (src.burn) this.addBurn(e, dmg * src.burn, p);
     if (crit) {
@@ -145,7 +146,7 @@
     if (st.blessed) {
       let low = null;
       for (const q of this.players.values()) if (!q.downed && !q.dead && q.hp < q.maxHp && (!low || q.hp / q.maxHp < low.hp / low.maxHp)) low = q;
-      if (low) this.healPlayer(low, st.blessed, true);
+      if (low) this.sustainHeal(low, st.blessed);
     }
   };
 
@@ -157,16 +158,17 @@
     if (st.stormInfuse) this.addCharge(e, dmg * st.stormInfuse, p);
   };
 
-  // Leech heal through a sliding 1 s window (10 slots of 0.1 s) capped at LEECH_CAP x max HP; p.leechT is the newest slot id.
-  W.leechHeal = function (p, amt) {
-    const win = p.leechWin || (p.leechWin = new Array(10).fill(0));
+  // Combat sustain (leech, hemorrhage, steal, kill heals, Blessed Strikes, Soul Siphon, Judgment): heals the receiver p through one shared
+  // sliding 1 s window (10 slots of 0.1 s) capped at SUSTAIN_CAP x its max HP; p.susT is the newest slot id. Returns the HP restored.
+  W.sustainHeal = function (p, amt) {
+    const win = p.susWin || (p.susWin = new Array(10).fill(0));
     const id = Math.floor(this.time * 10);
-    if (p.leechT === undefined) p.leechT = id;
-    for (let i = 1, gap = Math.min(10, id - p.leechT); i <= gap; i++) win[(p.leechT + i) % 10] = 0;
-    p.leechT = id;
+    if (p.susT === undefined) p.susT = id;
+    for (let i = 1, gap = Math.min(10, id - p.susT); i <= gap; i++) win[(p.susT + i) % 10] = 0;
+    p.susT = id;
     let used = 0;
     for (let i = 0; i < 10; i++) used += win[i];
-    const a = Math.min(amt, p.maxHp * ED.CONST.LEECH_CAP - used);
+    const a = Math.min(amt, p.maxHp * ED.CONST.SUSTAIN_CAP - used);
     if (!(a > 0)) return 0;
     win[id % 10] += a;
     return this.healPlayer(p, a, true);
@@ -308,7 +310,7 @@
         e.bleedPool -= d;
         if (e.bleedPool < 1e-3) e.bleedPool = 0;
         const got = this.hitEnemy(e, d, { p: o, kind: 'dot', raw: true, noProc: true, crit: false, bleed: true });
-        if (o && o.stats.hemorrhage && got > 0) this.leechHeal(o, got * 0.1);
+        if (o && o.stats.hemorrhage && got > 0) this.sustainHeal(o, got * 0.1);
       }
     }
     if (e.hp <= 0) return;
@@ -370,13 +372,13 @@
     if (p && src.kind !== 'minionBurst') {
       const st = p.stats, k = evoOf(p) === 'blood' ? 2 : 1;
       const comp = !!src.comp || src.kind === 'orbit' || src.kind === 'wisp' || src.kind === 'minion';
-      if (st.killHeal) this.healPlayer(p, st.killHeal * k, true);
-      if (st.killHealPct) this.healPlayer(p, p.maxHp * st.killHealPct * k, true);
+      if (st.killHeal) this.sustainHeal(p, st.killHeal * k);
+      if (st.killHealPct) this.sustainHeal(p, p.maxHp * st.killHealPct * k);
       if (st.bloodOrb && this.rng.chance(st.bloodOrb)) this.spawnPickup('orb', e.x, e.y, 0.04);
-      if (comp && st.feast) this.healPlayer(p, p.maxHp * 0.01, true);
-      if (st.chalice && p.chaliceHp < 60) {
+      if (comp && st.feast) this.sustainHeal(p, p.maxHp * 0.01);
+      if (st.chalice && p.chaliceHp < 20) {
         p.chaliceKills++;
-        if (p.chaliceKills % 3 === 0) { p.chaliceHp++; this.recalc(p, false); if (p.chaliceHp % 5 === 0) this.sendBuild(p); }
+        if (p.chaliceKills % 4 === 0) { p.chaliceHp++; this.recalc(p, false); if (p.chaliceHp % 5 === 0) this.sendBuild(p); }
       }
       if (p.cls === 'necro') {
         const ch = 0.12 + (st.weapon.raise || 0);
@@ -434,6 +436,7 @@
     const e = src.e;
     if (e && e.chill > 0 && e.chillOwner) dmg *= 1 - e.chillOwner.stats.chillWeaken;
     dmg = Math.max(1, Math.round(dmg));
+    if (e && e.def.gloom) dmg = Math.min(dmg, Math.max(1, Math.round(p.maxHp * ED.CONST.GLOOM_CAP)));
     if (p.shield > 0) { const ab = Math.min(p.shield, dmg); p.shield -= ab; dmg -= ab; }
     p.hp -= dmg; p.invuln = src.hazard ? 0.3 : 0.6; p.hurtT = 0.3;
     if (this.boss) p.hitThisBoss = true;
@@ -647,7 +650,7 @@
           const sp = Math.hypot(pr.vx, pr.vy) || 1;
           const hs = { p: owner, kind: pr.hk || (pr.kind === 'wisp' ? 'wisp' : 'weapon'), comp: pr.comp, crit: pr.crit, mul: pr.mul, ambush: pr.ambush, knock: pr.knock, kx: pr.vx / sp, ky: pr.vy / sp, burn: pr.burn, x: pr.x, y: pr.y };
           const got = this.hitEnemy(e, pr.dmg, hs);
-          if (pr.steal && owner && got > 0) this.healPlayer(owner, got * pr.steal, true);
+          if (pr.steal && owner && got > 0) this.sustainHeal(owner, got * pr.steal);
           if (pr.spec && hs.critOut) this.spectralShot(pr, e);
           if (pr.explode) { this.projBurst(pr); dead = true; break; }
           if (pr.cloud) { this.addZone({ kind: 'plague', x: pr.x, y: pr.y, r: pr.cloud.r, dur: pr.cloud.dur, dps: pr.cloud.dps, owner: pr.owner, team: 0 }); dead = true; break; }

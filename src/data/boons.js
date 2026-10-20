@@ -76,13 +76,13 @@
     evo_steel: { name: 'Masterwork Arms', rar: 'l', icon: 'sword', path: 'steel', evo: 'steel', desc: 'Crits release a spectral strike at 60%. +10% critical chance.', mods: { crit: 0.1 }, max: 1 },
 
     // ---- Blood ----
-    bloodpact: { name: 'Blood Pact', rar: 'r', icon: 'drop', path: 'blood', gate: true, desc: 'Kills heal 1% max health. +20% damage, and +20% more below 50% health.', mods: { killHealPct: 0.01, berserk: 0.2, dmg: 0.2 }, max: 1 },
-    leech: { name: 'Leech', rar: 'r', icon: 'fang', path: 'blood', desc: 'Heal 1.5% of damage dealt (up to 1.2% max health per second).', mods: { leech: 0.015 }, max: 2 },
+    bloodpact: { name: 'Blood Pact', rar: 'r', icon: 'drop', path: 'blood', gate: true, desc: 'Kills heal 1% max health (within the hit and kill heal cap). +20% damage, and +20% more below 50% health.', mods: { killHealPct: 0.01, berserk: 0.2, dmg: 0.2 }, max: 1 },
+    leech: { name: 'Leech', rar: 'r', icon: 'fang', path: 'blood', desc: 'Heal 1.5% of damage dealt. All hit and kill healing together is capped per second.', mods: { leech: 0.015 }, max: 2 },
     bloodrush: { name: 'Bloodrush', rar: 'r', icon: 'boot', path: 'blood', desc: '+8% attack speed. Below 50% health: +15% attack speed and +10% move speed.', mods: { bloodrush: 0.15, atk: 0.08 }, max: 2 },
     transfusion: { name: 'Transfusion', rar: 'c', icon: 'potion', path: 'blood', desc: 'Kills drop a blood orb 20% of the time (heals 4% max health).', mods: { bloodOrb: 0.2 }, max: 1 },
     hemomancy: { name: 'Hemomancy', rar: 'r', icon: 'heartbroken', path: 'blood', desc: 'Skills cost 4% of current health but deal +35% damage.', mods: { hemomancy: 0.35 }, max: 2 },
     crimsontide: { name: 'Crimson Tide', rar: 'e', icon: 'chalice', path: 'blood', key: true, desc: 'Overhealing becomes a blood shield (max 25% max health) that absorbs damage first.', mods: { bloodShield: 0.25 }, max: 1 },
-    evo_blood: { name: 'Sanguine Arms', rar: 'l', icon: 'drop', path: 'blood', evo: 'blood', desc: 'Every attack also launches a blood scythe (50%) that heals 15% of its damage. Kill heals are doubled.', mods: {}, max: 1 },
+    evo_blood: { name: 'Sanguine Arms', rar: 'l', icon: 'drop', path: 'blood', evo: 'blood', desc: 'Every attack also launches a blood scythe (50%) that heals 15% of its damage. Kill heals are doubled. Healing stays within the hit and kill heal cap.', mods: {}, max: 1 },
 
     // ---- Spirit ----
     wispcall: { name: 'Spirit Wisp', rar: 'r', icon: 'orb', path: 'spirit', gate: true, desc: 'A wisp fights at your side.', mods: { wisp: 1 }, max: 1 },
@@ -97,11 +97,11 @@
     thermalshock: { name: 'Thermal Shock', rar: 'd', icon: 'snow', duo: ['pyre', 'rime'], desc: 'When a burning foe freezes, its Burn pool is dealt instantly, doubled.', mods: { thermal: 1 }, max: 1 },
     plasma: { name: 'Plasma', rar: 'd', icon: 'star', duo: ['pyre', 'storm'], desc: 'Discharges add Burn equal to 40% of their damage.', mods: { plasma: 1 }, max: 1 },
     superconductor: { name: 'Superconductor', rar: 'd', icon: 'bolt', duo: ['rime', 'storm'], desc: 'Discharges add 25 chill. Frozen foes arc to 2 extra targets.', mods: { supercond: 1 }, max: 1 },
-    hemorrhage: { name: 'Hemorrhage', rar: 'd', icon: 'fang', duo: ['steel', 'blood'], desc: 'Bleed heals you for 10% of its damage (counts toward the leech cap).', mods: { hemorrhage: 1 }, max: 1 },
+    hemorrhage: { name: 'Hemorrhage', rar: 'd', icon: 'fang', duo: ['steel', 'blood'], desc: 'Bleed heals you for 10% of its damage (within the hit and kill heal cap).', mods: { hemorrhage: 1 }, max: 1 },
     staticedge: { name: 'Static Edge', rar: 'd', icon: 'dagger', duo: ['steel', 'storm'], desc: "Crits instantly discharge the foe's charge at +50%.", mods: { staticEdge: 1 }, max: 1 },
     serrated: { name: 'Serrated Frost', rar: 'd', icon: 'axe', duo: ['steel', 'rime'], desc: 'Crits on chilled foes add 35 chill. Frozen foes take +50% crit damage.', mods: { serrated: 1 }, max: 1 },
     soulfire: { name: 'Soulfire', rar: 'd', icon: 'ember', duo: ['spirit', 'pyre'], desc: 'Companion hits add Burn equal to 60% of their damage.', mods: { soulfire: 1 }, max: 1 },
-    feast: { name: 'Spirit Feast', rar: 'd', icon: 'chalice', duo: ['spirit', 'blood'], desc: 'Companion kills heal you 1% max health. Companions deal +20% damage.', mods: { feast: 1 }, max: 1 },
+    feast: { name: 'Spirit Feast', rar: 'd', icon: 'chalice', duo: ['spirit', 'blood'], desc: 'Companion kills heal you 1% max health (within the hit and kill heal cap). Companions deal +20% damage.', mods: { feast: 1 }, max: 1 },
   };
   ED.BOON_IDS = Object.keys(B);
   ED.RARITY = {
