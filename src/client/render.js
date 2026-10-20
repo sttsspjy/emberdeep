@@ -901,6 +901,7 @@
 
   // ---------------- status overlays (foes) and hero effects ----------------
   const LOOK_H = { priest: 44, rift: 44, sentinel: 48, knight: 34, golem: 36, hulk: 30, robed: 30, wraith: 36, reaver: 34, drone: 24, worm: 40, horror: 36, shade: 30, imp: 24, totem: 30, skeleton: 28, zombie: 28, wolf: 20, crab: 20, spider: 14, slime: 18, spitter: 28, shroom: 26, eel: 18 }; // approximate sprite heights at def.r
+  const BURN_K = [0, 0.85, 1.1, 1.4]; // flame scale per burn level
   const hash1 = (n) => { const s = Math.sin(n * 127.1) * 43758.5453; return s - Math.floor(s); };
   // Status light + halo, capped per frame (fewer on low quality).
   const stLight = (x, y, r, col, k) => { if (stN < (R.quality === 'low' ? 8 : 26)) { stN++; R.light(x, y, r, col, k); R.emit(x, y, r * 0.45, col, k * 0.5); } };
@@ -928,8 +929,9 @@
       for (let i = 0; i < n; i++) { const a = i * 2.4 + id, x = Math.cos(a) * r * 0.95, y = cy + Math.sin(a) * hh * 0.95, s = 1.8 + ch * 2; c.beginPath(); c.moveTo(x, y - s * 1.6); c.lineTo(x + s * 0.8, y + s * 0.5); c.lineTo(x - s * 0.8, y + s * 0.5); c.closePath(); c.fill(); c.stroke(); }
       stLight(e.x, e.y + cy, r * 2.6, '#7fe3ff', 0.15 + 0.35 * ch);
     }
-    if (e.burn > 0 || e.burnPool > 0) {
-      const k = e.burnPool > 1 ? U.clamp(0.7 + e.burnPool / Math.max(1, e.maxHp) * 2.5, 0.7, 1.5) : 0.9, n = R.quality === 'low' ? 3 : 5;
+    const bl = e.burnLvl !== undefined ? e.burnLvl : ED.Net.burnLevel(e); // clients get the level in the snapshot, host/solo derive it from the pool: same flames
+    if (bl > 0) {
+      const k = BURN_K[bl], n = R.quality === 'low' ? 3 : 5;
       for (let i = 0; i < n; i++) {
         const a = i * 1.9 + id, fx = Math.cos(a) * r * 0.8, fy = -bh * 0.12 - (i % 3) * bh * 0.2 + Math.sin(a) * r * 0.1;
         const ph = t * 12 + i * 2.1 + id, h = (r * 0.8 + 3 + Math.sin(ph) * 1.6) * k, w = r * 0.34 + 1.5;
@@ -962,6 +964,16 @@
       for (let i = 0; i < 3; i++) { const a = -rot + i * U.TAU / 3; c.lineTo(Math.cos(a) * rr * 0.62, Math.sin(a) * rr * 0.62); }
       c.closePath(); c.stroke(); c.restore();
       stLight(e.x, e.y, r * 2.4, '#ffd36b', 0.35);
+    }
+    if (e.vulnT > 0) { // takes +20% damage (Hailthorns, Smokescreen): two pink chevrons dripping down beside the body, apart from the Judgment ring
+      const x = r * 0.95 + 5, hv = hh * 1.1;
+      c.strokeStyle = '#ff8ed0'; c.lineWidth = 1.3; c.lineJoin = 'round'; c.lineCap = 'round';
+      for (let i = 0; i < 2; i++) {
+        const ph = (t * 1.3 + i * 0.5 + id * 0.17) % 1, y = cy - hh * 0.55 + ph * hv;
+        c.globalAlpha = Math.sin(ph * Math.PI) * 0.8;
+        c.beginPath(); c.moveTo(x - 3.2, y - 2.6); c.lineTo(x, y + 0.6); c.lineTo(x + 3.2, y - 2.6); c.stroke();
+      }
+      c.globalAlpha = 1;
     }
     if (e.blind > 0) { // smoke curling off the head and dim motes circling it
       const hy = cy - hh * 0.95;
