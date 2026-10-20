@@ -161,7 +161,7 @@ Six paths. A hero owns at most **3 gates** (path slots) per run. `affinity(path)
 | feast | spirit+blood | Companion kills heal you 1% max HP; companions +20% damage. |
 
 ### Neutral boons (no path; low caps)
-vigor (c,3: +15 max HP, heal 15) · plating (c,2: +5 armor) · fleet (c,2: +7% move) · focus (c,3: skills −10% cd) · lightstep (c,2: dash −20% cd) · magnet (c,2: +40% pickup, +10% xp) · edge (c,2: +10% damage) · quick (c,2: +10% attack speed) · wide (r,2: +15% area) · bounty (c,2: +25% gold) · evade (r,2: +6% dodge) · thorns (r,2: attackers take 10, +4 armor) · pierce (r,2, ranged: +1 pierce) · split (r,2, ranged: +1 projectile, −8% damage) · bladedash (r,1: dashing through foes deals 120% weapon damage) · echo (e,1: K skill holds 2 charges) · laststand (e,1) · glass (e,1: +30% damage, −15% max HP) · trance (e,1: a skill grants +30% attack speed 4 s) · overcharge (e,1: skills release a shockwave).
+vigor (c,3: +15 max HP, heal 15) · plating (c,2: +5 armor) · fleet (c,2: +7% move) · focus (c,3: skills −10% cd) · lightstep (c,2: dash −20% cd) · magnet (c,2: +40% pickup, +10% xp) · edge (c,2: +10% damage) · quick (c,2: +10% attack speed) · wide (r,2: +15% area) · bounty (c,2: +25% gold) · evade (r,2: +6% dodge) · thorns (r,2: attackers take 10, +4 armor) · pierce (r,2, ranged: +1 pierce) · split (r,2, ranged: +1 projectile, −8% damage) · bladedash (r,1: dashing through foes deals 120% weapon damage) · echo (e,1: skill 1 holds 2 charges) · laststand (e,1) · glass (e,1: +30% damage, −15% max HP) · trance (e,1: a skill grants +30% attack speed 4 s) · overcharge (e,1: skills release a shockwave).
 
 ## 4. Offers
 
@@ -178,7 +178,7 @@ vigor (c,3: +15 max HP, heal 15) · plating (c,2: +5 armor) · fleet (c,2: +7% m
 - Offer message to client: `{t:'offer', boons, rerolls, picks, src, path}`. Rerolls work on every offer except forge.
 - **Pacing targets** (smart bots, `tools/sim.js` pacing line): about 6 offers per stratum; median evolution in stratum III–IV; at least 60% of runs that reach stratum IV have evolved; most runs end with at most two paths at affinity ≥ 4 and a clearly deepest path.
 
-## 5. Skills (K = slot 0, L = slot 1)
+## 5. Skills (skill 1 = slot 0, skill 2 = slot 1)
 
 Slot 0 skills: charge, volley, nova, step, sanctuary, legion. Slot 1:
 
@@ -193,7 +193,7 @@ Slot 0 skills: charge, volley, nova, step, sanctuary, legion. Slot 1:
 
 Skill cooldown reduction applies to both slots. Class boons (2 per skill, 4 per class):
 
-| Class | K skill boons | L skill boons |
+| Class | Skill 1 boons | Skill 2 boons |
 |---|---|---|
 | Knight | shieldwall, quake | **bastion** (r): Bulwark lasts 50% longer, bash stuns 1.2 s · **mirrorguard** (e): Bulwark blocks from every side and reflects at 250% |
 | Ranger | mark, arrowstorm | **barrage** (r): Rain +40% radius, +1 s · **hailthorns** (e): foes inside Rain are slowed 50% and take +20% damage (`vulnT`) |
@@ -202,7 +202,7 @@ Skill cooldown reduction applies to both slots. Class boons (2 per skill, 4 per 
 | Cleric | wrath, blessed | **twinhammer** (r): Judgment throws two hammers in a V · **verdict** (e): judged foes explode on death (60 + 150% weapon, r70) |
 | Necromancer | legionplus, bonespikes | **grimharvest** (r): Harvest explosions +50%, raise 2 · **soulsiphon** (e): minion hits heal you 1 (≤ 4/s) |
 
-Controls: K / X / right mouse = skill 1; L / C / E / middle mouse = skill 2; gamepad skill 1 = B/RB, skill 2 = Y/LT.
+Controls (defaults; every action has two rebindable slots, keyboard codes or mouse buttons, saved in settings): move WASD / arrows; attack left mouse / J (also interacts with props); skill 1 Q / right mouse (rerolls while boon cards are open); skill 2 E; dash Space; lantern flare F; map and sheet Tab; pause Esc. Gamepad (fixed): skill 1 = B/RB, skill 2 = Y/LT, flare = left-stick click. Hints on the HUD, prompts and tutorial signs show the live binding (`ED.Input.label` / `hint`; sim text carries `{action}` tokens that the client substitutes).
 
 **Starting heroes**: Knight, Ranger, Pyromancer. Locked: Shade (defeat the Bone Warden), Cleric (complete 4 descents), Necromancer (defeat the Sporemother).
 
@@ -241,7 +241,7 @@ Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat
 - **Fewer, nastier** (Dim and darker): each elite in a wave displaces `World.ELITE_BODIES` (4) budget of plain foes (one plain foe always stays); Dark and Lightless elites roll their affix from brutal / vampiric / warded / swift (one affix per elite, so the pool is the "nastier" lever). `World.darkWaves(waves)` runs at the end of `planWaves`.
 - **Darkness pays**: at Dark and Lightless a cleared room's reward is upgraded one step with chance `up` (gold → vigor → forge → epic, class → epic, any `boon:<path>` → epic; relic, epic and oil stay); `{t:'upgrade', to, x, y}` announces it.
 - **The Gloom** (Dark and Lightless, non-boss non-start rooms): a telegraphed spawn (1.5 s) at the floor point farthest from the heroes, then a hunter: invulnerable, passes through walls, speed 0.9 × the target's move speed (a dash escapes it), keeps 120 px away, and every 2.5 s (after its last lunge) winds up 0.7 s with a fixed aim line toward the hero, then lunges 140 px (body-hit state `lunge`). A touch deals `World.GLOOM_HIT` (0.22) of the toughest living hero's max HP. Ignored by room-clear checks; despawns when you leave the room.
-- **Driving it off**: any light gained (`addLight`: oil) banishes the Gloom and its telegraph (`{t:'banish', x, y}`) and resets its timer. **Lantern flare** (`F`, pad left-stick click; `{t:'act'}` action `flare` → `World.flare`): costs 8 light, needs light ≥ 8, not in the boss room, 1 s cooldown; banishes the Gloom for 12 s and blinds non-boss foes within 160 px for 1.5 s (`e.blind`); emits `{t:'flare', pid, x, y, r}`. It can push the lantern into a darker tier.
+- **Driving it off**: any light gained (`addLight`: oil) banishes the Gloom and its telegraph (`{t:'banish', x, y}`) and resets its timer. **Lantern flare** (default `F`, pad left-stick click; `{t:'act'}` action `flare` → `World.flare`): costs 8 light, needs light ≥ 8, not in the boss room, 1 s cooldown; banishes the Gloom for 12 s and blinds non-boss foes within 160 px for 1.5 s (`e.blind`); emits `{t:'flare', pid, x, y, r}`. It can push the lantern into a darker tier.
 - Emits `{t:'dread', tier}` on tier change. The renderer keeps darkness mild: ambient and post-process darkening are a fraction of the old values and the hero light radius shrinks at most 15% (Lightless); pickups keep their own glow at every tier.
 
 ## 8. Enemies
@@ -284,3 +284,13 @@ Smart pick policy unless noted; 384 runs each, six heroes in rotation, `node too
 - Pacing (half-upgraded): normal combat rooms 16 / 22 / 21 / 20 / 26 / 25 s per stratum (fresh 19 / 25 / 26 / 26 / 37 / 38 s), elite rooms 24-36 s (fresh 31-45 s), bosses 49 / 65 / 72 / 81 / 89 / 92 s (fresh 64-107 s). Strata I-II are the on-ramp: a fresh hero has 1-4 boons there, and longer rooms there fail the depth target.
 - Winning descent 25-28 min, final level 16-18. The bot explores the nearest unvisited room while paying its light cost leaves the lantern at or above `--explore` (default 0.3, `tools/sim.js` `EXPLORE_MIN_LIGHT`; negative = explore everything), else heads for the boss. Explore sweep: `node tools/simpool.js 1 96 0.75 mid --pick=smart --jobs=5 --explore=<minLight>` per setting (win %, rooms visited %, depth).
 - Forced from the start (half-upgraded, smart, 384 runs): no gate raises the win rate above 39% (Pyre 37, Rime 32, Storm 35, Steel 39, Blood 28, Spirit 36; random start 31); no relic above +15 points (Hourglass 41%).
+
+## 11. HUD
+
+Canvas `#hud` above the world at device resolution (capped by pixel count); unit `u = clamp(13, min(W / 110, H / 62), 36)` CSS px, the same as `style.css`; minimum text 0.85u; panels use the menu look (soot fill, 2 px line, brass corner brackets). Fixed anchors, nothing floats:
+
+- **Bottom-left, hero block**: portrait medallion, name, weapon (evolution prefix), large health bar (numbers, pale shield segment after the health, damage ghost, pulse under 30%); above it the ability slots skill 1, skill 2, dash and flare with live key caps, cooldown sweep and seconds, charge pips, flare light cost; path pips (ring fills to the evolution threshold, tick at the keystone threshold, star on the evolved path); status chips; the message feed (newest at the bottom, 4 lines at most) stacks above them.
+- **Top-left**: party frames (name, class, health; DOWN with revive progress; Fallen).
+- **Top-right**: stratum name, stratum number, weak/resists chips, minimap (light cost on unvisited rooms), then the lantern panel: tier name, percent, meter with tint zones and ticks at 50% and 25%, one effect line (a tier change shows its warning for 6 s instead), room costs and the boss-door reward.
+- **Bottom-centre**: level, xp bar, gold; a pending-boon pill above it. **Bottom-right**: relics. **Top-centre**: boss bar with phase marks.
+- **At the prop**: interaction prompt with the attack key (all bound keys, e.g. `LMB / J`) and a description card. Tutorial and stratum signs draw as a screen-space card on the side of the sign away from the hero; their text uses `{attack}`, `{skill1}`, `{skill2}`, `{dash}`, `{flare}`, `{map}` tokens.
