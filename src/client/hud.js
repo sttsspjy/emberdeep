@@ -128,12 +128,13 @@
       c = cv.getContext('2d');
       if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', dropArt);
     }
-    const w = window.innerWidth, h = window.innerHeight, low = R.quality === 'low';
+    const w = window.innerWidth, h = window.innerHeight, soft = !!(ED.Post && ED.Post.soft), low = R.quality === 'low' || soft;
     if (!shown) { cv.style.display = 'block'; shown = true; }
     const dpr = window.devicePixelRatio || 1;
     if (w !== cssW || h !== cssH || low !== lowQ || dpr !== lastDpr) {
       cssW = w; cssH = h; lowQ = low; lastDpr = dpr;
-      hd = Math.max(1, Math.min(dpr, low ? 1 : 2, Math.sqrt(6e6 / (w * h))));
+      // software raster: the HUD backs at most 1.1 MP like the world canvas (sub-CSS resolution), else device pixels up to 2x / 6 MP
+      hd = soft ? Math.min(1, Math.sqrt(1.1e6 / (w * h))) : Math.max(1, Math.min(dpr, low ? 1 : 2, Math.sqrt(6e6 / (w * h))));
       cv.width = W = Math.round(w * hd); cv.height = Hh = Math.round(h * hd);
       u = U.clamp(Math.min(w / 110, h / 62), 13, 36) * hd;
       lastFont = ''; lastAl = ''; c.textBaseline = 'middle';

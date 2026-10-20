@@ -10,7 +10,7 @@
   let lightCv, lctx, vignette, shadowCv, rimCv, rimCtx, lightN = 0;
   const lights = [], rimSrc = [], glowQ = [], rimOut = { dx: 0, dy: 0, col: '', s: 0 };
   let rimN = 0; // live entries of rimSrc (filled by last frame's lighting pass)
-  const worlds = [], wctxs = []; let wi = 0, wPrev = false; // two world canvases: post reads the previous frame's while the next is drawn, so nothing waits on the canvas just drawn
+  const worlds = [], wctxs = []; let wi = 0, wPrev = false, bwLast = 0, bwMs = 16.7; // two world canvases (see R.endWorld); bwMs = smoothed frame interval
   let nl = 0, ng = 0, stN = 0, shDX = 0, shDY = 0; // lights/glows queued this frame (stN: status lights); shadow skew away from the nearest light
 
   R.init = (canvas) => {
@@ -110,17 +110,21 @@
 
   // Target context for this frame's world drawing: an offscreen canvas (alternating) when post is active, else the visible one.
   R.beginWorld = () => {
+    const now = performance.now();
+    if (bwLast) bwMs += (Math.min(50, now - bwLast) - bwMs) * 0.05; // smoothed frame interval
+    bwLast = now;
     R.posting = R.usePost();
     if (!R.posting) { wPrev = false; return R.ctx; }
     if (worlds[0].width !== R.W || worlds[0].height !== R.H) { for (const w of worlds) { w.width = R.W; w.height = R.H; } wPrev = false; }
     wi ^= 1;
     return wctxs[wi];
   };
-  // Hands the finished world to post, which shows the previous frame's canvas (one frame of added latency; the first frame after a reset uses the current one); the visible canvas is left transparent for the HUD (or holds the world on fallback).
+  // Hands the finished world to post; the visible canvas is left transparent for the HUD (or holds the world on fallback). Above ~100 Hz post shows
+  // the previous frame's canvas (one short frame of latency) so the upload never waits on the raster just issued; at lower rates the current one.
   R.endWorld = (o) => {
     if (!R.posting) return;
     const c = R.ctx, t0 = performance.now(); c.setTransform(1, 0, 0, 1, 0, 0);
-    if (ED.Post.render(wPrev ? worlds[wi ^ 1] : worlds[wi], o)) c.clearRect(0, 0, R.W, R.H);
+    if (ED.Post.render(wPrev && bwMs < 10 ? worlds[wi ^ 1] : worlds[wi], o)) c.clearRect(0, 0, R.W, R.H);
     else { c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.drawImage(worlds[wi], 0, 0); }
     wPrev = true;
     R.stats.post += performance.now() - t0;
