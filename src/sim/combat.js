@@ -782,7 +782,15 @@
     if (e.frozen > 0 || e.stun > 0) return;
     if (e.cd > 0 && !e.boss) e.cd -= dt * this.threat().cdRate; // attack cooldowns recover faster; wind-ups are untouched
     e.tgtT -= dt;
-    if (e.tgtT <= 0 || !this.alive(e.target) || e.target.stealthT > 0) { e.target = this.nearestPlayer(e.x, e.y); e.tgtT = 0.6; }
+    const t = e.target;
+    if (e.tgtT <= 0 || !t || t.ghost || t.stealthT > 0 || !this.alive(t)) {
+      const n = this.nearestPlayer(e.x, e.y);
+      e.tgtT = 0.6;
+      // no visible hero: AI runs against a position-only stand-in {x, y, vx, vy, ghost} at the last seen spot (ai.js/bosses.js read only those fields); nobody up = idle
+      if (n) e.target = n;
+      else if (t && this.alivePlayers().length) { if (!t.ghost) e.target = { x: t.x, y: t.y, vx: 0, vy: 0, ghost: true }; }
+      else e.target = null;
+    }
     if (!e.target) return;
     const ai = ED.AI[e.def.ai];
     if (ai) ai(this, e, dt);
