@@ -55,7 +55,7 @@ Elements: `pyre`, `rime`, `storm`. Physical paths (`steel`, `blood`, `spirit`) i
 - Tick every 0.5 s: deal `max(1, pool × 0.2) × (1 + burnMul)`, reduce pool by `max(1, pool × 0.2)`. Pyre damage, credited to `e.burnOwner`, never crits.
 
 ### Chill / Freeze (rime)
-- Infused hit: `e.chill += ((dmg / e.maxHp) × 260 + 2) × rimeInfuse × (1 + chillMul) × aff × (boss 0.35 | elite 0.7 | 1)`.
+- Infused hit: `e.chill += (dmg / foeHp) × 340 × rimeInfuse × (1 + chillMul) × aff × (boss 0.35 | elite 0.7 | 1)`; `foeHp` is HP before the stratum lever (bosses: `refHp`). No per-hit term.
 - Decay: 1.5 s after the last gain, chill drops 25/s.
 - While chilled: move speed × `1 − min(0.45, chill/180)`; attack wind-ups × `e.windMul = 1 + chill/220`; foe damage × `1 − chillWeaken`.
 - At chill ≥ `100 × (1 + 0.5 × e.freezeRes)`: frozen for `1.6 × (1 + freezeDur)` s (elite ×0.75; boss flat 0.6 s), chill → 0, `freezeRes += 1` (decays 1 per 6 s).
@@ -123,7 +123,7 @@ Six paths. A hero owns at most **3 gates** (path slots) per run. `affinity(path)
 | keen | Keen Eye | c | 2 | +6% crit chance. `crit 0.06` |
 | lacerate | Lacerate | r | 2 | +15% damage to bleeding foes. `lacerate 0.15` |
 | execute | Executioner | r | 2 | +40% damage to foes below 30% HP. `execute 0.4` |
-| sunder | Sunder (key) | e | 1 | Each crit makes that foe take +4% damage from you (max +40%). `sunder 1` |
+| sunder | Sunder (key) | e | 1 | Each crit makes that foe take +4% damage from you per stack (max 10 stacks, +40%). A crit adds `(dmg / foeHp) × 60` stacks, at most 2: about 1 for a typical crit on an elite or boss. `sunder 1` |
 | evo_steel | Masterwork Arms (evolution) | l | 1 | Crits release a spectral strike (repeat swing or spectral projectile) at 60%. +10% crit chance. |
 
 ### Blood — `#d43a5a`, icon `drop`
@@ -156,7 +156,7 @@ Six paths. A hero owns at most **3 gates** (path slots) per run. `affinity(path)
 | superconductor | rime+storm | Discharges add 25 chill; frozen foes arc to 2 extra targets. |
 | hemorrhage | steel+blood | Bleed heals you 10% of its damage (counts toward the leech cap). |
 | staticedge | steel+storm | Crits discharge the foe's charge instantly at +50%. |
-| serrated | steel+rime | Crits on chilled foes add 35 chill; frozen foes take +50% crit damage. |
+| serrated | steel+rime | Crits on chilled foes add `(dmg / foeHp) × 2000` chill, at most 70 (35 for the median crit on a chilled foe); frozen foes take +50% crit damage. |
 | soulfire | spirit+pyre | Companion hits add Burn equal to 60% of their damage. |
 | feast | spirit+blood | Companion kills heal you 1% max HP; companions +20% damage. |
 

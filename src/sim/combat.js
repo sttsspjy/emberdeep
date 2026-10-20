@@ -9,6 +9,7 @@
   const NO_GUARD = { dot: 1, chain: 1, explode: 1 }; // hit kinds that ignore a foe's frontal guard
   const FULL_CONTACT = new Set(['lunge', 'charge', 'leap', 'bash', 'dive']); // attack states whose body contact deals full damage
   const NO_STATS = {};
+  const hpFrac = (e, dmg) => dmg / (e.maxHp / e.hpLever); // damage as a fraction of the foe's HP before the stratum lever (bosses: refHp): the unit of HP-relative build-up
   const WINDUP = { tele: 1, teleLine: 1, teleCone: 1 }; // zone kinds that telegraph their caster's attack
   const evoOf = (p) => p.evo || p.stats.evo || null;
 
@@ -135,9 +136,9 @@
     if (src.burn) this.addBurn(e, dmg * src.burn, p);
     if (crit) {
       if (st.bleed) { if (e.bleedPool <= 0) e.bleedTick = 0.5; e.bleedPool += dmg * st.bleed; e.bleedOwner = p; }
-      if (st.sunder) { if (e.sunderOwner !== p.pid) { e.sunderOwner = p.pid; e.sunder = 0; } e.sunder = Math.min(10, e.sunder + 1); }
+      if (st.sunder) { if (e.sunderOwner !== p.pid) { e.sunderOwner = p.pid; e.sunder = 0; } e.sunder = Math.min(10, e.sunder + Math.min(2, hpFrac(e, dmg) * 60)); } // stacks from crit damage: 60 per foe HP, <= 2 per crit
       if (st.critCharge) this.addCharge(e, dmg * st.critCharge, p);
-      if (st.serrated && e.chill > 0) this.addChill(e, 35, p);
+      if (st.serrated && e.chill > 0) this.addChill(e, Math.min(70, hpFrac(e, dmg) * 2000), p); // chill from crit damage: 2000 per foe HP, <= 70 per crit
       if (st.mark) e.mark = 4;
       if (st.staticEdge && e.charge > 0) this.discharge(e, e.chargeOwner || p, 1.5);
     }
@@ -152,7 +153,7 @@
   W.applyInfusions = function (e, dmg, p) {
     const st = p.stats;
     if (st.pyreInfuse) this.addBurn(e, dmg * st.pyreInfuse, p);
-    if (st.rimeInfuse) this.addChill(e, ((dmg / (e.maxHp / e.hpLever)) * 260 + 2) * st.rimeInfuse, p);
+    if (st.rimeInfuse) this.addChill(e, hpFrac(e, dmg) * 340 * st.rimeInfuse, p);
     if (st.stormInfuse) this.addCharge(e, dmg * st.stormInfuse, p);
   };
 
