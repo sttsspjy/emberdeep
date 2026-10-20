@@ -23,7 +23,9 @@ const MAX_SECONDS = 60 * 60; // a run that is still going after an hour of game 
 // Neutral boons in the order a sensible player takes them (damage and defence first).
 const NEUTRAL_PREF = ['edge', 'quick', 'vigor', 'plating', 'focus', 'evade', 'wide', 'fleet', 'magnet', 'thorns', 'lightstep', 'bounty'];
 
-function bfsDir(room, locked, sx, sy, tx, ty) {
+// First step toward (tx, ty): the shortest path that stays off floor hazards, else the shortest path (a hero walks around hazards when it can).
+function bfsDir(room, locked, sx, sy, tx, ty) { return bfsStep(room, locked, sx, sy, tx, ty, true) || bfsStep(room, locked, sx, sy, tx, ty, false); }
+function bfsStep(room, locked, sx, sy, tx, ty, safe) {
   const w = room.w, h = room.h;
   const s = Math.floor(sy / T) * w + Math.floor(sx / T), g = Math.floor(ty / T) * w + Math.floor(tx / T);
   if (s === g || s < 0 || s >= w * h || g < 0 || g >= w * h) return [tx - sx, ty - sy];
@@ -35,14 +37,26 @@ function bfsDir(room, locked, sx, sy, tx, ty) {
     for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w]) {
       if (j < 0 || j >= w * h || prev[j] >= 0) continue;
       const t = room.tiles[j];
-      if (t === 0 || t === 4 || (t === 5 && !locked)) { prev[j] = i; q.push(j); }
+      if (t === 0 || (t === 4 && !safe) || (t === 5 && !locked)) { prev[j] = i; q.push(j); }
     }
   }
-  if (prev[g] < 0) return [tx - sx, ty - sy];
+  if (prev[g] < 0) return safe ? null : [tx - sx, ty - sy];
   let c = g;
   while (prev[c] !== s && c !== s) c = prev[c];
   const nx = (c % w + 0.5) * T, ny = (Math.floor(c / w) + 0.5) * T;
   return [nx - sx, ny - sy];
+}
+
+// Steers (mx, my) off hazard tiles: standing on one or about to step onto one, the first turn of 35-145 degrees (either side) or the reverse that lands on safe floor.
+function avoidHazard(room, p, mx, my) {
+  const look = p.r + 12, bad = (dx, dy) => D.tileAt(room, p.x + dx * look, p.y + dy * look) === 4 || D.tileAt(room, p.x + dx * look * 0.5, p.y + dy * look * 0.5) === 4;
+  if (D.tileAt(room, p.x, p.y) !== 4 && !bad(mx, my)) return [mx, my];
+  const l = Math.hypot(mx, my) || 1, a0 = Math.atan2(my, mx);
+  for (const off of [0.6, -0.6, 1.1, -1.1, 1.6, -1.6, 2.1, -2.1, 2.5, -2.5, Math.PI]) {
+    const dx = Math.cos(a0 + off), dy = Math.sin(a0 + off);
+    if (!bad(dx, dy)) return [dx * l, dy * l];
+  }
+  return [mx, my];
 }
 
 // Direction perpendicular to the Gloom's lunge line, on the side the hero already stands.
@@ -232,7 +246,7 @@ function runBot(opts) {
   w.giveRelic = function (p, id) { const k = this.room ? this.room.type : '?'; rec.relicsBy[k] = (rec.relicsBy[k] || 0) + 1; return give0.call(this, p, id); };
   w.dropGold = function (x, y, total) { rec.goldIn += Math.round(total); return drop0.call(this, x, y, total); };
   const ctl = {};
-  for (const p of w.players.values()) ctl[p.pid] = { atk: 0, skill: 0, skill2: 0, dash: 0, goal: null, glPrev: '', glReact: false };
+  for (const p of w.players.values()) ctl[p.pid] = { atk: 0, skill: 0, skill2: 0, dash: 0, goal: null, glPrev: '', glReact: false, attn: true, attnT: 0 };
   const dt = 1 / 60;
   let steps = 0;
   const maxSteps = 60 * MAX_SECONDS;
@@ -309,6 +323,9 @@ function runBot(opts) {
         if (dodge && U.dist2(gloom.x, gloom.y, p.x, p.y) < 260 * 260) dir = sidestep(gloom, p);
         if (dir) { const l = Math.hypot(dir[0], dir[1]) || 1; mx = dir[0] / l; my = dir[1] / l; }
       }
+      // floor hazards: the bot watches the ground on a share `skill` of its ticks (redrawn every 0.25 s) and steers off or around hazard tiles
+      if ((c.attnT -= dt) <= 0) { c.attn = brng.next() < skill; c.attnT = 0.25; }
+      if (c.attn && (mx || my)) { const v = avoidHazard(w.room, p, mx, my); mx = v[0]; my = v[1]; }
       if (opts.trace) opts.trace(w, p, mx, my, foes, c);
       ED.Sim.movePlayer(p, { mx, my }, dt, w.room, w.locked, w.zones);
     }
