@@ -133,8 +133,8 @@
     if (++lightN > 90) { for (const k in lightCache) delete lightCache[k]; lightN = 0; }
     s = lightCache[color] = document.createElement('canvas'); s.width = s.height = 96;
     const g = s.getContext('2d'), gr = g.createRadialGradient(48, 48, 0, 48, 48, 48);
-    gr.addColorStop(0, U.rgba(color, 1)); gr.addColorStop(0.18, U.rgba(color, 0.72)); gr.addColorStop(0.42, U.rgba(color, 0.32));
-    gr.addColorStop(0.7, U.rgba(color, 0.09)); gr.addColorStop(1, U.rgba(color, 0));
+    gr.addColorStop(0, U.rgba(color, 0.95)); gr.addColorStop(0.16, U.rgba(color, 0.74)); gr.addColorStop(0.4, U.rgba(color, 0.42));
+    gr.addColorStop(0.66, U.rgba(color, 0.17)); gr.addColorStop(0.86, U.rgba(color, 0.05)); gr.addColorStop(1, U.rgba(color, 0)); // long soft shoulder: pools blend instead of ending in a hard edge
     g.fillStyle = gr; g.fillRect(0, 0, 96, 96);
     return s;
   }
@@ -169,7 +169,7 @@
       tint = ambCache[biome.id] = n.map(v => v / lum);
     }
     const dark = U.clamp(P.darkness + extraDark, 0, 0.92);
-    const lum = (R.quality === 'low' ? 0.16 : 0.12) + 0.52 * (1 - dark), o = ambOut; // shared result: consumed by lightBegin right away
+    const lum = (R.quality === 'low' ? 0.22 : 0.18) + 0.5 * (1 - dark), o = ambOut; // shared result: consumed by lightBegin right away
     for (let i = 0; i < 3; i++) o[i] = U.clamp(tint[i] * lum, 0, 1);
     if (redden > 0) { o[0] = o[0] * (1 + redden * 0.5); o[1] *= 1 - redden * 0.45; o[2] *= 1 - redden * 0.45; }
     for (let i = 0; i < 3; i++) o[i] = U.clamp(o[i], 0, 1) * 255;
@@ -197,7 +197,7 @@
     drawRoomDynamics(c, view, room, biome, t, 0);
     drawDoors(c, view, room, P, t);
     drawZones(c, view, t, 0);
-    drawPickups(c, view, t);
+    drawPickups(c, view, t, 0);
     drawProps(c, view, local, t);
     let dn = 0;
     for (const p of view.players.values()) qDraw(dn++, p.y, 0, p);
@@ -211,7 +211,7 @@
       else {
         c.save(); c.translate(o.x, o.y);
         if (it.k === 0) { drawCompanions(c, o, view, t, true); Sp.hero(c, o, t, F.anim[o.pid]); drawCompanions(c, o, view, t, false); }
-        else if (it.k === 1) { Sp.enemy(c, o, t); if (rim && rim.s > 0.35) R.glowOnce(c, 0, -o.r * 1.2, o.r * 1.5, rim.col, 0.14 * rim.s, rim.dx * o.r * 0.55, rim.dy * o.r * 0.4); drawStatus(c, o, t); }
+        else if (it.k === 1) { const X = F.xform(o); if (X) { c.save(); c.translate(X.dx, X.dy); c.rotate(X.rot); c.scale(X.sx, X.sy); Sp.enemy(c, o, t); c.restore(); } else Sp.enemy(c, o, t); if (rim && rim.s > 0.35) R.glowOnce(c, 0, -o.r * 1.2, o.r * 1.5, rim.col, 0.14 * rim.s, rim.dx * o.r * 0.55, rim.dy * o.r * 0.4); drawStatus(c, o, t); }
         else Sp.minion(c, o, t);
         c.restore();
       }
@@ -232,11 +232,15 @@
     const emis = ED.Tiles.emissive(room, R.scale);
     if (emis) { c.globalAlpha = 0.82 + Math.sin(t * 2.1) * 0.1 + Math.sin(t * 5.3) * 0.05; c.drawImage(emis, 0, 0, emis.width / emis.px, emis.height / emis.px); c.globalAlpha = 1; }
     drawRoomDynamics(c, view, room, biome, t, 1);
+    drawPickups(c, view, t, 1);
     drawZones(c, view, t, 1);
     drawProjectiles(c, view, t, 1);
     if (!low) drawMotes(c, view, room, biome, t, dt, 1);
     const eyeA = 0.2 + P.darkness * 0.5;
-    for (const e of view.enemies) if (e.hp > 0 && !e.burrowed) R.glow(c, e.x, e.y - e.r * (e.def.fly ? 2.2 : 1.7), 5 + e.r * 0.5, e.def.col.c, eyeA);
+    for (const e of view.enemies) if (e.hp > 0 && !e.burrowed) {
+      R.glow(c, e.x, e.y - e.r * (e.def.fly ? 2.2 : 1.7), 5 + e.r * 0.5, e.def.col.c, eyeA);
+      const wp = F.windupP(e); if (wp > 0.05) R.glow(c, e.x, e.y - e.r * 1.2, e.r * (1.5 + wp), wp > 0.8 ? '#ffd0a0' : '#ff5a3a', 0.12 + 0.5 * wp * wp);
+    }
     for (let i = 0; i < ng; i++) { const g = glowQ[i]; R.glow(c, g.x, g.y, g.r, g.c, g.a); }
     F.drawGlow(c, t);
     c.globalCompositeOperation = 'source-over';
@@ -632,38 +636,89 @@
 
   // ---------------- pickups & props ----------------
   const NOP = () => {};
-  function drawPickups(c, view, t) {
-    let n = 0; // light/glow budget: a big pile of orbs must not starve other lights
-    for (const pk of view.pickups) {
-      const bob = Math.sin(t * 5 + pk.id) * 1.5, lit = n++ < 14, hot = n < 60;
-      const L = lit ? R.light : NOP, E = hot ? R.emit : NOP;
-      if (pk.kind === 'gold') {
-        L(pk.x, pk.y - 4, 28, '#ffd36b', 0.5); E(pk.x, pk.y - 4, 11, '#ffd36b', 0.5);
-        c.fillStyle = 'rgba(0,0,0,0.25)'; c.beginPath(); c.ellipse(pk.x, pk.y, 3.5, 1.5, 0, 0, U.TAU); c.fill();
-        const w = 3.5 * Math.abs(Math.cos(t * 4 + pk.id)) + 0.8;
-        c.fillStyle = '#e6b84a'; c.strokeStyle = '#6a4a12'; c.lineWidth = 1; c.beginPath(); c.ellipse(pk.x, pk.y - 4 + bob, w, 3.5, 0, 0, U.TAU); c.fill(); c.stroke();
-        c.fillStyle = '#fff0b0'; c.beginPath(); c.ellipse(pk.x - w * 0.3, pk.y - 5.4 + bob, w * 0.4, 1.2, 0, 0, U.TAU); c.fill();
-      } else if (pk.kind === 'xp') {
-        L(pk.x, pk.y - 4, 26, '#7dffd9', 0.5); E(pk.x, pk.y - 4, 11, '#7dffd9', 0.7);
-        c.fillStyle = '#b6fff0'; c.beginPath(); c.moveTo(pk.x, pk.y - 8 + bob); c.lineTo(pk.x + 3, pk.y - 4 + bob); c.lineTo(pk.x, pk.y + bob); c.lineTo(pk.x - 3, pk.y - 4 + bob); c.fill();
-        c.fillStyle = '#ffffff'; c.beginPath(); c.moveTo(pk.x, pk.y - 8 + bob); c.lineTo(pk.x + 1.4, pk.y - 5 + bob); c.lineTo(pk.x - 0.6, pk.y - 4.5 + bob); c.fill();
-      } else if (pk.kind === 'orb') {
-        L(pk.x, pk.y - 6, 34, '#ff2a4a', 0.65); E(pk.x, pk.y - 6, 15, '#ff2a4a', 0.7);
-        c.fillStyle = 'rgba(0,0,0,0.25)'; c.beginPath(); c.ellipse(pk.x, pk.y, 3.5, 1.5, 0, 0, U.TAU); c.fill();
-        c.save(); c.translate(pk.x, pk.y - 7 + bob); c.scale(0.9 + Math.sin(t * 6 + pk.id) * 0.06, 0.9);
-        c.fillStyle = '#d4142e'; c.strokeStyle = '#3a0610'; c.lineWidth = 1.2;
-        c.beginPath(); c.moveTo(0, -7.5); c.quadraticCurveTo(5.5, -1, 4.6, 2.6); c.quadraticCurveTo(3.6, 6, 0, 6); c.quadraticCurveTo(-3.6, 6, -4.6, 2.6); c.quadraticCurveTo(-5.5, -1, 0, -7.5); c.fill(); c.stroke();
-        c.fillStyle = 'rgba(255,255,255,0.65)'; c.beginPath(); c.ellipse(-1.7, 1.2, 1.1, 2.2, 0.3, 0, U.TAU); c.fill();
-        c.restore();
-      } else if (pk.kind === 'heart') {
-        L(pk.x, pk.y - 6, 36, '#ff4a5a', 0.6); E(pk.x, pk.y - 6, 16, '#ff4a5a', 0.6);
-        c.save(); c.translate(pk.x, pk.y - 6 + bob); c.scale(0.28, 0.28);
-        c.fillStyle = '#ff4a5a'; c.strokeStyle = '#3a0a10'; c.lineWidth = 4;
-        c.beginPath(); c.moveTo(0, 18); c.bezierCurveTo(-24, 2, -22, -20, -8, -20); c.quadraticCurveTo(-2, -20, 0, -12); c.quadraticCurveTo(2, -20, 8, -20); c.bezierCurveTo(22, -20, 24, 2, 0, 18); c.fill(); c.stroke();
-        c.fillStyle = 'rgba(255,255,255,0.5)'; c.beginPath(); c.ellipse(-9, -8, 4, 6, -0.6, 0, U.TAU); c.fill();
-        c.restore();
-      }
+  // Pickups are cached 16x16 sprites (outlined, drawn once at 4x). Pass 0 (lit): ground blob and lights. Pass 1 (after lighting): halos (additive), then
+  // the opaque sprites, so shards and coins read in any light; fast-moving (magnetised) pickups leave a short trail.
+  const pkSpr = {}, pkTrail = new Map(); let pkFrame = 0;
+  const PK_COL = { gold: '#ffc94a', xp: '#7dffd9', orb: '#ff2a4a', heart: '#ff4a5a' };
+  function pickSprite(kind) {
+    let s = pkSpr[kind]; if (s) return s;
+    s = pkSpr[kind] = document.createElement('canvas'); s.width = s.height = 64;
+    const g = s.getContext('2d'); g.translate(32, 32); g.scale(4, 4); g.lineJoin = 'round'; g.lineWidth = 0.9; g.strokeStyle = '#0b0806';
+    if (kind === 'xp') {
+      g.fillStyle = '#34dcb0'; g.beginPath(); g.moveTo(0, -7); g.lineTo(-4, -1); g.lineTo(0, 6); g.closePath(); g.fill();
+      g.fillStyle = '#b4ffe9'; g.beginPath(); g.moveTo(0, -7); g.lineTo(4, -1); g.lineTo(0, 6); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(0, -7); g.lineTo(4, -1); g.lineTo(0, 6); g.lineTo(-4, -1); g.closePath(); g.stroke();
+      g.fillStyle = '#ffffff'; g.beginPath(); g.moveTo(0, -7); g.lineTo(1.7, -3.2); g.lineTo(-0.7, -2.2); g.closePath(); g.fill();
+    } else if (kind === 'gold') {
+      g.fillStyle = '#c98a1a'; g.beginPath(); g.arc(0, 0, 4.4, 0, U.TAU); g.fill(); g.stroke();
+      g.fillStyle = '#ffd84f'; g.beginPath(); g.arc(0, 0, 3.4, 0, U.TAU); g.fill();
+      g.strokeStyle = '#d99a1e'; g.lineWidth = 0.7; g.beginPath(); g.arc(0, 0, 2.2, 0, U.TAU); g.stroke();
+      g.fillStyle = '#fff6c0'; g.beginPath(); g.ellipse(-1.2, -1.5, 1.3, 0.8, -0.5, 0, U.TAU); g.fill();
+    } else if (kind === 'orb') {
+      g.fillStyle = '#e01a38'; g.beginPath(); g.moveTo(0, -7.5); g.quadraticCurveTo(5.5, -1, 4.6, 2.6); g.quadraticCurveTo(3.6, 6, 0, 6); g.quadraticCurveTo(-3.6, 6, -4.6, 2.6); g.quadraticCurveTo(-5.5, -1, 0, -7.5); g.fill(); g.stroke();
+      g.fillStyle = '#ff6a80'; g.beginPath(); g.ellipse(1.2, 2.6, 2.2, 2.4, 0, 0, U.TAU); g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.85)'; g.beginPath(); g.ellipse(-1.8, 0.4, 1.1, 2.2, 0.3, 0, U.TAU); g.fill();
+    } else {
+      g.scale(0.3, 0.3); g.lineWidth = 3.2; g.fillStyle = '#ff4a5a';
+      g.beginPath(); g.moveTo(0, 18); g.bezierCurveTo(-24, 2, -22, -20, -8, -20); g.quadraticCurveTo(-2, -20, 0, -12); g.quadraticCurveTo(2, -20, 8, -20); g.bezierCurveTo(22, -20, 24, 2, 0, 18); g.fill(); g.stroke();
+      g.fillStyle = 'rgba(255,255,255,0.7)'; g.beginPath(); g.ellipse(-9, -8, 4, 6, -0.6, 0, U.TAU); g.fill();
     }
+    return s;
+  }
+  let glintSpr = null;
+  function glintSprite() {
+    if (glintSpr) return glintSpr;
+    glintSpr = document.createElement('canvas'); glintSpr.width = glintSpr.height = 32;
+    const g = glintSpr.getContext('2d'); g.translate(16, 16); g.fillStyle = '#ffffff';
+    g.beginPath(); g.moveTo(0, -15); g.lineTo(1.3, -1.3); g.lineTo(15, 0); g.lineTo(1.3, 1.3); g.lineTo(0, 15); g.lineTo(-1.3, 1.3); g.lineTo(-15, 0); g.lineTo(-1.3, -1.3); g.closePath(); g.fill();
+    return glintSpr;
+  }
+  function drawPickups(c, view, t, pass) {
+    const pks = view.pickups;
+    if (pass === 0) {
+      let n = 0; // light budget: a big pile of orbs must not starve other lights
+      for (const pk of pks) {
+        const lit = n++ < 14, L = lit ? R.light : NOP, k = pk.kind, big = k === 'orb' || k === 'heart';
+        if (k === 'gold') L(pk.x, pk.y - 4, 28, '#ffd36b', 0.5);
+        else if (k === 'xp') L(pk.x, pk.y - 4, 26, '#7dffd9', 0.5);
+        else if (k === 'orb') L(pk.x, pk.y - 6, 34, '#ff2a4a', 0.65);
+        else L(pk.x, pk.y - 6, 36, '#ff4a5a', 0.6);
+        c.globalAlpha = 0.55; c.drawImage(shadowCv, pk.x - 7, pk.y - (big ? 9 : 6), 14, big ? 12 : 9);
+      }
+      c.globalAlpha = 1;
+      return;
+    }
+    if (!pks.length) return;
+    const fr = ++pkFrame; let n = 0;
+    // motion since the last frame: magnetised pickups (> 150 px/s) get a trail
+    for (const pk of pks) {
+      let s = pkTrail.get(pk.id);
+      if (!s) { s = { x: pk.x, y: pk.y, t, v: 0, dx: 0, dy: 0, f: fr }; pkTrail.set(pk.id, s); }
+      else { const dt = t - s.t; if (dt > 0.0005) { const dx = (pk.x - s.x) / dt, dy = (pk.y - s.y) / dt; s.dx += (dx - s.dx) * 0.5; s.dy += (dy - s.dy) * 0.5; s.v = Math.hypot(s.dx, s.dy); s.x = pk.x; s.y = pk.y; s.t = t; } s.f = fr; }
+    }
+    if (pkTrail.size > pks.length + 48) for (const [id, s] of pkTrail) if (s.f !== fr) pkTrail.delete(id);
+    for (const pk of pks) { // halos and trails (context is additive)
+      const k = pk.kind, big = k === 'orb' || k === 'heart', bob = Math.sin(t * 5 + pk.id) * 1.5, y = pk.y - (big ? 7 : 5) + bob, col = PK_COL[k], s = pkTrail.get(pk.id);
+      if (n++ < 70) R.glow(c, pk.x, y, big ? 15 : 11, col, k === 'xp' ? 0.75 + Math.sin(t * 6 + pk.id) * 0.15 : 0.6);
+      if (s && s.v > 150) for (let i = 1; i <= 3; i++) R.glow(c, pk.x - s.dx / s.v * i * 5, y - s.dy / s.v * i * 5 * 0.7, 6 - i, col, 0.62 - i * 0.16);
+    }
+    c.globalCompositeOperation = 'source-over';
+    for (const pk of pks) {
+      const k = pk.kind, bob = Math.sin(t * 5 + pk.id) * 1.5, spr = pickSprite(k);
+      if (k === 'gold') { const w = 8 * Math.max(0.2, Math.abs(Math.cos(t * 4 + pk.id))); c.drawImage(spr, pk.x - w, pk.y - 12 + bob, w * 2, 16); }
+      else if (k === 'xp') { const p = 1 + Math.sin(t * 6 + pk.id) * 0.05; c.drawImage(spr, pk.x - 8 * p, pk.y - 13 + bob - 8 * (p - 1), 16 * p, 16 * p); }
+      else if (k === 'orb') { const p = 0.9 + Math.sin(t * 6 + pk.id) * 0.06; c.drawImage(spr, pk.x - 8 * p, pk.y - 15 + bob, 16 * p, 16); }
+      else c.drawImage(spr, pk.x - 8, pk.y - 14 + bob, 16, 16);
+    }
+    c.globalCompositeOperation = 'lighter';
+    for (const pk of pks) { // twinkle
+      const k = pk.kind; if (k !== 'xp' && k !== 'gold') continue;
+      const q = Math.sin(t * (k === 'gold' ? 2.6 : 1.9) + pk.id * 1.7);
+      if (q < 0.88) continue;
+      const a = (q - 0.88) / 0.12, sz = 6 + a * 6;
+      c.globalAlpha = a * 0.9; c.drawImage(glintSprite(), pk.x - sz / 2 + 1, pk.y - 10 - sz / 2 + Math.sin(t * 5 + pk.id) * 1.5, sz, sz);
+    }
+    c.globalAlpha = 1;
   }
 
   const PROP_LABEL = {
@@ -1203,8 +1258,8 @@
       const base = (p.stats ? p.stats.lightR : 175) * (p.downed ? 0.6 : 1) * (0.85 + 0.15 * ll);
       const fl = 1 + Math.sin(t * 7 + (p.slot || 0)) * 0.03 + Math.sin(t * 19 + (p.slot || 0) * 2) * 0.02 * (1 + (1 - ll) * 3);
       const col = U.mix('#ffc27a', ED.PLAYER_COLORS[p.slot] || '#ffc27a', 0.12);
-      R.lightAdd(p.x * s + ox, (p.y - 10) * s + oy, base * 1.05 * fl * s, U.mix(col, P.light, 0.2), 0.95);
-      R.lightAdd(p.x * s + ox, (p.y - 10) * s + oy, base * 0.5 * fl * s, '#ffd9a0', 0.55);
+      R.lightAdd(p.x * s + ox, (p.y - 10) * s + oy, base * 1.15 * fl * s, U.mix(col, P.light, 0.2), 0.9);
+      R.lightAdd(p.x * s + ox, (p.y - 10) * s + oy, base * 0.52 * fl * s, '#ffd9a0', 0.45);
       src(p.x, p.y - 10, base * 0.9, col, 0.9);
     }
     // torches, fungus, lava and other fixed room lights

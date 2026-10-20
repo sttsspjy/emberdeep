@@ -90,17 +90,23 @@
   function drawBody(c, p, C, pc, cls, t, bob, dir, anim) {
     const face = p.face || 0;
     const w = ED.WEAPONS[p.weapon] || ED.WEAPONS[cls.weapons[0]];
-    // weapon swing offset
-    let wa = face, reach = 1;
-    if (anim && anim.atkT < 0.22) {
-      const k = anim.atkT / 0.22;
+    // Weapon swing: anticipation (pull back, crouch) -> fast strike (accelerating sweep, lunge) -> follow-through (overshoot, settle). push: -1..1 body lunge along the aim.
+    let wa = face, reach = 1, push = 0;
+    const swinging = !!anim && anim.atkT < anim.D;
+    if (swinging) {
+      const u = anim.atkT, t0 = anim.t0, t1 = anim.t1, D = anim.D, side = anim.side || 1;
+      const k0 = u < t0 ? u / t0 : 1, k1 = U.clamp((u - t0) / (t1 - t0), 0, 1), k2 = U.clamp((u - t1) / (D - t1), 0, 1), e1 = 1 - Math.pow(1 - k1, 3), e2 = U.easeInOut(k2);
       if (w.kind === 'melee') {
-        if (w.arc > 6) wa = face + k * U.TAU;
-        else wa = face + (anim.side || 1) * (U.lerp(-w.arc * 0.6, w.arc * 0.6, U.easeOut(k)));
-        reach = 1 + Math.sin(k * Math.PI) * 0.25;
-      } else reach = 1 - Math.sin(k * Math.PI) * 0.18;
+        const spin = w.arc > 6, thrust = w.arc < 1, half = spin ? 0 : thrust ? 0.1 : w.arc * 0.6, pull = thrust ? 0.1 : 0.32, rA = thrust ? 0.72 : 0.92, rS = thrust ? 1.4 : 1.18;
+        let off = 0;
+        if (u < t0) { off = -side * (half + pull * U.easeOut(k0)); push = -0.55 * k0; reach = 1 - (1 - rA) * k0; if (spin) wa = face - 0.4 * U.easeOut(k0); }
+        else if (u < t1) { off = -side * (half + pull) * (1 - e1) + side * half * e1; push = -0.55 + 1.55 * e1; reach = rA + (rS - rA) * e1; if (spin) wa = face - 0.4 + (U.TAU + 0.4) * e1; }
+        else { off = side * (half * (1 - e2) + 0.18 * Math.sin(k2 * Math.PI)); push = 1 - e2; reach = rS + (1 - rS) * e2; }
+        if (!spin) wa = face + off; else if (u >= t1) wa = face;
+      } else { const kick = Math.exp(-u * 26); reach = 1 - 0.22 * kick; push = -0.8 * kick; }
     }
     const behind = Math.sin(wa) < -0.25;
+    if (swinging && push) { const L = w.arc < 1 ? 4.6 : 3.2; c.save(); c.translate(Math.cos(face) * push * L, Math.sin(face) * push * L * 0.5); c.scale(1 - 0.04 * push, 1 + 0.06 * push); }
     const drawWeapon = () => {
       c.save(); c.translate(0, -11 - bob); c.rotate(wa); c.scale(reach, Math.cos(wa) < 0 ? -1 : 1);
       const ec = p.stats && p.stats.evo && ED.PATHS[p.stats.evo] ? ED.PATHS[p.stats.evo].color : null; // evolved weapons glow in their path colour
@@ -135,7 +141,11 @@
     if (p.mastery10) { c.strokeStyle = U.rgba('#ffd36b', 0.55 + Math.sin(t * 4) * 0.25); c.lineWidth = 1.2; c.beginPath(); c.ellipse(0, -2, 13, 4, 0, 0, U.TAU); c.stroke(); c.strokeStyle = OUT; c.lineWidth = 1.6; }
     c.restore();
     if (!behind) drawWeapon();
+    if (swinging && push) c.restore();
   }
+
+  // [anticipation end, strike end, total] seconds of a weapon's attack animation: heavy weapons wind up longer, light ones snap.
+  Sp.atkTimes = (w) => { const k = U.clamp(w.rate / 0.42, 0.55, 1.5); return [0.05 * k, 0.12 * k, U.clamp(w.rate * 0.7, 0.2, 0.5)]; };
 
   Sp.portrait = (canvas, cls, slot, weapon) => {
     const c = canvas.getContext('2d');

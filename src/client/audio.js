@@ -70,9 +70,23 @@
       case 'shoot': tone('triangle', r(800, 950), 300, 0.08, 0.12 * v); noise('highpass', 3000, 1500, 0.05, 0.05 * v); break;
       case 'fire': noise('lowpass', 1200, 300, 0.2, 0.18 * v); tone('sine', 220, 80, 0.18, 0.1 * v); break;
       case 'magic': tone('sine', r(600, 700), r(1200, 1400), 0.12, 0.08 * v); tone('triangle', 300, 600, 0.12, 0.05 * v); break;
-      case 'hit': noise('bandpass', r(1600, 2400), 600, 0.05, 0.18 * v, 2); tone('sine', 170, 60, 0.07, 0.16 * v); break;
-      case 'crit': noise('bandpass', 3200, 900, 0.06, 0.22 * v, 3); tone('square', 520, 140, 0.09, 0.08 * v); break;
-      case 'die': tone('sine', r(280, 340), 55, 0.25, 0.16 * v); noise('lowpass', 900, 120, 0.22, 0.12 * v); break;
+      case 'hit': case 'crit': { // layers: body thump (lower and longer with damage share w), click, element tail; crits add a ringing partial
+        const w = arg && arg.w !== undefined ? Math.min(1.4, arg.w) : 0.5, el = arg && arg.el | 0, crit = name === 'crit';
+        noise('bandpass', crit ? 3200 : r(1600, 2400), 700, 0.05 + 0.02 * w, (crit ? 0.2 : 0.14 + 0.07 * w) * v, crit ? 3 : 2);
+        tone('sine', (crit ? 230 : 190) - 70 * w, 52, 0.07 + 0.07 * w, (0.12 + 0.12 * w) * v);
+        if (crit) { tone('square', 520, 140, 0.09, 0.07 * v); tone('sine', 1320, 1180, 0.2, 0.05 * v); }
+        if (el === 1) noise('lowpass', 2600, 500, 0.16, 0.1 * v, 1);
+        else if (el === 2) tone('sine', r(2600, 3200), 3800, 0.09, 0.06 * v);
+        else if (el === 3) { tone('sawtooth', 1600, 300, 0.07, 0.05 * v); noise('highpass', 4500, 2500, 0.05, 0.05 * v); }
+        else if (el === 4) noise('bandpass', 420, 180, 0.1, 0.12 * v, 1.5);
+        else tone('square', r(1700, 2100), 1200, 0.035, 0.03 * v);
+        break;
+      }
+      case 'die': { // arg: the foe's radius; bigger foes fall lower and longer
+        const sz = Math.max(0.6, Math.min(1.7, (arg || 10) / 11));
+        tone('sine', r(280, 340) / sz, 50, 0.2 + 0.1 * sz, 0.16 * v); noise('lowpass', 900 / sz, 120, 0.2 * sz, 0.12 * v); noise('bandpass', 1500, 400, 0.08, 0.07 * v, 1.2);
+        break;
+      }
       case 'hurt': tone('sawtooth', 190, 70, 0.22, 0.18 * v); noise('lowpass', 1400, 200, 0.18, 0.2 * v); break;
       case 'gold': tone('sine', 1320, 1320, 0.05, 0.08 * v); tone('sine', 1760, 1760, 0.07, 0.07 * v, null, A.ctx.currentTime + 0.05); break;
       case 'xp': tone('sine', r(880, 1100), r(1300, 1500), 0.05, 0.04 * v); break;

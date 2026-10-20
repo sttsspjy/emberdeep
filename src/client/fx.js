@@ -11,11 +11,13 @@
     get timeScale() { return performance.now() / 1000 < hsUntil ? 0.06 : 1; },
     set timeScale(v) { /* derived value; assignments are ignored */ },
   };
-  let MAXP = 500, lastHs = 0;
+  let MAXP = 500, lastHs = 0, pickT = 0;
   const calm = () => !!(ED.App && ED.App.settings && !ED.App.settings.shake); // "screen shake off" also mutes flashes and hit-stop
 
-  F.reset = () => { F.parts.length = 0; F.texts.length = 0; F.slashes.length = 0; F.rings.length = 0; F.bolts.length = 0; F.pops.length = 0; F.ghosts.length = 0; F.stains.length = 0; F.msgs.length = 0; F.banner = null; F.shake = 0; F.flash = null; F.anim = {}; F.aberr = 0; F.kick = 0; F.dread = 0; hsUntil = 0; };
+  F.reset = () => { F.parts.length = 0; F.texts.length = 0; F.slashes.length = 0; F.rings.length = 0; F.bolts.length = 0; F.pops.length = 0; releaseGhosts(); F.stains.length = 0; F.msgs.length = 0; F.banner = null; F.shake = 0; F.flash = null; F.anim = {}; F.aberr = 0; F.kick = 0; F.dread = 0; hsUntil = 0; ent.clear(); hitN = 0; };
   F.setQuality = (q) => { MAXP = q === 'low' ? 180 : 500; };
+  const lowFx = () => MAXP < 300;
+  const cnt = (n) => (MAXP < 300 ? Math.ceil(n / 2) : n);
 
   // opts: a (angle), spread (random +- around a), sp, life, size, color, kind (dot|shard|smoke|streak|ember|drop|ash|spark), add, lt (light colour), ltr (light radius)
   // spOv/lifeOv replace o.sp/o.life (burst jitter). Dead particles are recycled through ppool; when full, a rotating slot is overwritten.
@@ -23,14 +25,14 @@
   F.part = (x, y, o, spOv, lifeOv) => {
     const ps = F.parts; let p;
     if (ps.length >= MAXP) { evict = (evict + 1) % ps.length; p = ps[evict]; }
-    else { p = ppool.pop() || { x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 0, size: 0, color: '', kind: '', grav: 0, drag: 0, add: false, z: 0, vz: 0, rot: 0, lt: null, ltr: 0 }; ps.push(p); }
+    else { p = ppool.pop() || { x: 0, y: 0, vx: 0, vy: 0, life: 0, max: 0, size: 0, color: '', kind: '', grav: 0, drag: 0, add: false, z: 0, vz: 0, rot: 0, lt: null, ltr: 0, land: false }; ps.push(p); }
     const a = o.a !== undefined ? o.a + (o.spread ? (Math.random() - 0.5) * o.spread : 0) : Math.random() * TAU;
     const sp = spOv !== undefined ? spOv : o.sp !== undefined ? o.sp : 40 + Math.random() * 80;
     const life = lifeOv !== undefined ? lifeOv : (o.life || 0.5), kind = o.kind || 'dot';
     p.x = x; p.y = y; p.vx = Math.cos(a) * sp + (o.vx || 0); p.vy = Math.sin(a) * sp + (o.vy || 0);
     p.life = life; p.max = life; p.size = o.size || 2; p.color = o.color || '#fff'; p.kind = kind; p.grav = o.grav || 0; p.drag = o.drag !== undefined ? o.drag : 3;
     p.add = o.add !== undefined ? o.add : (kind === 'streak' || kind === 'ember' || kind === 'spark');
-    p.z = o.z || 0; p.vz = o.vz || 0; p.rot = Math.random() * 6; p.lt = o.lt || null; p.ltr = o.ltr || 28;
+    p.z = o.z || 0; p.vz = o.vz || 0; p.land = false; p.rot = Math.random() * 6; p.lt = o.lt || null; p.ltr = o.ltr || 28;
   };
   F.burst = (x, y, n, o) => { const k = MAXP < 300 ? Math.ceil(n / 2) : n, sp = o.sp || 90, life = o.life || 0.5; for (let i = 0; i < k; i++) F.part(x, y, o, sp * (0.4 + Math.random() * 0.8), life * (0.6 + Math.random() * 0.6)); };
   const NO_OPTS = {};
@@ -42,7 +44,11 @@
     F.texts.push({ x: x + (Math.random() - 0.5) * 10, y: yy, s: String(s), color, size: size || 10, life: o.life ?? 0.9, max: o.max ?? 0.9, vy: o.vy ?? -42, crit: !!o.crit, pop: !!o.pop });
   };
   F.ring = (x, y, r, color, life, width) => F.rings.push({ x, y, r, color, life: life || 0.4, max: life || 0.4, w: width || 3 });
-  F.slash = (x, y, a, r, arc, color, life) => F.slashes.push({ x, y, a, r, arc, color, life: life || 0.16, max: life || 0.16 });
+  // Smear arc. A hero weapon swing (no life given) takes its sweep side and timing from the attack animation that was just started.
+  F.slash = (x, y, a, r, arc, color, life) => {
+    const an = life === undefined ? F.lastAnim : null, L = life || 0.28;
+    if (F.slashes.length < 24) F.slashes.push({ x, y, a, r, arc, color, hot: U.mix(color, '#ffffff', 0.6), life: L, max: L, side: an ? an.side : (F.slashes.length & 1 ? 1 : -1), t0: an ? an.t0 : 0.02, t1: an ? an.t1 : 0.1 });
+  };
   // Bright impact flash that also lights the scene. star: flare lines (crits).
   F.pop = (x, y, r, color, life, star) => { if (F.pops.length < 40) F.pops.push({ x, y, r, color, life: life || 0.16, max: life || 0.16, star: !!star }); };
   F.addShake = (v) => { if (ED.App && !ED.App.settings.shake) return; F.shake = Math.min(12, F.shake + v); };
@@ -57,7 +63,7 @@
   const tick = (a, dt) => { let n = 0; for (let i = 0; i < a.length; i++) { const o = a[i]; o.life -= dt; if (o.life > 0) a[n++] = o; } a.length = n; };
 
   F.update = (dt) => {
-    F.time += dt;
+    F.time += dt; snapBudget = 4;
     F.shake = Math.max(0, F.shake - dt * (10 + F.shake * 3));
     F.aberr = Math.max(0, F.aberr - dt * 2.4);
     F.kick = Math.max(0, F.kick - dt * 3.6);
@@ -71,27 +77,96 @@
       p.vx *= d; p.vy *= d; p.vy += p.grav * dt;
       if (p.kind === 'ember') { p.vx += Math.sin(F.time * 9 + p.rot * 3) * 70 * dt; p.vy -= 34 * dt; }
       p.x += p.vx * dt; p.y += p.vy * dt;
-      if (p.vz || p.z) { p.vz -= 300 * dt; p.z += p.vz * dt; if (p.z < 0) { p.z = 0; p.vz *= -0.35; p.vx *= 0.6; p.vy *= 0.6; } }
-      p.rot += dt * 6;
+      if (p.vz || p.z) {
+        p.vz -= 300 * dt; p.z += p.vz * dt;
+        if (p.z < 0) {
+          const drop = p.kind === 'drop'; p.z = 0; p.vz *= drop ? -0.06 : -0.35; p.vx *= drop ? 0.15 : 0.6; p.vy *= drop ? 0.15 : 0.6;
+          if (drop && p.life > 0.45) p.life = 0.45;
+          if (p.vz < 14) { p.vz = 0; p.land = true; }
+        } else p.rot += dt * 6;
+      } else if (!p.land) p.rot += dt * 6;
       ps[n++] = p;
     }
     ps.length = n;
     const ts = F.texts; n = 0;
     for (let i = 0; i < ts.length; i++) { const t = ts[i]; t.life -= dt; if (t.life <= 0) continue; t.y += t.vy * dt; t.vy *= Math.max(0, 1 - 2.5 * dt); ts[n++] = t; }
     ts.length = n;
-    tick(F.slashes, dt); tick(F.rings, dt); tick(F.bolts, dt); tick(F.pops, dt); tick(F.ghosts, dt); tick(F.stains, dt);
+    tick(F.slashes, dt); tick(F.rings, dt); tick(F.bolts, dt); tick(F.pops, dt); tick(F.stains, dt);
+    const gs = F.ghosts; n = 0;
+    for (let i = 0; i < gs.length; i++) { const g = gs[i]; g.life -= dt; if (g.life > 0) gs[n++] = g; else if (g.sn) g.sn.busy = false; }
+    gs.length = n;
+    if ((entSweep += dt) > 1) { entSweep = 0; for (const [id, s] of ent) if (F.time - s.ht > 1 && F.time - s.seen > 2) ent.delete(id); }
     const ms = F.msgs; n = 0;
     for (let i = 0; i < ms.length; i++) { const m = ms[i]; m.t -= dt; if (m.t > 0) ms[n++] = m; }
     ms.length = n;
     if (F.banner) { F.banner.t += dt; if (F.banner.t > F.banner.dur) F.banner = null; }
-    for (const k in F.anim) F.anim[k].atkT = (F.anim[k].atkT || 9) + dt;
+    for (const k in F.anim) F.anim[k].atkT += dt;
     if (F.fade > 0) F.fade = Math.max(0, F.fade - dt * 2.2);
   };
 
+  // Starts a hero's attack animation (weapon sweep timing from Sprites.atkTimes); ranged weapons also get a muzzle flash.
   F.playerAttackAnim = (pid, a) => {
-    const an = F.anim[pid] || (F.anim[pid] = { atkT: 9, side: 1 });
-    an.atkT = 0; an.side = -an.side; an.a = a;
+    const an = F.anim[pid] || (F.anim[pid] = { atkT: 9, side: 1, t0: 0.05, t1: 0.12, D: 0.3 });
+    if (an.atkT < 0.03) return; // swing + atk events of one attack arrive together
+    const s = ED.Game && ED.Game.s, p = s && s.view.players.get(pid), w = p && ED.WEAPONS[p.weapon];
+    an.atkT = 0; an.side = -an.side; an.a = a; F.lastAnim = an;
+    if (w) {
+      const tm = ED.Sprites.atkTimes(w); an.t0 = tm[0]; an.t1 = tm[1]; an.D = tm[2];
+      if (w.kind !== 'melee') {
+        const col = F.projColor(w.proj), x = p.x + Math.cos(a) * 20, y = p.y - 11 + Math.sin(a) * 20;
+        F.pop(x, y, 9, col, 0.09); if (!lowFx()) F.burst(x, y, 3, { kind: 'spark', color: col, a, spread: 0.7, sp: 170, life: 0.14, size: 1.3, drag: 5 });
+      }
+    }
   };
+
+  // ---------- per-foe animation state, keyed by sim id: hit reaction and wind-up progress. F.xform is applied by the caller around Sprites.enemy. ----------
+  const ent = new Map(); let entSweep = 0, hitN = 0;
+  const WIND = { windup: 1, aim: 1, cast: 1 }, STRIKE = { lunge: 1, charge: 1, dive: 1, leap: 1, bash: 1 };
+  const entOf = (id) => { let s = ent.get(id); if (!s) { s = { ht: -9, ax: 1, ay: 0, m: 0, crit: 0, wk: '', ws: 0, wd: 0.5, wp: 0, seen: 0 }; ent.set(id, s); } return s; };
+  const hitMem = [{}, {}, {}, {}, {}, {}, {}, {}]; // last hits (position, direction, weight, element): a death replays the killing blow's direction
+  // Hit events carry the foe's top point, not its id: the nearest live foe within 30 px is the target.
+  function foeAt(x, y) {
+    const s = ED.Game && ED.Game.s; if (!s) return null;
+    const es = s.view.enemies; let best = null, bd = 900;
+    for (let i = 0; i < es.length; i++) { const e = es[i], dx = e.x - x, dy = e.y - e.r - y, d = dx * dx + dy * dy; if (d < bd) { bd = d; best = e; } }
+    return best;
+  }
+  function hitReact(e, ax, ay, w, crit) {
+    const s = entOf(e.id); s.ht = F.time; s.ax = ax; s.ay = ay; s.crit = crit ? 1 : 0;
+    s.m = w * (e.boss ? 0.12 : e.elite ? 0.55 : 1);
+  }
+  const X = { dx: 0, dy: 0, rot: 0, sx: 1, sy: 1 };
+  // Pose of a foe this frame (offset, lean, squash about its feet): wind-up crouch, strike stretch, hit recoil. null = untouched.
+  F.xform = (e) => {
+    let s = ent.get(e.id), any = false;
+    const sg = e.face < 0 ? -1 : 1;
+    X.dx = 0; X.dy = 0; X.rot = 0; X.sx = 1; X.sy = 1;
+    if (!e.boss && WIND[e.st]) {
+      if (!s) s = entOf(e.id);
+      if (s.wk !== e.st) { s.wk = e.st; s.ws = F.time; s.wd = e.t > 0.08 ? e.t : 0.5; }
+      const p = U.clamp((F.time - s.ws) / s.wd, 0, 1), q = p * p * (3 - 2 * p);
+      s.wp = p; X.sy = 1 - 0.15 * q; X.sx = 1 + 0.09 * q; X.rot = -sg * 0.17 * q; X.dx = -sg * 2.6 * q;
+      if (p > 0.6) { const th = Math.sin(F.time * 55) * 0.035 * (p - 0.6) / 0.4; X.sx += th; X.sy -= th; }
+      any = true;
+    } else {
+      if (s && s.wk) { s.wk = ''; s.wp = 0; }
+      if (!e.boss && STRIKE[e.st]) { X.sx = 1.13; X.sy = 0.92; X.rot = sg * 0.13; any = true; }
+    }
+    if (s) {
+      s.seen = F.time;
+      const a = F.time - s.ht;
+      if (a >= 0 && a < 0.34) {
+        const m = s.m, d = Math.exp(-a * 12), u = d * Math.cos(a * 30), ax = s.ax, ay = s.ay, q = 0.3 * m * d * Math.cos(a * 20);
+        X.rot += (ax >= 0 ? 1 : -1) * 0.34 * m * u * (0.5 + 0.5 * Math.abs(ax)); X.dx += ax * 5 * m * u; X.dy += ay * 2 * m * u;
+        X.sx += q * (Math.abs(ay) - Math.abs(ax)); X.sy += q * (Math.abs(ax) - Math.abs(ay));
+        if (s.crit) { const pp = 0.2 * Math.exp(-a * 14) * (e.boss ? 0.3 : 1); X.sx += pp; X.sy += pp; }
+        any = true;
+      }
+    }
+    return any ? X : null;
+  };
+  // Wind-up progress 0..1 of the foe's current telegraph (0 when none); valid after F.xform ran this frame.
+  F.windupP = (e) => { const s = ent.get(e.id); return s && s.wk ? s.wp : 0; };
 
   // Called by the renderer for every hero each frame: leaves a fading copy behind while dashing.
   F.dashTrail = (p) => {
@@ -118,6 +193,149 @@
     else if (el === 2) { F.burst(x, y, 4 * n, { kind: 'streak', color: '#c8f6ff', a, spread: 2.8, sp: 150, life: 0.3, size: 1.4 }); F.burst(x, y, 2 * n, { kind: 'dot', color: '#ffffff', sp: 30, life: 0.6, size: 1.3, add: true, drag: 2 }); }
     else if (el === 3) { F.burst(x, y, 4 * n, { kind: 'spark', color: '#fff3a0', sp: 190, life: 0.2, size: 1.6, drag: 5 }); if (F.bolts.length < 8) F.bolts.push({ pts: [[x - 7, y - 5], [x - 1, y + 2], [x + 5, y - 4], [x + 9, y + 3]], life: 0.1, max: 0.1, color: '#ffe66b' }); }
     else if (el === 4) F.burst(x, y, 5 * n, { kind: 'drop', color: '#a8142c', a, spread: 2.2, sp: 100, life: 0.5, size: 1.8, grav: 220, drag: 2 });
+  }
+
+  // Impact spray along the hit direction a, from body height above the foe's ground point (x, gy): element-coloured, sized by damage
+  // relative to the foe's health (w 0.25..1.4), crits bigger; chips take the foe's own colours.
+  function hitSplash(ev, e, r, gy, a, w, el, p) {
+    const x = ev.x, z0 = r * 0.7, crit = !!ev.c, k = crit ? 1.5 : 1, sp = 95 + 120 * w, evo = p && p.stats ? p.stats.evo : '';
+    const ec = EL_COL[el] || (crit ? '#ffd36b' : '#fff4d0');
+    F.pop(x, gy - z0, (crit ? 12 : 8) + 8 * w, EL_COL[el] || (crit ? '#ffd36b' : '#ffffff'), crit ? 0.2 : 0.12, crit);
+    if (crit) F.ring(x, gy - z0, 16 + 14 * w, ec, 0.24, 2.5); else if (w > 1) F.ring(x, gy - z0, 12 + 8 * w, ec, 0.18, 1.6);
+    if (F.parts.length > MAXP * 0.85) return;
+    const col = e ? e.def.col : null;
+    if (col) {
+      F.burst(x, gy, cnt(Math.min(3 + Math.round(4 * w * k), 8)), { kind: 'shard', color: col.a, a, spread: 2, sp: sp * 0.8, life: 0.6, size: 2.6 + 1.4 * w, vz: 80 + 70 * w, z: z0 });
+      if (w > 0.5) F.burst(x, gy, cnt(2), { kind: 'shard', color: col.b, a, spread: 2.6, sp: sp * 0.6, life: 0.5, size: 1.6 + w, vz: 60, z: z0 });
+    }
+    F.part(x, gy, { kind: 'streak', color: crit ? '#fff0b0' : ec, a, spread: 0.12, life: 0.1, size: 2.2 + 1.3 * w, z: z0, drag: 0 }, 430 + 220 * w); // one long impact ray along the blow
+    F.burst(x, gy, cnt(Math.round(4 + 5 * w * k)), { kind: 'streak', color: crit ? '#fff0b0' : ec, a, spread: 0.9, sp: sp * 1.8, life: 0.22, size: 1.4 + 0.9 * w * k, z: z0 });
+    if (el === 1) {
+      for (let i = 0, m = cnt(2 + Math.round(3 * w * k)); i < m; i++) F.part(x, gy, { kind: 'ember', color: i & 1 ? '#ffcf4a' : '#ff8a2a', a, spread: 2.6, life: 0.9, size: 1.8, drag: 1.6, z: z0, vz: 40, lt: i === 0 ? '#ff8a2a' : null, ltr: 24 }, 50 + Math.random() * 60, 0.6 + Math.random() * 0.5);
+      F.burst(x, gy, cnt(2 + Math.round(2 * w)), { kind: 'spark', color: '#ffb347', a, spread: 1.4, sp: sp * 1.4, life: 0.2, size: 1.5, drag: 5, z: z0 });
+    } else if (el === 2) {
+      F.burst(x, gy, cnt(3 + Math.round(3 * w * k)), { kind: 'shard', color: '#d8f8ff', a, spread: 2, sp: sp * 0.9, life: 0.5, size: 2 + w, vz: 90, z: z0, add: true });
+      F.burst(x, gy, 2, { kind: 'dot', color: '#ffffff', sp: 25, life: 0.6, size: 1.3, add: true, drag: 2, z: z0 });
+    } else if (el === 3) {
+      F.burst(x, gy, cnt(4 + Math.round(4 * w * k)), { kind: 'spark', color: '#fff3a0', a, spread: 2.6, sp: sp * 1.8, life: 0.2, size: 1.6, drag: 4, z: z0 });
+      if (F.bolts.length < 10) { const ca = Math.cos(a), sa = Math.sin(a), L = 12 + 12 * w, y0 = gy - z0 + 10, o = (Math.random() - 0.5) * 8; F.bolts.push({ pts: [[x, y0 - 10], [x + ca * L * 0.4 - sa * o, y0 + sa * L * 0.4 + ca * o], [x + ca * L * 0.7 + sa * o, y0 + sa * L * 0.7 - ca * o], [x + ca * L, y0 + sa * L]], life: 0.1, max: 0.1, color: '#ffe66b' }); }
+    } else if (el === 4) {
+      F.burst(x, gy, cnt(5 + Math.round(5 * w * k)), { kind: 'drop', color: '#a8142c', a, spread: 1.8, sp: sp * 0.9, life: 0.9, size: 1.8 + 0.6 * w, vz: 60, z: z0, drag: 1.2 });
+      addStain(x, gy, 2 + 3 * w, '#6a0a1a', 0.5, 4);
+    } else if (evo === 'spirit') {
+      F.burst(x, gy, cnt(2 + Math.round(2 * w)), { color: '#b78cff', sp: 30, vy: -34, life: 0.8, size: 2, add: true, drag: 1.5, z: z0 });
+      F.burst(x, gy, cnt(2), { kind: 'spark', color: '#d9c8ff', a, spread: 1.6, sp: sp * 1.3, life: 0.2, size: 1.4, drag: 5, z: z0 });
+    } else F.burst(x, gy, cnt(Math.round((3 + 4 * w) * (evo === 'steel' ? 1.4 : 1))), { kind: 'spark', color: evo === 'steel' ? '#ffe6a8' : '#fff4d0', a, spread: 1.6, sp: sp * 1.8, life: 0.18, size: 1.5, drag: 5, z: z0 });
+    if (crit) F.burst(x, gy, cnt(6), { kind: 'streak', color: '#ffffff', a, spread: 1.6, sp: 300, life: 0.22, size: 2.2, z: z0 });
+  }
+
+  // ---------- ground stains: cached blotch sprites (one draw each) ----------
+  const stainCache = {};
+  function stainSprite(col, v) {
+    const key = col + v; let s = stainCache[key]; if (s) return s;
+    s = stainCache[key] = document.createElement('canvas'); s.width = 64; s.height = 40;
+    const g = s.getContext('2d'); g.fillStyle = col;
+    g.beginPath(); g.ellipse(32, 20, 17 + v * 2, 9 + v, 0, 0, TAU); g.fill();
+    for (let i = 0; i < 6 + v * 2; i++) { const a = i * 2.4 + v, d = 13 + (i * 7 + v * 5) % 12, rr = 1.5 + (i * 5 + v) % 4; g.beginPath(); g.ellipse(32 + Math.cos(a) * d * 1.5, 20 + Math.sin(a) * d * 0.7, rr, rr * 0.7, 0, 0, TAU); g.fill(); }
+    return s;
+  }
+  function addStain(x, y, r, col, a, life) {
+    if (F.stains.length >= 32) F.stains.shift();
+    F.stains.push({ x, y, r, spr: stainSprite(col, (Math.random() * 3) | 0), a: a || 0.5, life: life || 6, max: life || 6 });
+  }
+
+  // ---------- death: foes collapse by look family. A cached snapshot of the sprite (colour + white silhouette) is posed and faded; particles carry the rest. ----------
+  const FAM = { skeleton: 'bone', zombie: 'bone', slime: 'goo', jelly: 'goo', puff: 'goo', shroom: 'goo', hulk: 'goo', spitter: 'goo', worm: 'goo',
+    wisp: 'spirit', wraith: 'spirit', shade: 'spirit', gloom: 'spirit', eye: 'spirit', imp: 'spirit', rift: 'spirit', star: 'spirit', robed: 'spirit', priest: 'spirit',
+    knight: 'metal', golem: 'metal', sentinel: 'metal', drone: 'metal', totem: 'metal' };
+  const DUR = { bone: 0.5, goo: 0.42, spirit: 0.55, metal: 0.3, beast: 0.5 };
+  const snapPool = [];
+  function releaseGhosts() { for (const g of F.ghosts) if (g.sn) g.sn.busy = false; F.ghosts.length = 0; }
+  // Free snapshot canvas that fits w x h (colour half at x 0, white half at x cw); grows a free one or adds up to 14.
+  function snapGet(w, h) {
+    let s = null;
+    for (const q of snapPool) if (!q.busy && q.cw >= w && q.ch >= h) { s = q; break; }
+    if (!s) {
+      for (const q of snapPool) if (!q.busy) { s = q; break; }
+      if (!s) { if (snapPool.length >= 14) return null; s = { cv: document.createElement('canvas'), g: null, cw: 0, ch: 0, busy: false }; s.g = s.cv.getContext('2d'); snapPool.push(s); }
+      s.cw = Math.max(w, s.cw); s.ch = Math.max(h, s.ch); s.cv.width = s.cw * 2; s.cv.height = s.ch;
+    }
+    s.busy = true;
+    return s;
+  }
+  const NOP = () => {};
+  let snapBudget = 4; // snapshots per frame: a mass kill spreads its sprite draws over frames
+  function spawnGhost(ev, d, fam, a, e) {
+    if (lowFx() || F.ghosts.length >= 14 || snapBudget <= 0) return;
+    snapBudget--;
+    const Rn = R(), S = Rn.scale, r = ev.r || d.r, Sp = ED.Sprites;
+    const hw = r * 2.6 + 14, top = r * 3.9 + 24, bot = r * 0.9 + 8, w = Math.ceil(hw * 2 * S), h = Math.ceil((top + bot) * S);
+    if (w * h > 1.2e6) return;
+    const sn = snapGet(w, h); if (!sn) return;
+    const g = sn.g, fk = e ? Object.create(e) : { def: d, r, id: 0, st: 'move', face: 1, frozen: 0, elite: null, hp: 1, maxHp: 1, t: 0, pose: '', aimA: 0, phase: 0 };
+    fk.flash = 0; fk.hp = 1; fk.st = fk.st === 'burrow' ? 'move' : fk.st; fk.exposed = false;
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, sn.cw * 2, sn.ch);
+    g.setTransform(S, 0, 0, S, hw * S, top * S);
+    const sh = Sp.shadow; Sp.shadow = NOP;
+    let ok = true;
+    try { Sp.enemy(g, fk, F.time); } catch (err) { ok = false; } finally { Sp.shadow = sh; }
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    if (!ok) { snapPool.splice(snapPool.indexOf(sn), 1); return; } // an unbalanced context is never reused
+    g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+    g.drawImage(sn.cv, 0, 0, w, h, sn.cw, 0, w, h);
+    g.globalCompositeOperation = 'source-atop'; g.fillStyle = '#ffffff'; g.fillRect(sn.cw, 0, w, h); g.globalCompositeOperation = 'source-over';
+    const dur = DUR[fam] + (ev.el ? 0.1 : 0);
+    F.ghosts.push({ k: 'die', sn, w, h, wu: w / S, hu: h / S, hw, top, x: ev.x, y: ev.y, r, fam, sgn: Math.cos(a) >= 0 ? 1 : -1, life: dur, max: dur });
+  }
+  const GP = { dx: 0, dy: 0, rot: 0, sx: 1, sy: 1, a: 1, add: false };
+  // Pose of a dying foe's snapshot at age u (collapse, flatten, rise or shudder by family).
+  function ghostPose(g, u) {
+    const P = GP, k = u / g.max; P.dx = 0; P.dy = 0; P.rot = 0; P.sx = 1; P.sy = 1; P.a = 1; P.add = false;
+    switch (g.fam) {
+      case 'bone': { const e = U.easeOut(Math.min(1, u / 0.26)); P.sy = 1 - 0.55 * e; P.sx = 1 + 0.15 * e; P.rot = g.sgn * 1.05 * e; P.dx = g.sgn * 6 * e; P.a = k < 0.55 ? 1 : 1 - (k - 0.55) / 0.45; break; }
+      case 'goo': { const e = U.easeOut(Math.min(1, u / 0.15)); P.sy = 1 - 0.85 * e; P.sx = 1 + 0.55 * e; P.a = k < 0.4 ? 1 : 1 - (k - 0.4) / 0.6; break; }
+      case 'spirit': P.add = true; P.sy = 1 + 0.6 * k; P.sx = 1 - 0.5 * k; P.dy = -u * 34; P.a = (1 - k) * (1 - k); break;
+      case 'metal': P.dx = u < 0.12 ? Math.sin(u * 140) * 1.8 * (1 - u / 0.12) : 0; P.a = u < 0.12 ? 1 : Math.max(0, 1 - (u - 0.12) / 0.1); if (u >= 0.12) { P.sy = 1 + (u - 0.12) * 1.5; P.sx = 1 + (u - 0.12) * 1.5; } break;
+      default: { const e = U.easeOut(Math.min(1, u / 0.3)); P.rot = g.sgn * 1.3 * e; P.sy = 1 - 0.2 * e; P.dx = g.sgn * 8 * e; P.a = k < 0.5 ? 1 : 1 - (k - 0.5) / 0.5; }
+    }
+    return P;
+  }
+
+  const DARK = (c) => U.shade(c, -0.45);
+  // Particles and stain of a death, by family; a is the killing blow's direction, big = elite or large foe.
+  function deathFx(ev, d, fam, a, big, mem) {
+    const x = ev.x, y = ev.y, r = ev.r || d.r, col = d.col, z0 = r * 0.8, k = big ? 1.6 : 1, w = mem ? mem.w : 0.6;
+    const dirSp = 120 + 90 * w;
+    switch (fam) {
+      case 'bone':
+        F.burst(x, y, cnt(Math.round(11 * k)), { kind: 'shard', color: col.a, a, spread: 2.6, sp: dirSp, life: 0.85, size: 3, vz: 130, z: z0 });
+        F.burst(x, y, cnt(Math.round(4 * k)), { kind: 'shard', color: col.b, a, spread: 3, sp: dirSp * 0.7, life: 0.7, size: 2, vz: 90, z: z0 });
+        F.burst(x, y, cnt(3), { kind: 'smoke', color: '#8a8070', sp: 30, life: 0.6, size: 5, drag: 3, z: 2 });
+        addStain(x, y, r * 1.1, '#1c1814', 0.4);
+        break;
+      case 'goo':
+        F.burst(x, y, cnt(Math.round(14 * k)), { kind: 'drop', color: col.a, sp: 115, life: 0.9, size: 3, vz: 120, z: z0, drag: 1.1 });
+        F.burst(x, y, cnt(Math.round(5 * k)), { kind: 'drop', color: col.b, sp: 70, life: 0.9, size: 2.2, vz: 80, z: z0, drag: 1.1 });
+        addStain(x, y, r * 1.6, col.a, 0.62);
+        break;
+      case 'spirit':
+        F.burst(x, y, cnt(Math.round(10 * k)), { color: col.c, sp: 26, vy: -48, life: 1.0, size: 2, add: true, drag: 1.3, z: z0, lt: big ? col.c : null, ltr: 26 });
+        F.burst(x, y, cnt(Math.round(6 * k)), { color: col.a, sp: 40, vy: -30, life: 0.8, size: 2.6, add: true, drag: 1.6, z: z0 });
+        F.burst(x, y, cnt(4), { kind: 'smoke', color: DARK(col.a), sp: 25, life: 0.9, size: 7, drag: 2, z: z0 });
+        break;
+      case 'metal':
+        F.burst(x, y, cnt(Math.round(12 * k)), { kind: 'spark', color: '#ffe6a8', sp: 230, life: 0.28, size: 1.7, drag: 4, z: z0 });
+        F.burst(x, y, cnt(Math.round(6 * k)), { kind: 'shard', color: col.a, a, spread: 3.4, sp: dirSp, life: 0.8, size: 2.8, vz: 130, z: z0 });
+        F.burst(x, y, cnt(Math.round(3 * k)), { kind: 'shard', color: '#3a3a44', sp: 90, life: 0.8, size: 2.4, vz: 110, z: z0 });
+        F.burst(x, y, cnt(3), { kind: 'smoke', color: '#454048', sp: 30, life: 0.7, size: 6, drag: 3, z: z0 });
+        addStain(x, y, r * 1.0, '#0c0a0e', 0.45);
+        break;
+      default:
+        F.burst(x, y, cnt(Math.round(12 * k)), { kind: 'shard', color: col.a, a, spread: 2.4, sp: dirSp, life: 0.8, size: 2.9, vz: 120, z: z0 });
+        F.burst(x, y, cnt(Math.round(5 * k)), { kind: 'drop', color: DARK(col.a), a, spread: 2.2, sp: dirSp * 0.8, life: 0.9, size: 2.2, vz: 90, z: z0 });
+        F.burst(x, y, cnt(3), { kind: 'smoke', color: '#6a5a4a', sp: 30, life: 0.6, size: 5, drag: 3, z: 2 });
+        addStain(x, y, r * 1.3, DARK(col.a), 0.5);
+    }
   }
 
   // Jagged lightning arm between two points (interior points are fixed at birth; the renderer adds shimmer).
@@ -156,13 +374,15 @@
           F.text(ev.x, ev.y - 6, ev.v, col, size, { crit: !!ev.c, pop: true, life: ev.c ? 1.15 : 0.85, max: ev.c ? 1.15 : 0.85, vy: ev.c ? -58 : -42 });
         }
         if (!ev.k) {
-          const a = p ? Math.atan2(ev.y - (p.y - 6), ev.x - p.x) : Math.random() * TAU, col = ec || (ev.c ? '#ffd36b' : '#ffffff');
-          F.burst(ev.x, ev.y + 6, ev.c ? 8 : 4, { kind: 'streak', color: col, a, spread: 1.1, sp: ev.c ? 260 : 190, life: 0.22, size: ev.c ? 2.2 : 1.5 });
-          F.pop(ev.x, ev.y + 4, ev.c ? 15 : 8, col, ev.c ? 0.2 : 0.12, ev.c);
-          if (ev.c) F.ring(ev.x, ev.y + 4, 20, col, 0.22, 2);
-          elemHit(ev.x, ev.y + 4, el, a, ev.c);
-          A.play(ev.c ? 'crit' : 'hit', mine ? 1 : 0.5);
+          const e = foeAt(ev.x, ev.y), r = e ? e.r : 8, gy = e ? e.y : ev.y + r;
+          const w = e ? U.clamp(Math.sqrt(ev.v / Math.max(1, e.maxHp)) * 1.6, 0.25, 1.4) : 0.5;
+          const a = p ? Math.atan2(gy - r * 0.6 - (p.y - 10), ev.x - p.x) : Math.random() * TAU;
+          if (e) hitReact(e, Math.cos(a), Math.sin(a), w, ev.c);
+          const hm = hitMem[hitN++ & 7]; hm.x = ev.x; hm.y = gy; hm.a = a; hm.w = w; hm.t = F.time; hm.mine = mine;
+          hitSplash(ev, e, r, gy, a, w, el, p);
+          A.play(ev.c ? 'crit' : 'hit', mine ? 1 : 0.5, { w, el });
           if (mine && (ev.c || ev.v >= 60)) F.hitStop(ev.c ? 0.06 : 0.04);
+          if (mine && w > 0.75 && !ev.c) F.addShake(1);
           if (ev.v >= 100) F.punch(0.5, 0);
         } else if (el === 1) elemHit(ev.x, ev.y + 4, 1, 0, false);
         if (ev.c && mine) { F.addShake(2.5); F.punch(0.35, 0); }
@@ -170,14 +390,16 @@
       }
       case 'die': {
         const col = ENEMY_COLOR(ev.type), big = ev.el || ev.r > 14, d = ED.ENEMIES[ev.type];
-        F.burst(ev.x, ev.y - 6, big ? 26 : 12, { color: col, sp: big ? 150 : 110, life: 0.6, size: big ? 3.4 : 2.6, kind: 'shard', vz: 120, z: 6 });
-        F.burst(ev.x, ev.y - 6, big ? 14 : 7, { color: col, sp: 22, vy: -50, life: 1.0, size: 1.8, kind: 'dot', add: true, drag: 1.4, lt: big ? col : null, ltr: 26 });
-        F.burst(ev.x, ev.y - 6, 6, { color: '#000000', sp: 40, life: 0.8, size: 6, kind: 'smoke', drag: 2 });
-        F.burst(ev.x, ev.y - 4, 4, { color: '#5a5048', sp: 36, vy: -20, life: 1.2, size: 1.6, kind: 'ash', grav: 24, drag: 1.2 });
+        let mem = null; for (const m of hitMem) if (m.t !== undefined && F.time - m.t < 0.3 && Math.abs(m.x - ev.x) < 26 && Math.abs(m.y - ev.y) < 26 && (!mem || m.t > mem.t)) mem = m;
+        const a = mem ? mem.a : Math.random() * TAU;
+        if (d) {
+          const fam = FAM[d.look] || 'beast';
+          deathFx(ev, d, fam, a, big, mem);
+          spawnGhost(ev, d, fam, a, foeAt(ev.x, ev.y - (ev.r || d.r)));
+        }
         F.pop(ev.x, ev.y - 8, big ? 26 : 14, col, 0.2);
-        if (d) F.ghosts.push({ k: 'die', x: ev.x, y: ev.y, type: ev.type, r: ev.r || d.r, life: 0.45, max: 0.45 });
-        if (F.stains.length < 24) F.stains.push({ x: ev.x, y: ev.y, r: (ev.r || 10) * 1.25, life: 6, max: 6, col });
-        A.play('die', 0.7);
+        if (mem && mem.mine) { if (big || ev.r >= 10) F.hitStop(0.035); F.addShake(big ? 1.6 : 0.7); }
+        A.play('die', 0.7, ev.r);
         if (big) { F.ring(ev.x, ev.y, 30, col, 0.4); F.addShake(3); F.hitStop(0.06); }
         break;
       }
@@ -205,7 +427,7 @@
         break;
       }
       case 'swing': {
-        if (ev.pid !== local) { const p = ctx.player(ev.pid); if (p) F.slash(p.x, p.y - 10, ev.a, ev.r, ev.arc, ED.PLAYER_COLORS[p.slot]); A.play('swing', 0.35); }
+        if (ev.pid !== local) { const p = ctx.player(ev.pid); if (p) { F.playerAttackAnim(ev.pid, ev.a); F.slash(p.x, p.y - 10, ev.a, ev.r, ev.arc, ED.PLAYER_COLORS[p.slot]); } A.play('swing', 0.35); }
         break;
       }
       case 'atk': if (ev.pid !== local) { F.playerAttackAnim(ev.pid, ev.a); const p = ctx.player(ev.pid); if (p && p.stats && !p.stats.melee) A.play('shoot', 0.3); } break;
@@ -220,8 +442,10 @@
       case 'bolt': F.bolts.push({ pts: [[ev.x + 10, ev.y - 220], [ev.x - 8, ev.y - 120], [ev.x + 6, ev.y - 50], [ev.x, ev.y]], life: 0.3, max: 0.3, color: '#ffffff' }); F.pop(ev.x, ev.y - 6, 38, '#e8f4ff', 0.28); F.ring(ev.x, ev.y, 42, '#bfe9ff', 0.3, 3); F.punch(0.8, 0.5); A.play('bolt'); F.addShake(3); break;
       case 'nova': F.ring(ev.x, ev.y, ev.r, ev.c || '#ff7a2a', 0.45, 6); F.ring(ev.x, ev.y, ev.r * 0.6, '#ffffff', 0.3, 2); F.burst(ev.x, ev.y, 26, { color: ev.c || '#ff7a2a', sp: ev.r * 3, life: 0.45, size: 3, add: true }); F.pop(ev.x, ev.y - 6, ev.r * 0.7, ev.c || '#ff7a2a', 0.25); F.punch(0.4, 0); A.play('boom', 0.6); F.addShake(4); break;
       case 'levelup': F.showBanner('Level ' + ev.level, ev.boon ? 'A boon awaits when the room is clear' : '', 'level', 2.2); A.play('level'); for (const p of ctx.players()) { F.burst(p.x, p.y - 10, 18, { color: '#ffd36b', sp: 80, vy: -60, life: 0.9, size: 2.2, add: true, drag: 1.5 }); F.ring(p.x, p.y, 36, '#ffd36b', 0.5, 3); F.pop(p.x, p.y - 12, 26, '#ffd36b', 0.3); } break;
-      case 'gold': if (ev.pid === local) A.play('gold', 0.6); break;
-      case 'xp': if (ev.pid === local) A.play('xp', 0.5); break;
+      case 'gold': case 'xp': { // pickup sparkle on the collector, rate-limited
+        const p = ctx.player(ev.pid), gold = ev.t === 'gold';
+        if (p && F.time - pickT > 0.05) { pickT = F.time; const c = gold ? '#ffd36b' : '#7dffd9'; F.burst(p.x, p.y - 16, 2, { color: c, sp: 40, vy: -45, life: 0.4, size: 1.6, add: true, drag: 2.2 }); }
+        if (ev.pid === local) A.play(ev.t, gold ? 0.6 : 0.5); break; }
       case 'boon': { const p = ctx.player(ev.pid), b = ED.BOONS[ev.id]; if (p && b) { const col = b.path ? PATH_COL[b.path] : ED.RARITY[b.rar].color; F.burst(p.x, p.y - 12, b.gate ? 32 : 22, { color: col, sp: 70, vy: -50, life: 0.8, size: 2.4, add: true, drag: 1.2 }); F.ring(p.x, p.y, b.gate ? 42 : 30, col, 0.45, 3); F.pop(p.x, p.y - 14, 22, col, 0.25); if (b.path) F.burst(p.x, p.y - 12, 8, { kind: 'ember', color: col, sp: 40, a: -1.57, spread: 2.4, life: 1.0, size: 1.8, drag: 1.4, lt: col, ltr: 22 }); } if (ev.pid === local) A.play('boon'); break; }
       case 'relic': { const p = ctx.player(ev.pid); const r = ED.RELICS[ev.id]; if (p) { F.text(p.x, p.y - 40, r.name, ED.RARITY[r.rar].color, 11, { life: 1.8, max: 1.8 }); F.burst(p.x, p.y - 12, 24, { color: ED.RARITY[r.rar].color, sp: 80, vy: -40, life: 0.9, size: 2.4, add: true }); F.ring(p.x, p.y, 34, ED.RARITY[r.rar].color, 0.5, 3); } if (ev.pid === local) { A.play('relic'); ED.UI && ED.UI.toast(`<b>${r.name}</b> — ${r.desc}`, ED.Icons.relicUrl(ev.id)); } else if (p) F.msg(`${p.name} found ${r.name}`); break; }
       case 'lock': A.play('lock'); F.addShake(4); break;
@@ -296,10 +520,7 @@
   // Lit pass: stains, non-additive particles (smoke, shards, ash, drops); registers lights for flares and bright particles.
   F.drawWorld = (c) => {
     const Rn = R();
-    for (const s of F.stains) {
-      const k = Math.min(1, s.life / 2);
-      c.globalAlpha = 0.34 * k; c.fillStyle = '#05030a'; c.beginPath(); c.ellipse(s.x, s.y + 2, s.r, s.r * 0.55, 0, 0, TAU); c.fill();
-    }
+    for (const s of F.stains) { const w = s.r * 3.6; c.globalAlpha = s.a * Math.min(1, s.life / 2); c.drawImage(s.spr, s.x - w / 2, s.y - w * 0.31 + 2, w, w * 0.62); }
     c.globalAlpha = 1;
     let nl = 0;
     for (const p of F.parts) {
@@ -315,6 +536,16 @@
       else { c.beginPath(); c.arc(p.x, p.y - p.z, sz, 0, TAU); c.fill(); }
     }
     c.globalAlpha = 1;
+    // dying foes: the posed snapshot (white silhouette for the first frames); spirit-family ghosts are drawn additively in drawGlow instead
+    for (const g of F.ghosts) {
+      if (!g.sn) continue;
+      const u = g.max - g.life, P = ghostPose(g, u);
+      if (P.a <= 0.01) continue;
+      c.save(); c.translate(g.x, g.y); Rn.shadow(c, g.r, 0.35 * P.a);
+      if (!P.add) { c.translate(P.dx, P.dy); c.rotate(P.rot); c.scale(P.sx, P.sy); c.globalAlpha = P.a; c.drawImage(g.sn.cv, u < 0.06 ? g.sn.cw : 0, 0, g.w, g.h, -g.hw, -g.top, g.wu, g.hu); }
+      c.restore();
+    }
+    c.globalAlpha = 1;
     for (const p of F.pops) Rn.light(p.x, p.y, p.r * 3.2, p.color, 0.9 * (p.life / p.max));
     for (const r of F.rings) { const k = 1 - r.life / r.max; if (r.r > 40) Rn.light(r.x, r.y, r.r * (0.3 + 0.7 * U.easeOut(k)) * 1.2, r.color, 0.5 * (1 - k)); }
     for (const b of F.bolts) { const k = b.life / b.max; for (let i = 1; i < b.pts.length; i += 2) Rn.light(b.pts[i][0], b.pts[i][1] - 10, 60, b.color, 0.8 * k); }
@@ -324,15 +555,25 @@
   // Emissive pass (context is in 'lighter'): slashes, rings, glowing particles, streaks, pops, bolts, ghosts.
   F.drawGlow = (c, t) => {
     const Rn = R(), Sp = ED.Sprites;
+    // smear: a crescent whose bright head sweeps the arc during the weapon's strike; three nested layers (long dim tail -> short white core) fake the fade, then the whole arc fades
     for (const s of F.slashes) {
-      const k = s.life / s.max, arc = Math.min(6.28, s.arc), a2 = 1 - (1 - k) * (1 - k);
-      c.save(); c.translate(s.x, s.y); c.rotate(s.a);
-      const g = c.createRadialGradient(0, 0, s.r * 0.4, 0, 0, s.r);
-      g.addColorStop(0, U.rgba(s.color, 0)); g.addColorStop(0.65, U.rgba(s.color, 0.35 * a2)); g.addColorStop(1, U.rgba(U.mix(s.color, '#ffffff', 0.55), 0.85 * a2));
-      c.fillStyle = g; c.beginPath(); c.arc(0, 0, s.r, -arc / 2, arc / 2); c.arc(0, 0, s.r * (0.5 + 0.3 * (1 - k)), arc / 2, -arc / 2, true); c.closePath(); c.fill();
-      c.strokeStyle = U.rgba('#ffffff', 0.9 * a2); c.lineWidth = 1.2 + 1.6 * k; c.beginPath(); c.arc(0, 0, s.r, -arc / 2, arc / 2); c.stroke();
-      c.strokeStyle = U.rgba(s.color, 0.5 * a2); c.lineWidth = 4 * k + 1; c.beginPath(); c.arc(0, 0, s.r * 0.96, -arc / 2, arc / 2); c.stroke();
+      const age = s.max - s.life, arc = Math.min(6.28, s.arc), sd = s.side, h = U.easeOut(U.clamp((age - s.t0) / (s.t1 - s.t0), 0, 1));
+      if (h <= 0) continue;
+      const f0 = U.clamp(1 - (age - s.t1) / (s.max - s.t1), 0, 1), fa = f0 * f0, sweep = arc * h, tail = Math.min(arc, 1.9);
+      const rad = s.r * 0.94, th = Math.max(4, s.r * 0.2), base = s.a - sd * arc / 2;
+      c.save(); c.translate(s.x, s.y);
+      for (let L = lowFx() ? 1 : 0; L < 3; L++) {
+        const lt = tail * (L === 0 ? 1 : L === 1 ? 0.5 : 0.2), d1 = sweep, d0 = Math.max(0, d1 - lt); if (d1 - d0 < 0.02) continue;
+        c.globalAlpha = fa * (L === 0 ? 0.5 : L === 1 ? 0.65 : 0.9); c.fillStyle = L === 0 ? s.color : L === 1 ? s.hot : '#ffffff';
+        const tw = th * (L === 0 ? 1 : L === 1 ? 0.75 : 0.45), n = 10;
+        c.beginPath();
+        for (let i = 0; i <= n; i++) { const a = base + sd * (d0 + (d1 - d0) * i / n); i ? c.lineTo(Math.cos(a) * rad, Math.sin(a) * rad) : c.moveTo(Math.cos(a) * rad, Math.sin(a) * rad); }
+        for (let i = n; i >= 0; i--) { const q = i / n, a = base + sd * (d0 + (d1 - d0) * q), rr = rad - tw * Math.pow(q, 0.75) * (1 - 0.9 * Math.pow(q, 8)); c.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+        c.closePath(); c.fill();
+      }
       c.restore();
+      const he = base + sd * sweep;
+      Rn.glow(c, s.x + Math.cos(he) * rad * 0.95, s.y + Math.sin(he) * rad * 0.95, s.r * 0.3, s.color, 0.65 * fa);
     }
     for (const r of F.rings) {
       const k = 1 - r.life / r.max, rr = r.r * (0.3 + 0.7 * U.easeOut(k));
@@ -383,28 +624,34 @@
       c.strokeStyle = U.rgba('#ffffff', k); c.lineWidth = 1; c.stroke();
       for (const pt of b.pts) Rn.glow(c, pt[0], pt[1] - 10, 12, b.color, 0.5 * k);
     }
-    // ghosts: dash afterimages (hero sprite, additive) and death silhouettes (white flash drifting up and fading)
+    // ghosts: dash afterimages (hero sprite, additive); dying foes' flash overlay and spirit-family dissolve (cached snapshots)
     for (const g of F.ghosts) {
-      const k = g.life / g.max, fake = g.fake || (g.fake = g.k === 'dash' ? { cls: g.cls, slot: g.slot, weapon: g.weapon, face: g.face, moving: true, hp: 1, flash: 0 } : { def: ED.ENEMIES[g.type], r: g.r, id: 0, st: 'move', face: 1, flash: 1, frozen: 0, elite: null, hp: 1, maxHp: 1, t: 0, pose: '', aimA: 0, phase: 0 });
-      if (g.ok === undefined) g.ok = ghostOK(g, fake);
+      if (g.sn) {
+        const u = g.max - g.life, P = ghostPose(g, u), fl = u < 0.12 ? 1 - u / 0.12 : 0;
+        if (!fl && !P.add) continue;
+        c.save(); c.translate(g.x + P.dx, g.y + P.dy); c.rotate(P.rot); c.scale(P.sx, P.sy);
+        if (P.add && P.a > 0.01) { c.globalAlpha = P.a * 0.9; c.drawImage(g.sn.cv, u < 0.06 ? g.sn.cw : 0, 0, g.w, g.h, -g.hw, -g.top, g.wu, g.hu); }
+        if (fl) { c.globalAlpha = fl * 0.85; c.drawImage(g.sn.cv, g.sn.cw, 0, g.w, g.h, -g.hw, -g.top, g.wu, g.hu); }
+        c.restore();
+        continue;
+      }
+      const k = g.life / g.max, fake = g.fake || (g.fake = { cls: g.cls, slot: g.slot, weapon: g.weapon, face: g.face, moving: true, hp: 1, flash: 0 });
+      if (g.ok === undefined) g.ok = dashOK(g, fake);
       if (!g.ok) continue;
-      c.save(); c.translate(g.x, g.y);
-      if (g.k === 'dash') { c.globalAlpha = 0.32 * k; Sp.hero(c, fake, t, null); }
-      else { c.translate(0, -(1 - k) * 9); c.scale(1 + (1 - k) * 0.12, 1 - (1 - k) * 0.1); c.globalAlpha = Math.min(1, k * 1.4) * 0.85; Sp.enemy(c, fake, t); }
-      c.restore();
+      c.save(); c.translate(g.x, g.y); c.globalAlpha = 0.32 * k; Sp.hero(c, fake, t, null); c.restore();
     }
     c.globalAlpha = 1; c.globalCompositeOperation = 'lighter';
   };
 
-  // A sprite is test-drawn once per kind on a throwaway canvas, so a look that cannot render a synthetic actor never unbalances the world context.
-  const ghostChecked = {};
-  function ghostOK(g, fake) {
-    const key = g.k === 'dash' ? 'h:' + g.cls : 'e:' + g.type;
-    if (ghostChecked[key] === undefined) {
+  // A hero sprite is test-drawn once per class on a throwaway canvas, so a look that cannot render a synthetic actor never unbalances the world context.
+  const dashChecked = {};
+  function dashOK(g, fake) {
+    const key = g.cls;
+    if (dashChecked[key] === undefined) {
       const cv = document.createElement('canvas'); cv.width = cv.height = 4;
-      try { if (g.k === 'dash') ED.Sprites.hero(cv.getContext('2d'), fake, 0, null); else if (fake.def) ED.Sprites.enemy(cv.getContext('2d'), fake, 0); else throw new Error('no def'); ghostChecked[key] = true; } catch (e) { ghostChecked[key] = false; }
+      try { ED.Sprites.hero(cv.getContext('2d'), fake, 0, null); dashChecked[key] = true; } catch (e) { dashChecked[key] = false; }
     }
-    return ghostChecked[key];
+    return dashChecked[key];
   }
 
   F.drawTexts = (c) => {

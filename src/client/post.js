@@ -153,7 +153,7 @@ void main(){
       gain: tw.gain || [1.04, 1, 0.95],
       shadowT: mixv(cold, acc, 0.45).map(v => v * 0.05),
       highT: lt.map(v => v * 0.035),
-      gamma: 1.1, sat: tw.sat || 1.15, contrast: 0.42, bloom: tw.bloom || 0.55, thr: tw.thr || 0.6, vig: 0.42,
+      gamma: 1.12, sat: tw.sat || 1.15, contrast: 0.34, bloom: tw.bloom || 0.55, thr: tw.thr || 0.6, vig: 0.36,
     };
     grades[biome.id] = g;
     return g;
