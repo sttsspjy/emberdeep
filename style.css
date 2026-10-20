@@ -5,7 +5,7 @@
             Large, centred, high contrast. Nothing tilted. Selection = ember diamond markers + a warm light pool.
    Unit     1u = 1rem = clamp(13px, min(100vw / 110, 100vh / 62), 36px)   -> 17.4px at 1920x1080, 23.2px at 2560x1440, 13px at 1280x720.
             Canvas HUD (own #hud canvas at device resolution, hud.js): u = clamp(13, min(W / 110, H / 62), 36) with W, H in CSS px, then multiply by the HUD canvas ratio.
-            HUD anchors: hero block bottom-left, party top-left, map + lantern top-right, xp bottom-centre, relics bottom-right, boss bar top-centre, messages above the hero block.
+            HUD anchors: hero block bottom-left, party top-left, map + lantern top-right, xp bottom-centre, relics bottom-right, boss bar top-centre, messages above the hero block, DOM toasts top-centre below the boss bar.
    Fonts    Display "Cinzel" 700/900 (hero names, titles, buttons, big numbers). Body "Alegreya Sans" 400-800 (all other text, tabular numerals).
             Fallbacks: Georgia / "Segoe UI", system-ui.
    Type     minimum text 0.85u. 0.95u small · 1.08u body · 1.3u subhead · 1.75u title · 2.4u banner · 5-7u wordmark.
@@ -551,6 +551,7 @@ input[type=range]::-moz-range-thumb { width: 1.2rem; height: 1.2rem; transform: 
 #modal { z-index: 20; background: rgba(3, 2, 2, 0.72); }
 
 #toasts { position: absolute; top: max(1rem, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 0.6rem; align-items: center; z-index: 50; pointer-events: none; }
+body.hud-on #toasts { top: 8rem; width: max-content; max-width: max(20rem, calc(100vw - 44rem)); } /* in a run: below the boss bar (ends 6.8rem), between the party and map columns (each <= 20.2rem wide) */
 .toast { display: flex; align-items: center; gap: 0.7rem; padding: 0.6rem 1.4rem; background: linear-gradient(180deg, rgba(40, 30, 22, 0.98), rgba(20, 14, 10, 0.98)); border: 2px solid var(--gold-lo); border-radius: 2rem; box-shadow: var(--bevel), 0 0.8rem 2rem rgba(0, 0, 0, 0.6); color: var(--text); font-size: var(--fs-md); animation: toastIn 0.3s ease-out, toastOut 0.4s ease-in forwards; animation-delay: 0s, var(--life, 3.4s); }
 .toast img { width: 1.8rem; height: 1.8rem; }
 .toast b { color: var(--gold); }

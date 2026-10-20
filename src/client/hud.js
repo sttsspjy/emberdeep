@@ -1,4 +1,4 @@
-// Screen-space HUD on its own device-resolution canvas (#hud): hero block, ability slots, party, map + lantern, xp, boss bar, prompts, signs, messages, banners.
+// Screen-space HUD on its own device-resolution canvas (#hud): hero block, ability slots, party, map + lantern, xp, boss bar, prompts, signs, messages, banners; panels fade while the world is under them.
 // Scale unit u mirrors style.css (1u = 1rem). Static art (plates, keycaps, bar fills, portrait) is cached offscreen and rebuilt when u changes.
 (function (ED) {
   'use strict';
@@ -11,6 +11,10 @@
   let lastFont = '', lastAl = '', lastDpr = 0, cv = null, c = null, W = 0, Hh = 0, hd = 1, u = 13, cssW = 0, cssH = 0, lowQ = false, shown = false, dtc = 0, rk = 1;
   const L = {}; // layout rects in canvas px, rebuilt with u
   const ghost = {}, slotFx = [], lantern = { view: null, tier: 0, hint: '', t: 99, fx: '', fxTier: -1 };
+  // Panel fade: a panel eases to FADE_MIN alpha while a hero, foe or pickup is under it (held FADE_HOLD s after the last overlap), then back. ga = alpha of the panel being drawn.
+  const FADE_MIN = 0.35, FADE_RATE = (1 - FADE_MIN) / 0.15, FADE_HOLD = 0.2, FP_MAX = 640;
+  const fade = {}, fp = new Float32Array(FP_MAX * 3); // fp: x, y, radius of each world object in canvas px
+  let ga = 1, fpN = 0;
   const mk = (w, h) => { const e = document.createElement('canvas'); e.width = Math.max(1, w); e.height = Math.max(1, h); return e; };
   const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 
@@ -129,7 +133,7 @@
       if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', dropArt);
     }
     const w = window.innerWidth, h = window.innerHeight, soft = !!(ED.Post && ED.Post.soft), low = R.quality === 'low' || soft;
-    if (!shown) { cv.style.display = 'block'; shown = true; }
+    if (!shown) { cv.style.display = 'block'; shown = true; document.body.classList.add('hud-on'); }
     const dpr = window.devicePixelRatio || 1;
     if (w !== cssW || h !== cssH || low !== lowQ || dpr !== lastDpr) {
       cssW = w; cssH = h; lowQ = low; lastDpr = dpr;
@@ -143,7 +147,7 @@
     rk = hd / (R.dpr || 1);
     return true;
   }
-  H.clear = () => { if (cv && shown) { cv.style.display = 'none'; shown = false; } };
+  H.clear = () => { if (cv && shown) { cv.style.display = 'none'; shown = false; document.body.classList.remove('hud-on'); } };
 
   function layout() {
     const m = u * 1.2;
@@ -158,11 +162,34 @@
     L.bw = Math.min(u * 55, W - 2 * (L.mw + m * 2)); // boss plate width, clear of the map column
   }
 
+  // ---------------- panel fade ----------------
+  // Screen points of every living hero, foe and pickup (same affine as R.toScreen, taken once per frame).
+  function focusPoints(view) {
+    const R = ED.Render, a = R.toScreen(0, 0), b = R.toScreen(1, 0), sc = (b.x - a.x) * rk, ox = a.x * rk, oy = a.y * rk;
+    let n = 0;
+    const put = (x, y, r) => { if (n < FP_MAX) { const i = n++ * 3; fp[i] = ox + x * sc; fp[i + 1] = oy + y * sc; fp[i + 2] = r * sc; } };
+    for (const p of view.players.values()) if (!p.dead) put(p.x, p.y - 12, 14);
+    for (const e of view.enemies) if (e.hp > 0 && !e.burrowed) put(e.x, e.y - e.r - (e.def.fly ? 8 : 0), e.r * 1.3);
+    for (const k of view.pickups) put(k.x, k.y - 6, 8);
+    fpN = n;
+  }
+  // Starts drawing panel `key` (canvas-px rect) at its faded alpha; endFade() restores full alpha.
+  function fadeStart(key, x, y, w, h) {
+    const f = fade[key] || (fade[key] = { a: 1, hold: 0 }), mg = u * 0.4;
+    let hit = false;
+    for (let i = 0, n = fpN * 3; i < n; i += 3) { const r = fp[i + 2] + mg; if (fp[i] + r > x && fp[i] - r < x + w && fp[i + 1] + r > y && fp[i + 1] - r < y + h) { hit = true; break; } }
+    if (hit) f.hold = FADE_HOLD; else if (f.hold > 0) f.hold -= dtc;
+    const tgt = f.hold > 0 ? FADE_MIN : 1, st = FADE_RATE * dtc;
+    f.a = f.a < tgt ? Math.min(tgt, f.a + st) : Math.max(tgt, f.a - st);
+    c.globalAlpha = ga = f.a;
+  }
+  const endFade = () => { c.globalAlpha = ga = 1; };
+
   // ---------------- main draw ----------------
   H.draw = (_c, view, me, ctl, t, dt, extra) => {
     if (!sync()) return;
     dtc = dt;
-    c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 1; c.clearRect(0, 0, W, Hh);
+    c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = ga = 1; c.clearRect(0, 0, W, Hh);
     const F = ED.FX;
     if (F.flash) { c.fillStyle = U.rgba(F.flash.color, F.flash.a * (F.flash.t / 0.3)); c.fillRect(0, 0, W, Hh); }
     if (me && me.downed) {
@@ -171,6 +198,7 @@
     }
     if (me) {
       const biome = ED.biomeFor(view.stratum);
+      focusPoints(view);
       const chips = heroBlock(view, me, ctl, t);
       party(view, me);
       mapBlock(view, biome, t);
@@ -191,6 +219,7 @@
   function heroBlock(view, me, ctl, t) {
     const cls = ED.CLASSES[me.cls], st = me.stats, I = ED.Input;
     const x = L.hx, y = L.hy, w = L.hw, h = L.hh;
+    fadeStart('hero', x, L.sy, u * 29, Hh - L.sy);
     plate(x, y, w, h);
     const frac = me.maxHp > 0 ? me.hp / me.maxHp : 0, low = frac < 0.3 && me.hp > 0, pulse = 0.5 + 0.5 * Math.sin(t * 7);
     if (low) { rr(c, x, y, w, h, u * 0.3); c.strokeStyle = U.rgba(K.danger, 0.35 + 0.5 * pulse); c.lineWidth = lw() * 1.5; c.stroke(); }
@@ -246,6 +275,7 @@
     if ((me.critStacks || 0) > 0) chip('Crit ×' + me.critStacks, '#b78cff');
     if ((me.secondWind || 0) > 0) chip('Second Wind', '#86d38f');
     if (st && st.phoenix && !me.phoenixUsed) chip('Phoenix', '#ffb02e');
+    endFade();
     return any;
   }
 
@@ -254,7 +284,7 @@
     const x = L.sx + i * (L.ss + L.sg), y = L.sy, s = L.ss, ins = u * 0.3, fx = slotFx[i] || (slotFx[i] = { r: ready, t: 0 });
     if (ready && !fx.r) fx.t = 0.5; fx.r = ready; if (fx.t > 0) fx.t -= dtc;
     plate(x, y, s, s, u * 0.6);
-    c.globalAlpha = ready ? 1 : 0.42; ic(c, icon, col, x + ins, y + ins, s - 2 * ins); c.globalAlpha = 1;
+    c.globalAlpha = ga * (ready ? 1 : 0.42); ic(c, icon, col, x + ins, y + ins, s - 2 * ins); c.globalAlpha = ga;
     if (secs > 0.04 && total > 0) {
       c.save(); c.beginPath(); c.rect(x + ins * 0.5, y + ins * 0.5, s - ins, s - ins); c.clip();
       c.fillStyle = 'rgba(6,4,3,0.72)'; c.beginPath(); c.moveTo(x + s / 2, y + s / 2); c.arc(x + s / 2, y + s / 2, s, -Math.PI / 2, -Math.PI / 2 + TAU * clamp01(secs / total)); c.closePath(); c.fill();
@@ -277,19 +307,25 @@
     for (const p of view.players.values()) {
       if (p.pid === me.pid) continue;
       const x = L.m, w = L.pw, h = L.ph, col = ED.PLAYER_COLORS[p.slot] || K.bone, out = p.dead || p.downed;
+      fadeStart('p' + p.pid, x, ty, w, h);
       plate(x, ty, w, h, 0);
       c.fillStyle = col; c.fillRect(x + u * 0.25, ty + u * 0.35, u * 0.3, h - u * 0.7);
       T(p.name, x + u * 1.1, ty + u * 1.0, u * 1.05, col, FB, 'left', 800);
       T(p.dead ? 'Fallen' : p.downed ? 'DOWN' : ED.CLASSES[p.cls].name, x + w - u * 0.9, ty + u * 1.0, u * 0.95, out ? '#ff8a7a' : K.muted, FB, 'right', 700);
       const fr = p.dead ? 0 : p.downed ? clamp01(p.revive || 0) : p.hp / p.maxHp;
       bar(x + u * 1.1, ty + u * 1.95, w - u * 2, u * 0.95, fr, p.downed ? '#f0c060' : p.dead ? '#555555' : '#7fcf8a');
+      endFade();
       ty += h + u * 0.55;
     }
   }
 
   // ---------------- map + stratum (top-right) ----------------
+  // The panel height follows the floor: cells are as large as the panel width allows (at most 4.2u, grid height within 17u), the lantern panel sits below.
   function mapBlock(view, biome, t) {
-    const x = L.mx, y = L.my, w = L.mw;
+    const x = L.mx, y = L.my, w = L.mw, fl = view.floor, G = fl && gridOf(fl), top = u * 5.8, mw = w - u * 1.2;
+    const hCap = Math.max(u * 6, Math.min(u * 17, Hh - 2 * L.m - top - u * 1.3 - L.lh)), cell = G ? Math.min(mw / G.cols, hCap / G.rows, 4.2 * u) : 0, mh = G ? Math.ceil(G.rows * cell) : u * 4;
+    L.mh = top + mh + u * 0.7; L.ly = L.my + L.mh + u * 0.6;
+    fadeStart('map', x, y, w, L.mh);
     plate(x, y, w, L.mh);
     T(biome.name, x + w / 2, y + u * 1.55, u * 1.3, biome.pal.ui, FD, 'center', 700);
     T('Stratum ' + U.roman(view.stratum), x + u * 1.1, y + u * 3.05, u * 0.95, K.muted, FB, 'left', 700);
@@ -305,7 +341,8 @@
         T(P.name, lx + u * 1.6, ay, u * 1.0, P.color, FB, 'left', 800);
       }
     }
-    H.drawMap(c, view, x + u * 0.6, y + u * 5.8, w - u * 1.2, L.mh - u * 6.4, u, t);
+    H.drawMap(c, view, x + u * 0.6, y + top, mw, mh, u, t);
+    endFade();
   }
 
   // ---------------- lantern (under the map) ----------------
@@ -325,6 +362,7 @@
       lantern.fx = parts.length ? parts.join(' · ') : 'Foes at normal strength'; lantern.fxTier = tier;
     }
     const tc = tier === 3 ? U.mix('#8a2a2a', '#ff5a40', pl) : TIER[tier][1];
+    fadeStart('lantern', x, y, w, L.lh);
     plate(x, y, w, L.lh);
     ic(c, 'lantern', tc, x + u * 0.9, y + u * 0.7, u * 2.1);
     T(TIER[tier][0], x + u * 3.4, y + u * 1.75, u * 1.45, tc, FD, 'left', 700);
@@ -340,9 +378,9 @@
     if (tier === 3) { c.strokeStyle = U.rgba('#ff4a3a', 0.35 + 0.5 * pl); c.lineWidth = lw(); c.strokeRect(mx - b * 2, my - b * 2, mw + b * 4, mh + b * 4); }
     // one line of what the tier does (a fresh tier change shows its warning for a few seconds instead)
     const hint = lantern.t < 6 && lantern.hint;
-    c.globalAlpha = hint ? clamp01(6 - lantern.t) : 1;
+    c.globalAlpha = ga * (hint ? clamp01(6 - lantern.t) : 1);
     T(hint || lantern.fx, x + w / 2, y + u * 6.35, u * 0.95, hint ? tc : K.muted, FB, 'center', 700);
-    c.globalAlpha = 1;
+    c.globalAlpha = ga;
     // what the light is worth: each unvisited room costs light (numbers on the doors and map); light left at the boss door guards the party
     const WC = Wd.ROOM_COST;
     T(`Room −${WC.combat} · Elite −${WC.elite} · Other −${WC.shop}`, x + w / 2, y + u * 7.9, u * 0.95, K.warm, FB, 'center', 700);
@@ -355,17 +393,20 @@
       T('Boss door', cx, by, u * 0.95, K.muted, FB, 'left', 700); cx += c.measureText('Boss door').width + u * 0.7;
       for (let k = 0; k < 3; k++) { ic(c, seg[k][0], seg[k][1], cx, by - u * 0.65, u * 1.3); cx += u * 1.6; T(seg[k][2], cx, by, u * 0.95, K.good, FB, 'left', 800); font(800, u * 0.95); cx += c.measureText(seg[k][2]).width + u * 0.7; }
     } else T('Boss door: no light to spare', x + w / 2, by, u * 0.95, K.faint, FB, 'center', 700);
+    endFade();
   }
 
   // ---------------- xp, gold, picks (bottom-centre) ----------------
   function xpBlock(view, ctl, extra, t) {
     const x = L.xx, y = L.xy, w = L.xw, h = L.xh;
+    fadeStart('xp', x, y, w, h);
     plate(x, y, w, h);
     T('Lv ' + view.level, x + u * 1.3, y + h / 2 + u * 0.05, u * 1.6, K.gold, FD, 'left', 900);
     const bx = x + u * 6.2, bw = w - u * 6.2 - u * 7.4, bh = u * 1.3;
     bar(bx, y + (h - bh) / 2, bw, bh, view.xp / view.xpNext, '#4fd0b0');
     ic(c, 'coin', '#ffd36b', x + w - u * 6.7, y + h / 2 - u * 1.0, u * 2.0);
     T(String(view.gold), x + w - u * 4.3, y + h / 2 + u * 0.05, u * 1.5, '#ffd36b', FB, 'left', 800);
+    endFade();
     let ay = y - u * 0.7;
     if ((ctl.picks || 0) > 0 && !ctl.offerOpen) {
       const s = ctl.picks + ' boon' + (ctl.picks > 1 ? 's' : '') + ' ready', gl = 0.55 + 0.45 * Math.sin(t * 4);
@@ -379,12 +420,14 @@
   // ---------------- relics (bottom-right) ----------------
   function relics(me) {
     const n = me.relics ? me.relics.length : 0; if (!n) return;
-    const s = u * 2.5, g = u * 0.35, per = 9;
+    const s = u * 2.5, g = u * 0.35, per = 9, rows = Math.ceil(n / per);
+    fadeStart('relics', W - L.m - Math.min(n, per) * (s + g), Hh - L.m - rows * (s + g) + g, Math.min(n, per) * (s + g), rows * (s + g));
     for (let i = 0; i < n; i++) {
       const col = i % per, row = Math.floor(i / per), inRow = Math.min(per, n - row * per);
       const x = W - L.m - (inRow - col) * (s + g) + g, y = Hh - L.m - s - row * (s + g);
       c.drawImage(ED.Icons.relicCanvas(me.relics[i], 64), x, y, s, s);
     }
+    endFade();
   }
 
   // ---------------- boss bar (top-centre) ----------------
@@ -484,13 +527,18 @@
   }
 
   // ---------------- minimap / full map of the current floor ----------------
-  // g: target context; u: text unit in px of g (cells and labels scale with it).
+  // Room-grid bounds of the whole floor (known or not, so the scale holds for the stratum), cached per floor.
+  const grids = new WeakMap();
+  function gridOf(fl) {
+    let G = grids.get(fl); if (G) return G;
+    let minX = 99, maxX = -99, minY = 99, maxY = -99;
+    for (const r of fl.rooms) { minX = Math.min(minX, r.gx); maxX = Math.max(maxX, r.gx); minY = Math.min(minY, r.gy); maxY = Math.max(maxY, r.gy); }
+    G = { minX, minY, cols: maxX - minX + 1, rows: maxY - minY + 1 }; grids.set(fl, G); return G;
+  }
+  // g: target context; u: text unit in px of g (cells and labels scale with it). The grid is centred in the w x h box.
   H.drawMap = (g, view, x, y, w, h, un, t) => {
     const fl = view.floor; if (!fl) return;
-    const rs = view.roomState || {};
-    let minX = 9, maxX = -9, minY = 9, maxY = -9;
-    for (const r of fl.rooms) { minX = Math.min(minX, r.gx); maxX = Math.max(maxX, r.gx); minY = Math.min(minY, r.gy); maxY = Math.max(maxY, r.gy); }
-    const cols = maxX - minX + 1, rows = maxY - minY + 1;
+    const rs = view.roomState || {}, G = gridOf(fl), minX = G.minX, minY = G.minY, cols = G.cols, rows = G.rows;
     const cell = Math.min(w / cols, h / rows, 4.2 * un);
     const ox = x + (w - cols * cell) / 2, oy = y + (h - rows * cell) / 2;
     const cx = (r) => ox + (r.gx - minX + 0.5) * cell, cy = (r) => oy + (r.gy - minY + 0.5) * cell;
@@ -504,7 +552,7 @@
     const fpx = Math.max(0.85 * un, cell * 0.36);
     for (const r of fl.rooms) {
       const st = rs[r.id]; if (!st || !st.known) continue;
-      const s = cell * 0.78, rx = cx(r) - s / 2, ry = cy(r) - s / 2;
+      const s = cell * 0.8, rx = cx(r) - s / 2, ry = cy(r) - s / 2;
       const cur = r.id === view.roomId;
       g.fillStyle = cur ? '#e6c27a' : st.visited ? (st.cleared ? '#5a4a3c' : '#8a3a2a') : 'rgba(60,48,40,0.7)';
       g.fillRect(rx, ry, s, s);

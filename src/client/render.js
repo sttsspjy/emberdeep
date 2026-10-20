@@ -1610,17 +1610,19 @@
   }
 
   // ---------------- overhead info (names, bars, prompts) ----------------
-  const F7 = '800 7px "Alegreya Sans", sans-serif';
   let mctx = null;
-  // Outlined text baked once per (string, colour); sprite origin = text centre.
+  // Overhead label font in world px: 7, kept between 13 and 26 device px so it reads at 720p and 1440p alike.
+  const labelFs = () => U.clamp(7 * R.scale, 13, 26) / R.scale;
+  // Outlined text baked once per (string, colour) at labelFs; sprite origin = text centre.
   function textSprite(str, color) {
     const key = color + str;
     let s = txtCache.get(key);
     if (s) return s;
     if (!mctx) mctx = document.createElement('canvas').getContext('2d');
-    mctx.font = F7;
-    const hw = mctx.measureText(str).width / 2 + 3;
-    s = bake(-hw, -6, hw, 6, false, (g) => { g.font = F7; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineWidth = 2; g.strokeStyle = 'rgba(0,0,0,0.85)'; g.strokeText(str, 0, 0); g.fillStyle = color; g.fillText(str, 0, 0); });
+    const fs = labelFs(), font = '800 ' + fs.toFixed(2) + 'px "Alegreya Sans", sans-serif';
+    mctx.font = font;
+    const hw = mctx.measureText(str).width / 2 + fs * 0.45, hh = fs * 0.85;
+    s = bake(-hw, -hh, hw, hh, false, (g) => { g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineWidth = fs * 0.3; g.strokeStyle = 'rgba(0,0,0,0.85)'; g.strokeText(str, 0, 0); g.fillStyle = color; g.fillText(str, 0, 0); });
     if (txtCache.size > 200) txtCache.clear();
     txtCache.set(key, s);
     return s;
@@ -1644,42 +1646,60 @@
     numC.set(key, s);
     return s;
   };
-  // HP bar (frame, dark base, fill, sheen) baked per colour / width / fill step (half pixels); sprite origin = bar left-top.
-  function barSprite(bc, w, fw2) {
-    return sprite('hb' + bc + '|' + w + '|' + fw2, -1, -1, w + 1, 3, false, (g) => {
+  // HP bar (frame, dark base, fill, sheen) baked per colour / width / fill step (half pixels) / height; sprite origin = bar left-top.
+  function barSprite(bc, w, fw2, h) {
+    return sprite('hb' + bc + '|' + w + '|' + fw2 + '|' + h, -1, -1, w + 1, h + 1, false, (g) => {
       const fw = fw2 / 2;
-      g.fillStyle = 'rgba(0,0,0,0.72)'; g.fillRect(-1, -1, w + 2, 4);
-      g.fillStyle = U.shade(bc, -0.35); g.fillRect(0, 0, w, 2);
-      g.fillStyle = bc; g.fillRect(0, 0, fw, 2);
-      g.fillStyle = 'rgba(255,255,255,0.3)'; g.fillRect(0, 0, fw, 0.8);
+      g.fillStyle = 'rgba(0,0,0,0.72)'; g.fillRect(-1, -1, w + 2, h + 2);
+      g.fillStyle = U.shade(bc, -0.35); g.fillRect(0, 0, w, h);
+      g.fillStyle = bc; g.fillRect(0, 0, fw, h);
+      g.fillStyle = 'rgba(255,255,255,0.3)'; g.fillRect(0, 0, fw, h * 0.4);
     });
+  }
+  // Hero labels placed this frame (x, y, half-width), so stacked heroes never print their names over each other.
+  const lbl = new Float32Array(24); let lblN = 0;
+  // Returns y for a label of width w and height lh centred near (x, y): steps up by lh until it clears every placed label, then registers it.
+  function placeLabel(x, y, w, lh) {
+    for (let k = 0; k < 6; k++) {
+      let hit = false;
+      for (let i = 0; i < lblN * 3; i += 3) if (Math.abs(lbl[i] - x) < lbl[i + 2] + w / 2 && Math.abs(lbl[i + 1] - y) < lh * 0.95) { hit = true; break; }
+      if (!hit) break;
+      y -= lh;
+    }
+    if (lblN < 8) { lbl[lblN * 3] = x; lbl[lblN * 3 + 1] = y; lbl[lblN * 3 + 2] = w / 2; lblN++; }
+    return y;
   }
   function drawOverheads(c, view, local, t) {
     c.textAlign = 'center'; c.textBaseline = 'middle';
     if (view.room) drawDoorPreviews(c, view, view.room, t);
     baseT(c);
-    // enemy bars and elite labels: one blit each, snapped to the device pixel grid
+    // enemy bars and elite labels: one blit each, snapped to the device pixel grid; bars stay at least 4 device px thick
+    const bh = Math.max(2, 4 / R.scale);
     for (const e of view.enemies) {
       if (e.hp <= 0 || e.boss || e.burrowed) continue;
       const frac = e.hp / e.maxHp;
       if (frac >= 0.999 && !e.elite) continue;
       const w = e.elite ? 30 : 18, y = e.y - e.r * 2.6 - (e.def.fly ? 14 : 4), af = e.elite ? ED.AFFIXES[e.elite] : null;
-      blit(c, barSprite(af ? af.color : '#e2513f', w, Math.round(U.clamp(frac, 0, 1) * w * 2)), e.x - w / 2, y);
-      if (e.ward > 0) { c.fillStyle = '#7fc8ff'; c.fillRect(e.x - w / 2, y - 3, w * (e.ward / (e.wardMax || 1)), 1.5); }
-      if (af) blit(c, textSprite(af.name + ' ' + e.def.name, af.color), e.x, y - 6);
+      blit(c, barSprite(af ? af.color : '#e2513f', w, Math.round(U.clamp(frac, 0, 1) * w * 2), Math.round(bh * 4) / 4), e.x - w / 2, y);
+      if (e.ward > 0) { c.fillStyle = '#7fc8ff'; c.fillRect(e.x - w / 2, y - 1 - bh * 0.75, w * (e.ward / (e.wardMax || 1)), bh * 0.75); }
+      if (af) { const ts = textSprite(af.name + ' ' + e.def.name, af.color); blit(c, ts, e.x, y - 1.5 - ts.h / 2 - (e.ward > 0 ? bh : 0)); }
     }
-    // hero names & revive rings
-    const multi = view.players.size > 1;
-    for (const p of view.players.values()) {
+    // hero names (the local hero first; a name that would overlap another steps up) and revive rings with a cached DOWN / REVIVE label
+    const multi = view.players.size > 1, lh = labelFs() * 1.3;
+    lblN = 0;
+    for (let pass = 0; pass < 2; pass++) for (const p of view.players.values()) {
+      if ((p.pid === local) !== (pass === 0)) continue;
       const col = ED.PLAYER_COLORS[p.slot] || '#fff';
       if (multi && !p.dead) {
-        blit(c, textSprite(p.name, col), p.x, p.y - 44);
-        if (p.pid !== local) { const fr = p.hp / p.maxHp; c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(p.x - 11, p.y - 39, 22, 3); c.fillStyle = fr > 0.35 ? '#86d38f' : '#e2513f'; c.fillRect(p.x - 10.5, p.y - 38.5, 21 * fr, 2); }
+        const ns = textSprite(p.name, col);
+        blit(c, ns, p.x, placeLabel(p.x, p.y - 44, ns.w, lh));
+        if (p.pid !== local && !p.downed) { const fr = p.hp / p.maxHp; c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(p.x - 11, p.y - 39, 22, 3); c.fillStyle = fr > 0.35 ? '#86d38f' : '#e2513f'; c.fillRect(p.x - 10.5, p.y - 38.5, 21 * fr, 2); }
       }
       if (p.downed) {
         c.strokeStyle = 'rgba(0,0,0,0.6)'; c.lineWidth = 3; c.beginPath(); c.arc(p.x, p.y - 8, 20, 0, U.TAU); c.stroke();
         c.strokeStyle = '#86d38f'; c.beginPath(); c.arc(p.x, p.y - 8, 20, -Math.PI / 2, -Math.PI / 2 + U.TAU * (p.revive || 0)); c.stroke();
-        c.font = '800 7px "Alegreya Sans", sans-serif'; c.fillStyle = '#ff8a7a'; c.fillText(p.pid === local ? 'DOWN' : 'REVIVE', p.x, p.y - 34);
+        const ts = textSprite(p.pid === local ? 'DOWN' : 'REVIVE', '#ff8a7a');
+        blit(c, ts, p.x, placeLabel(p.x, p.y - 34, ts.w, lh));
       }
     }
     // nearest sign within reach (one at a time); the HUD draws its text in screen space with the current key bindings
