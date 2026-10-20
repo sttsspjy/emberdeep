@@ -124,7 +124,7 @@
     ED.FX.reset();
     ED.Render.lightLevel = 1;
     U.resetUid(1);
-    const s = G.s = { mode, cfg, localPid: cfg.localPid, net: cfg.net || null, fxBuf: [], snapT: 0, snapN: 0, inT: 0, epoch: 0, offer: null, offerOpen: false, ended: false, paused: false, prompt: null, sig: '', claimed: {} };
+    const s = G.s = { mode, cfg, localPid: cfg.localPid, net: cfg.net || null, fxBuf: [], snapT: 0, snapN: 0, inT: 0, acc: 0, epoch: 0, offer: null, offerOpen: false, ended: false, paused: false, prompt: null, sig: '', claimed: {} };
     if (mode === 'client') {
       s.mirror = new Mirror(cfg, cfg.localPid);
       s.view = s.mirror;
@@ -380,6 +380,7 @@
   }
 
   // ---------------- per-frame ----------------
+  const STEP = 1 / 60, MAX_STEPS = 8; // the world advances in fixed 1/60 s steps at any frame rate
   // Mirrors World.isSafe: calm room, no live foe except the invulnerable Gloom, no descent pending (clients see no pendingStratum).
   const isSafe = (v) => !v.locked && !v.pendingStratum && !v.enemies.some(e => e.hp > 0 && !e.def.gloom);
   G.update = (dt, inp) => {
@@ -405,8 +406,10 @@
       if (s.mode !== 'client') {
         const w = s.world;
         if (!hold) {
-          const steps = Math.max(1, Math.ceil(sdt / (1 / 60)));
-          for (let i = 0; i < steps; i++) w.update(sdt / steps);
+          s.acc += sdt;
+          let n = 0;
+          while (s.acc >= STEP - 1e-9 && n < MAX_STEPS) { w.update(STEP); s.acc -= STEP; n++; }
+          if (s.acc >= STEP) s.acc = 0; // step cap hit: drop the backlog instead of spiralling
         }
         G.drainWorld();
         if (s.mode === 'host') {
