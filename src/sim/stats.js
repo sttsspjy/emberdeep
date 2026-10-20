@@ -17,7 +17,7 @@
     // path infusions, statuses and path/duo effects
     pyreInfuse: 0, burnMul: 0, searing: 0, wildfire: 0, conflag: 0, rimeInfuse: 0, chillMul: 0, shatter: 0, dashFrost: 0, freezeDur: 0, chillWeaken: 0,
     frostNova: 0, stormInfuse: 0, arcs: 0, arcRange: 0, shockMul: 0, dashShock: 0, arcStun: 0, thunderbolt: 0, bleed: 0, lacerate: 0, sunder: 0,
-    killHealPct: 0, berserk: 0, bloodrush: 0, bloodOrb: 0, hemomancy: 0, hemoCost: 0, bloodShield: 0, compDmg: 0, compInfuse: 0, bladeBlock: 0, critCharge: 0, twinEvery: 0,
+    killHealPct: 0, berserk: 0, bleedHit: 0, bloodrush: 0, bloodOrb: 0, hemomancy: 0, hemoCost: 0, bloodShield: 0, compDmg: 0, compInfuse: 0, bladeBlock: 0, critCharge: 0, twinEvery: 0,
     thermal: 0, plasma: 0, supercond: 0, hemorrhage: 0, staticEdge: 0, serrated: 0, soulfire: 0, feast: 0,
   });
 

@@ -41,7 +41,7 @@ if (process.argv[2] === '--worker') {
     for (const meta of metas) {
       const rs = all[meta], wins = rs.filter(r => r.victory).length;
       if (flags.detail) console.log(`\n== ${meta}\n` + sim.summarize(rs));
-      else console.log(`${meta.padEnd(5)} wins ${wins}/${rs.length} (${(100 * wins / rs.length).toFixed(0)}%) depth ${(rs.reduce((s, r) => s + r.stratum, 0) / rs.length).toFixed(2)} winners ${wins ? sim.ED.U.fmtTime(rs.filter(r => r.victory).reduce((s, r) => s + r.time, 0) / wins) : '-'} rooms ${(100 * rs.reduce((s, r) => s + r.rooms.visited, 0) / rs.reduce((s, r) => s + r.rooms.total, 0)).toFixed(0)}% gloom downs ${(rs.reduce((s, r) => s + r.downedBy.filter(k => k.startsWith('gloom@')).length, 0) / rs.length).toFixed(2)}/run flares ${(rs.reduce((s, r) => s + r.flares, 0) / rs.length).toFixed(2)}/run`);
+      else console.log(`${meta.padEnd(5)} wins ${wins}/${rs.length} (${(100 * wins / rs.length).toFixed(0)}%) depth ${(rs.reduce((s, r) => s + r.stratum, 0) / rs.length).toFixed(2)} winners ${wins ? sim.ED.U.fmtTime(rs.filter(r => r.victory).reduce((s, r) => s + r.time, 0) / wins) : '-'} rooms ${(100 * rs.reduce((s, r) => s + r.rooms.visited, 0) / rs.reduce((s, r) => s + r.rooms.total, 0)).toFixed(0)}% gloom downs ${(rs.reduce((s, r) => s + r.downedBy.filter(k => k.startsWith('gloom@')).length, 0) / rs.length).toFixed(2)}/run, ${(100 * rs.reduce((s, r) => s + (r.dmgBy.gloom || 0), 0) / Math.max(1, rs.reduce((s, r) => s + Object.values(r.dmgBy).reduce((x, y) => x + y, 0), 0))).toFixed(0)}% of damage taken, flares ${(rs.reduce((s, r) => s + r.flares, 0) / rs.length).toFixed(2)}/run`);
     }
   };
 }

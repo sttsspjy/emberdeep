@@ -49,7 +49,7 @@
     }
     e.t -= dt;
     (opts.idle || approach(120))(w, e, dt);
-    if (e.t <= 0 && !(e.blind > 0)) { // blinded bosses keep moving but start nothing
+    if (e.t <= 0 && !(e.blind > 0) && w.alivePlayers().length) { // blinded bosses keep moving but start nothing; no attack starts once every hero is down
       const keys = Object.keys(attacks).filter(k => (attacks[k].phase || 1) <= e.phase && k !== e.last && (!attacks[k].ok || attacks[k].ok(w, e)));
       const k = w.rng.weighted(keys.length ? keys : Object.keys(attacks), x => attacks[x].w || 1);
       e.atk = k; e.last = k; e.st = 'atk'; e.t = 0; e.vars = { wm: e.windMul || 1 };

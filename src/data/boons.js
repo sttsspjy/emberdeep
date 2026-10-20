@@ -76,9 +76,9 @@
     evo_steel: { name: 'Masterwork Arms', rar: 'l', icon: 'sword', path: 'steel', evo: 'steel', desc: 'Crits release a spectral strike at 60%. +10% critical chance.', mods: { crit: 0.1 }, max: 1 },
 
     // ---- Blood ----
-    bloodpact: { name: 'Blood Pact', rar: 'r', icon: 'drop', path: 'blood', gate: true, desc: 'Kills heal 1% max health (within the hit and kill heal cap). +20% damage, and +20% more below 50% health.', mods: { killHealPct: 0.01, berserk: 0.2, dmg: 0.2 }, max: 1 },
-    leech: { name: 'Leech', rar: 'r', icon: 'fang', path: 'blood', desc: 'Heal 1.5% of damage dealt. All hit and kill healing together is capped per second.', mods: { leech: 0.015 }, max: 2 },
-    bloodrush: { name: 'Bloodrush', rar: 'r', icon: 'boot', path: 'blood', desc: '+8% attack speed. Below 50% health: +15% attack speed and +10% move speed.', mods: { bloodrush: 0.15, atk: 0.08 }, max: 2 },
+    bloodpact: { name: 'Blood Pact', rar: 'r', icon: 'drop', path: 'blood', gate: true, desc: 'Kills heal 1% max health (within the hit and kill heal cap). Hits make foes Bleed for 20% of the hit. +30% damage, and +40% more below 50% health.', mods: { killHealPct: 0.01, berserk: 0.4, dmg: 0.3, bleedHit: 0.2 }, max: 1 },
+    leech: { name: 'Leech', rar: 'r', icon: 'fang', path: 'blood', desc: 'Heal 1.5% of damage dealt (all hit and kill healing together is capped per second) and deal +6% damage.', mods: { leech: 0.015, dmg: 0.06 }, max: 2 },
+    bloodrush: { name: 'Bloodrush', rar: 'r', icon: 'boot', path: 'blood', desc: '+10% attack speed. Below 50% health: +15% attack speed and +10% move speed.', mods: { bloodrush: 0.15, atk: 0.1 }, max: 2 },
     transfusion: { name: 'Transfusion', rar: 'c', icon: 'potion', path: 'blood', desc: 'Kills drop a blood orb 20% of the time (heals 4% max health).', mods: { bloodOrb: 0.2 }, max: 1 },
     hemomancy: { name: 'Hemomancy', rar: 'r', icon: 'heartbroken', path: 'blood', desc: 'Each rank: skills cost 4% of current health and deal +35% damage.', mods: { hemomancy: 0.35, hemoCost: 0.04 }, max: 2 },
     crimsontide: { name: 'Crimson Tide', rar: 'e', icon: 'chalice', path: 'blood', key: true, desc: 'Overhealing becomes a blood shield (max 25% max health) that absorbs damage first.', mods: { bloodShield: 0.25 }, max: 1 },

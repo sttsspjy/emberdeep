@@ -30,7 +30,11 @@
     if (pact >= 10) hp *= 1.2;
     dmg *= (1 + 0.22 * (s - 1) + 0.03 * (s - 1) * (s - 1)) * (pact >= 2 ? 1.25 : 1) * (pact >= 8 ? 1.2 : 1) * this.threat().dmg;
     const dr = this.dread;
-    if (dr && !def.minion && !def.gloom && !def.ally && !opts.ally) { hp *= dr.hp; dmg *= dr.dmg; }
+    let hpDread = 1;
+    if (dr && !def.minion && !def.gloom && !def.ally && !opts.ally) {
+      const deep = 1 + ED.World.DEEP * Math.min(ED.World.DEEP_MAX, this.deepRooms); // the dark thickens with every room entered Lightless this stratum
+      hpDread = dr.hp * deep; hp *= hpDread; dmg *= dr.dmg * deep;
+    }
     const e = {
       id: U.uid(), type, def, x, y, r: def.r, hp, maxHp: hp, dmg, spd: def.spd * (pact >= 6 ? 1.15 : 1),
       kbx: 0, kby: 0, st: 'move', t: 0, cd: this.rng.range(0.6, 1.6), face: 1, flash: 0, stun: 0, frozen: 0, elite: null, ward: 0, wardMax: 0,
@@ -39,7 +43,7 @@
       // statuses: burn/bleed pools, chill, charge, hero debuffs (judged = Cleric Judgment, vulnT = Rain/Smoke vulnerability); slow/windMul/dmgTakenMul are read by ai.js and hitEnemy
       burn: 0, burnPool: 0, burnTick: 0, burnOwner: null, bleedPool: 0, bleedTick: 0, bleedOwner: null,
       chill: 0, chillT: 0, chillOwner: null, freezeRes: 0, freezeResT: 0, charge: 0, chargeOwner: null, dischargeT: 0,
-      hpLever: def.boss ? def.hp / def.refHp : this.threat().hp, // HP-relative statuses (chill, Conflagration, Wildfire) ignore this stratum lever
+      hpLever: (def.boss ? def.hp / def.refHp : this.threat().hp) * hpDread, // HP-relative statuses (chill, Conflagration, Wildfire) ignore this stratum lever and the dread HP
       mark: 0, judged: 0, vulnT: 0, blind: 0, sunder: 0, sunderOwner: null, slow: 1, slowAmt: 0, slowT: 0, windMul: 1, dmgTakenMul: 1, invulnT: 0, killed: false,
     };
     if (opts.elite) this.makeElite(e, opts.affix);
@@ -49,7 +53,7 @@
 
   W.makeElite = function (e, affix) {
     e.elite = affix || this.rng.pick(ED.AFFIX_IDS);
-    e.hp *= 2.8 + 0.6 * (this.stratum - 1); e.maxHp = e.hp; e.dmg *= 1.25; e.r = Math.round(e.r * 1.22); // elite HP x2.8 at stratum I up to x5.8 at VI
+    e.hp *= ED.World.ELITE.hp + ED.World.ELITE.hpStep * (this.stratum - 1); e.maxHp = e.hp; e.dmg *= ED.World.ELITE.dmg; e.r = Math.round(e.r * 1.22); // elite HP x2.8 at stratum I up to x5.8 at VI
     if (e.elite === 'swift') e.spd *= 1.4;
     if (e.elite === 'brutal') e.dmg *= 1.4;
     if (e.elite === 'warded') { e.ward = e.maxHp * 0.45; e.wardMax = e.ward; }
@@ -136,10 +140,11 @@
   W.heroProcs = function (e, p, dmg, crit, comp, src) {
     const st = p.stats;
     if (st.leech && !comp) this.sustainHeal(p, dmg * st.leech);
+    if (st.bleedHit && !comp) this.addBleed(e, dmg * st.bleedHit, p);
     if (!comp || st.compInfuse) this.applyInfusions(e, dmg, p);
     if (src.burn) this.addBurn(e, dmg * src.burn, p);
     if (crit) {
-      if (st.bleed) { if (e.bleedPool <= 0) e.bleedTick = 0.5; e.bleedPool += dmg * st.bleed; e.bleedOwner = p; }
+      if (st.bleed) this.addBleed(e, dmg * st.bleed, p);
       if (st.sunder) { if (e.sunderOwner !== p.pid) { e.sunderOwner = p.pid; e.sunder = 0; } e.sunder = Math.min(10, e.sunder + Math.min(2, hpFrac(e, dmg) * 60)); } // stacks from crit damage: 60 per foe HP, <= 2 per crit
       if (st.critCharge) this.addCharge(e, dmg * st.critCharge, p);
       if (st.serrated && e.chill > 0) this.addChill(e, Math.min(70, hpFrac(e, dmg) * 2000), p); // chill from crit damage: 2000 per foe HP, <= 70 per crit
@@ -175,6 +180,13 @@
     if (!(a > 0)) return 0;
     win[id % 10] += a;
     return this.healPlayer(p, a, true);
+  };
+
+  // Bleed pool: physical, no affinity; drains like Burn (tickStatuses).
+  W.addBleed = function (e, amount, p) {
+    if (!(amount > 0) || e.killed || e.def.invuln || e.burrowed) return;
+    if (e.bleedPool <= 0) e.bleedTick = 0.5;
+    e.bleedPool += amount; e.bleedOwner = p;
   };
 
   // Burn pool: aff-scaled; ticks in tickStatuses. Conflagration checks after every addition.

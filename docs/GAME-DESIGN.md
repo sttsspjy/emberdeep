@@ -16,14 +16,16 @@ Canonical rules and numbers. Code follows this file; balance passes may retune n
 
 | Stratum | HP × | Damage × | Wave × | `cdRate` | Boss pause × |
 |---|---|---|---|---|---|
-| I | 3 | 0.5 | 1 | −40% | 2 |
-| II | 3 | 0.6 | 1 | −30% | 1.7 |
-| III | 3 | 1 | 1.05 | −10% | 1.4 |
-| IV | 1.6 | 1 | 1.1 | 0 | 1.2 |
-| V | 4 | 1 | 1.2 | +15% | 1 |
-| VI | 2.55 | 1 | 1.3 | +30% | 0.9 |
+| I | 2.2 | 0.5 | 0.8 | −40% | 2 |
+| II | 1.62 | 0.6 | 0.75 | −30% | 1.7 |
+| III | 1.3 | 1 | 0.7 | −10% | 1.4 |
+| IV | 1.14 | 1 | 0.66 | 0 | 1.2 |
+| V | 1.07 | 1 | 0.62 | +15% | 1 |
+| VI | 1.02 | 1 | 0.6 | +30% | 0.9 |
 
-- Boss HP: Bone Warden 4,700 · Sporemother 8,500 · Rimeheart 23,500 · Forgelord 33,500 · Drowned King 107,000 · Hollow King 145,000. Fights last 50–110 s; the exposed timers (45 s foes, 78 s bosses) end stalled fights.
+Effective foe HP multiplier (depth curve × threat HP): 2.2 / 2.8 / 3.4 / 4.2 / 5.2 / 6.4, monotone. A regular foe dies in 2–4 weapon hits on strata I–II, an elite in 5–8 s.
+
+- Boss HP: Bone Warden 4,400 · Sporemother 6,200 · Rimeheart 17,900 · Forgelord 24,800 · Drowned King 75,000 · Hollow King 101,000; boss base damage 11 (strata I–II) and 12. Fights last 50–110 s; the exposed timers (45 s foes, 78 s bosses) end stalled fights.
 - Elite HP × `2.8 + 0.6(s−1)` (damage ×1.25). Elite rooms use the normal wave budget.
 - Party multiplier (n = other heroes): HP `1 + 1.1n + 0.35n(n−1)`, wave budget `1 + 0.6n + 0.2n(n−1)`; a downed hero bleeds out in 18 s when no ally revives them.
 - HP-relative statuses (chill build-up, Conflagration threshold, Wildfire) measure against foe HP before the stratum HP lever (bosses: `refHp`, the design HP 800–7,800), so inflating HP does not weaken Rime or Pyre.
@@ -63,10 +65,10 @@ Elements: `pyre`, `rime`, `storm`. Physical paths (`steel`, `blood`, `spirit`) i
 
 ### Charge / Discharge (storm)
 - Infused hit: `e.charge += dmg × stormInfuse × aff`; `e.chargeOwner` = that hero.
-- Every 1.0 s per foe (0.5 s with Tempest Arms): if charge > 0, discharge: `charge × (1 + shockMul)` hits the foe and arcs to up to `3 + arcs` nearest other foes within `140 × (1 + arcRange)`, each taking the same. Charge → 0. Arcs never add charge (duos excepted). Emits `chain`.
+- Every 1.0 s per foe (0.5 s with Tempest Arms): if charge > 0, discharge: `charge × (1 + shockMul)` hits the foe and arcs to up to `3 + arcs` nearest other foes within `140 × (1 + arcRange)`, each taking half of it (`ED.CONST.ARC_MUL` 0.5). Charge → 0. Arcs never add charge (duos excepted). Emits `chain`.
 
-### Bleed (steel)
-- Critical hit by a hero with `bleed`: `e.bleedPool += hitDmg × bleed`. Drains like Burn (20% per 0.5 s). Physical, no affinity.
+### Bleed (steel, blood)
+- Critical hit by a hero with `bleed` (Steel), or any direct hit by a hero with `bleedHit` (Blood Pact): `e.bleedPool += hitDmg × bleed | bleedHit`. Drains like Burn (20% per 0.5 s). Physical, no affinity.
 
 ### Damage taken by foes (order)
 1. Hero multiplier (dmg stat, conditionals: execute, searing, lacerate, berserk, hemomancy, idol, banner).
@@ -85,12 +87,12 @@ Six paths. A hero owns at most **3 gates** (path slots) per run. `affinity(path)
 ### Pyre — `#ff7a2a`, icon `flame`
 | id | name | rar | max | effect |
 |---|---|---|---|---|
-| kindle | Kindle (gate) | r | 1 | Hits add 40% of their damage as Burn. `pyreInfuse 0.4` |
-| stoke | Stoke the Flames | r | 3 | Burn deals +30% damage. `burnMul 0.3` |
+| kindle | Kindle (gate) | r | 1 | Hits add 35% of their damage as Burn. `pyreInfuse 0.35` |
+| stoke | Stoke the Flames | r | 3 | Burn deals +28% damage. `burnMul 0.28` |
 | searing | Searing | c | 2 | +12% damage to burning foes. `searing 0.12` |
 | wildfire | Wildfire | r | 2 | A burning foe that dies sets foes within 80 alight for 15% of its max HP per rank. `wildfire 0.15` |
 | cindertrail | Cinder Trail | r | 1 | Your dash leaves burning ground. `dashFire 1` |
-| conflag | Conflagration (key) | e | 1 | When a foe's Burn pool exceeds 30% of its current HP it combusts: the whole pool hits it and foes within 70 at once. `conflag 1` |
+| conflag | Conflagration (key) | e | 1 | When a foe's Burn pool exceeds 30% of its current HP it combusts: the whole pool hits it and 60% of it hits foes within 70 (`ED.CONST.SPLASH_MUL`). `conflag 1` |
 | evo_pyre | Cinder Arms (evolution) | l | 1 | Melee swings also launch a piercing flame crescent (60% weapon damage); projectiles explode on hit (50%, r40); exploding weapons (Fire Staff, Inferno Tome) get a 30% wider blast and leave a burning patch at each impact (r 60% of the blast, 2 s, `0.4 × weapon damage` per second, one per shot). Burn +25%. |
 
 ### Rime — `#7fe3ff`, icon `snow`
@@ -107,12 +109,12 @@ Six paths. A hero owns at most **3 gates** (path slots) per run. `affinity(path)
 ### Storm — `#ffe66b`, icon `bolt`
 | id | name | rar | max | effect |
 |---|---|---|---|---|
-| staticcharge | Static Charge (gate) | r | 1 | Hits charge foes with 35% of their damage; every second charged foes discharge to themselves and 3 nearby foes. `stormInfuse 0.35` |
+| staticcharge | Static Charge (gate) | r | 1 | Hits charge foes with 25% of their damage; every second charged foes discharge to themselves and 3 nearby foes (which take half). `stormInfuse 0.25` |
 | conductor | Conductor | r | 2 | +1 arc target, +30% arc range. `arcs 1, arcRange 0.3` |
-| highvoltage | High Voltage | r | 3 | Discharges deal +25%. `shockMul 0.25` |
+| highvoltage | High Voltage | r | 3 | Discharges deal +20%. `shockMul 0.2` |
 | thunderstep | Thunderstep | r | 1 | Foes you dash through take 100% weapon damage (infused). `dashShock 1` |
 | overload | Overload | c | 2 | Discharges stun non-boss foes 0.25 s per rank. `arcStun 0.25` |
-| thunderhead | Thunderhead (key) | e | 1 | Each discharge has a 25% chance to drop a thunderbolt on the foe: 200% weapon damage, r60. `thunderbolt 0.25` |
+| thunderhead | Thunderhead (key) | e | 1 | Each discharge has a 25% chance to drop a thunderbolt on the foe: 200% weapon damage, r60; one hero drops at most one per 0.6 s (`ED.CONST.BOLT_CD`). `thunderbolt 0.25` |
 | evo_storm | Tempest Arms (evolution) | l | 1 | Every 4th attack calls lightning on its target (150% weapon damage, r50, infused). Foes discharge every 0.5 s. |
 
 ### Steel — `#d9dfe8`, icon `sword`
@@ -129,11 +131,11 @@ Six paths. A hero owns at most **3 gates** (path slots) per run. `affinity(path)
 ### Blood — `#d43a5a`, icon `drop`
 | id | name | rar | max | effect |
 |---|---|---|---|---|
-| bloodpact | Blood Pact (gate) | r | 1 | Kills heal 1% max HP (sustain cap). +20% damage, and +20% more below 50% HP. `killHealPct 0.01, berserk 0.2, dmg 0.2` |
-| leech | Leech | r | 2 | Heal 1.5% of damage dealt (sustain cap). `leech 0.015` |
-| bloodrush | Bloodrush | r | 2 | +8% attack speed; below 50% HP: +15% attack speed, +10% move speed. `bloodrush 0.15, atk 0.08` |
+| bloodpact | Blood Pact (gate) | r | 1 | Kills heal 1% max HP (sustain cap). Hits make foes Bleed for 20% of the hit. +30% damage, and +40% more below 50% HP. `killHealPct 0.01, bleedHit 0.2, dmg 0.3, berserk 0.4` |
+| leech | Leech | r | 2 | Heal 1.5% of damage dealt (sustain cap) and +6% damage. `leech 0.015, dmg 0.06` |
+| bloodrush | Bloodrush | r | 2 | +10% attack speed; below 50% HP: +15% attack speed, +10% move speed. `bloodrush 0.15, atk 0.1` |
 | transfusion | Transfusion | c | 1 | Kills drop a blood orb 20% of the time (heals 4% max HP). `bloodOrb 0.2` |
-| hemomancy | Hemomancy | r | 2 | Skills cost 4% current HP but deal +35%. `hemomancy 0.35` |
+| hemomancy | Hemomancy | r | 2 | Each rank: skills cost 4% current HP and deal +35%. `hemomancy 0.35, hemoCost 0.04` |
 | crimsontide | Crimson Tide (key) | e | 1 | Overhealing becomes a blood shield (max 25% max HP) that absorbs damage first. `bloodShield 0.25` |
 | evo_blood | Sanguine Arms (evolution) | l | 1 | Every attack also launches a blood scythe/shard (50%) that heals 15% of its damage. Kill heals ×2. Both go through the sustain cap. |
 
@@ -143,7 +145,7 @@ Six paths. A hero owns at most **3 gates** (path slots) per run. `affinity(path)
 | wispcall | Spirit Wisp (gate) | r | 1 | A wisp fights at your side. `wisp 1` |
 | orbit | Orbiting Blades | r | 3 | +1 blade circles you. `orbit 1` |
 | wispchoir | Wisp Choir | r | 2 | +1 wisp. `wisp 1` |
-| kindred | Kindred | c | 2 | Companions (wisps, blades, minions) +35% damage. `compDmg 0.35` |
+| kindred | Kindred | c | 2 | Companions (wisps, blades, minions) +30% damage. `compDmg 0.3` |
 | guardians | Guardian Spirits | r | 1 | Blades destroy enemy projectiles they touch (each blade ≤ once per second). `bladeBlock 1` |
 | bond | Elemental Bond (key) | e | 1 | Companion hits apply your infusions. `compInfuse 1` |
 | evo_spirit | Ascendant Arms (evolution) | l | 1 | A spectral twin repeats every attack 0.15 s later at 50%. +1 wisp, +1 blade. |
@@ -191,7 +193,7 @@ Slot 0 skills: charge, volley, nova, step, sanctuary, legion. Slot 1:
 | Cleric | **Judgment** | 9 | A hammer flies 0.55 s out and returns, piercing; each leg hits a foe once for `18 + 1.4 × weapon` and Judges it 4 s (+20% damage taken). A judged foe dying heals allies within 160 by 3% max HP (sustain cap). |
 | Necromancer | **Bone Harvest** | 10 | Each of your minions explodes (r60, `24 + 1.8 × weapon`); heal 3% max HP per minion; then raise 1 minion (12 s). No minions: raise 2. |
 
-Skill cooldown reduction applies to both slots. Class boons (2 per skill, 4 per class):
+Skill cooldown reduction applies to both slots and counts fully up to 0.4, half above it, at most 0.65 (`ED.Stats.cdrEff`). Class boons (2 per skill, 4 per class):
 
 | Class | Skill 1 boons | Skill 2 boons |
 |---|---|---|
@@ -210,7 +212,7 @@ Controls (defaults; every action has two rebindable slots, keyboard codes or mou
 
 Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat `[5,5,6,6,6,6][s−1]`, elite combat `[1,1,1,2,2,2][s−1]` → 12–14 rooms. Grid bounds ±4, tree layout. Boss = farthest dead end, BFS distance ≥ 4. Utility rooms prefer dead ends; elite rooms prefer distance ≥ 3.
 
-- Wave budget = `(7 + 2s)` × threat wave × party × `danger = 1 + 0.05 × distance` × dread wave. Elite rooms: same budget, 2 waves + 2 elites guaranteed (3 waves under Pact 10).
+- Wave budget = `(7 + 2s)` × threat wave × party × `danger = 1 + 0.05 × distance` × dread wave. Pacing (`World.PACE`): the first wave 0.5 s after the lock, spawn telegraph 0.7–0.95 s, the next wave when at most 45% of the current one stands (gap ≥ 0.9 s) or the current one is 6 s old; foes spawn ≥ 100 px from every hero (turrets 130). Elite rooms: same budget, 2 waves + 2 elites guaranteed (3 waves under Pact 10).
 - **Rewards** are fixed at generation (deterministic from the floor seed) and shown on doors and the map before entering:
   - normal combat: `boon:<path>` 50% (each path at most twice per floor) · `gold` 14% · `vigor` 13% · `forge` 5% · `oil` 10% · `class` 8%. Each kind gets its share of the floor's combat rooms (shares rounded by a weighted draw on the remainders), so averages match the percentages: no minimum of boon or oil rooms.
   - elite: `relic` 75% · `epic` 25% (drawn per room).

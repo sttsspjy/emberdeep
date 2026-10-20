@@ -202,7 +202,7 @@ function runBot(opts) {
   rec.evoAt = null; // { s: stratum, lvl: team level } when hero 0 takes its evolution
   const p0id = w.players.keys().next().value;
   // damage metrics: hero damage by source per stratum, combat seconds, observed hits/time to kill, analytic hits to kill, cooldown reduction
-  Object.assign(rec, { src: [], combatS: [0, 0, 0, 0, 0, 0], hits: [[], [], [], [], [], []], ttk: [[], [], [], [], [], []], ttkElite: [[], [], [], [], [], []], htk: [[], [], [], [], [], []], htkBare });
+  Object.assign(rec, { src: [], combatS: [0, 0, 0, 0, 0, 0], hits: [[], [], [], [], [], []], ttk: [[], [], [], [], [], []], ttkElite: [[], [], [], [], [], []], htk: [[], [], [], [], [], []], htkBare, bossTry: [] });
   const hit0 = w.hitEnemy;
   w.hitEnemy = function (e, base, src) {
     const d = hit0.call(this, e, base, src);
@@ -246,7 +246,7 @@ function runBot(opts) {
   w.giveRelic = function (p, id) { const k = this.room ? this.room.type : '?'; rec.relicsBy[k] = (rec.relicsBy[k] || 0) + 1; return give0.call(this, p, id); };
   w.dropGold = function (x, y, total) { rec.goldIn += Math.round(total); return drop0.call(this, x, y, total); };
   const ctl = {};
-  for (const p of w.players.values()) ctl[p.pid] = { atk: 0, skill: 0, skill2: 0, dash: 0, goal: null, glPrev: '', glReact: false, attn: true, attnT: 0 };
+  for (const p of w.players.values()) ctl[p.pid] = { atk: 0, skill: 0, skill2: 0, dash: 0, goal: null, gl: {}, attn: true, attnT: 0 };
   const dt = 1 / 60;
   let steps = 0;
   const maxSteps = 60 * MAX_SECONDS;
@@ -263,13 +263,18 @@ function runBot(opts) {
       if (p.downed || p.dead) continue;
       let mx = 0, my = 0;
       const foes = w.enemies.filter(e => e.hp > 0 && e.spawnT <= 0 && !e.def.gloom);
-      const gloom = w.enemies.find(e => e.hp > 0 && e.def.gloom && e.spawnT <= 0);
-      if (gloom && U.dist2(gloom.x, gloom.y, p.x, p.y) < 120 * 120 && !p.downed && w.flare(p)) rec.flares++; // lantern flare when the Gloom closes in (needs the light; no flare while it is still far)
+      const glooms = w.enemies.filter(e => e.hp > 0 && e.def.gloom && e.spawnT <= 0);
+      let gloom = null; // the nearest Gloom drives flare and keep-away
+      for (const g of glooms) if (!gloom || U.dist2(g.x, g.y, p.x, p.y) < U.dist2(gloom.x, gloom.y, p.x, p.y)) gloom = g;
+      if (gloom && c.attn && U.dist2(gloom.x, gloom.y, p.x, p.y) < 120 * 120 && !p.downed && w.flare(p)) rec.flares++; // lantern flare when the Gloom closes in on a tick the bot pays attention (needs the light; no flare while it is still far)
       const skill = opts.skill ?? 0.75;
-      const gst = gloom ? gloom.st : ''; // the bot reads each Gloom lunge telegraph with probability `skill` (decided once per wind-up) and sidesteps the line
-      if (gst === 'windup' && c.glPrev !== 'windup') c.glReact = brng.next() < skill;
-      c.glPrev = gst;
-      const dodge = gst === 'windup' && c.glReact;
+      // the bot reads each Gloom lunge telegraph with probability `skill` (decided once per wind-up) and sidesteps the line of the nearest one it read
+      let dg = null;
+      for (const g of glooms) {
+        if (g.st !== 'windup') { delete c.gl[g.id]; continue; }
+        if (c.gl[g.id] === undefined) c.gl[g.id] = brng.next() < skill;
+        if (c.gl[g.id] && U.dist2(g.x, g.y, p.x, p.y) < 260 * 260 && (!dg || U.dist2(g.x, g.y, p.x, p.y) < U.dist2(dg.x, dg.y, p.x, p.y))) dg = g;
+      }
       if (foes.length) {
         let tgt = null, bd = 1e9;
         for (const e of foes) { const d = U.dist2(e.x, e.y, p.x, p.y); if (d < bd) { bd = d; tgt = e; } }
@@ -284,7 +289,7 @@ function runBot(opts) {
         for (const pr of w.projs) if (pr.team === 1 && U.dist2(pr.x, pr.y, p.x, p.y) < 55 * 55) { danger = true; dir = [dir[0] + (p.x - pr.x) * 2, dir[1] + (p.y - pr.y) * 2]; }
         for (const z of w.zones) if ((z.kind === 'tele' || z.kind === 'poison' || z.kind === 'fire') && z.team === 1 && U.dist2(z.x, z.y, p.x, p.y) < (z.r + 12) ** 2) { danger = true; dir = [p.x - z.x + dir[0] * 0.2, p.y - z.y + dir[1] * 0.2]; }
         if (gloom && U.dist2(gloom.x, gloom.y, p.x, p.y) < 90 * 90) { danger = true; dir = [p.x - gloom.x, p.y - gloom.y]; }
-        if (dodge && U.dist2(gloom.x, gloom.y, p.x, p.y) < 260 * 260) { danger = true; dir = sidestep(gloom, p); }
+        if (dg) { danger = true; dir = sidestep(dg, p); }
         const l = Math.hypot(dir[0], dir[1]) || 1; mx = dir[0] / l; my = dir[1] / l;
         if (brng.next() > skill) { mx += (brng.next() - 0.5) * 1.5; my += (brng.next() - 0.5) * 1.5; }
         const a = Math.atan2(tgt.y - p.y, tgt.x - p.x);
@@ -320,7 +325,7 @@ function runBot(opts) {
           dir = [p.x - gloom.x, p.y - gloom.y];
           if (c.dash <= 0 && U.dist2(gloom.x, gloom.y, p.x, p.y) < 60 * 60) { const l2 = Math.hypot(dir[0], dir[1]) || 1; p.dashT = 0.17; p.dashDx = dir[0] / l2; p.dashDy = dir[1] / l2; w.playerDash(p, p.dashDx, p.dashDy); c.dash = p.stats.dashCd; }
         }
-        if (dodge && U.dist2(gloom.x, gloom.y, p.x, p.y) < 260 * 260) dir = sidestep(gloom, p);
+        if (dg) dir = sidestep(dg, p);
         if (dir) { const l = Math.hypot(dir[0], dir[1]) || 1; mx = dir[0] / l; my = dir[1] / l; }
       }
       // floor hazards: the bot watches the ground on a share `skill` of its ticks (redrawn every 0.25 s) and steers off or around hazard tiles
@@ -336,8 +341,8 @@ function runBot(opts) {
       if (ev.t === 'room') rec.roomDmg = 0;
       if (ev.t === 'clear' && !ev.trial && w.room && w.room.type === 'combat') rec.htk[w.stratum - 1].push(hitsToKill(w, w.players.values().next().value, w.stratum));
       if (ev.t === 'evolve' && ev.pid === p0id && !rec.evoAt) rec.evoAt = { s: w.stratum, lvl: w.level };
-      if (ev.t === 'bossSpawn') bossStart = w.time;
-      if (ev.t === 'bossDown') { rec.bossTimes[w.stratum] = Math.round(w.time - bossStart); log.push(`  boss ${ev.type} down in ${(w.time - bossStart).toFixed(0)}s (t=${U.fmtTime(w.time)}, lvl ${w.level})`); }
+      if (ev.t === 'bossSpawn') { bossStart = w.time; rec.bossTry.push({ s: w.stratum, tier: w.bossTier, kill: false }); }
+      if (ev.t === 'bossDown') { rec.bossTry[rec.bossTry.length - 1].kill = true; rec.bossTimes[w.stratum] = Math.round(w.time - bossStart); log.push(`  boss ${ev.type} down in ${(w.time - bossStart).toFixed(0)}s (t=${U.fmtTime(w.time)}, lvl ${w.level})`); }
       if (ev.t === 'clear' && !ev.trial && w.room && (w.room.type === 'combat' || w.room.type === 'elite')) rec.clears.push({ s: w.stratum, type: w.room.type, t: Math.round(w.roomTime * 10) / 10, d: Math.round(100 * rec.roomDmg / Math.max(1, w.players.values().next().value.maxHp)) / 100 });
       if (ev.t === 'stratum') {
         const dealt = totalDealt();
@@ -357,7 +362,7 @@ function runBot(opts) {
     rooms: { visited: w.run.roomsVisited, total: w.run.roomsTotal }, lightAtBoss: w.run.lightAtBoss.slice(), strata, light: w.light / w.lightMax,
     clears: rec.clears, dmgByS: rec.dmgByS, spawns: rec.spawns, heal: rec.heal, offers: rec.offers, relicsBy: rec.relicsBy, goldIn: rec.goldIn, dmgStrata: rec.dmgStrata, bossTimes: rec.bossTimes.slice(), turn: rec.turn, dmgBy: rec.dmgBy, downedBy: rec.downedBy, dealtStrata: rec.dealtStrata,
     evoAt: rec.evoAt, aff: ED.PATH_IDS.map(k => ED.pathAffinity(p0.boons, k)).sort((a, b) => b - a),
-    cls: p0.cls, main: ED.PATH_IDS.map(k => [k, ED.pathAffinity(p0.boons, k)]).sort((a, b) => b[1] - a[1])[0][0], heroes: players.length, bare: avg(players.map(p => bareDps(p.cls, p.weapon))), src: rec.src, combatS: rec.combatS, hits: rec.hits, ttk: rec.ttk, ttkElite: rec.ttkElite, htk: rec.htk, htkBare: rec.htkBare, cdr: p0.stats.cdr, cdrAfter: ED.Stats.cdrEff ? ED.Stats.cdrEff(p0.stats.cdr) : p0.stats.cdr,
+    bossTry: rec.bossTry, cls: p0.cls, main: ED.PATH_IDS.map(k => [k, ED.pathAffinity(p0.boons, k)]).sort((a, b) => b[1] - a[1])[0][0], heroes: players.length, bare: avg(players.map(p => bareDps(p.cls, p.weapon))), src: rec.src, combatS: rec.combatS, hits: rec.hits, ttk: rec.ttk, ttkElite: rec.ttkElite, htk: rec.htk, htkBare: rec.htkBare, cdr: p0.stats.cdr, cdrAfter: ED.Stats.cdrEff ? ED.Stats.cdrEff(p0.stats.cdr) : p0.stats.cdr,
     endRoom: w.room ? w.room.type : '', evo: p0.stats.evo || null, gates: ED.gatePaths(p0.boons), boonCount: Object.values(p0.boons).reduce((a, b) => a + b, 0), keystones: Object.keys(p0.boons).filter(id => ED.BOONS[id].key).length };
 }
 
@@ -406,6 +411,8 @@ function summarize(results) {
   lines.push(`damage share (all strata | strata IV-VI): all ${share(results, 0)} | ${share(results, 3)}`);
   lines.push(`  Storm-main builds (${stormRuns.length}) ${share(stormRuns, 0)} | ${share(stormRuns, 3)}; other builds (${otherRuns.length}) ${share(otherRuns, 0)} | ${share(otherRuns, 3)}`);
   lines.push('  by main path (strata IV-VI): ' + ED.PATH_IDS.map(k => { const rs = results.filter(r => r.main === k); return `${k} (${rs.length}) ${share(rs, 3)}`; }).join(' | '));
+  const tries = results.flatMap(r => r.bossTry);
+  lines.push('boss fights won by the lantern tier at the door (Bright/Dim/Dark/Lightless): ' + [0, 1, 2, 3].map(t => { const a = tries.filter(x => x.tier === t); return `${a.length ? Math.round(100 * a.filter(x => x.kill).length / a.length) : '-'}% of ${a.length}`; }).join(' | '));
   const cd = results.map(r => r.cdr);
   lines.push(`cooldown reduction at run end (raw stat): mean ${f2(avg(cd))} max ${f2(Math.max(...cd))} above 0.4 in ${Math.round(100 * cd.filter(v => v > 0.4).length / n)}% above 0.65 in ${Math.round(100 * cd.filter(v => v > 0.65).length / n)}% | effective after the soft cap mean ${f2(avg(results.map(r => r.cdrAfter)))}`);
   lines.push(`dealt/stratum [${S.map(s => Math.round(avg(results.map(r => r.dealtStrata[s - 1]).filter(v => v !== undefined)))).join(' ')}]  evo ${(100 * results.filter(r => r.evo).length / n).toFixed(0)}% keystones ${f1(avg(results.map(r => r.keystones)))} boons ${f1(avg(results.map(r => r.boonCount)))} relics ${f1(avg(results.map(r => r.relics)))}`);
@@ -423,6 +430,8 @@ function summarize(results) {
   const deep = (r, t) => r.aff.filter(v => v >= t).length, spread = (f) => [0, 1, 2, 3].map(k => pct(results.filter(r => f(r) === k).length, n)).join('/');
   lines.push(`pacing: offers/run ${f1(avgOffers)} (${f1(avgOffers / Math.max(1, avg(results.map(r => r.stratum))))} per stratum) | evolved ${pct(evolved.length, n)}% (${ED.PATH_IDS.map(k => k + " " + results.filter(r => r.evo === k).length).join(", ")}) at stratum [${qs(evolved.map(r => r.evoAt.s))}] team lvl [${qs(evolved.map(r => r.evoAt.lvl))}] | of ${reachIV.length} runs reaching IV: evolved ${pct(reachIV.filter(r => r.evo).length, reachIV.length)}% (by IV entry ${pct(reachIV.filter(r => r.evoAt && r.evoAt.s < 4).length, reachIV.length)}%) | affinity median top3 [${[0, 1, 2].map(i => qs(results.map(r => r.aff[i])).split(' ')[1]).join(' ')}] main-path lead (top - 2nd) quartiles [${qs(results.map(r => r.aff[0] - r.aff[1]))}] | runs with 0/1/2/3 paths at aff>=4: ${spread(r => deep(r, 4))}% at aff>=6: ${spread(r => deep(r, 6))}% | gates 0/1/2/3: ${spread(r => r.gates.length)}%`);
   lines.push(`damage taken ${top(dmg, 5).map(([k, v]) => `${k} ${(100 * v / dTot).toFixed(0)}%`).join(', ')}; first downed by ${top(downed, 5).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+  const byS = S.map(k => { const o = {}; for (const r of results) for (const who in (r.dmgByS[k] || {})) o[who] = (o[who] || 0) + r.dmgByS[k][who]; const t = Object.values(o).reduce((x, y) => x + y, 0) || 1; return `${k}: ` + Object.entries(o).sort((x, y) => y[1] - x[1]).slice(0, 4).map(([w, v]) => `${w} ${Math.round(100 * v / t)}%`).join(' '); });
+  lines.push('damage taken by stratum: ' + byS.join(' | '));
   const downsAll = results.reduce((a, r) => a + r.downedBy.length, 0), downsGloom = results.reduce((a, r) => a + r.downedBy.filter(k => k.startsWith('gloom@')).length, 0);
   lines.push(`gloom: downs ${f2(downsGloom / n)}/run (${(100 * downsGloom / Math.max(1, downsAll)).toFixed(0)}% of ${f2(downsAll / n)} downs/run), damage ${(100 * (dmg.gloom || 0) / dTot).toFixed(0)}% of taken, flares ${f2(avg(results.map(r => r.flares)))}/run, Gloom out ${Math.round(avg(results.map(r => r.gloomSecs)))} s/run, ${f2(avg(results.map(r => r.gloomHits)))} touches/run`);
   return lines.join('\n');
