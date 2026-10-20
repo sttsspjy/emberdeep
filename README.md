@@ -72,7 +72,7 @@ Boons belong to six **paths**. A hero follows at most **three** paths per run. A
 - **Duo boons:** owning the gates of two paths unlocks boons that combine them (Thermal Shock, Plasma, Superconductor, Hemorrhage, Static Edge, Serrated Frost, Soulfire, Spirit Feast).
 - **Forge:** picking a forge card ranks an owned boon up by one.
 - A room that rewards "a boon of Pyre" offers Pyre boons (or the Pyre gate, if you have not opened that path). Level-ups offer neutral boons, boons of your paths, keystones, duos and your hero's class boons. The start of a descent lets you choose your first path from three gates.
-- Life steal exists only in the Blood path, and heals at most 1.2% of your max health per second. Damage over time never leeches.
+- Life steal exists only in the Blood path. All healing from your hits and kills (leech, kill heals, blood scythes, Blessed Strikes, Soul Siphon, Judgment) together restores at most 1% of your max health per second. Hearts, campfires, potions and class-skill heals are not limited. Damage over time never leeches.
 
 ### Elemental weaknesses
 

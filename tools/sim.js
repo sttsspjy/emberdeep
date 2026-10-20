@@ -175,10 +175,12 @@ function runBot(opts) {
   // heal totals by source: callers that heal are wrapped to label the amount healPlayer returns
   const heal0 = w.healPlayer;
   w.healPlayer = function (p, amt, silent) { const v = heal0.call(this, p, amt, silent); rec.heal[rec.healSrc] = (rec.heal[rec.healSrc] || 0) + v; return v; };
-  for (const [fn, label] of [['leechHeal', 'leech'], ['collect', 'pickup'], ['interact', 'prop'], ['killEnemy', 'kill'], ['onStratumBuild', 'stratum'], ['updatePlayerBuild', 'regen'], ['onEnemyKilledSkill', 'skillkill'], ['playerSkill', 'skill'], ['pickBoon', 'boon'], ['updateProjectiles', 'proj'], ['updateAllies', 'minion']]) {
+  for (const [fn, label] of [['heroProcs', 'hit'], ['tickStatuses', 'dot'], ['collect', 'pickup'], ['interact', 'prop'], ['killEnemy', 'kill'], ['onStratumBuild', 'stratum'], ['updatePlayerBuild', 'regen'], ['onEnemyKilledSkill', 'skillkill'], ['playerSkill', 'skill'], ['pickBoon', 'boon'], ['updateProjectiles', 'proj'], ['updateAllies', 'minion']]) {
     const f0 = w[fn];
     w[fn] = function (...a) { const prev = rec.healSrc; rec.healSrc = label; try { return f0.apply(this, a); } finally { rec.healSrc = prev; } };
   }
+  const sus0 = w.sustainHeal; // capped combat sustain is labelled 'sus:' + the calling source
+  w.sustainHeal = function (...a) { const prev = rec.healSrc; rec.healSrc = 'sus:' + prev; try { return sus0.apply(this, a); } finally { rec.healSrc = prev; } };
   // offers by source and relics by room type (room.type of the hero's room when the relic was taken)
   const spawn0 = w.spawnEnemy;
   w.spawnEnemy = function (type, x, y, o) { rec.spawns[type] = (rec.spawns[type] || 0) + 1; return spawn0.call(this, type, x, y, o); };
@@ -329,7 +331,7 @@ function summarize(results) {
   const dmgTot = {}, healTot = {};
   for (const r of results) { r.dmgStrata.forEach((v, i) => { dmgTot[i] = (dmgTot[i] || 0) + v; }); for (const k in r.heal) healTot[k] = (healTot[k] || 0) + r.heal[k]; }
   const hSum = Object.values(healTot).reduce((a, b) => a + b, 0) || 1;
-  lines.push(`room dmg taken (fraction of max HP) combat ${f2(avg(results.flatMap(r => r.clears.filter(c => c.type === 'combat').map(c => c.d))))} elite ${f2(avg(results.flatMap(r => r.clears.filter(c => c.type === 'elite').map(c => c.d))))}; per run dmg taken ${Math.round(Object.values(dmg).reduce((a, b) => a + b, 0) / n)} healed ${Math.round(hSum / n)} (${top(healTot, 6).map(([k, v]) => k + ' ' + (100 * v / hSum).toFixed(0) + '%').join(', ')})`);
+  lines.push(`room dmg taken (fraction of max HP) combat ${f2(avg(results.flatMap(r => r.clears.filter(c => c.type === 'combat').map(c => c.d))))} elite ${f2(avg(results.flatMap(r => r.clears.filter(c => c.type === 'elite').map(c => c.d))))}; per run dmg taken ${Math.round(Object.values(dmg).reduce((a, b) => a + b, 0) / n)} healed ${Math.round(hSum / n)} (${top(healTot, 14).map(([k, v]) => k + ' ' + (100 * v / hSum).toFixed(0) + '%').join(', ')})`);
   const sumBy = (key) => { const o = {}; for (const r of results) for (const k in r[key]) o[k] = (o[k] || 0) + r[key][k] / n; return o; };
   const fmtO = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => k + ' ' + v.toFixed(1)).join(', ');
   lines.push(`offers/run: ${fmtO(sumBy('offers'))} | relics by room: ${fmtO(sumBy('relicsBy'))} | gold earned ${Math.round(avg(results.map(r => r.goldIn)))}`);

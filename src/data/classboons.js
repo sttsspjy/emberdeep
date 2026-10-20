@@ -24,14 +24,14 @@
     nightsedge: { name: "Night's Edge", rar: 'e', icon: 'mask', cls: 'shade', desc: 'Killing a foe with an Ambush refunds Vanish.', mods: { nightsEdge: 1 }, max: 1 },
     // Cleric: Sanctuary · Judgment
     wrath: { name: 'Divine Wrath', rar: 'r', icon: 'sun', cls: 'cleric', desc: 'Sanctuary burns 3x harder and stuns foes.', mods: { wrath: 1 }, max: 1 },
-    blessed: { name: 'Blessed Strikes', rar: 'e', icon: 'heart', cls: 'cleric', desc: 'Your hits heal the most wounded ally for 1.', mods: { blessed: 1 }, max: 2 },
+    blessed: { name: 'Blessed Strikes', rar: 'e', icon: 'heart', cls: 'cleric', desc: 'Your hits heal the most wounded ally for 1 (within the hit and kill heal cap).', mods: { blessed: 1 }, max: 2 },
     twinhammer: { name: 'Twin Hammers', rar: 'r', icon: 'twin', cls: 'cleric', desc: 'Judgment throws two hammers in a V.', mods: { twinHammer: 1 }, max: 1 },
     verdict: { name: 'Verdict', rar: 'e', icon: 'scroll', cls: 'cleric', desc: 'Judged foes explode on death for 60 + 150% weapon damage (radius 70).', mods: { verdict: 1 }, max: 1 },
     // Necromancer: Raise Legion · Bone Harvest
     legionplus: { name: 'Endless Legion', rar: 'r', icon: 'skull', cls: 'necro', desc: '+2 max minions; minions deal +30% damage.', mods: { minions: 2, minionDmg: 0.3 }, max: 2 },
     bonespikes: { name: 'Bone Spikes', rar: 'e', icon: 'bomb', cls: 'necro', desc: 'Minions burst for 150% weapon damage when they fall.', mods: { boneSpikes: 1 }, max: 1 },
     grimharvest: { name: 'Grim Harvest', rar: 'r', icon: 'blades', cls: 'necro', desc: 'Bone Harvest explosions deal +50% damage and raise 2 minions.', mods: { grimHarvest: 1 }, max: 1 },
-    soulsiphon: { name: 'Soul Siphon', rar: 'e', icon: 'orb', cls: 'necro', desc: 'Minion hits heal you for 1 (up to 4 per second).', mods: { soulSiphon: 1 }, max: 1 },
+    soulsiphon: { name: 'Soul Siphon', rar: 'e', icon: 'orb', cls: 'necro', desc: 'Minion hits heal you for 0.15% max health (within the hit and kill heal cap).', mods: { soulSiphon: 1 }, max: 1 },
   };
   Object.assign(ED.BOONS, CB);
   ED.BOON_IDS = Object.keys(ED.BOONS);

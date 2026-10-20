@@ -32,7 +32,7 @@
   W.initSkills = function (p) {
     p.bulwarkT = 0; p.bulwarkEnd = 0; p.blocks = 0; p.blockSeen = {};
     p.stealthT = 0; p.ambush = false; p.ambushT = 0;
-    p.hammers = []; p.sipN = 4; p.sipT = 0; p.critStacks = 0;
+    p.hammers = []; p.critStacks = 0;
   };
 
   // Called from hurtPlayer before damage lands. Return true when a skill fully blocks the hit.
@@ -153,8 +153,8 @@
 
   // Called from killEnemy for every slain foe (p = credited hero or null).
   W.onEnemyKilledSkill = function (e, p, src) {
-    if (e.judgeUntil > this.time) { // Judged foe: heals allies within 160 by 3% max HP; Verdict explodes it
-      for (const q of this.players.values()) if (!q.downed && !q.dead && U.dist2(q.x, q.y, e.x, e.y) < 160 * 160) this.healPlayer(q, q.maxHp * 0.03);
+    if (e.judgeUntil > this.time) { // Judged foe: heals allies within 160 by 3% max HP (through the sustain cap); Verdict explodes it
+      for (const q of this.players.values()) if (!q.downed && !q.dead && U.dist2(q.x, q.y, e.x, e.y) < 160 * 160) this.sustainHeal(q, q.maxHp * 0.03);
       const o = this.players.get(e.judgeOwner);
       if (o && o.stats.verdict) {
         const r = 70 * (1 + o.stats.area * 0.5);
@@ -165,11 +165,8 @@
     if (p && src && src.ambush && p.stats.nightsEdge) this.msgs.push({ to: p.pid, t: 'refund', slot: 1 });
   };
 
-  // Soul Siphon: a minion hit heals its owner 1 (token bucket, 4 per second). Called by updateAllies.
-  W.soulSiphon = function (p) {
-    p.sipN = Math.min(4, p.sipN + (this.time - p.sipT) * 4); p.sipT = this.time;
-    if (p.sipN >= 1) { p.sipN--; this.healPlayer(p, 1, true); }
-  };
+  // Soul Siphon: a minion hit heals its owner 0.15% max HP through the sustain cap. Called by updateAllies.
+  W.soulSiphon = function (p) { this.sustainHeal(p, p.maxHp * 0.0015); };
 
   // Slot 1 skills. Each returns false to reject the cast (no cost) or an object of extra event fields.
   const SLOT2 = {
