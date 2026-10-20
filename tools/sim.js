@@ -45,6 +45,9 @@ function bfsDir(room, locked, sx, sy, tx, ty) {
   return [nx - sx, ny - sy];
 }
 
+// Direction perpendicular to the Gloom's lunge line, on the side the hero already stands.
+function sidestep(g, p) { const a = g.aimA, side = ((p.x - g.x) * -Math.sin(a) + (p.y - g.y) * Math.cos(a)) >= 0 ? 1 : -1; return [-Math.sin(a) * side, Math.cos(a) * side]; }
+
 // Next prop worth walking to, or null. Per-hero rewards respect p.claimed; shop and rest choices follow the lantern and HP.
 function wantedProp(w, p) {
   const lightFrac = w.lightMax ? w.light / w.lightMax : 1;
@@ -154,7 +157,7 @@ function runBot(opts) {
       else if (ED.BOONS[id] && !ED.BOONS[id].gate) { p.boons[id] = (p.boons[id] || 0) + 1; w.recalc(p, false); }
     }
   }
-  const rec = { turn: {}, clears: [], bossTimes: [], dmgBy: {}, downedBy: [], dealtStrata: [], heal: {}, dmgByS: {}, spawns: {}, offers: {}, relicsBy: {}, goldIn: 0, roomDmg: 0, dmgStrata: [], healSrc: 'other' };
+  const rec = { flares: 0, gloomHits: 0, gloomSecs: 0,  turn: {}, clears: [], bossTimes: [], dmgBy: {}, downedBy: [], dealtStrata: [], heal: {}, dmgByS: {}, spawns: {}, offers: {}, relicsBy: {}, goldIn: 0, roomDmg: 0, dmgStrata: [], healSrc: 'other' };
   // wrap hurtPlayer to attribute the damage that landed (armor, shield and dodge already applied) to the source foe
   const hurt0 = w.hurtPlayer;
   w.hurtPlayer = function (p, amount, src) {
@@ -163,6 +166,7 @@ function runBot(opts) {
     const e = src && (src.e || (src.pr && src.pr.src));
     const who = e ? e.type : src && src.hazard ? (src.x !== undefined ? 'zone' : 'tile') : 'other';
     for (let i = n0; i < this.fx.length; i++) if (this.fx[i].t === 'hurt') { rec.dmgBy[who] = (rec.dmgBy[who] || 0) + this.fx[i].v; const bs = rec.dmgByS[this.stratum] || (rec.dmgByS[this.stratum] = {}); bs[who] = (bs[who] || 0) + this.fx[i].v; rec.roomDmg += this.fx[i].v; rec.dmgStrata[this.stratum - 1] = (rec.dmgStrata[this.stratum - 1] || 0) + this.fx[i].v; }
+    if (who === 'gloom') rec.gloomHits++;
     if (!was && p.downed) rec.downedBy.push(who + '@s' + this.stratum);
     return r;
   };
@@ -181,7 +185,7 @@ function runBot(opts) {
   w.giveRelic = function (p, id) { const k = this.room ? this.room.type : '?'; rec.relicsBy[k] = (rec.relicsBy[k] || 0) + 1; return give0.call(this, p, id); };
   w.dropGold = function (x, y, total) { rec.goldIn += Math.round(total); return drop0.call(this, x, y, total); };
   const ctl = {};
-  for (const p of w.players.values()) ctl[p.pid] = { atk: 0, skill: 0, skill2: 0, dash: 0, goal: null };
+  for (const p of w.players.values()) ctl[p.pid] = { atk: 0, skill: 0, skill2: 0, dash: 0, goal: null, glPrev: '', glReact: false };
   const dt = 1 / 60;
   let steps = 0;
   const maxSteps = 60 * MAX_SECONDS;
@@ -199,7 +203,12 @@ function runBot(opts) {
       let mx = 0, my = 0;
       const foes = w.enemies.filter(e => e.hp > 0 && e.spawnT <= 0 && !e.def.gloom);
       const gloom = w.enemies.find(e => e.hp > 0 && e.def.gloom && e.spawnT <= 0);
+      if (gloom && U.dist2(gloom.x, gloom.y, p.x, p.y) < 120 * 120 && !p.downed && w.flare(p)) rec.flares++; // lantern flare when the Gloom closes in (needs the light; no flare while it is still far)
       const skill = opts.skill ?? 0.75;
+      const gst = gloom ? gloom.st : ''; // the bot reads each Gloom lunge telegraph with probability `skill` (decided once per wind-up) and sidesteps the line
+      if (gst === 'windup' && c.glPrev !== 'windup') c.glReact = brng.next() < skill;
+      c.glPrev = gst;
+      const dodge = gst === 'windup' && c.glReact;
       if (foes.length) {
         let tgt = null, bd = 1e9;
         for (const e of foes) { const d = U.dist2(e.x, e.y, p.x, p.y); if (d < bd) { bd = d; tgt = e; } }
@@ -214,6 +223,7 @@ function runBot(opts) {
         for (const pr of w.projs) if (pr.team === 1 && U.dist2(pr.x, pr.y, p.x, p.y) < 55 * 55) { danger = true; dir = [dir[0] + (p.x - pr.x) * 2, dir[1] + (p.y - pr.y) * 2]; }
         for (const z of w.zones) if ((z.kind === 'tele' || z.kind === 'poison' || z.kind === 'fire') && z.team === 1 && U.dist2(z.x, z.y, p.x, p.y) < (z.r + 12) ** 2) { danger = true; dir = [p.x - z.x + dir[0] * 0.2, p.y - z.y + dir[1] * 0.2]; }
         if (gloom && U.dist2(gloom.x, gloom.y, p.x, p.y) < 90 * 90) { danger = true; dir = [p.x - gloom.x, p.y - gloom.y]; }
+        if (dodge && U.dist2(gloom.x, gloom.y, p.x, p.y) < 260 * 260) { danger = true; dir = sidestep(gloom, p); }
         const l = Math.hypot(dir[0], dir[1]) || 1; mx = dir[0] / l; my = dir[1] / l;
         if (brng.next() > skill) { mx += (brng.next() - 0.5) * 1.5; my += (brng.next() - 0.5) * 1.5; }
         const a = Math.atan2(tgt.y - p.y, tgt.x - p.x);
@@ -249,11 +259,13 @@ function runBot(opts) {
           dir = [p.x - gloom.x, p.y - gloom.y];
           if (c.dash <= 0 && U.dist2(gloom.x, gloom.y, p.x, p.y) < 60 * 60) { const l2 = Math.hypot(dir[0], dir[1]) || 1; p.dashT = 0.17; p.dashDx = dir[0] / l2; p.dashDy = dir[1] / l2; w.playerDash(p, p.dashDx, p.dashDy); c.dash = p.stats.dashCd; }
         }
+        if (dodge && U.dist2(gloom.x, gloom.y, p.x, p.y) < 260 * 260) dir = sidestep(gloom, p);
         if (dir) { const l = Math.hypot(dir[0], dir[1]) || 1; mx = dir[0] / l; my = dir[1] / l; }
       }
       if (opts.trace) opts.trace(w, p, mx, my, foes, c);
       ED.Sim.movePlayer(p, { mx, my }, dt, w.room, w.locked, w.zones);
     }
+    if (w.enemies.some(e => e.def.gloom && e.hp > 0)) rec.gloomSecs += dt;
     w.update(dt);
     for (const ev of w.fx) {
       if (ev.t === 'room') rec.roomDmg = 0;
@@ -274,7 +286,7 @@ function runBot(opts) {
   rec.dealtStrata.push(Math.round(totalDealt() - dealt0));
   const p0 = [...w.players.values()][0];
   const sum = w.summary ? w.summary() : null;
-  return { state: w.state, victory: w.victory, stratum: w.stratum, time: w.time, level: w.level, kills: w.run.kills, relics: p0.relics.length, log, sum, hp: p0.hp | 0, maxHp: p0.maxHp,
+  return { flares: rec.flares, gloomHits: rec.gloomHits, gloomSecs: rec.gloomSecs, state: w.state, victory: w.victory, stratum: w.stratum, time: w.time, level: w.level, kills: w.run.kills, relics: p0.relics.length, log, sum, hp: p0.hp | 0, maxHp: p0.maxHp,
     rooms: { visited: w.run.roomsVisited, total: w.run.roomsTotal }, lightAtBoss: w.run.lightAtBoss.slice(), strata, light: w.light / w.lightMax,
     clears: rec.clears, dmgByS: rec.dmgByS, spawns: rec.spawns, heal: rec.heal, offers: rec.offers, relicsBy: rec.relicsBy, goldIn: rec.goldIn, dmgStrata: rec.dmgStrata, bossTimes: rec.bossTimes.slice(), turn: rec.turn, dmgBy: rec.dmgBy, downedBy: rec.downedBy, dealtStrata: rec.dealtStrata,
     endRoom: w.room ? w.room.type : '', evo: p0.stats.evo || null, gates: ED.gatePaths(p0.boons), boonCount: Object.values(p0.boons).reduce((a, b) => a + b, 0), keystones: Object.keys(p0.boons).filter(id => ED.BOONS[id].key).length };
@@ -318,6 +330,8 @@ function summarize(results) {
   const fmtO = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => k + ' ' + v.toFixed(1)).join(', ');
   lines.push(`offers/run: ${fmtO(sumBy('offers'))} | relics by room: ${fmtO(sumBy('relicsBy'))} | gold earned ${Math.round(avg(results.map(r => r.goldIn)))}`);
   lines.push(`damage taken ${top(dmg, 5).map(([k, v]) => `${k} ${(100 * v / dTot).toFixed(0)}%`).join(', ')}; first downed by ${top(downed, 5).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+  const downsAll = results.reduce((a, r) => a + r.downedBy.length, 0), downsGloom = results.reduce((a, r) => a + r.downedBy.filter(k => k.startsWith('gloom@')).length, 0);
+  lines.push(`gloom: downs ${f2(downsGloom / n)}/run (${(100 * downsGloom / Math.max(1, downsAll)).toFixed(0)}% of ${f2(downsAll / n)} downs/run), damage ${(100 * (dmg.gloom || 0) / dTot).toFixed(0)}% of taken, flares ${f2(avg(results.map(r => r.flares)))}/run, Gloom out ${Math.round(avg(results.map(r => r.gloomSecs)))} s/run, ${f2(avg(results.map(r => r.gloomHits)))} touches/run`);
   return lines.join('\n');
 }
 

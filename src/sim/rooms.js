@@ -8,7 +8,7 @@
     'Hold J (or click) to attack. Your hero aims for you.',
     'Press K (or right-click) for your skill. Space dashes through danger.',
     'Clear a room to open its doors. The reward inside is shown on the door.',
-    'Your lantern burns down as you explore. A dim light makes the Deep stronger.',
+    'Every new room costs lantern light (shown on its door). In the dark the Gloom hunts: press F to flare it away.',
     'The skull on your map marks the stratum boss. Tab shows the map.',
   ];
 
@@ -63,7 +63,7 @@
       const first = waves[0];
       if (first.length) first[this.rng.int(0, first.length - 1)].elite = true;
       else first.push({ type: biome.elite, elite: true });
-      return waves;
+      return this.darkWaves(waves);
     }
     let eliteCh = 0.28 + (this.pact >= 3 ? 0.4 : 0) + (s >= 4 ? 0.1 : 0);
     if (this.tutorial && s === 1) eliteCh = 0.1;
@@ -74,7 +74,7 @@
       else if (wv.length) wv[this.rng.int(0, wv.length - 1)].elite = true;
     }
     if (s >= 3 && this.rng.chance(0.2 + (this.pact >= 3 ? 0.3 : 0))) waves[nW - 1].push({ type: biome.elite, elite: true });
-    return waves;
+    return this.darkWaves(waves);
   };
 
   W.updateEncounter = function (dt) {
@@ -123,7 +123,7 @@
     for (const it of list) {
       const def = ED.ENEMIES[it.type];
       const pt = D.randomFloor(this.room, this.rng, avoid, def.ai === 'turret' ? 150 : 120);
-      this.addZone({ kind: 'spawn', x: pt.x, y: pt.y, r: def.r + 4, dur: 0.85 + this.rng.range(0, 0.35), type: it.type, elite: !!it.elite });
+      this.addZone({ kind: 'spawn', x: pt.x, y: pt.y, r: def.r + 4, dur: 0.85 + this.rng.range(0, 0.35), type: it.type, elite: !!it.elite, affix: it.affix });
     }
   };
 
@@ -140,7 +140,7 @@
     if (this.rng.chance(0.3)) this.spawnPickup('heart', c.x, c.y, 1);
     if (room.reward) {
       const m = D.clearSpot(room, D.center(room).x, D.center(room).y);
-      this.props.push({ id: U.uid(), kind: 'reward', x: m.x, y: m.y, item: room.reward, group: U.uid(), state: 0 });
+      this.props.push({ id: U.uid(), kind: 'reward', x: m.x, y: m.y, item: this.darkReward(room.reward, m.x, m.y), group: U.uid(), state: 0 });
     }
     this.checkFullClear();
     this.computeFlow();
@@ -228,11 +228,11 @@
     return props;
   };
 
-  // Lantern oil is 30 + 12s and a forge is 60 + 15s; everything else scales 12% per stratum. Favor (-10% per rank), the discount stat and the Pact 7 markup (x1.4) apply to all; rounded to 5, minimum 5.
+  // Lantern oil (+OIL_LIGHT light) is 45 + 15s and a forge is 60 + 15s; everything else scales 12% per stratum. Favor (-10% per rank), the discount stat and the Pact 7 markup (x1.4) apply to all; rounded to 5, minimum 5.
   W.priceOf = function (it) {
     const s = this.stratum;
     let base;
-    if (it.type === 'oil') base = 30 + 12 * s;
+    if (it.type === 'oil') base = 45 + 15 * s;
     else if (it.type === 'forge') base = 60 + 15 * s;
     else base = (it.type === 'relic' ? ED.RELIC_PRICE[ED.RELICS[it.item].rar] : it.type === 'boon' ? 75 : 30) * (1 + 0.12 * (s - 1));
     let favor = 0, discount = 0;
@@ -276,7 +276,7 @@
         } else {
           pr.state = 1;
           if (item === 'gold') this.dropGold(pr.x, pr.y + 18, ED.World.rewardGold(s, this.dread.gold), true);
-          else if (item === 'oil') this.addLight(15, pr.x, pr.y);
+          else if (item === 'oil') this.addLight(ED.World.OIL_LIGHT, pr.x, pr.y);
           else if (item === 'relic') this.spawnRelicChoices(pr.x, pr.y + 46, 'r');
         }
         this.emit({ t: 'claim', pid, item, x: pr.x, y: pr.y });
@@ -315,7 +315,7 @@
         else if (pr.stype === 'potion') this.healPlayer(p, p.maxHp * 0.4);
         else if (pr.stype === 'boon') this.grantOffer(p, { src: 'epic' });
         else if (pr.stype === 'forge') this.grantOffer(p, { src: 'forge' });
-        else if (pr.stype === 'oil') this.addLight(15, pr.x, pr.y);
+        else if (pr.stype === 'oil') this.addLight(ED.World.OIL_LIGHT, pr.x, pr.y);
         break;
       }
       case 'fountain': {

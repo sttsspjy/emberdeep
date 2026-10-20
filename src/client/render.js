@@ -124,7 +124,7 @@
   // Post parameters from the FX state (chromatic aberration, flashes) and the lantern.
   R.postOpts = (biome, t, extra) => {
     const F = ED.FX;
-    return Object.assign({ biome, t, aberr: F.aberr || 0, flash: F.kick > 0.01 ? [1, 0.92, 0.8, F.kick * 0.22] : null, lightLevel: R.lightLevel }, extra);
+    return Object.assign({ biome, t, aberr: F.aberr || 0, flash: F.kick > 0.01 ? [1, 0.92, 0.8, F.kick * 0.22] : null, lightLevel: 0.6 + 0.4 * R.lightLevel }, extra); // post-process darkening (saturation, vignette) stays mild
   };
 
   // ---------------- light buffer (device-pixel space, reused by the camp) ----------------
@@ -1191,16 +1191,16 @@
   function rimAdd(x, y, r, col, k) { if (rimN < 40) { let L = rimSrc[rimN]; if (!L) L = rimSrc[rimN] = { x: 0, y: 0, r: 0, c: '', k: 0 }; L.x = x; L.y = y; L.r = r; L.c = col; L.k = k; rimN++; } }
   function drawLighting(c, view, room, biome, local, t, ox, oy) {
     const P = biome.pal, ll = R.lightLevel, s = R.scale;
-    const amb = R.ambient(biome, (1 - ll) * 0.32, view.pact > 0 ? Math.min(0.5, view.pact * 0.05) : 0);
+    const amb = R.ambient(biome, (1 - ll) * 0.1, view.pact > 0 ? Math.min(0.5, view.pact * 0.05) : 0);
     R.lightBegin(amb);
     const gm = ED.Tiles.glowmap(room, s);
     if (gm) { lctx.globalAlpha = 0.5; lctx.drawImage(gm, ox / R.lightDiv, oy / R.lightDiv, gm.width / gm.px * s / R.lightDiv, gm.height / gm.px * s / R.lightDiv); lctx.globalAlpha = 1; }
     rimN = 0;
     const src = rimAdd;
-    // hero lanterns: warm core plus a wider tinted fill; radius shrinks and flickers as the lantern fails
+    // hero lanterns: warm core plus a wider tinted fill; radius shrinks by at most 15% and flickers as the lantern fails
     for (const p of view.players.values()) {
       if (p.dead) continue;
-      const base = (p.stats ? p.stats.lightR : 175) * (p.downed ? 0.6 : 1) * (0.55 + 0.45 * ll);
+      const base = (p.stats ? p.stats.lightR : 175) * (p.downed ? 0.6 : 1) * (0.85 + 0.15 * ll);
       const fl = 1 + Math.sin(t * 7 + (p.slot || 0)) * 0.03 + Math.sin(t * 19 + (p.slot || 0) * 2) * 0.02 * (1 + (1 - ll) * 3);
       const col = U.mix('#ffc27a', ED.PLAYER_COLORS[p.slot] || '#ffc27a', 0.12);
       R.lightAdd(p.x * s + ox, (p.y - 10) * s + oy, base * 1.05 * fl * s, U.mix(col, P.light, 0.2), 0.95);

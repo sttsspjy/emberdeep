@@ -15,10 +15,11 @@ No build step, no backend, no install. It is a static site: open it from any web
 | `K` / `X` or right mouse | Skill 1 (rerolls the boon cards while they are open) |
 | `L` / `C` / `E` or middle mouse | Skill 2 |
 | `Space` | Dash (brief invulnerability) |
+| `F` | Lantern flare: spend 8 light to banish the Gloom and blind nearby foes |
 | `Tab` | Map and character sheet: paths, boons, stats |
 | `Esc` | Pause / settings |
 
-Aiming is automatic by default. Switch to mouse aiming in Settings. Gamepads also work: left stick moves, right stick aims, `X` or right trigger attacks, `B` or right bumper is skill 1, `Y` or left trigger is skill 2, `A` or left bumper dashes.
+Aiming is automatic by default. Switch to mouse aiming in Settings. Gamepads also work: left stick moves, right stick aims, `X` or right trigger attacks, `B` or right bumper is skill 1, `Y` or left trigger is skill 2, `A` or left bumper dashes, a click of the left stick fires the lantern flare.
 
 ## A descent
 
@@ -32,16 +33,20 @@ Aiming is automatic by default. Switch to mouse aiming in Settings. Gamepads als
 
 ### The lantern and Dread
 
-Every room you have not visited yet costs lantern light: the number on its door (and on the map, and in the Tab map) says how much (combat 7, elite 10, anything else 5 out of 100; red means the room drops you to a darker tier). Going back through a room you have visited is free. The lantern also burns slowly while you stay on a floor, but not in boss rooms and not while a safe room waits for a boon pick. It refills when you enter the next stratum. Exploring more rooms means more power, but as the light drops the Deep grows stronger. **Light you still carry when you step into the boss room heals the whole party** (up to 30% of max health with a full lantern) and pays a little gold and embers; the door and the lantern panel show what it will give. Lantern oil (room rewards, shops) and the **Deep Wick** Hearth upgrade give more light.
+Every room you have not visited yet costs lantern light: the number on its door (and on the map, and in the Tab map) says how much (combat 10, elite 14, anything else 7 out of 100; red means the room drops you to a darker tier). Going back through a room you have visited is free. The lantern also burns slowly while you stay on a floor, but not in boss rooms and not while a safe room waits for a boon pick. It refills when you enter the next stratum. Lantern oil (room rewards, shops) gives +35 light, and the **Deep Wick** Hearth upgrade raises the lantern's size.
 
-| Light left | Tier | Foe health | Foe damage | Elite chance | Wave size | Room gold and embers |
+**Light you still carry when you step into the boss room guards the whole party**: up to 30% of max health healed and a shield of up to 40% with a full lantern, plus a little gold and embers. The door and the lantern panel show what it will give.
+
+Darkness does not make foes tougher; it makes the Deep hunt you:
+
+| Light left | Tier | Foe damage | Elite chance | Room gold and embers | Better room reward | Gloom |
 | --- | --- | --- | --- | --- | --- | --- |
-| 50% or more | Bright | x1 | x1 | normal | x1 | x1 |
-| 25% to 50% | Dim | x1.2 | x1 | +12% | x1.08 | x1.5 |
-| Under 25% | Dark | x1.45 | x1.1 | +25% | x1.2 | x2 |
-| 0% | Lightless | x1.8 | x1.25 | +40% | x1.3 | x2 |
+| 50% or more | Bright | x1 | normal | x1 | no | no |
+| 25% to 50% | Dim | x1 | +15% | x1.5 | no | no |
+| Under 25% | Dark | x1.05 | +30% | x2 | 25% of cleared rooms | hunts after 8 s |
+| 0% | Lightless | x1.1 | +45% | x2.5 | 40% of cleared rooms | hunts after 3 s |
 
-When the lantern is empty, a **Gloom** stalks you in every room: it cannot be hurt, walks through walls and hits hard, so keep moving or leave the room. Any lantern oil banishes it until the light runs dry again. The boss takes the tier you carried into its room. Running dry never ends a descent.
+In the dark an elite replaces some of a wave's ordinary foes (fewer, nastier), and Dark and Lightless elites carry the worse affixes. The **Gloom** is an invulnerable hunter that walks through walls at nearly your speed (a dash outruns it), keeps its distance, then winds up a red line and lunges along it: step off the line. A touch takes about a fifth of your health. Drive it off with **lantern oil** (any light gained banishes it) or press **F** for a **lantern flare**: it costs 8 light, banishes the Gloom for 12 seconds and blinds the foes around you for 1.5 seconds. The flare can drop you into a darker tier. Running dry never ends a descent.
 
 ## Builds: paths, weaknesses, evolutions
 

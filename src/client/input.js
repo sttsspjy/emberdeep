@@ -1,5 +1,5 @@
 // Keyboard, mouse and gamepad. Game controls: WASD move, J / left mouse attack, K / X / right mouse skill 1,
-// L / C / E / middle mouse skill 2, Space dash, Tab map; gamepad: B/RB skill 1, Y/LT skill 2.
+// L / C / E / middle mouse skill 2, Space dash, F lantern flare, Tab map; gamepad: B/RB skill 1, Y/LT skill 2, left stick click flare.
 (function (ED) {
   'use strict';
   const I = ED.Input = {
@@ -34,7 +34,7 @@
 
   // Snapshot of intent for this frame.
   I.read = () => {
-    const out = { mx: 0, my: 0, atk: false, skill: false, dash: false, atkPressed: false, tab: false, esc: false, confirm: false, left: false, right: false, aimX: null, aimY: null, skill2: false };
+    const out = { mx: 0, my: 0, atk: false, skill: false, dash: false, atkPressed: false, flare: false, tab: false, esc: false, confirm: false, left: false, right: false, aimX: null, aimY: null, skill2: false };
     if (down('KeyW', 'ArrowUp')) out.my -= 1;
     if (down('KeyS', 'ArrowDown')) out.my += 1;
     if (down('KeyA', 'ArrowLeft')) out.mx -= 1;
@@ -44,6 +44,7 @@
     out.skill = hit('KeyK', 'KeyX') || I.mouse.rPressed;
     out.skill2 = hit('KeyL', 'KeyC', 'KeyE') || I.mouse.mPressed;
     out.dash = hit('Space', 'ShiftLeft', 'ShiftRight');
+    out.flare = hit('KeyF');
     out.tab = hit('Tab');
     out.esc = hit('Escape');
     out.confirm = hit('KeyJ', 'KeyZ', 'Enter'); // not Space: a dash mashed in combat must never pick a boon
@@ -66,6 +67,7 @@
       out.skill = out.skill || bp(1) || bp(5);
       out.skill2 = out.skill2 || bp(3) || bp(6);
       out.dash = out.dash || bp(0) || bp(4);
+      out.flare = out.flare || bp(10);
       out.esc = out.esc || bp(9);
       out.tab = out.tab || bp(8);
       out.confirm = out.confirm || bp(2);
