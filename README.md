@@ -10,15 +10,18 @@ No build step, no backend, no install. It is a static site: open it from any web
 
 | Input | Action |
 | --- | --- |
-| `W` `A` `S` `D` | Move |
-| `J` or left mouse | Attack (hold). Also interacts with chests, shops and shrines |
-| `K` / `X` or right mouse | Skill 1 (rerolls the boon cards while they are open) |
-| `L` / `C` / `E` or middle mouse | Skill 2 |
+| `W` `A` `S` `D` (or the arrow keys) | Move |
+| Left mouse or `J` | Attack (hold). Also interacts with chests, shops and shrines |
+| `Q` or right mouse | Skill 1 (rerolls the boon cards while they are open) |
+| `E` | Skill 2 |
 | `Space` | Dash (brief invulnerability) |
+| `F` | Lantern flare |
 | `Tab` | Map and character sheet: paths, boons, stats |
-| `Esc` | Pause / settings |
+| `Esc` | Pause (also backs out of any menu) |
 
-Aiming is automatic by default. Switch to mouse aiming in Settings. Gamepads also work: left stick moves, right stick aims, `X` or right trigger attacks, `B` or right bumper is skill 1, `Y` or left trigger is skill 2, `A` or left bumper dashes.
+Every key and mouse button can be changed in **Settings > Controls**: click an action's slot, then press the new key or mouse button (`Esc` cancels, `Backspace` clears). A key that is already taken is swapped into the slot you replaced. **Reset to defaults** restores the table above, and bindings are saved with your other settings.
+
+Aiming is automatic by default. Switch to mouse aiming in Settings. Gamepads also work (fixed layout): left stick moves, right stick aims, `X` or right trigger attacks, `B` or right bumper is skill 1, `Y` or left trigger is skill 2, `A` or left bumper dashes, pressing the left stick fires the lantern flare.
 
 ## A descent
 
@@ -93,7 +96,7 @@ Your weapon is renamed after the path (Cinder Longsword, Glacial Longbow, and so
 
 You start with the **Knight**, **Ranger** and **Pyromancer**. Each hero has three weapons (unlocked by mastery) and two skills. Skill cooldown reductions apply to both, and each skill has class boons of its own.
 
-| Hero | Skill 1 (K) | Skill 2 (L) | Unlock |
+| Hero | Skill 1 (Q) | Skill 2 (E) | Unlock |
 | --- | --- | --- | --- |
 | Knight | Shield Charge, 6 s | Bulwark, 9 s: block and reflect arrows, then bash | Start |
 | Ranger | Volley, 5 s | Rain of Arrows, 10 s: a storm of arrows on a point | Start |
@@ -101,6 +104,10 @@ You start with the **Knight**, **Ranger** and **Pyromancer**. Each hero has thre
 | Shade | Shadowstep, 4.5 s | Vanish, 11 s: smoke, stealth and a guaranteed-crit ambush | Defeat the Bone Warden |
 | Cleric | Sanctuary, 11 s | Judgment, 9 s: a returning hammer that judges foes | Complete 4 descents |
 | Necromancer | Raise Legion, 12 s | Bone Harvest, 10 s: minions explode, then rise again | Defeat the Sporemother |
+
+## The menus
+
+The main menu has four entries. **Descend** picks your hero, weapon and pact, then starts a solo descent or opens a party (**Host a party**, or **Join a party** with a code). **Hearth** holds the upgrades, the relic codex and the chronicle. **Heroes** shows every hero's stats and mastery rewards. **Settings** holds sound, display, controls and your profile (name, save code, erase). `Esc` steps back out of a menu.
 
 ## Between descents (the Hearth)
 
@@ -113,7 +120,7 @@ You start with the **Knight**, **Ranger** and **Pyromancer**. Each hero has thre
 
 ### Saving
 
-Progress autosaves to the browser. The **Save** tab shows a portable save code (for example `WD1-XXXXX-XXXXX-…`). It packs the whole profile into letters and digits with a checksum. Paste it on any device or browser to continue (on a new device, use **I have a save code** on the title screen). No account or database is involved.
+Progress autosaves to the browser. **Settings > Profile** shows a portable save code (for example `WD1-XXXXX-XXXXX-…`). It packs the whole profile into letters and digits with a checksum. Paste it on any device or browser to continue (on a new device, use **I have a save code** on the first-run screen). No account or database is involved.
 
 Wickdeep starts fresh profiles: saves and codes from Emberdeep (`ED1-…`) do not carry over, and the game says so if you paste one.
 
@@ -121,8 +128,8 @@ Two tabs open on the same profile stay in step: each adopts the other's saved pr
 
 ## Multiplayer
 
-1. One player presses **Host a Party** and shares the 5-character code, or the invite link.
-2. Friends press **Join a Party** and enter the code (or just open the link), pick a hero and press Ready. Everyone sees the pact the host has chosen.
+1. One player presses **Host a party** on the Descend screen and shares the 5-character code, or the invite link.
+2. Friends press **Join a party** and enter the code (or just open the link), pick a hero and press Ready. Everyone sees the pact the host has chosen.
 3. The host presses **Begin**.
 
 How it works:
@@ -169,7 +176,7 @@ src/util.js               math, seeded RNG, colour helpers
 src/data/                 strata, enemies, heroes, weapons and skills, boons, class boons, relics, meta progression
 src/save.js               profile storage and the save-code format
 src/sim/                  simulation: dungeon generation, stats, world, combat, build (offers, paths, evolutions),
-                          skills (K and L), enemy AI, bosses, rooms
+                          skills (the two class skills), enemy AI, bosses, rooms
 src/net.js                transports (PeerJS / local), host and client sessions, snapshots
 src/game.js               a run in progress: local controller, client mirror, network routing
 src/client/               input, audio synth, icons, sprites, room art, effects, renderer, post (WebGL), HUD, camp, menus
