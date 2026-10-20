@@ -56,7 +56,12 @@
   F.punch = (aberr, kick) => { if (calm()) return; F.aberr = Math.max(F.aberr, aberr || 0); F.kick = Math.max(F.kick, kick || 0); };
   // Brief time dip; read FX.timeScale. At most one every 0.22 s so rapid hits never stall the game.
   F.hitStop = (sec) => { const now = performance.now() / 1000; if (calm() || now - lastHs < 0.22) return; lastHs = now; hsUntil = now + Math.min(0.3, sec); };
-  F.msg = (text, color) => { F.msgs.push({ text, color: color || '#f0e5d3', t: 4 }); if (F.msgs.length > 5) F.msgs.shift(); };
+  // A repeat of the newest message refreshes it with a count ('text ×3') instead of stacking.
+  F.msg = (text, color) => {
+    const last = F.msgs[F.msgs.length - 1];
+    if (last && last.base === text) { last.n++; last.text = text + ' ×' + last.n; last.t = 4; return; }
+    F.msgs.push({ text, base: text, n: 1, color: color || '#f0e5d3', t: 4 }); if (F.msgs.length > 5) F.msgs.shift();
+  };
   F.showBanner = (title, sub, style, dur) => { F.banner = { title, sub: sub || '', style: style || 'small', t: 0, dur: dur || 2.6 }; };
 
   // Ages every entry by dt and drops the expired ones in place (order and array identity kept, nothing allocated).
