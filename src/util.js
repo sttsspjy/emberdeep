@@ -83,17 +83,34 @@
   U.pct = (v) => Math.round(v * 100) + '%';
   U.roman = (n) => ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][n] || String(n);
 
-  // Colour helpers (hex <-> rgb, mix, shade) used by procedural art.
+  // Colour helpers (hex <-> rgb, mix, shade) used by procedural art. Parsed colours are memoised (bounded) and shared: callers must not mutate the arrays.
+  const rgbMemo = new Map(), rgbaMemo = new Map(), HEX2 = [];
+  for (let i = 0; i < 256; i++) HEX2.push((i < 16 ? '0' : '') + i.toString(16));
   U.hexToRgb = (hex) => {
+    let c = rgbMemo.get(hex);
+    if (c) return c;
     let h = hex.replace('#', '');
     if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
     const n = parseInt(h, 16);
-    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    c = Object.freeze([(n >> 16) & 255, (n >> 8) & 255, n & 255]);
+    if (rgbMemo.size >= 512) rgbMemo.clear();
+    rgbMemo.set(hex, c);
+    return c;
   };
-  U.rgbToHex = (r, g, b) => '#' + [r, g, b].map(v => U.clamp(Math.round(v), 0, 255).toString(16).padStart(2, '0')).join('');
-  U.mix = (a, b, t) => { const A = U.hexToRgb(a), B = U.hexToRgb(b); return U.rgbToHex(U.lerp(A[0], B[0], t), U.lerp(A[1], B[1], t), U.lerp(A[2], B[2], t)); };
+  const byte = (v) => (v <= 0 ? 0 : v >= 255 ? 255 : Math.round(v));
+  U.rgbToHex = (r, g, b) => '#' + HEX2[byte(r)] + HEX2[byte(g)] + HEX2[byte(b)];
+  U.mix = (a, b, t) => { const A = U.hexToRgb(a), B = U.hexToRgb(b); return U.rgbToHex(A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t); };
   U.shade = (hex, amt) => (amt >= 0 ? U.mix(hex, '#ffffff', amt) : U.mix(hex, '#000000', -amt));
-  U.rgba = (hex, a) => { const c = U.hexToRgb(hex); return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')'; };
+  U.rgba = (hex, a) => {
+    let p = rgbaMemo.get(hex);
+    if (p === undefined) {
+      const c = U.hexToRgb(hex);
+      p = 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',';
+      if (rgbaMemo.size >= 512) rgbaMemo.clear();
+      rgbaMemo.set(hex, p);
+    }
+    return p + a + ')';
+  };
 
   let _uid = 1;
   U.uid = () => _uid++;
