@@ -71,7 +71,7 @@ Elements: `pyre`, `rime`, `storm`. Physical paths (`steel`, `blood`, `spirit`) i
 ### Damage taken by foes (order)
 1. Hero multiplier (dmg stat, conditionals: execute, searing, lacerate, berserk, hemomancy, idol, banner).
 2. Crit ×critMult.
-3. Foe vulnerability `1 + Σ(mark 0.25, judged 0.2, frozen 0.25, sunder stacks × 0.04)`.
+3. Foe vulnerability `1 + Σ(mark 0.25, judged|vulnT 0.2 (once), frozen 0.25, sunder stacks × 0.04)`. Judgment sets `judged`; Hailthorns and Smokescreen set `vulnT` (no ring, no kill-heal).
 4. Element affinity (elemental damage only).
 5. `e.exposed` ×1.5.
 6. Guard: if `e.def.guard = {arc, mul}` and the attack comes from within `arc/2` of `e.guardA` → ×mul (DoT, discharges and explosions ignore guard). Emits `guardhit`.
@@ -197,9 +197,9 @@ Skill cooldown reduction applies to both slots. Class boons (2 per skill, 4 per 
 | Class | Existing | New |
 |---|---|---|
 | Knight | shieldwall, quake | **bastion** (r): Bulwark lasts 50% longer, bash stuns 1.2 s · **mirrorguard** (e): Bulwark blocks from every side and reflects at 250% |
-| Ranger | mark, arrowstorm (was `storm`) | **barrage** (r): Rain +40% radius, +1 s · **hailthorns** (e): foes inside Rain are slowed 50% and take +20% damage |
+| Ranger | mark, arrowstorm (was `storm`) | **barrage** (r): Rain +40% radius, +1 s · **hailthorns** (e): foes inside Rain are slowed 50% and take +20% damage (`vulnT`) |
 | Pyromancer | combust, phoenixnova | **twinmeteor** (e): a second Meteor lands 0.6 s later on the nearest foe · **moltencore** (r): crater lasts 3× longer, burns 2× hotter |
-| Shade | assassin, decoy | **smokescreen** (r): smoke +40% radius, +2 s, foes inside take +20% · **nightsedge** (e): an Ambush kill refunds Vanish |
+| Shade | assassin, decoy | **smokescreen** (r): smoke +40% radius, +2 s, foes inside take +20% (`vulnT`) · **nightsedge** (e): an Ambush kill refunds Vanish |
 | Cleric | wrath, blessed | **twinhammer** (r): Judgment throws two hammers in a V · **verdict** (e): judged foes explode on death (60 + 150% weapon, r70) |
 | Necromancer | legionplus, bonespikes | **grimharvest** (r): Harvest explosions +50%, raise 2 · **soulsiphon** (e): minion hits heal you 1 (≤ 4/s) |
 

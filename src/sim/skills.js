@@ -192,7 +192,7 @@
           if (tick) k++;
           for (const e of world.enemies) {
             if (e.hp <= 0 || e.spawnT > 0 || U.dist2(e.x, e.y, z.x, z.y) >= (z.r + e.r) ** 2) continue;
-            if (hail) { world.slowEnemy(e, 0.5, 0.3); e.judged = Math.max(e.judged || 0, 0.3); }
+            if (hail) { world.slowEnemy(e, 0.5, 0.3); e.vulnT = Math.max(e.vulnT || 0, 0.3); }
             if (tick) world.hitEnemy(e, dmg, { p: o, kind: 'skill', noGuard: true, x: z.x, y: z.y });
           }
         } });
@@ -212,7 +212,7 @@
             if (e.hp <= 0 || e.spawnT > 0 || U.dist2(e.x, e.y, z.x, z.y) >= (z.r + e.r) ** 2) continue;
             world.slowEnemy(e, 0.4, 0.3);
             e.blind = Math.max(e.blind || 0, 0.3);
-            if (smoke) e.judged = Math.max(e.judged || 0, 0.3);
+            if (smoke) e.vulnT = Math.max(e.vulnT || 0, 0.3);
           }
         } });
       for (let i = 0; i < 6; i++) { const an = i * U.TAU / 6; this.emit({ t: 'puff', x: Math.round(p.x + Math.cos(an) * r * 0.5), y: Math.round(p.y + Math.sin(an) * r * 0.5), c: '#8a86a0' }); }

@@ -31,11 +31,11 @@
       kbx: 0, kby: 0, st: 'move', t: 0, cd: this.rng.range(0.6, 1.6), face: 1, flash: 0, stun: 0, frozen: 0, elite: null, ward: 0, wardMax: 0,
       boss: !!def.boss, fly: !!def.fly, target: null, tgtT: 0, aimA: 0, guardA: 0, contactCd: 0, spawnT: opts.spawnT || 0,
       phase: 1, vars: {}, strafe: this.rng.sign(), wob: this.rng.range(0, 6.28), exposed: false, recoil: 0,
-      // statuses: burn/bleed pools, chill, charge, hero debuffs; slow/windMul/dmgTakenMul are read by ai.js and hitEnemy
+      // statuses: burn/bleed pools, chill, charge, hero debuffs (judged = Cleric Judgment, vulnT = Rain/Smoke vulnerability); slow/windMul/dmgTakenMul are read by ai.js and hitEnemy
       burn: 0, burnPool: 0, burnTick: 0, burnOwner: null, bleedPool: 0, bleedTick: 0, bleedOwner: null,
       chill: 0, chillT: 0, chillOwner: null, freezeRes: 0, freezeResT: 0, charge: 0, chargeOwner: null, dischargeT: 0,
       hpLever: def.boss ? def.hp / def.refHp : this.threat().hp, // HP-relative statuses (chill, Conflagration, Wildfire) ignore this stratum lever
-      mark: 0, judged: 0, blind: 0, sunder: 0, sunderOwner: null, slow: 1, slowAmt: 0, slowT: 0, windMul: 1, dmgTakenMul: 1, invulnT: 0, killed: false,
+      mark: 0, judged: 0, vulnT: 0, blind: 0, sunder: 0, sunderOwner: null, slow: 1, slowAmt: 0, slowT: 0, windMul: 1, dmgTakenMul: 1, invulnT: 0, killed: false,
     };
     if (opts.elite) this.makeElite(e, opts.affix);
     this.enemies.push(e);
@@ -94,7 +94,7 @@
     if (p && !src.noProc && st.shatter && e.frozen > 0 && !src.noShatter) { dmg *= 1 + st.shatter; shatter = true; }
     let vuln = 1;
     if (e.mark > 0) vuln += 0.25;
-    if (e.judged > 0) vuln += 0.2;
+    if (e.judged > 0 || e.vulnT > 0) vuln += 0.2; // Judgment and skill-granted vulnerability share one +20%
     if (e.frozen > 0) vuln += 0.25;
     if (e.sunder && p && e.sunderOwner === p.pid) vuln += 0.04 * e.sunder;
     dmg *= vuln;
@@ -327,6 +327,7 @@
     if (e.frozen > 0) e.frozen -= dt;
     if (e.stun > 0) e.stun -= dt;
     if (e.judged > 0) e.judged -= dt;
+    if (e.vulnT > 0) e.vulnT -= dt;
     if (e.blind > 0) e.blind -= dt;
     let slow = 1 - Math.min(0.45, e.chill / 180);
     if (e.slowT > 0) { e.slowT -= dt; slow *= 1 - e.slowAmt; } else e.slowAmt = 0;
