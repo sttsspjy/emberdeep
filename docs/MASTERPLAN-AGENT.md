@@ -11,7 +11,7 @@
 
 ## In-progress
 - F2-A `fix/f2-sustain`: shared sustain cap (~0.5% max HP/s) over leech/steal/blessed/on-kill heals; each sustain source ≤ +5 win points; Gloom hit ≤ 25% max HP.
-- F2-C `feat/f2-lantern`: per-room light cost on doors/map + small drain; dread adds elites/loot, not HP/waves; vision shrink ≤ 15%; Gloom hunter at Dark/Lightless (fast, telegraphed lunges); flare (F, 8 light) and oil (+35) drive it off; boss-door light reward; drain paused during party offers.
+- Wave 3a: HUD `feat/hud-redesign` · Juice `feat/juice` · Perf A `fix/perf-draw-a` (worktrees wt-hud, wt-juice, wt-pa).
 
 ## Done
 - Prep refactor: build.js / skills.js / classboons.js split behind hooks.
@@ -20,6 +20,7 @@
 - W7 balance: World.THREAT, boss HP, XP, gold ×0.65, drain, Hearth steps; tools/simpool.js; smart-pick bot.
 - F1: stealth last-seen targeting, telegraph stall/cancel, wind-up helper, vulnT, damage-based build-up, Cinder Arms on exploding weapons, client gloom-safe check, sim-time shards, burn level + vuln in snapshot v5, fixed 1/60 host step + render interpolation, FX pooling, dead code, stats.evo single source, hooks list. Bots: none 2% · mid 31% · max 73%, deterministic.
 - F2-B pacing: EVO_AFFINITY 8, KEY_AFFINITY 4, level boon on even levels, boss epic only III/V, anvil odd strata, one shop build item, reward odds retuned. Median evolution stratum III. Bots: none 0% · mid 5% · max 33% (balance retunes).
+- F2-C lantern: ROOM_COST 10/14/7 (first entry), drain ×4 slower, DREAD hp/wave 1 with elites +15/30/45%, gold ×1.5/2/2.5, reward upgrade 25/40% and Dark+ affix pool, Gloom hunter (8 s Dark, 3 s Lightless; 0.9× hero speed, 0.7 s wind-up lunge, touch 22% max HP), flare F (8 light, Gloom away 12 s, blind 1.5 s r160), oil +35 banishes, boss-door heal/shield/gold/embers, drain and Gloom delay paused during safe-room offers, N.VERSION 6. Explore sweep still monotone (more rooms = more wins): balance must fix.
 - Menus: design tokens in style.css (1u scales with viewport), title Descend/Hearth/Heroes/Settings, binding table `ED.Input.ACTIONS/DEFAULTS` + rebinding (skill1 Q/RMB, skill2 E, flare F) saved in settings.
 - Perf profile (2560×1440, RTX 4070S, background bots running): cost = canvas draw ops rasterized in the GPU process (~34 paint + 82 state ops per foe); not sim (0.66 ms/step at 80 foes), resolution, post or lighting. Solo peak scene mean 7.9–9.0 ms, p95 22; 80 foes 12.3 ms (sprites 6.3–7.2, status 2.2–2.7, FX 1.5); at solo peak zones −2.7, projectiles −1.4, sprites −1.9. Harnesses: scratchpad `perf/` (bench, crowd.js, ablation switches).
 
@@ -36,4 +37,4 @@
 ## Logs
 - 2026-10-20: rework on `feat/wickdeep-rework`; W1–W7 + P2-A/B committed; handoff HANDOFF-2026-10-20.md.
 - 2026-10-20 (PC 2): F1 merged; F2 mechanisms, menu redesign and perf profiling running in worktrees.
-- 2026-10-21: F2-B and menus merged; perf profiled; F2-A/F2-C running.
+- 2026-10-21: F2-B, menus, F2-C merged; perf profiled. Bots (F1+F2-B+F2-C, smart, 384): none 10% · mid 33% · max 53%, fresh winners 37 min; deterministic. F2-A and wave 3a running.
