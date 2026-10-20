@@ -1,7 +1,7 @@
 // Usage: node tools/sim.js <heroes> <runs> <botSkill 0-1> <meta none|mid|max> [classes|-] [pact] [--pick=random|smart] [--force=id,id] [--seed0=N] [--explore=minLight] [--quiet]   (parallel batches: tools/simpool.js)
 // Headless simulation harness: loads the game's sim files in a VM and drives bot heroes through full runs (deterministic per seed: the bot has its own seeded RNG).
-// Bot policy: fight, claim room rewards, use rest sites and shops, then explore unvisited rooms nearest-first while the lantern
-// is at least 30% full and head for the boss once it dims (the exploration/lantern trade-off).
+// Bot policy: fight, claim room rewards, use rest sites and shops, then explore unvisited rooms nearest-first while entering the next one
+// (its light cost paid) leaves the lantern at least EXPLORE_MIN_LIGHT full, else head for the boss (the exploration/lantern trade-off).
 // Pick policies: 'random' takes a random card; 'smart' (PICK=smart) follows the build order in smartScore (evolution > keystone > duo > owned path > gate while < 2 paths > neutral).
 // --force: boon/relic ids granted at run start (a gate id replaces the random start pick; other boons and relics are added) for fairness tests.
 const fs = require('fs');
@@ -17,7 +17,7 @@ for (const f of files) vm.runInContext(fs.readFileSync(ROOT + f, 'utf8'), ctx, {
 const ED = ctx.ED;
 const U = ED.U, T = ED.CONST.TILE, D = ED.Dungeon;
 
-const EXPLORE_MIN_LIGHT = 0.3; // below this light fraction the bot stops exploring and goes for the boss
+const EXPLORE_MIN_LIGHT = 0.3; // the bot stops exploring when the next room would leave the lantern below this fraction, and goes for the boss
 const PER_HERO_REWARDS = ['class', 'forge', 'epic', 'vigor'];
 const MAX_SECONDS = 60 * 60; // a run that is still going after an hour of game time counts as a loss
 // Neutral boons in the order a sensible player takes them (damage and defence first).
@@ -74,20 +74,27 @@ function wantedProp(w, p) {
   return best;
 }
 
-// Direction toward the next room to visit: nearest unvisited non-boss room while the lantern holds, else the boss. rec.turn[stratum] logs the light when it first heads for the boss.
+// Direction toward the next room to visit: the nearest unvisited non-boss room while entering it (its light cost paid) leaves the lantern at or above minLight, else the boss.
+// rec.turn[stratum] logs the light when it first heads for the boss.
 function exploreDir(w, p, rec, minLight) {
   const room = w.room, fl = w.floor;
   const frac = w.lightMax ? w.light / w.lightMax : 1;
-  const exploring = !w.lightMax || frac >= (minLight ?? EXPLORE_MIN_LIGHT);
-  const unvisited = fl.rooms.some(r => !w.roomState[r.id].visited && r.type !== 'boss');
-  const target = unvisited && exploring ? null : fl.boss;
-  if (target !== null && rec && !rec.turn[w.stratum]) rec.turn[w.stratum] = { light: Math.round(frac * 100) / 100, explored: !unvisited };
-  const prev = {}; prev[room.id] = -1; const q = [room.id]; let found = null;
-  while (q.length) {
-    const id = q.shift(); const r = fl.rooms[id];
-    if (id !== room.id && ((target === null && !w.roomState[id].visited && r.type !== 'boss') || id === target)) { found = id; break; }
-    for (const dd in r.doors) { const n = r.doors[dd]; if (n >= 0 && prev[n] === undefined) { if (fl.rooms[n].type === 'boss' && target === null) continue; prev[n] = id; q.push(n); } }
+  const search = (target) => { // BFS from the current room: nearest unvisited non-boss room (target null) or the target room
+    const prev = {}; prev[room.id] = -1; const q = [room.id];
+    while (q.length) {
+      const id = q.shift(); const r = fl.rooms[id];
+      if (id !== room.id && ((target === null && !w.roomState[id].visited && r.type !== 'boss') || id === target)) return { found: id, prev };
+      for (const dd in r.doors) { const n = r.doors[dd]; if (n >= 0 && prev[n] === undefined) { if (fl.rooms[n].type === 'boss' && target === null) continue; prev[n] = id; q.push(n); } }
+    }
+    return { found: null, prev };
+  };
+  let hit = search(null);
+  const exploring = hit.found !== null && (!w.lightMax || (w.light - ED.World.roomCost(fl.rooms[hit.found].type)) / w.lightMax >= (minLight ?? EXPLORE_MIN_LIGHT));
+  if (!exploring) {
+    if (rec && !rec.turn[w.stratum]) rec.turn[w.stratum] = { light: Math.round(frac * 100) / 100, explored: hit.found === null };
+    hit = search(fl.boss);
   }
+  const { found, prev } = hit;
   if (found === null) return null;
   let step = found; while (prev[step] !== room.id) step = prev[step];
   const dd = Object.keys(room.doors).find(k => room.doors[k] === step);

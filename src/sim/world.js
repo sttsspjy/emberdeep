@@ -136,7 +136,14 @@
   ];
   // Per-stratum threat on top of the base scales: foe HP, wave budget, `cdRate` = extra cooldown recovery (0.2 = attack timers tick 20% faster, -0.2 = 20% slower) and the boss pause between attacks (x).
   W.THREAT = [{ hp: 3, dmg: 0.5, wave: 1, cdRate: -0.4, pause: 2 }, { hp: 3, dmg: 0.6, wave: 1, cdRate: -0.3, pause: 1.7 }, { hp: 3, dmg: 1, wave: 1.05, cdRate: -0.1, pause: 1.4 }, { hp: 1.6, dmg: 1, wave: 1.1, cdRate: 0, pause: 1.2 }, { hp: 4, dmg: 1, wave: 1.2, cdRate: 0.15, pause: 1 }, { hp: 2.55, dmg: 1, wave: 1.3, cdRate: 0.3, pause: 0.9 }];
-  W.DRAIN_SECS = [250, 220, 205, 200, 200, 200]; // seconds for a full unupgraded lantern to burn out, per stratum
+  W.DRAIN_SECS = [1000, 880, 820, 800, 800, 800]; // seconds for a full unupgraded lantern to burn out on the slow per-second drain, per stratum
+  // Entering a room not yet visited costs this much light (of 100, not scaled by Deep Wick); revisits, the start room and the boss room are free. Shown on doors and the map.
+  W.ROOM_COST = { combat: 7, elite: 10, treasure: 5, shop: 5, event: 5, rest: 5 };
+  W.roomCost = (type) => W.ROOM_COST[type] || 0;
+  // Dread tier of a light fraction.
+  W.tierOf = (f) => f >= 0.5 ? 0 : f >= 0.25 ? 1 : f > 0 ? 2 : 3;
+  // Boss-door reward for the light left (fraction f): every living hero heals `heal` of max HP; the party gains `gold` and `embers`.
+  W.bossLight = (f, stratum) => ({ heal: 0.3 * f, gold: Math.round(f * (10 + 5 * stratum)), embers: Math.round(f * (2 + stratum)) });
 
   // Gold dropped by a 'gold' room reward (shared with the UI): 15 + 8 per stratum, times the dread gold bonus and the global gold multiplier.
   W.rewardGold = (stratum, dreadGold) => Math.round((15 + 8 * stratum) * (dreadGold || 1) * W.GOLD_MUL);
@@ -285,10 +292,12 @@
     this.roomEpoch = (this.roomEpoch || 0) + 1;
     const room = this.room = this.floor.rooms[id];
     const rs = this.roomState[id];
-    if (!rs.visited) this.run.roomsVisited++;
+    let cost = 0, atBoss = false;
+    if (!rs.visited) { this.run.roomsVisited++; cost = W.roomCost(room.type); }
     rs.visited = true; rs.known = true;
+    if (cost > 0) { this.light = Math.max(0, this.light - cost); this.updateDread(); } // paid before the room's encounter is planned
     this.gloomT = null; this.gloomOut = false;
-    if (room.type === 'boss' && !rs.cleared) { this.bossTier = this.dread.tier; this.run.lightAtBoss.push(Math.round(this.light / this.lightMax * 100) / 100); }
+    if (room.type === 'boss' && !rs.cleared) { this.bossTier = this.dread.tier; this.run.lightAtBoss.push(Math.round(this.light / this.lightMax * 100) / 100); atBoss = true; }
     for (const d in room.doors) if (room.doors[d] >= 0) this.roomState[room.doors[d]].known = true;
     let k = 0;
     const pos = [];
@@ -306,7 +315,8 @@
     if (!rs.cleared) this.beginEncounter(room, rs);
     this.checkFullClear();
     this.computeFlow();
-    this.emit({ t: 'room', id, from: fromDir || '', pos, locked: this.locked, ep: this.roomEpoch });
+    this.emit({ t: 'room', id, from: fromDir || '', pos, locked: this.locked, ep: this.roomEpoch, lc: cost });
+    if (atBoss) this.bossLantern();
   };
 
   W.prototype.collectAll = function () {
@@ -574,12 +584,12 @@
     return 100 * (1 + 0.06 * rank);
   };
 
-  // Burns the lantern outside boss rooms (the boss room freezes the tier) and, Lightless, stalks regular rooms with a Gloom.
+  // Burns the lantern slowly outside boss rooms (the boss room freezes the tier; no drain while a safe room waits on a boon pick) and, Lightless, stalks regular rooms with a Gloom.
   W.prototype.updateLantern = function (dt) {
     const room = this.room;
     if (!room) return;
-    if (room.type !== 'boss') {
-      this.light = Math.max(0, this.light - dt * 100 / (W.DRAIN_SECS[this.stratum - 1] || 300));
+    if (room.type !== 'boss' && !this.offerHold()) {
+      this.light = Math.max(0, this.light - dt * 100 / (W.DRAIN_SECS[this.stratum - 1] || 800));
       this.updateDread();
     }
     if (this.dread.tier === 3 && room.type !== 'boss' && room.type !== 'start' && !this.gloomOut && ED.ENEMIES.gloom) {
@@ -591,16 +601,42 @@
   // Recomputes the dread tier from the light fraction; w.dread carries the multipliers read at spawn and at room rewards.
   W.prototype.updateDread = function () {
     const f = this.lightMax > 0 ? this.light / this.lightMax : 0;
-    const tier = f >= 0.5 ? 0 : f >= 0.25 ? 1 : f > 0 ? 2 : 3;
+    const tier = W.tierOf(f);
     if (tier === this.dread.tier) return;
     this.dread = Object.assign({}, W.DREAD[tier]);
     this.emit({ t: 'dread', tier });
   };
 
+  // True while the room is safe and a hero has a boon offer open.
+  W.prototype.offerHold = function () {
+    if (!this.isSafe()) return false;
+    for (const p of this.players.values()) if (p.offer) return true;
+    return false;
+  };
+
+  // Any light gained banishes the Gloom (it returns only if the lantern runs dry again).
   W.prototype.addLight = function (amt, x, y) {
     this.light = Math.min(this.lightMax, this.light + amt);
     this.updateDread();
     this.emit({ t: 'oil', x, y, v: amt });
+    if (amt > 0) this.banishGloom();
+  };
+
+  W.prototype.banishGloom = function () {
+    for (const e of this.enemies) if (e.def.gloom && e.hp > 0) { e.hp = 0; this.emit({ t: 'banish', x: Math.round(e.x), y: Math.round(e.y) }); }
+    this.zones = this.zones.filter(z => !z.gloom);
+    this.gloomOut = false; this.gloomT = null;
+  };
+
+  // Entering the boss room turns the light left into a reward (see W.bossLight): heals the living heroes, drops gold, adds embers.
+  W.prototype.bossLantern = function () {
+    const f = this.lightMax > 0 ? this.light / this.lightMax : 0;
+    if (f <= 0) return;
+    const R = W.bossLight(f, this.stratum), heroes = this.alivePlayers();
+    for (const p of heroes) this.healPlayer(p, p.maxHp * R.heal);
+    this.run.embers.rooms += R.embers;
+    if (R.gold > 0 && heroes.length) this.dropGold(heroes[0].x, heroes[0].y, R.gold, true);
+    this.emit({ t: 'wick', f: Math.round(f * 100), heal: Math.round(R.heal * 100), gold: R.gold, embers: R.embers });
   };
 
   // Telegraphed spawn at the floor point farthest from every living hero.

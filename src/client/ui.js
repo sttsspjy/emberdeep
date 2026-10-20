@@ -161,7 +161,7 @@
     const tierNext = ED.UPGRADES.find(u => u.tier > p.stats.deepest);
     const lines = [
       `<b>Paths:</b> follow up to ${ED.MAX_GATES} of ${ED.PATH_IDS.map(k => pathName(k, true)).join(', ')}. Each stratum is weak to one element.`,
-      '<b>Lantern:</b> exploring burns light. The dimmer it gets, the harder foes hit and the more they pay.',
+      '<b>Lantern:</b> every new room costs light (shown on its door). The dimmer it gets, the harder foes hit and the more they pay; spare light heals you at the boss door.',
     ];
     if (p.stats.runs === 0) lines.push('<b>First goal:</b> reach the Bone Warden at the end of the Ossuary. Every descent pays embers, win or lose.');
     else if (next) lines.push(`<b>Next hero:</b> ${ED.CLASSES[next].name} (${esc(ED.CLASSES[next].unlock.text)}).`);
@@ -482,7 +482,7 @@
     $('sheet-paths').innerHTML = owned.map(k => pathRow(k, me, evoPath)).join('') + '<div class="path-row empty">Open path slot</div>'.repeat(Math.max(0, ED.MAX_GATES - owned.length));
     // stratum affinity: now and next
     const biome = ED.biomeFor(view.stratum), nb = view.stratum < ED.BIOMES.length ? ED.biomeFor(view.stratum + 1) : null;
-    $('sheet-strat').textContent = `Stratum ${U.roman(view.stratum)} · ${biome.name}`;
+    $('sheet-strat').innerHTML = `Stratum ${U.roman(view.stratum)} · ${esc(biome.name)}<br><small>Lantern ${Math.round(100 * view.light / Math.max(1, view.lightMax))}% · map numbers: light each unvisited room costs</small>`;
     $('sheet-aff').innerHTML = `<div class="aff-row">${affChips(biome)}</div>` + (nb ? `<div class="aff-row next"><span class="lbl">Next · ${nb.short}</span>${affChips(nb, true)}</div>` : '');
     const mc = $('map-canvas'), c = mc.getContext('2d');
     c.clearRect(0, 0, mc.width, mc.height);

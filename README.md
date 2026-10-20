@@ -32,7 +32,7 @@ Aiming is automatic by default. Switch to mouse aiming in Settings. Gamepads als
 
 ### The lantern and Dread
 
-Your lantern burns while you explore (not in boss rooms): a full lantern lasts about 4 minutes in the first stratum and about 3 1/3 minutes from the fourth on and refills when you enter the next one. Exploring more rooms means more power, but as the light drops the Deep grows stronger. Lantern oil (room rewards, shops) and the **Deep Wick** Hearth upgrade give more light.
+Every room you have not visited yet costs lantern light: the number on its door (and on the map, and in the Tab map) says how much (combat 7, elite 10, anything else 5 out of 100; red means the room drops you to a darker tier). Going back through a room you have visited is free. The lantern also burns slowly while you stay on a floor, but not in boss rooms and not while a safe room waits for a boon pick. It refills when you enter the next stratum. Exploring more rooms means more power, but as the light drops the Deep grows stronger. **Light you still carry when you step into the boss room heals the whole party** (up to 30% of max health with a full lantern) and pays a little gold and embers; the door and the lantern panel show what it will give. Lantern oil (room rewards, shops) and the **Deep Wick** Hearth upgrade give more light.
 
 | Light left | Tier | Foe health | Foe damage | Elite chance | Wave size | Room gold and embers |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -41,7 +41,7 @@ Your lantern burns while you explore (not in boss rooms): a full lantern lasts a
 | Under 25% | Dark | x1.45 | x1.1 | +25% | x1.2 | x2 |
 | 0% | Lightless | x1.8 | x1.25 | +40% | x1.3 | x2 |
 
-When the lantern is empty, a **Gloom** stalks you in every room: it cannot be hurt, walks through walls and hits hard, so keep moving or leave the room. The boss takes the tier you carried into its room. Running dry never ends a descent.
+When the lantern is empty, a **Gloom** stalks you in every room: it cannot be hurt, walks through walls and hits hard, so keep moving or leave the room. Any lantern oil banishes it until the light runs dry again. The boss takes the tier you carried into its room. Running dry never ends a descent.
 
 ## Builds: paths, weaknesses, evolutions
 

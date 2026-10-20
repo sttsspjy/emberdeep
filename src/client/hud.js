@@ -23,7 +23,7 @@
   H.txt = txt;
   const ghost = {};
   const TIER = [['Bright', '#ffd36b'], ['Dim', '#e6a050'], ['Dark', '#c0603a'], ['Lightless', '#8a2a2a']];
-  const TIER_HINT = ['The lantern burns bright.', 'The Deep grows bolder.', 'Darkness gathers. Foes grow fierce.', 'Lightless! A Gloom stalks the rooms.'];
+  const TIER_HINT = ['The lantern burns bright.', 'The Deep grows bolder.', 'Darkness gathers. Foes grow fierce.', 'Lightless! A Gloom stalks the rooms. Oil banishes it.'];
   const lantern = { view: null, tier: 0, hint: '', t: 99 };
   // Weapon name with its evolution prefix ('Cinder Longsword'); falls back to the class name before stats exist.
   H.weaponName = (p) => {
@@ -122,7 +122,7 @@
 
     // ---------- minimap & stratum ----------
     const mw = 184 * k, mh = 116 * k, mx = W - pad - mw, my = pad;
-    panel(c, mx, my, mw, 214 * k, 10 * k, 'rgba(14,10,8,0.72)', 'rgba(90,66,50,0.8)');
+    panel(c, mx, my, mw, 240 * k, 10 * k, 'rgba(14,10,8,0.72)', 'rgba(90,66,50,0.8)');
     const biome = ED.biomeFor(view.stratum);
     txt(c, biome.name, mx + mw / 2, my + 13 * k, 12 * k, biome.pal.ui, FD, 'center', 700);
     // stratum affinity: foes are weak to one element and resist another
@@ -157,6 +157,10 @@
       c.globalAlpha = hint ? U.clamp(6 - lantern.t, 0, 1) : 1;
       txt(c, hint || (parts.length ? parts.join(' · ') : 'Foes at normal strength'), mx + mw / 2, ly + 28 * k, 9.5 * k, hint ? tc : '#a99886', FB, 'center', 700);
       c.globalAlpha = 1;
+      // what the light is worth: each unvisited room costs light (numbers on the doors and map); light left at the boss door heals the party
+      const Wd = ED.World, bl = Wd.bossLight(lf, view.stratum);
+      txt(c, `New room: ${Wd.ROOM_COST.combat} light · elite ${Wd.ROOM_COST.elite} · other ${Wd.ROOM_COST.shop}`, mx + mw / 2, ly + 41 * k, 9.5 * k, '#ffd9a0', FB, 'center', 700);
+      txt(c, bl.heal > 0 ? `Boss door: heal ${Math.round(bl.heal * 100)}% · +${bl.gold} gold · +${bl.embers} embers` : 'Boss door: no light left to spare', mx + mw / 2, ly + 54 * k, 9.5 * k, bl.heal > 0 ? '#86d38f' : '#a99886', FB, 'center', 700);
     }
 
     // ---------- xp & gold (bottom centre) ----------
@@ -269,6 +273,11 @@
       if (open && r.reward && (r.type === 'combat' || r.type === 'elite')) { // reward preview: whole icon in plain combat rooms, a corner badge in elite rooms
         const ri = ED.Render.rewardIcon(r.reward, cls), big = r.type === 'combat', z = big ? s * 0.76 : s * 0.5;
         c.drawImage(ED.Icons.canvas(ri[0], ri[1], 64), big ? rx + s * 0.12 : rx + s - z * 0.9, big ? ry + s * 0.12 : ry + s - z * 0.9, z, z);
+      }
+      const cost = st.visited ? 0 : ED.World.roomCost(r.type); // light the unvisited room costs, bottom-right of its cell
+      if (cost > 0) {
+        c.save(); c.font = `800 ${Math.max(8, cell * 0.4)}px ${FB}`; c.textAlign = 'right'; c.textBaseline = 'alphabetic';
+        c.lineWidth = 3; c.strokeStyle = 'rgba(0,0,0,0.9)'; c.strokeText(cost, rx + s + 1, ry + s + 1); c.fillStyle = '#ffd9a0'; c.fillText(cost, rx + s + 1, ry + s + 1); c.restore();
       }
     }
   };

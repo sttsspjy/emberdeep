@@ -6,7 +6,7 @@ Canonical rules and numbers. Code follows this file; balance passes may retune n
 
 1. **Builds are chosen, not rolled.** Paths gate boons, rooms show their reward before you enter, commitment unlocks a keystone and a weapon evolution.
 2. **Every element has a job.** Burn = sustained damage, Freeze = control/burst, Discharge = crowds. Each stratum is weak to one element and resists another.
-3. **Exploring is a wager.** More rooms = more power, but the lantern dims and the Deep grows stronger.
+3. **Exploring is a wager.** More rooms = more power, but every new room costs lantern light and the Deep grows stronger as it dims; light you keep heals you at the boss door.
 4. **Fights are read, not out-healed.** Low chip damage, heavy telegraphed damage, no sustain by default.
 
 ## 1. Damage model
@@ -222,7 +222,9 @@ Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat
 ## 7. Lantern and Dread
 
 - `w.light` ∈ [0, lightMax]; `lightMax = 100 × (1 + 0.06 × Deep Wick rank)` (best in party). Refills to max at each stratum.
-- Drain per second = `100 / [250, 220, 205, 200, 200, 200][s−1]`, only while playing, not in the boss room, not during stratum transition (solo boon picking freezes the world).
+- **Room cost**: entering a room not yet visited costs light, paid before its encounter is planned (the tier it leaves you in applies to that room): `World.ROOM_COST` combat 7 · elite 10 · treasure, shop, event, rest 5 (of 100, not scaled by Deep Wick). Revisits, the start room and the boss room are free. Light cannot go below 0 (running over means Lightless, never a block). Clients derive the cost from the room type: the number is drawn on each unvisited door preview (red when it drops the tier) and on each unvisited map cell; the room event carries `lc` (cost paid).
+- Drain per second = `100 / [1000, 880, 820, 800, 800, 800][s−1]`, only while playing, not in the boss room, not during stratum transition. No drain while the room is safe and any hero has an open boon offer (solo also freezes the world).
+- **Boss door**: on first entering the boss room the light left converts into a reward, `World.bossLight(f, s)` with `f = light / lightMax`: every living hero heals `0.3 f` of max HP (healing multipliers apply), the party gets `round(f (10 + 5s))` gold (not scaled by dread or the gold multiplier) and `round(f (2 + s))` embers (counted with room embers). Light is not consumed (the boss still takes the tier of that moment). Emits `{t:'wick', f, heal, gold, embers}`; the door preview and the HUD lantern panel show the heal on offer.
 - **Dread tier** by `light / lightMax`: ≥ 0.5 Bright (0) · ≥ 0.25 Dim (1) · > 0 Dark (2) · 0 Lightless (3).
 
 | Tier | Foe HP & damage | Elite chance | Wave budget | Gold & embers from rooms |
@@ -233,7 +235,7 @@ Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat
 | Lightless | HP ×1.8, damage ×1.25 | +0.40 | ×1.3 | ×2 |
 
 - `w.dread` holds the tier's `{hp, dmg, elite, wave, gold}`: `hp` and `dmg` apply at spawn (not to minions, allies or the Gloom), `elite` adds to a room's elite chance, `wave` multiplies the wave budget, `gold` multiplies room-clear gold and embers and the `gold` reward. The boss takes the tier of the moment its room is entered (light does not drain there).
-- **Lightless**: 4 s after entering a non-boss, non-start room, a telegraphed **Gloom** stalker spawns: invulnerable, passes through walls, speed 50, contact damage `35 × (1 + 0.22(s−1) + 0.03(s−1)²) × threat damage` (pact multipliers apply, dread does not), ignored by room-clear checks; despawns when you leave the room.
+- **Lightless**: 4 s after entering a non-boss, non-start room, a telegraphed **Gloom** stalker spawns: invulnerable, passes through walls, speed 50, contact damage `35 × (1 + 0.22(s−1) + 0.03(s−1)²) × threat damage` (pact multipliers apply, dread does not), ignored by room-clear checks; despawns when you leave the room. **Any light gained** (`addLight`: oil reward, shop oil) banishes it: the Gloom and a pending telegraph are removed (`{t:'banish', x, y}`), its timer resets and it returns only if the lantern runs dry again.
 - Emits `{t:'dread', tier}` on tier change. Renderer darkens the world and shrinks hero light with the light fraction.
 
 ## 8. Enemies
@@ -274,5 +276,5 @@ Smart pick policy unless noted; 384 runs each, six heroes in rotation, `node too
 | Three heroes, half-upgraded | 45–70% | 64% | — | 5.4 |
 
 - Pacing (half-upgraded): normal combat rooms 16 / 22 / 21 / 20 / 26 / 25 s per stratum (fresh 19 / 25 / 26 / 26 / 37 / 38 s), elite rooms 24-36 s (fresh 31-45 s), bosses 49 / 65 / 72 / 81 / 89 / 92 s (fresh 64-107 s). Strata I-II are the on-ramp: a fresh hero has 1-4 boons there, and longer rooms there fail the depth target.
-- Winning descent 25-28 min, final level 16-18. The lantern ends exploration on 44-66% of floors (rooms visited 77-91%); a bot that never turns back (explore-everything) wins 26% instead of 31% and reaches Lightless on 14% of floors instead of 6%.
+- Winning descent 25-28 min, final level 16-18. The bot explores the nearest unvisited room while paying its light cost leaves the lantern at or above `--explore` (default 0.3, `tools/sim.js` `EXPLORE_MIN_LIGHT`; negative = explore everything), else heads for the boss. Explore sweep: `node tools/simpool.js 1 96 0.75 mid --pick=smart --jobs=5 --explore=<minLight>` per setting (win %, rooms visited %, depth).
 - Forced from the start (half-upgraded, smart, 384 runs): no gate raises the win rate above 39% (Pyre 37, Rime 32, Storm 35, Steel 39, Blood 28, Spirit 36; random start 31); no relic above +15 points (Hourglass 41%).

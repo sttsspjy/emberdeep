@@ -729,13 +729,13 @@
     return { icon: ri[0], color: ri[1], badge: rm.type === 'elite' ? 'skull' : null };
   };
 
-  // Reward previews over the doors of the current room: neighbours not yet cleared, bobbing in front of each doorway.
+  // Reward previews over the doors of the current room: neighbours not yet cleared, bobbing in front of each doorway, with the lantern light the room costs (boss door: the heal on offer).
   const dpList = [], dpPool = [];
   function doorPreviews(view, room, t) {
     const out = dpList; let n = 0; // pooled: the list is consumed before the next call
     out.length = 0;
     if (view.locked || !view.floor) return out;
-    const me = view.players.get(R.local), cls = me ? me.cls : null, h = room.h * T, w = room.w * T;
+    const me = view.players.get(R.local), cls = me ? me.cls : null, h = room.h * T, w = room.w * T, Wd = ED.World, lm = view.lightMax, lf = lm > 0 ? U.clamp(view.light / lm, 0, 1) : 0;
     for (const d in room.doors) {
       const id = room.doors[d]; if (id < 0) continue;
       const nb = view.floor.rooms[id], st = view.roomState && view.roomState[id];
@@ -744,8 +744,13 @@
       const r = ED.Dungeon.doorRect(room, d), cx = (r.x0 + r.x1 + 1) / 2 * T, cy = (r.y0 + r.y1 + 1) / 2 * T;
       let x = cx, y = cy;
       if (d === 'n') y = T - 2; else if (d === 's') y = h - T - 6; else if (d === 'w') x = T * 0.5 + 6; else x = w - T * 0.5 - 6;
-      let o = dpPool[n]; if (!o) o = dpPool[n] = { x: 0, y: 0, color: '', ri: null };
-      o.x = x; o.y = y + Math.sin(t * 2.2 + x * 0.03 + y * 0.02) * 1.8; o.color = ri.color; o.ri = ri; out[n++] = o;
+      let o = dpPool[n]; if (!o) o = dpPool[n] = { x: 0, y: 0, color: '', ri: null, d: '', lab: '', lc: '' };
+      o.x = x; o.y = y + Math.sin(t * 2.2 + x * 0.03 + y * 0.02) * 1.8; o.color = ri.color; o.ri = ri; o.d = d; o.lab = ''; o.lc = '';
+      if (lm > 0) { // lantern label: the light an unvisited room costs (red when it drops the tier), or the boss-door heal
+        if (nb.type === 'boss') { const hp = Math.round(Wd.bossLight(lf, view.stratum).heal * 100); if (hp > 0) { o.lab = '+' + hp + '%'; o.lc = '#86d38f'; } }
+        else if (!(st && st.visited)) { const cost = Wd.roomCost(nb.type); if (cost > 0) { o.lab = '−' + cost; o.lc = Wd.tierOf(Math.max(0, view.light - cost) / lm) > Wd.tierOf(lf) ? '#ff7a5a' : '#ffd9a0'; } }
+      }
+      out[n++] = o;
     }
     return out;
   }
@@ -754,9 +759,17 @@
     const list = doorPreviews(view, room, t); if (!list.length) return;
     for (const pv of list) {
       let near = 1e9; for (const p of view.players.values()) if (!p.dead) near = Math.min(near, Math.hypot(p.x - pv.x, p.y - pv.y));
-      c.globalAlpha = U.clamp((near - 22) / 46, 0.22, 0.95);
+      const a = U.clamp((near - 22) / 46, 0.22, 0.95);
+      c.globalAlpha = a;
       c.drawImage(ED.Icons.canvas(pv.ri.icon, pv.color, 64), pv.x - 11, pv.y - 11, 22, 22);
       if (pv.ri.badge) c.drawImage(ED.Icons.canvas('skull', '#ff7a3a', 64), pv.x + 3, pv.y + 2, 12, 12);
+      if (pv.lab) { // lantern label on the room side of the icon; stays readable up close
+        c.save(); c.globalAlpha = Math.max(a, 0.7);
+        c.font = '800 8px "Alegreya Sans", sans-serif'; c.textAlign = 'left'; c.textBaseline = 'middle';
+        const tw = c.measureText(pv.lab).width, lx = pv.x - (tw + 11) / 2, ly = pv.d === 's' ? pv.y - 17 : pv.y + 17;
+        c.drawImage(ED.Icons.canvas('lantern', pv.lc, 64), lx, ly - 4.5, 9, 9);
+        c.lineWidth = 2.5; c.strokeStyle = 'rgba(0,0,0,0.85)'; c.strokeText(pv.lab, lx + 11, ly); c.fillStyle = pv.lc; c.fillText(pv.lab, lx + 11, ly); c.restore();
+      }
     }
     c.globalAlpha = 1;
   }
