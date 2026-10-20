@@ -115,6 +115,7 @@
     this.run.kills++;
     if (p) p.kills++;
     this.emit({ t: 'die', x: Math.round(e.x), y: Math.round(e.y), type: e.type, el: e.elite ? 1 : 0, r: e.r });
+    this.onEnemyKilledSkill(e, p, src);
     if (def.boss) { this.onBossKilled(e); return; }
     const xpMul = 1 + 0.35 * (s - 1);
     this.dropXp(e.x, e.y, def.xp * xpMul * (e.elite ? 3 : 1));
@@ -145,6 +146,25 @@
         if (this.rng.chance(ch)) this.spawnMinion(p, e.x, e.y, 10);
       }
     }
+  };
+
+  // Called every tick from updatePlayerBuild for a living, standing hero: dash and other per-tick combat effects.
+  W.updatePlayerCombat = function (p, dt) {
+    const st = p.stats;
+    // dash effects (host sees remote dashes through their state reports)
+    if (p.dashing) {
+      if (st.dashDmg) {
+        if (!p.dashHit) p.dashHit = new Set();
+        for (const e of this.enemies) {
+          if (e.hp <= 0 || p.dashHit.has(e.id)) continue;
+          if (U.dist2(e.x, e.y, p.x, p.y) < (e.r + p.r + 8) ** 2) { p.dashHit.add(e.id); this.hitEnemy(e, st.weapon.dmg * st.dashDmg, { p, kind: 'dash', knock: 80, kx: p.dashDx, ky: p.dashDy }); }
+        }
+      }
+      if (st.dashFire) {
+        p.dashTrail -= dt;
+        if (p.dashTrail <= 0) { p.dashTrail = 0.05; this.addZone({ kind: 'pfire', x: p.x, y: p.y, r: 22, dur: 2.2, dps: 6 + st.weapon.dmg * 0.6, owner: p.pid, team: 0 }); }
+      }
+    } else p.dashHit = null;
   };
 
   // ---------------- heroes take damage ----------------
@@ -376,9 +396,12 @@
     const keep = [];
     for (const z of this.zones) {
       z.t += dt;
-      if (z.kind === 'laser' && z.update) z.update(this, z, dt);
+      if (z.update) z.update(this, z, dt);
       const done = z.t >= z.dur;
-      if (z.kind === 'spawn') {
+      if (z.custom) {
+        // custom zones run entirely through z.update; z.onEnd fires once when they expire
+        if (done) { if (z.onEnd) z.onEnd(this, z); continue; }
+      } else if (z.kind === 'spawn') {
         if (done) {
           const e = this.spawnEnemy(z.type, z.x, z.y, { elite: z.elite, affix: z.affix });
           this.emit({ t: 'spawned', x: Math.round(z.x), y: Math.round(z.y), el: z.elite ? 1 : 0 });

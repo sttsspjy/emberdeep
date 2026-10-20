@@ -38,20 +38,15 @@
     if (st.regen > 0) this.healPlayer(p, st.regen * dt, true);
     if (st.aegis) p.aegisT = Math.max(0, p.aegisT - dt);
     p.guardCd -= dt; p.guardT -= dt; p.frozenCd -= dt; p.tranceT -= dt; p.wallT -= dt;
-    // dash effects (host sees remote dashes through their state reports)
-    if (p.dashing) {
-      if (st.dashDmg) {
-        if (!p.dashHit) p.dashHit = new Set();
-        for (const e of this.enemies) {
-          if (e.hp <= 0 || p.dashHit.has(e.id)) continue;
-          if (U.dist2(e.x, e.y, p.x, p.y) < (e.r + p.r + 8) ** 2) { p.dashHit.add(e.id); this.hitEnemy(e, st.weapon.dmg * st.dashDmg, { p, kind: 'dash', knock: 80, kx: p.dashDx, ky: p.dashDy }); }
-        }
-      }
-      if (st.dashFire) {
-        p.dashTrail -= dt;
-        if (p.dashTrail <= 0) { p.dashTrail = 0.05; this.addZone({ kind: 'pfire', x: p.x, y: p.y, r: 22, dur: 2.2, dps: 6 + st.weapon.dmg * 0.6, owner: p.pid, team: 0 }); }
-      }
-    } else p.dashHit = null;
+    this.updateSkills(p, dt);
+    this.updatePlayerCombat(p, dt);
+  };
+
+  // Called by playerSkill after any skill resolves (slot 0 = K, 1 = L).
+  W.onSkillCast = function (p, slot) {
+    const st = p.stats, area = 1 + st.area * 0.5;
+    if (st.overcharge) this.explode(p.x, p.y, 85 * area, st.weapon.dmg * 1.5 * st.overcharge + 10, 0, p, 'shock', true);
+    if (st.trance) p.tranceT = 4;
   };
 
   // ---------------- xp, levels and boons ----------------

@@ -10,6 +10,12 @@
   // Called from hurtPlayer before damage lands. Return true when a skill fully blocks the hit.
   W.skillBlock = function (p, amount, src) { return false; };
 
+  // Called every tick from updatePlayerBuild for a living, standing hero.
+  W.updateSkills = function (p, dt) { /* no timed skill state yet */ };
+
+  // Called from killEnemy for every slain foe (p = credited hero or null).
+  W.onEnemyKilledSkill = function (e, p, src) { /* no kill reactions yet */ };
+
   // data: { x0, y0, x1, y1 } for movement skills (performed by the hero's own client)
   W.playerSkill = function (p, a, data) {
     if (!p || p.downed || p.dead) return;
@@ -60,8 +66,7 @@
     } else if (skill === 'legion') {
       for (let i = 0; i < 3; i++) { const an = a + (i - 1) * 0.9; this.spawnMinion(p, p.x + Math.cos(an) * 26, p.y + Math.sin(an) * 26, 12); }
     }
-    if (st.overcharge) this.explode(p.x, p.y, 85 * area, w.dmg * 1.5 * st.overcharge + 10, 0, p, 'shock', true);
-    if (st.trance) p.tranceT = 4;
+    this.onSkillCast(p, 0);
     this.emit({ t: 'skill', pid: p.pid, k: skill, a: Math.round(a * 100) / 100, x: Math.round(p.x), y: Math.round(p.y) });
   };
 })(globalThis.ED || (globalThis.ED = {}));
