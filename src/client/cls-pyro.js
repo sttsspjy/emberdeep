@@ -73,10 +73,10 @@
 
   // ---------------- hero hook ----------------
   // One pixel flame tongue standing at (x, y) (world px, on the 2 px grid): rows of the fire ramp, widest at the base; hot = white tip.
-  function tongue(c, x, y, rows, hot) {
+  function tongue(c, x, y, rows, hot, wide) {
     const rp = FIRE;
-    c.fillStyle = rp[1]; c.fillRect(x - 2, y - 2, 4, 2);
-    c.fillStyle = rp[2]; c.fillRect(x - 2, y - 4, 4, 2);
+    c.fillStyle = rp[1]; c.fillRect(x - (wide ? 3 : 2), y - 2, wide ? 6 : 4, 2);
+    c.fillStyle = rp[2]; c.fillRect(x - 2, y - 4, 4, 2); if (wide) { c.fillStyle = rp[3]; c.fillRect(x - 1, y - 4, 2, 2); }
     if (rows >= 3) { c.fillStyle = rp[3]; c.fillRect(x - 1, y - 6, 2, 2); }
     if (rows >= 4) { c.fillStyle = hot ? rp[4] : rp[3]; c.fillRect(x - 1, y - 8, 2, 2); }
   }
@@ -108,10 +108,10 @@
     for (let i = 0; i < tg; i++) {
       const th = -Math.PI + (i + 0.5) / Math.max(tg, 1) * Math.PI, x = s2(Math.cos(th) * 11 * (0.7 + 0.3 * fr)), y = s2(top + 8 + Math.sin(th) * 6);
       const rows = 2 + Math.floor(Pix.hash(i * 3.7 + Math.floor(t * 9)) * (full ? 3 : 2.4));
-      tongue(c, x, y, Math.min(4, rows), hot);
+      tongue(c, x, y, Math.min(4, rows + (fr >= 0.6 ? 1 : 0)), hot, fr >= 0.6);
     }
     if (full) { c.fillStyle = rp[4]; for (let i = 0; i < 3; i++) { const a = t * 3 + i * TAU / 3; c.fillRect(s2(Math.cos(a) * 13), s2(top + 12 + Math.sin(a) * 6), 2, 2); } }
-    R().emit(p.x, p.y + top * 0.55, 12 + 14 * fr, '#ff7a2a', 0.12 + 0.3 * fr);
+    R().emit(p.x, p.y + top * 0.55, 16 + 20 * fr, '#ff7a2a', 0.2 + 0.45 * fr);
     R().light(p.x, p.y - 14, 36 + 40 * fr, '#ff8a2a', 0.2 + 0.5 * fr);
   }
 
