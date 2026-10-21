@@ -86,13 +86,13 @@
 
   // Hero medallion: portrait in a player-colour ring, cached per hero look. Returns { cv, w, h }.
   function medallion(me) {
-    const key = me.cls + '|' + me.slot + '|' + me.weapon + '|' + u;
+    const wid = (me.stats && me.stats.weaponId) || me.weapon, key = me.cls + '|' + me.slot + '|' + wid + '|' + u; // the held fork shows in the portrait
     if (medalKey === key && medal) return medal;
     if (medal) { medal.dead = true; Bmp.free(medal.cv); }
     const D = Math.round(u * 4.9), r = D / 2, l = lw(), cvs = mk(D, D), g = cvs.getContext('2d');
     const bg = g.createRadialGradient(r, r * 0.8, r * 0.1, r, r, r); bg.addColorStop(0, '#33271d'); bg.addColorStop(1, '#0d0806');
     g.fillStyle = bg; g.beginPath(); g.arc(r, r, r - l, 0, TAU); g.fill();
-    const pc = mk(D, D); ED.Sprites.portrait(pc, me.cls, me.slot, me.weapon);
+    const pc = mk(D, D); ED.Sprites.portrait(pc, me.cls, me.slot, wid);
     g.save(); g.beginPath(); g.arc(r, r, r - l, 0, TAU); g.clip(); g.drawImage(pc, 0, 0); g.restore();
     g.lineWidth = l * 1.8; g.strokeStyle = ED.PLAYER_COLORS[me.slot] || K.gold; g.beginPath(); g.arc(r, r, r - l * 0.9, 0, TAU); g.stroke();
     g.lineWidth = 1; g.strokeStyle = 'rgba(0,0,0,0.7)'; g.beginPath(); g.arc(r, r, r - l * 1.9, 0, TAU); g.stroke();

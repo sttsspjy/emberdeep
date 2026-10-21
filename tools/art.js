@@ -282,6 +282,8 @@ function build() {
   for (const [ch, [cx, cy]] of Object.entries(fontDef.cells)) {
     let b = cut(fontSheet, cx * fontDef.cw, cy * fontDef.ch, fontDef.cw, fontDef.ch);
     b = mapPixels(b, (r, g, bl, a) => (a ? [255, 255, 255, 255] : [0, 0, 0, 0]));
+    const ov = fontDef.override && fontDef.override[ch]; // hand-drawn glyph rows ('#' = ink) in place of the sheet's cell
+    if (ov) { b = bmp(fontDef.cw, fontDef.ch); for (let y = 0; y < ov.length; y++) for (let x = 0; x < ov[y].length; x++) if (ov[y][x] === '#') { const d = (y * b.w + x) * 4; b.data[d] = b.data[d + 1] = b.data[d + 2] = b.data[d + 3] = 255; } }
     const id = 'font.' + (ch.charCodeAt(0)).toString(16).padStart(2, '0'); glyphIds[ch] = id;
     fontAnims.push({ e: { id, page: fontDef.page, set: id, pivot: 'tl', fps: 0, loop: false, font: true }, fr: [b], fw: fontDef.cw, fh: fontDef.ch });
   }

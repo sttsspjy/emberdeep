@@ -15,7 +15,7 @@
   let MAXP = 500, lastHs = 0, pickT = 0;
   const calm = () => !!(ED.App && ED.App.settings && !ED.App.settings.shake); // "screen shake off" also mutes flashes and hit-stop
 
-  F.reset = () => { F.parts.length = 0; F.texts.length = 0; for (const s of F.slashes) if (s.sm) smearPool.push(s.sm); F.slashes.length = 0; hitSp.length = 0; F.rings.length = 0; F.bolts.length = 0; F.pops.length = 0; releaseGhosts(); F.stains.length = 0; F.sheets.length = 0; F.beams.length = 0; F.holyT = {}; F.chargeT = {}; F.msgs.length = 0; F.hurtAt = {}; F.banner = null; F.shake = 0; F.flash = null; F.anim = {}; F.aberr = 0; F.kick = 0; F.dread = 0; hsUntil = 0; ent.clear(); hitN = 0; };
+  F.reset = () => { F.parts.length = 0; F.texts.length = 0; for (const s of F.slashes) if (s.sm) smearPool.push(s.sm); F.slashes.length = 0; F.rings.length = 0; F.bolts.length = 0; F.pops.length = 0; releaseGhosts(); F.stains.length = 0; F.sheets.length = 0; F.beams.length = 0; F.holyT = {}; F.chargeT = {}; F.msgs.length = 0; F.hurtAt = {}; F.banner = null; F.shake = 0; F.flash = null; F.anim = {}; F.aberr = 0; F.kick = 0; F.dread = 0; hsUntil = 0; ent.clear(); hitN = 0; ED.Sprites.shotReset(); };
   F.setQuality = (q) => { MAXP = q === 'low' ? 180 : 500; };
   const lowFx = () => MAXP < 300;
   const cnt = (n) => Math.ceil(n * (MAXP < 300 ? 0.5 : 1) * F.crowd);
@@ -61,10 +61,15 @@
   };
   // Smear arc. A hero weapon swing (no life given) takes its sweep side and timing from the attack animation that was just started.
   F.slash = (x, y, a, r, arc, color, life) => {
-    const an = life === undefined ? F.lastAnim : null, L = life || 0.28;
-    if (an && an.col) color = an.col; // a hero swing wears the colour of the hero's path (steel without one)
-    if (F.slashes.length < 24) F.slashes.push({ x, y, a, r, arc, color, hot: U.mix(color, '#ffffff', 0.6), life: L, max: L, side: an ? an.side : (F.slashes.length & 1 ? 1 : -1), t0: an ? an.t0 : 0.02, t1: an ? an.t1 : 0.1, sm: null, hr: -1 });
+    const an = life === undefined ? F.lastAnim : null, L = life || 0.28, cl = an && color === CLEAVE_COL; // a Cleave keeps its gold
+    if (an && an.col && !cl) color = an.col; // a hero swing wears the colour of the hero's path (steel without one)
+    const fk = an ? an.fork : '', tk = fk === 'heavy' ? 1.4 : fk === 'swift' ? 0.55 : 1; // Heavy swings leave a 1.4x wider smear, Swift ones a thin bright one
+    if (fk === 'swift') color = U.mix(color, '#ffffff', 0.35);
+    if (F.slashes.length < 24) F.slashes.push({ x, y, a, r, arc, color, hot: U.mix(color, '#ffffff', 0.6), life: L, max: L, side: an ? an.side : (F.slashes.length & 1 ? 1 : -1), t0: an ? an.t0 : 0.02, t1: an ? an.t1 : 0.1, sm: null, hr: -1, tk: tk * (cl ? 1.25 : 1) });
+    if (cl) F.cleaveT = F.time;
+    if (cl && !lowFx()) { const ta = a, tx = x + Math.cos(ta) * r * 0.9, ty = y + Math.sin(ta) * r * 0.9; F.ring(tx, ty + 6, 22 * tk, CLEAVE_COL, 0.3, 3); } // Cleave shock ring at the tip of the blow
   };
+  const CLEAVE_COL = '#ffd36b';
   // Bright impact flash that also lights the scene. star: flare lines (crits).
   F.pop = (x, y, r, color, life, star) => { if (F.pops.length < 40) F.pops.push({ x, y, r, color, life: life || 0.16, max: life || 0.16, star: !!star }); };
   F.addShake = (v) => { if (ED.App && !ED.App.settings.shake) return; F.shake = Math.min(12, F.shake + v); };
@@ -112,7 +117,7 @@
     const ts = F.texts; n = 0;
     for (let i = 0; i < ts.length; i++) { const t = ts[i]; t.life -= dt; if (t.life <= 0) continue; t.y += t.vy * dt; t.vy *= Math.max(0, 1 - 2.5 * dt); ts[n++] = t; }
     ts.length = n;
-    tickSlashes(dt); tick(F.rings, dt); tick(F.bolts, dt); tick(F.pops, dt); tick(F.stains, dt); tick(F.beams, dt); tickHits(dt);
+    tickSlashes(dt); tick(F.rings, dt); tick(F.bolts, dt); tick(F.pops, dt); tick(F.stains, dt); tick(F.beams, dt);
     { const sh = F.sheets; n = 0; // sprite effects: age, drift; a one-shot ends after its last frame, a loop or static sprite after its life
       for (let i = 0; i < sh.length; i++) {
         const s = sh[i]; s.t += dt; if (s.t > 0) { s.x += s.vx * dt; s.y += s.vy * dt; }
@@ -136,8 +141,8 @@
   F.playerAttackAnim = (pid, a) => {
     const an = F.anim[pid] || (F.anim[pid] = { atkT: 9, side: 1, t0: 0.05, t1: 0.12, D: 0.3 });
     if (an.atkT < 0.03) return; // swing + atk events of one attack arrive together
-    const s = ED.Game && ED.Game.s, p = s && s.view.players.get(pid), w = p && ED.WEAPONS[p.weapon];
-    an.atkT = 0; an.side = -an.side; an.a = a; F.lastAnim = an;
+    const s = ED.Game && ED.Game.s, p = s && s.view.players.get(pid), wd = p && ED.Sprites.weaponArt(p), w = wd && wd.w;
+    an.atkT = 0; an.side = -an.side; an.a = a; an.fork = wd ? wd.fork : ''; F.lastAnim = an;
     const mp = p && p.boons ? ED.mainPath(p.boons) : null; an.col = mp && mp !== 'general' && PATH_COL[mp] ? PATH_COL[mp] : '#9fb0c0'; // smear outer band: the hero's path colour, steel without one
     if (w) {
       const tm = ED.Sprites.atkTimes(w); an.t0 = tm[0]; an.t1 = tm[1]; an.D = tm[2];
@@ -145,8 +150,8 @@
         const col = F.projColor(w.proj), x = p.x + Math.cos(a) * 20, y = p.y - 11 + Math.sin(a) * 20;
         F.pop(x, y, 9, col, 0.09); if (!lowFx()) F.burst(x, y, 3, { kind: 'spark', color: col, a, spread: 0.7, sp: 170, life: 0.14, size: 1.3, drag: 5 });
         if (ED.Actors && ED.Actors.on()) { // pixel flash: a spark at the string of a bow, an element-tinted star at the tip of a magic weapon (one frame)
-          if (w.look === 'bow' || w.look === 'crossbow') F.atlasFx('fx.hit.spark', x - Math.cos(a) * 10, y - Math.sin(a) * 10, { dur: 0.1 });
-          else F.atlasFx('fx.spark.magic', x, y, { fr: 1, dur: 0.07, add: true, variant: ED.Actors.tint('fx.spark.magic', col) });
+          if (w.look === 'bow' || w.look === 'crossbow') F.sheet('fx.hit.spark', x - Math.cos(a) * 10, y - Math.sin(a) * 10, { speed: 1.5 });
+          else F.sheet('fx.spark.magic', x, y, { frame: 1, life: 0.07, add: true, ramp: col });
         }
       }
     }
@@ -199,11 +204,11 @@
         const dx = (i + 0.5 - half) * K2 + ex, dy = (j + 0.5 - half) * K2 + ey, ax = dx * ca + dy * sa;
         if (ax < s0 || ax > hd) continue;
         const pp = -dx * sa + dy * ca, f = (ax - s0) / Math.max(1, hd - s0);
-        if (Math.abs(pp) > 0.7 + 2.4 * f) continue;
+        if (Math.abs(pp) > (0.7 + 2.4 * f) * sl.tk) continue;
         u[j * SM + i] = f > 0.72 ? cC : f > 0.38 ? cM : cO;
       }
     } else {
-      const Ro = sl.r * 0.94, base = sl.a - sd * arc / 2, Tm = U.clamp(sl.r * 0.4, 8, 24), tail = Math.min(arc, 1.9), hdA = head * arc, inner = (Ro - Tm) * (Ro - Tm), outer = Ro * Ro;
+      const Ro = sl.r * 0.94, base = sl.a - sd * arc / 2, Tm = Math.min(Ro * 0.9, U.clamp(sl.r * 0.4, 8, 24) * sl.tk), tail = Math.min(arc, 1.9), hdA = head * arc, inner = (Ro - Tm) * (Ro - Tm), outer = Ro * Ro;
       const T0 = tail, T1 = tail * 0.5, T2 = tail * 0.2;
       for (let j = 0; j < W; j++) for (let i = 0; i < W; i++) {
         const dx = (i + 0.5 - half) * K2 + ex, dy = (j + 0.5 - half) * K2 + ey, r2 = dx * dx + dy * dy;
@@ -237,40 +242,25 @@
     c.globalAlpha = 1; c.globalCompositeOperation = comp; c.imageSmoothingEnabled = true;
   }
 
-  // ---------- one-shot atlas sprites at world points (hit contacts, death puffs, dash dust) ----------
-  const hitSp = [], hitO = { flip: false, variant: '', alpha: 1, rot: 0, anchor: '' };
-  // o: { rot (radians, drawn clockwise about the sprite centre), flip, a (alpha), variant, add }.
+  // F.atlasFx(id, x, y, { dur, fr, add, a, delay, rot, flip, ramp }): the older one-shot call, now a thin form of F.sheet (dur plays the whole anim in that many seconds, fr holds one frame for dur).
   F.atlasFx = (id, x, y, o) => {
-    const A = ED.Atlas; if (!A.ok || hitSp.length >= 36) return;
-    const r = A.anim(id); if (!r) return;
-    hitSp.push({ id, x: Math.round(x), y: Math.round(y), t: -((o && o.delay) || 0), dur: o && o.dur ? o.dur : r.n / r.fps, fr: o && o.fr !== undefined ? o.fr : -1, rot: (o && o.rot) || 0, flip: !!(o && o.flip), a: o && o.a !== undefined ? o.a : 1, v: (o && o.variant) || '', add: !!(o && o.add) });
+    o = o || NO_OPTS; const r = ED.Atlas.anim(id);
+    return F.sheet(id, x, y, { delay: o.delay, frame: o.fr, life: o.dur, speed: o.fr === undefined && o.dur && r ? r.n / r.fps / o.dur : 1, add: o.add, a: o.a, rot: o.rot, flip: o.flip, ramp: o.ramp });
   };
-  function tickHits(dt) { let n = 0; for (let i = 0; i < hitSp.length; i++) { const s = hitSp[i]; s.t += dt; if (s.t < s.dur) hitSp[n++] = s; } hitSp.length = n; }
-  function drawHitSprites(c) {
-    if (!hitSp.length) return;
-    const A = ED.Atlas, comp = c.globalCompositeOperation;
-    for (const s of hitSp) {
-      const r = A.anim(s.id); if (!r || s.t < 0) continue;
-      c.globalCompositeOperation = s.add ? 'lighter' : 'source-over';
-      hitO.flip = s.flip; hitO.variant = s.v; hitO.alpha = s.a; hitO.rot = s.rot;
-      A.draw(c, s.id, s.fr >= 0 ? s.fr : Math.min(r.n - 1, Math.floor(s.t * r.fps)), s.x, s.y, hitO);
-    }
-    c.globalCompositeOperation = comp;
-  }
-  // Contact flash of a hero's direct hit: the Cut slash across the blow (CutX on a crit), a red Blast under heavy weapons. The local hero's hits always show (one per 50 ms); allies' only crits and heavy blows.
+  // Contact flash of a hero's direct hit: the Cut slash across the blow (CutX on a crit), a red Blast under heavy weapons (a heavy hit, or a hammer that is not Swift). The local hero's hits always show (one per 50 ms); allies' only crits and heavy blows.
   const HEAVY = { warhammer: 1, dawnhammer: 1 };
   let contactT = -9;
   function contactFx(ev, a, mine, p) {
     if (!ED.Actors || !ED.Actors.on()) return;
-    const heavy = p ? !!HEAVY[ED.Sprites.weaponArt(p).id] : false, crit = !!ev.c;
+    const wd = p ? ED.Sprites.weaponArt(p) : null, heavy = !!ev.h || (!!wd && !!HEAVY[wd.id] && wd.fork !== 'swift'), crit = !!ev.c;
     if (!mine && !crit && !heavy) return;
     if (F.time - contactT < 0.05) return;
     contactT = F.time;
     const x = ev.x, y = ev.y + 3, an = ev.pid !== undefined ? F.anim[ev.pid] : null;
-    const delay = an && an.atkT < 0.05 && p && ED.Sprites.weaponArt(p).w.kind === 'melee' ? an.t0 + (an.t1 - an.t0) * 0.45 : 0; // the flash lands when the blade passes the foe, not when the swing starts
-    if (crit) F.atlasFx('fx.cutx', x, y, { delay });
-    else F.atlasFx('fx.cut', x, y, { delay, rot: Math.round((a + 3 * Math.PI / 4) / (Math.PI / 4)) * Math.PI / 4 });
-    if (heavy && mine) F.atlasFx('fx.blast.red', x, y, { a: 0.9, delay });
+    const delay = an && an.atkT < 0.05 && wd && wd.w.kind === 'melee' ? an.t0 + (an.t1 - an.t0) * 0.45 : 0; // the flash lands when the blade passes the foe, not when the swing starts
+    if (crit) F.sheet('fx.cutx', x, y, { delay });
+    else F.sheet('fx.cut', x, y, { delay, rot: Math.round((a + 3 * Math.PI / 4) / (Math.PI / 4)) * Math.PI / 4 });
+    if (heavy && mine) F.sheet('fx.blast.red', x, y, { a: 0.9, delay });
   }
   const X = { dx: 0, dy: 0, rot: 0, sx: 1, sy: 1 };
   // Pose of a foe this frame (offset, lean, squash about its feet): wind-up crouch, strike stretch, hit recoil. null = untouched.
@@ -420,7 +410,7 @@
     if (ED.Actors && ED.Actors.on()) { // atlas body: the last drawn frame lies down, flattens or dissolves; a puff marks the spot
       if (F.ghosts.length >= 14) return;
       const sn = ED.Actors.foeSnap(ev.type, e, ev.x, ev.y), r = ev.r || d.r;
-      F.atlasFx(r > 14 || ev.el ? 'fx.smoke' : 'fx.puff', ev.x, ev.y - (sn ? sn.lift : 0) - (r > 14 ? 8 : 4));
+      F.sheet(r > 14 || ev.el ? 'fx.smoke' : 'fx.puff', ev.x, ev.y - (sn ? sn.lift : 0) - (r > 14 ? 8 : 4));
       if (!sn) return;
       const dur = sn.death ? sn.dur : DUR[fam] + (ev.el ? 0.1 : 0);
       F.ghosts.push({ k: 'die', at: sn, x: ev.x, y: ev.y, r, fam: sn.death ? 'anim' : fam, sgn: Math.cos(a) >= 0 ? 1 : -1, life: dur, max: dur });
@@ -565,7 +555,8 @@
   // Per-class client hooks, registered by src/client/cls-<class>.js at load: ev[type] = [fn(ev, ctx, localPid)] run before the built-in handler of that event;
   // zone[kind] = fn(c, z, pass, t, k, view) draws a zone kind render.js has no case for; hero = [fn(c, p, t, low)] runs after the built-in hero effects (hero feet frame);
   // mark = [fn(e) -> {id, ramp, stub} | null] adds a 14 px glyph (atlas anim id, Pix ramp, GLYPH stub key when the art is absent) to a foe's overhead mark row.
-  const CFX = ED.ClassFx = { ev: {}, zone: {}, hero: [], mark: [], on(t, f) { (this.ev[t] || (this.ev[t] = [])).push(f); } };
+  // shot[kind] = fn(c, pr, t, x, y) runs after a projectile of that kind is drawn (unlit pass, world frame; x, y the body's centre on the pixel grid).
+  const CFX = ED.ClassFx = { ev: {}, zone: {}, hero: [], mark: [], shot: {}, on(t, f) { (this.ev[t] || (this.ev[t] = [])).push(f); } };
   // Translate one world event into effects. local: the viewing player's pid.
   F.handle = (ev, ctx) => {
     const local = ctx.localPid, A = ED.Audio, set = ED.App ? ED.App.settings : { dmg: true };
@@ -627,7 +618,7 @@
         F.burst(ev.x, ev.y, bk(Math.min(30, 8 + ev.r / 4)), { color: cols[0], sp: ev.r * 2.6, life: 0.45, size: 3, add: true });
         F.burst(ev.x, ev.y, bk(6), { color: cols[1], sp: ev.r * 1.2, life: 0.3, size: 4, add: true });
         F.burst(ev.x, ev.y, bk(Math.min(14, 4 + ev.r / 8)), { kind: 'streak', color: cols[1], sp: ev.r * 3.2, life: 0.3, size: 1.8 });
-        F.pop(ev.x, ev.y - 4, ev.r * 0.8, cols[1], 0.22);
+        if (ev.k === 'shock') F.pop(ev.x, ev.y - 4, ev.r * 0.2, cols[0], 0.18); else F.pop(ev.x, ev.y - 4, ev.r * 0.8, cols[1], 0.22); // a shockwave is a ring of dust, not a white flash
         switch (ev.k) { // sprite layer: explosion clusters, shock ring, dust, ice, spore and bone bursts
           case 'bigfire': boomSheets(ev.x, ev.y, ev.r, ''); SP('fx.ring.shock', ev.x, ev.y - 4, { add: true, delay: 0.05 }); addStain(ev.x, ev.y, ev.r * 0.5, '#120805', 0.75, 16); break;
           case 'fire': case 'burst': case 'firedamp': boomSheets(ev.x, ev.y, ev.r, ''); break;
@@ -681,7 +672,7 @@
       case 'bossDown': F.showBanner('Vanquished', ED.ENEMIES[ev.type].name, 'victory', 3); F.flash = { color: '#ffffff', t: 0.5, a: 0.5 }; F.addShake(12); F.punch(2, 1); F.hitStop(0.3); A.play('roar', 0.6); A.play('victory', 0.7); A.music({ s: ctx.stratum() }); F.burst(ev.x, ev.y - 20, 60, { color: ED.ENEMIES[ev.type].col.c, sp: 220, life: 1.2, size: 3.5, add: true }); F.burst(ev.x, ev.y - 20, 18, { kind: 'streak', color: '#ffffff', sp: 380, life: 0.5, size: 2.4 }); F.ring(ev.x, ev.y, 160, ED.ENEMIES[ev.type].col.c, 0.8, 6); F.ring(ev.x, ev.y, 90, '#ffffff', 0.5, 3); F.pop(ev.x, ev.y - 20, 90, '#ffffff', 0.5); break;
       case 'phase': F.addShake(8); F.punch(1.6, 0.8); A.play('roar', 0.8); F.ring(ev.x, ev.y, 120, '#ffffff', 0.5, 5); F.ring(ev.x, ev.y, 70, '#ff8a5a', 0.4, 3); F.pop(ev.x, ev.y - 20, 60, '#ffffff', 0.35); break;
       case 'stratum': { const b = ED.biomeFor(ev.s); F.showBanner(b.name, 'Stratum ' + U.roman(ev.s), 'stratum', 3.6); F.fade = 1; A.music({ s: ev.s }); break; }
-      case 'room': for (const p of ctx.players()) F.atlasFx('fx.circle.spark', p.x, p.y + 2, { add: true, a: 0.7, dur: 0.27 }); F.fade = Math.max(F.fade, 0.6); if (ev.lc > 0) F.msg(`−${ev.lc} light`, '#ffd9a0'); break;
+      case 'room': for (const p of ctx.players()) F.sheet('fx.circle.spark', p.x, p.y + 2, { add: true, a: 0.7, speed: 1.6 }); F.fade = Math.max(F.fade, 0.6); if (ev.lc > 0) F.msg(`−${ev.lc} light`, '#ffd9a0'); break;
       case 'down': { const p = ctx.player(ev.pid); A.play('down'); if (p) F.msg(ev.pid === local ? 'You are down! An ally can revive you.' : `${p.name} is down! Stand near them to revive.`, '#ff8a7a'); break; }
       case 'revived': { const p = ctx.player(ev.pid); A.play('revive'); if (p) { F.msg(`${p.name} is back on their feet`, '#86d38f'); F.burst(p.x, p.y - 10, 24, { color: '#ffe9a0', sp: 70, vy: -60, life: 0.9, size: 2.4, add: true }); F.ring(p.x, p.y, 40, '#ffe9a0', 0.5, 3); SP('fx.circle.spark', p.x, p.y - 4, { ramp: 'holy', add: true }); F.pop(p.x, p.y - 12, 30, '#ffe9a0', 0.3); } break; }
       case 'dead': { const p = ctx.player(ev.pid); if (p) F.msg(`${p.name} has fallen. They return at the next stratum.`, '#ff8a7a'); break; }
@@ -696,17 +687,7 @@
       case 'blinkfx': F.burst(ev.x0, ev.y0 - 12, 14, { color: '#b78cff', sp: 60, life: 0.5, size: 3, add: true }); F.burst(ev.x1, ev.y1 - 12, 14, { color: '#b78cff', sp: 60, life: 0.5, size: 3, add: true }); F.pop(ev.x0, ev.y0 - 12, 20, '#b78cff', 0.2); F.pop(ev.x1, ev.y1 - 12, 20, '#b78cff', 0.2); break;
       case 'deflect': F.burst(ev.x, ev.y, 8, { color: '#ffffff', sp: 120, life: 0.25, size: 2, add: true }); F.burst(ev.x, ev.y, 4, { kind: 'streak', color: '#ffffff', sp: 200, life: 0.2, size: 1.4 }); F.pop(ev.x, ev.y, 10, '#ffffff', 0.12, true); A.play('deflect', 0.6); break;
       case 'block': F.text(ev.x, ev.y - 30, { dodge: 'Dodge', mirror: 'Shrugged off', aegis: 'Blocked' }[ev.k] || 'Blocked', '#bfe9ff', 9, { pop: true }); A.play('deflect', 0.5); break;
-      // ---- Knight: the thrown shield (placeholders until the visuals pass) ----
-      case 'ric': { // a strike: a gold line to the next foe, white-gold star and sparks at the shield; guarded: grey spark only
-        const mine = ev.pid === local;
-        if (ev.g) { F.burst(ev.x0, ev.y0 - 4, 4, { kind: 'spark', color: '#9aa0a8', sp: 120, life: 0.2, size: 1.4, drag: 5 }); A.play('clang', mine ? 0.8 : 0.4, { n: ev.n, g: 1 }); break; }
-        if (ev.x1 !== ev.x0 || ev.y1 !== ev.y0) F.bolts.push({ pts: [[ev.x0, ev.y0 - 4], [ev.x1, ev.y1 - 4]], life: 0.12, max: 0.12, color: '#ffe9a0' });
-        F.burst(ev.x0, ev.y0 - 4, 6, { kind: 'spark', color: '#ffe6a8', sp: 210, life: 0.25, size: 1.6, drag: 5 }); F.pop(ev.x0, ev.y0 - 4, 16, '#fff3c4', 0.14, true);
-        A.play('clang', mine ? 0.9 : 0.45, { n: ev.n });
-        if (mine) { F.hitStop(0.045); F.addShake(2); }
-        break; }
-      case 'catch': { const mine = ev.pid === local; F.ring(ev.x, ev.y - 4, 18, '#ffd36b', 0.25, 3); F.pop(ev.x, ev.y - 4, 18, '#ffe9a0', 0.16); if (ev.v > 0) F.burst(ev.x, ev.y - 10, 6, { color: '#ffe9a0', sp: 40, vy: -40, life: 0.5, size: 1.8, add: true, drag: 1.5 }); A.play('catch', mine ? 0.9 : 0.4, ev.v > 0); break; }
-      case 'parry': { F.ring(ev.x, ev.y, 22, '#ffffff', 0.25, 3); F.burst(ev.x, ev.y, 8, { kind: 'spark', color: '#ffffff', sp: 220, life: 0.25, size: 1.6, drag: 5 }); F.pop(ev.x, ev.y, 20, '#ffffff', 0.16, true); A.play('parry', ev.pid === local ? 0.9 : 0.5); if (ev.pid === local) F.hitStop(0.08); break; }
+      // Knight events (ric, catch, parry, deflect, ward, the boom of a shockwave) are drawn by src/client/cls-knight.js through ED.ClassFx.
       case 'spawned': F.burst(ev.x, ev.y, ev.el ? 18 : 8, { color: ev.el ? '#ffb13a' : '#b8a0ff', sp: 70, life: 0.4, size: 2.4, add: true }); F.pop(ev.x, ev.y - 8, ev.el ? 30 : 20, ev.el ? '#ffb13a' : '#b8a0ff', 0.25); A.play('spawn', 0.5); break;
       case 'raise': F.burst(ev.x, ev.y, 14, { color: '#7dffd9', sp: 60, vy: -40, life: 0.6, size: 2.4, add: true }); F.ring(ev.x, ev.y, 26, '#7dffd9', 0.4, 2); SP('fx.circle.spark', ev.x, ev.y - 2, { ramp: 'teal', add: true }); SP('fx.puff', ev.x, ev.y - 4, { ramp: 'dust' }); break;
       case 'puff': F.burst(ev.x, ev.y - 8, 10, { color: ev.c || '#cccccc', sp: 50, life: 0.5, size: 3, kind: 'smoke' }); SP('fx.puff', ev.x, ev.y - 6, { ramp: ev.c || 'smoke' }); break;
@@ -853,7 +834,7 @@
   F.drawGlow = (c, t) => {
     const Rn = R(), Sp = ED.Sprites;
     const px = ED.Actors && ED.Actors.on();
-    if (px) { drawSmears(c); drawHitSprites(c); }
+    if (px) drawSmears(c);
     // smear: a crescent whose bright head sweeps the arc during the weapon's strike; three nested layers (long dim tail -> short white core) fake the fade, then the whole arc fades (procedural fallback)
     for (const s of px ? NONE : F.slashes) {
       const age = s.max - s.life, arc = Math.min(6.28, s.arc), sd = s.side, h = U.easeOut(U.clamp((age - s.t0) / (s.t1 - s.t0), 0, 1));

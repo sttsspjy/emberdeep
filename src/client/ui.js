@@ -410,11 +410,12 @@
   const boonRibbon = (b, id) => (b.evo ? 'Evolution' : b.duo ? 'Duo' : b.key ? 'Keystone' : id === 'generalist' ? 'Forsake the elements' : b.gate ? 'Path gate' : b.route ? (b.tag ? b.tag + (b.coop ? ' · co-op' : '') : 'Route') : '');
   // The fork weapon of a class card as a small canvas drawn from the pixel atlas (null without art): tilted up-right about its grip.
   function weaponThumb(wid) {
-    const L = ED.FORK_LOOKS && ED.FORK_LOOKS[wid], A = ED.Atlas;
-    if (!L || !A || !A.ok || !A.has(L.art)) return null;
+    const A = ED.Atlas, id = ED.Sprites.forkAnim(wid); // the baked fork look: the same sprite the hero holds
+    if (!id || !A || !A.ok || !A.has(id)) return null;
     const cv = document.createElement('canvas'); cv.width = cv.height = 88; cv.className = 'bc-wimg';
-    const c = cv.getContext('2d'), an = A.anim(L.art), dir = (an && an.anchors && typeof an.anchors.dir === 'number') ? an.anchors.dir : 0;
-    A.draw(c, L.art, 0, 44, 62, { rot: (45 - dir) * Math.PI / 180, anchor: 'grip' });
+    const c = cv.getContext('2d'), an = A.anim(id), dir = (an && an.anchors && typeof an.anchors.dir === 'number') ? an.anchors.dir : 0;
+    const rot = (45 - dir) * Math.PI / 180, vx = (an.fw / 2 - an.ax) * 2, vy = (an.fh / 2 - an.ay) * 2; // the sprite's centre, rotated about the grip, lands on the middle of the canvas
+    A.draw(c, id, 0, Math.round(44 - (vx * Math.cos(rot) - vy * Math.sin(rot))), Math.round(44 - (vx * Math.sin(rot) + vy * Math.cos(rot))), { rot, anchor: 'grip' });
     return cv;
   }
   // Card body of a class route or fork card: the text at the offered rank (+ rider from rank 3), "Plays as" and "Forks" on a route card, the rank-3 rider name on lower ranks, the fork weapon of an Attack fork.
