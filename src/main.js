@@ -276,12 +276,58 @@
   };
 
   // ---------------- loop ----------------
+  // Frame pacing. A browser that misses vsync alternates frame times (4 / 8 / 12 ms on a 240 Hz panel), which reads as judder. settings.frameCap decides what the loop does:
+  // 'auto' (default) measures the vsync interval and the share of rAF intervals longer than one vsync, and presents every n-th rAF (n = 2: 120 fps on 240 Hz) while frames keep missing;
+  // 'off' presents every rAF; '144' / '120' / '60' cap the rate at the nearest whole divisor of the display rate. dt is smoothed to n vsync intervals whenever it lands within 10% of them.
+  const Pace = A.pace = { vs: 0, n: 1, miss: 0, cap: 'auto', hz: 0, work: 0 };
+  const RATES = [30, 48, 50, 60, 72, 75, 90, 100, 120, 144, 165, 180, 240, 360];
+  const PD = new Float32Array(240); let pdI = 0, pdN = 0, pTick = 0, lastRaf = 0, pHold = performance.now() + 3000, pRetry = 0, pTrial = 0, pBad = 0, pEval = 0, pBack = 30000, dtErr = 0;
+  function pObserve(ms, now) {
+    if (!(ms > 1) || ms > 100) return;
+    PD[pdI] = ms; pdI = (pdI + 1) % 240; if (pdN < 240) pdN++;
+    if (pdN < 90 || now - pEval < 1000) return;
+    pEval = now;
+    const s = Array.from(PD.subarray(0, pdN)).sort((a, b) => a - b), base = s[Math.floor(pdN * 0.15)];
+    let sum = 0, cnt = 0;
+    for (let i = 0; i < pdN; i++) { const k = Math.max(1, Math.round(PD[i] / base)); if (Math.abs(PD[i] / k - base) < 0.25 * base) { sum += PD[i]; cnt += k; } }
+    let vs = cnt ? sum / cnt : base;
+    for (const r of RATES) if (Math.abs(vs * r - 1000) < 40) { vs = 1000 / r; break; } // snap to a known refresh rate: no drift from timer-precision noise
+    Pace.vs = vs; Pace.hz = Math.round(1000 / vs);
+    let m = 0; for (let i = 0; i < pdN; i++) if (PD[i] > 1.5 * vs) m++;
+    Pace.miss = m / pdN;
+    pAdapt(now);
+  }
+  function pSetN(n, now) { Pace.n = n; pdN = 0; pdI = 0; pTick = 0; pBad = 0; pHold = now + 2500; }
+  function pAdapt(now) {
+    const cap = (A.settings && A.settings.frameCap) || 'auto', vs = Pace.vs;
+    if (cap !== Pace.cap) { Pace.cap = cap; pTrial = 0; pBad = 0; }
+    if (cap === 'off') { if (Pace.n !== 1) pSetN(1, now); return; }
+    if (cap !== 'auto') { const n = Math.max(1, Math.round(1000 / vs / (+cap || 60))); if (n !== Pace.n) pSetN(n, now); return; }
+    if (now < pHold) return;
+    const maxN = Math.max(1, Math.floor(1000 / vs / 72)); // never below ~72 fps
+    if (pTrial) { // the faster cadence was just tried: keep it unless it misses again
+      if (Pace.miss > 0.1) { const n = pTrial; pTrial = 0; pSetN(n, now); pBack = Math.min(480000, pBack * 2); pRetry = now + pBack; } else { pTrial = 0; pBack = 30000; } // a failed trial doubles the wait for the next one
+    } else if (Pace.n < maxN && vs < 9.5 && Pace.miss > 0.2) { // frames keep missing vsync (three evaluations in a row): present every n+1-th rAF
+      if (++pBad >= 3) { pSetN(Pace.n + 1, now); pRetry = now + pBack; }
+    } else {
+      pBad = 0;
+      if (Pace.n > 1 && now > pRetry) { pTrial = Pace.n; pSetN(Pace.n - 1, now); } // try the faster cadence again now and then
+    }
+  }
+
   let last = performance.now(), hiddenTick = null;
   const EMPTY = { mx: 0, my: 0, atk: false, skill: false, dash: false, atkPressed: false };
   function frame(now) {
-    const dt = Math.min(0.05, (now - last) / 1000);
+    requestAnimationFrame(frame);
+    pObserve(now - lastRaf, now); lastRaf = now;
+    if (Pace.n > 1 && (++pTick % Pace.n) !== 0) return; // paced: this rAF is not presented
+    let dt = (now - last) / 1000;
+    const ideal = Pace.n * Pace.vs / 1000;
+    if (Pace.vs && Math.abs(dt - ideal) < 0.1 * ideal) { const d = ideal - dtErr * 0.25; dtErr += d - dt; dt = d; } else dtErr = 0; // steady cadence: the vsync interval, drift pulled back toward real time
+    dt = Math.min(0.05, dt);
     last = now;
     const t = now / 1000;
+    const w0 = performance.now();
     const inp = ED.Input.read();
     if (A.state === 'run' && ED.Game.s) {
       const s = ED.Game.s;
@@ -300,7 +346,7 @@
       ED.Camp.draw(ED.Render.ctx, A.profile, t, dt, A.state === 'hearth' || A.state === 'lobby' || (A.state === 'title' && A.hasProfile) ? A.sel.cls : null);
     }
     ED.Input.endFrame();
-    requestAnimationFrame(frame);
+    Pace.work += (performance.now() - w0 - Pace.work) * 0.05;
   }
 
   // Keep a hosted world ticking while its tab is in the background (rAF stops there).
@@ -346,7 +392,9 @@
     ED.UI.show('title');
     if (!A.hasProfile) setTimeout(() => $('inp-name').focus(), 50);
     startHiddenTicker();
-    requestAnimationFrame((n) => { last = n; frame(n); });
+    // The first frame waits for the atlas pages to decode (3 s at most); the menus are DOM and already usable.
+    const go1 = () => requestAnimationFrame((n) => { last = lastRaf = n; frame(n); });
+    if (ED.Atlas && ED.Atlas.ready) Promise.race([ED.Atlas.ready, new Promise((r) => setTimeout(r, 3000))]).then(go1, go1); else go1();
     // test hook for automated checks
     window.__ED = ED;
   };

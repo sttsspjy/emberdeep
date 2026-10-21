@@ -72,7 +72,7 @@
   // colour: glyph fill. Returns an offscreen canvas.
   Ic.canvas = (name, color, size) => {
     const key = name + '|' + color + '|' + (size || S);
-    if (cache[key]) return cache[key].cv;
+    if (cache[key]) return cache[key].bm || cache[key].cv; // the ImageBitmap once ready (Gecko pays per source canvas); the canvas stays for Ic.url
     const cv = document.createElement('canvas');
     cv.width = cv.height = size || S;
     const c = cv.getContext('2d');
@@ -88,10 +88,11 @@
     c.save();
     c.translate(32, 32); c.scale(0.72, 0.72); c.translate(-32, -32);
     c.fillStyle = color; c.strokeStyle = '#1a0d08'; c.lineWidth = 3; c.lineJoin = 'round'; c.lineCap = 'round';
-    c.shadowColor = color; c.shadowBlur = 8;
+    c.shadowColor = color; c.shadowBlur = 8 * Math.min(1, k);
     (P[name] || P.star)(c);
     c.restore();
-    cache[key] = { cv, url: null };
+    const e = cache[key] = { cv, bm: null, url: null };
+    ED.Bmp.from(cv, (b) => { if (cache[key] === e) e.bm = b; else ED.Bmp.free(b); });
     return cv;
   };
   Ic.url = (name, color) => {

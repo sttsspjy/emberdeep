@@ -236,13 +236,13 @@
 
   // ---------- ground stains: cached blotch sprites (one draw each) ----------
   const stainCache = {};
-  function stainSprite(col, v) {
-    const key = col + v; let s = stainCache[key]; if (s) return s;
-    s = stainCache[key] = document.createElement('canvas'); s.width = 64; s.height = 40;
+  function stainSprite(col, v) { // holder { v }: the canvas now, its ImageBitmap once ready
+    const key = col + v; let h = stainCache[key]; if (h) return h;
+    const s = document.createElement('canvas'); s.width = 64; s.height = 40;
     const g = s.getContext('2d'); g.fillStyle = col;
     g.beginPath(); g.ellipse(32, 20, 17 + v * 2, 9 + v, 0, 0, TAU); g.fill();
     for (let i = 0; i < 6 + v * 2; i++) { const a = i * 2.4 + v, d = 13 + (i * 7 + v * 5) % 12, rr = 1.5 + (i * 5 + v) % 4; g.beginPath(); g.ellipse(32 + Math.cos(a) * d * 1.5, 20 + Math.sin(a) * d * 0.7, rr, rr * 0.7, 0, 0, TAU); g.fill(); }
-    return s;
+    return (stainCache[key] = ED.Bmp.hold(s));
   }
   function addStain(x, y, r, col, a, life) {
     if (F.stains.length >= 32) F.stains.shift();
@@ -273,7 +273,7 @@
   function spawnGhost(ev, d, fam, a, e) {
     if (lowFx() || F.ghosts.length >= 14 || snapBudget <= 0) return;
     snapBudget--;
-    const Rn = R(), S = Rn.scale, r = ev.r || d.r, Sp = ED.Sprites;
+    const Rn = R(), S = Rn.bakeScale, r = ev.r || d.r, Sp = ED.Sprites;
     const hw = r * 2.6 + 14, top = r * 3.9 + 24, bot = r * 0.9 + 8, w = Math.ceil(hw * 2 * S), h = Math.ceil((top + bot) * S);
     if (w * h > 1.2e6) return;
     const sn = snapGet(w, h); if (!sn) return;
@@ -525,7 +525,7 @@
   // Lit pass: stains, non-additive particles (smoke, shards, ash, drops); registers lights for flares and bright particles.
   F.drawWorld = (c) => {
     const Rn = R();
-    for (const s of F.stains) { const w = s.r * 3.6; c.globalAlpha = s.a * Math.min(1, s.life / 2); c.drawImage(s.spr, s.x - w / 2, s.y - w * 0.31 + 2, w, w * 0.62); }
+    for (const s of F.stains) { const w = s.r * 3.6; c.globalAlpha = s.a * Math.min(1, s.life / 2); c.drawImage(s.spr.v, s.x - w / 2, s.y - w * 0.31 + 2, w, w * 0.62); }
     c.globalAlpha = 1;
     let nl = 0, rot = false;
     const m = c.getTransform(), S = m.a, bx = m.e, by = m.f; // base transform: rotated rects set a full matrix
@@ -687,7 +687,7 @@
     return dashChecked[key];
   }
 
-  // Damage numbers: one blit of a baked sprite (Render.numSprite) scaled to the animated size.
+  // Damage numbers: pixel-font glyph blits, else one blit of a baked sprite (Render.numSprite) scaled to the animated size.
   F.drawTexts = (c) => {
     const Rn = R();
     for (const t of F.texts) {
@@ -696,8 +696,7 @@
       const sc = t.crit ? pop * (1 + 0.07 * Math.sin(age * 42) * Math.exp(-age * 5)) : pop;
       const a = Math.min(1, k * 2.2), fs = t.size * sc;
       if (t.crit) { c.globalCompositeOperation = 'lighter'; Rn.glow(c, t.x, t.y, fs * 1.7, t.color, 0.5 * a); c.globalCompositeOperation = 'source-over'; }
-      const sp = Rn.numSprite(t.s, t.color, t.size, t.crit), q = fs / sp.fs;
-      c.globalAlpha = a; c.drawImage(sp.cv, t.x + sp.x * q, t.y + sp.y * q, sp.w * q, sp.h * q);
+      Rn.drawNum(c, t, fs, a);
     }
     c.globalAlpha = 1;
   };

@@ -1,30 +1,32 @@
-// World renderer: camera, cached room art, coloured light accumulation, zones, props, entities, projectiles and the
-// hand-off to the WebGL post pass. The world is drawn to one of two alternating offscreen canvases when post is active, else straight
-// to the visible canvas (R.ctx); either way R.ctx ends the frame as the layer the HUD draws on.
+// World renderer: camera, cached room art, coloured light accumulation, zones, props, entities, projectiles and the hand-off to the WebGL present / post pass.
+// The whole world is drawn into one small offscreen buffer at 1 buffer px = 1 world px (buffer origin = integer world px R.ix / R.iy); the present step upscales it to the
+// screen (sharp-bilinear in WebGL, nearest on the 2D fallback) and applies the fractional camera offset (R.fx / R.fy), so scrolling stays smooth.
 (function (ED) {
   'use strict';
-  const U = ED.U, T = ED.CONST.TILE, Sp = ED.Sprites;
-  const R = ED.Render = { cam: { x: 0, y: 0 }, scale: 2, W: 0, H: 0, dpr: 1, quality: 'high', lightLevel: 1, posting: false, stats: { n: 0, world: 0, post: 0 } };
+  const U = ED.U, T = ED.CONST.TILE, Sp = ED.Sprites, Bmp = ED.Bmp;
+  const R = ED.Render = { cam: { x: 0, y: 0 }, scale: 2, W: 0, H: 0, dpr: 1, bw: 1, bh: 1, ix: 0, iy: 0, fx: 0, fy: 0, ox: 0, oy: 0, shx: 0, shy: 0, bakeScale: 1, quality: 'high', lightLevel: 1, posting: false, stats: { n: 0, world: 0, post: 0 } };
+  const BQ = R.bakeScale; // texels per world px of baked sprites and room art (world resolution)
   const glowCache = {}, lightCache = {}, trailCache = {};
-  const PIX_HIGH = 3.7e6, PIX_LOW = 2.8e6, PIX_SOFT = 1.1e6; // canvas pixel caps per quality (2560x1440 = 3.69 MP renders native on High); PIX_SOFT: software-rasterised canvases (no GPU)
-  let lightCv, lctx, vignette, shadowCv, rimCv, rimCtx, lightN = 0;
+  const PIX_HIGH = 3.7e6, PIX_LOW = 2.8e6, PIX_SOFT = 1.1e6; // screen canvas pixel caps per quality (2560x1440 = 3.69 MP renders native on High); PIX_SOFT: software-rasterised canvases (no GPU)
+  let buf, bctx, lightCv, lctx, vignetteH, shadowH, lightN = 0, glowN = 0, presenting2D = null;
+  const bufs = [], bctxs = []; let bi = 0, wPrev = false, prevO = null, bwLast = 0, bwMs = 16.7; // two alternating world buffers (see R.endWorld); bwMs = smoothed frame interval
   const lights = [], rimSrc = [], glowQ = [], rimOut = { dx: 0, dy: 0, col: '', s: 0 };
   let rimN = 0; // live entries of rimSrc (filled by last frame's lighting pass)
-  const worlds = [], wctxs = []; let wi = 0, wPrev = false, bwLast = 0, bwMs = 16.7; // two world canvases (see R.endWorld); bwMs = smoothed frame interval
   let nl = 0, ng = 0, stN = 0, shDX = 0, shDY = 0; // lights/glows queued this frame (stN: status lights); shadow skew away from the nearest light
 
   R.init = (canvas) => {
     R.canvas = canvas;
-    R.ctx = canvas.getContext('2d', { alpha: true });
-    for (let i = 0; i < 2; i++) { const w = document.createElement('canvas'); worlds.push(w); wctxs.push(w.getContext('2d', { alpha: false })); }
+    R.ctx = canvas.getContext('2d', { alpha: false }); // visible canvas: shows the world only on the 2D present path
+    for (let i = 0; i < 2; i++) { const w = document.createElement('canvas'); bufs.push(w); bctxs.push(w.getContext('2d', { alpha: false })); } // the world buffers
+    buf = bufs[0]; bctx = bctxs[0];
     lightCv = document.createElement('canvas');
     lctx = lightCv.getContext('2d');
-    rimCv = document.createElement('canvas'); rimCtx = rimCv.getContext('2d');
-    shadowCv = document.createElement('canvas'); shadowCv.width = 64; shadowCv.height = 32;
-    const sg = shadowCv.getContext('2d'); sg.translate(32, 16); sg.scale(1, 0.5);
+    const sc = document.createElement('canvas'); sc.width = 64; sc.height = 32;
+    const sg = sc.getContext('2d'); sg.translate(32, 16); sg.scale(1, 0.5);
     const sr = sg.createRadialGradient(0, 0, 0, 0, 0, 32);
     sr.addColorStop(0, 'rgba(0,0,0,0.95)'); sr.addColorStop(0.45, 'rgba(0,0,0,0.6)'); sr.addColorStop(0.8, 'rgba(0,0,0,0.14)'); sr.addColorStop(1, 'rgba(0,0,0,0)');
     sg.fillStyle = sr; sg.fillRect(-32, -32, 64, 64);
+    shadowH = Bmp.hold(sc);
     Sp.shadow = R.shadow; // every sprite and prop shadow becomes the cached soft blob
     if (ED.Post) ED.Post.init(canvas);
     window.addEventListener('resize', R.resize);
@@ -34,35 +36,48 @@
   R.setQuality = (q) => { R.quality = q; R.resize(); };
   R.usePost = () => !!(ED.Post && ED.Post.ready && R.quality !== 'low' && !ED.Post.soft); // post on a software GL context costs more than the whole frame
 
+  // The visible #game canvas carries the world only on the 2D present path; while WebGL presents it shrinks to a never-redrawn 1x1 transparent layer that still receives pointer events.
+  function setPresent(on2d) {
+    if (on2d === presenting2D) return;
+    presenting2D = on2d;
+    const cv = R.canvas;
+    if (on2d) { cv.width = R.W; cv.height = R.H; cv.style.opacity = ''; }
+    else { cv.width = 1; cv.height = 1; cv.style.opacity = '0'; }
+  }
+
   R.resize = () => {
     const cssW = window.innerWidth, cssH = window.innerHeight;
     const low = R.quality === 'low';
     let dpr = Math.min(window.devicePixelRatio || 1, low ? 1 : 1.5);
     dpr = Math.max(0.5, Math.min(dpr, Math.sqrt((ED.Post && ED.Post.soft ? PIX_SOFT : low ? PIX_LOW : PIX_HIGH) / (cssW * cssH)))); // pixel cap: native 2560x1440 on High, 2.8 MP on Low, 1.1 MP without a GPU
     R.dpr = dpr;
-    R.canvas.width = Math.round(cssW * dpr); R.canvas.height = Math.round(cssH * dpr);
-    R.W = R.canvas.width; R.H = R.canvas.height;
-    for (const w of worlds) { w.width = R.W; w.height = R.H; }
+    R.W = Math.round(cssW * dpr); R.H = Math.round(cssH * dpr);
+    R.scale = Math.max(0.5, Math.floor(2 * Math.min(R.W / ED.CONST.VIEW_W, R.H / ED.CONST.VIEW_H)) / 2); // screen px per world px, in half steps: one art px (2 world px) is a whole number of screen px
+    R.bw = Math.ceil(R.W / R.scale) + 2; R.bh = Math.ceil(R.H / R.scale) + 2; // buffer covers the view plus a 2 px margin for the fractional offset
+    for (const w of bufs) { w.width = R.bw; w.height = R.bh; }
     wPrev = false;
-    R.scale = Math.min(R.W / ED.CONST.VIEW_W, R.H / ED.CONST.VIEW_H);
-    const div = R.quality === 'low' ? 5 : 3;
-    lightCv.width = Math.ceil(R.W / div); lightCv.height = Math.ceil(R.H / div);
+    const div = low ? 3 : 2;
+    lightCv.width = Math.ceil(R.bw / div); lightCv.height = Math.ceil(R.bh / div);
     R.lightDiv = div;
-    vignette = document.createElement('canvas'); vignette.width = 256; vignette.height = 256;
-    const v = vignette.getContext('2d'), vg = v.createRadialGradient(128, 128, 60, 128, 128, 182);
+    Bmp.drop(vignetteH);
+    const vc = document.createElement('canvas'); vc.width = 256; vc.height = 256;
+    const v = vc.getContext('2d'), vg = v.createRadialGradient(128, 128, 60, 128, 128, 182);
     vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.55)');
     v.fillStyle = vg; v.fillRect(0, 0, 256, 256);
-    if (ED.Post) { ED.Post.setVisible(R.quality !== 'low' && !ED.Post.soft); ED.Post.resize(R.W, R.H); }
+    vignetteH = Bmp.hold(vc);
+    if (ED.Post) { ED.Post.setVisible(R.quality !== 'low' && !ED.Post.soft); ED.Post.resize(R.W, R.H, R.bw, R.bh); }
+    presenting2D = null; setPresent(!R.usePost());
     ED.Tiles.clear(); sprClear();
   };
 
   R.glowSprite = (color) => {
-    if (glowCache[color]) return glowCache[color];
+    const h = glowCache[color]; if (h) return h.v;
+    if (++glowN > 300) { for (const k in glowCache) { Bmp.drop(glowCache[k]); delete glowCache[k]; } glowN = 1; }
     const cv = document.createElement('canvas'); cv.width = cv.height = 64;
     const g = cv.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
     gr.addColorStop(0, U.rgba(color, 0.9)); gr.addColorStop(0.35, U.rgba(color, 0.35)); gr.addColorStop(1, U.rgba(color, 0));
     g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
-    glowCache[color] = cv;
+    glowCache[color] = Bmp.hold(cv);
     return cv;
   };
   R.glow = (c, x, y, r, color, a) => {
@@ -89,13 +104,14 @@
   R.shadow = (c, r, a = 0.35, lite) => {
     const w = r * 2.7, h = r * 1.25, y = r * 0.6;
     c.globalAlpha = Math.min(1, a * 1.9);
-    c.drawImage(shadowCv, -w / 2 + shDX * r, y - h / 2 + shDY * r, w, h);
-    if (!lite) { c.globalAlpha = Math.min(1, a * 1.1); c.drawImage(shadowCv, -w * 0.3 + shDX * r * 0.4, y - h * 0.3 + shDY * r * 0.4, w * 0.6, h * 0.6); }
+    c.drawImage(shadowH.v, -w / 2 + shDX * r, y - h / 2 + shDY * r, w, h);
+    if (!lite) { c.globalAlpha = Math.min(1, a * 1.1); c.drawImage(shadowH.v, -w * 0.3 + shDX * r * 0.4, y - h * 0.3 + shDY * r * 0.4, w * 0.6, h * 0.6); }
     c.globalAlpha = 1;
   };
 
-  R.toScreen = (x, y) => ({ x: (x - R.cam.x) * R.scale + R.W / 2, y: (y - R.cam.y) * R.scale + R.H / 2 });
-  R.toWorld = (sx, sy) => ({ x: (sx - R.W / 2) / R.scale + R.cam.x, y: (sy - R.H / 2) / R.scale + R.cam.y });
+  // Screen (device px of the visible canvas) <-> world, exact for the last frame's mapping: camera, scale and screen shake (R.shx / R.shy, device px).
+  R.toScreen = (x, y) => ({ x: (x - R.cam.x) * R.scale + R.W / 2 + R.shx, y: (y - R.cam.y) * R.scale + R.H / 2 + R.shy });
+  R.toWorld = (sx, sy) => ({ x: (sx - R.W / 2 - R.shx) / R.scale + R.cam.x, y: (sy - R.H / 2 - R.shy) / R.scale + R.cam.y });
 
   R.updateCamera = (view, focus, dt, snap) => {
     const room = view.room; if (!room) return;
@@ -108,25 +124,41 @@
     else { const k = Math.min(1, dt * 8); R.cam.x += (tx - R.cam.x) * k; R.cam.y += (ty - R.cam.y) * k; }
   };
 
-  // Target context for this frame's world drawing: an offscreen canvas (alternating) when post is active, else the visible one.
+  // Starts a frame: returns the world buffer context (identity transform, buffer px). The buffer origin is set by R.setView (R.frame) or stays at world (0, 0) (camp).
   R.beginWorld = () => {
+    Bmp.sweep();
     const now = performance.now();
-    if (bwLast) bwMs += (Math.min(50, now - bwLast) - bwMs) * 0.05; // smoothed frame interval
+    if (bwLast) bwMs += (Math.min(50, now - bwLast) - bwMs) * 0.05;
     bwLast = now;
     R.posting = R.usePost();
-    if (!R.posting) { wPrev = false; return R.ctx; }
-    if (worlds[0].width !== R.W || worlds[0].height !== R.H) { for (const w of worlds) { w.width = R.W; w.height = R.H; } wPrev = false; }
-    wi ^= 1;
-    return wctxs[wi];
+    if (bufs[0].width !== R.bw || bufs[0].height !== R.bh) { for (const w of bufs) { w.width = R.bw; w.height = R.bh; } wPrev = false; }
+    bi ^= 1; buf = bufs[bi]; bctx = bctxs[bi];
+    const c = bctx;
+    c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.imageSmoothingEnabled = true;
+    R.ix = R.iy = 0; R.fx = R.fy = 0; R.shx = R.shy = 0; R.ox = R.oy = 0;
+    return c;
   };
-  // Hands the finished world to post; the visible canvas is left transparent for the HUD (or holds the world on fallback). Above ~100 Hz post shows
-  // the previous frame's canvas (one short frame of latency) so the upload never waits on the raster just issued; at lower rates the current one.
+  // Sets the view of this frame: x0 / y0 = world position of the screen's top-left corner (fractional). The buffer starts at its floor; the remainder is applied when presenting.
+  R.setView = (x0, y0) => {
+    R.ix = Math.floor(x0); R.iy = Math.floor(y0); R.fx = x0 - R.ix; R.fy = y0 - R.iy; R.ox = -x0 * R.scale; R.oy = -y0 * R.scale;
+  };
+  // Presents the finished frame: WebGL post when active, else a nearest-neighbour blit to the visible canvas. Above ~100 Hz post shows the previous frame's buffer with its own
+  // view and grade (one short frame of latency) so the texture upload never waits on the raster just issued; at lower rates it shows the current one.
   R.endWorld = (o) => {
-    if (!R.posting) return;
-    const c = R.ctx, t0 = performance.now(); c.setTransform(1, 0, 0, 1, 0, 0);
-    if (ED.Post.render(wPrev && bwMs < 10 ? worlds[wi ^ 1] : worlds[wi], o)) c.clearRect(0, 0, R.W, R.H);
-    else { c.globalAlpha = 1; c.globalCompositeOperation = 'source-over'; c.drawImage(worlds[wi], 0, 0); }
-    wPrev = true;
+    const c = bctx, t0 = performance.now();
+    c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
+    let shown = false;
+    if (R.posting) {
+      o.scale = R.scale; o.fx = R.fx; o.fy = R.fy;
+      shown = wPrev && bwMs < 10 && prevO ? ED.Post.render(bufs[bi ^ 1], prevO) : ED.Post.render(buf, o);
+    }
+    wPrev = R.posting; prevO = o;
+    if (shown) setPresent(false);
+    else {
+      setPresent(true);
+      const g = R.ctx; g.imageSmoothingEnabled = false;
+      g.drawImage(buf, R.fx, R.fy, R.W / R.scale, R.H / R.scale, 0, 0, R.W, R.H);
+    }
     R.stats.post += performance.now() - t0;
     R.posting = false;
   };
@@ -136,15 +168,16 @@
     return Object.assign({ biome, t, aberr: F.aberr || 0, flash: F.kick > 0.01 ? [1, 0.92, 0.8, F.kick * 0.22] : null, lightLevel: 0.6 + 0.4 * R.lightLevel }, extra); // post-process darkening (saturation, vignette) stays mild
   };
 
-  // ---------------- light buffer (device-pixel space, reused by the camp) ----------------
+  // ---------------- light buffer (buffer-pixel space, reused by the camp) ----------------
   function lightSprite(color) {
-    let s = lightCache[color]; if (s) return s;
-    if (++lightN > 90) { for (const k in lightCache) delete lightCache[k]; lightN = 0; }
-    s = lightCache[color] = document.createElement('canvas'); s.width = s.height = 96;
+    const h = lightCache[color]; if (h) return h.v;
+    if (++lightN > 90) { for (const k in lightCache) { Bmp.drop(lightCache[k]); delete lightCache[k]; } lightN = 1; }
+    const s = document.createElement('canvas'); s.width = s.height = 96;
     const g = s.getContext('2d'), gr = g.createRadialGradient(48, 48, 0, 48, 48, 48);
     gr.addColorStop(0, U.rgba(color, 0.95)); gr.addColorStop(0.16, U.rgba(color, 0.74)); gr.addColorStop(0.4, U.rgba(color, 0.42));
     gr.addColorStop(0.66, U.rgba(color, 0.17)); gr.addColorStop(0.86, U.rgba(color, 0.05)); gr.addColorStop(1, U.rgba(color, 0)); // long soft shoulder: pools blend instead of ending in a hard edge
     g.fillStyle = gr; g.fillRect(0, 0, 96, 96);
+    lightCache[color] = Bmp.hold(s);
     return s;
   }
   R.lightBegin = (rgb) => {
@@ -153,7 +186,7 @@
     lctx.fillRect(0, 0, lightCv.width, lightCv.height);
     lctx.globalCompositeOperation = 'lighter';
   };
-  // Adds a coloured pool at device pixel (sx, sy) with radius rr (px).
+  // Adds a coloured pool at buffer pixel (sx, sy) with radius rr (px).
   R.lightAdd = (sx, sy, rr, color, k) => {
     const div = R.lightDiv; sx /= div; sy /= div; rr /= div;
     if (sx + rr < 0 || sy + rr < 0 || sx - rr > lightCv.width || sy - rr > lightCv.height || k <= 0.01) return;
@@ -164,7 +197,7 @@
   R.lightEnd = (c) => {
     lctx.globalAlpha = 1; lctx.globalCompositeOperation = 'source-over';
     c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.imageSmoothingEnabled = true; c.globalCompositeOperation = 'multiply';
-    c.drawImage(lightCv, 0, 0, R.W, R.H);
+    c.drawImage(lightCv, 0, 0, R.bw, R.bh);
     c.restore();
   };
   // Ambient colour: palette darkColor gives the hue, darkness gives the level; a lower lantern deepens it.
@@ -187,23 +220,23 @@
 
   // ---------------- main frame ----------------
   R.frame = (view, local, t, dt) => {
-    const t0 = performance.now(), c = R.beginWorld(), room = view.room, F = ED.FX;
+    const t0 = performance.now(), c = R.beginWorld(), room = view.room, F = ED.FX, S = R.scale;
     const biome = ED.biomeFor(view.stratum || 1), P = biome.pal;
+    ED.Atlas.tick();
     foeTick(view.stratum || 1);
-    c.setTransform(1, 0, 0, 1, 0, 0);
-    c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
-    c.fillStyle = P.void; c.fillRect(0, 0, R.W, R.H);
+    c.fillStyle = P.void; c.fillRect(0, 0, R.bw, R.bh);
     nl = 0; ng = 0; stN = 0; R.local = local;
     R.simT = view.renderT || view.time || 0; // sim-time clock for hazards drawn from sim state: interpolated host time on clients, world time otherwise
     if (!room) { R.endWorld(R.postOpts(biome, t)); return; }
-    let sx = 0, sy = 0;
-    if (F.shake > 0) { const a = F.shake * R.scale * 0.55; sx = (Math.sin(t * 71) + Math.sin(t * 43 + 1.7) * 0.6) * a * 0.62; sy = (Math.cos(t * 67) + Math.sin(t * 51 + 0.4) * 0.6) * a * 0.62; }
-    const ox = Math.round(-R.cam.x * R.scale + R.W / 2 + sx), oy = Math.round(-R.cam.y * R.scale + R.H / 2 + sy);
-    const low = R.quality === 'low';
-    c.setTransform(R.scale, 0, 0, R.scale, ox, oy);
+    let swx = 0, swy = 0; // screen shake in world px
+    if (F.shake > 0) { const a = F.shake * 0.55; swx = (Math.sin(t * 71) + Math.sin(t * 43 + 1.7) * 0.6) * a * 0.62; swy = (Math.cos(t * 67) + Math.sin(t * 51 + 0.4) * 0.6) * a * 0.62; }
+    R.shx = swx * S; R.shy = swy * S;
+    R.setView(R.cam.x - R.W / (2 * S) - swx, R.cam.y - R.H / (2 * S) - swy);
+    const ix = R.ix, iy = R.iy, low = R.quality === 'low';
+    c.setTransform(1, 0, 0, 1, -ix, -iy);
     // ---- lit pass ----
-    const art = ED.Tiles.get(room, R.scale);
-    c.drawImage(art, 0, 0, art.width / R.scale, art.height / R.scale);
+    const art = ED.Tiles.get(room, BQ);
+    c.drawImage(art, 0, 0, art.width / BQ, art.height / BQ);
     drawRoomDynamics(c, view, room, biome, t, 0);
     drawDoors(c, view, room, P, t);
     drawZones(c, view, t, 0);
@@ -215,26 +248,26 @@
     for (const a of view.allies) qDraw(dn++, a.y, 2, a);
     crowdLod(view, local, nFoe, dn);
     drawList.length = dn; drawList.sort(byY);
-    const S = R.scale;
     for (const it of drawList) {
-      const o = it.o, rim = low ? null : rimLight(o.x, o.y, it.k === 0 ? 16 : 0);
+      const o = it.o, rim = low ? null : rimLight(o.x, o.y, it.k === 0 ? 16 : 0), px = Math.round(o.x), py = Math.round(o.y); // feet on the buffer pixel grid
       if (rim) { shDX = -rim.dx * 0.28; shDY = -rim.dy * 0.12; } else { shDX = 0; shDY = 0; }
-      if (it.k === 0 && rim && !o.dead) drawHeroRim(c, o, view, t, ox, oy, rim);
-      else if (it.k === 1) { // foe: feet on the device pixel grid so cached frames blit texel for texel; pose offset, lean and squash (F.xform) go into one matrix
-        const X = F.xform(o), px = Math.round(o.x * S + ox), py = Math.round(o.y * S + oy), m = o.face < 0 ? -1 : 1;
-        if (X) { const cr = Math.cos(X.rot) * S, sr = Math.sin(X.rot) * S; c.setTransform(m * cr * X.sx, m * sr * X.sx, -sr * X.sy, cr * X.sy, px + X.dx * S, py + X.dy * S); } else c.setTransform(m * S, 0, 0, S, px, py);
+      if (it.k === 1) { // foe: pose offset, lean and squash (F.xform) go into one matrix with the mirror
+        const X = F.xform(o), m = o.face < 0 ? -1 : 1, bx = px - ix, by = py - iy;
+        if (X) { const cr = Math.cos(X.rot), sr = Math.sin(X.rot); c.setTransform(m * cr * X.sx, m * sr * X.sx, -sr * X.sy, cr * X.sy, bx + X.dx, by + X.dy); } else c.setTransform(m, 0, 0, 1, bx, by);
         foe(c, o, t, !it.full);
-        c.setTransform(S, 0, 0, S, px, py);
+        c.setTransform(1, 0, 0, 1, bx, by);
         if (rim && rim.s > 0.35 && it.full) R.glowOnce(c, 0, -o.r * 1.2, o.r * 1.5, rim.col, 0.14 * rim.s, rim.dx * o.r * 0.55, rim.dy * o.r * 0.4);
         drawStatus(c, o, t);
-        c.setTransform(S, 0, 0, S, ox, oy);
+        c.setTransform(1, 0, 0, 1, -ix, -iy);
       } else {
-        c.save(); c.translate(o.x, o.y);
-        if (it.k === 0) { drawCompanions(c, o, view, t, true); Sp.hero(c, o, t, F.anim[o.pid]); drawCompanions(c, o, view, t, false); }
-        else Sp.minion(c, o, t);
+        c.save(); c.translate(px, py);
+        if (it.k === 0) {
+          drawCompanions(c, o, view, t, true); Sp.hero(c, o, t, F.anim[o.pid]); drawCompanions(c, o, view, t, false);
+          if (rim && rim.s > 0.35 && !o.dead) R.glowOnce(c, 0, -12, 17, rim.col, 0.15 * rim.s, rim.dx * 7, rim.dy * 5); // lit-side rim stand-in (additive glow toward the light)
+        } else Sp.minion(c, o, t);
         c.restore();
       }
-      if (it.k === 0) { c.save(); c.translate(o.x, o.y); drawHeroFx(c, o, t); c.restore(); }
+      if (it.k === 0) { c.save(); c.translate(px, py); drawHeroFx(c, o, t); c.restore(); }
       if (it.k === 0 && !o.dead && !low) F.dashTrail && F.dashTrail(o, t);
     }
     shDX = shDY = 0;
@@ -243,11 +276,11 @@
     if (!low) drawMotes(c, view, room, biome, t, dt, 0);
     // ---- lighting ----
     c.setTransform(1, 0, 0, 1, 0, 0);
-    drawLighting(c, view, room, biome, local, t, ox, oy);
+    drawLighting(c, view, room, biome, local, t, ix, iy);
     // ---- emissive pass (unlit, additive: bloom catches it) ----
-    c.setTransform(R.scale, 0, 0, R.scale, ox, oy);
+    c.setTransform(1, 0, 0, 1, -ix, -iy);
     c.globalCompositeOperation = 'lighter';
-    const emis = ED.Tiles.emissive(room, R.scale);
+    const emis = ED.Tiles.emissive(room, BQ);
     if (emis) { c.globalAlpha = 0.82 + Math.sin(t * 2.1) * 0.1 + Math.sin(t * 5.3) * 0.05; c.drawImage(emis, 0, 0, emis.width / emis.px, emis.height / emis.px); c.globalAlpha = 1; }
     drawRoomDynamics(c, view, room, biome, t, 1);
     drawPickups(c, view, t, 1);
@@ -265,6 +298,7 @@
     c.globalCompositeOperation = 'source-over';
     // ---- overlays above lighting ----
     drawOverheads(c, view, local, t);
+    if (ED.AimFx) ED.AimFx.draw(c, view);
     F.drawTexts(c);
     c.setTransform(1, 0, 0, 1, 0, 0);
     if (R.syncWorld) c.getImageData(0, 0, 1, 1); // benchmarking: force the 2D raster to finish
@@ -296,22 +330,6 @@
     const dx = best.x - x, dy = best.y - y, d = Math.hypot(dx, dy) || 1;
     rimOut.dx = dx / d; rimOut.dy = dy / d; rimOut.col = best.c; rimOut.s = Math.min(1, bs * 1.6);
     return rimOut; // shared: consumed before the next call
-  }
-
-  // Heroes render into a scratch canvas so a lit-side rim can be composited with 'source-atop' onto the sprite only.
-  function drawHeroRim(c, p, view, t, ox, oy, rim) {
-    const s = R.scale, sw = Math.ceil(160 * s), sh = Math.ceil(140 * s);
-    if (rimCv.width !== sw || rimCv.height !== sh) { rimCv.width = sw; rimCv.height = sh; }
-    const dx = p.x * s + ox, dy = p.y * s + oy, ix = Math.floor(dx), iy = Math.floor(dy);
-    const cx = Math.round(80 * s), cy = Math.round(100 * s), rc = rimCtx;
-    rc.setTransform(1, 0, 0, 1, 0, 0); rc.globalCompositeOperation = 'source-over'; rc.globalAlpha = 1; rc.clearRect(0, 0, sw, sh);
-    rc.setTransform(s, 0, 0, s, cx + (dx - ix), cy + (dy - iy));
-    drawCompanions(rc, p, view, t, true); Sp.hero(rc, p, t, ED.FX.anim[p.pid]); drawCompanions(rc, p, view, t, false);
-    rc.setTransform(1, 0, 0, 1, 0, 0); rc.globalCompositeOperation = 'source-atop';
-    const mx = cx, my = cy - 16 * s, g = rc.createLinearGradient(mx + rim.dx * 13 * s, my + rim.dy * 13 * s, mx - rim.dx * 3 * s, my - rim.dy * 3 * s);
-    g.addColorStop(0, U.rgba(rim.col, 0.62 * rim.s)); g.addColorStop(0.55, U.rgba(rim.col, 0.14 * rim.s)); g.addColorStop(1, U.rgba(rim.col, 0));
-    rc.fillStyle = g; rc.fillRect(0, 0, sw, sh);
-    c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(rimCv, ix - cx, iy - cy); c.restore();
   }
 
   // ---------------- room details ----------------
@@ -397,18 +415,22 @@
   }
 
   // ---------------- baked sprites ----------------
-  // Vector overlays (telegraphs, statuses, shots, flames, labels) are painted once into small canvases at R.scale and blitted afterwards:
-  // one drawImage replaces dozens of path ops. Cached by shape key; bounded by pixel count; dropped on resize (baked at R.scale).
-  const spr = new Map(), txtCache = new Map();
+  // Vector overlays (telegraphs, statuses, shots, flames, labels) are painted once into small canvases at world resolution and blitted afterwards:
+  // one drawImage replaces dozens of path ops. Cached by shape key; bounded by pixel count. A baked canvas is drawn until its ImageBitmap is ready, then swapped (Gecko pays per source canvas, not per bitmap);
+  // every sprite is tracked in `live` and its bitmap released (closed two frames later) when the cache drops it.
+  const spr = new Map(), txtCache = new Map(), live = new Set();
   let sprPx = 0, sprGen = 0, bakeLeft = 0, bS = 1, bX = 0, bY = 0;
   const SPR_PX_MAX = 16e6, BAKE_PER_FRAME = 10, NF_FIRE = 8, NF_POISON = 16;
   const numC = new Map();
-  function sprClear() { spr.clear(); txtCache.clear(); numC.clear(); sprPx = 0; sprGen++; }
-  if (typeof document !== 'undefined' && document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => { txtCache.clear(); numC.clear(); }); // text baked with a fallback face is rebuilt once the webfont arrives
+  function freeSp(s) { if (s && !s.dead) { s.dead = true; live.delete(s); Bmp.free(s.cv); } }
+  function dropText() { for (const s of txtCache.values()) freeSp(s); for (const s of numC.values()) freeSp(s); txtCache.clear(); numC.clear(); }
+  function sprClear() { for (const s of live) { s.dead = true; Bmp.free(s.cv); } live.clear(); spr.clear(); dropText(); sprPx = 0; sprGen++; }
+  if (typeof document !== 'undefined' && document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', dropText); // text baked with a fallback face is rebuilt once the webfont arrives
   // Bakes paint(g) into a canvas covering the box [x0,x1] x [y0,y1] of the painter's local space (add: additive compositing, so the blit equals drawing the parts additively).
-  // Returns { cv, x, y, w, h }: the draw rectangle in the same local space (1 texel = 1 device pixel at R.scale).
+  // Returns { cv, x, y, w, h }: the draw rectangle in the same local space (1 texel = 1 buffer pixel; the box snaps outward to the texel grid).
   function bake(x0, y0, x1, y1, add, paint) {
-    const Q = R.scale, cw = Math.max(1, Math.ceil((x1 - x0) * Q)), ch = Math.max(1, Math.ceil((y1 - y0) * Q));
+    const Q = BQ; x0 = Math.floor(x0 * Q) / Q; y0 = Math.floor(y0 * Q) / Q; x1 = Math.ceil(x1 * Q) / Q; y1 = Math.ceil(y1 * Q) / Q;
+    const cw = Math.max(1, Math.round((x1 - x0) * Q)), ch = Math.max(1, Math.round((y1 - y0) * Q));
     const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
     const g = cv.getContext('2d');
     g.setTransform(Q, 0, 0, Q, -x0 * Q, -y0 * Q);
@@ -416,7 +438,10 @@
     g.lineJoin = 'round';
     paint(g);
     sprPx += cw * ch;
-    return { cv, x: x0, y: y0, w: cw / Q, h: ch / Q };
+    const s = { cv, x: x0, y: y0, w: cw / Q, h: ch / Q, dead: false };
+    live.add(s);
+    Bmp.from(cv, (b) => { if (s.dead) Bmp.free(b); else s.cv = b; });
+    return s;
   }
   // Keyed sprite: baked on first use.
   function sprite(key, x0, y0, x1, y1, add, paint) {
@@ -440,8 +465,8 @@
   function rotAt(c, x, y, a) { const co = Math.cos(a) * bS, si = Math.sin(a) * bS; c.setTransform(co, si, -si, co, x * bS + bX, y * bS + bY); }
   function rotDir(c, x, y, vx, vy, sp) { const co = sp > 0 ? vx / sp * bS : bS, si = sp > 0 ? vy / sp * bS : 0; c.setTransform(co, si, -si, co, x * bS + bX, y * bS + bY); }
   function rotEnd(c) { c.setTransform(bS, 0, 0, bS, bX, bY); }
-  // Blit with the sprite origin at world (x, y), snapped to the device pixel grid (crisp bars and text).
-  function blit(c, s, x, y) { c.drawImage(s.cv, (Math.round((x + s.x) * bS + bX) - bX) / bS, (Math.round((y + s.y) * bS + bY) - bY) / bS, s.w, s.h); }
+  // Blit with the sprite origin at world (x, y), snapped to the buffer pixel grid (crisp bars and text); the base transform is an integer translation.
+  function blit(c, s, x, y) { c.drawImage(s.cv, Math.round(x + s.x), Math.round(y + s.y), s.w, s.h); }
   // Per-shape sprite arrays for foes (see drawStatus): shared by every foe with the same silhouette; reset when the cache is dropped.
   const geoms = new Map();
   // Two-layer flame (outer tongue + bright core) at base (fx, fy); wb: tip sway, tipK/i1/i2: tip and core heights in units of h.
@@ -451,13 +476,14 @@
   }
 
   // ---------------- foe flipbooks ----------------
-  // Foes are painted once per (look frame, pose, tint, size, facing) into small canvases at R.scale (Sp.FOE) and blitted: one drawImage replaces ~120 path ops.
+  // Foes are painted once per (look frame, pose, tint, size, facing) into small canvases at world resolution (Sp.FOE) and blitted: one drawImage replaces ~120 path ops.
   // Float bob and the windup shake apply at blit time; aimed parts and shield arcs are live overlays. Frames bake lazily on the shared per-frame budget: until a frame exists
   // the nearest baked one stands in and a group with none yet is drawn live. Foe pixels have their own cap (least recently used looks go first); the cache is cleared on stratum change and whenever the shared cache is.
   const foeTC = new Map(), FOE_PX_MAX = 16e6, FOE_WARM = 4;
   let foePx = 0, foeGen = 0, foeStratum = 0, foeFr = 0, warmQ = [], warmI = 0;
   R.foeCache = true;
-  function foeClear() { foeTC.clear(); foePx = 0; warmQ.length = 0; warmI = 0; }
+  function freeLook(tc) { for (const grp of tc) if (grp) for (const sp of grp) freeSp(sp); }
+  function foeClear() { for (const tc of foeTC.values()) freeLook(tc); foeTC.clear(); foePx = 0; warmQ.length = 0; warmI = 0; }
   function foeFrames(e, spec, state, tint) {
     if (foeGen !== sprGen) { foeGen = sprGen; foeClear(); }
     let tc = foeTC.get(e.def); if (!tc) { foeTC.set(e.def, tc = []); tc.px = 0; }
@@ -466,7 +492,7 @@
     return tc[v] || (tc[v] = []);
   }
   function foeBake(e, spec, state, tint, f) {
-    const Q = R.scale, s = e.r / e.def.r, b = spec.box, pad = 1.2;
+    const Q = BQ, s = e.r / e.def.r, b = spec.box, pad = 1.2;
     const x0 = Math.floor((b[0] * s - pad) * Q) / Q, y0 = Math.floor((b[1] * s - pad) * Q) / Q; // origin on the pixel grid: the blit copies texels 1:1
     let halos = null;
     const sp = bake(x0, y0, x0 + Math.ceil((b[2] * s + pad) * Q - x0 * Q) / Q, y0 + Math.ceil((b[3] * s + pad) * Q - y0 * Q) / Q, false, (g) => { halos = Sp.paintFoe(g, e, spec, state, tint, f); });
@@ -534,7 +560,7 @@
       for (const [id] of ED.biomeFor(stratum).enemies) { const d = ED.ENEMIES[id]; if (d && Sp.FOE[d.look] && defs.indexOf(d) < 0) defs.push(d); }
       for (let f = 0; f < 40; f++) for (const d of defs) if (f < Sp.FOE[d.look].N) warmQ.push({ def: d, r: d.r, face: 1, id: 0, st: 'move', f });
     } else if (foePx >= FOE_PX_MAX) { // over the cap: drop the least recently used looks down to 70%
-      for (const [d, tc] of [...foeTC].sort((a, b) => a[1].u - b[1].u)) { if (foePx < FOE_PX_MAX * 0.7) break; foeTC.delete(d); foePx -= tc.px; }
+      for (const [d, tc] of [...foeTC].sort((a, b) => a[1].u - b[1].u)) { if (foePx < FOE_PX_MAX * 0.7) break; foeTC.delete(d); foePx -= tc.px; freeLook(tc); }
     }
     foeFr++;
     for (let k = 0; k < FOE_WARM && warmI < warmQ.length; k++, warmI++) {
@@ -887,12 +913,12 @@
   const NOP = () => {};
   // Pickups are cached 16x16 sprites (outlined, drawn once at 4x). Pass 0 (lit): ground blob and lights. Pass 1 (after lighting): halos (additive), then
   // the opaque sprites, so shards and coins read in any light; fast-moving (magnetised) pickups leave a short trail.
-  const pkSpr = {}, pkTrail = new Map(); let pkFrame = 0;
+  const pkSpr = {}, pkTrail = new Map(); let pkFrame = 0, glintH = null;
   const PK_COL = { gold: '#ffc94a', xp: '#7dffd9', orb: '#ff2a4a', heart: '#ff4a5a' };
   function pickSprite(kind) {
-    let s = pkSpr[kind]; if (s) return s;
-    s = pkSpr[kind] = document.createElement('canvas'); s.width = s.height = 64;
-    const g = s.getContext('2d'); g.translate(32, 32); g.scale(4, 4); g.lineJoin = 'round'; g.lineWidth = 0.9; g.strokeStyle = '#0b0806';
+    const h = pkSpr[kind]; if (h) return h.v;
+    const s = document.createElement('canvas'); s.width = s.height = 16; pkSpr[kind] = Bmp.hold(s);
+    const g = s.getContext('2d'); g.translate(8, 8); g.lineJoin = 'round'; g.lineWidth = 0.9; g.strokeStyle = '#0b0806';
     if (kind === 'xp') {
       g.fillStyle = '#34dcb0'; g.beginPath(); g.moveTo(0, -7); g.lineTo(-4, -1); g.lineTo(0, 6); g.closePath(); g.fill();
       g.fillStyle = '#b4ffe9'; g.beginPath(); g.moveTo(0, -7); g.lineTo(4, -1); g.lineTo(0, 6); g.closePath(); g.fill();
@@ -914,13 +940,12 @@
     }
     return s;
   }
-  let glintSpr = null;
   function glintSprite() {
-    if (glintSpr) return glintSpr;
-    glintSpr = document.createElement('canvas'); glintSpr.width = glintSpr.height = 32;
-    const g = glintSpr.getContext('2d'); g.translate(16, 16); g.fillStyle = '#ffffff';
+    if (glintH) return glintH.v;
+    const cv = document.createElement('canvas'); cv.width = cv.height = 16; glintH = Bmp.hold(cv);
+    const g = cv.getContext('2d'); g.translate(8, 8); g.scale(0.5, 0.5); g.fillStyle = '#ffffff';
     g.beginPath(); g.moveTo(0, -15); g.lineTo(1.3, -1.3); g.lineTo(15, 0); g.lineTo(1.3, 1.3); g.lineTo(0, 15); g.lineTo(-1.3, 1.3); g.lineTo(-15, 0); g.lineTo(-1.3, -1.3); g.closePath(); g.fill();
-    return glintSpr;
+    return cv;
   }
   function drawPickups(c, view, t, pass) {
     const pks = view.pickups;
@@ -932,7 +957,7 @@
         else if (k === 'xp') L(pk.x, pk.y - 4, 26, '#7dffd9', 0.5);
         else if (k === 'orb') L(pk.x, pk.y - 6, 34, '#ff2a4a', 0.65);
         else L(pk.x, pk.y - 6, 36, '#ff4a5a', 0.6);
-        c.globalAlpha = 0.55; c.drawImage(shadowCv, pk.x - 7, pk.y - (big ? 9 : 6), 14, big ? 12 : 9);
+        c.globalAlpha = 0.55; c.drawImage(shadowH.v, pk.x - 7, pk.y - (big ? 9 : 6), 14, big ? 12 : 9);
       }
       c.globalAlpha = 1;
       return;
@@ -954,10 +979,10 @@
     c.globalCompositeOperation = 'source-over';
     for (const pk of pks) {
       const k = pk.kind, bob = Math.sin(t * 5 + pk.id) * 1.5, spr = pickSprite(k);
-      if (k === 'gold') { const w = 8 * Math.max(0.2, Math.abs(Math.cos(t * 4 + pk.id))); c.drawImage(spr, pk.x - w, pk.y - 12 + bob, w * 2, 16); }
-      else if (k === 'xp') { const p = 1 + Math.sin(t * 6 + pk.id) * 0.05; c.drawImage(spr, pk.x - 8 * p, pk.y - 13 + bob - 8 * (p - 1), 16 * p, 16 * p); }
-      else if (k === 'orb') { const p = 0.9 + Math.sin(t * 6 + pk.id) * 0.06; c.drawImage(spr, pk.x - 8 * p, pk.y - 15 + bob, 16 * p, 16); }
-      else c.drawImage(spr, pk.x - 8, pk.y - 14 + bob, 16, 16);
+      if (k === 'gold') { const w = Math.max(2, Math.round(8 * Math.max(0.2, Math.abs(Math.cos(t * 4 + pk.id))))); c.drawImage(spr, Math.round(pk.x - w), Math.round(pk.y - 12 + bob), w * 2, 16); }
+      else if (k === 'xp') { const p = Math.round(16 * (1 + Math.sin(t * 6 + pk.id) * 0.05)); c.drawImage(spr, Math.round(pk.x - p / 2), Math.round(pk.y - 13 + bob - (p - 16) / 2), p, p); }
+      else if (k === 'orb') { const p = Math.round(16 * (0.9 + Math.sin(t * 6 + pk.id) * 0.06)); c.drawImage(spr, Math.round(pk.x - p / 2), Math.round(pk.y - 15 + bob), p, 16); }
+      else c.drawImage(spr, Math.round(pk.x - 8), Math.round(pk.y - 14 + bob), 16, 16);
     }
     c.globalCompositeOperation = 'lighter';
     for (const pk of pks) { // twinkle
@@ -1063,16 +1088,15 @@
     const list = doorPreviews(view, room, t); if (!list.length) return;
     for (const pv of list) {
       let near = 1e9; for (const p of view.players.values()) if (!p.dead) near = Math.min(near, Math.hypot(p.x - pv.x, p.y - pv.y));
-      const a = U.clamp((near - 22) / 46, 0.22, 0.95);
+      const a = U.clamp((near - 22) / 46, 0.22, 0.95), qx = Math.round(pv.x), qy = Math.round(pv.y);
       c.globalAlpha = a;
-      c.drawImage(ED.Icons.canvas(pv.ri.icon, pv.color, 64), pv.x - 11, pv.y - 11, 22, 22);
-      if (pv.ri.badge) c.drawImage(ED.Icons.canvas('skull', '#ff7a3a', 64), pv.x + 3, pv.y + 2, 12, 12);
+      c.drawImage(ED.Icons.canvas(pv.ri.icon, pv.color, 22), qx - 11, qy - 11); // icons are drawn at their cached size: 1 texel = 1 buffer px
+      if (pv.ri.badge) c.drawImage(ED.Icons.canvas('skull', '#ff7a3a', 12), qx + 3, qy + 2);
       if (pv.lab) { // lantern label on the room side of the icon; stays readable up close
-        c.save(); c.globalAlpha = Math.max(a, 0.7);
-        c.font = '800 9.5px "Alegreya Sans", sans-serif'; c.textAlign = 'left'; c.textBaseline = 'middle';
-        const tw = c.measureText(pv.lab).width, lx = pv.x - (tw + 13) / 2, ly = pv.d === 's' ? pv.y - 18 : pv.y + 18;
-        c.drawImage(ED.Icons.canvas('lantern', pv.lc, 64), lx, ly - 5.5, 11, 11);
-        c.lineJoin = 'round'; c.lineWidth = 3; c.strokeStyle = 'rgba(0,0,0,0.9)'; c.strokeText(pv.lab, lx + 13, ly); c.fillStyle = pv.lc; c.fillText(pv.lab, lx + 13, ly); c.restore();
+        c.globalAlpha = Math.max(a, 0.7);
+        const tw = R.labelW(pv.lab), lx = Math.round(pv.x - (tw + 13) / 2), ly = Math.round(pv.d === 's' ? pv.y - 18 : pv.y + 18);
+        c.drawImage(ED.Icons.canvas('lantern', pv.lc, 11), lx, ly - 5);
+        R.label(c, pv.lab, lx + 13 + tw / 2, ly, pv.lc);
       }
     }
     c.globalAlpha = 1;
@@ -1082,7 +1106,7 @@
     for (const p of view.props) {
       const done = !!(R.claimed && p.group && R.claimed[p.group] && (p.kind === 'campfire' || p.kind === 'anvil' || (p.kind === 'reward' && /^(boon:|class$|forge$|epic$|vigor$)/.test(p.item)))); // this hero already used it
       const G = done ? () => {} : (dx, dy, r, col, a) => R.emit(p.x + dx, p.y + dy, r, col, a), L = done ? () => {} : (dx, dy, r, col, k) => R.light(p.x + dx, p.y + dy, r, col, k);
-      c.save(); c.translate(p.x, p.y);
+      c.save(); c.translate(Math.round(p.x), Math.round(p.y));
       if (done) c.globalAlpha = 0.4;
       c.lineWidth = 1.5; c.strokeStyle = '#0b0806';
       switch (p.kind) {
@@ -1105,19 +1129,14 @@
           if (!p.state) {
             const bob = Math.sin(t * 3 + p.id) * 2;
             let col = '#ffffff', icon = null;
-            if (p.kind === 'relic' || p.stype === 'relic') { const r = ED.RELICS[p.item]; col = ED.RARITY[r.rar].color; icon = ED.Icons.relicCanvas(p.item, 64); }
-            else if (p.stype === 'boon') { col = ED.RARITY.e.color; icon = ED.Icons.canvas('star', col, 64); }
-            else if (p.stype === 'oil') { col = '#ffb35c'; icon = ED.Icons.canvas('oil', col, 64); }
-            else if (p.stype === 'forge') { col = '#ff9a3a'; icon = ED.Icons.canvas('anvil', col, 64); }
-            else { col = '#ff4a5a'; icon = ED.Icons.canvas('potion', col, 64); }
+            if (p.kind === 'relic' || p.stype === 'relic') { const r = ED.RELICS[p.item]; col = ED.RARITY[r.rar].color; icon = ED.Icons.relicCanvas(p.item, 20); }
+            else if (p.stype === 'boon') { col = ED.RARITY.e.color; icon = ED.Icons.canvas('star', col, 20); }
+            else if (p.stype === 'oil') { col = '#ffb35c'; icon = ED.Icons.canvas('oil', col, 20); }
+            else if (p.stype === 'forge') { col = '#ff9a3a'; icon = ED.Icons.canvas('anvil', col, 20); }
+            else { col = '#ff4a5a'; icon = ED.Icons.canvas('potion', col, 20); }
             G(0, -22 + bob, 24, col, 0.65); L(0, -22, 80, col, 0.8);
-            c.drawImage(icon, -10, -32 + bob, 20, 20);
-            if (p.kind === 'shop') {
-              const can = view.gold >= p.price;
-              c.font = '800 8px "Alegreya Sans", sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
-              c.lineWidth = 2.5; c.strokeStyle = 'rgba(0,0,0,0.8)'; c.strokeText(p.price + 'g', 0, 9);
-              c.fillStyle = can ? '#ffd36b' : '#a07060'; c.fillText(p.price + 'g', 0, 9);
-            }
+            c.drawImage(icon, -10, Math.round(-32 + bob));
+            if (p.kind === 'shop') R.label(c, p.price + 'g', 0, 9, view.gold >= p.price ? '#ffd36b' : '#a07060', 8);
           }
           break;
         }
@@ -1201,7 +1220,7 @@
           c.fillStyle = '#524a44'; c.fillRect(-13, -10, 26, 4); c.strokeRect(-13, -10, 26, 4);
           G(0, -26 + bob, 34, col, 0.7); L(0, -24, 120, col, 0.95);
           const me = view.players.get(local), ri = R.rewardIcon(p.item, me ? me.cls : null);
-          c.drawImage(ED.Icons.canvas(ri[0], ri[1], 64), -12, -38 + bob, 24, 24);
+          c.drawImage(ED.Icons.canvas(ri[0], ri[1], 24), -12, Math.round(-38 + bob));
           for (let i = 0; i < 3; i++) { const a = t * 1.5 + i * 2.1; G(Math.cos(a) * 15, -26 + bob + Math.sin(a) * 6, 5, col, 0.8); }
           break;
         }
@@ -1424,8 +1443,8 @@
 
   // ---------------- projectiles ----------------
   function trailSprite(color) {
-    let s = trailCache[color]; if (s) return s;
-    s = trailCache[color] = document.createElement('canvas'); s.width = 64; s.height = 16;
+    const h = trailCache[color]; if (h) return h.v;
+    const s = document.createElement('canvas'); s.width = 64; s.height = 16; trailCache[color] = Bmp.hold(s);
     const g = s.getContext('2d'), gr = g.createLinearGradient(0, 0, 64, 0);
     gr.addColorStop(0, U.rgba(color, 0)); gr.addColorStop(0.7, U.rgba(color, 0.45)); gr.addColorStop(1, U.rgba(color, 0.9));
     g.fillStyle = gr; g.beginPath(); g.moveTo(0, 8); g.lineTo(64, 0); g.lineTo(64, 16); g.closePath(); g.fill();
@@ -1567,12 +1586,12 @@
 
   // ---------------- lighting ----------------
   function rimAdd(x, y, r, col, k) { if (rimN < 40) { let L = rimSrc[rimN]; if (!L) L = rimSrc[rimN] = { x: 0, y: 0, r: 0, c: '', k: 0 }; L.x = x; L.y = y; L.r = r; L.c = col; L.k = k; rimN++; } }
-  function drawLighting(c, view, room, biome, local, t, ox, oy) {
-    const P = biome.pal, ll = R.lightLevel, s = R.scale;
+  function drawLighting(c, view, room, biome, local, t, ix, iy) { // lights are added in buffer px: world position minus the buffer origin
+    const P = biome.pal, ll = R.lightLevel, dv = R.lightDiv;
     const amb = R.ambient(biome, (1 - ll) * 0.1, view.pact > 0 ? Math.min(0.5, view.pact * 0.05) : 0);
     R.lightBegin(amb);
-    const gm = ED.Tiles.glowmap(room, s);
-    if (gm) { lctx.globalAlpha = 0.5; lctx.drawImage(gm, ox / R.lightDiv, oy / R.lightDiv, gm.width / gm.px * s / R.lightDiv, gm.height / gm.px * s / R.lightDiv); lctx.globalAlpha = 1; }
+    const gm = ED.Tiles.glowmap(room, BQ);
+    if (gm) { lctx.globalAlpha = 0.5; lctx.drawImage(gm, -ix / dv, -iy / dv, gm.width / gm.px / dv, gm.height / gm.px / dv); lctx.globalAlpha = 1; }
     rimN = 0;
     const src = rimAdd;
     // hero lanterns: warm core plus a wider tinted fill; radius shrinks by at most 15% and flickers as the lantern fails
@@ -1581,8 +1600,8 @@
       const base = (p.stats ? p.stats.lightR : 175) * (p.downed ? 0.6 : 1) * (0.85 + 0.15 * ll);
       const fl = 1 + Math.sin(t * 7 + (p.slot || 0)) * 0.03 + Math.sin(t * 19 + (p.slot || 0) * 2) * 0.02 * (1 + (1 - ll) * 3);
       const col = U.mix('#ffc27a', ED.PLAYER_COLORS[p.slot] || '#ffc27a', 0.12);
-      R.lightAdd(p.x * s + ox, (p.y - 10) * s + oy, base * 1.15 * fl * s, U.mix(col, P.light, 0.2), 0.9);
-      R.lightAdd(p.x * s + ox, (p.y - 10) * s + oy, base * 0.52 * fl * s, '#ffd9a0', 0.45);
+      R.lightAdd(p.x - ix, p.y - 10 - iy, base * 1.15 * fl, U.mix(col, P.light, 0.2), 0.9);
+      R.lightAdd(p.x - ix, p.y - 10 - iy, base * 0.52 * fl, '#ffd9a0', 0.45);
       src(p.x, p.y - 10, base * 0.9, col, 0.9);
     }
     // torches, fungus, lava and other fixed room lights
@@ -1593,7 +1612,7 @@
       else k = 0.6 + Math.sin(t * 2 + d.x) * 0.1;
       if (d.k === 'hz' && biome.hazard === 'water') k *= 0.45;
       const r = d.r * (d.k === 'torch' ? 1.25 : 0.85);
-      R.lightAdd(d.x * s + ox, d.y * s + oy, r * s, d.color, k);
+      R.lightAdd(d.x - ix, d.y - iy, r, d.color, k);
       if (d.k === 'torch') src(d.x, d.y, r, d.color, k);
     }
     for (const e of view.enemies) {
@@ -1602,32 +1621,47 @@
     }
     for (let i = 0; i < nl; i++) {
       const L = lights[i];
-      R.lightAdd(L.x * s + ox, L.y * s + oy, L.r * s, L.c, L.k);
+      R.lightAdd(L.x - ix, L.y - iy, L.r, L.c, L.k);
       if (L.k * L.r >= 60) src(L.x, L.y, L.r, L.c, L.k);
     }
-    if (!R.posting) { lctx.globalCompositeOperation = 'source-over'; lctx.globalAlpha = 1; lctx.drawImage(vignette, 0, 0, lightCv.width, lightCv.height); } // vignette (black, alpha) darkens the light buffer: same result as a full-screen overlay at buffer cost
+    if (!R.posting) { lctx.globalCompositeOperation = 'source-over'; lctx.globalAlpha = 1; lctx.drawImage(vignetteH.v, 0, 0, lightCv.width, lightCv.height); } // vignette (black, alpha) darkens the light buffer: same result as a full-screen overlay at buffer cost
     R.lightEnd(c);
   }
 
-  // ---------------- overhead info (names, bars, prompts) ----------------
+  // ---------------- world text and overhead info (names, bars, prompts) ----------------
+  // With the pixel font (ED.Atlas.font) text is glyph blits at an integer number of world px per font px; without it, outlined canvas text baked once per (string, colour, size).
+  const LBL = 10; // default label height, world px
   let mctx = null;
-  // Overhead label font in world px: 7, kept between 13 and 26 device px so it reads at 720p and 1440p alike.
-  const labelFs = () => U.clamp(7 * R.scale, 13, 26) / R.scale;
-  // Outlined text baked once per (string, colour) at labelFs; sprite origin = text centre.
-  function textSprite(str, color) {
-    const key = color + str;
+  const fontK = (size) => Math.max(1, Math.round((size || LBL) / ED.Atlas.font.h));
+  const fbPx = (size) => (size || LBL) * 0.9; // canvas-font px of the fallback for a nominal label height
+  // Outlined text baked once per (string, colour, size in px); sprite origin = text centre.
+  function textSprite(str, color, fs) {
+    const key = color + '|' + fs + '|' + str;
     let s = txtCache.get(key);
     if (s) return s;
     if (!mctx) mctx = document.createElement('canvas').getContext('2d');
-    const fs = labelFs(), font = '800 ' + fs.toFixed(2) + 'px "Alegreya Sans", sans-serif';
+    const font = '800 ' + fs.toFixed(2) + 'px "Alegreya Sans", sans-serif';
     mctx.font = font;
     const hw = mctx.measureText(str).width / 2 + fs * 0.45, hh = fs * 0.85;
-    s = bake(-hw, -hh, hw, hh, false, (g) => { g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineWidth = fs * 0.3; g.strokeStyle = 'rgba(0,0,0,0.85)'; g.strokeText(str, 0, 0); g.fillStyle = color; g.fillText(str, 0, 0); });
-    if (txtCache.size > 200) txtCache.clear();
+    s = bake(-hw, -hh, hw, hh, false, (g) => { g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.lineWidth = Math.max(2, fs * 0.3); g.strokeStyle = 'rgba(0,0,0,0.85)'; g.strokeText(str, 0, 0); g.fillStyle = color; g.fillText(str, 0, 0); });
+    if (txtCache.size > 200) dropText();
     txtCache.set(key, s);
     return s;
   }
-  // Floating damage number baked once per (string, colour, size in half units, crit); FX.drawTexts scales it to the animated size. Sprite origin = text centre, .fs = baked font size.
+  R.labelH = (size) => (ED.Atlas.font ? ED.Atlas.font.h * fontK(size) : size || LBL);
+  R.labelW = (str, size) => {
+    if (ED.Atlas.font) return ED.Atlas.textW(str, fontK(size));
+    if (!mctx) mctx = document.createElement('canvas').getContext('2d');
+    mctx.font = '800 ' + fbPx(size).toFixed(2) + 'px "Alegreya Sans", sans-serif';
+    return Math.ceil(mctx.measureText(str).width + fbPx(size) * 0.9);
+  };
+  // Label centred at world (x, y) in the current (integer-translated) transform; size = nominal height in world px.
+  R.label = (c, str, x, y, color, size, alpha) => {
+    if (ED.Atlas.text(c, str, Math.round(x), Math.round(y), color, ED.Atlas.font ? fontK(size) : 2, 'c', alpha)) return;
+    const ts = textSprite(str, color, fbPx(size));
+    if (alpha !== undefined && alpha !== 1) { const ga = c.globalAlpha; c.globalAlpha = ga * alpha; blit(c, ts, x, y); c.globalAlpha = ga; } else blit(c, ts, x, y);
+  };
+  // Floating damage number baked once per (string, colour, size in half units, crit); R.drawNum scales it to the animated size. Sprite origin = text centre, .fs = baked font size.
   R.numSprite = (str, color, size, crit) => {
     const bs = Math.round(size * 2) / 2, key = bs + (crit ? 'c' : 'n') + color + str;
     let s = numC.get(key);
@@ -1637,23 +1671,28 @@
     const hw = mctx.measureText(str).width / 2 + bs * 0.4, hh = bs * 0.75;
     s = bake(-hw, -hh, hw, hh, false, (g) => {
       g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
-      g.lineWidth = crit ? 4 : 3; g.strokeStyle = crit ? 'rgba(40,10,0,0.95)' : 'rgba(0,0,0,0.85)'; g.strokeText(str, 0, 0);
+      g.lineWidth = crit ? 3 : 2; g.strokeStyle = crit ? 'rgba(40,10,0,0.95)' : 'rgba(0,0,0,0.85)'; g.strokeText(str, 0, 0);
       g.fillStyle = color; g.fillText(str, 0, 0);
       if (crit) { g.fillStyle = 'rgba(255,255,255,0.4)'; g.save(); g.beginPath(); g.rect(-bs * 3, -bs * 0.6, bs * 6, bs * 0.55); g.clip(); g.fillText(str, 0, 0); g.restore(); }
     });
     s.fs = bs;
-    if (numC.size > 160) numC.clear();
+    if (numC.size > 160) dropText();
     numC.set(key, s);
     return s;
   };
-  // HP bar (frame, dark base, fill, sheen) baked per colour / width / fill step (half pixels) / height; sprite origin = bar left-top.
-  function barSprite(bc, w, fw2, h) {
-    return sprite('hb' + bc + '|' + w + '|' + fw2 + '|' + h, -1, -1, w + 1, h + 1, false, (g) => {
-      const fw = fw2 / 2;
+  // One floating text t (FX.texts entry) at its animated size fs and alpha a: pixel-font glyphs, else the baked number scaled.
+  R.drawNum = (c, t, fs, a) => {
+    if (ED.Atlas.font) { ED.Atlas.text(c, t.s, Math.round(t.x), Math.round(t.y), t.color, fontK(fs), 'c', a); return; }
+    const sp = R.numSprite(t.s, t.color, t.size, t.crit), q = fs / sp.fs;
+    c.globalAlpha = a; c.drawImage(sp.cv, Math.round(t.x + sp.x * q), Math.round(t.y + sp.y * q), sp.w * q, sp.h * q);
+  };
+  // HP bar (frame, dark base, fill, sheen) baked per colour / width / fill px / height; sprite origin = bar left-top.
+  function barSprite(bc, w, fw, h) {
+    return sprite('hb' + bc + '|' + w + '|' + fw + '|' + h, -1, -1, w + 1, h + 1, false, (g) => {
       g.fillStyle = 'rgba(0,0,0,0.72)'; g.fillRect(-1, -1, w + 2, h + 2);
       g.fillStyle = U.shade(bc, -0.35); g.fillRect(0, 0, w, h);
       g.fillStyle = bc; g.fillRect(0, 0, fw, h);
-      g.fillStyle = 'rgba(255,255,255,0.3)'; g.fillRect(0, 0, fw, h * 0.4);
+      g.fillStyle = 'rgba(255,255,255,0.3)'; g.fillRect(0, 0, fw, Math.max(1, Math.floor(h * 0.4)));
     });
   }
   // Hero labels placed this frame (x, y, half-width), so stacked heroes never print their names over each other.
@@ -1670,36 +1709,33 @@
     return y;
   }
   function drawOverheads(c, view, local, t) {
-    c.textAlign = 'center'; c.textBaseline = 'middle';
     if (view.room) drawDoorPreviews(c, view, view.room, t);
-    baseT(c);
-    // enemy bars and elite labels: one blit each, snapped to the device pixel grid; bars stay at least 4 device px thick
-    const bh = Math.max(2, 4 / R.scale);
+    // enemy bars and elite labels: one blit each on the buffer pixel grid
+    const bh = R.scale >= 2 ? 2 : 3, lhh = R.labelH();
     for (const e of view.enemies) {
       if (e.hp <= 0 || e.boss || e.burrowed) continue;
       const frac = e.hp / e.maxHp;
       if (frac >= 0.999 && !e.elite) continue;
-      const w = e.elite ? 30 : 18, y = e.y - e.r * 2.6 - (e.def.fly ? 14 : 4), af = e.elite ? ED.AFFIXES[e.elite] : null;
-      blit(c, barSprite(af ? af.color : '#e2513f', w, Math.round(U.clamp(frac, 0, 1) * w * 2), Math.round(bh * 4) / 4), e.x - w / 2, y);
-      if (e.ward > 0) { c.fillStyle = '#7fc8ff'; c.fillRect(e.x - w / 2, y - 1 - bh * 0.75, w * (e.ward / (e.wardMax || 1)), bh * 0.75); }
-      if (af) { const ts = textSprite(af.name + ' ' + e.def.name, af.color); blit(c, ts, e.x, y - 1.5 - ts.h / 2 - (e.ward > 0 ? bh : 0)); }
+      const w = e.elite ? 30 : 18, y = Math.round(e.y - e.r * 2.6 - (e.def.fly ? 14 : 4)), af = e.elite ? ED.AFFIXES[e.elite] : null, bx = Math.round(e.x - w / 2);
+      blit(c, barSprite(af ? af.color : '#e2513f', w, Math.round(U.clamp(frac, 0, 1) * w), bh), bx, y);
+      if (e.ward > 0) { c.fillStyle = '#7fc8ff'; c.fillRect(bx, y - 1 - bh, Math.max(1, Math.round(w * (e.ward / (e.wardMax || 1)))), Math.max(1, bh - 1)); }
+      if (af) R.label(c, af.name + ' ' + e.def.name, e.x, y - 2 - lhh / 2 - (e.ward > 0 ? bh : 0), af.color);
     }
-    // hero names (the local hero first; a name that would overlap another steps up) and revive rings with a cached DOWN / REVIVE label
-    const multi = view.players.size > 1, lh = labelFs() * 1.3;
+    // hero names (the local hero first; a name that would overlap another steps up) and revive rings with a DOWN / REVIVE label
+    const multi = view.players.size > 1, lh = lhh * 1.3;
     lblN = 0;
     for (let pass = 0; pass < 2; pass++) for (const p of view.players.values()) {
       if ((p.pid === local) !== (pass === 0)) continue;
-      const col = ED.PLAYER_COLORS[p.slot] || '#fff';
+      const col = ED.PLAYER_COLORS[p.slot] || '#fff', px = Math.round(p.x), py = Math.round(p.y);
       if (multi && !p.dead) {
-        const ns = textSprite(p.name, col);
-        blit(c, ns, p.x, placeLabel(p.x, p.y - 44, ns.w, lh));
-        if (p.pid !== local && !p.downed) { const fr = p.hp / p.maxHp; c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(p.x - 11, p.y - 39, 22, 3); c.fillStyle = fr > 0.35 ? '#86d38f' : '#e2513f'; c.fillRect(p.x - 10.5, p.y - 38.5, 21 * fr, 2); }
+        R.label(c, p.name, px, placeLabel(px, py - 44, R.labelW(p.name), lh), col);
+        if (p.pid !== local && !p.downed) { const fr = p.hp / p.maxHp; c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(px - 11, py - 39, 22, 3); c.fillStyle = fr > 0.35 ? '#86d38f' : '#e2513f'; c.fillRect(px - 10, py - 38, Math.round(20 * fr), 1); }
       }
       if (p.downed) {
-        c.strokeStyle = 'rgba(0,0,0,0.6)'; c.lineWidth = 3; c.beginPath(); c.arc(p.x, p.y - 8, 20, 0, U.TAU); c.stroke();
-        c.strokeStyle = '#86d38f'; c.beginPath(); c.arc(p.x, p.y - 8, 20, -Math.PI / 2, -Math.PI / 2 + U.TAU * (p.revive || 0)); c.stroke();
-        const ts = textSprite(p.pid === local ? 'DOWN' : 'REVIVE', '#ff8a7a');
-        blit(c, ts, p.x, placeLabel(p.x, p.y - 34, ts.w, lh));
+        c.strokeStyle = 'rgba(0,0,0,0.6)'; c.lineWidth = 3; c.beginPath(); c.arc(px, py - 8, 20, 0, U.TAU); c.stroke();
+        c.strokeStyle = '#86d38f'; c.beginPath(); c.arc(px, py - 8, 20, -Math.PI / 2, -Math.PI / 2 + U.TAU * (p.revive || 0)); c.stroke();
+        const str = p.pid === local ? 'DOWN' : 'REVIVE';
+        R.label(c, str, px, placeLabel(px, py - 34, R.labelW(str), lh), '#ff8a7a');
       }
     }
     // nearest sign within reach (one at a time); the HUD draws its text in screen space with the current key bindings
