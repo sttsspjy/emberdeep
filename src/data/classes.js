@@ -4,13 +4,14 @@
   'use strict';
 
   ED.PLAYER_COLORS = ['#ff8a3d', '#5fb8ff', '#8ee06a', '#e889e0'];
+  ED.CLS = {}; // per-class sim hook tables (src/sim/class-*.js)
 
   ED.CLASSES = {
     knight: {
       name: 'Knight', title: 'Oathsworn Shield', icon: 'shield',
-      desc: 'Sturdy frontliner. Sweeping blades cut down crowds; the raised shield turns arrows back.',
+      desc: 'Sturdy frontliner. Sweeping blades cut down crowds; the thrown shield stuns whole packs and swats arrows.',
       hp: 135, armor: 8, spd: 116, crit: 0.05, power: 18, element: null,
-      weapons: ['longsword', 'warhammer', 'glaive'], skill: 'charge', skill2: 'bulwark',
+      weapons: ['longsword', 'warhammer', 'glaive'], skill: 'charge', skill2: 'shieldthrow',
       col: { a: '#a7b0ba', b: '#5d6670', c: '#d6aa55', d: '#2b3038' }, unlock: null,
     },
     ranger: {
@@ -36,7 +37,7 @@
     },
     cleric: {
       name: 'Cleric', title: 'Lantern of the Faithful', icon: 'sun',
-      desc: 'Holy bruiser. Shields and heals the whole party; a natural co-op anchor.',
+      desc: 'Holy bruiser. Consecrates the ground and shields the whole party; a natural co-op anchor.',
       hp: 121, armor: 7, spd: 114, crit: 0.05, power: 17, element: 'holy',
       weapons: ['mace', 'dawnhammer', 'lantern'], skill: 'sanctuary', skill2: 'judgment',
       col: { a: '#e8e0c8', b: '#a69a78', c: '#ffd36b', d: '#4a4232' }, unlock: { runs: 4, text: 'Complete 4 descents (clear a room in each)' },
@@ -78,21 +79,158 @@
     plaguestaff: { name: 'Plague Staff', desc: 'Bolts that burst into lingering plague.', kind: 'proj', dmg: 6, rate: 0.6, speed: 260, n: 1, spread: 0, pierce: 0, r: 6, life: 0.8, proj: 'plague', cloud: { r: 44, dps: 10, dur: 2.6 }, look: 'staff' },
   };
 
+  // Skills. slot 0 = K, 1 = L. aim: 'dir' flies toward the cursor, 'ground' lands on it (clamped to range; walk: on a standable spot), 'move' travels toward it (rangeMin..range, + the stat in rangeAdd), 'self' ignores it.
+  // aimIf { stat: aim } overrides aim while the stat is set; moveIf { stat: { k: 'charge' | 'hop' | 'leap', ... } } moves the caster with the cast (iframes seconds untouchable, default = the move time).
+  // parts feed ED.Stats.skillNums (the one source for sim, sheet and bots): dmg = (base + pow x X) x (1 + slot damage), X = Power (on 'P'), the equipped weapon's dmg ('W') or the unforked weapon ('B');
+  // powKey adds a stat to pow; of + mul / mul1 derive a part from another (mul1: x (1 + stat); times 'ticks': x the tick count); if = the stat that enables the part; mulIf = { stat: factor };
+  // r scales with area (x(1 + 0.5 area) x (1 + slot area)); dur adds slot duration and is capped at capCd x the effective cooldown; n adds slot count; per: 'hit' | 'tick' | 'sec' | 'minion' | 'status'.
   ED.SKILLS = {
-    charge: { name: 'Shield Charge', cd: 6, icon: 'shield', desc: 'Charge forward invulnerable, smashing and stunning everything in your path.' },
-    volley: { name: 'Volley', cd: 5, icon: 'arrows', desc: 'Loose a wide fan of 7 piercing arrows.' },
-    nova: { name: 'Flame Nova', cd: 7, icon: 'flame', desc: 'Erupt in a ring of fire that burns everything nearby.' },
-    step: { name: 'Shadowstep', cd: 4.5, icon: 'cloak', desc: 'Blink forward, cutting through foes. Your next 3 attacks are critical hits.' },
-    sanctuary: { name: 'Sanctuary', cd: 11, icon: 'sun', desc: 'Heal nearby allies 7% and consecrate the ground: allies inside take 15% less damage, foes burn.' },
-    legion: { name: 'Raise Legion', cd: 12, icon: 'skull', desc: 'Summon 3 skeletal minions for 12 seconds. Kills may also raise minions.', minion: { pw: { base: 6, k: 0.6 } } }, // minion hit damage = ED.procDmg(minion, stats)
+    charge: { name: 'Shield Charge', slot: 0, cd: 6, icon: 'shield', aim: 'move', range: 150, rangeMin: 60, rangeAdd: 's1Range', move: { k: 'charge', speed: 600 },
+      desc: 'Charge toward the cursor, untouchable, smashing and stunning every foe you run into.',
+      parts: [
+        { id: 'impact', label: 'Impact', base: 20, pow: 1.6, per: 'hit', proc: true, stun: 1.0, knock: 260, crush: 0.4, reach: 26 },
+        { id: 'shock', label: 'Shockwave', if: 'jugShock', of: 'impact', mul: 'jugShock', per: 'hit', r: 90, knock: 220, proc: false },
+        { id: 'bash', label: 'Shield Bash', if: 'bash', per: 'hit', mulKey: 'bash', proc: true },
+      ] },
+    shieldthrow: { name: 'Shield Throw', slot: 1, cd: 9, icon: 'bulwark', aim: 'dir', range: 280, rangeMin: 120,
+      desc: 'Hurl your shield at the cursor. It strikes and stuns up to 4 foes as it ricochets between them, then flies back to your hand, striking again. Catching it shields you for 0.5% max health per foe struck (at most once per 6 s). In flight it swats enemy shots.',
+      parts: [
+        { id: 'strike', label: 'Strike', base: 20, pow: 1.3, per: 'hit', n: 4, proc: true, stun: 0.9, knock: 140, r: 14, bossMul: 1.5 },
+        { id: 'return', label: 'Return', base: 10, pow: 0.65, per: 'hit', proc: true, knock: 80, r: 14 },
+        { id: 'orbit', label: 'Orbit', if: 'orbit', of: 'strike', mul: 'orbitMul', per: 'hit', durKey: 'orbit', every: 0.75, r: 44, proc: true },
+        { id: 'reflect', label: 'Returned shard', if: 'orbitReflect', of: 'strike', mul: 'orbitReflect', per: 'hit', range: 300, proc: true },
+      ] },
+    volley: { name: 'Volley', slot: 0, cd: 5, icon: 'arrows', aim: 'dir', moveIf: { volleyHop: { k: 'hop', dist: 70, dir: -1, t: 0.15, iframes: 0.15 } },
+      desc: 'Loose a wide fan of piercing arrows toward the cursor.',
+      parts: [
+        { id: 'arrow', label: 'Arrow', base: 4, pow: 1.2, per: 'hit', n: 7, fan: 1.2, pierce: 1, speed: 480, life: 0.8, pr: 5, knock: 60, proc: true, close: 110 },
+      ] },
+    nova: { name: 'Flame Nova', slot: 0, cd: 7, icon: 'flame', aim: 'self',
+      desc: 'Erupt in a ring of fire that burns everything nearby.',
+      parts: [
+        { id: 'blast', label: 'Blast', base: 22, pow: 2.5, per: 'hit', r: 105, knock: 200, el: 'class', proc: true },
+        { id: 'burn', label: 'Burn', base: 12, pow: 2.4, per: 'status', status: 'burn' },
+        { id: 'ring', label: 'Ring of fire', if: 'novaRing', base: 8, pow: 1, per: 'sec', rOf: 'blast', rMul: 0.8, dur: 3, el: 'class' },
+        { id: 'echo', label: 'Second eruption', if: 'novaEcho', of: 'blast', mul: 'novaEcho', per: 'hit', delay: 0.6, el: 'class', proc: true },
+        { id: 'flare', label: 'Rebirth flare', if: 'mantleBurst', of: 'blast', mul: 'mantleBurst', per: 'hit', r: 90, knock: 220, el: 'class', proc: true },
+      ] },
+    step: { name: 'Shadowstep', slot: 0, cd: 4.5, icon: 'cloak', aim: 'move', range: 140, rangeMin: 40,
+      desc: 'Blink toward the cursor, cutting through foes. Your next attacks are critical hits.',
+      parts: [
+        { id: 'slash', label: 'Slash', base: 12, pow: 2.2, per: 'hit', crit: true, proc: true, reach: 20 },
+        { id: 'after', label: 'Afterimage', if: 'afterimage', base: 5, pow: 3, per: 'hit', r: 80, delay: 1.2, blind: 1, proc: false },
+        { id: 'twin', label: 'Twin cut', if: 'stepTwin', of: 'slash', mul: 'stepTwin', per: 'hit', delay: 0.15, crit: true, proc: true },
+      ] },
+    sanctuary: { name: 'Sanctuary', slot: 0, cd: 11, icon: 'sun', aim: 'ground', range: 200, aimIf: { aura: 'self' },
+      desc: 'Consecrate the ground at the cursor: foes burn and allies inside take less damage. Heals the allies around you when cast.',
+      parts: [
+        { id: 'zone', label: 'Holy ground', base: 10, pow: 1.2, per: 'sec', r: 100, dur: 3.5, capCd: 0.6, el: 'class' },
+      ] },
+    legion: { name: 'Raise Legion', slot: 0, cd: 12, icon: 'skull', aim: 'ground', range: 160, walk: true, prevR: 35,
+      desc: 'Raise skeletal minions at the cursor for a time. Kills may also raise minions.',
+      parts: [
+        { id: 'minion', label: 'Minion strike', base: 6, pow: 0.6, per: 'minion', n: 3, dur: 12, every: 0.7 },
+        { id: 'spikes', label: 'Bone spikes', if: 'boneSpikes', base: 10, pow: 1.5, per: 'hit', r: 60, el: 'class', proc: true },
+      ] },
     // Second skill (skill2 binding): one per class, cooldown reduction applies like the first.
-    bulwark: { name: 'Bulwark', cd: 9, icon: 'bulwark', desc: 'Raise your shield toward your aim for 1.4s, moving at half speed. Blocks up to 6 hits from the front and turns arrows back (15 + weapon damage). On release, bash for 20 + 1.2x weapon damage, +25% per block.' },
-    rain: { name: 'Rain of Arrows', cd: 10, icon: 'rain', desc: 'Mark a point within 260. After 0.35s arrows fall for 2s over radius 80, hitting every foe inside each 0.25s for 4 + 0.45x weapon damage.' },
-    meteor: { name: 'Meteor', cd: 12, icon: 'meteor', desc: 'Call a meteor to a point within 300. After 0.9s it lands (radius 95) for 30 + 3.5x weapon damage, knocks foes back, adds Burn worth 50% of the impact and leaves a burning crater for 3s.' },
-    vanish: { name: 'Vanish', cd: 11, icon: 'vanish', desc: 'Drop smoke (radius 75, 3s): foes inside are slowed 40% and cannot start attacks. Foes lose track of you for 2.5s; your next attack is an Ambush, a guaranteed crit for +150% damage. Attacking ends stealth.' },
-    judgment: { name: 'Judgment', cd: 9, icon: 'hammer', desc: 'Throw a hammer that flies out for 0.55s and returns, piercing. Each leg hits a foe once for 18 + 1.4x weapon damage and Judges it for 4s (+20% damage taken). A judged foe dying heals allies within 160 by 3% max HP (within the hit and kill heal cap).' },
-    harvest: { name: 'Bone Harvest', cd: 10, icon: 'harvest', desc: 'Each of your minions explodes (radius 60, 24 + 1.8x weapon damage) and heals you 3% max HP. Then raise 1 minion for 12s, or 2 if you had none.' },
+    rain: { name: 'Rain of Arrows', slot: 1, cd: 10, icon: 'rain', aim: 'ground', range: 260,
+      desc: 'Mark a point at the cursor. After a moment arrows fall on it, hitting every foe inside.',
+      parts: [
+        { id: 'tick', label: 'Arrows', base: 4, pow: 0.45, per: 'tick', every: 0.25, dur: 2, delay: 0.35, r: 80, proc: true },
+        { id: 'sky', label: 'Skyfall', if: 'skyfall', of: 'tick', times: 'ticks', per: 'hit', delay: 0.6, rMul: 1.15, stun: 0.5, proc: true },
+        { id: 'sky2', label: 'Twin Sky', if: 'skyTwin', of: 'sky', mul: 'skyTwin', per: 'hit', delay: 0.8, proc: true },
+        { id: 'shower', label: 'Second Shower', if: 'shower', of: 'tick', mul: 'shower', per: 'tick', every: 0.25, dur: 2, proc: true },
+      ] },
+    meteor: { name: 'Meteor', slot: 1, cd: 12, icon: 'meteor', aim: 'ground', range: 300, moveIf: { comet: { k: 'leap', t: 0.6, iframes: 0.35 } },
+      desc: 'Call a meteor down on the cursor. It knocks foes back, burns them and leaves a burning crater.',
+      parts: [
+        { id: 'impact', label: 'Impact', base: 30, pow: 3.5, per: 'hit', r: 95, delay: 0.9, knock: 220, el: 'class', statusAdd: { burn: 0.5 }, proc: true },
+        { id: 'crater', label: 'Crater', base: 8, pow: 0.8, per: 'sec', r: 60, dur: 3, el: 'class' },
+        { id: 'twin', label: 'Twin Meteor', if: 'twinMeteor', of: 'impact', mul: 'twinMeteor', per: 'hit', r: 95, delay: 0.6, el: 'class', proc: true },
+        { id: 'rocks', label: 'Meteorites', if: 'meteorites', of: 'impact', mul: 'meteorites', per: 'hit', n: 3, r: 45, delay: 0.3, el: 'class', proc: true },
+      ] },
+    vanish: { name: 'Vanish', slot: 1, cd: 11, icon: 'vanish', aim: 'self',
+      desc: 'Drop smoke that slows and blinds foes. You vanish from their sight; your next attack is an Ambush, a guaranteed critical hit.',
+      parts: [
+        { id: 'ambush', label: 'Ambush', pow: 2.5, powKey: 'ambushMul', on: 'B', per: 'hit', crit: true, proc: true },
+        { id: 'smoke', label: 'Smoke', per: 'zone', r: 75, dur: 3, slow: 0.4 },
+        { id: 'blind', label: 'Smoke blind', per: 'zone', dur: 2, durKey: 'veilBlind', capCd: 0.5 },
+      ] },
+    judgment: { name: 'Judgment', slot: 1, cd: 9, icon: 'hammer', aim: 'dir',
+      desc: 'Throw a hammer toward the cursor that flies out and returns, piercing. Each leg hits a foe once and Judges it (+20% damage taken).',
+      parts: [
+        { id: 'leg', label: 'Hammer', base: 18, pow: 1.4, per: 'hit', r: 18, el: 'class', mulIf: { twinHammer: 0.75 }, proc: true },
+        { id: 'verdict', label: 'Verdict', if: 'verdict', base: 20, pow: 3, per: 'hit', r: 70, el: 'class', stun: 0.4, proc: true },
+      ] },
+    harvest: { name: 'Bone Harvest', slot: 1, cd: 10, icon: 'harvest', aim: 'self',
+      desc: 'Each of your minions explodes and heals you; then raise new minions.',
+      parts: [
+        { id: 'burst', label: 'Burst', base: 24, pow: 1.8, per: 'hit', r: 60, el: 'class', proc: true },
+        { id: 'corpse', label: 'Corpse burst', if: 'corpse', of: 'burst', mul: 'corpseMul', per: 'hit', proc: true },
+        { id: 'lance', label: 'Bone lance', if: 'boneLance', of: 'burst', mul1: 'boneLance', per: 'hit', proc: true },
+      ] },
   };
 
   ED.weaponUnlocked = (cls, idx, masteryLevel) => idx === 0 || (idx === 1 && masteryLevel >= 3) || (idx === 2 && masteryLevel >= 6);
+
+  // ---------------- fork weapons (Heavy / Swift attack forks) ----------------
+  // Constants (ED.CONST, read at call time): ATK_FLOOR 0.12 s and ATK_FLOOR_SHOT 0.06 s per shot bound a weapon's attack interval (stats.js); a Heavy interval stops at 1.3 s.
+  ED.FORK_NAMES = {
+    'longsword@heavy': 'Greatsword', 'longsword@swift': 'Saber', 'warhammer@heavy': 'Maul', 'warhammer@swift': 'War Pick', 'glaive@heavy': 'Halberd', 'glaive@swift': 'Spear',
+    'longbow@heavy': 'Greatbow', 'longbow@swift': 'Hunting Bow', 'crossbow@heavy': 'Arbalest', 'crossbow@swift': 'Repeater', 'twinbows@heavy': 'Twin Recurves', 'twinbows@swift': 'Twin Flatbows',
+    'firestaff@heavy': 'Magma Staff', 'firestaff@swift': 'Spark Staff', 'emberwand@heavy': 'Cinder Rod', 'emberwand@swift': 'Flicker Wand', 'inferno@heavy': 'Tome of Ruin', 'inferno@swift': 'Pocket Grimoire',
+    'daggers@heavy': 'Twin Kukris', 'daggers@swift': 'Stilettos', 'knives@heavy': 'Chakrams', 'knives@swift': 'Darts', 'scythes@heavy': 'Great Scythes', 'scythes@swift': 'Sickles',
+    'mace@heavy': 'Morning Star', 'mace@swift': 'Flail', 'dawnhammer@heavy': 'Sunforged Maul', 'dawnhammer@swift': 'Dawn Pick', 'lantern@heavy': 'Great Lantern', 'lantern@swift': 'Censer',
+    'bonewand@heavy': 'Skull Staff', 'bonewand@swift': 'Finger Wand', 'soulscythe@heavy': 'Death Scythe', 'soulscythe@swift': 'Soul Sickle', 'plaguestaff@heavy': 'Plague Totem', 'plaguestaff@swift': 'Plague Rod',
+  };
+  // Look of each fork for the sprite baker: art = ED.ART anim id (a pack sprite, or the base weapon's art for an overlay look), op = silhouette overlay H (head x1.4, studs, brass band; thicker shafts) or S (head x0.6, wrapped grip, thinner shafts), tint, len = sprite length factor, dup = drawn twice.
+  const LOOK = (art, op, len, extra) => Object.assign({ art, op, len }, extra);
+  ED.FORK_LOOKS = {
+    'longsword@heavy': LOOK('weapon.alt.anime_sword', 'H', 1.15), 'longsword@swift': LOOK('weapon.alt.katana', 'S', 0.9),
+    'warhammer@heavy': LOOK('weapon.alt.big_hammer', 'H', 1.15, { tint: '#9aa3ad' }), 'warhammer@swift': LOOK('weapon.alt.throwing_axe', 'S', 0.9, { tint: '#9aa3ad' }),
+    'glaive@heavy': LOOK('weapon.glaive', 'H', 1.15, { head: 'weapon.alt.waraxe' }), 'glaive@swift': LOOK('weapon.glaive', 'S', 0.9),
+    'longbow@heavy': LOOK('weapon.longbow', 'H', 1.15), 'longbow@swift': LOOK('weapon.longbow', 'S', 0.9),
+    'crossbow@heavy': LOOK('weapon.crossbow', 'H', 1.15, { tint: '#9aa3ad' }), 'crossbow@swift': LOOK('weapon.crossbow', 'S', 0.9, { magazine: true }),
+    'twinbows@heavy': LOOK('weapon.twinbows', 'H', 1.15, { dup: 2 }), 'twinbows@swift': LOOK('weapon.twinbows', 'S', 0.9, { dup: 2 }),
+    'firestaff@heavy': LOOK('weapon.firestaff', 'H', 1.15, { gem: '#ff8a2a' }), 'firestaff@swift': LOOK('weapon.firestaff', 'S', 0.9),
+    'emberwand@heavy': LOOK('weapon.emberwand', 'H', 1.15), 'emberwand@swift': LOOK('weapon.emberwand', 'S', 0.9),
+    'inferno@heavy': LOOK('weapon.inferno', 'H', 1.25, { clasp: true }), 'inferno@swift': LOOK('weapon.inferno', 'S', 0.75, { ribbon: true }),
+    'daggers@heavy': LOOK('weapon.alt.machete', 'H', 1.15, { dup: 2 }), 'daggers@swift': LOOK('weapon.daggers', 'S', 0.9, { dup: 2 }),
+    'knives@heavy': LOOK('weapon.knives', 'H', 1.15), 'knives@swift': LOOK('weapon.knives', 'S', 0.9),
+    'scythes@heavy': LOOK('weapon.scythes', 'H', 1.15, { dup: 2 }), 'scythes@swift': LOOK('weapon.scythes', 'S', 0.9, { dup: 2 }),
+    'mace@heavy': LOOK('weapon.mace', 'H', 1.15, { tint: '#d4b24a', spikes: true }), 'mace@swift': LOOK('weapon.mace', 'S', 0.9, { chain: true }),
+    'dawnhammer@heavy': LOOK('weapon.alt.big_hammer', 'H', 1.15, { tint: '#d4b24a' }), 'dawnhammer@swift': LOOK('weapon.alt.throwing_axe', 'S', 0.9, { tint: '#d4b24a' }),
+    'lantern@heavy': LOOK('weapon.lantern', 'H', 1.15, { cage: true }), 'lantern@swift': LOOK('weapon.lantern', 'S', 0.9, { chain: true }),
+    'bonewand@heavy': LOOK('weapon.bonewand', 'H', 1.15, { skull: true }), 'bonewand@swift': LOOK('weapon.bonewand', 'S', 0.9),
+    'soulscythe@heavy': LOOK('weapon.soulscythe', 'H', 1.15, { dup: 1, tint: '#4fd8c0' }), 'soulscythe@swift': LOOK('weapon.soulscythe', 'S', 0.9, { tint: '#4fd8c0' }),
+    'plaguestaff@heavy': LOOK('weapon.plaguestaff', 'H', 1.15, { tint: '#7fbf3a' }), 'plaguestaff@swift': LOOK('weapon.plaguestaff', 'S', 0.9, { tint: '#7fbf3a' }),
+  };
+
+  const forkMemo = new Map();
+  // The Heavy / Swift version of weapon baseId for a fork card (id or card object), derived from the base so it follows any re-tune of the base; pure and memoized.
+  // Nominal damage per second is 1.1x the base: dmg scales with the interval change; Heavy is bigger and harder-hitting, Swift is quicker with less reach and knockback.
+  ED.forkWeapon = (baseId, card) => {
+    const cid = typeof card === 'string' ? card : card && card.id, key = baseId + '|' + cid;
+    let out = forkMemo.get(key);
+    if (out) return out;
+    const b = ED.WEAPONS[baseId], cd = typeof card === 'string' ? ED.BOONS[card] : card, kind = cd && cd.weapon && cd.weapon.kind;
+    if (!b || (kind !== 'heavy' && kind !== 'swift')) return b;
+    const C = ED.CONST, heavy = kind === 'heavy', shots = b.kind === 'proj' ? b.n : 1, floor = Math.max(C.ATK_FLOOR, C.ATK_FLOOR_SHOT * shots);
+    const rate = heavy ? Math.min(1.3, b.rate * 1.8) : Math.max(floor, b.rate * 0.55), k = rate / b.rate;
+    const w = Object.assign({}, b), r2 = (v) => Math.round(v * 1000) / 1000;
+    w.rate = rate; w.dmg = b.dmg * 1.1 * k; w.fork = kind; w.base = baseId;
+    w.name = ED.FORK_NAMES[baseId + '@' + kind] || b.name;
+    if (b.kind === 'melee') {
+      if (heavy) { w.range = b.range * 1.1; w.arc = Math.min(6.3, b.arc * 1.1); w.knock = Math.min(320, b.knock * 1.6); } else w.knock = b.knock * 0.5;
+      if (b.shock) w.shock = { r: b.shock.r * (heavy ? 1.15 : 1), mul: b.shock.mul };
+    } else {
+      if (heavy) { w.r = b.r * 1.2; w.speed = b.speed * 0.9; w.life = b.life * 1.1; w.knock = Math.max(80, (b.knock || 40) * 2); }
+      else { w.speed = b.speed * 1.2; w.life = b.life * 0.85; w.knock = (b.knock || 40) * 0.5; if (b.spread) w.spread = b.spread * 0.85; }
+      if (b.explode) w.explode = { r: b.explode.r * (heavy ? 1.15 : 1), mul: b.explode.mul };
+      if (b.cloud) w.cloud = { r: b.cloud.r * (heavy ? 1.15 : 1), dps: b.cloud.dps * 1.1 * k, dur: b.cloud.dur };
+    }
+    for (const f of ['dmg', 'rate', 'range', 'arc', 'knock', 'r', 'speed', 'life', 'spread']) if (typeof w[f] === 'number') w[f] = r2(w[f]);
+    forkMemo.set(key, w);
+    return w;
+  };
 })(globalThis.ED || (globalThis.ED = {}));

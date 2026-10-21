@@ -134,6 +134,7 @@
     const rs = this.roomState[this.roomId], room = this.room;
     rs.cleared = true;
     this.locked = false; this.enc = null;
+    for (const q of this.players.values()) q.mantleAmt = 0; // a Mantle shield is spent with the room
     const s = this.stratum, bonus = this.dread.gold;
     this.run.roomsCleared++;
     this.run.embers.rooms += Math.round((1 + Math.round(s / 2)) * bonus);
@@ -167,6 +168,8 @@
     this.dropXp(e.x, e.y, e.def.xp * (1 + 0.3 * (s - 1)));
     this.dropGold(e.x, e.y, 15 + 6 * s);
     this.spawnPickup('heart', e.x, e.y, 1); this.spawnPickup('heart', e.x, e.y, 1);
+    for (const q of this.players.values()) q.mantleAmt = 0;
+    if (s === 1 || s === 2 || s === 4) for (const q of this.players.values()) this.grantOffer(q, { src: 'class' }); // fork at the first boss, its ranks at the second and fourth (downed heroes get it when they are back up)
     if (s >= ED.CONST.STRATA) {
       this.run.embers.victory = 60;
       this.endRun(true);

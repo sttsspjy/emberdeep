@@ -53,7 +53,7 @@
   W.updatePlayerBuild = function (p, dt) {
     const st = p.stats;
     if (st.aegis) p.aegisT = Math.max(0, p.aegisT - dt);
-    p.guardCd -= dt; p.guardT -= dt; p.frozenCd -= dt; p.tranceT -= dt; p.wallT -= dt;
+    p.guardCd -= dt; p.guardT -= dt; p.frozenCd -= dt; p.tranceT -= dt;
     p.holyT -= dt; p.lanternT -= dt; p.retT -= dt;
     if (p.knellT > 0 && (p.knellT -= dt) <= 0) p.knellN = 0;
     this.updateSkills(p, dt);
@@ -68,14 +68,15 @@
   };
 
   // ---------------- xp, levels and boons ----------------
-  // Every even level grants a level offer; odd levels only raise the level.
+  // Every even level grants a level offer; odd levels only raise the level. Team level 3 grants every hero the class route offer (cls: 1 on the event); the bosses of strata I, II and IV grant the fork and its ranks (rooms.js).
   W.addXp = function (v) {
     this.xp += v;
     while (this.xp >= this.xpNext) {
       this.xp -= this.xpNext; this.level++; this.xpNext = ED.World.xpFor(this.level);
-      const boon = this.level % 2 === 0;
+      const boon = this.level % 2 === 0, route = this.level === 3;
       if (boon) for (const p of this.players.values()) this.grantOffer(p, { src: 'level' });
-      this.emit({ t: 'levelup', level: this.level, boon });
+      if (route) for (const p of this.players.values()) this.grantOffer(p, { src: 'class' });
+      this.emit({ t: 'levelup', level: this.level, boon, cls: route ? 1 : 0 });
     }
   };
 
@@ -88,8 +89,12 @@
       p.picks = p.offers.length;
       if (p.offer) {
         p.offerT += dt;
-        // AFK guard so a party is never stuck behind one player (a solo hero may take as long as they like); never auto-evolves and never makes a hero a Generalist (the Generalist card is last in the start offer)
-        if (p.offerT > 45 && this.players.size > 1) this.pickBoon(p.pid, Math.max(0, p.offer.findIndex(id => !ED.BOONS[id].evo)));
+        // AFK guard so a party is never stuck behind one player (a solo hero may take as long as they like); never auto-evolves and never makes a hero a Generalist (the Generalist card is last in the start offer);
+        // a route or fork pick is seeded random, a mastery pick takes the fork
+        if (p.offerT > 45 && this.players.size > 1) {
+          const sp = p.offers[0], cl = sp && sp.src === 'class';
+          this.pickBoon(p.pid, cl ? (sp.ctier < 3 ? this.rng.int(0, p.offer.length - 1) : 0) : Math.max(0, p.offer.findIndex(id => !ED.BOONS[id].evo)));
+        }
       } else if (p.offers.length && safe && !p.downed && !p.dead) {
         p.offer = this.rollOffer(p, p.offers[0]); p.offerT = 0;
         this.sendOffer(p);
@@ -97,10 +102,10 @@
     }
   };
 
-  // Offer message for the hero's head spec: { to, t:'offer', boons, rerolls, picks, src, path, forge }.
+  // Offer message for the hero's head spec: { to, t:'offer', boons, rerolls, picks, src, path, forge, ctier (class offers: 1 route, 2 fork, 3 mastery), route }.
   W.sendOffer = function (p) {
     const sp = p.offers[0];
-    this.msgs.push({ to: p.pid, t: 'offer', boons: p.offer, rerolls: p.rerolls, picks: p.picks, src: sp.src, path: sp.path || null, forge: sp.src === 'forge' });
+    this.msgs.push({ to: p.pid, t: 'offer', boons: p.offer, rerolls: p.rerolls, picks: p.picks, src: sp.src, path: sp.path || null, forge: sp.src === 'forge', ctier: sp.src === 'class' ? sp.ctier | 0 : 0, route: sp.route || null });
   };
 
   // Evolution paths the hero may take now: affinity >= the path's evolution affinity, keystone owned, no evolution yet.
@@ -131,14 +136,15 @@
 
   // Boon ids for one offer spec (evolution card first, then the duo, both prepended on top of the cards). A forge spec with nothing to rank up turns into a level spec.
   // Everyone sees 3 cards (epic 4, Crown +1): the start offer is 3 element gates plus the guaranteed card (Generalist for Knight, Ranger and Shade; the class element's gate for the others);
-  // a class spec returns exactly the hero's class boons; room, level and epic offers draw from the hero's own paths (element heroes) or the General path (Generalists) plus open boons.
+  // a class spec returns exactly the cards of the hero's next route step (no draw padding, no evolution or duo prepended): the 4 route cards, the 2 forks of the chosen route, or at mastery the fork plus rare boons
+  // (a fork at rank 3 gives an epic-style offer instead); room, level and epic offers draw from the hero's own paths (element heroes) or the General path (Generalists) plus open boons.
   W.rollOffer = function (p, spec) {
     spec = spec || { src: 'level' };
     const rng = this.rng, st = p.stats, s = Math.max(1, this.stratum), luck = st.luck || 0, kind = st.kind;
     const gen = ED.isGeneralist(p.boons), els = ED.elementGates(p.boons), aff = {};
     for (const k of ED.PATH_IDS) aff[k] = ED.pathAffinity(p.boons, k);
-    const epic = spec.src === 'epic';
-    const n = (epic ? 4 : 3) + (st.choices | 0);
+    let epic = spec.src === 'epic';
+    let n = (epic ? 4 : 3) + (st.choices | 0);
     const out = [];
     const rank = (id) => ED.BOONS[id].rar;
     const free = !gen && els.length < ED.MAX_ELEMENTS;
@@ -190,10 +196,16 @@
         return out;
       }
       case 'class': {
-        const mine = ED.BOON_IDS.filter(id => ED.BOONS[id].cls === p.cls && (p.boons[id] || 0) < (ED.BOONS[id].max || 5));
-        if (mine.length) return mine.slice(0, 4);
-        spec.src = 'level';
-        break;
+        const tbl = ED.CLASS_CARDS[p.cls], rt = ED.classRoute(p.boons, p.cls);
+        if (!tbl) { spec.src = 'level'; break; }
+        if (!rt.route) { spec.ctier = 1; return ED.ROUTES.map(r => tbl[r].t1); }
+        spec.route = rt.route;
+        if (!rt.fork) { spec.ctier = 2; return tbl[rt.route].forks.slice(); }
+        spec.ctier = 3;
+        if (rt.rank < ED.BOONS[rt.fork].max) out.push(rt.fork); else { epic = true; n = 4 + (st.choices | 0); }
+        draw(level.filter(rare));
+        if (!out.length) out.push('vigor');
+        return out;
       }
       case 'epic': draw(level.filter(rare)); break;
       case 'room': {
@@ -246,50 +258,9 @@
   W.reroll = function (pid) {
     const p = this.players.get(pid);
     if (!p || !p.offer || p.rerolls <= 0 || !p.offers.length || p.offers[0].src === 'forge') return;
+    if (p.offers[0].src === 'class' && p.offers[0].ctier < 3) return; // a route or fork pick is a fixed choice: no reroll, no cost
     p.rerolls--;
     p.offer = this.rollOffer(p, p.offers[0]);
     this.sendOffer(p);
-  };
-
-  // ---------------- allies (Necromancer minions) ----------------
-  ED.CONST.COMP_MUL = 0.85; // minion damage multiplier
-
-  W.spawnMinion = function (owner, x, y, life) {
-    const st = owner.stats;
-    const mine = this.allies.filter(a => a.owner === owner.pid);
-    if (mine.length >= st.maxMinions) { mine.sort((a, b) => a.life - b.life); mine[0].life = 0; }
-    this.allies.push({ id: U.uid(), owner: owner.pid, x, y, r: 9, life, maxLife: life, cd: 0.5, face: 1,
-      dmg: ED.procDmg(ED.SKILLS.legion.minion, st) * (1 + st.minionDmg) });
-    this.emit({ t: 'raise', x, y });
-  };
-
-  // Minions hit physically (untagged, no hero multiplier or crit) and infuse their owner's gates at half strength.
-  W.updateAllies = function (dt) {
-    const keep = [];
-    for (const a of this.allies) {
-      a.life -= dt; a.cd -= dt;
-      const owner = this.players.get(a.owner);
-      if (a.life <= 0 || !owner) {
-        if (owner && owner.stats.boneSpikes) this.explode(a.x, a.y, 60, ED.procDmg(ED.BOONS.bonespikes, owner.stats) * owner.stats.dmg, 0, owner, 'bone');
-        this.emit({ t: 'puff', x: a.x, y: a.y, c: '#7dffd9' });
-        continue;
-      }
-      const tgt = this.nearestEnemy(a.x, a.y, 400);
-      let tx, ty;
-      if (tgt) { tx = tgt.x; ty = tgt.y; } else { tx = owner.x + Math.cos(a.id) * 30; ty = owner.y + Math.sin(a.id) * 30; }
-      const d = Math.hypot(tx - a.x, ty - a.y);
-      if (tgt && d < a.r + tgt.r + 6) {
-        if (a.cd <= 0) {
-          a.cd = 0.7;
-          this.hitEnemy(tgt, a.dmg * ED.CONST.COMP_MUL, { p: owner, kind: 'minion', comp: true, knock: 40, kx: (tx - a.x) / (d || 1), ky: (ty - a.y) / (d || 1), raw: true });
-        }
-      } else if (d > 6) {
-        const dir = this.pathDir(a, tx, ty);
-        Sim.moveCircle(a, dir[0] * 105 * dt, dir[1] * 105 * dt, this.room, this.locked, false);
-        a.face = dir[0] >= 0 ? 1 : -1;
-      }
-      keep.push(a);
-    }
-    this.allies = keep;
   };
 })(globalThis.ED || (globalThis.ED = {}));

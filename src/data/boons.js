@@ -129,7 +129,7 @@
     lacerate: { name: 'Lacerate', rar: 'r', icon: 'dagger', path: 'general', desc: '+12% damage to bleeding foes.', mods: { lacerate: 0.12 }, max: 2 },
     execute: { name: 'Executioner', rar: 'r', icon: 'axe', path: 'general', desc: '+25% damage to foes below 30% health.', mods: { execute: 0.25 }, max: 2 },
     deepcuts: { name: 'Deep Cuts', rar: 'r', icon: 'blades', path: 'general', desc: 'Bleed deals +30%.', mods: { bleedMul: 0.3 }, max: 2 },
-    opportunist: { name: 'Opportunist', rar: 'r', icon: 'hand', path: 'general', desc: '+25% damage to stunned, frozen, blinded or slowed foes.', mods: { opportunist: 0.25 }, max: 1 },
+    opportunist: { name: 'Opportunist', rar: 'r', icon: 'hand', path: 'general', desc: '+25% damage to stunned, frozen or blinded foes.', mods: { opportunist: 0.25 }, max: 1 },
     sunder: { name: 'Sunder', rar: 'r', icon: 'blades', path: 'general', desc: 'Each crit makes that foe take +4% damage from you per stack (max 10).', mods: { sunder: 1 }, max: 1 },
     masterstroke: { name: 'Masterstroke', rar: 'e', icon: 'sword', path: 'general', key: true, desc: 'Every 4th attack is a guaranteed crit at +30% that Bleeds for 50% of the hit.', mods: { masterstroke: 1 }, max: 1 },
     evo_general: { name: 'Masterwork Arms', rar: 'l', icon: 'sword', path: 'general', evo: 'general', desc: 'Crits release a spectral strike (a repeat swing or a spectral shot) at 60%. +10% crit chance.', mods: { crit: 0.1 }, max: 1 },

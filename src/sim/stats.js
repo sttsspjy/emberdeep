@@ -5,37 +5,61 @@
   const U = ED.U;
   const St = ED.Stats = {};
 
-  const BASE = () => ({
-    hp: 0, hpMul: 1, armor: 0, spd: 1, dmg: 1, atk: 1, crit: 0, critDmg: 0, cdr: 0,
-    pickup: 0, xp: 0, gold: 0, luck: 0, heal: 0, projN: 0, pierce: 0, area: 0, dodge: 0, thorns: 0,
-    dashcdr: 0, dashDmg: 0, dashFire: 0, dashBomb: 0, execute: 0,
-    overcharge: 0, guardian: 0, trance: 0, forager: 0, roomWard: 0, openRank: 0,
-    charges: 0, shieldwall: 0, quake: 0, mark: 0, combust: 0, phoenixNova: 0, decoy: 0, wrath: 0,
-    minions: 0, minionDmg: 0, boneSpikes: 0, phoenix: 0, strataHeal: 0, wardrum: 0,
-    homing: 0, meleeReach: 0, mirror: 0, choices: 0, idol: 0, vuln: 0, banner: 0, angel: 0, gauntlet: 0,
-    frozenHeart: 0, chalice: 0, emberBonus: 0, discount: 0, stone: 0, cloverRerolls: 0, aegis: 0, light: 0,
-    // status route hooks (+X% to every status amount the hero applies; +X% to class-element skill hits)
-    statusPow: 0, classElMul: 0,
-    // element infusions and their payoffs: Fire, Ice, Lightning, Poison, Holy, Shadow, General (Bleed)
-    fireInfuse: 0, burnMul: 0, searing: 0, wildfire: 0, conflag: 0,
-    iceInfuse: 0, chillMul: 0, shatter: 0, brittle: 0, dashFrost: 0, freezeDur: 0, chillWeaken: 0, frostNova: 0,
-    lightningInfuse: 0, arcs: 0, arcRange: 0, shockMul: 0, shortCircuit: 0, arcStun: 0, thunderbolt: 0, critCharge: 0,
-    poisonInfuse: 0, venomBuild: 0, venomHold: 0, corrode: 0, fester: 0, sporeBurst: 0, dashVenom: 0, pandemic: 0,
-    holyInfuse: 0, smiteMul: 0, smiteShield: 0.01, holyCap: 0.06, beacon: 0, dashBlind: 0, radiantAegis: 0, // smiteShield and holyCap start at the base every hero smites with
-    shadowInfuse: 0, doomMul: 0, doomTough: 0, malice: 0, knell: 0, deathsEdge: 0, dashDoom: 0, reaper: 0,
-    bleed: 0, bleedMul: 0, lacerate: 0, sunder: 0, opportunist: 0, masterstroke: 0, twinEvery: 0,
-    // duos
-    thermal: 0, plasma: 0, supercond: 0, firedamp: 0, sunfire: 0, blackflame: 0, cryotoxin: 0, hoarlight: 0, blackice: 0, galvanic: 0, heavenwrath: 0, blackLight: 0, purge: 0, necrosis: 0, twilight: 0,
-  });
+  // ATK_FLOOR / ATK_FLOOR_SHOT: shortest attack interval (s) of a weapon and extra per projectile of one attack; attack speed beyond it becomes weapon damage.
+  // FLOW_SPD / FLOW_T: Swift forks give +15% move speed for 0.5 s after each attack. ROUTE_CDR_MAX: cap of a route's cooldown cut (s1Cdr, s2Cdr), applied after the soft cap.
+  Object.assign(ED.CONST, { ATK_FLOOR: 0.12, ATK_FLOOR_SHOT: 0.06, FLOW_SPD: 0.15, FLOW_T: 0.5, ROUTE_CDR_MAX: 0.4 });
+
+  // Stat keys of the class routes (DESIGN-classes section 16): slot stats first, then one group per class, all 0 until a card sets them.
+  const ROUTE_KEYS = ('s1Dmg s1Area s1Dur s1N s1Cdr s1Range s2Dmg s2Area s2Dur s2N s2Cdr s2Range wDmg bleedAll'
+    + ' cleave cleaveN cShock cStun chargeCleave parry riposte brace braceDR braceAura jugShock bash rally chargeStun twinShield gather orbit orbitMul orbitReflect ruinInf carry ruinSpread brand seal'
+    + ' deadeye pierceRamp splitBolt hitSlow flurry volleyClose volleyHop caltrops volleyMark markV markLeap skyfall skyTwin rainHail shower skillInfK festerHit contagion contagionR contagionN'
+    + ' channel chanStep chanCap aftershock lavaPool overheat novaEcho novaPull novaRing mantle mantleBurst twinMeteor meteorites comet cometStun wInfFire searSkill burnCrit heatEngine heatChain'
+    + ' momentum momMax execCrit execMom bladeStorm stepStack stackMax assassinate stepTwin afterimage afterPull smokeVuln stealthSpd stealthDur ambushMul nightsEdge ambushCleave veil veilBlind shroud veins exsang rupture bloodbloom'
+    + ' waveEvery waveMul waveBig waveStun waveBurst waveHome litany sanctDR sanctStun sanctJudge aura auraDmg judgeDur judgeWeak twinHammer thirdLeg verdict verdictJudge wInfHoly smiteBig guardLight smiteJudge smiteBeam beamJumps'
+    + ' hex hexMul wRaise hexSpread hexSelf hexHaste spikeRaise knights knightLife knightStun harvestRaise corpse corpseMul boneLance boneArmor boneCap boneField minionInfuse mInfShadow tollMul abyssMin abyssDoom reapRaise tideMul').split(' ');
+
+  const BASE = () => {
+    const s = {
+      hp: 0, hpMul: 1, armor: 0, spd: 1, dmg: 1, atk: 1, crit: 0, critDmg: 0, cdr: 0,
+      pickup: 0, xp: 0, gold: 0, luck: 0, heal: 0, projN: 0, pierce: 0, area: 0, dodge: 0, thorns: 0,
+      dashcdr: 0, dashDmg: 0, dashFire: 0, dashBomb: 0, execute: 0,
+      overcharge: 0, guardian: 0, trance: 0, forager: 0, roomWard: 0, openRank: 0,
+      charges: 0,
+      minions: 0, minionDmg: 0, boneSpikes: 0, phoenix: 0, strataHeal: 0, wardrum: 0,
+      homing: 0, meleeReach: 0, mirror: 0, choices: 0, idol: 0, vuln: 0, banner: 0, angel: 0, gauntlet: 0,
+      frozenHeart: 0, chalice: 0, emberBonus: 0, discount: 0, stone: 0, cloverRerolls: 0, aegis: 0, light: 0,
+      // status route hooks (+X% to every status amount the hero applies; +X% to class-element skill hits)
+      statusPow: 0, classElMul: 0,
+      // element infusions and their payoffs: Fire, Ice, Lightning, Poison, Holy, Shadow, General (Bleed)
+      fireInfuse: 0, burnMul: 0, searing: 0, wildfire: 0, conflag: 0,
+      iceInfuse: 0, chillMul: 0, shatter: 0, brittle: 0, dashFrost: 0, freezeDur: 0, chillWeaken: 0, frostNova: 0,
+      lightningInfuse: 0, arcs: 0, arcRange: 0, shockMul: 0, shortCircuit: 0, arcStun: 0, thunderbolt: 0, critCharge: 0,
+      poisonInfuse: 0, venomBuild: 0, venomHold: 0, corrode: 0, fester: 0, sporeBurst: 0, dashVenom: 0, pandemic: 0,
+      holyInfuse: 0, smiteMul: 0, smiteShield: 0.01, holyCap: 0.06, beacon: 0, dashBlind: 0, radiantAegis: 0, // smiteShield and holyCap start at the base every hero smites with
+      shadowInfuse: 0, doomMul: 0, doomTough: 0, malice: 0, knell: 0, deathsEdge: 0, dashDoom: 0, reaper: 0,
+      bleed: 0, bleedMul: 0, lacerate: 0, sunder: 0, opportunist: 0, masterstroke: 0, twinEvery: 0,
+      // duos
+      thermal: 0, plasma: 0, supercond: 0, firedamp: 0, sunfire: 0, blackflame: 0, cryotoxin: 0, hoarlight: 0, blackice: 0, galvanic: 0, heavenwrath: 0, blackLight: 0, purge: 0, necrosis: 0, twilight: 0,
+    };
+    for (let i = 0; i < ROUTE_KEYS.length; i++) s[ROUTE_KEYS[i]] = 0;
+    return s;
+  };
 
   // Skill cooldown reduction: full up to CDR_SOFT, half above it, never more than CDR_MAX.
   St.CDR_SOFT = 0.4; St.CDR_MAX = 0.65;
   St.cdrEff = (c) => (c <= St.CDR_SOFT ? Math.max(0, c) : Math.min(St.CDR_MAX, St.CDR_SOFT + (c - St.CDR_SOFT) * 0.5));
 
+  // Edits a weapon copy with a class card's weapon.extra: mul { field: factor }, add { field: n }, ifNone { field: value } (sets a field the weapon lacks).
+  function applyExtra(w, ex) {
+    if (ex.mul) for (const k in ex.mul) if (typeof w[k] === 'number') w[k] *= ex.mul[k];
+    if (ex.add) for (const k in ex.add) w[k] = (w[k] || 0) + ex.add[k];
+    if (ex.ifNone) for (const k in ex.ifNone) if (!w[k]) w[k] = Object.assign({}, ex.ifNone[k]);
+  }
+
   // build: { cls, weapon, boons: {id: n}, relics: [id], meta: { up: [], mastery }, pact, chaliceHp, bonusHp }
   St.compute = (build) => {
     const cls = ED.CLASSES[build.cls];
-    const wpn = ED.WEAPONS[build.weapon];
+    const base = ED.WEAPONS[build.weapon];
     const s = BASE();
     s.hp = cls.hp; s.armor = cls.armor; s.crit = cls.crit;
     const meta = build.meta || { up: [], mastery: 1 };
@@ -57,7 +81,21 @@
     if ((build.pact || 0) >= 9) s.hpMul -= 0.25;
     const add = (mods, n) => { for (const k in mods) s[k] = (s[k] || 0) + mods[k] * n; };
     const boons = build.boons || {};
-    for (const id in boons) if (ED.BOONS[id]) add(ED.BOONS[id].mods, boons[id]);
+    // class cards: card total per rank (mods + up x (rank - 1) + r3); slot damage compounds card by card (each card's text is its exact factor)
+    let m1 = 1, m2 = 1, fork = null;
+    const extras = [];
+    for (const id in boons) {
+      const b = ED.BOONS[id], n = boons[id];
+      if (!b || !(n > 0)) continue;
+      if (!b.route) { add(b.mods, n); continue; }
+      if (b.cls !== build.cls) continue;
+      const tot = ED.cardTotals(b, n);
+      for (const k in tot) {
+        if (k === 's1Dmg') m1 *= 1 + tot[k]; else if (k === 's2Dmg') m2 *= 1 + tot[k]; else s[k] = (s[k] || 0) + tot[k];
+      }
+      if (b.weapon) { if (b.weapon.kind && !fork) fork = id; if (b.weapon.extra) extras.push(b.weapon.extra); }
+    }
+    s.s1Dmg = m1 - 1; s.s2Dmg = m2 - 1;
     const relics = build.relics || [];
     for (const id of relics) if (ED.RELICS[id]) add(ED.RELICS[id].mods, 1);
     if (s.stone) { s.dmg += 0.02 * relics.length; s.hp += 2 * relics.length; }
@@ -68,10 +106,22 @@
     out.power = cls.power; out.element = cls.element || null; // Class Power scales every non-attack proc (ED.procDmg)
     out.maxHp = Math.max(20, Math.round(s.hp * Math.max(0.3, s.hpMul)));
     out.moveSpeed = cls.spd * U.clamp(s.spd, 0.5, 2.2);
-    out.atkInterval = wpn.rate / Math.max(0.3, s.atk);
-    const cdr = St.cdrEff(s.cdr);
-    out.skillCd = ED.SKILLS[cls.skill].cd * (1 - cdr);
-    out.skill2Cd = cls.skill2 && ED.SKILLS[cls.skill2] ? ED.SKILLS[cls.skill2].cd * (1 - cdr) : 0;
+    // weapon: the fork transform of an owned attack fork, card extras, wDmg, and the attack-interval floor (speed beyond the floor becomes damage)
+    const fw = fork ? ED.forkWeapon(build.weapon, fork) : base, kind = fork ? ED.BOONS[fork].weapon.kind : null;
+    const w = Object.assign({}, fw);
+    if (w.cloud) w.cloud = Object.assign({}, w.cloud);
+    for (let i = 0; i < extras.length; i++) applyExtra(w, extras[i]);
+    const C = ED.CONST, shots = w.kind === 'proj' ? (w.n || 1) + s.projN : 1, floor = Math.max(C.ATK_FLOOR, C.ATK_FLOOR_SHOT * shots);
+    const raw = w.rate / Math.max(0.3, s.atk), over = Math.max(1, floor / raw);
+    w.dmg = w.dmg * (1 + s.wDmg) * over;
+    if (w.cloud) w.cloud.dps = w.cloud.dps * (1 + s.wDmg) * over;
+    out.atkInterval = Math.max(floor, raw); out.atkFloor = floor; out.atkOver = over;
+    out.weapon = w; out.weaponId = fork ? build.weapon + '@' + kind : build.weapon;
+    out.baseWDmg = base.dmg * (1 + s.wDmg); out.critK = base.rate / fw.rate; // critK: crit-stack grants scale with the fork's attack rate (a Heavy hit is worth more crits' damage)
+    out.heavy = kind === 'heavy'; out.swift = kind === 'swift';
+    const cdr = St.cdrEff(s.cdr), rc = (n) => 1 - Math.min(C.ROUTE_CDR_MAX, s['s' + n + 'Cdr']);
+    out.skillCd = ED.SKILLS[cls.skill].cd * (1 - cdr) * rc(1);
+    out.skill2Cd = cls.skill2 && ED.SKILLS[cls.skill2] ? ED.SKILLS[cls.skill2].cd * (1 - cdr) * rc(2) : 0;
     out.dashCd = 1.1 * Math.max(0.3, 1 - s.dashcdr);
     out.pickupR = 46 * (1 + s.pickup);
     out.critMult = 1.75 + s.critDmg;
@@ -82,20 +132,62 @@
     out.maxMinions = 3 + s.minions;
     out.lightR = 200 * (1 + s.light);
     out.evo = ED.evoOf ? ED.evoOf(boons) : null;
-    out.weapon = wpn;
-    out.kind = wpn.kind;
-    out.melee = wpn.kind === 'melee';
+    out.kind = w.kind;
+    out.melee = w.kind === 'melee';
     return out;
   };
 
   // Damage-reduction from armor: 60 armor halves incoming damage.
   St.armorMul = (armor) => 60 / (60 + Math.max(0, armor));
 
-  // Dynamic rates. Attack interval = stats.atkInterval / attackRate(p); movement speed = stats.moveSpeed * moveRate(p).
-  // War Drum (wardrum) doubles in elite and boss rooms (p.toughRoom).
+  // Dynamic rates. Attack interval = max(stats.atkFloor, stats.atkInterval / attackRate(p)); movement speed = stats.moveSpeed * moveRate(p).
+  // War Drum (wardrum) doubles in elite and boss rooms (p.toughRoom). Temporary speed is capped by the floor, never turned into damage.
   St.attackRate = (p) => {
     const s = p.stats;
     return 1 + (p.tranceT > 0 ? s.trance : 0) + s.wardrum * (p.toughRoom ? 2 : 1);
   };
-  St.moveRate = (p) => 1;
+  St.attackInterval = (p) => Math.max(p.stats.atkFloor, p.stats.atkInterval / St.attackRate(p));
+  // Move rate: Flow (Swift forks, p.flowT) and the unseen speed of Nightfall (stealthSpd while p.stealthT).
+  St.moveRate = (p) => {
+    const s = p.stats;
+    return 1 + (p.flowT > 0 ? ED.CONST.FLOW_SPD : 0) + (p.stealthT > 0 ? s.stealthSpd : 0);
+  };
+
+  // Numbers of a skill for a stat block, the one source for the sim, the sheet and the bots. Returns
+  // { id, slot, aim, range, rangeMin, move, cd, cdEff, parts: [{id, label, on, dmg, r, dur, n, count, ...the part's data}], p: {partId: part} } (cached on st).
+  St.skillNums = (id, st) => {
+    const c = st.sn || (st.sn = {});
+    if (c[id]) return c[id];
+    const sk = ED.SKILLS[id];
+    if (!sk) return null;
+    const pre = 's' + (sk.slot + 1), A = 1 + 0.5 * st.area, sD = st[pre + 'Dmg'], sA = st[pre + 'Area'], sU = st[pre + 'Dur'], sN = st[pre + 'N'];
+    const cdEff = sk.cd * (1 - St.cdrEff(st.cdr)) * (1 - Math.min(ED.CONST.ROUTE_CDR_MAX, st[pre + 'Cdr']));
+    let aim = sk.aim, move = sk.move || null;
+    if (sk.aimIf) for (const k in sk.aimIf) if (st[k]) aim = sk.aimIf[k];
+    if (sk.moveIf) for (const k in sk.moveIf) if (st[k]) move = sk.moveIf[k];
+    const out = { id, slot: sk.slot, aim, range: sk.range === undefined ? 0 : sk.range + (sk.rangeAdd ? st[sk.rangeAdd] : 0), rangeMin: sk.rangeMin || 0, move, cd: sk.cd, cdEff, walk: !!sk.walk, parts: [], p: {} };
+    for (const d of sk.parts) {
+      const q = Object.assign({}, d);
+      q.on = !d.if || !!st[d.if];
+      let dmg = 0;
+      if (d.of) {
+        const b = out.p[d.of];
+        dmg = b.dmg * (d.mul ? st[d.mul] : 1) * (d.mul1 ? 1 + st[d.mul1] : 1) * (d.times === 'ticks' ? b.count : 1);
+      } else if (d.base !== undefined || d.pow !== undefined) {
+        const X = d.on === 'W' ? st.weapon.dmg : d.on === 'B' ? st.baseWDmg : st.power;
+        dmg = ((d.base || 0) + ((d.pow || 0) + (d.powKey ? st[d.powKey] : 0)) * X) * (1 + sD);
+      }
+      if (d.mulIf) for (const k in d.mulIf) if (st[k]) dmg *= d.mulIf[k];
+      q.dmg = dmg;
+      q.r = d.rOf ? out.p[d.rOf].r * d.rMul : d.r ? d.r * A * (1 + sA) * (d.rMul || 1) : 0;
+      if (d.mulKey) q.mulv = st[d.mulKey];
+      if (d.durKey) q.dur = (d.dur || 0) + st[d.durKey]; else if (d.dur !== undefined) q.dur = d.dur + sU;
+      if (d.capCd && q.dur !== undefined) q.dur = Math.min(q.dur, d.capCd * cdEff);
+      if (d.n !== undefined) q.n = d.n + sN;
+      if (d.per === 'tick') q.count = Math.round(q.dur / d.every);
+      else if (d.per === 'sec') q.count = Math.ceil(q.dur / 0.5 - 1e-9);
+      out.parts.push(q); out.p[d.id] = q;
+    }
+    return (c[id] = out);
+  };
 })(globalThis.ED || (globalThis.ED = {}));

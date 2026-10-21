@@ -265,7 +265,7 @@
   // ---------------- snapshots ----------------
   const ST = ['move', 'windup', 'lunge', 'aim', 'spin', 'charge', 'fuse', 'cast', 'idle', 'atk', 'dash', 'wind', 'slam', 'air', 'roar', 'fade', 'burrow', 'erupt', 'bash', 'leap', 'dive']; // append only: indices are the wire format
   const ST_IDX = U.indexer(ST);
-  const ZK = ['spawn', 'tele', 'teleLine', 'teleCone', 'laser', 'poison', 'fire', 'pfire', 'plague', 'sanct', 'pull', 'bomb', 'decoy', 'mire', 'rain', 'meteor', 'smoke'];
+  const ZK = ['spawn', 'tele', 'teleLine', 'teleCone', 'laser', 'poison', 'fire', 'pfire', 'plague', 'sanct', 'pull', 'bomb', 'decoy', 'mire', 'rain', 'meteor', 'smoke', 'skyfall', 'shards']; // append only: indices are the wire format
   const ZK_IDX = U.indexer(ZK);
   const PK = ['gold', 'xp', 'heart', 'orb'];
   const PK_IDX = U.indexer(PK);
@@ -279,8 +279,8 @@
     return k < 0.95 ? 1 : k < 1.25 ? 2 : 3;
   };
   // FX events kept per type in one snapshot (host to client), and per rendered frame on the host or solo machine (a third of it). Extras are dropped; sim state never is.
-  N.CAPS = { hit: 24, smite: 12, reap: 12, toll: 12, lance: 12 };
-  N.CAPS_LOCAL = { hit: 8, smite: 4, reap: 4, toll: 4, lance: 4 };
+  N.CAPS = { hit: 24, smite: 12, reap: 12, toll: 12, lance: 12, ric: 12, parry: 6, catch: 4 };
+  N.CAPS_LOCAL = { hit: 8, smite: 4, reap: 4, toll: 4, lance: 4, ric: 4, parry: 2, catch: 2 };
   N.capFx = (fx, caps) => {
     let over = false, n = null;
     for (let i = 0; i < fx.length; i++) {
@@ -301,16 +301,18 @@
   // Venom bar level of a foe: 0-4 pips (one per 25 Venom), 5 = Corroded. Radiance fill 0-3 of the Smite gauge.
   N.venomLevel = (e) => (e.venom >= 100 ? 5 : e.venom > 0 ? Math.min(4, Math.ceil(e.venom / 25)) : 0);
   N.radLevel = (w, e) => (e.rad > 0 ? Math.min(3, Math.floor(4 * e.rad / w.smiteAt(e))) : 0);
+  // Hero flags (bit n = 1 << n): 0 moving, 1 dashing, 2 downed, 3 dead, 4 invulnerable, 5 hurt, 6 shield thrown, 7 stealth, 8 ambush, 9 airborne (Comet).
+  // Foe flags: 0 flash, 1 frozen, 2 stunned, 4 chilled, 5 exposed, 6 charged, 7 bleeding, 8 judged, 9 blind, 10 vulnerable, 11-12 burn level, 13-15 Venom level, 16-17 Radiance fill, 18 Hexed, 19 Marked, 20 Sealed, 21-23 ailment count (0-7).
 
   N.encodeSnap = (w, fx, full) => {
     const P = [], E = [], B = [], K = [], Z = [], A = [];
     for (const p of w.players.values()) {
-      const fl = (p.moving ? 1 : 0) | (p.dashing ? 2 : 0) | (p.downed ? 4 : 0) | (p.dead ? 8 : 0) | (p.invuln > 0 ? 16 : 0) | (p.hurtT > 0 ? 32 : 0) | (p.bulwarkT > 0 ? 64 : 0) | (p.stealthT > 0 ? 128 : 0) | (p.ambush ? 256 : 0);
-      P.push([p.pid, r(p.x), r(p.y), r2(p.face), Math.ceil(p.hp), p.maxHp, fl, r2(p.revive), p.critStacks | 0, p.aegisT > 0 ? 1 : 0, p.guardT > 0 ? 1 : 0, p.secondWind | 0, p.phoenixUsed ? 1 : 0, p.picks | 0, p.rerolls | 0, Math.ceil(p.shield || 0)]);
+      const fl = (p.moving ? 1 : 0) | (p.dashing ? 2 : 0) | (p.downed ? 4 : 0) | (p.dead ? 8 : 0) | (p.invuln > 0 ? 16 : 0) | (p.hurtT > 0 ? 32 : 0) | (p.shields.length > 0 ? 64 : 0) | (p.stealthT > 0 ? 128 : 0) | (p.ambush ? 256 : 0) | (p.cometT > 0 ? 512 : 0);
+      P.push([p.pid, r(p.x), r(p.y), r2(p.face), Math.ceil(p.hp), p.maxHp, fl, r2(p.revive), p.critStacks | 0, p.aegisT > 0 ? 1 : 0, p.guardT > 0 ? 1 : 0, p.secondWind | 0, p.phoenixUsed ? 1 : 0, p.picks | 0, p.rerolls | 0, Math.ceil(p.shield || 0), 0, p.momN | 0]); // P[16] is reserved (ready-state bits of the character sheet); P[17] Momentum stacks
     }
     for (const e of w.enemies) {
       if (e.hp <= 0) continue;
-      const fl = (e.flash > 0 ? 1 : 0) | (e.frozen > 0 ? 2 : 0) | (e.stun > 0 ? 4 : 0) | (e.chill > 0 ? 16 : 0) | (e.exposed ? 32 : 0) | (e.charge > 0 ? 64 : 0) | (e.bleedPool > 0 ? 128 : 0) | (e.judged > 0 ? 256 : 0) | (e.blind > 0 ? 512 : 0) | (e.vulnT > 0 ? 1024 : 0) | (N.burnLevel(e) << 11) | (N.venomLevel(e) << 13) | (N.radLevel(w, e) << 16);
+      const fl = (e.flash > 0 ? 1 : 0) | (e.frozen > 0 ? 2 : 0) | (e.stun > 0 ? 4 : 0) | (e.chill > 0 ? 16 : 0) | (e.exposed ? 32 : 0) | (e.charge > 0 ? 64 : 0) | (e.bleedPool > 0 ? 128 : 0) | (e.judged > 0 ? 256 : 0) | (e.blind > 0 ? 512 : 0) | (e.vulnT > 0 ? 1024 : 0) | (N.burnLevel(e) << 11) | (N.venomLevel(e) << 13) | (N.radLevel(w, e) << 16) | (e.hexT > 0 ? 1 << 18 : 0) | (e.mark > 0 ? 1 << 19 : 0) | (e.sealT > 0 ? 1 << 20 : 0) | (Math.min(7, w.ailments(e)) << 21);
       E.push([e.id, ED.ENEMY_IDX[e.type], r(e.x), r(e.y), Math.ceil(e.hp), r(e.maxHp), e.r, fl, ST_IDX[e.boss ? (e.pose || 'idle') : e.st] | 0, r2(e.aimA || 0), e.elite ? ED.AFFIX_IDS.indexOf(e.elite) : -1, r(e.ward || 0), r(e.wardMax || 0), e.phase | 0, e.face < 0 ? -1 : 1, r2(e.t || 0), r(e.chill || 0), e.boss ? r(e.doom || 0) : r(w.doomLine(e))]);
     }
     for (const pr of w.projs) B.push([pr.id, ED.PROJ_IDX[pr.kind] | 0, r(pr.x), r(pr.y), r(pr.vx), r(pr.vy), pr.r, pr.team]);
