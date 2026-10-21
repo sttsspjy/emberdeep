@@ -231,7 +231,7 @@
         c.setTransform(S, 0, 0, S, ox, oy);
       } else {
         c.save(); c.translate(o.x, o.y);
-        if (it.k === 0) { drawCompanions(c, o, view, t, true); Sp.hero(c, o, t, F.anim[o.pid]); drawCompanions(c, o, view, t, false); }
+        if (it.k === 0) Sp.hero(c, o, t, F.anim[o.pid]);
         else Sp.minion(c, o, t);
         c.restore();
       }
@@ -307,7 +307,7 @@
     const cx = Math.round(80 * s), cy = Math.round(100 * s), rc = rimCtx;
     rc.setTransform(1, 0, 0, 1, 0, 0); rc.globalCompositeOperation = 'source-over'; rc.globalAlpha = 1; rc.clearRect(0, 0, sw, sh);
     rc.setTransform(s, 0, 0, s, cx + (dx - ix), cy + (dy - iy));
-    drawCompanions(rc, p, view, t, true); Sp.hero(rc, p, t, ED.FX.anim[p.pid]); drawCompanions(rc, p, view, t, false);
+    Sp.hero(rc, p, t, ED.FX.anim[p.pid]);
     rc.setTransform(1, 0, 0, 1, 0, 0); rc.globalCompositeOperation = 'source-atop';
     const mx = cx, my = cy - 16 * s, g = rc.createLinearGradient(mx + rim.dx * 13 * s, my + rim.dy * 13 * s, mx - rim.dx * 3 * s, my - rim.dy * 3 * s);
     g.addColorStop(0, U.rgba(rim.col, 0.62 * rim.s)); g.addColorStop(0.55, U.rgba(rim.col, 0.14 * rim.s)); g.addColorStop(1, U.rgba(rim.col, 0));
@@ -889,7 +889,7 @@
   // Pickups are cached 16x16 sprites (outlined, drawn once at 4x). Pass 0 (lit): ground blob and lights. Pass 1 (after lighting): halos (additive), then
   // the opaque sprites, so shards and coins read in any light; fast-moving (magnetised) pickups leave a short trail.
   const pkSpr = {}, pkTrail = new Map(); let pkFrame = 0;
-  const PK_COL = { gold: '#ffc94a', xp: '#7dffd9', orb: '#ff2a4a', heart: '#ff4a5a' };
+  const PK_COL = { gold: '#ffc94a', xp: '#7dffd9', heart: '#ff4a5a' };
   function pickSprite(kind) {
     let s = pkSpr[kind]; if (s) return s;
     s = pkSpr[kind] = document.createElement('canvas'); s.width = s.height = 64;
@@ -904,10 +904,6 @@
       g.fillStyle = '#ffd84f'; g.beginPath(); g.arc(0, 0, 3.4, 0, U.TAU); g.fill();
       g.strokeStyle = '#d99a1e'; g.lineWidth = 0.7; g.beginPath(); g.arc(0, 0, 2.2, 0, U.TAU); g.stroke();
       g.fillStyle = '#fff6c0'; g.beginPath(); g.ellipse(-1.2, -1.5, 1.3, 0.8, -0.5, 0, U.TAU); g.fill();
-    } else if (kind === 'orb') {
-      g.fillStyle = '#e01a38'; g.beginPath(); g.moveTo(0, -7.5); g.quadraticCurveTo(5.5, -1, 4.6, 2.6); g.quadraticCurveTo(3.6, 6, 0, 6); g.quadraticCurveTo(-3.6, 6, -4.6, 2.6); g.quadraticCurveTo(-5.5, -1, 0, -7.5); g.fill(); g.stroke();
-      g.fillStyle = '#ff6a80'; g.beginPath(); g.ellipse(1.2, 2.6, 2.2, 2.4, 0, 0, U.TAU); g.fill();
-      g.fillStyle = 'rgba(255,255,255,0.85)'; g.beginPath(); g.ellipse(-1.8, 0.4, 1.1, 2.2, 0.3, 0, U.TAU); g.fill();
     } else {
       g.scale(0.3, 0.3); g.lineWidth = 3.2; g.fillStyle = '#ff4a5a';
       g.beginPath(); g.moveTo(0, 18); g.bezierCurveTo(-24, 2, -22, -20, -8, -20); g.quadraticCurveTo(-2, -20, 0, -12); g.quadraticCurveTo(2, -20, 8, -20); g.bezierCurveTo(22, -20, 24, 2, 0, 18); g.fill(); g.stroke();
@@ -926,12 +922,11 @@
   function drawPickups(c, view, t, pass) {
     const pks = view.pickups;
     if (pass === 0) {
-      let n = 0; // light budget: a big pile of orbs must not starve other lights
+      let n = 0; // light budget: a big pile of coins must not starve other lights
       for (const pk of pks) {
-        const lit = n++ < 14, L = lit ? R.light : NOP, k = pk.kind, big = k === 'orb' || k === 'heart';
+        const lit = n++ < 14, L = lit ? R.light : NOP, k = pk.kind, big = k === 'heart';
         if (k === 'gold') L(pk.x, pk.y - 4, 28, '#ffd36b', 0.5);
         else if (k === 'xp') L(pk.x, pk.y - 4, 26, '#7dffd9', 0.5);
-        else if (k === 'orb') L(pk.x, pk.y - 6, 34, '#ff2a4a', 0.65);
         else L(pk.x, pk.y - 6, 36, '#ff4a5a', 0.6);
         c.globalAlpha = 0.55; c.drawImage(shadowCv, pk.x - 7, pk.y - (big ? 9 : 6), 14, big ? 12 : 9);
       }
@@ -948,7 +943,7 @@
     }
     if (pkTrail.size > pks.length + 48) for (const [id, s] of pkTrail) if (s.f !== fr) pkTrail.delete(id);
     for (const pk of pks) { // halos and trails (context is additive)
-      const k = pk.kind, big = k === 'orb' || k === 'heart', bob = Math.sin(t * 5 + pk.id) * 1.5, y = pk.y - (big ? 7 : 5) + bob, col = PK_COL[k], s = pkTrail.get(pk.id);
+      const k = pk.kind, big = k === 'heart', bob =Math.sin(t * 5 + pk.id) * 1.5, y = pk.y - (big ? 7 : 5) + bob, col = PK_COL[k], s = pkTrail.get(pk.id);
       if (n++ < 70) R.glow(c, pk.x, y, big ? 15 : 11, col, k === 'xp' ? 0.75 + Math.sin(t * 6 + pk.id) * 0.15 : 0.6);
       if (s && s.v > 150) for (let i = 1; i <= 3; i++) R.glow(c, pk.x - s.dx / s.v * i * 5, y - s.dy / s.v * i * 5 * 0.7, 6 - i, col, 0.62 - i * 0.16);
     }
@@ -957,7 +952,6 @@
       const k = pk.kind, bob = Math.sin(t * 5 + pk.id) * 1.5, spr = pickSprite(k);
       if (k === 'gold') { const w = 8 * Math.max(0.2, Math.abs(Math.cos(t * 4 + pk.id))); c.drawImage(spr, pk.x - w, pk.y - 12 + bob, w * 2, 16); }
       else if (k === 'xp') { const p = 1 + Math.sin(t * 6 + pk.id) * 0.05; c.drawImage(spr, pk.x - 8 * p, pk.y - 13 + bob - 8 * (p - 1), 16 * p, 16 * p); }
-      else if (k === 'orb') { const p = 0.9 + Math.sin(t * 6 + pk.id) * 0.06; c.drawImage(spr, pk.x - 8 * p, pk.y - 15 + bob, 16 * p, 16); }
       else c.drawImage(spr, pk.x - 8, pk.y - 14 + bob, 16, 16);
     }
     c.globalCompositeOperation = 'lighter';
@@ -1387,33 +1381,6 @@
       R.emit(p.x + Math.cos(a) * rr, p.y - 10 + Math.sin(a) * rr, 22, '#ffe9a0', 0.4 * fl); R.light(p.x + Math.cos(a) * rr, p.y - 10 + Math.sin(a) * rr, 56, '#ffe9a0', 0.45);
     }
     c.globalAlpha = 1;
-  }
-
-  // ---------------- companions (orbit blades / wisps drawn around heroes) ----------------
-  function drawCompanions(c, p, view, t, back) {
-    if (!p.stats || p.downed || p.dead) return;
-    const ht = view.time !== undefined ? view.time : t;
-    const n = p.stats.orbit || 0;
-    for (let i = 0; i < n; i++) {
-      const a = ht * 3.2 + i * U.TAU / n;
-      const ox = Math.cos(a) * 44, oy = Math.sin(a) * 44;
-      if ((oy < 0) !== back) continue;
-      c.save(); c.translate(ox, oy - 6); c.rotate(a * 3);
-      R.glow(c, 0, 0, 14, '#cfe6ff', 0.5);
-      c.fillStyle = '#e6eef6'; c.strokeStyle = '#0b0806'; c.lineWidth = 1;
-      c.beginPath(); c.moveTo(0, -8); c.quadraticCurveTo(6, -2, 0, 8); c.quadraticCurveTo(2, 0, 0, -8); c.fill(); c.stroke();
-      c.restore();
-      if (!back) R.light(p.x + ox, p.y + oy - 6, 34, '#cfe6ff', 0.35);
-    }
-    const nw = p.stats.wisp || 0;
-    for (let i = 0; i < nw; i++) {
-      const a = ht * 1.6 + i * U.TAU / nw;
-      const ox = Math.cos(a) * 26, oy = Math.sin(a) * 10 - 14;
-      if ((Math.sin(a) < 0) !== back) continue;
-      R.glow(c, ox, oy, 12, '#bff0ff', 0.8);
-      c.fillStyle = '#ffffff'; c.beginPath(); c.arc(ox, oy, 2.4, 0, U.TAU); c.fill();
-      if (!back) R.light(p.x + ox, p.y + oy, 44, '#bff0ff', 0.55);
-    }
   }
 
   // ---------------- projectiles ----------------

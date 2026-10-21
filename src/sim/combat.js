@@ -158,18 +158,18 @@
     return dmg;
   };
 
-  // On-hit effects of a direct hero hit: infusions (minions: infusions only, at half strength) and crit effects.
+  // On-hit effects of a direct hero hit: infusions (minions: infusions only, at half strength) and crit effects; every adder builds from the damage before the hit's affinity (the adder applies its own once).
   W.heroProcs = function (e, p, dmg, crit, comp, src) {
     const st = p.stats;
     if (comp) { this.applyInfusions(e, dmg, p, src, ED.CONST.MINION_INFUSE); return; }
     this.applyInfusions(e, dmg, p, src, 1);
-    const pow = 1 + st.statusPow;
-    if (src.burn) this.addBurn(e, dmg * src.burn * pow, p);
+    const pow = 1 + st.statusPow, pre = dmg / (src.affMul || 1);
+    if (src.burn) this.addBurn(e, pre * src.burn * pow, p);
     if (crit) {
       const bl = Math.max(st.bleed, src.bleedMin || 0);
-      if (bl) this.addBleed(e, dmg * bl * pow, p);
-      if (st.sunder) { if (e.sunderOwner !== p.pid) { e.sunderOwner = p.pid; e.sunder = 0; } e.sunder = Math.min(10, e.sunder + Math.min(2, hpFrac(e, dmg) * 60)); } // stacks from crit damage: 60 per foe HP, <= 2 per crit
-      if (st.critCharge) this.addCharge(e, dmg * st.critCharge * pow, p);
+      if (bl) this.addBleed(e, pre * bl * pow, p);
+      if (st.sunder) { if (e.sunderOwner !== p.pid) { e.sunderOwner = p.pid; e.sunder = 0; } e.sunder = Math.min(10, e.sunder + Math.min(2, hpFrac(e, pre) * 60)); } // stacks from crit damage: 60 per foe HP, <= 2 per crit
+      if (st.critCharge) this.addCharge(e, pre * st.critCharge * pow, p);
       if (st.mark) e.mark = 4;
     }
   };
@@ -256,7 +256,7 @@
     if (own) this.curChain = null;
   };
 
-  // A Smite of stored amount amt on e by o: holy damage, then the owner's duo effects and shields for heroes near the owner (HOLY_GRANT_MAX per grant, once per HOLY_CD per hero).
+  // A Smite of stored amount amt on e by o: holy damage, then the owner's duo effects and shields for heroes within HOLY_R of the smitten foe (HOLY_GRANT_MAX per grant, once per HOLY_CD per hero).
   W.smite = function (e, o, amt) {
     const st = o.stats, C = ED.CONST, corroded = e.venom >= 100, big = e.elite || e.boss;
     const dmg = amt * (1 + st.smiteMul) * (st.hoarlight && e.frozen > 0 ? 2 : 1) * (st.purge && corroded ? 1.5 : 1);
@@ -264,9 +264,8 @@
     this.hitEnemy(e, dmg, { p: o, kind: 'smite', raw: true, noProc: true, crit: false, noGuard: true, el: 'holy', affDone: true });
     let n = 0;
     const g = Math.min(C.HOLY_GRANT_MAX, st.smiteShield * (big ? 2 : 1) * (st.purge && corroded ? 2 : 1));
-    const cx = o.hp > 0 && !o.downed && !o.dead ? o.x : x, cy = o.hp > 0 && !o.downed && !o.dead ? o.y : y;
     for (const q of this.players.values()) {
-      if (q.downed || q.dead || q.holyT > 0 || U.dist2(q.x, q.y, cx, cy) > C.HOLY_R * C.HOLY_R) continue;
+      if (q.downed || q.dead || q.holyT > 0 || U.dist2(q.x, q.y, x, y) > C.HOLY_R * C.HOLY_R) continue;
       this.addShield(q, q.maxHp * g, q.maxHp * st.holyCap, 'holy');
       q.holyT = C.HOLY_CD; n++;
     }
@@ -351,7 +350,8 @@
   };
 
   // True (and marks it) the first time foe e pays out a payoff of this kind in chain cid.
-  const PAID = { thermal: 1, firedamp: 2, reaper: 4, blackice: 8, wrath: 16, sc: 32, twilight: 64 };
+  // twilight marks the Reaped source of a ripple entry; twilightHit marks the foes a ripple already force-Smote (a Reaped target still queues its own entry).
+  const PAID = { thermal: 1, firedamp: 2, reaper: 4, blackice: 8, wrath: 16, sc: 32, twilight: 64, twilightHit: 128 };
   const firstPay = (e, cid, kind) => {
     if (e.cid !== cid) { e.cid = cid; e.cidMask = 0; }
     if (e.cidMask & PAID[kind]) return false;
@@ -404,9 +404,11 @@
       case 'thermal': // 60% of a Thermal Shock detonation bursts to foes within 70 and chills them
         this.payBlast(tr, en.x, en.y, 70, en.amt * C.SPLASH_MUL, 'fire', 'fire', (o, got) => this.addChill(o, hpFrac(o, got) * C.CHILL_K, tr), true, e, 'thermal');
         break;
-      case 'firedamp': // the blast's survivors catch Burn (50%) and Venom
-        this.payBlast(tr, en.x, en.y, 80, en.amt, 'fire', 'firedamp', (o, got) => { this.addBurn(o, got * 0.5, tr); this.addVenom(o, hpFrac(o, got) * C.VENOM_K * 0.5, tr); }, false, null, 'firedamp');
+      case 'firedamp': { // the blast's survivors catch Burn (50%) and Venom, built from the damage before the fire affinity
+        const pre = 1 / this.elemAff('fire');
+        this.payBlast(tr, en.x, en.y, 80, en.amt, 'fire', 'firedamp', (o, got) => { this.addBurn(o, got * pre * 0.5, tr); this.addVenom(o, hpFrac(o, got * pre) * C.VENOM_K * 0.5, tr); }, false, null, 'firedamp');
         break;
+      }
       case 'reaper': this.payBlast(tr, en.x, en.y, 80, en.amt, 'shadow', 'shadow', null, false, null, 'reaper'); break;
       case 'blackice': this.payBlast(tr, en.x, en.y, 70, en.amt, 'ice', 'ice', null, false, null, 'blackice'); break;
       case 'wrath': // thunderbolt: 60% of the Smite as Lightning; the smitten foe is charged with half of the bolt (wrathQ remembers it so discharging it returns no Radiance)
@@ -421,12 +423,12 @@
       case 'twilight': { // each Reap forces a Smite on the nearest foe within 120 this chain has not touched, joined by a black-gold beam
         let best = null, bd = 120 * 120;
         for (const o of this.enemies) {
-          if (o.hp <= 0 || o.spawnT > 0 || o.def.invuln || o.burrowed || o.invulnT > 0 || (o.cid === en.cid && (o.cidMask & PAID.twilight))) continue;
+          if (o.hp <= 0 || o.spawnT > 0 || o.def.invuln || o.burrowed || o.invulnT > 0 || (o.cid === en.cid && (o.cidMask & PAID.twilightHit))) continue;
           const d2 = U.dist2(o.x, o.y, en.x, en.y);
           if (d2 < bd) { bd = d2; best = o; }
         }
         if (!best) break;
-        firstPay(best, en.cid, 'twilight');
+        firstPay(best, en.cid, 'twilightHit');
         this.emit({ t: 'chain', k: 't', pts: [[Math.round(en.x), Math.round(en.y)], [Math.round(best.x), Math.round(best.y)]] });
         const amt = Math.max(1.5 * best.rad, 0.5 * smiteAt(best));
         best.rad = 0; best.radOwner = tr;
