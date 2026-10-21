@@ -33,6 +33,24 @@
   const smiteAt = (e) => e.maxHp * ED.CONST.SMITE_AT[e.boss ? 'boss' : e.elite ? 'elite' : 'trash']; // Radiance a Smite needs (real HP, so Smites per foe match in every stratum)
   const UNIT = { dmg: (e, d) => d, chill: (e, d) => hpFrac(e, d) * ED.CONST.CHILL_K, venom: (e, d) => hpFrac(e, d) * ED.CONST.VENOM_K }; // amount of an infusion before its rate (ED.ELEMENTS unit)
   W.smiteAt = smiteAt;
+  // Conditional damage added to the hero multiplier st.dmg, in this order (the class hook hitMul runs between the two groups). key: the stat that enables the row (null: a hero state, own() says whether the hero has it);
+  // hit(st, e, p, w, src) -> what this hit adds (0 when the condition fails); label says when; per names the unit of a stacking row; live(st, p, ctx) -> the value now for the sheet (ctx.gold, ctx.allyNear).
+  const nearAllies = (w, p) => { let near = 0; for (const q of w.players.values()) if (q !== p && !q.downed && !q.dead && U.dist2(q.x, q.y, p.x, p.y) < 200 * 200) near++; return near; };
+  const COND = ED.COND_DMG = [
+    { key: 'execute', label: 'to foes below 30% health', hit: (st, e) => (e.hp < e.maxHp * 0.3 ? st.execute : 0) },
+    { key: 'searing', label: 'to burning foes', hit: (st, e) => (e.burnPool > 0 ? st.searing : 0) },
+    { key: 'lacerate', label: 'to bleeding foes', hit: (st, e) => (e.bleedPool > 0 ? st.lacerate : 0) },
+    { key: 'malice', label: 'to foes carrying Doom', hit: (st, e) => (e.doom > 0 ? st.malice : 0) },
+    { key: 'brittle', label: 'to chilled or frozen foes', hit: (st, e) => (e.chill > 0 || e.frozen > 0 ? st.brittle : 0) },
+    { key: 'fester', label: 'to envenomed foes', hit: (st, e) => (e.venom > 0 ? st.fester : 0) },
+    { key: 'opportunist', label: 'to stunned, frozen or blinded foes', hit: (st, e) => (e.stun > 0 || e.frozen > 0 || e.blind > 0 ? st.opportunist : 0) },
+    { key: null, id: 'knell', label: 'per Death Knell stack, for 6 s', own: (st) => st.knell > 0, value: () => 0.04, hit: (st, e, p) => (p.knellT > 0 ? 0.04 * p.knellN : 0), live: (st, p) => (p.knellT > 0 ? 0.04 * (p.knellN | 0) : 0) },
+    { key: 'brand', label: 'for each ailment on the foe (up to 4)', hit: (st, e, p, w) => st.brand * Math.min(4, w.ailments(e)) },
+    { key: 'classElMul', post: true, label: 'to your class-element skills', hit: (st, e, p, w, src) => (src.clsEl ? st.classElMul : 0) },
+    { key: 'idol', post: true, label: 'from party gold (1% per 15, at most 20%)', hit: (st, e, p, w) => Math.min(0.2, Math.floor(w.gold / 15) * 0.01), live: (st, p, ctx) => Math.min(0.2, Math.floor((ctx.gold || 0) / 15) * 0.01) },
+    { key: 'banner', post: true, label: 'per hero within 200, you included', hit: (st, e, p, w) => st.banner * (1 + nearAllies(w, p)), live: (st, p, ctx) => st.banner * (1 + (ctx.allyNear | 0)) },
+  ];
+  const COND_PRE = COND.filter(r => !r.post), COND_POST = COND.filter(r => r.post);
 
   // ---------------- enemies ----------------
   W.spawnEnemy = function (type, x, y, opts) {
@@ -45,7 +63,7 @@
     if (pact >= 1) hp *= 1.25;
     if (def.boss && pact >= 5) hp *= 1.35;
     if (pact >= 10) hp *= 1.2;
-    dmg *= (1 + 0.22 * (s - 1) + 0.03 * (s - 1) * (s - 1)) * (pact >= 2 ? 1.25 : 1) * (pact >= 8 ? 1.2 : 1) * this.threat().dmg;
+    dmg *= ED.World.dmgScale(s) * (pact >= 2 ? 1.25 : 1) * (pact >= 8 ? 1.2 : 1) * this.threat().dmg;
     const dr = this.dread;
     if (dr && !def.minion && !def.gloom && !def.ally && !opts.ally) {
       const deep = 1 + ED.World.DEEP * Math.min(ED.World.DEEP_MAX, this.deepRooms); // the Deep hits harder with every room entered Dark or Lightless this stratum
@@ -110,23 +128,9 @@
     if (p && !src.raw) {
       crit = src.crit === undefined ? !!((ch && ch.hitCrit && ch.hitCrit.call(this, p, e, src)) || this.rng.chance(st.crit)) : !!src.crit;
       let mul = st.dmg;
-      if (st.execute && e.hp < e.maxHp * 0.3) mul += st.execute;
-      if (st.searing && e.burnPool > 0) mul += st.searing;
-      if (st.lacerate && e.bleedPool > 0) mul += st.lacerate;
-      if (st.malice && e.doom > 0) mul += st.malice;
-      if (st.brittle && (e.chill > 0 || e.frozen > 0)) mul += st.brittle;
-      if (st.fester && e.venom > 0) mul += st.fester;
-      if (st.opportunist && (e.stun > 0 || e.frozen > 0 || e.blind > 0)) mul += st.opportunist;
-      if (p.knellT > 0) mul += 0.04 * p.knellN;
-      if (st.brand) mul += st.brand * Math.min(4, this.ailments(e));
+      for (let i = 0; i < COND_PRE.length; i++) { const r = COND_PRE[i]; if (r.key === null || st[r.key]) mul += r.hit(st, e, p, this, src); }
       if (ch && ch.hitMul) mul += ch.hitMul.call(this, p, e, src) || 0;
-      if (src.clsEl && st.classElMul) mul += st.classElMul;
-      if (st.idol) mul += Math.min(0.2, Math.floor(this.gold / 15) * 0.01);
-      if (st.banner) {
-        let near = 0;
-        for (const q of this.players.values()) if (q !== p && !q.downed && !q.dead && U.dist2(q.x, q.y, p.x, p.y) < 200 * 200) near++;
-        mul += st.banner * (1 + near);
-      }
+      for (let i = 0; i < COND_POST.length; i++) { const r = COND_POST[i]; if (st[r.key]) mul += r.hit(st, e, p, this, src); }
       dmg *= Math.max(0.1, mul);
       if (crit) { dmg *= st.critMult; if (ch && ch.critMul) dmg *= ch.critMul.call(this, p, e, src) || 1; }
     }

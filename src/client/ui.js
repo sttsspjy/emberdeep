@@ -40,6 +40,7 @@
   const selectText = (el) => { if (!el) return; const r = document.createRange(); r.selectNodeContents(el); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); };
 
   const portrait = (cls, size, slot, weapon) => { const cv = document.createElement('canvas'); cv.width = cv.height = size * 2; ED.Sprites.portrait(cv, cls, slot || 0, weapon); if (ED.Actors && ED.Actors.on()) ED.Actors.fit(cv, () => ED.Sprites.portrait(cv, cls, slot || 0, weapon)); return cv; };
+  UI.portrait = portrait;
 
   // Path helpers: elements share ids with their paths (fire, ice, lightning, poison, holy, shadow).
   const pathIcon = (k) => ED.Icons.url(ED.PATHS[k].icon, ED.PATHS[k].color);
@@ -146,15 +147,36 @@
     }
   }
 
+  // One line per skill of the numbers its parts have for a boonless hero ("Impact 49 · stun 1s · Shockwave …"), from the sheet model.
+  function skillFacts(cls, st) {
+    const out = {};
+    try {
+      const Sh = ED.Sheet, p = { pid: 'camp', name: '', cls, weapon: st.weaponId.split('@')[0], boons: {}, relics: [], meta: { up: [], mastery: 1 }, stats: st, hp: st.maxHp, maxHp: st.maxHp, shield: 0, picks: 0, slot: 0 };
+      const m = Sh.compute(p, Sh.ctx({ stratum: 1, pact: 0, players: new Map(), allies: [] }, p), { raw: true });
+      for (const k of m.skills) {
+        out[k.id] = k.parts.filter(q => q.kind !== 'zone').map(q => {
+          const bits = [q.label + ' ' + Sh.n1(q.kind === 'status' ? q.here : q.hit)];
+          if (q.kind === 'tick' || q.kind === 'sec') bits.push(`${q.oneFoe} ticks`);
+          else if (q.kind === 'minion') bits.push(`${q.hitsEach} strikes each`);
+          if (q.r) bits.push('r ' + q.r);
+          if (q.stun) bits.push('stun ' + Sh.n1(q.stun) + 's');
+          return bits.join(' ');
+        }).join(' · ');
+      }
+    } catch (e) { /* the description alone */ }
+    return out;
+  }
+
   function renderDescend() {
     const A = ED.App, p = A.profile;
     const cls = A.sel.cls, c = ED.CLASSES[cls];
     rosterTiles($('class-list'), cls, (id) => { A.selectClass(id); renderDescend(); });
     const st = ED.Stats.compute({ cls, weapon: A.sel.weapon, boons: {}, relics: [], meta: S.metaBundle(p, cls), pact: A.sel.pact });
     const skills = [[c.skill, 'skill1', st.skillCd], [c.skill2, 'skill2', st.skill2Cd]].filter(x => ED.SKILLS[x[0]]);
+    const facts = skillFacts(cls, st);
     $('hero-detail').innerHTML = `
       <div class="hd-top"><div id="hd-port"></div><div><div class="hd-name">${c.name}</div><div class="hd-title">${c.title}</div><p class="hd-desc">${esc(c.desc)}</p></div></div>
-      <div class="hd-skills">${skills.map(([id, act, cd]) => { const sk = ED.SKILLS[id]; return `<div class="hd-skill"><img alt="" src="${ED.Icons.url(sk.icon, c.col.c)}"><div><div class="sk-head"><b>${sk.name}</b>${keys(act)}<span class="cd">${cd.toFixed(1)}s cooldown</span></div><p>${esc(sk.desc)}</p></div></div>`; }).join('')}</div>`;
+      <div class="hd-skills">${skills.map(([id, act, cd]) => { const sk = ED.SKILLS[id]; return `<div class="hd-skill"><img alt="" src="${ED.Icons.url(sk.icon, c.col.c)}"><div><div class="sk-head"><b>${sk.name}</b>${keys(act)}<span class="cd">${cd.toFixed(1)}s cooldown</span></div><p>${esc(sk.desc)}</p>${facts[id] ? `<div class="sk-facts">${esc(facts[id])}</div>` : ''}</div></div>`; }).join('')}</div>`;
     $('hd-port').appendChild(portrait(cls, 96, 0, A.sel.weapon));
     weaponChips($('weapon-row'), cls, A.sel.weapon, (wid) => { A.sel.weapon = wid; A.saveSel(); renderDescend(); });
     const ar = $('asc-row');
@@ -436,7 +458,17 @@
     return bi ? `<span class="bc-weak" style="--pc:${ED.PATHS[b.path].color}">Weak: ${esc(bi.short)}</span>` : '';
   };
 
-  function boonCard(id, i, offer, me) {
+  // The (at most 2) numbers each offered card changes most: [[{ label, from, to, unit, better }]] from the hero's sheet models now and with each card (computed once per offer).
+  function offerDeltas(offer, me) {
+    const s = ED.Game.s;
+    if (!s || !me || !me.stats) return [];
+    try {
+      const Sh = ED.Sheet, ctx = Sh.ctx(s.view, me), base = Sh.compute(me, ctx);
+      return offer.boons.map(id => Sh.deltas(base, Sh.compute(Sh.withBoon(me, id, ctx), ctx)));
+    } catch (e) { return []; }
+  }
+  const deltaHtml = (list) => (list && list.length ? `<div class="bdl">${list.map(d => `<span class="${d.better ? 'up' : 'down'}">${esc(d.label)} ${ED.Sheet.n1(d.from)} → ${ED.Sheet.n1(d.to)}${d.unit ? ' ' + d.unit : ''}</span>`).join('')}</div>` : '');
+  function boonCard(id, i, offer, me, deltas) {
     const b = ED.BOONS[id], max = me && me.stats ? ED.maxRank(b, me.stats) : (b.max || 5);
     const have = me && me.boons ? (me.boons[id] || 0) : 0;
     const path = b.path || (b.duo && b.duo[0]) || null, path2 = b.duo ? b.duo[1] : null;
@@ -447,7 +479,7 @@
     if (path2 && ED.PATHS[path2]) el.style.setProperty('--pc2', ED.PATHS[path2].color);
     const rank = have ? (have < max ? `Rank ${have} → ${have + 1} (max ${max})` : `Rank ${have} (max)`) : max > 1 ? `Max rank ${max}` : '';
     const ribbon = boonRibbon(b, id), [line, two] = boonPathLine(b);
-    el.innerHTML = `${ribbon ? `<span class="bc-ribbon${two ? ' two' : ''}">${ribbon}</span>` : ''}<div class="bc-top">${line}<span class="bc-rar">${ED.RARITY[b.rar].name}</span></div><img class="bc-icon" alt="" src="${ED.Icons.boonUrl(id)}"><div class="bn">${esc(b.name)}</div>${b.evo ? `<div class="bsub">${esc(UI.evoName(b.evo, me && me.weapon))}</div>` : ''}${weakChip(b)}${b.route ? classBody(b, id, have, me) : `<div class="bd">${esc(b.desc)}</div>`}${rank ? `<div class="bk${have ? ' own' : ''}">${rank}</div>` : ''}`;
+    el.innerHTML = `${ribbon ? `<span class="bc-ribbon${two ? ' two' : ''}">${ribbon}</span>` : ''}<div class="bc-top">${line}<span class="bc-rar">${ED.RARITY[b.rar].name}</span></div><img class="bc-icon" alt="" src="${ED.Icons.boonUrl(id)}"><div class="bn">${esc(b.name)}</div>${b.evo ? `<div class="bsub">${esc(UI.evoName(b.evo, me && me.weapon))}</div>` : ''}${weakChip(b)}${b.route ? classBody(b, id, have, me) : `<div class="bd">${esc(ED.Sheet.text(id, Math.min(max, have + 1), me && me.stats))}</div>`}${deltaHtml(deltas)}${rank ? `<div class="bk${have ? ' own' : ''}">${rank}</div>` : ''}`;
     const wb = el.querySelector('.bweap');
     if (wb) { const th = weaponThumb(wb.dataset.w); if (th) wb.insertBefore(th, wb.firstChild); }
     el.onclick = () => { if (performance.now() >= boonLock) UI.pickBoon(i); };
@@ -462,7 +494,8 @@
     boonOffer = offer; boonFocus = 0; boonLock = performance.now() + BOON_LOCK_MS;
     const wrap = $('boon-cards'); wrap.innerHTML = '';
     const me = ED.Game.s && ED.Game.s.me;
-    offer.boons.forEach((id, i) => wrap.appendChild(boonCard(id, i, offer, me)));
+    const dl = offerDeltas(offer, me);
+    offer.boons.forEach((id, i) => wrap.appendChild(boonCard(id, i, offer, me, dl[i])));
     paintDense();
     const [head, sub, hp] = offerHead(offer, me);
     $('boon-head').textContent = head;
@@ -471,8 +504,9 @@
     $('boon-count').textContent = offer.picks > 1 ? `(${offer.picks} waiting)` : '';
     const fixed = offer.src === 'class' && offer.ctier < 3; // a route or fork pick is a fixed choice: no reroll
     const rr = $('btn-reroll'), canRe = offer.rerolls > 0 && !offer.forge && !fixed;
-    rr.hidden = !canRe; rr.innerHTML = `<kbd>${esc(ED.Input.label('skill1'))}</kbd> Reroll (${offer.rerolls})`;
-    $('boon-hint').innerHTML = `${keyPair('left', 'right')} select · <kbd>${esc(ED.Input.label('attack'))}</kbd> or <kbd>Enter</kbd> take${fixed ? ' · Routes are fixed choices' : ''}`;
+    const pad = ED.Input.device === 'pad';
+    rr.hidden = !canRe; rr.innerHTML = `<kbd>${pad ? 'Y' : esc(ED.Input.label('skill1'))}</kbd> Reroll (${offer.rerolls})`;
+    $('boon-hint').innerHTML = (pad ? '<kbd>D-pad</kbd> select · <kbd>X</kbd> take · <kbd>Back</kbd> sheet' : `${keyPair('left', 'right')} select · <kbd>${esc(ED.Input.label('attack'))}</kbd> or <kbd>Enter</kbd> take · <kbd>${esc(ED.Input.label('map'))}</kbd> character sheet`) + (fixed ? ' · Routes are fixed choices' : '');
     rr.onclick = () => UI.boonReroll(false);
     $('ov-boon').hidden = false;
     $('ov-boon').scrollTop = 0;
@@ -492,78 +526,11 @@
     if (!boonOffer) return;
     boonOffer = null;
     $('ov-boon').hidden = true;
+    ED.Input.mask(['attack', 'skill1', 'skill2', 'dash']); // the pick press (or a held attack) must not reach the hero; movement keys stay live
     ED.Game.act({ t: 'pick', i });
     if (ED.Game.s) { ED.Game.s.offerOpen = false; ED.Game.s.offer = null; }
   };
   UI.hideBoons = () => { boonOffer = null; $('ov-boon').hidden = true; };
-
-  // ---------------- character sheet (map key) ----------------
-  // One path row: icon, affinity, keystone and evolution status.
-  function pathRow(k, me, evoPath) {
-    const P = ED.PATHS[k], boons = me.boons || {}, aff = ED.pathAffinity(boons, k);
-    const keyId = ED.BOON_IDS.find(id => ED.BOONS[id].key && ED.BOONS[id].path === k);
-    const hasKey = !!(keyId && boons[keyId]);
-    const keyAff = ED.keyAffinity(k), evoAff = ED.evoAffinity(k);
-    const keyLine = hasKey ? `Keystone: ${esc(ED.BOONS[keyId].name)}` : aff >= keyAff ? 'Keystone available in your offers' : `Keystone ready at ${keyAff}`;
-    let evoLine;
-    if (evoPath === k) evoLine = `Evolved: ${esc(UI.evoName(k, me.weapon))}`;
-    else if (evoPath) evoLine = 'Evolution already taken';
-    else if (hasKey && aff >= evoAff) evoLine = 'Evolution ready — it will appear in your next offer';
-    else evoLine = `Evolves at ${evoAff} with keystone`;
-    return `<div class="path-row${evoPath === k ? ' evolved' : ''}" style="--pc:${P.color}"><img alt="" src="${pathIcon(k)}"><div><div class="pr-head"><b>${P.name}</b><span>Affinity ${aff}</span></div><div class="pr-line${hasKey ? ' ok' : ''}">${keyLine}</div><div class="pr-line${evoPath === k ? ' ok' : ''}">${evoLine}</div></div></div>`;
-  }
-
-  // Boons grouped by path (pick order), then duo, class and neutral.
-  function boonGroups(me) {
-    const boons = me.boons || {}, ids = Object.keys(boons).filter(id => ED.BOONS[id] && boons[id] > 0);
-    const chip = (id) => { const b = ED.BOONS[id]; return `<span class="chip${b.key ? ' key' : ''}${b.evo ? ' evo' : ''}" style="--rc:${ED.RARITY[b.rar].color}" title="${esc(ED.boonText(id, boons[id], me.stats))}"><img alt="" src="${ED.Icons.boonUrl(id)}">${esc(b.name)}${boons[id] > 1 ? ' ×' + boons[id] : ''}</span>`; };
-    const paths = ED.gatePaths(boons);
-    const groups = paths.map(k => [`${ED.PATHS[k].name} <small>affinity ${ED.pathAffinity(boons, k)}</small>`, ids.filter(id => ED.BOONS[id].path === k && !ED.BOONS[id].open), ED.PATHS[k].color]);
-    groups.push(['Duo', ids.filter(id => ED.BOONS[id].duo), '']);
-    groups.push(['Class route', ids.filter(id => ED.BOONS[id].cls), '']);
-    groups.push(['Open', ids.filter(id => { const b = ED.BOONS[id]; return !b.duo && !b.cls && (!b.path || b.open || !paths.includes(b.path)); }), '']);
-    const html = groups.filter(g => g[1].length).map(([h, list, col]) => `<div class="bg"${col ? ` style="--pc:${col}"` : ''}><div class="bg-h">${h}</div><div class="chip-list">${list.map(chip).join('')}</div></div>`).join('');
-    return html || '<span class="chip none">None yet</span>';
-  }
-
-  UI.toggleSheet = (on) => {
-    const s = ED.Game.s; if (!s) return;
-    const el = $('ov-sheet');
-    el.hidden = on === undefined ? !el.hidden : !on;
-    if (el.hidden) return;
-    const me = s.me, st = me.stats, view = s.view;
-    $('sheet-hero').textContent = `${me.name} · ${ED.CLASSES[me.cls].name}`;
-    const rows = [
-      ['Health', `${Math.ceil(me.hp)} / ${me.maxHp}`], ['Damage', U.pct(st.dmg)], ['Attack speed', U.pct(st.atk)], ['Critical', `${Math.round(st.crit * 100)}% ×${st.critMult.toFixed(2)}`],
-      ['Armor', Math.round(st.armor) + ` (−${Math.round((1 - ED.Stats.armorMul(st.armor)) * 100)}%)`], ['Move speed', Math.round(st.moveSpeed)],
-      [`Skill cooldowns (${esc(ED.Input.label('skill1'))} · ${esc(ED.Input.label('skill2'))})`, `${st.skillCd.toFixed(1)}s · ${(st.skill2Cd || 0).toFixed(1)}s`], ['Dodge', Math.round(st.dodge * 100) + '%'],
-      ['Shield', `${Math.ceil(me.shield || 0)}` + (st.holyInfuse ? ` (Holy holds up to ${Math.round(me.maxHp * st.holyCap)})` : '')], ['Level', view.level], ['Gold', view.gold],
-    ];
-    $('sheet-dl').innerHTML = rows.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
-    const note = $('sheet-note');
-    note.hidden = false;
-    note.textContent = `Nothing heals you for hitting or killing. Shields fade ${Math.round(ED.CONST.SHIELD_DECAY * 100)}% of max health per second between rooms.`;
-    $('sheet-relics').innerHTML = me.relics.length ? me.relics.map(id => { const r = ED.RELICS[id]; return `<span class="chip" style="--rc:${ED.RARITY[r.rar].color}" title="${esc(r.desc)}"><img alt="" src="${ED.Icons.relicUrl(id)}">${r.name}</span>`; }).join('') : '<span class="chip none">None yet</span>';
-    $('sheet-boons').innerHTML = boonGroups(me);
-    // paths: slots used, affinity, keystone and evolution
-    const owned = ED.gatePaths(me.boons || {}), evoPath = ED.evoOf(me.boons || {});
-    const gen = ED.isGeneralist(me.boons || {}), slots = gen ? 0 : Math.max(0, ED.MAX_ELEMENTS - owned.length);
-    $('sheet-slots').textContent = gen ? 'Generalist' : `${owned.length}/${ED.MAX_ELEMENTS}`;
-    $('sheet-paths').innerHTML = owned.map(k => pathRow(k, me, evoPath)).join('') + '<div class="path-row empty">Open path slot</div>'.repeat(slots);
-    // stratum affinity: now and next
-    const biome = ED.biomeFor(view.stratum), nb = view.stratum < ED.BIOMES.length ? ED.biomeFor(view.stratum + 1) : null;
-    $('sheet-strat').innerHTML = `Stratum ${U.roman(view.stratum)} · ${esc(biome.name)}<br><small>Lantern ${Math.round(100 * view.light / Math.max(1, view.lightMax))}% · map numbers: light each unvisited room costs</small>`;
-    $('sheet-aff').innerHTML = affChips(biome);
-    $('sheet-aff2').innerHTML = nb ? `<div class="aff-row">Next, ${esc(nb.short)}: ${affChips(nb)}</div>` : '';
-    $('sheet-foot').innerHTML = `Press <kbd>${esc(ED.Input.label('map'))}</kbd> or <kbd>Esc</kbd> to close`;
-    // the map canvas backs one device pixel per drawn pixel, so it stays sharp at any size
-    const mc = $('map-canvas'), c = mc.getContext('2d');
-    const w = mc.getBoundingClientRect().width || 360, dpr = window.devicePixelRatio || 1;
-    mc.width = Math.round(w * dpr); mc.height = Math.round(w * dpr * 5 / 6);
-    c.clearRect(0, 0, mc.width, mc.height);
-    const pad = 10 * dpr;
-    ED.HUD.drawMap(c, view, pad, pad, mc.width - 2 * pad, mc.height - 2 * pad, (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16) * dpr, 0);
-  };
 
   // ---------------- results ----------------
   UI.renderResults = (sum, res, note) => {
@@ -704,6 +671,8 @@
     $('mm-hearth').onclick = () => A.enterHearth('upgrades');
     $('mm-heroes').onclick = () => A.enterHearth('heroes');
     $('mm-settings').onclick = () => UI.openSettings();
+    $('mm-credits').onclick = () => { $('ov-credits').hidden = false; $('btn-credits-close').focus({ preventScroll: true }); };
+    $('btn-credits-close').onclick = () => { $('ov-credits').hidden = true; $('mm-credits').focus({ preventScroll: true }); };
     for (const m of document.querySelectorAll('.menu')) arrowNav(m, '.menu-btn', 'ArrowUp', 'ArrowDown');
     arrowNav($('hearth-tabs'), '.tab', 'ArrowLeft', 'ArrowRight');
     arrowNav($('set-tabs'), '.tab:not([hidden])', 'ArrowLeft', 'ArrowRight');
@@ -761,11 +730,14 @@
     window.addEventListener('keydown', (e) => {
       if (e.code !== 'Escape' || A.inRun()) return;
       if (!$('modal').hidden) $('modal').hidden = true;
+      else if (!$('ov-credits').hidden) $('btn-credits-close').click();
       else if (!$('ov-settings').hidden) UI.closeSettings();
       else if (!$('ov-hearth').hidden) $('btn-ph-close').click();
       else if (A.state === 'hearth' && !(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))) A.goHome();
     });
     nameHint($('inp-name'), $('name-msg'));
+    UI.wireSheet();
+    ED.Icons.fit(); window.addEventListener('resize', () => ED.Icons.fit());
     // UI sounds
     document.addEventListener('click', (e) => { if (e.target.closest('.btn, .menu-btn')) ED.Audio.play('click'); });
   };
