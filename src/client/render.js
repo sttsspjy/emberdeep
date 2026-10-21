@@ -1373,7 +1373,7 @@
     }
   }
 
-  // Drawn at the hero's origin after the sprite: evolution aura, shield, ambush glint, Bulwark.
+  // Drawn at the hero's origin after the sprite: evolution aura, shield, ambush glint.
   function drawHeroFx(c, p, t) {
     if (p.dead) return;
     const st = p.stats, evo = st && st.evo, low = R.quality === 'low', a0 = p.stealthT > 0 ? (p.pid === R.local ? 0.45 : 0.2) : 1;
@@ -1391,16 +1391,6 @@
       c.strokeStyle = U.rgba('#ffffff', 0.55); c.beginPath(); c.arc(0, -12, rr * 0.8, -2.5, -1.6); c.stroke();
     }
     if (p.ambush && !p.downed) R.emit(p.x, p.y - 12, 22, '#b78cff', 0.3 + Math.sin(t * 9) * 0.12);
-    if (p.bulwarkT > 0 && !p.downed) {
-      const a = p.face || 0, mir = st && st.mirrorguard, rr = 22, half = mir ? Math.PI : 1.309, fl = p.bulwarkT < 0.25 && p.bulwarkT !== 1 ? 0.5 + 0.5 * Math.sin(t * 40) : 1;
-      c.save(); c.translate(0, -10); c.globalAlpha = (a0 < 1 ? a0 : 1) * fl; c.lineCap = 'round';
-      c.strokeStyle = '#0b0806'; c.lineWidth = 8; c.beginPath(); c.arc(0, 0, rr, a - half, a + half); c.stroke();
-      c.strokeStyle = '#d9b44a'; c.lineWidth = 5.4; c.beginPath(); c.arc(0, 0, rr, a - half, a + half); c.stroke();
-      c.strokeStyle = '#fff3c4'; c.lineWidth = 1.6; c.beginPath(); c.arc(0, 0, rr + 1.4, a - half * 0.92, a + half * 0.92); c.stroke();
-      c.fillStyle = '#fff6c8'; for (const q of [-half * 0.85, 0, half * 0.85]) { c.beginPath(); c.arc(Math.cos(a + q) * rr, Math.sin(a + q) * rr, 1.6, 0, U.TAU); c.fill(); }
-      c.restore();
-      R.emit(p.x + Math.cos(a) * rr, p.y - 10 + Math.sin(a) * rr, 22, '#ffe9a0', 0.4 * fl); R.light(p.x + Math.cos(a) * rr, p.y - 10 + Math.sin(a) * rr, 56, '#ffe9a0', 0.45);
-    }
     c.globalAlpha = 1;
   }
 
@@ -1416,9 +1406,9 @@
   }
   const FIRE_KINDS = { fire: 1, firebolt: 1, fireball: 1, droneshot: 1, crescent: 1 };
   const WAVE_KINDS = { wave: 1, crescent: 1, bloodscythe: 1 };
-  const NOROT = { bone: 1, skull: 1, hammer: 1, web: 1 }; // shot sprites that are symmetric: blitted without a rotation
+  const NOROT = { bone: 1, skull: 1, hammer: 1, web: 1, shield: 1 }; // shot sprites that are symmetric: blitted without a rotation
   // Solid bodies of the lit pass: sprite id and spin rate (rad/s, 0 = heading). Everything else is only a glow/trail in the emissive pass.
-  const BODY = { arrow: { id: 'arrow', spin: 0 }, bolt: { id: 'arrow', spin: 0 }, trident: { id: 'trident', spin: 0 }, knife: { id: 'knife', spin: 0 }, bone: { id: 'bone', spin: 14 }, skull: { id: 'bone', spin: 14 }, hammer: { id: 'hammer', spin: 16 }, thorn: { id: 'thorn', spin: 0 }, web: { id: 'web', spin: 3, still: 1 } };
+  const BODY = { arrow: { id: 'arrow', spin: 0 }, bolt: { id: 'arrow', spin: 0 }, trident: { id: 'trident', spin: 0 }, knife: { id: 'knife', spin: 0 }, bone: { id: 'bone', spin: 14 }, skull: { id: 'bone', spin: 14 }, hammer: { id: 'hammer', spin: 16 }, shield: { id: 'shield', spin: 14 }, thorn: { id: 'thorn', spin: 0 }, web: { id: 'web', spin: 3, still: 1 } };
   function bodySprite(id) {
     switch (id) {
       case 'arrow': case 'trident': {
@@ -1432,6 +1422,10 @@
       case 'knife': return sprite('bknife', -8, -3, 8, 3, false, (g) => { g.fillStyle = '#d9dfe8'; g.beginPath(); g.moveTo(-4, -1.6); g.lineTo(7, 0); g.lineTo(-4, 1.6); g.fill(); g.fillStyle = '#2b2233'; g.fillRect(-7, -1, 3, 2); });
       case 'bone': return sprite('bbone', -8, -5, 8, 5, false, (g) => { g.fillStyle = '#efe8d4'; g.fillRect(-5, -1.3, 10, 2.6); g.beginPath(); g.arc(-5, 0, 2.2, 0, U.TAU); g.arc(5, 0, 2.2, 0, U.TAU); g.fill(); });
       case 'hammer': return sprite('bhammer', -8, -13, 8, 7, false, (g) => { g.fillStyle = '#8a6a42'; g.fillRect(-1, -9, 2, 14); g.fillStyle = '#d8dde4'; g.fillRect(-6, -11, 12, 7); g.fillStyle = '#fff'; g.fillRect(-6, -11, 12, 1.5); });
+      case 'shield': return sprite('bshield', -9, -10, 9, 10, false, (g) => { // thrown kite shield (placeholder)
+        g.fillStyle = '#c9ced6'; g.beginPath(); g.moveTo(0, -9); g.lineTo(8, -6); g.lineTo(7, 2); g.quadraticCurveTo(5, 7, 0, 9); g.quadraticCurveTo(-5, 7, -7, 2); g.lineTo(-8, -6); g.closePath(); g.fill();
+        g.strokeStyle = '#d6aa55'; g.lineWidth = 1.3; g.stroke(); g.fillStyle = '#d6aa55'; g.fillRect(-1, -6, 2, 13); g.fillRect(-5, -2, 10, 2);
+      });
       case 'thorn': return sprite('bthorn', -7, -3, 10, 3, false, (g) => { g.fillStyle = '#4a7a2a'; g.beginPath(); g.moveTo(-5, -1.6); g.lineTo(8, 0); g.lineTo(-5, 1.6); g.fill(); });
       default: return sprite('bweb', -7, -7, 7, 7, false, (g) => { g.strokeStyle = 'rgba(235,235,245,0.85)'; g.lineWidth = 0.8; g.beginPath(); for (let i = 0; i < 4; i++) { const aa = i * Math.PI / 4; g.moveTo(Math.cos(aa) * 5, Math.sin(aa) * 5); g.lineTo(-Math.cos(aa) * 5, -Math.sin(aa) * 5); } g.stroke(); g.beginPath(); g.arc(0, 0, 3, 0, U.TAU); g.stroke(); });
     }
@@ -1449,6 +1443,7 @@
       case 'knife': return sprite('sknife', -24, -8, 11, 8, true, (g) => { g.drawImage(trailSprite(col), -24, -2, 26, 4); R.glow(g, 3, 0, 8, '#cfd8ff', 0.4); });
       case 'bone': case 'skull': return sprite('sbone', -13, -13, 13, 13, true, (g) => R.glow(g, 0, 0, 13, '#ff5a3a', 0.4));
       case 'hammer': return sprite('shammer', -16, -16, 16, 16, true, (g) => R.glow(g, 0, 0, 16, '#ffe9a0', 0.7));
+      case 'shield': return sprite('sshield', -16, -16, 16, 16, true, (g) => R.glow(g, 0, 0, 16, '#ffe9a0', 0.5));
       case 'thorn': return sprite('sthorn', -20, -9, 9, 9, true, (g) => { g.drawImage(trailSprite(col), -20, -2, 22, 4); R.glow(g, 0, 0, 9, '#9cff6a', 0.4); });
       case 'web': return sprite('sweb', -10, -10, 10, 10, true, (g) => R.glow(g, 0, 0, 10, '#ffffff', 0.3));
       case 'ice': case 'shard': case 'iceshard': case 'spectral':
@@ -1681,6 +1676,12 @@
     if (view.room) drawDoorPreviews(c, view, view.room, t);
     // enemy bars and elite labels: one blit each on the buffer pixel grid
     const bh = R.scale >= 2 ? 2 : 3, lhh = R.labelH();
+    const lp = view.players.get(local), cuePips = ED.HUD.wantsPips(lp), cueParry = !!(lp && lp.stats && lp.stats.parry);
+    if (cuePips || cueParry) for (const e of view.enemies) { // class route cues of the local hero: ailment pips under the bar (Brand, Open Veins, Contagion, Gangrene), the Parry rim on a foe in the last 0.3 s of a wind-up
+      if (e.hp <= 0 || e.boss || e.burrowed) continue;
+      if (cuePips && e.ailN) ED.HUD.foePips(c, e, Math.round(e.x - (e.elite ? 15 : 9)), Math.round(e.y - e.r * 2.6 - (e.def.fly ? 14 : 4)) + bh + 2);
+      if (cueParry && (e.st === 'windup' || e.st === 'aim' || e.st === 'cast') && e.t > 0 && e.t <= ED.CONST.PARRY_WIN) { c.strokeStyle = 'rgba(255,255,255,0.95)'; c.lineWidth = 1; c.beginPath(); c.ellipse(Math.round(e.x), Math.round(e.y), e.r + 2, (e.r + 2) * 0.5, 0, 0, U.TAU); c.stroke(); }
+    }
     for (const e of view.enemies) {
       if (e.hp <= 0 || e.boss || e.burrowed) continue;
       const frac = e.hp / e.maxHp;

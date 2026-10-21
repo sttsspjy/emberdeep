@@ -449,6 +449,12 @@ input[type=range]::-moz-range-thumb { width: 1.2rem; height: 1.2rem; transform: 
 .boon-card .bd { font-size: var(--fs-lg); line-height: 1.35; color: var(--text); flex: 1; }
 .boon-card .bk { font-size: var(--fs-md); font-weight: 800; color: var(--muted); }
 .boon-card .bk.own { color: var(--ember-hi); }
+.boon-card .bplay { align-self: stretch; font-size: var(--fs-md); line-height: 1.3; color: var(--muted); }
+.boon-card .bweap { align-self: stretch; display: flex; align-items: center; gap: 0.7rem; padding: 0.3rem 0.7rem; border-radius: var(--r-sm, 0.5rem); background: rgba(0, 0, 0, 0.28); border: 1px solid color-mix(in srgb, var(--pc) 40%, transparent); text-align: left; }
+.boon-card .bweap span { font-weight: 800; color: var(--bone); display: block; }
+.boon-card .bweap small { color: var(--muted); font-size: var(--fs-md); display: block; }
+.boon-card .bweap > div, .boon-card .bweap > span { min-width: 0; }
+.boon-card .bc-wimg { width: 4.4rem; height: 4.4rem; flex: none; image-rendering: pixelated; }
 .boon-card .bc-ribbon { position: absolute; top: -1.05rem; left: 50%; transform: translateX(-50%); white-space: nowrap; padding: 0.2rem 1.2rem; border-radius: 2rem; font: 800 var(--fs-md)/1.3 var(--f-body); letter-spacing: 0.02em; color: #15100c; background: var(--pc); border: 2px solid #0e0907; box-shadow: 0 0 1.2rem color-mix(in srgb, var(--pc) 60%, transparent); }
 .boon-card .bc-ribbon.two { background: linear-gradient(90deg, var(--pc), var(--pc2, var(--pc))); }
 /* path colours; the paths' hues are the identity of a card, rarity only colours its label */

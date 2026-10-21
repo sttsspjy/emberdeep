@@ -389,7 +389,12 @@
       const els = ED.elementGates(boons).length;
       return [OFFER_HEAD.level, ED.isGeneralist(boons) ? 'Boons of your General path' : els < ED.MAX_ELEMENTS ? `A new path may be offered (${els}/${ED.MAX_ELEMENTS} used)` : 'Boons of your paths', main];
     }
-    if (src === 'class') return [`${me && ED.CLASSES[me.cls] ? ED.CLASSES[me.cls].name : 'Class'} technique`, '', null];
+    if (src === 'class') {
+      const cn = me && ED.CLASSES[me.cls] ? ED.CLASSES[me.cls].name : 'Class', rt = me && me.boons ? ED.classRoute(me.boons, me.cls) : null;
+      if (offer.ctier === 1) return ['Choose your route', `It shapes how ${cn} fights`, null];
+      if (offer.ctier === 2) return [`${rt && rt.route ? ED.routeLabel(me.cls, rt.route) : 'Route'}: choose your fork`, 'A fork changes how the route plays; later bosses deepen it', null];
+      return ['Route mastery', 'Deepen your fork, or take a boon', null];
+    }
     if (src === 'start') return [OFFER_HEAD.start, `Paths gate your boons: ${ED.MAX_ELEMENTS} element paths, or Generalist`, null];
     if (src === 'forge') return [OFFER_HEAD.forge, 'The boon you pick gains one rank.', null];
     return [OFFER_HEAD[src] || OFFER_HEAD.level, '', null];
@@ -399,10 +404,31 @@
   function boonPathLine(b) {
     if (b.duo) return [`<span class="bc-path two">${pathName(b.duo[0], true)} + ${pathName(b.duo[1], true)}</span>`, true];
     if (b.path) return [`<span class="bc-path">${ED.PATHS[b.path].name}</span>`, false];
-    if (b.cls) return [`<span class="bc-path">${esc(ED.CLASSES[b.cls].name)} technique</span>`, false];
+    if (b.cls) return [`<span class="bc-path">${esc(b.route ? ED.routeLabel(b.cls, b.route) : ED.CLASSES[b.cls].name)}</span>`, false];
     return ['<span class="bc-path">Open</span>', false];
   }
-  const boonRibbon = (b, id) => (b.evo ? 'Evolution' : b.duo ? 'Duo' : b.key ? 'Keystone' : id === 'generalist' ? 'Forsake the elements' : b.gate ? 'Path gate' : '');
+  const boonRibbon = (b, id) => (b.evo ? 'Evolution' : b.duo ? 'Duo' : b.key ? 'Keystone' : id === 'generalist' ? 'Forsake the elements' : b.gate ? 'Path gate' : b.route ? (b.tag ? b.tag + (b.coop ? ' · co-op' : '') : 'Route') : '');
+  // The fork weapon of a class card as a small canvas drawn from the pixel atlas (null without art): tilted up-right about its grip.
+  function weaponThumb(wid) {
+    const L = ED.FORK_LOOKS && ED.FORK_LOOKS[wid], A = ED.Atlas;
+    if (!L || !A || !A.ok || !A.has(L.art)) return null;
+    const cv = document.createElement('canvas'); cv.width = cv.height = 88; cv.className = 'bc-wimg';
+    const c = cv.getContext('2d'), an = A.anim(L.art), dir = (an && an.anchors && typeof an.anchors.dir === 'number') ? an.anchors.dir : 0;
+    A.draw(c, L.art, 0, 44, 62, { rot: (45 - dir) * Math.PI / 180, anchor: 'grip' });
+    return cv;
+  }
+  // Card body of a class route or fork card: the text at the offered rank (+ rider from rank 3), "Plays as" and "Forks" on a route card, the rank-3 rider name on lower ranks, the fork weapon of an Attack fork.
+  function classBody(b, id, have, me) {
+    const rk = Math.min(b.max, have + 1), P = ED.cardParts(id, rk, me && me.stats);
+    let h = `<div class="bd">${esc(P.text)}${P.rider ? ` <b>${esc(P.riderName)}</b>: ${esc(P.rider)}` : ''}</div>`;
+    if (b.tier === 1) h += `<div class="bplay">Plays as: ${esc(b.plays)}</div><div class="bplay">Forks: ${b.forks.map(f => esc(ED.BOONS[f].name)).join(' / ')}</div>`;
+    else if (P.riderName && !P.rider) h += `<div class="bplay">Rank 3: ${esc(P.riderName)}</div>`;
+    if (b.weapon && b.weapon.kind && me && ED.CLASSES[me.cls]) {
+      const base = me.stats && me.stats.weaponId ? me.stats.weaponId.split('@')[0] : me.weapon, fw = ED.forkWeapon(base, id);
+      h += `<div class="bweap" data-w="${base}@${b.weapon.kind}"><div><span>${esc(fw.name)}</span><small>${fw.dmg.toFixed(1)} damage every ${fw.rate.toFixed(2)} s</small></div></div>`;
+    }
+    return h;
+  }
   // "Weak: <stratum>" chip of an element gate card: the stratum whose foes are weak to the path's element.
   const weakChip = (b) => {
     if (!b.gate || !ED.PATHS[b.path].element) return '';
@@ -421,7 +447,9 @@
     if (path2 && ED.PATHS[path2]) el.style.setProperty('--pc2', ED.PATHS[path2].color);
     const rank = have ? (have < max ? `Rank ${have} → ${have + 1} (max ${max})` : `Rank ${have} (max)`) : max > 1 ? `Max rank ${max}` : '';
     const ribbon = boonRibbon(b, id), [line, two] = boonPathLine(b);
-    el.innerHTML = `${ribbon ? `<span class="bc-ribbon${two ? ' two' : ''}">${ribbon}</span>` : ''}<div class="bc-top">${line}<span class="bc-rar">${ED.RARITY[b.rar].name}</span></div><img class="bc-icon" alt="" src="${ED.Icons.boonUrl(id)}"><div class="bn">${esc(b.name)}</div>${b.evo ? `<div class="bsub">${esc(UI.evoName(b.evo, me && me.weapon))}</div>` : ''}${weakChip(b)}<div class="bd">${esc(b.desc)}</div>${rank ? `<div class="bk${have ? ' own' : ''}">${rank}</div>` : ''}`;
+    el.innerHTML = `${ribbon ? `<span class="bc-ribbon${two ? ' two' : ''}">${ribbon}</span>` : ''}<div class="bc-top">${line}<span class="bc-rar">${ED.RARITY[b.rar].name}</span></div><img class="bc-icon" alt="" src="${ED.Icons.boonUrl(id)}"><div class="bn">${esc(b.name)}</div>${b.evo ? `<div class="bsub">${esc(UI.evoName(b.evo, me && me.weapon))}</div>` : ''}${weakChip(b)}${b.route ? classBody(b, id, have, me) : `<div class="bd">${esc(b.desc)}</div>`}${rank ? `<div class="bk${have ? ' own' : ''}">${rank}</div>` : ''}`;
+    const wb = el.querySelector('.bweap');
+    if (wb) { const th = weaponThumb(wb.dataset.w); if (th) wb.insertBefore(th, wb.firstChild); }
     el.onclick = () => { if (performance.now() >= boonLock) UI.pickBoon(i); };
     el.onmouseenter = () => { boonFocus = i; paintFocus(); };
     return el;
@@ -441,9 +469,10 @@
     $('boon-head').style.color = hp ? ED.PATHS[hp].color : '';
     $('boon-sub').textContent = sub; $('boon-sub').hidden = !sub;
     $('boon-count').textContent = offer.picks > 1 ? `(${offer.picks} waiting)` : '';
-    const rr = $('btn-reroll'), canRe = offer.rerolls > 0 && !offer.forge;
+    const fixed = offer.src === 'class' && offer.ctier < 3; // a route or fork pick is a fixed choice: no reroll
+    const rr = $('btn-reroll'), canRe = offer.rerolls > 0 && !offer.forge && !fixed;
     rr.hidden = !canRe; rr.innerHTML = `<kbd>${esc(ED.Input.label('skill1'))}</kbd> Reroll (${offer.rerolls})`;
-    $('boon-hint').innerHTML = `${keyPair('left', 'right')} select · <kbd>${esc(ED.Input.label('attack'))}</kbd> or <kbd>Enter</kbd> take`;
+    $('boon-hint').innerHTML = `${keyPair('left', 'right')} select · <kbd>${esc(ED.Input.label('attack'))}</kbd> or <kbd>Enter</kbd> take${fixed ? ' · Routes are fixed choices' : ''}`;
     rr.onclick = () => UI.boonReroll(false);
     $('ov-boon').hidden = false;
     $('ov-boon').scrollTop = 0;
@@ -454,7 +483,7 @@
   UI.boonMove = (d) => { if (!boonOffer) return; boonFocus = (boonFocus + d + boonOffer.boons.length) % boonOffer.boons.length; paintFocus(); ED.Audio.play('hover'); };
   UI.boonConfirm = () => { if (!boonOffer || performance.now() < boonLock) return; UI.pickBoon(boonFocus); };
   UI.boonReroll = (byKey) => {
-    if (!boonOffer || !(boonOffer.rerolls > 0) || boonOffer.forge || performance.now() < boonLock) return;
+    if (!boonOffer || !(boonOffer.rerolls > 0) || boonOffer.forge || (boonOffer.src === 'class' && boonOffer.ctier < 3) || performance.now() < boonLock) return;
     boonLock = performance.now() + BOON_LOCK_MS; // the fresh hand arrives in a moment; don't send twice
     if (byKey) ED.Audio.play('click');
     ED.Game.act({ t: 'reroll' });
@@ -487,11 +516,11 @@
   // Boons grouped by path (pick order), then duo, class and neutral.
   function boonGroups(me) {
     const boons = me.boons || {}, ids = Object.keys(boons).filter(id => ED.BOONS[id] && boons[id] > 0);
-    const chip = (id) => { const b = ED.BOONS[id]; return `<span class="chip${b.key ? ' key' : ''}${b.evo ? ' evo' : ''}" style="--rc:${ED.RARITY[b.rar].color}" title="${esc(b.desc)}"><img alt="" src="${ED.Icons.boonUrl(id)}">${esc(b.name)}${boons[id] > 1 ? ' ×' + boons[id] : ''}</span>`; };
+    const chip = (id) => { const b = ED.BOONS[id]; return `<span class="chip${b.key ? ' key' : ''}${b.evo ? ' evo' : ''}" style="--rc:${ED.RARITY[b.rar].color}" title="${esc(ED.boonText(id, boons[id], me.stats))}"><img alt="" src="${ED.Icons.boonUrl(id)}">${esc(b.name)}${boons[id] > 1 ? ' ×' + boons[id] : ''}</span>`; };
     const paths = ED.gatePaths(boons);
     const groups = paths.map(k => [`${ED.PATHS[k].name} <small>affinity ${ED.pathAffinity(boons, k)}</small>`, ids.filter(id => ED.BOONS[id].path === k && !ED.BOONS[id].open), ED.PATHS[k].color]);
     groups.push(['Duo', ids.filter(id => ED.BOONS[id].duo), '']);
-    groups.push([`${ED.CLASSES[me.cls].name} technique`, ids.filter(id => ED.BOONS[id].cls), '']);
+    groups.push(['Class route', ids.filter(id => ED.BOONS[id].cls), '']);
     groups.push(['Open', ids.filter(id => { const b = ED.BOONS[id]; return !b.duo && !b.cls && (!b.path || b.open || !paths.includes(b.path)); }), '']);
     const html = groups.filter(g => g[1].length).map(([h, list, col]) => `<div class="bg"${col ? ` style="--pc:${col}"` : ''}><div class="bg-h">${h}</div><div class="chip-list">${list.map(chip).join('')}</div></div>`).join('');
     return html || '<span class="chip none">None yet</span>';

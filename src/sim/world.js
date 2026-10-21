@@ -86,15 +86,17 @@
 
   // Hero movement: walking, dash, skill-move, hazards and pull zones.
   Sim.movePlayer = (p, inp, dt, room, locked, zones) => {
-    if (p.downed || p.dead) { p.moving = false; return; }
+    if (p.downed || p.dead) { p.moving = false; p.skillMove = null; p.skillIfr = false; return; }
     const speed = p.stats.moveSpeed * (ED.Stats.moveRate ? ED.Stats.moveRate(p) : 1);
-    if (p.skillMove) {
+    if (p.skillMove) { // a skill's own movement { dx, dy, speed, t (seconds left), iframes (untouchable for this long), age }
       const m = p.skillMove;
       Sim.moveCircle(p, m.dx * m.speed * dt, m.dy * m.speed * dt, room, locked, false);
-      m.t -= dt; p.moving = true;
-      if (m.t <= 0) p.skillMove = null;
+      m.age = (m.age || 0) + dt; m.t -= dt; p.moving = true;
+      p.skillIfr = m.age < (m.iframes === undefined ? m.t + m.age : m.iframes);
+      if (m.t <= 0) { p.skillMove = null; p.skillIfr = false; }
       return;
     }
+    p.skillIfr = false;
     if (p.dashT > 0) {
       p.dashT -= dt;
       Sim.moveCircle(p, p.dashDx * 430 * dt, p.dashDy * 430 * dt, room, locked, false);
@@ -131,7 +133,7 @@
     this.pact = opts.pact | 0;
     this.players = new Map();
     this.enemies = []; this.projs = []; this.pickups = []; this.zones = []; this.allies = []; this.props = [];
-    this.fx = []; this.msgs = [];
+    this.fx = []; this.msgs = []; this.corpses = []; // corpses: recent non-boss deaths { x, y, t } for Corpse Explosion, cleared with each room
     this.gold = 0; this.xp = 0; this.level = 1; this.xpNext = W.xpFor(1);
     this.time = 0; this.roomTime = 0; this.state = 'play'; this.stratum = 0; this.floorSeed = 0;
     this.locked = false; this.enc = null; this.boss = null; this.pendingStratum = null;
@@ -202,10 +204,12 @@
     }
     return best;
   };
-  W.prototype.nearestEnemy = function (x, y, maxD, exclude) {
+  // Nearest living foe within maxD of (x, y), skipping the ids in exclude; with cone > 0 only foes within cone radians of the direction a0.
+  W.prototype.nearestEnemy = function (x, y, maxD, exclude, a0, cone) {
     let best = null, bd = maxD * maxD;
     for (const e of this.enemies) {
       if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed || (exclude && exclude.has(e.id))) continue;
+      if (cone > 0 && Math.abs(U.angDiff(a0, Math.atan2(e.y - y, e.x - x))) > cone) continue;
       const d = U.dist2(x, y, e.x, e.y);
       if (d < bd) { bd = d; best = e; }
     }
@@ -222,7 +226,7 @@
       hp: 1, maxHp: 1, dashT: 0, dashDx: 0, dashDy: 0, dashing: false, skillMove: null,
       invuln: 0, hurtT: 0, downed: false, bleed: 0, revive: 0, dead: false,
       phoenixUsed: false, secondWind: 0, swPct: 0.4, angelUsed: false, aegisT: 0, guardCd: 0, guardT: 0,
-      frozenCd: 0, tranceT: 0, wallT: 0, atkCount: 0, chaliceKills: 0, chaliceHp: 0, bonusHp: 0,
+      frozenCd: 0, tranceT: 0, atkCount: 0, chaliceKills: 0, chaliceHp: 0, bonusHp: 0,
       picks: 0, offer: null, offerT: 0, rerolls: 0, claimed: {}, shield: 0,
       kills: 0, dealt: 0, hitThisBoss: false,
       remote: !!pd.remote, connected: true,
@@ -263,11 +267,26 @@
     return v;
   };
 
+  // Every shield a hero receives except Battle Ward ('ward') and the boss door passes one sliding window of SHIELD_WIN_T seconds (10 one-second slots in p.shWin): class sources (any k but 'holy') give at most
+  // SHIELD_WIN_CLASS of max HP per window, all sources together SHIELD_WIN_ALL; what the window refuses is logged in p.shieldClip[k].
+  Object.assign(ED.CONST, { SHIELD_WIN_T: 10, SHIELD_WIN_CLASS: 0.03, SHIELD_WIN_ALL: 0.06 });
   // Adds amt (x the dread heal multiplier) to p's absorb shield up to cap (a shield above the cap is never lowered); k labels the source in p.shieldBy. Returns the shield gained.
   W.prototype.addShield = function (p, amt, cap, k) {
     if (!p || p.downed || p.dead || !(amt > 0) || !(p.shield < cap)) return 0;
-    const to = Math.min(cap, p.shield + amt * (this.dread.heal ?? 1)), gain = to - p.shield;
-    p.shield = to;
+    let gain = Math.min(cap, p.shield + amt * (this.dread.heal ?? 1)) - p.shield;
+    if (k !== 'ward') {
+      const C = ED.CONST, win = p.shWin, now = Math.floor(this.time);
+      let c = 0, a = 0;
+      for (let i = 0; i < win.length; i++) { const s = win[i]; if (now - s.sec < C.SHIELD_WIN_T) { c += s.c; a += s.a; } }
+      const room = Math.max(0, k === 'holy' ? C.SHIELD_WIN_ALL * p.maxHp - a : Math.min(C.SHIELD_WIN_CLASS * p.maxHp - c, C.SHIELD_WIN_ALL * p.maxHp - a));
+      if (gain > room) { p.shieldClip[k] = (p.shieldClip[k] || 0) + gain - room; gain = room; }
+      if (!(gain > 0)) return 0;
+      const sl = win[now % C.SHIELD_WIN_T];
+      if (sl.sec !== now) { sl.sec = now; sl.c = 0; sl.a = 0; }
+      if (k !== 'holy') sl.c += gain;
+      sl.a += gain;
+    }
+    p.shield += gain;
     p.shieldBy[k] = (p.shieldBy[k] || 0) + gain;
     this.emit({ t: 'shielded', pid: p.pid, v: Math.round(gain * 10) / 10, k });
     return gain;
@@ -379,7 +398,7 @@
 
   W.prototype.enterRoom = function (id, fromDir) {
     this.collectAll();
-    this.enemies.length = 0; this.projs.length = 0; this.zones.length = 0; this.chainQ.length = 0; this.curChain = null;
+    this.enemies.length = 0; this.projs.length = 0; this.zones.length = 0; this.chainQ.length = 0; this.curChain = null; this.corpses.length = 0;
     this.boss = null; this.enc = null;
     this.roomId = id;
     this.roomEpoch = (this.roomEpoch || 0) + 1;
@@ -397,7 +416,7 @@
     const pos = [];
     for (const p of this.players.values()) {
       const pt = fromDir ? D.entryPoint(room, D.OPP[fromDir], k) : { x: D.center(room).x + (k - 1.5) * 22, y: D.center(room).y + 20 };
-      p.x = pt.x; p.y = pt.y; p.vx = 0; p.vy = 0; p.dashT = 0; p.skillMove = null;
+      p.x = pt.x; p.y = pt.y; p.vx = 0; p.vy = 0; p.dashT = 0; p.skillMove = null; p.skillIfr = false; p.charge = null; this.clearShields(p); // a thrown shield and a charge in flight end with the room
       p.toughRoom = room.type === 'elite' || room.type === 'boss'; // War Drum doubles in these rooms
       pos.push([p.pid, Math.round(p.x), Math.round(p.y)]);
       k++;
@@ -484,6 +503,7 @@
     p.invuln = Math.max(0, p.invuln - dt);
     p.hurtT -= dt;
     if (!p.remote) p.dashing = p.dashT > 0;
+    if (p.shields.length && (p.downed || p.dead)) this.clearShields(p);
     if (p.dead) return;
     if (p.downed) {
       let helpers = 0;

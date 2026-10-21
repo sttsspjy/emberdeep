@@ -1,4 +1,4 @@
-// Usage: node tools/simpool.js <heroes> <runs> <botSkill> <meta none|mid|max[,...]> [classes|-] [pact] [--pick=smart|random] [--start=random|class|generalist|<gateId>] [--gates=1|2] [--force=id[@slot],...] [--route=...] [--fork=0|1]
+// Usage: node tools/simpool.js <heroes> <runs> <botSkill> <meta none|mid|max[,...]> [classes|-] [pact] [--pick=smart|random] [--start=random|class|generalist|rotate|<gateId>] [--gates=1|2] [--force=id[@slot],...] [--route=attack|skill1|skill2|element|random|rotate] [--fork=0|1|random|rotate] [--weapon=0|1|2|rotate] [--mastery=smart|fork]
 //   [--seed0=N] [--explore=minLight] [--strata=N] [--jobs=N] [--patch=file.js] [--out=rows.json] [--pair=rows.json] [--detail]   (every flag of tools/sim.js is forwarded)
 // Parallel batch runs of tools/sim.js bots across worker processes (default: cores - 1) at idle priority. One result line per meta profile;
 // --detail prints the full sim.js summary of each. --patch=file.js loads a module exporting function (ED) that edits tables (ED.World.THREAT, ED.ENEMIES, ...) in every worker.
@@ -26,7 +26,7 @@ if (process.argv[2] === '--worker') {
   const jobs = [];
   for (const meta of metas) {
     const { up, mastery } = sim.metaProfile(meta);
-    for (let i = 0; i < runs; i++) jobs.push(Object.assign({ label: meta, seed: seed0 + i * 7, n, cls: [cls[i % cls.length]].concat(cls), skill, up, pact, mastery }, o));
+    for (let i = 0; i < runs; i++) jobs.push(Object.assign({ label: meta, seed: seed0 + i * 7, n, cls: [cls[i % cls.length]].concat(cls), skill, up, pact, mastery }, sim.jobOpts(o, i, cls.length)));
   }
   // job queue: each worker takes the next job when it finishes one; results are reported in job order (output independent of --jobs and timing)
   const W = Math.max(1, Math.min(+(flags.jobs || os.cpus().length - 1), jobs.length));
@@ -43,11 +43,12 @@ if (process.argv[2] === '--worker') {
     jobs.forEach((j, i) => (all[j.label] = all[j.label] || []).push(res[i]));
     const rows = jobs.map((j, i) => sim.rowOf(res[i], j.label, j.seed));
     if (flags.out) fs.writeFileSync(flags.out, JSON.stringify(rows));
-    console.log(`pick=${pick}${o.start ? ' start=' + o.start : ''}${o.gates ? ' gates=' + o.gates : ''}${force.length ? ' force=' + force.join(',') : ''}${exploreMin === undefined ? '' : ' explore=' + exploreMin}${maxStratum === undefined ? '' : ' strata<=' + maxStratum + ' (capped runs: wins and depth do not apply)'} heroes=${n} pact=${pact} runs=${runs} (${((Date.now() - t0) / 1000).toFixed(0)}s, ${W} workers)`);
+    console.log(`pick=${pick}${o.route ? ' route=' + o.route : ''}${o.fork !== undefined ? ' fork=' + o.fork : ''}${o.weapon !== undefined ? ' weapon=' + o.weapon : ''}${o.cardMastery ? ' mastery=' + o.cardMastery : ''}${o.start ? ' start=' + o.start : ''}${o.gates ? ' gates=' + o.gates : ''}${force.length ? ' force=' + force.join(',') : ''}${exploreMin === undefined ? '' : ' explore=' + exploreMin}${maxStratum === undefined ? '' : ' strata<=' + maxStratum + ' (capped runs: wins and depth do not apply)'} heroes=${n} pact=${pact} runs=${runs} (${((Date.now() - t0) / 1000).toFixed(0)}s, ${W} workers)`);
     for (const meta of metas) {
       const rs = all[meta], wins = rs.filter(r => r.victory).length;
       if (flags.detail) console.log(`\n== ${meta}\n` + sim.summarize(rs));
-      else console.log(`${meta.padEnd(5)} wins ${wins}/${rs.length} (${(100 * wins / rs.length).toFixed(0)}% +-${(100 * Math.sqrt(wins / rs.length * (1 - wins / rs.length) / rs.length)).toFixed(1)}) depth ${(rs.reduce((s, r) => s + r.stratum, 0) / rs.length).toFixed(2)} +-${Math.sqrt(rs.reduce((s, r, _, a) => s + (r.stratum - a.reduce((x, y) => x + y.stratum, 0) / a.length) ** 2, 0) / (rs.length - 1) / rs.length).toFixed(2)} winners ${wins ? sim.ED.U.fmtTime(rs.filter(r => r.victory).reduce((s, r) => s + r.time, 0) / wins) : '-'} rooms ${(100 * rs.reduce((s, r) => s + r.rooms.visited, 0) / rs.reduce((s, r) => s + r.rooms.total, 0)).toFixed(0)}% gloom downs ${(rs.reduce((s, r) => s + r.downedBy.filter(k => k.startsWith('gloom@')).length, 0) / rs.length).toFixed(2)}/run, ${(100 * rs.reduce((s, r) => s + (r.dmgBy.gloom || 0), 0) / Math.max(1, rs.reduce((s, r) => s + Object.values(r.dmgBy).reduce((x, y) => x + y, 0), 0))).toFixed(0)}% of damage taken, flares ${(rs.reduce((s, r) => s + r.flares, 0) / rs.length).toFixed(2)}/run`);
+      else if (o.route || o.fork !== undefined || o.weapon !== undefined) console.log(sim.classLines(rs));
+      if (!flags.detail) console.log(`${meta.padEnd(5)} wins ${wins}/${rs.length} (${(100 * wins / rs.length).toFixed(0)}% +-${(100 * Math.sqrt(wins / rs.length * (1 - wins / rs.length) / rs.length)).toFixed(1)}) depth ${(rs.reduce((s, r) => s + r.stratum, 0) / rs.length).toFixed(2)} +-${Math.sqrt(rs.reduce((s, r, _, a) => s + (r.stratum - a.reduce((x, y) => x + y.stratum, 0) / a.length) ** 2, 0) / (rs.length - 1) / rs.length).toFixed(2)} winners ${wins ? sim.ED.U.fmtTime(rs.filter(r => r.victory).reduce((s, r) => s + r.time, 0) / wins) : '-'} rooms ${(100 * rs.reduce((s, r) => s + r.rooms.visited, 0) / rs.reduce((s, r) => s + r.rooms.total, 0)).toFixed(0)}% gloom downs ${(rs.reduce((s, r) => s + r.downedBy.filter(k => k.startsWith('gloom@')).length, 0) / rs.length).toFixed(2)}/run, ${(100 * rs.reduce((s, r) => s + (r.dmgBy.gloom || 0), 0) / Math.max(1, rs.reduce((s, r) => s + Object.values(r.dmgBy).reduce((x, y) => x + y, 0), 0))).toFixed(0)}% of damage taken, flares ${(rs.reduce((s, r) => s + r.flares, 0) / rs.length).toFixed(2)}/run`);
     }
     if (flags.pair) console.log(sim.pairReport(rows, JSON.parse(fs.readFileSync(flags.pair, 'utf8'))));
   };
