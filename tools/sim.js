@@ -365,7 +365,7 @@ function runBot(opts) {
     // Venom term of the vulnerability sum, read before the hit (the hit may clear it): its share of the damage dealt is the bonus Venom added
     const sp = src && src.p, vTerm = sp && e.venom > 0 ? e.venom / 100 * (VAMP + e.corrode) * ((e.venomBy & (1 << sp.slot)) ? 1 : VALLY) * (sp.stats.cryotoxin && e.frozen > 0 ? 2 : 1) : 0;
     const mine = vTerm > 0 && (e.venomBy & (1 << sp.slot)) ? 1 : 0, cor = vTerm > 0 ? e.corrode / (VAMP + e.corrode) : 0;
-    const vTot = vTerm > 0 ? 1 + vTerm + (e.mark > 0 ? 0.25 : 0) + (e.judged > 0 || e.vulnT > 0 ? 0.2 : 0) + (e.frozen > 0 ? 0.25 : 0) + (e.sunder && e.sunderOwner === sp.pid ? 0.04 * e.sunder : 0) : 1;
+    const vTot = vTerm > 0 ? 1 + vTerm + (e.mark > 0 ? e.markV : 0) + (e.judged > 0 || e.vulnT > 0 ? 0.2 : 0) + (e.frozen > 0 ? 0.25 : 0) + (e.sunder && e.sunderOwner === sp.pid ? 0.04 * e.sunder : 0) : 1;
     const sg0 = e.staggerT, d = hit0.call(this, e, base, src);
     if (!(d > 0)) return d;
     if (e.staggerT > sg0 + 0.5) rec.cnt.staggers++;

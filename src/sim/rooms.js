@@ -160,8 +160,8 @@
     if (this.bossTier === 3) this.run.lightlessBoss = true;
     if (![...this.players.values()].some(p => p.hitThisBoss)) this.run.flawlessBoss = true;
     for (const x of this.enemies) if (x !== e && x.hp > 0) { x.hp = 0; this.emit({ t: 'die', x: Math.round(x.x), y: Math.round(x.y), type: x.type, el: 0, r: x.r }); }
-    this.projs = this.projs.filter(p => p.team === 0);
-    this.zones = this.zones.filter(z => z.team === 0);
+    for (const q of this.projs) if (q.team !== 0) q.dead = true; // flagged, not refiltered: the kill may land inside the projectile/zone loops, which end by reassigning their own keep list
+    for (const z of this.zones) if (z.team !== 0) z.dead = true;
     this.boss = null; this.enc = null; this.locked = false;
     this.roomState[this.roomId].cleared = true;
     this.emit({ t: 'bossDown', type: e.type, x: Math.round(e.x), y: Math.round(e.y) });

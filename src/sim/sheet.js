@@ -49,7 +49,7 @@
   Sh.n1 = n1;
 
   // ---------------- text at rank ----------------
-  // Boon text at `rank`: {stat} renders |mods[stat]| x rank in the stat's format (":pct|flat|sec|x" overrides it), {stat*K} that number times K (K = P: the hero's Power), {pw} the proc damage of the boon at the hero's Power.
+  // Boon text at `rank`: {stat} renders |mods[stat]| x rank in the stat's format (":pct|flat|sec|x" overrides it), {stat*K} that number times K (K = P: the hero's Power; ck / ck3: see below), {pw} the proc damage of the boon at the hero's Power.
   // Class cards render through ED.boonText. st (the hero's stat block) is optional: without it {pw} reads as its formula and {stat*P} as a Power share.
   const TOKEN = /\{(\w+)(?:\*(\w+(?:\.\d+)?))?(?::(\w+))?\}/g;
   const PLURAL = /(\d+(?:\.\d+)?)((?:\s+[\w-]+){1,2})\(s\)/g; // "+2 foe(s)" reads "+2 foes", "+1 foe(s)" reads "+1 foe"
@@ -61,6 +61,7 @@
     return b.desc.replace(TOKEN, (m, key, mulBy, f) => {
       if (key === 'pw') return b.pw ? (st ? String(Math.round(ED.procDmg(b, st))) : `${Math.round(b.pw.k * 100)}% Power${b.pw.base ? ' + ' + b.pw.base : ''}`) : m;
       const v = Math.abs((b.mods && b.mods[key]) || 0) * rank;
+      if (mulBy === 'ck' || mulBy === 'ck3') return String(Math.max(1, Math.round(v * (mulBy === 'ck3' ? 3 : 1) * ((st && st.critK) || 1)))); // *ck / *ck3: the number and three times it, x the hero's critK (as W.grantCrits scales a grant and its cap)
       if (mulBy) return n1(v * (mulBy === 'P' ? (st ? st.power : 1) : +mulBy));
       return Sh.fmt(key, v, f);
     }).replace(PLURAL, (m, num, words) => num + words + (Math.abs(+num) === 1 ? '' : 's'));

@@ -243,6 +243,7 @@
   W.prototype.removePlayer = function (pid) {
     const p = this.players.get(pid);
     if (!p) return;
+    this.clearShields(p);
     this.players.delete(pid);
     this.allies = this.allies.filter(a => a.owner !== pid);
     this.emit({ t: 'left', pid, name: p.name });
