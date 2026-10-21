@@ -99,10 +99,11 @@
     return sg;
   }
   // RGBA pixels of frame f drawn at (pad, pad) inside a (w + 2 pad) x (h + 2 pad) buffer.
-  function readFrame(f, pad) {
-    const g = scratch(f.w + 2 * pad, f.h + 2 * pad);
-    g.drawImage(A.pages[f.p], f.x, f.y, f.w, f.h, pad, pad, f.w, f.h);
-    return g.getImageData(0, 0, f.w + 2 * pad, f.h + 2 * pad);
+  function readFrame(f, pad) { return readRect(A.pages[f.p], f.x, f.y, f.w, f.h, pad); }
+  function readRect(src, sx, sy, w, h, pad) {
+    const g = scratch(w + 2 * pad, h + 2 * pad);
+    g.drawImage(src, sx, sy, w, h, pad, pad, w, h);
+    return g.getImageData(0, 0, w + 2 * pad, h + 2 * pad);
   }
   const hexInt = (h) => { // '#rrggbb' -> packed little-endian RGBA with full alpha
     const v = parseInt(h.slice(1), 16); return ((255 << 24) | ((v & 255) << 16) | (((v >> 8) & 255) << 8) | (v >> 16)) >>> 0;
@@ -172,21 +173,25 @@
     }
     return dst;
   }
-  // Frame i of anim `id` rotated clockwise by step / 32 turns about the anim's anchor (optionally mirrored first): Scale2x twice, nearest rotation, 4x4 majority downsample.
+  const rotKey = (id, i, step, flip, anchor, variant) => id + '|' + i + '|' + step + '|' + (flip ? 1 : 0) + '|' + (anchor || '') + '|' + (variant || '');
+  // Frame i of anim `id` rotated clockwise by step / 32 turns about the anim's anchor (optionally mirrored first, optionally from a recoloured variant sheet): Scale2x twice, nearest rotation, 4x4 majority downsample.
   // Returns { src, sx, sy, w, h, ox, oy } (rect of the rotated image in art px, anchor position inside it). A canvas stands in until its ImageBitmap is ready.
-  A.rotSprite = (id, i, step, flip, anchor) => {
+  A.rotSprite = (id, i, step, flip, anchor, variant) => {
     const r = rec(id); if (!r) return null;
     i = ((i | 0) % r.n + r.n) % r.n; step = ((step | 0) % NSTEP + NSTEP) % NSTEP;
-    const key = id + '|' + i + '|' + step + '|' + (flip ? 1 : 0) + '|' + (anchor || '');
-    return rotCache.get(key) || bakeRot(r, i, step, !!flip, anchor, key);
+    if (variant && !variantRec(r, variant)) variant = '';
+    const key = rotKey(id, i, step, flip, anchor, variant);
+    return rotCache.get(key) || bakeRot(r, i, step, !!flip, anchor, variant, key);
   };
-  function bakeRot(r, i, step, flip, anchor, key) {
-    const f = r.f[i], im = readFrame(f, 0), w = f.w, h = f.h;
+  function bakeRot(r, i, step, flip, anchor, variant, key) {
+    const f = r.f[i], v = variant ? variantRec(r, variant) : null, pad = v ? v.pad : 0;
+    const w = f.w + 2 * pad, h = f.h + 2 * pad;
+    const im = v ? readRect(v.src, v.rects[i].x - pad, v.rects[i].y - pad, w, h, 0) : readFrame(f, 0);
     let px = new Uint32Array(im.data.buffer);
     for (let o = 0; o < px.length; o++) if ((px[o] >>> 24) === 0) px[o] = 0;
     if (flip) for (let y = 0; y < h; y++) for (let x = 0; x < w >> 1; x++) { const a = y * w + x, b = y * w + w - 1 - x, t = px[a]; px[a] = px[b]; px[b] = t; }
     const an = anchorPt(r, anchor), axa = an ? an[0] : r.ax, aya = an ? an[1] : r.ay;
-    const ax = flip ? f.w - (axa - f.ox) : axa - f.ox, ay = aya - f.oy; // pivot inside the (mirrored) trimmed frame, art px
+    const ax0 = axa - f.ox + pad, ax = flip ? w - ax0 : ax0, ay = aya - f.oy + pad; // pivot inside the (mirrored, padded) trimmed frame, art px
     const big = scale2x(scale2x(px, w, h), w * 2, h * 2), bw = w * 4, bh = h * 4;
     const R = Math.max(Math.hypot(ax, ay), Math.hypot(w - ax, ay), Math.hypot(ax, h - ay), Math.hypot(w - ax, h - ay)), Hh = Math.ceil(R) + 1, D = Hh * 2, D4 = D * 4;
     const th = step / NSTEP * Math.PI * 2, co = Math.cos(th), si = Math.sin(th), rot = new Uint32Array(D4 * D4), pcx = ax * 4, pcy = ay * 4, c0 = Hh * 4;
@@ -214,13 +219,13 @@
     return s;
   }
   // Queues all 32 angles of a frame to bake in the background (Atlas.tick spends a small time budget per frame on the queue).
-  A.prebake = (id, i, flip, anchor) => { if (rec(id)) for (let s = 1; s < NSTEP; s++) rotQueue.push([id, i | 0, s, !!flip, anchor]); };
+  A.prebake = (id, i, flip, anchor, variant) => { if (rec(id)) for (let s = 1; s < NSTEP; s++) rotQueue.push([id, i | 0, s, !!flip, anchor, variant]); };
   // Per frame: resets the inline bake allowance and works the prebake queue for at most `ms` milliseconds.
   A.tick = (ms) => {
     rotLeft = 4;
     if (!rotQueue.length) return;
     const t0 = performance.now(), lim = ms === undefined ? 1.5 : ms;
-    while (rotQueue.length && performance.now() - t0 < lim) { const q = rotQueue.shift(); A.rotSprite(q[0], q[1], q[2], q[3], q[4]); }
+    while (rotQueue.length && performance.now() - t0 < lim) { const q = rotQueue.shift(); A.rotSprite(q[0], q[1], q[2], q[3], q[4], q[5]); }
   };
 
   // ---------------- draw ----------------
@@ -229,28 +234,24 @@
   A.draw = (c, id, i, x, y, o) => {
     const r = rec(id); if (!r) return false;
     i = ((i | 0) % r.n + r.n) % r.n;
-    const f = r.f[i], flip = !!(o && o.flip);
-    let src, sx, sy, sw, sh, ax, ay, pad = 0, dxl, dyt, dw, dh;
-    const an = o && o.anchor ? anchorPt(r, o.anchor) : null;
-    ax = an ? an[0] : r.ax; ay = an ? an[1] : r.ay;
+    const f = r.f[i], flip = !!(o && o.flip), v = o && o.variant ? variantRec(r, o.variant) : null, vk = v ? o.variant : '';
+    let src, sx, sy, sw, sh, pad = 0, dxl, dyt, dw, dh;
+    const an = o && o.anchor ? anchorPt(r, o.anchor) : null, ax = an ? an[0] : r.ax, ay = an ? an[1] : r.ay;
     if (o && o.rot) {
       const st = Math.round(o.rot / (Math.PI * 2) * NSTEP) & (NSTEP - 1);
       if (st) {
-        let s = rotCache.get(id + '|' + i + '|' + st + '|' + (flip ? 1 : 0) + '|' + (o.anchor || ''));
+        const an2 = o.anchor || '';
+        let s = rotCache.get(rotKey(id, i, st, flip, an2, vk));
         if (!s) {
-          if (rotLeft > 0) { rotLeft--; s = A.rotSprite(id, i, st, flip, o.anchor); }
-          else for (let d = 1; d < NSTEP && !s; d++) s = rotCache.get(id + '|' + i + '|' + ((st + d) & 31) + '|' + (flip ? 1 : 0) + '|' + (o.anchor || '')) || rotCache.get(id + '|' + i + '|' + ((st - d) & 31) + '|' + (flip ? 1 : 0) + '|' + (o.anchor || ''));
-          if (!s) s = A.rotSprite(id, i, st, flip, o.anchor);
+          if (rotLeft > 0) { rotLeft--; s = A.rotSprite(id, i, st, flip, an2, vk); }
+          else for (let d = 1; d < NSTEP && !s; d++) s = rotCache.get(rotKey(id, i, (st + d) & 31, flip, an2, vk)) || rotCache.get(rotKey(id, i, (st - d) & 31, flip, an2, vk));
+          if (!s) s = A.rotSprite(id, i, st, flip, an2, vk);
         }
-        src = s.src; sx = s.sx; sy = s.sy; sw = s.w; sh = s.h; dxl = x - s.ox * K; dyt = y - s.oy * K; dw = s.w * K; dh = s.h * K;
-        return blitTo(c, src, sx, sy, sw, sh, dxl, dyt, dw, dh, false, o);
+        return blitTo(c, s.src, s.sx, s.sy, s.w, s.h, x - s.ox * K, y - s.oy * K, s.w * K, s.h * K, false, o);
       }
     }
     src = A.pages[f.p]; sx = f.x; sy = f.y; sw = f.w; sh = f.h;
-    if (o && o.variant) {
-      const v = variantRec(r, o.variant);
-      if (v) { src = v.src; const q = v.rects[i]; pad = v.pad; sx = q.x - pad; sy = q.y - pad; sw = f.w + 2 * pad; sh = f.h + 2 * pad; }
-    }
+    if (v) { src = v.src; const q = v.rects[i]; pad = v.pad; sx = q.x - pad; sy = q.y - pad; sw = f.w + 2 * pad; sh = f.h + 2 * pad; }
     dxl = flip ? x + (ax - f.ox - f.w - pad) * K : x + (f.ox - ax - pad) * K;
     dyt = y + (f.oy - ay - pad) * K; dw = sw * K; dh = sh * K;
     return blitTo(c, src, sx, sy, sw, sh, dxl, dyt, dw, dh, flip, o);
@@ -268,17 +269,18 @@
   }
 
   // ---------------- pixel font ----------------
-  // ED.ART.font = { h, gap, glyphs: { char: frameId } }. A tinted sheet (every glyph with a 1 px dark outline) is built per colour; text is glyph blits from it.
+  // ED.ART.font = { h, gap, space, glyphs: { char: frameId } }. Glyphs are drawn at (pen, top + oy) and the pen advances by w + gap (ox is not used); a space advances by font.space.
+  // A tinted sheet (every glyph with a 1 px dark outline) is built per colour; text is glyph blits from it.
   const fsheets = new Map(), OUTLINE = '#120a06';
   let fmask = null; // white glyph sheet: cells of (w + 4) x (h + 2), glyph at cell + (2, 1)
   function initFont() {
     const F = art.font, g = {}; let W = 0, H = F.h + 2;
-    for (const ch in F.glyphs) { const f = art.frames[F.glyphs[ch]]; if (!f || !A.pages[f.p]) continue; g[ch] = { f, cx: W, w: f.w, h: f.h, ox: f.ox || 0, oy: f.oy || 0 }; W += f.w + 4; H = Math.max(H, f.h + 2); }
+    for (const ch in F.glyphs) { const f = art.frames[F.glyphs[ch]]; if (!f || !A.pages[f.p]) continue; g[ch] = { f, cx: W, w: f.w, h: f.h, oy: f.oy || 0 }; W += f.w + 4; H = Math.max(H, f.h + 2); }
     const cv = document.createElement('canvas'); cv.width = Math.max(1, W); cv.height = H;
     const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
     for (const ch in g) { const q = g[ch]; c.drawImage(A.pages[q.f.p], q.f.x, q.f.y, q.f.w, q.f.h, q.cx + 2, 1, q.f.w, q.f.h); }
     fmask = cv;
-    A.font = { h: F.h, gap: F.gap || 1, g, space: Math.max(2, Math.round(F.h * 0.5)) };
+    A.font = { h: F.h, gap: F.gap === undefined ? 1 : F.gap, g, space: F.space || Math.max(2, Math.round(F.h * 0.5)) };
   }
   function fontSheet(color) {
     let s = fsheets.get(color);
@@ -295,14 +297,20 @@
     Bmp.from(cv, (b) => { if (fsheets.get(color) === s) s.src = b; else Bmp.free(b); });
     return s;
   }
-  // Width in world px of `s` at k world px per font px (outline excluded).
+  // True when a pixel font is loaded and has a glyph for every non-space character of `s` (callers draw other strings, e.g. non-Latin player names, with canvas text).
+  A.covers = (s) => {
+    const F = A.font; if (!F) return false;
+    for (let i = 0; i < s.length; i++) if (s[i] !== ' ' && !F.g[s[i]]) return false;
+    return true;
+  };
+  // Width in world px of `s` at k world px per font px (outline excluded): glyph widths plus gaps, spaces advance by font.space.
   A.textW = (s, k) => {
     const F = A.font; if (!F) return 0;
-    let w = 0;
-    for (let i = 0; i < s.length; i++) { const q = F.g[s[i]]; w += (q ? q.w : F.space) + F.gap; }
-    return (w > 0 ? w - F.gap : 0) * (k || 2);
+    let w = 0, last = 0;
+    for (let i = 0; i < s.length; i++) { const q = F.g[s[i]]; last = q ? F.gap : 0; w += q ? q.w + F.gap : F.space; }
+    return (w - last) * (k || 2);
   };
-  // Draws `s` in `color` with a 1 px dark outline; (x, y) is the text centre (align 'l' / 'r': left / right edge, vertically centred). k: world px per font px (default 2).
+  // Draws `s` in `color` with a 1 px dark outline; (x, y) is the text centre (align 'l' / 'r': left / right edge, vertically centred). k: world px per font px (default 2; callers pass even values so font px stay on the art grid).
   // Returns false when no pixel font is loaded, so callers fall back to canvas text.
   A.text = (c, s, x, y, color, k, align, alpha) => {
     const F = A.font; if (!F) return false;
@@ -314,8 +322,8 @@
     if (alpha !== undefined && alpha !== 1) c.globalAlpha = ga * alpha;
     for (let i = 0; i < s.length; i++) {
       const q = F.g[s[i]];
-      if (!q) { px += (F.space + F.gap) * k; continue; }
-      c.drawImage(sh.src, q.cx + 1, 0, q.w + 2, q.h + 2, Math.round(px + (q.ox - 1) * k), Math.round(py + (q.oy - 1) * k), (q.w + 2) * k, (q.h + 2) * k);
+      if (!q) { px += F.space * k; continue; }
+      c.drawImage(sh.src, q.cx + 1, 0, q.w + 2, q.h + 2, Math.round(px - k), Math.round(py + (q.oy - 1) * k), (q.w + 2) * k, (q.h + 2) * k); // the sheet cell keeps 1 px of outline around the glyph
       px += (q.w + F.gap) * k;
     }
     c.globalAlpha = ga; c.imageSmoothingEnabled = true;

@@ -7,7 +7,7 @@
   const R = ED.Render = { cam: { x: 0, y: 0 }, scale: 2, W: 0, H: 0, dpr: 1, bw: 1, bh: 1, ix: 0, iy: 0, fx: 0, fy: 0, ox: 0, oy: 0, shx: 0, shy: 0, bakeScale: 1, quality: 'high', lightLevel: 1, posting: false, stats: { n: 0, world: 0, post: 0 } };
   const BQ = R.bakeScale; // texels per world px of baked sprites and room art (world resolution)
   const glowCache = {}, lightCache = {}, trailCache = {};
-  const PIX_HIGH = 3.7e6, PIX_LOW = 2.8e6, PIX_SOFT = 1.1e6; // screen canvas pixel caps per quality (2560x1440 = 3.69 MP renders native on High); PIX_SOFT: software-rasterised canvases (no GPU)
+  const PIX_MAX = 8.4e6, PIX_SOFT = 1.1e6; // screen canvas pixel caps: 3840x2160 renders native on every quality (the world costs buffer pixels, the present is one blit or quad); PIX_SOFT: software-rasterised canvases (no GPU)
   let buf, bctx, lightCv, lctx, vignetteH, shadowH, lightN = 0, glowN = 0, presenting2D = null;
   const bufs = [], bctxs = []; let bi = 0, wPrev = false, prevO = null, bwLast = 0, bwMs = 16.7; // two alternating world buffers (see R.endWorld); bwMs = smoothed frame interval
   const lights = [], rimSrc = [], glowQ = [], rimOut = { dx: 0, dy: 0, col: '', s: 0 };
@@ -48,8 +48,8 @@
   R.resize = () => {
     const cssW = window.innerWidth, cssH = window.innerHeight;
     const low = R.quality === 'low';
-    let dpr = Math.min(window.devicePixelRatio || 1, low ? 1 : 1.5);
-    dpr = Math.max(0.5, Math.min(dpr, Math.sqrt((ED.Post && ED.Post.soft ? PIX_SOFT : low ? PIX_LOW : PIX_HIGH) / (cssW * cssH)))); // pixel cap: native 2560x1440 on High, 2.8 MP on Low, 1.1 MP without a GPU
+    let dpr = window.devicePixelRatio || 1;
+    dpr = Math.max(0.5, Math.min(dpr, Math.sqrt((ED.Post && ED.Post.soft ? PIX_SOFT : PIX_MAX) / (cssW * cssH)))); // native device px (no CSS stretch that would blur art pixels); capped at 8.4 MP, 1.1 MP without a GPU
     R.dpr = dpr;
     R.W = Math.round(cssW * dpr); R.H = Math.round(cssH * dpr);
     R.scale = Math.max(0.5, Math.floor(2 * Math.min(R.W / ED.CONST.VIEW_W, R.H / ED.CONST.VIEW_H)) / 2); // screen px per world px, in half steps: one art px (2 world px) is a whole number of screen px
@@ -917,7 +917,7 @@
   const PK_COL = { gold: '#ffc94a', xp: '#7dffd9', orb: '#ff2a4a', heart: '#ff4a5a' };
   function pickSprite(kind) {
     const h = pkSpr[kind]; if (h) return h.v;
-    const s = document.createElement('canvas'); s.width = s.height = 16; pkSpr[kind] = Bmp.hold(s);
+    const s = document.createElement('canvas'); s.width = s.height = 16;
     const g = s.getContext('2d'); g.translate(8, 8); g.lineJoin = 'round'; g.lineWidth = 0.9; g.strokeStyle = '#0b0806';
     if (kind === 'xp') {
       g.fillStyle = '#34dcb0'; g.beginPath(); g.moveTo(0, -7); g.lineTo(-4, -1); g.lineTo(0, 6); g.closePath(); g.fill();
@@ -938,13 +938,15 @@
       g.beginPath(); g.moveTo(0, 18); g.bezierCurveTo(-24, 2, -22, -20, -8, -20); g.quadraticCurveTo(-2, -20, 0, -12); g.quadraticCurveTo(2, -20, 8, -20); g.bezierCurveTo(22, -20, 24, 2, 0, 18); g.fill(); g.stroke();
       g.fillStyle = 'rgba(255,255,255,0.7)'; g.beginPath(); g.ellipse(-9, -8, 4, 6, -0.6, 0, U.TAU); g.fill();
     }
+    pkSpr[kind] = Bmp.hold(s); // snapshot after painting
     return s;
   }
   function glintSprite() {
     if (glintH) return glintH.v;
-    const cv = document.createElement('canvas'); cv.width = cv.height = 16; glintH = Bmp.hold(cv);
+    const cv = document.createElement('canvas'); cv.width = cv.height = 16;
     const g = cv.getContext('2d'); g.translate(8, 8); g.scale(0.5, 0.5); g.fillStyle = '#ffffff';
     g.beginPath(); g.moveTo(0, -15); g.lineTo(1.3, -1.3); g.lineTo(15, 0); g.lineTo(1.3, 1.3); g.lineTo(0, 15); g.lineTo(-1.3, 1.3); g.lineTo(-15, 0); g.lineTo(-1.3, -1.3); g.closePath(); g.fill();
+    glintH = Bmp.hold(cv);
     return cv;
   }
   function drawPickups(c, view, t, pass) {
@@ -1444,10 +1446,11 @@
   // ---------------- projectiles ----------------
   function trailSprite(color) {
     const h = trailCache[color]; if (h) return h.v;
-    const s = document.createElement('canvas'); s.width = 64; s.height = 16; trailCache[color] = Bmp.hold(s);
+    const s = document.createElement('canvas'); s.width = 64; s.height = 16;
     const g = s.getContext('2d'), gr = g.createLinearGradient(0, 0, 64, 0);
     gr.addColorStop(0, U.rgba(color, 0)); gr.addColorStop(0.7, U.rgba(color, 0.45)); gr.addColorStop(1, U.rgba(color, 0.9));
     g.fillStyle = gr; g.beginPath(); g.moveTo(0, 8); g.lineTo(64, 0); g.lineTo(64, 16); g.closePath(); g.fill();
+    trailCache[color] = Bmp.hold(s);
     return s;
   }
   const FIRE_KINDS = { fire: 1, firebolt: 1, fireball: 1, droneshot: 1, crescent: 1 };
@@ -1629,11 +1632,14 @@
   }
 
   // ---------------- world text and overhead info (names, bars, prompts) ----------------
-  // With the pixel font (ED.Atlas.font) text is glyph blits at an integer number of world px per font px; without it, outlined canvas text baked once per (string, colour, size).
-  const LBL = 10; // default label height, world px
+  // With the pixel font (ED.Atlas.font) text is glyph blits at 2 world px per font px (1 art px = 2 world px; 4 only for the pop frames of big numbers); strings the font cannot spell
+  // (non-Latin names) and the no-font case use outlined canvas text baked once per (string, colour, size).
+  const LBL = 10; // nominal label height without the pixel font, world px
   let mctx = null;
-  const fontK = (size) => Math.max(1, Math.round((size || LBL) / ED.Atlas.font.h));
-  const fbPx = (size) => (size || LBL) * 0.9; // canvas-font px of the fallback for a nominal label height
+  const fontK = (size) => ((size || LBL) >= 26 ? 4 : 2);
+  const PF = (str) => ED.Atlas.covers(str);
+  const PX = (str) => (/[\u2212\u2013\u2014]/.test(str) ? str.replace(/[\u2212\u2013\u2014]/g, '-') : str); // typographic minus / dashes -> the font's hyphen
+  const fbPx = (size) => (ED.Atlas.font ? ED.Atlas.font.h * 2 : size || LBL) * 0.9; // canvas-font px of the fallback for a nominal label height
   // Outlined text baked once per (string, colour, size in px); sprite origin = text centre.
   function textSprite(str, color, fs) {
     const key = color + '|' + fs + '|' + str;
@@ -1650,14 +1656,15 @@
   }
   R.labelH = (size) => (ED.Atlas.font ? ED.Atlas.font.h * fontK(size) : size || LBL);
   R.labelW = (str, size) => {
-    if (ED.Atlas.font) return ED.Atlas.textW(str, fontK(size));
+    if (PF(PX(str))) return ED.Atlas.textW(PX(str), fontK(size));
     if (!mctx) mctx = document.createElement('canvas').getContext('2d');
     mctx.font = '800 ' + fbPx(size).toFixed(2) + 'px "Alegreya Sans", sans-serif';
     return Math.ceil(mctx.measureText(str).width + fbPx(size) * 0.9);
   };
   // Label centred at world (x, y) in the current (integer-translated) transform; size = nominal height in world px.
   R.label = (c, str, x, y, color, size, alpha) => {
-    if (ED.Atlas.text(c, str, Math.round(x), Math.round(y), color, ED.Atlas.font ? fontK(size) : 2, 'c', alpha)) return;
+    const ps = PX(str);
+    if (PF(ps) && ED.Atlas.text(c, ps, Math.round(x), Math.round(y), color, fontK(size), 'c', alpha)) return;
     const ts = textSprite(str, color, fbPx(size));
     if (alpha !== undefined && alpha !== 1) { const ga = c.globalAlpha; c.globalAlpha = ga * alpha; blit(c, ts, x, y); c.globalAlpha = ga; } else blit(c, ts, x, y);
   };
@@ -1682,7 +1689,7 @@
   };
   // One floating text t (FX.texts entry) at its animated size fs and alpha a: pixel-font glyphs, else the baked number scaled.
   R.drawNum = (c, t, fs, a) => {
-    if (ED.Atlas.font) { ED.Atlas.text(c, t.s, Math.round(t.x), Math.round(t.y), t.color, fontK(fs), 'c', a); return; }
+    if (PF(t.s)) { ED.Atlas.text(c, t.s, Math.round(t.x), Math.round(t.y), t.color, fontK(fs), 'c', a); return; }
     const sp = R.numSprite(t.s, t.color, t.size, t.crit), q = fs / sp.fs;
     c.globalAlpha = a; c.drawImage(sp.cv, Math.round(t.x + sp.x * q), Math.round(t.y + sp.y * q), sp.w * q, sp.h * q);
   };
@@ -1722,20 +1729,20 @@
       if (af) R.label(c, af.name + ' ' + e.def.name, e.x, y - 2 - lhh / 2 - (e.ward > 0 ? bh : 0), af.color);
     }
     // hero names (the local hero first; a name that would overlap another steps up) and revive rings with a DOWN / REVIVE label
-    const multi = view.players.size > 1, lh = lhh * 1.3;
+    const multi = view.players.size > 1, lh = lhh * 1.1;
     lblN = 0;
     for (let pass = 0; pass < 2; pass++) for (const p of view.players.values()) {
       if ((p.pid === local) !== (pass === 0)) continue;
       const col = ED.PLAYER_COLORS[p.slot] || '#fff', px = Math.round(p.x), py = Math.round(p.y);
       if (multi && !p.dead) {
-        R.label(c, p.name, px, placeLabel(px, py - 44, R.labelW(p.name), lh), col);
+        R.label(c, p.name, px, placeLabel(px, py - 47, R.labelW(p.name), lh), col);
         if (p.pid !== local && !p.downed) { const fr = p.hp / p.maxHp; c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(px - 11, py - 39, 22, 3); c.fillStyle = fr > 0.35 ? '#86d38f' : '#e2513f'; c.fillRect(px - 10, py - 38, Math.round(20 * fr), 1); }
       }
       if (p.downed) {
         c.strokeStyle = 'rgba(0,0,0,0.6)'; c.lineWidth = 3; c.beginPath(); c.arc(px, py - 8, 20, 0, U.TAU); c.stroke();
         c.strokeStyle = '#86d38f'; c.beginPath(); c.arc(px, py - 8, 20, -Math.PI / 2, -Math.PI / 2 + U.TAU * (p.revive || 0)); c.stroke();
         const str = p.pid === local ? 'DOWN' : 'REVIVE';
-        R.label(c, str, px, placeLabel(px, py - 34, R.labelW(str), lh), '#ff8a7a');
+        R.label(c, str, px, placeLabel(px, py - (multi ? 47 + lh : 34), R.labelW(str), lh), '#ff8a7a'); // stacked over the name in co-op
       }
     }
     // nearest sign within reach (one at a time); the HUD draws its text in screen space with the current key bindings

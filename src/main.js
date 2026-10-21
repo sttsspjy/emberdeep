@@ -278,7 +278,7 @@
   // ---------------- loop ----------------
   // Frame pacing. A browser that misses vsync alternates frame times (4 / 8 / 12 ms on a 240 Hz panel), which reads as judder. settings.frameCap decides what the loop does:
   // 'auto' (default) measures the vsync interval and the share of rAF intervals longer than one vsync, and presents every n-th rAF (n = 2: 120 fps on 240 Hz) while frames keep missing;
-  // 'off' presents every rAF; '144' / '120' / '60' cap the rate at the nearest whole divisor of the display rate. dt is smoothed to n vsync intervals whenever it lands within 10% of them.
+  // 'off' presents every rAF; '144' / '120' / '60' present every n-th rAF with the smallest n that keeps the rate at or below the cap (display rate / n). dt is smoothed to n vsync intervals whenever it lands within 10% of them.
   const Pace = A.pace = { vs: 0, n: 1, miss: 0, cap: 'auto', hz: 0, work: 0 };
   const RATES = [30, 48, 50, 60, 72, 75, 90, 100, 120, 144, 165, 180, 240, 360];
   const PD = new Float32Array(240); let pdI = 0, pdN = 0, pTick = 0, lastRaf = 0, pHold = performance.now() + 3000, pRetry = 0, pTrial = 0, pBad = 0, pEval = 0, pBack = 30000, dtErr = 0;
@@ -302,7 +302,7 @@
     const cap = (A.settings && A.settings.frameCap) || 'auto', vs = Pace.vs;
     if (cap !== Pace.cap) { Pace.cap = cap; pTrial = 0; pBad = 0; }
     if (cap === 'off') { if (Pace.n !== 1) pSetN(1, now); return; }
-    if (cap !== 'auto') { const n = Math.max(1, Math.round(1000 / vs / (+cap || 60))); if (n !== Pace.n) pSetN(n, now); return; }
+    if (cap !== 'auto') { const n = Math.max(1, Math.ceil(1000 / vs / (+cap || 60) - 0.05)); if (n !== Pace.n) pSetN(n, now); return; }
     if (now < pHold) return;
     const maxN = Math.max(1, Math.floor(1000 / vs / 72)); // never below ~72 fps
     if (pTrial) { // the faster cadence was just tried: keep it unless it misses again

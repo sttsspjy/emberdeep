@@ -692,8 +692,8 @@
       }
       const cost = st.visited ? 0 : ED.World.roomCost(r.type); // light the unvisited room costs, bottom-right of its cell
       if (cost > 0) {
-        g.save(); g.font = `800 ${fpx.toFixed(1)}px ${FB}`; g.textAlign = 'right'; g.textBaseline = 'alphabetic'; g.lineJoin = 'round';
-        g.lineWidth = Math.max(3, fpx * 0.3); g.strokeStyle = 'rgba(0,0,0,0.92)'; g.strokeText(cost, rx + s + 1, ry + s + 1); g.fillStyle = K.warm; g.fillText(cost, rx + s + 1, ry + s + 1); g.restore();
+        const e = textArt(String(cost), fpx, K.warm, FB, 800, true); // cached text bitmap, right edge and baseline at the cell's bottom-right
+        g.drawImage(e.cv, Math.round(rx + s + 1 - e.pad - e.adv), Math.round(ry + s + 1 - fpx * 0.35 - e.h / 2));
       }
     }
   };
