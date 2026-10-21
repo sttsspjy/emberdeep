@@ -1117,12 +1117,20 @@
     return p.state ? t - r.t0 : 0;
   }
   const orbDone = new Set(); let ironOk = false, merchOk = false;
-  // Key of the Atlas variant of the shrine pedestal whose orb wears colour hex ('' while the atlas cannot build it).
-  function orbKey(hex) {
-    const key = 'pal:orb' + hex;
+  const stoneVk = {}, CAMP_STONE = ['#5f7160', '#8d977f', '#abc2bc'], PEDESTAL = ['#4e484a', '#5f7160', '#8d977f', '#d6d3c4']; // stratum id -> { sprite id -> Atlas draw options } of stone props
+  // Draw options of stone prop `id` wearing the stratum's wall stone (only the palette hexes in `only` when given); undefined until the atlas can build it.
+  function stoneOf(id, view, only) {
+    const b = ED.biomeFor(view.stratum || 1), m = stoneVk[b.id] || (stoneVk[b.id] = {});
+    let o = m[id];
+    if (!o) { const k = ED.Tiles.stoneKey ? ED.Tiles.stoneKey(id, b, only) : ''; if (k) o = m[id] = { variant: k }; }
+    return o;
+  }
+  // Key of the Atlas variant of the shrine pedestal whose orb wears colour hex and whose base wears the stratum's stone ('' while the atlas cannot build it).
+  function orbKey(hex, view) {
+    const b = ED.biomeFor(view.stratum || 1), key = 'pal:orb' + b.id + hex;
     if (orbDone.has(key)) return key;
     const src = ['#965340', '#d14b34', '#e46d3a', '#ffffff'], to = [U.shade(hex, -0.5), U.shade(hex, -0.2), hex, U.mix(hex, '#ffffff', 0.7)];
-    if (!ED.Atlas.variant('prop.shrine.3', key, () => { const m = {}; src.forEach((s, i) => { m[s] = to[i]; }); return m; })) return '';
+    if (!ED.Atlas.variant('prop.shrine.3', key, (pal) => { const m = ED.Tiles.stoneMap ? ED.Tiles.stoneMap(pal, b, PEDESTAL) : {}; src.forEach((s, i) => { m[s] = to[i]; }); return m; })) return '';
     orbDone.add(key); return key;
   }
   // Swirling portal vortex: 12 frames of an ellipse painted pixel by pixel on the 2-px art grid.
@@ -1167,7 +1175,7 @@
       case 'relic': case 'shop': {
         if (p.state) c.globalAlpha = 0.35;
         Sp.shadow(c, 12, 0.3);
-        A_.draw(c, 'prop.plinth.stone', 0, 0, 0);
+        A_.draw(c, 'prop.plinth.stone', 0, 0, 0, stoneOf('prop.plinth.stone', view));
         if (!p.state) {
           const bob = Math.sin(t * 3 + p.id) * 2;
           let col = '#ffffff', icon = null, flask = null;
@@ -1204,9 +1212,9 @@
         let hex = reward ? rewardColor(p.reward || p.rw || p.item || p.what) : (PATH_COL[R.mainPath] || ELEM_HEX[(view.room ? view.room.seed >>> 0 : 0) % 6]);
         const bob = Math.sin(t * 2.6 + p.id) * 2.5;
         Sp.shadow(c, 14);
-        if (!reward && p.state) A_.draw(c, 'prop.plinth.stone', 0, 0, 0);
+        if (!reward && p.state) A_.draw(c, 'prop.plinth.stone', 0, 0, 0, stoneOf('prop.plinth.stone', view));
         else {
-          const vk = orbKey(hex); A_.draw(c, 'prop.shrine.3', 0, 0, 0, vk ? { variant: vk } : undefined);
+          const vk = orbKey(hex, view); A_.draw(c, 'prop.shrine.3', 0, 0, 0, vk ? { variant: vk } : undefined);
           G(0, reward ? -30 + bob : -22, 34, hex, reward ? 0.7 : 0.55 + Math.sin(t * 4) * 0.15); L(0, reward ? -28 : -18, reward ? 120 : 100, hex, reward ? 0.95 : 0.8);
           if (reward) {
             const me = view.players.get(local), ri = R.rewardIcon(p.item, me ? me.cls : null);
@@ -1234,7 +1242,7 @@
       case 'sign': Sp.shadow(c, 9, 0.3); A_.draw(c, 'prop.sign', 0, 0, 0); return true;
       case 'campfire': {
         Sp.shadow(c, 18, 0.3);
-        A_.draw(c, 'prop.campfire', 0, 0, 0);
+        A_.draw(c, 'prop.campfire', 0, 0, 0, stoneOf('prop.campfire', view, CAMP_STONE));
         G(0, -14, 46, '#ff8a3d', 0.6 + Math.sin(t * 9) * 0.06); L(0, -14, 170, '#ff9a4a', 1.1);
         for (const [dx, dy, ph] of [[-8, -20, 0], [8, -22, 0.37], [0, -28, 0.71]]) A_.draw(c, 'fx.flame', A_.frameAt('fx.flame', t + ph), dx, dy);
         return true;

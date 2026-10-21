@@ -561,7 +561,8 @@
         if (r > b + 40 && mx - mn > 80) { const L = lumOf(r, g, b), q = L < 0.25 ? 0 : L < 0.45 ? 1 : L < 0.62 ? 2 : L < 0.82 ? 3 : 4; return packA(rp.flame[q]); } // flame pixels onto the stratum's light colour
         return px;
       }
-      if (cat === 'goo' && g > r + 25 && g > b - 10 && Math.max(r, g, b) - Math.min(r, g, b) > 50) { const L = lumOf(r, g, b); return packA(mixA(mulA(acc, 0.45), mixA(acc, [255, 255, 255], 0.4), Math.min(1, L * 1.25))); }
+      if ((cat === 'goo' || cat === 'splash') && g > r + 25 && g > b - 10 && Math.max(r, g, b) - Math.min(r, g, b) > 50) { const L = lumOf(r, g, b); return packA(mixA(mulA(acc, 0.45), mixA(acc, [255, 255, 255], 0.4), Math.min(1, L * 1.25))); }
+      if (cat === 'splash') return 0; // only the slime of the sprite: the drip landing on the floor
       if (cat === 'grate' && b > r + 20) { const L = lumOf(r, g, b); return packA(L < 0.3 ? [90, 28, 10] : [255, 122, 42]); } // sewer grate becomes a furnace vent
       if (cat === 'gate') { const L = lumOf(r, g, b); if (Math.max(r, g, b) - Math.min(r, g, b) > 40 && b > r) return packA(mixA(rp.wall(0.58), rp.wall(0.76), 0.5)); if (L > 0.15) return packA(rp.wall(L * 1.1)); return px; }
       if (cat === 'carpet') return carpetPx(px, r, g, b);
@@ -583,7 +584,8 @@
     add('floor', 'tile.spikes');
     for (const s of ['left', 'mid', 'right']) { add('wall', 'tile.wall.cap.' + s); add('wall', 'tile.wall.face.' + s); }
     for (const s of ['left', 'right']) { add('wall', 'tile.wall.side.' + s); add('wall', 'tile.door.frame.' + s); }
-    add('wall', 'tile.wall.hole.1'); add('wall', 'tile.wall.hole.2'); add('goo', 'tile.wall.goo'); add('grate', 'tile.wall.grate');
+    for (const s of ['left', 'right']) { add('wall', 'tile.wall.outer.front.' + s); add('wall', 'tile.wall.outer.top.' + s); }
+    add('wall', 'tile.wall.hole.1'); add('wall', 'tile.wall.hole.2'); add('goo', 'tile.wall.goo'); add('splash', 'tile.wall.goo.base'); add('grate', 'tile.wall.grate');
     add('wall', 'tile.door.leaf.closed'); add('wall', 'tile.door.leaf.open');
     add('gate', 'tile.gate.bars'); add('gate', 'tile.gate.bars.side');
     for (let i = 1; i <= 3; i++) add('wall', 'tile.fountain.top.' + i);
@@ -674,24 +676,30 @@
     }
   }
   const tintDone = new Set();
-  function tintVariant(id, kind, biome) {
-    const stops = tintStops(kind, biome); if (!stops) return '';
-    const key = 'pal:w' + biome.id + kind;
+  function tintVariant(id, kind, biome, only) {
+    const key = 'pal:w' + biome.id + kind + (only ? 'o' : '');
     if (tintDone.has(id + key)) return key;
-    const rgbs = stops.map(rgbOf);
-    const ok = A.variant(id, key, (pal) => {
-      const m = {};
-      for (const hex of pal) {
-        const c = rgbOf(hex), L = lumOf(c[0], c[1], c[2]);
-        if (L < 0.17) continue; // outline stays
-        const q = Math.min(1, Math.max(0, (L - 0.17) / 0.78)) * (rgbs.length - 1), i = Math.min(rgbs.length - 2, Math.floor(q));
-        m[hex] = hexA(mixA(rgbs[i], rgbs[i + 1], q - i));
-      }
-      return m;
-    });
+    const stops = tintStops(kind, biome); if (!stops) return '';
+    const ok = A.variant(id, key, (pal) => tintMap(pal, stops, only));
     if (ok) tintDone.add(id + key);
     return ok ? key : '';
   }
+  // Palette map of the hexes in `pal` (only those in `only` when given) onto the ramp `stops` by luminance; outlines stay.
+  function tintMap(pal, stops, only) {
+    const rgbs = stops.map(rgbOf), m = {};
+    for (const hex of pal) {
+      if (only && only.indexOf(hex) < 0) continue;
+      const c = rgbOf(hex), L = lumOf(c[0], c[1], c[2]);
+      if (L < 0.17) continue; // outline stays
+      const q = Math.min(1, Math.max(0, (L - 0.17) / 0.78)) * (rgbs.length - 1), i = Math.min(rgbs.length - 2, Math.floor(q));
+      m[hex] = hexA(mixA(rgbs[i], rgbs[i + 1], q - i));
+    }
+    return m;
+  }
+  // Atlas variant key of sprite `id` recoloured onto the stratum's wall stone ramp (only the palette hexes in `only` when given); '' while the atlas cannot build it. Built once per sprite and stratum.
+  Tl.stoneKey = (id, biome, only) => tintVariant(id, 'stone', biome, only);
+  // The same recolour as a palette map for Atlas.variant (props that also recolour other parts of their palette).
+  Tl.stoneMap = (pal, biome, only) => tintMap(pal, tintStops('stone', biome), only);
   const snap = (v) => Math.round(v / K) * K; // world px -> the art grid
 
   // Random-walk path of n art px from (x, y): mostly horizontal, used for cracks and lava seams.
@@ -723,7 +731,10 @@
     const edgeC = pk(dkEdge), rimC = pk(rim1), crust = [pk('#2a0f08'), pk('#3a160b'), pk('#7a3410')];
     const sd = 91 + (s & 15), S1 = kind === 'water' ? 0.17 : 0.075, bub = [];
     const tab1 = noiseTab(Math.ceil(room.w * AT * S1) + 3, Math.ceil(room.h * AT * S1) + 3, sd), tab2 = noiseTab(Math.ceil(room.w * AT * 0.18 + 17) + 3, Math.ceil(room.h * AT * 0.18 + 5) + 3, 92);
+    const nq = new Float32Array(AT * AT);
     cells.forEach(([tx, ty, mask], ci) => {
+      let thr0 = 0.64; // lava: crust above this noise level; raised per cell so at least ~40% of every cell stays molten
+      if (kind === 'lava') { for (let py = 0; py < AT; py++) for (let px = 0; px < AT; px++) nq[py * AT + px] = hzNoise(tab1, (tx * AT + px) * S1, (ty * AT + py) * S1); nq.sort(); thr0 = Math.max(thr0, nq[(AT * AT * 0.42) | 0] + 0.03); }
       if (kind === 'poison') { bub.length = 0; for (let k = 0; k < 2; k++) bub.push([3 + Math.floor(hash(tx, ty, 200 + k) * 10), 3 + Math.floor(hash(tx, ty, 210 + k) * 10), Math.floor(hash(tx, ty, 220 + k) * 4)]); }
       for (let py = 0; py < AT; py++) for (let px = 0; px < AT; px++) {
         const gx = tx * AT + px, gy = ty * AT + py;
@@ -734,9 +745,8 @@
           let c;
           if (d === 0) c = edgeC;
           else if (kind === 'lava') { // dark crust plates floating on molten rock; the crust edge breathes
-            const thr = 0.56 + 0.022 * Math.sin(f * 1.5708 + n2 * 6.28), v = thr - n1;
-            if (d <= 2 && n1 > 0.32) c = crust[d === 1 ? 1 : 0];
-            else if (v < 0) c = up <= thr ? crust[2] : (hs > 0.8 ? crust[1] : crust[0]);
+            const thr = thr0 + 0.022 * Math.sin(f * 1.5708 + n2 * 6.28), v = thr - n1;
+            if (v < 0) c = up <= thr ? crust[2] : (hs > 0.8 ? crust[1] : crust[0]);
             else { c = v < 0.05 ? pk('#f59a2a') : v < 0.15 ? pk('#dd5f14') : pk('#b0360b'); if (hs > 0.992 && (f + (hs * 400 | 0)) % HZ_NF === 0) c = pk('#ffe0a0'); }
           } else if (kind === 'poison') { // murky pool with algae and rising bubbles
             if (d === 1) c = rimC;
@@ -785,13 +795,14 @@
     const faceAt = (x, y) => isM(x, y) && !isM(x, y + 1);
     const colArt = !!sh.rects['prop.column'];
     const isCol = (x, y) => colArt && T_(x, y) === 2 && !isM(x - 1, y) && !isM(x + 1, y) && !isM(x, y - 1) && !isM(x, y + 1);
+    const isW = (x, y) => isM(x, y) && !isCol(x, y); // wall mass that casts the soft floor bands (columns cast their own blob)
     const ao = U.shade(P.wallShadow, -0.5), rr = U.RNG(s ^ 0x7111e);
     const glowAt = (c, x, y, r, col, a) => { c.globalAlpha = a; c.drawImage(ED.Render.glowSprite(col), x - r, y - r, r * 2, r * 2); c.globalAlpha = 1; };
 
     // ---- floor ----
     const dark = bid === 'abyss', nv = dark ? 6 : 8, fbase = dark ? 'tile.dark.floor.' : 'tile.floor.';
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-      const t = tiles[y * W + x]; if (t !== 0 && t !== 4) continue;
+      const t = tiles[y * W + x]; if (t !== 0 && t !== 4 && !isCol(x, y)) continue; // a column stands on floor
       const r = hashS(x, y, 1, s), vv = hashS(x, y, 5, s);
       sblit(g, sh, fbase + (r < 0.86 ? 1 : 2 + Math.floor((r - 0.86) / 0.14 * (nv - 1)) % (nv - 1)), 0, x * AT, y * AT);
       if (vv < 0.3) fill(g, x * AT, y * AT, AT, AT, 'rgba(0,0,0,' + (0.04 + vv * 0.2).toFixed(3) + ')'); // per-tile tone drift so the grid never reads as one flat sheet
@@ -800,7 +811,7 @@
     // Sanctum runner: three rows of carpet along the door axis, trim on its long edges
     if (bid === 'sanctum') {
       const cy = (H >> 1) + 1;
-      for (let x = 1; x <= W - 2; x++) for (let k = -1; k <= 1; k++) if (T_(x, cy + k) === 0) sblit(g, sh, 'tile.carpet.red' + (k < 0 ? '.run.top' : k > 0 ? '.run.bot' : '.run.fill'), 0, x * AT, (cy + k) * AT);
+      for (let x = 1; x <= W - 2; x++) for (let k = -1; k <= 1; k++) if (T_(x, cy + k) === 0 || isCol(x, cy + k)) sblit(g, sh, 'tile.carpet.red' + (k < 0 ? '.run.top' : k > 0 ? '.run.bot' : '.run.fill'), 0, x * AT, (cy + k) * AT);
     }
     // ---- chasm: far wall face on the top row, black below ----
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
@@ -901,7 +912,7 @@
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
       const t = tiles[y * W + x]; if (t !== 0 && t !== 5 && t !== 4) continue;
       if (t === 4 && biome.hazard !== 'spikes') continue;
-      const ox = x * AT, oy = y * AT, n = isM(x, y - 1), w = isM(x - 1, y), ea = isM(x + 1, y), so = isM(x, y + 1);
+      const ox = x * AT, oy = y * AT, n = isW(x, y - 1), w = isW(x - 1, y), ea = isW(x + 1, y), so = isW(x, y + 1);
       if (n) { fill(g, ox, oy, AT, 2, U.rgba(ao, 0.5)); fill(g, ox, oy + 2, AT, 2, U.rgba(ao, 0.34)); fill(g, ox, oy + 4, AT, 3, U.rgba(ao, 0.18)); fill(g, ox, oy + 7, AT, 3, U.rgba(ao, 0.08)); }
       if (w) { fill(g, ox, oy, 2, AT, U.rgba(ao, 0.34)); fill(g, ox + 2, oy, 3, AT, U.rgba(ao, 0.15)); }
       if (ea) { fill(g, ox + AT - 2, oy, 2, AT, U.rgba(ao, 0.34)); fill(g, ox + AT - 5, oy, 3, AT, U.rgba(ao, 0.15)); }
@@ -928,9 +939,14 @@
       if (eS) sblit(g, sh, 'tile.wall.side.left', 0, ox, oy);
       if (wS) sblit(g, sh, 'tile.wall.side.right', 0, ox, oy);
     }
+    const gooX = []; // columns of goo wall faces: the drip lands on a base tile of the floor row below
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { // brick faces and their cap strips
       if (!faceAt(x, y) || isCol(x, y)) continue;
       const cl = faceAt(x - 1, y), cr = faceAt(x + 1, y), ox = x * AT, oy = y * AT;
+      if ((x === 0 || x === W - 1) && sblit(g, sh, 'tile.wall.outer.front.' + (x ? 'right' : 'left'), 0, ox, oy)) { // outer corner: only the pillar column beside the side strip, not a full brick tile
+        sblit(g, sh, 'tile.wall.outer.top.' + (x ? 'right' : 'left'), 0, ox, isM(x, y - 1) ? oy - AT : oy - 12);
+        continue;
+      }
       let special = null;
       if (cl && cr && y === 1 && !blocked.has(x)) {
         const r = hashS(x, y, 2, s);
@@ -939,6 +955,7 @@
         else if (bid === 'cinderforge') special = r < 0.12 ? 'tile.wall.grate' : null;
         else if (bid === 'sanctum') special = r < 0.07 ? 'deco.banner.' + (r < 0.035 ? 'yellow' : 'blue') : null;
       }
+      if (special === 'tile.wall.goo') gooX.push(x);
       if (special) sblit(g, sh, special, 0, ox, oy);
       else if (!cl && !cr) { sblit(g, sh, 'tile.wall.face.left', 0, ox, oy, 0, 8); sblit(g, sh, 'tile.wall.face.right', 0, ox + 8, oy, 8, 16); }
       else sblit(g, sh, 'tile.wall.face.' + (!cl ? 'left' : !cr ? 'right' : 'mid'), 0, ox, oy);
@@ -953,6 +970,7 @@
       }
       if (bid === 'cinderforge' && special === 'tile.wall.grate') { glowAt(e, (ox + 8) * K, (oy + 13) * K, 16, '#ff7a2a', 0.35); fill(e, ox + 3, oy + 11, 10, 3, 'rgba(255,110,30,0.45)'); }
     }
+    for (const x of gooX) if (T_(x, 2) === 0) sblit(g, sh, 'tile.wall.goo.base', 0, x * AT, 2 * AT);
     // ---- standing torches flanking the north wall of rooms people linger in (boss rooms also get the south corners) ----
     out.ftorches = [];
     if (room.type === 'boss' || room.type === 'start' || room.type === 'treasure' || room.type === 'shop' || room.type === 'event') {
@@ -1060,6 +1078,7 @@
     const e = entry(room, bqOf()), sh = sheetFor(biome);
     if (s.k === 'col') {
       const a = Tl.hides(view, s.x, s.y, 24, s.h) ? 0.45 : 1;
+      c.save(); c.translate(s.x, s.y - 8); ED.Render.shadow(c, 11, 0.3, true); c.restore();
       if (a !== 1) c.globalAlpha = a;
       c.imageSmoothingEnabled = false; sblit(c, sh, 'prop.column', 0, s.x / K - 8, s.y / K - 39); c.imageSmoothingEnabled = true;
       if (a !== 1) c.globalAlpha = 1;
@@ -1071,6 +1090,7 @@
       c.save(); c.translate(s.x, s.y); ED.Render.shadow(c, 9, 0.3, true); c.restore();
       c.imageSmoothingEnabled = false; sblit(c, sh, 'prop.column', 0, fx, fy - 20, undefined, undefined, 4, 14); sblit(c, sh, 'prop.column', 0, fx, fy - 10, undefined, undefined, 29, 39); c.imageSmoothingEnabled = true;
     } else if (s.k === 'deco') {
+      for (const p of view.props) if (p.kind === 'shop' && Math.abs(s.x - p.x) < 26 && s.y > p.y - 2 && s.y < p.y + 44) return; // never over a price label
       A.draw(c, s.id, 0, s.x, s.y, s.vk ? { variant: s.vk } : undefined);
     } else if (s.k === 'arch') {
       let hit = false;
