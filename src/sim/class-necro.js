@@ -19,7 +19,7 @@
   };
 
   // Bone Harvest: every minion explodes where it stands (Bone Lances: on the foe nearest it within 200) and heals the Necromancer 3% each (at most 6% per cast); Corpse Explosion detonates recent corpses within 220;
-  // Bone Armor shields per minion harvested and Marrow Field leaves slowing shards; then new minions rise (1, or 2 with none; harvestRaise sets the count).
+  // Bone Armor shields per minion harvested (source 'bone': counts in the all-sources shield window only, its own 12 s timer keeps it at 0.5%/s) and Marrow Field leaves slowing shards; then new minions rise (1, or 2 with none; harvestRaise sets the count).
   ED.CAST.harvest = function (p, a, data, st, N) {
     const mine = this.allies.filter(q => q.owner === p.pid && q.life > 0), b = N.p.burst, life = ED.Stats.skillNums('legion', st).p.minion.dur;
     const dead = st.corpse ? this.corpses.filter(c => this.time - c.t <= C.CORPSE_T && U.dist2(c.x, c.y, p.x, p.y) <= 220 * 220).sort((u, v) => v.t - u.t).slice(0, Math.round(st.corpse)) : [];
@@ -36,7 +36,7 @@
       const gone = new Set(mine);
       this.allies = this.allies.filter(q => !gone.has(q));
       this.healPlayer(p, p.maxHp * Math.min(0.06, 0.03 * mine.length));
-      if (st.boneArmor && p.boneT <= 0 && this.addShield(p, Math.min(st.boneCap, st.boneArmor * mine.length) * p.maxHp, C.CLASS_SHIELD_CAP * p.maxHp, 'class') > 0) p.boneT = C.BONE_CD;
+      if (st.boneArmor && p.boneT <= 0 && this.addShield(p, Math.min(st.boneCap, st.boneArmor * mine.length) * p.maxHp, C.CLASS_SHIELD_CAP * p.maxHp, 'bone') > 0) p.boneT = C.BONE_CD;
       if (st.boneField) for (const m of mine) this.boneField(p, m.x, m.y);
     }
     const n = st.harvestRaise || (mine.length ? 1 : 2);

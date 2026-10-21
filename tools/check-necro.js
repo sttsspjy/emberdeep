@@ -189,7 +189,11 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
 {
   const { w, p } = stage({ n_s2: 1, n_s2_b: 1 }); const M = p.maxHp;
   for (let i = 0; i < 2; i++) w.spawnMinion(p, p.x, p.y, 12); p.hp = 1; w.playerSkill(p, 0, {}, 1);
-  near(p.shield, 0.03 * M, 0.01, 'Bone Armor 2% x 2 = 4% asked, the class window grants 3%'); near(p.boneT, 12, 1e-9, 'Bone Armor once per 12 s'); ok(p.shieldBy.class > 0, 'a class shield');
+  near(p.shield, 0.04 * M, 0.01, 'Bone Armor 2% x 2 = 4% of max health (the card text)'); near(p.boneT, 12, 1e-9, 'Bone Armor once per 12 s'); ok(p.shieldBy.bone > 0 && !p.shieldBy.class && !(p.shieldClip.bone > 0), 'a bone shield outside the class window, nothing clipped');
+  ok(evs(w, 'shielded').some(s => s.k === 'bone' && s.pid === 'p0'), 'shielded event with source bone');
+  near(w.addShield(p, M, M, 'class'), 0.02 * M, 0.01, 'the class window is still empty: a class grant takes the rest of the 6% all-source window');
+  const { w: w3, p: p3 } = stage({ n_s2: 1, n_s2_b: 1 }); for (let i = 0; i < 3; i++) w3.spawnMinion(p3, p3.x, p3.y, 12); w3.playerSkill(p3, 0, {}, 1); near(p3.shield, 0.05 * M, 0.01, 'rank 1: 3 minions give the 5% cap, not 6%');
+  const { w: w4, p: p4 } = stage({ n_s2: 1, n_s2_b: 3 }); for (let i = 0; i < 3; i++) w4.spawnMinion(p4, p4.x, p4.y, 12); w4.playerSkill(p4, 0, {}, 1); near(p4.shield, 0.06 * M, 0.01, 'rank 3: 3 minions give 6% (cap 5% + 2 x 0.5%)');
   const s0 = p.shield; for (let i = 0; i < 2; i++) w.spawnMinion(p, p.x, p.y, 12); w.playerSkill(p, 0, {}, 1); near(p.shield, s0, 1e-9, 'no second shield while boneT runs');
   p.boneT = 0; w.time += 11; p.shield = 0; w.playerSkill(p, 0, {}, 1); ok(p.shield > 0, 'a new shield after the cooldown and the window');
   const { w: w1, p: p1 } = stage({ n_s2: 1, n_s2_b: 1 }); w1.playerSkill(p1, 0, {}, 1); ok(p1.shield === 0 && p1.boneT === 0, 'no minion harvested: no shield, no cooldown spent');
