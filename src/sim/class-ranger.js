@@ -6,7 +6,7 @@
   const U = ED.U;
 
   // Deadeye grows from nothing at FAR_FROM px flown to its full bonus at FAR_TO; a hit from FAR_AT of that ramp carries the far-shot flag. LEAP_R: reach of Relentless Hunt. SPLIT_A / SPLIT_LIFE: Splitting Bolt's fan and flight.
-  // FLURRY_A: Flurry's extra arrows. CALTROPS: the Scattershot patch, base + pow x P damage per second, slow, radius, seconds.
+  // FLURRY_A: Flurry's extra arrows. CALTROPS: the Scattershot patch, base + pow x P damage per second, slow, radius (fixed), seconds.
   const FAR_FROM = 80, FAR_TO = 260, FAR_AT = 0.75, LEAP_R = 120, SPLIT_A = 0.3, SPLIT_LIFE = 0.4, FLURRY_A = 0.12;
   const CALTROPS = { base: 6, pow: 0.5, r: 50, dur: 2.5, slow: 0.4 };
   const SKILL_PARTS = new Set(['volley.arrow', 'rain.tick', 'rain.sky', 'rain.sky2', 'rain.shower']); // Gangrene's parts
@@ -25,7 +25,7 @@
   // Caltrops: a patch on the hero's feet; foes inside are slowed and take CALTROPS.base + pow x P per second (the zone's damage-over-time branch).
   function caltrops(w, p, st) {
     const C = CALTROPS;
-    w.addZone({ kind: 'shards', x: p.x, y: p.y, r: C.r * (1 + 0.5 * st.area), dur: C.dur, dps: C.base + C.pow * st.power, team: 0, owner: p.pid,
+    w.addZone({ kind: 'shards', x: p.x, y: p.y, r: C.r, dur: C.dur, dps: C.base + C.pow * st.power, team: 0, owner: p.pid,
       update: (world, z) => { for (const e of world.enemies) if (e.hp > 0 && e.spawnT <= 0 && U.dist2(e.x, e.y, z.x, z.y) < (z.r + e.r) ** 2) world.slowEnemy(e, C.slow, 0.3); } });
   }
 
@@ -96,13 +96,13 @@
     w.emit({ t: 'split', x: Math.round(pr.x), y: Math.round(pr.y), a: Math.round(h * 100) / 100, pid: pr.owner });
   }
 
-  // Flurry: two extra weapon arrows beside the aimed one, fired like the weapon's own (same speed, size, damage and pierce).
+  // Flurry: two extra weapon arrows beside the aimed one, fired by W.fireWeapon so they carry everything the aimed arrow does (evolution blast and spectral copies, cloud, homing, burn).
+  // fireWeapon shoots w.n + st.projN arrows: the one-arrow copy of the weapon has n = 1 - projN (cached per weapon object and projN).
+  const ONE_ARROW = new WeakMap();
   function flurry(w, p, a, st, wp) {
-    for (let s = -1; s <= 1; s += 2) {
-      const ang = a + s * FLURRY_A;
-      w.spawnProj({ team: 0, kind: wp.proj, x: p.x + Math.cos(ang) * 10, y: p.y - 4 + Math.sin(ang) * 10, a: ang, speed: wp.speed, r: wp.r, dmg: wp.dmg, life: wp.life, pierce: wp.pierce + st.pierce, owner: p.pid, knock: wp.knock || 40, wpn: true,
-        homing: (wp.homing || 0) + (st.homing || 0), burn: wp.burn || 0 });
-    }
+    let c = ONE_ARROW.get(wp);
+    if (!c || c.pn !== st.projN) ONE_ARROW.set(wp, c = { pn: st.projN, w1: Object.assign({}, wp, { n: 1 - st.projN }) });
+    for (let s = -1; s <= 1; s += 2) w.fireWeapon(p, a + s * FLURRY_A, c.w1);
   }
 
   // Hunter's Mark: foe e takes markV more damage from everyone for volleyMark seconds; the strongest value wins and its owner keeps the mark's leap.

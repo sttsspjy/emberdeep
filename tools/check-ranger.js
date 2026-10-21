@@ -106,6 +106,21 @@ const RAD = (a) => a * Math.PI / 180;
   const tb = stage({ r_atk_s: 3 }, 2); tb.p.atkCount = 4; tb.w.projs.length = 0; tb.w.playerAttack(tb.p, 0); ok(tb.w.projs.filter(q => q.team === 0).length === 4, 'Twin Flatbows: the pair plus two Flurry arrows');
   const noF = stage({ r_atk_s: 2 }); noF.p.atkCount = 4; noF.w.projs.length = 0; noF.w.playerAttack(noF.p, 0); ok(noF.w.projs.filter(q => q.team === 0).length === 1, 'no Flurry below rank 3');
 }
+{ // Flurry arrows go through W.fireWeapon: evolution riders, homing and extra projectiles match the aimed arrow
+  const shots = (boons, setup) => { const s = stage(boons); setup(s.p.stats); s.p.atkCount = 4; s.w.projs.length = 0; s.w.playerAttack(s.p, 0); return s.w.projs.filter(q => q.team === 0); };
+  const rider = (q) => JSON.stringify([!!q.explode, !!q.spec, q.homing, q.burn, q.pierce, q.dmg, q.knock, q.r, q.speed]);
+  for (const evo of ['fire', 'general']) {
+    const sh = shots({ r_atk_s: 3 }, (st) => { st.evo = evo; });
+    ok(sh.length === 3 && sh.every(q => rider(q) === rider(sh[0])), `Flurry arrows carry the ${evo} evolution rider of the aimed arrow`);
+    ok(evo !== 'fire' || sh.every(q => q.explode && q.explode.r === 40), 'Cinder Arms: every Flurry arrow explodes (r 40)');
+    ok(evo !== 'general' || sh.every(q => q.spec), 'Spectral Arms: every Flurry arrow can release a spectral copy');
+  }
+  for (const pn of [1, 2]) {
+    const sh = shots({ r_atk_s: 3 }, (st) => { st.projN = pn; });
+    ok(sh.length === pn + 3, `Split Shot +${pn}: the aimed fan of ${pn + 1} plus two Flurry arrows (got ${sh.length})`);
+  }
+  const hm = shots({ r_atk_s: 3 }, (st) => { st.homing = 3; }); ok(hm.length === 3 && hm.every(q => q.homing === 3), 'homing applies to the Flurry arrows');
+}
 
 // ---- Hunter's Mark (r_s1_a): Volley marks foes 4 s, +12% from everyone, strongest value wins, Relentless Hunt at rank 3 ----
 {
@@ -153,7 +168,7 @@ const RAD = (a) => a * Math.PI / 180;
   ok(z && z.x === x0 && z.y === y0 && z.r === 50 && z.dur === 2.5 && z.team === 0, 'a shards zone on the hero feet, r 50, 2.5 s'); near(z.dps, 12, 1e-9, 'Caltrops 6 + 0.5 P = 12 per second');
   p.x = 400; run(w, 1.0); near(inside.slowAmt, 0.4, 1e-9, 'foes inside are slowed 40%'); ok(!(outside.slowT > 0), 'foes outside are not'); run(w, 2.2);
   near(5000 - inside.hp, 30, 0.5, 'Caltrops deal 12 per second for 2.5 s = 30'); ok(outside.hp === 5000, 'foes outside take nothing'); ok(!w.zones.some(q => q.kind === 'shards'), 'the patch ends'); ok(inside.slowAmt === 0, 'and the slow wears off');
-  const big = stage({ r_s1: 1, r_s1_b: 3 }); big.p.stats.area = 1; big.w.zones.length = 0; big.w.playerSkill(big.p, Math.PI, {}, 0); near(big.w.zones.find(q => q.kind === 'shards').r, 75, 1e-9, 'the patch grows with area');
+  const big = stage({ r_s1: 1, r_s1_b: 3 }); big.p.stats.area = 1; big.w.zones.length = 0; big.w.playerSkill(big.p, Math.PI, {}, 0); near(big.w.zones.find(q => q.kind === 'shards').r, 50, 1e-9, 'the patch radius is fixed (no area scaling)');
 }
 
 // ---- Rainmaker (r_s2): +30% radius, +1 s (12 ticks), +10% damage ----
@@ -211,7 +226,7 @@ const RAD = (a) => a * Math.PI / 180;
 // ---- Trapper's Craft (r_el): everything bleeds; Infected Wounds (r_el_a): Volley and Rain build statuses 50% faster, Bleed and Burn tick 20% harder, Gangrene at rank 3 ----
 {
   const { w, p } = stage({ r_el: 1 }); const e = foe(w, 200, 212);
-  hit(w, p, e, 100, { kind: 'weapon' }); near(e.bleedPool, 100 * 0.15 * 1.15, 1e-6, 'Trapper\'s Craft: 15% of the damage bleeds, statuses +15% stronger');
+  hit(w, p, e, 100, { kind: 'weapon' }); near(e.bleedPool, 100 * 0.1 * 1.15, 1e-6, 'Trapper\'s Craft: 10% of the damage bleeds, statuses +15% stronger');
   const k = stage({ r_el: 1, r_el_a: 1 }); const a = foe(k.w, 200, 212), b = foe(k.w, 230, 212);
   hit(k.w, k.p, a, 100, { kind: 'skill', part: 'volley.arrow', infK: 1 }); hit(k.w, k.p, b, 100, { kind: 'skill', part: 'volley.arrow', infK: 1.5 }); near(b.bleedPool / a.bleedPool, 1.5, 1e-6, 'skill hits build statuses 50% faster');
   k.w.projs.length = 0; k.w.playerSkill(k.p, 0, {}, 0); ok(k.w.projs.every(q => q.team !== 0 || Math.abs(q.infK - 1.5) < 1e-9), 'Volley arrows carry the 1.5 build-up factor');

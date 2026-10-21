@@ -94,15 +94,18 @@
 
   // ---- Contagion (chain k 'c'): a poison-green thread from the dead foe to each foe that catches its statuses, violet motes along it ----
   CFX.on('chain', (ev) => {
-    if (ev.k !== 'c' || ev.pts.length < 2) return;
+    if (ev.k !== 'c') return;
+    if (ev.pts.length < 2) return true;
     const a = ev.pts[0], b = ev.pts[1];
     if (F.bolts.length < 24) F.bolts.push({ pts: [[a[0], a[1]], [b[0], b[1]]], life: 0.3, max: 0.3, color: '#9be33c', st: true });
     fly(a[0], a[1] - 8, b[0], b[1] - 8, '#c9b3ff', low() ? 1 : 3, 0.3);
     F.pop(b[0], b[1] - 8, 12, '#c9b3ff', 0.16);
     if (!low()) SP('fx.puff', b[0], b[1] - 8, { ramp: 'poison', speed: 1.2, a: 0.8 });
     if (F.time - threadT > 0.1) { threadT = F.time; A.play('magic', 0.18); }
+    return true; // the built-in chain bolt would draw a second, blue line
   });
 
-  // ---- Hunter's Mark: a red crosshair in the overhead glyph row of every marked foe (host and solo foes carry mark, mirror foes marked) ----
-  CFX.mark.push((e) => (e.marked || e.mark > 0 ? { id: 'mark.hunt', ramp: '', stub: 'cross' } : null));
+  // ---- Hunter's Mark: a red crosshair in the overhead glyph row of every marked foe (host and solo foes carry mark, mirror foes marked); the atlas has no crosshair, the render.js GLYPH.cross stub is the art ----
+  const MARK = { id: '', ramp: '', stub: 'cross' };
+  CFX.mark.push((e) => (e.marked || e.mark > 0 ? MARK : null));
 })(globalThis.ED || (globalThis.ED = {}));

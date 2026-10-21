@@ -562,14 +562,14 @@
     for (let i = 0; i < n; i++) { const dx = tx - x, dy = ty - 10 - y; F.part(x + (Math.random() - 0.5) * 12, y + (Math.random() - 0.5) * 12, { color: col, size: 2, life: 0.5, add: true, drag: 0, vx: dx / 0.45, vy: dy / 0.45 }, 0, 0.45 + Math.random() * 0.08); }
   }
 
-  // Per-class client hooks, registered by src/client/cls-<class>.js at load: ev[type] = [fn(ev, ctx, localPid)] run before the built-in handler of that event;
+  // Per-class client hooks, registered by src/client/cls-<class>.js at load: ev[type] = [fn(ev, ctx, localPid)] run before the built-in handler of that event (a hook that returns true consumes the event: no built-in handler);
   // zone[kind] = fn(c, z, pass, t, k, view) draws a zone kind render.js has no case for; hero = [fn(c, p, t, low)] runs after the built-in hero effects (hero feet frame);
   // mark = [fn(e) -> {id, ramp, stub} | null] adds a 14 px glyph (atlas anim id, Pix ramp, GLYPH stub key when the art is absent) to a foe's overhead mark row.
   const CFX = ED.ClassFx = { ev: {}, zone: {}, hero: [], mark: [], on(t, f) { (this.ev[t] || (this.ev[t] = [])).push(f); } };
   // Translate one world event into effects. local: the viewing player's pid.
   F.handle = (ev, ctx) => {
     const local = ctx.localPid, A = ED.Audio, set = ED.App ? ED.App.settings : { dmg: true };
-    const xh = CFX.ev[ev.t]; if (xh) for (let i = 0; i < xh.length; i++) xh[i](ev, ctx, local);
+    const xh = CFX.ev[ev.t]; if (xh) for (let i = 0; i < xh.length; i++) if (xh[i](ev, ctx, local) === true) return;
     switch (ev.t) {
       case 'hit': {
         const mine = ev.pid === local, el = ev.el | 0, ec = EL_COL[el] || '', p = ev.pid ? ctx.player(ev.pid) : null;
@@ -653,8 +653,7 @@
       }
       case 'atk': if (ev.pid !== local) { F.playerAttackAnim(ev.pid, ev.a); const p = ctx.player(ev.pid); if (p && p.stats && !p.stats.melee) A.play('shoot', 0.3); } break;
       case 'spark': { const c = F.projColor(ED.PROJ_KINDS[ev.k]); F.burst(ev.x, ev.y, 4, { color: c, sp: 80, life: 0.25, size: 1.8, add: true }); F.burst(ev.x, ev.y, 3, { kind: 'streak', color: c, sp: 130, life: 0.2, size: 1.3 }); F.pop(ev.x, ev.y, 7, c, 0.1); A.play('spark', 0.4); break; }
-      case 'chain': { // star (hub, t1, hub, t2, ...): one forked arm per target; otherwise a plain polyline. k: h Wrath of Heaven bolt, t Twilight beam, s Superconductor discharge, c Contagion thread (cls-ranger.js draws it)
-        if (ev.k === 'c') break;
+      case 'chain': { // star (hub, t1, hub, t2, ...): one forked arm per target; otherwise a plain polyline. k: h Wrath of Heaven bolt, t Twilight beam, s Superconductor discharge
         const pts = ev.pts, star = pts.length >= 3 && pts[2][0] === pts[0][0] && pts[2][1] === pts[0][1], cc = ev.k === 'h' ? '#fff3a0' : ev.k === 't' ? '#d9b44a' : ev.k === 's' ? '#8fdcff' : '#bfe9ff';
         if (star) for (let i = 1; i < pts.length; i += 2) F.zap(pts[0][0], pts[0][1], pts[i][0], pts[i][1], cc);
         else F.bolts.push({ pts, life: 0.22, max: 0.22, color: cc });
