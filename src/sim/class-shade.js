@@ -197,6 +197,7 @@
     // After a hit: the execution slash; an Ambush hit (Night's Edge: the first one refunds Shadowstep; Rupture: each foe once; Ambush Sweep: remember the target).
     hitDone(p, e, dmg, crit, src) {
       if (src.rupt || src.sweep) return;
+      if (src.ambush && !src.part) src.part = 'vanish.ambush'; // the Ambush hits are the Vanish skill's damage (damage report)
       if (src.exec && crit) this.emit({ t: 'exec', pid: p.pid, x: R(e.x), y: R(e.y), a: R(Math.atan2(e.y - p.y, e.x - p.x) * 100) / 100 });
       if (!src.ambush || !p.ambSet) return;
       const st = p.stats;
