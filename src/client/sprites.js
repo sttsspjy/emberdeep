@@ -261,10 +261,10 @@
   // Crossbow: turned upright (prod across the top), edited like a staff, turned back; Swift adds a 3 x 3 magazine box beside the stock.
   function fXbow(s, L, X) {
     s = frot(s, 3);
-    s = fUp(s, L, [8, 9, 13, 1], Object.assign({}, X, { swiftK: 0.8 })); // the prod only narrows to 0.8 so it still reads as a crossbow
-    if (!X.heavy && L.magazine) { // a 2 x 4 magazine box lies along the stock just behind the prod (on the stock's left in this pose)
+    s = fUp(s, L, [8, 9, 13, 1], Object.assign({}, X, { swiftK: 0.7 }));
+    if (!X.heavy && L.magazine) { // a 3 x 3 magazine box sits on the stock just behind the prod (on the stock's left in this pose)
       const y0 = 8 + P8 + 1, [xa] = fspan(s, y0 + 1), c1 = fpx('#aeb8c0'), c2 = fpx('#7b8994');
-      for (let j = 0; j < 4; j++) for (let i = 0; i < 2; i++) s.d[(y0 + j) * s.w + xa - 2 + i] = j === 0 ? fpx(BRASS) : i ? c2 : c1;
+      for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) s.d[(y0 + j) * s.w + xa - 3 + i] = j === 0 ? fpx(BRASS) : i === 1 ? c1 : c2;
     }
     return fturnBack(s, 1);
   }
