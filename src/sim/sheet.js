@@ -70,6 +70,31 @@
   // joined with " · ", and the rider a route card gains at rank 3.
   const NEXT_WORDS = 3, NEXT_RUN = 6, NEXT_STOP = /^(to|of|the|a|an|and|or|from|for|in|on|at|by|with|as|that|their|its|is|are|your|you|than|per|each)$/i;
   const wordKey = (w) => w.replace(/[.,;:]+$/, '');
+  const bareNum = (ph) => !/[A-Za-z]{3,}/.test(ph.join(' ').replace(/\d+(?:\.\d+)?\s?s\b/g, '')); // numbers and units only, no noun
+  // A lone number ph (Z[a..a+ph.length)) names nothing: borrow the noun from its clause. The unchanged words after it (to the clause end, at most 4, a trailing "'s" takes its noun),
+  // else up to 3 words before it (2 or more once a content word is in), else its whole sentence.
+  function withNoun(Z, a, ph, same) {
+    const stop = (w) => NEXT_STOP.test(wordKey(w)), m = Z.length, fw = [];
+    for (let k = a + ph.length; fw.length < 4 && k < m && same[k] && !/[.,;:]$/.test(Z[k - 1]) && !/^\(/.test(Z[k]); k++) fw.push(Z[k]);
+    while (fw.length && stop(fw[fw.length - 1])) fw.pop();
+    for (let k = a + ph.length + fw.length; fw.length && /'s$/.test(wordKey(fw[fw.length - 1])) && fw.length < 6 && k < m && same[k]; k++) fw.push(Z[k]);
+    let out = ph;
+    if (fw.length) out = ph.concat(fw);
+    else {
+      const bw = [];
+      for (let k = a - 1; k >= 0 && bw.length < 3 && !/[.,;:)]$/.test(Z[k]); k--) { bw.unshift(Z[k]); if (bw.length >= 2 && bw.some(w => !stop(w))) break; }
+      while (bw.length > 1 && stop(bw[0])) bw.shift();
+      out = bw.concat(ph);
+      if (bareNum(out)) { // no content word in reach: the sentence the number sits in
+        let s0 = a, s1 = a + ph.length;
+        while (s0 > 0 && !/[.]$/.test(Z[s0 - 1])) s0--;
+        while (s1 < m && !/[.]$/.test(Z[s1 - 1])) s1++;
+        out = Z.slice(s0, s1);
+      }
+    }
+    if (out.length && /^\(/.test(out[0]) && !out.some(w => /\)/.test(w))) out = [out[0].slice(1)].concat(out.slice(1)); // an opening bracket without its close
+    return out;
+  }
   Sh.nextText = (id, rank, st) => {
     const b = ED.BOONS[id];
     if (!b) return '';
@@ -84,13 +109,16 @@
       if (same[j]) continue;
       let e = j;
       while (e < m && !same[e]) e++;
+      const j0 = j;
       let ph = Z.slice(j, e);
       const d = ph.findIndex(w => /\d/.test(w));
       j = e;
       if (d < 0) continue;
-      if (ph.length > NEXT_RUN) ph = ph.slice(d, d + NEXT_WORDS);
+      const ph0 = ph.length > NEXT_RUN;
+      if (ph0) ph = ph.slice(d, d + NEXT_WORDS);
       for (let k = e; ph.length < NEXT_WORDS && k < m && same[k] && !/[.,;:]$/.test(ph[ph.length - 1]) && !/^\(/.test(Z[k]); k++) ph.push(Z[k]);
       while (ph.length > 1 && NEXT_STOP.test(wordKey(ph[ph.length - 1]))) ph.pop();
+      if (bareNum(ph)) ph = withNoun(Z, j0 + (ph0 ? d : 0), ph, same);
       out.push(wordKey(ph.join(' ')));
     }
     if (b.route && rank + 1 === 3) { const rn = ED.cardParts(id, 3, st).riderName; if (rn) out.push('unlocks ' + rn); }
@@ -239,7 +267,7 @@
     const stratum = ctx.stratum, clsEl = q.el === 'class' && st.element ? st.element : null, tag = clsEl || (q.el && q.el !== 'class' ? q.el : null);
     const aff = clsEl ? ED.affC(stratum, clsEl) : tag ? ED.elemMul(stratum, tag) : 1;
     const M = Math.max(0.1, st.dmg + (clsEl ? st.classElMul : 0)), cm = st.critMult, c = st.crit, EC = 1 + c * (cm - 1);
-    const o = { id: q.id, label: q.label, per: q.per, el: tag, aff: R.x(aff), r: q.r ? Math.round(q.r) : 0, dur: q.dur, every: q.every, delay: q.delay, count: q.count, n: q.n, stun: q.stun, knock: q.knock, note: q.note || '', proc: procDefault(q), radiance: q.radiance || 0, noCrit: !!q.noCrit, alwaysCrit: q.crit === true, selfVuln: q.selfVuln || 0, infAdd: q.infAdd || null };
+    const o = { id: q.id, label: q.label, per: q.per, el: tag, aff: R.x(aff), r: q.r && !q.pRad ? Math.round(q.r) : 0, dur: q.dur, every: q.every, delay: q.delay, count: q.count, n: q.n, stun: q.stun, knock: q.knock, note: q.note || '', proc: procDefault(q), radiance: q.radiance || 0, noCrit: !!q.noCrit, alwaysCrit: q.crit === true, selfVuln: q.selfVuln || 0, infAdd: q.infAdd || null };
     if (q.per === 'minion') {
       const per = q.dmg * (1 + st.minionDmg) * (C.COMP_MUL || 0.85), live = Math.min(ctx.minions > 0 ? ctx.minions : q.n, st.maxMinions || 3), hits = Math.floor((q.dur || 0) / q.every + 1e-9);
       Object.assign(o, { kind: 'minion', raw: q.dmg, hit: per, avg: per, pre: per, here: per, hitsEach: hits, minions: live, oneFoe: live * hits, total: per * live * hits, kc: 0 });
@@ -251,8 +279,12 @@
       return finish(o, R);
     }
     if (q.per === 'zone') return finish(Object.assign(o, { kind: 'zone', raw: 0, hit: 0, avg: 0, pre: 0, here: 0, total: 0, oneFoe: 0, kc: 0 }), R);
-    const sec = q.per === 'sec', raw = q.dmg || 0, hit = raw * M * (sec ? 0.5 : 1), always = q.crit === true, kc = always ? 1 : q.noCrit || sec ? 0 : c;
-    let oneFoe = q.oneFoe;
+    const sec = q.per === 'sec', always = q.crit === true, kc = always ? 1 : q.noCrit || sec ? 0 : c;
+    let raw = q.dmg || 0, oneFoe = q.oneFoe;
+    // Cast-time factors skillNums leaves out (the casts apply them): Shield Storm throws two shields at twinShield each, both reach a foe at REF; Comet's impact lands at 1 + comet.
+    if (skillId === 'shieldthrow' && st.twinShield > 0 && (q.id === 'strike' || q.id === 'return')) { raw *= st.twinShield; oneFoe = 2; }
+    else if (skillId === 'meteor' && q.id === 'impact' && st.comet > 0) raw *= 1 + st.comet;
+    const hit = raw * M * (sec ? 0.5 : 1);
     if (q.fan) { const offs = []; for (let i = 0; i < q.n; i++) offs.push(q.n > 1 ? (i / (q.n - 1) - 0.5) * q.fan : 0); oneFoe = fanHits(offs, q.pr || 5); o.fanN = q.n; }
     if (q.id === 'ambush' && skillId === 'vanish') oneFoe = wpn.oneFoe; // each of the weapon's hits carries the Ambush value
     if (q.perMinion) { // one hit per minion: the minions you have now (all of them when none), or the ones this cast raises
@@ -411,7 +443,7 @@
     if (st.rainHail) add('judged', 'Foes in your Rain take +20% damage (the same +20% as Judged).', 0.2, 'inside your Rain');
     if (st.smokeVuln) add('judged', 'Foes in your smoke take +20% damage (the same +20% as Judged).', 0.2, 'inside your smoke');
     if (st.markV) add('marked', `Marked foes take +${Math.round(st.markV * 100)}% damage from every hero` + (st.volleyMark ? ` for ${n1(st.volleyMark)} s.` : '.'), st.markV, 'from every hero');
-    if (st.sunder) add('marked', 'Each critical hit makes the foe take +4% more damage from you per stack (up to 10).', 0.04, 'per Sunder stack, up to 10');
+    if (st.sunder) add('sundered', 'Each critical hit makes the foe take +4% more damage from you per stack (up to 10).', 0.04, 'per Sunder stack, up to 10');
     if (st.poisonInfuse > 0) add('venom', `Envenomed foes take up to +${Math.round((C.VENOM_AMP + st.corrode) * 100)}% damage from you, half from allies.`, C.VENOM_AMP + st.corrode, 'at full Venom, half from allies');
     return out;
   }
@@ -441,7 +473,7 @@
     if (st.boneArmor) sh.push({ label: 'Bone Armor', text: `${pc(st.boneArmor)} per minion harvested, up to ${pc(st.boneCap)} (once per 12 s)` });
     if (st.roomWard) sh.push({ label: 'Battle Ward', text: `${pc(st.roomWard)} when an elite room locks` });
     if (p.cls === 'cleric') sh.push({ label: 'Judgment kill', text: '3% for allies within 160, once per cast' });
-    if (p.weapon === 'lantern') sh.push({ label: 'Sacred Lantern', text: `${pc(0.015)} of an ally's health per orb, once per ${C.LANTERN_CD} s each, up to ${pc(C.CLASS_SHIELD_CAP)}` });
+    if (p.weapon === 'lantern') sh.push({ label: 'Sacred Lantern', text: `${pc(0.015)} of an ally's health per orb, at most once per ${C.LANTERN_CD} s per ally, up to ${pc(C.CLASS_SHIELD_CAP)}; counts toward the class-shield limit of ${pc(C.SHIELD_WIN_CLASS)} per ${C.SHIELD_WIN_T} s` });
     for (const k of skills) for (const h of k.heals) def.heals.push({ label: k.name, text: h.perMinion ? `${pc(h.perMinion)} of max health per minion, up to ${pc(h.cap)}` : `${pc(h.frac)} of max health for you and allies within 180` });
     def.limits = `Class shields give at most ${pc(C.SHIELD_WIN_CLASS)} of max health per ${C.SHIELD_WIN_T} s and all sources ${pc(C.SHIELD_WIN_ALL)}; Battle Ward and the boss door are exempt.`;
   }
