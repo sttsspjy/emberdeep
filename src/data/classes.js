@@ -60,7 +60,7 @@
     // Ranger
     longbow: { name: 'Longbow', desc: 'Fast, accurate arrows.', kind: 'proj', dmg: 12, rate: 0.34, speed: 440, n: 1, spread: 0, pierce: 0, r: 4, life: 0.85, proj: 'arrow', look: 'bow' },
     crossbow: { name: 'Heavy Crossbow', desc: 'Slow bolts that pierce two foes.', kind: 'proj', dmg: 24, rate: 0.72, speed: 560, n: 1, spread: 0, pierce: 2, r: 5, life: 0.8, proj: 'bolt', look: 'crossbow', knock: 120 },
-    twinbows: { name: 'Twin Shortbows', desc: 'Two arrows at a time, very fast.', kind: 'proj', dmg: 6, rate: 0.25, speed: 420, n: 2, spread: 0.14, pierce: 0, r: 4, life: 0.7, proj: 'arrow', look: 'bow' },
+    twinbows: { name: 'Twin Shortbows', desc: 'Two arrows at a time, very fast.', kind: 'proj', dmg: 4.5, rate: 0.25, speed: 420, n: 2, spread: 0.14, pierce: 0, r: 4, life: 0.7, proj: 'arrow', look: 'bow' },
     // Pyromancer
     firestaff: { name: 'Fire Staff', desc: 'Firebolts that explode on impact.', kind: 'proj', dmg: 12, rate: 0.5, speed: 310, n: 1, spread: 0, pierce: 0, r: 6, life: 1.0, proj: 'firebolt', explode: { r: 40, mul: 0.6 }, look: 'staff' },
     emberwand: { name: 'Ember Wand', desc: 'A torrent of sparks that often ignite.', kind: 'proj', dmg: 6, rate: 0.15, speed: 390, n: 1, spread: 0, jitter: 0.12, pierce: 0, r: 4, life: 0.6, proj: 'spark', burn: 0.15, look: 'wand' },

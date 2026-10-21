@@ -15,7 +15,7 @@ const FORKS = [ // base, kind, dmg, rate, {field: value}
   ['glaive', 'heavy', 39.6, 0.9, { range: 90.2, arc: 0.83, knock: 240 }], ['glaive', 'swift', 12.1, 0.275, { range: 82, knock: 75 }],
   ['longbow', 'heavy', 23.8, 0.612, { r: 4.8, speed: 396, life: 0.94, knock: 80 }], ['longbow', 'swift', 7.26, 0.187, { speed: 528, life: 0.72 }],
   ['crossbow', 'heavy', 47.5, 1.296, { r: 6, speed: 504, life: 0.88, pierce: 2, knock: 240 }], ['crossbow', 'swift', 14.5, 0.396, { speed: 672, life: 0.68, pierce: 2, knock: 60 }],
-  ['twinbows', 'heavy', 11.9, 0.45, { r: 4.8, speed: 378, life: 0.77, knock: 80 }], ['twinbows', 'swift', 3.63, 0.1375, { speed: 504, life: 0.6, spread: 0.12 }],
+  ['twinbows', 'heavy', 8.91, 0.45, { r: 4.8, speed: 378, life: 0.77, knock: 80 }], ['twinbows', 'swift', 2.72, 0.1375, { speed: 504, life: 0.6, spread: 0.12 }],
   ['firestaff', 'heavy', 23.8, 0.9, { r: 7.2, speed: 279 }], ['firestaff', 'swift', 7.26, 0.275, { speed: 372 }],
   ['emberwand', 'heavy', 11.9, 0.27, { r: 4.8, speed: 351 }], ['emberwand', 'swift', 5.28, 0.12, { speed: 468 }],
   ['inferno', 'heavy', 42.9, 1.3, { r: 10.8, speed: 225 }], ['inferno', 'swift', 18.2, 0.55, { speed: 300 }],

@@ -211,7 +211,7 @@ const RAD = (a) => a * Math.PI / 180;
 // ---- Trapper's Craft (r_el): everything bleeds; Infected Wounds (r_el_a): Volley and Rain build statuses 50% faster, Bleed and Burn tick 20% harder, Gangrene at rank 3 ----
 {
   const { w, p } = stage({ r_el: 1 }); const e = foe(w, 200, 212);
-  hit(w, p, e, 100, { kind: 'weapon' }); near(e.bleedPool, 100 * 0.1 * 1.15, 1e-6, 'Trapper\'s Craft: 10% of the damage bleeds, statuses +15% stronger');
+  hit(w, p, e, 100, { kind: 'weapon' }); near(e.bleedPool, 100 * 0.15 * 1.15, 1e-6, 'Trapper\'s Craft: 15% of the damage bleeds, statuses +15% stronger');
   const k = stage({ r_el: 1, r_el_a: 1 }); const a = foe(k.w, 200, 212), b = foe(k.w, 230, 212);
   hit(k.w, k.p, a, 100, { kind: 'skill', part: 'volley.arrow', infK: 1 }); hit(k.w, k.p, b, 100, { kind: 'skill', part: 'volley.arrow', infK: 1.5 }); near(b.bleedPool / a.bleedPool, 1.5, 1e-6, 'skill hits build statuses 50% faster');
   k.w.projs.length = 0; k.w.playerSkill(k.p, 0, {}, 0); ok(k.w.projs.every(q => q.team !== 0 || Math.abs(q.infK - 1.5) < 1e-9), 'Volley arrows carry the 1.5 build-up factor');
