@@ -332,7 +332,7 @@
         if (sk2 === 'rain' || sk2 === 'meteor') { const tp = skillPoint(s, me, aim, inp, sk2 === 'rain' ? 260 : 300); data = { x: Math.round(tp.x), y: Math.round(tp.y) }; }
         else if (sk2 === 'bulwark' && s.mode === 'client') me.bulwarkT = 1.4 * (st.bastion ? 1.5 : 1); // host sets the authoritative timer
         G.act({ t: 'skill', a: aim, data, slot: 1 });
-        ctl.skill2Cd = st.skill2Cd ?? ED.SKILLS[sk2].cd * Math.max(0.35, 1 - st.cdr);
+        ctl.skill2Cd = st.skill2Cd ?? ED.SKILLS[sk2].cd * (1 - ED.Stats.cdrEff(st.cdr));
         if (st.trance) { ctl.tranceT = 4; if (s.mode === 'client') me.tranceT = 4; }
       }
       if (inp.flare && view.light >= ED.World.FLARE.cost && view.room.type !== 'boss') G.act({ t: 'flare' }); // host checks light, room and cooldown

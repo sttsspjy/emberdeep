@@ -352,13 +352,13 @@
     const tier = U.clamp((view.dread && view.dread.tier) | 0, 0, 3), lf = clamp01(view.light / view.lightMax), pl = tier === 3 ? 0.5 + 0.5 * Math.sin(t * 5) : 1;
     if (lantern.view !== view) { lantern.view = view; lantern.tier = tier; lantern.hint = ''; lantern.t = 99; }
     else if (tier !== lantern.tier) {
-      lantern.hint = tier > lantern.tier ? ['', 'Elites stir. The Deep pays more.', `The Gloom hunts. Flare (${I.label('flare')}) or oil.`, `Lightless! Flare (${I.label('flare')}) or oil, now.`][tier] : tier === 0 ? 'The lantern burns bright.' : 'The light pushes the dark back.';
+      lantern.hint = tier > lantern.tier ? ['', 'Elites stir. The Deep pays more.', `The Gloom hunts. Flare (${I.label('flare')}) or oil.`, 'Lightless! Only oil drives the Gloom off.'][tier] : tier === 0 ? 'The lantern burns bright.' : 'The light pushes the dark back.';
       lantern.t = 0; lantern.tier = tier;
     }
     lantern.t += dtc;
     if (lantern.fxTier !== tier) { // effect line of the tier, rebuilt on a tier change
       const D = Wd.DREAD && Wd.DREAD[tier], parts = [];
-      if (D) { if (D.elite > 0) parts.push(`Elites +${Math.round(D.elite * 100)}%`); if (D.gold > 1) parts.push(`Gold ×${D.gold}`); if (D.dmg > 1) parts.push(`Dmg +${Math.round((D.dmg - 1) * 100)}%`); }
+      if (D) { if (D.dmg > 1) parts.push(`Dmg +${Math.round((D.dmg - 1) * 100)}%`); if (D.heal < 1) parts.push(`Heal −${Math.round((1 - D.heal) * 100)}%`); if (D.elite > 0) parts.push(`Elites +${Math.round(D.elite * 100)}%`); if (D.gold > 1) parts.push(`Gold ×${D.gold}`); }
       lantern.fx = parts.length ? parts.join(' · ') : 'Foes at normal strength'; lantern.fxTier = tier;
     }
     const tc = tier === 3 ? U.mix('#8a2a2a', '#ff5a40', pl) : TIER[tier][1];
@@ -379,7 +379,8 @@
     // one line of what the tier does (a fresh tier change shows its warning for a few seconds instead)
     const hint = lantern.t < 6 && lantern.hint;
     c.globalAlpha = ga * (hint ? clamp01(6 - lantern.t) : 1);
-    T(hint || lantern.fx, x + w / 2, y + u * 6.35, u * 0.95, hint ? tc : K.muted, FB, 'center', 700);
+    const fxs = hint || lantern.fx; font(700, u * 0.95, FB); const fxw = c.measureText(fxs).width; // shrink a long effect line to the panel, not below 0.85u
+    T(fxs, x + w / 2, y + u * 6.35, fxw > w - u * 1.2 ? Math.max(u * 0.85, u * 0.95 * (w - u * 1.2) / fxw) : u * 0.95, hint ? tc : K.muted, FB, 'center', 700);
     c.globalAlpha = ga;
     // what the light is worth: each unvisited room costs light (numbers on the doors and map); light left at the boss door guards the party
     const WC = Wd.ROOM_COST;
