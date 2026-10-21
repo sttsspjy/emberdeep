@@ -230,7 +230,7 @@
       phoenixUsed: false, secondWind: 0, swPct: 0.4, angelUsed: false, aegisT: 0, guardCd: 0, guardT: 0,
       frozenCd: 0, tranceT: 0, atkCount: 0, chaliceKills: 0, chaliceHp: 0, bonusHp: 0,
       picks: 0, offer: null, offerT: 0, rerolls: 0, claimed: {}, shield: 0,
-      kills: 0, dealt: 0, hitThisBoss: false,
+      kills: 0, dealt: 0, hitThisBoss: false, maxRelics: 0, revivesGiven: 0,
       remote: !!pd.remote, connected: true,
     };
     this.initBuild(p);
@@ -368,6 +368,7 @@
     p.relics.push(id);
     this.recalc(p, false);
     this.run.maxRelics = Math.max(this.run.maxRelics, p.relics.length);
+    p.maxRelics = Math.max(p.maxRelics, p.relics.length); // the most this hero held (a Generalist's transmute can shrink the list)
     this.emit({ t: 'relic', pid: p.pid, id, x: p.x, y: p.y });
     this.sendBuild(p);
   };
@@ -456,7 +457,7 @@
 
   W.prototype.summary = function () {
     const players = {};
-    for (const p of this.players.values()) players[p.pid] = { cls: p.cls, name: p.name, kills: p.kills, dealt: Math.round(p.dealt), emberBonus: p.stats.emberBonus || 0, relics: p.relics.length, evo: p.stats.evo || null };
+    for (const p of this.players.values()) players[p.pid] = { cls: p.cls, name: p.name, kills: p.kills, dealt: Math.round(p.dealt), emberBonus: p.stats.emberBonus || 0, relics: p.relics.length, evo: p.stats.evo || null, maxRelics: p.maxRelics, revivesGiven: p.revivesGiven };
     return {
       victory: this.victory, retreat: !!this.retreat, abandoned: !!this.abandoned, stratum: this.stratum, time: Math.round(this.time), kills: this.run.kills,
       roomsCleared: this.run.roomsCleared, elitesKilled: this.run.elitesKilled, bosses: this.run.bosses, bossCount: this.run.bossCount,
@@ -516,6 +517,7 @@
         if (p.revive >= 1) {
           p.downed = false; p.revive = 0; p.hp = Math.round(p.maxHp * 0.35); p.invuln = 1.5;
           this.run.revives++;
+          for (const q of this.players.values()) if (q !== p && !q.downed && !q.dead && U.dist2(q.x, q.y, p.x, p.y) < 48 * 48) q.revivesGiven++;
           this.emit({ t: 'revived', pid: p.pid, x: p.x, y: p.y });
         }
       } else p.revive = Math.max(0, p.revive - dt * 0.15);

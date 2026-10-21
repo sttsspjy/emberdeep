@@ -77,6 +77,7 @@
     $('ov-hearth').hidden = true;
     ED.UI.renderTitle();
     ED.UI.show('title');
+    ED.UI.maybeNews();
     ED.Audio.music('camp');
   };
 
@@ -132,7 +133,9 @@
     const mine = summary.players && summary.players[myPid];
     const hero = ED.Game.s && ED.Game.s.me; // the local hero's evolution, read before the session is dropped
     const myEvo = hero && hero.stats && hero.stats.evo ? { path: hero.stats.evo, weapon: hero.weapon } : null;
-    const run = Object.assign({}, summary, { cls: A.runCls, emberBonus: mine ? mine.emberBonus : 0, myEvo });
+    // Deeds are per hero: the party-wide summary fields are replaced by this hero's own (a client's partial summary has no hero entry: its relic count is the held one, revives 0); the party's evolution stays for the results line.
+    const run = Object.assign({}, summary, { cls: A.runCls, emberBonus: mine ? mine.emberBonus : 0, myEvo, partyEvolved: !!summary.evolved,
+      evolved: !!(myEvo || (mine && mine.evo)), maxRelics: mine ? mine.maxRelics | 0 : hero && hero.relics ? hero.relics.length : 0, revives: mine ? mine.revivesGiven | 0 : 0 });
     const latest = A.storeOk !== false && S.load(); // another tab may have saved meanwhile (trust storage only if our own writes land)
     if (latest) A.profile = latest;
     const res = S.applyRun(A.profile, run);
@@ -398,6 +401,7 @@
     A.state = 'title';
     ED.UI.renderTitle();
     ED.UI.show('title');
+    ED.UI.maybeNews();
     if (!A.hasProfile) setTimeout(() => $('inp-name').focus(), 50);
     startHiddenTicker();
     // The first frame waits for the atlas pages to decode (3 s at most); the menus are DOM and already usable.

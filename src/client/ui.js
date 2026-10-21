@@ -72,6 +72,27 @@
     if (jc) $('title-join-code').textContent = jc;
   };
 
+  // One-time notice for a profile made before the v3 rules (profile.news): the changed rules, and what the relics it owns turned into. Closing it clears the flag.
+  const RELIC_WAS = { fang: 'Fang Pendant', wardrum: 'War Drum', wispjar: 'Wisp Jar', crest: 'Vampire Crest', chalice: 'Blood Chalice', bloodstone: 'Bloodstone' };
+  UI.maybeNews = () => {
+    const A = ED.App, p = A.profile;
+    if (!A.hasProfile || !p.news) return;
+    const relics = Object.keys(RELIC_WAS).filter(id => ED.RELICS[id] && S.relicUnlocked(p, id)).map(id => {
+      const r = ED.RELICS[id];
+      return `<b>${esc(r.name)}</b> ${r.name === RELIC_WAS[id] ? '(reworked)' : `(was ${esc(RELIC_WAS[id])})`}: ${esc(r.desc)}`;
+    });
+    $('news-body').innerHTML = [
+      '<b>Aim:</b> attacks and ground skills go toward the mouse cursor (right stick on a pad). The Auto-aim setting is gone.',
+      `<b>Paths:</b> follow up to ${ED.MAX_ELEMENTS} of ${ED.ELEMENT_IDS.map(k => pathName(k, true)).join(', ')}, or take the ${pathName('general', true)} path alone as a Generalist. Blood and Spirit are gone.`,
+      '<b>No life steal:</b> hits do not heal you any more. Shields take their place.',
+      '<b>Knight:</b> Shield Throw replaces Bulwark.',
+      '<b>Lantern:</b> light no longer drains on its own. It is spent on new rooms and flares.',
+      relics.length ? '<b>Relics you own changed:</b><br>' + relics.join('<br>') : '',
+    ].filter(Boolean).map(t => `<p>${t}</p>`).join('');
+    $('ov-news').hidden = false;
+    requestAnimationFrame(() => $('btn-news-close').focus({ preventScroll: true })); // after the screen's own focus
+  };
+
   // ---------------- sections ----------------
   UI.tab = 'descend';
   const SECTION = { descend: 'Descend', upgrades: 'Hearth', relics: 'Hearth', chronicle: 'Hearth', heroes: 'Heroes' };
@@ -202,6 +223,7 @@
   function goalText(p) {
     const next = ED.CLASS_IDS.find(c => !S.classUnlocked(p, c));
     const tierNext = ED.UPGRADES.find(u => u.tier > p.stats.deepest);
+    const locked = ED.RELIC_IDS.filter(id => !S.relicUnlocked(p, id)).length;
     const lines = [];
     if (p.stats.runs < 2) {
       lines.push(`<b>Paths:</b> follow up to ${ED.MAX_ELEMENTS} of ${ED.ELEMENT_IDS.map(k => pathName(k, true)).join(', ')}, or take the ${pathName('general', true)} path alone as a Generalist. Each stratum is weak to one element.`);
@@ -210,7 +232,9 @@
     if (p.stats.runs === 0) lines.push('<b>First goal:</b> reach the Bone Warden at the end of the Ossuary. Every descent pays embers, win or lose.');
     else if (next) lines.push(`<b>Next hero:</b> ${ED.CLASSES[next].name} (${esc(ED.CLASSES[next].unlock.text)}).`);
     else if (tierNext) lines.push(`<b>Reach stratum ${U.roman(tierNext.tier)}</b> to reveal new Hearth upgrades.`);
-    else if (p.stats.wins > 0 && p.pactMax < 10) lines.push(`<b>Pacts:</b> complete a descent under Pact ${p.pactMax} to unlock Pact ${p.pactMax + 1}.`);
+    else if (!p.stats.wins) lines.push('<b>Next goal:</b> defeat the Hollow King to complete a descent and unlock Pacts.');
+    else if (p.pactMax < 10) lines.push(`<b>Pacts:</b> complete a descent under Pact ${p.pactMax} to unlock Pact ${p.pactMax + 1}.`);
+    else if (locked) lines.push(`<b>${locked} relic${locked === 1 ? '' : 's'}</b> still wait${locked === 1 ? 's' : ''} in the Codex.`);
     else lines.push('<b>Every relic, hero and pact is yours.</b> The Deep still has deeds to earn.');
     return lines.join('<br>');
   }
@@ -270,7 +294,8 @@
       const buyable = !un && !req;
       card.className = 'relic-card' + (un ? '' : ' locked') + (buyable ? '' : ' nocost');
       card.style.setProperty('--rc', col);
-      card.innerHTML = `<img alt="" src="${ED.Icons.relicUrl(id)}"><div><div class="rn">${r.name}</div><div class="rd">${esc(r.desc)}</div><div class="rq">${ED.RARITY[r.rar].name}${req ? ' · ' + esc(req) : ''}</div></div>`;
+      const el = r.el && ED.PATHS[r.el] ? ED.PATHS[r.el] : null; // element relics are found more often by a party that follows the element; a Generalist never keeps one
+      card.innerHTML = `<img alt="" src="${ED.Icons.relicUrl(id)}"><div><div class="rn">${r.name}</div><div class="rd">${esc(r.desc)}</div><div class="rq"${el ? ` title="${esc(`Element relic: found more often when a hero follows the ${el.name} path. A Generalist never keeps one.`)}"` : ''}>${ED.RARITY[r.rar].name}${el ? ` · ${pathName(r.el, true)} relic` : ''}${req ? ' · ' + esc(req) : ''}</div></div>`;
       if (buyable) card.appendChild(buyButton(r.cost, p.embers >= r.cost, `Unlock ${r.name} for ${r.cost} embers`, () => { if (S.unlockRelic(p, id)) { ED.Audio.play('relic'); ED.App.afterMetaChange(); } }));
       grid.appendChild(card);
     }
@@ -555,9 +580,9 @@
       sum.pact ? ['Pact', sum.pact] : null,
     ].filter(Boolean).map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
     const evo = sum.myEvo && ED.PATHS[sum.myEvo.path] ? sum.myEvo : null, evoEl = $('res-evo');
-    evoEl.hidden = !evo && !sum.evolved;
+    evoEl.hidden = !evo && !sum.partyEvolved;
     evoEl.style.setProperty('--pc', evo ? ED.PATHS[evo.path].color : 'var(--r-legend)');
-    evoEl.innerHTML = evo ? `<img alt="" src="${pathIcon(evo.path)}"><span>Evolved: <b>${esc(UI.evoName(evo.path, evo.weapon))}</b> <small>${ED.PATHS[evo.path].name} path</small></span>` : sum.evolved ? '<span>A hero in your party evolved their weapon.</span>' : '';
+    evoEl.innerHTML = evo ? `<img alt="" src="${pathIcon(evo.path)}"><span>Evolved: <b>${esc(UI.evoName(evo.path, evo.weapon))}</b> <small>${ED.PATHS[evo.path].name} path</small></span>` : sum.partyEvolved ? '<span>A hero in your party evolved their weapon.</span>' : '';
     $('res-embers').innerHTML = res.rewards.lines.map(([a, b]) => `<dt>${esc(a)}</dt><dd>+${b}</dd>`).join('') || '<dt>Nothing this time</dt><dd>0</dd>';
     $('res-ember-total').textContent = res.rewards.total;
     const ci = ED.CLASS_IDS.indexOf(sum.cls);
@@ -674,6 +699,7 @@
     $('mm-settings').onclick = () => UI.openSettings();
     $('mm-credits').onclick = () => { $('ov-credits').hidden = false; $('btn-credits-close').focus({ preventScroll: true }); };
     $('btn-credits-close').onclick = () => { $('ov-credits').hidden = true; $('mm-credits').focus({ preventScroll: true }); };
+    $('btn-news-close').onclick = () => { $('ov-news').hidden = true; A.profile.news = 0; A.persist(); if ($('mm-descend').offsetParent) $('mm-descend').focus({ preventScroll: true }); };
     for (const m of document.querySelectorAll('.menu')) arrowNav(m, '.menu-btn', 'ArrowUp', 'ArrowDown');
     arrowNav($('hearth-tabs'), '.tab', 'ArrowLeft', 'ArrowRight');
     arrowNav($('set-tabs'), '.tab:not([hidden])', 'ArrowLeft', 'ArrowRight');
@@ -731,6 +757,7 @@
     window.addEventListener('keydown', (e) => {
       if (e.code !== 'Escape' || A.inRun()) return;
       if (!$('modal').hidden) $('modal').hidden = true;
+      else if (!$('ov-news').hidden) $('btn-news-close').click();
       else if (!$('ov-credits').hidden) $('btn-credits-close').click();
       else if (!$('ov-settings').hidden) UI.closeSettings();
       else if (!$('ov-hearth').hidden) $('btn-ph-close').click();

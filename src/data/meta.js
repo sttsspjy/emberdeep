@@ -54,7 +54,7 @@
     '+4% critical chance',
     '+1 boon reroll per descent',
     '+8% damage',
-    'Gilded: a golden aura and title',
+    'Gilded: a golden aura',
   ];
   ED.masteryLevel = (xp) => { let l = 1; for (let i = 0; i < ED.MASTERY_XP.length; i++) if (xp >= ED.MASTERY_XP[i]) l = i + 1; return l; };
 
