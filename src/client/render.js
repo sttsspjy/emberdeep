@@ -249,8 +249,13 @@
     for (const e of view.enemies) if (e.hp > 0) { qDraw(dn++, e.y, 1, e); nFoe++; }
     for (const a of view.allies) qDraw(dn++, a.y, 2, a);
     crowdLod(view, local, nFoe, dn);
+    for (const z of view.zones) if ((z.kind === 'fire' || z.kind === 'pfire') && fireFade(z) > 0.01) { // fire flames: kind 3 entries, d = flame index
+      const nf = fireCount(z), vis = Math.max(1, Math.ceil(nf * fireFade(z)));
+      for (let i = 0; i < vis; i++) { flamePos(z, i); qDraw(dn, flY, 3, z); drawPool[dn++].d = i; }
+    }
     drawList.length = dn; drawList.sort(byY);
     for (const it of drawList) {
+      if (it.k === 3) { drawFlame(c, it.o, it.d, t); continue; }
       const o = it.o, rim = low ? null : rimLight(o.x, o.y, it.k === 0 ? 16 : 0), px = Math.round(o.x), py = Math.round(o.y); // feet on the buffer pixel grid
       if (rim) { shDX = -rim.dx * 0.28; shDY = -rim.dy * 0.12; } else { shDX = 0; shDY = 0; }
       if (it.k === 1) { // foe: pose offset, lean and squash (F.xform) go into one matrix with the mirror
@@ -458,6 +463,15 @@
     s = bake(x0, y0, x1, y1, add, paint); spr.set(key, s);
     return s;
   }
+  // Animation frame i (of nf) of series `arr`, baked lazily: at most BAKE_PER_FRAME new bakes per render, otherwise the nearest earlier frame stands in.
+  function frameOf(arr, base, i, nf, make) {
+    let s = arr[base + i];
+    if (s) return s;
+    if (bakeLeft <= 0) for (let d = 1; d < nf; d++) { s = arr[base + (i + nf - d) % nf]; if (s) return s; }
+    bakeLeft--;
+    if (sprPx > SPR_PX_MAX) sprClear();
+    return (arr[base + i] = make());
+  }
   // Blit with the sprite origin at world (x, y), snapped to the buffer pixel grid (crisp bars and text); the base transform is an integer translation.
   function blit(c, s, x, y) { c.drawImage(s.cv, Math.round(x + s.x), Math.round(y + s.y), s.w, s.h); }
   // Per-shape sprite arrays for foes (see drawStatus): shared by every foe with the same silhouette; reset when the cache is dropped.
@@ -571,7 +585,7 @@
   }
 
   // ---------------- zones ----------------
-  // Three passes: 0 = ground decals and fills (lit by the scene), 1 = unlit additive edges, rims and glows, 2 = unlit opaque sprites (flames, arrows, smoke, rings). Everything is pixel art on the 2 px grid:
+  // Three passes: 0 = everything on the ground (fills, rims, rings, caltrops, smoke, the Sanctuary circle; lit by the scene and drawn before the actors), 1 = unlit additive edges and glows, 2 = unlit airborne sprites drawn over the actors (falling arrows, the meteor, a lobbed orb). Everything is pixel art on the 2 px grid:
   // pixel disc / ring sprites (ED.Pix, cached), telegraph lanes and cones filled in 2 px rows straight from their geometry (exact for any angle, nothing cached), atlas sprites for flames, smoke and arrows.
   // Hero zones (pfire, plague, sanct, rain...) get a dashed bright rim and a 0.25 fill, hostile zones a solid rim.
   const RED = '#ff3a22', GOLD = '#ffc94a';
@@ -616,6 +630,25 @@
       }
     });
   }
+  // Stand-in flame when the atlas has no fx.flame: three stacked pixel blocks in the fire ramp (feet at x, y), h in art px.
+  function flameStub(c, x, y, f, ramp, a, h) {
+    const rp = Pix.ramp(ramp || 'fire'), ga = c.globalAlpha, tip = 2 + ((f & 3) === 1 ? 2 : 0);
+    c.globalAlpha = ga * a;
+    c.fillStyle = rp[2]; c.fillRect(x - 3, y - 2 * h, 6, 2 * h); c.fillStyle = rp[3]; c.fillRect(x - 1, y - 2 * h - 2, 2, 2 * h); c.fillStyle = rp[4]; c.fillRect(x - 1, y - 2 * h - tip, 2, 2);
+    c.globalAlpha = ga;
+  }
+  // Fire-zone flames (fx.flame loop) stand on a golden-angle spiral. R.frame queues them in the y-sorted actor list, so a foe in the fire hides the flames behind it and not those in front.
+  const fireFade = (z) => Math.min(1, (z.dur - z.t) * 2, z.t * 5), fireCount = (z) => Math.max(3, Math.round(z.r / 9));
+  let flX = 0, flY = 0;
+  function flamePos(z, i) {
+    const a = i * 2.39996 + (z.id & 1) * 2.1, rr = Math.sqrt((i + 0.5) / fireCount(z)) * z.r * 0.7;
+    flX = z.x + Math.cos(a) * rr; flY = z.y + Math.sin(a) * rr * 0.62;
+  }
+  function drawFlame(c, z, i, t) {
+    flamePos(z, i);
+    const pf = z.kind === 'pfire', fade = fireFade(z), f = (t * 12 + z.id + i * 3) | 0, x = sx2(flX), y = sx2(flY) + 4; // the sprite's pivot is its feet
+    if (!Pix.draw(c, 'fx.flame', pf ? '#ffb347' : '', f, x, y, fade)) flameStub(c, x, y, f, pf ? '#ffb347' : 'fire', fade, 3);
+  }
   function drawZones(c, view, t, pass) {
     if (pass === 0) bakeLeft = BAKE_PER_FRAME;
     if (!view.zones.length) return;
@@ -625,11 +658,11 @@
       switch (z.kind) {
         case 'spawn': {
           const col = z.elite ? '#ffb13a' : '#b8a0ff', rr = z.r || 14;
-          if (pass === 0) { Pix.put(c, Pix.ell(Math.round(rr * 1.1 / 2), Math.max(2, Math.round(rr * 0.6 / 2)), '#0a0414', true), sx2(z.x), sx2(z.y), 0.4); R.light(z.x, z.y, (z.r || 16) * 2.4, col, 0.55); break; }
-          if (pass === 2) {
+          if (pass === 0) { // ground decals: shadow, smoke ring and spark circle sit under whatever stands on the spawn point
+            Pix.put(c, Pix.ell(Math.round(rr * 1.1 / 2), Math.max(2, Math.round(rr * 0.6 / 2)), '#0a0414', true), sx2(z.x), sx2(z.y), 0.4); R.light(z.x, z.y, (z.r || 16) * 2.4, col, 0.55);
             Pix.draw(c, 'fx.smoke.ring', z.elite ? 'holy' : 'shadow', Math.min(7, (k * 8) | 0), sx2(z.x), sx2(z.y) + 2, 0.9);
             if (!Pix.draw(c, 'fx.circle.spark', col, Math.min(5, (k * 6) | 0), sx2(z.x), sx2(z.y) - 4)) ringPut(c, z.x, z.y - 4, rr * (0.4 + k * 0.8), 1, gb(col), 0.9);
-          } else R.glow(c, z.x, z.y, 28 * (0.4 + k), col, 0.55);
+          } else if (pass === 1) R.glow(c, z.x, z.y, 28 * (0.4 + k), col, 0.55);
           break;
         }
         case 'tele': {
@@ -682,7 +715,11 @@
             c.fillStyle = '#ffaa78'; c.globalAlpha = 0.9; c.beginPath(); Pix.edge(c, poly, lanePoly(z.x, z.y, z.a, 0, z.len, z.w), true); c.fill(); // pixel outline of the lane
             c.globalAlpha = 0.85; c.fillStyle = '#ff9664'; c.beginPath();
             for (let v = -z.w / 2; v <= z.w / 2; v += 2) c.rect(sx2(z.x + co * z.len * k - si * v), sx2(z.y + si * z.len * k + co * v), 2, 2); // the bar that fills the lane
-            for (let u = (t * 50) % 24; u < z.len * k; u += 24) { const px = z.x + co * u, py = z.y + si * u; c.rect(sx2(px), sx2(py - 4), 2, 2); c.rect(sx2(px + 2), sx2(py), 2, 2); c.rect(sx2(px), sx2(py + 4), 2, 2); } // chevrons running along it
+            const hv = Math.max(2, Math.min(4, z.w / 2 - 2)); // chevrons running along the lane: tip at u, two 2 px arms back to v = +-hv, in lane-local (u, v) coordinates
+            for (let u = (t * 50) % 24 + hv; u < z.len * k; u += 24) {
+              const tx = z.x + co * u, ty = z.y + si * u, ex = co * hv, ey = si * hv, fx = -si * hv, fy = co * hv;
+              Pix.line(c, tx - ex - fx, ty - ey - fy, tx, ty, 2); Pix.line(c, tx - ex + fx, ty - ey + fy, tx, ty, 2);
+            }
             c.fill(); c.globalAlpha = 1;
           }
           break;
@@ -717,15 +754,16 @@
           const plague = z.kind === 'plague', fade = Math.min(1, (z.dur - z.t) * 2, z.t * 4);
           if (pass === 0) {
             const rA = Math.max(3, Math.round(z.r / 2)), f = Math.floor(t * 0.35 / 1.05 % 1 * NF_POISON);
+            if (plague) discPut(c, z.x, z.y, z.r, '#9be33c', 0.25 * fade); // hero cloud: 0.25 fill, dashed bright rim
             Pix.put(c, poolSprite(plague, rA, f), sx2(z.x), sx2(z.y), fade);
+            if (plague) ringPut(c, z.x, z.y, z.r, 1, gb('#9be33c'), 0.9 * fade, 3, (t * 6) & 7); else ringPut(c, z.x, z.y, z.r, 1, ['#2f5a1c', '#4a7a2a', '#6a9a3a'], 0.7 * fade);
             R.light(z.x, z.y, z.r * 1.6, plague ? '#a6ff6a' : '#7ad44a', 0.34 * fade);
           } else if (pass === 1) {
             R.glow(c, z.x, z.y, z.r * 1.15, plague ? '#a6ff6a' : '#7ad44a', 0.28 * fade);
             c.fillStyle = '#d6ffb0';
             for (let i = 0; i < 5; i++) { const kk = (t * 0.5 + i * 0.21 + z.id * 0.13) % 1, a = i * 2.4 + z.id; c.globalAlpha = Math.max(0.25, Math.ceil(Math.sin(kk * Math.PI) * 0.8 * fade * 4) / 4); c.beginPath(); bubble(c, sx2(z.x + Math.cos(a) * z.r * 0.5 * (0.4 + kk * 0.4)), sx2(z.y + Math.sin(a) * z.r * 0.3 - kk * 12)); c.fill(); }
             c.globalAlpha = 1;
-          } else if (plague) ringPut(c, z.x, z.y, z.r, 1, gb('#9be33c'), 0.9 * fade, 3, (t * 6) & 7); // hero cloud: dashed bright rim
-          else ringPut(c, z.x, z.y, z.r, 1, ['#2f5a1c', '#4a7a2a', '#6a9a3a'], 0.7 * fade);
+          }
           break;
         }
         case 'mire': {
@@ -745,51 +783,46 @@
         case 'fire': case 'pfire': {
           const fade = Math.min(1, (z.dur - z.t) * 2, z.t * 5), pf = z.kind === 'pfire';
           if (pass === 0) {
+            if (pf) discPut(c, z.x, z.y, z.r, '#ffb347', 0.25 * fade);
             Pix.put(c, patchSprite('#120804', Math.max(3, Math.round(z.r * 0.95 / 2))), sx2(z.x), sx2(z.y), fade * 0.9);
+            if (fade > 0.01) { if (pf) ringPut(c, z.x, z.y, z.r, 1, gb('#ffb347'), 0.9 * fade, 3, (t * 6) & 7); else ringPut(c, z.x, z.y, z.r, 1, ['#8a2a10', '#ff6a1a', '#ffb070'], 0.8 * fade); }
             R.light(z.x, z.y - 6, z.r * 2.2, pf ? '#ffb347' : '#ff6a1a', 0.85 * fade);
-            if (pf) discPut(c, z.x, z.y, z.r, '#ffb347', 0.2 * fade);
-            break;
+            break; // the flames are y-sorted with the actors (R.frame queues them, drawFlame draws them)
           }
           if (pass === 1) {
             R.glow(c, z.x, z.y - 4, z.r * 1.5, pf ? '#ffb347' : '#ff5a1a', 0.6 * fade);
             c.fillStyle = '#ffd36b'; // sparks rising off the patch
             for (let i = 0; i < 4; i++) { const kk = (t * 0.9 + i * 0.25 + z.id * 0.17) % 1, a = i * 2.4 + z.id; c.globalAlpha = Math.max(0.25, Math.ceil((1 - kk) * 4) / 4) * fade; c.fillRect(sx2(z.x + Math.cos(a) * z.r * 0.6), sx2(z.y + Math.sin(a) * z.r * 0.3 - kk * 26), 2, 2); }
             c.globalAlpha = 1;
-            break;
-          }
-          if (fade <= 0.01) break;
-          if (pf) ringPut(c, z.x, z.y, z.r, 1, gb('#ffb347'), 0.9 * fade, 3, (t * 6) & 7); else ringPut(c, z.x, z.y, z.r, 1, ['#8a2a10', '#ff6a1a', '#ffb070'], 0.8 * fade);
-          const nf = Math.max(3, Math.round(z.r / 9)), vis = Math.max(1, Math.ceil(nf * fade));
-          for (let i = 0; i < vis; i++) { // flames (fx.flame loop, 8 frames) on a golden-angle spiral, each with its own phase; the sprite's pivot is its feet
-            const a = i * 2.39996 + (z.id & 1) * 2.1, rr = Math.sqrt((i + 0.5) / nf) * z.r * 0.7;
-            Pix.draw(c, 'fx.flame', pf ? '#ffb347' : '', ((t * 12 + z.id + i * 3) | 0), sx2(z.x + Math.cos(a) * rr), sx2(z.y + Math.sin(a) * rr * 0.62) + 4, fade);
           }
           break;
         }
         case 'sanct': {
           const fade = Math.min(1, (z.dur - z.t) * 2, z.t * 5);
-          if (pass === 0) { R.light(z.x, z.y, z.r * 1.9, '#ffe9a0', 0.8 * fade); discPut(c, z.x, z.y, z.r, '#ffe9a0', 0.25 * fade); break; }
+          if (pass === 0) { // ground: fill, dashed rim and the CodeManu protection circle at its native 2 px density under the actors
+            R.light(z.x, z.y, z.r * 1.9, '#ffe9a0', 0.8 * fade); discPut(c, z.x, z.y, z.r, '#ffe9a0', 0.25 * fade);
+            ringPut(c, z.x, z.y, z.r, 2, TRING[1], 0.9 * fade, 4, (t * 6) & 7);
+            Pix.draw(c, 'fxbig.protection', 'gold', (t * 12) | 0, sx2(z.x), sx2(z.y), 0.5 * fade);
+            break;
+          }
           if (pass === 1) {
             R.glow(c, z.x, z.y, z.r * 1.05, '#ffe9a0', 0.3 * fade);
             c.fillStyle = '#fff3c4'; // gold motes rising inside the circle
             for (let i = 0; i < 8; i++) { const kk = (t * 0.45 + i * 0.125 + z.id * 0.11) % 1, a = i * 2.39996 + z.id, rr = Math.sqrt((i + 0.5) / 8) * z.r * 0.85; c.globalAlpha = Math.max(0.25, Math.ceil(Math.sin(kk * Math.PI) * 4) / 4) * fade; c.fillRect(sx2(z.x + Math.cos(a) * rr), sx2(z.y + Math.sin(a) * rr * 0.8 - kk * 22), 2, 2); }
             c.globalAlpha = 1;
-            break;
           }
-          ringPut(c, z.x, z.y, z.r, 2, TRING[1], 0.9 * fade, 4, (t * 6) & 7);
-          Pix.draw(c, 'fxbig.protection', 'gold', (t * 12) | 0, sx2(z.x), sx2(z.y), 0.75 * fade);
           break;
         }
         case 'rain': case 'skyfall': { // Rain of Arrows: faint ground disc, then arrows falling inside the circle (Skyfall: one curtain landing together)
           const sky = z.kind === 'skyfall', fade = sky ? 1 : Math.min(1, (z.dur - z.t) * 2.5, z.t * 4), warm = !sky && z.t < 0.35;
           if (pass === 0) {
             discPut(c, z.x, z.y, z.r, '#e8d8b0', (warm ? 0.12 : 0.25) * fade);
-            if (!warm) R.light(z.x, z.y - 8, z.r * 1.5, '#d8c890', 0.32 * fade);
+            ringPut(c, z.x, z.y, warm ? Math.max(2, z.r * (1.4 - z.t / 0.35 * 0.4)) : z.r, 1, gb('#e8d8b0'), 0.9 * fade, 3, (t * 6) & 7);
+            R.light(z.x, z.y - 8, z.r * 1.5, '#d8c890', (warm ? 0.3 : 0.45) * fade); // lit rim: the light keeps the aim circle readable in dark rooms
             break;
           }
           if (pass === 1) { R.glow(c, z.x, z.y, z.r * 0.9, '#e8d8b0', 0.12 * fade); break; }
-          ringPut(c, z.x, z.y, warm ? Math.max(2, z.r * (1.4 - z.t / 0.35 * 0.4)) : z.r, 1, gb('#e8d8b0'), 0.9 * fade, 3, (t * 6) & 7);
-          if (warm) break;
+          if (warm) break; // pass 2: only the falling arrows (airborne)
           const n = R.quality === 'low' ? 7 : Math.max(8, Math.round(z.r / 5)), hasA = At.has('proj.arrow');
           for (let i = 0; i < n; i++) {
             const kk = sky ? k : (t * 2.3 + i * 0.381 + z.id * 0.17) % 1, a = i * 2.39996 + z.id, rr = Math.sqrt((i + 0.5) / n) * z.r * 0.94, gx = z.x + Math.cos(a) * rr, gy = z.y + Math.sin(a) * rr, hy = gy - (sky ? 150 : 70) * (1 - kk) * (1 - kk) - 4;
@@ -803,12 +836,16 @@
           if (pass === 0) {
             discPut(c, z.x, z.y, z.r, '#ff7a2a', 0.07 + 0.12 * q);
             Pix.put(c, Pix.ell(Math.max(2, Math.round((5 + q * q * z.r * 0.5) / 2)), Math.max(2, Math.round((2.5 + q * q * z.r * 0.26) / 2)), '#000000', true), sx2(z.x), sx2(z.y), 0.15 + 0.3 * q);
-            R.light(fx, fy, 60 + 90 * q, '#ff8a2a', 0.55 + 0.5 * q); R.light(z.x, z.y, z.r * 1.4, '#ff6a1a', 0.2 + 0.4 * q * q);
+            R.light(fx, fy, 60 + 90 * q, '#ff8a2a', 0.55 + 0.5 * q); R.light(z.x, z.y, z.r * 1.4, '#ff6a1a', 0.3 + 0.4 * q * q);
+            ringPut(c, z.x, z.y, z.r, 1, gb('#ff8a2a'), 0.9, 4, (t * 6) & 7); // ground marks: dashed rim, the closing ring and a reticle whose arms converge as the meteor lands
+            ringPut(c, z.x, z.y, Math.max(2, z.r * q), 1, ['#a84a10', '#ff6a1a', '#ffc27a'], 0.55 + (q > 0.8 ? 0.4 * Math.sin(t * 40) : 0));
+            { const cx = sx2(z.x), cy = sx2(z.y), d = 4 + Math.round((1 - q) * 4) * 2;
+              c.globalAlpha = 0.85; c.fillStyle = q > 0.8 && Math.sin(t * 40) > 0 ? '#ffffff' : '#ffc27a'; c.beginPath();
+              c.rect(cx, cy, 2, 2); c.rect(cx - d - 4, cy, 4, 2); c.rect(cx + d + 2, cy, 4, 2); c.rect(cx, cy - d - 4, 2, 4); c.rect(cx, cy + d + 2, 2, 4);
+              c.fill(); c.globalAlpha = 1; }
             break;
           }
           if (pass === 1) { R.glow(c, fx, fy, 24 + 22 * q, '#ff6a1a', 0.85); break; }
-          ringPut(c, z.x, z.y, z.r, 1, gb('#ff8a2a'), 0.9, 4, (t * 6) & 7);
-          ringPut(c, z.x, z.y, Math.max(2, z.r * q), 1, ['#a84a10', '#ff6a1a', '#ffc27a'], 0.55 + (q > 0.8 ? 0.4 * Math.sin(t * 40) : 0));
           const dx = z.x - fx, dy = z.y - fy, dl = Math.hypot(dx, dy) || 1, hd = Math.atan2(dy, dx), dir = shotDir('proj.fireball');
           c.fillStyle = '#ff9a3a'; c.beginPath(); // ember trail behind the fireball
           for (let i = 1; i <= 6; i++) { const kk = i / 6, tx = fx - dx / dl * kk * 44, ty = fy - dy / dl * kk * 44; c.globalAlpha = 1 - kk; c.rect(sx2(tx + Math.sin(i * 5 + t * 20) * 4), sx2(ty + Math.cos(i * 3 + t * 17) * 4), i < 3 ? 4 : 2, i < 3 ? 4 : 2); }
@@ -825,14 +862,14 @@
               const a = i * 0.83 + z.id, wob = 0.55 + 0.3 * Math.sin(t * 0.8 + i * 1.7), rr = z.r * wob * 0.7, px = z.x + Math.cos(a + t * 0.2) * rr, py = z.y - 8 + Math.sin(a + t * 0.2) * rr * 0.62;
               if (!Pix.draw(c, 'fx.smoke', 'smoke', ((t * 5 + i * 2) | 0) % 6, sx2(px), sx2(py), 0.55 * fade)) discPut(c, px, py, z.r * 0.3, '#6a6484', 0.42 * fade);
             }
+            ringPut(c, z.x, z.y, z.r, 1, gb('#b4a8dc'), 0.7 * fade, 3, (t * 4) & 7);
           } else if (pass === 1) R.glow(c, z.x, z.y - 6, z.r * 0.95, '#8a7cc0', 0.1 * fade);
-          else ringPut(c, z.x, z.y, z.r, 1, gb('#b4a8dc'), 0.7 * fade, 3, (t * 4) & 7);
           break;
         }
         case 'shards': { // Caltrops: pixel caltrops scattered over a slowing patch
           const fade = Math.min(1, (z.dur - z.t) * 2, z.t * 5);
-          if (pass === 0) { discPut(c, z.x, z.y, z.r, '#cfd6de', 0.1 * fade); R.light(z.x, z.y, z.r * 1.4, '#cfd6de', 0.2 * fade); break; }
-          if (pass === 2) {
+          if (pass === 0) { // ground: caltrops lie under whatever walks over them
+            discPut(c, z.x, z.y, z.r, '#cfd6de', 0.1 * fade); R.light(z.x, z.y, z.r * 1.4, '#cfd6de', 0.3 * fade);
             ringPut(c, z.x, z.y, z.r, 1, gb('#cfd6de'), 0.85 * fade, 3, 0);
             const n = Math.max(6, Math.round(z.r / 5));
             c.globalAlpha = fade; c.fillStyle = '#cfd6de'; c.beginPath();
@@ -855,12 +892,10 @@
           const fr = z.team === 0, col = fr ? '#ffe39a' : RED;
           if (pass === 0) {
             discPut(c, z.x, z.y, z.r, col, (fr ? 0.1 : 0.12) * fade);
-            R.light(z.x, z.y, z.r * 1.7, col, 0.45 * fade);
-          } else if (pass === 1) R.glow(c, z.x, z.y, z.r * 1.05, col, 0.18 * fade);
-          else {
             ringPut(c, z.x, z.y, z.r, 1, gb(col), 0.75 * fade, fr ? 3 : 4, (t * 6) & 7);
             if (fr) ringPut(c, z.x, z.y, z.r * 0.62, 1, gb(col), 0.4 * fade);
-          }
+            R.light(z.x, z.y, z.r * 1.7, col, 0.45 * fade);
+          } else if (pass === 1) R.glow(c, z.x, z.y, z.r * 1.05, col, 0.18 * fade);
         }
       }
     }
@@ -1274,11 +1309,53 @@
       }
     });
   }
+  const venomOf = (e) => e.venomLvl !== undefined ? e.venomLvl : ED.Net.venomLevel(e);
+  const doomOf = (e) => e.doomLine !== undefined ? e.doomLine : (e.boss ? e.doom : curView && curView.doomLine ? curView.doomLine(e) : 0);
+  // Pixel stand-ins (2 px per char; 1 = body, 2 = accent) for the overhead glyphs while the atlas lacks them.
+  const GLYPH = {
+    skull: { rows: ['.111.', '11111', '12121', '11111', '.1.1.'], c: { 1: '#d9c8ff', 2: '#1c0c3a' } },
+    guard: { rows: ['11111', '11211', '12211', '.121.', '..1..'], c: { 1: '#9be33c', 2: '#26340f' } },
+    star: { rows: ['.1.', '111', '.1.'], c: { 1: '#ffe66b' } },
+  };
+  function glyphStub(c, g, cx, bottom) {
+    const rows = g.rows, x0 = cx - rows[0].length, y0 = bottom - rows.length * 2;
+    for (let j = 0; j < rows.length; j++) for (let i = 0; i < rows[j].length; i++) { const ch = rows[j][i]; if (ch === '.') continue; c.fillStyle = g.c[ch]; c.fillRect(x0 + i * 2, y0 + j * 2, 2, 2); }
+  }
+  // Overhead status marks of a foe, drawn with the HP bars above the lighting. Layout bottom-up from the bar line (bosses have no bar): ward bar and an elite's name, then the Venom pips on their own line,
+  // then one row of glyphs left to right: stun stars, Doom skull (the Reap is near), Corroded cracked guard, Charge bolt. Nothing shares a point, whatever the combination.
+  function drawMarks(c, e, t) {
+    const vl = venomOf(e), dl = doomOf(e), skull = dl > 0 && !e.boss && e.hp < 1.5 * dl, stun = e.stun > 0, chg = e.charge > 0, cor = vl >= 5;
+    if (!(vl > 0 || skull || stun || chg)) return;
+    const G = foeGeom(e), r = G.r, id = e.id | 0, af = e.elite ? ED.AFFIXES[e.elite] : null;
+    let b = e.boss ? s2(G.top) - 4 : s2(Math.min(G.top - 6, -(r * 2.6 + (e.def.fly ? 14 : 4)))) - 2; // bottom of the free space
+    if (!e.boss) { if (e.ward > 0) b -= (R.scale >= 2 ? 2 : 3) + 1; if (af) b -= Math.ceil(R.labelH()) + 4; }
+    const ox = Math.round(e.x), oy = Math.round(e.y) + b; // marks are laid out in the foe's feet frame with the baseline b, drawn at (ox, oy + ...)
+    b = 0;
+    if (vl > 0) { // four pips on a dark plate; Corroded lights all four bright
+      const x0 = s2(ox - 11);
+      c.fillStyle = 'rgba(0,0,0,0.55)'; c.fillRect(x0 - 2, oy - 4, 26, 6);
+      for (let i = 0; i < 4; i++) { c.fillStyle = cor ? '#c8ff5a' : i < vl ? '#9be33c' : '#26340f'; c.fillRect(x0 + i * 6, oy - 2, 4, 2); }
+      b = -6;
+    } else b = -2;
+    const n = (stun ? 1 : 0) + (skull ? 1 : 0) + (cor ? 1 : 0) + (chg ? 1 : 0);
+    if (n) {
+      const w = (stun ? 26 : 0) + (skull ? 14 : 0) + (cor ? 14 : 0) + (chg ? 6 : 0) + (n - 1) * 2;
+      let x = s2(ox - w / 2);
+      const by = oy + b; // bottom of the glyph row
+      if (stun) { // three stars orbiting on a flat ellipse
+        for (let i = 0; i < 3; i++) { const a = t * 5 + i * 2.094 + id, sx = s2(x + 13 + Math.cos(a) * 8), sy = by - 5 + Math.round(Math.sin(a) * 2); if (!Pix.draw(c, 'fx.star.stun', '', 0, sx, sy)) glyphStub(c, GLYPH.star, sx, sy + 3); }
+        x += 28;
+      }
+      if (skull) { const up = Math.sin(t * 4 + id) > 0 ? 2 : 0, sx = x + 6, sy = by - 7 - up; if (!Pix.draw(c, 'fx.sigil.skull', 'shadow', 0, sx, sy)) glyphStub(c, GLYPH.skull, sx, sy + 5); x += 16; }
+      if (cor) { const up = Math.sin(t * 5 + id) > 0 ? 2 : 0, sx = x + 6, sy = by - 7 - up; if (!Pix.draw(c, 'fx.glyph.corroded', '', 0, sx, sy)) glyphStub(c, GLYPH.guard, sx, sy + 5); x += 16; }
+      if (chg && ((t * 3 + id) | 0) % 2 === 0) { c.fillStyle = '#ffe66b'; c.fillRect(x + 2, by - 8, 4, 2); c.fillRect(x, by - 6, 4, 2); c.fillRect(x + 2, by - 4, 2, 2); c.fillRect(x, by - 2, 4, 2); }
+    }
+  }
   // Drawn at the foe's origin right after its sprite. Element colours: Burn fire, Chill and Freeze ice, Charge lightning, Venom poison, Radiance holy, Doom shadow, Bleed red; pixel art on the 2 px grid.
   // Chill, Freeze and Radiance halos are baked sprites (one blit each); the rest are atlas sprites and 2 px squares batched into one path per kind.
   function drawStatus(c, e, t, full) { // full = false (crowd LOD): the moving decoration (embers, bubbles, drips, motes, smoke) is skipped, every status keeps its icon, sprite or ring
     if (e.burrowed || e.hp <= 0) return;
-    const G = foeGeom(e), r = G.r, id = e.id | 0, cy = G.cy, hh = G.hh, top = G.top, At = ED.Atlas;
+    const G = foeGeom(e), r = G.r, id = e.id | 0, cy = G.cy, hh = G.hh;
     let s;
     if (e.ward > 0) {
       const sh = 0.5 + 0.2 * Math.sin(t * 4 + id), rx = Math.max(3, Math.round(r * 1.35 / 2)), ry = Math.max(3, Math.round(hh * 1.2 / 2));
@@ -1296,7 +1373,7 @@
     const bl = e.burnLvl !== undefined ? e.burnLvl : ED.Net.burnLevel(e); // clients get the level in the snapshot, host/solo derive it from the pool: same flames
     if (bl > 0) { // micro flames (fx.ember loop) on the shoulders and head, staggered frames, plus rising embers
       const f = (t * 12 + id) | 0;
-      for (let i = 0; i < bl; i++) Pix.draw(c, 'fx.ember', '', f + i * 3, s2((i - (bl - 1) / 2) * r * 0.8), s2(cy - hh * (i & 1 ? 0.15 : 0.55)));
+      for (let i = 0; i < bl; i++) { const fx = s2((i - (bl - 1) / 2) * r * 0.8), fy = s2(cy - hh * (i & 1 ? 0.15 : 0.55)); if (!Pix.draw(c, 'fx.ember', '', f + i * 3, fx, fy)) flameStub(c, fx, fy + 4, f + i * 3, 'fire', 1, 2); }
       if (full) {
         c.fillStyle = '#ff9a3a'; c.beginPath();
         for (let i = 0; i < 2 + bl; i++) { const ph = (t * 1.1 + i * 0.37 + id * 0.17) % 1; if (ph > 0.15) c.rect(s2(Math.sin(i * 2.3 + id) * r * 0.7), s2(cy - hh * 0.4 - ph * (hh + 12)), 2, 2); }
@@ -1304,7 +1381,7 @@
       }
       stLight(e.x, e.y - r, r * 3.2, '#ff7a2a', 0.5 * BURN_K[bl]);
     }
-    if (e.charge > 0) { // two to three yellow sparks (plus-shaped, white core) re-rolled at 15 Hz around the body, and a small bolt glyph over the head
+    if (e.charge > 0) { // two to three yellow sparks (plus-shaped, white core) re-rolled at 15 Hz around the body (the bolt glyph over the head is an overhead mark)
       const q = Math.floor(t * 15) + id * 7, ns = full ? 3 : 1;
       c.fillStyle = '#ffe66b'; c.beginPath();
       for (let i = 0; i < ns; i++) { const a = hash1(q * 3.1 + i * 5.7) * U.TAU, x = s2(Math.cos(a) * r * 0.85), y = s2(cy + Math.sin(a) * hh * 0.85); c.rect(x - 2, y, 6, 2); c.rect(x, y - 2, 2, 6); }
@@ -1312,7 +1389,6 @@
       c.fillStyle = '#ffffff'; c.beginPath();
       for (let i = 0; i < ns; i++) { const a = hash1(q * 3.1 + i * 5.7) * U.TAU; c.rect(s2(Math.cos(a) * r * 0.85), s2(cy + Math.sin(a) * hh * 0.85), 2, 2); }
       c.fill();
-      if (((t * 3 + id) | 0) % 2 === 0) { const bx = -2, by = s2(top) - 12; c.fillStyle = '#ffe66b'; c.fillRect(bx + 2, by, 4, 2); c.fillRect(bx, by + 2, 4, 2); c.fillRect(bx + 2, by + 4, 2, 2); c.fillRect(bx, by + 6, 4, 2); }
       stLight(e.x, e.y + cy, r * 2.6, '#ffe66b', 0.45);
     }
     if (e.bleedPool > 0) { // red drips (1x2 art px) falling from the body
@@ -1320,16 +1396,13 @@
       for (let i = 0, n = full ? 3 : 1; i < n; i++) { const ph = (t * 1.6 + id * 0.13 + i * 0.37) % 1; c.rect(s2((i - 1) * r * 0.55), s2(cy - hh * 0.2 + ph * hh * 1.1), 2, ph > 0.5 ? 4 : 2); }
       c.fill();
     }
-    const vl = e.venomLvl !== undefined ? e.venomLvl : ED.Net.venomLevel(e);
-    if (vl > 0) { // bubbles rise from the body (one per pip; Corroded: acid drips, a cracked-guard glyph over the head), and the pips (a row of four) over the head
+    const vl = venomOf(e);
+    if (vl > 0) { // bubbles rise from the body (one per pip; Corroded: acid drips); the pips and the cracked-guard glyph are overhead marks
       c.fillStyle = '#9be33c'; c.beginPath();
       const nb = full ? Math.min(vl, 4) : 0;
       for (let i = 0; i < nb; i++) { const ph = (t * 0.7 + i / nb + id * 0.13) % 1; bubble(c, s2(Math.sin(i * 2.7 + id) * r * 0.7), s2(cy + hh * 0.3 - ph * (hh + 10))); }
       if (vl >= 5 && full) for (let i = 0; i < 3; i++) { const ph = (t * 1.3 + id * 0.1 + i * 0.33) % 1; c.rect(s2((i - 1) * r * 0.6), s2(cy - hh * 0.3 + ph * hh * 1.2), 2, 4); }
       c.fill();
-      const px = -(4 * 6 - 2) / 2;
-      for (let i = 0; i < 4; i++) { c.fillStyle = vl >= 5 || i < vl ? (vl >= 5 ? '#c8ff5a' : '#9be33c') : '#26340f'; c.fillRect(s2(px + i * 6), s2(top) - 4, 4, 2); }
-      if (vl >= 5) Pix.draw(c, 'fx.glyph.corroded', '', 0, 0, s2(top) - 12 + Math.round(Math.sin(t * 5 + id)) * 2);
       stLight(e.x, e.y + cy, r * 2.2, '#9be33c', vl >= 5 ? 0.4 : 0.22);
     }
     const rl = e.radLvl !== undefined ? e.radLvl : (curView && curView.smiteAt ? ED.Net.radLevel(curView, e) : 0);
@@ -1340,19 +1413,14 @@
       c.fill();
       stLight(e.x, e.y + cy, r * 2.2, '#ffcf5a', 0.2 + 0.08 * rl);
     }
-    const dl = e.doomLine !== undefined ? e.doomLine : (e.boss ? e.doom : curView && curView.doomLine ? curView.doomLine(e) : 0);
-    if (dl > 0) { // violet smoke sinking into the ground; a skull sigil over the head once the Reap is near
+    const dl = doomOf(e);
+    if (dl > 0) { // violet smoke sinking into the ground (the skull sigil over the head, once the Reap is near, is an overhead mark)
       for (let i = 0; i < (full ? 3 : 0); i++) {
         const ph = (t * 0.7 + i / 3 + id * 0.1) % 1, x = s2(Math.sin(ph * 5 + i * 2 + id) * r * 0.55), y = s2(cy + hh * 0.3 + ph * (-cy - hh * 0.3));
         c.globalAlpha = Math.max(0.25, Math.ceil((1 - ph) * 4) / 4); c.fillStyle = '#5a2fb0'; c.fillRect(x - 2, y - 2, 4, 4); c.fillStyle = '#c9b3ff'; c.fillRect(x - 2, y - 2, 2, 2);
       }
       c.globalAlpha = 1;
-      if (!e.boss && e.hp < 1.5 * dl) Pix.draw(c, 'fx.sigil.skull', 'shadow', 0, 0, s2(top) - 12 + Math.round(Math.sin(t * 4 + id)) * 2);
       stLight(e.x, e.y + cy, r * 2.2, '#a070ff', 0.25);
-    }
-    if (e.stun > 0 && At.has('fx.star.stun')) { // three stars circling the head
-      const w = Math.max(8, r * 0.8);
-      for (let i = 0; i < 3; i++) { const a = t * 5 + i * 2.094 + id; Pix.draw(c, 'fx.star.stun', '', 0, s2(Math.cos(a) * w), s2(top) - 4 + Math.round(Math.sin(a) * 3)); }
     }
     if (e.judged > 0) { // gold ring on the ground with four cross marks turning around it
       const rx = Math.max(4, Math.round(r * 1.5 / 2)), rot = t * 1.2;
@@ -1425,10 +1493,10 @@
     arrow: { id: 'proj.arrow' }, bolt: { id: 'proj.bolt' }, knife: { id: 'proj.knife' }, trident: { id: 'proj.trident' }, thorn: { id: 'proj.thorn' }, fireball: { id: 'proj.fireball' },
     bone: { id: 'proj.bone', spin: 14 }, hammer: { id: 'proj.hammer', spin: 16 }, shield: { id: 'proj.shield', spin: 14 }, skull: { id: 'proj.skull', spin: 8, q: 1 }, web: { id: 'proj.web', spin: 3 },
   };
-  const DIAMOND = { ice: 1, shard: 1, iceshard: 1, spectral: 1 }, CRESCENT = { wave: 1, crescent: 1, bloodscythe: 1 };
+  const DIAMOND = { shard: 1, iceshard: 1 }, CRESCENT = { wave: 1, crescent: 1, bloodscythe: 1 };
   const SOLID = { arrow: 1, bolt: 1, knife: 1, trident: 1, thorn: 1, bone: 1, hammer: 1, shield: 1, skull: 1, web: 1 }; // sprite shots: a small halo only
   const TRAIL = { arrow: '#e8d8b0', bolt: '#cfd6de', knife: '#d9dfe8', trident: '#e8c66b', thorn: '#9cff6a', shield: '#ffe9a0', hammer: '#ffe9a0' }; // plain sprite trails; the others trail their element colour
-  const NOTRAIL = { bone: 1, skull: 1, web: 1 };
+  const NOTRAIL = { bone: 1, skull: 1, web: 1 }, HALO = { skull: '#a070ff' }; // HALO: shots whose glow is not their team / element colour (the violet skull)
   const FLAME = { fire: 1, firebolt: 1, fireball: 1, droneshot: 1, crescent: 1 }; // ember trails flicker through the fire ramp
   const dirOf = {};
   // Canvas angle the art points along as drawn (anchors.dir is degrees clockwise from screen up).
@@ -1437,10 +1505,10 @@
     if (d === undefined) { const a = ED.Atlas.anim(id); if (!a) return 0; d = dirOf[id] = a.anchors && a.anchors.dir !== undefined ? (a.anchors.dir - 90) * Math.PI / 180 : 0; }
     return d;
   }
-  // Pixel lozenge (ice / shard shots) or crescent (wave shots) pointing along step / 32 turns, baked per (size, colour, step).
-  function diamondSprite(rA, col, st) {
-    const rp = Pix.ramp(col), L = Math.max(3, rA * 1.7), W = Math.max(1.6, rA * 0.7), S = Math.ceil(L) * 2 + 2, th = st / 32 * U.TAU, co = Math.cos(th), si = Math.sin(th);
-    return Pix.bake('dm|' + rA + col + st, S, S, S / 2, S / 2, (b, w) => {
+  // Pixel lozenge (shard / iceshard shots) or crescent (wave shots) pointing along step / 32 turns, baked per (size, colour, step, team). A foe's lozenge is as wide as its hitbox (half-width rA art px).
+  function diamondSprite(rA, col, st, foe) {
+    const rp = Pix.ramp(col), L = Math.max(3, rA * 1.7), W = foe ? Math.max(rA, 1.6) : Math.max(1.6, rA * 0.7), S = Math.ceil(L) * 2 + 2, th = st / 32 * U.TAU, co = Math.cos(th), si = Math.sin(th);
+    return Pix.bake('dm|' + rA + col + st + (foe ? 'f' : ''), S, S, S / 2, S / 2, (b, w) => {
       const c0 = Pix.px32(rp[2]), c1 = Pix.px32(rp[3]), c2 = Pix.px32('#ffffff');
       for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
         const px = x + 0.5 - S / 2, py = y + 0.5 - S / 2, d = Math.abs(px * co + py * si) / L + Math.abs(-px * si + py * co) / W;
@@ -1486,17 +1554,17 @@
       return;
     }
     if (CRESCENT[kind]) { Pix.put(c, crescentSprite(Math.max(4, Math.round((pr.r || 14) / 2)), col, Math.round(Math.atan2(pr.vy, pr.vx) / U.TAU * 32) & 31), x, y); return; }
-    if (DIAMOND[kind]) { Pix.put(c, diamondSprite(Math.max(2, Math.round(pr.r / 2)), col, Math.round(Math.atan2(pr.vy, pr.vx) / U.TAU * 32) & 31), x, y); return; }
+    if (DIAMOND[kind]) { Pix.put(c, diamondSprite(Math.max(2, Math.round(pr.r / 2)), col, Math.round(Math.atan2(pr.vy, pr.vx) / U.TAU * 32) & 31, foe), x, y); return; }
     Pix.put(c, orbOf(pr, foe, col), x, y);
   }
   function drawProjectiles(c, view, t, pass) {
     const ps = view.projs; if (!ps.length) return;
     const FX = ED.FX;
-    if (pass === 0) { let n = 0; for (const pr of ps) { if (n++ >= 40) break; const foe = pr.team === 1; R.light(pr.x, pr.y - 6, (foe ? 46 : 40) + pr.r * 2.5, FX.projColor(pr.kind), foe ? 0.8 : 0.7); } return; }
+    if (pass === 0) { let n = 0; for (const pr of ps) { if (n++ >= 40) break; const foe = pr.team === 1; R.light(pr.x, pr.y - 6, (foe ? 46 : 40) + pr.r * 2.5, HALO[pr.kind] || FX.projColor(pr.kind), foe ? 0.8 : 0.7); } return; }
     if (pass === 1) { // halos (additive): sprite shots a small one, orbs a larger one; foe bullets glow hotter
       for (const pr of ps) {
         const foe = pr.team === 1, kind = pr.kind, y = pr.y - 6;
-        if (SOLID[kind]) R.glow(c, pr.x, y, foe ? 15 : 10, foe ? '#ff5a3a' : FX.projColor(kind), foe ? 0.5 : 0.3);
+        if (SOLID[kind]) R.glow(c, pr.x, y, foe ? 15 : 10, HALO[kind] || (foe ? '#ff5a3a' : FX.projColor(kind)), foe ? 0.5 : 0.3);
         else R.glow(c, pr.x, y, pr.r * 2.2 + 7, FX.projColor(kind), foe ? 0.7 : 0.5);
       }
       return;
@@ -1690,6 +1758,7 @@
       if (e.ward > 0) { c.fillStyle = '#7fc8ff'; c.fillRect(bx, y - 1 - bh, Math.max(1, Math.round(w * (e.ward / (e.wardMax || 1)))), Math.max(1, bh - 1)); }
       if (af) R.label(c, af.name + ' ' + e.def.name, e.x, y - 2 - lhh / 2 - (e.ward > 0 ? bh : 0), af.color);
     }
+    for (const e of view.enemies) if (e.hp > 0 && !e.burrowed) drawMarks(c, e, t);
     // hero names (the local hero first; a name that would overlap another steps up) and revive rings with a DOWN / REVIVE label
     const multi = view.players.size > 1, lh = lhh * 1.1;
     lblN = 0;

@@ -19,6 +19,7 @@
   F.setQuality = (q) => { MAXP = q === 'low' ? 180 : 500; };
   const lowFx = () => MAXP < 300;
   const cnt = (n) => Math.ceil(n * (MAXP < 300 ? 0.5 : 1) * F.crowd);
+  const lk = (n) => (MAXP < 300 ? Math.max(1, Math.round(n * 0.7)) : n); // path payoff bursts (Smite, Reap, acid): with cnt's 0.5 on Low they come out at 0.35 of nominal
 
   // opts: a (angle), spread (random +- around a), sp, life, size, color, kind (dot|shard|smoke|streak|ember|drop|ash|spark), add, lt (light colour), ltr (light radius)
   // spOv/lifeOv replace o.sp/o.life (burst jitter). Dead particles are recycled through ppool; when full, a rotating slot is overwritten.
@@ -46,7 +47,8 @@
   };
   F.ring = (x, y, r, color, life, width, inv) => { if (F.rings.length < 48) F.rings.push({ x, y, r, color, life: life || 0.4, max: life || 0.4, w: width || 3, inv: !!inv }); }; // inv: the ring shrinks instead of growing
   // One-shot (or looping) atlas sprite effect with the anim's pivot at world (x, y). o: ramp (recolour: ramp name or colour), add (additive pass instead of the unlit one), delay (s), speed (fps factor), a (alpha), flip, rot,
-  // spin (rad/s), loop + life (s), fade (alpha falls to 0 over life), vx / vy (px/s), frame (fixed frame of a static sprite), dy (draw offset), lt / ltr (scene light colour / radius). Capped at 72 (28 on Low), the oldest goes first.
+  // spin (rad/s), loop + life (s), fade (alpha falls to 0 over life), vx / vy (px/s), frame (fixed frame of a static sprite), dy (draw offset), lt / ltr (scene light colour / radius),
+  // pid + fdy (follows that hero, pivot fdy px below its feet point). Capped at 72 (28 on Low), the oldest goes first.
   const sheetPool = [];
   F.sheet = (id, x, y, o) => {
     const At = ED.Atlas, r = At.anim(id); if (!r) return null;
@@ -54,7 +56,7 @@
     const sh = F.sheets, s = sh.length >= (lowFx() ? 28 : 72) ? sh.shift() : (sheetPool.pop() || {});
     s.id = id; s.ramp = o.ramp || ''; s.x = x; s.y = y; s.t = -(o.delay || 0); s.fps = (o.fps || r.fps) * (o.speed || 1); s.n = r.n; s.loop = !!o.loop; s.fixed = o.frame === undefined ? -1 : o.frame;
     s.life = o.life || (s.fixed >= 0 ? 0.4 : 0); s.a = o.a === undefined ? 1 : o.a; s.add = !!o.add; s.flip = !!o.flip; s.rot = o.rot || 0; s.spin = o.spin || 0; s.vx = o.vx || 0; s.vy = o.vy || 0; s.fade = !!o.fade;
-    s.dy = o.dy || 0; s.lt = o.lt || null; s.ltr = o.ltr || 60;
+    s.dy = o.dy || 0; s.lt = o.lt || null; s.ltr = o.ltr || 60; s.pid = o.pid === undefined ? null : o.pid; s.fdy = o.fdy || 0;
     sh.push(s); return s;
   };
   // Smear arc. A hero weapon swing (no life given) takes its sweep side and timing from the attack animation that was just started.
@@ -113,6 +115,7 @@
     { const sh = F.sheets; n = 0; // sprite effects: age, drift; a one-shot ends after its last frame, a loop or static sprite after its life
       for (let i = 0; i < sh.length; i++) {
         const s = sh[i]; s.t += dt; if (s.t > 0) { s.x += s.vx * dt; s.y += s.vy * dt; }
+        if (s.pid !== null) { const g = ED.Game && ED.Game.s, p = g && g.view.players.get(s.pid); if (p) { s.x = p.x; s.y = p.y + s.fdy; } } // follows its hero
         if (s.loop || s.fixed >= 0 ? (s.life > 0 && s.t >= s.life) : s.t * s.fps >= s.n) { if (sheetPool.length < 80) sheetPool.push(s); } else sh[n++] = s;
       }
       sh.length = n; }
@@ -475,18 +478,18 @@
       }
       case 'heal': if (ev.v >= 2) { F.text(ev.x, ev.y - 28, '+' + ev.v, '#86d38f', 10, { pop: true }); F.burst(ev.x, ev.y - 10, 6, { color: '#86ffa0', sp: 30, vy: -40, life: 0.7, size: 2, add: true, drag: 1, lt: '#86ffa0', ltr: 24 }); if (ev.pid === local) A.play('heal', 0.6); } break;
       case 'boom': {
-        const cols = BOOM[ev.k] || BOOM.fire, fire = ev.k === 'fire' || ev.k === 'bigfire' || ev.k === 'burst';
+        const cols = BOOM[ev.k] || BOOM.fire, fire = ev.k === 'fire' || ev.k === 'bigfire' || ev.k === 'burst', bk = ev.k === 'acid' ? lk : (n) => n;
         F.ring(ev.x, ev.y, ev.r, cols[0], 0.35, 4);
         F.ring(ev.x, ev.y, ev.r * 0.7, cols[1], 0.22, 2);
-        F.burst(ev.x, ev.y, Math.min(30, 8 + ev.r / 4), { color: cols[0], sp: ev.r * 2.6, life: 0.45, size: 3, add: true });
-        F.burst(ev.x, ev.y, 6, { color: cols[1], sp: ev.r * 1.2, life: 0.3, size: 4, add: true });
-        F.burst(ev.x, ev.y, Math.min(14, 4 + ev.r / 8), { kind: 'streak', color: cols[1], sp: ev.r * 3.2, life: 0.3, size: 1.8 });
+        F.burst(ev.x, ev.y, bk(Math.min(30, 8 + ev.r / 4)), { color: cols[0], sp: ev.r * 2.6, life: 0.45, size: 3, add: true });
+        F.burst(ev.x, ev.y, bk(6), { color: cols[1], sp: ev.r * 1.2, life: 0.3, size: 4, add: true });
+        F.burst(ev.x, ev.y, bk(Math.min(14, 4 + ev.r / 8)), { kind: 'streak', color: cols[1], sp: ev.r * 3.2, life: 0.3, size: 1.8 });
         F.pop(ev.x, ev.y - 4, ev.r * 0.8, cols[1], 0.22);
         switch (ev.k) { // sprite layer: explosion clusters, shock ring, dust, ice, spore and bone bursts
           case 'bigfire': boomSheets(ev.x, ev.y, ev.r, ''); SP('fx.ring.shock', ev.x, ev.y - 4, { add: true, delay: 0.05 }); addStain(ev.x, ev.y, ev.r * 0.5, '#120805', 0.75, 16); break;
           case 'fire': case 'burst': case 'firedamp': boomSheets(ev.x, ev.y, ev.r, ''); break;
           case 'acid': boomSheets(ev.x, ev.y, ev.r, 'poison'); break;
-          case 'spore': SP('fx.burst', ev.x, ev.y - 6, { ramp: 'poison' }); break;
+          case 'spore': for (let i = 0; i < 3; i++) SP('fx.smoke', ev.x + (i - 1) * ev.r * 0.3, ev.y - 8, { ramp: 'poison', delay: i * 0.05 }); break;
           case 'bone': SP('fx.burst', ev.x, ev.y - 6, { ramp: 'teal' }); break;
           case 'ice': SP('fx.ice.burst', ev.x, ev.y - 6); break;
           case 'bolt': SP('fx.blast.blue', ev.x, ev.y - 6, { add: true, ramp: 'lightning' }); break;
@@ -572,22 +575,22 @@
       // ---- path payoffs (own hero full size, allies at 70% size and 60% alpha; text labels for your own hero only) ----
       case 'smite': { // a gold light pillar on the foe, a ring on the ground, motes flying to the heroes it shields
         const mine = ev.pid === local, m = mine ? 1 : 0.7;
-        F.beam(ev.x, ev.y, 210, 16 * m, '#ffcf5a', 0.25); SP('fx.circle.white', ev.x, ev.y - 2, { ramp: 'holy', add: true, a: mine ? 1 : 0.6 });
+        F.beam(ev.x, ev.y, 210, 12 * m, '#ffcf5a', 0.25); SP('fx.circle.white', ev.x, ev.y - 2, { ramp: 'holy', add: true, a: mine ? 1 : 0.6 });
         F.pop(ev.x, ev.y - 20, 32 * m, '#fff0c2', 0.2, true);
-        F.burst(ev.x, ev.y - 8, 6, { color: '#ffe9a0', sp: 40, vy: -85, life: 0.7, size: 2, add: true, drag: 1 });
+        F.burst(ev.x, ev.y - 8, lk(6), { color: '#ffe9a0', sp: 40, vy: -85, life: 0.7, size: 2, add: true, drag: 1 });
         if (!lowFx()) for (const p of ctx.players()) if (!p.dead && U.dist2(p.x, p.y, ev.x, ev.y) < 160 * 160) fly(ev.x, ev.y - 10, p.x, p.y, '#ffe9a0', 3);
         A.play('boon', 0.25 * m); break; }
       case 'reap': { // violet crescent, a skull rising out of the foe, sinking smoke
         const mine = ev.pid === local, m = mine ? 1 : 0.7;
         F.slash(ev.x, ev.y - 8, -0.9, 34 * m, 2.2, '#a070ff', 0.2);
         SP('deco.skull', ev.x, ev.y - 14, { ramp: 'shadow', frame: 0, life: 0.5, fade: true, vy: -24, a: mine ? 1 : 0.6 });
-        F.burst(ev.x, ev.y - 8, 8, { kind: 'smoke', color: '#5a2fb0', sp: 40, life: 0.6, size: 6, drag: 2.5 });
-        F.burst(ev.x, ev.y - 8, 5, { kind: 'spark', color: '#c9b3ff', sp: 150, life: 0.2, size: 1.5, drag: 5 });
+        F.burst(ev.x, ev.y - 8, lk(8), { kind: 'smoke', color: '#5a2fb0', sp: 40, life: 0.6, size: 6, drag: 2.5 });
+        F.burst(ev.x, ev.y - 8, lk(5), { kind: 'spark', color: '#c9b3ff', sp: 150, life: 0.2, size: 1.5, drag: 5 });
         F.pop(ev.x, ev.y - 8, 24 * m, '#c9b3ff', 0.2); if (mine) F.text(ev.x, ev.y - 30, 'REAPED', '#c9b3ff', 9, { pop: true }); break; }
       case 'toll': { // a violet ring collapsing onto the boss
         const mine = ev.pid === local, m = mine ? 1 : 0.7;
         F.ring(ev.x, ev.y - 10, 90 * m, '#5a2fb0', 0.5, 6, true); F.ring(ev.x, ev.y - 10, 50 * m, '#c9b3ff', 0.4, 3, true);
-        for (let i = 0; i < 3; i++) SP('fx.smoke', ev.x + (i - 1) * 14, ev.y - 12, { ramp: 'shadow', delay: i * 0.06, a: mine ? 1 : 0.6 });
+        for (let i = 0, n = lowFx() ? 1 : 3; i < n; i++) SP('fx.smoke', ev.x + (i - 1) * 14, ev.y - 12, { ramp: 'shadow', delay: i * 0.06, a: mine ? 1 : 0.6 });
         F.pop(ev.x, ev.y - 12, 50 * m, '#a070ff', 0.3, true); F.addShake(3 * m); A.play('boom', 0.4 * m); break; }
       case 'lance': { // a straight gold line (2 art px) from the shielded hero to the foe
         const m = ev.pid === local ? 1 : 0.7;
@@ -598,7 +601,7 @@
         if (p && F.time - (st[ev.pid] || 0) > 0.25) {
           st[ev.pid] = F.time; const holy = ev.k === 'holy', c = holy ? '#ffcf5a' : '#bfe3ff';
           if (holy) F.holyT[ev.pid] = F.time + 1.2;
-          SP('fx.shield.gold', p.x, p.y - 12, { ramp: holy ? '' : 'ice', a: ev.pid === local ? 1 : 0.7 });
+          SP('fx.shield.gold', p.x, p.y - 12, { ramp: holy ? '' : 'ice', a: ev.pid === local ? 1 : 0.7, pid: ev.pid, fdy: -12 });
           F.burst(p.x, p.y - 10, 4, { color: c, sp: 24, vy: -36, life: 0.6, size: 1.8, add: true, drag: 1.2 });
           if (ev.pid === local) A.play('heal', 0.25);
         }
