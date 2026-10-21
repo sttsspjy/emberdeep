@@ -191,7 +191,7 @@
     const out = { id, slot: sk.slot, aim, range: sk.range === undefined ? 0 : sk.range + (sk.rangeAdd ? st[sk.rangeAdd] : 0), rangeMin: sk.rangeMin || 0, move, cd: sk.cd, cdEff, walk: !!sk.walk, parts: [], p: {} };
     for (const d of sk.parts) {
       const q = Object.assign({}, d);
-      q.on = !d.if || !!st[d.if];
+      q.on = (!d.if || !!st[d.if]) && !(d.ifNot && st[d.ifNot]); // ifNot: a part another card replaces (Skyfall replaces the Rain ticks)
       let dmg = 0;
       if (d.of) {
         const b = out.p[d.of];

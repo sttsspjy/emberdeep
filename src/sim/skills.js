@@ -29,7 +29,7 @@
     if (!d) return 0;
     if (d.prevR) return d.prevR;
     const N = ED.Stats.skillNums(id, st);
-    for (const q of N.parts) if (q.on && q.r && !(q.ifNot && st[q.ifNot])) return q.r; // ifNot: a part another card replaces (Skyfall replaces the Rain ticks)
+    for (const q of N.parts) if (q.on && q.r) return q.r;
     return 0;
   };
 

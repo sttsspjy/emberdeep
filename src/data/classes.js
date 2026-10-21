@@ -184,6 +184,7 @@
     'harvest.corpse': { oneFoe: 0, note: 'per corpse that explodes on the foe' },
     'meteor.rocks': { oneFoe: 0, note: 'each meteorite lands at random within 80' },
     'rain.tick': { selfVuln: { v: 0.2, if: 'rainHail' } },
+    'rain.shower': { selfVuln: { v: 0.2, if: 'rainHail' } },
     'judgment.leg': { oneFoe: 2, oneMul: { twinHammer: 2, thirdLeg: 2 }, selfVuln: 0.2, infAdd: { holy: 0.5 }, note: 'out and back' },
     'judgment.verdict': { oneFoe: 0, infAdd: { holy: 0.5 }, note: 'when a Judged foe dies' },
     'vanish.ambush': { note: 'your next attack' },
