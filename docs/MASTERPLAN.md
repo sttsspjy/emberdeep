@@ -17,10 +17,12 @@ North-star: a co-op browser roguelite where builds are chosen, not rolled. Rules
 - [x] First playtest
 - [x] Sustain cap: no healing boon is a must-pick
 - [x] Build pacing: evolution needs ~8 path boons, fewer offers
-- [ ] Lantern: rooms cost light; darkness brings elites, better loot and a hunting Gloom (flare or oil drives it off)
+- [x] Lantern: rooms cost light; darkness brings elites, better loot and a hunting Gloom (flare or oil drives it off)
 - [x] UI redesign: bold, readable menus and HUD at any resolution; Q/E skills + key rebinding
 - [x] Visual feedback: impact splashes, hit reactions, animations; readable pickups
 - [x] Performance with crowded rooms at 1440p
-- [ ] Balance: fast trash (2–4 hits), fresh profile wins 5–10%, smooth power curve
+- [x] Balance: fast trash (2–4 hits), smooth power curve, paths within 8 points
+- [ ] Fresh profile wins 5–10% (bots win 2%)
+- [ ] Shade and Necromancer catch up with the other heroes
+- [x] PR to main (live on the site)
 - [ ] Your second playtest
-- [ ] PR to main
