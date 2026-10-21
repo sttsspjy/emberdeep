@@ -136,7 +136,7 @@
     rain: { name: 'Rain of Arrows', slot: 1, cd: 10, icon: 'rain', aim: 'ground', range: 260,
       desc: 'Mark a point at the cursor. After a moment arrows fall on it, hitting every foe inside.',
       parts: [
-        { id: 'tick', label: 'Arrows', base: 4, pow: 0.45, per: 'tick', every: 0.25, dur: 2, delay: 0.35, r: 80, proc: true },
+        { id: 'tick', label: 'Arrows', ifNot: 'skyfall', base: 4, pow: 0.45, per: 'tick', every: 0.25, dur: 2, delay: 0.35, r: 80, proc: true },
         { id: 'sky', label: 'Skyfall', if: 'skyfall', of: 'tick', times: 'ticks', per: 'hit', delay: 0.6, rOf: 'tick', rMul: 1.15, stun: 0.5, proc: true },
         { id: 'sky2', label: 'Twin Sky', if: 'skyTwin', of: 'sky', mul: 'skyTwin', per: 'hit', delay: 0.8, rOf: 'sky', rMul: 1, proc: true },
         { id: 'shower', label: 'Second Shower', if: 'shower', of: 'tick', mul: 'shower', per: 'tick', every: 0.25, dur: 2, durFix: true, rOf: 'tick', rMul: 1, proc: true },

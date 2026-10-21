@@ -1504,6 +1504,7 @@
     skull: { rows: ['.111.', '11111', '12121', '11111', '.1.1.'], c: { 1: '#d9c8ff', 2: '#1c0c3a' } },
     guard: { rows: ['11111', '11211', '12211', '.121.', '..1..'], c: { 1: '#9be33c', 2: '#26340f' } },
     star: { rows: ['.1.', '111', '.1.'], c: { 1: '#ffe66b' } },
+    cross: { rows: ['...2...', '..111..', '.1.2.1.', '2122212', '.1.2.1.', '..111..', '...2...'], c: { 1: '#ff5a4a', 2: '#ffd8d0' } }, // Hunter's Mark crosshair (cls-ranger.js)
   };
   function glyphStub(c, g, cx, bottom) {
     const rows = g.rows, x0 = cx - rows[0].length, y0 = bottom - rows.length * 2;

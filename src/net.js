@@ -281,6 +281,7 @@
   // FX events kept per type in one snapshot (host to client), and per rendered frame on the host or solo machine (a third of it). Extras are dropped; sim state never is.
   N.CAPS = { hit: 24, smite: 12, reap: 12, toll: 12, lance: 12, ric: 12, parry: 6, catch: 4 };
   N.CAPS_LOCAL = { hit: 8, smite: 4, reap: 4, toll: 4, lance: 4, ric: 4, parry: 2, catch: 2 };
+  Object.assign(N.CAPS, { skyfx: 6, hunt: 6, split: 8 }); Object.assign(N.CAPS_LOCAL, { skyfx: 2, hunt: 2, split: 3 }); // Ranger: Skyfall and Second Shower, mark leap, Splitting Bolt
   N.capFx = (fx, caps) => {
     let over = false, n = null;
     for (let i = 0; i < fx.length; i++) {

@@ -1,0 +1,264 @@
+// Usage: node tools/check-ranger.js
+// Headless checks of the 12 Ranger route cards, their rank-3 riders and the Ranger events against DESIGN-classes section 5, in staged rooms. Prints failures and exits 1 when any check fails.
+const fs = require('fs');
+const vm = require('vm');
+const path = require('path');
+const { ED } = require('./sim.js');
+vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'net.js'), 'utf8'), { filename: 'net.js' });
+const N = ED.Net;
+let n = 0, fails = 0;
+const ok = (c, msg) => { n++; if (!c) { fails++; console.log('FAIL ' + msg); } };
+const near = (a, b, tol, msg) => ok(Math.abs(a - b) <= tol, `${msg}: got ${a}, want ${b}`);
+const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
+
+// A staged room with one Ranger at (60, 212): no foes, no encounter; crit 0 so damage is exact. extra: more heroes ({pid, cls, weapon}).
+function stage(boons, wi, extra) {
+  const meta = META(), players = [{ pid: 'p0', name: 'T', slot: 0, cls: 'ranger', weapon: ED.CLASSES.ranger.weapons[wi || 0], meta }];
+  const w = new ED.World({ seed: 7, pact: 0, players });
+  w.startRun();
+  for (const x of extra || []) w.addPlayer({ pid: x.pid, name: x.pid, slot: 1, cls: x.cls || 'ranger', weapon: x.weapon || 'longbow', meta: META() });
+  const p = w.players.get('p0');
+  for (const id in (boons || {})) p.boons[id] = boons[id];
+  for (const q of w.players.values()) { w.recalc(q, true); q.offers.length = 0; q.picks = 0; q.offer = null; q.stats.crit = 0; }
+  w.enemies.length = 0; w.enc = null; w.locked = false;
+  p.x = 60; p.y = 212;
+  return { w, p };
+}
+const foe = (w, x, y, o) => { const e = w.spawnEnemy('skeleton', x, y, o); e.spd = 0; e.cd = 9999; e.maxHp = e.hp = 5000; return e; };
+const run = (w, secs, f) => { for (let i = 0; i < Math.round(secs * 60); i++) { w.update(1 / 60); if (f) f(); } };
+const tap = (w) => { const all = []; return { all, step() { for (const ev of w.fx) all.push(ev); w.fx.length = 0; } }; };
+const hit = (w, p, e, base, src) => { const hp = e.hp; w.hitEnemy(e, base, Object.assign({ p }, src)); return hp - e.hp; };
+const RAD = (a) => a * Math.PI / 180;
+
+// ---- Fletcher (r_s1): 10 arrows, 20% faster cooldown ----
+{
+  const { w, p } = stage({ r_s1: 1 });
+  near(ED.Stats.skillNums('volley', p.stats).p.arrow.n, 10, 0, 'Fletcher: 10 arrows'); near(p.stats.skillCd, 4, 1e-9, 'Fletcher: Volley cooldown 4 s');
+  w.projs.length = 0; w.playerSkill(p, 0, {}, 0);
+  const arrows = w.projs.filter(q => q.part === 'volley.arrow');
+  ok(arrows.length === 10, `Volley fires 10 arrows (got ${arrows.length})`);
+  near(arrows[0].dmg, 18.4, 0.06, 'Volley arrow 18.4'); near(arrows[9].vy / arrows[9].vx, Math.tan(0.6), 1e-6, 'fan spans 1.2 rad');
+  ok(!ED.Stats.skillNums('volley', stage({}).p.stats).move, 'no hop without Scattershot');
+}
+
+// ---- Deadeye (r_atk): shots grow with distance flown, far-shot flag from 75% of the ramp, weapon shots only ----
+{
+  const { w, p } = stage({ r_atk: 1 }); const e = foe(w, 300, 212), wp = { kind: 'weapon', wpn: true };
+  const d = (dist, src) => hit(w, p, e, 100, Object.assign({ dist }, wp, src)); w.fx.length = 0;
+  near(d(80), 100, 1e-6, 'Deadeye +0% at 80'); near(d(170), 115, 1e-6, 'Deadeye +15% at 170'); near(d(260), 130, 1e-6, 'Deadeye +30% at 260'); near(d(500), 130, 1e-6, 'Deadeye stops at +30%'); near(d(40), 100, 1e-6, 'Deadeye: nothing close');
+  const far = w.fx.filter(ev => ev.t === 'hit' && ev.f).length; ok(far === 2, `far-shot flag on hits at >= 75% of the ramp (got ${far})`);
+  near(hit(w, p, e, 100, { kind: 'skill', part: 'volley.arrow', dist: 300 }), 100, 1e-6, 'Deadeye: Volley arrows are not weapon shots');
+  near(hit(w, p, e, 100, { kind: 'weapon', wpn: false, dist: 300 }), 100, 1e-6, 'Deadeye: twin and spectral repeats are not weapon hits');
+  // a real arrow flying 246 px
+  w.fx.length = 0; e.x = 60 + 270; e.hp = 5000; const hp0 = e.hp; w.playerAttack(p, 0); run(w, 1);
+  const hv = w.fx.find(ev => ev.t === 'hit' && ev.pid === 'p0');
+  ok(hv && hv.f === 1, 'a real far arrow carries the far-shot flag'); near(hp0 - e.hp, 12 * (1 + 0.3 * (246 - 80) / 180), 1.2, 'a real far arrow deals the ramped damage');
+  const near1 = stage({ r_atk: 1 }); const e2 = foe(near1.w, 60 + 70, 212); near1.w.playerAttack(near1.p, 0); run(near1.w, 0.6); near(5000 - e2.hp, 12, 1e-6, 'a close arrow deals the plain 12');
+}
+
+// ---- Ballista (r_atk_h): heavy shots, +28% speed, +2 pierce, +15% per foe passed, Splitting Bolt at rank 3 ----
+{
+  const { w, p } = stage({ r_atk: 1, r_atk_h: 1 }), wp = p.stats.weapon;
+  near(wp.speed, 396 * 1.28, 0.01, 'Ballista speed x1.28 over the heavy bow'); near(wp.pierce, 2, 0, 'Ballista: +2 pierce'); ok(p.stats.heavy, 'Ballista is a Heavy fork');
+  near(stage({ r_atk_h: 1 }, 1).p.stats.weapon.pierce, 4, 0, 'Arbalest keeps its pierce and gains 2');
+  const e = foe(w, 300, 212); const ramp = (pass) => hit(w, p, e, 100, { kind: 'weapon', wpn: true, pass });
+  near(ramp(0), 100, 1e-6, 'pierce ramp: first foe plain'); near(ramp(1), 115, 1e-6, 'pierce ramp +15%'); near(ramp(2), 130, 1e-6, 'pierce ramp +30%');
+  near(hit(w, p, e, 100, { kind: 'skill', part: 'volley.arrow', pass: 2 }), 100, 1e-6, 'pierce ramp: weapon shots only');
+  const r2 = stage({ r_atk_h: 2 }); near(r2.p.stats.pierceRamp, 0.25, 1e-9, 'rank 2: +10% per foe'); near(r2.p.stats.deadeye, 0.05, 1e-9, 'rank 2: Deadeye +5%');
+  // a real shot through a line of foes: 100%, 115%, 130% of the first hit
+  const L = stage({ r_atk_h: 1 }), es = [90, 120, 150].map(x => foe(L.w, x, 212)), ev0 = tap(L.w);
+  L.w.playerAttack(L.p, 0); run(L.w, 0.7, ev0.step);
+  const dm = es.map(f => 5000 - f.hp); near(dm[1] / dm[0], 1.15, 1e-6, 'a real shot: +15% on the second foe'); near(dm[2] / dm[0], 1.3, 1e-6, 'a real shot: +30% on the third foe'); ok(!ev0.all.some(v => v.t === 'split'), 'no Splitting Bolt below rank 3');
+}
+{ // Splitting Bolt: pierce spent on the third foe, two arrows +-0.3 rad at 50%, short, no pierce, never split again, no second hit on the same foe
+  const { w, p } = stage({ r_atk_h: 3 }), es = [90, 120, 150].map(x => foe(w, x, 212)), side = foe(w, 195, 150), evs = tap(w);
+  w.playerAttack(p, 0); const main = w.projs.find(q => q.team === 0); const dmg0 = main.dmg;
+  let kids = null, seen = 0;
+  for (let i = 0; i < 90 && !kids; i++) { w.update(1 / 60); evs.step(); const c = w.projs.filter(q => q.noSplit); if (c.length) kids = c; }
+  ok(kids && kids.length === 2, 'Splitting Bolt: two arrows when the third foe is struck');
+  if (kids) {
+    near(kids[0].dmg, dmg0 * 0.5, 1e-6, 'split arrows at 50%'); ok(kids[0].pierce === 0 && kids[0].life <= 0.4 + 1e-9 && kids[0].noSplit, 'split arrows: no pierce, life 0.4, no further split');
+    near(Math.abs(Math.atan2(kids[0].vy, kids[0].vx) - Math.atan2(kids[1].vy, kids[1].vx)), 0.6, 0.02, 'split arrows fan +-0.3 rad');
+    ok(kids[0].hit.has(es[2].id) && kids[0].hit.has(es[0].id), 'split arrows do not hit the foes the shot already struck');
+  }
+  run(w, 0.6, evs.step); ok(evs.all.filter(v => v.t === 'split').length === 1, 'one split event'); ok(evs.all.filter(v => v.t === 'hit' && !v.k).length === 3, 'the line is hit once each, the split arrows hit nobody they already passed');
+  near(5000 - es[2].hp, dmg0 * 1.7, 1e-6, 'rank 3 pierce ramp +35% per foe'); void side; void seen;
+  const two = stage({ r_atk_h: 3 }); [90, 120].forEach(x => foe(two.w, x, 212)); const t2 = tap(two.w); two.w.playerAttack(two.p, 0); run(two.w, 0.8, t2.step); ok(!t2.all.some(v => v.t === 'split'), 'no split while the shot still has pierce');
+  near(stage({ r_atk_h: 3 }).p.stats.splitBolt, 0.5, 1e-9, 'rank 3: Splitting Bolt 50%');
+}
+
+// ---- Quickdraw (r_atk_s): swift shots, +10% damage, 15% slow for 1 s (not bosses), Flurry every 5th shot at rank 3 ----
+{
+  const { w, p } = stage({ r_atk_s: 1 }), wp = p.stats.weapon;
+  ok(p.stats.swift, 'Quickdraw is a Swift fork'); near(wp.dmg, 7.26 * 1.1, 0.01, 'Quickdraw: +10% weapon damage'); near(p.stats.atkInterval, 0.187, 0.002, 'Quickdraw: x0.55 interval');
+  const e = foe(w, 300, 212), b = foe(w, 330, 212); b.boss = true; const evs = tap(w); w.fx.length = 0;
+  hit(w, p, e, 10, { kind: 'weapon', wpn: true }); near(e.slowAmt, 0.15, 1e-9, 'weapon hit slows 15%'); near(e.slowT, 1, 1e-9, 'for 1 s'); ok(w.fx.some(v => v.t === 'hit' && v.sl === 1), 'the hit event carries the slow flag');
+  hit(w, p, b, 10, { kind: 'weapon', wpn: true }); ok(!(b.slowT > 0), 'bosses are not slowed');
+  const e2 = foe(w, 360, 212); hit(w, p, e2, 10, { kind: 'skill', part: 'volley.arrow' }); ok(!(e2.slowT > 0), 'skills do not slow'); void evs;
+  const r2 = stage({ r_atk_s: 2 }).p.stats; near(r2.wDmg, 0.15, 1e-9, 'rank 2: +5% damage'); near(r2.deadeye, 0.05, 1e-9, 'rank 2: Deadeye +5%');
+}
+{ // Flurry: every 5th attack fires two more arrows +-0.12 rad
+  const { w, p } = stage({ r_atk_s: 3 }); near(p.stats.flurry, 5, 0, 'rank 3: every 5th shot'); const counts = [], ang = [];
+  for (let i = 0; i < 10; i++) { w.projs.length = 0; w.playerAttack(p, 0.3); const sh = w.projs.filter(q => q.team === 0); counts.push(sh.length); if (i === 4) for (const q of sh) ang.push(Math.atan2(q.vy, q.vx)); }
+  ok(counts.join() === '1,1,1,1,3,1,1,1,1,3', `Flurry fires 2 extra arrows on every 5th shot (got ${counts.join()})`);
+  ang.sort((a, b) => a - b); near(ang[0], 0.18, 1e-6, 'Flurry: -0.12 rad'); near(ang[1], 0.3, 1e-6, 'Flurry: the aimed arrow'); near(ang[2], 0.42, 1e-6, 'Flurry: +0.12 rad');
+  w.projs.length = 0; p.atkCount = 4; w.playerAttack(p, 0); const sh = w.projs.filter(q => q.team === 0); ok(sh.every(q => Math.abs(q.dmg - p.stats.weapon.dmg) < 1e-9 && q.wpn), 'Flurry arrows are full weapon arrows');
+  const tb = stage({ r_atk_s: 3 }, 2); tb.p.atkCount = 4; tb.w.projs.length = 0; tb.w.playerAttack(tb.p, 0); ok(tb.w.projs.filter(q => q.team === 0).length === 4, 'Twin Flatbows: the pair plus two Flurry arrows');
+  const noF = stage({ r_atk_s: 2 }); noF.p.atkCount = 4; noF.w.projs.length = 0; noF.w.playerAttack(noF.p, 0); ok(noF.w.projs.filter(q => q.team === 0).length === 1, 'no Flurry below rank 3');
+}
+
+// ---- Hunter's Mark (r_s1_a): Volley marks foes 4 s, +12% from everyone, strongest value wins, Relentless Hunt at rank 3 ----
+{
+  const { w, p } = stage({ r_s1: 1, r_s1_a: 1 }, 0, [{ pid: 'p1' }]); const q1 = w.players.get('p1');
+  const es = [foe(w, 130, 212), foe(w, 160, 212), foe(w, 130, 180)], clean = foe(w, 200, 60);
+  w.playerSkill(p, 0, {}, 0); run(w, 0.45);
+  ok(es.every(e => e.mark > 3.4 && e.mark <= 4), 'every foe the Volley hit is marked for 4 s'); ok(es.every(e => Math.abs(e.markV - 0.12) < 1e-9 && e.markBy === 'p0'), 'with the 12% value and its owner');
+  ok(!(clean.mark > 0), 'a foe the Volley missed is not marked');
+  const dm = (e, who) => hit(w, who, e, 100, { kind: 'weapon' });
+  const a = es[0], base = dm(clean, q1); near(dm(a, q1) / base, 1.12, 1e-6, 'marked foes take +12% from another hero'); near(dm(a, p) / base, 1.12, 1e-6, 'and from the Ranger');
+  // strongest value wins, never adds
+  a.markV = 0.2; a.mark = 1; a.markBy = 'p1'; ED.CLS.ranger.hitDone.call(w, p, a, 1, false, { part: 'volley.arrow' }); near(a.markV, 0.2, 1e-9, 'a weaker mark never lowers the value'); near(a.mark, 4, 1e-9, 'but refreshes the time');
+  ok(w.hitEnemy && N.encodeSnap(w, [], false).E.some(r => (r[7] >> 19) & 1), 'the Marked flag (1 << 19) is on the wire');
+  near(stage({ r_s1_a: 2 }).p.stats.markV, 0.16, 1e-9, 'rank 2: +16%'); ok(!stage({ r_s1_a: 2 }).p.stats.markLeap, 'no Relentless Hunt below rank 3'); near(stage({ r_s1_a: 3 }).p.stats.markLeap, 1, 0, 'rank 3: Relentless Hunt');
+}
+{ // Relentless Hunt: a marked foe's death marks the nearest unmarked foe within 120 (fresh time, owner's value), only with the rider, never onto marked or far foes
+  const { w, p } = stage({ r_s1: 1, r_s1_a: 3 }); const evs = tap(w);
+  const a = foe(w, 200, 212), near1 = foe(w, 270, 212), nearer = foe(w, 240, 160), far = foe(w, 200, 340), marked = foe(w, 250, 250);
+  for (const e of [a, marked]) { e.mark = 3; e.markV = 0.5; e.markBy = 'p0'; }
+  hit(w, p, a, 1e9, { kind: 'weapon' }); evs.step();
+  ok(nearer.mark > 3.9 && !(near1.mark > 0) && !(far.mark > 0), `the mark leaps to the nearest unmarked foe (nearer ${nearer.mark.toFixed(2)}, other ${near1.mark.toFixed(2)})`);
+  near(nearer.markV, 0.2, 1e-9, 'the leaped mark carries the owner value (rank 3: 20%)'); near(marked.mark, 3, 1e-9, 'an already marked foe is left alone'); ok(evs.all.filter(v => v.t === 'hunt').length === 1, 'one hunt event');
+  const h = evs.all.find(v => v.t === 'hunt'); ok(h && Math.abs(h.x1 - 240) < 1 && h.pid === 'p0', 'the hunt event runs from the dead foe to the new mark');
+  const lone = stage({ r_s1: 1, r_s1_a: 3 }); const k = foe(lone.w, 200, 212), e2 = foe(lone.w, 200 + 135, 212); k.mark = 2; k.markV = 0.2; k.markBy = 'p0'; hit(lone.w, lone.p, k, 1e9, { kind: 'weapon' });
+  ok(!(e2.mark > 0), 'nothing within 120: no leap'); ok(lone.w.fx.filter(v => v.t === 'hunt').length === 0, 'no hunt event without a target');
+  const ch = stage({ r_s1: 1, r_s1_a: 3 }); const c1 = foe(ch.w, 300, 212), c2 = foe(ch.w, 360, 212), c3 = foe(ch.w, 420, 212); c1.mark = 3; c1.markV = 0.12; c1.markBy = 'p0';
+  hit(ch.w, ch.p, c1, 1e9, { kind: 'weapon' }); ok(c2.mark > 0 && !(c3.mark > 0), 'the leap lands on the next foe only'); hit(ch.w, ch.p, c2, 1e9, { kind: 'weapon' }); ok(c3.mark > 0, 'a leaped mark leaps again');
+  const lo = stage({ r_s1: 1, r_s1_a: 2 }), x = foe(lo.w, 200, 212), y = foe(lo.w, 250, 212); x.mark = 3; x.markV = 0.16; x.markBy = 'p0'; hit(lo.w, lo.p, x, 1e9, { kind: 'weapon' }); ok(!(y.mark > 0), 'rank 2 has no leap');
+  const co = stage({ r_s1: 1, r_s1_a: 3 }, 0, [{ pid: 'p1' }]), xa = foe(co.w, 200, 212), xb = foe(co.w, 250, 212); xa.mark = 2; xa.markV = 0.2; xa.markBy = 'p0'; hit(co.w, co.w.players.get('p1'), xa, 1e9, { kind: 'weapon' }); ok(xb.mark > 0, 'a kill by an ally still leaps the Rangers mark');
+}
+
+// ---- Scattershot (r_s1_b): +40% within 110 and triple knockback, a 70 px hop, Caltrops at rank 3 ----
+{
+  const { w, p } = stage({ r_s1: 1, r_s1_b: 1 }); const e = foe(w, 300, 212), mv = ED.Stats.skillNums('volley', p.stats).move;
+  ok(mv && mv.k === 'hop' && mv.dist === 70 && mv.dir === -1 && mv.t === 0.15 && mv.iframes === 0.15, 'Volley hops 70 px back over 0.15 s with 0.15 s of i-frames');
+  const sh = (dist) => { e.kbx = e.kby = 0; const d = hit(w, p, e, 10, { kind: 'skill', part: 'volley.arrow', dist, knock: 60, kx: 1, ky: 0 }); return [d, e.kbx]; };
+  let r = sh(50); near(r[0], 14, 1e-6, 'Scattershot +40% close'); near(r[1], 180, 1e-6, 'and triple knockback'); r = sh(109); near(r[0], 14, 1e-6, 'close up to 110');
+  r = sh(111); near(r[0], 10, 1e-6, 'plain beyond 110'); near(r[1], 60, 1e-6, 'plain knockback beyond 110');
+  near(stage({ r_s1_b: 2 }).p.stats.volleyClose, 0.5, 1e-9, 'rank 2: +10% close bonus'); ok(!stage({ r_s1_b: 2 }).p.stats.caltrops, 'no Caltrops below rank 3');
+  w.projs.length = 0; w.zones.length = 0; w.playerSkill(p, 0, {}, 0); ok(!w.zones.some(z => z.kind === 'shards'), 'no caltrops without the rider');
+}
+{ // Caltrops: where the hero stood, r 50, 2.5 s, slow 40%, 12 per second
+  const { w, p } = stage({ r_s1: 1, r_s1_b: 3 }); const inside = foe(w, 60 + 30, 212), outside = foe(w, 60 + 90, 212), x0 = p.x, y0 = p.y; w.zones.length = 0;
+  w.playerSkill(p, Math.PI, {}, 0); w.projs.length = 0; const z = w.zones.find(q => q.kind === 'shards'); // aimed at the wall: the arrows stay out of the way
+  ok(z && z.x === x0 && z.y === y0 && z.r === 50 && z.dur === 2.5 && z.team === 0, 'a shards zone on the hero feet, r 50, 2.5 s'); near(z.dps, 12, 1e-9, 'Caltrops 6 + 0.5 P = 12 per second');
+  p.x = 400; run(w, 1.0); near(inside.slowAmt, 0.4, 1e-9, 'foes inside are slowed 40%'); ok(!(outside.slowT > 0), 'foes outside are not'); run(w, 2.2);
+  near(5000 - inside.hp, 30, 0.5, 'Caltrops deal 12 per second for 2.5 s = 30'); ok(outside.hp === 5000, 'foes outside take nothing'); ok(!w.zones.some(q => q.kind === 'shards'), 'the patch ends'); ok(inside.slowAmt === 0, 'and the slow wears off');
+  const big = stage({ r_s1: 1, r_s1_b: 3 }); big.p.stats.area = 1; big.w.zones.length = 0; big.w.playerSkill(big.p, Math.PI, {}, 0); near(big.w.zones.find(q => q.kind === 'shards').r, 75, 1e-9, 'the patch grows with area');
+}
+
+// ---- Rainmaker (r_s2): +30% radius, +1 s (12 ticks), +10% damage ----
+{
+  const { w, p } = stage({ r_s2: 1 }); const rn = ED.Stats.skillNums('rain', p.stats), tk = rn.p.tick;
+  near(tk.r, 104, 1e-6, 'Rainmaker radius 80 x 1.3'); near(tk.dur, 3, 1e-9, 'Rainmaker lasts 3 s'); near(tk.count, 12, 0, 'Rainmaker: 12 volleys'); near(tk.dmg, 9.4 * 1.1, 0.01, 'Rainmaker +10% damage'); near(p.stats.skill2Cd, 10, 1e-9, 'Rainmaker keeps its 10 s cooldown');
+  const e = foe(w, 200, 212), log = []; const hk = w.hitEnemy; w.hitEnemy = function (f, b, s) { if (s && s.part) log.push(s.part); return hk.call(this, f, b, s); };
+  w.zones.length = 0; w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: 200, y: 212 }, 1); const z = w.zones.find(q => q.kind === 'rain'); ok(z && Math.abs(z.r - 104) < 1e-6, 'a rain zone of radius 104'); run(w, 3.6);
+  ok(log.filter(s => s === 'rain.tick').length === 12, `12 arrow ticks (got ${log.filter(s => s === 'rain.tick').length})`); w.hitEnemy = hk; void e;
+}
+
+// ---- Skyfall (r_s2_a): the whole Rain lands once after 0.6 s, 15% wider, 0.5 s stun; Twin Sky 0.8 s later at 50% ----
+{
+  const { w, p } = stage({ r_s2: 1, r_s2_a: 1 }); const rn = ED.Stats.skillNums('rain', p.stats);
+  near(rn.p.sky.dmg, 124.08, 0.1, 'Skyfall 124 in one hit'); near(rn.p.sky.r, 104 * 1.15, 1e-6, 'Skyfall is 15% wider'); ok(!rn.p.sky2.on, 'no Twin Sky at rank 1');
+  near(ED.skillRadius('rain', p.stats), 104 * 1.15, 1e-6, 'the aim circle shows the wider Skyfall radius'); near(ED.skillRadius('rain', stage({ r_s2: 1 }).p.stats), 104, 1e-6, 'and the Rain radius without Skyfall');
+  const inn = foe(w, 200, 212), edge = foe(w, 200 + 104 * 1.15 + 6, 212), out = foe(w, 200 + 104 * 1.15 + 40, 212), bs = foe(w, 200, 240); bs.boss = true;
+  const evs = tap(w), log = []; const hk = w.hitEnemy; w.hitEnemy = function (f, b, s) { const d = hk.call(this, f, b, s); if (s && s.part) log.push({ part: s.part, e: f, d }); return d; };
+  w.zones.length = 0; w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: 200, y: 212 }, 1);
+  ok(w.zones.length === 1 && w.zones[0].kind === 'skyfall' && Math.abs(w.zones[0].dur - 0.6) < 1e-9, 'a skyfall zone of 0.6 s (no tick zone)');
+  run(w, 0.55, evs.step); ok(log.length === 0 && inn.hp === 5000, 'nothing lands before 0.6 s'); run(w, 0.1, evs.step);
+  const hits = log.filter(h => h.part === 'rain.sky'); ok(hits.length === 3 && hits.every(h => Math.abs(h.d - 124.08) < 0.3), `the centre, edge and boss foes each take one 124 hit (got ${hits.map(h => h.d.toFixed(1))})`);
+  ok(!log.some(h => h.e === out), 'a foe outside the circle is not hit'); ok(inn.stun > 0.4 && inn.stun <= 0.5 + 1e-9, `non-boss foes are stunned 0.5 s (got ${inn.stun.toFixed(2)})`); ok(!(bs.stun > 0), 'bosses are never stunned');
+  ok(evs.all.filter(v => v.t === 'skyfx' && v.k === 0).length === 1, 'a landing event'); run(w, 1.5, evs.step); ok(log.length === 3 && log.every(h => h.part === 'rain.sky'), 'no further hits without Twin Sky'); w.hitEnemy = hk; void edge;
+}
+{ // Twin Sky: a second landing 0.8 s after the first at 50%, same spot, no stun; rank 2 adds damage and radius
+  const { w, p } = stage({ r_s2: 1, r_s2_a: 3 }); const rn = ED.Stats.skillNums('rain', p.stats); near(rn.p.sky.dmg, 9.4 * 1.1 * 1.2 * 12, 0.2, 'rank 3 Skyfall damage (Rainmaker +10%, Skyfall +20% at rank 3)'); near(rn.p.sky2.dmg, rn.p.sky.dmg * 0.5, 1e-9, 'Twin Sky at 50%');
+  const e = foe(w, 200, 212), evs = tap(w), log = []; const hk = w.hitEnemy; w.hitEnemy = function (f, b, s) { const d = hk.call(this, f, b, s); if (s && s.part) log.push({ part: s.part, t: w.time, d, stun: f.stun }); return d; };
+  w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: 200, y: 212 }, 1); run(w, 0.7, evs.step); e.stun = 0; e.stunCd = 0; run(w, 1.0, evs.step);
+  const a = log.find(h => h.part === 'rain.sky'), b = log.find(h => h.part === 'rain.sky2');
+  ok(a && b && Math.abs((b.t - a.t) - 0.8) < 0.03, `Twin Sky lands 0.8 s later (${a && b ? (b.t - a.t).toFixed(2) : '-'})`); near(b.d / a.d, 0.5, 1e-6, 'Twin Sky deals half'); ok(!(e.stun > 0), 'Twin Sky does not stun again');
+  ok(evs.all.filter(v => v.t === 'skyfx').map(v => v.k).join() === '0,1', 'two landing events'); w.hitEnemy = hk;
+}
+
+// ---- Hail of Thorns (r_s2_b): foes in the Rain slowed 50% and +20% damage; Second Shower at rank 3 ----
+{
+  const { w, p } = stage({ r_s2: 1, r_s2_b: 1 }); const e = foe(w, 200, 212), out = foe(w, 330, 212);
+  w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: 200, y: 212 }, 1); run(w, 0.3); ok(!(e.slowAmt > 0), 'no slow before the arrows fall'); run(w, 0.2);
+  near(e.slowAmt, 0.5, 1e-9, 'foes in the Rain are slowed 50%'); ok(e.vulnT > 0, 'and vulnerable'); ok(!(out.slowT > 0), 'foes outside the Rain are not slowed');
+  near(hit(w, p, e, 100, { kind: 'weapon' }) / hit(w, p, out, 100, { kind: 'weapon' }), 1.2, 1e-6, 'vulnerable foes take +20%');
+  near(stage({ r_s2_b: 2 }).p.stats.s2Dmg, 0.1, 1e-9, 'rank 2 adds +10% Rain damage');
+}
+{ // Second Shower: when the Rain ends it falls again on the same spot for 2 s at 40% per tick
+  const { w, p } = stage({ r_s2: 1, r_s2_b: 3 }); const e = foe(w, 200, 212), evs = tap(w), log = []; const hk = w.hitEnemy; w.hitEnemy = function (f, b, s) { const d = hk.call(this, f, b, s); if (s && s.part) log.push({ part: s.part, t: w.time, b }); return d; };
+  const rn = ED.Stats.skillNums('rain', p.stats); near(rn.p.shower.dmg, rn.p.tick.dmg * 0.4, 1e-9, 'Second Shower at 40% of a tick');
+  w.zones.length = 0; w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: 200, y: 212 }, 1); run(w, 6.2, evs.step);
+  const tk = log.filter(h => h.part === 'rain.tick'), sh = log.filter(h => h.part === 'rain.shower');
+  ok(tk.length === 12, `the Rain keeps its 12 ticks (got ${tk.length})`); ok(sh.length === 8, `the Shower lasts 2 s = 8 ticks (got ${sh.length})`);
+  near(sh[0].b / tk[0].b, 0.4, 1e-6, 'a Shower tick is 40% of a Rain tick'); ok(sh[0].t >= tk[11].t - 1e-9 && sh[0].t - tk[11].t < 0.3, 'the Shower starts when the Rain ends');
+  ok(evs.all.some(v => v.t === 'skyfx' && v.k === 2), 'a Shower event'); ok(w.zones.length === 0, 'no zone is left'); ok(e.slowAmt === 0, 'the slow wears off'); w.hitEnemy = hk;
+  const no = stage({ r_s2: 1, r_s2_b: 2 }); const f = foe(no.w, 200, 212), l2 = []; const h2 = no.w.hitEnemy; no.w.hitEnemy = function (g, b, s) { if (s && s.part) l2.push(s.part); return h2.call(this, g, b, s); };
+  no.w.playerSkill(no.p, 0, { x0: no.p.x, y0: no.p.y, x: 200, y: 212 }, 1); run(no.w, 6, null); ok(!l2.includes('rain.shower'), 'no Shower below rank 3'); void f;
+}
+
+// ---- Trapper's Craft (r_el): everything bleeds; Infected Wounds (r_el_a): Volley and Rain build statuses 50% faster, Bleed and Burn tick 20% harder, Gangrene at rank 3 ----
+{
+  const { w, p } = stage({ r_el: 1 }); const e = foe(w, 200, 212);
+  hit(w, p, e, 100, { kind: 'weapon' }); near(e.bleedPool, 100 * 0.1 * 1.15, 1e-6, 'Trapper\'s Craft: 10% of the damage bleeds, statuses +15% stronger');
+  const k = stage({ r_el: 1, r_el_a: 1 }); const a = foe(k.w, 200, 212), b = foe(k.w, 230, 212);
+  hit(k.w, k.p, a, 100, { kind: 'skill', part: 'volley.arrow', infK: 1 }); hit(k.w, k.p, b, 100, { kind: 'skill', part: 'volley.arrow', infK: 1.5 }); near(b.bleedPool / a.bleedPool, 1.5, 1e-6, 'skill hits build statuses 50% faster');
+  k.w.projs.length = 0; k.w.playerSkill(k.p, 0, {}, 0); ok(k.w.projs.every(q => q.team !== 0 || Math.abs(q.infK - 1.5) < 1e-9), 'Volley arrows carry the 1.5 build-up factor');
+  const log = [], hk = k.w.hitEnemy; k.w.hitEnemy = function (f, bb, s) { if (s && s.part) log.push({ part: s.part, k: s.infK }); return hk.call(this, f, bb, s); };
+  k.w.playerSkill(k.p, 0, { x0: k.p.x, y0: k.p.y, x: 200, y: 212 }, 1); run(k.w, 1); ok(log.some(h => h.part === 'rain.tick') && log.filter(h => h.part === 'rain.tick').every(h => h.k === 1.5), 'Rain ticks carry the 1.5 build-up factor'); k.w.hitEnemy = hk;
+  // Bleed and Burn tick harder
+  const bl = (cards) => { const s = stage(cards); const f = foe(s.w, 200, 212); f.bleedPool = 100; f.bleedOwner = s.p; f.bleedTick = 0.1; const h0 = f.hp; run(s.w, 0.2); return h0 - f.hp; };
+  near(bl({ r_el_a: 1 }) / bl({}), 1.2, 1e-6, 'Bleed ticks 20% harder'); near(stage({ r_el_a: 2 }).p.stats.bleedMul, 0.3, 1e-9, 'rank 2: Bleed +30%'); near(stage({ r_el_a: 2 }).p.stats.burnMul, 0.3, 1e-9, 'rank 2: Burn +30%');
+  const bn = (cards) => { const s = stage(cards); const f = foe(s.w, 200, 212); f.burnPool = 100; f.burnOwner = s.p; f.burnTick = 0.1; f.burn = 1; const h0 = f.hp; run(s.w, 0.2); return h0 - f.hp; };
+  near(bn({ r_el_a: 1 }) / bn({}), 1.2, 1e-6, 'Burn ticks 20% harder');
+}
+{ // Gangrene
+  const { w, p } = stage({ r_el_a: 3 }); near(p.stats.festerHit, 0.25, 1e-9, 'rank 3: Gangrene 25%');
+  const mk = (n) => { const e = foe(w, 200, 212); if (n >= 1) e.burnPool = 600; if (n >= 2) e.bleedPool = 400; if (n >= 3) e.chill = 30; return e; };
+  const base = hit(w, p, mk(0), 100, { kind: 'skill', part: 'volley.arrow', noGuard: true });
+  near(hit(w, p, mk(3), 100, { kind: 'skill', part: 'volley.arrow' }) / base, 1.25, 1e-6, 'Volley +25% on a foe with 3 ailments'); near(hit(w, p, mk(3), 100, { kind: 'skill', part: 'rain.tick' }) / base, 1.25, 1e-6, 'Rain +25% on a foe with 3 ailments');
+  near(hit(w, p, mk(3), 100, { kind: 'skill', part: 'rain.sky' }) / base, 1.25, 1e-6, 'Skyfall +25% too'); near(hit(w, p, mk(2), 100, { kind: 'skill', part: 'volley.arrow' }) / base, 1, 1e-6, 'no bonus with 2 ailments');
+  near(hit(w, p, mk(3), 100, { kind: 'weapon', wpn: true }) / base, 1, 1e-6, 'weapon shots get no Gangrene'); ok(w.ailments(mk(3)) === 3, 'three ailments counted');
+  const lo = stage({ r_el_a: 2 }); const e = foe(lo.w, 200, 212); e.burnPool = 600; e.bleedPool = 400; e.chill = 30; near(hit(lo.w, lo.p, e, 100, { kind: 'skill', part: 'volley.arrow' }), 100, 1e-6, 'no Gangrene below rank 3');
+}
+
+// ---- Contagion (r_el_b): a foe with 2+ ailments that dies to the Ranger passes 50% of each status to the 2 nearest foes within 100 (+20 per rank); Outbreak (rank 3): 3 foes at 33% ----
+{
+  const spread = (cards, setup) => {
+    const { w, p } = stage(cards); const a = foe(w, 200, 212), ring = [[90, 0], [0, 70], [-95, 0], [60, 60], [130, 0]].map(([dx, dy]) => foe(w, 200 + dx, 212 + dy)); const evs = tap(w);
+    a.burnPool = 600; a.burnOwner = p; a.bleedPool = 400; a.bleedOwner = p; a.chill = 40; a.chillOwner = p; if (setup) setup(a);
+    hit(w, p, a, 1e9, { kind: 'weapon' }); run(w, 0.4, evs.step);
+    return { got: ring.map(r => r.burnPool), bl: ring.map(r => r.bleedPool), chill: ring.map(r => r.chill), evs: evs.all, ring, w };
+  };
+  let s = spread({ r_el_b: 1 }); // nearest are (0,70)=70, (60,60)=85, (90,0)=90, (-95,0)=95 within 100; 130 is out
+  ok(s.got.filter(v => v > 0).length === 2, `two foes receive (got ${s.got.map(v => v.toFixed(0))})`); ok(s.got[1] > 0 && s.got[3] > 0 && s.got[0] === 0 && s.got[4] === 0, 'the two nearest foes within 100 receive');
+  near(s.got[1], 300, 1e-6, '50% of the Burn pool'); near(s.bl[1], 200, 1e-6, '50% of the Bleed pool'); ok(s.chill[1] > 0, 'and of the Chill gauge'); ok(s.evs.filter(v => v.t === 'chain' && v.k === 'c').length === 2, 'a chain thread per recipient');
+  s = spread({ r_el_b: 1 }, a => { a.bleedPool = 0; a.chill = 0; }); ok(s.got.every(v => v === 0), 'one ailment: nothing spreads');
+  s = spread({ r_el_b: 2 }); ok(s.got.filter(v => v > 0).length === 2 && s.got[3] > 0 && s.got[1] > 0, 'rank 2 reach 120: the two nearest still');
+  const far = stage({ r_el_b: 1 }); const a = foe(far.w, 200, 212), f = foe(far.w, 200 + 118, 212); a.burnPool = 600; a.burnOwner = far.p; a.bleedPool = 400; a.bleedOwner = far.p; hit(far.w, far.p, a, 1e9, { kind: 'weapon' }); run(far.w, 0.4); ok(f.burnPool === 0, 'a foe at 118 is out of reach at rank 1');
+  const r2 = stage({ r_el_b: 2 }); const a2 = foe(r2.w, 200, 212), f2 = foe(r2.w, 200 + 118, 212); a2.burnPool = 600; a2.burnOwner = r2.p; a2.bleedPool = 400; a2.bleedOwner = r2.p; hit(r2.w, r2.p, a2, 1e9, { kind: 'weapon' }); run(r2.w, 0.4); ok(f2.burnPool > 0, 'and in reach at rank 2 (120)');
+  s = spread({ r_el_b: 3 }); ok(s.got.filter(v => v > 0).length === 3, `Outbreak: three foes (got ${s.got.map(v => v.toFixed(0))})`); near(s.got[1], 600 * 0.33, 1e-6, 'Outbreak: 33% each'); ok(s.evs.filter(v => v.t === 'chain' && v.k === 'c').length === 3, 'three threads');
+  // someone else's kill, or a kill by a hero without the card, does not spread
+  const o = stage({ r_el_b: 1 }, 0, [{ pid: 'p1' }]); const b = foe(o.w, 200, 212), g = foe(o.w, 240, 212); b.burnPool = 600; b.bleedPool = 400; hit(o.w, o.w.players.get('p1'), b, 1e9, { kind: 'weapon' }); run(o.w, 0.4); ok(g.burnPool === 0, 'a kill by a hero without Contagion does not spread');
+  const dead = stage({ r_el_b: 1 }); const d1 = foe(dead.w, 200, 212), d2 = foe(dead.w, 230, 212); d2.hp = 0; d2.killed = true; d1.burnPool = 600; d1.bleedPool = 400; d1.burnOwner = d1.bleedOwner = dead.p; hit(dead.w, dead.p, d1, 1e9, { kind: 'weapon' }); run(dead.w, 0.3); ok(d2.burnPool === 0, 'dead foes receive nothing');
+  const cap = stage({ r_el_b: 1 }); const c1 = foe(cap.w, 200, 212), c2 = foe(cap.w, 230, 212); c2.maxHp = c2.hp = 200; c1.burnPool = 1e6; c1.burnOwner = cap.p; c1.bleedPool = 5000; c1.bleedOwner = cap.p; hit(cap.w, cap.p, c1, 1e9, { kind: 'weapon' }); run(cap.w, 0.25); ok(c2.burnPool <= 0.25 * 200 + 1e-6, 'a receiver takes at most 25% of its HP per pool');
+}
+
+// ---- events and the wire ----
+{
+  ok(N.CAPS.skyfx === 6 && N.CAPS.hunt === 6 && N.CAPS.split === 8 && N.CAPS_LOCAL.skyfx === 2, 'the Ranger events are capped per snapshot');
+  const evs = []; for (let i = 0; i < 20; i++) evs.push({ t: 'split', x: i }); ok(N.capFx(evs, N.CAPS).length === 8, 'capFx cuts splits to 8');
+}
+console.log(`${n} checks, ${fails} failed`);
+process.exit(fails ? 1 : 0);
