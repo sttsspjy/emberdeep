@@ -242,14 +242,19 @@
     drawDoors(c, view, room, P, t);
     drawZones(c, view, t, 0);
     drawPickups(c, view, t, 0);
-    drawProps(c, view, local, t);
+    const artProps = R.propArt();
+    if (!artProps) drawProps(c, view, local, t);
     let dn = 0, nFoe = 0;
     for (const p of view.players.values()) qDraw(dn++, p.y, 0, p);
     for (const e of view.enemies) if (e.hp > 0) { qDraw(dn++, e.y, 1, e); nFoe++; }
     for (const a of view.allies) qDraw(dn++, a.y, 2, a);
+    for (const s of ED.Tiles.statics(room)) qDraw(dn++, s.key, 3, s); // tall pieces of the room art (columns, standing decor, door arch)
+    if (artProps) for (const p of view.props) qDraw(dn++, p.y, 4, p); // pixel-art props sort with the entities
     crowdLod(view, local, nFoe, dn);
     drawList.length = dn; drawList.sort(byY);
     for (const it of drawList) {
+      if (it.k === 3) { ED.Tiles.drawStatic(c, room, biome, it.o, view, t); continue; }
+      if (it.k === 4) { shDX = shDY = 0; drawProp(c, it.o, view, local, t); continue; }
       const o = it.o, rim = low ? null : rimLight(o.x, o.y, it.k === 0 ? 16 : 0), px = Math.round(o.x), py = Math.round(o.y); // feet on the buffer pixel grid
       if (rim) { shDX = -rim.dx * 0.28; shDY = -rim.dy * 0.12; } else { shDX = 0; shDY = 0; }
       if (it.k === 1) { // foe: pose offset, lean and squash (F.xform) go into one matrix with the mirror
@@ -335,6 +340,7 @@
 
   // ---------------- room details ----------------
   function drawRoomDynamics(c, view, room, biome, t, pass) {
+    if (ED.Tiles.drawDyn(c, room, biome, t, pass, R.quality === 'low')) return; // art rooms animate their own torches, pools and spikes
     const P = biome.pal;
     if (pass === 0) {
       // spike traps cycle
@@ -400,6 +406,7 @@
       const r = ED.Dungeon.doorRect(room, d);
       const x0 = r.x0 * T, y0 = r.y0 * T, x1 = (r.x1 + 1) * T, y1 = (r.y1 + 1) * T;
       const pulse = 0.55 + Math.sin(t * 4) * 0.2, w = x1 - x0, h = y1 - y0, ns = d === 'n' || d === 's';
+      if (ED.Tiles.drawGate(c, room, ED.biomeFor(view.stratum || 1), d)) { R.light((x0 + x1) / 2, (y0 + y1) / 2, 70, P.accent, 0.35 * pulse); R.emit((x0 + x1) / 2, (y0 + y1) / 2, 42, P.accent, 0.5 * pulse); continue; }
       const ds = sprite('dr' + (ns ? 'h' : 'v') + w + '|' + h, 0, 0, w, h, false, (g) => { // dark gate with iron bars, baked per size
         g.fillStyle = 'rgba(14,8,6,0.92)'; g.fillRect(0, 0, w, h);
         const bar = (a, b, c2, d2) => {
@@ -975,9 +982,15 @@
       if (s && s.v > 150) for (let i = 1; i <= 3; i++) R.glow(c, pk.x - s.dx / s.v * i * 5, y - s.dy / s.v * i * 5 * 0.7, 6 - i, col, 0.62 - i * 0.16);
     }
     c.globalCompositeOperation = 'source-over';
+    const AT_ = ED.Atlas, art = AT_.ok && AT_.has('pickup.coin') && AT_.has('pickup.heart') && AT_.has('pickup.xp');
     for (const pk of pks) {
-      const k = pk.kind, bob = Math.sin(t * 5 + pk.id) * 1.5, spr = pickSprite(k);
-      if (k === 'gold') { const w = Math.max(2, Math.round(8 * Math.max(0.2, Math.abs(Math.cos(t * 4 + pk.id))))); c.drawImage(spr, Math.round(pk.x - w), Math.round(pk.y - 12 + bob), w * 2, 16); }
+      const k = pk.kind, bob = Math.sin(t * 5 + pk.id) * 1.5, spr = art ? null : pickSprite(k);
+      if (art) { // pixel sprites on the buffer pixel grid: coin 4-frame spin, heart, xp gem
+        const y = Math.round(pk.y - 3 + bob);
+        if (k === 'gold') AT_.draw(c, 'pickup.coin', AT_.frameAt('pickup.coin', t + (pk.id % 7) * 0.13), pk.x, y);
+        else if (k === 'xp') AT_.draw(c, 'pickup.xp', 0, pk.x, y);
+        else AT_.draw(c, 'pickup.heart', 0, pk.x, y);
+      } else if (k === 'gold') { const w = Math.max(2, Math.round(8 * Math.max(0.2, Math.abs(Math.cos(t * 4 + pk.id))))); c.drawImage(spr, Math.round(pk.x - w), Math.round(pk.y - 12 + bob), w * 2, 16); }
       else if (k === 'xp') { const p = Math.round(16 * (1 + Math.sin(t * 6 + pk.id) * 0.05)); c.drawImage(spr, Math.round(pk.x - p / 2), Math.round(pk.y - 13 + bob - (p - 16) / 2), p, p); }
       else c.drawImage(spr, Math.round(pk.x - 8), Math.round(pk.y - 14 + bob), 16, 16);
     }
@@ -987,6 +1000,7 @@
       const q = Math.sin(t * (k === 'gold' ? 2.6 : 1.9) + pk.id * 1.7);
       if (q < 0.88) continue;
       const a = (q - 0.88) / 0.12, sz = 6 + a * 6;
+      if (art && AT_.has('fx.glint')) { AT_.draw(c, 'fx.glint', Math.min(6, Math.floor(a * 7)), Math.round(pk.x + 1), Math.round(pk.y - 10 + Math.sin(t * 5 + pk.id) * 1.5), { alpha: a * 0.9 }); continue; }
       c.globalAlpha = a * 0.9; c.drawImage(glintSprite(), pk.x - sz / 2 + 1, pk.y - 10 - sz / 2 + Math.sin(t * 5 + pk.id) * 1.5, sz, sz);
     }
     c.globalAlpha = 1;
@@ -1092,13 +1106,159 @@
     c.globalAlpha = 1;
   }
 
-  function drawProps(c, view, local, t) {
-    for (const p of view.props) {
+  // ---- pixel-art props (feet at the prop point) ----
+  R.propArt = () => { const a = ED.Atlas; return !!(a && a.ok && a.has('prop.chest.closed') && a.has('prop.plinth.stone') && a.has('prop.merchant')); };
+  const propOpen = new Map(); // prop id -> { open, t0 }: when its state turned on (chest and mimic opening animations)
+  // Seconds since the prop's state turned on (0 while off); a prop first seen open counts as long open.
+  function openAge(p, t) {
+    let r = propOpen.get(p.id);
+    if (!r) { if (propOpen.size > 300) propOpen.clear(); r = { open: !!p.state, t0: p.state ? -99 : 0 }; propOpen.set(p.id, r); }
+    if (p.state && !r.open) { r.open = true; r.t0 = t; } else if (!p.state) r.open = false;
+    return p.state ? t - r.t0 : 0;
+  }
+  const orbDone = new Set(); let ironOk = false;
+  // Key of the Atlas variant of the shrine pedestal whose orb wears colour hex ('' while the atlas cannot build it).
+  function orbKey(hex) {
+    const key = 'pal:orb' + hex;
+    if (orbDone.has(key)) return key;
+    const src = ['#965340', '#d14b34', '#e46d3a', '#ffffff'], to = [U.shade(hex, -0.5), U.shade(hex, -0.2), hex, U.mix(hex, '#ffffff', 0.7)];
+    if (!ED.Atlas.variant('prop.shrine.3', key, () => { const m = {}; src.forEach((s, i) => { m[s] = to[i]; }); return m; })) return '';
+    orbDone.add(key); return key;
+  }
+  // Swirling portal vortex: 12 frames of an ellipse painted pixel by pixel on the 2-px art grid.
+  const NF_PORTAL = 12; let portalS = [], portalGen = -1;
+  function portalFrame(f) {
+    if (portalGen !== sprGen) { portalS = []; portalGen = sprGen; }
+    return frameOf(portalS, 0, f, NF_PORTAL, () => bake(-28, -36, 28, 36, false, (g) => {
+      for (let j = -16; j <= 16; j++) for (let i = -13; i <= 13; i++) {
+        const nx = i / 12, ny = j / 15, r = Math.hypot(nx, ny); if (r > 1.12) continue;
+        let col;
+        if (r > 1.0) col = '#12062a';
+        else if (r > 0.9) col = r > 0.95 ? '#e8c8ff' : '#9a6aff';
+        else if (r < 0.2) col = '#05010c';
+        else { const v = Math.sin(Math.atan2(ny, nx) * 3 + r * 8 - f * 0.5236) * 0.5 + 0.5; col = ['#1a0a38', '#3a1a78', '#7a4ae0', '#d8a8ff'][Math.min(3, Math.floor(v * (1.6 + r * 2.4)))]; }
+        g.fillStyle = col; g.fillRect(i * 2, j * 2, 2, 2);
+      }
+    }));
+  }
+  // Dashed ground ring of the trial altar, 3 dash phases (pixel dots on the art grid).
+  function trialRing(ph) {
+    return sprite('trialring' + ph, -30, -16, 30, 16, false, (g) => {
+      for (let i = 0; i < 48; i++) { if ((i + ph) % 3 === 2) continue; const a = i / 48 * U.TAU; g.fillStyle = i % 6 < 3 ? '#ff6a4a' : '#ffb08a'; g.fillRect(Math.round(Math.cos(a) * 13) * 2, Math.round(Math.sin(a) * 6) * 2, 2, 2); }
+    });
+  }
+  const ELEM_HEX = ['#ff7a2a', '#7fe3ff', '#ffe66b', '#9be33c', '#fff0c2', '#a070ff'];
+  // Draws prop p as pixel art and issues its lights; returns false for kinds without art.
+  function propArt(c, p, view, local, t, G, L) {
+    const A_ = ED.Atlas, K_ = 2;
+    switch (p.kind) {
+      case 'chest': {
+        Sp.shadow(c, 14);
+        if (!p.state) { G(0, -8, 30 + Math.sin(t * 3) * 4, '#ffd36b', 0.4); L(0, -10, 90, '#ffd36b', 0.7); A_.draw(c, 'prop.chest.closed', 0, 0, 0); }
+        else { const age = openAge(p, t); if (age < 0.4) A_.draw(c, 'prop.chest.open', Math.min(2, Math.floor(age * 8)), 0, 0); else A_.draw(c, 'prop.chest.empty', 2, 0, 0); }
+        return true;
+      }
+      case 'gamble': {
+        Sp.shadow(c, 14);
+        if (!p.state) { G(0, -12, 28, '#ffd36b', 0.45); L(0, -12, 90, '#ffd36b', 0.7); A_.draw(c, 'prop.mimic.closed', 0, 0, 0); }
+        else A_.draw(c, 'prop.mimic.open', Math.min(2, Math.floor(openAge(p, t) * 8)), 0, 0);
+        return true;
+      }
+      case 'relic': case 'shop': {
+        if (p.state) c.globalAlpha = 0.35;
+        Sp.shadow(c, 12, 0.3);
+        A_.draw(c, 'prop.plinth.stone', 0, 0, 0);
+        if (!p.state) {
+          const bob = Math.sin(t * 3 + p.id) * 2;
+          let col = '#ffffff', icon = null, flask = null;
+          if (p.kind === 'relic' || p.stype === 'relic') { const r = ED.RELICS[p.item]; col = ED.RARITY[r.rar].color; icon = ED.Icons.relicCanvas(p.item, 20); }
+          else if (p.stype === 'boon') { col = ED.RARITY.e.color; icon = ED.Icons.canvas('star', col, 20); }
+          else if (p.stype === 'oil') { col = '#ffb35c'; flask = 'pickup.flask.yellow'; }
+          else if (p.stype === 'forge') { col = '#ff9a3a'; icon = ED.Icons.canvas('anvil', col, 20); }
+          else { col = '#ff4a5a'; flask = 'pickup.flask.red'; }
+          G(0, -42 + bob, 24, col, 0.65); L(0, -42, 80, col, 0.8);
+          if (flask) A_.draw(c, flask, 0, 0, Math.round(-30 + bob)); else c.drawImage(icon, -10, Math.round(-56 + bob));
+          if (p.kind === 'shop') R.label(c, p.price + 'g', 0, 9, view.gold >= p.price ? '#ffd36b' : '#a07060', 8);
+        }
+        return true;
+      }
+      case 'merchant': {
+        Sp.shadow(c, 11);
+        G(10, -16, 34, '#ffcf6a', 0.4); L(8, -16, 100, '#ffcf6a', 0.7);
+        A_.draw(c, 'prop.crate', 0, -26, 0); A_.draw(c, 'prop.bag', 0, 24, 0);
+        A_.draw(c, 'prop.merchant', A_.frameAt('prop.merchant', t), 0, 0);
+        return true;
+      }
+      case 'fountain': {
+        Sp.shadow(c, 18);
+        if (!p.state) {
+          G(0, -26, 34, '#6fe6ff', 0.4); L(0, -26, 110, '#6fe6ff', 0.75);
+          const f = A_.frameAt('tile.fountain.mid.blue', t);
+          A_.draw(c, 'tile.fountain.basin.blue', f, -16, -32); A_.draw(c, 'tile.fountain.mid.blue', f, -16, -64); A_.draw(c, 'tile.fountain.top.1', 0, -16, -96);
+        } else { c.globalAlpha *= 0.7; A_.draw(c, 'tile.fountain.basin.blue', 0, -16, -32); A_.draw(c, 'tile.fountain.mid.blue', 0, -16, -64); A_.draw(c, 'tile.fountain.top.1', 0, -16, -96); }
+        return true;
+      }
+      case 'altar': case 'reward': {
+        const reward = p.kind === 'reward';
+        let hex = reward ? rewardColor(p.reward || p.rw || p.item || p.what) : (PATH_COL[R.mainPath] || ELEM_HEX[(view.room ? view.room.seed >>> 0 : 0) % 6]);
+        const bob = Math.sin(t * 2.6 + p.id) * 2.5;
+        Sp.shadow(c, 14);
+        if (!reward && p.state) A_.draw(c, 'prop.plinth.stone', 0, 0, 0);
+        else {
+          const vk = orbKey(hex); A_.draw(c, 'prop.shrine.3', 0, 0, 0, vk ? { variant: vk } : undefined);
+          G(0, reward ? -30 + bob : -22, 34, hex, reward ? 0.7 : 0.55 + Math.sin(t * 4) * 0.15); L(0, reward ? -28 : -18, reward ? 120 : 100, hex, reward ? 0.95 : 0.8);
+          if (reward) {
+            const me = view.players.get(local), ri = R.rewardIcon(p.item, me ? me.cls : null);
+            c.drawImage(ED.Icons.canvas(ri[0], ri[1], 24), -12, Math.round(-62 + bob));
+            for (let i = 0; i < 3; i++) { const a = t * 1.5 + i * 2.1; G(Math.cos(a) * 15, -40 + bob + Math.sin(a) * 6, 5, hex, 0.8); }
+          } else for (let i = 0; i < 3; i++) { const k = (t * 0.8 + i / 3) % 1; c.fillStyle = U.rgba(hex, 0.8 * (1 - k)); c.fillRect(Math.round((-4 + i * 4 + Math.sin(t * 3 + i) * 1.5) / 2) * 2, Math.round((-34 - k * 14) / 2) * 2, 2, 2); }
+        }
+        return true;
+      }
+      case 'trial': {
+        Sp.shadow(c, 12);
+        if (!p.state) {
+          c.globalAlpha *= 0.6 + Math.sin(t * 4) * 0.25; const rs = trialRing(Math.floor(t * 3) % 3); c.drawImage(rs.cv, rs.x, rs.y + 4, rs.w, rs.h); c.globalAlpha = 1;
+          G(0, -28, 30, '#ff6a4a', 0.5); L(0, -28, 100, '#ff6a4a', 0.75);
+        }
+        A_.draw(c, 'prop.trial', 0, 0, 0);
+        return true;
+      }
+      case 'portal': {
+        G(0, -22, 74, '#c98bff', 0.65); L(0, -22, 190, '#c98bff', 1);
+        Sp.shadow(c, 20, 0.4);
+        const s = portalFrame(Math.floor(t * 8) % NF_PORTAL); blit(c, s, 0, -24);
+        return true;
+      }
+      case 'sign': Sp.shadow(c, 9, 0.3); A_.draw(c, 'prop.sign', 0, 0, 0); return true;
+      case 'campfire': {
+        Sp.shadow(c, 18, 0.3);
+        A_.draw(c, 'prop.campfire', 0, 0, 0);
+        G(0, -14, 46, '#ff8a3d', 0.6 + Math.sin(t * 9) * 0.06); L(0, -14, 170, '#ff9a4a', 1.1);
+        for (const [dx, dy, ph] of [[-8, -20, 0], [8, -22, 0.37], [0, -28, 0.71]]) A_.draw(c, 'fx.flame', A_.frameAt('fx.flame', t + ph), dx, dy);
+        return true;
+      }
+      case 'anvil': {
+        Sp.shadow(c, 12);
+        if (!ironOk) ironOk = A_.variant('prop.anvil', 'pal:iron', () => ({ '#262b44': '#171a26', '#52607c': '#3d465e', '#8b9bb4': '#69748f', '#c0cbdc': '#9aa5be', '#e4edf9': '#bcc8e0' })); // darker iron than the pack's near-white
+        A_.draw(c, 'prop.anvil', 0, 0, 0, ironOk ? { variant: 'pal:iron' } : undefined);
+        if (!p.state) { G(0, -14, 26, '#ff9a3a', 0.5); L(0, -14, 80, '#ff9a3a', 0.7); }
+        return true;
+      }
+      default: return false;
+    }
+  }
+  function drawProps(c, view, local, t) { for (const p of view.props) drawProp(c, p, view, local, t); }
+  // One prop at its feet point: pixel art when the atlas is loaded (drawn in the y-sorted entity list), else the procedural drawing.
+  function drawProp(c, p, view, local, t) {
+    {
       const done = !!(R.claimed && p.group && R.claimed[p.group] && (p.kind === 'campfire' || p.kind === 'anvil' || (p.kind === 'reward' && /^(boon$|forge$|epic$|vigor$)/.test(p.item)))); // this hero already used it
       const G = done ? () => {} : (dx, dy, r, col, a) => R.emit(p.x + dx, p.y + dy, r, col, a), L = done ? () => {} : (dx, dy, r, col, k) => R.light(p.x + dx, p.y + dy, r, col, k);
-      c.save(); c.translate(Math.round(p.x), Math.round(p.y));
+      const art = R.propArt(); // pixel props sit on the 2-px art grid
+      c.save(); c.translate(art ? Math.round(p.x / 2) * 2 : Math.round(p.x), art ? Math.round(p.y / 2) * 2 : Math.round(p.y));
       if (done) c.globalAlpha = 0.4;
       c.lineWidth = 1.5; c.strokeStyle = '#0b0806';
+      if (art && propArt(c, p, view, local, t, G, L)) { c.restore(); return; }
       switch (p.kind) {
         case 'chest': {
           Sp.shadow(c, 14);
