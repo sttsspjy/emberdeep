@@ -1,16 +1,17 @@
 // Profile persistence: localStorage autosave plus a portable, checksummed save code.
 // The save code packs the whole profile into bits -> bytes -> CRC16 -> light XOR scramble -> Crockford base32,
-// grouped like ED1-XXXXX-XXXXX-... It needs no server: paste it on any device to restore progress.
+// grouped like WD1-XXXXX-XXXXX-... It needs no server: paste it on any device to restore progress.
 (function (ED) {
   'use strict';
   const U = ED.U;
   // ?slot=2 keeps a second profile in the same browser (handy for two local tabs playing together).
   const SLOT = (() => { try { const v = new URLSearchParams(location.search).get('slot'); return v ? '.' + v.replace(/[^a-z0-9]/gi, '').slice(0, 8) : ''; } catch (e) { return ''; } })();
-  const LS_KEY = 'emberdeep.profile.v1' + SLOT;
-  const LS_SETTINGS = 'emberdeep.settings.v1';
+  const LS_KEY = 'wickdeep.profile.v1' + SLOT;
+  const LS_SETTINGS = 'wickdeep.settings.v1';
   const NAME_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -';
   const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-  const CODE_VERSION = 1;
+  const CODE_VERSION = 2;
+  const PREFIX = 'WD1';
 
   const S = ED.Save = { KEY: LS_KEY, NAME_CHARS };
 
@@ -273,13 +274,18 @@
     const all = new Uint8Array(body.length + 2);
     all.set(body); all[body.length] = crc >> 8; all[body.length + 1] = crc & 255;
     const code = toB32(scramble(all));
-    return 'ED1-' + code.match(/.{1,5}/g).join('-');
+    return PREFIX + '-' + code.match(/.{1,5}/g).join('-');
   };
 
   // Returns a normalized profile or throws an Error with a human-readable message.
   S.decode = (code) => {
-    let s = String(code || '').toUpperCase().replace(/\s+/g, '').replace(/^ED1-?/, '').replace(/-/g, '');
-    s = s.replace(/[IL]/g, '1').replace(/O/g, '0');
+    let s = String(code || '').toUpperCase().replace(/\s+/g, '');
+    // Save groups are 5 characters, so a shorter leading group is a prefix; only WD1 (dash optional) is ours.
+    const head = (s.match(/^([A-Z0-9]{1,4})-/) || [])[1];
+    if (s.startsWith('ED1')) throw new Error('That is an Emberdeep save code. Wickdeep starts a fresh profile, so old codes do not carry over. Wickdeep codes begin with ' + PREFIX + '-.');
+    if (s.startsWith(PREFIX)) s = s.slice(PREFIX.length);
+    else if (head) throw new Error(`That code starts with "${head}-", but Wickdeep save codes begin with ${PREFIX}-.`);
+    s = s.replace(/-/g, '').replace(/[IL]/g, '1').replace(/O/g, '0');
     if (s.length < 20) throw new Error('That code is too short. Copy the whole code, including every group.');
     let all;
     try { all = scramble(fromB32(s)); } catch (e) { throw new Error('That code contains characters a save code never uses.'); }

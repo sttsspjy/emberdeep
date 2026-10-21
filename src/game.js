@@ -4,6 +4,7 @@
   'use strict';
   const U = ED.U, Sim = ED.Sim, N = ED.Net;
   const G = ED.Game = { s: null };
+  const HERO_REWARD = /^(boon:|class$|forge$|epic$|vigor$)/; // reward items every hero claims separately
 
   // ---------------- client-side mirror of the host's world ----------------
   function Mirror(cfg, localPid) {
@@ -21,9 +22,10 @@
     this.floor = null; this.room = null; this.roomId = -1; this.roomState = {}; this.stratum = 0; this.floorSeed = 0;
     this.gold = 0; this.level = 1; this.xp = 0; this.xpNext = 20; this.time = 0; this.locked = false; this.waitMsg = '';
     this.snaps = []; this.renderT = 0; this.run = null; this.eMap = new Map();
+    this.light = 100; this.lightMax = 100; this.dread = { tier: 0 };
   }
   Mirror.prototype.recalc = function (p) {
-    p.stats = ED.Stats.compute({ cls: p.cls, weapon: p.weapon, boons: p.boons, relics: p.relics, meta: p.meta, pact: this.pact, chaliceHp: p.chaliceHp });
+    p.stats = ED.Stats.compute({ cls: p.cls, weapon: p.weapon, boons: p.boons, relics: p.relics, meta: p.meta, pact: this.pact, chaliceHp: p.chaliceHp, bonusHp: p.bonusHp });
   };
   Mirror.prototype.apply = function (d, now) {
     if (d.s !== this.stratum || d.fs !== this.floorSeed) {
@@ -35,6 +37,7 @@
     }
     if (d.r !== this.roomId) { this.roomId = d.r; this.room = this.floor.rooms[d.r]; this.snaps.length = 0; this.firstInRoom = true; }
     this.locked = !!d.L; this.gold = d.g; this.xp = d.x; this.xpNext = d.n; this.level = d.l; this.waitMsg = d.wm; this.time = d.T;
+    this.light = d.li; this.lightMax = d.lm || 100; this.dread = { tier: d.dr | 0 };
     if (d.O) this.props = d.O.map(a => ({ id: a[0], kind: a[1], x: a[2], y: a[3], state: a[4], item: a[5], price: a[6], group: a[7], stype: a[8], text: a[9] }));
     if (d.RS) d.RS.forEach((b, i) => { this.roomState[i] = { visited: !!(b & 1), known: !!(b & 2), cleared: !!(b & 4) }; });
     if (d.RUN) this.run = d.RUN;
@@ -51,7 +54,8 @@
       p.hp = a[4]; p.maxHp = a[5]; const fl = a[6];
       p.downed = !!(fl & 4); p.dead = !!(fl & 8); p.invuln = fl & 16 ? 0.2 : 0; p.revive = a[7];
       p.critStacks = a[8]; p.aegisT = a[9] ? 0 : 1; p.guardT = a[10] ? 1 : 0; p.secondWind = a[11]; p.phoenixUsed = !!a[12]; p.picks = a[13]; p.rerolls = a[14];
-      if (p.pid !== this.localPid) { p.moving = !!(fl & 1); p.dashing = !!(fl & 2); p.face = a[3]; }
+      p.shield = a[15] || 0; p.stealthT = fl & 128 ? 1 : 0; p.ambush = !!(fl & 256);
+      if (p.pid !== this.localPid) { p.moving = !!(fl & 1); p.dashing = !!(fl & 2); p.face = a[3]; p.bulwarkT = fl & 64 ? 1 : 0; } // the local hero runs its own Bulwark timer
       else if (this.firstInRoom) { p.x = a[1]; p.y = a[2]; }
     }
     this.firstInRoom = false;
@@ -88,12 +92,13 @@
       const xy = lerpXY(ra, rb);
       e.x = xy[0]; e.y = xy[1]; e.hp = rb[4]; e.maxHp = rb[5]; e.r = rb[6];
       const fl = rb[7];
-      e.flash = fl & 1 ? 0.05 : 0; e.frozen = fl & 2 ? 1 : 0; e.stun = fl & 4 ? 1 : 0; e.burn = fl & 8 ? 1 : 0; e.chill = fl & 16 ? 1 : 0; e.exposed = !!(fl & 32);
+      e.flash = fl & 1 ? 0.05 : 0; e.frozen = fl & 2 ? 1 : 0; e.stun = fl & 4 ? 1 : 0; e.burnLvl = (fl >> 11) & 3; e.burn = e.burnPool = e.burnLvl > 0 ? 1 : 0; e.chill = rb[16] || 0; e.exposed = !!(fl & 32);
+      e.charge = fl & 64 ? 1 : 0; e.bleedPool = fl & 128 ? 1 : 0; e.judged = fl & 256 ? 1 : 0; e.blind = fl & 512 ? 1 : 0; e.vulnT = fl & 1024 ? 1 : 0;
       e.boss = !!e.def.boss;
       const st = N.ST[rb[8]] || 'move';
       if (e.boss) { e.pose = st; e.st = 'atk'; } else e.st = st;
+      e.burrowed = st === 'burrow' && !e.boss;
       e.aimA = rb[9]; e.elite = rb[10] >= 0 ? ED.AFFIX_IDS[rb[10]] : null; e.ward = rb[11]; e.wardMax = rb[12]; e.phase = rb[13]; e.face = rb[14]; e.t = rb[15];
-      e.renderT = this.renderT;
       out.push(e);
     }
     if (this.eMap.size > out.length * 2 + 40) { const keep = new Map(); for (const e of out) keep.set(e.id, e); this.eMap = keep; }
@@ -117,8 +122,9 @@
   // ---------------- session lifecycle ----------------
   G.start = (mode, cfg) => {
     ED.FX.reset();
+    ED.Render.lightLevel = 1;
     U.resetUid(1);
-    const s = G.s = { mode, cfg, localPid: cfg.localPid, net: cfg.net || null, fxBuf: [], snapT: 0, snapN: 0, inT: 0, epoch: 0, offer: null, offerOpen: false, ended: false, paused: false, prompt: null, sig: '', claimed: {} };
+    const s = G.s = { mode, cfg, localPid: cfg.localPid, net: cfg.net || null, fxBuf: [], snapT: 0, snapN: 0, inT: 0, acc: 0, alpha: 1, epoch: 0, offer: null, offerOpen: false, ended: false, paused: false, prompt: null, sig: '', claimed: {} };
     if (mode === 'client') {
       s.mirror = new Mirror(cfg, cfg.localPid);
       s.view = s.mirror;
@@ -131,7 +137,7 @@
       for (const p of s.world.players.values()) p.mastery10 = p.meta && p.meta.mastery >= 10;
     }
     s.view.pact = cfg.pact;
-    s.ctl = { atkCd: 0, skillCd: 0, charges: s.me.stats.maxCharges, dashCd: 0, tranceT: 0, latch: false, target: null };
+    s.ctl = { atkCd: 0, skillCd: 0, skill2Cd: 0, charges: s.me.stats.maxCharges, dashCd: 0, tranceT: 0, latch: false, target: null };
     s.fxCtx = {
       localPid: s.localPid,
       player: (pid) => s.view.players.get(pid),
@@ -153,8 +159,9 @@
     if (!p || !a) return;
     switch (a.t) {
       case 'atk': w.playerAttack(p, +a.a || 0); break;
-      case 'skill': w.playerSkill(p, +a.a || 0, a.data); break;
+      case 'skill': if ((a.slot | 0) === 0 || (a.slot | 0) === 1) w.playerSkill(p, +a.a || 0, a.data, a.slot | 0); break;
       case 'dash': w.playerDash(p, +a.dx || 0, +a.dy || 0); break;
+      case 'flare': w.flare(p); break;
       case 'interact': w.interact(pid, a.id); break;
       case 'pick': w.pickBoon(pid, a.i | 0); break;
       case 'reroll': w.reroll(pid); break;
@@ -197,7 +204,7 @@
       const p = s.mirror.players.get(ev.b.pid);
       if (p) {
         const hadEcho = p.stats.maxCharges;
-        p.boons = ev.b.boons; p.relics = ev.b.relics; p.chaliceHp = ev.b.chaliceHp; s.mirror.recalc(p);
+        p.boons = ev.b.boons; p.relics = ev.b.relics; p.chaliceHp = ev.b.chaliceHp; p.bonusHp = ev.b.bonusHp || 0; s.mirror.recalc(p);
         if (p === s.me && p.stats.maxCharges > hadEcho) s.ctl.charges++;
       }
     } else if (ev.t === 'boon' && s.mode !== 'client' && ev.pid === s.localPid) {
@@ -225,6 +232,7 @@
     else if (m.t === 'offerDone') { s.offer = null; s.offerOpen = false; ED.UI.hideBoons(); }
     else if (m.t === 'claimed') s.claimed[m.group] = true;
     else if (m.t === 'toast') { ED.UI.toast(m.text); ED.Audio.play('deny'); }
+    else if (m.t === 'refund') s.ctl.skill2Cd = 0; // Night's Edge: an Ambush kill refunds the second skill
   };
 
   // Network handlers.
@@ -245,14 +253,15 @@
       const fx = s.mirror.apply(d, performance.now() / 1000);
       for (const ev of fx) G.localEvent(ev);
     } else if (d.t === 'end') G.localEvent({ t: 'end', summary: d.summary });
-    else if (d.t === 'offer' || d.t === 'offerDone' || d.t === 'claimed' || d.t === 'toast') G.message(d);
+    else if (d.t === 'offer' || d.t === 'offerDone' || d.t === 'claimed' || d.t === 'toast' || d.t === 'refund') G.message(d);
   };
   G.onPeerLeft = (pid) => { const s = G.s; if (s && s.mode === 'host') { s.world.removePlayer(pid); } };
 
   // ---------------- local hero control ----------------
   function control(s, inp, dt) {
     const me = s.me, view = s.view, ctl = s.ctl, st = me.stats;
-    ctl.atkCd -= dt; ctl.dashCd -= dt; ctl.tranceT -= dt;
+    ctl.atkCd -= dt; ctl.dashCd -= dt; ctl.tranceT -= dt; ctl.skill2Cd -= dt;
+    if (s.mode === 'client') { if (me.bulwarkT > 0) me.bulwarkT -= dt; if (me.tranceT > 0) me.tranceT -= dt; } // a mirror hero has no world tick
     if (ctl.charges < st.maxCharges) { ctl.skillCd -= dt; if (ctl.skillCd <= 0) { ctl.charges++; if (ctl.charges < st.maxCharges) ctl.skillCd = st.skillCd; else ctl.skillCd = 0; } }
     if (me.downed || me.dead || !view.room) { s.prompt = null; if (s.mode !== 'client') me.dashing = false; return; }
     let mx = inp.mx, my = inp.my;
@@ -271,7 +280,7 @@
     for (const p of view.props) {
       if (!ED.Render.interactable(p)) continue;
       if (view.locked && p.kind !== 'trial') continue;
-      if (p.kind === 'relic' && s.claimed[p.group]) continue;
+      if (s.claimed[p.group] && (p.kind === 'relic' || p.kind === 'campfire' || p.kind === 'anvil' || (p.kind === 'reward' && HERO_REWARD.test(p.item)))) continue;
       const d = U.dist2(p.x, p.y, me.x, me.y);
       if (d < nd) { nd = d; near = p; }
     }
@@ -279,16 +288,17 @@
       const text = ED.Render.propPrompt(near, view);
       let desc = null, color = null;
       if (near.kind === 'relic' || near.stype === 'relic') { const r = ED.RELICS[near.item]; desc = r.desc; color = ED.RARITY[r.rar].color; }
-      else if (near.stype === 'boon') desc = 'Grants an extra boon pick with no common options.';
       else if (near.kind === 'portal') desc = 'Step down into ' + ED.biomeFor(view.stratum + 1).name + '.';
-      s.prompt = { x: near.x, y: near.y, text, desc, color, can: near.kind === 'shop' || near.kind === 'gamble' ? view.gold >= near.price : true };
+      else { desc = ED.Render.propDesc(near, view); if (near.kind === 'reward') color = ED.Render.rewardColor(near.item); }
+      const full = near.stype === 'oil' && view.light >= view.lightMax - 0.5;
+      s.prompt = { x: near.x, y: near.y, text, desc, color, can: near.kind === 'shop' || near.kind === 'gamble' ? view.gold >= near.price && !full : true };
     }
     if (!s.offerOpen) {
       if (inp.atkPressed && near) { G.act({ t: 'interact', id: near.id }); ctl.latch = true; ctl.atkCd = Math.max(ctl.atkCd, 0.25); }
       if (!inp.atk) ctl.latch = false;
       if (inp.atk && !ctl.latch && ctl.atkCd <= 0 && !near) {
         G.act({ t: 'atk', a: aim });
-        const ws = 1 + (ctl.tranceT > 0 ? st.trance : 0) + (st.wardrum && me.hp < me.maxHp * 0.5 ? st.wardrum : 0);
+        const ws = ED.Stats.attackRate ? ED.Stats.attackRate(me) : 1 + (ctl.tranceT > 0 ? st.trance : 0) + (st.wardrum && me.hp < me.maxHp * 0.5 ? st.wardrum : 0);
         ctl.atkCd = st.atkInterval / ws;
         ED.FX.playerAttackAnim(s.localPid, aim);
         const w = st.weapon;
@@ -314,8 +324,18 @@
         G.act({ t: 'skill', a: aim, data });
         if (ctl.charges === st.maxCharges) ctl.skillCd = st.skillCd;
         ctl.charges--;
-        if (st.trance) ctl.tranceT = 4;
+        if (st.trance) { ctl.tranceT = 4; if (s.mode === 'client') me.tranceT = 4; }
       }
+      const sk2 = ED.CLASSES[me.cls].skill2;
+      if (inp.skill2 && sk2 && ctl.skill2Cd <= 0 && !(me.bulwarkT > 0)) {
+        let data = null;
+        if (sk2 === 'rain' || sk2 === 'meteor') { const tp = skillPoint(s, me, aim, inp, sk2 === 'rain' ? 260 : 300); data = { x: Math.round(tp.x), y: Math.round(tp.y) }; }
+        else if (sk2 === 'bulwark' && s.mode === 'client') me.bulwarkT = 1.4 * (st.bastion ? 1.5 : 1); // host sets the authoritative timer
+        G.act({ t: 'skill', a: aim, data, slot: 1 });
+        ctl.skill2Cd = st.skill2Cd ?? ED.SKILLS[sk2].cd * (1 - ED.Stats.cdrEff(st.cdr));
+        if (st.trance) { ctl.tranceT = 4; if (s.mode === 'client') me.tranceT = 4; }
+      }
+      if (inp.flare && view.light >= ED.World.FLARE.cost && view.room.type !== 'boss') G.act({ t: 'flare' }); // host checks light, room and cooldown
       if (inp.dash && ctl.dashCd <= 0 && !me.skillMove) {
         let dx = mx, dy = my;
         if (Math.hypot(dx, dy) < 0.2) { dx = Math.cos(aim); dy = Math.sin(aim); }
@@ -325,8 +345,22 @@
         G.act({ t: 'dash', dx, dy });
       }
     }
+    if (me.bulwarkT > 0) { mx *= 0.5; my *= 0.5; }
     Sim.movePlayer(me, { mx, my }, dt, view.room, view.locked, view.zones);
     if (s.mode !== 'client') me.dashing = me.dashT > 0 || !!me.skillMove;
+  }
+
+  // Target point of Rain of Arrows / Meteor: cursor (mouse aim), else the auto-target, else 200 along the aim; clamped to range.
+  function skillPoint(s, me, aim, inp, range) {
+    let tx = me.x + Math.cos(aim) * 200, ty = me.y + Math.sin(aim) * 200;
+    if (inp.padAim === undefined) {
+      const tgt = s.ctl.target;
+      if (ED.App.settings.aim === 'mouse') { const wpt = ED.Render.toWorld(ED.Input.mouse.x * ED.Render.dpr, ED.Input.mouse.y * ED.Render.dpr); tx = wpt.x; ty = wpt.y; }
+      else if (tgt && tgt.hp > 0) { tx = tgt.x; ty = tgt.y; }
+    }
+    const d = Math.hypot(tx - me.x, ty - me.y);
+    if (d > range) { tx = me.x + (tx - me.x) * range / d; ty = me.y + (ty - me.y) * range / d; }
+    return { x: tx, y: ty };
   }
 
   function autoAim(s, me, view) {
@@ -334,7 +368,7 @@
     let best = null, bs = Infinity;
     const fx = me.mvx || 0, fy = me.mvy || 0;
     for (const e of view.enemies) {
-      if (e.hp <= 0) continue;
+      if (e.hp <= 0 || e.def.invuln || e.burrowed) continue;
       const dx = e.x - me.x, dy = e.y - me.y, d = Math.hypot(dx, dy);
       if (d > range) continue;
       const dot = (dx * fx + dy * fy) / (d || 1);
@@ -348,15 +382,37 @@
   }
 
   // ---------------- per-frame ----------------
+  const STEP = 1 / 60, MAX_STEPS = 8; // the world advances in fixed 1/60 s steps at any frame rate
+  // Render interpolation (solo/host): the sim records each mover's position before a step (px/py, never read by the sim);
+  // G.render draws the foes, allies, shots and pickups at px + (x - px) * alpha, alpha = unspent frame time / STEP, then restores x/y exactly.
+  // Heroes are not interpolated: the local hero is moved per frame by control(), remote ones by network input.
+  const MOVERS = ['enemies', 'allies', 'projs', 'pickups'], JUMP2 = 48 * 48; // a larger step (blink, teleport) is drawn unsmoothed
+  const markPrev = (w) => { for (const k of MOVERS) { const a = w[k]; for (let i = 0; i < a.length; i++) { const o = a[i]; o.px = o.x; o.py = o.y; } } };
+  const interp = (w, al) => {
+    for (const k of MOVERS) {
+      const a = w[k];
+      for (let i = 0; i < a.length; i++) {
+        const o = a[i]; o.rx = o.x; o.ry = o.y;
+        if (o.px === undefined) continue; // born this step: drawn at its current position
+        const dx = o.x - o.px, dy = o.y - o.py;
+        if (dx * dx + dy * dy <= JUMP2) { o.x = o.px + dx * al; o.y = o.py + dy * al; }
+      }
+    }
+  };
+  const unterp = (w) => { for (const k of MOVERS) { const a = w[k]; for (let i = 0; i < a.length; i++) { const o = a[i]; if (o.rx !== undefined) { o.x = o.rx; o.y = o.ry; } } } };
+  // Mirrors World.isSafe: calm room, no live foe except the invulnerable Gloom, no descent pending (clients see no pendingStratum).
+  const isSafe = (v) => !v.locked && !v.pendingStratum && !v.enemies.some(e => e.hp > 0 && !e.def.gloom);
   G.update = (dt, inp) => {
     const s = G.s; if (!s) return;
     const now = performance.now() / 1000;
     const alone = G.alone(), frozen = alone && s.paused;
     // Alone, the world waits while you read boon cards (offers only open in a safe room), so picking never costs lantern time.
     const hold = alone && s.offerOpen;
+    s.alpha = 1; // frozen, held or client: draw the newest state
+    const sdt = alone ? dt * ED.FX.timeScale : dt; // hit-stop slows only a world nobody else shares; effects keep real time
     if (!frozen) {
       if (s.offer) {
-        const safe = !s.view.locked && !s.view.enemies.some(e => e.hp > 0);
+        const safe = isSafe(s.view);
         if (!safe && s.offerOpen) { ED.UI.hideBoons(); s.offerOpen = false; s.offerHidden = true; }
         else if (safe && !s.offerOpen && s.offerHidden) { s.offerHidden = false; s.offerOpen = true; ED.UI.showBoons(s.offer); }
       }
@@ -366,12 +422,15 @@
         if (inp.confirm) ED.UI.boonConfirm();
         if (inp.skill) ED.UI.boonReroll(true);
       }
-      control(s, inp, dt);
+      control(s, inp, sdt);
       if (s.mode !== 'client') {
         const w = s.world;
         if (!hold) {
-          const steps = Math.max(1, Math.ceil(dt / (1 / 60)));
-          for (let i = 0; i < steps; i++) w.update(dt / steps);
+          s.acc += sdt;
+          let n = 0;
+          while (s.acc >= STEP - 1e-9 && n < MAX_STEPS) { markPrev(w); w.update(STEP); s.acc -= STEP; n++; }
+          if (s.acc >= STEP) s.acc = 0; // step cap hit: drop the backlog instead of spiralling
+          s.alpha = s.acc > 0 ? s.acc / STEP : 0;
         }
         G.drainWorld();
         if (s.mode === 'host') {
@@ -400,10 +459,21 @@
     ED.Render.updateCamera(s.view, s.me.dead ? ([...s.view.players.values()].find(p => !p.dead) || s.me) : s.me, dt, false);
   };
 
+  // Solo/host draw one step behind the sim, interpolated; the world clock shifts the same way so orbiting hazards stay in phase.
   G.render = (t, dt) => {
     const s = G.s; if (!s) return;
+    if (s.mode === 'client' || s.alpha >= 1) { drawFrame(s, t, dt); return; }
+    const w = s.world, tm = w.time;
+    try { interp(w, s.alpha); w.time = tm - (1 - s.alpha) * STEP; drawFrame(s, t, dt); }
+    finally { unterp(w); w.time = tm; }
+  };
+  const drawFrame = (s, t, dt) => {
     const c = ED.Render.ctx;
-    ED.Render.frame(s.view, s.localPid, t, dt);
-    ED.HUD.draw(c, s.view, s.me, Object.assign({}, s.ctl, { picks: s.me.picks || 0, offerOpen: s.offerOpen }), t, dt, { prompt: s.prompt, offerOpen: s.offerOpen });
+    const v = s.view, R = ED.Render, lit = v.room && v.lightMax > 0 ? U.clamp(v.light / v.lightMax, 0, 1) : 1;
+    R.lightLevel += (lit - R.lightLevel) * Math.min(1, dt * 2.5); // eased so a refill or a tier drop never pops
+    R.claimed = s.claimed;
+    R.frame(s.view, s.localPid, t, dt);
+    const ob = document.getElementById('ov-boon'), cover = s.offerOpen || !!(ob && !ob.hidden); // the boon overlay owns the screen: no banners or prompts under it
+    ED.HUD.draw(c, s.view, s.me, Object.assign({}, s.ctl, { picks: s.me.picks || 0, offerOpen: s.offerOpen }), t, dt, { prompt: cover ? null : s.prompt, offerOpen: cover });
   };
 })(globalThis.ED || (globalThis.ED = {}));

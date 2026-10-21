@@ -4,21 +4,22 @@
 
   // tier = deepest stratum that must have been reached before the upgrade is offered.
   ED.UPGRADES = [
-    { id: 'vitality', name: 'Vitality', icon: 'heart', tier: 1, desc: r => `+${10 * r} max health`, step: '+10 max health', costs: [25, 50, 80, 130, 190] },
-    { id: 'might', name: 'Might', icon: 'sword', tier: 1, desc: r => `+${5 * r}% damage`, step: '+5% damage', costs: [30, 65, 105, 160, 240] },
+    { id: 'vitality', name: 'Vitality', icon: 'heart', tier: 1, desc: r => `+${6 * r} max health`, step: '+6 max health', costs: [25, 50, 80, 130, 190] },
+    { id: 'might', name: 'Might', icon: 'sword', tier: 1, desc: r => `+${4 * r}% damage`, step: '+4% damage', costs: [30, 65, 105, 160, 240] },
     { id: 'fortune', name: 'Fortune', icon: 'coin', tier: 1, desc: r => `+${10 * r}% gold`, step: '+10% gold', costs: [25, 55, 95] },
     { id: 'fleet', name: 'Fleetness', icon: 'boot', tier: 1, desc: r => `+${4 * r}% move speed`, step: '+4% move speed', costs: [30, 70, 130] },
-    { id: 'provisions', name: 'Provisions', icon: 'potion', tier: 1, desc: r => `Heal ${15 * r}% at each stratum`, step: 'Heal 15% at each stratum', costs: [65, 145] },
-    { id: 'bulwark', name: 'Bulwark', icon: 'shield', tier: 2, desc: r => `+${3 * r} armor`, step: '+3 armor', costs: [40, 80, 145] },
-    { id: 'precision', name: 'Precision', icon: 'eye', tier: 2, desc: r => `+${3 * r}% critical chance`, step: '+3% critical chance', costs: [40, 90, 150] },
-    { id: 'wisdom', name: 'Wisdom', icon: 'scroll', tier: 2, desc: r => `+${10 * r}% experience`, step: '+10% experience', costs: [40, 90, 145] },
+    { id: 'provisions', name: 'Provisions', icon: 'potion', tier: 1, desc: r => `Heal ${10 * r}% at each stratum`, step: 'Heal 10% at each stratum', costs: [65, 145] },
+    { id: 'bulwark', name: 'Bulwark', icon: 'shield', tier: 2, desc: r => `+${2 * r} armor`, step: '+2 armor', costs: [40, 80, 145] },
+    { id: 'precision', name: 'Precision', icon: 'eye', tier: 2, desc: r => `+${2 * r}% critical chance`, step: '+2% critical chance', costs: [40, 90, 150] },
+    { id: 'wisdom', name: 'Wisdom', icon: 'scroll', tier: 2, desc: r => `+${5 * r}% experience`, step: '+5% experience', costs: [40, 90, 145] },
     { id: 'insight', name: 'Insight', icon: 'clover', tier: 2, desc: r => `${r} boon reroll${r === 1 ? '' : 's'} per descent`, step: '+1 boon reroll per descent', costs: [65, 130, 225] },
     { id: 'headstart', name: 'Head Start', icon: 'star', tier: 2, desc: r => `Begin with ${r} bonus boon${r === 1 ? '' : 's'}`, step: '+1 bonus boon at the start', costs: [80, 190] },
-    { id: 'alacrity', name: 'Alacrity', icon: 'hourglass', tier: 3, desc: r => `Skill recharges ${6 * r}% faster`, step: 'Skill recharges 6% faster', costs: [50, 95, 160] },
+    { id: 'alacrity', name: 'Alacrity', icon: 'hourglass', tier: 3, desc: r => `Skill recharges ${4 * r}% faster`, step: 'Skill recharges 4% faster', costs: [50, 95, 160] },
     { id: 'armory', name: 'Armory', icon: 'chest', tier: 3, desc: r => (r >= 2 ? 'Begin with a rare-or-better relic' : r === 1 ? 'Begin with a common relic' : 'Begin with a relic'), step: 'Better starting relic', costs: [95, 240] },
     { id: 'attunement', name: 'Ember Attunement', icon: 'ember', tier: 3, desc: r => `+${10 * r}% embers earned`, step: '+10% embers earned', costs: [80, 160, 255, 385] },
     { id: 'favor', name: "Merchant's Favor", icon: 'scroll', tier: 3, desc: r => (r >= 2 ? 'Shops stock +1 relic and are 20% cheaper' : 'Shops are 10% cheaper'), step: 'Cheaper shops (rank 2: +1 relic)', costs: [95, 225] },
     { id: 'secondwind', name: 'Second Wind', icon: 'feather', tier: 4, desc: r => (r ? `Once per descent, revive at ${r >= 2 ? 70 : 40}% health` : 'Once per descent, revive'), step: 'Revive once per descent', costs: [240, 560] },
+    { id: 'deepwick', name: 'Deep Wick', icon: 'lantern', tier: 1, desc: r => `+${6 * r}% lantern light`, step: '+6% lantern light', costs: [40, 90, 160] },
   ];
   ED.UPGRADE_IDX = ED.U.indexer(ED.UPGRADES.map(u => u.id));
 
@@ -80,6 +81,9 @@
     { id: 'manyfaces', name: 'Many Faces', desc: 'Unlock all six heroes', icon: 'mask', reward: 60, check: p => ED.CLASS_IDS.every(c => ED.Save.classUnlocked(p, c)) },
     { id: 'archivist', name: 'Archivist', desc: 'Unlock every relic', icon: 'scroll', reward: 100, check: p => ED.RELIC_IDS.every(r => ED.Save.relicUnlocked(p, r)) },
     { id: 'hearthkeeper', name: 'Hearthkeeper', desc: 'Buy 25 Hearth upgrade ranks', icon: 'ember', reward: 80, check: p => p.up.reduce((a, b) => a + b, 0) >= 25 },
+    { id: 'evolved', name: 'Evolved', desc: 'Evolve a weapon', icon: 'wing', reward: 40, check: (p, run) => run && run.evolved },
+    { id: 'intothedark', name: 'Into the Dark', desc: 'Defeat a boss while Lightless', icon: 'eye', reward: 50, check: (p, run) => run && run.lightlessBoss },
+    { id: 'cartographer', name: 'Cartographer', desc: 'Clear every room of a stratum', icon: 'scroll', reward: 40, check: (p, run) => run && run.fullClear },
   ];
   ED.DEED_IDX = ED.U.indexer(ED.DEEDS.map(d => d.id));
 
