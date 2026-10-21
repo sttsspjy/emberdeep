@@ -279,6 +279,7 @@
       } else {
         c.save(); c.translate(px, py);
         if (it.k === 0) {
+          if (ED.ClassFx.lift) c.translate(0, -ED.ClassFx.lift(o, t)); // a hero in the air (Comet) is drawn lifted
           Sp.hero(c, o, t, F.anim[o.pid]);
           if (rim && rim.s > 0.35 && !o.dead) R.glowOnce(c, 0, -12, 17, rim.col, 0.15 * rim.s, rim.dx * 7, rim.dy * 5); // lit-side rim stand-in (additive glow toward the light)
         } else Sp.minion(c, o, t);
@@ -806,6 +807,7 @@
           break;
         }
         case 'fire': case 'pfire': {
+          if (z.w === 9 && ED.ClassFx.lava) { ED.ClassFx.lava(c, z, pass, t); break; } // a Lava Pool (Magma Heart) draws its own molten ground
           const fade = Math.min(1, (z.dur - z.t) * 2, z.t * 5), pf = z.kind === 'pfire';
           if (pass === 0) {
             if (pf) discPut(c, z.x, z.y, z.r, '#ffb347', 0.25 * fade);
@@ -870,6 +872,7 @@
               c.fill(); c.globalAlpha = 1; }
             break;
           }
+          if (z.w === 1) break; // a Comet: the hero is the fireball, only the ground marks are drawn
           if (pass === 1) { R.glow(c, fx, fy, 24 + 22 * q, '#ff6a1a', 0.85); break; }
           const dx = z.x - fx, dy = z.y - fy, dl = Math.hypot(dx, dy) || 1, hd = Math.atan2(dy, dx), dir = shotDir('proj.fireball');
           c.fillStyle = '#ff9a3a'; c.beginPath(); // ember trail behind the fireball

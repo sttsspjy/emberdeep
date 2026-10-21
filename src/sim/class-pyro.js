@@ -5,9 +5,12 @@
   const U = ED.U, D = ED.Dungeon, C = ED.CONST;
   const W = ED.World.prototype;
 
-  // CHAN_IDLE: seconds without an attack that end Channel. AFTERSHOCK_T: delay of Magma Heart's second eruption. PULL_LEAD: Collapse pulls this long before the echo. LAVA_T / LAVA_R: Lava Pool life and radius share of the blast.
-  // MANTLE_CD: seconds between Mantle shields. HEAT_MAX: most cooldown one cast cuts. HEAT_CD: seconds between Chain Reactions. LAVA_TAG: zone field w of a Lava Pool, COMET_TAG: of the Meteor a Comet rides (both only tell the renderer which look to draw).
-  Object.assign(C, { CHAN_IDLE: 0.6, AFTERSHOCK_T: 0.4, PULL_LEAD: 0.15, LAVA_T: 2, LAVA_R: 0.6, MANTLE_CD: 10, HEAT_MAX: 1.5, HEAT_CD: 6, LAVA_TAG: 9, COMET_TAG: 1 });
+  // CHAN_IDLE: shortest pause between attacks that ends Channel (ED.chanWindow). AFTERSHOCK_T: delay of Magma Heart's second eruption. PULL_LEAD: Collapse pulls this long before the echo. LAVA_T / LAVA_R: Lava Pool life and radius share of the blast.
+  // LAVA_MAX: most Lava Pools a hero keeps alive. MANTLE_CD: seconds between Mantle shields. HEAT_MAX: most cooldown one cast cuts. HEAT_CD: seconds between Chain Reactions. LAVA_TAG: zone field w of a Lava Pool, COMET_TAG: of the Meteor a Comet rides (both only tell the renderer which look to draw).
+  Object.assign(C, { CHAN_IDLE: 0.6, AFTERSHOCK_T: 0.4, PULL_LEAD: 0.15, LAVA_T: 2, LAVA_R: 0.6, MANTLE_CD: 10, HEAT_MAX: 1.5, HEAT_CD: 6, LAVA_TAG: 9, COMET_TAG: 1, LAVA_MAX: 4 });
+
+  // Seconds after an attack that keep Channel alive: CHAN_IDLE, or 1.25 x the hero's attack interval when that is longer (a Heavy weapon attacks less often than every 0.6 s and would never build it).
+  ED.chanWindow = (p) => Math.max(C.CHAN_IDLE, 1.25 * ED.Stats.attackInterval(p));
 
   const burningSet = (w) => { const s = new Set(); for (const e of w.enemies) if (e.hp > 0 && e.burnPool > 0) s.add(e.id); return s; };
 
@@ -112,7 +115,10 @@
     if (burning) heat(w, o, 1, seen.size);
     if (own && st.twinMeteor) {
       const tg = w.nearestEnemy(z.x, z.y, 300);
-      if (tg) w.castMeteor(o, tg.x, tg.y, N.p.twin.delay, 1, 'twin');
+      if (tg) {
+        w.castMeteor(o, tg.x, tg.y, N.p.twin.delay, 1, 'twin');
+        w.emit({ t: 'pyTwin', pid: o.pid, x0: Math.round(z.x), y0: Math.round(z.y), x1: Math.round(tg.x), y1: Math.round(tg.y), d: N.p.twin.delay });
+      }
     }
     if (!rock && N.p.rocks.on) {
       const rk = N.p.rocks, room = w.room;
@@ -128,9 +134,14 @@
   // ---------------- Magma Heart ----------------
   // A Lava Pool: untagged burning ground of the blast radius x LAVA_R; a new pool inside the hero's own live pool refreshes it instead (one pool per spot).
   function lavaPool(w, p, x, y, r, dps) {
+    let n = 0, old = null;
     for (const z of w.zones) {
-      if (z.lava && z.owner === p.pid && U.dist2(z.x, z.y, x, y) < z.r * z.r) { z.t = 0; z.dps = Math.max(z.dps, dps); return; }
+      if (!z.lava || z.owner !== p.pid) continue;
+      if (U.dist2(z.x, z.y, x, y) < z.r * z.r) { z.t = 0; z.dps = Math.max(z.dps, dps); return; }
+      n++;
+      if (!old || z.t > old.t) old = z;
     }
+    if (n >= C.LAVA_MAX) { old.x = x; old.y = y; old.r = r * C.LAVA_R; old.t = 0; old.dps = dps; return; } // a hero keeps at most LAVA_MAX pools: the oldest moves to the new spot
     w.addZone({ kind: 'pfire', x, y, r: r * C.LAVA_R, dur: C.LAVA_T, dps, owner: p.pid, team: 0, untagged: true, lava: true, w: C.LAVA_TAG });
     w.emit({ t: 'pyLava', pid: p.pid, x: Math.round(x), y: Math.round(y), r: Math.round(r * C.LAVA_R) });
   }
@@ -159,10 +170,10 @@
   ED.CLS.pyro = {
     init(p) { p.pyroQ = []; },
 
-    // Channel builds while the hero stands still and keeps attacking; moving or CHAN_IDLE seconds without an attack ends it. Rebirth Flare watches mantleAmt; a decaying shield lowers it without a flare.
+    // Channel builds while the hero stands still and keeps attacking; moving or a pause longer than ED.chanWindow ends it. Rebirth Flare watches mantleAmt; a decaying shield lowers it without a flare.
     tick(p, dt) {
       const st = p.stats;
-      p.chanT = st.channel > 0 && !p.moving && this.time - p.lastAtkT < C.CHAN_IDLE ? p.chanT + dt : 0;
+      p.chanT = st.channel > 0 && !p.moving && this.time - p.lastAtkT < ED.chanWindow(p) ? p.chanT + dt : 0;
       if (p.mantleAmt > p.shield) p.mantleAmt = Math.max(0, p.shield);
       if (p.pyroQ.length) runQueue(this, p);
     },

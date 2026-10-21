@@ -275,6 +275,7 @@
     const me = s.me, view = s.view, ctl = s.ctl, st = me.stats;
     ctl.atkCd -= dt; ctl.dashCd -= dt; ctl.tranceT -= dt; ctl.skill2Cd -= dt;
     if (s.mode === 'client') for (const k of MIRROR_TIMERS) if (me[k] > 0) me[k] -= dt; // a mirror hero has no world tick
+    if (s.mode === 'client') { me.atkAge = (me.atkAge === undefined ? 9 : me.atkAge) + dt; me.chanT = st.channel > 0 && !me.moving && me.atkAge < ED.chanWindow(me) ? (me.chanT || 0) + dt : 0; } // Channel (a client's chip estimates the host's value)
     if (ctl.charges < st.maxCharges) { ctl.skillCd -= dt; if (ctl.skillCd <= 0) { ctl.charges++; if (ctl.charges < st.maxCharges) ctl.skillCd = st.skillCd; else ctl.skillCd = 0; } }
     if (me.downed || me.dead || !view.room) {
       s.prompt = null; if (s.mode !== 'client') me.dashing = false;
@@ -311,6 +312,7 @@
         const w = st.weapon, cl = isCleave(me, st, w, view.time); // decided before the act: the sim spends the Follow-Through
         G.act({ t: 'atk', a: aim });
         if (s.mode === 'client') { me.atkCount = (me.atkCount | 0) + 1; if (st.swift) me.flowT = ED.CONST.FLOW_T; if (cl) me.cleaveNext = 0; } // the host spends Follow-Through on the Cleave it grants
+        if (s.mode === 'client') me.atkAge = 0;
         ctl.atkCd = Math.max(ctl.atkCd, -dt) + ED.Stats.attackInterval(me); // carries the overshoot of this frame so the real rate equals the shown one
         s.aim.pulseT = performance.now();
         ED.FX.playerAttackAnim(s.localPid, aim);
@@ -351,6 +353,7 @@
         G.act({ t: 'skill', a: aim, data, slot: 1 });
         castMove(view, me, N2, aim, data);
         if (sk2 === 'vanish' && s.mode === 'client') me.stealthT = 2.5 + st.stealthDur; // the host's flag takes over with the next snapshot
+        if (sk2 === 'meteor' && N2.move && s.mode === 'client') me.cometT = N2.move.t; // Comet: airborne until the landing
         ctl.skill2Cd = st.skill2Cd;
         if (st.trance) { ctl.tranceT = 4; if (s.mode === 'client') me.tranceT = 4; }
       }
@@ -369,7 +372,7 @@
     aimExtras(s, me, view);
   }
 
-  const MIRROR_TIMERS = ['braceT', 'flowT', 'tranceT', 'stealthT'];
+  const MIRROR_TIMERS = ['braceT', 'flowT', 'tranceT', 'stealthT', 'cometT'];
   // True when the next melee swing is a Cleave (Oath of Steel: every (3 + cleaveN)th attack, or the first after a Charge with Follow-Through): the viewer draws its own smear, the host decides the damage.
   function isCleave(me, st, w, now) {
     return st.cleave > 0 && w.kind === 'melee' && (now < (me.cleaveNext || 0) || ((me.atkCount | 0) + 1) % (3 + st.cleaveN) === 0);

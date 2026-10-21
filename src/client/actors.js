@@ -625,7 +625,7 @@
       c.globalAlpha = ga; s.an = hitId; anchorFrom(s.anc, A.anim(hitId), flip, 0, 0); s.anc.top = -14; s.anc.cy = -6; s.anc.eye[0][1] = -8;
       return;
     }
-    shadowAt(c, 10);
+    if (!p.lift) shadowAt(c, 10); // a lifted hero (Comet) casts its shadow on the ground, drawn by its class hook
     if (p.downed) { lying(c, p, hitId, flip, 'grey', cls); s.an = hitId; anchorFrom(s.anc, A.anim(hitId), flip, 0, 0); s.anc.top = -14; s.anc.cy = -6; s.anc.eye[0][1] = -8; return; }
     beginRec(s, HX, HY);
     // ---- alpha: invulnerability flicker, dash, Vanish (readable to yourself, nearly gone to allies) ----

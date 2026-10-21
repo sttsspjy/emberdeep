@@ -70,6 +70,14 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
   stepAtk(1.0); ok(p.chanT > 0.9, 'Channel builds again'); run(s, 0.7, () => { p.moving = false; });
   near(p.chanT, 0, 1e-9, '0.6 s without attacking resets Channel');
   const s2 = stage({}); run(s2, 0.5, () => { s2.p.moving = false; s2.w.playerAttack(s2.p, 0); }); near(s2.p.chanT, 0, 1e-9, 'no Channel without the card');
+  // a Heavy weapon attacks every 0.9 s (Magma Staff) or 1.3 s (Tome of Ruin): the pause between its shots must not end Channel
+  for (const [wi, iv] of [[0, 0.9], [2, 1.3]]) {
+    const h = stage({ p_atk: 1, p_atk_h: 1 }, wi), hp = h.p; near(ED.Stats.attackInterval(hp), iv, 1e-9, 'heavy interval ' + iv); foe(h.w, hp.x + 60, hp.y);
+    let nxt = 0; run(h, 6, () => { hp.moving = false; if (h.w.time >= nxt) { h.w.playerAttack(hp, 0); nxt = h.w.time + iv; } });
+    ok(hp.chanT > 4, `Channel survives the ${iv} s pause between heavy shots (chanT ${hp.chanT.toFixed(1)})`);
+    near(ED.chanWindow(hp), 1.25 * iv, 1e-9, 'Channel window follows the interval'); run(h, ED.chanWindow(hp) + 0.1, () => { hp.moving = false; }); near(hp.chanT, 0, 1e-9, 'a pause of 1.25 intervals ends it');
+  }
+  near(ED.chanWindow(stage({ p_atk: 1 }, 1).p), 0.6, 1e-9, 'fast weapons keep the 0.6 s window'); near(ED.chanWindow(stage({ p_atk: 1, p_atk_s: 1 }, 0).p), 0.6, 1e-9, 'Swift weapons too'); near(ED.chanWindow(stage({ p_atk: 1 }, 0).p), 0.625, 1e-9, 'the Fire Staff (0.5 s) gets 0.625 s');
 }
 
 // ---- Ember Rush: Channel every 0.15 s up to +60% (+5% per rank); Overheat at full Channel ----
@@ -89,7 +97,7 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
 
 // ---- Magma Heart: aftershock 0.4 s after the blast at 30% (+10% per rank), noProc and untagged; Lava Pools at rank 3, one per spot ----
 {
-  const s = stage({ p_atk: 1, p_atk_h: 1 }, 0), { w, p } = s;
+  const s = stage({ p_atk: 1, p_atk_h: 1 }, 0), { w, p } = s; p.moving = true; // moving: no Channel, so the blast and the aftershock compare cleanly
   foe(w, p.x + 90, p.y);
   near(p.stats.weapon.dmg, 23.8, 0.05, 'Magma Staff damage');
   w.playerAttack(p, 0);
@@ -99,7 +107,7 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
   near(after[0].d / blast[0].d, 0.3, 1e-6, 'aftershock = 30% of the blast'); near(after[0].t - blast[0].t, 0.4, 0.03, 'aftershock 0.4 s later');
   ok(after[0].src.noProc && after[0].src.wpn && !after[0].src.el && !after[0].src.clsEl, 'aftershock is a physical weapon blast without infusions');
   ok(evOf(s, 'pyAfter').length === 1, 'aftershock telegraph event'); ok(!w.zones.some(z => z.lava), 'no Lava Pool before rank 3');
-  const s2 = stage({ p_atk: 1, p_atk_h: 2 }, 0); foe(s2.w, s2.p.x + 90, s2.p.y); s2.w.playerAttack(s2.p, 0); run(s2, 1.0);
+  const s2 = stage({ p_atk: 1, p_atk_h: 2 }, 0); s2.p.moving = true; foe(s2.w, s2.p.x + 90, s2.p.y); s2.w.playerAttack(s2.p, 0); run(s2, 1.0);
   near(parts(s2, 'aftershock')[0].d / s2.log.filter(h => h.kind === 'explode' && h.src.part === undefined)[0].d, 0.4, 1e-6, 'aftershock 40% at rank 2');
   // rank 3: a Lava Pool of 30% of the shot per second, 2 s, untagged; a new pool on the same spot refreshes it
   const s3 = stage({ p_atk: 1, p_atk_h: 3 }, 0), w3 = s3.w, p3 = s3.p, e3 = foe(w3, p3.x + 90, p3.y);
@@ -113,6 +121,8 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
   const z0 = pools[0]; e3.x = p3.x + 90; e3.y = p3.y; e3.kbx = e3.kby = 0; w3.playerAttack(p3, 0); run(s3, 0.9); pools = w3.zones.filter(z => z.lava);
   ok(pools.length === 1 && pools[0] === z0, `the second pool on the same spot refreshes the first (${pools.length} pools)`);
   const far = foe(w3, p3.x + 90, p3.y + 130); w3.playerAttack(p3, Math.atan2(far.y - p3.y, far.x - p3.x)); run(s3, 0.9); ok(w3.zones.filter(z => z.lava).length === 2, 'a pool on another spot is a separate pool');
+  for (let i = 0; i < 6; i++) p3.pyroQ.push({ at: w3.time + 0.1, k: 'after', x: p3.x + 200 + i * 80, y: p3.y - 60, r: 46, dmg: 1, lava: 5, room: w3.room });
+  run(s3, 0.3); ok(w3.zones.filter(z => z.lava).length === C.LAVA_MAX, `a hero keeps at most ${C.LAVA_MAX} Lava Pools (got ${w3.zones.filter(z => z.lava).length})`);
   const s4 = stage({ p_atk: 1, p_atk_h: 1 }, 1); foe(s4.w, s4.p.x + 60, s4.p.y); s4.w.playerAttack(s4.p, 0); run(s4, 1.0);
   ok(s4.log.some(h => h.kind === 'explode') && parts(s4, 'aftershock').length === 1, 'a blast-less weapon gets a blast and its aftershock');
 }
