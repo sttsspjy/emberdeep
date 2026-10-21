@@ -46,7 +46,7 @@
       const mine = ev.pid === local;
       F.dust(ev.x, ev.y + 2, 'dust', 3);
       F.burst(ev.x, ev.y - 6, 4, { kind: 'streak', color: '#e8e2c8', a: ev.a + Math.PI, spread: 0.5, sp: 260, life: 0.2, size: 1.6 });
-      A.play('dash', mine ? 0.55 : 0.25);
+      A.play('dash', mine ? 0.55 : 0.25); A.play('shoot', mine ? 0.5 : 0.2); // whoosh and bowstring twang
       if (st.caltrops) { F.burst(ev.x, ev.y - 2, 12, { kind: 'shard', color: '#cfd6de', sp: 120, life: 0.55, size: 2, vz: 80, z: 3 }); A.play('spark', mine ? 0.5 : 0.25); }
     } else if (ev.k === 'rain' && st.rainHail && ev.tx !== undefined) {
       const r = ED.skillRadius('rain', st);
