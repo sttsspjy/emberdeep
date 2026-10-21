@@ -4,7 +4,7 @@
   const U = ED.U, Sim = ED.Sim, D = ED.Dungeon;
   const W = ED.World.prototype;
 
-  ED.CONST.SUSTAIN_CAP = 0.01; // max HP fraction a hero regains per second from on-hit and on-kill combat heals (read by the UI)
+  ED.CONST.SUSTAIN_CAP = 0.003; // max HP fraction a hero regains per second from on-hit and on-kill combat heals (read by the UI)
   ED.CONST.GLOOM_CAP = 0.25; // max HP fraction one Gloom touch may take
   ED.CONST.ARC_MUL = 0.6; // a discharge's arc targets take this fraction of what the charged foe takes
   ED.CONST.BOLT_CD = 0.6; // seconds between one hero's Thunderhead bolts
@@ -30,10 +30,9 @@
     if (pact >= 10) hp *= 1.2;
     dmg *= (1 + 0.22 * (s - 1) + 0.03 * (s - 1) * (s - 1)) * (pact >= 2 ? 1.25 : 1) * (pact >= 8 ? 1.2 : 1) * this.threat().dmg;
     const dr = this.dread;
-    let hpDread = 1;
     if (dr && !def.minion && !def.gloom && !def.ally && !opts.ally) {
-      const deep = 1 + ED.World.DEEP * Math.min(ED.World.DEEP_MAX, this.deepRooms); // the dark thickens with every room entered Lightless this stratum
-      hpDread = dr.hp * deep; hp *= hpDread; dmg *= dr.dmg * deep;
+      const deep = 1 + ED.World.DEEP * Math.min(ED.World.DEEP_MAX, this.deepRooms); // the Deep hits harder with every room entered Dark or Lightless this stratum
+      hp *= dr.hp; dmg *= dr.dmg * deep;
     }
     const e = {
       id: U.uid(), type, def, x, y, r: def.r, hp, maxHp: hp, dmg, spd: def.spd * (pact >= 6 ? 1.15 : 1),
@@ -43,7 +42,7 @@
       // statuses: burn/bleed pools, chill, charge, hero debuffs (judged = Cleric Judgment, vulnT = Rain/Smoke vulnerability); slow/windMul/dmgTakenMul are read by ai.js and hitEnemy
       burn: 0, burnPool: 0, burnTick: 0, burnOwner: null, bleedPool: 0, bleedTick: 0, bleedOwner: null,
       chill: 0, chillT: 0, chillOwner: null, freezeRes: 0, freezeResT: 0, charge: 0, chargeOwner: null, dischargeT: 0,
-      hpLever: (def.boss ? def.hp / def.refHp : this.threat().hp) * hpDread, // HP-relative statuses (chill, Conflagration, Wildfire) ignore this stratum lever and the dread HP
+      hpLever: def.boss ? def.hp / def.refHp : this.threat().hp, // HP-relative statuses (chill, Conflagration, Wildfire) ignore this stratum lever
       mark: 0, judged: 0, vulnT: 0, blind: 0, sunder: 0, sunderOwner: null, slow: 1, slowAmt: 0, slowT: 0, windMul: 1, dmgTakenMul: 1, invulnT: 0, killed: false,
     };
     if (opts.elite) this.makeElite(e, opts.affix);
@@ -53,7 +52,7 @@
 
   W.makeElite = function (e, affix) {
     e.elite = affix || this.rng.pick(ED.AFFIX_IDS);
-    e.hp *= ED.World.ELITE.hp + ED.World.ELITE.hpStep * (this.stratum - 1); e.maxHp = e.hp; e.dmg *= ED.World.ELITE.dmg; e.r = Math.round(e.r * 1.22); // elite HP x2.8 at stratum I up to x5.8 at VI
+    e.hp *= ED.World.ELITE.hp + ED.World.ELITE.hpStep * (this.stratum - 1); e.maxHp = e.hp; e.dmg *= ED.World.ELITE.dmg; e.r = Math.round(e.r * 1.22); // elite HP x2.8 at stratum I up to x5.3 at VI
     if (e.elite === 'swift') e.spd *= 1.4;
     if (e.elite === 'brutal') e.dmg *= 1.4;
     if (e.elite === 'warded') { e.ward = e.maxHp * 0.45; e.wardMax = e.ward; }
@@ -390,7 +389,7 @@
       const comp = !!src.comp || src.kind === 'orbit' || src.kind === 'wisp' || src.kind === 'minion';
       if (st.killHeal) this.sustainHeal(p, st.killHeal * k);
       if (st.killHealPct) this.sustainHeal(p, p.maxHp * st.killHealPct * k);
-      if (st.bloodOrb && this.rng.chance(st.bloodOrb)) this.spawnPickup('orb', e.x, e.y, 0.04);
+      if (st.bloodOrb && this.rng.chance(st.bloodOrb)) this.spawnPickup('orb', e.x, e.y, 0.03);
       if (comp && st.feast) this.sustainHeal(p, p.maxHp * 0.01);
       if (st.chalice && p.chaliceHp < 20) {
         p.chaliceKills++;
@@ -446,7 +445,7 @@
     if (!src.hazard && st.dodge && this.rng.chance(st.dodge)) { this.emit({ t: 'block', x: p.x, y: p.y, k: 'dodge' }); p.invuln = 0.25; return false; }
     if (!src.hazard && st.aegis && p.aegisT <= 0) { p.aegisT = 10; p.invuln = 0.4; this.emit({ t: 'block', x: p.x, y: p.y, k: 'aegis' }); return false; }
     let dmg = amount * ED.Stats.armorMul(st.armor) * (1 + st.vuln);
-    for (const z of this.zones) if (z.kind === 'sanct' && U.dist2(z.x, z.y, p.x, p.y) < z.r * z.r) { dmg *= 0.65; break; }
+    for (const z of this.zones) if (z.kind === 'sanct' && U.dist2(z.x, z.y, p.x, p.y) < z.r * z.r) { dmg *= ED.CONST.SANCT_DR; break; }
     if (p.guardT > 0) dmg *= 0.4;
     if (p.wallT > 0) dmg *= 0.6;
     const e = src.e;

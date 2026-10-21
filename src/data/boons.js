@@ -58,7 +58,7 @@
     evo_rime: { name: 'Glacial Arms', rar: 'l', icon: 'snow', path: 'rime', evo: 'rime', desc: 'Every 3rd attack fires 5 piercing ice shards in a fan (50% each). Chill +25%.', mods: { chillMul: 0.25 }, max: 1 },
 
     // ---- Storm ----
-    staticcharge: { name: 'Static Charge', rar: 'r', icon: 'bolt', path: 'storm', gate: true, desc: 'Hits charge foes with 25% of their damage; each second they discharge to themselves and 3 nearby foes (they take half).', mods: { stormInfuse: 0.25 }, max: 1 },
+    staticcharge: { name: 'Static Charge', rar: 'r', icon: 'bolt', path: 'storm', gate: true, desc: 'Hits charge foes with 25% of their damage; each second they discharge to themselves and 3 nearby foes (they take 60%).', mods: { stormInfuse: 0.25 }, max: 1 },
     conductor: { name: 'Conductor', rar: 'r', icon: 'bolt', path: 'storm', desc: '+1 arc target and +30% arc range.', mods: { arcs: 1, arcRange: 0.3 }, max: 2 },
     highvoltage: { name: 'High Voltage', rar: 'r', icon: 'star', path: 'storm', desc: 'Discharges deal +20% damage.', mods: { shockMul: 0.2 }, max: 3 },
     thunderstep: { name: 'Thunderstep', rar: 'r', icon: 'wingblade', path: 'storm', desc: 'Foes you dash through take 100% weapon damage.', mods: { dashShock: 1 }, max: 1 },
@@ -67,9 +67,9 @@
     evo_storm: { name: 'Tempest Arms', rar: 'l', icon: 'bolt', path: 'storm', evo: 'storm', desc: 'Every 4th attack calls lightning on its target (150%, radius 50). Foes discharge every 0.5s.', mods: {}, max: 1 },
 
     // ---- Steel ----
-    honededge: { name: 'Honed Edge', rar: 'r', icon: 'sword', path: 'steel', gate: true, desc: '+6% critical chance. Crits make foes Bleed for 30% of the hit.', mods: { crit: 0.06, bleed: 0.3 }, max: 1 },
-    brutal: { name: 'Brutality', rar: 'r', icon: 'skull', path: 'steel', desc: '+35% critical damage.', mods: { critDmg: 0.35 }, max: 3 },
-    keen: { name: 'Keen Eye', rar: 'c', icon: 'eye', path: 'steel', desc: '+6% critical chance.', mods: { crit: 0.06 }, max: 2 },
+    honededge: { name: 'Honed Edge', rar: 'r', icon: 'sword', path: 'steel', gate: true, desc: '+5% critical chance. Crits make foes Bleed for 25% of the hit.', mods: { crit: 0.05, bleed: 0.25 }, max: 1 },
+    brutal: { name: 'Brutality', rar: 'r', icon: 'skull', path: 'steel', desc: '+30% critical damage.', mods: { critDmg: 0.3 }, max: 3 },
+    keen: { name: 'Keen Eye', rar: 'c', icon: 'eye', path: 'steel', desc: '+5% critical chance.', mods: { crit: 0.05 }, max: 2 },
     lacerate: { name: 'Lacerate', rar: 'r', icon: 'dagger', path: 'steel', desc: '+15% damage to bleeding foes.', mods: { lacerate: 0.15 }, max: 2 },
     execute: { name: 'Executioner', rar: 'r', icon: 'axe', path: 'steel', desc: '+40% damage to foes below 30% health.', mods: { execute: 0.4 }, max: 2 },
     sunder: { name: 'Sunder', rar: 'e', icon: 'blades', path: 'steel', key: true, desc: 'Each crit makes that foe take +4% damage from you (max +40%).', mods: { sunder: 1 }, max: 1 },
@@ -79,7 +79,7 @@
     bloodpact: { name: 'Blood Pact', rar: 'r', icon: 'drop', path: 'blood', gate: true, desc: 'Kills heal 1% max health (within the hit and kill heal cap). Hits make foes Bleed for 20% of the hit. +30% damage, and +40% more below 50% health.', mods: { killHealPct: 0.01, berserk: 0.4, dmg: 0.3, bleedHit: 0.2 }, max: 1 },
     leech: { name: 'Leech', rar: 'r', icon: 'fang', path: 'blood', desc: 'Heal 1.5% of damage dealt (all hit and kill healing together is capped per second) and deal +6% damage.', mods: { leech: 0.015, dmg: 0.06 }, max: 2 },
     bloodrush: { name: 'Bloodrush', rar: 'r', icon: 'boot', path: 'blood', desc: '+10% attack speed. Below 50% health: +15% attack speed and +10% move speed.', mods: { bloodrush: 0.15, atk: 0.1 }, max: 2 },
-    transfusion: { name: 'Transfusion', rar: 'c', icon: 'potion', path: 'blood', desc: 'Kills drop a blood orb 20% of the time (heals 4% max health).', mods: { bloodOrb: 0.2 }, max: 1 },
+    transfusion: { name: 'Transfusion', rar: 'c', icon: 'potion', path: 'blood', desc: 'Kills drop a blood orb 12% of the time (heals 3% max health).', mods: { bloodOrb: 0.12 }, max: 1 },
     hemomancy: { name: 'Hemomancy', rar: 'r', icon: 'heartbroken', path: 'blood', desc: 'Each rank: skills cost 4% of current health and deal +35% damage.', mods: { hemomancy: 0.35, hemoCost: 0.04 }, max: 2 },
     crimsontide: { name: 'Crimson Tide', rar: 'e', icon: 'chalice', path: 'blood', key: true, desc: 'Overhealing becomes a blood shield (max 25% max health) that absorbs damage first.', mods: { bloodShield: 0.25 }, max: 1 },
     evo_blood: { name: 'Sanguine Arms', rar: 'l', icon: 'drop', path: 'blood', evo: 'blood', desc: 'Every attack also launches a blood scythe (50%) that heals 15% of its damage. Kill heals are doubled. Healing stays within the hit and kill heal cap.', mods: {}, max: 1 },

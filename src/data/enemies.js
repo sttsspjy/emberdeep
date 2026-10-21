@@ -110,17 +110,17 @@
 
     // ---------------- Bosses (absolute HP, scaled by party, pact and dread; refHp = design HP that chill, Conflagration and Wildfire measure against) ----------------
     bonewarden: { name: 'The Bone Warden', title: 'Keeper of the First Graves', ai: 'boss', look: 'b_warden', col: { a: '#ece4cc', b: '#7d745f', c: '#ff5a3a' },
-      hp: 4400, refHp: 800, spd: 60, dmg: 7, r: 24, xp: 40, boss: true, quote: 'None leave the Ossuary. Not even the dead.' },
+      hp: 4350, refHp: 800, spd: 60, dmg: 6.4, r: 24, xp: 40, boss: true, quote: 'None leave the Ossuary. Not even the dead.' },
     sporemother: { name: 'The Sporemother', title: 'Bloom of the Glowmire', ai: 'boss', look: 'b_spore', col: { a: '#c86bff', b: '#5b2a7a', c: '#7dffd9' },
-      hp: 6200, refHp: 1500, spd: 34, dmg: 7, r: 32, xp: 60, boss: true, quote: 'Rest, little ones. Become soil. Become ME.' },
+      hp: 5950, refHp: 1500, spd: 34, dmg: 6.4, r: 32, xp: 60, boss: true, quote: 'Rest, little ones. Become soil. Become ME.' },
     rimeheart: { name: 'Rimeheart Colossus', title: 'The Frozen Oath', ai: 'boss', look: 'b_rime', col: { a: '#d8f0ff', b: '#6d93b5', c: '#3ad1ff' },
-      hp: 17900, refHp: 2600, spd: 44, dmg: 7, r: 30, xp: 80, boss: true, quote: 'THE KING SAID: HOLD THE HALL. I HOLD.' },
+      hp: 16500, refHp: 2600, spd: 44, dmg: 6.4, r: 30, xp: 80, boss: true, quote: 'THE KING SAID: HOLD THE HALL. I HOLD.' },
     forgelord: { name: 'The Forgelord', title: 'Last Smith of the Empire', ai: 'boss', look: 'b_forge', col: { a: '#6a4636', b: '#2a1810', c: '#ff8a2a' },
-      hp: 24800, refHp: 4200, spd: 70, dmg: 7, r: 26, xp: 100, boss: true, quote: 'Steel remembers every hammer-blow. So will you.' },
+      hp: 17400, refHp: 4200, spd: 70, dmg: 5.5, r: 26, xp: 100, boss: true, quote: 'Steel remembers every hammer-blow. So will you.' },
     drownedking: { name: 'The Drowned King', title: 'Tyrant Beneath the Tide', ai: 'boss', look: 'b_king', col: { a: '#3f8f88', b: '#173d3b', c: '#e8c66b' },
-      hp: 75000, refHp: 5600, spd: 62, dmg: 7, r: 26, xp: 120, boss: true, quote: 'Kneel. The sea has already taken your breath.' },
+      hp: 50400, refHp: 5600, spd: 62, dmg: 8, r: 26, xp: 120, boss: true, quote: 'Kneel. The sea has already taken your breath.' },
     hollowking: { name: 'The Hollow King', title: 'Crown of the Starless Abyss', ai: 'boss', look: 'b_hollow', col: { a: '#2a1f44', b: '#0e0820', c: '#ff7ad9' },
-      hp: 101000, refHp: 7800, spd: 70, dmg: 7, r: 24, xp: 160, boss: true, quote: 'You came so far down... only to fill my empty crown.' },
+      hp: 59000, refHp: 7800, spd: 70, dmg: 7.5, r: 24, xp: 160, boss: true, quote: 'You came so far down... only to fill my empty crown.' },
   };
 
   ED.ENEMY_IDS = Object.keys(E);

@@ -18,7 +18,7 @@
     phoenix: { name: 'Phoenix Feather', rar: 'l', icon: 'feather', desc: 'Once per descent, rise again at 50% health.', mods: { phoenix: 1 }, start: true },
     stormidol: { name: 'Storm Idol', rar: 'e', icon: 'bolt', desc: 'Critical hits charge foes with 60% of their damage.', mods: { critCharge: 0.6 }, start: true },
     glasseye: { name: 'Glass Eye', rar: 'r', icon: 'eye', desc: '+10% critical chance.', mods: { crit: 0.1 }, start: true },
-    elixir: { name: 'Elixir Flask', rar: 'c', icon: 'potion', desc: 'Heal 30% at the start of each stratum. +20% healing.', mods: { strataHeal: 0.3, heal: 0.2 }, start: true },
+    elixir: { name: 'Elixir Flask', rar: 'c', icon: 'potion', desc: 'Heal 20% at the start of each stratum. +10% healing.', mods: { strataHeal: 0.2, heal: 0.1 }, start: true },
     // ---- codex unlocks ----
     axe: { name: "Headsman's Axe", rar: 'r', icon: 'axe', desc: '+60% damage to foes below 30% health.', mods: { execute: 0.6 }, cost: 50 },
     cloak: { name: 'Shadow Cloak', rar: 'r', icon: 'cloak', desc: 'Dash recharges 35% faster. +5% dodge.', mods: { dashcdr: 0.35, dodge: 0.05 }, cost: 50 },

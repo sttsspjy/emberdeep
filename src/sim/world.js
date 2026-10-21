@@ -127,28 +127,28 @@
     for (const pd of opts.players) this.addPlayer(pd);
   };
   W.xpFor = (L) => Math.round(30 + 3 * (L - 1) + 6 * (L - 1) * (L - 1)); // xp from level L to L+1
-  // Dread tiers by light fraction (>= 0.5, >= 0.25, > 0, 0): foe hp/damage multipliers, elite chance added to a room's, wave budget multiplier, room gold & embers multiplier,
+  // Dread tiers by light fraction (>= 0.5, >= 0.25, > 0, 0): foe hp (1 in every tier: darkness never adds HP) and damage multipliers, elite chance added to a room's, wave budget multiplier, room gold & embers multiplier,
   // chance (up) that a cleared room's reward is upgraded, seconds after entering a room until the Gloom hunts (gloom 0 = none), Glooms hunting at once (glooms), healing multiplier (heal).
   W.DREAD = [
     { tier: 0, hp: 1, dmg: 1, elite: 0, wave: 1, gold: 1, up: 0, gloom: 0, glooms: 0, heal: 1 },
     { tier: 1, hp: 1, dmg: 1.1, elite: 0.2, wave: 1, gold: 1.25, up: 0, gloom: 0, glooms: 0, heal: 1 },
-    { tier: 2, hp: 1.3, dmg: 1.4, elite: 0.4, wave: 1, gold: 1.5, up: 0.12, gloom: 8, glooms: 1, heal: 0.8 },
-    { tier: 3, hp: 1.7, dmg: 1.7, elite: 0.6, wave: 1, gold: 1.75, up: 0.2, gloom: 3, glooms: 1, heal: 0.6 },
+    { tier: 2, hp: 1, dmg: 1.6, elite: 0.4, wave: 1, gold: 1.5, up: 0.12, gloom: 8, glooms: 1, heal: 0.7 },
+    { tier: 3, hp: 1, dmg: 2.3, elite: 0.6, wave: 1, gold: 1.75, up: 0.2, gloom: 3, glooms: 1, heal: 0.5 },
   ];
-  W.ELITE = { hp: 2.8, hpStep: 0.6, dmg: 1 }; // elite HP multiplier at stratum I (+ hpStep per stratum) and damage multiplier
-  W.HAZARD_MUL = 0.7; // floor hazard damage multiplier
+  W.ELITE = { hp: 2.4, hpStep: 0.4, dmg: 0.9 }; // elite HP multiplier at stratum I (+ hpStep per stratum) and damage multiplier
+  W.HAZARD_MUL = 0.5; // floor hazard damage multiplier
   W.LANTERN_MUL = [1.3, 1.2, 1.1, 1, 1, 1]; // lantern size per stratum: the first strata are bright
   W.GLOOM_GAP = 4; // seconds between the Glooms of one room when its tier hunts with more than one
-  W.GLOOM_STEP = 1; W.GLOOM_MAX = 3; // Lightless: one more Gloom for every GLOOM_STEP new rooms entered Lightless earlier in the stratum, at most GLOOM_MAX
-  W.DEEP = 0.15; W.DEEP_MAX = 5; // every new room entered Dark or Lightless raises foe HP and damage by DEEP for the rest of the stratum (up to DEEP_MAX rooms)
-  W.GLOOM_HIT = 0.22; // Gloom touch damage as a fraction of the toughest living hero's max HP
+  W.GLOOM_STEP = 1; W.GLOOM_MAX = 3; // Lightless hunts with 1 + floor(deepRooms / GLOOM_STEP) Glooms, at most GLOOM_MAX
+  W.DEEP = 0.28; W.DEEP_MAX = 5; // every new room entered Dark or Lightless raises foe damage by DEEP for the rest of the stratum (up to DEEP_MAX rooms)
+  W.GLOOM_HIT = 0.19; // Gloom touch damage as a fraction of the toughest living hero's max HP
   W.OIL_LIGHT = 35; // light gained from a lantern oil reward or shop oil
-  W.FLARE = { cost: 8, banish: 12, blind: 1.5, r: 160 }; // lantern flare (F): light spent, seconds the Gloom stays away, foe blind seconds, blind radius
+  W.FLARE = { cost: 6, banish: 12, blind: 1.5, r: 160 }; // lantern flare (F): light spent, seconds the Gloom stays away, foe blind seconds, blind radius
   W.DARK_AFFIXES = ['brutal', 'vampiric', 'warded', 'swift']; // affix pool of elites made at Dark and Lightless (the volatile affix is left out)
   W.ELITE_BODIES = 4; // plain-foe budget one elite displaces from its wave in any tier but Bright
   W.REWARD_UP = { gold: 'vigor', vigor: 'forge', forge: 'epic', class: 'epic' }; // darkness upgrades a room reward one step (boon:<path> -> epic)
   // Per-stratum threat on top of the base scales: foe HP, wave budget, `cdRate` = extra cooldown recovery (0.2 = attack timers tick 20% faster, -0.2 = 20% slower) and the boss pause between attacks (x).
-  W.THREAT = [{ hp: 2.2, dmg: 0.5, wave: 0.8, cdRate: -0.4, pause: 2 }, { hp: 1.62, dmg: 0.6, wave: 0.75, cdRate: -0.3, pause: 1.7 }, { hp: 1.3, dmg: 0.64, wave: 0.7, cdRate: -0.1, pause: 1.4 }, { hp: 1.14, dmg: 0.73, wave: 0.66, cdRate: 0, pause: 1.2 }, { hp: 1.07, dmg: 0.8, wave: 0.62, cdRate: 0.15, pause: 1 }, { hp: 1.02, dmg: 0.88, wave: 0.6, cdRate: 0.3, pause: 0.9 }];
+  W.THREAT = [{ hp: 2.2, dmg: 0.5, wave: 0.8, cdRate: -0.4, pause: 2 }, { hp: 1.62, dmg: 0.5, wave: 0.75, cdRate: -0.3, pause: 1.7 }, { hp: 1.3, dmg: 0.5, wave: 0.7, cdRate: -0.1, pause: 1.4 }, { hp: 1, dmg: 0.4, wave: 0.66, cdRate: 0, pause: 1.2 }, { hp: 1.07, dmg: 0.8, wave: 0.62, cdRate: 0.15, pause: 1 }, { hp: 1.02, dmg: 1, wave: 0.6, cdRate: 0.3, pause: 0.9 }];
   // Foe HP multiplier of stratum s: the depth curve times the threat HP.
   W.hpScale = (s) => (1 + 0.65 * (s - 1) + 0.08 * (s - 1) * (s - 1)) * W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, s - 1))].hp;
   // Wave pacing of combat rooms: seconds before the first wave, spawn telegraph (+ random extra), minimum gap before the next wave, the share of a wave that may still stand when the next one is called, the seconds after which the next wave comes regardless, and the minimum spawn distance from heroes (turrets keep more).
@@ -168,7 +168,7 @@
   W.prototype.threat = function () { return W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, this.stratum - 1))]; };
   W.prototype.emit = function (ev) { this.fx.push(ev); };
   W.prototype.partySize = function () { return Math.max(1, this.players.size); };
-  W.prototype.partyHpMul = function () { const n = this.partySize() - 1; return 1 + 1.1 * n + 0.35 * n * (n - 1); };
+  W.prototype.partyHpMul = function () { const n = this.partySize() - 1; return 1 + 0.9 * n + 0.3 * n * (n - 1); };
   W.prototype.alive = function (p) { return p && !p.downed && !p.dead; };
   W.prototype.alivePlayers = function () { const out = []; for (const p of this.players.values()) if (!p.downed && !p.dead) out.push(p); return out; };
   W.prototype.hostiles = function () { let n = 0; for (const e of this.enemies) if (e.hp > 0 && !e.def.gloom) n++; return n; };
@@ -618,7 +618,7 @@
     } else if (!(gl > 0)) this.gloomT = null;
   };
 
-  // Glooms hunting in this room: the tier's count, plus one per GLOOM_STEP rooms already entered Lightless this stratum.
+  // Glooms hunting in this room: the tier's count; Lightless adds one per GLOOM_STEP dark rooms entered this stratum (this one included).
   W.prototype.gloomWant = function () {
     const n = this.dread.glooms || 1;
     return this.dread.tier >= 3 ? Math.min(W.GLOOM_MAX, n + Math.floor(this.deepRooms / W.GLOOM_STEP)) : n;
