@@ -1,5 +1,5 @@
 // Cleric: Sanctuary and Judgment (base kits from ED.SKILLS numbers), the Judgment hammers, the wave hooks of the Attack route, the Verdict and Prism payoffs and the Cleric hook table ED.CLS.cleric.
-// Judged = e.judged seconds (+20% damage taken); Verdict also weakens a Judged foe (e.weakT / e.weakV, read by hurtPlayer). Only a hammer hit stamps e.judgeOwner / e.judgeCast (the kill shield of Judgment).
+// Judged = e.judged seconds (+20% damage taken); Verdict also weakens a Judged foe (e.weakT / e.weakV, read by hurtPlayer). Only a hammer hit stamps e.judgeOwner / e.judgeCast / e.judgeUntil (the kill shield of Judgment needs the hammer's own Judged window).
 (function (ED) {
   'use strict';
   const U = ED.U, C = ED.CONST;
@@ -11,10 +11,10 @@
   const live = (e) => e.hp > 0 && e.spawnT <= 0 && !e.def.invuln && !e.burrowed;
   const rnd = Math.round;
 
-  // Judges foe e for hero o for dur seconds; stamp: a hammer hit, which marks the cast for the kill shield. With Verdict the foe also deals less damage (bosses half as much).
-  function judgeFoe(e, o, dur, stamp) {
+  // Judges foe e for hero o for dur seconds; stamp: a hammer hit of world w, which marks the cast and the hammer's own Judged window (judgeUntil) for the kill shield. With Verdict the foe also deals less damage (bosses half as much).
+  function judgeFoe(e, o, dur, stamp, w) {
     e.judged = Math.max(e.judged, dur);
-    if (stamp) { e.judgeOwner = o.pid; e.judgeCast = o.castN; }
+    if (stamp) { e.judgeOwner = o.pid; e.judgeCast = o.castN; e.judgeUntil = Math.max(e.judgeUntil || 0, w.time + dur); }
     const st = o.stats;
     if (st.verdict) { e.weakT = e.judged; e.weakV = Math.max(e.weakV, e.boss ? st.judgeWeak / 2 : st.judgeWeak); }
   }
@@ -94,7 +94,7 @@
         if (e.hp <= 0 || e.spawnT > 0 || h.hit.has(e.id)) continue;
         if (U.dist2(pr.x, pr.y, e.x, e.y) > (e.r + pr.r) ** 2) continue;
         h.hit.add(e.id);
-        judgeFoe(e, p, 4 + st.judgeDur, true); // judged before the hit lands: the leg itself takes the +20%
+        judgeFoe(e, p, 4 + st.judgeDur, true, this); // judged before the hit lands: the leg itself takes the +20%
         this.hitEnemy(e, q.dmg, this.partSrc(p, N, 'leg', { knock: 90, kx: pr.vx / sp, ky: pr.vy / sp, x: pr.x, y: pr.y, infAdd: { holy: 0.5 } }));
       }
       h.x = pr.x; h.y = pr.y;
@@ -132,7 +132,7 @@
     projEnd(pr, owner, why) {
       const st = owner.stats;
       if (pr.kind !== 'wave' || !st.waveBurst) return;
-      const r = FLARE_R * (1 + st.area * 0.5), dmg = pr.dmg * st.waveBurst;
+      const r = FLARE_R, dmg = pr.dmg * st.waveBurst;
       for (const e of this.enemies) {
         if (e.hp <= 0 || e.spawnT > 0) continue;
         const d = Math.hypot(e.x - pr.x, e.y - pr.y);
@@ -141,11 +141,12 @@
       }
       this.emit({ t: 'solar', x: rnd(pr.x), y: rnd(pr.y), r: rnd(r), pid: owner.pid });
     },
-    // A Judged foe that dies: Verdict bursts it (queued, the Verdict owner deals it), and the allies within 160 of a hammer-Judged death get a shield once per cast (3% of max HP, class window)
+    // A Judged foe that dies: Verdict bursts it (queued, the Verdict owner deals it), and the allies within 160 of a death inside the hammer's own Judged window get a shield once per cast (3% of max HP, class window)
     kill(e) {
       if (!(e.judged > 0)) return;
       const vo = verdictOwner(this, e);
       if (vo) this.queuePayoff(vo, { kind: 'verdict', e, x: e.x, y: e.y });
+      if (!(e.judgeUntil > this.time)) return;
       const o = this.players.get(e.judgeOwner);
       if (!o || o.cls !== 'cleric') return;
       for (const q of this.players.values()) {
@@ -154,14 +155,13 @@
         this.addShield(q, q.maxHp * 0.03, q.maxHp * C.CLASS_SHIELD_CAP, 'class');
       }
     },
-    // Chain payoffs (combat.js runPayoff): Verdict (r70 Holy burst at the dead foe, stun; Sentence Judges the foes it hits before the blow) and Prism's beam (half the Smite to the nearest other foe within 120; Sunburst jumps once more at half again).
+    // Chain payoffs (combat.js runPayoff): Verdict (r70 Holy burst at the dead foe, stun; Sentence Judges the foes it leaves standing) and Prism's beam (half the Smite to the nearest other foe within 120; Sunburst jumps once more at half again).
     payoff(en) {
       const o = en.tr, st = o.stats;
       if (en.kind === 'verdict') {
         const N = ED.Stats.skillNums('judgment', st), v = N.p.verdict;
         if (!v.on) return;
-        if (st.verdictJudge) for (const f of this.enemies) if (live(f) && U.dist2(f.x, f.y, en.x, en.y) < (v.r + f.r) ** 2) judgeFoe(f, o, 4 + st.judgeDur, false);
-        this.skillBlast(o, en.x, en.y, v.r, v.dmg, this.partSrc(o, N, 'verdict', { knock: 90, infAdd: { holy: 0.5 } }), (f) => { if (f.hp > 0) this.stunFoe(f, v.stun, true); });
+        this.skillBlast(o, en.x, en.y, v.r, v.dmg, this.partSrc(o, N, 'verdict', { knock: 90, infAdd: { holy: 0.5 } }), (f) => { if (f.hp > 0) { this.stunFoe(f, v.stun, true); if (st.verdictJudge) judgeFoe(f, o, 4 + st.judgeDur, false); } }); // Sentence: the foes the burst leaves standing are Judged
         this.emit({ t: 'verdict', x: rnd(en.x), y: rnd(en.y), r: rnd(v.r), pid: o.pid });
         return;
       }

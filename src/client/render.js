@@ -1504,6 +1504,7 @@
     skull: { rows: ['.111.', '11111', '12121', '11111', '.1.1.'], c: { 1: '#d9c8ff', 2: '#1c0c3a' } },
     guard: { rows: ['11111', '11211', '12211', '.121.', '..1..'], c: { 1: '#9be33c', 2: '#26340f' } },
     star: { rows: ['.1.', '111', '.1.'], c: { 1: '#ffe66b' } },
+    weak: { rows: ['11111', '11211', '12211', '.121.', '..1..'], c: { 1: '#ffcf5a', 2: '#5a3a0c' } }, // Verdict's weaken mark (cls-cleric.js): the guard shape in gold
   };
   function glyphStub(c, g, cx, bottom) {
     const rows = g.rows, x0 = cx - rows[0].length, y0 = bottom - rows.length * 2;
@@ -1728,7 +1729,7 @@
   const prebaked = {};
   function shotBody(c, pr, t, kind, foe, col) {
     const sh = SHOT[kind], x = Math.round(pr.x), y = Math.round(pr.y - 6), At = ED.Atlas;
-    const xs = ED.ClassFx.shot; if (xs && xs[kind] && xs[kind](c, pr, t, x, y, foe, col)) return; // a class look for a shot kind (cls-cleric.js: waves); false = the default body
+    const xb = ED.ClassFx.shotBody; if (xb && xb[kind] && xb[kind](c, pr, t, x, y, foe, col)) return; // ED.ClassFx.shotBody[kind](c, pr, t, x, y, foe, col) replaces the body of a shot kind and returns true (cls-cleric.js: waves); a falsy return keeps the default body
     if (FLAME[kind] && kind !== 'crescent') { const sp = Math.hypot(pr.vx, pr.vy) || 1; Pix.draw(c, 'fx.ember', '', (t * 12 + pr.id) | 0, x - pr.vx / sp * 9, y - pr.vy / sp * 9, 0.9); } // a micro flame licks behind fire shots
     if (sh && At.has(sh.id)) {
       if (!prebaked[sh.id]) { prebaked[sh.id] = 1; for (let f = 0, n = At.anim(sh.id).n; f < n; f++) At.prebake(sh.id, f); } // all 32 rotation steps are baked in the background (Atlas.tick) the first time a shot kind shows up
@@ -1750,7 +1751,7 @@
       for (const pr of ps) {
         const foe = pr.team === 1, kind = pr.kind, y = pr.y - 6;
         if (SOLID[kind]) R.glow(c, pr.x, y, foe ? 15 : 10, HALO[kind] || (foe ? '#ff5a3a' : FX.projColor(kind)), foe ? 0.5 : 0.3);
-        else R.glow(c, pr.x, y, pr.r * 2.2 + 7, FX.projColor(kind), foe ? 0.7 : 0.5);
+        else R.glow(c, pr.x, y, (kind === 'wave' ? Math.min(pr.r, 16) : pr.r) * 2.2 + 7, FX.projColor(kind), foe ? 0.7 : 0.5); // a widened wave keeps the halo of a normal one: its sun body stays readable
       }
       return;
     }

@@ -84,6 +84,7 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
   const ew = stage({ c_atk: 1, c_atk_h: 3 }); let wall = ew.p.x; while (!ED.Dungeon.blocksShots(ED.Dungeon.tileAt(ew.w.room, wall, ew.p.y), false)) wall += 2;
   const bf = foe(ew.w, wall - 24, ew.p.y); ew.w.playerAttack(ew.p, 0); ew.w.projs.length = 0; ew.w.playerAttack(ew.p, 0); const wd = waves(ew.w)[0].dmg; let sn = 0; run(ew.w, 1.2, () => { sn += evs(ew.w, 'solar').length; ew.w.fx.length = 0; });
   ok(sn === 1 && lost(bf) > wd * ew.p.stats.dmg * 1.3, `a wave that ends at a wall bursts once, the foe there takes wave + burst (${lost(bf).toFixed(1)} of ${(wd * ew.p.stats.dmg).toFixed(1)} + half)`);
+  const wa = stage({ c_atk: 1, c_atk_h: 3 }); wa.p.stats.area = 1; flare(wa, wa.p.x, wa.p.y, 'life'); ok(evs(wa.w, 'solar')[0].r === 50, 'Solar Flare radius is fixed at 50 whatever the area stat');
   const nf = stage({ c_atk: 1, c_atk_h: 2 }); flare(nf, nf.p.x, nf.p.y, 'life'); ok(evs(nf.w, 'solar').length === 0, 'no Solar Flare below rank 3');
 }
 
@@ -201,18 +202,22 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
   ok(nv === 1 && lost(n3) > 0, 'a Judged death with no stamp (another Judge) still bursts for the Verdict owner');
   const q4 = stage({ c_s2: 1 }); const d4 = foe(q4.w, q4.p.x - 120, q4.p.y), n4 = foe(q4.w, q4.p.x - 80, q4.p.y); d4.judged = 5; d4.hp = 5; q4.w.hitEnemy(d4, 99, { p: q4.p, kind: 'weapon', crit: false }); run(q4.w, 0.3); ok(lost(n4) === 0, 'no Verdict burst without the card');
 }
-{ // Sentence: the burst Judges the foes it hits first, so a weak neighbour dies to it and bursts in turn; each foe pays out once
+{ // Sentence: the burst Judges the foes it leaves standing (the blow itself is not boosted); a Judged foe that dies later bursts in turn; each death pays out once
   const { w, p } = stage({ c_s2: 1, c_s2_b: 3 }); const bx = p.x - 150, by = p.y;
-  const d = foe(w, bx, by), b = foe(w, bx + 50, by), c = foe(w, bx + 100, by), z = foe(w, bx + 100, by + 150); d.judged = 5; d.hp = 5; b.hp = 50; c.hp = 50;
-  let nv = 0; w.hitEnemy(d, 99, { p, kind: 'weapon', crit: false }); run(w, 0.6, () => { nv += evs(w, 'verdict').length; w.fx.length = 0; });
-  ok(nv === 3 && b.hp <= 0 && c.hp <= 0 && lost(z) === 0, `Sentence: the burst cascades through its neighbours (${nv} bursts)`);
-  const al = stage({ c_s2: 1, c_s2_b: 3 }); const d2 = foe(al.w, al.p.x - 150, al.p.y), b2 = foe(al.w, al.p.x - 110, al.p.y); d2.judged = 5; d2.hp = 5; al.w.hitEnemy(d2, 99, { p: al.p, kind: 'weapon', crit: false }); run(al.w, 0.3);
-  ok(b2.judged > 4 && b2.weakT > 4, 'Sentence leaves the foes it hit Judged (and weakened)');
-  const no = stage({ c_s2: 1, c_s2_b: 2 }); const d3 = foe(no.w, no.p.x - 150, no.p.y), b3 = foe(no.w, no.p.x - 110, no.p.y); d3.judged = 5; d3.hp = 5; no.w.hitEnemy(d3, 99, { p: no.p, kind: 'weapon', crit: false }); run(no.w, 0.3); ok(!(b3.judged > 0), 'no Sentence below rank 3');
+  const d = foe(w, bx, by), b = foe(w, bx + 50, by), c = foe(w, bx + 100, by), z = foe(w, bx + 100, by + 150); d.judged = 5; d.hp = 5;
+  let nv = 0; w.hitEnemy(d, 99, { p, kind: 'weapon', crit: false }); run(w, 0.3, () => { nv += evs(w, 'verdict').length; w.fx.length = 0; });
+  const v = ED.Stats.skillNums('judgment', p.stats).p.verdict;
+  ok(nv === 1 && b.judged > 4 && b.weakT > 4 && !(c.judged > 0) && lost(c) === 0 && lost(z) === 0, `Sentence: the burst Judges (and weakens) the foe it hit, not those beyond r70 (${nv} burst)`);
+  near(lost(b), v.dmg * p.stats.dmg * w.affC(p.stats.element), 0.2, 'the burst hits before it Judges: no +20% on that blow');
+  b.hp = 5; w.hitEnemy(b, 99, { p, kind: 'weapon', crit: false }); nv = 0; run(w, 0.3, () => { nv += evs(w, 'verdict').length; w.fx.length = 0; });
+  ok(b.hp <= 0 && nv === 1 && c.judged > 4 && lost(c) > 0 && lost(z) === 0, `Sentence: the Judged neighbour bursts in turn and Judges the next foe (${nv} burst)`);
+  const no = stage({ c_s2: 1, c_s2_b: 2 }); const d3 = foe(no.w, no.p.x - 150, no.p.y), b3 = foe(no.w, no.p.x - 110, no.p.y); d3.judged = 5; d3.hp = 5; no.w.hitEnemy(d3, 99, { p: no.p, kind: 'weapon', crit: false }); run(no.w, 0.3); ok(lost(b3) > 0 && !(b3.judged > 0), 'no Sentence below rank 3');
 }
 { // the kill shield of Judgment (3% max HP, once per cast) is kept
   const { w, p } = stage({ c_s2: 1 }); const e = foe(w, p.x + 80, p.y), e2 = foe(w, p.x + 90, p.y + 10); w.playerSkill(p, 0, {}, 1); run(w, 0.3); e.hp = 3; e2.hp = 3; p.shield = 0;
   w.hitEnemy(e, 99, { p, kind: 'weapon', crit: false }); w.hitEnemy(e2, 99, { p, kind: 'weapon', crit: false }); near(p.shield, 0.03 * p.maxHp, 0.01, 'Judgment kill shield 3% once per cast');
+  const st = stage({ c_s2: 1 }); const s1 = foe(st.w, st.p.x + 80, st.p.y); st.w.playerSkill(st.p, 0, {}, 1); run(st.w, 0.3); ok(s1.judgeUntil > st.w.time + 5, 'a hammer hit stamps the end of its own Judged window');
+  s1.judgeUntil = st.w.time - 1; s1.judged = 3; s1.hp = 3; st.p.shield = 0; st.w.hitEnemy(s1, 99, { p: st.p, kind: 'weapon', crit: false }); near(st.p.shield, 0, 1e-9, 'a foe Judged by another source after the hammer window lapsed gives no kill shield');
 }
 
 // ---------------- Radiant Faith: weapon Radiance, class skills +25% ----------------

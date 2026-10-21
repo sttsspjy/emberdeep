@@ -1,4 +1,4 @@
-// cleric route-card visuals, client only: registers ED.ClassFx hooks (event, zone, hero and foe-mark hooks; contract in fx.js; the wave look uses ED.ClassFx.shot, see render.js shotBody).
+// cleric route-card visuals, client only: registers ED.ClassFx hooks (event, zone, hero and foe-mark hooks; contract in fx.js; the wave look is a body replacement, ED.ClassFx.shotBody[kind] of render.js shotBody).
 // Everything is read from what the snapshot already carries: events (skill hf / au, hturn, solar, verdict, chain k 'b'), the foe flags (Judged), the hero flags (glBuff, embolden) and the zone follow slot (z.fol); the cards a hero owns come from its boons.
 (function (ED) {
   'use strict';
@@ -105,7 +105,7 @@
   });
 
   // ---------------- foe mark: Judged foes of a Verdict party deal less (a cracked guard in gold) ----------------
-  const WEAK = { id: 'fx.glyph.corroded', ramp: 'gold', stub: 'guard' };
+  const WEAK = { id: 'fx.glyph.corroded', ramp: 'gold', stub: 'weak' };
   CFX.mark.push((e) => (e.judged > 0 && partyHas('verdict') ? WEAK : null));
 
   // ---------------- heroes: Aura of Faith halo, Embolden glints, Guardian Light sword ----------------
@@ -120,12 +120,12 @@
   CFX.hero.push((c, p, t, low) => {
     if (p.dead || p.downed) return;
     const ga = c.globalAlpha, slot = p.slot | 0, s2 = Pix.s2, Rn = R();
-    // Aura of Faith: a gold ring on the ground and a bright halo with orbiting motes over the Cleric's head
+    // Aura of Faith: a gold ring on the ground and a bright ring with orbiting motes around the Cleric's waist
     if (p.cls === 'cleric' && p.stats && p.stats.aura && auraOf(p)) {
-      const z = auraOf(p), fade = Math.min(1, z.dur ? (z.dur - z.t) * 2 : 1, z.t * 5), top = Rn && Rn.actorAnchor ? Rn.actorAnchor(p).top : -50;
+      const z = auraOf(p), fade = Math.min(1, z.dur ? (z.dur - z.t) * 2 : 1, z.t * 5), an = Rn && Rn.actorAnchor ? Rn.actorAnchor(p) : null;
       Pix.put(c, Pix.ell(11, 5, PALE, false, 3, (t * 6) & 7), 0, 2, 0.9 * fade);
-      const y = s2(top) - 4 + Math.round(Math.sin(t * 2.2)) * 2;
-      Pix.put(c, Pix.ell(9, 3, GOLD, false), 0, y, 0.7 * fade); Pix.put(c, Pix.ell(8, 2, '#ffffff', false), 0, y, fade);
+      const y = s2(an ? an.cy : -22) + 8 + Math.round(Math.sin(t * 2.2)) * 2; // waist height: the overhead rows belong to the name label, the head to the hero
+      Pix.put(c, Pix.ell(9, 3, GOLD, false, 3, (t * 5) & 7), 0, y, 0.85 * fade); Pix.put(c, Pix.ell(8, 2, PALE, false, 2, (-t * 6) & 7), 0, y, 0.6 * fade);
       if (!low) { rects.length = 0; for (let i = 0; i < 4; i++) { const a = t * 2.4 + i * TAU / 4; rects.push(s2(Math.cos(a) * 20), s2(y + Math.sin(a) * 7) - 2, 2, 2); } fillC(c, '#fff3c4', fade, rects); }
       if (Rn && !low) Rn.emit(p.x, p.y + y, 18, PALE, 0.22 * fade);
       c.globalAlpha = ga;
@@ -154,17 +154,17 @@
   });
 
   // ---------------- waves: Sunhammer's sun disc, Crusader's winged crescent ----------------
-  // ED.ClassFx.shot.wave(c, pr, t, x, y, foe, col) draws the shot and returns true, or returns false for the default crescent.
+  // ED.ClassFx.shotBody.wave(c, pr, t, x, y, foe, col) replaces the body of a wave shot and returns true, or returns false for the default crescent.
   const sunSprite = (R2, ph) => Pix.bake('sun|' + R2 + '|' + ph, 2 * R2 + 2, 2 * R2 + 2, R2 + 1, R2 + 1, (b, w) => {
-    const rp = Pix.RAMP.holy, c0 = Pix.px32(rp[1]), c1 = Pix.px32(rp[2]), c2 = Pix.px32(rp[3]), c3 = Pix.px32('#ffffff'), S = 2 * R2 + 2;
+    const rp = Pix.RAMP.holy, c0 = Pix.px32(rp[1]), c1 = Pix.px32(rp[2]), c2 = Pix.px32(rp[3]), c3 = Pix.px32(rp[0]), S = 2 * R2 + 2; // cream core (never white), gold body, dark rim
     for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
       const dx = x + 0.5 - S / 2, dy = y + 0.5 - S / 2, d = Math.hypot(dx, dy) / R2;
       if (d > 1) continue;
-      if (d <= 0.24) b[y * w + x] = c3;
-      else if (d <= 0.5) b[y * w + x] = c2;
-      else if (d <= 0.72) b[y * w + x] = c1;
-      else if (d <= 0.8) b[y * w + x] = c0;
-      else if (d > 0.86 && Math.cos(12 * Math.atan2(dy, dx) + ph * TAU / 4 * 0.5) > 0.5) b[y * w + x] = d > 0.95 ? c2 : c1;
+      if (d <= 0.24) b[y * w + x] = c2;
+      else if (d <= 0.5) b[y * w + x] = c1;
+      else if (d <= 0.72) b[y * w + x] = c0;
+      else if (d <= 0.8) b[y * w + x] = c3;
+      else if (d > 0.86 && Math.cos(12 * Math.atan2(dy, dx) + ph * TAU / 4 * 0.5) > 0.5) b[y * w + x] = d > 0.95 ? c1 : c0;
     }
   });
   const wingSprite = (R2, st) => Pix.bake('wing|' + R2 + '|' + st, 2 * R2 + 8, 2 * R2 + 8, R2 + 4, R2 + 4, (b, w) => { // a thin crescent with a white edge and two feathers trailing from each tip
@@ -176,12 +176,12 @@
       else if (Math.abs(ang) >= 1.05 && Math.abs(ang) < 1.5 && d <= R2 + 0.5 && d > R2 - 1.4 - (Math.abs(ang) - 1.05) * 3 && lx < 0.4 * R2 + 2) b[y * w + x] = c1; // tip feathers sweep backwards
     }
   });
-  (CFX.shot || (CFX.shot = {})).wave = (c, pr, t, x, y, foe) => {
+  (CFX.shotBody || (CFX.shotBody = {})).wave = (c, pr, t, x, y, foe) => {
     if (foe) return false;
     const heading = Math.round(Math.atan2(pr.vy, pr.vx) / TAU * 32) & 31;
     if (pr.r >= 26) { // Sunhammer: the sun disc turns as it rolls
       const R2 = Math.max(8, Math.round(pr.r / 2) - 1);
-      Pix.put(c, sunSprite(R2, (t * 8) & 3), Pix.s2(x), Pix.s2(y));
+      Pix.put(c, sunSprite(R2, (t * 8) & 3), Pix.s2(x), Pix.s2(y), 0.85); // translucent: the foe under the sun stays readable
       Pix.put(c, wingSprite(R2 + 1, heading), Pix.s2(x), Pix.s2(y), 0.85);
       return true;
     }
