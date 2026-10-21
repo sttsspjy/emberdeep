@@ -986,10 +986,10 @@
     for (const pk of pks) {
       const k = pk.kind, bob = Math.sin(t * 5 + pk.id) * 1.5, spr = art ? null : pickSprite(k);
       if (art) { // pixel sprites on the buffer pixel grid: coin 4-frame spin, heart, xp gem
-        const y = Math.round(pk.y - 3 + bob);
-        if (k === 'gold') AT_.draw(c, 'pickup.coin', AT_.frameAt('pickup.coin', t + (pk.id % 7) * 0.13), pk.x, y);
-        else if (k === 'xp') AT_.draw(c, 'pickup.xp', 0, pk.x, y);
-        else AT_.draw(c, 'pickup.heart', 0, pk.x, y);
+        const y = Math.round((pk.y - 3 + bob) / 2) * 2, x = Math.round(pk.x / 2) * 2; // on the 2-px art grid
+        if (k === 'gold') AT_.draw(c, 'pickup.coin', AT_.frameAt('pickup.coin', t + (pk.id % 7) * 0.13), x, y);
+        else if (k === 'xp') AT_.draw(c, 'pickup.xp', 0, x, y);
+        else AT_.draw(c, 'pickup.heart', 0, x, y);
       } else if (k === 'gold') { const w = Math.max(2, Math.round(8 * Math.max(0.2, Math.abs(Math.cos(t * 4 + pk.id))))); c.drawImage(spr, Math.round(pk.x - w), Math.round(pk.y - 12 + bob), w * 2, 16); }
       else if (k === 'xp') { const p = Math.round(16 * (1 + Math.sin(t * 6 + pk.id) * 0.05)); c.drawImage(spr, Math.round(pk.x - p / 2), Math.round(pk.y - 13 + bob - (p - 16) / 2), p, p); }
       else c.drawImage(spr, Math.round(pk.x - 8), Math.round(pk.y - 14 + bob), 16, 16);
@@ -1116,7 +1116,7 @@
     if (p.state && !r.open) { r.open = true; r.t0 = t; } else if (!p.state) r.open = false;
     return p.state ? t - r.t0 : 0;
   }
-  const orbDone = new Set(); let ironOk = false;
+  const orbDone = new Set(); let ironOk = false, merchOk = false;
   // Key of the Atlas variant of the shrine pedestal whose orb wears colour hex ('' while the atlas cannot build it).
   function orbKey(hex) {
     const key = 'pal:orb' + hex;
@@ -1150,7 +1150,7 @@
   const ELEM_HEX = ['#ff7a2a', '#7fe3ff', '#ffe66b', '#9be33c', '#fff0c2', '#a070ff'];
   // Draws prop p as pixel art and issues its lights; returns false for kinds without art.
   function propArt(c, p, view, local, t, G, L) {
-    const A_ = ED.Atlas, K_ = 2;
+    const A_ = ED.Atlas;
     switch (p.kind) {
       case 'chest': {
         Sp.shadow(c, 14);
@@ -1186,7 +1186,8 @@
         Sp.shadow(c, 11);
         G(10, -16, 34, '#ffcf6a', 0.4); L(8, -16, 100, '#ffcf6a', 0.7);
         A_.draw(c, 'prop.crate', 0, -26, 0); A_.draw(c, 'prop.bag', 0, 24, 0);
-        A_.draw(c, 'prop.merchant', A_.frameAt('prop.merchant', t), 0, 0);
+        if (!merchOk) merchOk = A_.variant('prop.merchant', 'pal:brown', () => ({ '#314152': '#4a3322', '#417089': '#8a5e34' })); // trader's robe in merchant brown
+        A_.draw(c, 'prop.merchant', A_.frameAt('prop.merchant', t), 0, 0, merchOk ? { variant: 'pal:brown' } : undefined);
         return true;
       }
       case 'fountain': {

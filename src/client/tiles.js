@@ -531,19 +531,20 @@
   // Highlight colour of wall caps per stratum (mixed into the top stop).
   const RIM = { ossuary: 'accent2', glowmire: 'accent', rimefrost: 'accent2', cinderforge: 'accent2', sanctum: 'accent', abyss: 'accent' };
   const RIM_K = { ossuary: 0.35, glowmire: 0.3, rimefrost: 0.9, cinderforge: 0.3, sanctum: 0.55, abyss: 0.4 };
+  const ART_LIFT = { ossuary: 0.6, glowmire: 0.7, rimefrost: 0, cinderforge: 0.7, sanctum: 0.6, abyss: 1.0 }; // floor brightness boost (the lighting multiply only darkens)
   // Per-stratum stone ramps: floor, wall (cap, brick, mortar, outline) and the flame ramp of torches.
   const rampCache = new Map();
   function rampsFor(biome) {
     let o = rampCache.get(biome.id);
     if (o) return o;
-    const P = biome.pal, lift = 1 + (LIFT[biome.id] || 0);
+    const P = biome.pal, lift = 1 + (ART_LIFT[biome.id] || 0);
     const gr = rgbOf(P.grout), fa = rgbOf(P.floorA), fb = rgbOf(P.floorB), ws = rgbOf(P.wallShadow), wf = rgbOf(P.wallFace), wt = rgbOf(P.wallTop), li = rgbOf(P.light);
     const rim = mixA(wt, rgbOf(P[RIM[biome.id]] || P.light), RIM_K[biome.id] || 0.3);
     const fl = mulA(fa, lift);
     o = {
       floor: ramp5([mixA(mulA(gr, lift * 0.9), fl, 0.35), fl, mixA(fl, mulA(fb, lift), 0.5), mixA(fl, wt, 0.5), wt]),
       wall: ramp5([ws, mixA(ws, wf, 0.6), mixA(wf, wt, 0.28), wt, rim]),
-      flame: [mulA(li, 0.35), mulA(li, 0.8), li, mixA(li, [255, 255, 255], 0.55), [255, 255, 255]],
+      flame: ((fb) => [mulA(fb, 0.3), mulA(fb, 0.62), fb, mixA(fb, [255, 255, 255], 0.5), [255, 255, 255]])(biome.id === 'ossuary' || biome.id === 'cinderforge' ? li : mixA(rgbOf(P.accent), li, 0.3)), // warm strata keep their light colour; the cold ones a saturated flame
     };
     rampCache.set(biome.id, o);
     return o;
@@ -552,7 +553,7 @@
   function modeFn(cat, biome) {
     const rp = rampsFor(biome), P = biome.pal, ramp = cat === 'floor' ? rp.floor : rp.wall;
     const stone = (r, g, b) => Math.max(r, g, b) - Math.min(r, g, b) <= 56 && lumOf(r, g, b) <= 0.8;
-    const acc = rgbOf(P.accent), acc2 = rgbOf(P.accent2);
+    const acc = rgbOf(P.accent);
     return (px) => {
       const r = px & 255, g = (px >>> 8) & 255, b = (px >>> 16) & 255;
       if (cat === 'torch') {
@@ -579,18 +580,18 @@
   { const add = (cat, id) => SHEET.push([cat, id]);
     for (let i = 1; i <= 8; i++) add('floor', 'tile.floor.' + i);
     for (let i = 1; i <= 6; i++) add('floor', 'tile.dark.floor.' + i);
-    add('floor', 'tile.spikes'); add('floor', 'tile.hole');
+    add('floor', 'tile.spikes');
     for (const s of ['left', 'mid', 'right']) { add('wall', 'tile.wall.cap.' + s); add('wall', 'tile.wall.face.' + s); }
     for (const s of ['left', 'right']) { add('wall', 'tile.wall.side.' + s); add('wall', 'tile.door.frame.' + s); }
     add('wall', 'tile.wall.hole.1'); add('wall', 'tile.wall.hole.2'); add('goo', 'tile.wall.goo'); add('grate', 'tile.wall.grate');
-    add('wall', 'tile.door.leaf.closed'); add('wall', 'tile.door.leaf.open'); add('wall', 'tile.door.frame.top');
+    add('wall', 'tile.door.leaf.closed'); add('wall', 'tile.door.leaf.open');
     add('gate', 'tile.gate.bars'); add('gate', 'tile.gate.bars.side');
     for (let i = 1; i <= 3; i++) add('wall', 'tile.fountain.top.' + i);
-    for (const c of ['red', 'blue']) { add('wall', 'tile.fountain.mid.' + c); add('wall', 'tile.fountain.basin.' + c); }
+    for (const c of ['red', 'blue']) add('wall', 'tile.fountain.mid.' + c);
     for (const c of ['red', 'blue', 'green', 'yellow']) add('wall', 'deco.banner.' + c);
     add('torch', 'tile.torch.wall'); add('torch', 'tile.torch.floor');
-    for (const s of ['full', 'rug', 'run.fill', 'run.top', 'run.bot', 'band']) add('carpet', 'tile.carpet.red.' + s);
-    add('wall', 'prop.column'); add('wall', 'prop.column.wall'); add('wall', 'deco.pillarstub');
+    for (const s of ['run.fill', 'run.top', 'run.bot']) add('carpet', 'tile.carpet.red.' + s);
+    add('wall', 'prop.column');
   }
   let wpx = null; // pixels of the world page, read once
   function worldPixels() {
@@ -636,12 +637,14 @@
     return sh;
   }
   // Draws frame i of `id` from the sheet with the logical frame's top-left at art px (ax, ay); cols [c0, c1) of the logical frame only when given (column c0 lands on ax).
-  function sblit(g, sh, id, i, ax, ay, c0, c1) {
+  // Rows [r0, r1) of the logical frame likewise (row r0 lands on ay).
+  function sblit(g, sh, id, i, ax, ay, c0, c1, r0, r1) {
     const q = sh.rects[id]; if (!q) return false;
     const m = q[i | 0]; if (!m || !m.w) return false;
-    let sx = m.x, sw = m.w, dx = m.ox;
+    let sx = m.x, sw = m.w, dx = m.ox, sy = m.y, sh_ = m.h, dy = m.oy;
     if (c0 !== undefined) { const a = Math.max(dx, c0), b = Math.min(dx + sw, c1); if (b <= a) return false; sx += a - dx; sw = b - a; dx = a - c0; }
-    g.drawImage(sh.src, sx, m.y, sw, m.h, (ax + dx) * K, (ay + m.oy) * K, sw * K, m.h * K);
+    if (r0 !== undefined) { const a = Math.max(dy, r0), b = Math.min(dy + sh_, r1); if (b <= a) return false; sy += a - dy; sh_ = b - a; dy = a - r0; }
+    g.drawImage(sh.src, sx, sy, sw, sh_, (ax + dx) * K, (ay + dy) * K, sw * K, sh_ * K);
     return true;
   }
 
@@ -734,7 +737,7 @@
             const thr = 0.56 + 0.022 * Math.sin(f * 1.5708 + n2 * 6.28), v = thr - n1;
             if (d <= 2 && n1 > 0.32) c = crust[d === 1 ? 1 : 0];
             else if (v < 0) c = up <= thr ? crust[2] : (hs > 0.8 ? crust[1] : crust[0]);
-            else { c = v < 0.05 ? pk('#ffb83a') : v < 0.15 ? pk('#f2701a') : pk('#c8400c'); if (hs > 0.992 && (f + (hs * 400 | 0)) % HZ_NF === 0) c = pk('#ffe9a0'); }
+            else { c = v < 0.05 ? pk('#f59a2a') : v < 0.15 ? pk('#dd5f14') : pk('#b0360b'); if (hs > 0.992 && (f + (hs * 400 | 0)) % HZ_NF === 0) c = pk('#ffe0a0'); }
           } else if (kind === 'poison') { // murky pool with algae and rising bubbles
             if (d === 1) c = rimC;
             else {
@@ -788,13 +791,15 @@
     const dark = bid === 'abyss', nv = dark ? 6 : 8, fbase = dark ? 'tile.dark.floor.' : 'tile.floor.';
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
       const t = tiles[y * W + x]; if (t !== 0 && t !== 4) continue;
-      const r = hashS(x, y, 1, s);
+      const r = hashS(x, y, 1, s), vv = hashS(x, y, 5, s);
       sblit(g, sh, fbase + (r < 0.86 ? 1 : 2 + Math.floor((r - 0.86) / 0.14 * (nv - 1)) % (nv - 1)), 0, x * AT, y * AT);
+      if (vv < 0.3) fill(g, x * AT, y * AT, AT, AT, 'rgba(0,0,0,' + (0.04 + vv * 0.2).toFixed(3) + ')'); // per-tile tone drift so the grid never reads as one flat sheet
+      else if (vv > 0.88) fill(g, x * AT, y * AT, AT, AT, 'rgba(255,255,255,' + (0.03 + (vv - 0.88) * 0.3).toFixed(3) + ')');
     }
     // Sanctum runner: three rows of carpet along the door axis, trim on its long edges
     if (bid === 'sanctum') {
       const cy = (H >> 1) + 1;
-      for (let x = 3; x <= W - 4; x++) for (let k = -1; k <= 1; k++) if (T_(x, cy + k) === 0) sblit(g, sh, 'tile.carpet.red' + (k < 0 ? '.run.top' : k > 0 ? '.run.bot' : '.run.fill'), 0, x * AT, (cy + k) * AT);
+      for (let x = 1; x <= W - 2; x++) for (let k = -1; k <= 1; k++) if (T_(x, cy + k) === 0) sblit(g, sh, 'tile.carpet.red' + (k < 0 ? '.run.top' : k > 0 ? '.run.bot' : '.run.fill'), 0, x * AT, (cy + k) * AT);
     }
     // ---- chasm: far wall face on the top row, black below ----
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
@@ -830,6 +835,7 @@
       di++;
       const wx = snap(d.x * T), wy = snap(d.y * T), ax = wx / K, ay = wy / K, spec = DECOR[d.k];
       if (!spec) { procDecor(d.k, ax, ay, d.v, U.RNG(s ^ (di * 7919))); continue; }
+      if (d.k === 'pillarstub') { out.statics.push({ k: 'stub', x: wx, y: wy, key: wy, h: 0 }); continue; }
       let n = spec[1], v = n ? Math.min(n - 1, Math.floor(d.v * n)) : 0;
       if (spec[0] === 'deco.puddle.' && PUDDLE_V[bid]) { const pv = PUDDLE_V[bid]; v = pv[Math.floor(d.v * pv.length) % pv.length]; }
       const id = n ? spec[0] + v : spec[0];
@@ -1010,7 +1016,7 @@
         R_.glow(c, x, TORCH_Y * K + 8, 22 + fl * 2, P.light, 0.4);
       }
       if (e.hz && !low) {
-        const k = biome.hazard, a = k === 'lava' ? 0.26 : k === 'poison' ? 0.14 : k === 'void' ? 0.1 : 0;
+        const k = biome.hazard, a = k === 'lava' ? 0.2 : k === 'poison' ? 0.14 : k === 'void' ? 0.1 : 0;
         if (a) { const f = Math.floor(t * 5) % HZ_NF; c.globalAlpha = a; for (let i = 0; i < e.hzCells.length; i++) { const q = e.hzCells[i]; c.drawImage(e.hz, f * AT, i * AT, AT, AT, q[0] * T, q[1] * T, T, T); } c.globalAlpha = 1; }
       }
       for (const ft of e.ftorches) {
@@ -1061,6 +1067,10 @@
     } else if (s.k === 'ftorch') {
       c.save(); c.translate(s.x, s.y); ED.Render.shadow(c, 8, 0.3, true); c.restore();
       c.imageSmoothingEnabled = false; sblit(c, sh, 'tile.torch.floor', loopF(t, 10, 8, s.x * 0.1), s.x / K - 8, s.y / K - 24); c.imageSmoothingEnabled = true;
+    } else if (s.k === 'stub') { // broken column: the cap and the base of the column sprite
+      const fx = s.x / K - 8, fy = s.y / K;
+      c.save(); c.translate(s.x, s.y); ED.Render.shadow(c, 9, 0.3, true); c.restore();
+      c.imageSmoothingEnabled = false; sblit(c, sh, 'prop.column', 0, fx, fy - 20, undefined, undefined, 4, 14); sblit(c, sh, 'prop.column', 0, fx, fy - 10, undefined, undefined, 29, 39); c.imageSmoothingEnabled = true;
     } else if (s.k === 'deco') {
       A.draw(c, s.id, 0, s.x, s.y, s.vk ? { variant: s.vk } : undefined);
     } else if (s.k === 'arch') {
