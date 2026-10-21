@@ -249,13 +249,13 @@
     for (const e of view.enemies) if (e.hp > 0) { qDraw(dn++, e.y, 1, e); nFoe++; }
     for (const a of view.allies) qDraw(dn++, a.y, 2, a);
     crowdLod(view, local, nFoe, dn);
-    for (const z of view.zones) if ((z.kind === 'fire' || z.kind === 'pfire') && fireFade(z) > 0.01) { // fire flames: kind 3 entries, d = flame index
+    for (const z of view.zones) if ((z.kind === 'fire' || z.kind === 'pfire') && fireFade(z) > 0.01) { // fire flames: kind 5 entries (3 and 4 are the room's statics and props), d = flame index
       const nf = fireCount(z), vis = Math.max(1, Math.ceil(nf * fireFade(z)));
-      for (let i = 0; i < vis; i++) { flamePos(z, i); qDraw(dn, flY, 3, z); drawPool[dn++].d = i; }
+      for (let i = 0; i < vis; i++) { flamePos(z, i); qDraw(dn, flY, 5, z); drawPool[dn++].d = i; }
     }
     drawList.length = dn; drawList.sort(byY);
     for (const it of drawList) {
-      if (it.k === 3) { drawFlame(c, it.o, it.d, t); continue; }
+      if (it.k === 5) { drawFlame(c, it.o, it.d, t); continue; }
       const o = it.o, rim = low ? null : rimLight(o.x, o.y, it.k === 0 ? 16 : 0), px = Math.round(o.x), py = Math.round(o.y); // feet on the buffer pixel grid
       if (rim) { shDX = -rim.dx * 0.28; shDY = -rim.dy * 0.12; } else { shDX = 0; shDY = 0; }
       if (it.k === 1) { // foe: pose offset, lean and squash (F.xform) go into one matrix with the mirror
