@@ -100,7 +100,7 @@
   // The command stream: teal motes run from each of the hero's minions to the foe they rush (a few per second, flat cost).
   function stream(p, low) {
     const now = F.time;
-    if (now - (lastStream[p.pid] || -9) < (low ? 0.3 : 0.16)) return;
+    if (now - (lastStream[p.pid] || -9) < (low ? 0.24 : 0.12)) return;
     lastStream[p.pid] = now;
     const v = view(), cs = commands();
     let tgt = null;
@@ -110,7 +110,7 @@
       if (a.owner !== p.pid) continue;
       const dx = tgt.x - a.x, dy = tgt.y - a.y, d = Math.hypot(dx, dy);
       if (d < 28) continue;
-      F.part(a.x, a.y - 10, { a: Math.atan2(dy, dx), size: 2, color: TEAL, add: true, drag: 0, lt: TEAL, ltr: 14 }, 230, Math.min(0.8, d / 230));
+      F.part(a.x, a.y - 10, { a: Math.atan2(dy, dx), size: 3, color: TEAL, add: true, drag: 0, lt: TEAL, ltr: 16 }, 250, Math.min(0.9, d / 250));
     }
   }
 
