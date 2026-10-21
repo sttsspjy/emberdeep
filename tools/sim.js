@@ -163,7 +163,7 @@ function smartScore(p, id, ctx, rng) {
   if (b.key) return 900 + aff(b.path);
   if (b.duo) return 850;
   if (b.path && !b.gate && (b.path === 'general' ? gen : els.includes(b.path))) return 600 + 10 * aff(b.path) + rar;
-  if (b.gate && !gen && b.path !== 'general' && els.length < ctx.gatesCap) return gateScore(p, b.path, ctx.w.stratum, rng);
+  if (b.gate) return !gen && b.path !== 'general' && els.length < ctx.gatesCap ? gateScore(p, b.path, ctx.w.stratum, rng) : 50; // over the --gates cap a gate is the last choice
   const n = NEUTRAL_PREF.indexOf(id);
   if (n >= 0) return 400 - n;
   if (b.cls) return 300 + rar;
@@ -555,7 +555,7 @@ function summarize(results) {
   // path lines: evolution / keystone / duo pacing, wins by main path and start, status payoffs, shields
   const elemRuns = results.filter(r => !r.gen && r.elGates.length), genRuns = results.filter(r => r.gen);
   const medS = (a) => (a.length ? median(a) : NaN), withS = (rs, key) => rs.filter(r => r[key]).map(r => (key === 'evoAt' ? r.evoAt.s : r[key]));
-  lines.push(`evolution stratum quartiles: element mains [${qs(withS(elemRuns, 'evoAt'))}] (${withS(elemRuns, 'evoAt').length}/${elemRuns.length} evolved; by IV entry ${pct(elemRuns.filter(r => r.evoAt && r.evoAt.s < 4).length, elemRuns.filter(r => r.stratum >= 4).length)}% of those reaching IV) | Generalist [${qs(withS(genRuns, 'evoAt'))}] (${withS(genRuns, 'evoAt').length}/${genRuns.length}) | per path ${ED.PATH_IDS.map(k => { const a = results.filter(r => r.evoAt && r.evo === k).map(r => r.evoAt.s); return `${k} [${qs(a)}] n=${a.length}`; }).join(' ')}`);
+  lines.push(`evolution stratum quartiles: element mains [${qs(withS(elemRuns, 'evoAt'))}] (${withS(elemRuns, 'evoAt').length}/${elemRuns.length} evolved; by IV entry ${pct(elemRuns.filter(r => r.stratum >= 4 && r.evoAt && r.evoAt.s < 4).length, elemRuns.filter(r => r.stratum >= 4).length)}% of those reaching IV) | Generalist [${qs(withS(genRuns, 'evoAt'))}] (${withS(genRuns, 'evoAt').length}/${genRuns.length}) | per path ${ED.PATH_IDS.map(k => { const a = results.filter(r => r.evoAt && r.evo === k).map(r => r.evoAt.s); return `${k} [${qs(a)}] n=${a.length}`; }).join(' ')}`);
   const two = elemRuns.filter(r => r.elGates.length === 2), duoRuns = two.filter(r => r.duo);
   lines.push(`keystone stratum quartiles [${qs(withS(results, 'keyAt'))}] (${withS(results, 'keyAt').length}/${n} took one) | duo (2-gate runs ${two.length}): taken ${pct(duoRuns.length, two.length)}%, by the end of IV ${pct(two.filter(r => r.duoAt && r.duoAt <= 4).length, two.length)}%, stratum quartiles [${qs(duoRuns.map(r => r.duoAt))}]`);
   const grp = (rs) => (rs.length ? `${rs.length} runs wins ${pct(rs.filter(r => r.victory).length, rs.length)}% depth ${ms(rs.map(r => r.stratum), 2)}` : '0 runs');
@@ -565,7 +565,7 @@ function summarize(results) {
   const per = (f) => ms(results.map(f), 1);
   lines.push(`per run: smites ${per(r => r.cnt.smite)} reaps ${per(r => r.cnt.reap)} (${pct(results.reduce((a, r) => a + r.cnt.reap, 0), results.reduce((a, r) => a + r.kills, 0))}% of kills; reap health ${f1(avg(results.map(r => r.cnt.reapHp)))}) tolls ${per(r => r.cnt.toll)} lances ${per(r => r.cnt.lance)} dash-rider hits ${per(r => r.cnt.dashHits)} downs ${per(r => r.downedBy.length)} | chain queue peak ${f1(avg(results.map(r => r.chainPeak)))} (max ${Math.max(...results.map(r => r.chainPeak))}) hops ${f1(avg(results.map(r => r.chainHops)))} (max ${Math.max(...results.map(r => r.chainHops))})`);
   const pois = results.filter(r => r.elGates.includes('poison'));
-  lines.push(`Venom bonus (${pois.length} Poison runs): ${f1(100 * pois.reduce((a, r) => a + r.venom.own + r.venom.ally, 0) / Math.max(1, pois.reduce((a, r) => a + r.venom.base, 0)))}% of damage dealt, own ${f1(pois.reduce((a, r) => a + r.venom.own, 0))} vs ally ${f1(pois.reduce((a, r) => a + r.venom.ally, 0))}, corrode part ${pct(pois.reduce((a, r) => a + r.venom.corrode, 0), pois.reduce((a, r) => a + r.venom.own + r.venom.ally, 0))}% of the bonus`);
+  lines.push(`Venom bonus (${pois.length} Poison runs): ${f1(100 * pois.reduce((a, r) => a + r.venom.own + r.venom.ally, 0) / Math.max(1, pois.reduce((a, r) => a + r.venom.base, 0)))}% of damage dealt (per run: own ${Math.round(pois.reduce((a, r) => a + r.venom.own, 0) / Math.max(1, pois.length))} vs ally ${Math.round(pois.reduce((a, r) => a + r.venom.ally, 0) / Math.max(1, pois.length))}), corrode part ${pct(pois.reduce((a, r) => a + r.venom.corrode, 0), pois.reduce((a, r) => a + r.venom.own + r.venom.ally, 0))}% of the bonus`);
   const shSum = (key) => { const o = {}; for (const r of results) for (const k in r.shield[key]) o[k] = (o[k] || 0) + r.shield[key][k] / n; return Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => k + ' ' + Math.round(v)).join(', ') || '-'; };
   const holyMains = results.filter(r => r.main === 'holy' && r.bossSecs > 0);
   lines.push(`shield per run (HP) gained: ${shSum('gained')} | absorbed: ${shSum('absorbed')} | Holy absorbed per boss-fight second (${holyMains.length} Holy mains): ${ms(holyMains.map(r => 100 * r.shield.holyBoss / r.bossSecs), 2)}% max HP/s (limit 0.5, design ceiling 1)`);
