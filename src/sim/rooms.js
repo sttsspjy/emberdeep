@@ -10,7 +10,7 @@
     '{skill1} and {skill2} cast your skills where you aim: some fly toward it, some land on it. {dash} dashes through danger.',
     'Clear a room to open its doors. The reward inside is shown on the door.',
     'Every new room costs lantern light (shown on its door). In the dark the Gloom hunts: press {flare} to flare it away.',
-    'The skull on your map marks the stratum boss. {map} shows the map.',
+    'The skull on your map marks the stratum boss. {map} opens your build, combat numbers and the map ({skill1} / {skill2} switch tabs).',
   ];
 
   // Regular foes of a biome that exist in the enemy table (rosters may name foes whose definitions land later).
@@ -204,7 +204,9 @@
     const id = () => U.uid();
     if (room.type === 'start') {
       if (this.tutorial && s === 1) {
-        SIGNS.forEach((txt, i) => props.push({ id: id(), kind: 'sign', x: c.x + (i - (SIGNS.length - 1) / 2) * 84, y: c.y + 58, text: txt, state: 0 }));
+        // Sign 0 (mouse aim) takes the centre slot, 50 px from the solo spawn; the rest fan out to both sides.
+        const SLOT = [2, 1, 3, 0, 4];
+        SIGNS.forEach((txt, i) => props.push({ id: id(), kind: 'sign', x: c.x + (SLOT[i] - (SIGNS.length - 1) / 2) * 84, y: c.y + 58, text: txt, state: 0 }));
       } else {
         props.push({ id: id(), kind: 'sign', x: c.x, y: c.y + 58, text: ED.biomeFor(s).blurb, state: 0 });
       }

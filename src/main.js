@@ -75,6 +75,7 @@
     A.closeNet();
     A.state = 'title';
     $('ov-hearth').hidden = true;
+    $('ov-credits').hidden = true;
     ED.UI.renderTitle();
     ED.UI.show('title');
     ED.UI.maybeNews();
@@ -87,6 +88,8 @@
     A.closeNet();
     A.state = 'hearth';
     $('ov-hearth').hidden = true;
+    $('ov-credits').hidden = true;
+    $('scr-title').inert = false;
     ED.UI.show('hearth');
     ED.UI.setTab(tab || 'descend');
     ED.Audio.music('camp');
@@ -132,7 +135,7 @@
     const myPid = ED.Game.s ? ED.Game.s.localPid : A.myPid;
     const mine = summary.players && summary.players[myPid];
     const hero = ED.Game.s && ED.Game.s.me; // the local hero's evolution, read before the session is dropped
-    const myEvo = hero && hero.stats && hero.stats.evo ? { path: hero.stats.evo, weapon: hero.weapon } : null;
+    const myEvo = hero && hero.stats && hero.stats.evo ? { path: hero.stats.evo, weapon: hero.stats.weapon ? hero.stats.weapon.name : ED.WEAPONS[hero.weapon] ? ED.WEAPONS[hero.weapon].name : '' } : null;
     // Deeds are per hero: the party-wide summary fields are replaced by this hero's own (a client's partial summary has no hero entry: its relic count is the held one, revives 0); the party's evolution stays for the results line.
     const run = Object.assign({}, summary, { cls: A.runCls, emberBonus: mine ? mine.emberBonus : 0, myEvo, partyEvolved: !!summary.evolved,
       evolved: !!(myEvo || (mine && mine.evo)), maxRelics: mine ? mine.maxRelics | 0 : hero && hero.relics ? hero.relics.length : 0, revives: mine ? mine.revivesGiven | 0 : 0 });

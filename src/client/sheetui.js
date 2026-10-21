@@ -60,12 +60,13 @@
     $('sh-name').textContent = h.name; $('sh-name').style.color = color;
     $('sh-class').textContent = ' · ' + h.clsName;
     const rt = m.build.route;
-    $('sh-sub').textContent = m.weapon.name + (rt.route ? ' · ' + ED.routeLabel(h.cls, rt.route) + ' route' + (rt.fork ? ': ' + ED.BOONS[rt.fork].name + (rt.rank > 1 ? ' ' + rt.rank : '') : '') : ' · no route yet');
+    $('sh-sub').textContent = m.weapon.name + (rt.route ? ' · ' + ED.routeLabel(h.cls, rt.route) + ' route' + (rt.fork ? ': ' + ED.BOONS[rt.fork].name + (rt.rank > 1 ? ' (rank ' + rt.rank + ')' : '') : '') : ' · no route yet');
     const xpf = U.clamp(h.xp / Math.max(1, h.xpNext), 0, 1);
     $('sh-lv').textContent = 'Lv ' + h.level; $('sh-xpbar').style.width = Math.round(100 * xpf) + '%'; $('sh-xp').textContent = Math.round(100 * xpf) + '%';
     $('sh-hp').textContent = `${h.hp} / ${h.maxHp}`; $('sh-hpbar').style.width = Math.round(100 * U.clamp(h.hp / Math.max(1, h.maxHp), 0, 1)) + '%';
     $('sh-shield').textContent = h.shield > 0 ? '+' + Math.ceil(h.shield) : ''; $('sh-shield').hidden = !(h.shield > 0);
     $('sh-gold').textContent = String(h.gold);
+    if (!$('sh-coin').getAttribute('src')) $('sh-coin').src = ico('coin', '#ffd36b');
     $('sh-strat').textContent = `Stratum ${U.roman(m.ctx.stratum)} · ${biome.name}`;
     $('sh-aff').innerHTML = affChips(m.aff.now);
   }
@@ -80,7 +81,7 @@
     return `<div class="sh-path sh-f" data-k="path:${P.id}" style="--pc:${P.color}"><div class="sh-ph"><img alt="" src="${pathIco(P.id)}"><b>${esc(P.name)}</b><span class="sh-aff">affinity <b>${P.aff}</b></span></div>`
       + `<div class="aff-bar">${cells.join('')}</div>`
       + `<div class="sh-pl${P.key.state === 'owned' ? ' ok' : ''}"><u>◆</u> Keystone at ${P.key.at}: ${keyTxt}</div>`
-      + `<div class="sh-pl${P.evo.state === 'evolved' ? ' ok' : ''}"><u>★</u> Evolves at ${P.evo.at}${P.id === 'general' ? '' : ' with keystone'}: ${evoTxt}</div></div>`;
+      + `<div class="sh-pl${P.evo.state === 'evolved' ? ' ok' : ''}"><u>★</u> ${P.evo.state === 'evolved' ? '' : `Evolves at ${P.evo.at}${P.id === 'general' ? '' : ' with keystone'}: `}${evoTxt}</div></div>`;
   }
   function routeBlock(R) {
     let h = '';
@@ -122,12 +123,12 @@
     left += head('Class route', B.route.route ? esc(ED.routeLabel(m.hero.cls, B.route.route)) : 'choose at level 3') + `<div class="sh-list">${routeBlock(B.route)}</div>`;
     let boons = B.groups.length ? '' : '<div class="sh-empty">No boons yet. The first pick comes from the start offer.</div>';
     for (const g of B.groups) {
-      const P = g.path ? ED.PATHS[g.path] : null, title = g.group === 'duo' ? 'Duo' : g.group === 'route' ? 'Class route' : P ? `${P.name} <small>affinity ${ED.pathAffinity(p.boons || {}, g.path)}</small>` : 'Open (General)';
+      const P = g.path ? ED.PATHS[g.path] : null, title = g.group === 'duo' ? 'Duo' : g.group === 'route' ? 'Class route' : P ? `${P.name} <small>affinity ${ED.pathAffinity(p.boons || {}, g.path)}</small>` : 'Open <small>any hero, no path</small>';
       boons += `<div class="sh-bg"><div class="sh-gh"${P ? ` style="--pc:${P.color}"` : ''}>${P ? `<img alt="" src="${pathIco(g.path)}">` : ''}${title}</div>${g.items.map(boonRow).join('')}</div>`;
     }
     let status = '';
     for (const s of B.statuses) status += `<div class="sh-status sh-f" data-k="s:${s.id}" style="border-left-color:${s.color}"><b style="color:${s.color}">${esc(s.name)}</b>${esc(s.rule)}</div>`;
-    for (const d of m.mult.debuffs) status += `<div class="sh-status sh-f" data-k="s:${d.id}:${d.text.length}" style="border-left-color:${d.color}"><b style="color:${d.color}">${esc(d.name)}</b>${esc(d.text)}</div>`;
+    for (const d of m.mult.debuffs) if (!B.statuses.some(s => s.id === d.id)) status += `<div class="sh-status sh-f" data-k="s:${d.id}:${d.text.length}" style="border-left-color:${d.color}"><b style="color:${d.color}">${esc(d.name)}</b>${esc(d.text)}</div>`;
     const mid = head('Boons', String(B.groups.reduce((n, g) => n + g.items.length, 0))) + `<div class="sh-boons">${boons}</div>` + (status ? head('Statuses') + `<div class="sh-list">${status}</div>` : '');
     let rel = B.relics.length ? '' : '<div class="sh-empty">No relics yet.</div>';
     for (const r of B.relics) {
@@ -143,26 +144,26 @@
     let h = `<div class="sh-card sh-f" data-k="weapon" style="--pc:${color}"><div class="sh-ct"><img alt="" src="${ico(WEAPON_ICON[w.look] || 'sword', color)}"><b>${esc(w.name)}</b><span class="sh-chip">${w.kind === 'melee' ? 'melee' : 'ranged'}</span>${w.fork ? `<span class="sh-chip">${w.fork}</span>` : ''}</div>`;
     h += `<div class="sh-big">${n1(w.hit)}<small>per hit</small><span class="sh-crit">${n1(w.crit)} crit <small>(${pc(w.critChance)} · ${X(w.critMult)})</small></span></div>`;
     h += `<div class="sh-row"><b>${w.aps.toFixed(2)}</b> attacks/s <span class="mut">(base ${w.apsBase.toFixed(2)})</span>`;
-    h += w.kind === 'melee' ? ` · reach ${w.reach} · ${w.allAround ? 'all around' : w.arcDeg + '°'}` : ` · ${w.n} ${w.n > 1 ? 'projectiles' : 'projectile'} · range ${w.range}${w.pierce ? ` · pierce ${w.pierce}` : ''}${w.homing ? ' · seeking' : ''}${w.blast ? ` · blast r ${w.blast.r}` : ''}`;
+    h += w.kind === 'melee' ? ` · reach ${w.reach} · ${w.allAround ? 'all around' : w.arcDeg + '°'}` : ` · ${w.n} ${w.n > 1 ? 'projectiles' : 'projectile'} · range ${w.range}${w.pierce ? ` · pierce ${w.pierce}` : ''}${w.homing ? ' · seeking' : ''}${w.blast ? ` · blast radius ${w.blast.r}` : ''}`;
     h += '</div>';
     if (w.fan) h += `<div class="sh-row mut">${w.oneFoe} of ${w.n} shots reach one foe at ${Sh.REF.d} px; all ${w.n} point-blank</div>`;
-    for (const e of w.extras) h += `<div class="sh-row sh-ex"><span>${esc(e.label)}</span> <b>${n1(e.perAttack)}</b><span class="mut"> per attack${e.r ? ` (r ${e.r})` : ''}${e.note ? ' · ' + esc(e.note) : ''}${e.el ? ' · ' + cap1(e.el) : ''}</span></div>`;
+    for (const e of w.extras) h += `<div class="sh-row sh-ex"><span>${esc(e.label)}</span> <b>${n1(e.perAttack)}</b><span class="mut"> per attack${e.r ? ` (radius ${e.r})` : ''}${e.note ? ' · ' + esc(e.note) : ''}${e.el ? ' · ' + cap1(e.el) : ''}</span></div>`;
     for (const n of w.notes) h += `<div class="sh-row mut sh-ex">${esc(n)}</div>`;
     return h + `<div class="sh-tot">≈ <b>${n1(w.dps)}</b> damage/s on one foe${w.fan ? ` <span class="mut">(${n1(w.dpsAll)} if every shot lands)</span>` : ''}<small>every attack lands, no statuses, neutral stratum</small></div></div>`;
   }
   function partRow(q, stratum) {
-    if (q.kind === 'zone') return `<div class="sh-part"><span class="sh-plab">${esc(q.label)}</span><span class="sh-pv"></span><span class="sh-pn">${[q.r ? `r ${q.r}` : '', q.dur ? `${Sh.secs(q.dur)}s` : '', q.note ? esc(q.note) : ''].filter(Boolean).join(' · ')}</span></div>`;
+    if (q.kind === 'zone') return `<div class="sh-part"><span class="sh-plab">${esc(q.label)}</span><span class="sh-pv"></span><span class="sh-pn">${[q.r ? `radius ${q.r}` : '', q.dur ? `${Sh.secs(q.dur)}s` : '', q.note ? esc(q.note) : ''].filter(Boolean).join(' · ')}</span></div>`;
     let v = n1(q.here), n = '';
     if (q.kind === 'status') n = `${esc(q.statusName)} pool added${q.aff !== 1 ? ` · ${X(q.aff)} here` : ''}`;
     else if (q.kind === 'minion') n = `per strike · ${q.hitsEach} ${pl(q.hitsEach, 'strike')} each in ${Sh.secs(q.dur)}s · ${q.minions} ${pl(q.minions, 'minion')}`;
-    else if (q.kind === 'sec') n = `per 0.5 s · ${q.oneFoe} ${pl(q.oneFoe, 'tick')} over ${Sh.secs(q.dur)}s · r ${q.r}`;
+    else if (q.kind === 'sec') n = `per 0.5 s · ${q.oneFoe} ${pl(q.oneFoe, 'tick')} over ${Sh.secs(q.dur)}s · radius ${q.r}`;
     else {
       const bits = [];
       if (q.kind === 'tick') bits.push(`${q.oneFoe} ${pl(q.oneFoe, 'tick')} of ${Sh.secs(q.every)}s over ${Sh.secs(q.dur)}s`);
       else if (q.fanN) bits.push(`${q.oneFoe} of ${q.fanN} ${pl(q.fanN, 'arrow')} reach${q.oneFoe === 1 ? 'es' : ''} one foe`);
       else if (q.oneFoe === 0) bits.push(esc(q.note || 'conditional'));
       else if (q.oneFoe > 1) bits.push(`×${q.oneFoe} on one foe`);
-      if (q.r) bits.push('r ' + q.r);
+      if (q.r) bits.push('radius ' + q.r);
       if (q.stun) bits.push(`stun ${Sh.secs(q.stun)}s`);
       if (q.alwaysCrit) bits.push('always crits'); else if (q.noCrit) bits.push('no crit');
       if (q.selfVuln) bits.push(`includes Judged +${Math.round(q.selfVuln * 100)}%`);
@@ -185,7 +186,7 @@
   function dashCard(m, color) {
     const d = m.dash;
     let h = `<div class="sh-card sh-f" data-k="dash" style="--pc:${color}"><div class="sh-ct"><kbd>${esc(ED.Input.label('dash'))}</kbd><img alt="" src="${ico('wing', color)}"><b>Dash</b><span class="sh-cd">${d.cd.toFixed(2)}s</span></div><div class="sh-sub">Untouchable for ${d.ifr}s while you dash</div>`;
-    for (const q of d.parts) h += `<div class="sh-part"><span class="sh-plab">${esc(q.label)}</span><span class="sh-pv">${q.dmg !== undefined ? n1(q.dmg) : ''}</span><span class="sh-pn">${q.per ? 'per ' + q.per + ' · ' : ''}${q.r ? 'r ' + q.r + ' · ' : ''}${q.dur ? Sh.secs(q.dur) + 's · ' : ''}${esc(q.note || '')}</span></div>`;
+    for (const q of d.parts) h += `<div class="sh-part"><span class="sh-plab">${esc(q.label)}</span><span class="sh-pv">${q.dmg !== undefined ? n1(q.dmg) : ''}</span><span class="sh-pn">${q.per ? 'per ' + q.per + ' · ' : ''}${q.r ? 'radius ' + q.r + ' · ' : ''}${q.dur ? Sh.secs(q.dur) + 's · ' : ''}${esc(q.note || '')}</span></div>`;
     return h + '</div>';
   }
   function procsCard(m) {
@@ -198,7 +199,7 @@
     h += stat('o:dmg', 'Damage', X(M.dmg.total), '', chips(M.dmg.rows, 'dmg'));
     h += stat('o:atk', 'Attack speed', X(M.atk.total), `${w.aps.toFixed(2)} attacks/s`, chips(M.atk.rows, 'atk'));
     h += stat('o:crit', 'Critical', `${pc(M.crit.total)} · ${X(M.crit.mult)}`, `the average hit counts ${X(M.crit.expected)}`, [{ lab: 'Chance', html: chips(M.crit.rows, 'crit') }, { lab: 'Damage', html: `<span>Base <b>${X(M.crit.mult - M.crit.rowsDmg.reduce((a, r) => a + r.v, 0))}</b></span>` + chips(M.crit.rowsDmg, 'critDmg') }]);
-    h += stat('o:area', 'Area', '+' + pc(M.area.total), `blasts and auras r ${X(M.area.blast)} · melee arc ${X(M.area.arc)}`, chips(M.area.rows, 'area'));
+    h += stat('o:area', 'Area', '+' + pc(M.area.total), `blasts and auras radius ${X(M.area.blast)} · melee arc ${X(M.area.arc)}`, chips(M.area.rows, 'area'));
     h += stat('o:cdr', 'Skill cooldown', M.cdr.eff > 0 ? '−' + pc(M.cdr.eff) : '0%', M.cdr.capped ? `raw ${pc(M.cdr.raw)}: full up to ${pc(M.cdr.soft)}, half above it, at most ${pc(M.cdr.max)}` : '', chips(M.cdr.rows, 'cdr'));
     if (M.projN.total || M.projN.pierce) h += stat('o:proj', 'Projectiles and pierce', `+${M.projN.total} · pierce +${M.projN.pierce}`, '', [{ lab: 'Projectiles', html: chips(M.projN.rows, 'projN') }, { lab: 'Pierce', html: chips(M.projN.rowsPierce, 'pierce') }]);
     for (const s of M.slots) {
@@ -223,7 +224,8 @@
     h += stat('d:ehp', 'Effective health', n1(D.ehp), 'hits you can take, counting armor and dodge', '');
     const parts = [`${U.roman(m.ctx.stratum)} ${X(D.foeParts.depth * D.foeParts.threat)}`];
     if (D.foeParts.pact !== 1) parts.push(`pact ${X(D.foeParts.pact)}`);
-    parts.push(`${m.lantern.name} ${X(D.foeParts.dread)}`, D.deepKnown ? `Deep ${X(D.foeParts.deep)}` : 'Deep (not shown)');
+    parts.push(`${m.lantern.name} ${X(D.foeParts.dread)}`);
+    if (D.deepKnown) parts.push(`Dark rooms entered ${X(D.foeParts.deep)}`); // clients do not know the host's dark-room count
     h += stat('d:foe', 'Foes that spawn now hit', X(D.foeHere), parts.join(' · ') + '. Foes already alive keep the damage they spawned with.', '');
     h += stat('d:heal', 'Healing received', X(D.heal), `${X(D.healMul)} from your stats${D.pactHeal !== 1 ? ' and pact' : ''} · ${X(m.lantern.effect.heal)} from the ${m.lantern.name} lantern`, chips(D.healRows, 'heal'));
     for (const s of D.heals) h += stat('d:h:' + s.label, 'Heals: ' + esc(s.label), '', esc(s.text), '');
@@ -303,8 +305,8 @@
     SH.dirty = false; SH.t = 0;
   }
   function paintFoot() {
-    const I = ED.Input, k = (a) => `<kbd>${esc(I.label(a))}</kbd>`;
-    $('sh-keys').innerHTML = $('sh-foot').innerHTML = I.device === 'pad' ? '<kbd>LB</kbd><kbd>RB</kbd> tabs · <kbd>D-pad</kbd> move · <kbd>R stick</kbd> scroll · <kbd>Y</kbd> party · <kbd>B</kbd> close'
+    const I = ED.Input, k = (a) => `<kbd>${esc(I.label(a))}</kbd>`, gs = ED.Game.s, party = gs && gs.view && gs.view.players.size > 1; // Y cycles heroes: only with a party
+    $('sh-keys').innerHTML = $('sh-foot').innerHTML = I.device === 'pad' ? '<kbd>LB</kbd><kbd>RB</kbd> tabs · <kbd>D-pad</kbd> move · <kbd>R stick</kbd> scroll · ' + (party ? '<kbd>Y</kbd> party · ' : '') + '<kbd>B</kbd> close'
       : `${k('skill1')}${k('skill2')} tabs · ${k('up')}${k('left')}${k('down')}${k('right')} move · <kbd>PgUp</kbd><kbd>PgDn</kbd> scroll · ${k('map')} or <kbd>Esc</kbd> close`;
   }
 

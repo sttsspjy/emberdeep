@@ -42,10 +42,11 @@
     charge: { name: 'Charge', color: '#ffe66b', el: 'lightning', mulKey: 'shockMul', rule: 'Every 1 s the stored charge discharges into the foe and 60% of it arcs to 3 nearby foes.' },
     venom: { name: 'Venom', color: '#9be33c', el: 'poison', mulKey: 'corrode', rule: 'Envenomed foes take up to +25% damage from you (half from allies); at full Venom the foe is Corroded and its guard breaks.' },
     radiance: { name: 'Radiance', color: '#fff0c2', el: 'holy', mulKey: 'smiteMul', rule: 'Stored light Smites the foe at 12% of its health (elites 6%, bosses 2%) and shields heroes near it.' },
-    doom: { name: 'Doom', color: '#a070ff', el: 'shadow', mulKey: 'doomMul', rule: 'A foe whose health falls to its Doom is Reaped; a boss takes its Doom as damage at 5% of its health.' },
+    doom: { name: 'Doom', color: '#a070ff', el: 'shadow', mulKey: 'doomMul', rule: 'A foe whose health falls to its Doom is Reaped. A boss is never Reaped: each time its Doom reaches 5% of its health it Tolls, taking that Doom as damage.' },
     bleed: { name: 'Bleed', color: '#d9dfe8', el: null, mulKey: 'bleedMul', rule: 'Physical: every 0.5 s, 20% of the pool (at least 1) is dealt as damage. Never weak, never resisted.' },
     judged: { name: 'Judged', color: '#ffd36b', el: 'holy', rule: 'Takes +20% damage; does not stack with other +20% vulnerability (Hailthorns, smoke).' },
     marked: { name: 'Marked', color: '#ff8a5a', el: null, rule: 'Takes extra damage from every hero.' },
+    sundered: { name: 'Sundered', color: '#ffb04a', el: null, rule: 'Takes +4% damage from you per stack (up to 10).' },
     exposed: { name: 'Exposed', color: '#ef5a46', el: null, rule: 'A foe left alive too long takes ×1.5 damage and bleeds health.' },
     ailment: { name: 'Ailments', color: '#d9dfe8', el: null, rule: 'A foe counts one ailment for each of: a Burn, Bleed or Charge pool worth 1% of its health; Chill of 25 or more, or Frozen; Venom above 25; Radiance a quarter of the way to a Smite; Doom worth 2% of its health; Dazed (stunned or blinded); Sealed. Brand, Open Veins, Contagion and Gangrene read the count (at most 4).' }, // thresholds as World.ailments (combat.js)
   };
@@ -160,7 +161,7 @@
     evo_holy: { name: 'Hallowed Arms', rar: 'l', icon: 'sun', path: 'holy', evo: 'holy', desc: 'Every 3rd attack releases a lance of light along your aim (melee 150 long, projectiles 260, 20 wide): 80% weapon damage as Holy to every foe on it. Smites shield 0.25% more.', mods: { smiteShield: 0.0025 }, strikes: [{ label: 'Lance of light', on: 'any', mul: 0.8, every: 3, n: 1, crit: false, proc: true, el: 'holy' }], max: 1 },
 
     // ---- Shadow ----
-    doommark: { name: 'Mark of Doom', rar: 'r', icon: 'mask', path: 'shadow', gate: true, desc: 'Hits mark 30% of their damage as Doom (elites and bosses take 70% of it). A foe whose health falls to its Doom is Reaped. A boss takes its Doom as damage each time it reaches 5% of its health.', mods: { shadowInfuse: 0.3 }, max: 1 },
+    doommark: { name: 'Mark of Doom', rar: 'r', icon: 'mask', path: 'shadow', gate: true, desc: 'Hits mark 30% of their damage as Doom (elites and bosses take 70% of it). A foe whose health falls to its Doom is Reaped. A boss is never Reaped: each time its Doom reaches 5% of its health it Tolls, taking that Doom as damage.', mods: { shadowInfuse: 0.3 }, max: 1 },
     malignance: { name: 'Malignance', rar: 'c', icon: 'mask', path: 'shadow', desc: 'Hits mark {shadowInfuse} more of their damage as Doom.', mods: { shadowInfuse: 0.08 }, max: 2 },
     malice: { name: 'Malice', rar: 'c', icon: 'skull', path: 'shadow', desc: '+{malice} damage to foes carrying Doom.', mods: { malice: 0.1 }, max: 2 },
     inevitable: { name: 'Inevitable', rar: 'r', icon: 'skull', path: 'shadow', desc: 'Elites and bosses take {doomTough} more of your Doom (full at rank 2).', mods: { doomTough: 0.15 }, max: 2 },
@@ -171,7 +172,7 @@
     evo_shadow: { name: 'Umbral Arms', rar: 'l', icon: 'mask', path: 'shadow', evo: 'shadow', desc: 'A shadow twin repeats every attack 0.15s later at 40%; twin hits mark double Doom.', mods: {}, strikes: [{ label: 'Shadow twin', on: 'any', mul: 0.4, every: 1, n: 1, crit: true, proc: true, of: 'attack' }], max: 1 },
 
     // ---- General (Generalist only; keen and brutal also open at rank 1 to element heroes) ----
-    generalist: { name: 'Generalist', rar: 'r', icon: 'sword', path: 'general', gate: true, desc: 'Forsake the elements: you never see element boons or relics. +15% damage, +5% crit chance; crits Bleed for 30% of the hit. Open boon caps +1.', mods: { dmg: 0.15, crit: 0.05, bleed: 0.3, openRank: 1 }, max: 1 },
+    generalist: { name: 'Generalist', rar: 'r', icon: 'sword', path: 'general', gate: true, desc: 'Forsake the elements: you never see element boons or relics. +15% damage, +5% crit chance; crits Bleed for 30% of the hit. Open boons can rank 1 higher.', mods: { dmg: 0.15, crit: 0.05, bleed: 0.3, openRank: 1 }, max: 1 },
     keen: { name: 'Keen Eye', rar: 'c', icon: 'eye', path: 'general', openMax: 1, desc: '+{crit} crit chance.', mods: { crit: 0.05 }, max: 2 },
     brutal: { name: 'Brutality', rar: 'r', icon: 'skull', path: 'general', openMax: 1, desc: '+{critDmg} crit damage.', mods: { critDmg: 0.25 }, max: 3 },
     lacerate: { name: 'Lacerate', rar: 'r', icon: 'dagger', path: 'general', desc: '+{lacerate} damage to bleeding foes.', mods: { lacerate: 0.12 }, max: 2 },

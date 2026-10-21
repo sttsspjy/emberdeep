@@ -115,17 +115,17 @@ for (const s of [1, 2]) {
     const b = ED.BOONS[id], cls = b.cls;
     for (const wid of ED.CLASSES[cls].weapons) {
       const bw = ED.WEAPONS[wid], fw = ED.forkWeapon(wid, id), st = { weaponId: wid, critK: 1 };
-      const m = /×([\d.]+) (?:slower|interval), ×([\d.]+) per hit/.exec(ED.cardParts(id, 1, st).text);
+      const m = /×([\d.]+) attack time, ×([\d.]+) damage per hit/.exec(ED.cardParts(id, 1, st).text);
       ok(!!m, `${id} on ${wid} shows both factors`);
       if (m) { near(+m[1], fw.rate / bw.rate, 0.0006, `${id} on ${wid} rate factor`); near(+m[2], fw.dmg / bw.dmg, 0.0006, `${id} on ${wid} damage factor`); }
       ok(!/[{}\[\]]/.test(ED.cardParts(id, 3, st).text + ED.cardParts(id, 3, st).rider), `${id} on ${wid} has no raw token`);
     }
-    const nom = /×([\d.]+) (?:slower|interval), ×([\d.]+) per hit/.exec(ED.cardParts(id, 1).text);
+    const nom = /×([\d.]+) attack time, ×([\d.]+) damage per hit/.exec(ED.cardParts(id, 1).text);
     ok(nom && +nom[1] === (b.weapon.kind === 'heavy' ? 1.8 : 0.55) && +nom[2] === (b.weapon.kind === 'heavy' ? 1.98 : 0.605), `${id} without a hero shows the nominal factors`);
   }
-  ok(/×1\.3 slower, ×1\.43 per hit/.test(ED.cardParts('p_atk_h', 1, { weaponId: 'inferno' }).text), 'Tome of Ruin shows the capped heavy factors');
-  ok(/×0\.8 interval, ×0\.88 per hit/.test(ED.cardParts('p_atk_s', 1, { weaponId: 'emberwand' }).text), 'Flicker Wand shows the floored swift factors');
-  ok(/×0\.8 interval/.test(ED.cardParts('p_atk_s', 1, { weaponId: 'emberwand@swift' }).text), 'a forked weaponId reads its base');
+  ok(/×1\.3 attack time, ×1\.43 damage per hit/.test(ED.cardParts('p_atk_h', 1, { weaponId: 'inferno' }).text), 'Tome of Ruin shows the capped heavy factors');
+  ok(/×0\.8 attack time, ×0\.88 damage per hit/.test(ED.cardParts('p_atk_s', 1, { weaponId: 'emberwand' }).text), 'Flicker Wand shows the floored swift factors');
+  ok(/×0\.8 attack time/.test(ED.cardParts('p_atk_s', 1, { weaponId: 'emberwand@swift' }).text), 'a forked weaponId reads its base');
   const de = (st) => ED.Sheet.text('deathsedge', 1, st);
   ok(de({ critK: 1 }).indexOf('readies 1 guaranteed crit (up to 3 stored)') >= 0, "Death's Edge text at critK 1: " + de({ critK: 1 }));
   ok(de(null).indexOf('readies 1 guaranteed crit (up to 3 stored)') >= 0, "Death's Edge text without a hero");

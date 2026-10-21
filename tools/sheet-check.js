@@ -91,6 +91,14 @@ for (const key in ED.SKILL_SHEET) { const [sid, pid] = key.split('.'); ok(ED.SKI
   const st = ED.Stats.compute({ cls: 'knight', weapon: 'longsword', boons: {}, relics: [], meta: META(), pact: 0 }), S = ED.Sheet;
   ok(S.nextText('edge', 1, st) === '+20% damage', 'Next rank lists only the changed number: ' + S.nextText('edge', 1, st));
   { const rows = [].concat(...modelOf('knight', { edge: 2, quick: 1 }, 0).build.groups.map(g => g.items)); ok(rows.find(x => x.id === 'edge').next === null && rows.find(x => x.id === 'quick').next === '+20% attack speed', 'only a card below its last rank has a Next rank line'); }
+  { // no Next-rank piece is a bare number: it names what changes
+    let bare = 0;
+    for (const id of ED.BOON_IDS) { const b = ED.BOONS[id]; for (let r = 1; r < (b.max || 1); r++) for (const piece of S.nextText(id, r, st).split(' · ')) if (!/[A-Za-z]{3,}/.test(piece.replace(/\d+(?:\.\d+)?\s?s\b/g, ''))) { bare++; console.log(`FAIL bare next-rank piece ${id} rank ${r}: "${piece}"`); } }
+    ok(bare === 0, 'Next rank lines are never bare numbers');
+    ok(S.nextText('k_s1_a', 1, st) === 'deals +20% · 50% of its impact' && S.nextText('k_s2_b', 1, st) === 'orbits you for 3.5 s · 20% of a strike', 'Juggernaut and Shield Orbit name their numbers: ' + S.nextText('k_s1_a', 1, st) + ' / ' + S.nextText('k_s2_b', 1, st));
+    ok(S.text('r_el_b', 2, st).indexOf('within 120.') >= 0 && S.text('r_el_b', 3, st).indexOf('within 140') >= 0 && S.nextText('r_el_b', 1, st) === 'foes within 120', 'Contagion shows its total radius: ' + S.nextText('r_el_b', 1, st));
+    ok(S.nextText('p_s2_b', 1, st) === 'impact (+40%)', 'Comet names what the +40% belongs to: ' + S.nextText('p_s2_b', 1, st));
+  }
   ok(S.nextText('k_el_a', 1, st).indexOf('unlocks Ruin Seal') < 0 && S.nextText('k_el_a', 2, st).indexOf('unlocks Ruin Seal') >= 0, 'a route card names the rider it unlocks at rank 3');
   ok(S.fmt('arcStun', 0.25, 'sec') === '0.25s' && S.fmt('arcStun', 0.5, 'sec') === '0.5s' && S.fmt('venomHold', 2, 'sec') === '2s' && S.fmt('venomHold', 12, 'sec') === '12s', 'seconds keep two decimals below 1 s');
   ok(S.text('overload', 1, st).indexOf('0.25s') >= 0, 'Overload states its real stun time: ' + S.text('overload', 1, st));
@@ -161,9 +169,9 @@ let pend = 0;
 const pending = (msg) => { pend++; if (verbose) console.log('pending ' + msg); };
 // [class, stat switches, slot, dummy distance (default REF.d)]
 const CASES = [
-  ['knight', {}, 0], ['knight', {}, 1], ['knight', { jugShock: 0.4, s1Range: 90 }, 0], ['knight', { orbit: 3, orbitMul: 0.15 }, 1],
+  ['knight', {}, 0], ['knight', {}, 1], ['knight', { jugShock: 0.4, s1Range: 90 }, 0], ['knight', { orbit: 3, orbitMul: 0.15 }, 1], ['knight', { twinShield: 0.7 }, 1],
   ['ranger', {}, 0], ['ranger', {}, 1], ['ranger', { rainHail: 1 }, 1], ['ranger', { skyfall: 1 }, 1], ['ranger', { skyTwin: 0.5, skyfall: 1 }, 1], ['ranger', { shower: 0.4, rainHail: 1 }, 1],
-  ['pyro', {}, 0], ['pyro', {}, 1], ['pyro', { novaRing: 1 }, 0], ['pyro', { twinMeteor: 0.6 }, 1, 0, true],
+  ['pyro', {}, 0], ['pyro', {}, 1], ['pyro', { novaRing: 1 }, 0], ['pyro', { twinMeteor: 0.6 }, 1, 0, true], ['pyro', { comet: 0.3 }, 1],
   ['shade', {}, 0], ['shade', { stepTwin: 0.5 }, 0], ['shade', {}, 1, 28],
   ['cleric', {}, 0], ['cleric', {}, 1], ['cleric', { twinHammer: 0.75 }, 1],
   ['necro', {}, 0], ['necro', { boneSpikes: 1 }, 0],

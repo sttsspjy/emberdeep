@@ -287,7 +287,9 @@ input[type=range]::-moz-range-thumb { width: 1.2rem; height: 1.2rem; transform: 
 .go-bar > :last-child { justify-self: start; }
 .join-row { display: flex; gap: 0.8rem; align-items: center; justify-content: center; }
 .join-row input { width: 12rem; text-transform: uppercase; letter-spacing: 0.3em; font: 700 var(--fs-xl) var(--f-display); text-align: center; }
-.run-goal { text-align: center; color: var(--muted); font-size: var(--fs-md); line-height: 1.5; text-shadow: 0 1px 4px #000; }
+.run-goal p { margin: 0 0 0.45rem; }
+.run-goal p:last-child { margin-bottom: 0; }
+.run-goal { text-align: left; color: var(--muted); font-size: var(--fs-md); line-height: 1.45; text-shadow: 0 1px 4px #000; margin-top: 0.5rem; padding-top: 1rem; border-top: 1px solid var(--line); }
 .run-goal b { color: var(--gold); }
 .run-goal i { font-style: normal; font-weight: 700; }
 
@@ -519,6 +521,7 @@ body:has(#ov-sheet:not([hidden])) #ov-boon { visibility: hidden; }
 .sh-vit .bar { width: 7.5rem; height: 0.6rem; }
 .sh-vit .hp i { background: linear-gradient(90deg, #2f7d3d, #8fdc98); box-shadow: none; }
 .sh-shield { color: #9fd9ff; font-weight: 800; }
+.sh-coin { width: 1.25rem; height: 1.25rem; }
 .sh-lvl { font: 800 var(--fs-lg) var(--f-display); color: var(--ember-hi); }
 .sh-world { grid-column: 3; grid-row: 2; justify-self: end; display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; justify-content: flex-end; }
 .sh-strat { font: 700 var(--fs-lg) var(--f-display); color: var(--bone); white-space: nowrap; }
