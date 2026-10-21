@@ -18,7 +18,7 @@ function modelOf(cls, boons, wi, o) {
   const stats = ED.Stats.compute(b);
   if (o && o.stat) Object.assign(stats, o.stat);
   stats.sn = {};
-  const p = { pid: 'p', name: 'T', cls, weapon: b.weapon, boons: b.boons, relics: b.relics, meta: b.meta, stats, hp: stats.maxHp, maxHp: stats.maxHp, shield: 0, picks: 0, slot: 0 };
+  const p = { pid: 'p', name: 'T', cls, weapon: b.weapon, boons: b.boons, relics: b.relics, meta: b.meta, stats, hp: stats.maxHp, maxHp: stats.maxHp, shield: (o && o.shield) || 0, picks: 0, slot: 0 };
   return ED.Sheet.compute(p, CTX(o && o.ctx), { raw: true });
 }
 {
@@ -319,6 +319,9 @@ function statusRun(boons, stratum, secs, until) {
   ok(st && Math.abs(burn - want) <= want * 0.08, `Burn damage per second ${burn.toFixed(1)} vs modelled ${want.toFixed(1)}`);
   ok(st && Math.abs(st.est.dps - (m.proc.split.weapon + m.proc.split.skills) * p.stats.fireInfuse * (1 + p.stats.burnMul)) <= 0.01, 'Burn estimate follows the damage that feeds it');
 }
+
+// the sheet shows the shield the way the HUD does (rounded up), so the host and a client reading the snapshot agree
+{ const m = modelOf('knight', {}, 0, { shield: 2.4 }); ok(m.def.shield === 3 && m.hero.shield === 3, `shield 2.4 reads ${m.def.shield} (defence) and ${m.hero.shield} (header), want 3`); }
 
 W.hitEnemy = oHit; W.updateEnemy = oUpd;
 console.log(`${n} checks, ${fails} failed` + (pend ? `, ${pend} pending (class routes still to be built by their streams)` : ''));
