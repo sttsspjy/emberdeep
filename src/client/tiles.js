@@ -3,13 +3,15 @@
 // fungus, inlay, stars) that the renderer adds after lighting so bloom catches them. Palettes and decor change per stratum.
 (function (ED) {
   'use strict';
-  const U = ED.U, T = ED.CONST.TILE;
+  const U = ED.U, T = ED.CONST.TILE, Bmp = ED.Bmp;
   const Tl = ED.Tiles = { ms: 0, paints: 0, lastMs: 0 };
   const cache = new Map();
   let NOISE = null;
+  // Painted canvases are swapped for ImageBitmaps once ready (a bitmap keeps the canvas's .px); evicted entries release theirs.
+  const release = (e) => { e.dead = true; Bmp.free(e.canvas); Bmp.free(e.emis); Bmp.free(e.glowmap); };
   const LIFT = { ossuary: 0.55, glowmire: 0.55, rimefrost: 0, cinderforge: 0.55, sanctum: 0.5, abyss: 0.6 };
 
-  Tl.clear = () => cache.clear();
+  Tl.clear = () => { for (const e of cache.values()) release(e); cache.clear(); };
 
   function entry(room, scale) {
     const key = room.stratum + ':' + room.seed + ':' + scale.toFixed(3);
@@ -19,7 +21,8 @@
       e = paint(room, scale);
       Tl.lastMs = performance.now() - t0; Tl.ms += Tl.lastMs; Tl.paints++;
       cache.set(key, e);
-      if (cache.size > 4) cache.delete(cache.keys().next().value);
+      for (const k of ['canvas', 'emis', 'glowmap']) { const cv = e[k]; Bmp.from(cv, (b) => { if (e.dead) Bmp.free(b); else { b.px = cv.px; e[k] = b; } }); }
+      if (cache.size > 4) { const old = cache.keys().next().value; release(cache.get(old)); cache.delete(old); }
     }
     return e;
   }
@@ -56,11 +59,11 @@
     cv.width = Math.ceil(room.w * T * scale); cv.height = Math.ceil(room.h * T * scale);
     const c = cv.getContext('2d');
     c.scale(scale, scale);
-    const es = scale * 0.5, ev = document.createElement('canvas');
+    const es = scale, ev = document.createElement('canvas');
     ev.width = Math.ceil(room.w * T * es); ev.height = Math.ceil(room.h * T * es); ev.px = es;
     const e = ev.getContext('2d');
     e.scale(es, es); e.globalCompositeOperation = 'lighter'; e.lineCap = 'round'; e.lineJoin = 'round';
-    const gs = scale * 0.25, gv = document.createElement('canvas');
+    const gs = scale * 0.5, gv = document.createElement('canvas');
     gv.width = Math.ceil(room.w * T * gs); gv.height = Math.ceil(room.h * T * gs); gv.px = gs;
     const g = gv.getContext('2d'); g.scale(gs, gs); g.globalCompositeOperation = 'lighter';
     const rng = U.RNG(room.seed ^ 0x7111e);

@@ -96,7 +96,7 @@
   }
 
   Camp.draw = (c0, profile, t, dt, heroCls) => {
-    const R = ED.Render, W = R.W, H = R.H;
+    const R = ED.Render, W = R.bw, H = R.bh; // the scene is laid out in world-buffer pixels (the buffer is upscaled to the screen)
     const c = R.beginWorld();
     c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
     const deepest = Math.max(1, Math.min(6, profile ? profile.stats.deepest || 1 : 1));
@@ -173,10 +173,10 @@
     if (Math.random() < dt * 30) Camp.sparks.push({ x: fx + (Math.random() - 0.5) * fs, y: fy - fs * 0.6, vx: (Math.random() - 0.5) * 20, vy: -40 - Math.random() * 60, life: 1.5 + Math.random() * 2, max: 3.5 });
     for (const s of Camp.sparks) { s.life -= dt; s.x += s.vx * dt + Math.sin(t * 3 + s.y * 0.05) * 0.4; s.y += s.vy * dt; }
     Camp.sparks = Camp.sparks.filter(s => s.life > 0);
-    for (const s of Camp.sparks) { const a = Math.min(1, s.life); c.fillStyle = `rgba(255,${150 + Math.random() * 80 | 0},60,${a})`; c.fillRect(s.x, s.y, 2.2 * R.dpr, 2.2 * R.dpr); if (R.quality !== 'low') R.glow(c, s.x, s.y, 7 * R.dpr, '#ff9a3a', a * 0.5); }
+    for (const s of Camp.sparks) { const a = Math.min(1, s.life); c.fillStyle = `rgba(255,${150 + Math.random() * 80 | 0},60,${a})`; c.fillRect(Math.round(s.x), Math.round(s.y), 1, 1); if (R.quality !== 'low') R.glow(c, s.x, s.y, 4, '#ff9a3a', a * 0.5); }
     // fireflies
     if (!Camp.flies) { const r = U.RNG(99); Camp.flies = []; for (let i = 0; i < 14; i++) Camp.flies.push({ x: r.next(), y: 0.66 + r.next() * 0.3, ph: r.next() * 6, sp: 0.2 + r.next() * 0.4 }); }
-    if (R.quality !== 'low') for (const f of Camp.flies) { const x = (f.x + Math.sin(t * f.sp + f.ph) * 0.03) * W, y = (f.y + Math.cos(t * f.sp * 1.3 + f.ph) * 0.02) * H, b = Math.max(0, Math.sin(t * 1.7 + f.ph * 3)); R.glow(c, x, y, 7 * R.dpr, '#d8ff8a', 0.15 + b * 0.7); }
+    if (R.quality !== 'low') for (const f of Camp.flies) { const x = (f.x + Math.sin(t * f.sp + f.ph) * 0.03) * W, y = (f.y + Math.cos(t * f.sp * 1.3 + f.ph) * 0.02) * H, b = Math.max(0, Math.sin(t * 1.7 + f.ph * 3)); R.glow(c, x, y, 4, '#d8ff8a', 0.15 + b * 0.7); }
     c.globalCompositeOperation = 'source-over';
     if (!R.posting) {
       const v = c.createRadialGradient(fx, fy, fs * 2, fx, fy, Math.max(W, H) * 0.8);
