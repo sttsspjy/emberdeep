@@ -10,7 +10,9 @@
     pad: null, padPrev: [], enabled: true, binds: {}, device: 'mouse',
   };
   const PAD_AIM = 0.45, LATCH_MS = 350, SWITCH_PX = 3, SWITCH_WINDOW_MS = 250;
-  let padLast = null, padLM = 0, padRM = 0; // last right-stick aim above PAD_AIM {a, mag, t}; stick magnitudes of the previous sample
+  const JUMP_MS = 50;
+  let padLast = null; // last right-stick aim above PAD_AIM {a, mag, t}
+  let pbT = 0, pbL = 0, pbR = 0, poL = 0, poR = 0; // stick magnitudes: newest baseline sample (pb*) and the one before it (po*), JUMP_MS or more apart
 
   // ---------------- binding table ----------------
   I.ACTIONS = [
@@ -218,10 +220,10 @@
       if (padLast && now - padLast.t <= LATCH_MS) { out.padAim = padLast.a; out.padMag = padLast.mag; }
       const b = (i) => gp.buttons[i] && gp.buttons[i].pressed;
       const bp = (i) => b(i) && !I.padPrev[i];
-      // device: any new button press, or a stick that is pushed past 0.5 and jumped by more than 0.2 since the last sample (worn sticks drift but do not jump)
-      let touch = (lm > 0.5 && Math.abs(lm - padLM) > 0.2) || (rm > 0.5 && Math.abs(rm - padRM) > 0.2);
+      // device: any new button press, or a stick pushed past 0.5 that moved by more than 0.2 within the last 50-100 ms, whatever the frame rate (worn sticks drift but do not jump)
+      if (now - pbT >= JUMP_MS) { poL = pbL; poR = pbR; pbL = lm; pbR = rm; pbT = now; }
+      let touch = (lm > 0.5 && Math.abs(lm - poL) > 0.2) || (rm > 0.5 && Math.abs(rm - poR) > 0.2);
       for (let i = 0; i < gp.buttons.length && !touch; i++) if (bp(i)) touch = true;
-      padLM = lm; padRM = rm;
       if (touch) I.device = 'pad';
       out.atk = out.atk || b(2) || b(7);
       out.atkPressed = out.atkPressed || bp(2) || bp(7);
@@ -235,7 +237,7 @@
       out.left = out.left || bp(14);
       out.right = out.right || bp(15);
       I.padPrev = gp.buttons.map(x => x.pressed);
-    } else { padLast = null; padLM = padRM = 0; if (I.device === 'pad') I.device = 'mouse'; }
+    } else { padLast = null; pbT = pbL = pbR = poL = poR = 0; if (I.device === 'pad') I.device = 'mouse'; }
     const l = Math.hypot(out.mx, out.my);
     if (l > 1) { out.mx /= l; out.my /= l; }
     return out;

@@ -15,10 +15,10 @@
     WANT.d = Math.hypot(WANT.x - me.x, WANT.y - me.y);
     return WANT;
   };
-  // Landing point of a ground skill: the target clamped to `range` and cut at the first wall (Sim.groundPoint).
-  A.groundLand = (view, me, a, range) => {
+  // Landing point of a ground skill: the target clamped to `range` and cut at the first wall (Sim.groundPoint); `walk` lands on a standable spot.
+  A.groundLand = (view, me, a, range, walk) => {
     const w = A.want(me, a, range);
-    return Sim.groundPoint(view.room, view.locked, me.x, me.y, w.x, w.y, range);
+    return Sim.groundPoint(view.room, view.locked, me.x, me.y, w.x, w.y, range, walk);
   };
   // Shadowstep: toward the target, 40..140 px, stopped by walls for the hero's body; a free path lands exactly on the point, not on the last 8 px step.
   A.stepLand = (view, me, a) => {
@@ -141,22 +141,22 @@
       const g = a.ground[i];
       if (g.move) {
         const l = A.stepLand(view, me, a), x = Math.round(l.x * S) / S, y = Math.round(l.y * S) / S, d = 0.4 * uw;
-        c.globalAlpha = 0.5; c.lineWidth = lineW(0.1 * uw); c.strokeStyle = '#ffb56b'; c.fillStyle = 'rgba(255,181,107,0.25)';
+        c.globalAlpha = 0.4; c.lineWidth = lineW(0.1 * uw); c.strokeStyle = '#ffb56b'; c.fillStyle = 'rgba(255,181,107,0.25)';
         c.beginPath(); c.moveTo(x, y - d); c.lineTo(x + d, y); c.lineTo(x, y + d); c.lineTo(x - d, y); c.closePath(); c.fill(); c.stroke(); c.globalAlpha = 1;
         continue;
       }
-      const w = A.want(me, a, g.range), tx = w.x, ty = w.y, l = Sim.groundPoint(view.room, view.locked, me.x, me.y, tx, ty, g.range);
+      const w = A.want(me, a, g.range), tx = w.x, ty = w.y, l = Sim.groundPoint(view.room, view.locked, me.x, me.y, tx, ty, g.range, g.walk);
       const lx = Math.round(l.x * S) / S, ly = Math.round(l.y * S) / S, near = Math.hypot(l.x - tx, l.y - ty) < 3;
-      if (near) dashed(c, lx, ly, g.r, [0.4 * uw, 0.3 * uw], lineW(0.08 * uw), '#ffb56b', 0.4);
+      if (near) dashed(c, lx, ly, g.r, [0.4 * uw, 0.3 * uw], lineW(0.08 * uw), '#ffb56b', 0.35);
       else {
-        dashed(c, Math.round(me.x * S) / S, Math.round(me.y * S) / S, g.range, [0.5 * uw, 0.5 * uw], lineW(0.08 * uw), '#ff8a3d', 0.35);
+        dashed(c, Math.round(me.x * S) / S, Math.round(me.y * S) / S, g.range, [0.5 * uw, 0.5 * uw], lineW(0.08 * uw), '#ff8a3d', 0.3);
         c.beginPath(); c.arc(lx, ly, g.r, 0, TAU);
         c.globalAlpha = 0.08; c.fillStyle = '#ffb56b'; c.fill();
         c.globalAlpha = 0.75; c.lineWidth = lineW(0.1 * uw); c.strokeStyle = '#ffb56b'; c.stroke();
         const q = 0.15 * uw; c.beginPath(); c.moveTo(lx - q, ly); c.lineTo(lx + q, ly); c.moveTo(lx, ly - q); c.lineTo(lx, ly + q); c.stroke();
         c.globalAlpha = 1;
         if (a.pointer) { // dotted tether from the cursor to the landing point
-          c.setLineDash([0.15 * uw, 0.3 * uw]); c.globalAlpha = 0.4; c.lineWidth = lineW(0.08 * uw); c.strokeStyle = '#ffb56b';
+          c.setLineDash([0.15 * uw, 0.3 * uw]); c.globalAlpha = 0.35; c.lineWidth = lineW(0.08 * uw); c.strokeStyle = '#ffb56b';
           c.beginPath(); c.moveTo(tx, ty); c.lineTo(lx, ly); c.stroke(); c.setLineDash([]); c.globalAlpha = 1;
         }
       }

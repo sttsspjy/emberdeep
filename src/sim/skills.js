@@ -21,11 +21,11 @@
     }
   }
 
-  // How each skill is aimed until ED.SKILLS[id] carries it: 'dir' flies toward the cursor, 'ground' lands on it (clamped to `range`), 'move' travels toward it, 'self' ignores it.
+  // How each skill is aimed until ED.SKILLS[id] carries it: 'dir' flies toward the cursor, 'ground' lands on it (clamped to `range`; `walk`: on a standable spot), 'move' travels toward it, 'self' ignores it.
   const AIM = {
     charge: { aim: 'move', range: 150 }, step: { aim: 'move', range: 140 }, volley: { aim: 'dir' }, nova: { aim: 'self' },
-    sanctuary: { aim: 'ground', range: 200 }, legion: { aim: 'ground', range: 160 }, bulwark: { aim: 'dir' },
-    rain: { aim: 'ground', range: 260 }, meteor: { aim: 'ground', range: 300 }, vanish: { aim: 'self' }, judgment: { aim: 'dir' }, harvest: { aim: 'dir' },
+    sanctuary: { aim: 'ground', range: 200 }, legion: { aim: 'ground', range: 160, walk: true }, bulwark: { aim: 'dir' },
+    rain: { aim: 'ground', range: 260 }, meteor: { aim: 'ground', range: 300 }, vanish: { aim: 'self' }, judgment: { aim: 'dir' }, harvest: { aim: 'self' },
   };
   const AIM_DIR = { aim: 'dir', range: 0 };
   ED.skillAim = (id) => { const d = ED.SKILLS[id]; return (d && d.aim) ? d : (AIM[id] || AIM_DIR); };
@@ -35,21 +35,14 @@
     return id === 'rain' ? 80 * area * (st.barrage ? 1.4 : 1) : id === 'meteor' ? 95 * area : id === 'sanctuary' ? 100 * area : id === 'legion' ? 35 : 0;
   };
 
-  // Landing point of a ground skill: from the client's origin (accepted within 48 px of the host's hero) to its {x, y}, else along the aim at min(200, range); clamped to range and cut at walls.
-  function targetPoint(world, p, a, data, range) {
-    const fin = (v) => typeof v === 'number' && isFinite(v);
+  // Landing point of ground skill `id`: from the client's origin (accepted within 48 px of the host's hero) to its {x, y}, else along the aim at min(200, range); clamped to range, cut at walls (chasms do not stop it).
+  function targetPoint(world, p, a, data, id) {
+    const fin = (v) => typeof v === 'number' && isFinite(v), ai = ED.skillAim(id);
     let x0 = p.x, y0 = p.y;
     if (fin(data.x0) && fin(data.y0) && U.dist2(data.x0, data.y0, p.x, p.y) <= 48 * 48) { x0 = data.x0; y0 = data.y0; }
-    let tx = x0 + Math.cos(a) * Math.min(200, range), ty = y0 + Math.sin(a) * Math.min(200, range);
+    let tx = x0 + Math.cos(a) * Math.min(200, ai.range), ty = y0 + Math.sin(a) * Math.min(200, ai.range);
     if (fin(data.x) && fin(data.y)) { tx = data.x; ty = data.y; }
-    return ED.Sim.groundPoint(world.room, world.locked, x0, y0, tx, ty, range);
-  }
-  // targetPoint pushed out of walls for a body of radius r (zone centres, minion spawns).
-  function spotPoint(world, p, a, data, id, r) {
-    const t = targetPoint(world, p, a, data, ED.skillAim(id).range);
-    const probe = { x: t.x, y: t.y, r };
-    ED.Sim.resolve(probe, world.room, world.locked, false);
-    return probe;
+    return ED.Sim.groundPoint(world.room, world.locked, x0, y0, tx, ty, ai.range, !!ai.walk);
   }
 
   // Called from addPlayer: per-hero skill state (p.stats is not built yet).
@@ -200,7 +193,7 @@
       return {};
     },
     rain(p, a, data, st, w) {
-      const t = targetPoint(this, p, a, data, ED.skillAim('rain').range);
+      const t = targetPoint(this, p, a, data, 'rain');
       const r = ED.skillRadius('rain', st), dur = 2 + (st.barrage ? 1 : 0), dmg = 4 + 0.45 * w.dmg, hail = !!st.hailthorns;
       const n = Math.round(dur / 0.25);
       let k = 0;
@@ -219,7 +212,7 @@
       return { tx: Math.round(t.x), ty: Math.round(t.y) };
     },
     meteor(p, a, data) {
-      const t = targetPoint(this, p, a, data, ED.skillAim('meteor').range);
+      const t = targetPoint(this, p, a, data, 'meteor');
       this.castMeteor(p, t.x, t.y, 0.9, false);
       return { tx: Math.round(t.x), ty: Math.round(t.y) };
     },
@@ -307,13 +300,13 @@
       if (st.decoy) this.addZone({ kind: 'decoy', x: x0, y: y0, r: 80 * area, dur: 1.4, team: 0, owner: p.pid, dmg: w.dmg * 3, boom: 'shadow' });
       this.emit({ t: 'blink', pid: p.pid, x0: Math.round(x0), y0: Math.round(y0), x1: Math.round(x1), y1: Math.round(y1) });
     } else if (skill === 'sanctuary') { // ground skill: the zone lands at the aimed point; the caster always heals, allies within 180 of the zone
-      const g = spotPoint(this, p, a, data, skill, 4), r = ED.skillRadius(skill, st);
+      const g = targetPoint(this, p, a, data, skill), r = ED.skillRadius(skill, st);
       for (const q of this.players.values()) if (!q.downed && !q.dead && (q === p || U.dist2(q.x, q.y, g.x, g.y) < 180 * 180)) this.healPlayer(q, q.maxHp * ED.CONST.SANCT_HEAL);
       this.addZone({ kind: 'sanct', x: g.x, y: g.y, r, dur: 3.5, dps: (10 + w.dmg * 1.2) * (st.wrath ? 3 : 1), owner: p.pid, team: 0 });
       if (st.wrath) for (const e of this.enemies) if (e.hp > 0 && !e.boss && U.dist2(e.x, e.y, g.x, g.y) < r * r) e.stun = Math.max(e.stun, 1.2);
       extra = { x: Math.round(g.x), y: Math.round(g.y) };
     } else if (skill === 'legion') { // ground skill: 3 minions fan out around the aimed point
-      const g = spotPoint(this, p, a, data, skill, 4);
+      const g = targetPoint(this, p, a, data, skill);
       for (let i = 0; i < 3; i++) {
         const an = a + (i - 1) * 0.9, m = { x: g.x + Math.cos(an) * 26, y: g.y + Math.sin(an) * 26, r: 9 };
         ED.Sim.resolve(m, this.room, this.locked, false);

@@ -64,15 +64,23 @@
     return { x: probe.x, y: probe.y };
   };
 
-  // Landing point of a ground skill cast from (x0, y0) at (tx, ty): the target clamped to `range`, cut short at the first wall. Used by the client preview and send, and by the host check.
-  Sim.groundPoint = (room, locked, x0, y0, tx, ty, range) => {
+  // Landing point of a ground skill cast from (x0, y0) at (tx, ty): the target clamped to `range`, cut short at the first tile that blocks shots (chasms do not). With `walk` the point is one a body can stand on (minion spawns).
+  // Used by the client preview and send, and by the host check; a free ray lands exactly on the target.
+  Sim.groundPoint = (room, locked, x0, y0, tx, ty, range, walk) => {
     const dx = tx - x0, dy = ty - y0, dist = Math.hypot(dx, dy);
     if (!(dist > 0) || !(range > 0)) return { x: x0, y: y0 };
-    const d = Math.min(dist, range), a = Math.atan2(dy, dx);
-    const px = x0 + Math.cos(a) * d, py = y0 + Math.sin(a) * d;
-    const e = Sim.castMove(room, x0, y0, a, d, 4, locked);
-    const t = D.tileAt(room, px, py);
-    if (Math.hypot(e.x - x0, e.y - y0) >= d - 8 && !(t === 1 || t === 2 || (t === 5 && locked))) return { x: px, y: py }; // free ray: exact point, not the last 8 px step
+    const d = Math.min(dist, range), a = Math.atan2(dy, dx), cs = Math.cos(a), sn = Math.sin(a);
+    let lx = x0, ly = y0, free = true;
+    for (let s = 8; s < d + 8; s += 8) { // samples every 8 px, the last one exactly at d
+      const q = Math.min(s, d), px = x0 + cs * q, py = y0 + sn * q;
+      if (D.blocksShots(D.tileAt(room, px, py), locked)) { free = false; break; }
+      lx = px; ly = py;
+    }
+    let g = { x: lx, y: ly };
+    if (!free) { g = { x: lx, y: ly, r: 4 }; Sim.resolve(g, room, locked, true); }
+    if (!walk) return { x: g.x, y: g.y };
+    const dd = Math.hypot(g.x - x0, g.y - y0), e = Sim.castMove(room, x0, y0, a, dd, 9, locked);
+    if (Math.hypot(e.x - x0, e.y - y0) >= dd - 8) { const q = { x: g.x, y: g.y, r: 9 }; if (!Sim.resolve(q, room, locked, false)) return { x: q.x, y: q.y }; }
     return e;
   };
 

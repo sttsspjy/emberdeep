@@ -390,7 +390,7 @@
   function groundData(view, me, a, id) {
     const ai = ED.skillAim(id);
     if (ai.aim !== 'ground') return null;
-    const g = ED.AimFx.groundLand(view, me, a, ai.range);
+    const g = ED.AimFx.groundLand(view, me, a, ai.range, ai.walk);
     return { x0: Math.round(me.x), y0: Math.round(me.y), x: Math.round(g.x), y: Math.round(g.y) };
   }
 
@@ -399,7 +399,7 @@
     const ai = ED.skillAim(id);
     if (ai.aim !== 'ground' && id !== 'step') return n;
     const g = a.ground[n] || (a.ground[n] = {});
-    g.slot = slot; g.id = id; g.move = ai.aim !== 'ground'; g.range = ai.range || 140;
+    g.slot = slot; g.id = id; g.move = ai.aim !== 'ground'; g.range = ai.range || 140; g.walk = !!ai.walk;
     return n + 1;
   }
   function aimExtras(s, me, view) {
