@@ -23,8 +23,8 @@
       if (F.time - tinkT > 0.05) { tinkT = F.time; A.play('deflect', ev.pid === local ? 0.4 : 0.18); }
     }
     if (ev.sl) {
-      F.burst(ev.x, ev.y + 2, 3, { kind: 'streak', color: '#cfd8e2', a: Math.PI, spread: 0.6, sp: 90, life: 0.25, size: 1.4, drag: 4 });
-      if (!low()) SP('fx.glint', ev.x, ev.y, { add: true, ramp: 'ice', speed: 1.5, a: 0.8 });
+      F.burst(ev.x, ev.y + 4, 3, { kind: 'streak', color: '#dff1ff', a: Math.PI, spread: 0.5, sp: 110, life: 0.4, size: 1.5, drag: 3 });
+      if (!low()) { SP('fx.glint', ev.x - 6, ev.y + 4, { add: true, ramp: 'ice', delay: 0.07, a: 0.9 }); SP('fx.glint', ev.x + 7, ev.y + 8, { add: true, ramp: 'ice', delay: 0.12, a: 0.9 }); }
     }
   });
 
