@@ -79,6 +79,22 @@
     if (v || ED.Atlas.ok) varKey.set(k, v); // a missing atlas is not remembered: the page may still be decoding
     return v;
   };
+  // Registers a runtime-baked anim `id` from canvas cv (art px; an array of equal-sized canvases makes a multi-frame anim at fps, looping when loop) with pivot (ax, ay) and anchors, so the atlas draws, rotates and recolours it like packed art. False without an atlas; an id already defined stays as it is.
+  Pix.define = (id, cv, ax, ay, anchors, fps, loop) => {
+    const art = ED.ART, At = ED.Atlas;
+    if (!art || !At || !At.ok) return false;
+    if (art.anims[id]) return true;
+    const cvs = Array.isArray(cv) ? cv : [cv], f = [];
+    cvs.forEach((cn, i) => {
+      const pg = i ? 'rt:' + id + '#' + i : 'rt:' + id, fk = id + '#' + i;
+      At.pages[pg] = cn;
+      art.frames[fk] = { p: pg, x: 0, y: 0, w: cn.width, h: cn.height, ox: 0, oy: 0 }; f.push(fk);
+      Bmp.from(cn, (b) => { if (At.pages[pg] === cn) At.pages[pg] = b; else Bmp.free(b); }); // the page becomes an ImageBitmap once decoded (cheap blits on Gecko)
+    });
+    art.anims[id] = { f, fps: fps || 1, loop: !!loop, fw: cvs[0].width, fh: cvs[0].height, ax, ay, anchors: anchors || {} };
+    Pix.baked += cvs.length;
+    return true;
+  };
   const OP = { flip: false, variant: '', alpha: 1, rot: 0, anchor: undefined };
   // Draws frame i of anim `id` (optionally recoloured through `ramp`, mirrored, rotated clockwise by rot radians in 32 steps about its anchor) with the anim's pivot at world (x, y). False when the art is missing.
   Pix.draw = (c, id, ramp, i, x, y, alpha, flip, rot, anchor) => {

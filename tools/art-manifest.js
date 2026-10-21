@@ -442,6 +442,7 @@ BIG('fxbig.firespin', 'cm_firespin'); BIG('fxbig.protection', 'cm_protection'); 
 // --------------------------------------------------------------------------- font (white glyphs; 0x21..0x7e in ASCII order, 15 per row from space)
 const fontCells = {};
 for (let code = 0x21; code <= 0x7e; code++) { const i = code - 0x20; fontCells[String.fromCharCode(code)] = [i % 15, Math.floor(i / 15)]; }
-const font = { src: 'font8', page: 'fx', cw: 8, ch: 8, h: 8, gap: 1, space: 4, cells: fontCells };
+// 'g' sits on the x-height of 'o' with a descender (the sheet's 'g' started a row higher, level with the digits, and read as a thin 9 in prices)
+const font = { src: 'font8', page: 'fx', cw: 8, ch: 8, h: 8, gap: 1, space: 4, cells: fontCells, override: { g: ['........', '........', '.###....', '#...#...', '#...#...', '.####...', '....#...', '.###....'] } };
 
 module.exports = { pages: ['world', 'actors', 'bosses', 'fx', 'fxbig'], tileList: '0x72/tile_list_v1.7', sheets, entries: E, swaps: SWAPS, font };

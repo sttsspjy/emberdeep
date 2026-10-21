@@ -75,14 +75,346 @@
     necro(c, C, pc) { c.beginPath(); c.moveTo(-9, -14); c.quadraticCurveTo(-9, -32, 0, -32); c.quadraticCurveTo(9, -32, 9, -14); c.closePath(); c.fillStyle = C.a; c.fill(); c.stroke(); ell(c, 1, -20, 5.6, 5.8, '#e6e0cf'); c.fillStyle = '#0b0806'; c.fillRect(-1.6, -21.5, 2.6, 2.6); c.fillRect(2.8, -21.5, 2.6, 2.6); eyes(c, 1.6, -20.2, 2.2, 0.8, C.c); rrect(c, -9, -15, 18, 2.6, 1.3, pc, false); },
   };
 
-  // Weapon art of hero p: { id (base weapon id, before any '@' fork suffix), w (ED.WEAPONS entry), anim (atlas anim id), look, twin (off-hand copy) }. The one place weapon looks are resolved.
+  // ---------- fork weapon looks ----------
+  // ED.FORK_LOOKS[<base>@heavy | @swift] (classes.js) tells how a fork differs from its base weapon: a pack sprite (art) or the base sprite, plus the silhouette overlay H (head x1.4, studs, brass band, thicker shafts, brass cap)
+  // or S (head x0.6, class-colour grip wrap and tassel, thinner shafts) and the sprite length factor. The sprite is read from the atlas as an art-px buffer (outline stripped), edited row by row, outlined again and registered
+  // as the anim 'wk.<id>' (Pix.define), so drawing, rotation steps and the evolution outline are the base weapon's. Baked lazily, once per equipped fork.
+  const OUTC = 0xff222222, P8 = 8; // outline colour (ABGR) and the transparent margin the editing room needs
+  let fcv = null, fgx = null;
+  const fpx = (h) => ED.Pix.px32(h), fnew = (w, h) => ({ w, h, d: new Uint32Array(w * h), gx: 0, gy: 0, tx: 0, ty: 0, dir: 0 });
+  // Sprite { w, h, d (ABGR), gx, gy (grip pivot), tx, ty (tip), dir } of frame i (0) of anim `id` in its logical frame.
+  function fread(id, i) {
+    const At = ED.Atlas, r = At.anim(id); if (!r) return null;
+    const f = r.f[i || 0];
+    if (!fcv) { fcv = document.createElement('canvas'); fgx = fcv.getContext('2d', { willReadFrequently: true }); }
+    fcv.width = f.w; fcv.height = f.h; fgx.imageSmoothingEnabled = false; fgx.clearRect(0, 0, f.w, f.h);
+    fgx.drawImage(At.pages[f.p], f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
+    const px = new Uint32Array(fgx.getImageData(0, 0, f.w, f.h).data.buffer), s = fnew(r.fw, r.fh), an = r.anchors, gr = an.grip || [r.ax, r.ay], tp = an.tip || [r.fw / 2, 0];
+    for (let y = 0; y < f.h; y++) for (let x = 0; x < f.w; x++) { const v = px[y * f.w + x]; if ((v >>> 24) >= 128) s.d[(y + f.oy) * s.w + x + f.ox] = v | 0xff000000; }
+    s.gx = gr[0]; s.gy = gr[1]; s.tx = tp[0]; s.ty = tp[1]; s.dir = an.dir || 0;
+    return s;
+  }
+  function fpad(s, n) {
+    const o = fnew(s.w + 2 * n, s.h + 2 * n);
+    for (let y = 0; y < s.h; y++) o.d.set(s.d.subarray(y * s.w, (y + 1) * s.w), (y + n) * o.w + n);
+    o.gx = s.gx + n; o.gy = s.gy + n; o.tx = s.tx + n; o.ty = s.ty + n; o.dir = s.dir;
+    return o;
+  }
+  function fcrop(s) {
+    let x0 = s.w, y0 = s.h, x1 = -1, y1 = -1;
+    for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) if (s.d[y * s.w + x]) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    if (x1 < 0) return s;
+    const o = fnew(x1 - x0 + 1, y1 - y0 + 1);
+    for (let y = 0; y < o.h; y++) o.d.set(s.d.subarray((y + y0) * s.w + x0, (y + y0) * s.w + x0 + o.w), y * o.w);
+    o.gx = s.gx - x0; o.gy = s.gy - y0; o.tx = s.tx - x0; o.ty = s.ty - y0; o.dir = s.dir;
+    return o;
+  }
+  // Outer outline pixels removed (an outline pixel with a transparent 4-neighbour); lines inside the shape stay as dark fill.
+  function fstrip(s) {
+    const d = s.d, src = d.slice(), w = s.w, h = s.h;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * w + x; if (src[i] === OUTC && (x === 0 || y === 0 || x === w - 1 || y === h - 1 || !src[i - 1] || !src[i + 1] || !src[i - w] || !src[i + w])) d[i] = 0; }
+  }
+  function foutline(s) {
+    const o = fpad(s, 1), d = o.d, src = d.slice(), w = o.w, h = o.h;
+    for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const i = y * w + x; if (!src[i] && (src[i - 1] || src[i + 1] || src[i - w] || src[i + w])) d[i] = OUTC; }
+    return o;
+  }
+  // Width of a run of w px after scaling by f: at least one px more at f >= 1.25 and one less at f <= 0.8 (down to 1).
+  const fW = (w, f) => (f >= 1 ? Math.max(w + (f >= 1.25 ? 1 : 0), Math.round(w * f)) : Math.max(1, Math.min(w - (f <= 0.8 && w > 1 ? 1 : 0), Math.round(w * f))));
+  // Rows y0..y1-1 resampled horizontally by f about each row's centre (nearest); columns up to skipX are left alone (a bowstring).
+  function frows(s, y0, y1, f, skipX) {
+    for (let y = Math.max(0, y0); y < Math.min(s.h, y1); y++) {
+      const o = y * s.w; let xa = skipX === undefined ? 0 : skipX + 1; while (xa < s.w && !s.d[o + xa]) xa++;
+      let xb = s.w - 1; while (xb >= xa && !s.d[o + xb]) xb--;
+      if (xb < xa) continue;
+      const w = xb - xa + 1, nw = fW(w, f); if (nw === w) continue;
+      const row = s.d.slice(o + xa, o + xb + 1), nl = Math.max(0, Math.min(s.w - nw, Math.round((xa + xb + 1) / 2 - nw / 2)));
+      s.d.fill(0, o + xa, o + xb + 1);
+      for (let i = 0; i < nw; i++) s.d[o + nl + i] = row[Math.min(w - 1, Math.floor((i + 0.5) * w / nw))];
+    }
+  }
+  // Bow rows resampled horizontally by f on their limb pixels only (every pixel not of the string colour sc), the string-side edge held so the string keeps meeting the limb.
+  function fbowrows(s, f, sc) {
+    for (let y = 0; y < s.h; y++) {
+      const o = y * s.w; let xa = -1, xb = -1;
+      for (let x = 0; x < s.w; x++) { const v = s.d[o + x]; if (v && v !== sc) { if (xa < 0) xa = x; xb = x; } }
+      if (xa < 0) continue;
+      const w = xb - xa + 1, nw = Math.min(fW(w, f), s.w - xa); if (nw === w) continue;
+      const row = s.d.slice(o + xa, o + xb + 1);
+      s.d.fill(0, o + xa, o + xb + 1);
+      for (let i = 0; i < nw; i++) s.d[o + xa + i] = row[Math.min(w - 1, Math.floor((i + 0.5) * w / nw))];
+    }
+  }
+  // Inserts (n > 0) or removes (n < 0) |n| rows inside [y0, y1), taking the rows most like their neighbour so blades and shafts keep their pattern; the pivot and tip follow. s.ym(y) = the new index of old row y.
+  function fcarve(s, n, y0, y1) {
+    y1 = Math.min(y1, s.h - 1);
+    if (!n || y1 <= y0) { s.ym = (y) => y; return s; }
+    const diff = [], mid = (y0 + y1) / 2;
+    for (let y = y0; y < y1; y++) { let c = 0; for (let x = 0; x < s.w; x++) if (s.d[y * s.w + x] !== s.d[(y + 1) * s.w + x]) c++; diff.push([c, y]); }
+    diff.sort((a, b) => a[0] - b[0] || Math.abs(a[1] - mid) - Math.abs(b[1] - mid));
+    const pick = [], k = n < 0 ? Math.min(-n, y1 - y0 - 1) : n, copies = new Map();
+    for (const gap of [3, 2, 1]) for (const [, y] of diff) if (pick.length < k && !pick.includes(y) && pick.every((q) => Math.abs(q - y) >= gap)) { pick.push(y); copies.set(y, 1); }
+    for (let i = 0; n > 0 && i < k - pick.length; i++) { const y = diff[i % diff.length][1]; copies.set(y, (copies.get(y) || 0) + 1); } // a zone shorter than n: some rows repeat more than once
+    const rows = [];
+    for (let y = 0; y < s.h; y++) { const c = copies.get(y) || 0; if (n < 0 && c) continue; rows.push(y); for (let i = 0; n > 0 && i < c; i++) rows.push(y); }
+    const o = fnew(s.w, rows.length);
+    for (let i = 0; i < rows.length; i++) o.d.set(s.d.subarray(rows[i] * s.w, (rows[i] + 1) * s.w), i * s.w);
+    const ym = (v) => { let c = 0; for (const r of rows) if (r < v) c++; return c; };
+    o.gx = s.gx; o.gy = ym(s.gy); o.tx = s.tx; o.ty = ym(s.ty); o.dir = s.dir; o.ym = ym;
+    return o;
+  }
+  // Rows of n chain links (1 px wide, alternating light and dark) inserted at row y on the column of the shaft; the pivot moves down with the rows below.
+  function fchain(s, y, n) {
+    const o = fnew(s.w, s.h + n); let xa = 0, xb = s.w - 1;
+    while (xa < s.w && !s.d[y * s.w + xa]) xa++;
+    while (xb > xa && !s.d[y * s.w + xb]) xb--;
+    const cx = Math.round((xa + xb) / 2), c1 = fpx('#c8d0d8'), c2 = fpx('#6b7480');
+    for (let r = 0; r < y; r++) o.d.set(s.d.subarray(r * s.w, (r + 1) * s.w), r * s.w);
+    for (let i = 0; i < n; i++) o.d[(y + i) * s.w + cx] = i & 1 ? c2 : c1;
+    for (let r = y; r < s.h; r++) o.d.set(s.d.subarray(r * s.w, (r + 1) * s.w), (r + n) * s.w);
+    o.gx = s.gx; o.gy = s.gy + (s.gy >= y ? n : 0); o.tx = s.tx; o.ty = s.ty + (s.ty >= y ? n : 0); o.dir = s.dir;
+    return o;
+  }
+  function fscale(s, k) {
+    const w = Math.max(1, Math.round(s.w * k)), h = Math.max(1, Math.round(s.h * k)), o = fnew(w, h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) o.d[y * w + x] = s.d[Math.min(s.h - 1, Math.floor((y + 0.5) * s.h / h)) * s.w + Math.min(s.w - 1, Math.floor((x + 0.5) * s.w / w))];
+    o.gx = s.gx * w / s.w; o.gy = s.gy * h / s.h; o.tx = s.tx * w / s.w; o.ty = s.ty * h / s.h; o.dir = s.dir;
+    return o;
+  }
+  // Quarter turns clockwise (k = 1..3).
+  function frot(s, k) {
+    k = ((k % 4) + 4) % 4; if (!k) return s;
+    const o = k === 2 ? fnew(s.w, s.h) : fnew(s.h, s.w), pt = (x, y) => (k === 1 ? [s.h - y, x] : k === 2 ? [s.w - x, s.h - y] : [y, s.w - x]);
+    for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) { const v = s.d[y * s.w + x]; if (!v) continue; const q = k === 1 ? [s.h - 1 - y, x] : k === 2 ? [s.w - 1 - x, s.h - 1 - y] : [y, s.w - 1 - x]; o.d[q[1] * o.w + q[0]] = v; }
+    [o.gx, o.gy] = pt(s.gx, s.gy); [o.tx, o.ty] = pt(s.tx, s.ty); o.dir = (s.dir + 90 * k) % 360;
+    return o;
+  }
+  // Metal pixels (cool or grey) re-mapped onto the ramp of a tint colour by luminance; wood, brass and warm colours stay.
+  function ftint(s, hex) {
+    const rp = ED.Pix.ramp(hex).map((h) => U.hexToRgb(h));
+    for (let i = 0; i < s.d.length; i++) {
+      const v = s.d[i]; if (!v || v === OUTC) continue;
+      const r = v & 255, g = (v >> 8) & 255, b = (v >> 16) & 255; if (b < r - 6) continue;
+      const l = (r * 0.299 + g * 0.587 + b * 0.114) / 255, t = U.clamp((l - 0.25) / 0.6, 0, 1) * (rp.length - 1), a = Math.min(rp.length - 2, t | 0), f = t - a, p = rp[a], q = rp[a + 1];
+      s.d[i] = ((255 << 24) | (Math.round(p[2] + (q[2] - p[2]) * f) << 16) | (Math.round(p[1] + (q[1] - p[1]) * f) << 8) | Math.round(p[0] + (q[0] - p[0]) * f)) >>> 0;
+    }
+  }
+  // Studs (1 px light dots on the outline: [row, side]) placed on an outlined sprite whose rows are those of the unoutlined one + 1.
+  function fstuds(s, studs) {
+    for (const [y, sd] of studs || []) { const r = y + 1; if (r < 0 || r >= s.h) continue; const [xa, xb] = fspan(s, r); if (xb >= xa) s.d[r * s.w + (sd < 0 ? xa : xb)] = fpx(STUDC); }
+  }
+  // A sprite edited in a turned pose: outlined and studded here, then turned back k quarter turns; the caller's outline step is skipped.
+  function fturnBack(s, k) {
+    s = foutline(s); fstuds(s, s.studs);
+    s = frot(s, k); s.outlined = true; s.studs = [];
+    return s;
+  }
+  // The palette of s re-mapped onto the palette of anim refId by luminance rank (outline kept).
+  const WEAR = { dawnhammer: 1 };
+  function fwear(s, refId) {
+    const lum = (v) => (v & 255) * 0.299 + ((v >> 8) & 255) * 0.587 + ((v >> 16) & 255) * 0.114, ref = fread(refId), pal = (b) => { const m = new Set(); for (let i = 0; i < b.d.length; i++) if (b.d[i] && b.d[i] !== OUTC) m.add(b.d[i]); return [...m].sort((a, c) => lum(a) - lum(c)); };
+    const from = pal(s), to = pal(ref), map = new Map();
+    from.forEach((v, i) => map.set(v, to[Math.round(i * (to.length - 1) / Math.max(1, from.length - 1))]));
+    for (let i = 0; i < s.d.length; i++) { const m = map.get(s.d[i]); if (m !== undefined) s.d[i] = m; }
+  }
+  const frowIs = (s, y, col, skipX, keep) => { for (let x = (skipX === undefined ? 0 : skipX + 1); x < s.w; x++) { const v = s.d[y * s.w + x]; if (v && v !== OUTC && v !== keep) s.d[y * s.w + x] = col; } }; // every fill pixel of row y becomes col (pixels of colour keep, a bowstring, stay)
+  const fbottom = (s) => { for (let y = s.h - 1; y >= 0; y--) for (let x = 0; x < s.w; x++) if (s.d[y * s.w + x]) return y; return 0; };
+  const fspan = (s, y) => { let xa = 0, xb = s.w - 1; while (xa < s.w && !s.d[y * s.w + xa]) xa++; while (xb >= xa && !s.d[y * s.w + xb]) xb--; return [xa, xb]; };
+  const BRASS = '#c8963c', BRASS_D = '#8a5f1e', STUDC = '#e8e8e8';
+  // Upright families: [head end row, carve from, carve to, 1 = staff-like (shaft thickens / thins with the fork)] in the source art's rows.
+  const UP = {
+    'weapon.longsword': [20, 3, 19], 'weapon.alt.anime_sword': [21, 3, 20], 'weapon.alt.katana': [21, 3, 20], 'weapon.alt.machete': [16, 2, 15],
+    'weapon.warhammer': [7, 8, 22], 'weapon.alt.big_hammer': [7, 8, 35], 'weapon.dawnhammer': [7, 8, 35], 'weapon.alt.throwing_axe': [8, 9, 12], 'weapon.alt.waraxe': [11, 12, 21],
+    'weapon.glaive': [10, 12, 28], 'weapon.firestaff': [8, 9, 28, 1], 'weapon.plaguestaff': [7, 9, 28, 1], 'weapon.emberwand': [5, 6, 8, 1],
+    'weapon.daggers': [8, 2, 7], 'weapon.knives': [8, 2, 7], 'weapon.mace': [13, 14, 22],
+  };
+  const PACK = (id) => id.indexOf('weapon.alt.') === 0;
+  // Edits an upright sprite (padded by P8) for look L: head, shaft, length, decorations. Returns the studs to place after the outline: [[row, side (-1 left, 1 right)], ...].
+  function fUp(s, L, E, X) {
+    const H0 = s.h - 2 * P8, heavy = X.heavy;
+    let he = E[0] + P8, studs = [];
+    if (L.head && ED.Atlas.has(L.head)) { // a second sprite's head (Halberd: the war axe's blade on the glaive), joined on the shaft
+      const h2 = fread(L.head); fstrip(h2);
+      const [a1, b1] = fspan(s, P8 + 16), [a2, b2] = fspan(h2, 15), dx = Math.round((a1 + b1 + 1) / 2 - (a2 + b2 + 1) / 2);
+      for (let y = 3; y <= 10; y++) for (let x = 0; x < s.w; x++) s.d[(y + P8) * s.w + x] = 0;
+      for (let y = 1; y <= 10; y++) for (let x = 0; x < h2.w; x++) { const v = h2.d[y * h2.w + x]; if (v) s.d[(y + 2 + P8) * s.w + x + dx] = v; }
+      he = Math.max(he, 13 + P8);
+    }
+    if (E[1] !== undefined) { const delta = U.clamp(Math.round(X.baseH * L.len - H0), -10, 10); s = fcarve(s, delta, E[1] + P8, E[2] + P8); he = s.ym(he); } // the length is relative to the base weapon's sprite, not to the pack sprite
+    const pack = PACK(L.art) && !L.head && !X.widen, hk = heavy ? 1.4 : X.swiftK || 0.6;
+    if (!pack) frows(s, 0, he, hk);
+    if (E[3]) frows(s, he, s.h, heavy ? 1.3 : 0.7);
+    const yb = fbottom(s);
+    if (heavy) {
+      frowIs(s, he, fpx(BRASS)); frowIs(s, yb, fpx(BRASS_D)); frowIs(s, yb - 1, fpx(BRASS)); // band where the head meets the grip, brass cap
+      for (const [f, sd] of [[0.3, -1], [0.55, 1], [0.8, -1]]) studs.push([P8 + Math.round((he - P8) * f), sd]);
+    } else { // grip wrap in the class colour on every other row, a short tassel at the pommel of staffs and wands
+      const col = fpx(X.col);
+      for (let y = Math.round(s.gy) - 2, i = 0; y < Math.round(s.gy) + 2; y++, i++) if (!(i & 1)) frowIs(s, y, col);
+      if (E[3] && H0 >= 20) { const [, xb] = fspan(s, yb); s.d[yb * s.w + xb + 1] = col; s.d[(yb + 1) * s.w + xb + 2] = col; s.d[(yb + 2) * s.w + xb + 2] = col; }
+    }
+    if (heavy && L.gem) { const cx = Math.round(s.gx), gy = P8 + Math.round((he - P8) * 0.4); s.d[gy * s.w + cx - 1] = s.d[gy * s.w + cx] = s.d[(gy + 1) * s.w + cx - 1] = s.d[(gy + 1) * s.w + cx] = fpx(L.gem); s.d[gy * s.w + cx - 1] = fpx('#ffe9a0'); }
+    if (heavy && L.spikes) for (const f of [0.3, 0.5, 0.7]) { const r = P8 + Math.round((he - P8) * f), [xa, xb] = fspan(s, r); if (xb >= xa) { s.d[r * s.w + xa - 1] = fpx(STUDC); s.d[r * s.w + xb + 1] = fpx(STUDC); } }
+    if (!heavy && L.chain) { s = fchain(s, he, 3); }
+    s.studs = studs;
+    return s;
+  }
+  // Bows (the string on the left, the belly to the right): limbs thicker and longer with brass tips and grip, or thinner and shorter with a class-colour wrap.
+  function fBow(s, L, X) {
+    let xs = s.w, sc = 0; for (let i = 0; i < s.d.length; i++) if (s.d[i] && i % s.w < xs) { xs = i % s.w; sc = s.d[i]; } // the string is the colour of the leftmost pixel
+    const H0 = s.h - 2 * P8; s = fcarve(s, Math.round(H0 * (L.len - 1)), P8 + 8, P8 + 18);
+    fbowrows(s, X.heavy ? 1.3 : 0.7, sc);
+    const y0 = (() => { for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) if (s.d[y * s.w + x] && s.d[y * s.w + x] !== sc) return y; return 0; })(), y1 = fbottom(s), gy = Math.round(s.gy);
+    if (X.heavy) { for (const y of [y0, y0 + 1, y1, y1 - 1]) frowIs(s, y, fpx(BRASS), xs, sc); for (let y = gy - 2; y < gy + 2; y++) frowIs(s, y, fpx(BRASS_D), xs, sc); }
+    else for (let y = gy - 3, i = 0; y < gy + 3; y++, i++) if (!(i & 1)) frowIs(s, y, fpx(X.col), xs, sc);
+    s.studs = [];
+    return s;
+  }
+  // Crossbow: turned upright (prod across the top), edited like a staff, turned back; Swift adds a 3 x 3 magazine box beside the stock.
+  function fXbow(s, L, X) {
+    s = frot(s, 3);
+    s = fUp(s, L, [8, 9, 13, 1], Object.assign({}, X, { swiftK: 0.7 }));
+    if (!X.heavy && L.magazine) { // a 3 x 3 magazine box sits on the stock just behind the prod (on the stock's left in this pose)
+      const y0 = 8 + P8 + 1, [xa] = fspan(s, y0 + 1), c1 = fpx('#aeb8c0'), c2 = fpx('#7b8994');
+      for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) s.d[(y0 + j) * s.w + xa - 3 + i] = j === 0 ? fpx(BRASS) : i === 1 ? c1 : c2;
+    }
+    return fturnBack(s, 1);
+  }
+  // Tome: scaled as a whole; Heavy gets corner studs and a brass clasp, Swift a ribbon bookmark.
+  function fTome(s, L, X) {
+    s = fscale(s, X.heavy ? 1.25 : 0.75);
+    let xa = s.w, xb = 0, y0 = s.h, y1 = 0;
+    for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) if (s.d[y * s.w + x]) { if (x < xa) xa = x; if (x > xb) xb = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    const mid = Math.round((y0 + y1) / 2);
+    if (X.heavy) {
+      if (L.clasp) { for (let y = mid - 1; y <= mid + 1; y++) { s.d[y * s.w + xa] = fpx(BRASS); s.d[y * s.w + xb] = fpx(BRASS); } }
+      s.studs = [[y0 + 1, -1], [y0 + 1, 1], [y1 - 1, -1], [y1 - 1, 1]];
+    } else {
+      s.studs = [];
+      if (L.ribbon) { const cx = Math.round((xa + xb) / 2); for (let i = 0; i < 4; i++) s.d[(y1 + i - 1) * s.w + cx] = fpx(i & 1 ? '#a3281e' : '#e0483a'); }
+    }
+    return s;
+  }
+  // Diagonal sprites (scythes, the bone wand): scaled as a whole (Heavy x1.3, Swift x0.75), brass or class-colour wrap on the grip, a skull on the Skull Staff.
+  const SKULL = ['.bbb.', 'bbbbb', 'bobob', 'bbbbb', '.b.b.'];
+  function fDiag(s, L, X) {
+    s = fscale(s, L.len * (X.heavy ? 1.13 : 0.83));
+    const col = fpx(X.heavy ? BRASS : X.col);
+    for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) { const i = y * s.w + x; if (s.d[i] && s.d[i] !== OUTC && Math.hypot(x + 0.5 - s.gx, y + 0.5 - s.gy) < 5 && ((x + y) & 1)) s.d[i] = col; }
+    if (X.heavy && L.skull) { // a 5 x 5 skull at the far end
+      let bx = 0, by = s.h, best = -1e9;
+      for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) if (s.d[y * s.w + x]) { const q = (x - s.gx) - (y - s.gy); if (q > best) { best = q; bx = x; by = y; } }
+      const sx = Math.max(0, bx - 3), sy = Math.max(0, by - 1);
+      for (let j = 0; j < 5; j++) for (let i = 0; i < 5; i++) { const ch = SKULL[j][i]; if (ch !== '.') s.d[(sy + j) * s.w + sx + i] = fpx(ch === 'o' ? '#2a2428' : '#e6dfc9'); }
+    }
+    s.studs = [];
+    return s;
+  }
+  // Lantern (hanging from its hook): turned upright with the body on top; Heavy widens the body and adds brass cage bars, Swift narrows it and hangs it on a chain.
+  function fLantern(s, L, X) {
+    s = frot(s, 2);
+    const he = 12 + P8, mid = Math.round(s.gx);
+    frows(s, 0, he, X.heavy ? 1.4 : 0.6);
+    if (X.heavy) {
+      const [xa, xb] = fspan(s, 6 + P8);
+      for (const x of [xa + 1, xb - 1]) for (let y = 2 + P8; y < he - 2; y++) { const v = s.d[y * s.w + x]; if (v && v !== OUTC) s.d[y * s.w + x] = fpx(BRASS); }
+      frowIs(s, he, fpx(BRASS)); s.d[(P8) * s.w + mid] = fpx(BRASS);
+      s.studs = [[he - 3, -1], [he - 3, 1]];
+    } else { s = fchain(s, he, 3); s.studs = []; }
+    return fturnBack(s, 2);
+  }
+  const FAMILY = { longbow: fBow, twinbows: fBow, crossbow: fXbow, inferno: fTome, scythes: fDiag, soulscythe: fDiag, bonewand: fDiag, lantern: fLantern };
+  const classOfWeapon = (base) => ED.CLASS_IDS.find((c) => ED.CLASSES[c].weapons.indexOf(base) >= 0);
+  // Fork weapon data (ED.forkWeapon) of a weapon id like 'longsword@heavy'; the base weapon for a plain id.
+  Sp.forkData = (id) => {
+    const i = id.indexOf('@'), base = id.slice(0, i < 0 ? undefined : i);
+    if (i < 0) return ED.WEAPONS[base] || null;
+    const cls = classOfWeapon(base), kind = id.slice(i + 1), t = cls && ED.CLASS_CARDS[cls] && ED.CLASS_CARDS[cls].attack;
+    return t ? ED.forkWeapon(base, t.forks[kind === 'heavy' ? 0 : 1]) : ED.WEAPONS[base] || null;
+  };
+  const FORKA = new Map();
+  // Atlas anim id of the weapon id `wid` ('<base>' or '<base>@heavy|swift'): the baked look of a fork, else the base weapon's art; null without an atlas.
+  Sp.forkAnim = (wid) => {
+    const i = wid.indexOf('@'), base = wid.slice(0, i < 0 ? undefined : i), plain = 'weapon.' + base;
+    if (i < 0) return plain;
+    let a = FORKA.get(wid);
+    if (a) return a;
+    const A = ED.Atlas, L = ED.FORK_LOOKS && ED.FORK_LOOKS[wid];
+    if (!L || !A || !A.ok || !A.has(L.art) || !ED.Pix || !ED.Pix.define) return L && A && A.ok ? plain : null;
+    try {
+      const cls = classOfWeapon(base), br = A.anim('weapon.' + base), X = { heavy: L.op === 'H', col: ED.CLASSES[cls].col.c, baseH: br.anchors.dir === 90 ? br.fw : br.fh, widen: L.art === 'weapon.alt.big_hammer' };
+      let s = fpad(fread(L.art), P8);
+      fstrip(s);
+      if (WEAR[base] && PACK(L.art)) fwear(s, 'weapon.' + base); else if (L.tint) ftint(s, L.tint); // a pre-coloured base (the gold Dawn Hammer) lends its palette to the pack sprite
+      const fam = FAMILY[base];
+      s = fam ? fam(s, L, X) : fUp(s, L, UP[L.art] || [s.h - 2 * P8 - 8, 2, 8, 0], X);
+      if (!s.outlined) { const studs = s.studs; s = foutline(s); fstuds(s, studs); }
+      s = fcrop(s);
+      let tx = s.tx, ty = s.ty;
+      { const dx = Math.sin(s.dir * Math.PI / 180), dy = -Math.cos(s.dir * Math.PI / 180); let best = -1e9; for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) if (s.d[y * s.w + x]) { const q = x * dx + y * dy; if (q > best) { best = q; tx = x + 0.5; ty = y; } } }
+      const cv = document.createElement('canvas'); cv.width = s.w; cv.height = s.h;
+      const g = cv.getContext('2d'), im = g.createImageData(s.w, s.h); new Uint32Array(im.data.buffer).set(s.d); g.putImageData(im, 0, 0);
+      a = 'wk.' + wid;
+      if (!ED.Pix.define(a, cv, s.gx, s.gy, { grip: [s.gx, s.gy], tip: [tx, ty], dir: s.dir, centre: [s.w / 2, s.h / 2], top: 0 })) return plain;
+      FORKA.set(wid, a);
+      return a;
+    } catch (e) { console.error('fork look ' + wid, e); FORKA.set(wid, plain); return plain; }
+  };
+
+  // Heavy shots draw x1.2 and Swift x0.85 (visual only). The owner of a fresh hero shot is the hero beside it whose fork weapon fires that kind at that speed; the factor is remembered by projectile id.
+  const SHOTK = new Map(), SHOTA = new Map();
+  Sp.shotReset = () => SHOTK.clear();
+  Sp.shotK = (pr, view) => {
+    let k = SHOTK.get(pr.id);
+    if (k !== undefined) return k;
+    k = 1;
+    if (view) for (const p of view.players.values()) {
+      const st = p.stats, w = st && st.weapon;
+      if (!w || w.kind !== 'proj' || w.proj !== pr.kind || !(st.heavy || st.swift) || U.dist2(p.x, p.y, pr.x, pr.y) > 110 * 110) continue;
+      if (Math.abs(Math.hypot(pr.vx, pr.vy) - w.speed) <= 0.04 * w.speed + 6) { k = st.heavy ? 1.2 : 0.85; break; }
+    }
+    if (SHOTK.size > 400) SHOTK.clear();
+    SHOTK.set(pr.id, k);
+    return k;
+  };
+  // Atlas anim of a shot sprite (every frame) scaled by k (nearest, outline rebuilt at 1 px, one shared crop box); the original id when it cannot be baked.
+  Sp.shotAnim = (id, k) => {
+    const sl = k > 1 ? 0 : 1; let m = SHOTA.get(id); if (!m) SHOTA.set(id, m = [null, null]);
+    let a = m[sl];
+    if (a) return a;
+    const key = id + (sl ? '@s' : '@h');
+    a = id;
+    const A = ED.Atlas, r = A && A.ok ? A.anim(id) : null;
+    if (r && ED.Pix && ED.Pix.define) {
+      try {
+        const fr = []; let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1;
+        for (let i = 0; i < r.n; i++) {
+          const q = fread(id, i); fstrip(q); const s = foutline(fscale(q, k)); fr.push(s);
+          for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) if (s.d[y * s.w + x]) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+        }
+        const w = x1 - x0 + 1, h = y1 - y0 + 1, gx = fr[0].gx - x0, gy = fr[0].gy - y0, cvs = [];
+        for (const s of fr) {
+          const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+          const g = cv.getContext('2d'), im = g.createImageData(w, h), d = new Uint32Array(im.data.buffer);
+          for (let y = 0; y < h; y++) d.set(s.d.subarray((y + y0) * s.w + x0, (y + y0) * s.w + x0 + w), y * w);
+          g.putImageData(im, 0, 0); cvs.push(cv);
+        }
+        if (ED.Pix.define('wk.' + key, cvs, gx, gy, { dir: fr[0].dir, centre: [gx, gy] }, r.fps, r.loop)) a = 'wk.' + key;
+      } catch (e) { console.error('shot look ' + key, e); }
+    }
+    if (A && A.ok) m[sl] = a;
+    return a;
+  };
+
+  // Weapon art of hero p: { id (base weapon id, before any '@' fork suffix), w (the fork weapon, else the ED.WEAPONS entry), anim (atlas anim id: the baked fork look when the hero owns a fork), look, twin (off-hand copy), fork ('heavy' | 'swift' | '') }. The one place weapon looks are resolved.
   const WART = {}, TWIN = { daggers: 1, twinbows: 1, scythes: 1 };
   Sp.weaponArt = (p) => {
     const cls = ED.CLASSES[p.cls], id = String((p.stats && p.stats.weaponId) || p.weapon || (cls && cls.weapons[0]) || 'longsword');
     let d = WART[id];
     if (!d) {
-      const base = id.split('@')[0], w = ED.WEAPONS[base] || ED.WEAPONS[cls.weapons[0]];
-      d = WART[id] = { id: base, w, anim: 'weapon.' + base, look: w.look, twin: !!TWIN[base] };
+      const base = id.split('@')[0], w = Sp.forkData(id) || ED.WEAPONS[base] || ED.WEAPONS[cls.weapons[0]], fk = id.indexOf('@') > 0 ? id.slice(id.indexOf('@') + 1) : '', anim = Sp.forkAnim(id);
+      d = { id: base, w, anim: anim || 'weapon.' + base, look: w.look, twin: !!TWIN[base], fork: fk };
+      if (!fk || (anim && anim.indexOf('wk.') === 0)) WART[id] = d; // a fork waits for the atlas before it is remembered
     }
     return d;
   };
@@ -181,7 +513,7 @@
     g.addColorStop(0, U.rgba(ED.CLASSES[cls].col.c, 0.35)); g.addColorStop(1, 'rgba(0,0,0,0)');
     c.fillStyle = g; c.fillRect(0, 0, canvas.width, canvas.height);
     c.save(); c.translate(canvas.width / 2, canvas.height * 0.86); c.scale(s * 1.25, s * 1.25);
-    Sp.hero(c, { cls, slot: slot || 0, weapon: weapon || ED.CLASSES[cls].weapons[0], face: 0.3, moving: false, hp: 1 }, 0.8, null);
+    Sp.hero(c, { cls, slot: slot || 0, weapon: String(weapon || ED.CLASSES[cls].weapons[0]).split('@')[0], face: 0.3, moving: false, hp: 1 }, 0.8, null);
     c.restore();
   };
 

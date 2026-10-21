@@ -100,12 +100,13 @@
     const lo = lift(U.shade(col.b, -0.2), 0.2), mid = lift(col.b, lumOf(lo) + 0.12), body = lift(col.a, lumOf(mid) + 0.12);
     return [lo, mid, body, lift(U.mix(col.a, '#ffffff', 0.28), Math.max(lumOf(body) + 0.12, 0.72))];
   }
+  const FOE_STOPS = { lavahound: ['#4a1a10', '#a03a1a', '#e8702e', '#ffc884'] }; // hand-set ramps (dark to light) where the data colours are too dark to read: the Lava Hound is ember-rust, not brown, against Stratum IV's basalt
   function foeMapOf(type, colOv) {
     const def = ED.ENEMIES[type], col = colOv || def.col, pre = 'foe.' + type + '.', set = new Set(), acc = ACC[type] || {};
     for (const id in ED.ART.pal) if (id.startsWith(pre)) for (const h of ED.ART.pal[id]) set.add(h);
     set.delete(OUTLINE);
     const list = [...set].filter((h) => !acc[h]).sort((a, b) => lumOf(a) - lumOf(b)), n = list.length, m = {};
-    const stops = foeStops(col);
+    const stops = FOE_STOPS[type] || foeStops(col);
     for (let i = 0; i < n; i++) m[list[i]] = ramp(stops, (i + 0.5) / n);
     for (const h in acc) m[h] = acc[h] === 'c+' ? U.shade(col.c, 0.3) : acc[h] === 'c-' ? U.shade(col.c, -0.3) : col.c;
     return m;
@@ -165,6 +166,7 @@
   const newAnc = () => ({ cx: 0, cy: -10, top: -20, eye: [[0, -14]] });
   function stOf(e, t) {
     let s = FS.get(e.id);
+    if (s && s.type !== e.type) s = null; // an id left over from a minion or from an earlier run's foe of another type
     if (!s) { s = { type: e.type, lx: e.x, ly: e.y, lt: t, sp: 0, hd: 0, mv: -9, dir: 'd', oct: 2, st: e.st, ss: t, sd: 0.5, es: -9, hold: -1, ps: t, pose: '', seen: t, anc: newAnc(), an: null, fi: 0, flip: false, lift: 0, ho: 0 }; FS.set(e.id, s); }
     s.seen = t;
     const dt = t - s.lt;
@@ -559,7 +561,7 @@
       s.vx += (vx - s.vx) * k; s.vy += (vy - s.vy) * k; s.sp = Math.hypot(s.vx, s.vy);
     } else if (dt >= 0.5) { s.vx = s.vy = s.sp = 0; }
     s.lx = p.x; s.ly = p.y; s.lt = t;
-    if (p.dead && !s.wasDead) { s.deadT = t; F().atlasFx('fx.puff', p.x, p.y - 8); } // the body fades over 0.6 s under a puff
+    if (p.dead && !s.wasDead) { s.deadT = t; F().sheet('fx.puff', p.x, p.y - 8); } // the body fades over 0.6 s under a puff
     s.wasDead = !!p.dead;
     if (p.downed && !s.wasDown) s.downT = t; s.wasDown = !!p.downed;
     return s;
@@ -669,6 +671,7 @@
     const hx = bx + (hand[0] - body.ax) * K * sg, hy = by + (hand[1] - body.ay + bobA) * K;
     // ---- draw order: pieces behind the body, the body, pieces in front ----
     const wBehind = Math.sin(wa) < -0.25;
+    if (swinging && wd.fork === 'swift' && w.kind === 'melee' && !(R() && R().quality === 'low')) swiftGhosts(c, wd, w, anim, hx, hy, flip);
     if (wd.twin) twinDraw(c, p, wd, anim, swinging, face, flip, hx, hy, t, true);
     if (wBehind) heroWeapon(c, p, wd, hx, hy, wa, flip, thr, kick, t, swinging ? anim.atkT : 9);
     if (p.cls === 'knight' && !p.shieldOut) put(c, 'shield.kite', 0, bx - 5 * K * sg, by - 8 * K + bobA * K, flip, '', 1);
@@ -735,6 +738,18 @@
     c.fillStyle = col; c.fillRect(px - h, py - h, sz, sz);
     if (sz > K) { c.fillStyle = '#ffffff'; c.fillRect(px - 1, py - 1, K, K); }
     Sp.glow(c, px, py, 7, col, 0.3 * k);
+  }
+  // Swift melee weapons leave two fading copies of the blade behind it along the arc through the strike (22 ms and 44 ms back).
+  function swiftGhosts(c, wd, w, anim, hx, hy, flip) {
+    const u = anim.atkT, base = anim.a !== undefined ? anim.a : 0, ga = c.globalAlpha;
+    if (u < anim.t0 || u > anim.t1 + 0.08) return;
+    for (let k = 2; k >= 1; k--) {
+      const uu = u - k * 0.022; if (uu < anim.t0 * 0.5) continue;
+      swing(w, anim, base, uu, anim.side || 1);
+      c.globalAlpha = ga * (k === 1 ? 0.4 : 0.2);
+      weaponAt(c, wd.anim, hx, hy, SW.wa, flip, '', 0);
+    }
+    c.globalAlpha = ga;
   }
   // Warm glow of a held lantern.
   function lightGlow(c, x, y, a) { Sp.glow(c, x, y, 16, '#ffe9a0', a); }

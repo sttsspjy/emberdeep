@@ -1712,7 +1712,7 @@
       }
     });
   }
-  const orbOf = (pr, foe, col) => { const rp = Pix.ramp(col); return Pix.orb(Math.max(2, Math.round(pr.r / 2)), foe ? '#1a0604' : rp[0], rp[1], rp[2], rp[3]); }; // dark body, element colour, light core, one white glint
+  const orbOf = (pr, foe, col, k) => { const rp = Pix.ramp(col); return Pix.orb(Math.max(2, Math.round(pr.r * (k || 1) / 2)), foe ? '#1a0604' : rp[0], rp[1], rp[2], rp[3]); }; // dark body, element colour, light core, one white glint
   // Pixel trail of one shot: up to three squares behind it along its motion (ember colours flicker for fire shots).
   function shotTrail(pr, t, kind, col) {
     if (NOTRAIL[kind]) return;
@@ -1729,17 +1729,20 @@
   function shotBody(c, pr, t, kind, foe, col) {
     const sh = SHOT[kind], x = Math.round(pr.x), y = Math.round(pr.y - 6), At = ED.Atlas;
     if (FLAME[kind] && kind !== 'crescent') { const sp = Math.hypot(pr.vx, pr.vy) || 1; Pix.draw(c, 'fx.ember', '', (t * 12 + pr.id) | 0, x - pr.vx / sp * 9, y - pr.vy / sp * 9, 0.9); } // a micro flame licks behind fire shots
+    const k = foe || !curView ? 1 : Sp.shotK(pr, curView); // 1.2 for a Heavy weapon's shot, 0.85 for a Swift one's (visual only)
     if (sh && At.has(sh.id)) {
-      if (!prebaked[sh.id]) { prebaked[sh.id] = 1; for (let f = 0, n = At.anim(sh.id).n; f < n; f++) At.prebake(sh.id, f); } // all 32 rotation steps are baked in the background (Atlas.tick) the first time a shot kind shows up
-      let rot = sh.spin ? t * sh.spin + (pr.id & 7) : Math.atan2(pr.vy, pr.vx) - shotDir(sh.id);
+      const id = k !== 1 ? Sp.shotAnim(sh.id, k) : sh.id;
+      if (!prebaked[id]) { prebaked[id] = 1; for (let f = 0, n = At.anim(id).n; f < n; f++) At.prebake(id, f); } // all 32 rotation steps are baked in the background (Atlas.tick) the first time a shot kind shows up
+      let rot = sh.spin ? t * sh.spin + (pr.id & 7) : Math.atan2(pr.vy, pr.vx) - shotDir(id);
       if (sh.q) rot = Math.round(rot / (Math.PI / 2)) * Math.PI / 2;
-      if (kind === 'shield') for (let i = 3; i >= 1; i--) Pix.draw(c, sh.id, '', 0, x - pr.vx * 0.03 * i, y - pr.vy * 0.03 * i, 0.36 - i * 0.09, false, rot - 14 * 0.03 * i); // three fading ghost copies
-      Pix.draw(c, sh.id, '', At.frameAt(sh.id, t + pr.id * 0.13), x, y, 1, false, rot);
+      if (kind === 'shield') for (let i = 3; i >= 1; i--) Pix.draw(c, id, '', 0, x - pr.vx * 0.03 * i, y - pr.vy * 0.03 * i, 0.36 - i * 0.09, false, rot - 14 * 0.03 * i); // three fading ghost copies
+      Pix.draw(c, id, '', At.frameAt(id, t + pr.id * 0.13), x, y, 1, false, rot);
+      const xs = ED.ClassFx.shot[kind]; if (xs) xs(c, pr, t, x, y);
       return;
     }
     if (CRESCENT[kind]) { Pix.put(c, crescentSprite(Math.max(4, Math.round((pr.r || 14) / 2)), col, Math.round(Math.atan2(pr.vy, pr.vx) / U.TAU * 32) & 31), x, y); return; }
     if (DIAMOND[kind]) { Pix.put(c, diamondSprite(Math.max(2, Math.round(pr.r / 2)), col, Math.round(Math.atan2(pr.vy, pr.vx) / U.TAU * 32) & 31, foe), x, y); return; }
-    Pix.put(c, orbOf(pr, foe, col), x, y);
+    Pix.put(c, orbOf(pr, foe, col, k < 1 ? k : 1), x, y); // a Heavy orb is already 1.2x through its hitbox radius
   }
   function drawProjectiles(c, view, t, pass) {
     const ps = view.projs; if (!ps.length) return;
@@ -1917,28 +1920,37 @@
       g.fillStyle = 'rgba(255,255,255,0.3)'; g.fillRect(0, 0, fw, Math.max(1, Math.floor(h * 0.4)));
     });
   }
-  // Hero labels placed this frame (x, y, half-width), so stacked heroes never print their names over each other.
-  const lbl = new Float32Array(24); let lblN = 0;
-  // Returns y for a label of width w and height lh centred near (x, y): steps up by lh until it clears every placed label, then registers it.
+  // Rects placed this frame (x, y, half-width, half-height): elite bars and the labels, so stacked heroes and elites never print over each other.
+  const lbl = new Float32Array(128); let lblN = 0; const eliteQ = [];
+  function labelAdd(x, y, hw, hh) {
+    if (lblN < 32) { lbl[lblN * 4] = x; lbl[lblN * 4 + 1] = y; lbl[lblN * 4 + 2] = hw; lbl[lblN * 4 + 3] = hh; lblN++; }
+  }
+  // True when a label of width w and height lh centred at (x, y) would overprint a placed rect.
+  function labelHit(x, y, w, lh) {
+    for (let i = 0; i < lblN * 4; i += 4) if (Math.abs(lbl[i] - x) < lbl[i + 2] + w / 2 && Math.abs(lbl[i + 1] - y) < (lbl[i + 3] + lh / 2) * 0.95) return true;
+    return false;
+  }
+  // Returns y for a label of width w and height lh centred near (x, y): steps up by lh until it clears every placed rect, then registers it.
   function placeLabel(x, y, w, lh) {
-    for (let k = 0; k < 6; k++) {
-      let hit = false;
-      for (let i = 0; i < lblN * 3; i += 3) if (Math.abs(lbl[i] - x) < lbl[i + 2] + w / 2 && Math.abs(lbl[i + 1] - y) < lh * 0.95) { hit = true; break; }
-      if (!hit) break;
-      y -= lh;
-    }
-    if (lblN < 8) { lbl[lblN * 3] = x; lbl[lblN * 3 + 1] = y; lbl[lblN * 3 + 2] = w / 2; lblN++; }
+    for (let k = 0; k < 6 && labelHit(x, y, w, lh); k++) y -= lh;
+    labelAdd(x, y, w / 2, lh / 2);
     return y;
+  }
+  // Parry window: a white pixel ring (1 art px) closes from r + 11 onto the foe's rim through the last PARRY_WIN seconds of its wind-up and blinks in the last 0.1 s.
+  function parryRim(c, e) {
+    const k = U.clamp(e.t / ED.CONST.PARRY_WIN, 0, 1), rx = Math.max(3, Math.round((e.r + 3 + 8 * k) / 2)), ry = Math.max(2, Math.round(rx * 0.5));
+    Pix.put(c, Pix.ell(rx, ry, e.t < 0.1 && Math.floor(e.t * 40) % 2 ? '#8ad0ff' : '#ffffff', false), s2(e.x), s2(e.y), 1);
   }
   function drawOverheads(c, view, local, t) {
     if (view.room) drawDoorPreviews(c, view, view.room, t);
     // enemy bars and elite labels: one blit each on the buffer pixel grid
     const bh = R.scale >= 2 ? 2 : 3, lhh = R.labelH();
+    lblN = 0;
     const lp = view.players.get(local), cuePips = ED.HUD.wantsPips(lp), cueParry = !!(lp && lp.stats && lp.stats.parry);
     if (cuePips || cueParry) for (const e of view.enemies) { // class route cues of the local hero: ailment pips under the bar (Brand, Open Veins, Contagion, Gangrene), the Parry rim on a foe in the last 0.3 s of a wind-up
       if (e.hp <= 0 || e.boss || e.burrowed) continue;
       if (cuePips && e.ailN) ED.HUD.foePips(c, e, Math.round(e.x - (e.elite ? 15 : 9)), Math.round(e.y - e.r * 2.6 - (e.def.fly ? 14 : 4)) + bh + 2);
-      if (cueParry && (e.st === 'windup' || e.st === 'aim' || e.st === 'cast') && e.t > 0 && e.t <= ED.CONST.PARRY_WIN) { c.strokeStyle = 'rgba(255,255,255,0.95)'; c.lineWidth = 1; c.beginPath(); c.ellipse(Math.round(e.x), Math.round(e.y), e.r + 2, (e.r + 2) * 0.5, 0, 0, U.TAU); c.stroke(); }
+      if (cueParry && (e.st === 'windup' || e.st === 'aim' || e.st === 'cast') && e.t > 0 && e.t <= ED.CONST.PARRY_WIN) parryRim(c, e);
     }
     for (const e of view.enemies) {
       if (e.hp <= 0 || e.boss || e.burrowed) continue;
@@ -1948,12 +1960,18 @@
       const w = e.elite ? 30 : 18, y = an ? Math.round(e.y + an.top) - 6 : Math.round(e.y - e.r * 2.6 - (e.def.fly ? 14 : 4)), af = e.elite ? ED.AFFIXES[e.elite] : null, bx = Math.round(e.x - w / 2);
       blit(c, barSprite(af ? af.color : '#e2513f', w, Math.round(U.clamp(frac, 0, 1) * w), bh), bx, y);
       if (e.ward > 0) { c.fillStyle = '#7fc8ff'; c.fillRect(bx, y - 1 - bh, Math.max(1, Math.round(w * (e.ward / (e.wardMax || 1)))), Math.max(1, bh - 1)); }
-      if (af) R.label(c, af.name + ' ' + e.def.name, e.x, y - 2 - lhh / 2 - (e.ward > 0 ? bh : 0), af.color);
+      if (af) { eliteQ.push(e, y); labelAdd(e.x, y + bh / 2, w / 2, bh / 2); } // the bar blocks the labels of the elites beside it
     }
+    for (let i = 0; i < eliteQ.length; i += 2) { // elite labels after every bar: close elites share the row, the label shortens to the affix, then steps up, instead of overprinting
+      const e = eliteQ[i], af = ED.AFFIXES[e.elite], ly = eliteQ[i + 1] - 2 - lhh / 2 - (e.ward > 0 ? bh : 0), full = af.name + ' ' + e.def.name, lh2 = lhh * 1.1;
+      let str = full;
+      if (labelHit(e.x, ly, R.labelW(full), lh2) && !labelHit(e.x, ly, R.labelW(af.name), lh2)) str = af.name;
+      R.label(c, str, e.x, placeLabel(e.x, ly, R.labelW(str), lh2), af.color);
+    }
+    eliteQ.length = 0;
     for (const e of view.enemies) if (e.hp > 0 && !e.burrowed) drawMarks(c, e, t);
     // hero names (the local hero first; a name that would overlap another steps up) and revive rings with a DOWN / REVIVE label
     const multi = view.players.size > 1, lh = lhh * 1.1;
-    lblN = 0;
     for (let pass = 0; pass < 2; pass++) for (const p of view.players.values()) {
       if ((p.pid === local) !== (pass === 0)) continue;
       const col = ED.PLAYER_COLORS[p.slot] || '#fff', px = Math.round(p.x), py = Math.round(p.y);
