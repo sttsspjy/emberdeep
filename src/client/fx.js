@@ -562,9 +562,14 @@
     for (let i = 0; i < n; i++) { const dx = tx - x, dy = ty - 10 - y; F.part(x + (Math.random() - 0.5) * 12, y + (Math.random() - 0.5) * 12, { color: col, size: 2, life: 0.5, add: true, drag: 0, vx: dx / 0.45, vy: dy / 0.45 }, 0, 0.45 + Math.random() * 0.08); }
   }
 
+  // Per-class client hooks, registered by src/client/cls-<class>.js at load: ev[type] = [fn(ev, ctx, localPid)] run before the built-in handler of that event;
+  // zone[kind] = fn(c, z, pass, t, k, view) draws a zone kind render.js has no case for; hero = [fn(c, p, t, low)] runs after the built-in hero effects (hero feet frame);
+  // mark = [fn(e) -> {id, ramp, stub} | null] adds a 14 px glyph (atlas anim id, Pix ramp, GLYPH stub key when the art is absent) to a foe's overhead mark row.
+  const CFX = ED.ClassFx = { ev: {}, zone: {}, hero: [], mark: [], on(t, f) { (this.ev[t] || (this.ev[t] = [])).push(f); } };
   // Translate one world event into effects. local: the viewing player's pid.
   F.handle = (ev, ctx) => {
     const local = ctx.localPid, A = ED.Audio, set = ED.App ? ED.App.settings : { dmg: true };
+    const xh = CFX.ev[ev.t]; if (xh) for (let i = 0; i < xh.length; i++) xh[i](ev, ctx, local);
     switch (ev.t) {
       case 'hit': {
         const mine = ev.pid === local, el = ev.el | 0, ec = EL_COL[el] || '', p = ev.pid ? ctx.player(ev.pid) : null;

@@ -911,6 +911,7 @@
           break;
         }
         default: {
+          const zf = ED.ClassFx.zone[z.kind]; if (zf) { zf(c, z, pass, t, k, view); break; }
           // unknown kinds: friendly (team 0) areas get a gold sigil disc; hostile ones a faint red mark
           if (!z.r) break;
           const fade = z.dur ? Math.min(1, (z.dur - z.t) * 2, z.t * 5) : 1;
@@ -1510,9 +1511,12 @@
   }
   // Overhead status marks of a foe, drawn with the HP bars above the lighting. Layout bottom-up from the bar line (bosses have no bar): ward bar and an elite's name, then the Venom pips on their own line,
   // then one row of glyphs left to right: stun stars, Doom skull (the Reap is near), Corroded cracked guard, Charge bolt. Nothing shares a point, whatever the combination.
+  const xg = []; // class glyphs of the foe being drawn (ED.ClassFx.mark)
   function drawMarks(c, e, t) {
     const vl = venomOf(e), dl = doomOf(e), skull = dl > 0 && !e.boss && e.hp < 1.5 * dl, stun = e.stun > 0, chg = e.charge > 0, cor = vl >= 5;
-    if (!(vl > 0 || skull || stun || chg)) return;
+    const xm = ED.ClassFx.mark; let xn = 0;
+    for (let i = 0; i < xm.length; i++) { const g = xm[i](e); if (g) xg[xn++] = g; }
+    if (!(vl > 0 || skull || stun || chg || xn)) return;
     const G = foeGeom(e), r = G.r, id = e.id | 0, af = e.elite ? ED.AFFIXES[e.elite] : null;
     let b = e.boss ? s2(G.top) - 4 : s2(Math.min(G.top - 6, -(r * 2.6 + (e.def.fly ? 14 : 4)))) - 2; // bottom of the free space
     if (!e.boss) { if (e.ward > 0) b -= (R.scale >= 2 ? 2 : 3) + 1; if (af) b -= Math.ceil(R.labelH()) + 4; }
@@ -1524,9 +1528,9 @@
       for (let i = 0; i < 4; i++) { c.fillStyle = cor ? '#c8ff5a' : i < vl ? '#9be33c' : '#26340f'; c.fillRect(x0 + i * 6, oy - 2, 4, 2); }
       b = -6;
     } else b = -2;
-    const n = (stun ? 1 : 0) + (skull ? 1 : 0) + (cor ? 1 : 0) + (chg ? 1 : 0);
+    const n = (stun ? 1 : 0) + (skull ? 1 : 0) + (cor ? 1 : 0) + (chg ? 1 : 0) + xn;
     if (n) {
-      const w = (stun ? 26 : 0) + (skull ? 14 : 0) + (cor ? 14 : 0) + (chg ? 6 : 0) + (n - 1) * 2;
+      const w = (stun ? 26 : 0) + (skull ? 14 : 0) + (cor ? 14 : 0) + (chg ? 6 : 0) + xn * 14 + (n - 1) * 2;
       let x = s2(ox - w / 2);
       const by = oy + b; // bottom of the glyph row
       if (stun) { // three stars orbiting on a flat ellipse
@@ -1536,6 +1540,8 @@
       if (skull) { const up = Math.sin(t * 4 + id) > 0 ? 2 : 0, sx = x + 6, sy = by - 7 - up; if (!Pix.draw(c, 'fx.sigil.skull', 'shadow', 0, sx, sy)) glyphStub(c, GLYPH.skull, sx, sy + 5); x += 16; }
       if (cor) { const up = Math.sin(t * 5 + id) > 0 ? 2 : 0, sx = x + 6, sy = by - 7 - up; if (!Pix.draw(c, 'fx.glyph.corroded', '', 0, sx, sy)) glyphStub(c, GLYPH.guard, sx, sy + 5); x += 16; }
       if (chg && ((t * 3 + id) | 0) % 2 === 0) { c.fillStyle = '#ffe66b'; c.fillRect(x + 2, by - 8, 4, 2); c.fillRect(x, by - 6, 4, 2); c.fillRect(x + 2, by - 4, 2, 2); c.fillRect(x, by - 2, 4, 2); }
+      if (chg) x += 8;
+      for (let i = 0; i < xn; i++) { const g = xg[i], up = Math.sin(t * 4 + id + i) > 0 ? 2 : 0, sx = x + 6, sy = by - 7 - up; if (!Pix.draw(c, g.id, g.ramp || '', 0, sx, sy) && GLYPH[g.stub]) glyphStub(c, GLYPH[g.stub], sx, sy + 5); x += 16; }
     }
   }
   // Drawn at the foe's origin right after its sprite. Element colours: Burn fire, Chill and Freeze ice, Charge lightning, Venom poison, Radiance holy, Doom shadow, Bleed red; pixel art on the 2 px grid.
@@ -1660,6 +1666,7 @@
       c.fillStyle = '#ffffff'; c.fillRect(Pix.s2(-rx * 1.3), Pix.s2(cyh - ry * 1.6), 4, 2); c.fillRect(Pix.s2(-rx * 1.7), Pix.s2(cyh - ry * 1.2), 2, 4); // glint on the upper left
     }
     if (p.ambush && !p.downed) R.emit(p.x, p.y - 12, 22, '#b78cff', 0.3 + Math.sin(t * 9) * 0.12);
+    const xh = ED.ClassFx.hero; for (let i = 0; i < xh.length; i++) xh[i](c, p, t, low);
     c.globalAlpha = 1;
   }
 
