@@ -40,8 +40,8 @@
     if (F.texts.length > 80) F.texts.shift();
     // numbers born in the same spot stack upward instead of overprinting
     let yy = y; for (const t of F.texts) if (t.max - t.life < 0.3 && Math.abs(t.x - x) < 24 && Math.abs(t.y - yy) < 9) yy = t.y - 9;
-    const o = opts || NO_OPTS; // opts: crit, pop, life, max, vy
-    F.texts.push({ x: x + (Math.random() - 0.5) * 10, y: yy, s: String(s), color, size: size || 10, life: o.life ?? 0.9, max: o.max ?? 0.9, vy: o.vy ?? -42, crit: !!o.crit, pop: !!o.pop });
+    const o = opts || NO_OPTS; // opts: crit, pop, life, max, vy, ol (rim colour)
+    F.texts.push({ x: x + (Math.random() - 0.5) * 10, y: yy, s: String(s), color, size: size || 10, life: o.life ?? 0.9, max: o.max ?? 0.9, vy: o.vy ?? -42, crit: !!o.crit, pop: !!o.pop, ol: o.ol || null });
   };
   F.ring = (x, y, r, color, life, width) => F.rings.push({ x, y, r, color, life: life || 0.4, max: life || 0.4, w: width || 3 });
   // Smear arc. A hero weapon swing (no life given) takes its sweep side and timing from the attack animation that was just started.
@@ -183,12 +183,13 @@
 
   const R = () => ED.Render;
   const ENEMY_COLOR = (type) => { const d = ED.ENEMIES[type]; return d ? d.col.a : '#ffffff'; };
-  const EL_COL = ['', '#ff9a3a', '#9fefff', '#ffe66b', '#ff4a5a']; // el: 0 physical, 1 pyre, 2 rime, 3 storm, 4 bleed
-  const PATH_COL = { pyre: '#ff7a2a', rime: '#7fe3ff', storm: '#ffe66b', steel: '#d9dfe8', blood: '#d43a5a', spirit: '#b78cff' };
+  const EL_COL = ['', '#ff9a3a', '#9fefff', '#ffe66b', '#ff4a5a', '#9be33c', '#fff0c2', '#a070ff']; // hit-event el: 0 physical, 1 fire, 2 ice, 3 lightning, 4 bleed, 5 poison, 6 holy, 7 shadow
+  const EL_OL = [null, null, null, '#bfe6ff', '#b8c0cc', null, '#ffcf5a', null]; // 1 px rim of a hit number where the fill alone is hard to tell apart (Lightning, Bleed, Holy); the others keep the dark outline
+  const PATH_COL = { fire: '#ff7a2a', ice: '#7fe3ff', lightning: '#ffe66b', poison: '#9be33c', holy: '#fff0c2', shadow: '#a070ff', general: '#d9dfe8' };
   const PROJ_COLOR = { bone: '#e6dfc9', spore: '#9cff6a', ice: '#9fefff', fire: '#ff8a2a', water: '#6fe6ff', void: '#d48cff', arrow: '#e8d8b0', bolt: '#cfd6de', firebolt: '#ff9a3a', spark: '#ffcf4a', fireball: '#ff6a1a', knife: '#d9dfe8', holy: '#ffe9a0', soul: '#7dffd9', plague: '#9cff6a', wave: '#ffe9a0', wisp: '#bff0ff', shard: '#b78cff', blade: '#cfd6de', orb: '#ff7ad9', trident: '#e8c66b', skull: '#e6dfc9',
     hammer: '#ffe9a0', crescent: '#ff9a3a', iceshard: '#9fefff', bloodscythe: '#d43a5a', spectral: '#bcd0ff', web: '#e8e6f0', droneshot: '#ff9a3a', thorn: '#9cff6a' };
   F.projColor = (k) => PROJ_COLOR[k] || '#ffffff';
-  const BOOM = { fire: ['#ff9a3a', '#ffcf4a'], bigfire: ['#ff6a1a', '#ffd36b'], shock: ['#e8e2c8', '#ffffff'], slam: ['#c9b98f', '#ffffff'], spore: ['#9cff6a', '#e8ffd0'], ice: ['#9fefff', '#ffffff'], bolt: ['#bfe9ff', '#ffffff'], bone: ['#7dffd9', '#e6dfc9'], burst: ['#ff6a4a', '#ffd36b'], shadow: ['#b78cff', '#2a1f44'] };
+  const BOOM = { fire: ['#ff9a3a', '#ffcf4a'], bigfire: ['#ff6a1a', '#ffd36b'], shock: ['#e8e2c8', '#ffffff'], slam: ['#c9b98f', '#ffffff'], spore: ['#9cff6a', '#e8ffd0'], ice: ['#9fefff', '#ffffff'], bolt: ['#bfe9ff', '#ffffff'], bone: ['#7dffd9', '#e6dfc9'], burst: ['#ff6a4a', '#ffd36b'], shadow: ['#b78cff', '#2a1f44'], acid: ['#9be33c', '#e8ffd0'], firedamp: ['#ff8a2a', '#ffe9a0'] };
 
   // Elemental flavour on a hit: embers, ice glints, sparks or blood.
   function elemHit(x, y, el, a, crit) {
@@ -227,10 +228,19 @@
     } else if (el === 4) {
       F.burst(x, gy, cnt(5 + Math.round(5 * w * k)), { kind: 'drop', color: '#a8142c', a, spread: 1.8, sp: sp * 0.9, life: 0.9, size: 1.8 + 0.6 * w, vz: 60, z: z0, drag: 1.2 });
       addStain(x, gy, 2 + 3 * w, '#6a0a1a', 0.5, 4);
-    } else if (evo === 'spirit') {
-      F.burst(x, gy, cnt(2 + Math.round(2 * w)), { color: '#b78cff', sp: 30, vy: -34, life: 0.8, size: 2, add: true, drag: 1.5, z: z0 });
+    } else if (el === 5) { // poison: rising bubbles and green drips
+      F.burst(x, gy, cnt(3 + Math.round(3 * w * k)), { kind: 'drop', color: '#9be33c', a, spread: 2, sp: sp * 0.7, life: 0.8, size: 1.8 + 0.6 * w, vz: 70, z: z0, drag: 1.4 });
+      F.burst(x, gy, cnt(2), { color: '#d6ff8a', sp: 25, vy: -40, life: 0.7, size: 1.8, add: true, drag: 1.5, z: z0 });
+    } else if (el === 6) { // holy: gold motes and a short ray
+      F.burst(x, gy, cnt(3 + Math.round(2 * w * k)), { color: '#ffe9a0', sp: 35, vy: -48, life: 0.8, size: 2, add: true, drag: 1.5, z: z0 });
+      F.burst(x, gy, cnt(2), { kind: 'spark', color: '#fff6d8', a, spread: 1.4, sp: sp * 1.4, life: 0.2, size: 1.5, drag: 5, z: z0 });
+    } else if (el === 7) { // shadow: sinking violet smoke
+      F.burst(x, gy, cnt(2 + Math.round(2 * w)), { kind: 'smoke', color: '#5a2fb0', sp: 26, life: 0.7, size: 5, drag: 2.5, z: z0 });
+      F.burst(x, gy, cnt(2), { kind: 'spark', color: '#c9b3ff', a, spread: 1.6, sp: sp * 1.2, life: 0.2, size: 1.4, drag: 5, z: z0 });
+    } else if (evo === 'shadow') {
+      F.burst(x, gy, cnt(2 + Math.round(2 * w)), { color: '#a070ff', sp: 30, vy: -34, life: 0.8, size: 2, add: true, drag: 1.5, z: z0 });
       F.burst(x, gy, cnt(2), { kind: 'spark', color: '#d9c8ff', a, spread: 1.6, sp: sp * 1.3, life: 0.2, size: 1.4, drag: 5, z: z0 });
-    } else F.burst(x, gy, cnt(Math.round((3 + 4 * w) * (evo === 'steel' ? 1.4 : 1))), { kind: 'spark', color: evo === 'steel' ? '#ffe6a8' : '#fff4d0', a, spread: 1.6, sp: sp * 1.8, life: 0.18, size: 1.5, drag: 5, z: z0 });
+    } else F.burst(x, gy, cnt(Math.round((3 + 4 * w) * (evo === 'general' ? 1.4 : 1))), { kind: 'spark', color: evo === 'general' ? '#ffe6a8' : '#fff4d0', a, spread: 1.6, sp: sp * 1.8, life: 0.18, size: 1.5, drag: 5, z: z0 });
     if (crit) F.burst(x, gy, cnt(6), { kind: 'streak', color: '#ffffff', a, spread: 1.6, sp: 300, life: 0.22, size: 2.2, z: z0 });
   }
 
@@ -376,7 +386,7 @@
         if (set.dmg && (mine || ev.c || ev.v >= 20)) {
           const col = ec || (ev.c ? '#ffd36b' : ev.k ? '#ffab70' : (mine ? '#ffffff' : '#cfc6b6'));
           const size = (ev.c ? 14 : (ev.k ? 8 : 10)) + Math.min(5, Math.sqrt(ev.v) * 0.22);
-          F.text(ev.x, ev.y - 6, ev.v, col, size, { crit: !!ev.c, pop: true, life: ev.c ? 1.15 : 0.85, max: ev.c ? 1.15 : 0.85, vy: ev.c ? -58 : -42 });
+          F.text(ev.x, ev.y - 6, ev.v, col, size, { crit: !!ev.c, pop: true, life: ev.c ? 1.15 : 0.85, max: ev.c ? 1.15 : 0.85, vy: ev.c ? -58 : -42, ol: EL_OL[el] });
         }
         if (!ev.k) {
           const e = foeAt(ev.x, ev.y), r = e ? e.r : 8, gy = e ? e.y : ev.y + r;
@@ -437,10 +447,10 @@
       }
       case 'atk': if (ev.pid !== local) { F.playerAttackAnim(ev.pid, ev.a); const p = ctx.player(ev.pid); if (p && p.stats && !p.stats.melee) A.play('shoot', 0.3); } break;
       case 'spark': { const c = F.projColor(ED.PROJ_KINDS[ev.k]); F.burst(ev.x, ev.y, 4, { color: c, sp: 80, life: 0.25, size: 1.8, add: true }); F.burst(ev.x, ev.y, 3, { kind: 'streak', color: c, sp: 130, life: 0.2, size: 1.3 }); F.pop(ev.x, ev.y, 7, c, 0.1); A.play('spark', 0.4); break; }
-      case 'chain': { // star (hub, t1, hub, t2, ...): one forked arm per target; otherwise a plain polyline
-        const pts = ev.pts, star = pts.length >= 3 && pts[2][0] === pts[0][0] && pts[2][1] === pts[0][1];
-        if (star) for (let i = 1; i < pts.length; i += 2) F.zap(pts[0][0], pts[0][1], pts[i][0], pts[i][1], '#bfe9ff');
-        else F.bolts.push({ pts, life: 0.22, max: 0.22, color: '#bfe9ff' });
+      case 'chain': { // star (hub, t1, hub, t2, ...): one forked arm per target; otherwise a plain polyline. k: h Wrath of Heaven bolt, t Twilight beam, s Superconductor discharge
+        const pts = ev.pts, star = pts.length >= 3 && pts[2][0] === pts[0][0] && pts[2][1] === pts[0][1], cc = ev.k === 'h' ? '#fff3a0' : ev.k === 't' ? '#d9b44a' : ev.k === 's' ? '#8fdcff' : '#bfe9ff';
+        if (star) for (let i = 1; i < pts.length; i += 2) F.zap(pts[0][0], pts[0][1], pts[i][0], pts[i][1], cc);
+        else F.bolts.push({ pts, life: 0.22, max: 0.22, color: cc });
         for (let i = star ? 1 : 0; i < pts.length; i += star ? 2 : 1) F.pop(pts[i][0], pts[i][1] - 6, 9, '#cfeaff', 0.14);
         if (star) F.pop(pts[0][0], pts[0][1] - 6, 12, '#ffffff', 0.16);
         A.play('bolt', 0.5); break; }
@@ -490,6 +500,12 @@
       case 'guard': A.play('skill', 0.6); break;
       case 'cone': F.slash(ev.x, ev.y - 6, ev.a, ev.r, ev.arc, '#ff5a3a', 0.25); break;
       case 'left': F.msg(`${ev.name} left the party`, '#ffab70'); break;
+      // ---- path payoffs: placeholders until the FX pass (own hero full size, allies at 70% size) ----
+      case 'smite': { const m = ev.pid === local ? 1 : 0.7; F.pop(ev.x, ev.y - 20, 40 * m, '#fff0c2', 0.28, true); F.ring(ev.x, ev.y - 4, 26 * m, '#ffcf5a', 0.4, 3); F.burst(ev.x, ev.y - 8, 8, { color: '#ffe9a0', sp: 40, vy: -85, life: 0.7, size: 2, add: true, drag: 1 }); A.play('boon', 0.25 * m); break; }
+      case 'reap': { const m = ev.pid === local ? 1 : 0.7; F.slash(ev.x, ev.y - 8, -0.9, 34 * m, 2.2, '#a070ff', 0.25); F.burst(ev.x, ev.y - 8, 10, { kind: 'smoke', color: '#5a2fb0', sp: 40, life: 0.6, size: 6, drag: 2.5 }); F.pop(ev.x, ev.y - 8, 24 * m, '#c9b3ff', 0.2); if (ev.pid === local) F.text(ev.x, ev.y - 30, 'REAPED', '#c9b3ff', 9, { pop: true }); break; }
+      case 'toll': { const m = ev.pid === local ? 1 : 0.7; F.ring(ev.x, ev.y - 10, 70 * m, '#5a2fb0', 0.5, 5); F.ring(ev.x, ev.y - 10, 36 * m, '#c9b3ff', 0.35, 3); F.pop(ev.x, ev.y - 12, 50 * m, '#a070ff', 0.3, true); F.addShake(3 * m); A.play('boom', 0.4 * m); break; }
+      case 'lance': { const m = ev.pid === local ? 1 : 0.7; F.zap(ev.x0, ev.y0, ev.x1, ev.y1, '#fff0c2', 0.3); F.pop(ev.x1, ev.y1, 16 * m, '#ffe9a0', 0.2); A.play('bolt', 0.2 * m); break; }
+      case 'shielded': { const p = ctx.player(ev.pid), st = F.shieldT || (F.shieldT = {}); if (p && F.time - (st[ev.pid] || 0) > 0.25) { st[ev.pid] = F.time; const c = ev.k === 'holy' ? '#ffcf5a' : '#bfe3ff'; F.ring(p.x, p.y - 6, 20, c, 0.3, 2); F.burst(p.x, p.y - 10, 4, { color: c, sp: 24, vy: -36, life: 0.6, size: 1.8, add: true, drag: 1.2 }); if (ev.pid === local) A.play('heal', 0.25); } break; }
       // ---- Wickdeep events (visuals only) ----
       case 'freeze': F.burst(ev.x, ev.y - 10, 12, { kind: 'streak', color: '#c8f6ff', sp: 150, life: 0.35, size: 1.6 }); F.burst(ev.x, ev.y - 10, 8, { kind: 'shard', color: '#bfeaff', sp: 70, life: 0.7, size: 2.6, vz: 70, z: 8 }); F.ring(ev.x, ev.y - 6, 28, '#9fefff', 0.35, 3); F.pop(ev.x, ev.y - 10, 22, '#bfeaff', 0.22, true); A.play('freeze', 0.7); break;
       case 'shatter': F.burst(ev.x, ev.y - 8, 24, { kind: 'shard', color: '#d8f8ff', sp: (ev.r || 60) * 2.4, life: 0.7, size: 3, vz: 110, z: 8, add: true }); F.burst(ev.x, ev.y - 8, 14, { kind: 'streak', color: '#ffffff', sp: (ev.r || 60) * 3.4, life: 0.3, size: 1.8 }); F.ring(ev.x, ev.y, ev.r || 60, '#9fefff', 0.4, 4); F.pop(ev.x, ev.y - 8, (ev.r || 60) * 0.6, '#d8f8ff', 0.25, true); F.punch(0.45, 0); F.addShake(3); A.play('shatter', 0.8); break;
@@ -696,7 +712,7 @@
       const sc = t.crit ? pop * (1 + 0.07 * Math.sin(age * 42) * Math.exp(-age * 5)) : pop;
       const a = Math.min(1, k * 2.2), fs = t.size * sc;
       if (t.crit) { c.globalCompositeOperation = 'lighter'; Rn.glow(c, t.x, t.y, fs * 1.7, t.color, 0.5 * a); c.globalCompositeOperation = 'source-over'; }
-      const sp = Rn.numSprite(t.s, t.color, t.size, t.crit), q = fs / sp.fs;
+      const sp = Rn.numSprite(t.s, t.color, t.size, t.crit, t.ol), q = fs / sp.fs;
       c.globalAlpha = a; c.drawImage(sp.cv, t.x + sp.x * q, t.y + sp.y * q, sp.w * q, sp.h * q);
     }
     c.globalAlpha = 1;

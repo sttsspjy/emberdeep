@@ -41,8 +41,7 @@
 
   const portrait = (cls, size, slot, weapon) => { const cv = document.createElement('canvas'); cv.width = cv.height = size * 2; ED.Sprites.portrait(cv, cls, slot || 0, weapon); return cv; };
 
-  // Path helpers: elements share ids with their paths (pyre, rime, storm).
-  const KEY_AFF = () => ED.KEY_AFFINITY, EVO_AFF = () => ED.EVO_AFFINITY, SUSTAIN_CAP = () => ED.CONST.SUSTAIN_CAP;
+  // Path helpers: elements share ids with their paths (fire, ice, lightning, poison, holy, shadow).
   const pathIcon = (k) => ED.Icons.url(ED.PATHS[k].icon, ED.PATHS[k].color);
   const pathName = (k, wrap) => (ED.PATHS[k] ? (wrap ? `<i style="color:${ED.PATHS[k].color}">${ED.PATHS[k].name}</i>` : ED.PATHS[k].name) : '');
   UI.evoName = (path, weaponId) => (ED.PATHS[path] ? ED.PATHS[path].evo : '') + (ED.WEAPONS[weaponId] ? ' ' + ED.WEAPONS[weaponId].name : ' Arms');
@@ -183,7 +182,7 @@
     const tierNext = ED.UPGRADES.find(u => u.tier > p.stats.deepest);
     const lines = [];
     if (p.stats.runs < 2) {
-      lines.push(`<b>Paths:</b> follow up to ${ED.MAX_GATES} of ${ED.PATH_IDS.map(k => pathName(k, true)).join(', ')}. Each stratum is weak to one element.`);
+      lines.push(`<b>Paths:</b> follow up to ${ED.MAX_ELEMENTS} of ${ED.ELEMENT_IDS.map(k => pathName(k, true)).join(', ')}, or take the ${pathName('general', true)} path alone as a Generalist. Each stratum is weak to one element.`);
       lines.push(`<b>Lantern:</b> every new room costs light (shown on its door). In the dark elites and the Gloom hunt you, but rooms pay more; <kbd>${esc(ED.Input.label('flare'))}</kbd> flares the Gloom away, and spare light shields you at the boss door.`);
     }
     if (p.stats.runs === 0) lines.push('<b>First goal:</b> reach the Bone Warden at the end of the Ossuary. Every descent pays embers, win or lose.');
@@ -382,18 +381,16 @@
   const BOON_LOCK_MS = 700;
   const OFFER_HEAD = { start: 'Choose your first path', level: 'Choose a boon', epic: 'An epic boon', forge: 'Temper — rank up a boon' };
 
-  // [header, subtitle, path colour key] for an offer message { src, path, forge }.
+  // [header, subtitle, path colour key] for an offer message { src, forge }.
   function offerHead(offer, me) {
     const src = offer.forge ? 'forge' : (offer.src || 'level');
-    const owned = me && me.boons ? ED.gatePaths(me.boons) : [];
-    const P = ED.PATHS[offer.path];
-    if (src === 'room' && P) {
-      if (owned.includes(offer.path)) return [`Boon of ${P.name}`, `Your ${P.name} affinity: ${ED.pathAffinity(me.boons, offer.path)}`, offer.path];
-      if (owned.length < ED.MAX_GATES) return [`Boon of ${P.name}`, `A new path (${owned.length}/${ED.MAX_GATES} slots used)`, offer.path];
-      return [OFFER_HEAD.level, `${P.name} is out of reach: your ${ED.MAX_GATES} path slots are full`, null];
+    const boons = me && me.boons ? me.boons : {}, main = ED.mainPath(boons);
+    if (src === 'room') {
+      const els = ED.elementGates(boons).length;
+      return [OFFER_HEAD.level, ED.isGeneralist(boons) ? 'Boons of your General path' : els < ED.MAX_ELEMENTS ? `A new path may be offered (${els}/${ED.MAX_ELEMENTS} used)` : 'Boons of your paths', main];
     }
     if (src === 'class') return [`${me && ED.CLASSES[me.cls] ? ED.CLASSES[me.cls].name : 'Class'} technique`, '', null];
-    if (src === 'start') return [OFFER_HEAD.start, `Paths gate your boons. A hero follows up to ${ED.MAX_GATES}.`, null];
+    if (src === 'start') return [OFFER_HEAD.start, `Paths gate your boons: ${ED.MAX_ELEMENTS} element paths, or Generalist`, null];
     if (src === 'forge') return [OFFER_HEAD.forge, 'The boon you pick gains one rank.', null];
     return [OFFER_HEAD[src] || OFFER_HEAD.level, '', null];
   }
@@ -403,12 +400,18 @@
     if (b.duo) return [`<span class="bc-path two">${pathName(b.duo[0], true)} + ${pathName(b.duo[1], true)}</span>`, true];
     if (b.path) return [`<span class="bc-path">${ED.PATHS[b.path].name}</span>`, false];
     if (b.cls) return [`<span class="bc-path">${esc(ED.CLASSES[b.cls].name)} technique</span>`, false];
-    return ['<span class="bc-path">Neutral</span>', false];
+    return ['<span class="bc-path">Open</span>', false];
   }
-  const boonRibbon = (b) => (b.evo ? 'Evolution' : b.duo ? 'Duo' : b.key ? 'Keystone' : b.gate ? 'Path gate' : '');
+  const boonRibbon = (b, id) => (b.evo ? 'Evolution' : b.duo ? 'Duo' : b.key ? 'Keystone' : id === 'generalist' ? 'Forsake the elements' : b.gate ? 'Path gate' : '');
+  // "Weak: <stratum>" chip of an element gate card: the stratum whose foes are weak to the path's element.
+  const weakChip = (b) => {
+    if (!b.gate || !ED.PATHS[b.path].element) return '';
+    const bi = ED.BIOMES.find(x => x.weak === b.path);
+    return bi ? `<span class="bc-weak" style="--pc:${ED.PATHS[b.path].color}">Weak: ${esc(bi.short)}</span>` : '';
+  };
 
   function boonCard(id, i, offer, me) {
-    const b = ED.BOONS[id], max = b.max || 5;
+    const b = ED.BOONS[id], max = me && me.stats ? ED.maxRank(b, me.stats) : (b.max || 5);
     const have = me && me.boons ? (me.boons[id] || 0) : 0;
     const path = b.path || (b.duo && b.duo[0]) || null, path2 = b.duo ? b.duo[1] : null;
     const el = document.createElement('button'); el.type = 'button';
@@ -417,8 +420,8 @@
     if (path && ED.PATHS[path]) el.style.setProperty('--pc', ED.PATHS[path].color);
     if (path2 && ED.PATHS[path2]) el.style.setProperty('--pc2', ED.PATHS[path2].color);
     const rank = have ? (have < max ? `Rank ${have} → ${have + 1} (max ${max})` : `Rank ${have} (max)`) : max > 1 ? `Max rank ${max}` : '';
-    const ribbon = boonRibbon(b), [line, two] = boonPathLine(b);
-    el.innerHTML = `${ribbon ? `<span class="bc-ribbon${two ? ' two' : ''}">${ribbon}</span>` : ''}<div class="bc-top">${line}<span class="bc-rar">${ED.RARITY[b.rar].name}</span></div><img class="bc-icon" alt="" src="${ED.Icons.boonUrl(id)}"><div class="bn">${esc(b.name)}</div>${b.evo ? `<div class="bsub">${esc(UI.evoName(b.evo, me && me.weapon))}</div>` : ''}<div class="bd">${esc(b.desc)}</div>${rank ? `<div class="bk${have ? ' own' : ''}">${rank}</div>` : ''}`;
+    const ribbon = boonRibbon(b, id), [line, two] = boonPathLine(b);
+    el.innerHTML = `${ribbon ? `<span class="bc-ribbon${two ? ' two' : ''}">${ribbon}</span>` : ''}<div class="bc-top">${line}<span class="bc-rar">${ED.RARITY[b.rar].name}</span></div><img class="bc-icon" alt="" src="${ED.Icons.boonUrl(id)}"><div class="bn">${esc(b.name)}</div>${b.evo ? `<div class="bsub">${esc(UI.evoName(b.evo, me && me.weapon))}</div>` : ''}${weakChip(b)}<div class="bd">${esc(b.desc)}</div>${rank ? `<div class="bk${have ? ' own' : ''}">${rank}</div>` : ''}`;
     el.onclick = () => { if (performance.now() >= boonLock) UI.pickBoon(i); };
     el.onmouseenter = () => { boonFocus = i; paintFocus(); };
     return el;
@@ -471,12 +474,13 @@
     const P = ED.PATHS[k], boons = me.boons || {}, aff = ED.pathAffinity(boons, k);
     const keyId = ED.BOON_IDS.find(id => ED.BOONS[id].key && ED.BOONS[id].path === k);
     const hasKey = !!(keyId && boons[keyId]);
-    const keyLine = hasKey ? `Keystone: ${esc(ED.BOONS[keyId].name)}` : aff >= KEY_AFF() ? 'Keystone available in your offers' : `Keystone ready at ${KEY_AFF()}`;
+    const keyAff = ED.keyAffinity(k), evoAff = ED.evoAffinity(k);
+    const keyLine = hasKey ? `Keystone: ${esc(ED.BOONS[keyId].name)}` : aff >= keyAff ? 'Keystone available in your offers' : `Keystone ready at ${keyAff}`;
     let evoLine;
     if (evoPath === k) evoLine = `Evolved: ${esc(UI.evoName(k, me.weapon))}`;
     else if (evoPath) evoLine = 'Evolution already taken';
-    else if (hasKey && aff >= EVO_AFF()) evoLine = 'Evolution ready — it will appear in your next offer';
-    else evoLine = `Evolves at ${EVO_AFF()} with keystone`;
+    else if (hasKey && aff >= evoAff) evoLine = 'Evolution ready — it will appear in your next offer';
+    else evoLine = `Evolves at ${evoAff} with keystone`;
     return `<div class="path-row${evoPath === k ? ' evolved' : ''}" style="--pc:${P.color}"><img alt="" src="${pathIcon(k)}"><div><div class="pr-head"><b>${P.name}</b><span>Affinity ${aff}</span></div><div class="pr-line${hasKey ? ' ok' : ''}">${keyLine}</div><div class="pr-line${evoPath === k ? ' ok' : ''}">${evoLine}</div></div></div>`;
   }
 
@@ -484,10 +488,11 @@
   function boonGroups(me) {
     const boons = me.boons || {}, ids = Object.keys(boons).filter(id => ED.BOONS[id] && boons[id] > 0);
     const chip = (id) => { const b = ED.BOONS[id]; return `<span class="chip${b.key ? ' key' : ''}${b.evo ? ' evo' : ''}" style="--rc:${ED.RARITY[b.rar].color}" title="${esc(b.desc)}"><img alt="" src="${ED.Icons.boonUrl(id)}">${esc(b.name)}${boons[id] > 1 ? ' ×' + boons[id] : ''}</span>`; };
-    const groups = ED.gatePaths(boons).map(k => [`${ED.PATHS[k].name} <small>affinity ${ED.pathAffinity(boons, k)}</small>`, ids.filter(id => ED.BOONS[id].path === k), ED.PATHS[k].color]);
+    const paths = ED.gatePaths(boons);
+    const groups = paths.map(k => [`${ED.PATHS[k].name} <small>affinity ${ED.pathAffinity(boons, k)}</small>`, ids.filter(id => ED.BOONS[id].path === k && !ED.BOONS[id].open), ED.PATHS[k].color]);
     groups.push(['Duo', ids.filter(id => ED.BOONS[id].duo), '']);
     groups.push([`${ED.CLASSES[me.cls].name} technique`, ids.filter(id => ED.BOONS[id].cls), '']);
-    groups.push(['Neutral', ids.filter(id => { const b = ED.BOONS[id]; return !b.path && !b.duo && !b.cls; }), '']);
+    groups.push(['Open', ids.filter(id => { const b = ED.BOONS[id]; return !b.duo && !b.cls && (!b.path || b.open || !paths.includes(b.path)); }), '']);
     const html = groups.filter(g => g[1].length).map(([h, list, col]) => `<div class="bg"${col ? ` style="--pc:${col}"` : ''}><div class="bg-h">${h}</div><div class="chip-list">${list.map(chip).join('')}</div></div>`).join('');
     return html || '<span class="chip none">None yet</span>';
   }
@@ -499,24 +504,23 @@
     if (el.hidden) return;
     const me = s.me, st = me.stats, view = s.view;
     $('sheet-hero').textContent = `${me.name} · ${ED.CLASSES[me.cls].name}`;
-    const shieldCap = Math.round(me.maxHp * (st.bloodShield || 0));
     const rows = [
       ['Health', `${Math.ceil(me.hp)} / ${me.maxHp}`], ['Damage', U.pct(st.dmg)], ['Attack speed', U.pct(st.atk)], ['Critical', `${Math.round(st.crit * 100)}% ×${st.critMult.toFixed(2)}`],
       ['Armor', Math.round(st.armor) + ` (−${Math.round((1 - ED.Stats.armorMul(st.armor)) * 100)}%)`], ['Move speed', Math.round(st.moveSpeed)],
       [`Skill cooldowns (${esc(ED.Input.label('skill1'))} · ${esc(ED.Input.label('skill2'))})`, `${st.skillCd.toFixed(1)}s · ${(st.skill2Cd || 0).toFixed(1)}s`], ['Dodge', Math.round(st.dodge * 100) + '%'],
-      ['Life steal', Math.round(st.leech * 1000) / 10 + '%'], ['Level', view.level], ['Gold', view.gold],
+      ['Shield', `${Math.ceil(me.shield || 0)}` + (st.holyInfuse ? ` (Holy holds up to ${Math.round(me.maxHp * st.holyCap)})` : '')], ['Level', view.level], ['Gold', view.gold],
     ];
-    if (shieldCap > 0) rows.push(['Blood shield', `${Math.ceil(me.shield || 0)} / ${shieldCap}`]);
     $('sheet-dl').innerHTML = rows.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
     const note = $('sheet-note');
-    note.hidden = !(st.leech > 0 || st.hemorrhage || st.killHeal || st.killHealPct || st.blessed || st.soulSiphon || st.feast || st.evo === 'blood');
-    note.textContent = `Healing from hits and kills (leech, kill heals, blood scythes, Blessed Strikes, Soul Siphon, Judgment) restores at most ${Math.round(SUSTAIN_CAP() * 1000) / 10}% max health per second (${(me.maxHp * SUSTAIN_CAP()).toFixed(1)} for you). Damage over time never leeches.`;
+    note.hidden = false;
+    note.textContent = `Nothing heals you for hitting or killing. Shields fade ${Math.round(ED.CONST.SHIELD_DECAY * 100)}% of max health per second between rooms.`;
     $('sheet-relics').innerHTML = me.relics.length ? me.relics.map(id => { const r = ED.RELICS[id]; return `<span class="chip" style="--rc:${ED.RARITY[r.rar].color}" title="${esc(r.desc)}"><img alt="" src="${ED.Icons.relicUrl(id)}">${r.name}</span>`; }).join('') : '<span class="chip none">None yet</span>';
     $('sheet-boons').innerHTML = boonGroups(me);
     // paths: slots used, affinity, keystone and evolution
     const owned = ED.gatePaths(me.boons || {}), evoPath = ED.evoOf(me.boons || {});
-    $('sheet-slots').textContent = `${owned.length}/${ED.MAX_GATES}`;
-    $('sheet-paths').innerHTML = owned.map(k => pathRow(k, me, evoPath)).join('') + '<div class="path-row empty">Open path slot</div>'.repeat(Math.max(0, ED.MAX_GATES - owned.length));
+    const gen = ED.isGeneralist(me.boons || {}), slots = gen ? 0 : Math.max(0, ED.MAX_ELEMENTS - owned.length);
+    $('sheet-slots').textContent = gen ? 'Generalist' : `${owned.length}/${ED.MAX_ELEMENTS}`;
+    $('sheet-paths').innerHTML = owned.map(k => pathRow(k, me, evoPath)).join('') + '<div class="path-row empty">Open path slot</div>'.repeat(slots);
     // stratum affinity: now and next
     const biome = ED.biomeFor(view.stratum), nb = view.stratum < ED.BIOMES.length ? ED.biomeFor(view.stratum + 1) : null;
     $('sheet-strat').innerHTML = `Stratum ${U.roman(view.stratum)} · ${esc(biome.name)}<br><small>Lantern ${Math.round(100 * view.light / Math.max(1, view.lightMax))}% · map numbers: light each unvisited room costs</small>`;

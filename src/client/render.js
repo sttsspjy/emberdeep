@@ -194,6 +194,7 @@
     c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
     c.fillStyle = P.void; c.fillRect(0, 0, R.W, R.H);
     nl = 0; ng = 0; stN = 0; R.local = local;
+    { const me = view.players && view.players.get(local); R.mainPath = me ? ED.mainPath(me.boons) : null; } // path of 'boon' door and prop glyphs
     R.simT = view.renderT || view.time || 0; // sim-time clock for hazards drawn from sim state: interpolated host time on clients, world time otherwise
     if (!room) { R.endWorld(R.postOpts(biome, t)); return; }
     let sx = 0, sy = 0;
@@ -230,7 +231,7 @@
         c.setTransform(S, 0, 0, S, ox, oy);
       } else {
         c.save(); c.translate(o.x, o.y);
-        if (it.k === 0) { drawCompanions(c, o, view, t, true); Sp.hero(c, o, t, F.anim[o.pid]); drawCompanions(c, o, view, t, false); }
+        if (it.k === 0) Sp.hero(c, o, t, F.anim[o.pid]);
         else Sp.minion(c, o, t);
         c.restore();
       }
@@ -307,7 +308,7 @@
     const cx = Math.round(80 * s), cy = Math.round(100 * s), rc = rimCtx;
     rc.setTransform(1, 0, 0, 1, 0, 0); rc.globalCompositeOperation = 'source-over'; rc.globalAlpha = 1; rc.clearRect(0, 0, sw, sh);
     rc.setTransform(s, 0, 0, s, cx + (dx - ix), cy + (dy - iy));
-    drawCompanions(rc, p, view, t, true); Sp.hero(rc, p, t, ED.FX.anim[p.pid]); drawCompanions(rc, p, view, t, false);
+    Sp.hero(rc, p, t, ED.FX.anim[p.pid]);
     rc.setTransform(1, 0, 0, 1, 0, 0); rc.globalCompositeOperation = 'source-atop';
     const mx = cx, my = cy - 16 * s, g = rc.createLinearGradient(mx + rim.dx * 13 * s, my + rim.dy * 13 * s, mx - rim.dx * 3 * s, my - rim.dy * 3 * s);
     g.addColorStop(0, U.rgba(rim.col, 0.62 * rim.s)); g.addColorStop(0.55, U.rgba(rim.col, 0.14 * rim.s)); g.addColorStop(1, U.rgba(rim.col, 0));
@@ -889,7 +890,7 @@
   // Pickups are cached 16x16 sprites (outlined, drawn once at 4x). Pass 0 (lit): ground blob and lights. Pass 1 (after lighting): halos (additive), then
   // the opaque sprites, so shards and coins read in any light; fast-moving (magnetised) pickups leave a short trail.
   const pkSpr = {}, pkTrail = new Map(); let pkFrame = 0;
-  const PK_COL = { gold: '#ffc94a', xp: '#7dffd9', orb: '#ff2a4a', heart: '#ff4a5a' };
+  const PK_COL = { gold: '#ffc94a', xp: '#7dffd9', heart: '#ff4a5a' };
   function pickSprite(kind) {
     let s = pkSpr[kind]; if (s) return s;
     s = pkSpr[kind] = document.createElement('canvas'); s.width = s.height = 64;
@@ -904,10 +905,6 @@
       g.fillStyle = '#ffd84f'; g.beginPath(); g.arc(0, 0, 3.4, 0, U.TAU); g.fill();
       g.strokeStyle = '#d99a1e'; g.lineWidth = 0.7; g.beginPath(); g.arc(0, 0, 2.2, 0, U.TAU); g.stroke();
       g.fillStyle = '#fff6c0'; g.beginPath(); g.ellipse(-1.2, -1.5, 1.3, 0.8, -0.5, 0, U.TAU); g.fill();
-    } else if (kind === 'orb') {
-      g.fillStyle = '#e01a38'; g.beginPath(); g.moveTo(0, -7.5); g.quadraticCurveTo(5.5, -1, 4.6, 2.6); g.quadraticCurveTo(3.6, 6, 0, 6); g.quadraticCurveTo(-3.6, 6, -4.6, 2.6); g.quadraticCurveTo(-5.5, -1, 0, -7.5); g.fill(); g.stroke();
-      g.fillStyle = '#ff6a80'; g.beginPath(); g.ellipse(1.2, 2.6, 2.2, 2.4, 0, 0, U.TAU); g.fill();
-      g.fillStyle = 'rgba(255,255,255,0.85)'; g.beginPath(); g.ellipse(-1.8, 0.4, 1.1, 2.2, 0.3, 0, U.TAU); g.fill();
     } else {
       g.scale(0.3, 0.3); g.lineWidth = 3.2; g.fillStyle = '#ff4a5a';
       g.beginPath(); g.moveTo(0, 18); g.bezierCurveTo(-24, 2, -22, -20, -8, -20); g.quadraticCurveTo(-2, -20, 0, -12); g.quadraticCurveTo(2, -20, 8, -20); g.bezierCurveTo(22, -20, 24, 2, 0, 18); g.fill(); g.stroke();
@@ -926,12 +923,11 @@
   function drawPickups(c, view, t, pass) {
     const pks = view.pickups;
     if (pass === 0) {
-      let n = 0; // light budget: a big pile of orbs must not starve other lights
+      let n = 0; // light budget: a big pile of coins must not starve other lights
       for (const pk of pks) {
-        const lit = n++ < 14, L = lit ? R.light : NOP, k = pk.kind, big = k === 'orb' || k === 'heart';
+        const lit = n++ < 14, L = lit ? R.light : NOP, k = pk.kind, big = k === 'heart';
         if (k === 'gold') L(pk.x, pk.y - 4, 28, '#ffd36b', 0.5);
         else if (k === 'xp') L(pk.x, pk.y - 4, 26, '#7dffd9', 0.5);
-        else if (k === 'orb') L(pk.x, pk.y - 6, 34, '#ff2a4a', 0.65);
         else L(pk.x, pk.y - 6, 36, '#ff4a5a', 0.6);
         c.globalAlpha = 0.55; c.drawImage(shadowCv, pk.x - 7, pk.y - (big ? 9 : 6), 14, big ? 12 : 9);
       }
@@ -948,7 +944,7 @@
     }
     if (pkTrail.size > pks.length + 48) for (const [id, s] of pkTrail) if (s.f !== fr) pkTrail.delete(id);
     for (const pk of pks) { // halos and trails (context is additive)
-      const k = pk.kind, big = k === 'orb' || k === 'heart', bob = Math.sin(t * 5 + pk.id) * 1.5, y = pk.y - (big ? 7 : 5) + bob, col = PK_COL[k], s = pkTrail.get(pk.id);
+      const k = pk.kind, big = k === 'heart', bob =Math.sin(t * 5 + pk.id) * 1.5, y = pk.y - (big ? 7 : 5) + bob, col = PK_COL[k], s = pkTrail.get(pk.id);
       if (n++ < 70) R.glow(c, pk.x, y, big ? 15 : 11, col, k === 'xp' ? 0.75 + Math.sin(t * 6 + pk.id) * 0.15 : 0.6);
       if (s && s.v > 150) for (let i = 1; i <= 3; i++) R.glow(c, pk.x - s.dx / s.v * i * 5, y - s.dy / s.v * i * 5 * 0.7, 6 - i, col, 0.62 - i * 0.16);
     }
@@ -957,7 +953,6 @@
       const k = pk.kind, bob = Math.sin(t * 5 + pk.id) * 1.5, spr = pickSprite(k);
       if (k === 'gold') { const w = 8 * Math.max(0.2, Math.abs(Math.cos(t * 4 + pk.id))); c.drawImage(spr, pk.x - w, pk.y - 12 + bob, w * 2, 16); }
       else if (k === 'xp') { const p = 1 + Math.sin(t * 6 + pk.id) * 0.05; c.drawImage(spr, pk.x - 8 * p, pk.y - 13 + bob - 8 * (p - 1), 16 * p, 16 * p); }
-      else if (k === 'orb') { const p = 0.9 + Math.sin(t * 6 + pk.id) * 0.06; c.drawImage(spr, pk.x - 8 * p, pk.y - 15 + bob, 16 * p, 16); }
       else c.drawImage(spr, pk.x - 8, pk.y - 14 + bob, 16, 16);
     }
     c.globalCompositeOperation = 'lighter';
@@ -972,7 +967,7 @@
   }
 
   const PROP_LABEL = {
-    chest: () => 'Open', fountain: () => 'Drink (heal party 50%)', altar: (p, me) => `Bleed 20% health for an epic boon`,
+    chest: () => 'Open', fountain: () => 'Drink (heal party 50%)', altar: (p, me) => `Pay 20% health for an epic boon`,
     gamble: (p) => `Offer ${p.price} gold for a random relic`, trial: () => 'Begin the trial (elite fight, rare relic)', portal: () => 'Descend',
   };
   R.propPrompt = (p, view) => {
@@ -986,14 +981,12 @@
     if (p.kind === 'anvil') return 'Temper at the anvil';
     return PROP_LABEL[p.kind] ? PROP_LABEL[p.kind](p) : null;
   };
-  const REWARD_DESC = { gold: 'Gold for the whole party, more when the lantern is low.', vigor: 'Permanently raises your maximum health and heals you.', forge: 'Rank up one of your boons.', oil: 'Refills part of the lantern for the whole party.', class: 'Choose a technique unique to your hero.', epic: 'Choose from epic boons.', relic: 'A hoard of relics: each hero takes one.' };
+  const REWARD_DESC = { gold: 'Gold for the whole party, more when the lantern is low.', vigor: 'Permanently raises your maximum health and heals you.', forge: 'Rank up one of your boons.', oil: 'Refills part of the lantern for the whole party.', boon: 'A boon from your paths (a new path while you have a free slot).', epic: 'Choose from epic boons.', relic: 'A hoard of relics: each hero takes one.' };
   const SHOP_DESC = { boon: 'Grants an extra boon pick with no common options.', oil: 'Lantern oil: refills part of the lantern for the whole party.', forge: 'Forge: rank up one of your boons.', potion: 'Heals a good chunk of your health.' };
   // Longer explanation shown above the prompt (null when there is none).
   R.propDesc = (p) => {
     if (p.kind === 'reward') {
-      const s = String(p.item);
-      if (s.indexOf('boon:') === 0) { const pa = ED.PATHS[s.slice(5)]; return pa ? `Choose a ${pa.name} boon. Opens the path if you have a free slot.` : null; }
-      return REWARD_DESC[s] || null;
+      return REWARD_DESC[String(p.item)] || null;
     }
     if (p.kind === 'campfire') return 'Rest: recover a chunk of your health. One use per hero.';
     if (p.kind === 'anvil') return 'Temper: rank up one of your boons. One use per hero.';
@@ -1002,26 +995,21 @@
   };
   R.interactable = (p) => !p.state && p.kind !== 'sign' && p.kind !== 'merchant';
 
-  const PATH_COL = { pyre: '#ff7a2a', rime: '#7fe3ff', storm: '#ffe66b', steel: '#d9dfe8', blood: '#d43a5a', spirit: '#b78cff' };
-  // Colour of a reward-type string such as 'boon:pyre', 'gold', 'oil', 'relic' (unknown -> warm white).
+  const PATH_COL = { fire: '#ff7a2a', ice: '#7fe3ff', lightning: '#ffe66b', poison: '#9be33c', holy: '#fff0c2', shadow: '#a070ff', general: '#d9dfe8' };
+  // Colour of a reward-type string such as 'boon', 'gold', 'oil', 'relic' (unknown -> warm white). 'boon' wears the colour of the local hero's deepest path (R.mainPath).
   function rewardColor(s) {
     s = String(s || '');
-    if (s.indexOf('boon:') === 0) return PATH_COL[s.slice(5)] || '#ffe9a0';
-    return { gold: '#ffd36b', vigor: '#ff4a5a', forge: '#ff9a3a', oil: '#ffb35c', class: '#c98bff', epic: '#c98bff', relic: '#ffb02e', campfire: '#ff9a3a', anvil: '#ffb066' }[s] || '#ffe9a0';
+    if (s === 'boon') return PATH_COL[R.mainPath] || '#ffe9a0';
+    return { gold: '#ffd36b', vigor: '#ff4a5a', forge: '#ff9a3a', oil: '#ffb35c', epic: '#c98bff', relic: '#ffb02e', campfire: '#ff9a3a', anvil: '#ffb066' }[s] || '#ffe9a0';
   }
   R.rewardColor = rewardColor;
-  const REWARD_LABEL = { gold: 'Gold', vigor: 'Vigor', forge: 'Forge', oil: 'Lantern oil', class: 'Class technique', relic: 'Relic hoard', epic: 'Epic boon', campfire: 'Rest', anvil: 'Temper' };
-  // Short name of a reward string: 'boon:pyre' -> 'Boon of Pyre'.
-  R.rewardLabel = (s) => {
-    s = String(s || '');
-    if (s.indexOf('boon:') === 0) { const pa = ED.PATHS[s.slice(5)]; return 'Boon of ' + (pa ? pa.name : 'the Deep'); }
-    return REWARD_LABEL[s] || 'Reward';
-  };
-  // [icon, colour] for a reward string; cls (a hero class id) picks the glyph of 'class' rewards.
+  const REWARD_LABEL = { boon: 'Boon', gold: 'Gold', vigor: 'Vigor', forge: 'Forge', oil: 'Lantern oil', relic: 'Relic hoard', epic: 'Epic boon', campfire: 'Rest', anvil: 'Temper' };
+  // Short name of a reward string: 'boon' -> 'Boon'.
+  R.rewardLabel = (s) => REWARD_LABEL[String(s || '')] || 'Reward';
+  // [icon, colour] for a reward string; 'boon' shows the icon of the local hero's deepest path (a Generalist sees General).
   R.rewardIcon = (s, cls) => {
     s = String(s || '');
-    if (s.indexOf('boon:') === 0) { const pa = ED.PATHS[s.slice(5)]; return pa ? [pa.icon, pa.color] : ['star', '#ffe9a0']; }
-    if (s === 'class') { const k = ED.CLASSES[cls]; return k ? [k.icon, k.col.c] : ['scroll', '#c98bff']; }
+    if (s === 'boon') { const pa = ED.PATHS[R.mainPath]; return pa ? [pa.icon, pa.color] : ['star', '#ffe9a0']; }
     return { gold: ['coin', '#ffd36b'], vigor: ['heart', '#ff4a5a'], forge: ['anvil', '#ff9a3a'], oil: ['oil', '#ffb35c'], epic: ['star', '#c98bff'], relic: ['chest', '#ffb02e'], campfire: ['campfire', '#ff9a3a'], anvil: ['anvil', '#ffb066'] }[s] || ['star', '#ffe9a0'];
   };
   // Map/door glyph of a floor room: { icon, color, badge? } (null for plain rooms). Elite rooms add a skull badge.
@@ -1081,7 +1069,7 @@
 
   function drawProps(c, view, local, t) {
     for (const p of view.props) {
-      const done = !!(R.claimed && p.group && R.claimed[p.group] && (p.kind === 'campfire' || p.kind === 'anvil' || (p.kind === 'reward' && /^(boon:|class$|forge$|epic$|vigor$)/.test(p.item)))); // this hero already used it
+      const done = !!(R.claimed && p.group && R.claimed[p.group] && (p.kind === 'campfire' || p.kind === 'anvil' || (p.kind === 'reward' && /^(boon$|forge$|epic$|vigor$)/.test(p.item)))); // this hero already used it
       const G = done ? () => {} : (dx, dy, r, col, a) => R.emit(p.x + dx, p.y + dy, r, col, a), L = done ? () => {} : (dx, dy, r, col, k) => R.light(p.x + dx, p.y + dy, r, col, k);
       c.save(); c.translate(p.x, p.y);
       if (done) c.globalAlpha = 0.4;
@@ -1365,7 +1353,7 @@
     }
   }
 
-  // Drawn at the hero's origin after the sprite: evolution aura, blood shield, ambush glint, Bulwark.
+  // Drawn at the hero's origin after the sprite: evolution aura, shield, ambush glint, Bulwark.
   function drawHeroFx(c, p, t) {
     if (p.dead) return;
     const st = p.stats, evo = st && st.evo, low = R.quality === 'low', a0 = p.stealthT > 0 ? (p.pid === R.local ? 0.45 : 0.2) : 1;
@@ -1377,8 +1365,8 @@
       R.emit(p.x, p.y - 10, 24, col, 0.2 + Math.sin(t * 3 + (p.slot || 0)) * 0.05); R.light(p.x, p.y - 10, 62, col, 0.28);
     }
     if (p.shield > 0) {
-      const fr = U.clamp(p.shield / Math.max(1, p.maxHp * 0.25), 0.15, 1), rr = 12 + 9 * fr, wob = Math.sin(t * 4 + (p.slot || 0)) * 0.6;
-      c.fillStyle = U.rgba('#d43a5a', 0.1 + 0.14 * fr); c.strokeStyle = U.rgba('#ffc4d0', 0.5 + 0.3 * fr); c.lineWidth = 1.3;
+      const fr = U.clamp(p.shield / Math.max(1, p.maxHp * 0.12), 0.15, 1), rr = 12 + 9 * fr, wob = Math.sin(t * 4 + (p.slot || 0)) * 0.6; // ring full at a 12% shield (the Holy ceiling)
+      c.fillStyle = U.rgba('#9fd0ff', 0.1 + 0.14 * fr); c.strokeStyle = U.rgba('#e8f4ff', 0.5 + 0.3 * fr); c.lineWidth = 1.3;
       c.beginPath(); c.ellipse(0, -12, rr + wob, rr * 1.2 - wob, 0, 0, U.TAU); c.fill(); c.stroke();
       c.strokeStyle = U.rgba('#ffffff', 0.55); c.beginPath(); c.arc(0, -12, rr * 0.8, -2.5, -1.6); c.stroke();
     }
@@ -1394,33 +1382,6 @@
       R.emit(p.x + Math.cos(a) * rr, p.y - 10 + Math.sin(a) * rr, 22, '#ffe9a0', 0.4 * fl); R.light(p.x + Math.cos(a) * rr, p.y - 10 + Math.sin(a) * rr, 56, '#ffe9a0', 0.45);
     }
     c.globalAlpha = 1;
-  }
-
-  // ---------------- companions (orbit blades / wisps drawn around heroes) ----------------
-  function drawCompanions(c, p, view, t, back) {
-    if (!p.stats || p.downed || p.dead) return;
-    const ht = view.time !== undefined ? view.time : t;
-    const n = p.stats.orbit || 0;
-    for (let i = 0; i < n; i++) {
-      const a = ht * 3.2 + i * U.TAU / n;
-      const ox = Math.cos(a) * 44, oy = Math.sin(a) * 44;
-      if ((oy < 0) !== back) continue;
-      c.save(); c.translate(ox, oy - 6); c.rotate(a * 3);
-      R.glow(c, 0, 0, 14, '#cfe6ff', 0.5);
-      c.fillStyle = '#e6eef6'; c.strokeStyle = '#0b0806'; c.lineWidth = 1;
-      c.beginPath(); c.moveTo(0, -8); c.quadraticCurveTo(6, -2, 0, 8); c.quadraticCurveTo(2, 0, 0, -8); c.fill(); c.stroke();
-      c.restore();
-      if (!back) R.light(p.x + ox, p.y + oy - 6, 34, '#cfe6ff', 0.35);
-    }
-    const nw = p.stats.wisp || 0;
-    for (let i = 0; i < nw; i++) {
-      const a = ht * 1.6 + i * U.TAU / nw;
-      const ox = Math.cos(a) * 26, oy = Math.sin(a) * 10 - 14;
-      if ((Math.sin(a) < 0) !== back) continue;
-      R.glow(c, ox, oy, 12, '#bff0ff', 0.8);
-      c.fillStyle = '#ffffff'; c.beginPath(); c.arc(ox, oy, 2.4, 0, U.TAU); c.fill();
-      if (!back) R.light(p.x + ox, p.y + oy, 44, '#bff0ff', 0.55);
-    }
   }
 
   // ---------------- projectiles ----------------
@@ -1629,8 +1590,8 @@
     return s;
   }
   // Floating damage number baked once per (string, colour, size in half units, crit); FX.drawTexts scales it to the animated size. Sprite origin = text centre, .fs = baked font size.
-  R.numSprite = (str, color, size, crit) => {
-    const bs = Math.round(size * 2) / 2, key = bs + (crit ? 'c' : 'n') + color + str;
+  R.numSprite = (str, color, size, crit, ol) => {
+    const bs = Math.round(size * 2) / 2, key = bs + (crit ? 'c' : 'n') + (ol || '') + color + str;
     let s = numC.get(key);
     if (s) return s;
     if (!mctx) mctx = document.createElement('canvas').getContext('2d');
@@ -1639,6 +1600,7 @@
     s = bake(-hw, -hh, hw, hh, false, (g) => {
       g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
       g.lineWidth = crit ? 4 : 3; g.strokeStyle = crit ? 'rgba(40,10,0,0.95)' : 'rgba(0,0,0,0.85)'; g.strokeText(str, 0, 0);
+      if (ol) { g.lineWidth = 1.5; g.strokeStyle = ol; g.strokeText(str, 0, 0); } // element rim between the dark outline and the fill
       g.fillStyle = color; g.fillText(str, 0, 0);
       if (crit) { g.fillStyle = 'rgba(255,255,255,0.4)'; g.save(); g.beginPath(); g.rect(-bs * 3, -bs * 0.6, bs * 6, bs * 0.55); g.clip(); g.fillText(str, 0, 0); g.restore(); }
     });

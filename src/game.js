@@ -4,7 +4,7 @@
   'use strict';
   const U = ED.U, Sim = ED.Sim, N = ED.Net;
   const G = ED.Game = { s: null };
-  const HERO_REWARD = /^(boon:|class$|forge$|epic$|vigor$)/; // reward items every hero claims separately
+  const HERO_REWARD = /^(boon$|forge$|epic$|vigor$)/; // reward items every hero claims separately
 
   // ---------------- client-side mirror of the host's world ----------------
   function Mirror(cfg, localPid) {
@@ -35,7 +35,11 @@
       for (const rm of this.floor.rooms) this.roomState[rm.id] = { visited: false, known: false, cleared: false };
       this.roomId = -1;
     }
-    if (d.r !== this.roomId) { this.roomId = d.r; this.room = this.floor.rooms[d.r]; this.snaps.length = 0; this.firstInRoom = true; }
+    if (d.r !== this.roomId) {
+      this.roomId = d.r; this.room = this.floor.rooms[d.r]; this.snaps.length = 0; this.firstInRoom = true;
+      const tough = this.room.type === 'elite' || this.room.type === 'boss';
+      for (const p of this.players.values()) p.toughRoom = tough; // War Drum doubles in these rooms
+    }
     this.locked = !!d.L; this.gold = d.g; this.xp = d.x; this.xpNext = d.n; this.level = d.l; this.waitMsg = d.wm; this.time = d.T;
     this.light = d.li; this.lightMax = d.lm || 100; this.dread = { tier: d.dr | 0 };
     if (d.O) this.props = d.O.map(a => ({ id: a[0], kind: a[1], x: a[2], y: a[3], state: a[4], item: a[5], price: a[6], group: a[7], stype: a[8], text: a[9] }));
@@ -94,6 +98,7 @@
       const fl = rb[7];
       e.flash = fl & 1 ? 0.05 : 0; e.frozen = fl & 2 ? 1 : 0; e.stun = fl & 4 ? 1 : 0; e.burnLvl = (fl >> 11) & 3; e.burn = e.burnPool = e.burnLvl > 0 ? 1 : 0; e.chill = rb[16] || 0; e.exposed = !!(fl & 32);
       e.charge = fl & 64 ? 1 : 0; e.bleedPool = fl & 128 ? 1 : 0; e.judged = fl & 256 ? 1 : 0; e.blind = fl & 512 ? 1 : 0; e.vulnT = fl & 1024 ? 1 : 0;
+      e.venomLvl = (fl >> 13) & 7; e.radLvl = (fl >> 16) & 3; e.doomLine = rb[17] || 0; // Venom pips (5 = Corroded), Radiance fill, Reap line (bosses: the Toll gauge)
       e.boss = !!e.def.boss;
       const st = N.ST[rb[8]] || 'move';
       if (e.boss) { e.pose = st; e.st = 'atk'; } else e.st = st;
@@ -181,10 +186,8 @@
   // Host/solo: process events and targeted messages produced by the world this frame.
   G.drainWorld = () => {
     const s = G.s, w = s.world;
-    for (const ev of w.fx) {
-      if (s.mode === 'host') s.fxBuf.push(ev);
-      G.localEvent(ev);
-    }
+    if (s.mode === 'host') for (const ev of w.fx) s.fxBuf.push(ev); // peers get every event (capped per snapshot); the local screen is capped per frame
+    for (const ev of N.capFx(w.fx, N.CAPS_LOCAL)) G.localEvent(ev);
     w.fx.length = 0;
     for (const m of w.msgs) {
       if (m.to === s.localPid) G.message(m);
@@ -300,7 +303,7 @@
       if (!inp.atk) ctl.latch = false;
       if (inp.atk && !ctl.latch && ctl.atkCd <= 0 && !near) {
         G.act({ t: 'atk', a: aim });
-        ctl.atkCd = Math.max(ctl.atkCd, -dt) + st.atkInterval / atkRate(me, ctl, st); // carries the overshoot of this frame so the real rate equals the shown one
+        ctl.atkCd = Math.max(ctl.atkCd, -dt) + st.atkInterval / ED.Stats.attackRate(me); // carries the overshoot of this frame so the real rate equals the shown one
         s.aim.pulseT = performance.now();
         ED.FX.playerAttackAnim(s.localPid, aim);
         const w = st.weapon;
@@ -349,8 +352,6 @@
     if (s.mode !== 'client') me.dashing = me.dashT > 0 || !!me.skillMove;
     aimExtras(s, me, view);
   }
-
-  const atkRate = (me, ctl, st) => (ED.Stats.attackRate ? ED.Stats.attackRate(me) : 1 + (ctl.tranceT > 0 ? st.trance : 0) + (st.wardrum && me.hp < me.maxHp * 0.5 ? st.wardrum : 0));
 
   // Aim angle of this frame, and the cursor state ED.AimFx draws from (s.aim). Aim origin is the projectile spawn point (x, y - 4).
   // The last angle is kept when the cursor is within 12 px of the origin or outside the window; before the first pointer event the aim follows the walking direction.
@@ -409,7 +410,7 @@
     if (cls.skill2 && ctl.skill2Cd <= 0) n = addReady(a, n, 1, cls.skill2);
     a.ground.length = n;
     for (let i = 0; i < n; i++) { const g = a.ground[i]; g.r = g.move ? 0 : ED.skillRadius(g.id, st); }
-    const iv = st.atkInterval / atkRate(me, ctl, st);
+    const iv = st.atkInterval / ED.Stats.attackRate(me);
     a.cd = iv >= 0.45 ? U.clamp(ctl.atkCd / iv, 0, 1) : 0;
   }
 

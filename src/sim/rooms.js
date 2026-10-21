@@ -25,6 +25,7 @@
       this.locked = true;
       this.enc = { kind: 'waves', waves: this.planWaves(room), wave: -1, t: ED.World.PACE.first };
       this.emit({ t: 'lock' });
+      for (const p of this.players.values()) if (!p.downed && !p.dead) this.onRoomLockBuild(p, room);
     } else if (room.type === 'boss') {
       this.locked = true;
       this.enc = { kind: 'boss', t: 2.4, spawned: false };
@@ -138,7 +139,9 @@
     this.run.embers.rooms += Math.round((1 + Math.round(s / 2)) * bonus);
     const c = this.alivePlayers()[0] || D.center(room);
     this.dropGold(c.x, c.y, (3 + Math.round(1.5 * s)) * bonus);
-    if (this.rng.chance(0.3)) this.spawnPickup('heart', c.x, c.y, 1);
+    let heartCh = 0.36; // +10% per Forager rank in the party, at most 80%
+    for (const q of this.players.values()) heartCh += 0.1 * q.stats.forager;
+    if (this.rng.chance(Math.min(0.8, heartCh))) this.spawnPickup('heart', c.x, c.y, 1);
     if (room.reward) {
       const m = D.clearSpot(room, D.center(room).x, D.center(room).y);
       this.props.push({ id: U.uid(), kind: 'reward', x: m.x, y: m.y, item: this.darkReward(room.reward, m.x, m.y), group: U.uid(), state: 0 });
@@ -175,13 +178,16 @@
     this.props.push({ id: U.uid(), kind: 'portal', x: c.x, y: c.y - 60, state: 0 });
   };
 
+  // Generalists in the party: the first picks of a hoard or shop are non-element relics, one per Generalist.
+  W.generalists = function () { let n = 0; for (const q of this.players.values()) if (ED.isGeneralist(q.boons)) n++; return n; };
+
   // One relic per hero; each hero may claim one relic from a group.
   W.spawnRelicChoices = function (x, y, minRar) {
     const n = this.partySize() + (this.partySize() > 1 ? 0 : 1);
     const group = U.uid();
-    const taken = new Set();
+    const taken = new Set(), gens = this.generalists();
     for (let i = 0; i < n; i++) {
-      const id = this.rollRelic(minRar, taken);
+      const id = this.rollRelic(minRar, taken, null, i < gens);
       taken.add(id);
       this.props.push({ id: U.uid(), kind: 'relic', x: x + (i - (n - 1) / 2) * 56, y, item: id, group, state: 0 });
     }
@@ -211,9 +217,9 @@
       let favor = 0;
       for (const p of this.players.values()) favor = Math.max(favor, (p.meta.up && p.meta.up[ED.UPGRADE_IDX.favor]) || 0);
       const items = [];
-      const taken = new Set();
+      const taken = new Set(), gens = this.generalists();
       const nRelics = 2 + (favor >= 2 ? 1 : 0);
-      for (let i = 0; i < nRelics; i++) { const r = this.rollRelic('c', taken); taken.add(r); items.push({ type: 'relic', item: r }); }
+      for (let i = 0; i < nRelics; i++) { const r = this.rollRelic('c', taken, null, i < gens); taken.add(r); items.push({ type: 'relic', item: r }); }
       items.push({ type: s % 2 ? 'boon' : 'forge' }); // one build item per shop: epic boon on odd strata, forge on even
       items.push({ type: 'potion' });
       items.push({ type: 'oil' });
@@ -245,7 +251,7 @@
     return Math.max(5, Math.round(base / 5) * 5);
   };
 
-  const PER_HERO_REWARDS = new Set(['class', 'forge', 'epic', 'vigor']);
+  const PER_HERO_REWARDS = new Set(['boon', 'forge', 'epic', 'vigor']);
   const allClaimed = (w, group) => [...w.players.values()].every(q => q.dead || q.claimed[group]);
 
   W.interact = function (pid, propId) {
@@ -265,11 +271,11 @@
       }
       case 'reward': {
         const item = pr.item;
-        if (item.startsWith('boon:') || PER_HERO_REWARDS.has(item)) {
+        if (PER_HERO_REWARDS.has(item)) {
           // every hero claims once; the prop stays until all have
           if (p.claimed[pr.group]) { this.msgs.push({ to: pid, t: 'toast', text: 'You already claimed this reward.' }); return; }
           p.claimed[pr.group] = true;
-          if (item.startsWith('boon:')) this.grantOffer(p, { src: 'room', path: item.slice(5) });
+          if (item === 'boon') this.grantOffer(p, { src: 'room' });
           else if (item === 'vigor') { p.bonusHp += 12; this.recalc(p, false); this.healPlayer(p, p.maxHp * 0.2); this.sendBuild(p); }
           else this.grantOffer(p, { src: item });
           this.msgs.push({ to: pid, t: 'claimed', group: pr.group });
@@ -338,7 +344,7 @@
         this.gold -= pr.price; pr.state = 1;
         const roll = this.rng.next();
         const rar = roll < 0.12 ? 'e' : roll < 0.5 ? 'r' : 'c';
-        this.giveRelic(p, this.rollRelic(rar));
+        this.giveRelic(p, this.rollRelic(rar, null, p));
         this.emit({ t: 'gamble', x: pr.x, y: pr.y });
         break;
       }

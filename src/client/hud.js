@@ -231,7 +231,7 @@
     const gk = 'p' + me.pid; ghost[gk] = ghost[gk] === undefined ? frac : Math.max(frac, ghost[gk] - dtc * 0.35);
     const by = y + u * 2.8, bh = u * 2.4, shield = me.shield || 0;
     bar(bx, by, bw, bh, frac, frac > 0.35 ? '#d9443a' : U.mix('#ff2a1a', '#ff7a5a', pulse), ghost[gk], [0.25, 0.5, 0.75]);
-    if (shield > 0) { // blood shield: a pale segment after the health (clipped to the bar end), absorbs damage first
+    if (shield > 0) { // shield: a pale segment after the health (clipped to the bar end), absorbs damage first
       const sf = U.clamp(shield / me.maxHp, 0.03, 1), s0 = Math.min(clamp01(frac), 1 - sf), sp = fillArt('#cfe3ff', bh);
       c.drawImage(sp, 0, 0, 4, sp.height, bx + bw * s0, by, bw * sf, bh);
       c.fillStyle = 'rgba(255,255,255,0.7)'; c.fillRect(bx + bw * s0, by, Math.max(2, u * 0.12), bh);
@@ -259,8 +259,9 @@
     for (let g = 0; g < gates.length; g++) {
       const P = ED.PATHS[gates[g]], aff = ED.pathAffinity(me.boons, gates[g]), cx = px0 + g * u * 3.2, evolved = st && st.evo === gates[g];
       c.lineWidth = u * 0.28; c.strokeStyle = 'rgba(0,0,0,0.65)'; c.beginPath(); c.arc(cx, py, pr, 0, TAU); c.stroke();
-      c.strokeStyle = P.color; c.beginPath(); c.arc(cx, py, pr, -Math.PI / 2, -Math.PI / 2 + TAU * clamp01(aff / ED.EVO_AFFINITY)); c.stroke();
-      const kt = -Math.PI / 2 + TAU * (ED.KEY_AFFINITY / ED.EVO_AFFINITY); c.strokeStyle = K.bone; c.lineWidth = Math.max(1.5, u * 0.1); c.beginPath(); c.moveTo(cx + Math.cos(kt) * (pr - u * 0.22), py + Math.sin(kt) * (pr - u * 0.22)); c.lineTo(cx + Math.cos(kt) * (pr + u * 0.22), py + Math.sin(kt) * (pr + u * 0.22)); c.stroke();
+      const evoAff = ED.evoAffinity(gates[g]);
+      c.strokeStyle = P.color; c.beginPath(); c.arc(cx, py, pr, -Math.PI / 2, -Math.PI / 2 + TAU * clamp01(aff / evoAff)); c.stroke();
+      const kt = -Math.PI / 2 + TAU * (ED.keyAffinity(gates[g]) / evoAff); c.strokeStyle = K.bone; c.lineWidth = Math.max(1.5, u * 0.1); c.beginPath(); c.moveTo(cx + Math.cos(kt) * (pr - u * 0.22), py + Math.sin(kt) * (pr - u * 0.22)); c.lineTo(cx + Math.cos(kt) * (pr + u * 0.22), py + Math.sin(kt) * (pr + u * 0.22)); c.stroke();
       ic(c, P.icon, P.color, cx - u * 1.05, py - u * 1.05, u * 2.1);
       pill(cx + u * 0.15, py + u * 0.45, u * 1.6, u * 1.3, '#120c09', 0.92);
       T(String(aff), cx + u * 0.95, py + u * 1.12, u * 0.95, P.color, FB, 'center', 800);
