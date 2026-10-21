@@ -77,8 +77,14 @@
   };
 
   S.loadSettings = () => {
-    const d = { master: 70, music: 55, sfx: 80, aim: 'auto', quality: 'high', shake: true, dmg: true };
-    try { return Object.assign(d, JSON.parse(localStorage.getItem(LS_SETTINGS) || '{}')); } catch (e) { return d; }
+    const d = { master: 70, music: 55, sfx: 80, quality: 'high', shake: true, dmg: true, cursor: 'reticle', reticle: 'm', reticleCol: 'ember', aimPreview: true, frameCap: 'auto' };
+    let s = d;
+    try { s = Object.assign(d, JSON.parse(localStorage.getItem(LS_SETTINGS) || '{}')); } catch (e) { return d; }
+    const pick = (v, list, def) => (list.indexOf(v) >= 0 ? v : def);
+    delete s.aim; // the removed Auto-aim setting
+    s.cursor = pick(s.cursor, ['reticle', 'system'], 'reticle'); s.reticle = pick(s.reticle, ['s', 'm', 'l'], 'm'); s.reticleCol = pick(s.reticleCol, ['ember', 'bone', 'frost'], 'ember');
+    s.frameCap = pick(String(s.frameCap), ['auto', 'off', '144', '120', '60'], 'auto'); s.aimPreview = s.aimPreview !== false;
+    return s;
   };
   S.storeSettings = (s) => { try { localStorage.setItem(LS_SETTINGS, JSON.stringify(s)); } catch (e) { /* ignore */ } };
 

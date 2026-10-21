@@ -137,7 +137,10 @@
       for (const p of s.world.players.values()) p.mastery10 = p.meta && p.meta.mastery >= 10;
     }
     s.view.pact = cfg.pact;
-    s.ctl = { atkCd: 0, skillCd: 0, skill2Cd: 0, charges: s.me.stats.maxCharges, dashCd: 0, tranceT: 0, latch: false, target: null };
+    s.ctl = { atkCd: 0, skillCd: 0, skill2Cd: 0, charges: s.me.stats.maxCharges, dashCd: 0, tranceT: 0, latch: false, aimA: 0 };
+    // Aim state read by ED.AimFx: cursor in CSS px (sx, sy) and world (wx, wy), device, angle, push fraction (frac) for stick or keyboard-only ground skills, ready ground skills, cooldown fraction, pulse/crit timestamps.
+    s.aim = { sx: 0, sy: 0, wx: 0, wy: 0, a: 0, device: 'mouse', pointer: false, show: false, dead: false, foe: false, frac: 0.6, cd: 0, ground: [], pulseT: -9, critT: -9 };
+    if (ED.AimFx) ED.AimFx.applyCursor();
     s.fxCtx = {
       localPid: s.localPid,
       player: (pid) => s.view.players.get(pid),
@@ -149,7 +152,7 @@
     return s;
   };
 
-  G.stop = () => { G.s = null; };
+  G.stop = () => { G.s = null; if (ED.AimFx) ED.AimFx.hover(false, false); };
   // No one else is in this world (solo, or a hosted party whose friends have all left): it may wait for us.
   G.alone = () => { const s = G.s; return !!s && (s.mode === 'solo' || (s.mode === 'host' && s.world.players.size <= 1)); };
 
@@ -199,7 +202,8 @@
         if (mine) { s.me.x = mine[1]; s.me.y = mine[2]; s.me.vx = 0; s.me.vy = 0; s.me.dashT = 0; s.me.skillMove = null; }
       }
       ED.Render.updateCamera(s.view, s.me, 0, true);
-      s.ctl.target = null;
+    } else if (ev.t === 'hit' && ev.c && ev.pid === s.localPid && s.aim) {
+      s.aim.critT = performance.now();
     } else if (ev.t === 'build' && s.mode === 'client') {
       const p = s.mirror.players.get(ev.b.pid);
       if (p) {
@@ -263,16 +267,14 @@
     ctl.atkCd -= dt; ctl.dashCd -= dt; ctl.tranceT -= dt; ctl.skill2Cd -= dt;
     if (s.mode === 'client') { if (me.bulwarkT > 0) me.bulwarkT -= dt; if (me.tranceT > 0) me.tranceT -= dt; } // a mirror hero has no world tick
     if (ctl.charges < st.maxCharges) { ctl.skillCd -= dt; if (ctl.skillCd <= 0) { ctl.charges++; if (ctl.charges < st.maxCharges) ctl.skillCd = st.skillCd; else ctl.skillCd = 0; } }
-    if (me.downed || me.dead || !view.room) { s.prompt = null; if (s.mode !== 'client') me.dashing = false; return; }
+    if (me.downed || me.dead || !view.room) {
+      s.prompt = null; if (s.mode !== 'client') me.dashing = false;
+      s.aim.show = false; s.aim.ground.length = 0; ED.AimFx.hover(ED.Input.device === 'pad', false);
+      return;
+    }
     let mx = inp.mx, my = inp.my;
     if (s.offerOpen) { mx = 0; my = 0; }
-    // aim
-    let aim = null;
-    const set = ED.App.settings;
-    if (inp.padAim !== undefined) aim = inp.padAim;
-    else if (set.aim === 'mouse') { const wpt = ED.Render.toWorld(ED.Input.mouse.x * ED.Render.dpr, ED.Input.mouse.y * ED.Render.dpr); aim = Math.atan2(wpt.y - (me.y - 10), wpt.x - me.x); }
-    else aim = autoAim(s, me, view);
-    if (aim === null) aim = Math.atan2(me.mvy || 0, me.mvx || 1);
+    const aim = aimOf(s, me, inp);
     me.face = aim;
     // interaction prompt
     s.prompt = null;
@@ -298,8 +300,8 @@
       if (!inp.atk) ctl.latch = false;
       if (inp.atk && !ctl.latch && ctl.atkCd <= 0 && !near) {
         G.act({ t: 'atk', a: aim });
-        const ws = ED.Stats.attackRate ? ED.Stats.attackRate(me) : 1 + (ctl.tranceT > 0 ? st.trance : 0) + (st.wardrum && me.hp < me.maxHp * 0.5 ? st.wardrum : 0);
-        ctl.atkCd = st.atkInterval / ws;
+        ctl.atkCd = Math.max(ctl.atkCd, -dt) + st.atkInterval / atkRate(me, ctl, st); // carries the overshoot of this frame so the real rate equals the shown one
+        s.aim.pulseT = performance.now();
         ED.FX.playerAttackAnim(s.localPid, aim);
         const w = st.weapon;
         if (w.kind === 'melee') {
@@ -316,21 +318,19 @@
           data = { x0: Math.round(me.x), y0: Math.round(me.y), x1: Math.round(end.x), y1: Math.round(end.y) };
           me.skillMove = { dx: Math.cos(aim), dy: Math.sin(aim), speed: 600, t: 0.25 };
         } else if (skill === 'step') {
-          const dirA = (Math.hypot(mx, my) > 0.2) ? Math.atan2(my, mx) : aim;
-          const end = Sim.castMove(view.room, me.x, me.y, dirA, 140, me.r, view.locked);
+          const end = ED.AimFx.stepLand(view, me, s.aim);
           data = { x0: Math.round(me.x), y0: Math.round(me.y), x1: Math.round(end.x), y1: Math.round(end.y) };
           me.x = end.x; me.y = end.y;
-        }
+        } else data = groundData(view, me, s.aim, skill);
         G.act({ t: 'skill', a: aim, data });
         if (ctl.charges === st.maxCharges) ctl.skillCd = st.skillCd;
         ctl.charges--;
         if (st.trance) { ctl.tranceT = 4; if (s.mode === 'client') me.tranceT = 4; }
       }
       const sk2 = ED.CLASSES[me.cls].skill2;
-      if (inp.skill2 && sk2 && ctl.skill2Cd <= 0 && !(me.bulwarkT > 0)) {
-        let data = null;
-        if (sk2 === 'rain' || sk2 === 'meteor') { const tp = skillPoint(s, me, aim, inp, sk2 === 'rain' ? 260 : 300); data = { x: Math.round(tp.x), y: Math.round(tp.y) }; }
-        else if (sk2 === 'bulwark' && s.mode === 'client') me.bulwarkT = 1.4 * (st.bastion ? 1.5 : 1); // host sets the authoritative timer
+      if (inp.skill2 && sk2 && ctl.skill2Cd <= 0) {
+        const data = groundData(view, me, s.aim, sk2);
+        if (sk2 === 'bulwark' && s.mode === 'client') me.bulwarkT = 1.4 * (st.bastion ? 1.5 : 1); // host sets the authoritative timer
         G.act({ t: 'skill', a: aim, data, slot: 1 });
         ctl.skill2Cd = st.skill2Cd ?? ED.SKILLS[sk2].cd * (1 - ED.Stats.cdrEff(st.cdr));
         if (st.trance) { ctl.tranceT = 4; if (s.mode === 'client') me.tranceT = 4; }
@@ -345,40 +345,72 @@
         G.act({ t: 'dash', dx, dy });
       }
     }
-    if (me.bulwarkT > 0) { mx *= 0.5; my *= 0.5; }
     Sim.movePlayer(me, { mx, my }, dt, view.room, view.locked, view.zones);
     if (s.mode !== 'client') me.dashing = me.dashT > 0 || !!me.skillMove;
+    aimExtras(s, me, view);
   }
 
-  // Target point of Rain of Arrows / Meteor: cursor (mouse aim), else the auto-target, else 200 along the aim; clamped to range.
-  function skillPoint(s, me, aim, inp, range) {
-    let tx = me.x + Math.cos(aim) * 200, ty = me.y + Math.sin(aim) * 200;
-    if (inp.padAim === undefined) {
-      const tgt = s.ctl.target;
-      if (ED.App.settings.aim === 'mouse') { const wpt = ED.Render.toWorld(ED.Input.mouse.x * ED.Render.dpr, ED.Input.mouse.y * ED.Render.dpr); tx = wpt.x; ty = wpt.y; }
-      else if (tgt && tgt.hp > 0) { tx = tgt.x; ty = tgt.y; }
+  const atkRate = (me, ctl, st) => (ED.Stats.attackRate ? ED.Stats.attackRate(me) : 1 + (ctl.tranceT > 0 ? st.trance : 0) + (st.wardrum && me.hp < me.maxHp * 0.5 ? st.wardrum : 0));
+
+  // Aim angle of this frame, and the cursor state ED.AimFx draws from (s.aim). Aim origin is the projectile spawn point (x, y - 4).
+  // The last angle is kept when the cursor is within 12 px of the origin or outside the window; before the first pointer event the aim follows the walking direction.
+  // On a pad the right stick (latched 0.35 s after release) aims, else the left stick, else the last angle; no aim assist anywhere.
+  const AIM_DEAD2 = 12 * 12;
+  function aimOf(s, me, inp) {
+    const I = ED.Input, R = ED.Render, a = s.aim, ctl = s.ctl, m = I.mouse, pad = I.device === 'pad';
+    a.device = pad ? 'pad' : 'mouse'; a.pointer = !pad && m.moved > 0; a.show = true; a.dead = false;
+    a.sx = m.x; a.sy = m.y;
+    let ang = ctl.aimA;
+    if (pad) {
+      if (inp.padAim !== undefined) ang = inp.padAim;
+      else if (Math.hypot(inp.mx, inp.my) > 0.2) ang = Math.atan2(inp.my, inp.mx);
+    } else if (!a.pointer) {
+      if (Math.hypot(me.mvx || 0, me.mvy || 0) > 0.1) ang = Math.atan2(me.mvy, me.mvx);
+    } else {
+      const w = R.toWorld(m.x * R.dpr, m.y * R.dpr), dx = w.x - me.x, dy = w.y - (me.y - 4);
+      a.wx = w.x; a.wy = w.y;
+      if (dx * dx + dy * dy > AIM_DEAD2) { if (m.inside) ang = Math.atan2(dy, dx); } else a.dead = true;
     }
-    const d = Math.hypot(tx - me.x, ty - me.y);
-    if (d > range) { tx = me.x + (tx - me.x) * range / d; ty = me.y + (ty - me.y) * range / d; }
-    return { x: tx, y: ty };
+    ctl.aimA = a.a = ang;
+    a.frac = pad && inp.padMag !== undefined ? U.clamp((inp.padMag - 0.45) / 0.5, 0.3, 1) : 0.6; // stick push -> share of a ground skill's range
+    let foe = false;
+    if (a.pointer && m.inside) {
+      for (const e of s.view.enemies) {
+        if (e.hp <= 0 || e.burrowed || e.spawnT > 0) continue;
+        const ex = a.wx - e.x, ey = a.wy - e.y, rr = e.r + 4;
+        if (ex * ex + ey * ey <= rr * rr) { foe = true; break; }
+      }
+    }
+    a.foe = foe;
+    ED.AimFx.hover(pad, foe);
+    return ang;
   }
 
-  function autoAim(s, me, view) {
-    const st = me.stats, range = st.melee ? 230 : 420;
-    let best = null, bs = Infinity;
-    const fx = me.mvx || 0, fy = me.mvy || 0;
-    for (const e of view.enemies) {
-      if (e.hp <= 0 || e.def.invuln || e.burrowed) continue;
-      const dx = e.x - me.x, dy = e.y - me.y, d = Math.hypot(dx, dy);
-      if (d > range) continue;
-      const dot = (dx * fx + dy * fy) / (d || 1);
-      let sc = d * (1.2 - 0.3 * dot);
-      if (!Sim.los(view.room, me.x, me.y, e.x, e.y, view.locked)) sc *= 3;
-      if (e === s.ctl.target) sc *= 0.75;
-      if (sc < bs) { bs = sc; best = e; }
-    }
-    s.ctl.target = best;
-    return best ? Math.atan2(best.y - (me.y - 4), best.x - me.x) : null;
+  // data of a ground skill's cast: origin and landing point; null for any other skill.
+  function groundData(view, me, a, id) {
+    const ai = ED.skillAim(id);
+    if (ai.aim !== 'ground') return null;
+    const g = ED.AimFx.groundLand(view, me, a, ai.range, ai.walk);
+    return { x0: Math.round(me.x), y0: Math.round(me.y), x: Math.round(g.x), y: Math.round(g.y) };
+  }
+
+  // After the frame's casts: ready ground/move skills for the landing preview and the attack-cooldown fraction for the cursor arc.
+  function addReady(a, n, slot, id) {
+    const ai = ED.skillAim(id);
+    if (ai.aim !== 'ground' && id !== 'step') return n;
+    const g = a.ground[n] || (a.ground[n] = {});
+    g.slot = slot; g.id = id; g.move = ai.aim !== 'ground'; g.range = ai.range || 140; g.walk = !!ai.walk;
+    return n + 1;
+  }
+  function aimExtras(s, me, view) {
+    const a = s.aim, ctl = s.ctl, st = me.stats, cls = ED.CLASSES[me.cls];
+    let n = 0;
+    if (ctl.charges > 0) n = addReady(a, n, 0, cls.skill);
+    if (cls.skill2 && ctl.skill2Cd <= 0) n = addReady(a, n, 1, cls.skill2);
+    a.ground.length = n;
+    for (let i = 0; i < n; i++) { const g = a.ground[i]; g.r = g.move ? 0 : ED.skillRadius(g.id, st); }
+    const iv = st.atkInterval / atkRate(me, ctl, st);
+    a.cd = iv >= 0.45 ? U.clamp(ctl.atkCd / iv, 0, 1) : 0;
   }
 
   // ---------------- per-frame ----------------
@@ -406,7 +438,7 @@
     const s = G.s; if (!s) return;
     const now = performance.now() / 1000;
     const alone = G.alone(), frozen = alone && s.paused;
-    // Alone, the world waits while you read boon cards (offers only open in a safe room), so picking never costs lantern time.
+    // Alone, the world waits while you read boon cards (offers only open in a safe room), so the Gloom's delay never runs while you pick.
     const hold = alone && s.offerOpen;
     s.alpha = 1; // frozen, held or client: draw the newest state
     const sdt = alone ? dt * ED.FX.timeScale : dt; // hit-stop slows only a world nobody else shares; effects keep real time
