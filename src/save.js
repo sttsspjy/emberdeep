@@ -10,7 +10,8 @@
   const LS_SETTINGS = 'wickdeep.settings.v1';
   const NAME_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -';
   const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-  const CODE_VERSION = 2;
+  const CODE_VERSION = 3; // 3: the non-start relic bits carry a count prefix, so appended relics never shift what follows; 2 stored exactly V2_RELIC_BITS bits
+  const V2_RELIC_BITS = 26;
   const PREFIX = 'WD1';
 
   const S = ED.Save = { KEY: LS_KEY, NAME_CHARS };
@@ -261,7 +262,9 @@
     for (const ch of name) w.put(NAME_CHARS.indexOf(ch), 6);
     w.varint(p.embers); w.varint(p.lifetime);
     ED.UPGRADES.forEach((u, i) => w.put(p.up[i] | 0, 3));
-    ED.RELIC_IDS.forEach((id, i) => { if (!ED.RELICS[id].start) w.put(p.relics[i] ? 1 : 0, 1); });
+    const codex = ED.RELIC_IDS.map((id, i) => [id, i]).filter(x => !ED.RELICS[x[0]].start); // non-start relics in positional order
+    w.put(codex.length, 7);
+    codex.forEach(x => w.put(p.relics[x[1]] ? 1 : 0, 1));
     ED.CLASS_IDS.forEach((c, i) => w.varint(p.mastery[i] | 0));
     w.put(p.bosses & 63, 6);
     w.put(ED.DEEDS.length, 6);
@@ -302,13 +305,14 @@
     const p = S.defaultProfile();
     try {
       const ver = r.get(8);
-      if (ver !== CODE_VERSION) throw new Error('ver');
+      if (ver !== CODE_VERSION && ver !== 2) throw new Error('ver');
       const nl = r.get(4); let name = '';
       for (let i = 0; i < nl; i++) name += NAME_CHARS[r.get(6)] || '';
       p.name = S.sanitizeName(name);
       p.embers = r.varint(); p.lifetime = r.varint();
       ED.UPGRADES.forEach((u, i) => { p.up[i] = Math.min(u.costs.length, r.get(3)); });
-      ED.RELIC_IDS.forEach((id, i) => { if (!ED.RELICS[id].start) p.relics[i] = r.get(1); });
+      const codex = ED.RELIC_IDS.map((id, i) => i).filter(i => !ED.RELICS[ED.RELIC_IDS[i]].start), n = ver === 2 ? V2_RELIC_BITS : r.get(7);
+      for (let k = 0; k < n; k++) { const bit = r.get(1); if (k < codex.length) p.relics[codex[k]] = bit; } // missing relics stay locked, extra bits are skipped
       ED.CLASS_IDS.forEach((c, i) => { p.mastery[i] = r.varint(); });
       p.bosses = r.get(6);
       const nd = r.get(6); let deeds = 0;

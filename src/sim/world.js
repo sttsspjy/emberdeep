@@ -124,6 +124,7 @@
     this.endTimer = -1; this.result = null; this.victory = false;
     this.flowT = 0; this.flow = null; this.tick = 0; this.waitMsg = '';
     this.tutorial = !!opts.tutorial;
+    this.chainQ = []; this.chainSeq = 0; this.curChain = null; this.chainPeak = 0; this.chainHops = 0; // forced payoffs of duos and keystones (see combat.js); peak queue length and deepest hop are bot statistics
     for (const pd of opts.players) this.addPlayer(pd);
   };
   W.xpFor = (L) => Math.round(30 + 3 * (L - 1) + 6 * (L - 1) * (L - 1)); // xp from level L to L+1
@@ -146,7 +147,7 @@
   W.FLARE = { cost: 6, banish: 12, blind: 1.5, r: 160 }; // lantern flare (F): light spent, seconds the Gloom stays away, foe blind seconds, blind radius
   W.DARK_AFFIXES = ['brutal', 'vampiric', 'warded', 'swift']; // affix pool of elites made at Dark and Lightless (the volatile affix is left out)
   W.ELITE_BODIES = 4; // plain-foe budget one elite displaces from its wave in any tier but Bright
-  W.REWARD_UP = { gold: 'vigor', vigor: 'forge', forge: 'epic', class: 'epic' }; // darkness upgrades a room reward one step (boon:<path> -> epic)
+  W.REWARD_UP = { gold: 'vigor', vigor: 'forge', forge: 'epic', boon: 'epic' }; // darkness upgrades a room reward one step
   // Per-stratum threat on top of the base scales: foe HP, wave budget, `cdRate` = extra cooldown recovery (0.2 = attack timers tick 20% faster, -0.2 = 20% slower) and the boss pause between attacks (x).
   W.THREAT = [{ hp: 2.2, dmg: 0.5, wave: 0.8, cdRate: -0.4, pause: 2 }, { hp: 1.62, dmg: 0.5, wave: 0.75, cdRate: -0.3, pause: 1.7 }, { hp: 1.3, dmg: 0.5, wave: 0.7, cdRate: -0.1, pause: 1.4 }, { hp: 1, dmg: 0.4, wave: 0.66, cdRate: 0, pause: 1.2 }, { hp: 1.07, dmg: 0.8, wave: 0.62, cdRate: 0.15, pause: 1 }, { hp: 1.02, dmg: 1, wave: 0.6, cdRate: 0.3, pause: 0.9 }];
   // Foe HP multiplier of stratum s: the depth curve times the threat HP.
@@ -234,39 +235,95 @@
   W.prototype.buildOf = function (p) { return { pid: p.pid, boons: Object.assign({}, p.boons), relics: p.relics.slice(), chaliceHp: p.chaliceHp, bonusHp: p.bonusHp }; };
   W.prototype.sendBuild = function (p) { this.emit({ t: 'build', b: this.buildOf(p) }); };
 
-  // Heals up to max HP; healing beyond it feeds the blood shield (cap maxHp x bloodShield). Returns the HP actually restored.
+  // Heals up to max HP (no heal ever overflows into a shield). Returns the HP actually restored.
   W.prototype.healPlayer = function (p, amt, silent) {
-    if (!p || p.downed || p.dead) return 0;
-    const raw = amt * p.stats.healMul * (this.dread.heal ?? 1), cap = p.maxHp * (p.stats.bloodShield || 0);
-    if (p.hp >= p.maxHp && !(cap > 0 && raw > 0)) return 0;
-    const v = Math.min(p.maxHp - p.hp, raw);
+    if (!p || p.downed || p.dead || p.hp >= p.maxHp) return 0;
+    const v = Math.min(p.maxHp - p.hp, amt * p.stats.healMul * (this.dread.heal ?? 1));
     p.hp += v;
-    if (cap > 0 && raw > v) p.shield = Math.min(cap, (p.shield || 0) + raw - v);
     if (!silent && v >= 1) this.emit({ t: 'heal', pid: p.pid, v: Math.round(v), x: p.x, y: p.y });
     return v;
   };
 
-  W.prototype.relicPool = function () {
-    // Shared progression: relics unlocked by ANY party member can drop for everyone.
+  // Adds amt (x the dread heal multiplier) to p's absorb shield up to cap (a shield above the cap is never lowered); k labels the source in p.shieldBy. Returns the shield gained.
+  W.prototype.addShield = function (p, amt, cap, k) {
+    if (!p || p.downed || p.dead || !(amt > 0) || !(p.shield < cap)) return 0;
+    const to = Math.min(cap, p.shield + amt * (this.dread.heal ?? 1)), gain = to - p.shield;
+    p.shield = to;
+    p.shieldBy[k] = (p.shieldBy[k] || 0) + gain;
+    this.emit({ t: 'shielded', pid: p.pid, v: Math.round(gain * 10) / 10, k });
+    return gain;
+  };
+
+  // Shields fade by SHIELD_DECAY of max HP per second while no room is locked and outside boss rooms, so income serves only the room it was earned in.
+  W.prototype.updateShields = function (dt) {
+    if (this.locked || (this.room && this.room.type === 'boss')) return;
+    for (const p of this.players.values()) if (p.shield > 0) p.shield = Math.max(0, p.shield - ED.CONST.SHIELD_DECAY * p.maxHp * dt);
+  };
+
+  // Relics any party member has unlocked can drop for everyone (shared progression); with nobody holding any unlocks, the start relics.
+  W.prototype.unlockedRelics = function () {
     const set = new Set();
     for (const p of this.players.values()) for (const id of (p.meta.relics || [])) set.add(id);
     if (!set.size) ED.RELIC_IDS.filter(id => ED.RELICS[id].start).forEach(id => set.add(id));
+    return set;
+  };
+  W.prototype.relicPool = function () {
+    const set = this.unlockedRelics();
     const held = new Set();
     for (const p of this.players.values()) for (const id of p.relics) held.add(id);
     let pool = [...set].filter(id => !held.has(id));
     if (!pool.length) pool = [...set];
     return pool;
   };
-  W.prototype.rollRelic = function (minRar, exclude) {
+  // A relic roll at least minRar. forHero: only relics that fit that hero (no element relics for a Generalist); without it, relics that fit at least one living hero, an element some living hero follows weighs x2 and any other element x0.5.
+  // noElement: element relics are left out (the first picks of a hoard or shop for each Generalist in the party).
+  W.prototype.rollRelic = function (minRar, exclude, forHero, noElement) {
     const order = { c: 0, r: 1, e: 2, l: 3 };
-    let pool = this.relicPool().filter(id => order[ED.RELICS[id].rar] >= order[minRar || 'c'] && !(exclude && exclude.has(id)));
-    if (!pool.length) pool = this.relicPool();
+    const heroes = forHero ? [forHero] : this.alivePlayers();
+    const fits = (id) => (!ED.RELICS[id].el || !noElement) && (!heroes.length || heroes.some(q => ED.relicFits(q, id)));
+    const base = this.relicPool().filter(fits);
+    let pool = base.filter(id => order[ED.RELICS[id].rar] >= order[minRar || 'c'] && !(exclude && exclude.has(id)));
+    if (!pool.length) pool = base.length ? base : this.relicPool();
     const s = this.stratum;
     const w = { c: 50, r: 34 + s * 3, e: 14 + s * 3, l: 3 + s };
-    return this.rng.weighted(pool, id => w[ED.RELICS[id].rar]);
+    const owned = new Set();
+    if (!forHero) for (const q of heroes) for (const k of ED.elementGates(q.boons)) owned.add(k);
+    return this.rng.weighted(pool, id => { const r = ED.RELICS[id]; return w[r.rar] * (r.el && !forHero ? (owned.has(r.el) ? 2 : 0.5) : 1); });
   };
 
+  // A Generalist forsakes an element relic: it becomes a random unowned non-element relic of the same rarity (else the next rarity down, else 40 gold). Returns the new id or null.
+  W.prototype.transmuteRelic = function (p, id) {
+    const order = ['c', 'r', 'e', 'l'], set = this.unlockedRelics(), held = new Set();
+    for (const q of this.players.values()) for (const x of q.relics) held.add(x);
+    for (let i = order.indexOf(ED.RELICS[id].rar); i >= 0; i--) {
+      const pool = [...set].filter(x => !ED.RELICS[x].el && ED.RELICS[x].rar === order[i] && !held.has(x));
+      if (pool.length) return this.rng.pick(pool);
+    }
+    this.gold += 40;
+    return null;
+  };
+
+  // A Generalist who owns element relics swaps each one (Armory, or any picked before the Generalist gate).
+  W.prototype.forsakeRelics = function (p) {
+    for (let i = 0; i < p.relics.length; i++) {
+      const id = p.relics[i];
+      if (ED.relicFits(p, id)) continue;
+      const to = this.transmuteRelic(p, id);
+      this.msgs.push({ to: p.pid, t: 'toast', text: to ? `A Generalist forsakes element relics: ${ED.RELICS[id].name} becomes ${ED.RELICS[to].name}.` : `A Generalist forsakes element relics: ${ED.RELICS[id].name} is sold for 40 gold.` });
+      if (to) p.relics[i] = to; else { p.relics.splice(i, 1); i--; }
+    }
+    this.recalc(p, false);
+    this.sendBuild(p);
+  };
+
+  // Gives p a relic; a Generalist's element relic transmutes (the price paid stays paid).
   W.prototype.giveRelic = function (p, id) {
+    if (!ED.relicFits(p, id)) {
+      const to = this.transmuteRelic(p, id);
+      this.msgs.push({ to: p.pid, t: 'toast', text: to ? `A Generalist forsakes element relics: ${ED.RELICS[id].name} becomes ${ED.RELICS[to].name}.` : `A Generalist forsakes element relics: ${ED.RELICS[id].name} is sold for 40 gold.` });
+      if (!to) return;
+      id = to;
+    }
     p.relics.push(id);
     this.recalc(p, false);
     this.run.maxRelics = Math.max(this.run.maxRelics, p.relics.length);
@@ -303,7 +360,7 @@
 
   W.prototype.enterRoom = function (id, fromDir) {
     this.collectAll();
-    this.enemies.length = 0; this.projs.length = 0; this.zones.length = 0;
+    this.enemies.length = 0; this.projs.length = 0; this.zones.length = 0; this.chainQ.length = 0; this.curChain = null;
     this.boss = null; this.enc = null;
     this.roomId = id;
     this.roomEpoch = (this.roomEpoch || 0) + 1;
@@ -322,6 +379,7 @@
     for (const p of this.players.values()) {
       const pt = fromDir ? D.entryPoint(room, D.OPP[fromDir], k) : { x: D.center(room).x + (k - 1.5) * 22, y: D.center(room).y + 20 };
       p.x = pt.x; p.y = pt.y; p.vx = 0; p.vy = 0; p.dashT = 0; p.skillMove = null;
+      p.toughRoom = room.type === 'elite' || room.type === 'boss'; // War Drum doubles in these rooms
       pos.push([p.pid, Math.round(p.x), Math.round(p.y)]);
       k++;
     }
@@ -384,6 +442,7 @@
       return;
     }
     this.updateLantern(dt);
+    this.updateShields(dt);
     for (const p of this.players.values()) this.updatePlayer(p, dt);
     this.flowT -= dt;
     if (this.flowT <= 0) { this.computeFlow(); this.flowT = 0.25; }
@@ -391,9 +450,9 @@
     for (let i = 0; i < this.enemies.length; i++) this.updateEnemy(this.enemies[i], dt);
     this.separate();
     this.updateAllies(dt);
-    this.updateCompanions(dt);
     this.updateProjectiles(dt);
     this.updateZones(dt);
+    this.updateChains();
     this.updatePickups(dt);
     if (this.enemies.some(e => e.hp <= 0)) this.enemies = this.enemies.filter(e => e.hp > 0);
     this.checkDoors(dt);
@@ -569,7 +628,7 @@
       let target = null, bd = Infinity;
       for (const p of this.players.values()) {
         if (p.downed || p.dead) continue;
-        const heal = pk.kind === 'heart' || pk.kind === 'orb';
+        const heal = pk.kind === 'heart';
         if (heal && p.hp >= p.maxHp) continue;
         const d = U.dist2(pk.x, pk.y, p.x, p.y);
         const range = (heal ? 34 : p.stats.pickupR);
@@ -589,8 +648,7 @@
   W.prototype.collect = function (p, pk) {
     if (pk.kind === 'gold') { const v = Math.max(1, Math.round(pk.val * (1 + p.stats.gold))); this.gold += v; this.emit({ t: 'gold', v, pid: p.pid }); }
     else if (pk.kind === 'xp') { this.addXp(pk.val * (1 + p.stats.xp)); this.emit({ t: 'xp', pid: p.pid }); }
-    else if (pk.kind === 'heart') { this.healPlayer(p, p.maxHp * 0.22 + 6); }
-    else if (pk.kind === 'orb') { this.healPlayer(p, p.maxHp * pk.val); }
+    else if (pk.kind === 'heart') { this.healPlayer(p, p.maxHp * (0.22 + 0.03 * p.stats.forager) + 6); }
   };
 
   // ---------------- lantern and dread ----------------
@@ -684,7 +742,7 @@
   // Dark and Lightless: a cleared room's reward may be upgraded one step (chance dread.up); announced by an 'upgrade' event at the reward's spot.
   W.prototype.darkReward = function (item, x, y) {
     if (!(this.dread.up > 0) || !this.rng.chance(this.dread.up)) return item;
-    const to = item.startsWith('boon:') ? 'epic' : W.REWARD_UP[item];
+    const to = W.REWARD_UP[item];
     if (!to) return item;
     this.emit({ t: 'upgrade', to, x: Math.round(x), y: Math.round(y) });
     return to;
@@ -695,7 +753,11 @@
     const f = this.lightMax > 0 ? this.light / this.lightMax : 0;
     if (f <= 0) return;
     const R = W.bossLight(f, this.stratum), heroes = this.alivePlayers();
-    for (const p of heroes) { this.healPlayer(p, p.maxHp * R.heal); p.shield = Math.max(p.shield || 0, p.maxHp * R.shield); }
+    for (const p of heroes) {
+      this.healPlayer(p, p.maxHp * R.heal);
+      const to = Math.max(p.shield || 0, p.maxHp * R.shield);
+      p.shieldBy.door = (p.shieldBy.door || 0) + (to - (p.shield || 0)); p.shield = to;
+    }
     this.run.embers.rooms += R.embers;
     if (R.gold > 0 && heroes.length) this.dropGold(heroes[0].x, heroes[0].y, R.gold, true);
     this.emit({ t: 'wick', f: Math.round(f * 100), heal: Math.round(R.heal * 100), shield: Math.round(R.shield * 100), gold: R.gold, embers: R.embers });

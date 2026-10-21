@@ -9,42 +9,42 @@
     knight: {
       name: 'Knight', title: 'Oathsworn Shield', icon: 'shield',
       desc: 'Sturdy frontliner. Sweeping blades cut down crowds; the raised shield turns arrows back.',
-      hp: 135, armor: 8, spd: 116, crit: 0.05,
+      hp: 135, armor: 8, spd: 116, crit: 0.05, power: 18, element: null,
       weapons: ['longsword', 'warhammer', 'glaive'], skill: 'charge', skill2: 'bulwark',
       col: { a: '#a7b0ba', b: '#5d6670', c: '#d6aa55', d: '#2b3038' }, unlock: null,
     },
     ranger: {
       name: 'Ranger', title: 'Warden of the Wilds', icon: 'bow',
       desc: 'Swift archer. Keep your distance and riddle the Deep with arrows.',
-      hp: 117, armor: 5, spd: 128, crit: 0.10,
+      hp: 117, armor: 5, spd: 128, crit: 0.10, power: 12, element: null,
       weapons: ['longbow', 'crossbow', 'twinbows'], skill: 'volley', skill2: 'rain',
       col: { a: '#4f7a3f', b: '#2e4a25', c: '#c8a46a', d: '#1d2a17' }, unlock: null,
     },
     pyro: {
       name: 'Pyromancer', title: 'Keeper of the Flame', icon: 'flame',
       desc: 'Fragile but devastating. Exploding fire clears whole rooms.',
-      hp: 89, armor: 2, spd: 120, crit: 0.05,
+      hp: 89, armor: 2, spd: 120, crit: 0.05, power: 12, element: 'fire',
       weapons: ['firestaff', 'emberwand', 'inferno'], skill: 'nova', skill2: 'meteor',
       col: { a: '#9a2f2a', b: '#5a1714', c: '#ffb347', d: '#2a0c0a' }, unlock: null,
     },
     shade: {
       name: 'Shade', title: 'Blade in the Dark', icon: 'dagger',
       desc: 'Fastest hero alive. Blinks through foes and lands guaranteed crits.',
-      hp: 97, armor: 3, spd: 138, crit: 0.12,
+      hp: 97, armor: 3, spd: 138, crit: 0.12, power: 10, element: null,
       weapons: ['daggers', 'knives', 'scythes'], skill: 'step', skill2: 'vanish',
       col: { a: '#3a3550', b: '#1f1b2e', c: '#b78cff', d: '#121018' }, unlock: { boss: 1, text: 'Defeat The Bone Warden' },
     },
     cleric: {
       name: 'Cleric', title: 'Lantern of the Faithful', icon: 'sun',
       desc: 'Holy bruiser. Shields and heals the whole party; a natural co-op anchor.',
-      hp: 121, armor: 7, spd: 114, crit: 0.05,
+      hp: 121, armor: 7, spd: 114, crit: 0.05, power: 17, element: 'holy',
       weapons: ['mace', 'dawnhammer', 'lantern'], skill: 'sanctuary', skill2: 'judgment',
       col: { a: '#e8e0c8', b: '#a69a78', c: '#ffd36b', d: '#4a4232' }, unlock: { runs: 4, text: 'Complete 4 descents (clear a room in each)' },
     },
     necro: {
       name: 'Necromancer', title: 'Speaker for the Dead', icon: 'skull',
       desc: 'Commands the risen. Fallen foes may rise to fight for you.',
-      hp: 91, armor: 2, spd: 120, crit: 0.05,
+      hp: 91, armor: 2, spd: 120, crit: 0.05, power: 9, element: 'shadow',
       weapons: ['bonewand', 'soulscythe', 'plaguestaff'], skill: 'legion', skill2: 'harvest',
       col: { a: '#2f4a42', b: '#17261f', c: '#7dffd9', d: '#0c1411' }, unlock: { boss: 2, text: 'Defeat The Sporemother' },
     },
@@ -71,7 +71,7 @@
     // Cleric
     mace: { name: 'Holy Mace', desc: 'Every 3rd swing sends a wave of light.', kind: 'melee', dmg: 17, rate: 0.42, range: 46, arc: 1.7, knock: 140, look: 'mace', wave: { every: 3, mul: 0.9 } },
     dawnhammer: { name: 'Dawn Hammer', desc: 'Heavy blows; every 3rd swing sends a wave.', kind: 'melee', dmg: 32, rate: 0.72, range: 52, arc: 2.2, knock: 220, look: 'hammer', wave: { every: 3, mul: 1.0 } },
-    lantern: { name: 'Sacred Lantern', desc: 'Piercing holy orbs that heal allies they touch.', kind: 'proj', dmg: 11, rate: 0.42, speed: 300, n: 1, spread: 0, pierce: 1, r: 6, life: 0.9, proj: 'holy', healAlly: 3, look: 'lantern' },
+    lantern: { name: 'Sacred Lantern', desc: 'Piercing holy orbs that shield allies they touch (1.5% max health, once per 1.5s each, up to 8%).', kind: 'proj', dmg: 11, rate: 0.42, speed: 300, n: 1, spread: 0, pierce: 1, r: 6, life: 0.9, proj: 'holy', shieldAlly: 0.015, look: 'lantern' },
     // Necromancer
     bonewand: { name: 'Bone Wand', desc: 'Seeking soul bolts.', kind: 'proj', dmg: 9, rate: 0.4, speed: 350, n: 1, spread: 0, pierce: 0, r: 5, life: 1.0, proj: 'soul', homing: 4, look: 'wand' },
     soulscythe: { name: 'Soul Scythe', desc: 'Wide reaping arcs; reaped foes rise more often.', kind: 'melee', dmg: 17, rate: 0.56, range: 52, arc: 2.4, knock: 110, look: 'scythe', raise: 0.12 },
@@ -84,7 +84,7 @@
     nova: { name: 'Flame Nova', cd: 7, icon: 'flame', desc: 'Erupt in a ring of fire that burns everything nearby.' },
     step: { name: 'Shadowstep', cd: 4.5, icon: 'cloak', desc: 'Blink forward, cutting through foes. Your next 3 attacks are critical hits.' },
     sanctuary: { name: 'Sanctuary', cd: 11, icon: 'sun', desc: 'Heal nearby allies 7% and consecrate the ground: allies inside take 15% less damage, foes burn.' },
-    legion: { name: 'Raise Legion', cd: 12, icon: 'skull', desc: 'Summon 3 skeletal minions for 12 seconds. Kills may also raise minions.' },
+    legion: { name: 'Raise Legion', cd: 12, icon: 'skull', desc: 'Summon 3 skeletal minions for 12 seconds. Kills may also raise minions.', minion: { pw: { base: 6, k: 0.6 } } }, // minion hit damage = ED.procDmg(minion, stats)
     // Second skill (skill2 binding): one per class, cooldown reduction applies like the first.
     bulwark: { name: 'Bulwark', cd: 9, icon: 'bulwark', desc: 'Raise your shield toward your aim for 1.4s, moving at half speed. Blocks up to 6 hits from the front and turns arrows back (15 + weapon damage). On release, bash for 20 + 1.2x weapon damage, +25% per block.' },
     rain: { name: 'Rain of Arrows', cd: 10, icon: 'rain', desc: 'Mark a point within 260. After 0.35s arrows fall for 2s over radius 80, hitting every foe inside each 0.25s for 4 + 0.45x weapon damage.' },
