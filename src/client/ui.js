@@ -504,8 +504,9 @@
     $('boon-count').textContent = offer.picks > 1 ? `(${offer.picks} waiting)` : '';
     const fixed = offer.src === 'class' && offer.ctier < 3; // a route or fork pick is a fixed choice: no reroll
     const rr = $('btn-reroll'), canRe = offer.rerolls > 0 && !offer.forge && !fixed;
-    rr.hidden = !canRe; rr.innerHTML = `<kbd>${esc(ED.Input.label('skill1'))}</kbd> Reroll (${offer.rerolls})`;
-    $('boon-hint').innerHTML = `${keyPair('left', 'right')} select · <kbd>${esc(ED.Input.label('attack'))}</kbd> or <kbd>Enter</kbd> take${fixed ? ' · Routes are fixed choices' : ''}`;
+    const pad = ED.Input.device === 'pad';
+    rr.hidden = !canRe; rr.innerHTML = `<kbd>${pad ? 'Y' : esc(ED.Input.label('skill1'))}</kbd> Reroll (${offer.rerolls})`;
+    $('boon-hint').innerHTML = (pad ? '<kbd>D-pad</kbd> select · <kbd>X</kbd> take · <kbd>Back</kbd> sheet' : `${keyPair('left', 'right')} select · <kbd>${esc(ED.Input.label('attack'))}</kbd> or <kbd>Enter</kbd> take · <kbd>${esc(ED.Input.label('map'))}</kbd> character sheet`) + (fixed ? ' · Routes are fixed choices' : '');
     rr.onclick = () => UI.boonReroll(false);
     $('ov-boon').hidden = false;
     $('ov-boon').scrollTop = 0;
@@ -735,6 +736,7 @@
     });
     nameHint($('inp-name'), $('name-msg'));
     UI.wireSheet();
+    ED.Icons.fit(); window.addEventListener('resize', () => ED.Icons.fit());
     // UI sounds
     document.addEventListener('click', (e) => { if (e.target.closest('.btn, .menu-btn')) ED.Audio.play('click'); });
   };

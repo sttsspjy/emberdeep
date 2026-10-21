@@ -355,14 +355,14 @@
 
   // Foe vulnerabilities and debuffs the build applies, with their rules.
   function debuffs(p, st) {
-    const out = [], add = (id, text) => out.push({ id, name: ED.STATUS[id].name, color: ED.STATUS[id].color, text });
-    if (st.iceInfuse > 0) add('frozen', ED.STATUS.frozen.rule);
-    if (ED.CLASSES[p.cls].skill2 === 'judgment') add('judged', 'Judgment Judges every foe it hits: it takes +20% damage for ' + n1(4 + st.judgeDur) + ' s. Does not stack with other +20% vulnerability.');
-    if (st.rainHail) add('judged', 'Foes in your Rain take +20% damage (the same +20% as Judged).');
-    if (st.smokeVuln) add('judged', 'Foes in your smoke take +20% damage (the same +20% as Judged).');
-    if (st.markV) add('marked', `Marked foes take +${Math.round(st.markV * 100)}% damage from every hero` + (st.volleyMark ? ` for ${n1(st.volleyMark)} s.` : '.'));
-    if (st.sunder) add('marked', 'Each critical hit makes the foe take +4% more damage from you per stack (up to 10).');
-    if (st.poisonInfuse > 0) add('venom', `Envenomed foes take up to +${Math.round((C.VENOM_AMP + st.corrode) * 100)}% damage from you, half from allies.`);
+    const out = [], add = (id, text, v, short) => out.push({ id, name: ED.STATUS[id].name, color: ED.STATUS[id].color, text, v: v || 0, short: short || '' });
+    if (st.iceInfuse > 0) add('frozen', ED.STATUS.frozen.rule, 0.25, 'while frozen');
+    if (ED.CLASSES[p.cls].skill2 === 'judgment') add('judged', 'Judgment Judges every foe it hits: it takes +20% damage for ' + n1(4 + st.judgeDur) + ' s. Does not stack with other +20% vulnerability.', 0.2, `for ${n1(4 + st.judgeDur)} s (does not stack with other +20%)`);
+    if (st.rainHail) add('judged', 'Foes in your Rain take +20% damage (the same +20% as Judged).', 0.2, 'inside your Rain');
+    if (st.smokeVuln) add('judged', 'Foes in your smoke take +20% damage (the same +20% as Judged).', 0.2, 'inside your smoke');
+    if (st.markV) add('marked', `Marked foes take +${Math.round(st.markV * 100)}% damage from every hero` + (st.volleyMark ? ` for ${n1(st.volleyMark)} s.` : '.'), st.markV, 'from every hero');
+    if (st.sunder) add('marked', 'Each critical hit makes the foe take +4% more damage from you per stack (up to 10).', 0.04, 'per Sunder stack, up to 10');
+    if (st.poisonInfuse > 0) add('venom', `Envenomed foes take up to +${Math.round((C.VENOM_AMP + st.corrode) * 100)}% damage from you, half from allies.`, C.VENOM_AMP + st.corrode, 'at full Venom, half from allies');
     return out;
   }
 

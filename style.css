@@ -421,7 +421,7 @@ input[type=range]::-moz-range-thumb { width: 1.2rem; height: 1.2rem; transform: 
 /* ---------- overlays ---------- */
 .overlay { display: flex; align-items: center; justify-content: center; background: radial-gradient(ellipse at 50% 42%, rgba(12, 7, 4, 0.6), rgba(3, 2, 2, 0.88)); padding: max(1rem, env(safe-area-inset-top)) 1.2rem; animation: fadeIn 0.25s ease-out; }
 .overlay.sheet { background: radial-gradient(ellipse at 50% 42%, rgba(12, 7, 4, 0.72), rgba(3, 2, 2, 0.92)); }
-#ov-sheet { background: radial-gradient(ellipse at 50% 42%, rgba(12, 7, 4, 0.93), rgba(3, 2, 2, 0.97)); }
+#ov-sheet { background: radial-gradient(ellipse at 50% 42%, rgba(12, 7, 4, 0.95), rgba(3, 2, 2, 0.985)); }
 @keyframes fadeIn { from { opacity: 0; } }
 
 /* boon picker */
@@ -505,7 +505,7 @@ input[type=range]::-moz-range-thumb { width: 1.2rem; height: 1.2rem; transform: 
 
 /* ---------- character sheet (Tab): header, three tabs, columns that scroll on their own ---------- */
 #ov-sheet { overflow: hidden; container: sheet / size; align-items: stretch; padding: max(0.8rem, env(safe-area-inset-top)) 1.2rem; }
-body.sheet-open #ov-boon { visibility: hidden; }
+body:has(#ov-sheet:not([hidden])) #ov-boon { visibility: hidden; }
 .sheet-wrap { margin: 0 auto; width: min(100%, 104rem); height: 100%; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 0.8rem; min-height: 0; }
 .sh-head { display: grid; grid-template-columns: 3.6rem minmax(0, 1fr) auto; grid-template-rows: auto auto; gap: 0.1rem 1rem; align-items: center; padding-bottom: 0.6rem; border-bottom: 2px solid var(--brass); min-height: 4.6rem; }
 .sh-port { grid-row: 1 / span 2; width: 3.6rem; height: 3.6rem; }
@@ -526,6 +526,8 @@ body.sheet-open #ov-boon { visibility: hidden; }
 .sh-tabs { display: flex; justify-content: center; align-items: center; gap: 0.5rem; position: relative; flex-wrap: nowrap; }
 .sh-tabs .tab { min-height: 3rem; }
 .sh-tr { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 0.7rem; }
+.sh-keys { display: none; color: var(--muted); font-size: max(var(--fs-sm), 12px); white-space: nowrap; }
+.sh-keys kbd { height: 1.4rem; min-width: 1.5rem; font-size: var(--fs-xs); }
 .sh-pill { padding: 0.15rem 0.9rem; border-radius: 2rem; border: 1px solid var(--ember); background: rgba(255, 138, 61, 0.14); color: var(--ember-hi); font-weight: 800; font-size: max(var(--fs-sm), 12px); }
 .sh-body { min-height: 0; position: relative; }
 .sh-panel { height: 100%; min-height: 0; display: grid; gap: 1rem; }
@@ -671,6 +673,7 @@ body.sheet-open #ov-boon { visibility: hidden; }
   .sh-vit .bar { width: 5rem; }
   .sh-tabs .tab { min-height: 2.5rem; padding-top: 0.3rem; padding-bottom: 0.3rem; }
   .sh-foot { display: none; }
+  .sh-keys { display: inline; }
   .sh-compact { display: grid; gap: 0.35rem; }
   .sh-compact .sh-aff { display: flex; }
 }

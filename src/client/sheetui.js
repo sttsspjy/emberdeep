@@ -127,7 +127,7 @@
     let rel = B.relics.length ? '' : '<div class="sh-empty">No relics yet.</div>';
     for (const r of B.relics) {
       rel += `<div class="sh-relic sh-f" data-k="x:${r.id}" style="--rc:${RAR(r.rar).color}"><img class="sh-bi" alt="" src="${ED.Icons.relicUrl(r.id)}"><div class="sh-bm"><div class="sh-bt"><b class="sh-bn">${esc(r.name)}</b><span class="sh-rar">${RAR(r.rar).name}</span>${r.state ? `<span class="sh-state ${r.state}" data-live="rs:${r.id}">${r.state}</span>` : ''}</div>`
-        + `<div class="sh-btx">${esc(r.text)}</div>${r.live ? `<div class="sh-live">${esc(r.live)}</div>` : ''}</div></div>`;
+        + `<div class="sh-btx">${esc(r.text)}</div>${r.live ? `<div class="sh-live" data-live="rl:${r.id}">${esc(r.live)}</div>` : ''}</div></div>`;
     }
     return col('paths', left) + col('boons', mid) + col('relics', head('Relics', String(B.relics.length)) + `<div class="sh-list">${rel}</div>`);
   }
@@ -194,13 +194,17 @@
     h += stat('o:atk', 'Attack speed', X(M.atk.total), `${w.aps.toFixed(2)} attacks/s`, chips(M.atk.rows, 'atk'));
     h += stat('o:crit', 'Critical', `${pc(M.crit.total)} · ${X(M.crit.mult)}`, `the average hit counts ${X(M.crit.expected)}`, chips(M.crit.rows, 'crit') + chips(M.crit.rowsDmg, 'critDmg'));
     h += stat('o:area', 'Area', '+' + pc(M.area.total), `blasts and auras r ${X(M.area.blast)} · melee arc ${X(M.area.arc)}`, chips(M.area.rows, 'area'));
-    h += stat('o:cdr', 'Skill cooldown', '−' + pc(M.cdr.eff), M.cdr.capped ? `raw ${pc(M.cdr.raw)}: full up to ${pc(M.cdr.soft)}, half above it, at most ${pc(M.cdr.max)}` : '', chips(M.cdr.rows, 'cdr'));
+    h += stat('o:cdr', 'Skill cooldown', M.cdr.eff > 0 ? '−' + pc(M.cdr.eff) : '0%', M.cdr.capped ? `raw ${pc(M.cdr.raw)}: full up to ${pc(M.cdr.soft)}, half above it, at most ${pc(M.cdr.max)}` : '', chips(M.cdr.rows, 'cdr'));
     if (M.projN.total || M.projN.pierce) h += stat('o:proj', 'Projectiles and pierce', `+${M.projN.total} · pierce +${M.projN.pierce}`, '', chips(M.projN.rows, 'projN') + chips(M.projN.rowsPierce, 'pierce'));
-    for (const s of M.slots) h += stat('o:' + s.key, s.label, s.fmt === 'pct' ? sgn(s.v, pc(Math.abs(s.v))) : Sh.fmt(s.key, s.v), '', s.rows.map(r => `<span class="${r.v < 0 ? 'neg' : ''}">${esc(r.label)} <b>${sgn(r.v, Sh.fmt(s.key, Math.abs(r.v)))}</b></span>`).join(''));
+    for (const s of M.slots) {
+      const cut = /Cdr$/.test(s.key), sg = (v) => ((cut ? v > 0 : v < 0) ? '−' : '+'); // a cooldown stat is a cut: Vanguard shows −30%
+      h += stat('o:' + s.key, s.label, s.fmt === 'pct' ? sg(s.v) + pc(Math.abs(s.v)) : Sh.fmt(s.key, s.v), '', s.rows.map(r => `<span class="${r.v < 0 ? 'neg' : ''}">${esc(r.label)} <b>${sg(r.v)}${Sh.fmt(s.key, Math.abs(r.v))}</b></span>`).join(''));
+    }
     for (const s of M.status) {
       const rows = s.rows.map(r => `<span>${esc(r.label)} <b>${Sh.fmt(r.key, r.v)}</b></span>`).join('');
       h += `<div class="sh-stat sh-f st" data-k="o:st:${s.el}" style="--pc:${s.color}"><div class="sh-sl"><span class="sh-l"><img alt="" src="${pathIco(s.el)}">${esc(ED.STATUS[s.status].name)}${s.builtin ? ' <span class="mut">from your class skills</span>' : ''}</span><span class="sh-v">${s.el === 'general' ? '' : X(s.aff) + ' here'}</span></div><div class="sh-sub">${esc(s.est.label)}</div>${rows ? `<div class="sh-src">${rows}</div>` : ''}</div>`;
     }
+    if (M.debuffs.length) h += `<div class="sh-stat sh-f" data-k="o:deb"><div class="sh-sl"><span class="sh-l">Foe vulnerabilities you apply</span></div>${M.debuffs.map(d => `<div class="sh-cond"><b style="color:${d.color}">${esc(d.name)}</b>${d.v ? ` <b>+${pc(d.v)}</b>` : ''} ${esc(d.short || d.text)}</div>`).join('')}</div>`;
     if (M.cond.length) h += `<div class="sh-stat sh-f" data-k="o:cond"><div class="sh-sl"><span class="sh-l">Conditional damage</span></div>${M.cond.map(c => `<div class="sh-cond">${c.live !== null ? live('c:' + c.id, '+' + pc(c.live)) : '<b>+' + pc(c.v) + '</b>'} ${esc(c.label)}${c.live !== null ? ` <span class="mut">(+${pc(c.v)} ${c.id === 'idol' ? 'at most' : 'each'})</span>` : ''}</div>`).join('')}</div>`;
     return h;
   }
@@ -294,7 +298,7 @@
   }
   function paintFoot() {
     const I = ED.Input, k = (a) => `<kbd>${esc(I.label(a))}</kbd>`;
-    $('sh-foot').innerHTML = I.device === 'pad' ? '<kbd>LB</kbd><kbd>RB</kbd> tabs · <kbd>D-pad</kbd> move · <kbd>R stick</kbd> scroll · <kbd>Y</kbd> party · <kbd>B</kbd> close'
+    $('sh-keys').innerHTML = $('sh-foot').innerHTML = I.device === 'pad' ? '<kbd>LB</kbd><kbd>RB</kbd> tabs · <kbd>D-pad</kbd> move · <kbd>R stick</kbd> scroll · <kbd>Y</kbd> party · <kbd>B</kbd> close'
       : `${k('skill1')}${k('skill2')} tabs · ${k('up')}${k('left')}${k('down')}${k('right')} move · <kbd>PgUp</kbd><kbd>PgDn</kbd> scroll · ${k('map')} or <kbd>Esc</kbd> close`;
   }
 
@@ -313,7 +317,6 @@
     const el = $('ov-sheet'), open = on === undefined ? el.hidden : !!on;
     if (open === !el.hidden) return;
     el.hidden = !open;
-    document.body.classList.toggle('sheet-open', open);
     if (!open) { SH.focusEl = null; SH.viewPid = null; return; }
     if (!SH.opened) { const saved = ED.App && ED.App.settings && ED.App.settings.sheetTab; if (TABS.indexOf(saved) >= 0) SH.tab = saved; SH.opened = true; }
     SH.sig = {}; SH.live = {};

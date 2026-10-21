@@ -8,7 +8,7 @@ let n = 0, fails = 0;
 const ok = (c, msg) => { n++; if (!c) { fails++; console.log('FAIL ' + msg); } else if (verbose) console.log('ok   ' + msg); };
 const near = (a, b, tol, msg) => ok(Math.abs(a - b) <= tol, `${msg}: got ${a}, want ${b}`);
 const rel = (a, b, tol, msg) => ok(Math.abs(a - b) <= Math.max(1e-6, Math.abs(b) * tol), `${msg}: got ${a.toFixed ? a.toFixed(3) : a}, want ${b.toFixed ? b.toFixed(3) : b} (${tol * 100}%)`);
-const W = ED.World.prototype, REF = ED.Sheet.REF;
+const W = ED.World.prototype, REF = ED.Sheet.REF, C = ED.CONST;
 const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
 const CTX = (o) => Object.assign({ stratum: 1, pact: 0, gold: 0, level: 5, xp: 0, xpNext: 100, light: 100, lightMax: 100, tier: 0, deep: null, allyNear: 0, minions: 0, room: null, party: 1, rooms: { seen: 1, total: 10 }, heroes: [], time: 0 }, o || {});
 
@@ -53,6 +53,21 @@ function modelOf(cls, boons, wi, o) {
   near(by(e2, 0, 'burn').here, 40.8 * 1.5 * 1.25, 0.05, 'Set 2 Nova burn (full affinity, Burn strength)');
   near(by(e2, 1, 'impact').statusAdd.here, 0.5 * by(e2, 1, 'impact').pre * 1.5 * 1.25, 0.05, 'Set 2 Meteor burn add (affinity once)');
   near(by(e2, 1, 'crater').here * by(e2, 1, 'crater').oneFoe, 6 * 8.8 * 1.2 * 1.25, 0.1, 'Set 2 crater, 6 ticks');
+}
+
+// ---------------- text at rank: every boon renders without a left-over token, numbers follow the rank ----------------
+{
+  const st = ED.Stats.compute({ cls: 'knight', weapon: 'longsword', boons: {}, relics: [], meta: META(), pact: 0 });
+  let bad = 0;
+  for (const id of ED.BOON_IDS) { const b = ED.BOONS[id]; for (let r = 1; r <= (b.max || 5) + 1; r++) { const t = ED.Sheet.text(id, r, st); if (!t || /[{}\[\]]/.test(t)) { bad++; console.log('FAIL boon text ' + id + ' rank ' + r + ': ' + t); } } }
+  ok(bad === 0, 'boon texts resolve at every rank');
+  ok(ED.Sheet.text('edge', 1, st) === '+10% damage.' && ED.Sheet.text('edge', 2, st) === '+20% damage.', 'Sharpened Edge text follows the rank');
+  ok(ED.Sheet.text('overcharge', 1, st).indexOf('37 damage') >= 0, 'Overcharge shows its damage at the Knight Power (10 + 1.5 x 18)');
+  ok(ED.Sheet.text('forager', 2, st).indexOf('20% more often') >= 0 && ED.Sheet.text('forager', 2, st).indexOf('6% more max') >= 0, 'Forager numbers scale with the rank');
+  ok(ED.Sheet.text('sanctity', 2, st).indexOf('0.5% more') >= 0 && ED.Sheet.text('sanctity', 2, st).indexOf('6% more') >= 0, 'small percentages keep their decimals');
+  ok(ED.Sheet.text('k_atk_h', 3, st).indexOf('Follow-Through') >= 0, 'class cards render through boonText');
+  // every number a token prints equals the stat the boon adds
+  for (const id of ED.BOON_IDS) { const b = ED.BOONS[id]; if (b.route || !b.mods) continue; for (const k in b.mods) { const m = new RegExp('\\{' + k + '(\\*[^}:]+)?(:\\w+)?\\}').exec(b.desc); if (m && !m[1] && b.mods[k] !== 0) ok(ED.Sheet.text(id, 1, st).indexOf(ED.Sheet.fmt(k, Math.abs(b.mods[k]), m[2] && m[2].slice(1))) >= 0, 'token ' + k + ' of ' + id); } }
 }
 
 // ---------------- the staged world ----------------
@@ -178,6 +193,65 @@ for (const [cls, evo, stratum] of [['knight', 'fire', 1], ['pyro', 'fire', 1], [
   const boons = {}; boons['evo_' + evo] = 1;
   const r = weaponRun(cls, 0, boons, { secs: 30, stratum });
   rel(r.total / r.atk, r.m.weapon.dps / r.m.weapon.aps, 0.06, `${cls} evolution ${evo} damage per attack`);
+}
+
+// ---------------- defence and the foes that spawn now ----------------
+for (const [stratum, pact, tier, deep, party, boons] of [[1, 0, 0, 0, 1, {}], [3, 2, 1, 0, 1, { plating: 2, evade: 0 }], [4, 8, 2, 3, 1, { mending: 2 }], [6, 10, 3, 5, 2, { edge: 1 }], [2, 4, 0, 0, 1, { glass: 1, stalwart: 2 }]]) {
+  const { w, p } = stage('knight', boons, 0, {});
+  w.pact = pact; w.recalc(p, true); w.enterStratum(stratum); w.deepRooms = deep; w.light = [100, 40, 20, 0][tier] * w.lightMax / 100; w.updateDread();
+  if (party > 1) w.addPlayer({ pid: 'p1', name: 'B', slot: 1, cls: 'ranger', weapon: 'longbow', meta: META() });
+  w.enemies.length = 0; w.enc = null; w.locked = false;
+  const tag = `stratum ${stratum} pact ${pact} tier ${tier} deep ${deep} party ${party}`, m = ED.Sheet.compute(p, ED.Sheet.ctx(w, p), { raw: true });
+  const e = w.spawnEnemy('skeleton', p.x + 80, p.y), e2 = w.spawnEnemy('frozenskel', p.x + 90, p.y);
+  rel(e.dmg / ED.ENEMIES.skeleton.dmg, m.def.foeHere, 1e-9, `foes that spawn now hit (${tag})`);
+  rel(e2.hp, m.ref.hp, 1e-9, `reference foe health (${tag})`); rel(e2.hp / e2.hpLever, m.ref.statusHp, 1e-9, `reference foe status health (${tag})`);
+  p.hp = p.maxHp; p.invuln = 0; w.hurtPlayer(p, 100, { hazard: true }); near(p.maxHp - p.hp, Math.max(1, Math.round(100 * m.def.taken)), 1, `damage taken from a 100 hit (${tag})`);
+  p.hp = 1; const got = w.healPlayer(p, 10, true); rel(got, 10 * m.def.heal, 1e-9, `healing received (${tag})`);
+  ok(m.def.maxHp === p.maxHp && m.def.ehp > 0, `max health (${tag})`);
+}
+
+// ---------------- statuses on a foe of the reference health: the payoffs the estimates promise (weapon damage only, no crit) ----------------
+function statusRun(boons, stratum, secs, until) {
+  const { w, p, e } = stage('ranger', boons, 0, {});
+  w.stratum = stratum; w.updateDread();
+  const m0 = ED.Sheet.compute(p, ED.Sheet.ctx(w, p), { raw: true }), ref = m0.ref;
+  e.maxHp = e.hp = ref.hp; e.hpLever = ref.hp / ref.statusHp; // a foe of the reference health; the pin below keeps it alive unless the payoff is a kill
+  let next = 0, t = null;
+  for (let i = 0; i < secs * 60; i++) {
+    if (w.time >= next) { w.playerAttack(p, 0); next = w.time + ED.Stats.attackInterval(p); }
+    w.update(1 / 60);
+    if (until === 'freeze' && e.frozen > 0) { t = w.time; break; }
+    if (until === 'venom' && e.venom >= 100) { t = w.time; break; }
+    if (until === 'reap' && e.hp <= 0) { t = w.time; break; }
+    if (until !== 'reap') e.hp = e.maxHp;
+  }
+  return { w, p, e, m0, t, ref };
+}
+{
+  const r = statusRun({ frostbite: 1 }, 6, 12, 'freeze'), st = r.p.stats, pow = 1 + st.statusPow; // stratum VI: a reference foe of 230 health takes several hits to freeze
+  const rate = r.m0.proc.split.weapon * st.iceInfuse * pow / r.ref.statusHp * C.CHILL_K * (1 + st.chillMul) * ED.elemMul(6, 'ice');
+  ok(r.t !== null && Math.abs(r.t - 100 / rate) <= 100 / rate * 0.15 + 0.35, `time to freeze a reference foe ${r.t && r.t.toFixed(2)} s vs ${(100 / rate).toFixed(2)} s from the weapon`);
+  const est = r.m0.mult.status.find(s => s.el === 'ice').est; ok(est.secs > 0 && est.secs <= 100 / rate + 1e-9, 'Ice estimate counts the skills on top of the weapon');
+}
+{
+  const r = statusRun({ envenom: 1 }, 6, 16, 'venom'), st = r.p.stats, pow = 1 + st.statusPow;
+  const rate = r.m0.proc.split.weapon * st.poisonInfuse * pow / r.ref.statusHp * C.VENOM_K * (1 + st.venomBuild) * ED.elemMul(6, 'poison');
+  ok(r.t !== null && Math.abs(r.t - 100 / rate) <= 100 / rate * 0.15 + 0.35, `time to full Venom ${r.t && r.t.toFixed(2)} s vs ${(100 / rate).toFixed(2)} s from the weapon`);
+}
+{
+  const r = statusRun({ staticcharge: 1, highvoltage: 2 }, 1, 20, null); // the discharge damage per second on one foe
+  const st = r.p.stats, dps = hits.filter(h => h.kind === 'chain' && h.t > 6).reduce((s, h) => s + h.dealt, 0) / (r.w.time - 6), want = r.m0.proc.split.weapon * st.lightningInfuse * (1 + st.shockMul);
+  rel(dps, want, 0.08, 'Charge: discharge damage per second on one foe');
+}
+{
+  const r = statusRun({ consecrate: 1, zealotry: 2 }, 3, 20, null); // Smite damage per second (Holy is neutral in stratum III)
+  const st = r.p.stats, dps = hits.filter(h => h.kind === 'smite').reduce((s, h) => s + h.dealt, 0) / r.w.time, want = r.m0.proc.split.weapon * st.holyInfuse * (1 + st.smiteMul);
+  rel(dps, want, 0.1, 'Radiance: Smite damage per second on one foe');
+}
+{
+  const r = statusRun({ doommark: 1, malignance: 2 }, 3, 40, 'reap'), st = r.p.stats; // Shadow is neutral in stratum III
+  const dealt = hits.filter(h => h.kind !== 'dot' || !h.raw).reduce((s, h) => s + h.dealt, 0), i = st.shadowInfuse * (1 + st.doomMul);
+  ok(r.t !== null && Math.abs(dealt / r.ref.hp - 1 / (1 + i)) <= 0.12, `Doom: a foe is Reaped after ${(dealt / r.ref.hp * 100).toFixed(0)}% of its health, modelled ${(100 / (1 + i)).toFixed(0)}%`);
 }
 
 // ---------------- Burn: a Kindle hero's pool drains into the damage the model predicts ----------------

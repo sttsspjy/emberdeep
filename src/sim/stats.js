@@ -177,6 +177,7 @@
 
   // Numbers of a skill for a stat block, the one source for the sim, the sheet and the bots. Returns
   // { id, slot, aim, range, rangeMin, move, cd, cdEff, parts: [{id, label, on, dmg, r, dur, n, count, ...the part's data}], p: {partId: part} } (cached on st).
+  // Parts also carry the sheet fields raw (dmg), noCrit, selfVuln (the vulnerability the part sets before its own hit) and oneFoe (hits on one foe per cast; undefined for a fan and for a per-minion part, which the sheet resolves).
   St.skillNums = (id, st) => {
     const c = st.sn || (st.sn = {});
     if (c[id]) return c[id];
