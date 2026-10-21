@@ -398,7 +398,7 @@
       const sn = ED.Actors.foeSnap(ev.type, e, ev.x, ev.y), r = ev.r || d.r;
       F.atlasFx(r > 14 || ev.el ? 'fx.smoke' : 'fx.puff', ev.x, ev.y - (sn ? sn.lift : 0) - (r > 14 ? 8 : 4));
       if (!sn) return;
-      const dur = sn.death ? 0.36 : DUR[fam] + (ev.el ? 0.1 : 0);
+      const dur = sn.death ? sn.dur : DUR[fam] + (ev.el ? 0.1 : 0);
       F.ghosts.push({ k: 'die', at: sn, x: ev.x, y: ev.y, r, fam: sn.death ? 'anim' : fam, sgn: Math.cos(a) >= 0 ? 1 : -1, life: dur, max: dur });
       return;
     }

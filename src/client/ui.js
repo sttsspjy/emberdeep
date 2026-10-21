@@ -39,7 +39,7 @@
   };
   const selectText = (el) => { if (!el) return; const r = document.createRange(); r.selectNodeContents(el); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); };
 
-  const portrait = (cls, size, slot, weapon) => { const cv = document.createElement('canvas'); cv.width = cv.height = size * 2; ED.Sprites.portrait(cv, cls, slot || 0, weapon); return cv; };
+  const portrait = (cls, size, slot, weapon) => { const cv = document.createElement('canvas'); cv.width = cv.height = size * 2; ED.Sprites.portrait(cv, cls, slot || 0, weapon); if (ED.Actors && ED.Actors.on()) ED.Actors.fit(cv, () => ED.Sprites.portrait(cv, cls, slot || 0, weapon)); return cv; };
 
   // Path helpers: elements share ids with their paths (fire, ice, lightning, poison, holy, shadow).
   const pathIcon = (k) => ED.Icons.url(ED.PATHS[k].icon, ED.PATHS[k].color);

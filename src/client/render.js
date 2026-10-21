@@ -180,22 +180,7 @@
     lightCache[color] = Bmp.hold(s);
     return s;
   }
-  // Light pools of the frame (buffer px x, y, radius, intensity) and the ambient level, kept so actors can be lifted toward a minimum brightness (R.lightAt).
-  const lrec = new Float32Array(4 * 320), lumMemo = {}; let lrecN = 0, ambL = 0.4;
-  const LPT = [0, 0.16, 0.4, 0.66, 0.86, 1], LPV = [0.95, 0.74, 0.42, 0.17, 0.05, 0]; // radial falloff of lightSprite
-  // Approximate brightness (0..1) the light multiply gives the buffer pixel (x, y): ambient plus the recorded pools.
-  R.lightAt = (x, y) => {
-    let L = ambL;
-    for (let i = 0; i < lrecN; i++) {
-      const dx = x - lrec[i * 4], dy = y - lrec[i * 4 + 1], r = lrec[i * 4 + 2], d2 = dx * dx + dy * dy;
-      if (d2 >= r * r) continue;
-      const t = Math.sqrt(d2) / r; let j = 1; while (LPT[j] < t) j++;
-      L += lrec[i * 4 + 3] * (LPV[j - 1] + (LPV[j] - LPV[j - 1]) * (t - LPT[j - 1]) / (LPT[j] - LPT[j - 1]));
-    }
-    return L > 1 ? 1 : L;
-  };
   R.lightBegin = (rgb) => {
-    lrecN = 0; ambL = (rgb[0] * 0.299 + rgb[1] * 0.587 + rgb[2] * 0.114) / 255;
     lctx.globalCompositeOperation = 'source-over'; lctx.globalAlpha = 1;
     lctx.fillStyle = `rgb(${rgb[0] | 0},${rgb[1] | 0},${rgb[2] | 0})`;
     lctx.fillRect(0, 0, lightCv.width, lightCv.height);
@@ -203,7 +188,6 @@
   };
   // Adds a coloured pool at buffer pixel (sx, sy) with radius rr (px).
   R.lightAdd = (sx, sy, rr, color, k) => {
-    if (lrecN < 320 && k > 0.01) { let lw = lumMemo[color]; if (lw === undefined) { const c = U.hexToRgb(color); lw = lumMemo[color] = (c[0] * 0.299 + c[1] * 0.587 + c[2] * 0.114) / 255; } const o = lrecN++ * 4; lrec[o] = sx; lrec[o + 1] = sy; lrec[o + 2] = rr; lrec[o + 3] = k * lw; }
     const div = R.lightDiv; sx /= div; sy /= div; rr /= div;
     if (sx + rr < 0 || sy + rr < 0 || sx - rr > lightCv.width || sy - rr > lightCv.height || k <= 0.01) return;
     const spr = lightSprite(color);
@@ -304,7 +288,6 @@
     c.globalCompositeOperation = 'lighter';
     const emis = ED.Tiles.emissive(room, BQ);
     if (emis) { c.globalAlpha = 0.82 + Math.sin(t * 2.1) * 0.1 + Math.sin(t * 5.3) * 0.05; c.drawImage(emis, 0, 0, emis.width / emis.px, emis.height / emis.px); c.globalAlpha = 1; }
-    if (atlasOn && R.actorFloor !== false) actorFloor(c, dn, ix, iy);
     drawRoomDynamics(c, view, room, biome, t, 1);
     drawPickups(c, view, t, 1);
     drawZones(c, view, t, 1);
@@ -329,20 +312,6 @@
     R.stats.world += performance.now() - t0; R.stats.n++;
     R.endWorld(R.postOpts(biome, t, view.pact > 0 ? { vig: 0.42 + Math.min(0.2, view.pact * 0.02) } : null));
   };
-
-  // Brightness floor of heroes and foes: the light multiply never takes an actor below about half its colour. Where the recorded light at an actor is under ACTOR_FLOOR its blits are replayed additively
-  // with the missing share, so the result is sprite * max(light, floor). Actors in a lit pool (L at the floor or above) cost nothing extra.
-  const ACTOR_FLOOR = 0.5;
-  function actorFloor(c, dn, ix, iy) {
-    for (let i = 0; i < dn; i++) {
-      const it = drawList[i], o = it.o;
-      if (it.k > 1 || !it.full || o.burrowed || o.dead || o.downed || (o.hp !== undefined && o.hp <= 0)) continue; // far foes of a crowd (crowdLod) keep the plain multiply
-      const still = AC.still(o), px = still ? Math.round(o.x / 2) * 2 : Math.round(o.x), py = still ? Math.round(o.y / 2) * 2 : Math.round(o.y); // the same snapped spot as the lit draw
-      if (px < ix - 90 || px > ix + R.bw + 90 || py < iy - 110 || py > iy + R.bh + 90) continue;
-      const a = (ACTOR_FLOOR - R.lightAt(px - ix, py - iy - 10)) * 0.95;
-      if (a > 0.04) AC.replay(c, o, it.k, px, py, a);
-    }
-  }
 
   // Y-sorted entity list: items are pooled by index, so a frame allocates nothing.
   const drawList = [], drawPool = [], byY = (a, b) => a.y - b.y;
@@ -1639,6 +1608,7 @@
       R.lightAdd(L.x - ix, L.y - iy, L.r, L.c, L.k);
       if (L.k * L.r >= 60) src(L.x, L.y, L.r, L.c, L.k);
     }
+    if (AC.on() && R.actorFloor !== false) AC.floor(lctx, drawList, drawList.length, 1 / dv); // actors never fall below half their colour (before the vignette: the final darkening still applies)
     if (!R.posting) { lctx.globalCompositeOperation = 'source-over'; lctx.globalAlpha = 1; lctx.drawImage(vignetteH.v, 0, 0, lightCv.width, lightCv.height); } // vignette (black, alpha) darkens the light buffer: same result as a full-screen overlay at buffer cost
     R.lightEnd(c);
   }
