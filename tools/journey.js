@@ -20,7 +20,7 @@ function journey(seed0, quiet) {
     const ml = S.masteryLevel(p, cls);
     const wi = ml >= 6 ? 2 : ml >= 3 ? 1 : 0;
     const pact = p.stats.wins > 0 ? p.pactMax : 0;
-    const r = runBot({ seed: seed0 * 1000 + runs * 13, n: 1, cls: [cls], weapon: wi, skill, up: p.up.slice(), mastery: ml, pact, tutorial: p.stats.runs < 2, pick });
+    const r = runBot({ seed: seed0 * 1000 + runs * 13, n: 1, cls: [cls], weapon: wi, skill, up: p.up.slice(), mastery: ml, pact, tutorial: p.stats.runs < 2, pick, relics: ED.RELIC_IDS.filter(id => S.relicUnlocked(p, id)) });
     runs++; total += r.time * HUMAN + 45; // + time in the Hearth between runs
     const sum = r.sum; sum.cls = cls;
     rooms += r.rooms.visited; roomsTotal += r.rooms.total;

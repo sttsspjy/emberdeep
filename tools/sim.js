@@ -14,6 +14,7 @@
 // --mastery: smart (default) scores a fork rank-up in the mastery offers like any card (rank 2: 700, rank 3: 760, below evolutions, keystones and duos); fork always takes the fork.
 // Casting follows ED.SKILLS: aim 'dir' throws along the target angle, 'ground' lands on the foe, 'move' runs or blinks through it, 'self' fires around the hero; aim noise shrinks with the bot's skill (angle 0.12 rad, ground point 36 px at skill 0).
 // --out=file.json writes one row per run (seed, class, depth, win, boss time to kill and HP lost per stratum, evolution stratum, main path, gates); --pair=file.json prints the mean difference to such a baseline for the same seeds.
+// meta: none = fresh profile (start relics); mid = half the upgrade ranks, mastery 5, start relics plus the Codex relics costing <= 70 without a boss requirement; max = every rank, mastery 10, every relic. runBot takes opts.relics to override the relic pool.
 const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
@@ -320,7 +321,7 @@ function runBot(opts) {
   for (let i = 0; i < opts.n; i++) {
     const cls = opts.cls[i % opts.cls.length];
     players.push({ pid: 'p' + i, name: 'Bot' + i, slot: i, cls, weapon: ED.CLASSES[cls].weapons[opts.weapon || 0],
-      meta: { up: opts.up || ED.UPGRADES.map(() => 0), mastery: opts.mastery || 1, relics: ED.RELIC_IDS.filter(id => ED.RELICS[id].start) } });
+      meta: { up: opts.up || ED.UPGRADES.map(() => 0), mastery: opts.mastery || 1, relics: opts.relics || ED.RELIC_IDS.filter(id => ED.RELICS[id].start) } });
   }
   const w = new ED.World({ seed: opts.seed, pact: opts.pact || 0, players, tutorial: opts.tutorial });
   ctx.w = w;
@@ -719,10 +720,11 @@ function classLines(results) {
   return out.join('\n');
 }
 
-// Hearth profile of a bot: none (fresh), mid (half the ranks, mastery 5) or max (every rank, mastery 10).
+// Hearth profile of a bot: none (fresh: start relics only), mid (half the ranks, mastery 5, start relics plus the Codex relics costing <= 70 with no boss requirement) or max (every rank, mastery 10, every relic).
 const metaProfile = (meta) => ({
   up: meta === 'max' ? ED.UPGRADES.map(u => u.costs.length) : meta === 'mid' ? ED.UPGRADES.map(u => Math.ceil(u.costs.length / 2)) : ED.UPGRADES.map(() => 0),
   mastery: meta === 'max' ? 10 : meta === 'mid' ? 5 : 1,
+  relics: ED.RELIC_IDS.filter(id => { const r = ED.RELICS[id]; return r.start || meta === 'max' || (meta === 'mid' && r.cost <= 70 && !(r.req && r.req.boss)); }),
 });
 
 // Run options shared by both command lines, from the parsed --flags.
@@ -762,12 +764,12 @@ if (require.main === module) {
   for (const a of process.argv.slice(2)) { const m = /^--([a-z0-9]+)(?:=(.*))?$/i.exec(a); if (m) flags[m[1]] = m[2] === undefined ? '1' : m[2]; else args.push(a); }
   const n = +(args[0] || 1), runs = +(args[1] || 5), skill = +(args[2] || 0.75), meta = args[3] || 'none';
   const cls = (args[4] && args[4] !== '-' ? args[4] : 'knight,ranger,pyro,shade,cleric,necro').split(','); // '-' = every hero
-  const { up, mastery } = metaProfile(meta);
+  const { up, mastery, relics } = metaProfile(meta);
   const o = optsFromFlags(flags), pick = o.pick, force = o.force, seed0 = +(flags.seed0 || 1000);
   const results = [];
   for (let i = 0; i < runs; i++) {
     const t0 = Date.now();
-    const r = runBot(Object.assign({ seed: seed0 + i * 7, n, cls: [cls[i % cls.length]].concat(cls), skill, up, pact: +(args[5] || 0), mastery }, jobOpts(o, i, cls.length)));
+    const r = runBot(Object.assign({ seed: seed0 + i * 7, n, cls: [cls[i % cls.length]].concat(cls), skill, up, pact: +(args[5] || 0), mastery, relics }, jobOpts(o, i, cls.length)));
     results.push(r);
     if (!flags.quiet) {
       console.log(`run ${i} ${cls[i % cls.length]}: ${r.victory ? 'WIN' : r.state} stratum ${r.stratum} time ${U.fmtTime(r.time)} lvl ${r.level} kills ${r.kills} relics ${r.relics} rooms ${r.rooms.visited}/${r.rooms.total} lightAtBoss [${r.lightAtBoss.join(' ')}] strata [${r.strata.map(U.fmtTime).join(' ')}] (${Date.now() - t0}ms)`);

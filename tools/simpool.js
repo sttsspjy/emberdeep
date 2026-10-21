@@ -25,8 +25,8 @@ if (process.argv[2] === '--worker') {
   const o = sim.optsFromFlags(flags), pick = o.pick, seed0 = +(flags.seed0 || 1000), force = o.force, exploreMin = o.exploreMin, maxStratum = o.maxStratum;
   const jobs = [];
   for (const meta of metas) {
-    const { up, mastery } = sim.metaProfile(meta);
-    for (let i = 0; i < runs; i++) jobs.push(Object.assign({ label: meta, seed: seed0 + i * 7, n, cls: [cls[i % cls.length]].concat(cls), skill, up, pact, mastery }, sim.jobOpts(o, i, cls.length)));
+    const { up, mastery, relics } = sim.metaProfile(meta);
+    for (let i = 0; i < runs; i++) jobs.push(Object.assign({ label: meta, seed: seed0 + i * 7, n, cls: [cls[i % cls.length]].concat(cls), skill, up, pact, mastery, relics }, sim.jobOpts(o, i, cls.length)));
   }
   // job queue: each worker takes the next job when it finishes one; results are reported in job order (output independent of --jobs and timing)
   const W = Math.max(1, Math.min(+(flags.jobs || os.cpus().length - 1), jobs.length));
