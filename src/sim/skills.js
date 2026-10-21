@@ -1,6 +1,10 @@
 // Hero skills: per-hero skill state, the cast dispatcher for the class skills on K (slot 0) and L (slot 1), skill moves, cooldown refunds and the hooks of the class files.
 // A skill's behaviour lives in src/sim/class-<id>.js: ED.CAST[skillId] = function (p, a, data, st, nums) (this = world) returns false to reject the cast or the extra fields of the 'skill' event.
-// A class file also registers a hook table ED.CLS[cls] = { init, tick, kill, hitMul, hitCrit, critMul, hitDone, procs, attackOpts, attack, absorb } that combat.js, build.js and this file call (all optional, see each call site).
+// A class file also registers a hook table ED.CLS[cls] (all optional; this = world; the attacker's class unless noted):
+//   init(p) / tick(p, dt): hero fields at creation / every tick (skills.js)      kill(e, killer, src): every class's table runs on every foe death (skills.js)
+//   hitMul(p, e, src) -> added to the hero multiplier, hitCrit(p, e, src) -> force a crit, critMul(p, e, src) -> crit damage factor, hitDone(p, e, dmg, crit, src), procs(e, p, dmg, crit, src) (combat.js hitEnemy / heroProcs)
+//   attackOpts(p, st) -> options merged into every weapon hit of an attack (infAdd, pierce, blastMul), attack(p, a, st, w) after an attack, waveShot(p, pr, a, st) on the Cleric wave (combat.js playerAttack)
+//   projHit(pr, e, hs) after a hero shot hit e, projBurst(pr, owner) after a shot's blast (combat.js); absorb(p, absorbed, src) when p's shield absorbed damage (combat.js hurtPlayer)
 (function (ED) {
   'use strict';
   const U = ED.U;

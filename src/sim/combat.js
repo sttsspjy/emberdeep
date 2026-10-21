@@ -161,6 +161,7 @@
     if (kind !== 'dot' || dmg >= 3) {
       const ev = { t: 'hit', x: Math.round(e.x), y: Math.round(e.y - e.r), v: Math.round(dmg), c: crit ? 1 : 0, k: kind === 'dot' ? 1 : 0, pid: p ? p.pid : '', el: src.bleed ? 4 : EL_IDX[src.el || src.clsEl] || 0 };
       if (src.wpn && st && st.heavy) ev.h = 1; // heavy weapon hit: the viewer's hit-stop
+      if (src.far) ev.f = 1; // a far shot (Deadeye): the viewer's bright spark
       this.emit(ev);
     }
     if (p) {
@@ -850,11 +851,11 @@
     if (!src.hazard && st.aegis && p.aegisT <= 0) { p.aegisT = 10; p.invuln = 0.4; this.emit({ t: 'block', x: p.x, y: p.y, k: 'aegis' }); return false; }
     let dmg = amount * ED.Stats.armorMul(st.armor) * (1 + st.vuln);
     // Brace (own, or a Knight with Hold the Line within 100) x the best Sanctuary here, never below DR_FLOOR; Last Stand and Verdict weaken stack separately
-    let cut = 1;
-    if (p.braceT > 0) cut = 1 - Math.min(0.4, st.braceDR);
-    for (const q of this.players.values()) if (q !== p && q.braceT > 0 && q.stats.braceAura && !q.downed && !q.dead && U.dist2(q.x, q.y, p.x, p.y) < 100 * 100) cut = Math.min(cut, 1 - Math.min(0.4, q.stats.braceDR));
-    for (const z of this.zones) if (z.kind === 'sanct' && U.dist2(z.x, z.y, p.x, p.y) < z.r * z.r) cut = Math.min(cut, 1 - Math.min(0.4, z.dr === undefined ? 0.15 : z.dr));
-    dmg *= Math.max(ED.CONST.DR_FLOOR, cut);
+    let braceF = 1, sanctF = 1;
+    if (p.braceT > 0) braceF = 1 - Math.min(0.4, st.braceDR);
+    for (const q of this.players.values()) if (q !== p && q.braceT > 0 && q.stats.braceAura && !q.downed && !q.dead && U.dist2(q.x, q.y, p.x, p.y) < 100 * 100) braceF = Math.min(braceF, 1 - Math.min(0.4, q.stats.braceDR));
+    for (const z of this.zones) if (z.kind === 'sanct' && U.dist2(z.x, z.y, p.x, p.y) < z.r * z.r) sanctF = Math.min(sanctF, 1 - Math.min(0.4, z.dr === undefined ? 0.15 : z.dr));
+    dmg *= Math.max(ED.CONST.DR_FLOOR, braceF * sanctF);
     if (p.guardT > 0) dmg *= 0.4;
     const e = src.e;
     if (e && e.weakT > 0) dmg *= 1 - e.weakV;
@@ -956,7 +957,8 @@
     if (w.wave) {
       const every = Math.max(1, w.wave.every + st.waveEvery);
       if (p.atkCount % every === 0) {
-        this.spawnProj({ team: 0, kind: 'wave', x: p.x, y: p.y, a, speed: 320, r: 16 * (1 + st.area * 0.5), dmg: w.dmg * w.wave.mul * (1 + st.waveMul), life: 0.55, pierce: 99, owner: p.pid, knock: 120, wpn: true });
+        const wv = this.spawnProj({ team: 0, kind: 'wave', x: p.x, y: p.y, a, speed: 320, r: 16 * (1 + st.area * 0.5), dmg: w.dmg * w.wave.mul * (1 + st.waveMul), life: 0.55, pierce: 99, owner: p.pid, knock: 120, wpn: true });
+        if (ch && ch.waveShot) ch.waveShot.call(this, p, wv, a, st); // class hook: edit the wave shot (width, range, stun, homing)
       }
     }
     if (st.gauntlet && p.atkCount % 6 === 0) {
@@ -1048,13 +1050,13 @@
     const n = w.n + st.projN;
     const sp = n > 1 ? Math.max(w.spread || 0, 0.13) : 0;
     const pyre = evo === 'fire' && !o.twin; // Cinder Arms: plain shots explode (r40, 50%); exploding weapons get a 30% wider blast and a burning patch
-    const ex = w.explode ? { r: w.explode.r * area * (pyre ? 1.3 : 1), mul: w.explode.mul, patch: pyre } : pyre ? { r: 40 * area, mul: 0.5 } : null;
+    const ex = w.explode ? { r: w.explode.r * area * (pyre ? 1.3 : 1) * (o.blastMul || 1), mul: w.explode.mul, patch: pyre } : pyre ? { r: 40 * area, mul: 0.5 } : null; // o.blastMul / o.pierce: per-attack options of a class hook (attackOpts)
     const spec = evo === 'general' && !o.spectral && !o.twin, wpn = !o.twin && !o.spectral;
     for (let i = 0; i < n; i++) {
       const ang = a + (i - (n - 1) / 2) * sp + (w.jitter ? this.rng.range(-w.jitter, w.jitter) : 0);
       this.spawnProj({
         team: 0, kind: w.proj, x: p.x + Math.cos(ang) * 10, y: p.y - 4 + Math.sin(ang) * 10, a: ang, speed: w.speed, r: w.r,
-        dmg: w.dmg, life: w.life, pierce: w.pierce + st.pierce, owner: p.pid, crit, knock: w.knock || 40, mul: o.mul, ambush: o.ambush, spec, wpn,
+        dmg: w.dmg, life: w.life, pierce: w.pierce + st.pierce + (o.pierce || 0), owner: p.pid, crit, knock: w.knock || 40, mul: o.mul, ambush: o.ambush, spec, wpn,
         explode: ex, infAdd: o.infAdd, bleedMin: o.bleedMin, acid: !!o.acid && i === 0,
         cloud: w.cloud ? { r: w.cloud.r * area, dps: w.cloud.dps, dur: w.cloud.dur } : null,
         homing: (w.homing || 0) + (st.homing || 0), shieldAlly: w.shieldAlly || 0, burn: w.burn || 0,
@@ -1141,6 +1143,8 @@
           const sp = Math.hypot(pr.vx, pr.vy) || 1;
           const hs = { p: owner, kind: pr.hk || 'weapon', crit: pr.crit, mul: pr.mul, ambush: pr.ambush, knock: pr.knock, kx: pr.vx / sp, ky: pr.vy / sp, burn: pr.burn, infAdd: pr.infAdd, infK: pr.infK, bleedMin: pr.bleedMin, x: pr.x, y: pr.y, wpn: pr.wpn, part: pr.part, dist: pr.dist, pass: pr.pass };
           this.hitEnemy(e, pr.dmg, hs);
+          const ph = owner && CLS[owner.cls];
+          if (ph && ph.projHit) ph.projHit.call(this, pr, e, hs); // class hook: a hero shot hit e (pr.pierce is what is left before this hit is counted)
           if (pr.stun && e.hp > 0) this.stunFoe(e, pr.stun, true);
           this.projAcid(pr);
           if (pr.spec && hs.critOut) this.spectralShot(pr, e);
@@ -1189,6 +1193,8 @@
     if (!owner) return;
     this.explode(pr.x, pr.y, pr.explode.r, pr.dmg * (pr.mul || 1) * pr.explode.mul, 0, owner, pr.kind === 'fireball' ? 'bigfire' : 'fire', false, { wpn: pr.wpn });
     if (pr.explode.patch) this.addZone({ kind: 'pfire', x: pr.x, y: pr.y, r: pr.explode.r * 0.6, dur: 2, dps: pr.dmg * 0.4, owner: pr.owner, team: 0 }); // one burning patch per shot
+    const bh = CLS[owner.cls];
+    if (bh && bh.projBurst) bh.projBurst.call(this, pr, owner); // class hook: a hero shot blasted at (pr.x, pr.y)
   };
 
   // ---------------- zones: telegraphs, clouds, fire, sanctuary ----------------

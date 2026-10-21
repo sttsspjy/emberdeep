@@ -77,8 +77,8 @@ const hv = build('knight', 0, { k_atk: 1, k_atk_h: 1 }), sw = build('knight', 0,
 near(hv.critK, 0.42 / 0.756, 1e-9, 'Heavy critK'); near(sw.critK, 0.42 / 0.231, 1e-9, 'Swift critK'); ok(hv.heavy && !hv.swift && sw.swift && hv.weaponId === 'longsword@heavy', 'fork flags');
 
 // ---- staged world ----
-function stage(cls, boons, seed) {
-  const meta = META(), w = new ED.World({ seed: seed || 7, pact: 0, players: [{ pid: 'p0', name: 'T', slot: 0, cls, weapon: ED.CLASSES[cls].weapons[0], meta }] });
+function stage(cls, boons, seed, wi) {
+  const meta = META(), w = new ED.World({ seed: seed || 7, pact: 0, players: [{ pid: 'p0', name: 'T', slot: 0, cls, weapon: ED.CLASSES[cls].weapons[wi || 0], meta }] });
   w.startRun();
   const p = w.players.get('p0');
   for (const id in (boons || {})) p.boons[id] = boons[id];
@@ -148,6 +148,55 @@ const run = (w, secs, f) => { for (let i = 0; i < Math.round(secs * 60); i++) { 
   const { w, p } = stage('knight', { k_atk: 1 }); const e = foe(w, p.x + 30, p.y); const dealt = [];
   for (let i = 0; i < 6; i++) { const h = e.hp; p.stats.crit = 0; w.playerAttack(p, 0); dealt.push(h - e.hp); }
   ok(dealt[2] > dealt[0] * 1.4 && dealt[5] > dealt[3] * 1.4 && dealt[1] < dealt[2], `Cleave on swings 3 and 6 (${dealt.map(v => v.toFixed(0)).join(' ')})`);
+}
+// Brace cuts damage taken by braceDR, Hold the Line shares it, the best Sanctuary stacks with it and the product never falls below DR_FLOOR
+{
+  const { w, p } = stage('knight', { k_s1: 1, k_s1_b: 3 }); const q = ED.Stats.armorMul(p.stats.armor), hit = () => { p.hp = p.maxHp; p.invuln = 0; w.hurtPlayer(p, 100, {}); return p.maxHp - p.hp; };
+  const base = hit(); p.braceT = 1; const braced = hit(); near(braced / base, 0.6, 0.03, 'Brace -40% (Vanguard 25 + Rallying rank 3: 15)');
+  p.braceT = 0; const ally = w.addPlayer({ pid: 'p1', name: 'A', slot: 1, cls: 'ranger', weapon: 'longbow', meta: META() }); ally.x = p.x + 40; ally.y = p.y; ally.hp = ally.maxHp;
+  p.braceT = 1; p.boons.k_s1_b = 3; w.recalc(p, false); ally.invuln = 0; const a0 = ally.hp; w.hurtPlayer(ally, 100, {}); const aHit = a0 - ally.hp;
+  ally.hp = ally.maxHp; ally.invuln = 0; p.braceT = 0; w.hurtPlayer(ally, 100, {}); const aBase = ally.maxHp - ally.hp; near(aHit / aBase, 1 - Math.min(0.4, p.stats.braceDR), 0.04, 'Hold the Line braces allies within 100');
+  p.braceT = 1; w.zones.push({ kind: 'sanct', x: p.x, y: p.y, r: 80, dr: 0.4, t: 0, dur: 9, team: 0, id: 99 }); const floor = hit(); near(floor / base, 0.5, 0.03, 'DR floor 0.5 (Brace x Sanctuary)');
+}
+// Parry (Sworn Blade): a Cleave in the last 0.3 s of a wind-up cancels it and stuns; otherwise nothing; once per 2.5 s
+{
+  const { w, p } = stage('knight', { k_atk: 1, k_atk_s: 1 }); const e = foe(w, p.x + 30, p.y); e.st = 'windup'; e.t = 0.2; e.hp = e.maxHp = 5000; p.atkCount = 2; let ev = 0;
+  w.playerAttack(p, 0); for (const f of w.fx) if (f.t === 'parry') ev++; w.fx.length = 0;
+  ok(ev === 1 && e.stun > 0 && e.st === 'move' && e.parryT > w.time, 'Parry cancels the wind-up and stuns'); near(e.stun, 0.6, 0.01, 'Parry stun 0.6 s');
+  const e2 = foe(w, p.x + 30, p.y - 4); e2.st = 'windup'; e2.t = 0.2; p.atkCount = 5; w.playerAttack(p, 0); ok(e2.st === 'windup', 'Parry once per 2.5 s per hero');
+  const { w: w2, p: p2 } = stage('knight', { k_atk: 1, k_atk_s: 1 }); const e3 = foe(w2, p2.x + 30, p2.y); e3.st = 'windup'; e3.t = 0.8; p2.atkCount = 2; w2.playerAttack(p2, 0); ok(e3.st === 'windup' && e3.stun === 0, 'no parry early in a wind-up');
+}
+// moments: team level 3 grants the route offer, bosses I, II and IV the fork and its ranks; a downed hero still gets it
+{
+  const { w, p } = stage('ranger'); w.addXp(69); ok(p.offers.filter(o => o.src === 'class').length === 1, 'level 3 route offer');
+  const lv = w.level; w.addXp(1e5); ok(w.level > lv && p.offers.filter(o => o.src === 'class').length === 1, 'only level 3 grants a route');
+  for (const s of [1, 2, 3, 4, 5]) { p.offers.length = 0; w.stratum = s; w.boss = null; const b = w.spawnEnemy(ED.biomeFor(s).boss, 100, 100); w.onBossKilled(b); ok(p.offers.some(o => o.src === 'class') === (s === 1 || s === 2 || s === 4), 'boss ' + s + ' class grant'); }
+}
+// weapon clouds merge: many shots on one spot keep one cloud zone, the damage per second adds up
+{
+  const { w, p } = stage('necro', {}, 7, 2); const wp = p.stats.weapon; let z0 = null;
+  for (let i = 0; i < 6; i++) { const z = w.spawnCloud(p.pid, p.x + 60, p.y, { r: wp.cloud.r, dps: wp.cloud.dps, dur: wp.cloud.dur }); z0 = z0 || z; w.update(0.1); }
+  ok(w.zones.filter(z => z.kind === 'plague').length === 1 && z0.parts.length >= 5, 'cloud merge keeps one zone per spot');
+}
+// skill-move i-frames: the hero is untouchable while the move's window is open, and only then; a real dash is separate
+{
+  const { w, p } = stage('knight'); p.skillMove = { dx: 1, dy: 0, speed: 100, t: 0.4, iframes: 0.2, age: 0 }; let on = 0, off = 0;
+  for (let i = 0; i < 30; i++) { ED.Sim.movePlayer(p, { mx: 0, my: 0 }, 1 / 60, w.room, w.locked, w.zones); if (i < 10) on += p.skillIfr ? 1 : 0; else if (i > 14) off += p.skillIfr ? 1 : 0; }
+  ok(on === 10 && off === 0 && !p.dashing, 'skill move i-frames follow iframes, not the move length');
+}
+// a downed hero loses its thrown shields; Shield Charge sets Brace once per BRACE_CD
+{
+  const { w, p } = stage('knight', { k_s1: 1 }); w.playerSkill(p, 0, { d: 200 }, 1); ok(p.shields.length === 1, 'shield out'); p.downed = true; p.bleed = 99; w.update(1 / 60); ok(p.shields.length === 0 && !w.projs.some(q => q.kind === 'shield'), 'a downed hero loses its shield');
+  p.downed = false; p.braceAt = -99; w.playerSkill(p, 0, { x0: p.x, y0: p.y, x1: p.x + 50, y1: p.y }, 0); ok(p.braceT > 1.4, 'Charge starts Brace'); const t1 = p.braceT; p.braceT = 0; w.playerSkill(p, 0, { x0: p.x, y0: p.y, x1: p.x + 50, y1: p.y }, 0); ok(p.braceT === 0 && t1 > 0, 'Brace once per BRACE_CD');
+}
+// ailments, status moves and crit grants
+{
+  const { w, p } = stage('knight'); const a = foe(w, p.x + 60, p.y), b2 = foe(w, p.x + 90, p.y);
+  a.burnPool = 600; a.burnOwner = p; a.chill = 50; a.bleedPool = 400; a.bleedOwner = p; a.stun = 1; ok(w.ailments(a) === 4, 'ailments: Burn, Chill, Bleed, Dazed');
+  w.moveStatuses(a, b2, 0.5); near(b2.burnPool, 300, 1e-6, 'moved Burn pool'); near(a.burnPool, 300, 1e-6, 'source loses the moved Burn'); ok(b2.chill > 0 && b2.burnOwner === p, 'chill moved, owner kept');
+  const big = 0.25 * b2.maxHp; a.burnPool = 1e9; w.moveStatuses(a, b2, 1); ok(b2.burnPool <= 300 + big + 1e-6, 'a spread gives at most 25% of the receiver HP per pool');
+  const hk = stage('knight', { k_atk: 1, k_atk_h: 1 }).p; hk.critStacks = 0; ED.World.prototype.grantCrits.call(null, hk, 3, 3, 'set'); ok(hk.critStacks === 2, 'Heavy fork grants fewer crit stacks (3 x 0.56 -> 2)');
+  const sk = stage('knight', { k_atk: 1, k_atk_s: 1 }).p; ED.World.prototype.grantCrits.call(null, sk, 3, 5, 'set'); ok(sk.critStacks === 5, 'Swift fork grants more (3 x 1.82 -> 5)');
 }
 // every class: all four routes can be taken in a staged world and the offers hold the right cards
 {

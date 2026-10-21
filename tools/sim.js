@@ -353,7 +353,7 @@ function runBot(opts) {
   rec.keyAt = null; rec.duoAt = null; // stratum when hero 0 takes its keystone / duo
   rec.cnt = { smite: 0, reap: 0, toll: 0, lance: 0, dashHits: 0, reapHp: 0, kills0: 0, refunds: 0, parries: 0, staggers: 0, rics: 0, gRics: 0, catches: 0, casts: {} };
   rec.parts = {}; rec.projDmgS = []; rec.maxHost = 0; // damage by skill part / source, hero damage taken from shots per stratum (fraction of max HP), most foes standing in the current room
-  rec.upt = { brace: [0, 0], sanct: [0, 0], stun: [0, 0], smoke: [0, 0], mom: [0, 0] }; rec.peak = { projs: 0, zones: 0 }; // uptimes as [on, of] tick counts, peak shots and zones of hero 0
+  rec.smokeSeen = new Set(); rec.upt = { brace: [0, 0], sanct: [0, 0], stun: [0, 0], smoke: [0, 0, 0], mom: [0, 0] }; rec.peak = { projs: 0, zones: 0 }; // uptimes as [on, of] tick counts, peak shots and zones of hero 0
   rec.venom = { own: 0, ally: 0, corrode: 0, base: 0 }; // damage added by the Venom vulnerability, split by who dealt it, and the corrode part of it
   rec.shield = { gained: {}, absorbed: {}, holyBoss: 0 }; rec.bossSecs = 0;
   const shMix = new Map(); for (const p of w.players.values()) shMix.set(p.pid, {}); // shield composition per hero by source (absorption is attributed pro rata)
@@ -525,7 +525,11 @@ function runBot(opts) {
       u.sanct[1]++; for (const z of w.zones) if (z.kind === 'sanct' && U.dist2(z.x, z.y, h0.x, h0.y) < z.r * z.r) { u.sanct[0]++; break; }
       u.mom[1]++; u.mom[0] += h0.momN | 0;
       for (const e of w.enemies) if (e.hp > 0 && !e.boss && !e.elite && e.spawnT <= 0 && !e.def.gloom) { u.stun[1]++; if (e.stun > 0) u.stun[0]++; }
-      for (const z of w.zones) if (z.kind === 'smoke' && z.owner === p0id) for (const e of w.enemies) if (e.hp > 0 && !e.boss && e.spawnT <= 0 && U.dist2(z.x, z.y, e.x, e.y) < (z.r + e.r) ** 2) { u.smoke[1]++; if (e.blind > 0) u.smoke[0]++; }
+      for (const z of w.zones) if (z.kind === 'smoke' && z.owner === p0id) for (const e of w.enemies) if (e.hp > 0 && !e.boss && e.spawnT <= 0 && U.dist2(z.x, z.y, e.x, e.y) < (z.r + e.r) ** 2) { // blind seconds per foe per smoke, as a share of Vanish's cooldown
+        const key = z.id + ':' + e.id;
+        if (!rec.smokeSeen.has(key)) { rec.smokeSeen.add(key); u.smoke[1]++; u.smoke[2] += ED.Stats.skillNums('vanish', h0.stats).cdEff; }
+        if (e.blind > 0) u.smoke[0] += dt;
+      }
     }
     if (w.tick % 6 === 0) {
       let np = 0, nz = 0;
@@ -708,7 +712,7 @@ function classLines(results) {
   const healS = {}; for (const r of results) for (const k in r.heal) healS[k] = (healS[k] || 0) + r.heal[k];
   out.push(`shield per run (HP) gained: ${fo(sh('gained'))} | absorbed: ${fo(sh('absorbed'))} | clipped by the window: ${fo(clip)} | heal per second by source: ${Object.entries(healS).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => k + ' ' + (v / Math.max(1, time)).toFixed(2)).join(', ') || '-'} (boss fight time ${Math.round(bossShield)} s)`);
   const up = (key, filt) => { const rs = results.filter(filt || (() => true)); const on = rs.reduce((a, r) => a + r.upt[key][0], 0), of = rs.reduce((a, r) => a + r.upt[key][1], 0); return of ? pc1(on / of) + ' (' + rs.length + ' runs)' : '-'; };
-  out.push(`uptimes in fights: Brace ${up('brace', r => r.braceOn)} | Sanctuary DR ${up('sanct', r => r.cls === 'cleric')} | trash stun ${up('stun')} | smoke blind ${up('smoke', r => r.cls === 'shade')} | Momentum mean stacks ${(() => { const rs = results.filter(r => r.cls === 'shade'), on = rs.reduce((a, r) => a + r.upt.mom[0], 0), of = rs.reduce((a, r) => a + r.upt.mom[1], 0); return of ? (on / of).toFixed(2) : '-'; })()}`);
+  out.push(`uptimes in fights: Brace ${up('brace', r => r.braceOn)} | Sanctuary DR ${up('sanct', r => r.cls === 'cleric')} | trash stun ${up('stun')} | smoke blind per foe ${(() => { const rs = results.filter(r => r.cls === 'shade'), b = rs.reduce((a, r) => a + r.upt.smoke[0], 0), cd = rs.reduce((a, r) => a + r.upt.smoke[2], 0); return cd ? pc1(b / cd) + ' of the cooldown' : '-'; })()} | Momentum mean stacks ${(() => { const rs = results.filter(r => r.cls === 'shade'), on = rs.reduce((a, r) => a + r.upt.mom[0], 0), of = rs.reduce((a, r) => a + r.upt.mom[1], 0); return of ? (on / of).toFixed(2) : '-'; })()}`);
   const knights = results.filter(r => r.cnt.casts.shieldthrow), strikes = knights.reduce((a, r) => a + r.cnt.rics, 0), casts = knights.reduce((a, r) => a + r.cnt.casts.shieldthrow, 0);
   out.push(`counts per run: refunds ${f2(avg(results.map(r => r.cnt.refunds)))} parries ${f2(avg(results.map(r => r.cnt.parries)))} staggers ${f1(avg(results.map(r => r.cnt.staggers)))} catches ${f1(avg(knights.map(r => r.cnt.catches)))} | Shield Throw strikes per cast ${casts ? (strikes / casts).toFixed(2) : '-'} (guarded ${strikes ? Math.round(100 * knights.reduce((a, r) => a + r.cnt.gRics, 0) / strikes) : 0}%) | peak shots per hero ${f1(avg(results.map(r => r.peak.projs)))} (max ${Math.max(...results.map(r => r.peak.projs))}) live zones ${f1(avg(results.map(r => r.peak.zones)))} (max ${Math.max(...results.map(r => r.peak.zones))})`);
   return out.join('\n');
