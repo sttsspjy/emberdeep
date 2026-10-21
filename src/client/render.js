@@ -826,11 +826,11 @@
           break;
         }
         case 'sanct': {
-          const fade = Math.min(1, (z.dur - z.t) * 2, z.t * 5);
+          const fade = Math.min(1, (z.dur - z.t) * 2, z.t * 5), au = z.fol || z.follow ? 0.4 : 1; // au: an Aura of Faith sits on its Cleric, so its light and circle are softer
           if (pass === 0) { // ground: fill, dashed rim and the CodeManu protection circle at its native 2 px density under the actors
-            R.light(z.x, z.y, z.r * 1.9, '#ffe9a0', 0.8 * fade); discPut(c, z.x, z.y, z.r, '#ffe9a0', 0.25 * fade);
+            R.light(z.x, z.y, z.r * 1.9, '#ffe9a0', 0.8 * fade * au); discPut(c, z.x, z.y, z.r, '#ffe9a0', 0.25 * fade);
             ringPut(c, z.x, z.y, z.r, 2, TRING[1], 0.9 * fade, 4, (t * 6) & 7);
-            Pix.draw(c, 'fxbig.protection', 'gold', (t * 12) | 0, sx2(z.x), sx2(z.y), 0.5 * fade);
+            Pix.draw(c, 'fxbig.protection', 'gold', (t * 12) | 0, sx2(z.x), sx2(z.y), 0.5 * fade * au);
             break;
           }
           if (pass === 1) {
@@ -1510,6 +1510,7 @@
     star: { rows: ['.1.', '111', '.1.'], c: { 1: '#ffe66b' } },
     cross: { rows: ['...2...', '..111..', '.1.2.1.', '2122212', '.1.2.1.', '..111..', '...2...'], c: { 1: '#ff5a4a', 2: '#ffd8d0' } }, // Hunter's Mark crosshair (cls-ranger.js)
     execskull: { rows: ['.111.', '11111', '12121', '11111', '.1.1.'], c: { 1: '#e8283c', 2: '#2a0408' } },
+    weak: { rows: ['11111', '11211', '12211', '.121.', '..1..'], c: { 1: '#ffcf5a', 2: '#5a3a0c' } }, // Verdict's weaken mark (cls-cleric.js): the guard shape in gold
   };
   function glyphStub(c, g, cx, bottom) {
     const rows = g.rows, x0 = cx - rows[0].length, y0 = bottom - rows.length * 2;
@@ -1737,6 +1738,7 @@
   const prebaked = {};
   function shotBody(c, pr, t, kind, foe, col) {
     const sh = SHOT[kind], x = Math.round(pr.x), y = Math.round(pr.y - 6), At = ED.Atlas;
+    const xb = ED.ClassFx.shotBody; if (xb && xb[kind] && xb[kind](c, pr, t, x, y, foe, col)) return; // ED.ClassFx.shotBody[kind](c, pr, t, x, y, foe, col) replaces the body of a shot kind and returns true (cls-cleric.js: waves); a falsy return keeps the default body
     if (FLAME[kind] && kind !== 'crescent') { const sp = Math.hypot(pr.vx, pr.vy) || 1; Pix.draw(c, 'fx.ember', '', (t * 12 + pr.id) | 0, x - pr.vx / sp * 9, y - pr.vy / sp * 9, 0.9); } // a micro flame licks behind fire shots
     const k = foe || !curView ? 1 : Sp.shotK(pr, curView); // 1.2 for a Heavy weapon's shot, 0.85 for a Swift one's (visual only)
     if (sh && At.has(sh.id)) {
@@ -1761,7 +1763,7 @@
       for (const pr of ps) {
         const foe = pr.team === 1, kind = pr.kind, y = pr.y - 6;
         if (SOLID[kind]) R.glow(c, pr.x, y, foe ? 15 : 10, HALO[kind] || (foe ? '#ff5a3a' : FX.projColor(kind)), foe ? 0.5 : 0.3);
-        else R.glow(c, pr.x, y, pr.r * 2.2 + 7, FX.projColor(kind), foe ? 0.7 : 0.5);
+        else R.glow(c, pr.x, y, (kind === 'wave' ? Math.min(pr.r, 16) : pr.r) * 2.2 + 7, FX.projColor(kind), foe ? 0.7 : 0.5); // a widened wave keeps the halo of a normal one: its sun body stays readable
       }
       return;
     }

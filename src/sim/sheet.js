@@ -351,8 +351,8 @@
     mult.projN = { total: st.projN, rows: rowsOf(build, 'projN'), pierce: st.pierce, rowsPierce: rowsOf(build, 'pierce') };
     mult.cond = [];
     for (const r of ED.COND_DMG) {
-      if (r.key !== null ? !(st[r.key] > 0) : !(r.own && r.own(st))) continue;
-      const live = r.live ? r.live(st, p, ctx) : null, v = r.value ? r.value(st) : st[r.key];
+      if (r.key !== null ? !(st[r.key] > 0) : !(r.own && r.own(st, p))) continue;
+      const live = r.live ? r.live(st, p, ctx) : null, v = r.value ? r.value(st, p) : st[r.key];
       mult.cond.push({ id: r.key || r.id, label: r.label, v: R.f(v), live: live === null ? null : R.f(live), per: r.per || null });
     }
     mult.slots = [];

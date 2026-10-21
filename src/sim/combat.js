@@ -46,6 +46,8 @@
     { key: 'opportunist', label: 'to stunned, frozen or blinded foes', hit: (st, e) => (e.stun > 0 || e.frozen > 0 || e.blind > 0 ? st.opportunist : 0) },
     { key: null, id: 'knell', label: 'per Death Knell stack, for 6 s', own: (st) => st.knell > 0, value: () => 0.04, hit: (st, e, p) => (p.knellT > 0 ? 0.04 * p.knellN : 0), live: (st, p) => (p.knellT > 0 ? 0.04 * (p.knellN | 0) : 0) },
     { key: 'brand', label: 'for each ailment on the foe (up to 4)', hit: (st, e, p, w) => st.brand * Math.min(4, w.ailments(e)) },
+    { key: null, id: 'glight', label: 'while Guardian Light lasts', own: (st, p) => !!(p && p.glT > 0), value: (st, p) => (p && p.glT > 0 ? p.glV : 0), hit: (st, e, p) => (p.glT > 0 ? p.glV : 0), live: (st, p) => (p.glT > 0 ? p.glV : 0) },
+    { key: null, id: 'embolden', label: 'while Emboldened by a Cleric aura', own: (st, p) => !!(p && p.auraT > 0), value: (st, p) => (p && p.auraT > 0 ? p.auraV : 0), hit: (st, e, p) => (p.auraT > 0 ? p.auraV : 0), live: (st, p) => (p.auraT > 0 ? p.auraV : 0) },
     { key: 'classElMul', post: true, label: 'to your class-element skills', hit: (st, e, p, w, src) => (src.clsEl ? st.classElMul : 0) },
     { key: 'idol', post: true, label: 'from party gold (1% per 15, at most 20%)', hit: (st, e, p, w) => Math.min(0.2, Math.floor(w.gold / 15) * 0.01), live: (st, p, ctx) => Math.min(0.2, Math.floor((ctx.gold || 0) / 15) * 0.01) },
     { key: 'banner', post: true, label: 'per hero within 200, you included', hit: (st, e, p, w) => st.banner * (1 + nearAllies(w, p)), live: (st, p, ctx) => st.banner * (1 + (ctx.allyNear | 0)) },
@@ -286,7 +288,7 @@
   // A Smite of stored amount amt on e by o: holy damage, then the owner's duo effects and shields for heroes within HOLY_R of the smitten foe (HOLY_GRANT_MAX per grant, once per HOLY_CD per hero).
   W.smite = function (e, o, amt) {
     const st = o.stats, C = ED.CONST, corroded = e.venom >= 100, big = e.elite || e.boss;
-    const dmg = amt * (1 + st.smiteMul) * (st.hoarlight && e.frozen > 0 ? 2 : 1) * (st.purge && corroded ? 1.5 : 1);
+    const dmg = amt * (1 + st.smiteMul + (big ? st.smiteBig : 0)) * (st.hoarlight && e.frozen > 0 ? 2 : 1) * (st.purge && corroded ? 1.5 : 1);
     const x = e.x, y = e.y;
     this.hitEnemy(e, dmg, { p: o, kind: 'smite', raw: true, noProc: true, crit: false, noGuard: true, el: 'holy', affDone: true });
     let n = 0;
@@ -295,6 +297,7 @@
       if (q.downed || q.dead || q.holyT > 0 || U.dist2(q.x, q.y, x, y) > C.HOLY_R * C.HOLY_R) continue;
       this.addShield(q, q.maxHp * g, q.maxHp * st.holyCap, 'holy');
       q.holyT = C.HOLY_CD; n++;
+      if (st.guardLight) { q.glV = q.glT > 0 ? Math.max(q.glV, st.guardLight) : st.guardLight; q.glT = C.GL_T; } // Guardian Light: the heroes this Smite shields deal more for GL_T
     }
     this.emit({ t: 'smite', x: Math.round(x), y: Math.round(y), pid: o.pid, n });
     if (st.beacon || st.sunfire || st.hoarlight) {
@@ -308,11 +311,13 @@
       }
     }
     if (e.hp > 0) {
+      if (st.smiteJudge) e.judged = Math.max(e.judged, st.smiteJudge); // Judging Light
       if (st.sunfire) this.addBurn(e, dmg * 0.6, o);
       if (st.hoarlight) this.addChill(e, hpFrac(e, dmg) * C.CHILL_K, o);
       if (st.twilight) this.addDoom(e, dmg, o);
     }
     if (st.heavenwrath) this.queuePayoff(o, { kind: 'wrath', e, x, y, amt: dmg });
+    if (st.smiteBeam) this.queuePayoff(o, { kind: 'beam', e, x, y, amt: dmg * st.smiteBeam, jumps: st.beamJumps }); // Prism
   };
 
   // Doom (HP units): elites and bosses take DOOM_TOUGH (+ doomTough) of it; builds with affinity and never decays. A Reap or Toll may follow at once.
@@ -462,7 +467,7 @@
   // True (and marks it) the first time foe e pays out a payoff of this kind in chain cid.
   // twilight marks the Reaped source of a ripple entry; twilightHit marks the foes a ripple already force-Smote (a Reaped target still queues its own entry).
   // spread marks a foe that already received a status spread in the chain.
-  const PAID = { thermal: 1, firedamp: 2, reaper: 4, blackice: 8, wrath: 16, sc: 32, twilight: 64, twilightHit: 128, spread: 256 };
+  const PAID = { thermal: 1, firedamp: 2, reaper: 4, blackice: 8, wrath: 16, sc: 32, twilight: 64, twilightHit: 128, spread: 256, verdict: 1 << 12, beam: 1 << 13 };
   const firstPay = (e, cid, kind) => {
     if (e.cid !== cid) { e.cid = cid; e.cidMask = 0; }
     if (e.cidMask & PAID[kind]) return false;
@@ -558,6 +563,7 @@
         this.smite(best, tr, amt);
         break;
       }
+      case 'verdict': case 'beam': CLS.cleric.payoff.call(this, en); break; // Cleric: Verdict burst, Prism beam
       default: break;
     }
   };
@@ -1278,7 +1284,7 @@
             if (z.parts) { dps = 0; let k = 0; for (const q of z.parts) if (q.until > z.t) { dps += q.dps; z.parts[k++] = q; } z.parts.length = k; }
             for (const e of this.enemies) {
               if (e.hp <= 0 || e.spawnT > 0 || U.dist2(z.x, z.y, e.x, e.y) >= (z.r + e.r) ** 2) continue;
-              this.hitEnemy(e, dps * 0.5, { p: owner, kind: 'dot', noProc: true, crit: false, el, clsEl: z.clsEl, wpn: z.wpn });
+              this.hitEnemy(e, dps * 0.5, { p: owner, kind: 'dot', noProc: true, crit: false, el, clsEl: z.clsEl, wpn: z.wpn, part: z.part });
               if (z.rad && e.hp > 0 && owner) this.addRadiance(e, dps * 0.5 * z.rad, owner); // z.rad: share of each tick stored as Radiance (Sanctuary)
             }
           } else if (z.dps) {

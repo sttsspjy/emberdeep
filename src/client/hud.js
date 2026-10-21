@@ -162,6 +162,8 @@
     if ((me.momN | 0) > 0) o.push('Momentum ×' + me.momN, '#b78cff');
     if (st.channel > 0 && (me.chanT || 0) > 0) o.push('Channel +' + Math.round(100 * Math.min(st.chanCap, st.channel * Math.floor(me.chanT / Math.max(0.05, st.chanStep)))) + '%', '#ff9a3a');
     if (st.hex > 0) { let n = 0; for (const e of view.enemies) if (e.hexed || e.hexT > 0) n++; if (n) o.push('Hexed ' + n, '#7dffd9'); }
+    if (me.glBuff || (me.glT || 0) > 0) o.push('Guardian Light', '#ffcf5a'); // Cleric buffs on any hero: Guardian Light, Embolden
+    if (me.embolden || (me.auraT || 0) > 0) o.push('Emboldened', '#ffcf5a');
     return o;
   }
   const shieldOut = (p) => !!(p.shieldOut || (p.shields && p.shields.length));

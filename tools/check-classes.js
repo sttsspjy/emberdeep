@@ -24,7 +24,7 @@ const FORKS = [ // base, kind, dmg, rate, {field: value}
   ['scythes', 'heavy', 31.68, 0.864, { range: 57.2, arc: 6.3, knock: 144 }], ['scythes', 'swift', 9.68, 0.264, { range: 52, knock: 45 }],
   ['mace', 'heavy', 33.7, 0.756, { range: 50.6, arc: 1.87, knock: 224 }], ['mace', 'swift', 10.3, 0.231, { range: 46, knock: 70 }],
   ['dawnhammer', 'heavy', 63.4, 1.296, { range: 57.2, arc: 2.42, knock: 320 }], ['dawnhammer', 'swift', 19.4, 0.396, { range: 52, knock: 110 }],
-  ['lantern', 'heavy', 21.8, 0.756, { r: 7.2, speed: 270, pierce: 1, knock: 80 }], ['lantern', 'swift', 6.66, 0.231, { speed: 360, pierce: 1 }],
+  ['lantern', 'heavy', 24.75, 0.756, { r: 7.2, speed: 270, pierce: 1, knock: 80 }], ['lantern', 'swift', 7.563, 0.231, { speed: 360, pierce: 1 }],
   ['bonewand', 'heavy', 17.8, 0.72, { r: 6, speed: 315, homing: 4 }], ['bonewand', 'swift', 5.45, 0.22, { speed: 420 }],
   ['soulscythe', 'heavy', 33.7, 1.008, { range: 57.2, arc: 2.64, knock: 176, raise: 0.12 }], ['soulscythe', 'swift', 10.3, 0.308, { range: 52, knock: 55 }],
   ['plaguestaff', 'heavy', 11.9, 1.08, {}], ['plaguestaff', 'swift', 3.63, 0.33, {}],
@@ -54,7 +54,7 @@ const sky = ED.Stats.skillNums('rain', build('ranger', 0, { r_s2: 1, r_s2_a: 1 }
 near(sky.p.sky.dmg, 124.08, 0.1, 'Rainmaker + Skyfall sky');
 ok(!ED.Stats.skillNums('rain', build('ranger')).p.sky.on && sky.p.sky.on, 'Skyfall part gated by its stat');
 near(build('knight', 0, { k_s1: 1, k_s1_a: 1 }).s1Dmg, 0.375, 1e-9, 'slot damage compounds (Vanguard x1.25, Juggernaut x1.1)');
-near(build('cleric', 0, { c_s1: 1, c_s1_b: 1 }).s1Dmg, 1.2 * 0.6 - 1, 1e-9, 'slot damage compounds (Sanctum x1.2, Aura x0.6)');
+near(build('cleric', 0, { c_s1: 1, c_s1_b: 1 }).s1Dmg, 1.5 * 0.6 - 1, 1e-9, 'slot damage compounds (Sanctum x1.5, Aura x0.6)');
 const jug3 = build('knight', 0, { k_s1: 1, k_s1_a: 3 });
 near(jug3.jugShock, 0.6, 1e-9, 'Juggernaut rank 3 shock (0.4 + 2 x 0.1)'); near(jug3.bash, 0.6, 1e-9, 'Juggernaut rank 3 Shield Bash');
 near(build('knight', 0, { k_s2: 1 }).skill2Cd, 9 * (1 - 0.167), 0.001, 'Shield Throw cooldown with Shieldmaster'); near(ED.Stats.skillNums('charge', build('knight', 0, { k_s1: 1, k_s1_a: 1 })).range, 240, 1e-9, 'Juggernaut Charge range');

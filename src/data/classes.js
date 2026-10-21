@@ -72,7 +72,7 @@
     // Cleric
     mace: { name: 'Holy Mace', desc: 'Every 3rd swing sends a wave of light.', kind: 'melee', dmg: 17, rate: 0.42, range: 46, arc: 1.7, knock: 140, look: 'mace', wave: { every: 3, mul: 0.9 } },
     dawnhammer: { name: 'Dawn Hammer', desc: 'Heavy blows; every 3rd swing sends a wave.', kind: 'melee', dmg: 32, rate: 0.72, range: 52, arc: 2.2, knock: 220, look: 'hammer', wave: { every: 3, mul: 1.0 } },
-    lantern: { name: 'Sacred Lantern', desc: 'Piercing holy orbs that shield allies they touch (1.5% max health, once per 1.5s each, up to 8%).', kind: 'proj', dmg: 11, rate: 0.42, speed: 300, n: 1, spread: 0, pierce: 1, r: 6, life: 0.9, proj: 'holy', shieldAlly: 0.015, look: 'lantern' },
+    lantern: { name: 'Sacred Lantern', desc: 'Piercing holy orbs that shield allies they touch (1.5% max health, once per 1.5s each, up to 8%).', kind: 'proj', dmg: 12.5, rate: 0.42, speed: 300, n: 1, spread: 0, pierce: 1, r: 6, life: 0.9, proj: 'holy', shieldAlly: 0.015, look: 'lantern' },
     // Necromancer
     bonewand: { name: 'Bone Wand', desc: 'Seeking soul bolts.', kind: 'proj', dmg: 9, rate: 0.4, speed: 350, n: 1, spread: 0, pierce: 0, r: 5, life: 1.0, proj: 'soul', homing: 4, look: 'wand' },
     soulscythe: { name: 'Soul Scythe', desc: 'Wide reaping arcs; reaped foes rise more often.', kind: 'melee', dmg: 17, rate: 0.56, range: 52, arc: 2.4, knock: 110, look: 'scythe', raise: 0.12 },
@@ -159,7 +159,7 @@
     judgment: { name: 'Judgment', slot: 1, cd: 9, icon: 'hammer', aim: 'dir',
       desc: 'Throw a hammer toward the cursor that flies out and returns, piercing. Each leg hits a foe once and Judges it (+20% damage taken).',
       parts: [
-        { id: 'leg', label: 'Hammer', base: 18, pow: 1.4, per: 'hit', r: 18, el: 'class', mulIf: { twinHammer: 0.75 }, proc: true },
+        { id: 'leg', label: 'Hammer', base: 18, pow: 1.4, per: 'hit', r: 18, el: 'class', mulIf: { twinHammer: 0.6 }, proc: true },
         { id: 'verdict', label: 'Verdict', if: 'verdict', base: 20, pow: 3, per: 'hit', r: 70, el: 'class', stun: 0.4, proc: true },
       ] },
     harvest: { name: 'Bone Harvest', slot: 1, cd: 10, icon: 'harvest', aim: 'self',
