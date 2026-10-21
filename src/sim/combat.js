@@ -289,7 +289,7 @@
   W.smite = function (e, o, amt) {
     const st = o.stats, C = ED.CONST, corroded = e.venom >= 100, big = e.elite || e.boss;
     const dmg = amt * (1 + st.smiteMul + (big ? st.smiteBig : 0)) * (st.hoarlight && e.frozen > 0 ? 2 : 1) * (st.purge && corroded ? 1.5 : 1);
-    const x = e.x, y = e.y;
+    const x = e.x, y = e.y, pre = dmg / this.elemAff('holy'); // pre: the Smite before the holy affinity, the base of its duo statuses (each status applies its own element's affinity)
     this.hitEnemy(e, dmg, { p: o, kind: 'smite', raw: true, noProc: true, crit: false, noGuard: true, el: 'holy', affDone: true });
     let n = 0;
     const g = Math.min(C.HOLY_GRANT_MAX, st.smiteShield * (big ? 2 : 1) * (st.purge && corroded ? 2 : 1));
@@ -306,15 +306,15 @@
         const d2 = U.dist2(f.x, f.y, x, y);
         if (st.beacon && d2 <= (70 + f.r) ** 2) this.hitEnemy(f, dmg * st.beacon, { p: o, kind: 'smite', raw: true, noProc: true, crit: false, noGuard: true, el: 'holy', affDone: true });
         if (f.hp <= 0) continue;
-        if (st.sunfire && d2 <= (60 + f.r) ** 2) this.addBurn(f, dmg * 0.6, o);
-        if (st.hoarlight && d2 <= (70 + f.r) ** 2) this.addChill(f, hpFrac(f, dmg) * C.CHILL_K, o);
+        if (st.sunfire && d2 <= (60 + f.r) ** 2) this.addBurn(f, pre * 0.6, o);
+        if (st.hoarlight && d2 <= (70 + f.r) ** 2) this.addChill(f, hpFrac(f, pre) * C.CHILL_K, o);
       }
     }
     if (e.hp > 0) {
       if (st.smiteJudge) e.judged = Math.max(e.judged, st.smiteJudge); // Judging Light
-      if (st.sunfire) this.addBurn(e, dmg * 0.6, o);
-      if (st.hoarlight) this.addChill(e, hpFrac(e, dmg) * C.CHILL_K, o);
-      if (st.twilight) this.addDoom(e, dmg, o);
+      if (st.sunfire) this.addBurn(e, pre * 0.6, o);
+      if (st.hoarlight) this.addChill(e, hpFrac(e, pre) * C.CHILL_K, o);
+      if (st.twilight) this.addDoom(e, pre, o);
     }
     if (st.heavenwrath) this.queuePayoff(o, { kind: 'wrath', e, x, y, amt: dmg });
     if (st.smiteBeam) this.queuePayoff(o, { kind: 'beam', e, x, y, amt: dmg * st.smiteBeam, jumps: st.beamJumps }); // Prism
@@ -429,7 +429,8 @@
   // Crit stacks a skill or payoff readies, scaled by the weapon fork's rate (a Heavy fork's crit is worth more damage): n stacks capped at cap; mode 'set' raises the stored count to n, 'add' adds n.
   W.grantCrits = function (p, n, cap, mode) {
     const k = p.stats.critK, nK = Math.round(n * k), capK = Math.round(cap * k);
-    p.critStacks = mode === 'add' ? Math.min(capK, (p.critStacks | 0) + nK) : Math.max(p.critStacks | 0, Math.min(capK, nK));
+    const cur = p.critStacks | 0;
+    p.critStacks = mode === 'add' ? Math.max(cur, Math.min(capK, cur + nK)) : Math.max(cur, Math.min(capK, nK));
   };
 
   // A foe in the last PARRY_WIN of a wind-up (state or live telegraph zone): a Cleave that lands now parries it.
@@ -518,7 +519,7 @@
     const tr = en.tr, st = tr ? tr.stats : NO_STATS, C = ED.CONST, e = en.e;
     switch (en.kind) {
       case 'thermal': // 60% of a Thermal Shock detonation bursts to foes within 70 and chills them
-        this.payBlast(tr, en.x, en.y, 70, en.amt * C.SPLASH_MUL, 'fire', 'fire', (o, got) => this.addChill(o, hpFrac(o, got) * C.CHILL_K, tr), true, e, 'thermal');
+        this.payBlast(tr, en.x, en.y, 70, en.amt * C.SPLASH_MUL, 'fire', 'fire', (o, got) => this.addChill(o, hpFrac(o, got / this.elemAff('fire')) * C.CHILL_K, tr), true, e, 'thermal');
         break;
       case 'firedamp': { // the blast's survivors catch Burn (50%) and Venom, built from the damage before the fire affinity
         const pre = 1 / this.elemAff('fire');
@@ -527,10 +528,10 @@
       }
       case 'reaper': this.payBlast(tr, en.x, en.y, 80, en.amt, 'shadow', 'shadow', null, false, null, 'reaper'); break;
       case 'blackice': this.payBlast(tr, en.x, en.y, 70, en.amt, 'ice', 'ice', null, false, null, 'blackice'); break;
-      case 'wrath': // thunderbolt: 60% of the Smite as Lightning; the smitten foe is charged with half of the bolt (wrathQ remembers it so discharging it returns no Radiance)
+      case 'wrath': // thunderbolt: 60% of the Smite as Lightning; the smitten foe is charged with 30% of the Smite before the holy affinity (wrathQ remembers it so discharging it returns no Radiance)
         this.emit({ t: 'chain', k: 'h', pts: [[Math.round(en.x), Math.round(en.y) - 90], [Math.round(en.x), Math.round(en.y)]] });
         this.payBlast(tr, en.x, en.y, 70, en.amt * 0.6, 'lightning', 'bolt', null, false, null, 'wrath');
-        if (e && e.hp > 0) this.addCharge(e, en.amt * 0.3, tr, true);
+        if (e && e.hp > 0) this.addCharge(e, en.amt / this.elemAff('holy') * 0.3, tr, true);
         break;
       case 'sc': // Short Circuit: the dead foe's charge discharges at once
         e.charge = en.ch;
@@ -898,7 +899,7 @@
     if (st.guardian && p.hp > 0 && p.hp < p.maxHp * 0.3 && p.guardCd <= 0) { p.guardT = 3; p.guardCd = 20; this.emit({ t: 'guard', pid: p.pid }); }
     if (st.frozenHeart && p.frozenCd <= 0) {
       p.frozenCd = 8;
-      for (const en of this.enemies) if (en.hp > 0 && !en.boss && !en.def.invuln && U.dist2(en.x, en.y, p.x, p.y) < 120 * 120) en.frozen = 1.6;
+      for (const en of this.enemies) if (en.hp > 0 && !en.boss && !en.def.invuln && en.spawnT <= 0 && !en.burrowed && U.dist2(en.x, en.y, p.x, p.y) < 120 * 120) this.freezeEnemy(en, p);
       this.emit({ t: 'nova', x: p.x, y: p.y, r: 120, c: '#9fefff' });
     }
     if (p.hp <= 0) this.playerLethal(p);
@@ -1120,7 +1121,8 @@
     const room = this.room, locked = this.locked;
     const keep = [];
     for (const pr of this.projs) {
-      if (pr.ghost) { if (!pr.dead) keep.push(pr); continue; }
+      if (pr.dead) continue;
+      if (pr.ghost) { keep.push(pr); continue; }
       pr.life -= dt;
       if (pr.life <= 0) { if (pr.team === 0) { if (pr.explode) this.projBurst(pr); this.projEnd(pr, 'life'); } this.projAcid(pr); continue; }
       if (pr.homing) {
@@ -1242,6 +1244,7 @@
   W.updateZones = function (dt) {
     const keep = [];
     for (const z of this.zones) {
+      if (z.dead) continue;
       const s = z.src;
       if (s && WINDUP[z.kind] && !z.detached) { // a wind-up telegraph follows its caster: stalled while it is frozen or stunned, dropped (no hit, no onEnd) when it dies
         if (s.hp <= 0) continue;
