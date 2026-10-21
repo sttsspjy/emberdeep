@@ -30,7 +30,7 @@
     const arm = rk('armory');
     if (arm) {
       const pool = (p.meta.relics || []).filter(id => (arm >= 2 ? ED.RELICS[id].rar !== 'c' : ED.RELICS[id].rar === 'c') && !p.relics.includes(id));
-      if (pool.length) { p.relics.push(this.rng.pick(pool)); this.recalc(p, true); }
+      if (pool.length) { p.relics.push(this.rng.pick(pool)); p.maxRelics = p.relics.length; this.recalc(p, true); }
     }
   };
 
