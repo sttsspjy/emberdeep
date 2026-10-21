@@ -1,11 +1,16 @@
-// Usage: node tools/sim.js <heroes> <runs> <botSkill 0-1> <meta none|mid|max> [classes|-] [pact] [--pick=random|smart] [--force=id,id] [--seed0=N] [--explore=minLight] [--strata=N] [--quiet]   (parallel batches: tools/simpool.js)
+// Usage: node tools/sim.js <heroes> <runs> <botSkill 0-1> <meta none|mid|max> [classes|-] [pact] [--pick=random|smart] [--start=random|class|generalist|<gateId>] [--gates=1|2] [--force=id[@slot],...] [--route=attack|skill1|skill2|element] [--fork=0|1]
+//   [--seed0=N] [--explore=minLight] [--strata=N] [--out=rows.json] [--pair=rows.json] [--quiet]   (parallel batches: tools/simpool.js)
 // Headless simulation harness: loads the game's sim files into this Node context and drives bot heroes through full runs (deterministic per seed: the bot has its own seeded RNG).
 // Bot policy: fight, claim room rewards, use rest sites and shops, then explore unvisited rooms nearest-first while entering the next one
 // (its light cost paid) leaves the lantern at least EXPLORE_MIN_LIGHT full, else head for the boss (the exploration/lantern trade-off).
-// Pick policies: 'random' takes a random card; 'smart' (PICK=smart) follows the build order in smartScore (evolution > keystone > duo > owned path > gate while < 2 paths > neutral).
+// Pick policies: 'random' takes a random card; 'smart' (PICK=smart) follows the build order in smartScore (evolution > keystone > duo > own-path boon > element gate while a slot is free > open General > anything).
 // Skill (0-1) is the share of ticks the bot pays attention (floor hazards, lantern flare) and the chance it reads a Gloom lunge telegraph; the rest of the time it moves on instinct.
-// The summary reports win rate, pacing, hits and time to kill, hero DPS, damage share by source, cooldown reduction and the lantern/Gloom lines (see summarize).
-// --force: boon/relic ids granted at run start (a gate id replaces the random start pick; other boons and relics are added) for fairness tests.
+// The summary reports win rate, pacing, hits and time to kill, hero DPS, damage share by source, cooldown reduction, the lantern/Gloom lines and the path lines (see summarize); every mean prints its standard error.
+// --start: how the start offer is picked (default random: uniform over its cards; class: the class element's gate; a gate id or generalist forces that card).
+// --gates=1: a hero never takes a second element gate (mono-element arm).
+// --force: gate ids (and generalist) replace the start pick, then are taken whenever offered; other boons and relics are granted at run start. id@slot limits an id to one hero.
+// --route / --fork: class route and fork cards to prefer (seeded uniform by default); a no-op while the build has no such cards.
+// --out=file.json writes one row per run (seed, class, depth, win, boss time to kill and HP lost per stratum, evolution stratum, main path, gates); --pair=file.json prints the mean difference to such a baseline for the same seeds.
 const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
@@ -18,10 +23,10 @@ const ED = globalThis.ED;
 const U = ED.U, T = ED.CONST.TILE, D = ED.Dungeon;
 
 const EXPLORE_MIN_LIGHT = 0.3; // the bot stops exploring when the next room would leave the lantern below this fraction, and goes for the boss
-const PER_HERO_REWARDS = ['class', 'forge', 'epic', 'vigor'];
+const PER_HERO_REWARDS = ['boon', 'forge', 'epic', 'vigor'];
 const MAX_SECONDS = 60 * 60; // a run that is still going after an hour of game time counts as a loss
-// Neutral boons in the order a sensible player takes them (damage and defence first).
-const NEUTRAL_PREF = ['edge', 'quick', 'vigor', 'plating', 'focus', 'evade', 'wide', 'fleet', 'magnet', 'thorns', 'lightstep', 'bounty'];
+// Open General boons in the order a sensible player takes them (damage and defence first).
+const NEUTRAL_PREF = ['edge', 'quick', 'keen', 'brutal', 'vigor', 'stalwart', 'plating', 'battleward', 'focus', 'evade', 'wide', 'mending', 'forager', 'fleet', 'magnet', 'thorns', 'lightstep', 'bounty'];
 
 // First step toward (tx, ty): the shortest path that stays off floor hazards, else the shortest path (a hero walks around hazards when it can).
 function bfsDir(room, locked, sx, sy, tx, ty) { return bfsStep(room, locked, sx, sy, tx, ty, true) || bfsStep(room, locked, sx, sy, tx, ty, false); }
@@ -90,7 +95,7 @@ function wantedProp(w, p) {
     if (x.state) continue;
     let s = 0;
     switch (x.kind) {
-      case 'reward': s = (x.item.startsWith('boon:') || PER_HERO_REWARDS.includes(x.item)) ? (p.claimed[x.group] ? 0 : 9) : (x.item === 'oil' && lightFrac > 0.85 ? 3 : 9); break;
+      case 'reward': s = PER_HERO_REWARDS.includes(x.item) ? (p.claimed[x.group] ? 0 : 9) : (x.item === 'oil' && lightFrac > 0.85 ? 3 : 9); break;
       case 'chest': s = 8; break;
       case 'relic': s = p.claimed[x.group] ? 0 : 7; break;
       case 'campfire': s = !p.claimed[x.group] && hurt ? 8 : 0; break;
@@ -139,50 +144,94 @@ function exploreDir(w, p, rec, minLight) {
   return bfsDir(room, w.locked, p.x, p.y, U.clamp(gx, 4, room.w * T - 4), U.clamp(gy, 4, room.h * T - 4));
 }
 
-// Card score for the smart policy: evolution > keystone > duo > boon of an owned path (deepest path first) > gate while fewer than 2 paths > neutral > class > anything.
-function smartScore(p, id) {
+// Stratum (1-6) where an element is weak / resisted.
+const weakStratum = (el) => ED.BIOMES.findIndex(b => b.weak === el) + 1, resistStratum = (el) => ED.BIOMES.findIndex(b => b.resist === el) + 1;
+
+// Score of an element gate card: 500, +20 when the stratum that is weak to it is not behind us, -20 when the stratum that resists it is not, +30 when it is weak where an owned gate is resisted, plus seeded jitter 0-15.
+function gateScore(p, el, stratum, rng) {
+  let s = 500 + (weakStratum(el) >= stratum ? 20 : 0) - (resistStratum(el) >= stratum ? 20 : 0);
+  if (ED.elementGates(p.boons).some(h => resistStratum(h) === weakStratum(el))) s += 30;
+  return s + rng.next() * 15;
+}
+
+// Card score for the smart policy: evolution > keystone > duo > boon of an own path (deepest path first) > element gate while a slot is free (not for a Generalist) > open General > class > anything.
+function smartScore(p, id, ctx, rng) {
   const b = ED.BOONS[id];
   if (b.evo) return 1000;
-  const owned = ED.gatePaths(p.boons), aff = (k) => ED.pathAffinity(p.boons, k);
+  const gen = ED.isGeneralist(p.boons), els = ED.elementGates(p.boons), aff = (k) => ED.pathAffinity(p.boons, k);
   const rar = b.rar === 'r' ? 3 : b.rar === 'e' ? 4 : 1;
   if (b.key) return 900 + aff(b.path);
-  if (b.duo) return 800;
-  if (b.path && !b.gate && owned.includes(b.path)) return 600 + 10 * aff(b.path) + rar;
-  if (b.gate && owned.length < 2) return 500;
+  if (b.duo) return 850;
+  if (b.path && !b.gate && (b.path === 'general' ? gen : els.includes(b.path))) return 600 + 10 * aff(b.path) + rar;
+  if (b.gate && !gen && b.path !== 'general' && els.length < ctx.gatesCap) return gateScore(p, b.path, ctx.w.stratum, rng);
   const n = NEUTRAL_PREF.indexOf(id);
   if (n >= 0) return 400 - n;
   if (b.cls) return 300 + rar;
-  if (b.gate) return 250;
   return 100 + rar;
 }
 
-// Index of the card to take. Forge: rank up the boon of the most-invested path (stacked boons first); a forced gate is taken whenever it is offered.
-function pickIndex(p, spec, policy, rng, force) {
-  const offer = p.offer;
-  for (const f of force) { const i = offer.indexOf(f); if (i >= 0) return i; }
+// The start card a --start / --force request names for hero p, or null.
+function wantedStart(p, ctx) {
+  const st = ctx.start;
+  if (!st || st === 'random') return null;
+  if (st === 'class') return p.stats.element ? ED.PATH_GATE[p.stats.element] : null;
+  return st === 'generalist' ? 'generalist' : ED.BOONS[st] && ED.BOONS[st].gate ? st : null;
+}
+
+// Index of the card to take. Start offer: the requested card, else uniform over the cards. Forge: rank up the boon of the most-invested path (stacked boons first); a forced gate is taken whenever it is offered;
+// class cards follow --route / --fork when they carry such fields.
+function pickIndex(p, spec, policy, rng, ctx) {
+  const offer = p.offer, src = spec && spec.src;
+  for (const f of ctx.force) { if (f.slot !== null && f.slot !== p.slot) continue; const i = offer.indexOf(f.id); if (i >= 0) return i; }
+  if (src === 'start') {
+    const want = wantedStart(p, ctx), i = want ? offer.indexOf(want) : -1;
+    return i >= 0 ? i : Math.floor(rng.next() * offer.length);
+  }
   if (policy !== 'smart') return Math.floor(rng.next() * offer.length);
-  const forge = spec && spec.src === 'forge';
+  if (src === 'class') {
+    const ids = offer.filter(id => ED.BOONS[id].route || ED.BOONS[id].fork !== undefined);
+    if (ids.length) {
+      const route = ctx.route || ED.BOONS[ids[Math.floor(rng.next() * ids.length)]].route, fork = ctx.fork === undefined ? Math.floor(rng.next() * 2) : ctx.fork;
+      const i = offer.findIndex(id => { const b = ED.BOONS[id]; return (b.route === undefined || b.route === route) && (b.fork === undefined || b.fork === fork); });
+      if (i >= 0) return i;
+    }
+  }
+  const forge = src === 'forge';
   let best = 0, bs = -1e9;
   offer.forEach((id, i) => {
     const b = ED.BOONS[id];
-    const s = forge ? (b.path ? 100 * ED.pathAffinity(p.boons, b.path) + 10 * (p.boons[id] || 0) + (b.key ? 5 : 0) : (p.boons[id] || 0)) : smartScore(p, id);
+    const s = forge ? (b.path ? 100 * ED.pathAffinity(p.boons, b.path) + 10 * (p.boons[id] || 0) + (b.key ? 5 : 0) : (p.boons[id] || 0)) : smartScore(p, id, ctx, rng);
     const sc = s + rng.next() * 0.5;
     if (sc > bs) { bs = sc; best = i; }
   });
   return best;
 }
 
-// Damage-report bucket of a hero hit: companions, class skills, Storm arcs (discharges, thunderbolts, lightning), status payouts (burn/bleed ticks, combust, shatter, thermal), ground fields, else weapon (swings, shots, blasts, dashes, evolution strikes).
+// Damage-report buckets: weapon (swings, shots, blasts, evolution strikes), skill, minion, dash, one per element (fire: burn ticks, combust, Firedamp; ice: shatter, Thermal Shock, Black Ice; lightning: arcs, bolts, Wrath bolts;
+// poison: acid; holy: Smites, Beacon, lance, retribution; shadow: Tolls, Reaper blasts, Reap health), bleed, ground fields.
+const BUCKETS = ['weapon', 'skill', 'minion', 'dash', 'fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'bleed', 'field'];
+const BUCKET_KIND = { thermal: 'ice', blackice: 'ice', firedamp: 'fire', reaper: 'shadow', toll: 'shadow', wrath: 'lightning', smite: 'holy', retribution: 'holy', chain: 'lightning' };
+const PAYOFF_KINDS = new Set(['chain', 'thermal', 'blackice', 'firedamp', 'reaper', 'toll', 'wrath', 'smite', 'retribution']);
 function dmgSource(src, k) {
-  if (src.comp || k === 'orbit' || k === 'wisp' || k === 'minion') return 'comp';
+  if (k === 'minion') return 'minion';
   if (k === 'skill') return 'skill';
-  if (k === 'chain' || src.el === 'storm') return 'storm';
-  if (k === 'dot') return src.raw ? 'status' : 'field';
-  if (k === 'explode' && src.raw) return 'status';
-  return 'weapon';
+  if (k === 'dash') return 'dash';
+  if (src.bleed) return 'bleed';
+  if (BUCKET_KIND[k]) return BUCKET_KIND[k];
+  if (k === 'dot' && !src.raw) return 'field';
+  return src.el && BUCKETS.includes(src.el) ? src.el : 'weapon';
 }
 
 const median = (a) => { if (!a.length) return NaN; a = a.slice().sort((x, y) => x - y); return a[a.length >> 1]; };
+
+// One paired-measurement row of a finished run (--out/--pair): depth = bosses beaten + the share of the death stratum's combat and elite rooms cleared, boss time to kill and HP lost per stratum (fraction of max HP).
+function rowOf(r, label, seed) {
+  const kills = r.bossTry.filter(b => b.kill).length, ROOMS = [6, 6, 7, 8, 8, 8];
+  const inS = r.clears.filter(c => c.s === r.stratum).length;
+  const depth = r.victory ? 6 : kills + Math.min(1, inS / ROOMS[Math.max(0, r.stratum - 1)]);
+  return { label, seed, cls: r.cls, win: r.victory ? 1 : 0, depth: Math.round(depth * 1000) / 1000, bossTtk: [1, 2, 3, 4, 5, 6].map(s => r.bossTimes[s] === undefined ? null : r.bossTimes[s]),
+    hpLost: [1, 2, 3, 4, 5, 6].map(s => r.dmgStrata[s - 1] === undefined ? null : Math.round(1000 * r.dmgStrata[s - 1] / Math.max(1, r.maxHp)) / 1000), evoS: r.evoAt ? r.evoAt.s : null, main: r.main, gates: r.gates.length, gen: r.gen ? 1 : 0 };
+}
 
 // Weapon hits to kill a regular foe of stratum s: median over the roster (weighted) of ceil(foe HP / expected hit), expected hit = weapon damage x damage stat x crit factor (party and pact excluded).
 function hitsToKill(w, p, s) {
@@ -201,7 +250,8 @@ const bareDps = (cls, weapon) => { const wp = ED.WEAPONS[weapon]; return wp.dmg 
 function runBot(opts) {
   U.resetUid(1);
   const brng = U.RNG((opts.seed ^ 0xb07b07) >>> 0), policy = opts.pick || process.env.PICK || 'random';
-  const force = (opts.force || []).filter(id => ED.BOONS[id] && ED.BOONS[id].gate);
+  const forced = (opts.force || []).map(f => { const m = /^([a-z_]+)(?:@(\d+))?$/.exec(f); return m ? { id: m[1], slot: m[2] === undefined ? null : +m[2] } : null; }).filter(Boolean);
+  const ctx = { force: forced.filter(f => ED.BOONS[f.id] && ED.BOONS[f.id].gate), gatesCap: opts.gates || 2, start: opts.start || 'random', route: opts.route, fork: opts.fork, w: null };
   const players = [];
   for (let i = 0; i < opts.n; i++) {
     const cls = opts.cls[i % opts.cls.length];
@@ -209,26 +259,44 @@ function runBot(opts) {
       meta: { up: opts.up || ED.UPGRADES.map(() => 0), mastery: opts.mastery || 1, relics: ED.RELIC_IDS.filter(id => ED.RELICS[id].start) } });
   }
   const w = new ED.World({ seed: opts.seed, pact: opts.pact || 0, players, tutorial: opts.tutorial });
+  ctx.w = w;
   w.startRun();
   const htkBare = hitsToKill(w, w.players.values().next().value, 1);
-  for (const id of opts.force || []) {
+  // the requested start card (first forced gate, else --start=<gate|generalist>) replaces the start pick; a Generalist card exists only for heroes without a class element
+  for (const p of w.players.values()) {
+    const f = ctx.force.find(x => x.slot === null || x.slot === p.slot), id = f ? f.id : ctx.start === 'generalist' || (ED.BOONS[ctx.start] && ED.BOONS[ctx.start].gate) ? ctx.start : null;
+    if (id && p.offers.length && p.offers[0].src === 'start' && (id !== 'generalist' || !p.stats.element)) { p.offer = [id]; w.pickBoon(p.pid, 0); }
+  }
+  for (const f of forced) {
     for (const p of w.players.values()) {
-      if (ED.RELICS[id]) w.giveRelic(p, id);
-      else if (ED.BOONS[id] && !ED.BOONS[id].gate) { p.boons[id] = (p.boons[id] || 0) + 1; w.recalc(p, false); }
+      if (f.slot !== null && f.slot !== p.slot) continue;
+      if (ED.RELICS[f.id]) w.giveRelic(p, f.id);
+      else if (ED.BOONS[f.id] && !ED.BOONS[f.id].gate) { p.boons[f.id] = (p.boons[f.id] || 0) + 1; w.recalc(p, false); }
     }
   }
-  const rec = { flares: 0, gloomHits: 0, gloomSecs: 0, turn: {}, clears: [], bossTimes: [], dmgBy: {}, downedBy: [], dealtStrata: [], heal: {}, dmgByS: {}, spawns: {}, offers: {}, relicsBy: {}, goldIn: 0, roomDmg: 0, dmgStrata: [], healSrc: 'other' };
+  const rec = { flares: 0, gloomHits: 0, gloomSecs: 0, turn: {}, clears: [], bossTimes: [], dmgBy: {}, downedBy: [], dealtStrata: [], heal: {}, dmgByS: {}, spawns: {}, offers: {}, relicsBy: {}, goldIn: 0, roomDmg: 0, dmgStrata: [], hpFrac: [], healSrc: 'other' };
   rec.evoAt = null; // { s: stratum, lvl: team level } when hero 0 takes its evolution
+  rec.keyAt = null; rec.duoAt = null; // stratum when hero 0 takes its keystone / duo
+  rec.cnt = { smite: 0, reap: 0, toll: 0, lance: 0, dashHits: 0, reapHp: 0, kills0: 0 };
+  rec.venom = { own: 0, ally: 0, corrode: 0, base: 0 }; // damage added by the Venom vulnerability, split by who dealt it, and the corrode part of it
+  rec.shield = { gained: {}, absorbed: {}, holyBoss: 0 }; rec.bossSecs = 0;
+  const shMix = new Map(); for (const p of w.players.values()) shMix.set(p.pid, {}); // shield composition per hero by source (absorption is attributed pro rata)
   const p0id = w.players.keys().next().value;
   // damage metrics: hero damage by source per stratum, combat seconds, observed hits/time to kill, analytic hits to kill, cooldown reduction
   Object.assign(rec, { src: [], combatS: [0, 0, 0, 0, 0, 0], hits: [[], [], [], [], [], []], ttk: [[], [], [], [], [], []], ttkElite: [[], [], [], [], [], []], htk: [[], [], [], [], [], []], htkBare, bossTry: [] });
-  const hit0 = w.hitEnemy;
+  const hit0 = w.hitEnemy, VAMP = ED.CONST.VENOM_AMP, VALLY = ED.CONST.VENOM_ALLY;
   w.hitEnemy = function (e, base, src) {
+    // Venom term of the vulnerability sum, read before the hit (the hit may clear it): its share of the damage dealt is the bonus Venom added
+    const sp = src && src.p, vTerm = sp && e.venom > 0 ? e.venom / 100 * (VAMP + e.corrode) * ((e.venomBy & (1 << sp.slot)) ? 1 : VALLY) * (sp.stats.cryotoxin && e.frozen > 0 ? 2 : 1) : 0;
+    const mine = vTerm > 0 && (e.venomBy & (1 << sp.slot)) ? 1 : 0, cor = vTerm > 0 ? e.corrode / (VAMP + e.corrode) : 0;
+    const vTot = vTerm > 0 ? 1 + vTerm + (e.mark > 0 ? 0.25 : 0) + (e.judged > 0 || e.vulnT > 0 ? 0.2 : 0) + (e.frozen > 0 ? 0.25 : 0) + (e.sunder && e.sunderOwner === sp.pid ? 0.04 * e.sunder : 0) : 1;
     const d = hit0.call(this, e, base, src);
     if (!(d > 0)) return d;
-    const k = (src && src.kind) || 'weapon', bucket = rec.src[this.stratum - 1] || (rec.src[this.stratum - 1] = { weapon: 0, skill: 0, storm: 0, status: 0, comp: 0, field: 0 });
-    const direct = k !== 'dot' && k !== 'chain' && !(src && src.raw && k === 'explode');
+    const k = (src && src.kind) || 'weapon', bucket = rec.src[this.stratum - 1] || (rec.src[this.stratum - 1] = Object.fromEntries(BUCKETS.map(b => [b, 0])));
+    const direct = k !== 'dot' && !PAYOFF_KINDS.has(k) && !(src && src.raw && k === 'explode');
     if (src && src.p) bucket[dmgSource(src, k)] += d;
+    if (k === 'dash') rec.cnt.dashHits++;
+    if (src && src.p) { rec.venom.base += d; if (vTerm > 0) { const bonus = d * vTerm / vTot; if (mine) rec.venom.own += bonus; else rec.venom.ally += bonus; rec.venom.corrode += bonus * cor; } }
     if (!e.boss && !e.def.minion) {
       if (e._t0 === undefined) { e._t0 = this.time; e._n = 0; }
       if (direct) e._n++;
@@ -239,15 +307,37 @@ function runBot(opts) {
   // wrap hurtPlayer to attribute the damage that landed (armor, shield and dodge already applied) to the source foe
   const hurt0 = w.hurtPlayer;
   w.hurtPlayer = function (p, amount, src) {
-    const n0 = this.fx.length, was = p.downed || p.dead;
+    const n0 = this.fx.length, was = p.downed || p.dead, sh0 = p.shield;
     const r = hurt0.call(this, p, amount, src);
     const e = src && (src.e || (src.pr && src.pr.src));
     const who = e ? e.type : src && src.hazard ? (src.x !== undefined ? 'zone' : 'tile') : 'other';
-    for (let i = n0; i < this.fx.length; i++) if (this.fx[i].t === 'hurt') { rec.dmgBy[who] = (rec.dmgBy[who] || 0) + this.fx[i].v; const bs = rec.dmgByS[this.stratum] || (rec.dmgByS[this.stratum] = {}); bs[who] = (bs[who] || 0) + this.fx[i].v; rec.roomDmg += this.fx[i].v; rec.dmgStrata[this.stratum - 1] = (rec.dmgStrata[this.stratum - 1] || 0) + this.fx[i].v; }
+    for (let i = n0; i < this.fx.length; i++) if (this.fx[i].t === 'hurt') { rec.dmgBy[who] = (rec.dmgBy[who] || 0) + this.fx[i].v; const bs = rec.dmgByS[this.stratum] || (rec.dmgByS[this.stratum] = {}); bs[who] = (bs[who] || 0) + this.fx[i].v; rec.roomDmg += this.fx[i].v; rec.dmgStrata[this.stratum - 1] = (rec.dmgStrata[this.stratum - 1] || 0) + this.fx[i].v; rec.hpFrac[this.stratum - 1] = (rec.hpFrac[this.stratum - 1] || 0) + this.fx[i].v / p.maxHp; }
+    if (sh0 > p.shield) { // shield absorbed this hit: attribute it to the sources in the shield's make-up
+      const ab = sh0 - p.shield, mix = shMix.get(p.pid);
+      let tot = 0; for (const k in mix) tot += mix[k];
+      for (const k in mix) { const take = tot > 0 ? ab * mix[k] / tot : 0; mix[k] -= take; rec.shield.absorbed[k] = (rec.shield.absorbed[k] || 0) + take; if (k === 'holy' && this.boss) rec.shield.holyBoss += take / p.maxHp; }
+    }
     if (who === 'gloom') rec.gloomHits++;
     if (!was && p.downed) rec.downedBy.push(who + '@s' + this.stratum);
     return r;
   };
+  // shield make-up by source: gains (addShield, the boss door) add to it, decay scales it
+  const add0 = w.addShield, door0 = w.bossLantern, dec0 = w.updateShields, reap0 = w.checkReap;
+  w.addShield = function (p, amt, cap, k) { const g = add0.call(this, p, amt, cap, k); if (g > 0) { const m = shMix.get(p.pid); m[k] = (m[k] || 0) + g; rec.shield.gained[k] = (rec.shield.gained[k] || 0) + g; } return g; };
+  w.bossLantern = function () {
+    const before = [...this.players.values()].map(p => p.shield || 0);
+    door0.call(this);
+    let i = 0;
+    for (const p of this.players.values()) { const g = (p.shield || 0) - before[i++]; if (g > 0) { const m = shMix.get(p.pid); m.door = (m.door || 0) + g; rec.shield.gained.door = (rec.shield.gained.door || 0) + g; } }
+  };
+  w.updateShields = function (dt) {
+    const before = [...this.players.values()].map(p => p.shield);
+    dec0.call(this, dt);
+    let i = 0;
+    for (const p of this.players.values()) { const b = before[i++]; if (b > 0 && p.shield < b) { const f = p.shield / b, m = shMix.get(p.pid); for (const k in m) m[k] *= f; } }
+  };
+  // a Reap kills without a hitEnemy call: its health counts as shadow damage
+  w.checkReap = function (e) { const hp = e.hp; reap0.call(this, e); if (e.killed && hp > 0 && e.doomOwner) { rec.cnt.reapHp += hp; const bk = rec.src[this.stratum - 1] || (rec.src[this.stratum - 1] = Object.fromEntries(BUCKETS.map(b => [b, 0]))); bk.shadow += hp; } };
   // heal totals by source: callers that heal are wrapped to label the amount healPlayer returns
   const heal0 = w.healPlayer;
   w.healPlayer = function (p, amt, silent) { const v = heal0.call(this, p, amt, silent); rec.heal[rec.healSrc] = (rec.heal[rec.healSrc] || 0) + v; return v; };
@@ -255,8 +345,6 @@ function runBot(opts) {
     const f0 = w[fn];
     w[fn] = function (...a) { const prev = rec.healSrc; rec.healSrc = label; try { return f0.apply(this, a); } finally { rec.healSrc = prev; } };
   }
-  const sus0 = w.sustainHeal; // capped combat sustain is labelled 'sus:' + the calling source
-  w.sustainHeal = function (...a) { const prev = rec.healSrc; rec.healSrc = 'sus:' + prev; try { return sus0.apply(this, a); } finally { rec.healSrc = prev; } };
   // offers by source and relics by room type (room.type of the hero's room when the relic was taken)
   const spawn0 = w.spawnEnemy;
   w.spawnEnemy = function (type, x, y, o) { rec.spawns[type] = (rec.spawns[type] || 0) + 1; return spawn0.call(this, type, x, y, o); };
@@ -278,7 +366,7 @@ function runBot(opts) {
     for (const p of w.players.values()) {
       const c = ctl[p.pid];
       c.atk -= dt; c.skill -= dt; c.skill2 -= dt; c.dash -= dt; c.goal = null;
-      if (p.offer) { w.pickBoon(p.pid, pickIndex(p, p.offers[0], policy, brng, force)); }
+      if (p.offer) { w.pickBoon(p.pid, pickIndex(p, p.offers[0], policy, brng, ctx)); }
       if (p.downed || p.dead) continue;
       let mx = 0, my = 0;
       const foes = w.enemies.filter(e => e.hp > 0 && e.spawnT <= 0 && !e.def.gloom);
@@ -329,6 +417,10 @@ function runBot(opts) {
           w.playerSkill(p, a, { x: tgt.x, y: tgt.y }, 1); c.skill2 = p.stats.skill2Cd;
         }
         if (danger && c.dash <= 0 && brng.next() < skill * 0.5) { p.dashT = 0.17; p.dashDx = mx; p.dashDy = my; w.playerDash(p, mx, my); c.dash = p.stats.dashCd; }
+        else if (!danger && c.dash <= 0 && d <= 90 && (p.stats.dashDmg || p.stats.dashFire || p.stats.dashFrost || p.stats.dashBomb) && brng.next() < skill * 0.5) { // dash rider: dash through the target
+          const l2 = Math.hypot(tgt.x - p.x, tgt.y - p.y) || 1, ddx = (tgt.x - p.x) / l2, ddy = (tgt.y - p.y) / l2;
+          p.dashT = 0.17; p.dashDx = ddx; p.dashDy = ddy; w.playerDash(p, ddx, ddy); c.dash = p.stats.dashCd;
+        }
       } else if (!w.locked) {
         // loot first, then the portal, then the next room to visit
         const pr = wantedProp(w, p);
@@ -355,8 +447,12 @@ function runBot(opts) {
     }
     if (w.enemies.some(e => e.def.gloom && e.hp > 0)) rec.gloomSecs += dt;
     if (w.locked && w.stratum >= 1 && w.hostiles() > 0) rec.combatS[w.stratum - 1] += dt;
+    if (w.boss && w.boss.hp > 0) rec.bossSecs += dt;
     w.update(dt);
+    for (const m of w.msgs) if (m.t === 'refund' && ctl[m.to]) { if (m.slot === 1) ctl[m.to].skill2 = 0; else ctl[m.to].skill = 0; } // Night's Edge refund
     for (const ev of w.fx) {
+      if (ev.t === 'smite') rec.cnt.smite++; else if (ev.t === 'reap') rec.cnt.reap++; else if (ev.t === 'toll') rec.cnt.toll++; else if (ev.t === 'lance') rec.cnt.lance++;
+      if (ev.t === 'boon' && ev.pid === p0id) { const b = ED.BOONS[ev.id]; if (b.key && !rec.keyAt) rec.keyAt = w.stratum; if (b.duo && !rec.duoAt) rec.duoAt = w.stratum; }
       if (ev.t === 'room') rec.roomDmg = 0;
       if (ev.t === 'clear' && !ev.trial && w.room && w.room.type === 'combat') rec.htk[w.stratum - 1].push(hitsToKill(w, w.players.values().next().value, w.stratum));
       if (ev.t === 'evolve' && ev.pid === p0id && !rec.evoAt) rec.evoAt = { s: w.stratum, lvl: w.level };
@@ -383,12 +479,18 @@ function runBot(opts) {
     clears: rec.clears, dmgByS: rec.dmgByS, spawns: rec.spawns, heal: rec.heal, offers: rec.offers, relicsBy: rec.relicsBy, goldIn: rec.goldIn, dmgStrata: rec.dmgStrata, bossTimes: rec.bossTimes.slice(), turn: rec.turn, dmgBy: rec.dmgBy, downedBy: rec.downedBy, dealtStrata: rec.dealtStrata,
     evoAt: rec.evoAt, aff: ED.PATH_IDS.map(k => ED.pathAffinity(p0.boons, k)).sort((a, b) => b - a),
     bossTry: rec.bossTry, cls: p0.cls, main: ED.PATH_IDS.map(k => [k, ED.pathAffinity(p0.boons, k)]).sort((a, b) => b[1] - a[1])[0][0], heroes: players.length, bare: avg(players.map(p => bareDps(p.cls, p.weapon))), src: rec.src, combatS: rec.combatS, hits: rec.hits, ttk: rec.ttk, ttkElite: rec.ttkElite, htk: rec.htk, htkBare: rec.htkBare, cdr: p0.stats.cdr, cdrAfter: ED.Stats.cdrEff ? ED.Stats.cdrEff(p0.stats.cdr) : p0.stats.cdr,
-    endRoom: w.room ? w.room.type : '', evo: p0.stats.evo || null, gates: ED.gatePaths(p0.boons), boonCount: Object.values(p0.boons).reduce((a, b) => a + b, 0), keystones: Object.keys(p0.boons).filter(id => ED.BOONS[id].key).length };
+    endRoom: w.room ? w.room.type : '', evo: p0.stats.evo || null, gates: ED.gatePaths(p0.boons), boonCount: Object.values(p0.boons).reduce((a, b) => a + b, 0), keystones: Object.keys(p0.boons).filter(id => ED.BOONS[id].key).length,
+    gen: ED.isGeneralist(p0.boons), elGates: ED.elementGates(p0.boons), startPath: ED.gatePaths(p0.boons)[0] || null, keyAt: rec.keyAt, duoAt: rec.duoAt, duo: Object.keys(p0.boons).some(id => ED.BOONS[id].duo),
+    cnt: rec.cnt, kills0: p0.kills, venom: rec.venom, shield: rec.shield, bossSecs: rec.bossSecs, hpFrac: rec.hpFrac, chainPeak: w.chainPeak, chainHops: w.chainHops, rerolls: p0.rerolls };
 }
 
 const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
 const f1 = (v) => (Number.isFinite(v) ? v.toFixed(1) : '-');
 const f2 = (v) => (Number.isFinite(v) ? v.toFixed(2) : '-');
+// Standard error of the mean, and "mean +-se" text.
+const se = (a) => { if (a.length < 2) return NaN; const m = avg(a); return Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / (a.length - 1) / a.length); };
+const ms = (a, d = 1) => (a.length ? avg(a).toFixed(d) + (a.length > 1 ? ' +-' + se(a).toFixed(d) : '') : '-');
+const pctOf = (a, b) => (b ? Math.round(100 * a / b) : 0);
 
 // One-block summary of a batch of runBot results: win rate, depth, pacing per stratum, lantern, damage sources.
 function summarize(results) {
@@ -413,7 +515,7 @@ function summarize(results) {
   const hist = S.map(k => results.filter(r => !r.victory && r.stratum === k).length), atBoss = results.filter(r => !r.victory && r.endRoom === 'boss').length;
   lines.push('wins by hero: ' + [...new Set(results.map(r => r.cls))].map(c => { const rs = results.filter(r => r.cls === c); return `${c} ${Math.round(100 * rs.filter(r => r.victory).length / rs.length)}% (depth ${f1(avg(rs.map(r => r.stratum)))})`; }).join(', '));
   lines.push(`deaths by stratum [${hist.join(' ')}] (${atBoss} of ${n - wins.length} at a boss)`);
-  lines.push(`wins ${wins.length}/${n} (${(100 * wins.length / n).toFixed(0)}%) avg depth ${(avg(results.map(r => r.stratum))).toFixed(2)} avg time ${U.fmtTime(avg(results.map(r => r.time)))} winners ${wins.length ? U.fmtTime(avg(wins.map(r => r.time))) : '-'} lvl ${f1(avg(results.map(r => r.level)))} (winners ${wins.length ? f1(avg(wins.map(r => r.level))) : '-'})`);
+  lines.push(`wins ${wins.length}/${n} (${(100 * wins.length / n).toFixed(0)}% +-${(100 * Math.sqrt(wins.length / n * (1 - wins.length / n) / n)).toFixed(1)}) avg depth ${ms(results.map(r => r.stratum), 2)} depth incl. partial stratum ${ms(results.map(r => rowOf(r).depth), 2)} avg time ${U.fmtTime(avg(results.map(r => r.time)))} winners ${wins.length ? U.fmtTime(avg(wins.map(r => r.time))) : '-'} lvl ${f1(avg(results.map(r => r.level)))} (winners ${wins.length ? f1(avg(wins.map(r => r.level))) : '-'})`);
   lines.push(`rooms visited ${(100 * vis / Math.max(1, tot)).toFixed(0)}% (${(vis / n).toFixed(1)}/run) light at boss ${nBoss ? (bossLight / nBoss).toFixed(2) : '-'} (Lightless ${bossLightless}/${nBoss}) light when heading for boss ${turns.length ? avg(turns).toFixed(2) : '-'} (lantern ended exploration on ${floors ? Math.round(100 * lanternEnded / floors) : 0}% of floors) avg stratum time [${strataSum.map((t, k) => U.fmtTime(t / strataN[k])).join(' ')}]`);
   lines.push(`clear s  combat [${S.map(s => f1(clear('combat', s))).join(' ')}] all ${f1(clear('combat', 0))}  elite [${S.map(s => f1(clear('elite', s))).join(' ')}] all ${f1(clear('elite', 0))}  boss [${S.map(s => f1(bossT(s))).join(' ')}]`);
   const flat = (key, s) => results.flatMap(r => r[key][s - 1]);
@@ -426,12 +528,11 @@ function summarize(results) {
   const share = (rs, from) => {
     const t = {}; let tot = 0;
     for (const r of rs) for (let i = from; i < 6; i++) if (r.src[i]) for (const k in r.src[i]) { t[k] = (t[k] || 0) + r.src[i][k]; tot += r.src[i][k]; }
-    return ['weapon', 'skill', 'storm', 'status', 'comp', 'field'].map(k => k + ' ' + Math.round(100 * (t[k] || 0) / (tot || 1)) + '%').join(' ');
+    return BUCKETS.map(k => k + ' ' + Math.round(100 * (t[k] || 0) / (tot || 1)) + '%').join(' ');
   };
-  const stormRuns = results.filter(r => r.main === 'storm'), otherRuns = results.filter(r => r.main !== 'storm');
   lines.push(`damage share (all strata | strata IV-VI): all ${share(results, 0)} | ${share(results, 3)}`);
-  lines.push(`  Storm-main builds (${stormRuns.length}) ${share(stormRuns, 0)} | ${share(stormRuns, 3)}; other builds (${otherRuns.length}) ${share(otherRuns, 0)} | ${share(otherRuns, 3)}`);
   lines.push('  by main path (strata IV-VI): ' + ED.PATH_IDS.map(k => { const rs = results.filter(r => r.main === k); return `${k} (${rs.length}) ${share(rs, 3)}`; }).join(' | '));
+  lines.push('  weapon share by main path (all strata; each path should keep at least 20%): ' + ED.PATH_IDS.map(k => { const rs = results.filter(r => r.main === k); const sh = (b) => { let t = 0, a = 0; for (const r of rs) for (const o of r.src) if (o) for (const x in o) { a += o[x]; if (x === b) t += o[x]; } return a ? Math.round(100 * t / a) : NaN; }; return `${k} ${Number.isFinite(sh('weapon')) ? sh('weapon') + '%' : '-'}`; }).join(' | '));
   const tries = results.flatMap(r => r.bossTry);
   lines.push('boss fights won by the lantern tier at the door (Bright/Dim/Dark/Lightless): ' + [0, 1, 2, 3].map(t => { const a = tries.filter(x => x.tier === t); return `${a.length ? Math.round(100 * a.filter(x => x.kill).length / a.length) : '-'}% of ${a.length}`; }).join(' | '));
   const cd = results.map(r => r.cdr);
@@ -448,8 +549,29 @@ function summarize(results) {
   const qs = (a) => { a = a.slice().sort((x, y) => x - y); return a.length ? [0.25, 0.5, 0.75].map(q => a[Math.min(a.length - 1, Math.floor(q * a.length))]).join(' ') : '-'; };
   const evolved = results.filter(r => r.evoAt), reachIV = results.filter(r => r.stratum >= 4), pct = (a, b) => (b ? Math.round(100 * a / b) : 0);
   const avgOffers = avg(results.map(r => Object.values(r.offers).reduce((a, b) => a + b, 0)));
-  const deep = (r, t) => r.aff.filter(v => v >= t).length, spread = (f) => [0, 1, 2, 3].map(k => pct(results.filter(r => f(r) === k).length, n)).join('/');
-  lines.push(`pacing: offers/run ${f1(avgOffers)} (${f1(avgOffers / Math.max(1, avg(results.map(r => r.stratum))))} per stratum) | evolved ${pct(evolved.length, n)}% (${ED.PATH_IDS.map(k => k + " " + results.filter(r => r.evo === k).length).join(", ")}) at stratum [${qs(evolved.map(r => r.evoAt.s))}] team lvl [${qs(evolved.map(r => r.evoAt.lvl))}] | of ${reachIV.length} runs reaching IV: evolved ${pct(reachIV.filter(r => r.evo).length, reachIV.length)}% (by IV entry ${pct(reachIV.filter(r => r.evoAt && r.evoAt.s < 4).length, reachIV.length)}%) | affinity median top3 [${[0, 1, 2].map(i => qs(results.map(r => r.aff[i])).split(' ')[1]).join(' ')}] main-path lead (top - 2nd) quartiles [${qs(results.map(r => r.aff[0] - r.aff[1]))}] | runs with 0/1/2/3 paths at aff>=4: ${spread(r => deep(r, 4))}% at aff>=6: ${spread(r => deep(r, 6))}% | gates 0/1/2/3: ${spread(r => r.gates.length)}%`);
+  const deep = (r, t) => r.aff.filter(v => v >= t).length, spread = (f) => [0, 1, 2].map(k => pct(results.filter(r => f(r) === k).length, n)).join('/');
+  const offersPer = results.map(r => Object.values(r.offers).reduce((a, b) => a + b, 0) / Math.max(1, r.stratum));
+  lines.push(`pacing: offers/run ${f1(avgOffers)} (per stratum ${ms(offersPer, 2)}) | evolved ${pct(evolved.length, n)}% (${ED.PATH_IDS.map(k => k + " " + results.filter(r => r.evo === k).length).join(", ")}) at stratum [${qs(evolved.map(r => r.evoAt.s))}] team lvl [${qs(evolved.map(r => r.evoAt.lvl))}] | of ${reachIV.length} runs reaching IV: evolved ${pct(reachIV.filter(r => r.evo).length, reachIV.length)}% (by IV entry ${pct(reachIV.filter(r => r.evoAt && r.evoAt.s < 4).length, reachIV.length)}%) | affinity median top3 [${[0, 1, 2].map(i => qs(results.map(r => r.aff[i])).split(' ')[1]).join(' ')}] main-path lead (top - 2nd) quartiles [${qs(results.map(r => r.aff[0] - r.aff[1]))}] | runs with 0/1/2 paths at aff>=4: ${spread(r => deep(r, 4))}% at aff>=5: ${spread(r => deep(r, 5))}% | element gates 0/1/2: ${spread(r => r.elGates.length)}% (Generalist runs ${pct(results.filter(r => r.gen).length, n)}%)`);
+  // path lines: evolution / keystone / duo pacing, wins by main path and start, status payoffs, shields
+  const elemRuns = results.filter(r => !r.gen && r.elGates.length), genRuns = results.filter(r => r.gen);
+  const medS = (a) => (a.length ? median(a) : NaN), withS = (rs, key) => rs.filter(r => r[key]).map(r => (key === 'evoAt' ? r.evoAt.s : r[key]));
+  lines.push(`evolution stratum quartiles: element mains [${qs(withS(elemRuns, 'evoAt'))}] (${withS(elemRuns, 'evoAt').length}/${elemRuns.length} evolved; by IV entry ${pct(elemRuns.filter(r => r.evoAt && r.evoAt.s < 4).length, elemRuns.filter(r => r.stratum >= 4).length)}% of those reaching IV) | Generalist [${qs(withS(genRuns, 'evoAt'))}] (${withS(genRuns, 'evoAt').length}/${genRuns.length}) | per path ${ED.PATH_IDS.map(k => { const a = results.filter(r => r.evoAt && r.evo === k).map(r => r.evoAt.s); return `${k} [${qs(a)}] n=${a.length}`; }).join(' ')}`);
+  const two = elemRuns.filter(r => r.elGates.length === 2), duoRuns = two.filter(r => r.duo);
+  lines.push(`keystone stratum quartiles [${qs(withS(results, 'keyAt'))}] (${withS(results, 'keyAt').length}/${n} took one) | duo (2-gate runs ${two.length}): taken ${pct(duoRuns.length, two.length)}%, by the end of IV ${pct(two.filter(r => r.duoAt && r.duoAt <= 4).length, two.length)}%, stratum quartiles [${qs(duoRuns.map(r => r.duoAt))}]`);
+  const grp = (rs) => (rs.length ? `${rs.length} runs wins ${pct(rs.filter(r => r.victory).length, rs.length)}% depth ${ms(rs.map(r => r.stratum), 2)}` : '0 runs');
+  lines.push('by main path: ' + ED.PATH_IDS.map(k => `${k} (${grp(results.filter(r => r.main === k))})`).join(' | '));
+  const sel = results.filter(r => ['knight', 'ranger', 'shade'].includes(r.cls));
+  lines.push(`Knight/Ranger/Shade: Generalist (${grp(sel.filter(r => r.gen))}) vs element (${grp(sel.filter(r => !r.gen))}) | by start path: ${ED.PATH_IDS.map(k => `${k} ${results.filter(r => r.startPath === k).length}`).join(' ')}`);
+  const per = (f) => ms(results.map(f), 1);
+  lines.push(`per run: smites ${per(r => r.cnt.smite)} reaps ${per(r => r.cnt.reap)} (${pct(results.reduce((a, r) => a + r.cnt.reap, 0), results.reduce((a, r) => a + r.kills, 0))}% of kills; reap health ${f1(avg(results.map(r => r.cnt.reapHp)))}) tolls ${per(r => r.cnt.toll)} lances ${per(r => r.cnt.lance)} dash-rider hits ${per(r => r.cnt.dashHits)} downs ${per(r => r.downedBy.length)} | chain queue peak ${f1(avg(results.map(r => r.chainPeak)))} (max ${Math.max(...results.map(r => r.chainPeak))}) hops ${f1(avg(results.map(r => r.chainHops)))} (max ${Math.max(...results.map(r => r.chainHops))})`);
+  const pois = results.filter(r => r.elGates.includes('poison'));
+  lines.push(`Venom bonus (${pois.length} Poison runs): ${f1(100 * pois.reduce((a, r) => a + r.venom.own + r.venom.ally, 0) / Math.max(1, pois.reduce((a, r) => a + r.venom.base, 0)))}% of damage dealt, own ${f1(pois.reduce((a, r) => a + r.venom.own, 0))} vs ally ${f1(pois.reduce((a, r) => a + r.venom.ally, 0))}, corrode part ${pct(pois.reduce((a, r) => a + r.venom.corrode, 0), pois.reduce((a, r) => a + r.venom.own + r.venom.ally, 0))}% of the bonus`);
+  const shSum = (key) => { const o = {}; for (const r of results) for (const k in r.shield[key]) o[k] = (o[k] || 0) + r.shield[key][k] / n; return Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => k + ' ' + Math.round(v)).join(', ') || '-'; };
+  const holyMains = results.filter(r => r.main === 'holy' && r.bossSecs > 0);
+  lines.push(`shield per run (HP) gained: ${shSum('gained')} | absorbed: ${shSum('absorbed')} | Holy absorbed per boss-fight second (${holyMains.length} Holy mains): ${ms(holyMains.map(r => 100 * r.shield.holyBoss / r.bossSecs), 2)}% max HP/s (limit 0.5, design ceiling 1)`);
+  const classBoss = [...new Set(results.map(r => r.cls))].map(c => c + ' [' + S.map(s => f1(avg(results.filter(r => r.cls === c).map(r => r.bossTimes[s]).filter(v => v !== undefined)))).join(' ') + ']');
+  lines.push('boss time to kill by class and stratum (s): ' + classBoss.join(' '));
+  lines.push(`hp lost per stratum (fraction of max HP, runs that played it) [${S.map(s => ms(results.map(r => r.hpFrac[s - 1]).filter(v => v !== undefined), 2)).join(' | ')}]`);
   lines.push(`damage taken ${top(dmg, 5).map(([k, v]) => `${k} ${(100 * v / dTot).toFixed(0)}%`).join(', ')}; first downed by ${top(downed, 5).map(([k, v]) => `${k} ${v}`).join(', ')}`);
   const byS = S.map(k => { const o = {}; for (const r of results) for (const who in (r.dmgByS[k] || {})) o[who] = (o[who] || 0) + r.dmgByS[k][who]; const t = Object.values(o).reduce((x, y) => x + y, 0) || 1; return `${k}: ` + Object.entries(o).sort((x, y) => y[1] - x[1]).slice(0, 4).map(([w, v]) => `${w} ${Math.round(100 * v / t)}%`).join(' '); });
   lines.push('damage taken by stratum: ' + byS.join(' | '));
@@ -464,23 +586,44 @@ const metaProfile = (meta) => ({
   mastery: meta === 'max' ? 10 : meta === 'mid' ? 5 : 1,
 });
 
-module.exports = { runBot, summarize, metaProfile, ED };
+// Run options shared by both command lines, from the parsed --flags.
+const optsFromFlags = (flags) => ({
+  pick: flags.pick || process.env.PICK || 'random', start: flags.start, gates: flags.gates === undefined ? undefined : +flags.gates, route: flags.route, fork: flags.fork === undefined ? undefined : +flags.fork,
+  force: flags.force ? flags.force.split(',') : [], exploreMin: flags.explore === undefined ? undefined : +flags.explore, maxStratum: flags.strata === undefined ? undefined : +flags.strata,
+});
+
+// Mean difference (this - baseline) +- standard error over the runs both row sets hold (matched on label, seed and class): depth, boss time to kill and HP lost per stratum.
+function pairReport(rows, base) {
+  const key = (r) => r.label + '|' + r.seed + '|' + r.cls, bm = new Map(base.map(r => [key(r), r]));
+  const fmt = (a, d) => (a.length ? `${avg(a) >= 0 ? '+' : ''}${avg(a).toFixed(d)}${a.length > 1 ? ' +-' + se(a).toFixed(d) : ''}` : '-');
+  return [...new Set(rows.map(r => r.label))].map(lab => {
+    const pairs = rows.filter(r => r.label === lab && bm.has(key(r))).map(r => [r, bm.get(key(r))]);
+    const diff = (f) => pairs.map(([a, b]) => { const x = f(a), y = f(b); return x === null || y === null || x === undefined || y === undefined ? NaN : x - y; }).filter(Number.isFinite);
+    const idx = [0, 1, 2, 3, 4, 5];
+    return `paired vs baseline [${lab}] ${pairs.length} of ${rows.filter(r => r.label === lab).length} runs matched: depth ${fmt(diff(r => r.depth), 2)} | boss time to kill by stratum (s) [${idx.map(i => fmt(diff(r => r.bossTtk[i]), 0)).join(' | ')}] | hp lost per stratum (fraction of max HP) [${idx.map(i => fmt(diff(r => r.hpLost[i]), 2)).join(' | ')}]`;
+  }).join('\n');
+}
+
+module.exports = { runBot, summarize, metaProfile, rowOf, optsFromFlags, pairReport, ED };
 if (require.main === module) {
   const flags = {}, args = [];
   for (const a of process.argv.slice(2)) { const m = /^--([a-z0-9]+)(?:=(.*))?$/i.exec(a); if (m) flags[m[1]] = m[2] === undefined ? '1' : m[2]; else args.push(a); }
   const n = +(args[0] || 1), runs = +(args[1] || 5), skill = +(args[2] || 0.75), meta = args[3] || 'none';
   const cls = (args[4] && args[4] !== '-' ? args[4] : 'knight,ranger,pyro,shade,cleric,necro').split(','); // '-' = every hero
   const { up, mastery } = metaProfile(meta);
-  const pick = flags.pick || process.env.PICK || 'random', seed0 = +(flags.seed0 || 1000), force = flags.force ? flags.force.split(',') : [];
+  const o = optsFromFlags(flags), pick = o.pick, force = o.force, seed0 = +(flags.seed0 || 1000);
   const results = [];
   for (let i = 0; i < runs; i++) {
     const t0 = Date.now();
-    const r = runBot({ seed: seed0 + i * 7, n, cls: [cls[i % cls.length]].concat(cls), skill, up, pact: +(args[5] || 0), mastery, pick, force, exploreMin: flags.explore === undefined ? undefined : +flags.explore, maxStratum: flags.strata === undefined ? undefined : +flags.strata });
+    const r = runBot(Object.assign({ seed: seed0 + i * 7, n, cls: [cls[i % cls.length]].concat(cls), skill, up, pact: +(args[5] || 0), mastery }, o));
     results.push(r);
     if (!flags.quiet) {
       console.log(`run ${i} ${cls[i % cls.length]}: ${r.victory ? 'WIN' : r.state} stratum ${r.stratum} time ${U.fmtTime(r.time)} lvl ${r.level} kills ${r.kills} relics ${r.relics} rooms ${r.rooms.visited}/${r.rooms.total} lightAtBoss [${r.lightAtBoss.join(' ')}] strata [${r.strata.map(U.fmtTime).join(' ')}] (${Date.now() - t0}ms)`);
       for (const l of r.log) console.log(l);
     }
   }
-  console.log(`\npick=${pick}${force.length ? ' force=' + force.join(',') : ''}${flags.strata ? ' strata<=' + flags.strata + ' (capped runs: win, depth and death lines do not apply)' : ''}\n` + summarize(results));
+  console.log(`\npick=${pick}${o.start ? ' start=' + o.start : ''}${o.gates ? ' gates=' + o.gates : ''}${force.length ? ' force=' + force.join(',') : ''}${flags.strata ? ' strata<=' + flags.strata + ' (capped runs: win, depth and death lines do not apply)' : ''}\n` + summarize(results));
+  const rows = results.map((r, i) => rowOf(r, meta, seed0 + i * 7));
+  if (flags.out) fs.writeFileSync(flags.out, JSON.stringify(rows));
+  if (flags.pair) console.log(pairReport(rows, JSON.parse(fs.readFileSync(flags.pair, 'utf8'))));
 }
