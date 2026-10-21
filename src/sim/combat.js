@@ -1030,7 +1030,7 @@
       const ang = Math.atan2(e.y - p.y, e.x - p.x);
       if (arc < 6.2 && Math.abs(U.angDiff(a, ang)) > arc / 2 + Math.atan2(e.r, Math.max(d, 1))) continue;
       if (cl && st.parry && this.parry(e, p) && st.riposte) this.grantCrits(p, st.riposte, 5, 'add');
-      const hs = { p, kind: 'weapon', wpn, crit, mul: mul === 1 ? undefined : mul, ambush: o.ambush, infAdd: o.infAdd, bleedMin: o.bleedMin, knock: cl ? w.knock * 2 : w.knock, kx: Math.cos(ang), ky: Math.sin(ang) };
+      const hs = { p, kind: 'weapon', wpn, part: cl ? 'cleave' : undefined, crit, mul: mul === 1 ? undefined : mul, ambush: o.ambush, infAdd: o.infAdd, bleedMin: o.bleedMin, knock: cl ? w.knock * 2 : w.knock, kx: Math.cos(ang), ky: Math.sin(ang) };
       this.hitEnemy(e, w.dmg, hs);
       if (hs.critOut) anyCrit = true;
     }

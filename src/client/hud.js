@@ -143,6 +143,38 @@
     return w ? (ep ? ep.evo + ' ' : '') + w.name : ED.CLASSES[p.cls].name;
   };
 
+  // Hero status chips as a flat [label, colour, ...] list shared by the redraw signature and the drawing: item states, Brace, Momentum, Channel, Hexed foes, the next Cleave.
+  const CHIPS = [];
+  const cleaveNext = (me, st, view) => st.cleave > 0 && st.weapon.kind === 'melee' && ((view.time || 0) < (me.cleaveNext || 0) || ((me.atkCount | 0) + 1) % (3 + st.cleaveN) === 0);
+  function chipList(view, me) {
+    const st = me.stats, o = CHIPS; o.length = 0;
+    if (!st) return o;
+    if (st.aegis && (me.aegisT || 0) <= 0) o.push('Aegis', '#7fc8ff');
+    if ((me.guardT || 0) > 0) o.push('Last Stand', '#ffd36b');
+    if ((me.critStacks || 0) > 0) o.push('Crit ×' + me.critStacks, '#b78cff');
+    if ((me.secondWind || 0) > 0) o.push('Second Wind', '#86d38f');
+    if (st.phoenix && !me.phoenixUsed) o.push('Phoenix', '#ffb02e');
+    if (st.brace) {
+      const t = view.time || 0, wait = (me.braceAt || -99) + ED.CONST.BRACE_CD - t;
+      if ((me.braceT || 0) > 0) { o.push('Braced ' + me.braceT.toFixed(1) + ' s', '#ffd36b'); anim = true; } else if (wait > 0) o.push('Brace ' + Math.ceil(wait) + ' s', '#8f7f6c');
+    }
+    if (st.cleave > 0 && cleaveNext(me, st, view)) o.push('Cleave next', '#ffd36b');
+    if ((me.momN | 0) > 0) o.push('Momentum ×' + me.momN, '#b78cff');
+    if (st.channel > 0 && (me.chanT || 0) > 0) o.push('Channel +' + Math.round(100 * Math.min(st.chanCap, st.channel * Math.floor(me.chanT / Math.max(0.05, st.chanStep)))) + '%', '#ff9a3a');
+    if (st.hex > 0) { let n = 0; for (const e of view.enemies) if (e.hexed || e.hexT > 0) n++; if (n) o.push('Hexed ' + n, '#7dffd9'); }
+    return o;
+  }
+  const shieldOut = (p) => !!(p.shieldOut || (p.shields && p.shields.length));
+  // Route sigil: the icon of the hero's route card in the class colour (nothing before the level-3 pick); returns its id for the redraw signature.
+  const routeIcon = (p) => { const rt = p.boons ? ED.classRoute(p.boons, p.cls) : null; return rt && rt.t1 ? ED.BOONS[rt.t1].icon : ''; };
+  // Ailment pips of a foe (the host's count, 1 to 4) for a hero who owns Brand, Open Veins, Contagion or Gangrene: small squares under the foe's bar at (x, y), drawn into the world context c.
+  H.wantsPips = (p) => { const st = p && p.stats; return !!(st && (st.brand || st.veins || st.contagion || st.festerHit)); };
+  H.foePips = (c, e, x, y) => {
+    const n = Math.min(4, e.ailN | 0);
+    if (!n) return;
+    for (let i = 0; i < 4; i++) { c.fillStyle = i < n ? '#ffd36b' : 'rgba(0,0,0,0.55)'; c.fillRect(x + i * 3, y, 2, 2); }
+  };
+
   // ---------------- canvas + layout ----------------
   // Creates #hud above #game on first use and keeps it at device resolution (capped by pixel count); returns false when unusable.
   function sync() {
@@ -252,17 +284,18 @@
     const scd = ctl.skillCd > 0 && ctl.charges <= 0 ? ctl.skillCd : 0;
     sp(sid(I.label('skill1'))); sp(scd > 0 ? 1 : 0); sp(ctl.charges | 0); sp(st ? st.maxCharges | 0 : 1); sp(st ? Math.round(st.skillCd * 100) : 0);
     const s2 = cls.skill2 && ED.SKILLS[cls.skill2], cd2 = ctl.skill2Cd > 0 ? ctl.skill2Cd : 0;
-    if (s2) { sp(sid(I.label('skill2'))); sp(cd2 > 0 ? 1 : 0); sp(me.bulwarkT > 0 ? 1 : 0); sp(Math.round(((st && st.skill2Cd) || s2.cd) * 100)); if (cd2 > 0.04) anim = true; }
+    if (s2) { sp(sid(I.label('skill2'))); sp(cd2 > 0 ? 1 : 0); sp(shieldOut(me) ? 1 : 0); sp(Math.round(((st && st.skill2Cd) || s2.cd) * 100)); if (cd2 > 0.04) anim = true; }
     sp(sid(I.label('dash'))); sp(ctl.dashCd > 0 ? 1 : 0); sp(st ? Math.round(st.dashCd * 100) : 0);
     sp(sid(I.label('flare'))); sp(canFlare ? 1 : 0); sp(view.lightMax > 0 ? 1 : 0);
     if (scd > 0.04 || ctl.dashCd > 0.04) anim = true; // sweeps
     for (const fx of slotFx) if (fx && fx.t > 0) anim = true; // ready flash
     const pl = pips(me); sp(pl.length); for (let i = 0; i < pl.length; i += 2) { sp(sid(pl[i])); sp(pl[i + 1]); } sp(sid(st && st.evo || ''));
-    sp(st && st.aegis && (me.aegisT || 0) <= 0 ? 1 : 0); sp((me.guardT || 0) > 0 ? 1 : 0); sp(me.critStacks || 0); sp((me.secondWind || 0) > 0 ? 1 : 0); sp(st && st.phoenix && !me.phoenixUsed ? 1 : 0);
+    const ch = chipList(view, me); sp(ch.length); for (let i = 0; i < ch.length; i += 2) sp(sid(ch[i]));
+    sp(sid(routeIcon(me)));
     // party
     for (const p of view.players.values()) {
       if (p.pid === me.pid) continue;
-      sp(sid(p.pid)); sp(sid(p.name)); sp(sid(p.cls)); sp(p.slot | 0); sp(p.dead ? 1 : 0); sp(p.downed ? 1 : 0); sp(Math.round((p.dead ? 0 : p.downed ? clamp01(p.revive || 0) : p.hp / p.maxHp) * 512));
+      sp(sid(p.pid)); sp(sid(p.name)); sp(sid(p.cls)); sp(sid(routeIcon(p))); sp(p.slot | 0); sp(p.dead ? 1 : 0); sp(p.downed ? 1 : 0); sp(Math.round((p.dead ? 0 : p.downed ? clamp01(p.revive || 0) : p.hp / p.maxHp) * 512));
     }
     // map
     const fl = view.floor;
@@ -356,7 +389,10 @@
     const bx = x + u * 6.4, bw = w - u * 7.4;
     T(me.name, bx, y + u * 1.55, u * 1.25, K.gold, FD, 'left', 700);
     const evoP = st && st.evo && ED.PATHS[st.evo];
-    T(evoP ? H.weaponName(me) : cls.name, bx + bw, y + u * 1.55, u * 0.95, evoP ? evoP.color : K.muted, FB, 'right', 700);
+    const wname = evoP || (st && st.weaponId && st.weaponId.indexOf('@') > 0) ? H.weaponName(me) : cls.name; // an evolved or forked weapon shows its name
+    T(wname, bx + bw, y + u * 1.55, u * 0.95, evoP ? evoP.color : K.muted, FB, 'right', 700);
+    const sig = routeIcon(me);
+    if (sig) ic(c, sig, cls.col.c, bx + bw - adv(wname, u * 0.95, 700) - u * 2.1, y + u * 0.55, u * 1.8);
     const gk = 'p' + me.pid; ghost[gk] = ghost[gk] === undefined ? frac : Math.max(frac, ghost[gk] - dtc * 0.35);
     const by = y + u * 2.8, bh = u * 2.4, shield = me.shield || 0;
     bar(bx, by, bw, bh, frac, frac > 0.35 ? '#d9443a' : U.mix('#ff2a1a', '#ff7a5a', pulse), ghost[gk], [0.25, 0.5, 0.75]);
@@ -375,7 +411,7 @@
     slot(i++, I.label('skill1'), scd, st ? st.skillCd : sk.cd, ctl.charges > 0, sk.icon, cls.col.c, ctl.charges, mx, 0);
     const s2 = cls.skill2 && ED.SKILLS[cls.skill2];
     if (s2) {
-      const tot = Math.max(0.1, (st && st.skill2Cd) || s2.cd), up = me.bulwarkT > 0, cd2 = ctl.skill2Cd > 0 ? ctl.skill2Cd : 0;
+      const tot = Math.max(0.1, (st && st.skill2Cd) || s2.cd), up = shieldOut(me), cd2 = ctl.skill2Cd > 0 ? ctl.skill2Cd : 0; // a thrown shield lights the slot until it is caught
       slot(i++, I.label('skill2'), cd2, tot, cd2 <= 0 && !up, s2.icon, up ? '#ffe9a0' : cls.col.c, 0, 1, 0);
     }
     const dcd = ctl.dashCd > 0 ? ctl.dashCd : 0;
@@ -400,11 +436,8 @@
     // status chips above the slots
     let sx = L.sx, any = false;
     const chip = (label, col) => { const cw = adv(label, u * 0.95, 800) + u * 1.3; pill(sx, L.cy, cw, L.ch, col); T(label, sx + cw / 2, L.cy + L.ch / 2 + u * 0.05, u * 0.95, col, FB, 'center', 800); sx += cw + u * 0.4; any = true; };
-    if (st && st.aegis && (me.aegisT || 0) <= 0) chip('Aegis', '#7fc8ff');
-    if ((me.guardT || 0) > 0) chip('Last Stand', '#ffd36b');
-    if ((me.critStacks || 0) > 0) chip('Crit ×' + me.critStacks, '#b78cff');
-    if ((me.secondWind || 0) > 0) chip('Second Wind', '#86d38f');
-    if (st && st.phoenix && !me.phoenixUsed) chip('Phoenix', '#ffb02e');
+    const cl = chipList(view, me);
+    for (let k = 0; k < cl.length; k += 2) chip(cl[k], cl[k + 1]);
     endFade();
     return any;
   }
@@ -441,7 +474,9 @@
       plate(x, ty, w, h, 0);
       c.fillStyle = col; c.fillRect(x + u * 0.25, ty + u * 0.35, u * 0.3, h - u * 0.7);
       T(p.name, x + u * 1.1, ty + u * 1.0, u * 1.05, col, FB, 'left', 800);
-      T(p.dead ? 'Fallen' : p.downed ? 'DOWN' : ED.CLASSES[p.cls].name, x + w - u * 0.9, ty + u * 1.0, u * 0.95, out ? '#ff8a7a' : K.muted, FB, 'right', 700);
+      const label = p.dead ? 'Fallen' : p.downed ? 'DOWN' : ED.CLASSES[p.cls].name, psg = routeIcon(p);
+      T(label, x + w - u * 0.9, ty + u * 1.0, u * 0.95, out ? '#ff8a7a' : K.muted, FB, 'right', 700);
+      if (psg && !out) ic(c, psg, ED.CLASSES[p.cls].col.c, x + w - u * 0.9 - adv(label, u * 0.95, 700) - u * 1.9, ty + u * 0.15, u * 1.7);
       const fr = p.dead ? 0 : p.downed ? clamp01(p.revive || 0) : p.hp / p.maxHp;
       bar(x + u * 1.1, ty + u * 1.95, w - u * 2, u * 0.95, fr, p.downed ? '#f0c060' : p.dead ? '#555555' : '#7fcf8a');
       endFade();

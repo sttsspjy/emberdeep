@@ -51,7 +51,7 @@ const SK = [ // class, skill, part, dmg
 for (const [cls, sk, part, dmg] of SK) near(ED.Stats.skillNums(sk, build(cls)).p[part].dmg, dmg, 0.06, `${sk}.${part}`);
 near(ED.Stats.skillNums('legion', build('necro', 0, { n_s1: 1, n_s1_a: 1 })).p.spikes.dmg, 23.5 * 1.0, 0.06, 'legion.spikes (rank 1)');
 const sky = ED.Stats.skillNums('rain', build('ranger', 0, { r_s2: 1, r_s2_a: 1 }));
-near(sky.p.sky.dmg, 124.08, 0.1, 'Rainmaker + Skyfall sky'); near(sky.p.sky.n === undefined ? 0 : 0, 0, 0, 'sky count unused');
+near(sky.p.sky.dmg, 124.08, 0.1, 'Rainmaker + Skyfall sky');
 ok(!ED.Stats.skillNums('rain', build('ranger')).p.sky.on && sky.p.sky.on, 'Skyfall part gated by its stat');
 near(build('knight', 0, { k_s1: 1, k_s1_a: 1 }).s1Dmg, 0.375, 1e-9, 'slot damage compounds (Vanguard x1.25, Juggernaut x1.1)');
 near(build('cleric', 0, { c_s1: 1, c_s1_b: 1 }).s1Dmg, 1.2 * 0.6 - 1, 1e-9, 'slot damage compounds (Sanctum x1.2, Aura x0.6)');
@@ -114,9 +114,9 @@ const run = (w, secs, f) => { for (let i = 0; i < Math.round(secs * 60); i++) { 
   w.playerSkill(p, 0, { d: 280 }, 1);
   ok(p.shields.length === 1 && w.projs.some(q => q.kind === 'shield'), 'Shield Throw spawns a shield projectile');
   run(w, 3, () => { for (const e of es) if (e.stunCd > 0) stunned.add(e); for (const ev of w.fx) { if (ev.t === 'ric') ric++; if (ev.t === 'catch') { catches++; got += ev.v; } if (ev.t === 'deflect') swat++; } w.fx.length = 0; });
-  ok(ric === 4, `Shield Throw strikes 4 foes (got ${ric})`); ok(es.slice(0, 4).every(e => e.hp < 5000) && es[4].hp < 5000 === false || es[4].hp < 5000, 'foes hit');
+  ok(ric === 4, `Shield Throw strikes 4 foes (got ${ric})`); ok(es.slice(0, 4).every(e => e.hp < 5000), 'foes hit');
   ok(es.slice(0, 4).every(e => stunned.has(e)), 'struck foes stunned'); ok(catches === 1 && p.shields.length === 0, 'caught once, no shield left');
-  near(got, 0.02 * p.maxHp, 0.05 * p.maxHp * 0.01 + 0.01, 'catch shield 4 foes x 0.5% = 2%'); ok(swat >= 1, 'enemy shot swatted');
+  near(got, 0.02 * p.maxHp, 0.01, 'catch shield 4 foes x 0.5% = 2%'); ok(swat >= 1, 'enemy shot swatted');
   ok(!w.projs.some(q => q.kind === 'shield'), 'shield projectile removed after the catch');
   // a second catch inside KWARD_CD gives nothing
   p.kWardT = 5; p.shield = 0; w.playerSkill(p, 0, { d: 280 }, 1); let again = 0; run(w, 3, () => { for (const ev of w.fx) if (ev.t === 'catch') again += ev.v; w.fx.length = 0; }); near(again, 0, 1e-9, 'catch shield once per 6 s');
