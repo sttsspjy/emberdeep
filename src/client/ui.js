@@ -45,7 +45,9 @@
   // Path helpers: elements share ids with their paths (fire, ice, lightning, poison, holy, shadow).
   const pathIcon = (k) => ED.Icons.url(ED.PATHS[k].icon, ED.PATHS[k].color);
   const pathName = (k, wrap) => (ED.PATHS[k] ? (wrap ? `<i style="color:${ED.PATHS[k].color}">${ED.PATHS[k].name}</i>` : ED.PATHS[k].name) : '');
-  UI.evoName = (path, weaponId) => (ED.PATHS[path] ? ED.PATHS[path].evo : '') + (ED.WEAPONS[weaponId] ? ' ' + ED.WEAPONS[weaponId].name : ' Arms');
+  // Evolved weapon name from a weapon name (the fork's name after an Attack fork: 'Cinder Greatsword').
+  UI.evoName = (path, weaponName) => (ED.PATHS[path] ? ED.PATHS[path].evo : '') + ' ' + (weaponName || 'Arms');
+  const heroWeaponName = (p) => (p && p.stats && p.stats.weapon ? p.stats.weapon.name : p && ED.WEAPONS[p.weapon] ? ED.WEAPONS[p.weapon].name : '');
   const affChip = (el, kind) => (el && ED.PATHS[el] ? `<span class="aff-chip ${kind}" style="--pc:${ED.PATHS[el].color}"><img alt="" src="${pathIcon(el)}">${kind === 'weak' ? 'Weak to' : 'Resists'} ${ED.PATHS[el].name}</span>` : '');
   const affChips = (biome) => affChip(biome.weak, 'weak') + affChip(biome.resist, 'resist');
 
@@ -158,7 +160,7 @@
           const bits = [q.label + ' ' + Sh.n1(q.kind === 'status' ? q.here : q.hit)];
           if (q.kind === 'tick' || q.kind === 'sec') bits.push(`${q.oneFoe} ticks`);
           else if (q.kind === 'minion') bits.push(`${q.hitsEach} strikes each`);
-          if (q.r) bits.push('r ' + q.r);
+          if (q.r) bits.push('radius ' + q.r);
           if (q.stun) bits.push('stun ' + Sh.n1(q.stun) + 's');
           return bits.join(' ');
         }).join(' · ');
@@ -204,7 +206,9 @@
     const tierNext = ED.UPGRADES.find(u => u.tier > p.stats.deepest);
     const lines = [];
     if (p.stats.runs < 2) {
-      lines.push(`<b>Paths:</b> follow up to ${ED.MAX_ELEMENTS} of ${ED.ELEMENT_IDS.map(k => pathName(k, true)).join(', ')}, or take the ${pathName('general', true)} path alone as a Generalist. Each stratum is weak to one element.`);
+      const gen = ED.CLASS_IDS.filter(c => !ED.CLASSES[c].element).map(c => ED.CLASSES[c].name); // heroes without a class element can go Generalist
+      lines.push('<b>Aim:</b> aim with the mouse; skills go to the cursor. At level 3 you choose a class route.');
+      lines.push(`<b>Paths:</b> follow up to ${ED.MAX_ELEMENTS} of ${ED.ELEMENT_IDS.map(k => pathName(k, true)).join(', ')}, or, as ${gen.slice(0, -1).join(', ')} or ${gen[gen.length - 1]}, take the ${pathName('general', true)} path alone as a Generalist. Each stratum is weak to one element.`);
       lines.push(`<b>Lantern:</b> every new room costs light (shown on its door). In the dark elites and the Gloom hunt you, but rooms pay more; <kbd>${esc(ED.Input.label('flare'))}</kbd> flares the Gloom away, and spare light shields you at the boss door.`);
     }
     if (p.stats.runs === 0) lines.push('<b>First goal:</b> reach the Bone Warden at the end of the Ossuary. Every descent pays embers, win or lose.');
@@ -212,7 +216,7 @@
     else if (tierNext) lines.push(`<b>Reach stratum ${U.roman(tierNext.tier)}</b> to reveal new Hearth upgrades.`);
     else if (p.stats.wins > 0 && p.pactMax < 10) lines.push(`<b>Pacts:</b> complete a descent under Pact ${p.pactMax} to unlock Pact ${p.pactMax + 1}.`);
     else lines.push('<b>Every relic, hero and pact is yours.</b> The Deep still has deeds to earn.');
-    return lines.join('<br>');
+    return lines.map(l => '<p>' + l + '</p>').join('');
   }
 
   function buyButton(cost, can, label, onClick) {
@@ -417,7 +421,10 @@
       if (offer.ctier === 2) return [`${rt && rt.route ? ED.routeLabel(me.cls, rt.route) : 'Route'}: choose your fork`, 'A fork changes how the route plays; later bosses deepen it', null];
       return ['Route mastery', 'Deepen your fork, or take a boon', null];
     }
-    if (src === 'start') return [OFFER_HEAD.start, `Paths gate your boons: ${ED.MAX_ELEMENTS} element paths, or Generalist`, null];
+    if (src === 'start') { // only heroes without a class element are offered the General gate
+      const cl = me && ED.CLASSES[me.cls];
+      return [OFFER_HEAD.start, cl && cl.element ? `Paths gate your boons: pick up to ${ED.MAX_ELEMENTS} element paths` : `Paths gate your boons: ${ED.MAX_ELEMENTS} element paths, or Generalist`, null];
+    }
     if (src === 'forge') return [OFFER_HEAD.forge, 'The boon you pick gains one rank.', null];
     return [OFFER_HEAD[src] || OFFER_HEAD.level, '', null];
   }
@@ -480,7 +487,7 @@
     if (path2 && ED.PATHS[path2]) el.style.setProperty('--pc2', ED.PATHS[path2].color);
     const rank = have ? (have < max ? `Rank ${have} → ${have + 1} (max ${max})` : `Rank ${have} (max)`) : max > 1 ? `Max rank ${max}` : '';
     const ribbon = boonRibbon(b, id), [line, two] = boonPathLine(b);
-    el.innerHTML = `${ribbon ? `<span class="bc-ribbon${two ? ' two' : ''}">${ribbon}</span>` : ''}<div class="bc-top">${line}<span class="bc-rar">${ED.RARITY[b.rar].name}</span></div><img class="bc-icon" alt="" src="${ED.Icons.boonUrl(id)}"><div class="bn">${esc(b.name)}</div>${b.evo ? `<div class="bsub">${esc(UI.evoName(b.evo, me && me.weapon))}</div>` : ''}${weakChip(b)}${b.route ? classBody(b, id, have, me) : `<div class="bd">${esc(ED.Sheet.text(id, Math.min(max, have + 1), me && me.stats))}</div>`}${deltaHtml(deltas)}${rank ? `<div class="bk${have ? ' own' : ''}">${rank}</div>` : ''}`;
+    el.innerHTML = `${ribbon ? `<span class="bc-ribbon${two ? ' two' : ''}">${ribbon}</span>` : ''}<div class="bc-top">${line}<span class="bc-rar">${ED.RARITY[b.rar].name}</span></div><img class="bc-icon" alt="" src="${ED.Icons.boonUrl(id)}"><div class="bn">${esc(b.name)}</div>${b.evo ? `<div class="bsub">${esc(UI.evoName(b.evo, heroWeaponName(me)))}</div>` : ''}${weakChip(b)}${b.route ? classBody(b, id, have, me) : `<div class="bd">${esc(ED.Sheet.text(id, Math.min(max, have + 1), me && me.stats))}</div>`}${deltaHtml(deltas)}${rank ? `<div class="bk${have ? ' own' : ''}">${rank}</div>` : ''}`;
     const wb = el.querySelector('.bweap');
     if (wb) { const th = weaponThumb(wb.dataset.w); if (th) wb.insertBefore(th, wb.firstChild); }
     el.onclick = () => { if (performance.now() >= boonLock) UI.pickBoon(i); };
@@ -585,6 +592,8 @@
     else { ED.Input.stopCapture(); }
     if (t === 'profile') renderProfile();
   };
+  // The menu behind the Credits / Settings dialogs takes no focus while one is open.
+  const titleInert = (on) => { const t = $('scr-title'); if (t) t.inert = on; };
   UI.openSettings = (tab) => {
     const A = ED.App, s = A.settings;
     $('set-master').value = s.master; $('set-music').value = s.music; $('set-sfx').value = s.sfx;
@@ -592,6 +601,7 @@
     $('set-cursor').value = s.cursor; $('set-reticle').value = s.reticle; $('set-retcol').value = s.reticleCol; $('set-aimprev').checked = s.aimPreview !== false;
     for (const id of ['set-master', 'set-music', 'set-sfx']) fill($(id));
     $('stab-profile').hidden = A.inRun() || !A.hasProfile; // profile tools never appear mid-descent
+    if (A.state === 'title') titleInert(true);
     $('ov-settings').hidden = false;
     UI.setSettingsTab(tab || UI.settingsTab);
     const on = document.querySelector('#set-tabs .tab.on'); if (on) on.focus({ preventScroll: true });
@@ -599,6 +609,7 @@
   UI.closeSettings = () => {
     ED.Input.stopCapture();
     $('ov-settings').hidden = true;
+    titleInert(false);
     const A = ED.App;
     if (A.state === 'hearth') UI.renderHearth(); else if (A.state === 'title') UI.renderTitle();
   };
@@ -672,8 +683,8 @@
     $('mm-hearth').onclick = () => A.enterHearth('upgrades');
     $('mm-heroes').onclick = () => A.enterHearth('heroes');
     $('mm-settings').onclick = () => UI.openSettings();
-    $('mm-credits').onclick = () => { $('ov-credits').hidden = false; $('btn-credits-close').focus({ preventScroll: true }); };
-    $('btn-credits-close').onclick = () => { $('ov-credits').hidden = true; $('mm-credits').focus({ preventScroll: true }); };
+    $('mm-credits').onclick = () => { titleInert(true); $('ov-credits').hidden = false; $('btn-credits-close').focus({ preventScroll: true }); };
+    $('btn-credits-close').onclick = () => { $('ov-credits').hidden = true; titleInert(false); $('mm-credits').focus({ preventScroll: true }); };
     for (const m of document.querySelectorAll('.menu')) arrowNav(m, '.menu-btn', 'ArrowUp', 'ArrowDown');
     arrowNav($('hearth-tabs'), '.tab', 'ArrowLeft', 'ArrowRight');
     arrowNav($('set-tabs'), '.tab:not([hidden])', 'ArrowLeft', 'ArrowRight');

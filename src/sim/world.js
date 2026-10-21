@@ -349,7 +349,7 @@
       const id = p.relics[i];
       if (ED.relicFits(p, id)) continue;
       const to = this.transmuteRelic(p, id);
-      this.msgs.push({ to: p.pid, t: 'toast', text: to ? `A Generalist forsakes element relics: ${ED.RELICS[id].name} becomes ${ED.RELICS[to].name}.` : `A Generalist forsakes element relics: ${ED.RELICS[id].name} is sold for 40 gold.` });
+      this.msgs.push({ to: p.pid, t: 'toast', info: true, text: to ? `A Generalist forsakes element relics: ${ED.RELICS[id].name} becomes ${ED.RELICS[to].name}.` : `A Generalist forsakes element relics: ${ED.RELICS[id].name} is sold for 40 gold.` });
       if (to) p.relics[i] = to; else { p.relics.splice(i, 1); i--; }
     }
     this.recalc(p, false);
@@ -360,7 +360,7 @@
   W.prototype.giveRelic = function (p, id) {
     if (!ED.relicFits(p, id)) {
       const to = this.transmuteRelic(p, id);
-      this.msgs.push({ to: p.pid, t: 'toast', text: to ? `A Generalist forsakes element relics: ${ED.RELICS[id].name} becomes ${ED.RELICS[to].name}.` : `A Generalist forsakes element relics: ${ED.RELICS[id].name} is sold for 40 gold.` });
+      this.msgs.push({ to: p.pid, t: 'toast', info: true, text: to ? `A Generalist forsakes element relics: ${ED.RELICS[id].name} becomes ${ED.RELICS[to].name}.` : `A Generalist forsakes element relics: ${ED.RELICS[id].name} is sold for 40 gold.` });
       if (!to) return;
       id = to;
     }

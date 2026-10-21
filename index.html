@@ -79,6 +79,7 @@
                 <div class="pact-steps" id="asc-steps" role="radiogroup" aria-label="Pact level"></div>
                 <div class="pact-desc" id="asc-desc"></div>
               </div>
+              <div class="run-goal" id="run-goal"></div>
             </div>
           </div>
           <div class="go-bar">
@@ -91,7 +92,6 @@
             <input id="inp-join" maxlength="5" placeholder="K7QX2" autocomplete="off" spellcheck="false">
             <button class="btn btn-primary" id="btn-join-go" type="button">Join</button>
           </div>
-          <div class="run-goal" id="run-goal"></div>
         </div>
         <!-- UPGRADES -->
         <div class="pane" data-pane="upgrades" hidden>
@@ -234,7 +234,7 @@
         <div class="sh-vit">
           <div><span class="sh-lvl" id="sh-lv">Lv 1</span><div class="bar"><i id="sh-xpbar"></i></div><span class="mut" id="sh-xp"></span></div>
           <div><span class="lbl">HP</span><b id="sh-hp"></b><div class="bar hp"><i id="sh-hpbar"></i></div><span class="sh-shield" id="sh-shield" hidden></span></div>
-          <div><span class="ember-ico" aria-hidden="true"></span><b id="sh-gold">0</b></div>
+          <div title="Gold"><img class="sh-coin" id="sh-coin" alt="" width="20" height="20"><b id="sh-gold">0</b></div>
         </div>
         <div class="sh-world"><span class="sh-strat" id="sh-strat"></span><span class="sh-aff" id="sh-aff"></span></div>
       </header>
@@ -302,7 +302,7 @@
           <div class="bind-head"><span>Click a key, then press the new key or mouse button. Esc cancels, Backspace clears.</span><button class="btn btn-small" id="btn-bind-reset" type="button">Reset to defaults</button></div>
           <div class="bind-msg" id="bind-msg" role="status"></div>
           <div class="bind-list" id="bind-list"></div>
-          <p class="bind-pad">Gamepad: left stick moves, right stick aims (let go and you aim where you walk), X / RT attacks, RB / B skill 1, LT / Y skill 2, A / LB dashes, L3 lantern flare. Use RB and LT for aimed skills: your thumb stays on the stick. Ground skills land farther the harder you push the right stick.</p>
+          <p class="bind-pad">Gamepad: left stick moves, right stick aims (let go and you aim where you walk), X / RT attacks, RB / B skill 1, LT / Y skill 2, A / LB dashes, L3 lantern flare. Use RB and LT for aimed skills: your thumb stays on the stick. Ground skills land farther the harder you push the right stick. Back opens the character sheet (LB / RB switch tabs, B closes it); Start pauses. In a boon offer, X takes the card and Y rerolls.</p>
         </div>
         <div class="set-pane" data-spane="profile" hidden>
           <h3 class="plate-h">Name</h3>

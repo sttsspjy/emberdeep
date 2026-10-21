@@ -243,7 +243,7 @@
     }
     else if (m.t === 'offerDone') { s.offer = null; s.offerOpen = false; ED.UI.hideBoons(); }
     else if (m.t === 'claimed') s.claimed[m.group] = true;
-    else if (m.t === 'toast') { ED.UI.toast(m.text); ED.Audio.play('deny'); }
+    else if (m.t === 'toast') { ED.UI.toast(m.text); if (!m.info) ED.Audio.play('deny'); } // info toasts are not refusals
     else if (m.t === 'refund') { // cooldown refund { slot, s }: s seconds off (a charge returns when the cooldown reaches 0), no s = in full
       const c = s.ctl;
       if (m.slot === 1) c.skill2Cd = m.s ? Math.max(0, c.skill2Cd - m.s) : 0;

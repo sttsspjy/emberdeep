@@ -112,14 +112,17 @@
   };
   const isMouse = (c) => /^Mouse/.test(c);
   I.labels = (action) => (codes[action] || []).map(I.keyName);
-  // Primary label for HUD hints: the first keyboard binding, else the first mouse button.
+  // Gamepad button names (fixed layout, see I.poll): what HUD keycaps, prompts and signs show while I.device is 'pad'.
+  const PAD = { attack: 'X / RT', skill1: 'RB / B', skill2: 'LT / Y', dash: 'A / LB', flare: 'L3', map: 'Back', pause: 'Start' };
+  // Primary label for HUD hints: the first keyboard binding, else the first mouse button; the pad button names on a pad.
   I.label = (action) => {
+    if (I.device === 'pad' && PAD[action]) return PAD[action];
     const list = codes[action] || [];
     const c = list.find(x => !isMouse(x)) || list[0];
     return c ? I.keyName(c) : '—';
   };
   // Every bound key of an action, at most two ('LMB / J'): what the interact prompt and tutorial signs show.
-  I.hint = (action) => { const l = I.labels(action); return l.length ? l.slice(0, 2).join(' / ') : '—'; };
+  I.hint = (action) => { if (I.device === 'pad' && PAD[action]) return PAD[action]; const l = I.labels(action); return l.length ? l.slice(0, 2).join(' / ') : '—'; };
   // Replaces {action} tokens in a text with the action's current key hint (unknown tokens stay); {aim} names the device that aims.
   I.fill = (text) => String(text).replace(/\{(\w+)\}/g, (m, a) => (a === 'aim' ? (I.device === 'pad' ? 'the right stick' : 'the mouse') : ACTION[a] ? I.hint(a) : m));
 

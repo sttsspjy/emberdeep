@@ -75,6 +75,7 @@
     A.closeNet();
     A.state = 'title';
     $('ov-hearth').hidden = true;
+    $('ov-credits').hidden = true;
     ED.UI.renderTitle();
     ED.UI.show('title');
     ED.Audio.music('camp');
@@ -86,6 +87,8 @@
     A.closeNet();
     A.state = 'hearth';
     $('ov-hearth').hidden = true;
+    $('ov-credits').hidden = true;
+    $('scr-title').inert = false;
     ED.UI.show('hearth');
     ED.UI.setTab(tab || 'descend');
     ED.Audio.music('camp');
@@ -131,7 +134,7 @@
     const myPid = ED.Game.s ? ED.Game.s.localPid : A.myPid;
     const mine = summary.players && summary.players[myPid];
     const hero = ED.Game.s && ED.Game.s.me; // the local hero's evolution, read before the session is dropped
-    const myEvo = hero && hero.stats && hero.stats.evo ? { path: hero.stats.evo, weapon: hero.weapon } : null;
+    const myEvo = hero && hero.stats && hero.stats.evo ? { path: hero.stats.evo, weapon: hero.stats.weapon ? hero.stats.weapon.name : ED.WEAPONS[hero.weapon] ? ED.WEAPONS[hero.weapon].name : '' } : null;
     const run = Object.assign({}, summary, { cls: A.runCls, emberBonus: mine ? mine.emberBonus : 0, myEvo });
     const latest = A.storeOk !== false && S.load(); // another tab may have saved meanwhile (trust storage only if our own writes land)
     if (latest) A.profile = latest;

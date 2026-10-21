@@ -326,7 +326,7 @@
     const pr = extra.prompt;
     if (pr) { const s = R.toScreen(pr.x, pr.y - 46); sp(1); sp(sid(pr.text)); sp(sid(pr.desc || '')); sp(sid(pr.color || '')); sp(pr.can === false ? 1 : 0); sp(sid(I.hint('attack'))); sp(Math.round(s.x * rk)); sp(Math.round(s.y * rk)); } else sp(0);
     const sg2 = R.sign;
-    if (sg2) { const s = R.toScreen(sg2.x, me.y >= sg2.y ? sg2.y - 36 : sg2.y + 8); sp(1); sp(sid(String(sg2.text))); sp(me.y >= sg2.y ? 1 : 0); sp(Math.round(s.x * rk)); sp(Math.round(s.y * rk)); } else sp(0);
+    if (sg2) { const s = R.toScreen(sg2.x, me.y >= sg2.y ? sg2.y - 36 : sg2.y + 8); sp(1); sp(sid(ED.Input.fill(String(sg2.text)))); sp(me.y >= sg2.y ? 1 : 0); sp(Math.round(s.x * rk)); sp(Math.round(s.y * rk)); } else sp(0);
     // messages and banner
     const ms = F.msgs; sp(ms.length);
     for (let i = 0; i < ms.length; i++) { sp(sid(ms[i].text)); sp(sid(ms[i].color)); if (ms[i].t < 1) anim = true; }
