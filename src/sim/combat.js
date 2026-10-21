@@ -166,6 +166,7 @@
       const ev = { t: 'hit', x: Math.round(e.x), y: Math.round(e.y - e.r), v: Math.round(dmg), c: crit ? 1 : 0, k: kind === 'dot' ? 1 : 0, pid: p ? p.pid : '', el: src.bleed ? 4 : EL_IDX[src.el || src.clsEl] || 0 };
       if (src.wpn && kind === 'weapon' && st && st.heavy) ev.h = 1; // heavy weapon hit: the viewer's hit-stop
       if (src.far) ev.f = 1; // a far shot (Deadeye): the viewer's bright spark
+      if (src.slow) ev.sl = 1; // a hit that slows (Quickdraw): the viewer's frost streak
       this.emit(ev);
     }
     if (p) {
@@ -539,6 +540,7 @@
         }
         near.sort((a, b) => a.d2 - b.d2);
         for (let i = 0; i < (en.n || 2) && i < near.length; i++) { firstPay(near[i].o, en.cid, 'spread'); this.moveStatuses(e, near[i].o, en.f); }
+        if (en.fx) for (let i = 0; i < (en.n || 2) && i < near.length; i++) this.emit({ t: 'chain', k: en.fx, pts: [[Math.round(en.x), Math.round(en.y)], [Math.round(near[i].o.x), Math.round(near[i].o.y)]] }); // en.fx: the thread's look (Contagion 'c')
         break;
       }
       case 'twilight': { // each Reap forces a Smite on the nearest foe within 120 this chain has not touched, joined by a black-gold beam

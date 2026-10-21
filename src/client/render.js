@@ -1504,6 +1504,7 @@
     skull: { rows: ['.111.', '11111', '12121', '11111', '.1.1.'], c: { 1: '#d9c8ff', 2: '#1c0c3a' } },
     guard: { rows: ['11111', '11211', '12211', '.121.', '..1..'], c: { 1: '#9be33c', 2: '#26340f' } },
     star: { rows: ['.1.', '111', '.1.'], c: { 1: '#ffe66b' } },
+    cross: { rows: ['...2...', '..111..', '.1.2.1.', '2122212', '.1.2.1.', '..111..', '...2...'], c: { 1: '#ff5a4a', 2: '#ffd8d0' } }, // Hunter's Mark crosshair (cls-ranger.js)
   };
   function glyphStub(c, g, cx, bottom) {
     const rows = g.rows, x0 = cx - rows[0].length, y0 = bottom - rows.length * 2;
@@ -1949,6 +1950,7 @@
     const lp = view.players.get(local), cuePips = ED.HUD.wantsPips(lp), cueParry = !!(lp && lp.stats && lp.stats.parry);
     if (cuePips || cueParry) for (const e of view.enemies) { // class route cues of the local hero: ailment pips under the bar (Brand, Open Veins, Contagion, Gangrene), the Parry rim on a foe in the last 0.3 s of a wind-up
       if (e.hp <= 0 || e.boss || e.burrowed) continue;
+      if (cuePips && view.ailments) e.ailN = view.ailments(e); // host and solo foes are sim objects: they count their own ailments (mirror foes carry the host's count)
       if (cuePips && e.ailN) ED.HUD.foePips(c, e, Math.round(e.x - (e.elite ? 15 : 9)), Math.round(e.y - e.r * 2.6 - (e.def.fly ? 14 : 4)) + bh + 2);
       if (cueParry && (e.st === 'windup' || e.st === 'aim' || e.st === 'cast') && e.t > 0 && e.t <= ED.CONST.PARRY_WIN) parryRim(c, e);
     }

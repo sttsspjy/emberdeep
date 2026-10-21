@@ -298,6 +298,7 @@
     }
     return out;
   };
+  Object.assign(N.CAPS, { skyfx: 6, hunt: 6, split: 8 }); Object.assign(N.CAPS_LOCAL, { skyfx: 2, hunt: 2, split: 3 }); // Ranger: Skyfall and Second Shower, mark leap, Splitting Bolt
   // Venom bar level of a foe: 0-4 pips (one per 25 Venom), 5 = Corroded. Radiance fill 0-3 of the Smite gauge.
   N.venomLevel = (e) => (e.venom >= 100 ? 5 : e.venom > 0 ? Math.min(4, Math.ceil(e.venom / 25)) : 0);
   N.radLevel = (w, e) => (e.rad > 0 ? Math.min(3, Math.floor(4 * e.rad / w.smiteAt(e))) : 0);
