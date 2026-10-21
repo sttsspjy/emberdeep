@@ -12,9 +12,10 @@
   Object.assign(N.CAPS, { pyAfter: 6, pyFlash: 6, pyLava: 4, pyPull: 2, pyEcho: 3, pyTwin: 3 });
   Object.assign(N.CAPS_LOCAL, { pyAfter: 3, pyFlash: 3, pyLava: 2, pyPull: 1, pyEcho: 2, pyTwin: 2 });
 
-  // Per-hero client state: chan (Channel estimate for heroes whose sim value this viewer does not own), lastAtk (event clock), t (last frame), steps / full (Channel shown last frame), echo / comet (running timelines).
+  // Per-hero client state: chan (Channel estimate for heroes whose sim value this viewer does not own), lastAtk (event clock), t (last frame), steps / full (Channel shown last frame), echo / comet (running timelines),
+  // cmUp (the hero's cometT was positive last frame), predAt (F.time a Comet arc was started from the local cast, so the host's pyComet of that cast is not played twice).
   const hs = {};
-  const stateOf = (pid) => hs[pid] || (hs[pid] = { chan: 0, lastAtk: -9, t: 0, steps: 0, full: false, echo: null, comet: null, trail: 0, orb: 0 });
+  const stateOf = (pid) => hs[pid] || (hs[pid] = { chan: 0, lastAtk: -9, t: 0, steps: 0, full: false, echo: null, comet: null, trail: 0, orb: 0, cmUp: false, predAt: -9 });
   CF.on('atk', (ev) => { stateOf(ev.pid).lastAtk = F.time; });
 
   const pick = (a) => a[(Math.random() * a.length) | 0];
@@ -62,9 +63,17 @@
   };
 
   // ---------------- the hero in the air (Comet) ----------------
-  // Lift in world px (whole art px) of a hero on its Comet arc; render.js translates the hero sprite by it. Zero when no flight runs.
+  // Lift in world px (whole art px) of a hero on its Comet arc; render.js translates the hero sprite and its body effects by it (p.lift). Zero when no flight runs.
+  // A joined client's own hero starts its arc on the rising edge of the cometT its cast set locally (game.js), from the leap in p.skillMove, instead of waiting a round trip for the host's pyComet.
   CF.lift = (p) => {
-    const s = hs[p.pid], cm = s && s.comet;
+    let s = hs[p.pid];
+    if (p.cls === 'pyro' && R() && p.pid === R().local) {
+      s = stateOf(p.pid);
+      const up = p.cometT > 0;
+      if (up && !s.cmUp && !s.comet) predict(p, s);
+      s.cmUp = up;
+    }
+    const cm = s && s.comet;
     if (!cm) return (p.lift = 0);
     const k = (F.time - cm.t0) / cm.d;
     if (k >= 1 || k < 0) { if (k >= 1) s.comet = null; return (p.lift = 0); }
@@ -100,6 +109,7 @@
       if (st.overheat) { SP('fx.blast.red', p.x, p.y - 12, { add: true, a: 0.8 }); F.burst(p.x, p.y - 14, 10, { kind: 'spark', color: '#ffe9a0', sp: 150, life: 0.3, size: 1.5, drag: 4 }); }
       if (mine) A().play(st.overheat ? 'skill' : 'magic', 0.5);
     }
+    if (mine && steps > s.steps && !full) A().play('magic', 0.08 + 0.04 * steps); // a soft tick per step, louder as the heat builds (the cap has its own flare sound)
     s.steps = steps; s.full = full;
     if (steps <= 0) return;
     const an = R().actorAnchor(p), top = s2(an ? an.top : -26), rp = FIRE;
@@ -150,7 +160,7 @@
   function mantleOverlay(c, p, st, t, low) {
     if (!(st.mantle > 0) || !(p.shield > 0)) return;
     F.holyT[p.pid] = F.time + 0.15; // the built-in bubble turns gold while this is set
-    const fr = U.clamp(p.shield / Math.max(1, p.maxHp * 0.12), 0.15, 1), rx = 6 + Math.round(4 * fr), ry = Math.round(rx * 1.2), an = R().actorAnchor(p), cyh = s2(an ? an.cy : -12);
+    const fr = U.clamp(p.shield / Math.max(1, p.maxHp * 0.12), 0.15, 1), rx = 6 + Math.round(4 * fr), ry = Math.round(rx * 1.2), an = R().actorAnchor(p), cyh = s2((an ? an.cy : -12) - (p.lift || 0)); // the body rides the Comet's lift
     Pix.put(c, Pix.ell(rx + 2, ry + 2, FIRE[2], false, 2, (t * 6) & 7), 0, cyh, 0.55 + 0.25 * fr);
     if (low) return;
     c.fillStyle = FIRE[3];
@@ -250,14 +260,25 @@
     F.pop(ev.x0, ev.y0, 16, '#ffb347', 0.16);
   });
 
-  // Comet: the hero leaves the ground in a burst of fire and a rush of air.
-  CF.on('pyComet', (ev, ctx, local) => {
-    const s = stateOf(ev.pid), m = ev.pid === local;
-    s.comet = { t0: F.time, d: ev.d, x0: ev.x, y0: ev.y, tx: ev.tx, ty: ev.ty };
-    SP('fx.blast.red', ev.x, ev.y - 6, { add: true, lt: '#ff8a4a', ltr: 70 });
-    F.ring(ev.x, ev.y, 26, '#ff7a2a', 0.3, 3); F.burst(ev.x, ev.y - 6, 12, { kind: 'streak', color: '#ffb347', a: Math.atan2(ev.ty - ev.y, ev.tx - ev.x) + Math.PI, spread: 1.4, sp: 220, life: 0.25, size: 1.8 });
-    F.dust(ev.x, ev.y + 2, 'dust', 2);
+  // Comet: the hero leaves the ground in a burst of fire and a rush of air. age = seconds the leap has already run.
+  function launch(pid, x0, y0, tx, ty, d, age, m) {
+    stateOf(pid).comet = { t0: F.time - age, d, x0, y0, tx, ty };
+    SP('fx.blast.red', x0, y0 - 6, { add: true, lt: '#ff8a4a', ltr: 70 });
+    F.ring(x0, y0, 26, '#ff7a2a', 0.3, 3); F.burst(x0, y0 - 6, 12, { kind: 'streak', color: '#ffb347', a: Math.atan2(ty - y0, tx - x0) + Math.PI, spread: 1.4, sp: 220, life: 0.25, size: 1.8 });
+    F.dust(x0, y0 + 2, 'dust', 2);
     A().play('dash', m ? 0.8 : 0.4); A().play('fire', m ? 0.6 : 0.3);
+  }
+  // The local hero's own cast: the arc from where the leap began to where it ends (p.skillMove: direction, speed, seconds left, seconds run).
+  function predict(p, s) {
+    const sm = p.skillMove, age = sm ? sm.age || 0 : 0, d = sm ? sm.t + age : p.cometT;
+    s.predAt = F.time;
+    if (!sm) return launch(p.pid, p.x, p.y, p.x, p.y, d, 0, true);
+    launch(p.pid, p.x - sm.dx * sm.speed * age, p.y - sm.dy * sm.speed * age, p.x + sm.dx * sm.speed * sm.t, p.y + sm.dy * sm.speed * sm.t, d, age, true);
+  }
+  CF.on('pyComet', (ev, ctx, local) => {
+    const m = ev.pid === local;
+    if (m && F.time - stateOf(ev.pid).predAt < 1) return; // the client started this arc at its own cast
+    launch(ev.pid, ev.x, ev.y, ev.tx, ev.ty, ev.d, 0, m);
   });
 
   // Flashpoint: a forced crit on a burning foe flares white-hot.

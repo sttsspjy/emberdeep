@@ -1060,7 +1060,7 @@
       this.spawnProj({
         team: 0, kind: w.proj, x: p.x + Math.cos(ang) * 10, y: p.y - 4 + Math.sin(ang) * 10, a: ang, speed: w.speed, r: w.r,
         dmg: w.dmg, life: w.life, pierce: w.pierce + st.pierce + (o.pierce || 0), owner: p.pid, crit, knock: w.knock || 40, mul: o.mul, ambush: o.ambush, spec, wpn,
-        explode: ex, infAdd: o.infAdd, bleedMin: o.bleedMin, acid: !!o.acid && i === 0,
+        explode: ex, infAdd: o.infAdd, bleedMin: o.bleedMin, acid: !!o.acid && i === 0, blastPierce: o.blastPierce,
         cloud: w.cloud ? { r: w.cloud.r * area, dps: w.cloud.dps, dur: w.cloud.dur } : null,
         homing: (w.homing || 0) + (st.homing || 0), shieldAlly: w.shieldAlly || 0, burn: w.burn || 0,
       });
@@ -1086,7 +1086,7 @@
       crit: o.crit, knock: o.knock || 0, explode: o.explode || null, cloud: o.cloud || null, homing: o.homing || 0,
       shieldAlly: o.shieldAlly || 0, burn: o.burn || 0, hit: null, healed: null, accel: o.accel || 0, turn: o.turn || 0, boom: o.boom || null,
       hk: o.hk || null, mul: o.mul || 0, ambush: !!o.ambush, spec: !!o.spec, infAdd: o.infAdd || null, bleedMin: o.bleedMin || 0, acid: !!o.acid,
-      wpn: !!o.wpn, part: o.part || null, ghost: !!o.ghost, dead: false, infK: o.infK || 0, stun: o.stun || 0, dist: 0, pass: 0, homeA0: o.homeA0, homeCone: o.homeCone || 0, noSplit: !!o.noSplit,
+      wpn: !!o.wpn, blastPierce: !!o.blastPierce, part: o.part || null, ghost: !!o.ghost, dead: false, infK: o.infK || 0, stun: o.stun || 0, dist: 0, pass: 0, homeA0: o.homeA0, homeCone: o.homeCone || 0, noSplit: !!o.noSplit,
     };
     this.projs.push(pr);
     return pr;
@@ -1153,7 +1153,7 @@
           if (pr.stun && e.hp > 0) this.stunFoe(e, pr.stun, true);
           this.projAcid(pr);
           if (pr.spec && hs.critOut) this.spectralShot(pr, e);
-          if (pr.explode) { this.projBurst(pr); dead = true; break; }
+          if (pr.explode) { this.projBurst(pr); if (!(pr.blastPierce && pr.pierce-- > 0)) { dead = true; break; } pr.pass++; continue; } // blastPierce (a class option): the shot bursts on each foe it pierces
           if (pr.cloud) { this.spawnCloud(pr.owner, pr.x, pr.y, pr.cloud); dead = true; break; }
           if (hs.guarded || pr.pierce-- <= 0) { dead = true; break; }
           pr.pass++;
@@ -1201,7 +1201,7 @@
   W.projBurst = function (pr) {
     const owner = this.players.get(pr.owner);
     if (!owner) return;
-    this.explode(pr.x, pr.y, pr.explode.r, pr.dmg * (pr.mul || 1) * pr.explode.mul, 0, owner, pr.kind === 'fireball' ? 'bigfire' : 'fire', false, { wpn: pr.wpn, infAdd: pr.infAdd });
+    this.explode(pr.x, pr.y, pr.explode.r, pr.dmg * (pr.mul || 1) * pr.explode.mul, 0, owner, pr.kind === 'fireball' ? 'bigfire' : 'fire', false, { wpn: pr.wpn, infAdd: pr.wpn ? pr.infAdd : undefined });
     if (pr.explode.patch) this.addZone({ kind: 'pfire', x: pr.x, y: pr.y, r: pr.explode.r * 0.6, dur: 2, dps: pr.dmg * 0.4, owner: pr.owner, team: 0 }); // one burning patch per shot
     const bh = CLS[owner.cls];
     if (bh && bh.projBurst) bh.projBurst.call(this, pr, owner); // class hook: a hero shot blasted at (pr.x, pr.y)

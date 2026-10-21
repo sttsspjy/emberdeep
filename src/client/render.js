@@ -1656,11 +1656,13 @@
     }
     const st = p.stats, evo = st && st.evo, low = R.quality === 'low', a0 = p.stealthT > 0 ? (p.pid === R.local ? 0.45 : 0.2) : 1;
     if (a0 < 1) c.globalAlpha = a0;
+    const lift = p.lift || 0; // a hero in the air (Comet): the ground rim stays, the body effects ride up; the class hooks below run in the feet frame again
+    if (lift) c.translate(0, -lift);
     if (evo && !p.downed && PATH_COL[evo]) {
       const col = PATH_COL[evo];
-      Pix.put(c, Pix.ell(8, 4, col, false, 2, (t * 8) & 7), 0, 2, 0.65); // dashed rim under the hero, the dashes turning
+      Pix.put(c, Pix.ell(8, 4, col, false, 2, (t * 8) & 7), 0, 2 + lift, 0.65); // dashed rim under the hero, the dashes turning
       if (!low) { c.fillStyle = col; c.beginPath(); for (let i = 0; i < 3; i++) { const a = t * 1.8 + i * U.TAU / 3, x = Pix.s2(Math.cos(a) * 17), y = Pix.s2(-11 + Math.sin(a) * 7); c.rect(x, y - 2, 2, 6); c.rect(x - 2, y, 6, 2); } c.fill(); } // orbiting pixel diamonds
-      R.emit(p.x, p.y - 10, 24, col, 0.2 + Math.sin(t * 3 + (p.slot || 0)) * 0.05); R.light(p.x, p.y - 10, 62, col, 0.28);
+      R.emit(p.x, p.y - 10 - lift, 24, col, 0.2 + Math.sin(t * 3 + (p.slot || 0)) * 0.05); R.light(p.x, p.y - 10 - lift, 62, col, 0.28);
     }
     if (p.shield > 0) {
       const fr = U.clamp(p.shield / Math.max(1, p.maxHp * 0.12), 0.15, 1), rx = 6 + Math.round(4 * fr), ry = Math.round(rx * 1.2), an = R.actorAnchor ? R.actorAnchor(p) : null, cyh = Pix.s2(an ? an.cy : -12); // ring full at a 12% shield (the Holy ceiling)
@@ -1668,7 +1670,8 @@
       Pix.put(c, Pix.ell(rx, ry, holy ? '#ffcf5a' : '#9fd0ff', true), 0, cyh, 0.1 + 0.14 * fr); Pix.put(c, Pix.ell(rx + (pulse > 0 ? 1 : 0), ry + (pulse > 0 ? 1 : 0), holy ? '#fff0c2' : '#e8f4ff', false), 0, cyh, Math.ceil((0.5 + 0.3 * fr) * 4) / 4);
       c.fillStyle = '#ffffff'; c.fillRect(Pix.s2(-rx * 1.3), Pix.s2(cyh - ry * 1.6), 4, 2); c.fillRect(Pix.s2(-rx * 1.7), Pix.s2(cyh - ry * 1.2), 2, 4); // glint on the upper left
     }
-    if (p.ambush && !p.downed) R.emit(p.x, p.y - 12, 22, '#b78cff', 0.3 + Math.sin(t * 9) * 0.12);
+    if (p.ambush && !p.downed) R.emit(p.x, p.y - 12 - lift, 22, '#b78cff', 0.3 + Math.sin(t * 9) * 0.12);
+    if (lift) c.translate(0, lift);
     const xh = ED.ClassFx.hero; for (let i = 0; i < xh.length; i++) xh[i](c, p, t, low);
     c.globalAlpha = 1;
   }

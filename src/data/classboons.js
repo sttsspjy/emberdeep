@@ -78,7 +78,7 @@
 
   // ---------------- Pyromancer (Flame Nova · Meteor) ----------------
   card('pyro', 'attack', 1, 'p_atk', { name: 'Pyroclast', icon: 'flame', forks: ['p_atk_h', 'p_atk_s'], plays: 'plant your feet and pour fire; choose when to move.',
-    desc: 'Standing still while attacking builds Channel: your weapon deals +{channel} every {chanStep:s}, up to +{chanCap}. Moving, or 0.6 s without attacking, resets it.', mods: { channel: 0.1, chanStep: 0.3, chanCap: 0.5 } });
+    desc: 'Standing still while attacking builds Channel: your weapon deals +{channel} every {chanStep:s}, up to +{chanCap}. Moving, or a pause longer than 0.6 s (1.25 attacks for slow weapons), resets it.', mods: { channel: 0.1, chanStep: 0.3, chanCap: 0.5 } });
   card('pyro', 'attack', 2, 'p_atk_h', { name: 'Magma Heart', icon: 'ember', tag: 'Heavy', weapon: { kind: 'heavy', extra: { ifNone: { explode: { r: 40, mul: 0.5 } } } },
     desc: 'Heavy shots (×1.8 slower, ×1.98 per hit, Stagger, 15% bigger blasts). Shots that have no blast gain one (r40, 50%), and every blast erupts again 0.4 s later at {aftershock}.',
     rider: 'Lava Pools: each aftershock leaves burning ground (2 s, {lavaPool} of the shot per second; a new pool on the same spot refreshes the old one).', mods: { aftershock: 0.3 }, up: { aftershock: 0.1 }, r3: { lavaPool: 0.3 } });
@@ -92,7 +92,7 @@
     rider: 'Collapse: before the second eruption, foes within its radius are pulled {novaPull:n} px toward you.', mods: { novaEcho: 0.4 }, up: { novaEcho: 0.1 }, r3: { novaPull: 40 } });
   card('pyro', 'skill1', 2, 'p_s1_b', { name: 'Phoenix Mantle', icon: 'feather', tag: 'Guard',
     desc: 'Nova leaves a ring of fire (3 s), and if it hits a foe it shields you for {mantle} max health (at most once per 10 s).[ Nova deals +{s1Dmg}.]',
-    rider: "Rebirth Flare: when the Mantle shield is used up, it bursts (r90) for {mantleBurst} of Nova's blast and knocks foes back.", mods: { novaRing: 1, mantle: 0.04 }, up: { s1Dmg: 0.1 }, r3: { mantleBurst: 0.5 } });
+    rider: "Rebirth Flare: when the Mantle shield is used up, it bursts (r90) for {mantleBurst} of Nova's blast and knocks foes back.", mods: { novaRing: 1, mantle: 0.03 }, up: { s1Dmg: 0.1 }, r3: { mantleBurst: 0.5 } });
   card('pyro', 'skill2', 1, 'p_s2', { name: 'Starfall', icon: 'meteor', forks: ['p_s2_a', 'p_s2_b'], plays: 'call the sky down on every pack.',
     desc: 'Meteor: +{s2Dmg} damage; its crater lasts {s2Dur:s} longer.', mods: { s2Dmg: 0.15, s2Dur: 2 } });
   card('pyro', 'skill2', 2, 'p_s2_a', { name: 'Twin Meteor', icon: 'star', tag: 'Burst',

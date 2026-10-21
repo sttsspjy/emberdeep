@@ -132,16 +132,16 @@
   }
 
   // ---------------- Magma Heart ----------------
-  // A Lava Pool: untagged burning ground of the blast radius x LAVA_R; a new pool inside the hero's own live pool refreshes it instead (one pool per spot).
+  // A Lava Pool: untagged burning ground of the blast radius x LAVA_R; a new pool inside the hero's own live pool extends it to LAVA_T more seconds instead (one pool per spot).
   function lavaPool(w, p, x, y, r, dps) {
     let n = 0, old = null;
     for (const z of w.zones) {
       if (!z.lava || z.owner !== p.pid) continue;
-      if (U.dist2(z.x, z.y, x, y) < z.r * z.r) { z.t = 0; z.dps = Math.max(z.dps, dps); return; }
+      if (U.dist2(z.x, z.y, x, y) < z.r * z.r) { z.dur = z.t + C.LAVA_T; z.dps = Math.max(z.dps, dps); return; } // a refresh extends the life (z.t keeps running, so the pool never fades out between aftershocks)
       n++;
-      if (!old || z.t > old.t) old = z;
+      if (!old || z.dur - z.t < old.dur - old.t) old = z; // the pool with the least life left (a refresh resets that to LAVA_T)
     }
-    if (n >= C.LAVA_MAX) { old.x = x; old.y = y; old.r = r * C.LAVA_R; old.t = 0; old.dps = dps; return; } // a hero keeps at most LAVA_MAX pools: the oldest moves to the new spot
+    if (n >= C.LAVA_MAX) { old.x = x; old.y = y; old.r = r * C.LAVA_R; old.t = 0; old.dur = C.LAVA_T; old.dps = dps; w.emit({ t: 'pyLava', pid: p.pid, x: Math.round(x), y: Math.round(y), r: Math.round(r * C.LAVA_R) }); return; } // a hero keeps at most LAVA_MAX pools: the oldest moves to the new spot and starts anew
     w.addZone({ kind: 'pfire', x, y, r: r * C.LAVA_R, dur: C.LAVA_T, dps, owner: p.pid, team: 0, untagged: true, lava: true, w: C.LAVA_TAG });
     w.emit({ t: 'pyLava', pid: p.pid, x: Math.round(x), y: Math.round(y), r: Math.round(r * C.LAVA_R) });
   }
@@ -182,7 +182,7 @@
     attackOpts(p, st) {
       const o = {};
       if (st.wInfFire > 0) o.infAdd = { fire: Math.max(0, st.wInfFire - st.fireInfuse) };
-      if (st.overheat && channelFull(p, st)) { o.pierce = st.overheat; o.blastMul = 1.2; }
+      if (st.overheat && channelFull(p, st)) { o.pierce = st.overheat; o.blastMul = 1.2; o.blastPierce = true; }
       return o.infAdd || o.pierce ? o : null;
     },
 

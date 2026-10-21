@@ -93,6 +93,18 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
   w.playerAttack(p, 0); const shot = w.projs.find(q => q.team === 0);
   near(shot.pierce, base.pierce + st.pierce + 1, 1e-9, 'Overheat shot pierces one more'); near(shot.explode.r, base.explode.r * 1.2, 1e-6, 'Overheat blast is 20% wider');
   w.projs.length = 0; p.chanT = 0; p.lastAtkT = -99; w.playerAttack(p, 0); const shot2 = w.projs.find(q => q.team === 0); near(shot2.explode.r, base.explode.r, 1e-6, 'normal blast without Channel');
+  // every Pyromancer weapon, blast or not: one shot strikes one more foe directly at full Channel (a blast shot bursts on each foe it pierces)
+  for (let wi = 0; wi < 3; wi++) {
+    const direct = (full) => {
+      const q = stage({ p_atk: 1, p_atk_s: 3 }, wi); q.p.moving = false; q.p.chanT = full ? 9 : 0; q.p.lastAtkT = q.w.time;
+      for (let i = 1; i <= 3; i++) foe(q.w, q.p.x + 40 + i * 50, q.p.y);
+      q.w.playerAttack(q.p, 0); run(q, 1.0);
+      return { n: q.log.filter(h => h.kind === 'weapon').length, bursts: evOf(q, 'boom').length };
+    };
+    const off = direct(false), on = direct(true);
+    ok(on.n === off.n + 1, `${ED.CLASSES.pyro.weapons[wi]}: Overheat strikes one more foe directly (${off.n} -> ${on.n})`);
+    if (wi !== 1) ok(on.bursts >= 2 && on.bursts > off.bursts, `${ED.CLASSES.pyro.weapons[wi]}: a blast shot bursts on each foe it pierces (${off.bursts} -> ${on.bursts} bursts)`);
+  }
 }
 
 // ---- Magma Heart: aftershock 0.4 s after the blast at 30% (+10% per rank), noProc and untagged; Lava Pools at rank 3, one per spot ----
@@ -118,11 +130,11 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
   ok(pools[0].untagged && pools[0].kind === 'pfire', 'Lava Pool is untagged ground fire'); near(pools[0].w, C.LAVA_TAG, 0, 'Lava Pool carries the look tag');
   const burn0 = e3.burnPool; run(s3, 0.6); ok(e3.burnPool === burn0, 'Lava Pool builds no Burn and is not Fire-tagged');
   ok(s3.log.some(h => h.kind === 'dot' && !h.src.el && h.d > 0), 'Lava Pool ticks as untagged damage');
-  const z0 = pools[0]; e3.x = p3.x + 90; e3.y = p3.y; e3.kbx = e3.kby = 0; w3.playerAttack(p3, 0); run(s3, 0.9); pools = w3.zones.filter(z => z.lava);
-  ok(pools.length === 1 && pools[0] === z0, `the second pool on the same spot refreshes the first (${pools.length} pools)`);
+  const z0 = pools[0], tb = z0.t; e3.x = p3.x + 90; e3.y = p3.y; e3.kbx = e3.kby = 0; w3.playerAttack(p3, 0); run(s3, 0.9); pools = w3.zones.filter(z => z.lava);
+  ok(pools.length === 1 && pools[0] === z0, `the second pool on the same spot refreshes the first (${pools.length} pools)`); near(z0.t, tb + 0.9, 0.03, 'a refresh keeps the pool clock running (no fade-out between aftershocks)'); ok(z0.dur > 2.2 && z0.dur - z0.t <= C.LAVA_T + 1e-6, `a refresh extends the pool's life (dur ${z0.dur.toFixed(2)}, t ${z0.t.toFixed(2)})`);
   const far = foe(w3, p3.x + 90, p3.y + 130); w3.playerAttack(p3, Math.atan2(far.y - p3.y, far.x - p3.x)); run(s3, 0.9); ok(w3.zones.filter(z => z.lava).length === 2, 'a pool on another spot is a separate pool');
   for (let i = 0; i < 6; i++) p3.pyroQ.push({ at: w3.time + 0.1, k: 'after', x: p3.x + 200 + i * 80, y: p3.y - 60, r: 46, dmg: 1, lava: 5, room: w3.room });
-  run(s3, 0.3); ok(w3.zones.filter(z => z.lava).length === C.LAVA_MAX, `a hero keeps at most ${C.LAVA_MAX} Lava Pools (got ${w3.zones.filter(z => z.lava).length})`);
+  run(s3, 0.3); ok(w3.zones.filter(z => z.lava).length === C.LAVA_MAX, `a hero keeps at most ${C.LAVA_MAX} Lava Pools (got ${w3.zones.filter(z => z.lava).length})`); ok(evOf(s3, 'pyLava').length === 8, `a moved pool announces itself like a new one (${evOf(s3, 'pyLava').length} pyLava events, want 8)`); ok(w3.zones.filter(z => z.lava).every(z => z.dur - z.t <= C.LAVA_T + 1e-6), 'a moved pool restarts with LAVA_T of life');
   const s4 = stage({ p_atk: 1, p_atk_h: 1 }, 1); foe(s4.w, s4.p.x + 60, s4.p.y); s4.w.playerAttack(s4.p, 0); run(s4, 1.0);
   ok(s4.log.some(h => h.kind === 'explode') && parts(s4, 'aftershock').length === 1, 'a blast-less weapon gets a blast and its aftershock');
 }
@@ -149,14 +161,14 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
   const s4 = stage({ p_s1: 1, p_s1_a: 1 }); foe(s4.w, s4.p.x + 70, s4.p.y); cast(s4, 0, 0, 0); s4.p.pyroQ[0].room = {}; run(s4, 1.0); ok(!parts(s4, 'nova.echo').length, 'an echo does not follow the hero into another room');
 }
 
-// ---- Phoenix Mantle: ring of fire, a shield for 4% (the class window allows 3% per 10 s) once per 10 s, Rebirth Flare when the Mantle is used up ----
+// ---- Phoenix Mantle: ring of fire, a shield for 3% (the class shield window's cap per 10 s) once per 10 s, Rebirth Flare when the Mantle is used up ----
 {
   const s = stage({ p_s1: 1, p_s1_b: 1 }), { w, p } = s, M = p.maxHp;
   foe(w, p.x + 70, p.y);
   cast(s, 0, 0, 0);
   const ring = w.zones.find(z => z.kind === 'pfire' && !z.lava);
   ok(ring && Math.abs(ring.dur - 3) < 1e-9 && Math.abs(ring.dps - 24) < 0.01, `ring of fire 3 s, 20 x 1.2 per s (got ${ring && ring.dps})`);
-  near(p.shield, 0.03 * M, 1e-6, 'Mantle shield: 4% asked, the class window grants 3%'); near(p.mantleAmt, p.shield, 1e-9, 'mantleAmt tracks the Mantle part'); near(p.mantleT, 10, 1e-9, 'Mantle cooldown 10 s');
+  near(p.shield, 0.03 * M, 1e-6, 'Mantle shield: 3% (the class shield window caps a class grant at 3% per 10 s)'); near(p.stats.mantle, 0.03, 1e-9, 'Mantle stat equals what the window grants (the card text is true)'); near(p.mantleAmt, p.shield, 1e-9, 'mantleAmt tracks the Mantle part'); near(p.mantleT, 10, 1e-9, 'Mantle cooldown 10 s');
   ok(w.fx.some(ev => ev.t === 'pyMantle'), 'Mantle event');
   p.shield = 0; p.mantleAmt = 0; cast(s, 0, 0, 0); near(p.shield, 0, 1e-9, 'no second Mantle inside 10 s');
   const s2 = stage({ p_s1: 1, p_s1_b: 1 }); cast(s2, 0, 0, 0); near(s2.p.shield, 0, 1e-9, 'no foe hit, no shield'); near(s2.p.mantleT, 0, 1e-9, 'no cooldown without a hit');
