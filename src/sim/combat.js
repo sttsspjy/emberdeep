@@ -944,6 +944,7 @@
     if (p.ambush) {
       p.ambush = false; crit = true; amb = { mul: ED.Stats.skillNums('vanish', st).p.ambush.dmg / w.dmg, ambush: true }; // the Ambush hit deals the unforked weapon times 2.5 whatever the fork
       this.emit({ t: 'ambush', pid: p.pid, x: Math.round(p.x), y: Math.round(p.y) });
+      if (ch && ch.ambush) ch.ambush.call(this, p, st); // class hook: an Ambush attack starts
     }
     if (st.masterstroke && p.atkCount % 4 === 0) { // Masterstroke: every 4th attack crits at +30% and Bleeds for at least 50% of the hit
       crit = true;

@@ -68,7 +68,7 @@
     // Shade
     daggers: { name: 'Twin Daggers', desc: 'Lightning-fast stabs.', kind: 'melee', dmg: 10, rate: 0.21, range: 42, arc: 1.3, knock: 60, look: 'dagger' },
     knives: { name: 'Throwing Knives', desc: 'Fans of three short-range knives.', kind: 'proj', dmg: 7, rate: 0.36, speed: 480, n: 3, spread: 0.22, pierce: 0, r: 4, life: 0.42, proj: 'knife', look: 'dagger' },
-    scythes: { name: 'Crescent Scythes', desc: 'Spinning cuts that hit all around you.', kind: 'melee', dmg: 13, rate: 0.48, range: 52, arc: 6.3, knock: 90, look: 'scythe' },
+    scythes: { name: 'Crescent Scythes', desc: 'Spinning cuts that hit all around you.', kind: 'melee', dmg: 16, rate: 0.48, range: 52, arc: 6.3, knock: 90, look: 'scythe' },
     // Cleric
     mace: { name: 'Holy Mace', desc: 'Every 3rd swing sends a wave of light.', kind: 'melee', dmg: 17, rate: 0.42, range: 46, arc: 1.7, knock: 140, look: 'mace', wave: { every: 3, mul: 0.9 } },
     dawnhammer: { name: 'Dawn Hammer', desc: 'Heavy blows; every 3rd swing sends a wave.', kind: 'melee', dmg: 32, rate: 0.72, range: 52, arc: 2.2, knock: 220, look: 'hammer', wave: { every: 3, mul: 1.0 } },

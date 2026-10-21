@@ -724,6 +724,7 @@
           break;
         }
         case 'decoy': {
+          const df = ED.ClassFx.zone.decoy; if (df) { df(c, z, pass, t, k, view); break; } // the Shade's Afterimage (cls-shade.js)
           if (pass === 0) {
             const a = 0.5 + Math.sin(t * 20) * 0.2;
             if (!Pix.draw(c, 'hero.shade.idle', 'shadow', (t * 6.7) | 0, sx2(z.x), sx2(z.y), a)) Pix.put(c, Pix.ell(4, 6, '#2a1f44', true), sx2(z.x), sx2(z.y - 12), a);
@@ -1508,6 +1509,7 @@
     guard: { rows: ['11111', '11211', '12211', '.121.', '..1..'], c: { 1: '#9be33c', 2: '#26340f' } },
     star: { rows: ['.1.', '111', '.1.'], c: { 1: '#ffe66b' } },
     cross: { rows: ['...2...', '..111..', '.1.2.1.', '2122212', '.1.2.1.', '..111..', '...2...'], c: { 1: '#ff5a4a', 2: '#ffd8d0' } }, // Hunter's Mark crosshair (cls-ranger.js)
+    execskull: { rows: ['.111.', '11111', '12121', '11111', '.1.1.'], c: { 1: '#e8283c', 2: '#2a0408' } },
   };
   function glyphStub(c, g, cx, bottom) {
     const rows = g.rows, x0 = cx - rows[0].length, y0 = bottom - rows.length * 2;
