@@ -74,13 +74,10 @@
   const NATIVE = { skeleton: 1, imp: 1, drone: 1 }; // foes drawn in the source colours
   const foeMakers = {};
   // Ramp stops (dark to light) of a foe's data colours: the lightest stop stays above lightness 0.72 and the darkest above 0.2, so the body reads against the outline and the dark floor.
+  const lift = (hex, L) => { const l = lumOf(hex); return l >= L ? hex : U.mix(hex, '#ffffff', (L - l) / (1 - l + 1e-6)); }; // lightens hex until its luminance reaches L
   function foeStops(col) {
-    const la = lumOf(col.a);
-    const hi = U.mix(col.a, '#ffffff', U.clamp((0.72 - la) / (1 - la + 1e-6), 0.28, 0.85));
-    let lo = U.shade(col.b, -0.2); const ll = lumOf(lo);
-    if (ll < 0.2) lo = U.mix(lo, '#ffffff', (0.2 - ll) / (1 - ll));
-    let mid = col.b; if (lumOf(mid) < lumOf(lo) + 0.05) mid = U.mix(lo, col.a, 0.5);
-    return [lo, mid, col.a, hi];
+    const lo = lift(U.shade(col.b, -0.2), 0.2), mid = lift(col.b, lumOf(lo) + 0.12), body = lift(col.a, lumOf(mid) + 0.12);
+    return [lo, mid, body, lift(U.mix(col.a, '#ffffff', 0.28), Math.max(lumOf(body) + 0.12, 0.72))];
   }
   function foeMapOf(type, colOv) {
     const def = ED.ENEMIES[type], col = colOv || def.col, pre = 'foe.' + type + '.', set = new Set(), acc = ACC[type] || {};
@@ -100,7 +97,7 @@
   // Minions and Bone Knights wear the minion palette (own variant key: the knight body is also the Skeleton Knight's).
   const minionMk = {};
   function minionVar(anim, base) {
-    const mk = minionMk[base] || (minionMk[base] = () => foeMapOf(base, ED.ENEMIES.minion.col));
+    const mk = minionMk[base] || (minionMk[base] = () => { const mc = ED.ENEMIES.minion.col; return foeMapOf(base, base === 'minion' ? mc : { a: U.mix(mc.a, '#2a6a58', 0.45), b: U.mix(mc.b, '#000000', 0.45), c: mc.c }); }); // the armoured body is darker so its face and plates read
     return A.variant(anim, 'pal:m', mk) ? 'pal:m' : '';
   }
   const stateVar = (anim, k) => (A.variant(anim, k) ? k : '');
@@ -207,20 +204,20 @@
     if (e.st === 'burrow') { mound(c, e, t); return true; }
     const s = stOf(e, t), def = e.def, st = e.st, fly = info.fly;
     beginRec(s);
-    const wind = st === 'windup' || st === 'aim' || st === 'cast' || st === 'spin';
+    const fuse = st === 'fuse', wind = st === 'windup' || st === 'aim' || st === 'cast' || fuse; // telegraph states (a spinning totem is firing, not winding up)
     const strike = st === 'lunge' || st === 'charge' || st === 'dive' || st === 'leap' || st === 'bash';
     const fh = F().hitState ? F().hitState(e.id) : null, ha = fh ? F().time - fh.ht : 9;
     const fa = faceAng(e, s, t), fc = Math.cos(fa), fsn = Math.sin(fa);
     // ---- anim and frame ----
     const moving = t - s.mv < 0.3, ph = (e.id | 0) * 0.6180339887;
     let id, fi = 0, flip = false;
-    const frozen = e.frozen > 0, flash = e.flash > 0;
+    const frozen = e.frozen > 0, flash = e.flash > 0 || (fuse && Math.floor(t * 16) % 2 === 0); // a lit fuse blinks white
     if (info.k === 2) {
       id = moving || wind || strike || !info.idle ? info.walk : info.idle; flip = e.face < 0;
       if (st === 'cast' && info.rig && info.rig.bow) id = info.walk;
       fi = A.frameAt(id, t + ph);
     } else if (info.k === 4) {
-      const d = dir4(s, fa);
+      const d = def.spd === 0 && !AIMED[st] ? 'd' : dir4(s, fa); // turrets face the camera until they aim
       id = info.cast && st === 'cast' ? info.cast[d] : info.walk[d];
       fi = info.cast && st === 'cast' ? 0 : A.frameAt(id, (t + ph) * (moving || wind || strike ? 1 : 0.5));
     } else {
@@ -236,12 +233,13 @@
     P.dx = 0; P.dy = 0; P.wp = -1;
     if (wind && !frozen) {
       const wp = U.clamp((t - s.ss) / s.sd, 0, 1); P.wp = wp;
-      P.dx = -Math.round(fc * 2); P.dy = -Math.round(fsn * 1);
-      if (s.sd >= 0.6 && wp > 0.7 && Math.floor(t / 0.066) % 2) P.dx += 2;
-    } else if (strike) { P.dx = Math.round(fc * 4); P.dy = Math.round(fsn * 2); }
-    if (ha >= 0 && ha < 0.12 && fh) { const m = fh.m, g = fh.crit ? 3 : m >= 0.45 ? 2 : m >= 0.2 ? 1 : 0; P.dx += Math.round(fh.ax * g); P.dy += Math.round(fh.ay * g * 0.5); }
+      P.dx = -q2(fc * 2); P.dy = -q2(fsn); // lean one art px away from the target
+      if (s.sd >= 0.6 && wp > 0.7 && Math.floor(t / 0.066) % 2) P.dx += 2; // shiver: one art px every 66 ms through the last 30% of a long wind-up
+    } else if (strike) { P.dx = q2(fc * 4); P.dy = q2(fsn * 2); }
+    if (ha >= 0 && ha < 0.12 && fh) { const m = fh.m, g = fh.crit ? 3 : m >= 0.45 ? 2 : m >= 0.2 ? 1 : 0; P.dx += q2(fh.ax * g); P.dy += q2(fh.ay * g * 0.5); } // recoil: an art px away from the blow
     let lift = 0;
     if (fly) lift = (def.gloom ? 6 : 12 + Math.round(e.r * 0.25)) + q2(Math.sin(t * 4 + (e.id | 0)) * 2);
+    if (st === 'leap') lift += q2(Math.sin((1 - U.clamp(e.t / 0.35, 0, 1)) * PI) * 26); // the leaper's arc over its 0.35 s flight
     s.lift = lift;
     const ox = P.dx, oy = P.dy - lift;
     // ---- behind-the-body rig pieces, body, front pieces ----
@@ -285,11 +283,9 @@
       put(c, rig.sh, 0, ox + Math.round(Math.cos(la) * 9), oy + (rig.shPos[1]) * K + Math.round(Math.sin(la) * 5), false, '', 1);
       return;
     }
-    if (rig.sh && behind) put(c, rig.sh, 0, ox + rig.shPos[0] * K * sg, oy + rig.shPos[1] * K, flip, '', 1);
-    if (!rig.w) return;
+    if (rig.sh && !behind) put(c, rig.sh, 0, ox + rig.shPos[0] * K * sg, oy + rig.shPos[1] * K, flip, '', 1); // the off-hand shield rides over the body
+    if (!rig.w || behind) return; // the weapon is always seen in front of the (three-quarter view) body
     const wa = rigAngle(e, s, rig, fa, flip, t), hx = ox + rig.hand[0] * K * sg, hy = oy + rig.hand[1] * K;
-    const wbehind = Math.sin(wa) < -0.25;
-    if (wbehind !== behind) return;
     const rr = A.anim(rig.w); if (!rr) return;
     const dirA = ((rr.anchors.dir || 0) - 90) * PI / 180;
     // bows face right in the art; the others point up: rotation = aim - drawn direction (mirrored sprites mirror the drawn direction)
@@ -328,6 +324,24 @@
 
   // Wind-up progress 0..1 of a foe's current telegraph (0 when none).
   AC.windupP = (e) => { const s = FS.get(e.id); return s && s.wpv > 0 && s.st === e.st ? s.wpv : 0; };
+
+  // ---------------- effect sprites ----------------
+  // Variant key of fx anim id recoloured to hex (its colours ranked by luminance onto a dark-to-white ramp of hex); '' when the anim is missing.
+  const tintMk = {};
+  AC.tint = (id, hex) => {
+    const mk = tintMk[hex] || (tintMk[hex] = (pal) => { const l = pal.filter((h) => h !== OUTLINE), m = {}; l.forEach((h, i) => { m[h] = ramp([U.shade(hex, -0.35), hex, U.mix(hex, '#ffffff', 0.6)], (i + 0.5) / l.length); }); return m; });
+    const key = 'pal:t' + hex;
+    return A.variant(id, key, mk) ? key : '';
+  };
+  // Spawn-in ring of a spawn zone (z.t of z.dur): the Circle Spark sprite in the arrival colour, frames spread over the telegraph, with a dust ring under it.
+  AC.spawnRing = (c, z, k, t) => {
+    const id = 'fx.circle.spark', r = A.anim(id); if (!r) return false;
+    const col = z.elite ? '#ffb13a' : '#b8a0ff', x = Math.round(z.x), y = Math.round(z.y);
+    put(c, id, Math.min(r.n - 1, Math.floor(k * r.n)), x, y - 2, false, AC.tint(id, col), 1);
+    const ring = A.anim('fx.smoke.ring');
+    if (ring) put(c, 'fx.smoke.ring', A.frameAt('fx.smoke.ring', t * 0.7), x, y + 2, false, AC.tint('fx.smoke.ring', col), 0.6);
+    return true;
+  };
 
   // ---------------- warm-up ----------------
   // Entering a stratum queues the recoloured and white sheets of its roster; AC.pump builds a few per frame inside a small time budget.
@@ -539,12 +553,11 @@
       Sp.shadow(c, 9, 0.3);
       c.globalAlpha = ga * (ds < 0.6 ? 1 - 0.7 * ds / 0.6 : 0.3);
       lying(c, p, hitId, flip, 'grey', cls);
-      c.globalAlpha = ga; s.an = hitId; anchorFrom(s.anc, A.anim(hitId), flip, -2 * K, 0);
+      c.globalAlpha = ga; s.an = hitId; anchorFrom(s.anc, A.anim(hitId), flip, 0, 0); s.anc.top = -14; s.anc.cy = -6; s.anc.eye[0][1] = -8;
       return;
     }
     Sp.shadow(c, 10);
-    if (p.downed) { lying(c, p, hitId, flip, 'grey', cls); s.an = hitId; anchorFrom(s.anc, A.anim(hitId), flip, -2 * K, 0); return; }
-    if (s.rec) s.rec.n = 0;
+    if (p.downed) { lying(c, p, hitId, flip, 'grey', cls); s.an = hitId; anchorFrom(s.anc, A.anim(hitId), flip, 0, 0); s.anc.top = -14; s.anc.cy = -6; s.anc.eye[0][1] = -8; return; }
     beginRec(s);
     // ---- alpha: invulnerability flicker, dash, Vanish (readable to yourself, nearly gone to allies) ----
     let a = 1;
@@ -570,19 +583,20 @@
     const wd = Sp.weaponArt(p), w = wd.w;
     const swinging = !!anim && anim.atkT < anim.D;
     let wa = face, bx = 0, by = 0, thr = 0, kick = 0, push = 0;
+    anim_D = anim ? anim.D : 0.3;
     if (swinging) {
       const base = anim.a !== undefined ? anim.a : face;
       swing(w, anim, base, anim.atkT, anim.side || 1);
       wa = SW.wa; push = SW.push; thr = SW.thr; kick = SW.kick;
       const L = w.kind === 'melee' ? (w.arc < 1 ? 6 : 4) : 2;
-      bx = Math.round(Math.cos(base) * push * L); by = Math.round(Math.sin(base) * push * L * 0.5);
+      bx = q2(Math.cos(base) * push * L); by = q2(Math.sin(base) * push * L * 0.5); // lunge and pull-back in whole art px
     }
     if (hit) { bx -= sg * 2; }
     // ---- body variant ----
     let variant = hit && hurtA < 0.05 ? stateVar(id, 'white') : heroVar(p.cls, slot, id);
     // ---- weapon pivot (the hand) ----
     const hand = body.anchors.hand || [body.ax + 3, body.ay - 6];
-    const f0 = body.f[fi], bobA = Math.round(U.clamp((f0.oy - body.f[0].oy) * 0.5, -2, 2));
+    const f0 = body.f[fi], ib = A.anim(idleId), bobA = Math.round(U.clamp((f0.oy - ib.f[0].oy) * 0.5, -2, 2)); // the hand follows the body's stretch and crouch
     const hx = bx + (hand[0] - body.ax) * K * sg, hy = by + (hand[1] - body.ay + bobA) * K;
     // ---- draw order: pieces behind the body, the body, pieces in front ----
     const wBehind = Math.sin(wa) < -0.25;
@@ -596,6 +610,7 @@
     if (p.mastery10) { c.strokeStyle = U.rgba('#ffd36b', 0.55 + Math.sin(t * 4) * 0.25); c.lineWidth = 1; c.beginPath(); c.ellipse(0, -2, 13, 4, 0, 0, TAU); c.stroke(); }
     c.globalAlpha = ga;
     s.an = id; s.fi = fi; anchorFrom(s.anc, body, flip, 0, bx);
+    s.anc.top = (ib.f[0].oy - ib.ay) * K; // head line of the standing pose: stable for name labels (the anim set's union box includes the taller hit pose)
   }
 
   // The weapon of a hero. thr: thrust 0..1 (glaive), kick: ranged recoil, u: seconds into the attack animation (9 = idle).
@@ -612,6 +627,7 @@
       const fl = flip ? -1 : 1, rot = Math.sin(t * 2.6 + (p.slot | 0)) * 0.14 - fl * 0.9 * Math.exp(-u * 10);
       put(c, wd.anim, 0, hx, hy - 16, flip, variant, 1, nrm(rot));
       lightGlow(c, hx, hy - 6, 0.5 + 0.1 * Math.sin(t * 7));
+      if (R() && p.x !== undefined) { R().light(p.x + hx, p.y + hy - 6, 64, '#ffe9a0', 0.3); R().emit(p.x + hx, p.y + hy - 6, 16, '#ffe9a0', 0.25); } // the lantern lights its surroundings
       return;
     }
     if (look === 'tome') { // floats open in front of the hand, tilting toward the aim
@@ -621,8 +637,16 @@
       return;
     }
     weaponAt(c, wd.anim, x, y, ang, flip, variant, extra);
+    if (look === 'bow' || look === 'crossbow') { // the next arrow is nocked 3 art px back once the string has recovered: hidden for the first 45% of the cycle, drawn back over the rest
+      const D = (anim_D || 0.3), pr = U.clamp((u - D * 0.45) / (D * 0.55), 0, 1);
+      if (u >= D * 0.45 || u > 5) {
+        const back = (u > 5 ? 3 : pr * 3) * K, id = look === 'crossbow' ? 'proj.bolt' : 'proj.arrow';
+        weaponAt(c, id, x - Math.cos(wa) * back + Math.cos(wa) * 4 * K, y - Math.sin(wa) * back * 0.6 + Math.sin(wa) * 4 * K * 0.6, wa, flip, '');
+      }
+    }
     if (ec && !(R() && R().quality === 'low')) Sp.glow(c, x + Math.cos(wa) * 14, y + Math.sin(wa) * 14, 18, ec, 0.38 + Math.sin(t * 5) * 0.08);
   }
+  let anim_D = 0.3; // length of the attack animation being drawn (set by drawHero)
   // Warm glow of a held lantern.
   function lightGlow(c, x, y, a) { Sp.glow(c, x, y, 16, '#ffe9a0', a); }
 
@@ -642,7 +666,8 @@
 
   // Lying hero (downed, dead): the hit pose turned 90 degrees away from facing, 2 art px lower, in grey.
   function lying(c, p, hitId, flip, key, cls) {
-    c.save(); c.translate(flip ? 6 : -6, 4); c.rotate(flip ? HP : -HP);
+    const rr = A.anim(hitId), half = Math.abs((rr.anchors.centre ? rr.anchors.centre[1] - rr.ay : -14) * K); // the body's middle ends up over the hero's spot
+    c.save(); c.translate(flip ? -half : half, 4); c.rotate(flip ? HP : -HP);
     put(c, hitId, 0, 0, 0, flip, stateVar(hitId, key), 1);
     c.restore();
   }
@@ -656,7 +681,7 @@
     const g = c.createRadialGradient(D / 2, canvas.height * 0.6, 2, D / 2, canvas.height * 0.6, D * 0.55);
     g.addColorStop(0, U.rgba(col, 0.35)); g.addColorStop(1, 'rgba(0,0,0,0)');
     c.fillStyle = g; c.fillRect(0, 0, D, canvas.height);
-    const h = r.ay - (r.anchors.top === undefined ? 0 : r.anchors.top), m = Math.max(1, Math.floor(canvas.height * 0.62 / h)); // device px per art px
+    const h = r.ay - (r.anchors.top === undefined ? 0 : r.anchors.top), m = Math.max(1, Math.floor(canvas.height * 0.76 / h)); // device px per art px
     c.save(); c.imageSmoothingEnabled = false;
     c.translate(Math.round(D * 0.42), Math.round(canvas.height * 0.9)); c.scale(m / K, m / K);
     const pseudo = { cls, slot: slot || 0, weapon: weapon || ED.CLASSES[cls].weapons[0] }, wd = Sp.weaponArt(pseudo), hand = r.anchors.hand || [r.ax + 3, r.ay - 6];
@@ -707,14 +732,17 @@
       let bd = 900;
       for (const q of FS.values()) { if (q.type !== type || !q.an || nowT - q.seen > 0.5) continue; const d = (q.lx - x) * (q.lx - x) + (q.ly - y) * (q.ly - y); if (d < bd) { bd = d; s = q; } }
     }
+    const info = foeInfo(type);
+    if (info.death) return { id: info.death, i: 0, flip: s ? s.flip : false, lift: s ? s.lift || 0 : 0, type, death: true }; // slimes play their splat
     if (s && s.an) return { id: s.an, i: s.fi, flip: s.flip, lift: s.lift || 0, type };
-    const info = foeInfo(type); if (!info.k) return null;
+    if (!info.k) return null;
     const id = info.k === 2 ? info.idle : info.k === 4 ? info.walk.d : info.walk[0];
     return A.has(id) ? { id, i: 0, flip: false, lift: info.fly ? 14 : 0, type } : null;
   };
   // Draws a death snapshot: white silhouette while white, else its recoloured sheet.
-  AC.drawSnap = (c, sn, white, a) => {
-    put(c, sn.id, sn.i, 0, -sn.lift, sn.flip, white ? stateVar(sn.id, 'white') : foeVar(sn.type, sn.id), a === undefined ? 1 : a);
+  AC.drawSnap = (c, sn, white, a, u) => {
+    const i = sn.death ? Math.min(A.anim(sn.id).n - 1, Math.floor((u || 0) * A.anim(sn.id).fps)) : sn.i;
+    put(c, sn.id, i, 0, -sn.lift, sn.flip, white ? stateVar(sn.id, 'white') : foeVar(sn.type, sn.id), a === undefined ? 1 : a);
   };
 
   // Seconds since the hero's last hurt event (FX clock; 99 when never).

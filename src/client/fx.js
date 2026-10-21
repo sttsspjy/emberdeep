@@ -122,6 +122,10 @@
       if (w.kind !== 'melee') {
         const col = F.projColor(w.proj), x = p.x + Math.cos(a) * 20, y = p.y - 11 + Math.sin(a) * 20;
         F.pop(x, y, 9, col, 0.09); if (!lowFx()) F.burst(x, y, 3, { kind: 'spark', color: col, a, spread: 0.7, sp: 170, life: 0.14, size: 1.3, drag: 5 });
+        if (ED.Actors && ED.Actors.on()) { // pixel flash: a spark at the string of a bow, an element-tinted star at the tip of a magic weapon (one frame)
+          if (w.look === 'bow' || w.look === 'crossbow') F.atlasFx('fx.hit.spark', x - Math.cos(a) * 10, y - Math.sin(a) * 10, { dur: 0.1 });
+          else F.atlasFx('fx.spark.magic', x, y, { fr: 1, dur: 0.07, add: true, variant: ED.Actors.tint('fx.spark.magic', col) });
+        }
       }
     }
   };
@@ -217,17 +221,17 @@
   F.atlasFx = (id, x, y, o) => {
     const A = ED.Atlas; if (!A.ok || hitSp.length >= 36) return;
     const r = A.anim(id); if (!r) return;
-    hitSp.push({ id, x: Math.round(x), y: Math.round(y), t: 0, dur: r.n / r.fps, rot: (o && o.rot) || 0, flip: !!(o && o.flip), a: o && o.a !== undefined ? o.a : 1, v: (o && o.variant) || '', add: !!(o && o.add) });
+    hitSp.push({ id, x: Math.round(x), y: Math.round(y), t: -((o && o.delay) || 0), dur: o && o.dur ? o.dur : r.n / r.fps, fr: o && o.fr !== undefined ? o.fr : -1, rot: (o && o.rot) || 0, flip: !!(o && o.flip), a: o && o.a !== undefined ? o.a : 1, v: (o && o.variant) || '', add: !!(o && o.add) });
   };
   function tickHits(dt) { let n = 0; for (let i = 0; i < hitSp.length; i++) { const s = hitSp[i]; s.t += dt; if (s.t < s.dur) hitSp[n++] = s; } hitSp.length = n; }
   function drawHitSprites(c) {
     if (!hitSp.length) return;
     const A = ED.Atlas, comp = c.globalCompositeOperation;
     for (const s of hitSp) {
-      const r = A.anim(s.id); if (!r) continue;
+      const r = A.anim(s.id); if (!r || s.t < 0) continue;
       c.globalCompositeOperation = s.add ? 'lighter' : 'source-over';
       hitO.flip = s.flip; hitO.variant = s.v; hitO.alpha = s.a; hitO.rot = s.rot;
-      A.draw(c, s.id, Math.min(r.n - 1, Math.floor(s.t * r.fps)), s.x, s.y, hitO);
+      A.draw(c, s.id, s.fr >= 0 ? s.fr : Math.min(r.n - 1, Math.floor(s.t * r.fps)), s.x, s.y, hitO);
     }
     c.globalCompositeOperation = comp;
   }
@@ -240,10 +244,11 @@
     if (!mine && !crit && !heavy) return;
     if (F.time - contactT < 0.05) return;
     contactT = F.time;
-    const x = ev.x, y = ev.y + 3;
-    if (crit) F.atlasFx('fx.cutx', x, y);
-    else F.atlasFx('fx.cut', x, y, { rot: Math.round((a + 3 * Math.PI / 4) / (Math.PI / 4)) * Math.PI / 4 });
-    if (heavy && mine) F.atlasFx('fx.blast.red', x, y, { a: 0.9 });
+    const x = ev.x, y = ev.y + 3, an = ev.pid !== undefined ? F.anim[ev.pid] : null;
+    const delay = an && an.atkT < 0.05 && p && ED.Sprites.weaponArt(p).w.kind === 'melee' ? an.t0 + (an.t1 - an.t0) * 0.45 : 0; // the flash lands when the blade passes the foe, not when the swing starts
+    if (crit) F.atlasFx('fx.cutx', x, y, { delay });
+    else F.atlasFx('fx.cut', x, y, { delay, rot: Math.round((a + 3 * Math.PI / 4) / (Math.PI / 4)) * Math.PI / 4 });
+    if (heavy && mine) F.atlasFx('fx.blast.red', x, y, { a: 0.9, delay });
   }
   const X = { dx: 0, dy: 0, rot: 0, sx: 1, sy: 1 };
   // Pose of a foe this frame (offset, lean, squash about its feet): wind-up crouch, strike stretch, hit recoil. null = untouched.
@@ -393,8 +398,8 @@
       const sn = ED.Actors.foeSnap(ev.type, e, ev.x, ev.y), r = ev.r || d.r;
       F.atlasFx(r > 14 || ev.el ? 'fx.smoke' : 'fx.puff', ev.x, ev.y - (sn ? sn.lift : 0) - (r > 14 ? 8 : 4));
       if (!sn) return;
-      const dur = DUR[fam] + (ev.el ? 0.1 : 0);
-      F.ghosts.push({ k: 'die', at: sn, x: ev.x, y: ev.y, r, fam, sgn: Math.cos(a) >= 0 ? 1 : -1, life: dur, max: dur });
+      const dur = sn.death ? 0.36 : DUR[fam] + (ev.el ? 0.1 : 0);
+      F.ghosts.push({ k: 'die', at: sn, x: ev.x, y: ev.y, r, fam: sn.death ? 'anim' : fam, sgn: Math.cos(a) >= 0 ? 1 : -1, life: dur, max: dur });
       return;
     }
     if (lowFx() || F.ghosts.length >= 14 || snapBudget <= 0) return;
@@ -423,6 +428,7 @@
   function ghostPoseA(g, u) {
     const P = GA, k = u / g.max, sg = g.sgn; P.dx = 0; P.dy = 0; P.rot = 0; P.sx = 1; P.sy = 1; P.a = 1; P.add = false;
     switch (g.fam) {
+      case 'anim': P.a = k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4; break;
       case 'bone': default: if (u >= 0.06) { P.rot = sg * HALF_PI; P.dx = sg * 6; P.dy = u < 0.12 ? -4 : 0; } P.a = k < 0.55 ? 1 : 1 - (k - 0.55) / 0.45; break;
       case 'goo': if (u >= 0.06) { P.sx = 2; P.sy = 0.5; } P.a = k < 0.4 ? 1 : 1 - (k - 0.4) / 0.6; break;
       case 'spirit': P.add = true; P.dy = -Math.round(u * 34 / 2) * 2; P.a = (1 - k) * (1 - k); break;
@@ -601,9 +607,9 @@
       case 'bossDown': F.showBanner('Vanquished', ED.ENEMIES[ev.type].name, 'victory', 3); F.flash = { color: '#ffffff', t: 0.5, a: 0.5 }; F.addShake(12); F.punch(2, 1); F.hitStop(0.3); A.play('roar', 0.6); A.play('victory', 0.7); A.music({ s: ctx.stratum() }); F.burst(ev.x, ev.y - 20, 60, { color: ED.ENEMIES[ev.type].col.c, sp: 220, life: 1.2, size: 3.5, add: true }); F.burst(ev.x, ev.y - 20, 18, { kind: 'streak', color: '#ffffff', sp: 380, life: 0.5, size: 2.4 }); F.ring(ev.x, ev.y, 160, ED.ENEMIES[ev.type].col.c, 0.8, 6); F.ring(ev.x, ev.y, 90, '#ffffff', 0.5, 3); F.pop(ev.x, ev.y - 20, 90, '#ffffff', 0.5); break;
       case 'phase': F.addShake(8); F.punch(1.6, 0.8); A.play('roar', 0.8); F.ring(ev.x, ev.y, 120, '#ffffff', 0.5, 5); F.ring(ev.x, ev.y, 70, '#ff8a5a', 0.4, 3); F.pop(ev.x, ev.y - 20, 60, '#ffffff', 0.35); break;
       case 'stratum': { const b = ED.biomeFor(ev.s); F.showBanner(b.name, 'Stratum ' + U.roman(ev.s), 'stratum', 3.6); F.fade = 1; A.music({ s: ev.s }); break; }
-      case 'room': for (const p of ctx.players()) F.atlasFx('fx.circle.spark', p.x, p.y - 2); F.fade = Math.max(F.fade, 0.6); if (ev.lc > 0) F.msg(`−${ev.lc} light`, '#ffd9a0'); break;
+      case 'room': for (const p of ctx.players()) F.atlasFx('fx.circle.spark', p.x, p.y - 2, { add: true, a: 0.85 }); F.fade = Math.max(F.fade, 0.6); if (ev.lc > 0) F.msg(`−${ev.lc} light`, '#ffd9a0'); break;
       case 'down': { const p = ctx.player(ev.pid); A.play('down'); if (p) F.msg(ev.pid === local ? 'You are down! An ally can revive you.' : `${p.name} is down! Stand near them to revive.`, '#ff8a7a'); break; }
-      case 'revived': { const p = ctx.player(ev.pid); A.play('revive'); if (p) { F.atlasFx('fx.circle.spark', p.x, p.y - 2); F.msg(`${p.name} is back on their feet`, '#86d38f'); F.burst(p.x, p.y - 10, 24, { color: '#ffe9a0', sp: 70, vy: -60, life: 0.9, size: 2.4, add: true }); F.ring(p.x, p.y, 40, '#ffe9a0', 0.5, 3); F.pop(p.x, p.y - 12, 30, '#ffe9a0', 0.3); } break; }
+      case 'revived': { const p = ctx.player(ev.pid); A.play('revive'); if (p) { F.atlasFx('fx.circle.spark', p.x, p.y - 2, { add: true, a: 0.85 }); F.msg(`${p.name} is back on their feet`, '#86d38f'); F.burst(p.x, p.y - 10, 24, { color: '#ffe9a0', sp: 70, vy: -60, life: 0.9, size: 2.4, add: true }); F.ring(p.x, p.y, 40, '#ffe9a0', 0.5, 3); F.pop(p.x, p.y - 12, 30, '#ffe9a0', 0.3); } break; }
       case 'dead': { const p = ctx.player(ev.pid); if (p) F.msg(`${p.name} has fallen. They return at the next stratum.`, '#ff8a7a'); break; }
       case 'rise': { const p = ctx.player(ev.pid); const name = { phoenix: 'Phoenix Feather', angel: 'Guardian Angel', wind: 'Second Wind' }[ev.k]; F.showBanner(name, p ? p.name + ' refuses to fall' : '', 'small', 2); F.burst(ev.x, ev.y - 10, 40, { color: '#ffd36b', sp: 150, life: 0.9, size: 3, add: true }); F.ring(ev.x, ev.y, 70, '#ffd36b', 0.6, 4); F.pop(ev.x, ev.y - 12, 50, '#ffd36b', 0.4); F.punch(0.8, 0.4); A.play('revive'); break; }
       case 'dash': F.atlasFx('fx.smoke.ring', ev.x, ev.y - 2, { a: 0.8 }); A.play('dash', ev.pid === local ? 0.8 : 0.3); F.burst(ev.x, ev.y, 6, { color: '#ffffff', sp: 40, life: 0.3, size: 3, kind: 'smoke', drag: 4 }); F.ring(ev.x, ev.y, 18, '#ffffff', 0.18, 2); break;
@@ -702,7 +708,7 @@
         if (P.add || P.a <= 0.01) continue;
         c.save(); c.translate(Math.round(g.x), Math.round(g.y)); Rn.shadow(c, g.r, 0.35 * P.a);
         c.translate(P.dx, P.dy); if (P.rot) c.rotate(P.rot); if (P.sx !== 1 || P.sy !== 1) c.scale(P.sx, P.sy);
-        ED.Actors.drawSnap(c, g.at, u < 0.06, P.a);
+        ED.Actors.drawSnap(c, g.at, !g.at.death && u < 0.06, P.a, u);
         c.restore();
         continue;
       }

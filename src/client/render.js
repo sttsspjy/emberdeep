@@ -704,9 +704,11 @@
           const col = z.elite ? '#ffb13a' : '#b8a0ff';
           if (pass === 0) { c.fillStyle = 'rgba(10,4,20,0.35)'; c.beginPath(); c.ellipse(z.x, z.y, (z.r || 14) * 1.1, (z.r || 14) * 0.6, 0, 0, U.TAU); c.fill(); R.light(z.x, z.y, (z.r || 16) * 2.4, col, 0.55); break; }
           const rr = (z.r || 14) * (0.4 + k * 0.8);
-          c.strokeStyle = U.rgba(col, 0.9); c.lineWidth = 1.8; c.beginPath();
-          for (let i = 0; i < 3; i++) { const a = t * 4 + i * 2.1; c.moveTo(z.x + Math.cos(a) * rr, z.y + Math.sin(a) * rr); c.arc(z.x, z.y, rr, a, a + 1.4); }
-          c.stroke();
+          if (!(AC.on() && AC.spawnRing(c, z, k, t))) { // pixel ring sprite, else the vector arcs
+            c.strokeStyle = U.rgba(col, 0.9); c.lineWidth = 1.8; c.beginPath();
+            for (let i = 0; i < 3; i++) { const a = t * 4 + i * 2.1; c.moveTo(z.x + Math.cos(a) * rr, z.y + Math.sin(a) * rr); c.arc(z.x, z.y, rr, a, a + 1.4); }
+            c.stroke();
+          }
           R.glow(c, z.x, z.y, 28 * (0.4 + k), col, 0.7);
           break;
         }
@@ -1747,8 +1749,9 @@
       if ((p.pid === local) !== (pass === 0)) continue;
       const col = ED.PLAYER_COLORS[p.slot] || '#fff', px = Math.round(p.x), py = Math.round(p.y);
       if (multi && !p.dead) {
-        R.label(c, p.name, px, placeLabel(px, py - 47, R.labelW(p.name), lh), col);
-        if (p.pid !== local && !p.downed) { const fr = p.hp / p.maxHp; c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(px - 11, py - 39, 22, 3); c.fillStyle = fr > 0.35 ? '#86d38f' : '#e2513f'; c.fillRect(px - 10, py - 38, Math.round(20 * fr), 1); }
+        const ha = AC.on() && !p.downed ? AC.anchor(p) : null, dy = ha ? Math.round(ha.top) + 38 : 0; // name and bar ride the top of the sprite (the procedural hero is 38 px tall)
+        R.label(c, p.name, px, placeLabel(px, py - 47 + dy, R.labelW(p.name), lh), col);
+        if (p.pid !== local && !p.downed) { const fr = p.hp / p.maxHp; c.fillStyle = 'rgba(0,0,0,0.6)'; c.fillRect(px - 11, py - 39 + dy, 22, 3); c.fillStyle = fr > 0.35 ? '#86d38f' : '#e2513f'; c.fillRect(px - 10, py - 38 + dy, Math.round(20 * fr), 1); }
       }
       if (p.downed) {
         c.strokeStyle = 'rgba(0,0,0,0.6)'; c.lineWidth = 3; c.beginPath(); c.arc(px, py - 8, 20, 0, U.TAU); c.stroke();
