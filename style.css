@@ -81,7 +81,7 @@ body { font-family: var(--f-body); font-size: 1rem; line-height: 1.4; -webkit-fo
 h1, h2, h3, p { margin: 0; }
 
 #post { position: fixed; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
-#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; background: transparent; }
+#game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; background: transparent; image-rendering: pixelated; }
 #hud { position: fixed; inset: 0; width: 100%; height: 100%; display: none; pointer-events: none; }
 #ui { position: fixed; inset: 0; pointer-events: none; }
 /* in-run cursor: ED.AimFx.applyCursor sets --aim-cur / --aim-cur-foe (procedural reticle bitmaps); body.aim-foe, .syscursor and .pad are toggled by it and game.js. Later rules win. */

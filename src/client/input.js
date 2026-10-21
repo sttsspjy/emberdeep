@@ -185,6 +185,7 @@
   };
 
   const down = (a) => codes[a].some(c => I.keys.has(c));
+  I.held = down;
   const hit = (a) => codes[a].some(c => I.pressed.has(c));
   const hitCode = (...cs) => cs.some(c => I.pressed.has(c));
 

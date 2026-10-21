@@ -194,6 +194,8 @@
     for (const p of view.players.values()) if (!p.dead) put(p.x, p.y - 12, 14);
     for (const e of view.enemies) if (e.hp > 0 && !e.burrowed) put(e.x, e.y - e.r - (e.def.fly ? 8 : 0), e.r * 1.3);
     for (const k of view.pickups) put(k.x, k.y - 6, 8);
+    const s = ED.Game.s, I = ED.Input, m = I.mouse; // the cursor while attacking or previewing a ground skill (screen space, radius 1.2u)
+    if (s && s.aim && s.aim.pointer && m.inside && n < FP_MAX && (s.aim.ground.length || I.held('attack'))) { const i = n++ * 3; fp[i] = m.x * R.dpr * rk; fp[i + 1] = m.y * R.dpr * rk; fp[i + 2] = 1.2 * u; }
     fpN = n;
   }
   // Steps panel f's fade once per frame against the focus points (its rect is the one it was last drawn with).
