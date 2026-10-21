@@ -389,7 +389,7 @@
       const comp = !!src.comp || src.kind === 'orbit' || src.kind === 'wisp' || src.kind === 'minion';
       if (st.killHeal) this.sustainHeal(p, st.killHeal * k);
       if (st.killHealPct) this.sustainHeal(p, p.maxHp * st.killHealPct * k);
-      if (st.bloodOrb && this.rng.chance(st.bloodOrb)) this.spawnPickup('orb', e.x, e.y, 0.03);
+      if (st.bloodOrb && this.rng.chance(st.bloodOrb)) this.spawnPickup('orb', e.x, e.y, 0.025);
       if (comp && st.feast) this.sustainHeal(p, p.maxHp * 0.01);
       if (st.chalice && p.chaliceHp < 20) {
         p.chaliceKills++;

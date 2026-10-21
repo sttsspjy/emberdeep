@@ -3,6 +3,8 @@
 // Bot policy: fight, claim room rewards, use rest sites and shops, then explore unvisited rooms nearest-first while entering the next one
 // (its light cost paid) leaves the lantern at least EXPLORE_MIN_LIGHT full, else head for the boss (the exploration/lantern trade-off).
 // Pick policies: 'random' takes a random card; 'smart' (PICK=smart) follows the build order in smartScore (evolution > keystone > duo > owned path > gate while < 2 paths > neutral).
+// Skill (0-1) is the share of ticks the bot pays attention (floor hazards, lantern flare) and the chance it reads a Gloom lunge telegraph; the rest of the time it moves on instinct.
+// The summary reports win rate, pacing, hits and time to kill, hero DPS, damage share by source, cooldown reduction and the lantern/Gloom lines (see summarize).
 // --force: boon/relic ids granted at run start (a gate id replaces the random start pick; other boons and relics are added) for fairness tests.
 const fs = require('fs');
 const vm = require('vm');

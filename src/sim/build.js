@@ -195,7 +195,8 @@
 
   // ---------------- allies & companions ----------------
   // Companion damage multiplier: Kindred (compDmg) and the Spirit Feast duo.
-  const compMul = (st) => 1 + (st.compDmg || 0) + (st.feast ? 0.2 : 0);
+  ED.CONST.COMP_MUL = 0.85; // companion damage multiplier on top of Kindred and Spirit Feast
+  const compMul = (st) => (1 + (st.compDmg || 0) + (st.feast ? 0.2 : 0)) * ED.CONST.COMP_MUL;
 
   W.spawnMinion = function (owner, x, y, life) {
     const st = owner.stats;
