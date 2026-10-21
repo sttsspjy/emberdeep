@@ -4,6 +4,8 @@
   const U = ED.U;
   const W = ED.World.prototype;
 
+  ED.CONST.SANCT_HEAL = 0.07; // Sanctuary: allies within 180 heal this fraction of max HP
+  ED.CONST.SANCT_DR = 0.85; // Sanctuary: damage multiplier of an ally standing inside the zone
   const BULWARK_HALF = 1.309; // ±75°
   const HAMMER_OUT = 0.55, HAMMER_SPEED = 360, HAMMER_BACK = 420;
   const NO_HIT = { has: () => true, add: () => {} }; // hammer pr.hit: updateProjectiles never collides with it, updateHammers does
@@ -285,7 +287,7 @@
       if (st.decoy) this.addZone({ kind: 'decoy', x: x0, y: y0, r: 80 * area, dur: 1.4, team: 0, owner: p.pid, dmg: w.dmg * 3, boom: 'shadow' });
       this.emit({ t: 'blink', pid: p.pid, x0: Math.round(x0), y0: Math.round(y0), x1: Math.round(x1), y1: Math.round(y1) });
     } else if (skill === 'sanctuary') {
-      for (const q of this.players.values()) if (!q.downed && !q.dead && U.dist2(q.x, q.y, p.x, p.y) < 180 * 180) this.healPlayer(q, q.maxHp * 0.25);
+      for (const q of this.players.values()) if (!q.downed && !q.dead && U.dist2(q.x, q.y, p.x, p.y) < 180 * 180) this.healPlayer(q, q.maxHp * ED.CONST.SANCT_HEAL);
       const r = 100 * area;
       this.addZone({ kind: 'sanct', x: p.x, y: p.y, r, dur: 3.5, dps: (10 + w.dmg * 1.2) * (st.wrath ? 3 : 1), owner: p.pid, team: 0 });
       if (st.wrath) for (const e of this.enemies) if (e.hp > 0 && !e.boss && U.dist2(e.x, e.y, p.x, p.y) < r * r) e.stun = Math.max(e.stun, 1.2);

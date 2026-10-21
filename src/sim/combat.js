@@ -4,8 +4,11 @@
   const U = ED.U, Sim = ED.Sim, D = ED.Dungeon;
   const W = ED.World.prototype;
 
-  ED.CONST.SUSTAIN_CAP = 0.01; // max HP fraction a hero regains per second from on-hit and on-kill combat heals (read by the UI)
+  ED.CONST.SUSTAIN_CAP = 0.003; // max HP fraction a hero regains per second from on-hit and on-kill combat heals (read by the UI)
   ED.CONST.GLOOM_CAP = 0.25; // max HP fraction one Gloom touch may take
+  ED.CONST.ARC_MUL = 0.6; // a discharge's arc targets take this fraction of what the charged foe takes
+  ED.CONST.BOLT_CD = 0.6; // seconds between one hero's Thunderhead bolts
+  ED.CONST.SPLASH_MUL = 0.6; // foes next to a combusting foe take this fraction of the pool
   const EL_IDX = { pyre: 1, rime: 2, storm: 3 };
   const NO_GUARD = { dot: 1, chain: 1, explode: 1 }; // hit kinds that ignore a foe's frontal guard
   const FULL_CONTACT = new Set(['lunge', 'charge', 'leap', 'bash', 'dive']); // attack states whose body contact deals full damage
@@ -20,14 +23,17 @@
     const def = ED.ENEMIES[type];
     const s = this.stratum, pact = this.pact;
     let hp = def.hp, dmg = def.dmg;
-    if (!def.boss) hp *= (1 + 0.65 * (s - 1) + 0.08 * (s - 1) * (s - 1)) * this.threat().hp;
+    if (!def.boss) hp *= ED.World.hpScale(s);
     hp *= this.partyHpMul();
     if (pact >= 1) hp *= 1.25;
     if (def.boss && pact >= 5) hp *= 1.35;
     if (pact >= 10) hp *= 1.2;
     dmg *= (1 + 0.22 * (s - 1) + 0.03 * (s - 1) * (s - 1)) * (pact >= 2 ? 1.25 : 1) * (pact >= 8 ? 1.2 : 1) * this.threat().dmg;
     const dr = this.dread;
-    if (dr && !def.minion && !def.gloom && !def.ally && !opts.ally) { hp *= dr.hp; dmg *= dr.dmg; }
+    if (dr && !def.minion && !def.gloom && !def.ally && !opts.ally) {
+      const deep = 1 + ED.World.DEEP * Math.min(ED.World.DEEP_MAX, this.deepRooms); // the Deep hits harder with every room entered Dark or Lightless this stratum
+      hp *= dr.hp; dmg *= dr.dmg * deep;
+    }
     const e = {
       id: U.uid(), type, def, x, y, r: def.r, hp, maxHp: hp, dmg, spd: def.spd * (pact >= 6 ? 1.15 : 1),
       kbx: 0, kby: 0, st: 'move', t: 0, cd: this.rng.range(0.6, 1.6), face: 1, flash: 0, stun: 0, frozen: 0, elite: null, ward: 0, wardMax: 0,
@@ -46,7 +52,7 @@
 
   W.makeElite = function (e, affix) {
     e.elite = affix || this.rng.pick(ED.AFFIX_IDS);
-    e.hp *= 2.8 + 0.6 * (this.stratum - 1); e.maxHp = e.hp; e.dmg *= 1.25; e.r = Math.round(e.r * 1.22); // elite HP x2.8 at stratum I up to x5.8 at VI
+    e.hp *= ED.World.ELITE.hp + ED.World.ELITE.hpStep * (this.stratum - 1); e.maxHp = e.hp; e.dmg *= ED.World.ELITE.dmg; e.r = Math.round(e.r * 1.22); // elite HP x2.8 at stratum I up to x5.3 at VI
     if (e.elite === 'swift') e.spd *= 1.4;
     if (e.elite === 'brutal') e.dmg *= 1.4;
     if (e.elite === 'warded') { e.ward = e.maxHp * 0.45; e.wardMax = e.ward; }
@@ -133,10 +139,11 @@
   W.heroProcs = function (e, p, dmg, crit, comp, src) {
     const st = p.stats;
     if (st.leech && !comp) this.sustainHeal(p, dmg * st.leech);
+    if (st.bleedHit && !comp) this.addBleed(e, dmg * st.bleedHit, p);
     if (!comp || st.compInfuse) this.applyInfusions(e, dmg, p);
     if (src.burn) this.addBurn(e, dmg * src.burn, p);
     if (crit) {
-      if (st.bleed) { if (e.bleedPool <= 0) e.bleedTick = 0.5; e.bleedPool += dmg * st.bleed; e.bleedOwner = p; }
+      if (st.bleed) this.addBleed(e, dmg * st.bleed, p);
       if (st.sunder) { if (e.sunderOwner !== p.pid) { e.sunderOwner = p.pid; e.sunder = 0; } e.sunder = Math.min(10, e.sunder + Math.min(2, hpFrac(e, dmg) * 60)); } // stacks from crit damage: 60 per foe HP, <= 2 per crit
       if (st.critCharge) this.addCharge(e, dmg * st.critCharge, p);
       if (st.serrated && e.chill > 0) this.addChill(e, Math.min(70, hpFrac(e, dmg) * 2000), p); // chill from crit damage: 2000 per foe HP, <= 70 per crit
@@ -174,6 +181,13 @@
     return this.healPlayer(p, a, true);
   };
 
+  // Bleed pool: physical, no affinity; drains like Burn (tickStatuses).
+  W.addBleed = function (e, amount, p) {
+    if (!(amount > 0) || e.killed || e.def.invuln || e.burrowed) return;
+    if (e.bleedPool <= 0) e.bleedTick = 0.5;
+    e.bleedPool += amount; e.bleedOwner = p;
+  };
+
   // Burn pool: aff-scaled; ticks in tickStatuses. Conflagration checks after every addition.
   W.addBurn = function (e, amount, p) {
     if (!(amount > 0) || e.killed || e.def.invuln || e.burrowed) return;
@@ -184,7 +198,7 @@
     if (p && p.stats.conflag) this.checkCombust(e, p);
   };
 
-  // A pool above 30% of current HP combusts: the whole pool hits the foe and every foe within 70.
+  // A pool above 30% of current HP combusts: the whole pool hits the foe and, at SPLASH_MUL, every foe within 70.
   W.checkCombust = function (e, p) {
     const pool = e.burnPool;
     if (e.hp <= 0 || pool < 5 || pool <= e.hp / e.hpLever * 0.3) return;
@@ -194,7 +208,7 @@
     for (let i = 0, n = this.enemies.length; i < n; i++) {
       const o = this.enemies[i];
       if (o.hp <= 0 || o.spawnT > 0 || o.def.invuln || (o !== e && U.dist2(o.x, o.y, e.x, e.y) > (r + o.r) ** 2)) continue;
-      this.hitEnemy(o, dmg, { p, kind: 'explode', raw: true, noProc: true, crit: false, noGuard: true, el: 'pyre', affDone: true });
+      this.hitEnemy(o, o === e ? dmg : dmg * ED.CONST.SPLASH_MUL, { p, kind: 'explode', raw: true, noProc: true, crit: false, noGuard: true, el: 'pyre', affDone: true });
     }
   };
 
@@ -272,13 +286,14 @@
     if (tg.length > 1) { pts.pop(); this.emit({ t: 'chain', pts }); } else this.emit({ t: 'chain', pts: [[hx, hy], [hx, hy - 24]] });
     for (const t of tg) {
       if (t.hp <= 0) continue;
-      const got = this.hitEnemy(t, dmg, { p, kind: 'chain', raw: true, noProc: true, crit: false, el: 'storm', affDone: true, x: e.x, y: e.y });
+      const got = this.hitEnemy(t, t === e ? dmg : dmg * ED.CONST.ARC_MUL, { p, kind: 'chain', raw: true, noProc: true, crit: false, el: 'storm', affDone: true, x: e.x, y: e.y });
       if (t.hp <= 0 || !p) continue;
       if (st.supercond) this.addChill(t, 25, p);
       if (st.plasma) this.addBurn(t, got * 0.4, p);
       if (st.arcStun && !t.boss) t.stun = Math.max(t.stun, st.arcStun);
     }
-    if (p && st.thunderbolt && e.hp > 0 && this.rng.chance(st.thunderbolt)) {
+    if (p && st.thunderbolt && e.hp > 0 && this.time >= p.boltAt && this.rng.chance(st.thunderbolt)) {
+      p.boltAt = this.time + ED.CONST.BOLT_CD;
       this.emit({ t: 'bolt', x: Math.round(e.x), y: Math.round(e.y) });
       this.explode(e.x, e.y, 60, st.weapon.dmg * 2, 0, p, 'bolt', true, { el: 'storm' });
     }
@@ -374,7 +389,7 @@
       const comp = !!src.comp || src.kind === 'orbit' || src.kind === 'wisp' || src.kind === 'minion';
       if (st.killHeal) this.sustainHeal(p, st.killHeal * k);
       if (st.killHealPct) this.sustainHeal(p, p.maxHp * st.killHealPct * k);
-      if (st.bloodOrb && this.rng.chance(st.bloodOrb)) this.spawnPickup('orb', e.x, e.y, 0.04);
+      if (st.bloodOrb && this.rng.chance(st.bloodOrb)) this.spawnPickup('orb', e.x, e.y, 0.025);
       if (comp && st.feast) this.sustainHeal(p, p.maxHp * 0.01);
       if (st.chalice && p.chaliceHp < 20) {
         p.chaliceKills++;
@@ -430,7 +445,7 @@
     if (!src.hazard && st.dodge && this.rng.chance(st.dodge)) { this.emit({ t: 'block', x: p.x, y: p.y, k: 'dodge' }); p.invuln = 0.25; return false; }
     if (!src.hazard && st.aegis && p.aegisT <= 0) { p.aegisT = 10; p.invuln = 0.4; this.emit({ t: 'block', x: p.x, y: p.y, k: 'aegis' }); return false; }
     let dmg = amount * ED.Stats.armorMul(st.armor) * (1 + st.vuln);
-    for (const z of this.zones) if (z.kind === 'sanct' && U.dist2(z.x, z.y, p.x, p.y) < z.r * z.r) { dmg *= 0.65; break; }
+    for (const z of this.zones) if (z.kind === 'sanct' && U.dist2(z.x, z.y, p.x, p.y) < z.r * z.r) { dmg *= ED.CONST.SANCT_DR; break; }
     if (p.guardT > 0) dmg *= 0.4;
     if (p.wallT > 0) dmg *= 0.6;
     const e = src.e;

@@ -40,8 +40,8 @@
     overcharge: { name: 'Overcharge', rar: 'e', icon: 'star', desc: 'Your skills also release a damaging shockwave.', mods: { overcharge: 1 }, max: 1 },
 
     // ---- Pyre ----
-    kindle: { name: 'Kindle', rar: 'r', icon: 'flame', path: 'pyre', gate: true, desc: 'Hits add 40% of their damage as Burn.', mods: { pyreInfuse: 0.4 }, max: 1 },
-    stoke: { name: 'Stoke the Flames', rar: 'r', icon: 'flame', path: 'pyre', desc: 'Burn deals +30% damage.', mods: { burnMul: 0.3 }, max: 3 },
+    kindle: { name: 'Kindle', rar: 'r', icon: 'flame', path: 'pyre', gate: true, desc: 'Hits add 35% of their damage as Burn.', mods: { pyreInfuse: 0.35 }, max: 1 },
+    stoke: { name: 'Stoke the Flames', rar: 'r', icon: 'flame', path: 'pyre', desc: 'Burn deals +28% damage.', mods: { burnMul: 0.28 }, max: 3 },
     searing: { name: 'Searing', rar: 'c', icon: 'sun', path: 'pyre', desc: '+12% damage to burning foes.', mods: { searing: 0.12 }, max: 2 },
     wildfire: { name: 'Wildfire', rar: 'r', icon: 'flame', path: 'pyre', desc: 'A burning foe that dies sets foes within 80 alight for 15% of its max health.', mods: { wildfire: 0.15 }, max: 2 },
     cindertrail: { name: 'Cinder Trail', rar: 'r', icon: 'wing', path: 'pyre', desc: 'Your dash leaves burning ground.', mods: { dashFire: 1 }, max: 1 },
@@ -58,37 +58,37 @@
     evo_rime: { name: 'Glacial Arms', rar: 'l', icon: 'snow', path: 'rime', evo: 'rime', desc: 'Every 3rd attack fires 5 piercing ice shards in a fan (50% each). Chill +25%.', mods: { chillMul: 0.25 }, max: 1 },
 
     // ---- Storm ----
-    staticcharge: { name: 'Static Charge', rar: 'r', icon: 'bolt', path: 'storm', gate: true, desc: 'Hits charge foes with 35% of their damage; each second they discharge to themselves and 3 nearby foes.', mods: { stormInfuse: 0.35 }, max: 1 },
+    staticcharge: { name: 'Static Charge', rar: 'r', icon: 'bolt', path: 'storm', gate: true, desc: 'Hits charge foes with 25% of their damage; each second they discharge to themselves and 3 nearby foes (they take 60%).', mods: { stormInfuse: 0.25 }, max: 1 },
     conductor: { name: 'Conductor', rar: 'r', icon: 'bolt', path: 'storm', desc: '+1 arc target and +30% arc range.', mods: { arcs: 1, arcRange: 0.3 }, max: 2 },
-    highvoltage: { name: 'High Voltage', rar: 'r', icon: 'star', path: 'storm', desc: 'Discharges deal +25% damage.', mods: { shockMul: 0.25 }, max: 3 },
+    highvoltage: { name: 'High Voltage', rar: 'r', icon: 'star', path: 'storm', desc: 'Discharges deal +20% damage.', mods: { shockMul: 0.2 }, max: 3 },
     thunderstep: { name: 'Thunderstep', rar: 'r', icon: 'wingblade', path: 'storm', desc: 'Foes you dash through take 100% weapon damage.', mods: { dashShock: 1 }, max: 1 },
     overload: { name: 'Overload', rar: 'c', icon: 'magnet', path: 'storm', desc: 'Discharges stun non-boss foes for 0.25s.', mods: { arcStun: 0.25 }, max: 2 },
     thunderhead: { name: 'Thunderhead', rar: 'e', icon: 'bolt', path: 'storm', key: true, desc: 'Each discharge has a 25% chance to drop a thunderbolt: 200% weapon damage, radius 60.', mods: { thunderbolt: 0.25 }, max: 1 },
     evo_storm: { name: 'Tempest Arms', rar: 'l', icon: 'bolt', path: 'storm', evo: 'storm', desc: 'Every 4th attack calls lightning on its target (150%, radius 50). Foes discharge every 0.5s.', mods: {}, max: 1 },
 
     // ---- Steel ----
-    honededge: { name: 'Honed Edge', rar: 'r', icon: 'sword', path: 'steel', gate: true, desc: '+6% critical chance. Crits make foes Bleed for 30% of the hit.', mods: { crit: 0.06, bleed: 0.3 }, max: 1 },
-    brutal: { name: 'Brutality', rar: 'r', icon: 'skull', path: 'steel', desc: '+35% critical damage.', mods: { critDmg: 0.35 }, max: 3 },
-    keen: { name: 'Keen Eye', rar: 'c', icon: 'eye', path: 'steel', desc: '+6% critical chance.', mods: { crit: 0.06 }, max: 2 },
-    lacerate: { name: 'Lacerate', rar: 'r', icon: 'dagger', path: 'steel', desc: '+15% damage to bleeding foes.', mods: { lacerate: 0.15 }, max: 2 },
-    execute: { name: 'Executioner', rar: 'r', icon: 'axe', path: 'steel', desc: '+40% damage to foes below 30% health.', mods: { execute: 0.4 }, max: 2 },
+    honededge: { name: 'Honed Edge', rar: 'r', icon: 'sword', path: 'steel', gate: true, desc: '+4% critical chance. Crits make foes Bleed for 25% of the hit.', mods: { crit: 0.04, bleed: 0.25 }, max: 1 },
+    brutal: { name: 'Brutality', rar: 'r', icon: 'skull', path: 'steel', desc: '+25% critical damage.', mods: { critDmg: 0.25 }, max: 3 },
+    keen: { name: 'Keen Eye', rar: 'c', icon: 'eye', path: 'steel', desc: '+4% critical chance.', mods: { crit: 0.04 }, max: 2 },
+    lacerate: { name: 'Lacerate', rar: 'r', icon: 'dagger', path: 'steel', desc: '+12% damage to bleeding foes.', mods: { lacerate: 0.12 }, max: 2 },
+    execute: { name: 'Executioner', rar: 'r', icon: 'axe', path: 'steel', desc: '+25% damage to foes below 30% health.', mods: { execute: 0.25 }, max: 2 },
     sunder: { name: 'Sunder', rar: 'e', icon: 'blades', path: 'steel', key: true, desc: 'Each crit makes that foe take +4% damage from you (max +40%).', mods: { sunder: 1 }, max: 1 },
     evo_steel: { name: 'Masterwork Arms', rar: 'l', icon: 'sword', path: 'steel', evo: 'steel', desc: 'Crits release a spectral strike at 60%. +10% critical chance.', mods: { crit: 0.1 }, max: 1 },
 
     // ---- Blood ----
-    bloodpact: { name: 'Blood Pact', rar: 'r', icon: 'drop', path: 'blood', gate: true, desc: 'Kills heal 1% max health (within the hit and kill heal cap). +20% damage, and +20% more below 50% health.', mods: { killHealPct: 0.01, berserk: 0.2, dmg: 0.2 }, max: 1 },
-    leech: { name: 'Leech', rar: 'r', icon: 'fang', path: 'blood', desc: 'Heal 1.5% of damage dealt. All hit and kill healing together is capped per second.', mods: { leech: 0.015 }, max: 2 },
-    bloodrush: { name: 'Bloodrush', rar: 'r', icon: 'boot', path: 'blood', desc: '+8% attack speed. Below 50% health: +15% attack speed and +10% move speed.', mods: { bloodrush: 0.15, atk: 0.08 }, max: 2 },
-    transfusion: { name: 'Transfusion', rar: 'c', icon: 'potion', path: 'blood', desc: 'Kills drop a blood orb 20% of the time (heals 4% max health).', mods: { bloodOrb: 0.2 }, max: 1 },
-    hemomancy: { name: 'Hemomancy', rar: 'r', icon: 'heartbroken', path: 'blood', desc: 'Skills cost 4% of current health but deal +35% damage.', mods: { hemomancy: 0.35 }, max: 2 },
-    crimsontide: { name: 'Crimson Tide', rar: 'e', icon: 'chalice', path: 'blood', key: true, desc: 'Overhealing becomes a blood shield (max 25% max health) that absorbs damage first.', mods: { bloodShield: 0.25 }, max: 1 },
+    bloodpact: { name: 'Blood Pact', rar: 'r', icon: 'drop', path: 'blood', gate: true, desc: 'Kills heal 1% max health (within the hit and kill heal cap). Hits make foes Bleed for 45% of the hit. +40% damage, and +40% more below 50% health.', mods: { killHealPct: 0.01, berserk: 0.4, dmg: 0.4, bleedHit: 0.45 }, max: 1 },
+    leech: { name: 'Leech', rar: 'r', icon: 'fang', path: 'blood', desc: 'Heal 1.5% of damage dealt (all hit and kill healing together is capped per second) and deal +8% damage.', mods: { leech: 0.015, dmg: 0.08 }, max: 2 },
+    bloodrush: { name: 'Bloodrush', rar: 'r', icon: 'boot', path: 'blood', desc: '+12% attack speed. Below 50% health: +15% attack speed and +10% move speed.', mods: { bloodrush: 0.15, atk: 0.12 }, max: 2 },
+    transfusion: { name: 'Transfusion', rar: 'c', icon: 'potion', path: 'blood', desc: 'Kills drop a blood orb 7% of the time (heals 2.5% max health).', mods: { bloodOrb: 0.07 }, max: 1 },
+    hemomancy: { name: 'Hemomancy', rar: 'r', icon: 'heartbroken', path: 'blood', desc: 'Each rank: skills cost 4% of current health and deal +35% damage.', mods: { hemomancy: 0.35, hemoCost: 0.04 }, max: 2 },
+    crimsontide: { name: 'Crimson Tide', rar: 'e', icon: 'chalice', path: 'blood', key: true, desc: 'Bleeding foes take +30% damage from you. Overhealing becomes a blood shield (max 25% max health) that absorbs damage first.', mods: { bloodShield: 0.25, lacerate: 0.3 }, max: 1 },
     evo_blood: { name: 'Sanguine Arms', rar: 'l', icon: 'drop', path: 'blood', evo: 'blood', desc: 'Every attack also launches a blood scythe (50%) that heals 15% of its damage. Kill heals are doubled. Healing stays within the hit and kill heal cap.', mods: {}, max: 1 },
 
     // ---- Spirit ----
     wispcall: { name: 'Spirit Wisp', rar: 'r', icon: 'orb', path: 'spirit', gate: true, desc: 'A wisp fights at your side.', mods: { wisp: 1 }, max: 1 },
     orbit: { name: 'Orbiting Blades', rar: 'r', icon: 'blades', path: 'spirit', desc: '+1 blade circles you, cutting foes.', mods: { orbit: 1 }, max: 3 },
     wispchoir: { name: 'Wisp Choir', rar: 'r', icon: 'orb', path: 'spirit', desc: '+1 wisp.', mods: { wisp: 1 }, max: 2 },
-    kindred: { name: 'Kindred', rar: 'c', icon: 'banner', path: 'spirit', desc: 'Companions (wisps, blades, minions) deal +35% damage.', mods: { compDmg: 0.35 }, max: 2 },
+    kindred: { name: 'Kindred', rar: 'c', icon: 'banner', path: 'spirit', desc: 'Companions (wisps, blades, minions) deal +30% damage.', mods: { compDmg: 0.3 }, max: 2 },
     guardians: { name: 'Guardian Spirits', rar: 'r', icon: 'shieldgold', path: 'spirit', desc: 'Blades destroy enemy projectiles they touch (each blade once per second).', mods: { bladeBlock: 1 }, max: 1 },
     bond: { name: 'Elemental Bond', rar: 'e', icon: 'twinblue', path: 'spirit', key: true, desc: 'Companion hits apply your infusions.', mods: { compInfuse: 1 }, max: 1 },
     evo_spirit: { name: 'Ascendant Arms', rar: 'l', icon: 'orb', path: 'spirit', evo: 'spirit', desc: 'A spectral twin repeats every attack 0.15s later at 50%. +1 wisp, +1 blade.', mods: { wisp: 1, orbit: 1 }, max: 1 },

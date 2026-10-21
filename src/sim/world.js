@@ -119,7 +119,7 @@
       lightlessBoss: false, fullClear: false, roomsVisited: 0, roomsTotal: 0, lightAtBoss: [],
       embers: { rooms: 0, elites: 0, bosses: 0, victory: 0 } };
     this.light = 100; this.lightMax = 100; this.dread = Object.assign({}, W.DREAD[0]); // lantern and dread tier (see updateLantern)
-    this.gloomT = null; this.gloomOut = false; this.bossTier = 0; this.fullClearDone = 0;
+    this.gloomT = null; this.gloomN = 0; this.deepRooms = 0; this.bossTier = 0; this.fullClearDone = 0;
     this.roomState = {};
     this.endTimer = -1; this.result = null; this.victory = false;
     this.flowT = 0; this.flow = null; this.tick = 0; this.waitMsg = '';
@@ -127,30 +127,40 @@
     for (const pd of opts.players) this.addPlayer(pd);
   };
   W.xpFor = (L) => Math.round(30 + 3 * (L - 1) + 6 * (L - 1) * (L - 1)); // xp from level L to L+1
-  // Dread tiers by light fraction (>= 0.5, >= 0.25, > 0, 0): foe hp/damage multipliers (hp 1: darkness never adds HP), elite chance added to a room's, wave budget multiplier,
-  // room gold & embers multiplier, chance (up) that a cleared room's reward is upgraded, seconds after entering a room until the Gloom hunts (gloom 0 = none).
+  // Dread tiers by light fraction (>= 0.5, >= 0.25, > 0, 0): foe hp (1 in every tier: darkness never adds HP) and damage multipliers, elite chance added to a room's, wave budget multiplier, room gold & embers multiplier,
+  // chance (up) that a cleared room's reward is upgraded, seconds after entering a room until the Gloom hunts (gloom 0 = none), Glooms hunting at once (glooms), healing multiplier (heal).
   W.DREAD = [
-    { tier: 0, hp: 1, dmg: 1, elite: 0, wave: 1, gold: 1, up: 0, gloom: 0 },
-    { tier: 1, hp: 1, dmg: 1, elite: 0.15, wave: 1, gold: 1.5, up: 0, gloom: 0 },
-    { tier: 2, hp: 1, dmg: 1.05, elite: 0.3, wave: 1, gold: 2, up: 0.25, gloom: 8 },
-    { tier: 3, hp: 1, dmg: 1.1, elite: 0.45, wave: 1, gold: 2.5, up: 0.4, gloom: 3 },
+    { tier: 0, hp: 1, dmg: 1, elite: 0, wave: 1, gold: 1, up: 0, gloom: 0, glooms: 0, heal: 1 },
+    { tier: 1, hp: 1, dmg: 1.1, elite: 0.2, wave: 1, gold: 1.25, up: 0, gloom: 0, glooms: 0, heal: 1 },
+    { tier: 2, hp: 1, dmg: 1.6, elite: 0.4, wave: 1, gold: 1.5, up: 0.12, gloom: 8, glooms: 1, heal: 0.7 },
+    { tier: 3, hp: 1, dmg: 2.3, elite: 0.6, wave: 1, gold: 1.75, up: 0.2, gloom: 3, glooms: 1, heal: 0.5 },
   ];
-  W.GLOOM_HIT = 0.22; // Gloom touch damage as a fraction of the toughest living hero's max HP
+  W.ELITE = { hp: 2.4, hpStep: 0.4, dmg: 0.9 }; // elite HP multiplier at stratum I (+ hpStep per stratum) and damage multiplier
+  W.HAZARD_MUL = 0.5; // floor hazard damage multiplier
+  W.LANTERN_MUL = [1.3, 1.2, 1.1, 1, 1, 1]; // lantern size per stratum: the first strata are bright
+  W.GLOOM_GAP = 4; // seconds between the Glooms of one room when its tier hunts with more than one
+  W.GLOOM_STEP = 1; W.GLOOM_MAX = 3; // Lightless hunts with 1 + floor(deepRooms / GLOOM_STEP) Glooms, at most GLOOM_MAX
+  W.DEEP = 0.28; W.DEEP_MAX = 5; // every new room entered Dark or Lightless raises foe damage by DEEP for the rest of the stratum (up to DEEP_MAX rooms)
+  W.GLOOM_HIT = 0.19; // Gloom touch damage as a fraction of the toughest living hero's max HP
   W.OIL_LIGHT = 35; // light gained from a lantern oil reward or shop oil
-  W.FLARE = { cost: 8, banish: 12, blind: 1.5, r: 160 }; // lantern flare (F): light spent, seconds the Gloom stays away, foe blind seconds, blind radius
+  W.FLARE = { cost: 6, banish: 12, blind: 1.5, r: 160 }; // lantern flare (F): light spent, seconds the Gloom stays away, foe blind seconds, blind radius
   W.DARK_AFFIXES = ['brutal', 'vampiric', 'warded', 'swift']; // affix pool of elites made at Dark and Lightless (the volatile affix is left out)
   W.ELITE_BODIES = 4; // plain-foe budget one elite displaces from its wave in any tier but Bright
   W.REWARD_UP = { gold: 'vigor', vigor: 'forge', forge: 'epic', class: 'epic' }; // darkness upgrades a room reward one step (boon:<path> -> epic)
   // Per-stratum threat on top of the base scales: foe HP, wave budget, `cdRate` = extra cooldown recovery (0.2 = attack timers tick 20% faster, -0.2 = 20% slower) and the boss pause between attacks (x).
-  W.THREAT = [{ hp: 3, dmg: 0.5, wave: 1, cdRate: -0.4, pause: 2 }, { hp: 3, dmg: 0.6, wave: 1, cdRate: -0.3, pause: 1.7 }, { hp: 3, dmg: 1, wave: 1.05, cdRate: -0.1, pause: 1.4 }, { hp: 1.6, dmg: 1, wave: 1.1, cdRate: 0, pause: 1.2 }, { hp: 4, dmg: 1, wave: 1.2, cdRate: 0.15, pause: 1 }, { hp: 2.55, dmg: 1, wave: 1.3, cdRate: 0.3, pause: 0.9 }];
-  W.DRAIN_SECS = [1000, 880, 820, 800, 800, 800]; // seconds for a full unupgraded lantern to burn out on the slow per-second drain, per stratum
+  W.THREAT = [{ hp: 2.2, dmg: 0.5, wave: 0.8, cdRate: -0.4, pause: 2 }, { hp: 1.62, dmg: 0.5, wave: 0.75, cdRate: -0.3, pause: 1.7 }, { hp: 1.3, dmg: 0.5, wave: 0.7, cdRate: -0.1, pause: 1.4 }, { hp: 1, dmg: 0.4, wave: 0.66, cdRate: 0, pause: 1.2 }, { hp: 1.07, dmg: 0.8, wave: 0.62, cdRate: 0.15, pause: 1 }, { hp: 1.02, dmg: 1, wave: 0.6, cdRate: 0.3, pause: 0.9 }];
+  // Foe HP multiplier of stratum s: the depth curve times the threat HP.
+  W.hpScale = (s) => (1 + 0.65 * (s - 1) + 0.08 * (s - 1) * (s - 1)) * W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, s - 1))].hp;
+  // Wave pacing of combat rooms: seconds before the first wave, spawn telegraph (+ random extra), minimum gap before the next wave, the share of a wave that may still stand when the next one is called, the seconds after which the next wave comes regardless, and the minimum spawn distance from heroes (turrets keep more).
+  W.PACE = { first: 0.5, spawn: 0.7, spawnVar: 0.25, gap: 0.9, nextAt: 0.45, maxAge: 6, avoid: 100, avoidTurret: 130 };
+  W.DRAIN_SECS = [2500, 2200, 2050, 2000, 2000, 2000]; // seconds for a full unupgraded lantern to burn out on the slow per-second drain, per stratum
   // Entering a room not yet visited costs this much light (of 100, not scaled by Deep Wick); revisits, the start room and the boss room are free. Shown on doors and the map.
-  W.ROOM_COST = { combat: 10, elite: 14, treasure: 7, shop: 7, event: 7, rest: 7 };
+  W.ROOM_COST = { combat: 12, elite: 17, treasure: 8, shop: 8, event: 8, rest: 8 };
   W.roomCost = (type) => W.ROOM_COST[type] || 0;
   // Dread tier of a light fraction.
   W.tierOf = (f) => f >= 0.5 ? 0 : f >= 0.25 ? 1 : f > 0 ? 2 : 3;
   // Boss-door reward for the light left (fraction f): every living hero heals `heal` and gains a `shield` (both fractions of max HP); the party gains `gold` and `embers`.
-  W.bossLight = (f, stratum) => ({ heal: 0.3 * f, shield: 0.4 * f, gold: Math.round(f * (10 + 5 * stratum)), embers: Math.round(f * (2 + stratum)) });
+  W.bossLight = (f, stratum) => ({ heal: 0.5 * f, shield: 0.8 * f, gold: Math.round(f * (10 + 5 * stratum)), embers: Math.round(f * (2 + stratum)) });
 
   // Gold dropped by a 'gold' room reward (shared with the UI): 15 + 8 per stratum, times the dread gold bonus and the global gold multiplier.
   W.rewardGold = (stratum, dreadGold) => Math.round((15 + 8 * stratum) * (dreadGold || 1) * W.GOLD_MUL);
@@ -158,7 +168,7 @@
   W.prototype.threat = function () { return W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, this.stratum - 1))]; };
   W.prototype.emit = function (ev) { this.fx.push(ev); };
   W.prototype.partySize = function () { return Math.max(1, this.players.size); };
-  W.prototype.partyHpMul = function () { const n = this.partySize() - 1; return 1 + 1.1 * n + 0.35 * n * (n - 1); };
+  W.prototype.partyHpMul = function () { const n = this.partySize() - 1; return 1 + 0.9 * n + 0.3 * n * (n - 1); };
   W.prototype.alive = function (p) { return p && !p.downed && !p.dead; };
   W.prototype.alivePlayers = function () { const out = []; for (const p of this.players.values()) if (!p.downed && !p.dead) out.push(p); return out; };
   W.prototype.hostiles = function () { let n = 0; for (const e of this.enemies) if (e.hp > 0 && !e.def.gloom) n++; return n; };
@@ -227,7 +237,7 @@
   // Heals up to max HP; healing beyond it feeds the blood shield (cap maxHp x bloodShield). Returns the HP actually restored.
   W.prototype.healPlayer = function (p, amt, silent) {
     if (!p || p.downed || p.dead) return 0;
-    const raw = amt * p.stats.healMul, cap = p.maxHp * (p.stats.bloodShield || 0);
+    const raw = amt * p.stats.healMul * (this.dread.heal ?? 1), cap = p.maxHp * (p.stats.bloodShield || 0);
     if (p.hp >= p.maxHp && !(cap > 0 && raw > 0)) return 0;
     const v = Math.min(p.maxHp - p.hp, raw);
     p.hp += v;
@@ -280,7 +290,7 @@
     this.roomState = {};
     for (const r of this.floor.rooms) this.roomState[r.id] = { visited: false, known: false, cleared: false, props: null };
     this.run.roomsTotal += this.floor.rooms.length;
-    this.lightMax = this.lanternMax(); this.light = this.lightMax; this.updateDread();
+    this.lightMax = this.lanternMax(); this.light = this.lightMax; this.updateDread(); this.deepRooms = 0;
     this.allies.length = 0;
     for (const p of this.players.values()) {
       if (p.dead) { p.dead = false; p.downed = false; p.hp = Math.round(p.maxHp * 0.3); p.invuln = 2; }
@@ -303,7 +313,8 @@
     if (!rs.visited) { this.run.roomsVisited++; cost = W.roomCost(room.type); }
     rs.visited = true; rs.known = true;
     if (cost > 0) { this.light = Math.max(0, this.light - cost); this.updateDread(); } // paid before the room's encounter is planned
-    this.gloomT = null; this.gloomOut = false;
+    this.gloomT = null; this.gloomN = 0;
+    if (cost > 0 && this.dread.tier >= 2) this.deepRooms++;
     if (room.type === 'boss' && !rs.cleared) { this.bossTier = this.dread.tier; this.run.lightAtBoss.push(Math.round(this.light / this.lightMax * 100) / 100); atBoss = true; }
     for (const d in room.doors) if (room.doors[d] >= 0) this.roomState[room.doors[d]].known = true;
     let k = 0;
@@ -419,7 +430,7 @@
       if (p.hzT <= 0) {
         const s = this.stratum;
         const dmg = hz === 'spikes' ? 6 : hz === 'poison' ? 4 : hz === 'lava' ? 6 : hz === 'void' ? 6 : 0; // damage per tick; every floor hazard stays near 7-10 damage per second
-        if (dmg) this.hurtPlayer(p, dmg * (1 + 0.2 * (s - 1)), { hazard: true });
+        if (dmg) this.hurtPlayer(p, dmg * (1 + 0.2 * (s - 1)) * W.HAZARD_MUL, { hazard: true });
         p.hzT = hz === 'spikes' ? 0.9 : 0.6;
       }
     }
@@ -588,7 +599,7 @@
   W.prototype.lanternMax = function () {
     let rank = 0;
     for (const p of this.players.values()) rank = Math.max(rank, (p.meta.up && p.meta.up[ED.UPGRADE_IDX.deepwick]) || 0);
-    return 100 * (1 + 0.06 * rank);
+    return 100 * (1 + 0.06 * rank) * (W.LANTERN_MUL[this.stratum - 1] || 1);
   };
 
   // Burns the lantern slowly outside boss rooms (the boss room freezes the tier; no drain while a safe room waits on a boon pick) and, Lightless, stalks regular rooms with a Gloom.
@@ -601,10 +612,16 @@
       this.updateDread();
     }
     const gl = this.dread.gloom;
-    if (gl > 0 && room.type !== 'boss' && room.type !== 'start' && !this.gloomOut && ED.ENEMIES.gloom) {
-      this.gloomT = (this.gloomT === null ? gl : this.gloomT) - (hold ? 0 : dt);
-      if (this.gloomT <= 0) { this.gloomOut = true; this.spawnGloom(); }
+    if (gl > 0 && room.type !== 'boss' && room.type !== 'start' && this.gloomN < this.gloomWant() && ED.ENEMIES.gloom) {
+      this.gloomT = (this.gloomT === null ? (this.gloomN ? W.GLOOM_GAP : gl) : this.gloomT) - (hold ? 0 : dt);
+      if (this.gloomT <= 0) { this.gloomN++; this.gloomT = null; this.spawnGloom(); }
     } else if (!(gl > 0)) this.gloomT = null;
+  };
+
+  // Glooms hunting in this room: the tier's count; Lightless adds one per GLOOM_STEP dark rooms entered this stratum (this one included).
+  W.prototype.gloomWant = function () {
+    const n = this.dread.glooms || 1;
+    return this.dread.tier >= 3 ? Math.min(W.GLOOM_MAX, n + Math.floor(this.deepRooms / W.GLOOM_STEP)) : n;
   };
 
   // Recomputes the dread tier from the light fraction; w.dread carries the multipliers read at spawn and at room rewards.
@@ -635,7 +652,7 @@
   W.prototype.banishGloom = function (hold) {
     for (const e of this.enemies) if (e.def.gloom && e.hp > 0) { e.hp = 0; this.emit({ t: 'banish', x: Math.round(e.x), y: Math.round(e.y) }); }
     this.zones = this.zones.filter(z => !z.gloom);
-    this.gloomOut = false; this.gloomT = hold;
+    this.gloomN = 0; this.gloomT = hold;
   };
 
   // Lantern flare (F): spends light to banish the Gloom for FLARE.banish seconds and blind the foes around the hero. Returns whether it fired.

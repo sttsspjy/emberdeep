@@ -17,9 +17,13 @@
     // path infusions, statuses and path/duo effects
     pyreInfuse: 0, burnMul: 0, searing: 0, wildfire: 0, conflag: 0, rimeInfuse: 0, chillMul: 0, shatter: 0, dashFrost: 0, freezeDur: 0, chillWeaken: 0,
     frostNova: 0, stormInfuse: 0, arcs: 0, arcRange: 0, shockMul: 0, dashShock: 0, arcStun: 0, thunderbolt: 0, bleed: 0, lacerate: 0, sunder: 0,
-    killHealPct: 0, berserk: 0, bloodrush: 0, bloodOrb: 0, hemomancy: 0, bloodShield: 0, compDmg: 0, compInfuse: 0, bladeBlock: 0, critCharge: 0, twinEvery: 0,
+    killHealPct: 0, berserk: 0, bleedHit: 0, bloodrush: 0, bloodOrb: 0, hemomancy: 0, hemoCost: 0, bloodShield: 0, compDmg: 0, compInfuse: 0, bladeBlock: 0, critCharge: 0, twinEvery: 0,
     thermal: 0, plasma: 0, supercond: 0, hemorrhage: 0, staticEdge: 0, serrated: 0, soulfire: 0, feast: 0,
   });
+
+  // Skill cooldown reduction: full up to CDR_SOFT, half above it, never more than CDR_MAX.
+  St.CDR_SOFT = 0.4; St.CDR_MAX = 0.65;
+  St.cdrEff = (c) => (c <= St.CDR_SOFT ? Math.max(0, c) : Math.min(St.CDR_MAX, St.CDR_SOFT + (c - St.CDR_SOFT) * 0.5));
 
   // build: { cls, weapon, boons: {id: n}, relics: [id], meta: { up: [], mastery }, pact, chaliceHp, bonusHp }
   St.compute = (build) => {
@@ -56,8 +60,9 @@
     out.maxHp = Math.max(20, Math.round(s.hp * Math.max(0.3, s.hpMul)));
     out.moveSpeed = cls.spd * U.clamp(s.spd, 0.5, 2.2);
     out.atkInterval = wpn.rate / Math.max(0.3, s.atk);
-    out.skillCd = ED.SKILLS[cls.skill].cd * Math.max(0.35, 1 - s.cdr);
-    out.skill2Cd = cls.skill2 && ED.SKILLS[cls.skill2] ? ED.SKILLS[cls.skill2].cd * Math.max(0.35, 1 - s.cdr) : 0;
+    const cdr = St.cdrEff(s.cdr);
+    out.skillCd = ED.SKILLS[cls.skill].cd * (1 - cdr);
+    out.skill2Cd = cls.skill2 && ED.SKILLS[cls.skill2] ? ED.SKILLS[cls.skill2].cd * (1 - cdr) : 0;
     out.dashCd = 1.1 * Math.max(0.3, 1 - s.dashcdr);
     out.pickupR = 46 * (1 + s.pickup);
     out.critMult = 1.75 + s.critDmg;

@@ -15,7 +15,7 @@ No build step, no backend, no install. It is a static site: open it from any web
 | `Q` or right mouse | Skill 1 (rerolls the boon cards while they are open) |
 | `E` | Skill 2 |
 | `Space` | Dash (brief invulnerability) |
-| `F` | Lantern flare: spend 8 light to banish the Gloom and blind nearby foes |
+| `F` | Lantern flare: spend 6 light to banish the Gloom and blind nearby foes |
 | `Tab` | Map and character sheet: paths, boons, stats |
 | `Esc` | Pause (also backs out of any menu) |
 
@@ -35,24 +35,24 @@ The interface scales with your window (larger on big and 4K screens). Bottom-lef
 - **Rest sites** have a campfire (heal 35%) and, in strata I, III and V, an anvil (forge one boon); each hero uses one of them. **Shops** sell relics, a healing draught, lantern oil and one build item: an epic boon in strata I, III and V, a forge in strata II, IV and VI. The bosses of strata III and V also grant an epic boon.
 - **Relics** are run-long items from elite rooms, chests, shops, shrines and bosses.
 - You level up from kills and gain a boon at every second level (2, 4, 6, ...). Offers open only when the room is safe. Playing alone, the world waits while the boon cards are open (and while paused).
-- A winning descent is designed to take 22 to 32 minutes.
+- A winning descent takes about 20 to 30 minutes.
 
 ### The lantern and Dread
 
-Every room you have not visited yet costs lantern light: the number on its door (and on the map, and in the Tab map) says how much (combat 10, elite 14, anything else 7 out of 100; red means the room drops you to a darker tier). Going back through a room you have visited is free. The lantern also burns slowly while you stay on a floor, but not in boss rooms and not while a safe room waits for a boon pick. It refills when you enter the next stratum. Lantern oil (room rewards, shops) gives +35 light, and the **Deep Wick** Hearth upgrade raises the lantern's size.
+Every room you have not visited yet costs lantern light: the number on its door (and on the map, and in the Tab map) says how much (combat 12, elite 17, anything else 8 out of 100; red means the room drops you to a darker tier). The first three strata carry a bigger lantern (+30%, +20%, +10%). Going back through a room you have visited is free. The lantern also burns very slowly while you stay on a floor, but not in boss rooms and not while a safe room waits for a boon pick. It refills when you enter the next stratum. Lantern oil (room rewards, shops) gives +35 light, and the **Deep Wick** Hearth upgrade raises the lantern's size.
 
-**Light you still carry when you step into the boss room guards the whole party**: up to 30% of max health healed and a shield of up to 40% with a full lantern, plus a little gold and embers. The door and the lantern panel show what it will give.
+**Light you still carry when you step into the boss room guards the whole party**: up to 50% of max health healed and a shield of up to 80% with a full lantern, plus a little gold and embers. The door and the lantern panel show what it will give.
 
-Darkness does not make foes tougher; it makes the Deep hunt you:
+The darker the lantern, the harder the Deep hits back (never with more health, so foes stay quick to kill), and the more it pays:
 
-| Light left | Tier | Foe damage | Elite chance | Room gold and embers | Better room reward | Gloom |
-| --- | --- | --- | --- | --- | --- | --- |
-| 50% or more | Bright | x1 | normal | x1 | no | no |
-| 25% to 50% | Dim | x1 | +15% | x1.5 | no | no |
-| Under 25% | Dark | x1.05 | +30% | x2 | 25% of cleared rooms | hunts after 8 s |
-| 0% | Lightless | x1.1 | +45% | x2.5 | 40% of cleared rooms | hunts after 3 s |
+| Light left | Tier | Foe damage | Elite chance | Healing | Room gold and embers | Better room reward | Gloom |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 50% or more | Bright | x1 | normal | x1 | x1 | no | no |
+| 25% to 50% | Dim | x1.1 | +20% | x1 | x1.25 | no | no |
+| Under 25% | Dark | x1.6 | +40% | x0.7 | x1.5 | 12% of cleared rooms | hunts after 8 s |
+| 0% | Lightless | x2.3 | +60% | x0.5 | x1.75 | 20% of cleared rooms | hunts after 3 s |
 
-In the dark an elite replaces some of a wave's ordinary foes (fewer, nastier), and Dark and Lightless elites carry the worse affixes. The **Gloom** is an invulnerable hunter that walks through walls at nearly your speed (a dash outruns it), keeps its distance, then winds up a red line and lunges along it: step off the line. A touch takes about a fifth of your health. Drive it off with **lantern oil** (any light gained banishes it) or press **F** for a **lantern flare**: it costs 8 light, banishes the Gloom for 12 seconds and blinds the foes around you for 1.5 seconds. The flare can drop you into a darker tier. Running dry never ends a descent.
+**Greed compounds.** Every new room you enter Dark or Lightless makes the rest of that stratum hit harder, boss included (+28% foe damage per such room, up to five). In the dark an elite replaces some of a wave's ordinary foes (fewer, nastier), and Dark and Lightless elites carry the worse affixes. The **Gloom** is an invulnerable hunter that walks through walls at your speed (a dash only breaks away for a moment), keeps its distance, then winds up a red line and lunges along it: step off the line. A touch takes about a fifth of your health. Lightless, more Glooms join for every dark room you have entered (up to three). Drive them off with **lantern oil** (any light gained banishes them) or press **F** for a **lantern flare**: it costs 6 light, banishes the Gloom for 12 seconds and blinds the foes around you for 1.5 seconds. The flare can drop you into a darker tier, and at 0 light only oil helps. Running dry never ends a descent.
 
 ## Builds: paths, weaknesses, evolutions
 
@@ -64,7 +64,7 @@ Boons belong to six **paths**. A hero follows at most **three** paths per run. A
 | **Rime** | Chill and Freeze | Control and burst: slow foes, freeze them solid, shatter them for extra damage. |
 | **Storm** | Charge and Discharge | Crowds: charge builds on foes and discharges arc between nearby enemies. |
 | **Steel** | Bleed (physical) | Critical hits and execution: bigger crits, bleeding foes and finishing blows. |
-| **Blood** | Physical | Sustain by risk: heal from kills, hit harder when hurt, trade health for skill damage. |
+| **Blood** | Physical | Risk for power: hits bleed foes, hit harder when hurt, trade health for skill damage; healing from hits is slight. |
 | **Spirit** | Physical | Companions: wisps and orbiting blades fight for you, and bonds share your element. |
 
 - **Keystone:** at affinity 4 a path can offer its keystone, a build-defining epic boon.
@@ -72,7 +72,7 @@ Boons belong to six **paths**. A hero follows at most **three** paths per run. A
 - **Duo boons:** owning the gates of two paths unlocks boons that combine them (Thermal Shock, Plasma, Superconductor, Hemorrhage, Static Edge, Serrated Frost, Soulfire, Spirit Feast).
 - **Forge:** picking a forge card ranks an owned boon up by one.
 - A room that rewards "a boon of Pyre" offers Pyre boons (or the Pyre gate, if you have not opened that path). Level-ups offer neutral boons, boons of your paths, keystones, duos and your hero's class boons. The start of a descent lets you choose your first path from three gates.
-- Life steal exists only in the Blood path. All healing from your hits and kills (leech, kill heals, blood scythes, Blessed Strikes, Soul Siphon, Judgment) together restores at most 1% of your max health per second. Hearts, campfires, potions and class-skill heals are not limited. Damage over time never leeches.
+- Life steal exists only in the Blood path. All healing from your hits and kills (leech, kill heals, blood scythes, Blessed Strikes, Soul Siphon, Judgment) together restores at most 0.3% of your max health per second. Hearts, campfires, potions and class-skill heals are not limited. Damage over time never leeches.
 
 ### Elemental weaknesses
 
@@ -102,7 +102,7 @@ Your weapon is renamed after the path (Cinder Longsword, Glacial Longbow, and so
 
 ## Heroes
 
-You start with the **Knight**, **Ranger** and **Pyromancer**. Each hero has three weapons (unlocked by mastery) and two skills. Skill cooldown reductions apply to both, and each skill has class boons of its own.
+You start with the **Knight**, **Ranger** and **Pyromancer**. Each hero has three weapons (unlocked by mastery) and two skills. Skill cooldown reductions apply to both (full up to 40%, half beyond, 65% at most), and each skill has class boons of its own.
 
 | Hero | Skill 1 (Q) | Skill 2 (E) | Unlock |
 | --- | --- | --- | --- |
@@ -206,4 +206,4 @@ node tools/journey.js 0.7 1           # a whole player journey from a fresh save
 node tools/simpool.js 1 384 0.75 none,mid,max --pick=smart   # same bots in parallel, one line per profile
 ```
 
-Current bot results (skill 0.75, smart picks, 384 runs each): fresh profile 1% wins, half-upgraded 31%, fully upgraded 71%, fully upgraded with Pact 5 24%; mid-profile parties of 2 and 3 win 58% and 64%. A winning descent takes about 27 minutes. Targets live in docs/GAME-DESIGN.md §10.
+Current bot results (skill 0.75, smart picks, 384 runs each): fresh profile 2% wins, half-upgraded 34%, fully upgraded 71%, fully upgraded with Pact 5 28%; mid-profile parties of 2 and 3 win 55% and 56%. A winning descent takes 19 to 23 minutes. Targets live in docs/GAME-DESIGN.md §10.

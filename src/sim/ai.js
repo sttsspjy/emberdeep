@@ -574,7 +574,8 @@
 
   // The Gloom: invulnerable hunter that drifts through walls at `speed` x the hero's move speed, keeps `keep` px away, and every `cd` s winds up
   // (aim line fixed at the hero's spot) then lunges `lunge` px; touch deals full damage (state 'lunge' is a body-hit state, see combat.js).
-  const GLOOM = { speed: 0.9, keep: 120, range: 190, windup: 0.7, lunge: 140, lungeSpeed: 470, cd: 2.5 };
+  const GLOOM = { speed: 1.05, keep: 100, range: 230, windup: 0.55, lunge: 170, lungeSpeed: 520, cd: 1.6 };
+  AI.GLOOM = GLOOM;
   AI.gloom = (w, e, dt) => {
     e.spd = 0; // spd 0 keeps world.separate() from wall-resolving it
     const G = GLOOM, v = e.vars;
