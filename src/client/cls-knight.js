@@ -81,14 +81,24 @@
     for (let i = 0; i < 4; i++) { const q = i * TAU / 4 + 0.6; SP('deco.banner.yellow', ev.x + Math.cos(q) * 70, ev.y + Math.sin(q) * 40 - 6, { frame: 0, life: 0.8, fade: true, vy: -16, delay: i * 0.06 }); }
     for (const q of ctx.players()) if (!q.dead && !q.downed && U.dist2(q.x, q.y, ev.x, ev.y) < 100 * 100) for (let i = 0; i < 3; i++) F.part(ev.x + (Math.random() - 0.5) * 20, ev.y - 6, { color: '#ffe9a0', size: 2, life: 0.5, add: true, drag: 0, vx: (q.x - ev.x) / 0.45, vy: (q.y - 10 - ev.y) / 0.45 }, 0, 0.45);
   });
+  // The Knight whose Oathbreaker made this boom: its radius is 72 x area and it lies 0.9 x the Cleave reach (weapon range x 1.4) from that hero, 0.55 x for a warhammer's own shock.
+  function oathOf(ev, ctx) {
+    for (const p of ctx.players()) {
+      const st = p.stats, w = st && st.weapon;
+      if (p.cls !== 'knight' || !st || !st.cShock || !w || w.kind !== 'melee') continue;
+      const reach = w.range * (1 + st.area * 0.5 + st.meleeReach) * 1.4;
+      if (Math.abs(ev.r - Math.round(72 * (1 + st.area * 0.5))) <= 1 && Math.abs(Math.hypot(ev.x - p.x, ev.y - p.y) - reach * 0.9) < 13) return p;
+    }
+    return null;
+  }
   // Shockwaves: Juggernaut (the end of a Charge) and Oathbreaker (the tip of a Cleave) get a gold ring pair, a ground crack of dust and a heavier shake.
   CFX.on('boom', (ev, ctx, local) => {
     if (ev.k !== 'shock') return;
     let jug = null;
     for (const k in chargeEnd) { const c = chargeEnd[k]; if (F.time - c.t1 < 0.3 && F.time >= c.t0 && Math.abs(c.x - ev.x) < 8 && Math.abs(c.y - ev.y) < 8) { const p = heroOf(ctx, k) || heroOf(ctx, +k); if (p && p.stats && p.stats.jugShock) { jug = p; break; } } }
-    const oath = !jug && F.time - (F.cleaveT || -9) < 0.45;
-    if (!jug && !oath) return;
-    F.ring(ev.x, ev.y, ev.r, GOLD, 0.35, 4); F.ring(ev.x, ev.y, ev.r * 0.6, '#ffffff', 0.25, 2);
+    if (!jug && !oathOf(ev, ctx)) return;
+    ev.kfx = 1; // the gold pair below replaces the generic rings of this boom
+    F.ring(ev.x, ev.y, ev.r, GOLD, 0.35, 4); F.ring(ev.x, ev.y, ev.r * 0.6, PALE, 0.25, 2);
     F.burst(ev.x, ev.y, jug ? 10 : 6, { kind: 'shard', color: '#9a8a6a', sp: ev.r * 1.8, life: 0.5, size: 3, vz: 90, z: 2 });
     if (jug) F.addShake(jug.pid === local ? 3 : 1);
   });
@@ -157,7 +167,7 @@
     if (sp > 270 && sp < 345) {
       const v = gview(); if (!v) return;
       let best = null, bd = 60 * 60;
-      for (const p of v.players.values()) { const d = U.dist2(p.x, p.y - 4, pr.x, pr.y); if (d < bd && d > 25 * 25) { bd = d; best = p; } }
+      for (const p of v.players.values()) { if (p.cls !== 'knight' || !p.shieldOut || !p.stats || !(p.stats.orbit > 0)) continue; const d = U.dist2(p.x, p.y - 4, pr.x, pr.y); if (d < bd && d > 25 * 25) { bd = d; best = p; } } // only a Knight with Shield Orbit circles a shield
       if (best) { const rp = Pix.ramp(GOLD); Pix.put(c, Pix.ring(22, 1, rp[2], rp[3], rp[3], 3, (t * 4) & 7), s2(best.x), s2(best.y - 4), 0.3); }
     }
   };

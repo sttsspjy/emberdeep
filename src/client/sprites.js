@@ -82,10 +82,10 @@
   const OUTC = 0xff222222, P8 = 8; // outline colour (ABGR) and the transparent margin the editing room needs
   let fcv = null, fgx = null;
   const fpx = (h) => ED.Pix.px32(h), fnew = (w, h) => ({ w, h, d: new Uint32Array(w * h), gx: 0, gy: 0, tx: 0, ty: 0, dir: 0 });
-  // Sprite { w, h, d (ABGR), gx, gy (grip pivot), tx, ty (tip), dir } of anim `id` in its logical frame.
-  function fread(id) {
+  // Sprite { w, h, d (ABGR), gx, gy (grip pivot), tx, ty (tip), dir } of frame i (0) of anim `id` in its logical frame.
+  function fread(id, i) {
     const At = ED.Atlas, r = At.anim(id); if (!r) return null;
-    const f = r.f[0];
+    const f = r.f[i || 0];
     if (!fcv) { fcv = document.createElement('canvas'); fgx = fcv.getContext('2d', { willReadFrequently: true }); }
     fcv.width = f.w; fcv.height = f.h; fgx.imageSmoothingEnabled = false; fgx.clearRect(0, 0, f.w, f.h);
     fgx.drawImage(At.pages[f.p], f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
@@ -131,6 +131,18 @@
       const row = s.d.slice(o + xa, o + xb + 1), nl = Math.max(0, Math.min(s.w - nw, Math.round((xa + xb + 1) / 2 - nw / 2)));
       s.d.fill(0, o + xa, o + xb + 1);
       for (let i = 0; i < nw; i++) s.d[o + nl + i] = row[Math.min(w - 1, Math.floor((i + 0.5) * w / nw))];
+    }
+  }
+  // Bow rows resampled horizontally by f on their limb pixels only (every pixel not of the string colour sc), the string-side edge held so the string keeps meeting the limb.
+  function fbowrows(s, f, sc) {
+    for (let y = 0; y < s.h; y++) {
+      const o = y * s.w; let xa = -1, xb = -1;
+      for (let x = 0; x < s.w; x++) { const v = s.d[o + x]; if (v && v !== sc) { if (xa < 0) xa = x; xb = x; } }
+      if (xa < 0) continue;
+      const w = xb - xa + 1, nw = Math.min(fW(w, f), s.w - xa); if (nw === w) continue;
+      const row = s.d.slice(o + xa, o + xb + 1);
+      s.d.fill(0, o + xa, o + xb + 1);
+      for (let i = 0; i < nw; i++) s.d[o + xa + i] = row[Math.min(w - 1, Math.floor((i + 0.5) * w / nw))];
     }
   }
   // Inserts (n > 0) or removes (n < 0) |n| rows inside [y0, y1), taking the rows most like their neighbour so blades and shafts keep their pattern; the pivot and tip follow. s.ym(y) = the new index of old row y.
@@ -205,7 +217,7 @@
     from.forEach((v, i) => map.set(v, to[Math.round(i * (to.length - 1) / Math.max(1, from.length - 1))]));
     for (let i = 0; i < s.d.length; i++) { const m = map.get(s.d[i]); if (m !== undefined) s.d[i] = m; }
   }
-  const frowIs = (s, y, col, skipX) => { for (let x = (skipX === undefined ? 0 : skipX + 1); x < s.w; x++) { const v = s.d[y * s.w + x]; if (v && v !== OUTC) s.d[y * s.w + x] = col; } }; // every fill pixel of row y becomes col
+  const frowIs = (s, y, col, skipX, keep) => { for (let x = (skipX === undefined ? 0 : skipX + 1); x < s.w; x++) { const v = s.d[y * s.w + x]; if (v && v !== OUTC && v !== keep) s.d[y * s.w + x] = col; } }; // every fill pixel of row y becomes col (pixels of colour keep, a bowstring, stay)
   const fbottom = (s) => { for (let y = s.h - 1; y >= 0; y--) for (let x = 0; x < s.w; x++) if (s.d[y * s.w + x]) return y; return 0; };
   const fspan = (s, y) => { let xa = 0, xb = s.w - 1; while (xa < s.w && !s.d[y * s.w + xa]) xa++; while (xb >= xa && !s.d[y * s.w + xb]) xb--; return [xa, xb]; };
   const BRASS = '#c8963c', BRASS_D = '#8a5f1e', STUDC = '#e8e8e8';
@@ -249,12 +261,12 @@
   }
   // Bows (the string on the left, the belly to the right): limbs thicker and longer with brass tips and grip, or thinner and shorter with a class-colour wrap.
   function fBow(s, L, X) {
-    let xs = s.w; for (let i = 0; i < s.d.length; i++) if (s.d[i] && i % s.w < xs) xs = i % s.w;
+    let xs = s.w, sc = 0; for (let i = 0; i < s.d.length; i++) if (s.d[i] && i % s.w < xs) { xs = i % s.w; sc = s.d[i]; } // the string is the colour of the leftmost pixel
     const H0 = s.h - 2 * P8; s = fcarve(s, Math.round(H0 * (L.len - 1)), P8 + 8, P8 + 18);
-    frows(s, 0, s.h, X.heavy ? 1.3 : 0.7, xs);
-    const y0 = (() => { for (let y = 0; y < s.h; y++) for (let x = xs + 1; x < s.w; x++) if (s.d[y * s.w + x]) return y; return 0; })(), y1 = fbottom(s), gy = Math.round(s.gy);
-    if (X.heavy) { for (const y of [y0, y0 + 1, y1, y1 - 1]) frowIs(s, y, fpx(BRASS), xs); for (let y = gy - 2; y < gy + 2; y++) frowIs(s, y, fpx(BRASS_D), xs); }
-    else for (let y = gy - 3, i = 0; y < gy + 3; y++, i++) if (!(i & 1)) frowIs(s, y, fpx(X.col), xs);
+    fbowrows(s, X.heavy ? 1.3 : 0.7, sc);
+    const y0 = (() => { for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) if (s.d[y * s.w + x] && s.d[y * s.w + x] !== sc) return y; return 0; })(), y1 = fbottom(s), gy = Math.round(s.gy);
+    if (X.heavy) { for (const y of [y0, y0 + 1, y1, y1 - 1]) frowIs(s, y, fpx(BRASS), xs, sc); for (let y = gy - 2; y < gy + 2; y++) frowIs(s, y, fpx(BRASS_D), xs, sc); }
+    else for (let y = gy - 3, i = 0; y < gy + 3; y++, i++) if (!(i & 1)) frowIs(s, y, fpx(X.col), xs, sc);
     s.studs = [];
     return s;
   }
@@ -365,7 +377,7 @@
     SHOTK.set(pr.id, k);
     return k;
   };
-  // Atlas anim of a one-frame shot sprite scaled by k (nearest, outline rebuilt at 1 px); the original id when it cannot be baked.
+  // Atlas anim of a shot sprite (every frame) scaled by k (nearest, outline rebuilt at 1 px, one shared crop box); the original id when it cannot be baked.
   Sp.shotAnim = (id, k) => {
     const sl = k > 1 ? 0 : 1; let m = SHOTA.get(id); if (!m) SHOTA.set(id, m = [null, null]);
     let a = m[sl];
@@ -373,12 +385,21 @@
     const key = id + (sl ? '@s' : '@h');
     a = id;
     const A = ED.Atlas, r = A && A.ok ? A.anim(id) : null;
-    if (r && r.n === 1 && ED.Pix && ED.Pix.define) {
+    if (r && ED.Pix && ED.Pix.define) {
       try {
-        let s = fread(id); fstrip(s); s = foutline(fscale(s, k)); s = fcrop(s);
-        const cv = document.createElement('canvas'); cv.width = s.w; cv.height = s.h;
-        const g = cv.getContext('2d'), im = g.createImageData(s.w, s.h); new Uint32Array(im.data.buffer).set(s.d); g.putImageData(im, 0, 0);
-        if (ED.Pix.define('wk.' + key, cv, s.gx, s.gy, { dir: s.dir, centre: [s.gx, s.gy] })) a = 'wk.' + key;
+        const fr = []; let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1;
+        for (let i = 0; i < r.n; i++) {
+          const q = fread(id, i); fstrip(q); const s = foutline(fscale(q, k)); fr.push(s);
+          for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) if (s.d[y * s.w + x]) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+        }
+        const w = x1 - x0 + 1, h = y1 - y0 + 1, gx = fr[0].gx - x0, gy = fr[0].gy - y0, cvs = [];
+        for (const s of fr) {
+          const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+          const g = cv.getContext('2d'), im = g.createImageData(w, h), d = new Uint32Array(im.data.buffer);
+          for (let y = 0; y < h; y++) d.set(s.d.subarray((y + y0) * s.w + x0, (y + y0) * s.w + x0 + w), y * w);
+          g.putImageData(im, 0, 0); cvs.push(cv);
+        }
+        if (ED.Pix.define('wk.' + key, cvs, gx, gy, { dir: fr[0].dir, centre: [gx, gy] }, r.fps, r.loop)) a = 'wk.' + key;
       } catch (e) { console.error('shot look ' + key, e); }
     }
     if (A && A.ok) m[sl] = a;

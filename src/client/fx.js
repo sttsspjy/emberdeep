@@ -66,7 +66,6 @@
     const fk = an ? an.fork : '', tk = fk === 'heavy' ? 1.4 : fk === 'swift' ? 0.55 : 1; // Heavy swings leave a 1.4x wider smear, Swift ones a thin bright one
     if (fk === 'swift') color = U.mix(color, '#ffffff', 0.35);
     if (F.slashes.length < 24) F.slashes.push({ x, y, a, r, arc, color, hot: U.mix(color, '#ffffff', 0.6), life: L, max: L, side: an ? an.side : (F.slashes.length & 1 ? 1 : -1), t0: an ? an.t0 : 0.02, t1: an ? an.t1 : 0.1, sm: null, hr: -1, tk: tk * (cl ? 1.25 : 1) });
-    if (cl) F.cleaveT = F.time;
     if (cl && !lowFx()) { const ta = a, tx = x + Math.cos(ta) * r * 0.9, ty = y + Math.sin(ta) * r * 0.9; F.ring(tx, ty + 6, 22 * tk, CLEAVE_COL, 0.3, 3); } // Cleave shock ring at the tip of the blow
   };
   const CLEAVE_COL = '#ffd36b';
@@ -242,11 +241,6 @@
     c.globalAlpha = 1; c.globalCompositeOperation = comp; c.imageSmoothingEnabled = true;
   }
 
-  // F.atlasFx(id, x, y, { dur, fr, add, a, delay, rot, flip, ramp }): the older one-shot call, now a thin form of F.sheet (dur plays the whole anim in that many seconds, fr holds one frame for dur).
-  F.atlasFx = (id, x, y, o) => {
-    o = o || NO_OPTS; const r = ED.Atlas.anim(id);
-    return F.sheet(id, x, y, { delay: o.delay, frame: o.fr, life: o.dur, speed: o.fr === undefined && o.dur && r ? r.n / r.fps / o.dur : 1, add: o.add, a: o.a, rot: o.rot, flip: o.flip, ramp: o.ramp });
-  };
   // Contact flash of a hero's direct hit: the Cut slash across the blow (CutX on a crit), a red Blast under heavy weapons (a heavy hit, or a hammer that is not Swift). The local hero's hits always show (one per 50 ms); allies' only crits and heavy blows.
   const HEAVY = { warhammer: 1, dawnhammer: 1 };
   let contactT = -9;
@@ -552,7 +546,7 @@
     for (let i = 0; i < n; i++) { const dx = tx - x, dy = ty - 10 - y; F.part(x + (Math.random() - 0.5) * 12, y + (Math.random() - 0.5) * 12, { color: col, size: 2, life: 0.5, add: true, drag: 0, vx: dx / 0.45, vy: dy / 0.45 }, 0, 0.45 + Math.random() * 0.08); }
   }
 
-  // Per-class client hooks, registered by src/client/cls-<class>.js at load: ev[type] = [fn(ev, ctx, localPid)] run before the built-in handler of that event;
+  // Per-class client hooks, registered by src/client/cls-<class>.js at load: ev[type] = [fn(ev, ctx, localPid)] run before the built-in handler of that event (a 'boom' hook that sets ev.kfx = 1 replaces the built-in rings);
   // zone[kind] = fn(c, z, pass, t, k, view) draws a zone kind render.js has no case for; hero = [fn(c, p, t, low)] runs after the built-in hero effects (hero feet frame);
   // mark = [fn(e) -> {id, ramp, stub} | null] adds a 14 px glyph (atlas anim id, Pix ramp, GLYPH stub key when the art is absent) to a foe's overhead mark row.
   // shot[kind] = fn(c, pr, t, x, y) runs after a projectile of that kind is drawn (unlit pass, world frame; x, y the body's centre on the pixel grid).
@@ -613,8 +607,7 @@
       case 'heal': if (ev.v >= 2) { F.text(ev.x, ev.y - 28, '+' + ev.v, '#86d38f', 10, { pop: true }); F.burst(ev.x, ev.y - 10, 6, { color: '#86ffa0', sp: 30, vy: -40, life: 0.7, size: 2, add: true, drag: 1, lt: '#86ffa0', ltr: 24 }); if (ev.pid === local) A.play('heal', 0.6); } break;
       case 'boom': {
         const cols = BOOM[ev.k] || BOOM.fire, fire = ev.k === 'fire' || ev.k === 'bigfire' || ev.k === 'burst', bk = ev.k === 'acid' ? lk : (n) => n;
-        F.ring(ev.x, ev.y, ev.r, cols[0], 0.35, 4);
-        F.ring(ev.x, ev.y, ev.r * 0.7, cols[1], 0.22, 2);
+        if (!ev.kfx) { F.ring(ev.x, ev.y, ev.r, cols[0], 0.35, 4); F.ring(ev.x, ev.y, ev.r * 0.7, cols[1], 0.22, 2); } // a hook that sets ev.kfx draws its own rings
         F.burst(ev.x, ev.y, bk(Math.min(30, 8 + ev.r / 4)), { color: cols[0], sp: ev.r * 2.6, life: 0.45, size: 3, add: true });
         F.burst(ev.x, ev.y, bk(6), { color: cols[1], sp: ev.r * 1.2, life: 0.3, size: 4, add: true });
         F.burst(ev.x, ev.y, bk(Math.min(14, 4 + ev.r / 8)), { kind: 'streak', color: cols[1], sp: ev.r * 3.2, life: 0.3, size: 1.8 });

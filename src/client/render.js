@@ -1920,17 +1920,20 @@
       g.fillStyle = 'rgba(255,255,255,0.3)'; g.fillRect(0, 0, fw, Math.max(1, Math.floor(h * 0.4)));
     });
   }
-  // Hero labels placed this frame (x, y, half-width), so stacked heroes never print their names over each other.
-  const lbl = new Float32Array(48); let lblN = 0;
-  // True when a label of width w and height lh centred at (x, y) would overprint one placed this frame.
+  // Rects placed this frame (x, y, half-width, half-height): elite bars and the labels, so stacked heroes and elites never print over each other.
+  const lbl = new Float32Array(128); let lblN = 0; const eliteQ = [];
+  function labelAdd(x, y, hw, hh) {
+    if (lblN < 32) { lbl[lblN * 4] = x; lbl[lblN * 4 + 1] = y; lbl[lblN * 4 + 2] = hw; lbl[lblN * 4 + 3] = hh; lblN++; }
+  }
+  // True when a label of width w and height lh centred at (x, y) would overprint a placed rect.
   function labelHit(x, y, w, lh) {
-    for (let i = 0; i < lblN * 3; i += 3) if (Math.abs(lbl[i] - x) < lbl[i + 2] + w / 2 && Math.abs(lbl[i + 1] - y) < lh * 0.95) return true;
+    for (let i = 0; i < lblN * 4; i += 4) if (Math.abs(lbl[i] - x) < lbl[i + 2] + w / 2 && Math.abs(lbl[i + 1] - y) < (lbl[i + 3] + lh / 2) * 0.95) return true;
     return false;
   }
-  // Returns y for a label of width w and height lh centred near (x, y): steps up by lh until it clears every placed label, then registers it.
+  // Returns y for a label of width w and height lh centred near (x, y): steps up by lh until it clears every placed rect, then registers it.
   function placeLabel(x, y, w, lh) {
     for (let k = 0; k < 6 && labelHit(x, y, w, lh); k++) y -= lh;
-    if (lblN < 16) { lbl[lblN * 3] = x; lbl[lblN * 3 + 1] = y; lbl[lblN * 3 + 2] = w / 2; lblN++; }
+    labelAdd(x, y, w / 2, lh / 2);
     return y;
   }
   // Parry window: a white pixel ring (1 art px) closes from r + 11 onto the foe's rim through the last PARRY_WIN seconds of its wind-up and blinks in the last 0.1 s.
@@ -1957,13 +1960,15 @@
       const w = e.elite ? 30 : 18, y = an ? Math.round(e.y + an.top) - 6 : Math.round(e.y - e.r * 2.6 - (e.def.fly ? 14 : 4)), af = e.elite ? ED.AFFIXES[e.elite] : null, bx = Math.round(e.x - w / 2);
       blit(c, barSprite(af ? af.color : '#e2513f', w, Math.round(U.clamp(frac, 0, 1) * w), bh), bx, y);
       if (e.ward > 0) { c.fillStyle = '#7fc8ff'; c.fillRect(bx, y - 1 - bh, Math.max(1, Math.round(w * (e.ward / (e.wardMax || 1)))), Math.max(1, bh - 1)); }
-      if (af) { // elites close together share the row: the label shortens to the affix, then steps up, instead of overprinting
-        const ly = y - 2 - lhh / 2 - (e.ward > 0 ? bh : 0), full = af.name + ' ' + e.def.name, lh2 = lhh * 1.1;
-        let str = full;
-        if (labelHit(e.x, ly, R.labelW(full), lh2) && !labelHit(e.x, ly, R.labelW(af.name), lh2)) str = af.name;
-        R.label(c, str, e.x, placeLabel(e.x, ly, R.labelW(str), lh2), af.color);
-      }
+      if (af) { eliteQ.push(e, y); labelAdd(e.x, y + bh / 2, w / 2, bh / 2); } // the bar blocks the labels of the elites beside it
     }
+    for (let i = 0; i < eliteQ.length; i += 2) { // elite labels after every bar: close elites share the row, the label shortens to the affix, then steps up, instead of overprinting
+      const e = eliteQ[i], af = ED.AFFIXES[e.elite], ly = eliteQ[i + 1] - 2 - lhh / 2 - (e.ward > 0 ? bh : 0), full = af.name + ' ' + e.def.name, lh2 = lhh * 1.1;
+      let str = full;
+      if (labelHit(e.x, ly, R.labelW(full), lh2) && !labelHit(e.x, ly, R.labelW(af.name), lh2)) str = af.name;
+      R.label(c, str, e.x, placeLabel(e.x, ly, R.labelW(str), lh2), af.color);
+    }
+    eliteQ.length = 0;
     for (const e of view.enemies) if (e.hp > 0 && !e.burrowed) drawMarks(c, e, t);
     // hero names (the local hero first; a name that would overlap another steps up) and revive rings with a DOWN / REVIVE label
     const multi = view.players.size > 1, lh = lhh * 1.1;
