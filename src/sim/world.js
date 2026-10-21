@@ -64,6 +64,18 @@
     return { x: probe.x, y: probe.y };
   };
 
+  // Landing point of a ground skill cast from (x0, y0) at (tx, ty): the target clamped to `range`, cut short at the first wall. Used by the client preview and send, and by the host check.
+  Sim.groundPoint = (room, locked, x0, y0, tx, ty, range) => {
+    const dx = tx - x0, dy = ty - y0, dist = Math.hypot(dx, dy);
+    if (!(dist > 0) || !(range > 0)) return { x: x0, y: y0 };
+    const d = Math.min(dist, range), a = Math.atan2(dy, dx);
+    const px = x0 + Math.cos(a) * d, py = y0 + Math.sin(a) * d;
+    const e = Sim.castMove(room, x0, y0, a, d, 4, locked);
+    const t = D.tileAt(room, px, py);
+    if (Math.hypot(e.x - x0, e.y - y0) >= d - 8 && !(t === 1 || t === 2 || (t === 5 && locked))) return { x: px, y: py }; // free ray: exact point, not the last 8 px step
+    return e;
+  };
+
   // Hero movement: walking, dash, skill-move, hazards and pull zones.
   Sim.movePlayer = (p, inp, dt, room, locked, zones) => {
     if (p.downed || p.dead) { p.moving = false; return; }
@@ -153,7 +165,6 @@
   W.hpScale = (s) => (1 + 0.65 * (s - 1) + 0.08 * (s - 1) * (s - 1)) * W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, s - 1))].hp;
   // Wave pacing of combat rooms: seconds before the first wave, spawn telegraph (+ random extra), minimum gap before the next wave, the share of a wave that may still stand when the next one is called, the seconds after which the next wave comes regardless, and the minimum spawn distance from heroes (turrets keep more).
   W.PACE = { first: 0.5, spawn: 0.7, spawnVar: 0.25, gap: 0.9, nextAt: 0.45, maxAge: 6, avoid: 100, avoidTurret: 130 };
-  W.DRAIN_SECS = [2500, 2200, 2050, 2000, 2000, 2000]; // seconds for a full unupgraded lantern to burn out on the slow per-second drain, per stratum
   // Entering a room not yet visited costs this much light (of 100, not scaled by Deep Wick); revisits, the start room and the boss room are free. Shown on doors and the map.
   W.ROOM_COST = { combat: 12, elite: 17, treasure: 8, shop: 8, event: 8, rest: 8 };
   W.roomCost = (type) => W.ROOM_COST[type] || 0;
@@ -602,15 +613,11 @@
     return 100 * (1 + 0.06 * rank) * (W.LANTERN_MUL[this.stratum - 1] || 1);
   };
 
-  // Burns the lantern slowly outside boss rooms (the boss room freezes the tier; no drain while a safe room waits on a boon pick) and, Lightless, stalks regular rooms with a Gloom.
+  // Dark and Lightless tiers stalk regular rooms with a Gloom. The lantern only loses light through room costs and the flare.
   W.prototype.updateLantern = function (dt) {
     const room = this.room;
     if (!room) return;
-    const hold = this.offerHold(); // an open boon pick in a safe room pauses both the drain and the Gloom's delay
-    if (room.type !== 'boss' && !hold) {
-      this.light = Math.max(0, this.light - dt * 100 / (W.DRAIN_SECS[this.stratum - 1] || 800));
-      this.updateDread();
-    }
+    const hold = this.offerHold(); // an open boon pick in a safe room pauses the Gloom's delay
     const gl = this.dread.gloom;
     if (gl > 0 && room.type !== 'boss' && room.type !== 'start' && this.gloomN < this.gloomWant() && ED.ENEMIES.gloom) {
       this.gloomT = (this.gloomT === null ? (this.gloomN ? W.GLOOM_GAP : gl) : this.gloomT) - (hold ? 0 : dt);

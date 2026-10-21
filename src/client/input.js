@@ -1,12 +1,16 @@
 // Keyboard, mouse and gamepad. One binding table maps every action to two slots, each a KeyboardEvent.code or Mouse0..Mouse4.
 // Defaults: WASD move (arrows alternate), attack LMB / J, skill 1 Q / RMB, skill 2 E, dash Space, flare F, map Tab, pause Esc.
-// Gamepad (fixed): left stick move, right stick aim, X / RT attack, B / RB skill 1, Y / LT skill 2, A / LB dash, L3 flare, Start pause, Back map.
+// Aim is the mouse cursor (I.mouse, CSS px; moved = time of the last pointer event, 0 before the first). Gamepad (fixed): left stick move,
+// right stick aim (latched 0.35 s after release), X / RT attack, B / RB skill 1, Y / LT skill 2, A / LB dash, L3 flare, Start pause, Back map.
+// I.device ('mouse' | 'pad') says which of the two currently aims.
 (function (ED) {
   'use strict';
   const I = ED.Input = {
-    keys: new Set(), pressed: new Set(), mouse: { x: 0, y: 0, moved: 0 },
-    pad: null, padPrev: [], enabled: true, binds: {},
+    keys: new Set(), pressed: new Set(), mouse: { x: 0, y: 0, moved: 0, inside: true },
+    pad: null, padPrev: [], enabled: true, binds: {}, device: 'mouse',
   };
+  const PAD_AIM = 0.45, LATCH_MS = 350, SWITCH_PX = 3, SWITCH_WINDOW_MS = 250;
+  let padLast = null, padLM = 0, padRM = 0; // last right-stick aim above PAD_AIM {a, mag, t}; stick magnitudes of the previous sample
 
   // ---------------- binding table ----------------
   I.ACTIONS = [
@@ -111,8 +115,8 @@
   };
   // Every bound key of an action, at most two ('LMB / J'): what the interact prompt and tutorial signs show.
   I.hint = (action) => { const l = I.labels(action); return l.length ? l.slice(0, 2).join(' / ') : '—'; };
-  // Replaces {action} tokens in a text with the action's current key hint (unknown tokens stay).
-  I.fill = (text) => String(text).replace(/\{(\w+)\}/g, (m, a) => (ACTION[a] ? I.hint(a) : m));
+  // Replaces {action} tokens in a text with the action's current key hint (unknown tokens stay); {aim} names the device that aims.
+  I.fill = (text) => String(text).replace(/\{(\w+)\}/g, (m, a) => (a === 'aim' ? (I.device === 'pad' ? 'the right stick' : 'the mouse') : ACTION[a] ? I.hint(a) : m));
 
   // ---------------- capture (rebinding screen) ----------------
   let stopCap = null;
@@ -153,7 +157,20 @@
     });
     window.addEventListener('keyup', (e) => { I.keys.delete(e.code); });
     window.addEventListener('blur', () => { I.keys.clear(); });
-    canvas.addEventListener('mousemove', (e) => { I.mouse.x = e.clientX; I.mouse.y = e.clientY; I.mouse.moved = performance.now(); });
+    // Pointer position comes from the window so a click on an overlay button seeds it; button codes stay on the canvas (an overlay click never registers Mouse0).
+    // The device flips to the mouse on a press or after more than SWITCH_PX of movement within SWITCH_WINDOW_MS, so desk jitter never steals aim from a pad.
+    let travel = 0;
+    const point = (e, press) => {
+      const m = I.mouse, now = performance.now();
+      if (m.moved && now - m.moved > SWITCH_WINDOW_MS) travel = 0;
+      if (m.moved) travel += Math.hypot(e.clientX - m.x, e.clientY - m.y);
+      m.x = e.clientX; m.y = e.clientY; m.moved = now; m.inside = true;
+      if (press || travel > SWITCH_PX) { I.device = 'mouse'; travel = 0; }
+    };
+    window.addEventListener('pointermove', (e) => point(e, false), { passive: true });
+    window.addEventListener('pointerdown', (e) => point(e, true), { passive: true });
+    const leave = () => { I.mouse.inside = false; }, enter = () => { I.mouse.inside = true; };
+    for (const t of [document, document.documentElement]) { t.addEventListener('mouseleave', leave); t.addEventListener('mouseenter', enter); }
     canvas.addEventListener('mousedown', (e) => {
       if (e.button === 1 || e.button > 2) e.preventDefault(); // no autoscroll, no history navigation
       const c = 'Mouse' + e.button;
@@ -195,10 +212,17 @@
     if (gp) {
       const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0;
       if (Math.hypot(ax, ay) > 0.22) { out.mx += ax; out.my += ay; }
-      const rx = gp.axes[2] || 0, ry = gp.axes[3] || 0;
-      if (Math.hypot(rx, ry) > 0.45) { out.padAim = Math.atan2(ry, rx); }
+      const rx = gp.axes[2] || 0, ry = gp.axes[3] || 0, lm = Math.hypot(ax, ay), rm = Math.hypot(rx, ry), now = performance.now();
+      // right stick: aim angle and push (padMag), held for LATCH_MS after the stick drops below PAD_AIM (B / Y / X are right-thumb buttons)
+      if (rm > PAD_AIM) padLast = { a: Math.atan2(ry, rx), mag: rm, t: now };
+      if (padLast && now - padLast.t <= LATCH_MS) { out.padAim = padLast.a; out.padMag = padLast.mag; }
       const b = (i) => gp.buttons[i] && gp.buttons[i].pressed;
       const bp = (i) => b(i) && !I.padPrev[i];
+      // device: any new button press, or a stick that is pushed past 0.5 and jumped by more than 0.2 since the last sample (worn sticks drift but do not jump)
+      let touch = (lm > 0.5 && Math.abs(lm - padLM) > 0.2) || (rm > 0.5 && Math.abs(rm - padRM) > 0.2);
+      for (let i = 0; i < gp.buttons.length && !touch; i++) if (bp(i)) touch = true;
+      padLM = lm; padRM = rm;
+      if (touch) I.device = 'pad';
       out.atk = out.atk || b(2) || b(7);
       out.atkPressed = out.atkPressed || bp(2) || bp(7);
       out.skill = out.skill || bp(1) || bp(5);
@@ -211,8 +235,7 @@
       out.left = out.left || bp(14);
       out.right = out.right || bp(15);
       I.padPrev = gp.buttons.map(x => x.pressed);
-      I.padActive = true;
-    }
+    } else { padLast = null; padLM = padRM = 0; if (I.device === 'pad') I.device = 'mouse'; }
     const l = Math.hypot(out.mx, out.my);
     if (l > 1) { out.mx /= l; out.my /= l; }
     return out;

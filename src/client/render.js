@@ -265,6 +265,7 @@
     c.globalCompositeOperation = 'source-over';
     // ---- overlays above lighting ----
     drawOverheads(c, view, local, t);
+    if (ED.AimFx) ED.AimFx.draw(c, view);
     F.drawTexts(c);
     c.setTransform(1, 0, 0, 1, 0, 0);
     if (R.syncWorld) c.getImageData(0, 0, 1, 1); // benchmarking: force the 2D raster to finish

@@ -6,8 +6,8 @@
 
   // {action} tokens are replaced with the player's key bindings when the sign is drawn (ED.Input.fill); the sim never reads bindings.
   const SIGNS = [
-    'Hold {attack} to attack. Your hero aims for you.',
-    'Press {skill1} for your first skill and {skill2} for your second. {dash} dashes through danger.',
+    'Aim with {aim}. Hold {attack} to attack where you aim.',
+    '{skill1} and {skill2} cast your skills where you aim: some fly toward it, some land on it. {dash} dashes through danger.',
     'Clear a room to open its doors. The reward inside is shown on the door.',
     'Every new room costs lantern light (shown on its door). In the dark the Gloom hunts: press {flare} to flare it away.',
     'The skull on your map marks the stratum boss. {map} shows the map.',

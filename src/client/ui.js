@@ -587,7 +587,8 @@
   UI.openSettings = (tab) => {
     const A = ED.App, s = A.settings;
     $('set-master').value = s.master; $('set-music').value = s.music; $('set-sfx').value = s.sfx;
-    $('set-aim').value = s.aim; $('set-quality').value = s.quality; $('set-shake').checked = s.shake; $('set-dmg').checked = s.dmg;
+    $('set-quality').value = s.quality; $('set-framecap').value = s.frameCap; $('set-shake').checked = s.shake; $('set-dmg').checked = s.dmg;
+    $('set-cursor').value = s.cursor; $('set-reticle').value = s.reticle; $('set-retcol').value = s.reticleCol; $('set-aimprev').checked = s.aimPreview !== false;
     for (const id of ['set-master', 'set-music', 'set-sfx']) fill($(id));
     $('stab-profile').hidden = A.inRun() || !A.hasProfile; // profile tools never appear mid-descent
     $('ov-settings').hidden = false;
@@ -713,11 +714,13 @@
     const setChange = (e) => {
       const s = A.settings;
       s.master = +$('set-master').value; s.music = +$('set-music').value; s.sfx = +$('set-sfx').value;
-      s.aim = $('set-aim').value; s.quality = $('set-quality').value; s.shake = $('set-shake').checked; s.dmg = $('set-dmg').checked;
+      s.quality = $('set-quality').value; s.frameCap = $('set-framecap').value; s.shake = $('set-shake').checked; s.dmg = $('set-dmg').checked;
+      s.cursor = $('set-cursor').value; s.reticle = $('set-reticle').value; s.reticleCol = $('set-retcol').value; s.aimPreview = $('set-aimprev').checked;
       if (e && e.target.type === 'range') fill(e.target);
       A.applySettings();
+      if (ED.AimFx) ED.AimFx.applyCursor();
     };
-    for (const id of ['set-master', 'set-music', 'set-sfx', 'set-aim', 'set-quality', 'set-shake', 'set-dmg']) $(id).addEventListener('input', setChange);
+    for (const id of ['set-master', 'set-music', 'set-sfx', 'set-quality', 'set-framecap', 'set-shake', 'set-dmg', 'set-cursor', 'set-reticle', 'set-retcol', 'set-aimprev']) $(id).addEventListener('input', setChange);
     $('btn-bind-reset').onclick = () => { ED.Input.resetBinds(); A.settings.binds = ED.Input.exportBinds(); S.storeSettings(A.settings); renderBindings(); setBindMsg('Controls reset to defaults.', 'ok'); };
     $('btn-settings-close').onclick = () => UI.closeSettings();
     window.addEventListener('resize', () => { if (!$('ov-boon').hidden) paintDense(); });

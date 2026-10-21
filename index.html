@@ -285,16 +285,23 @@
         <div class="set-pane" data-spane="display" hidden>
           <div class="set-row"><label for="set-quality">Visual quality</label>
             <select id="set-quality"><option value="high">High (lighting and particles)</option><option value="low">Low (faster)</option></select></div>
+          <div class="set-row"><label for="set-framecap">Frame cap</label>
+            <select id="set-framecap"><option value="auto">Auto (display rate)</option><option value="off">Uncapped</option><option value="144">144 fps</option><option value="120">120 fps</option><option value="60">60 fps</option></select></div>
           <div class="set-row"><label for="set-shake">Screen shake</label><input type="checkbox" class="switch" id="set-shake"></div>
           <div class="set-row"><label for="set-dmg">Damage numbers</label><input type="checkbox" class="switch" id="set-dmg"></div>
         </div>
         <div class="set-pane" data-spane="controls" hidden>
-          <div class="set-row"><label for="set-aim">Aiming</label>
-            <select id="set-aim"><option value="auto">Auto-aim (keyboard)</option><option value="mouse">Aim at mouse cursor</option></select></div>
+          <div class="set-row"><label for="set-cursor">Cursor</label>
+            <select id="set-cursor"><option value="reticle">Reticle (lights up over foes)</option><option value="system">System crosshair</option></select></div>
+          <div class="set-row"><label for="set-reticle">Cursor size</label>
+            <select id="set-reticle"><option value="s">Small</option><option value="m">Medium</option><option value="l">Large</option></select></div>
+          <div class="set-row"><label for="set-retcol">Cursor colour</label>
+            <select id="set-retcol"><option value="ember">Ember</option><option value="bone">Bone</option><option value="frost">Frost</option></select></div>
+          <div class="set-row"><label for="set-aimprev">Skill aim preview</label><input type="checkbox" class="switch" id="set-aimprev"></div>
           <div class="bind-head"><span>Click a key, then press the new key or mouse button. Esc cancels, Backspace clears.</span><button class="btn btn-small" id="btn-bind-reset" type="button">Reset to defaults</button></div>
           <div class="bind-msg" id="bind-msg" role="status"></div>
           <div class="bind-list" id="bind-list"></div>
-          <p class="bind-pad">Gamepad: left stick moves, right stick aims, X attacks, B skill 1, Y skill 2, A dashes, L3 lantern flare.</p>
+          <p class="bind-pad">Gamepad: left stick moves, right stick aims (let go and you aim where you walk), X / RT attacks, RB / B skill 1, LT / Y skill 2, A / LB dashes, L3 lantern flare. Use RB and LT for aimed skills: your thumb stays on the stick. Ground skills land farther the harder you push the right stick.</p>
         </div>
         <div class="set-pane" data-spane="profile" hidden>
           <h3 class="plate-h">Name</h3>
@@ -353,6 +360,7 @@
 <script src="src/client/tiles.js" defer></script>
 <script src="src/client/fx.js" defer></script>
 <script src="src/client/render.js" defer></script>
+<script src="src/client/aim.js" defer></script>
 <script src="src/client/post.js" defer></script>
 <script src="src/client/hud.js" defer></script>
 <script src="src/client/camp.js" defer></script>
