@@ -14,10 +14,10 @@
   card('knight', 'attack', 1, 'k_atk', { name: 'Oath of Steel', icon: 'sword', forks: ['k_atk_h', 'k_atk_s'], plays: 'slash, slash, CLEAVE; time the Cleave into the pack.',
     desc: 'Every 3rd swing is a Cleave: +{cleave} damage, 40% more reach and arc, double knockback.', mods: { cleave: 0.6 } });
   card('knight', 'attack', 2, 'k_atk_h', { name: 'Oathbreaker', icon: 'hammer', tag: 'Heavy', weapon: { kind: 'heavy' },
-    desc: 'Your weapon becomes heavy (×1.8 slower, ×1.98 per hit; hits Stagger). Cleaves crack the ground: a shock at the swing tip (r72) deals {cShock} weapon damage and stuns {cStun:s}.[ Cleaves deal +{cleave} more.]',
+    desc: 'Your weapon becomes heavy (×{fkRate:x} slower, ×{fkDmg:x} per hit; hits Stagger). Cleaves crack the ground: a shock at the swing tip (r72) deals {cShock} weapon damage and stuns {cStun:s}.[ Cleaves deal +{cleave} more.]',
     rider: 'Follow-Through: your first swing after a Shield Charge is a Cleave at +{chargeCleave}.', mods: { cShock: 0.5, cStun: 0.5 }, up: { cleave: 0.1, cShock: 0.15 }, r3: { chargeCleave: 0.5 } });
   card('knight', 'attack', 2, 'k_atk_s', { name: 'Sworn Blade', icon: 'blades', tag: 'Swift', weapon: { kind: 'swift' },
-    desc: "Your weapon becomes swift (×0.55 interval, ×0.605 per hit; attacks give Flow). Cleaves deal +{cleave} more.[ +{atk} attack speed.] Parry: a Cleave that starts in the last 0.3 s of a foe's wind-up (its rim flashes white) cancels that attack and stuns it 0.6 s (elites: 0.3 s stun, no cancel; never bosses), at most once per 2.5 s.",
+    desc: "Your weapon becomes swift (×{fkRate:x} interval, ×{fkDmg:x} per hit; attacks give Flow). Cleaves deal +{cleave} more.[ +{atk} attack speed.] Parry: a Cleave that starts in the last 0.3 s of a foe's wind-up (its rim flashes white) cancels that attack and stuns it 0.6 s (elites: 0.3 s stun, no cancel; never bosses), at most once per 2.5 s.",
     rider: 'Riposte: each Parry readies {riposte:ck} guaranteed crits.', mods: { cleave: 0.3, parry: 1 }, up: { cleave: 0.1, atk: 0.03 }, r3: { riposte: 2 } });
   card('knight', 'skill1', 1, 'k_s1', { name: 'Vanguard', icon: 'shield', forks: ['k_s1_a', 'k_s1_b'], plays: 'charge in just before the big hit lands.',
     desc: 'Shield Charge recharges {s1Cdr} faster and deals +{s1Dmg}. After a Charge you are Braced for {brace:s}: {braceDR} less damage taken (at most once per 4 s).', mods: { s1Cdr: 0.3, s1Dmg: 0.25, brace: 1.5, braceDR: 0.25 } });
@@ -47,10 +47,10 @@
   card('ranger', 'attack', 1, 'r_atk', { name: 'Deadeye', icon: 'bow', forks: ['r_atk_h', 'r_atk_s'], plays: 'keep your distance; long shots ring.',
     desc: 'Your shots deal more the farther they fly: +0% at 80, rising to +{deadeye} at 260.', mods: { deadeye: 0.3 } });
   card('ranger', 'attack', 2, 'r_atk_h', { name: 'Ballista', icon: 'arrow', tag: 'Heavy', weapon: { kind: 'heavy', extra: { mul: { speed: 1.28 }, add: { pierce: 2 } } },
-    desc: 'Heavy shots (×1.8 slower, ×1.98 per hit, Stagger) fly 28% faster than heavy shots usually do and pierce 2 more foes; each foe a shot passes through adds +{pierceRamp} to it.[ Deadeye is +{deadeye} stronger.]',
+    desc: 'Heavy shots (×{fkRate:x} slower, ×{fkDmg:x} per hit, Stagger) fly 28% faster than heavy shots usually do and pierce 2 more foes; each foe a shot passes through adds +{pierceRamp} to it.[ Deadeye is +{deadeye} stronger.]',
     rider: 'Splitting Bolt: a shot that passes through its last foe splits into 2 arrows (±0.3 rad) at {splitBolt}.', mods: { pierceRamp: 0.15 }, up: { pierceRamp: 0.1, deadeye: 0.05 }, r3: { splitBolt: 0.5 } });
   card('ranger', 'attack', 2, 'r_atk_s', { name: 'Quickdraw', icon: 'arrows', tag: 'Swift', weapon: { kind: 'swift' },
-    desc: 'Swift shots (×0.55 interval, ×0.605 per hit, Flow) deal +{wDmg} and slow foes {hitSlow} for 1 s (not bosses).[ Deadeye is +{deadeye} stronger.]',
+    desc: 'Swift shots (×{fkRate:x} interval, ×{fkDmg:x} per hit, Flow) deal +{wDmg} and slow foes {hitSlow} for 1 s (not bosses).[ Deadeye is +{deadeye} stronger.]',
     rider: 'Flurry: every {flurry:n}th shot fires 2 extra arrows in a narrow fan (±0.12 rad).', mods: { wDmg: 0.1, hitSlow: 0.15 }, up: { deadeye: 0.05, wDmg: 0.05 }, r3: { flurry: 5 } });
   card('ranger', 'skill1', 1, 'r_s1', { name: 'Fletcher', icon: 'arrows', forks: ['r_s1_a', 'r_s1_b'], plays: 'Volley is your main damage; cast it on cooldown.',
     desc: 'Volley fires {s1N:n} more arrows and recharges {s1Cdr} faster.', mods: { s1N: 3, s1Cdr: 0.2 } });
@@ -80,10 +80,10 @@
   card('pyro', 'attack', 1, 'p_atk', { name: 'Pyroclast', icon: 'flame', forks: ['p_atk_h', 'p_atk_s'], plays: 'plant your feet and pour fire; choose when to move.',
     desc: 'Standing still while attacking builds Channel: your weapon deals +{channel} every {chanStep:s}, up to +{chanCap}. Moving, or a pause longer than 0.6 s (1.25 attacks for slow weapons), resets it.', mods: { channel: 0.1, chanStep: 0.3, chanCap: 0.5 } });
   card('pyro', 'attack', 2, 'p_atk_h', { name: 'Magma Heart', icon: 'ember', tag: 'Heavy', weapon: { kind: 'heavy', extra: { ifNone: { explode: { r: 40, mul: 0.5 } } } },
-    desc: 'Heavy shots (×1.8 slower, ×1.98 per hit, Stagger, 15% bigger blasts). Shots that have no blast gain one (r40, 50%), and every blast erupts again 0.4 s later at {aftershock}.',
+    desc: 'Heavy shots (×{fkRate:x} slower, ×{fkDmg:x} per hit, Stagger, 15% bigger blasts). Shots that have no blast gain one (r40, 50%), and every blast erupts again 0.4 s later at {aftershock}.',
     rider: 'Lava Pools: each aftershock leaves burning ground (2 s, {lavaPool} of the shot per second; a new pool on the same spot refreshes the old one).', mods: { aftershock: 0.3 }, up: { aftershock: 0.1 }, r3: { lavaPool: 0.3 } });
   card('pyro', 'attack', 2, 'p_atk_s', { name: 'Ember Rush', icon: 'bolt', tag: 'Swift', weapon: { kind: 'swift' },
-    desc: 'Swift shots (×0.55 interval, ×0.605 per hit, Flow). Channel builds twice as fast (every 0.15 s) and caps {chanCap} higher.',
+    desc: 'Swift shots (×{fkRate:x} interval, ×{fkDmg:x} per hit, Flow). Channel builds twice as fast (every 0.15 s) and caps {chanCap} higher.',
     rider: 'Overheat: at full Channel your shots pierce 1 more foe and their blasts are 20% wider.', mods: { chanStep: -0.15, chanCap: 0.1 }, up: { chanCap: 0.05 }, r3: { overheat: 1 } });
   card('pyro', 'skill1', 1, 'p_s1', { name: 'Firestorm', icon: 'flame', forks: ['p_s1_a', 'p_s1_b'], plays: 'dive into packs and erupt.',
     desc: 'Flame Nova: +{s1Area} radius, +{s1Dmg} damage, recharges {s1Cdr} faster.', mods: { s1Area: 0.25, s1Dmg: 0.2, s1Cdr: 0.21 } });
@@ -114,10 +114,10 @@
   card('shade', 'attack', 1, 's_atk', { name: 'Bladedancer', icon: 'dagger', forks: ['s_atk_h', 's_atk_s'], plays: 'never stop; crit chains keep you hot.',
     desc: '+{crit} crit chance. Each crit grants Momentum: +{momentum} damage for 2.5 s, stacking {momMax:n} times.', mods: { crit: 0.08, momentum: 0.04, momMax: 5 } });
   card('shade', 'attack', 2, 's_atk_h', { name: 'Culling Blades', icon: 'wingblade', tag: 'Heavy', weapon: { kind: 'heavy' },
-    desc: 'Heavy blades (×1.8 slower, ×1.98 per hit, Stagger, wider reach): weapon hits on foes below {execCrit} health always crit.[ Crits deal +{critDmg} more.]',
+    desc: 'Heavy blades (×{fkRate:x} slower, ×{fkDmg:x} per hit, Stagger, wider reach): weapon hits on foes below {execCrit} health always crit.[ Crits deal +{critDmg} more.]',
     rider: 'Killing Rhythm: an execution crit that kills grants {execMom:n} Momentum.', mods: { execCrit: 0.25 }, up: { critDmg: 0.1 }, r3: { execMom: 3 } });
   card('shade', 'attack', 2, 's_atk_s', { name: 'Thousand Cuts', icon: 'blades', tag: 'Swift', weapon: { kind: 'swift' },
-    desc: 'Swift blades (×0.55 interval, ×0.605 per hit, Flow). Momentum holds {momMax:n} more stacks.',
+    desc: 'Swift blades (×{fkRate:x} interval, ×{fkDmg:x} per hit, Flow). Momentum holds {momMax:n} more stacks.',
     rider: 'Whirlwind: at full Momentum, every 4th attack also spins all around you at {bladeStorm} (knives: a ring of 6 at {bladeStorm}).', mods: { momMax: 2 }, up: { momMax: 1 }, r3: { bladeStorm: 0.6 } });
   card('shade', 'skill1', 1, 's_s1', { name: 'Ghost Walk', icon: 'cloak', forks: ['s_s1_a', 's_s1_b'], plays: 'blink through lines of foes, then unload.',
     desc: 'Shadowstep: +{s1Dmg} damage, recharges {s1Cdr} faster, and each foe it cuts readies {stepStack:ck} more crit attack (up to {stackMax:ck3}).', mods: { s1Cdr: 0.2, s1Dmg: 0.2, stepStack: 1, stackMax: 2 } });
@@ -125,7 +125,7 @@
     desc: 'Shadowstep deals +{assassinate} to foes below 50% health, and a Shadowstep kill refunds it (at most once per 1.5 s).[ Shadowstep deals +{s1Dmg}.]',
     rider: 'Twin Cut: a second slash runs the Shadowstep path 0.15 s later at {stepTwin}.', mods: { assassinate: 0.4 }, up: { s1Dmg: 0.1 }, r3: { stepTwin: 0.5 } });
   card('shade', 'skill1', 2, 's_s1_b', { name: 'Afterimage', icon: 'mirror', tag: 'Guard',
-    desc: 'Shadowstep leaves an afterimage where you stood; 1.2 s later it bursts (r80), hurting foes and blinding them 1 s (not bosses).[ Shadowstep deals +{s1Dmg}.]',
+    desc: 'Shadowstep leaves an afterimage where you stood; 1.2 s later it bursts (r80), hurting foes and blinding them 1 s (elites 0.5 s, not bosses).[ Shadowstep deals +{s1Dmg}.]',
     rider: 'Lure: just before it bursts, the afterimage pulls foes within {afterPull:n} toward it.', mods: { afterimage: 1 }, up: { s1Dmg: 0.1 }, r3: { afterPull: 120 } });
   card('shade', 'skill2', 1, 's_s2', { name: 'Nightfall', icon: 'vanish', forks: ['s_s2_a', 's_s2_b'], plays: 'vanish, reposition, ambush.',
     desc: 'Vanish recharges {s2Cdr} faster; its smoke is {s2Area} wider, lasts {s2Dur:s} longer and foes inside take +20% damage; you move {stealthSpd} faster while unseen.', mods: { s2Cdr: 0.27, s2Area: 0.4, s2Dur: 2, smokeVuln: 1, stealthSpd: 0.3 } });
@@ -147,10 +147,10 @@
   card('cleric', 'attack', 1, 'c_atk', { name: 'Dawnbringer', icon: 'sun', forks: ['c_atk_h', 'c_atk_s'], plays: 'a stream of light ahead of every swing.', weapon: { extra: { ifNone: { wave: { every: 3, mul: 0.6 } } } },
     desc: 'Your waves of light come every 2nd attack and deal +{waveMul}; the Sacred Lantern gains waves too (60% of its damage).', mods: { waveEvery: -1, waveMul: 0.3 } });
   card('cleric', 'attack', 2, 'c_atk_h', { name: 'Sunhammer', icon: 'hammer', tag: 'Heavy', weapon: { kind: 'heavy' },
-    desc: 'Heavy weapon (×1.8 slower, ×1.98 per hit, Stagger). Your waves are twice as wide, travel 60% farther and stun foes {waveStun:s} (not bosses).[ Waves deal +{waveMul} more.]',
+    desc: 'Heavy weapon (×{fkRate:x} slower, ×{fkDmg:x} per hit, Stagger). Your waves are twice as wide, travel 60% farther and stun foes {waveStun:s} (not bosses).[ Waves deal +{waveMul} more.]',
     rider: 'Solar Flare: each wave ends in a burst of light (r50) for {waveBurst} of the wave.', mods: { waveBig: 1, waveStun: 0.4 }, up: { waveMul: 0.1 }, r3: { waveBurst: 0.5 } });
   card('cleric', 'attack', 2, 'c_atk_s', { name: 'Crusader', icon: 'wing', tag: 'Swift', weapon: { kind: 'swift' },
-    desc: 'Swift weapon (×0.55 interval, ×0.605 per hit, Flow). Your waves steer toward foes within 25 degrees of where you aimed them and deal +{waveMul}.',
+    desc: 'Swift weapon (×{fkRate:x} interval, ×{fkDmg:x} per hit, Flow). Your waves steer toward foes within 25 degrees of where you aimed them and deal +{waveMul}.',
     rider: 'Litany: every {litany:n}th attack sends 3 waves in a fan (±0.25 rad).', mods: { waveHome: 2, waveMul: 0.1 }, up: { waveMul: 0.1 }, r3: { litany: 6 } });
   card('cleric', 'skill1', 1, 'c_s1', { name: 'Sanctum', icon: 'sun', forks: ['c_s1_a', 'c_s1_b'], plays: 'fight from holy ground.',
     desc: 'Sanctuary: +{s1Area} radius, lasts {s1Dur:s} longer (at most 60% of its cooldown), +{s1Dmg} damage; allies inside take {sanctDR:dr} less damage.', mods: { s1Area: 0.3, s1Dur: 2, s1Dmg: 0.5, sanctDR: 0.1 } });
@@ -181,10 +181,10 @@
   card('necro', 'attack', 1, 'n_atk', { name: 'Soul Command', icon: 'hand', forks: ['n_atk_h', 'n_atk_s'], plays: 'shoot to command the army.',
     desc: 'Your weapon deals +{wDmg} and Hexes what it hits for {hex:s}. Your minions rush the Hexed foe nearest you and deal +{hexMul} to Hexed foes.', mods: { wDmg: 0.2, hex: 3, hexMul: 0.2 } });
   card('necro', 'attack', 2, 'n_atk_h', { name: 'Gravecaller', icon: 'skull', tag: 'Heavy', weapon: { kind: 'heavy' },
-    desc: 'Heavy weapon (×1.8 slower, ×1.98 per hit, Stagger): each foe your weapon kills rises as a minion for 10 s (at most once per second).[ Hexed foes take +{hexMul} more from minions.]',
+    desc: 'Heavy weapon (×{fkRate:x} slower, ×{fkDmg:x} per hit, Stagger): each foe your weapon kills rises as a minion for 10 s (at most once per second).[ Hexed foes take +{hexMul} more from minions.]',
     rider: "Hex Burst: your weapon's Hex also lands on foes within {hexSpread:n} of the hit.", mods: { wRaise: 1 }, up: { hexMul: 0.1 }, r3: { hexSpread: 50 } });
   card('necro', 'attack', 2, 'n_atk_s', { name: 'Soul Barrage', icon: 'orb', tag: 'Swift', weapon: { kind: 'swift' },
-    desc: 'Swift weapon (×0.55 interval, ×0.605 per hit, Flow): foes you Hexed take +{hexSelf} from you.',
+    desc: 'Swift weapon (×{fkRate:x} interval, ×{fkDmg:x} per hit, Flow): foes you Hexed take +{hexSelf} from you.',
     rider: 'Quickened Dead: your minions attack {hexHaste} faster against foes you Hexed.', mods: { hexSelf: 0.1 }, up: { hexSelf: 0.05 }, r3: { hexHaste: 0.25 } });
   card('necro', 'skill1', 1, 'n_s1', { name: 'Endless Legion', icon: 'skull', forks: ['n_s1_a', 'n_s1_b'], plays: 'a standing army.',
     desc: '+{minions:n} max minion, Raise Legion raises {s1N:n} more, and your minions deal +{s1Dmg}.', mods: { minions: 1, s1N: 1, s1Dmg: 0.2 } });
@@ -256,6 +256,7 @@
       case 's': return trim(v, 2) + ' s';
       case 'ck': return trim(Math.max(1, Math.round(v * critK)), 0);
       case 'ck3': return trim(Math.max(1, Math.round((3 + v) * critK)), 0);
+      case 'x': return trim(v, 3);
       case 'a25': return trim(2.5 + v, 2);
       case 'dr': return trim((0.15 + v) * 100, 0) + '%';
       default: { const p = v * 100; return trim(p, Math.abs(p) >= 10 ? 0 : 2) + '%'; }
@@ -266,6 +267,12 @@
     const fill = (s) => s.replace(/\{(\w+)(?::(\w+))?\}/g, (m, k, f) => { const v = tot[k] || 0; if (!v) bad = true; return fmtVal(Math.abs(v) < 1e-9 ? 0 : v, f, critK); });
     return tpl.replace(/\[([^\]]*)\]/g, (m, seg) => { bad = false; const out = fill(seg); return bad ? '' : out; }).replace(/\{(\w+)(?::(\w+))?\}/g, (m, k, f) => fmtVal(tot[k] || 0, f, critK)).replace(/ {2,}/g, ' ').trim();
   };
+  // Rate and damage factors of an attack fork card on the hero's base weapon (st.weaponId; the Heavy cap and Swift floor bend them); the nominal ones without a weapon.
+  const FORK_NOMINAL = { heavy: { rate: 1.8, dmg: 1.98 }, swift: { rate: 0.55, dmg: 0.605 } };
+  const forkRatios = (b, st) => {
+    const base = st && st.weaponId ? String(st.weaponId).split('@')[0] : null, bw = base && ED.WEAPONS[base], fw = bw && ED.forkWeapon(base, b);
+    return fw && fw !== bw ? { rate: fw.rate / bw.rate, dmg: fw.dmg / bw.dmg } : FORK_NOMINAL[b.weapon.kind] || { rate: 1, dmg: 1 };
+  };
   // Player-facing text of a boon: a class card at `rank` (default 1) with its numbers filled in (critK from the hero's stats `st`), else the boon's own desc.
   // The rider sentence joins from rank 3. Returns the string; ED.cardParts gives the pieces.
   ED.cardParts = (id, rank, st) => {
@@ -273,6 +280,7 @@
     if (!b || !b.route) return { text: b ? b.desc : '', rider: '', riderName: '' };
     rank = Math.max(1, Math.min(b.max || 1, rank | 0 || 1));
     const tot = ED.cardTotals(b, rank), ck = (st && st.critK) || 1;
+    if (b.weapon && b.weapon.kind) { const fk = forkRatios(b, st); tot.fkRate = fk.rate; tot.fkDmg = fk.dmg; }
     const text = render(b.desc, tot, ck);
     let rider = '', riderName = '';
     if (b.rider) { const m = /^([^:]+): (.*)$/.exec(b.rider); riderName = m ? m[1] : ''; rider = m ? render(m[2], ED.cardTotals(b, 3), ck) : ''; }
