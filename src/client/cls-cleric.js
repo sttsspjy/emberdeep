@@ -181,11 +181,11 @@
     const heading = Math.round(Math.atan2(pr.vy, pr.vx) / TAU * 32) & 31;
     if (pr.r >= 26) { // Sunhammer: the sun disc turns as it rolls
       const R2 = Math.max(8, Math.round(pr.r / 2) - 1);
-      Pix.put(c, sunSprite(R2, (t * 8) & 3), x, y);
-      Pix.put(c, wingSprite(R2 + 1, heading), x, y, 0.85);
+      Pix.put(c, sunSprite(R2, (t * 8) & 3), Pix.s2(x), Pix.s2(y));
+      Pix.put(c, wingSprite(R2 + 1, heading), Pix.s2(x), Pix.s2(y), 0.85);
       return true;
     }
-    if (partyHas('waveHome')) { Pix.put(c, wingSprite(Math.max(5, Math.round(pr.r / 2)), heading), x, y); return true; }
+    if (partyHas('waveHome')) { Pix.put(c, wingSprite(Math.max(5, Math.round(pr.r / 2)), heading), Pix.s2(x), Pix.s2(y)); return true; }
     return false;
   };
 })(globalThis.ED || (globalThis.ED = {}));

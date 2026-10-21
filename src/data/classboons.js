@@ -153,7 +153,7 @@
     desc: 'Swift weapon (×0.55 interval, ×0.605 per hit, Flow). Your waves steer toward foes within 25 degrees of where you aimed them and deal +{waveMul}.',
     rider: 'Litany: every {litany:n}th attack sends 3 waves in a fan (±0.25 rad).', mods: { waveHome: 2, waveMul: 0.1 }, up: { waveMul: 0.1 }, r3: { litany: 6 } });
   card('cleric', 'skill1', 1, 'c_s1', { name: 'Sanctum', icon: 'sun', forks: ['c_s1_a', 'c_s1_b'], plays: 'fight from holy ground.',
-    desc: 'Sanctuary: +{s1Area} radius, lasts {s1Dur:s} longer (at most 60% of its cooldown), +{s1Dmg} damage; allies inside take {sanctDR:dr} less damage.', mods: { s1Area: 0.3, s1Dur: 2, s1Dmg: 0.2, sanctDR: 0.1 } });
+    desc: 'Sanctuary: +{s1Area} radius, lasts {s1Dur:s} longer (at most 60% of its cooldown), +{s1Dmg} damage; allies inside take {sanctDR:dr} less damage.', mods: { s1Area: 0.3, s1Dur: 2, s1Dmg: 0.5, sanctDR: 0.1 } });
   card('cleric', 'skill1', 2, 'c_s1_a', { name: 'Holy Fury', icon: 'star', tag: 'Burst',
     desc: 'Sanctuary deals +{s1Dmg} and stuns foes inside for {sanctStun:s} when cast (not bosses).',
     rider: 'Hallowed Ground: foes inside Sanctuary are Judged (+20% damage taken).', mods: { s1Dmg: 0.4, sanctStun: 1 }, up: { s1Dmg: 0.1 }, r3: { sanctJudge: 1 } });
@@ -164,7 +164,7 @@
     desc: 'Judgment: +{s2Dmg} damage, flies {s2Range} farther, Judged lasts {judgeDur:s} longer, recharges {s2Cdr} faster.', mods: { s2Dmg: 0.3, s2Range: 0.4, judgeDur: 2, s2Cdr: 0.167 } });
   card('cleric', 'skill2', 2, 'c_s2_a', { name: 'Twin Hammers', icon: 'twin', tag: 'Burst',
     desc: 'Judgment throws two hammers in a V (±0.2 rad), each at {twinHammer}.[ Judgment deals +{s2Dmg}.]',
-    rider: 'Second Flight: each hammer flies out once more after it returns (out, back, out, back).', mods: { twinHammer: 0.75 }, up: { s2Dmg: 0.1 }, r3: { thirdLeg: 1 } });
+    rider: 'Second Flight: each hammer flies out once more after it returns (out, back, out, back).', mods: { twinHammer: 0.6 }, up: { s2Dmg: 0.1 }, r3: { thirdLeg: 1 } });
   card('cleric', 'skill2', 2, 'c_s2_b', { name: 'Verdict', icon: 'scroll', tag: 'Guard', coop: true,
     desc: 'Judged foes deal {judgeWeak} less damage (bosses half that). A Judged foe that dies bursts (r70) for Holy damage, stunning foes in it 0.4 s (not bosses).[ Judgment deals +{s2Dmg}.]',
     rider: 'Sentence: Verdict bursts Judge the foes they hit.', mods: { verdict: 1, judgeWeak: 0.2 }, up: { s2Dmg: 0.1 }, r3: { verdictJudge: 1 } });
