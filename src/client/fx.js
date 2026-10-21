@@ -6,7 +6,7 @@
   const U = ED.U, TAU = U.TAU;
   let hsUntil = 0; // wall-clock end of the current hit-stop
   const F = ED.FX = {
-    parts: [], texts: [], slashes: [], rings: [], bolts: [], pops: [], ghosts: [], stains: [], msgs: [], banner: null, shake: 0, flash: null, fade: 0, anim: {}, hitstop: 0, time: 0, aberr: 0, kick: 0, dread: 0, crowd: 1, // crowd: burst-count factor, set by the renderer (below 1 with many live foes)
+    parts: [], texts: [], slashes: [], rings: [], bolts: [], pops: [], ghosts: [], stains: [], msgs: [], hurtAt: {}, banner: null, shake: 0, flash: null, fade: 0, anim: {}, hitstop: 0, time: 0, aberr: 0, kick: 0, dread: 0, crowd: 1, // crowd: burst-count factor, set by the renderer (below 1 with many live foes)
     // 1 normally, ~0.06 during a hit-stop; consumers (game loop) multiply their dt by it. Wall-clock based, so it is safe however dt is scaled.
     get timeScale() { return performance.now() / 1000 < hsUntil ? 0.06 : 1; },
     set timeScale(v) { /* derived value; assignments are ignored */ },
@@ -14,7 +14,7 @@
   let MAXP = 500, lastHs = 0, pickT = 0;
   const calm = () => !!(ED.App && ED.App.settings && !ED.App.settings.shake); // "screen shake off" also mutes flashes and hit-stop
 
-  F.reset = () => { F.parts.length = 0; F.texts.length = 0; F.slashes.length = 0; F.rings.length = 0; F.bolts.length = 0; F.pops.length = 0; releaseGhosts(); F.stains.length = 0; F.msgs.length = 0; F.banner = null; F.shake = 0; F.flash = null; F.anim = {}; F.aberr = 0; F.kick = 0; F.dread = 0; hsUntil = 0; ent.clear(); hitN = 0; };
+  F.reset = () => { F.parts.length = 0; F.texts.length = 0; for (const s of F.slashes) if (s.sm) smearPool.push(s.sm); F.slashes.length = 0; hitSp.length = 0; F.rings.length = 0; F.bolts.length = 0; F.pops.length = 0; releaseGhosts(); F.stains.length = 0; F.msgs.length = 0; F.hurtAt = {}; F.banner = null; F.shake = 0; F.flash = null; F.anim = {}; F.aberr = 0; F.kick = 0; F.dread = 0; hsUntil = 0; ent.clear(); hitN = 0; };
   F.setQuality = (q) => { MAXP = q === 'low' ? 180 : 500; };
   const lowFx = () => MAXP < 300;
   const cnt = (n) => Math.ceil(n * (MAXP < 300 ? 0.5 : 1) * F.crowd);
@@ -47,7 +47,8 @@
   // Smear arc. A hero weapon swing (no life given) takes its sweep side and timing from the attack animation that was just started.
   F.slash = (x, y, a, r, arc, color, life) => {
     const an = life === undefined ? F.lastAnim : null, L = life || 0.28;
-    if (F.slashes.length < 24) F.slashes.push({ x, y, a, r, arc, color, hot: U.mix(color, '#ffffff', 0.6), life: L, max: L, side: an ? an.side : (F.slashes.length & 1 ? 1 : -1), t0: an ? an.t0 : 0.02, t1: an ? an.t1 : 0.1 });
+    if (an && an.col) color = an.col; // a hero swing wears the colour of the hero's path (steel without one)
+    if (F.slashes.length < 24) F.slashes.push({ x, y, a, r, arc, color, hot: U.mix(color, '#ffffff', 0.6), life: L, max: L, side: an ? an.side : (F.slashes.length & 1 ? 1 : -1), t0: an ? an.t0 : 0.02, t1: an ? an.t1 : 0.1, sm: null, hr: -1 });
   };
   // Bright impact flash that also lights the scene. star: flare lines (crits).
   F.pop = (x, y, r, color, life, star) => { if (F.pops.length < 40) F.pops.push({ x, y, r, color, life: life || 0.16, max: life || 0.16, star: !!star }); };
@@ -96,7 +97,7 @@
     const ts = F.texts; n = 0;
     for (let i = 0; i < ts.length; i++) { const t = ts[i]; t.life -= dt; if (t.life <= 0) continue; t.y += t.vy * dt; t.vy *= Math.max(0, 1 - 2.5 * dt); ts[n++] = t; }
     ts.length = n;
-    tick(F.slashes, dt); tick(F.rings, dt); tick(F.bolts, dt); tick(F.pops, dt); tick(F.stains, dt);
+    tickSlashes(dt); tick(F.rings, dt); tick(F.bolts, dt); tick(F.pops, dt); tick(F.stains, dt); tickHits(dt);
     const gs = F.ghosts; n = 0;
     for (let i = 0; i < gs.length; i++) { const g = gs[i]; g.life -= dt; if (g.life > 0) gs[n++] = g; else if (g.sn) g.sn.busy = false; }
     gs.length = n;
@@ -115,6 +116,7 @@
     if (an.atkT < 0.03) return; // swing + atk events of one attack arrive together
     const s = ED.Game && ED.Game.s, p = s && s.view.players.get(pid), w = p && ED.WEAPONS[p.weapon];
     an.atkT = 0; an.side = -an.side; an.a = a; F.lastAnim = an;
+    const mp = p && p.boons ? ED.mainPath(p.boons) : null; an.col = mp && mp !== 'general' && PATH_COL[mp] ? PATH_COL[mp] : '#9fb0c0'; // smear outer band: the hero's path colour, steel without one
     if (w) {
       const tm = ED.Sprites.atkTimes(w); an.t0 = tm[0]; an.t1 = tm[1]; an.D = tm[2];
       if (w.kind !== 'melee') {
@@ -139,6 +141,109 @@
   function hitReact(e, ax, ay, w, crit) {
     const s = entOf(e.id); s.ht = F.time; s.ax = ax; s.ay = ay; s.crit = crit ? 1 : 0;
     s.m = w * (e.boss ? 0.12 : e.elite ? 0.55 : 1);
+  }
+  // Last hit reaction of foe `id` ({ ht: time, ax, ay: direction, m: weight, crit }) or null.
+  F.hitState = (id) => ent.get(id) || null;
+
+  // ---------- pixel smear of weapon swings ----------
+  // The crescent of a swing rasterised on the art grid (1 art px = 2 world px) into a pooled canvas: a white core, a warm mid band and the path-colour outer band sweep with the weapon through the strike, then fade in three alpha steps (1, .7, .35).
+  const SM = 150, smearPool = [], colMemo = {};
+  function smearGet() {
+    let s = smearPool.pop();
+    if (!s) { const cv = document.createElement('canvas'); cv.width = cv.height = SM; const g = cv.getContext('2d'), img = g.createImageData(SM, SM); s = { cv, g, img, u32: new Uint32Array(img.data.buffer) }; }
+    return s;
+  }
+  const packRGBA = (hex) => colMemo[hex] || (colMemo[hex] = ((255 << 24) | (U.hexToRgb(hex)[2] << 16) | (U.hexToRgb(hex)[1] << 8) | U.hexToRgb(hex)[0]) >>> 0);
+  function tickSlashes(dt) {
+    const a = F.slashes; let n = 0;
+    for (let i = 0; i < a.length; i++) { const o = a[i]; o.life -= dt; if (o.life > 0) a[n++] = o; else if (o.sm) { smearPool.push(o.sm); o.sm = null; } }
+    a.length = n;
+  }
+  // Rasterises slash sl with its head at fraction head (0..1) of the sweep into its canvas; origin = the slash centre on the even world grid. Thrusts (arc < 1.2) are a tapering line, other arcs a crescent of growing thickness.
+  function smearRaster(s, sl, head) {
+    const K2 = 2, half = Math.min(SM >> 1, Math.ceil(sl.r / K2) + 4), W = half * 2, u = s.u32;
+    u.fill(0);
+    const ox = Math.round(sl.x / K2) * K2, oy = Math.round(sl.y / K2) * K2, ex = ox - sl.x, ey = oy - sl.y;
+    sl.ox = ox; sl.oy = oy; sl.half = half;
+    const ca = Math.cos(sl.a), sa = Math.sin(sl.a), arc = Math.min(TAU, sl.arc), sd = sl.side;
+    const cO = packRGBA(sl.color), cM = packRGBA(U.mix(sl.color, '#ffe6b0', 0.6)), cC = 0xffffffff;
+    if (arc < 1.2) {
+      const R2 = sl.r * 0.95, s0 = sl.r * 0.2, hd = s0 + (R2 - s0) * head;
+      for (let j = 0; j < W; j++) for (let i = 0; i < W; i++) {
+        const dx = (i + 0.5 - half) * K2 + ex, dy = (j + 0.5 - half) * K2 + ey, ax = dx * ca + dy * sa;
+        if (ax < s0 || ax > hd) continue;
+        const pp = -dx * sa + dy * ca, f = (ax - s0) / Math.max(1, hd - s0);
+        if (Math.abs(pp) > 0.7 + 2.4 * f) continue;
+        u[j * SM + i] = f > 0.72 ? cC : f > 0.38 ? cM : cO;
+      }
+    } else {
+      const Ro = sl.r * 0.94, base = sl.a - sd * arc / 2, Tm = U.clamp(sl.r * 0.4, 8, 24), tail = Math.min(arc, 1.9), hdA = head * arc, inner = (Ro - Tm) * (Ro - Tm), outer = Ro * Ro;
+      const T0 = tail, T1 = tail * 0.5, T2 = tail * 0.2;
+      for (let j = 0; j < W; j++) for (let i = 0; i < W; i++) {
+        const dx = (i + 0.5 - half) * K2 + ex, dy = (j + 0.5 - half) * K2 + ey, r2 = dx * dx + dy * dy;
+        if (r2 > outer || r2 < inner) continue;
+        let q = (sd * (Math.atan2(dy, dx) - base)) % TAU; if (q < 0) q += TAU;
+        if (q > arc || q > hdA) continue;
+        const d = hdA - q, r = Math.sqrt(r2);
+        let col = 0;
+        if (d <= T2 && r >= Ro - Tm * 0.4 * Math.pow(1 - d / T2, 0.75)) col = cC;
+        else if (d <= T1 && r >= Ro - Tm * 0.7 * Math.pow(1 - d / T1, 0.75)) col = cM;
+        else if (d <= T0 && r >= Ro - Tm * Math.pow(1 - d / T0, 0.75)) col = cO;
+        if (col) u[j * SM + i] = col;
+      }
+    }
+    s.g.putImageData(s.img, 0, 0, 0, 0, W, W);
+  }
+  function drawSmears(c) {
+    const comp = c.globalCompositeOperation; c.globalCompositeOperation = 'source-over'; c.imageSmoothingEnabled = false;
+    for (const sl of F.slashes) {
+      const age = sl.max - sl.life;
+      if (age < sl.t0) continue;
+      const h = U.easeOut(U.clamp((age - sl.t0) / (sl.t1 - sl.t0), 0, 1));
+      if (h <= 0) continue;
+      if (!sl.sm) sl.sm = smearGet();
+      if (sl.hr !== h) { smearRaster(sl.sm, sl, h); sl.hr = h; }
+      const f0 = age <= sl.t1 ? 0 : (age - sl.t1) / Math.max(0.01, sl.max - sl.t1);
+      c.globalAlpha = f0 < 0.34 ? 1 : f0 < 0.67 ? 0.7 : 0.35;
+      const W = sl.half * 2;
+      c.drawImage(sl.sm.cv, 0, 0, W, W, sl.ox - sl.half * 2, sl.oy - sl.half * 2, W * 2, W * 2);
+    }
+    c.globalAlpha = 1; c.globalCompositeOperation = comp; c.imageSmoothingEnabled = true;
+  }
+
+  // ---------- one-shot atlas sprites at world points (hit contacts, death puffs, dash dust) ----------
+  const hitSp = [], hitO = { flip: false, variant: '', alpha: 1, rot: 0, anchor: '' };
+  // o: { rot (radians, drawn clockwise about the sprite centre), flip, a (alpha), variant, add }.
+  F.atlasFx = (id, x, y, o) => {
+    const A = ED.Atlas; if (!A.ok || hitSp.length >= 36) return;
+    const r = A.anim(id); if (!r) return;
+    hitSp.push({ id, x: Math.round(x), y: Math.round(y), t: 0, dur: r.n / r.fps, rot: (o && o.rot) || 0, flip: !!(o && o.flip), a: o && o.a !== undefined ? o.a : 1, v: (o && o.variant) || '', add: !!(o && o.add) });
+  };
+  function tickHits(dt) { let n = 0; for (let i = 0; i < hitSp.length; i++) { const s = hitSp[i]; s.t += dt; if (s.t < s.dur) hitSp[n++] = s; } hitSp.length = n; }
+  function drawHitSprites(c) {
+    if (!hitSp.length) return;
+    const A = ED.Atlas, comp = c.globalCompositeOperation;
+    for (const s of hitSp) {
+      const r = A.anim(s.id); if (!r) continue;
+      c.globalCompositeOperation = s.add ? 'lighter' : 'source-over';
+      hitO.flip = s.flip; hitO.variant = s.v; hitO.alpha = s.a; hitO.rot = s.rot;
+      A.draw(c, s.id, Math.min(r.n - 1, Math.floor(s.t * r.fps)), s.x, s.y, hitO);
+    }
+    c.globalCompositeOperation = comp;
+  }
+  // Contact flash of a hero's direct hit: the Cut slash across the blow (CutX on a crit), a red Blast under heavy weapons. The local hero's hits always show (one per 50 ms); allies' only crits and heavy blows.
+  const HEAVY = { warhammer: 1, dawnhammer: 1 };
+  let contactT = -9;
+  function contactFx(ev, a, mine, p) {
+    if (!ED.Actors || !ED.Actors.on()) return;
+    const heavy = p ? !!HEAVY[ED.Sprites.weaponArt(p).id] : false, crit = !!ev.c;
+    if (!mine && !crit && !heavy) return;
+    if (F.time - contactT < 0.05) return;
+    contactT = F.time;
+    const x = ev.x, y = ev.y + 3;
+    if (crit) F.atlasFx('fx.cutx', x, y);
+    else F.atlasFx('fx.cut', x, y, { rot: Math.round((a + 3 * Math.PI / 4) / (Math.PI / 4)) * Math.PI / 4 });
+    if (heavy && mine) F.atlasFx('fx.blast.red', x, y, { a: 0.9 });
   }
   const X = { dx: 0, dy: 0, rot: 0, sx: 1, sy: 1 };
   // Pose of a foe this frame (offset, lean, squash about its feet): wind-up crouch, strike stretch, hit recoil. null = untouched.
@@ -178,7 +283,9 @@
     if (!p.dashing || p.dead || p.downed || R().quality === 'low') return;
     if (F.time - (p.ghostT === undefined ? -1 : p.ghostT) < 0.035) return;
     p.ghostT = F.time;
-    if (F.ghosts.length < 28) F.ghosts.push({ k: 'dash', x: p.x, y: p.y, cls: p.cls, slot: p.slot, weapon: p.weapon, face: p.face, life: 0.26, max: 0.26 });
+    if (F.ghosts.length >= 28) return;
+    const at = ED.Actors && ED.Actors.on() ? ED.Actors.heroSnap(p) : null; // atlas body: three flat silhouettes in the player colour, one per 35 ms
+    F.ghosts.push({ k: 'dash', x: p.x, y: p.y, cls: p.cls, slot: p.slot, weapon: p.weapon, face: p.face, at, life: at ? 0.11 : 0.26, max: at ? 0.11 : 0.26 });
   };
 
   const R = () => ED.Render;
@@ -278,9 +385,18 @@
     s.busy = true;
     return s;
   }
-  const NOP = () => {};
+  const NOP = () => {}, NONE = [];
   let snapBudget = 4; // snapshots per frame: a mass kill spreads its sprite draws over frames
   function spawnGhost(ev, d, fam, a, e) {
+    if (ED.Actors && ED.Actors.on()) { // atlas body: the last drawn frame lies down, flattens or dissolves; a puff marks the spot
+      if (F.ghosts.length >= 14) return;
+      const sn = ED.Actors.foeSnap(ev.type, e, ev.x, ev.y), r = ev.r || d.r;
+      F.atlasFx(r > 14 || ev.el ? 'fx.smoke' : 'fx.puff', ev.x, ev.y - (sn ? sn.lift : 0) - (r > 14 ? 8 : 4));
+      if (!sn) return;
+      const dur = DUR[fam] + (ev.el ? 0.1 : 0);
+      F.ghosts.push({ k: 'die', at: sn, x: ev.x, y: ev.y, r, fam, sgn: Math.cos(a) >= 0 ? 1 : -1, life: dur, max: dur });
+      return;
+    }
     if (lowFx() || F.ghosts.length >= 14 || snapBudget <= 0) return;
     snapBudget--;
     const Rn = R(), S = Rn.bakeScale, r = ev.r || d.r, Sp = ED.Sprites;
@@ -302,6 +418,19 @@
     const dur = DUR[fam] + (ev.el ? 0.1 : 0);
     F.ghosts.push({ k: 'die', sn, w, h, wu: w / S, hu: h / S, hw, top, x: ev.x, y: ev.y, r, fam, sgn: Math.cos(a) >= 0 ? 1 : -1, life: dur, max: dur });
   }
+  // Pose of an atlas death ghost at age u: the body stays upright for the white flash, then lies down, flattens, rises or shudders by family (rotations are exact quarter turns, squashes whole ratios, so pixels stay square).
+  const GA = { dx: 0, dy: 0, rot: 0, sx: 1, sy: 1, a: 1, add: false };
+  function ghostPoseA(g, u) {
+    const P = GA, k = u / g.max, sg = g.sgn; P.dx = 0; P.dy = 0; P.rot = 0; P.sx = 1; P.sy = 1; P.a = 1; P.add = false;
+    switch (g.fam) {
+      case 'bone': default: if (u >= 0.06) { P.rot = sg * HALF_PI; P.dx = sg * 6; P.dy = u < 0.12 ? -4 : 0; } P.a = k < 0.55 ? 1 : 1 - (k - 0.55) / 0.45; break;
+      case 'goo': if (u >= 0.06) { P.sx = 2; P.sy = 0.5; } P.a = k < 0.4 ? 1 : 1 - (k - 0.4) / 0.6; break;
+      case 'spirit': P.add = true; P.dy = -Math.round(u * 34 / 2) * 2; P.a = (1 - k) * (1 - k); break;
+      case 'metal': P.dx = u < 0.12 ? (Math.floor(u * 60) % 2 ? 2 : -2) : 0; P.a = u < 0.12 ? 1 : Math.max(0, 1 - (u - 0.12) / 0.1); break;
+    }
+    return P;
+  }
+  const HALF_PI = Math.PI / 2;
   const GP = { dx: 0, dy: 0, rot: 0, sx: 1, sy: 1, a: 1, add: false };
   // Pose of a dying foe's snapshot at age u (collapse, flatten, rise or shudder by family).
   function ghostPose(g, u) {
@@ -395,6 +524,7 @@
           if (e) hitReact(e, Math.cos(a), Math.sin(a), w, ev.c);
           const hm = hitMem[hitN++ & 7]; hm.x = ev.x; hm.y = gy; hm.a = a; hm.w = w; hm.t = F.time; hm.mine = mine;
           hitSplash(ev, e, r, gy, a, w, el, p);
+          contactFx(ev, a, mine, p);
           A.play(ev.c ? 'crit' : 'hit', mine ? 1 : 0.5, { w, el });
           if (mine && (ev.c || ev.v >= 60)) F.hitStop(ev.c ? 0.06 : 0.04);
           if (mine && w > 0.75 && !ev.c) F.addShake(1);
@@ -419,6 +549,7 @@
         break;
       }
       case 'hurt': {
+        F.hurtAt[ev.pid] = F.time; // the hero body plays its hit frame
         if (ev.pid === local) { F.flash = { color: '#ff2a2a', t: 0.25, a: 0.32 }; F.addShake(6); F.punch(1.1, 0); A.play('hurt'); }
         F.text(ev.x, ev.y - 26, '-' + Math.max(1, Math.round(ev.v)), '#ff5a4a', 11, { pop: true, life: 1, max: 1 });
         F.burst(ev.x, ev.y - 10, 8, { color: '#d22a2a', sp: 90, life: 0.4, size: 2.2 });
@@ -470,12 +601,12 @@
       case 'bossDown': F.showBanner('Vanquished', ED.ENEMIES[ev.type].name, 'victory', 3); F.flash = { color: '#ffffff', t: 0.5, a: 0.5 }; F.addShake(12); F.punch(2, 1); F.hitStop(0.3); A.play('roar', 0.6); A.play('victory', 0.7); A.music({ s: ctx.stratum() }); F.burst(ev.x, ev.y - 20, 60, { color: ED.ENEMIES[ev.type].col.c, sp: 220, life: 1.2, size: 3.5, add: true }); F.burst(ev.x, ev.y - 20, 18, { kind: 'streak', color: '#ffffff', sp: 380, life: 0.5, size: 2.4 }); F.ring(ev.x, ev.y, 160, ED.ENEMIES[ev.type].col.c, 0.8, 6); F.ring(ev.x, ev.y, 90, '#ffffff', 0.5, 3); F.pop(ev.x, ev.y - 20, 90, '#ffffff', 0.5); break;
       case 'phase': F.addShake(8); F.punch(1.6, 0.8); A.play('roar', 0.8); F.ring(ev.x, ev.y, 120, '#ffffff', 0.5, 5); F.ring(ev.x, ev.y, 70, '#ff8a5a', 0.4, 3); F.pop(ev.x, ev.y - 20, 60, '#ffffff', 0.35); break;
       case 'stratum': { const b = ED.biomeFor(ev.s); F.showBanner(b.name, 'Stratum ' + U.roman(ev.s), 'stratum', 3.6); F.fade = 1; A.music({ s: ev.s }); break; }
-      case 'room': F.fade = Math.max(F.fade, 0.6); if (ev.lc > 0) F.msg(`−${ev.lc} light`, '#ffd9a0'); break;
+      case 'room': for (const p of ctx.players()) F.atlasFx('fx.circle.spark', p.x, p.y - 2); F.fade = Math.max(F.fade, 0.6); if (ev.lc > 0) F.msg(`−${ev.lc} light`, '#ffd9a0'); break;
       case 'down': { const p = ctx.player(ev.pid); A.play('down'); if (p) F.msg(ev.pid === local ? 'You are down! An ally can revive you.' : `${p.name} is down! Stand near them to revive.`, '#ff8a7a'); break; }
-      case 'revived': { const p = ctx.player(ev.pid); A.play('revive'); if (p) { F.msg(`${p.name} is back on their feet`, '#86d38f'); F.burst(p.x, p.y - 10, 24, { color: '#ffe9a0', sp: 70, vy: -60, life: 0.9, size: 2.4, add: true }); F.ring(p.x, p.y, 40, '#ffe9a0', 0.5, 3); F.pop(p.x, p.y - 12, 30, '#ffe9a0', 0.3); } break; }
+      case 'revived': { const p = ctx.player(ev.pid); A.play('revive'); if (p) { F.atlasFx('fx.circle.spark', p.x, p.y - 2); F.msg(`${p.name} is back on their feet`, '#86d38f'); F.burst(p.x, p.y - 10, 24, { color: '#ffe9a0', sp: 70, vy: -60, life: 0.9, size: 2.4, add: true }); F.ring(p.x, p.y, 40, '#ffe9a0', 0.5, 3); F.pop(p.x, p.y - 12, 30, '#ffe9a0', 0.3); } break; }
       case 'dead': { const p = ctx.player(ev.pid); if (p) F.msg(`${p.name} has fallen. They return at the next stratum.`, '#ff8a7a'); break; }
       case 'rise': { const p = ctx.player(ev.pid); const name = { phoenix: 'Phoenix Feather', angel: 'Guardian Angel', wind: 'Second Wind' }[ev.k]; F.showBanner(name, p ? p.name + ' refuses to fall' : '', 'small', 2); F.burst(ev.x, ev.y - 10, 40, { color: '#ffd36b', sp: 150, life: 0.9, size: 3, add: true }); F.ring(ev.x, ev.y, 70, '#ffd36b', 0.6, 4); F.pop(ev.x, ev.y - 12, 50, '#ffd36b', 0.4); F.punch(0.8, 0.4); A.play('revive'); break; }
-      case 'dash': A.play('dash', ev.pid === local ? 0.8 : 0.3); F.burst(ev.x, ev.y, 6, { color: '#ffffff', sp: 40, life: 0.3, size: 3, kind: 'smoke', drag: 4 }); F.ring(ev.x, ev.y, 18, '#ffffff', 0.18, 2); break;
+      case 'dash': F.atlasFx('fx.smoke.ring', ev.x, ev.y - 2, { a: 0.8 }); A.play('dash', ev.pid === local ? 0.8 : 0.3); F.burst(ev.x, ev.y, 6, { color: '#ffffff', sp: 40, life: 0.3, size: 3, kind: 'smoke', drag: 4 }); F.ring(ev.x, ev.y, 18, '#ffffff', 0.18, 2); break;
       case 'skill': { A.play('skill', ev.pid === local ? 1 : 0.5); const p = ctx.player(ev.pid); if (p && ev.k === 'volley') F.ring(p.x, p.y, 30, '#e8d8b0', 0.25); if (ev.k === 'legion' || ev.k === 'sanctuary') F.ring(ev.x, ev.y, ev.k === 'sanctuary' ? 100 : 40, ev.k === 'sanctuary' ? '#ffe9a0' : '#7dffd9', 0.5, 4); if (ev.slot === 1) skill2Fx(ev, ev.pid === local, A); break; }
       case 'blink': for (let i = 0; i <= 8; i++) { const k = i / 8; F.part(U.lerp(ev.x0, ev.x1, k), U.lerp(ev.y0, ev.y1, k) - 10, { color: '#b78cff', sp: 20, life: 0.5, size: 4, add: true, kind: 'smoke' }); } break;
       case 'blinkfx': F.burst(ev.x0, ev.y0 - 12, 14, { color: '#b78cff', sp: 60, life: 0.5, size: 3, add: true }); F.burst(ev.x1, ev.y1 - 12, 14, { color: '#b78cff', sp: 60, life: 0.5, size: 3, add: true }); F.pop(ev.x0, ev.y0 - 12, 20, '#b78cff', 0.2); F.pop(ev.x1, ev.y1 - 12, 20, '#b78cff', 0.2); break;
@@ -566,6 +697,15 @@
     c.globalAlpha = 1;
     // dying foes: the posed snapshot (white silhouette for the first frames); spirit-family ghosts are drawn additively in drawGlow instead
     for (const g of F.ghosts) {
+      if (g.k === 'die' && g.at) { // atlas ghost (white while the hit flash lasts); spirit ghosts are drawn additively in drawGlow
+        const u = g.max - g.life, P = ghostPoseA(g, u);
+        if (P.add || P.a <= 0.01) continue;
+        c.save(); c.translate(Math.round(g.x), Math.round(g.y)); Rn.shadow(c, g.r, 0.35 * P.a);
+        c.translate(P.dx, P.dy); if (P.rot) c.rotate(P.rot); if (P.sx !== 1 || P.sy !== 1) c.scale(P.sx, P.sy);
+        ED.Actors.drawSnap(c, g.at, u < 0.06, P.a);
+        c.restore();
+        continue;
+      }
       if (!g.sn) continue;
       const u = g.max - g.life, P = ghostPose(g, u);
       if (P.a <= 0.01) continue;
@@ -600,8 +740,10 @@
   // Emissive pass (context is in 'lighter'): slashes, rings, glowing particles, streaks, pops, bolts, ghosts.
   F.drawGlow = (c, t) => {
     const Rn = R(), Sp = ED.Sprites;
-    // smear: a crescent whose bright head sweeps the arc during the weapon's strike; three nested layers (long dim tail -> short white core) fake the fade, then the whole arc fades
-    for (const s of F.slashes) {
+    const px = ED.Actors && ED.Actors.on();
+    if (px) { drawSmears(c); drawHitSprites(c); }
+    // smear: a crescent whose bright head sweeps the arc during the weapon's strike; three nested layers (long dim tail -> short white core) fake the fade, then the whole arc fades (procedural fallback)
+    for (const s of px ? NONE : F.slashes) {
       const age = s.max - s.life, arc = Math.min(6.28, s.arc), sd = s.side, h = U.easeOut(U.clamp((age - s.t0) / (s.t1 - s.t0), 0, 1));
       if (h <= 0) continue;
       const f0 = U.clamp(1 - (age - s.t1) / (s.max - s.t1), 0, 1), fa = f0 * f0, sweep = arc * h, tail = Math.min(arc, 1.9);
@@ -675,6 +817,11 @@
     }
     // ghosts: dash afterimages (hero sprite, additive); dying foes' flash overlay and spirit-family dissolve (cached snapshots)
     for (const g of F.ghosts) {
+      if (g.k === 'die' && g.at) { // atlas ghost: only the spirit family dissolves additively here
+        const P = ghostPoseA(g, g.max - g.life);
+        if (P.add && P.a > 0.01) { c.save(); c.translate(Math.round(g.x + P.dx), Math.round(g.y + P.dy)); ED.Actors.drawSnap(c, g.at, false, P.a * 0.9); c.restore(); }
+        continue;
+      }
       if (g.sn) {
         const u = g.max - g.life, P = ghostPose(g, u), fl = u < 0.12 ? 1 - u / 0.12 : 0;
         if (!fl && !P.add) continue;
@@ -682,6 +829,12 @@
         if (P.add && P.a > 0.01) { c.globalAlpha = P.a * 0.9; c.drawImage(g.sn.cv, u < 0.06 ? g.sn.cw : 0, 0, g.w, g.h, -g.hw, -g.top, g.wu, g.hu); }
         if (fl) { c.globalAlpha = fl * 0.85; c.drawImage(g.sn.cv, g.sn.cw, 0, g.w, g.h, -g.hw, -g.top, g.wu, g.hu); }
         c.restore();
+        continue;
+      }
+      if (g.at) { // atlas silhouette: alpha .45 / .30 / .15 by age
+        const k = g.life / g.max; c.globalCompositeOperation = 'source-over';
+        c.save(); c.translate(Math.round(g.x), Math.round(g.y)); ED.Actors.drawDash(c, g, k > 0.66 ? 0.45 : k > 0.33 ? 0.3 : 0.15); c.restore();
+        c.globalCompositeOperation = 'lighter';
         continue;
       }
       const k = g.life / g.max, fake = g.fake || (g.fake = { cls: g.cls, slot: g.slot, weapon: g.weapon, face: g.face, moving: true, hp: 1, flash: 0 });

@@ -3,7 +3,7 @@
 // screen (sharp-bilinear in WebGL, nearest on the 2D fallback) and applies the fractional camera offset (R.fx / R.fy), so scrolling stays smooth.
 (function (ED) {
   'use strict';
-  const U = ED.U, T = ED.CONST.TILE, Sp = ED.Sprites, Bmp = ED.Bmp;
+  const U = ED.U, T = ED.CONST.TILE, Sp = ED.Sprites, Bmp = ED.Bmp, AC = ED.Actors;
   const R = ED.Render = { cam: { x: 0, y: 0 }, scale: 2, W: 0, H: 0, dpr: 1, bw: 1, bh: 1, ix: 0, iy: 0, fx: 0, fy: 0, ox: 0, oy: 0, shx: 0, shy: 0, bakeScale: 1, quality: 'high', lightLevel: 1, posting: false, stats: { n: 0, world: 0, post: 0 } };
   const BQ = R.bakeScale; // texels per world px of baked sprites and room art (world resolution)
   const glowCache = {}, lightCache = {}, trailCache = {};
@@ -180,7 +180,22 @@
     lightCache[color] = Bmp.hold(s);
     return s;
   }
+  // Light pools of the frame (buffer px x, y, radius, intensity) and the ambient level, kept so actors can be lifted toward a minimum brightness (R.lightAt).
+  const lrec = new Float32Array(4 * 320), lumMemo = {}; let lrecN = 0, ambL = 0.4;
+  const LPT = [0, 0.16, 0.4, 0.66, 0.86, 1], LPV = [0.95, 0.74, 0.42, 0.17, 0.05, 0]; // radial falloff of lightSprite
+  // Approximate brightness (0..1) the light multiply gives the buffer pixel (x, y): ambient plus the recorded pools.
+  R.lightAt = (x, y) => {
+    let L = ambL;
+    for (let i = 0; i < lrecN; i++) {
+      const dx = x - lrec[i * 4], dy = y - lrec[i * 4 + 1], r = lrec[i * 4 + 2], d2 = dx * dx + dy * dy;
+      if (d2 >= r * r) continue;
+      const t = Math.sqrt(d2) / r; let j = 1; while (LPT[j] < t) j++;
+      L += lrec[i * 4 + 3] * (LPV[j - 1] + (LPV[j] - LPV[j - 1]) * (t - LPT[j - 1]) / (LPT[j] - LPT[j - 1]));
+    }
+    return L > 1 ? 1 : L;
+  };
   R.lightBegin = (rgb) => {
+    lrecN = 0; ambL = (rgb[0] * 0.299 + rgb[1] * 0.587 + rgb[2] * 0.114) / 255;
     lctx.globalCompositeOperation = 'source-over'; lctx.globalAlpha = 1;
     lctx.fillStyle = `rgb(${rgb[0] | 0},${rgb[1] | 0},${rgb[2] | 0})`;
     lctx.fillRect(0, 0, lightCv.width, lightCv.height);
@@ -188,6 +203,7 @@
   };
   // Adds a coloured pool at buffer pixel (sx, sy) with radius rr (px).
   R.lightAdd = (sx, sy, rr, color, k) => {
+    if (lrecN < 320 && k > 0.01) { let lw = lumMemo[color]; if (lw === undefined) { const c = U.hexToRgb(color); lw = lumMemo[color] = (c[0] * 0.299 + c[1] * 0.587 + c[2] * 0.114) / 255; } const o = lrecN++ * 4; lrec[o] = sx; lrec[o + 1] = sy; lrec[o + 2] = rr; lrec[o + 3] = k * lw; }
     const div = R.lightDiv; sx /= div; sy /= div; rr /= div;
     if (sx + rr < 0 || sy + rr < 0 || sx - rr > lightCv.width || sy - rr > lightCv.height || k <= 0.01) return;
     const spr = lightSprite(color);
@@ -223,6 +239,8 @@
     const t0 = performance.now(), c = R.beginWorld(), room = view.room, F = ED.FX, S = R.scale;
     const biome = ED.biomeFor(view.stratum || 1), P = biome.pal;
     ED.Atlas.tick();
+    const atlasOn = AC.on();
+    if (atlasOn) AC.begin(view, t);
     foeTick(view.stratum || 1);
     c.fillStyle = P.void; c.fillRect(0, 0, R.bw, R.bh);
     nl = 0; ng = 0; stN = 0; R.local = local;
@@ -252,10 +270,13 @@
     for (const it of drawList) {
       const o = it.o, rim = low ? null : rimLight(o.x, o.y, it.k === 0 ? 16 : 0), px = Math.round(o.x), py = Math.round(o.y); // feet on the buffer pixel grid
       if (rim) { shDX = -rim.dx * 0.28; shDY = -rim.dy * 0.12; } else { shDX = 0; shDY = 0; }
-      if (it.k === 1) { // foe: pose offset, lean and squash (F.xform) go into one matrix with the mirror
-        const X = F.xform(o), m = o.face < 0 ? -1 : 1, bx = px - ix, by = py - iy;
-        if (X) { const cr = Math.cos(X.rot), sr = Math.sin(X.rot); c.setTransform(m * cr * X.sx, m * sr * X.sx, -sr * X.sy, cr * X.sy, bx + X.dx, by + X.dy); } else c.setTransform(m, 0, 0, 1, bx, by);
-        foe(c, o, t, !it.full);
+      if (it.k === 1) { // foe: atlas art (pose offsets are art-px steps), else the procedural look with pose offset, lean and squash (F.xform) in one matrix with the mirror
+        const bx = px - ix, by = py - iy;
+        if (!(atlasOn && AC.foe(c, o, t, !it.full, bx, by))) {
+          const X = F.xform(o), m = o.face < 0 ? -1 : 1;
+          if (X) { const cr = Math.cos(X.rot), sr = Math.sin(X.rot); c.setTransform(m * cr * X.sx, m * sr * X.sx, -sr * X.sy, cr * X.sy, bx + X.dx, by + X.dy); } else c.setTransform(m, 0, 0, 1, bx, by);
+          foe(c, o, t, !it.full);
+        }
         c.setTransform(1, 0, 0, 1, bx, by);
         if (rim && rim.s > 0.35 && it.full) R.glowOnce(c, 0, -o.r * 1.2, o.r * 1.5, rim.col, 0.14 * rim.s, rim.dx * o.r * 0.55, rim.dy * o.r * 0.4);
         drawStatus(c, o, t);
@@ -283,6 +304,7 @@
     c.globalCompositeOperation = 'lighter';
     const emis = ED.Tiles.emissive(room, BQ);
     if (emis) { c.globalAlpha = 0.82 + Math.sin(t * 2.1) * 0.1 + Math.sin(t * 5.3) * 0.05; c.drawImage(emis, 0, 0, emis.width / emis.px, emis.height / emis.px); c.globalAlpha = 1; }
+    if (atlasOn) actorFloor(c, dn, ix, iy);
     drawRoomDynamics(c, view, room, biome, t, 1);
     drawPickups(c, view, t, 1);
     drawZones(c, view, t, 1);
@@ -291,8 +313,9 @@
     const eyeA = 0.2 + P.darkness * 0.5;
     for (let i = 0; i < dn; i++) {
       const it = drawList[i], e = it.o; if (it.k !== 1 || e.burrowed) continue;
-      if (it.full) R.glow(c, e.x, e.y - e.r * (e.def.fly ? 2.2 : 1.7), 5 + e.r * 0.5, e.def.col.c, eyeA);
-      const wp = F.windupP(e); if (wp > 0.05) R.glow(c, e.x, e.y - e.r * 1.2, e.r * (1.5 + wp), wp > 0.8 ? '#ffd0a0' : '#ff5a3a', 0.12 + 0.5 * wp * wp);
+      const an = atlasOn ? AC.anchor(e) : null;
+      if (it.full) { if (an) { for (const ey of an.eye) R.glow(c, e.x + ey[0], e.y + ey[1], 5 + e.r * 0.5, e.def.col.c, eyeA); } else R.glow(c, e.x, e.y - e.r * (e.def.fly ? 2.2 : 1.7), 5 + e.r * 0.5, e.def.col.c, eyeA); }
+      const wp = atlasOn ? AC.windupP(e) : F.windupP(e); if (wp > 0.05) R.glow(c, e.x, e.y + (an ? an.cy : -e.r * 1.2), e.r * (1.5 + wp), wp > 0.8 ? '#ffd0a0' : '#ff5a3a', 0.12 + 0.5 * wp * wp);
     }
     for (let i = 0; i < ng; i++) { const g = glowQ[i]; R.glow(c, g.x, g.y, g.r, g.c, g.a); }
     F.drawGlow(c, t);
@@ -306,6 +329,20 @@
     R.stats.world += performance.now() - t0; R.stats.n++;
     R.endWorld(R.postOpts(biome, t, view.pact > 0 ? { vig: 0.42 + Math.min(0.2, view.pact * 0.02) } : null));
   };
+
+  // Brightness floor of heroes and foes: the light multiply never takes an actor below about half its colour. Where the recorded light at an actor is under ACTOR_FLOOR its blits are replayed additively
+  // with the missing share, so the result is sprite * max(light, floor). Actors in a lit pool (L at the floor or above) cost nothing extra.
+  const ACTOR_FLOOR = 0.5;
+  function actorFloor(c, dn, ix, iy) {
+    for (let i = 0; i < dn; i++) {
+      const it = drawList[i], o = it.o;
+      if (it.k > 1 || o.burrowed || o.dead || o.downed || (o.hp !== undefined && o.hp <= 0)) continue;
+      const px = Math.round(o.x), py = Math.round(o.y);
+      if (px < ix - 90 || px > ix + R.bw + 90 || py < iy - 110 || py > iy + R.bh + 90) continue;
+      const a = (ACTOR_FLOOR - R.lightAt(px - ix, py - iy - 10)) * 0.95;
+      if (a > 0.04) AC.replay(c, o, it.k, px, py, a);
+    }
+  }
 
   // Y-sorted entity list: items are pooled by index, so a frame allocates nothing.
   const drawList = [], drawPool = [], byY = (a, b) => a.y - b.y;
@@ -550,10 +587,22 @@
   }
   R.foeStats = () => { let n = 0; for (const tc of foeTC.values()) for (const g of tc) if (g) n += g.filter(Boolean).length; return { frames: n, px: foePx, mb: +(foePx * 4 / 1048576).toFixed(1), sharedPx: sprPx }; };
   R.drawFoe = (c, e, t, lite) => { c.save(); if (e.face < 0) c.scale(-1, 1); foe(c, e, t, lite); c.restore(); };
+  // Anchors { cx, cy, top, eye: [[x, y]...] } of a foe or hero in world px from its feet: its current atlas anim, else the procedural sizes. The fallback object is shared: read it before the next call.
+  const ancFb = { cx: 0, cy: 0, top: 0, eye: [[0, 0]] };
+  R.actorAnchor = (o) => {
+    const a = AC.on() ? AC.anchor(o) : null;
+    if (a) return a;
+    const r = o.r || 10, fb = ancFb, d = o.def, fly = !!(d && d.fly);
+    if (!d) { fb.cx = 0; fb.cy = -14; fb.top = -38; fb.eye[0][0] = 2; fb.eye[0][1] = -26; return fb; }
+    const bh = fly ? r * 2.6 : (LOOK_H[d.look] || r * 2.7) * (r / d.r);
+    fb.cx = 0; fb.cy = fly ? -r * 1.7 : -bh * 0.5; fb.top = -bh; fb.eye[0][0] = 0; fb.eye[0][1] = -r * (fly ? 2.2 : 1.7);
+    return fb;
+  };
   R.sprite = sprite;
   R.bakeBudget = (n) => { bakeLeft = n; }; // frames the shared cache may bake before the next frame resets it
   // Entering a stratum drops the old roster's frames and queues the new roster's idle frames, FOE_WARM baked per rendered frame.
   function foeTick(stratum) {
+    if (AC.on()) { if (stratum !== foeStratum) { foeStratum = stratum; AC.warm(stratum); } AC.pump(); return; } // atlas art: recoloured sheets are queued per stratum, no flipbooks
     if (foeGen !== sprGen) { foeGen = sprGen; foeStratum = 0; } // the shared cache was dropped (resize, overflow): frames are rebuilt
     if (stratum !== foeStratum) {
       foeStratum = stratum; foeClear();
@@ -1685,7 +1734,8 @@
       if (e.hp <= 0 || e.boss || e.burrowed) continue;
       const frac = e.hp / e.maxHp;
       if (frac >= 0.999 && !e.elite) continue;
-      const w = e.elite ? 30 : 18, y = Math.round(e.y - e.r * 2.6 - (e.def.fly ? 14 : 4)), af = e.elite ? ED.AFFIXES[e.elite] : null, bx = Math.round(e.x - w / 2);
+      const an = AC.on() ? AC.anchor(e) : null; // bar 6 px over the top of the sprite
+      const w = e.elite ? 30 : 18, y = an ? Math.round(e.y + an.top) - 6 : Math.round(e.y - e.r * 2.6 - (e.def.fly ? 14 : 4)), af = e.elite ? ED.AFFIXES[e.elite] : null, bx = Math.round(e.x - w / 2);
       blit(c, barSprite(af ? af.color : '#e2513f', w, Math.round(U.clamp(frac, 0, 1) * w), bh), bx, y);
       if (e.ward > 0) { c.fillStyle = '#7fc8ff'; c.fillRect(bx, y - 1 - bh, Math.max(1, Math.round(w * (e.ward / (e.wardMax || 1)))), Math.max(1, bh - 1)); }
       if (af) R.label(c, af.name + ' ' + e.def.name, e.x, y - 2 - lhh / 2 - (e.ward > 0 ? bh : 0), af.color);
