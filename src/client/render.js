@@ -304,7 +304,7 @@
     c.globalCompositeOperation = 'lighter';
     const emis = ED.Tiles.emissive(room, BQ);
     if (emis) { c.globalAlpha = 0.82 + Math.sin(t * 2.1) * 0.1 + Math.sin(t * 5.3) * 0.05; c.drawImage(emis, 0, 0, emis.width / emis.px, emis.height / emis.px); c.globalAlpha = 1; }
-    if (atlasOn) actorFloor(c, dn, ix, iy);
+    if (atlasOn && R.actorFloor !== false) actorFloor(c, dn, ix, iy);
     drawRoomDynamics(c, view, room, biome, t, 1);
     drawPickups(c, view, t, 1);
     drawZones(c, view, t, 1);
@@ -336,7 +336,7 @@
   function actorFloor(c, dn, ix, iy) {
     for (let i = 0; i < dn; i++) {
       const it = drawList[i], o = it.o;
-      if (it.k > 1 || o.burrowed || o.dead || o.downed || (o.hp !== undefined && o.hp <= 0)) continue;
+      if (it.k > 1 || !it.full || o.burrowed || o.dead || o.downed || (o.hp !== undefined && o.hp <= 0)) continue; // far foes of a crowd (crowdLod) keep the plain multiply
       const px = Math.round(o.x), py = Math.round(o.y);
       if (px < ix - 90 || px > ix + R.bw + 90 || py < iy - 110 || py > iy + R.bh + 90) continue;
       const a = (ACTOR_FLOOR - R.lightAt(px - ix, py - iy - 10)) * 0.95;

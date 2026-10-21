@@ -240,6 +240,7 @@
     let lift = 0;
     if (fly) lift = (def.gloom ? 6 : 12 + Math.round(e.r * 0.25)) + q2(Math.sin(t * 4 + (e.id | 0)) * 2);
     if (st === 'leap') lift += q2(Math.sin((1 - U.clamp(e.t / 0.35, 0, 1)) * PI) * 26); // the leaper's arc over its 0.35 s flight
+    else if (!fly && moving && A.anim(id).n === 2 && Math.floor((t + ph) * 4) % 2) lift += 2; // two-frame walkers hop one art px at 2 Hz
     s.lift = lift;
     const ox = P.dx, oy = P.dy - lift;
     // ---- behind-the-body rig pieces, body, front pieces ----
@@ -354,15 +355,16 @@
   AC.warm = (stratum) => {
     wq.length = 0;
     const b = ED.biomeFor(stratum), roster = b.enemies;
-    if (b.boss) for (const id in ED.ART.anims) if (id.startsWith('boss.' + b.boss + '.') && A.has(id)) wq.push(id, b.boss);
-    for (let i = roster.length - 1; i >= 0; i--) for (const id of foeAnims(roster[i][0])) wq.push(id, roster[i][0]);
+    const add = (id, type) => { wq.push(id, type, 2, id, type, 1, id, type, 0); }; // popped last-in-first-out: recolour (0), white flash (1), wind-up outline (2)
+    if (b.boss) for (const id in ED.ART.anims) if (id.startsWith('boss.' + b.boss + '.') && A.has(id)) add(id, b.boss);
+    for (let i = roster.length - 1; i >= 0; i--) for (const id of foeAnims(roster[i][0])) add(id, roster[i][0]);
   };
   AC.pump = () => {
     const t0 = performance.now();
-    while (wq.length && performance.now() - t0 < 1.2) {
-      const type = wq.pop(), id = wq.pop();
-      if (ED.ENEMIES[type].boss) bossVar(type, id); else foeVar(type, id);
-      stateVar(id, 'white');
+    while (wq.length && performance.now() - t0 < 1.2) { // one sheet per step, so a big boss anim never stalls a frame for long
+      const step = wq.pop(), type = wq.pop(), id = wq.pop();
+      if (step === 0) { if (ED.ENEMIES[type].boss) bossVar(type, id); else foeVar(type, id); }
+      else if (step === 1) stateVar(id, 'white'); else outlineVar(id, RED);
     }
   };
 

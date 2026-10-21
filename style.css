@@ -372,6 +372,7 @@ input[type=range]::-moz-range-thumb { width: 1.2rem; height: 1.2rem; transform: 
 .lobby-members { display: grid; gap: 0.6rem; }
 .member { display: grid; grid-template-columns: 3.6rem minmax(0, 1fr) auto; gap: 0.9rem; align-items: center; padding: 0.6rem 1rem 0.6rem 0.7rem; border: 2px solid var(--line); border-radius: var(--r-sm); background: var(--card); min-height: 4.8rem; }
 .member canvas { width: 3.6rem; height: 3.6rem; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, 0.5)); }
+.hero-tile canvas, .hd-top canvas, .member canvas { image-rendering: pixelated; } /* hero portraits are pixel art */
 .member .mn { font: 700 var(--fs-lg)/1.15 var(--f-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .member .mc { font-size: var(--fs-md); color: var(--muted); }
 .member .mr { font: 800 var(--fs-md) var(--f-body); color: var(--faint); padding: 0.2rem 0.8rem; border-radius: 2rem; border: 1px solid var(--line); }
