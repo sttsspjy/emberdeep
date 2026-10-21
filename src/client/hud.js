@@ -202,6 +202,7 @@
     return true;
   }
   H.dirty = () => { forceDirty = true; }; // next draw repaints (tests, external invalidation)
+  H.flashSlot = (i, t) => { const fx = slotFx[i] || (slotFx[i] = { r: false, t: 0 }); fx.t = Math.max(fx.t, t || 0.5); forceDirty = true; }; // white outline pulse on ability slot i (a cooldown cut)
   H.clear = () => { if (cv && shown) { cv.style.display = 'none'; shown = false; document.body.classList.remove('hud-on'); } };
 
   function layout() {

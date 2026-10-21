@@ -111,7 +111,7 @@
         { id: 'blast', label: 'Blast', base: 22, pow: 2.5, per: 'hit', r: 105, knock: 200, el: 'class', proc: true },
         { id: 'burn', label: 'Burn', base: 12, pow: 2.4, per: 'status', status: 'burn' },
         { id: 'ring', label: 'Ring of fire', if: 'novaRing', base: 8, pow: 1, per: 'sec', rOf: 'blast', rMul: 0.8, dur: 3, el: 'class' },
-        { id: 'echo', label: 'Second eruption', if: 'novaEcho', of: 'blast', mul: 'novaEcho', per: 'hit', delay: 0.6, el: 'class', proc: true },
+        { id: 'echo', label: 'Second eruption', if: 'novaEcho', of: 'blast', mul: 'novaEcho', per: 'hit', delay: 0.6, rOf: 'blast', rMul: 1, el: 'class', proc: true },
         { id: 'flare', label: 'Rebirth flare', if: 'mantleBurst', of: 'blast', mul: 'mantleBurst', per: 'hit', r: 90, knock: 220, el: 'class', proc: true },
       ] },
     step: { name: 'Shadowstep', slot: 0, cd: 4.5, icon: 'cloak', aim: 'move', range: 140, rangeMin: 40,
