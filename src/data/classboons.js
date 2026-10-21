@@ -187,7 +187,7 @@
     desc: 'Swift weapon (×0.55 interval, ×0.605 per hit, Flow): foes you Hexed take +{hexSelf} from you.',
     rider: 'Quickened Dead: your minions attack {hexHaste} faster against foes you Hexed.', mods: { hexSelf: 0.1 }, up: { hexSelf: 0.05 }, r3: { hexHaste: 0.25 } });
   card('necro', 'skill1', 1, 'n_s1', { name: 'Endless Legion', icon: 'skull', forks: ['n_s1_a', 'n_s1_b'], plays: 'a standing army.',
-    desc: '+{minions:n} max minion, and Raise Legion raises {s1N:n} more.', mods: { minions: 1, s1N: 1 } });
+    desc: '+{minions:n} max minion, Raise Legion raises {s1N:n} more, and your minions deal +{s1Dmg}.', mods: { minions: 1, s1N: 1, s1Dmg: 0.2 } });
   card('necro', 'skill1', 2, 'n_s1_a', { name: 'Bone Spikes', icon: 'bomb', tag: 'Burst',
     desc: 'Your minions burst when they expire, fall or are replaced (r60) for Shadow damage that marks Doom for half of it.[ Bursts deal +{s1Dmg} more.]',
     rider: 'Boneyard: a foe a Bone Spikes burst kills rises as a minion (at most once per 2 s).', mods: { boneSpikes: 1 }, up: { s1Dmg: 0.1 }, r3: { spikeRaise: 1 } });

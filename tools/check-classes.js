@@ -49,7 +49,7 @@ const SK = [ // class, skill, part, dmg
   ['cleric', 'sanctuary', 'zone', 30.4], ['cleric', 'judgment', 'leg', 41.8], ['necro', 'legion', 'minion', 11.4], ['necro', 'harvest', 'burst', 40.2],
 ];
 for (const [cls, sk, part, dmg] of SK) near(ED.Stats.skillNums(sk, build(cls)).p[part].dmg, dmg, 0.06, `${sk}.${part}`);
-near(ED.Stats.skillNums('legion', build('necro', 0, { n_s1: 1, n_s1_a: 1 })).p.spikes.dmg, 23.5 * 1.0, 0.06, 'legion.spikes (rank 1)');
+near(ED.Stats.skillNums('legion', build('necro', 0, { n_s1: 1, n_s1_a: 1 })).p.spikes.dmg, 23.5 * 1.2, 0.06, 'legion.spikes (rank 1, Endless Legion +20%)');
 const sky = ED.Stats.skillNums('rain', build('ranger', 0, { r_s2: 1, r_s2_a: 1 }));
 near(sky.p.sky.dmg, 124.08, 0.1, 'Rainmaker + Skyfall sky');
 ok(!ED.Stats.skillNums('rain', build('ranger')).p.sky.on && sky.p.sky.on, 'Skyfall part gated by its stat');

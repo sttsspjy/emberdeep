@@ -279,8 +279,8 @@
     return k < 0.95 ? 1 : k < 1.25 ? 2 : 3;
   };
   // FX events kept per type in one snapshot (host to client), and per rendered frame on the host or solo machine (a third of it). Extras are dropped; sim state never is.
-  N.CAPS = { hit: 24, smite: 12, reap: 12, toll: 12, lance: 12, ric: 12, parry: 6, catch: 4 };
-  N.CAPS_LOCAL = { hit: 8, smite: 4, reap: 4, toll: 4, lance: 4, ric: 4, parry: 2, catch: 2 };
+  N.CAPS = { hit: 24, smite: 12, reap: 12, toll: 12, lance: 12, ric: 12, parry: 6, catch: 4, kblock: 6, blance: 8 };
+  N.CAPS_LOCAL = { hit: 8, smite: 4, reap: 4, toll: 4, lance: 4, ric: 4, parry: 2, catch: 2, kblock: 3, blance: 4 };
   Object.assign(N.CAPS, { exec: 8, rupt: 8, bloom: 6, sweep: 6 }); Object.assign(N.CAPS_LOCAL, { exec: 3, rupt: 3, bloom: 2, sweep: 2 }); // Shade execution cuts, ruptures, Bloodbloom lines and Ambush Sweep rings
   N.capFx = (fx, caps) => {
     let over = false, n = null;

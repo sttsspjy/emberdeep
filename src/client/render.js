@@ -1511,6 +1511,8 @@
     cross: { rows: ['...2...', '..111..', '.1.2.1.', '2122212', '.1.2.1.', '..111..', '...2...'], c: { 1: '#ff5a4a', 2: '#ffd8d0' } }, // Hunter's Mark crosshair (cls-ranger.js)
     execskull: { rows: ['.111.', '11111', '12121', '11111', '.1.1.'], c: { 1: '#e8283c', 2: '#2a0408' } },
     weak: { rows: ['11111', '11211', '12211', '.121.', '..1..'], c: { 1: '#ffcf5a', 2: '#5a3a0c' } }, // Verdict's weaken mark (cls-cleric.js): the guard shape in gold
+    hex: { rows: ['.111.', '12221', '12321', '12221', '.111.'], c: { 1: '#7dffd9', 2: '#1c0c3a', 3: '#a070ff' } },
+    hext: { rows: ['41114', '12321', '13331', '12321', '41114'], c: { 1: '#c4ffee', 2: '#1c0c3a', 3: '#ffffff', 4: '#a070ff' } },
   };
   function glyphStub(c, g, cx, bottom) {
     const rows = g.rows, x0 = cx - rows[0].length, y0 = bottom - rows.length * 2;
