@@ -12,7 +12,7 @@
 //   eye = heuristic single point (centre x, 30% below the top of the union bbox); pal[id] = unique colours sorted dark to light (not for fx.*).
 //   Directions of foes (probe with ED.ART.anims): foe.<id>.<state> two-way (drawn facing right, mirror for left);
 //   foe.<id>.<state>.<d|u|l|r> four-way (down, up, left, right); foe.<id>.<state>.<0..7> eight-way (source rows: 0 S, 1 SE, 2 E, 3 NE, 4 N, 5 NW, 6 W, 7 SW).
-//   Every foe has `walk`; `idle` exists for 0x72 foes; `atk`/`cast`/`death` where the source has them.
+//   Every foe has `walk`; `idle` exists for 0x72 foes; `atk`/`cast`/`howl`/`death` where the source has them (howl: icewolf, lavahound).
 //
 // ----------------------------------------------------------------------------- ID LIST (one line per family; the exhaustive list is generated into ID-LIST.md)
 // hero.<knight|ranger|pyro|shade|cleric|necro>.<idle|run|hit>   0x72 bodies facing right: idle 4f, run 4f, hit 1f; anchors.hand = weapon pivot on the body (feet + 3,-6)
@@ -20,10 +20,11 @@
 // weapon.alt.<name>      Route-fork and foe weapons: big_hammer waraxe double_axe anime_sword katana duel_sword machete saw_sword throwing_axe rusty_sword cleaver
 // shield.<wood|green|gold|round|kite|buckler|tower>   16x16 guard-side shields (DawnLike); proj.shield = the thrown kite shield (centre pivot)
 // foe.<id>.<state>[.dir] all 46 foes (state walk always; idle/atk/cast/death where the source has them), direction rule above; imp/skeleton keep native colours, the rest take pal(def.col) at runtime
-// boss.<id>.<state>      bonewarden: idle walk attack(8f) shield hit death | sporemother: idle walk attack charge hit | rimeheart: idle walk hit, attack.l attack.r charge.l charge.r (set boss.rimeheart.atk)
+// boss.<id>.<state>      bonewarden: idle walk attack(8f) shield hit death | sporemother: idle walk attack charge hit | rimeheart: idle walk hit, attack.l attack.r charge.l charge.r (own pivots; centre/top/eye copied from idle)
 //                        forgelord: idle walk hit | drownedking: idle walk attack1 attack2 attack3 hit death | hollowking: idle walk attack hit death, crown overlay boss.hollowking.crown
 // tile.floor.<1..8>, tile.wall.{cap,face}.{left,mid,right}, tile.wall.side.{left,right}, tile.wall.outer.{top,front}.{left,right}, tile.wall.edge.<shape>, tile.wall.lip, tile.wall.auto.<col>.<row>,
-//   tile.wall.{hole.1,hole.2,goo,goo.base}, tile.hole, tile.spikes(4f), tile.stairs, tile.door.{frame.left,frame.right,frame.top,leaf.closed,leaf.open}, tile.gate.bars,
+//   tile.wall.{hole.1,hole.2,goo,goo.base}, tile.hole, tile.spikes(4f), tile.stairs, tile.door.{frame.left,frame.right,frame.top,leaf.closed,leaf.open}, tile.gate.bars (front view) / tile.gate.bars.side (E/W), tile.wall.grate,
+//   tile.carpet.<red|beige>.{full,rug,run.fill,run.top,run.bot,band} (Sanctum),
 //   tile.fountain.{top.1..3,mid.red,mid.blue,basin.red,basin.blue}(3f), tile.torch.{wall,floor}(8f), tile.torch.unlit, tile.dark.floor.<1..6>   (0x72 base set; per-biome recolour at runtime)
 // prop.<chest.closed|chest.open|chest.empty|mimic.closed|mimic.open|plinth|plinth.stone|shrine.<0..4>|merchant|crate|bag|campfire|anvil|trial|portal|sign|column|column.wall>
 // deco.<bones.0..4|skull|moss.0..2|candle.0..3|urn.0..5|mushroom.0..3|root.0..1|puddle.0..3|crystal.0..2|shard.0..2|shell.0..2|seaweed.0..1|coral.0..1|pillarstub|chain|grate|banner.<blue|green|red|yellow>>
@@ -91,7 +92,7 @@ const sheets = {
   nf_explosion: { file: NA + 'FX/Elemental/Explosion/SpriteSheet.png' },
   nf_flam: { file: NA + 'FX/Elemental/Flam/SpriteSheet.png' },
   nf_iceb: { file: NA + 'FX/Elemental/Ice/SpriteSheetB.png' },
-  nf_thunder: { file: NA + 'FX/Elemental/Thunder/SpriteSheet.png' },
+  nf_thunder: { file: NA + 'FX/Elemental/Thunder/SpriteSheet.png', outline: ['#141b1b'] },
   nf_circle_spark: { file: NA + 'FX/Magic/Circle/SpriteSheetSpark.png' },
   nf_circle_white: { file: NA + 'FX/Magic/Circle/SpriteSheetWhite.png' },
   nf_shield_gold: { file: NA + 'FX/Magic/Shield/SpriteSheetYellow.png' },
@@ -103,7 +104,7 @@ const sheets = {
   nf_arrow: { file: NA + 'FX/Projectile/Arrow.png', outline: ['#141b1b'] },
   nf_kunai: { file: NA + 'FX/Projectile/Kunai.png', outline: ['#141b1b'] },
   nf_fireball: { file: NA + 'FX/Projectile/Fireball.png' },
-  nf_thorn: { file: NA + 'FX/Projectile/PlantSpike.png', outline: ['#141b1b'] },
+  nf_thorn: { file: NA + 'FX/Projectile/PlantSpike.png', outline: ['#141b1b', '#000000'] },
   // Puny
   pu_wolf: { file: 'puny/monsters/PunyMonsters/Gray-Wolf-32x32.png', outline: ['#151515'] },
   pu_spider: { file: 'puny/monsters/PunyMonsters/Purple-Spider-32x32.png', outline: ['#151515'] },
@@ -254,20 +255,22 @@ foeNa4('frostwisp', 'na_wisp'); foeNa4Shared('shade', 'frostwisp');
 foeNa4('voideye', 'na_eye'); foeNa4('reaver', 'na_kappa'); foeNa4('drone', 'na_flam');
 foeNa4('rimemage', 'na_sorc', { cast: true }); foeNa4('riftcaller', 'na_nmage', { cast: true });
 
-// Puny eight-way sheets: 12 columns x 8 rows of 32x32 (cols 0-5 walk, 6-9 attack); row k = direction k.
-const foePu8 = (id, sheet) => {
+// Puny eight-way sheets: 12 columns x 8 rows of 32x32 (cols 0-5 walk, 6-9 attack, 11 howl on the wolf sheet); row k = direction k.
+const foePu8 = (id, sheet, howl) => {
   for (let k = 0; k < 8; k++) {
     add('foe.' + id + '.walk.' + k, 'actors', sheet, strip(0, k * 32, 32, 32, 6), { set: 'foe.' + id, fps: 10, loop: true, eye: 'auto' });
     add('foe.' + id + '.atk.' + k, 'actors', sheet, strip(192, k * 32, 32, 32, 4), { set: 'foe.' + id, fps: 14, loop: false, eye: 'auto', core: false });
+    if (howl) add('foe.' + id + '.howl.' + k, 'actors', sheet, [[352, k * 32, 32, 32]], { set: 'foe.' + id, fps: 0, loop: false, eye: 'auto', core: false });
   }
 };
-const foePu8Shared = (id, srcId) => {
+const foePu8Shared = (id, srcId, howl) => {
   for (let k = 0; k < 8; k++) {
     add('foe.' + id + '.walk.' + k, 'actors', null, null, { use: 'foe.' + srcId + '.walk.' + k, set: 'foe.' + id, fps: 10, loop: true, eye: 'auto' });
     add('foe.' + id + '.atk.' + k, 'actors', null, null, { use: 'foe.' + srcId + '.atk.' + k, set: 'foe.' + id, fps: 14, loop: false, eye: 'auto', core: false });
+    if (howl) add('foe.' + id + '.howl.' + k, 'actors', null, null, { use: 'foe.' + srcId + '.howl.' + k, set: 'foe.' + id, fps: 0, loop: false, eye: 'auto', core: false });
   }
 };
-foePu8('icewolf', 'pu_wolf'); foePu8Shared('lavahound', 'icewolf'); foePu8('cavespider', 'pu_spider');
+foePu8('icewolf', 'pu_wolf', true); foePu8Shared('lavahound', 'icewolf', true); foePu8('cavespider', 'pu_spider');
 // Puny slime strip (15 frames of 32x32): idle 0,1,2,1; walk (hop) 2,3,4,5,7,8; death 10-13.
 const foePuSlime = (id, first) => {
   const f = (i) => [i * 32, 0, 32, 32], base = { set: 'foe.' + id, eye: 'auto' };
@@ -309,9 +312,11 @@ boss('sporemother', [['idle', 'nb_bamboo_idle', 62, 62, 6, 6, true], ['walk', 'n
   ['charge', 'nb_bamboo_charge', 62, 62, 3, 8, false], ['hit', 'nb_bamboo_hit', 62, 62, 4, 12, false]]);
 boss('forgelord', [['idle', 'nb_cyc_idle', 50, 50, 5, 6, true], ['walk', 'nb_cyc_walk', 50, 50, 6, 9, true], ['hit', 'nb_cyc_hit', 50, 50, 3, 12, false]]);
 boss('rimeheart', [['idle', 'nb_sam_idle', 96, 48, 6, 6, true], ['walk', 'nb_sam_walk', 96, 48, 6, 8, true], ['hit', 'nb_sam_hit', 96, 48, 4, 12, false]]);
-// The samurai attack and charge sheets are 96x96 with the body 26 px lower than in the 96x48 sheets: pivot is set by hand.
-boss('rimeheart', [['attack.l', 'nb_sam_attackl', 96, 96, 4, 10, false, { pivot: [48, 74] }], ['attack.r', 'nb_sam_attackr', 96, 96, 4, 10, false, { pivot: [48, 74] }],
-  ['charge.l', 'nb_sam_chargel', 96, 96, 3, 8, false, { pivot: [48, 74] }], ['charge.r', 'nb_sam_charger', 96, 96, 3, 8, false, { pivot: [48, 74] }]], 'boss.rimeheart.atk');
+// The samurai attack and charge sheets are 96x96 and each places the body at its own height: pivots are measured per anim as the hat position (#f1c471) of the anim against idle (idle pivot [47,48]).
+// charge.l/charge.r f0 equal idle f0 shifted by (-1,+26)/(-2,+34); the crouching attacks align on the frame-mean hat (+29.75/+30.75 rows). centre/top/eye are copied from idle (translated) so the HP bar and eye glow do not move.
+const RA = { anchorsFrom: 'boss.rimeheart.idle' };
+boss('rimeheart', [['attack.l', 'nb_sam_attackl', 96, 96, 4, 10, false, Object.assign({ pivot: [45, 77] }, RA)], ['attack.r', 'nb_sam_attackr', 96, 96, 4, 10, false, Object.assign({ pivot: [47, 78] }, RA)],
+  ['charge.l', 'nb_sam_chargel', 96, 96, 3, 8, false, Object.assign({ pivot: [46, 74] }, RA)], ['charge.r', 'nb_sam_charger', 96, 96, 3, 8, false, Object.assign({ pivot: [45, 82] }, RA)]], 'boss.rimeheart.atk');
 add('boss.hollowking.crown', 'bosses', null, null, { ascii: [['y...y...y', 'yy.yyy.yy', 'yyyyyyyyy', 'yRyyBYyRy', 'ooooooooo']], pal: { y: '#ffd36b', Y: '#fff2c0', o: '#c8922a', R: '#d8442a', B: '#5fb8ff' }, stamp: true, fps: 0 });
 
 // --------------------------------------------------------------------------- world: tiles, doors, torches, props, decor (page world)
@@ -329,7 +334,8 @@ T('tile.hole', 'hole'); T('tile.stairs', 'floor_stairs');
 add('tile.spikes', 'world', 'ox', oxn('floor_spikes_anim', 4), { pivot: 'tl', fps: 8, loop: false });
 T('tile.door.frame.left', 'doors_frame_left'); T('tile.door.frame.right', 'doors_frame_right'); T('tile.door.frame.top', 'doors_frame_top');
 T('tile.door.leaf.closed', 'doors_leaf_closed'); T('tile.door.leaf.open', 'doors_leaf_open');
-add('tile.gate.bars', 'world', 'dl_door0', [[0, 32, 16, 16]], { pivot: 'tl', fps: 0 });
+add('tile.gate.bars', 'world', 'dl_door0', [[0, 32, 16, 16]], { pivot: 'tl', fps: 0 }); // front view (north/south gates)
+add('tile.gate.bars.side', 'world', 'dl_door0', [[16, 32, 16, 16]], { pivot: 'tl', fps: 0 }); // side view (east/west gates)
 for (const c of ['red', 'blue']) {
   add('tile.fountain.mid.' + c, 'world', 'ox', oxn('wall_fountain_mid_' + c + '_anim', 3), { pivot: 'tl', fps: 6, loop: true });
   add('tile.fountain.basin.' + c, 'world', 'ox', oxn('wall_fountain_basin_' + c + '_anim', 3), { pivot: 'tl', fps: 6, loop: true });
@@ -375,7 +381,19 @@ CRYSTALS.forEach((rows, i) => add('deco.crystal.' + i, 'world', null, null, { as
 CRYSTALS.forEach((rows, i) => add('deco.shard.' + i, 'world', null, null, { use: 'deco.crystal.' + i, fps: 0 }));
 for (let i = 0; i < 3; i++) D('deco.shell.' + i, 'dl_ground0', [i * 16, 64, 16, 16]);
 for (let i = 0; i < 2; i++) { D('deco.seaweed.' + i, 'dl_ground0', [i * 16, 16, 16, 16]); D('deco.coral.' + i, 'dl_ground0', [32 + i * 16, 16, 16, 16]); }
-D('deco.pillarstub', 'ox', [80, 112, 16, 16]); D('deco.grate', 'ext', [64, 48, 16, 16]);
+D('deco.pillarstub', 'ox', [80, 96, 16, 23]); // column rows 16-38: lower shaft plus base (rows 39-47 of the cell are empty)
+// Free-standing floor grate (the ext cell at 64,48 is a brick wall tile with a grate along its bottom: kept as tile.wall.grate).
+add('deco.grate', 'world', null, null, { ascii: [['kkkkkkkkk', 'kObObObOk', 'kObGbGbOk', 'kObGbGbOk', 'kObObObOk', 'kkkkkkkkk']], pal: { k: '#1a1210', b: '#5a463a', O: '#c8501a', G: '#ffa83a' }, fps: 0 });
+add('tile.wall.grate', 'world', 'ext', [[64, 48, 16, 16]], { pivot: 'tl', fps: 0 });
+// Sanctum carpets (ext): rug = ragged 3x2-ish rug, full = 2x3 bordered carpet, run.* = runner pieces (plain / bordered top / bordered bottom, 16x16), band = 16x32 bordered both sides.
+[['red', 16], ['beige', 64]].forEach(([c, x]) => {
+  add('tile.carpet.' + c + '.full', 'world', 'ext', [[x, 272, 32, 48]], { pivot: 'tl', fps: 0 });
+  add('tile.carpet.' + c + '.rug', 'world', 'ext', [[x, 320, 32, 48]], { pivot: 'tl', fps: 0 });
+  add('tile.carpet.' + c + '.run.fill', 'world', 'ext', [[x + 32, 272, 16, 16]], { pivot: 'tl', fps: 0 });
+  add('tile.carpet.' + c + '.run.top', 'world', 'ext', [[x + 32, 288, 16, 16]], { pivot: 'tl', fps: 0 });
+  add('tile.carpet.' + c + '.run.bot', 'world', 'ext', [[x + 32, 304, 16, 16]], { pivot: 'tl', fps: 0 });
+  add('tile.carpet.' + c + '.band', 'world', 'ext', [[x + 32, 320, 16, 32]], { pivot: 'tl', fps: 0 });
+});
 add('deco.chain', 'world', null, null, { ascii: [['.kk.', 'kSSk', 'kSSk', '.kk.', '.kk.', 'kSSk', 'kSSk', '.kk.', '.kk.', 'kSSk', 'kSSk', '.kk.']], pal: { k: '#222222', S: '#9aa6b0' }, fps: 0 });
 
 // --------------------------------------------------------------------------- fx page: pickups, projectiles, effects, font
