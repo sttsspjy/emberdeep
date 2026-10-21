@@ -75,8 +75,21 @@
     necro(c, C, pc) { c.beginPath(); c.moveTo(-9, -14); c.quadraticCurveTo(-9, -32, 0, -32); c.quadraticCurveTo(9, -32, 9, -14); c.closePath(); c.fillStyle = C.a; c.fill(); c.stroke(); ell(c, 1, -20, 5.6, 5.8, '#e6e0cf'); c.fillStyle = '#0b0806'; c.fillRect(-1.6, -21.5, 2.6, 2.6); c.fillRect(2.8, -21.5, 2.6, 2.6); eyes(c, 1.6, -20.2, 2.2, 0.8, C.c); rrect(c, -9, -15, 18, 2.6, 1.3, pc, false); },
   };
 
+  // Weapon art of hero p: { id (base weapon id, before any '@' fork suffix), w (ED.WEAPONS entry), anim (atlas anim id), look, twin (off-hand copy) }. The one place weapon looks are resolved.
+  const WART = {}, TWIN = { daggers: 1, twinbows: 1, scythes: 1 };
+  Sp.weaponArt = (p) => {
+    const cls = ED.CLASSES[p.cls], id = String((p.stats && p.stats.weaponId) || p.weapon || (cls && cls.weapons[0]) || 'longsword');
+    let d = WART[id];
+    if (!d) {
+      const base = id.split('@')[0], w = ED.WEAPONS[base] || ED.WEAPONS[cls.weapons[0]];
+      d = WART[id] = { id: base, w, anim: 'weapon.' + base, look: w.look, twin: !!TWIN[base] };
+    }
+    return d;
+  };
+
   Sp.hero = (c, p, t, anim) => {
     const cls = ED.CLASSES[p.cls]; if (!cls) return;
+    if (ED.Actors && ED.Actors.on() && ED.Actors.hero(c, p, t, anim)) return;
     const C = p.flash > 0 ? WHITE : cls.col;
     const pc = ED.PLAYER_COLORS[p.slot] || '#ffffff';
     const face = p.face || 0;
@@ -160,6 +173,7 @@
   Sp.atkTimes = (w) => { const k = U.clamp(w.rate / 0.42, 0.55, 1.5); return [0.05 * k, 0.12 * k, U.clamp(w.rate * 0.7, 0.2, 0.5)]; };
 
   Sp.portrait = (canvas, cls, slot, weapon) => {
+    if (ED.Actors && ED.Actors.on() && ED.Actors.portrait(canvas, cls, slot, weapon)) return;
     const c = canvas.getContext('2d');
     const s = canvas.width / 56;
     c.clearRect(0, 0, canvas.width, canvas.height);
@@ -925,6 +939,7 @@
   };
 
   Sp.minion = (c, a, t) => {
+    if (ED.Actors && ED.Actors.on() && ED.Actors.minion(c, a, t)) return;
     const def = ED.ENEMIES.minion;
     c.save(); c.globalAlpha = 0.9;
     Sp.shadow(c, 9, 0.3);
