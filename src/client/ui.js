@@ -526,6 +526,7 @@
     if (!boonOffer) return;
     boonOffer = null;
     $('ov-boon').hidden = true;
+    ED.Input.mask(['attack', 'skill1', 'skill2', 'dash']); // the pick press (or a held attack) must not reach the hero; movement keys stay live
     ED.Game.act({ t: 'pick', i });
     if (ED.Game.s) { ED.Game.s.offerOpen = false; ED.Game.s.offer = null; }
   };

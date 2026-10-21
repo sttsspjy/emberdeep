@@ -39,17 +39,20 @@
   Sh.fmt = (key, v, fmt) => {
     const f = fmt || SIF(key).fmt;
     if (f === 'x') return '×' + v.toFixed(2);
-    if (f === 'sec') return n1(v) + 's';
+    if (f === 'sec') return Sh.secs(v) + 's';
     if (f === 'flat' || f === 'n') return n1(v);
     const p = v * 100, a = Math.abs(p);
     return (a >= 10 ? String(Math.round(p)) : a >= 1 ? trim(p.toFixed(1)) : trim(p.toFixed(2))) + '%';
   };
+  // Seconds without the unit: two decimals below 1 s (0.25), one below 10, whole from 10; trailing zeros dropped.
+  Sh.secs = (v) => { const a = Math.abs(v); return trim(a >= 10 ? String(Math.round(v)) : a >= 1 ? v.toFixed(1) : v.toFixed(2)); };
   Sh.n1 = n1;
 
   // ---------------- text at rank ----------------
   // Boon text at `rank`: {stat} renders |mods[stat]| x rank in the stat's format (":pct|flat|sec|x" overrides it), {stat*K} that number times K (K = P: the hero's Power), {pw} the proc damage of the boon at the hero's Power.
   // Class cards render through ED.boonText. st (the hero's stat block) is optional: without it {pw} reads as its formula and {stat*P} as a Power share.
   const TOKEN = /\{(\w+)(?:\*(\w+(?:\.\d+)?))?(?::(\w+))?\}/g;
+  const PLURAL = /(\d+(?:\.\d+)?)((?:\s+[\w-]+){1,2})\(s\)/g; // "+2 foe(s)" reads "+2 foes", "+1 foe(s)" reads "+1 foe"
   Sh.text = (id, rank, st) => {
     const b = ED.BOONS[id];
     if (!b) return '';
@@ -60,7 +63,38 @@
       const v = Math.abs((b.mods && b.mods[key]) || 0) * rank;
       if (mulBy) return n1(v * (mulBy === 'P' ? (st ? st.power : 1) : +mulBy));
       return Sh.fmt(key, v, f);
-    });
+    }).replace(PLURAL, (m, num, words) => num + words + (Math.abs(+num) === 1 ? '' : 's'));
+  };
+
+  // The "Next rank" line: the changed numbers of the text at rank + 1 (runs of words the text at rank lacks, found by a word-level diff that ignores trailing punctuation), a lone number with up to NEXT_WORDS - 1 words after it ("+30% damage"),
+  // joined with " · ", and the rider a route card gains at rank 3.
+  const NEXT_WORDS = 3, NEXT_RUN = 6, NEXT_STOP = /^(to|of|the|a|an|and|or|from|for|in|on|at|by|with|as|that|their|its|is|are|your|you|than|per|each)$/i;
+  const wordKey = (w) => w.replace(/[.,;:]+$/, '');
+  Sh.nextText = (id, rank, st) => {
+    const b = ED.BOONS[id];
+    if (!b) return '';
+    rank = Math.max(1, rank | 0 || 1);
+    const body = (r) => (b.route ? ED.cardParts(id, r, st).text : Sh.text(id, r, st)), A = body(rank).split(/\s+/), Z = body(rank + 1).split(/\s+/), out = [];
+    const n = A.length, m = Z.length, L = [];
+    for (let i = 0; i <= n; i++) L.push(new Array(m + 1).fill(0));
+    for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = wordKey(A[i]) === wordKey(Z[j]) ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+    const same = new Array(m).fill(false); // Z words that A has too (longest common subsequence)
+    for (let i = 0, j = 0; i < n && j < m;) { if (wordKey(A[i]) === wordKey(Z[j])) { same[j] = true; i++; j++; } else if (L[i + 1][j] >= L[i][j + 1]) i++; else j++; }
+    for (let j = 0; j < m; j++) {
+      if (same[j]) continue;
+      let e = j;
+      while (e < m && !same[e]) e++;
+      let ph = Z.slice(j, e);
+      const d = ph.findIndex(w => /\d/.test(w));
+      j = e;
+      if (d < 0) continue;
+      if (ph.length > NEXT_RUN) ph = ph.slice(d, d + NEXT_WORDS);
+      for (let k = e; ph.length < NEXT_WORDS && k < m && same[k] && !/[.,;:]$/.test(ph[ph.length - 1]) && !/^\(/.test(Z[k]); k++) ph.push(Z[k]);
+      while (ph.length > 1 && NEXT_STOP.test(wordKey(ph[ph.length - 1]))) ph.pop();
+      out.push(wordKey(ph.join(' ')));
+    }
+    if (b.route && rank + 1 === 3) { const rn = ED.cardParts(id, 3, st).riderName; if (rn) out.push('unlocks ' + rn); }
+    return out.join(' · ');
   };
 
   // ---------------- ready states of defensive items (net.js sends them as one bitfield) ----------------
@@ -73,6 +107,14 @@
     { id: 'phoenix', name: 'Phoenix Feather', owned: (st) => st.phoenix > 0, ready: (p) => !p.phoenixUsed },
   ];
   Sh.readyBits = (p) => { let b = 0; for (let i = 0; i < Sh.READY.length; i++) if (Sh.READY[i].ready(p)) b |= 1 << i; return b; };
+  // Shield received in the last SHIELD_WIN_T seconds in health: { c: class sources, a: all sources } (world.js addShield). A mirror hero carries the host's sums in shwC / shwA (net.js).
+  Sh.shieldWindow = (p, time) => {
+    if (!p.shWin) return { c: p.shwC || 0, a: p.shwA || 0 };
+    const now = Math.floor(time || 0);
+    let c = 0, a = 0;
+    for (const s of p.shWin) if (now - s.sec < C.SHIELD_WIN_T) { c += s.c; a += s.a; }
+    return { c, a };
+  };
   const readyOf = (p, i) => (p.rdy !== undefined ? !!(p.rdy & (1 << i)) : Sh.READY[i].ready(p));
 
   // ---------------- the reference foe and the context ----------------
@@ -128,6 +170,7 @@
   };
 
   // ---------------- weapon ----------------
+  const MS = { every: 4, mul: 1.3, bleed: 0.5 }; // Masterstroke as combat.js playerAttack plays it
   // Damage numbers are per landed hit before the stratum affinity and any status; dps counts every attack landing on one foe (a fan: the shots that reach it at REF).
   // extras: damage each attack adds besides the main hits (blasts, shocks, waves, clouds, evolution strikes, relics): { label, perAttack, perSec, proc (feeds statuses), el?, note? }.
   function weaponModel(p, st, ctx, R) {
@@ -162,6 +205,13 @@
       add(s.label, per, { proc: !!s.proc, crit: !!s.crit, el: s.el || null, note: s.every > 1 ? `every ${ordinal(s.every)} attack` : s.onCrit ? 'when you crit' : '' });
     }
     if (st.twinEvery) add('Twin Fang', attackTotal / st.twinEvery, { proc: true, note: `every ${ordinal(st.twinEvery)} attack strikes twice` });
+    // Masterstroke (combat.js playerAttack): every MS.every-th attack crits for sure at MS.mul, and its blast and shock take the MS.mul too; the extra is that attack's surplus over a normal one
+    const ms = st.masterstroke ? MS : null;
+    if (ms) {
+      let side = 0;
+      for (const e of extras) if (e.label === 'Blast' || e.label === 'Shockwave') side += e.perAttack;
+      add('Masterstroke', ((hit * cm * ms.mul - avg) * one + (ms.mul - 1) * side) / ms.every, { proc: true, note: `every ${ordinal(ms.every)} attack: a guaranteed crit at ×${ms.mul} that Bleeds for at least ${Math.round(ms.bleed * 100)}% of the hit` });
+    }
     let sum = 0;
     for (const e of extras) sum += e.perAttack;
     const dps = (avg * one + sum) * aps, dpsAll = (avg * n + sum) * aps;
@@ -174,7 +224,7 @@
       look: w.look, hit: R.n(hit), crit: R.n(hit * cm), avg: R.n(avg), n, oneFoe: one, aps: R.x(aps), apsBase: R.x(apsBase), interval: R.x(1 / aps), floorBinds: st.atkOver > 1.0001,
       critChance: R.f(c), critMult: R.x(cm), dps: R.n(dps), dpsAll: R.n(dpsAll), fan: !melee && n > 1, notes,
       extras: extras.map(e => Object.assign({}, e, { perAttack: R.n(e.perAttack), perSec: R.n(e.perAttack * aps) })),
-      _hit: hit, _avg: avg, _aps: aps, _extras: extras,
+      _hit: hit, _avg: avg, _aps: aps, _extras: extras, _ms: ms,
     };
     if (melee) { const arc = Math.min(6.3, w.arc * (1 + 0.4 * st.area)); out.reach = Math.round(w.range * (1 + 0.5 * st.area + st.meleeReach)); out.arcDeg = Math.round(arc * 57.2958); out.allAround = arc >= 6.2; }
     else { out.range = Math.round(w.speed * w.life); out.pierce = (w.pierce || 0) + st.pierce; out.homing = (w.homing || 0) + (st.homing || 0) > 0; out.blast = blast ? { r: Math.round(blast.r), mul: blast.mul } : null; }
@@ -308,7 +358,7 @@
     mult.slots = [];
     for (const k of ['s1Dmg', 's1Area', 's1Dur', 's1N', 's1Cdr', 's2Dmg', 's2Area', 's2Dur', 's2N', 's2Cdr']) if (st[k]) mult.slots.push({ key: k, label: SIF(k).label, v: R.f(st[k]), fmt: SIF(k).fmt, rows: St.breakdown(build, k).map(r => ({ label: r.label, kind: r.kind, v: r.v })) });
     mult.status = [];
-    const statusEls = ED.ELEMENT_IDS.filter(el => st[ED.ELEMENTS[el].inf] > 0 || st.element === el).concat(st.bleed > 0 || st.bleedAll > 0 ? ['general'] : []);
+    const statusEls = ED.ELEMENT_IDS.filter(el => st[ED.ELEMENTS[el].inf] > 0 || st.element === el).concat(st.bleed > 0 || st.bleedAll > 0 || st.masterstroke ? ['general'] : []);
     for (const el of statusEls) {
       const P = ED.PATHS[el], aff = el === 'general' ? 1 : ED.elemMul(s, el), est = P.sheet.est(proc, st, aff, ref);
       mult.status.push({
@@ -329,7 +379,7 @@
       dodge: R.f(st.dodge), dodgeRows: rowsOf(build, 'dodge'), ehp: R.n(maxHp / taken / (1 - st.dodge)),
       foeHere: R.x(foeHere), foeParts: { depth: R.x(W.dmgScale(s)), threat: R.x(thr.dmg), pact: R.x(pactMul), dread: R.x(dread.dmg), deep: deepOn ? R.x(deepMul) : null }, deepKnown: deepOn,
       healMul: R.x(st.healMul), heal: R.x(st.healMul * (dread.heal === undefined ? 1 : dread.heal)), healRows: rowsOf(build, 'heal'), pactHeal: R.x(St.pactHeal(ctx.pact | 0)),
-      shield: R.n(p.shield || 0), ready: [], situational: [], shields: [], heals: [],
+      shield: R.n(p.shield || 0), ready: [], situational: [], shields: [], heals: [], window: shieldWin(p, ctx, maxHp, R),
     };
     for (let i = 0; i < Sh.READY.length; i++) { const r = Sh.READY[i]; if (r.owned(st)) def.ready.push({ id: r.id, name: r.name, ready: readyOf(p, i), once: r.id === 'angel' || r.id === 'phoenix' }); }
     defenceExtras(p, st, def, skills);
@@ -366,6 +416,11 @@
     return out;
   }
 
+  // The shield window of the hero now: health received from class sources and from all sources in the last SHIELD_WIN_T seconds, with the caps (class sources and all sources).
+  function shieldWin(p, ctx, maxHp, R) {
+    const w = Sh.shieldWindow(p, ctx.time), mh = Math.max(1, maxHp);
+    return { cls: R.n(w.c), all: R.n(w.a), clsPct: R.f(w.c / mh), allPct: R.f(w.a / mh), clsCap: C.SHIELD_WIN_CLASS, allCap: C.SHIELD_WIN_ALL, secs: C.SHIELD_WIN_T };
+  }
   // Situational damage reduction, shield sources and heals.
   function defenceExtras(p, st, def, skills) {
     const S = def.situational, sh = def.shields, pc = (v) => trim((v * 100).toFixed(1)) + '%';
@@ -388,7 +443,7 @@
     if (p.cls === 'cleric') sh.push({ label: 'Judgment kill', text: '3% for allies within 160, once per cast' });
     if (p.weapon === 'lantern') sh.push({ label: 'Sacred Lantern', text: `${pc(0.015)} of an ally's health per orb, once per ${C.LANTERN_CD} s each, up to ${pc(C.CLASS_SHIELD_CAP)}` });
     for (const k of skills) for (const h of k.heals) def.heals.push({ label: k.name, text: h.perMinion ? `${pc(h.perMinion)} of max health per minion, up to ${pc(h.cap)}` : `${pc(h.frac)} of max health for you and allies within 180` });
-    def.limits = `Class shields give at most ${pc(C.SHIELD_WIN_CLASS)} of max health per ${C.SHIELD_WIN_T} s and all sources ${pc(C.SHIELD_WIN_ALL)}; shields fade ${pc(C.SHIELD_DECAY)} of max health per second between fights.`;
+    def.limits = `Class shields give at most ${pc(C.SHIELD_WIN_CLASS)} of max health per ${C.SHIELD_WIN_T} s and all sources ${pc(C.SHIELD_WIN_ALL)}; Battle Ward and the boss door are exempt.`;
   }
 
   // ---------------- statuses fed by the hero's damage ----------------
@@ -409,7 +464,9 @@
     const direct = wpn._avg * one * aps;
     let wDps = direct;
     feed(direct, 1, null, wInf);
-    critDps += wpn._hit * cm * c * one * aps;
+    const ms = wpn._ms; // Masterstroke: 1 attack in ms.every crits for sure at ms.mul, the others at the crit chance
+    critDps += wpn._hit * cm * one * aps * (ms ? (1 - 1 / ms.every) * c + ms.mul / ms.every : c);
+    const msBleed = ms ? wpn._hit * cm * ms.mul / ms.every * one * aps * Math.max(0, ms.bleed - st.bleed) * pow : 0; // the Bleed it adds above the Bleed on crits
     for (const e of wpn._extras) if (e.proc) { const ps = e.perAttack * aps; wDps += ps; critDps += e.crit ? ps * c * cm / (1 + c * (cm - 1)) : 0; feed(ps, 1, null, e.el ? null : wInf); }
     if (st.weapon.burn) pool.fire = (pool.fire || 0) + direct * st.weapon.burn * pow;
     split.weapon = wDps; all += wDps;
@@ -426,7 +483,7 @@
         split.skills += dps; all += dps; critDps += r.hit * cm * m.kc * (1 + m.selfVuln) * m.oneFoe / sk._cd;
       }
     }
-    return { dps: all, critDps, rate, pool, bleed: critDps * st.bleed * pow + all * st.bleedAll * pow, split };
+    return { dps: all, critDps, rate, pool, bleed: critDps * st.bleed * pow + msBleed + all * st.bleedAll * pow, split };
   }
   function procOut(pr, R) {
     const rate = {}, pool = {};
@@ -444,7 +501,7 @@
     for (const id of p.relics || []) if (ED.RELICS[id] && ED.RELICS[id].el) push(ED.RELICS[id].el, 'relic');
     const at = (stratum) => {
       const b = ED.BIOMES[stratum - 1];
-      return { stratum, name: b.name, short: b.short, weak: b.weak, resist: b.resist, mine: mine.map(m => ({ el: m.el, name: m.name, color: m.color, why: m.why, mul: ED.elemMul(stratum, m.el), skillMul: m.why === 'class' ? ED.affC(stratum, m.el) : null })) };
+      return { stratum, name: b.name, short: b.short, weak: b.weak, resist: b.resist, mine: mine.map(m => ({ el: m.el, name: m.name, color: m.color, why: m.why, mul: ED.elemMul(stratum, m.el), skillMul: m.el === st.element ? ED.affC(stratum, m.el) : null })) }; // mul: statuses and tagged hits; skillMul: the class element's skills (half the affinity), whichever source listed the element
     };
     const s = clampI(ctx.stratum || 1, 1, ED.BIOMES.length);
     return { now: at(s), next: s < ED.BIOMES.length ? at(s + 1) : null };
@@ -460,6 +517,7 @@
   }
 
   // ---------------- build tab ----------------
+  const AILMENT_STATS = ['brand', 'veins', 'contagion', 'festerHit', 'exsang']; // stats that read the ailment count of a foe (World.ailments)
   const ROUTE_WHEN = { t1: 'Offered at team level 3', fork: 'Offered when the stratum I boss falls', r2: 'Rank 2 when the stratum II boss falls', r3: 'Rank 3 when the stratum IV boss falls' };
   const KIND_ORDER = { gate: 0, path: 1, open: 1, route: 0, fork: 1, keystone: 2, evolution: 3, duo: 0 };
   function buildModel(p, st, ctx, R) {
@@ -488,7 +546,7 @@
       const e = tbl[r], b = ED.BOONS[e.t1];
       route.nodes.push({
         route: r, label: ED.routeLabel(p.cls, r), id: e.t1, name: b.name, icon: b.icon, chosen: rt.route === r, closed: !!rt.route && rt.route !== r, plays: b.plays, text: Sh.text(e.t1, 1, st), when: ROUTE_WHEN.t1,
-        forks: e.forks.map((fid) => { const fb = ED.BOONS[fid], rank = boons[fid] | 0; return { id: fid, name: fb.name, icon: fb.icon, tag: fb.tag || '', coop: !!fb.coop, owned: rank > 0, rank, max: fb.max, text: Sh.text(fid, rank || 1, st), when: rank ? (rank < fb.max ? ROUTE_WHEN[rank === 1 ? 'r2' : 'r3'] : '') : ROUTE_WHEN.fork, weapon: fb.weapon && fb.weapon.kind ? ED.forkWeapon(p.weapon, fid).name : null }; }),
+        forks: e.forks.map((fid) => { const fb = ED.BOONS[fid], rank = boons[fid] | 0; return { id: fid, name: fb.name, icon: fb.icon, tag: fb.tag || '', coop: !!fb.coop, owned: rank > 0, rank, max: fb.max, closed: !!rt.fork && rt.fork !== fid, text: Sh.text(fid, rank || 1, st), when: rank ? (rank < fb.max ? ROUTE_WHEN[rank === 1 ? 'r2' : 'r3'] : '') : rt.fork ? '' : ROUTE_WHEN.fork, weapon: fb.weapon && fb.weapon.kind ? ED.forkWeapon(p.weapon, fid).name : null }; }),
       });
     }
     // boons grouped by owned path (gate, boons, keystone, evolution), duo, class route and open
@@ -498,7 +556,7 @@
       if (!b || !(rank > 0) || (b.cls && b.cls !== p.cls)) continue;
       const max = ED.maxRank(b, st), kind = b.evo ? 'evolution' : b.key ? 'keystone' : b.gate ? 'gate' : b.duo ? 'duo' : b.route ? (b.tier === 1 ? 'route' : 'fork') : b.path && !b.open ? 'path' : 'open';
       const group = b.cls ? 'route' : b.duo ? 'duo' : b.path && !b.open && gates.includes(b.path) ? 'path:' + b.path : 'open';
-      rows.push({ id, name: b.name, icon: b.icon, rar: b.rar, rank, max, kind, group, path: b.path || (b.duo ? b.duo[0] : null), path2: b.duo ? b.duo[1] : null, tag: b.tag || '', coop: !!b.coop, text: Sh.text(id, rank, st), next: rank < max ? Sh.text(id, rank + 1, st) : null });
+      rows.push({ id, name: b.name, icon: b.icon, rar: b.rar, rank, max, kind, group, path: b.path || (b.duo ? b.duo[0] : null), path2: b.duo ? b.duo[1] : null, tag: b.tag || '', coop: !!b.coop, text: Sh.text(id, rank, st), next: rank < max ? Sh.nextText(id, rank, st) : null });
     }
     const groups = gates.map(k => 'path:' + k).concat(['duo', 'route', 'open']).map(g => ({ group: g, path: g.indexOf('path:') === 0 ? g.slice(5) : null, items: rows.filter(r => r.group === g).sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind]) })).filter(g => g.items.length);
     const relics = (p.relics || []).map(id => {
@@ -507,7 +565,8 @@
     });
     const statuses = [];
     for (const m of ED.ELEMENT_IDS) if (st[ED.ELEMENTS[m].inf] > 0 || st.element === m) { const S = ED.STATUS[ED.PATHS[m].status]; statuses.push({ id: ED.PATHS[m].status, name: S.name, color: S.color, rule: S.rule, el: m }); }
-    if (st.bleed > 0 || st.bleedAll > 0) statuses.push({ id: 'bleed', name: ED.STATUS.bleed.name, color: ED.STATUS.bleed.color, rule: ED.STATUS.bleed.rule, el: null });
+    if (st.bleed > 0 || st.bleedAll > 0 || st.masterstroke) statuses.push({ id: 'bleed', name: ED.STATUS.bleed.name, color: ED.STATUS.bleed.color, rule: ED.STATUS.bleed.rule, el: null });
+    if (AILMENT_STATS.some(k => st[k] > 0)) statuses.push({ id: 'ailment', name: ED.STATUS.ailment.name, color: ED.STATUS.ailment.color, rule: ED.STATUS.ailment.rule, el: null });
     return {
       generalist: gen, paths, slotsFree: gen ? 0 : Math.max(0, ED.MAX_ELEMENTS - gates.length), slots: ED.MAX_ELEMENTS, evolved: evoPath, picks: p.picks | 0,
       classElementRow: !gen && st.element && !gates.includes(st.element) ? { el: st.element, name: ED.PATHS[st.element].name, color: ED.PATHS[st.element].color, icon: ED.PATHS[st.element].icon } : null,
@@ -532,7 +591,7 @@
     boons[id] = (boons[id] || 0) + 1;
     const q = Object.assign({}, p, { boons });
     q.stats = St.compute({ cls: p.cls, weapon: p.weapon, boons, relics: p.relics || [], meta: p.meta, pact: ctx ? ctx.pact | 0 : 0, chaliceHp: p.chaliceHp || 0, bonusHp: p.bonusHp || 0 });
-    q.maxHp = q.stats.maxHp;
+    q.maxHp = (p.maxHp || p.stats.maxHp) + (q.stats.maxHp - p.stats.maxHp); // the hero's own max health plus what the card adds (a mirror's snapshot value leads its rebuilt stats)
     return q;
   };
   // The (at most 2) numbers a card changes most, from the models of the hero now (a) and with the card (b): [{ label, from, to, unit, better }].

@@ -586,7 +586,8 @@ body:has(#ov-sheet:not([hidden])) #ov-boon { visibility: hidden; }
 .sh-route.off { padding: 0.35rem 0.8rem; font-size: max(var(--fs-sm), 12px); }
 .sh-fork { margin-left: 1.2rem; border-left: 2px solid var(--brass); }
 .sh-fork.on { border-color: var(--gold-lo); border-left-color: var(--brass-hi); }
-.sh-fork.open { border-style: dashed; color: var(--muted); }
+.sh-fork.open, .sh-fork.off { border-style: dashed; color: var(--muted); }
+.sh-fork.off { padding: 0.35rem 0.8rem; font-size: max(var(--fs-sm), 12px); }
 .sh-btx { font-size: max(var(--fs-sm), 12px); line-height: 1.35; color: var(--text); margin-top: 0.15rem; }
 .sh-route.open .sh-btx, .sh-fork.open .sh-btx { color: var(--muted); }
 .sh-next { margin-top: 0.15rem; font-size: max(var(--fs-sm), 12px); color: var(--muted); line-height: 1.3; }
@@ -635,7 +636,7 @@ body:has(#ov-sheet:not([hidden])) #ov-boon { visibility: hidden; }
 .sh-tot small { display: block; color: var(--muted); font-size: max(var(--fs-sm), 12px); font-weight: 600; }
 .sh-part { display: grid; grid-template-columns: 7rem 3.2rem minmax(0, 1fr); gap: 0.5rem; align-items: baseline; font-size: var(--fs-md); }
 .sh-part.sub { padding-left: 0.8rem; }
-.sh-pl { font-weight: 700; color: var(--bone); }
+.sh-plab { font-weight: 700; color: var(--bone); }
 .sh-pv { font: 800 var(--fs-md) var(--f-display); color: var(--gold); text-align: right; font-variant-numeric: tabular-nums; }
 .sh-pn { color: var(--muted); font-size: max(var(--fs-sm), 12px); line-height: 1.3; }
 .sh-el { display: inline-block; margin-left: 0.3rem; padding: 0 0.5rem; border-radius: 2rem; border: 1px solid color-mix(in srgb, var(--pc) 60%, transparent); color: var(--pc); font: 700 max(var(--fs-sm), 12px) var(--f-body); white-space: nowrap; }
@@ -647,6 +648,8 @@ body:has(#ov-sheet:not([hidden])) #ov-boon { visibility: hidden; }
 .sh-v { font: 700 var(--fs-lg) var(--f-display); color: var(--gold); font-variant-numeric: tabular-nums; text-align: right; }
 .sh-src { display: flex; flex-wrap: wrap; gap: 0.15rem 0.7rem; margin-top: 0.2rem; font: 600 max(var(--fs-sm), 12px)/1.3 var(--f-body); color: var(--muted); }
 .sh-src b { color: var(--bone); font-weight: 700; }
+.sh-src .sh-sk { color: var(--text); font-weight: 800; }
+.sh-src .sh-sk::after { content: ':'; }
 .sh-src .neg b { color: var(--danger); }
 .sh-src .tmp { color: var(--ember-hi); }
 .sh-src .rd b { color: var(--muted); } .sh-src .rd.ok b { color: var(--good); }

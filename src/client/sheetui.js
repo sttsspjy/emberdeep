@@ -14,6 +14,7 @@
   const pc = (v) => { const p = v * 100, a = Math.abs(p); return (a >= 10 ? String(Math.round(p)) : String(Math.round(p * 10) / 10)) + '%'; };
   const sgn = (v, s) => (v < 0 ? '−' : '+') + s;
   const cap1 = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  const pl = (n, w) => (n === 1 ? w : w + 's');
   const colorOf = (el) => (ED.PATHS[el] ? ED.PATHS[el].color : '#d9dfe8');
   const ico = (name, color) => ED.Icons.url(name, color);
   const pathIco = (k) => ico(ED.PATHS[k].icon, ED.PATHS[k].color);
@@ -27,7 +28,9 @@
   // Source chips of one stat: [{ label, kind, v }] -> "Base 100%", "Might 3 +12%"; a negative contribution is the only red on the sheet.
   const chips = (rows, key) => rows.map(r => (r.kind === 'base' ? `<span>${esc(r.label)} <b>100%</b></span>`
     : `<span class="${r.v < 0 ? 'neg' : ''}${r.kind === 'temp' ? ' tmp' : ''}">${esc(r.label)} <b>${sgn(r.v, Sh.fmt(key, Math.abs(r.v)))}</b></span>`)).join('');
-  const stat = (k, label, value, sub, src, cls) => `<div class="sh-stat sh-f${cls ? ' ' + cls : ''}" data-k="${k}"><div class="sh-sl"><span class="sh-l">${label}</span><span class="sh-v">${value}</span></div>${sub ? `<div class="sh-sub">${sub}</div>` : ''}${src ? `<div class="sh-src">${src}</div>` : ''}</div>`;
+  // src: the chip row as a string, or [{ lab, html }] for several labelled rows.
+  const srcRows = (src) => (Array.isArray(src) ? src.filter(g => g.html).map(g => `<div class="sh-src"><span class="sh-sk">${g.lab}</span>${g.html}</div>`).join('') : src ? `<div class="sh-src">${src}</div>` : '');
+  const stat = (k, label, value, sub, src, cls) => `<div class="sh-stat sh-f${cls ? ' ' + cls : ''}" data-k="${k}"><div class="sh-sl"><span class="sh-l">${label}</span><span class="sh-v">${value}</span></div>${sub ? `<div class="sh-sub">${sub}</div>` : ''}${srcRows(src)}</div>`;
 
   const viewed = () => {
     const s = ED.Game.s;
@@ -37,12 +40,13 @@
   };
 
   // ---------------- header ----------------
-  // "Weak: Fire → your Fire ×1.5" and "Resists: Ice → your Ice ×0.5" chips of a stratum (the multiplier only for elements the hero uses).
+  // "Weak: Fire → your Fire ×1.50" and "Resists: Ice → your Ice ×0.50" chips of a stratum (the multiplier only for elements the hero uses); the class element lists its skills (half the affinity) before its statuses.
   function affChips(a) {
     const chip = (el, kind) => {
       if (!el || !ED.PATHS[el]) return '';
-      const mm = a.mine.find(x => x.el === el);
-      return `<span class="aff-chip ${kind}" style="--pc:${colorOf(el)}"><img alt="" src="${pathIco(el)}">${kind === 'weak' ? 'Weak' : 'Resists'}: ${ED.PATHS[el].name}${mm ? ` → your ${ED.PATHS[el].name} ${X(mm.mul)}` : ''}</span>`;
+      const mm = a.mine.find(x => x.el === el), nm = ED.PATHS[el].name;
+      const mine = !mm ? '' : mm.skillMul !== null ? ` → your ${nm} skills ${X(mm.skillMul)} · statuses ${X(mm.mul)}` : ` → your ${nm} ${X(mm.mul)}`;
+      return `<span class="aff-chip ${kind}" style="--pc:${colorOf(el)}"><img alt="" src="${pathIco(el)}">${kind === 'weak' ? 'Weak' : 'Resists'}: ${nm}${mine}</span>`;
     };
     return chip(a.weak, 'weak') + chip(a.resist, 'resist');
   }
@@ -86,6 +90,7 @@
         + `<div class="sh-btx">${nd.chosen ? esc(nd.text) : `${esc(nd.when)}. Plays as: ${esc(nd.plays)}`}</div></div>`;
       if (!nd.chosen) continue;
       for (const f of nd.forks) {
+        if (f.closed) { h += `<div class="sh-fork off sh-f" data-k="f:${f.id}"><b>${esc(f.name)}</b> <span class="mut">(not taken)</span></div>`; continue; }
         h += `<div class="sh-fork ${f.owned ? 'on' : 'open'} sh-f" data-k="f:${f.id}"><div class="sh-rh">${f.owned ? '<u class="ok">✓</u> ' : ''}<b>${esc(f.name)}</b>${f.tag ? `<span class="sh-kind">${esc(f.tag)}${f.coop ? ' · co-op' : ''}</span>` : ''}${f.owned ? `<span class="sh-pips">${pips(f.rank, f.max, 'var(--gold)')}</span>` : ''}</div>`
           + `<div class="sh-btx">${esc(f.text)}</div>${f.weapon ? `<div class="sh-sub">Weapon: ${esc(f.weapon)}</div>` : ''}${f.when ? `<div class="sh-next">${esc(f.when)}</div>` : ''}</div>`;
       }
@@ -146,56 +151,56 @@
     return h + `<div class="sh-tot">≈ <b>${n1(w.dps)}</b> damage/s on one foe${w.fan ? ` <span class="mut">(${n1(w.dpsAll)} if every shot lands)</span>` : ''}<small>every attack lands, no statuses, neutral stratum</small></div></div>`;
   }
   function partRow(q, stratum) {
-    if (q.kind === 'zone') return `<div class="sh-part"><span class="sh-pl">${esc(q.label)}</span><span class="sh-pv"></span><span class="sh-pn">${q.r ? `r ${q.r}` : ''}${q.dur ? ` · ${n1(q.dur)}s` : ''}${q.note ? ' ' + esc(q.note) : ''}</span></div>`;
+    if (q.kind === 'zone') return `<div class="sh-part"><span class="sh-plab">${esc(q.label)}</span><span class="sh-pv"></span><span class="sh-pn">${[q.r ? `r ${q.r}` : '', q.dur ? `${Sh.secs(q.dur)}s` : '', q.note ? esc(q.note) : ''].filter(Boolean).join(' · ')}</span></div>`;
     let v = n1(q.here), n = '';
     if (q.kind === 'status') n = `${esc(q.statusName)} pool added${q.aff !== 1 ? ` · ${X(q.aff)} here` : ''}`;
-    else if (q.kind === 'minion') n = `per strike · ${q.hitsEach} strikes each in ${n1(q.dur)}s · ${q.minions} minions`;
-    else if (q.kind === 'sec') n = `per 0.5 s · ${q.oneFoe} ticks over ${n1(q.dur)}s · r ${q.r}`;
+    else if (q.kind === 'minion') n = `per strike · ${q.hitsEach} ${pl(q.hitsEach, 'strike')} each in ${Sh.secs(q.dur)}s · ${q.minions} ${pl(q.minions, 'minion')}`;
+    else if (q.kind === 'sec') n = `per 0.5 s · ${q.oneFoe} ${pl(q.oneFoe, 'tick')} over ${Sh.secs(q.dur)}s · r ${q.r}`;
     else {
       const bits = [];
-      if (q.kind === 'tick') bits.push(`${q.oneFoe} ticks of ${n1(q.every)}s over ${n1(q.dur)}s`);
-      else if (q.fanN) bits.push(`${q.oneFoe} of ${q.fanN} arrows reach one foe`);
+      if (q.kind === 'tick') bits.push(`${q.oneFoe} ${pl(q.oneFoe, 'tick')} of ${Sh.secs(q.every)}s over ${Sh.secs(q.dur)}s`);
+      else if (q.fanN) bits.push(`${q.oneFoe} of ${q.fanN} ${pl(q.fanN, 'arrow')} reach${q.oneFoe === 1 ? 'es' : ''} one foe`);
       else if (q.oneFoe === 0) bits.push(esc(q.note || 'conditional'));
       else if (q.oneFoe > 1) bits.push(`×${q.oneFoe} on one foe`);
       if (q.r) bits.push('r ' + q.r);
-      if (q.stun) bits.push(`stun ${n1(q.stun)}s`);
+      if (q.stun) bits.push(`stun ${Sh.secs(q.stun)}s`);
       if (q.alwaysCrit) bits.push('always crits'); else if (q.noCrit) bits.push('no crit');
       if (q.selfVuln) bits.push(`includes Judged +${Math.round(q.selfVuln * 100)}%`);
-      if (q.delay) bits.push(`after ${n1(q.delay)}s`);
+      if (q.delay) bits.push(`after ${Sh.secs(q.delay)}s`);
       if (q.note && q.oneFoe !== 0) bits.push(esc(q.note));
       n = bits.join(' · ');
     }
     const elc = q.el ? `<span class="sh-el" style="--pc:${colorOf(q.el)}">${cap1(q.el)}${q.aff !== 1 ? ` ${X(q.aff)} here` : ''}</span>` : '';
-    const add = q.statusAdd ? `<div class="sh-part sub"><span class="sh-pl">+ ${esc(ED.STATUS[q.statusAdd.status].name)}</span><span class="sh-pv">${n1(q.statusAdd.here)}</span><span class="sh-pn">pool of half the hit${ED.elemMul(stratum, q.statusAdd.el) !== 1 ? ` · ${X(ED.elemMul(stratum, q.statusAdd.el))} here` : ''}</span></div>` : '';
-    return `<div class="sh-part"><span class="sh-pl">${esc(q.label)}</span><span class="sh-pv">${v}</span><span class="sh-pn">${n}${elc}</span></div>${add}`;
+    const add = q.statusAdd ? `<div class="sh-part sub"><span class="sh-plab">+ ${esc(ED.STATUS[q.statusAdd.status].name)}</span><span class="sh-pv">${n1(q.statusAdd.here)}</span><span class="sh-pn">pool of half the hit${ED.elemMul(stratum, q.statusAdd.el) !== 1 ? ` · ${X(ED.elemMul(stratum, q.statusAdd.el))} here` : ''}</span></div>` : '';
+    return `<div class="sh-part"><span class="sh-plab">${esc(q.label)}</span><span class="sh-pv">${v}</span><span class="sh-pn">${n}${elc}</span></div>${add}`;
   }
   function skillCard(k, color, stratum) {
     let h = `<div class="sh-card sh-f" data-k="skill:${k.id}" style="--pc:${color}"><div class="sh-ct"><kbd>${esc(ED.Input.label(k.key))}</kbd><img alt="" src="${ico(k.icon, color)}"><b>${esc(k.name)}</b><span class="sh-cd">${k.cd.toFixed(1)}s <small>(base ${k.cdBase.toFixed(1)}s)</small></span>${k.charges > 1 ? `<span class="sh-pips">${pips(k.charges, k.charges, color)}</span>` : ''}</div>`;
     h += `<div class="sh-sub">${esc(cap1(k.aimText))}${k.aim === 'ground' ? ` (range ${k.range})` : k.aim === 'move' ? ` (${k.rangeMin}–${k.range})` : ''}</div>`;
     for (const q of k.parts) h += partRow(q, stratum);
-    for (const he of k.heals) h += `<div class="sh-part"><span class="sh-pl">Heals</span><span class="sh-pv"></span><span class="sh-pn">${he.perMinion ? `${pc(he.perMinion)} of max health per minion, up to ${pc(he.cap)}` : `${pc(he.frac)} of max health`} · ${esc(he.label)}</span></div>`;
+    for (const he of k.heals) h += `<div class="sh-part"><span class="sh-plab">Heals</span><span class="sh-pv"></span><span class="sh-pn">${he.perMinion ? `${pc(he.perMinion)} of max health per minion, up to ${pc(he.cap)}` : `${pc(he.frac)} of max health`} · ${esc(he.label)}</span></div>`;
     const hits = k.parts.filter(q => q.kind !== 'zone' && q.kind !== 'status' && q.oneFoe > 0).reduce((n, q) => n + q.oneFoe, 0);
     return h + `<div class="sh-tot">Per cast on one foe: <b>${n1(k.perCast)}</b> <span class="mut">(${hits} ${hits === 1 ? 'hit' : 'hits'}${k.perCastAll > k.perCast + 0.5 ? `; ${n1(k.perCastAll)} if every shot lands` : ''})</span> · ≈ <b>${n1(k.dpsCd)}</b>/s over its cooldown</div></div>`;
   }
   function dashCard(m, color) {
     const d = m.dash;
     let h = `<div class="sh-card sh-f" data-k="dash" style="--pc:${color}"><div class="sh-ct"><kbd>${esc(ED.Input.label('dash'))}</kbd><img alt="" src="${ico('wing', color)}"><b>Dash</b><span class="sh-cd">${d.cd.toFixed(2)}s</span></div><div class="sh-sub">Untouchable for ${d.ifr}s while you dash</div>`;
-    for (const q of d.parts) h += `<div class="sh-part"><span class="sh-pl">${esc(q.label)}</span><span class="sh-pv">${q.dmg !== undefined ? n1(q.dmg) : ''}</span><span class="sh-pn">${q.per ? 'per ' + q.per + ' · ' : ''}${q.r ? 'r ' + q.r + ' · ' : ''}${q.dur ? n1(q.dur) + 's · ' : ''}${esc(q.note || '')}</span></div>`;
+    for (const q of d.parts) h += `<div class="sh-part"><span class="sh-plab">${esc(q.label)}</span><span class="sh-pv">${q.dmg !== undefined ? n1(q.dmg) : ''}</span><span class="sh-pn">${q.per ? 'per ' + q.per + ' · ' : ''}${q.r ? 'r ' + q.r + ' · ' : ''}${q.dur ? Sh.secs(q.dur) + 's · ' : ''}${esc(q.note || '')}</span></div>`;
     return h + '</div>';
   }
   function procsCard(m) {
     if (!m.procs.length) return '';
-    return `<div class="sh-card sh-f" data-k="procs" style="--pc:#b9ad9b"><div class="sh-ct"><b>Procs</b><span class="mut">strikes that scale with your Power</span></div>${m.procs.map(q => `<div class="sh-part"><span class="sh-pl">${esc(q.label)}</span><span class="sh-pv">${n1(q.dmg)}</span><span class="sh-pn">${esc(q.note)}</span></div>`).join('')}</div>`;
+    return `<div class="sh-card sh-f" data-k="procs" style="--pc:#b9ad9b"><div class="sh-ct"><b>Procs</b><span class="mut">strikes that scale with your Power</span></div>${m.procs.map(q => `<div class="sh-part"><span class="sh-plab">${esc(q.label)}</span><span class="sh-pv">${n1(q.dmg)}</span><span class="sh-pn">${esc(q.note)}</span></div>`).join('')}</div>`;
   }
   function offenseRows(m) {
     const M = m.mult, w = m.weapon;
     let h = '';
     h += stat('o:dmg', 'Damage', X(M.dmg.total), '', chips(M.dmg.rows, 'dmg'));
     h += stat('o:atk', 'Attack speed', X(M.atk.total), `${w.aps.toFixed(2)} attacks/s`, chips(M.atk.rows, 'atk'));
-    h += stat('o:crit', 'Critical', `${pc(M.crit.total)} · ${X(M.crit.mult)}`, `the average hit counts ${X(M.crit.expected)}`, chips(M.crit.rows, 'crit') + chips(M.crit.rowsDmg, 'critDmg'));
+    h += stat('o:crit', 'Critical', `${pc(M.crit.total)} · ${X(M.crit.mult)}`, `the average hit counts ${X(M.crit.expected)}`, [{ lab: 'Chance', html: chips(M.crit.rows, 'crit') }, { lab: 'Damage', html: `<span>Base <b>${X(M.crit.mult - M.crit.rowsDmg.reduce((a, r) => a + r.v, 0))}</b></span>` + chips(M.crit.rowsDmg, 'critDmg') }]);
     h += stat('o:area', 'Area', '+' + pc(M.area.total), `blasts and auras r ${X(M.area.blast)} · melee arc ${X(M.area.arc)}`, chips(M.area.rows, 'area'));
     h += stat('o:cdr', 'Skill cooldown', M.cdr.eff > 0 ? '−' + pc(M.cdr.eff) : '0%', M.cdr.capped ? `raw ${pc(M.cdr.raw)}: full up to ${pc(M.cdr.soft)}, half above it, at most ${pc(M.cdr.max)}` : '', chips(M.cdr.rows, 'cdr'));
-    if (M.projN.total || M.projN.pierce) h += stat('o:proj', 'Projectiles and pierce', `+${M.projN.total} · pierce +${M.projN.pierce}`, '', chips(M.projN.rows, 'projN') + chips(M.projN.rowsPierce, 'pierce'));
+    if (M.projN.total || M.projN.pierce) h += stat('o:proj', 'Projectiles and pierce', `+${M.projN.total} · pierce +${M.projN.pierce}`, '', [{ lab: 'Projectiles', html: chips(M.projN.rows, 'projN') }, { lab: 'Pierce', html: chips(M.projN.rowsPierce, 'pierce') }]);
     for (const s of M.slots) {
       const cut = /Cdr$/.test(s.key), sg = (v) => ((cut ? v > 0 : v < 0) ? '−' : '+'); // a cooldown stat is a cut: Vanguard shows −30%
       h += stat('o:' + s.key, s.label, s.fmt === 'pct' ? sg(s.v) + pc(Math.abs(s.v)) : Sh.fmt(s.key, s.v), '', s.rows.map(r => `<span class="${r.v < 0 ? 'neg' : ''}">${esc(r.label)} <b>${sg(r.v)}${Sh.fmt(s.key, Math.abs(r.v))}</b></span>`).join(''));
@@ -211,7 +216,7 @@
   function defenceRows(m) {
     const D = m.def;
     let h = '';
-    h += stat('d:hp', 'Max health', String(D.maxHp), `${n1(D.hpBase)} × ${Math.round(D.hpMul * 100)}%`, chips(D.hpRows, 'hp') + chips(D.hpMulRows, 'hpMul'));
+    h += stat('d:hp', 'Max health', String(D.maxHp), `${n1(D.hpBase)} × ${Math.round(D.hpMul * 100)}%`, [{ lab: 'Health', html: chips(D.hpRows, 'hp') }, { lab: 'Multiplier', html: chips(D.hpMulRows, 'hpMul') }]);
     h += stat('d:armor', 'Armor', n1(D.armor), `${pc(D.reduction)} less damage from hits`, chips(D.armorRows, 'armor'));
     h += stat('d:dodge', 'Dodge', pc(D.dodge), D.dodge >= 0.6 ? 'at the 60% cap' : '', chips(D.dodgeRows, 'dodge'));
     h += stat('d:taken', 'Damage taken', X(D.taken), D.vuln ? `armor ${X(D.armorMul)} · extra ${pc(D.vuln)}` : `armor ${X(D.armorMul)}`, chips(D.vulnRows, 'vuln'));
@@ -223,7 +228,8 @@
     h += stat('d:heal', 'Healing received', X(D.heal), `${X(D.healMul)} from your stats${D.pactHeal !== 1 ? ' and pact' : ''} · ${X(m.lantern.effect.heal)} from the ${m.lantern.name} lantern`, chips(D.healRows, 'heal'));
     for (const s of D.heals) h += stat('d:h:' + s.label, 'Heals: ' + esc(s.label), '', esc(s.text), '');
     h += stat('d:shield', 'Shield', live('shield', n1(D.shield)), `fades ${pc(0.02)} of max health per second between fights`, D.shields.map(s => `<span>${esc(s.label)} <b>${esc(s.text)}</b></span>`).join(''));
-    if (D.limits) h += `<div class="sh-note">${esc(D.limits)}</div>`;
+    const SW = D.window;
+    h += stat('d:swin', 'Shield window', live('swin', `${pc(SW.allPct)} / ${pc(SW.allCap)}`), `Shield gained in the last ${SW.secs} s from all sources; from class sources ${live('swc', `${pc(SW.clsPct)} / ${pc(SW.clsCap)}`)}. ${esc(D.limits)}`, '');
     if (D.ready.length) h += stat('d:ready', 'Safeguards', '', '', D.ready.map(r => `<span class="rd${r.ready ? ' ok' : ''}">${esc(r.name)} <b data-live="rd:${r.id}">${r.ready ? 'ready' : r.once ? 'used' : 'recharging'}</b></span>`).join(''));
     if (D.situational.length) h += `<div class="sh-stat sh-f" data-k="d:sit"><div class="sh-sl"><span class="sh-l">Situational</span></div>${D.situational.map(s => `<div class="sh-cond"><b>${esc(s.label)}</b> ${esc(s.text)}</div>`).join('')}</div>`;
     return h;
@@ -241,15 +247,15 @@
   function renderMapSide(m) {
     const L = m.lantern, A = m.aff, biome = ED.biomeFor(m.ctx.stratum);
     let h = `<div class="sh-stat sh-f" data-k="m:strat"><div class="sh-sl"><span class="sh-l">${U.roman(m.ctx.stratum)} ${esc(biome.name)}</span></div><div class="sh-aff2">${affChips(A.now)}</div>`;
-    const cls = A.now.mine.filter(x => x.why === 'class' && x.skillMul !== null);
+    const cls = A.now.mine.filter(x => x.skillMul !== null && x.skillMul !== x.mul);
     if (cls.length) h += `<div class="sh-sub">Your class skills take half the affinity: ${cls.map(x => `${esc(x.name)} ${X(x.skillMul)}`).join(', ')}.</div>`;
     if (A.next) h += `<div class="sh-sub">Next, ${esc(A.next.short)}:</div><div class="sh-aff2">${affChips(A.next)}</div>`;
     h += '</div>';
     h += `<div class="sh-stat sh-f" data-k="m:lantern"><div class="sh-sl"><span class="sh-l">Lantern</span><span class="sh-v"><span class="sh-tier t${L.tier}">${L.name}</span></span></div>`
       + `<div class="sh-sub">Light ${live('light', `${n1(L.light)} / ${n1(L.lightMax)} (${Math.round(L.pct * 100)}%)`)}</div>`
-      + `<div class="sh-cond">Foes that spawn now ${X(L.effect.dmg)} damage · elite chance +${Math.round(L.effect.elite * 100)}%${L.effect.gloom ? ` · the Gloom hunts ${L.effect.gloom}s after you enter a room` : ''} · healing ${X(L.effect.heal)}</div>`
+      + `<div class="sh-cond">${L.name} lantern: foe damage ${X(L.effect.dmg)} · elite chance +${Math.round(L.effect.elite * 100)}%${L.effect.gloom ? ` · the Gloom hunts ${L.effect.gloom}s after you enter a room` : ''} · healing ${X(L.effect.heal)}</div>`
       + `<div class="sh-cond">New room: fight −${n1(L.cost.combat.pts)} (−${Math.round(L.cost.combat.pct * 100)}%) · elite −${n1(L.cost.elite.pts)} (−${Math.round(L.cost.elite.pct * 100)}%) · other −${n1(L.cost.other.pts)} (−${Math.round(L.cost.other.pct * 100)}%)</div>`
-      + `<div class="sh-cond">Boss door now: heal ${Math.round(L.boss.heal * 100)}% · shield ${Math.round(L.boss.shield * 100)}% · ${L.boss.gold} gold · ${L.boss.embers} embers</div>`
+      + `<div class="sh-cond">Boss door now: heal ${Math.round(L.boss.heal * 100)}% · shield ${Math.round(L.boss.shield * 100)}% · ${L.boss.gold} gold · ${L.boss.embers} ${pl(L.boss.embers, 'ember')}</div>`
       + `<div class="sh-cond">Rooms explored ${live('rooms', `${L.rooms.seen} / ${L.rooms.total}`)} · Flare −${n1(L.flare.pts)} (−${Math.round(L.flare.pct * 100)}%)</div></div>`;
     h += `<div class="sh-stat sh-f" data-k="m:party"><div class="sh-sl"><span class="sh-l">Party</span></div>${m.partyRows}</div>`;
     return h;

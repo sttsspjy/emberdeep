@@ -316,7 +316,7 @@
   }
 
   let last = performance.now(), hiddenTick = null, sheetFrames = 0, drawnW = 0, drawnH = 0;
-  const anyOverlay = () => ['ov-pause', 'ov-settings', 'modal', 'ov-sheet', 'ov-boon'].some(id => !$(id).hidden);
+  const anyOverlay = () => ['ov-pause', 'ov-settings', 'modal', 'ov-sheet'].some(id => !$(id).hidden); // the boon cards are no blocker: a hero keeps moving under them (UI.pickBoon masks the attack keys itself)
   const EMPTY = { mx: 0, my: 0, atk: false, skill: false, dash: false, atkPressed: false };
   function frame(now) {
     requestAnimationFrame(frame);

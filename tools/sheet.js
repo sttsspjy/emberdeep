@@ -4,7 +4,7 @@
 //   --routes    per class x route x fork x rank: change in hero damage (one foe | a pack of 4) against the class without the card, for a fresh and a mid build (--mid prints only the mid build),
 //               effective health with the uptime of the route's defence, shield income and stun uptime
 //   --weapons   per weapon: damage per second on one foe and in a pack of 4 at the class Power, and the damage factor that puts it on the class median
-// Hero damage = weapon dps + skill damage per cooldown (+ status estimates); a pack of 4: melee arcs, blasts, sweeps, waves and ricochets hit all four foes, a fan hits as many as it has arrows and pierces.
+// Hero damage = (weapon dps + skill damage per cooldown) x the conditional-damage factor (ED.COND_DMG rows the build owns at assumed uptimes, see COND_NOTE) + status estimates; a pack of 4: melee arcs, blasts, sweeps, waves and ricochets hit all four foes, a fan hits as many as it has arrows and pierces.
 // The mid build: the class element's gate (else Fire) and a second gate, Sharpened Edge x2, Quickened Hands x2, Focus and Stalwart.
 const { ED } = require('./sim.js');
 const args = {};
@@ -48,7 +48,7 @@ function directDamage(m, n) {
   return sum;
 }
 const statusDamage = (m) => m.mult.status.reduce((s, x) => s + (x.est && x.est.dps || 0), 0);
-const heroDamage = (m, n) => directDamage(m, n) + statusDamage(m);
+const heroDamage = (m, n, k) => directDamage(m, n) * (k || 1) + statusDamage(m); // k: the conditional-damage factor of the build (condFactor); statuses are raw damage
 
 // ---- defence: effective health with the uptime of a guard ----
 function defence(p, m) {
@@ -84,6 +84,43 @@ function defence(p, m) {
   return out;
 }
 
+// ---- conditional damage: the ED.COND_DMG rows a build owns count at an assumed uptime (the bonus is additive with the Damage stat) ----
+const COND_NOTE = 'conditional damage at assumed uptimes: execute 30% of the time; burning, bleeding, chilled, envenomed, doomed 60-90% when the build applies it; stunned = the stun uptime; Brand = the ailments the build keeps up (at most 4); unknown rows 50%';
+function ailmentsKept(st, d) {
+  let n = 0;
+  for (const id of ED.ELEMENT_IDS) if (st[ED.ELEMENTS[id].inf] > 0) n += 0.7; else if (st.element === id) n += 0.5;
+  if (st.bleed > 0 || st.bleedAll > 0 || st.masterstroke) n += 0.7;
+  return Math.min(4, n + (d ? d.stun : 0) + (st.seal > 0 ? 1 : 0));
+}
+function uptime(id, st, m, d) {
+  const has = (k) => st[k] > 0;
+  switch (id) {
+    case 'execute': return 0.3;
+    case 'searing': return has('fireInfuse') || st.element === 'fire' ? 0.8 : 0;
+    case 'lacerate': return has('bleedAll') ? 0.9 : has('bleed') || st.masterstroke ? Math.min(0.9, 1 - Math.pow(1 - st.crit, m.weapon.aps * 2)) : 0;
+    case 'malice': return has('shadowInfuse') || st.element === 'shadow' ? 0.6 : 0;
+    case 'brittle': return has('iceInfuse') ? 0.6 : 0;
+    case 'fester': return has('poisonInfuse') ? 0.6 : 0;
+    case 'opportunist': return Math.min(1, d.stun + (has('iceInfuse') ? 0.3 : 0));
+    case 'knell': return 0.5 * Math.min(st.knell, 3);
+    case 'brand': return ailmentsKept(st, d);
+    case 'idol': return 1;
+    case 'banner': return 1;
+    default: return 0.5;
+  }
+}
+// The factor on hero hit damage: (Damage + sum of the owned conditional bonuses x uptime) / Damage.
+function condFactor(p, m, d) {
+  const st = p.stats; let sum = 0;
+  for (const r of ED.COND_DMG) {
+    if (r.key === 'classElMul') continue; // already in the class-skill hits of the sheet
+    if (r.key !== null ? !(st[r.key] > 0) : !(r.own && r.own(st))) continue;
+    const id = r.key || r.id, v = id === 'idol' ? 0.1 : r.value ? r.value(st) : st[r.key];
+    sum += v * uptime(id, st, m, d);
+  }
+  return (Math.max(0.1, st.dmg) + sum) / Math.max(0.1, st.dmg);
+}
+
 const pct = (v, d) => (v * 100).toFixed(d === undefined ? 0 : d) + '%';
 const f1 = (v) => (v >= 100 ? v.toFixed(0) : v.toFixed(1));
 const pad = (s, n) => String(s).padEnd(n);
@@ -110,14 +147,15 @@ if (!args.routes && !args.weapons || args.fresh) {
 // ---- routes ----
 function routeTable(label, boonsFor) {
   out(`\n###### ${label}`);
+  out(`  (${COND_NOTE})`);
   for (const cls of CLS) {
-    const base = boonsFor(cls), pb = hero(cls, 0, base), mb = model(pb), b1 = heroDamage(mb, 1), b4 = heroDamage(mb, PACK), db = defence(pb, mb);
+    const base = boonsFor(cls), pb = hero(cls, 0, base), mb = model(pb), db = defence(pb, mb), kb = condFactor(pb, mb, db), b1 = heroDamage(mb, 1, kb), b4 = heroDamage(mb, PACK, kb);
     out(`\n== ${ED.CLASSES[cls].name}: base ${f1(b1)} one foe | ${f1(b4)} pack, effective health ${f1(db.ehp)}`);
     out(`  ${pad('route / fork', 34)} ${rpad('1 foe', 7)} ${rpad('pack', 7)} ${rpad('EHP', 6)} ${rpad('shield/s', 9)} ${rpad('stun', 5)}  weapon dps  skill1  skill2   notes`);
     for (const r of ED.ROUTES) {
       const e = ED.CLASS_CARDS[cls][r];
       const emit = (name, boons) => {
-        const p = hero(cls, 0, boons), m = model(p), d = defence(p, m), h1 = heroDamage(m, 1), h4 = heroDamage(m, PACK);
+        const p = hero(cls, 0, boons), m = model(p), d = defence(p, m), k = condFactor(p, m, d), h1 = heroDamage(m, 1, k), h4 = heroDamage(m, PACK, k);
         out(`  ${pad(name, 34)} ${rpad(sign(h1 / b1 - 1), 7)} ${rpad(sign(h4 / b4 - 1), 7)} ${rpad(sign(d.ehp / db.ehp - 1), 6)} ${rpad(pct(d.shield, 2), 9)} ${rpad(pct(d.stun), 5)}  ${rpad(f1(m.weapon.dps), 10)}  ${rpad(f1(m.skills[0].dpsCd), 6)}  ${rpad(f1(m.skills[1] ? m.skills[1].dpsCd : 0), 6)}   ${d.note.join('; ')}`);
       };
       emit(`${ED.routeLabel(cls, r)} (${ED.BOONS[e.t1].name})`, Object.assign({}, base, { [e.t1]: 1 }));
@@ -135,7 +173,7 @@ if (args.weapons) {
   out(`\n###### weapons at the class Power (dps on one foe | pack of ${PACK} | mean; dmg factor to the class median)`);
   for (const cls of CLS) {
     const list = ED.CLASSES[cls].weapons.map((id, wi) => {
-      const m = model(hero(cls, wi)), one = m.weapon.dps, pack = packWeapon(m, PACK), hero1 = heroDamage(m, 1);
+      const p = hero(cls, wi), m = model(p), one = m.weapon.dps, pack = packWeapon(m, PACK), hero1 = heroDamage(m, 1, condFactor(p, m, defence(p, m)));
       return { id, name: m.weapon.name, one, pack, mean: (one + pack) / 2, hero1 };
     });
     const med = list.map(w => w.mean).sort((a, b) => a - b)[1];

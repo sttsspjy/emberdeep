@@ -25,15 +25,16 @@ function modelOf(cls, boons, wi, o) {
   const V = { // weapon hit, avg, aps, dps; armor taken
     knight: [18, 18.675, 2.381, 44.47, 0.8824], ranger: [12, 12.9, 2.941, 37.94, 0.9231], pyro: [12, 12.45, 2.0, 39.3, 0.9677], shade: [10, 10.9, 4.762, 51.9, 0.9524], cleric: [17, 17.64, 2.381, 54.6, 0.8955], necro: [9, 9.34, 2.5, 23.35, 0.9677],
   };
-  for (const cls in V) {
-    const m = modelOf(cls, {}, 0, { stat: { crit: 0 } }), v = V[cls], w = m.weapon;
+  for (const cls in V) { // every class: hit, avg at crit 0 (= hit), avg and dps at the class crit, attacks per second, armor
+    const m = modelOf(cls, {}, 0, { stat: { crit: 0 } }), mc = modelOf(cls, {}, 0), v = V[cls], w = m.weapon;
     near(w.hit, v[0], 0.05, cls + ' weapon hit');
-    if (cls !== 'pyro' && cls !== 'shade' && cls !== 'cleric' && cls !== 'necro' && cls !== 'ranger') near(w.avg, v[0], 0.05, cls + ' weapon avg at crit 0');
+    near(w.avg, v[0], 0.05, cls + ' weapon avg at crit 0');
+    near(mc.weapon.avg, v[1], 0.01, cls + ' weapon avg at the class crit');
+    near(mc.weapon.dps, v[3], 0.1, cls + ' weapon dps');
     near(w.aps, v[2], 0.005, cls + ' attacks per second');
     near(m.def.taken, v[4], 0.0005, cls + ' damage taken');
   }
-  const kn = modelOf('knight', {}, 0), by = (m, s, p) => m.skills[s].parts.find(q => q.id === p);
-  near(kn.weapon.avg, 18.675, 0.01, 'Knight weapon avg'); near(kn.weapon.dps, 44.47, 0.1, 'Knight weapon dps');
+  const by = (m, s, p) => m.skills[s].parts.find(q => q.id === p);
   near(by(modelOf('knight', {}, 0, { stat: { crit: 0 } }), 0, 'impact').raw, 48.8, 0.05, 'Charge impact'); near(modelOf('knight', {}, 0).def.ehp, 153, 1, 'Knight effective health');
   const rg = modelOf('ranger', {}, 0, { stat: { crit: 0 } }), arrow = by(rg, 0, 'arrow');
   near(arrow.raw, 18.4, 0.05, 'Volley arrow'); ok(arrow.oneFoe === 3 && arrow.fanN === 7, `Volley: 3 of 7 arrows reach a foe at REF (got ${arrow.oneFoe} of ${arrow.fanN})`);
@@ -47,13 +48,28 @@ function modelOf(cls, boons, wi, o) {
   near(leg.pre, 50.16, 0.05, 'Judgment leg with its own vulnerability'); near(cl.skills[1].perCast, 100.3, 0.1, 'Judgment per cast (two legs)'); near(by(cl, 0, 'zone').here * 7, 106.4, 0.1, 'Sanctuary 7 ticks');
   const nc = modelOf('necro', {}, 0, { stat: { crit: 0 } }), mn = by(nc, 0, 'minion');
   near(mn.here, 9.69, 0.01, 'Minion hit'); ok(mn.oneFoe === 51, `Minions: 3 x 17 hits (got ${mn.oneFoe})`); near(by(nc, 1, 'burst').raw, 40.2, 0.05, 'Harvest burst');
-  // Set 2: Sharpened Edge x2, Stoke x1, weak to Fire (stratum III), crit 5%
+  // Set 2: Sharpened Edge x2, Stoke x1, weak to Fire (stratum III), crit 5%. DEVIATION from DESIGN-ux A4: a class-element skill takes half the affinity (combat.js affC: x1.25, not x1.5), so Nova blast and crater use 1.25; statuses (Nova burn, Meteor burn add) take the full x1.5.
   const e2 = modelOf('pyro', { edge: 2, stoke: 1, kindle: 1 }, 0, { ctx: { stratum: 3 }, stat: { crit: 0.05 } });
   near(e2.mult.dmg.total, 1.2, 1e-9, 'Set 2 damage'); near(by(e2, 0, 'blast').here, 52 * 1.2 * (1 + 0.05 * 0.75) * 1.25, 0.05, 'Set 2 Nova blast (class skill: half affinity)');
   near(by(e2, 0, 'burn').here, 40.8 * 1.5 * 1.25, 0.05, 'Set 2 Nova burn (full affinity, Burn strength)');
   near(by(e2, 1, 'impact').statusAdd.here, 0.5 * by(e2, 1, 'impact').pre * 1.5 * 1.25, 0.05, 'Set 2 Meteor burn add (affinity once)');
   near(by(e2, 1, 'crater').here * by(e2, 1, 'crater').oneFoe, 6 * 8.8 * 1.2 * 1.25, 0.1, 'Set 2 crater, 6 ticks');
 }
+
+// ---------------- affinity chips: the class element's skills take half the affinity whichever source lists the element ----------------
+{
+  const aff = (cls, boons, stratum) => modelOf(cls, boons, 0, { ctx: { stratum } }).aff.now.mine;
+  let a = aff('cleric', {}, 2).find(x => x.el === 'holy');
+  ok(a && a.why === 'class' && a.mul === 0.5 && a.skillMul === 0.75, 'fresh Cleric, stratum II: Holy statuses x0.5, skills x0.75');
+  a = aff('cleric', { consecrate: 1 }, 2).find(x => x.el === 'holy');
+  ok(a && a.why === 'path' && a.mul === 0.5 && a.skillMul === 0.75, 'Cleric with the Holy gate keeps the class-skill affinity');
+  a = aff('pyro', { kindle: 1 }, 3).find(x => x.el === 'fire');
+  ok(a && a.mul === 1.5 && a.skillMul === 1.25, 'Pyromancer with Kindle, stratum III: statuses x1.5, skills x1.25');
+  a = aff('knight', { kindle: 1 }, 3).find(x => x.el === 'fire');
+  ok(a && a.skillMul === null, 'a Knight has no class element');
+}
+// every ED.SKILL_SHEET key names a part that exists (a renamed part would silently lose its oneFoe, selfVuln or infAdd)
+for (const key in ED.SKILL_SHEET) { const [sid, pid] = key.split('.'); ok(ED.SKILLS[sid] && ED.SKILLS[sid].parts.some(q => q.id === pid), 'ED.SKILL_SHEET key ' + key + ' resolves to a skill part'); }
 
 // ---------------- text at rank: every boon renders without a left-over token, numbers follow the rank ----------------
 {
@@ -70,6 +86,25 @@ function modelOf(cls, boons, wi, o) {
   for (const id of ED.BOON_IDS) { const b = ED.BOONS[id]; if (b.route || !b.mods) continue; for (const k in b.mods) { const m = new RegExp('\\{' + k + '(\\*[^}:]+)?(:\\w+)?\\}').exec(b.desc); if (m && !m[1] && b.mods[k] !== 0) ok(ED.Sheet.text(id, 1, st).indexOf(ED.Sheet.fmt(k, Math.abs(b.mods[k]), m[2] && m[2].slice(1))) >= 0, 'token ' + k + ' of ' + id); } }
 }
 
+// ---------------- next rank, seconds, plurals, statuses and forks in the model ----------------
+{
+  const st = ED.Stats.compute({ cls: 'knight', weapon: 'longsword', boons: {}, relics: [], meta: META(), pact: 0 }), S = ED.Sheet;
+  ok(S.nextText('edge', 1, st) === '+20% damage', 'Next rank lists only the changed number: ' + S.nextText('edge', 1, st));
+  { const rows = [].concat(...modelOf('knight', { edge: 2, quick: 1 }, 0).build.groups.map(g => g.items)); ok(rows.find(x => x.id === 'edge').next === null && rows.find(x => x.id === 'quick').next === '+20% attack speed', 'only a card below its last rank has a Next rank line'); }
+  ok(S.nextText('k_el_a', 1, st).indexOf('unlocks Ruin Seal') < 0 && S.nextText('k_el_a', 2, st).indexOf('unlocks Ruin Seal') >= 0, 'a route card names the rider it unlocks at rank 3');
+  ok(S.fmt('arcStun', 0.25, 'sec') === '0.25s' && S.fmt('arcStun', 0.5, 'sec') === '0.5s' && S.fmt('venomHold', 2, 'sec') === '2s' && S.fmt('venomHold', 12, 'sec') === '12s', 'seconds keep two decimals below 1 s');
+  ok(S.text('overload', 1, st).indexOf('0.25s') >= 0, 'Overload states its real stun time: ' + S.text('overload', 1, st));
+  ok(S.text('pierce', 1, st).indexOf('+1 foe.') >= 0 && S.text('pierce', 2, st).indexOf('+2 foes.') >= 0, 'counts pluralise: ' + S.text('pierce', 1, st) + ' / ' + S.text('pierce', 2, st));
+  const mb = modelOf('knight', { k_el: 1, k_el_a: 1 }, 0), ids = mb.build.statuses.map(x => x.id);
+  ok(ids.indexOf('ailment') >= 0 && ids.indexOf('bleed') >= 0, 'Brand lists the Ailments rule and the Bleed rule: ' + ids.join(','));
+  ok(modelOf('knight', { masterstroke: 1 }, 0).build.statuses.some(x => x.id === 'bleed'), 'Masterstroke lists the Bleed rule');
+  const fk = modelOf('knight', { k_atk: 1, k_atk_h: 1 }, 0).build.route.nodes.find(n => n.route === 'attack').forks;
+  ok(fk.find(x => x.id === 'k_atk_h').closed === false && fk.find(x => x.id === 'k_atk_s').closed === true && fk.find(x => x.id === 'k_atk_s').when === '', 'the sibling of the taken fork is closed');
+  const open = modelOf('knight', { k_atk: 1 }, 0).build.route.nodes.find(n => n.route === 'attack').forks;
+  ok(open.every(x => !x.closed && x.when), 'before a fork both are open and say when they are offered');
+  ok(ED.Sheet.shieldWindow({ shwC: 1.5, shwA: 2.5 }, 0).a === 2.5 && ED.Sheet.shieldWindow({ shwC: 1.5, shwA: 2.5 }, 0).c === 1.5, 'a mirror hero carries the shield window in shwC and shwA');
+}
+
 // ---------------- the staged world ----------------
 const hits = []; // [{ part, kind, dealt, el }]
 const oHit = W.hitEnemy;
@@ -83,14 +118,14 @@ W.updateEnemy = function (e, dt) {
   if (!e._dummy) return oUpd.call(this, e, dt);
   e.flash -= dt; e.mark -= dt; e.invulnT = (e.invulnT || 0) - dt; e.kbx = e.kby = 0; this.tickStatuses(e, dt);
 };
-function stage(cls, boons, wi, stat, relics, dist) {
+function stage(cls, boons, wi, stat, relics, dist, crit) {
   const w = new ED.World({ seed: 11, pact: 0, players: [{ pid: 'p0', name: 'T', slot: 0, cls, weapon: ED.CLASSES[cls].weapons[wi || 0], meta: META() }] });
   w.startRun();
   const p = w.players.get('p0');
   for (const id in (boons || {})) p.boons[id] = boons[id];
   if (relics) p.relics = relics.slice();
   w.recalc(p, true); p.offers.length = 0; p.picks = 0; p.offer = null;
-  Object.assign(p.stats, stat || {}, { crit: 0 }); p.stats.sn = {};
+  Object.assign(p.stats, stat || {}, { crit: crit || 0 }); p.stats.sn = {};
   w.enemies.length = 0; w.enc = null; w.locked = false; w.zones.length = 0; w.projs.length = 0;
   const e = w.spawnEnemy('skeleton', p.x + (dist || REF.d), p.y - 4); e._dummy = true; e.spd = 0; e.cd = 1e9; e.r = REF.r; e.hp = e.maxHp = 1e9; e.def = Object.assign({}, e.def, { guard: undefined });
   hits.length = 0;
@@ -170,14 +205,14 @@ for (const [cls, stat, slot, dist, skipImpact] of CASES) {
 function weaponRun(cls, wi, boons, o) {
   o = o || {};
   const probe = stage(cls, boons, wi, null), wp = probe.p.stats.weapon, reach = wp.kind === 'melee' ? wp.range * (1 + 0.5 * probe.p.stats.area + probe.p.stats.meleeReach) : 0;
-  const { w, p } = stage(cls, boons, wi, o.stat, null, reach ? reach * 0.55 : REF.d);
+  const { w, p } = stage(cls, boons, wi, o.stat, null, reach ? reach * 0.55 : REF.d, o.crit);
   if (o.stratum) w.stratum = o.stratum;
   const m = sheetOf(w, p);
   let next = 0, atk = 0;
   run(w, o.secs || 20, () => { if (w.time >= next) { w.playerAttack(p, 0); next = w.time + ED.Stats.attackInterval(p); atk++; } });
   run(w, 4);
-  const total = hits.filter(h => !(h.kind === 'dot' && h.raw)).reduce((s, h) => s + h.dealt, 0);
-  return { m, total, atk };
+  const total = hits.filter(h => !(h.kind === 'dot' && h.raw)).reduce((s, h) => s + h.dealt, 0), bleed = hits.filter(h => h.kind === 'dot' && h.raw && h.bleed).reduce((s, h) => s + h.dealt, 0);
+  return { m, total, atk, bleed, secs: o.secs || 20 };
 }
 for (const cls of ED.CLASS_IDS) for (let wi = 0; wi < 3; wi++) {
   const r = weaponRun(cls, wi, {}), id = ED.CLASSES[cls].weapons[wi];
@@ -188,11 +223,29 @@ for (const [cls, boons, tag] of [['knight', { k_atk: 1 }, 'Oath of Steel'], ['kn
   const r = weaponRun(cls, 0, boons, { secs: 24 });
   rel(r.total / r.atk, r.m.weapon.dps / r.m.weapon.aps, 0.05, `${tag} damage per attack`);
 }
+// Masterstroke: every 4th attack crits for sure at x1.3 (the chance of a normal crit stays on the other three) and Bleeds for at least half the hit
+for (const [cls, crit] of [['knight', 0], ['knight', 0.3], ['ranger', 0], ['pyro', 0.3], ['shade', 0]]) {
+  const r = weaponRun(cls, 0, { masterstroke: 1 }, { secs: 60, crit }), plain = weaponRun(cls, 0, {}, { secs: 20, crit: 0 });
+  rel(r.total / r.atk, r.m.weapon.dps / r.m.weapon.aps, 0.04, `Masterstroke ${cls} damage per attack at crit ${crit}`);
+  ok(r.m.weapon.extras.some(e => e.label === 'Masterstroke') && r.m.weapon.dps > plain.m.weapon.dps, `Masterstroke ${cls}: the weapon card lists it and dps rises`);
+  rel(r.bleed / r.secs, r.m.proc.bleed, 0.08, `Masterstroke ${cls} Bleed damage per second at crit ${crit}`);
+}
 // evolutions: the strikes of each path (poison builds Venom, which raises later hits: not compared)
 for (const [cls, evo, stratum] of [['knight', 'fire', 1], ['pyro', 'fire', 1], ['ranger', 'ice', 1], ['ranger', 'lightning', 1], ['cleric', 'holy', 3], ['shade', 'shadow', 1], ['ranger', 'general', 1], ['knight', 'general', 1], ['necro', 'ice', 1]]) {
   const boons = {}; boons['evo_' + evo] = 1;
   const r = weaponRun(cls, 0, boons, { secs: 30, stratum });
   rel(r.total / r.atk, r.m.weapon.dps / r.m.weapon.aps, 0.06, `${cls} evolution ${evo} damage per attack`);
+}
+
+// ---------------- shield window: the readout equals what addShield granted in the last 10 s ----------------
+{
+  const { w, p } = stage('knight', {}, 0, {});
+  w.addShield(p, 3, 100, 'catch'); w.addShield(p, 2, 100, 'holy');
+  let m = sheetOf(w, p);
+  near(m.def.window.cls, 3, 0.01, 'shield window, class sources'); near(m.def.window.all, 5, 0.01, 'shield window, all sources');
+  near(m.def.window.clsPct, 3 / p.maxHp, 1e-6, 'shield window as a share of max health');
+  run(w, 11);
+  m = sheetOf(w, p); near(m.def.window.all, 0, 0.001, 'the window empties after 10 s');
 }
 
 // ---------------- defence and the foes that spawn now ----------------

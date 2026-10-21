@@ -3,7 +3,7 @@
 // Aim is the mouse cursor (I.mouse, CSS px; moved = time of the last pointer event, 0 before the first). Gamepad (fixed): left stick move,
 // right stick aim (latched 0.35 s after release), X / RT attack, B / RB skill 1, Y / LT skill 2, A / LB dash, L3 flare, Start pause, Back map.
 // I.device ('mouse' | 'pad') says which of the two currently aims. Menus read tabPrev / tabNext (Q / E, LB / RB), tabN (1-3), up / down / left / right (keys, d-pad), navX / navY (left stick, repeating), scrollY (right stick), back (B), reroll (Q, Y), cycle (Y).
-// I.mask() makes every key, mouse button and pad button held right now read as up until released (an overlay that closes must not pass its closing press to the game).
+// I.mask([actions]) makes every key, mouse button and pad button held right now (only the keys of the listed actions, when given; pad buttons always) read as up until released (an overlay that closes must not pass its closing press to the game).
 (function (ED) {
   'use strict';
   const I = ED.Input = {
@@ -189,7 +189,7 @@
 
   const down = (a) => codes[a].some(c => I.keys.has(c) && !masked.has(c));
   I.held = down;
-  I.mask = () => { for (const c of I.keys) masked.add(c); const g = navigator.getGamepads ? [...navigator.getGamepads()].find(q => q && q.connected) : null; if (g) g.buttons.forEach((b, i) => { if (b.pressed) masked.add('pad' + i); }); };
+  I.mask = (actions) => { const only = actions ? new Set(actions.flatMap(a => codes[a] || [])) : null; for (const c of I.keys) if (!only || only.has(c)) masked.add(c); const g = navigator.getGamepads ? [...navigator.getGamepads()].find(q => q && q.connected) : null; if (g) g.buttons.forEach((b, i) => { if (b.pressed) masked.add('pad' + i); }); };
   const hit = (a) => codes[a].some(c => I.pressed.has(c));
   const hitCode = (...cs) => cs.some(c => I.pressed.has(c));
 
