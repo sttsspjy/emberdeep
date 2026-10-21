@@ -14,7 +14,7 @@
             bone    #f6ecda text             muted   #c5b49d secondary text                      faint #8f7f6c tertiary
             gold    #f0cf8a titles           ember   #ff8a3d action / live accent (hi #ffb56b, lo #b54f1c)
             danger  #ef5a46                  good    #8fdc98
-            paths   pyre #ff7a2a · rime #7fe3ff · storm #ffe66b · steel #d9dfe8 · blood #d43a5a · spirit #b78cff
+            paths   fire #ff7a2a · ice #7fe3ff · lightning #ffe66b · poison #9be33c · holy #fff0c2 · shadow #a070ff · general #d9dfe8
             rarity  common #cfc6b6 · rare #6fb2ff · epic #c98bff · legendary #ffb02e
    Panels   2px line border, 0.3u radius, brass L-shaped corner brackets (1.1u), inset 1px black rim, deep drop shadow.
    Buttons  min height 2.9u (large 3.4u, hero 4.2u), 2px border, ember fill only for the single primary action per screen.
@@ -42,12 +42,13 @@
   --faint: #8f7f6c;
   --danger: #ef5a46;
   --good: #8fdc98;
-  --path-pyre: #ff7a2a;
-  --path-rime: #7fe3ff;
-  --path-storm: #ffe66b;
-  --path-steel: #d9dfe8;
-  --path-blood: #d43a5a;
-  --path-spirit: #b78cff;
+  --path-fire: #ff7a2a;
+  --path-ice: #7fe3ff;
+  --path-lightning: #ffe66b;
+  --path-poison: #9be33c;
+  --path-holy: #fff0c2;
+  --path-shadow: #a070ff;
+  --path-general: #d9dfe8;
   --r-common: #cfc6b6;
   --r-rare: #6fb2ff;
   --r-epic: #c98bff;
@@ -445,10 +446,12 @@ input[type=range]::-moz-range-thumb { width: 1.2rem; height: 1.2rem; transform: 
 .boon-card .bc-ribbon { position: absolute; top: -1.05rem; left: 50%; transform: translateX(-50%); white-space: nowrap; padding: 0.2rem 1.2rem; border-radius: 2rem; font: 800 var(--fs-md)/1.3 var(--f-body); letter-spacing: 0.02em; color: #15100c; background: var(--pc); border: 2px solid #0e0907; box-shadow: 0 0 1.2rem color-mix(in srgb, var(--pc) 60%, transparent); }
 .boon-card .bc-ribbon.two { background: linear-gradient(90deg, var(--pc), var(--pc2, var(--pc))); }
 /* path colours; the paths' hues are the identity of a card, rarity only colours its label */
-.boon-card.path-pyre { --pc: var(--path-pyre); } .boon-card.path-rime { --pc: var(--path-rime); } .boon-card.path-storm { --pc: var(--path-storm); }
-.boon-card.path-steel { --pc: var(--path-steel); } .boon-card.path-blood { --pc: var(--path-blood); } .boon-card.path-spirit { --pc: var(--path-spirit); }
-.boon-card.path2-pyre { --pc2: var(--path-pyre); } .boon-card.path2-rime { --pc2: var(--path-rime); } .boon-card.path2-storm { --pc2: var(--path-storm); }
-.boon-card.path2-steel { --pc2: var(--path-steel); } .boon-card.path2-blood { --pc2: var(--path-blood); } .boon-card.path2-spirit { --pc2: var(--path-spirit); }
+.boon-card.path-fire { --pc: var(--path-fire); } .boon-card.path-ice { --pc: var(--path-ice); } .boon-card.path-lightning { --pc: var(--path-lightning); } .boon-card.path-poison { --pc: var(--path-poison); }
+.boon-card.path-holy { --pc: var(--path-holy); } .boon-card.path-shadow { --pc: var(--path-shadow); } .boon-card.path-general { --pc: var(--path-general); }
+.boon-card.path2-fire { --pc2: var(--path-fire); } .boon-card.path2-ice { --pc2: var(--path-ice); } .boon-card.path2-lightning { --pc2: var(--path-lightning); } .boon-card.path2-poison { --pc2: var(--path-poison); }
+.boon-card.path2-holy { --pc2: var(--path-holy); } .boon-card.path2-shadow { --pc2: var(--path-shadow); } .boon-card.path2-general { --pc2: var(--path-general); }
+.boon-card .bc-weak { align-self: center; padding: 0.1rem 0.8rem; border-radius: 2rem; border: 1px solid var(--pc); color: var(--pc); font: 800 var(--fs-md)/1.3 var(--f-body); background: rgba(0, 0, 0, 0.3); }
+.boon-cards.dense .bc-weak { grid-column: 2; justify-self: start; }
 .boon-card.neutral, .boon-card.class { --pc: #b9ad9b; }
 .boon-card.class { --pc: var(--gold); }
 /* duo: split frame between the two gate paths */

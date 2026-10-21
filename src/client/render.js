@@ -194,6 +194,7 @@
     c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
     c.fillStyle = P.void; c.fillRect(0, 0, R.W, R.H);
     nl = 0; ng = 0; stN = 0; R.local = local;
+    { const me = view.players && view.players.get(local); R.mainPath = me ? ED.mainPath(me.boons) : null; } // path of 'boon' door and prop glyphs
     R.simT = view.renderT || view.time || 0; // sim-time clock for hazards drawn from sim state: interpolated host time on clients, world time otherwise
     if (!room) { R.endWorld(R.postOpts(biome, t)); return; }
     let sx = 0, sy = 0;
@@ -971,7 +972,7 @@
   }
 
   const PROP_LABEL = {
-    chest: () => 'Open', fountain: () => 'Drink (heal party 50%)', altar: (p, me) => `Bleed 20% health for an epic boon`,
+    chest: () => 'Open', fountain: () => 'Drink (heal party 50%)', altar: (p, me) => `Pay 20% health for an epic boon`,
     gamble: (p) => `Offer ${p.price} gold for a random relic`, trial: () => 'Begin the trial (elite fight, rare relic)', portal: () => 'Descend',
   };
   R.propPrompt = (p, view) => {
@@ -985,14 +986,12 @@
     if (p.kind === 'anvil') return 'Temper at the anvil';
     return PROP_LABEL[p.kind] ? PROP_LABEL[p.kind](p) : null;
   };
-  const REWARD_DESC = { gold: 'Gold for the whole party, more when the lantern is low.', vigor: 'Permanently raises your maximum health and heals you.', forge: 'Rank up one of your boons.', oil: 'Refills part of the lantern for the whole party.', class: 'Choose a technique unique to your hero.', epic: 'Choose from epic boons.', relic: 'A hoard of relics: each hero takes one.' };
+  const REWARD_DESC = { gold: 'Gold for the whole party, more when the lantern is low.', vigor: 'Permanently raises your maximum health and heals you.', forge: 'Rank up one of your boons.', oil: 'Refills part of the lantern for the whole party.', boon: 'A boon from your paths (a new path while you have a free slot).', epic: 'Choose from epic boons.', relic: 'A hoard of relics: each hero takes one.' };
   const SHOP_DESC = { boon: 'Grants an extra boon pick with no common options.', oil: 'Lantern oil: refills part of the lantern for the whole party.', forge: 'Forge: rank up one of your boons.', potion: 'Heals a good chunk of your health.' };
   // Longer explanation shown above the prompt (null when there is none).
   R.propDesc = (p) => {
     if (p.kind === 'reward') {
-      const s = String(p.item);
-      if (s.indexOf('boon:') === 0) { const pa = ED.PATHS[s.slice(5)]; return pa ? `Choose a ${pa.name} boon. Opens the path if you have a free slot.` : null; }
-      return REWARD_DESC[s] || null;
+      return REWARD_DESC[String(p.item)] || null;
     }
     if (p.kind === 'campfire') return 'Rest: recover a chunk of your health. One use per hero.';
     if (p.kind === 'anvil') return 'Temper: rank up one of your boons. One use per hero.';
@@ -1001,26 +1000,21 @@
   };
   R.interactable = (p) => !p.state && p.kind !== 'sign' && p.kind !== 'merchant';
 
-  const PATH_COL = { pyre: '#ff7a2a', rime: '#7fe3ff', storm: '#ffe66b', steel: '#d9dfe8', blood: '#d43a5a', spirit: '#b78cff' };
-  // Colour of a reward-type string such as 'boon:pyre', 'gold', 'oil', 'relic' (unknown -> warm white).
+  const PATH_COL = { fire: '#ff7a2a', ice: '#7fe3ff', lightning: '#ffe66b', poison: '#9be33c', holy: '#fff0c2', shadow: '#a070ff', general: '#d9dfe8' };
+  // Colour of a reward-type string such as 'boon', 'gold', 'oil', 'relic' (unknown -> warm white). 'boon' wears the colour of the local hero's deepest path (R.mainPath).
   function rewardColor(s) {
     s = String(s || '');
-    if (s.indexOf('boon:') === 0) return PATH_COL[s.slice(5)] || '#ffe9a0';
-    return { gold: '#ffd36b', vigor: '#ff4a5a', forge: '#ff9a3a', oil: '#ffb35c', class: '#c98bff', epic: '#c98bff', relic: '#ffb02e', campfire: '#ff9a3a', anvil: '#ffb066' }[s] || '#ffe9a0';
+    if (s === 'boon') return PATH_COL[R.mainPath] || '#ffe9a0';
+    return { gold: '#ffd36b', vigor: '#ff4a5a', forge: '#ff9a3a', oil: '#ffb35c', epic: '#c98bff', relic: '#ffb02e', campfire: '#ff9a3a', anvil: '#ffb066' }[s] || '#ffe9a0';
   }
   R.rewardColor = rewardColor;
-  const REWARD_LABEL = { gold: 'Gold', vigor: 'Vigor', forge: 'Forge', oil: 'Lantern oil', class: 'Class technique', relic: 'Relic hoard', epic: 'Epic boon', campfire: 'Rest', anvil: 'Temper' };
-  // Short name of a reward string: 'boon:pyre' -> 'Boon of Pyre'.
-  R.rewardLabel = (s) => {
-    s = String(s || '');
-    if (s.indexOf('boon:') === 0) { const pa = ED.PATHS[s.slice(5)]; return 'Boon of ' + (pa ? pa.name : 'the Deep'); }
-    return REWARD_LABEL[s] || 'Reward';
-  };
-  // [icon, colour] for a reward string; cls (a hero class id) picks the glyph of 'class' rewards.
+  const REWARD_LABEL = { boon: 'Boon', gold: 'Gold', vigor: 'Vigor', forge: 'Forge', oil: 'Lantern oil', relic: 'Relic hoard', epic: 'Epic boon', campfire: 'Rest', anvil: 'Temper' };
+  // Short name of a reward string: 'boon' -> 'Boon'.
+  R.rewardLabel = (s) => REWARD_LABEL[String(s || '')] || 'Reward';
+  // [icon, colour] for a reward string; 'boon' shows the icon of the local hero's deepest path (a Generalist sees General).
   R.rewardIcon = (s, cls) => {
     s = String(s || '');
-    if (s.indexOf('boon:') === 0) { const pa = ED.PATHS[s.slice(5)]; return pa ? [pa.icon, pa.color] : ['star', '#ffe9a0']; }
-    if (s === 'class') { const k = ED.CLASSES[cls]; return k ? [k.icon, k.col.c] : ['scroll', '#c98bff']; }
+    if (s === 'boon') { const pa = ED.PATHS[R.mainPath]; return pa ? [pa.icon, pa.color] : ['star', '#ffe9a0']; }
     return { gold: ['coin', '#ffd36b'], vigor: ['heart', '#ff4a5a'], forge: ['anvil', '#ff9a3a'], oil: ['oil', '#ffb35c'], epic: ['star', '#c98bff'], relic: ['chest', '#ffb02e'], campfire: ['campfire', '#ff9a3a'], anvil: ['anvil', '#ffb066'] }[s] || ['star', '#ffe9a0'];
   };
   // Map/door glyph of a floor room: { icon, color, badge? } (null for plain rooms). Elite rooms add a skull badge.
@@ -1080,7 +1074,7 @@
 
   function drawProps(c, view, local, t) {
     for (const p of view.props) {
-      const done = !!(R.claimed && p.group && R.claimed[p.group] && (p.kind === 'campfire' || p.kind === 'anvil' || (p.kind === 'reward' && /^(boon:|class$|forge$|epic$|vigor$)/.test(p.item)))); // this hero already used it
+      const done = !!(R.claimed && p.group && R.claimed[p.group] && (p.kind === 'campfire' || p.kind === 'anvil' || (p.kind === 'reward' && /^(boon$|forge$|epic$|vigor$)/.test(p.item)))); // this hero already used it
       const G = done ? () => {} : (dx, dy, r, col, a) => R.emit(p.x + dx, p.y + dy, r, col, a), L = done ? () => {} : (dx, dy, r, col, k) => R.light(p.x + dx, p.y + dy, r, col, k);
       c.save(); c.translate(p.x, p.y);
       if (done) c.globalAlpha = 0.4;
@@ -1364,7 +1358,7 @@
     }
   }
 
-  // Drawn at the hero's origin after the sprite: evolution aura, blood shield, ambush glint, Bulwark.
+  // Drawn at the hero's origin after the sprite: evolution aura, shield, ambush glint, Bulwark.
   function drawHeroFx(c, p, t) {
     if (p.dead) return;
     const st = p.stats, evo = st && st.evo, low = R.quality === 'low', a0 = p.stealthT > 0 ? (p.pid === R.local ? 0.45 : 0.2) : 1;
@@ -1376,8 +1370,8 @@
       R.emit(p.x, p.y - 10, 24, col, 0.2 + Math.sin(t * 3 + (p.slot || 0)) * 0.05); R.light(p.x, p.y - 10, 62, col, 0.28);
     }
     if (p.shield > 0) {
-      const fr = U.clamp(p.shield / Math.max(1, p.maxHp * 0.25), 0.15, 1), rr = 12 + 9 * fr, wob = Math.sin(t * 4 + (p.slot || 0)) * 0.6;
-      c.fillStyle = U.rgba('#d43a5a', 0.1 + 0.14 * fr); c.strokeStyle = U.rgba('#ffc4d0', 0.5 + 0.3 * fr); c.lineWidth = 1.3;
+      const fr = U.clamp(p.shield / Math.max(1, p.maxHp * 0.12), 0.15, 1), rr = 12 + 9 * fr, wob = Math.sin(t * 4 + (p.slot || 0)) * 0.6; // ring full at a 12% shield (the Holy ceiling)
+      c.fillStyle = U.rgba('#9fd0ff', 0.1 + 0.14 * fr); c.strokeStyle = U.rgba('#e8f4ff', 0.5 + 0.3 * fr); c.lineWidth = 1.3;
       c.beginPath(); c.ellipse(0, -12, rr + wob, rr * 1.2 - wob, 0, 0, U.TAU); c.fill(); c.stroke();
       c.strokeStyle = U.rgba('#ffffff', 0.55); c.beginPath(); c.arc(0, -12, rr * 0.8, -2.5, -1.6); c.stroke();
     }
@@ -1628,8 +1622,8 @@
     return s;
   }
   // Floating damage number baked once per (string, colour, size in half units, crit); FX.drawTexts scales it to the animated size. Sprite origin = text centre, .fs = baked font size.
-  R.numSprite = (str, color, size, crit) => {
-    const bs = Math.round(size * 2) / 2, key = bs + (crit ? 'c' : 'n') + color + str;
+  R.numSprite = (str, color, size, crit, ol) => {
+    const bs = Math.round(size * 2) / 2, key = bs + (crit ? 'c' : 'n') + (ol || '') + color + str;
     let s = numC.get(key);
     if (s) return s;
     if (!mctx) mctx = document.createElement('canvas').getContext('2d');
@@ -1638,6 +1632,7 @@
     s = bake(-hw, -hh, hw, hh, false, (g) => {
       g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
       g.lineWidth = crit ? 4 : 3; g.strokeStyle = crit ? 'rgba(40,10,0,0.95)' : 'rgba(0,0,0,0.85)'; g.strokeText(str, 0, 0);
+      if (ol) { g.lineWidth = 1.5; g.strokeStyle = ol; g.strokeText(str, 0, 0); } // element rim between the dark outline and the fill
       g.fillStyle = color; g.fillText(str, 0, 0);
       if (crit) { g.fillStyle = 'rgba(255,255,255,0.4)'; g.save(); g.beginPath(); g.rect(-bs * 3, -bs * 0.6, bs * 6, bs * 0.55); g.clip(); g.fillText(str, 0, 0); g.restore(); }
     });
