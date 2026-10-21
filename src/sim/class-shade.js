@@ -1,5 +1,4 @@
 // Shade: Shadowstep and Vanish (base kits from ED.SKILLS numbers) and the Shade hook table ED.CLS.shade.
-// Route cards with behaviour still to build here: Bladedancer (Momentum), Culling Blades, Thousand Cuts, Assassinate's refund, Afterimage, Night's Edge, Veil of Night, Open Veins, Rupture (DESIGN-classes section 7).
 (function (ED) {
   'use strict';
   const U = ED.U;

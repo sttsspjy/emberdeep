@@ -1,5 +1,5 @@
 // Usage: node tools/sim.js <heroes> <runs> <botSkill 0-1> <meta none|mid|max> [classes|-] [pact] [--pick=random|smart] [--start=random|class|generalist|rotate|<gateId>] [--gates=1|2] [--force=id[@slot],...]
-//   [--route=attack|skill1|skill2|element|random|rotate] [--fork=0|1|random|rotate] [--weapon=0|1|2|rotate] [--mastery=smart|fork] [--seed0=N] [--explore=minLight] [--strata=N] [--out=rows.json] [--pair=rows.json] [--quiet]   (parallel batches: tools/simpool.js)
+//   [--route=attack|skill1|skill2|element|random|rotate] [--fork=0|1|random|rotate] [--weapon=0|1|2|rotate] [--mastery=smart|fork] [--aimnoise=<angle rad>,<point px>|0] [--seed0=N] [--explore=minLight] [--strata=N] [--out=rows.json] [--pair=rows.json] [--quiet]   (parallel batches: tools/simpool.js)
 // Headless simulation harness: loads the game's sim files into this Node context and drives bot heroes through full runs (deterministic per seed: the bot has its own seeded RNG).
 // Bot policy: fight, claim room rewards, use rest sites and shops, then explore unvisited rooms nearest-first while entering the next one
 // (its light cost paid) leaves the lantern at least EXPLORE_MIN_LIGHT full, else head for the boss (the exploration/lantern trade-off).

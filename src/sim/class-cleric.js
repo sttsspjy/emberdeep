@@ -1,5 +1,4 @@
 // Cleric: Sanctuary and Judgment (base kits from ED.SKILLS numbers), the Judgment hammers and the Cleric hook table ED.CLS.cleric.
-// Route cards with behaviour still to build here: Dawnbringer's Lantern waves, Sunhammer, Crusader, Holy Fury, Hallowed Ground, Aura's Embolden, Second Flight, Sentence, Guardian Light, Prism (DESIGN-classes section 8).
 (function (ED) {
   'use strict';
   const U = ED.U, C = ED.CONST;

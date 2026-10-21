@@ -1,5 +1,4 @@
 // Ranger: Volley and Rain of Arrows (base kits from ED.SKILLS numbers) and the Ranger hook table ED.CLS.ranger.
-// Route cards with behaviour still to build here: Deadeye, Ballista, Quickdraw, Hunter's Mark, Scattershot, Skyfall, Hail of Thorns' rider, Infected Wounds' Gangrene, Contagion (see DESIGN-classes section 5).
 (function (ED) {
   'use strict';
   const U = ED.U;

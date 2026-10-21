@@ -1,5 +1,4 @@
 // Necromancer: Raise Legion and Bone Harvest (base kits from ED.SKILLS numbers), the minions (spawnMinion, updateAllies) and the Necromancer hook table ED.CLS.necro.
-// Route cards with behaviour still to build here: Soul Command's Hex, Gravecaller, Soul Barrage, Bone Spikes' Boneyard, Bone Knights, Corpse Explosion, Bone Armor, Grave Pact's Doom, Abyssal Toll, Rise Again (DESIGN-classes section 9).
 (function (ED) {
   'use strict';
   const U = ED.U, Sim = ED.Sim, C = ED.CONST;

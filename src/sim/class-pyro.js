@@ -1,5 +1,4 @@
 // Pyromancer: Flame Nova and Meteor (base kits from ED.SKILLS numbers) and the Pyromancer hook table ED.CLS.pyro.
-// Route cards with behaviour still to build here: Pyroclast (Channel), Magma Heart, Ember Rush, Twin Nova's echo and pull, Phoenix Mantle's shield and flare, Comet, Meteor Shower, White Heat, Heat Engine (DESIGN-classes section 6).
 (function (ED) {
   'use strict';
 
