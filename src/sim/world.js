@@ -581,7 +581,6 @@
         if (d < target.r + 8) { this.collect(target, pk); continue; }
       }
       pk.x += pk.vx * dt; pk.y += pk.vy * dt;
-      Sim.resolve({ x: pk.x, y: pk.y, r: 4 }, this.room, this.locked, true);
       keep.push(pk);
     }
     this.pickups = keep;

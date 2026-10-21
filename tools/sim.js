@@ -1,5 +1,5 @@
-// Usage: node tools/sim.js <heroes> <runs> <botSkill 0-1> <meta none|mid|max> [classes|-] [pact] [--pick=random|smart] [--force=id,id] [--seed0=N] [--explore=minLight] [--quiet]   (parallel batches: tools/simpool.js)
-// Headless simulation harness: loads the game's sim files in a VM and drives bot heroes through full runs (deterministic per seed: the bot has its own seeded RNG).
+// Usage: node tools/sim.js <heroes> <runs> <botSkill 0-1> <meta none|mid|max> [classes|-] [pact] [--pick=random|smart] [--force=id,id] [--seed0=N] [--explore=minLight] [--strata=N] [--quiet]   (parallel batches: tools/simpool.js)
+// Headless simulation harness: loads the game's sim files into this Node context and drives bot heroes through full runs (deterministic per seed: the bot has its own seeded RNG).
 // Bot policy: fight, claim room rewards, use rest sites and shops, then explore unvisited rooms nearest-first while entering the next one
 // (its light cost paid) leaves the lantern at least EXPLORE_MIN_LIGHT full, else head for the boss (the exploration/lantern trade-off).
 // Pick policies: 'random' takes a random card; 'smart' (PICK=smart) follows the build order in smartScore (evolution > keystone > duo > owned path > gate while < 2 paths > neutral).
@@ -12,11 +12,9 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..', 'src') + '/';
 const files = ['util.js', 'data/biomes.js', 'data/enemies.js', 'data/classes.js', 'data/boons.js', 'data/classboons.js', 'data/relics.js', 'data/meta.js', 'save.js',
   'sim/dungeon.js', 'sim/stats.js', 'sim/world.js', 'sim/combat.js', 'sim/build.js', 'sim/skills.js', 'sim/ai.js', 'sim/bosses.js', 'sim/rooms.js'];
-const ctx = { console, Math, Date, Object, Array, Set, Map, JSON, Uint8Array, Int16Array, Int32Array, Number, String, Error, parseInt, isNaN };
-ctx.globalThis = ctx;
-vm.createContext(ctx);
-for (const f of files) vm.runInContext(fs.readFileSync(ROOT + f, 'utf8'), ctx, { filename: f });
-const ED = ctx.ED;
+// Main context, not vm.createContext: inside a vm context every global read (Math, Object, ...) goes through the context interceptor and the sim runs ~3x slower.
+for (const f of files) vm.runInThisContext(fs.readFileSync(ROOT + f, 'utf8'), { filename: f });
+const ED = globalThis.ED;
 const U = ED.U, T = ED.CONST.TILE, D = ED.Dungeon;
 
 const EXPLORE_MIN_LIGHT = 0.3; // the bot stops exploring when the next room would leave the lantern below this fraction, and goes for the boss
@@ -27,24 +25,43 @@ const NEUTRAL_PREF = ['edge', 'quick', 'vigor', 'plating', 'focus', 'evade', 'wi
 
 // First step toward (tx, ty): the shortest path that stays off floor hazards, else the shortest path (a hero walks around hazards when it can).
 function bfsDir(room, locked, sx, sy, tx, ty) { return bfsStep(room, locked, sx, sy, tx, ty, true) || bfsStep(room, locked, sx, sy, tx, ty, false); }
-function bfsStep(room, locked, sx, sy, tx, ty, safe) {
-  const w = room.w, h = room.h;
-  const s = Math.floor(sy / T) * w + Math.floor(sx / T), g = Math.floor(ty / T) * w + Math.floor(tx / T);
-  if (s === g || s < 0 || s >= w * h || g < 0 || g >= w * h) return [tx - sx, ty - sy];
-  const prev = new Int32Array(w * h).fill(-1); prev[s] = s;
-  const q = [s];
-  while (q.length) {
-    const i = q.shift(); if (i === g) break;
-    const x = i % w;
-    for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w]) {
-      if (j < 0 || j >= w * h || prev[j] >= 0) continue;
-      const t = room.tiles[j];
-      if (t === 0 || (t === 4 && !safe) || (t === 5 && !locked)) { prev[j] = i; q.push(j); }
+// Walking distance to goal tile g (-1: unreachable) over the tiles a hero may enter (safe: hazards excluded); cached per room, lock state and goal (room tiles never change after floor generation).
+const fields = new Map(); let fieldRoom = null;
+function goalField(room, locked, g, safe) {
+  if (room !== fieldRoom) { fields.clear(); fieldRoom = room; }
+  const key = g * 4 + (locked ? 2 : 0) + (safe ? 1 : 0);
+  let f = fields.get(key);
+  if (f) return f;
+  const w = room.w, n = w * room.h, tiles = room.tiles;
+  const ok = (t) => t === 0 || (t === 4 && !safe) || (t === 5 && !locked);
+  f = new Int32Array(n).fill(-1);
+  if (ok(tiles[g])) {
+    const q = new Int32Array(n); let qh = 0, qt = 0;
+    f[g] = 0; q[qt++] = g;
+    while (qh < qt) {
+      const i = q[qh++], x = i % w, d = f[i] + 1;
+      if (x > 0 && f[i - 1] < 0 && ok(tiles[i - 1])) { f[i - 1] = d; q[qt++] = i - 1; }
+      if (x < w - 1 && f[i + 1] < 0 && ok(tiles[i + 1])) { f[i + 1] = d; q[qt++] = i + 1; }
+      if (i - w >= 0 && f[i - w] < 0 && ok(tiles[i - w])) { f[i - w] = d; q[qt++] = i - w; }
+      if (i + w < n && f[i + w] < 0 && ok(tiles[i + w])) { f[i + w] = d; q[qt++] = i + w; }
     }
   }
-  if (prev[g] < 0) return safe ? null : [tx - sx, ty - sy];
-  let c = g;
-  while (prev[c] !== s && c !== s) c = prev[c];
+  if (fields.size >= 256) fields.clear();
+  fields.set(key, f);
+  return f;
+}
+// First step of the breadth-first path (neighbour order W, E, N, S): the first neighbour of s with the least distance to g.
+function bfsStep(room, locked, sx, sy, tx, ty, safe) {
+  const w = room.w, n = w * room.h;
+  const s = Math.floor(sy / T) * w + Math.floor(sx / T), g = Math.floor(ty / T) * w + Math.floor(tx / T);
+  if (s === g || s < 0 || s >= n || g < 0 || g >= n) return [tx - sx, ty - sy];
+  const f = goalField(room, locked, g, safe), x = s % w;
+  let c = -1, best = 1e9;
+  if (x > 0 && f[s - 1] >= 0 && f[s - 1] < best) { best = f[s - 1]; c = s - 1; }
+  if (x < w - 1 && f[s + 1] >= 0 && f[s + 1] < best) { best = f[s + 1]; c = s + 1; }
+  if (s - w >= 0 && f[s - w] >= 0 && f[s - w] < best) { best = f[s - w]; c = s - w; }
+  if (s + w < n && f[s + w] >= 0 && f[s + w] < best) { best = f[s + w]; c = s + w; }
+  if (c < 0) return safe ? null : [tx - sx, ty - sy];
   const nx = (c % w + 0.5) * T, ny = (Math.floor(c / w) + 0.5) * T;
   return [nx - sx, ny - sy];
 }
@@ -246,7 +263,7 @@ function runBot(opts) {
   const grant0 = w.grantOffer, give0 = w.giveRelic, drop0 = w.dropGold;
   w.grantOffer = function (p, spec) { const k = spec && spec.src === 'room' ? 'room' : spec && spec.src || 'level'; rec.offers[k] = (rec.offers[k] || 0) + 1; return grant0.call(this, p, spec); };
   w.giveRelic = function (p, id) { const k = this.room ? this.room.type : '?'; rec.relicsBy[k] = (rec.relicsBy[k] || 0) + 1; return give0.call(this, p, id); };
-  w.dropGold = function (x, y, total) { rec.goldIn += Math.round(total); return drop0.call(this, x, y, total); };
+  w.dropGold = function (x, y, total, exact) { rec.goldIn += Math.round(exact ? total : total * ED.World.GOLD_MUL); return drop0.call(this, x, y, total, exact); };
   const ctl = {};
   for (const p of w.players.values()) ctl[p.pid] = { atk: 0, skill: 0, skill2: 0, dash: 0, goal: null, gl: {}, attn: true, attnT: 0 };
   const dt = 1 / 60;
@@ -355,6 +372,7 @@ function runBot(opts) {
     w.fx.length = 0; w.msgs.length = 0;
     if (w.roomTime > 150 && w.locked && !w.boss) { log.push('  STUCK in room ' + w.roomId + ' type ' + w.room.type + ' hostiles ' + w.hostiles()); break; }
     if (w.roomTime > 420 && !w.locked && w.state === 'play') { log.push('  IDLE in room ' + w.roomId + ' type ' + w.room.type); break; }
+    if (opts.maxStratum && w.stratum > opts.maxStratum) break; // --strata=N: stop on entering stratum N+1 (strata 1..N play out exactly as in a full run)
   }
   strata.push(Math.round(w.time - stratumStart));
   rec.dealtStrata.push(Math.round(totalDealt() - dealt0));
@@ -457,12 +475,12 @@ if (require.main === module) {
   const results = [];
   for (let i = 0; i < runs; i++) {
     const t0 = Date.now();
-    const r = runBot({ seed: seed0 + i * 7, n, cls: [cls[i % cls.length]].concat(cls), skill, up, pact: +(args[5] || 0), mastery, pick, force, exploreMin: flags.explore === undefined ? undefined : +flags.explore });
+    const r = runBot({ seed: seed0 + i * 7, n, cls: [cls[i % cls.length]].concat(cls), skill, up, pact: +(args[5] || 0), mastery, pick, force, exploreMin: flags.explore === undefined ? undefined : +flags.explore, maxStratum: flags.strata === undefined ? undefined : +flags.strata });
     results.push(r);
     if (!flags.quiet) {
       console.log(`run ${i} ${cls[i % cls.length]}: ${r.victory ? 'WIN' : r.state} stratum ${r.stratum} time ${U.fmtTime(r.time)} lvl ${r.level} kills ${r.kills} relics ${r.relics} rooms ${r.rooms.visited}/${r.rooms.total} lightAtBoss [${r.lightAtBoss.join(' ')}] strata [${r.strata.map(U.fmtTime).join(' ')}] (${Date.now() - t0}ms)`);
       for (const l of r.log) console.log(l);
     }
   }
-  console.log(`\npick=${pick}${force.length ? ' force=' + force.join(',') : ''}\n` + summarize(results));
+  console.log(`\npick=${pick}${force.length ? ' force=' + force.join(',') : ''}${flags.strata ? ' strata<=' + flags.strata + ' (capped runs: win, depth and death lines do not apply)' : ''}\n` + summarize(results));
 }
