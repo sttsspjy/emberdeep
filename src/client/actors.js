@@ -125,11 +125,12 @@
 
   // Held weapon / shield of a foe: hand = pivot in art px from the feet of the right-facing body; rest / up / down: weapon angles (right-facing, radians) at rest, wound up and after the slam.
   const RIG = {
-    skelknight: { w: 'weapon.alt.rusty_sword', hand: [9, -11], rest: -1.15, up: -2.35, down: 1.2, sh: 'shield.buckler', shPos: [-5, -11] },
+    skelknight: { w: 'weapon.alt.rusty_sword', hand: [9, -11], rest: -1.15, up: -2.35, down: 1.2, sh: 'shield.buckler', guard: 11, shPos: [0, -10] },
     frostknight: { w: 'weapon.longsword', hand: [9, -11], rest: -1.15, up: -2.35, down: 1.2, sh: 'shield.tower', shPos: [-6, -12] },
     forgeknight: { w: 'weapon.warhammer', hand: [9, -11], rest: -0.95, up: -2.4, down: 1.25, sh: 'shield.round', shPos: [-5, -11] },
     voidknight: { w: 'weapon.longsword', hand: [9, -11], rest: -1.15, up: -2.35, down: 1.2, sh: 'shield.wood', shPos: [-5, -11] },
-    sentinel: { sh: 'shield.tower', guard: true, shPos: [0, -13] },
+    sentinel: { sh: 'shield.tower', guard: 10, shPos: [0, -13] },
+    crab: { arc: true },
     bonearcher: { w: 'weapon.crossbow', hand: [4, -6], bow: true },
     reaver: { w: 'weapon.alt.cleaver', hand: [5, -6], rest: -0.7, up: -2.2, down: 1.1 },
   };
@@ -278,13 +279,18 @@
   // behind = true draws the pieces that belong under the body (the shield on the far side, the weapon when it points up).
   function rigDraw(c, e, s, info, rig, ox, oy, fa, flip, t, behind) {
     const sg = flip ? -1 : 1;
-    if (rig.guard) { // tower shield turned toward the guard direction (aimA); in front of the body unless it faces up
-      const la = e.aimA || 0, up = Math.sin(la) < -0.3;
-      if (up !== behind) return;
-      put(c, rig.sh, 0, ox + Math.round(Math.cos(la) * 9), oy + (rig.shPos[1]) * K + Math.round(Math.sin(la) * 5), false, '', 1);
+    if (rig.arc) { // a pixel arc of shell where the foe blocks (aimA turns toward the hero)
+      const G = e.def.guard, la = e.aimA || 0;
+      if ((Math.sin(la) < -0.3) !== behind) return;
+      const h = Math.min(G.arc, 2.8) / 2, r = e.r + 5, n = Math.max(5, Math.round(h * 2 * r / 5));
+      for (let i = 0; i <= n; i++) { const a = la - h + 2 * h * i / n, x = q2(Math.cos(a) * r) + ox, y = q2(Math.sin(a) * r * 0.7) + oy - 12; c.fillStyle = '#222222'; c.fillRect(x - 3, y - 3, 6, 6); }
+      for (let i = 0; i <= n; i++) { const a = la - h + 2 * h * i / n, x = q2(Math.cos(a) * r) + ox, y = q2(Math.sin(a) * r * 0.7) + oy - 12; c.fillStyle = i === n >> 1 ? '#ffffff' : e.def.col.c; c.fillRect(x - 2, y - 2, 4, 4); }
       return;
     }
-    if (rig.sh && !behind) put(c, rig.sh, 0, ox + rig.shPos[0] * K * sg, oy + rig.shPos[1] * K, flip, '', 1); // the off-hand shield rides over the body
+    if (rig.guard) { // the guard shield stands where the foe blocks (aimA turns toward the hero); behind the body when that points up
+      const la = e.aimA || 0, up = Math.sin(la) < -0.3;
+      if (up === behind) put(c, rig.sh, 0, ox + Math.round(Math.cos(la) * rig.guard), oy + rig.shPos[1] * K + Math.round(Math.sin(la) * rig.guard * 0.55), false, '', 1);
+    } else if (rig.sh && !behind) put(c, rig.sh, 0, ox + rig.shPos[0] * K * sg, oy + rig.shPos[1] * K, flip, '', 1); // the off-hand shield rides over the body
     if (!rig.w || behind) return; // the weapon is always seen in front of the (three-quarter view) body
     const wa = rigAngle(e, s, rig, fa, flip, t), hx = ox + rig.hand[0] * K * sg, hy = oy + rig.hand[1] * K;
     const rr = A.anim(rig.w); if (!rr) return;
@@ -323,6 +329,11 @@
     Sp.glow(c, 0, -r, r * 1.2, e.def.col.c, 0.18);
   }
 
+  // True when actor o stands still (its drawn position may sit on the 2 px art grid, so its pixels line up with the tiles).
+  AC.still = (o) => {
+    const s = o.pid !== undefined ? HS.get(o.pid) : FS.get(o.id);
+    return !!s && s.sp < 5 && !o.moving && !o.dashing;
+  };
   // Wind-up progress 0..1 of a foe's current telegraph (0 when none).
   AC.windupP = (e) => { const s = FS.get(e.id); return s && s.wpv > 0 && s.st === e.st ? s.wpv : 0; };
 

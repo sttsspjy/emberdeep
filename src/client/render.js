@@ -268,7 +268,7 @@
     crowdLod(view, local, nFoe, dn);
     drawList.length = dn; drawList.sort(byY);
     for (const it of drawList) {
-      const o = it.o, rim = low ? null : rimLight(o.x, o.y, it.k === 0 ? 16 : 0), px = Math.round(o.x), py = Math.round(o.y); // feet on the buffer pixel grid
+      const o = it.o, rim = low ? null : rimLight(o.x, o.y, it.k === 0 ? 16 : 0), still = atlasOn && it.k < 2 && AC.still(o), px = still ? Math.round(o.x / 2) * 2 : Math.round(o.x), py = still ? Math.round(o.y / 2) * 2 : Math.round(o.y); // feet on the buffer pixel grid (the 2 px art grid while standing still)
       if (rim) { shDX = -rim.dx * 0.28; shDY = -rim.dy * 0.12; } else { shDX = 0; shDY = 0; }
       if (it.k === 1) { // foe: atlas art (pose offsets are art-px steps), else the procedural look with pose offset, lean and squash (F.xform) in one matrix with the mirror
         const bx = px - ix, by = py - iy;
@@ -337,7 +337,7 @@
     for (let i = 0; i < dn; i++) {
       const it = drawList[i], o = it.o;
       if (it.k > 1 || !it.full || o.burrowed || o.dead || o.downed || (o.hp !== undefined && o.hp <= 0)) continue; // far foes of a crowd (crowdLod) keep the plain multiply
-      const px = Math.round(o.x), py = Math.round(o.y);
+      const still = AC.still(o), px = still ? Math.round(o.x / 2) * 2 : Math.round(o.x), py = still ? Math.round(o.y / 2) * 2 : Math.round(o.y); // the same snapped spot as the lit draw
       if (px < ix - 90 || px > ix + R.bw + 90 || py < iy - 110 || py > iy + R.bh + 90) continue;
       const a = (ACTOR_FLOOR - R.lightAt(px - ix, py - iy - 10)) * 0.95;
       if (a > 0.04) AC.replay(c, o, it.k, px, py, a);
