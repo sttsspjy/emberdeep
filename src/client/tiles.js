@@ -783,7 +783,8 @@
     const T_ = (x, y) => (x < 0 || y < 0 || x >= W || y >= H ? 1 : tiles[y * W + x]);
     const isM = (x, y) => { if (y >= H) return false; if (x < 0 || y < 0 || x >= W) return true; const t = tiles[y * W + x]; return t === 1 || t === 2; };
     const faceAt = (x, y) => isM(x, y) && !isM(x, y + 1);
-    const isCol = (x, y) => T_(x, y) === 2 && !isM(x - 1, y) && !isM(x + 1, y) && !isM(x, y - 1) && !isM(x, y + 1);
+    const colArt = !!sh.rects['prop.column'];
+    const isCol = (x, y) => colArt && T_(x, y) === 2 && !isM(x - 1, y) && !isM(x + 1, y) && !isM(x, y - 1) && !isM(x, y + 1);
     const ao = U.shade(P.wallShadow, -0.5), rr = U.RNG(s ^ 0x7111e);
     const glowAt = (c, x, y, r, col, a) => { c.globalAlpha = a; c.drawImage(ED.Render.glowSprite(col), x - r, y - r, r * 2, r * 2); c.globalAlpha = 1; };
 
@@ -1011,18 +1012,16 @@
       for (const fo of e.fountains) sblit(c, sh, 'tile.fountain.mid.' + fo.c, loopF(t, 6, 3, fo.x), fo.x * AT, AT);
     } else {
       for (const tc of room.torches) {
-        const f = loopF(t, 10, 8, tc.x * 3), x = (Math.floor(tc.x) + 0.5) * T, fl = Math.sin(t * 13 + x) * 1.2 + Math.sin(t * 23 + x * 1.7) * 0.7;
-        c.globalAlpha = 0.3; sblit(c, sh, 'tile.torch.wall', f, Math.floor(tc.x) * AT, TORCH_Y); c.globalAlpha = 1;
-        R_.glow(c, x, TORCH_Y * K + 8, 22 + fl * 2, P.light, 0.4);
+        const x = (Math.floor(tc.x) + 0.5) * T, fl = Math.sin(t * 13 + x) * 1.2 + Math.sin(t * 23 + x * 1.7) * 0.7;
+        R_.glow(c, x, TORCH_Y * K + 8, 22 + fl * 2, P.light, 0.5);
       }
       if (e.hz && !low) {
         const k = biome.hazard, a = k === 'lava' ? 0.2 : k === 'poison' ? 0.14 : k === 'void' ? 0.1 : 0;
         if (a) { const f = Math.floor(t * 5) % HZ_NF; c.globalAlpha = a; for (let i = 0; i < e.hzCells.length; i++) { const q = e.hzCells[i]; c.drawImage(e.hz, f * AT, i * AT, AT, AT, q[0] * T, q[1] * T, T, T); } c.globalAlpha = 1; }
       }
       for (const ft of e.ftorches) {
-        const f = loopF(t, 10, 8, ft.x * 0.1), fl = Math.sin(t * 13 + ft.x) * 1.2 + Math.sin(t * 23 + ft.x * 1.7) * 0.7;
-        c.globalAlpha = 0.3; sblit(c, sh, 'tile.torch.floor', f, ft.x / K - 8, ft.y / K - 24); c.globalAlpha = 1;
-        R_.glow(c, ft.x, ft.y - 32, 22 + fl * 2, P.light, 0.4);
+        const fl = Math.sin(t * 13 + ft.x) * 1.2 + Math.sin(t * 23 + ft.x * 1.7) * 0.7;
+        R_.glow(c, ft.x, ft.y - 32, 22 + fl * 2, P.light, 0.5);
       }
       for (const fo of e.fountains) if (fo.c === 'red') { c.globalAlpha = 0.4; sblit(c, sh, 'tile.fountain.mid.red', loopF(t, 6, 3, fo.x), fo.x * AT, AT); c.globalAlpha = 1; }
       for (const d of Tl.dynamics(room)) { // glow pools of room lights (fungus, lava, candles...)
