@@ -158,6 +158,10 @@
     }
   });
 
+  // ---- foe mark: Ruin Seal ---- a gold sigil in the overhead glyph row of every Sealed foe (host and solo foes carry sealT, mirror foes sealed); the atlas has no seal sprite, the render.js GLYPH.seal stub is the art.
+  const SEAL = { id: '', ramp: '', stub: 'seal' };
+  CFX.mark.push((e) => (e.sealed || e.sealT > 0 ? SEAL : null));
+
   // ---- shot hook: the thrown shield ----
   // Rim glint: a white pixel circling the rim every other 80 ms; Shield Orbit (a shield circling its owner at about 307 px/s) also gets a dashed gold ring along its path.
   CFX.shot.shield = (c, pr, t, x, y) => {

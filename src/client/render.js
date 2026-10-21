@@ -1513,6 +1513,7 @@
     weak: { rows: ['11111', '11211', '12211', '.121.', '..1..'], c: { 1: '#ffcf5a', 2: '#5a3a0c' } }, // Verdict's weaken mark (cls-cleric.js): the guard shape in gold
     hex: { rows: ['.111.', '12221', '12321', '12221', '.111.'], c: { 1: '#7dffd9', 2: '#1c0c3a', 3: '#a070ff' } },
     hext: { rows: ['41114', '12321', '13331', '12321', '41114'], c: { 1: '#c4ffee', 2: '#1c0c3a', 3: '#ffffff', 4: '#a070ff' } },
+    seal: { rows: ['.111.', '11211', '12221', '11211', '.111.'], c: { 1: '#ffd36b', 2: '#3a2606' } }, // Ruin Seal sigil (cls-knight.js): a gold disc with a dark cross
   };
   function glyphStub(c, g, cx, bottom) {
     const rows = g.rows, x0 = cx - rows[0].length, y0 = bottom - rows.length * 2;
