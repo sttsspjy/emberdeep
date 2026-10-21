@@ -21,7 +21,7 @@ const FORKS = [ // base, kind, dmg, rate, {field: value}
   ['inferno', 'heavy', 42.9, 1.3, { r: 10.8, speed: 225 }], ['inferno', 'swift', 18.2, 0.55, { speed: 300 }],
   ['daggers', 'heavy', 19.8, 0.378, { range: 46.2, arc: 1.43, knock: 96 }], ['daggers', 'swift', 6.29, 0.12, { range: 42, knock: 30 }],
   ['knives', 'heavy', 13.9, 0.648, { r: 4.8, speed: 432, knock: 80 }], ['knives', 'swift', 4.24, 0.198, { speed: 576, spread: 0.19 }],
-  ['scythes', 'heavy', 31.68, 0.864, { range: 57.2, arc: 6.3, knock: 144 }], ['scythes', 'swift', 9.68, 0.264, { range: 52, knock: 45 }], // Crescent Scythes tuned 13 -> 16 (boss time to kill, DESIGN-classes 13.2 target 3)
+  ['scythes', 'heavy', 31.68, 0.864, { range: 57.2, arc: 6.3, knock: 144 }], ['scythes', 'swift', 9.68, 0.264, { range: 52, knock: 45 }],
   ['mace', 'heavy', 33.7, 0.756, { range: 50.6, arc: 1.87, knock: 224 }], ['mace', 'swift', 10.3, 0.231, { range: 46, knock: 70 }],
   ['dawnhammer', 'heavy', 63.4, 1.296, { range: 57.2, arc: 2.42, knock: 320 }], ['dawnhammer', 'swift', 19.4, 0.396, { range: 52, knock: 110 }],
   ['lantern', 'heavy', 21.8, 0.756, { r: 7.2, speed: 270, pierce: 1, knock: 80 }], ['lantern', 'swift', 6.66, 0.231, { speed: 360, pierce: 1 }],

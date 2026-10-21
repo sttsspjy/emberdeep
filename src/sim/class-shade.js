@@ -1,5 +1,5 @@
 // Shade: Shadowstep and Vanish (base kits from ED.SKILLS numbers), the Shade route cards that act on them (Momentum, execution crits, Whirlwind, Twin Cut, Afterimage, Ambush rules, Veil, Open Veins, Rupture) and the hook table ED.CLS.shade.
-// Hero fields: momN / momT (Momentum), stepQ (Twin Cuts waiting), ambSet / ambTgt / ambMul / ambRef (the Ambush in flight: foes it struck, sweep targets, its damage factor, Shadowstep refunded).
+// Hero fields: momN / momT (Momentum), stepQ (Twin Cuts waiting), ambSet / ambTgt / ambMul / ambRef / ambRupt (the Ambush in flight: foes it struck, sweep targets, its damage factor, Shadowstep refunded, target ruptured).
 (function (ED) {
   'use strict';
   const U = ED.U, C = ED.CONST, W = ED.World.prototype;
@@ -76,11 +76,11 @@
   }
 
   // Vanish: smoke that slows foes and blinds each non-boss foe inside for a budget (elites half, then a cooldown); the hero is unseen for a while and the next attack is an Ambush.
-  // Veil of Night shields the hero once per 12 s, Shroud adds 2 s to the smoke.
+  // Veil of Night shields the hero once per 12 s (the class shield window bounds it); Shroud's longer smoke is the card's s2Dur.
   ED.CAST.vanish = function (p, a, data, st, N) {
     const sm = N.p.smoke, bl = N.p.blind, stealth = 2.5 + st.stealthDur, bud = {};
     p.stealthT = stealth; p.ambush = true; p.ambushT = stealth + 0.5;
-    this.addZone({ kind: 'smoke', x: p.x, y: p.y, r: sm.r, dur: sm.dur + (st.shroud ? 2 : 0), team: 0, owner: p.pid, custom: true,
+    this.addZone({ kind: 'smoke', x: p.x, y: p.y, r: sm.r, dur: sm.dur, team: 0, owner: p.pid, custom: true,
       update: (world, z, dt) => {
         for (const e of world.enemies) {
           if (e.hp <= 0 || e.spawnT > 0 || U.dist2(e.x, e.y, z.x, z.y) >= (z.r + e.r) ** 2) continue;
@@ -139,7 +139,7 @@
 
   ED.CLS.shade = {
     init(p) {
-      p.stepQ = []; p.ambSet = null; p.ambTgt = []; p.ambMul = 1; p.ambRef = false;
+      p.stepQ = []; p.ambSet = null; p.ambTgt = []; p.ambMul = 1; p.ambRef = false; p.ambRupt = false;
     },
     // Momentum runs out as a whole; Twin Cuts fire when their delay is up; the Ambush Sweep strikes after the Ambush's own hits have landed.
     tick(p, dt) {
@@ -171,7 +171,7 @@
     },
     // An Ambush attack starts: a fresh set of foes it has struck, nothing refunded yet.
     ambush(p, st) {
-      p.ambSet = new Set(); p.ambTgt.length = 0; p.ambRef = false;
+      p.ambSet = new Set(); p.ambTgt.length = 0; p.ambRef = false; p.ambRupt = false;
     },
     // Momentum: +momentum damage per stack. Culling Blades marks the execution (a crit is forced in hitCrit; hits with a readied crit are marked here).
     hitMul(p, e, src) {
@@ -205,7 +205,7 @@
       if (p.ambSet.has(e.id)) return;
       p.ambSet.add(e.id);
       if (st.ambushCleave > 0) p.ambTgt.push({ x: e.x, y: e.y, mul: src.mul });
-      if (st.rupture && e.hp > 0) this.rupture(e, p, st.rupture, 'vanish.rupture', true);
+      if (st.rupture && e.hp > 0 && !p.ambRupt) { p.ambRupt = true; this.rupture(e, p, st.rupture, 'vanish.rupture', true); }
     },
     // Whirlwind (Thousand Cuts rider): at full Momentum every 4th attack also spins around the hero at bladeStorm of the weapon (knives: a ring of 6).
     attack(p, a, st, w) {

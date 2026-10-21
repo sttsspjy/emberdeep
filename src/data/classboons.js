@@ -123,7 +123,7 @@
     desc: 'Shadowstep: +{s1Dmg} damage, recharges {s1Cdr} faster, and each foe it cuts readies {stepStack:ck} more crit attack (up to {stackMax:ck3}).', mods: { s1Cdr: 0.2, s1Dmg: 0.2, stepStack: 1, stackMax: 2 } });
   card('shade', 'skill1', 2, 's_s1_a', { name: 'Assassinate', icon: 'dagger', tag: 'Burst',
     desc: 'Shadowstep deals +{assassinate} to foes below 50% health, and a Shadowstep kill refunds it (at most once per 1.5 s).[ Shadowstep deals +{s1Dmg}.]',
-    rider: 'Twin Cut: a second slash runs the Shadowstep path 0.15 s later at {stepTwin}.', mods: { assassinate: 0.5 }, up: { s1Dmg: 0.1 }, r3: { stepTwin: 0.5 } });
+    rider: 'Twin Cut: a second slash runs the Shadowstep path 0.15 s later at {stepTwin}.', mods: { assassinate: 0.4 }, up: { s1Dmg: 0.1 }, r3: { stepTwin: 0.5 } });
   card('shade', 'skill1', 2, 's_s1_b', { name: 'Afterimage', icon: 'mirror', tag: 'Guard',
     desc: 'Shadowstep leaves an afterimage where you stood; 1.2 s later it bursts (r80), hurting foes and blinding them 1 s (not bosses).[ Shadowstep deals +{s1Dmg}.]',
     rider: 'Lure: just before it bursts, the afterimage pulls foes within {afterPull:n} toward it.', mods: { afterimage: 1 }, up: { s1Dmg: 0.1 }, r3: { afterPull: 120 } });
@@ -134,7 +134,7 @@
     rider: 'Ambush Sweep: Ambush also strikes every foe within {ambushCleave:n} of its target.', mods: { ambushMul: 1.5, nightsEdge: 1 }, up: { ambushMul: 0.25 }, r3: { ambushCleave: 70 } });
   card('shade', 'skill2', 2, 's_s2_b', { name: 'Veil of Night', icon: 'cloak', tag: 'Guard',
     desc: 'Vanish shields you for {veil} max health (at most once per 12 s); your smoke blinds each foe {veilBlind:s} longer (elites half); stealth lasts {stealthDur:s} longer.',
-    rider: 'Shroud: your smoke slows foes 60% (from 40%) and lasts 2 s longer.', mods: { veil: 0.05, veilBlind: 1, stealthDur: 1 }, up: { veil: 0.005 }, r3: { shroud: 1 } });
+    rider: 'Shroud: your smoke slows foes 60% (from 40%) and lasts {s2Dur:s} longer.', mods: { veil: 0.03, veilBlind: 1, stealthDur: 1 }, up: { stealthDur: 0.5 }, r3: { shroud: 1, s2Dur: 2 } });
   card('shade', 'element', 1, 's_el', { name: 'Cruel Arts', icon: 'fang', forks: ['s_el_a', 's_el_b'], plays: 'open wounds, then rip them open.', desc: BLEED, mods: { bleedAll: 0.1, statusPow: 0.15 } });
   card('shade', 'element', 2, 's_el_a', { name: 'Open Veins', icon: 'drop', tag: 'Focus', coop: true,
     desc: 'Your crits deal +{veins} for each ailment on the foe (up to 4).',

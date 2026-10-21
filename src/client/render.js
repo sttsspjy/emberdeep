@@ -1505,6 +1505,7 @@
     skull: { rows: ['.111.', '11111', '12121', '11111', '.1.1.'], c: { 1: '#d9c8ff', 2: '#1c0c3a' } },
     guard: { rows: ['11111', '11211', '12211', '.121.', '..1..'], c: { 1: '#9be33c', 2: '#26340f' } },
     star: { rows: ['.1.', '111', '.1.'], c: { 1: '#ffe66b' } },
+    execskull: { rows: ['.111.', '11111', '12121', '11111', '.1.1.'], c: { 1: '#e8283c', 2: '#2a0408' } },
   };
   function glyphStub(c, g, cx, bottom) {
     const rows = g.rows, x0 = cx - rows[0].length, y0 = bottom - rows.length * 2;

@@ -204,6 +204,6 @@
     const s = ED.Game && ED.Game.s; if (!s) return null;
     const p = s.view.players.get(s.localPid), st = p && p.stats;
     if (!st || !(st.execCrit > 0) || !(e.hp > 0) || e.hp >= e.maxHp * st.execCrit) return null;
-    return { id: 'fx.sigil.skull', ramp: 'execmark', stub: 'skull' };
+    return { id: 'fx.sigil.skull', ramp: 'execmark', stub: 'execskull' };
   });
 })(globalThis.ED || (globalThis.ED = {}));

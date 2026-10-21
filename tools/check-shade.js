@@ -44,7 +44,10 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   near(ED.Stats.moveRate({ stats: nf, flowT: 0, stealthT: 1 }) / ED.Stats.moveRate({ stats: nf, flowT: 0, stealthT: 0 }), 1.3, 1e-9, 'moveRate adds stealthSpd while unseen');
   near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_a: 1 })).p.ambush.dmg, 40, 1e-9, "Night's Edge Ambush x4 of 10"); near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_a: 3 })).p.ambush.dmg, 45, 1e-9, "Night's Edge rank 3 x4.5");
   near(ED.Stats.skillNums('vanish', build({})).p.ambush.dmg, 25, 1e-9, 'plain Ambush x2.5'); near(build({ s_s2: 1, s_s2_a: 3 }).ambushCleave, 70, 1e-9, 'Ambush Sweep radius');
-  near(build({ s_s2: 1, s_s2_b: 1 }).veil, 0.05, 1e-9, 'Veil 5%'); near(build({ s_s2: 1, s_s2_b: 3 }).veil, 0.06, 1e-9, 'Veil rank 3 6%'); near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_b: 1 })).p.blind.dur, 3, 1e-9, 'Veil blind budget 3 s');
+  near(build({ s_s2: 1, s_s2_b: 1 }).veil, 0.03, 1e-9, 'Veil 3%'); near(build({ s_s2: 1, s_s2_b: 3 }).veil, 0.03, 1e-9, 'Veil stays 3% at rank 3 (the class shield window)');
+  near(build({ s_s2: 1, s_s2_b: 1 }).stealthDur, 1, 1e-9, 'Veil stealth +1 s'); near(build({ s_s2: 1, s_s2_b: 3 }).stealthDur, 2, 1e-9, 'Veil rank 3 stealth +2 s (+0.5 s per rank)');
+  near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_b: 3 })).p.smoke.dur, 7, 1e-9, 'Shroud: the sheet smoke lasts 3 + 2 (Nightfall) + 2 (Shroud) s');
+  ok(ED.boonText('s_s2_b', 1).indexOf('3%') >= 0 && ED.boonText('s_s2_b', 3).indexOf('lasts 2 s longer') >= 0, 'Veil card text shows 3% and the Shroud rider shows 2 s'); near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_b: 1 })).p.blind.dur, 3, 1e-9, 'Veil blind budget 3 s');
   near(build({ s_el: 1, s_el_a: 1 }).veins, 0.1, 1e-9, 'Open Veins 10%'); near(build({ s_el: 1, s_el_a: 3 }).veins, 0.14, 1e-9, 'Open Veins rank 3'); near(build({ s_el: 1, s_el_a: 3 }).exsang, 0.25, 1e-9, 'Exsanguinate');
   near(build({ s_el: 1, s_el_b: 3 }).rupture, 0.7, 1e-9, 'Rupture rank 3 70%'); near(build({ s_el: 1, s_el_b: 1 }).bloodbloom, 0, 1e-9, 'Bloodbloom is a rank 3 rider'); near(build({ s_el: 1, s_el_b: 3 }).bloodbloom, 1, 1e-9, 'Bloodbloom rank 3');
   near(build({ s_el: 1 }).bleedAll, 0.1, 1e-9, 'Cruel Arts Bleed share'); near(build({ s_el: 1 }).statusPow, 0.15, 1e-9, 'Cruel Arts status power');
@@ -86,6 +89,8 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   p.momN = 0; const k2 = foe(w, p.x + 80, p.y + 10); k2.hp = 5; hit(w, p, k2, {}); ok(p.momN === 4, 'second execution kill');
   p.momN = 0; const k3 = foe(w, p.x + 80, p.y + 20); k3.hp = 4000; hit(w, p, k3, { crit: true, mul: 1e6 }); ok(k3.hp <= 0 && p.momN === 1, 'a kill from high health grants no Rhythm (only the crit stack)');
   p.momN = 0; const k4 = foe(w, p.x + 80, p.y + 30); k4.hp = 5; hit(w, p, k4, { crit: true }); near(p.momN, 4, 0, 'a readied crit on a foe below 25% that kills also counts');
+  { const am = stage({ s_atk: 1, s_atk_h: 3, s_s2: 1 }); const ke = foe(am.w, am.p.x + 30, am.p.y); ke.hp = 5; am.w.playerSkill(am.p, 0, {}, 1); am.w.fx.length = 0; am.w.playerAttack(am.p, 0); run(am.w, 0.6);
+    ok(ke.hp <= 0 && evs(am.w, 'exec').length === 1 && am.p.momN === 4, 'an Ambush execution kill grants Killing Rhythm (1 from the crit + 3; got ' + am.p.momN + ')'); }
   const r1 = stage({ s_atk: 1, s_atk_h: 1 }); const k5 = foe(r1.w, r1.p.x + 80, r1.p.y); k5.hp = 5; hit(r1.w, r1.p, k5, {}); near(r1.p.momN, 1, 0, 'no Rhythm below rank 3');
 }
 
@@ -119,7 +124,7 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   const { w, p } = stage({ s_s1: 1, s_s1_a: 3 }); const low = foe(w, p.x + 40, p.y - 40), hi = foe(w, p.x + 40, p.y + 40); low.hp = low.maxHp * 0.4; hi.hp = hi.maxHp * 0.6;
   const q = ED.Stats.skillNums('step', p.stats).p.slash, st = p.stats;
   w.playerSkill(p, 0, { x0: p.x, y0: p.y - 40, x1: p.x + 100, y1: p.y - 40 }, 0); w.playerSkill(p, 0, { x0: p.x, y0: p.y + 40, x1: p.x + 100, y1: p.y + 40 }, 0);
-  const base = q.dmg * st.critMult; near((hi.maxHp * 0.6 - hi.hp) / base, 1, 0.02, 'Shadowstep slash'); near((low.maxHp * 0.4 - low.hp) / (hi.maxHp * 0.6 - hi.hp), 1.5, 0.02, 'Assassinate: +50% below half health (first slash)');
+  const base = q.dmg * st.critMult; near((hi.maxHp * 0.6 - hi.hp) / base, 1, 0.02, 'Shadowstep slash'); near((low.maxHp * 0.4 - low.hp) / (hi.maxHp * 0.6 - hi.hp), 1.4, 0.02, 'Assassinate: +40% below half health (first slash)');
 }
 {
   const { w, p } = stage({ s_s1: 1, s_s1_a: 1 }); const a = foe(w, p.x + 40, p.y), b = foe(w, p.x + 60, p.y + 6); a.hp = 3; b.hp = 3;
@@ -196,10 +201,11 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
 // ---------------- Veil of Night ----------------
 {
   const { w, p } = stage({ s_s2: 1, s_s2_b: 1 }); w.playerSkill(p, 0, {}, 1);
-  near(p.shield, 0.03 * p.maxHp, 0.01, 'Vanish shields up to the class window (5% asked, 3% per 10 s allowed)'); near(p.veilT, 12, 0.01, 'Veil once per 12 s'); ok(evs(w, 'veil').length === 1, 'a veil event');
+  near(p.shield, 0.03 * p.maxHp, 0.01, 'Vanish shields 3% max health (the class window)'); near(p.veilT, 12, 0.01, 'Veil once per 12 s'); ok(evs(w, 'veil').length === 1, 'a veil event');
   const s0 = p.shield; run(w, 11); p.shield = 0; w.playerSkill(p, 0, {}, 1); near(p.shield, 0, 1e-9, 'no second Veil inside 12 s');
   run(w, 2); w.playerSkill(p, 0, {}, 1); ok(p.shield > 0, 'Veil is back after 12 s'); void s0;
   near(p.stealthT, 3.5, 0.01, 'stealth 1 s longer');
+  const v3 = stage({ s_s2: 1, s_s2_b: 3 }); v3.w.playerSkill(v3.p, 0, {}, 1); near(v3.p.stealthT, 4.5, 0.01, 'rank 3 stealth 2 s longer'); near(v3.p.shield, 0.03 * v3.p.maxHp, 0.01, 'rank 3 shields no more than rank 1');
   const sh = stage({ s_s2: 1, s_s2_b: 3 }); const e = foe(sh.w, sh.p.x + 30, sh.p.y); sh.w.playerSkill(sh.p, 0, {}, 1);
   const z = sh.w.zones.find(q => q.kind === 'smoke'); near(z.dur, 3 + 2 + 2, 1e-9, 'Shroud: smoke 2 s longer'); run(sh.w, 0.2); near(e.slowAmt, 0.6, 1e-9, 'Shroud slows 60%');
   const ns = stage({ s_s2: 1, s_s2_b: 2 }); const e2 = foe(ns.w, ns.p.x + 30, ns.p.y); ns.w.playerSkill(ns.p, 0, {}, 1); run(ns.w, 0.2); near(e2.slowAmt, 0.4, 1e-9, 'slow stays 40% before rank 3');
@@ -254,12 +260,14 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   ok(evs(w, 'rupt').length === 2, 'two foes cut, two ruptures'); ok(a.bleedPool < 250 && b.bleedPool < 250, 'both pools halved (' + a.bleedPool.toFixed(1) + ', ' + b.bleedPool.toFixed(1) + ')');
   ok(lost(a) > 300, 'the rupture hit lands on top of the slash');
 }
-{ // Ambush ruptures its target, once per foe even with 3 knives; a swung Ambush ruptures each foe it strikes
+{ // Ambush ruptures its target, once even with 3 knives; a swung Ambush ruptures only the first foe it strikes
   const { w, p } = stage({ s_s2: 1, s_el: 1, s_el_b: 1 }, 1); const e = foe(w, p.x + 30, p.y); e.bleedPool = 400; e.bleedOwner = p;
   w.playerSkill(p, 0, {}, 1); w.fx.length = 0; w.playerAttack(p, 0); run(w, 0.6);
   ok(evs(w, 'rupt').length === 1, 'three knives on one foe rupture it once (got ' + evs(w, 'rupt').length + ')');
   const m = stage({ s_s2: 1, s_el: 1, s_el_b: 1 }); const a = foe(m.w, m.p.x + 30, m.p.y), b = foe(m.w, m.p.x + 30, m.p.y + 14); for (const f of [a, b]) { f.bleedPool = 400; f.bleedOwner = m.p; }
-  m.w.playerSkill(m.p, 0, {}, 1); m.w.fx.length = 0; m.w.playerAttack(m.p, 0); ok(evs(m.w, 'rupt').length === 2, 'a swing ruptures each foe it strikes once');
+  m.w.playerSkill(m.p, 0, {}, 1); m.w.fx.length = 0; m.w.playerAttack(m.p, 0); ok(evs(m.w, 'rupt').length === 1, 'a swing ruptures only the first foe it strikes (got ' + evs(m.w, 'rupt').length + ')');
+  ok(a.bleedPool < 250 !== b.bleedPool < 250, 'exactly one of the two foes was ruptured');
+  run(m.w, 1); for (const f of [a, b]) { f.bleedPool = 400; f.bleedOwner = m.p; } m.w.playerSkill(m.p, 0, {}, 1); m.w.fx.length = 0; m.w.playerAttack(m.p, 0); ok(evs(m.w, 'rupt').length === 1, 'the next Ambush ruptures its target again');
   const none = stage({ s_s2: 1, s_el: 1 }); const g = foe(none.w, none.p.x + 30, none.p.y); g.bleedPool = 400; g.bleedOwner = none.p; none.w.playerSkill(none.p, 0, {}, 1); none.w.playerAttack(none.p, 0); ok(!evs(none.w, 'rupt').length, 'no rupture without the fork');
 }
 { // Bloodbloom: a foe the rupture kills hands its remaining Bleed to the 2 nearest foes within 80
