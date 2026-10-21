@@ -56,51 +56,73 @@
     if (ex.ifNone) for (const k in ex.ifNone) if (!w[k]) w[k] = Object.assign({}, ex.ifNone[k]);
   }
 
-  // build: { cls, weapon, boons: {id: n}, relics: [id], meta: { up: [], mastery }, pact, chaliceHp, bonusHp }
+  // Every source of a stat block, in the order the stat block adds them: [{ kind, id, label, mods, n, rank?, card? }]; a source adds mods[key] x n to its key.
+  // Order: class, Hearth upgrades, mastery levels, pacts, boons (insertion order), relics, Philosopher's Stone per relic held, reward health, a full Grail. A class card (card: true) carries its totals at `rank`
+  // (n is 1) and compounds slot damage. build: { cls, weapon, boons: {id: n}, relics: [id], meta: { up: [], mastery }, pact, chaliceHp, bonusHp }.
+  St.sources = (build) => {
+    const cls = ED.CLASSES[build.cls], meta = build.meta || { up: [], mastery: 1 }, out = [];
+    out.push({ kind: 'class', id: build.cls, label: cls.name, mods: { hp: cls.hp, armor: cls.armor, crit: cls.crit }, n: 1 });
+    for (const u of ED.UPGRADES) {
+      const n = u.mods && meta.up && meta.up[ED.UPGRADE_IDX[u.id]] || 0;
+      if (n > 0) out.push({ kind: 'hearth', id: u.id, label: u.name + ' ' + n, mods: u.mods, n });
+    }
+    const ml = meta.mastery || 1;
+    for (const l in ED.MASTERY_MODS) if (ml >= +l) out.push({ kind: 'mastery', id: 'mastery' + l, label: 'Mastery ' + l, mods: ED.MASTERY_MODS[l], n: 1 });
+    const pact = build.pact || 0;
+    for (let i = 1; i <= pact && i < ED.PACTS.length; i++) if (ED.PACTS[i].mods) out.push({ kind: 'pact', id: 'pact' + i, label: 'Pact ' + i + ': ' + ED.PACTS[i].name, mods: ED.PACTS[i].mods, n: 1 });
+    const boons = build.boons || {};
+    for (const id in boons) {
+      const b = ED.BOONS[id], n = boons[id];
+      if (!b || !(n > 0)) continue;
+      if (!b.route) { out.push({ kind: 'boon', id, label: b.name + (n > 1 ? ' ×' + n : ''), mods: b.mods, n }); continue; }
+      if (b.cls !== build.cls) continue;
+      out.push({ kind: 'card', id, label: b.name + (n > 1 ? ' ×' + n : ''), mods: ED.cardTotals(b, n), n: 1, rank: n, card: true }); // card total per rank: mods + up x (rank - 1) + r3
+    }
+    const relics = build.relics || [];
+    for (const id of relics) if (ED.RELICS[id]) out.push({ kind: 'relic', id, label: ED.RELICS[id].name, mods: ED.RELICS[id].mods, n: 1 });
+    if (relics.indexOf('stone') >= 0) out.push({ kind: 'relic', id: 'stone', label: ED.RELICS.stone.name + ' (per relic)', mods: ED.RELICS.stone.perRelic, n: relics.length });
+    if (build.chaliceHp) out.push({ kind: 'reward', id: 'chalice', label: 'Grail of Ages kills', mods: { hp: build.chaliceHp }, n: 1 });
+    if (build.bonusHp) out.push({ kind: 'reward', id: 'vigor', label: 'Vigor rewards', mods: { hp: build.bonusHp }, n: 1 });
+    if (relics.indexOf('chalice') >= 0 && (build.chaliceHp || 0) >= ED.RELICS.chalice.full.hp) out.push({ kind: 'relic', id: 'chalice', label: ED.RELICS.chalice.name + ' (full)', mods: ED.RELICS.chalice.full.mods, n: 1 });
+    return out;
+  };
+
+  // The contributions to stat `key` of every source: [{ kind, id, label, v, rank? }], preceded by a Base row (v 1) for the multiplicative stats. Slot damage (s1Dmg, s2Dmg) lists each card's factor part; the stat compounds them.
+  const BASE_ONE = { dmg: 1, atk: 1, spd: 1, hpMul: 1 };
+  St.breakdown = (build, key) => {
+    const rows = [];
+    if (BASE_ONE[key]) rows.push({ kind: 'base', id: 'base', label: 'Base', v: BASE_ONE[key] });
+    for (const r of St.sources(build)) {
+      const m = r.mods[key];
+      if (m) rows.push({ kind: r.kind, id: r.id, label: r.label, v: m * r.n, rank: r.rank });
+    }
+    return rows;
+  };
+
+  // Healing factor of the pacts up to level `pact` (ED.PACTS[i].heroMul.heal multiplies healMul).
+  const pactHeal = (pact) => {
+    let m = 1;
+    for (let i = 1; i <= pact && i < ED.PACTS.length; i++) if (ED.PACTS[i].heroMul && ED.PACTS[i].heroMul.heal) m *= ED.PACTS[i].heroMul.heal;
+    return m;
+  };
+  St.pactHeal = pactHeal;
+
   St.compute = (build) => {
     const cls = ED.CLASSES[build.cls];
     const base = ED.WEAPONS[build.weapon];
     const s = BASE();
-    s.hp = cls.hp; s.armor = cls.armor; s.crit = cls.crit;
-    const meta = build.meta || { up: [], mastery: 1 };
-    const rk = (id) => (meta.up && meta.up[ED.UPGRADE_IDX[id]]) || 0;
-    s.hp += 6 * rk('vitality');
-    s.dmg += 0.04 * rk('might');
-    s.gold += 0.1 * rk('fortune');
-    s.spd += 0.04 * rk('fleet');
-    s.armor += 2 * rk('bulwark');
-    s.crit += 0.02 * rk('precision');
-    s.xp += 0.05 * rk('wisdom');
-    s.cdr += 0.04 * rk('alacrity');
-    const ml = meta.mastery || 1;
-    if (ml >= 2) s.dmg += 0.05;
-    if (ml >= 4) s.hp += 10;
-    if (ml >= 5) s.cdr += 0.08;
-    if (ml >= 7) s.crit += 0.04;
-    if (ml >= 9) s.dmg += 0.08;
-    if ((build.pact || 0) >= 9) s.hpMul -= 0.25;
-    const add = (mods, n) => { for (const k in mods) s[k] = (s[k] || 0) + mods[k] * n; };
-    const boons = build.boons || {};
-    // class cards: card total per rank (mods + up x (rank - 1) + r3); slot damage compounds card by card (each card's text is its exact factor)
-    let m1 = 1, m2 = 1, fork = null;
+    let m1 = 1, m2 = 1, fork = null; // slot damage compounds card by card (each card's text is its exact factor)
     const extras = [];
-    for (const id in boons) {
-      const b = ED.BOONS[id], n = boons[id];
-      if (!b || !(n > 0)) continue;
-      if (!b.route) { add(b.mods, n); continue; }
-      if (b.cls !== build.cls) continue;
-      const tot = ED.cardTotals(b, n);
+    for (const r of St.sources(build)) {
+      if (!r.card) { for (const k in r.mods) s[k] = (s[k] || 0) + r.mods[k] * r.n; continue; }
+      const tot = r.mods;
       for (const k in tot) {
         if (k === 's1Dmg') m1 *= 1 + tot[k]; else if (k === 's2Dmg') m2 *= 1 + tot[k]; else s[k] = (s[k] || 0) + tot[k];
       }
-      if (b.weapon) { if (b.weapon.kind && !fork) fork = id; if (b.weapon.extra) extras.push(b.weapon.extra); }
+      const b = ED.BOONS[r.id];
+      if (b.weapon) { if (b.weapon.kind && !fork) fork = r.id; if (b.weapon.extra) extras.push(b.weapon.extra); }
     }
     s.s1Dmg = m1 - 1; s.s2Dmg = m2 - 1;
-    const relics = build.relics || [];
-    for (const id of relics) if (ED.RELICS[id]) add(ED.RELICS[id].mods, 1);
-    if (s.stone) { s.dmg += 0.02 * relics.length; s.hp += 2 * relics.length; }
-    s.hp += (build.chaliceHp || 0) + (build.bonusHp || 0);
-    if (s.chalice && (build.chaliceHp || 0) >= 30) s.dmg += 0.1; // Grail of Ages: a full chalice adds damage
 
     const out = s;
     out.power = cls.power; out.element = cls.element || null; // Class Power scales every non-attack proc (ED.procDmg)
@@ -127,11 +149,11 @@
     out.critMult = 1.75 + s.critDmg;
     out.crit = Math.min(0.95, s.crit);
     out.dodge = Math.min(0.6, s.dodge);
-    out.healMul = (1 + s.heal) * ((build.pact || 0) >= 4 ? 0.6 : 1);
+    out.healMul = (1 + s.heal) * pactHeal(build.pact || 0);
     out.maxCharges = 1 + (s.charges > 0 ? 1 : 0);
     out.maxMinions = 3 + s.minions;
     out.lightR = 200 * (1 + s.light);
-    out.evo = ED.evoOf ? ED.evoOf(boons) : null;
+    out.evo = ED.evoOf ? ED.evoOf(build.boons || {}) : null;
     out.kind = w.kind;
     out.melee = w.kind === 'melee';
     return out;
@@ -186,6 +208,17 @@
       if (d.n !== undefined) q.n = d.n + sN;
       if (d.per === 'tick') q.count = Math.round(q.dur / d.every);
       else if (d.per === 'sec') q.count = Math.ceil(q.dur / 0.5 - 1e-9);
+      // sheet fields: raw = dmg before the hero multiplier; selfVuln = the vulnerability the part sets before its own hit; oneFoe = hits on one foe per cast (undefined: a fan or a per-minion count the sheet resolves)
+      q.raw = dmg; q.noCrit = !!d.noCrit;
+      const sv = d.selfVuln;
+      q.selfVuln = !sv ? 0 : typeof sv === 'number' ? sv : (!sv.if || st[sv.if]) ? sv.v : 0;
+      if (d.oneEvery) q.oneFoe = Math.floor((q.dur || 0) / d.every + 1e-9);
+      else if (d.oneFoe !== undefined) { q.oneFoe = d.oneFoe; if (d.oneMul) for (const k in d.oneMul) if (st[k]) q.oneFoe *= d.oneMul[k]; }
+      else if (d.perMinion) q.oneFoe = undefined; // one hit per minion: the sheet counts the minions
+      else if (d.per === 'tick' || d.per === 'sec') q.oneFoe = q.count;
+      else if (d.per === 'minion') q.oneFoe = (q.n || 0) * Math.floor((q.dur || 0) / d.every + 1e-9);
+      else if (d.per === 'status') q.oneFoe = 1;
+      else if (d.per === 'hit' && !d.fan) q.oneFoe = 1;
       out.parts.push(q); out.p[d.id] = q;
     }
     return (c[id] = out);

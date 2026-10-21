@@ -43,6 +43,7 @@
         <button class="menu-btn" id="mm-hearth">Hearth<span class="dot" id="dot-hearth" hidden title="You can afford something"></span></button>
         <button class="menu-btn" id="mm-heroes">Heroes</button>
         <button class="menu-btn" id="mm-settings">Settings</button>
+        <button class="menu-btn" id="mm-credits">Credits</button>
       </nav>
       <div class="title-profile" id="title-profile" hidden><span class="pp-name" id="title-name">Wanderer</span><span class="pp-embers"><span class="ember-ico" aria-hidden="true"></span><b id="title-embers">0</b> embers</span></div>
       <div class="title-join" id="title-join" hidden>You were invited to party <b id="title-join-code"></b>. Choose Descend to join.</div>
@@ -226,32 +227,32 @@
   </div>
 
   <div id="ov-sheet" class="overlay sheet" hidden>
-    <div class="sheet-wrap">
-      <header class="sheet-head">
-        <h2 class="sheet-hero" id="sheet-hero">Hero</h2>
-        <div class="sheet-stratline"><span class="sheet-strat" id="sheet-strat"></span><span class="sheet-aff" id="sheet-aff"></span></div>
+    <div class="sheet-wrap" role="dialog" aria-label="Character sheet">
+      <header class="sh-head">
+        <div class="sh-port" id="sh-port"></div>
+        <div class="sh-id"><div class="sh-hero"><span id="sh-name">Hero</span><span id="sh-class"></span></div><div class="sh-subl" id="sh-sub"></div></div>
+        <div class="sh-vit">
+          <div><span class="sh-lvl" id="sh-lv">Lv 1</span><div class="bar"><i id="sh-xpbar"></i></div><span class="mut" id="sh-xp"></span></div>
+          <div><span class="lbl">HP</span><b id="sh-hp"></b><div class="bar hp"><i id="sh-hpbar"></i></div><span class="sh-shield" id="sh-shield" hidden></span></div>
+          <div><span class="ember-ico" aria-hidden="true"></span><b id="sh-gold">0</b></div>
+        </div>
+        <div class="sh-world"><span class="sh-strat" id="sh-strat"></span><span class="sh-aff" id="sh-aff"></span></div>
       </header>
-      <div class="sheet-cols">
-        <section class="plate sheet-col sheet-build">
-          <h3 class="plate-h">Paths <small id="sheet-slots"></small></h3>
-          <div class="path-list" id="sheet-paths"></div>
-          <h3 class="plate-h">Boons</h3>
-          <div class="boon-groups" id="sheet-boons"></div>
-        </section>
-        <section class="plate sheet-col sheet-stats">
-          <h3 class="plate-h">Stats</h3>
-          <dl class="stat-dl" id="sheet-dl"></dl>
-          <div class="sheet-note" id="sheet-note" hidden></div>
-          <h3 class="plate-h">Relics</h3>
-          <div class="chip-list" id="sheet-relics"></div>
-        </section>
-        <section class="plate sheet-col sheet-map">
-          <h3 class="plate-h">Map</h3>
-          <canvas id="map-canvas" width="360" height="300"></canvas>
-          <div class="sheet-aff2" id="sheet-aff2"></div>
-        </section>
+      <nav class="tabs sh-tabs" id="sh-tabs" role="tablist" aria-label="Sheet tabs">
+        <button type="button" role="tab" class="tab on" id="shtab-build" aria-controls="shp-build" aria-selected="true">Build</button>
+        <button type="button" role="tab" class="tab" id="shtab-combat" aria-controls="shp-combat" aria-selected="false">Combat</button>
+        <button type="button" role="tab" class="tab" id="shtab-map" aria-controls="shp-map" aria-selected="false">Map</button>
+        <div class="sh-tr"><span class="sh-pill" id="sh-pill" hidden></span><button type="button" class="btn btn-small" id="sh-view" hidden></button></div>
+      </nav>
+      <div class="sh-body">
+        <div class="sh-panel" id="shp-build" role="tabpanel" aria-labelledby="shtab-build" data-t="build"></div>
+        <div class="sh-panel" id="shp-combat" role="tabpanel" aria-labelledby="shtab-combat" data-t="combat" hidden></div>
+        <div class="sh-panel" id="shp-map" role="tabpanel" aria-labelledby="shtab-map" data-t="map" hidden>
+          <section class="plate sh-col"><div class="sh-in"><h3 class="plate-h">Map</h3><div class="sh-mapbox" id="sh-mapbox"><canvas id="map-canvas" width="360" height="300"></canvas></div></div></section>
+          <section class="plate sh-col"><div class="sh-in"><h3 class="plate-h">Stratum and lantern</h3><div class="sh-list" id="shp-map-side"></div></div></section>
+        </div>
       </div>
-      <div class="sheet-foot" id="sheet-foot"></div>
+      <footer class="sh-foot" id="sh-foot"></footer>
     </div>
   </div>
 
@@ -321,6 +322,18 @@
     </div>
   </div>
 
+  <div id="ov-credits" class="overlay" hidden>
+    <div class="plate credits-wrap" role="dialog" aria-labelledby="credits-title">
+      <h2 class="sec-title" id="credits-title">Credits</h2>
+      <div class="credits-body">
+        <p>DawnLike tileset by DragonDePlatino (CC-BY 4.0, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">https://creativecommons.org/licenses/by/4.0/</a> ; <a href="https://opengameart.org/content/dawnlike-16x16-universal-rogue-like-tileset-v181" target="_blank" rel="noopener">https://opengameart.org/content/dawnlike-16x16-universal-rogue-like-tileset-v181</a>), using the DawnBringer DB16 palette by DawnBringer. Cropped and recoloured for Wickdeep.</p>
+        <p>Free Pixel Effects Pack by CodeManu (Davit Masia), CC-BY 4.0 (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">https://creativecommons.org/licenses/by/4.0/</a> ; <a href="https://codemanu.itch.io/pixelart-effect-pack" target="_blank" rel="noopener">https://codemanu.itch.io/pixelart-effect-pack</a>). Frames subsampled and recoloured for Wickdeep.</p>
+        <p class="mut">16x16 DungeonTileset II by 0x72 (Robert); Dungeon Tileset II Extended by nijikokun; 16x16 Dark Dungeon by kosinaz; Ninja Adventure by Pixel-boy and AAA; Puny Characters by Shade; LuizMelo; Kenney; o_lobster; Aim studios; ansimuz.</p>
+      </div>
+      <div class="row end"><button class="btn btn-primary btn-lg" id="btn-credits-close" type="button" data-focus>Done</button></div>
+    </div>
+  </div>
+
   <div id="modal" class="overlay" hidden>
     <div class="plate modal-wrap" role="alertdialog" aria-labelledby="modal-title">
       <h2 class="card-title" id="modal-title"></h2>
@@ -358,6 +371,7 @@
 <script src="src/sim/ai.js" defer></script>
 <script src="src/sim/bosses.js" defer></script>
 <script src="src/sim/rooms.js" defer></script>
+<script src="src/sim/sheet.js" defer></script>
 <script src="src/net.js" defer></script>
 <script src="src/client/input.js" defer></script>
 <script src="src/client/audio.js" defer></script>
@@ -386,6 +400,7 @@
 <script src="src/client/hud.js" defer></script>
 <script src="src/client/camp.js" defer></script>
 <script src="src/client/ui.js" defer></script>
+<script src="src/client/sheetui.js" defer></script>
 <script src="src/game.js" defer></script>
 <script src="src/main.js" defer></script>
 </body>

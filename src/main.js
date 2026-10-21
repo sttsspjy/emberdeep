@@ -315,7 +315,8 @@
     }
   }
 
-  let last = performance.now(), hiddenTick = null;
+  let last = performance.now(), hiddenTick = null, sheetFrames = 0, drawnW = 0, drawnH = 0;
+  const anyOverlay = () => ['ov-pause', 'ov-settings', 'modal', 'ov-sheet', 'ov-boon'].some(id => !$(id).hidden);
   const EMPTY = { mx: 0, my: 0, atk: false, skill: false, dash: false, atkPressed: false };
   function frame(now) {
     requestAnimationFrame(frame);
@@ -330,17 +331,24 @@
     const w0 = performance.now();
     const inp = ED.Input.read();
     if (A.state === 'run' && ED.Game.s) {
-      const s = ED.Game.s;
+      const s = ED.Game.s, sheet = $('ov-sheet'), sheetWas = !sheet.hidden, openBefore = anyOverlay();
       if (inp.esc) {
         if (!$('ov-settings').hidden) $('ov-settings').hidden = true;
         else if (!$('modal').hidden) $('modal').hidden = true;
-        else if (!$('ov-sheet').hidden) { ED.UI.toggleSheet(false); s.paused = !$('ov-pause').hidden; }
+        else if (!sheet.hidden) ED.UI.toggleSheet(false);
         else A.togglePause();
       }
-      if (inp.tab && (!s.offerOpen || !$('ov-sheet').hidden)) { ED.UI.toggleSheet(); s.paused = !$('ov-pause').hidden || (!$('ov-sheet').hidden && ED.Game.alone()); }
-      const blocked = !$('ov-pause').hidden || !$('ov-settings').hidden || !$('modal').hidden || !$('ov-sheet').hidden;
+      if (inp.tab) ED.UI.toggleSheet(); // also during a boon offer: the sheet stacks above the cards
+      if (!sheet.hidden) { ED.UI.sheetNav(inp, dt); ED.UI.sheetTick(dt); }
+      s.paused = !$('ov-pause').hidden || !sheet.hidden;
+      const blocked = sheetWas || !$('ov-pause').hidden || !$('ov-settings').hidden || !$('modal').hidden || !sheet.hidden;
       ED.Game.update(dt, blocked ? EMPTY : inp);
-      if (ED.Game.s) ED.Game.render(t, dt);
+      if (ED.Game.s) {
+        // under the sheet the world is paused (solo: no redraw, the canvases keep the last frame) or drawn every 3rd frame (party); a resize clears the canvases and redraws once
+        const R = ED.Render, shot = R.W !== drawnW || R.H !== drawnH;
+        if (sheet.hidden || shot || (!ED.Game.alone() && ++sheetFrames % 3 === 0)) { ED.Game.render(t, dt); drawnW = R.W; drawnH = R.H; }
+      }
+      if (openBefore && !anyOverlay()) ED.Input.mask(); // a closing overlay must not pass the press that closed it (or a held attack) to the game
     } else {
       ED.HUD.clear();
       ED.Camp.draw(ED.Render.ctx, A.profile, t, dt, A.state === 'hearth' || A.state === 'lobby' || (A.state === 'title' && A.hasProfile) ? A.sel.cls : null);

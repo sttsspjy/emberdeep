@@ -22,7 +22,7 @@
     this.floor = null; this.room = null; this.roomId = -1; this.roomState = {}; this.stratum = 0; this.floorSeed = 0;
     this.gold = 0; this.level = 1; this.xp = 0; this.xpNext = 20; this.time = 0; this.locked = false; this.waitMsg = '';
     this.snaps = []; this.renderT = 0; this.run = null; this.eMap = new Map();
-    this.light = 100; this.lightMax = 100; this.dread = { tier: 0 };
+    this.light = 100; this.lightMax = 100; this.dread = { tier: 0 }; this.deepRooms = 0;
   }
   Mirror.prototype.recalc = function (p) {
     p.stats = ED.Stats.compute({ cls: p.cls, weapon: p.weapon, boons: p.boons, relics: p.relics, meta: p.meta, pact: this.pact, chaliceHp: p.chaliceHp, bonusHp: p.bonusHp });
@@ -41,7 +41,7 @@
       for (const p of this.players.values()) p.toughRoom = tough; // War Drum doubles in these rooms
     }
     this.locked = !!d.L; this.gold = d.g; this.xp = d.x; this.xpNext = d.n; this.level = d.l; this.waitMsg = d.wm; this.time = d.T;
-    this.light = d.li; this.lightMax = d.lm || 100; this.dread = { tier: d.dr | 0 };
+    this.light = d.li; this.lightMax = d.lm || 100; this.dread = { tier: d.dr | 0 }; this.deepRooms = d.dp | 0;
     if (d.O) this.props = d.O.map(a => ({ id: a[0], kind: a[1], x: a[2], y: a[3], state: a[4], item: a[5], price: a[6], group: a[7], stype: a[8], text: a[9] }));
     if (d.RS) d.RS.forEach((b, i) => { this.roomState[i] = { visited: !!(b & 1), known: !!(b & 2), cleared: !!(b & 4) }; });
     if (d.RUN) this.run = d.RUN;
@@ -57,8 +57,8 @@
       const p = this.players.get(a[0]); if (!p) continue;
       p.hp = a[4]; p.maxHp = a[5]; const fl = a[6];
       p.downed = !!(fl & 4); p.dead = !!(fl & 8); p.invuln = fl & 16 ? 0.2 : 0; p.revive = a[7];
-      p.critStacks = a[8]; p.aegisT = a[9] ? 0 : 1; p.guardT = a[10] ? 1 : 0; p.secondWind = a[11]; p.phoenixUsed = !!a[12]; p.picks = a[13]; p.rerolls = a[14];
-      p.shield = a[15] || 0; p.stealthT = fl & 128 ? 1 : 0; p.ambush = !!(fl & 256); p.shieldOut = !!(fl & 64); p.airborne = !!(fl & 512); p.momN = a[17] | 0;
+      p.critStacks = a[8]; p.aegisT = a[9] ? 1 : 0; p.guardT = a[10] ? 1 : 0; p.secondWind = a[11]; p.phoenixUsed = !!a[12]; p.picks = a[13]; p.rerolls = a[14];
+      p.shield = a[15] || 0; p.rdy = a[16] | 0; p.stealthT = fl & 128 ? 1 : 0; p.ambush = !!(fl & 256); p.shieldOut = !!(fl & 64); p.airborne = !!(fl & 512); p.momN = a[17] | 0;
       if (p.pid !== this.localPid) { p.moving = !!(fl & 1); p.dashing = !!(fl & 2); p.face = a[3]; }
       else if (this.firstInRoom) { p.x = a[1]; p.y = a[2]; }
     }
@@ -197,8 +197,10 @@
     w.msgs.length = 0;
   };
 
+  const SHEET_EVENTS = { build: 1, boon: 1, evolve: 1, levelup: 1, dread: 1, room: 1, relic: 1, stratum: 1 }; // events that change what the open character sheet shows
   G.localEvent = (ev) => {
     const s = G.s; if (!s) return;
+    if (SHEET_EVENTS[ev.t]) ED.UI.sheetDirty();
     if (ev.t === 'room') {
       s.epoch = ev.ep;
       if (s.mode === 'client') {
@@ -233,9 +235,8 @@
     const s = G.s; if (!s) return;
     if (m.t === 'offer') {
       s.offer = m; s.offerOpen = true; s.offerHidden = false;
-      const sheet = document.getElementById('ov-sheet');
-      if (!sheet.hidden) { ED.UI.toggleSheet(false); s.paused = !document.getElementById('ov-pause').hidden; }
       ED.UI.showBoons(m);
+      ED.UI.sheetDirty();
     }
     else if (m.t === 'offerDone') { s.offer = null; s.offerOpen = false; ED.UI.hideBoons(); }
     else if (m.t === 'claimed') s.claimed[m.group] = true;
@@ -487,7 +488,7 @@
         if (inp.left || inp.up) ED.UI.boonMove(-1);
         if (inp.right || inp.down) ED.UI.boonMove(1);
         if (inp.confirm) ED.UI.boonConfirm();
-        if (inp.skill) ED.UI.boonReroll(true);
+        if (inp.reroll) ED.UI.boonReroll(true);
       }
       control(s, inp, sdt);
       if (s.mode !== 'client') {

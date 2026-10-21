@@ -171,6 +171,28 @@
       ] },
   };
 
+  // Sheet data of skill parts, merged into the parts above: ED.Stats.skillNums turns it into q.oneFoe (hits on one foe per cast), q.selfVuln (the vulnerability the part sets before its own hit), q.raw and q.noCrit.
+  // perMinion ('live': one hit per minion you have, 'cast': one per minion the cast raises; the sheet counts them), infAdd { element: rate } (a status the part builds without the path's gate), radiance (share of a zone tick stored as Radiance), oneFoe n (times oneMul[stat] when set), oneEvery (floor(dur / every): a hit per interval), selfVuln n | { v, if: stat }, noCrit (its hits never crit), note (what the sheet adds to the part), heal { key (ED.CONST) | perMinion, cap, note } (heals the caster on cast).
+  ED.SKILL_SHEET = {
+    'charge.shock': { noCrit: true, note: 'at the end of the run' },
+    'charge.bash': { note: 'a free Shield Throw along the run' },
+    'shieldthrow.orbit': { oneEvery: true },
+    'shieldthrow.reflect': { oneFoe: 0, note: 'per enemy shot the orbit destroys' },
+    'legion.spikes': { perMinion: 'cast', infAdd: { shadow: 0.5 }, note: 'one burst per minion when it expires' },
+    'sanctuary.zone': { heal: { key: 'SANCT_HEAL', note: 'you and allies within 180 heal on cast' }, radiance: 0.25 },
+    'harvest.burst': { perMinion: 'live', infAdd: { shadow: 0.5 }, note: 'one burst per minion you have', heal: { perMinion: 0.03, cap: 0.06, note: 'you heal on cast' } },
+    'harvest.corpse': { oneFoe: 0, note: 'per corpse that explodes on the foe' },
+    'meteor.rocks': { oneFoe: 0, note: 'each meteorite lands at random within 80' },
+    'rain.tick': { selfVuln: { v: 0.2, if: 'rainHail' } },
+    'judgment.leg': { oneFoe: 2, oneMul: { twinHammer: 2, thirdLeg: 2 }, selfVuln: 0.2, infAdd: { holy: 0.5 }, note: 'out and back' },
+    'judgment.verdict': { oneFoe: 0, infAdd: { holy: 0.5 }, note: 'when a Judged foe dies' },
+    'vanish.ambush': { note: 'your next attack' },
+  };
+  for (const key in ED.SKILL_SHEET) {
+    const [sid, pid] = key.split('.'), sk = ED.SKILLS[sid], part = sk && sk.parts.find(x => x.id === pid);
+    if (part) Object.assign(part, ED.SKILL_SHEET[key]);
+  }
+
   ED.weaponUnlocked = (cls, idx, masteryLevel) => idx === 0 || (idx === 1 && masteryLevel >= 3) || (idx === 2 && masteryLevel >= 6);
 
   // ---------------- fork weapons (Heavy / Swift attack forks) ----------------
