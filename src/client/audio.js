@@ -55,7 +55,7 @@
     s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.05);
   };
 
-  const GAP = { hit: 0.035, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1, freeze: 0.05, shatter: 0.06, combust: 0.06, guardhit: 0.06, block: 0.05, clang: 0.03, throw: 0.08, catch: 0.08, parry: 0.1 };
+  const GAP = { hit: 0.035, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1, freeze: 0.05, shatter: 0.06, combust: 0.06, guardhit: 0.06, block: 0.05, clang: 0.03, throw: 0.08, catch: 0.08, parry: 0.1, bell: 0.06 };
   // arg: cue-specific parameter (dread: the new tier)
   A.play = (name, vol, arg) => {
     if (!A.ready || A.ctx.state !== 'running') return;
@@ -144,6 +144,11 @@
         break;
       }
       case 'catch': tone('sine', 140, 70, 0.14, 0.3 * v); noise('lowpass', 500, 150, 0.1, 0.16 * v, 1); if (arg) [1318, 1760].forEach((f, i) => tone('sine', f, f, 0.22, 0.06 * v, null, A.ctx.currentTime + 0.03 + i * 0.06)); break;
+      case 'bell': { // Cleric: a struck golden bell (arg: semitones above A5; lower for slams, higher for beams), with a bright partial and a soft fifth
+        const k = Math.pow(2, ((arg | 0) || 0) / 12);
+        tone('sine', 880 * k, 876 * k, 0.55, 0.09 * v); tone('sine', 880 * k * 2.76, 870 * k * 2.76, 0.3, 0.04 * v); tone('triangle', 880 * k * 1.5, 880 * k * 1.5, 0.4, 0.025 * v);
+        break;
+      }
       case 'parry': tone('square', 1500, 700, 0.12, 0.09 * v); tone('sine', 2400, 2200, 0.25, 0.07 * v); noise('bandpass', 3000, 1200, 0.1, 0.16 * v, 3); tone('sine', 110, 55, 0.15, 0.22 * v); break;
       default: break;
     }

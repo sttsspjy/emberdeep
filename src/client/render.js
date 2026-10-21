@@ -823,11 +823,11 @@
           break;
         }
         case 'sanct': {
-          const fade = Math.min(1, (z.dur - z.t) * 2, z.t * 5);
+          const fade = Math.min(1, (z.dur - z.t) * 2, z.t * 5), au = z.fol || z.follow ? 0.4 : 1; // au: an Aura of Faith sits on its Cleric, so its light and circle are softer
           if (pass === 0) { // ground: fill, dashed rim and the CodeManu protection circle at its native 2 px density under the actors
-            R.light(z.x, z.y, z.r * 1.9, '#ffe9a0', 0.8 * fade); discPut(c, z.x, z.y, z.r, '#ffe9a0', 0.25 * fade);
+            R.light(z.x, z.y, z.r * 1.9, '#ffe9a0', 0.8 * fade * au); discPut(c, z.x, z.y, z.r, '#ffe9a0', 0.25 * fade);
             ringPut(c, z.x, z.y, z.r, 2, TRING[1], 0.9 * fade, 4, (t * 6) & 7);
-            Pix.draw(c, 'fxbig.protection', 'gold', (t * 12) | 0, sx2(z.x), sx2(z.y), 0.5 * fade);
+            Pix.draw(c, 'fxbig.protection', 'gold', (t * 12) | 0, sx2(z.x), sx2(z.y), 0.5 * fade * au);
             break;
           }
           if (pass === 1) {
@@ -1728,6 +1728,7 @@
   const prebaked = {};
   function shotBody(c, pr, t, kind, foe, col) {
     const sh = SHOT[kind], x = Math.round(pr.x), y = Math.round(pr.y - 6), At = ED.Atlas;
+    const xs = ED.ClassFx.shot; if (xs && xs[kind] && xs[kind](c, pr, t, x, y, foe, col)) return; // a class look for a shot kind (cls-cleric.js: waves); false = the default body
     if (FLAME[kind] && kind !== 'crescent') { const sp = Math.hypot(pr.vx, pr.vy) || 1; Pix.draw(c, 'fx.ember', '', (t * 12 + pr.id) | 0, x - pr.vx / sp * 9, y - pr.vy / sp * 9, 0.9); } // a micro flame licks behind fire shots
     if (sh && At.has(sh.id)) {
       if (!prebaked[sh.id]) { prebaked[sh.id] = 1; for (let f = 0, n = At.anim(sh.id).n; f < n; f++) At.prebake(sh.id, f); } // all 32 rotation steps are baked in the background (Atlas.tick) the first time a shot kind shows up

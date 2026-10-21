@@ -653,8 +653,8 @@
       }
       case 'atk': if (ev.pid !== local) { F.playerAttackAnim(ev.pid, ev.a); const p = ctx.player(ev.pid); if (p && p.stats && !p.stats.melee) A.play('shoot', 0.3); } break;
       case 'spark': { const c = F.projColor(ED.PROJ_KINDS[ev.k]); F.burst(ev.x, ev.y, 4, { color: c, sp: 80, life: 0.25, size: 1.8, add: true }); F.burst(ev.x, ev.y, 3, { kind: 'streak', color: c, sp: 130, life: 0.2, size: 1.3 }); F.pop(ev.x, ev.y, 7, c, 0.1); A.play('spark', 0.4); break; }
-      case 'chain': { // star (hub, t1, hub, t2, ...): one forked arm per target; otherwise a plain polyline. k: h Wrath of Heaven bolt, t Twilight beam, s Superconductor discharge
-        const pts = ev.pts, star = pts.length >= 3 && pts[2][0] === pts[0][0] && pts[2][1] === pts[0][1], cc = ev.k === 'h' ? '#fff3a0' : ev.k === 't' ? '#d9b44a' : ev.k === 's' ? '#8fdcff' : '#bfe9ff';
+      case 'chain': { // star (hub, t1, hub, t2, ...): one forked arm per target; otherwise a plain polyline. k: h Wrath of Heaven bolt, t Twilight beam, s Superconductor discharge, b Prism beam
+        const pts = ev.pts, star = pts.length >= 3 && pts[2][0] === pts[0][0] && pts[2][1] === pts[0][1], cc = ev.k === 'h' ? '#fff3a0' : ev.k === 't' ? '#d9b44a' : ev.k === 's' ? '#8fdcff' : ev.k === 'b' ? '#ffcf5a' : '#bfe9ff';
         if (star) for (let i = 1; i < pts.length; i += 2) F.zap(pts[0][0], pts[0][1], pts[i][0], pts[i][1], cc);
         else F.bolts.push({ pts, life: 0.22, max: 0.22, color: cc });
         for (let i = star ? 1 : 0; i < pts.length; i += star ? 2 : 1) F.pop(pts[i][0], pts[i][1] - 6, 9, '#cfeaff', 0.14);
