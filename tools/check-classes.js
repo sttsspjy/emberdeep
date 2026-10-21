@@ -212,5 +212,52 @@ const run = (w, secs, f) => { for (let i = 0; i < Math.round(secs * 60); i++) { 
     ok(o.length === 4 && !o.some(id => ED.BOONS[id].cls), cls + ' maxed fork: epic-style offer');
   }
 }
+// p.shieldOut (wire flag 1 << 6) follows the thrown shields; a new throw relaunches the orbiting shield instead of adding one
+{
+  const { w, p } = stage('knight', { k_s2: 1, k_s2_b: 1 }); const es = [1, 2].map(k => foe(w, p.x + 40 * k, p.y));
+  ok(p.shieldOut === false, 'shieldOut starts false'); w.playerSkill(p, 0, { d: 280 }, 1); ok(p.shieldOut === true, 'a throw sets shieldOut');
+  let t = 0; while (t < 4 && !(p.shields[0] && p.shields[0].leg === 'orbit')) { run(w, 0.05); t += 0.05; }
+  ok(p.shields.length === 1 && p.shields[0].leg === 'orbit' && p.shieldOut, 'caught shield orbits and shieldOut stays set');
+  const pr0 = p.shields[0].pr; w.playerSkill(p, 0, { d: 280 }, 1);
+  ok(p.shields.length === 1 && p.shields[0].leg === 'out' && p.shields[0].pr === pr0 && w.projs.filter(q => q.kind === 'shield').length === 1, 'a new throw relaunches the orbiting shield');
+  w.clearShields(p); ok(!p.shieldOut && !p.shields.length, 'clearShields clears shieldOut'); void es;
+  const sw = stage('knight'); sw.w.playerSkill(sw.p, 0, { d: 200 }, 1); sw.p.downed = true; sw.p.bleed = 99; sw.w.update(1 / 60); ok(!sw.p.shieldOut, 'a downed hero has no shieldOut');
+}
+// Stagger needs a Heavy weapon hit of kind weapon (not a cloud tick or a blast); Shadowstep knocks foes back; Rain parts carry their radius and the Second Shower a fixed 2 s
+{
+  const { w, p } = stage('knight', { k_atk: 1, k_atk_h: 1 }); const a = foe(w, p.x + 50, p.y), b = foe(w, p.x + 70, p.y), c = foe(w, p.x + 90, p.y);
+  w.hitEnemy(a, 1, { p, kind: 'dot', wpn: true }); w.hitEnemy(b, 1, { p, kind: 'explode', wpn: true }); w.hitEnemy(c, 1, { p, kind: 'weapon', wpn: true });
+  ok(a.stun === 0 && b.stun === 0 && c.stun > 0, 'Stagger only from a Heavy weapon hit of kind weapon');
+  near(ED.Stats.skillNums('step', build('shade')).p.slash.knock, 60, 1e-9, 'Shadowstep knockback');
+  const rn = ED.Stats.skillNums('rain', build('ranger', 0, { r_s2: 1, r_s2_a: 3, r_s2_b: 3 })), tk = rn.p.tick;
+  near(rn.p.sky.r, tk.r * 1.15, 1e-6, 'Skyfall radius'); near(rn.p.sky2.r, rn.p.sky.r, 1e-6, 'Twin Sky radius'); near(rn.p.shower.r, tk.r, 1e-6, 'Second Shower radius');
+  near(tk.dur, 3, 1e-9, 'Rainmaker lengthens the Rain'); near(rn.p.shower.dur, 2, 1e-9, 'Second Shower is a fixed 2 s'); near(rn.p.shower.count, 8, 1e-9, 'Second Shower ticks');
+}
+// shared seams: cone homing, shot end hook, shot distance, Toll factor and hook, Abyssal Hunger
+{
+  const { w, p } = stage('ranger'); const a0 = 0, cone = 25 * Math.PI / 180, ang = (pr) => Math.atan2(pr.vy, pr.vx);
+  const out = foe(w, p.x + 120, p.y + 90); // 37 degrees off the launch angle
+  const pr1 = w.spawnProj({ team: 0, kind: 'arrow', x: p.x, y: p.y, a: a0, speed: 300, r: 4, dmg: 1, life: 1, owner: p.pid, homing: 8, homeA0: a0, homeCone: cone, pierce: 5 });
+  for (let i = 0; i < 20; i++) w.updateProjectiles(1 / 60);
+  near(ang(pr1), 0, 1e-9, 'cone homing ignores a foe outside the cone');
+  w.enemies.length = 0; w.projs.length = 0; const inn = foe(w, p.x + 150, p.y + 60); // 22 degrees: inside
+  const pr2 = w.spawnProj({ team: 0, kind: 'arrow', x: p.x, y: p.y, a: a0, speed: 300, r: 4, dmg: 1, life: 1, owner: p.pid, homing: 8, homeA0: a0, homeCone: cone, pierce: 5 });
+  for (let i = 0; i < 10; i++) w.updateProjectiles(1 / 60);
+  ok(ang(pr2) > 0.05 && ang(pr2) <= cone + 1e-9, 'cone homing steers toward a foe inside the cone and never past it'); void out; void inn;
+  w.enemies.length = 0; w.projs.length = 0; const seen = []; ED.CLS.ranger.projEnd = (pr, owner, why) => seen.push(why);
+  const pr3 = w.spawnProj({ team: 0, kind: 'arrow', x: p.x, y: p.y, a: 0, speed: 100, r: 4, dmg: 1, life: 0.05, owner: p.pid });
+  for (let i = 0; i < 6; i++) w.updateProjectiles(1 / 60);
+  w.spawnProj({ team: 0, kind: 'arrow', x: p.x, y: p.y, a: Math.PI, speed: 900, r: 4, dmg: 1, life: 5, owner: p.pid, hk: 'skill' });
+  for (let i = 0; i < 120; i++) w.updateProjectiles(1 / 60);
+  delete ED.CLS.ranger.projEnd; ok(seen.join() === 'life,wall', `projEnd hook on life end and wall (got ${seen.join()})`);
+  near(pr3.dist, 5, 1.5, 'every hero shot accumulates its distance');
+}
+{
+  const dmg = (st) => { const { w, p } = stage('necro', st); const b = foe(w, p.x + 100, p.y); b.boss = true; b.maxHp = b.hp = 1000; b.doomOwner = p; b.doom = ED.CONST.TOLL_AT * 1000; let calls = 0; ED.CLS.necro.toll = () => { calls++; }; w.checkToll(b); delete ED.CLS.necro.toll; return { d: 1000 - b.hp, calls }; };
+  const base = dmg({}), buff = dmg({ n_el: 1, n_el_a: 1 });
+  near(buff.d / base.d, 1.4, 0.01, 'Abyssal Toll: Tolls deal +40%'); ok(base.calls === 1 && buff.calls === 1, 'toll hook called once per Toll');
+  const doom = (st, elite) => { const { w, p } = stage('necro', st); p.stats.shadowInfuse = 0.5; const e = foe(w, p.x + 100, p.y); if (elite) e.elite = 'swift'; w.applyInfusions(e, 100, p, { kind: 'minion' }, 1); return e.doom; };
+  near(doom({ n_el: 1, n_el_a: 3 }, true) / doom({ n_el: 1, n_el_a: 1 }, true), 2, 1e-6, 'Abyssal Hunger doubles minion Doom on elites'); near(doom({ n_el: 1, n_el_a: 3 }, false) / doom({ n_el: 1, n_el_a: 1 }, false), 1, 1e-6, 'Abyssal Hunger leaves common foes alone');
+}
 console.log(`${n} checks, ${fails} failed`);
 process.exit(fails ? 1 : 0);

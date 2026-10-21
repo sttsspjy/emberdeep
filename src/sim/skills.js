@@ -4,7 +4,8 @@
 //   init(p) / tick(p, dt): hero fields at creation / every tick (skills.js)      kill(e, killer, src): every class's table runs on every foe death (skills.js)
 //   hitMul(p, e, src) -> added to the hero multiplier, hitCrit(p, e, src) -> force a crit, critMul(p, e, src) -> crit damage factor, hitDone(p, e, dmg, crit, src), procs(e, p, dmg, crit, src) (combat.js hitEnemy / heroProcs)
 //   attackOpts(p, st) -> options merged into every weapon hit of an attack (infAdd, pierce, blastMul), attack(p, a, st, w) after an attack, waveShot(p, pr, a, st) on the Cleric wave (combat.js playerAttack)
-//   projHit(pr, e, hs) after a hero shot hit e, projBurst(pr, owner) after a shot's blast (combat.js); absorb(p, absorbed, src) when p's shield absorbed damage (combat.js hurtPlayer)
+//   projHit(pr, e, hs) after a hero shot hit e, projBurst(pr, owner) after a shot's blast, projEnd(pr, owner, 'life' | 'wall') when a hero shot ends its flight (combat.js); absorb(p, absorbed, src) when p's shield absorbed damage (combat.js hurtPlayer)
+//   toll(p, boss, dmg) after a Doom Toll landed (combat.js checkToll; a Reap arrives through kill with src.kind 'reap')
 (function (ED) {
   'use strict';
   const U = ED.U;
@@ -49,7 +50,7 @@
     p.momN = 0; p.momT = 0; p.chanT = 0; p.lastAtkT = -99; p.flowT = 0; p.cometT = 0; p.stepRefT = 0; p.edgeT = 0; p.parryT = 0; p.heatT = 0;
     p.glT = 0; p.glV = 0; p.auraT = 0; p.auraV = 0; p.abyssT = 0; p.cleaveNext = 0; p.skillIfr = false;
     p.shWin = []; for (let i = 0; i < ED.CONST.SHIELD_WIN_T; i++) p.shWin.push({ sec: -99, c: 0, a: 0 }); // shield window slots (world.js addShield)
-    p.shieldClip = {}; p.shields = []; p.charge = null;
+    p.shieldClip = {}; p.shields = []; p.shieldOut = false; p.charge = null; // shieldOut: a thrown shield is away from the hero (wire flag 1 << 6)
     const h = CLS[p.cls];
     if (h && h.init) h.init.call(this, p);
   };

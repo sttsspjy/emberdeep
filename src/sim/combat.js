@@ -97,7 +97,7 @@
   // ---------------- damage to foes (order: hero mul, crit, vulnerability, affinity, exposed, guard, dmgTakenMul, ward) ----------------
   // src: { p, kind, crit, mul, el, clsEl, affDone, raw, noProc, noGuard, noShatter, comp, infAdd, infK, bleedMin, ambush, knock, kx, ky, x, y, part, wpn, dist, pass }. Writes back src.critOut / src.guarded / src.affMul.
   // el tags a hit with an element (affinity x1.5 / x0.5 unless affDone); clsEl tags a class-skill hit (half affinity, +classElMul); infAdd { el: rate } adds a per-hit infusion rate that needs no gate; infK scales every infusion of the hit.
-  // part names the skill part ('charge.impact'); wpn marks a weapon hit (swing, shot, its blast, warhammer shock, plague cloud tick, wave). The attacker's class hook table (ED.CLS[cls]) may add to the hero multiplier (hitMul), force or boost crits (hitCrit, critMul) and react (hitDone).
+  // part names the skill part ('charge.impact'); wpn marks a weapon hit (swing, shot, its blast, warhammer shock, plague cloud tick, wave); Stagger and the heavy hit-stop need kind 'weapon' (a direct swing or shot). The attacker's class hook table (ED.CLS[cls]) may add to the hero multiplier (hitMul), force or boost crits (hitCrit, critMul) and react (hitDone).
   W.hitEnemy = function (e, base, src) {
     if (!e || e.hp <= 0) return 0;
     src = src || {};
@@ -160,13 +160,13 @@
     }
     if (kind !== 'dot' || dmg >= 3) {
       const ev = { t: 'hit', x: Math.round(e.x), y: Math.round(e.y - e.r), v: Math.round(dmg), c: crit ? 1 : 0, k: kind === 'dot' ? 1 : 0, pid: p ? p.pid : '', el: src.bleed ? 4 : EL_IDX[src.el || src.clsEl] || 0 };
-      if (src.wpn && st && st.heavy) ev.h = 1; // heavy weapon hit: the viewer's hit-stop
+      if (src.wpn && kind === 'weapon' && st && st.heavy) ev.h = 1; // heavy weapon hit: the viewer's hit-stop
       if (src.far) ev.f = 1; // a far shot (Deadeye): the viewer's bright spark
       this.emit(ev);
     }
     if (p) {
       p.dealt += dmg;
-      if (src.wpn && st.heavy && e.hp > 0 && !e.boss && e.staggerT <= 0 && e.stunCd <= 0) { e.stun = Math.max(e.stun, e.elite ? ED.CONST.STAGGER * 0.5 : ED.CONST.STAGGER); e.staggerT = ED.CONST.STAGGER_CD; } // Stagger never sets stunCd
+      if (src.wpn && kind === 'weapon' && st.heavy && e.hp > 0 && !e.boss && e.staggerT <= 0 && e.stunCd <= 0) { e.stun = Math.max(e.stun, e.elite ? ED.CONST.STAGGER * 0.5 : ED.CONST.STAGGER); e.staggerT = ED.CONST.STAGGER_CD; } // Stagger never sets stunCd
       if (shatter) this.shatterBurst(e, p, dmg);
       if (!src.noProc) this.heroProcs(e, p, dmg, crit, comp, src);
       if (ch && ch.hitDone) ch.hitDone.call(this, p, e, dmg, crit, src);
@@ -203,6 +203,7 @@
       let rate = ((st[el.inf] || 0) + ((add && add[id]) || 0)) * pow;
       if (!(rate > 0)) continue;
       if (id === 'holy' && p.shield > 0 && st.radiantAegis) rate *= 2;
+      else if (id === 'shadow' && st.abyssDoom && (e.elite || e.boss) && src && src.kind === 'minion') rate *= 2; // Abyssal Hunger
       this[el.add](e, UNIT[el.unit](e, pre) * rate, p);
       if (e.hp <= 0) return;
     }
@@ -345,12 +346,14 @@
   W.checkToll = function (e) {
     const o = e.doomOwner;
     if (!o || !e.boss || e.hp <= 0 || e.doom < ED.CONST.TOLL_AT * e.maxHp || e.invulnT > 0 || e.burrowed || e.def.invuln) return;
-    const d = e.doom * (o.stats.necrosis && e.venom >= 100 ? 1.25 : 1);
+    const d = e.doom * (o.stats.necrosis && e.venom >= 100 ? 1.25 : 1) * (1 + o.stats.tollMul);
     e.doom = 0;
     const own = this.openChain();
     this.hitEnemy(e, d, { p: o, kind: 'toll', raw: true, noProc: true, crit: false, noGuard: true, el: 'shadow', affDone: true });
     this.emit({ t: 'toll', x: Math.round(e.x), y: Math.round(e.y), pid: o.pid });
     this.onDoomPayoff(o);
+    const th = CLS[o.cls];
+    if (th && th.toll) th.toll.call(this, o, e, d); // class hook: a Toll of d damage landed on boss e
     if (own) this.curChain = null;
   };
 
@@ -1075,7 +1078,7 @@
   // o.hk: hit kind for hitEnemy; o.mul/o.ambush: extra multiplier; o.spec: crits release a spectral copy; o.shieldAlly: shield fraction an ally gets on touch (Sacred Lantern);
   // o.infAdd / o.bleedMin: per-hit infusion rates and Bleed share; o.acid: bursts into Venomous acid on its first hit or at the end of its flight.
   // o.wpn: a weapon shot (its hits are weapon hits); o.part: the skill part its hits belong to; o.ghost: moved and removed by its owner's code (thrown shield: pr.dead removes it); o.infK: infusion scale of its hits;
-  // o.stun: seconds of repeating stun on a hit (waves); pr.dist = distance flown and pr.pass = foes passed (weapon shots); o.homeA0 / o.noSplit: reserved for class routes.
+  // o.stun: seconds of repeating stun on a hit (waves); pr.dist = distance flown (every hero shot) and pr.pass = foes passed; o.homeCone (radians, with o.homing): the shot steers only toward foes within homeCone of o.homeA0 and never turns past it; o.noSplit: reserved for class routes.
   W.spawnProj = function (o) {
     const pr = {
       id: U.uid(), team: o.team, kind: o.kind, x: o.x, y: o.y, vx: Math.cos(o.a) * o.speed, vy: Math.sin(o.a) * o.speed,
@@ -1083,7 +1086,7 @@
       crit: o.crit, knock: o.knock || 0, explode: o.explode || null, cloud: o.cloud || null, homing: o.homing || 0,
       shieldAlly: o.shieldAlly || 0, burn: o.burn || 0, hit: null, healed: null, accel: o.accel || 0, turn: o.turn || 0, boom: o.boom || null,
       hk: o.hk || null, mul: o.mul || 0, ambush: !!o.ambush, spec: !!o.spec, infAdd: o.infAdd || null, bleedMin: o.bleedMin || 0, acid: !!o.acid,
-      wpn: !!o.wpn, part: o.part || null, ghost: !!o.ghost, dead: false, infK: o.infK || 0, stun: o.stun || 0, dist: 0, pass: 0, homeA0: o.homeA0, noSplit: !!o.noSplit,
+      wpn: !!o.wpn, part: o.part || null, ghost: !!o.ghost, dead: false, infK: o.infK || 0, stun: o.stun || 0, dist: 0, pass: 0, homeA0: o.homeA0, homeCone: o.homeCone || 0, noSplit: !!o.noSplit,
     };
     this.projs.push(pr);
     return pr;
@@ -1106,26 +1109,28 @@
     for (const pr of this.projs) {
       if (pr.ghost) { if (!pr.dead) keep.push(pr); continue; }
       pr.life -= dt;
-      if (pr.life <= 0) { if (pr.team === 0 && pr.explode) this.projBurst(pr); this.projAcid(pr); continue; }
+      if (pr.life <= 0) { if (pr.team === 0) { if (pr.explode) this.projBurst(pr); this.projEnd(pr, 'life'); } this.projAcid(pr); continue; }
       if (pr.homing) {
         let tgt = null;
-        if (pr.team === 0) tgt = this.nearestEnemy(pr.x, pr.y, 240, pr.hit);
+        if (pr.team === 0) tgt = pr.homeCone ? this.nearestEnemy(pr.x, pr.y, 240, pr.hit, pr.homeA0, pr.homeCone) : this.nearestEnemy(pr.x, pr.y, 240, pr.hit);
         else tgt = this.nearestPlayer(pr.x, pr.y);
         if (tgt) {
           const cur = Math.atan2(pr.vy, pr.vx), want = Math.atan2(tgt.y - pr.y, tgt.x - pr.x);
           const sp = Math.hypot(pr.vx, pr.vy);
-          const na = cur + U.clamp(U.angDiff(cur, want), -pr.homing * dt, pr.homing * dt);
+          let na = cur + U.clamp(U.angDiff(cur, want), -pr.homing * dt, pr.homing * dt);
+          if (pr.homeCone) na = pr.homeA0 + U.clamp(U.angDiff(pr.homeA0, na), -pr.homeCone, pr.homeCone);
           pr.vx = Math.cos(na) * sp; pr.vy = Math.sin(na) * sp;
         }
       }
       if (pr.turn) { const cur = Math.atan2(pr.vy, pr.vx) + pr.turn * dt, sp = Math.hypot(pr.vx, pr.vy); pr.vx = Math.cos(cur) * sp; pr.vy = Math.sin(cur) * sp; }
       if (pr.accel) { const f = 1 + pr.accel * dt; pr.vx *= f; pr.vy *= f; }
       pr.x += pr.vx * dt; pr.y += pr.vy * dt;
-      if (pr.wpn) pr.dist += Math.hypot(pr.vx, pr.vy) * dt;
+      if (pr.team === 0) pr.dist += Math.hypot(pr.vx, pr.vy) * dt;
       const t = D.tileAt(room, pr.x, pr.y);
       if (D.blocksShots(t, locked)) {
         if (pr.team === 0 && pr.explode) this.projBurst(pr);
         else if (pr.team === 0 && pr.cloud) this.spawnCloud(pr.owner, pr.x - pr.vx * dt, pr.y - pr.vy * dt, pr.cloud);
+        if (pr.team === 0) this.projEnd(pr, 'wall');
         this.projAcid(pr);
         this.emit({ t: 'spark', x: Math.round(pr.x), y: Math.round(pr.y), k: ED.PROJ_IDX[pr.kind] || 0 });
         continue;
@@ -1170,7 +1175,6 @@
           if (U.dist2(pr.x, pr.y, p.x, p.y) > rr * rr) continue;
           if (p.invuln > 0 || p.dashing || p.dashT > 0 || p.skillIfr) continue; // shots pass through i-frames
           this.hurtPlayer(p, pr.dmg, { proj: true, e: pr.src, pr, x: pr.x, y: pr.y });
-          if (pr.team === 0) break; // reflected: stays alive as a hero projectile
           if (pr.boom) this.explode(pr.x, pr.y, pr.boom.r, pr.dmg * 0.5, 1, pr.src, pr.boom.k);
           dead = true; break;
         }
@@ -1178,6 +1182,12 @@
       if (!dead) keep.push(pr);
     }
     this.projs = keep;
+  };
+
+  // A hero shot ended its flight at (pr.x, pr.y) by running out of life ('life') or hitting a wall ('wall'): the owner's class hook projEnd(pr, owner, why) may add an effect there.
+  W.projEnd = function (pr, why) {
+    const owner = this.players.get(pr.owner), h = owner && CLS[owner.cls];
+    if (h && h.projEnd) h.projEnd.call(this, pr, owner, why);
   };
 
   // A projectile carrying acid (Venomous Arms) bursts once where it ends.

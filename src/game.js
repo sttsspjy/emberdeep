@@ -310,7 +310,7 @@
       if (inp.atk && !ctl.latch && ctl.atkCd <= 0 && !near) {
         const w = st.weapon, cl = isCleave(me, st, w, view.time); // decided before the act: the sim spends the Follow-Through
         G.act({ t: 'atk', a: aim });
-        if (s.mode === 'client') { me.atkCount = (me.atkCount | 0) + 1; if (st.swift) me.flowT = ED.CONST.FLOW_T; }
+        if (s.mode === 'client') { me.atkCount = (me.atkCount | 0) + 1; if (st.swift) me.flowT = ED.CONST.FLOW_T; if (cl) me.cleaveNext = 0; } // the host spends Follow-Through on the Cleave it grants
         ctl.atkCd = Math.max(ctl.atkCd, -dt) + ED.Stats.attackInterval(me); // carries the overshoot of this frame so the real rate equals the shown one
         s.aim.pulseT = performance.now();
         ED.FX.playerAttackAnim(s.localPid, aim);

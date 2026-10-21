@@ -57,20 +57,26 @@
 
   // ---------------- Shield Throw ----------------
   // p.shields = [{ pr (the ghost projectile), leg: 'out' | 'chase' | 'back' | 'orbit', t (total flight), legT, flown, d (straight distance), a, hit (foes struck this leg), strikes, tgt, room, mul, noStun, grp ({ strikes, open }: one cast), lastFoe, orbitA, orbitDur, orbitSeen }]
+  // A new throw launches the shield that is orbiting the hero (Shield Orbit) before it spawns another.
   ED.CAST.shieldthrow = function (p, a, data, st, N) {
     const d = U.clamp(fin(data.d) ? data.d : C.THROW_MAX, N.rangeMin, N.range), twin = st.twinShield > 0;
     const grp = { strikes: 0, open: twin ? 2 : 1 };
-    if (twin) { this.throwShield(p, a - 0.22, d, st.twinShield, null, false, grp); this.throwShield(p, a + 0.22, d, st.twinShield, null, false, grp); } else this.throwShield(p, a, d, 1, null, false, grp);
+    let orb = p.shields.find(s => s.leg === 'orbit') || null;
+    const launch = (aa, mul) => { const re = orb; orb = null; this.throwShield(p, aa, d, mul, null, false, grp, re); };
+    if (twin) { launch(a - 0.22, st.twinShield); launch(a + 0.22, st.twinShield); } else launch(a, 1);
     return { d: Math.round(d) };
   };
 
   // Launches a shield from the hero (or origin {x, y}) along a for d px at damage factor mul; noStun: Shield Bash. grp joins the shields of one cast (their strikes count together for the catch).
-  W.throwShield = function (p, a, d, mul, origin, noStun, grp) {
+  // reuse: an orbiting shield of p that flies this throw in place of a new one.
+  W.throwShield = function (p, a, d, mul, origin, noStun, grp, reuse) {
     const st = p.stats, N = ED.Stats.skillNums('shieldthrow', st), q = N.p.strike;
     const x = (origin ? origin.x : p.x) + Math.cos(a) * 10, y = (origin ? origin.y : p.y - 4) + Math.sin(a) * 10;
-    const pr = this.spawnProj({ team: 0, kind: 'shield', ghost: true, x, y, a, speed: C.THROW_SPEED, r: q.r, dmg: 0, life: 99, pierce: 999, owner: p.pid });
+    let pr;
+    if (reuse) { pr = reuse.pr; pr.x = x; pr.y = y; } else pr = this.spawnProj({ team: 0, kind: 'shield', ghost: true, x, y, a, speed: C.THROW_SPEED, r: q.r, dmg: 0, life: 99, pierce: 999, owner: p.pid });
     const s = { pr, leg: 'out', t: 0, legT: 0, flown: 0, d: U.clamp(d, N.rangeMin, N.range), a, hit: new Set(), strikes: 0, tgt: null, room: this.room, mul, noStun: !!noStun, grp: grp || { strikes: 0, open: 1 }, lastFoe: null, orbitA: 0, orbitDur: 0, orbitSeen: null };
-    p.shields.push(s);
+    if (reuse) p.shields[p.shields.indexOf(reuse)] = s; else p.shields.push(s);
+    p.shieldOut = true;
     return s;
   };
 
@@ -83,11 +89,13 @@
   W.dropShield = function (p, i) {
     p.shields[i].pr.dead = true;
     p.shields.splice(i, 1);
+    p.shieldOut = p.shields.length > 0;
   };
 
   W.clearShields = function (p) {
     for (const s of p.shields) s.pr.dead = true;
     p.shields.length = 0;
+    p.shieldOut = false;
   };
 
   // Next ricochet target after foe e: the nearest living foe within RIC_R of it that is not in this leg's hit set and has a clear line.

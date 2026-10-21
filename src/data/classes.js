@@ -83,7 +83,7 @@
   // aimIf { stat: aim } overrides aim while the stat is set; moveIf { stat: { k: 'charge' | 'hop' | 'leap', ... } } moves the caster with the cast (iframes seconds untouchable, default = the move time).
   // parts feed ED.Stats.skillNums (the one source for sim, sheet and bots): dmg = (base + pow x X) x (1 + slot damage), X = Power (on 'P'), the equipped weapon's dmg ('W') or the unforked weapon ('B');
   // powKey adds a stat to pow; of + mul / mul1 derive a part from another (mul1: x (1 + stat); times 'ticks': x the tick count); if = the stat that enables the part; mulIf = { stat: factor };
-  // r scales with area (x(1 + 0.5 area) x (1 + slot area)); dur adds slot duration and is capped at capCd x the effective cooldown; n adds slot count; per: 'hit' | 'tick' | 'sec' | 'minion' | 'status'.
+  // r scales with area (x(1 + 0.5 area) x (1 + slot area)), rOf + rMul derive it from another part; dur adds slot duration (durFix: none) and is capped at capCd x the effective cooldown; n adds slot count; per: 'hit' | 'tick' | 'sec' | 'minion' | 'status'.
   ED.SKILLS = {
     charge: { name: 'Shield Charge', slot: 0, cd: 6, icon: 'shield', aim: 'move', range: 150, rangeMin: 60, rangeAdd: 's1Range', move: { k: 'charge', speed: 600 },
       desc: 'Charge toward the cursor, untouchable, smashing and stunning every foe you run into.',
@@ -117,7 +117,7 @@
     step: { name: 'Shadowstep', slot: 0, cd: 4.5, icon: 'cloak', aim: 'move', range: 140, rangeMin: 40,
       desc: 'Blink toward the cursor, cutting through foes. Your next attacks are critical hits.',
       parts: [
-        { id: 'slash', label: 'Slash', base: 12, pow: 2.2, per: 'hit', crit: true, proc: true, reach: 20 },
+        { id: 'slash', label: 'Slash', base: 12, pow: 2.2, per: 'hit', crit: true, proc: true, reach: 20, knock: 60 },
         { id: 'after', label: 'Afterimage', if: 'afterimage', base: 5, pow: 3, per: 'hit', r: 80, delay: 1.2, blind: 1, proc: false },
         { id: 'twin', label: 'Twin cut', if: 'stepTwin', of: 'slash', mul: 'stepTwin', per: 'hit', delay: 0.15, crit: true, proc: true },
       ] },
@@ -137,9 +137,9 @@
       desc: 'Mark a point at the cursor. After a moment arrows fall on it, hitting every foe inside.',
       parts: [
         { id: 'tick', label: 'Arrows', base: 4, pow: 0.45, per: 'tick', every: 0.25, dur: 2, delay: 0.35, r: 80, proc: true },
-        { id: 'sky', label: 'Skyfall', if: 'skyfall', of: 'tick', times: 'ticks', per: 'hit', delay: 0.6, rMul: 1.15, stun: 0.5, proc: true },
-        { id: 'sky2', label: 'Twin Sky', if: 'skyTwin', of: 'sky', mul: 'skyTwin', per: 'hit', delay: 0.8, proc: true },
-        { id: 'shower', label: 'Second Shower', if: 'shower', of: 'tick', mul: 'shower', per: 'tick', every: 0.25, dur: 2, proc: true },
+        { id: 'sky', label: 'Skyfall', if: 'skyfall', of: 'tick', times: 'ticks', per: 'hit', delay: 0.6, rOf: 'tick', rMul: 1.15, stun: 0.5, proc: true },
+        { id: 'sky2', label: 'Twin Sky', if: 'skyTwin', of: 'sky', mul: 'skyTwin', per: 'hit', delay: 0.8, rOf: 'sky', rMul: 1, proc: true },
+        { id: 'shower', label: 'Second Shower', if: 'shower', of: 'tick', mul: 'shower', per: 'tick', every: 0.25, dur: 2, durFix: true, rOf: 'tick', rMul: 1, proc: true },
       ] },
     meteor: { name: 'Meteor', slot: 1, cd: 12, icon: 'meteor', aim: 'ground', range: 300, moveIf: { comet: { k: 'leap', t: 0.6, iframes: 0.35 } },
       desc: 'Call a meteor down on the cursor. It knocks foes back, burns them and leaves a burning crater.',

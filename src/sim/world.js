@@ -204,10 +204,12 @@
     }
     return best;
   };
-  W.prototype.nearestEnemy = function (x, y, maxD, exclude) {
+  // Nearest living foe within maxD of (x, y), skipping the ids in exclude; with cone > 0 only foes within cone radians of the direction a0.
+  W.prototype.nearestEnemy = function (x, y, maxD, exclude, a0, cone) {
     let best = null, bd = maxD * maxD;
     for (const e of this.enemies) {
       if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed || (exclude && exclude.has(e.id))) continue;
+      if (cone > 0 && Math.abs(U.angDiff(a0, Math.atan2(e.y - y, e.x - x))) > cone) continue;
       const d = U.dist2(x, y, e.x, e.y);
       if (d < bd) { bd = d; best = e; }
     }
@@ -414,7 +416,7 @@
     const pos = [];
     for (const p of this.players.values()) {
       const pt = fromDir ? D.entryPoint(room, D.OPP[fromDir], k) : { x: D.center(room).x + (k - 1.5) * 22, y: D.center(room).y + 20 };
-      p.x = pt.x; p.y = pt.y; p.vx = 0; p.vy = 0; p.dashT = 0; p.skillMove = null; p.skillIfr = false; p.charge = null; p.shields.length = 0; // a thrown shield and a charge in flight end with the room
+      p.x = pt.x; p.y = pt.y; p.vx = 0; p.vy = 0; p.dashT = 0; p.skillMove = null; p.skillIfr = false; p.charge = null; this.clearShields(p); // a thrown shield and a charge in flight end with the room
       p.toughRoom = room.type === 'elite' || room.type === 'boss'; // War Drum doubles in these rooms
       pos.push([p.pid, Math.round(p.x), Math.round(p.y)]);
       k++;

@@ -181,7 +181,7 @@
       q.dmg = dmg;
       q.r = d.rOf ? out.p[d.rOf].r * d.rMul : d.r ? d.r * A * (1 + sA) * (d.rMul || 1) : 0;
       if (d.mulKey) q.mulv = st[d.mulKey];
-      if (d.durKey) q.dur = (d.dur || 0) + st[d.durKey]; else if (d.dur !== undefined) q.dur = d.dur + sU;
+      if (d.durKey) q.dur = (d.dur || 0) + st[d.durKey]; else if (d.dur !== undefined) q.dur = d.dur + (d.durFix ? 0 : sU); // durFix: a fixed length, no slot duration
       if (d.capCd && q.dur !== undefined) q.dur = Math.min(q.dur, d.capCd * cdEff);
       if (d.n !== undefined) q.n = d.n + sN;
       if (d.per === 'tick') q.count = Math.round(q.dur / d.every);
