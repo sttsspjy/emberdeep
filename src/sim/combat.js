@@ -249,7 +249,7 @@
   // Natural Smite: the pool's owner Smites for the stored Radiance. Waits while the foe cannot take damage.
   W.checkSmite = function (e) {
     const o = e.radOwner;
-    if (!o || e.hp <= 0 || e.spawnT > 0 || e.invulnT > 0 || e.burrowed || e.rad < smiteAt(e)) return;
+    if (!o || e.hp <= 0 || e.spawnT > 0 || e.invulnT > 0 || e.burrowed || e.def.invuln || e.rad < smiteAt(e)) return;
     const amt = e.rad; e.rad = 0;
     const own = this.openChain();
     this.smite(e, o, amt);
