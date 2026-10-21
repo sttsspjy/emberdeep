@@ -166,8 +166,8 @@
       desc: 'Each of your minions explodes and heals you; then raise new minions.',
       parts: [
         { id: 'burst', label: 'Burst', base: 24, pow: 1.8, per: 'hit', r: 60, el: 'class', proc: true },
-        { id: 'corpse', label: 'Corpse burst', if: 'corpse', of: 'burst', mul: 'corpseMul', per: 'hit', proc: true },
-        { id: 'lance', label: 'Bone lance', if: 'boneLance', of: 'burst', mul1: 'boneLance', per: 'hit', proc: true },
+        { id: 'corpse', label: 'Corpse burst', if: 'corpse', of: 'burst', mul: 'corpseMul', per: 'hit', rOf: 'burst', rMul: 1, el: 'class', proc: true },
+        { id: 'lance', label: 'Bone lance', if: 'boneLance', of: 'burst', mul1: 'boneLance', per: 'hit', rOf: 'burst', rMul: 1, el: 'class', proc: true },
       ] },
   };
 

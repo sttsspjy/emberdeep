@@ -814,6 +814,7 @@
     REC = null;
     c.globalAlpha = ga;
     Sp.glow(c, 0, -10, 16, ED.ENEMIES.minion.col.c, 0.25);
+    if (ED.ClassFx.minion) ED.ClassFx.minion(c, a, t, knight, flip); // Bone Knight gear, Abyssal glow (cls-necro.js)
     return true;
   };
 
