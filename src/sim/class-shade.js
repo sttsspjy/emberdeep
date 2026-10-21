@@ -163,6 +163,7 @@
             const d = Math.hypot(o.x - t.x, o.y - t.y);
             if (d >= rad + o.r) continue;
             p.ambSet.add(o.id);
+            if (!t.shown) { t.shown = true; this.emit({ t: 'sweep', pid: p.pid, x: R(t.x), y: R(t.y), r: rad }); }
             this.hitEnemy(o, w.dmg, { p, kind: 'weapon', part: 'vanish.sweep', wpn: true, crit: true, mul: t.mul, ambush: true, sweep: true, knock: w.knock, kx: (o.x - t.x) / (d || 1), ky: (o.y - t.y) / (d || 1), x: t.x, y: t.y });
           }
         }

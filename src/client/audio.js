@@ -121,6 +121,12 @@
       case 'combust': noise('lowpass', 2000, 180, 0.4, 0.3 * v); tone('sawtooth', 170, 45, 0.32, 0.12 * v); tone('sine', 80, 32, 0.3, 0.22 * v); break;
       case 'guardhit': tone('square', 1700, 1450, 0.05, 0.07 * v); tone('sine', 2650, 2550, 0.2, 0.05 * v); noise('bandpass', 2200, 1200, 0.06, 0.1 * v, 3); break;
       case 'ambush': noise('bandpass', 3200, 700, 0.1, 0.2 * v, 2); tone('sawtooth', 720, 140, 0.13, 0.1 * v); tone('sine', 90, 45, 0.12, 0.18 * v); break;
+      // Shade: an execution slices low and wet, a whirl sweeps up and back, a rupture pops, a refund ticks up twice, a veil swells like breath
+      case 'exec': noise('bandpass', 2600, 300, 0.14, 0.24 * v, 2.5); tone('sawtooth', 190, 55, 0.16, 0.12 * v); tone('sine', 80, 38, 0.16, 0.22 * v); break;
+      case 'whirl': noise('bandpass', 500, 2800, 0.16, 0.2 * v, 2); noise('bandpass', 2800, 600, 0.16, 0.16 * v, 2, null, A.ctx.currentTime + 0.1); tone('triangle', 400, 900, 0.2, 0.05 * v); break;
+      case 'rupt': noise('lowpass', 2000, 180, 0.18, 0.26 * v, 1); tone('sine', 150, 55, 0.14, 0.2 * v); noise('highpass', 4200, 2200, 0.08, 0.08 * v); break;
+      case 'sref': tone('sine', 880, 1320, 0.07, 0.09 * v); tone('sine', 1320, 1760, 0.1, 0.09 * v, null, A.ctx.currentTime + 0.07); break;
+      case 'veil': noise('highpass', 3200, 1400, 0.3, 0.06 * v, 0.7); tone('triangle', 330, 520, 0.28, 0.07 * v); tone('sine', 660, 780, 0.3, 0.04 * v); break;
       case 'evolve': [262, 330, 392, 523, 659].forEach((f, i) => { tone('triangle', f, f * 1.005, 0.9, 0.08 * v, null, A.ctx.currentTime + i * 0.07); tone('sine', f * 2, f * 2, 0.7, 0.03 * v, null, A.ctx.currentTime + i * 0.07); }); tone('sine', 131, 131, 1.0, 0.12 * v); noise('highpass', 7000, 4000, 0.6, 0.03 * v, 1, null, A.ctx.currentTime + 0.3); break;
       case 'dread': { // low bell, deeper and more dissonant per tier
         const tier = arg | 0, f = [196, 147, 110, 73][Math.min(3, tier)];

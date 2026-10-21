@@ -723,6 +723,7 @@
           break;
         }
         case 'decoy': {
+          const df = ED.ClassFx.zone.decoy; if (df) { df(c, z, pass, t, k, view); break; } // the Shade's Afterimage (cls-shade.js)
           if (pass === 0) {
             const a = 0.5 + Math.sin(t * 20) * 0.2;
             if (!Pix.draw(c, 'hero.shade.idle', 'shadow', (t * 6.7) | 0, sx2(z.x), sx2(z.y), a)) Pix.put(c, Pix.ell(4, 6, '#2a1f44', true), sx2(z.x), sx2(z.y - 12), a);
