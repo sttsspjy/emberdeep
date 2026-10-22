@@ -4,7 +4,7 @@
 // Fields: tag (Heavy | Swift | Burst | Guard | Focus | Spread), plays (a T1 card's style line), forks ([idA, idB]), rider2 ('Name: sentence', appended from rank 2), rider ('Name: sentence', appended from rank 3),
 // form ({ name, desc }: the rank-3 transform; its name replaces the card name from rank 3, see ED.cardName), coop (helps allies),
 // weapon { kind: 'heavy' | 'swift', extra } (an attack fork's weapon transform; extra { mul: {field: factor}, add: {field: n}, ifNone: {field: value} } edits the fork after the rule).
-// desc tokens: {key} the card's total as a percentage, {key:n} a number, {key:s} seconds, {key:ck} a number x the weapon's critK, {key:ck3} (3 + number) x critK, {key:a25} 2.5 + number, {key:r100} 100 + number, {key:dr} 15% + number; [text with tokens] is dropped while a token inside is 0.
+// desc tokens: {key} the card's total as a percentage, {key:n} a number, {key:s} seconds, {key:ck} a number x the weapon's critK, {key:ck3} (3 + number) x critK, {key:a25} 2.5 + number, {key:o3} the ordinal of 3 + number ("2nd"), {key:r100} 100 + number, {key:dr} 15% + number; [text with tokens] is dropped while a token inside is 0.
 (function (ED) {
   'use strict';
   const CB = ED.CLASS_BOONS = {};
@@ -16,10 +16,12 @@
     desc: 'Every 3rd swing is a Cleave: +{cleave} damage, 40% more reach and arc, double knockback.', mods: { cleave: 0.6 } });
   card('knight', 'attack', 2, 'k_atk_h', { name: 'Oathbreaker', icon: 'hammer', tag: 'Heavy', weapon: { kind: 'heavy' },
     desc: 'Your weapon becomes heavy (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit; hits Stagger). Cleaves crack the ground: a shock at the swing tip (radius 72) deals {cShock} weapon damage and stuns {cStun:s}.[ Cleaves deal +{cleave} more.]',
-    rider: 'Follow-Through: your first swing after a Shield Charge is a Cleave at +{chargeCleave}.', mods: { cShock: 0.5, cStun: 0.3 }, up: { cleave: 0.1, cShock: 0.15 }, r3: { chargeCleave: 0.5 } });
+    rider2: 'Follow-Through: your first swing after a Shield Charge is a Cleave at +{chargeCleave}.', mods: { cShock: 0.5, cStun: 0.3 }, up: { cleave: 0.1, cShock: 0.15 }, r2: { chargeCleave: 0.5 }, r3: { fissure: 0.1, cleaveN: -1 },
+    form: { name: 'Earthsplitter', desc: 'Cleaves come every {cleaveN:o3} swing. Each Cleave splits the ground ahead: a fissure runs 180 forward along your aim, erupts 0.25 s later and strikes every foe on it once for {fissure} weapon damage, stunning them {cStun:s}.' } });
   card('knight', 'attack', 2, 'k_atk_s', { name: 'Sworn Blade', icon: 'blades', tag: 'Swift', weapon: { kind: 'swift' },
     desc: "Your weapon becomes swift (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit; attacks give Flow). Cleaves deal +{cleave} more.[ +{atk} attack speed.] Parry: a Cleave that starts in the last 0.3 s of a foe's wind-up (its rim flashes white) cancels that attack and stuns it 0.6 s (elites: 0.3 s stun, no cancel; never bosses), at most once per 2.5 s.",
-    rider: 'Riposte: each Parry readies {riposte:ck} guaranteed crits.', mods: { cleave: 0.3, parry: 1 }, up: { cleave: 0.1, atk: 0.03 }, r3: { riposte: 2 } });
+    rider2: 'Riposte: each Parry readies {riposte:ck} guaranteed crits.', mods: { cleave: 0.3, parry: 1 }, up: { cleave: 0.1, atk: 0.03 }, r2: { riposte: 2 }, r3: { bladeWave: 0.8 },
+    form: { name: 'Thousand Edges', desc: 'Every Cleave launches a blade wave along your aim, 180 long and 24 wide, that pierces every foe on it for {bladeWave} weapon damage. A Parry launches 3 waves in a fan instead.' } });
   card('knight', 'skill1', 1, 'k_s1', { name: 'Vanguard', icon: 'shield', forks: ['k_s1_a', 'k_s1_b'], plays: 'charge in just before the big hit lands.',
     desc: 'Shield Charge recharges {s1Cdr} faster and deals +{s1Dmg}. After a Charge you are Braced for {brace:s}: {braceDR} less damage taken (at most once per 4 s).', mods: { s1Cdr: 0.3, s1Dmg: 0.25, brace: 1.5, braceDR: 0.25 } });
   card('knight', 'skill1', 2, 'k_s1_a', { name: 'Juggernaut', icon: 'star', tag: 'Burst',
@@ -42,11 +44,13 @@
     form: { name: 'Bastion', desc: 'A second shield joins the first and orbits opposite it (radius 60); orbit strikes deal {orbitMul} of a strike. The orbit no longer times out: it lasts until your next Throw, and destroyed shots no longer shorten it.' } });
   card('knight', 'element', 1, 'k_el', { name: 'Oath of Ruin', icon: 'fang', forks: ['k_el_a', 'k_el_b'], plays: 'everything you hit bleeds; stack ailments, then cash them in.', desc: BLEED, mods: { bleedAll: 0.16, statusPow: 0.15 } });
   card('knight', 'element', 2, 'k_el_a', { name: 'Brand of Ruin', icon: 'eye', tag: 'Focus', coop: true,
-    desc: '+{brand} damage to a foe for each ailment on it (up to 4), from any hero.',
-    rider: 'Ruin Seal: Shield Charge and Shield Throw strikes seal foes for {seal:s}; Sealed counts as one more ailment for every hero (bosses too).', mods: { brand: 0.06 }, up: { brand: 0.01 }, r3: { seal: 4 } });
+    desc: '+{brand} damage to a foe for each of its first {brandCap:n} ailments, from any hero.',
+    rider2: 'Ruin Seal: Shield Charge and Shield Throw strikes seal foes for {seal:s}; Sealed counts as one more ailment for every hero (bosses too).', mods: { brand: 0.06, brandCap: 4 }, up: { brand: 0.01 }, r2: { seal: 4 }, r3: { doombrand: 1, brandMark: 0.5, brandCap: 2 },
+    form: { name: 'Doombrand', desc: 'Brand now counts up to {brandCap:n} ailments. A foe holding 4 or more ailments is Doombranded for 4 s: Marked, it takes +{brandMark} damage from every hero (the strongest Mark on a foe applies).' } });
   card('knight', 'element', 2, 'k_el_b', { name: 'Ruinous Blows', icon: 'axe', tag: 'Spread',
     desc: "Shield Charge and Shield Throw deal +{s1Dmg} and build your statuses at double strength, and the thrown shield carries wounds: each ricochet moves {carry} of the last foe's statuses to the next foe it strikes.",
-    rider: 'Ruin Spreads: a foe killed by a shield strike hands {ruinSpread} of its statuses to each of the 2 nearest foes within 80.', mods: { ruinInf: 1, carry: 0.25, s1Dmg: 0.15, s2Dmg: 0.15 }, up: { carry: 0.1 }, r3: { ruinSpread: 0.5 } });
+    rider2: 'Ruin Spreads: a foe killed by a shield strike hands {ruinSpread} of its statuses to each of the 2 nearest foes within 80.', mods: { ruinInf: 1, carry: 0.25, s1Dmg: 0.15, s2Dmg: 0.15 }, up: { carry: 0.1 }, r2: { ruinSpread: 0.5 }, r3: { cataclysm: 1, cataSplash: 0.6 },
+    form: { name: 'Cataclysm', desc: 'A Shield Charge or Shield Throw strike on a foe with 3 or more ailments detonates its wounds: its Bleed pool hits it at once and {cataSplash} of that amount bursts to foes within 80, who start Bleeding for it (at most once per second per foe).' } });
 
   // ---------------- Ranger (Volley · Rain of Arrows) ----------------
   card('ranger', 'attack', 1, 'r_atk', { name: 'Deadeye', icon: 'bow', forks: ['r_atk_h', 'r_atk_s'], plays: 'keep your distance; long shots ring.',
@@ -273,6 +277,7 @@
       case 'ck3': return trim(Math.max(1, Math.round((3 + v) * critK)), 0);
       case 'x': return trim(v, 3);
       case 'a25': return trim(2.5 + v, 2);
+      case 'o3': { const n = Math.round(3 + v), t = n % 100; return n + (t >= 11 && t <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10 < 4 ? n % 10 : 0]); }
       case 'r100': return trim(100 + v, 0);
       case 'dr': return trim((0.15 + v) * 100, 0) + '%';
       default: { const p = v * 100; return trim(p, Math.abs(p) >= 10 ? 0 : 2) + '%'; }
