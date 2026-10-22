@@ -45,7 +45,7 @@
       if (!live(e) || e.boss || e.aegisAt > w.time - AEGIS_T + 1e-6 || U.dist2(e.x, e.y, z.x, z.y) >= (z.r + e.r) ** 2) continue;
       if (w.stunFoe(e, st.aegisStun, true) > 0) e.aegisAt = w.time;
     }
-    w.emit({ t: 'aegis', x: rnd(z.x), y: rnd(z.y), r: rnd(z.r), pid: o.pid });
+    w.emit({ t: 'aegispulse', x: rnd(z.x), y: rnd(z.y), r: rnd(z.r), pid: o.pid });
   }
 
   // Zone update of a Sanctuary (z.update, every tick): Hallowed Ground keeps the foes inside Judged, Embolden gives the allies inside an Aura of Faith +auraDmg damage for AURA_T,
@@ -164,7 +164,7 @@
     for (const [f, o] of q) {
       if (f.hp <= 0) continue;
       w.hitEnemy(f, o.a, { p, kind: 'echo', raw: true, noProc: true, crit: false, noGuard: true, el: 'holy', affDone: true, echo: true, x: o.x, y: o.y });
-      w.emit({ t: 'echo', x0: rnd(o.x), y0: rnd(o.y), x1: rnd(f.x), y1: rnd(f.y), pid: p.pid });
+      w.emit({ t: 'jecho', x0: rnd(o.x), y0: rnd(o.y), x1: rnd(f.x), y1: rnd(f.y), pid: p.pid });
     }
   }
 

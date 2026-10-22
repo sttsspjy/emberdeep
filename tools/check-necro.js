@@ -396,6 +396,12 @@ const cast0 = (w, p) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x + 60, y: 
   { const R = stage({ n_s2: 1, n_s2_b: 2 }); for (let i = 0; i < 2; i++) R.w.spawnMinion(R.p, R.p.x, R.p.y, 12); R.w.playerSkill(R.p, 0, {}, 1); R.w.projs.length = 0; R.w.playerAttack(R.p, 0); ok(!(R.p.lichT > 0) && R.w.projs.filter(q => q.kind === 'soul').length === 1 && Math.abs(mine(R.w, R.p)[0].life - 12) < 1e-9, 'rank 2 opens no window'); }
 }
 
+{ // fodder never rises: not by Gravecaller, not by the luck roll; its corpse still counts for Corpse Explosion
+  const { w, p } = stage({ n_atk: 1, n_atk_h: 1 }); const e = foe(w, p.x + 50, p.y); e.fodder = true; e.hp = 1; weaponHit(w, p, e); ok(mine(w, p).length === 0 && p.raiseT <= 0, 'a fodder kill raises nothing (Gravecaller)');
+  const c = stage({ n_s2: 1, n_s2_a: 1 }); const f = foe(c.w, c.p.x + 50, c.p.y); f.fodder = true; weaponHit(c.w, c.p, f, 1e6); ok(c.w.corpses.length === 1, 'a fodder death leaves a corpse');
+  let rose = 0; for (let i = 0; i < 200; i++) { const s2 = stage({}, 7 + (i % 5)); const g = foe(s2.w, s2.p.x + 50, s2.p.y); g.fodder = true; g.hp = 1; weaponHit(s2.w, s2.p, g); rose += mine(s2.w, s2.p).length; } ok(rose === 0, 'the luck roll never raises fodder (' + rose + ' of 200)');
+}
+
 // ---- the luck roll still works for other builds, deterministic per seed ----
 {
   const cnt = (seed) => { const { w, p } = stage({}, seed); for (let i = 0; i < 100; i++) { const e = foe(w, p.x + 50, p.y); e.hp = 1; weaponHit(w, p, e); } return w.allies.filter(a => a.life > 0).length; };

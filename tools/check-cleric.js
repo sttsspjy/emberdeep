@@ -214,6 +214,9 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
   ok(b.hp <= 0 && nv === 1 && c.judged > 4 && lost(c) > 0 && lost(z) === 0, `Sentence: the Judged neighbour bursts in turn and Judges the next foe (${nv} burst)`);
   const no = stage({ c_s2: 1, c_s2_b: 1 }); const d3 = foe(no.w, no.p.x - 150, no.p.y), b3 = foe(no.w, no.p.x - 110, no.p.y); d3.judged = 5; d3.hp = 5; no.w.hitEnemy(d3, 99, { p: no.p, kind: 'weapon', crit: false }); run(no.w, 0.3); ok(lost(b3) > 0 && !(b3.judged > 0), 'no Sentence at rank 1');
 }
+{ // the kill shield of Judgment ignores fodder (shields do), but a Verdict burst still comes from it
+  const { w, p } = stage({ c_s2: 1, c_s2_b: 1 }); const e = foe(w, p.x + 80, p.y), n = foe(w, p.x + 100, p.y); e.fodder = true; w.playerSkill(p, 0, {}, 1); run(w, 0.3); e.hp = 3; p.shield = 0; w.hitEnemy(e, 99, { p, kind: 'weapon', crit: false }); run(w, 0.3); near(p.shield, 0, 1e-9, 'a Judged fodder foe dying gives no Judgment shield'); ok(lost(n) > 0, 'but its Verdict burst still lands');
+}
 { // the kill shield of Judgment (3% max HP, once per cast) is kept
   const { w, p } = stage({ c_s2: 1 }); const e = foe(w, p.x + 80, p.y), e2 = foe(w, p.x + 90, p.y + 10); w.playerSkill(p, 0, {}, 1); run(w, 0.3); e.hp = 3; e2.hp = 3; p.shield = 0;
   w.hitEnemy(e, 99, { p, kind: 'weapon', crit: false }); w.hitEnemy(e2, 99, { p, kind: 'weapon', crit: false }); near(p.shield, 0.03 * p.maxHp, 0.01, 'Judgment kill shield 3% once per cast');
@@ -326,9 +329,9 @@ const castSanct = (w, p, dx) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x +
   castSanct(S.w, S.p); S.ev.step(); const z = S.w.zones.find(q => q.kind === 'sanct');
   ok(z && z.follow === 'p0' && z.w === 9 && Math.abs(z.r - 170) < 1e-9, 'the aura follows the Cleric, marked w 9, radius 170'); near(z.dr, 0.15 + 0.24 + 0.1, 1e-9, 'damage reduction 15% + Sanctum 10% + Aura 14% + Aegis 10%'); near(z.drCap, C.DR_FLOOR, 1e-9, 'the zone may cut up to the DR floor (combat.js reads z.drCap)');
   ok(S.a.stun > 0.29 && S.a.stun <= 0.3 + 1e-9 && S.el.stun > 0.14 && S.el.stun <= 0.15 + 1e-9, `the cast pulses a stun: a common foe 0.3 s, an elite 0.15 s (${S.a.stun}, ${S.el.stun})`); ok(!(S.bs.stun > 0) && !(S.out.stun > 0), 'a boss and a foe outside the circle are not stunned');
-  ok(S.ev.all.filter(v => v.t === 'aegis').length === 1 && S.ev.all.find(v => v.t === 'aegis').r === 170, 'an aegis event with the circle');
-  S.a.stun = 0; S.el.stun = 0; run(S.w, 1.9, S.ev.step); ok(S.a.stun <= 0, 'no pulse before 2 s'); run(S.w, 0.2, S.ev.step); ok(S.a.stun > 0.15 && S.ev.all.filter(v => v.t === 'aegis').length === 2, 'the second pulse stuns again at 2 s');
-  run(S.w, 2.1, S.ev.step); ok(S.ev.all.filter(v => v.t === 'aegis').length === 3, 'a third pulse at 4 s'); run(S.w, 3, S.ev.step); ok(S.ev.all.filter(v => v.t === 'aegis').length === 3 && !S.w.zones.some(q => q.kind === 'sanct'), 'the aura (5.5 s) ends with three pulses');
+  ok(S.ev.all.filter(v => v.t === 'aegispulse').length === 1 && S.ev.all.find(v => v.t === 'aegispulse').r === 170, 'an aegis event with the circle');
+  S.a.stun = 0; S.el.stun = 0; run(S.w, 1.9, S.ev.step); ok(S.a.stun <= 0, 'no pulse before 2 s'); run(S.w, 0.2, S.ev.step); ok(S.a.stun > 0.15 && S.ev.all.filter(v => v.t === 'aegispulse').length === 2, 'the second pulse stuns again at 2 s');
+  run(S.w, 2.1, S.ev.step); ok(S.ev.all.filter(v => v.t === 'aegispulse').length === 3, 'a third pulse at 4 s'); run(S.w, 3, S.ev.step); ok(S.ev.all.filter(v => v.t === 'aegispulse').length === 3 && !S.w.zones.some(q => q.kind === 'sanct'), 'the aura (5.5 s) ends with three pulses');
   { const T = setup(3); castSanct(T.w, T.p); T.a.stun = 0; T.a.stunCd = 0; T.w.zones.find(q => q.kind === 'sanct').gA = 2; T.w.update(1 / 60); ok(!(T.a.stun > 0), 'a foe pulsed less than 2 s ago is skipped even when another pulse comes due'); }
   // damage taken: combat.js clamps a Sanctuary at 40% until it reads z.drCap (then the Aegis ally takes 51)
   const hit = (S2, who, src) => { who.hp = who.maxHp; who.invuln = 0; S2.w.hurtPlayer(who, 100, src || {}); return who.maxHp - who.hp; };
@@ -336,7 +339,7 @@ const castSanct = (w, p, dx) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x +
   const c3 = hit(R3, R3.ally), c2 = hit(R2, R2.ally);
   ok(c3 <= c2 && c3 >= 50, `an ally in the Aegis takes at most what it takes in the Aura and at least 50% (${c3} vs ${c2})`);
   R3.ally.braceT = 5; R3.ally.stats.braceDR = 0.4; ok(hit(R3, R3.ally) >= 50, 'Brace with the Aegis never takes the hit below the DR floor of 50%');
-  const R1 = setup(1); castSanct(R1.w, R1.p); run(R1.w, 2.2); ok(!R1.w.fx.some(v => v.t === 'aegis') && !(R1.a.stun > 0) && R1.w.zones.find(q => q.kind === 'sanct').w === undefined, 'ranks 1 and 2 never pulse'); ok(R2.w.zones.find(q => q.kind === 'sanct').drCap === undefined, 'and carry no DR cap');
+  const R1 = setup(1); castSanct(R1.w, R1.p); run(R1.w, 2.2); ok(!R1.w.fx.some(v => v.t === 'aegispulse') && !(R1.a.stun > 0) && R1.w.zones.find(q => q.kind === 'sanct').w === undefined, 'ranks 1 and 2 never pulse'); ok(R2.w.zones.find(q => q.kind === 'sanct').drCap === undefined, 'and carry no DR cap');
   const quick = ED.Stats.compute({ cls: 'cleric', weapon: 'mace', boons: { c_s1: 1, c_s1_b: 3 }, relics: [], meta: META(), pact: 0 }); quick.cdr = 0.4; quick.sn = null; const qn = ED.Stats.skillNums('sanctuary', quick);
   ok(qn.p.zone.dur <= 0.6 * qn.cdEff + 1e-9, `the Aegis aura still lasts at most 60% of the cooldown (${qn.p.zone.dur.toFixed(2)} of ${qn.cdEff.toFixed(2)})`);
   const fod = setup(3); fod.a.fodder = true; castSanct(fod.w, fod.p); ok(fod.a.stun > 0, 'fodder is pulsed too');
@@ -366,7 +369,7 @@ const castSanct = (w, p, dx) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x +
   const dA = (() => { const h0 = S.A.hp; S.w.hitEnemy(S.A, 100, { p: S.p, kind: 'weapon', crit: false }); return h0 - S.A.hp; })();
   ok(lost(S.B) === 0 && S.p.echoQ.size === 2, 'the echo is queued: not instant, two Judged foes within 200 of the struck one'); S.w.update(DT); S.ev.step();
   near(lost(S.B), dA * 0.2 * 1.2, 0.02, 'a Judged foe within 200 takes 20% of the damage (through its own +20%)'); near(lost(S.C), dA * 0.2 * 1.2, 0.02, 'every other Judged foe within 200 does'); ok(lost(S.D) === 0, 'a Judged foe 260 away does not'); ok(lost(S.E) === 0, 'a foe that is not Judged does not');
-  near(lost(S.A), dA, 1e-9, 'the struck foe takes only the blow: an echo never echoes again'); ok(S.log.filter(h => h.part === 'echo').length === 2 && S.ev.all.filter(v => v.t === 'echo').length === 2, 'two echo hits and two echo events');
+  near(lost(S.A), dA, 1e-9, 'the struck foe takes only the blow: an echo never echoes again'); ok(S.log.filter(h => h.part === 'echo').length === 2 && S.ev.all.filter(v => v.t === 'jecho').length === 2, 'two echo hits and two echo events');
   ok(S.B.rad === 0 && S.B.bleedPool === 0 && S.A.rad > 0 && S.A.bleedPool > 0, 'an echo carries no Radiance, Bleed or other on-hit effect (the blow did)');
   const a0 = S.A.hp; run(S.w, 0.2); near(a0 - S.A.hp, 0, 1e-6, 'nothing bounces back to the struck foe'); ok(S.p.echoQ.size === 0, 'the queue is empty again');
   S.w.hitEnemy(S.D, 100, { p: S.p, kind: 'weapon', crit: false }); S.w.update(DT); const cb = lost(S.C); ok(cb > dA * 0.2 * 1.2 * 1.5, 'a hit on the far foe echoes to the one within its 200');

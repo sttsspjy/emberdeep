@@ -96,12 +96,16 @@
 
   // Raises a minion for the owner (the oldest falls when the cap is full). kind labels the rise effect (gc Gravecaller, yard Boneyard, again Rise Again); tide: a Risen Tide minion (lasts TIDE_LIFE longer, hits harder).
   // Bone Knights (the owner holds knights) are armoured: bigger, longer-lived by knightLife.
-  // A Death Knight holds the cap by itself (it counts as 2 minions and is never replaced): every other raise is refused while it stands. Lich Form doubles the life of what the Necromancer raises in its window.
+  // A Death Knight counts as 2 minions against the cap and is never the one that falls. Lich Form doubles the life of what the Necromancer raises in its window.
   W.spawnMinion = function (owner, x, y, life, kind, tide) {
     const st = owner.stats, kn = st.knights > 0;
     const mine = this.allies.filter(a => a.owner === owner.pid && a.life > 0 && !a.bomb);
-    if (mine.some(a => a.dk)) return null;
-    if (mine.length >= st.maxMinions) { mine.sort((a, b) => a.life - b.life); mine[0].life = 0; }
+    let used = 0; for (const m of mine) used += m.dk ? 2 : 1;
+    if (used >= st.maxMinions) { // the cap is full: the oldest minion falls; a Death Knight is never the one (nothing else to free: the raise is refused)
+      const old = mine.filter(m => !m.dk).sort((u, v) => u.life - v.life)[0];
+      if (!old) return null;
+      old.life = 0;
+    }
     const l = (life + (tide ? C.TIDE_LIFE : 0)) * (kn ? 1 + st.knightLife : 1) * (owner.lichT > 0 ? st.lichLife : 1);
     const a = { id: U.uid(), owner: owner.pid, x, y, r: kn ? C.KNIGHT_R : 9, life: l, maxLife: l, cd: 0.5, face: 1, knight: kn, tide: !!tide, k: 0,
       dmg: ED.Stats.skillNums('legion', st).p.minion.dmg * (1 + st.minionDmg) };

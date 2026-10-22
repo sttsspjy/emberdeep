@@ -258,7 +258,7 @@
     } else if (pass === 1) R.glow(c, z.x, z.y, z.r * 0.8, '#ffe9a0', 0.22 * fade);
   };
   // A pulse of the Aegis: two rings sweeping out to the circle, a flash at the Cleric and a bright chime.
-  CFX.on('aegis', (ev, ctx, local) => {
+  CFX.on('aegispulse', (ev, ctx, local) => {
     const F = FX(), mine = ev.pid === local, m = mine ? 1 : 0.7;
     F.ring(ev.x, ev.y, ev.r, PALE, 0.45, 5); F.ring(ev.x, ev.y, ev.r * 0.62, '#ffffff', 0.34, 3); F.pop(ev.x, ev.y - 8, ev.r * 0.35, '#ffe9a0', 0.22, true);
     SP('fx.ring.shock', ev.x, ev.y - 4, { ramp: HOLY, add: true, a: 0.8 * m, speed: 1.2 });
@@ -290,7 +290,7 @@
   });
 
   // Final Judgment: an echo is a gold chain from the struck foe to the one it reaches, a flash at the receiver and a thin chime; Judged foes of such a party wear linked rings over their heads.
-  CFX.on('echo', (ev, ctx, local) => {
+  CFX.on('jecho', (ev, ctx, local) => {
     const F = FX(), m = ev.pid === local ? 1 : 0.6;
     F.bolts.push({ pts: [[ev.x0, ev.y0 - 8], [ev.x1, ev.y1 - 8]], life: 0.2, max: 0.2, color: GOLD, st: true }); if (F.bolts.length > 24) F.bolts.shift();
     F.pop(ev.x1, ev.y1 - 8, 18, '#fff3c4', 0.14, true); F.ring(ev.x1, ev.y1 - 4, 16, GOLD, 0.2, 2);
