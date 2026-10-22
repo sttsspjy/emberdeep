@@ -284,7 +284,7 @@ const charge = (w, p, len) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x1: p.x + 
   const tt = (id, r) => ED.cardTotals(ED.BOONS[id], r);
   near(tt('k_s1_a', 3).avalanche, 0.9, 1e-9, 'Avalanche slam 90% of the impact'); near(tt('k_s1_a', 3).avaStun, 0.8, 1e-9, 'Avalanche stun 0.8'); near(tt('k_s1_a', 3).avaCrack, 0.3, 1e-9, 'Avalanche cracks 30%');
   near(tt('k_s1_b', 3).bannerDur, 5, 1e-9, 'War Banner 5 s'); near(tt('k_s1_b', 3).bannerSlow, 0.4, 1e-9, 'War Banner slow 40%'); near(tt('k_s1_b', 3).bannerWeak, 0.25, 1e-9, 'War Banner weakens 25%');
-  near(tt('k_s2_a', 3).tempest, 3, 1e-9, 'Aegis Tempest three shields'); near(tt('k_s2_a', 3).vortexMul, 0.08, 1e-9, 'vortex 8% of a strike'); near(tt('k_s2_a', 3).vortexDur, 2.5, 1e-9, 'vortex 2.5 s'); near(tt('k_s2_b', 3).orbitMul, 0.15, 1e-9, 'Bastion strike 15%');
+  near(tt('k_s2_a', 3).tempest, 3, 1e-9, 'Aegis Tempest three shields'); near(tt('k_s2_a', 3).vortexMul, 0.03, 1e-9, 'vortex 3% of a strike'); near(tt('k_s2_a', 3).vortexDur, 2.5, 1e-9, 'vortex 2.5 s'); near(tt('k_s2_b', 3).orbitMul, 0.15, 1e-9, 'Bastion strike 15%');
   const N3 = ED.Stats.skillNums('charge', build('knight', 0, { k_s1: 1, k_s1_a: 3 }));
   near(N3.p.quake.dmg, N3.p.impact.dmg * 0.9, 1e-6, 'quake part: 90% of the impact'); near(N3.p.crack.dmg, N3.p.impact.dmg * 0.3, 1e-6, 'crack part: 30% of the impact');
   ok(!N3.p.shock.on && ED.Stats.skillNums('charge', build('knight', 0, { k_s1: 1, k_s1_a: 2 })).p.shock.on, 'the slam replaces the shockwave part at rank 3 only');
@@ -361,7 +361,7 @@ const charge = (w, p, len) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x1: p.x + 
   const lastStrike = partHits(t3.log, 'shieldthrow.strike').pop();
   ok(t3.vz && lastStrike && Math.hypot(t3.vz.x - lastStrike.px, t3.vz.y - lastStrike.py) < 1, 'the vortex forms on the last foe struck');
   const vh = partHits(t3.log, 'shieldthrow.vortex');
-  ok(vh.length >= 20 && vh.every(h => Math.abs(h.d / strike - 0.08) < 0.01), `the vortex strikes for 8% of a strike (${vh.length} hits, ${vh[0] ? (vh[0].d / strike).toFixed(2) : '-'})`);
+  ok(vh.length >= 20 && vh.every(h => Math.abs(h.d / strike - 0.03) < 0.01), `the vortex strikes for 3% of a strike (${vh.length} hits, ${vh[0] ? (vh[0].d / strike).toFixed(2) : '-'})`);
   const perFoe = {}; for (const h of vh) perFoe[h.e.id] = (perFoe[h.e.id] || 0) + 1; const counts = Object.values(perFoe).sort((a, b) => b - a);
   ok(counts.length >= 2 && counts[0] >= 9 && counts[0] <= 11, `a foe inside the whole time is struck 4 times a second for 2.5 s (${counts.join(',')})`);
   ok(t3.pull && t3.pull.d1 && t3.pull.d.some((d0, i) => d0 > 40 && d0 < 100 && d0 - t3.pull.d1[i] > 40), `foes inside are pulled in about 60 px/s (${t3.pull && t3.pull.d1 ? t3.pull.d.map((d0, i) => Math.round(d0) + '>' + Math.round(t3.pull.d1[i])).join(' ') : '-'})`);
