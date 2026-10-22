@@ -488,21 +488,21 @@ function runBot(opts) {
     let i = 0;
     for (const p of this.players.values()) { const g = (p.shield || 0) - before[i++]; if (g > 0) { const m = shMix.get(p.pid); m.door = (m.door || 0) + g; rec.shield.gained.door = (rec.shield.gained.door || 0) + g; } }
   };
+  const shBefore = [];
   w.updateShields = function (dt) {
-    const before = [...this.players.values()].map(p => p.shield);
-    dec0.call(this, dt);
     let i = 0;
-    for (const p of this.players.values()) { const b = before[i++]; if (b > 0 && p.shield < b) { const f = p.shield / b, m = shMix.get(p.pid); for (const k in m) m[k] *= f; } }
+    for (const p of this.players.values()) shBefore[i++] = p.shield;
+    dec0.call(this, dt);
+    i = 0;
+    for (const p of this.players.values()) { const b = shBefore[i++]; if (b > 0 && p.shield < b) { const f = p.shield / b, m = shMix.get(p.pid); for (const k in m) m[k] *= f; } }
   };
   // a Reap kills without a hitEnemy call: its health counts as shadow damage
   w.checkReap = function (e) { const hp = e.hp; reap0.call(this, e); if (e.killed && hp > 0 && e.doomOwner) { rec.cnt.reapHp += hp; const bk = rec.src[this.stratum - 1] || (rec.src[this.stratum - 1] = Object.fromEntries(BUCKETS.map(b => [b, 0]))); bk.shadow += hp; } };
   // heal totals by source: callers that heal are wrapped to label the amount healPlayer returns
   const heal0 = w.healPlayer;
   w.healPlayer = function (p, amt, silent) { const v = heal0.call(this, p, amt, silent); rec.heal[rec.healSrc] = (rec.heal[rec.healSrc] || 0) + v; return v; };
-  for (const [fn, label] of [['heroProcs', 'hit'], ['tickStatuses', 'dot'], ['collect', 'pickup'], ['interact', 'prop'], ['killEnemy', 'kill'], ['onStratumBuild', 'stratum'], ['updatePlayerBuild', 'regen'], ['onEnemyKilledSkill', 'skillkill'], ['playerSkill', 'skill'], ['pickBoon', 'boon'], ['updateProjectiles', 'proj'], ['updateAllies', 'minion']]) {
-    const f0 = w[fn];
-    w[fn] = function (...a) { const prev = rec.healSrc; rec.healSrc = label; try { return f0.apply(this, a); } finally { rec.healSrc = prev; } };
-  }
+  const labeled = (f0, label) => function (a, b, c, d, e, f) { const prev = rec.healSrc; rec.healSrc = label; const r = f0.call(this, a, b, c, d, e, f); rec.healSrc = prev; return r; }; // sets the heal label for the call (the widest wrapped signature has 6 parameters)
+  for (const [fn, label] of [['heroProcs', 'hit'], ['tickStatuses', 'dot'], ['collect', 'pickup'], ['interact', 'prop'], ['killEnemy', 'kill'], ['onStratumBuild', 'stratum'], ['updatePlayerBuild', 'regen'], ['onEnemyKilledSkill', 'skillkill'], ['playerSkill', 'skill'], ['pickBoon', 'boon'], ['updateProjectiles', 'proj'], ['updateAllies', 'minion']]) w[fn] = labeled(w[fn], label);
   // offers by source and relics by room type (room.type of the hero's room when the relic was taken)
   const spawn0 = w.spawnEnemy;
   w.spawnEnemy = function (type, x, y, o) { rec.spawns[type] = (rec.spawns[type] || 0) + 1; return spawn0.call(this, type, x, y, o); };
