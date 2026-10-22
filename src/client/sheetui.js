@@ -61,7 +61,7 @@
     $('sh-name').textContent = h.name; $('sh-name').style.color = color;
     $('sh-class').textContent = ' · ' + h.clsName;
     const rt = m.build.route;
-    $('sh-sub').textContent = m.weapon.name + (rt.route ? ' · ' + ED.routeLabel(h.cls, rt.route) + ' route' + (rt.fork ? ': ' + ED.BOONS[rt.fork].name + (rt.rank > 1 ? ' (rank ' + rt.rank + ')' : '') : '') : ' · no route yet');
+    $('sh-sub').textContent = m.weapon.name + (rt.route ? ' · ' + ED.routeLabel(h.cls, rt.route) + ' route' + (rt.fork ? ': ' + ED.cardName(rt.fork, rt.rank) + (rt.rank > 1 ? ' (rank ' + rt.rank + ')' : '') : '') : ' · no route yet');
     const xpf = U.clamp(h.xp / Math.max(1, h.xpNext), 0, 1);
     $('sh-lv').textContent = 'Lv ' + h.level; $('sh-xpbar').style.width = Math.round(100 * xpf) + '%'; $('sh-xp').textContent = Math.round(100 * xpf) + '%';
     $('sh-hp').textContent = `${h.hp} / ${h.maxHp}`; $('sh-hpbar').style.width = Math.round(100 * U.clamp(h.hp / Math.max(1, h.maxHp), 0, 1)) + '%';
