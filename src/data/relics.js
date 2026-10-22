@@ -16,7 +16,7 @@
     glasseye: { name: 'Glass Eye', rar: 'r', icon: 'eye', desc: '+10% critical chance.', mods: { crit: 0.1 } },
     elixir: { name: 'Elixir Flask', rar: 'c', icon: 'potion', desc: 'Heal 20% at the start of each stratum. +10% healing.', mods: { strataHeal: 0.2, heal: 0.1 } },
     axe: { name: "Headsman's Axe", rar: 'r', icon: 'axe', desc: '+60% damage to foes below 30% health.', mods: { execute: 0.6 } },
-    cloak: { name: 'Shadow Cloak', rar: 'r', icon: 'cloak', desc: 'Dash recharges 35% faster. +5% dodge.', mods: { dashcdr: 0.35, dodge: 0.05 } },
+    cloak: { name: 'Shadow Cloak', rar: 'r', icon: 'cloak', desc: 'A dash charge recharges in 1 s instead of 1.5 s. +5% dodge.', mods: { dashcdr: 1 / 3, dodge: 0.05 } },
     satchel: { name: 'Bomb Satchel', rar: 'r', icon: 'bomb', desc: 'Dashing drops a bomb (200% Power).', mods: { dashBomb: 1 }, pw: { k: 2 } },
     lantern: { name: 'Soul Lantern', rar: 'r', icon: 'lantern', desc: '+20% experience and a brighter light.', mods: { xp: 0.2, light: 0.35 } },
     seeker: { name: 'Seeker Gem', rar: 'e', icon: 'gem', desc: 'Projectiles seek foes. Melee reach +20%.', mods: { homing: 3, meleeReach: 0.2 } },

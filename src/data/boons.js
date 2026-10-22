@@ -99,7 +99,7 @@
     plating: { name: 'Plating', rar: 'c', icon: 'shield', open: true, desc: '+{armor} armor.', mods: { armor: 5 }, max: 2 },
     fleet: { name: 'Fleet Foot', rar: 'c', icon: 'boot', open: true, desc: '+{spd} move speed.', mods: { spd: 0.07 }, max: 2 },
     focus: { name: 'Focus', rar: 'c', icon: 'hourglass', open: true, desc: 'Skills recharge {cdr} faster.', mods: { cdr: 0.10 }, max: 3 },
-    lightstep: { name: 'Light Step', rar: 'c', icon: 'wing', open: true, desc: 'Dash recharges {dashcdr} faster.', mods: { dashcdr: 0.2 }, max: 2 },
+    lightstep: { name: 'Light Step', rar: 'c', icon: 'wing', open: true, desc: 'Dash: +{dashN} charge(s).', mods: { dashN: 1 }, max: 2 },
     magnet: { name: 'Lodestar', rar: 'c', icon: 'magnet', open: true, desc: '+{pickup} pickup range and +{xp} experience.', mods: { pickup: 0.4, xp: 0.1 }, max: 2 },
     edge: { name: 'Sharpened Edge', rar: 'c', icon: 'sword', open: true, desc: '+{dmg} damage.', mods: { dmg: 0.10 }, max: 2 },
     quick: { name: 'Quickened Hands', rar: 'c', icon: 'hand', open: true, desc: '+{atk} attack speed.', mods: { atk: 0.10 }, max: 2 },
