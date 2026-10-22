@@ -247,12 +247,12 @@ const run = (w, secs, f) => { for (let i = 0; i < Math.round(secs * 60); i++) { 
   const pr2 = w.spawnProj({ team: 0, kind: 'arrow', x: p.x, y: p.y, a: a0, speed: 300, r: 4, dmg: 1, life: 1, owner: p.pid, homing: 8, homeA0: a0, homeCone: cone, pierce: 5 });
   for (let i = 0; i < 10; i++) w.updateProjectiles(1 / 60);
   ok(ang(pr2) > 0.05 && ang(pr2) <= cone + 1e-9, 'cone homing steers toward a foe inside the cone and never past it'); void out; void inn;
-  w.enemies.length = 0; w.projs.length = 0; const seen = []; ED.CLS.ranger.projEnd = (pr, owner, why) => seen.push(why);
+  w.enemies.length = 0; w.projs.length = 0; const seen = [], realEnd = ED.CLS.ranger.projEnd; ED.CLS.ranger.projEnd = (pr, owner, why) => seen.push(why);
   const pr3 = w.spawnProj({ team: 0, kind: 'arrow', x: p.x, y: p.y, a: 0, speed: 100, r: 4, dmg: 1, life: 0.05, owner: p.pid });
   for (let i = 0; i < 6; i++) w.updateProjectiles(1 / 60);
   w.spawnProj({ team: 0, kind: 'arrow', x: p.x, y: p.y, a: Math.PI, speed: 900, r: 4, dmg: 1, life: 5, owner: p.pid, hk: 'skill' });
   for (let i = 0; i < 120; i++) w.updateProjectiles(1 / 60);
-  delete ED.CLS.ranger.projEnd; ok(seen.join() === 'life,wall', `projEnd hook on life end and wall (got ${seen.join()})`);
+  ED.CLS.ranger.projEnd = realEnd; ok(seen.join() === 'life,wall', `projEnd hook on life end and wall (got ${seen.join()})`);
   near(pr3.dist, 5, 1.5, 'every hero shot accumulates its distance');
 }
 {

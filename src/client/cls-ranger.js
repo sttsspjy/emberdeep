@@ -1,6 +1,7 @@
 // ranger route-card visuals, client only: registers ED.ClassFx hooks (event, zone, hero and foe-mark hooks; contract in fx.js).
 // Deadeye far-shot spark, Quickdraw frost streak, Flurry fan, Scattershot hop and caltrops, Hail of Thorns glints, Skyfall and Second Shower landings, Splitting Bolt split, Hunter's Mark glyph and leap, Contagion threads.
 // Skill forms: Death Mark (waves, red-tinged arrows, bursts), Thornburst (the ring), Starfall Barrage (falling stars, star landings), Storm of Thorns (thorn ring on the Rain, bramble patches).
+// Attack and element forms: Siege Ballista (a larger, brighter bolt body; the siege blast is the boom k 'siege'), Storm Bow (ricochet streak = chain k 'r'; Flurry draws all its arrows), Hemorrhage (chain k 'm': blood spray), Plaguebearer (chain k 'g': green-red cloud).
 (function (ED) {
   'use strict';
   const F = ED.FX, CFX = ED.ClassFx, A = ED.Audio;
@@ -30,13 +31,14 @@
     }
   });
 
-  // ---- Flurry: every nth attack fans three streaks out of the bow ----
+  // ---- Flurry: every nth attack fans a streak per arrow out of the bow (the aimed one plus 2 + flurryN, spaced as the sim fires them) ----
   CFX.on('atk', (ev, ctx, local) => {
-    const p = ctx.player(ev.pid), n = p && p.stats && p.stats.flurry;
+    const p = ctx.player(ev.pid), st = p && p.stats, n = st && st.flurry;
     if (!n || ev.n % n) return;
-    const mx = p.x + Math.cos(ev.a) * 14, my = p.y - 10 + Math.sin(ev.a) * 14;
-    for (let s = -1; s <= 1; s++) F.burst(mx, my, 2, { kind: 'streak', color: '#e8f0ff', a: ev.a + s * 0.12, spread: 0.04, sp: 380, life: 0.16, size: 1.7, drag: 6 });
-    F.pop(mx, my, 13, '#dfe9ff', 0.1);
+    const mx = p.x + Math.cos(ev.a) * 14, my = p.y - 10 + Math.sin(ev.a) * 14, extra = 2 + Math.max(0, Math.round(st.flurryN || 0)), step = extra > 2 ? 0.09 : 0.12, flip = (extra & 1) && (Math.round(ev.n / n) & 1) ? -1 : 1;
+    F.burst(mx, my, 2, { kind: 'streak', color: '#e8f0ff', a: ev.a, spread: 0.04, sp: 380, life: 0.16, size: 1.7, drag: 6 });
+    for (let k = 0; k < extra; k++) F.burst(mx, my, 2, { kind: 'streak', color: extra > 2 ? '#bfe0ff' : '#e8f0ff', a: ev.a + ((k & 1) ? 1 : -1) * flip * ((k >> 1) + 1) * step, spread: 0.04, sp: 380, life: 0.16, size: 1.7, drag: 6 });
+    F.pop(mx, my, extra > 2 ? 17 : 13, '#dfe9ff', 0.1);
     A.play('shoot', ev.pid === local ? 0.5 : 0.22);
   });
 
@@ -113,8 +115,42 @@
     A.play('shoot', ev.pid === local ? 0.45 : 0.2);
   });
 
+  // ---- Storm Bow (chain k 'r', pts: struck foe, new target): a bright straight streak with a spark where the ricochet lands ----
+  let ricT = 0;
+  function ricochetFx(ev) {
+    const a = ev.pts[0], b = ev.pts[1];
+    if (F.bolts.length < 24) F.bolts.push({ pts: [[a[0], a[1]], [b[0], b[1]]], life: 0.14, max: 0.14, color: '#eaf4ff', st: true });
+    F.burst(b[0], b[1], 2, { kind: 'spark', color: '#dff1ff', sp: 120, life: 0.18, size: 1.4, drag: 5 });
+    F.pop(b[0], b[1], 8, '#eaf4ff', 0.1);
+    if (F.time - ricT > 0.06) { ricT = F.time; A.play('deflect', 0.16); }
+  }
+  // ---- Hemorrhage (chain k 'm', pts: the foe, r: its radius): a spray of blood droplets and a red burst ----
+  let hemoT = 0;
+  function hemorrhageFx(ev, ctx, local) {
+    const x = ev.pts[0][0], y = ev.pts[0][1], big = Math.max(10, ev.r || 10);
+    F.burst(x, y, low() ? 8 : 16, { kind: 'shard', color: '#c01830', sp: 150, life: 0.6, size: 2.2, vz: 100, z: 4 });
+    F.burst(x, y, 6, { kind: 'streak', color: '#ff5a4a', a: -Math.PI / 2, spread: 2.6, sp: 260, life: 0.28, size: 1.8, drag: 4 });
+    F.ring(x, y + 6, big * 1.6, '#d43a3a', 0.28, 3);
+    F.pop(x, y, big * 1.3, '#ff7a6a', 0.16, true);
+    if (!low()) SP('fx.circle.spark', x, y + 6, { ramp: 'blood', add: true, speed: 1.5 });
+    if (F.time - hemoT > 0.08) { hemoT = F.time; A.play('rupt', 0.3); }
+  }
+  // ---- Plaguebearer (chain k 'g', pts: the corpse, the rim PLAGUE_R away): a green and red cloud rolls out to the rim ----
+  let plagueT = 0;
+  function plagueFx(ev) {
+    const x = ev.pts[0][0], y = ev.pts[0][1], r = Math.max(20, ev.pts[1][0] - x);
+    F.ring(x, y, r, '#9be33c', 0.45, 4); F.ring(x, y, r * 0.65, '#d43a3a', 0.3, 2);
+    F.burst(x, y - 4, low() ? 6 : 12, { kind: 'smoke', color: '#9be33c', sp: r * 1.4, life: 0.6, size: 6, drag: 3 });
+    F.burst(x, y - 4, low() ? 4 : 8, { kind: 'smoke', color: '#b0242c', sp: r * 1.0, life: 0.5, size: 5, drag: 3 });
+    F.pop(x, y - 4, r * 0.6, '#c9f06a', 0.2);
+    if (!low()) { SP('fx.puff', x - 14, y - 8, { ramp: 'poison', speed: 1.1, a: 0.85 }); SP('fx.puff', x + 14, y - 6, { ramp: 'blood', speed: 1.1, a: 0.7, delay: 0.05 }); }
+    if (F.time - plagueT > 0.08) { plagueT = F.time; A.play('magic', 0.3); }
+  }
   // ---- Contagion (chain k 'c'): a poison-green thread from the dead foe to each foe that catches its statuses, violet motes along it ----
-  CFX.on('chain', (ev) => {
+  CFX.on('chain', (ev, ctx, local) => {
+    if (ev.k === 'r') { ricochetFx(ev); return true; }
+    if (ev.k === 'm') { hemorrhageFx(ev, ctx, local); return true; }
+    if (ev.k === 'g') { plagueFx(ev); return true; }
     if (ev.k !== 'c') return;
     if (ev.pts.length < 2) return true;
     const a = ev.pts[0], b = ev.pts[1];
@@ -158,6 +194,58 @@
     for (let i = 1; i <= 3; i++) { c.globalAlpha = 0.8 - i * 0.2; c.fillRect(Pix.s2(x - ux * i * 7) - 1, Pix.s2(y - uy * i * 7) - 1, 2, 2); }
     c.globalAlpha = 1;
   };
+
+  // ---- Siege Ballista: the bolt (an arrow shot twice its owner's hitbox radius) is drawn as a long gold-tipped bolt on the pixel grid, 32 heading steps, with a bright tail; it ends in the boom k 'siege' ----
+  const SIEGE_SEEN = new Map();
+  function isSiege(pr) {
+    if (pr.team !== 0) return false;
+    let k = SIEGE_SEEN.get(pr.id);
+    if (k !== undefined) return k;
+    k = false;
+    const g = ED.Game && ED.Game.s, v = g ? g.view : null;
+    if (v) for (const p of v.players.values()) { const st = p.stats; if (p.cls === 'ranger' && st && st.siege > 0 && st.weapon && Math.abs(pr.r - 2 * st.weapon.r) < 0.6) { k = true; break; } }
+    if (SIEGE_SEEN.size > 200) SIEGE_SEEN.clear();
+    SIEGE_SEEN.set(pr.id, k);
+    return k;
+  }
+  // The bolt along heading step / 32 turns: u runs along the heading (length SG_L art px), v across it; wood shaft, white-hot core, a wide gold head and cream fletching.
+  const SG_L = 22;
+  function siegeSprite(step) {
+    const S = 2 * Math.ceil(SG_L / 2) + 4, th = step / 32 * Math.PI * 2, co = Math.cos(th), si = Math.sin(th), h = SG_L / 2;
+    return Pix.bake('sg|' + step, S, S, S / 2, S / 2, (b, w) => {
+      const wood = Pix.px32('#7a5426'), wood2 = Pix.px32('#c89a52'), gold = Pix.px32('#ffd36b'), hot = Pix.px32('#fff3c4'), white = Pix.px32('#ffffff'), cream = Pix.px32('#e8e2c8'), rim = Pix.px32('#a8841e');
+      for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+        const px = x + 0.5 - S / 2, py = y + 0.5 - S / 2, u = px * co + py * si, v = Math.abs(-px * si + py * co);
+        if (u < -h || u > h) continue;
+        const tail = u + h, head = h - u; // art px from the tail end and from the tip
+        if (head < 8) { const hw = 4.6 * head / 8; if (v <= hw) b[y * w + x] = v < 0.8 ? white : v < hw * 0.55 ? hot : head < 1.6 ? hot : v > hw - 1 ? rim : gold; continue; }
+        if (tail < 5) { if (v <= 2 + (5 - tail) * 0.5 && v >= (tail < 2 ? 0 : 1.2)) b[y * w + x] = v < 1.2 ? wood2 : cream; continue; }
+        if (v <= 1.6) b[y * w + x] = v < 0.7 ? hot : v > 1.2 ? wood : wood2;
+      }
+    });
+  }
+  (CFX.shotBody || (CFX.shotBody = {})).arrow = (c, pr, t, x, y, foe) => {
+    if (foe || !isSiege(pr)) return false;
+    const sp = Math.hypot(pr.vx, pr.vy) || 1, ux = pr.vx / sp, uy = pr.vy / sp;
+    c.fillStyle = '#ffd36b';
+    for (let i = 1; i <= 5; i++) { c.globalAlpha = 0.85 - i * 0.15; const s = i < 3 ? 6 : 4; c.fillRect(Pix.s2(x - ux * (7 + i * 7)) - s / 2, Pix.s2(y - uy * (7 + i * 7)) - s / 2, s, s); }
+    c.globalAlpha = 1;
+    Pix.put(c, siegeSprite(Math.round(Math.atan2(pr.vy, pr.vx) / (Math.PI * 2) * 32) & 31), Pix.s2(x), Pix.s2(y));
+    return true;
+  };
+  CFX.on('boom', (ev, ctx, local) => {
+    if (ev.k !== 'siege') return;
+    const d = away(ctx, ev.x, ev.y), r = ev.r;
+    F.ring(ev.x, ev.y, r * 1.1, '#ffd36b', 0.4, 5); F.ring(ev.x, ev.y, r * 0.6, '#ffffff', 0.25, 2);
+    F.pop(ev.x, ev.y - 4, r * 0.9, '#ffe9a0', 0.22, true);
+    F.burst(ev.x, ev.y, low() ? 8 : 14, { kind: 'shard', color: '#c89a52', sp: r * 2.4, life: 0.55, size: 2.4, vz: 110, z: 3 });
+    F.burst(ev.x, ev.y - 2, 10, { kind: 'streak', color: '#fff3c4', sp: r * 3.4, life: 0.26, size: 1.8, drag: 4 });
+    F.dust(ev.x, ev.y, 'dust', 4);
+    if (!low()) SP('fx.ring.shock', ev.x, ev.y - 4, { add: true, ramp: 'gold', delay: 0.02 });
+    if (d < 360) { F.addShake(3); F.punch(0.3, 0); }
+    A.play('thud', d < 360 ? 0.7 : 0.25);
+    return true;
+  });
 
   // ---- Starfall Barrage (zone 'starfall': r, dur = seconds until it lands): a faint ring from the cast, a closing ring and a gold star plunging in the last 0.5 s ----
   CFX.zone.starfall = (c, z, pass, t) => {

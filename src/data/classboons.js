@@ -57,10 +57,12 @@
     desc: 'Your shots deal more the farther they fly: +0% at 80, rising to +{deadeye} at 260.', mods: { deadeye: 0.4 } });
   card('ranger', 'attack', 2, 'r_atk_h', { name: 'Ballista', icon: 'arrow', tag: 'Heavy', weapon: { kind: 'heavy', extra: { mul: { speed: 1.28 }, add: { pierce: 2 } } },
     desc: 'Heavy shots (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit, Stagger) fly 28% faster than heavy shots usually do and pierce 2 more foes; each foe a shot passes through adds +{pierceRamp} to it. Shots deal +{wDmg}.[ Deadeye is +{deadeye} stronger.]',
-    rider: 'Splitting Bolt: a shot that passes through its last foe splits into 2 arrows in a V at {splitBolt}.', mods: { pierceRamp: 0.15, wDmg: 0.1 }, up: { pierceRamp: 0.1, deadeye: 0.05 }, r3: { splitBolt: 0.5 } });
+    rider2: 'Splitting Bolt: a shot that passes through its last foe splits into 2 arrows in a V at {splitBolt}.', mods: { pierceRamp: 0.15, wDmg: 0.1 }, up: { pierceRamp: 0.1, deadeye: 0.05 }, r2: { splitBolt: 0.5 }, r3: { siege: 5, siegeMul: 1.5, siegeBlast: 0.3 },
+    form: { name: 'Siege Ballista', desc: 'One shot in {siege:n} is a siege bolt: it pierces every foe, is twice as wide, deals ×{siegeMul:x} damage and ends in a blast (radius 60) for {siegeBlast} of the shot when it hits a wall, a guard or the end of its range.' } });
   card('ranger', 'attack', 2, 'r_atk_s', { name: 'Quickdraw', icon: 'arrows', tag: 'Swift', weapon: { kind: 'swift' },
     desc: 'Swift shots (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit, Flow) deal +{wDmg} and slow foes {hitSlow} for 1 s (not bosses).[ Deadeye is +{deadeye} stronger.]',
-    rider: 'Flurry: every {flurry:n}th shot fires 2 extra arrows in a narrow fan, each at {flurryMul} of a shot.', mods: { wDmg: 0.1, hitSlow: 0.15 }, up: { deadeye: 0.05, wDmg: 0.05 }, r3: { flurry: 5, flurryMul: 0.25 } });
+    rider2: 'Flurry: every {flurry:n}th shot fires 2 extra arrows in a narrow fan, each at {flurryMul} of a shot.', mods: { wDmg: 0.1, hitSlow: 0.15 }, up: { deadeye: 0.05, wDmg: 0.05 }, r2: { flurry: 4, flurryMul: 0.3 }, r3: { ricochet: 0.4, flurryN: 1 },
+    form: { name: 'Storm Bow', desc: "Each shot ricochets once to the nearest other foe within 140 for {ricochet} of its damage, and Flurry's extra arrows rise by {flurryN:n}." } });
   card('ranger', 'skill1', 1, 'r_s1', { name: 'Fletcher', icon: 'arrows', forks: ['r_s1_a', 'r_s1_b'], plays: 'Volley is your main damage; cast it on cooldown.',
     desc: 'Volley fires {s1N:n} more arrows and recharges {s1Cdr} faster.', mods: { s1N: 3, s1Cdr: 0.2 } });
   card('ranger', 'skill1', 2, 'r_s1_a', { name: "Hunter's Mark", icon: 'eye', tag: 'Burst', coop: true,
@@ -84,10 +86,12 @@
   card('ranger', 'element', 1, 'r_el', { name: "Trapper's Craft", icon: 'leaf', forks: ['r_el_a', 'r_el_b'], plays: 'wound everything, and let the wounds work.', desc: BLEED, mods: { bleedAll: 0.1, statusPow: 0.15 } });
   card('ranger', 'element', 2, 'r_el_a', { name: 'Infected Wounds', icon: 'drop', tag: 'Focus',
     desc: 'Volley and Rain build your statuses {skillInfK} faster; your Bleed and Burn tick {bleedMul} harder.',
-    rider: 'Gangrene: Volley and Rain deal +{festerHit} to foes with 3 or more ailments.', mods: { skillInfK: 0.5, bleedMul: 0.2, burnMul: 0.2 }, up: { bleedMul: 0.1, burnMul: 0.1 }, r3: { festerHit: 0.25 } });
+    rider2: 'Gangrene: Volley and Rain deal +{festerHit} to foes with 3 or more ailments.', mods: { skillInfK: 0.5, bleedMul: 0.2, burnMul: 0.2 }, up: { bleedMul: 0.1, burnMul: 0.1 }, r2: { festerHit: 0.5 }, r3: { hemo: 1, hemoAt: 0.04, hemoMul: 4, hemoBoss: 0.003 },
+    form: { name: 'Hemorrhage', desc: 'Your hit on a foe whose Bleed has reached {hemoAt} of its max health (bosses: {hemoBoss}) makes the whole pool hit at once for ×{hemoMul:x} and empties it. At most once per second per foe (bosses: every 4 s).' } });
   card('ranger', 'element', 2, 'r_el_b', { name: 'Contagion', icon: 'orb', tag: 'Spread',
     desc: 'When a foe with 2 or more ailments dies to your damage, {contagion} of each of its statuses passes to each of the 2 nearest foes within {contagionR:r100}.',
-    rider: 'Outbreak: it passes to the 3 nearest foes (33% each).', mods: { contagion: 0.5 }, up: { contagionR: 20 }, r3: { contagionN: 1 } });
+    rider2: 'Outbreak: it passes to the 3 nearest foes ({outbreak} each).', mods: { contagion: 0.5 }, up: { contagionR: 20 }, r2: { contagionN: 1, outbreak: 0.5 }, r3: { plague: 1, plagueBurst: 0.6 },
+    form: { name: 'Plaguebearer', desc: 'A foe with 2 or more ailments that dies to your damage bursts (radius 90): every foe inside takes {plagueBurst} of its remaining Bleed and Burn at once and catches its other statuses.' } });
 
   // ---------------- Pyromancer (Flame Nova · Meteor) ----------------
   card('pyro', 'attack', 1, 'p_atk', { name: 'Pyroclast', icon: 'flame', forks: ['p_atk_h', 'p_atk_s'], plays: 'plant your feet and pour fire; choose when to move.',

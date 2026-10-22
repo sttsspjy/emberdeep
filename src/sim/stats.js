@@ -18,7 +18,8 @@
     + ' waveEvery waveMul waveBig waveStun waveBurst waveHome litany sanctDR sanctStun sanctJudge aura auraDmg judgeDur judgeWeak twinHammer thirdLeg secondFlight verdict verdictJudge wInfHoly smiteBig guardLight smiteJudge smiteBeam beamJumps'
     + ' hex hexMul wRaise hexSpread hexSelf hexHaste spikeRaise knights knightLife knightStun harvestRaise corpse corpseMul boneLance boneArmor boneCap boneField minionInfuse mInfShadow tollMul abyssMin abyssDoom reapRaise tideMul'
     + ' avalanche avaCrack avaStun phalanx bannerSlow bannerWeak bannerDur tempest vortexMul vortexDur bastion deathMark deathWave thornburst thornRoot starfall thornstorm'
-    + ' fissure bladeWave doombrand brandMark brandCap cataclysm cataMul cataSplash').split(' ');
+    + ' fissure bladeWave doombrand brandMark brandCap cataclysm cataMul cataSplash'
+    + ' siege siegeMul siegeBlast ricochet flurryN hemo hemoAt hemoMul hemoBoss plague plagueBurst outbreak').split(' ');
 
   const BASE = () => {
     const s = {
