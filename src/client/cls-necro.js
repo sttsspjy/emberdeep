@@ -143,7 +143,7 @@
   // k: gc Gravecaller (a teal soul climbs out of the foe), yard Boneyard (bone chips), again Rise Again (violet), tide Risen Tide (a second skull and a wide ring).
   CF.on('raise', (ev, ctx, local) => {
     const k = ev.k;
-    if (!k) return;
+    if (!k || k === 'bomb') return; // a bone bomb has its own rise below
     const m = ev.pid === local ? 1 : 0.7, x = ev.x, y = ev.y;
     // A soul (own art, outlined so the built-in flare cannot wash it out) climbs out of the foe from above the flare; an upward streak column marks the kind.
     const soul = (id, dx, vy, a, life) => F.sheet(id, x + dx, y - 14, { loop: true, life, fade: true, vy, a: a * m });
@@ -175,10 +175,12 @@
       if (has('fx.bone.spikes')) F.sheet('fx.bone.spikes', ev.x, ev.y, { a: 0.95 });
       else F.burst(ev.x, ev.y - 4, 10, { kind: 'shard', color: BONE, sp: ev.r * 2.2, life: 0.4, size: 2.4 });
       F.ring(ev.x, ev.y, ev.r, BONE, 0.25, 2);
+      if (ev.b) bombBurst(ev); // a bone bomb
     } else if (ev.c) { // Corpse Explosion: a sickly gas burst over the corpse
       F.sheet('fx.explosion', ev.x, ev.y - 6, { ramp: 'poison', a: 0.7 });
       F.sheet('deco.skull', ev.x, ev.y - 4, { ramp: 'dust', frame: 0, life: 0.3, fade: true, vy: -16, a: 0.8 });
       F.burst(ev.x, ev.y - 6, 8, { kind: 'shard', color: GAS, sp: ev.r * 2, life: 0.45, size: 2.4, vz: 70, z: 4 });
+      if (ev.cs) F.burst(ev.x, ev.y - 6, 9, { kind: 'shard', color: BONE, sp: ev.r * 3.2, life: 0.55, size: 2.6, vz: 110, z: 4 }); // Carrion Storm: the bones fly with the shards
     }
   });
   // Bone Lance: the minion's spear flies to its foe in 0.12 s (the burst lands with it)
@@ -266,5 +268,116 @@
     if (!p || !p.boons || !p.boons.n_s2_b) return;
     for (let i = 0; i < 4; i++) { const a = i * U.TAU / 4 + 0.4; F.part(p.x + Math.cos(a) * 26, p.y - 12 + Math.sin(a) * 12, { a: a + Math.PI, kind: 'shard', color: BONE, size: 2.2, drag: 0 }, 90, 0.28); }
     F.ring(p.x, p.y - 10, 20, BONE, 0.25, 2);
+  });
+  // ---------------- skill forms ----------------
+  // Ossuary Bloom (bone bombs, fields of bone spikes), Death Knight (a giant armoured knight with a taunt ring and a sweeping cleave), Carrion Storm (bones fly with the shards), Lich Form (green ghost fire, a skull crown, orbiting souls).
+  const s2 = Pix.s2, away = (ctx, x, y) => { const me = ctx.player(ctx.localPid); return me ? Math.hypot(me.x - x, me.y - y) : 9999; }; // far events do not shake the screen
+  const lichUntil = {};
+
+  // A bone bomb rises: bone chips and a spark of fuse-fire.
+  CF.on('raise', (ev, ctx, local) => {
+    if (ev.k !== 'bomb') return;
+    const m = ev.pid === local ? 1 : 0.7;
+    F.burst(ev.x, ev.y - 4, 5, { kind: 'shard', color: BONE, sp: 90, life: 0.4, size: 2.2, vz: 80, z: 3 });
+    F.ring(ev.x, ev.y, 14, BONE, 0.2, 2); F.pop(ev.x, ev.y - 8, 14, '#ffd36b', 0.12, true);
+    A.play('magic', 0.1 * m);
+  });
+  // A bone bomb goes off (a boom with b): a ring of bone shrapnel, a hot flash and a thud.
+  function bombBurst(ev) {
+    F.burst(ev.x, ev.y - 6, 14, { kind: 'shard', color: BONE, sp: ev.r * 3, life: 0.5, size: 2.6, vz: 120, z: 3 });
+    F.burst(ev.x, ev.y - 6, 8, { color: '#ffb347', sp: ev.r * 1.6, life: 0.3, size: 2.4, add: true, drag: 3 });
+    F.pop(ev.x, ev.y - 8, ev.r * 0.9, '#ffd36b', 0.2, true); F.ring(ev.x, ev.y, ev.r * 1.1, '#ffb347', 0.28, 3);
+    F.sheet('fx.explosion', ev.x, ev.y - 6, { ramp: 'dust', a: 0.7 });
+    A.play('boom', 0.3);
+  }
+
+  // The bomb itself (called by actors.js and the sprites.js stand-in in place of a minion's body when the ally has k 2): a bone-white skull on two little legs with a sputtering fuse and a hot glow.
+  CF.bomb = (c, a, t) => {
+    const id = a.id | 0, bob = Math.round(Math.sin(t * 17 + id)) * 2, pulse = 0.5 + 0.5 * Math.sin(t * 11 + id), fl = Math.floor(t * 14 + id) & 1, flip = a.face < 0 ? -1 : 1;
+    Pix.put(c, Pix.ell(6, 2, '#000000', true), 0, 0, 0.3);
+    ED.Sprites.glow(c, 0, -12, 18 + 5 * pulse, '#ff7a3a', 0.2 + 0.18 * pulse);
+    c.fillStyle = '#222222'; c.fillRect(-6, -4 + (bob ? 2 : 0), 4, 4); c.fillRect(2, -4 + (bob ? 0 : 2), 4, 4); c.fillStyle = BONE; c.fillRect(-4, -4 + (bob ? 2 : 0), 2, 2); c.fillRect(4, -4 + (bob ? 0 : 2), 2, 2); // two stubs of legs
+    Pix.put(c, Pix.orb(6, '#14100c', '#a89c7c', BONE, '#fffbe8'), 0, -14 + bob);
+    c.fillStyle = '#1c0c3a'; c.fillRect(-6, -16 + bob, 4, 4); c.fillRect(2, -16 + bob, 4, 4); c.fillRect(-2, -10 + bob, 4, 2); // eye sockets and a toothy mouth
+    c.fillStyle = TEAL; c.fillRect(-4, -14 + bob, 2, 2); c.fillRect(4, -14 + bob, 2, 2);
+    c.fillStyle = '#222222'; c.fillRect(flip * 6 - 1, -28 + bob, 4, 8); c.fillStyle = '#8a8068'; c.fillRect(flip * 6, -27 + bob, 2, 6); // the fuse
+    c.fillStyle = fl ? '#ffd36b' : '#ff6a2a'; c.fillRect(flip * 6 - 1, -32 + bob, 4, 4); c.fillStyle = '#ffffff'; c.fillRect(flip * 6, -31 + bob, 2, 2);
+    ED.Sprites.glow(c, flip * 6, -30 + bob, 9, '#ffb347', 0.5);
+    return true;
+  };
+
+  // Bone field (zone 'shards' with w 11): a dark cracked patch ringed in teal with a thicket of bone spikes that thrust up, sway and sink back in the last half second.
+  CF.zone.bonefield = (c, z, pass, t) => {
+    const R = ED.Render, left = z.dur - z.t, fade = Math.min(1, left * 2.5, z.t * 8), grow = Math.min(1, z.t * 7) * Math.min(1, left * 2.2), n = Math.max(7, Math.round(z.r / 5)), x = s2(z.x), y = s2(z.y);
+    if (pass === 0) {
+      R.light(z.x, z.y, z.r * 1.5, TEAL, 0.3 * fade);
+      Pix.put(c, Pix.disc(Math.max(1, Math.round(z.r / 2)), '#1b1626'), x, y, 0.3 * fade);
+      Pix.put(c, Pix.ring(Math.max(2, Math.round(z.r / 2)), 1, '#2a8a70', TEAL, '#c4ffee', 3, (t * 5) & 7), x, y, 0.8 * fade);
+      c.globalAlpha = fade;
+      for (let i = 0; i < n; i++) { // spikes: rows of 2 px tapering from 6 px wide at the root to a white tip, leaning with the patch, thrusting up as the field forms
+        const a = i * 2.39996 + z.id, rr = Math.sqrt((i + 0.5) / n) * z.r * 0.86, px = s2(z.x + Math.cos(a) * rr), py = s2(z.y + Math.sin(a) * rr * 0.72), rows = Math.max(1, Math.round((5 + (i % 3) * 2) * grow)), lean = (i & 1) ? 2 : -2;
+        c.fillStyle = '#14100c'; c.fillRect(px - 4, py - 2, 8, 4);
+        for (let j = 0; j < rows; j++) {
+          const w = j < rows * 0.34 ? 6 : j < rows * 0.7 ? 4 : 2, off = j > rows * 0.5 ? lean : 0, y0 = py - 4 - j * 2;
+          c.fillStyle = j === rows - 1 ? '#ffffff' : '#a89c7c'; c.fillRect(px - w / 2 + off, y0, w, 2);
+          if (w > 2 && j < rows - 1) { c.fillStyle = BONE; c.fillRect(px - w / 2 + off, y0, 2, 2); }
+        }
+      }
+      c.globalAlpha = 1;
+    } else if (pass === 1) R.glow(c, z.x, z.y, z.r * 0.9, TEAL, 0.12 * fade);
+  };
+
+  // Death Knight: a huge Bone Knight. dk(c, a, t, post) is called by actors.js and the sprites.js stand-in for an ally with k 1: before the body (post false) the taunt ring on the ground and a dark flame behind it,
+  // after it (post true) two burning eyes. The body itself is drawn at twice the size by the callers (CF.DK_SCALE).
+  CF.DK_SCALE = 2;
+  CF.dk = (c, a, t, post) => {
+    const id = a.id | 0, pulse = 0.5 + 0.5 * Math.sin(t * 4 + id);
+    if (!post) {
+      Pix.put(c, Pix.ring(60, 1, '#2a8a70', TEAL, '#c4ffee', 5, (t * 3) & 7), 0, 0, 0.1 + 0.07 * pulse); // the taunt radius (120)
+      ED.Sprites.glow(c, 0, -34, 54 + 8 * pulse, VIOLET, 0.3 + 0.12 * pulse);
+      c.fillStyle = LILAC; c.beginPath();
+      for (let i = 0; i < 5; i++) { const k = (t * 0.8 + i * 0.2 + id * 0.11) % 1; c.globalAlpha = Math.max(0.25, Math.ceil((1 - k) * 4) / 4) * 0.8; c.rect(s2(Math.cos(id + i * 2.4) * 18), s2(-12 - k * 70), 2, 4); }
+      c.fill(); c.globalAlpha = 1;
+    } else {
+      c.fillStyle = '#ff3a3a'; c.fillRect(-6, -58, 4, 2); c.fillRect(4, -58, 4, 2); ED.Sprites.glow(c, 0, -57, 14, '#ff3a3a', 0.35 + 0.15 * pulse);
+    }
+  };
+  CF.on('dkraise', (ev, ctx, local) => {
+    const mine = ev.pid === local, d = away(ctx, ev.x, ev.y);
+    F.ring(ev.x, ev.y, 120, VIOLET, 0.5, 5); F.ring(ev.x, ev.y, 60, TEAL, 0.4, 4); F.ring(ev.x, ev.y, 28, '#ffffff', 0.25, 2);
+    F.burst(ev.x, ev.y, 16, { kind: 'shard', color: BONE, sp: 200, life: 0.7, size: 3, vz: 140, z: 2 }); F.burst(ev.x, ev.y - 6, 12, { kind: 'smoke', color: '#5a2fb0', sp: 90, life: 0.8, size: 6, drag: 2.2 });
+    F.burst(ev.x, ev.y - 10, 14, { kind: 'streak', color: LILAC, a: -Math.PI / 2, spread: 2.6, sp: 300, life: 0.4, size: 2 }); F.pop(ev.x, ev.y - 14, 60, VIOLET, 0.32, true); F.dust(ev.x, ev.y, 'dust', 4);
+    if (mine) F.text(ev.x, ev.y - 70, 'DEATH KNIGHT', LILAC, 10, { pop: true });
+    A.play('thud', mine ? 1 : d < 400 ? 0.6 : 0.25); A.play('clang', mine ? 0.8 : 0.3, { g: 1 }); A.play('rift', mine ? 0.3 : 0.12);
+    if (mine) { F.addShake(6); F.hitStop(0.07); F.punch(0.7, 0.3); } else if (d < 400) F.addShake(2);
+  });
+  CF.on('dkswing', (ev, ctx, local) => { // the cleave: a fan of bone-white streaks across its arc and a short flash
+    const mine = ev.pid === local, d = away(ctx, ev.x, ev.y), x = ev.x + Math.cos(ev.a) * 26, y = ev.y - 24 + Math.sin(ev.a) * 18;
+    for (let k = -3; k <= 3; k++) F.part(x, y, { kind: 'streak', color: k & 1 ? BONE : '#ffffff', a: ev.a + k * 0.4, sp: 260 - Math.abs(k) * 22, life: 0.22, size: 2.2, drag: 5 });
+    F.pop(x + Math.cos(ev.a) * 22, y + Math.sin(ev.a) * 12, 26, LILAC, 0.14, true);
+    A.play('swing', mine ? 0.7 : 0.3); if (d < 360) A.play('heavy', mine ? 0.4 : 0.15);
+    if (mine) { F.addShake(1.6); F.hitStop(0.03); } else if (d < 300) F.addShake(0.7);
+  });
+
+  // Lich Form: the event starts the window (the card's seconds); the hero wears green ghost fire, a skull crown and three souls circling it until the window ends.
+  CF.on('lich', (ev, ctx, local) => {
+    const p = ctx.player(ev.pid), mine = ev.pid === local;
+    lichUntil[ev.pid] = F.time + ((p && p.stats && p.stats.lichT) || 5);
+    if (!p) return;
+    F.ring(p.x, p.y, 70, TEAL, 0.5, 5); F.ring(p.x, p.y, 36, '#ffffff', 0.3, 2); F.pop(p.x, p.y - 14, 46, TEAL, 0.3, true);
+    F.burst(p.x, p.y - 8, 20, { color: TEAL, a: -Math.PI / 2, spread: 3, sp: 120, life: 0.9, size: 2.8, add: true, drag: 1.2 }); F.burst(p.x, p.y - 12, 8, { kind: 'streak', color: '#ffffff', a: -Math.PI / 2, spread: 1.6, sp: 320, life: 0.4, size: 2 });
+    A.play('rift', mine ? 0.45 : 0.2); A.play('magic', mine ? 0.3 : 0.12);
+    if (mine) { F.addShake(3); F.punch(0.5, 0.2); F.flash = { color: TEAL, t: 0.25, a: 0.16 }; }
+  });
+  CF.hero.push((c, p, t, low) => {
+    if (p.cls !== 'necro' || p.dead || !(lichUntil[p.pid] > F.time)) return;
+    const left = lichUntil[p.pid] - F.time, fade = Math.min(1, left * 2, (5 - left) * 6 + 0.4), an = ED.Render && ED.Render.actorAnchor ? ED.Render.actorAnchor(p) : null, top = an ? an.top : -38, cy = an ? an.cy : -14, slot = p.slot | 0;
+    Pix.put(c, Pix.ell(13, 5, TEAL, false, 4, (t * 6) & 7), 0, 2, 0.85 * fade); // a dashed teal ring on the ground
+    ED.Sprites.glow(c, 0, cy, 30 + 4 * Math.sin(t * 5), TEAL, 0.28 * fade);
+    c.fillStyle = TEAL; c.beginPath();
+    for (let i = 0; i < (low ? 5 : 9); i++) { const k = (t * 0.9 + i * 0.111 + slot * 0.13) % 1, a = i * 2.39996 + slot; c.globalAlpha = Math.max(0.25, Math.ceil((1 - k) * 4) / 4) * fade; c.rect(s2(Math.cos(a) * (8 + k * 6)) - 2, s2(cy + 10 - k * 40), 4, 4 - (k > 0.5 ? 2 : 0)); } // ghost flames rising off the shoulders
+    c.fill(); c.globalAlpha = 1;
+    Pix.draw(c, 'fx.sigil.skull', 'teal', 0, 0, s2(top - 10 + Math.round(Math.sin(t * 3)) * 2), fade); // a skull crown above the head
+    if (has('fx.soul.teal')) for (let i = 0; i < 3; i++) { const a = t * 2.2 + i * U.TAU / 3; Pix.draw(c, 'fx.soul.teal', '', ((t * 6) | 0) & 1, s2(Math.cos(a) * 20), s2(cy + Math.sin(a) * 7), (Math.sin(a) > 0 ? 1 : 0.6) * fade); }
   });
 })(globalThis.ED || (globalThis.ED = {}));

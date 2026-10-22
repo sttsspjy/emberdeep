@@ -1254,14 +1254,17 @@
 
   Sp.minion = (c, a, t) => {
     if (ED.Actors && ED.Actors.on() && ED.Actors.minion(c, a, t)) return;
-    const def = ED.ENEMIES.minion, kn = !!(ED.ClassFx.knight && ED.ClassFx.knight(a));
+    if (a.k === 2 && ED.ClassFx.bomb) { ED.ClassFx.bomb(c, a, t); return; } // a bone bomb (cls-necro.js)
+    const def = ED.ENEMIES.minion, kn = !!(ED.ClassFx.knight && ED.ClassFx.knight(a)), dk = a.k === 1 && ED.ClassFx.dk;
+    if (dk) ED.ClassFx.dk(c, a, t, false);
     c.save(); c.globalAlpha = 0.9;
-    if (kn) c.scale(1.4, 1.4); // Bone Knight body
+    if (dk) c.scale(1.4 * ED.ClassFx.DK_SCALE, 1.4 * ED.ClassFx.DK_SCALE); else if (kn) c.scale(1.4, 1.4); // Bone Knight body; a Death Knight is twice that
     Sp.shadow(c, 9, 0.3);
     glow(c, 0, -10, 16, def.col.c, 0.25);
     c.scale(a.face < 0 ? -1 : 1, 1); c.lineWidth = 1.5; c.strokeStyle = OUT;
     LOOK.skeleton(c, { id: a.id, st: 'move', def }, def.col, t, 0.85);
     c.restore();
     if (ED.ClassFx.minion) ED.ClassFx.minion(c, a, t, kn, a.face < 0);
+    if (dk) ED.ClassFx.dk(c, a, t, true);
   };
 })(globalThis.ED || (globalThis.ED = {}));

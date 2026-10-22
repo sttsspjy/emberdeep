@@ -849,6 +849,7 @@
         }
         case 'sanct': {
           if (z.w === 7 && ED.ClassFx.zone.banner) { ED.ClassFx.zone.banner(c, z, pass, t, k, view); break; } // an Iron Phalanx War Banner (cls-knight.js)
+          if (z.w === 8 && ED.ClassFx.zone.wrath) ED.ClassFx.zone.wrath(c, z, pass, t, k, view); else if (z.w === 9 && ED.ClassFx.zone.aegis) ED.ClassFx.zone.aegis(c, z, pass, t, k, view); // Wrath of Heaven's sun wheel and Radiant Aegis's wings join the plain Sanctuary (cls-cleric.js)
           const fade = Math.min(1, (z.dur - z.t) * 2, z.t * 5), au = z.fol || z.follow ? 0.4 : 1; // au: an Aura of Faith sits on its Cleric, so its light and circle are softer
           if (pass === 0) { // ground: fill, dashed rim and the CodeManu protection circle at its native 2 px density under the actors
             R.light(z.x, z.y, z.r * 1.9, '#ffe9a0', 0.8 * fade * au); discPut(c, z.x, z.y, z.r, '#ffe9a0', 0.25 * fade);
@@ -921,6 +922,7 @@
           break;
         }
         case 'shards': { // Caltrops: pixel caltrops scattered over a slowing patch
+          if (z.w === 11 && ED.ClassFx.zone.bonefield) { ED.ClassFx.zone.bonefield(c, z, pass, t, k, view); break; } // an Ossuary Bloom bone field (cls-necro.js)
           const fade = Math.min(1, (z.dur - z.t) * 2, z.t * 5);
           if (pass === 0) { // ground: caltrops lie under whatever walks over them
             discPut(c, z.x, z.y, z.r, '#cfd6de', 0.1 * fade); R.light(z.x, z.y, z.r * 1.4, '#cfd6de', 0.3 * fade);
@@ -1541,6 +1543,7 @@
     hex: { rows: ['.111.', '12221', '12321', '12221', '.111.'], c: { 1: '#7dffd9', 2: '#1c0c3a', 3: '#a070ff' } },
     hext: { rows: ['41114', '12321', '13331', '12321', '41114'], c: { 1: '#c4ffee', 2: '#1c0c3a', 3: '#ffffff', 4: '#a070ff' } },
     seal: { rows: ['.111.', '11211', '12221', '11211', '.111.'], c: { 1: '#ffd36b', 2: '#3a2606' } }, // Ruin Seal sigil (cls-knight.js): a gold disc with a dark cross
+    bound: { rows: ['.11.11.', '1..2..1', '.11.11.'], c: { 1: '#ffcf5a', 2: '#fff3c4' } }, // Final Judgment's link (cls-cleric.js): two gold rings joined
   };
   function glyphStub(c, g, cx, bottom) {
     const rows = g.rows, x0 = cx - rows[0].length, y0 = bottom - rows.length * 2;

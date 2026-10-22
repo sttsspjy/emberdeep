@@ -11,7 +11,7 @@ module.exports = (ED, opts) => {
     const w = m.weapon, st = null; void st;
     const hitsBase = w.kind === 'melee' ? n : Math.min(n, (w.n || 1) * (1 + (w.pierce || 0)));
     let sum = w._avg * hitsBase;
-    for (const e of w._extras) sum += e.perAttack * (e.label === 'Twin Fang' ? hitsBase / (w.oneFoe || 1) : n);
+    for (const e of w._extras) sum += e.perAttack * (e.label === 'Twin Fang' ? hitsBase / (w.oneFoe || 1) : e.label === 'Lich bolts' ? 1 : n); // the two Lich bolts seek one foe each: the same total in a pack
     return sum * w._aps;
   }
   function directDamage(m, n) {
@@ -25,20 +25,22 @@ module.exports = (ED, opts) => {
       if (key === 'volley.burst') { sum += q.here * n * Math.min(2, n - 1) / k._cd; continue; } // a marked foe's burst reaches 2 other foes of the pack, one burst per foe of the pack
       if (key === 'step.blossom') { sum += q.here * Math.min(n - 1, q.n) / k._cd; continue; } // Death Blossom: the chain cuts one more foe of the pack per blink (the Shadowstep cut the first)
       if (key === 'shieldthrow.strike') mul = Math.min(n, 4 + 2);
-      if (q.kind === 'minion') mul = 1;
+      if (q.kind === 'minion') mul = q.dkCleave ? Math.min(n, 3) : 1; // the Death Knight cleaves a wide arc: about 3 foes of a pack
       if (key === 'vanish.ambush') mul = (m.weapon.kind === 'melee' ? n : Math.min(n, m.weapon.n)) / Math.max(1, q.oneFoe);
       sum += q._r.total * mul / k._cd;
     }
     return sum;
   }
   const statusDamage = (m) => m.mult.status.reduce((s, x) => s + (x.est && x.est.dps || 0), 0);
-  const heroDamage = (m, n, k) => directDamage(m, n) * (k || 1) + statusDamage(m); // k: the conditional-damage factor of the build (condFactor); statuses are raw damage
+  const heroDamage = (m, n, k, e) => directDamage(m, n) * (k || 1) * (e || 1) + statusDamage(m); // k: the conditional-damage factor of the build (condFactor); e: echoK; statuses are raw damage
+  // Final Judgment: every hit on a Judged foe echoes fjEcho to each other Judged foe of the pack (judged for 4 s + judgeDur of every Judgment cooldown), so a pack of n takes 1 + fjEcho x (n - 1) x the Judged share.
+  const echoK = (p, m, n) => (p.stats.fjEcho > 0 && n > 1 ? 1 + p.stats.fjEcho * (n - 1) * Math.min(1, (4 + p.stats.judgeDur) / St.skillNums('judgment', p.stats).cdEff) : 1);
 
   // ---- defence: effective health with the uptime of a guard ----
   function defence(p, m) {
     const st = p.stats, out = { ehp: m.def.ehp, note: [] };
     let keep = 1;
-    if (st.braceDR) {
+    if (st.braceDR && !(st.lich > 0)) {
       const N = St.skillNums('charge', st), up = Math.min(1, st.brace / Math.max(C.BRACE_CD, N.cdEff)), dr = Math.min(0.4, st.braceDR);
       keep *= 1 - dr * up; out.note.push(`Brace -${Math.round(dr * 100)}% x ${Math.round(up * 100)}% uptime`);
     }
@@ -47,8 +49,12 @@ module.exports = (ED, opts) => {
       keep *= (1 - dr * up) * (1 - st.bannerWeak * up); out.note.push(`War Banner -${Math.round(dr * 100)}% and foes -${Math.round(st.bannerWeak * 100)}% x ${Math.round(up * 100)}% uptime`);
     }
     if (p.cls === 'cleric') {
-      const N = St.skillNums('sanctuary', st), z = N.p.zone, up = Math.min(1, z.dur / N.cdEff), dr = Math.min(0.4, 0.15 + st.sanctDR);
+      const N = St.skillNums('sanctuary', st), z = N.p.zone, up = Math.min(1, z.dur / N.cdEff), dr = Math.min(st.aegis > 0 ? C.DR_FLOOR : 0.4, 0.15 + st.sanctDR + st.aegisDR); // Radiant Aegis may cut up to the DR floor (combat.js still clamps a Sanctuary at 40% until it reads z.drCap)
       keep *= 1 - dr * up; out.note.push(`Sanctuary -${Math.round(dr * 100)}% x ${Math.round(up * 100)}% uptime`);
+    }
+    if (st.lich > 0) { // Lich Form: the Brace channel for lichT seconds after every Bone Harvest
+      const up = Math.min(1, st.lichT / Math.max(st.lichT, St.skillNums('harvest', st).cdEff)), dr = Math.min(0.4, st.braceDR);
+      keep *= 1 - dr * up; out.note.push(`Lich Form -${Math.round(dr * 100)}% x ${Math.round(up * 100)}% uptime`);
     }
     out.ehp = m.def.ehp / keep;
     // shield income (percent of max health per second, before the window caps)
@@ -66,6 +72,7 @@ module.exports = (ED, opts) => {
     if (p.cls === 'knight') { const q = St.skillNums('charge', st).p.impact; src.push([q.stun + st.chargeStun, cd1]); src.push([St.skillNums('shieldthrow', st).p.strike.stun, cd2]); }
     if (st.cShock && st.cStun) src.push([st.cStun, (3 + st.cleaveN) * m.weapon.interval]);
     if (st.sanctStun) src.push([st.sanctStun, cd1]);
+    if (st.aegis > 0) src.push([st.aegisStun, 2]); // a Radiant Aegis pulse every 2 s
     if (st.waveStun && m.weapon.fork) src.push([st.waveStun, 3 * m.weapon.interval]);
     for (const [d, cd] of src) stun += Math.min(1, d / Math.max(cd, d + C.STUN_DR));
     out.stun = Math.min(1, stun);
@@ -112,7 +119,7 @@ module.exports = (ED, opts) => {
   // ---- one hero in one context: the sheet model, its defence, the conditional factor, hero damage on one foe and in a pack of `pack` ----
   function assess(p, ctx) {
     const m = ED.Sheet.compute(p, ctx, { raw: true, numbers: true }), d = defence(p, m), k = condFactor(p, m, d);
-    return { m, d, k, one: heroDamage(m, 1, k), pack: heroDamage(m, pack, k), ehp: d.ehp };
+    return { m, d, k, one: heroDamage(m, 1, k), pack: heroDamage(m, pack, k, echoK(p, m, pack)), ehp: d.ehp };
   }
 
   // A copy of hero p holding relic `id` as well, the stat block rebuilt (the relic counterpart of ED.Sheet.withBoon).
@@ -123,5 +130,5 @@ module.exports = (ED, opts) => {
     return q;
   }
 
-  return { pack, packWeapon, directDamage, statusDamage, heroDamage, defence, ailmentsKept, uptime, condFactor, assess, withRelic, COND_NOTE };
+  return { pack, packWeapon, directDamage, statusDamage, heroDamage, echoK, defence, ailmentsKept, uptime, condFactor, assess, withRelic, COND_NOTE };
 };

@@ -18,6 +18,7 @@
     + ' supernova supernovaPull phoenixMul phoenixDur dashTrail cataclysm sunDive diveTrail blossom blossomN blossomMax mirrorHall eclipse eclipseDur umbral cloneMul'
     + ' waveEvery waveMul waveBig waveStun waveBurst waveHome litany sanctDR sanctStun sanctJudge aura auraDmg judgeDur judgeWeak twinHammer thirdLeg secondFlight verdict verdictJudge wInfHoly smiteBig guardLight smiteJudge smiteBeam beamJumps'
     + ' hex hexMul wRaise hexSpread hexSelf hexHaste spikeRaise knights knightLife knightStun harvestRaise corpse corpseMul boneLance boneArmor boneCap boneField minionInfuse mInfShadow tollMul abyssMin abyssDoom reapRaise tideMul'
+    + ' wrath wrathNova wrathPillar aegis aegisR aegisDR aegisStun storm stormMul fjEcho fjR fjStun bloom bloomField bloomBomb dk dkMul dkArc dkTaunt carrionN carrionShard lich lichT lichMul lichLife'
     + ' avalanche avaCrack avaStun phalanx bannerSlow bannerWeak bannerDur tempest vortexMul vortexDur bastion deathMark deathWave thornburst thornRoot starfall thornstorm'
     + ' fissure bladeWave doombrand brandMark brandCap cataclysm cataMul cataSplash'
     + ' siege siegeMul siegeBlast ricochet flurryN hemo hemoAt hemoMul hemoBoss plague plagueBurst outbreak').split(' ');
@@ -203,15 +204,17 @@
       let dmg = 0;
       if (d.of) {
         const b = out.p[d.of];
-        dmg = b.dmg * (d.mul ? st[d.mul] : 1) * (d.mul1 ? 1 + st[d.mul1] : 1) * (d.times === 'ticks' ? b.count : 1);
+        dmg = b.dmg * (d.mul ? st[d.mul] : 1) * (d.mulFix || 1) * (d.mul1 ? 1 + st[d.mul1] : 1) * (d.times === 'ticks' ? b.count : 1);
       } else if (d.base !== undefined || d.pow !== undefined) {
         const X = d.on === 'W' ? st.weapon.dmg : d.on === 'B' ? st.baseWDmg : st.power;
         dmg = ((d.base || 0) + ((d.pow || 0) + (d.powKey ? st[d.powKey] : 0)) * X) * (1 + sD);
       }
       if (d.mulIf) for (const k in d.mulIf) if (st[k]) dmg *= d.mulIf[k];
       if (d.mulStat && st[d.mulStat] > 0) dmg *= st[d.mulStat]; // mulStat: the stat is a damage factor (Supernova's Burn)
+      if (d.mulFirst) for (const k of d.mulFirst) if (st[k]) { dmg *= st[k]; break; } // mulFirst: the first listed stat that is set is the factor (Hammerstorm before Twin Hammers)
       q.dmg = dmg;
       q.r = d.rOf ? out.p[d.rOf].r * d.rMul : d.r ? d.r * A * (1 + sA) * (d.rMul || 1) : 0;
+      if (d.rAddKey && q.r > 0) q.r += st[d.rAddKey]; // rAddKey: the stat adds px to the radius after every scaling (Radiant Aegis, Final Judgment)
       if (d.mulKey) q.mulv = st[d.mulKey];
       if (d.durKey) q.dur = (d.dur || 0) + st[d.durKey]; else if (d.dur !== undefined) q.dur = d.dur + (d.durFix ? 0 : sU); // durFix: a fixed length, no slot duration
       if (d.durMulKey && st[d.durMulKey] > 0 && q.dur !== undefined) q.dur *= st[d.durMulKey]; // durMulKey: the stat is a length factor (Storm of Thorns)
@@ -221,7 +224,7 @@
       if (d.nOf) q.n = out.p[d.nOf].n; // the count of another part (Death Mark's later waves)
       if (d.nKey) q.n = st[d.nKey]; // nKey: the stat is the count (Death Blossom's cuts)
       if (d.ringKey && st[d.ringKey] > 0) { q.n = st[d.ringKey]; q.fan = U.TAU; q.ring = true; } // ringKey: the stat is the arrow count of a full ring (Thornburst)
-      if (d.stunKey) q.stun = st[d.stunKey];
+      if (d.stunKey && st[d.stunKey] > 0) q.stun = st[d.stunKey]; // stunKey: the stat is the stun while it is set
       if (d.perAtk && q.dur !== undefined) q.attacks = Math.floor(q.dur / st.atkInterval + 1e-9) + (d.perAtk === 'skip' ? 0 : 1); // perAtk: one hit per weapon attack from the cast on within dur ('skip': the attack at the cast itself is the Ambush, so only the later ones count)
       if (d.per === 'tick') q.count = Math.round(q.dur / d.every);
       else if (d.per === 'sec') q.count = Math.ceil(q.dur / 0.5 - 1e-9);
