@@ -266,6 +266,76 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     ok(live(0) === 'c,0,1,2' && live(2) === 'c,0,2' && live(5) === 'c,1' && live(7) === 'c', 'the draw list drops the broken breakables and keeps the other statics');
     ok(R.liveStatics({ roomState: {}, roomId: 3 }, rm).length === 4, 'a view without room state draws everything');
   }
+
+  // boss fury on the wire, in the mirror, in the fx and on the boss bar
+  {
+    const FB = ED.World.BOSS_FURY, tIV = FB.t[3];
+    const bossAt = (s, furyT) => { const w = room1(0); if (s > 1) w.enterStratum(s); w.enemies.length = 0; w.enc = null; w.locked = false; const b = w.spawnEnemy(ED.biomeFor(s).boss, 300, 300, {}); b.furyT = furyT; return { w, b }; };
+    const rowOf = (w, b) => wire(N.encodeSnap(w, [], false)).E.find((r) => r[0] === b.id);
+    const iv = bossAt(4, 80.34), ii = bossAt(2, 0), iv0 = bossAt(4, 0);
+    const sk = iv.w.spawnEnemy('skeleton', 330, 300, {});
+    ok(rowOf(iv.w, iv.b).length === 20 && rowOf(iv.w, iv.b)[19] === 80.3, `a stratum IV boss row carries its clock in tenths as E[19] (${rowOf(iv.w, iv.b)[19]})`);
+    ok(rowOf(ii.w, ii.b).length === 19 && rowOf(iv0.w, iv0.b).length === 19 && rowOf(iv.w, sk).length === 19, 'a stratum II boss, a fresh IV boss and a normal foe have no clock field');
+    const m = mirrorOf(iv.w), snap = wire(N.encodeSnap(iv.w, [], false)); snap.T = 5; m.apply(snap, 0); m.renderT = 5; m.update(0, 0.1);
+    const vb = m.enemies.find((e) => e.boss), vs = m.enemies.find((e) => e.id === sk.id);
+    ok(m.stratum === 4 && vb && vb.furyT === 80.3 && Math.abs(vb.furyM - ED.World.furyMul(4, 80.3)) < 1e-12 && vb.furyM > 1, `the mirror restores the clock (${vb && vb.furyT}) and derives x${vb && vb.furyM}`);
+    ok(vs && vs.furyT === 0 && vs.furyM === 1, 'a normal foe in the mirror has clock 0, x1');
+    const m2 = mirrorOf(ii.w), s2 = wire(N.encodeSnap(ii.w, [], false)); s2.T = 5; m2.apply(s2, 0); m2.renderT = 5; m2.update(0, 0.1);
+    ok(m2.enemies.find((e) => e.boss).furyM === 1, 'a stratum II boss in the mirror is x1');
+    // fury event: shake, burst, message with the boss name
+    const fxCtx = { localPid: 'p0', player: () => ({ x: 0, y: 0, pid: 'p0', cls: 'knight', name: 'T' }), players: () => [], stratum: () => 4 };
+    F.reset(); F.handle({ t: 'fury', type: 'forgelord', x: 200, y: 200 }, fxCtx);
+    ok(F.parts.length > 0 && F.rings.length > 0 && F.shake > 0 && F.msgs.some((q) => q.text === 'The Forgelord is enraged!'), `the fury event bursts, rings, shakes and posts the message (${F.parts.length} particles, ${F.rings.length} rings, shake ${F.shake})`);
+    F.reset();
+
+    // boss bar through the real hud.js over a recording canvas
+    const rec = { fills: [], imgs: [] };
+    const cvs = () => {
+      const cv = { width: 1, height: 1, style: {}, texts: [], setAttribute() {}, getContext: () => cx };
+      const cx = new Proxy({}, {
+        get: (t, k) => (k in t ? t[k] : k === 'canvas' ? cv : k === 'measureText' ? (s) => ({ width: String(s).length * 7 }) : k === 'fillText' ? (s) => { cv.texts.push(String(s)); }
+          : k === 'fillRect' ? (x, y, w2, h2) => { rec.fills.push({ style: t.fillStyle, x, y, w: w2, h: h2 }); } : k === 'drawImage' ? (im, x, y, w2, h2) => { rec.imgs.push({ im, x, y, w: w2, h: h2, a: t.globalAlpha }); }
+          : k.startsWith('create') ? () => ({ addColorStop() {} }) : () => {}),
+        set: (t, k, v) => { t[k] = v; return true; },
+      });
+      return cv;
+    };
+    const doc0 = globalThis.document, win0 = globalThis.window, hud0 = ED.HUD, sp0 = ED.Sprites;
+    globalThis.document = { createElement: cvs, getElementById: () => ({ parentNode: { insertBefore() {} } }), body: { classList: { add() {}, remove() {} } } };
+    globalThis.window = { innerWidth: 1280, innerHeight: 720, devicePixelRatio: 1 };
+    try {
+      load('client/hud.js');
+      const H = ED.HUD, viewOf = (s, boss) => ({ stratum: s, pact: 0, enemies: [boss], players: new Map(), pickups: [] });
+      const mk = (type, furyT, extra) => Object.assign({ id: 9, type, def: ED.ENEMIES[type], boss: true, hp: 800, maxHp: 1000, exposed: false, furyT, furyM: ED.World.furyMul(ED.ENEMIES[type].stratum || 4, furyT) }, extra);
+      H.draw(null, viewOf(4, mk('forgelord', 0)), null, {}, 0, 0.016, {}); // sets up the canvas and layout
+      const bar = (s, type, furyT, extra) => {
+        rec.fills.length = 0; rec.imgs.length = 0;
+        const b = mk(type, furyT, Object.assign({ furyM: ED.World.furyMul(s, furyT) }, extra));
+        H.bossBar(viewOf(s, b), 1);
+        const labels = rec.imgs.filter((i) => i.im && i.im.texts && i.im.texts.length).map((i) => ({ text: i.im.texts[0], x: i.x, w: i.im.width }));
+        return { track: rec.fills.filter((f) => f.style === '#26120b').length, labels, fills: rec.fills.map((f) => f.style) };
+      };
+      const II = bar(2, 'sporemother', 30), IV = bar(4, 'forgelord', 10), IVw = bar(4, 'forgelord', tIV - 5), IVf = bar(4, 'forgelord', tIV + 10);
+      ok(II.track === 0 && IV.track === 1, `the bar draws the fury track for a IV boss (${IV.track}) and not for a II boss (${II.track})`);
+      ok(!IV.labels.some((l) => /Fury/.test(l.text)) && !IVw.labels.some((l) => /Fury/.test(l.text)), 'no fury label before the start');
+      ok(IV.fills.includes('#b88a4a') && IVw.fills.some((f) => /^rgba\(255, ?181, ?107/.test(f)) && IVf.fills.some((f) => /^rgba\(255, ?90, ?26/.test(f)), 'the track fill is amber, pulses light from the warning on, burns ember past the start');
+      const lab = IVf.labels.find((l) => /^Fury/.test(l.text));
+      ok(lab && lab.text === 'Fury ×1.4', `the fury label reads the multiplier ten seconds in (${lab && lab.text})`);
+      ok(!II.labels.some((l) => /Fury/.test(l.text)), 'no label on a II boss');
+      const both = bar(4, 'forgelord', tIV + 10, { exposed: true }), ex = both.labels.find((l) => l.text === 'Exposed'), fu = both.labels.find((l) => /^Fury/.test(l.text));
+      ok(ex && fu && ex.x + ex.w <= fu.x, `Exposed and Fury sit side by side without overlap (Exposed ${ex && ex.x}+${ex && ex.w}, Fury ${fu && fu.x})`);
+      const onlyEx = bar(2, 'sporemother', 5, { exposed: true });
+      ok(onlyEx.labels.some((l) => l.text === 'Exposed') && !onlyEx.labels.some((l) => /Fury/.test(l.text)), 'a II boss keeps its Exposed label alone');
+      // boss aura: nothing at x1, one glow sprite past it, wider and stronger as the multiplier climbs
+      load('client/sprites.js');
+      const aura = (furyM) => { const g = cvs().getContext('2d'); g.globalAlpha = 1; rec.imgs.length = 0; ED.Sprites.furyGlow(g, { r: 30, furyM }, 0); return rec.imgs.map((i) => ({ w: i.w, a: i.a })); };
+      const a1 = aura(1), a2 = aura(1.4), a3 = aura(FB.max);
+      ok(a1.length === 0 && a2.length === 1 && a3.length === 1 && a3[0].w > a2[0].w && a3[0].a > a2[0].a, `the boss aura is absent at x1 and grows with the multiplier (${JSON.stringify(a2)} -> ${JSON.stringify(a3)})`);
+    } finally {
+      globalThis.document = doc0; globalThis.window = win0; ED.HUD = hud0; ED.Sprites = sp0;
+      if (doc0 === undefined) delete globalThis.document; if (win0 === undefined) delete globalThis.window;
+    }
+  }
 }
 
 console.log(`${n} checks, ${fails} failed`);

@@ -203,6 +203,7 @@
     return true;
   }
   H.dirty = () => { forceDirty = true; }; // next draw repaints (tests, external invalidation)
+  H.bossBar = (view, t) => bossBar(view, t); // draws the boss bar into the HUD canvas as set up by the last draw (tests)
   H.flashSlot = (i, t) => { const fx = slotFx[i] || (slotFx[i] = { r: false, t: 0 }); fx.t = Math.max(fx.t, t || 0.5); forceDirty = true; }; // white outline pulse on ability slot i (a cooldown cut)
   H.clear = () => { if (cv && shown) { cv.style.display = 'none'; shown = false; document.body.classList.remove('hud-on'); } };
 
@@ -317,7 +318,10 @@
     // boss bar
     let boss = null; const en = view.enemies;
     for (let i = 0; i < en.length; i++) if (en[i].boss && en[i].hp > 0) { boss = en[i]; break; }
-    if (boss) { const fr = boss.hp / boss.maxHp; sp(boss.id); sp(Math.round(fr * 1024)); sp(boss.exposed ? 1 : 0); sp(sid(boss.def.name)); if (ghost.boss !== undefined && ghost.boss > fr + 0.0005) anim = true; } else sp(0);
+    if (boss) { const fr = boss.hp / boss.maxHp; sp(boss.id); sp(Math.round(fr * 1024)); sp(boss.exposed ? 1 : 0); sp(sid(boss.def.name)); if (ghost.boss !== undefined && ghost.boss > fr + 0.0005) anim = true;
+      const fz = ED.World.furyAt(view.stratum | 0);
+      if (fz > 0) { const fc = boss.furyT || 0; sp(Math.round(fc * 2)); sp(Math.round((boss.furyM || 1) * 10)); if (fc >= fz - ED.World.BOSS_FURY.warn) anim = true; } // fury track fill and label; the pulse from `warn` seconds before the start
+    } else sp(0);
     // prompt and sign (their screen position follows the world)
     const pr = extra.prompt;
     if (pr) { const s = R.toScreen(pr.x, pr.y - 46); sp(1); sp(sid(pr.text)); sp(sid(pr.desc || '')); sp(sid(pr.color || '')); sp(pr.can === false ? 1 : 0); sp(sid(I.hint('attack'))); sp(Math.round(s.x * rk)); sp(Math.round(s.y * rk)); } else sp(0);
@@ -544,16 +548,25 @@
     let boss = null; const en = view.enemies;
     for (let i = 0; i < en.length; i++) if (en[i].boss && en[i].hp > 0) { boss = en[i]; break; }
     if (!boss) return;
-    const pw = L.bw, bw = pw - u * 3, ph = u * 5.6, x = (W - pw) / 2, y = L.m;
+    const FZ = ED.World.furyAt(view.stratum | 0), FU = ED.World.BOSS_FURY, fc = boss.furyT || 0, fm = boss.furyM || 1, fon = FZ > 0 && fc > FZ, fwarn = FZ > 0 && !fon && fc >= FZ - FU.warn; // fury: strata with a start time only
+    const pw = L.bw, bw = pw - u * 3, ph = u * (FZ > 0 ? 6.5 : 5.6), x = (W - pw) / 2, y = L.m;
     fadeStart('boss', x, y, pw, ph);
     plate(x, y, pw, ph);
+    if (fon) { rr(c, x, y, pw, ph, u * 0.3); c.strokeStyle = U.rgba('#ff5a1a', 0.7 + 0.3 * Math.sin(t * (6 + 2 * fm))); c.lineWidth = lw() * 1.6; c.stroke(); }
     T(boss.def.name, W / 2, y + u * 1.65, u * 1.7, K.bone, FD, 'center', 900);
     const fr = boss.hp / boss.maxHp;
     ghost.boss = ghost.boss === undefined || ghost.bossId !== boss.id ? fr : Math.max(fr, ghost.boss - dtc * 0.2); ghost.bossId = boss.id;
     const marks = boss.type === 'hollowking' ? [0.6, 0.3] : [0.66, 0.33], by = y + u * 3.2, bh = u * 1.7;
     bar(x + u * 1.5, by, bw, bh, fr, boss.exposed ? '#ff9a3a' : '#c0392b', ghost.boss);
     c.fillStyle = K.gold; for (const mk2 of marks) c.fillRect(Math.round(x + u * 1.5 + bw * mk2) - 1, by - u * 0.3, 3, bh + u * 0.6);
-    if (boss.exposed) T('Exposed', x + pw - u * 1.5, y + u * 1.65, u * 1.0, '#ffb870', FB, 'right', 800);
+    if (FZ > 0) { // fury track under the bar: fight time up to the cap (start + the ramp's length), a notch at the start; it pulses from `warn` s before the start and burns past it
+      const end = FZ + (FU.max - 1) / FU.ramp, ty = by + bh + u * 0.55, th = u * 0.4, pu = 0.5 + 0.5 * Math.sin(t * (fon ? 6 + 2 * fm : 9));
+      c.fillStyle = '#000'; c.fillRect(x + u * 1.5 - 1, ty - 1, bw + 2, th + 2); c.fillStyle = '#26120b'; c.fillRect(x + u * 1.5, ty, bw, th);
+      c.fillStyle = fon ? U.rgba('#ff5a1a', 0.75 + 0.25 * pu) : fwarn ? U.rgba('#ffb56b', 0.55 + 0.45 * pu) : '#b88a4a'; c.fillRect(x + u * 1.5, ty, bw * clamp01(fc / end), th);
+      c.fillStyle = fon || fwarn ? '#ffd9a0' : K.gold; c.fillRect(Math.round(x + u * 1.5 + bw * FZ / end) - 1, ty - u * 0.2, 3, th + u * 0.4);
+    }
+    if (fon) T('Fury ×' + fm.toFixed(1), x + pw - u * 1.5, y + u * 1.65, u * 1.0, '#ff8a3d', FB, 'right', 800);
+    if (boss.exposed) T('Exposed', fon ? x + u * 1.5 : x + pw - u * 1.5, y + u * 1.65, u * 1.0, '#ffb870', FB, fon ? 'left' : 'right', 800); // beside the fury label, not under it
     endFade();
   }
 
