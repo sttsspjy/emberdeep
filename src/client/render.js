@@ -252,7 +252,10 @@
     for (const p of view.players.values()) qDraw(dn++, p.y, 0, p);
     for (const e of view.enemies) if (e.hp > 0) { qFoe(dn++, e); nFoe++; }
     for (const a of view.allies) qDraw(dn++, a.y, 2, a);
-    for (const s of ED.Tiles.statics(room)) qDraw(dn++, s.key, 3, s); // tall pieces of the room art (columns, standing decor, door arch)
+    for (const s of R.liveStatics(view, room)) { // tall pieces of the room art (columns, standing decor, door arch, unbroken breakables)
+      qDraw(dn++, s.key, 3, s);
+      if (s.gc) { R.light(s.x, s.y - 6, 40, s.gc, 0.45); R.emit(s.x, s.y - s.gy, s.gr, s.gc, s.ga); } // a glowing breakable (mushroom, crystal, shard) lights and glows until it is smashed
+    }
     if (artProps) for (const p of view.props) qDraw(dn++, p.y, 4, p); // pixel-art props sort with the entities
     crowdLod(view, local, nFoe, dn);
     for (const z of view.zones) if ((z.kind === 'fire' || z.kind === 'pfire') && fireFade(z) > 0.01) { // fire flames: kind 5 entries (3 and 4 are the room's statics and props), d = flame index
@@ -330,6 +333,15 @@
     if (R.syncWorld) c.getImageData(0, 0, 1, 1); // benchmarking: force the 2D raster to finish
     R.stats.world += performance.now() - t0; R.stats.n++;
     R.endWorld(R.postOpts(biome, t, view.pact > 0 ? { vig: 0.42 + Math.min(0.2, view.pact * 0.02) } : null));
+  };
+
+  // The room's tall statics without the breakables already smashed here (bit s.bi of view.roomState[view.roomId].broken); one shared array, valid until the next call.
+  const liveSt = [];
+  R.liveStatics = (view, room) => {
+    const all = ED.Tiles.statics(room), rs = view.roomState && view.roomState[view.roomId], bm = rs ? rs.broken | 0 : 0;
+    liveSt.length = 0;
+    for (let i = 0; i < all.length; i++) { const s = all[i]; if (s.bi === undefined || !((bm >> s.bi) & 1)) liveSt.push(s); }
+    return liveSt;
   };
 
   // Y-sorted entity list: items are pooled by index, so a frame allocates nothing.
@@ -963,7 +975,7 @@
       g.strokeStyle = '#d99a1e'; g.lineWidth = 0.7; g.beginPath(); g.arc(0, 0, 2.2, 0, U.TAU); g.stroke();
       g.fillStyle = '#fff6c0'; g.beginPath(); g.ellipse(-1.2, -1.5, 1.3, 0.8, -0.5, 0, U.TAU); g.fill();
     } else {
-      g.scale(0.3, 0.3); g.lineWidth = 3.2; g.fillStyle = '#ff4a5a';
+      g.scale(0.2, 0.2); g.lineWidth = 4.2; g.fillStyle = '#ff4a5a';
       g.beginPath(); g.moveTo(0, 18); g.bezierCurveTo(-24, 2, -22, -20, -8, -20); g.quadraticCurveTo(-2, -20, 0, -12); g.quadraticCurveTo(2, -20, 8, -20); g.bezierCurveTo(22, -20, 24, 2, 0, 18); g.fill(); g.stroke();
       g.fillStyle = 'rgba(255,255,255,0.7)'; g.beginPath(); g.ellipse(-9, -8, 4, 6, -0.6, 0, U.TAU); g.fill();
     }
@@ -983,11 +995,12 @@
     if (pass === 0) {
       let n = 0; // light budget: a big pile of coins must not starve other lights
       for (const pk of pks) {
-        const lit = n++ < 14, L = lit ? R.light : NOP, k = pk.kind, big = k === 'heart';
+        const lit = n++ < 14, L = lit ? R.light : NOP, k = pk.kind;
         if (k === 'gold') L(pk.x, pk.y - 4, 28, '#ffd36b', 0.5);
         else if (k === 'xp') L(pk.x, pk.y - 4, 26, '#7dffd9', 0.5);
-        else L(pk.x, pk.y - 6, 36, '#ff4a5a', 0.6);
-        c.globalAlpha = 0.55; c.drawImage(shadowH.v, pk.x - 7, pk.y - (big ? 9 : 6), 14, big ? 12 : 9);
+        else L(pk.x, pk.y - 4, 24, '#ff4a5a', 0.6);
+        c.globalAlpha = 0.55;
+        if (k === 'heart') c.drawImage(shadowH.v, pk.x - 5, pk.y - 5, 10, 7); else c.drawImage(shadowH.v, pk.x - 7, pk.y - 6, 14, 9);
       }
       c.globalAlpha = 1;
       return;
@@ -1002,8 +1015,8 @@
     }
     if (pkTrail.size > pks.length + 48) for (const [id, s] of pkTrail) if (s.f !== fr) pkTrail.delete(id);
     for (const pk of pks) { // halos and trails (context is additive)
-      const k = pk.kind, big = k === 'heart', bob =Math.sin(t * 5 + pk.id) * 1.5, y = pk.y - (big ? 7 : 5) + bob, col = PK_COL[k], s = pkTrail.get(pk.id);
-      if (n++ < 70) R.glow(c, pk.x, y, big ? 15 : 11, col, k === 'xp' ? 0.75 + Math.sin(t * 6 + pk.id) * 0.15 : 0.6);
+      const k = pk.kind, bob = Math.sin(t * 5 + pk.id) * 1.5, y = pk.y - 5 + bob, col = PK_COL[k], s = pkTrail.get(pk.id);
+      if (n++ < 70) R.glow(c, pk.x, y, k === 'heart' ? 9 : 11, col, k === 'xp' ? 0.75 + Math.sin(t * 6 + pk.id) * 0.15 : 0.6);
       if (s && s.v > 150) for (let i = 1; i <= 3; i++) R.glow(c, pk.x - s.dx / s.v * i * 5, y - s.dy / s.v * i * 5 * 0.7, 6 - i, col, 0.62 - i * 0.16);
     }
     c.globalCompositeOperation = 'source-over';
@@ -1017,7 +1030,7 @@
         else AT_.draw(c, 'pickup.heart', 0, x, y);
       } else if (k === 'gold') { const w = Math.max(2, Math.round(8 * Math.max(0.2, Math.abs(Math.cos(t * 4 + pk.id))))); c.drawImage(spr, Math.round(pk.x - w), Math.round(pk.y - 12 + bob), w * 2, 16); }
       else if (k === 'xp') { const p = Math.round(16 * (1 + Math.sin(t * 6 + pk.id) * 0.05)); c.drawImage(spr, Math.round(pk.x - p / 2), Math.round(pk.y - 13 + bob - (p - 16) / 2), p, p); }
-      else c.drawImage(spr, Math.round(pk.x - 8), Math.round(pk.y - 14 + bob), 16, 16);
+      else c.drawImage(spr, Math.round(pk.x - 8), Math.round(pk.y - 13 + bob), 16, 16);
     }
     c.globalCompositeOperation = 'lighter';
     for (const pk of pks) { // twinkle

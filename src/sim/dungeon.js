@@ -162,7 +162,7 @@
       id: c.id, gx: c.gx, gy: c.gy, type: c.type, w, h, tiles, seed, stratum,
       dist: c.dist, danger: 1 + 0.05 * c.dist, reward: null,
       doors: { n: -1, s: -1, e: -1, w: -1 },
-      decor: [], torches: [], dark: !!c.dark,
+      decor: [], breakables: [], torches: [], dark: !!c.dark,
       event: c.type === 'event' ? EVENTS[seed % EVENTS.length] : null,
       pattern: 'open',
     };
@@ -313,15 +313,40 @@
   }
 
   // ---------------- decoration (cosmetic, deterministic) ----------------
+  // Breakables ({ k, x, y, v, s } in tiles, like decor) are the decor kinds of biome.breakable: smashable props, never baked into the floor. Combat, elite and boss rooms hold BREAK_MIN..BREAK_MAX of them, every other room at most BREAK_SPARE.
+  const BREAK_MIN = 4, BREAK_MAX = 8, BREAK_SPARE = 3, BREAK_GAP = 1.1; // BREAK_GAP: least distance in tiles between two
+  const FIGHT = { combat: 1, elite: 1, boss: 1 };
+
+  // A breakable stands on plain floor, off every door lane, clear of the prop spot (1.5 tiles around the centre; in a room without a fight the whole band its props and signs span) and BREAK_GAP from the others in `list`.
+  function breakFree(room, x, y, list) {
+    const tx = Math.floor(x), ty = Math.floor(y);
+    if (room.tiles[ty * room.w + tx] !== 0 || inDoorLane(room, tx, ty)) return false;
+    const cx = room.w / 2, cy = room.h / 2 + 0.5;
+    if (FIGHT[room.type] ? Math.hypot(x - cx, y - cy) < 1.5 : Math.abs(x - cx) < 5.8 && Math.abs(y - cy) < 2.9) return false;
+    for (const b of list) if (Math.hypot(b.x - x, b.y - y) < BREAK_GAP) return false;
+    return true;
+  }
+
   function decorate(room, stratum) {
     const rng = U.RNG(room.seed ^ 0xdec0);
-    const biome = ED.biomeFor(stratum);
+    const biome = ED.biomeFor(stratum), brk = biome.breakable || [];
     const n = Math.floor(room.w * room.h / 22);
     for (let i = 0; i < n; i++) {
       const x = rng.int(1, room.w - 2), y = rng.int(2, room.h - 2);
       if (room.tiles[y * room.w + x] !== 0) continue;
-      room.decor.push({ k: rng.pick(biome.decor), x: x + rng.range(0.15, 0.85), y: y + rng.range(0.2, 0.85), v: rng.next(), s: rng.range(0.7, 1.2) });
+      const d = { k: rng.pick(biome.decor), x: x + rng.range(0.15, 0.85), y: y + rng.range(0.2, 0.85), v: rng.next(), s: rng.range(0.7, 1.2) };
+      if (brk.indexOf(d.k) < 0) room.decor.push(d);
+      else if (breakFree(room, d.x, d.y, room.breakables)) room.breakables.push(d);
     }
+    if (FIGHT[room.type] && brk.length) { // top up to BREAK_MIN from a stream of its own (the decor and torch rolls stay as they are)
+      const top = U.RNG(room.seed ^ 0xb7ea);
+      for (let i = 0; i < 200 && room.breakables.length < BREAK_MIN; i++) {
+        const x = top.int(1, room.w - 2), y = top.int(2, room.h - 2);
+        const d = { k: top.pick(brk), x: x + top.range(0.15, 0.85), y: y + top.range(0.2, 0.85), v: top.next(), s: top.range(0.7, 1.2) };
+        if (breakFree(room, d.x, d.y, room.breakables)) room.breakables.push(d);
+      }
+    }
+    room.breakables.length = Math.min(room.breakables.length, FIGHT[room.type] ? BREAK_MAX : BREAK_SPARE);
     // torches along the top wall face, avoiding the door
     const cx = Math.floor(room.w / 2);
     for (let x = 3; x < room.w - 2; x += rng.int(4, 6)) {

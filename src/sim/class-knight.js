@@ -48,6 +48,7 @@
         if (st.seal) e.sealT = Math.max(e.sealT, st.seal);
       }
     }
+    this.smashSeg(p, ax, ay, bx, by, reach);
     if (c.carry) carryFoes(this, p, c, bx, by, ca, sa);
     if (st.phalanx > 0) {
       for (const o of this.projs) {
@@ -338,6 +339,7 @@
         if (s.legT >= s.orbitDur) { this.dropShield(p, i); continue; }
       }
       pr.x = nx; pr.y = ny; pr.vx = Math.cos(ang) * sp; pr.vy = Math.sin(ang) * sp;
+      this.smashCircle(p, nx, ny, pr.r);
       // foes touched
       if (s.leg === 'out' || s.leg === 'chase') {
         let hit = null, bd = Infinity;

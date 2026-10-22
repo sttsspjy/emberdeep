@@ -236,6 +236,36 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     ok(R.eliteLabel(v(e1)) === `${nm('swift')} ${nm('brutal')} ${fn}` && R.eliteLabel(v(e1), true) === `${nm('swift')} ${nm('brutal')}`, `a two-affix elite reads both names before the foe name (${R.eliteLabel(v(e1))})`);
     ok(R.eliteLabel({ elite: 'warded', elite2: null, def: ED.ENEMIES.skeleton }) === `${nm('warded')} ${fn}` && R.eliteLabel({ elite: 'warded', def: ED.ENEMIES.skeleton }, true) === nm('warded'), 'a one-affix elite keeps "Affix Foe"');
   }
+
+  // breakable props: BR rides the full snapshots only, the mirror applies it, a smash event marks the bit in its room, smash events are capped, a smashed breakable leaves the draw list
+  {
+    const w = room1(0), rm = w.floor.rooms.find((r) => r.type === 'combat');
+    w.enterRoom(rm.id, null); w.enemies.length = 0; w.enc = null; w.zones.length = 0;
+    ok(rm.breakables.length >= 4, `the combat room holds ${rm.breakables.length} breakables (both sides build them from the floor seed)`);
+    w.smashBreakable(1, null); w.smashBreakable(3, null);
+    const full = wire(N.encodeSnap(w, w.fx, true)), part = wire(N.encodeSnap(w, [], false));
+    ok(Array.isArray(full.BR) && full.BR.length === w.floor.rooms.length && full.BR[rm.id] === 10 && full.BR.filter((b) => b).length === 1, `a full snapshot carries BR, one mask per room (${full.BR})`);
+    ok(!('BR' in part), 'a partial snapshot does not');
+    ok(full.F.filter((e) => e.t === 'smash').map((e) => e.i).join() === '1,3', 'the smash events ride the snapshot');
+    const m = mirrorOf(w); full.T = 5; m.apply(full, 0);
+    ok(m.roomId === rm.id && m.roomState[rm.id].broken === 10 && m.roomState[0].broken === 0, `the mirror applies BR (room ${rm.id}: ${m.roomState[rm.id].broken})`);
+    const sig = N.propSig(w); w.roomState[rm.id].broken = 0; const sig0 = N.propSig(w); w.roomState[rm.id].broken = 10;
+    ok(sig !== sig0, 'a smash changes the prop signature, so the next snapshot is a full one');
+    const fxCtx = { localPid: 'p0', player: () => ({ x: 0, y: 0, pid: 'p0', cls: 'knight' }), players: () => [], stratum: () => 1 };
+    G.s = { mode: 'client', mirror: m, fxCtx };
+    G.localEvent({ t: 'smash', i: 5, x: 100, y: 100, k: 'urn', r: rm.id });
+    ok(m.roomState[rm.id].broken === (10 | 32), 'a smash event sets its bit in its room');
+    G.localEvent({ t: 'smash', i: 6, x: 100, y: 100, k: 'urn', r: 9999 });
+    ok(m.roomState[rm.id].broken === (10 | 32), 'an event of an unknown room is ignored');
+    G.s = null;
+    const many = Array.from({ length: 20 }, (_, i) => ({ t: 'smash', i: i & 7, x: 0, y: 0, k: 'urn', r: 0 }));
+    ok(N.capFx(many, N.CAPS).length === 8 && N.capFx(many, N.CAPS_LOCAL).length === 4, 'smash events are capped at 8 per snapshot and 4 per local frame');
+    F.reset(); F.handle({ t: 'smash', x: 100, y: 100, k: 'crystal', r: 0 }, fxCtx); ok(F.parts.length > 0, `a smash throws shards (${F.parts.length} particles)`); F.reset();
+    ED.Tiles.statics = () => [{ k: 'col', key: 5 }, { k: 'brk', bi: 0, key: 6 }, { k: 'brk', bi: 1, key: 7 }, { k: 'brk', bi: 2, key: 8 }];
+    const live = (broken) => R.liveStatics({ roomState: { [rm.id]: { broken } }, roomId: rm.id }, rm).map((s) => (s.bi === undefined ? 'c' : s.bi)).join();
+    ok(live(0) === 'c,0,1,2' && live(2) === 'c,0,2' && live(5) === 'c,1' && live(7) === 'c', 'the draw list drops the broken breakables and keeps the other statics');
+    ok(R.liveStatics({ roomState: {}, roomId: 3 }, rm).length === 4, 'a view without room state draws everything');
+  }
 }
 
 console.log(`${n} checks, ${fails} failed`);

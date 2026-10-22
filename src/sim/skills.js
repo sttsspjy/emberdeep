@@ -89,6 +89,7 @@
       if (onHit) onHit(e, dealt, dealt / (s.affMul || 1));
     }
     this.foeEnd();
+    this.smashCircle(p, x, y, r);
   };
 
   // Cooldown refund for the hero's own client (cooldowns are client-authoritative): slot 0 or 1, s seconds off, or a full refund when s is omitted.

@@ -31,7 +31,7 @@
       this.stratum = d.s; this.floorSeed = d.fs;
       this.floor = ED.Dungeon.generate(d.s, d.fs);
       this.roomState = {};
-      for (const rm of this.floor.rooms) this.roomState[rm.id] = { visited: false, known: false, cleared: false };
+      for (const rm of this.floor.rooms) this.roomState[rm.id] = { visited: false, known: false, cleared: false, broken: 0 };
       this.roomId = -1;
     }
     if (d.r !== this.roomId) {
@@ -41,7 +41,7 @@
     }
     this.locked = !!d.L; this.gold = d.g; this.xp = d.x; this.xpNext = d.n; this.level = d.l; this.waitMsg = d.wm; this.time = d.T;
     if (d.O) this.props = d.O.map(a => ({ id: a[0], kind: a[1], x: a[2], y: a[3], state: a[4], item: a[5], price: a[6], group: a[7], stype: a[8], text: a[9] }));
-    if (d.RS) d.RS.forEach((b, i) => { this.roomState[i] = { visited: !!(b & 1), known: !!(b & 2), cleared: !!(b & 4) }; });
+    if (d.RS) d.RS.forEach((b, i) => { this.roomState[i] = { visited: !!(b & 1), known: !!(b & 2), cleared: !!(b & 4), broken: d.BR ? d.BR[i] | 0 : 0 }; });
     if (d.RUN) this.run = d.RUN;
     const P = new Map(), E = new Map(), H = new Map(), K = new Map(), A = new Map();
     for (const a of d.P) P.set(a[0], a);
@@ -239,6 +239,8 @@
       }
     } else if (ev.t === 'boon' && s.mode !== 'client' && ev.pid === s.localPid) {
       if (s.me.stats.maxCharges > s.ctl.charges && ED.BOONS[ev.id].mods.charges) s.ctl.charges++;
+    } else if (ev.t === 'smash') {
+      if (s.mode === 'client') { const rs = s.mirror.roomState[ev.r]; if (rs) rs.broken |= 1 << ev.i; } // the host world already holds its own bit
     } else if (ev.t === 'end') {
       if (s.mode === 'host' && !s.ended) {
         // flush everything (including this event) before the session is torn down, then confirm directly
