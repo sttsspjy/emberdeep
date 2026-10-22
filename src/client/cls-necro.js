@@ -2,6 +2,8 @@
 // Hex sigils on Hexed foes and the command stream of the minions, Gravecaller / Boneyard / Rise Again rise effects, the Bone Spikes and Corpse Explosion bursts, Bone Lance flights, Bone Knight gear (ED.ClassFx.minion, called by
 // actors.js and the sprites.js stand-in for every drawn minion), the shot-block clang, Ironbone's stun ring, Bone Armor plates around the Necromancer and the Abyssal glow on empowered minions. All art is drawn here on the 2 px grid
 // and registered into the atlas as extra anims (ED.ART frames, ED.Atlas pages), so the effects run through the normal sheet, mark and put paths; without ED.ART the particle effects remain.
+// Attack and element forks: Hex Burst ring (event hexburst), Quickened Dead and Abyssal Maw speed streaks and Abyssal Hunger eyes on minions (ED.ClassFx.minion), Grave Bolt (a green-black bolt body for soul shots of radius 10 or more, a muzzle flash or scythe smear on every graveN-th atk),
+// Soul Storm (event soulstorm), Abyssal Maw (the bone-field zone with arc 1: shards, w 11), Tide of the Dead (free minions are allies with k 3; their burst is the boom k shadow with d).
 (function (ED) {
   'use strict';
   const U = ED.U, F = ED.FX, A = ED.Audio, At = ED.Atlas, Pix = ED.Pix, CF = ED.ClassFx;
@@ -169,7 +171,8 @@
   });
 
   // ---------------- bursts ----------------
-  CF.on('boom', (ev) => {
+  CF.on('boom', (ev, ctx, local) => {
+    if (ev.d && ev.k === 'shadow') { doomBurst(ev, ctx, local); return; }
     if (ev.k !== 'bone') return;
     if (ev.s) { // Bone Spikes
       if (has('fx.bone.spikes')) F.sheet('fx.bone.spikes', ev.x, ev.y, { a: 0.95 });
@@ -258,6 +261,7 @@
   CF.minion = (c, a, t, knight, flip) => {
     if (knight) { if (has(SHIELD.id)) knightGear(c, a, t, flip); else knightGearPlain(c, a, t, flip); }
     if (abyssUntil[a.owner] > F.time) abyssGlow(c, a, t);
+    forkGear(c, a, t, flip);
   };
 
   // ---------------- Bone Armor ----------------
@@ -308,6 +312,7 @@
 
   // Bone field (zone 'shards' with w 11): a dark cracked patch ringed in teal with a thicket of bone spikes that thrust up, sway and sink back in the last half second.
   CF.zone.bonefield = (c, z, pass, t) => {
+    if (z.arc === 1) { mawZone(c, z, pass, t); return; } // an Abyssal Maw rides the same wire kind
     const R = ED.Render, left = z.dur - z.t, fade = Math.min(1, left * 2.5, z.t * 8), grow = Math.min(1, z.t * 7) * Math.min(1, left * 2.2), n = Math.max(7, Math.round(z.r / 5)), x = s2(z.x), y = s2(z.y);
     if (pass === 0) {
       R.light(z.x, z.y, z.r * 1.5, TEAL, 0.3 * fade);
@@ -380,4 +385,125 @@
     Pix.draw(c, 'fx.sigil.skull', 'teal', 0, 0, s2(top - 10 + Math.round(Math.sin(t * 3)) * 2), fade); // a skull crown above the head
     if (has('fx.soul.teal')) for (let i = 0; i < 3; i++) { const a = t * 2.2 + i * U.TAU / 3; Pix.draw(c, 'fx.soul.teal', '', ((t * 6) | 0) & 1, s2(Math.cos(a) * 20), s2(cy + Math.sin(a) * 7), (Math.sin(a) > 0 ? 1 : 0.6) * fade); }
   });
+
+  // ---------------- attack and element forks ----------------
+  const low = () => !!(ED.Render && ED.Render.quality === 'low');
+  const MINT = '#3fe090', DEEP = '#0f3a28', DOOM = '#7a3cff';
+  let burstT = -9, stormT = -9;
+
+  // Hex Burst (event hexburst: x, y, r): a violet ring runs out to the burst radius and sparks fly off it; the new sigils appear through the Hex mark above.
+  CF.on('hexburst', (ev, ctx, local) => {
+    F.ring(ev.x, ev.y, ev.r + 8, VIOLET, 0.32, 2, false, 6); F.ring(ev.x, ev.y, ev.r * 0.6, TEAL, 0.24, 1, false, 4);
+    F.burst(ev.x, ev.y - 6, low() ? 4 : 8, { kind: 'spark', color: LILAC, sp: ev.r * 3, life: 0.28, size: 1.6, drag: 5 });
+    F.pop(ev.x, ev.y - 6, 14, VIOLET, 0.12);
+    if (F.time - burstT > 0.12) { burstT = F.time; A.play('magic', ev.pid === local ? 0.2 : 0.1); }
+  });
+
+  // Soul Storm (event soulstorm: x, y -> x1, y1): the soul of the struck foe flies to its target in 0.18 s on a trail of motes and bursts there.
+  CF.on('soulstorm', (ev, ctx, local) => {
+    const dx = ev.x1 - ev.x, dy = ev.y1 - ev.y, dur = 0.18, ang = Math.atan2(dy, dx);
+    F.sheet('fx.soul.teal', ev.x, ev.y - 4, { loop: true, life: dur, fade: true, vx: dx / dur, vy: dy / dur, a: 0.95, rot: ang + Math.PI / 2 });
+    for (let i = 0; i < 4; i++) F.part(ev.x, ev.y, { color: i & 1 ? TEAL : LILAC, size: 2, life: dur, add: true, drag: 0, vx: dx / dur, vy: dy / dur }, 0, dur * (0.35 + 0.15 * i));
+    F.burst(ev.x1, ev.y1, low() ? 3 : 6, { kind: 'spark', color: TEAL, sp: 120, life: 0.25, size: 1.6, drag: 5 }); F.ring(ev.x1, ev.y1, 18, VIOLET, 0.22, 2); F.pop(ev.x1, ev.y1, 11, TEAL, 0.1);
+    if (F.time - stormT > 0.1) { stormT = F.time; A.play('magic', ev.pid === local ? 0.18 : 0.08); }
+  });
+
+  // Grave Bolt: every graveN-th attack of a hero with the form leaves its weapon in a green-black flash (a scythe adds a wide mint smear); the shot itself is the bolt body below.
+  CF.on('atk', (ev, ctx, local) => {
+    const p = ctx.player(ev.pid), st = p && p.stats;
+    if (!st || !(st.graveBolt > 0) || !st.graveN || ev.n % st.graveN) return;
+    const mine = ev.pid === local, mx = p.x + Math.cos(ev.a) * 16, my = p.y - 10 + Math.sin(ev.a) * 16;
+    if (st.weapon && st.weapon.kind === 'melee') F.slash(p.x, p.y - 8, ev.a, (st.weapon.range || 52) * 1.3, 2.4, MINT, 0.3);
+    F.burst(mx, my, low() ? 4 : 8, { kind: 'smoke', color: DEEP, sp: 60, life: 0.45, size: 5, drag: 2.5 });
+    F.burst(mx, my, 6, { kind: 'streak', color: MINT, a: ev.a, spread: 0.5, sp: 260, life: 0.2, size: 1.8, drag: 5 });
+    F.pop(mx, my, 16, MINT, 0.12);
+    A.play('rift', mine ? 0.26 : 0.1);
+  });
+  // Body of a Grave Bolt (a 'soul' shot of the hero's team with a radius of 10 or more; Lich Form's bolts and the plain wand shots are 5 to 7): a black-rimmed green orb with a pale core, a ring of dashes that turns round it and a wake of dark green squares.
+  (CF.shotBody || (CF.shotBody = {})).soul = (c, pr, t, x, y, foe) => {
+    if (foe || pr.r < 10) return false;
+    const R = Math.max(4, Math.round(pr.r / 2)), sp = Math.hypot(pr.vx, pr.vy) || 1, ux = pr.vx / sp, uy = pr.vy / sp, ox = Pix.s2(x), oy = Pix.s2(y);
+    for (let i = 6; i >= 1; i--) { c.globalAlpha = 0.85 - i * 0.12; c.fillStyle = i & 1 ? DEEP : MINT; const s = i < 3 ? 6 : 4; c.fillRect(Pix.s2(x - ux * i * 7) - s / 2, Pix.s2(y - uy * i * 7) - s / 2, s, s); }
+    c.globalAlpha = 1;
+    Pix.put(c, Pix.orb(R, '#04080a', '#0c3022', '#25a368', '#dbfff0'), ox, oy);
+    Pix.put(c, Pix.ring(R + 2, 1, MINT, MINT, MINT, 3, (t * 8) & 7), ox, oy, 0.85);
+    return true;
+  };
+
+  // Minions of a hero with a fork: free Tide minions (k 3) wear a violet ground ring and two circling motes; Quickened Dead (near a Hexed foe) and Abyssal Maw (near a live maw) leave speed streaks, teal and violet;
+  // Abyssal Hunger (near an elite or boss) opens two white eyes and sends dark motes up.
+  function nearFoe(a, r, test) {
+    const v = view();
+    if (!v) return false;
+    for (const e of v.enemies) if (e.hp > 0 && test(e) && (e.x - a.x) * (e.x - a.x) + (e.y - a.y) * (e.y - a.y) < r * r) return true;
+    return false;
+  }
+  function nearMaw(a) {
+    const v = view();
+    if (v) for (const z of v.zones) if (z.kind === 'shards' && z.w === 11 && z.arc === 1 && (z.x - a.x) * (z.x - a.x) + (z.y - a.y) * (z.y - a.y) < 120 * 120) return true;
+    return false;
+  }
+  function forkGear(c, a, t, flip) {
+    const v = view(), o = v && v.players.get(a.owner), st = o && o.stats;
+    if (!st) return;
+    const id = a.id | 0;
+    if (a.k === 3) {
+      const pulse = 0.5 + 0.5 * Math.sin(t * 5 + id);
+      ED.Sprites.glow(c, 0, -10, 20 + 3 * pulse, DOOM, 0.26 + 0.1 * pulse);
+      Pix.put(c, Pix.ell(7, 3, DOOM, false, 3, (t * 6) & 7), 0, 0, 0.85);
+      c.fillStyle = LILAC; c.beginPath();
+      for (let i = 0; i < 2; i++) { const q = t * 3.4 + i * Math.PI + id; c.rect(Pix.s2(Math.cos(q) * 10), Pix.s2(-12 + Math.sin(q) * 4), 2, 2); }
+      c.fill();
+    }
+    const quick = st.hexHaste > 0 && nearFoe(a, 36, (e) => e.hexed || e.hexT > 0), maw = st.maw > 0 && nearMaw(a);
+    if (quick || maw) { // three trailing lines behind the body, flicker at the speed of the strikes
+      const dir = flip ? 1 : -1, ph = Math.floor(t * 12 + id);
+      c.fillStyle = maw ? VIOLET : TEAL;
+      for (let i = 0; i < 3; i++) { const w = 6 + ((i + ph) % 3) * 4; c.globalAlpha = 0.75 - i * 0.15; c.fillRect(dir > 0 ? 8 : -8 - w, -22 + i * 6, w, 2); }
+      c.globalAlpha = 1;
+      ED.Sprites.glow(c, 0, -10, 18, maw ? VIOLET : TEAL, 0.12 + 0.08 * Math.sin(t * 14 + id));
+    }
+    if (st.abyssDoom > 0 && nearFoe(a, 34, (e) => e.elite || e.boss)) {
+      const pulse = 0.5 + 0.5 * Math.sin(t * 9 + id);
+      ED.Sprites.glow(c, 0, -20, 12, VIOLET, 0.3 + 0.2 * pulse);
+      c.fillStyle = '#ffffff'; c.fillRect(-6, -22, 2, 2); c.fillRect(2, -22, 2, 2);
+      c.fillStyle = '#5a2fb0'; c.beginPath();
+      for (let i = 0; i < 3; i++) { const k = (t * 1.1 + i * 0.33 + id * 0.1) % 1; c.globalAlpha = Math.max(0.25, 1 - k); c.rect(Pix.s2((i - 1) * 7), Pix.s2(-26 - k * 18), 2, 2); }
+      c.fill(); c.globalAlpha = 1;
+    }
+  }
+
+  // Abyssal Maw (zone 'shards', w 11, arc 1): a dark pit with a dashed violet lip, bone fangs that snap round it and motes spiralling in; it opens in 0.2 s and shuts in the last third of a second.
+  function mawZone(c, z, pass, t) {
+    const R = ED.Render, left = z.dur - z.t, open = Math.min(1, z.t * 5), k = open * Math.min(1, left * 3), rx = Math.max(4, Math.round(z.r / 2 * (0.4 + 0.6 * open))), ry = Math.max(3, Math.round(rx * 0.62)), x = s2(z.x), y = s2(z.y);
+    if (pass === 0) {
+      R.light(z.x, z.y, z.r * 1.5, '#5a2fb0', 0.28 * k);
+      Pix.put(c, Pix.ell(rx + 2, ry + 2, '#3b1a7a', true), x, y, 0.5 * k);
+      Pix.put(c, Pix.ell(rx, ry, '#07030c', true), x, y, 0.96 * k);
+      Pix.put(c, Pix.ell(rx, ry, VIOLET, false, 3, (t * 6) & 7), x, y, 0.9 * k);
+      const n = 12, snap = 0.5 + 0.5 * Math.sin(t * 7 + z.id);
+      c.fillStyle = BONE;
+      for (let i = 0; i < n; i++) { // a fang: a 2 px line of 3 to 5 steps from the lip toward the centre, longer when the maw snaps
+        const an = i * U.TAU / n + 0.2, ca = Math.cos(an), sa = Math.sin(an), len = Math.round((3 + 2 * snap * (i & 1 ? 1 : 0.5)) * k);
+        for (let s = 0; s < len; s++) c.fillRect(s2(x + ca * (rx * 2 - 1 - s * 2)), s2(y + sa * (ry * 2 - 1 - s * 2 * 0.62)), 2, 2);
+      }
+      c.fillStyle = '#9a6aff';
+      for (let i = 0; i < 8; i++) {
+        const q = (t * 0.9 + i * 0.125) % 1, an = t * 2.2 + i * 0.785, r = rx * 2 * (1 - q);
+        c.globalAlpha = (1 - q) * 0.9 * k; c.fillRect(s2(x + Math.cos(an) * r), s2(y + Math.sin(an) * r * 0.62), 2, 2);
+      }
+      c.globalAlpha = 1;
+    } else if (pass === 1) R.glow(c, z.x, z.y - 4, z.r * 0.9, DOOM, 0.16 * k);
+  }
+
+  // The burst of a free Tide minion that falls (boom k shadow, d 1, radius 60): the Doom it marks closes in as a violet ring while runes and a skull rise off the ground.
+  function doomBurst(ev, ctx, local) {
+    const d = away(ctx, ev.x, ev.y);
+    F.ring(ev.x, ev.y, ev.r, VIOLET, 0.4, 3); F.ring(ev.x, ev.y, ev.r * 0.55, '#5a2fb0', 0.3, 2, true);
+    F.burst(ev.x, ev.y - 4, low() ? 5 : 10, { kind: 'shard', color: LILAC, sp: ev.r * 2, life: 0.5, size: 2.2, vz: 90, z: 3 });
+    F.burst(ev.x, ev.y - 6, 5, { kind: 'smoke', color: '#2a0f55', sp: ev.r * 1.1, life: 0.5, size: 5, drag: 2.5 });
+    F.sheet('deco.skull', ev.x, ev.y - 6, { ramp: 'shadow', frame: 0, life: 0.4, fade: true, vy: -22, a: 0.8 });
+    F.pop(ev.x, ev.y - 6, ev.r * 0.7, VIOLET, 0.18);
+    A.play('rift', d < 400 ? 0.16 : 0.06);
+  }
 })(globalThis.ED || (globalThis.ED = {}));

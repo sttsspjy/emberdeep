@@ -1,6 +1,6 @@
 // Usage: node tools/check-cleric.js
 // Headless checks of the 12 Cleric route cards against DESIGN-classes section 8 in staged rooms: waves (Dawnbringer, Sunhammer, Crusader), Sanctuary (Sanctum, Holy Fury, Aura of Faith), Judgment (Hammer of Judgment, Twin Hammers, Verdict)
-// and the Holy element route (Radiant Faith, Guardian Light, Prism), plus the wire fields they use. Prints failures and exits 1 when any check fails.
+// and the Holy element route (Radiant Faith, Guardian Light, Prism), the rank 2 riders and rank 3 forms of the skill forks and of the attack and element forks (Dawn's Wake, Returning Light, Sunstrike, Spectrum) with the fodder audit, plus the wire fields they use. Prints failures and exits 1 when any check fails.
 const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
@@ -35,8 +35,8 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
 {
   const rows = [ // [boons], {stat: value}
     [{ c_atk: 1 }, { waveEvery: -1, waveMul: 0.3 }],
-    [{ c_atk: 1, c_atk_h: 1 }, { waveBig: 1, waveStun: 0.4, waveMul: 0.3, waveBurst: 0 }], [{ c_atk: 1, c_atk_h: 2 }, { waveMul: 0.4, waveBurst: 0 }], [{ c_atk: 1, c_atk_h: 3 }, { waveMul: 0.5, waveBurst: 0.5 }],
-    [{ c_atk: 1, c_atk_s: 1 }, { waveHome: 2, waveMul: 0.4, litany: 0 }], [{ c_atk: 1, c_atk_s: 2 }, { waveMul: 0.5 }], [{ c_atk: 1, c_atk_s: 3 }, { waveMul: 0.6, litany: 6 }],
+    [{ c_atk: 1, c_atk_h: 1 }, { waveBig: 1, waveStun: 0.4, waveMul: 0.3, waveBurst: 0, wake: 0 }], [{ c_atk: 1, c_atk_h: 2 }, { waveMul: 0.4, waveBurst: 0.8, wake: 0 }], [{ c_atk: 1, c_atk_h: 3 }, { waveMul: 0.5, waveBurst: 0.8, wake: 0.6 }],
+    [{ c_atk: 1, c_atk_s: 1 }, { waveHome: 2, waveMul: 0.4, litany: 0, waveReturn: 0 }], [{ c_atk: 1, c_atk_s: 2 }, { waveMul: 0.5, litany: 16, waveReturn: 0 }], [{ c_atk: 1, c_atk_s: 3 }, { waveMul: 0.6, litany: 16, waveReturn: 0.5 }],
     [{ c_s1: 1 }, { s1Area: 0.3, s1Dur: 2, sanctDR: 0.1, s1Dmg: 0.5 }],
     [{ c_s1: 1, c_s1_a: 1 }, { sanctStun: 0.5, s1Dmg: 1.5 * 1.2 - 1, sanctJudge: 0, wrath: 0 }], [{ c_s1: 1, c_s1_a: 2 }, { s1Dmg: 1.5 * 1.3 - 1, sanctJudge: 1, wrath: 0 }], [{ c_s1: 1, c_s1_a: 3 }, { s1Dmg: 1.5 * 1.4 - 1, sanctJudge: 1, wrath: 1, wrathNova: 1.5, wrathPillar: 1.2 }],
     [{ c_s1: 1, c_s1_b: 1 }, { aura: 1, s1Dmg: 1.5 * 0.9 - 1, sanctDR: 0.2, auraDmg: 0, aegis: 0 }], [{ c_s1: 1, c_s1_b: 2 }, { sanctDR: 0.22, auraDmg: 0.1, aegis: 0 }], [{ c_s1: 1, c_s1_b: 3 }, { sanctDR: 0.24, auraDmg: 0.1, aegis: 1, aegisR: 40, aegisDR: 0.1, aegisStun: 0.3 }],
@@ -44,8 +44,8 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
     [{ c_s2: 1, c_s2_a: 1 }, { twinHammer: 0.55, thirdLeg: 0, storm: 0 }], [{ c_s2: 1, c_s2_a: 2 }, { s2Dmg: 1.25 * 1.1 - 1, thirdLeg: 1, secondFlight: 0.25, storm: 0 }], [{ c_s2: 1, c_s2_a: 3 }, { thirdLeg: 1, secondFlight: 0.25, s2Dmg: 1.25 * 1.2 - 1, storm: 5, stormMul: 0.45 }],
     [{ c_s2: 1, c_s2_b: 1 }, { verdict: 1, judgeWeak: 0.4, verdictJudge: 0, fjEcho: 0 }], [{ c_s2: 1, c_s2_b: 2 }, { s2Dmg: 1.25 * 1.1 - 1, verdictJudge: 1, fjEcho: 0 }], [{ c_s2: 1, c_s2_b: 3 }, { verdictJudge: 1, s2Dmg: 1.25 * 1.2 - 1, fjEcho: 0.2, fjR: 40, fjStun: 0.6 }],
     [{ c_el: 1 }, { classElMul: 0.25, wInfHoly: 0.12 }],
-    [{ c_el: 1, c_el_a: 1 }, { smiteBig: 0.5, guardLight: 0.08, smiteJudge: 0 }], [{ c_el: 1, c_el_a: 2 }, { guardLight: 0.1 }], [{ c_el: 1, c_el_a: 3 }, { guardLight: 0.12, smiteJudge: 3 }],
-    [{ c_el: 1, c_el_b: 1 }, { smiteMul: 0.3, smiteBeam: 0.5, beamJumps: 0 }], [{ c_el: 1, c_el_b: 2 }, { smiteMul: 0.4 }], [{ c_el: 1, c_el_b: 3 }, { smiteMul: 0.5, beamJumps: 1 }],
+    [{ c_el: 1, c_el_a: 1 }, { smiteBig: 0.5, guardLight: 0.08, smiteJudge: 0, sunstrike: 0 }], [{ c_el: 1, c_el_a: 2 }, { smiteBig: 0.5 + 0.4, guardLight: 0.1 + 0.02, smiteJudge: 3, sunstrike: 0 }], [{ c_el: 1, c_el_a: 3 }, { smiteBig: 0.5 + 0.4 + 0.5, guardLight: 0.12 + 0.02 + 0.04, smiteJudge: 3, sunstrike: 4 }],
+    [{ c_el: 1, c_el_b: 1 }, { smiteMul: 0.3, smiteBeam: 0.5, beamJumps: 0, prismN: 0 }], [{ c_el: 1, c_el_b: 2 }, { smiteMul: 0.4, beamJumps: 1, prismN: 0 }], [{ c_el: 1, c_el_b: 3 }, { smiteMul: 0.5, beamJumps: 1, prismN: 4, prismRad: 0.05 }],
   ];
   for (const [b, want] of rows) { const st = build(0, b); for (const k in want) near(st[k], want[k], 1e-9, JSON.stringify(b) + ' ' + k); }
   ok(ED.CLASS_CARDS.cleric.attack.forks.join() === 'c_atk_h,c_atk_s' && ED.boonText('c_atk_h', 3).indexOf('Solar Flare') > 0 && !/[{}\[\]]/.test(ED.boonText('c_s1_b', 3)), 'card text and fork table');
@@ -76,31 +76,31 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
   ok(st0('common') > 0.3 && st0('common') < 0.5, `wave stuns a common foe (${st0('common')})`); ok(st0('elite') > 0.1 && st0('elite') < 0.25, `elite stun halved (${st0('elite')})`); ok(!(st0('boss') > 0.0002), 'bosses are never stunned');
   const r2 = stage({ c_atk: 1, c_atk_h: 2 }); r2.w.playerAttack(r2.p, 0); r2.w.projs.length = 0; r2.w.playerAttack(r2.p, 0);
   near(waves(r2.w)[0].dmg, r2.p.stats.weapon.dmg * 0.9 * 1.4, 1e-6, 'Sunhammer rank 2: waves deal +10% more');
-  // Solar Flare: the wave ends in a burst of r50 at 50% of the wave, with no wave contact needed
-  const f3 = stage({ c_atk: 1, c_atk_h: 3 }), flare = (S, x, y, why) => { const pr = { kind: 'wave', x, y, dmg: 100, infAdd: null }; ED.CLS.cleric.projEnd.call(S.w, pr, S.p, why); };
+  // Solar Flare (rank 2): the wave ends in a burst of r50 at 80% of the wave, with no wave contact needed
+  const f3 = stage({ c_atk: 1, c_atk_h: 2 }), flare = (S, x, y, why) => { const pr = { kind: 'wave', x, y, dmg: 100, infAdd: null }; ED.CLS.cleric.projEnd.call(S.w, pr, S.p, why); };
   const fin = foe(f3.w, f3.p.x + 40, f3.p.y), fout = foe(f3.w, f3.p.x + 70, f3.p.y + 1); flare(f3, f3.p.x, f3.p.y, 'life'); // 40 px from the burst: inside; 70 px: outside r50 + the foe's radius 11
-  const sol = evs(f3.w, 'solar')[0]; ok(sol && sol.r === 50, 'Solar Flare event r50'); near(lost(fin), 100 * 0.5 * f3.p.stats.dmg, 0.05, 'Solar Flare deals 50% of the wave to a foe in r50'); ok(lost(fout) === 0, 'Solar Flare does not reach past r50');
+  const sol = evs(f3.w, 'solar')[0]; ok(sol && sol.r === 50, 'Solar Flare event r50'); near(lost(fin), 100 * 0.8 * f3.p.stats.dmg, 0.05, 'Solar Flare deals 80% of the wave to a foe in r50'); ok(lost(fout) === 0, 'Solar Flare does not reach past r50');
   // end to end: a wave that runs into the east wall bursts there (the room is too small for the full range)
-  const ew = stage({ c_atk: 1, c_atk_h: 3 }); let wall = ew.p.x; while (!ED.Dungeon.blocksShots(ED.Dungeon.tileAt(ew.w.room, wall, ew.p.y), false)) wall += 2;
+  const ew = stage({ c_atk: 1, c_atk_h: 2 }); let wall = ew.p.x; while (!ED.Dungeon.blocksShots(ED.Dungeon.tileAt(ew.w.room, wall, ew.p.y), false)) wall += 2;
   const bf = foe(ew.w, wall - 24, ew.p.y); ew.w.playerAttack(ew.p, 0); ew.w.projs.length = 0; ew.w.playerAttack(ew.p, 0); const wd = waves(ew.w)[0].dmg; let sn = 0; run(ew.w, 1.2, () => { sn += evs(ew.w, 'solar').length; ew.w.fx.length = 0; });
-  ok(sn === 1 && lost(bf) > wd * ew.p.stats.dmg * 1.3, `a wave that ends at a wall bursts once, the foe there takes wave + burst (${lost(bf).toFixed(1)} of ${(wd * ew.p.stats.dmg).toFixed(1)} + half)`);
-  const wa = stage({ c_atk: 1, c_atk_h: 3 }); wa.p.stats.area = 1; flare(wa, wa.p.x, wa.p.y, 'life'); ok(evs(wa.w, 'solar')[0].r === 50, 'Solar Flare radius is fixed at 50 whatever the area stat');
-  const nf = stage({ c_atk: 1, c_atk_h: 2 }); flare(nf, nf.p.x, nf.p.y, 'life'); ok(evs(nf.w, 'solar').length === 0, 'no Solar Flare below rank 3');
+  ok(sn === 1 && lost(bf) > wd * ew.p.stats.dmg * 1.3, `a wave that ends at a wall bursts once, the foe there takes wave + burst (${lost(bf).toFixed(1)} of ${(wd * ew.p.stats.dmg).toFixed(1)} + 80%)`);
+  const wa = stage({ c_atk: 1, c_atk_h: 2 }); wa.p.stats.area = 1; flare(wa, wa.p.x, wa.p.y, 'life'); ok(evs(wa.w, 'solar')[0].r === 50, 'Solar Flare radius is fixed at 50 whatever the area stat');
+  const nf = stage({ c_atk: 1, c_atk_h: 1 }); flare(nf, nf.p.x, nf.p.y, 'life'); ok(evs(nf.w, 'solar').length === 0, 'no Solar Flare below rank 2');
 }
 
-// ---------------- Crusader: waves steer inside 25 degrees only; Litany fan every 6th attack ----------------
+// ---------------- Crusader: waves steer inside 25 degrees only; Litany fan every 16th attack (rank 2) ----------------
 {
   const cone = 25 * Math.PI / 180, ang = (pr) => Math.atan2(pr.vy, pr.vx);
   const steer = (deg) => { const { w, p } = stage({ c_atk: 1, c_atk_s: 1 }); const a = deg * Math.PI / 180; foe(w, p.x + Math.cos(a) * 170, p.y + Math.sin(a) * 170); w.playerAttack(p, 0); w.projs.length = 0; w.playerAttack(p, 0); const wv = waves(w)[0]; for (let i = 0; i < 12; i++) w.updateProjectiles(DT); return ang(wv); };
   ok(steer(15) > 0.05 && steer(15) <= cone + 1e-9, `Crusader wave steers toward a foe 15 degrees off (${steer(15).toFixed(3)} rad)`); near(steer(40), 0, 1e-9, 'Crusader wave ignores a foe 40 degrees off');
   const one = stage({ c_atk: 1, c_atk_s: 1 }); one.w.playerAttack(one.p, 0); one.w.projs.length = 0; one.w.playerAttack(one.p, 0); const wv = waves(one.w)[0];
   near(wv.homing, 2, 1e-9, 'waveHome turn rate'); near(wv.homeCone, cone, 1e-9, 'cone 25 degrees'); near(wv.dmg, one.p.stats.weapon.dmg * 0.9 * 1.4, 1e-6, 'Crusader wave +10% (+30% Dawnbringer)'); ok(one.p.stats.swift, 'Crusader is a Swift weapon');
-  const lit = stage({ c_atk: 1, c_atk_s: 3 }); const per = [], fan = [];
-  for (let i = 0; i < 12; i++) { lit.w.projs.length = 0; lit.w.playerAttack(lit.p, 0); const ws = waves(lit.w); per.push(ws.length); if (ws.length === 3) fan.push(ws.map(q => +ang(q).toFixed(3)).sort((a, b) => a - b)); }
-  ok(per.join() === '0,1,0,1,0,3,0,1,0,1,0,3', `Litany: the 6th and 12th attack send three waves (got ${per.join()})`);
+  const lit = stage({ c_atk: 1, c_atk_s: 2 }); const per = [], fan = [];
+  for (let i = 0; i < 32; i++) { lit.w.projs.length = 0; lit.w.playerAttack(lit.p, 0); const ws = waves(lit.w); per.push(ws.length); if (ws.length === 3) fan.push(ws.map(q => +ang(q).toFixed(3)).sort((a, b) => a - b)); }
+  ok(per.join() === '0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,3,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,3', `Litany (rank 2): the 16th and 32nd attack send three waves (got ${per.join()})`);
   ok(fan.length === 2 && fan.every(f => Math.abs(f[0] + 0.25) < 0.01 && Math.abs(f[1]) < 0.01 && Math.abs(f[2] - 0.25) < 0.01), 'Litany fan is -0.25, 0, +0.25 rad');
   const fw = waves(lit.w); near(fw[0].dmg, fw[1].dmg, 1e-9, 'fan waves deal equal damage'); ok(fw.every(q => q.homeCone > 0 && Math.abs(q.homeA0 - ang(q)) < 0.01), 'each fan wave steers around its own launch angle');
-  const nolit = stage({ c_atk: 1, c_atk_s: 2 }); let m = 0; for (let i = 0; i < 12; i++) { nolit.w.projs.length = 0; nolit.w.playerAttack(nolit.p, 0); m += waves(nolit.w).length === 3 ? 1 : 0; } ok(m === 0, 'no Litany below rank 3');
+  const nolit = stage({ c_atk: 1, c_atk_s: 1 }); let m = 0; for (let i = 0; i < 32; i++) { nolit.w.projs.length = 0; nolit.w.playerAttack(nolit.p, 0); m += waves(nolit.w).length === 3 ? 1 : 0; } ok(m === 0, 'no Litany below rank 2');
 }
 
 // ---------------- Sanctum: radius, length (60% of the cooldown at most), damage, damage reduction ----------------
@@ -247,9 +247,9 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
   ok(S.p.glT === 6 && Math.abs(S.p.glV - 0.08) < 1e-9 && q.glT === 6 && Math.abs(q.glV - 0.08) < 1e-9 && !(far.glT > 0), 'heroes the Smite shields (within 160) get +8% for 6 s');
   const hitBy = (who) => { const t = foe(S.w, who.x + 20, who.y); const h = t.hp; S.w.hitEnemy(t, 100, { p: who, kind: 'weapon', crit: false }); return h - t.hp; };
   const buffed = hitBy(q); q.glT = 0; near(buffed / hitBy(q), (q.stats.dmg + 0.08) / q.stats.dmg, 0.01, 'Guardian Light adds 8% to the damage multiplier');
-  const r2 = stage({ c_el: 1, c_el_a: 2 }); const e2 = foe(r2.w, r2.p.x + 60, r2.p.y); smiteIt(r2.w, r2.p, e2, 1000); near(r2.p.glV, 0.1, 1e-9, 'rank 2: +10%');
+  const r2 = stage({ c_el: 1, c_el_a: 2 }); const e2 = foe(r2.w, r2.p.x + 60, r2.p.y); smiteIt(r2.w, r2.p, e2, 1000); near(r2.p.glV, 0.12, 1e-9, 'rank 2: +12% (+2% from Judging Light)');
   const nob = stage({ c_el: 1 }); const e3 = foe(nob.w, nob.p.x + 60, nob.p.y); smiteIt(nob.w, nob.p, e3, 1000); ok(!(nob.p.glT > 0) && !(e3.judged > 0), 'no buff and no Judged without the card');
-  const jl = stage({ c_el: 1, c_el_a: 3 }); const e4 = foe(jl.w, jl.p.x + 60, jl.p.y); smiteIt(jl.w, jl.p, e4, 1000); near(e4.judged, 3, 1e-9, 'Judging Light: the smitten foe is Judged 3 s'); near(jl.p.glV, 0.12, 1e-9, 'rank 3: +12%');
+  const jl = stage({ c_el: 1, c_el_a: 3 }); const e4 = foe(jl.w, jl.p.x + 60, jl.p.y); smiteIt(jl.w, jl.p, e4, 1000); near(e4.judged, 3, 1e-9, 'Judging Light: the smitten foe is Judged 3 s'); near(jl.p.glV, 0.18, 1e-9, 'rank 3: +18% (+2% Judging Light, +4% Sunstrike)');
   const hc = stage({ c_el: 1, c_el_a: 1 }); const e5 = foe(hc.w, hc.p.x + 60, hc.p.y); smiteIt(hc.w, hc.p, e5, 1000); hc.p.glT = 2; const gv = hc.p.glV; smiteIt(hc.w, hc.p, e5, 1000); near(hc.p.glV, gv, 1e-9, 'the buff is not refreshed while the Holy shield cooldown runs');
 }
 
@@ -260,9 +260,9 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
   const smite = 1000 * 1.3; near(1e9 - a.hp, smite, 1e-6, 'Prism Smite +30%'); ok(S.w.chainQ.some(en => en.kind === 'beam'), 'the beam is a queued payoff'); ok(lost(b) === 0, 'the beam is not instant');
   let beams = []; run(S.w, 0.3, () => { for (const e of S.w.fx) if (e.t === 'chain' && e.k === 'b') beams.push(e); S.w.fx.length = 0; });
   near(lost(b), smite * 0.5, 0.01, 'the beam deals half the Smite to the nearest other foe'); ok(lost(c) === 0 && lost(far) === 0, 'only the nearest foe within 120 is struck'); ok(beams.length === 1 && beams[0].pts.length === 2, 'one beam event, two points');
-  const T = stage({ c_el: 1, c_el_b: 3 }); const a2 = foe(T.w, T.p.x + 100, T.p.y), b2 = foe(T.w, T.p.x + 160, T.p.y), c2 = foe(T.w, T.p.x + 220, T.p.y), d2 = foe(T.w, T.p.x + 280, T.p.y), e2 = foe(T.w, T.p.x + 100, T.p.y + 400);
+  const T = stage({ c_el: 1, c_el_b: 2 }); const a2 = foe(T.w, T.p.x + 100, T.p.y), b2 = foe(T.w, T.p.x + 160, T.p.y), c2 = foe(T.w, T.p.x + 220, T.p.y), d2 = foe(T.w, T.p.x + 280, T.p.y), e2 = foe(T.w, T.p.x + 100, T.p.y + 400);
   a2.maxHp = a2.hp = 1e9; smiteIt(T.w, T.p, a2, 1000); let n2 = 0; run(T.w, 0.5, () => { for (const e of T.w.fx) if (e.t === 'chain' && e.k === 'b') n2++; T.w.fx.length = 0; });
-  const big = 1000 * 1.5; near(lost(b2), big * 0.5, 0.01, 'Sunburst: the first beam'); near(lost(c2), big * 0.25, 0.01, 'Sunburst: the jump deals half again'); ok(lost(d2) === 0 && lost(e2) === 0 && n2 === 2, `the beam jumps once (${n2} beams) and stops`);
+  const big = 1000 * 1.4; near(lost(b2), big * 0.5, 0.01, 'Sunburst: the first beam'); near(lost(c2), big * 0.25, 0.01, 'Sunburst: the jump deals half again'); ok(lost(d2) === 0 && lost(e2) === 0 && n2 === 2, `the beam jumps once (${n2} beams) and stops`);
   const U2 = stage({ c_el: 1, c_el_b: 2 }); const a3 = foe(U2.w, U2.p.x + 100, U2.p.y); a3.maxHp = a3.hp = 1e9; smiteIt(U2.w, U2.p, a3, 1000); near(1e9 - a3.hp, 1400, 1e-6, 'Prism rank 2: Smites +40%');
   const lone = stage({ c_el: 1, c_el_b: 1 }); const solo = foe(lone.w, lone.p.x + 100, lone.p.y); solo.maxHp = solo.hp = 1e9; smiteIt(lone.w, lone.p, solo, 1000); run(lone.w, 0.3); ok(!lone.w.chainQ.length && lone.w.fx.filter(e => e.t === 'chain').length === 0, 'a lone Smite fires no beam');
   const nat = stage({ c_el: 1, c_el_b: 1 }); const x1 = foe(nat.w, nat.p.x + 100, nat.p.y), x2 = foe(nat.w, nat.p.x + 150, nat.p.y); nat.w.addRadiance(x1, nat.w.smiteAt(x1) / nat.w.elemAff('holy'), nat.p); run(nat.w, 0.3); ok(lost(x1) > 0 && lost(x2) > 0, 'a natural Smite (Radiance gauge) also fires the beam');
@@ -391,6 +391,120 @@ const castSanct = (w, p, dx) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x +
   const ve = V.w.fx.find(v => v.t === 'verdict'); ok(ve && ve.r === 110, 'the verdict event has radius 110'); ok(Math.hypot(near1.x - V.A.x, near1.y - V.A.y) < 110 + near1.r && lost(near1) > 0 && st1 > 0.59 && st1 <= 0.6 + 1e-9, `a foe at 104 is burst and stunned 0.6 s (${st1})`);
   ok(Math.hypot(edge.x - V.A.x, edge.y - V.A.y) > 110 + edge.r - 2 && lost(edge) === 0, 'a foe at 122 (beyond 110 + its body) is untouched'); ok(st2 > 0.29 && st2 <= 0.3 + 1e-9, `an elite is stunned 0.3 s (${st2})`); ok(st3 === 0 && lost(bs) > 0, 'a boss takes the burst and is never stunned');
   const V2 = setup(2), VN2 = ED.Stats.skillNums('judgment', V2.p.stats).p.verdict; ok(Math.abs(VN2.r - 70) < 1e-9 && VN2.stun === 0.4, 'rank 2: radius 70, stun 0.4 s');
+}
+
+// ---------------- route forms (rank 2: the rider, rank 3: the transform): Sunhammer, Crusader, Guardian Light, Prism ----------------
+{ // card names, riders and transforms of the four Cleric attack and element forks
+  const FORKS = { c_atk_h: ['Sunhammer', 'Solar Flare', "Dawn's Wake"], c_atk_s: ['Crusader', 'Litany', 'Returning Light'], c_el_a: ['Guardian Light', 'Judging Light', 'Sunstrike'], c_el_b: ['Prism', 'Sunburst', 'Spectrum'] };
+  for (const id in FORKS) {
+    const [name, rider, form] = FORKS[id], b = ED.BOONS[id], P = [1, 2, 3].map(r => ED.cardParts(id, r, null));
+    ok(!b.rider && b.rider2 && b.r2 && b.form && b.r3 && b.form.name === form, id + ' keeps its rider in rider2/r2 and its transform in form/r3');
+    ok(P[0].rider2 === '' && P[1].rider2Name === rider && P[1].rider2 !== '' && P[2].rider2 !== '', id + ' rider ' + rider + ' from rank 2');
+    ok(!P[0].form && !P[1].form && P[2].form && P[2].form.name === form && P[2].form.desc.length > 20 && !/[{}\[\]]/.test(P[2].form.desc) && !/[{}\[\]]/.test(P[1].rider2), id + ' transform ' + form + ' only at rank 3');
+    ok(ED.cardName(id, 1) === name && ED.cardName(id, 2) === name && ED.cardName(id, 3) === form, id + ' card name: ' + name + ' then ' + form);
+    ok(ED.boonText(id, 2, null).indexOf(form) < 0 && ED.boonText(id, 3, null).indexOf(form + ':') >= 0, id + ' card text names the transform only at rank 3');
+    const t1 = ED.cardTotals(b, 1), t2 = ED.cardTotals(b, 2), t3 = ED.cardTotals(b, 3);
+    for (const k in b.r2) ok(!(t1[k] > 0) ? t2[k] > 0 && t3[k] >= t2[k] : t2[k] > t1[k] && t3[k] >= t2[k], id + ' stat ' + k + ' (rank 2 rider)');
+    for (const k in b.r3) ok(t3[k] > (t2[k] || 0), id + ' stat ' + k + ' (rank 3 transform)');
+  }
+  ok(/Every wave turns back/.test(ED.boonText('c_atk_s', 3, null)) && /3rd Smite/.test(ED.boonText('c_el_a', 3, null)), 'form texts name their mechanics');
+}
+{ // Dawn's Wake (c_atk_h rank 3): each wave leaves a 44 wide strip from the hand to the wave's end, growing with the wave and burning 2 s after it; foes on it take 60% of the wave per second in 0.25 s ticks as Holy class damage and store a quarter of the tick as Radiance
+  const real = ED.Dungeon.blocksShots, WAKE = 0.6;
+  const setup = (rank) => {
+    const S = stage({ c_atk: 1, c_atk_h: rank }); ED.Dungeon.blocksShots = () => false; // the staged room is too small for the full range of the wave (282)
+    S.on = foe(S.w, S.p.x + 60, S.p.y); S.fod = foe(S.w, S.p.x + 150, S.p.y); S.fod.fodder = true; S.off = foe(S.w, S.p.x + 60, S.p.y + 90); S.far = foe(S.w, S.p.x + 330, S.p.y);
+    S.log = spy(S.w); S.ev = tap(S.w); S.w.playerAttack(S.p, 0); S.w.projs.length = 0; S.w.playerAttack(S.p, 0); S.wave = waves(S.w)[0];
+    S.strips = () => S.w.zones.filter(q => q.kind === 'crack' && q.arc === 2); return S;
+  };
+  const S = setup(3), base = S.wave.dmg, tick = base * WAKE * 0.25, mul = S.p.stats.dmg * S.w.affC('holy'), z = S.strips()[0];
+  ok(S.strips().length === 1 && z.len === 0 && z.owner === 'p0' && Math.abs(z.w - 44) < 1e-9 && Math.abs(z.a) < 1e-9 && z.x === S.p.x && z.y === S.p.y, 'one strip per wave, 44 wide, at the hand along the aim, length 0 at the start');
+  run(S.w, 0.4); near(z.len, 0.4 * 320, 12, 'the strip grows with the wave (320 px/s)');
+  let endAt = -1, endLen = 0; run(S.w, 0.6, () => { if (endAt < 0 && !waves(S.w).length) { endAt = S.w.time; endLen = z.len; } });
+  near(endLen, 0.55 * 1.6 * 320, 8, 'the strip reaches the end of the wave (282)'); near(z.dur - z.t, 2 - (S.w.time - endAt), 0.05, 'it burns 2 s from the wave end');
+  let gone = -1; run(S.w, 2.5, () => { if (gone < 0 && !S.strips().length) gone = S.w.time; }); near(gone - endAt, 2, 0.08, 'the strip is gone 2 s after its wave ended');
+  const onH = partHits(S.log, 'wake').filter(h => h.e === S.on), fodH = partHits(S.log, 'wake').filter(h => h.e === S.fod);
+  ok(onH.length >= 9 && onH.length <= 11, `a foe on the strip is ticked every 0.25 s while it burns (${onH.length} ticks)`); ok(onH.every(h => Math.abs(h.d - tick * mul) < 0.02 * tick * mul), `each tick deals ${(tick * mul).toFixed(2)} (60% of the wave per second x 0.25 s, Holy class affinity; ${onH.length ? onH[0].d.toFixed(2) : '-'})`);
+  ok(onH.every(h => !h.crit) && onH.slice(1).every((h, i) => Math.abs(h.t - onH[i].t - 0.25) < 0.02), 'ticks never crit and fall 0.25 s apart');
+  ok(partHits(S.log, 'wake').every(h => h.e !== S.off && h.e !== S.far), 'foes beside the strip and beyond its end are not ticked'); ok(fodH.length >= 5, `a horde foe is ticked as well (${fodH.length})`);
+  near(S.on.rad, onH.length * tick * 0.25 * S.w.elemAff('holy'), 0.05 * S.on.rad, 'every tick stores a quarter of its raw damage as Radiance (x Holy affinity)'); ok(S.fod.rad > 0 && S.off.rad === 0, 'Radiance only on the foes struck');
+  const T = setup(3); T.w.projs.length = 0; T.w.playerAttack(T.p, 0); T.w.projs.length = 0; T.w.playerAttack(T.p, 0); ok(T.strips().length === 2, 'two waves leave two strips');
+  { const W2 = setup(3), sn = ED.Net.encodeSnap(W2.w, [], false), row = sn.Z.find(r => r[1] === ED.Net.ZK.indexOf('crack')); ok(row && row[10] === 2 && row[9] === 44, 'the wire row carries kind crack, arc 2 and width 44 (angle and length with it)'); }
+  const R2 = setup(2); run(R2.w, 1); ok(!R2.strips().length && !partHits(R2.log, 'wake').length, 'rank 2 leaves no strip'); const ow = setup(3); ow.w.players.delete('p0'); run(ow.w, 0.2); ok(!ow.strips().length, 'a strip whose owner left ends at once');
+  ED.Dungeon.blocksShots = real;
+}
+{ // Returning Light (c_atk_s rank 3): a wave that ends turns back from its end, aimed at the hero, at 50% of its damage; it steers like the outward wave, strikes each foe once per leg and never turns again
+  const setup = (rank, boons) => {
+    const S = stage(Object.assign({ c_atk: 1, c_atk_s: rank }, boons || {}));
+    S.A = foe(S.w, S.p.x + 60, S.p.y); S.B = foe(S.w, S.p.x + 150, S.p.y); S.F = foe(S.w, S.p.x + 100, S.p.y); S.F.fodder = true; S.off = foe(S.w, S.p.x + 100, S.p.y + 110);
+    S.log = spy(S.w); S.ev = tap(S.w); S.w.playerAttack(S.p, 0); S.w.projs.length = 0; S.w.playerAttack(S.p, 0); S.wave = waves(S.w)[0]; S.hits = (f) => partHits(S.log, 'wave').filter(h => h.e === f); return S;
+  };
+  const S = setup(3), D0 = S.wave.dmg; let ret = null, turnAt = -1, closest = 1e9, goneAt = -1;
+  run(S.w, 2.4, () => { S.ev.step(); const r = S.w.projs.find(q => q.ret); if (r) { if (!ret) { ret = Object.assign({}, r); turnAt = S.w.time; } closest = Math.min(closest, Math.hypot(r.x - S.p.x, r.y - S.p.y)); } else if (ret && goneAt < 0) goneAt = S.w.time; });
+  ok(ret && Math.abs(ret.x - (S.p.x + 176)) < 8 && Math.abs(ret.y - S.p.y) < 2, `the return wave starts where the wave ended (${ret && ret.x - S.p.x})`); ok(ret && Math.abs(Math.abs(Math.atan2(ret.vy, ret.vx)) - Math.PI) < 0.3 && ret.kind === 'wave' && ret.wpn && ret.part === 'wave', 'it flies back toward the hero as an ordinary wave');
+  near(ret.dmg, D0 * 0.5, 1e-9, 'the return wave deals 50% of the wave'); near(ret.homing, 2, 1e-9, 'it steers like the outward wave (turn rate)'); near(ret.homeCone, 25 * Math.PI / 180, 1e-9, 'inside the same 25 degree cone'); near(ret.r, S.wave.r, 1e-9, 'and is as wide');
+  ok(S.ev.all.filter(v => v.t === 'wret').length === 1 && S.ev.all.find(v => v.t === 'wret').pid === 'p0', 'one wret event for the turn'); ok(closest < 20 && goneAt > turnAt && goneAt - turnAt < 1.5, `the return wave comes home (${closest.toFixed(1)} px from the hero) and ends (${(goneAt - turnAt).toFixed(2)} s)`);
+  const hA = S.hits(S.A), hB = S.hits(S.B), hF = S.hits(S.F), tw = (hs) => hs.length === 2 && Math.abs(hs[1].d / hs[0].d - 0.5) < 0.01 && hs[1].t - hs[0].t > 0.1;
+  ok(tw(hA) && tw(hB) && tw(hF), `a foe on the way is struck once by each leg, the second at 50% (A ${hA.length}, B ${hB.length}, horde ${hF.length})`); ok(S.hits(S.off).length === 0, 'a foe off the line is struck by neither leg');
+  ok(!S.w.projs.some(q => q.kind === 'wave') && S.ev.all.filter(v => v.t === 'wret').length === 1, 'a returning wave never turns again');
+  { const T = setup(3); let moved = false, dmin = 1e9; run(T.w, 1.4, () => { const r = T.w.projs.find(q => q.ret); if (r) { if (!moved) { moved = true; T.p.y += 70; } dmin = Math.min(dmin, Math.hypot(r.x - T.p.x, r.y - T.p.y)); } }); ok(moved && dmin < 20, `the return wave follows a hero who moved away (${dmin.toFixed(1)} px)`); }
+  { const T = stage({ c_atk: 1, c_atk_s: 3 }); let wall = T.p.x; while (!ED.Dungeon.blocksShots(ED.Dungeon.tileAt(T.w.room, wall, T.p.y), false)) wall += 2; T.p.x = wall - 100; T.w.playerAttack(T.p, 0); T.w.projs.length = 0; T.w.playerAttack(T.p, 0); let r = null; run(T.w, 0.6, () => { if (!r) { const q = T.w.projs.find(v => v.ret); if (q) r = Object.assign({}, q); } });
+    ok(r && !ED.Dungeon.blocksShots(ED.Dungeon.tileAt(T.w.room, r.x, r.y), false) && r.x < wall && r.x > wall - 30, `a wave that hits a wall returns from just before it (${r && (wall - r.x).toFixed(1)} px off the wall)`); }
+  { const T = setup(3); T.p.downed = true; run(T.w, 1.2); ok(!T.w.projs.some(q => q.ret) && !T.w.fx.some(v => v.t === 'wret'), 'a downed hero wave does not return'); }
+  { const L = stage({ c_atk: 1, c_atk_s: 3 }); for (let i = 0; i < 16; i++) { L.w.projs.length = 0; L.w.playerAttack(L.p, 0); } ok(waves(L.w).length === 3, 'the 16th attack sends the Litany fan (3 waves)'); L.ev = tap(L.w); run(L.w, 0.7, L.ev.step); ok(L.ev.all.filter(v => v.t === 'wret').length === 3, 'all three waves of a Litany fan turn back'); }
+  const R2 = setup(2); run(R2.w, 1.5); ok(!R2.w.projs.some(q => q.ret) && !R2.w.fx.some(v => v.t === 'wret') && S.hits(S.A).length === 2 && R2.hits(R2.A).length === 1, 'rank 2 waves do not return');
+}
+{ // Sunstrike (c_el_a rank 3): every 3rd Smite on the same foe (never a horde foe) deals x4 and doubles the shield it grants (a grant stays under 3% of max health); the 6th is one as well
+  const setup = (rank) => { const S = stage({ c_el: 1, c_el_a: rank }); S.e = foe(S.w, S.p.x + 60, S.p.y); S.e.maxHp = S.e.hp = 1e9; S.ev = tap(S.w); S.smite = (f) => { f = f || S.e; const h = f.hp; S.p.holyT = 0; S.p.shield = 0; f.judged = 0; for (const s of S.p.shWin) { s.sec = -99; s.c = 0; s.a = 0; } S.w.smite(f, S.p, 1000); S.ev.step(); return { dmg: h - f.hp, shield: S.p.shield / S.p.maxHp }; }; return S; };
+  const S = setup(3), r = [1, 2, 3, 4, 5, 6].map(() => S.smite());
+  ok(r.map(x => x.dmg).join() === '1000,1000,4000,1000,1000,4000', `every 3rd Smite is x4 (${r.map(x => x.dmg)})`); ok(r.map(x => +(x.shield * 100).toFixed(2)).join() === '1,1,2,1,1,2', `its shield is doubled: 1% to 2% (${r.map(x => (x.shield * 100).toFixed(2))})`);
+  ok(S.ev.all.filter(v => v.t === 'sunstrike').length === 2 && S.ev.all.filter(v => v.t === 'sunstrike').every(v => v.x === Math.round(S.e.x) && v.pid === 'p0'), 'one sunstrike event per Sunstrike, on the foe');
+  const O = foe(S.w, S.p.x + 90, S.p.y); O.maxHp = O.hp = 1e9; ok(S.smite(O).dmg === 1000, 'each foe counts its own Smites (the first on another foe is a plain Smite)');
+  { const El = setup(3), el = foe(El.w, El.p.x + 60, El.p.y, { elite: 'swift' }); el.maxHp = el.hp = 1e9; el.ward = 0; const q = [1, 2, 3].map(() => El.smite(el)), big = 1 + El.p.stats.smiteBig; ok(q.map(x => x.dmg).join() === [1000 * big, 1000 * big, 4000 * big].join() && q.map(x => +(x.shield * 100).toFixed(2)).join() === '2,2,3', `on an elite the Sunstrike multiplies the boosted Smite and its shield stops at the 3% grant cap (${q.map(x => x.dmg)} / ${q.map(x => (x.shield * 100).toFixed(2))})`); }
+  { const F = setup(3), fd = foe(F.w, F.p.x + 60, F.p.y + 40); fd.fodder = true; fd.maxHp = fd.hp = 1e9; const q = [1, 2, 3, 4, 5, 6].map(() => F.smite(fd)); ok(q.every(x => x.dmg === 1000 && Math.abs(x.shield - 0.01) < 1e-9) && !F.ev.all.some(v => v.t === 'sunstrike') && !(fd.sunN > 0), 'a horde foe never counts toward a Sunstrike: plain Smites, plain shield, no event'); }
+  { const R2 = setup(2); const q = [1, 2, 3].map(() => R2.smite()); ok(q.every(x => x.dmg === 1000 && Math.abs(x.shield - 0.01) < 1e-9) && !R2.ev.all.some(v => v.t === 'sunstrike'), 'rank 2 has no Sunstrike'); }
+  { const N = stage({ c_el: 1 }); const e = foe(N.w, N.p.x + 60, N.p.y); e.maxHp = e.hp = 1e9; N.w.smite(e, N.p, 1000); ok(!(e.sunN > 0), 'a hero without the card keeps no count'); }
+  { const T = stage({ c_el: 1, c_el_a: 3 }), e = foe(T.w, T.p.x + 60, T.p.y); e.maxHp = e.hp = 1e9; const dmgs = []; for (let i = 0; i < 3; i++) { T.p.holyT = 0; const h = e.hp; T.w.addRadiance(e, T.w.smiteAt(e) / T.w.elemAff('holy'), T.p); dmgs.push(h - e.hp); } ok(dmgs[0] > 0 && dmgs[2] > 3.9 * dmgs[1] && dmgs[2] < 4.1 * dmgs[1], `a natural Smite (the Radiance gauge) counts too (${dmgs.map(d => d.toFixed(0))})`); }
+}
+{ // Spectrum (c_el_b rank 3): the beam of a Smite strikes the nearest 4 other foes within 160 at 50% each (a horde foe too), the Sunburst jump follows the nearest at half again; each non-horde foe struck stores 5% of the Smite as Radiance, kept just under its gauge
+  const setup = (rank) => {
+    const S = stage({ c_el: 1, c_el_b: rank }), ys = S.p.y; S.A = foe(S.w, S.p.x + 100, ys); S.A.maxHp = S.A.hp = 1e9; // the Smitten foe; the others stand east of it at 40, 70, 100, 130 (the 3rd a horde foe), 150 and 400
+    S.near = [40, 70, 100, 130].map(d => foe(S.w, S.A.x + d, ys)); S.near[2].fodder = true; S.fifth = foe(S.w, S.A.x + 150, ys); S.out = foe(S.w, S.A.x + 400, ys); S.ev = tap(S.w); return S;
+  };
+  const S = setup(3), smite = 1000 * 1.5; S.w.smite(S.A, S.p, 1000); const before = S.near.map(f => f.rad);
+  ok(S.w.chainQ.length === 1 && S.w.chainQ[0].kind === 'beam', 'the Smite queues one beam payoff'); run(S.w, 0.5, S.ev.step);
+  ok(S.near.every(f => Math.abs(lost(f) - smite * 0.5) < 0.01), `the four nearest other foes each take 50% of the Smite (${S.near.map(f => lost(f).toFixed(0))} of ${smite * 0.5})`);
+  near(lost(S.fifth), smite * 0.25, 0.01, 'the Sunburst jump follows the nearest beam, at half again, onto the next foe within 120'); ok(lost(S.out) === 0, 'a foe beyond 160 is untouched');
+  const bm = S.ev.all.filter(v => v.t === 'chain' && v.k === 'p'); ok(bm.length === 4 && bm.map(v => v.i).sort().join() === '0,1,2,3' && bm.every(v => v.pts.length === 2 && v.pts[0][0] === Math.round(S.A.x)), 'four Spectrum chain events (k p, i 0 to 3) from the Smitten foe'); ok(S.ev.all.filter(v => v.t === 'chain' && v.k === 'b').length === 1, 'only the Sunburst jump is a plain beam event');
+  const want = smite * 0.05; ok([0, 1, 3].every(i => Math.abs(S.near[i].rad - before[i] - want) < 0.01) && S.near[2].rad === before[2] && S.fifth.rad === 0, `each non-horde foe struck stores 5% of the Smite as Radiance (${S.near.map(f => f.rad.toFixed(1))}); the horde foe and the jump foe store none`);
+  ok(S.near.every(f => f.hp > 0) && S.near.concat([S.fifth]).every(f => f.hp === f.maxHp - lost(f)), 'beams never Smite');
+  { const T = setup(3); const f = T.near[0]; f.rad = T.w.smiteAt(f) * 0.995; T.w.smite(T.A, T.p, 1000); run(T.w, 0.5); ok(Math.abs(lost(f) - smite * 0.5) < 0.01 && f.rad <= T.w.smiteAt(f), 'stored Radiance never reaches the gauge: a foe at the brink takes the beam and no Smite'); }
+  { const T = setup(3); T.near[1].maxHp = T.near[1].hp = 100; T.w.smite(T.A, T.p, 1000); run(T.w, 0.5); ok(T.near[1].hp <= 0, 'a beam can kill'); }
+  { const lone = stage({ c_el: 1, c_el_b: 3 }), a = foe(lone.w, lone.p.x + 100, lone.p.y); a.maxHp = a.hp = 1e9; lone.w.smite(a, lone.p, 1000); run(lone.w, 0.3); ok(!lone.w.chainQ.length && !lone.w.fx.some(v => v.t === 'chain'), 'a lone Smite fires no beam'); }
+  { const two = stage({ c_el: 1, c_el_b: 3 }), a = foe(two.w, two.p.x + 100, two.p.y), b = foe(two.w, two.p.x + 150, two.p.y); a.maxHp = a.hp = 1e9; two.w.smite(a, two.p, 1000); run(two.w, 0.5); ok(Math.abs(lost(b) - smite * 0.5) < 0.01 && !two.w.chainQ.length, 'with one other foe there is one beam and nothing to jump to'); }
+  { const R2 = setup(2); R2.w.smite(R2.A, R2.p, 1000); run(R2.w, 0.5, R2.ev.step); ok(lost(R2.near[0]) > 0 && R2.near.slice(1).every(f => lost(f) === 0 || f === R2.near[1]) && R2.ev.all.filter(v => v.t === 'chain' && v.k === 'p').length === 0, 'rank 2 keeps the single beam to the nearest foe (and its jump)'); }
+  { const N = setup(3); N.w.addRadiance(N.A, N.w.smiteAt(N.A) / N.w.elemAff('holy'), N.p); run(N.w, 0.5); ok(N.near.filter(f => lost(f) > 0).length === 4, 'a natural Smite splits as well'); }
+}
+
+{ // Judging Light (c_el_a rank 2): a Smite Judges its foe for 3 s (+20% damage taken); none at rank 1; the shield buff and elite Smites carry the rank 2 additions
+  const sm = (boons) => { const S = stage(boons), e = foe(S.w, S.p.x + 60, S.p.y); e.maxHp = e.hp = 1e9; S.w.smite(e, S.p, 1000); return { S, e, judged: e.judged }; };
+  const r1 = sm({ c_el: 1, c_el_a: 1 }), r2 = sm({ c_el: 1, c_el_a: 2 });
+  near(r2.judged, 3, 1e-9, 'rank 2: the smitten foe is Judged 3 s'); ok(!(r1.judged > 0), 'rank 1: no Judged');
+  const h0 = r2.e.hp; r2.S.w.hitEnemy(r2.e, 100, { p: r2.S.p, kind: 'weapon', crit: false }); near(h0 - r2.e.hp, 100 * 1.2 * (r2.S.p.stats.dmg + r2.S.p.glV), 0.5, 'a Judged foe takes +20% from the next hit (the Cleric’s own Guardian Light buff counts in its damage)');
+  near(r2.S.p.stats.smiteBig, 0.9, 1e-9, 'rank 2: elite and boss Smites +90% (50% + 40%)'); near(r2.S.p.glV, 0.12, 1e-9, 'rank 2: the shield buff is +12%');
+}
+{ // the fodder audit of the Cleric route hooks: damage, chains and Radiance from damage run on horde foes; a refund, shield, buff grant or count never rides on one of them
+  const { w, p } = stage({ c_s2: 1, c_s2_b: 2, c_el: 1, c_el_a: 3 }); const fd = foe(w, p.x + 70, p.y), nb = foe(w, p.x + 100, p.y); fd.fodder = true;
+  w.playerSkill(p, 0, {}, 1); run(w, 0.3); fd.hp = 3; p.shield = 0; w.hitEnemy(fd, 99, { p, kind: 'weapon', crit: false }); run(w, 0.3);
+  near(p.shield, 0, 1e-9, 'audit: a Judged horde foe dying grants no Judgment shield'); ok(lost(nb) > 0, 'audit: its Verdict burst (a chain) still lands');
+  const S = stage({ c_el: 1, c_el_a: 3 }), f2 = foe(S.w, S.p.x + 60, S.p.y); f2.fodder = true; f2.maxHp = f2.hp = 1e9; for (let i = 0; i < 6; i++) S.w.smite(f2, S.p, 1000);
+  ok(!(f2.sunN > 0) && !S.w.fx.some(v => v.t === 'sunstrike'), 'audit: six Smites on a horde foe count no Sunstrike');
+  const B = stage({ c_el: 1, c_el_b: 3 }), a = foe(B.w, B.p.x + 100, B.p.y), b2 = foe(B.w, B.p.x + 130, B.p.y); a.maxHp = a.hp = 1e9; b2.fodder = true; B.w.smite(a, B.p, 1000); run(B.w, 0.4);
+  ok(lost(b2) > 0 && b2.rad === 0, 'audit: a beam damages a horde foe and stores no Radiance in it');
+  const W2 = stage({ c_atk: 1, c_atk_h: 3 }); const wf = foe(W2.w, W2.p.x + 60, W2.p.y); wf.fodder = true; const real = ED.Dungeon.blocksShots; ED.Dungeon.blocksShots = () => false; W2.w.playerAttack(W2.p, 0); W2.w.projs.length = 0; W2.w.playerAttack(W2.p, 0); run(W2.w, 1.5); ED.Dungeon.blocksShots = real;
+  ok(lost(wf) > 0 && wf.rad > 0 && W2.p.shield === 0 && W2.p.critStacks === 0, 'audit: the Wake burns a horde foe and stores Radiance from the damage (as a Sanctuary does), and grants nothing else');
+  const L = stage({ c_atk: 1, c_atk_s: 3 }); const lf = foe(L.w, L.p.x + 60, L.p.y); lf.fodder = true; L.w.playerAttack(L.p, 0); L.w.projs.length = 0; L.w.playerAttack(L.p, 0); run(L.w, 1.6);
+  ok(lost(lf) > 0 && L.p.shield === 0 && !L.w.projs.some(q => q.kind === 'wave'), 'audit: waves, returning ones too, strike a horde foe for damage only');
 }
 
 // ---------------- bookkeeping and edges: zone damage part, a hero that goes down mid-flight, a room change ----------------

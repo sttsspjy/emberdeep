@@ -1,5 +1,7 @@
 // shade route-card visuals, client only: registers ED.ClassFx hooks (event, zone, hero and foe-mark hooks; contract in fx.js).
 // Events from src/sim/class-shade.js: exec, whirl, twincut, after, lure, sref, veil, sweep, rupt, bloom. Hero hook: Momentum pips and ribbons, stealth rim, Veil bubble. Zone hook: the Afterimage decoy. Mark hook: execution threshold.
+// Attack and element forms: Killing Rhythm (a jump of 2+ Momentum stacks at once flares the hero), Guillotine (event gill: a red arc between the dead foe and the one struck), Cyclone (whirl events with c 1 are light pulses; the hero hook turns a ring of blades at full Momentum),
+// Exsanguinate (the Open Veins hit spray gets a geyser on a foe with 4 ailments), Arterial Strike (event arter: a fan of blood along the blow, k 1 when it readied a crit), Bloodbloom (bloom), Crimson Cascade (event casc: a blood streak per leap).
 // Skill forms: blossom (a Death Blossom blink), after with k 1 (a Hall of Mirrors image shatters), clone / cloneswing (Umbral Veil), the decoy zone's mirror (tag 1) and clone (tag 2) looks, the Eclipse dome (smoke zone tag 2, called from render.js) and its sigil over the hero.
 // Everything is pixel art on the 2 world px grid (atlas sprites through FX.sheet, 2 px particles, cached Pix rings); each sprite effect is paired with particles, so it still reads without ED.ART.
 (function (ED) {
@@ -10,6 +12,7 @@
   const A = () => ED.Audio, R = () => ED.Render;
   const low = () => !!R() && R().quality === 'low';
   Object.assign(N.CAPS, { blossom: 8, clone: 3, cloneswing: 6 }); Object.assign(N.CAPS_LOCAL, { blossom: 4, clone: 2, cloneswing: 3 }); // a chain makes up to 6 blinks; clone attacks follow the hero's
+  Object.assign(N.CAPS, { gill: 8, arter: 8, casc: 12, whirl: 6 }); Object.assign(N.CAPS_LOCAL, { gill: 3, arter: 3, casc: 5, whirl: 3 }); // Guillotine carries, Arterial sprays, Cascade leaps, spins (a Cyclone spin comes with every attack)
   Pix.RAMP.execmark = ['#2a0408', '#6a0c18', '#c01830', '#e8283c', '#ff5a68']; // the skull of an executable foe: deep red, never white
   const dropOpts = (col, sp, life) => ({ kind: 'drop', color: col || BLOOD, sp: sp || 90, vz: 90, z: 8, life: life || 0.7, size: 2.4 });
   const pick = (a) => a[(Math.random() * a.length) | 0];
@@ -31,6 +34,13 @@
   // Whirlwind (Thousand Cuts): a full-circle smear (blades) or six knives flying out of the hero.
   CFX.on('whirl', (ev, ctx, local) => {
     const m = ev.pid === local, x = ev.x, y = ev.y - 10;
+    if (ev.c) { // a Cyclone spin (every attack, the end of a dash): a thin ring and a few streaks, no sound beyond a soft tick
+      F.ring(ev.x, ev.y, Math.max(26, ev.r), '#c9b3ff', 0.16, 2);
+      if (ev.k === 1) for (let i = 0; i < 6; i++) { const a = i * TAU / 6; F.burst(x + Math.cos(a) * 10, y + Math.sin(a) * 10, 1, { kind: 'streak', color: PALE, a, spread: 0.1, sp: 280, life: 0.2, size: 1.6 }); }
+      else F.burst(x, y, 3, { kind: 'streak', color: PALE, a: Math.random() * TAU, spread: 3, sp: Math.max(60, ev.r) * 2.4, life: 0.14, size: 1.6, drag: 4 });
+      if (m) A().play('whirl', 0.1);
+      return;
+    }
     if (ev.k === 0) { F.slash(x, y, 0, Math.max(30, ev.r), 6.28, '#c9b3ff', 0.3); F.ring(ev.x, ev.y, Math.max(30, ev.r), VIOLET, 0.32, 3); }
     else for (let i = 0; i < 6; i++) { const a = i * TAU / 6; F.burst(x + Math.cos(a) * 10, y + Math.sin(a) * 10, 2, { kind: 'streak', color: PALE, a, spread: 0.1, sp: 300, life: 0.3, size: 1.8 }); }
     F.burst(x, y, 8, { color: VIOLET, sp: 130, life: 0.35, size: 2.4, add: true }); F.pop(x, y, 24, VIOLET, 0.16);
@@ -144,6 +154,38 @@
     A().play('eclipse', m ? 0.8 : 0.4);
   });
 
+  // Guillotine: the dead foe's blow carries on - a red arc leaps from it to the next weak foe, a bright blade streak falls on the target (its X cut comes with the exec event).
+  CFX.on('gill', (ev, ctx, local) => {
+    const m = ev.pid === local, d = Math.hypot(ev.x1 - ev.x0, ev.y1 - ev.y0), my = (ev.y0 + ev.y1) / 2 - 8 - Math.min(34, d * 0.4), mx = (ev.x0 + ev.x1) / 2, pts = [];
+    for (let i = 0; i <= 6; i++) { const u = i / 6, v = 1 - u; pts.push([v * v * ev.x0 + 2 * u * v * mx + u * u * ev.x1, v * v * (ev.y0 - 8) + 2 * u * v * my + u * u * (ev.y1 - 8)]); }
+    F.bolts.push({ pts, life: 0.28, max: 0.28, color: RED, st: true }); if (F.bolts.length > 24) F.bolts.shift();
+    F.burst(ev.x1, ev.y1 - 34, 3, { kind: 'streak', color: '#ffffff', a: Math.PI / 2, spread: 0.06, sp: 560, life: 0.12, size: 1.8 });
+    F.burst(ev.x0, ev.y0 - 8, 5, dropOpts(BLOOD, 80)); F.pop(ev.x1, ev.y1 - 8, 16, '#ff4a4a', 0.14);
+    A().play('exec', m ? 0.3 : 0.15);
+  });
+
+  // Arterial Strike: the blow opens an artery - a fan of blood droplets and streaks along the hero's blow; when it readied a crit (k 1) a red ring closes on the hero.
+  CFX.on('arter', (ev, ctx, local) => {
+    const m = ev.pid === local, a = ev.a || 0, x = ev.x, y = ev.y - 8;
+    F.burst(x, y, low() ? 6 : 12, { kind: 'drop', color: BLOOD, a, spread: 0.7, sp: 200, vz: 70, z: 8, life: 0.7, size: 2.4 });
+    F.burst(x, y, 5, { kind: 'streak', color: '#ff5a68', a, spread: 0.35, sp: 340, life: 0.24, size: 1.8 });
+    F.pop(x, y, 14, '#ff4a4a', 0.12);
+    if (!ev.k) return;
+    const p = ctx.player(ev.pid); if (!p) return;
+    F.ring(p.x, p.y, 22, RED, 0.3, 3, true); F.burst(p.x, p.y - 12, 4, { color: '#ff5a68', sp: 60, vy: -50, life: 0.5, size: 2, add: true, drag: 1.4 });
+    if (m) { F.text(p.x, p.y - 42, 'Crit ready', '#ff7a7a', 9, { pop: true, life: 0.8, max: 0.8 }); A().play('sref', 0.3); }
+  });
+
+  // Crimson Cascade: the rupture leaps - a thick blood streak from the dead foe to the next one, droplets along it, a spray where it lands (the burst comes with the rupt event); the chime climbs with every leap.
+  CFX.on('casc', (ev, ctx, local) => {
+    const m = ev.pid === local, a = Math.atan2(ev.y1 - ev.y0, ev.x1 - ev.x0);
+    F.bolts.push({ pts: [[ev.x0, ev.y0 - 8], [ev.x1, ev.y1 - 8]], life: 0.3, max: 0.3, color: '#d43a5a', st: true }); if (F.bolts.length > 24) F.bolts.shift();
+    for (let i = 1; i <= 3; i++) F.burst(U.lerp(ev.x0, ev.x1, i / 4), U.lerp(ev.y0, ev.y1, i / 4) - 8, 1, dropOpts(BLOOD, 40, 0.5));
+    F.burst(ev.x1, ev.y1 - 8, low() ? 3 : 6, { kind: 'streak', color: '#ff5a68', a, spread: 0.6, sp: 260, life: 0.2, size: 1.8 });
+    F.pop(ev.x0, ev.y0 - 8, 14, '#ff4a4a', 0.12);
+    A().play('blossom', m ? 0.5 : 0.25, ev.n);
+  });
+
   // Rupture: the foe bursts at once - crimson droplets for the Bleed, embers for the Burn, a ring of the splash radius.
   CFX.on('rupt', (ev, ctx, local) => {
     const m = ev.pid === local, x = ev.x, y = ev.y - 8, bleed = ev.k !== 1, burn = ev.k !== 0;
@@ -174,6 +216,10 @@
     for (const e of s.view.enemies) { const dx = e.x - ev.x, dy = e.y - e.r - ev.y, d = dx * dx + dy * dy; if (d < bd) { bd = d; best = e; } }
     const n = best ? Math.min(4, best.ailN !== undefined ? best.ailN : s.view.ailments ? s.view.ailments(best) : 0) : 0;
     if (n) F.burst(ev.x, ev.y, 2 + 2 * n, dropOpts(BLOOD, 70 + 20 * n, 0.8));
+    if (n >= 4 && p.stats.exsang > 0) { // Exsanguinate: the foe's fourth ailment turns the wound into a geyser
+      F.burst(ev.x, ev.y, low() ? 5 : 10, { kind: 'drop', color: BLOOD, a: -Math.PI / 2, spread: 0.5, sp: 130, vz: 150, z: 8, life: 0.9, size: 2.4 });
+      F.ring(ev.x, ev.y + 8, 16, '#d43a3a', 0.26, 2);
+    }
   });
 
   // ---------------- hero hook: Momentum, stealth, Veil ----------------
@@ -184,6 +230,7 @@
     const st = p.stats, local = p.pid === R().local, m = memOf(p.pid), n = p.momN | 0, cap = st.momMax | 0;
     if (n > m.n) {
       F.pop(p.x, p.y - 12, 12 + 2 * n, VIOLET, 0.14); F.burst(p.x, p.y - 12, 3, { color: PALE, sp: 70, life: 0.25, size: 1.8, add: true });
+      if (n - m.n >= 2 && st.execMom > 0) { F.ring(p.x, p.y, 34, RED, 0.3, 3); F.burst(p.x, p.y - 12, 8, { color: '#ff5a68', sp: 110, life: 0.4, size: 2.2, add: true }); if (local) A().play('sref', 0.35); } // Killing Rhythm: an execution kill adds several stacks at once
       if (n >= cap && cap > 0 && !m.full) { m.full = true; F.ring(p.x, p.y, 28, '#ffffff', 0.3, 3); F.burst(p.x, p.y - 10, 8, { color: '#ffffff', sp: 90, life: 0.4, size: 2.2, add: true }); if (local) A().play('sref', 0.35); }
     }
     if (n < cap) m.full = false;
@@ -203,6 +250,19 @@
         const f = p.face || 0, back = f + Math.PI;
         for (let k = -1; k <= 1; k += 2) F.part(p.x + Math.cos(f + k * 1.4) * 6, p.y - 10 + Math.sin(f + k * 1.4) * 4, { kind: 'streak', color: full ? '#ffffff' : '#c9b3ff', a: back, spread: 0.5, sp: 40 + 6 * n, life: 0.3 + 0.03 * n, size: 1.6, add: true });
       }
+    }
+    // Cyclone: at full Momentum six blades with fading tails turn round the hero on the spin's own radius
+    if (st.cyclone > 0 && cap > 0 && n >= cap && !p.downed) {
+      const wp = st.weapon, R0 = wp && wp.kind === 'melee' ? U.clamp(wp.range * (1 + st.area * 0.5 + st.meleeReach), 28, 70) : 40, ga = c.globalAlpha;
+      for (let i = 0, nb = lw ? 3 : 6; i < nb; i++) {
+        const base = t * 9 + i * TAU / nb;
+        for (let k = 0; k < 4; k++) {
+          const a = base - k * 0.18, sz = k === 0 ? 4 : 2;
+          c.globalAlpha = (1 - k / 4) * 0.9; c.fillStyle = k === 0 ? '#ffffff' : k < 2 ? PALE : VIOLET;
+          c.fillRect(s2(Math.cos(a) * R0) - sz / 2, s2(Math.sin(a) * R0 * 0.5 - 6) - sz / 2, sz, sz);
+        }
+      }
+      c.globalAlpha = ga;
     }
     // stealth: a dashed violet rim under the unseen hero (allies see it through the 0.2 body alpha); Nightfall's speed leaves motes
     if (p.stealthT > 0 && !p.downed) {

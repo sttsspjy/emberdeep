@@ -20,14 +20,18 @@
     + ' hex hexMul wRaise hexSpread hexSelf hexHaste spikeRaise knights knightLife knightStun harvestRaise corpse corpseMul boneLance boneArmor boneCap boneField minionInfuse mInfShadow tollMul abyssMin abyssDoom reapRaise tideMul'
     + ' wrath wrathNova wrathPillar aegis aegisR aegisDR aegisStun storm stormMul fjEcho fjR fjStun bloom bloomField bloomBomb dk dkMul dkArc dkTaunt carrionN carrionShard lich lichT lichMul lichLife'
     + ' avalanche avaCrack avaStun phalanx bannerSlow bannerWeak bannerDur tempest vortexMul vortexDur bastion deathMark deathWave thornburst thornRoot starfall thornstorm'
-    + ' fissure bladeWave doombrand brandMark brandCap cataclysm cataMul cataSplash'
-    + ' siege siegeMul siegeBlast ricochet flurryN hemo hemoAt hemoMul hemoBoss plague plagueBurst outbreak').split(' ');
+    + ' fissure bladeWave doombrand brandMark brandCap bloodquake bloodquakeMul bloodquakeSplash'
+    + ' siege siegeMul siegeBlast ricochet flurryN hemo hemoAt hemoMul hemoBoss plague plagueBurst outbreak'
+    + ' wake waveReturn sunstrike prismN prismRad'
+    + ' caldera fireDance dancerBurst whiteHot whiteT heatMax infernoMul'
+    + ' graveBolt graveN soulStorm maw mawHaste tideFree tideCap tideDoom'
+    + ' guillotine cyclone arterial arterialN cascade cascadeN').split(' ');
 
   const BASE = () => {
     const s = {
-      hp: 0, hpMul: 1, armor: 0, spd: 1, dmg: 1, atk: 1, crit: 0, critDmg: 0, cdr: 0,
+      hp: 0, hpMul: 1, armor: 0, spd: 1, dmg: 1, dmgX: 1, atk: 1, crit: 0, critDmg: 0, cdr: 0,
       pickup: 0, xp: 0, gold: 0, luck: 0, heal: 0, projN: 0, pierce: 0, area: 0, dodge: 0, thorns: 0,
-      dashcdr: 0, dashDmg: 0, dashFire: 0, dashBomb: 0, execute: 0,
+      dashcdr: 0, dashN: 0, dashDmg: 0, dashFire: 0, dashBomb: 0, execute: 0,
       overcharge: 0, guardian: 0, trance: 0, forager: 0, roomWard: 0, openRank: 0,
       charges: 0,
       minions: 0, minionDmg: 0, boneSpikes: 0, phoenix: 0, strataHeal: 0, wardrum: 0,
@@ -132,6 +136,7 @@
     }
     s.s1Dmg = m1 - 1; s.s2Dmg = m2 - 1;
     for (const x of asc) for (const k in x) s[k] = (s[k] || 0) * (1 + x[k]); // Ascended bucket: after every additive source, before the derived values
+    for (const x of asc) if (x.dmg) s.dmgX *= 1 + x.dmg; // dmgX: the Ascended damage factor; combat.js scales the conditional (additive) damage by it so a hit stays exactly dmgX x the same hit without the card
 
     const out = s;
     out.power = cls.power; out.element = cls.element || null; // Class Power scales every non-attack proc (ED.procDmg)
@@ -153,7 +158,7 @@
     const cdr = St.cdrEff(s.cdr), rc = (n) => 1 - Math.min(C.ROUTE_CDR_MAX, s['s' + n + 'Cdr']);
     out.skillCd = ED.SKILLS[cls.skill].cd * (1 - cdr) * rc(1);
     out.skill2Cd = cls.skill2 && ED.SKILLS[cls.skill2] ? ED.SKILLS[cls.skill2].cd * (1 - cdr) * rc(2) : 0;
-    out.dashCd = 1.5; out.dashCharges = 1; // recharge seconds per charge, max charges
+    out.dashCd = Math.max(1, 1.5 * (1 - s.dashcdr)); out.dashCharges = Math.min(3, 1 + s.dashN); // recharge seconds per charge (base 1.5, floor 1.0), max charges (base 1, cap 3)
     out.pickupR = 46 * (1 + s.pickup);
     out.critMult = 1.75 + s.critDmg;
     out.crit = Math.min(0.95, s.crit);

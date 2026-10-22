@@ -1,5 +1,6 @@
 // Pyromancer: Flame Nova and Meteor, the route cards that act on them (Channel, Magma Heart's aftershock and Lava Pools, Twin Nova, Phoenix Mantle, Twin Meteor, Comet, White Heat, Heat Engine) and the hook table ED.CLS.pyro.
 // Skill forms (rank 3): Supernova (an expanding wave and a collapse), Phoenix Form (a ring that follows the hero and a dash trail), Cataclysm (five meteors and one lava field), Sun Dive (a second Comet leap and a trail).
+// Attack and Element forms (rank 3): Caldera (geysers in Lava Pools), Fire Dancer (Channel held through moving, a flame ring on a dash), White Flame (burn-time bonus and sure Flashpoint crits), Inferno Engine (Heat from burning foes makes a Nova or Meteor an Inferno).
 // Delayed effects (Collapse pull, the Nova echo and wave start, aftershocks, the Cataclysm meteors) wait in the hero's queue p.pyroQ and run from the tick hook; Meteors are 'meteor' zones that land through their onEnd.
 (function (ED) {
   'use strict';
@@ -18,10 +19,18 @@
 
   const burningSet = (w) => { const s = new Set(); for (const e of w.enemies) if (e.hp > 0 && e.burnPool > 0 && !e.fodder) s.add(e.id); return s; }; // Heat Engine refunds count foes that are not horde foes
 
+  // Route forms of the Attack and Element forks (rank 3): Caldera (an aftershock inside a Lava Pool is a geyser that widens the pool), Fire Dancer (Channel holds while moving; a dash at full Channel leaves a flame ring),
+  // White Flame (a foe burning WHITE_T s without a break takes more and always meets Flashpoint), Inferno Engine (Heat from burning foes makes a Nova or Meteor an Inferno). Only damage, knock-back and Heat: none refunds, shields or raises.
+  // CALDERA_R / POOL_GROW / POOL_MAX: geyser radius factor over the blast, pool growth per geyser and its limit (x the first radius); CALDERA_KNOCK: geyser knock-back. DANCE_R: Fire Dancer ring radius (x area).
+  // WHITE_EVERY: seconds between White Flame scans (a scan adds that long to every burning foe). INFERNO_R: Inferno radius factor. BOSS_HEAT: Heat one burning boss stores. HEAT_PING: seconds between Heat refresh events.
+  Object.assign(C, { CALDERA_R: 1.5, CALDERA_KNOCK: 200, POOL_GROW: 1.2, POOL_MAX: 2, DANCE_R: 80, WHITE_EVERY: 0.1, INFERNO_R: 1.4, BOSS_HEAT: 3, HEAT_PING: 2 });
+
   // Heat Engine: n distinct burning foes hit by a cast of skill `slot` cut HEAT_MAX at most from the other skill's cooldown (heatEngine seconds each); Chain Reaction (n >= heatChain, once per HEAT_CD) refunds it in full.
-  function heat(w, p, slot, n) {
+  // Inferno Engine: the foes in `seen` (the burning foes the cast hit) store Heat first.
+  function heat(w, p, slot, n, seen) {
     const st = p.stats;
     if (!(st.heatEngine > 0) || n <= 0) return;
+    if (st.infernoMul > 0 && seen) stockHeat(w, p, seen);
     const other = 1 - slot;
     if (st.heatChain && n >= st.heatChain && p.heatT <= 0) {
       p.heatT = C.HEAT_CD;
@@ -69,7 +78,7 @@
     if (ring.on) this.addZone({ kind: 'pfire', x: p.x, y: p.y, r: ring.r, dur: ring.dur, dps: ring.dmg, owner: p.pid, team: 0, clsEl: st.element });
     if (ph.on) phoenixRing(this, p, ph, st);
     if (hit && st.mantle > 0 && p.mantleT <= 0) mantle(this, p);
-    if (burning) heat(this, p, 0, seen.size);
+    if (burning) heat(this, p, 0, seen.size, seen);
     if (echo) {
       const t = this.time;
       if (st.novaPull) p.pyroQ.push({ at: t + echo.delay - C.PULL_LEAD, k: 'pull', room: this.room });
@@ -202,10 +211,10 @@
       const f = N.p.field;
       w.addZone({ kind: 'pfire', x: grp.x, y: grp.y, r: f.r, dur: f.dur, dps: f.dmg, owner: o.pid, team: 0, clsEl: st.element, w: C.LAVA_TAG });
       w.emit({ t: 'pyField', pid: o.pid, x: Math.round(grp.x), y: Math.round(grp.y), r: Math.round(f.r) });
-      if (burning) heat(w, o, 1, seen.size);
+      if (burning) heat(w, o, 1, seen.size, seen);
       return;
     }
-    if (burning) heat(w, o, 1, seen.size);
+    if (burning) heat(w, o, 1, seen.size, seen);
     if (own && st.twinMeteor) {
       const tg = w.nearestEnemy(z.x, z.y, 300);
       if (tg) {
@@ -225,7 +234,7 @@
   }
 
   // ---------------- Magma Heart ----------------
-  // A Lava Pool: untagged burning ground of the blast radius x LAVA_R; a new pool inside the hero's own live pool extends it to LAVA_T more seconds instead (one pool per spot).
+  // A Lava Pool: untagged burning ground of the blast radius x LAVA_R (z.r0 keeps that first radius); a new pool inside the hero's own live pool extends it to LAVA_T more seconds instead (one pool per spot).
   function lavaPool(w, p, x, y, r, dps) {
     let n = 0, old = null;
     for (const z of w.zones) {
@@ -234,12 +243,21 @@
       n++;
       if (!old || z.dur - z.t < old.dur - old.t) old = z; // the pool with the least life left (a refresh resets that to LAVA_T)
     }
-    if (n >= C.LAVA_MAX) { old.x = x; old.y = y; old.r = r * C.LAVA_R; old.t = 0; old.dur = C.LAVA_T; old.dps = dps; w.emit({ t: 'pyLava', pid: p.pid, x: Math.round(x), y: Math.round(y), r: Math.round(r * C.LAVA_R) }); return; } // a hero keeps at most LAVA_MAX pools: the oldest moves to the new spot and starts anew
-    w.addZone({ kind: 'pfire', x, y, r: r * C.LAVA_R, dur: C.LAVA_T, dps, owner: p.pid, team: 0, untagged: true, lava: true, w: C.LAVA_TAG });
+    if (n >= C.LAVA_MAX) { old.x = x; old.y = y; old.r = old.r0 = r * C.LAVA_R; old.t = 0; old.dur = C.LAVA_T; old.dps = dps; w.emit({ t: 'pyLava', pid: p.pid, x: Math.round(x), y: Math.round(y), r: Math.round(r * C.LAVA_R) }); return; } // a hero keeps at most LAVA_MAX pools: the oldest moves to the new spot and starts anew
+    w.addZone({ kind: 'pfire', x, y, r: r * C.LAVA_R, r0: r * C.LAVA_R, dur: C.LAVA_T, dps, owner: p.pid, team: 0, untagged: true, lava: true, w: C.LAVA_TAG });
     w.emit({ t: 'pyLava', pid: p.pid, x: Math.round(x), y: Math.round(y), r: Math.round(r * C.LAVA_R) });
   }
 
-  // The queued effects of hero p that are due: the Collapse pull, the Nova echo, and Magma Heart's aftershock (a physical blast of the weapon, Channel counts, it never infuses) with its Lava Pool.
+  // Caldera: an aftershock whose centre lies inside one of the hero's live Lava Pools erupts as a geyser (CALDERA_R x the blast radius, caldera x the shot, knocks foes back, bosses stay); the pool refreshes and widens by POOL_GROW (at most POOL_MAX x its first radius).
+  function caldera(w, p, en, pool) {
+    const r = en.r * C.CALDERA_R;
+    w.explode(en.x, en.y, r, (en.shot || 0) * p.stats.caldera, 0, p, 'magma', true, { wpn: true, part: 'caldera', knock: C.CALDERA_KNOCK });
+    pool.dur = pool.t + C.LAVA_T; pool.dps = Math.max(pool.dps, en.lava);
+    pool.r = Math.min(pool.r0 * C.POOL_MAX, pool.r * C.POOL_GROW);
+    w.emit({ t: 'pyGeyser', pid: p.pid, x: Math.round(en.x), y: Math.round(en.y), r: Math.round(r), px: Math.round(pool.x), py: Math.round(pool.y), pr: Math.round(pool.r) });
+  }
+
+  // The queued effects of hero p that are due: the Collapse pull, the Nova echo, and Magma Heart's aftershock (a physical blast of the weapon, Channel counts, it never infuses) with its Lava Pool, or Caldera's geyser inside a pool.
   function runQueue(w, p) {
     const q = p.pyroQ;
     for (let i = 0; i < q.length;) {
@@ -252,6 +270,9 @@
       else if (en.k === 'wave') startWave(w, p);
       else if (en.k === 'storm') w.castMeteor(p, en.x, en.y, ED.Stats.skillNums('meteor', p.stats).p.storm.delay, 1, 'storm', en.grp);
       else {
+        let pool = null;
+        if (p.stats.caldera > 0 && en.lava > 0) for (const z of w.zones) if (z.lava && z.owner === p.pid && U.dist2(z.x, z.y, en.x, en.y) < z.r * z.r) { pool = z; break; }
+        if (pool) { caldera(w, p, en, pool); continue; }
         w.explode(en.x, en.y, en.r, en.dmg, 0, p, 'magma', true, { wpn: true, part: 'aftershock' });
         if (en.lava > 0) lavaPool(w, p, en.x, en.y, en.r, en.lava);
       }
@@ -261,15 +282,80 @@
   // Overheat: Channel is at its cap.
   const channelFull = (p, st) => st.channel > 0 && st.channel * Math.floor(p.chanT / Math.max(0.05, st.chanStep)) >= st.chanCap - 1e-9;
 
+  // ---------------- route forms ----------------
+  // Fire Dancer: the first tick of a dash at full Channel strikes foes within DANCE_R (x area) of where the dash began (p.fdX, p.fdY: the hero's place at the end of its last tick off a dash) for dancerBurst x the weapon damage (a weapon blast: Channel counts, no infusions).
+  function fireDance(w, p, st) {
+    const dash = !!p.dashing;
+    if (dash && !p.fdOn && channelFull(p, st)) {
+      const r = C.DANCE_R * (1 + 0.5 * st.area), x = p.fdX, y = p.fdY;
+      w.explode(x, y, r, st.weapon.dmg * st.dancerBurst, 0, p, 'fire', true, { wpn: true, part: 'dancer' });
+      w.emit({ t: 'pyRing', pid: p.pid, x: Math.round(x), y: Math.round(y), r: Math.round(r) });
+    }
+    p.fdOn = dash;
+    if (!dash) { p.fdX = p.x; p.fdY = p.y; }
+  }
+
+  // White Flame: every scan adds `dt` to the burning time the foe has had in a row for this hero (e.wf[pid]); a foe that stopped burning starts over. Horde foes are left out (they die long before WHITE_T).
+  function whiteScan(w, p, dt) {
+    const pid = p.pid;
+    for (const e of w.enemies) {
+      if (e.hp <= 0 || e.spawnT > 0 || e.fodder) continue;
+      if (e.burnPool > 0) { const m = e.wf || (e.wf = {}); m[pid] = (m[pid] || 0) + dt; } else if (e.wf && e.wf[pid]) e.wf[pid] = 0;
+    }
+  }
+  const isWhite = (p, e) => e.burnPool > 0 && e.wf !== undefined && e.wf[p.pid] >= p.stats.whiteT - 1e-9;
+
+  // Inferno Engine: the burning foes (not horde foes) a cast hit store 1 Heat, a boss BOSS_HEAT, up to heatMax; the event carries the new count for the viewers.
+  function stockHeat(w, p, seen) {
+    const mx = p.stats.heatMax;
+    let add = 0;
+    for (const e of w.enemies) if (seen.has(e.id)) add += e.boss ? C.BOSS_HEAT : 1;
+    if (!(add > 0) || p.heat >= mx) return;
+    p.heat = Math.min(mx, p.heat + add); p.heatPing = C.HEAT_PING;
+    w.emit({ t: 'pyEng', pid: p.pid, n: p.heat, mx });
+  }
+  // At full Heat the next Nova or Meteor is an Inferno and the Heat empties. Nova: its blast part and Burn add are edited before the cast reads them. Meteor: the impact zone the cast made grows and lands with infernoMul (the Burn add follows the damage).
+  const takeInferno = (p) => {
+    const st = p.stats;
+    if (!(st.infernoMul > 0) || !(st.heatMax > 0) || !(p.heat >= st.heatMax)) return false;
+    p.heat = 0; p.heatPing = 0;
+    return true;
+  };
+  const novaCast = ED.CAST.nova, meteorCast = ED.CAST.meteor;
+  ED.CAST.nova = function (p, a, data, st, N) {
+    if (!takeInferno(p)) return novaCast.call(this, p, a, data, st, N);
+    const b = N.p.blast, bu = N.p.burn, r = b.r * C.INFERNO_R;
+    const np = Object.assign({}, N.p, { blast: Object.assign({}, b, { r, dmg: b.dmg * st.infernoMul }), burn: Object.assign({}, bu, { dmg: bu.dmg * st.infernoMul }) });
+    this.emit({ t: 'pyEng', pid: p.pid, n: 0, mx: st.heatMax, go: 1, x: Math.round(p.x), y: Math.round(p.y), r: Math.round(r) });
+    return novaCast.call(this, p, a, data, st, Object.assign({}, N, { p: np }));
+  };
+  ED.CAST.meteor = function (p, a, data, st, N) {
+    if (!takeInferno(p)) return meteorCast.call(this, p, a, data, st, N);
+    const z0 = this.zones.length, out = meteorCast.call(this, p, a, data, st, N), m = st.infernoMul;
+    for (let i = z0; i < this.zones.length; i++) {
+      const z = this.zones[i];
+      if (z.kind !== 'meteor' || z.owner !== p.pid) continue;
+      const comet = z.w === C.COMET_TAG, mul = (comet ? 1 + st.comet : 1) * m;
+      z.r *= C.INFERNO_R;
+      this.emit({ t: 'pyEng', pid: p.pid, n: 0, mx: st.heatMax, go: 1, k: 1, x: Math.round(z.x), y: Math.round(z.y), r: Math.round(z.r) });
+      z.onEnd = (w, zz) => { meteorLand(w, zz, mul, comet ? 'comet' : 'main'); w.emit({ t: 'pyEng', pid: p.pid, n: 0, mx: st.heatMax, go: 2, k: 1, x: Math.round(zz.x), y: Math.round(zz.y), r: Math.round(zz.r) }); };
+    }
+    return out;
+  };
+
   // ---------------- Pyromancer hook table ----------------
   ED.CLS.pyro = {
-    init(p) { p.pyroQ = []; p.waves = []; p.phoenixT = 0; p.diveAt = 0; p.diveRoom = null; p.trailAt = null; },
+    init(p) { p.pyroQ = []; p.waves = []; p.phoenixT = 0; p.diveAt = 0; p.diveRoom = null; p.trailAt = null; p.fdOn = false; p.fdX = 0; p.fdY = 0; p.whiteAcc = 0; p.heat = 0; p.heatPing = 0; },
 
-    // Channel builds while the hero stands still and keeps attacking; moving or a pause longer than ED.chanWindow ends it. Rebirth Flare watches mantleAmt; a decaying shield lowers it without a flare.
+    // Channel builds while the hero stands still and keeps attacking; moving or a pause longer than ED.chanWindow ends it (Fire Dancer: moving only holds it). Rebirth Flare watches mantleAmt; a decaying shield lowers it without a flare.
+    // Fire Dancer strikes at a dash, White Flame times the burning foes, Inferno Engine refreshes the Heat count for the viewers every HEAT_PING s.
     // The Supernova waves expand; Phoenix Form lays a trail patch every TRAIL_STEP px of a dash while its ring burns; Sun Dive lays one every DIVE_STEP px of a flight and starts its second leap when SUN_GAP has passed.
     tick(p, dt) {
       const st = p.stats;
-      p.chanT = st.channel > 0 && !p.moving && this.time - p.lastAtkT < ED.chanWindow(p) ? p.chanT + dt : 0;
+      p.chanT = st.channel > 0 && this.time - p.lastAtkT < ED.chanWindow(p) ? (!p.moving ? p.chanT + dt : st.fireDance > 0 ? p.chanT : 0) : 0;
+      if (st.fireDance > 0) fireDance(this, p, st);
+      if (st.whiteHot > 0 && (p.whiteAcc += dt) >= C.WHITE_EVERY) { whiteScan(this, p, p.whiteAcc); p.whiteAcc = 0; }
+      if (p.heat > 0 && (p.heatPing -= dt) <= 0) { p.heatPing = C.HEAT_PING; this.emit({ t: 'pyEng', pid: p.pid, n: p.heat, mx: st.heatMax }); }
       if (p.mantleAmt > p.shield) p.mantleAmt = Math.max(0, p.shield);
       if (p.pyroQ.length) runQueue(this, p);
       if (p.waves.length) stepWaves(this, p);
@@ -288,29 +374,30 @@
       return o.infAdd || o.pierce ? o : null;
     },
 
-    // Channel adds to weapon hits; White Heat adds to skill hits on burning foes.
+    // Channel adds to weapon hits; White Heat adds to skill hits on burning foes; White Flame adds whiteHot to every hit on a white-hot foe.
     hitMul(p, e, src) {
       const st = p.stats;
       let m = 0;
       if (src.wpn && st.channel > 0 && p.chanT > 0) m += Math.min(st.chanCap, st.channel * Math.floor(p.chanT / Math.max(0.05, st.chanStep)));
       if (st.searSkill && src.kind === 'skill' && e.burnPool > 0) m += st.searSkill;
+      if (st.whiteHot > 0 && isWhite(p, e)) m += st.whiteHot;
       return m;
     },
 
-    // Flashpoint: Nova and Meteor always crit a foe whose Burn pool is over burnCrit of its max HP.
+    // Flashpoint: Nova and Meteor always crit a foe whose Burn pool is over burnCrit of its max HP, or one that is white-hot.
     hitCrit(p, e, src) {
       const st = p.stats;
-      if (!st.burnCrit || src.kind !== 'skill' || !(e.burnPool > st.burnCrit * e.maxHp)) return false;
+      if (!st.burnCrit || src.kind !== 'skill' || !(e.burnPool > st.burnCrit * e.maxHp || (st.whiteHot > 0 && isWhite(p, e)))) return false;
       this.emit({ t: 'pyFlash', pid: p.pid, x: Math.round(e.x), y: Math.round(e.y - e.r) });
       return true;
     },
 
-    // Magma Heart: a shot's blast erupts again AFTERSHOCK_T later at `aftershock` of itself; rank 3 leaves a Lava Pool of lavaPool of the shot per second.
+    // Magma Heart: a shot's blast erupts again AFTERSHOCK_T later at `aftershock` of itself; rank 2 leaves a Lava Pool of lavaPool of the shot per second (shot: the geyser's base).
     projBurst(pr, owner) {
       const st = owner.stats;
       if (!(st.aftershock > 0) || !pr.wpn || !pr.explode) return;
       const shot = pr.dmg * (pr.mul || 1);
-      owner.pyroQ.push({ at: this.time + C.AFTERSHOCK_T, k: 'after', x: pr.x, y: pr.y, r: pr.explode.r, dmg: shot * pr.explode.mul * st.aftershock, lava: shot * st.lavaPool, room: this.room });
+      owner.pyroQ.push({ at: this.time + C.AFTERSHOCK_T, k: 'after', x: pr.x, y: pr.y, r: pr.explode.r, shot, dmg: shot * pr.explode.mul * st.aftershock, lava: shot * st.lavaPool, room: this.room });
       this.emit({ t: 'pyAfter', pid: owner.pid, x: Math.round(pr.x), y: Math.round(pr.y), r: Math.round(pr.explode.r), d: C.AFTERSHOCK_T });
     },
 

@@ -14,7 +14,7 @@
   Sh.STAT_INFO = {
     dmg: SI('Damage', 'pct', 'offense'), atk: SI('Attack speed', 'pct', 'offense'), crit: SI('Critical chance', 'pct', 'offense'), critDmg: SI('Critical damage', 'pct', 'offense'), area: SI('Area', 'pct', 'offense'),
     cdr: SI('Skill cooldown', 'pct', 'offense'), projN: SI('Projectiles', 'flat', 'offense'), pierce: SI('Pierce', 'flat', 'offense'), execute: SI('Execute', 'pct', 'offense'), wDmg: SI('Weapon damage', 'pct', 'offense'),
-    dashDmg: SI('Dash damage', 'pct', 'offense'), dashFrost: SI('Dash frost ring', 'pct', 'offense'), dashcdr: SI('Dash cooldown', 'pct', 'utility'), idol: SI('Golden Idol', 'flat', 'offense'), banner: SI('Banner of Unity', 'pct', 'offense'),
+    dashDmg: SI('Dash damage', 'pct', 'offense'), dashFrost: SI('Dash frost ring', 'pct', 'offense'), dashcdr: SI('Dash recharge', 'pct', 'utility'), dashN: SI('Dash charges', 'flat', 'utility'), idol: SI('Golden Idol', 'flat', 'offense'), banner: SI('Banner of Unity', 'pct', 'offense'),
     hp: SI('Max health', 'flat', 'defense'), hpMul: SI('Max health', 'pct', 'defense'), armor: SI('Armor', 'flat', 'defense'), dodge: SI('Dodge', 'pct', 'defense'), vuln: SI('Damage taken', 'pct', 'defense'), heal: SI('Healing received', 'pct', 'defense'),
     thorns: SI('Thorns', 'flat', 'defense'), roomWard: SI('Battle Ward', 'pct', 'defense'), mirror: SI('Mirror Shard', 'pct', 'defense'), spd: SI('Move speed', 'pct', 'utility'), pickup: SI('Pickup range', 'pct', 'utility'), xp: SI('Experience', 'pct', 'utility'),
     gold: SI('Gold', 'pct', 'utility'), luck: SI('Luck', 'pct', 'utility'), light: SI('Lantern light', 'pct', 'utility'), minions: SI('Max minions', 'flat', 'utility'), minionDmg: SI('Minion damage', 'pct', 'offense'), charges: SI('Skill charges', 'flat', 'utility'),
@@ -166,9 +166,11 @@
   };
   // The numbers about the run the sheet needs from a World or a Mirror (duck-typed: players, allies, floor, roomState, room, gold, level, xp).
   Sh.ctx = (view, p) => {
-    let allyNear = 0, minions = 0;
+    const wickOf = (q) => (q.meta && q.meta.up && q.meta.up[ED.UPGRADE_IDX.deepwick]) || 0;
+    let allyNear = 0, minions = 0, wick = wickOf(p);
     const party = [];
     if (view.players) for (const q of view.players.values()) {
+      wick = Math.max(wick, wickOf(q));
       party.push({ pid: q.pid, name: q.name, cls: q.cls, hp: Math.ceil(q.hp), maxHp: q.maxHp, slot: q.slot | 0, downed: !!q.downed, dead: !!q.dead });
       if (q !== p && !q.downed && !q.dead && U.dist2(q.x, q.y, p.x, p.y) < 200 * 200) allyNear++;
     }
@@ -182,7 +184,7 @@
     }
     return {
       stratum: view.stratum || 1, pact: view.pact | 0, gold: view.gold | 0, level: view.level || 1, xp: Math.floor(view.xp || 0), xpNext: view.xpNext || 1,
-      dark: !!(view.room && view.room.dark), allyNear, minions, room: view.room ? { type: view.room.type, id: view.roomId } : null,
+      dark: !!(view.room && view.room.dark), darkLoot: W.DARK_LOOT * (1 + ED.UPGRADES[ED.UPGRADE_IDX.deepwick].loot * wick), allyNear, minions, room: view.room ? { type: view.room.type, id: view.roomId } : null,
       party: view.players ? view.players.size : 1, rooms: { seen, total: rooms.length, darkTotal, darkLeft }, heroes: party, time: view.time || 0,
     };
   };
@@ -211,6 +213,22 @@
   // RIC_HIT: share of shots whose ricochet finds a second foe. PLAGUE_KEEP / PLAGUE_PACK: share of its pool inputs a dying foe (2+ ailments) still holds, and the pool input of a pack against one foe (skills hit every foe);
   // both and SPREAD_PAY (the share of a burst's value that a status spread pays) are fitted to a staged fight of a stratum III mid build against a pack of 4 trash foes. FESTER_UP: uptime of 3+ ailments for Gangrene.
   const PACK_REF = 4, SIEGE_BLAST_HIT = 0.5, RIC_HIT = 0.8, PLAGUE_KEEP = 0.9, PLAGUE_PACK = 1.5, SPREAD_PAY = 0.5, FESTER_UP = 0.5;
+  // Assumptions of the Cleric attack forms (waves, class-cleric.js). FLARE_HIT: share of waves whose end burst (radius 50, written for the wave's far end) catches a given foe. WAKE_ON: seconds a foe stands on the strip of one wave
+  // (the strip burns about 2.9 s and a foe in front of the Cleric is covered by about half of that). RET_HIT: share of returning waves that strike a foe the outward wave struck (foes chase the hero, the return leg ends on the hero).
+  const FLARE_HIT = 0.3, WAKE_ON = 1.5, RET_HIT = 0.75;
+  // Pyromancer assumptions (class-pyro.js). CHAN_MOVE: share of the weapon's attacks made while moving (Channel 0 unless Fire Dancer holds it); CHAN_SEG: seconds of one standing stretch; CHAN_PAUSE: seconds of attacking between the pauses that end Channel even under Fire Dancer (it builds only while standing).
+  // LAVA_UP: share of the time a foe in the line of fire stands in a Lava Pool; LAVA_PACK: pack foes one pool covers (Caldera widens it by one). CALDERA_IN: share of aftershocks that land in a live pool. DANCE_EVERY: seconds between dashes made at full Channel (one flame ring each).
+  // OVERHEAT_LINE: share of shots that find a second foe in line; OVERHEAT_BLASTS: pack foes the second blast of a piercing shot reaches. HE_USE: share of a cut or refund that counts (a skill is recast about half a second after it comes up, and a cut on a ready skill is lost; fitted to a time-stepped cast simulation). BURN_HIT: share of foes a cast finds burning.
+  const CHAN_MOVE = 0.3, CHAN_SEG = 3, CHAN_PAUSE = 8, LAVA_UP = 0.7, LAVA_PACK = 2, CALDERA_IN = 0.7, DANCE_EVERY = 4, OVERHEAT_LINE = 0.7, OVERHEAT_BLASTS = 2, HE_USE = 0.6, BURN_HIT = 0.8;
+  // Average Channel bonus added to the weapon's hit multiplier and the share of hits at the cap, for attacks iv seconds apart: a standing stretch of CHAN_SEG s builds from 0 (moving attacks get 0);
+  // Fire Dancer keeps it through moving, so it builds on the standing share of CHAN_PAUSE s of attacking.
+  function channelAvg(st, iv) {
+    const step = Math.max(0.05, st.chanStep), f = (t) => Math.min(st.chanCap, st.channel * Math.floor(t / step + 1e-9)), dance = st.fireDance > 0, stand = 1 - CHAN_MOVE, span = dance ? CHAN_PAUSE : CHAN_SEG;
+    let sum = 0, full = 0, n = 0;
+    for (let t = 0; t < span - 1e-9; t += iv, n++) { const v = f(dance ? stand * t : t); sum += v; if (v >= st.chanCap - 1e-9) full++; }
+    const k = dance ? 1 : stand;
+    return { avg: sum / n * k, full: full / n * k };
+  }
   // Damage numbers are per landed hit before the stratum affinity and any status; dps counts every attack landing on one foe (a fan: the shots that reach it at REF).
   // extras: damage each attack adds besides the main hits (blasts, shocks, waves, clouds, evolution strikes, relics): { label, perAttack, perSec, proc (feeds statuses), el?, note? }.
   function weaponModel(p, st, ctx, R) {
@@ -218,7 +236,8 @@
     const aps = 1 / St.attackInterval(p), apsBase = 1 / st.atkInterval;
     const n = melee ? 1 : (w.n || 1) + st.projN, sp = n > 1 ? Math.max(w.spread || 0, 0.13) : 0, offs = [];
     for (let i = 0; i < n; i++) offs.push((i - (n - 1) / 2) * sp);
-    const one = melee ? 1 : fanHits(offs, w.r), hit = Wd * M, avg = hit * EC;
+    const chan = st.channel > 0 ? channelAvg(st, 1 / aps) : null, Mw = M + (chan ? chan.avg : 0); // Mw: the multiplier of a weapon hit (Pyromancer Channel at its assumed average)
+    const one = melee ? 1 : fanHits(offs, w.r), hit = Wd * Mw, avg = hit * EC;
     const extras = [], add = (label, perAttack, o) => { if (perAttack > 0) extras.push(Object.assign({ label, perAttack, proc: false }, o)); };
     const cleaveEvery = melee && st.cleave > 0 ? 3 + st.cleaveN : 0, cleaveK = cleaveEvery ? st.cleave / cleaveEvery : 0;
     if (cleaveEvery) add('Cleave', avg * cleaveK, { proc: true, crit: true, note: `every ${ordinal(cleaveEvery)} swing: +${Math.round(st.cleave * 100)}% damage, 40% more reach and arc` });
@@ -229,10 +248,28 @@
     // the blast of a shot (its own, or the Cinder Arms blast of a plain shot), its aftershock, its cloud
     const pyre = evo === 'fire';
     const blast = !melee ? (w.explode ? { r: w.explode.r * area * (pyre ? 1.3 : 1), mul: w.explode.mul } : pyre ? { r: 40 * area, mul: 0.5 } : null) : null;
-    if (blast) add('Blast', Wd * blast.mul * M * one, { proc: true, r: Math.round(blast.r), note: 'each shot that lands, no crit' });
-    if (blast && st.aftershock) add('Aftershock', Wd * blast.mul * M * st.aftershock * one, { r: Math.round(blast.r), note: '0.4 s after each blast' });
+    if (blast) add('Blast', Wd * blast.mul * Mw * one, { proc: true, r: Math.round(blast.r), note: 'each shot that lands, no crit' });
+    if (blast && st.aftershock) add('Aftershock', Wd * blast.mul * Mw * st.aftershock * one, { r: Math.round(blast.r), note: '0.4 s after each blast' });
+    // Pyromancer Attack forks (class-pyro.js). Lava Pools: untagged burning ground, one pool per spot, so a foe takes lavaPool x the shot a second whatever the shot count. Caldera: the share CALDERA_IN of aftershocks becomes a geyser (caldera x the shot, 1.5 x the radius) instead.
+    // Overheat: at full Channel a shot pierces overheat more foes (its direct hit and a second blast that reaches OVERHEAT_BLASTS pack foes): no gain on one foe. Fire Dancer: a ring of dancerBurst x the weapon at full Channel on every dash made at full Channel (one per DANCE_EVERY s).
+    if (blast && st.lavaPool) add('Lava Pools', Wd * st.lavaPool * M / aps * LAVA_UP, { pack: LAVA_PACK + (st.caldera > 0 ? 1 : 0), r: Math.round(blast.r * 0.6), note: `burning ground under a foe in the line of fire about ${Math.round(LAVA_UP * 100)}% of the time; a pool covers about ${LAVA_PACK + (st.caldera > 0 ? 1 : 0)} foes of a pack` });
+    if (blast && st.caldera) add('Geyser', CALDERA_IN * Wd * Mw * (st.caldera - blast.mul * st.aftershock) * one, { r: Math.round(blast.r * 1.5), note: `${Math.round(CALDERA_IN * 100)}% of aftershocks land in a pool and erupt as a geyser instead` });
+    if (!melee && chan && st.overheat) add('Overheat', chan.full * st.overheat * OVERHEAT_LINE * (Wd * (M + st.chanCap) * EC + OVERHEAT_BLASTS * (blast ? Wd * blast.mul * (M + st.chanCap) : 0)), { packOnly: true, pack: 1, proc: false, note: 'at full Channel a shot pierces one more foe: its direct hit and a second blast, in a pack' });
+    if (chan && st.fireDance && st.dancerBurst) add('Flame ring', chan.full * Wd * st.dancerBurst * (M + st.chanCap) / aps / DANCE_EVERY, { r: Math.round(80 * area), note: `a dash at full Channel (about every ${DANCE_EVERY} s) leaves a ring of flame where it started` });
     if (!melee && w.cloud) { const ticks = w.cloud.dur / 0.5; add('Plague cloud', ticks * w.cloud.dps * 0.5 * M * one, { r: Math.round(w.cloud.r * area), note: `about ${n1(ticks)} ticks over ${n1(w.cloud.dur)}s per shot (clouds that merge tick on one 0.5 s grid), no crit` }); }
-    if (w.wave) { const every = Math.max(1, w.wave.every + st.waveEvery); add('Wave of light', Wd * w.wave.mul * (1 + st.waveMul) * M * EC / every, { proc: true, crit: true, note: (every === 1 ? 'every attack' : `every ${ordinal(every)} attack`) + ', pierces every foe in line' }); }
+    if (w.wave) {
+      const every = Math.max(1, w.wave.every + st.waveEvery), waveRaw = Wd * w.wave.mul * (1 + st.waveMul), waveHit = waveRaw * M, ev = every === 1 ? 'every attack' : `every ${ordinal(every)} attack`;
+      add('Wave of light', waveHit * EC / every, { proc: true, crit: true, note: ev + ', pierces every foe in line' });
+      // Cleric attack forks (class-cleric.js): Solar Flare's end burst, Dawn's Wake's strip (class-element damage, a quarter of each tick stored as Radiance), Litany's two side waves (and their return legs), Returning Light's second pass
+      if (st.waveBurst > 0) add('Solar Flare', waveHit * st.waveBurst * FLARE_HIT / every, { proc: true, r: Math.round(50 * area), note: `${ev}: the wave ends in a burst (radius 50) for ${Math.round(st.waveBurst * 100)}% of it, catching a foe about ${Math.round(FLARE_HIT * 100)}% of the time, no crit` });
+      if (st.wake > 0) {
+        const cls = (M + st.classElMul) * ED.affC(ctx.stratum || 1, 'holy'), secs = WAKE_ON * st.wake;
+        add("Dawn's Wake", waveRaw * secs * cls / every, { radiance: waveRaw * secs * 0.25 / every, note: `${ev}: a strip burns 2 s after its wave, ${Math.round(st.wake * 100)}% of the wave per second; a foe stands on it about ${n1(WAKE_ON)} s, no crit` });
+      }
+      const ret = st.waveReturn > 0 ? 1 + st.waveReturn * RET_HIT : 1;
+      if (st.litany > 0) add('Litany', waveHit * EC * 2 * ret / st.litany, { proc: true, crit: true, note: `every ${ordinal(st.litany)} attack: 2 more waves in a fan, both reach a foe at ${Sh.REF.d}` });
+      if (st.waveReturn > 0) add('Returning Light', waveHit * EC * st.waveReturn * RET_HIT / every, { proc: true, crit: true, note: `${ev}: the wave flies home and strikes again for ${Math.round(st.waveReturn * 100)}% (about ${Math.round(RET_HIT * 100)}% of foes are on its way)` });
+    }
     if (st.gauntlet) add('Thunder Gauntlet', Wd * 2.2 * M / 6, { proc: true, el: 'lightning', note: 'every 6th attack, no crit' });
     // evolution strikes (data on the evolution boon)
     const evoBoon = evo && ED.BOONS['evo_' + evo], attackTotal = avg * one + (blast ? Wd * blast.mul * M * one : 0);
@@ -277,6 +314,7 @@
     const dps = (avg * one + sum) * aps, dpsAll = (avg * n + sum) * aps;
     const notes = [];
     if (st.atkOver > 1.0001) notes.push(`Attack speed cap ${n1(1 / st.atkFloor)}/s: the excess adds +${Math.round((st.atkOver - 1) * 100)}% damage`);
+    if (chan) notes.push(`Channel averages +${Math.round(chan.avg * 100)}% damage on the weapon's hits, taking ${Math.round(CHAN_MOVE * 100)}% of the attacks as made on the move${st.fireDance ? ' (Fire Dancer holds it through moving)' : ''}`);
     if (st.heavy) notes.push(`Heavy: a hit Staggers a foe for ${C.STAGGER} s (elites half)`);
     if (st.swift) notes.push(`Swift: +${Math.round(C.FLOW_SPD * 100)}% move speed for ${C.FLOW_T} s after each attack`);
     const out = {
@@ -299,7 +337,7 @@
   function partModel(q, skillId, st, ctx, wpn, R) {
     const stratum = ctx.stratum, clsEl = q.el === 'class' && st.element ? st.element : null, tag = clsEl || (q.el && q.el !== 'class' ? q.el : null);
     const aff = clsEl ? ED.affC(stratum, clsEl) : tag ? ED.elemMul(stratum, tag) : 1;
-    const M = Math.max(0.1, st.dmg + (clsEl ? st.classElMul : 0)), cm = st.critMult, c = st.crit, EC = 1 + c * (cm - 1);
+    const M = Math.max(0.1, st.dmg + (clsEl ? st.classElMul * st.dmgX : 0)), cm = st.critMult, c = st.crit, EC = 1 + c * (cm - 1);
     const o = { id: q.id, label: q.label, per: q.per, el: tag, aff: R.x(aff), r: q.r && !q.pRad ? Math.round(q.r) : 0, dur: q.dur, every: q.every, delay: q.delay, count: q.count, n: q.n, attacks: q.attacks, stun: q.stun, knock: q.knock, note: q.note || '', proc: procDefault(q), radiance: q.radiance || 0, noCrit: !!q.noCrit, alwaysCrit: q.crit === true, selfVuln: q.selfVuln || 0, infAdd: q.infAdd || null };
     if (q.per === 'minion') { // a Bone Knight strikes every 0.5 s for x KNIGHT_MUL; the Death Knight (one unit) for x dkMul
       const per = q.dmg * (1 + st.minionDmg) * (C.COMP_MUL || 0.85) * (st.dk > 0 ? st.dkMul : st.knights > 0 ? C.KNIGHT_MUL : 1), live = st.dk > 0 ? 1 : Math.min(ctx.minions > 0 ? ctx.minions : q.n, st.maxMinions || 3), hits = Math.floor((q.dur || 0) / (st.knights > 0 ? 0.5 : q.every) + 1e-9);
@@ -419,12 +457,16 @@
 
     const proc = procModel(p, st, wpn, skills);
     elementForms(st, wpn, skills, proc, ref, R);
+    smiteForms(st, wpn, proc, s, R);
+    pyroForms(st, wpn, skills, proc, ref, s, R);
+    shadeForms(st, wpn, skills, proc, ref, s, R);
     if (st.contagion > 0) poolExtras(wpn, st, proc, s, R);
+    if (p.cls === 'necro') { const ex = necroForms(st, wpn, skills, proc, ref, s, R); if (ex.length) { for (const e of ex) wpn._extras.push(e); refit(wpn, R); } }
 
     // offense multipliers, each with its sources
     const mult = {}, dmgExtra = [], atkExtra = [], rate = St.attackRate(p);
-    if (st.momentum && p.momN > 0) dmgExtra.push({ label: `Momentum ×${p.momN | 0}`, kind: 'temp', v: st.momentum * (p.momN | 0), live: true });
-    if (p.knellT > 0 && p.knellN > 0) dmgExtra.push({ label: `Death Knell ×${p.knellN}`, kind: 'temp', v: 0.04 * p.knellN, live: true });
+    if (st.momentum && p.momN > 0) dmgExtra.push({ label: `Momentum ×${p.momN | 0}`, kind: 'temp', v: st.momentum * (p.momN | 0) * st.dmgX, live: true }); // additive hit bonuses carry the Ascended damage factor (combat.js hitEnemy)
+    if (p.knellT > 0 && p.knellN > 0) dmgExtra.push({ label: `Death Knell ×${p.knellN}`, kind: 'temp', v: 0.04 * p.knellN * st.dmgX, live: true });
     if (st.wardrum) atkExtra.push({ label: 'War Drum' + (p.toughRoom ? ' (elite or boss room: doubled)' : ' (doubled in elite and boss rooms)'), kind: 'temp', v: st.wardrum * (p.toughRoom ? 2 : 1), live: !!p.toughRoom });
     if (p.tranceT > 0 && st.trance > 0) atkExtra.push({ label: 'Battle Trance (active)', kind: 'temp', v: st.trance, live: true });
     mult.dmg = { total: R.x(st.dmg + dmgExtra.reduce((a, r) => a + r.v, 0)), rows: rowsOf(build, 'dmg', dmgExtra) };
@@ -436,8 +478,8 @@
     mult.cond = [];
     for (const r of ED.COND_DMG) {
       if (r.key !== null ? !(st[r.key] > 0) : !(r.own && r.own(st, p))) continue;
-      const live = r.live ? r.live(st, p, ctx) : null, v = r.value ? r.value(st, p) : st[r.key];
-      mult.cond.push({ id: r.key || r.id, label: r.key === 'brand' && st.brandCap > 4 ? r.label.replace('up to 4', 'up to ' + st.brandCap) : r.label, v: R.f(v), live: live === null ? null : R.f(live), per: r.per || null }); // Doombrand raises Brand's cap
+      const live = r.live ? r.live(st, p, ctx) : null, v = r.value ? r.value(st, p) : st[r.key], X = st.dmgX; // a row's bonus is what the hit gains: the row x the Ascended damage factor
+      mult.cond.push({ id: r.key || r.id, label: r.key === 'brand' && st.brandCap > 4 ? r.label.replace('up to 4', 'up to ' + st.brandCap) : r.label, v: R.f(v * X), live: live === null ? null : R.f(live * X), per: r.per || null }); // Doombrand raises Brand's cap
     }
     mult.slots = [];
     for (const k of ['s1Dmg', 's1Area', 's1Dur', 's1N', 's1Cdr', 's2Dmg', 's2Area', 's2Dur', 's2N', 's2Cdr']) if (st[k]) mult.slots.push({ key: k, label: SIF(k).label, v: R.f(st[k]), fmt: SIF(k).fmt, rows: build ? St.breakdown(build, k).map(r => ({ label: r.label, kind: r.kind, v: r.v })) : [] });
@@ -470,7 +512,7 @@
     const hero = { pid: p.pid, name: p.name, cls: p.cls, clsName: cls.name, title: cls.title, level: ctx.level, xp: ctx.xp, xpNext: ctx.xpNext, hp: Math.ceil(p.hp), maxHp, shield: Math.ceil(p.shield || 0), gold: ctx.gold, picks: p.picks | 0, power: st.power, element: st.element, weaponName: wpn.name, slot: p.slot | 0 };
     const model = {
       hero, ctx: { stratum: s, pact: ctx.pact | 0, dark: !!ctx.dark, party: ctx.party }, weapon: wpn, skills, dash, proc: procOut(proc, R), mult, def, aff: affModel(p, st, ctx), build: lite ? null : buildModel(p, st, ctx, R), dark: darkModel(ctx),
-      ref: { hp: R.n(ref.hp), statusHp: R.n(ref.statusHp), r: ref.r }, procs: procList(st, M, R),
+      ref: { hp: R.n(ref.hp), statusHp: R.n(ref.statusHp), r: ref.r }, procs: procList(st, M, R), boost: { pack: wpn._boostPack || 0 },
     };
     return opts && opts.raw ? model : strip(model);
   };
@@ -490,7 +532,7 @@
   function debuffs(p, st) {
     const out = [], add = (id, text, v, short) => out.push({ id, name: ED.STATUS[id].name, color: ED.STATUS[id].color, text, v: v || 0, short: short || '' });
     if (st.iceInfuse > 0) add('frozen', ED.STATUS.frozen.rule, 0.25, 'while frozen');
-    if (ED.CLASSES[p.cls].skill2 === 'judgment') add('judged', 'Judgment Judges every foe it hits: it takes +20% damage for ' + n1(4 + st.judgeDur) + ' s. Does not stack with other +20% vulnerability.', 0.2, `for ${n1(4 + st.judgeDur)} s (does not stack with other +20%)`);
+    if (ED.CLASSES[p.cls].skill2 === 'judgment') add('judged', 'Judgment Judges every foe it hits: it takes +20% damage for ' + n1(4 + st.judgeDur) + ' s.' + (st.smiteJudge > 0 ? ` Your Smites Judge their foe for ${n1(st.smiteJudge)} s as well.` : '') + ' Does not stack with other +20% vulnerability.', 0.2, `for ${n1(4 + st.judgeDur)} s (does not stack with other +20%)`);
     if (st.rainHail) add('judged', 'Foes in your Rain take +20% damage (the same +20% as Judged).', 0.2, 'inside your Rain');
     if (st.smokeVuln) add('judged', 'Foes in your smoke take +20% damage (the same +20% as Judged).', 0.2, 'inside your smoke');
     if (st.markV) add('marked', `Marked foes take +${Math.round(st.markV * 100)}% damage from every hero` + (st.volleyMark ? ` for ${n1(st.volleyMark)} s.` : '.'), st.markV, 'from every hero');
@@ -518,7 +560,7 @@
     if (st.chillWeaken) S.push({ label: 'Permafrost', text: `chilled foes deal ${Math.round(st.chillWeaken * 100)}% less damage` });
     if (st.frozenHeart) S.push({ label: 'Frozen Heart', text: 'when hit, freezes foes within 120 (8 s cooldown)' });
     if (st.thorns) S.push({ label: 'Thorns', text: `attackers take ${n1(st.thorns)} damage` });
-    if (st.holyInfuse > 0 || st.element === 'holy') sh.push({ label: 'Holy Smite', text: `${pc(Math.min(C.HOLY_GRANT_MAX, st.smiteShield))} per Smite (twice from elites and bosses), once per ${C.HOLY_CD} s per hero, up to ${pc(st.holyCap)}` });
+    if (st.holyInfuse > 0 || st.element === 'holy') sh.push({ label: 'Holy Smite', text: `${pc(Math.min(C.HOLY_GRANT_MAX, st.smiteShield))} per Smite (twice from elites and bosses${st.sunstrike > 0 ? ' and from a Sunstrike' : ''}), once per ${C.HOLY_CD} s per hero, up to ${pc(st.holyCap)}` });
     if (p.cls === 'knight') sh.push({ label: 'Shield Throw catch', text: `${pc(C.CATCH_PER)} per foe struck, up to ${pc(C.CATCH_MAX)}, once per ${C.KWARD_CD} s` });
     if (st.rally) sh.push({ label: 'Rallying Charge', text: `${pc(st.rally)} for you and allies within 100` });
     if (st.mantle) sh.push({ label: 'Phoenix Mantle', text: `${pc(st.mantle)} after a Nova that hits a foe (once per 10 s)` });
@@ -568,6 +610,7 @@
     critDps += wpn._hit * cm * one * aps * (ms ? (1 - 1 / ms.every) * c + ms.mul / ms.every : c);
     const msBleed = ms ? wpn._hit * cm * ms.mul / ms.every * one * aps * Math.max(0, ms.bleed - st.bleed) * pow : 0; // the Bleed it adds above the Bleed on crits
     for (const e of wpn._extras) if (e.proc && !e.packOnly) { const ps = e.perAttack * aps; wDps += ps; critDps += e.crit ? ps * c * cm / (1 + c * (cm - 1)) : 0; feed(ps, 1, null, e.el ? null : wInf); }
+    for (const e of wpn._extras) if (e.radiance) rate.holy = (rate.holy || 0) + e.radiance * aps; // Dawn's Wake: a quarter of each tick, before the hero multiplier, stored as Radiance
     if (st.weapon.burn) pool.fire = (pool.fire || 0) + direct * st.weapon.burn * pow;
     split.weapon = wDps; all += wDps;
     for (const sk of skills) {
@@ -592,7 +635,7 @@
     return { dps: R.n(pr.dps), critDps: R.n(pr.critDps), rate, pool, bleed: R.n(pr.bleed), split: { weapon: R.n(pr.split.weapon), skills: R.n(pr.split.skills), minions: R.n(pr.split.minions) } };
   }
 
-  // ---------------- Knight element forms: Doombrand and Cataclysm ----------------
+  // ---------------- Knight element forms: Doombrand and Bloodquake ----------------
   // The count of ailments on a typical foe, [P(0), P(1), ...], from the assumptions of tools/sheet.js: an infusion 70%, the class element 50%, Bleed 70%, Dazed 35%, Sealed always.
   function ailmentDist(st) {
     let d = [1];
@@ -604,13 +647,13 @@
     return d;
   }
   const atLeast = (d, k) => d.reduce((s, v, i) => s + (i >= k ? v : 0), 0), meanMin = (d, cap) => d.reduce((s, v, i) => s + v * Math.min(i, cap), 0);
-  const DOOM_AT = 4, CATA_AT = 3, CATA_R = 80, POOL_K = 2.5, PACK = 4; // POOL_K: a Bleed pool drains 40% a second, so it holds 2.5 s of income. PACK: the foes of the pack tools/sheet.js reads (the other 3 catch a burst)
+  const DOOM_AT = 4, BQUAKE_AT = 3, BQUAKE_R = 80, POOL_K = 2.5, PACK = 4; // POOL_K: a Bleed pool drains 40% a second, so it holds 2.5 s of income. PACK: the foes of the pack tools/sheet.js reads (the other 3 catch a burst)
   // Doombrand adds one weapon extra, the damage that the Mark (foes holding DOOM_AT ailments take +brandMark from every hero) and the two extra Brand ailments add to the weapon and the skills of the hero's own hits (co-op allies gain more, not counted).
-  // Cataclysm adds the extra damage of its payout (pool x cataMul, one strike per cast on a foe) to the Shield Throw's damage on one foe, and a part for packs: each of the PACK - 1 others within CATA_R catches cataSplash of the amount paid (a pool holds POOL_K x the Bleed income), at most SPREAD_CAP of a foe's health.
-  // A strike detonates a foe holding CATA_AT ailments at most once a second.
+  // Bloodquake adds the extra damage of its payout (pool x bloodquakeMul, one strike per cast on a foe) to the Shield Throw's damage on one foe, and a part for packs: each of the PACK - 1 others within BQUAKE_R catches bloodquakeSplash of the amount paid (a pool holds POOL_K x the Bleed income), at most SPREAD_CAP of a foe's health.
+  // A strike detonates a foe holding BQUAKE_AT ailments at most once a second.
   function elementForms(st, wpn, skills, proc, ref, R) {
     if (st.doombrand > 0) {
-      const d = ailmentDist(st), M = Math.max(0.1, st.dmg), p4 = atLeast(d, DOOM_AT), fBrand = st.brand * (meanMin(d, st.brandCap) - meanMin(d, 4)) / M, fMark = p4 * st.brandMark, f = (1 + fBrand) * (1 + fMark) - 1;
+      const d = ailmentDist(st), M = Math.max(0.1, st.dmg), p4 = atLeast(d, DOOM_AT), fBrand = st.brand * st.dmgX * (meanMin(d, st.brandCap) - meanMin(d, 4)) / M, fMark = p4 * st.brandMark, f = (1 + fBrand) * (1 + fMark) - 1;
       let x = 0, sk = 0;
       for (const e of wpn._extras) x += e.perAttack;
       for (const k of skills) for (const q of k.parts) if (q.kind !== 'zone') sk += q._r.total / k._cd;
@@ -618,21 +661,258 @@
       wpn._extras.push({ label: 'Doombrand', perAttack: per, proc: false, note: `foes with ${DOOM_AT} ailments (about ${Math.round(p4 * 100)}% of the time) are Marked: +${Math.round(st.brandMark * 100)}% from every hero; Brand counts up to ${st.brandCap}` });
       refit(wpn, R);
     }
-    if (st.cataclysm > 0 && skills.length > 1) {
-      const k2 = skills[1], k1 = skills[0], strike = k2.parts.find(q => q.id === 'strike'), p3 = atLeast(ailmentDist(st), CATA_AT);
+    if (st.bloodquake > 0 && skills.length > 1) {
+      const k2 = skills[1], k1 = skills[0], strike = k2.parts.find(q => q.id === 'strike'), p3 = atLeast(ailmentDist(st), BQUAKE_AT);
       if (strike) {
-        const bm = 1 + st.bleedMul, pool = POOL_K * proc.bleed, paid = pool * bm * (1 + st.cataMul), own = pool * bm * st.cataMul, give = Math.min(st.cataSplash * paid, C.SPREAD_CAP * ref.hp) * bm;
+        const bm = 1 + st.bleedMul, pool = POOL_K * proc.bleed, paid = pool * bm * (1 + st.bloodquakeMul), own = pool * bm * st.bloodquakeMul, give = Math.min(st.bloodquakeSplash * paid, C.SPREAD_CAP * ref.hp) * bm;
         const one = p3 * (k2._cd / k2._cd + k2._cd / k1._cd) * own, det = p3 * (Math.min(PACK, strike.n || 1) + PACK * k2._cd / k1._cd), gain = det * (own + (PACK - 1) * give);
-        const q = { id: 'cataclysm', label: 'Cataclysm', per: 'hit', kind: 'hit', el: null, aff: 1, r: CATA_R, proc: false, note: `a Charge or Throw strike on a foe with ${CATA_AT} ailments pays out its Bleed pool at +${Math.round(st.cataMul * 100)}% and bursts ${Math.round(st.cataSplash * 100)}% of that to each foe near it (a pack only)`, raw: paid, hit: paid, avg: paid, pre: paid, here: paid, total: gain / PACK, oneFoe: 0, kc: 0, alwaysCrit: false, noCrit: true, selfVuln: 0 };
+        const q = { id: 'bloodquake', label: 'Bloodquake', per: 'hit', kind: 'hit', el: null, aff: 1, r: BQUAKE_R, proc: false, note: `a Charge or Throw strike on a foe with ${BQUAKE_AT} ailments pays out its Bleed pool at +${Math.round(st.bloodquakeMul * 100)}% and bursts ${Math.round(st.bloodquakeSplash * 100)}% of that to each foe near it (a pack only)`, raw: paid, hit: paid, avg: paid, pre: paid, here: paid, total: gain / PACK, oneFoe: 0, kc: 0, alwaysCrit: false, noCrit: true, selfVuln: 0 };
         k2.parts.push(finish(q, R));
         k2.perCast = R.n(k2.perCast + one); k2.perCastAll = R.n(k2.perCastAll + one); k2.dpsCd = R.n(k2.perCast / k2._cd);
       }
     }
   }
+  // ---------------- Cleric element routes: Guardian Light and Prism ----------------
+  // S is the Smite damage per second the holy status estimate credits one foe's Radiance stream (one stream however big the pack). BIG_SHARE: share of the Smite damage that lands on elites and bosses, which hold most of the health a run deals damage to (Guardian Light's bonus).
+  // TOUGH_SHARE: share that lands on foes which take 3 or more Smites (those and trash that lives long), the only ones that reach a Sunstrike; every 3rd of their Smites is one at x sunstrike.
+  // Beams need a second foe, so they are pack-only extras written per foe of a PACK_REF pack (every foe's stream beams to the others: PACK_REF - 1 targets); Sunburst's jump is one more hop at half of a beam.
+  // Spectrum's Radiance puts prismRad of a Smite into the stream of each foe struck, which pays back (1 + smiteMul) times as Smite damage, once per beam a foe receives (first order: the loop it forms is ignored).
+  const BIG_SHARE = 0.6, TOUGH_SHARE = 0.7;
+  function smiteForms(st, wpn, proc, stratum, R) {
+    const S = (proc.rate.holy || 0) * ED.elemMul(stratum, 'holy') * (1 + st.smiteMul), aps = wpn._aps;
+    if (!(S > 0)) return;
+    let any = false;
+    const push = (label, dps, o) => { if (!(dps > 0)) return; any = true; wpn._extras.push(Object.assign({ label, perAttack: dps / aps, proc: false }, o)); };
+    if (st.smiteBig > 0) push('Heavy Smites', S / (1 + st.smiteMul) * st.smiteBig * BIG_SHARE, { note: `Smites on elites and bosses deal +${Math.round(st.smiteBig * 100)}% (about ${Math.round(BIG_SHARE * 100)}% of your Smite damage lands there)` });
+    if (st.sunstrike > 0) push('Sunstrike', S * TOUGH_SHARE * (st.sunstrike - 1) / 3, { note: `every 3rd Smite on a foe that takes three or more (about ${Math.round(TOUGH_SHARE * 100)}% of your Smite damage) is ×${n1(st.sunstrike)}` });
+    if (st.smiteBeam > 0) {
+      const split = st.prismN > 0 ? Math.min(Math.round(st.prismN), PACK_REF - 1) : 1, beam = S * st.smiteBeam;
+      push('Prism beam', beam, { packOnly: true, note: `a beam to the nearest other foe for ${Math.round(st.smiteBeam * 100)}% of each Smite, in a pack` });
+      if (st.beamJumps > 0) push('Sunburst', beam * 0.5 * st.beamJumps, { packOnly: true, note: 'the beam jumps once more at half again, in a pack' });
+      if (st.prismN > 0) push('Spectrum', beam * (split - 1) + S * st.prismRad * (1 + st.smiteMul) * split, { packOnly: true, note: `${split} beams in a pack of ${PACK_REF}; each foe struck stores ${Math.round(st.prismRad * 100)}% of the Smite as Radiance` });
+    }
+    if (any) refit(wpn, R);
+  }
+
+  // ---------------- Pyromancer Element forks: Flashpoint, White Flame, Heat Engine, Chain Reaction, Inferno Engine ----------------
+  // Each adds a weapon extra built from the damage per attack the weapon and the skills already deal; packMul turns its value on one foe into the value per foe of a pack of PACK (tools/model.js packWeapon).
+  // Flashpoint: a foe's Burn pool settles at 2.5 s of its Burn income (the pool drains 40% a second), so it is over burnCrit x the foe's health P / (P + burnCrit x health) of the time; a Nova or Meteor hit then crits for sure.
+  // White Flame: a foe that burned WHITE_T s in a row takes whiteHot more from every hit and meets Flashpoint for sure; a fight lasts FIGHT_ONE s on one foe and FIGHT_PACK s on each foe of a pack, and the foe keeps burning WHITE_KEEP of it.
+  // Heat Engine / Chain Reaction: a cast finds BURN_HIT of its foes burning, cuts min(HEAT_MAX, burning x heatEngine) s from the other skill (HE_USE of it counts) and, with heatChain burning foes, refunds it (once per HEAT_CD, saving half its cooldown); both skills are cast on cooldown.
+  // Inferno Engine: a cast stores one Heat per burning foe it hits; every ceil(heatMax / stored)th cast is an Inferno that deals infernoMul x.
+  const FIGHT_ONE = 12, FIGHT_PACK = 6, WHITE_KEEP = 0.85;
+  const choose = (n, k) => { let r = 1; for (let i = 1; i <= k; i++) r = r * (n - k + i) / i; return r; };
+  const atLeastBinom = (n, p, k) => { let s = 0; for (let i = Math.max(0, k); i <= n; i++) s += choose(n, i) * Math.pow(p, i) * Math.pow(1 - p, n - i); return s; };
+  // Cast-rate gain of [Nova, Meteor] (cd: their cooldowns) from Heat Engine cuts at nb burning foes a cast and from Chain Reactions when a cast reaches heatChain with chance pt.
+  function engineGain(st, cd, nb, pt) {
+    const cut = Math.min(C.HEAT_MAX, nb * st.heatEngine) * HE_USE;
+    let x = cd[0], y = cd[1];
+    for (let i = 0; i < 40; i++) {
+      const rN = 1 / x, rM = 1 / y, lam = st.heatChain > 0 ? Math.min(pt * (rN + rM), 1 / C.HEAT_CD) * HE_USE : 0;
+      const sN = lam * rM / (rN + rM) * x / 2, sM = lam * rN / (rN + rM) * y / 2; // seconds each skill's cooldown shrinks per second from the refunds
+      x = cd[0] / (1 + cut / y + sN); y = cd[1] / (1 + cut / x + sM);
+    }
+    return [cd[0] / x - 1, cd[1] / y - 1];
+  }
+  // Pack value per foe of a skill's damage per second (tools/model.js: a part with a radius hits every foe of the pack, the others one foe), next to its value on one foe.
+  const skillDps = (k, n, only) => { let one = 0, pk = 0; for (const q of k.parts) { if (q.kind === 'zone' || (only && only.indexOf(q.id) < 0)) continue; one += q._r.total / k._cd; pk += q._r.total * (q.r > 0 ? n : 1) / k._cd / n; } return [one, pk]; };
+  const INFERNO_PARTS = [['blast', 'burn'], ['impact']]; // the parts an Inferno scales: the Nova blast and Burn add, the Meteor impact (its Burn add rides on it)
+  function pyroForms(st, wpn, skills, proc, ref, stratum, R) {
+    if (!(st.burnCrit > 0 || st.whiteHot > 0 || st.heatEngine > 0) || skills.length < 2) return;
+    const aps = wpn._aps, M = Math.max(0.1, st.dmg), Mw = wpn._hit > 0 ? wpn._hit / st.weapon.dmg : M, c = st.crit, cm = st.critMult, cds = [skills[0]._cd, skills[1]._cd];
+    const sk = skills.map(k => skillDps(k, PACK)), skAll = sk[0][0] + sk[1][0];
+    const push = (label, one, pk, note) => { if (one > 0) wpn._extras.push({ label, perAttack: one, proc: false, packMul: pk / one, note }); };
+    let wh1 = 0, whP = 0;
+    if (st.whiteHot > 0) { // White Flame: the share of the damage dealt while the foe is white-hot. Its value on one foe is an extra; in a pack it scales the whole pack damage (m.boost.pack, read by tools/model.js directDamage), not one foe's.
+      wh1 = WHITE_KEEP * Math.max(0, 1 - st.whiteT / FIGHT_ONE); whP = WHITE_KEEP * Math.max(0, 1 - st.whiteT / FIGHT_PACK);
+      let w1 = wpn._avg * wpn.oneFoe;
+      for (const e of wpn._extras) if (!e.packOnly) w1 += e.perAttack;
+      const sw = w1 * aps / (w1 * aps + skAll), rel = sw / Mw + (1 - sw) / M;
+      push('White Flame', wh1 * st.whiteHot * rel * (w1 + skAll / aps), 0, `a foe that burned ${n1(st.whiteT)} s in a row (about ${Math.round(wh1 * 100)}% of a fight on one foe, ${Math.round(whP * 100)}% in a pack) takes +${Math.round(st.whiteHot * 100)}% from every hit`);
+      wpn._boostPack = whP * st.whiteHot * rel;
+    }
+    if (st.burnCrit > 0) { // Flashpoint
+      const income = ((proc.rate.fire || 0) + (proc.pool.fire || 0)) * ED.elemMul(stratum, 'fire'), P = income / 0.4, u0 = P / (P + st.burnCrit * ref.hp);
+      let g = 0;
+      for (let i = 0; i < 2; i++) for (const q of skills[i].parts) if (q.kind === 'hit' && !q.noCrit && !q.alwaysCrit) g += q._r.hit * (1 + q.selfVuln) * q.aff * q.oneFoe * (1 - c) * (cm - 1) / skills[i]._cd;
+      push('Flashpoint', (wh1 + (1 - wh1) * u0) * g / aps, (whP + (1 - whP) * u0) * g / aps, `Nova and Meteor crit for sure while the foe's Burn is over ${Math.round(st.burnCrit * 100)}% of its health (about ${Math.round(u0 * 100)}% of the time${st.whiteHot > 0 ? ', and when it is white-hot' : ''})`);
+    }
+    if (st.heatEngine > 0) {
+      const nb1 = BURN_HIT, nbP = BURN_HIT * PACK, g1 = engineGain(st, cds, nb1, st.heatChain > 1 ? 0 : BURN_HIT), gP = engineGain(st, cds, nbP, st.heatChain > 0 ? atLeastBinom(PACK, BURN_HIT, st.heatChain) : 0);
+      push('Heat Engine', (sk[0][0] * g1[0] + sk[1][0] * g1[1]) / aps, (sk[0][1] * gP[0] + sk[1][1] * gP[1]) / aps, `the cooldown cuts${st.heatChain > 0 ? ` and Chain Reactions (${st.heatChain} burning foes)` : ''} let the skills cast ${Math.round(g1[0] * 100)}% (Nova) and ${Math.round(g1[1] * 100)}% (Meteor) more often on one foe, ${Math.round(gP[0] * 100)}% and ${Math.round(gP[1] * 100)}% in a pack`);
+      if (st.infernoMul > 0 && st.heatMax > 0) {
+        const every = (nb) => Math.max(1, Math.ceil(st.heatMax / nb - 1e-9)), e1 = every(nb1), eP = every(nbP), I = skills.map((k, i) => skillDps(k, PACK, INFERNO_PARTS[i]));
+        push('Inferno', (I[0][0] + I[1][0]) * (st.infernoMul - 1) / e1 / aps, (I[0][1] + I[1][1]) * (st.infernoMul - 1) / eP / aps, `every ${ordinal(e1)} cast on one foe (${ordinal(eP)} in a pack) is an Inferno: ×${trim(st.infernoMul.toFixed(2))} damage and Burn, radius ×1.4`);
+      }
+    }
+    refit(wpn, R);
+  }
+
+  // ---------------- Shade attack and element routes (class-shade.js) ----------------
+  // Momentum: the chance q that an attack crits (crit chance, the crits Shadowstep readies, executions below the line, Arterial readyings, Killing Rhythm) feeds the stacks; a gap of MOM_T s without a crit drops them all,
+  // so a hit sees ES x (1 - rho) stacks on average (rho = (1 - q)^K, K = attacks in MOM_T s, ES = stacks right after a crit) and a spin needs the full count (pFull of the time). The foe is fought long enough to reach this steady state.
+  // MOM_THREAT: share of the hero's kills that are foes Killing Rhythm counts (horde foes never do). DASH_SPINS: dashes per second ending at full Momentum (Cyclone).
+  // GIL_*: a Guillotine carry looks at the PACK_REF - 1 other foes of the pack, each below the line with the chance the line gives; GIL_CORR scales that for foes that are hurt together (a swing that kills one foe of a pack usually kills its neighbours:
+  // a staged pack of 4 inside one swing made 0.37-0.44 of the independent estimate, a horde spread over the room 1; the model takes 0.5). RUPT_NET: what a rupture adds over the ticks it replaces (RUPT_MUL less the half of the share those would have paid).
+  // BLOOM_PAY: share of a handed-over Bleed pool the receivers pay out. CASC_FILL / CASC_CROWD / CASC_SPLASH: share of its leaps a Shadowstep cast makes, the most it makes and the factor the splash of each rupture adds to a leap's damage,
+  // in the horde the cut foes stand in (fitted to staged casts through a crowd of 12 to 20 foes at random health, every foe holding a pool: 0.81-0.83 N leaps for N = 2 and 4 (0.95 N at stratum VI), +70 to +120 foe health removed
+  // per leap against 66 to 93 for the leap alone; a pack of 4 would run out of foes, a room horde of 40 allows about 10 leaps).
+  const DASH_SPINS = 0.3, MOM_THREAT = 0.5, GIL_CORR = 0.5, RUPT_NET = 1, BLOOM_PAY = 0.6, CASC_FILL = 0.85, CASC_CROWD = 10, CASC_SPLASH = 1.4;
+  // The crit chance per attack and the Momentum it builds: { q, ra (Arterial readyings per attack), avg (stacks a hit sees), pFull }.
+  function momentumState(st, wpn, ref) {
+    const aps = wpn._aps, c = st.crit, N = St.skillNums('step', st), P3 = atLeast(ailmentDist(st), 3);
+    const ready = Math.min(Math.round((3 + st.stackMax) * st.critK), Math.round((3 + st.stepStack) * st.critK)), rs = Math.min(0.9, ready / (N.cdEff * aps));
+    let q0 = 1 - (1 - c) * (1 - st.execCrit) * (1 - rs);
+    if (st.execMom > 0) q0 = Math.min(0.95, q0 + st.execMom * MOM_THREAT * (wpn.dps / ref.hp) / aps);
+    let q = q0, ra = 0;
+    if (st.arterial > 0) for (let i = 0; i < 6; i++) { ra = Math.min(1 / (C.ARTER_CD * aps), q * P3); q = 1 - (1 - q0) * (1 - ra); }
+    const mx = st.momMax, K = Math.max(1, Math.floor(C.MOM_T * aps + 1e-9)), rho = Math.pow(1 - q, K);
+    let es = mx * Math.pow(1 - rho, mx - 1);
+    for (let k = 1; k < mx; k++) es += k * rho * Math.pow(1 - rho, k - 1);
+    return { q, ra, avg: mx > 0 ? es * (1 - rho) : 0, pFull: mx > 0 ? Math.pow(1 - rho, mx) : 0 };
+  }
+  // Mean of min(strike, health left) for a foe left with a uniform share of 0..line of its health hp.
+  const chainValue = (strike, line, hp) => { const L = line * hp; return !(L > 0) ? 0 : strike >= L ? L / 2 : strike - strike * strike / (2 * L); };
+
+  // Adds the Shade cards' extras to the weapon card and their parts to the skills: the execution crits, Whirlwind and Cyclone, Guillotine's carries, Open Veins, Exsanguinate and Arterial Strike, Rupture, Bloodbloom and Crimson Cascade.
+  // wpn._mom holds the Momentum state for tools/model.js (the damage the stacks add is part of its conditional factor).
+  function shadeForms(st, wpn, skills, proc, ref, s, R) {
+    if (!(st.momMax > 0 || st.veins > 0 || st.rupture > 0)) return;
+    const w = st.weapon, melee = w.kind === 'melee', c = st.crit, cm = st.critMult, aps = wpn._aps, hit = wpn._hit, one = wpn.oneFoe;
+    const mom = momentumState(st, wpn, ref), q = mom.q, dist = ailmentDist(st), P3 = atLeast(dist, 3), P4 = atLeast(dist, 4), nAil = meanMin(dist, 4);
+    const ex = wpn._extras, add = (label, perAttack, o) => { if (perAttack > 0) ex.push(Object.assign({ label, perAttack, proc: false }, o)); };
+    if (st.momMax > 0) wpn._mom = mom;
+    // execution crits: the weapon hits on foes below the line (execCrit of the attacks) crit for sure
+    if (st.execCrit > 0) add('Execution', st.execCrit * hit * (1 - c) * (cm - 1) * one, { proc: true, note: `weapon hits on foes below ${Math.round(st.execCrit * 100)}% health always crit (about that share of the attacks)` });
+    // Whirlwind: every 4th attack at full Momentum spins; Cyclone: every attack does, the 4th at the larger of the two, and a dash ends in a spin
+    if (st.momMax > 0 && (st.bladeStorm > 0 || st.cyclone > 0)) {
+      const per = st.cyclone > 0 ? (3 * st.cyclone + Math.max(st.bladeStorm, st.cyclone)) / 4 : st.bladeStorm / 4, dash = st.cyclone > 0 ? DASH_SPINS / aps * st.cyclone : 0;
+      add(st.cyclone > 0 ? 'Cyclone' : 'Whirlwind', mom.pFull * (per + dash) * wpn._avg, { proc: true, crit: true, note: `at full Momentum (about ${Math.round(mom.pFull * 100)}% of the time) ${st.cyclone > 0 ? 'every attack and the end of a dash spin' : 'every 4th attack spins'} ${melee ? 'all around you' : 'a ring of 6'}` });
+    }
+    // Guillotine: an execution kill carries free execution strikes to the weak foes of the pack, at most guillotine per attack; a pack of PACK_REF foes dies PACK_REF x avg / hp kills per attack
+    if (st.guillotine > 0) {
+      const hits = melee ? PACK_REF : Math.min(PACK_REF, one * (1 + (w.pierce || 0) + st.pierce)), kills = Math.min(1, hits * wpn._avg / ref.hp), line = st.execCrit;
+      const strikes = Math.min(st.guillotine, (PACK_REF - 1) * line), strike = hit * cm, total = GIL_CORR * kills * strikes * chainValue(strike, line, ref.hp);
+      add('Guillotine', total / PACK_REF, { packOnly: true, proc: true, note: `an execution kill carries up to ${Math.round(st.guillotine)} free execution strikes to weak foes within 100, in a pack` });
+    }
+    // crit damage per attack on one foe (weapon) and per second (skills): what Open Veins and Arterial Strike scale
+    let critSk = 0;
+    for (const k of skills) for (const p of k.parts) if (p.kind !== 'zone' && p.kind !== 'status' && p.kind !== 'minion' && p._r) critSk += p._r.hit * cm * p.kc * (1 + p.selfVuln) * p.oneFoe / k._cd;
+    const critAtk = hit * cm * q * one + ex.reduce((a, e) => a + (e.crit ? e.perAttack * c * cm / (1 + c * (cm - 1)) : 0), 0) + critSk / aps;
+    if (st.veins > 0) add('Open Veins', st.veins * nAil * critAtk, { proc: true, note: `crits deal +${Math.round(st.veins * 100)}% per ailment (about ${trim(nAil.toFixed(1))} on a foe)` });
+    if (st.arterial > 0) {
+      const n3 = atLeast(dist, 3) > 0 ? dist.reduce((a, v, i) => a + (i >= 3 ? v * Math.min(4, i) : 0), 0) / P3 : 3;
+      add('Arterial Strike', st.arterial * P3 * (1 + st.veins * n3) * critAtk, { proc: true, note: `a crit on a foe with 3+ ailments (about ${Math.round(P3 * 100)}% of the time) deals +${Math.round(st.arterial * 100)}%` });
+      add('Arterial crits', mom.ra * (1 - c) * hit * one * (cm * (1 + st.veins * n3) - 1), { proc: true, note: `each Arterial crit readies ${Math.round(st.arterialN)} crit attack, at most once per ${C.ARTER_CD} s (about ${trim((mom.ra * aps).toFixed(1))} per second)` });
+    }
+    // Exsanguinate: a crit on a foe with 4 ailments adds Bleed (a share of the hit) to its pool; the pool pays out at the Bleed rate
+    if (st.exsang > 0) proc.bleed += critAtk * aps * P4 * st.exsang * (1 + st.statusPow);
+    // Rupture: a share of the Bleed and Burn pools (POOL_K x the income) bursts at RUPT_MUL; Shadowstep ruptures every foe it cuts, an Ambush its target
+    if (st.rupture > 0 && skills.length > 1) {
+      const bm = 1 + st.bleedMul, bleedInc = proc.bleed * bm, burnInc = ((proc.rate.fire || 0) * ED.elemMul(s, 'fire') + (proc.pool.fire || 0)) * (1 + st.burnMul), pool = POOL_K * (bleedInc + burnInc);
+      const share = Math.min(1, st.rupture), net = share * RUPT_NET * pool, k1 = skills[0], k2 = skills[1], slash = k1.parts.find(p => p.id === 'slash');
+      const part = (id, label, note, total, r) => finish({ id, label, per: 'hit', kind: 'hit', el: null, aff: 1, r, proc: false, note, raw: total, hit: total, avg: total, pre: total, here: total, total, oneFoe: 0, kc: 0, alwaysCrit: false, noCrit: true, selfVuln: 0 }, R);
+      const bump = (k, v) => { k.perCast = R.n(k.perCast + v); k.perCastAll = R.n(k.perCastAll + v); k.dpsCd = R.n(k.perCast / k._cd); };
+      k1.parts.push(part('rupture', 'Rupture', `${Math.round(share * 100)}% of the Bleed and Burn pools of every foe the blink cuts burst at ×${C.RUPT_MUL} (the pools lose it)`, net, C.RUPT_R)); bump(k1, net);
+      k2.parts.push(part('rupture', 'Rupture', `the Ambush ruptures ${Math.round(share * 100)}% of its target's pools`, net, 0)); bump(k2, net);
+      const pk = slash ? Math.min(1, (slash._r.pre + share * C.RUPT_MUL * pool) / ref.hp) : 0.5; // a cut foe at a uniform share of its health dies to the blink and the burst with this chance
+      if (st.bloodbloom > 0) k1.parts.push(part('bloodbloom', 'Bloodbloom', `a foe the rupture kills (about ${Math.round(pk * 100)}%) hands the rest of its Bleed to the 2 nearest foes within 80, in a pack`, pk * (1 - share) * POOL_K * bleedInc * BLOOM_PAY, C.RUPT_R));
+      if (st.cascade > 0) { // each rupture kill leaps to a foe with a pool and ruptures it at cascade x the burst; a leap deals at most the foe's health (uniform share of it left)
+        const leaps = Math.min(st.cascadeN * CASC_FILL, CASC_CROWD), burst = st.cascade * C.RUPT_MUL * pool;
+        k1.parts.push(part('cascade', 'Crimson Cascade', `a rupture kill leaps to the nearest foe with a pool within 120 and ruptures all of it at ×${trim((st.cascade * C.RUPT_MUL).toFixed(2))} (about ${trim(leaps.toFixed(1))} leaps per blink in a horde)`, leaps * CASC_SPLASH * chainValue(burst, 1, ref.hp) / PACK_REF, C.RUPT_R));
+      }
+    }
+    refit(wpn, R);
+  }
+
+  // ---------------- Necromancer attack and element forms ----------------
+  // Fitted assumptions (the sheet reads a lone foe and a pack of PACK_REF; tools/sheet-check.js measures the staged parts that a fight can isolate).
+  // Hex: HEX_ONE the share of your hits that land on a foe already Hexed; HEX_BASE the share of a pack your weapon keeps Hexed on its own (a hit Hexes the foe it strikes for 3 s); HEX_PACK_R the radius a pack stands in (Hex Burst Hexes spread / HEX_PACK_R of the rest);
+  // GRAVE_HEX / STORM_HEX the share of the rest that a Grave Bolt's line / the souls of Soul Storm Hex; GRAVE_LINE the foes of a pack on a Grave Bolt's line; SOUL_FOES the foes a projectile weapon strikes per second in a pack (a homing shot picks one at a time, a swing hits the pack).
+  // Doom cards act on elites and bosses only: the lone foe of a Focus build is a boss (it Tolls: Toll bonus, Maw), the pack holds an elite TOUGH_PACK of the time (it is Reaped: empower, Maw on its neighbours), ELITE_UP the share of an elite fight that a 6 s empower or a 3 s maw covers.
+  // Rise Again: REAP_FRAC the share of kills that are Reaps, PACK_KILLS the kill-rate factor of a pack, FREE_ONE / FREE_PACK the share of the Tide cap that stands alive in the lone-foe / pack column.
+  const HEX_ONE = 0.95, HEX_BASE = 0.5, HEX_PACK_R = 90, GRAVE_HEX = 0.25, STORM_HEX = 0.7, GRAVE_LINE = 2.5, SOUL_FOES = 2;
+  const TOUGH_PACK = 0.5, ELITE_UP = 0.3, REAP_FRAC = 0.7, PACK_KILLS = 1.4, FREE_ONE = 0.6, FREE_PACK = 0.9;
+  // The share of a pack of n foes that carries the hero's Hex: the weapon alone, then Hex Burst, the line of a Grave Bolt and the souls of Soul Storm each reach a share of the rest.
+  function hexCov(st, n) {
+    if (n < 2) return 1;
+    let c = HEX_BASE;
+    if (st.hexSpread > 0) c += (1 - c) * Math.min(1, st.hexSpread / HEX_PACK_R);
+    if (st.graveBolt > 0) c += (1 - c) * GRAVE_HEX;
+    if (st.soulStorm > 0) c += (1 - c) * STORM_HEX;
+    return c;
+  }
+  // The Hex, Grave Bolt, Soul Storm, Abyssal and Tide effects of class-necro.js as weapon extras (damage per attack on one foe; _pack(n): the total per attack in a pack of n). Per-second values are divided by the attack rate.
+  function necroForms(st, wpn, skills, proc, ref, s, R) {
+    const aps = wpn._aps, avg = wpn._avg, melee = wpn.kind === 'melee', M = Math.max(0.1, st.dmg), one = wpn.oneFoe, hasHex = st.hex > 0, mine = [];
+    const pow = 1 + st.statusPow, kM = C.MINION_INFUSE + st.minionInfuse, aff = ED.elemMul(s, 'shadow') * (1 + st.doomMul), toughK = C.DOOM_TOUGH + st.doomTough;
+    const hb = (n) => (melee ? n : Math.min(n, (wpn.n || 1) * (1 + (wpn.pierce || 0)))); // foes one attack's normal hits reach (tools/model.js packWeapon)
+    let minionDps = 0, minionDoom = 0, minions = 0, strike = 0, dpsOne = avg * one * aps;
+    const spells = [];
+    for (const e of wpn._extras) if (!e.packOnly) dpsOne += e.perAttack * aps;
+    for (const sk of skills) for (const m of sk.parts) {
+      if (m.kind === 'zone' || m.kind === 'status') continue;
+      const d = m._r.total / sk._cd;
+      dpsOne += d;
+      if (m.kind === 'minion') { minionDps += d; minions = Math.max(minions, m.minions); strike = m._r.pre; minionDoom += d * Math.max(st.shadowInfuse * kM, st.mInfShadow) * pow; } else spells.push({ d, area: m.r > 0 });
+    }
+    const add = (label, one1, pack, note, o) => mine.push(Object.assign({ label, perAttack: one1 / aps, proc: false, note, _pack: (n) => pack(n) / aps }, o));
+    // Grave Bolt: every graveN-th attack, its shots (or a scythe swing) deal graveBolt times the damage; a shot pierces the pack along its line
+    let graveOne = 0, gravePack = () => 0;
+    if (st.graveBolt > 0 && st.graveN > 0) {
+      const gb = st.graveBolt, ev = st.graveN, shots = melee ? 1 : (wpn.n || 1);
+      graveOne = avg * one * (gb - 1) / ev * aps;
+      gravePack = (n) => (melee ? avg * n * (gb - 1) : avg * (shots * gb * Math.min(n, Math.max(1 + (wpn.pierce || 0), GRAVE_LINE)) - hb(n))) / ev * aps;
+      add('Grave Bolt', graveOne, gravePack, `every ${ordinal(ev)} attack: ×${trim(gb.toFixed(2))} damage${melee ? '' : ', twice as wide, pierces every foe'}; its kills rise`, { proc: true, crit: true });
+    }
+    // Soul Storm: a Hexed foe your weapon hits sends a soul (soulStorm of the hit) to another foe once per second; a lone foe has none to send it to
+    if (st.soulStorm > 0 && hasHex) {
+      const dealt = avg * (1 + st.hexSelf / M);
+      const storm = (n) => (n < 2 ? 0 : Math.min(n, melee ? n : SOUL_FOES) * HEX_ONE * st.soulStorm * dealt);
+      add('Soul Storm', storm(PACK_REF) / PACK_REF, storm, `a Hexed foe you hit sends a soul to another foe once per second, ${Math.round(st.soulStorm * 100)}% of the hit, in a pack`, { packOnly: true });
+    }
+    // Soul Barrage: your hits and area skills deal hexSelf more to Hexed foes (the minions are raw hits and read hexMul instead)
+    if (st.hexSelf > 0 && hasHex) {
+      const k = st.hexSelf / M, spell1 = spells.reduce((t, q) => t + q.d, 0);
+      add('Hexed foes', (avg * one * aps + graveOne + spell1) * k * HEX_ONE, (n) => (avg * hb(n) * aps + gravePack(n) + spells.reduce((t, q) => t + q.d * (q.area ? n : 1), 0)) * k * hexCov(st, n), `your weapon and skills deal +${Math.round(st.hexSelf * 100)}% to Hexed foes (about ${Math.round(HEX_ONE * 100)}% of your hits on one foe)`);
+    }
+    // Soul Command, Quickened Dead: Hexed foes take hexMul more from minions and the minions strike hexHaste faster; minions rush a Hexed foe whenever one lives
+    if (hasHex && minionDps > 0 && (st.hexMul > 0 || st.hexHaste > 0)) {
+      const f = (1 + st.hexMul) / (1 - st.hexHaste) - 1;
+      add('Hexed minions', minionDps * f, (n) => minionDps * f * (1 - (1 - hexCov(st, n)) ** 2), `minions strike Hexed foes ${Math.round(st.hexMul * 100)}% harder${st.hexHaste > 0 ? ' and ' + Math.round(st.hexHaste * 100) + '% faster' : ''}`);
+    }
+    // Abyssal Toll, Abyssal Maw: damage per second on a boss (the lone-foe column) or an elite (the pack column, TOUGH_PACK of the time). doomI: the Doom such a foe collects per second; a boss pays it back as Tolls, an elite is Reaped by it, both about 1:1.
+    // The Toll gap (a Toll per TOLL_AT of the boss' health in Doom) sets how often a boss' 6 s empower and 3 s maw run; an elite's covers ELITE_UP of its fight.
+    const doomI = (proc.rate.shadow || 0) * aff * toughK, boss = (n) => (n < 2 ? 1 : 0), tough = (n) => (n < 2 ? 1 : TOUGH_PACK);
+    if (doomI > 0 && (st.tollMul > 0 || st.abyssMin > 0 || st.maw > 0)) {
+      const gap = C.TOLL_AT * ED.ENEMIES[ED.biomeFor(s).boss].hp / doomI, up = (T, n) => boss(n) * Math.min(1, T / gap) + (1 - boss(n)) * ELITE_UP;
+      const toll = (n) => tough(n) * (doomI * st.tollMul * boss(n) + minionDps * st.abyssMin * up(C.ABYSS_T, n) + (st.abyssDoom > 0 ? minionDoom * aff * toughK * st.abyssDoom * (1 + st.tollMul * boss(n)) : 0));
+      if (st.tollMul > 0 || st.abyssMin > 0) add('Abyssal Toll', toll(1), toll, `on bosses and elites: Tolls +${Math.round(st.tollMul * 100)}%, minions +${Math.round(st.abyssMin * 100)}% after a Toll or a Reaped elite${st.abyssDoom > 0 ? ', minion Doom doubled' : ''}`);
+      if (st.maw > 0) {
+        const maw = (n) => tough(n) * (doomI * (1 + st.tollMul) * st.maw * C.MAW_T * boss(n) + (n < 2 ? 0 : doomI * st.maw * C.MAW_T * Math.min(2, n - 1)) + minionDps * st.mawHaste * up(C.MAW_T, n));
+        add('Abyssal Maw', maw(1), maw, `a Toll or a Reaped elite opens a maw for ${C.MAW_T} s: foes in it take ${Math.round(st.maw * 100)}% of the Toll per second, minions near it strike ${Math.round(st.mawHaste * 100)}% faster`);
+      }
+    }
+    // Risen Tide, Tide of the Dead: the minions risen from Reaps (rate: Reaps per second, the Reap share of the kills a hero's damage makes, held by the raise limit). Risen Tide buffs the share of the army they fill;
+    // Tide of the Dead adds tideCap free minions (an alive share of the cap) and their falling bursts of Doom, 1:1 damage on trash
+    if (st.reapRaise > 0 && minionDps > 0 && minions > 0) {
+      const life = 10 + C.TIDE_LIFE, per = minionDps / minions, kills = REAP_FRAC * dpsOne / ref.hp, rises = (n) => Math.min(1 / (st.tideFree > 0 ? C.TIDE_CD : C.RISE_CD), kills * (n < 2 ? 1 : PACK_KILLS));
+      if (st.tideFree > 0) {
+        const alive = (n) => Math.min(st.tideCap * (n < 2 ? FREE_ONE : FREE_PACK), rises(n) * life), tm = 1 + st.tideMul;
+        const tide = (n) => alive(n) * per * tm + alive(n) / life * (n < 2 ? 1 : Math.min(n, 3)) * st.tideDoom * strike * tm * aff;
+        add('Tide of the Dead', tide(1), tide, `${trim(st.tideCap.toFixed(1))} extra minions outside the cap (about ${Math.round(FREE_ONE * 100)}% alive on one foe), each bursting Doom when it falls`);
+      } else if (st.tideMul > 0) {
+        const tide = (n) => minionDps * st.tideMul * Math.min(1, rises(n) * life / Math.max(1, st.maxMinions));
+        add('Risen Tide', tide(1), tide, `minions risen from Reaps strike ${Math.round(st.tideMul * 100)}% harder and last longer`);
+      }
+    }
+    return mine;
+  }
+
   // Rebuilds the weapon model's totals and extras list after an extra was pushed on wpn._extras.
   function refit(wpn, R) {
     let sum = 0;
-    for (const e of wpn._extras) sum += e.perAttack;
+    for (const e of wpn._extras) if (!e.packOnly) sum += e.perAttack;
     wpn.dps = R.n((wpn._avg * wpn.oneFoe + sum) * wpn._aps); wpn.dpsAll = R.n((wpn._avg * wpn.n + sum) * wpn._aps);
     wpn.extras = wpn._extras.map(e => Object.assign({}, e, { perAttack: R.n(e.perAttack), perSec: R.n(e.perAttack * wpn._aps) }));
   }
@@ -650,13 +930,13 @@
     const s = clampI(ctx.stratum || 1, 1, ED.BIOMES.length);
     return { now: at(s), next: s < ED.BIOMES.length ? at(s + 1) : null };
   }
-  // Dark rooms of the floor: unvisited / total, whether the hero stands in one, and the rule constants (foe damage, gold and xp multiplier).
+  // Dark rooms of the floor: unvisited / total, whether the hero stands in one, and the rule constants (foe damage, gold and xp multiplier including the party's Deep Wick).
   function darkModel(ctx) {
-    return { left: ctx.rooms.darkLeft, total: ctx.rooms.darkTotal, here: !!ctx.dark, dmg: W.DARK_DMG, loot: W.DARK_LOOT, rooms: ctx.rooms };
+    return { left: ctx.rooms.darkLeft, total: ctx.rooms.darkTotal, here: !!ctx.dark, dmg: W.DARK_DMG, loot: ctx.darkLoot || W.DARK_LOOT, rooms: ctx.rooms };
   }
 
   // ---------------- build tab ----------------
-  const AILMENT_STATS = ['brand', 'veins', 'contagion', 'festerHit', 'exsang']; // stats that read the ailment count of a foe (World.ailments)
+  const AILMENT_STATS = ['brand', 'veins', 'contagion', 'festerHit', 'exsang', 'arterial']; // stats that read the ailment count of a foe (World.ailments)
   const ROUTE_WHEN = { t1: 'Offered at team level 3', fork: 'Offered when the stratum I boss falls', r2: 'Rank 2 when the stratum II boss falls', r3: 'Rank 3 when the stratum IV boss falls' };
   const KIND_ORDER = { gate: 0, path: 1, open: 1, route: 0, fork: 1, keystone: 2, evolution: 3, duo: 0, ascended: 0 };
   function buildModel(p, st, ctx, R) {

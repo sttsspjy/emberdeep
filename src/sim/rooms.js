@@ -83,17 +83,17 @@
   };
 
   // Horde and xp budget of a combat or elite room, beside its threat waves: q = fodder to spawn in all, spawned so far, the pack timer and size, the 2-4 edges packs come from,
-  // and the xp ledger (budget = ROOM_XP x DARK_LOOT in the units that drop, split into fod = the fodder motes' share and thrCap = what threat drops may take; K = thrCap / the planned waves' threat xp; out = dropped so far, thr = the threat part, clip = cut away, acc / thrAcc = mote and threat fractions not yet dropped).
+  // and the xp ledger (budget = ROOM_XP x darkLoot() in a dark room, in the units that drop, split into fod = the fodder motes' share and thrCap = what threat drops may take; K = thrCap / the planned waves' threat xp; out = dropped so far, thr = the threat part, clip = cut away, acc / thrAcc = mote and threat fractions not yet dropped).
   W.planHorde = function (room, enc) {
     const s = this.stratum, n = this.partySize(), Wc = ED.World, kind = room.type === 'elite' ? 'elite' : 'combat';
     enc.q = Math.round(Wc.FODDER_Q[s - 1] * (kind === 'elite' ? 0.6 : 1) * (1 + 0.5 * (n - 1)) * (this.tutorial && s === 1 ? 0.6 : 1) * (room.dark ? Wc.DARK_FODDER : 1));
     enc.spawned = 0; enc.packT = 0; enc.packN = 0; enc.wait = 0;
     enc.edges = this.rng.shuffle(['n', 's', 'e', 'w']).slice(0, this.rng.int(2, 4));
-    enc.xpBudget = Math.round(Wc.ROOM_XP[kind][s - 1] * (room.dark ? Wc.DARK_LOOT : 1));
+    enc.xpBudget = Math.round(Wc.ROOM_XP[kind][s - 1] * (room.dark ? this.darkLoot() : 1));
     enc.xpFod = Math.round(Wc.FODDER_XP_SHARE * enc.xpBudget); enc.xpThrCap = enc.xpBudget - enc.xpFod;
     let plan = 0;
     for (const wv of enc.waves) for (const f of wv) plan += Wc.threatXp(ED.ENEMIES[f.type], s, f.elite);
-    plan *= room.dark ? Wc.DARK_LOOT : 1;
+    plan *= room.dark ? this.darkLoot() : 1;
     enc.xpK = plan > 0 ? enc.xpThrCap / plan : 1;
     enc.xpOut = 0; enc.xpThr = 0; enc.xpClip = 0; enc.xpAcc = 0; enc.xpThrAcc = 0;
   };
@@ -247,6 +247,7 @@
     for (const q of this.players.values()) q.mantleAmt = 0; // a Mantle shield is spent with the room
     const s = this.stratum;
     this.run.roomsCleared++;
+    if (room.dark) this.run.darkCleared++;
     this.run.embers.rooms += 1 + Math.round(s / 2);
     const c = this.alivePlayers()[0] || D.center(room);
     const enc = this.enc;
@@ -332,12 +333,9 @@
       if (anvil) props.push({ id: id(), kind: 'anvil', x: c.x + 44, y: c.y, group, state: 0 });
     } else if (room.type === 'shop') {
       props.push({ id: id(), kind: 'merchant', x: c.x, y: c.y - 70, state: 0 });
-      let favor = 0;
-      for (const p of this.players.values()) favor = Math.max(favor, (p.meta.up && p.meta.up[ED.UPGRADE_IDX.favor]) || 0);
       const items = [];
       const taken = new Set();
-      const nRelics = 2 + (favor >= 2 ? 1 : 0);
-      for (let i = 0; i < nRelics; i++) { const r = this.rollRelic('c', taken); taken.add(r); items.push({ type: 'relic', item: r }); }
+      for (let i = 0; i < 2; i++) { const r = this.rollRelic('c', taken); taken.add(r); items.push({ type: 'relic', item: r }); }
       items.push({ type: s % 2 ? 'boon' : 'forge' }); // one build item per shop: epic boon on odd strata, forge on even
       items.push({ type: 'potion' });
       items.forEach((it, i) => {
@@ -352,7 +350,7 @@
     return props;
   };
 
-  // A forge is 60 + 15s; everything else scales 12% per stratum. Favor (-10% per rank), the discount stat and the Pact 7 markup (x1.4) apply to all; rounded to 5, minimum 5.
+  // A forge is 60 + 15s; everything else scales 12% per stratum. Favor (-4% per rank), the discount stat and the Pact 7 markup (x1.4) apply to all; rounded to 5, minimum 5.
   W.priceOf = function (it) {
     const s = this.stratum;
     let base;
@@ -363,7 +361,7 @@
       favor = Math.max(favor, (p.meta.up && p.meta.up[ED.UPGRADE_IDX.favor]) || 0);
       discount = Math.max(discount, p.stats.discount || 0);
     }
-    base *= (1 - 0.1 * favor) * (1 - discount) * (this.pact >= 7 ? 1.4 : 1);
+    base *= (1 - ED.UPGRADES[ED.UPGRADE_IDX.favor].discount * favor) * (1 - discount) * (this.pact >= 7 ? 1.4 : 1);
     return Math.max(5, Math.round(base / 5) * 5);
   };
 
