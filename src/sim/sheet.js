@@ -122,7 +122,10 @@
       if (bareNum(ph)) ph = withNoun(Z, j0 + (ph0 ? d : 0), ph, same);
       out.push(wordKey(ph.join(' ')));
     }
-    if (b.route && rank + 1 === 3) { const rn = ED.cardParts(id, 3, st).riderName; if (rn) out.push('unlocks ' + rn); }
+    if (b.route && (rank + 1 === 2 || rank + 1 === 3)) { // the rider a route card gains at rank 2 (rider2) or 3 (rider, or the transform's name)
+      const P = ED.cardParts(id, 3, st), nm = rank + 1 === 2 ? P.rider2Name : P.form ? P.form.name : P.riderName;
+      if (nm) out.push('unlocks ' + nm);
+    }
     return out.join(' · ');
   };
 
@@ -282,11 +285,16 @@
     if (q.per === 'zone') return finish(Object.assign(o, { kind: 'zone', raw: 0, hit: 0, avg: 0, pre: 0, here: 0, total: 0, oneFoe: 0, kc: 0 }), R);
     const sec = q.per === 'sec', always = q.crit === true, kc = always ? 1 : q.noCrit || sec ? 0 : c;
     let raw = q.dmg || 0, oneFoe = q.oneFoe;
-    // Cast-time factors skillNums leaves out (the casts apply them): Shield Storm throws two shields at twinShield each, both reach a foe at REF; Comet's impact lands at 1 + comet.
-    if (skillId === 'shieldthrow' && st.twinShield > 0 && (q.id === 'strike' || q.id === 'return')) { raw *= st.twinShield; oneFoe = 2; }
+    // Cast-time factors skillNums leaves out (the casts apply them): Shield Storm throws two shields (Aegis Tempest three) at twinShield each, all reach a foe at REF; Comet's impact lands at 1 + comet.
+    if (skillId === 'shieldthrow' && (st.twinShield > 0 || st.tempest > 0) && (q.id === 'strike' || q.id === 'return')) { raw *= st.twinShield > 0 ? st.twinShield : 1; oneFoe = st.tempest > 0 ? Math.round(st.tempest) : 2; }
     else if (skillId === 'meteor' && q.id === 'impact' && st.comet > 0) raw *= 1 + st.comet;
     const hit = raw * M * (sec ? 0.5 : 1);
-    if (q.fan) { const offs = []; for (let i = 0; i < q.n; i++) offs.push(q.n > 1 ? (i / (q.n - 1) - 0.5) * q.fan : 0); oneFoe = fanHits(offs, q.pr || 5); o.fanN = q.n; }
+    if (q.fan) { // a fan spreads its arrows over fan radians (a ring: evenly round the circle); a later wave (q.waves) repeats the fan
+      const offs = [];
+      for (let i = 0; i < q.n; i++) offs.push(q.ring ? i / q.n * q.fan : q.n > 1 ? (i / (q.n - 1) - 0.5) * q.fan : 0);
+      oneFoe = fanHits(offs, q.pr || 5) * (q.waves || 1); o.fanN = q.n; o.waves = q.waves || 1;
+    }
+    if (q.ref) { let hits = 0; for (let k = 0; k < q.n; k++) if (q.ref * (q.n - 1 - k) / q.n <= q.r + Sh.REF.r) hits++; oneFoe = hits; } // Starfall: the impacts walk from the hero to a target q.ref px away; a foe there is in reach of some of them
     if (q.id === 'ambush' && skillId === 'vanish') oneFoe = wpn.oneFoe; // each of the weapon's hits carries the Ambush value
     if (q.perMinion) { // one hit per minion: the minions you have now (all of them when none), or the ones this cast raises
       oneFoe = q.perMinion === 'cast' ? St.skillNums('legion', st).p.minion.n : ctx.minions > 0 ? Math.min(ctx.minions, st.maxMinions || 3) : st.maxMinions || 3;
@@ -328,7 +336,7 @@
       if (!q.on) continue;
       const m = id === 'charge' && q.id === 'bash' ? bashPart(q, st, R) : partModel(q, id, st, ctx, wpn, R);
       parts.push(m);
-      if (m.kind !== 'zone') { perCast += m._r.total; perCastAll += m.fanN ? m._r.avg * (1 + m.selfVuln) * m.aff * m.fanN : m._r.total; }
+      if (m.kind !== 'zone') { perCast += m._r.total; perCastAll += m.fanN ? m._r.avg * (1 + m.selfVuln) * m.aff * m.fanN * m.waves : m._r.total; }
     }
     const cd = N.cdEff, heals = [];
     for (const q of N.parts) if (q.on && q.heal) {

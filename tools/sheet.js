@@ -1,4 +1,4 @@
-// Usage: node tools/sheet.js [--cls=all|knight,ranger,...] [--routes] [--weapons] [--rank=1,2,3] [--stratum=3] [--mid] [--json]
+// Usage: node tools/sheet.js [--cls=all|knight,ranger,...] [--routes] [--weapons] [--rank=1,2,3] [--stratum=3] [--pack=4] [--mid] [--json]
 // The analytic sheet (DESIGN-classes 13.1 step 1): hero numbers from ED.Sheet.compute for synthetic builds, in milliseconds, before any bot hours are spent.
 //   (default)   per class: the fresh hero (weapon, skills with their parts, shares of direct damage, effective health)
 //   --routes    per class x route x fork x rank: change in hero damage (one foe | a pack of 4) against the class without the card, for a fresh and a mid build (--mid prints only the mid build),
@@ -10,7 +10,7 @@ const { ED } = require('./sim.js');
 const args = {};
 for (const a of process.argv.slice(2)) { const m = /^--([a-z0-9]+)(?:=(.*))?$/i.exec(a); if (m) args[m[1]] = m[2] === undefined ? '1' : m[2]; }
 const CLS = !args.cls || args.cls === 'all' ? ED.CLASS_IDS : args.cls.split(',');
-const RANKS = (args.rank || '1,2,3').split(',').map(Number), STRATUM = +(args.stratum || 3), PACK = 4;
+const RANKS = (args.rank || '1,2,3').split(',').map(Number), STRATUM = +(args.stratum || 3), PACK = +(args.pack || 4);
 const C = ED.CONST, St = ED.Stats;
 const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
 const GATE2 = { knight: ['kindle', 'frostbite'], ranger: ['kindle', 'frostbite'], pyro: ['kindle', 'staticcharge'], shade: ['kindle', 'frostbite'], cleric: ['consecrate', 'frostbite'], necro: ['doommark', 'envenom'] };
@@ -39,7 +39,8 @@ function directDamage(m, n) {
     if (q.kind === 'zone') continue;
     const key = k.id + '.' + q.id;
     let mul = q.r > 0 || SWEEP.has(key) ? n : 1;
-    if (key === 'volley.arrow') mul = Math.min(n, q.fanN * 2) / Math.max(1, q.oneFoe);
+    if (key === 'volley.arrow' || key === 'volley.wave') mul = Math.min(n, q.fanN * 2) * (q.waves || 1) / Math.max(1, q.oneFoe);
+    if (key === 'volley.burst') { sum += q.here * n * Math.min(2, n - 1) / k._cd; continue; } // a marked foe's burst reaches 2 other foes of the pack, one burst per foe of the pack
     if (key === 'shieldthrow.strike') mul = Math.min(n, 4 + 2);
     if (q.kind === 'minion') mul = 1;
     if (key === 'vanish.ambush') mul = (m.weapon.kind === 'melee' ? n : Math.min(n, m.weapon.n)) / Math.max(1, q.oneFoe);
@@ -57,6 +58,10 @@ function defence(p, m) {
   if (st.braceDR) {
     const N = St.skillNums('charge', st), up = Math.min(1, st.brace / Math.max(C.BRACE_CD, N.cdEff)), dr = Math.min(0.4, st.braceDR);
     keep *= 1 - dr * up; out.note.push(`Brace -${Math.round(dr * 100)}% x ${Math.round(up * 100)}% uptime`);
+  }
+  if (st.phalanx > 0) { // Iron Phalanx: the War Banner lasts bannerDur of every Charge cooldown; fighting inside it 60% of the time, Brace-strength damage reduction and foes that deal bannerWeak less
+    const N = St.skillNums('charge', st), up = 0.6 * Math.min(1, N.p.banner.dur / Math.max(N.p.banner.dur, N.cdEff)), dr = Math.min(0.4, st.braceDR);
+    keep *= (1 - dr * up) * (1 - st.bannerWeak * up); out.note.push(`War Banner -${Math.round(dr * 100)}% and foes -${Math.round(st.bannerWeak * 100)}% x ${Math.round(up * 100)}% uptime`);
   }
   if (p.cls === 'cleric') {
     const N = St.skillNums('sanctuary', st), z = N.p.zone, up = Math.min(1, z.dur / N.cdEff), dr = Math.min(0.4, 0.15 + st.sanctDR);
