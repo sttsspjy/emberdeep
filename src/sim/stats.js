@@ -16,7 +16,8 @@
     + ' channel chanStep chanCap aftershock lavaPool overheat novaEcho novaPull novaRing mantle mantleBurst twinMeteor meteorites comet cometStun wInfFire searSkill burnCrit heatEngine heatChain'
     + ' momentum momMax execCrit execMom bladeStorm stepStack stackMax assassinate stepTwin afterimage afterPull smokeVuln stealthSpd stealthDur ambushMul nightsEdge ambushCleave veil veilBlind shroud veins exsang rupture bloodbloom'
     + ' waveEvery waveMul waveBig waveStun waveBurst waveHome litany sanctDR sanctStun sanctJudge aura auraDmg judgeDur judgeWeak twinHammer thirdLeg secondFlight verdict verdictJudge wInfHoly smiteBig guardLight smiteJudge smiteBeam beamJumps'
-    + ' hex hexMul wRaise hexSpread hexSelf hexHaste spikeRaise knights knightLife knightStun harvestRaise corpse corpseMul boneLance boneArmor boneCap boneField minionInfuse mInfShadow tollMul abyssMin abyssDoom reapRaise tideMul').split(' ');
+    + ' hex hexMul wRaise hexSpread hexSelf hexHaste spikeRaise knights knightLife knightStun harvestRaise corpse corpseMul boneLance boneArmor boneCap boneField minionInfuse mInfShadow tollMul abyssMin abyssDoom reapRaise tideMul'
+    + ' avalanche avaCrack avaStun phalanx bannerSlow bannerWeak bannerDur tempest vortexMul vortexDur bastion deathMark deathWave thornburst thornRoot starfall thornstorm').split(' ');
 
   const BASE = () => {
     const s = {
@@ -56,9 +57,9 @@
     if (ex.ifNone) for (const k in ex.ifNone) if (!w[k]) w[k] = Object.assign({}, ex.ifNone[k]);
   }
 
-  // Every source of a stat block, in the order the stat block adds them: [{ kind, id, label, mods, n, rank?, card? }]; a source adds mods[key] x n to its key.
+  // Every source of a stat block, in the order the stat block adds them: [{ kind, id, label, mods, n, rank?, card?, x? }]; a source adds mods[key] x n to its key.
   // Order: class, Hearth upgrades, mastery levels, pacts, boons (insertion order), relics, Philosopher's Stone per relic held, reward health, a full Grail. A class card (card: true) carries its totals at `rank`
-  // (n is 1) and compounds slot damage. build: { cls, weapon, boons: {id: n}, relics: [id], meta: { up: [], mastery }, pact, chaliceHp, bonusHp }.
+  // (n is 1) and compounds slot damage. An Ascended boon (kind 'asc') adds its mods like a boon and carries x { key: f }: St.compute multiplies s[key] by 1 + f once every additive source is summed. build: { cls, weapon, boons: {id: n}, relics: [id], meta: { up: [], mastery }, pact, chaliceHp, bonusHp }.
   St.sources = (build) => {
     const cls = ED.CLASSES[build.cls], meta = build.meta || { up: [], mastery: 1 }, out = [];
     out.push({ kind: 'class', id: build.cls, label: cls.name, mods: { hp: cls.hp, armor: cls.armor, crit: cls.crit }, n: 1 });
@@ -74,9 +75,10 @@
     for (const id in boons) {
       const b = ED.BOONS[id], n = boons[id];
       if (!b || !(n > 0)) continue;
+      if (b.asc) { out.push({ kind: 'asc', id, label: b.name, mods: b.mods, n: 1, x: b.x }); continue; }
       if (!b.route) { out.push({ kind: 'boon', id, label: b.name + (n > 1 ? ' ×' + n : ''), mods: b.mods, n }); continue; }
       if (b.cls !== build.cls) continue;
-      out.push({ kind: 'card', id, label: b.name + (n > 1 ? ' ×' + n : ''), mods: ED.cardTotals(b, n), n: 1, rank: n, card: true }); // card total per rank: mods + up x (rank - 1) + r3
+      out.push({ kind: 'card', id, label: ED.cardName(id, n) + (n > 1 ? ' ×' + n : ''), mods: ED.cardTotals(b, n), n: 1, rank: n, card: true }); // card total per rank: mods + up x (rank - 1) + r2 + r3
     }
     const relics = build.relics || [];
     for (const id of relics) if (ED.RELICS[id]) out.push({ kind: 'relic', id, label: ED.RELICS[id].name, mods: ED.RELICS[id].mods, n: 1 });
@@ -87,15 +89,17 @@
     return out;
   };
 
-  // The contributions to stat `key` of every source: [{ kind, id, label, v, rank? }], preceded by a Base row (v 1) for the multiplicative stats. Slot damage (s1Dmg, s2Dmg) lists each card's factor part; the stat compounds them.
+  // The contributions to stat `key` of every source: [{ kind, id, label, v, rank?, mul? }], preceded by a Base row (v 1) for the multiplicative stats. Slot damage (s1Dmg, s2Dmg) lists each card's factor part; the stat compounds them.
+  // Additive rows come first; an Ascended multiplier row (mul: true) has v = f and multiplies the sum of the rows before it by 1 + f.
   const BASE_ONE = { dmg: 1, atk: 1, spd: 1, hpMul: 1 };
   St.breakdown = (build, key) => {
-    const rows = [];
+    const rows = [], src = St.sources(build);
     if (BASE_ONE[key]) rows.push({ kind: 'base', id: 'base', label: 'Base', v: BASE_ONE[key] });
-    for (const r of St.sources(build)) {
+    for (const r of src) {
       const m = r.mods[key];
       if (m) rows.push({ kind: r.kind, id: r.id, label: r.label, v: m * r.n, rank: r.rank });
     }
+    for (const r of src) if (r.x && r.x[key]) rows.push({ kind: r.kind, id: r.id, label: r.label, v: r.x[key], mul: true });
     return rows;
   };
 
@@ -112,9 +116,9 @@
     const base = ED.WEAPONS[build.weapon];
     const s = BASE();
     let m1 = 1, m2 = 1, fork = null; // slot damage compounds card by card (each card's text is its exact factor)
-    const extras = [];
+    const extras = [], asc = [];
     for (const r of St.sources(build)) {
-      if (!r.card) { for (const k in r.mods) s[k] = (s[k] || 0) + r.mods[k] * r.n; continue; }
+      if (!r.card) { for (const k in r.mods) s[k] = (s[k] || 0) + r.mods[k] * r.n; if (r.x) asc.push(r.x); continue; }
       const tot = r.mods;
       for (const k in tot) {
         if (k === 's1Dmg') m1 *= 1 + tot[k]; else if (k === 's2Dmg') m2 *= 1 + tot[k]; else s[k] = (s[k] || 0) + tot[k];
@@ -123,6 +127,7 @@
       if (b.weapon) { if (b.weapon.kind && !fork) fork = r.id; if (b.weapon.extra) extras.push(b.weapon.extra); }
     }
     s.s1Dmg = m1 - 1; s.s2Dmg = m2 - 1;
+    for (const x of asc) for (const k in x) s[k] = (s[k] || 0) * (1 + x[k]); // Ascended bucket: after every additive source, before the derived values
 
     const out = s;
     out.power = cls.power; out.element = cls.element || null; // Class Power scales every non-attack proc (ED.procDmg)
@@ -205,15 +210,20 @@
       q.r = d.rOf ? out.p[d.rOf].r * d.rMul : d.r ? d.r * A * (1 + sA) * (d.rMul || 1) : 0;
       if (d.mulKey) q.mulv = st[d.mulKey];
       if (d.durKey) q.dur = (d.dur || 0) + st[d.durKey]; else if (d.dur !== undefined) q.dur = d.dur + (d.durFix ? 0 : sU); // durFix: a fixed length, no slot duration
+      if (d.durMulKey && st[d.durMulKey] > 0 && q.dur !== undefined) q.dur *= st[d.durMulKey]; // durMulKey: the stat is a length factor (Storm of Thorns)
+      if (d.durCd && st[d.durCd] && q.dur !== undefined) q.dur = cdEff; // durCd: lasts until the skill is cast again (Bastion)
       if (d.capCd && q.dur !== undefined) q.dur = Math.min(q.dur, d.capCd * cdEff);
-      if (d.n !== undefined) q.n = d.n + sN;
+      if (d.n !== undefined) q.n = d.n + (d.nFix ? 0 : sN); // nFix: a count the slot's count does not change
+      if (d.nOf) q.n = out.p[d.nOf].n; // the count of another part (Death Mark's later waves)
+      if (d.ringKey && st[d.ringKey] > 0) { q.n = st[d.ringKey]; q.fan = U.TAU; q.ring = true; } // ringKey: the stat is the arrow count of a full ring (Thornburst)
+      if (d.stunKey) q.stun = st[d.stunKey];
       if (d.per === 'tick') q.count = Math.round(q.dur / d.every);
       else if (d.per === 'sec') q.count = Math.ceil(q.dur / 0.5 - 1e-9);
       // sheet fields: raw = dmg before the hero multiplier; selfVuln = the vulnerability the part sets before its own hit; oneFoe = hits on one foe per cast (undefined: a fan or a per-minion count the sheet resolves)
       q.raw = dmg; q.noCrit = !!d.noCrit;
       const sv = d.selfVuln;
       q.selfVuln = !sv ? 0 : typeof sv === 'number' ? sv : (!sv.if || st[sv.if]) ? sv.v : 0;
-      if (d.oneEvery) q.oneFoe = Math.floor((q.dur || 0) / d.every + 1e-9);
+      if (d.oneEvery) { q.oneFoe = Math.floor((q.dur || 0) / d.every + 1e-9); if (d.oneMul) for (const k in d.oneMul) if (st[k]) q.oneFoe *= d.oneMul[k]; }
       else if (d.oneFoe !== undefined) { q.oneFoe = d.oneFoe; if (d.oneMul) for (const k in d.oneMul) if (st[k]) q.oneFoe *= d.oneMul[k]; }
       else if (d.perMinion) q.oneFoe = undefined; // one hit per minion: the sheet counts the minions
       else if (d.per === 'tick' || d.per === 'sec') q.oneFoe = q.count;

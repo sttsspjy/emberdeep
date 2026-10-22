@@ -1,4 +1,4 @@
-// Usage: node tools/sheet.js [--cls=all|knight,ranger,...] [--routes] [--weapons] [--rank=1,2,3] [--stratum=3] [--mid] [--json]
+// Usage: node tools/sheet.js [--cls=all|knight,ranger,...] [--routes] [--weapons] [--rank=1,2,3] [--stratum=3] [--pack=4] [--surround] [--mid] [--json]
 // The analytic sheet (DESIGN-classes 13.1 step 1): hero numbers from ED.Sheet.compute for synthetic builds, in milliseconds, before any bot hours are spent.
 //   (default)   per class: the fresh hero (weapon, skills with their parts, shares of direct damage, effective health)
 //   --routes    per class x route x fork x rank: change in hero damage (one foe | a pack of 4) against the class without the card, for a fresh and a mid build (--mid prints only the mid build),
@@ -10,8 +10,10 @@ const { ED } = require('./sim.js');
 const args = {};
 for (const a of process.argv.slice(2)) { const m = /^--([a-z0-9]+)(?:=(.*))?$/i.exec(a); if (m) args[m[1]] = m[2] === undefined ? '1' : m[2]; }
 const CLS = !args.cls || args.cls === 'all' ? ED.CLASS_IDS : args.cls.split(',');
-const RANKS = (args.rank || '1,2,3').split(',').map(Number), STRATUM = +(args.stratum || 3), PACK = 4;
-const C = ED.CONST, St = ED.Stats;
+const RANKS = (args.rank || '1,2,3').split(',').map(Number), STRATUM = +(args.stratum || 3);
+const St = ED.Stats;
+const M = require('./model.js')(ED, { pack: +(args.pack || 4), surround: !!args.surround }); // hero damage, defence and conditional factor live in the shared model (tools/pick.js reads the same one)
+const { packWeapon, directDamage, heroDamage, defence, condFactor, COND_NOTE } = M, PACK = M.pack;
 const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
 const GATE2 = { knight: ['kindle', 'frostbite'], ranger: ['kindle', 'frostbite'], pyro: ['kindle', 'staticcharge'], shade: ['kindle', 'frostbite'], cleric: ['consecrate', 'frostbite'], necro: ['doommark', 'envenom'] };
 const MID = (cls) => Object.assign({}, ...GATE2[cls].map(id => ({ [id]: 1 })), { edge: 2, quick: 2, focus: 1, stalwart: 1 });
@@ -22,104 +24,6 @@ function hero(cls, wi, boons) {
   return { pid: 'p', name: 'T', cls, weapon: b.weapon, boons: b.boons, relics: b.relics, meta: b.meta, stats, hp: stats.maxHp, maxHp: stats.maxHp, shield: 0, picks: 0, slot: 0 };
 }
 const model = (p) => ED.Sheet.compute(p, ctx(), { raw: true });
-
-// ---- hero damage on one foe and in a pack ----
-const SWEEP = new Set(['charge.impact', 'charge.shock', 'step.slash', 'judgment.leg', 'shieldthrow.return', 'vanish.ambush']);
-function packWeapon(m, n) {
-  const w = m.weapon, st = null; void st;
-  const hitsBase = w.kind === 'melee' ? n : Math.min(n, (w.n || 1) * (1 + (w.pierce || 0)));
-  let sum = w._avg * hitsBase;
-  for (const e of w._extras) sum += e.perAttack * (e.label === 'Twin Fang' ? hitsBase / (w.oneFoe || 1) : n);
-  return sum * w._aps;
-}
-function directDamage(m, n) {
-  if (n === 1) return m.weapon.dps + m.skills.reduce((s, k) => s + k.dpsCd, 0);
-  let sum = packWeapon(m, n);
-  for (const k of m.skills) for (const q of k.parts) {
-    if (q.kind === 'zone') continue;
-    const key = k.id + '.' + q.id;
-    let mul = q.r > 0 || SWEEP.has(key) ? n : 1;
-    if (key === 'volley.arrow') mul = Math.min(n, q.fanN * 2) / Math.max(1, q.oneFoe);
-    if (key === 'shieldthrow.strike') mul = Math.min(n, 4 + 2);
-    if (q.kind === 'minion') mul = 1;
-    if (key === 'vanish.ambush') mul = (m.weapon.kind === 'melee' ? n : Math.min(n, m.weapon.n)) / Math.max(1, q.oneFoe);
-    sum += q._r.total * mul / k._cd;
-  }
-  return sum;
-}
-const statusDamage = (m) => m.mult.status.reduce((s, x) => s + (x.est && x.est.dps || 0), 0);
-const heroDamage = (m, n, k) => directDamage(m, n) * (k || 1) + statusDamage(m); // k: the conditional-damage factor of the build (condFactor); statuses are raw damage
-
-// ---- defence: effective health with the uptime of a guard ----
-function defence(p, m) {
-  const st = p.stats, out = { ehp: m.def.ehp, note: [] };
-  let keep = 1;
-  if (st.braceDR) {
-    const N = St.skillNums('charge', st), up = Math.min(1, st.brace / Math.max(C.BRACE_CD, N.cdEff)), dr = Math.min(0.4, st.braceDR);
-    keep *= 1 - dr * up; out.note.push(`Brace -${Math.round(dr * 100)}% x ${Math.round(up * 100)}% uptime`);
-  }
-  if (p.cls === 'cleric') {
-    const N = St.skillNums('sanctuary', st), z = N.p.zone, up = Math.min(1, z.dur / N.cdEff), dr = Math.min(0.4, 0.15 + st.sanctDR);
-    keep *= 1 - dr * up; out.note.push(`Sanctuary -${Math.round(dr * 100)}% x ${Math.round(up * 100)}% uptime`);
-  }
-  out.ehp = m.def.ehp / keep;
-  // shield income (percent of max health per second, before the window caps)
-  let inc = 0;
-  const cd1 = St.skillNums(ED.CLASSES[p.cls].skill, st).cdEff, cd2 = St.skillNums(ED.CLASSES[p.cls].skill2, st).cdEff;
-  if (p.cls === 'knight') { const n = St.skillNums('shieldthrow', st).p.strike.n; inc += Math.min(C.CATCH_MAX, C.CATCH_PER * n) / Math.max(C.KWARD_CD, cd2); }
-  if (st.rally) inc += st.rally / Math.max(8, cd1);
-  if (st.mantle) inc += st.mantle / Math.max(10, cd1);
-  if (st.veil) inc += st.veil / Math.max(12, cd2);
-  if (st.boneArmor) inc += Math.min(st.boneCap, st.boneArmor * 3) / Math.max(12, cd2);
-  out.shield = Math.min(inc, C.SHIELD_WIN_CLASS / C.SHIELD_WIN_T);
-  // trash stun uptime: each source stuns the foe for dur, then its stun cooldown (dur + STUN_DR) must pass
-  let stun = 0;
-  const src = [];
-  if (p.cls === 'knight') { const q = St.skillNums('charge', st).p.impact; src.push([q.stun + st.chargeStun, cd1]); src.push([St.skillNums('shieldthrow', st).p.strike.stun, cd2]); }
-  if (st.cShock && st.cStun) src.push([st.cStun, (3 + st.cleaveN) * m.weapon.interval]);
-  if (st.sanctStun) src.push([st.sanctStun, cd1]);
-  if (st.waveStun && m.weapon.fork) src.push([st.waveStun, 3 * m.weapon.interval]);
-  for (const [d, cd] of src) stun += Math.min(1, d / Math.max(cd, d + C.STUN_DR));
-  out.stun = Math.min(1, stun);
-  return out;
-}
-
-// ---- conditional damage: the ED.COND_DMG rows a build owns count at an assumed uptime (the bonus is additive with the Damage stat) ----
-const COND_NOTE = 'conditional damage at assumed uptimes: execute 30% of the time; burning, bleeding, chilled, envenomed, doomed 60-90% when the build applies it; stunned = the stun uptime; Brand = the ailments the build keeps up (at most 4); unknown rows 50%';
-function ailmentsKept(st, d) {
-  let n = 0;
-  for (const id of ED.ELEMENT_IDS) if (st[ED.ELEMENTS[id].inf] > 0) n += 0.7; else if (st.element === id) n += 0.5;
-  if (st.bleed > 0 || st.bleedAll > 0 || st.masterstroke) n += 0.7;
-  return Math.min(4, n + (d ? d.stun : 0) + (st.seal > 0 ? 1 : 0));
-}
-function uptime(id, st, m, d) {
-  const has = (k) => st[k] > 0;
-  switch (id) {
-    case 'execute': return 0.3;
-    case 'searing': return has('fireInfuse') || st.element === 'fire' ? 0.8 : 0;
-    case 'lacerate': return has('bleedAll') ? 0.9 : has('bleed') || st.masterstroke ? Math.min(0.9, 1 - Math.pow(1 - st.crit, m.weapon.aps * 2)) : 0;
-    case 'malice': return has('shadowInfuse') || st.element === 'shadow' ? 0.6 : 0;
-    case 'brittle': return has('iceInfuse') ? 0.6 : 0;
-    case 'fester': return has('poisonInfuse') ? 0.6 : 0;
-    case 'opportunist': return Math.min(1, d.stun + (has('iceInfuse') ? 0.3 : 0));
-    case 'knell': return 0.5 * Math.min(st.knell, 3);
-    case 'brand': return ailmentsKept(st, d);
-    case 'idol': return 1;
-    case 'banner': return 1;
-    default: return 0.5;
-  }
-}
-// The factor on hero hit damage: (Damage + sum of the owned conditional bonuses x uptime) / Damage.
-function condFactor(p, m, d) {
-  const st = p.stats; let sum = 0;
-  for (const r of ED.COND_DMG) {
-    if (r.key === 'classElMul') continue; // already in the class-skill hits of the sheet
-    if (r.key !== null ? !(st[r.key] > 0) : !(r.own && r.own(st))) continue;
-    const id = r.key || r.id, v = id === 'idol' ? 0.1 : r.value ? r.value(st) : st[r.key];
-    sum += v * uptime(id, st, m, d);
-  }
-  return (Math.max(0.1, st.dmg) + sum) / Math.max(0.1, st.dmg);
-}
 
 const pct = (v, d) => (v * 100).toFixed(d === undefined ? 0 : d) + '%';
 const f1 = (v) => (v >= 100 ? v.toFixed(0) : v.toFixed(1));

@@ -95,7 +95,7 @@ for (const key in ED.SKILL_SHEET) { const [sid, pid] = key.split('.'); ok(ED.SKI
     let bare = 0;
     for (const id of ED.BOON_IDS) { const b = ED.BOONS[id]; for (let r = 1; r < (b.max || 1); r++) for (const piece of S.nextText(id, r, st).split(' · ')) if (!/[A-Za-z]{3,}/.test(piece.replace(/\d+(?:\.\d+)?\s?s\b/g, ''))) { bare++; console.log(`FAIL bare next-rank piece ${id} rank ${r}: "${piece}"`); } }
     ok(bare === 0, 'Next rank lines are never bare numbers');
-    ok(S.nextText('k_s1_a', 1, st) === 'deals +20% · 50% of its impact' && S.nextText('k_s2_b', 1, st) === 'orbits you for 4 s · 20% of a strike', 'Juggernaut and Shield Orbit name their numbers: ' + S.nextText('k_s1_a', 1, st) + ' / ' + S.nextText('k_s2_b', 1, st));
+    ok(S.nextText('k_s1_a', 1, st) === 'deals +20% · 50% of its impact · unlocks Shield Bash' && S.nextText('k_s2_b', 1, st) === 'orbits you for 4 s · 20% of a strike · unlocks Return to Sender' && S.nextText('k_s1_a', 2, st).indexOf('unlocks Avalanche') >= 0 && S.nextText('r_s2_b', 2, st).indexOf('unlocks Storm of Thorns') >= 0, 'Juggernaut and Shield Orbit name their numbers: ' + S.nextText('k_s1_a', 1, st) + ' / ' + S.nextText('k_s2_b', 1, st));
     ok(S.text('r_el_b', 2, st).indexOf('within 120.') >= 0 && S.text('r_el_b', 3, st).indexOf('within 140') >= 0 && S.nextText('r_el_b', 1, st) === 'foes within 120', 'Contagion shows its total radius: ' + S.nextText('r_el_b', 1, st));
     ok(S.nextText('p_s2_b', 1, st) === 'impact (+40%)', 'Comet names what the +40% belongs to: ' + S.nextText('p_s2_b', 1, st));
   }
@@ -108,6 +108,11 @@ for (const key in ED.SKILL_SHEET) { const [sid, pid] = key.split('.'); ok(ED.SKI
   ok(modelOf('knight', { masterstroke: 1 }, 0).build.statuses.some(x => x.id === 'bleed'), 'Masterstroke lists the Bleed rule');
   const fk = modelOf('knight', { k_atk: 1, k_atk_h: 1 }, 0).build.route.nodes.find(n => n.route === 'attack').forks;
   ok(fk.find(x => x.id === 'k_atk_h').closed === false && fk.find(x => x.id === 'k_atk_s').closed === true && fk.find(x => x.id === 'k_atk_s').when === '', 'the sibling of the taken fork is closed');
+  { // a fork at rank 3 carries its transform's name on the sheet (the route node and the boon list)
+    const m3 = modelOf('knight', { k_s1: 1, k_s1_a: 3 }, 0), m2 = modelOf('knight', { k_s1: 1, k_s1_a: 2 }, 0), fn = (m) => m.build.route.nodes.find(n => n.route === 'skill1').forks.find(f => f.id === 'k_s1_a');
+    ok(fn(m3).name === 'Avalanche' && fn(m2).name === 'Juggernaut' && fn(m3).text.indexOf('Avalanche:') >= 0 && fn(m2).text.indexOf('Avalanche') < 0, 'the route node names the transform from rank 3: ' + fn(m3).name + ' / ' + fn(m2).name);
+    ok([].concat(...m3.build.groups.map(g => g.items)).some(r => r.id === 'k_s1_a' && r.name === 'Avalanche'), 'the boon list names the transform too');
+  }
   const open = modelOf('knight', { k_atk: 1 }, 0).build.route.nodes.find(n => n.route === 'attack').forks;
   ok(open.every(x => !x.closed && x.when), 'before a fork both are open and say when they are offered');
   ok(ED.Sheet.shieldWindow({ shwC: 1.5, shwA: 2.5 }, 0).a === 2.5 && ED.Sheet.shieldWindow({ shwC: 1.5, shwA: 2.5 }, 0).c === 1.5, 'a mirror hero carries the shield window in shwC and shwA');
@@ -169,8 +174,8 @@ let pend = 0;
 const pending = (msg) => { pend++; if (verbose) console.log('pending ' + msg); };
 // [class, stat switches, slot, dummy distance (default REF.d)]
 const CASES = [
-  ['knight', {}, 0], ['knight', {}, 1], ['knight', { jugShock: 0.4, s1Range: 90 }, 0], ['knight', { orbit: 3, orbitMul: 0.15 }, 1], ['knight', { twinShield: 0.7 }, 1],
-  ['ranger', {}, 0], ['ranger', {}, 1], ['ranger', { rainHail: 1 }, 1], ['ranger', { skyfall: 1 }, 1], ['ranger', { skyTwin: 0.5, skyfall: 1 }, 1], ['ranger', { shower: 0.4, rainHail: 1 }, 1],
+  ['knight', {}, 0], ['knight', {}, 1], ['knight', { jugShock: 0.4, s1Range: 90 }, 0], ['knight', { avalanche: 2, avaCrack: 0.5, avaStun: 0.8, jugShock: 0.4, s1Range: 90 }, 0], ['knight', { tempest: 3, twinShield: 0.7, vortexMul: 0.25, vortexDur: 2.5 }, 1], ['knight', { orbit: 3, orbitMul: 0.15 }, 1], ['knight', { twinShield: 0.7 }, 1],
+  ['ranger', {}, 0], ['ranger', {}, 1], ['ranger', { deathMark: 0.5, deathWave: 0.6 }, 0], ['ranger', { thornburst: 20 }, 0], ['ranger', { skyfall: 1, starfall: 0.6 }, 1, 160], ['ranger', { thornstorm: 2 }, 1], ['ranger', { rainHail: 1 }, 1], ['ranger', { skyfall: 1 }, 1], ['ranger', { skyTwin: 0.5, skyfall: 1 }, 1], ['ranger', { shower: 0.4, rainHail: 1 }, 1],
   ['pyro', {}, 0], ['pyro', {}, 1], ['pyro', { novaRing: 1 }, 0], ['pyro', { twinMeteor: 0.6 }, 1, 0, true], ['pyro', { comet: 0.3 }, 1],
   ['shade', {}, 0], ['shade', { stepTwin: 0.5 }, 0], ['shade', {}, 1, 28],
   ['cleric', {}, 0], ['cleric', {}, 1], ['cleric', { twinHammer: 0.75 }, 1],
@@ -194,6 +199,7 @@ for (const [cls, stat, slot, dist, skipImpact] of CASES) {
     const per = got.sum / got.n;
     rel(per, q.here, 0.015, `${tag} ${q.id} per hit`);
     if (q.kind === 'minion') continue; // minions walk to the foe: the count is reported, not compared
+    if (stat.tempest && q.id === 'return') continue; // which of the vortex shields cross the foe on the way home depends on where each spun: the damage per hit is compared, not the count
     ok(got.n === q.oneFoe, `${tag} ${q.id}: ${got.n} ${q.fanN ? 'arrows reached' : 'hits on'} the foe, modelled ${q.oneFoe}`);
     if (q.statusAdd) { const s = by['status:' + q.statusAdd.el]; ok(s && Math.abs(s.sum - q.statusAdd.here * q.oneFoe) <= q.statusAdd.here * q.oneFoe * 0.03 + 0.2, `${tag} ${q.id}: status add ${s ? s.sum.toFixed(1) : 0} vs ${(q.statusAdd.here * q.oneFoe).toFixed(1)}`); }
   }

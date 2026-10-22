@@ -25,8 +25,9 @@
   const pips = (rank, max, col) => { let s = ''; for (let i = 1; i <= max; i++) s += `<i class="${i <= rank ? 'on' : ''}"${i <= rank ? ` style="background:${col}"` : ''}></i>`; return s; };
   const col = (name, body, cls) => `<section class="plate sh-col${cls ? ' ' + cls : ''}" data-col="${name}"><div class="sh-in">${body}</div></section>`;
   const head = (title, small) => `<h3 class="plate-h">${title}${small ? ` <small>${small}</small>` : ''}</h3>`;
-  // Source chips of one stat: [{ label, kind, v }] -> "Base 100%", "Might 3 +12%"; a negative contribution is the only red on the sheet.
+  // Source chips of one stat: [{ label, kind, v, mul? }] -> "Base 100%", "Might 3 +12%", "Honed Edge ×1.15" (an Ascended multiplier); a negative contribution is the only red on the sheet.
   const chips = (rows, key) => rows.map(r => (r.kind === 'base' ? `<span>${esc(r.label)} <b>100%</b></span>`
+    : r.mul ? `<span class="asc">${esc(r.label)} <b>${Sh.fmt(key, 1 + r.v, 'x')}</b></span>`
     : `<span class="${r.v < 0 ? 'neg' : ''}${r.kind === 'temp' ? ' tmp' : ''}">${esc(r.label)} <b>${sgn(r.v, Sh.fmt(key, Math.abs(r.v)))}</b></span>`)).join('');
   // src: the chip row as a string, or [{ lab, html }] for several labelled rows.
   const srcRows = (src) => (Array.isArray(src) ? src.filter(g => g.html).map(g => `<div class="sh-src"><span class="sh-sk">${g.lab}</span>${g.html}</div>`).join('') : src ? `<div class="sh-src">${src}</div>` : '');
@@ -60,7 +61,7 @@
     $('sh-name').textContent = h.name; $('sh-name').style.color = color;
     $('sh-class').textContent = ' · ' + h.clsName;
     const rt = m.build.route;
-    $('sh-sub').textContent = m.weapon.name + (rt.route ? ' · ' + ED.routeLabel(h.cls, rt.route) + ' route' + (rt.fork ? ': ' + ED.BOONS[rt.fork].name + (rt.rank > 1 ? ' (rank ' + rt.rank + ')' : '') : '') : ' · no route yet');
+    $('sh-sub').textContent = m.weapon.name + (rt.route ? ' · ' + ED.routeLabel(h.cls, rt.route) + ' route' + (rt.fork ? ': ' + ED.cardName(rt.fork, rt.rank) + (rt.rank > 1 ? ' (rank ' + rt.rank + ')' : '') : '') : ' · no route yet');
     const xpf = U.clamp(h.xp / Math.max(1, h.xpNext), 0, 1);
     $('sh-lv').textContent = 'Lv ' + h.level; $('sh-xpbar').style.width = Math.round(100 * xpf) + '%'; $('sh-xp').textContent = Math.round(100 * xpf) + '%';
     $('sh-hp').textContent = `${h.hp} / ${h.maxHp}`; $('sh-hpbar').style.width = Math.round(100 * U.clamp(h.hp / Math.max(1, h.maxHp), 0, 1)) + '%';
@@ -98,7 +99,7 @@
     }
     return h;
   }
-  const KIND_LABEL = { gate: 'gate', keystone: 'keystone', evolution: 'evolution', duo: 'duo', route: 'route', fork: 'fork' };
+  const KIND_LABEL = { gate: 'gate', keystone: 'keystone', evolution: 'evolution', duo: 'duo', route: 'route', fork: 'fork', ascended: 'ascended' };
   function boonRow(b) {
     const P = b.path && ED.PATHS[b.path] ? ED.PATHS[b.path] : null, color = P ? P.color : '#b9ad9b', lab = KIND_LABEL[b.kind] || '';
     return `<div class="sh-boon sh-f" data-k="b:${b.id}" style="--pc:${color};--rc:${RAR(b.rar).color}"><img class="sh-bi" alt="" src="${ED.Icons.boonUrl(b.id)}"><div class="sh-bm">`
@@ -123,7 +124,7 @@
     left += head('Class route', B.route.route ? esc(ED.routeLabel(m.hero.cls, B.route.route)) : 'choose at level 3') + `<div class="sh-list">${routeBlock(B.route)}</div>`;
     let boons = B.groups.length ? '' : '<div class="sh-empty">No boons yet. The first pick comes from the start offer.</div>';
     for (const g of B.groups) {
-      const P = g.path ? ED.PATHS[g.path] : null, title = g.group === 'duo' ? 'Duo' : g.group === 'route' ? 'Class route' : P ? `${P.name} <small>affinity ${ED.pathAffinity(p.boons || {}, g.path)}</small>` : 'Open <small>any hero, no path</small>';
+      const P = g.path ? ED.PATHS[g.path] : null, title = g.group === 'duo' ? 'Duo' : g.group === 'route' ? 'Class route' : g.group === 'asc' ? 'Ascended <small>multiplies the bonuses you hold</small>' : P ? `${P.name} <small>affinity ${ED.pathAffinity(p.boons || {}, g.path)}</small>` : 'Open <small>any hero, no path</small>';
       boons += `<div class="sh-bg"><div class="sh-gh"${P ? ` style="--pc:${P.color}"` : ''}>${P ? `<img alt="" src="${pathIco(g.path)}">` : ''}${title}</div>${g.items.map(boonRow).join('')}</div>`;
     }
     let status = '';
@@ -198,7 +199,7 @@
     let h = '';
     h += stat('o:dmg', 'Damage', X(M.dmg.total), '', chips(M.dmg.rows, 'dmg'));
     h += stat('o:atk', 'Attack speed', X(M.atk.total), `${w.aps.toFixed(2)} attacks/s`, chips(M.atk.rows, 'atk'));
-    h += stat('o:crit', 'Critical', `${pc(M.crit.total)} · ${X(M.crit.mult)}`, `the average hit counts ${X(M.crit.expected)}`, [{ lab: 'Chance', html: chips(M.crit.rows, 'crit') }, { lab: 'Damage', html: `<span>Base <b>${X(M.crit.mult - M.crit.rowsDmg.reduce((a, r) => a + r.v, 0))}</b></span>` + chips(M.crit.rowsDmg, 'critDmg') }]);
+    h += stat('o:crit', 'Critical', `${pc(M.crit.total)} · ${X(M.crit.mult)}`, `the average hit counts ${X(M.crit.expected)}`, [{ lab: 'Chance', html: chips(M.crit.rows, 'crit') }, { lab: 'Damage', html: `<span>Base <b>${X(M.crit.base)}</b></span>` + chips(M.crit.rowsDmg, 'critDmg') }]);
     h += stat('o:area', 'Area', '+' + pc(M.area.total), `blasts and auras radius ${X(M.area.blast)} · melee arc ${X(M.area.arc)}`, chips(M.area.rows, 'area'));
     h += stat('o:cdr', 'Skill cooldown', M.cdr.eff > 0 ? '−' + pc(M.cdr.eff) : '0%', M.cdr.capped ? `raw ${pc(M.cdr.raw)}: full up to ${pc(M.cdr.soft)}, half above it, at most ${pc(M.cdr.max)}` : '', chips(M.cdr.rows, 'cdr'));
     if (M.projN.total || M.projN.pierce) h += stat('o:proj', 'Projectiles and pierce', `+${M.projN.total} · pierce +${M.projN.pierce}`, '', [{ lab: 'Projectiles', html: chips(M.projN.rows, 'projN') }, { lab: 'Pierce', html: chips(M.projN.rowsPierce, 'pierce') }]);

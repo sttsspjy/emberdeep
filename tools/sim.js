@@ -1,31 +1,32 @@
-// Usage: node tools/sim.js <heroes> <runs> <botSkill 0-1> <meta none|mid|max> [classes|-] [pact] [--pick=random|smart] [--start=random|class|generalist|rotate|<gateId>] [--gates=1|2] [--force=id[@slot],...]
-//   [--route=attack|skill1|skill2|element|random|rotate] [--fork=0|1|random|rotate] [--weapon=0|1|2|rotate] [--mastery=smart|fork] [--aimnoise=<angle rad>,<point px>|0] [--seed0=N] [--explore=minLight] [--strata=N] [--out=rows.json] [--pair=rows.json] [--quiet]   (parallel batches: tools/simpool.js)
+// Usage: node tools/sim.js <heroes> <runs> <botSkill 0-1> <meta none|mid|max> [classes|-] [pact] [--pick=random|smart|legacy] [--start=random|class|generalist|rotate|<gateId>] [--gates=1|2] [--force=id[@slot],...]
+//   [--route=attack|skill1|skill2|element|random|rotate] [--fork=0|1|random|rotate] [--weapon=0|1|2|rotate] [--aimnoise=<angle rad>,<point px>|0] [--seed0=N] [--explore=minLight] [--strata=N] [--out=rows.json] [--pair=rows.json] [--quiet] [--explain]   (parallel batches: tools/simpool.js)
 // Headless simulation harness: loads the game's sim files into this Node context and drives bot heroes through full runs (deterministic per seed: the bot has its own seeded RNG).
 // Bot policy: fight, claim room rewards, use rest sites and shops, then explore unvisited rooms nearest-first while entering the next one
 // (its light cost paid) leaves the lantern at least EXPLORE_MIN_LIGHT full, else head for the boss (the exploration/lantern trade-off).
-// Pick policies: 'random' takes a random card; 'smart' (PICK=smart) follows the build order in smartScore (evolution > keystone > duo > own-path boon > element gate while a slot is free > open General > anything).
+// Pick policies: 'random' takes a random card; 'smart' takes the card of best marginal value (tools/pick.js: damage and effective health over the next three strata from the sheet model, folded mechanics, milestone value of keystone / evolution / duo; start card, forge, rerolls and relics by the same value);
+// 'legacy' is the v3 smart order in smartScore (evolution > keystone > duo > own-path boon > element gate while a slot is free > open General > anything), kept for paired comparison. --explain prints every pick of a single run with its value parts.
 // Skill (0-1) is the share of ticks the bot pays attention (floor hazards, lantern flare) and the chance it reads a Gloom lunge telegraph; the rest of the time it moves on instinct.
 // The summary reports win rate, pacing, hits and time to kill, hero DPS, damage share by source, cooldown reduction, the lantern/Gloom lines and the path lines (see summarize); every mean prints its standard error.
-// --start: how the start offer is picked (default random: uniform over its cards; class: the class element's gate; a gate id or generalist forces that card; rotate: run i takes fire, ice, lightning, poison, holy, shadow, generalist in turn).
+// --start: how the start offer is picked (default: the best gain under --pick=smart, else uniform over its cards; random: always uniform; class: the class element's gate; a gate id or generalist forces that card; rotate: run i takes fire, ice, lightning, poison, holy, shadow, generalist in turn).
 // --gates=1: a hero never takes a second element gate (mono-element arm).
 // --force: gate ids (and generalist) replace the start pick, then are taken whenever offered; other boons and relics are granted at run start (a fork id also grants its route card). id@slot limits an id to one hero.
 // --route / --fork: the class route card and fork (0 = Heavy / Burst / Focus, 1 = Swift / Guard / Spread) a hero takes (default random, seeded per run and hero). rotate cycles them over the runs so every class meets every route, fork and weapon in one batch:
 //   route = floor(i / classes) mod 4, fork = floor(i / (classes x 4)) mod 2, weapon = floor(i / (classes x 4 x 2)) mod 3. --weapon picks the weapon index (default 0).
-// --mastery: smart (default) scores a fork rank-up in the mastery offers like any card (rank 2: 700, rank 3: 760, below evolutions, keystones and duos); fork always takes the fork.
 // Casting follows ED.SKILLS: aim 'dir' throws along the target angle, 'ground' lands on the foe, 'move' runs or blinks through it, 'self' fires around the hero; aim noise shrinks with the bot's skill (angle 0.12 rad, ground point 36 px at skill 0).
 // --out=file.json writes one row per run (seed, class, depth, win, boss time to kill and HP lost per stratum, evolution stratum, main path, gates); --pair=file.json prints the mean difference to such a baseline for the same seeds.
-// meta: none = fresh profile (start relics); mid = half the upgrade ranks, mastery 5, start relics plus the Codex relics costing <= 70 without a boss requirement; max = every rank, mastery 10, every relic. runBot takes opts.relics to override the relic pool.
+// meta: none = fresh profile; mid = half the upgrade ranks, mastery 5; max = every rank, mastery 10. Every relic is always in the pool.
 const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
 const ROOT = path.join(__dirname, '..', 'src') + '/';
-const files = ['util.js', 'data/biomes.js', 'data/enemies.js', 'data/classes.js', 'data/boons.js', 'data/classboons.js', 'data/relics.js', 'data/meta.js', 'save.js',
+const files = ['util.js', 'data/biomes.js', 'data/enemies.js', 'data/classes.js', 'data/boons.js', 'data/classboons.js', 'data/ascended.js', 'data/relics.js', 'data/meta.js', 'save.js',
   'sim/dungeon.js', 'sim/stats.js', 'sim/world.js', 'sim/combat.js', 'sim/build.js', 'sim/skills.js', 'sim/class-knight.js', 'sim/class-ranger.js', 'sim/class-pyro.js', 'sim/class-shade.js', 'sim/class-cleric.js', 'sim/class-necro.js',
   'sim/ai.js', 'sim/bosses.js', 'sim/rooms.js', 'sim/sheet.js'];
 // Main context, not vm.createContext: inside a vm context every global read (Math, Object, ...) goes through the context interceptor and the sim runs ~3x slower.
 for (const f of files) vm.runInThisContext(fs.readFileSync(ROOT + f, 'utf8'), { filename: f });
 const ED = globalThis.ED;
 const U = ED.U, T = ED.CONST.TILE, D = ED.Dungeon;
+const PICK = require('./pick.js')(ED, require('./model.js')(ED)); // card values by marginal gain (--pick=smart)
 
 const EXPLORE_MIN_LIGHT = 0.3; // the bot stops exploring when the next room would leave the lantern below this fraction, and goes for the boss
 const PER_HERO_REWARDS = ['boon', 'forge', 'epic', 'vigor'];
@@ -151,6 +152,15 @@ function botCast(w, p, slot, tgt, d, a, foes, brng, skill) {
   return true;
 }
 
+// Value in [0, 1) of the relic on prop x for hero p (PICK.relicValue), cached on the prop per hero until the hero's stat block or the stratum changes.
+function relicScore(w, p, x) {
+  const c = x.botVal || (x.botVal = {}), e = c[p.pid];
+  if (e && e.st === p.stats && e.s === w.stratum) return e.v;
+  const v = PICK.relicValue(w, p, x.item);
+  c[p.pid] = { st: p.stats, s: w.stratum, v };
+  return v;
+}
+
 // Next prop worth walking to, or null. Per-hero rewards respect p.claimed; shop and rest choices follow the lantern and HP.
 function wantedProp(w, p) {
   const lightFrac = w.lightMax ? w.light / w.lightMax : 1;
@@ -162,7 +172,7 @@ function wantedProp(w, p) {
     switch (x.kind) {
       case 'reward': s = PER_HERO_REWARDS.includes(x.item) ? (p.claimed[x.group] ? 0 : 9) : (x.item === 'oil' && lightFrac > 0.85 ? 3 : 9); break;
       case 'chest': s = 8; break;
-      case 'relic': s = p.claimed[x.group] ? 0 : 7; break;
+      case 'relic': s = p.claimed[x.group] ? 0 : 7 + (w.botSmart ? relicScore(w, p, x) : 0); break;
       case 'campfire': s = !p.claimed[x.group] && hurt ? 8 : 0; break;
       case 'anvil': s = !p.claimed[x.group] && !hurt ? 8 : 0; break;
       case 'fountain': s = 5; break;
@@ -171,7 +181,7 @@ function wantedProp(w, p) {
         if (w.gold < x.price) break;
         if (x.stype === 'oil') s = lightFrac < 0.4 ? 10 : 0;
         else if (x.stype === 'potion') s = p.hp < p.maxHp * 0.7 ? 6 : 0;
-        else s = x.stype === 'relic' ? 6 : 7;
+        else s = x.stype === 'relic' ? 6 + (w.botSmart ? relicScore(w, p, x) : 0) : 7;
         break;
       default: break;
     }
@@ -219,7 +229,7 @@ function gateScore(p, el, stratum, rng) {
   return s + rng.next() * 15;
 }
 
-// Card score for the smart policy: evolution > keystone > duo > boon of an own path (deepest path first) > element gate while a slot is free (not for a Generalist) > open General > class > anything.
+// Card score for the legacy policy: evolution > keystone > duo > boon of an own path (deepest path first) > element gate while a slot is free (not for a Generalist) > open General > class > anything.
 function smartScore(p, id, ctx, rng) {
   const b = ED.BOONS[id];
   if (b.evo) return 1000;
@@ -244,22 +254,23 @@ function wantedStart(p, ctx) {
   return st === 'generalist' ? 'generalist' : ED.BOONS[st] && ED.BOONS[st].gate ? st : null;
 }
 
-// Index of the card to take. Start offer: the requested card, else uniform over the cards. Forge: rank up the boon of the most-invested path (stacked boons first); a forced gate is taken whenever it is offered;
-// class cards follow --route / --fork when they carry such fields.
-function pickIndex(p, spec, policy, rng, ctx) {
+// Index of the card to take, or -1 (smart policy: reroll; call again with noReroll). A forced gate is taken whenever it is offered; class cards follow --route / --fork.
+// Start offer: the requested card, else the best gain (smart, no --start) or uniform over the cards. smart: the card of best marginal gain (tools/pick.js); legacy: the v3 order below (forge: rank up the boon of the most-invested path); random: uniform.
+function pickIndex(p, spec, policy, rng, ctx, noReroll) {
   const offer = p.offer, src = spec && spec.src;
   for (const f of ctx.force) { if (f.slot !== null && f.slot !== p.slot) continue; const i = offer.indexOf(f.id); if (i >= 0) return i; }
   if (src === 'start') {
     const want = wantedStart(p, ctx), i = want ? offer.indexOf(want) : -1;
-    return i >= 0 ? i : Math.floor(rng.next() * offer.length);
+    if (i >= 0) return i;
+    return policy === 'smart' && ctx.startAuto ? PICK.chooseIndex(ctx.w, p, spec, rng, ctx, true) : Math.floor(rng.next() * offer.length);
   }
-  if (src === 'class') { // route card, then the fork of that route; mastery offers take the fork with --mastery=fork, else score every card
+  if (src === 'class') { // route card, then the fork of that route
     const ct = spec.ctier | 0;
     if (ct === 1) { const i = offer.findIndex(id => ED.BOONS[id].route === p.botRoute); if (i >= 0) return i; }
     if (ct === 2) { const i = offer.indexOf(ED.CLASS_CARDS[p.cls][p.botRoute].forks[p.botFork]); if (i >= 0) return i; }
-    if (ct === 3 && ctx.cardMastery === 'fork' && ED.BOONS[offer[0]].route) return 0;
   }
-  if (policy !== 'smart') return Math.floor(rng.next() * offer.length);
+  if (policy === 'smart') return PICK.chooseIndex(ctx.w, p, spec, rng, ctx, noReroll);
+  if (policy !== 'legacy') return Math.floor(rng.next() * offer.length);
   const forge = src === 'forge';
   let best = 0, bs = -1e9;
   offer.forEach((id, i) => {
@@ -316,15 +327,15 @@ function runBot(opts) {
   const brng = U.RNG((opts.seed ^ 0xb07b07) >>> 0), policy = opts.pick || process.env.PICK || 'random';
   AIM[0] = opts.aimNoise ? opts.aimNoise[0] : 0.12; AIM[1] = opts.aimNoise ? opts.aimNoise[1] : 36;
   const forced = (opts.force || []).map(f => { const m = /^([a-z_]+)(?:@(\d+))?$/.exec(f); return m ? { id: m[1], slot: m[2] === undefined ? null : +m[2] } : null; }).filter(Boolean);
-  const ctx = { force: forced.filter(f => ED.BOONS[f.id] && ED.BOONS[f.id].gate), gatesCap: opts.gates || 2, start: opts.start || 'random', cardMastery: opts.cardMastery || 'smart', w: null };
+  const ctx = { force: forced.filter(f => ED.BOONS[f.id] && ED.BOONS[f.id].gate), gatesCap: opts.gates || 2, start: opts.start || 'random', startAuto: !opts.start, explain: !!opts.explain, w: null };
   const players = [];
   for (let i = 0; i < opts.n; i++) {
     const cls = opts.cls[i % opts.cls.length];
     players.push({ pid: 'p' + i, name: 'Bot' + i, slot: i, cls, weapon: ED.CLASSES[cls].weapons[opts.weapon || 0],
-      meta: { up: opts.up || ED.UPGRADES.map(() => 0), mastery: opts.mastery || 1, relics: opts.relics || ED.RELIC_IDS.filter(id => ED.RELICS[id].start) } });
+      meta: { up: opts.up || ED.UPGRADES.map(() => 0), mastery: opts.mastery || 1 } });
   }
   const w = new ED.World({ seed: opts.seed, pact: opts.pact || 0, players, tutorial: opts.tutorial });
-  ctx.w = w;
+  ctx.w = w; w.botSmart = policy === 'smart';
   w.startRun();
   for (const p of w.players.values()) { // route and fork of each hero: the flags, else seeded uniform per run and hero
     const rr = U.RNG((opts.seed ^ 0x5a17 ^ Math.imul(p.slot + 1, 7919)) >>> 0);
@@ -444,7 +455,11 @@ function runBot(opts) {
     for (const p of w.players.values()) {
       const c = ctl[p.pid];
       c.atk -= dt; c.skill -= dt; c.skill2 -= dt; c.dash -= dt; c.goal = null;
-      if (p.offer) { w.pickBoon(p.pid, pickIndex(p, p.offers[0], policy, brng, ctx)); }
+      if (p.offer) {
+        let ix = pickIndex(p, p.offers[0], policy, brng, ctx);
+        if (ix < 0) { w.reroll(p.pid); ix = pickIndex(p, p.offers[0], policy, brng, ctx, true); } // one reroll per offer
+        w.pickBoon(p.pid, ix);
+      }
       if (p.downed || p.dead) continue;
       let mx = 0, my = 0;
       const foes = w.enemies.filter(e => e.hp > 0 && e.spawnT <= 0 && !e.def.gloom);
@@ -573,7 +588,7 @@ function runBot(opts) {
     evoAt: rec.evoAt, aff: ED.PATH_IDS.map(k => ED.pathAffinity(p0.boons, k)).sort((a, b) => b - a),
     bossTry: rec.bossTry, cls: p0.cls, main: ED.PATH_IDS.map(k => [k, ED.pathAffinity(p0.boons, k)]).sort((a, b) => b[1] - a[1])[0][0], heroes: players.length, bare: avg(players.map(p => bareDps(p.cls, p.weapon))), src: rec.src, combatS: rec.combatS, hits: rec.hits, ttk: rec.ttk, ttkElite: rec.ttkElite, htk: rec.htk, htkBare: rec.htkBare, cdr: p0.stats.cdr, cdrAfter: ED.Stats.cdrEff ? ED.Stats.cdrEff(p0.stats.cdr) : p0.stats.cdr,
     endRoom: w.room ? w.room.type : '', evo: p0.stats.evo || null, gates: ED.gatePaths(p0.boons), boonCount: Object.values(p0.boons).reduce((a, b) => a + b, 0), keystones: Object.keys(p0.boons).filter(id => ED.BOONS[id].key).length,
-    gen: ED.isGeneralist(p0.boons), elGates: ED.elementGates(p0.boons), startPath: ED.gatePaths(p0.boons)[0] || null, keyAt: rec.keyAt, duoAt: rec.duoAt, duo: Object.keys(p0.boons).some(id => ED.BOONS[id].duo), duoIds: Object.keys(p0.boons).filter(id => ED.BOONS[id].duo), relicIds: p0.relics.slice(),
+    gen: ED.isGeneralist(p0.boons), elGates: ED.elementGates(p0.boons), startPath: ED.gatePaths(p0.boons)[0] || null, keyAt: rec.keyAt, duoAt: rec.duoAt, duo: Object.keys(p0.boons).some(id => ED.BOONS[id].duo), duoIds: Object.keys(p0.boons).filter(id => ED.BOONS[id].duo), boonIds: Object.keys(p0.boons), relicIds: p0.relics.slice(),
     cnt: rec.cnt, kills0: p0.kills, venom: rec.venom, shield: rec.shield, bossSecs: rec.bossSecs, hpFrac: rec.hpFrac, chainPeak: w.chainPeak, chainHops: w.chainHops, rerolls: p0.rerolls,
     route: ED.classRoute(p0.boons, p0.cls), wi: ED.CLASSES[p0.cls].weapons.indexOf(p0.weapon), parts: rec.parts, projDmgS: rec.projDmgS, upt: rec.upt, peak: rec.peak, clip: Object.assign({}, p0.shieldClip), braceOn: p0.stats.brace > 0, hexOn: p0.stats.hex > 0 };
 }
@@ -653,7 +668,7 @@ function summarize(results) {
   const two = elemRuns.filter(r => r.elGates.length === 2), duoRuns = two.filter(r => r.duo);
   lines.push(`keystone stratum quartiles [${qs(withS(results, 'keyAt'))}] (${withS(results, 'keyAt').length}/${n} took one) | duo (2-gate runs ${two.length}): taken ${pct(duoRuns.length, two.length)}%, by the end of IV ${pct(two.filter(r => r.duoAt && r.duoAt <= 4).length, two.length)}%, stratum quartiles [${qs(duoRuns.map(r => r.duoAt))}]`);
   const duoCnt = {}; for (const r of results) for (const id of r.duoIds) duoCnt[id] = (duoCnt[id] || 0) + 1;
-  lines.push('duo picks: ' + (Object.entries(duoCnt).sort((a, b) => b[1] - a[1]).map(([k, v]) => k + ' ' + v).join(', ') || '-') + ' | path relics held at run end (share of runs): ' + ['fang', 'embercharm', 'frostshard', 'stormidol', 'halo', 'gravecandle', 'wardrum', 'crest', 'wispjar', 'venomgland', 'chalice', 'bloodstone'].map(id => `${id} ${pct(results.filter(r => r.relicIds.includes(id)).length, n)}%`).join(' '));
+  lines.push('duo picks: ' + (Object.entries(duoCnt).sort((a, b) => b[1] - a[1]).map(([k, v]) => k + ' ' + v).join(', ') || '-') + ' | former element relics, now boons (share of runs that took one): ' + ['stormcall', 'thundergauntlet', 'frostheart', 'souljar'].map(id => `${id} ${pct(results.filter(r => r.boonIds.includes(id)).length, n)}%`).join(' '));
   const grp = (rs) => (rs.length ? `${rs.length} runs wins ${pct(rs.filter(r => r.victory).length, rs.length)}% depth ${ms(rs.map(r => r.stratum), 2)}` : '0 runs');
   lines.push('by main path: ' + ED.PATH_IDS.map(k => `${k} (${grp(results.filter(r => r.main === k))})`).join(' | '));
   const sel = results.filter(r => ['knight', 'ranger', 'shade'].includes(r.cls));
@@ -720,17 +735,16 @@ function classLines(results) {
   return out.join('\n');
 }
 
-// Hearth profile of a bot: none (fresh: start relics only), mid (half the ranks, mastery 5, start relics plus the Codex relics costing <= 70 with no boss requirement) or max (every rank, mastery 10, every relic).
+// Hearth profile of a bot: none (fresh), mid (half the ranks, mastery 5) or max (every rank, mastery 10).
 const metaProfile = (meta) => ({
   up: meta === 'max' ? ED.UPGRADES.map(u => u.costs.length) : meta === 'mid' ? ED.UPGRADES.map(u => Math.ceil(u.costs.length / 2)) : ED.UPGRADES.map(() => 0),
   mastery: meta === 'max' ? 10 : meta === 'mid' ? 5 : 1,
-  relics: ED.RELIC_IDS.filter(id => { const r = ED.RELICS[id]; return r.start || meta === 'max' || (meta === 'mid' && r.cost <= 70 && !(r.req && r.req.boss)); }),
 });
 
 // Run options shared by both command lines, from the parsed --flags.
 const optsFromFlags = (flags) => ({
   pick: flags.pick || process.env.PICK || 'random', start: flags.start, gates: flags.gates === undefined ? undefined : +flags.gates, route: flags.route, fork: flags.fork === undefined || isNaN(+flags.fork) ? flags.fork : +flags.fork,
-  weapon: flags.weapon === undefined || isNaN(+flags.weapon) ? flags.weapon : +flags.weapon, cardMastery: flags.mastery,
+  weapon: flags.weapon === undefined || isNaN(+flags.weapon) ? flags.weapon : +flags.weapon, explain: !!flags.explain,
   aimNoise: flags.aimnoise === undefined ? undefined : flags.aimnoise.split(',').map(Number).concat([0]).slice(0, 2).map(v => (Number.isFinite(v) ? v : 0)),
   force: flags.force ? flags.force.split(',') : [], exploreMin: flags.explore === undefined ? undefined : +flags.explore, maxStratum: flags.strata === undefined ? undefined : +flags.strata,
 });
@@ -764,12 +778,12 @@ if (require.main === module) {
   for (const a of process.argv.slice(2)) { const m = /^--([a-z0-9]+)(?:=(.*))?$/i.exec(a); if (m) flags[m[1]] = m[2] === undefined ? '1' : m[2]; else args.push(a); }
   const n = +(args[0] || 1), runs = +(args[1] || 5), skill = +(args[2] || 0.75), meta = args[3] || 'none';
   const cls = (args[4] && args[4] !== '-' ? args[4] : 'knight,ranger,pyro,shade,cleric,necro').split(','); // '-' = every hero
-  const { up, mastery, relics } = metaProfile(meta);
+  const { up, mastery } = metaProfile(meta);
   const o = optsFromFlags(flags), pick = o.pick, force = o.force, seed0 = +(flags.seed0 || 1000);
   const results = [];
   for (let i = 0; i < runs; i++) {
     const t0 = Date.now();
-    const r = runBot(Object.assign({ seed: seed0 + i * 7, n, cls: [cls[i % cls.length]].concat(cls), skill, up, pact: +(args[5] || 0), mastery, relics }, jobOpts(o, i, cls.length)));
+    const r = runBot(Object.assign({ seed: seed0 + i * 7, n, cls: [cls[i % cls.length]].concat(cls), skill, up, pact: +(args[5] || 0), mastery }, jobOpts(o, i, cls.length)));
     results.push(r);
     if (!flags.quiet) {
       console.log(`run ${i} ${cls[i % cls.length]}: ${r.victory ? 'WIN' : r.state} stratum ${r.stratum} time ${U.fmtTime(r.time)} lvl ${r.level} kills ${r.kills} relics ${r.relics} rooms ${r.rooms.visited}/${r.rooms.total} lightAtBoss [${r.lightAtBoss.join(' ')}] strata [${r.strata.map(U.fmtTime).join(' ')}] (${Date.now() - t0}ms)`);

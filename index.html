@@ -61,7 +61,6 @@
       </header>
       <nav class="tabs" id="hearth-tabs" role="tablist" hidden>
         <button role="tab" data-tab="upgrades" class="tab on">Upgrades<span class="dot" id="dot-upgrades" hidden></span></button>
-        <button role="tab" data-tab="relics" class="tab">Relics<span class="dot" id="dot-relics" hidden></span></button>
         <button role="tab" data-tab="chronicle" class="tab">Chronicle</button>
       </nav>
 
@@ -95,13 +94,8 @@
         </div>
         <!-- UPGRADES -->
         <div class="pane" data-pane="upgrades" hidden>
-          <p class="sub">Permanent strength, paid for in embers carried up from the Deep. Deeper strata reveal new upgrades.</p>
+          <p class="sub">Permanent strength, paid for in embers carried up from the Deep. Deeper strata reveal new upgrades. Every rank can be refunded for its full cost.</p>
           <div class="up-grid" id="up-grid"></div>
-        </div>
-        <!-- RELICS -->
-        <div class="pane" data-pane="relics" hidden>
-          <p class="sub">Unlocked relics can appear in chests and shops during a descent.</p>
-          <div class="relic-grid" id="relic-grid"></div>
         </div>
         <!-- HEROES -->
         <div class="pane" data-pane="heroes" hidden>
@@ -132,7 +126,7 @@
       <header class="sec-head">
         <button class="btn btn-ghost sec-back" id="btn-lobby-leave" type="button">Leave</button>
         <h2 class="sec-title">Party</h2>
-        <button class="btn has-dot" id="btn-lobby-hearth" type="button" title="Spend embers on upgrades and relics">Hearth<span class="dot" id="dot-lobby-hearth" hidden></span></button>
+        <button class="btn has-dot" id="btn-lobby-hearth" type="button" title="Spend embers on upgrades">Hearth<span class="dot" id="dot-lobby-hearth" hidden></span></button>
       </header>
       <div class="lobby-cols">
         <div class="plate lobby-party">
@@ -213,13 +207,11 @@
       </header>
       <nav class="tabs" id="ph-tabs" role="tablist">
         <button role="tab" data-tab="upgrades" class="tab on">Upgrades<span class="dot" id="ph-dot-upgrades" hidden></span></button>
-        <button role="tab" data-tab="relics" class="tab">Relics<span class="dot" id="ph-dot-relics" hidden></span></button>
         <button role="tab" data-tab="heroes" class="tab">Heroes</button>
       </nav>
       <p class="sub">Purchases count from the next descent; friends who buy something press Ready again.</p>
       <div class="ph-body">
         <div class="up-grid" id="ph-upgrades"></div>
-        <div class="relic-grid" id="ph-relics" hidden></div>
         <div class="heroes-view" id="ph-heroes" hidden></div>
       </div>
       <div class="row end"><button class="btn btn-primary btn-lg" id="btn-ph-close" type="button">Back to the party</button></div>
@@ -351,6 +343,7 @@
   </div>
 
   <div id="toasts" aria-live="polite"></div>
+  <div id="ov-fork" class="fork-reveal" hidden aria-live="polite"></div>
   <div id="loading" class="loading">Kindling…</div>
 </div>
 
@@ -361,6 +354,7 @@
 <script src="src/data/classes.js" defer></script>
 <script src="src/data/boons.js" defer></script>
 <script src="src/data/classboons.js" defer></script>
+<script src="src/data/ascended.js" defer></script>
 <script src="src/data/relics.js" defer></script>
 <script src="src/data/meta.js" defer></script>
 <script src="src/save.js" defer></script>
@@ -383,6 +377,7 @@
 <script src="src/net.js" defer></script>
 <script src="src/client/input.js" defer></script>
 <script src="src/client/audio.js" defer></script>
+<script src="src/client/score.js" defer></script>
 <script src="src/art/meta.js" defer onerror="this.remove()"></script>
 <script src="src/art/world.js" defer onerror="this.remove()"></script>
 <script src="src/art/actors.js" defer onerror="this.remove()"></script>

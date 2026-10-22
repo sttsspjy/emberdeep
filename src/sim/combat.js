@@ -167,7 +167,8 @@
       e.kbx += (src.kx || 0) * kb; e.kby += (src.ky || 0) * kb;
     }
     if (kind !== 'dot' || dmg >= 3) {
-      const ev = { t: 'hit', x: Math.round(e.x), y: Math.round(e.y - e.r), v: Math.round(dmg), c: crit ? 1 : 0, k: kind === 'dot' ? 1 : 0, pid: p ? p.pid : '', el: src.bleed ? 4 : EL_IDX[src.el || src.clsEl] || 0 };
+      const ev = { t: 'hit', x: Math.round(e.x), y: Math.round(e.y - e.r), v: Math.round(dmg), c: crit ? 1 : 0, k: kind === 'dot' ? (src.zone ? 2 : 1) : 0, pid: p ? p.pid : '', el: src.bleed ? 4 : EL_IDX[src.el || src.clsEl] || 0 };
+      if (kind === 'skill') ev.s = 1; // a class-skill hit: the viewer's aggregated skill impact cue (k: 0 hit, 1 status DoT, 2 skill-zone tick)
       if (src.wpn && kind === 'weapon' && st && st.heavy) ev.h = 1; // heavy weapon hit: the viewer's hit-stop
       if (src.far) ev.f = 1; // a far shot (Deadeye): the viewer's bright spark
       if (src.slow) ev.sl = 1; // a hit that slows (Quickdraw): the viewer's frost streak
@@ -1329,12 +1330,13 @@
           if (z.team === 0) {
             const owner = this.players.get(z.owner), el = z.el || (z.kind === 'pfire' && !z.untagged ? 'fire' : undefined);
             let dps = z.dps;
+            const zk = !!(z.clsEl || z.part || z.lava || z.kind === 'shards'); // a class-skill field (Sanctuary, Pyro ring, crater, lava, caltrops) rings; boon and weapon fields stay silent
             if (z.parts) { dps = 0; let k = 0; for (const q of z.parts) if (q.until > z.t) { dps += q.dps; z.parts[k++] = q; } z.parts.length = k; }
             const q = this.foeScan(z.x, z.y, z.r);
             for (let k = 0; k < q.length || this.foeTail(q); k++) {
               const e = q[k];
               if (e.hp <= 0 || e.spawnT > 0 || U.dist2(z.x, z.y, e.x, e.y) >= (z.r + e.r) ** 2) continue;
-              this.hitEnemy(e, dps * 0.5, { p: owner, kind: 'dot', noProc: true, crit: false, el, clsEl: z.clsEl, wpn: z.wpn, part: z.part });
+              this.hitEnemy(e, dps * 0.5, { p: owner, kind: 'dot', noProc: true, crit: false, el, clsEl: z.clsEl, wpn: z.wpn, part: z.part, zone: zk });
               if (z.rad && e.hp > 0 && owner) this.addRadiance(e, dps * 0.5 * z.rad, owner); // z.rad: share of each tick stored as Radiance (Sanctuary)
             }
             this.foeEnd();

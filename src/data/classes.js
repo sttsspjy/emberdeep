@@ -83,27 +83,34 @@
   // aimIf { stat: aim } overrides aim while the stat is set; moveIf { stat: { k: 'charge' | 'hop' | 'leap', ... } } moves the caster with the cast (iframes seconds untouchable, default = the move time).
   // parts feed ED.Stats.skillNums (the one source for sim, sheet and bots): dmg = (base + pow x X) x (1 + slot damage), X = Power (on 'P'), the equipped weapon's dmg ('W') or the unforked weapon ('B');
   // powKey adds a stat to pow; of + mul / mul1 derive a part from another (mul1: x (1 + stat); times 'ticks': x the tick count); if = the stat that enables the part; mulIf = { stat: factor };
-  // r scales with area (x(1 + 0.5 area) x (1 + slot area)), rOf + rMul derive it from another part (pRad: r is a projectile's hit radius; the sheet leaves it out); dur adds slot duration (durFix: none) and is capped at capCd x the effective cooldown; n adds slot count; per: 'hit' | 'tick' | 'sec' | 'minion' | 'status'.
+  // r scales with area (x(1 + 0.5 area) x (1 + slot area)), rOf + rMul derive it from another part (pRad: r is a projectile's hit radius; the sheet leaves it out); dur adds slot duration (durFix: none) and is capped at capCd x the effective cooldown; n adds slot count (nFix: none); per: 'hit' | 'tick' | 'sec' | 'minion' | 'status'.
+  // Form keys (see Stats.skillNums): durMulKey (the stat multiplies dur), durCd (dur = the cooldown while the stat is set), ringKey (the stat is the arrow count of a full ring), nOf (the count of another part), stunKey (the stat is the stun), oneMul with oneEvery; ref (Starfall: reference cast distance for the sheet).
   ED.SKILLS = {
     charge: { name: 'Shield Charge', slot: 0, cd: 6, icon: 'shield', aim: 'move', range: 150, rangeMin: 60, rangeAdd: 's1Range', move: { k: 'charge', speed: 600 },
       desc: 'Charge toward the cursor, untouchable, smashing and stunning every foe you run into. A thrown shield flies back to you; foes stunned by your shield take +40% (Crush).',
       parts: [
         { id: 'impact', label: 'Impact', base: 20, pow: 1.6, per: 'hit', proc: true, stun: 1.0, knock: 260, crush: 0.4, reach: 26, note: '+40% vs foes your shield stunned (Crush)' },
-        { id: 'shock', label: 'Shockwave', if: 'jugShock', of: 'impact', mul: 'jugShock', per: 'hit', r: 90, knock: 220, proc: false },
+        { id: 'shock', label: 'Shockwave', if: 'jugShock', ifNot: 'avalanche', of: 'impact', mul: 'jugShock', per: 'hit', r: 90, knock: 220, proc: false },
         { id: 'bash', label: 'Shield Bash', if: 'bash', per: 'hit', mulKey: 'bash', proc: true },
+        { id: 'quake', label: 'Avalanche slam', if: 'avalanche', of: 'impact', mul: 'avalanche', per: 'hit', r: 160, knock: 300, stunKey: 'avaStun', bossMul: 1.5, proc: true },
+        { id: 'crack', label: 'Ground cracks', if: 'avalanche', of: 'impact', mul: 'avaCrack', per: 'hit', n: 3, nFix: true, len: 220, w: 44, delay: 0.3, knock: 120, proc: true },
+        { id: 'banner', label: 'War Banner', if: 'phalanx', per: 'zone', r: 120, durKey: 'bannerDur', stun: 0.4 },
       ] },
     shieldthrow: { name: 'Shield Throw', slot: 1, cd: 9, icon: 'bulwark', aim: 'dir', range: 280, rangeMin: 120,
       desc: 'Hurl your shield at the cursor. It strikes and stuns up to 4 foes as it ricochets between them, then flies back to your hand, striking again. Catching it shields you for 0.5% max health per foe struck (at most once per 6 s). In flight it swats enemy shots. Bosses take ×1.5 but are never stunned.',
       parts: [
         { id: 'strike', label: 'Strike', base: 20, pow: 1.3, per: 'hit', n: 4, proc: true, stun: 0.9, knock: 140, r: 14, pRad: true, bossMul: 1.5, note: 'bosses ×1.5, never stunned' },
         { id: 'return', label: 'Return', base: 10, pow: 0.65, per: 'hit', proc: true, knock: 80, r: 14, pRad: true },
-        { id: 'orbit', label: 'Orbit', if: 'orbit', of: 'strike', mul: 'orbitMul', per: 'hit', durKey: 'orbit', every: 0.75, r: 44, proc: true },
+        { id: 'orbit', label: 'Orbit', if: 'orbit', of: 'strike', mul: 'orbitMul', per: 'hit', durKey: 'orbit', durCd: 'bastion', oneMul: { bastion: 2 }, every: 0.75, r: 44, proc: true },
         { id: 'reflect', label: 'Returned shard', if: 'orbitReflect', of: 'strike', mul: 'orbitReflect', per: 'hit', range: 300, proc: true },
+        { id: 'vortex', label: 'Vortex', if: 'tempest', of: 'strike', mul: 'vortexMul', per: 'hit', every: 0.25, durKey: 'vortexDur', r: 100, pull: 60, proc: true },
       ] },
     volley: { name: 'Volley', slot: 0, cd: 5, icon: 'arrows', aim: 'dir', moveIf: { volleyHop: { k: 'hop', dist: 70, dir: -1, t: 0.25, iframes: 0.25 } },
       desc: 'Loose a wide fan of piercing arrows toward the cursor.',
       parts: [
-        { id: 'arrow', label: 'Arrow', base: 4, pow: 1.2, per: 'hit', n: 7, fan: 1.2, pierce: 1, speed: 480, life: 0.8, pr: 5, knock: 60, proc: true, close: 110 },
+        { id: 'arrow', label: 'Arrow', base: 4, pow: 1.2, per: 'hit', n: 7, fan: 1.2, ringKey: 'thornburst', pierce: 1, speed: 480, life: 0.8, pr: 5, knock: 60, proc: true, close: 110 },
+        { id: 'wave', label: 'Waves 2 and 3', if: 'deathMark', of: 'arrow', mul: 'deathWave', per: 'hit', nOf: 'arrow', fan: 1.2, waves: 2, pr: 5, proc: true },
+        { id: 'burst', label: 'Death burst', if: 'deathMark', of: 'arrow', mul: 'deathMark', per: 'hit', n: 4, nFix: true, proc: true },
       ] },
     nova: { name: 'Flame Nova', slot: 0, cd: 7, icon: 'flame', aim: 'self',
       desc: 'Erupt in a ring of fire that burns everything nearby.',
@@ -136,10 +143,12 @@
     rain: { name: 'Rain of Arrows', slot: 1, cd: 10, icon: 'rain', aim: 'ground', range: 260,
       desc: 'Mark a point at the cursor. After a moment arrows fall on it, hitting every foe inside.',
       parts: [
-        { id: 'tick', label: 'Arrows', ifNot: 'skyfall', base: 4, pow: 0.45, per: 'tick', every: 0.25, dur: 2, delay: 0.35, r: 80, proc: true },
-        { id: 'sky', label: 'Skyfall', if: 'skyfall', of: 'tick', times: 'ticks', per: 'hit', delay: 0.5, rOf: 'tick', rMul: 1.3, stun: 0.5, proc: true },
-        { id: 'sky2', label: 'Twin Sky', if: 'skyTwin', of: 'sky', mul: 'skyTwin', per: 'hit', delay: 0.8, rOf: 'sky', rMul: 1, proc: true },
+        { id: 'tick', label: 'Arrows', ifNot: 'skyfall', base: 4, pow: 0.45, per: 'tick', every: 0.25, dur: 2, durMulKey: 'thornstorm', delay: 0.35, r: 80, proc: true },
+        { id: 'sky', label: 'Skyfall', if: 'skyfall', ifNot: 'starfall', of: 'tick', times: 'ticks', per: 'hit', delay: 0.5, rOf: 'tick', rMul: 1.3, stun: 0.5, proc: true },
+        { id: 'sky2', label: 'Twin Sky', if: 'skyTwin', ifNot: 'starfall', of: 'sky', mul: 'skyTwin', per: 'hit', delay: 0.8, rOf: 'sky', rMul: 1, proc: true },
+        { id: 'star', label: 'Starfall', if: 'starfall', of: 'sky', mul: 'starfall', per: 'hit', n: 5, nFix: true, every: 0.12, r: 70, delay: 0.35, stun: 0.4, ref: 160, proc: true },
         { id: 'shower', label: 'Second Shower', if: 'shower', of: 'tick', mul: 'shower', per: 'tick', every: 0.25, dur: 2, durFix: true, rOf: 'tick', rMul: 1, proc: true },
+        { id: 'bramble', label: 'Bramble patches', if: 'thornstorm', per: 'zone', r: 40, dur: 3, durFix: true, slow: 0.3 },
       ] },
     meteor: { name: 'Meteor', slot: 1, cd: 12, icon: 'meteor', aim: 'ground', range: 300, moveIf: { comet: { k: 'leap', t: 0.6, iframes: 0.35 } },
       desc: 'Call a meteor down on the cursor. It knocks foes back, burns them and leaves a burning crater.',
@@ -176,8 +185,13 @@
   ED.SKILL_SHEET = {
     'charge.shock': { noCrit: true, note: 'at the end of the run' },
     'charge.bash': { note: 'a free Shield Throw along the run' },
+    'charge.quake': { noCrit: true, note: 'bosses ×1.5, never stunned; at the end of the run' },
+    'charge.crack': { noCrit: true, note: '3 cracks run outward from the slam; a foe is struck by one' },
     'shieldthrow.orbit': { oneEvery: true },
     'shieldthrow.reflect': { oneFoe: 0, note: 'per enemy shot the orbit destroys' },
+    'shieldthrow.vortex': { oneEvery: true, note: 'pulls foes in; every foe inside is struck 4 times a second' },
+    'volley.burst': { oneFoe: 0, note: 'when a marked foe dies: 4 piercing arrows' },
+    'rain.star': { note: '5 impacts walk from you to the cursor' },
     'legion.spikes': { perMinion: 'cast', infAdd: { shadow: 0.5 }, note: 'one burst per minion when it expires' },
     'sanctuary.zone': { heal: { key: 'SANCT_HEAL', note: 'you and allies within 180 heal on cast' }, radiance: 0.25 },
     'harvest.burst': { perMinion: 'live', infAdd: { shadow: 0.5 }, note: 'one burst per minion you have', heal: { perMinion: 0.03, cap: 0.06, note: 'you heal on cast' } },

@@ -122,7 +122,10 @@
       if (bareNum(ph)) ph = withNoun(Z, j0 + (ph0 ? d : 0), ph, same);
       out.push(wordKey(ph.join(' ')));
     }
-    if (b.route && rank + 1 === 3) { const rn = ED.cardParts(id, 3, st).riderName; if (rn) out.push('unlocks ' + rn); }
+    if (b.route && (rank + 1 === 2 || rank + 1 === 3)) { // the rider a route card gains at rank 2 (rider2) or 3 (rider, or the transform's name)
+      const P = ED.cardParts(id, 3, st), nm = rank + 1 === 2 ? P.rider2Name : P.form ? P.form.name : P.riderName;
+      if (nm) out.push('unlocks ' + nm);
+    }
     return out.join(' · ');
   };
 
@@ -189,7 +192,7 @@
   });
   const clampI = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   // Shots of a fan that reach a foe at REF.d: those whose lateral offset there is within REF.r + the shot radius.
-  const fanHits = (offsets, projR) => { let n = 0; for (let i = 0; i < offsets.length; i++) if (Sh.REF.d * Math.abs(Math.sin(offsets[i])) < Sh.REF.r + projR) n++; return n; };
+  const fanHits = (offsets, projR) => { let n = 0; for (let i = 0; i < offsets.length; i++) if (Math.cos(offsets[i]) > 0 && Sh.REF.d * Math.abs(Math.sin(offsets[i])) < Sh.REF.r + projR) n++; return n; }; // an arrow flying away from the foe (a ring) never reaches it
   const buildOf = (p, ctx) => ({ cls: p.cls, weapon: p.weapon, boons: p.boons || {}, relics: p.relics || [], meta: p.meta, pact: ctx.pact | 0, chaliceHp: p.chaliceHp || 0, bonusHp: p.bonusHp || 0 });
   // Drops the internal raw-number fields (names starting with an underscore) from a model.
   const strip = (o) => {
@@ -282,11 +285,16 @@
     if (q.per === 'zone') return finish(Object.assign(o, { kind: 'zone', raw: 0, hit: 0, avg: 0, pre: 0, here: 0, total: 0, oneFoe: 0, kc: 0 }), R);
     const sec = q.per === 'sec', always = q.crit === true, kc = always ? 1 : q.noCrit || sec ? 0 : c;
     let raw = q.dmg || 0, oneFoe = q.oneFoe;
-    // Cast-time factors skillNums leaves out (the casts apply them): Shield Storm throws two shields at twinShield each, both reach a foe at REF; Comet's impact lands at 1 + comet.
-    if (skillId === 'shieldthrow' && st.twinShield > 0 && (q.id === 'strike' || q.id === 'return')) { raw *= st.twinShield; oneFoe = 2; }
+    // Cast-time factors skillNums leaves out (the casts apply them): Shield Storm throws two shields (Aegis Tempest three) at twinShield each, all reach a foe at REF; Comet's impact lands at 1 + comet.
+    if (skillId === 'shieldthrow' && (st.twinShield > 0 || st.tempest > 0) && (q.id === 'strike' || q.id === 'return')) { raw *= st.twinShield > 0 ? st.twinShield : 1; oneFoe = st.tempest > 0 ? Math.round(st.tempest) : 2; }
     else if (skillId === 'meteor' && q.id === 'impact' && st.comet > 0) raw *= 1 + st.comet;
     const hit = raw * M * (sec ? 0.5 : 1);
-    if (q.fan) { const offs = []; for (let i = 0; i < q.n; i++) offs.push(q.n > 1 ? (i / (q.n - 1) - 0.5) * q.fan : 0); oneFoe = fanHits(offs, q.pr || 5); o.fanN = q.n; }
+    if (q.fan) { // a fan spreads its arrows over fan radians (a ring: evenly round the circle); a later wave (q.waves) repeats the fan
+      const offs = [];
+      for (let i = 0; i < q.n; i++) offs.push(q.ring ? i / q.n * q.fan : q.n > 1 ? (i / (q.n - 1) - 0.5) * q.fan : 0);
+      oneFoe = fanHits(offs, q.pr || 5) * (q.waves || 1); o.fanN = q.n; o.waves = q.waves || 1; o.fan = q.fan;
+    }
+    if (q.ref) { let hits = 0; for (let k = 0; k < q.n; k++) if (q.ref * (q.n - 1 - k) / q.n <= q.r + Sh.REF.r) hits++; oneFoe = hits; } // Starfall: the impacts walk from the hero to a target q.ref px away; a foe there is in reach of some of them
     if (q.id === 'ambush' && skillId === 'vanish') oneFoe = wpn.oneFoe; // each of the weapon's hits carries the Ambush value
     if (q.perMinion) { // one hit per minion: the minions you have now (all of them when none), or the ones this cast raises
       oneFoe = q.perMinion === 'cast' ? St.skillNums('legion', st).p.minion.n : ctx.minions > 0 ? Math.min(ctx.minions, st.maxMinions || 3) : st.maxMinions || 3;
@@ -328,7 +336,7 @@
       if (!q.on) continue;
       const m = id === 'charge' && q.id === 'bash' ? bashPart(q, st, R) : partModel(q, id, st, ctx, wpn, R);
       parts.push(m);
-      if (m.kind !== 'zone') { perCast += m._r.total; perCastAll += m.fanN ? m._r.avg * (1 + m.selfVuln) * m.aff * m.fanN : m._r.total; }
+      if (m.kind !== 'zone') { perCast += m._r.total; perCastAll += m.fanN ? m._r.avg * (1 + m.selfVuln) * m.aff * m.fanN * m.waves : m._r.total; }
     }
     const cd = N.cdEff, heals = [];
     for (const q of N.parts) if (q.on && q.heal) {
@@ -343,9 +351,9 @@
   }
 
   // ---------------- compute ----------------
-  // Contribution rows of one stat: [{ label, kind, v, id? }] from ED.Stats.breakdown plus the live (temporary) rows of the hero.
+  // Contribution rows of one stat: [{ label, kind, v, id?, mul? }] from ED.Stats.breakdown (an Ascended multiplier row has mul: true, v = f for a factor of 1 + f) plus the live (temporary) rows of the hero.
   function rowsOf(build, key, extra) {
-    const rows = St.breakdown(build, key).map(r => ({ label: r.label, kind: r.kind, v: r.v, id: r.id }));
+    const rows = St.breakdown(build, key).map(r => (r.mul ? { label: r.label, kind: r.kind, v: r.v, id: r.id, mul: true } : { label: r.label, kind: r.kind, v: r.v, id: r.id }));
     if (extra) for (const r of extra) if (r.v) rows.push(r);
     return rows;
   }
@@ -378,7 +386,7 @@
     if (p.tranceT > 0 && st.trance > 0) atkExtra.push({ label: 'Battle Trance (active)', kind: 'temp', v: st.trance, live: true });
     mult.dmg = { total: R.x(st.dmg + dmgExtra.reduce((a, r) => a + r.v, 0)), rows: rowsOf(build, 'dmg', dmgExtra) };
     mult.atk = { total: R.x(rate - 1 + st.atk), base: R.x(st.atk), aps: R.x(wpn.aps), rows: rowsOf(build, 'atk', atkExtra) };
-    mult.crit = { total: R.f(c), mult: R.x(cm), expected: R.x(EC), rows: rowsOf(build, 'crit'), rowsDmg: rowsOf(build, 'critDmg') };
+    mult.crit = { total: R.f(c), mult: R.x(cm), base: R.x(cm - st.critDmg), expected: R.x(EC), rows: rowsOf(build, 'crit'), rowsDmg: rowsOf(build, 'critDmg') };
     mult.area = { total: R.f(st.area), blast: R.x(1 + 0.5 * st.area), arc: R.x(1 + 0.4 * st.area), rows: rowsOf(build, 'area') };
     mult.cdr = { raw: R.f(st.cdr), eff: R.f(St.cdrEff(st.cdr)), soft: St.CDR_SOFT, max: St.CDR_MAX, capped: st.cdr > St.CDR_SOFT, rows: rowsOf(build, 'cdr') };
     mult.projN = { total: st.projN, rows: rowsOf(build, 'projN'), pierce: st.pierce, rowsPierce: rowsOf(build, 'pierce') };
@@ -531,7 +539,6 @@
     const push = (el, why) => { if (!el || seen[el] || !ED.PATHS[el] || !ED.PATHS[el].element) return; seen[el] = 1; mine.push({ el, name: ED.PATHS[el].name, color: ED.PATHS[el].color, why }); };
     for (const k of ED.elementGates(p.boons || {})) push(k, 'path');
     if (st.element) push(st.element, 'class');
-    for (const id of p.relics || []) if (ED.RELICS[id] && ED.RELICS[id].el) push(ED.RELICS[id].el, 'relic');
     const at = (stratum) => {
       const b = ED.BIOMES[stratum - 1];
       return { stratum, name: b.name, short: b.short, weak: b.weak, resist: b.resist, mine: mine.map(m => ({ el: m.el, name: m.name, color: m.color, why: m.why, mul: ED.elemMul(stratum, m.el), skillMul: m.el === st.element ? ED.affC(stratum, m.el) : null })) }; // mul: statuses and tagged hits; skillMul: the class element's skills (half the affinity), whichever source listed the element
@@ -552,7 +559,7 @@
   // ---------------- build tab ----------------
   const AILMENT_STATS = ['brand', 'veins', 'contagion', 'festerHit', 'exsang']; // stats that read the ailment count of a foe (World.ailments)
   const ROUTE_WHEN = { t1: 'Offered at team level 3', fork: 'Offered when the stratum I boss falls', r2: 'Rank 2 when the stratum II boss falls', r3: 'Rank 3 when the stratum IV boss falls' };
-  const KIND_ORDER = { gate: 0, path: 1, open: 1, route: 0, fork: 1, keystone: 2, evolution: 3, duo: 0 };
+  const KIND_ORDER = { gate: 0, path: 1, open: 1, route: 0, fork: 1, keystone: 2, evolution: 3, duo: 0, ascended: 0 };
   function buildModel(p, st, ctx, R) {
     const boons = p.boons || {}, gen = ED.isGeneralist(boons), gates = ED.gatePaths(boons), evoPath = ED.evoOf(boons), paths = [];
     for (const k of gates) {
@@ -579,7 +586,7 @@
       const e = tbl[r], b = ED.BOONS[e.t1];
       route.nodes.push({
         route: r, label: ED.routeLabel(p.cls, r), id: e.t1, name: b.name, icon: b.icon, chosen: rt.route === r, closed: !!rt.route && rt.route !== r, plays: b.plays, text: Sh.text(e.t1, 1, st), when: ROUTE_WHEN.t1,
-        forks: e.forks.map((fid) => { const fb = ED.BOONS[fid], rank = boons[fid] | 0; return { id: fid, name: fb.name, icon: fb.icon, tag: fb.tag || '', coop: !!fb.coop, owned: rank > 0, rank, max: fb.max, closed: !!rt.fork && rt.fork !== fid, text: Sh.text(fid, rank || 1, st), when: rank ? (rank < fb.max ? ROUTE_WHEN[rank === 1 ? 'r2' : 'r3'] : '') : rt.fork ? '' : ROUTE_WHEN.fork, weapon: fb.weapon && fb.weapon.kind ? ED.forkWeapon(p.weapon, fid).name : null }; }),
+        forks: e.forks.map((fid) => { const fb = ED.BOONS[fid], rank = boons[fid] | 0; return { id: fid, name: ED.cardName(fid, rank), icon: fb.icon, tag: fb.tag || '', coop: !!fb.coop, owned: rank > 0, rank, max: fb.max, closed: !!rt.fork && rt.fork !== fid, text: Sh.text(fid, rank || 1, st), when: rank ? (rank < fb.max ? ROUTE_WHEN[rank === 1 ? 'r2' : 'r3'] : '') : rt.fork ? '' : ROUTE_WHEN.fork, weapon: fb.weapon && fb.weapon.kind ? ED.forkWeapon(p.weapon, fid).name : null }; }),
       });
     }
     // boons grouped by owned path (gate, boons, keystone, evolution), duo, class route and open
@@ -587,14 +594,14 @@
     for (const id in boons) {
       const b = ED.BOONS[id], rank = boons[id];
       if (!b || !(rank > 0) || (b.cls && b.cls !== p.cls)) continue;
-      const max = ED.maxRank(b, st), kind = b.evo ? 'evolution' : b.key ? 'keystone' : b.gate ? 'gate' : b.duo ? 'duo' : b.route ? (b.tier === 1 ? 'route' : 'fork') : b.path && !b.open ? 'path' : 'open';
-      const group = b.cls ? 'route' : b.duo ? 'duo' : b.path && !b.open && gates.includes(b.path) ? 'path:' + b.path : 'open';
-      rows.push({ id, name: b.name, icon: b.icon, rar: b.rar, rank, max, kind, group, path: b.path || (b.duo ? b.duo[0] : null), path2: b.duo ? b.duo[1] : null, tag: b.tag || '', coop: !!b.coop, text: Sh.text(id, rank, st), next: rank < max ? Sh.nextText(id, rank, st) : null });
+      const max = ED.maxRank(b, st), kind = b.evo ? 'evolution' : b.asc ? 'ascended' : b.key ? 'keystone' : b.gate ? 'gate' : b.duo ? 'duo' : b.route ? (b.tier === 1 ? 'route' : 'fork') : b.path && !b.open ? 'path' : 'open';
+      const group = b.cls ? 'route' : b.duo ? 'duo' : b.asc ? 'asc' : b.path && !b.open && gates.includes(b.path) ? 'path:' + b.path : 'open';
+      rows.push({ id, name: ED.cardName(id, rank), icon: b.icon, rar: b.rar, rank, max, kind, group, path: b.path || (b.duo ? b.duo[0] : null), path2: b.duo ? b.duo[1] : null, tag: b.tag || '', coop: !!b.coop, text: Sh.text(id, rank, st), next: rank < max ? Sh.nextText(id, rank, st) : null });
     }
-    const groups = gates.map(k => 'path:' + k).concat(['duo', 'route', 'open']).map(g => ({ group: g, path: g.indexOf('path:') === 0 ? g.slice(5) : null, items: rows.filter(r => r.group === g).sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind]) })).filter(g => g.items.length);
+    const groups = gates.map(k => 'path:' + k).concat(['duo', 'route', 'asc', 'open']).map(g => ({ group: g, path: g.indexOf('path:') === 0 ? g.slice(5) : null, items: rows.filter(r => r.group === g).sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind]) })).filter(g => g.items.length);
     const relics = (p.relics || []).map(id => {
       const r = ED.RELICS[id], i = Sh.READY.findIndex(x => x.id === id);
-      return { id, name: r.name, icon: r.icon, rar: r.rar, text: r.desc, live: relicLive(id, p, st, ctx), state: i >= 0 ? (readyOf(p, i) ? 'ready' : id === 'angel' || id === 'phoenix' ? 'used' : 'recharging') : null, el: r.el || null };
+      return { id, name: r.name, icon: r.icon, rar: r.rar, text: r.desc, live: relicLive(id, p, st, ctx), state: i >= 0 ? (readyOf(p, i) ? 'ready' : id === 'angel' || id === 'phoenix' ? 'used' : 'recharging') : null };
     });
     const statuses = [];
     for (const m of ED.ELEMENT_IDS) if (st[ED.ELEMENTS[m].inf] > 0 || st.element === m) { const S = ED.STATUS[ED.PATHS[m].status]; statuses.push({ id: ED.PATHS[m].status, name: S.name, color: S.color, rule: S.rule, el: m }); }

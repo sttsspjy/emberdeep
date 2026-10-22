@@ -33,7 +33,7 @@ Canonical rules and numbers. Code follows this file; a balance pass changes numb
 
 ### Damage dealt by a hero (order, `hitEnemy`)
 
-1. **Hero multiplier** (one additive sum, at least ×0.1): `dmg` stat + conditional rows (execute: foes below 30% HP; searing: burning; lacerate: bleeding; malice: carrying Doom; brittle: chilled or frozen; fester: envenomed; opportunist: stunned, frozen or blinded; Death Knell stacks; Brand per ailment; Guardian Light; Embolden) + the class hook (`hitMul`: Momentum, Channel, Soul Barrage…) + class-element skill hits (`classElMul`), Golden Idol (+1% per 15 party gold, at most 20%), Banner of Unity.
+1. **Hero multiplier** (one additive sum, at least ×0.1): `dmg` stat + conditional rows (execute: foes below 30% HP; searing: burning; lacerate: bleeding; malice: carrying Doom; brittle: chilled or frozen; fester: envenomed; opportunist: stunned, frozen or blinded; Death Knell stacks; Brand per ailment; Guardian Light; Embolden) + the class hook (`hitMul`: Momentum, Channel, Soul Barrage…) + class-element skill hits (`classElMul`), Golden Idol (+1% per 15 party gold, at most 20%), Banner of Unity. The `dmg` stat itself is `1 + Σ additive sources`, then **× (1 + x) for each owned Ascended boon** (§3): the Ascended bucket sits after every additive source of the stat block. Known gap: the conditional rows, the class hook and Idol/Banner are added to `dmg` inside `hitEnemy`, so an Ascended ×`dmg` multiplies only the stat part until the hit multiplier moves into `combat.js`.
 2. **Crit** × `critMult` (1.75 + crit damage; chance capped at 95%), then the class `critMul`.
 3. The hit's own factor `src.mul` (Cleave, Ambush, Deadeye by distance flown, Ballista's pierce ramp, Gathering Force, Gangrene, …); with the Shatter boon, a hit on a frozen foe takes its bonus and ends the freeze.
 4. **Foe vulnerability** `1 + Σ`: Marked (Hunter's Mark, `markV`) · Judged or `vulnT` (+0.2, once: Judgment, Hail of Thorns, smoke do not stack) · Frozen +0.25 · Sunder +0.04 per stack (own stacks, max 10) · Venom `venom/100 × (0.25 + corrode)` (full from the hero who added Venom, ×0.5 from allies). Co-op debuffs are single foe states: the strongest value wins, they never add.
@@ -152,9 +152,9 @@ Seven statuses: Burn, Chill (Freeze included), Charge, Venom, Radiance, Doom (el
 Seven paths: six element paths and General. A hero follows at most **2 element paths** (`MAX_ELEMENTS`) or takes the **Generalist** gate and follows General alone. `affinity(path)` = sum of ranks of the hero's boons in that path (open boons count toward none; General counts only for a Generalist).
 
 - Gate: opens the path and sets its infusion. Keystone (`key`): offered at affinity ≥ 5 (General: 6). Evolution (`evo`): its card is prepended to every offer at affinity ≥ 10 (General: 12) with the path's keystone owned and no evolution yet. Duo: both element paths at affinity ≥ 4 put their duo on every offer until it is taken.
-- An element path holds 12 ranks before its evolution (General 15). Rarity: `c` common, `r` rare, `e` epic (keystones), `l` legendary (evolutions), `d` duo.
+- An element path holds 12 to 14 ranks before its evolution (Fire, Poison, Holy 12; Ice 13; Lightning, Shadow 14; General 15). Rarity: `c` common, `r` rare, `e` epic (keystones), `l` legendary (evolutions), `d` duo.
 - **Class element**: Pyromancer = fire, Cleric = holy, Necromancer = shadow. Their class-skill parts deal that element without a gate; their own gate is on their start offer. Knight, Ranger and Shade have no class element (their element route is Bleed).
-- **Generalist** (start offer of Knight, Ranger and Shade only): +15% damage, +5% crit chance, crits Bleed for 30% of the hit, open boons rank 1 higher; the hero never sees element boons or relics, and element relics it holds are swapped for a random unowned non-element relic of the same rarity (else the next rarity down, else 40 gold). Keen Eye and Brutality are open at rank 1 to element heroes.
+- **Generalist** (start offer of Knight, Ranger and Shade only): +15% damage, +5% crit chance, crits Bleed for 30% of the hit, open boons rank 1 higher; the hero never sees element boons (relics are element-free and reach every hero). Keen Eye and Brutality are open at rank 1 to element heroes.
 - The sheet and offers colour each path: Fire `#ff7a2a`, Ice `#7fe3ff`, Lightning `#ffe66b`, Poison `#9be33c`, Holy `#fff0c2`, Shadow `#a070ff`, General `#d9dfe8`.
 
 ### Fire — icon `flame`
@@ -178,6 +178,7 @@ Seven paths: six element paths and General. A hero follows at most **2 element p
 | brittle | Brittle Cold | c | 2 | +10% damage to chilled or frozen foes. |
 | coldsnap | Cold Snap | r | 1 | Dashing releases a frost ring (r80) for 50% P that chills. |
 | permafrost | Permafrost | c | 2 | Freeze lasts 30% longer; chilled foes deal 10% less. |
+| frostheart | Frozen Heart | r | 1 | When hit, freezes foes within 120 (8 s cooldown; was an element relic). |
 | abszero | Absolute Zero (key) | e | 1 | Freezing a foe releases a frost nova adding 60 chill to foes within 100. |
 | evo_ice | Glacial Arms | l | 1 | Every 3rd attack fires 5 piercing ice shards in a fan (50% each, infused). Chill +25%. |
 
@@ -190,6 +191,8 @@ Seven paths: six element paths and General. A hero follows at most **2 element p
 | shortcircuit | Short Circuit | r | 2 | A charged foe that dies discharges at once at +25%. |
 | thunderstep | Thunderstep | r | 1 | Foes you dash through take 100% P (charges them). |
 | overload | Overload | c | 2 | Discharges stun non-boss foes 0.25 s (elites half), at most once per second per foe. |
+| stormcall | Storm Call | r | 1 | Critical hits charge foes with 60% of their damage (was an element relic). |
+| thundergauntlet | Thunder Gauntlet | r | 1 | Every 6th attack calls lightning on its target (220% of weapon damage, r40, no crit; was an element relic). |
 | thunderhead | Thunderhead (key) | e | 1 | Each discharge has a 25% chance to drop a thunderbolt: 200% P, r60; one hero drops at most one per 0.6 s. |
 | evo_lightning | Tempest Arms | l | 1 | Every 4th attack calls lightning on the foe nearest the point 80 ahead of your aim, within 220 (150% weapon damage, r50). Foes discharge every 0.5 s. |
 
@@ -226,6 +229,7 @@ Seven paths: six element paths and General. A hero follows at most **2 element p
 | inevitable | Inevitable | r | 2 | Elites and bosses take 15% more of your Doom (full at rank 2). |
 | deathknell | Death Knell | r | 2 | Each Reap or Toll grants +4% damage for 6 s, stacking up to 5 times per rank. |
 | deathsedge | Death's Edge | r | 1 | Each Reap or Toll readies 1 guaranteed crit (up to 3 stored; scaled by the weapon fork). |
+| souljar | Soul Jar | c | 2 | Your hits mark 20% more Doom (`doomMul`; was an element relic). |
 | umbralstep | Umbral Step | r | 1 | Foes you dash through take 80% P and gain Doom from that hit at +60%. |
 | reaper | Reaper (key) | e | 1 | A Reaped foe implodes: 20% of its max HP (elites 10%) as Shadow damage to foes within 80. |
 | evo_shadow | Umbral Arms | l | 1 | A shadow twin repeats every attack 0.15 s later at 40%; twin hits mark double Doom. |
@@ -239,7 +243,7 @@ Seven paths: six element paths and General. A hero follows at most **2 element p
 | lacerate | Lacerate | r | 2 | +12% damage to bleeding foes. |
 | execute | Executioner | r | 2 | +25% damage to foes below 30% HP. |
 | deepcuts | Deep Cuts | r | 2 | Bleed deals +30%. |
-| opportunist | Opportunist | r | 1 | +25% damage to stunned, frozen or blinded foes. |
+| opportunist | Opportunist | r | 1 | +25% damage to stunned, frozen or blinded foes. Offered only to a hero that can stun, freeze or blind (§4). |
 | sunder | Sunder | r | 1 | Each crit adds Sunder stacks to the foe (`(dmg / foeHp) × 60`, at most 2 per crit, max 10): +4% damage from you per stack. |
 | masterstroke | Masterstroke (key) | e | 1 | Every 4th attack is a guaranteed crit at +30% that Bleeds for at least 50% of the hit. |
 | evo_general | Masterwork Arms | l | 1 | Crits release a spectral strike (repeat swing or spectral shot) at 60%. +10% crit chance. |
@@ -270,17 +274,39 @@ One per run. The weapon is renamed with the prefix before its (fork) name: Cinde
 ### Open boons (every hero, no path, low caps)
 vigor (c,3: +15 max HP, heal 15) · plating (c,2: +5 armor) · fleet (c,2: +7% move) · focus (c,3: skills −10% cooldown) · lightstep (c,2: dash −20% cooldown) · magnet (c,2: +40% pickup, +10% xp) · edge (c,2: +10% damage) · quick (c,2: +10% attack speed) · bounty (c,2: +25% gold) · stalwart (c,2: +6% max HP) · mending (c,2: +15% healing received) · forager (c,2: hearts drop 10% more often and heal 3% more) · wide (r,2: +15% area) · evade (r,2: +6% dodge) · thorns (r,2: attackers take 10, +4 armor) · pierce (r,2, ranged: +1 pierce) · split (r,2, ranged: +1 projectile, −8% damage) · bladedash (r,1: dash through foes for 120% P) · battleward (r,1: shield 5% max HP when an elite room locks) · echo (e,1: skill 1 holds 2 charges) · laststand (e,1: below 30% HP, 3 s of −60% damage taken, 20 s cooldown) · glass (e,1: +30% damage, −15% max HP) · trance (e,1: a skill grants +30% attack speed 4 s) · overcharge (e,1: skills release a shockwave, 10 + 150% P, r85).
 
+### Ascended boons (rar `a`, max 1, no path; `src/data/ascended.js`)
+
+The upgrade of a maxed open or General boon, id `asc_<base>`, colour `#ff5fd2`. It counts toward no affinity and carries the base's weapon-kind need. Eligible when the stratum is IV or deeper (`ED.ASC_STRATUM`), the base boon is owned at its max rank for this hero (`ED.maxRank`: a Generalist needs open boons one rank higher), the card is not owned and fewer than 2 (`ED.ASC_PER_STRATUM`) Ascended cards were taken this stratum. Offer rules: §4.
+
+Stat rule: `x` multiplies the stat block after every additive source (`s[key] *= 1 + x`); `mods` add like a boon's. `dmg`, `atk`, `spd` and `hpMul` are totals around 1, so the factor is on the total; `crit`, `critDmg`, `area`, `armor`, `pierce`, `lacerate`, `execute` and `bleedMul` are sums, so it is on the bonus you hold. Several factors on one key multiply. The sheet lists a factor as `×1.15` after the additive rows of its stat. Known gap: §1 step 1 (hit-time damage rows).
+
+| base (max rank) | id | name | effect |
+|---|---|---|---|
+| edge (2) | asc_edge | Honed Edge | ×1.15 damage |
+| quick (2) | asc_quick | Blur | ×1.15 attack speed |
+| split (2, ranged) | asc_split | Arrow Storm | +1 projectile, ×1.1 damage |
+| pierce (2, ranged) | asc_pierce | Impaler | +2 pierce, ×1.1 damage |
+| keen (open rank 1) | asc_keen | Hawk Eye | ×1.3 crit chance |
+| brutal (open rank 1) | asc_brutal | Savage | ×1.5 crit damage bonus |
+| wide (2) | asc_wide | Vast | ×1.5 area |
+| vigor (3) | asc_vigor | Titan | ×1.12 max health |
+| plating (2) | asc_plating | Bastion | ×1.5 armor |
+| lacerate (2, Generalist) | asc_lacerate | Hemorrhage | ×2 damage to bleeding foes |
+| execute (2, Generalist) | asc_execute | Headsman | ×2 damage to foes below 30% HP |
+| deepcuts (2, Generalist) | asc_deepcuts | Bloodletting | ×1.5 Bleed damage |
+
 ## 4. Offers
 
 - A hero holds a queue `p.offers` of offer specs; `p.picks === p.offers.length`. Offers open only when the room is safe. API: `W.grantOffer(p, spec)`.
 - Spec `src`: `start` · `level` · `room` · `class` · `forge` · `epic`.
 - Cards: 3 (+1 with Crown of Choice); `epic` 4 (+1). An evolution card and a duo are prepended to `level`, `room` and `epic` offers and take no slot.
+- **Ascended pin** (`level`, `room`, `epic` only; never `start`, `class` or `forge`): when any Ascended card is eligible (§3), one of them (uniform) is slot 1 of the drawn cards, behind the prepended evolution and duo cards; the draw fills the other n − 1 slots. `p.ascN` counts the Ascended picks of the stratum (reset when a stratum starts).
 - **start** (once, at run start; the Head Start upgrade adds `level` offers): 4 cards. Pyromancer, Cleric, Necromancer: their class gate plus 3 random other element gates. Knight, Ranger, Shade: 3 random element gates plus the Generalist gate (last).
-- **level**: every even level (2, 4, 6, …). Pool: open boons, non-gate boons of the hero's own paths (a Generalist: gated General boons), element gates while a slot is free (and no Generalist gate), keystones at affinity ≥ 5 (General 6). Weight = rarity weight (`c` 60, `r` 30 + 2.5s + 60·luck, `e` 10 + 2s + 40·luck, other 10) × (own path 2.5) × (gate 0.8); at most one gate per offer. Weapon-kind boons (`pierce`, `split`) need a projectile weapon.
+- **level**: every even level (2, 4, 6, …). Pool: open boons, non-gate boons of the hero's own paths (a Generalist: gated General boons), element gates while a slot is free (and no Generalist gate), keystones at affinity ≥ 5 (General 6). Weight = rarity weight (`c` 60, `r` 30 + 2.5s + 60·luck, `e` 10 + 2s + 40·luck, other 10) × (own path 2.5) × (gate 0.8); at most one gate per offer. Weapon-kind boons (`pierce`, `split`) need a projectile weapon. **Hygiene**: Opportunist needs a hero that can stun, freeze or blind a foe (`W.canDaze`: a Heavy fork, Knight, Shade, an owned `iceInfuse`, `frozenHeart`, `arcStun`, `dashBlind`, `waveStun`, `sanctStun`, `cStun`, `chargeStun`, `orbitStun`, `knightStun`, `cometStun` or `parry`, or a stun or blind skill part whose stat is set: Skyfall, Verdict, Afterimage); from stratum IV the utility commons bounty, magnet, forager, fleet and mending weigh ×0.25.
 - **room** (reward `boon`): card 1 = one unowned element gate while a slot is free, weighted by coverage (weak this or next stratum ×2, weak where an owned gate is resisted ×2, resisted next stratum ×0.5, class element ×2); the rest from the hero's own paths, then open boons at rarity ≥ r. A Generalist draws the level pool.
 - **epic**: level pool, rarity ≥ r, 4 cards, keystones ×2. Sources: elite-room reward (25%), boss of stratum III and V, shop (odd strata), altar.
-- **forge**: up to 3 owned boons below max (no evolutions); picking ranks one up (a fork card may be ranked). None → level offer. Sources: normal-room reward (8%), rest-site anvil (odd strata), shop (even strata).
-- **class**: the route system (§5): team level 3 (route), boss I (fork), boss II and IV (fork ranks). Fixed cards, no draw padding, no prepends, no class rooms.
+- **forge**: up to 3 owned boons below max (no evolutions, never route or fork cards: fork ranks come from bosses, §5); picking ranks one up. None → level offer. Sources: normal-room reward (8%), rest-site anvil (odd strata), shop (even strata).
+- **class**: the route system (§5): team level 3 (route, `ctier` 1) and boss I (fork, `ctier` 2). Fixed cards, no draw padding, no prepends. A class spec of a hero that already holds a fork becomes a level offer. Fork ranks 2 and 3 are not offers (§5).
 - Offer message to client: `{t:'offer', boons, rerolls, picks, src, path, forge, ctier, route}`. Rerolls (Q on keyboard, Y on a pad; from Insight and mastery 8) work on every offer except forge, route and fork picks. In a party a pick untouched for 45 s is taken for the hero: the first non-evolution card (so never the Generalist gate), a random card for a route or fork pick.
 - **Pacing targets**: see §10.
 
@@ -338,7 +364,7 @@ Crit-stack grants (Shadowstep, Riposte, Death's Edge) are multiplied by `critK =
 ### Route system
 
 - Each hero has four routes: **Attack**, **Skill 1**, **Skill 2** and **Element** (the status route: Bleed for Knight, Ranger and Shade; Fire, Holy, Shadow for the others). A route is a tier-1 card with two tier-2 forks: 12 cards per class, 72 in all (`src/data/classboons.js`).
-- **Moments** (every hero, every party member): team level 3 → pick 1 of the 4 route cards; boss of stratum I → pick 1 of the route's 2 forks (rank 1); boss of stratum II → the fork at rank 2 beside 2 rare boons; boss of stratum IV → rank 3, which adds the fork's named rider (a fork already at rank 3, e.g. after a forge, makes that offer an epic-style offer instead). A downed hero receives the pick when back up.
+- **Moments** (every hero, every party member): team level 3 → pick 1 of the 4 route cards; boss of stratum I → pick 1 of the route's 2 forks (rank 1); boss of stratum II → the fork gains rank 2 (a new behaviour: the card's `r2` numbers and `rider2`); boss of stratum IV → rank 3 (a transform: `r3` numbers, the named rider and the `form` name). Ranks 2 and 3 are granted by `W.grantForkRank` with no pick, to every hero including downed and dead ones, and announced with a reveal (message `forkRank {id, rank}` to the hero, event `forkRank` to everyone); the other boss rewards are unchanged. A hero without a fork when a rank falls due banks it (`p.forkDue`) and gets the banked ranks when the fork card is picked. The forge never ranks route or fork cards. A downed hero receives the route and fork picks when back up.
 - Route and fork cards never count toward path affinity and appear only in class offers. Card totals: `mods + up × (rank − 1) + r3` (rank 3). Slot damage (`s1Dmg`, `s2Dmg`) compounds card by card. Co-op cards help allies. Card text on the offer and the sheet is the exact source of every number below.
 - Fork tags: Attack forks **Heavy** / **Swift**; skill forks **Burst** (damage) / **Guard** (shields, damage reduction, stuns, slows, blinds, shot swats); element forks **Focus** (single target, bosses) / **Spread** (packs).
 
@@ -382,7 +408,7 @@ Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat
 - **Rest site**: a campfire (heal 35%) and, on odd strata only, an anvil (forge offer); each hero uses one.
 - **Shop**: 2 relics (+1 with Merchant's Favor 2), healing draught (40%), lantern oil (+35 light, `45 + 15s` gold) and one build item: an epic boon (75 gold) on odd strata, a forge (`60 + 15s` gold) on even strata. Relic, epic boon and draught prices scale 12% per stratum; every price is −10% per Favor rank, −25% with Merchant's Ledger, ×1.4 under Pact 7, rounded to 5 (minimum 5).
 - **Event shrines**: fountain (heals the party 50%, raises the downed), altar (pay 20% max HP for an epic offer), gamble shrine (`35 + 18s` gold for a random relic: 12% epic, 38% rare, 50% common), champion's trial (an elite fight for a rare relic).
-- **Relics**: 45 (18 available from the start, 27 bought in the Codex); `RELIC_PRICE` c 70 · r 110 · e 160 · l 220. Roll weights c 50, r 34 + 3s, e 14 + 3s, l 3 + s. Relics unlocked by any party member can drop for everyone. Element relics (14) weigh ×2 when a living hero follows that element, ×0.5 otherwise; Generalists get the first picks of a hoard or shop from non-element relics.
+- **Relics**: 31, all in the drop pool from the first descent (common 8, rare 12, epic 6, legendary 5). No relic carries an element: the 14 element relics are gone and their unique effects are the path boons Storm Call, Thunder Gauntlet, Frozen Heart and Soul Jar (§3). There is no Codex and no Generalist relic rule. `RELIC_PRICE` c 70 · r 110 · e 160 · l 220. A roll draws at or above the requested rarity from the relics no hero holds (the whole list when every relic is held); weights c 50, r 34 + 3s, e 14 + 3s, l 3 + s. The Reliquary upgrade (§9) starts a descent with a random common (rank 1) or rare-or-better (rank 2) relic.
 - XP from level L to L+1: `round(30 + 3(L−1) + 6(L−1)²)`. Even levels grant a `level` offer; level 3 also grants the route card.
 - Every gold drop (kills, room clears, chests, rewards, bosses) is scaled by ×0.65 (`World.GOLD_MUL`); shop prices are not scaled.
 
@@ -428,16 +454,19 @@ Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat
 
 ## 9. Hearth (meta) and save
 
-- **Deep Wick** (tier 1): +6% lantern light per rank, costs 40/90/160. 16 upgrades in all; steps per rank: Vitality +6 max health, Might +4% damage, Fortune +10% gold, Fleetness +4% move speed, Provisions heal 10%, Bulwark +2 armor, Precision +2% crit, Wisdom +5% experience, Alacrity +4% skill recharge. Mastery 10 levels per hero: 2 +5% damage · 3 second weapon · 4 +10 max health · 5 skills recharge 8% faster · 6 third weapon · 7 +4% crit · 8 +1 reroll · 9 +8% damage · 10 golden aura.
-- 26 deeds including Evolved (evolve a weapon, 40) · Into the Dark (defeat a boss while Lightless, 50) · Cartographer (clear every room of a stratum, 40). Ten pacts raise difficulty and embers (`PACT_EMBER_BONUS` 0.08 per level).
+- **Deep Wick** (tier 1): +6% lantern light per rank, costs 40/90/160. 16 upgrades in all; steps per rank: Vitality +6 max health, Might +4% damage, Fortune +10% gold, Fleetness +4% move speed, Provisions heal 10%, Bulwark +2 armor, Precision +2% crit, Wisdom +5% experience, Alacrity +4% skill recharge. Mastery 10 levels per hero: 2 +5% damage · 3 second weapon · 4 +10 max health · 5 skills recharge 8% faster · 6 third weapon · 7 +4% crit · 8 +1 reroll · 9 +8% damage · 10 golden aura. The relic upgrade (id `armory`) is named Reliquary.
+- **Refunds**: every upgrade rank and Armory entry refunds its full cost on demand (`S.refundUpgrade`, `S.refundArmory`); Reset all (`S.resetUpgrades`, a two-step confirm in the UI: the first press arms it for 3 s) refunds every rank and entry at once. `lifetime` embers never change on a purchase or refund.
+- **Armory**: `ED.ARMORY[hero]` lists per-hero sidegrade unlocks `{ id, name, desc, cost }`, bought and refunded in the Upgrades page below the upgrades (a hero's section shows while its list is non-empty and the hero is unlocked). The lists are empty until content lands. The meta bundle carries each hero's owned entry ids (`meta.armory`); the profile stores `armory: { hero: [0|1 per entry] }`.
+- 26 deeds including Evolved (evolve a weapon, 40) · Into the Dark (defeat a boss while Lightless, 50) · Cartographer (clear every room of a stratum, 40) · Relic Keeper (hold 10 relics in one descent, 60; the slot of the removed Archivist). Ten pacts raise difficulty and embers (`PACT_EMBER_BONUS` 0.08 per level).
 - Profile key `wickdeep.profile.v1`, save code prefix `WD1-`, peer prefix `wickdeep-v1-`. No other profile key is imported; Emberdeep `ED1-` codes are refused.
-- **Save code** (`CODE_VERSION` 4): positional lists (UPGRADES, non-start RELIC_IDS, CLASS_IDS mastery, DEEDS) each carry a count prefix, so appending an entry never shifts what follows; the decoder skips extra entries and leaves missing ones at 0. Versions 2 and 3 still decode; a newer version is refused with "reload the page"; a code with more than 127 Codex relics cannot be written. Changing a relic's start flag, reordering or removing an entry bumps `CODE_VERSION`.
-- **Returning players**: a profile with runs from before this ruleset (profile `v` below 2, or a version-2 code with runs) gets `news = 1`; a one-time "The Deep has changed" notice lists the changes and the owned relics that were renamed or reworked, then clears the flag.
+- **Save code** (`CODE_VERSION` 5): positional lists (UPGRADES, CLASS_IDS mastery, then the Armory, then DEEDS) each carry a count prefix, so appending an entry never shifts what follows; the decoder skips extra entries and leaves missing ones at 0. The Armory section follows mastery: a hero count (4 bits), then per hero an entry count (6 bits) and 1 bit per entry (at most 63 entries per hero; more cannot be written). Versions 2, 3 and 4 still decode (their relic bits are read against the frozen v4 relic table and refunded as embers); a newer version is refused with "reload the page". Reordering or removing an entry bumps `CODE_VERSION`.
+- **Codex migration**: a stored profile below era 3 (profile `v` 3 has no `relics` array) or a v2-v4 code holds the old Codex relics; their costs (the frozen v4 table in `save.js`) are added to `embers` once (never to `lifetime`), the amount is kept in `profile.refunded`, and `S.load` writes the migrated profile back so a reload cannot refund again.
+- **Returning players**: a profile below era 3 or a code below version 5 gets `news = 1` when it has runs or a refund; a one-time "The Deep has changed" notice lists the changes (relics, Hearth refunds, the v3 rules) and the refunded embers, then clears the flag and `refunded`.
 - Settings (`wickdeep.settings.v1`): volumes, quality, frame cap, screen shake, damage numbers, key bindings, cursor, cursor size, cursor colour, skill aim preview, last Tab-sheet tab (`sheetTab`).
 
 ## 10. Balance targets (bots, `tools/sim.js`, skill 0.75)
 
-Measured cells are the sign-off batch at skill 0.75, taken at `cd1074d` (solo rows on the commit before its party HP change, which solo runs do not read). Smart pick policy unless noted; 384 runs each (two and three heroes: 192), six heroes in rotation. Skill 0.75 is the share of ticks the bot pays attention to floor hazards and the lantern flare, and the chance it reads each Gloom lunge telegraph; hazard tiles are routed around. The `mid` and `max` presets carry the Codex relics (mid: start relics plus Codex relics costing ≤ 70 without a boss requirement). Runs (`node tools/simpool.js <args>`): Fresh random `1 384 0.75 none --pick=random`; Fresh smart, Half-upgraded and Fully upgraded `1 384 0.75 none,mid,max --pick=smart`; Pact 5 `1 384 0.75 max - 5 --pick=smart`; Two heroes `2 192 0.75 mid --pick=smart`; Three heroes `3 192 0.75 mid --pick=smart`. `simpool.js` runs at normal priority; `--nice` opts into idle priority, which Windows throttles while the machine is unattended.
+Measured cells are the sign-off batch at skill 0.75, taken at `cd1074d` (solo rows on the commit before its party HP change, which solo runs do not read). Smart pick policy unless noted (`--pick=smart`: every offer, the start card, forge rank-ups and relics go to the card of best marginal value, namely hero damage on one foe and in a pack plus effective health over the next three strata from the Tab-sheet model with the mechanics the sheet omits folded in, plus the discounted value of the keystone, evolution and duo the card brings closer; a reroll is spent when no card gains 1%; `--pick=legacy` is the v3 fixed order); 384 runs each (two and three heroes: 192), six heroes in rotation. Skill 0.75 is the share of ticks the bot pays attention to floor hazards and the lantern flare, and the chance it reads each Gloom lunge telegraph; hazard tiles are routed around. The `mid` and `max` presets carry the Codex relics (mid: start relics plus Codex relics costing ≤ 70 without a boss requirement). Runs (`node tools/simpool.js <args>`): Fresh random `1 384 0.75 none --pick=random`; Fresh smart, Half-upgraded and Fully upgraded `1 384 0.75 none,mid,max --pick=smart`; Pact 5 `1 384 0.75 max - 5 --pick=smart`; Two heroes `2 192 0.75 mid --pick=smart`; Three heroes `3 192 0.75 mid --pick=smart`. `simpool.js` runs at normal priority; `--nice` opts into idle priority, which Windows throttles while the machine is unattended.
 
 | Profile | Target win | Measured | Target depth | Measured |
 |---|---|---|---|---|

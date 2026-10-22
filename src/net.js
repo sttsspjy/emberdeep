@@ -117,8 +117,8 @@
     const list = ED.CLASSES[cls].weapons, weapon = list.indexOf(d.weapon) >= 0 ? d.weapon : list[0];
     const m = d.meta && typeof d.meta === 'object' ? d.meta : {};
     const up = ED.UPGRADES.map((u, i) => U.clamp((Array.isArray(m.up) ? m.up[i] : 0) | 0, 0, u.costs.length));
-    const relics = Array.isArray(m.relics) ? m.relics.filter(id => ED.RELIC_IDS.indexOf(id) >= 0) : [];
-    return { cls, weapon, meta: { up, mastery: U.clamp(m.mastery | 0, 1, 10), relics } };
+    const known = (ED.ARMORY[cls] || []).map(e => e.id), armory = Array.isArray(m.armory) ? m.armory.filter(id => known.indexOf(id) >= 0) : [];
+    return { cls, weapon, meta: { up, mastery: U.clamp(m.mastery | 0, 1, 10), armory } };
   };
 
   // ---------------- host session ----------------
@@ -265,7 +265,7 @@
   // ---------------- snapshots ----------------
   const ST = ['move', 'windup', 'lunge', 'aim', 'spin', 'charge', 'fuse', 'cast', 'idle', 'atk', 'dash', 'wind', 'slam', 'air', 'roar', 'fade', 'burrow', 'erupt', 'bash', 'leap', 'dive']; // append only: indices are the wire format
   const ST_IDX = U.indexer(ST);
-  const ZK = ['spawn', 'tele', 'teleLine', 'teleCone', 'laser', 'poison', 'fire', 'pfire', 'plague', 'sanct', 'pull', 'bomb', 'decoy', 'mire', 'rain', 'meteor', 'smoke', 'skyfall', 'shards']; // append only: indices are the wire format
+  const ZK = ['spawn', 'tele', 'teleLine', 'teleCone', 'laser', 'poison', 'fire', 'pfire', 'plague', 'sanct', 'pull', 'bomb', 'decoy', 'mire', 'rain', 'meteor', 'smoke', 'skyfall', 'shards', 'crack', 'vortex', 'starfall', 'bramble']; // append only: indices are the wire format
   const ZK_IDX = U.indexer(ZK);
   const PK = ['gold', 'xp', 'heart', 'orb'];
   const PK_IDX = U.indexer(PK);
@@ -300,6 +300,7 @@
     return out;
   };
   Object.assign(N.CAPS, { skyfx: 6, hunt: 6, split: 8 }); Object.assign(N.CAPS_LOCAL, { skyfx: 2, hunt: 2, split: 3 }); // Ranger: Skyfall and Second Shower, mark leap, Splitting Bolt
+  Object.assign(N.CAPS, { quake: 4, crack: 6, banner: 4, wave: 6, dmburst: 8, forkRank: 4 }); Object.assign(N.CAPS_LOCAL, { quake: 2, crack: 3, banner: 2, wave: 3, dmburst: 3, forkRank: 2 }); // Avalanche slam and cracks, War Banner plant, Death Mark waves and bursts, fork rank grants
   Object.assign(N.CAPS, { solar: 6, verdict: 8, hturn: 8, chain: 24 }); Object.assign(N.CAPS_LOCAL, { solar: 2, verdict: 3, hturn: 3, chain: 8 }); // Cleric events
   // Venom bar level of a foe: 0-4 pips (one per 25 Venom), 5 = Corroded. Radiance fill 0-3 of the Smite gauge.
   N.venomLevel = (e) => (e.venom >= 100 ? 5 : e.venom > 0 ? Math.min(4, Math.ceil(e.venom / 25)) : 0);

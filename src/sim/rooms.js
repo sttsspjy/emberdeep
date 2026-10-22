@@ -169,7 +169,8 @@
     this.dropGold(e.x, e.y, 15 + 6 * s);
     this.spawnPickup('heart', e.x, e.y, 1); this.spawnPickup('heart', e.x, e.y, 1);
     for (const q of this.players.values()) q.mantleAmt = 0;
-    if (s === 1 || s === 2 || s === 4) for (const q of this.players.values()) this.grantOffer(q, { src: 'class' }); // fork at the first boss, its ranks at the second and fourth (downed heroes get it when they are back up)
+    if (s === 1) for (const q of this.players.values()) this.grantOffer(q, { src: 'class' }); // the fork offer at the first boss (downed heroes get it when they are back up)
+    else if (s === 2 || s === 4) for (const q of this.players.values()) this.grantForkRank(q); // fork rank 2 and 3 at once, downed and dead heroes too
     if (s >= ED.CONST.STRATA) {
       this.run.embers.victory = 60;
       this.endRun(true);
@@ -181,16 +182,13 @@
     this.props.push({ id: U.uid(), kind: 'portal', x: c.x, y: c.y - 60, state: 0 });
   };
 
-  // Generalists in the party: the first picks of a hoard or shop are non-element relics, one per Generalist.
-  W.generalists = function () { let n = 0; for (const q of this.players.values()) if (ED.isGeneralist(q.boons)) n++; return n; };
-
   // One relic per hero; each hero may claim one relic from a group.
   W.spawnRelicChoices = function (x, y, minRar) {
     const n = this.partySize() + (this.partySize() > 1 ? 0 : 1);
     const group = U.uid();
-    const taken = new Set(), gens = this.generalists();
+    const taken = new Set();
     for (let i = 0; i < n; i++) {
-      const id = this.rollRelic(minRar, taken, null, i < gens);
+      const id = this.rollRelic(minRar, taken);
       taken.add(id);
       this.props.push({ id: U.uid(), kind: 'relic', x: x + (i - (n - 1) / 2) * 56, y, item: id, group, state: 0 });
     }
@@ -222,9 +220,9 @@
       let favor = 0;
       for (const p of this.players.values()) favor = Math.max(favor, (p.meta.up && p.meta.up[ED.UPGRADE_IDX.favor]) || 0);
       const items = [];
-      const taken = new Set(), gens = this.generalists();
+      const taken = new Set();
       const nRelics = 2 + (favor >= 2 ? 1 : 0);
-      for (let i = 0; i < nRelics; i++) { const r = this.rollRelic('c', taken, null, i < gens); taken.add(r); items.push({ type: 'relic', item: r }); }
+      for (let i = 0; i < nRelics; i++) { const r = this.rollRelic('c', taken); taken.add(r); items.push({ type: 'relic', item: r }); }
       items.push({ type: s % 2 ? 'boon' : 'forge' }); // one build item per shop: epic boon on odd strata, forge on even
       items.push({ type: 'potion' });
       items.push({ type: 'oil' });
@@ -349,7 +347,7 @@
         this.gold -= pr.price; pr.state = 1;
         const roll = this.rng.next();
         const rar = roll < 0.12 ? 'e' : roll < 0.5 ? 'r' : 'c';
-        this.giveRelic(p, this.rollRelic(rar, null, p));
+        this.giveRelic(p, this.rollRelic(rar));
         this.emit({ t: 'gamble', x: pr.x, y: pr.y });
         break;
       }
