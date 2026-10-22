@@ -5,7 +5,7 @@
             Large, centred, high contrast. Nothing tilted. Selection = ember diamond markers + a warm light pool.
    Unit     1u = 1rem = clamp(13px, min(100vw / 110, 100vh / 62), 36px)   -> 17.4px at 1920x1080, 23.2px at 2560x1440, 13px at 1280x720.
             Canvas HUD (own #hud canvas at device resolution, hud.js): u = clamp(13, min(W / 110, H / 62), 36) with W, H in CSS px, then multiply by the HUD canvas ratio.
-            HUD anchors: hero block bottom-left, party top-left, map + lantern top-right, xp bottom-centre, relics bottom-right, boss bar top-centre, messages above the hero block, DOM toasts top-centre below the boss bar.
+            HUD anchors: hero block bottom-left, party top-left, map top-right, xp bottom-centre, relics bottom-right, boss bar top-centre, messages above the hero block, DOM toasts top-centre below the boss bar.
    Fonts    Display "Cinzel" 700/900 (hero names, titles, buttons, big numbers). Body "Alegreya Sans" 400-800 (all other text, tabular numerals).
             Fallbacks: Georgia / "Segoe UI", system-ui.
    Type     minimum text 0.85u. 0.95u small · 1.08u body · 1.3u subhead · 1.75u title · 2.4u banner · 5-7u wordmark.
@@ -656,8 +656,6 @@ body:has(#ov-sheet:not([hidden])) #ov-boon { visibility: hidden; }
 .sh-cond { font-size: max(var(--fs-sm), 12px); line-height: 1.35; color: var(--text); margin-top: 0.15rem; }
 .sh-cond b { color: var(--bone); }
 .sh-aff2 { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.3rem 0; }
-.sh-tier { font: 800 var(--fs-md) var(--f-display); padding: 0 0.7rem; border-radius: 2rem; border: 1px solid var(--line-hi); }
-.sh-tier.t0 { color: var(--gold); } .sh-tier.t1 { color: var(--ember-hi); } .sh-tier.t2 { color: #ff7a5a; } .sh-tier.t3 { color: var(--danger); }
 .sh-party { display: flex; justify-content: space-between; gap: 0.8rem; font-size: var(--fs-md); padding: 0.1rem 0; }
 .sh-party.me span:first-child { font-weight: 800; }
 .sh-party.dead { opacity: 0.55; }

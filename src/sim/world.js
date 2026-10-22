@@ -1,6 +1,6 @@
 // Authoritative simulation. Runs on the host (or locally in solo play); clients mirror it from snapshots.
 // Split across files by prototype extension: combat.js (damage, attacks, skills), ai.js (enemy brains),
-// bosses.js (boss scripts), rooms.js (encounters, props, interactions). This file also owns the lantern and dread tiers.
+// bosses.js (boss scripts), rooms.js (encounters, props, interactions).
 (function (ED) {
   'use strict';
   const U = ED.U, T = ED.CONST.TILE, D = ED.Dungeon;
@@ -84,6 +84,25 @@
     return e;
   };
 
+  // Dash charges on a controller { dashN charges, dashT seconds to the next }: one charge refills every st.dashCd while below st.dashCharges. Returns the charges refilled.
+  Sim.dashTick = (c, st, dt) => {
+    const mx = st.dashCharges | 0;
+    if (c.dashN > mx) c.dashN = mx;
+    if (c.dashN >= mx) { c.dashT = 0; return 0; }
+    if (!(c.dashT > 0)) c.dashT = st.dashCd;
+    let n = 0;
+    c.dashT -= dt;
+    while (c.dashT <= 0 && c.dashN < mx) { c.dashN++; n++; c.dashT = c.dashN < mx ? c.dashT + st.dashCd : 0; } // an overshoot carries into the next charge
+    return n;
+  };
+  // Spends one charge (false when none is left); spending from a full set starts the recharge timer.
+  Sim.dashTry = (c, st) => {
+    if (!(c.dashN >= 1)) return false;
+    if (c.dashN >= (st.dashCharges | 0)) c.dashT = st.dashCd;
+    c.dashN--;
+    return true;
+  };
+
   // Hero movement: walking, dash, skill-move, hazards and pull zones.
   Sim.movePlayer = (p, inp, dt, room, locked, zones) => {
     if (p.downed || p.dead) { p.moving = false; p.skillMove = null; p.skillIfr = false; return; }
@@ -98,8 +117,9 @@
     }
     p.skillIfr = false;
     if (p.dashT > 0) {
-      p.dashT -= dt;
-      Sim.moveCircle(p, p.dashDx * 430 * dt, p.dashDy * 430 * dt, room, locked, false);
+      p.dashT -= dt; if (p.dashT < 1e-6) p.dashT = 0; // float residue would add a tick past DASH.t at the fixed step
+      const ds = ED.CONST.DASH.speed;
+      Sim.moveCircle(p, p.dashDx * ds * dt, p.dashDy * ds * dt, room, locked, false);
       p.moving = true;
       return;
     }
@@ -138,10 +158,9 @@
     this.time = 0; this.roomTime = 0; this.state = 'play'; this.stratum = 0; this.floorSeed = 0;
     this.locked = false; this.enc = null; this.boss = null; this.pendingStratum = null;
     this.run = { kills: 0, roomsCleared: 0, elitesKilled: 0, bosses: 0, bossCount: 0, revives: 0, maxGold: 0, maxRelics: 0, flawlessBoss: false,
-      lightlessBoss: false, fullClear: false, roomsVisited: 0, roomsTotal: 0, lightAtBoss: [],
+      fullClear: false, roomsVisited: 0, roomsTotal: 0,
       embers: { rooms: 0, elites: 0, bosses: 0, victory: 0 } };
-    this.light = 100; this.lightMax = 100; this.dread = Object.assign({}, W.DREAD[0]); // lantern and dread tier (see updateLantern)
-    this.gloomT = null; this.gloomN = 0; this.deepRooms = 0; this.bossTier = 0; this.fullClearDone = 0;
+    this.fullClearDone = 0;
     this.roomState = {};
     this.endTimer = -1; this.result = null; this.victory = false;
     this.flowT = 0; this.flow = null; this.tick = 0; this.waitMsg = '';
@@ -150,42 +169,20 @@
     for (const pd of opts.players) this.addPlayer(pd);
   };
   W.xpFor = (L) => Math.round(30 + 3 * (L - 1) + 6 * (L - 1) * (L - 1)); // xp from level L to L+1
-  // Dread tiers by light fraction (>= 0.5, >= 0.25, > 0, 0): foe hp (1 in every tier: darkness never adds HP) and damage multipliers, elite chance added to a room's, wave budget multiplier, room gold & embers multiplier,
-  // chance (up) that a cleared room's reward is upgraded, seconds after entering a room until the Gloom hunts (gloom 0 = none), Glooms hunting at once (glooms), healing multiplier (heal).
-  W.DREAD = [
-    { tier: 0, hp: 1, dmg: 1, elite: 0, wave: 1, gold: 1, up: 0, gloom: 0, glooms: 0, heal: 1 },
-    { tier: 1, hp: 1, dmg: 1.1, elite: 0.2, wave: 1, gold: 1.25, up: 0, gloom: 0, glooms: 0, heal: 1 },
-    { tier: 2, hp: 1, dmg: 1.6, elite: 0.4, wave: 1, gold: 1.5, up: 0.12, gloom: 8, glooms: 1, heal: 0.7 },
-    { tier: 3, hp: 1, dmg: 2.3, elite: 0.6, wave: 1, gold: 1.75, up: 0.2, gloom: 3, glooms: 1, heal: 0.5 },
-  ];
   W.ELITE = { hp: 2.4, hpStep: 0.4, dmg: 0.9 }; // elite HP multiplier at stratum I (+ hpStep per stratum) and damage multiplier
   W.HAZARD_MUL = 0.5; // floor hazard damage multiplier
-  W.LANTERN_MUL = [1.3, 1.2, 1.1, 1, 1, 1]; // lantern size per stratum: the first strata are bright
-  W.GLOOM_GAP = 4; // seconds between the Glooms of one room when its tier hunts with more than one
-  W.GLOOM_STEP = 1; W.GLOOM_MAX = 3; // Lightless hunts with 1 + floor(deepRooms / GLOOM_STEP) Glooms, at most GLOOM_MAX
-  W.DEEP = 0.28; W.DEEP_MAX = 5; // every new room entered Dark or Lightless raises foe damage by DEEP for the rest of the stratum (up to DEEP_MAX rooms)
-  W.GLOOM_HIT = 0.19; // Gloom touch damage as a fraction of the toughest living hero's max HP
-  W.OIL_LIGHT = 35; // light gained from a lantern oil reward or shop oil
-  W.FLARE = { cost: 6, banish: 12, blind: 1.5, r: 160 }; // lantern flare (F): light spent, seconds the Gloom stays away, foe blind seconds, blind radius
-  W.DARK_AFFIXES = ['brutal', 'vampiric', 'warded', 'swift']; // affix pool of elites made at Dark and Lightless (the volatile affix is left out)
-  W.ELITE_BODIES = 4; // plain-foe budget one elite displaces from its wave in any tier but Bright
-  W.REWARD_UP = { gold: 'vigor', vigor: 'forge', forge: 'epic', boon: 'epic' }; // darkness upgrades a room reward one step
+  // Dark rooms (room.dark, set by floor gen: 2 opt-in combat dead ends per floor): foe damage multiplier, gold and xp multiplier of everything dropped there, multiplier of the fodder quota.
+  W.DARK_DMG = 1.3; W.DARK_LOOT = 1.5; W.DARK_FODDER = 1.5;
+  W.DARK_AFFIXES = ['brutal', 'vampiric', 'warded', 'swift']; // affix pool of the extra elite of a dark room's last wave (the volatile affix is left out)
+  W.REWARD_UP = { gold: 'vigor', vigor: 'forge', forge: 'epic', boon: 'epic' }; // a dark room's reward goes up one step
   // Per-stratum threat on top of the base scales: foe HP, wave budget, `cdRate` = extra cooldown recovery (0.2 = attack timers tick 20% faster, -0.2 = 20% slower) and the boss pause between attacks (x).
   W.THREAT = [{ hp: 2.2, dmg: 0.5, wave: 0.8, cdRate: -0.4, pause: 2 }, { hp: 1.62, dmg: 0.5, wave: 0.75, cdRate: -0.3, pause: 1.7 }, { hp: 1.3, dmg: 0.5, wave: 0.7, cdRate: -0.1, pause: 1.4 }, { hp: 1, dmg: 0.4, wave: 0.66, cdRate: 0, pause: 1.2 }, { hp: 1.07, dmg: 0.78, wave: 0.62, cdRate: 0.15, pause: 1 }, { hp: 1.02, dmg: 0.98, wave: 0.6, cdRate: 0.3, pause: 0.9 }];
   // Foe HP multiplier of stratum s: the depth curve times the threat HP.
   W.hpScale = (s) => (1 + 0.65 * (s - 1) + 0.08 * (s - 1) * (s - 1)) * W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, s - 1))].hp;
   // Wave pacing of combat rooms: seconds before the first wave, spawn telegraph (+ random extra), minimum gap before the next wave, the share of a wave that may still stand when the next one is called, the seconds after which the next wave comes regardless, and the minimum spawn distance from heroes (turrets keep more).
   W.PACE = { first: 0.5, spawn: 0.7, spawnVar: 0.25, gap: 0.9, nextAt: 0.45, maxAge: 6, avoid: 100, avoidTurret: 130 };
-  // Entering a room not yet visited costs this much light (of 100, not scaled by Deep Wick); revisits, the start room and the boss room are free. Shown on doors and the map.
-  W.ROOM_COST = { combat: 12, elite: 17, treasure: 8, shop: 8, event: 8, rest: 8 };
-  W.roomCost = (type) => W.ROOM_COST[type] || 0;
-  // Dread tier of a light fraction.
-  W.tierOf = (f) => f >= 0.5 ? 0 : f >= 0.25 ? 1 : f > 0 ? 2 : 3;
-  // Boss-door reward for the light left (fraction f): every living hero heals `heal` and gains a `shield` (both fractions of max HP); the party gains `gold` and `embers`.
-  W.bossLight = (f, stratum) => ({ heal: 0.5 * f, shield: 0.8 * f, gold: Math.round(f * (10 + 5 * stratum)), embers: Math.round(f * (2 + stratum)) });
-
-  // Gold dropped by a 'gold' room reward (shared with the UI): 15 + 8 per stratum, times the dread gold bonus and the global gold multiplier.
-  W.rewardGold = (stratum, dreadGold) => Math.round((15 + 8 * stratum) * (dreadGold || 1) * W.GOLD_MUL);
+  // Gold dropped by a 'gold' room reward (shared with the UI): 15 + 8 per stratum, times the global gold multiplier.
+  W.rewardGold = (stratum) => Math.round((15 + 8 * stratum) * W.GOLD_MUL);
   W.GOLD_MUL = 0.65; // every gold drop (kills, rooms, chests, rewards) is scaled by this; shops sell at full price
   W.prototype.threat = function () { return W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, this.stratum - 1))]; };
   W.prototype.emit = function (ev) { this.fx.push(ev); };
@@ -195,7 +192,7 @@
   W.prototype.partyHpMul = function () { return W.partyHpMul(this.partySize()); };
   W.prototype.alive = function (p) { return p && !p.downed && !p.dead; };
   W.prototype.alivePlayers = function () { const out = []; for (const p of this.players.values()) if (!p.downed && !p.dead) out.push(p); return out; };
-  W.prototype.hostiles = function () { let n = 0; for (const e of this.enemies) if (e.hp > 0 && !e.def.gloom) n++; return n; };
+  W.prototype.hostiles = function () { let n = 0; for (const e of this.enemies) if (e.hp > 0) n++; return n; };
 
   W.prototype.nearestPlayer = function (x, y) {
     let best = null, bd = Infinity;
@@ -406,19 +403,19 @@
   // Heals up to max HP (no heal ever overflows into a shield). Returns the HP actually restored.
   W.prototype.healPlayer = function (p, amt, silent) {
     if (!p || p.downed || p.dead || p.hp >= p.maxHp) return 0;
-    const v = Math.min(p.maxHp - p.hp, amt * p.stats.healMul * (this.dread.heal ?? 1));
+    const v = Math.min(p.maxHp - p.hp, amt * p.stats.healMul);
     p.hp += v;
     if (!silent && v >= 1) this.emit({ t: 'heal', pid: p.pid, v: Math.round(v), x: p.x, y: p.y });
     return v;
   };
 
-  // Every shield a hero receives except Battle Ward ('ward') and the boss door passes one sliding window of SHIELD_WIN_T seconds (10 one-second slots in p.shWin): class sources (any k but 'holy' and 'bone') give at most
+  // Every shield a hero receives except Battle Ward ('ward') passes one sliding window of SHIELD_WIN_T seconds (10 one-second slots in p.shWin): class sources (any k but 'holy' and 'bone') give at most
   // SHIELD_WIN_CLASS of max HP per window, all sources together SHIELD_WIN_ALL; what the window refuses is logged in p.shieldClip[k].
   Object.assign(ED.CONST, { SHIELD_WIN_T: 10, SHIELD_WIN_CLASS: 0.03, SHIELD_WIN_ALL: 0.06 });
-  // Adds amt (x the dread heal multiplier) to p's absorb shield up to cap (a shield above the cap is never lowered); k labels the source in p.shieldBy. Returns the shield gained.
+  // Adds amt to p's absorb shield up to cap (a shield above the cap is never lowered); k labels the source in p.shieldBy. Returns the shield gained.
   W.prototype.addShield = function (p, amt, cap, k) {
     if (!p || p.downed || p.dead || !(amt > 0) || !(p.shield < cap)) return 0;
-    let gain = Math.min(cap, p.shield + amt * (this.dread.heal ?? 1)) - p.shield;
+    let gain = Math.min(cap, p.shield + amt) - p.shield;
     if (k !== 'ward') {
       const C = ED.CONST, win = p.shWin, now = Math.floor(this.time);
       let c = 0, a = 0;
@@ -487,7 +484,6 @@
     this.roomState = {};
     for (const r of this.floor.rooms) this.roomState[r.id] = { visited: false, known: false, cleared: false, props: null };
     this.run.roomsTotal += this.floor.rooms.length;
-    this.lightMax = this.lanternMax(); this.light = this.lightMax; this.updateDread(); this.deepRooms = 0;
     this.allies.length = 0;
     for (const p of this.players.values()) {
       if (p.dead) { p.dead = false; p.downed = false; p.hp = Math.round(p.maxHp * 0.3); p.invuln = 2; }
@@ -507,13 +503,8 @@
     this.roomEpoch = (this.roomEpoch || 0) + 1;
     const room = this.room = this.floor.rooms[id];
     const rs = this.roomState[id];
-    let cost = 0, atBoss = false;
-    if (!rs.visited) { this.run.roomsVisited++; cost = W.roomCost(room.type); }
+    if (!rs.visited) this.run.roomsVisited++;
     rs.visited = true; rs.known = true;
-    if (cost > 0) { this.light = Math.max(0, this.light - cost); this.updateDread(); } // paid before the room's encounter is planned
-    this.gloomT = null; this.gloomN = 0;
-    if (cost > 0 && this.dread.tier >= 2) this.deepRooms++;
-    if (room.type === 'boss' && !rs.cleared) { this.bossTier = this.dread.tier; this.run.lightAtBoss.push(Math.round(this.light / this.lightMax * 100) / 100); atBoss = true; }
     for (const d in room.doors) if (room.doors[d] >= 0) this.roomState[room.doors[d]].known = true;
     let k = 0;
     const pos = [];
@@ -532,8 +523,8 @@
     if (!rs.cleared) this.beginEncounter(room, rs);
     this.checkFullClear();
     this.computeFlow();
-    this.emit({ t: 'room', id, from: fromDir || '', pos, locked: this.locked, ep: this.roomEpoch, lc: cost });
-    if (atBoss) this.bossLantern();
+    this.emit({ t: 'room', id, from: fromDir || '', pos, locked: this.locked, ep: this.roomEpoch });
+    if (room.dark && !rs.cleared) this.emit({ t: 'dark' });
   };
 
   W.prototype.collectAll = function () {
@@ -562,8 +553,8 @@
       roomsCleared: this.run.roomsCleared, elitesKilled: this.run.elitesKilled, bosses: this.run.bosses, bossCount: this.run.bossCount,
       embers: Object.assign({}, this.run.embers), pact: this.pact, party: this.partySize(), level: this.level,
       revives: this.run.revives, flawlessBoss: this.run.flawlessBoss, maxGold: this.run.maxGold, maxRelics: this.run.maxRelics, players,
-      evolved: [...this.players.values()].some(p => !!p.stats.evo), lightlessBoss: this.run.lightlessBoss, fullClear: this.run.fullClear,
-      roomsVisited: this.run.roomsVisited, roomsTotal: this.run.roomsTotal, lightAtBoss: this.run.lightAtBoss.slice(),
+      evolved: [...this.players.values()].some(p => !!p.stats.evo), fullClear: this.run.fullClear,
+      roomsVisited: this.run.roomsVisited, roomsTotal: this.run.roomsTotal,
     };
   };
 
@@ -583,7 +574,6 @@
       return;
     }
     const fg = this.foeGrid(); fg.live = true; fg.qd = 0;
-    this.updateLantern(dt);
     this.updateShields(dt);
     for (const p of this.players.values()) this.updatePlayer(p, dt);
     if (!fg.direct) for (let i = 0; i < fg.n; i++) this.foeDrift(i); // hero effects that carry or pull foes (Sim.moveCircle) move them outside updateEnemy
@@ -756,9 +746,9 @@
     const es = this.enemies, n = es.length;
     if (n < GRID_MIN) {
       for (let i = 0; i < n; i++) {
-        const a = es[i]; if (a.hp <= 0 || a.def.gloom) continue;
+        const a = es[i]; if (a.hp <= 0) continue;
         for (let j = i + 1; j < n; j++) {
-          const b = es[j]; if (b.hp <= 0 || b.def.gloom) continue;
+          const b = es[j]; if (b.hp <= 0) continue;
           sepPair(a, b);
         }
       }
@@ -773,7 +763,7 @@
       let rmax = 0;
       for (let i = n - 1; i >= 0; i--) { // descending: each cell's list starts out ascending
         const e = es[i];
-        if (e.hp <= 0 || e.def.gloom) { cell[i] = -1; continue; }
+        if (e.hp <= 0) { cell[i] = -1; continue; }
         if (e.r > rmax) rmax = e.r;
         const c = sepCell(e, cw, ch);
         cell[i] = c; next[i] = head[c]; head[c] = i;
@@ -825,12 +815,14 @@
     this.pickups.push({ id: U.uid(), kind, x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, val, t: 0 });
   };
 
+  // Gold and xp dropped in a dark room are x DARK_LOOT.
+  W.prototype.lootMul = function () { return this.room && this.room.dark ? W.DARK_LOOT : 1; };
   W.prototype.dropGold = function (x, y, total, exact) {
-    total = Math.round(exact ? total : total * W.GOLD_MUL);
+    total = Math.round((exact ? total : total * W.GOLD_MUL) * this.lootMul());
     while (total > 0) { const v = Math.min(total, total > 30 ? 10 : total > 8 ? 4 : 1); this.spawnPickup('gold', x, y, v); total -= v; }
   };
   W.prototype.dropXp = function (x, y, total) {
-    total = Math.max(1, Math.round(total));
+    total = Math.max(1, Math.round(total * this.lootMul()));
     while (total > 0) { const v = Math.min(total, total > 40 ? 12 : total > 10 ? 4 : 1); this.spawnPickup('xp', x, y, v); total -= v; }
   };
 
@@ -864,129 +856,6 @@
     if (pk.kind === 'gold') { const v = Math.max(1, Math.round(pk.val * (1 + p.stats.gold))); this.gold += v; this.emit({ t: 'gold', v, pid: p.pid }); }
     else if (pk.kind === 'xp') { this.addXp(pk.val * (1 + p.stats.xp)); this.emit({ t: 'xp', pid: p.pid }); }
     else if (pk.kind === 'heart') { this.healPlayer(p, p.maxHp * (0.22 + 0.03 * p.stats.forager) + 6); }
-  };
-
-  // ---------------- lantern and dread ----------------
-  // Best Deep Wick rank in the party sets the lantern capacity.
-  W.prototype.lanternMax = function () {
-    let rank = 0;
-    for (const p of this.players.values()) rank = Math.max(rank, (p.meta.up && p.meta.up[ED.UPGRADE_IDX.deepwick]) || 0);
-    return 100 * (1 + 0.06 * rank) * (W.LANTERN_MUL[this.stratum - 1] || 1);
-  };
-
-  // Dark and Lightless tiers stalk regular rooms with a Gloom. The lantern only loses light through room costs and the flare.
-  W.prototype.updateLantern = function (dt) {
-    const room = this.room;
-    if (!room) return;
-    const hold = this.offerHold(); // an open boon pick in a safe room pauses the Gloom's delay
-    const gl = this.dread.gloom;
-    if (gl > 0 && room.type !== 'boss' && room.type !== 'start' && this.gloomN < this.gloomWant() && ED.ENEMIES.gloom) {
-      this.gloomT = (this.gloomT === null ? (this.gloomN ? W.GLOOM_GAP : gl) : this.gloomT) - (hold ? 0 : dt);
-      if (this.gloomT <= 0) { this.gloomN++; this.gloomT = null; this.spawnGloom(); }
-    } else if (!(gl > 0)) this.gloomT = null;
-  };
-
-  // Glooms hunting in this room: the tier's count; Lightless adds one per GLOOM_STEP dark rooms entered this stratum (this one included).
-  W.prototype.gloomWant = function () {
-    const n = this.dread.glooms || 1;
-    return this.dread.tier >= 3 ? Math.min(W.GLOOM_MAX, n + Math.floor(this.deepRooms / W.GLOOM_STEP)) : n;
-  };
-
-  // Recomputes the dread tier from the light fraction; w.dread carries the multipliers read at spawn and at room rewards.
-  W.prototype.updateDread = function () {
-    const f = this.lightMax > 0 ? this.light / this.lightMax : 0;
-    const tier = W.tierOf(f);
-    if (tier === this.dread.tier) return;
-    this.dread = Object.assign({}, W.DREAD[tier]);
-    this.emit({ t: 'dread', tier });
-  };
-
-  // True while the room is safe and a hero has a boon offer open.
-  W.prototype.offerHold = function () {
-    if (!this.isSafe()) return false;
-    for (const p of this.players.values()) if (p.offer) return true;
-    return false;
-  };
-
-  // Any light gained banishes the Gloom (it hunts again once the lantern is Dark or Lightless, after its usual delay).
-  W.prototype.addLight = function (amt, x, y) {
-    this.light = Math.min(this.lightMax, this.light + amt);
-    this.updateDread();
-    this.emit({ t: 'oil', x, y, v: amt });
-    if (amt > 0) this.banishGloom(null);
-  };
-
-  // Removes the Gloom and its spawn telegraph; `hold` = seconds until it may return (null: the tier's delay).
-  W.prototype.banishGloom = function (hold) {
-    for (const e of this.enemies) if (e.def.gloom && e.hp > 0) { e.hp = 0; this.emit({ t: 'banish', x: Math.round(e.x), y: Math.round(e.y) }); }
-    this.zones = this.zones.filter(z => !z.gloom);
-    this.gloomN = 0; this.gloomT = hold;
-  };
-
-  // Lantern flare (F): spends light to banish the Gloom for FLARE.banish seconds and blind the foes around the hero. Returns whether it fired.
-  W.prototype.flare = function (p) {
-    const F = W.FLARE, room = this.room;
-    if (!p || p.downed || p.dead || this.state !== 'play' || this.pendingStratum || !room || room.type === 'boss' || this.light < F.cost || this.time < (this.flareAt || 0)) return false;
-    this.flareAt = this.time + 1;
-    this.light -= F.cost; this.updateDread();
-    this.banishGloom(F.banish);
-    for (const e of this.enemies) if (e.hp > 0 && !e.boss && !e.def.gloom && U.dist2(e.x, e.y, p.x, p.y) < F.r * F.r) e.blind = Math.max(e.blind || 0, F.blind);
-    this.emit({ t: 'flare', pid: p.pid, x: Math.round(p.x), y: Math.round(p.y), r: F.r });
-    return true;
-  };
-
-  // Dim and darker: each elite displaces ELITE_BODIES of plain-foe budget from its wave (fewer, nastier bodies; one plain foe always stays); Dark and Lightless elites roll from DARK_AFFIXES.
-  W.prototype.darkWaves = function (waves) {
-    const dr = this.dread;
-    if (dr.tier === 0) return waves;
-    for (const wv of waves) {
-      let owe = 0;
-      for (const it of wv) if (it.elite) { owe += W.ELITE_BODIES; if (dr.tier >= 2) it.affix = this.rng.pick(W.DARK_AFFIXES); }
-      for (let i = wv.length - 1; i >= 0 && owe > 0 && wv.filter(x => !x.elite).length > 1; i--) {
-        if (wv[i].elite) continue;
-        owe -= ED.ENEMIES[wv[i].type].cost || 2; wv.splice(i, 1);
-      }
-    }
-    return waves;
-  };
-
-  // Dark and Lightless: a cleared room's reward may be upgraded one step (chance dread.up); announced by an 'upgrade' event at the reward's spot.
-  W.prototype.darkReward = function (item, x, y) {
-    if (!(this.dread.up > 0) || !this.rng.chance(this.dread.up)) return item;
-    const to = W.REWARD_UP[item];
-    if (!to) return item;
-    this.emit({ t: 'upgrade', to, x: Math.round(x), y: Math.round(y) });
-    return to;
-  };
-
-  // Entering the boss room turns the light left into a reward (see W.bossLight): heals and shields the living heroes, drops gold, adds embers.
-  W.prototype.bossLantern = function () {
-    const f = this.lightMax > 0 ? this.light / this.lightMax : 0;
-    if (f <= 0) return;
-    const R = W.bossLight(f, this.stratum), heroes = this.alivePlayers();
-    for (const p of heroes) {
-      this.healPlayer(p, p.maxHp * R.heal);
-      const to = Math.max(p.shield || 0, p.maxHp * R.shield);
-      p.shieldBy.door = (p.shieldBy.door || 0) + (to - (p.shield || 0)); p.shield = to;
-    }
-    this.run.embers.rooms += R.embers;
-    if (R.gold > 0 && heroes.length) this.dropGold(heroes[0].x, heroes[0].y, R.gold, true);
-    this.emit({ t: 'wick', f: Math.round(f * 100), heal: Math.round(R.heal * 100), shield: Math.round(R.shield * 100), gold: R.gold, embers: R.embers });
-  };
-
-  // Telegraphed spawn at the floor point farthest from every living hero.
-  W.prototype.spawnGloom = function () {
-    const room = this.room, heroes = this.alivePlayers();
-    let best = null, bd = -1;
-    for (let ty = 2; ty < room.h - 1; ty++) for (let tx = 1; tx < room.w - 1; tx++) {
-      if (room.tiles[ty * room.w + tx] !== 0) continue;
-      const x = (tx + 0.5) * T, y = (ty + 0.5) * T;
-      let d = Infinity;
-      for (const p of heroes) d = Math.min(d, U.dist2(x, y, p.x, p.y));
-      if (d > bd) { bd = d; best = { x, y }; }
-    }
-    if (best) this.addZone({ kind: 'spawn', x: best.x, y: best.y, r: ED.ENEMIES.gloom.r + 4, dur: 1.5, type: 'gloom', elite: false, gloom: true,
-      after: (e) => { e.dmg = W.GLOOM_HIT * Math.max(1, ...heroes.map(p => p.maxHp)); } }); // a touch takes GLOOM_HIT of the toughest hero's max HP
   };
 
   // Marks the stratum fully explored once every non-boss room has been cleared (non-combat rooms clear on entry).

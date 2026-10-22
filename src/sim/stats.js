@@ -149,7 +149,7 @@
     const cdr = St.cdrEff(s.cdr), rc = (n) => 1 - Math.min(C.ROUTE_CDR_MAX, s['s' + n + 'Cdr']);
     out.skillCd = ED.SKILLS[cls.skill].cd * (1 - cdr) * rc(1);
     out.skill2Cd = cls.skill2 && ED.SKILLS[cls.skill2] ? ED.SKILLS[cls.skill2].cd * (1 - cdr) * rc(2) : 0;
-    out.dashCd = 1.1 * Math.max(0.3, 1 - s.dashcdr);
+    out.dashCd = 1.5; out.dashCharges = 1; // recharge seconds per charge, max charges
     out.pickupR = 46 * (1 + s.pickup);
     out.critMult = 1.75 + s.critDmg;
     out.crit = Math.min(0.95, s.crit);

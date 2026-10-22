@@ -1,5 +1,5 @@
 // Usage: node tools/check-perf.js [--audit-only] [--limit=<ms per tick at 150 foes>] [--reps=N]
-// Headless sim cost per tick against the live foe count (hordes: up to 120 foes solo, 180 in a party). One hero stands in the largest combat room (25x15 tiles) and fires volleys at the nearest foe while N mixed foes
+// Headless sim cost per tick against the live foe count (hordes: up to 120 foes solo, 180 in a party). One hero stands in the largest combat room (37x17 tiles) and fires volleys at the nearest foe while N mixed foes
 // (every non-boss roster type) pile up around it; foes carry 25x HP so the count holds. Per count: 200 warm-up ticks, then 600 ticks at dt 1/60; the best of N runs, mean of its fastest 95% of ticks.
 // Fails when 150 foes cost more than the limit or when the audit finds a difference; the 200 / 70 cost ratio is printed (x2.86 would be linear in the foe count).
 // Audit (normal foe HP, respawns, a kiting hero, kills and splits): every foesNear call must return each foe that a full scan finds within the circle, ascending and alive, including random probes inside the foe loop of
@@ -19,15 +19,15 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
 
 const rosterTypes = (() => {
   const set = new Set();
-  for (const b of ED.BIOMES) for (const r of b.enemies) { const d = ED.ENEMIES[r[0]]; if (d && !d.boss && !d.gloom && !d.ally && !d.minion) set.add(r[0]); }
+  for (const b of ED.BIOMES) for (const r of b.enemies) { const d = ED.ENEMIES[r[0]]; if (d && !d.boss && !d.ally && !d.minion) set.add(r[0]); }
   return [...set].sort();
 })();
 const bigRoom = (() => {
   for (let s = 1; s < 2000; s++) {
-    const f = D.generate(1, s), r = f.rooms.find(q => q.type === 'combat' && q.w === 25 && q.h === 15);
+    const f = D.generate(1, s), r = f.rooms.find(q => q.type === 'combat' && q.w === 37 && q.h === 17);
     if (r) return { f, id: r.id };
   }
-  throw new Error('no 25x15 combat room found');
+  throw new Error('no 37x17 combat room found');
 })();
 
 function stage(sc) {
@@ -65,7 +65,7 @@ function topUp(s, n) {
 function tick(s, n) {
   const { w, p, c } = s, k = s.sc.kite ? 1 : 0;
   topUp(s, n);
-  p.invuln = 1e9; w.light = w.lightMax;
+  p.invuln = 1e9;
   c.t += DT;
   c.atk -= DT;
   let tgt = null, bd = 1e12;
@@ -100,9 +100,9 @@ function runCount(sc, n) {
 function refSeparate(w) {
   const es = w.enemies, n = es.length;
   for (let i = 0; i < n; i++) {
-    const a = es[i]; if (a.hp <= 0 || a.def.gloom) continue;
+    const a = es[i]; if (a.hp <= 0) continue;
     for (let j = i + 1; j < n; j++) {
-      const b = es[j]; if (b.hp <= 0 || b.def.gloom) continue;
+      const b = es[j]; if (b.hp <= 0) continue;
       const dx = b.x - a.x, dy = b.y - a.y, rr = (a.r + b.r) * 0.9;
       const d2 = dx * dx + dy * dy;
       if (d2 >= rr * rr || d2 < 1e-4) continue;
@@ -171,9 +171,9 @@ function audit(sc, n) {
   return { calls, bad, sep: sepBad, leaks, first };
 }
 
-// Stress: random packs (32-220 foes, radii 5-34, some immobile, bosses and Glooms, positions clustered tightly and against walls) separate exactly like the reference.
+// Stress: random packs (32-220 foes, radii 5-34, some immobile, bosses, positions clustered tightly and against walls) separate exactly like the reference.
 function stressSeparate(trials) {
-  const { w } = stage({ cls: 'ranger', kite: false, hp: 1 }), rng = U.RNG(4242), types = [...rosterTypes, 'gloom', 'bonewarden'];
+  const { w } = stage({ cls: 'ranger', kite: false, hp: 1 }), rng = U.RNG(4242), types = [...rosterTypes, 'bonewarden'];
   const room = w.room, W0 = room.w * T, H0 = room.h * T;
   let bad = 0;
   for (let t = 0; t < trials; t++) {

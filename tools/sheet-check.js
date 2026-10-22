@@ -10,7 +10,7 @@ const near = (a, b, tol, msg) => ok(Math.abs(a - b) <= tol, `${msg}: got ${a}, w
 const rel = (a, b, tol, msg) => ok(Math.abs(a - b) <= Math.max(1e-6, Math.abs(b) * tol), `${msg}: got ${a.toFixed ? a.toFixed(3) : a}, want ${b.toFixed ? b.toFixed(3) : b} (${tol * 100}%)`);
 const W = ED.World.prototype, REF = ED.Sheet.REF, C = ED.CONST;
 const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
-const CTX = (o) => Object.assign({ stratum: 1, pact: 0, gold: 0, level: 5, xp: 0, xpNext: 100, light: 100, lightMax: 100, tier: 0, deep: null, allyNear: 0, minions: 0, room: null, party: 1, rooms: { seen: 1, total: 10 }, heroes: [], time: 0 }, o || {});
+const CTX = (o) => Object.assign({ stratum: 1, pact: 0, gold: 0, level: 5, xp: 0, xpNext: 100, dark: false, allyNear: 0, minions: 0, room: null, party: 1, rooms: { seen: 1, total: 10, darkTotal: 2, darkLeft: 2 }, heroes: [], time: 0 }, o || {});
 
 // ---------------- test vectors (DESIGN-ux A4) ----------------
 function modelOf(cls, boons, wi, o) {
@@ -263,24 +263,25 @@ for (const [cls, evo, stratum] of [['knight', 'fire', 1], ['pyro', 'fire', 1], [
 }
 
 // ---------------- defence and the foes that spawn now ----------------
-for (const [stratum, pact, tier, deep, party, boons] of [[1, 0, 0, 0, 1, {}], [3, 2, 1, 0, 1, { plating: 2, evade: 0 }], [4, 8, 2, 3, 1, { mending: 2 }], [6, 10, 3, 5, 2, { edge: 1 }], [2, 4, 0, 0, 1, { glass: 1, stalwart: 2 }]]) {
+for (const [stratum, pact, dark, party, boons] of [[1, 0, false, 1, {}], [3, 2, true, 1, { plating: 2, evade: 0 }], [4, 8, true, 1, { mending: 2 }], [6, 10, false, 2, { edge: 1 }], [2, 4, true, 1, { glass: 1, stalwart: 2 }]]) {
   const { w, p } = stage('knight', boons, 0, {});
-  w.pact = pact; w.recalc(p, true); w.enterStratum(stratum); w.deepRooms = deep; w.light = [100, 40, 20, 0][tier] * w.lightMax / 100; w.updateDread();
+  w.pact = pact; w.recalc(p, true); w.enterStratum(stratum); w.room.dark = dark;
   if (party > 1) w.addPlayer({ pid: 'p1', name: 'B', slot: 1, cls: 'ranger', weapon: 'longbow', meta: META() });
   w.enemies.length = 0; w.enc = null; w.locked = false;
-  const tag = `stratum ${stratum} pact ${pact} tier ${tier} deep ${deep} party ${party}`, m = ED.Sheet.compute(p, ED.Sheet.ctx(w, p), { raw: true });
+  const tag = `stratum ${stratum} pact ${pact} dark ${dark} party ${party}`, m = ED.Sheet.compute(p, ED.Sheet.ctx(w, p), { raw: true });
   const e = w.spawnEnemy('skeleton', p.x + 80, p.y), e2 = w.spawnEnemy('frozenskel', p.x + 90, p.y);
   rel(e.dmg / ED.ENEMIES.skeleton.dmg, m.def.foeHere, 1e-9, `foes that spawn now hit (${tag})`);
   rel(e2.hp, m.ref.hp, 1e-9, `reference foe health (${tag})`); rel(e2.hp / e2.hpLever, m.ref.statusHp, 1e-9, `reference foe status health (${tag})`);
   p.hp = p.maxHp; p.invuln = 0; w.hurtPlayer(p, 100, { hazard: true }); near(p.maxHp - p.hp, Math.max(1, Math.round(100 * m.def.taken)), 1, `damage taken from a 100 hit (${tag})`);
-  p.hp = 1; const got = w.healPlayer(p, 10, true); rel(got, 10 * m.def.heal, 1e-9, `healing received (${tag})`);
+  p.hp = 1; const got = w.healPlayer(p, 10, true); rel(got, 10 * m.def.healMul, 1e-9, `healing received (${tag})`);
+  ok(m.ctx.dark === dark && (m.def.foeParts.dark === null) === !dark, `dark-room flag of the sheet (${tag})`);
   ok(m.def.maxHp === p.maxHp && m.def.ehp > 0, `max health (${tag})`);
 }
 
 // ---------------- statuses on a foe of the reference health: the payoffs the estimates promise (weapon damage only, no crit) ----------------
 function statusRun(boons, stratum, secs, until) {
   const { w, p, e } = stage('ranger', boons, 0, {});
-  w.stratum = stratum; w.updateDread();
+  w.stratum = stratum;
   const m0 = ED.Sheet.compute(p, ED.Sheet.ctx(w, p), { raw: true }), ref = m0.ref;
   e.maxHp = e.hp = ref.hp; e.hpLever = ref.hp / ref.statusHp; // a foe of the reference health; the pin below keeps it alive unless the payoff is a kill
   let next = 0, t = null;
