@@ -24,14 +24,14 @@
     pyro: {
       name: 'Pyromancer', title: 'Keeper of the Flame', icon: 'flame',
       desc: 'Fragile but devastating. Exploding fire clears whole rooms.',
-      hp: 100, armor: 8, spd: 120, crit: 0.05, power: 17, element: 'fire',
+      hp: 106, armor: 4, spd: 120, crit: 0.05, power: 17, element: 'fire',
       weapons: ['firestaff', 'emberwand', 'inferno'], skill: 'nova', skill2: 'meteor',
       col: { a: '#9a2f2a', b: '#5a1714', c: '#ffb347', d: '#2a0c0a' }, unlock: null,
     },
     shade: {
       name: 'Shade', title: 'Blade in the Dark', icon: 'dagger',
       desc: 'Fastest hero alive. Blinks through foes and lands guaranteed crits.',
-      hp: 110, armor: 9, spd: 138, crit: 0.12, power: 13, element: null,
+      hp: 116, armor: 5, spd: 138, crit: 0.12, power: 13, element: null,
       weapons: ['daggers', 'knives', 'scythes'], skill: 'step', skill2: 'vanish',
       col: { a: '#3a3550', b: '#1f1b2e', c: '#b78cff', d: '#121018' }, unlock: { boss: 1, text: 'Defeat The Bone Warden' },
     },

@@ -23,7 +23,7 @@ function modelOf(cls, boons, wi, o) {
 }
 {
   const V = { // weapon hit, avg, aps, dps; armor taken
-    knight: [18, 18.675, 2.381, 44.47, 0.8824], ranger: [12, 12.9, 2.941, 37.94, 0.9231], pyro: [15, 15.5625, 2.0, 49.125, 0.8824], shade: [11, 11.99, 4.762, 57.1, 0.8696], cleric: [17, 17.64, 2.381, 54.6, 0.8955], necro: [9, 9.34, 2.5, 23.35, 0.9677],
+    knight: [18, 18.675, 2.381, 44.47, 0.8824], ranger: [12, 12.9, 2.941, 37.94, 0.9231], pyro: [15, 15.5625, 2.0, 49.125, 0.9375], shade: [11, 11.99, 4.762, 57.1, 0.9231], cleric: [17, 17.64, 2.381, 54.6, 0.8955], necro: [9, 9.34, 2.5, 23.35, 0.9677],
   };
   for (const cls in V) { // every class: hit, avg at crit 0 (= hit), avg and dps at the class crit, attacks per second, armor
     const m = modelOf(cls, {}, 0, { stat: { crit: 0 } }), mc = modelOf(cls, {}, 0), v = V[cls], w = m.weapon;
