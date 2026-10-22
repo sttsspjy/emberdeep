@@ -49,8 +49,8 @@
     form: { name: 'Doombrand', desc: 'Brand now counts up to {brandCap:n} ailments. A foe holding 4 or more ailments is Doombranded for 4 s: Marked, it takes +{brandMark} damage from every hero (the strongest Mark on a foe applies).' } });
   card('knight', 'element', 2, 'k_el_b', { name: 'Ruinous Blows', icon: 'axe', tag: 'Spread',
     desc: "Shield Charge and Shield Throw deal +{s1Dmg} and build your statuses at double strength, and the thrown shield carries wounds: each ricochet moves {carry} of the last foe's statuses to the next foe it strikes.",
-    rider2: 'Ruin Spreads: a foe killed by a shield strike hands {ruinSpread} of its statuses to each of the 2 nearest foes within 80.', mods: { ruinInf: 1, carry: 0.25, s1Dmg: 0.15, s2Dmg: 0.15 }, up: { carry: 0.1, s1Dmg: 0.4, s2Dmg: 0.4 }, r2: { ruinSpread: 0.5, s1Dmg: 0.15, s2Dmg: 0.15 }, r3: { cataclysm: 1, cataMul: 1, cataSplash: 0.8 },
-    form: { name: 'Cataclysm', desc: 'A Shield Charge or Shield Throw strike on a foe with 3 or more ailments detonates its wounds: its Bleed pool hits it at once for {cataMul} more than it would have dealt, and {cataSplash} of the amount paid bursts to foes within 80, who start Bleeding for it (at most once per second per foe).' } });
+    rider2: 'Ruin Spreads: a foe killed by a shield strike hands {ruinSpread} of its statuses to each of the 2 nearest foes within 80.', mods: { ruinInf: 1, carry: 0.25, s1Dmg: 0.15, s2Dmg: 0.15 }, up: { carry: 0.1, s1Dmg: 0.4, s2Dmg: 0.4 }, r2: { ruinSpread: 0.5, s1Dmg: 0.15, s2Dmg: 0.15 }, r3: { bloodquake: 1, bloodquakeMul: 1, bloodquakeSplash: 0.8 },
+    form: { name: 'Bloodquake', desc: 'A Shield Charge or Shield Throw strike on a foe with 3 or more ailments detonates its wounds: its Bleed pool hits it at once for {bloodquakeMul} more than it would have dealt, and {bloodquakeSplash} of the amount paid bursts to foes within 80, who start Bleeding for it (at most once per second per foe).' } });
 
   // ---------------- Ranger (Volley · Rain of Arrows) ----------------
   card('ranger', 'attack', 1, 'r_atk', { name: 'Deadeye', icon: 'bow', forks: ['r_atk_h', 'r_atk_s'], plays: 'keep your distance; long shots ring.',

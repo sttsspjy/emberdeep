@@ -402,14 +402,14 @@ function statusRun(boons, stratum, secs, until) {
     const lo = K({ k_el: 1, k_el_a: 3 }), hi = modelOf('knight', { edge: 2, quick: 2, focus: 1, stalwart: 1, kindle: 1, frostbite: 1, k_el: 1, k_el_a: 3 }, 0, { ctx: { stratum: 3 }, stat: { brandMark: ED.BOONS.k_el_a.r3.brandMark * 2 } });
     ok(hi.weapon.dps > lo.weapon.dps, 'a stronger Mark raises the Doombrand extra');
   }
-  { // Cataclysm: the payout multiplier raises the Shield Throw's damage on one foe, a part for packs on top; the pack burst follows cataSplash
-    const r2 = K({ k_el: 1, k_el_b: 2 }), r3 = K({ k_el: 1, k_el_b: 3 }), q = r3.skills[1].parts.find(x => x.id === 'cataclysm');
-    ok(!r2.skills[1].parts.some(x => x.id === 'cataclysm') && q && q.oneFoe === 0 && q.r === 80, 'Cataclysm adds a part with no hit of its own on one foe, none at rank 2');
-    rel(q.here, 2.5 * r3.proc.bleed * (1 + ED.BOONS.k_el_b.r3.cataMul), 1e-6, 'the Cataclysm payout is the Bleed pool (2.5 s of income) x (1 + cataMul)');
-    const mid = { edge: 2, quick: 2, focus: 1, stalwart: 1, kindle: 1, frostbite: 1, k_el: 1, k_el_b: 3 }, part = (stat) => modelOf('knight', mid, 0, { ctx: { stratum: 3 }, stat }).skills[1].parts.find(x => x.id === 'cataclysm'), lo = part({ cataSplash: 0.1 }), hi = part({ cataSplash: 0.3 }), one = (stat) => modelOf('knight', mid, 0, { ctx: { stratum: 3 }, stat }).skills[1].perCast;
-    ok(hi._r.total > lo._r.total && lo._r.total > 0, 'the pack burst follows cataSplash');
-    ok(one({ cataMul: 2 }) > one({ cataMul: 1 }) && one({ cataMul: 1 }) > one({ cataclysm: 0 }) && one({ cataSplash: 0.1 }) === one({ cataSplash: 0.9 }), 'on one foe only cataMul counts: the Throw deals more with it, the splash adds nothing');
-    ok(modelOf('knight', { k_el: 1, k_el_b: 3 }, 0).skills[1].parts.find(x => x.id === 'cataclysm')._r.total === 0, 'a build with fewer than 3 ailment sources never detonates');
+  { // Bloodquake: the payout multiplier raises the Shield Throw's damage on one foe, a part for packs on top; the pack burst follows bloodquakeSplash
+    const r2 = K({ k_el: 1, k_el_b: 2 }), r3 = K({ k_el: 1, k_el_b: 3 }), q = r3.skills[1].parts.find(x => x.id === 'bloodquake');
+    ok(!r2.skills[1].parts.some(x => x.id === 'bloodquake') && q && q.oneFoe === 0 && q.r === 80, 'Bloodquake adds a part with no hit of its own on one foe, none at rank 2');
+    rel(q.here, 2.5 * r3.proc.bleed * (1 + ED.BOONS.k_el_b.r3.bloodquakeMul), 1e-6, 'the Bloodquake payout is the Bleed pool (2.5 s of income) x (1 + bloodquakeMul)');
+    const mid = { edge: 2, quick: 2, focus: 1, stalwart: 1, kindle: 1, frostbite: 1, k_el: 1, k_el_b: 3 }, part = (stat) => modelOf('knight', mid, 0, { ctx: { stratum: 3 }, stat }).skills[1].parts.find(x => x.id === 'bloodquake'), lo = part({ bloodquakeSplash: 0.1 }), hi = part({ bloodquakeSplash: 0.3 }), one = (stat) => modelOf('knight', mid, 0, { ctx: { stratum: 3 }, stat }).skills[1].perCast;
+    ok(hi._r.total > lo._r.total && lo._r.total > 0, 'the pack burst follows bloodquakeSplash');
+    ok(one({ bloodquakeMul: 2 }) > one({ bloodquakeMul: 1 }) && one({ bloodquakeMul: 1 }) > one({ bloodquake: 0 }) && one({ bloodquakeSplash: 0.1 }) === one({ bloodquakeSplash: 0.9 }), 'on one foe only bloodquakeMul counts: the Throw deals more with it, the splash adds nothing');
+    ok(modelOf('knight', { k_el: 1, k_el_b: 3 }, 0).skills[1].parts.find(x => x.id === 'bloodquake')._r.total === 0, 'a build with fewer than 3 ailment sources never detonates');
   }
 }
 

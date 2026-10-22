@@ -2,7 +2,7 @@
 // Events: ric (a shield strike), catch, parry, deflect (a shot swatted), ward (Rallying Charge) and the boom 'shock' of Juggernaut / Oathbreaker; hero hook: Brace plate, Hold the Line ring, catch glint, Riposte shimmer, Charge streaks;
 // shot hook: the thrown shield's rim glint and the Shield Orbit ring. Everything is pixel art on the 2 px grid.
 // Skill forms: Avalanche (quake slam, crack fissures), Iron Phalanx (wide streaks, War Banner), Aegis Tempest (vortex zone), Bastion (the orbit ring at radius 60).
-// Route forms: Earthsplitter (the fissure zone and its 'fissure' event), Thousand Edges (the 'blade' shot body), Doombrand (a foe mark glyph), Cataclysm (the 'cata' event).
+// Route forms: Earthsplitter (the fissure zone and its 'fissure' event), Thousand Edges (the 'blade' shot body), Doombrand (a foe mark glyph), Bloodquake (the 'bquake' event).
 (function (ED) {
   'use strict';
   const CFX = ED.ClassFx, F = ED.FX, U = ED.U, Pix = ED.Pix, TAU = U.TAU, s2 = Pix.s2;
@@ -286,7 +286,7 @@
     }
   };
 
-  // ---- route forms: Earthsplitter, Thousand Edges, Doombrand, Cataclysm (runtime bakes, no atlas art) ----
+  // ---- route forms: Earthsplitter, Thousand Edges, Doombrand, Bloodquake (runtime bakes, no atlas art) ----
   // Earthsplitter fissure: the host's 'crack' zone with arc 1 (z.x, z.y, a, len, w) draws a dark earth crack that runs outward over its 0.25 s and flares pale as it is about to strike; its eruption is the 'fissure' event (dust column, rubble and a short shake along the line).
   const EARTH = '#b8a070', CRACK = '#1d130a';
   const crackAvalanche = CFX.zone.crack;
@@ -359,8 +359,8 @@
     return brandGlyph() ? BRAND : null;
   });
 
-  // Cataclysm: the detonated foe bursts in a blood-red ring of the burst radius, a spray of droplets, a flash and a dull thud.
-  CFX.on('cata', (ev, ctx, local) => {
+  // Bloodquake: the detonated foe bursts in a blood-red ring of the burst radius, a spray of droplets, a flash and a dull thud.
+  CFX.on('bquake', (ev, ctx, local) => {
     const mine = ev.pid === local;
     F.ring(ev.x, ev.y, ev.r, '#d43a3a', 0.4, 4); F.ring(ev.x, ev.y, ev.r * 0.55, '#ff7a6a', 0.28, 2);
     F.burst(ev.x, ev.y, 12, { color: '#c8283a', sp: ev.r * 2.2, life: 0.5, size: 2.4, vz: 70, z: 2, drag: 2 });
