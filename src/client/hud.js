@@ -669,7 +669,7 @@
       const icn = ICON[r.type], open = !st.cleared; // utility rooms keep their glyph; a cleared elite room loses it
       if (icn && (open || r.type !== 'elite')) ic(g, icn[0], icn[1], rx + s * 0.12, ry + s * 0.12, s * 0.76);
       if (open && r.reward && (r.type === 'combat' || r.type === 'elite')) { // reward preview: whole icon in plain combat rooms, a corner badge in elite rooms
-        const ri = ED.Render.rewardIcon(r.reward, cls), big = r.type === 'combat', z = big ? s * 0.76 : s * 0.5;
+        const ri = ED.Render.rewardIcon((r.dark && ED.World.REWARD_UP[r.reward]) || r.reward, cls), big = r.type === 'combat', z = big ? s * 0.76 : s * 0.5; // a dark room previews its stepped-up reward
         ic(g, ri[0], ri[1], big ? rx + s * 0.12 : rx + s - z * 0.9, big ? ry + s * 0.12 : ry + s - z * 0.9, z);
       }
       if (r.dark && !st.visited) { const z = s * 0.5; ic(g, 'skull', '#a070ff', rx + s - z * 0.9, ry + s - z * 0.9, z); } // dark-room mark, bottom-right of its cell

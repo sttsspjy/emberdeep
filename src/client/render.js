@@ -1074,7 +1074,7 @@
     const T2 = { boss: ['skull', '#ff5a3a'], shop: ['coin', '#ffd36b'], treasure: ['chest', '#ffd36b'], event: ['star', '#7dffd9'], rest: ['campfire', '#ff9a3a'] }[rm.type];
     if (T2) return { icon: T2[0], color: T2[1] };
     if (!rm.reward) return rm.type === 'elite' ? { icon: 'skull', color: '#ff7a3a' } : null;
-    const ri = R.rewardIcon(rm.reward, cls);
+    const ri = R.rewardIcon((rm.dark && ED.World.REWARD_UP[rm.reward]) || rm.reward, cls); // a dark room shows the reward it pays after its guaranteed step up
     return { icon: ri[0], color: ri[1], badge: rm.type === 'elite' ? 'skull' : null };
   };
 
