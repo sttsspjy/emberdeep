@@ -1,6 +1,7 @@
 // Bot card choice by marginal value (tools/sim.js --pick=smart). Factory: require('./pick.js')(ED, model) with model = require('./model.js')(ED).
-// Value of a hero build: V = sum over the strata t = s, s+1, s+2 (weights 0.5 / 0.3 / 0.2, capped at VI) of w_t ln D_t + LAMBDA ln E + bonus, where D_t = sqrt(damage on one foe x damage on a pack) at stratum t
+// Value of a hero build: V = sum over the strata t = s, s+1, s+2 (weights 0.5 / 0.3 / 0.2, capped at VI) of w_t (ln D_t + lambda_t ln E_t) + bonus, where D_t = sqrt(damage on one foe x damage on a pack) at stratum t
 // (ED.Sheet.compute through the model, the stratum affinity included), E = effective health and bonus = the meta stats (gold, experience, offers).
+// lambda_t (setLambda, --lambda=<x>|auto[:<x0>]): a fixed x for every stratum, or auto = x0 times the foe damage lever of stratum t over LEVER_REF, read from the live World.THREAT, World.dmgScale, biome rosters and boss damage (a harder table raises the weight of effective health).
 // The sheet leaves many mechanics out; fold() adds them from the stat block (formulas below, assumptions in the constants) so a card's value follows the build it joins.
 // Gain(card) = V(after) - V(before) + F(after) - F(before) + X(card); F = discounted value of the milestones a card brings closer (keystone, evolution, duo), X = a flat prior for effects with no stat.
 // Deterministic: no Math.random; ties break on the bot rng passed in.
@@ -9,7 +10,8 @@ module.exports = (ED, model) => {
 
   // ---------------- constants ----------------
   const W_STRATA = [0.5, 0.3, 0.2]; // weights of strata s, s+1, s+2
-  const LAMBDA = 0.4; // weight of ln effective health against ln damage
+  const LAMBDA = 2; // default weight of ln effective health against ln damage (fixed mode)
+  const LEVER_HIT = 0.1; // auto mode: lambda_t = x0 when a typical foe or boss hit of stratum t takes this share of a hero's base max health (mean over the classes)
   const GAMMA = 0.75; // discount per rank still missing to a milestone
   const MIN_TERM = 0.1; // a milestone discounted below this share of its gain is dropped (speed)
   const PICKS_RUN = 32, FEASIBLE = 0.6; // picks in a run; a milestone is worth nothing when it needs more than this share of the picks left
@@ -268,6 +270,34 @@ module.exports = (ED, model) => {
   const sortedKey = (o) => { const ks = Object.keys(o).sort(); let s = ''; for (const k of ks) if (o[k] > 0) s += k + o[k] + ','; return s; };
   const heroKey = (p, pact) => p.cls + '|' + p.weapon + '|' + pact + '|' + (p.bonusHp | 0) + '|' + (p.chaliceHp | 0) + '|' + metaKey(p.meta) + '|' + sortedKey(p.boons) + '|' + (p.relics || []).slice().sort().join(',');
 
+  // ---------------- weight of effective health ----------------
+  let lamMode = 'f', lamX = LAMBDA, lamKey = 'f' + LAMBDA;
+  // Foe damage lever of stratum t from the live tables: the mean hit of a regular foe (roster weights) and of the boss, times the depth scale and the threat damage.
+  function lever(t) {
+    const i = clamp(t, 1, ED.BIOMES.length), b = ED.BIOMES[i - 1], thr = ED.World.THREAT[Math.min(i, ED.World.THREAT.length) - 1];
+    let sum = 0, wt = 0;
+    for (const e of b.enemies) { sum += e[1] * ED.ENEMIES[e[0]].dmg; wt += e[1]; }
+    return ED.World.dmgScale(i) * thr.dmg * (sum / wt + ED.ENEMIES[b.boss].dmg) / 2;
+  }
+  let hitRef = 0; // LEVER_HIT x the mean base max health of the classes
+  const lambdaAt = (t) => {
+    if (lamMode === 'f') return lamX;
+    if (!hitRef) { let s = 0; for (const id of ED.CLASS_IDS) s += ED.CLASSES[id].hp; hitRef = LEVER_HIT * s / ED.CLASS_IDS.length; }
+    return lamX * lever(t) / hitRef;
+  };
+  // spec: undefined or '' = the default; '<x>' = fixed; 'auto' / 'auto:<x0>' = threat-aware (x0 default 1). Returns the setting's key; a change clears the value cache.
+  function setLambda(spec) {
+    let mode = 'f', x = LAMBDA;
+    if (spec !== undefined && spec !== null && spec !== '') {
+      const m = /^auto(?::(.+))?$/.exec(String(spec));
+      if (m) { mode = 'a'; x = m[1] === undefined ? 1 : +m[1]; } else x = +spec;
+      if (!(x >= 0) || !isFinite(x)) throw new Error('--lambda expects a number or auto[:x0], got ' + spec);
+    }
+    const key = mode + x;
+    if (key !== lamKey) { lamMode = mode; lamX = x; lamKey = key; cache.clear(); }
+    return key;
+  }
+
   // Decision context: the sheet context of the world, the strata a build is valued at, the picks taken.
   function decision(w, p) {
     const base = ED.Sheet.ctx(w, p), s = clamp(w.stratum, 1, ED.BIOMES.length), ts = [], ws = [];
@@ -286,14 +316,15 @@ module.exports = (ED, model) => {
     let r = cache.get(key);
     if (r) return r;
     const h = Object.assign({}, h0, AT_REST);
-    let d = 0, e = 0, bonus = 0;
+    let d = 0, e = 0, le = 0, bonus = 0;
     for (let i = 0; i < dc.ts.length; i++) {
-      const ctx = Object.assign({}, dc.base, { stratum: dc.ts[i] }), a = model.assess(h, ctx), f = fold(h, a, ctx);
+      const ctx = Object.assign({}, dc.base, { stratum: dc.ts[i] }), a = model.assess(h, ctx), f = fold(h, a, ctx), we = dc.ws[i] * ln(Math.max(1, f.ehp));
       d += dc.ws[i] * 0.5 * (ln(Math.max(1e-6, f.one)) + ln(Math.max(1e-6, f.pack)));
-      e += dc.ws[i] * ln(Math.max(1, f.ehp));
+      e += we;
+      le += lambdaAt(dc.ts[i]) * we;
       bonus += dc.ws[i] * f.bonus;
     }
-    r = { v: d + LAMBDA * e + bonus, d, e, bonus };
+    r = { v: d + le + bonus, d, e, bonus };
     if (cache.size > 40000) cache.clear();
     cache.set(key, r);
     return r;
@@ -406,5 +437,5 @@ module.exports = (ED, model) => {
     console.log(lines.join('\n'));
   }
 
-  return { chooseIndex, relicValue, relicGain, gainOf, valueOf, decision, future, fold, AT_REST, REROLL_MIN, LAMBDA, GAMMA };
+  return { chooseIndex, relicValue, relicGain, gainOf, valueOf, decision, future, fold, setLambda, lambdaAt, lever, AT_REST, REROLL_MIN, LAMBDA, GAMMA };
 };

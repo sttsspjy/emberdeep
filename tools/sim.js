@@ -1,5 +1,5 @@
 // Usage: node tools/sim.js <heroes> <runs> <botSkill 0-1> <meta none|mid|max> [classes|-] [pact] [--pick=random|smart|legacy] [--start=random|class|generalist|rotate|<gateId>] [--gates=1|2] [--force=id[@slot],...]
-//   [--route=attack|skill1|skill2|element|random|rotate] [--fork=0|1|random|rotate] [--weapon=0|1|2|rotate] [--aimnoise=<angle rad>,<point px>|0] [--seed0=N] [--dark=smart|always|never] [--strata=N] [--from=N] [--vet[=charges,rider,dodge,hazard]] [--vetreact=<s>] [--out=rows.json] [--pair=rows.json] [--quiet] [--explain]   (parallel batches: tools/simpool.js, fixed quick suite: tools/bal.js)
+//   [--route=attack|skill1|skill2|element|random|rotate] [--fork=0|1|random|rotate] [--weapon=0|1|2|rotate] [--aimnoise=<angle rad>,<point px>|0] [--seed0=N] [--dark=smart|always|never] [--strata=N] [--from=N] [--vet[=charges,rider,dodge,hazard]] [--vetreact=<s>] [--lambda=<x>|auto[:<x0>]] [--out=rows.json] [--pair=rows.json] [--quiet] [--explain]   (parallel batches: tools/simpool.js, fixed quick suite: tools/bal.js)
 // Headless simulation harness: loads the game's sim files into this Node context and drives bot heroes through full runs (deterministic per seed: the bot has its own seeded RNG).
 // Bot policy: fight, claim room rewards, use rest sites and shops, explore every unvisited room nearest-first, then head for the boss.
 // Dark rooms follow --dark: smart (default) enters one while every living hero has at least DARK_HP of max HP, always enters, never skips them.
@@ -17,6 +17,7 @@
 //   route = floor(i / classes) mod 4, fork = floor(i / (classes x 4)) mod 2, weapon = floor(i / (classes x 4 x 2)) mod 3. --weapon picks the weapon index (default 0).
 // Casting follows ED.SKILLS: aim 'dir' throws along the target angle, 'ground' lands on the foe, 'move' runs or blinks through it, 'self' fires around the hero; aim noise shrinks with the bot's skill (angle 0.12 rad, ground point 36 px at skill 0).
 // --out=file.json writes one row per run (seed, class, depth, win, boss time to kill and HP lost per stratum, evolution stratum, main path, gates); --pair=file.json prints the mean difference to such a baseline for the same seeds.
+// --lambda: the weight of effective health against damage in --pick=smart (tools/pick.js): a number (default 0.4), or auto[:x0] = x0 times the foe damage lever of each stratum the pick looks ahead to (live tables).
 // --from=N: the bots start at stratum N with the build strata 1..N-1 give (skipStrata plays them without fighting); stats, wins and depth then cover strata >= N (depth counts the skipped bosses as beaten, time counts from stratum N, `entry` holds the hero state at each stratum start).
 // meta: none = fresh profile; mid = half the upgrade ranks, mastery 5; max = every rank, mastery 10. Every relic is always in the pool.
 const fs = require('fs');
@@ -624,6 +625,7 @@ function runBot(opts) {
   U.resetUid(1);
   const brng = U.RNG((opts.seed ^ 0xb07b07) >>> 0), policy = opts.pick || process.env.PICK || 'random';
   VR = opts.vetReact >= 0 ? opts.vetReact : 0.18;
+  PICK.setLambda(opts.lambda);
   const vet = parseVet(opts.vet), vetC = !!vet && vet.has('charges'), vetR = !!vet && vet.has('rider'), vetD = !!vet && vet.has('dodge'), vetH = !!vet && vet.has('hazard');
   AIM[0] = opts.aimNoise ? opts.aimNoise[0] : 0.12; AIM[1] = opts.aimNoise ? opts.aimNoise[1] : 36;
   const forced = (opts.force || []).map(f => { const m = /^([a-z_]+)(?:@(\d+))?$/.exec(f); return m ? { id: m[1], slot: m[2] === undefined ? null : +m[2] } : null; }).filter(Boolean);
@@ -1089,7 +1091,7 @@ const optsFromFlags = (flags) => ({
   weapon: flags.weapon === undefined || isNaN(+flags.weapon) ? flags.weapon : +flags.weapon, explain: !!flags.explain,
   aimNoise: flags.aimnoise === undefined ? undefined : flags.aimnoise.split(',').map(Number).concat([0]).slice(0, 2).map(v => (Number.isFinite(v) ? v : 0)),
   force: flags.force ? flags.force.split(',') : [], dark: flags.dark, maxStratum: flags.strata === undefined ? undefined : +flags.strata, vet: flags.vet, vetReact: flags.vetreact === undefined ? undefined : +flags.vetreact,
-  from: flags.from === undefined ? undefined : +flags.from,
+  from: flags.from === undefined ? undefined : +flags.from, lambda: flags.lambda,
 });
 
 // Expands the rotating flags for run i of a batch over nc classes: route = floor(i / nc) mod 4, fork = floor(i / (nc x 4)) mod 2, weapon = floor(i / (nc x 8)) mod 3, start = the six gates then generalist.

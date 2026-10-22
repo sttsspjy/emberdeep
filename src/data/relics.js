@@ -5,8 +5,8 @@
   const R = ED.RELICS = {
     whetstone: { name: 'Whetstone', rar: 'c', icon: 'sword', desc: '+12% damage.', mods: { dmg: 0.12 } },
     boots: { name: "Traveler's Boots", rar: 'c', icon: 'boot', desc: '+10% move speed.', mods: { spd: 0.1 } },
-    buckler: { name: 'Iron Buckler', rar: 'c', icon: 'shield', desc: '+8 armor.', mods: { armor: 8 } },
-    heartstone: { name: 'Heartstone', rar: 'c', icon: 'heart', desc: '+25 max health.', mods: { hp: 25 } },
+    buckler: { name: 'Iron Buckler', rar: 'c', icon: 'shield', desc: '+5 armor.', mods: { armor: 5 } },
+    heartstone: { name: 'Heartstone', rar: 'c', icon: 'heart', desc: '+15 max health.', mods: { hp: 15 } },
     coin: { name: 'Lucky Coin', rar: 'c', icon: 'coin', desc: '+30% gold, better boon rarity.', mods: { gold: 0.3, luck: 0.1 } },
     hourglass: { name: 'Sand Hourglass', rar: 'r', icon: 'hourglass', desc: 'Skills recharge 18% faster.', mods: { cdr: 0.18 } },
     lodestone: { name: 'Lodestone', rar: 'c', icon: 'magnet', desc: '+60% pickup range, +10% experience.', mods: { pickup: 0.6, xp: 0.1 } },
@@ -33,7 +33,7 @@
     stone: { name: "Philosopher's Stone", rar: 'l', icon: 'gem', desc: '+2% damage and +2 max health per relic held.', mods: { stone: 1 }, perRelic: { dmg: 0.02, hp: 2 } },
     clover: { name: 'Four-Leaf Clover', rar: 'r', icon: 'clover', desc: '+1 boon reroll each stratum and better rarity.', mods: { cloverRerolls: 1, luck: 0.1 } },
     aegis: { name: 'Aegis Charm', rar: 'e', icon: 'shieldgold', desc: 'Every 10 seconds, block the next hit completely.', mods: { aegis: 1 } },
-    bloodstone: { name: 'Heartwood', rar: 'r', icon: 'heart', desc: '+10% max health and +10% healing.', mods: { hpMul: 0.1, heal: 0.1 } },
+    bloodstone: { name: 'Heartwood', rar: 'r', icon: 'heart', desc: '+6% max health and +10% healing.', mods: { hpMul: 0.06, heal: 0.1 } },
   };
   ED.RELIC_IDS = Object.keys(R);
   ED.RELIC_PRICE = { c: 70, r: 110, e: 160, l: 220 };
