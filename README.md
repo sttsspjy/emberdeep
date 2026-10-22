@@ -46,7 +46,7 @@ Playing alone, the world waits while the sheet is open; in a party the descent g
 - Each stratum is a floor of 12 to 14 rooms: combat rooms, an elite room (two from stratum IV on), a treasure room, a shop, an event shrine (fountain, altar, gamble shrine or champion's trial), a rest site and the boss. Every door shows what waits inside before you open it.
 - **Room rewards.** A normal fight pays a boon (drawn from your own paths), gold, a Vigor blessing (+max health), a forge (rank up one boon) or lantern oil. Elite rooms usually pay a relic and sometimes an epic boon. Rewards appear in the middle of the room once it is clear; boons and forges are claimed by each hero, gold, oil and relics are shared.
 - **Rest sites** have a campfire (heal 35%) and, in strata I, III and V, an anvil (forge one boon); each hero uses one of them. **Shops** sell relics, a healing draught, lantern oil and one build item: an epic boon in strata I, III and V, a forge in strata II, IV and VI. The bosses of strata III and V also grant an epic boon.
-- **Relics** are run-long items from elite rooms, chests, shops, shrines and bosses.
+- **Relics** are run-long items from elite rooms, chests, shops, shrines and bosses. All 31 can drop from your first descent and none belongs to an element; the element effects are path boons.
 - You level up from kills and gain a boon at every second level (2, 4, 6, ...) and your class route card at level 3. Offers open only when the room is safe. Playing alone, the world waits while the boon cards are open (and while paused).
 - A winning descent takes about 20 to 30 minutes.
 
@@ -81,7 +81,7 @@ Boons belong to **paths**: six element paths and General. A hero follows at most
 | **Poison** | Venom | Amplifier: envenomed foes take more damage from you and your allies; full Venom breaks a foe's guard. |
 | **Holy** | Radiance and Smite | Stored light Smites foes and shields the heroes near them. |
 | **Shadow** | Doom | Marked foes whose health falls to their Doom are Reaped on the spot; bosses suffer Tolls instead. |
-| **General** | Bleed (physical) | Generalist only: critical hits, bleeding foes and finishing blows. No elements, no element boons or relics, but stronger open boons. |
+| **General** | Bleed (physical) | Generalist only: critical hits, bleeding foes and finishing blows. No elements and no element boons, but stronger open boons. |
 
 - **Start offer:** a descent begins with a choice of four gates. The Pyromancer, Cleric and Necromancer always find their own element on it. The Knight, Ranger and Shade may instead take the Generalist.
 - **Keystone:** at affinity 5 (General 6) a path can offer its keystone, a build-defining epic boon.
@@ -141,12 +141,13 @@ You start with the **Knight**, **Ranger** and **Pyromancer**. Each hero has thre
 
 ## The menus
 
-The main menu has five entries. **Descend** picks your hero, weapon and pact, then starts a solo descent or opens a party (**Host a party**, or **Join a party** with a code). **Hearth** holds the upgrades, the relic codex and the chronicle. **Heroes** shows every hero's stats and mastery rewards. **Settings** holds Sound, Display (visual quality, frame cap, screen shake, damage numbers), Controls (cursor, cursor size, cursor colour, skill aim preview, key bindings) and your profile (name, save code, erase). **Credits** lists the art that Wickdeep is built from. `Esc` steps back out of a menu.
+The main menu has five entries. **Descend** picks your hero, weapon and pact, then starts a solo descent or opens a party (**Host a party**, or **Join a party** with a code). **Hearth** holds the upgrades and the chronicle. **Heroes** shows every hero's stats and mastery rewards. **Settings** holds Sound, Display (visual quality, frame cap, screen shake, damage numbers), Controls (cursor, cursor size, cursor colour, skill aim preview, key bindings) and your profile (name, save code, erase). **Credits** lists the art that Wickdeep is built from. `Esc` steps back out of a menu.
 
 ## Between descents (the Hearth)
 
-- **Embers** are earned on every descent that clears at least one room, win or lose. Spend them on 16 permanent upgrades, including **Deep Wick** (+6% lantern light per rank). Deeper strata reveal new upgrades.
-- **Relic Codex:** 45 relics. 18 are available from the start; unlock the other 27 so they can appear in runs. Element relics (Fire, Ice, Lightning, Poison, Holy, Shadow) never reach a Generalist.
+- **Embers** are earned on every descent that clears at least one room, win or lose. Spend them on 16 permanent upgrades, including **Deep Wick** (+6% lantern light per rank) and the **Reliquary** (begin a descent with a relic). Deeper strata reveal new upgrades.
+- **Refunds are free:** every upgrade rank has a **Refund** button that returns its full cost, and **Reset all** (press it twice to confirm) returns every rank at once, so you can rebuild the Hearth for a new path.
+- **Armory:** each hero can have sidegrade unlocks listed under the upgrades (refundable like the ranks). The lists are empty for now.
 - **Heroes:** every descent trains the hero you took, up to mastery 10. Mastery unlocks weapons and permanent bonuses.
 - **Deeds:** 26 achievements with ember rewards (including Evolved, Into the Dark and Cartographer).
 - **Pacts:** ten optional difficulty tiers unlocked by winning, each paying more embers.
@@ -154,11 +155,11 @@ The main menu has five entries. **Descend** picks your hero, weapon and pact, th
 
 ### Saving
 
-Progress autosaves to the browser. **Settings > Profile** shows a portable save code (for example `WD1-XXXXX-XXXXX-…`). It packs the whole profile into letters and digits with a checksum. Paste it on any device or browser to continue (on a new device, use **I have a save code** on the first-run screen). No account or database is involved. Codes from earlier Wickdeep versions still load.
+Progress autosaves to the browser. **Settings > Profile** shows a portable save code (for example `WD1-XXXXX-XXXXX-…`). It packs the whole profile into letters and digits with a checksum. Paste it on any device or browser to continue (on a new device, use **I have a save code** on the first-run screen). No account or database is involved. Codes from earlier Wickdeep versions still load; the embers an old code spent on the removed relic Codex are refunded.
 
 Wickdeep starts fresh profiles: saves and codes from Emberdeep (`ED1-…`) do not carry over, and the game says so if you paste one.
 
-If you played an earlier version of Wickdeep, the first launch shows a one-time **"The Deep has changed"** notice. It lists what is different (mouse aim, the new paths, shields instead of life steal, the Knight's Shield Throw, the lantern no longer draining by itself) and any relics you own that were renamed or reworked.
+If you played an earlier version of Wickdeep, the first launch shows a one-time **"The Deep has changed"** notice. It lists what is different (the relic Codex is gone and every relic drops from the start, the element relics became path boons, free Hearth refunds, mouse aim, the new paths, shields instead of life steal, the Knight's Shield Throw, the lantern no longer draining by itself) and how many embers the Codex refunded.
 
 Two tabs open on the same profile stay in step: each adopts the other's saved progress instead of overwriting it.
 
@@ -178,11 +179,10 @@ How it works:
 The party shares in-run progression:
 - One party level, one gold purse and one lantern.
 - Each hero picks their own boons, paths and class route.
-- Relics unlocked by *any* party member can drop for everyone.
 
 At the end of the run everyone gets the embers, mastery and boss milestones from it (plus a party bonus). For example, a friend who helps beat the Bone Warden unlocks the Shade too.
 
-Downed heroes can be revived by standing next to them. A hero who bleeds out returns at the next stratum. The run ends only when the whole party is down. After a run, the party returns to the lobby together; the lobby's **Hearth** button opens the upgrades, relics and hero mastery so everyone can spend their embers before the next descent.
+Downed heroes can be revived by standing next to them. A hero who bleeds out returns at the next stratum. The run ends only when the whole party is down. After a run, the party returns to the lobby together; the lobby's **Hearth** button opens the upgrades and hero mastery so everyone can spend their embers before the next descent.
 
 The host should keep the game tab open. The simulation keeps ticking when the tab is in the background, but closing it ends the run for everyone; friends keep the embers earned so far. Everyone in a party needs the same version of the game: refresh if the host reports a mismatch.
 

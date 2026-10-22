@@ -22,7 +22,7 @@ Vanilla JS (ES2020, no modules, global `ED` namespace) + Canvas2D with a WebGL p
 ```
 index.html, style.css    page shell, DOM menus/overlays, styling
 src/util.js              constants, math, seeded RNG, colour helpers
-src/data/                biomes (palette, roster, affinity) · enemies · classes (heroes, weapons, skills) · boons (paths, duos) · classboons (class routes) · relics · meta (Hearth upgrades, pacts, deeds)
+src/data/                biomes (palette, roster, affinity) · enemies · classes (heroes, weapons, skills) · boons (paths, duos) · classboons (class routes) · relics · meta (Hearth upgrades, per-hero Armory, pacts, deeds)
 src/save.js              profile storage + save code
 src/sim/                 dungeon (floor gen) · stats (stat block) · world (run flow, rooms, light, pickups) · combat (damage, statuses, projectiles, zones)
                          build (offers, paths, evolutions, class routes) · skills (cast dispatcher, class hooks) · class-<hero>.js (each hero's skills and route hooks) · sheet (Tab sheet model)
@@ -47,7 +47,7 @@ docs/                    GAME-DESIGN.md · MASTERPLAN.md · MASTERPLAN-AGENT.md 
 5. **world.js/combat.js/rooms.js ↔ build.js/skills.js/class-*.js talk through hooks** — world.js calls `initBuild`, `initSkills`, `onRunStartBuild`, `onStratumBuild`, `updatePlayerBuild` (which calls `updateSkills`, and that runs `updateCharge`, `updateShieldThrow` and the class `tick` hook, then combat.js `updatePlayerCombat`), `updateOffers`, `updateAllies`, `addXp` and `clearShields` (defined in `class-knight.js`); combat.js calls `onEnemyKilledSkill` and the per-class hook tables `ED.CLS[cls]` (listed at the top of `skills.js`), and class files call combat.js `grantCrits`; minions (`spawnMinion`, `updateAllies`) live in `class-necro.js`; each skill's cast lives in `ED.CAST[skillId]` in its class file, which calls `refundSkill` for cooldown refunds; rooms.js calls `onRoomLockBuild` and `grantOffer`. Per-hero build/skill fields are created in `initBuild`/`initSkills` (and the class `init` hook), not in `addPlayer`. Keep the boundary.
 6. **Statuses build from damage dealt, never hit count** — attack speed must not out-scale damage.
 7. **All hotkeys use `e.code`** — `e.key` breaks on non-Latin layouts.
-8. **Save code is positional** (UPGRADES, CLASS_IDS, non-start RELIC_IDS, DEEDS order): append only, each list carries a count prefix (`CODE_VERSION` 4); changing a relic's start flag, reordering or removing bumps `CODE_VERSION`.
+8. **Save code is positional** (UPGRADES, CLASS_IDS, ARMORY per class, DEEDS order): append only, each list carries a count prefix (`CODE_VERSION` 5); reordering or removing bumps `CODE_VERSION`. The v4 relic table in `src/save.js` is frozen (old profiles and codes decode against it).
 9. **Balance claims need numbers** — run `tools/sim.js` (or `tools/simpool.js` for batches) before/after and report win rate, depth, time.
 10. **Low quality must stay fast** — WebGL post-process is optional; the 2D path must work without it.
 11. **Rules and numbers follow [docs/GAME-DESIGN.md](docs/GAME-DESIGN.md)** — change the doc and the code together.

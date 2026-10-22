@@ -117,8 +117,8 @@
     const list = ED.CLASSES[cls].weapons, weapon = list.indexOf(d.weapon) >= 0 ? d.weapon : list[0];
     const m = d.meta && typeof d.meta === 'object' ? d.meta : {};
     const up = ED.UPGRADES.map((u, i) => U.clamp((Array.isArray(m.up) ? m.up[i] : 0) | 0, 0, u.costs.length));
-    const relics = Array.isArray(m.relics) ? m.relics.filter(id => ED.RELIC_IDS.indexOf(id) >= 0) : [];
-    return { cls, weapon, meta: { up, mastery: U.clamp(m.mastery | 0, 1, 10), relics } };
+    const known = (ED.ARMORY[cls] || []).map(e => e.id), armory = Array.isArray(m.armory) ? m.armory.filter(id => known.indexOf(id) >= 0) : [];
+    return { cls, weapon, meta: { up, mastery: U.clamp(m.mastery | 0, 1, 10), armory } };
   };
 
   // ---------------- host session ----------------

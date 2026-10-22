@@ -152,9 +152,9 @@ Seven statuses: Burn, Chill (Freeze included), Charge, Venom, Radiance, Doom (el
 Seven paths: six element paths and General. A hero follows at most **2 element paths** (`MAX_ELEMENTS`) or takes the **Generalist** gate and follows General alone. `affinity(path)` = sum of ranks of the hero's boons in that path (open boons count toward none; General counts only for a Generalist).
 
 - Gate: opens the path and sets its infusion. Keystone (`key`): offered at affinity ≥ 5 (General: 6). Evolution (`evo`): its card is prepended to every offer at affinity ≥ 10 (General: 12) with the path's keystone owned and no evolution yet. Duo: both element paths at affinity ≥ 4 put their duo on every offer until it is taken.
-- An element path holds 12 ranks before its evolution (General 15). Rarity: `c` common, `r` rare, `e` epic (keystones), `l` legendary (evolutions), `d` duo.
+- An element path holds 12 to 14 ranks before its evolution (Fire, Poison, Holy 12; Ice 13; Lightning, Shadow 14; General 15). Rarity: `c` common, `r` rare, `e` epic (keystones), `l` legendary (evolutions), `d` duo.
 - **Class element**: Pyromancer = fire, Cleric = holy, Necromancer = shadow. Their class-skill parts deal that element without a gate; their own gate is on their start offer. Knight, Ranger and Shade have no class element (their element route is Bleed).
-- **Generalist** (start offer of Knight, Ranger and Shade only): +15% damage, +5% crit chance, crits Bleed for 30% of the hit, open boons rank 1 higher; the hero never sees element boons or relics, and element relics it holds are swapped for a random unowned non-element relic of the same rarity (else the next rarity down, else 40 gold). Keen Eye and Brutality are open at rank 1 to element heroes.
+- **Generalist** (start offer of Knight, Ranger and Shade only): +15% damage, +5% crit chance, crits Bleed for 30% of the hit, open boons rank 1 higher; the hero never sees element boons (relics are element-free and reach every hero). Keen Eye and Brutality are open at rank 1 to element heroes.
 - The sheet and offers colour each path: Fire `#ff7a2a`, Ice `#7fe3ff`, Lightning `#ffe66b`, Poison `#9be33c`, Holy `#fff0c2`, Shadow `#a070ff`, General `#d9dfe8`.
 
 ### Fire — icon `flame`
@@ -178,6 +178,7 @@ Seven paths: six element paths and General. A hero follows at most **2 element p
 | brittle | Brittle Cold | c | 2 | +10% damage to chilled or frozen foes. |
 | coldsnap | Cold Snap | r | 1 | Dashing releases a frost ring (r80) for 50% P that chills. |
 | permafrost | Permafrost | c | 2 | Freeze lasts 30% longer; chilled foes deal 10% less. |
+| frostheart | Frozen Heart | r | 1 | When hit, freezes foes within 120 (8 s cooldown; was an element relic). |
 | abszero | Absolute Zero (key) | e | 1 | Freezing a foe releases a frost nova adding 60 chill to foes within 100. |
 | evo_ice | Glacial Arms | l | 1 | Every 3rd attack fires 5 piercing ice shards in a fan (50% each, infused). Chill +25%. |
 
@@ -190,6 +191,8 @@ Seven paths: six element paths and General. A hero follows at most **2 element p
 | shortcircuit | Short Circuit | r | 2 | A charged foe that dies discharges at once at +25%. |
 | thunderstep | Thunderstep | r | 1 | Foes you dash through take 100% P (charges them). |
 | overload | Overload | c | 2 | Discharges stun non-boss foes 0.25 s (elites half), at most once per second per foe. |
+| stormcall | Storm Call | r | 1 | Critical hits charge foes with 60% of their damage (was an element relic). |
+| thundergauntlet | Thunder Gauntlet | r | 1 | Every 6th attack calls lightning on its target (220% of weapon damage, r40, no crit; was an element relic). |
 | thunderhead | Thunderhead (key) | e | 1 | Each discharge has a 25% chance to drop a thunderbolt: 200% P, r60; one hero drops at most one per 0.6 s. |
 | evo_lightning | Tempest Arms | l | 1 | Every 4th attack calls lightning on the foe nearest the point 80 ahead of your aim, within 220 (150% weapon damage, r50). Foes discharge every 0.5 s. |
 
@@ -226,6 +229,7 @@ Seven paths: six element paths and General. A hero follows at most **2 element p
 | inevitable | Inevitable | r | 2 | Elites and bosses take 15% more of your Doom (full at rank 2). |
 | deathknell | Death Knell | r | 2 | Each Reap or Toll grants +4% damage for 6 s, stacking up to 5 times per rank. |
 | deathsedge | Death's Edge | r | 1 | Each Reap or Toll readies 1 guaranteed crit (up to 3 stored; scaled by the weapon fork). |
+| souljar | Soul Jar | c | 2 | Your hits mark 20% more Doom (`doomMul`; was an element relic). |
 | umbralstep | Umbral Step | r | 1 | Foes you dash through take 80% P and gain Doom from that hit at +60%. |
 | reaper | Reaper (key) | e | 1 | A Reaped foe implodes: 20% of its max HP (elites 10%) as Shadow damage to foes within 80. |
 | evo_shadow | Umbral Arms | l | 1 | A shadow twin repeats every attack 0.15 s later at 40%; twin hits mark double Doom. |
@@ -382,7 +386,7 @@ Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat
 - **Rest site**: a campfire (heal 35%) and, on odd strata only, an anvil (forge offer); each hero uses one.
 - **Shop**: 2 relics (+1 with Merchant's Favor 2), healing draught (40%), lantern oil (+35 light, `45 + 15s` gold) and one build item: an epic boon (75 gold) on odd strata, a forge (`60 + 15s` gold) on even strata. Relic, epic boon and draught prices scale 12% per stratum; every price is −10% per Favor rank, −25% with Merchant's Ledger, ×1.4 under Pact 7, rounded to 5 (minimum 5).
 - **Event shrines**: fountain (heals the party 50%, raises the downed), altar (pay 20% max HP for an epic offer), gamble shrine (`35 + 18s` gold for a random relic: 12% epic, 38% rare, 50% common), champion's trial (an elite fight for a rare relic).
-- **Relics**: 45 (18 available from the start, 27 bought in the Codex); `RELIC_PRICE` c 70 · r 110 · e 160 · l 220. Roll weights c 50, r 34 + 3s, e 14 + 3s, l 3 + s. Relics unlocked by any party member can drop for everyone. Element relics (14) weigh ×2 when a living hero follows that element, ×0.5 otherwise; Generalists get the first picks of a hoard or shop from non-element relics.
+- **Relics**: 31, all in the drop pool from the first descent (common 8, rare 12, epic 6, legendary 5). No relic carries an element: the 14 element relics are gone and their unique effects are the path boons Storm Call, Thunder Gauntlet, Frozen Heart and Soul Jar (§3). There is no Codex and no Generalist relic rule. `RELIC_PRICE` c 70 · r 110 · e 160 · l 220. A roll draws at or above the requested rarity from the relics no hero holds (the whole list when every relic is held); weights c 50, r 34 + 3s, e 14 + 3s, l 3 + s. The Reliquary upgrade (§9) starts a descent with a random common (rank 1) or rare-or-better (rank 2) relic.
 - XP from level L to L+1: `round(30 + 3(L−1) + 6(L−1)²)`. Even levels grant a `level` offer; level 3 also grants the route card.
 - Every gold drop (kills, room clears, chests, rewards, bosses) is scaled by ×0.65 (`World.GOLD_MUL`); shop prices are not scaled.
 
@@ -428,11 +432,14 @@ Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat
 
 ## 9. Hearth (meta) and save
 
-- **Deep Wick** (tier 1): +6% lantern light per rank, costs 40/90/160. 16 upgrades in all; steps per rank: Vitality +6 max health, Might +4% damage, Fortune +10% gold, Fleetness +4% move speed, Provisions heal 10%, Bulwark +2 armor, Precision +2% crit, Wisdom +5% experience, Alacrity +4% skill recharge. Mastery 10 levels per hero: 2 +5% damage · 3 second weapon · 4 +10 max health · 5 skills recharge 8% faster · 6 third weapon · 7 +4% crit · 8 +1 reroll · 9 +8% damage · 10 golden aura.
-- 26 deeds including Evolved (evolve a weapon, 40) · Into the Dark (defeat a boss while Lightless, 50) · Cartographer (clear every room of a stratum, 40). Ten pacts raise difficulty and embers (`PACT_EMBER_BONUS` 0.08 per level).
+- **Deep Wick** (tier 1): +6% lantern light per rank, costs 40/90/160. 16 upgrades in all; steps per rank: Vitality +6 max health, Might +4% damage, Fortune +10% gold, Fleetness +4% move speed, Provisions heal 10%, Bulwark +2 armor, Precision +2% crit, Wisdom +5% experience, Alacrity +4% skill recharge. Mastery 10 levels per hero: 2 +5% damage · 3 second weapon · 4 +10 max health · 5 skills recharge 8% faster · 6 third weapon · 7 +4% crit · 8 +1 reroll · 9 +8% damage · 10 golden aura. The relic upgrade (id `armory`) is named Reliquary.
+- **Refunds**: every upgrade rank and Armory entry refunds its full cost on demand (`S.refundUpgrade`, `S.refundArmory`); Reset all (`S.resetUpgrades`, a two-step confirm in the UI: the first press arms it for 3 s) refunds every rank and entry at once. `lifetime` embers never change on a purchase or refund.
+- **Armory**: `ED.ARMORY[hero]` lists per-hero sidegrade unlocks `{ id, name, desc, cost }`, bought and refunded in the Upgrades page below the upgrades (a hero's section shows while its list is non-empty and the hero is unlocked). The lists are empty until content lands. The meta bundle carries each hero's owned entry ids (`meta.armory`); the profile stores `armory: { hero: [0|1 per entry] }`.
+- 26 deeds including Evolved (evolve a weapon, 40) · Into the Dark (defeat a boss while Lightless, 50) · Cartographer (clear every room of a stratum, 40) · Relic Keeper (hold 10 relics in one descent, 60; the slot of the removed Archivist). Ten pacts raise difficulty and embers (`PACT_EMBER_BONUS` 0.08 per level).
 - Profile key `wickdeep.profile.v1`, save code prefix `WD1-`, peer prefix `wickdeep-v1-`. No other profile key is imported; Emberdeep `ED1-` codes are refused.
-- **Save code** (`CODE_VERSION` 4): positional lists (UPGRADES, non-start RELIC_IDS, CLASS_IDS mastery, DEEDS) each carry a count prefix, so appending an entry never shifts what follows; the decoder skips extra entries and leaves missing ones at 0. Versions 2 and 3 still decode; a newer version is refused with "reload the page"; a code with more than 127 Codex relics cannot be written. Changing a relic's start flag, reordering or removing an entry bumps `CODE_VERSION`.
-- **Returning players**: a profile with runs from before this ruleset (profile `v` below 2, or a version-2 code with runs) gets `news = 1`; a one-time "The Deep has changed" notice lists the changes and the owned relics that were renamed or reworked, then clears the flag.
+- **Save code** (`CODE_VERSION` 5): positional lists (UPGRADES, CLASS_IDS mastery, then the Armory, then DEEDS) each carry a count prefix, so appending an entry never shifts what follows; the decoder skips extra entries and leaves missing ones at 0. The Armory section follows mastery: a hero count (4 bits), then per hero an entry count (6 bits) and 1 bit per entry (at most 63 entries per hero; more cannot be written). Versions 2, 3 and 4 still decode (their relic bits are read against the frozen v4 relic table and refunded as embers); a newer version is refused with "reload the page". Reordering or removing an entry bumps `CODE_VERSION`.
+- **Codex migration**: a stored profile below era 3 (profile `v` 3 has no `relics` array) or a v2-v4 code holds the old Codex relics; their costs (the frozen v4 table in `save.js`) are added to `embers` once (never to `lifetime`), the amount is kept in `profile.refunded`, and `S.load` writes the migrated profile back so a reload cannot refund again.
+- **Returning players**: a profile below era 3 or a code below version 5 gets `news = 1` when it has runs or a refund; a one-time "The Deep has changed" notice lists the changes (relics, Hearth refunds, the v3 rules) and the refunded embers, then clears the flag and `refunded`.
 - Settings (`wickdeep.settings.v1`): volumes, quality, frame cap, screen shake, damage numbers, key bindings, cursor, cursor size, cursor colour, skill aim preview, last Tab-sheet tab (`sheetTab`).
 
 ## 10. Balance targets (bots, `tools/sim.js`, skill 0.75)
