@@ -222,7 +222,7 @@
   // Xp a threat foe is worth before the dark-room multiplier and the room's budget scale (enc.xpK).
   W.threatXp = (def, s, elite) => (def.xp || 0) * (1 + 0.35 * (s - 1)) * (elite ? 3 : 1);
   // Room xp budget by stratum (solo, per room; x DARK_LOOT in a dark room, not scaled by the party): threat drops, fodder motes (FODDER_XP_SHARE of it, spread over the quota) and the clear pile together drop exactly this.
-  W.ROOM_XP = { combat: [38, 61, 96, 136, 173, 196], elite: [71, 103, 139, 187, 257, 290] }; W.FODDER_XP_SHARE = 0.5;
+  W.ROOM_XP = { combat: [24, 38, 60, 84, 107, 122], elite: [44, 64, 86, 116, 159, 180] }; W.FODDER_XP_SHARE = 0.5;
   // Gold dropped by a 'gold' room reward (shared with the UI): 15 + 8 per stratum, times the global gold multiplier.
   W.rewardGold = (stratum) => Math.round((15 + 8 * stratum) * W.GOLD_MUL);
   W.GOLD_MUL = 0.65; // every gold drop (kills, rooms, chests, rewards) is scaled by this; shops sell at full price

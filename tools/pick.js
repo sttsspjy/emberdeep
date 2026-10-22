@@ -406,5 +406,5 @@ module.exports = (ED, model) => {
     console.log(lines.join('\n'));
   }
 
-  return { chooseIndex, relicValue, relicGain, gainOf, valueOf, decision, future, fold, REROLL_MIN, LAMBDA, GAMMA };
+  return { chooseIndex, relicValue, relicGain, gainOf, valueOf, decision, future, fold, AT_REST, REROLL_MIN, LAMBDA, GAMMA };
 };

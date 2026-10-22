@@ -371,7 +371,7 @@ const budgetOf = (s, kind) => Math.round(W0.ROOM_XP[kind === 'elite' ? 'elite' :
   }
   const wt = hordeWorld(1, ['knight'], true);
   ok(Q(wt, { type: 'combat', dark: false }) === 24, `tutorial stratum I quota ${Q(wt, { type: 'combat', dark: false })}`);
-  ok(W0.LIVE_CAP[0] === 120 && W0.LIVE_CAP[1] === 180 && W0.FODDER_XP_SHARE === 0.5 && W0.ROOM_XP.combat.join() === '38,61,96,136,173,196' && W0.ROOM_XP.elite.join() === '71,103,139,187,257,290', 'horde and xp constants');
+  ok(W0.LIVE_CAP[0] === 120 && W0.LIVE_CAP[1] === 180 && W0.FODDER_XP_SHARE === 0.5 && W0.ROOM_XP.combat.join() === '24,38,60,84,107,122' && W0.ROOM_XP.elite.join() === '44,64,86,116,159,180', 'horde and xp constants');
 }
 // Every room kind of every stratum, played out by killing everything: the quota spawns, the room clears, fodder drop no gold or hearts, and the xp dropped is the budget
 for (let s = 1; s <= 6; s++) {
@@ -392,7 +392,7 @@ for (let s = 1; s <= 6; s++) {
 { // the xp mote ledger: a fodder kill drops its share as whole units, exact in total; threat drops are scaled so the planned waves fill their cap (xpK), never past it; the pile pays the rest
   const w = hordeWorld(1, ['knight']), room = roomOf(w, 'combat');
   const r = playRoom(w, room, 'none', 1);
-  const enc = w.enc; ok(enc && enc.xpBudget === 38 && enc.xpFod === 19 && enc.xpThrCap === 19 && enc.q === 40, `ledger ${JSON.stringify({ b: enc.xpBudget, f: enc.xpFod, t: enc.xpThrCap, q: enc.q })}`);
+  const enc = w.enc; ok(enc && enc.xpBudget === W0.ROOM_XP.combat[0] && enc.xpFod === W0.ROOM_XP.combat[0] * W0.FODDER_XP_SHARE && enc.xpThrCap === W0.ROOM_XP.combat[0] * (1 - W0.FODDER_XP_SHARE) && enc.q === 40, `ledger ${JSON.stringify({ b: enc.xpBudget, f: enc.xpFod, t: enc.xpThrCap, q: enc.q })}`);
   const p = w.players.get('p0'); let got = 0;
   for (let i = 0; i < enc.q; i++) { const e = w.spawnEnemy('bonemite', p.x, p.y); const before = w.log.xp; w.killEnemy(e, p, {}); got += w.log.xp - before; }
   ok(got >= enc.xpFod - 1 && got <= enc.xpFod && enc.xpOut === got, `40 fodder kills drop ${got} of ${enc.xpFod}`);
