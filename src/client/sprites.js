@@ -1149,6 +1149,13 @@
     if (e.elite) { const col = ED.AFFIXES[e.elite].color; glow(c, 0, -e.r, e.r * 2.6, col, 0.32 + Math.sin(t * 5) * 0.08); }
     if (e.exposed) glow(c, 0, -e.r, e.r * 2.2, '#ff3a3a', 0.25 + Math.sin(t * 9) * 0.1);
   };
+  // Boss fury aura under a boss whose furyM > 1: one cached glow sprite, radius, strength and pulse rate rising with the multiplier (1 to World.BOSS_FURY.max); origin = the boss's feet.
+  Sp.furyGlow = (c, e, t) => {
+    const m = e.furyM;
+    if (!(m > 1)) return;
+    const k = Math.min(1, (m - 1) / (ED.World.BOSS_FURY.max - 1));
+    glow(c, 0, -e.r, e.r * (2.3 + 0.9 * k), k > 0.6 ? '#ff4a1a' : '#ff8a3d', 0.28 + 0.3 * k + Math.sin(t * (6 + 10 * k)) * (0.06 + 0.06 * k));
+  };
   Sp.enemy = (c, e, t) => {
     const def = e.def;
     const C = e.flash > 0 ? WHITE : (e.frozen > 0 ? FROZEN : def.col);
@@ -1160,6 +1167,7 @@
     if (e.st === 'fade') c.globalAlpha = 0.4 + Math.sin(t * 34) * 0.18;
     if (e.elite) { const col = ED.AFFIXES[e.elite].color; glow(c, 0, -e.r, e.r * 2.6, col, 0.32 + Math.sin(t * 5) * 0.08); }
     if (e.exposed) glow(c, 0, -e.r, e.r * 2.2, '#ff3a3a', 0.25 + Math.sin(t * 9) * 0.1);
+    if (e.boss) Sp.furyGlow(c, e, t);
     if ((e.st === 'windup' || e.st === 'aim' || e.st === 'cast' || e.pose === 'wind') && Math.floor(t * 14) % 2 === 0) c.translate(Math.sin(t * 60) * 0.8, 0);
     c.scale(e.face < 0 ? -1 : 1, 1);
     (LOOK[def.look] || LOOK.slime)(c, e, C, t, s);

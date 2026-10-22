@@ -85,6 +85,7 @@
       shieldStunT: 0, staggerT: 0, parryT: 0, hexT: 0, hexBy: 0, markV: 0, sealT: 0, weakT: 0, weakV: 0,
     };
     if (opts.elite && !def.fodder) this.makeElite(e, opts.affix);
+    if (def.boss) { e.dmgBase = e.dmg; e.furyT = 0; e.furyM = 1; } // fury clock, multiplier and the damage it scales (see tickFury)
     this.enemies.push(e);
     this.foeLate(this.enemies.length - 1);
     return e;
@@ -1385,6 +1386,18 @@
     if (z.onEnd) z.onEnd(this, z);
   };
 
+  // Boss fury: where World.BOSS_FURY.t is set for the stratum, furyT counts fight seconds while the boss lives (phases, freezes, stuns and blinds keep it running); past t, furyM = World.furyMul and e.dmg = dmgBase x furyM, so
+  // every attack made later hits harder (bosses.js divides the pause between attacks by furyM). One 'fury' event at the crossing.
+  W.tickFury = function (e, dt) {
+    const t = ED.World.furyAt(this.stratum);
+    if (!(t > 0)) return;
+    const was = e.furyT;
+    e.furyT = was + dt;
+    if (e.furyT <= t) return;
+    if (was <= t) this.emit({ t: 'fury', type: e.type, x: Math.round(e.x), y: Math.round(e.y) });
+    e.furyM = ED.World.furyMul(this.stratum, e.furyT); e.dmg = e.dmgBase * e.furyM;
+  };
+
   // ---------------- generic enemy tick (behaviour lives in ai.js) ----------------
   W.updateEnemy = function (e, dt) {
     if (e.hp <= 0) return;
@@ -1398,6 +1411,7 @@
       if (Math.abs(e.kbx) + Math.abs(e.kby) < 4) { e.kbx = 0; e.kby = 0; }
     }
     e.age += dt;
+    if (e.boss) this.tickFury(e, dt);
     if (!e.exposed && !e.def.invuln && !e.fodder && this.enc && e.age > (e.boss ? 78 : 45)) { e.exposed = true; this.emit({ t: 'expose', x: e.x, y: e.y, boss: e.boss ? 1 : 0 }); }
     if (e.exposed && !e.def.invuln) e.hp -= e.maxHp * (e.boss ? 0.012 : 0.04) * dt;
     if (e.hp <= 0) { this.killEnemy(e, null, {}); return; }

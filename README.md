@@ -48,7 +48,7 @@ Playing alone, the world waits while the sheet is open; in a party the descent g
 - **Rest sites** have a campfire (heal 35%) and, in strata I, III and V, an anvil (forge one boon); each hero uses one of them. **Shops** sell relics, a healing draught and one build item: an epic boon in strata I, III and V, a forge in strata II, IV and VI. The bosses of strata III and V also grant an epic boon.
 - **Relics** are run-long items from elite rooms, chests, shops, shrines and bosses. All 31 can drop from your first descent and none belongs to an element; the element effects are path boons.
 - **Hordes.** Beside the foes that matter, every fight pours in packs of weak fodder from the room's edges: about 40 kills a fight in stratum I, up to 120 in stratum VI, more in elite and dark rooms. Fodder dies in a hit or two, nips for at most 3% of your health and slows you while it clings to you (down to half speed), so keep moving and dash out. It drops only experience motes, and every fight pays a fixed amount of experience however it goes (summoned and split foes pay nothing). A foe still standing 45 seconds after it appeared weakens and starts to wither.
-- **Deeper strata fight smarter.** From stratum III ranged foes aim where you are heading (more so the deeper you go), shots fly faster, rooms mix in foes from the stratum above, and from stratum IV elites can carry two affixes. Every boss fires aimed volleys at each hero (a warning line shows the path; change direction after it locks), adds one on top of everything else in its last phase, and fodder keeps trickling in during the fight.
+- **Deeper strata fight smarter.** From stratum III ranged foes aim where you are heading (more so the deeper you go), shots fly faster, rooms mix in foes from the stratum above, and from stratum IV elites can carry two affixes. Every boss fires aimed volleys at each hero (a warning line shows the path; change direction after it locks), adds one on top of everything else in its last phase, and fodder keeps trickling in during the fight. From stratum IV a boss that lives too long flies into a **fury**: the track under its health bar fills toward a notch, and past it the boss hits harder and attacks faster every second.
 - You level up from experience and gain a boon at every second level (2, 4, 6, ...) and your class route card at level 3. Offers open only when the room is safe. Playing alone, the world waits while the boon cards are open (and while paused).
 - A winning descent takes about 20 to 30 minutes.
 
@@ -87,7 +87,7 @@ Every hero also chooses a **route**: how their kit grows.
 
 - At **team level 3** you pick one of four route cards: **Attack** (how your weapon fights), **Skill 1**, **Skill 2** or **Element** (the status your hero builds: Bleed for the Knight, Ranger and Shade; Fire, Holy or Shadow for the others).
 - At the **boss of stratum I** you pick a **fork** of your route: a Heavy or a Swift weapon (Attack), Burst or Guard (a skill), Focus or Spread (Element). A Heavy weapon hits slower and harder and Staggers foes; a Swift weapon hits fast, trades damage per hit for speed, and gives a burst of move speed after each attack.
-- At the bosses of strata II and IV your fork gains a **rank** on its own, with no pick, and a message names what it adds: rank 2 a new behaviour, rank 3 a transform with a named rider. Each class has 12 route cards.
+- At the bosses of strata II and IV your fork gains a **rank** on its own, with no pick, and a message names what it adds: rank 2 a new behaviour, rank 3 a transform that renames the card and changes how the skill or attack plays (skill forks transform too). Each class has 12 route cards.
 
 ### Elemental weaknesses
 
@@ -226,11 +226,15 @@ node tools/sim.js 1 12 0.75 max - 5   # fully upgraded, every hero ("-"), Pact 5
 node tools/journey.js 0.7 1           # a whole player journey from a fresh save
 node tools/simpool.js 1 384 0.75 none,mid,max --pick=smart   # same bots in parallel, one line per profile
 node tools/sheet.js --cls=all --routes --weapons             # analytic hero numbers, no bot runs
+node tools/bal.js                                            # quick balance suite against the difficulty targets, about 2 minutes
+node tools/browse.js                                         # headless browser smoke test
 ```
 
 `simpool.js` runs its workers at normal priority; add `--nice` for idle priority (Windows throttles idle priority while the machine is unattended).
 
-Headless checks (each prints failures and exits 1 on any): `node tools/check-sim.js`, `check-classes.js`, `check-ranger.js`, `check-pyro.js`, `check-shade.js`, `check-cleric.js`, `check-necro.js`, `check-save.js`, `check-ux.js`, `check-render.js` (hit flash rules and art anchors) and `sheet-check.js`; `node tools/art.js --check` verifies that `src/art/` matches a rebuild of `art-src/`. Targets for the bots live in docs/GAME-DESIGN.md §10.
+`bal.js` prints a time estimate first, then one PASS/FAIL line per profile. It uses the veteran bot (a human proxy; `--vet=0` turns it off); `--from=N` starts the bots at stratum N and `--full` runs the sign-off sizes (under 15 minutes). `browse.js` is headless only, never a visible window: `--scen=smoke` (a short solo run), `crowd70` (frame cost with 70 live foes at Low and High quality) and `shots` (screenshots of the menus, a run and the Tab sheet). It needs Playwright.
+
+Headless checks (each prints failures and exits 1 on any): `node tools/check-sim.js`, `check-build.js` (fork ranks, offer rules, Ascended boons), `check-classes.js`, `check-knight.js`, `check-ranger.js`, `check-pyro.js`, `check-shade.js`, `check-cleric.js`, `check-necro.js`, `check-fodder.js` (fodder kill hooks), `check-perf.js` (sim cost per tick with 70 to 200 foes), `check-save.js`, `check-ux.js`, `check-render.js` (hit flash rules and art anchors) and `sheet-check.js` (the Tab sheet's numbers against the sim); `node tools/art.js --check` verifies that `src/art/` matches a rebuild of `art-src/`. Targets for the bots live in docs/GAME-DESIGN.md §10.
 
 ## Credits
 
