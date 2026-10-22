@@ -353,6 +353,7 @@
   // ---------------- compute ----------------
   // Contribution rows of one stat: [{ label, kind, v, id?, mul? }] from ED.Stats.breakdown (an Ascended multiplier row has mul: true, v = f for a factor of 1 + f) plus the live (temporary) rows of the hero.
   function rowsOf(build, key, extra) {
+    if (!build) return [];
     const rows = St.breakdown(build, key).map(r => (r.mul ? { label: r.label, kind: r.kind, v: r.v, id: r.id, mul: true } : { label: r.label, kind: r.kind, v: r.v, id: r.id }));
     if (extra) for (const r of extra) if (r.v) rows.push(r);
     return rows;
@@ -360,8 +361,9 @@
 
   // The model of hero p (a World hero, or a mirror hero with p.stats, boons, relics, meta, hp, maxHp, shield, picks) in context ctx (Sheet.ctx).
   // opts.raw keeps every number unrounded (tools, tests); otherwise numbers carry their display precision, so equal builds give equal JSON.
+  // opts.numbers (tools): no source rows and no Build tab (build: null); every other number is the same.
   Sh.compute = (p, ctx, opts) => {
-    const R = rounders(opts && opts.raw), st = p.stats, build = buildOf(p, ctx), cls = ED.CLASSES[p.cls];
+    const lite = !!(opts && opts.numbers), R = rounders(opts && opts.raw), st = p.stats, build = lite ? null : buildOf(p, ctx), cls = ED.CLASSES[p.cls];
     const ref = Sh.refFoe(ctx), s = ctx.stratum || 1, tier = clampI(ctx.tier | 0, 0, W.DREAD.length - 1), dread = W.DREAD[tier], thr = W.THREAT[clampI(s - 1, 0, W.THREAT.length - 1)];
     const wpn = weaponModel(p, st, ctx, R);
     const skills = [];
@@ -397,7 +399,7 @@
       mult.cond.push({ id: r.key || r.id, label: r.label, v: R.f(v), live: live === null ? null : R.f(live), per: r.per || null });
     }
     mult.slots = [];
-    for (const k of ['s1Dmg', 's1Area', 's1Dur', 's1N', 's1Cdr', 's2Dmg', 's2Area', 's2Dur', 's2N', 's2Cdr']) if (st[k]) mult.slots.push({ key: k, label: SIF(k).label, v: R.f(st[k]), fmt: SIF(k).fmt, rows: St.breakdown(build, k).map(r => ({ label: r.label, kind: r.kind, v: r.v })) });
+    for (const k of ['s1Dmg', 's1Area', 's1Dur', 's1N', 's1Cdr', 's2Dmg', 's2Area', 's2Dur', 's2N', 's2Cdr']) if (st[k]) mult.slots.push({ key: k, label: SIF(k).label, v: R.f(st[k]), fmt: SIF(k).fmt, rows: build ? St.breakdown(build, k).map(r => ({ label: r.label, kind: r.kind, v: r.v })) : [] });
     mult.status = [];
     const statusEls = ED.ELEMENT_IDS.filter(el => st[ED.ELEMENTS[el].inf] > 0 || st.element === el).concat(st.bleed > 0 || st.bleedAll > 0 || st.masterstroke ? ['general'] : []);
     for (const el of statusEls) {
@@ -427,7 +429,7 @@
 
     const hero = { pid: p.pid, name: p.name, cls: p.cls, clsName: cls.name, title: cls.title, level: ctx.level, xp: ctx.xp, xpNext: ctx.xpNext, hp: Math.ceil(p.hp), maxHp, shield: Math.ceil(p.shield || 0), gold: ctx.gold, picks: p.picks | 0, power: st.power, element: st.element, weaponName: wpn.name, slot: p.slot | 0 };
     const model = {
-      hero, ctx: { stratum: s, pact: ctx.pact | 0, tier, party: ctx.party }, weapon: wpn, skills, dash, proc: procOut(proc, R), mult, def, aff: affModel(p, st, ctx), build: buildModel(p, st, ctx, R), lantern: lanternModel(ctx, R, s),
+      hero, ctx: { stratum: s, pact: ctx.pact | 0, tier, party: ctx.party }, weapon: wpn, skills, dash, proc: procOut(proc, R), mult, def, aff: affModel(p, st, ctx), build: lite ? null : buildModel(p, st, ctx, R), lantern: lanternModel(ctx, R, s),
       ref: { hp: R.n(ref.hp), statusHp: R.n(ref.statusHp), r: ref.r }, procs: procList(st, M, R),
     };
     return opts && opts.raw ? model : strip(model);

@@ -109,15 +109,8 @@ module.exports = (ED, opts) => {
   }
 
   // ---- one hero in one context: the sheet model, its defence, the conditional factor, hero damage on one foe and in a pack of `pack` ----
-  // The Build tab of the sheet (the text of every owned card and route) is most of Sheet.compute and no number depends on it: the hero goes in without boons and relics (its stat block holds their effect)
-  // and the text builders are swapped for empty ones during the call.
-  const NO_BOONS = Object.freeze({}), NO_RELICS = Object.freeze([]), NO_TEXT = () => '';
   function assess(p, ctx) {
-    const S = ED.Sheet, text0 = S.text, next0 = S.nextText;
-    let m;
-    S.text = S.nextText = NO_TEXT;
-    try { m = S.compute(Object.assign({}, p, { boons: NO_BOONS, relics: NO_RELICS }), ctx, { raw: true }); } finally { S.text = text0; S.nextText = next0; }
-    const d = defence(p, m), k = condFactor(p, m, d);
+    const m = ED.Sheet.compute(p, ctx, { raw: true, numbers: true }), d = defence(p, m), k = condFactor(p, m, d);
     return { m, d, k, one: heroDamage(m, 1, k), pack: heroDamage(m, pack, k), ehp: d.ehp };
   }
 
