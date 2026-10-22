@@ -136,10 +136,12 @@
     desc: '+{crit} crit chance. Each crit grants Momentum: +{momentum} damage for 2.5 s, stacking {momMax:n} times.', mods: { crit: 0.08, momentum: 0.04, momMax: 5 } });
   card('shade', 'attack', 2, 's_atk_h', { name: 'Culling Blades', icon: 'wingblade', tag: 'Heavy', weapon: { kind: 'heavy' },
     desc: 'Heavy blades (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit, Stagger, wider reach): weapon hits on foes below {execCrit} health always crit.[ Crits deal +{critDmg} more.]',
-    rider: 'Killing Rhythm: an execution crit that kills grants {execMom:n} Momentum.', mods: { execCrit: 0.25 }, up: { critDmg: 0.1 }, r3: { execMom: 3 } });
+    rider2: 'Killing Rhythm: an execution crit that kills grants {execMom:n} Momentum (not on horde foes).', mods: { execCrit: 0.25 }, up: { critDmg: 0.1 }, r2: { execMom: 3 }, r3: { execCrit: 0.1, guillotine: 3 },
+    form: { name: 'Guillotine', desc: 'The execution line rises to {execCrit} health. An execution crit that kills carries to the nearest foe within 100 below that line: a free execution strike at the same damage, up to {guillotine:n} times per attack.' } });
   card('shade', 'attack', 2, 's_atk_s', { name: 'Thousand Cuts', icon: 'blades', tag: 'Swift', weapon: { kind: 'swift' },
     desc: 'Swift blades (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit, Flow). Momentum holds {momMax:n} more stacks.',
-    rider: 'Whirlwind: at full Momentum, every 4th attack also spins all around you at {bladeStorm} (knives: a ring of 6 at {bladeStorm}).', mods: { momMax: 2 }, up: { momMax: 1 }, r3: { bladeStorm: 0.6 } });
+    rider2: 'Whirlwind: at full Momentum, every 4th attack also spins all around you at {bladeStorm} (knives: a ring of 6 at {bladeStorm}).', mods: { momMax: 2 }, up: { momMax: 1 }, r2: { bladeStorm: 0.25 }, r3: { cyclone: 0.15 },
+    form: { name: 'Cyclone', desc: "At full Momentum every attack also spins all around you at {cyclone} (knives: a ring of 6), and a dash ends in a spin. Whirlwind's every 4th spin stays at {bladeStorm}." } });
   card('shade', 'skill1', 1, 's_s1', { name: 'Ghost Walk', icon: 'cloak', forks: ['s_s1_a', 's_s1_b'], plays: 'blink through lines of foes, then unload.',
     desc: 'Shadowstep: +{s1Dmg} damage, recharges {s1Cdr} faster, and each foe it cuts readies {stepStack:ck} more crit attack (up to {stackMax:ck3}).', mods: { s1Cdr: 0.2, s1Dmg: 0.2, stepStack: 1, stackMax: 2 } });
   card('shade', 'skill1', 2, 's_s1_a', { name: 'Assassinate', icon: 'dagger', tag: 'Burst',
@@ -163,10 +165,12 @@
   card('shade', 'element', 1, 's_el', { name: 'Cruel Arts', icon: 'fang', forks: ['s_el_a', 's_el_b'], plays: 'open wounds, then rip them open.', desc: BLEED, mods: { bleedAll: 0.1, statusPow: 0.15 } });
   card('shade', 'element', 2, 's_el_a', { name: 'Open Veins', icon: 'drop', tag: 'Focus', coop: true,
     desc: 'Your crits deal +{veins} for each ailment on the foe (up to 4).',
-    rider: 'Exsanguinate: crits on a foe with 4 ailments add Bleed equal to {exsang} of the hit.', mods: { veins: 0.15 }, up: { veins: 0.03 }, r3: { exsang: 0.25 } });
+    rider2: 'Exsanguinate: crits on a foe with 4 ailments add Bleed equal to {exsang} of the hit.', mods: { veins: 0.15 }, up: { veins: 0.03 }, r2: { exsang: 1 }, r3: { arterial: 0.1, arterialN: 1 },
+    form: { name: 'Arterial Strike', desc: 'A crit on a foe with 3 or more ailments is Arterial: +{arterial} damage, and it readies {arterialN:ck} crit attack (at most once per second; horde foes do not).' } });
   card('shade', 'element', 2, 's_el_b', { name: 'Rupture', icon: 'heartbroken', tag: 'Spread',
     desc: "Shadowstep ruptures every foe it cuts and Ambush ruptures its target: {rupture} of the foe's Bleed and Burn hit at once at 150% (the pools lose that share), and half of the burst splashes foes within 60.",
-    rider: 'Bloodbloom: a foe a rupture kills hands its remaining Bleed to the 2 nearest foes within 80.', mods: { rupture: 0.5 }, up: { rupture: 0.1 }, r3: { bloodbloom: 1 } });
+    rider2: 'Bloodbloom: a foe a rupture kills hands its remaining Bleed to the 2 nearest foes within 80.', mods: { rupture: 0.5 }, up: { rupture: 0.1 }, r2: { bloodbloom: 1 }, r3: { cascade: 1, cascadeN: 10 },
+    form: { name: 'Crimson Cascade', desc: 'A rupture that kills a foe (horde foes too) leaps to the nearest bleeding or burning foe within 120 and ruptures {cascade} of its Bleed and Burn, up to {cascadeN:n} leaps per cast.' } });
 
   // ---------------- Cleric (Sanctuary · Judgment) ----------------
   card('cleric', 'attack', 1, 'c_atk', { name: 'Dawnbringer', icon: 'sun', forks: ['c_atk_h', 'c_atk_s'], plays: 'a stream of light ahead of every swing.', weapon: { extra: { ifNone: { wave: { every: 3, mul: 0.6 } } } },
