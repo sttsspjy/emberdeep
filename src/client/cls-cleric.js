@@ -1,5 +1,6 @@
 // cleric route-card visuals, client only: registers ED.ClassFx hooks (event, zone, hero and foe-mark hooks; contract in fx.js; the wave look is a body replacement, ED.ClassFx.shotBody[kind] of render.js shotBody).
 // Everything is read from what the snapshot already carries: events (skill hf / au, hturn, solar, verdict, chain k 'b'), the foe flags (Judged), the hero flags (glBuff, embolden) and the zone follow slot (z.fol); the cards a hero owns come from its boons.
+// Skill forms (rank 3): Wrath of Heaven (nova ring, falling pillars, a turning sun wheel on the Sanctuary: zone w 8), Radiant Aegis (wings, pulse rings, a haloed aura: zone w 9), Hammerstorm (golden afterimages round the hammers), Final Judgment (gold echo chains between Judged foes, a bigger Verdict).
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = U.TAU, Pix = ED.Pix, CFX = ED.ClassFx;
@@ -20,7 +21,7 @@
     }
     return has[key] || null;
   }
-  const KEYS = ['verdict', 'waveBig', 'waveHome', 'sanctJudge', 'aura', 'guardLight', 'auraDmg'];
+  const KEYS = ['verdict', 'waveBig', 'waveHome', 'sanctJudge', 'aura', 'guardLight', 'auraDmg', 'storm', 'fjEcho', 'aegis'];
 
   // ---------------- sounds ----------------
   const bell = (n, v) => { if (ED.Audio) ED.Audio.play('bell', v, n); };
@@ -128,6 +129,7 @@
       Pix.put(c, Pix.ell(9, 3, GOLD, false, 3, (t * 5) & 7), 0, y, 0.85 * fade); Pix.put(c, Pix.ell(8, 2, PALE, false, 2, (-t * 6) & 7), 0, y, 0.6 * fade);
       if (!low) { rects.length = 0; for (let i = 0; i < 4; i++) { const a = t * 2.4 + i * TAU / 4; rects.push(s2(Math.cos(a) * 20), s2(y + Math.sin(a) * 7) - 2, 2, 2); } fillC(c, '#fff3c4', fade, rects); }
       if (Rn && !low) Rn.emit(p.x, p.y + y, 18, PALE, 0.22 * fade);
+      if (p.stats.aegis) { const flap = Math.round(Math.sin(t * 3 + slot) * 1) * 2; Pix.put(c, aegisWing(true), -14, y - 8 + flap, 0.95 * fade); Pix.put(c, aegisWing(false), 14, y - 8 + flap, 0.95 * fade); } // Radiant Aegis: a pair of wings at the shoulders
       c.globalAlpha = ga;
     }
     // Embolden: gold arrowheads rise along the body of an ally inside a Cleric's aura, over a gold ring on the ground
@@ -188,4 +190,121 @@
     if (partyHas('waveHome')) { Pix.put(c, wingSprite(Math.max(5, Math.round(pr.r / 2)), heading), Pix.s2(x), Pix.s2(y)); return true; }
     return false;
   };
+
+  // ---------------- skill forms ----------------
+  const s2 = Pix.s2, away = (ctx, x, y) => { const me = ctx.player(ctx.localPid); return me ? Math.hypot(me.x - x, me.y - y) : 9999; }; // far events do not shake the screen
+
+  // Wrath of Heaven: the cast is a nova over the whole circle - three rings, a column of light, a radial burst of streaks, a heavy shake and hit-stop for the Cleric who cast it.
+  CFX.on('skill', (ev, ctx, local) => {
+    if (ev.k !== 'sanctuary' || !ev.wr) return;
+    const F = FX(), p = ctx.player(ev.pid), st = p && p.stats; if (!st) return;
+    const mine = ev.pid === local, m = mine ? 1 : 0.7, r = ED.Stats.skillNums('sanctuary', st).p.zone.r, d = away(ctx, ev.x, ev.y);
+    F.beam(ev.x, ev.y, 420, 54 * m, '#fff3c4', 0.5); F.beam(ev.x, ev.y, 420, 22 * m, '#ffffff', 0.36, 1, '#ffffff');
+    F.ring(ev.x, ev.y, r * 1.05, GOLD, 0.55, 7); F.ring(ev.x, ev.y, r * 0.72, PALE, 0.42, 5); F.ring(ev.x, ev.y, r * 0.38, '#ffffff', 0.3, 3);
+    F.pop(ev.x, ev.y - 8, r * 0.9, '#fff3c4', 0.36, true);
+    SP('fx.ring.shock', ev.x, ev.y - 4, { ramp: HOLY, add: true, a: m, speed: 0.8 }); SP('fx.explosion', ev.x, ev.y - 6, { ramp: HOLY, add: true, a: 0.9 * m, lt: PALE, ltr: r * 1.4 });
+    if (!lowFx()) { F.burst(ev.x, ev.y - 6, 28, { kind: 'streak', color: PALE, sp: r * 3, life: 0.4, size: 2 }); F.burst(ev.x, ev.y - 6, 16, { color: GOLD, sp: r * 1.1, life: 0.7, size: 2.6, add: true, drag: 1.4 }); }
+    F.dust(ev.x, ev.y, 'dust', 4);
+    if (mine) { F.addShake(8); F.hitStop(0.08); F.punch(1, 0.4); } else if (d < 450) F.addShake(2.5);
+    if (ED.Audio) { ED.Audio.play('heavy', 0.9 * m); ED.Audio.play('boom', 0.35 * m); bell(-9, 1 * m); bell(3, 0.6 * m); }
+  });
+  // A pillar of light falls on a foe: a white-gold column from above, a ring and a flash at its foot, streaks flung upward, a short shake for the Cleric.
+  CFX.on('pillar', (ev, ctx, local) => {
+    const F = FX(), mine = ev.pid === local, m = mine ? 1 : 0.7;
+    F.beam(ev.x, ev.y, 360, 26 * m, GOLD, 0.3); F.beam(ev.x, ev.y, 360, 10 * m, '#ffffff', 0.22, 1, '#ffffff');
+    F.ring(ev.x, ev.y, 30, PALE, 0.3, 4); F.ring(ev.x, ev.y, 16, '#ffffff', 0.2, 2); F.pop(ev.x, ev.y - 8, 30, '#ffffff', 0.18, true);
+    SP('fx.hit.spark', ev.x, ev.y - 8, { ramp: HOLY, add: true, a: m }); SP('fx.glint', ev.x, ev.y - 14, { ramp: HOLY, add: true, speed: 1.4 });
+    if (!lowFx()) F.burst(ev.x, ev.y - 6, 7, { kind: 'streak', color: PALE, a: -1.57, spread: 2.6, sp: 210, life: 0.3, size: 1.8 });
+    if (mine) { F.addShake(1.4); F.hitStop(0.02); }
+    if (ED.Audio) { ED.Audio.play('deflect', 0.4 * m); bell(8 + (ev.x & 7), 0.45 * m); }
+  });
+  // The Wrath Sanctuary (zone 'sanct' with w 8, drawn over the plain one): a sun wheel of twelve rays turning on the ground, a second dashed ring, a bright eye and light motes that climb in columns.
+  CFX.zone.wrath = (c, z, pass, t) => {
+    const R = ED.Render, fade = Math.min(1, (z.dur - z.t) * 2, z.t * 5), x = s2(z.x), y = s2(z.y), rp = Pix.RAMP.holy;
+    if (pass === 0) {
+      R.light(z.x, z.y, z.r * 2.4, '#fff3c4', 0.55 * fade);
+      c.fillStyle = rp[3]; c.beginPath();
+      for (let i = 0, n = 12, a0 = t * 0.5; i < n; i++) {
+        const a = a0 + i * TAU / n, ca = Math.cos(a), sa = Math.sin(a), far = z.r * (i & 1 ? 0.97 : 0.72);
+        for (let r = z.r * 0.3; r < far; r += 7) { c.globalAlpha = (0.9 - (r / z.r) * 0.45) * fade; c.rect(s2(z.x + ca * r), s2(z.y + sa * r * 0.92), 2, 2); }
+      }
+      c.fill(); c.globalAlpha = 1;
+      Pix.put(c, Pix.ring(Math.max(2, Math.round(z.r * 0.56 / 2)), 1, rp[2], rp[3], rp[3], 5, (-t * 4) & 7), x, y, 0.75 * fade);
+      Pix.put(c, Pix.ring(Math.max(2, Math.round(z.r * 0.2 / 2)), 2, rp[2], rp[3], '#ffffff', 3, (t * 6) & 7), x, y, 0.9 * fade);
+    } else if (pass === 1) {
+      R.glow(c, z.x, z.y, z.r * 0.7, '#fff3c4', 0.28 * fade); R.glow(c, z.x, z.y, 22 + 6 * Math.sin(t * 5), '#ffffff', 0.5 * fade);
+      c.fillStyle = '#ffffff';
+      for (let i = 0; i < 10; i++) { const kk = (t * 0.7 + i * 0.1 + z.id * 0.13) % 1, a = i * 2.39996 + z.id, rr = Math.sqrt((i + 0.5) / 10) * z.r * 0.9; c.globalAlpha = Math.max(0.25, Math.ceil(Math.sin(kk * Math.PI) * 4) / 4) * fade; c.fillRect(s2(z.x + Math.cos(a) * rr), s2(z.y + Math.sin(a) * rr * 0.8 - kk * 46), 2, 4); }
+      c.globalAlpha = 1;
+    }
+  };
+
+  // An angel's wing (9 x 9 art px, right side; the left one is its mirror): gold feathers with a pale edge and a dark rim.
+  const WING = ['.....oo..', '....o11o.', '...o122o.', '..o1222o.', '.o12222o.', '.o1222o..', '..o122o..', '...o11o..', '....oo...'];
+  const aegisWing = (left) => {
+    const rp = Pix.RAMP.holy;
+    return Pix.bake('aegiswing|' + (left ? 'l' : 'r'), 9, 9, 4, 5, (b, w) => {
+      const col = { o: Pix.px32(rp[0]), 1: Pix.px32(rp[2]), 2: Pix.px32(rp[3]) };
+      for (let y = 0; y < 9; y++) for (let x = 0; x < 9; x++) { const ch = WING[y][left ? 8 - x : x]; if (ch !== '.') b[y * w + x] = col[ch]; }
+    });
+  };
+  // Radiant Aegis aura (zone 'sanct' with w 9): an inner ring, a bright halo and six small wings turning round the rim.
+  CFX.zone.aegis = (c, z, pass, t) => {
+    const R = ED.Render, fade = Math.min(1, (z.dur - z.t) * 2, z.t * 5), x = s2(z.x), y = s2(z.y), rp = Pix.RAMP.holy;
+    if (pass === 0) {
+      R.light(z.x, z.y, z.r * 1.7, '#ffe9a0', 0.4 * fade);
+      Pix.put(c, Pix.ring(Math.max(2, Math.round(z.r * 0.64 / 2)), 1, rp[2], rp[3], rp[3], 6, (t * 5) & 7), x, y, 0.6 * fade);
+      for (let i = 0, n = 6; i < n; i++) { const a = t * 0.6 + i * TAU / n; Pix.put(c, aegisWing(Math.cos(a) < 0), s2(z.x + Math.cos(a) * z.r), s2(z.y + Math.sin(a) * z.r * 0.92) - 4, 0.9 * fade); }
+    } else if (pass === 1) R.glow(c, z.x, z.y, z.r * 0.8, '#ffe9a0', 0.22 * fade);
+  };
+  // A pulse of the Aegis: two rings sweeping out to the circle, a flash at the Cleric and a bright chime.
+  CFX.on('aegis', (ev, ctx, local) => {
+    const F = FX(), mine = ev.pid === local, m = mine ? 1 : 0.7;
+    F.ring(ev.x, ev.y, ev.r, PALE, 0.45, 5); F.ring(ev.x, ev.y, ev.r * 0.62, '#ffffff', 0.34, 3); F.pop(ev.x, ev.y - 8, ev.r * 0.35, '#ffe9a0', 0.22, true);
+    SP('fx.ring.shock', ev.x, ev.y - 4, { ramp: HOLY, add: true, a: 0.8 * m, speed: 1.2 });
+    if (!lowFx()) for (let i = 0; i < 10; i++) { const a = i * TAU / 10; F.part(ev.x + Math.cos(a) * ev.r * 0.3, ev.y + Math.sin(a) * ev.r * 0.3, { color: PALE, a, sp: ev.r * 1.5, life: 0.3, size: 2, add: true, drag: 3 }); }
+    if (mine) { F.addShake(2); F.punch(0.3, 0); }
+    if (ED.Audio) { ED.Audio.play('deflect', 0.35 * m); bell(12, 0.7 * m); bell(19, 0.4 * m); }
+  });
+
+  // Hammerstorm: the cast fans five bright streaks and a ring at the hand; every hammer in flight trails gold afterimages and a turning ring of light.
+  CFX.on('skill', (ev, ctx, local) => {
+    if (ev.k !== 'judgment' || !ev.st) return;
+    const F = FX(), mine = ev.pid === local, m = mine ? 1 : 0.7;
+    for (let i = 0; i < 5; i++) F.part(ev.x, ev.y - 10, { kind: 'streak', color: i & 1 ? GOLD : PALE, a: ev.a + (i - 2) * 0.25, sp: 460, life: 0.26, size: 2, drag: 4 });
+    F.ring(ev.x, ev.y - 8, 40, GOLD, 0.3, 4); F.pop(ev.x, ev.y - 10, 34, PALE, 0.22, true); SP('fx.spark.magic', ev.x, ev.y - 10, { ramp: HOLY, add: true, a: m });
+    if (mine) { F.addShake(3); F.punch(0.4, 0.2); }
+    if (ED.Audio) { ED.Audio.play('heavy', 0.6 * m); bell(-3, 0.7 * m); bell(9, 0.5 * m); }
+  });
+  (CFX.shot || (CFX.shot = {})).hammer = (c, pr, t, x, y) => {
+    if (pr.team !== 0 || !partyHas('storm')) return;
+    const sp = Math.hypot(pr.vx, pr.vy) || 1, ux = pr.vx / sp, uy = pr.vy / sp, rp = Pix.RAMP.holy;
+    for (let i = 1; i <= 3; i++) Pix.draw(c, 'proj.hammer', '', 0, x - ux * i * 9, y - uy * i * 9, 0.34 - i * 0.08, false, t * 16 - i * 0.7);
+    Pix.put(c, Pix.ring(Math.max(3, Math.round(pr.r / 3) + 2), 1, rp[2], rp[3], rp[3], 3, (t * 9 + pr.id) & 7), x, y, 0.8);
+    c.fillStyle = '#fff3c4'; c.fillRect(s2(x - ux * 14 + uy * Math.sin(t * 20 + pr.id) * 5) - 1, s2(y - uy * 14 - ux * Math.sin(t * 20 + pr.id) * 5) - 1, 2, 2);
+  };
+  CFX.on('hturn', (ev, ctx, local) => { // a Hammerstorm hammer turns: a wider flash than a lone hammer's
+    const p = ctx.player(ev.pid), st = p && p.stats; if (!st || !st.storm) return;
+    const F = FX(); F.ring(ev.x, ev.y - 6, 30, GOLD, 0.24, 4); F.pop(ev.x, ev.y - 6, 26, '#ffffff', 0.14, true);
+    if (ev.pid === local && ev.n !== 2 && ev.n !== 4) F.addShake(0.9);
+  });
+
+  // Final Judgment: an echo is a gold chain from the struck foe to the one it reaches, a flash at the receiver and a thin chime; Judged foes of such a party wear linked rings over their heads.
+  CFX.on('echo', (ev, ctx, local) => {
+    const F = FX(), m = ev.pid === local ? 1 : 0.6;
+    F.bolts.push({ pts: [[ev.x0, ev.y0 - 8], [ev.x1, ev.y1 - 8]], life: 0.2, max: 0.2, color: GOLD, st: true }); if (F.bolts.length > 24) F.bolts.shift();
+    F.pop(ev.x1, ev.y1 - 8, 18, '#fff3c4', 0.14, true); F.ring(ev.x1, ev.y1 - 4, 16, GOLD, 0.2, 2);
+    if (!lowFx()) F.burst(ev.x1, ev.y1 - 8, 3, { kind: 'spark', color: PALE, sp: 110, life: 0.2, size: 1.5, drag: 5 });
+    bell(16, 0.25 * m);
+  });
+  const BOUND = { id: '', ramp: '', stub: 'bound' };
+  CFX.mark.push((e) => (e.judged > 0 && partyHas('fjEcho') ? BOUND : null));
+  CFX.on('verdict', (ev, ctx, local) => { // a Final Judgment burst (radius 110): a second ring, a column and a heavy thud
+    if ((ev.r || 0) < 100) return;
+    const F = FX(), mine = ev.pid === local, m = mine ? 1 : 0.7, r = ev.r;
+    F.beam(ev.x, ev.y, 360, 44 * m, '#fff3c4', 0.4); F.ring(ev.x, ev.y, r * 1.1, GOLD, 0.5, 6); F.ring(ev.x, ev.y, r * 0.5, '#ffffff', 0.3, 3); F.pop(ev.x, ev.y - 8, r * 0.8, '#fff3c4', 0.28, true);
+    if (!lowFx()) F.burst(ev.x, ev.y - 6, 18, { kind: 'streak', color: PALE, sp: r * 3.2, life: 0.34, size: 2 });
+    if (mine) { F.addShake(5); F.hitStop(0.06); F.punch(0.6, 0.3); } else if (away(ctx, ev.x, ev.y) < 400) F.addShake(2);
+    if (ED.Audio) { ED.Audio.play('heavy', 0.5 * m); bell(-9, 0.7 * m); }
+  });
 })(globalThis.ED || (globalThis.ED = {}));

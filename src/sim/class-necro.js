@@ -84,7 +84,7 @@
     const q = N.p.shard, n = Math.round(st.carrionN);
     for (let i = 0; i < n; i++) {
       const e = near[i % near.length].e;
-      w.spawnProj({ team: 0, kind: 'shard', x: c.x, y: c.y - 4, a: Math.atan2(e.y - c.y, e.x - c.x), speed: C.SHARD_SPEED, r: 5, dmg: q.dmg, life: 0.7, pierce: 0, owner: p.pid, knock: q.knock, hk: 'skill', part: 'harvest.shard', infAdd: { shadow: 0.5 } });
+      w.spawnProj({ team: 0, kind: 'bone', x: c.x, y: c.y - 4, a: Math.atan2(e.y - c.y, e.x - c.x), speed: C.SHARD_SPEED, r: 5, dmg: q.dmg, life: 0.7, pierce: 0, owner: p.pid, knock: q.knock, hk: 'skill', part: 'harvest.shard', infAdd: { shadow: 0.5 } });
     }
   }
 

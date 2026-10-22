@@ -820,6 +820,7 @@
   // ---------------- minions ----------------
   // Risen skeletons (teal skeleton body); Bone Knights (the owner holds the Bone Knights fork) wear the armoured body.
   AC.minion = (c, a, t) => {
+    if (a.k === 2 && ED.ClassFx.bomb) return ED.ClassFx.bomb(c, a, t); // a bone bomb (cls-necro.js)
     const owner = view ? view.players.get(a.owner) : null, knight = !!(a.knight || (owner && owner.boons && owner.boons.n_s1_b)), base = knight ? 'skelknight' : 'minion';
     const walk = 'foe.' + base + '.walk', idle = 'foe.' + base + '.idle';
     if (!A.has(walk)) return false;
@@ -829,7 +830,9 @@
     const dt = t - s.lt;
     if (dt > 0.0001) { const v = Math.hypot(a.x - s.lx, a.y - s.ly) / dt; s.sp += (v - s.sp) * Math.min(1, dt * 14); if (v > 12) s.mv = t; s.lx = a.x; s.ly = a.y; s.lt = t; }
     const id = t - s.mv < 0.3 ? walk : (A.has(idle) ? idle : walk), flip = a.face < 0, fi = A.frameAt(id, t + (a.id | 0) * 0.37);
-    const ga = c.globalAlpha, m = c.getTransform();
+    const ga = c.globalAlpha, m = c.getTransform(), dk = a.k === 1 && ED.ClassFx.dk;
+    if (dk) ED.ClassFx.dk(c, a, t, false); // a Death Knight: the taunt ring and dark flame behind, the body at ClassFx.DK_SCALE (cls-necro.js)
+    if (dk) { c.save(); c.scale(ED.ClassFx.DK_SCALE, ED.ClassFx.DK_SCALE); }
     shadowAt(c, knight ? 13 : 9, 0.3);
     c.globalAlpha = ga * 0.9;
     beginRec(s, m.e, m.f);
@@ -838,6 +841,7 @@
     c.globalAlpha = ga;
     Sp.glow(c, 0, -10, 16, ED.ENEMIES.minion.col.c, 0.25);
     if (ED.ClassFx.minion) ED.ClassFx.minion(c, a, t, knight, flip); // Bone Knight gear, Abyssal glow (cls-necro.js)
+    if (dk) { c.restore(); ED.ClassFx.dk(c, a, t, true); }
     return true;
   };
 

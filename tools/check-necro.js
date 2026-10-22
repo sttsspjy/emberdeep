@@ -357,7 +357,7 @@ const cast0 = (w, p) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x + 60, y: 
   S.w.playerSkill(S.p, 0, {}, 1); S.ev.step();
   const booms = S.ev.all.filter(v => v.t === 'boom' && v.c === 1), shards = S.w.projs.filter(q => q.part === 'harvest.shard');
   ok(booms.length === 10 && booms.every(v => v.cs === 1) && S.w.corpses.length === 2, `ten corpses detonate (the most recent), two stay (${booms.length}, ${S.w.corpses.length})`);
-  ok(shards.length === 30 && shards.every(q => q.kind === 'shard' && q.team === 0 && q.hk === 'skill' && Math.abs(q.dmg - hp.shard.dmg) < 1e-9 && q.pierce === 0), `each detonation launches 3 shards: 30 (${shards.length})`);
+  ok(shards.length === 30 && shards.every(q => q.kind === 'bone' && q.team === 0 && q.hk === 'skill' && Math.abs(q.dmg - hp.shard.dmg) < 1e-9 && q.pierce === 0), `each detonation launches 3 shards: 30 (${shards.length})`);
   const aimed = [0, 0, 0]; for (const q of shards) { const a = Math.atan2(q.vy, q.vx); let bi = 0, bd = 9; S.live.forEach((f, i) => { const d = Math.abs(U.angDiff(a, Math.atan2(f.y - q.y - 4, f.x - q.x))); if (d < bd) { bd = d; bi = i; } }); aimed[bi]++; }
   ok(aimed.every(n => n === 10), `with three foes standing, every detonation sends one shard to each (${aimed})`);
   run(S.w, 1.2, S.ev.step); ok(S.log.filter(h => h.part === 'harvest.shard').length > 0 && S.ev.all.filter(v => v.t === 'boom' && v.c === 1).length === 10 && S.w.projs.every(q => q.part !== 'harvest.shard' || q.life <= 0) , 'the shards hit and detonate nothing more: still ten detonations');
