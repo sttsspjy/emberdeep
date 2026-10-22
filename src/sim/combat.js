@@ -1006,7 +1006,7 @@
       if (follow || p.atkCount % (3 + st.cleaveN) === 0) { amb = Object.assign({}, amb, { cleave: st.cleave + (follow ? st.chargeCleave : 0) }); p.cleaveNext = 0; }
     }
     const co = ch && ch.attackOpts ? ch.attackOpts.call(this, p, st) : null;
-    const base = co ? Object.assign({}, co, amb) : amb;
+    const base = co ? Object.assign({}, co, amb, co.mul && amb && amb.mul ? { mul: co.mul * amb.mul } : null) : amb; // a class mul (Grave swing) and an attack mul (Masterstroke, Ambush) multiply
     const reps = st.twinEvery && p.atkCount % st.twinEvery === 0 ? 2 : 1;
     for (let rep = 0; rep < reps; rep++) {
       const o = rep === 0 ? base : co;
