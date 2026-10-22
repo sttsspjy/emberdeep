@@ -32,7 +32,7 @@ module.exports = (ED, model) => {
   // Cards and relics the sheet leaves at zero (found at a fresh Ranger, a Knight with two gates, a late Generalist Ranger and with each element gate owned), one line each.
   // Fold = a formula in fold() from the stat block (D damage, E effective health, bonus = meta value); Prior = a flat value in PRIOR; Sheet = the sheet models it once its path is active. Relics follow the boons.
   //   fleet        Fold  spd -> E
-  //   lightstep    Fold  dashcdr -> E
+  //   lightstep    Fold  dashN (a charge: 0.08 each) and dashcdr (0.2 per unit; Shadow Cloak) -> E
   //   magnet       Fold  xp -> bonus (pickup range: none)
   //   bounty       Fold  gold -> bonus
   //   mending      Fold  heal -> E
@@ -255,7 +255,7 @@ module.exports = (ED, model) => {
     if (st.roomWard) eMul *= 1 + 0.5 * st.roomWard;
     if (st.strataHeal) eMul *= 1 + 0.4 * st.strataHeal;
     if (st.chalice) { eMul *= 1.15; mul1 *= 1.04; mulN *= 1.04; }
-    eMul *= 1 + 0.002 * st.thorns + 0.35 * (st.spd - 1) + 0.2 * st.dashcdr + 0.1 * st.heal + 0.015 * st.forager;
+    eMul *= 1 + 0.002 * st.thorns + 0.35 * (st.spd - 1) + 0.08 * st.dashN + 0.2 * st.dashcdr + 0.1 * st.heal + 0.015 * st.forager;
     // meta stats: gold buys relics and boons, experience and choices add picks
     bonus += 0.12 * st.gold + 0.25 * st.xp + 0.15 * st.choices + 0.16 * st.discount + 0.04 * st.cloverRerolls + 0.12 * st.luck + 0.03 * st.light;
     return { one: (dOne + stOne + add1) * mul1, pack: (dPack + stN + addN) * mulN, ehp: a.ehp * eMul, bonus };
