@@ -1,7 +1,8 @@
 // Usage: node tools/bal.js [--cells=a,b] [--full] [--runs=N] [--power] [--save=file.json] [--pair=file.json] [--jobs=N] [--speed=X] [--nice] [--list] [--flag[=value] ...]
 // Fixed quick balance suite: the GAME-DESIGN section 10 cells (fresh random, fresh smart, half-upgraded, fully upgraded, Pact 5, two and three heroes; six heroes in rotation, skill 0.75, --pick=smart unless noted) plus the fresh legacy-pick cell
 // run in one worker pool (tools/simpool.js), one line per cell: wins % +-se, depth +-se, mean win time, target bands, PASS/FAIL (a band is met when the estimate lies inside it; a cell with no band for a figure ignores it). Exit code is always 0 (a report).
-// Fresh bands are the v4 difficulty contract (random <= 1%, smart 10-20%); the Hearth rule is checked on the fresh and max cells: (max - fresh smart) <= 1/2 x (fresh smart - fresh random), in win points.
+// Every cell moves with the veteran bot (--vet, the human proxy; --vet=0 turns it off). Bands are the v4 difficulty contract: fresh random <= 1%, fresh smart 10-20%, a small Hearth (max at most half the knowledge gap above fresh smart),
+// party rows solo-first (bot check only). The Hearth rule is checked on the fresh and max cells: (max - fresh smart) <= 1/2 x (fresh smart - fresh random), in win points.
 // The default sizes keep the suite near 2 minutes; --full runs the section 10 sign-off sizes (384 runs per solo cell, 192 for parties) in under 15 minutes. The estimate is printed first: sum(runs x cost) / speed, where cost is the measured
 // seconds of one run in one process and speed is the pool throughput (8 workers on the 8-core, 16-thread dev machine finish about 5 runs per single-process run time; --speed=X overrides it).
 // --cells=a,b runs only those cells (--list shows them). --save=file.json writes one row per run (label = cell id). --pair=file.json prints, per cell, the mean win and depth difference to such a saved baseline over the same seeds (plus sim.js pairReport).
@@ -16,14 +17,14 @@ const pool = require('./simpool.js');
 
 // id; title; heroes; meta; pact; flags; runs (default / --full); cost (seconds of one run in one process); win and depth bands as [lo, hi] (win in 0..1); byHero adds the per-hero line.
 const CELLS = [
-  { id: 'rand', title: 'fresh, random picks', n: 1, meta: 'none', pact: 0, flags: { pick: 'random' }, runs: [120, 384], cost: 0.5, win: [0, 0.01] },
-  { id: 'smart', title: 'fresh, smart picks', n: 1, meta: 'none', pact: 0, flags: { pick: 'smart' }, runs: [120, 384], cost: 0.5, win: [0.10, 0.20] },
+  { id: 'rand', title: 'fresh, random picks', n: 1, meta: 'none', pact: 0, flags: { pick: 'random', vet: '1' }, runs: [120, 384], cost: 0.5, win: [0, 0.01] },
+  { id: 'smart', title: 'fresh, smart picks', n: 1, meta: 'none', pact: 0, flags: { pick: 'smart', vet: '1' }, runs: [120, 384], cost: 0.5, win: [0.10, 0.20] },
   { id: 'legacy', title: 'fresh, v3 smart picks', n: 1, meta: 'none', pact: 0, flags: { pick: 'legacy' }, runs: [60, 192], cost: 0.45 },
-  { id: 'mid', title: 'half-upgraded', n: 1, meta: 'mid', pact: 0, flags: { pick: 'smart' }, runs: [120, 384], cost: 0.6, win: [0.25, 0.40], byHero: true },
-  { id: 'max', title: 'fully upgraded', n: 1, meta: 'max', pact: 0, flags: { pick: 'smart' }, runs: [120, 384], cost: 0.55, win: [0.65, 0.80], byHero: true },
-  { id: 'pact5', title: 'fully upgraded, Pact 5', n: 1, meta: 'max', pact: 5, flags: { pick: 'smart' }, runs: [120, 384], cost: 0.6, win: [0.20, 0.35] },
-  { id: 'duo', title: 'two heroes, half-upgraded', n: 2, meta: 'mid', pact: 0, flags: { pick: 'smart' }, runs: [60, 192], cost: 0.9, win: [0.45, 0.70] },
-  { id: 'trio', title: 'three heroes, half-upgraded', n: 3, meta: 'mid', pact: 0, flags: { pick: 'smart' }, runs: [60, 192], cost: 1.65, win: [0.45, 0.70] },
+  { id: 'mid', title: 'half-upgraded', n: 1, meta: 'mid', pact: 0, flags: { pick: 'smart', vet: '1' }, runs: [120, 384], cost: 0.6, win: [0.12, 0.24], byHero: true },
+  { id: 'max', title: 'fully upgraded', n: 1, meta: 'max', pact: 0, flags: { pick: 'smart', vet: '1' }, runs: [120, 384], cost: 0.55, win: [0.15, 0.27], byHero: true },
+  { id: 'pact5', title: 'fully upgraded, Pact 5', n: 1, meta: 'max', pact: 5, flags: { pick: 'smart', vet: '1' }, runs: [120, 384], cost: 0.6, win: [0.05, 0.15] },
+  { id: 'duo', title: 'two heroes, half-upgraded', n: 2, meta: 'mid', pact: 0, flags: { pick: 'smart', vet: '1' }, runs: [60, 192], cost: 0.9, win: [0.10, 0.35] },
+  { id: 'trio', title: 'three heroes, half-upgraded', n: 3, meta: 'mid', pact: 0, flags: { pick: 'smart', vet: '1' }, runs: [60, 192], cost: 1.65, win: [0.10, 0.35] },
 ];
 const SPEED = 5, OWN = new Set(['cells', 'full', 'runs', 'power', 'save', 'pair', 'jobs', 'speed', 'nice', 'list']);
 const U = sim.ED.U;
