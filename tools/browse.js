@@ -507,9 +507,15 @@ async function scenShots() {
     await tryShot('01-boot-name');
     await call(page, 'profile', o.cls, o.embers >= 0 ? o.embers : 400);
     await tryShot('02-menu', () => wait(500));
-    for (const [n, tab] of [['03-descend', 'descend'], ['04-hearth-upgrades', 'upgrades'], ['05-hearth-relics', 'relics'], ['06-hearth-chronicle', 'chronicle'], ['07-heroes', 'heroes']]) {
-      await tryShot(n, () => ev((t) => window.__ED.App.enterHearth(t), tab));
-    }
+    for (const [n, tab] of [['03-descend', 'descend'], ['04-hearth-upgrades', 'upgrades']]) await tryShot(n, () => ev((t) => window.__ED.App.enterHearth(t), tab));
+    // 05: three ranks bought (Refund buttons) and Reset all armed by one click
+    await tryShot('05-hearth-refunds', () => ev(() => {
+      const E = window.__ED, p = E.App.profile; let n = 0;
+      for (const u of E.UPGRADES) if (n < 3 && E.Save.buyUpgrade(p, u.id)) n++;
+      E.App.afterMetaChange(); E.App.enterHearth('upgrades');
+      const b = document.querySelector('.btn-reset'); if (b) b.click();
+    }));
+    for (const [n, tab] of [['06-hearth-chronicle', 'chronicle'], ['07-heroes', 'heroes']]) await tryShot(n, () => ev((t) => window.__ED.App.enterHearth(t), tab));
     await tryShot('08-settings', () => ev(() => { window.__ED.App.goHome(); window.__ED.UI.openSettings(); }));
     await tryShot('09-credits', () => ev(() => { window.__ED.UI.closeSettings(); document.getElementById('mm-credits').click(); }));
     await ev(() => { document.getElementById('btn-credits-close').click(); });
