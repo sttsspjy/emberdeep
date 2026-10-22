@@ -11,7 +11,7 @@ module.exports = (ED, opts) => {
     const w = m.weapon, st = null; void st;
     const hitsBase = w.kind === 'melee' ? n : Math.min(n, (w.n || 1) * (1 + (w.pierce || 0)));
     let sum = w._avg * hitsBase;
-    for (const e of w._extras) sum += e.perAttack * (e.label === 'Twin Fang' ? hitsBase / (w.oneFoe || 1) : e.label === 'Lich bolts' ? 1 : n); // the two Lich bolts seek one foe each: the same total in a pack
+    for (const e of w._extras) sum += e._pack ? e._pack(n) : e.perAttack * (e.label === 'Twin Fang' ? hitsBase / (w.oneFoe || 1) : e.label === 'Lich bolts' ? 1 : n); // the two Lich bolts seek one foe each: the same total in a pack; _pack(n): an extra that states its own pack total (the Necromancer forms)
     return sum * w._aps;
   }
   function directDamage(m, n) {
