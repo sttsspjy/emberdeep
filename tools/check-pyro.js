@@ -36,13 +36,13 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
 {
   const st = (b, wp) => ED.Stats.compute({ cls: 'pyro', weapon: wp || 'firestaff', boons: b, relics: [], meta: META(), pact: 0 });
   near(st({ p_atk: 1 }).chanStep, 0.3, 1e-9, 'Pyroclast step'); near(st({ p_atk: 1, p_atk_s: 1 }).chanStep, 0.15, 1e-9, 'Ember Rush halves the step');
-  near(st({ p_atk: 1, p_atk_s: 1 }).chanCap, 0.6, 1e-9, 'Ember Rush cap +10'); near(st({ p_atk: 1, p_atk_s: 3 }).chanCap, 0.7, 1e-9, 'Ember Rush rank 3 cap'); near(st({ p_atk: 1, p_atk_s: 3 }).overheat, 1, 1e-9, 'Overheat at rank 3');
-  near(st({ p_atk: 1, p_atk_h: 3 }).aftershock, 0.5, 1e-9, 'Magma Heart aftershock 0.3 + 2 x 0.1'); near(st({ p_atk: 1, p_atk_h: 3 }).lavaPool, 0.3, 1e-9, 'Lava Pools at rank 3'); near(st({ p_atk: 1, p_atk_h: 2 }).lavaPool, 0, 1e-9, 'no Lava Pool before rank 3');
+  near(st({ p_atk: 1, p_atk_s: 1 }).chanCap, 0.6, 1e-9, 'Ember Rush cap +10'); near(st({ p_atk: 1, p_atk_s: 3 }).chanCap, 0.7, 1e-9, 'Ember Rush rank 3 cap'); near(st({ p_atk: 1, p_atk_s: 3 }).overheat, 1, 1e-9, 'Overheat at rank 3'); near(st({ p_atk: 1, p_atk_s: 2 }).overheat, 1, 1e-9, 'Overheat from rank 2'); near(st({ p_atk: 1, p_atk_s: 1 }).overheat, 0, 1e-9, 'no Overheat at rank 1');
+  near(st({ p_atk: 1, p_atk_h: 3 }).aftershock, 0.5, 1e-9, 'Magma Heart aftershock 0.3 + 2 x 0.1'); near(st({ p_atk: 1, p_atk_h: 2 }).lavaPool, 0.5, 1e-9, 'Lava Pools at rank 2'); near(st({ p_atk: 1, p_atk_h: 1 }).lavaPool, 0, 1e-9, 'no Lava Pool at rank 1');
   near(st({ p_s1: 1 }).s1Dmg, 0.2, 1e-9, 'Firestorm damage'); near(st({ p_s1: 1 }).s1Area, 0.25, 1e-9, 'Firestorm radius'); near(st({ p_s1: 1 }).skillCd, 7 * 0.79, 1e-9, 'Firestorm cooldown 5.5 s');
   near(st({ p_s1: 1, p_s1_b: 2 }).s1Dmg, 1.2 * 1.1 - 1, 1e-9, 'Phoenix Mantle rank 2 Nova +10% (compounds)');
   near(st({ p_s2: 1, p_s2_a: 3 }).twinMeteor, 0.8, 1e-9, 'Twin Meteor 0.6 + 2 x 0.1'); near(st({ p_s2: 1, p_s2_b: 2 }).comet, 0.4, 1e-9, 'Comet 0.3 + 0.1'); near(st({ p_s2: 1, p_s2_b: 3 }).comet, 0.6, 1e-9, 'Sun Dive: every landing +60% (0.3 + 2 x 0.1 + 0.1)');
   near(st({ p_s2: 1, p_s2_b: 2 }).cometStun, 0.5, 1e-9, 'Impact Crater at rank 2'); near(st({ p_s2: 1, p_s2_b: 1 }).cometStun, 0, 1e-9, 'no Impact Crater at rank 1');
-  near(st({ p_el: 1, p_el_a: 3 }).burnMul, 0.4, 1e-9, 'White Heat burn 0.2 + 2 x 0.1'); near(st({ p_el: 1, p_el_a: 3 }).burnCrit, 0.1, 1e-9, 'Flashpoint'); near(st({ p_el: 1, p_el_b: 3 }).heatEngine, 0.25, 1e-9, 'Heat Engine 0.15 + 2 x 0.05'); near(st({ p_el: 1, p_el_b: 3 }).heatChain, 5, 1e-9, 'Chain Reaction needs 5');
+  near(st({ p_el: 1, p_el_a: 3 }).burnMul, 0.4, 1e-9, 'White Heat burn 0.2 + 2 x 0.1'); near(st({ p_el: 1, p_el_a: 2 }).burnCrit, 0.05, 1e-9, 'Flashpoint at rank 2'); near(st({ p_el: 1, p_el_a: 1 }).burnCrit, 0, 1e-9, 'no Flashpoint at rank 1'); near(st({ p_el: 1, p_el_b: 3 }).heatEngine, 0.25, 1e-9, 'Heat Engine 0.15 + 2 x 0.05'); near(st({ p_el: 1, p_el_b: 2 }).heatChain, 2, 1e-9, 'Chain Reaction needs 2 from rank 2'); near(st({ p_el: 1, p_el_b: 1 }).heatChain, 0, 1e-9, 'no Chain Reaction at rank 1');
   const w1 = st({ p_atk: 1, p_atk_h: 1 }, 'emberwand').weapon, w2 = st({ p_atk: 1, p_atk_h: 1 }).weapon;
   near(w1.explode.r, 40, 1e-9, 'Magma Heart gives a blast-less weapon a blast (r40)'); near(w1.explode.mul, 0.5, 1e-9, 'Magma Heart blast 50%');
   near(w2.explode.r, 46, 0.01, 'Magma Staff keeps its own (15% bigger) blast'); near(w2.explode.mul, 0.6, 1e-9, 'Magma Staff blast mul');
@@ -89,7 +89,7 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
   p.chanT = 5; near(wm(), 0.7, 1e-9, 'rank 3 caps at +70%');
   const oh = H.attackOpts.call(w, p, st); ok(oh && oh.pierce === 1 && Math.abs(oh.blastMul - 1.2) < 1e-9, 'Overheat at full Channel: +1 pierce, blast x1.2');
   p.chanT = 0.9; ok(!H.attackOpts.call(w, p, st), 'no Overheat below the cap (0.6 s of Channel is +40%)');
-  const r1 = stage({ p_atk: 1, p_atk_s: 1 }, 0); r1.p.chanT = 9; ok(!H.attackOpts.call(r1.w, r1.p, r1.p.stats), 'no Overheat before rank 3');
+  const r1 = stage({ p_atk: 1, p_atk_s: 1 }, 0); r1.p.chanT = 9; ok(!H.attackOpts.call(r1.w, r1.p, r1.p.stats), 'no Overheat at rank 1');
   p.chanT = 5; p.lastAtkT = w.time; p.moving = false; const base = p.stats.weapon;
   w.playerAttack(p, 0); const shot = w.projs.find(q => q.team === 0);
   near(shot.pierce, base.pierce + st.pierce + 1, 1e-9, 'Overheat shot pierces one more'); near(shot.explode.r, base.explode.r * 1.2, 1e-6, 'Overheat blast is 20% wider');
@@ -108,7 +108,7 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
   }
 }
 
-// ---- Magma Heart: aftershock 0.4 s after the blast at 30% (+10% per rank), noProc and untagged; Lava Pools at rank 3, one per spot ----
+// ---- Magma Heart: aftershock 0.4 s after the blast at 30% (+10% per rank), noProc and untagged; Lava Pools at rank 2, one per spot ----
 {
   const s = stage({ p_atk: 1, p_atk_h: 1 }, 0), { w, p } = s; p.moving = true; // moving: no Channel, so the blast and the aftershock compare cleanly
   foe(w, p.x + 90, p.y);
@@ -119,15 +119,15 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
   ok(blast.length === 1 && after.length === 1, `one blast and one aftershock (got ${blast.length}, ${after.length})`);
   near(after[0].d / blast[0].d, 0.3, 1e-6, 'aftershock = 30% of the blast'); near(after[0].t - blast[0].t, 0.4, 0.03, 'aftershock 0.4 s later');
   ok(after[0].src.noProc && after[0].src.wpn && !after[0].src.el && !after[0].src.clsEl, 'aftershock is a physical weapon blast without infusions');
-  ok(evOf(s, 'pyAfter').length === 1, 'aftershock telegraph event'); ok(!w.zones.some(z => z.lava), 'no Lava Pool before rank 3');
+  ok(evOf(s, 'pyAfter').length === 1, 'aftershock telegraph event'); ok(!w.zones.some(z => z.lava), 'no Lava Pool at rank 1');
   const s2 = stage({ p_atk: 1, p_atk_h: 2 }, 0); s2.p.moving = true; foe(s2.w, s2.p.x + 90, s2.p.y); s2.w.playerAttack(s2.p, 0); run(s2, 1.0);
   near(parts(s2, 'aftershock')[0].d / s2.log.filter(h => h.kind === 'explode' && h.src.part === undefined)[0].d, 0.4, 1e-6, 'aftershock 40% at rank 2');
-  // rank 3: a Lava Pool of 30% of the shot per second, 2 s, untagged; a new pool on the same spot refreshes it
-  const s3 = stage({ p_atk: 1, p_atk_h: 3 }, 0), w3 = s3.w, p3 = s3.p, e3 = foe(w3, p3.x + 90, p3.y);
+  // rank 2: a Lava Pool of 50% of the shot per second, 2 s, untagged; a new pool on the same spot refreshes it
+  const s3 = stage({ p_atk: 1, p_atk_h: 2 }, 0), w3 = s3.w, p3 = s3.p, e3 = foe(w3, p3.x + 90, p3.y);
   w3.playerAttack(p3, 0); run(s3, 0.9);
   let pools = w3.zones.filter(z => z.lava);
   ok(pools.length === 1, `a Lava Pool appears (got ${pools.length})`);
-  near(pools[0].r, 46 * 0.6, 0.05, 'Lava Pool radius = blast radius x 0.6'); near(pools[0].dps, 29.7 * 0.3, 0.05, 'Lava Pool dps = 30% of the shot'); near(pools[0].dur, 2, 1e-9, 'Lava Pool lasts 2 s');
+  near(pools[0].r, 46 * 0.6, 0.05, 'Lava Pool radius = blast radius x 0.6'); near(pools[0].dps, 29.7 * 0.5, 0.05, 'Lava Pool dps = 50% of the shot'); near(pools[0].dur, 2, 1e-9, 'Lava Pool lasts 2 s');
   ok(pools[0].untagged && pools[0].kind === 'pfire', 'Lava Pool is untagged ground fire'); near(pools[0].w, C.LAVA_TAG, 0, 'Lava Pool carries the look tag');
   const burn0 = e3.burnPool; run(s3, 0.6); ok(e3.burnPool === burn0, 'Lava Pool builds no Burn and is not Fire-tagged');
   ok(s3.log.some(h => h.kind === 'dot' && !h.src.el && h.d > 0), 'Lava Pool ticks as untagged damage');
@@ -252,7 +252,7 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
   const t = stage({ p_el: 1 }, 1); foe(t.w, t.p.x + 80, t.p.y); t.w.playerAttack(t.p, 0); run(t, 0.5); ok(t.adds.length >= 1, 'the Ember Wand builds Burn from the route as well');
 }
 
-// ---- White Heat: Burn +20% (+10% per rank), burning foes take +10% from skills, Flashpoint crits at Burn > 10% of max HP ----
+// ---- White Heat: Burn +20% (+10% per rank), burning foes take +10% from skills, Flashpoint (rank 2) crits at Burn > 5% of max HP ----
 {
   const s = stage({ p_el: 1, p_el_a: 1 }), { w, p } = s, e = foe(w, p.x + 60, p.y);
   e.burnPool = 100; e.burnOwner = p; e.burnTick = 0.01; e.burn = 1; run(s, 0.05);
@@ -262,14 +262,14 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
   const dh = hot.w.hitEnemy(eh, 100, { p: hot.p, kind: 'skill', part: 'nova.blast', clsEl: 'fire' }), dc = cold.w.hitEnemy(ec, 100, { p: cold.p, kind: 'skill', part: 'nova.blast', clsEl: 'fire' });
   const sd = hot.p.stats.dmg + 0.25; near(dh / dc, (sd + 0.1) / sd, 1e-6, 'burning foes take +10% from skills');
   const wk = hot.w.hitEnemy(eh, 100, { p: hot.p, kind: 'weapon', wpn: true, crit: false }), wc = cold.w.hitEnemy(ec, 100, { p: cold.p, kind: 'weapon', wpn: true, crit: false }); near(wk / wc, 1, 1e-6, 'the +10% is for skills only');
-  const f = stage({ p_el: 1, p_el_a: 3 }), fe = foe(f.w, f.p.x + 60, f.p.y), src = { p: f.p, kind: 'skill', part: 'nova.blast', clsEl: 'fire' };
-  fe.burnPool = 0.09 * fe.maxHp; fe.burnOwner = f.p; f.w.hitEnemy(fe, 10, src); ok(!src.critOut, 'no Flashpoint below 10% of max HP');
-  const src2 = { p: f.p, kind: 'skill', part: 'nova.blast', clsEl: 'fire' }; fe.burnPool = 0.11 * fe.maxHp; f.w.hitEnemy(fe, 10, src2); ok(src2.critOut, 'Flashpoint: Burn above 10% of max HP always crits');
+  const f = stage({ p_el: 1, p_el_a: 2 }), fe = foe(f.w, f.p.x + 60, f.p.y), src = { p: f.p, kind: 'skill', part: 'nova.blast', clsEl: 'fire' };
+  fe.burnPool = 0.04 * fe.maxHp; fe.burnOwner = f.p; f.w.hitEnemy(fe, 10, src); ok(!src.critOut, 'no Flashpoint below 5% of max HP');
+  const src2 = { p: f.p, kind: 'skill', part: 'nova.blast', clsEl: 'fire' }; fe.burnPool = 0.06 * fe.maxHp; f.w.hitEnemy(fe, 10, src2); ok(src2.critOut, 'Flashpoint: Burn above 5% of max HP always crits');
   ok(f.w.fx.some(ev => ev.t === 'pyFlash'), 'Flashpoint event'); const src3 = { p: f.p, kind: 'weapon', wpn: true }; fe.burnPool = 0.5 * fe.maxHp; f.w.hitEnemy(fe, 10, src3); ok(!src3.critOut, 'Flashpoint is for Nova and Meteor only');
-  const g = stage({ p_el: 1, p_el_a: 2 }), ge = foe(g.w, g.p.x + 60, g.p.y), src4 = { p: g.p, kind: 'skill', part: 'nova.blast', clsEl: 'fire' }; ge.burnPool = 0.5 * ge.maxHp; g.w.hitEnemy(ge, 10, src4); ok(!src4.critOut, 'no Flashpoint before rank 3');
+  const g = stage({ p_el: 1, p_el_a: 1 }), ge = foe(g.w, g.p.x + 60, g.p.y), src4 = { p: g.p, kind: 'skill', part: 'nova.blast', clsEl: 'fire' }; ge.burnPool = 0.5 * ge.maxHp; g.w.hitEnemy(ge, 10, src4); ok(!src4.critOut, 'no Flashpoint at rank 1');
 }
 
-// ---- Heat Engine: each burning foe a cast hits cuts 0.15 s from the other skill (at most 1.5 s per cast); Chain Reaction at 5 refunds it in full once per 6 s ----
+// ---- Heat Engine: each burning foe a cast hits cuts 0.15 s from the other skill (at most 1.5 s per cast); Chain Reaction (rank 2) at 2 burning foes refunds it in full once per 6 s ----
 {
   const refunds = (w) => w.msgs.filter(m => m.t === 'refund');
   const mk = (boons, nBurn, nCold) => {
@@ -284,11 +284,11 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
   s = mk({ p_el: 1, p_el_b: 1 }, 0, 3); cast(s, 0, 0, 0); ok(refunds(s.w).length === 0, 'foes that were not burning before the cast do not count');
   s.w.msgs.length = 0; cast(s, 0, 0, 0); r = refunds(s.w); ok(r.length === 1 && Math.abs(r[0].s - 0.45) < 1e-9, 'a second cast counts the foes the first one lit');
   s = mk({ p_el: 1, p_el_b: 1 }, 12, 0); cast(s, 0, 0, 0); r = refunds(s.w); near(r[0].s, 1.5, 1e-9, 'capped at 1.5 s per cast'); ok(r.length === 1, 'one message per cast');
-  s = mk({ p_el: 1, p_el_b: 2 }, 3, 0); cast(s, 0, 0, 0); near(refunds(s.w)[0].s, 0.6, 1e-9, 'rank 2: 0.2 s per foe');
-  s = mk({ p_el: 1, p_el_b: 3 }, 5, 0); cast(s, 0, 0, 0); r = refunds(s.w); ok(r.length === 1 && r[0].s === undefined && r[0].slot === 1, 'Chain Reaction: 5 burning foes refund Meteor in full'); near(s.p.heatT, 6, 1e-9, 'Chain Reaction cooldown 6 s');
+  s = mk({ p_el: 1, p_el_b: 2 }, 1, 0); cast(s, 0, 0, 0); near(refunds(s.w)[0].s, 0.2, 1e-9, 'rank 2: 0.2 s per foe');
+  s = mk({ p_el: 1, p_el_b: 2 }, 2, 0); cast(s, 0, 0, 0); r = refunds(s.w); ok(r.length === 1 && r[0].s === undefined && r[0].slot === 1, 'Chain Reaction: 2 burning foes refund Meteor in full'); near(s.p.heatT, 6, 1e-9, 'Chain Reaction cooldown 6 s');
   s.w.msgs.length = 0; cast(s, 0, 0, 0); r = refunds(s.w); ok(r.length === 1 && r[0].s !== undefined, 'a second chain inside 6 s only cuts the cooldown');
   s.p.heatT = 0; s.w.msgs.length = 0; cast(s, 0, 0, 0); r = refunds(s.w); ok(r.length === 1 && r[0].s === undefined, 'Chain Reaction is ready again after 6 s');
-  s = mk({ p_el: 1, p_el_b: 3 }, 4, 0); cast(s, 0, 0, 0); ok(refunds(s.w)[0].s !== undefined, '4 burning foes: a partial cut only');
+  s = mk({ p_el: 1, p_el_b: 2 }, 1, 0); cast(s, 0, 0, 0); ok(refunds(s.w)[0].s !== undefined, '1 burning foe: a partial cut only'); s = mk({ p_el: 1, p_el_b: 1 }, 4, 0); cast(s, 0, 0, 0); ok(refunds(s.w)[0].s !== undefined, 'rank 1: 4 burning foes cut only, no Chain Reaction');
   s = mk({ p_el: 1, p_el_b: 1 }, 4, 0); const e0 = s.w.enemies[0]; cast(s, 1, e0.x, e0.y); ok(refunds(s.w).length === 0, 'Meteor: nothing at the cast'); run(s, 1.0); r = refunds(s.w); ok(r.length === 1 && r[0].slot === 0 && r[0].s > 0, 'Meteor impact cuts the Nova cooldown');
   s = mk({}, 4, 0); cast(s, 0, 0, 0); ok(refunds(s.w).length === 0, 'no refund without the card');
 }
@@ -470,6 +470,154 @@ const hurt = (w, p) => { p.invuln = 0; return w.hurtPlayer(p, 1, { hazard: true 
   const rc = mk({ p_s2_b: 3 }); rc.p.diveRoom = {}; fly(rc, 1.3); ok(!rc.p.skillMove && !rc.w.msgs.some(m => m.t === 'leap') && rc.p.diveAt === 0, 'no dive in another room');
   const fb = mk({ p_s2_b: 3 }); fb.p.aimX = undefined; fb.p.face = Math.PI / 2; fly(fb, 1.15); ok(fb.p.skillMove && Math.abs(fb.p.skillMove.dy) > 0.9, 'without a cursor point the dive follows the facing');
   const dn = mk({ p_s2_b: 3 }); dn.p.downed = true; fly(dn, 1.3); ok(!dn.p.skillMove, 'a downed hero does not dive');
+}
+
+// ================= Attack and Element forks: rank 2 rider, rank 3 transform =================
+const evAll = (s, t) => s.evs.concat(s.w.fx).filter(e => e.t === t);
+{ // card shape, names and text of the four forks
+  const FORKS = { p_atk_h: ['Magma Heart', 'Lava Pools', 'Caldera', 'lavaPool', 'caldera'], p_atk_s: ['Ember Rush', 'Overheat', 'Fire Dancer', 'overheat', 'dancerBurst'], p_el_a: ['White Heat', 'Flashpoint', 'White Flame', 'burnCrit', 'whiteHot'], p_el_b: ['Heat Engine', 'Chain Reaction', 'Inferno Engine', 'heatChain', 'infernoMul'] };
+  const pc = (v) => String(Math.round(v * 100)) + '%';
+  for (const id in FORKS) {
+    const [name, rider, form, k2, k3] = FORKS[id], b = ED.BOONS[id], P = [1, 2, 3].map(r => ED.cardParts(id, r, null));
+    ok(!b.rider && b.rider2 && b.r2 && b.form && b.r3 && b.form.name === form && b.name === name, id + ' keeps its rider in rider2/r2 and its transform in form/r3');
+    ok(b.r2[k2] > 0 && !(k2 in b.r3) && b.r3[k3] > 0 && !(k3 in b.r2), id + ': ' + k2 + ' is a rank 2 number, ' + k3 + ' a rank 3 number');
+    ok(P[0].rider2 === '' && P[1].rider2Name === rider && P[1].rider2 !== '' && P[2].rider2 !== '' && !P[0].form && !P[1].form && P[2].form && P[2].form.name === form, id + ' rider ' + rider + ' from rank 2, form ' + form + ' at rank 3');
+    ok(ED.cardName(id, 2) === name && ED.cardName(id, 3) === form, id + ' takes its form name at rank 3');
+    ok(!/[{}]/.test(P[2].form.desc + P[2].rider2 + P[2].text), id + ' text has no unfilled token');
+  }
+  const t = (id, r) => ED.cardTotals(ED.BOONS[id], r);
+  ok(ED.boonText('p_atk_h', 3, null).indexOf('geyser') >= 0 && ED.boonText('p_atk_h', 3, null).indexOf(pc(t('p_atk_h', 3).caldera) + ' of the shot') >= 0 && ED.boonText('p_atk_h', 3, null).indexOf(pc(t('p_atk_h', 3).lavaPool) + ' of the shot per second') >= 0, 'Caldera and Lava Pools print their numbers');
+  ok(ED.boonText('p_atk_s', 3, null).indexOf(pc(t('p_atk_s', 3).dancerBurst) + ' weapon damage') >= 0, 'Fire Dancer prints its ring damage');
+  ok(ED.boonText('p_el_a', 3, null).indexOf('burned for ' + t('p_el_a', 3).whiteT + ' s') >= 0 || ED.boonText('p_el_a', 3, null).indexOf('burning for ' + t('p_el_a', 3).whiteT + ' s') >= 0, 'White Flame prints its time');
+  ok(ED.boonText('p_el_a', 3, null).indexOf('+' + pc(t('p_el_a', 3).whiteHot) + ' damage') >= 0 && ED.boonText('p_el_a', 3, null).indexOf(pc(t('p_el_a', 3).burnCrit) + ' of their health') >= 0, 'White Flame and Flashpoint print their numbers');
+  ok(ED.boonText('p_el_b', 3, null).indexOf('up to ' + t('p_el_b', 3).heatMax + '.') >= 0 && ED.boonText('p_el_b', 3, null).indexOf('×' + t('p_el_b', 3).infernoMul + ' damage') >= 0 && ED.boonText('p_el_b', 3, null).indexOf(t('p_el_b', 3).heatChain + ' or more burning foes') >= 0, 'Inferno Engine and Chain Reaction print their numbers');
+  ok(!ED.boonText('p_atk_h', 2, null).includes('geyser') && !ED.boonText('p_el_b', 2, null).includes('Heat'), 'rank 2 text has no transform');
+  ok(!H.kill, 'the Pyromancer route holds no kill hook: a kill refunds, shields and raises nothing');
+}
+
+// ---- Caldera: an aftershock inside a live Lava Pool is a geyser (caldera x the shot, 1.5 x the radius, knock-back) that refreshes the pool and widens it 20% (at most 2 x) ----
+{
+  const mk = (rank) => { const s = stage({ p_atk: 1, p_atk_h: rank }, 0); s.p.moving = true; return s; };
+  const after = (s, x, y) => { const p = s.p, shot = p.stats.weapon.dmg; p.pyroQ.push({ at: s.w.time + 0.01, k: 'after', x, y, r: 46, shot, dmg: shot * 0.6 * p.stats.aftershock, lava: shot * p.stats.lavaPool, room: s.w.room }); run(s, 0.05); };
+  const s = mk(3), { w, p } = s, x = p.x + 100, y = p.y, shot = p.stats.weapon.dmg, e = foe(w, x + 10, y), far = foe(w, x + 60, y), boss = foe(w, x - 20, y), fd = foe(w, x, y + 20); boss.boss = true; fd.fodder = true;
+  after(s, x, y);
+  const pool = w.zones.find(z => z.lava), r0 = pool.r;
+  ok(pool && Math.abs(r0 - 46 * 0.6) < 0.05 && Math.abs(pool.r0 - r0) < 1e-9 && parts(s, 'aftershock').length > 0 && parts(s, 'caldera').length === 0, 'the first aftershock is a plain one and plants the pool (r0 = its first radius)');
+  const a0 = parts(s, 'aftershock').find(h => h.e === e); s.log.length = 0; s.evs.length = 0; w.fx.length = 0; e.kbx = e.kby = 0; boss.kbx = 0; e.hp = e.maxHp = 5000; fd.hp = fd.maxHp = 5000;
+  const tb = pool.t; after(s, x + 8, y);
+  const g = parts(s, 'caldera'), ge = g.find(h => h.e === e);
+  ok(w.zones.filter(z => z.lava).length === 1, 'the geyser does not plant a second pool'); ok(parts(s, 'aftershock').length === 0, 'the aftershock is replaced by the geyser');
+  near(ge.d / a0.d, 0.8 / (0.6 * p.stats.aftershock), 0.01, 'geyser = 80% of the shot (against the aftershock 60% x 50% of it)'); near(ge.d, shot * 0.8 * p.stats.dmg, 0.05, 'geyser damage = caldera x the shot x the hero multiplier');
+  ok(g.some(h => h.e === far) && g.some(h => h.e === fd) && g.some(h => h.e === boss), 'the geyser reaches 1.5 x the blast radius (a foe 52 px away is struck, 46 would not) and horde foes');
+  ok(a0 && g.every(h => h.src.knock === 200 && h.src.wpn && h.src.noProc), 'a weapon blast without infusions, knock 200');
+  ok(e.kbx > 100 && boss.kbx === 0, 'foes are knocked back, bosses stay'); const gev = evAll(s, 'pyGeyser'); ok(gev.length === 1 && Math.abs(gev[0].r - 69) <= 1 && gev[0].pid === 'p0', 'pyGeyser event with the geyser radius');
+  near(pool.r, r0 * 1.2, 1e-9, 'the pool grows 20%'); ok(pool.dur - pool.t <= C.LAVA_T + 1e-6 && pool.dur > pool.t + 1.9 && pool.t > tb, 'and refreshes to LAVA_T more seconds'); ok(Math.abs(gev[0].pr - pool.r) <= 1, 'the event carries the new pool radius');
+  for (let i = 0; i < 6; i++) after(s, x + 8, y); near(pool.r, r0 * 2, 1e-9, 'the pool never grows past twice its first radius');
+  // outside every pool the aftershock is plain; a hero below rank 3 never erupts
+  s.log.length = 0; foe(w, x + 205, y); after(s, x + 200, y); ok(parts(s, 'aftershock').length === 1 && parts(s, 'caldera').length === 0 && w.zones.filter(z => z.lava).length === 2, 'an aftershock outside the pools is plain and plants a new pool');
+  const r2 = mk(2); after(r2, r2.p.x + 100, r2.p.y); after(r2, r2.p.x + 104, r2.p.y); ok(parts(r2, 'caldera').length === 0 && r2.w.zones.filter(z => z.lava).length === 1 && r2.w.zones.find(z => z.lava).r === r2.w.zones.find(z => z.lava).r0, 'rank 2: the second aftershock is plain, the pool only refreshes');
+  // a pool of another hero is not this hero's pool
+  const o = mk(3); o.w.addZone({ kind: 'pfire', x: o.p.x + 100, y: o.p.y, r: 30, r0: 30, dur: 2, dps: 1, owner: 'ally', team: 0, untagged: true, lava: true, w: C.LAVA_TAG }); after(o, o.p.x + 100, o.p.y); ok(parts(o, 'caldera').length === 0, "another hero's pool does not turn this hero's aftershock into a geyser");
+  // end to end: shots at one spot become geysers
+  const t = mk(3), te = foe(t.w, t.p.x + 90, t.p.y); for (let i = 0; i < 4; i++) { te.x = t.p.x + 90; te.y = t.p.y; te.kbx = te.kby = 0; t.w.playerAttack(t.p, 0); run(t, 0.9, () => { te.kbx = te.kby = 0; te.x = t.p.x + 90; }); }
+  ok(parts(t, 'caldera').length >= 1 && t.w.zones.filter(z => z.lava).length <= 2, `shots at one foe keep the pool alive and erupt as geysers (${parts(t, 'caldera').length})`);
+}
+
+// ---- Fire Dancer: Channel holds while moving (and stops building); a pause still ends it; a dash at full Channel leaves a ring of flame (r80, 2 x the weapon) where it began ----
+{
+  const mk = (rank) => { const s = stage({ p_atk: 1, p_atk_s: rank }, 0); s.p.moving = false; return s; };
+  const atk = (s, moving, secs) => { s.p.moving = moving; s.p.lastAtkT = s.w.time; run(s, secs, () => { s.p.moving = moving; s.p.lastAtkT = s.w.time; }); };
+  const d3 = mk(3), d2 = mk(2);
+  atk(d3, false, 0.5); atk(d2, false, 0.5); const c3 = d3.p.chanT, c2 = d2.p.chanT; ok(c3 > 0.4 && c2 > 0.4, `Channel builds while standing (${c3.toFixed(2)})`);
+  atk(d3, true, 0.5); atk(d2, true, 0.5);
+  near(d3.p.chanT, c3, 1e-9, 'Fire Dancer: moving holds Channel (it stops building)'); near(d2.p.chanT, 0, 1e-9, 'rank 2: moving ends Channel');
+  atk(d3, false, 0.3); near(d3.p.chanT, c3 + 0.3, 0.03, 'standing builds it again from where it was held');
+  d3.p.moving = true; run(d3, 0.7, () => { d3.p.moving = true; }); near(d3.p.chanT, 0, 1e-9, 'a pause in attacking longer than the window ends it, moving or not');
+  const hd = mk(3); hd.p.lastAtkT = hd.w.time; run(hd, ED.chanWindow(hd.p) - 0.05, () => { hd.p.moving = true; hd.p.chanT = 1; }); ok(hd.p.chanT === 1, 'inside the window a moving hero keeps its Channel');
+  // the ring: only on the first tick of a dash, only at full Channel, where the dash began
+  const ring = (rank, full) => {
+    const s = mk(rank), { w, p } = s, near1 = foe(w, p.x + 60, p.y), edge = foe(w, p.x - 75, p.y), out = foe(w, p.x + 120, p.y), fd = foe(w, p.x, p.y - 50); fd.fodder = true;
+    const x0 = p.x;
+    p.lastAtkT = w.time; run(s, 0.05, () => { p.lastAtkT = w.time; p.moving = false; });
+    p.chanT = full ? 9 : 0.2; p.dashT = 0.15; p.dashDx = 1; p.dashDy = 0;
+    run(s, 0.2, () => { p.lastAtkT = w.time; p.chanT = full ? 9 : 0.2; if (p.dashT > 0) p.x += 8; });
+    return { s, p, near1, edge, out, fd, hits: parts(s, 'dancer'), x0 };
+  };
+  const r3 = ring(3, true), st3 = r3.p.stats, want = st3.weapon.dmg * 2 * (st3.dmg + st3.chanCap);
+  ok(r3.hits.length === 3 && r3.hits.some(h => h.e === r3.near1) && r3.hits.some(h => h.e === r3.edge) && r3.hits.some(h => h.e === r3.fd) && !r3.hits.some(h => h.e === r3.out), `the ring strikes foes within 80 of where the dash began, horde foes too (${r3.hits.length} hits)`);
+  ok(r3.hits.every(h => Math.abs(h.d / want - 1) < 0.01), `each hit is 2 x the weapon damage with Channel at its cap (${r3.hits.map(h => h.d.toFixed(1)).join(', ')} vs ${want.toFixed(1)})`);
+  const rev = evAll(r3.s, 'pyRing'); ok(rev.length === 1 && Math.abs(rev[0].x - r3.x0) <= 10 && rev[0].r === 80, `one ring event at the start of the dash (x ${rev[0] && rev[0].x} vs ${Math.round(r3.x0)})`);
+  ok(ring(3, false).hits.length === 0, 'no ring below full Channel'); ok(ring(2, true).hits.length === 0, 'no ring at rank 2');
+  { // one ring per dash; a second dash makes a second ring
+    const s = mk(3), { w, p } = s; foe(w, p.x + 40, p.y); p.lastAtkT = w.time; run(s, 0.05, () => { p.lastAtkT = w.time; });
+    for (let k = 0; k < 2; k++) { p.chanT = 9; p.dashT = 0.15; run(s, 0.3, () => { p.lastAtkT = w.time; p.chanT = 9; }); p.dashT = 0; run(s, 0.1, () => { p.lastAtkT = w.time; p.chanT = 9; }); }
+    ok(evAll(s, 'pyRing').length === 2, 'each dash at full Channel rings once (' + evAll(s, 'pyRing').length + ')');
+  }
+  { // Overheat keeps working through moving at rank 3 (Channel stays full)
+    const s = mk(3); s.p.chanT = 9; s.p.moving = true; s.p.lastAtkT = s.w.time; ok(H.attackOpts.call(s.w, s.p, s.p.stats).pierce === 1, 'Overheat is active while moving at full Channel (Fire Dancer)');
+  }
+}
+
+// ---- White Flame: a foe burning WHITE_T s in a row takes +50% from every hero hit and meets Flashpoint for sure; a break starts it over; horde foes and rank 2 heroes are left out ----
+{
+  const mk = (rank) => stage({ p_el: 1, p_el_a: rank });
+  const burn = (p, e) => { e.burnPool = 5; e.burnOwner = p; e.burnTick = 99; e.burn = 1; };
+  const hitW = (s, e) => { s.p.invuln = 0; return s.w.hitEnemy(e, 100, { p: s.p, kind: 'weapon', wpn: true, crit: false }); };
+  const s = mk(3), { w, p } = s, st = p.stats, e = foe(w, p.x + 60, p.y), cold = foe(w, p.x + 60, p.y + 50), fd = foe(w, p.x + 60, p.y - 50); fd.fodder = true;
+  burn(p, e); burn(p, fd); run(s, 1.8, () => { burn(p, e); burn(p, fd); });
+  const base = hitW(s, cold);
+  near(hitW(s, e) / base, 1, 1e-9, 'a foe that burned 1.8 s is not white-hot yet');
+  run(s, 0.4, () => { burn(p, e); burn(p, fd); });
+  near(hitW(s, e) / base, (st.dmg + 0.5) / st.dmg, 1e-6, "after 2 s of burning it takes +50% from the hero's hits"); ok(Math.abs(hitW(s, fd) / base - 1) < 1e-9, 'horde foes are never white-hot');
+  const sk = { p, kind: 'skill', part: 'nova.blast', clsEl: 'fire' }; e.burnPool = 0.01 * e.maxHp; w.hitEnemy(e, 10, sk); ok(sk.critOut, 'Flashpoint always counts a white-hot foe, however small its Burn pool');
+  const sk2 = { p, kind: 'skill', part: 'nova.blast', clsEl: 'fire' }; cold.burnPool = 0.01 * cold.maxHp; cold.burnOwner = p; w.hitEnemy(cold, 10, sk2); ok(!sk2.critOut, 'a foe under the Flashpoint line that is not white-hot does not crit');
+  e.burnPool = 0; e.burn = 0; run(s, 0.3); burn(p, e); run(s, 0.3, () => { burn(p, e); }); near(hitW(s, e) / base, 1, 1e-9, 'a break in the burning starts the time over');
+  burn(p, e); e.wf[p.pid] = 5; e.burnPool = 0; near(hitW(s, e) / base, 1, 1e-9, 'a foe that is no longer burning takes no bonus');
+  const r2 = mk(2), e2 = foe(r2.w, r2.p.x + 60, r2.p.y); burn(r2.p, e2); run(r2, 3, () => burn(r2.p, e2)); ok(e2.wf === undefined, 'rank 2 keeps no timers');
+  const one = stage({ p_el: 1, p_el_a: 3 }), e3 = foe(one.w, one.p.x + 60, one.p.y); burn(one.p, e3); run(one, 2.2, () => burn(one.p, e3)); ok(e3.wf.p0 >= 2 && e3.wf.p1 === undefined, 'the timer is kept per hero');
+}
+
+// ---- Inferno Engine: burning foes (not horde foes) a Nova or Meteor hits store Heat (a boss 3) up to 4; at full Heat the next cast is an Inferno (r x1.4, x5 damage and Burn) and the Heat empties ----
+{
+  const mk = (boons) => stage(Object.assign({ p_el: 1, p_el_b: 3 }, boons));
+  const lit = (p, e) => { e.burnPool = 60; e.burnOwner = p; e.burnTick = 99; e.burn = 1; return e; };
+  const ctl = mk({}); foe(ctl.w, ctl.p.x + 70, ctl.p.y); cast(ctl, 0, 0, 0); const N = ED.Stats.skillNums('nova', ctl.p.stats), blast0 = parts(ctl, 'nova.blast')[0].d, burn0 = ctl.adds[0].amount;
+  // storing
+  let s = mk({}); for (let i = 0; i < 3; i++) lit(s.p, foe(s.w, s.p.x + 40 + i * 6, s.p.y + (i - 1) * 12)); for (let i = 0; i < 4; i++) lit(s.p, Object.assign(foe(s.w, s.p.x + 50 + i * 5, s.p.y + 40), { fodder: true }));
+  cast(s, 0, 0, 0); near(s.p.heat, 3, 0, 'three burning foes store 3 Heat, burning horde foes none'); const ev1 = evAll(s, 'pyEng').filter(x => !x.go); ok(ev1.length === 1 && ev1[0].n === 3 && ev1[0].mx === 4 && ev1[0].pid === 'p0', 'a Heat event carries the count');
+  for (const f of s.w.enemies) lit(s.p, f); cast(s, 0, 0, 0); near(s.p.heat, 4, 0, 'Heat stops at 4');
+  const b = mk({}); const boss = foe(b.w, b.p.x + 60, b.p.y); boss.boss = true; lit(b.p, boss); cast(b, 0, 0, 0); near(b.p.heat, 3, 0, 'a burning boss stores 3 Heat');
+  const cold = mk({}); foe(cold.w, cold.p.x + 60, cold.p.y); cast(cold, 0, 0, 0); near(cold.p.heat, 0, 0, 'foes that were not burning store nothing');
+  const rk2 = mk({ p_el_b: 2 }); lit(rk2.p, foe(rk2.w, rk2.p.x + 60, rk2.p.y)); cast(rk2, 0, 0, 0); near(rk2.p.heat, 0, 0, 'rank 2 stores no Heat');
+  // a Meteor impact stores Heat too
+  const m0 = mk({}); for (let i = 0; i < 3; i++) lit(m0.p, foe(m0.w, m0.p.x + 200 + i * 8, m0.p.y)); cast(m0, 1, m0.p.x + 200, m0.p.y); near(m0.p.heat, 0, 0, 'nothing is stored at the Meteor cast'); run(m0, 1.2); near(m0.p.heat, 3, 0, 'the impact stores 3 Heat');
+  // the Inferno Nova
+  const f = mk({}); f.p.heat = 4; const near1 = foe(f.w, f.p.x + 70, f.p.y), edge = foe(f.w, f.p.x + N.p.blast.r * 1.25 + 4, f.p.y), edge0 = foe(f.w, f.p.x - (N.p.blast.r * 1.4 + 24), f.p.y);
+  cast(f, 0, 0, 0);
+  const bl = parts(f, 'nova.blast'); near(bl.find(h => h.e === near1).d / blast0, 5, 1e-6, 'the Inferno blast deals x5'); ok(bl.some(h => h.e === edge) && !bl.some(h => h.e === edge0), 'its radius is x1.4 (a foe beyond the plain radius is struck)');
+  near(f.adds.find(a => a.e === near1).amount / burn0, 5, 1e-6, 'its Burn add is x5'); near(f.p.heat, 0, 0, 'the Heat empties'); const go = evAll(f, 'pyEng').filter(x => x.go === 1); ok(go.length === 1 && go[0].n === 0 && Math.abs(go[0].r - N.p.blast.r * 1.4) <= 1, 'the Inferno event carries its radius');
+  f.log.length = 0; f.adds.length = 0; near1.hp = near1.maxHp = 5000; cast(f, 0, 0, 0); near(parts(f, 'nova.blast').find(h => h.e === near1).d / blast0, 1, 1e-6, 'the next Nova is plain again');
+  // the Inferno Meteor
+  const q = mk({}), q0 = mk({}); q.p.heat = 4;
+  const mt = (s0) => { const a = foe(s0.w, s0.p.x + 200, s0.p.y), o = foe(s0.w, s0.p.x + 200 + 95 + 12 + 20, s0.p.y); cast(s0, 1, s0.p.x + 200, s0.p.y); const z = s0.w.zones.find(zz => zz.kind === 'meteor'), r = z.r; run(s0, 1.2); return { a, o, r, hit: parts(s0, 'meteor.impact') }; };
+  const A = mt(q), B = mt(q0);
+  near(A.r / B.r, 1.4, 1e-9, 'the Inferno Meteor falls x1.4 wider'); near(A.hit.find(h => h.e === A.a).d / B.hit.find(h => h.e === B.a).d, 5, 1e-6, 'and deals x5'); ok(A.hit.some(h => h.e === A.o) && !B.hit.some(h => h.e === B.o), 'a foe past the plain radius is struck by the Inferno only');
+  ok(q.adds.length >= 1 && Math.abs(q.adds[0].amount / q0.adds[0].amount - 5) < 1e-6, 'its Burn add is x5'); near(q.p.heat, 0, 0, 'the Heat is spent at the cast'); ok(evAll(q, 'pyEng').filter(x => x.go === 1 && x.k === 1).length === 1 && evAll(q, 'pyEng').filter(x => x.go === 2).length === 1, 'a telegraph event at the cast and a landing event');
+  // no Inferno below full Heat or without the form
+  const h3 = mk({}); h3.p.heat = 3; foe(h3.w, h3.p.x + 70, h3.p.y); cast(h3, 0, 0, 0); near(parts(h3, 'nova.blast')[0].d / blast0, 1, 1e-6, 'Heat 3 of 4 is not an Inferno'); near(h3.p.heat, 3, 0, 'and is kept');
+  const r2 = mk({ p_el_b: 2 }); r2.p.heat = 9; foe(r2.w, r2.p.x + 70, r2.p.y); cast(r2, 0, 0, 0); near(parts(r2, 'nova.blast')[0].d / blast0, 1, 1e-6, 'rank 2 has no Inferno');
+  // the viewers' count is refreshed while Heat is stored
+  const k = mk({}); k.p.heat = 2; k.p.heatPing = 0; run(k, 4.2); ok(evAll(k, 'pyEng').filter(x => !x.go && x.n === 2).length >= 2, 'a Heat event every 2 s while Heat is stored');
+}
+
+// ---- fodder audit of the route hooks: a burning horde foe feeds no Heat, refund, shield or stack; blasts still strike it ----
+{
+  const lit = (p, e) => { e.burnPool = 60; e.burnOwner = p; e.burnTick = 99; e.burn = 1; return e; };
+  const s = stage({ p_el: 1, p_el_b: 3 }); for (let i = 0; i < 6; i++) { const f = foe(s.w, s.p.x + 30 + i * 6, s.p.y + (i % 3) * 10 - 10); f.fodder = true; lit(s.p, f); }
+  s.w.msgs.length = 0; cast(s, 0, 0, 0);
+  ok(s.w.msgs.filter(m => m.t === 'refund').length === 0 && s.p.heat === 0 && s.p.shield === 0 && s.p.heatT === 0, 'six burning horde foes: no Heat Engine cut, no Chain Reaction, no Heat, no shield'); ok(parts(s, 'nova.blast').length === 6, 'but the Nova struck all six');
+  const k = stage({ p_el: 1, p_el_b: 3 }), dead = foe(k.w, k.p.x + 60, k.p.y); dead.fodder = true; dead.hp = 1; dead.maxHp = 1; k.p.heat = 2; k.w.msgs.length = 0; k.w.hitEnemy(dead, 99, { p: k.p, kind: 'skill', part: 'nova.blast', clsEl: 'fire' }); run(k, 0.1);
+  ok(dead.hp <= 0 && k.w.msgs.filter(m => m.t === 'refund').length === 0 && k.p.heat === 2 && k.p.shield === 0, 'killing a horde foe changes no Heat, refund or shield');
 }
 
 console.log(`${n} checks, ${fails} failed`);

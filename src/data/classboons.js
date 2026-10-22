@@ -98,10 +98,12 @@
     desc: 'Standing still while attacking builds Channel: your weapon deals +{channel} every {chanStep:s}, up to +{chanCap}. Moving, or a pause longer than 0.6 s (1.25 attacks for slow weapons), resets it.', mods: { channel: 0.1, chanStep: 0.3, chanCap: 0.5 } });
   card('pyro', 'attack', 2, 'p_atk_h', { name: 'Magma Heart', icon: 'ember', tag: 'Heavy', weapon: { kind: 'heavy', extra: { ifNone: { explode: { r: 40, mul: 0.5 } } } },
     desc: 'Heavy shots (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit, Stagger, 15% bigger blasts). Shots that have no blast gain one (radius 40, 50%), and every blast erupts again 0.4 s later at {aftershock}.',
-    rider: 'Lava Pools: each aftershock leaves burning ground (2 s, {lavaPool} of the shot per second; a new pool on the same spot refreshes the old one).', mods: { aftershock: 0.3 }, up: { aftershock: 0.1 }, r3: { lavaPool: 0.3 } });
+    rider2: 'Lava Pools: each aftershock leaves burning ground (2 s, {lavaPool} of the shot per second; a new pool on the same spot refreshes the old one).', mods: { aftershock: 0.3 }, up: { aftershock: 0.1 }, r2: { lavaPool: 0.5 }, r3: { caldera: 0.8 },
+    form: { name: 'Caldera', desc: 'An aftershock that lands inside one of your Lava Pools erupts as a geyser instead: 1.5 times the radius, {caldera} of the shot, knocking foes back (not bosses). The pool refreshes and grows 20% wider (at most twice its first radius).' } });
   card('pyro', 'attack', 2, 'p_atk_s', { name: 'Ember Rush', icon: 'bolt', tag: 'Swift', weapon: { kind: 'swift' },
     desc: 'Swift shots (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit, Flow). Channel builds twice as fast (every 0.15 s) and caps {chanCap} higher.',
-    rider: 'Overheat: at full Channel your shots pierce 1 more foe and their blasts are 20% wider.', mods: { chanStep: -0.15, chanCap: 0.1 }, up: { chanCap: 0.05 }, r3: { overheat: 1 } });
+    rider2: 'Overheat: at full Channel your shots pierce 1 more foe and their blasts are 20% wider.', mods: { chanStep: -0.15, chanCap: 0.1 }, up: { chanCap: 0.05 }, r2: { overheat: 1 }, r3: { fireDance: 1, dancerBurst: 2 },
+    form: { name: 'Fire Dancer', desc: 'Moving no longer ends Channel: it holds while you move (and stops building), and only a pause in attacking longer than its window ends it. A dash at full Channel leaves a ring of flame (radius 80) where it started, striking foes for {dancerBurst} weapon damage.' } });
   card('pyro', 'skill1', 1, 'p_s1', { name: 'Firestorm', icon: 'flame', forks: ['p_s1_a', 'p_s1_b'], plays: 'dive into packs and erupt.',
     desc: 'Flame Nova: +{s1Area} radius, +{s1Dmg} damage, recharges {s1Cdr} faster.', mods: { s1Area: 0.25, s1Dmg: 0.2, s1Cdr: 0.21 } });
   card('pyro', 'skill1', 2, 'p_s1_a', { name: 'Twin Nova', icon: 'twin', tag: 'Burst',
@@ -126,10 +128,12 @@
     desc: "Your skills deal +{classElMul} Fire damage, and your weapon sets foes alight for {wInfFire} of each hit (Kindle's rate counts instead when it is higher).", mods: { classElMul: 0.25, wInfFire: 0.15 } });
   card('pyro', 'element', 2, 'p_el_a', { name: 'White Heat', icon: 'flame', tag: 'Focus',
     desc: 'Your Burn deals +{burnMul}, and burning foes take +{searSkill} from your skills.',
-    rider: 'Flashpoint: Nova and Meteor always crit foes whose Burn exceeds {burnCrit} of their health.', mods: { burnMul: 0.2, searSkill: 0.1 }, up: { burnMul: 0.1 }, r3: { burnCrit: 0.1 } });
+    rider2: 'Flashpoint: Nova and Meteor always crit foes whose Burn exceeds {burnCrit} of their health.', mods: { burnMul: 0.2, searSkill: 0.1 }, up: { burnMul: 0.1 }, r2: { burnCrit: 0.05 }, r3: { whiteHot: 0.5, whiteT: 2 },
+    form: { name: 'White Flame', desc: 'A foe that has kept burning for {whiteT:s} without a break turns white-hot: it takes +{whiteHot} damage from your hits, and Flashpoint always counts it.' } });
   card('pyro', 'element', 2, 'p_el_b', { name: 'Heat Engine', icon: 'hourglass', tag: 'Spread',
     desc: "Each burning foe your Nova or Meteor hits cuts {heatEngine:s} from the other skill's cooldown (up to 1.5 s per cast).",
-    rider: 'Chain Reaction: hitting {heatChain:n} or more burning foes with one cast refunds the other skill fully (at most once per 6 s).', mods: { heatEngine: 0.15 }, up: { heatEngine: 0.05 }, r3: { heatChain: 5 } });
+    rider2: 'Chain Reaction: hitting {heatChain:n} or more burning foes with one cast refunds the other skill fully (at most once per 6 s).', mods: { heatEngine: 0.15 }, up: { heatEngine: 0.05 }, r2: { heatChain: 2 }, r3: { heatMax: 4, infernoMul: 5 },
+    form: { name: 'Inferno Engine', desc: 'Each burning foe your Nova or Meteor hits stores 1 Heat (a boss 3), up to {heatMax:n}. At full Heat your next Nova or Meteor is an Inferno: radius ×1.4, ×{infernoMul:x} damage and Burn, and the Heat empties.' } });
 
   // ---------------- Shade (Shadowstep · Vanish) ----------------
   card('shade', 'attack', 1, 's_atk', { name: 'Bladedancer', icon: 'dagger', forks: ['s_atk_h', 's_atk_s'], plays: 'never stop; crit chains keep you hot.',
