@@ -475,6 +475,7 @@ input[type=range]::-moz-range-thumb { width: 1.2rem; height: 1.2rem; transform: 
 .boon-cards.dense .bc-weak { grid-column: 2; justify-self: start; }
 .boon-card.neutral, .boon-card.class { --pc: #b9ad9b; }
 .boon-card.class { --pc: var(--gold); }
+.boon-card.asc { --pc: var(--rc); }
 /* duo: split frame between the two gate paths */
 .boon-card.duo { border: 3px solid transparent; border-top-width: 5px; background: radial-gradient(ellipse 110% 55% at 50% 0%, color-mix(in srgb, var(--pc) 20%, transparent), transparent 72%) padding-box, linear-gradient(180deg, #2a1e17, #14100c) padding-box, linear-gradient(135deg, var(--pc), var(--pc2, var(--pc)) 55%, var(--pc)) border-box; }
 .boon-card.duo .bc-icon { border-color: transparent; background: radial-gradient(circle, #1c1410, #0d0806 75%) padding-box, linear-gradient(135deg, var(--pc), var(--pc2, var(--pc))) border-box; }
@@ -655,6 +656,7 @@ body:has(#ov-sheet:not([hidden])) #ov-boon { visibility: hidden; }
 .sh-src .sh-sk::after { content: ':'; }
 .sh-src .neg b { color: var(--danger); }
 .sh-src .tmp { color: var(--ember-hi); }
+.sh-src .asc b { color: #ff5fd2; }
 .sh-src .rd b { color: var(--muted); } .sh-src .rd.ok b { color: var(--good); }
 .sh-cond { font-size: max(var(--fs-sm), 12px); line-height: 1.35; color: var(--text); margin-top: 0.15rem; }
 .sh-cond b { color: var(--bone); }

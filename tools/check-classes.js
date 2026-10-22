@@ -166,11 +166,11 @@ const run = (w, secs, f) => { for (let i = 0; i < Math.round(secs * 60); i++) { 
   const e2 = foe(w, p.x + 30, p.y - 4); e2.st = 'windup'; e2.t = 0.2; p.atkCount = 5; w.playerAttack(p, 0); ok(e2.st === 'windup', 'Parry once per 2.5 s per hero');
   const { w: w2, p: p2 } = stage('knight', { k_atk: 1, k_atk_s: 1 }); const e3 = foe(w2, p2.x + 30, p2.y); e3.st = 'windup'; e3.t = 0.8; p2.atkCount = 2; w2.playerAttack(p2, 0); ok(e3.st === 'windup' && e3.stun === 0, 'no parry early in a wind-up');
 }
-// moments: team level 3 grants the route offer, bosses I, II and IV the fork and its ranks; a downed hero still gets it
+// moments: team level 3 grants the route offer, boss I the fork offer; bosses II and IV rank the fork up without an offer (tools/check-build.js)
 {
   const { w, p } = stage('ranger'); w.addXp(69); ok(p.offers.filter(o => o.src === 'class').length === 1, 'level 3 route offer');
   const lv = w.level; w.addXp(1e5); ok(w.level > lv && p.offers.filter(o => o.src === 'class').length === 1, 'only level 3 grants a route');
-  for (const s of [1, 2, 3, 4, 5]) { p.offers.length = 0; w.stratum = s; w.boss = null; const b = w.spawnEnemy(ED.biomeFor(s).boss, 100, 100); w.onBossKilled(b); ok(p.offers.some(o => o.src === 'class') === (s === 1 || s === 2 || s === 4), 'boss ' + s + ' class grant'); }
+  for (const s of [1, 2, 3, 4, 5]) { p.offers.length = 0; w.stratum = s; w.boss = null; const b = w.spawnEnemy(ED.biomeFor(s).boss, 100, 100); w.onBossKilled(b); ok(p.offers.some(o => o.src === 'class') === (s === 1), 'boss ' + s + ' class grant'); }
 }
 // weapon clouds merge: many shots on one spot keep one cloud zone, the damage per second adds up
 {
@@ -207,9 +207,7 @@ const run = (w, secs, f) => { for (let i = 0; i < Math.round(secs * 60); i++) { 
     p.boons[o[0]] = 1; p.offers[0] = { src: 'class' }; o = w.rollOffer(p, p.offers[0]);
     ok(o.length === 2 && o.every(id => ED.BOONS[id].tier === 2), cls + ' fork offer');
     p.boons[o[0]] = 1; p.offers[0] = { src: 'class' }; o = w.rollOffer(p, p.offers[0]);
-    ok(o[0] === ED.classRoute(p.boons, cls).fork && o.length === 3, cls + ' mastery offer starts with the fork');
-    p.boons[o[0]] = 3; p.offers[0] = { src: 'class' }; o = w.rollOffer(p, p.offers[0]);
-    ok(o.length === 4 && !o.some(id => ED.BOONS[id].cls), cls + ' maxed fork: epic-style offer');
+    ok(p.offers[0].src === 'level' && o.length === 3 && !o.some(id => ED.BOONS[id].cls), cls + ' fork held: a class spec becomes a level offer (no ctier 3)');
   }
 }
 // p.shieldOut (wire flag 1 << 6) follows the thrown shields; a new throw relaunches the orbiting shield instead of adding one

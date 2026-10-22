@@ -169,7 +169,8 @@
     this.dropGold(e.x, e.y, 15 + 6 * s);
     this.spawnPickup('heart', e.x, e.y, 1); this.spawnPickup('heart', e.x, e.y, 1);
     for (const q of this.players.values()) q.mantleAmt = 0;
-    if (s === 1 || s === 2 || s === 4) for (const q of this.players.values()) this.grantOffer(q, { src: 'class' }); // fork at the first boss, its ranks at the second and fourth (downed heroes get it when they are back up)
+    if (s === 1) for (const q of this.players.values()) this.grantOffer(q, { src: 'class' }); // the fork offer at the first boss (downed heroes get it when they are back up)
+    else if (s === 2 || s === 4) for (const q of this.players.values()) this.grantForkRank(q); // fork rank 2 and 3 at once, downed and dead heroes too
     if (s >= ED.CONST.STRATA) {
       this.run.embers.victory = 60;
       this.endRun(true);
