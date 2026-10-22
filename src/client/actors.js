@@ -516,6 +516,7 @@
     const ga = c.globalAlpha;
     shadowAt(c, e.r, 0.4);
     if (e.exposed) Sp.glow(c, 0, -e.r, e.r * 2.2, '#ff3a3a', 0.25 + Math.sin(t * 9) * 0.1);
+    Sp.furyGlow(c, e, t);
     const ox = shake - (pose === 'wind' ? Math.round(Math.cos(e.aimA || 0) * 2) : 0), oy = -air;
     // hammer under the body when it points up, over it otherwise
     const hm = B.hammer ? forgeHammer(e, s, t, pose, el) : null;

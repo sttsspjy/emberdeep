@@ -217,6 +217,11 @@
   // flight speed at stratum I (+ step per stratum) and damage x boss damage; in phase 3 a volley also starts every BOSS_OV_GAP s. Fodder trickle after the boss spawns: pack size, s between packs, live-fodder cap (solo, 2+ heroes).
   W.BOSS_VOL = { n: [3, 4, 5], tele: 0.5, lock: 0.15, gap: 0.12, seq: 0.15, speed: 320, step: 20, dmg: 0.6 }; W.BOSS_OV_GAP = 5;
   W.BOSS_PACK_N = [4, 6]; W.BOSS_PACK_GAP = 7; W.BOSS_FODDER_CAP = [20, 30];
+  // Boss fury (soft enrage): t = fight seconds at which it starts, by stratum (0 = never), ramp = boss damage multiplier gained per second past t (the pause between attacks divides by the same factor), max = its cap, warn = seconds before t that the boss bar starts warning.
+  W.BOSS_FURY = { t: [0, 0, 0, 75, 80, 85], ramp: 0.04, max: 4, warn: 10 };
+  W.furyAt = (s) => W.BOSS_FURY.t[Math.max(0, Math.min(W.BOSS_FURY.t.length - 1, s - 1))];
+  // Fury multiplier at stratum s after ft fight seconds: 1 while t is 0 or ft <= t, then 1 + ramp x (ft - t) up to max (pure; the client mirror derives it from the synced clock).
+  W.furyMul = (s, ft) => { const t = W.furyAt(s); return t > 0 && ft > t ? Math.min(W.BOSS_FURY.max, 1 + W.BOSS_FURY.ramp * (ft - t)) : 1; };
   // Fodder max HP: depth (+25% per stratum) and pact only, no threat lever, party multiplier or elite (pure; the client mirror rebuilds it from the wire fraction).
   W.fodderHp = (def, s, pact) => def.hp * (1 + 0.25 * (s - 1)) * (pact >= 1 ? 1.25 : 1) * (pact >= 10 ? 1.2 : 1);
   // Xp a threat foe is worth before the dark-room multiplier and the room's budget scale (enc.xpK).

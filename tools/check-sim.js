@@ -875,5 +875,80 @@ for (let s = 1; s <= 6; s++) {
     ok(xp === 0 && evs === N, `no xp, one event per smash (xp ${xp}, events ${evs})`);
   }
 }
+{ // boss fury: only strata with a start time run the fight clock; it starts at t (one 'fury' event), scales boss damage and the attack pause, caps at max and ignores phases, freezes, stuns and blinds
+  const FB = W0.BOSS_FURY, Bs = ED.Bosses, Dn = ED.Dungeon;
+  const fw = (s, type) => {
+    const w = hordeWorld(s, ['knight']), p = w.players.values().next().value, c = Dn.center(w.room);
+    p.x = c.x + 100; p.y = c.y; p.invuln = 1e9;
+    const b = w.spawnEnemy(type || ED.biomeFor(s).boss, c.x - 140, c.y);
+    b.spd = 0; b.cd = 9999; b.hp = b.maxHp = 1e9; b.target = p;
+    return { w, b, p };
+  };
+  // Ticks the boss alone for secs (each(i) runs before a tick); returns the 'fury' events seen and the tick each came at.
+  const run = (w, b, secs, each) => { const ev = []; for (let i = 0, k = Math.round(secs * 60); i < k; i++) { if (each) each(i); w.updateEnemy(b, TICK); for (const e of w.fx) if (e.t === 'fury') ev.push({ e, i: i + 1, x: b.x, y: b.y }); w.fx.length = 0; } return ev; };
+  ok(FB.t.length === 6 && FB.t.slice(0, 3).every(v => v === 0) && FB.t.slice(3).every(v => v > 0) && FB.ramp > 0 && FB.max > 1 && FB.warn > 0, `BOSS_FURY: no start in strata I-III, one in IV-VI (${FB.t})`);
+  ok(W0.furyMul(4, FB.t[3]) === 1 && W0.furyMul(1, 1e6) === 1 && W0.furyMul(3, 1e6) === 1 && W0.furyMul(6, 1e6) === FB.max, 'furyMul: 1 up to the start and at strata I-III, max far past it');
+  near(W0.furyMul(5, FB.t[4] + 10), 1 + 10 * FB.ramp, 1e-12, 'furyMul ramps by BOSS_FURY.ramp per second past the start');
+  for (let s = 1; s <= 3; s++) { // no fury at strata I-III, past 200 s
+    const { w, b } = fw(s), ev = run(w, b, 205);
+    ok(ev.length === 0 && b.furyT === 0 && b.furyM === 1 && b.dmg === b.dmgBase && !w.fx.some(e => e.t === 'fury'), `stratum ${s}: no fury at 205 s (events ${ev.length}, clock ${b.furyT}, x${b.furyM})`);
+  }
+  for (let s = 4; s <= 6; s++) { // starts at t exactly, once; x1.4 ten seconds on
+    const t = FB.t[s - 1], { w, b } = fw(s);
+    ok(b.dmgBase === b.dmg && b.furyT === 0 && b.furyM === 1, `stratum ${s}: a fresh boss holds its base damage and a zero clock`);
+    const ev = run(w, b, t + 10);
+    ok(ev.length === 1 && Math.abs(ev[0].i * TICK - t) <= 1.5 * TICK, `stratum ${s}: one fury event at tick ${ev.length && ev[0].i} (${ev.length && (ev[0].i * TICK).toFixed(3)} s, want ${t})`);
+    ok(ev.length === 1 && ev[0].e.type === b.type && ev[0].e.x === Math.round(ev[0].x) && ev[0].e.y === Math.round(ev[0].y), `stratum ${s}: the event names the boss and its spot`);
+    near(b.furyT, t + 10, 2 * TICK, `stratum ${s}: clock after ${t + 10} s`);
+    near(b.furyM, 1.4, 0.003, `stratum ${s}: x1.4 ten seconds in`);
+    near(b.dmg, b.dmgBase * b.furyM, 1e-9, `stratum ${s}: boss damage = base x multiplier`);
+    ok(run(w, b, 30).length === 0, `stratum ${s}: the event never repeats`);
+  }
+  { // before the start the multiplier stays 1 and damage untouched (checked tick by tick)
+    const { w, b } = fw(4); let bad = 0;
+    for (let i = 0, k = Math.round((FB.t[3] - 0.1) * 60); i < k; i++) { w.updateEnemy(b, TICK); if (b.furyM !== 1 || b.dmg !== b.dmgBase) bad++; }
+    ok(bad === 0, `stratum IV: x1 and base damage on every tick before ${FB.t[3]} s (${bad} off)`);
+  }
+  { // new zones and shots carry the scaled damage: a Bone Warden spike field (x0.9 per pool, stratum IV), a shot (x0.6)
+    const { w, b } = fw(4, 'bonewarden');
+    b.furyT = FB.t[3] + 10 - TICK; run(w, b, TICK); near(b.furyM, 1.4, 1e-9, 'jumped ten seconds past the start: x1.4');
+    b.st = 'atk'; b.atk = 'spikes'; b.vars = { wm: 1 }; w.zones.length = 0; Bs.bonewarden.attacks.spikes.start(w, b);
+    const zs = w.zones.filter(z => z.src === b && z.kind === 'tele');
+    ok(zs.length > 3 && zs.every(z => Math.abs(z.dmg - b.dmgBase * 1.4 * 0.9) < 1e-9), `${zs.length} spike pools hit for base x1.4 x0.9 (${zs[0] && zs[0].dmg.toFixed(3)} vs ${(b.dmgBase * 1.4 * 0.9).toFixed(3)})`);
+    const q = w.enemyShoot(b, 0, 100, 'bone', 0.6, 6);
+    near(q.dmg, b.dmgBase * 1.4 * 0.6, 1e-9, 'a volley shot carries base x1.4 x0.6');
+    const sk = w.spawnEnemy('skeleton', b.x + 40, b.y);
+    ok(sk.dmgBase === undefined && sk.furyM === undefined && sk.furyT === undefined, 'a summon during fury carries no fury state');
+  }
+  { // the pause after an attack divides by the multiplier (windups and attack lengths are untouched)
+    Bs.forgelord.attacks.hold = { update: () => true };
+    const { w, b } = fw(4), after = () => { b.st = 'atk'; b.atk = 'hold'; b.t = 0; b.vars = { wm: 1 }; run(w, b, TICK); return b.t; };
+    b.furyT = 10; const t1 = after();
+    near(t1, 1.05 * w.threat().pause, 1e-9, 'before the start the phase-1 pause is 1.05 x the stratum pause');
+    b.furyT = FB.t[3] + 10 - TICK; const t2 = after();
+    near(t2 * 1.4, t1, 0.003, `ten seconds into fury the pause is divided by 1.4 (${t2.toFixed(4)} vs ${t1.toFixed(4)})`);
+    b.furyT = 1e4; const t3 = after();
+    near(t3, t1 / FB.max, 1e-9, 'at the cap the pause is divided by max');
+    delete Bs.forgelord.attacks.hold;
+  }
+  { // the multiplier caps at max and damage with it
+    const { w, b } = fw(6);
+    b.furyT = FB.t[5] + 1e3; run(w, b, TICK);
+    ok(b.furyM === FB.max && Math.abs(b.dmg - b.dmgBase * FB.max) < 1e-9, `x${b.furyM} capped at ${FB.max}`);
+  }
+  { // the clock runs through phase changes, freezes, stuns and blinds
+    const { w, b } = fw(4);
+    const ev = run(w, b, 24, (i) => {
+      if (i === 5 * 60) b.hp = b.maxHp * 0.6;
+      if (i === 8 * 60) b.frozen = 2;
+      if (i === 11 * 60) b.stun = 2;
+      if (i === 14 * 60) b.blind = 2;
+      if (i === 17 * 60) b.hp = b.maxHp * 0.3;
+    });
+    ok(b.phase === 3, `both phase changes ran (phase ${b.phase})`);
+    near(b.furyT, 24, 2 * TICK, 'the clock read 24 s after 24 s of phases, a freeze, a stun and a blind');
+    ok(ev.length === 0, 'no fury inside the first 24 s');
+  }
+}
 console.log(`${n} checks, ${fails} failed`);
 process.exit(fails ? 1 : 0);

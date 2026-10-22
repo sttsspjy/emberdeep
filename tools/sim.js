@@ -820,6 +820,7 @@ function runBot(opts) {
     if (w.locked && w.stratum >= 1 && w.hostiles() > 0) rec.combatS[w.stratum - 1] += dt;
     if (w.boss && w.boss.hp > 0) rec.bossSecs += dt;
     w.update(dt);
+    if (w.boss && w.boss.furyM > 1 && rec.bossTry.length) rec.bossTry[rec.bossTry.length - 1].m = w.boss.furyM; // the last fury multiplier seen alive = the one at the kill or at death
     if (w.locked) rec.maxHost = Math.max(rec.maxHost, w.hostiles());
     if (w.locked && w.hostiles() > 0) { // uptimes while a fight is on, hero 0
       const h0 = w.players.get(p0id), u = rec.upt;
@@ -851,7 +852,8 @@ function runBot(opts) {
       if (ev.t === 'evolve' && ev.pid === p0id && !rec.evoAt) rec.evoAt = { s: w.stratum, lvl: w.level };
       if (ev.t === 'dark') rec.dark[w.stratum - 1]++;
       if (ev.t === 'descend') rec.left.push({ s: w.stratum, missed: w.floor.rooms.filter(r => !w.roomState[r.id].visited && !r.dark).length, dark: w.floor.rooms.filter(r => r.dark).length }); // rooms left unvisited (dark rooms apart) when the party takes the portal
-      if (ev.t === 'bossSpawn') { bossStart = w.time; rec.bossTry.push({ s: w.stratum, kill: false }); }
+      if (ev.t === 'bossSpawn') { bossStart = w.time; rec.bossTry.push({ s: w.stratum, kill: false, fury: false, m: 1 }); }
+      if (ev.t === 'fury') rec.bossTry[rec.bossTry.length - 1].fury = true;
       if (ev.t === 'bossDown') { rec.bossTry[rec.bossTry.length - 1].kill = true; rec.bossTimes[w.stratum] = Math.round(w.time - bossStart); log.push(`  boss ${ev.type} down in ${(w.time - bossStart).toFixed(0)}s (t=${U.fmtTime(w.time)}, lvl ${w.level})`); }
       if (ev.t === 'clear' && !ev.trial && w.room && (w.room.type === 'combat' || w.room.type === 'elite')) rec.clears.push({ s: w.stratum, type: w.room.type, dark: !!w.room.dark, t: Math.round(w.roomTime * 10) / 10, d: Math.round(1000 * rec.roomDmg / Math.max(1, w.players.values().next().value.maxHp)) / 1000, n: rec.maxHost,
         th: rec.room.th, fo: rec.room.fo, xp: rec.room.xp, clip: rec.room.clip, bud: ED.World.ROOM_XP ? Math.round(ED.World.ROOM_XP[w.room.type][w.stratum - 1] * (w.room.dark ? ED.World.DARK_LOOT : 1)) : null });
@@ -916,6 +918,8 @@ function summarize(results) {
   const darkS = S.map(s => avg(results.map(r => r.dark[s - 1] || 0)));
   lines.push(`rooms visited ${(100 * vis / Math.max(1, tot)).toFixed(0)}% (${(vis / n).toFixed(1)}/run) dark rooms entered ${f2(darkS.reduce((a, b) => a + b, 0))}/run, per stratum [${darkS.map(f2).join(' ')}] avg stratum time [${strataSum.map((t, k) => U.fmtTime(t / strataN[k])).join(' ')}]`);
   lines.push(`clear s  combat [${S.map(s => f1(clear('combat', s))).join(' ')}] all ${f1(clear('combat', 0))}  elite [${S.map(s => f1(clear('elite', s))).join(' ')}] all ${f1(clear('elite', 0))}  boss [${S.map(s => f1(bossT(s))).join(' ')}]`);
+  const fur = [4, 5, 6].map(s => { const fs = results.flatMap(r => r.bossTry.filter(b => b.s === s)); return `${U.roman(s)} ${pctOf(fs.filter(b => b.fury).length, fs.length)}% x${f2(avg(fs.map(b => b.m)))} (${fs.length} fights)`; });
+  lines.push('boss fury, fights that reached it and mean multiplier at the kill or death: ' + fur.join(' | '));
   const flat = (key, s) => results.flatMap(r => r[key][s - 1]);
   const medClear = (type, s) => median(results.flatMap(r => r.clears.filter(c => c.type === type && c.s === s).map(c => c.t)));
   lines.push(`clear s median combat [${S.map(s => f1(medClear('combat', s))).join(' ')}] elite [${S.map(s => f1(medClear('elite', s))).join(' ')}]`);
