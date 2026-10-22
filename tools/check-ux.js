@@ -37,7 +37,7 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     ok(!/\{|\}|\[|\]/.test(t), `${src}: no left-over token: ${t.slice(0, 80)}`);
   }
   ok(/never Reaped/.test(ED.BOONS.doommark.desc) && /Tolls/.test(ED.BOONS.doommark.desc) && /never Reaped/.test(ED.STATUS.doom.rule), 'Doom: a boss is never Reaped, it Tolls');
-  ok(/Open boons can rank 1 higher/.test(ED.BOONS.generalist.desc) && /Your hits mark 40% more Doom/.test(ED.RELICS.wispjar.desc), 'Generalist and Soul Jar wording');
+  ok(/Open boons can rank 1 higher/.test(ED.BOONS.generalist.desc) && /Your hits mark 20% more Doom/.test(ED.Sheet.text('souljar', 1, st)) && /Your hits mark 40% more Doom/.test(ED.Sheet.text('souljar', 2, st)), 'Generalist and Soul Jar wording');
   ok(/foes inside take Holy damage/.test(ED.SKILLS.sanctuary.desc) && !/burn/i.test(ED.SKILLS.sanctuary.desc), 'Sanctuary does not burn');
   ok(/does not stack with other \+20% vulnerabilities/.test(ED.boonText('r_s2_b', 1, null)) && !/Judged/.test(ED.boonText('r_s2_b', 1, null)), 'Hail of Thorns does not lean on the Cleric term');
   ok(/Crush/.test(ED.SKILLS.charge.desc) && /never stunned/.test(ED.SKILLS.shieldthrow.desc), 'Shield Charge and Shield Throw name Crush and the boss rule');

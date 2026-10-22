@@ -56,9 +56,9 @@
     if (ex.ifNone) for (const k in ex.ifNone) if (!w[k]) w[k] = Object.assign({}, ex.ifNone[k]);
   }
 
-  // Every source of a stat block, in the order the stat block adds them: [{ kind, id, label, mods, n, rank?, card? }]; a source adds mods[key] x n to its key.
+  // Every source of a stat block, in the order the stat block adds them: [{ kind, id, label, mods, n, rank?, card?, x? }]; a source adds mods[key] x n to its key.
   // Order: class, Hearth upgrades, mastery levels, pacts, boons (insertion order), relics, Philosopher's Stone per relic held, reward health, a full Grail. A class card (card: true) carries its totals at `rank`
-  // (n is 1) and compounds slot damage. build: { cls, weapon, boons: {id: n}, relics: [id], meta: { up: [], mastery }, pact, chaliceHp, bonusHp }.
+  // (n is 1) and compounds slot damage. An Ascended boon (kind 'asc') adds its mods like a boon and carries x { key: f }: St.compute multiplies s[key] by 1 + f once every additive source is summed. build: { cls, weapon, boons: {id: n}, relics: [id], meta: { up: [], mastery }, pact, chaliceHp, bonusHp }.
   St.sources = (build) => {
     const cls = ED.CLASSES[build.cls], meta = build.meta || { up: [], mastery: 1 }, out = [];
     out.push({ kind: 'class', id: build.cls, label: cls.name, mods: { hp: cls.hp, armor: cls.armor, crit: cls.crit }, n: 1 });
@@ -74,9 +74,10 @@
     for (const id in boons) {
       const b = ED.BOONS[id], n = boons[id];
       if (!b || !(n > 0)) continue;
+      if (b.asc) { out.push({ kind: 'asc', id, label: b.name, mods: b.mods, n: 1, x: b.x }); continue; }
       if (!b.route) { out.push({ kind: 'boon', id, label: b.name + (n > 1 ? ' ×' + n : ''), mods: b.mods, n }); continue; }
       if (b.cls !== build.cls) continue;
-      out.push({ kind: 'card', id, label: b.name + (n > 1 ? ' ×' + n : ''), mods: ED.cardTotals(b, n), n: 1, rank: n, card: true }); // card total per rank: mods + up x (rank - 1) + r3
+      out.push({ kind: 'card', id, label: ED.cardName(id, n) + (n > 1 ? ' ×' + n : ''), mods: ED.cardTotals(b, n), n: 1, rank: n, card: true }); // card total per rank: mods + up x (rank - 1) + r2 + r3
     }
     const relics = build.relics || [];
     for (const id of relics) if (ED.RELICS[id]) out.push({ kind: 'relic', id, label: ED.RELICS[id].name, mods: ED.RELICS[id].mods, n: 1 });
@@ -87,15 +88,17 @@
     return out;
   };
 
-  // The contributions to stat `key` of every source: [{ kind, id, label, v, rank? }], preceded by a Base row (v 1) for the multiplicative stats. Slot damage (s1Dmg, s2Dmg) lists each card's factor part; the stat compounds them.
+  // The contributions to stat `key` of every source: [{ kind, id, label, v, rank?, mul? }], preceded by a Base row (v 1) for the multiplicative stats. Slot damage (s1Dmg, s2Dmg) lists each card's factor part; the stat compounds them.
+  // Additive rows come first; an Ascended multiplier row (mul: true) has v = f and multiplies the sum of the rows before it by 1 + f.
   const BASE_ONE = { dmg: 1, atk: 1, spd: 1, hpMul: 1 };
   St.breakdown = (build, key) => {
-    const rows = [];
+    const rows = [], src = St.sources(build);
     if (BASE_ONE[key]) rows.push({ kind: 'base', id: 'base', label: 'Base', v: BASE_ONE[key] });
-    for (const r of St.sources(build)) {
+    for (const r of src) {
       const m = r.mods[key];
       if (m) rows.push({ kind: r.kind, id: r.id, label: r.label, v: m * r.n, rank: r.rank });
     }
+    for (const r of src) if (r.x && r.x[key]) rows.push({ kind: r.kind, id: r.id, label: r.label, v: r.x[key], mul: true });
     return rows;
   };
 
@@ -112,9 +115,9 @@
     const base = ED.WEAPONS[build.weapon];
     const s = BASE();
     let m1 = 1, m2 = 1, fork = null; // slot damage compounds card by card (each card's text is its exact factor)
-    const extras = [];
+    const extras = [], asc = [];
     for (const r of St.sources(build)) {
-      if (!r.card) { for (const k in r.mods) s[k] = (s[k] || 0) + r.mods[k] * r.n; continue; }
+      if (!r.card) { for (const k in r.mods) s[k] = (s[k] || 0) + r.mods[k] * r.n; if (r.x) asc.push(r.x); continue; }
       const tot = r.mods;
       for (const k in tot) {
         if (k === 's1Dmg') m1 *= 1 + tot[k]; else if (k === 's2Dmg') m2 *= 1 + tot[k]; else s[k] = (s[k] || 0) + tot[k];
@@ -123,6 +126,7 @@
       if (b.weapon) { if (b.weapon.kind && !fork) fork = r.id; if (b.weapon.extra) extras.push(b.weapon.extra); }
     }
     s.s1Dmg = m1 - 1; s.s2Dmg = m2 - 1;
+    for (const x of asc) for (const k in x) s[k] = (s[k] || 0) * (1 + x[k]); // Ascended bucket: after every additive source, before the derived values
 
     const out = s;
     out.power = cls.power; out.element = cls.element || null; // Class Power scales every non-attack proc (ED.procDmg)

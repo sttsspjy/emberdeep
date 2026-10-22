@@ -66,7 +66,7 @@
     $('title-new').hidden = has; $('title-menu').hidden = !has; $('title-profile').hidden = !has;
     if (has) {
       $('title-name').textContent = p.name; $('title-embers').textContent = p.embers;
-      $('dot-hearth').hidden = !(canBuyUpgrade(p) || canBuyRelic(p));
+      $('dot-hearth').hidden = !canBuy(p);
     }
     $('title-load').hidden = true;
     const jc = A.pendingJoin;
@@ -74,22 +74,21 @@
     if (jc) $('title-join-code').textContent = jc;
   };
 
-  // One-time notice for a profile made before the v3 rules (profile.news): the changed rules, and what the relics it owns turned into. Closing it clears the flag.
-  const RELIC_WAS = { fang: 'Fang Pendant', wardrum: 'War Drum', wispjar: 'Wisp Jar', crest: 'Vampire Crest', chalice: 'Blood Chalice', bloodstone: 'Bloodstone' };
+  // One-time notice for a profile made before the current rules (profile.news): relic and Hearth changes, then the v3 rules, and the embers the Codex refunded. Closing it clears the flag.
+  const MOVED_RELICS = ['stormcall', 'thundergauntlet', 'frostheart', 'souljar']; // the element relics that became path boons
   UI.maybeNews = () => {
     const A = ED.App, p = A.profile;
     if (!A.hasProfile || !p.news) return;
-    const relics = Object.keys(RELIC_WAS).filter(id => ED.RELICS[id] && S.relicUnlocked(p, id)).map(id => {
-      const r = ED.RELICS[id];
-      return `<b>${esc(r.name)}</b> ${r.name === RELIC_WAS[id] ? '(reworked)' : `(was ${esc(RELIC_WAS[id])})`}: ${esc(r.desc)}`;
-    });
     $('news-body').innerHTML = [
+      '<b>Relics:</b> the Codex is gone. Every relic can drop from your first descent, and relics no longer belong to an element.',
+      `<b>Element relics are path boons now:</b> ${MOVED_RELICS.map(id => `${esc(ED.BOONS[id].name)} (${pathName(ED.BOONS[id].path, true)})`).join(', ')}. The other element relics are gone: their paths already hold the same effects as boons.`,
+      p.refunded > 0 ? `<b>Refunded:</b> the ${p.refunded} embers you spent on the Codex are back in your purse.` : '',
+      '<b>Hearth:</b> every upgrade rank can be refunded for its full cost, and Reset all returns everything at once. The Armory upgrade is now the Reliquary.',
       '<b>Aim:</b> attacks and ground skills go toward the mouse cursor (right stick on a pad). The Auto-aim setting is gone.',
       `<b>Paths:</b> follow up to ${ED.MAX_ELEMENTS} of ${ED.ELEMENT_IDS.map(k => pathName(k, true)).join(', ')}, or take the ${pathName('general', true)} path alone as a Generalist. Blood and Spirit are gone.`,
       '<b>No life steal:</b> hits do not heal you any more. Shields take their place.',
       '<b>Knight:</b> Shield Throw replaces Bulwark.',
       '<b>Lantern:</b> light no longer drains on its own. It is spent on new rooms and flares.',
-      relics.length ? '<b>Relics you own changed:</b><br>' + relics.join('<br>') : '',
     ].filter(Boolean).map(t => `<p>${t}</p>`).join('');
     $('ov-news').hidden = false;
     requestAnimationFrame(() => $('btn-news-close').focus({ preventScroll: true })); // after the screen's own focus
@@ -97,7 +96,7 @@
 
   // ---------------- sections ----------------
   UI.tab = 'descend';
-  const SECTION = { descend: 'Descend', upgrades: 'Hearth', relics: 'Hearth', chronicle: 'Hearth', heroes: 'Heroes' };
+  const SECTION = { descend: 'Descend', upgrades: 'Hearth', chronicle: 'Hearth', heroes: 'Heroes' };
   UI.setTab = (t) => {
     UI.tab = t;
     $('sec-title').textContent = SECTION[t] || 'Descend';
@@ -108,16 +107,18 @@
   };
 
   const canBuyUpgrade = (p) => ED.UPGRADES.some(u => S.upgradeAvailable(p, u) && p.up[ED.UPGRADE_IDX[u.id]] < u.costs.length && p.embers >= u.costs[p.up[ED.UPGRADE_IDX[u.id]]]);
-  const canBuyRelic = (p) => ED.RELIC_IDS.some(id => !S.relicUnlocked(p, id) && S.relicReqMet(p, id) && p.embers >= (ED.RELICS[id].cost || 9999));
+  const armoryOf = (cls) => ED.ARMORY[cls] || [];
+  const armoryHas = (p, cls, i) => !!(p.armory && p.armory[cls] && p.armory[cls][i]);
+  // An Armory entry of an unlocked hero is affordable.
+  const canBuyArmory = (p) => ED.CLASS_IDS.some(c => S.classUnlocked(p, c) && armoryOf(c).some((e, i) => !armoryHas(p, c, i) && p.embers >= e.cost));
+  const canBuy = (p) => canBuyUpgrade(p) || canBuyArmory(p);
 
   UI.renderHearth = () => {
     const p = ED.App.profile;
     $('hearth-embers').textContent = p.embers;
-    $('dot-upgrades').hidden = !canBuyUpgrade(p);
-    $('dot-relics').hidden = !canBuyRelic(p);
+    $('dot-upgrades').hidden = !canBuy(p);
     if (UI.tab === 'descend') renderDescend();
     else if (UI.tab === 'upgrades') renderUpgrades();
-    else if (UI.tab === 'relics') renderRelics();
     else if (UI.tab === 'heroes') renderHeroes($('heroes-view'));
     else if (UI.tab === 'chronicle') renderChronicle();
   };
@@ -225,7 +226,6 @@
   function goalText(p) {
     const next = ED.CLASS_IDS.find(c => !S.classUnlocked(p, c));
     const tierNext = ED.UPGRADES.find(u => u.tier > p.stats.deepest);
-    const locked = ED.RELIC_IDS.filter(id => !S.relicUnlocked(p, id)).length;
     const lines = [];
     if (p.stats.runs < 2) {
       const gen = ED.CLASS_IDS.filter(c => !ED.CLASSES[c].element).map(c => ED.CLASSES[c].name); // heroes without a class element can go Generalist
@@ -238,8 +238,7 @@
     else if (tierNext) lines.push(`<b>Reach stratum ${U.roman(tierNext.tier)}</b> to reveal new Hearth upgrades.`);
     else if (!p.stats.wins) lines.push('<b>Next goal:</b> defeat the Hollow King to complete a descent and unlock Pacts.');
     else if (p.pactMax < 10) lines.push(`<b>Pacts:</b> complete a descent under Pact ${p.pactMax} to unlock Pact ${p.pactMax + 1}.`);
-    else if (locked) lines.push(`<b>${locked} relic${locked === 1 ? '' : 's'}</b> still wait${locked === 1 ? 's' : ''} in the Codex.`);
-    else lines.push('<b>Every relic, hero and pact is yours.</b> The Deep still has deeds to earn.');
+    else lines.push('<b>Every hero and pact is yours.</b> The Deep still has deeds to earn.');
     return lines.map(l => '<p>' + l + '</p>').join('');
   }
 
@@ -252,9 +251,50 @@
     return b;
   }
 
+  function refundButton(gain, label, onClick) {
+    const b = document.createElement('button'); b.type = 'button';
+    b.className = 'btn btn-small btn-ghost refund';
+    b.textContent = `Refund +${gain}`;
+    b.setAttribute('aria-label', label); b.title = label;
+    b.onclick = onClick;
+    return b;
+  }
+  // Refund and Buy stacked in a card's last column; data-fk names each button so a re-render can put keyboard focus back.
+  function actionsCell(card, key, refund, buy) {
+    const d = document.createElement('div'); d.className = 'up-act';
+    if (refund) { refund.dataset.fk = key + ':refund'; d.appendChild(refund); }
+    if (buy) { buy.dataset.fk = key + ':buy'; d.appendChild(buy); }
+    card.appendChild(d);
+  }
+  // After a re-render: focus the button with the same key, else a sibling button of the same card or section, else nothing.
+  function restoreFocus(grid, fk) {
+    if (!fk) return;
+    const btns = [...grid.querySelectorAll('[data-fk]')].filter(b => !b.disabled);
+    const stem = (k) => k.slice(0, k.lastIndexOf(':'));
+    const el = btns.find(b => b.dataset.fk === fk) || btns.find(b => stem(b.dataset.fk) === stem(fk));
+    if (el) el.focus({ preventScroll: true });
+  }
+
+  // Reset all: the first click arms the button for 3 s (a click elsewhere disarms it), the second refunds every upgrade rank and Armory unlock.
+  let resetTimer = 0;
+  function paintReset(b) {
+    const n = S.refundTotal(ED.App.profile), armed = !!resetTimer && n > 0;
+    b.textContent = armed ? `Confirm reset (+${n} embers)` : 'Reset all';
+    b.classList.toggle('btn-danger', armed);
+    b.disabled = n <= 0;
+    const label = armed ? `Confirm: refund every upgrade rank and Armory unlock for ${n} embers` : `Reset all: refund every upgrade rank and Armory unlock (${n} embers)`;
+    b.setAttribute('aria-label', label); b.title = label;
+  }
+  function disarmReset() {
+    if (!resetTimer) return;
+    clearTimeout(resetTimer); resetTimer = 0;
+    for (const b of document.querySelectorAll('.btn-reset')) paintReset(b);
+  }
+
   function renderUpgrades(grid) {
     const p = ED.App.profile;
     grid = grid || $('up-grid');
+    const fk = document.activeElement && grid.contains(document.activeElement) ? document.activeElement.dataset.fk : null;
     grid.innerHTML = '';
     for (let tier = 1; tier <= 4; tier++) {
       const list = ED.UPGRADES.filter(u => u.tier === tier);
@@ -268,41 +308,43 @@
         card.className = 'up-card' + (open ? '' : ' locked') + (r >= max ? ' maxed' : '');
         const pips = Array.from({ length: max }, (_, k) => `<span class="pip${k < r ? ' on' : ''}"></span>`).join('');
         card.innerHTML = `<img alt="" src="${ED.Icons.url(u.icon, '#ff9a4a')}"><div><div class="un">${u.name}${r >= max ? ' <span class="badge-max">Max</span>' : ''}</div><div class="ud">${open ? (r ? esc(u.desc(r)) : 'Not learned yet') : '???'}</div>${open && r < max ? `<div class="un2">Next: ${esc(u.step)}</div>` : ''}<div class="pips">${pips}</div></div>`;
-        if (open && r < max) {
+        if (r > 0 || (open && r < max)) {
+          const back = r > 0 ? refundButton(u.costs[r - 1], `Refund ${u.name} rank ${r}: +${u.costs[r - 1]} embers`, () => { if (S.refundUpgrade(p, u.id)) ED.App.afterMetaChange(); }) : null;
           const cost = u.costs[r];
-          card.appendChild(buyButton(cost, p.embers >= cost, `Buy ${u.name}: ${u.step} for ${cost} embers`, () => { if (S.buyUpgrade(p, u.id)) { ED.Audio.play('buy'); ED.App.afterMetaChange(); } }));
+          const buy = open && r < max ? buyButton(cost, p.embers >= cost, `Buy ${u.name}: ${u.step} for ${cost} embers`, () => { if (S.buyUpgrade(p, u.id)) { ED.Audio.play('buy'); ED.App.afterMetaChange(); } }) : null;
+          actionsCell(card, 'u:' + u.id, back, buy);
         }
         grid.appendChild(card);
       }
     }
-  }
-
-  function renderRelics(grid) {
-    const p = ED.App.profile;
-    grid = grid || $('relic-grid');
-    grid.innerHTML = '';
-    const order = { c: 0, r: 1, e: 2, l: 3 };
-    const ids = ED.RELIC_IDS.slice().sort((a, b) => (S.relicUnlocked(p, b) - S.relicUnlocked(p, a)) || order[ED.RELICS[a].rar] - order[ED.RELICS[b].rar]);
-    const owned = ids.filter(id => S.relicUnlocked(p, id)).length;
-    let lastOwned = null;
-    for (const id of ids) {
-      const r = ED.RELICS[id], un = S.relicUnlocked(p, id), col = ED.RARITY[r.rar].color;
-      if (lastOwned !== un) {
-        lastOwned = un;
-        const h = document.createElement('div'); h.className = 'tier-head'; h.textContent = un ? `Unlocked (${owned})` : `Not yet unlocked (${ids.length - owned})`;
-        grid.appendChild(h);
-      }
-      const card = document.createElement('div');
-      let req = '';
-      if (!un && r.req && r.req.boss && !S.relicReqMet(p, id)) req = `Requires defeating ${ED.ENEMIES[ED.BIOMES[r.req.boss - 1].boss].name}`;
-      const buyable = !un && !req;
-      card.className = 'relic-card' + (un ? '' : ' locked') + (buyable ? '' : ' nocost');
-      card.style.setProperty('--rc', col);
-      const el = r.el && ED.PATHS[r.el] ? ED.PATHS[r.el] : null; // element relics are found more often by a party that follows the element; a Generalist never keeps one
-      card.innerHTML = `<img alt="" src="${ED.Icons.relicUrl(id)}"><div><div class="rn">${r.name}</div><div class="rd">${esc(r.desc)}</div><div class="rq"${el ? ` title="${esc(`Element relic: found more often when a hero follows the ${el.name} path. A Generalist never keeps one.`)}"` : ''}>${ED.RARITY[r.rar].name}${el ? ` · ${pathName(r.el, true)} relic` : ''}${req ? ' · ' + esc(req) : ''}</div></div>`;
-      if (buyable) card.appendChild(buyButton(r.cost, p.embers >= r.cost, `Unlock ${r.name} for ${r.cost} embers`, () => { if (S.unlockRelic(p, id)) { ED.Audio.play('relic'); ED.App.afterMetaChange(); } }));
-      grid.appendChild(card);
+    // Armory: each unlocked hero's sidegrade entries (a hero section is absent while its list is empty)
+    for (const c of ED.CLASS_IDS) {
+      const list = armoryOf(c);
+      if (!list.length || !S.classUnlocked(p, c)) continue;
+      const cl = ED.CLASSES[c];
+      const h = document.createElement('div'); h.className = 'tier-head'; h.textContent = `${cl.name} Armory`;
+      grid.appendChild(h);
+      list.forEach((e, i) => {
+        const own = armoryHas(p, c, i);
+        const card = document.createElement('div');
+        card.className = 'up-card' + (own ? ' maxed' : '');
+        card.innerHTML = `<img alt="" src="${ED.Icons.url(e.icon || 'chest', cl.col.c)}"><div><div class="un">${esc(e.name)}${own ? ' <span class="badge-max">Owned</span>' : ''}</div><div class="ud">${esc(e.desc)}</div></div>`;
+        if (own) actionsCell(card, `a:${c}:${e.id}`, refundButton(e.cost, `Refund ${e.name}: +${e.cost} embers`, () => { if (S.refundArmory(p, c, e.id)) ED.App.afterMetaChange(); }), null);
+        else actionsCell(card, `a:${c}:${e.id}`, null, buyButton(e.cost, p.embers >= e.cost, `Buy ${e.name} for ${e.cost} embers`, () => { if (S.buyArmory(p, c, e.id)) { ED.Audio.play('buy'); ED.App.afterMetaChange(); } }));
+        grid.appendChild(card);
+      });
     }
+    const foot = document.createElement('div'); foot.className = 'up-foot';
+    const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'btn btn-reset'; reset.dataset.fk = 'reset:all';
+    paintReset(reset);
+    reset.onclick = () => {
+      if (!resetTimer) { resetTimer = setTimeout(disarmReset, 3000); paintReset(reset); return; }
+      clearTimeout(resetTimer); resetTimer = 0;
+      if (S.resetUpgrades(p) > 0) { ED.Audio.play('buy'); ED.App.afterMetaChange(); } else paintReset(reset);
+    };
+    foot.appendChild(reset);
+    grid.appendChild(foot);
+    restoreFocus(grid, fk);
   }
 
   // Heroes: roster on the left, stats and mastery of the inspected hero on the right.
@@ -396,7 +438,7 @@
     $('lobby-asc-val').textContent = state.pact;
     pactSteps($('lobby-asc-steps'), state.pact | 0, isHost ? A.profile.pactMax : (state.pact | 0), isHost ? (i) => A.setLobbyPact(i) : null);
     $('lobby-asc-desc').textContent = pactText(state.pact | 0);
-    $('dot-lobby-hearth').hidden = !(canBuyUpgrade(A.profile) || canBuyRelic(A.profile));
+    $('dot-lobby-hearth').hidden = !canBuy(A.profile);
     const me = state.members.find(x => x.pid === myPid);
     const go = $('btn-lobby-go');
     if (isHost) {
@@ -417,12 +459,10 @@
     if ($('ov-hearth').hidden) return;
     const p = ED.App.profile;
     $('ph-embers').textContent = p.embers;
-    $('ph-dot-upgrades').hidden = !canBuyUpgrade(p);
-    $('ph-dot-relics').hidden = !canBuyRelic(p);
+    $('ph-dot-upgrades').hidden = !canBuy(p);
     for (const b of document.querySelectorAll('#ph-tabs .tab')) b.classList.toggle('on', b.dataset.tab === UI.phTab);
-    for (const t of ['upgrades', 'relics', 'heroes']) $('ph-' + t).hidden = t !== UI.phTab;
+    for (const t of ['upgrades', 'heroes']) $('ph-' + t).hidden = t !== UI.phTab;
     if (UI.phTab === 'upgrades') renderUpgrades($('ph-upgrades'));
-    else if (UI.phTab === 'relics') renderRelics($('ph-relics'));
     else renderHeroes($('ph-heroes'));
   };
 
@@ -443,8 +483,7 @@
     if (src === 'class') {
       const cn = me && ED.CLASSES[me.cls] ? ED.CLASSES[me.cls].name : 'Class', rt = me && me.boons ? ED.classRoute(me.boons, me.cls) : null;
       if (offer.ctier === 1) return ['Choose your route', `It shapes how ${cn} fights`, null];
-      if (offer.ctier === 2) return [`${rt && rt.route ? ED.routeLabel(me.cls, rt.route) : 'Route'}: choose your fork`, 'A fork changes how the route plays; later bosses deepen it', null];
-      return ['Route mastery', 'Deepen your fork, or take a boon', null];
+      return [`${rt && rt.route ? ED.routeLabel(me.cls, rt.route) : 'Route'}: choose your fork`, 'A fork changes how the route plays; the second and fourth bosses rank it up', null];
     }
     if (src === 'start') { // only heroes without a class element are offered the General gate
       const cl = me && ED.CLASSES[me.cls];
@@ -461,7 +500,7 @@
     if (b.cls) return [`<span class="bc-path">${esc(b.route ? ED.routeLabel(b.cls, b.route) : ED.CLASSES[b.cls].name)}</span>`, false];
     return ['<span class="bc-path">Open</span>', false];
   }
-  const boonRibbon = (b, id) => (b.evo ? 'Evolution' : b.duo ? 'Duo' : b.key ? 'Keystone' : id === 'generalist' ? 'Forsake the elements' : b.gate ? 'Path gate' : b.route ? (b.tag ? b.tag + (b.coop ? ' · co-op' : '') : 'Route') : '');
+  const boonRibbon = (b, id) => (b.evo ? 'Evolution' : b.asc ? 'Ascended' : b.duo ? 'Duo' : b.key ? 'Keystone' : id === 'generalist' ? 'Forsake the elements' : b.gate ? 'Path gate' : b.route ? (b.tag ? b.tag + (b.coop ? ' · co-op' : '') : 'Route') : '');
   // The fork weapon of a class card as a small canvas drawn from the pixel atlas (null without art): tilted up-right about its grip.
   function weaponThumb(wid) {
     const A = ED.Atlas, id = ED.Sprites.forkAnim(wid); // the baked fork look: the same sprite the hero holds
@@ -506,7 +545,7 @@
     const have = me && me.boons ? (me.boons[id] || 0) : 0;
     const path = b.path || (b.duo && b.duo[0]) || null, path2 = b.duo ? b.duo[1] : null;
     const el = document.createElement('button'); el.type = 'button';
-    el.className = ['boon-card', path ? 'path-' + path : b.cls ? 'class' : 'neutral', path2 && 'path2-' + path2, path2 && 'duo', b.key && 'key', b.evo && 'evo', offer.forge && 'forge'].filter(Boolean).join(' ');
+    el.className = ['boon-card', path ? 'path-' + path : b.cls ? 'class' : 'neutral', path2 && 'path2-' + path2, path2 && 'duo', b.key && 'key', b.evo && 'evo', b.asc && 'asc', offer.forge && 'forge'].filter(Boolean).join(' ');
     el.style.setProperty('--rc', ED.RARITY[b.rar].color);
     if (path && ED.PATHS[path]) el.style.setProperty('--pc', ED.PATHS[path].color);
     if (path2 && ED.PATHS[path2]) el.style.setProperty('--pc2', ED.PATHS[path2].color);
@@ -535,7 +574,7 @@
     $('boon-head').style.color = hp ? ED.PATHS[hp].color : '';
     $('boon-sub').textContent = sub; $('boon-sub').hidden = !sub;
     $('boon-count').textContent = offer.picks > 1 ? `(${offer.picks} waiting)` : '';
-    const fixed = offer.src === 'class' && offer.ctier < 3; // a route or fork pick is a fixed choice: no reroll
+    const fixed = offer.src === 'class'; // a route or fork pick is a fixed choice: no reroll
     const rr = $('btn-reroll'), canRe = offer.rerolls > 0 && !offer.forge && !fixed;
     const pad = ED.Input.device === 'pad';
     rr.hidden = !canRe; rr.innerHTML = `<kbd>${pad ? 'Y' : esc(ED.Input.label('skill1'))}</kbd> Reroll (${offer.rerolls})`;
@@ -550,7 +589,7 @@
   UI.boonMove = (d) => { if (!boonOffer) return; boonFocus = (boonFocus + d + boonOffer.boons.length) % boonOffer.boons.length; paintFocus(); ED.Audio.play('hover'); };
   UI.boonConfirm = () => { if (!boonOffer || performance.now() < boonLock) return; UI.pickBoon(boonFocus); };
   UI.boonReroll = (byKey) => {
-    if (!boonOffer || !(boonOffer.rerolls > 0) || boonOffer.forge || (boonOffer.src === 'class' && boonOffer.ctier < 3) || performance.now() < boonLock) return;
+    if (!boonOffer || !(boonOffer.rerolls > 0) || boonOffer.forge || boonOffer.src === 'class' || performance.now() < boonLock) return;
     boonLock = performance.now() + BOON_LOCK_MS; // the fresh hand arrives in a moment; don't send twice
     if (byKey) ED.Audio.play('click');
     ED.Game.act({ t: 'reroll' });
@@ -710,7 +749,8 @@
     $('mm-settings').onclick = () => UI.openSettings();
     $('mm-credits').onclick = () => { titleInert(true); $('ov-credits').hidden = false; $('btn-credits-close').focus({ preventScroll: true }); };
     $('btn-credits-close').onclick = () => { $('ov-credits').hidden = true; titleInert(false); $('mm-credits').focus({ preventScroll: true }); };
-    $('btn-news-close').onclick = () => { $('ov-news').hidden = true; A.profile.news = 0; A.persist(); if ($('mm-descend').offsetParent) $('mm-descend').focus({ preventScroll: true }); };
+    $('btn-news-close').onclick = () => { $('ov-news').hidden = true; A.profile.news = 0; A.profile.refunded = 0; A.persist(); if ($('mm-descend').offsetParent) $('mm-descend').focus({ preventScroll: true }); };
+    document.addEventListener('click', (e) => { if (resetTimer && !e.target.closest('.btn-reset')) disarmReset(); }, true);
     for (const m of document.querySelectorAll('.menu')) arrowNav(m, '.menu-btn', 'ArrowUp', 'ArrowDown');
     arrowNav($('hearth-tabs'), '.tab', 'ArrowLeft', 'ArrowRight');
     arrowNav($('set-tabs'), '.tab:not([hidden])', 'ArrowLeft', 'ArrowRight');

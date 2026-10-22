@@ -343,9 +343,9 @@
   }
 
   // ---------------- compute ----------------
-  // Contribution rows of one stat: [{ label, kind, v, id? }] from ED.Stats.breakdown plus the live (temporary) rows of the hero.
+  // Contribution rows of one stat: [{ label, kind, v, id?, mul? }] from ED.Stats.breakdown (an Ascended multiplier row has mul: true, v = f for a factor of 1 + f) plus the live (temporary) rows of the hero.
   function rowsOf(build, key, extra) {
-    const rows = St.breakdown(build, key).map(r => ({ label: r.label, kind: r.kind, v: r.v, id: r.id }));
+    const rows = St.breakdown(build, key).map(r => (r.mul ? { label: r.label, kind: r.kind, v: r.v, id: r.id, mul: true } : { label: r.label, kind: r.kind, v: r.v, id: r.id }));
     if (extra) for (const r of extra) if (r.v) rows.push(r);
     return rows;
   }
@@ -378,7 +378,7 @@
     if (p.tranceT > 0 && st.trance > 0) atkExtra.push({ label: 'Battle Trance (active)', kind: 'temp', v: st.trance, live: true });
     mult.dmg = { total: R.x(st.dmg + dmgExtra.reduce((a, r) => a + r.v, 0)), rows: rowsOf(build, 'dmg', dmgExtra) };
     mult.atk = { total: R.x(rate - 1 + st.atk), base: R.x(st.atk), aps: R.x(wpn.aps), rows: rowsOf(build, 'atk', atkExtra) };
-    mult.crit = { total: R.f(c), mult: R.x(cm), expected: R.x(EC), rows: rowsOf(build, 'crit'), rowsDmg: rowsOf(build, 'critDmg') };
+    mult.crit = { total: R.f(c), mult: R.x(cm), base: R.x(cm - st.critDmg), expected: R.x(EC), rows: rowsOf(build, 'crit'), rowsDmg: rowsOf(build, 'critDmg') };
     mult.area = { total: R.f(st.area), blast: R.x(1 + 0.5 * st.area), arc: R.x(1 + 0.4 * st.area), rows: rowsOf(build, 'area') };
     mult.cdr = { raw: R.f(st.cdr), eff: R.f(St.cdrEff(st.cdr)), soft: St.CDR_SOFT, max: St.CDR_MAX, capped: st.cdr > St.CDR_SOFT, rows: rowsOf(build, 'cdr') };
     mult.projN = { total: st.projN, rows: rowsOf(build, 'projN'), pierce: st.pierce, rowsPierce: rowsOf(build, 'pierce') };
@@ -531,7 +531,6 @@
     const push = (el, why) => { if (!el || seen[el] || !ED.PATHS[el] || !ED.PATHS[el].element) return; seen[el] = 1; mine.push({ el, name: ED.PATHS[el].name, color: ED.PATHS[el].color, why }); };
     for (const k of ED.elementGates(p.boons || {})) push(k, 'path');
     if (st.element) push(st.element, 'class');
-    for (const id of p.relics || []) if (ED.RELICS[id] && ED.RELICS[id].el) push(ED.RELICS[id].el, 'relic');
     const at = (stratum) => {
       const b = ED.BIOMES[stratum - 1];
       return { stratum, name: b.name, short: b.short, weak: b.weak, resist: b.resist, mine: mine.map(m => ({ el: m.el, name: m.name, color: m.color, why: m.why, mul: ED.elemMul(stratum, m.el), skillMul: m.el === st.element ? ED.affC(stratum, m.el) : null })) }; // mul: statuses and tagged hits; skillMul: the class element's skills (half the affinity), whichever source listed the element
@@ -552,7 +551,7 @@
   // ---------------- build tab ----------------
   const AILMENT_STATS = ['brand', 'veins', 'contagion', 'festerHit', 'exsang']; // stats that read the ailment count of a foe (World.ailments)
   const ROUTE_WHEN = { t1: 'Offered at team level 3', fork: 'Offered when the stratum I boss falls', r2: 'Rank 2 when the stratum II boss falls', r3: 'Rank 3 when the stratum IV boss falls' };
-  const KIND_ORDER = { gate: 0, path: 1, open: 1, route: 0, fork: 1, keystone: 2, evolution: 3, duo: 0 };
+  const KIND_ORDER = { gate: 0, path: 1, open: 1, route: 0, fork: 1, keystone: 2, evolution: 3, duo: 0, ascended: 0 };
   function buildModel(p, st, ctx, R) {
     const boons = p.boons || {}, gen = ED.isGeneralist(boons), gates = ED.gatePaths(boons), evoPath = ED.evoOf(boons), paths = [];
     for (const k of gates) {
@@ -587,14 +586,14 @@
     for (const id in boons) {
       const b = ED.BOONS[id], rank = boons[id];
       if (!b || !(rank > 0) || (b.cls && b.cls !== p.cls)) continue;
-      const max = ED.maxRank(b, st), kind = b.evo ? 'evolution' : b.key ? 'keystone' : b.gate ? 'gate' : b.duo ? 'duo' : b.route ? (b.tier === 1 ? 'route' : 'fork') : b.path && !b.open ? 'path' : 'open';
-      const group = b.cls ? 'route' : b.duo ? 'duo' : b.path && !b.open && gates.includes(b.path) ? 'path:' + b.path : 'open';
+      const max = ED.maxRank(b, st), kind = b.evo ? 'evolution' : b.asc ? 'ascended' : b.key ? 'keystone' : b.gate ? 'gate' : b.duo ? 'duo' : b.route ? (b.tier === 1 ? 'route' : 'fork') : b.path && !b.open ? 'path' : 'open';
+      const group = b.cls ? 'route' : b.duo ? 'duo' : b.asc ? 'asc' : b.path && !b.open && gates.includes(b.path) ? 'path:' + b.path : 'open';
       rows.push({ id, name: b.name, icon: b.icon, rar: b.rar, rank, max, kind, group, path: b.path || (b.duo ? b.duo[0] : null), path2: b.duo ? b.duo[1] : null, tag: b.tag || '', coop: !!b.coop, text: Sh.text(id, rank, st), next: rank < max ? Sh.nextText(id, rank, st) : null });
     }
-    const groups = gates.map(k => 'path:' + k).concat(['duo', 'route', 'open']).map(g => ({ group: g, path: g.indexOf('path:') === 0 ? g.slice(5) : null, items: rows.filter(r => r.group === g).sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind]) })).filter(g => g.items.length);
+    const groups = gates.map(k => 'path:' + k).concat(['duo', 'route', 'asc', 'open']).map(g => ({ group: g, path: g.indexOf('path:') === 0 ? g.slice(5) : null, items: rows.filter(r => r.group === g).sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind]) })).filter(g => g.items.length);
     const relics = (p.relics || []).map(id => {
       const r = ED.RELICS[id], i = Sh.READY.findIndex(x => x.id === id);
-      return { id, name: r.name, icon: r.icon, rar: r.rar, text: r.desc, live: relicLive(id, p, st, ctx), state: i >= 0 ? (readyOf(p, i) ? 'ready' : id === 'angel' || id === 'phoenix' ? 'used' : 'recharging') : null, el: r.el || null };
+      return { id, name: r.name, icon: r.icon, rar: r.rar, text: r.desc, live: relicLive(id, p, st, ctx), state: i >= 0 ? (readyOf(p, i) ? 'ready' : id === 'angel' || id === 'phoenix' ? 'used' : 'recharging') : null };
     });
     const statuses = [];
     for (const m of ED.ELEMENT_IDS) if (st[ED.ELEMENTS[m].inf] > 0 || st.element === m) { const S = ED.STATUS[ED.PATHS[m].status]; statuses.push({ id: ED.PATHS[m].status, name: S.name, color: S.color, rule: S.rule, el: m }); }

@@ -246,6 +246,10 @@
     else if (m.t === 'offerDone') { s.offer = null; s.offerOpen = false; ED.UI.hideBoons(); }
     else if (m.t === 'claimed') s.claimed[m.group] = true;
     else if (m.t === 'toast') { ED.UI.toast(m.text); if (!m.info) ED.Audio.play('deny'); } // info toasts are not refusals
+    else if (m.t === 'forkRank') { // a fork rank granted at a boss { id, rank }: a toast with the rank's new behaviour
+      const P = ED.cardParts(m.id, m.rank, s.me && s.me.stats), tx = P.rider ? `${P.riderName}: ${P.rider}` : P.rider2 ? `${P.rider2Name}: ${P.rider2}` : '', e = ED.UI.esc;
+      ED.UI.toast(`<b>${e(ED.cardName(m.id, m.rank))}</b>: rank ${m.rank}${tx ? '<br>' + e(tx) : ''}`, ED.Icons.boonUrl(m.id), 6);
+    }
     else if (m.t === 'refund') { // cooldown refund { slot, s }: s seconds off (a charge returns when the cooldown reaches 0), no s = in full
       const c = s.ctl;
       if (m.slot === 1) c.skill2Cd = m.s ? Math.max(0, c.skill2Cd - m.s) : 0;
@@ -272,7 +276,7 @@
       const fx = s.mirror.apply(d, performance.now() / 1000);
       for (const ev of fx) G.localEvent(ev);
     } else if (d.t === 'end') G.localEvent({ t: 'end', summary: d.summary });
-    else if (d.t === 'offer' || d.t === 'offerDone' || d.t === 'claimed' || d.t === 'toast' || d.t === 'refund') G.message(d);
+    else if (d.t === 'offer' || d.t === 'offerDone' || d.t === 'claimed' || d.t === 'toast' || d.t === 'refund' || d.t === 'forkRank') G.message(d);
   };
   G.onPeerLeft = (pid) => { const s = G.s; if (s && s.mode === 'host') { s.world.removePlayer(pid); } };
 
@@ -478,6 +482,15 @@
   const unterp = (w) => { for (const k of MOVERS) { const a = w[k]; for (let i = 0; i < a.length; i++) { const o = a[i]; if (o.rx !== undefined) { o.x = o.rx; o.y = o.ry; } } } };
   // Mirrors World.isSafe: calm room, no live foe except the invulnerable Gloom, no descent pending (clients see no pendingStratum).
   const isSafe = (v) => !v.locked && !v.pendingStratum && !v.enemies.some(e => e.hp > 0 && !e.def.gloom);
+  // Music level from the viewed foe list (host, solo and client alike): 0 calm, 1 foes alive or the room locked, 2 heavy at 25 live foes (held until fewer than 12);
+  // a boss piece plays its phase (1 -> 0 .. 3 -> 2), lifted to 1 by 8 or more summons.
+  const musicLevel = (v, prev) => {
+    let n = 0, boss = null;
+    for (const e of v.enemies) { if (e.hp <= 0 || e.def.gloom || e.spawnT > 0) continue; if (e.boss) boss = e; else n++; }
+    if (boss) return Math.max(Math.min(2, (boss.phase | 0) - 1), n >= 8 ? 1 : 0);
+    if (n >= 25 || (prev === 2 && n >= 12)) return 2;
+    return v.locked || n > 0 ? 1 : 0;
+  };
   G.update = (dt, inp) => {
     const s = G.s; if (!s) return;
     const now = performance.now() / 1000;
@@ -532,6 +545,7 @@
       }
     }
     ED.FX.update(frozen ? 0 : dt);
+    if ((s.musT = (s.musT || 0) - dt) <= 0) { s.musT = 0.1; s.musLv = musicLevel(s.view, s.musLv); ED.Audio.setIntensity(s.musLv); }
     ED.Render.updateCamera(s.view, s.me.dead ? ([...s.view.players.values()].find(p => !p.dead) || s.me) : s.me, dt, false);
   };
 

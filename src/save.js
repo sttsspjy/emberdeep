@@ -10,20 +10,30 @@
   const LS_SETTINGS = 'wickdeep.settings.v1';
   const NAME_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -';
   const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-  const CODE_VERSION = 4; // 4: upgrades and heroes carry count prefixes too; 3: only the non-start relic bits do; 2 stored exactly V2_RELIC_BITS relic bits, V2_UPGRADES ranks and V2_HEROES mastery values. A count prefix keeps appended entries from shifting what follows.
+  const CODE_VERSION = 5; // 5: no relic bits, an Armory section (per hero: 6-bit count, 1 bit per entry) after mastery; 4: upgrades and heroes carry count prefixes too; 3: only the non-start relic bits do; 2 stored exactly V2_RELIC_BITS relic bits, V2_UPGRADES ranks and V2_HEROES mastery values. A count prefix keeps appended entries from shifting what follows.
   const V2_RELIC_BITS = 26, V2_UPGRADES = 16, V2_HEROES = 6;
+  // The relic list of save code v4 as [id, start, cost], in v4 RELIC_IDS order: old profiles (positional flags) and v2-v4 codes (non-start bits) decode against it, and the Codex embers they paid are refunded. Frozen.
+  const V4_RELICS = [['whetstone', 1, 0], ['boots', 1, 0], ['buckler', 1, 0], ['heartstone', 1, 0], ['coin', 1, 0], ['hourglass', 1, 0], ['fang', 1, 0], ['embercharm', 1, 0], ['frostshard', 1, 0], ['lodestone', 1, 0], ['pauldron', 1, 0], ['wardrum', 1, 0], ['phoenix', 1, 0], ['stormidol', 1, 0], ['glasseye', 1, 0], ['elixir', 1, 0],
+    ['axe', 0, 50], ['cloak', 0, 50], ['satchel', 0, 65], ['lantern', 0, 45], ['seeker', 0, 80], ['twinfang', 0, 80], ['mirror', 0, 80], ['crown', 0, 105], ['idol', 0, 60], ['wispjar', 0, 70], ['mask', 0, 70], ['banner', 0, 50], ['angel', 0, 115], ['crest', 0, 70], ['gauntlet', 0, 85], ['frozenheart', 0, 80], ['chalice', 0, 115], ['skull', 0, 90], ['ledger', 0, 50], ['stone', 0, 130], ['clover', 0, 60], ['aegis', 0, 85], ['brazier', 0, 70], ['glaciercore', 0, 70], ['lightningrod', 0, 70], ['bloodstone', 0, 60],
+    ['halo', 1, 0], ['gravecandle', 1, 0], ['venomgland', 0, 70]];
+  const V4_CODEX = V4_RELICS.map((r, i) => i).filter(i => !V4_RELICS[i][1]); // indices of the Codex relics, the order of the v2-v4 code bits
   const PREFIX = 'WD1';
 
   const S = ED.Save = { KEY: LS_KEY, NAME_CHARS };
 
+  const armoryList = (cls) => ED.ARMORY[cls] || [];
+  // { cls: [0 per entry] } for every hero.
+  const blankArmory = () => { const a = {}; for (const c of ED.CLASS_IDS) a[c] = armoryList(c).map(() => 0); return a; };
+
   S.defaultProfile = () => ({
-    v: 2, // profile era: below 2 a profile with runs gets news = 1 (the "Deep has changed" notice, cleared once shown)
+    v: 3, // profile era: below 3 a profile has a positional relics array; its Codex embers are refunded and news = 1 (the "Deep has changed" notice, cleared once shown) when it has runs or a refund
     news: 0,
+    refunded: 0, // Codex embers refunded by that migration, printed by the notice
     name: 'Wanderer',
     embers: 0,
     lifetime: 0,
     up: ED.UPGRADES.map(() => 0),
-    relics: ED.RELIC_IDS.map(id => (ED.RELICS[id].start ? 1 : 0)),
+    armory: blankArmory(),
     mastery: ED.CLASS_IDS.map(() => 0),
     bosses: 0,
     deeds: 0,
@@ -43,7 +53,11 @@
     let raw = null;
     try { raw = localStorage.getItem(LS_KEY); } catch (e) { return null; }
     if (!raw) return null;
-    try { return S.normalize(JSON.parse(raw)); } catch (e) {
+    try {
+      const old = JSON.parse(raw), p = S.normalize(old);
+      if (old && typeof old === 'object' && (old.v | 0) < 3) S.store(p); // migrated once: the stored copy drops the relics array so the refund cannot repeat
+      return p;
+    } catch (e) {
       // unreadable: keep a copy aside before the fresh profile overwrites it
       try { localStorage.setItem(LS_KEY + '.corrupt', raw); } catch (e2) { /* ignore */ }
       return null;
@@ -51,6 +65,9 @@
   };
   S.store = (p) => { try { localStorage.setItem(LS_KEY, JSON.stringify(p)); return true; } catch (e) { return false; /* storage blocked: save code still works */ } };
   S.erase = () => { try { localStorage.removeItem(LS_KEY); } catch (e) { /* ignore */ } };
+
+  // Embers the Codex cost: the sum over the Codex relics a positional v4 flag array (one entry per V4_RELICS) holds.
+  const codexRefund = (flags) => V4_CODEX.reduce((n, i) => n + (flags[i] ? V4_RELICS[i][2] : 0), 0);
 
   // Whatever was stored (old versions, hand edits, damage), return a well-formed profile.
   const int = (v, lo, hi) => { const n = Math.floor(Number(v)); return Number.isFinite(n) ? U.clamp(n, lo, hi) : lo; };
@@ -60,11 +77,14 @@
     const d = S.defaultProfile();
     if (!p || typeof p !== 'object') return d;
     const arr = (v) => (Array.isArray(v) ? v : []);
-    const up = arr(p.up), relics = arr(p.relics), mastery = arr(p.mastery);
+    const up = arr(p.up), mastery = arr(p.mastery), old = (p.v | 0) < 3;
     d.name = S.sanitizeName(p.name);
     d.embers = int(p.embers, 0, BIG); d.lifetime = int(p.lifetime, 0, BIG);
+    d.refunded = int(p.refunded, 0, BIG);
+    if (old) { const gain = codexRefund(arr(p.relics)); d.embers = Math.min(BIG, d.embers + gain); d.refunded = gain; }
     d.up = ED.UPGRADES.map((u, i) => int(up[i], 0, u.costs.length));
-    d.relics = ED.RELIC_IDS.map((id, i) => (ED.RELICS[id].start || relics[i] ? 1 : 0));
+    const arm = obj(p.armory);
+    for (const c of ED.CLASS_IDS) { const a = arr(arm[c]); d.armory[c] = armoryList(c).map((e, i) => (a[i] ? 1 : 0)); }
     d.mastery = ED.CLASS_IDS.map((c, i) => int(mastery[i], 0, BIG));
     d.bosses = int(p.bosses, 0, 63);
     d.deeds = int(p.deeds, 0, 2 ** 31 - 1);
@@ -72,7 +92,7 @@
     d.pactWin = p.pactWin === undefined ? -1 : int(p.pactWin, -1, 10);
     const st = obj(p.stats);
     for (const k in d.stats) d.stats[k] = int(st[k], 0, k === 'deepest' ? 6 : BIG);
-    d.news = (p.v | 0) < 2 ? (d.stats.runs > 0 ? 1 : 0) : int(p.news, 0, 1);
+    d.news = old ? (d.stats.runs > 0 || d.refunded > 0 ? 1 : 0) : int(p.news, 0, 1);
     const sel = obj(p.sel);
     d.sel = { cls: ED.CLASS_IDS.indexOf(sel.cls) >= 0 ? sel.cls : 'knight', weapon: {}, pact: int(sel.pact, 0, 10) };
     for (const c of ED.CLASS_IDS) { const wid = obj(sel.weapon)[c]; if (ED.CLASSES[c].weapons.indexOf(wid) >= 0) d.sel.weapon[c] = wid; }
@@ -99,14 +119,13 @@
     if (u.runs) return p.stats.runs >= u.runs;
     return true;
   };
-  S.relicUnlocked = (p, id) => !!p.relics[ED.RELIC_IDX[id]];
   S.masteryLevel = (p, cls) => ED.masteryLevel(p.mastery[ED.CLASS_IDS.indexOf(cls)] || 0);
   S.rank = (p, id) => p.up[ED.UPGRADE_IDX[id]] || 0;
   S.upgradeAvailable = (p, u) => p.stats.deepest >= u.tier || u.tier <= 1;
-  S.relicReqMet = (p, id) => { const r = ED.RELICS[id].req; return !r || !r.boss || !!(p.bosses & (1 << (r.boss - 1))); };
 
   S.buyUpgrade = (p, id) => {
     const i = ED.UPGRADE_IDX[id], u = ED.UPGRADES[i];
+    if (!u) return false;
     const r = p.up[i];
     if (r >= u.costs.length || !S.upgradeAvailable(p, u)) return false;
     const cost = u.costs[r];
@@ -114,18 +133,58 @@
     p.embers -= cost; p.up[i] = r + 1;
     return true;
   };
-  S.unlockRelic = (p, id) => {
-    const i = ED.RELIC_IDX[id], def = ED.RELICS[id];
-    if (p.relics[i] || !def.cost || !S.relicReqMet(p, id) || p.embers < def.cost) return false;
-    p.embers -= def.cost; p.relics[i] = 1;
+  // Refunds are free and exact (the cost of the rank given up); lifetime embers never change.
+  S.refundUpgrade = (p, id) => {
+    const i = ED.UPGRADE_IDX[id], u = ED.UPGRADES[i];
+    if (!u || !(p.up[i] > 0)) return false;
+    p.embers += u.costs[p.up[i] - 1]; p.up[i] -= 1;
     return true;
   };
 
-  // The meta bundle a player brings into a run (sent to the host in multiplayer).
+  // Armory: entry index of `id` in hero `cls`'s list, or -1.
+  const armoryIdx = (cls, id) => armoryList(cls).findIndex(e => e.id === id);
+  S.armoryOwned = (p, cls, id) => { const i = armoryIdx(cls, id); return i >= 0 && !!(p.armory && p.armory[cls] && p.armory[cls][i]); };
+  const armoryRow = (p, cls) => {
+    if (!p.armory) p.armory = blankArmory();
+    const a = p.armory[cls] || (p.armory[cls] = []);
+    while (a.length < armoryList(cls).length) a.push(0);
+    return a;
+  };
+  S.buyArmory = (p, cls, id) => {
+    const i = armoryIdx(cls, id);
+    if (i < 0) return false;
+    const a = armoryRow(p, cls), cost = armoryList(cls)[i].cost;
+    if (a[i] || p.embers < cost) return false;
+    p.embers -= cost; a[i] = 1;
+    return true;
+  };
+  S.refundArmory = (p, cls, id) => {
+    const i = armoryIdx(cls, id);
+    if (i < 0) return false;
+    const a = armoryRow(p, cls);
+    if (!a[i]) return false;
+    p.embers += armoryList(cls)[i].cost; a[i] = 0;
+    return true;
+  };
+  // Embers a full reset returns: every upgrade rank and every owned Armory entry.
+  S.refundTotal = (p) => {
+    let n = 0;
+    ED.UPGRADES.forEach((u, i) => { for (let k = 0; k < (p.up[i] | 0); k++) n += u.costs[k]; });
+    for (const c of ED.CLASS_IDS) armoryList(c).forEach((e, i) => { if (p.armory && p.armory[c] && p.armory[c][i]) n += e.cost; });
+    return n;
+  };
+  // Clears every upgrade rank and Armory unlock and returns their embers; returns the amount.
+  S.resetUpgrades = (p) => {
+    const n = S.refundTotal(p);
+    p.up = ED.UPGRADES.map(() => 0); p.armory = blankArmory(); p.embers += n;
+    return n;
+  };
+
+  // The meta bundle a player brings into a run (sent to the host in multiplayer): upgrade ranks, mastery level and the ids of the hero's owned Armory entries.
   S.metaBundle = (p, cls) => ({
     up: p.up.slice(),
     mastery: S.masteryLevel(p, cls),
-    relics: ED.RELIC_IDS.filter(id => S.relicUnlocked(p, id)),
+    armory: armoryList(cls).filter((e, i) => p.armory && p.armory[cls] && p.armory[cls][i]).map(e => e.id),
   });
 
   // ---------------- run rewards ----------------
@@ -271,12 +330,15 @@
     w.varint(p.embers); w.varint(p.lifetime);
     w.put(ED.UPGRADES.length, 6);
     ED.UPGRADES.forEach((u, i) => w.put(p.up[i] | 0, 3));
-    const codex = ED.RELIC_IDS.map((id, i) => [id, i]).filter(x => !ED.RELICS[x[0]].start); // non-start relics in positional order
-    if (codex.length > 127) throw new Error('Too many Codex relics for the 7-bit count: widen it and bump CODE_VERSION');
-    w.put(codex.length, 7);
-    codex.forEach(x => w.put(p.relics[x[1]] ? 1 : 0, 1));
     w.put(ED.CLASS_IDS.length, 4);
     ED.CLASS_IDS.forEach((c, i) => w.varint(p.mastery[i] | 0));
+    w.put(ED.CLASS_IDS.length, 4);
+    for (const c of ED.CLASS_IDS) {
+      const list = armoryList(c), owned = (p.armory && p.armory[c]) || [];
+      if (list.length > 63) throw new Error('Too many Armory entries for the 6-bit count: widen it and bump CODE_VERSION');
+      w.put(list.length, 6);
+      list.forEach((e, i) => w.put(owned[i] ? 1 : 0, 1));
+    }
     w.put(p.bosses & 63, 6);
     w.put(ED.DEEDS.length, 6);
     ED.DEEDS.forEach((d, i) => w.put((p.deeds >>> i) & 1, 1));
@@ -324,10 +386,20 @@
       p.embers = r.varint(); p.lifetime = r.varint();
       const nu = ver >= 4 ? r.get(6) : V2_UPGRADES; // missing entries stay 0, extra ones are skipped
       for (let k = 0; k < nu; k++) { const v = r.get(3); if (k < ED.UPGRADES.length) p.up[k] = Math.min(ED.UPGRADES[k].costs.length, v); }
-      const codex = ED.RELIC_IDS.map((id, i) => i).filter(i => !ED.RELICS[ED.RELIC_IDS[i]].start), n = ver === 2 ? V2_RELIC_BITS : r.get(7);
-      for (let k = 0; k < n; k++) { const bit = r.get(1); if (k < codex.length) p.relics[codex[k]] = bit; } // missing relics stay locked, extra bits are skipped
+      let refund = 0; // v2-v4: the Codex relic bits follow the upgrades; their embers come back
+      if (ver < 5) {
+        const n = ver === 2 ? V2_RELIC_BITS : r.get(7);
+        for (let k = 0; k < n; k++) { const bit = r.get(1); if (bit && k < V4_CODEX.length) refund += V4_RELICS[V4_CODEX[k]][2]; } // extra bits are skipped
+      }
       const nm = ver >= 4 ? r.get(4) : V2_HEROES;
       for (let k = 0; k < nm; k++) { const v = r.varint(); if (k < ED.CLASS_IDS.length) p.mastery[k] = v; }
+      if (ver >= 5) {
+        const nc = r.get(4); // Armory: heroes beyond this build are skipped, missing entries stay 0
+        for (let k = 0; k < nc; k++) {
+          const ne = r.get(6), cls = ED.CLASS_IDS[k], list = cls ? armoryList(cls) : [];
+          for (let i = 0; i < ne; i++) { const bit = r.get(1); if (bit && i < list.length) p.armory[cls][i] = 1; }
+        }
+      }
       p.bosses = r.get(6);
       const nd = r.get(6); let deeds = 0;
       for (let i = 0; i < nd; i++) if (r.get(1)) deeds |= (1 << i);
@@ -335,7 +407,8 @@
       p.pactMax = Math.min(10, r.get(4)); p.pactWin = Math.min(10, r.get(4) - 1);
       p.stats.runs = r.varint(); p.stats.wins = r.varint(); p.stats.deepest = Math.min(6, r.get(3));
       p.stats.kills = r.varint(); p.stats.bestTime = r.varint(); p.stats.bossKills = r.varint();
-      p.news = ver === 2 && p.stats.runs > 0 ? 1 : 0; // a main-era (v2) code predates the v3 rules
+      p.embers += refund; p.refunded = refund;
+      p.news = ver < 5 && (p.stats.runs > 0 || refund > 0) ? 1 : 0; // a code from before the v4 rules gets the notice
     } catch (e) {
       if (e && e.keep) throw e;
       throw new Error('That code is from an unknown version or is damaged.');

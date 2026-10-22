@@ -15,12 +15,12 @@
 // Casting follows ED.SKILLS: aim 'dir' throws along the target angle, 'ground' lands on the foe, 'move' runs or blinks through it, 'self' fires around the hero; aim noise shrinks with the bot's skill (angle 0.12 rad, ground point 36 px at skill 0).
 // --out=file.json writes one row per run (seed, class, depth, win, boss time to kill and HP lost per stratum, evolution stratum, main path, gates); --pair=file.json prints the mean difference to such a baseline for the same seeds.
 // --from=N: the bots start at stratum N with the build strata 1..N-1 give (skipStrata plays them without fighting); stats, wins and depth then cover strata >= N (depth counts the skipped bosses as beaten, time counts from stratum N, `entry` holds the hero state at each stratum start).
-// meta: none = fresh profile (start relics); mid = half the upgrade ranks, mastery 5, start relics plus the Codex relics costing <= 70 without a boss requirement; max = every rank, mastery 10, every relic. runBot takes opts.relics to override the relic pool.
+// meta: none = fresh profile; mid = half the upgrade ranks, mastery 5; max = every rank, mastery 10. Every relic is always in the pool.
 const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
 const ROOT = path.join(__dirname, '..', 'src') + '/';
-const files = ['util.js', 'data/biomes.js', 'data/enemies.js', 'data/classes.js', 'data/boons.js', 'data/classboons.js', 'data/relics.js', 'data/meta.js', 'save.js',
+const files = ['util.js', 'data/biomes.js', 'data/enemies.js', 'data/classes.js', 'data/boons.js', 'data/classboons.js', 'data/ascended.js', 'data/relics.js', 'data/meta.js', 'save.js',
   'sim/dungeon.js', 'sim/stats.js', 'sim/world.js', 'sim/combat.js', 'sim/build.js', 'sim/skills.js', 'sim/class-knight.js', 'sim/class-ranger.js', 'sim/class-pyro.js', 'sim/class-shade.js', 'sim/class-cleric.js', 'sim/class-necro.js',
   'sim/ai.js', 'sim/bosses.js', 'sim/rooms.js', 'sim/sheet.js'];
 // Main context, not vm.createContext: inside a vm context every global read (Math, Object, ...) goes through the context interceptor and the sim runs ~3x slower.
@@ -398,7 +398,7 @@ function runBot(opts) {
   for (let i = 0; i < opts.n; i++) {
     const cls = opts.cls[i % opts.cls.length];
     players.push({ pid: 'p' + i, name: 'Bot' + i, slot: i, cls, weapon: ED.CLASSES[cls].weapons[opts.weapon || 0],
-      meta: { up: opts.up || ED.UPGRADES.map(() => 0), mastery: opts.mastery || 1, relics: opts.relics || ED.RELIC_IDS.filter(id => ED.RELICS[id].start) } });
+      meta: { up: opts.up || ED.UPGRADES.map(() => 0), mastery: opts.mastery || 1 } });
   }
   const w = new ED.World({ seed: opts.seed, pact: opts.pact || 0, players, tutorial: opts.tutorial });
   ctx.w = w;
@@ -654,7 +654,7 @@ function runBot(opts) {
     evoAt: rec.evoAt, aff: ED.PATH_IDS.map(k => ED.pathAffinity(p0.boons, k)).sort((a, b) => b - a),
     bossTry: rec.bossTry, cls: p0.cls, main: ED.PATH_IDS.map(k => [k, ED.pathAffinity(p0.boons, k)]).sort((a, b) => b[1] - a[1])[0][0], heroes: players.length, bare: avg(players.map(p => bareDps(p.cls, p.weapon))), src: rec.src, combatS: rec.combatS, hits: rec.hits, ttk: rec.ttk, ttkElite: rec.ttkElite, htk: rec.htk, htkBare: rec.htkBare, cdr: p0.stats.cdr, cdrAfter: ED.Stats.cdrEff ? ED.Stats.cdrEff(p0.stats.cdr) : p0.stats.cdr,
     endRoom: w.room ? w.room.type : '', evo: p0.stats.evo || null, gates: ED.gatePaths(p0.boons), boonCount: Object.values(p0.boons).reduce((a, b) => a + b, 0), keystones: Object.keys(p0.boons).filter(id => ED.BOONS[id].key).length,
-    gen: ED.isGeneralist(p0.boons), elGates: ED.elementGates(p0.boons), startPath: ED.gatePaths(p0.boons)[0] || null, keyAt: rec.keyAt, duoAt: rec.duoAt, duo: Object.keys(p0.boons).some(id => ED.BOONS[id].duo), duoIds: Object.keys(p0.boons).filter(id => ED.BOONS[id].duo), relicIds: p0.relics.slice(),
+    gen: ED.isGeneralist(p0.boons), elGates: ED.elementGates(p0.boons), startPath: ED.gatePaths(p0.boons)[0] || null, keyAt: rec.keyAt, duoAt: rec.duoAt, duo: Object.keys(p0.boons).some(id => ED.BOONS[id].duo), duoIds: Object.keys(p0.boons).filter(id => ED.BOONS[id].duo), boonIds: Object.keys(p0.boons), relicIds: p0.relics.slice(),
     cnt: rec.cnt, kills0: p0.kills, venom: rec.venom, shield: rec.shield, bossSecs: rec.bossSecs, hpFrac: rec.hpFrac, chainPeak: w.chainPeak, chainHops: w.chainHops, rerolls: p0.rerolls,
     route: ED.classRoute(p0.boons, p0.cls), wi: ED.CLASSES[p0.cls].weapons.indexOf(p0.weapon), parts: rec.parts, projDmgS: rec.projDmgS, upt: rec.upt, peak: rec.peak, clip: Object.assign({}, p0.shieldClip), braceOn: p0.stats.brace > 0, hexOn: p0.stats.hex > 0 };
 }
@@ -737,7 +737,7 @@ function summarize(results) {
   const two = elemRuns.filter(r => r.elGates.length === 2), duoRuns = two.filter(r => r.duo);
   lines.push(`keystone stratum quartiles [${qs(withS(results, 'keyAt'))}] (${withS(results, 'keyAt').length}/${n} took one) | duo (2-gate runs ${two.length}): taken ${pct(duoRuns.length, two.length)}%, by the end of IV ${pct(two.filter(r => r.duoAt && r.duoAt <= 4).length, two.length)}%, stratum quartiles [${qs(duoRuns.map(r => r.duoAt))}]`);
   const duoCnt = {}; for (const r of results) for (const id of r.duoIds) duoCnt[id] = (duoCnt[id] || 0) + 1;
-  lines.push('duo picks: ' + (Object.entries(duoCnt).sort((a, b) => b[1] - a[1]).map(([k, v]) => k + ' ' + v).join(', ') || '-') + ' | path relics held at run end (share of runs): ' + ['fang', 'embercharm', 'frostshard', 'stormidol', 'halo', 'gravecandle', 'wardrum', 'crest', 'wispjar', 'venomgland', 'chalice', 'bloodstone'].map(id => `${id} ${pct(results.filter(r => r.relicIds.includes(id)).length, n)}%`).join(' '));
+  lines.push('duo picks: ' + (Object.entries(duoCnt).sort((a, b) => b[1] - a[1]).map(([k, v]) => k + ' ' + v).join(', ') || '-') + ' | former element relics, now boons (share of runs that took one): ' + ['stormcall', 'thundergauntlet', 'frostheart', 'souljar'].map(id => `${id} ${pct(results.filter(r => r.boonIds.includes(id)).length, n)}%`).join(' '));
   const grp = (rs) => (rs.length ? `${rs.length} runs wins ${pct(rs.filter(r => r.victory).length, rs.length)}% depth ${ms(rs.map(r => r.stratum), 2)}` : '0 runs');
   lines.push('by main path: ' + ED.PATH_IDS.map(k => `${k} (${grp(results.filter(r => r.main === k))})`).join(' | '));
   const sel = results.filter(r => ['knight', 'ranger', 'shade'].includes(r.cls));
@@ -804,11 +804,10 @@ function classLines(results) {
   return out.join('\n');
 }
 
-// Hearth profile of a bot: none (fresh: start relics only), mid (half the ranks, mastery 5, start relics plus the Codex relics costing <= 70 with no boss requirement) or max (every rank, mastery 10, every relic).
+// Hearth profile of a bot: none (fresh), mid (half the ranks, mastery 5) or max (every rank, mastery 10).
 const metaProfile = (meta) => ({
   up: meta === 'max' ? ED.UPGRADES.map(u => u.costs.length) : meta === 'mid' ? ED.UPGRADES.map(u => Math.ceil(u.costs.length / 2)) : ED.UPGRADES.map(() => 0),
   mastery: meta === 'max' ? 10 : meta === 'mid' ? 5 : 1,
-  relics: ED.RELIC_IDS.filter(id => { const r = ED.RELICS[id]; return r.start || meta === 'max' || (meta === 'mid' && r.cost <= 70 && !(r.req && r.req.boss)); }),
 });
 
 // Run options shared by both command lines, from the parsed --flags.
@@ -849,12 +848,12 @@ if (require.main === module) {
   for (const a of process.argv.slice(2)) { const m = /^--([a-z0-9]+)(?:=(.*))?$/i.exec(a); if (m) flags[m[1]] = m[2] === undefined ? '1' : m[2]; else args.push(a); }
   const n = +(args[0] || 1), runs = +(args[1] || 5), skill = +(args[2] || 0.75), meta = args[3] || 'none';
   const cls = (args[4] && args[4] !== '-' ? args[4] : 'knight,ranger,pyro,shade,cleric,necro').split(','); // '-' = every hero
-  const { up, mastery, relics } = metaProfile(meta);
+  const { up, mastery } = metaProfile(meta);
   const o = optsFromFlags(flags), pick = o.pick, force = o.force, seed0 = +(flags.seed0 || 1000);
   const results = [];
   for (let i = 0; i < runs; i++) {
     const t0 = Date.now();
-    const r = runBot(Object.assign({ seed: seed0 + i * 7, n, cls: [cls[i % cls.length]].concat(cls), skill, up, pact: +(args[5] || 0), mastery, relics }, jobOpts(o, i, cls.length)));
+    const r = runBot(Object.assign({ seed: seed0 + i * 7, n, cls: [cls[i % cls.length]].concat(cls), skill, up, pact: +(args[5] || 0), mastery }, jobOpts(o, i, cls.length)));
     results.push(r);
     if (!flags.quiet) {
       console.log(`run ${i} ${cls[i % cls.length]}: ${r.victory ? 'WIN' : r.state} stratum ${r.stratum} time ${U.fmtTime(r.time)} lvl ${r.level} kills ${r.kills} relics ${r.relics} rooms ${r.rooms.visited}/${r.rooms.total} lightAtBoss [${r.lightAtBoss.join(' ')}] strata [${r.strata.map(U.fmtTime).join(' ')}] (${Date.now() - t0}ms)`);

@@ -82,7 +82,7 @@
     ED.Audio.music('camp');
   };
 
-  // A menu section (state 'hearth'): 'descend', 'upgrades', 'relics', 'chronicle' or 'heroes'.
+  // A menu section (state 'hearth'): 'descend', 'upgrades', 'chronicle' or 'heroes'.
   A.enterHearth = (tab) => {
     if (!A.hasProfile) { A.goHome(); return; }
     A.closeNet();
