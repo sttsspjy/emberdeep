@@ -19,8 +19,8 @@ North-star: a co-op browser roguelite where builds are chosen, not rolled. Rules
 - [x] Lantern burns only on rooms and flares
 - [x] Renderer speed work for Firefox
 - [x] Save code v4 and the "The Deep has changed" notice
-- [ ] Balance pass: classes, then global; sign-off with bots
-- [ ] Render review fixes
+- [x] Balance pass: classes, then global; signed off with bots (fresh-profile difficulty gap stays open)
+- [x] Render review fixes
 - [ ] Firefox speed check
 - [ ] PR to main
 - [ ] Your playtest of v3
