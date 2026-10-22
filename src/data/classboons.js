@@ -35,7 +35,7 @@
   card('knight', 'skill2', 2, 'k_s2_b', { name: 'Shield Orbit', icon: 'shieldgold', tag: 'Guard',
     desc: 'After you catch it, the shield orbits you for {orbit:s}, striking foes it passes for {orbitMul} of a strike (each once per 0.75 s) and destroying enemy shots it touches; each shot destroyed shortens the orbit by 0.75 s.',
     rider: 'Return to Sender: each shot the orbit destroys flies back as a shard at the nearest foe within 300 for {orbitReflect} of a strike.', mods: { orbit: 3.5, orbitMul: 0.15 }, up: { orbit: 0.5, orbitMul: 0.05 }, r3: { orbitReflect: 0.5 } });
-  card('knight', 'element', 1, 'k_el', { name: 'Oath of Ruin', icon: 'fang', forks: ['k_el_a', 'k_el_b'], plays: 'everything you hit bleeds; stack ailments, then cash them in.', desc: BLEED, mods: { bleedAll: 0.13, statusPow: 0.15 } });
+  card('knight', 'element', 1, 'k_el', { name: 'Oath of Ruin', icon: 'fang', forks: ['k_el_a', 'k_el_b'], plays: 'everything you hit bleeds; stack ailments, then cash them in.', desc: BLEED, mods: { bleedAll: 0.16, statusPow: 0.15 } });
   card('knight', 'element', 2, 'k_el_a', { name: 'Brand of Ruin', icon: 'eye', tag: 'Focus', coop: true,
     desc: '+{brand} damage to a foe for each ailment on it (up to 4), from any hero.',
     rider: 'Ruin Seal: Shield Charge and Shield Throw strikes seal foes for {seal:s}; Sealed counts as one more ailment for every hero (bosses too).', mods: { brand: 0.06 }, up: { brand: 0.01 }, r3: { seal: 4 } });
@@ -161,7 +161,7 @@
     desc: 'Sanctuary centres on you and moves with you, but deals 10% less. Damage taken inside is cut by a further {sanctDR}.',
     rider: 'Embolden: allies (not you) inside your aura deal +{auraDmg} damage.', mods: { aura: 1, s1Dmg: -0.1, sanctDR: 0.1 }, up: { sanctDR: 0.02 }, r3: { auraDmg: 0.1 } });
   card('cleric', 'skill2', 1, 'c_s2', { name: 'Hammer of Judgment', icon: 'hammer', forks: ['c_s2_a', 'c_s2_b'], plays: 'judge the pack, then the team cashes in.',
-    desc: 'Judgment: +{s2Dmg} damage, flies {s2Range} farther, Judged lasts {judgeDur:s} longer, recharges {s2Cdr} faster.', mods: { s2Dmg: 0.3, s2Range: 0.4, judgeDur: 2, s2Cdr: 0.167 } });
+    desc: 'Judgment: +{s2Dmg} damage, flies {s2Range} farther, Judged lasts {judgeDur:s} longer, recharges {s2Cdr} faster.', mods: { s2Dmg: 0.25, s2Range: 0.4, judgeDur: 1, s2Cdr: 0.167 } });
   card('cleric', 'skill2', 2, 'c_s2_a', { name: 'Twin Hammers', icon: 'twin', tag: 'Burst',
     desc: 'Judgment throws two hammers in a narrow V, each at {twinHammer}.[ Judgment deals +{s2Dmg}.]',
     rider: 'Second Flight: each hammer flies out once more after it returns (out, back, out, back), the second flight at {secondFlight} of a hit.', mods: { twinHammer: 0.55 }, up: { s2Dmg: 0.1 }, r3: { thirdLeg: 1, secondFlight: 0.25 } });
