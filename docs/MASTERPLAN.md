@@ -2,27 +2,25 @@
 
 North-star: a co-op browser roguelite where builds are chosen, not rolled. Rules and numbers: [GAME-DESIGN.md](GAME-DESIGN.md).
 
-## Rework (v2)
-- [x] Rename Emberdeep → Wickdeep, rewrite CLAUDE.md
-- [x] Paths: 6 disciplines, gates, keystones, duo boons, weapon evolutions
-- [x] Elements with stratum weaknesses/resistances (Burn, Freeze, Discharge, Bleed)
-- [x] Damage rework: lower enemy damage, no passive deflect, lifesteal only in Blood
-- [x] Second skill for every hero
-- [x] 3 starting heroes, 3 locked
-- [x] Bigger floors (12–14 rooms) with reward previews, rest sites, elite rooms
-- [x] New enemies and attack patterns, no untelegraphed teleports
-- [x] Balance pass with bots
-- [x] Dual code review (Opus + Sonnet)
-- [x] Review fixes: bugs and cleanup
-- [x] First playtest
-- [x] Sustain cap: no healing boon is a must-pick
-- [x] Build pacing: evolution needs ~8 path boons, fewer offers
-- [x] Lantern: rooms cost light; darkness brings elites, better loot and a hunting Gloom (flare or oil drives it off)
-- [x] UI redesign: bold, readable menus and HUD at any resolution; Q/E skills + key rebinding
-- [x] Visual feedback: impact splashes, hit reactions, animations; readable pickups
-- [x] Performance with crowded rooms at 1440p
-- [x] Balance: fast trash (2–4 hits), smooth power curve, paths within 8 points
-- [ ] Fresh profile wins 5–10% (bots win 2%)
-- [ ] Shade and Necromancer catch up with the other heroes
-- [x] PR to main (live on the site)
-- [ ] Your second playtest
+## Rework (v2): live on the site
+- [x] Paths with keystones and weapon evolutions, elements with stratum weaknesses
+- [x] Second skill per hero, 3 starting heroes and 3 unlocks
+- [x] Bigger floors with reward previews, rooms that cost lantern light, the Gloom
+- [x] New menus and HUD, key rebinding, effects and animations
+- [x] Fast trash, bot balance pass, first playtest
+
+## Overhaul (v3)
+- [x] Pixel art for everything (embedded CC0 and CC-BY packs, Credits screen)
+- [x] Mouse-only aim; skills land where the cursor is; gamepad right stick aims
+- [x] Tab character sheet: Build, Combat, Map
+- [x] New paths: Fire, Ice, Lightning, Poison, Holy, Shadow and General, with 15 duo boons
+- [x] Class routes: route card, Heavy or Swift and Burst or Guard forks, ranks at bosses
+- [x] No life steal: shields instead; Knight Shield Throw
+- [x] Lantern burns only on rooms and flares
+- [x] Renderer speed work for Firefox
+- [x] Save code v4 and the "The Deep has changed" notice
+- [x] Balance pass: classes, then global; signed off with bots (fresh-profile difficulty gap stays open)
+- [x] Render review fixes
+- [x] Firefox speed check
+- [x] PR to main
+- [ ] Your playtest of v3

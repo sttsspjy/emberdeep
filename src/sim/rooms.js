@@ -6,11 +6,11 @@
 
   // {action} tokens are replaced with the player's key bindings when the sign is drawn (ED.Input.fill); the sim never reads bindings.
   const SIGNS = [
-    'Hold {attack} to attack. Your hero aims for you.',
-    'Press {skill1} for your first skill and {skill2} for your second. {dash} dashes through danger.',
+    'Aim with {aim}. Hold {attack} to attack where you aim.',
+    '{skill1} and {skill2} cast your skills where you aim: some fly toward it, some land on it. {dash} dashes through danger.',
     'Clear a room to open its doors. The reward inside is shown on the door.',
     'Every new room costs lantern light (shown on its door). In the dark the Gloom hunts: press {flare} to flare it away.',
-    'The skull on your map marks the stratum boss. {map} shows the map.',
+    'The skull on your map marks the stratum boss. {map} opens your build, combat numbers and the map ({skill1} / {skill2} switch tabs).',
   ];
 
   // Regular foes of a biome that exist in the enemy table (rosters may name foes whose definitions land later).
@@ -25,6 +25,7 @@
       this.locked = true;
       this.enc = { kind: 'waves', waves: this.planWaves(room), wave: -1, t: ED.World.PACE.first };
       this.emit({ t: 'lock' });
+      for (const p of this.players.values()) if (!p.downed && !p.dead) this.onRoomLockBuild(p, room);
     } else if (room.type === 'boss') {
       this.locked = true;
       this.enc = { kind: 'boss', t: 2.4, spawned: false };
@@ -133,12 +134,15 @@
     const rs = this.roomState[this.roomId], room = this.room;
     rs.cleared = true;
     this.locked = false; this.enc = null;
+    for (const q of this.players.values()) q.mantleAmt = 0; // a Mantle shield is spent with the room
     const s = this.stratum, bonus = this.dread.gold;
     this.run.roomsCleared++;
     this.run.embers.rooms += Math.round((1 + Math.round(s / 2)) * bonus);
     const c = this.alivePlayers()[0] || D.center(room);
     this.dropGold(c.x, c.y, (3 + Math.round(1.5 * s)) * bonus);
-    if (this.rng.chance(0.3)) this.spawnPickup('heart', c.x, c.y, 1);
+    let heartCh = 0.36; // +10% per Forager rank in the party, at most 80%
+    for (const q of this.players.values()) heartCh += 0.1 * q.stats.forager;
+    if (this.rng.chance(Math.min(0.8, heartCh))) this.spawnPickup('heart', c.x, c.y, 1);
     if (room.reward) {
       const m = D.clearSpot(room, D.center(room).x, D.center(room).y);
       this.props.push({ id: U.uid(), kind: 'reward', x: m.x, y: m.y, item: this.darkReward(room.reward, m.x, m.y), group: U.uid(), state: 0 });
@@ -156,14 +160,16 @@
     if (this.bossTier === 3) this.run.lightlessBoss = true;
     if (![...this.players.values()].some(p => p.hitThisBoss)) this.run.flawlessBoss = true;
     for (const x of this.enemies) if (x !== e && x.hp > 0) { x.hp = 0; this.emit({ t: 'die', x: Math.round(x.x), y: Math.round(x.y), type: x.type, el: 0, r: x.r }); }
-    this.projs = this.projs.filter(p => p.team === 0);
-    this.zones = this.zones.filter(z => z.team === 0);
+    for (const q of this.projs) if (q.team !== 0) q.dead = true; // flagged, not refiltered: the kill may land inside the projectile/zone loops, which end by reassigning their own keep list
+    for (const z of this.zones) if (z.team !== 0) z.dead = true;
     this.boss = null; this.enc = null; this.locked = false;
     this.roomState[this.roomId].cleared = true;
     this.emit({ t: 'bossDown', type: e.type, x: Math.round(e.x), y: Math.round(e.y) });
     this.dropXp(e.x, e.y, e.def.xp * (1 + 0.3 * (s - 1)));
     this.dropGold(e.x, e.y, 15 + 6 * s);
     this.spawnPickup('heart', e.x, e.y, 1); this.spawnPickup('heart', e.x, e.y, 1);
+    for (const q of this.players.values()) q.mantleAmt = 0;
+    if (s === 1 || s === 2 || s === 4) for (const q of this.players.values()) this.grantOffer(q, { src: 'class' }); // fork at the first boss, its ranks at the second and fourth (downed heroes get it when they are back up)
     if (s >= ED.CONST.STRATA) {
       this.run.embers.victory = 60;
       this.endRun(true);
@@ -175,13 +181,16 @@
     this.props.push({ id: U.uid(), kind: 'portal', x: c.x, y: c.y - 60, state: 0 });
   };
 
+  // Generalists in the party: the first picks of a hoard or shop are non-element relics, one per Generalist.
+  W.generalists = function () { let n = 0; for (const q of this.players.values()) if (ED.isGeneralist(q.boons)) n++; return n; };
+
   // One relic per hero; each hero may claim one relic from a group.
   W.spawnRelicChoices = function (x, y, minRar) {
     const n = this.partySize() + (this.partySize() > 1 ? 0 : 1);
     const group = U.uid();
-    const taken = new Set();
+    const taken = new Set(), gens = this.generalists();
     for (let i = 0; i < n; i++) {
-      const id = this.rollRelic(minRar, taken);
+      const id = this.rollRelic(minRar, taken, null, i < gens);
       taken.add(id);
       this.props.push({ id: U.uid(), kind: 'relic', x: x + (i - (n - 1) / 2) * 56, y, item: id, group, state: 0 });
     }
@@ -195,7 +204,9 @@
     const id = () => U.uid();
     if (room.type === 'start') {
       if (this.tutorial && s === 1) {
-        SIGNS.forEach((txt, i) => props.push({ id: id(), kind: 'sign', x: c.x + (i - (SIGNS.length - 1) / 2) * 84, y: c.y + 58, text: txt, state: 0 }));
+        // Sign 0 (mouse aim) takes the centre slot, 50 px from the solo spawn; the rest fan out to both sides.
+        const SLOT = [2, 1, 3, 0, 4];
+        SIGNS.forEach((txt, i) => props.push({ id: id(), kind: 'sign', x: c.x + (SLOT[i] - (SIGNS.length - 1) / 2) * 84, y: c.y + 58, text: txt, state: 0 }));
       } else {
         props.push({ id: id(), kind: 'sign', x: c.x, y: c.y + 58, text: ED.biomeFor(s).blurb, state: 0 });
       }
@@ -211,9 +222,9 @@
       let favor = 0;
       for (const p of this.players.values()) favor = Math.max(favor, (p.meta.up && p.meta.up[ED.UPGRADE_IDX.favor]) || 0);
       const items = [];
-      const taken = new Set();
+      const taken = new Set(), gens = this.generalists();
       const nRelics = 2 + (favor >= 2 ? 1 : 0);
-      for (let i = 0; i < nRelics; i++) { const r = this.rollRelic('c', taken); taken.add(r); items.push({ type: 'relic', item: r }); }
+      for (let i = 0; i < nRelics; i++) { const r = this.rollRelic('c', taken, null, i < gens); taken.add(r); items.push({ type: 'relic', item: r }); }
       items.push({ type: s % 2 ? 'boon' : 'forge' }); // one build item per shop: epic boon on odd strata, forge on even
       items.push({ type: 'potion' });
       items.push({ type: 'oil' });
@@ -245,7 +256,7 @@
     return Math.max(5, Math.round(base / 5) * 5);
   };
 
-  const PER_HERO_REWARDS = new Set(['class', 'forge', 'epic', 'vigor']);
+  const PER_HERO_REWARDS = new Set(['boon', 'forge', 'epic', 'vigor']);
   const allClaimed = (w, group) => [...w.players.values()].every(q => q.dead || q.claimed[group]);
 
   W.interact = function (pid, propId) {
@@ -265,11 +276,11 @@
       }
       case 'reward': {
         const item = pr.item;
-        if (item.startsWith('boon:') || PER_HERO_REWARDS.has(item)) {
+        if (PER_HERO_REWARDS.has(item)) {
           // every hero claims once; the prop stays until all have
           if (p.claimed[pr.group]) { this.msgs.push({ to: pid, t: 'toast', text: 'You already claimed this reward.' }); return; }
           p.claimed[pr.group] = true;
-          if (item.startsWith('boon:')) this.grantOffer(p, { src: 'room', path: item.slice(5) });
+          if (item === 'boon') this.grantOffer(p, { src: 'room' });
           else if (item === 'vigor') { p.bonusHp += 12; this.recalc(p, false); this.healPlayer(p, p.maxHp * 0.2); this.sendBuild(p); }
           else this.grantOffer(p, { src: item });
           this.msgs.push({ to: pid, t: 'claimed', group: pr.group });
@@ -338,7 +349,7 @@
         this.gold -= pr.price; pr.state = 1;
         const roll = this.rng.next();
         const rar = roll < 0.12 ? 'e' : roll < 0.5 ? 'r' : 'c';
-        this.giveRelic(p, this.rollRelic(rar));
+        this.giveRelic(p, this.rollRelic(rar, null, p));
         this.emit({ t: 'gamble', x: pr.x, y: pr.y });
         break;
       }

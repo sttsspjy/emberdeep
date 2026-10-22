@@ -14,8 +14,7 @@
   const COMBAT_COUNT = [5, 5, 6, 6, 6, 6]; // normal combat rooms per stratum
   const ELITE_COUNT = [1, 1, 1, 2, 2, 2]; // elite combat rooms per stratum
   const EVENTS = ['fountain', 'altar', 'gamble', 'trial'];
-  const PATHS = ['pyre', 'rime', 'storm', 'steel', 'blood', 'spirit'];
-  const REWARD_ODDS = [['boon', 50], ['gold', 14], ['vigor', 13], ['forge', 5], ['oil', 10], ['class', 8]]; // normal combat reward weights
+  const REWARD_ODDS = [['boon', 50], ['gold', 19], ['vigor', 13], ['forge', 8], ['oil', 10]]; // normal combat reward weights
   const BOUND = 4; // grid cells span -BOUND..BOUND on both axes
   const MIN_BOSS_DIST = 4;
   const ATTEMPTS = 120;
@@ -99,7 +98,7 @@
     return { stratum, seed, rooms, start: 0, boss: boss.id };
   };
 
-  // Rewards are fixed per floor and shown before entry. Normal combat: boon:<path> (each path <= 2x), gold, vigor, forge, oil, class,
+  // Rewards are fixed per floor and shown before entry. Normal combat: boon (drawn from the claiming hero's own paths), gold, vigor, forge, oil,
   // each kind getting its REWARD_ODDS share of the floor's combat rooms (rounded by weighted draw on the remainders). Elite: relic, or epic at 25%.
   function assignRewards(rooms, stratum, seed) {
     const rng = U.RNG((seed ^ 0x5bd1e995) + stratum * 15485863);
@@ -114,13 +113,6 @@
     counts.forEach((c, i) => { for (let k = 0; k < c; k++) bag.push(REWARD_ODDS[i][0]); });
     rng.shuffle(bag);
     combat.forEach((r, i) => { r.reward = bag[i]; });
-    const used = {};
-    for (const r of combat) {
-      if (r.reward !== 'boon') continue;
-      const path = rng.weighted(PATHS, p => ((used[p] || 0) >= 2 ? 0 : (used[p] || 0) === 0 ? 3 : 1));
-      used[path] = (used[path] || 0) + 1;
-      r.reward = 'boon:' + path;
-    }
     elites.forEach((r) => { r.reward = rng.chance(0.25) ? 'epic' : 'relic'; });
   }
 

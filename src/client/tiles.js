@@ -1,26 +1,34 @@
 // Room pre-rendering: each room's floor, walls, hazards and decor are painted once into an offscreen canvas at the
-// current zoom, so a frame costs a single blit. A second half-resolution canvas holds the emissive details (lava, runes,
+// current zoom, so a frame costs a single blit. A second canvas holds the emissive details (lava, runes,
 // fungus, inlay, stars) that the renderer adds after lighting so bloom catches them. Palettes and decor change per stratum.
+// With the pixel-art atlas (ED.Atlas) rooms are built from recoloured tile art (paintArt); without it the procedural painter (paint) runs.
 (function (ED) {
   'use strict';
-  const U = ED.U, T = ED.CONST.TILE;
+  const U = ED.U, T = ED.CONST.TILE, Bmp = ED.Bmp;
   const Tl = ED.Tiles = { ms: 0, paints: 0, lastMs: 0 };
   const cache = new Map();
   let NOISE = null;
+  // Painted canvases are swapped for ImageBitmaps once ready (a bitmap keeps the canvas's .px); evicted entries release theirs.
+  const release = (e) => { e.dead = true; Bmp.free(e.canvas); Bmp.free(e.emis); Bmp.free(e.glowmap); Bmp.free(e.hz); };
   const LIFT = { ossuary: 0.55, glowmire: 0.55, rimefrost: 0, cinderforge: 0.55, sanctum: 0.5, abyss: 0.6 };
 
-  Tl.clear = () => cache.clear();
+  Tl.clear = () => { for (const e of cache.values()) release(e); cache.clear(); };
 
+  let lastRoom = null, lastScale = 0, lastArt = false, lastE = null; // memo of the previous lookup (several calls per frame)
   function entry(room, scale) {
-    const key = room.stratum + ':' + room.seed + ':' + scale.toFixed(3);
+    const art = artOn();
+    if (room === lastRoom && scale === lastScale && art === lastArt && lastE && !lastE.dead) return lastE;
+    const key = room.stratum + ':' + room.seed + ':' + scale.toFixed(3) + (art ? 'a' : '');
     let e = cache.get(key);
     if (!e) {
       const t0 = performance.now();
-      e = paint(room, scale);
+      e = art ? paintArt(room, scale) : paint(room, scale);
       Tl.lastMs = performance.now() - t0; Tl.ms += Tl.lastMs; Tl.paints++;
       cache.set(key, e);
-      if (cache.size > 4) cache.delete(cache.keys().next().value);
+      for (const k of ['canvas', 'emis', 'glowmap', 'hz']) { const cv = e[k]; if (cv) Bmp.from(cv, (b) => { if (e.dead) Bmp.free(b); else { b.px = cv.px; e[k] = b; } }); }
+      if (cache.size > 4) { const old = cache.keys().next().value; release(cache.get(old)); cache.delete(old); }
     }
+    lastRoom = room; lastScale = scale; lastArt = art; lastE = e;
     return e;
   }
   Tl.get = (room, scale) => entry(room, scale).canvas;
@@ -56,11 +64,11 @@
     cv.width = Math.ceil(room.w * T * scale); cv.height = Math.ceil(room.h * T * scale);
     const c = cv.getContext('2d');
     c.scale(scale, scale);
-    const es = scale * 0.5, ev = document.createElement('canvas');
+    const es = scale, ev = document.createElement('canvas');
     ev.width = Math.ceil(room.w * T * es); ev.height = Math.ceil(room.h * T * es); ev.px = es;
     const e = ev.getContext('2d');
     e.scale(es, es); e.globalCompositeOperation = 'lighter'; e.lineCap = 'round'; e.lineJoin = 'round';
-    const gs = scale * 0.25, gv = document.createElement('canvas');
+    const gs = scale * 0.5, gv = document.createElement('canvas');
     gv.width = Math.ceil(room.w * T * gs); gv.height = Math.ceil(room.h * T * gs); gv.px = gs;
     const g = gv.getContext('2d'); g.scale(gs, gs); g.globalCompositeOperation = 'lighter';
     const rng = U.RNG(room.seed ^ 0x7111e);
@@ -495,12 +503,616 @@
     c.restore(); e.restore();
   }
 
+  // =====================================================================================================================
+  // Pixel-art rooms (ED.Atlas): 1 art px = 2 world px. The room is painted at world resolution and every shape sits on the art grid. The stone of the 0x72 set is a
+  // 5-colour palette; each stratum recolours it once into a private sheet (floor, wall, door, torch, ... modes), so no pixel work happens per frame.
+  // =====================================================================================================================
+  const A = ED.Atlas, K = 2, AT = 16; // K: world px per art px, AT: art px per tile
+  const artOn = () => !!(A && A.ok && A.pages && A.pages.world && A.has('tile.floor.1') && A.has('tile.wall.face.mid'));
+  Tl.art = artOn;
+  const hashS = (a, b, n, s) => hash(a + (s & 0xffff), b + ((s >>> 16) & 0xffff) * 7, n); // per-room seeded hash in [0, 1)
+  const clamp8 = (v) => (v <= 0 ? 0 : v >= 255 ? 255 : Math.round(v));
+  const rgbOf = (hex) => U.hexToRgb(hex);
+  const mixA = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  const mulA = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+  const packA = (a) => ((255 << 24) | (clamp8(a[2]) << 16) | (clamp8(a[1]) << 8) | clamp8(a[0])) >>> 0; // little-endian RGBA, opaque
+  const hexA = (a) => U.rgbToHex(a[0], a[1], a[2]);
+  const lumOf = (r, g, b) => (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+  // The five stone colours of the 0x72 set (luminance of #222222 #483b3a #775c55 #aa8d7a #d3bfa9) and a piecewise-linear map from a stone pixel's luminance onto five target colours.
+  const STONE_L = [0.133, 0.253, 0.389, 0.58, 0.76];
+  function ramp5(stops) {
+    return (L) => {
+      if (L <= STONE_L[0]) return stops[0];
+      for (let i = 1; i < 5; i++) if (L <= STONE_L[i]) return mixA(stops[i - 1], stops[i], (L - STONE_L[i - 1]) / (STONE_L[i] - STONE_L[i - 1]));
+      return stops[4];
+    };
+  }
+  // Highlight colour of wall caps per stratum (mixed into the top stop).
+  const RIM = { ossuary: 'accent2', glowmire: 'accent', rimefrost: 'accent2', cinderforge: 'accent2', sanctum: 'accent', abyss: 'accent' };
+  const RIM_K = { ossuary: 0.35, glowmire: 0.3, rimefrost: 0.9, cinderforge: 0.3, sanctum: 0.55, abyss: 0.4 };
+  const ART_LIFT = { ossuary: 0.6, glowmire: 0.7, rimefrost: 0, cinderforge: 0.7, sanctum: 0.6, abyss: 1.0 }; // floor brightness boost (the lighting multiply only darkens)
+  // Per-stratum stone ramps: floor, wall (cap, brick, mortar, outline) and the flame ramp of torches.
+  const rampCache = new Map();
+  function rampsFor(biome) {
+    let o = rampCache.get(biome.id);
+    if (o) return o;
+    const P = biome.pal, lift = 1 + (ART_LIFT[biome.id] || 0);
+    const gr = rgbOf(P.grout), fa = rgbOf(P.floorA), fb = rgbOf(P.floorB), ws = rgbOf(P.wallShadow), wf = rgbOf(P.wallFace), wt = rgbOf(P.wallTop), li = rgbOf(P.light);
+    const rim = mixA(wt, rgbOf(P[RIM[biome.id]] || P.light), RIM_K[biome.id] || 0.3);
+    const fl = mulA(fa, lift);
+    o = {
+      floor: ramp5([mixA(mulA(gr, lift * 0.9), fl, 0.35), fl, mixA(fl, mulA(fb, lift), 0.5), mixA(fl, wt, 0.5), wt]),
+      wall: ramp5([ws, mixA(ws, wf, 0.6), mixA(wf, wt, 0.28), wt, rim]),
+      flame: ((fb) => [mulA(fb, 0.3), mulA(fb, 0.62), fb, mixA(fb, [255, 255, 255], 0.5), [255, 255, 255]])(biome.id === 'ossuary' || biome.id === 'cinderforge' ? li : mixA(rgbOf(P.accent), li, 0.3)), // warm strata keep their light colour; the cold ones a saturated flame
+    };
+    rampCache.set(biome.id, o);
+    return o;
+  }
+  // Pixel recolour modes: each takes a packed RGBA source pixel and returns the replacement (or the pixel itself).
+  function modeFn(cat, biome) {
+    const rp = rampsFor(biome), P = biome.pal, ramp = cat === 'floor' ? rp.floor : rp.wall;
+    const stone = (r, g, b) => Math.max(r, g, b) - Math.min(r, g, b) <= 56 && lumOf(r, g, b) <= 0.8;
+    const acc = rgbOf(P.accent);
+    return (px) => {
+      const r = px & 255, g = (px >>> 8) & 255, b = (px >>> 16) & 255;
+      if (cat === 'torch') {
+        const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+        if (r > b + 40 && mx - mn > 80) { const L = lumOf(r, g, b), q = L < 0.25 ? 0 : L < 0.45 ? 1 : L < 0.62 ? 2 : L < 0.82 ? 3 : 4; return packA(rp.flame[q]); } // flame pixels onto the stratum's light colour
+        return px;
+      }
+      if ((cat === 'goo' || cat === 'splash') && g > r + 25 && g > b - 10 && Math.max(r, g, b) - Math.min(r, g, b) > 50) { const L = lumOf(r, g, b); return packA(mixA(mulA(acc, 0.45), mixA(acc, [255, 255, 255], 0.4), Math.min(1, L * 1.25))); }
+      if (cat === 'splash') return 0; // only the slime of the sprite: the drip landing on the floor
+      if (cat === 'grate' && b > r + 20) { const L = lumOf(r, g, b); return packA(L < 0.3 ? [90, 28, 10] : [255, 122, 42]); } // sewer grate becomes a furnace vent
+      if (cat === 'gate') { const L = lumOf(r, g, b); if (Math.max(r, g, b) - Math.min(r, g, b) > 40 && b > r) return packA(mixA(rp.wall(0.58), rp.wall(0.76), 0.5)); if (L > 0.15) return packA(rp.wall(L * 1.1)); return px; }
+      if (cat === 'carpet') return carpetPx(px, r, g, b);
+      if (stone(r, g, b)) return packA(ramp(lumOf(r, g, b)));
+      return px;
+    };
+  }
+  const CARPET = [[14, 52, 58], [24, 88, 94], [36, 124, 128], [214, 172, 84], [255, 234, 150]]; // Sanctum runner: teal field, gold trim (fringe, shade, field, trim, bright trim)
+  function carpetPx(px, r, g, b) {
+    const L = lumOf(r, g, b);
+    return packA(CARPET[L < 0.27 ? 0 : L < 0.4 ? 1 : L < 0.55 ? 2 : L < 0.7 ? 3 : 4]);
+  }
+
+  // Frames of the recoloured world sheet: [mode, anim id].
+  const SHEET = [];
+  { const add = (cat, id) => SHEET.push([cat, id]);
+    for (let i = 1; i <= 8; i++) add('floor', 'tile.floor.' + i);
+    for (let i = 1; i <= 6; i++) add('floor', 'tile.dark.floor.' + i);
+    add('floor', 'tile.spikes');
+    for (const s of ['left', 'mid', 'right']) { add('wall', 'tile.wall.cap.' + s); add('wall', 'tile.wall.face.' + s); }
+    for (const s of ['left', 'right']) { add('wall', 'tile.wall.side.' + s); add('wall', 'tile.door.frame.' + s); }
+    for (const s of ['left', 'right']) { add('wall', 'tile.wall.outer.front.' + s); add('wall', 'tile.wall.outer.top.' + s); }
+    add('wall', 'tile.wall.hole.1'); add('wall', 'tile.wall.hole.2'); add('goo', 'tile.wall.goo'); add('splash', 'tile.wall.goo.base'); add('grate', 'tile.wall.grate');
+    add('wall', 'tile.door.leaf.closed'); add('wall', 'tile.door.leaf.open');
+    add('gate', 'tile.gate.bars'); add('gate', 'tile.gate.bars.side');
+    for (let i = 1; i <= 3; i++) add('wall', 'tile.fountain.top.' + i);
+    for (const c of ['red', 'blue']) add('wall', 'tile.fountain.mid.' + c);
+    for (const c of ['red', 'blue', 'green', 'yellow']) add('wall', 'deco.banner.' + c);
+    add('torch', 'tile.torch.wall'); add('torch', 'tile.torch.floor');
+    for (const s of ['run.fill', 'run.top', 'run.bot']) add('carpet', 'tile.carpet.red.' + s);
+    add('wall', 'prop.column');
+  }
+  let wpx = null; // pixels of the world page, read once
+  function worldPixels() {
+    if (wpx) return wpx;
+    const pg = A.pages.world, w = pg.width, h = pg.height, cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    const g = cv.getContext('2d', { willReadFrequently: true }); g.drawImage(pg, 0, 0);
+    wpx = { w, h, px: new Uint32Array(g.getImageData(0, 0, w, h).data.buffer) };
+    return wpx;
+  }
+  const sheets = new Map();
+  // Recoloured frames of one stratum packed into a canvas: { src, rects: { id: [{ x, y, w, h, ox, oy }] } } (src becomes an ImageBitmap once ready).
+  function sheetFor(biome) {
+    let sh = sheets.get(biome.id);
+    if (sh) return sh;
+    const t0 = performance.now(), wp = worldPixels(), SW = 512, rects = {};
+    let x = 0, y = 0, rowH = 0;
+    const items = [];
+    for (const [cat, id] of SHEET) {
+      const r = A.anim(id); if (!r) continue;
+      rects[id] = [];
+      for (let i = 0; i < r.n; i++) {
+        const f = r.f[i]; if (x + f.w + 1 > SW) { x = 0; y += rowH + 1; rowH = 0; }
+        const q = { x, y, w: f.w, h: f.h, ox: f.ox, oy: f.oy }; rects[id].push(q); items.push([cat, f, q]);
+        x += f.w + 1; rowH = Math.max(rowH, f.h);
+      }
+    }
+    const SH = y + rowH + 1, cv = document.createElement('canvas'); cv.width = SW; cv.height = SH;
+    const g = cv.getContext('2d'), img = g.createImageData(SW, SH), out = new Uint32Array(img.data.buffer), fns = {};
+    for (const [cat, f, q] of items) {
+      const fn = fns[cat] || (fns[cat] = modeFn(cat, biome));
+      for (let yy = 0; yy < f.h; yy++) for (let xx = 0; xx < f.w; xx++) {
+        const px = wp.px[(f.y + yy) * wp.w + f.x + xx];
+        if ((px >>> 24) === 0) continue;
+        out[(q.y + yy) * SW + q.x + xx] = fn(px);
+      }
+    }
+    g.putImageData(img, 0, 0);
+    sh = { src: cv, rects };
+    sheets.set(biome.id, sh);
+    Bmp.from(cv, (b) => { if (sheets.get(biome.id) === sh) sh.src = b; else Bmp.free(b); });
+    Tl.sheetMs = (Tl.sheetMs || 0) + performance.now() - t0;
+    return sh;
+  }
+  // Draws frame i of `id` from the sheet with the logical frame's top-left at art px (ax, ay); cols [c0, c1) of the logical frame only when given (column c0 lands on ax).
+  // Rows [r0, r1) of the logical frame likewise (row r0 lands on ay).
+  function sblit(g, sh, id, i, ax, ay, c0, c1, r0, r1) {
+    const q = sh.rects[id]; if (!q) return false;
+    const m = q[i | 0]; if (!m || !m.w) return false;
+    let sx = m.x, sw = m.w, dx = m.ox, sy = m.y, sh_ = m.h, dy = m.oy;
+    if (c0 !== undefined) { const a = Math.max(dx, c0), b = Math.min(dx + sw, c1); if (b <= a) return false; sx += a - dx; sw = b - a; dx = a - c0; }
+    if (r0 !== undefined) { const a = Math.max(dy, r0), b = Math.min(dy + sh_, r1); if (b <= a) return false; sy += a - dy; sh_ = b - a; dy = a - r0; }
+    g.drawImage(sh.src, sx, sy, sw, sh_, (ax + dx) * K, (ay + dy) * K, sw * K, sh_ * K);
+    return true;
+  }
+
+  // ---------- decor catalogue: kind -> [anim id prefix, variants, tint, tall] ----------
+  // tall: drawn y-sorted with the entities (Tl.statics); the rest is baked flat under them. Kinds not listed are procedural (see procDecor).
+  const DECOR = {
+    bones: ['deco.bones.', 5, 'bone', false], skull: ['deco.skull', 0, '', false], moss: ['deco.moss.', 3, 'moss', false], candle: ['deco.candle.', 4, '', true], urn: ['deco.urn.', 6, '', true],
+    mushroom: ['deco.mushroom.', 4, 'glow', true], root: ['deco.root.', 2, 'root', false], puddle: ['deco.puddle.', 4, 'puddle', false], crystal: ['deco.crystal.', 3, '', true],
+    shard: ['deco.shard.', 3, 'shard', true], pillarstub: ['deco.pillarstub', 0, 'stone', true], frozenbones: ['deco.bones.', 5, 'ice', false], chain: ['deco.chain', 0, '', false],
+    anvil: ['prop.anvil', 0, 'iron', true], grate: ['deco.grate', 0, '', false], coral: ['deco.coral.', 2, '', true], seaweed: ['deco.seaweed.', 2, '', true], shell: ['deco.shell.', 3, '', false],
+  };
+  const PUDDLE_V = { glowmire: [1, 2], sanctum: [2], ossuary: [3, 3], abyss: [2] }; // variants that suit the stratum (others: all)
+  // Tinted copies of decor sprites: luminance onto a ramp, dark outlines kept. key -> stops (hex list, dark to light).
+  function tintStops(kind, biome) {
+    const P = biome.pal, a = P.accent, a2 = P.accent2;
+    switch (kind) {
+      case 'bone': return [U.shade(a2, -0.7), U.shade(a2, -0.35), a2, U.shade(a2, 0.45)];
+      case 'ice': return ['#5a7a96', '#9fc4dc', '#dff3ff', '#ffffff'];
+      case 'moss': return [U.shade(a, -0.7), U.shade(a, -0.4), a, U.shade(a, 0.4)];
+      case 'root': return [U.shade(a, -0.8), U.shade(a, -0.6), U.shade(a2, -0.4), a];
+      case 'glow': return biome.id === 'glowmire' ? [U.shade(a, -0.65), U.shade(a, -0.3), a, U.shade(a, 0.55)] : null;
+      case 'shard': return ['#2a1850', '#6a42b8', a, U.shade(a, 0.6)];
+      case 'iron': return ['#171a26', '#3d465e', '#69748f', '#9aa5be'];
+      case 'stone': { const rp = rampsFor(biome); return [hexA(rp.wall(0.25)), hexA(rp.wall(0.39)), hexA(rp.wall(0.58)), hexA(rp.wall(0.76))]; }
+      case 'puddle': return biome.id === 'abyss' ? ['#1a0f33', '#3a2a66', a, U.shade(a, 0.5)] : null;
+      default: return null;
+    }
+  }
+  const tintDone = new Set();
+  function tintVariant(id, kind, biome, only) {
+    const key = 'pal:w' + biome.id + kind + (only ? 'o' : '');
+    if (tintDone.has(id + key)) return key;
+    const stops = tintStops(kind, biome); if (!stops) return '';
+    const ok = A.variant(id, key, (pal) => tintMap(pal, stops, only));
+    if (ok) tintDone.add(id + key);
+    return ok ? key : '';
+  }
+  // Palette map of the hexes in `pal` (only those in `only` when given) onto the ramp `stops` by luminance; outlines stay.
+  function tintMap(pal, stops, only) {
+    const rgbs = stops.map(rgbOf), m = {};
+    for (const hex of pal) {
+      if (only && only.indexOf(hex) < 0) continue;
+      const c = rgbOf(hex), L = lumOf(c[0], c[1], c[2]);
+      if (L < 0.17) continue; // outline stays
+      const q = Math.min(1, Math.max(0, (L - 0.17) / 0.78)) * (rgbs.length - 1), i = Math.min(rgbs.length - 2, Math.floor(q));
+      m[hex] = hexA(mixA(rgbs[i], rgbs[i + 1], q - i));
+    }
+    return m;
+  }
+  // Atlas variant key of sprite `id` recoloured onto the stratum's wall stone ramp (only the palette hexes in `only` when given); '' while the atlas cannot build it. Built once per sprite and stratum.
+  Tl.stoneKey = (id, biome, only) => tintVariant(id, 'stone', biome, only);
+  // The same recolour as a palette map for Atlas.variant (props that also recolour other parts of their palette).
+  Tl.stoneMap = (pal, biome, only) => tintMap(pal, tintStops('stone', biome), only);
+  const snap = (v) => Math.round(v / K) * K; // world px -> the art grid
+
+  // Random-walk path of n art px from (x, y): mostly horizontal, used for cracks and lava seams.
+  function walk(rr, x, y, n) {
+    const out = [[x, y]];
+    for (let i = 1; i < n; i++) { const r = rr.next(); if (r < 0.5) x++; else if (r < 0.7) { x++; y++; } else if (r < 0.9) { x++; y--; } else y += rr.next() < 0.5 ? 1 : -1; out.push([x, y]); }
+    return out;
+  }
+
+  // ---------- hazard pools: 4 animated 16x16 frames per cell, drawn per frame (lava, poison, water, ice, void) ----------
+  const HZ_NF = 4;
+  // Smooth value noise in [0, 1) over a precomputed lattice (w lattice columns, h rows of hash values).
+  function noiseTab(w, h, n) { const t = new Float32Array(w * h); for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) t[j * w + i] = hash(i, j, n); return { t, w }; }
+  function hzNoise(tab, x, y) {
+    const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), i = yi * tab.w + xi, t = tab.t, a = t[i], b = t[i + 1], c = t[i + tab.w], d = t[i + tab.w + 1];
+    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+  }
+  const HZ_RAMP = {
+    lava: ['#9c2c08', '#d8480c', '#f58a22', '#ffcf5a'], poison: ['#1a361a', '#24502a', '#356f33', '#79cf48'], water: ['#0a2f42', '#0f4a60', '#16607a', '#2b88a4'],
+    ice: ['#bfe0f1', '#cdeaf8', '#e4f5fd', '#f2fbff'], void: ['#05010a', '#0a0222', '#12062e', '#1c0a44'],
+  };
+  const pk = (hex) => packA(rgbOf(hex));
+  // Packs frames for the hazard cells [[tx, ty, edgeMask]] into a canvas of HZ_NF columns; mask bits: 1 top, 2 right, 4 bottom, 8 left open (non-hazard side).
+  function buildHazard(room, biome, cells, s) {
+    const kind = biome.hazard, n = cells.length;
+    const cv = document.createElement('canvas'); cv.width = HZ_NF * AT; cv.height = Math.max(1, n * AT);
+    const g = cv.getContext('2d'), img = g.createImageData(cv.width, cv.height), out = new Uint32Array(img.data.buffer), W = cv.width;
+    const ramp = (HZ_RAMP[kind] || HZ_RAMP.lava).map(pk), dkEdge = { lava: '#1a0a05', poison: '#0c1c0e', water: '#052330', ice: '#6fa6c6', void: '#03000a' }[kind], rim1 = { lava: '#46200e', poison: '#10230f', water: '#0c3c52', ice: '#f4fcff', void: '#14083a' }[kind];
+    const edgeC = pk(dkEdge), rimC = pk(rim1), crust = [pk('#2a0f08'), pk('#3a160b'), pk('#7a3410')];
+    const sd = 91 + (s & 15), S1 = kind === 'water' ? 0.17 : 0.075, bub = [];
+    const tab1 = noiseTab(Math.ceil(room.w * AT * S1) + 3, Math.ceil(room.h * AT * S1) + 3, sd), tab2 = noiseTab(Math.ceil(room.w * AT * 0.18 + 17) + 3, Math.ceil(room.h * AT * 0.18 + 5) + 3, 92);
+    const nq = new Float32Array(AT * AT);
+    cells.forEach(([tx, ty, mask], ci) => {
+      let thr0 = 0.64; // lava: crust above this noise level; raised per cell so at least ~40% of every cell stays molten
+      if (kind === 'lava') { for (let py = 0; py < AT; py++) for (let px = 0; px < AT; px++) nq[py * AT + px] = hzNoise(tab1, (tx * AT + px) * S1, (ty * AT + py) * S1); nq.sort(); thr0 = Math.max(thr0, nq[(AT * AT * 0.42) | 0] + 0.03); }
+      if (kind === 'poison') { bub.length = 0; for (let k = 0; k < 2; k++) bub.push([3 + Math.floor(hash(tx, ty, 200 + k) * 10), 3 + Math.floor(hash(tx, ty, 210 + k) * 10), Math.floor(hash(tx, ty, 220 + k) * 4)]); }
+      for (let py = 0; py < AT; py++) for (let px = 0; px < AT; px++) {
+        const gx = tx * AT + px, gy = ty * AT + py;
+        let d = 99;
+        if (mask & 1) d = Math.min(d, py); if (mask & 4) d = Math.min(d, AT - 1 - py); if (mask & 8) d = Math.min(d, px); if (mask & 2) d = Math.min(d, AT - 1 - px);
+        const n1 = hzNoise(tab1, gx * S1, gy * S1), n2 = hzNoise(tab2, gx * 0.18 + 17, gy * 0.18 + 5), hs = hash(gx, gy, 93), up = kind === 'lava' ? hzNoise(tab1, gx * S1, Math.max(0, gy - 1) * S1) : 0;
+        for (let f = 0; f < HZ_NF; f++) {
+          let c;
+          if (d === 0) c = edgeC;
+          else if (kind === 'lava') { // dark crust plates floating on molten rock; the crust edge breathes
+            const thr = thr0 + 0.022 * Math.sin(f * 1.5708 + n2 * 6.28), v = thr - n1;
+            if (v < 0) c = up <= thr ? crust[2] : (hs > 0.8 ? crust[1] : crust[0]);
+            else { c = v < 0.05 ? pk('#f59a2a') : v < 0.15 ? pk('#dd5f14') : pk('#b0360b'); if (hs > 0.992 && (f + (hs * 400 | 0)) % HZ_NF === 0) c = pk('#ffe0a0'); }
+          } else if (kind === 'poison') { // murky pool with algae and rising bubbles
+            if (d === 1) c = rimC;
+            else {
+              c = n1 < 0.45 ? ramp[0] : n1 < 0.65 ? ramp[1] : ramp[2]; if (n2 > 0.8 && n1 > 0.5) c = pk('#5da446');
+              for (const [bx, by, ph] of bub) { const dx = px - bx, dy = py - by, q = (f + ph) % 4; if (q === 1 && !dx && !dy) c = pk('#9ad85a'); else if (q === 2 && ((Math.abs(dx) + Math.abs(dy)) === 1)) c = pk('#7fc24a'); else if (q === 2 && !dx && !dy) c = pk('#d8ffa8'); else if (q === 3 && !dx && !dy) c = pk('#ffffff'); }
+            }
+          } else if (kind === 'water') {
+            if (d === 1) c = rimC;
+            else { const wv = Math.sin(gx * 0.5 + gy * 0.85 + f * 1.571 + n1 * 3); c = wv > 0.94 ? pk('#8be8f0') : wv > 0.78 ? ramp[3] : ramp[Math.min(2, Math.floor(n2 * 3))]; }
+          } else if (kind === 'ice') { // frosted glaze: soft patches, hairline cracks, an occasional glint
+            if (d === 1) c = rimC;
+            else {
+              c = n1 < 0.4 ? ramp[0] : n1 > 0.68 ? ramp[2] : ramp[1];
+              if (Math.abs(n2 - 0.5) < 0.018) c = pk('#8fc0da');
+              else if (hs > 0.992 && (f + (hs * 400 | 0)) % HZ_NF === 0) c = pk('#ffffff');
+            }
+          } else { // void: faint nebula that drifts slowly, twinkling stars
+            if (d === 1) c = rimC;
+            else {
+              const shift = 0.02 * Math.sin(f * 1.5708 + n2 * 6.28), v = n1 + shift;
+              c = v < 0.5 ? ramp[0] : v < 0.68 ? ramp[1] : v < 0.82 ? ramp[2] : ramp[3];
+              if (hs > 0.987) c = ((f + (hs * 700 | 0)) % HZ_NF < 2) ? pk('#c9b0ff') : pk('#6a50a8'); else if (hs < 0.002) c = pk('#ffffff');
+            }
+          }
+          out[(ci * AT + py) * W + f * AT + px] = c;
+        }
+      }
+    });
+    g.putImageData(img, 0, 0);
+    return cv;
+  }
+
+  // ---------- the room ----------
+  function paintArt(room, scale) {
+    const biome = ED.biomeFor(room.stratum), P = biome.pal, bid = biome.id, W = room.w, H = room.h, s = room.seed | 0, rp = rampsFor(biome), sh = sheetFor(biome), tiles = room.tiles;
+    const mk = (px) => { const cv = document.createElement('canvas'); cv.width = Math.ceil(W * T * px); cv.height = Math.ceil(H * T * px); cv.px = px; return cv; };
+    const cv = mk(scale), g = cv.getContext('2d'); g.scale(scale, scale); g.imageSmoothingEnabled = false;
+    const ev = mk(scale), e = ev.getContext('2d'); e.scale(scale, scale); e.globalCompositeOperation = 'lighter'; e.imageSmoothingEnabled = false;
+    const gv = mk(scale * 0.5), gm = gv.getContext('2d'); gm.scale(scale * 0.5, scale * 0.5); gm.globalCompositeOperation = 'lighter';
+    const out = { canvas: cv, emis: ev, glowmap: gv, art: true, statics: [], hz: null, hzCells: [], spikes: [], fountains: [], doorArt: {} };
+    const fill = (c, ax, ay, aw, ah, col) => { c.fillStyle = col; c.fillRect(ax * K, ay * K, aw * K, ah * K); };
+    const adraw = (c, id, i, x, y, o) => { A.draw(c, id, i, x, y, o); c.imageSmoothingEnabled = false; }; // Atlas.draw leaves smoothing on
+    const T_ = (x, y) => (x < 0 || y < 0 || x >= W || y >= H ? 1 : tiles[y * W + x]);
+    const isM = (x, y) => { if (y >= H) return false; if (x < 0 || y < 0 || x >= W) return true; const t = tiles[y * W + x]; return t === 1 || t === 2; };
+    const faceAt = (x, y) => isM(x, y) && !isM(x, y + 1);
+    const colArt = !!sh.rects['prop.column'];
+    const isCol = (x, y) => colArt && T_(x, y) === 2 && !isM(x - 1, y) && !isM(x + 1, y) && !isM(x, y - 1) && !isM(x, y + 1);
+    const isW = (x, y) => isM(x, y) && !isCol(x, y); // wall mass that casts the soft floor bands (columns cast their own blob)
+    const ao = U.shade(P.wallShadow, -0.5), rr = U.RNG(s ^ 0x7111e);
+    const glowAt = (c, x, y, r, col, a) => { c.globalAlpha = a; c.drawImage(ED.Render.glowSprite(col), x - r, y - r, r * 2, r * 2); c.globalAlpha = 1; };
+
+    // ---- floor ----
+    const dark = bid === 'abyss', nv = dark ? 6 : 8, fbase = dark ? 'tile.dark.floor.' : 'tile.floor.';
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const t = tiles[y * W + x]; if (t !== 0 && t !== 4 && !isCol(x, y)) continue; // a column stands on floor
+      const r = hashS(x, y, 1, s), vv = hashS(x, y, 5, s);
+      sblit(g, sh, fbase + (r < 0.86 ? 1 : 2 + Math.floor((r - 0.86) / 0.14 * (nv - 1)) % (nv - 1)), 0, x * AT, y * AT);
+      if (vv < 0.3) fill(g, x * AT, y * AT, AT, AT, 'rgba(0,0,0,' + (0.04 + vv * 0.2).toFixed(3) + ')'); // per-tile tone drift so the grid never reads as one flat sheet
+      else if (vv > 0.88) fill(g, x * AT, y * AT, AT, AT, 'rgba(255,255,255,' + (0.03 + (vv - 0.88) * 0.3).toFixed(3) + ')');
+    }
+    // Sanctum runner: three rows of carpet along the door axis, trim on its long edges
+    if (bid === 'sanctum') {
+      const cy = (H >> 1) + 1;
+      for (let x = 1; x <= W - 2; x++) for (let k = -1; k <= 1; k++) if (T_(x, cy + k) === 0 || isCol(x, cy + k)) sblit(g, sh, 'tile.carpet.red' + (k < 0 ? '.run.top' : k > 0 ? '.run.bot' : '.run.fill'), 0, x * AT, (cy + k) * AT);
+    }
+    // ---- chasm: far wall face on the top row, black below ----
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (tiles[y * W + x] !== 3) continue;
+      const top = T_(x, y - 1) !== 3;
+      fill(g, x * AT, y * AT, AT, AT, P.chasm);
+      if (top) { sblit(g, sh, 'tile.wall.face.mid', 0, x * AT, y * AT); fill(g, x * AT, y * AT, AT, AT, 'rgba(0,0,0,0.5)'); }
+      else if (hashS(x, y, 8, s) < 0.3) fill(g, x * AT + Math.floor(hashS(x, y, 11, s) * 15), y * AT + Math.floor(hashS(x, y, 12, s) * 15), 1, 1, bid === 'cinderforge' ? 'rgba(255,120,50,0.35)' : bid === 'abyss' ? 'rgba(200,170,255,0.3)' : 'rgba(255,255,255,0.08)'); // faint specks keep a pit from reading as a flat hole
+      const gc = { cinderforge: '#ff4a1a', abyss: '#7a3aff', sanctum: '#0a6a8a', glowmire: '#2a8a6a' }[bid];
+      if (gc) glowAt(gm, (x + 0.5) * T, (y + 0.65) * T, 22, gc, 0.24 + hashS(x, y, 9, s) * 0.12);
+      for (const [dx, dy, ex, ey, ew, eh] of [[0, 1, 0, 15, 16, 1], [-1, 0, 0, 0, 1, 16], [1, 0, 15, 0, 1, 16]]) if (T_(x + dx, y + dy) !== 3) { fill(g, x * AT + ex, y * AT + ey, ew, eh, 'rgba(0,0,0,0.85)'); }
+    }
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { // lit edge of the floor where it meets a pit
+      if (tiles[y * W + x] !== 0 && tiles[y * W + x] !== 4) continue;
+      if (T_(x, y - 1) === 3) fill(g, x * AT, y * AT, AT, 1, 'rgba(255,255,255,0.16)');
+      if (T_(x - 1, y) === 3) fill(g, x * AT, y * AT, 1, AT, 'rgba(255,255,255,0.1)');
+      if (T_(x + 1, y) === 3) fill(g, x * AT + 15, y * AT, 1, AT, 'rgba(255,255,255,0.1)');
+    }
+    // ---- hazards: pool frames are drawn per frame; the floor tile underneath stays baked ----
+    if (biome.hazard === 'spikes') { for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (tiles[y * W + x] === 4) out.spikes.push([x * T, y * T]); }
+    else {
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (tiles[y * W + x] === 4) out.hzCells.push([x, y, (T_(x, y - 1) !== 4 ? 1 : 0) | (T_(x + 1, y) !== 4 ? 2 : 0) | (T_(x, y + 1) !== 4 ? 4 : 0) | (T_(x - 1, y) !== 4 ? 8 : 0)]);
+      if (out.hzCells.length) out.hz = buildHazard(room, biome, out.hzCells, s);
+      for (const [x, y] of out.hzCells) { // glowing pools light the buffer under entities standing on them
+        if (biome.hazard === 'lava') { gm.fillStyle = 'rgba(255,110,25,0.55)'; gm.fillRect(x * T, y * T, T, T); }
+        else if (biome.hazard === 'poison') glowAt(gm, (x + 0.5) * T, (y + 0.5) * T, 22, '#7ad44a', 0.26);
+        else if (biome.hazard === 'void') glowAt(gm, (x + 0.5) * T, (y + 0.5) * T, 20, '#a85aff', 0.4);
+      }
+    }
+    // ---- decor ----
+    let di = 0;
+    for (const d of room.decor) {
+      di++;
+      const wx = snap(d.x * T), wy = snap(d.y * T), ax = wx / K, ay = wy / K, spec = DECOR[d.k];
+      if (!spec) { procDecor(d.k, ax, ay, d.v, U.RNG(s ^ (di * 7919))); continue; }
+      if (d.k === 'pillarstub') { out.statics.push({ k: 'stub', x: wx, y: wy, key: wy, h: 0 }); continue; }
+      let n = spec[1], v = n ? Math.min(n - 1, Math.floor(d.v * n)) : 0;
+      if (spec[0] === 'deco.puddle.' && PUDDLE_V[bid]) { const pv = PUDDLE_V[bid]; v = pv[Math.floor(d.v * pv.length) % pv.length]; }
+      const id = n ? spec[0] + v : spec[0];
+      if (!A.has(id)) continue;
+      const vk = spec[2] ? tintVariant(id, spec[2], biome) : '';
+      if (spec[3]) { out.statics.push({ k: 'deco', id, vk, x: wx, y: wy, key: wy, h: 0 }); }
+      else if (d.k === 'chain') { // lying chain: the upright sprite turned 90 degrees
+        g.save(); g.translate(wx, wy); g.rotate(Math.PI / 2); adraw(g, id, 0, 0, 0, {}); g.restore();
+      } else adraw(g, id, 0, wx, wy, vk ? { variant: vk } : undefined);
+      if (d.k === 'candle') glowAt(e, wx, wy - 14, 9, '#ffb35c', 0.7);
+      else if (d.k === 'mushroom') glowAt(e, wx, wy - 8, 15, bid === 'glowmire' ? P.accent : P.accent2, 0.5);
+      else if (d.k === 'crystal') glowAt(e, wx, wy - 10, 14, P.accent, 0.45);
+      else if (d.k === 'shard') glowAt(e, wx, wy - 8, 12, '#b78cff', 0.4);
+      else if (d.k === 'grate') { glowAt(e, wx, wy - 4, 16, '#ff7a2a', 0.4); e.fillStyle = 'rgba(255,110,30,0.5)'; e.fillRect(wx - 6, wy - 8, 12, 6); }
+    }
+    function procDecor(k, ax, ay, v, rg) {
+      const dot = (c, x, y, w, h, col) => fill(c, x, y, w || 1, h || 1, col);
+      switch (k) {
+        case 'crack': { const p = walk(rg, ax - 6, ay - 1, 9 + Math.floor(v * 5)); for (const [x, y] of p) { dot(g, x, y, 1, 1, 'rgba(0,0,0,0.5)'); dot(g, x, y + 1, 1, 1, 'rgba(255,255,255,0.06)'); } break; }
+        case 'lavacrack': case 'voidcrack': {
+          const lava = k === 'lavacrack', p = walk(rg, ax - 7, ay - 1, 12 + Math.floor(v * 4)), c1 = lava ? '#ff7a2a' : '#c98bff', c2 = lava ? '#ffd36b' : '#f0d8ff';
+          p.forEach(([x, y], i) => { dot(g, x, y - 1, 1, 3, lava ? 'rgba(15,4,2,0.8)' : 'rgba(8,0,20,0.8)'); });
+          p.forEach(([x, y], i) => { dot(g, x, y, 1, 1, i % 3 === 1 ? c2 : c1); dot(e, x, y, 1, 1, lava ? 'rgba(255,140,50,0.8)' : 'rgba(210,140,255,0.8)'); });
+          glowAt(e, ax * K, ay * K, 16, lava ? '#ff6a2a' : '#b78cff', 0.32); break;
+        }
+        case 'cinders': {
+          for (const [dx, dy, w] of [[-3, -1, 7], [-4, 0, 9], [-3, 1, 7]]) dot(g, ax + dx, ay + dy, w, 1, 'rgba(30,20,16,0.5)');
+          for (let i = 0; i < 6; i++) { const x = ax - 4 + Math.floor(rg.next() * 9), y = ay - 1 + Math.floor(rg.next() * 3); dot(g, x, y, 1, 1, '#ff8a3a'); dot(e, x, y, 1, 1, 'rgba(255,150,60,0.85)'); }
+          glowAt(e, ax * K, ay * K, 12, '#ff8a3a', 0.25); break;
+        }
+        case 'glowcap': {
+          const col = P.accent2; dot(g, ax, ay - 1, 1, 2, '#d8d0c0'); dot(g, ax - 2, ay - 3, 5, 2, col); dot(g, ax - 1, ay - 4, 3, 1, col); dot(g, ax - 1, ay - 3, 1, 1, U.shade(col, 0.5));
+          dot(e, ax - 2, ay - 3, 5, 2, U.rgba(col, 0.7)); glowAt(e, ax * K, (ay - 3) * K, 15, col, 0.55); break;
+        }
+        case 'snow': {
+          for (const [dx, dy, w] of [[-5, 0, 11], [-4, -1, 9], [-3, 1, 7]]) dot(g, ax + dx, ay + dy, w, 1, dy === 1 ? 'rgba(70,110,150,0.4)' : dy === 0 ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.95)'); break;
+        }
+        case 'goldtile': {
+          const gc = '#e8c66b'; dot(g, ax - 6, ay - 6, 12, 12, 'rgba(30,20,6,0.3)');
+          for (let i = 0; i < 12; i++) { dot(g, ax - 6 + i, ay - 6, 1, 1, gc); dot(g, ax - 6 + i, ay + 5, 1, 1, gc); dot(g, ax - 6, ay - 6 + i, 1, 1, gc); dot(g, ax + 5, ay - 6 + i, 1, 1, gc); }
+          for (let i = 0; i < 6; i++) { dot(g, ax - 1 - i, ay - 6 + i + 0, 1, 1, 'rgba(255,230,140,0.8)'); dot(g, ax + i, ay - 6 + i, 1, 1, 'rgba(255,230,140,0.8)'); dot(g, ax - 6 + i, ay + i, 1, 1, 'rgba(255,230,140,0.8)'); dot(g, ax + 5 - i, ay + i, 1, 1, 'rgba(255,230,140,0.8)'); }
+          dot(g, ax - 1, ay - 1, 2, 2, '#fff0a8'); dot(e, ax - 6, ay - 6, 12, 12, 'rgba(255,214,110,0.12)'); glowAt(e, ax * K, ay * K, 14, '#ffd36b', 0.25); break;
+        }
+        case 'rune': {
+          const c1 = U.rgba(P.accent, 0.5), pts = [], vr = Math.floor(v * 3); // three glyph variants: bar, cross, diagonals
+          for (let a = 0; a < 24; a++) { const th = a / 24 * Math.PI * 2; pts.push([Math.round(ax + Math.cos(th) * 5), Math.round(ay - 1 + Math.sin(th) * 4)]); }
+          for (const [x, y] of pts) { dot(g, x, y, 1, 1, c1); dot(e, x, y, 1, 1, U.rgba(P.accent, 0.55)); }
+          for (let i = -3; i <= 3; i++) {
+            const pp = vr === 0 ? [[ax, ay - 1 + i]] : vr === 1 ? [[ax, ay - 1 + i], [ax + i, ay - 1]] : [[ax + i, ay - 1 + i], [ax + i, ay - 1 - i]];
+            for (const [x, y] of pp) { dot(g, x, y, 1, 1, c1); dot(e, x, y, 1, 1, U.rgba(P.accent, 0.5)); }
+          }
+          glowAt(e, ax * K, ay * K, 16, P.accent, 0.2); break;
+        }
+        case 'starfield': {
+          for (let i = 0; i < 5; i++) { const x = ax - 6 + Math.floor(rg.next() * 12), y = ay - 4 + Math.floor(rg.next() * 8); dot(g, x, y, 1, 1, '#efe6ff'); dot(e, x, y, 1, 1, 'rgba(240,230,255,0.9)'); if (i < 2) { dot(e, x - 1, y, 3, 1, 'rgba(200,180,255,0.4)'); dot(e, x, y - 1, 1, 3, 'rgba(200,180,255,0.4)'); } }
+          glowAt(e, ax * K, ay * K, 12, '#9a7aff', 0.15); break;
+        }
+        default: break;
+      }
+    }
+    // ---- soft shadows (stepped bands) cast on the floor by walls, blocks and pits ----
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const t = tiles[y * W + x]; if (t !== 0 && t !== 5 && t !== 4) continue;
+      if (t === 4 && biome.hazard !== 'spikes') continue;
+      const ox = x * AT, oy = y * AT, n = isW(x, y - 1), w = isW(x - 1, y), ea = isW(x + 1, y), so = isW(x, y + 1);
+      if (n) { fill(g, ox, oy, AT, 2, U.rgba(ao, 0.5)); fill(g, ox, oy + 2, AT, 2, U.rgba(ao, 0.34)); fill(g, ox, oy + 4, AT, 3, U.rgba(ao, 0.18)); fill(g, ox, oy + 7, AT, 3, U.rgba(ao, 0.08)); }
+      if (w) { fill(g, ox, oy, 2, AT, U.rgba(ao, 0.34)); fill(g, ox + 2, oy, 3, AT, U.rgba(ao, 0.15)); }
+      if (ea) { fill(g, ox + AT - 2, oy, 2, AT, U.rgba(ao, 0.34)); fill(g, ox + AT - 5, oy, 3, AT, U.rgba(ao, 0.15)); }
+      if (so) fill(g, ox, oy + AT - 3, AT, 3, U.rgba(ao, 0.22));
+    }
+
+    // ---- wall mass: dark tops, side strips, brick faces, cap strips ----
+    const blocked = new Set(); // face columns kept clear of wall decor (torches, doors, fountains)
+    for (const tc of room.torches) blocked.add(Math.floor(tc.x));
+    if (room.doors.n >= 0) { const r = ED.Dungeon.doorRect(room, 'n'); for (let x = r.x0 - 2; x <= r.x1 + 2; x++) blocked.add(x); }
+    const fxs = [];
+    if (bid === 'cinderforge' || bid === 'sanctum') { // wall fountains on the top wall, clear of torches and the door
+      const cand = []; for (let x = 3; x <= W - 4; x++) if (!blocked.has(x) && !room.torches.some((tc) => Math.abs(tc.x - 0.5 - x) < 2)) cand.push(x);
+      cand.sort((a, b) => hashS(a, 0, 50, s) - hashS(b, 0, 50, s));
+      for (const x of cand) { if (fxs.length >= (W >= 21 ? 2 : 1)) break; if (fxs.every((q) => Math.abs(q - x) >= 6)) fxs.push(x); }
+      for (const x of fxs) { blocked.add(x - 1); blocked.add(x); blocked.add(x + 1); }
+    }
+    const btop = hexA(mixA(rgbOf(P.wallFace), rgbOf(P.wallTop), 0.3));
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { // tops of mass that is not a face
+      if (!isM(x, y) || faceAt(x, y) || isCol(x, y)) continue;
+      const ox = x * AT, oy = y * AT;
+      if (T_(x, y) === 2) { fill(g, ox, oy, AT, AT, btop); if (!isM(x, y - 1)) { fill(g, ox, oy, AT, 1, hexA(rp.wall(0.133))); fill(g, ox, oy + 1, AT, 1, hexA(rp.wall(0.58))); } }
+      const eS = x === 0 || !isM(x + 1, y), wS = x === W - 1 || !isM(x - 1, y);
+      if (eS) sblit(g, sh, 'tile.wall.side.left', 0, ox, oy);
+      if (wS) sblit(g, sh, 'tile.wall.side.right', 0, ox, oy);
+    }
+    const gooX = []; // columns of goo wall faces: the drip lands on a base tile of the floor row below
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { // brick faces and their cap strips
+      if (!faceAt(x, y) || isCol(x, y)) continue;
+      const cl = faceAt(x - 1, y), cr = faceAt(x + 1, y), ox = x * AT, oy = y * AT;
+      if ((x === 0 || x === W - 1) && sblit(g, sh, 'tile.wall.outer.front.' + (x ? 'right' : 'left'), 0, ox, oy)) { // outer corner: only the pillar column beside the side strip, not a full brick tile
+        sblit(g, sh, 'tile.wall.outer.top.' + (x ? 'right' : 'left'), 0, ox, isM(x, y - 1) ? oy - AT : oy - 12);
+        continue;
+      }
+      let special = null;
+      if (cl && cr && y === 1 && !blocked.has(x)) {
+        const r = hashS(x, y, 2, s);
+        if (bid === 'ossuary') special = r < 0.06 ? 'tile.wall.hole.1' : r < 0.1 ? 'tile.wall.hole.2' : r < 0.17 ? 'deco.banner.' + ['red', 'green', 'blue', 'yellow'][Math.floor(r * 100) % 4] : null;
+        else if (bid === 'glowmire') special = r < 0.14 ? 'tile.wall.goo' : null;
+        else if (bid === 'cinderforge') special = r < 0.12 ? 'tile.wall.grate' : null;
+        else if (bid === 'sanctum') special = r < 0.07 ? 'deco.banner.' + (r < 0.035 ? 'yellow' : 'blue') : null;
+      }
+      if (special === 'tile.wall.goo') gooX.push(x);
+      if (special) sblit(g, sh, special, 0, ox, oy);
+      else if (!cl && !cr) { sblit(g, sh, 'tile.wall.face.left', 0, ox, oy, 0, 8); sblit(g, sh, 'tile.wall.face.right', 0, ox + 8, oy, 8, 16); }
+      else sblit(g, sh, 'tile.wall.face.' + (!cl ? 'left' : !cr ? 'right' : 'mid'), 0, ox, oy);
+      const cap = 'tile.wall.cap.' + (!cl && !cr ? 'mid' : !cl ? 'left' : !cr ? 'right' : 'mid');
+      if (isM(x, y - 1)) sblit(g, sh, cap, 0, ox, oy - AT); else sblit(g, sh, cap, 0, ox, oy - 12); // strip above the face; a one-row run carries it in its own top rows
+      if (bid === 'rimefrost' && y === 1 && cl && cr) { // icicles under the cap
+        for (let k = 0; k < 3; k++) { const hh = hashS(x, k, 60, s); if (hh < 0.45) continue; const ix = ox + 2 + k * 5 + Math.floor(hh * 3), len = 2 + Math.floor(hashS(x, k, 61, s) * 5); fill(g, ix, oy + 2, 1, len, '#f2fbff'); fill(g, ix + 1, oy + 2, 1, Math.max(1, len - 2), '#9fc8e0'); fill(g, ix, oy + 2 + len, 1, 1, '#cfeeff'); }
+      }
+      if (bid === 'abyss' && y === 1 && cl && cr && hashS(x, y, 70, s) < 0.12) { // glowing rune on the face
+        const c1 = U.rgba(P.accent, 0.75); for (const [dx, dy, w, h] of [[5, 5, 6, 1], [5, 5, 1, 6], [10, 5, 1, 6], [5, 10, 6, 1], [7, 7, 2, 2]]) { fill(g, ox + dx, oy + dy, w, h, c1); fill(e, ox + dx, oy + dy, w, h, U.rgba(P.accent, 0.8)); }
+        glowAt(e, (ox + 8) * K, (oy + 8) * K, 18, P.accent, 0.3);
+      }
+      if (bid === 'cinderforge' && special === 'tile.wall.grate') { glowAt(e, (ox + 8) * K, (oy + 13) * K, 16, '#ff7a2a', 0.35); fill(e, ox + 3, oy + 11, 10, 3, 'rgba(255,110,30,0.45)'); }
+    }
+    for (const x of gooX) if (T_(x, 2) === 0) sblit(g, sh, 'tile.wall.goo.base', 0, x * AT, 2 * AT);
+    // ---- standing torches flanking the north wall of rooms people linger in (boss rooms also get the south corners) ----
+    out.ftorches = [];
+    if (room.type === 'boss' || room.type === 'start' || room.type === 'treasure' || room.type === 'shop' || room.type === 'event') {
+      const spots = [[2, 3], [W - 3, 3]]; if (room.type === 'boss') spots.push([2, H - 3], [W - 3, H - 3]);
+      for (const [tx, ty] of spots) {
+        let ok = true; for (let j = -1; j <= 1 && ok; j++) for (let i = -1; i <= 1; i++) if (T_(tx + i, ty + j) !== 0) { ok = false; break; }
+        if (!ok) continue;
+        const x = (tx + 0.5) * T, y = Math.round((ty + 0.9) * T / K) * K;
+        out.ftorches.push({ x, y }); out.statics.push({ k: 'ftorch', x, y, key: y, h: 0 });
+        glowAt(gm, x, y - 30, 40, P.light, 0.25);
+      }
+    }
+    // ---- isolated blocks become columns drawn with the entities ----
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (isCol(x, y)) out.statics.push({ k: 'col', id: 'prop.column', vk: '', x: (x + 0.5) * T, y: (y + 1) * T - 2, key: (y + 1) * T - 2, h: 70 });
+
+    // ---- doors ----
+    for (const dd in room.doors) {
+      if (room.doors[dd] < 0) continue;
+      const r = ED.Dungeon.doorRect(room, dd), ax0 = r.x0 * AT, ay0 = r.y0 * AT, aw = (r.x1 - r.x0 + 1) * AT, ah = (r.y1 - r.y0 + 1) * AT, dk = hexA(mixA(rgbOf(P.void), rgbOf(P.wallShadow), 0.35));
+      fill(g, ax0, ay0, aw, ah, dk);
+      if (dd === 'n') {
+        sblit(g, sh, 'tile.door.frame.left', 0, ax0 - AT, 0); sblit(g, sh, 'tile.door.frame.right', 0, ax0 + aw, 0);
+        sblit(g, sh, 'tile.door.leaf.open', 0, ax0, 0, 0, 16); sblit(g, sh, 'tile.door.leaf.open', 0, ax0 + 16, 0, 8, 24); sblit(g, sh, 'tile.door.leaf.open', 0, ax0 + 32, 0, 16, 32);
+        out.statics.push({ k: 'arch', key: 2 * T, x: ax0 * K, y: 0, w: aw * K, h: 6 * K }); // arch stone above the opening: redrawn with the entities so heroes pass behind it
+      } else if (dd === 's') { fill(g, ax0, ay0, aw, 2, 'rgba(0,0,0,0.5)'); }
+    }
+    // ---- wall fountains (top piece baked, the water frames animate) and their pools ----
+    for (const x of fxs) {
+      const lava = bid === 'cinderforge';
+      sblit(g, sh, 'tile.fountain.top.' + (1 + Math.floor(hashS(x, 3, 52, s) * 3)), 0, x * AT, 0);
+      out.fountains.push({ x, c: lava ? 'red' : 'blue' });
+      const pc = lava ? ['#2a0f08', '#d8480c', '#f58a22'] : ['#0a2f42', '#1b6b84', '#5fc6dc'];
+      for (const [dx, dy, w, c] of [[2, 33, 12, pc[0]], [3, 34, 10, pc[1]], [5, 34, 6, pc[2]]]) fill(g, x * AT + dx, dy, w, 1, c);
+      glowAt(e, (x + 0.5) * T, 40, 24, lava ? '#ff6a2a' : '#6fe6ff', lava ? 0.4 : 0.22);
+      glowAt(gm, (x + 0.5) * T, 40, 28, lava ? '#ff5a1a' : '#4fd0ff', lava ? 0.3 : 0.14);
+    }
+    return out;
+  }
+
+  // ---------- per-frame parts of art rooms ----------
+  const bqOf = () => (ED.Render && ED.Render.bakeScale) || 1;
+  const TORCH_Y = 10; // art row of the wall torch sprite's top: flame over the cap strip, bracket on the brick face
+  // Frame of a looping animation at `fps` for time t, phased by x.
+  const loopF = (t, fps, n, ph) => Math.floor(t * fps + (ph || 0)) % n;
+  // Draws the room's animated pieces: pass 0 under the lighting (hazard pools, spikes, torches, fountains), pass 1 additive after it (flames, molten glow). Returns false when the room is not an art room.
+  Tl.drawDyn = (c, room, biome, t, pass, low) => {
+    const e = entry(room, bqOf()); if (!e.art) return false;
+    const sh = sheetFor(biome), P = biome.pal, R_ = ED.Render;
+    c.imageSmoothingEnabled = false;
+    if (pass === 0) {
+      if (e.hz) { const f = Math.floor(t * 5) % HZ_NF; for (let i = 0; i < e.hzCells.length; i++) { const q = e.hzCells[i]; c.drawImage(e.hz, f * AT, i * AT, AT, AT, q[0] * T, q[1] * T, T, T); } }
+      if (e.spikes.length) {
+        const ph = t % 1.8, f = ph < 0.7 ? 3 : ph < 0.8 ? 2 : ph < 1.45 ? 0 : ph < 1.7 ? 1 : 2, warn = ph >= 1.45 && ph < 1.7;
+        for (const q of e.spikes) { sblit(c, sh, 'tile.spikes', f, q[0] / K, q[1] / K); if (warn) { c.fillStyle = 'rgba(255,90,60,0.16)'; c.fillRect(q[0] + 2, q[1] + 2, T - 4, T - 4); } }
+      }
+      for (const tc of room.torches) sblit(c, sh, 'tile.torch.wall', loopF(t, 10, 8, tc.x * 3), Math.floor(tc.x) * AT, TORCH_Y);
+      for (const fo of e.fountains) sblit(c, sh, 'tile.fountain.mid.' + fo.c, loopF(t, 6, 3, fo.x), fo.x * AT, AT);
+    } else {
+      for (const tc of room.torches) {
+        const x = (Math.floor(tc.x) + 0.5) * T, fl = Math.sin(t * 13 + x) * 1.2 + Math.sin(t * 23 + x * 1.7) * 0.7;
+        R_.glow(c, x, TORCH_Y * K + 8, 22 + fl * 2, P.light, 0.5);
+      }
+      if (e.hz && !low) {
+        const k = biome.hazard, a = k === 'lava' ? 0.2 : k === 'poison' ? 0.14 : k === 'void' ? 0.1 : 0;
+        if (a) { const f = Math.floor(t * 5) % HZ_NF; c.globalAlpha = a; for (let i = 0; i < e.hzCells.length; i++) { const q = e.hzCells[i]; c.drawImage(e.hz, f * AT, i * AT, AT, AT, q[0] * T, q[1] * T, T, T); } c.globalAlpha = 1; }
+      }
+      for (const ft of e.ftorches) {
+        const fl = Math.sin(t * 13 + ft.x) * 1.2 + Math.sin(t * 23 + ft.x * 1.7) * 0.7;
+        R_.glow(c, ft.x, ft.y - 32, 22 + fl * 2, P.light, 0.5);
+      }
+      for (const fo of e.fountains) if (fo.c === 'red') { c.globalAlpha = 0.4; sblit(c, sh, 'tile.fountain.mid.red', loopF(t, 6, 3, fo.x), fo.x * AT, AT); c.globalAlpha = 1; }
+      for (const d of Tl.dynamics(room)) { // glow pools of room lights (fungus, lava, candles...)
+        if (d.k === 'torch') continue;
+        const fl = d.k === 'hz' ? 0.55 + Math.sin(t * 1.6 + d.x * 0.07 + d.y * 0.05) * 0.25 : 0.7 + Math.sin(t * 2 + d.x) * 0.2;
+        R_.glow(c, d.x, d.y, d.r * 0.55, d.color, (biome.hazard === 'water' && d.k === 'hz' ? 0.09 : 0.22) * fl);
+      }
+    }
+    c.imageSmoothingEnabled = true;
+    return true;
+  };
+  // Closed door of a locked room: wooden leaf on the north wall, iron bars on the others.
+  Tl.drawGate = (c, room, biome, d) => {
+    const e = entry(room, bqOf()); if (!e.art) return false;
+    const sh = sheetFor(biome), r = ED.Dungeon.doorRect(room, d), ax = r.x0 * AT, ay = r.y0 * AT;
+    c.imageSmoothingEnabled = false;
+    if (d === 'n') { sblit(c, sh, 'tile.door.leaf.closed', 0, ax, ay, 0, 16); sblit(c, sh, 'tile.door.leaf.closed', 0, ax + 16, ay, 8, 24); sblit(c, sh, 'tile.door.leaf.closed', 0, ax + 32, ay, 16, 32); }
+    else {
+      c.fillStyle = 'rgba(8,4,10,0.94)'; c.fillRect(ax * K, ay * K, (r.x1 - r.x0 + 1) * T, (r.y1 - r.y0 + 1) * T);
+      if (d === 's') for (let i = 0; i < 3; i++) sblit(c, sh, 'tile.gate.bars', 0, ax + i * AT, ay);
+      else for (let i = 0; i < 3; i++) for (const dx of [-5, 0, 5]) sblit(c, sh, 'tile.gate.bars.side', 0, ax + dx, ay + i * AT);
+    }
+    c.imageSmoothingEnabled = true;
+    return true;
+  };
+  // Tall static pieces of the room (columns, standing decor, the door arch) for the renderer's y-sorted list: [{ k, key (sort y), x, y, ... }].
+  Tl.statics = (room) => { const e = entry(room, bqOf()); return e.art ? e.statics : NOSTATIC; };
+  const NOSTATIC = [];
+  // True when a living entity stands behind (north of) a tall piece of height h at (x, y) and would be hidden by it.
+  Tl.hides = (view, x, y, hw, h) => {
+    for (const p of view.players.values()) if (!p.dead && p.y < y && p.y > y - h && Math.abs(p.x - x) < hw) return true;
+    for (const en of view.enemies) if (en.hp > 0 && en.y < y && en.y > y - h && Math.abs(en.x - x) < hw + en.r) return true;
+    return false;
+  };
+  Tl.drawStatic = (c, room, biome, s, view, t) => {
+    const e = entry(room, bqOf()), sh = sheetFor(biome);
+    if (s.k === 'col') {
+      const a = Tl.hides(view, s.x, s.y, 24, s.h) ? 0.45 : 1;
+      c.save(); c.translate(s.x, s.y - 8); ED.Render.shadow(c, 11, 0.3, true); c.restore();
+      if (a !== 1) c.globalAlpha = a;
+      c.imageSmoothingEnabled = false; sblit(c, sh, 'prop.column', 0, s.x / K - 8, s.y / K - 39); c.imageSmoothingEnabled = true;
+      if (a !== 1) c.globalAlpha = 1;
+    } else if (s.k === 'ftorch') {
+      c.save(); c.translate(s.x, s.y); ED.Render.shadow(c, 8, 0.3, true); c.restore();
+      c.imageSmoothingEnabled = false; sblit(c, sh, 'tile.torch.floor', loopF(t, 10, 8, s.x * 0.1), s.x / K - 8, s.y / K - 24); c.imageSmoothingEnabled = true;
+    } else if (s.k === 'stub') { // broken column: the cap and the base of the column sprite
+      const fx = s.x / K - 8, fy = s.y / K;
+      c.save(); c.translate(s.x, s.y); ED.Render.shadow(c, 9, 0.3, true); c.restore();
+      c.imageSmoothingEnabled = false; sblit(c, sh, 'prop.column', 0, fx, fy - 20, undefined, undefined, 4, 14); sblit(c, sh, 'prop.column', 0, fx, fy - 10, undefined, undefined, 29, 39); c.imageSmoothingEnabled = true;
+    } else if (s.k === 'deco') {
+      for (const p of view.props) if (p.kind === 'shop' && Math.abs(s.x - p.x) < 26 && s.y > p.y - 2 && s.y < p.y + 44) return; // never over a price label
+      A.draw(c, s.id, 0, s.x, s.y, s.vk ? { variant: s.vk } : undefined);
+    } else if (s.k === 'arch') {
+      let hit = false;
+      for (const p of view.players.values()) if (p.y < s.key + 6 && Math.abs(p.x - (s.x + s.w / 2)) < s.w / 2 + 14) { hit = true; break; }
+      if (!hit) for (const en of view.enemies) if (en.hp > 0 && en.y < s.key + 6 && Math.abs(en.x - (s.x + s.w / 2)) < s.w / 2 + 14) { hit = true; break; }
+      if (!hit) return;
+      const q = bqOf(), cv = e.canvas;
+      c.imageSmoothingEnabled = false; c.drawImage(cv, s.x * q, s.y * q, s.w * q, s.h * q, s.x, s.y, s.w, s.h); c.imageSmoothingEnabled = true;
+    }
+  };
+
   // Lights and animated glows a room contributes each frame (torches, lava, glowing fungus...).
   Tl.dynamics = (room) => {
     if (room._dyn) return room._dyn;
     const biome = ED.biomeFor(room.stratum), P = biome.pal;
-    const out = [];
-    for (const tc of room.torches) out.push({ k: 'torch', x: tc.x * T, y: tc.y * T - 4, r: 120, color: P.light });
+    const out = [], art = artOn();
+    for (const tc of room.torches) out.push(art ? { k: 'torch', x: (Math.floor(tc.x) + 0.5) * T, y: 34, r: 120, color: P.light } : { k: 'torch', x: tc.x * T, y: tc.y * T - 4, r: 120, color: P.light });
+    if (art) {
+      const e = entry(room, bqOf());
+      for (const fo of e.fountains || []) out.push({ k: 'glow', x: (fo.x + 0.5) * T, y: 44, r: 60, color: fo.c === 'red' ? '#ff6a2a' : '#6fe6ff' });
+      for (const ft of e.ftorches || []) out.push({ k: 'torch', x: ft.x, y: ft.y - 34, r: 110, color: P.light });
+    }
     const glowK = { glowcap: P.accent2, mushroom: P.accent, crystal: P.accent, lavacrack: '#ff6a2a', rune: P.accent, voidcrack: P.accent, candle: '#ffb35c', grate: '#ff7a2a', cinders: '#ff8a3a', goldtile: '#ffd36b', shard: P.accent };
     for (const d of room.decor) if (glowK[d.k]) out.push({ k: 'glow', x: d.x * T, y: d.y * T - 4, r: d.k === 'candle' ? 52 : 46, color: glowK[d.k] });
     if (biome.hazard === 'lava' || biome.hazard === 'poison' || biome.hazard === 'void' || biome.hazard === 'water') {

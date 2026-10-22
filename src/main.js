@@ -75,8 +75,10 @@
     A.closeNet();
     A.state = 'title';
     $('ov-hearth').hidden = true;
+    $('ov-credits').hidden = true;
     ED.UI.renderTitle();
     ED.UI.show('title');
+    ED.UI.maybeNews();
     ED.Audio.music('camp');
   };
 
@@ -86,6 +88,8 @@
     A.closeNet();
     A.state = 'hearth';
     $('ov-hearth').hidden = true;
+    $('ov-credits').hidden = true;
+    $('scr-title').inert = false;
     ED.UI.show('hearth');
     ED.UI.setTab(tab || 'descend');
     ED.Audio.music('camp');
@@ -131,8 +135,10 @@
     const myPid = ED.Game.s ? ED.Game.s.localPid : A.myPid;
     const mine = summary.players && summary.players[myPid];
     const hero = ED.Game.s && ED.Game.s.me; // the local hero's evolution, read before the session is dropped
-    const myEvo = hero && hero.stats && hero.stats.evo ? { path: hero.stats.evo, weapon: hero.weapon } : null;
-    const run = Object.assign({}, summary, { cls: A.runCls, emberBonus: mine ? mine.emberBonus : 0, myEvo });
+    const myEvo = hero && hero.stats && hero.stats.evo ? { path: hero.stats.evo, weapon: hero.stats.weapon ? hero.stats.weapon.name : ED.WEAPONS[hero.weapon] ? ED.WEAPONS[hero.weapon].name : '' } : null;
+    // Deeds are per hero: the party-wide summary fields are replaced by this hero's own (a client's partial summary has no hero entry: its relic count is the held one, revives 0); the party's evolution stays for the results line.
+    const run = Object.assign({}, summary, { cls: A.runCls, emberBonus: mine ? mine.emberBonus : 0, myEvo, partyEvolved: !!summary.evolved,
+      evolved: !!(myEvo || (mine && mine.evo)), maxRelics: mine ? mine.maxRelics | 0 : hero && hero.relics ? hero.relics.length : 0, revives: mine ? mine.revivesGiven | 0 : 0 });
     const latest = A.storeOk !== false && S.load(); // another tab may have saved meanwhile (trust storage only if our own writes land)
     if (latest) A.profile = latest;
     const res = S.applyRun(A.profile, run);
@@ -276,31 +282,85 @@
   };
 
   // ---------------- loop ----------------
-  let last = performance.now(), hiddenTick = null;
+  // Frame pacing. A browser that misses vsync alternates frame times (4 / 8 / 12 ms on a 240 Hz panel), which reads as judder. settings.frameCap decides what the loop does:
+  // 'auto' (default) measures the vsync interval and the share of rAF intervals longer than one vsync, and presents every n-th rAF (n = 2: 120 fps on 240 Hz) while frames keep missing;
+  // 'off' presents every rAF; '144' / '120' / '60' present every n-th rAF with the smallest n that keeps the rate at or below the cap (display rate / n). dt is smoothed to n vsync intervals whenever it lands within 10% of them.
+  const Pace = A.pace = { vs: 0, n: 1, miss: 0, cap: 'auto', hz: 0, work: 0 };
+  const RATES = [30, 48, 50, 60, 72, 75, 90, 100, 120, 144, 165, 180, 240, 360];
+  const PD = new Float32Array(240); let pdI = 0, pdN = 0, pTick = 0, lastRaf = 0, pHold = performance.now() + 3000, pRetry = 0, pTrial = 0, pBad = 0, pEval = 0, pBack = 30000, dtErr = 0;
+  function pObserve(ms, now) {
+    if (!(ms > 1) || ms > 100) return;
+    PD[pdI] = ms; pdI = (pdI + 1) % 240; if (pdN < 240) pdN++;
+    if (pdN < 90 || now - pEval < 1000) return;
+    pEval = now;
+    const s = Array.from(PD.subarray(0, pdN)).sort((a, b) => a - b), base = s[Math.floor(pdN * 0.15)];
+    let sum = 0, cnt = 0;
+    for (let i = 0; i < pdN; i++) { const k = Math.max(1, Math.round(PD[i] / base)); if (Math.abs(PD[i] / k - base) < 0.25 * base) { sum += PD[i]; cnt += k; } }
+    let vs = cnt ? sum / cnt : base;
+    for (const r of RATES) if (Math.abs(vs * r - 1000) < 40) { vs = 1000 / r; break; } // snap to a known refresh rate: no drift from timer-precision noise
+    Pace.vs = vs; Pace.hz = Math.round(1000 / vs);
+    let m = 0; for (let i = 0; i < pdN; i++) if (PD[i] > 1.5 * vs) m++;
+    Pace.miss = m / pdN;
+    pAdapt(now);
+  }
+  function pSetN(n, now) { Pace.n = n; pdN = 0; pdI = 0; pTick = 0; pBad = 0; pHold = now + 2500; }
+  function pAdapt(now) {
+    const cap = (A.settings && A.settings.frameCap) || 'auto', vs = Pace.vs;
+    if (cap !== Pace.cap) { Pace.cap = cap; pTrial = 0; pBad = 0; }
+    if (cap === 'off') { if (Pace.n !== 1) pSetN(1, now); return; }
+    if (cap !== 'auto') { const n = Math.max(1, Math.ceil(1000 / vs / (+cap || 60) - 0.05)); if (n !== Pace.n) pSetN(n, now); return; }
+    if (now < pHold) return;
+    const maxN = Math.max(1, Math.floor(1000 / vs / 72)); // never below ~72 fps
+    if (pTrial) { // the faster cadence was just tried: keep it unless it misses again
+      if (Pace.miss > 0.1) { const n = pTrial; pTrial = 0; pSetN(n, now); pBack = Math.min(480000, pBack * 2); pRetry = now + pBack; } else { pTrial = 0; pBack = 30000; } // a failed trial doubles the wait for the next one
+    } else if (Pace.n < maxN && vs < 9.5 && Pace.miss > 0.2) { // frames keep missing vsync (three evaluations in a row): present every n+1-th rAF
+      if (++pBad >= 3) { pSetN(Pace.n + 1, now); pRetry = now + pBack; }
+    } else {
+      pBad = 0;
+      if (Pace.n > 1 && now > pRetry) { pTrial = Pace.n; pSetN(Pace.n - 1, now); } // try the faster cadence again now and then
+    }
+  }
+
+  let last = performance.now(), hiddenTick = null, sheetFrames = 0, drawnW = 0, drawnH = 0;
+  const anyOverlay = () => ['ov-pause', 'ov-settings', 'modal', 'ov-sheet'].some(id => !$(id).hidden); // the boon cards are no blocker: a hero keeps moving under them (UI.pickBoon masks the attack keys itself)
   const EMPTY = { mx: 0, my: 0, atk: false, skill: false, dash: false, atkPressed: false };
   function frame(now) {
-    const dt = Math.min(0.05, (now - last) / 1000);
+    requestAnimationFrame(frame);
+    pObserve(now - lastRaf, now); lastRaf = now;
+    if (Pace.n > 1 && (++pTick % Pace.n) !== 0) return; // paced: this rAF is not presented
+    let dt = (now - last) / 1000;
+    const ideal = Pace.n * Pace.vs / 1000;
+    if (Pace.vs && Math.abs(dt - ideal) < 0.1 * ideal) { const d = ideal - dtErr * 0.25; dtErr += d - dt; dt = d; } else dtErr = 0; // steady cadence: the vsync interval, drift pulled back toward real time
+    dt = Math.min(0.05, dt);
     last = now;
     const t = now / 1000;
+    const w0 = performance.now();
     const inp = ED.Input.read();
     if (A.state === 'run' && ED.Game.s) {
-      const s = ED.Game.s;
+      const s = ED.Game.s, sheet = $('ov-sheet'), sheetWas = !sheet.hidden, openBefore = anyOverlay();
       if (inp.esc) {
         if (!$('ov-settings').hidden) $('ov-settings').hidden = true;
         else if (!$('modal').hidden) $('modal').hidden = true;
-        else if (!$('ov-sheet').hidden) { ED.UI.toggleSheet(false); s.paused = !$('ov-pause').hidden; }
+        else if (!sheet.hidden) ED.UI.toggleSheet(false);
         else A.togglePause();
       }
-      if (inp.tab && (!s.offerOpen || !$('ov-sheet').hidden)) { ED.UI.toggleSheet(); s.paused = !$('ov-pause').hidden || (!$('ov-sheet').hidden && ED.Game.alone()); }
-      const blocked = !$('ov-pause').hidden || !$('ov-settings').hidden || !$('modal').hidden || !$('ov-sheet').hidden;
+      if (inp.tab) ED.UI.toggleSheet(); // also during a boon offer: the sheet stacks above the cards
+      if (!sheet.hidden) { ED.UI.sheetNav(inp, dt); ED.UI.sheetTick(dt); }
+      s.paused = !$('ov-pause').hidden || !sheet.hidden;
+      const blocked = sheetWas || !$('ov-pause').hidden || !$('ov-settings').hidden || !$('modal').hidden || !sheet.hidden;
       ED.Game.update(dt, blocked ? EMPTY : inp);
-      if (ED.Game.s) ED.Game.render(t, dt);
+      if (ED.Game.s) {
+        // under the sheet the world is paused (solo: no redraw, the canvases keep the last frame) or drawn every 3rd frame (party); a resize clears the canvases and redraws once
+        const R = ED.Render, shot = R.W !== drawnW || R.H !== drawnH;
+        if (sheet.hidden || shot || (!ED.Game.alone() && ++sheetFrames % 3 === 0)) { ED.Game.render(t, dt); drawnW = R.W; drawnH = R.H; }
+      }
+      if (openBefore && !anyOverlay()) ED.Input.mask(); // a closing overlay must not pass the press that closed it (or a held attack) to the game
     } else {
       ED.HUD.clear();
       ED.Camp.draw(ED.Render.ctx, A.profile, t, dt, A.state === 'hearth' || A.state === 'lobby' || (A.state === 'title' && A.hasProfile) ? A.sel.cls : null);
     }
     ED.Input.endFrame();
-    requestAnimationFrame(frame);
+    Pace.work += (performance.now() - w0 - Pace.work) * 0.05;
   }
 
   // Keep a hosted world ticking while its tab is in the background (rAF stops there).
@@ -344,9 +404,12 @@
     A.state = 'title';
     ED.UI.renderTitle();
     ED.UI.show('title');
+    ED.UI.maybeNews();
     if (!A.hasProfile) setTimeout(() => $('inp-name').focus(), 50);
     startHiddenTicker();
-    requestAnimationFrame((n) => { last = n; frame(n); });
+    // The first frame waits for the atlas pages to decode (3 s at most); the menus are DOM and already usable.
+    const go1 = () => requestAnimationFrame((n) => { last = lastRaf = n; frame(n); });
+    if (ED.Atlas && ED.Atlas.ready) Promise.race([ED.Atlas.ready, new Promise((r) => setTimeout(r, 3000))]).then(go1, go1); else go1();
     // test hook for automated checks
     window.__ED = ED;
   };

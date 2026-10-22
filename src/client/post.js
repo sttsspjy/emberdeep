@@ -1,18 +1,19 @@
-// WebGL post-process. R.frame draws the world into an offscreen 2D canvas; this uploads it as a texture and renders
-// bloom (1/4 res, 2 separable blur iterations), a per-biome colour grade, vignette, film grain and FX-driven chromatic
-// aberration to a WebGL canvas that sits beneath the transparent HUD canvas. Any failure leaves Post.ready false and
-// Render falls back to the plain 2D path.
+// WebGL present + post-process. R.frame draws the world into a small offscreen canvas (1 px = 1 world px); this uploads it as a texture, renders bloom (1/2 of
+// the buffer, 2 separable blur iterations) at buffer resolution, then composites to the screen-size WebGL canvas with a sharp-bilinear upscale (crisp art pixels at
+// non-integer scales, the fractional camera offset applied here), a per-biome colour grade, vignette, film grain and FX-driven chromatic aberration. The WebGL canvas sits
+// beneath the transparent HUD canvas. Any failure leaves Post.ready false and Render falls back to the plain 2D present.
 (function (ED) {
   'use strict';
   const U = ED.U;
   const Post = ED.Post = { ready: false, wanted: false, canvas: null, lost: false, error: '', ms: 0, frames: 0, soft: false }; // soft: the GL context is software-rasterised (no GPU)
   const syncBuf = new Uint8Array(4);
-  let gl = null, glc = null, quad = null, tex = null, texW = 0, texH = 0, fb = [], qW = 1, qH = 1, P = {};
+  let gl = null, glc = null, quad = null, tex = null, texW = 0, texH = 0, fb = [], qW = 1, qH = 1, bufW = 1, bufH = 1, P = {};
   const grades = {};
+  const BLUR_K = [0.85, 1.4]; // blur tap spacing per iteration, in bloom texels
 
   const VS = 'attribute vec2 a;varying vec2 uv;void main(){uv=a*.5+.5;gl_Position=vec4(a,0.,1.);}';
   const HEAD = '#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\nvarying vec2 uv;\n';
-  // 4x4 box downsample of the world, keeping only what exceeds the soft threshold
+  // 4x4 box downsample of the world buffer, keeping only what exceeds the soft threshold
   const FS_BRIGHT = HEAD + `uniform sampler2D tex;uniform vec2 texel;uniform vec2 thr;
 vec3 s(vec2 o){return texture2D(tex,vec2(uv.x,1.-uv.y)+o*texel).rgb;}
 void main(){
@@ -29,16 +30,24 @@ void main(){
   c+=(texture2D(tex,uv+dir*3.2308).rgb+texture2D(tex,uv-dir*3.2308).rgb)*.0702703;
   gl_FragColor=vec4(c,1.);
 }`;
+  // bsz: buffer size (px), off: fractional camera offset in buffer px, scl: screen px per buffer px. Buffer coordinates run top-down; bloom textures are y-up.
   const FS_COMP = HEAD + `uniform sampler2D tex;uniform sampler2D bloom;
-uniform vec2 res;uniform float time,aberr,bloomK,gamma,sat,contrast,grain;
+uniform vec2 res,bsz,off;uniform float scl,time,aberr,bloomK,gamma,sat,contrast,grain;
 uniform vec3 lift,gain,shadowT,highT;uniform vec2 vig;uniform vec4 flash;
 float hash(vec2 p){return fract(sin(dot(p,vec2(12.9898,78.233)))*43758.5453);}
+vec3 samp(vec2 b){
+  vec2 i=floor(b),f=fract(b)-.5;
+  float rr=max(.5-.5/scl,0.);
+  vec2 g=(f-clamp(f,-rr,rr))*scl+.5;
+  return texture2D(tex,(i+g)/bsz).rgb;
+}
 void main(){
   vec2 p=uv-.5;
   vec2 o=p*(aberr*(.35+dot(p,p)*3.));
-  vec2 fu=vec2(uv.x,1.-uv.y),fo=vec2(o.x,-o.y);
-  vec3 c=vec3(texture2D(tex,fu+fo).r,texture2D(tex,fu).g,texture2D(tex,fu-fo).b);
-  c+=texture2D(bloom,uv).rgb*bloomK;
+  vec2 pd=vec2(gl_FragCoord.x,res.y-gl_FragCoord.y)/scl+off;
+  vec2 od=vec2(o.x*res.x,-o.y*res.y)/scl;
+  vec3 c=vec3(samp(pd+od).r,samp(pd).g,samp(pd-od).b);
+  c+=texture2D(bloom,vec2(pd.x/bsz.x,1.-pd.y/bsz.y)).rgb*bloomK;
   c=c*gain+lift;
   float l=dot(c,vec3(.299,.587,.114));
   c=mix(vec3(l),c,sat);
@@ -78,7 +87,7 @@ void main(){
     P = {
       bright: program(FS_BRIGHT, ['tex', 'texel', 'thr']),
       blur: program(FS_BLUR, ['tex', 'dir']),
-      comp: program(FS_COMP, ['tex', 'bloom', 'res', 'time', 'aberr', 'bloomK', 'gamma', 'sat', 'contrast', 'grain', 'lift', 'gain', 'shadowT', 'highT', 'vig', 'flash']),
+      comp: program(FS_COMP, ['tex', 'bloom', 'res', 'bsz', 'off', 'scl', 'time', 'aberr', 'bloomK', 'gamma', 'sat', 'contrast', 'grain', 'lift', 'gain', 'shadowT', 'highT', 'vig', 'flash']),
     };
     quad = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quad);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
@@ -86,13 +95,14 @@ void main(){
     gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     tex = makeTex(0, 0); texW = texH = 0; fb = [];
-    if (glc.width) allocate(glc.width, glc.height);
+    if (bufW > 1) allocate(bufW, bufH);
   }
 
-  function allocate(w, h) {
+  // Bloom targets for a bw x bh world buffer (half its size); the world texture itself is (re)created on the next upload.
+  function allocate(bw, bh) {
     for (const f of fb) { gl.deleteFramebuffer(f.fbo); gl.deleteTexture(f.tex); }
     fb = [];
-    qW = Math.max(1, Math.ceil(w / 4)); qH = Math.max(1, Math.ceil(h / 4));
+    bufW = bw; bufH = bh; qW = Math.max(1, Math.ceil(bw / 2)); qH = Math.max(1, Math.ceil(bh / 2));
     for (let i = 0; i < 2; i++) {
       const t = makeTex(qW, qH), f = gl.createFramebuffer();
       gl.bindFramebuffer(gl.FRAMEBUFFER, f); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
@@ -111,8 +121,9 @@ void main(){
       glc.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;display:none;pointer-events:none';
       gl = glc.getContext('webgl', { alpha: false, antialias: false, depth: false, stencil: false, premultipliedAlpha: false, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
       if (!gl) throw new Error('webgl unavailable');
-      const di = gl.getExtension('WEBGL_debug_renderer_info');
-      Post.soft = /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(di ? String(gl.getParameter(di.UNMASKED_RENDERER_WEBGL)) : '');
+      let rn = String(gl.getParameter(gl.RENDERER) || ''); // Gecko reports the real renderer here; other engines mask it ('WebKit WebGL') and are asked through the debug extension
+      if (!/Firefox\//.test(navigator.userAgent) && /^(WebKit WebGL|Mozilla|)$/i.test(rn.trim())) { const di = gl.getExtension('WEBGL_debug_renderer_info'); if (di) rn = String(gl.getParameter(di.UNMASKED_RENDERER_WEBGL)); }
+      Post.soft = /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(rn);
       hud.parentNode.insertBefore(glc, hud);
       Post.canvas = glc;
       glc.addEventListener('webglcontextlost', (e) => { e.preventDefault(); Post.ready = false; Post.lost = true; glc.style.display = 'none'; });
@@ -127,11 +138,13 @@ void main(){
 
   Post.fail = (err) => { Post.ready = false; Post.error = String(err && err.message || err); if (glc) glc.style.display = 'none'; };
 
-  Post.resize = (w, h) => {
+  // w x h: screen canvas in device px; bw x bh: world buffer in world px.
+  Post.resize = (w, h, bw, bh) => {
     if (!glc || !gl || gl.isContextLost()) return;
-    if (glc.width === w && glc.height === h) return;
-    glc.width = w; glc.height = h;
-    try { allocate(w, h); } catch (err) { Post.fail(err); }
+    try {
+      if (glc.width !== w || glc.height !== h) { glc.width = w; glc.height = h; }
+      if (bw !== bufW || bh !== bufH || !fb.length) allocate(bw, bh);
+    } catch (err) { Post.fail(err); }
   };
 
   Post.setVisible = (v) => { Post.wanted = v; if (glc) glc.style.display = v && Post.ready ? 'block' : 'none'; };
@@ -161,25 +174,25 @@ void main(){
     return g;
   };
 
-  // o: { biome, t, aberr, flash:[r,g,b,a], lightLevel, bloom, vig, camp }
+  // src: the world buffer canvas (bw x bh). o: { biome, t, aberr, flash:[r,g,b,a], lightLevel, bloom, vig, scale (screen px per buffer px), fx, fy (fractional camera offset in buffer px) }
   Post.render = (src, o) => {
     if (!Post.ready || !gl) return false;
     if (gl.isContextLost()) { Post.ready = false; Post.lost = true; return false; }
     const t0 = performance.now();
     try {
-      const w = glc.width, h = glc.height;
-      if (src.width !== w || src.height !== h) return false;
+      const w = glc.width, h = glc.height, bw = bufW, bh = bufH;
+      if (src.width !== bw || src.height !== bh) return false;
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex);
-      if (texW !== w || texH !== h) { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); texW = w; texH = h; }
+      if (texW !== bw || texH !== bh) { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); texW = bw; texH = bh; }
       else gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, src);
       const g = Post.grade(o.biome), ll = o.lightLevel === undefined ? 1 : o.lightLevel;
-      // bright pass -> blur x2 (ping-pong at 1/4 res)
+      // bright pass -> blur x2 (ping-pong at 1/2 of the world buffer)
       gl.bindFramebuffer(gl.FRAMEBUFFER, fb[0].fbo); gl.viewport(0, 0, qW, qH);
-      gl.useProgram(P.bright.p); gl.uniform1i(P.bright.u.tex, 0); gl.uniform2f(P.bright.u.texel, 1 / w, 1 / h); gl.uniform2f(P.bright.u.thr, g.thr, 0.22);
+      gl.useProgram(P.bright.p); gl.uniform1i(P.bright.u.tex, 0); gl.uniform2f(P.bright.u.texel, 1 / bw, 1 / bh); gl.uniform2f(P.bright.u.thr, g.thr, 0.22);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       gl.useProgram(P.blur.p); gl.uniform1i(P.blur.u.tex, 0);
       for (let i = 0; i < 2; i++) {
-        const k = i ? 1.7 : 1;
+        const k = BLUR_K[i];
         gl.bindFramebuffer(gl.FRAMEBUFFER, fb[1].fbo); gl.bindTexture(gl.TEXTURE_2D, fb[0].tex); gl.uniform2f(P.blur.u.dir, k / qW, 0); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         gl.bindFramebuffer(gl.FRAMEBUFFER, fb[0].fbo); gl.bindTexture(gl.TEXTURE_2D, fb[1].tex); gl.uniform2f(P.blur.u.dir, 0, k / qH); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
       }
@@ -189,7 +202,8 @@ void main(){
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex);
       const u = P.comp.u, f = o.flash || [0, 0, 0, 0];
       gl.useProgram(P.comp.p);
-      gl.uniform1i(u.tex, 0); gl.uniform1i(u.bloom, 1); gl.uniform2f(u.res, w, h); gl.uniform1f(u.time, o.t || 0);
+      gl.uniform1i(u.tex, 0); gl.uniform1i(u.bloom, 1); gl.uniform2f(u.res, w, h); gl.uniform2f(u.bsz, bw, bh); gl.uniform2f(u.off, o.fx || 0, o.fy || 0); gl.uniform1f(u.scl, o.scale || 1);
+      gl.uniform1f(u.time, o.t || 0);
       gl.uniform1f(u.aberr, 0.0007 + (o.aberr || 0) * 0.003);
       gl.uniform1f(u.bloomK, (o.bloom !== undefined ? o.bloom : g.bloom) * (1.25 - 0.25 * ll));
       gl.uniform3fv(u.lift, g.lift); gl.uniform3fv(u.gain, g.gain); gl.uniform3fv(u.shadowT, g.shadowT); gl.uniform3fv(u.highT, g.highT);

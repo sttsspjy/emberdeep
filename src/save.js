@@ -10,13 +10,15 @@
   const LS_SETTINGS = 'wickdeep.settings.v1';
   const NAME_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -';
   const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-  const CODE_VERSION = 2;
+  const CODE_VERSION = 4; // 4: upgrades and heroes carry count prefixes too; 3: only the non-start relic bits do; 2 stored exactly V2_RELIC_BITS relic bits, V2_UPGRADES ranks and V2_HEROES mastery values. A count prefix keeps appended entries from shifting what follows.
+  const V2_RELIC_BITS = 26, V2_UPGRADES = 16, V2_HEROES = 6;
   const PREFIX = 'WD1';
 
   const S = ED.Save = { KEY: LS_KEY, NAME_CHARS };
 
   S.defaultProfile = () => ({
-    v: 1,
+    v: 2, // profile era: below 2 a profile with runs gets news = 1 (the "Deep has changed" notice, cleared once shown)
+    news: 0,
     name: 'Wanderer',
     embers: 0,
     lifetime: 0,
@@ -70,6 +72,7 @@
     d.pactWin = p.pactWin === undefined ? -1 : int(p.pactWin, -1, 10);
     const st = obj(p.stats);
     for (const k in d.stats) d.stats[k] = int(st[k], 0, k === 'deepest' ? 6 : BIG);
+    d.news = (p.v | 0) < 2 ? (d.stats.runs > 0 ? 1 : 0) : int(p.news, 0, 1);
     const sel = obj(p.sel);
     d.sel = { cls: ED.CLASS_IDS.indexOf(sel.cls) >= 0 ? sel.cls : 'knight', weapon: {}, pact: int(sel.pact, 0, 10) };
     for (const c of ED.CLASS_IDS) { const wid = obj(sel.weapon)[c]; if (ED.CLASSES[c].weapons.indexOf(wid) >= 0) d.sel.weapon[c] = wid; }
@@ -77,8 +80,14 @@
   };
 
   S.loadSettings = () => {
-    const d = { master: 70, music: 55, sfx: 80, aim: 'auto', quality: 'high', shake: true, dmg: true };
-    try { return Object.assign(d, JSON.parse(localStorage.getItem(LS_SETTINGS) || '{}')); } catch (e) { return d; }
+    const d = { master: 70, music: 55, sfx: 80, quality: 'high', shake: true, dmg: true, cursor: 'reticle', reticle: 'm', reticleCol: 'ember', aimPreview: true, frameCap: 'auto' };
+    let s = d;
+    try { s = Object.assign(d, JSON.parse(localStorage.getItem(LS_SETTINGS) || '{}')); } catch (e) { return d; }
+    const pick = (v, list, def) => (list.indexOf(v) >= 0 ? v : def);
+    delete s.aim; // the removed Auto-aim setting
+    s.cursor = pick(s.cursor, ['reticle', 'system'], 'reticle'); s.reticle = pick(s.reticle, ['s', 'm', 'l'], 'm'); s.reticleCol = pick(s.reticleCol, ['ember', 'bone', 'frost'], 'ember');
+    s.frameCap = pick(String(s.frameCap), ['auto', 'off', '144', '120', '60'], 'auto'); s.aimPreview = s.aimPreview !== false;
+    return s;
   };
   S.storeSettings = (s) => { try { localStorage.setItem(LS_SETTINGS, JSON.stringify(s)); } catch (e) { /* ignore */ } };
 
@@ -260,8 +269,13 @@
     w.put(name.length, 4);
     for (const ch of name) w.put(NAME_CHARS.indexOf(ch), 6);
     w.varint(p.embers); w.varint(p.lifetime);
+    w.put(ED.UPGRADES.length, 6);
     ED.UPGRADES.forEach((u, i) => w.put(p.up[i] | 0, 3));
-    ED.RELIC_IDS.forEach((id, i) => { if (!ED.RELICS[id].start) w.put(p.relics[i] ? 1 : 0, 1); });
+    const codex = ED.RELIC_IDS.map((id, i) => [id, i]).filter(x => !ED.RELICS[x[0]].start); // non-start relics in positional order
+    if (codex.length > 127) throw new Error('Too many Codex relics for the 7-bit count: widen it and bump CODE_VERSION');
+    w.put(codex.length, 7);
+    codex.forEach(x => w.put(p.relics[x[1]] ? 1 : 0, 1));
+    w.put(ED.CLASS_IDS.length, 4);
     ED.CLASS_IDS.forEach((c, i) => w.varint(p.mastery[i] | 0));
     w.put(p.bosses & 63, 6);
     w.put(ED.DEEDS.length, 6);
@@ -302,14 +316,18 @@
     const p = S.defaultProfile();
     try {
       const ver = r.get(8);
-      if (ver !== CODE_VERSION) throw new Error('ver');
+      if (ver > CODE_VERSION) throw Object.assign(new Error('That code was made by a newer Wickdeep. Reload the page to get the latest version.'), { keep: true });
+      if (ver < 2) throw new Error('ver');
       const nl = r.get(4); let name = '';
       for (let i = 0; i < nl; i++) name += NAME_CHARS[r.get(6)] || '';
       p.name = S.sanitizeName(name);
       p.embers = r.varint(); p.lifetime = r.varint();
-      ED.UPGRADES.forEach((u, i) => { p.up[i] = Math.min(u.costs.length, r.get(3)); });
-      ED.RELIC_IDS.forEach((id, i) => { if (!ED.RELICS[id].start) p.relics[i] = r.get(1); });
-      ED.CLASS_IDS.forEach((c, i) => { p.mastery[i] = r.varint(); });
+      const nu = ver >= 4 ? r.get(6) : V2_UPGRADES; // missing entries stay 0, extra ones are skipped
+      for (let k = 0; k < nu; k++) { const v = r.get(3); if (k < ED.UPGRADES.length) p.up[k] = Math.min(ED.UPGRADES[k].costs.length, v); }
+      const codex = ED.RELIC_IDS.map((id, i) => i).filter(i => !ED.RELICS[ED.RELIC_IDS[i]].start), n = ver === 2 ? V2_RELIC_BITS : r.get(7);
+      for (let k = 0; k < n; k++) { const bit = r.get(1); if (k < codex.length) p.relics[codex[k]] = bit; } // missing relics stay locked, extra bits are skipped
+      const nm = ver >= 4 ? r.get(4) : V2_HEROES;
+      for (let k = 0; k < nm; k++) { const v = r.varint(); if (k < ED.CLASS_IDS.length) p.mastery[k] = v; }
       p.bosses = r.get(6);
       const nd = r.get(6); let deeds = 0;
       for (let i = 0; i < nd; i++) if (r.get(1)) deeds |= (1 << i);
@@ -317,7 +335,9 @@
       p.pactMax = Math.min(10, r.get(4)); p.pactWin = Math.min(10, r.get(4) - 1);
       p.stats.runs = r.varint(); p.stats.wins = r.varint(); p.stats.deepest = Math.min(6, r.get(3));
       p.stats.kills = r.varint(); p.stats.bestTime = r.varint(); p.stats.bossKills = r.varint();
+      p.news = ver === 2 && p.stats.runs > 0 ? 1 : 0; // a main-era (v2) code predates the v3 rules
     } catch (e) {
+      if (e && e.keep) throw e;
       throw new Error('That code is from an unknown version or is damaged.');
     }
     return S.normalize(p);

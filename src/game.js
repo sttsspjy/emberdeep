@@ -4,7 +4,7 @@
   'use strict';
   const U = ED.U, Sim = ED.Sim, N = ED.Net;
   const G = ED.Game = { s: null };
-  const HERO_REWARD = /^(boon:|class$|forge$|epic$|vigor$)/; // reward items every hero claims separately
+  const HERO_REWARD = /^(boon$|forge$|epic$|vigor$)/; // reward items every hero claims separately
 
   // ---------------- client-side mirror of the host's world ----------------
   function Mirror(cfg, localPid) {
@@ -22,7 +22,7 @@
     this.floor = null; this.room = null; this.roomId = -1; this.roomState = {}; this.stratum = 0; this.floorSeed = 0;
     this.gold = 0; this.level = 1; this.xp = 0; this.xpNext = 20; this.time = 0; this.locked = false; this.waitMsg = '';
     this.snaps = []; this.renderT = 0; this.run = null; this.eMap = new Map();
-    this.light = 100; this.lightMax = 100; this.dread = { tier: 0 };
+    this.light = 100; this.lightMax = 100; this.dread = { tier: 0 }; this.deepRooms = 0;
   }
   Mirror.prototype.recalc = function (p) {
     p.stats = ED.Stats.compute({ cls: p.cls, weapon: p.weapon, boons: p.boons, relics: p.relics, meta: p.meta, pact: this.pact, chaliceHp: p.chaliceHp, bonusHp: p.bonusHp });
@@ -35,9 +35,13 @@
       for (const rm of this.floor.rooms) this.roomState[rm.id] = { visited: false, known: false, cleared: false };
       this.roomId = -1;
     }
-    if (d.r !== this.roomId) { this.roomId = d.r; this.room = this.floor.rooms[d.r]; this.snaps.length = 0; this.firstInRoom = true; }
+    if (d.r !== this.roomId) {
+      this.roomId = d.r; this.room = this.floor.rooms[d.r]; this.snaps.length = 0; this.firstInRoom = true;
+      const tough = this.room.type === 'elite' || this.room.type === 'boss';
+      for (const p of this.players.values()) p.toughRoom = tough; // War Drum doubles in these rooms
+    }
     this.locked = !!d.L; this.gold = d.g; this.xp = d.x; this.xpNext = d.n; this.level = d.l; this.waitMsg = d.wm; this.time = d.T;
-    this.light = d.li; this.lightMax = d.lm || 100; this.dread = { tier: d.dr | 0 };
+    this.light = d.li; this.lightMax = d.lm || 100; this.dread = { tier: d.dr | 0 }; this.deepRooms = d.dp | 0;
     if (d.O) this.props = d.O.map(a => ({ id: a[0], kind: a[1], x: a[2], y: a[3], state: a[4], item: a[5], price: a[6], group: a[7], stype: a[8], text: a[9] }));
     if (d.RS) d.RS.forEach((b, i) => { this.roomState[i] = { visited: !!(b & 1), known: !!(b & 2), cleared: !!(b & 4) }; });
     if (d.RUN) this.run = d.RUN;
@@ -53,9 +57,12 @@
       const p = this.players.get(a[0]); if (!p) continue;
       p.hp = a[4]; p.maxHp = a[5]; const fl = a[6];
       p.downed = !!(fl & 4); p.dead = !!(fl & 8); p.invuln = fl & 16 ? 0.2 : 0; p.revive = a[7];
-      p.critStacks = a[8]; p.aegisT = a[9] ? 0 : 1; p.guardT = a[10] ? 1 : 0; p.secondWind = a[11]; p.phoenixUsed = !!a[12]; p.picks = a[13]; p.rerolls = a[14];
-      p.shield = a[15] || 0; p.stealthT = fl & 128 ? 1 : 0; p.ambush = !!(fl & 256);
-      if (p.pid !== this.localPid) { p.moving = !!(fl & 1); p.dashing = !!(fl & 2); p.face = a[3]; p.bulwarkT = fl & 64 ? 1 : 0; } // the local hero runs its own Bulwark timer
+      p.critStacks = a[8]; p.aegisT = a[9] ? 1 : 0; p.guardT = a[10] ? 1 : 0; p.secondWind = a[11]; p.phoenixUsed = !!a[12]; p.picks = a[13]; p.rerolls = a[14];
+      p.shield = a[15] || 0; p.rdy = a[16] | 0; p.stealthT = fl & 128 ? 1 : 0; p.ambush = !!(fl & 256); p.shieldOut = !!(fl & 64); p.airborne = !!(fl & 512); p.momN = a[17] | 0; p.shwC = a[18] || 0; p.shwA = a[19] || 0;
+      if ((a[20] | 0) !== (p.chaliceHp | 0)) { p.chaliceHp = a[20] | 0; this.recalc(p); }
+      p.glBuff = !!(fl & 1024); p.embolden = !!(fl & 2048); // Cleric buffs: Guardian Light, Embolden
+      p.glT = p.glBuff ? 1 : 0; p.glV = a[22] || 0; p.auraT = p.embolden ? 1 : 0; p.auraV = a[23] || 0; p.knellN = a[21] | 0; p.knellT = p.knellN ? 1 : 0; // timed damage bonuses the Tab sheet and Stats read
+      if (p.pid !== this.localPid) { p.moving = !!(fl & 1); p.dashing = !!(fl & 2); p.face = a[3]; p.braceT = fl & 1048576 ? 1 : 0; p.tranceT = fl & 4096 ? 1 : 0; } // the local hero predicts its own Trance
       else if (this.firstInRoom) { p.x = a[1]; p.y = a[2]; }
     }
     this.firstInRoom = false;
@@ -94,6 +101,8 @@
       const fl = rb[7];
       e.flash = fl & 1 ? 0.05 : 0; e.frozen = fl & 2 ? 1 : 0; e.stun = fl & 4 ? 1 : 0; e.burnLvl = (fl >> 11) & 3; e.burn = e.burnPool = e.burnLvl > 0 ? 1 : 0; e.chill = rb[16] || 0; e.exposed = !!(fl & 32);
       e.charge = fl & 64 ? 1 : 0; e.bleedPool = fl & 128 ? 1 : 0; e.judged = fl & 256 ? 1 : 0; e.blind = fl & 512 ? 1 : 0; e.vulnT = fl & 1024 ? 1 : 0;
+      e.venomLvl = (fl >> 13) & 7; e.radLvl = (fl >> 16) & 3; e.doomLine = rb[17] || 0; // Venom pips (5 = Corroded), Radiance fill, Reap line (bosses: the Toll gauge)
+      e.hexed = !!(fl & (1 << 18)); e.marked = !!(fl & (1 << 19)); e.sealed = !!(fl & (1 << 20)); e.ailN = (fl >> 21) & 7; // route states: Hexed, Marked, Sealed, ailment count
       e.boss = !!e.def.boss;
       const st = N.ST[rb[8]] || 'move';
       if (e.boss) { e.pose = st; e.st = 'atk'; } else e.st = st;
@@ -115,7 +124,8 @@
     const zb = this.zoneBase;
     if (zb) {
       const el = now - zb.recv;
-      this.zones = zb.list.map(z => ({ id: z[0], kind: N.ZK[z[1]], x: z[2], y: z[3], r: z[4], t: z[5] + el, dur: z[6], a: z[7], len: z[8], w: z[9], arc: z[10], team: z[11], elite: !!z[12], lob: z[13] > -99999 ? [z[13], z[14]] : null, warm: z[15], str: z[16] || 0 }));
+      this.zones = zb.list.map(z => ({ id: z[0], kind: N.ZK[z[1]], x: z[2], y: z[3], r: z[4], t: z[5] + el, dur: z[6], a: z[7], len: z[8], w: z[9], arc: z[10], team: z[11], elite: !!z[12], lob: z[13] > -99999 ? [z[13], z[14]] : null, warm: z[15], str: z[16] || 0, fol: z[17] | 0 }));
+      for (const z of this.zones) if (z.fol) for (const p of this.players.values()) if (p.slot === z.fol - 1) { z.x = p.x; z.y = p.y; break; } // a zone that follows its hero is drawn on the hero's smoothed position
     }
   };
 
@@ -124,6 +134,7 @@
     ED.FX.reset();
     ED.Render.lightLevel = 1;
     U.resetUid(1);
+    if (ED.Actors) ED.Actors.reset();
     const s = G.s = { mode, cfg, localPid: cfg.localPid, net: cfg.net || null, fxBuf: [], snapT: 0, snapN: 0, inT: 0, acc: 0, alpha: 1, epoch: 0, offer: null, offerOpen: false, ended: false, paused: false, prompt: null, sig: '', claimed: {} };
     if (mode === 'client') {
       s.mirror = new Mirror(cfg, cfg.localPid);
@@ -137,7 +148,10 @@
       for (const p of s.world.players.values()) p.mastery10 = p.meta && p.meta.mastery >= 10;
     }
     s.view.pact = cfg.pact;
-    s.ctl = { atkCd: 0, skillCd: 0, skill2Cd: 0, charges: s.me.stats.maxCharges, dashCd: 0, tranceT: 0, latch: false, target: null };
+    s.ctl = { atkCd: 0, skillCd: 0, skill2Cd: 0, charges: s.me.stats.maxCharges, dashCd: 0, tranceT: 0, latch: false, aimA: 0 };
+    // Aim state read by ED.AimFx: cursor in CSS px (sx, sy) and world (wx, wy), device, angle, push fraction (frac) for stick or keyboard-only ground skills, ready ground skills, cooldown fraction, pulse/crit timestamps.
+    s.aim = { sx: 0, sy: 0, wx: 0, wy: 0, a: 0, device: 'mouse', pointer: false, show: false, dead: false, foe: false, frac: 0.6, cd: 0, ground: [], pulseT: -9, critT: -9 };
+    if (ED.AimFx) ED.AimFx.applyCursor();
     s.fxCtx = {
       localPid: s.localPid,
       player: (pid) => s.view.players.get(pid),
@@ -149,7 +163,7 @@
     return s;
   };
 
-  G.stop = () => { G.s = null; };
+  G.stop = () => { G.s = null; if (ED.AimFx) ED.AimFx.hover(false, false); };
   // No one else is in this world (solo, or a hosted party whose friends have all left): it may wait for us.
   G.alone = () => { const s = G.s; return !!s && (s.mode === 'solo' || (s.mode === 'host' && s.world.players.size <= 1)); };
 
@@ -178,10 +192,8 @@
   // Host/solo: process events and targeted messages produced by the world this frame.
   G.drainWorld = () => {
     const s = G.s, w = s.world;
-    for (const ev of w.fx) {
-      if (s.mode === 'host') s.fxBuf.push(ev);
-      G.localEvent(ev);
-    }
+    if (s.mode === 'host') for (const ev of w.fx) s.fxBuf.push(ev); // peers get every event (capped per snapshot); the local screen is capped per frame
+    for (const ev of N.capFx(w.fx, N.CAPS_LOCAL)) G.localEvent(ev);
     w.fx.length = 0;
     for (const m of w.msgs) {
       if (m.to === s.localPid) G.message(m);
@@ -190,8 +202,10 @@
     w.msgs.length = 0;
   };
 
+  const SHEET_EVENTS = { build: 1, boon: 1, evolve: 1, levelup: 1, dread: 1, room: 1, relic: 1, stratum: 1 }; // events that change what the open character sheet shows
   G.localEvent = (ev) => {
     const s = G.s; if (!s) return;
+    if (SHEET_EVENTS[ev.t]) ED.UI.sheetDirty();
     if (ev.t === 'room') {
       s.epoch = ev.ep;
       if (s.mode === 'client') {
@@ -199,7 +213,8 @@
         if (mine) { s.me.x = mine[1]; s.me.y = mine[2]; s.me.vx = 0; s.me.vy = 0; s.me.dashT = 0; s.me.skillMove = null; }
       }
       ED.Render.updateCamera(s.view, s.me, 0, true);
-      s.ctl.target = null;
+    } else if (ev.t === 'hit' && ev.c && ev.pid === s.localPid && s.aim) {
+      s.aim.critT = performance.now();
     } else if (ev.t === 'build' && s.mode === 'client') {
       const p = s.mirror.players.get(ev.b.pid);
       if (p) {
@@ -225,14 +240,18 @@
     const s = G.s; if (!s) return;
     if (m.t === 'offer') {
       s.offer = m; s.offerOpen = true; s.offerHidden = false;
-      const sheet = document.getElementById('ov-sheet');
-      if (!sheet.hidden) { ED.UI.toggleSheet(false); s.paused = !document.getElementById('ov-pause').hidden; }
       ED.UI.showBoons(m);
+      ED.UI.sheetDirty();
     }
     else if (m.t === 'offerDone') { s.offer = null; s.offerOpen = false; ED.UI.hideBoons(); }
     else if (m.t === 'claimed') s.claimed[m.group] = true;
-    else if (m.t === 'toast') { ED.UI.toast(m.text); ED.Audio.play('deny'); }
-    else if (m.t === 'refund') s.ctl.skill2Cd = 0; // Night's Edge: an Ambush kill refunds the second skill
+    else if (m.t === 'toast') { ED.UI.toast(m.text); if (!m.info) ED.Audio.play('deny'); } // info toasts are not refusals
+    else if (m.t === 'refund') { // cooldown refund { slot, s }: s seconds off (a charge returns when the cooldown reaches 0), no s = in full
+      const c = s.ctl;
+      if (m.slot === 1) c.skill2Cd = m.s ? Math.max(0, c.skill2Cd - m.s) : 0;
+      else if (m.s) c.skillCd -= m.s;
+      else c.charges = Math.min(s.me.stats.maxCharges, c.charges + 1);
+    }
   };
 
   // Network handlers.
@@ -242,7 +261,7 @@
     if (d.t === 'in') {
       const p = w.players.get(pid);
       if (p && d.e === w.roomEpoch && !p.downed && !p.dead) {
-        p.x = +d.x || p.x; p.y = +d.y || p.y; p.face = +d.f || 0; p.moving = !!d.m; p.dashing = !!d.d; p.vx = +d.vx || 0; p.vy = +d.vy || 0;
+        p.x = +d.x || p.x; p.y = +d.y || p.y; p.face = +d.f || 0; p.moving = !!d.mv; p.dashing = !!d.d; p.skillIfr = !!d.m; p.vx = +d.vx || 0; p.vy = +d.vy || 0;
         Sim.resolve(p, w.room, w.locked, false);
       }
     } else if (d.t === 'act') G.applyAction(w, pid, d.a);
@@ -261,18 +280,17 @@
   function control(s, inp, dt) {
     const me = s.me, view = s.view, ctl = s.ctl, st = me.stats;
     ctl.atkCd -= dt; ctl.dashCd -= dt; ctl.tranceT -= dt; ctl.skill2Cd -= dt;
-    if (s.mode === 'client') { if (me.bulwarkT > 0) me.bulwarkT -= dt; if (me.tranceT > 0) me.tranceT -= dt; } // a mirror hero has no world tick
-    if (ctl.charges < st.maxCharges) { ctl.skillCd -= dt; if (ctl.skillCd <= 0) { ctl.charges++; if (ctl.charges < st.maxCharges) ctl.skillCd = st.skillCd; else ctl.skillCd = 0; } }
-    if (me.downed || me.dead || !view.room) { s.prompt = null; if (s.mode !== 'client') me.dashing = false; return; }
+    if (s.mode === 'client') for (const k of MIRROR_TIMERS) if (me[k] > 0) me[k] -= dt; // a mirror hero has no world tick
+    if (s.mode === 'client') { me.atkAge = (me.atkAge === undefined ? 9 : me.atkAge) + dt; me.chanT = st.channel > 0 && !me.moving && me.atkAge < ED.chanWindow(me) ? (me.chanT || 0) + dt : 0; } // Channel (a client's chip estimates the host's value)
+    if (ctl.charges < st.maxCharges) { ctl.skillCd -= dt; while (ctl.skillCd <= 0 && ctl.charges < st.maxCharges) { ctl.charges++; ctl.skillCd = ctl.charges < st.maxCharges ? ctl.skillCd + st.skillCd : 0; } } // a refund past the running cooldown carries into the next charge
+    if (me.downed || me.dead || !view.room) {
+      s.prompt = null; if (s.mode !== 'client') me.dashing = false;
+      s.aim.show = false; s.aim.ground.length = 0; ED.AimFx.hover(ED.Input.device === 'pad', false);
+      return;
+    }
     let mx = inp.mx, my = inp.my;
     if (s.offerOpen) { mx = 0; my = 0; }
-    // aim
-    let aim = null;
-    const set = ED.App.settings;
-    if (inp.padAim !== undefined) aim = inp.padAim;
-    else if (set.aim === 'mouse') { const wpt = ED.Render.toWorld(ED.Input.mouse.x * ED.Render.dpr, ED.Input.mouse.y * ED.Render.dpr); aim = Math.atan2(wpt.y - (me.y - 10), wpt.x - me.x); }
-    else aim = autoAim(s, me, view);
-    if (aim === null) aim = Math.atan2(me.mvy || 0, me.mvx || 1);
+    const aim = aimOf(s, me, inp);
     me.face = aim;
     // interaction prompt
     s.prompt = null;
@@ -297,42 +315,52 @@
       if (inp.atkPressed && near) { G.act({ t: 'interact', id: near.id }); ctl.latch = true; ctl.atkCd = Math.max(ctl.atkCd, 0.25); }
       if (!inp.atk) ctl.latch = false;
       if (inp.atk && !ctl.latch && ctl.atkCd <= 0 && !near) {
+        const w = st.weapon, cl = isCleave(me, st, w, view.time); // decided before the act: the sim spends the Follow-Through
         G.act({ t: 'atk', a: aim });
-        const ws = ED.Stats.attackRate ? ED.Stats.attackRate(me) : 1 + (ctl.tranceT > 0 ? st.trance : 0) + (st.wardrum && me.hp < me.maxHp * 0.5 ? st.wardrum : 0);
-        ctl.atkCd = st.atkInterval / ws;
+        if (s.mode === 'client') { me.atkCount = (me.atkCount | 0) + 1; if (st.swift) me.flowT = ED.CONST.FLOW_T; if (cl) me.cleaveNext = 0; } // the host spends Follow-Through on the Cleave it grants
+        if (s.mode === 'client') me.atkAge = 0;
+        ctl.atkCd = Math.max(ctl.atkCd, -dt) + ED.Stats.attackInterval(me); // carries the overshoot of this frame so the real rate equals the shown one
+        s.aim.pulseT = performance.now();
         ED.FX.playerAttackAnim(s.localPid, aim);
-        const w = st.weapon;
         if (w.kind === 'melee') {
-          const reach = w.range * (1 + st.area * 0.5 + st.meleeReach), arc = Math.min(6.3, w.arc * (1 + st.area * 0.4));
-          ED.FX.slash(me.x, me.y - 10, aim, reach, arc, ED.PLAYER_COLORS[me.slot]);
-          ED.Audio.play(w.look === 'hammer' ? 'heavy' : 'swing');
+          const reach = w.range * (1 + st.area * 0.5 + st.meleeReach) * (cl ? 1.4 : 1), arc = Math.min(6.3, w.arc * (1 + st.area * 0.4) * (cl ? 1.4 : 1));
+          ED.FX.slash(me.x, me.y - 10, aim, reach, arc, cl ? '#ffd36b' : ED.PLAYER_COLORS[me.slot]);
+          ED.Audio.play(cl || w.look === 'hammer' ? 'heavy' : 'swing');
+          if (cl) ED.FX.hitStop(0.06);
         } else ED.Audio.play(w.proj === 'firebolt' || w.proj === 'fireball' || w.proj === 'spark' ? 'fire' : w.proj === 'soul' || w.proj === 'holy' || w.proj === 'plague' ? 'magic' : 'shoot', 0.8);
       }
       if (inp.skill && ctl.charges > 0) {
-        const skill = ED.CLASSES[me.cls].skill;
+        const skill = ED.CLASSES[me.cls].skill, N = ED.Stats.skillNums(skill, st), C = ED.CONST;
         let data = null;
-        if (skill === 'charge') {
-          const end = Sim.castMove(view.room, me.x, me.y, aim, 150, me.r, view.locked);
+        if (skill === 'charge') { // a run toward the cursor: clamp(cursor distance, CHARGE_MIN.., range), cut at walls, at CHARGE_SPEED, untouchable for its whole length; the sim sweeps it for contact
+          const ww = ED.AimFx.want(me, s.aim, N.range), end = Sim.castMove(view.room, me.x, me.y, aim, U.clamp(ww.d, N.rangeMin, N.range), me.r, view.locked), len = Math.max(1, Math.hypot(end.x - me.x, end.y - me.y));
           data = { x0: Math.round(me.x), y0: Math.round(me.y), x1: Math.round(end.x), y1: Math.round(end.y) };
-          me.skillMove = { dx: Math.cos(aim), dy: Math.sin(aim), speed: 600, t: 0.25 };
+          me.skillMove = { dx: Math.cos(aim), dy: Math.sin(aim), speed: C.CHARGE_SPEED, t: len / C.CHARGE_SPEED, iframes: len / C.CHARGE_SPEED, age: 0 };
+          if (s.mode === 'client') { // local estimates of what the host decides: Brace for the chip, Follow-Through for the Cleave smear
+            if (st.brace && view.time >= (me.braceAt || -99) + C.BRACE_CD) { me.braceT = st.brace; me.braceAt = view.time; }
+            if (st.chargeCleave) me.cleaveNext = view.time + len / C.CHARGE_SPEED + 1.5;
+          }
         } else if (skill === 'step') {
-          const dirA = (Math.hypot(mx, my) > 0.2) ? Math.atan2(my, mx) : aim;
-          const end = Sim.castMove(view.room, me.x, me.y, dirA, 140, me.r, view.locked);
+          const end = ED.AimFx.stepLand(view, me, s.aim);
           data = { x0: Math.round(me.x), y0: Math.round(me.y), x1: Math.round(end.x), y1: Math.round(end.y) };
           me.x = end.x; me.y = end.y;
-        }
+        } else data = groundData(view, me, s.aim, skill, st);
         G.act({ t: 'skill', a: aim, data });
+        castMove(view, me, N, aim, data);
         if (ctl.charges === st.maxCharges) ctl.skillCd = st.skillCd;
         ctl.charges--;
         if (st.trance) { ctl.tranceT = 4; if (s.mode === 'client') me.tranceT = 4; }
       }
       const sk2 = ED.CLASSES[me.cls].skill2;
-      if (inp.skill2 && sk2 && ctl.skill2Cd <= 0 && !(me.bulwarkT > 0)) {
-        let data = null;
-        if (sk2 === 'rain' || sk2 === 'meteor') { const tp = skillPoint(s, me, aim, inp, sk2 === 'rain' ? 260 : 300); data = { x: Math.round(tp.x), y: Math.round(tp.y) }; }
-        else if (sk2 === 'bulwark' && s.mode === 'client') me.bulwarkT = 1.4 * (st.bastion ? 1.5 : 1); // host sets the authoritative timer
+      if (inp.skill2 && sk2 && ctl.skill2Cd <= 0) {
+        const N2 = ED.Stats.skillNums(sk2, st);
+        let data = groundData(view, me, s.aim, sk2, st);
+        if (sk2 === 'shieldthrow') { const ww = ED.AimFx.want(me, s.aim, N2.range); data = { d: Math.round(Math.hypot(ww.x - me.x, ww.y - (me.y - 4))) }; } // cursor distance: how far the shield flies
         G.act({ t: 'skill', a: aim, data, slot: 1 });
-        ctl.skill2Cd = st.skill2Cd ?? ED.SKILLS[sk2].cd * (1 - ED.Stats.cdrEff(st.cdr));
+        castMove(view, me, N2, aim, data);
+        if (sk2 === 'vanish' && s.mode === 'client') me.stealthT = 2.5 + st.stealthDur; // the host's flag takes over with the next snapshot
+        if (sk2 === 'meteor' && N2.move && s.mode === 'client') me.cometT = N2.move.t; // Comet: airborne until the landing
+        ctl.skill2Cd = st.skill2Cd;
         if (st.trance) { ctl.tranceT = 4; if (s.mode === 'client') me.tranceT = 4; }
       }
       if (inp.flare && view.light >= ED.World.FLARE.cost && view.room.type !== 'boss') G.act({ t: 'flare' }); // host checks light, room and cooldown
@@ -345,40 +373,88 @@
         G.act({ t: 'dash', dx, dy });
       }
     }
-    if (me.bulwarkT > 0) { mx *= 0.5; my *= 0.5; }
     Sim.movePlayer(me, { mx, my }, dt, view.room, view.locked, view.zones);
-    if (s.mode !== 'client') me.dashing = me.dashT > 0 || !!me.skillMove;
+    if (s.mode !== 'client') me.dashing = me.dashT > 0; // a skill's own move is not a dash (no dash riders) and keeps its own i-frames (me.skillIfr)
+    aimExtras(s, me, view);
   }
 
-  // Target point of Rain of Arrows / Meteor: cursor (mouse aim), else the auto-target, else 200 along the aim; clamped to range.
-  function skillPoint(s, me, aim, inp, range) {
-    let tx = me.x + Math.cos(aim) * 200, ty = me.y + Math.sin(aim) * 200;
-    if (inp.padAim === undefined) {
-      const tgt = s.ctl.target;
-      if (ED.App.settings.aim === 'mouse') { const wpt = ED.Render.toWorld(ED.Input.mouse.x * ED.Render.dpr, ED.Input.mouse.y * ED.Render.dpr); tx = wpt.x; ty = wpt.y; }
-      else if (tgt && tgt.hp > 0) { tx = tgt.x; ty = tgt.y; }
-    }
-    const d = Math.hypot(tx - me.x, ty - me.y);
-    if (d > range) { tx = me.x + (tx - me.x) * range / d; ty = me.y + (ty - me.y) * range / d; }
-    return { x: tx, y: ty };
+  const MIRROR_TIMERS = ['braceT', 'flowT', 'tranceT', 'stealthT', 'cometT'];
+  // True when the next melee swing is a Cleave (Oath of Steel: every (3 + cleaveN)th attack, or the first after a Charge with Follow-Through): the viewer draws its own smear, the host decides the damage.
+  function isCleave(me, st, w, now) {
+    return st.cleave > 0 && w.kind === 'melee' && (now < (me.cleaveNext || 0) || ((me.atkCount | 0) + 1) % (3 + st.cleaveN) === 0);
+  }
+  // A skill's own movement from its stats (moveIf): a hop away from the cursor, a leap to the ground point; clipped at walls, untouchable for its i-frame window. The Charge and Shadowstep move in their own branch.
+  function castMove(view, me, N, aim, data) {
+    const mv = N.move;
+    if (!mv || mv.k === 'charge') return;
+    let dx, dy, dist;
+    if (mv.k === 'hop') { dx = Math.cos(aim) * mv.dir; dy = Math.sin(aim) * mv.dir; dist = mv.dist; }
+    else if (mv.k === 'leap' && data && data.x !== undefined) { dist = Math.hypot(data.x - me.x, data.y - me.y); dx = (data.x - me.x) / (dist || 1); dy = (data.y - me.y) / (dist || 1); }
+    if (!(dist > 4)) return;
+    const end = Sim.castMove(view.room, me.x, me.y, Math.atan2(dy, dx), dist, me.r, view.locked), real = Math.hypot(end.x - me.x, end.y - me.y);
+    if (real < 4) return;
+    me.skillMove = { dx: (end.x - me.x) / real, dy: (end.y - me.y) / real, speed: real / mv.t, t: mv.t, iframes: mv.iframes === undefined ? mv.t : mv.iframes, age: 0 };
   }
 
-  function autoAim(s, me, view) {
-    const st = me.stats, range = st.melee ? 230 : 420;
-    let best = null, bs = Infinity;
-    const fx = me.mvx || 0, fy = me.mvy || 0;
-    for (const e of view.enemies) {
-      if (e.hp <= 0 || e.def.invuln || e.burrowed) continue;
-      const dx = e.x - me.x, dy = e.y - me.y, d = Math.hypot(dx, dy);
-      if (d > range) continue;
-      const dot = (dx * fx + dy * fy) / (d || 1);
-      let sc = d * (1.2 - 0.3 * dot);
-      if (!Sim.los(view.room, me.x, me.y, e.x, e.y, view.locked)) sc *= 3;
-      if (e === s.ctl.target) sc *= 0.75;
-      if (sc < bs) { bs = sc; best = e; }
+  // Aim angle of this frame, and the cursor state ED.AimFx draws from (s.aim). Aim origin is the projectile spawn point (x, y - 4).
+  // The last angle is kept when the cursor is within 12 px of the origin or outside the window; before the first pointer event the aim follows the walking direction.
+  // On a pad the right stick (latched 0.35 s after release) aims, else the left stick, else the last angle; no aim assist anywhere.
+  const AIM_DEAD2 = 12 * 12;
+  function aimOf(s, me, inp) {
+    const I = ED.Input, R = ED.Render, a = s.aim, ctl = s.ctl, m = I.mouse, pad = I.device === 'pad';
+    a.device = pad ? 'pad' : 'mouse'; a.pointer = !pad && m.moved > 0; a.show = true; a.dead = false;
+    a.sx = m.x; a.sy = m.y;
+    let ang = ctl.aimA;
+    if (pad) {
+      if (inp.padAim !== undefined) ang = inp.padAim;
+      else if (Math.hypot(inp.mx, inp.my) > 0.2) ang = Math.atan2(inp.my, inp.mx);
+    } else if (!a.pointer) {
+      if (Math.hypot(me.mvx || 0, me.mvy || 0) > 0.1) ang = Math.atan2(me.mvy, me.mvx);
+    } else {
+      const w = R.toWorld(m.x * R.dpr, m.y * R.dpr), dx = w.x - me.x, dy = w.y - (me.y - 4);
+      a.wx = w.x; a.wy = w.y;
+      if (dx * dx + dy * dy > AIM_DEAD2) { if (m.inside) ang = Math.atan2(dy, dx); } else a.dead = true;
     }
-    s.ctl.target = best;
-    return best ? Math.atan2(best.y - (me.y - 4), best.x - me.x) : null;
+    ctl.aimA = a.a = ang;
+    a.frac = pad && inp.padMag !== undefined ? U.clamp((inp.padMag - 0.45) / 0.5, 0.3, 1) : 0.6; // stick push -> share of a ground skill's range
+    let foe = false;
+    if (a.pointer && m.inside) {
+      for (const e of s.view.enemies) {
+        if (e.hp <= 0 || e.burrowed || e.spawnT > 0) continue;
+        const ex = a.wx - e.x, ey = a.wy - e.y, rr = e.r + 4;
+        if (ex * ex + ey * ey <= rr * rr) { foe = true; break; }
+      }
+    }
+    a.foe = foe;
+    ED.AimFx.hover(pad, foe);
+    return ang;
+  }
+
+  // data of a ground skill's cast: origin and landing point; null for any other skill.
+  function groundData(view, me, a, id, st) {
+    const ai = ED.skillAim(id, st);
+    if (ai.aim !== 'ground') return null;
+    const g = ED.AimFx.groundLand(view, me, a, ai.range, ai.walk);
+    return { x0: Math.round(me.x), y0: Math.round(me.y), x: Math.round(g.x), y: Math.round(g.y) };
+  }
+
+  // After the frame's casts: ready ground/move skills for the landing preview and the attack-cooldown fraction for the cursor arc.
+  function addReady(a, n, slot, id, st) {
+    const ai = ED.skillAim(id, st);
+    if (ai.aim !== 'ground' && id !== 'step') return n;
+    const g = a.ground[n] || (a.ground[n] = {});
+    g.slot = slot; g.id = id; g.move = ai.aim !== 'ground'; g.range = ai.range || 140; g.walk = !!ai.walk;
+    return n + 1;
+  }
+  function aimExtras(s, me, view) {
+    const a = s.aim, ctl = s.ctl, st = me.stats, cls = ED.CLASSES[me.cls];
+    let n = 0;
+    if (ctl.charges > 0) n = addReady(a, n, 0, cls.skill, st);
+    if (cls.skill2 && ctl.skill2Cd <= 0) n = addReady(a, n, 1, cls.skill2, st);
+    a.ground.length = n;
+    for (let i = 0; i < n; i++) { const g = a.ground[i]; g.r = g.move ? 0 : ED.skillRadius(g.id, st); }
+    const iv = ED.Stats.attackInterval(me);
+    a.cd = iv >= 0.45 ? U.clamp(ctl.atkCd / iv, 0, 1) : 0;
   }
 
   // ---------------- per-frame ----------------
@@ -406,7 +482,7 @@
     const s = G.s; if (!s) return;
     const now = performance.now() / 1000;
     const alone = G.alone(), frozen = alone && s.paused;
-    // Alone, the world waits while you read boon cards (offers only open in a safe room), so picking never costs lantern time.
+    // Alone, the world waits while you read boon cards (offers only open in a safe room), so the Gloom's delay never runs while you pick.
     const hold = alone && s.offerOpen;
     s.alpha = 1; // frozen, held or client: draw the newest state
     const sdt = alone ? dt * ED.FX.timeScale : dt; // hit-stop slows only a world nobody else shares; effects keep real time
@@ -420,7 +496,7 @@
         if (inp.left || inp.up) ED.UI.boonMove(-1);
         if (inp.right || inp.down) ED.UI.boonMove(1);
         if (inp.confirm) ED.UI.boonConfirm();
-        if (inp.skill) ED.UI.boonReroll(true);
+        if (inp.reroll) ED.UI.boonReroll(true);
       }
       control(s, inp, sdt);
       if (s.mode !== 'client') {
@@ -450,9 +526,9 @@
         if (s.inT <= 0) {
           s.inT = 1 / ED.CONST.INPUT_HZ;
           const me = s.me;
-          s.net.send({ t: 'in', x: Math.round(me.x * 10) / 10, y: Math.round(me.y * 10) / 10, f: Math.round(me.face * 100) / 100, m: me.moving ? 1 : 0, d: (me.dashT > 0 || me.skillMove) ? 1 : 0, vx: Math.round(me.vx || 0), vy: Math.round(me.vy || 0), e: s.epoch });
+          s.net.send({ t: 'in', x: Math.round(me.x * 10) / 10, y: Math.round(me.y * 10) / 10, f: Math.round(me.face * 100) / 100, mv: me.moving ? 1 : 0, d: me.dashT > 0 ? 1 : 0, m: me.skillIfr ? 1 : 0, vx: Math.round(me.vx || 0), vy: Math.round(me.vy || 0), e: s.epoch });
         }
-        s.me.dashing = s.me.dashT > 0 || !!s.me.skillMove;
+        s.me.dashing = s.me.dashT > 0;
       }
     }
     ED.FX.update(frozen ? 0 : dt);

@@ -55,7 +55,7 @@
     s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.05);
   };
 
-  const GAP = { hit: 0.035, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1, freeze: 0.05, shatter: 0.06, combust: 0.06, guardhit: 0.06, block: 0.05 };
+  const GAP = { hit: 0.035, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1, freeze: 0.05, shatter: 0.06, combust: 0.06, guardhit: 0.06, block: 0.05, clang: 0.03, throw: 0.08, catch: 0.08, parry: 0.1, bell: 0.06 };
   // arg: cue-specific parameter (dread: the new tier)
   A.play = (name, vol, arg) => {
     if (!A.ready || A.ctx.state !== 'running') return;
@@ -121,6 +121,12 @@
       case 'combust': noise('lowpass', 2000, 180, 0.4, 0.3 * v); tone('sawtooth', 170, 45, 0.32, 0.12 * v); tone('sine', 80, 32, 0.3, 0.22 * v); break;
       case 'guardhit': tone('square', 1700, 1450, 0.05, 0.07 * v); tone('sine', 2650, 2550, 0.2, 0.05 * v); noise('bandpass', 2200, 1200, 0.06, 0.1 * v, 3); break;
       case 'ambush': noise('bandpass', 3200, 700, 0.1, 0.2 * v, 2); tone('sawtooth', 720, 140, 0.13, 0.1 * v); tone('sine', 90, 45, 0.12, 0.18 * v); break;
+      // Shade: an execution slices low and wet, a whirl sweeps up and back, a rupture pops, a refund ticks up twice, a veil swells like breath
+      case 'exec': noise('bandpass', 2600, 300, 0.14, 0.24 * v, 2.5); tone('sawtooth', 190, 55, 0.16, 0.12 * v); tone('sine', 80, 38, 0.16, 0.22 * v); break;
+      case 'whirl': noise('bandpass', 500, 2800, 0.16, 0.2 * v, 2); noise('bandpass', 2800, 600, 0.16, 0.16 * v, 2, null, A.ctx.currentTime + 0.1); tone('triangle', 400, 900, 0.2, 0.05 * v); break;
+      case 'rupt': noise('lowpass', 2000, 180, 0.18, 0.26 * v, 1); tone('sine', 150, 55, 0.14, 0.2 * v); noise('highpass', 4200, 2200, 0.08, 0.08 * v); break;
+      case 'sref': tone('sine', 880, 1320, 0.07, 0.09 * v); tone('sine', 1320, 1760, 0.1, 0.09 * v, null, A.ctx.currentTime + 0.07); break;
+      case 'veil': noise('highpass', 3200, 1400, 0.3, 0.06 * v, 0.7); tone('triangle', 330, 520, 0.28, 0.07 * v); tone('sine', 660, 780, 0.3, 0.04 * v); break;
       case 'evolve': [262, 330, 392, 523, 659].forEach((f, i) => { tone('triangle', f, f * 1.005, 0.9, 0.08 * v, null, A.ctx.currentTime + i * 0.07); tone('sine', f * 2, f * 2, 0.7, 0.03 * v, null, A.ctx.currentTime + i * 0.07); }); tone('sine', 131, 131, 1.0, 0.12 * v); noise('highpass', 7000, 4000, 0.6, 0.03 * v, 1, null, A.ctx.currentTime + 0.3); break;
       case 'dread': { // low bell, deeper and more dissonant per tier
         const tier = arg | 0, f = [196, 147, 110, 73][Math.min(3, tier)];
@@ -134,6 +140,22 @@
       case 'block': tone('sine', 150, 70, 0.14, 0.26 * v); noise('bandpass', 900, 300, 0.1, 0.16 * v, 1.5); tone('square', 1250, 900, 0.05, 0.05 * v); break;
       case 'howl': tone('sawtooth', 300, 185, 0.9, 0.09 * v); tone('sawtooth', 312, 192, 0.9, 0.07 * v); tone('sine', 150, 90, 0.9, 0.12 * v); noise('lowpass', 600, 150, 0.8, 0.08 * v); break;
       case 'rift': tone('sine', 950, 110, 0.55, 0.1 * v); tone('triangle', 60, 40, 0.6, 0.18 * v); noise('bandpass', 200, 3200, 0.45, 0.1 * v, 4); break;
+      // Knight: the shield leaves the hand, rings off each foe (two semitones higher per ricochet; guarded strike: a dull clank), comes home with a leather thump (and a chime when it shields), a parry rings sharp
+      case 'throw': noise('highpass', 1200, 4200, 0.18, 0.2 * v, 0.7); tone('sine', 260, 520, 0.12, 0.05 * v); break;
+      case 'clang': {
+        const n = arg && arg.n ? Math.min(6, arg.n) : 1;
+        if (arg && arg.g) { tone('square', 210, 150, 0.1, 0.1 * v); noise('lowpass', 700, 200, 0.1, 0.14 * v, 1); break; }
+        const k = Math.pow(2, 2 * (n - 1) / 12);
+        tone('square', 880 * k, 800 * k, 0.12, 0.07 * v); tone('square', 1320 * k * 1.01, 1180 * k, 0.1, 0.05 * v); noise('bandpass', 2400 * k, 1500, 0.08, 0.12 * v, 3); tone('sine', 140, 70, 0.08, 0.1 * v);
+        break;
+      }
+      case 'catch': tone('sine', 140, 70, 0.14, 0.3 * v); noise('lowpass', 500, 150, 0.1, 0.16 * v, 1); if (arg) [1318, 1760].forEach((f, i) => tone('sine', f, f, 0.22, 0.06 * v, null, A.ctx.currentTime + 0.03 + i * 0.06)); break;
+      case 'bell': { // Cleric: a struck golden bell (arg: semitones above A5; lower for slams, higher for beams), with a bright partial and a soft fifth
+        const k = Math.pow(2, ((arg | 0) || 0) / 12);
+        tone('sine', 880 * k, 876 * k, 0.55, 0.09 * v); tone('sine', 880 * k * 2.76, 870 * k * 2.76, 0.3, 0.04 * v); tone('triangle', 880 * k * 1.5, 880 * k * 1.5, 0.4, 0.025 * v);
+        break;
+      }
+      case 'parry': tone('square', 1500, 700, 0.12, 0.09 * v); tone('sine', 2400, 2200, 0.25, 0.07 * v); noise('bandpass', 3000, 1200, 0.1, 0.16 * v, 3); tone('sine', 110, 55, 0.15, 0.22 * v); break;
       default: break;
     }
   };

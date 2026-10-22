@@ -1,12 +1,19 @@
 // Keyboard, mouse and gamepad. One binding table maps every action to two slots, each a KeyboardEvent.code or Mouse0..Mouse4.
 // Defaults: WASD move (arrows alternate), attack LMB / J, skill 1 Q / RMB, skill 2 E, dash Space, flare F, map Tab, pause Esc.
-// Gamepad (fixed): left stick move, right stick aim, X / RT attack, B / RB skill 1, Y / LT skill 2, A / LB dash, L3 flare, Start pause, Back map.
+// Aim is the mouse cursor (I.mouse, CSS px; moved = time of the last pointer event, 0 before the first). Gamepad (fixed): left stick move,
+// right stick aim (latched 0.35 s after release), X / RT attack, B / RB skill 1, Y / LT skill 2, A / LB dash, L3 flare, Start pause, Back map.
+// I.device ('mouse' | 'pad') says which of the two currently aims. Menus read tabPrev / tabNext (Q / E, LB / RB), tabN (1-3), up / down / left / right (keys, d-pad), navX / navY (left stick, repeating), scrollY (right stick), back (B), reroll (Q, Y), cycle (Y).
+// I.mask([actions]) makes every key, mouse button and pad button held right now (only the keys of the listed actions, when given; pad buttons always) read as up until released (an overlay that closes must not pass its closing press to the game).
 (function (ED) {
   'use strict';
   const I = ED.Input = {
-    keys: new Set(), pressed: new Set(), mouse: { x: 0, y: 0, moved: 0 },
-    pad: null, padPrev: [], enabled: true, binds: {},
+    keys: new Set(), pressed: new Set(), mouse: { x: 0, y: 0, moved: 0, inside: true },
+    pad: null, padPrev: [], enabled: true, binds: {}, device: 'mouse',
   };
+  const PAD_AIM = 0.45, LATCH_MS = 350, SWITCH_PX = 3, SWITCH_WINDOW_MS = 250;
+  const JUMP_MS = 50;
+  let padLast = null; // last right-stick aim above PAD_AIM {a, mag, t}
+  let pbT = 0, pbL = 0, pbR = 0, poL = 0, poR = 0; // stick magnitudes: newest baseline sample (pb*) and the one before it (po*), JUMP_MS or more apart
 
   // ---------------- binding table ----------------
   I.ACTIONS = [
@@ -26,6 +33,8 @@
   const CODE_RE = /^(Mouse[0-4]|[A-Za-z][A-Za-z0-9]{1,24})$/;
   const RESERVED = new Set(['Escape', 'Enter', 'NumpadEnter', 'MetaLeft', 'MetaRight', 'ContextMenu']); // not assignable by the user
   let codes = {}; // action -> non-empty codes, rebuilt whenever a slot changes
+  const masked = new Set(); // codes (and 'pad<i>') held when I.mask() ran; dropped when released
+  let navT = 0, navL = 0;
 
   const rebuild = () => {
     codes = {};
@@ -103,16 +112,19 @@
   };
   const isMouse = (c) => /^Mouse/.test(c);
   I.labels = (action) => (codes[action] || []).map(I.keyName);
-  // Primary label for HUD hints: the first keyboard binding, else the first mouse button.
+  // Gamepad button names (fixed layout, see I.poll): what HUD keycaps, prompts and signs show while I.device is 'pad'.
+  const PAD = { attack: 'X / RT', skill1: 'RB / B', skill2: 'LT / Y', dash: 'A / LB', flare: 'L3', map: 'Back', pause: 'Start' };
+  // Primary label for HUD hints: the first keyboard binding, else the first mouse button; the pad button names on a pad.
   I.label = (action) => {
+    if (I.device === 'pad' && PAD[action]) return PAD[action];
     const list = codes[action] || [];
     const c = list.find(x => !isMouse(x)) || list[0];
     return c ? I.keyName(c) : '—';
   };
   // Every bound key of an action, at most two ('LMB / J'): what the interact prompt and tutorial signs show.
-  I.hint = (action) => { const l = I.labels(action); return l.length ? l.slice(0, 2).join(' / ') : '—'; };
-  // Replaces {action} tokens in a text with the action's current key hint (unknown tokens stay).
-  I.fill = (text) => String(text).replace(/\{(\w+)\}/g, (m, a) => (ACTION[a] ? I.hint(a) : m));
+  I.hint = (action) => { if (I.device === 'pad' && PAD[action]) return PAD[action]; const l = I.labels(action); return l.length ? l.slice(0, 2).join(' / ') : '—'; };
+  // Replaces {action} tokens in a text with the action's current key hint (unknown tokens stay); {aim} names the device that aims.
+  I.fill = (text) => String(text).replace(/\{(\w+)\}/g, (m, a) => (a === 'aim' ? (I.device === 'pad' ? 'the right stick' : 'the mouse') : ACTION[a] ? I.hint(a) : m));
 
   // ---------------- capture (rebinding screen) ----------------
   let stopCap = null;
@@ -153,7 +165,20 @@
     });
     window.addEventListener('keyup', (e) => { I.keys.delete(e.code); });
     window.addEventListener('blur', () => { I.keys.clear(); });
-    canvas.addEventListener('mousemove', (e) => { I.mouse.x = e.clientX; I.mouse.y = e.clientY; I.mouse.moved = performance.now(); });
+    // Pointer position comes from the window so a click on an overlay button seeds it; button codes stay on the canvas (an overlay click never registers Mouse0).
+    // The device flips to the mouse on a press or after more than SWITCH_PX of movement within SWITCH_WINDOW_MS, so desk jitter never steals aim from a pad.
+    let travel = 0;
+    const point = (e, press) => {
+      const m = I.mouse, now = performance.now();
+      if (m.moved && now - m.moved > SWITCH_WINDOW_MS) travel = 0;
+      if (m.moved) travel += Math.hypot(e.clientX - m.x, e.clientY - m.y);
+      m.x = e.clientX; m.y = e.clientY; m.moved = now; m.inside = true;
+      if (press || travel > SWITCH_PX) { I.device = 'mouse'; travel = 0; }
+    };
+    window.addEventListener('pointermove', (e) => point(e, false), { passive: true });
+    window.addEventListener('pointerdown', (e) => point(e, true), { passive: true });
+    const leave = () => { I.mouse.inside = false; }, enter = () => { I.mouse.inside = true; };
+    for (const t of [document, document.documentElement]) { t.addEventListener('mouseleave', leave); t.addEventListener('mouseenter', enter); }
     canvas.addEventListener('mousedown', (e) => {
       if (e.button === 1 || e.button > 2) e.preventDefault(); // no autoscroll, no history navigation
       const c = 'Mouse' + e.button;
@@ -165,7 +190,9 @@
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   };
 
-  const down = (a) => codes[a].some(c => I.keys.has(c));
+  const down = (a) => codes[a].some(c => I.keys.has(c) && !masked.has(c));
+  I.held = down;
+  I.mask = (actions) => { const only = actions ? new Set(actions.flatMap(a => codes[a] || [])) : null; for (const c of I.keys) if (!only || only.has(c)) masked.add(c); const g = navigator.getGamepads ? [...navigator.getGamepads()].find(q => q && q.connected) : null; if (g) g.buttons.forEach((b, i) => { if (b.pressed) masked.add('pad' + i); }); };
   const hit = (a) => codes[a].some(c => I.pressed.has(c));
   const hitCode = (...cs) => cs.some(c => I.pressed.has(c));
 
@@ -189,16 +216,27 @@
     out.right = hit('right');
     out.up = hit('up');
     out.down = hit('down');
+    out.tabPrev = hit('skill1'); out.tabNext = hit('skill2'); out.tabN = hitCode('Digit1') ? 1 : hitCode('Digit2') ? 2 : hitCode('Digit3') ? 3 : 0;
+    out.back = false; out.reroll = hit('skill1'); out.cycle = false; out.navX = 0; out.navY = 0; out.scrollY = 0;
+    for (const c of masked) if (c.indexOf('pad') !== 0 && !I.keys.has(c)) masked.delete(c);
     // gamepad
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
     const gp = pads && [...pads].find(p => p && p.connected);
     if (gp) {
       const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0;
       if (Math.hypot(ax, ay) > 0.22) { out.mx += ax; out.my += ay; }
-      const rx = gp.axes[2] || 0, ry = gp.axes[3] || 0;
-      if (Math.hypot(rx, ry) > 0.45) { out.padAim = Math.atan2(ry, rx); }
-      const b = (i) => gp.buttons[i] && gp.buttons[i].pressed;
+      const rx = gp.axes[2] || 0, ry = gp.axes[3] || 0, lm = Math.hypot(ax, ay), rm = Math.hypot(rx, ry), now = performance.now();
+      // right stick: aim angle and push (padMag), held for LATCH_MS after the stick drops below PAD_AIM (B / Y / X are right-thumb buttons)
+      if (rm > PAD_AIM) padLast = { a: Math.atan2(ry, rx), mag: rm, t: now };
+      if (padLast && now - padLast.t <= LATCH_MS) { out.padAim = padLast.a; out.padMag = padLast.mag; }
+      for (const c of [...masked]) if (c.indexOf('pad') === 0 && !(gp.buttons[+c.slice(3)] && gp.buttons[+c.slice(3)].pressed)) masked.delete(c);
+      const b = (i) => gp.buttons[i] && gp.buttons[i].pressed && !masked.has('pad' + i);
       const bp = (i) => b(i) && !I.padPrev[i];
+      // device: any new button press, or a stick pushed past 0.5 that moved by more than 0.2 within the last 50-100 ms, whatever the frame rate (worn sticks drift but do not jump)
+      if (now - pbT >= JUMP_MS) { poL = pbL; poR = pbR; pbL = lm; pbR = rm; pbT = now; }
+      let touch = (lm > 0.5 && Math.abs(lm - poL) > 0.2) || (rm > 0.5 && Math.abs(rm - poR) > 0.2);
+      for (let i = 0; i < gp.buttons.length && !touch; i++) if (bp(i)) touch = true;
+      if (touch) I.device = 'pad';
       out.atk = out.atk || b(2) || b(7);
       out.atkPressed = out.atkPressed || bp(2) || bp(7);
       out.skill = out.skill || bp(1) || bp(5);
@@ -210,9 +248,15 @@
       out.confirm = out.confirm || bp(2);
       out.left = out.left || bp(14);
       out.right = out.right || bp(15);
+      out.up = out.up || bp(12); out.down = out.down || bp(13);
+      out.tabPrev = out.tabPrev || bp(4); out.tabNext = out.tabNext || bp(5);
+      out.back = bp(1); out.reroll = out.reroll || bp(3); out.cycle = bp(3);
+      // left stick as a repeating menu direction: the first push at once, then every 0.18 s while held past 0.6
+      const nx = Math.abs(ax) > 0.6 ? Math.sign(ax) : 0, ny = Math.abs(ay) > 0.6 ? Math.sign(ay) : 0;
+      if (nx || ny) { if (now - navT >= (navL ? 180 : 350)) { out.navX = nx; out.navY = ny; navT = now; navL = 1; } } else navL = 0;
+      if (Math.abs(ry) > 0.25) out.scrollY = Math.sign(ry) * ry * ry;
       I.padPrev = gp.buttons.map(x => x.pressed);
-      I.padActive = true;
-    }
+    } else { padLast = null; pbT = pbL = pbR = poL = poR = 0; if (I.device === 'pad') I.device = 'mouse'; }
     const l = Math.hypot(out.mx, out.my);
     if (l > 1) { out.mx /= l; out.my /= l; }
     return out;

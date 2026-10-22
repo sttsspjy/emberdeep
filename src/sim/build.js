@@ -1,13 +1,16 @@
-// Hero build: experience and levels, boon offers and picks, per-hero build state, companions (orbit blades, wisps, minions).
-// world.js calls the hooks below at fixed points (player creation, run start, stratum start, per-tick).
+// Hero build: experience and levels, boon offers and picks, per-hero build state, minions.
+// world.js calls the hooks below at fixed points (player creation, run start, stratum start, room lock, per-tick).
 (function (ED) {
   'use strict';
   const U = ED.U, Sim = ED.Sim;
   const W = ED.World.prototype;
 
   // ---------------- hooks called by world.js ----------------
-  // Called from addPlayer before the first recalc: add build-only fields to the hero (offer queue, companion and dash-boon state).
-  W.initBuild = function (p) { p.offers = []; p.picks = 0; p.bladeT = []; p.orbHit = {}; p.wispT = 0; p.dashHit = null; p.dashTrail = 0; p.boltAt = 0; };
+  // Called from addPlayer before the first recalc: add build-only fields to the hero (offer queue, dash-boon state, Holy/Lantern/Aegis timers, Death Knell stacks, Judgment grants, shield accounting).
+  W.initBuild = function (p) {
+    p.offers = []; p.picks = 0; p.dashHit = null; p.dashTrail = 0; p.boltAt = 0;
+    p.knellN = 0; p.knellT = 0; p.holyT = 0; p.lanternT = 0; p.retT = 0; p.castN = 0; p.judgeGot = {}; p.shieldBy = {}; p.toughRoom = false;
+  };
 
   // Queue an offer spec {src:'level'|'room'|'class'|'start'|'forge'|'epic', path?}; p.picks mirrors the queue length.
   W.grantOffer = function (p, spec) {
@@ -27,7 +30,7 @@
     const arm = rk('armory');
     if (arm) {
       const pool = (p.meta.relics || []).filter(id => (arm >= 2 ? ED.RELICS[id].rar !== 'c' : ED.RELICS[id].rar === 'c') && !p.relics.includes(id));
-      if (pool.length) { p.relics.push(this.rng.pick(pool)); this.recalc(p, true); }
+      if (pool.length) { p.relics.push(this.rng.pick(pool)); p.maxRelics = p.relics.length; this.recalc(p, true); }
     }
   };
 
@@ -40,11 +43,19 @@
     if (p.stats.cloverRerolls && s > 1) p.rerolls += p.stats.cloverRerolls;
   };
 
+  // Called from beginEncounter when an elite room locks: Battle Ward shields the hero (once per room, cap = the ward itself).
+  W.onRoomLockBuild = function (p, room) {
+    const ward = p.stats.roomWard;
+    if (ward > 0 && room.type === 'elite') this.addShield(p, p.maxHp * ward, p.maxHp * ward, 'ward');
+  };
+
   // Called every tick from updatePlayer for a living, standing hero (after hazards).
   W.updatePlayerBuild = function (p, dt) {
     const st = p.stats;
     if (st.aegis) p.aegisT = Math.max(0, p.aegisT - dt);
-    p.guardCd -= dt; p.guardT -= dt; p.frozenCd -= dt; p.tranceT -= dt; p.wallT -= dt;
+    p.guardCd -= dt; p.guardT -= dt; p.frozenCd -= dt; p.tranceT -= dt;
+    p.holyT -= dt; p.lanternT -= dt; p.retT -= dt;
+    if (p.knellT > 0 && (p.knellT -= dt) <= 0) p.knellN = 0;
     this.updateSkills(p, dt);
     this.updatePlayerCombat(p, dt);
   };
@@ -52,20 +63,20 @@
   // Called by playerSkill after any skill resolves (slot 0 = K, 1 = L).
   W.onSkillCast = function (p, slot) {
     const st = p.stats, area = 1 + st.area * 0.5;
-    if (st.overcharge) this.explode(p.x, p.y, 85 * area, st.weapon.dmg * 1.5 * st.overcharge + 10, 0, p, 'shock', true);
+    if (st.overcharge) this.explode(p.x, p.y, 85 * area, ED.procDmg(ED.BOONS.overcharge, st) * st.overcharge, 0, p, 'shock', true);
     if (st.trance) p.tranceT = 4;
-    if (st.hemoCost) p.hp = Math.max(1, p.hp - Math.floor(p.hp * st.hemoCost)); // cost scales with Hemomancy rank, like its damage bonus
   };
 
   // ---------------- xp, levels and boons ----------------
-  // Every even level grants a level offer; odd levels only raise the level.
+  // Every even level grants a level offer; odd levels only raise the level. Team level 3 grants every hero the class route offer (cls: 1 on the event); the bosses of strata I, II and IV grant the fork and its ranks (rooms.js).
   W.addXp = function (v) {
     this.xp += v;
     while (this.xp >= this.xpNext) {
       this.xp -= this.xpNext; this.level++; this.xpNext = ED.World.xpFor(this.level);
-      const boon = this.level % 2 === 0;
+      const boon = this.level % 2 === 0, route = this.level === 3;
       if (boon) for (const p of this.players.values()) this.grantOffer(p, { src: 'level' });
-      this.emit({ t: 'levelup', level: this.level, boon });
+      if (route) for (const p of this.players.values()) this.grantOffer(p, { src: 'class' });
+      this.emit({ t: 'levelup', level: this.level, boon, cls: route ? 1 : 0 });
     }
   };
 
@@ -78,8 +89,12 @@
       p.picks = p.offers.length;
       if (p.offer) {
         p.offerT += dt;
-        // AFK guard so a party is never stuck behind one player (a solo hero may take as long as they like); never auto-evolves
-        if (p.offerT > 45 && this.players.size > 1) this.pickBoon(p.pid, Math.max(0, p.offer.findIndex(id => !ED.BOONS[id].evo)));
+        // AFK guard so a party is never stuck behind one player (a solo hero may take as long as they like); never auto-evolves and never makes a hero a Generalist (the Generalist card is last in the start offer);
+        // a route or fork pick is seeded random, a mastery pick takes the fork
+        if (p.offerT > 45 && this.players.size > 1) {
+          const sp = p.offers[0], cl = sp && sp.src === 'class';
+          this.pickBoon(p.pid, cl ? (sp.ctier < 3 ? this.rng.int(0, p.offer.length - 1) : 0) : Math.max(0, p.offer.findIndex(id => !ED.BOONS[id].evo)));
+        }
       } else if (p.offers.length && safe && !p.downed && !p.dead) {
         p.offer = this.rollOffer(p, p.offers[0]); p.offerT = 0;
         this.sendOffer(p);
@@ -87,86 +102,140 @@
     }
   };
 
-  // Offer message for the hero's head spec: { to, t:'offer', boons, rerolls, picks, src, path, forge }.
+  // Offer message for the hero's head spec: { to, t:'offer', boons, rerolls, picks, src, path, forge, ctier (class offers: 1 route, 2 fork, 3 mastery), route }.
   W.sendOffer = function (p) {
     const sp = p.offers[0];
-    this.msgs.push({ to: p.pid, t: 'offer', boons: p.offer, rerolls: p.rerolls, picks: p.picks, src: sp.src, path: sp.path || null, forge: sp.src === 'forge' });
+    this.msgs.push({ to: p.pid, t: 'offer', boons: p.offer, rerolls: p.rerolls, picks: p.picks, src: sp.src, path: sp.path || null, forge: sp.src === 'forge', ctier: sp.src === 'class' ? sp.ctier | 0 : 0, route: sp.route || null });
   };
 
-  // Evolution paths the hero may take now: affinity >= EVO_AFFINITY, keystone owned, no evolution yet.
+  // Evolution paths the hero may take now: affinity >= the path's evolution affinity, keystone owned, no evolution yet.
   W.evoPaths = function (p) {
     const out = [];
     if (p.stats.evo) return out;
     for (const k of ED.PATH_IDS) {
       const id = 'evo_' + k;
-      if (!ED.BOONS[id] || p.boons[id] || ED.pathAffinity(p.boons, k) < ED.EVO_AFFINITY) continue;
+      if (!ED.BOONS[id] || p.boons[id] || ED.pathAffinity(p.boons, k) < ED.evoAffinity(k)) continue;
       if (Object.keys(p.boons).some(b => ED.BOONS[b] && ED.BOONS[b].key && ED.BOONS[b].path === k)) out.push(k);
     }
     return out;
   };
 
-  // Boon ids for one offer spec (evolution cards first). A forge spec with nothing to rank up turns into a level spec.
+  // Stratum (1-6) where the element is resisted / weak (the six elements biject with the six strata).
+  const resistStratum = (el) => ED.BIOMES.findIndex(b => b.resist === el) + 1;
+
+  // Weight of an unowned element gate on a room offer: weak soon x2, weak where an owned gate is resisted x2, resisted next stratum x0.5, the class element x2.
+  function coverage(p, g, s) {
+    let w = 1;
+    const cur = ED.biomeFor(s), next = ED.biomeFor(s + 1);
+    if (cur.weak === g || next.weak === g) w *= 2;
+    if (ED.elementGates(p.boons).some(h => { const rs = resistStratum(h); return rs > 0 && ED.biomeFor(rs).weak === g; })) w *= 2;
+    if (next.resist === g && next !== cur) w *= 0.5;
+    if (p.stats.element === g) w *= 2;
+    return w;
+  }
+
+  // Boon ids for one offer spec (evolution card first, then the duo, both prepended on top of the cards). A forge spec with nothing to rank up turns into a level spec.
+  // Everyone sees 3 cards (epic 4, Crown +1): the start offer is 3 element gates plus the guaranteed card (Generalist for Knight, Ranger and Shade; the class element's gate for the others);
+  // a class spec returns exactly the cards of the hero's next route step (no draw padding, no evolution or duo prepended): the 4 route cards, the 2 forks of the chosen route, or at mastery the fork plus rare boons
+  // (a fork at rank 3 gives an epic-style offer instead); room, level and epic offers draw from the hero's own paths (element heroes) or the General path (Generalists) plus open boons.
   W.rollOffer = function (p, spec) {
     spec = spec || { src: 'level' };
-    const rng = this.rng, s = Math.max(1, this.stratum), luck = p.stats.luck || 0, kind = p.stats.kind;
-    const owned = ED.gatePaths(p.boons), aff = {};
+    const rng = this.rng, st = p.stats, s = Math.max(1, this.stratum), luck = st.luck || 0, kind = st.kind;
+    const gen = ED.isGeneralist(p.boons), els = ED.elementGates(p.boons), aff = {};
     for (const k of ED.PATH_IDS) aff[k] = ED.pathAffinity(p.boons, k);
-    const epic = spec.src === 'epic';
-    const n = (epic ? 4 : 3) + (p.stats.choices ? 1 : 0);
+    let epic = spec.src === 'epic';
+    let n = (epic ? 4 : 3) + (st.choices | 0);
     const out = [];
     const rank = (id) => ED.BOONS[id].rar;
+    const free = !gen && els.length < ED.MAX_ELEMENTS;
     const eligible = (id) => {
       const b = ED.BOONS[id];
-      if (b.evo || (b.cls && b.cls !== p.cls) || (b.need && b.need !== kind)) return false;
-      if ((p.boons[id] || 0) >= (b.max || 5)) return false;
-      if (b.duo) return b.duo.every(k => owned.includes(k));
-      if (b.gate) return owned.length < ED.MAX_GATES && !owned.includes(b.path);
-      if (b.path) return owned.includes(b.path) && (!b.key || aff[b.path] >= ED.KEY_AFFINITY);
+      if (b.evo || b.duo || b.cls || (b.need && b.need !== kind)) return false;
+      if ((p.boons[id] || 0) >= ED.maxRank(b, st)) return false;
+      if (b.gate) return free && b.path !== 'general' && !els.includes(b.path); // the Generalist gate is only on the start offer
+      if (b.path === 'general') return b.key ? gen && aff.general >= ED.KEY_AFFINITY_GENERAL : gen || !!b.openMax; // gated General: Generalists; Keen Eye and Brutality are open at rank 1
+      if (b.path) return !gen && els.includes(b.path) && (!b.key || aff[b.path] >= ED.KEY_AFFINITY);
       return true;
     };
+    const own = (b) => !!b.path && !b.gate && (b.path === 'general' ? gen : true); // a boon of the hero's own paths
     const weight = (id) => {
       const b = ED.BOONS[id], r = rank(id);
-      let w = r === 'c' ? 60 : r === 'r' ? 30 + 2.5 * s + 60 * luck : r === 'e' ? 10 + 2 * s + 40 * luck : r === 'd' ? 12 : 10;
-      if (b.duo || (b.path && !b.gate)) w *= 2.5; // owned path
+      let w = r === 'c' ? 60 : r === 'r' ? 30 + 2.5 * s + 60 * luck : r === 'e' ? 10 + 2 * s + 40 * luck : 10;
+      if (own(b)) w *= 2.5;
       if (b.gate) w *= 0.8;
-      if (b.cls) w *= 1.4;
       if (epic && b.key) w *= 2;
       return w;
     };
-    // weighted draw without replacement until the offer holds n cards
+    // weighted draw without replacement until the offer holds n cards; at most one element gate per offer
     const draw = (pool) => {
       pool = pool.filter(id => !out.includes(id));
-      while (out.length < n && pool.length) { const id = rng.weighted(pool, weight); out.push(id); pool = pool.filter(x => x !== id); }
+      while (out.length < n && pool.length) {
+        const id = rng.weighted(pool, weight);
+        out.push(id);
+        pool = pool.filter(x => x !== id && !(ED.BOONS[id].gate && ED.BOONS[x].gate));
+      }
     };
     const level = ED.BOON_IDS.filter(eligible);
     const rare = (id) => rank(id) !== 'c';
+    const openPool = () => ED.BOON_IDS.filter(id => { const b = ED.BOONS[id]; return (b.open || b.openMax) && !b.gate && eligible(id); });
     switch (spec.src) {
       case 'forge': {
-        const own = Object.keys(p.boons).filter(id => ED.BOONS[id] && !ED.BOONS[id].evo && p.boons[id] < (ED.BOONS[id].max || 5));
-        rng.shuffle(own);
-        if (own.length) return own.slice(0, n);
+        const have = Object.keys(p.boons).filter(id => ED.BOONS[id] && !ED.BOONS[id].evo && p.boons[id] < ED.maxRank(ED.BOONS[id], st));
+        rng.shuffle(have);
+        if (have.length) return have.slice(0, n);
         spec.src = 'level';
         break;
       }
-      case 'start':
-        for (const k of rng.shuffle(ED.PATH_IDS.filter(k => !owned.includes(k)))) if (out.length < n) out.push(ED.PATH_GATE[k]);
-        break;
-      case 'class': draw(level.filter(id => ED.BOONS[id].cls)); break;
+      case 'start': {
+        const gates = ED.ELEMENT_IDS.map(k => ED.PATH_GATE[k]);
+        const mine = st.element ? ED.PATH_GATE[st.element] : null; // Pyromancer, Cleric, Necromancer: their own gate is always on the offer
+        if (mine) out.push(mine);
+        const others = rng.shuffle(gates.filter(id => id !== mine));
+        for (let i = 0; i < others.length && out.length < n + (mine ? 1 : 0); i++) out.push(others[i]);
+        if (!mine) out.push(ED.PATH_GATE.general); // Knight, Ranger, Shade: the Generalist card comes last
+        return out;
+      }
+      case 'class': {
+        const tbl = ED.CLASS_CARDS[p.cls], rt = ED.classRoute(p.boons, p.cls);
+        if (!tbl) { spec.src = 'level'; break; }
+        if (!rt.route) { spec.ctier = 1; return ED.ROUTES.map(r => tbl[r].t1); }
+        spec.route = rt.route;
+        if (!rt.fork) { spec.ctier = 2; return tbl[rt.route].forks.slice(); }
+        spec.ctier = 3;
+        if (rt.rank < ED.BOONS[rt.fork].max) out.push(rt.fork); else { epic = true; n = 4 + (st.choices | 0); }
+        draw(level.filter(rare));
+        if (!out.length) out.push('vigor');
+        return out;
+      }
       case 'epic': draw(level.filter(rare)); break;
       case 'room': {
-        const X = spec.path;
-        if (!ED.PATHS[X]) break;
-        if (owned.includes(X)) draw(level.filter(id => ED.BOONS[id].path === X || (ED.BOONS[id].duo && ED.BOONS[id].duo.includes(X))));
-        else if (owned.length < ED.MAX_GATES) out.push(ED.PATH_GATE[X]);
-        else draw(level.filter(rare));
-        break;
+        if (gen) { draw(level); break; } // gated General (x2.5) plus open General
+        if (free) { // card 1: one unowned element gate, weighted by how soon it is weak (shown with a "Weak: stratum" chip)
+          const gates = level.filter(id => ED.BOONS[id].gate);
+          if (gates.length) out.push(rng.weighted(gates, id => coverage(p, ED.BOONS[id].path, s)));
+        }
+        draw(level.filter(id => own(ED.BOONS[id])));
+        if (out.length < n) draw(openPool().filter(rare)); // the own pool ran dry: open General at rare and up
+        if (!out.length) out.push('vigor');
+        return this.prependCards(p, out);
       }
     }
     draw(level);
-    if (!out.length) draw(ED.BOON_IDS.filter(id => { const b = ED.BOONS[id]; return !b.cls && !b.path && !b.duo && eligible(id); }));
+    if (!out.length) draw(openPool());
     if (!out.length) out.push('vigor');
     if (spec.src === 'forge') return out;
-    return this.evoPaths(p).map(k => 'evo_' + k).concat(out);
+    return this.prependCards(p, out);
+  };
+
+  // Puts the evolution card (affinity >= its threshold with the keystone owned) and the duo of the hero's two element paths (both at DUO_AFFINITY, not yet taken) in front of the offer; they take no slot.
+  W.prependCards = function (p, out) {
+    const pre = this.evoPaths(p).map(k => 'evo_' + k);
+    const els = ED.elementGates(p.boons);
+    if (els.length === 2 && ED.pathAffinity(p.boons, els[0]) >= ED.DUO_AFFINITY && ED.pathAffinity(p.boons, els[1]) >= ED.DUO_AFFINITY) {
+      const duo = ED.duoOf(els[0], els[1]);
+      if (duo && !p.boons[duo] && !out.includes(duo)) pre.push(duo);
+    }
+    return pre.concat(out);
   };
 
   W.pickBoon = function (pid, idx) {
@@ -176,6 +245,7 @@
     const b = ED.BOONS[id];
     p.boons[id] = (p.boons[id] || 0) + 1;
     this.recalc(p, false);
+    if (id === 'generalist') this.forsakeRelics(p);
     if (b.heal) this.healPlayer(p, b.heal);
     if (b.mods.charges) p.chargeBonus = true;
     p.offers.shift(); p.picks = p.offers.length; p.offer = null;
@@ -188,99 +258,9 @@
   W.reroll = function (pid) {
     const p = this.players.get(pid);
     if (!p || !p.offer || p.rerolls <= 0 || !p.offers.length || p.offers[0].src === 'forge') return;
+    if (p.offers[0].src === 'class' && p.offers[0].ctier < 3) return; // a route or fork pick is a fixed choice: no reroll, no cost
     p.rerolls--;
     p.offer = this.rollOffer(p, p.offers[0]);
     this.sendOffer(p);
-  };
-
-  // ---------------- allies & companions ----------------
-  // Companion damage multiplier: Kindred (compDmg) and the Spirit Feast duo.
-  ED.CONST.COMP_MUL = 0.85; // companion damage multiplier on top of Kindred and Spirit Feast
-  const compMul = (st) => (1 + (st.compDmg || 0) + (st.feast ? 0.2 : 0)) * ED.CONST.COMP_MUL;
-
-  W.spawnMinion = function (owner, x, y, life) {
-    const st = owner.stats;
-    const mine = this.allies.filter(a => a.owner === owner.pid);
-    if (mine.length >= st.maxMinions) { mine.sort((a, b) => a.life - b.life); mine[0].life = 0; }
-    this.allies.push({ id: U.uid(), owner: owner.pid, x, y, r: 9, life, maxLife: life, cd: 0.5, face: 1,
-      dmg: (6 + st.weapon.dmg * 0.6) * (1 + st.minionDmg) });
-    this.emit({ t: 'raise', x, y });
-  };
-
-  W.updateAllies = function (dt) {
-    const keep = [];
-    for (const a of this.allies) {
-      a.life -= dt; a.cd -= dt;
-      const owner = this.players.get(a.owner);
-      if (a.life <= 0 || !owner) {
-        if (owner && owner.stats.boneSpikes) this.explode(a.x, a.y, 60, owner.stats.weapon.dmg * 1.5 * owner.stats.dmg, 0, owner, 'bone');
-        this.emit({ t: 'puff', x: a.x, y: a.y, c: '#7dffd9' });
-        continue;
-      }
-      const tgt = this.nearestEnemy(a.x, a.y, 400);
-      let tx, ty;
-      if (tgt) { tx = tgt.x; ty = tgt.y; } else { tx = owner.x + Math.cos(a.id) * 30; ty = owner.y + Math.sin(a.id) * 30; }
-      const d = Math.hypot(tx - a.x, ty - a.y);
-      if (tgt && d < a.r + tgt.r + 6) {
-        if (a.cd <= 0) {
-          a.cd = 0.7;
-          // minion hits infuse only with Elemental Bond
-          const got = this.hitEnemy(tgt, a.dmg * compMul(owner.stats), { p: owner, kind: 'minion', comp: true, noProc: !owner.stats.compInfuse, knock: 40, kx: (tx - a.x) / (d || 1), ky: (ty - a.y) / (d || 1), raw: true });
-          if (got > 0 && owner.stats.soulSiphon) this.soulSiphon(owner);
-        }
-      } else if (d > 6) {
-        const dir = this.pathDir(a, tx, ty);
-        Sim.moveCircle(a, dir[0] * 105 * dt, dir[1] * 105 * dt, this.room, this.locked, false);
-        a.face = dir[0] >= 0 ? 1 : -1;
-      }
-      keep.push(a);
-    }
-    this.allies = keep;
-  };
-
-  W.updateCompanions = function (dt) {
-    const t = this.time;
-    for (const p of this.players.values()) {
-      if (p.downed || p.dead) continue;
-      const st = p.stats;
-      if (st.orbit > 0) {
-        const n = st.orbit, dmg = (6 + st.weapon.dmg * 0.5) * compMul(st);
-        for (let i = 0; i < n; i++) {
-          const a = t * 3.2 + i * U.TAU / n;
-          const ox = p.x + Math.cos(a) * 44, oy = p.y + Math.sin(a) * 44;
-          // Guardian Spirits: a blade destroys one enemy projectile within 12 px, then rests 1 s
-          if (st.bladeBlock && (p.bladeT[i] || 0) <= t) {
-            for (const pr of this.projs) {
-              if (pr.team !== 1 || pr.life <= 0 || U.dist2(ox, oy, pr.x, pr.y) > 144) continue;
-              pr.life = 0; p.bladeT[i] = t + 1;
-              this.emit({ t: 'deflect', x: Math.round(pr.x), y: Math.round(pr.y) });
-              break;
-            }
-          }
-          for (const e of this.enemies) {
-            if (e.hp <= 0 || e.spawnT > 0) continue;
-            if (U.dist2(ox, oy, e.x, e.y) > (e.r + 10) ** 2) continue;
-            const key = e.id;
-            if ((p.orbHit[key] || 0) > t) continue;
-            p.orbHit[key] = t + 0.4;
-            this.hitEnemy(e, dmg, { p, kind: 'orbit', comp: true, knock: 60, kx: Math.cos(a + 1.57), ky: Math.sin(a + 1.57) });
-          }
-        }
-      }
-      if (st.wisp > 0) {
-        p.wispT -= dt;
-        if (p.wispT <= 0) {
-          p.wispT = 1.1 / st.wisp;
-          const tgt = this.nearestEnemy(p.x, p.y, 280);
-          if (tgt) {
-            const k = Math.floor(t * 10) % st.wisp;
-            const wa = t * 1.6 + k * U.TAU / st.wisp;
-            const wx = p.x + Math.cos(wa) * 26, wy = p.y - 14 + Math.sin(wa) * 10;
-            const a = U.angle(wx, wy, tgt.x, tgt.y);
-            this.spawnProj({ team: 0, kind: 'wisp', comp: true, x: wx, y: wy, a, speed: 330, r: 5, dmg: (5 + st.weapon.dmg * 0.45) * compMul(st), life: 1.2, owner: p.pid, homing: 3, knock: 20 });
-          }
-        }
-      }
-    }
   };
 })(globalThis.ED || (globalThis.ED = {}));

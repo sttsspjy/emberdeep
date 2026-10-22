@@ -39,13 +39,15 @@
   };
   const selectText = (el) => { if (!el) return; const r = document.createRange(); r.selectNodeContents(el); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); };
 
-  const portrait = (cls, size, slot, weapon) => { const cv = document.createElement('canvas'); cv.width = cv.height = size * 2; ED.Sprites.portrait(cv, cls, slot || 0, weapon); return cv; };
+  const portrait = (cls, size, slot, weapon) => { const cv = document.createElement('canvas'); cv.width = cv.height = size * 2; ED.Sprites.portrait(cv, cls, slot || 0, weapon); if (ED.Actors && ED.Actors.on()) ED.Actors.fit(cv, () => ED.Sprites.portrait(cv, cls, slot || 0, weapon)); return cv; };
+  UI.portrait = portrait;
 
-  // Path helpers: elements share ids with their paths (pyre, rime, storm).
-  const KEY_AFF = () => ED.KEY_AFFINITY, EVO_AFF = () => ED.EVO_AFFINITY, SUSTAIN_CAP = () => ED.CONST.SUSTAIN_CAP;
+  // Path helpers: elements share ids with their paths (fire, ice, lightning, poison, holy, shadow).
   const pathIcon = (k) => ED.Icons.url(ED.PATHS[k].icon, ED.PATHS[k].color);
   const pathName = (k, wrap) => (ED.PATHS[k] ? (wrap ? `<i style="color:${ED.PATHS[k].color}">${ED.PATHS[k].name}</i>` : ED.PATHS[k].name) : '');
-  UI.evoName = (path, weaponId) => (ED.PATHS[path] ? ED.PATHS[path].evo : '') + (ED.WEAPONS[weaponId] ? ' ' + ED.WEAPONS[weaponId].name : ' Arms');
+  // Evolved weapon name from a weapon name (the fork's name after an Attack fork: 'Cinder Greatsword').
+  UI.evoName = (path, weaponName) => (ED.PATHS[path] ? ED.PATHS[path].evo : '') + ' ' + (weaponName || 'Arms');
+  const heroWeaponName = (p) => (p && p.stats && p.stats.weapon ? p.stats.weapon.name : p && ED.WEAPONS[p.weapon] ? ED.WEAPONS[p.weapon].name : '');
   const affChip = (el, kind) => (el && ED.PATHS[el] ? `<span class="aff-chip ${kind}" style="--pc:${ED.PATHS[el].color}"><img alt="" src="${pathIcon(el)}">${kind === 'weak' ? 'Weak to' : 'Resists'} ${ED.PATHS[el].name}</span>` : '');
   const affChips = (biome) => affChip(biome.weak, 'weak') + affChip(biome.resist, 'resist');
 
@@ -70,6 +72,27 @@
     const jc = A.pendingJoin;
     $('title-join').hidden = !jc || !has;
     if (jc) $('title-join-code').textContent = jc;
+  };
+
+  // One-time notice for a profile made before the v3 rules (profile.news): the changed rules, and what the relics it owns turned into. Closing it clears the flag.
+  const RELIC_WAS = { fang: 'Fang Pendant', wardrum: 'War Drum', wispjar: 'Wisp Jar', crest: 'Vampire Crest', chalice: 'Blood Chalice', bloodstone: 'Bloodstone' };
+  UI.maybeNews = () => {
+    const A = ED.App, p = A.profile;
+    if (!A.hasProfile || !p.news) return;
+    const relics = Object.keys(RELIC_WAS).filter(id => ED.RELICS[id] && S.relicUnlocked(p, id)).map(id => {
+      const r = ED.RELICS[id];
+      return `<b>${esc(r.name)}</b> ${r.name === RELIC_WAS[id] ? '(reworked)' : `(was ${esc(RELIC_WAS[id])})`}: ${esc(r.desc)}`;
+    });
+    $('news-body').innerHTML = [
+      '<b>Aim:</b> attacks and ground skills go toward the mouse cursor (right stick on a pad). The Auto-aim setting is gone.',
+      `<b>Paths:</b> follow up to ${ED.MAX_ELEMENTS} of ${ED.ELEMENT_IDS.map(k => pathName(k, true)).join(', ')}, or take the ${pathName('general', true)} path alone as a Generalist. Blood and Spirit are gone.`,
+      '<b>No life steal:</b> hits do not heal you any more. Shields take their place.',
+      '<b>Knight:</b> Shield Throw replaces Bulwark.',
+      '<b>Lantern:</b> light no longer drains on its own. It is spent on new rooms and flares.',
+      relics.length ? '<b>Relics you own changed:</b><br>' + relics.join('<br>') : '',
+    ].filter(Boolean).map(t => `<p>${t}</p>`).join('');
+    $('ov-news').hidden = false;
+    requestAnimationFrame(() => $('btn-news-close').focus({ preventScroll: true })); // after the screen's own focus
   };
 
   // ---------------- sections ----------------
@@ -147,15 +170,36 @@
     }
   }
 
+  // One line per skill of the numbers its parts have for a boonless hero ("Impact 49 · stun 1s · Shockwave …"), from the sheet model.
+  function skillFacts(cls, st) {
+    const out = {};
+    try {
+      const Sh = ED.Sheet, p = { pid: 'camp', name: '', cls, weapon: st.weaponId.split('@')[0], boons: {}, relics: [], meta: { up: [], mastery: 1 }, stats: st, hp: st.maxHp, maxHp: st.maxHp, shield: 0, picks: 0, slot: 0 };
+      const m = Sh.compute(p, Sh.ctx({ stratum: 1, pact: 0, players: new Map(), allies: [] }, p), { raw: true });
+      for (const k of m.skills) {
+        out[k.id] = k.parts.filter(q => q.kind !== 'zone').map(q => {
+          const bits = [q.label + ' ' + Sh.n1(q.kind === 'status' ? q.here : q.hit)];
+          if (q.kind === 'tick' || q.kind === 'sec') bits.push(`${q.oneFoe} ticks`);
+          else if (q.kind === 'minion') bits.push(`${q.hitsEach} strikes each`);
+          if (q.r) bits.push('radius ' + q.r);
+          if (q.stun) bits.push('stun ' + Sh.n1(q.stun) + 's');
+          return bits.join(' ');
+        }).join(' · ');
+      }
+    } catch (e) { /* the description alone */ }
+    return out;
+  }
+
   function renderDescend() {
     const A = ED.App, p = A.profile;
     const cls = A.sel.cls, c = ED.CLASSES[cls];
     rosterTiles($('class-list'), cls, (id) => { A.selectClass(id); renderDescend(); });
     const st = ED.Stats.compute({ cls, weapon: A.sel.weapon, boons: {}, relics: [], meta: S.metaBundle(p, cls), pact: A.sel.pact });
     const skills = [[c.skill, 'skill1', st.skillCd], [c.skill2, 'skill2', st.skill2Cd]].filter(x => ED.SKILLS[x[0]]);
+    const facts = skillFacts(cls, st);
     $('hero-detail').innerHTML = `
       <div class="hd-top"><div id="hd-port"></div><div><div class="hd-name">${c.name}</div><div class="hd-title">${c.title}</div><p class="hd-desc">${esc(c.desc)}</p></div></div>
-      <div class="hd-skills">${skills.map(([id, act, cd]) => { const sk = ED.SKILLS[id]; return `<div class="hd-skill"><img alt="" src="${ED.Icons.url(sk.icon, c.col.c)}"><div><div class="sk-head"><b>${sk.name}</b>${keys(act)}<span class="cd">${cd.toFixed(1)}s cooldown</span></div><p>${esc(sk.desc)}</p></div></div>`; }).join('')}</div>`;
+      <div class="hd-skills">${skills.map(([id, act, cd]) => { const sk = ED.SKILLS[id]; return `<div class="hd-skill"><img alt="" src="${ED.Icons.url(sk.icon, c.col.c)}"><div><div class="sk-head"><b>${sk.name}</b>${keys(act)}<span class="cd">${cd.toFixed(1)}s cooldown</span></div><p>${esc(sk.desc)}</p>${facts[id] ? `<div class="sk-facts">${esc(facts[id])}</div>` : ''}</div></div>`; }).join('')}</div>`;
     $('hd-port').appendChild(portrait(cls, 96, 0, A.sel.weapon));
     weaponChips($('weapon-row'), cls, A.sel.weapon, (wid) => { A.sel.weapon = wid; A.saveSel(); renderDescend(); });
     const ar = $('asc-row');
@@ -181,17 +225,22 @@
   function goalText(p) {
     const next = ED.CLASS_IDS.find(c => !S.classUnlocked(p, c));
     const tierNext = ED.UPGRADES.find(u => u.tier > p.stats.deepest);
+    const locked = ED.RELIC_IDS.filter(id => !S.relicUnlocked(p, id)).length;
     const lines = [];
     if (p.stats.runs < 2) {
-      lines.push(`<b>Paths:</b> follow up to ${ED.MAX_GATES} of ${ED.PATH_IDS.map(k => pathName(k, true)).join(', ')}. Each stratum is weak to one element.`);
+      const gen = ED.CLASS_IDS.filter(c => !ED.CLASSES[c].element).map(c => ED.CLASSES[c].name); // heroes without a class element can go Generalist
+      lines.push('<b>Aim:</b> aim with the mouse; skills go to the cursor. At level 3 you choose a class route.');
+      lines.push(`<b>Paths:</b> follow up to ${ED.MAX_ELEMENTS} of ${ED.ELEMENT_IDS.map(k => pathName(k, true)).join(', ')}, or, as ${gen.slice(0, -1).join(', ')} or ${gen[gen.length - 1]}, take the ${pathName('general', true)} path alone as a Generalist. Each stratum is weak to one element.`);
       lines.push(`<b>Lantern:</b> every new room costs light (shown on its door). In the dark elites and the Gloom hunt you, but rooms pay more; <kbd>${esc(ED.Input.label('flare'))}</kbd> flares the Gloom away, and spare light shields you at the boss door.`);
     }
     if (p.stats.runs === 0) lines.push('<b>First goal:</b> reach the Bone Warden at the end of the Ossuary. Every descent pays embers, win or lose.');
     else if (next) lines.push(`<b>Next hero:</b> ${ED.CLASSES[next].name} (${esc(ED.CLASSES[next].unlock.text)}).`);
     else if (tierNext) lines.push(`<b>Reach stratum ${U.roman(tierNext.tier)}</b> to reveal new Hearth upgrades.`);
-    else if (p.stats.wins > 0 && p.pactMax < 10) lines.push(`<b>Pacts:</b> complete a descent under Pact ${p.pactMax} to unlock Pact ${p.pactMax + 1}.`);
+    else if (!p.stats.wins) lines.push('<b>Next goal:</b> defeat the Hollow King to complete a descent and unlock Pacts.');
+    else if (p.pactMax < 10) lines.push(`<b>Pacts:</b> complete a descent under Pact ${p.pactMax} to unlock Pact ${p.pactMax + 1}.`);
+    else if (locked) lines.push(`<b>${locked} relic${locked === 1 ? '' : 's'}</b> still wait${locked === 1 ? 's' : ''} in the Codex.`);
     else lines.push('<b>Every relic, hero and pact is yours.</b> The Deep still has deeds to earn.');
-    return lines.join('<br>');
+    return lines.map(l => '<p>' + l + '</p>').join('');
   }
 
   function buyButton(cost, can, label, onClick) {
@@ -249,7 +298,8 @@
       const buyable = !un && !req;
       card.className = 'relic-card' + (un ? '' : ' locked') + (buyable ? '' : ' nocost');
       card.style.setProperty('--rc', col);
-      card.innerHTML = `<img alt="" src="${ED.Icons.relicUrl(id)}"><div><div class="rn">${r.name}</div><div class="rd">${esc(r.desc)}</div><div class="rq">${ED.RARITY[r.rar].name}${req ? ' · ' + esc(req) : ''}</div></div>`;
+      const el = r.el && ED.PATHS[r.el] ? ED.PATHS[r.el] : null; // element relics are found more often by a party that follows the element; a Generalist never keeps one
+      card.innerHTML = `<img alt="" src="${ED.Icons.relicUrl(id)}"><div><div class="rn">${r.name}</div><div class="rd">${esc(r.desc)}</div><div class="rq"${el ? ` title="${esc(`Element relic: found more often when a hero follows the ${el.name} path. A Generalist never keeps one.`)}"` : ''}>${ED.RARITY[r.rar].name}${el ? ` · ${pathName(r.el, true)} relic` : ''}${req ? ' · ' + esc(req) : ''}</div></div>`;
       if (buyable) card.appendChild(buyButton(r.cost, p.embers >= r.cost, `Unlock ${r.name} for ${r.cost} embers`, () => { if (S.unlockRelic(p, id)) { ED.Audio.play('relic'); ED.App.afterMetaChange(); } }));
       grid.appendChild(card);
     }
@@ -382,18 +432,24 @@
   const BOON_LOCK_MS = 700;
   const OFFER_HEAD = { start: 'Choose your first path', level: 'Choose a boon', epic: 'An epic boon', forge: 'Temper — rank up a boon' };
 
-  // [header, subtitle, path colour key] for an offer message { src, path, forge }.
+  // [header, subtitle, path colour key] for an offer message { src, forge }.
   function offerHead(offer, me) {
     const src = offer.forge ? 'forge' : (offer.src || 'level');
-    const owned = me && me.boons ? ED.gatePaths(me.boons) : [];
-    const P = ED.PATHS[offer.path];
-    if (src === 'room' && P) {
-      if (owned.includes(offer.path)) return [`Boon of ${P.name}`, `Your ${P.name} affinity: ${ED.pathAffinity(me.boons, offer.path)}`, offer.path];
-      if (owned.length < ED.MAX_GATES) return [`Boon of ${P.name}`, `A new path (${owned.length}/${ED.MAX_GATES} slots used)`, offer.path];
-      return [OFFER_HEAD.level, `${P.name} is out of reach: your ${ED.MAX_GATES} path slots are full`, null];
+    const boons = me && me.boons ? me.boons : {}, main = ED.mainPath(boons);
+    if (src === 'room') {
+      const els = ED.elementGates(boons).length;
+      return [OFFER_HEAD.level, ED.isGeneralist(boons) ? 'Boons of your General path' : els < ED.MAX_ELEMENTS ? `A new path may be offered (${els}/${ED.MAX_ELEMENTS} used)` : 'Boons of your paths', main];
     }
-    if (src === 'class') return [`${me && ED.CLASSES[me.cls] ? ED.CLASSES[me.cls].name : 'Class'} technique`, '', null];
-    if (src === 'start') return [OFFER_HEAD.start, `Paths gate your boons. A hero follows up to ${ED.MAX_GATES}.`, null];
+    if (src === 'class') {
+      const cn = me && ED.CLASSES[me.cls] ? ED.CLASSES[me.cls].name : 'Class', rt = me && me.boons ? ED.classRoute(me.boons, me.cls) : null;
+      if (offer.ctier === 1) return ['Choose your route', `It shapes how ${cn} fights`, null];
+      if (offer.ctier === 2) return [`${rt && rt.route ? ED.routeLabel(me.cls, rt.route) : 'Route'}: choose your fork`, 'A fork changes how the route plays; later bosses deepen it', null];
+      return ['Route mastery', 'Deepen your fork, or take a boon', null];
+    }
+    if (src === 'start') { // only heroes without a class element are offered the General gate
+      const cl = me && ED.CLASSES[me.cls];
+      return [OFFER_HEAD.start, cl && cl.element ? `Paths gate your boons: pick up to ${ED.MAX_ELEMENTS} element paths` : `Paths gate your boons: ${ED.MAX_ELEMENTS} element paths, or Generalist`, null];
+    }
     if (src === 'forge') return [OFFER_HEAD.forge, 'The boon you pick gains one rank.', null];
     return [OFFER_HEAD[src] || OFFER_HEAD.level, '', null];
   }
@@ -402,13 +458,51 @@
   function boonPathLine(b) {
     if (b.duo) return [`<span class="bc-path two">${pathName(b.duo[0], true)} + ${pathName(b.duo[1], true)}</span>`, true];
     if (b.path) return [`<span class="bc-path">${ED.PATHS[b.path].name}</span>`, false];
-    if (b.cls) return [`<span class="bc-path">${esc(ED.CLASSES[b.cls].name)} technique</span>`, false];
-    return ['<span class="bc-path">Neutral</span>', false];
+    if (b.cls) return [`<span class="bc-path">${esc(b.route ? ED.routeLabel(b.cls, b.route) : ED.CLASSES[b.cls].name)}</span>`, false];
+    return ['<span class="bc-path">Open</span>', false];
   }
-  const boonRibbon = (b) => (b.evo ? 'Evolution' : b.duo ? 'Duo' : b.key ? 'Keystone' : b.gate ? 'Path gate' : '');
+  const boonRibbon = (b, id) => (b.evo ? 'Evolution' : b.duo ? 'Duo' : b.key ? 'Keystone' : id === 'generalist' ? 'Forsake the elements' : b.gate ? 'Path gate' : b.route ? (b.tag ? b.tag + (b.coop ? ' · co-op' : '') : 'Route') : '');
+  // The fork weapon of a class card as a small canvas drawn from the pixel atlas (null without art): tilted up-right about its grip.
+  function weaponThumb(wid) {
+    const A = ED.Atlas, id = ED.Sprites.forkAnim(wid); // the baked fork look: the same sprite the hero holds
+    if (!id || !A || !A.ok || !A.has(id)) return null;
+    const cv = document.createElement('canvas'); cv.width = cv.height = 88; cv.className = 'bc-wimg';
+    const c = cv.getContext('2d'), an = A.anim(id), dir = (an && an.anchors && typeof an.anchors.dir === 'number') ? an.anchors.dir : 0;
+    const rot = (45 - dir) * Math.PI / 180, vx = (an.fw / 2 - an.ax) * 2, vy = (an.fh / 2 - an.ay) * 2; // the sprite's centre, rotated about the grip, lands on the middle of the canvas
+    A.draw(c, id, 0, Math.round(44 - (vx * Math.cos(rot) - vy * Math.sin(rot))), Math.round(44 - (vx * Math.sin(rot) + vy * Math.cos(rot))), { rot, anchor: 'grip' });
+    return cv;
+  }
+  // Card body of a class route or fork card: the text at the offered rank (+ rider from rank 3), "Plays as" and "Forks" on a route card, the rank-3 rider name on lower ranks, the fork weapon of an Attack fork.
+  function classBody(b, id, have, me) {
+    const rk = Math.min(b.max, have + 1), P = ED.cardParts(id, rk, me && me.stats);
+    let h = `<div class="bd">${esc(P.text)}${P.rider ? ` <b>${esc(P.riderName)}</b>: ${esc(P.rider)}` : ''}</div>`;
+    if (b.tier === 1) h += `<div class="bplay">Plays as: ${esc(b.plays)}</div><div class="bplay">Forks: ${b.forks.map(f => esc(ED.BOONS[f].name)).join(' / ')}</div>`;
+    else if (P.riderName && !P.rider) h += `<div class="bplay">Rank 3: ${esc(P.riderName)}</div>`;
+    if (b.weapon && b.weapon.kind && me && ED.CLASSES[me.cls]) {
+      const base = me.stats && me.stats.weaponId ? me.stats.weaponId.split('@')[0] : me.weapon, fw = ED.forkWeapon(base, id);
+      h += `<div class="bweap" data-w="${base}@${b.weapon.kind}"><div><span>${esc(fw.name)}</span><small>${fw.dmg.toFixed(1)} damage every ${fw.rate.toFixed(2)} s</small></div></div>`;
+    }
+    return h;
+  }
+  // "Weak: <stratum>" chip of an element gate card: the stratum whose foes are weak to the path's element.
+  const weakChip = (b) => {
+    if (!b.gate || !ED.PATHS[b.path].element) return '';
+    const bi = ED.BIOMES.find(x => x.weak === b.path);
+    return bi ? `<span class="bc-weak" style="--pc:${ED.PATHS[b.path].color}">Weak: ${esc(bi.short)}</span>` : '';
+  };
 
-  function boonCard(id, i, offer, me) {
-    const b = ED.BOONS[id], max = b.max || 5;
+  // The (at most 2) numbers each offered card changes most: [[{ label, from, to, unit, better }]] from the hero's sheet models now and with each card (computed once per offer).
+  function offerDeltas(offer, me) {
+    const s = ED.Game.s;
+    if (!s || !me || !me.stats) return [];
+    try {
+      const Sh = ED.Sheet, ctx = Sh.ctx(s.view, me), base = Sh.compute(me, ctx);
+      return offer.boons.map(id => Sh.deltas(base, Sh.compute(Sh.withBoon(me, id, ctx), ctx)));
+    } catch (e) { return []; }
+  }
+  const deltaHtml = (list) => (list && list.length ? `<div class="bdl">${list.map(d => `<span class="${d.better ? 'up' : 'down'}">${esc(d.label)} ${ED.Sheet.n1(d.from)} → ${ED.Sheet.n1(d.to)}${d.unit ? ' ' + d.unit : ''}</span>`).join('')}</div>` : '');
+  function boonCard(id, i, offer, me, deltas) {
+    const b = ED.BOONS[id], max = me && me.stats ? ED.maxRank(b, me.stats) : (b.max || 5);
     const have = me && me.boons ? (me.boons[id] || 0) : 0;
     const path = b.path || (b.duo && b.duo[0]) || null, path2 = b.duo ? b.duo[1] : null;
     const el = document.createElement('button'); el.type = 'button';
@@ -417,8 +511,10 @@
     if (path && ED.PATHS[path]) el.style.setProperty('--pc', ED.PATHS[path].color);
     if (path2 && ED.PATHS[path2]) el.style.setProperty('--pc2', ED.PATHS[path2].color);
     const rank = have ? (have < max ? `Rank ${have} → ${have + 1} (max ${max})` : `Rank ${have} (max)`) : max > 1 ? `Max rank ${max}` : '';
-    const ribbon = boonRibbon(b), [line, two] = boonPathLine(b);
-    el.innerHTML = `${ribbon ? `<span class="bc-ribbon${two ? ' two' : ''}">${ribbon}</span>` : ''}<div class="bc-top">${line}<span class="bc-rar">${ED.RARITY[b.rar].name}</span></div><img class="bc-icon" alt="" src="${ED.Icons.boonUrl(id)}"><div class="bn">${esc(b.name)}</div>${b.evo ? `<div class="bsub">${esc(UI.evoName(b.evo, me && me.weapon))}</div>` : ''}<div class="bd">${esc(b.desc)}</div>${rank ? `<div class="bk${have ? ' own' : ''}">${rank}</div>` : ''}`;
+    const ribbon = boonRibbon(b, id), [line, two] = boonPathLine(b);
+    el.innerHTML = `${ribbon ? `<span class="bc-ribbon${two ? ' two' : ''}">${ribbon}</span>` : ''}<div class="bc-top">${line}<span class="bc-rar">${ED.RARITY[b.rar].name}</span></div><img class="bc-icon" alt="" src="${ED.Icons.boonUrl(id)}"><div class="bn">${esc(b.name)}</div>${b.evo ? `<div class="bsub">${esc(UI.evoName(b.evo, heroWeaponName(me)))}</div>` : ''}${weakChip(b)}${b.route ? classBody(b, id, have, me) : `<div class="bd">${esc(ED.Sheet.text(id, Math.min(max, have + 1), me && me.stats))}</div>`}${deltaHtml(deltas)}${rank ? `<div class="bk${have ? ' own' : ''}">${rank}</div>` : ''}`;
+    const wb = el.querySelector('.bweap');
+    if (wb) { const th = weaponThumb(wb.dataset.w); if (th) wb.insertBefore(th, wb.firstChild); }
     el.onclick = () => { if (performance.now() >= boonLock) UI.pickBoon(i); };
     el.onmouseenter = () => { boonFocus = i; paintFocus(); };
     return el;
@@ -431,16 +527,19 @@
     boonOffer = offer; boonFocus = 0; boonLock = performance.now() + BOON_LOCK_MS;
     const wrap = $('boon-cards'); wrap.innerHTML = '';
     const me = ED.Game.s && ED.Game.s.me;
-    offer.boons.forEach((id, i) => wrap.appendChild(boonCard(id, i, offer, me)));
+    const dl = offerDeltas(offer, me);
+    offer.boons.forEach((id, i) => wrap.appendChild(boonCard(id, i, offer, me, dl[i])));
     paintDense();
     const [head, sub, hp] = offerHead(offer, me);
     $('boon-head').textContent = head;
     $('boon-head').style.color = hp ? ED.PATHS[hp].color : '';
     $('boon-sub').textContent = sub; $('boon-sub').hidden = !sub;
     $('boon-count').textContent = offer.picks > 1 ? `(${offer.picks} waiting)` : '';
-    const rr = $('btn-reroll'), canRe = offer.rerolls > 0 && !offer.forge;
-    rr.hidden = !canRe; rr.innerHTML = `<kbd>${esc(ED.Input.label('skill1'))}</kbd> Reroll (${offer.rerolls})`;
-    $('boon-hint').innerHTML = `${keyPair('left', 'right')} select · <kbd>${esc(ED.Input.label('attack'))}</kbd> or <kbd>Enter</kbd> take`;
+    const fixed = offer.src === 'class' && offer.ctier < 3; // a route or fork pick is a fixed choice: no reroll
+    const rr = $('btn-reroll'), canRe = offer.rerolls > 0 && !offer.forge && !fixed;
+    const pad = ED.Input.device === 'pad';
+    rr.hidden = !canRe; rr.innerHTML = `<kbd>${pad ? 'Y' : esc(ED.Input.label('skill1'))}</kbd> Reroll (${offer.rerolls})`;
+    $('boon-hint').innerHTML = (pad ? '<kbd>D-pad</kbd> select · <kbd>X</kbd> take · <kbd>Back</kbd> sheet' : `${keyPair('left', 'right')} select · <kbd>${esc(ED.Input.label('attack'))}</kbd> or <kbd>Enter</kbd> take · <kbd>${esc(ED.Input.label('map'))}</kbd> character sheet`) + (fixed ? ' · Routes are fixed choices' : '');
     rr.onclick = () => UI.boonReroll(false);
     $('ov-boon').hidden = false;
     $('ov-boon').scrollTop = 0;
@@ -451,7 +550,7 @@
   UI.boonMove = (d) => { if (!boonOffer) return; boonFocus = (boonFocus + d + boonOffer.boons.length) % boonOffer.boons.length; paintFocus(); ED.Audio.play('hover'); };
   UI.boonConfirm = () => { if (!boonOffer || performance.now() < boonLock) return; UI.pickBoon(boonFocus); };
   UI.boonReroll = (byKey) => {
-    if (!boonOffer || !(boonOffer.rerolls > 0) || boonOffer.forge || performance.now() < boonLock) return;
+    if (!boonOffer || !(boonOffer.rerolls > 0) || boonOffer.forge || (boonOffer.src === 'class' && boonOffer.ctier < 3) || performance.now() < boonLock) return;
     boonLock = performance.now() + BOON_LOCK_MS; // the fresh hand arrives in a moment; don't send twice
     if (byKey) ED.Audio.play('click');
     ED.Game.act({ t: 'reroll' });
@@ -460,77 +559,11 @@
     if (!boonOffer) return;
     boonOffer = null;
     $('ov-boon').hidden = true;
+    ED.Input.mask(['attack', 'skill1', 'skill2', 'dash']); // the pick press (or a held attack) must not reach the hero; movement keys stay live
     ED.Game.act({ t: 'pick', i });
     if (ED.Game.s) { ED.Game.s.offerOpen = false; ED.Game.s.offer = null; }
   };
   UI.hideBoons = () => { boonOffer = null; $('ov-boon').hidden = true; };
-
-  // ---------------- character sheet (map key) ----------------
-  // One path row: icon, affinity, keystone and evolution status.
-  function pathRow(k, me, evoPath) {
-    const P = ED.PATHS[k], boons = me.boons || {}, aff = ED.pathAffinity(boons, k);
-    const keyId = ED.BOON_IDS.find(id => ED.BOONS[id].key && ED.BOONS[id].path === k);
-    const hasKey = !!(keyId && boons[keyId]);
-    const keyLine = hasKey ? `Keystone: ${esc(ED.BOONS[keyId].name)}` : aff >= KEY_AFF() ? 'Keystone available in your offers' : `Keystone ready at ${KEY_AFF()}`;
-    let evoLine;
-    if (evoPath === k) evoLine = `Evolved: ${esc(UI.evoName(k, me.weapon))}`;
-    else if (evoPath) evoLine = 'Evolution already taken';
-    else if (hasKey && aff >= EVO_AFF()) evoLine = 'Evolution ready — it will appear in your next offer';
-    else evoLine = `Evolves at ${EVO_AFF()} with keystone`;
-    return `<div class="path-row${evoPath === k ? ' evolved' : ''}" style="--pc:${P.color}"><img alt="" src="${pathIcon(k)}"><div><div class="pr-head"><b>${P.name}</b><span>Affinity ${aff}</span></div><div class="pr-line${hasKey ? ' ok' : ''}">${keyLine}</div><div class="pr-line${evoPath === k ? ' ok' : ''}">${evoLine}</div></div></div>`;
-  }
-
-  // Boons grouped by path (pick order), then duo, class and neutral.
-  function boonGroups(me) {
-    const boons = me.boons || {}, ids = Object.keys(boons).filter(id => ED.BOONS[id] && boons[id] > 0);
-    const chip = (id) => { const b = ED.BOONS[id]; return `<span class="chip${b.key ? ' key' : ''}${b.evo ? ' evo' : ''}" style="--rc:${ED.RARITY[b.rar].color}" title="${esc(b.desc)}"><img alt="" src="${ED.Icons.boonUrl(id)}">${esc(b.name)}${boons[id] > 1 ? ' ×' + boons[id] : ''}</span>`; };
-    const groups = ED.gatePaths(boons).map(k => [`${ED.PATHS[k].name} <small>affinity ${ED.pathAffinity(boons, k)}</small>`, ids.filter(id => ED.BOONS[id].path === k), ED.PATHS[k].color]);
-    groups.push(['Duo', ids.filter(id => ED.BOONS[id].duo), '']);
-    groups.push([`${ED.CLASSES[me.cls].name} technique`, ids.filter(id => ED.BOONS[id].cls), '']);
-    groups.push(['Neutral', ids.filter(id => { const b = ED.BOONS[id]; return !b.path && !b.duo && !b.cls; }), '']);
-    const html = groups.filter(g => g[1].length).map(([h, list, col]) => `<div class="bg"${col ? ` style="--pc:${col}"` : ''}><div class="bg-h">${h}</div><div class="chip-list">${list.map(chip).join('')}</div></div>`).join('');
-    return html || '<span class="chip none">None yet</span>';
-  }
-
-  UI.toggleSheet = (on) => {
-    const s = ED.Game.s; if (!s) return;
-    const el = $('ov-sheet');
-    el.hidden = on === undefined ? !el.hidden : !on;
-    if (el.hidden) return;
-    const me = s.me, st = me.stats, view = s.view;
-    $('sheet-hero').textContent = `${me.name} · ${ED.CLASSES[me.cls].name}`;
-    const shieldCap = Math.round(me.maxHp * (st.bloodShield || 0));
-    const rows = [
-      ['Health', `${Math.ceil(me.hp)} / ${me.maxHp}`], ['Damage', U.pct(st.dmg)], ['Attack speed', U.pct(st.atk)], ['Critical', `${Math.round(st.crit * 100)}% ×${st.critMult.toFixed(2)}`],
-      ['Armor', Math.round(st.armor) + ` (−${Math.round((1 - ED.Stats.armorMul(st.armor)) * 100)}%)`], ['Move speed', Math.round(st.moveSpeed)],
-      [`Skill cooldowns (${esc(ED.Input.label('skill1'))} · ${esc(ED.Input.label('skill2'))})`, `${st.skillCd.toFixed(1)}s · ${(st.skill2Cd || 0).toFixed(1)}s`], ['Dodge', Math.round(st.dodge * 100) + '%'],
-      ['Life steal', Math.round(st.leech * 1000) / 10 + '%'], ['Level', view.level], ['Gold', view.gold],
-    ];
-    if (shieldCap > 0) rows.push(['Blood shield', `${Math.ceil(me.shield || 0)} / ${shieldCap}`]);
-    $('sheet-dl').innerHTML = rows.map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
-    const note = $('sheet-note');
-    note.hidden = !(st.leech > 0 || st.hemorrhage || st.killHeal || st.killHealPct || st.blessed || st.soulSiphon || st.feast || st.evo === 'blood');
-    note.textContent = `Healing from hits and kills (leech, kill heals, blood scythes, Blessed Strikes, Soul Siphon, Judgment) restores at most ${Math.round(SUSTAIN_CAP() * 1000) / 10}% max health per second (${(me.maxHp * SUSTAIN_CAP()).toFixed(1)} for you). Damage over time never leeches.`;
-    $('sheet-relics').innerHTML = me.relics.length ? me.relics.map(id => { const r = ED.RELICS[id]; return `<span class="chip" style="--rc:${ED.RARITY[r.rar].color}" title="${esc(r.desc)}"><img alt="" src="${ED.Icons.relicUrl(id)}">${r.name}</span>`; }).join('') : '<span class="chip none">None yet</span>';
-    $('sheet-boons').innerHTML = boonGroups(me);
-    // paths: slots used, affinity, keystone and evolution
-    const owned = ED.gatePaths(me.boons || {}), evoPath = ED.evoOf(me.boons || {});
-    $('sheet-slots').textContent = `${owned.length}/${ED.MAX_GATES}`;
-    $('sheet-paths').innerHTML = owned.map(k => pathRow(k, me, evoPath)).join('') + '<div class="path-row empty">Open path slot</div>'.repeat(Math.max(0, ED.MAX_GATES - owned.length));
-    // stratum affinity: now and next
-    const biome = ED.biomeFor(view.stratum), nb = view.stratum < ED.BIOMES.length ? ED.biomeFor(view.stratum + 1) : null;
-    $('sheet-strat').innerHTML = `Stratum ${U.roman(view.stratum)} · ${esc(biome.name)}<br><small>Lantern ${Math.round(100 * view.light / Math.max(1, view.lightMax))}% · map numbers: light each unvisited room costs</small>`;
-    $('sheet-aff').innerHTML = affChips(biome);
-    $('sheet-aff2').innerHTML = nb ? `<div class="aff-row">Next, ${esc(nb.short)}: ${affChips(nb)}</div>` : '';
-    $('sheet-foot').innerHTML = `Press <kbd>${esc(ED.Input.label('map'))}</kbd> or <kbd>Esc</kbd> to close`;
-    // the map canvas backs one device pixel per drawn pixel, so it stays sharp at any size
-    const mc = $('map-canvas'), c = mc.getContext('2d');
-    const w = mc.getBoundingClientRect().width || 360, dpr = window.devicePixelRatio || 1;
-    mc.width = Math.round(w * dpr); mc.height = Math.round(w * dpr * 5 / 6);
-    c.clearRect(0, 0, mc.width, mc.height);
-    const pad = 10 * dpr;
-    ED.HUD.drawMap(c, view, pad, pad, mc.width - 2 * pad, mc.height - 2 * pad, (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16) * dpr, 0);
-  };
 
   // ---------------- results ----------------
   UI.renderResults = (sum, res, note) => {
@@ -554,9 +587,9 @@
       sum.pact ? ['Pact', sum.pact] : null,
     ].filter(Boolean).map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
     const evo = sum.myEvo && ED.PATHS[sum.myEvo.path] ? sum.myEvo : null, evoEl = $('res-evo');
-    evoEl.hidden = !evo && !sum.evolved;
+    evoEl.hidden = !evo && !sum.partyEvolved;
     evoEl.style.setProperty('--pc', evo ? ED.PATHS[evo.path].color : 'var(--r-legend)');
-    evoEl.innerHTML = evo ? `<img alt="" src="${pathIcon(evo.path)}"><span>Evolved: <b>${esc(UI.evoName(evo.path, evo.weapon))}</b> <small>${ED.PATHS[evo.path].name} path</small></span>` : sum.evolved ? '<span>A hero in your party evolved their weapon.</span>' : '';
+    evoEl.innerHTML = evo ? `<img alt="" src="${pathIcon(evo.path)}"><span>Evolved: <b>${esc(UI.evoName(evo.path, evo.weapon))}</b> <small>${ED.PATHS[evo.path].name} path</small></span>` : sum.partyEvolved ? '<span>A hero in your party evolved their weapon.</span>' : '';
     $('res-embers').innerHTML = res.rewards.lines.map(([a, b]) => `<dt>${esc(a)}</dt><dd>+${b}</dd>`).join('') || '<dt>Nothing this time</dt><dd>0</dd>';
     $('res-ember-total').textContent = res.rewards.total;
     const ci = ED.CLASS_IDS.indexOf(sum.cls);
@@ -584,12 +617,16 @@
     else { ED.Input.stopCapture(); }
     if (t === 'profile') renderProfile();
   };
+  // The menu behind the Credits / Settings dialogs takes no focus while one is open.
+  const titleInert = (on) => { const t = $('scr-title'); if (t) t.inert = on; };
   UI.openSettings = (tab) => {
     const A = ED.App, s = A.settings;
     $('set-master').value = s.master; $('set-music').value = s.music; $('set-sfx').value = s.sfx;
-    $('set-aim').value = s.aim; $('set-quality').value = s.quality; $('set-shake').checked = s.shake; $('set-dmg').checked = s.dmg;
+    $('set-quality').value = s.quality; $('set-framecap').value = s.frameCap; $('set-shake').checked = s.shake; $('set-dmg').checked = s.dmg;
+    $('set-cursor').value = s.cursor; $('set-reticle').value = s.reticle; $('set-retcol').value = s.reticleCol; $('set-aimprev').checked = s.aimPreview !== false;
     for (const id of ['set-master', 'set-music', 'set-sfx']) fill($(id));
     $('stab-profile').hidden = A.inRun() || !A.hasProfile; // profile tools never appear mid-descent
+    if (A.state === 'title') titleInert(true);
     $('ov-settings').hidden = false;
     UI.setSettingsTab(tab || UI.settingsTab);
     const on = document.querySelector('#set-tabs .tab.on'); if (on) on.focus({ preventScroll: true });
@@ -597,6 +634,7 @@
   UI.closeSettings = () => {
     ED.Input.stopCapture();
     $('ov-settings').hidden = true;
+    titleInert(false);
     const A = ED.App;
     if (A.state === 'hearth') UI.renderHearth(); else if (A.state === 'title') UI.renderTitle();
   };
@@ -670,6 +708,9 @@
     $('mm-hearth').onclick = () => A.enterHearth('upgrades');
     $('mm-heroes').onclick = () => A.enterHearth('heroes');
     $('mm-settings').onclick = () => UI.openSettings();
+    $('mm-credits').onclick = () => { titleInert(true); $('ov-credits').hidden = false; $('btn-credits-close').focus({ preventScroll: true }); };
+    $('btn-credits-close').onclick = () => { $('ov-credits').hidden = true; titleInert(false); $('mm-credits').focus({ preventScroll: true }); };
+    $('btn-news-close').onclick = () => { $('ov-news').hidden = true; A.profile.news = 0; A.persist(); if ($('mm-descend').offsetParent) $('mm-descend').focus({ preventScroll: true }); };
     for (const m of document.querySelectorAll('.menu')) arrowNav(m, '.menu-btn', 'ArrowUp', 'ArrowDown');
     arrowNav($('hearth-tabs'), '.tab', 'ArrowLeft', 'ArrowRight');
     arrowNav($('set-tabs'), '.tab:not([hidden])', 'ArrowLeft', 'ArrowRight');
@@ -713,11 +754,13 @@
     const setChange = (e) => {
       const s = A.settings;
       s.master = +$('set-master').value; s.music = +$('set-music').value; s.sfx = +$('set-sfx').value;
-      s.aim = $('set-aim').value; s.quality = $('set-quality').value; s.shake = $('set-shake').checked; s.dmg = $('set-dmg').checked;
+      s.quality = $('set-quality').value; s.frameCap = $('set-framecap').value; s.shake = $('set-shake').checked; s.dmg = $('set-dmg').checked;
+      s.cursor = $('set-cursor').value; s.reticle = $('set-reticle').value; s.reticleCol = $('set-retcol').value; s.aimPreview = $('set-aimprev').checked;
       if (e && e.target.type === 'range') fill(e.target);
       A.applySettings();
+      if (ED.AimFx) ED.AimFx.applyCursor();
     };
-    for (const id of ['set-master', 'set-music', 'set-sfx', 'set-aim', 'set-quality', 'set-shake', 'set-dmg']) $(id).addEventListener('input', setChange);
+    for (const id of ['set-master', 'set-music', 'set-sfx', 'set-quality', 'set-framecap', 'set-shake', 'set-dmg', 'set-cursor', 'set-reticle', 'set-retcol', 'set-aimprev']) $(id).addEventListener('input', setChange);
     $('btn-bind-reset').onclick = () => { ED.Input.resetBinds(); A.settings.binds = ED.Input.exportBinds(); S.storeSettings(A.settings); renderBindings(); setBindMsg('Controls reset to defaults.', 'ok'); };
     $('btn-settings-close').onclick = () => UI.closeSettings();
     window.addEventListener('resize', () => { if (!$('ov-boon').hidden) paintDense(); });
@@ -725,11 +768,15 @@
     window.addEventListener('keydown', (e) => {
       if (e.code !== 'Escape' || A.inRun()) return;
       if (!$('modal').hidden) $('modal').hidden = true;
+      else if (!$('ov-news').hidden) $('btn-news-close').click();
+      else if (!$('ov-credits').hidden) $('btn-credits-close').click();
       else if (!$('ov-settings').hidden) UI.closeSettings();
       else if (!$('ov-hearth').hidden) $('btn-ph-close').click();
       else if (A.state === 'hearth' && !(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))) A.goHome();
     });
     nameHint($('inp-name'), $('name-msg'));
+    UI.wireSheet();
+    ED.Icons.fit(); window.addEventListener('resize', () => ED.Icons.fit());
     // UI sounds
     document.addEventListener('click', (e) => { if (e.target.closest('.btn, .menu-btn')) ED.Audio.play('click'); });
   };

@@ -5,7 +5,7 @@
   ED.BIOMES = [
     {
       id: 'ossuary', name: 'The Ossuary', short: 'Ossuary',
-      weak: 'pyre', resist: 'storm', // elemental affinity of every foe in this stratum
+      weak: 'holy', resist: 'shadow', // elemental affinity of every foe in this stratum
       blurb: 'Bone-lined halls where the first delvers were laid to rest. They do not rest well.',
       pal: {
         void: '#090a09', floorA: '#3d3f38', floorB: '#36382f', grout: '#24261f', wallTop: '#62655a', wallFace: '#383a31',
@@ -22,7 +22,7 @@
     },
     {
       id: 'glowmire', name: 'Glowmire Grotto', short: 'Glowmire',
-      weak: 'storm', resist: 'pyre', // elemental affinity of every foe in this stratum
+      weak: 'shadow', resist: 'holy', // elemental affinity of every foe in this stratum
       blurb: 'A drowned cave swallowed by luminous fungus. The light is pretty. The spores are not.',
       pal: {
         void: '#06050b', floorA: '#2d2a3a', floorB: '#272436', grout: '#1a1926', wallTop: '#4a4262', wallFace: '#2b2643',
@@ -39,7 +39,7 @@
     },
     {
       id: 'rimefrost', name: 'Rimefrost Halls', short: 'Rimefrost',
-      weak: 'pyre', resist: 'rime', // elemental affinity of every foe in this stratum
+      weak: 'fire', resist: 'ice', // elemental affinity of every foe in this stratum
       blurb: 'A dwarven palace frozen in a single night. Every statue was once a guard.',
       pal: {
         void: '#0b111a', floorA: '#9fb8cc', floorB: '#94aec4', grout: '#7690a8', wallTop: '#e2f0fb', wallFace: '#7896b2',
@@ -56,7 +56,7 @@
     },
     {
       id: 'cinderforge', name: 'The Cinderforge', short: 'Cinderforge',
-      weak: 'rime', resist: 'pyre', // elemental affinity of every foe in this stratum
+      weak: 'ice', resist: 'fire', // elemental affinity of every foe in this stratum
       blurb: 'The furnace-heart of a fallen empire. Its machines still work. Its masters are gone.',
       pal: {
         void: '#0c0504', floorA: '#30231f', floorB: '#2a1e1a', grout: '#170f0c', wallTop: '#53392f', wallFace: '#2e1c17',
@@ -73,7 +73,7 @@
     },
     {
       id: 'sanctum', name: 'Drowned Sanctum', short: 'Sanctum',
-      weak: 'storm', resist: 'rime', // elemental affinity of every foe in this stratum
+      weak: 'lightning', resist: 'poison', // elemental affinity of every foe in this stratum
       blurb: 'A golden temple the sea reclaimed. Its priests kept praying underwater.',
       pal: {
         void: '#020a0d', floorA: '#214047', floorB: '#1c3940', grout: '#10252a', wallTop: '#3f7173', wallFace: '#1f4549',
@@ -90,7 +90,7 @@
     },
     {
       id: 'abyss', name: 'The Starless Abyss', short: 'Abyss',
-      weak: 'rime', resist: 'storm', // elemental affinity of every foe in this stratum
+      weak: 'poison', resist: 'lightning', // elemental affinity of every foe in this stratum
       blurb: 'Below the world there is a sky with no stars. Something wears a hollow crown there.',
       pal: {
         void: '#030107', floorA: '#1f1933', floorB: '#1a152b', grout: '#0f0b1d', wallTop: '#3d3060', wallFace: '#21183c',

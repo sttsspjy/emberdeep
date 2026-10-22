@@ -138,6 +138,6 @@
 
   // Projectile kinds share one table for both teams so the renderer knows how to draw them.
   ED.PROJ_KINDS = ['bone', 'spore', 'ice', 'fire', 'water', 'void', 'arrow', 'bolt', 'firebolt', 'spark', 'fireball', 'knife', 'holy', 'soul', 'plague', 'wave', 'wisp', 'shard', 'blade', 'orb', 'trident', 'skull',
-    'hammer', 'crescent', 'iceshard', 'bloodscythe', 'spectral', 'web', 'droneshot', 'thorn'];
+    'hammer', 'crescent', 'iceshard', 'bloodscythe', 'spectral', 'web', 'droneshot', 'thorn', 'shield']; // append only: indices are the wire format
   ED.PROJ_IDX = ED.U.indexer(ED.PROJ_KINDS);
 })(globalThis.ED || (globalThis.ED = {}));

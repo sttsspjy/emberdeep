@@ -64,17 +64,39 @@
     return { x: probe.x, y: probe.y };
   };
 
+  // Landing point of a ground skill cast from (x0, y0) at (tx, ty): the target clamped to `range`, cut short at the first tile that blocks shots (chasms do not). With `walk` the point is one a body can stand on (minion spawns).
+  // Used by the client preview and send, and by the host check; a free ray lands exactly on the target.
+  Sim.groundPoint = (room, locked, x0, y0, tx, ty, range, walk) => {
+    const dx = tx - x0, dy = ty - y0, dist = Math.hypot(dx, dy);
+    if (!(dist > 0) || !(range > 0)) return { x: x0, y: y0 };
+    const d = Math.min(dist, range), a = Math.atan2(dy, dx), cs = Math.cos(a), sn = Math.sin(a);
+    let lx = x0, ly = y0, free = true;
+    for (let s = 8; s < d + 8; s += 8) { // samples every 8 px, the last one exactly at d
+      const q = Math.min(s, d), px = x0 + cs * q, py = y0 + sn * q;
+      if (D.blocksShots(D.tileAt(room, px, py), locked)) { free = false; break; }
+      lx = px; ly = py;
+    }
+    let g = { x: lx, y: ly };
+    if (!free) { g = { x: lx, y: ly, r: 4 }; Sim.resolve(g, room, locked, true); }
+    if (!walk) return { x: g.x, y: g.y };
+    const dd = Math.hypot(g.x - x0, g.y - y0), e = Sim.castMove(room, x0, y0, a, dd, 9, locked);
+    if (Math.hypot(e.x - x0, e.y - y0) >= dd - 8) { const q = { x: g.x, y: g.y, r: 9 }; if (!Sim.resolve(q, room, locked, false)) return { x: q.x, y: q.y }; }
+    return e;
+  };
+
   // Hero movement: walking, dash, skill-move, hazards and pull zones.
   Sim.movePlayer = (p, inp, dt, room, locked, zones) => {
-    if (p.downed || p.dead) { p.moving = false; return; }
+    if (p.downed || p.dead) { p.moving = false; p.skillMove = null; p.skillIfr = false; return; }
     const speed = p.stats.moveSpeed * (ED.Stats.moveRate ? ED.Stats.moveRate(p) : 1);
-    if (p.skillMove) {
+    if (p.skillMove) { // a skill's own movement { dx, dy, speed, t (seconds left), iframes (untouchable for this long), age }
       const m = p.skillMove;
       Sim.moveCircle(p, m.dx * m.speed * dt, m.dy * m.speed * dt, room, locked, false);
-      m.t -= dt; p.moving = true;
-      if (m.t <= 0) p.skillMove = null;
+      m.age = (m.age || 0) + dt; m.t -= dt; p.moving = true;
+      p.skillIfr = m.age < (m.iframes === undefined ? m.t + m.age : m.iframes);
+      if (m.t <= 0) { p.skillMove = null; p.skillIfr = false; }
       return;
     }
+    p.skillIfr = false;
     if (p.dashT > 0) {
       p.dashT -= dt;
       Sim.moveCircle(p, p.dashDx * 430 * dt, p.dashDy * 430 * dt, room, locked, false);
@@ -111,7 +133,7 @@
     this.pact = opts.pact | 0;
     this.players = new Map();
     this.enemies = []; this.projs = []; this.pickups = []; this.zones = []; this.allies = []; this.props = [];
-    this.fx = []; this.msgs = [];
+    this.fx = []; this.msgs = []; this.corpses = []; // corpses: recent non-boss deaths { x, y, t } for Corpse Explosion, cleared with each room
     this.gold = 0; this.xp = 0; this.level = 1; this.xpNext = W.xpFor(1);
     this.time = 0; this.roomTime = 0; this.state = 'play'; this.stratum = 0; this.floorSeed = 0;
     this.locked = false; this.enc = null; this.boss = null; this.pendingStratum = null;
@@ -124,6 +146,7 @@
     this.endTimer = -1; this.result = null; this.victory = false;
     this.flowT = 0; this.flow = null; this.tick = 0; this.waitMsg = '';
     this.tutorial = !!opts.tutorial;
+    this.chainQ = []; this.chainSeq = 0; this.curChain = null; this.chainPeak = 0; this.chainHops = 0; // forced payoffs of duos and keystones (see combat.js); peak queue length and deepest hop are bot statistics
     for (const pd of opts.players) this.addPlayer(pd);
   };
   W.xpFor = (L) => Math.round(30 + 3 * (L - 1) + 6 * (L - 1) * (L - 1)); // xp from level L to L+1
@@ -146,14 +169,13 @@
   W.FLARE = { cost: 6, banish: 12, blind: 1.5, r: 160 }; // lantern flare (F): light spent, seconds the Gloom stays away, foe blind seconds, blind radius
   W.DARK_AFFIXES = ['brutal', 'vampiric', 'warded', 'swift']; // affix pool of elites made at Dark and Lightless (the volatile affix is left out)
   W.ELITE_BODIES = 4; // plain-foe budget one elite displaces from its wave in any tier but Bright
-  W.REWARD_UP = { gold: 'vigor', vigor: 'forge', forge: 'epic', class: 'epic' }; // darkness upgrades a room reward one step (boon:<path> -> epic)
+  W.REWARD_UP = { gold: 'vigor', vigor: 'forge', forge: 'epic', boon: 'epic' }; // darkness upgrades a room reward one step
   // Per-stratum threat on top of the base scales: foe HP, wave budget, `cdRate` = extra cooldown recovery (0.2 = attack timers tick 20% faster, -0.2 = 20% slower) and the boss pause between attacks (x).
-  W.THREAT = [{ hp: 2.2, dmg: 0.5, wave: 0.8, cdRate: -0.4, pause: 2 }, { hp: 1.62, dmg: 0.5, wave: 0.75, cdRate: -0.3, pause: 1.7 }, { hp: 1.3, dmg: 0.5, wave: 0.7, cdRate: -0.1, pause: 1.4 }, { hp: 1, dmg: 0.4, wave: 0.66, cdRate: 0, pause: 1.2 }, { hp: 1.07, dmg: 0.8, wave: 0.62, cdRate: 0.15, pause: 1 }, { hp: 1.02, dmg: 1, wave: 0.6, cdRate: 0.3, pause: 0.9 }];
+  W.THREAT = [{ hp: 2.2, dmg: 0.5, wave: 0.8, cdRate: -0.4, pause: 2 }, { hp: 1.62, dmg: 0.5, wave: 0.75, cdRate: -0.3, pause: 1.7 }, { hp: 1.3, dmg: 0.5, wave: 0.7, cdRate: -0.1, pause: 1.4 }, { hp: 1, dmg: 0.4, wave: 0.66, cdRate: 0, pause: 1.2 }, { hp: 1.07, dmg: 0.78, wave: 0.62, cdRate: 0.15, pause: 1 }, { hp: 1.02, dmg: 0.98, wave: 0.6, cdRate: 0.3, pause: 0.9 }];
   // Foe HP multiplier of stratum s: the depth curve times the threat HP.
   W.hpScale = (s) => (1 + 0.65 * (s - 1) + 0.08 * (s - 1) * (s - 1)) * W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, s - 1))].hp;
   // Wave pacing of combat rooms: seconds before the first wave, spawn telegraph (+ random extra), minimum gap before the next wave, the share of a wave that may still stand when the next one is called, the seconds after which the next wave comes regardless, and the minimum spawn distance from heroes (turrets keep more).
   W.PACE = { first: 0.5, spawn: 0.7, spawnVar: 0.25, gap: 0.9, nextAt: 0.45, maxAge: 6, avoid: 100, avoidTurret: 130 };
-  W.DRAIN_SECS = [2500, 2200, 2050, 2000, 2000, 2000]; // seconds for a full unupgraded lantern to burn out on the slow per-second drain, per stratum
   // Entering a room not yet visited costs this much light (of 100, not scaled by Deep Wick); revisits, the start room and the boss room are free. Shown on doors and the map.
   W.ROOM_COST = { combat: 12, elite: 17, treasure: 8, shop: 8, event: 8, rest: 8 };
   W.roomCost = (type) => W.ROOM_COST[type] || 0;
@@ -168,7 +190,9 @@
   W.prototype.threat = function () { return W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, this.stratum - 1))]; };
   W.prototype.emit = function (ev) { this.fx.push(ev); };
   W.prototype.partySize = function () { return Math.max(1, this.players.size); };
-  W.prototype.partyHpMul = function () { const n = this.partySize() - 1; return 1 + 0.9 * n + 0.3 * n * (n - 1); };
+  W.partyHpMul = (size) => { const n = size - 1; return 1 + 0.85 * n + 0.3 * n * (n - 1); }; // foe HP factor of a party of `size` (pure; the sheet reads it too)
+  W.dmgScale = (s) => 1 + 0.22 * (s - 1) + 0.03 * (s - 1) * (s - 1); // foe damage factor of stratum s
+  W.prototype.partyHpMul = function () { return W.partyHpMul(this.partySize()); };
   W.prototype.alive = function (p) { return p && !p.downed && !p.dead; };
   W.prototype.alivePlayers = function () { const out = []; for (const p of this.players.values()) if (!p.downed && !p.dead) out.push(p); return out; };
   W.prototype.hostiles = function () { let n = 0; for (const e of this.enemies) if (e.hp > 0 && !e.def.gloom) n++; return n; };
@@ -182,10 +206,12 @@
     }
     return best;
   };
-  W.prototype.nearestEnemy = function (x, y, maxD, exclude) {
+  // Nearest living foe within maxD of (x, y), skipping the ids in exclude; with cone > 0 only foes within cone radians of the direction a0.
+  W.prototype.nearestEnemy = function (x, y, maxD, exclude, a0, cone) {
     let best = null, bd = maxD * maxD;
     for (const e of this.enemies) {
       if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed || (exclude && exclude.has(e.id))) continue;
+      if (cone > 0 && Math.abs(U.angDiff(a0, Math.atan2(e.y - y, e.x - x))) > cone) continue;
       const d = U.dist2(x, y, e.x, e.y);
       if (d < bd) { bd = d; best = e; }
     }
@@ -202,9 +228,9 @@
       hp: 1, maxHp: 1, dashT: 0, dashDx: 0, dashDy: 0, dashing: false, skillMove: null,
       invuln: 0, hurtT: 0, downed: false, bleed: 0, revive: 0, dead: false,
       phoenixUsed: false, secondWind: 0, swPct: 0.4, angelUsed: false, aegisT: 0, guardCd: 0, guardT: 0,
-      frozenCd: 0, tranceT: 0, wallT: 0, atkCount: 0, chaliceKills: 0, chaliceHp: 0, bonusHp: 0,
+      frozenCd: 0, tranceT: 0, atkCount: 0, chaliceKills: 0, chaliceHp: 0, bonusHp: 0,
       picks: 0, offer: null, offerT: 0, rerolls: 0, claimed: {}, shield: 0,
-      kills: 0, dealt: 0, hitThisBoss: false,
+      kills: 0, dealt: 0, hitThisBoss: false, maxRelics: 0, revivesGiven: 0,
       remote: !!pd.remote, connected: true,
     };
     this.initBuild(p);
@@ -217,6 +243,7 @@
   W.prototype.removePlayer = function (pid) {
     const p = this.players.get(pid);
     if (!p) return;
+    this.clearShields(p);
     this.players.delete(pid);
     this.allies = this.allies.filter(a => a.owner !== pid);
     this.emit({ t: 'left', pid, name: p.name });
@@ -234,42 +261,114 @@
   W.prototype.buildOf = function (p) { return { pid: p.pid, boons: Object.assign({}, p.boons), relics: p.relics.slice(), chaliceHp: p.chaliceHp, bonusHp: p.bonusHp }; };
   W.prototype.sendBuild = function (p) { this.emit({ t: 'build', b: this.buildOf(p) }); };
 
-  // Heals up to max HP; healing beyond it feeds the blood shield (cap maxHp x bloodShield). Returns the HP actually restored.
+  // Heals up to max HP (no heal ever overflows into a shield). Returns the HP actually restored.
   W.prototype.healPlayer = function (p, amt, silent) {
-    if (!p || p.downed || p.dead) return 0;
-    const raw = amt * p.stats.healMul * (this.dread.heal ?? 1), cap = p.maxHp * (p.stats.bloodShield || 0);
-    if (p.hp >= p.maxHp && !(cap > 0 && raw > 0)) return 0;
-    const v = Math.min(p.maxHp - p.hp, raw);
+    if (!p || p.downed || p.dead || p.hp >= p.maxHp) return 0;
+    const v = Math.min(p.maxHp - p.hp, amt * p.stats.healMul * (this.dread.heal ?? 1));
     p.hp += v;
-    if (cap > 0 && raw > v) p.shield = Math.min(cap, (p.shield || 0) + raw - v);
     if (!silent && v >= 1) this.emit({ t: 'heal', pid: p.pid, v: Math.round(v), x: p.x, y: p.y });
     return v;
   };
 
-  W.prototype.relicPool = function () {
-    // Shared progression: relics unlocked by ANY party member can drop for everyone.
+  // Every shield a hero receives except Battle Ward ('ward') and the boss door passes one sliding window of SHIELD_WIN_T seconds (10 one-second slots in p.shWin): class sources (any k but 'holy' and 'bone') give at most
+  // SHIELD_WIN_CLASS of max HP per window, all sources together SHIELD_WIN_ALL; what the window refuses is logged in p.shieldClip[k].
+  Object.assign(ED.CONST, { SHIELD_WIN_T: 10, SHIELD_WIN_CLASS: 0.03, SHIELD_WIN_ALL: 0.06 });
+  // Adds amt (x the dread heal multiplier) to p's absorb shield up to cap (a shield above the cap is never lowered); k labels the source in p.shieldBy. Returns the shield gained.
+  W.prototype.addShield = function (p, amt, cap, k) {
+    if (!p || p.downed || p.dead || !(amt > 0) || !(p.shield < cap)) return 0;
+    let gain = Math.min(cap, p.shield + amt * (this.dread.heal ?? 1)) - p.shield;
+    if (k !== 'ward') {
+      const C = ED.CONST, win = p.shWin, now = Math.floor(this.time);
+      let c = 0, a = 0;
+      for (let i = 0; i < win.length; i++) { const s = win[i]; if (now - s.sec < C.SHIELD_WIN_T) { c += s.c; a += s.a; } }
+      const room = Math.max(0, k === 'holy' || k === 'bone' ? C.SHIELD_WIN_ALL * p.maxHp - a : Math.min(C.SHIELD_WIN_CLASS * p.maxHp - c, C.SHIELD_WIN_ALL * p.maxHp - a));
+      if (gain > room) { p.shieldClip[k] = (p.shieldClip[k] || 0) + gain - room; gain = room; }
+      if (!(gain > 0)) return 0;
+      const sl = win[now % C.SHIELD_WIN_T];
+      if (sl.sec !== now) { sl.sec = now; sl.c = 0; sl.a = 0; }
+      if (k !== 'holy' && k !== 'bone') sl.c += gain;
+      sl.a += gain;
+    }
+    p.shield += gain;
+    p.shieldBy[k] = (p.shieldBy[k] || 0) + gain;
+    this.emit({ t: 'shielded', pid: p.pid, v: Math.round(gain * 10) / 10, k });
+    return gain;
+  };
+
+  // Shields fade by SHIELD_DECAY of max HP per second while no room is locked and outside boss rooms, so income serves only the room it was earned in.
+  W.prototype.updateShields = function (dt) {
+    if (this.locked || (this.room && this.room.type === 'boss')) return;
+    for (const p of this.players.values()) if (p.shield > 0) p.shield = Math.max(0, p.shield - ED.CONST.SHIELD_DECAY * p.maxHp * dt);
+  };
+
+  // Relics any party member has unlocked can drop for everyone (shared progression); with nobody holding any unlocks, the start relics.
+  W.prototype.unlockedRelics = function () {
     const set = new Set();
     for (const p of this.players.values()) for (const id of (p.meta.relics || [])) set.add(id);
     if (!set.size) ED.RELIC_IDS.filter(id => ED.RELICS[id].start).forEach(id => set.add(id));
+    return set;
+  };
+  W.prototype.relicPool = function () {
+    const set = this.unlockedRelics();
     const held = new Set();
     for (const p of this.players.values()) for (const id of p.relics) held.add(id);
     let pool = [...set].filter(id => !held.has(id));
     if (!pool.length) pool = [...set];
     return pool;
   };
-  W.prototype.rollRelic = function (minRar, exclude) {
+  // A relic roll at least minRar. forHero: only relics that fit that hero (no element relics for a Generalist); without it, relics that fit at least one living hero, an element some living hero follows weighs x2 and any other element x0.5.
+  // noElement: element relics are left out (the first picks of a hoard or shop for each Generalist in the party).
+  W.prototype.rollRelic = function (minRar, exclude, forHero, noElement) {
     const order = { c: 0, r: 1, e: 2, l: 3 };
-    let pool = this.relicPool().filter(id => order[ED.RELICS[id].rar] >= order[minRar || 'c'] && !(exclude && exclude.has(id)));
-    if (!pool.length) pool = this.relicPool();
+    const heroes = forHero ? [forHero] : this.alivePlayers();
+    const fits = (id) => (!ED.RELICS[id].el || !noElement) && (!heroes.length || heroes.some(q => ED.relicFits(q, id)));
+    const base = this.relicPool().filter(fits);
+    let pool = base.filter(id => order[ED.RELICS[id].rar] >= order[minRar || 'c'] && !(exclude && exclude.has(id)));
+    if (!pool.length) pool = base.length ? base : this.relicPool();
     const s = this.stratum;
     const w = { c: 50, r: 34 + s * 3, e: 14 + s * 3, l: 3 + s };
-    return this.rng.weighted(pool, id => w[ED.RELICS[id].rar]);
+    const owned = new Set();
+    if (!forHero) for (const q of heroes) for (const k of ED.elementGates(q.boons)) owned.add(k);
+    return this.rng.weighted(pool, id => { const r = ED.RELICS[id]; return w[r.rar] * (r.el && !forHero ? (owned.has(r.el) ? 2 : 0.5) : 1); });
   };
 
+  // A Generalist forsakes an element relic: it becomes a random unowned non-element relic of the same rarity (else the next rarity down, else 40 gold). Returns the new id or null.
+  W.prototype.transmuteRelic = function (p, id) {
+    const order = ['c', 'r', 'e', 'l'], set = this.unlockedRelics(), held = new Set();
+    for (const q of this.players.values()) for (const x of q.relics) held.add(x);
+    for (let i = order.indexOf(ED.RELICS[id].rar); i >= 0; i--) {
+      const pool = [...set].filter(x => !ED.RELICS[x].el && ED.RELICS[x].rar === order[i] && !held.has(x));
+      if (pool.length) return this.rng.pick(pool);
+    }
+    this.gold += 40;
+    return null;
+  };
+
+  // A Generalist who owns element relics swaps each one (Armory, or any picked before the Generalist gate).
+  W.prototype.forsakeRelics = function (p) {
+    for (let i = 0; i < p.relics.length; i++) {
+      const id = p.relics[i];
+      if (ED.relicFits(p, id)) continue;
+      const to = this.transmuteRelic(p, id);
+      this.msgs.push({ to: p.pid, t: 'toast', info: true, text: to ? `A Generalist forsakes element relics: ${ED.RELICS[id].name} becomes ${ED.RELICS[to].name}.` : `A Generalist forsakes element relics: ${ED.RELICS[id].name} is sold for 40 gold.` });
+      if (to) p.relics[i] = to; else { p.relics.splice(i, 1); i--; }
+    }
+    this.recalc(p, false);
+    this.sendBuild(p);
+  };
+
+  // Gives p a relic; a Generalist's element relic transmutes (the price paid stays paid).
   W.prototype.giveRelic = function (p, id) {
+    if (!ED.relicFits(p, id)) {
+      const to = this.transmuteRelic(p, id);
+      this.msgs.push({ to: p.pid, t: 'toast', info: true, text: to ? `A Generalist forsakes element relics: ${ED.RELICS[id].name} becomes ${ED.RELICS[to].name}.` : `A Generalist forsakes element relics: ${ED.RELICS[id].name} is sold for 40 gold.` });
+      if (!to) return;
+      id = to;
+    }
     p.relics.push(id);
     this.recalc(p, false);
     this.run.maxRelics = Math.max(this.run.maxRelics, p.relics.length);
+    p.maxRelics = Math.max(p.maxRelics, p.relics.length); // the most this hero held (a Generalist's transmute can shrink the list)
     this.emit({ t: 'relic', pid: p.pid, id, x: p.x, y: p.y });
     this.sendBuild(p);
   };
@@ -303,7 +402,7 @@
 
   W.prototype.enterRoom = function (id, fromDir) {
     this.collectAll();
-    this.enemies.length = 0; this.projs.length = 0; this.zones.length = 0;
+    this.enemies.length = 0; this.projs.length = 0; this.zones.length = 0; this.chainQ.length = 0; this.curChain = null; this.corpses.length = 0;
     this.boss = null; this.enc = null;
     this.roomId = id;
     this.roomEpoch = (this.roomEpoch || 0) + 1;
@@ -321,7 +420,8 @@
     const pos = [];
     for (const p of this.players.values()) {
       const pt = fromDir ? D.entryPoint(room, D.OPP[fromDir], k) : { x: D.center(room).x + (k - 1.5) * 22, y: D.center(room).y + 20 };
-      p.x = pt.x; p.y = pt.y; p.vx = 0; p.vy = 0; p.dashT = 0; p.skillMove = null;
+      p.x = pt.x; p.y = pt.y; p.vx = 0; p.vy = 0; p.dashT = 0; p.skillMove = null; p.skillIfr = false; p.charge = null; this.clearShields(p); // a thrown shield and a charge in flight end with the room
+      p.toughRoom = room.type === 'elite' || room.type === 'boss'; // War Drum doubles in these rooms
       pos.push([p.pid, Math.round(p.x), Math.round(p.y)]);
       k++;
     }
@@ -357,7 +457,7 @@
 
   W.prototype.summary = function () {
     const players = {};
-    for (const p of this.players.values()) players[p.pid] = { cls: p.cls, name: p.name, kills: p.kills, dealt: Math.round(p.dealt), emberBonus: p.stats.emberBonus || 0, relics: p.relics.length, evo: p.stats.evo || null };
+    for (const p of this.players.values()) players[p.pid] = { cls: p.cls, name: p.name, kills: p.kills, dealt: Math.round(p.dealt), emberBonus: p.stats.emberBonus || 0, relics: p.relics.length, evo: p.stats.evo || null, maxRelics: p.maxRelics, revivesGiven: p.revivesGiven };
     return {
       victory: this.victory, retreat: !!this.retreat, abandoned: !!this.abandoned, stratum: this.stratum, time: Math.round(this.time), kills: this.run.kills,
       roomsCleared: this.run.roomsCleared, elitesKilled: this.run.elitesKilled, bosses: this.run.bosses, bossCount: this.run.bossCount,
@@ -384,6 +484,7 @@
       return;
     }
     this.updateLantern(dt);
+    this.updateShields(dt);
     for (const p of this.players.values()) this.updatePlayer(p, dt);
     this.flowT -= dt;
     if (this.flowT <= 0) { this.computeFlow(); this.flowT = 0.25; }
@@ -391,9 +492,9 @@
     for (let i = 0; i < this.enemies.length; i++) this.updateEnemy(this.enemies[i], dt);
     this.separate();
     this.updateAllies(dt);
-    this.updateCompanions(dt);
     this.updateProjectiles(dt);
     this.updateZones(dt);
+    this.updateChains();
     this.updatePickups(dt);
     if (this.enemies.some(e => e.hp <= 0)) this.enemies = this.enemies.filter(e => e.hp > 0);
     this.checkDoors(dt);
@@ -406,6 +507,7 @@
     p.invuln = Math.max(0, p.invuln - dt);
     p.hurtT -= dt;
     if (!p.remote) p.dashing = p.dashT > 0;
+    if (p.shields.length && (p.downed || p.dead)) this.clearShields(p);
     if (p.dead) return;
     if (p.downed) {
       let helpers = 0;
@@ -415,6 +517,7 @@
         if (p.revive >= 1) {
           p.downed = false; p.revive = 0; p.hp = Math.round(p.maxHp * 0.35); p.invuln = 1.5;
           this.run.revives++;
+          for (const q of this.players.values()) if (q !== p && !q.downed && !q.dead && U.dist2(q.x, q.y, p.x, p.y) < 48 * 48) q.revivesGiven++;
           this.emit({ t: 'revived', pid: p.pid, x: p.x, y: p.y });
         }
       } else p.revive = Math.max(0, p.revive - dt * 0.15);
@@ -569,7 +672,7 @@
       let target = null, bd = Infinity;
       for (const p of this.players.values()) {
         if (p.downed || p.dead) continue;
-        const heal = pk.kind === 'heart' || pk.kind === 'orb';
+        const heal = pk.kind === 'heart';
         if (heal && p.hp >= p.maxHp) continue;
         const d = U.dist2(pk.x, pk.y, p.x, p.y);
         const range = (heal ? 34 : p.stats.pickupR);
@@ -581,7 +684,6 @@
         if (d < target.r + 8) { this.collect(target, pk); continue; }
       }
       pk.x += pk.vx * dt; pk.y += pk.vy * dt;
-      Sim.resolve({ x: pk.x, y: pk.y, r: 4 }, this.room, this.locked, true);
       keep.push(pk);
     }
     this.pickups = keep;
@@ -590,8 +692,7 @@
   W.prototype.collect = function (p, pk) {
     if (pk.kind === 'gold') { const v = Math.max(1, Math.round(pk.val * (1 + p.stats.gold))); this.gold += v; this.emit({ t: 'gold', v, pid: p.pid }); }
     else if (pk.kind === 'xp') { this.addXp(pk.val * (1 + p.stats.xp)); this.emit({ t: 'xp', pid: p.pid }); }
-    else if (pk.kind === 'heart') { this.healPlayer(p, p.maxHp * 0.22 + 6); }
-    else if (pk.kind === 'orb') { this.healPlayer(p, p.maxHp * pk.val); }
+    else if (pk.kind === 'heart') { this.healPlayer(p, p.maxHp * (0.22 + 0.03 * p.stats.forager) + 6); }
   };
 
   // ---------------- lantern and dread ----------------
@@ -602,15 +703,11 @@
     return 100 * (1 + 0.06 * rank) * (W.LANTERN_MUL[this.stratum - 1] || 1);
   };
 
-  // Burns the lantern slowly outside boss rooms (the boss room freezes the tier; no drain while a safe room waits on a boon pick) and, Lightless, stalks regular rooms with a Gloom.
+  // Dark and Lightless tiers stalk regular rooms with a Gloom. The lantern only loses light through room costs and the flare.
   W.prototype.updateLantern = function (dt) {
     const room = this.room;
     if (!room) return;
-    const hold = this.offerHold(); // an open boon pick in a safe room pauses both the drain and the Gloom's delay
-    if (room.type !== 'boss' && !hold) {
-      this.light = Math.max(0, this.light - dt * 100 / (W.DRAIN_SECS[this.stratum - 1] || 800));
-      this.updateDread();
-    }
+    const hold = this.offerHold(); // an open boon pick in a safe room pauses the Gloom's delay
     const gl = this.dread.gloom;
     if (gl > 0 && room.type !== 'boss' && room.type !== 'start' && this.gloomN < this.gloomWant() && ED.ENEMIES.gloom) {
       this.gloomT = (this.gloomT === null ? (this.gloomN ? W.GLOOM_GAP : gl) : this.gloomT) - (hold ? 0 : dt);
@@ -685,7 +782,7 @@
   // Dark and Lightless: a cleared room's reward may be upgraded one step (chance dread.up); announced by an 'upgrade' event at the reward's spot.
   W.prototype.darkReward = function (item, x, y) {
     if (!(this.dread.up > 0) || !this.rng.chance(this.dread.up)) return item;
-    const to = item.startsWith('boon:') ? 'epic' : W.REWARD_UP[item];
+    const to = W.REWARD_UP[item];
     if (!to) return item;
     this.emit({ t: 'upgrade', to, x: Math.round(x), y: Math.round(y) });
     return to;
@@ -696,7 +793,11 @@
     const f = this.lightMax > 0 ? this.light / this.lightMax : 0;
     if (f <= 0) return;
     const R = W.bossLight(f, this.stratum), heroes = this.alivePlayers();
-    for (const p of heroes) { this.healPlayer(p, p.maxHp * R.heal); p.shield = Math.max(p.shield || 0, p.maxHp * R.shield); }
+    for (const p of heroes) {
+      this.healPlayer(p, p.maxHp * R.heal);
+      const to = Math.max(p.shield || 0, p.maxHp * R.shield);
+      p.shieldBy.door = (p.shieldBy.door || 0) + (to - (p.shield || 0)); p.shield = to;
+    }
     this.run.embers.rooms += R.embers;
     if (R.gold > 0 && heroes.length) this.dropGold(heroes[0].x, heroes[0].y, R.gold, true);
     this.emit({ t: 'wick', f: Math.round(f * 100), heal: Math.round(R.heal * 100), shield: Math.round(R.shield * 100), gold: R.gold, embers: R.embers });

@@ -3,7 +3,9 @@
   'use strict';
   const Ic = ED.Icons = {};
   const cache = {};
-  const S = 64;
+  let S = 64; // icon bitmap size: 128 when the sheet's icons (2.6 rem) would be upscaled, see Ic.fit
+  // Picks the icon size from the root font size and the device pixel ratio (128 when 2.6 rem in device pixels exceeds 64); icons cached at the other size stay valid.
+  Ic.fit = () => { const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16; S = (window.devicePixelRatio || 1) * rem * 2.6 > 64 ? 128 : 64; };
 
   const P = {
     sword(c) { c.beginPath(); c.moveTo(46, 12); c.lineTo(52, 12); c.lineTo(52, 18); c.lineTo(26, 44); c.lineTo(20, 38); c.closePath(); c.fill(); c.stroke();
@@ -72,7 +74,7 @@
   // colour: glyph fill. Returns an offscreen canvas.
   Ic.canvas = (name, color, size) => {
     const key = name + '|' + color + '|' + (size || S);
-    if (cache[key]) return cache[key].cv;
+    if (cache[key]) return cache[key].bm || cache[key].cv; // the ImageBitmap once ready (Gecko pays per source canvas); the canvas stays for Ic.url
     const cv = document.createElement('canvas');
     cv.width = cv.height = size || S;
     const c = cv.getContext('2d');
@@ -88,17 +90,22 @@
     c.save();
     c.translate(32, 32); c.scale(0.72, 0.72); c.translate(-32, -32);
     c.fillStyle = color; c.strokeStyle = '#1a0d08'; c.lineWidth = 3; c.lineJoin = 'round'; c.lineCap = 'round';
-    c.shadowColor = color; c.shadowBlur = 8;
+    c.shadowColor = color; c.shadowBlur = 8 * Math.min(1, k);
     (P[name] || P.star)(c);
     c.restore();
-    cache[key] = { cv, url: null };
+    const e = cache[key] = { cv, bm: null, url: null };
+    ED.Bmp.from(cv, (b) => { if (cache[key] === e) e.bm = b; else ED.Bmp.free(b); });
     return cv;
   };
   Ic.url = (name, color) => {
     const key = name + '|' + color + '|' + S;
     if (!cache[key]) Ic.canvas(name, color);
-    if (!cache[key].url) cache[key].url = cache[key].cv.toDataURL();
-    return cache[key].url;
+    const e = cache[key];
+    if (!e.url) { // the first use embeds a data URL; a blob URL (shorter, one decode) replaces it for later uses once the encoder returns
+      e.url = e.cv.toDataURL();
+      try { e.cv.toBlob((b) => { if (b && cache[key] === e) e.url = URL.createObjectURL(b); }); } catch (err) { /* keep the data URL */ }
+    }
+    return e.url;
   };
   Ic.boonUrl = (id) => { const b = ED.BOONS[id]; return Ic.url(b.icon, ED.RARITY[b.rar].color); };
   Ic.relicUrl = (id) => { const r = ED.RELICS[id]; return Ic.url(r.icon, ED.RARITY[r.rar].color); };
