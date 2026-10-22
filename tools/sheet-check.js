@@ -96,10 +96,10 @@ for (const key in ED.SKILL_SHEET) { const [sid, pid] = key.split('.'); ok(ED.SKI
     for (const id of ED.BOON_IDS) { const b = ED.BOONS[id]; for (let r = 1; r < (b.max || 1); r++) for (const piece of S.nextText(id, r, st).split(' · ')) if (!/[A-Za-z]{3,}/.test(piece.replace(/\d+(?:\.\d+)?\s?s\b/g, ''))) { bare++; console.log(`FAIL bare next-rank piece ${id} rank ${r}: "${piece}"`); } }
     ok(bare === 0, 'Next rank lines are never bare numbers');
     ok(S.nextText('k_s1_a', 1, st) === 'deals +20% · 50% of its impact · unlocks Shield Bash' && S.nextText('k_s2_b', 1, st) === 'orbits you for 4 s · 20% of a strike · unlocks Return to Sender' && S.nextText('k_s1_a', 2, st).indexOf('unlocks Avalanche') >= 0 && S.nextText('r_s2_b', 2, st).indexOf('unlocks Storm of Thorns') >= 0, 'Juggernaut and Shield Orbit name their numbers: ' + S.nextText('k_s1_a', 1, st) + ' / ' + S.nextText('k_s2_b', 1, st));
-    ok(S.text('r_el_b', 2, st).indexOf('within 120.') >= 0 && S.text('r_el_b', 3, st).indexOf('within 140') >= 0 && S.nextText('r_el_b', 1, st) === 'foes within 120', 'Contagion shows its total radius: ' + S.nextText('r_el_b', 1, st));
+    ok(S.text('r_el_b', 2, st).indexOf('within 120.') >= 0 && S.text('r_el_b', 3, st).indexOf('within 140') >= 0 && S.nextText('r_el_b', 1, st) === 'foes within 120 · unlocks Outbreak', 'Contagion shows its total radius: ' + S.nextText('r_el_b', 1, st));
     ok(S.nextText('p_s2_b', 1, st) === 'impact (+40%)', 'Comet names what the +40% belongs to: ' + S.nextText('p_s2_b', 1, st));
   }
-  ok(S.nextText('k_el_a', 1, st).indexOf('unlocks Ruin Seal') < 0 && S.nextText('k_el_a', 2, st).indexOf('unlocks Ruin Seal') >= 0, 'a route card names the rider it unlocks at rank 3');
+  ok(S.nextText('k_el_a', 1, st).indexOf('unlocks Ruin Seal') >= 0 && S.nextText('k_el_a', 2, st).indexOf('unlocks Doombrand') >= 0 && S.nextText('k_el_a', 2, st).indexOf('6 ailments') >= 0, 'a route card names the rider it unlocks at rank 2 and the transform at rank 3');
   ok(S.fmt('arcStun', 0.25, 'sec') === '0.25s' && S.fmt('arcStun', 0.5, 'sec') === '0.5s' && S.fmt('venomHold', 2, 'sec') === '2s' && S.fmt('venomHold', 12, 'sec') === '12s', 'seconds keep two decimals below 1 s');
   ok(S.text('overload', 1, st).indexOf('0.25s') >= 0, 'Overload states its real stun time: ' + S.text('overload', 1, st));
   ok(S.text('pierce', 1, st).indexOf('+1 foe.') >= 0 && S.text('pierce', 2, st).indexOf('+2 foes.') >= 0, 'counts pluralise: ' + S.text('pierce', 1, st) + ' / ' + S.text('pierce', 2, st));
@@ -233,7 +233,7 @@ for (const cls of ED.CLASS_IDS) for (let wi = 0; wi < 3; wi++) {
   rel(r.total / r.atk, r.m.weapon.dps / r.m.weapon.aps, 0.04, `${id} damage per attack on one foe`);
 }
 // forks and route weapons: Heavy, Swift and the Knight Cleave
-for (const [cls, boons, tag] of [['knight', { k_atk: 1 }, 'Oath of Steel'], ['knight', { k_atk: 1, k_atk_h: 1 }, 'Oathbreaker'], ['knight', { k_atk: 1, k_atk_s: 1 }, 'Sworn Blade'], ['ranger', { r_atk: 1, r_atk_h: 1 }, 'Ballista'], ['cleric', { c_atk: 1, c_atk_s: 1 }, 'Crusader']]) {
+for (const [cls, boons, tag] of [['knight', { k_atk: 1 }, 'Oath of Steel'], ['knight', { k_atk: 1, k_atk_h: 1 }, 'Oathbreaker'], ['knight', { k_atk: 1, k_atk_s: 1 }, 'Sworn Blade'], ['knight', { k_atk: 1, k_atk_h: 3 }, 'Earthsplitter'], ['knight', { k_atk: 1, k_atk_s: 3 }, 'Thousand Edges'], ['ranger', { r_atk: 1, r_atk_h: 1 }, 'Ballista'], ['cleric', { c_atk: 1, c_atk_s: 1 }, 'Crusader']]) {
   const r = weaponRun(cls, 0, boons, { secs: 24 });
   rel(r.total / r.atk, r.m.weapon.dps / r.m.weapon.aps, 0.05, `${tag} damage per attack`);
 }
@@ -249,6 +249,33 @@ for (const [cls, evo, stratum] of [['knight', 'fire', 1], ['pyro', 'fire', 1], [
   const boons = {}; boons['evo_' + evo] = 1;
   const r = weaponRun(cls, 0, boons, { secs: 30, stratum });
   rel(r.total / r.atk, r.m.weapon.dps / r.m.weapon.aps, 0.06, `${cls} evolution ${evo} damage per attack`);
+}
+
+// Ranger riders and forms: Flurry, the siege bolt and the ricochet on the weapon card (a pack-only extra is left out of the damage on one foe), Gangrene on the skills, Hemorrhage and the pool bursts
+for (const [cls, boons, tag] of [['ranger', { r_atk: 1, r_atk_s: 2 }, 'Flurry (Quickdraw rank 2)'], ['ranger', { r_atk: 1, r_atk_s: 3 }, 'Storm Bow'], ['ranger', { r_atk: 1, r_atk_h: 3 }, 'Siege Ballista']]) {
+  const r = weaponRun(cls, 0, boons, { secs: 40 });
+  rel(r.total / r.atk, r.m.weapon.dps / r.m.weapon.aps, 0.05, `${tag} damage per attack on one foe`);
+}
+{
+  const wm = (boons) => modelOf('ranger', boons, 0, { stat: { crit: 0 } }).weapon, ex = (m, l) => m.extras.find(e => e.label === l);
+  const q2 = wm({ r_atk: 1, r_atk_s: 2 }), q3 = wm({ r_atk: 1, r_atk_s: 3 }), q1 = wm({ r_atk: 1, r_atk_s: 1 });
+  ok(!ex(q1, 'Flurry') && ex(q2, 'Flurry') && ex(q3, 'Flurry') && ex(q3, 'Flurry').perAttack > ex(q2, 'Flurry').perAttack, 'Flurry appears at rank 2 and grows with Storm Bow');
+  near(ex(q2, 'Flurry').perAttack, q2.avg * 0.3 * 2 / 4, 1e-6, 'Flurry at rank 2: two arrows at 30% every 4th shot, both on a foe at REF');
+  const ric = ex(q3, 'Ricochet'); ok(ric && ric.packOnly && !ex(q2, 'Ricochet'), 'Storm Bow lists a pack-only Ricochet');
+  near(q3.dps, (q3.avg * q3.oneFoe + q3.extras.filter(e => !e.packOnly).reduce((s, e) => s + e.perAttack, 0)) * q3.aps, 0.01 * q3.dps, 'a pack-only extra is not in the damage on one foe');
+  near(ric.perAttack, q3.avg * 0.4 * 0.8 * (1 + 3 * 0.3 / 4) / 4, 0.05, 'Ricochet: 40% x 0.8 hit rate per shot (and per Flurry arrow at its share), written for a pack of 4');
+  const h2 = wm({ r_atk: 1, r_atk_h: 2 }), h3 = wm({ r_atk: 1, r_atk_h: 3 });
+  ok(!ex(h2, 'Siege bolt') && ex(h3, 'Siege bolt') && ex(h3, 'Siege blast').packOnly && !ex(h3, 'Siege bolt').packOnly, 'Siege Ballista lists the bolt (one foe) and its blast (pack only)');
+  near(ex(h3, 'Siege bolt').perAttack, h3.avg * 0.5 / 5, 1e-6, 'the siege bolt adds x1.5 on every 5th shot');
+  const hr = modelOf('ranger', { r_el: 1, r_el_a: 2 }, 0).skills[0], hs = modelOf('ranger', { r_el: 1, r_el_a: 1 }, 0).skills[0];
+  ok(hr.dpsCd > hs.dpsCd * 1.1, 'Gangrene raises Volley and Rain (50% at an assumed 50% uptime)');
+  const bleedOf = (boons, extra) => modelOf('ranger', Object.assign({ kindle: 1, frostbite: 1 }, boons), 0, extra).mult.status.find(s => s.el === 'general');
+  const b2 = bleedOf({ r_el: 1, r_el_a: 2 }), b3 = bleedOf({ r_el: 1, r_el_a: 3 }), bn = bleedOf({ r_el: 1, r_el_a: 3 }, { stat: { hemoAt: 0.9 } });
+  ok(!b2.est.pops && b3.est.pops > 0 && b3.est.dps > b2.est.dps * 1.5, 'Hemorrhage adds pops to the Bleed estimate (' + b3.est.pops + ' pops while the reference foe lasts)'); ok(!bn.est.pops && bn.est.dps < b3.est.dps, 'a threshold the pool never reaches adds nothing');
+  const pk = (boons) => modelOf('ranger', Object.assign({ kindle: 1 }, boons), 0).weapon.extras;
+  const c1 = pk({ r_el: 1, r_el_b: 1 }).find(e => e.label === 'Contagion spread'), c2 = pk({ r_el: 1, r_el_b: 2 }).find(e => e.label === 'Outbreak spread'), c3 = pk({ r_el: 1, r_el_b: 3 });
+  ok(c1 && c1.packOnly && c2 && c2.packOnly && c2.perAttack > c1.perAttack * 1.3, 'Contagion and Outbreak list a pack-only spread, Outbreak the larger'); ok(c3.some(e => e.label === 'Plaguebearer burst' && e.packOnly) && !c3.some(e => /spread/.test(e.label)), 'Plaguebearer lists its burst instead of the spread');
+  const pb = c3.find(e => e.label === 'Plaguebearer burst'); ok(pb.perAttack > c2.perAttack * 2, 'the burst is worth more than the spread');
 }
 
 // ---------------- shield window: the readout equals what addShield granted in the last 10 s ----------------
@@ -333,6 +360,37 @@ function statusRun(boons, stratum, secs, until) {
   const want = m.proc.split.weapon * p.stats.fireInfuse * (1 + p.stats.burnMul); // the weapon's share of the model's Burn input (this run casts no skills)
   ok(st && Math.abs(burn - want) <= want * 0.08, `Burn damage per second ${burn.toFixed(1)} vs modelled ${want.toFixed(1)}`);
   ok(st && Math.abs(st.est.dps - (m.proc.split.weapon + m.proc.split.skills) * p.stats.fireInfuse * (1 + p.stats.burnMul)) <= 0.01, 'Burn estimate follows the damage that feeds it');
+}
+
+// ---------------- Knight Attack and Element forms in the model ----------------
+{
+  const K = (boons, stratum) => modelOf('knight', Object.assign({ edge: 2, quick: 2, focus: 1, stalwart: 1, kindle: 1, frostbite: 1 }, boons), 0, { ctx: { stratum: stratum || 3 } });
+  const ex = (m, label) => m.weapon.extras.find(e => e.label === label);
+  { // Earthsplitter: a fissure per Cleave (every 3rd swing), Thousand Edges: a blade wave per Cleave
+    const h2 = K({ k_atk: 1, k_atk_h: 2 }), h3 = K({ k_atk: 1, k_atk_h: 3 }), fis = ED.BOONS.k_atk_h.r3.fissure;
+    ok(!ex(h2, 'Fissure') && ex(h3, 'Fissure') && ex(h3, 'Cleave').note.indexOf('3rd swing') >= 0 && ex(h2, 'Cleave').note.indexOf('3rd swing') >= 0, 'Earthsplitter: a Fissure extra at rank 3 only, the Cleave stays every 3rd swing');
+    rel(ex(h3, 'Fissure').perAttack, h3.weapon.hit * fis / 3, 0.01, 'Fissure damage per attack = weapon hit x fissure / 3');
+    const s2 = K({ k_atk: 1, k_atk_s: 2 }), s3 = K({ k_atk: 1, k_atk_s: 3 });
+    ok(!ex(s2, 'Blade wave') && ex(s3, 'Blade wave'), 'Thousand Edges: a Blade wave extra at rank 3 only');
+    rel(ex(s3, 'Blade wave').perAttack, s3.weapon.avg * ED.BOONS.k_atk_s.r3.bladeWave / 3, 0.01, 'Blade wave per attack = weapon avg x bladeWave / 3');
+  }
+  { // Doombrand: an extra on the weapon, the Mark in the debuffs, Brand's cap in the condition row; none at rank 2
+    const b2 = K({ k_el: 1, k_el_a: 2 }), b3 = K({ k_el: 1, k_el_a: 3 }), d = ex(b3, 'Doombrand');
+    ok(!ex(b2, 'Doombrand') && d && d.perAttack > 0 && b3.weapon.dps > b2.weapon.dps, 'Doombrand adds a weapon extra and raises the damage per second; none at rank 2');
+    ok(b3.mult.debuffs.some(x => x.id === 'marked' && x.name === 'Marked' && x.text.indexOf('Doombrand') >= 0) && !b2.mult.debuffs.some(x => x.id === 'marked'), 'the Mark is listed with the debuffs at rank 3');
+    ok(b3.mult.cond.find(x => x.id === 'brand').label.indexOf('up to 6') >= 0 && b2.mult.cond.find(x => x.id === 'brand').label.indexOf('up to 4') >= 0, "Brand's condition row names its cap per rank");
+    const lo = K({ k_el: 1, k_el_a: 3 }), hi = modelOf('knight', { edge: 2, quick: 2, focus: 1, stalwart: 1, kindle: 1, frostbite: 1, k_el: 1, k_el_a: 3 }, 0, { ctx: { stratum: 3 }, stat: { brandMark: ED.BOONS.k_el_a.r3.brandMark * 2 } });
+    ok(hi.weapon.dps > lo.weapon.dps, 'a stronger Mark raises the Doombrand extra');
+  }
+  { // Cataclysm: the payout multiplier raises the Shield Throw's damage on one foe, a part for packs on top; the pack burst follows cataSplash
+    const r2 = K({ k_el: 1, k_el_b: 2 }), r3 = K({ k_el: 1, k_el_b: 3 }), q = r3.skills[1].parts.find(x => x.id === 'cataclysm');
+    ok(!r2.skills[1].parts.some(x => x.id === 'cataclysm') && q && q.oneFoe === 0 && q.r === 80, 'Cataclysm adds a part with no hit of its own on one foe, none at rank 2');
+    rel(q.here, 2.5 * r3.proc.bleed * (1 + ED.BOONS.k_el_b.r3.cataMul), 1e-6, 'the Cataclysm payout is the Bleed pool (2.5 s of income) x (1 + cataMul)');
+    const mid = { edge: 2, quick: 2, focus: 1, stalwart: 1, kindle: 1, frostbite: 1, k_el: 1, k_el_b: 3 }, part = (stat) => modelOf('knight', mid, 0, { ctx: { stratum: 3 }, stat }).skills[1].parts.find(x => x.id === 'cataclysm'), lo = part({ cataSplash: 0.1 }), hi = part({ cataSplash: 0.3 }), one = (stat) => modelOf('knight', mid, 0, { ctx: { stratum: 3 }, stat }).skills[1].perCast;
+    ok(hi._r.total > lo._r.total && lo._r.total > 0, 'the pack burst follows cataSplash');
+    ok(one({ cataMul: 2 }) > one({ cataMul: 1 }) && one({ cataMul: 1 }) > one({ cataclysm: 0 }) && one({ cataSplash: 0.1 }) === one({ cataSplash: 0.9 }), 'on one foe only cataMul counts: the Throw deals more with it, the splash adds nothing');
+    ok(modelOf('knight', { k_el: 1, k_el_b: 3 }, 0).skills[1].parts.find(x => x.id === 'cataclysm')._r.total === 0, 'a build with fewer than 3 ailment sources never detonates');
+  }
 }
 
 // the sheet shows the shield the way the HUD does (rounded up), so the host and a client reading the snapshot agree

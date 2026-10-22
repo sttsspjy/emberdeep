@@ -207,6 +207,10 @@
 
   // ---------------- weapon ----------------
   const MS = { every: 4, mul: 1.3, bleed: 0.5 }; // Masterstroke as combat.js playerAttack plays it
+  // Pack assumptions of the Ranger forms. PACK_REF: the pack size a pack-only extra is written for (tools/sheet.js counts every extra once per foe of its pack). SIEGE_BLAST_HIT: share of siege bolts whose end blast catches a pack foe.
+  // RIC_HIT: share of shots whose ricochet finds a second foe. PLAGUE_KEEP / PLAGUE_PACK: share of its pool inputs a dying foe (2+ ailments) still holds, and the pool input of a pack against one foe (skills hit every foe);
+  // both and SPREAD_PAY (the share of a burst's value that a status spread pays) are fitted to a staged fight of a stratum III mid build against a pack of 4 trash foes. FESTER_UP: uptime of 3+ ailments for Gangrene.
+  const PACK_REF = 4, SIEGE_BLAST_HIT = 0.5, RIC_HIT = 0.8, PLAGUE_KEEP = 0.9, PLAGUE_PACK = 1.5, SPREAD_PAY = 0.5, FESTER_UP = 0.5;
   // Damage numbers are per landed hit before the stratum affinity and any status; dps counts every attack landing on one foe (a fan: the shots that reach it at REF).
   // extras: damage each attack adds besides the main hits (blasts, shocks, waves, clouds, evolution strikes, relics): { label, perAttack, perSec, proc (feeds statuses), el?, note? }.
   function weaponModel(p, st, ctx, R) {
@@ -220,6 +224,8 @@
     if (cleaveEvery) add('Cleave', avg * cleaveK, { proc: true, crit: true, note: `every ${ordinal(cleaveEvery)} swing: +${Math.round(st.cleave * 100)}% damage, 40% more reach and arc` });
     if (melee && w.shock) add('Shockwave', Wd * w.shock.mul * M * (1 + cleaveK), { r: Math.round(w.shock.r * area), note: 'each swing, no crit' });
     if (cleaveEvery && st.cShock) add('Cleave shock', Wd * st.cShock * M / cleaveEvery, { r: Math.round(72 * area), stun: st.cStun, note: 'each Cleave, no crit' });
+    if (cleaveEvery && st.fissure) add('Fissure', Wd * st.fissure * M / cleaveEvery, { stun: st.cStun, note: 'each Cleave: a fissure 180 long strikes every foe on it once, no crit' }); // Earthsplitter (class-knight.js fissure)
+    if (cleaveEvery && st.bladeWave) add('Blade wave', Wd * st.bladeWave * M * EC / cleaveEvery, { proc: true, crit: true, note: 'each Cleave: a wave 180 long pierces every foe on it (a Parry fans three)' }); // Thousand Edges (class-knight.js bladeWaves)
     // the blast of a shot (its own, or the Cinder Arms blast of a plain shot), its aftershock, its cloud
     const pyre = evo === 'fire';
     const blast = !melee ? (w.explode ? { r: w.explode.r * area * (pyre ? 1.3 : 1), mul: w.explode.mul } : pyre ? { r: 40 * area, mul: 0.5 } : null) : null;
@@ -248,8 +254,22 @@
       for (const e of extras) if (e.label === 'Blast' || e.label === 'Shockwave') side += e.perAttack;
       add('Masterstroke', ((hit * cm * ms.mul - avg) * one + (ms.mul - 1) * side) / ms.every, { proc: true, note: `every ${ordinal(ms.every)} attack: a guaranteed crit at ×${ms.mul} that Bleeds for at least ${Math.round(ms.bleed * 100)}% of the hit` });
     }
+    // Ranger riders and forms (class-ranger.js): Flurry's extra arrows (those of the fan that reach a foe at REF), the siege bolt's extra damage (every siege-th shot, x siegeMul) and its end blast, Storm Bow's ricochet
+    if (!melee && st.flurry > 0) {
+      const extra = 2 + Math.max(0, Math.round(st.flurryN)), step = extra > 2 ? 0.09 : 0.12, fo = [];
+      for (let k = 0; k < extra; k++) fo.push((k & 1 ? 1 : -1) * ((k >> 1) + 1) * step);
+      add('Flurry', avg * st.flurryMul * fanHits(fo, w.r) / st.flurry, { proc: true, crit: true, note: `every ${ordinal(st.flurry)} shot: ${extra} extra arrows at ${Math.round(st.flurryMul * 100)}%` });
+    }
+    if (!melee && st.siege > 0) {
+      add('Siege bolt', avg * (st.siegeMul - 1) / st.siege, { proc: true, crit: true, note: `every ${ordinal(st.siege)} shot: ×${trim(st.siegeMul.toFixed(2))} damage, twice as wide, pierces every foe` });
+      add('Siege blast', Wd * M * st.siegeMul * st.siegeBlast * SIEGE_BLAST_HIT / st.siege, { proc: true, packOnly: true, r: Math.round(60 * area), note: `where a siege bolt ends, in a pack (about ${Math.round(SIEGE_BLAST_HIT * 100)}% of the time), no crit` });
+    }
+    if (!melee && st.ricochet > 0) { // a shot (and each Flurry arrow, at its share) ricochets once, hitting a second foe in a pack about RIC_HIT of the time; extras count x the pack, so the value is per foe of a PACK_REF pack
+      const shots = 1 + (st.flurry > 0 ? (2 + Math.max(0, Math.round(st.flurryN))) * st.flurryMul / st.flurry : 0);
+      add('Ricochet', avg * st.ricochet * RIC_HIT * shots / PACK_REF, { proc: true, crit: true, packOnly: true, note: `${Math.round(st.ricochet * 100)}% to a second foe within 140, in a pack (about ${Math.round(RIC_HIT * 100)}% of the time)` });
+    }
     let sum = 0;
-    for (const e of extras) sum += e.perAttack;
+    for (const e of extras) if (!e.packOnly) sum += e.perAttack; // a pack-only extra needs a second foe: it is left out of the damage on one foe
     const dps = (avg * one + sum) * aps, dpsAll = (avg * n + sum) * aps;
     const notes = [];
     if (st.atkOver > 1.0001) notes.push(`Attack speed cap ${n1(1 / st.atkFloor)}/s: the excess adds +${Math.round((st.atkOver - 1) * 100)}% damage`);
@@ -269,6 +289,7 @@
 
   // ---------------- skills ----------------
   const procDefault = (q) => (q.proc !== undefined ? !!q.proc : q.per === 'hit' || q.per === 'tick');
+  const FESTER_PARTS = new Set(['volley.arrow', 'rain.tick', 'rain.sky', 'rain.sky2', 'rain.shower']); // the parts Gangrene boosts (class-ranger.js SKILL_PARTS)
   // One part of a skill at the hero's stats: hit (per landed hit with the hero multiplier), avg (with the crit chance), pre (with the vulnerability the part sets), here (with the stratum affinity), total (here x hits on one foe).
   // A class-element part takes half the stratum affinity (ED.affC) and the class-element multiplier; statuses take the full affinity.
   function partModel(q, skillId, st, ctx, wpn, R) {
@@ -292,7 +313,8 @@
     // Cast-time factors skillNums leaves out (the casts apply them): Shield Storm throws two shields (Aegis Tempest three) at twinShield each, all reach a foe at REF; Comet's impact lands at 1 + comet.
     if (skillId === 'shieldthrow' && (st.twinShield > 0 || st.tempest > 0) && (q.id === 'strike' || q.id === 'return')) { raw *= st.twinShield > 0 ? st.twinShield : 1; oneFoe = st.tempest > 0 ? Math.round(st.tempest) : 2; }
     else if (skillId === 'meteor' && q.id === 'impact' && st.comet > 0) raw *= 1 + st.comet;
-    const hit = raw * M * (sec ? 0.5 : 1);
+    const fester = st.festerHit > 0 && FESTER_PARTS.has(skillId + '.' + q.id) ? 1 + st.festerHit * FESTER_UP : 1; // Gangrene: Volley and Rain hits on foes with 3+ ailments, at an assumed uptime
+    const hit = raw * M * fester * (sec ? 0.5 : 1);
     if (q.fan) { // a fan spreads its arrows over fan radians (a ring: evenly round the circle); a later wave (q.waves) repeats the fan
       const offs = [];
       for (let i = 0; i < q.n; i++) offs.push(q.ring ? i / q.n * q.fan : q.n > 1 ? (i / (q.n - 1) - 0.5) * q.fan : 0);
@@ -357,6 +379,7 @@
   // ---------------- compute ----------------
   // Contribution rows of one stat: [{ label, kind, v, id?, mul? }] from ED.Stats.breakdown (an Ascended multiplier row has mul: true, v = f for a factor of 1 + f) plus the live (temporary) rows of the hero.
   function rowsOf(build, key, extra) {
+    if (!build) return [];
     const rows = St.breakdown(build, key).map(r => (r.mul ? { label: r.label, kind: r.kind, v: r.v, id: r.id, mul: true } : { label: r.label, kind: r.kind, v: r.v, id: r.id }));
     if (extra) for (const r of extra) if (r.v) rows.push(r);
     return rows;
@@ -364,8 +387,9 @@
 
   // The model of hero p (a World hero, or a mirror hero with p.stats, boons, relics, meta, hp, maxHp, shield, picks) in context ctx (Sheet.ctx).
   // opts.raw keeps every number unrounded (tools, tests); otherwise numbers carry their display precision, so equal builds give equal JSON.
+  // opts.numbers (tools): no source rows and no Build tab (build: null); every other number is the same.
   Sh.compute = (p, ctx, opts) => {
-    const R = rounders(opts && opts.raw), st = p.stats, build = buildOf(p, ctx), cls = ED.CLASSES[p.cls];
+    const lite = !!(opts && opts.numbers), R = rounders(opts && opts.raw), st = p.stats, build = lite ? null : buildOf(p, ctx), cls = ED.CLASSES[p.cls];
     const ref = Sh.refFoe(ctx), s = ctx.stratum || 1, thr = W.THREAT[clampI(s - 1, 0, W.THREAT.length - 1)];
     const wpn = weaponModel(p, st, ctx, R);
     const skills = [];
@@ -381,6 +405,8 @@
     if (st.dashBlind) dash.parts.push({ label: 'Blind', dur: R.x(st.dashBlind), note: 'foes you pass (elites half, never bosses)' });
 
     const proc = procModel(p, st, wpn, skills);
+    elementForms(st, wpn, skills, proc, ref, R);
+    if (st.contagion > 0) poolExtras(wpn, st, proc, s, R);
 
     // offense multipliers, each with its sources
     const mult = {}, dmgExtra = [], atkExtra = [], rate = St.attackRate(p);
@@ -398,10 +424,10 @@
     for (const r of ED.COND_DMG) {
       if (r.key !== null ? !(st[r.key] > 0) : !(r.own && r.own(st, p))) continue;
       const live = r.live ? r.live(st, p, ctx) : null, v = r.value ? r.value(st, p) : st[r.key];
-      mult.cond.push({ id: r.key || r.id, label: r.label, v: R.f(v), live: live === null ? null : R.f(live), per: r.per || null });
+      mult.cond.push({ id: r.key || r.id, label: r.key === 'brand' && st.brandCap > 4 ? r.label.replace('up to 4', 'up to ' + st.brandCap) : r.label, v: R.f(v), live: live === null ? null : R.f(live), per: r.per || null }); // Doombrand raises Brand's cap
     }
     mult.slots = [];
-    for (const k of ['s1Dmg', 's1Area', 's1Dur', 's1N', 's1Cdr', 's2Dmg', 's2Area', 's2Dur', 's2N', 's2Cdr']) if (st[k]) mult.slots.push({ key: k, label: SIF(k).label, v: R.f(st[k]), fmt: SIF(k).fmt, rows: St.breakdown(build, k).map(r => ({ label: r.label, kind: r.kind, v: r.v })) });
+    for (const k of ['s1Dmg', 's1Area', 's1Dur', 's1N', 's1Cdr', 's2Dmg', 's2Area', 's2Dur', 's2N', 's2Cdr']) if (st[k]) mult.slots.push({ key: k, label: SIF(k).label, v: R.f(st[k]), fmt: SIF(k).fmt, rows: build ? St.breakdown(build, k).map(r => ({ label: r.label, kind: r.kind, v: r.v })) : [] });
     mult.status = [];
     const statusEls = ED.ELEMENT_IDS.filter(el => st[ED.ELEMENTS[el].inf] > 0 || st.element === el).concat(st.bleed > 0 || st.bleedAll > 0 || st.masterstroke ? ['general'] : []);
     for (const el of statusEls) {
@@ -430,7 +456,7 @@
 
     const hero = { pid: p.pid, name: p.name, cls: p.cls, clsName: cls.name, title: cls.title, level: ctx.level, xp: ctx.xp, xpNext: ctx.xpNext, hp: Math.ceil(p.hp), maxHp, shield: Math.ceil(p.shield || 0), gold: ctx.gold, picks: p.picks | 0, power: st.power, element: st.element, weaponName: wpn.name, slot: p.slot | 0 };
     const model = {
-      hero, ctx: { stratum: s, pact: ctx.pact | 0, dark: !!ctx.dark, party: ctx.party }, weapon: wpn, skills, dash, proc: procOut(proc, R), mult, def, aff: affModel(p, st, ctx), build: buildModel(p, st, ctx, R), dark: darkModel(ctx),
+      hero, ctx: { stratum: s, pact: ctx.pact | 0, dark: !!ctx.dark, party: ctx.party }, weapon: wpn, skills, dash, proc: procOut(proc, R), mult, def, aff: affModel(p, st, ctx), build: lite ? null : buildModel(p, st, ctx, R), dark: darkModel(ctx),
       ref: { hp: R.n(ref.hp), statusHp: R.n(ref.statusHp), r: ref.r }, procs: procList(st, M, R),
     };
     return opts && opts.raw ? model : strip(model);
@@ -455,6 +481,7 @@
     if (st.rainHail) add('judged', 'Foes in your Rain take +20% damage (the same +20% as Judged).', 0.2, 'inside your Rain');
     if (st.smokeVuln) add('judged', 'Foes in your smoke take +20% damage (the same +20% as Judged).', 0.2, 'inside your smoke');
     if (st.markV) add('marked', `Marked foes take +${Math.round(st.markV * 100)}% damage from every hero` + (st.volleyMark ? ` for ${n1(st.volleyMark)} s.` : '.'), st.markV, 'from every hero');
+    if (st.doombrand) add('marked', `Doombrand: a foe holding 4 or more ailments is Marked for 4 s and takes +${Math.round(st.brandMark * 100)}% damage from every hero.`, st.brandMark, 'from every hero, at 4 ailments');
     if (st.sunder) add('sundered', 'Each critical hit makes the foe take +4% more damage from you per stack (up to 10).', 0.04, 'per Sunder stack, up to 10');
     if (st.poisonInfuse > 0) add('venom', `Envenomed foes take up to +${Math.round((C.VENOM_AMP + st.corrode) * 100)}% damage from you, half from allies.`, C.VENOM_AMP + st.corrode, 'at full Venom, half from allies');
     return out;
@@ -490,6 +517,21 @@
     def.limits = `Class shields give at most ${pc(C.SHIELD_WIN_CLASS)} of max health per ${C.SHIELD_WIN_T} s and all sources ${pc(C.SHIELD_WIN_ALL)}; Battle Ward is exempt.`;
   }
 
+  // Contagion and Plaguebearer (need the status model): pack-only extras on the pools of a dying foe. Every foe that dies with 2+ ailments leaves PLAGUE_KEEP of the pool inputs of the hero's damage
+  // (Bleed, Burn at the stratum affinity; a pack takes PLAGUE_PACK x the single-target input) on it. Plaguebearer hands PACK_REF - 1 neighbours plagueBurst of it at once; Contagion and Outbreak move shares of it
+  // (recipients x share) to the nearest foes as pools that drain over seconds, SPREAD_PAY of what a burst would pay.
+  function poolExtras(wpn, st, proc, s, R) {
+    const burn = ((proc.rate.fire || 0) * ED.elemMul(s, 'fire') + (proc.pool.fire || 0)) * (1 + st.burnMul), bleed = (proc.bleed || 0) * (1 + st.bleedMul);
+    const unit = PLAGUE_KEEP * PLAGUE_PACK * (burn + bleed) / wpn._aps / PACK_REF, out = st.contagionN > 0;
+    const push = (label, perAttack, note, r) => {
+      const e = { label, perAttack, proc: false, packOnly: true, r, note };
+      wpn._extras.push(e);
+      wpn.extras.push(Object.assign({}, e, { perAttack: R.n(perAttack), perSec: R.n(perAttack * wpn._aps) }));
+    };
+    if (st.plague > 0) push('Plaguebearer burst', (PACK_REF - 1) * st.plagueBurst * unit, `a foe with 2+ ailments dying hands ${Math.round(st.plagueBurst * 100)}% of its Bleed and Burn to the foes round it, in a pack`, 90);
+    else if (st.contagion > 0) push(out ? 'Outbreak spread' : 'Contagion spread', Math.min(out ? 3 : 2, PACK_REF - 1) * (out ? st.outbreak : st.contagion) * SPREAD_PAY * unit, `a foe with 2+ ailments dying passes its statuses to the nearest ${out ? 3 : 2} foes, in a pack`, 0);
+  }
+
   // ---------------- statuses fed by the hero's damage ----------------
   // proc.dps: damage per second of the hero's hits that run heroProcs (crit chance averaged), proc.critDps what the crit hits among them deal per second;
   // proc.rate[el] / proc.pool[el] / proc.bleed as in ED.PATHS[el].sheet.est; proc.split = { weapon, skills, minions } of dps.
@@ -511,7 +553,7 @@
     const ms = wpn._ms; // Masterstroke: 1 attack in ms.every crits for sure at ms.mul, the others at the crit chance
     critDps += wpn._hit * cm * one * aps * (ms ? (1 - 1 / ms.every) * c + ms.mul / ms.every : c);
     const msBleed = ms ? wpn._hit * cm * ms.mul / ms.every * one * aps * Math.max(0, ms.bleed - st.bleed) * pow : 0; // the Bleed it adds above the Bleed on crits
-    for (const e of wpn._extras) if (e.proc) { const ps = e.perAttack * aps; wDps += ps; critDps += e.crit ? ps * c * cm / (1 + c * (cm - 1)) : 0; feed(ps, 1, null, e.el ? null : wInf); }
+    for (const e of wpn._extras) if (e.proc && !e.packOnly) { const ps = e.perAttack * aps; wDps += ps; critDps += e.crit ? ps * c * cm / (1 + c * (cm - 1)) : 0; feed(ps, 1, null, e.el ? null : wInf); }
     if (st.weapon.burn) pool.fire = (pool.fire || 0) + direct * st.weapon.burn * pow;
     split.weapon = wDps; all += wDps;
     for (const sk of skills) {
@@ -534,6 +576,51 @@
     for (const k in pr.rate) rate[k] = R.n(pr.rate[k]);
     for (const k in pr.pool) pool[k] = R.n(pr.pool[k]);
     return { dps: R.n(pr.dps), critDps: R.n(pr.critDps), rate, pool, bleed: R.n(pr.bleed), split: { weapon: R.n(pr.split.weapon), skills: R.n(pr.split.skills), minions: R.n(pr.split.minions) } };
+  }
+
+  // ---------------- Knight element forms: Doombrand and Cataclysm ----------------
+  // The count of ailments on a typical foe, [P(0), P(1), ...], from the assumptions of tools/sheet.js: an infusion 70%, the class element 50%, Bleed 70%, Dazed 35%, Sealed always.
+  function ailmentDist(st) {
+    let d = [1];
+    const add = (q) => { const nd = new Array(d.length + 1).fill(0); for (let k = 0; k < d.length; k++) { nd[k] += d[k] * (1 - q); nd[k + 1] += d[k] * q; } d = nd; };
+    for (const id of ED.ELEMENT_IDS) if (st[ED.ELEMENTS[id].inf] > 0) add(0.7); else if (st.element === id) add(0.5);
+    if (st.bleed > 0 || st.bleedAll > 0 || st.masterstroke) add(0.7);
+    add(0.35);
+    if (st.seal > 0) d.unshift(0);
+    return d;
+  }
+  const atLeast = (d, k) => d.reduce((s, v, i) => s + (i >= k ? v : 0), 0), meanMin = (d, cap) => d.reduce((s, v, i) => s + v * Math.min(i, cap), 0);
+  const DOOM_AT = 4, CATA_AT = 3, CATA_R = 80, POOL_K = 2.5, PACK = 4; // POOL_K: a Bleed pool drains 40% a second, so it holds 2.5 s of income. PACK: the foes of the pack tools/sheet.js reads (the other 3 catch a burst)
+  // Doombrand adds one weapon extra, the damage that the Mark (foes holding DOOM_AT ailments take +brandMark from every hero) and the two extra Brand ailments add to the weapon and the skills of the hero's own hits (co-op allies gain more, not counted).
+  // Cataclysm adds the extra damage of its payout (pool x cataMul, one strike per cast on a foe) to the Shield Throw's damage on one foe, and a part for packs: each of the PACK - 1 others within CATA_R catches cataSplash of the amount paid (a pool holds POOL_K x the Bleed income), at most SPREAD_CAP of a foe's health.
+  // A strike detonates a foe holding CATA_AT ailments at most once a second.
+  function elementForms(st, wpn, skills, proc, ref, R) {
+    if (st.doombrand > 0) {
+      const d = ailmentDist(st), M = Math.max(0.1, st.dmg), p4 = atLeast(d, DOOM_AT), fBrand = st.brand * (meanMin(d, st.brandCap) - meanMin(d, 4)) / M, fMark = p4 * st.brandMark, f = (1 + fBrand) * (1 + fMark) - 1;
+      let x = 0, sk = 0;
+      for (const e of wpn._extras) x += e.perAttack;
+      for (const k of skills) for (const q of k.parts) if (q.kind !== 'zone') sk += q._r.total / k._cd;
+      const per = (wpn._avg * wpn.oneFoe + x + sk / wpn._aps) * f;
+      wpn._extras.push({ label: 'Doombrand', perAttack: per, proc: false, note: `foes with ${DOOM_AT} ailments (about ${Math.round(p4 * 100)}% of the time) are Marked: +${Math.round(st.brandMark * 100)}% from every hero; Brand counts up to ${st.brandCap}` });
+      refit(wpn, R);
+    }
+    if (st.cataclysm > 0 && skills.length > 1) {
+      const k2 = skills[1], k1 = skills[0], strike = k2.parts.find(q => q.id === 'strike'), p3 = atLeast(ailmentDist(st), CATA_AT);
+      if (strike) {
+        const bm = 1 + st.bleedMul, pool = POOL_K * proc.bleed, paid = pool * bm * (1 + st.cataMul), own = pool * bm * st.cataMul, give = Math.min(st.cataSplash * paid, C.SPREAD_CAP * ref.hp) * bm;
+        const one = p3 * (k2._cd / k2._cd + k2._cd / k1._cd) * own, det = p3 * (Math.min(PACK, strike.n || 1) + PACK * k2._cd / k1._cd), gain = det * (own + (PACK - 1) * give);
+        const q = { id: 'cataclysm', label: 'Cataclysm', per: 'hit', kind: 'hit', el: null, aff: 1, r: CATA_R, proc: false, note: `a Charge or Throw strike on a foe with ${CATA_AT} ailments pays out its Bleed pool at +${Math.round(st.cataMul * 100)}% and bursts ${Math.round(st.cataSplash * 100)}% of that to each foe near it (a pack only)`, raw: paid, hit: paid, avg: paid, pre: paid, here: paid, total: gain / PACK, oneFoe: 0, kc: 0, alwaysCrit: false, noCrit: true, selfVuln: 0 };
+        k2.parts.push(finish(q, R));
+        k2.perCast = R.n(k2.perCast + one); k2.perCastAll = R.n(k2.perCastAll + one); k2.dpsCd = R.n(k2.perCast / k2._cd);
+      }
+    }
+  }
+  // Rebuilds the weapon model's totals and extras list after an extra was pushed on wpn._extras.
+  function refit(wpn, R) {
+    let sum = 0;
+    for (const e of wpn._extras) sum += e.perAttack;
+    wpn.dps = R.n((wpn._avg * wpn.oneFoe + sum) * wpn._aps); wpn.dpsAll = R.n((wpn._avg * wpn.n + sum) * wpn._aps);
+    wpn.extras = wpn._extras.map(e => Object.assign({}, e, { perAttack: R.n(e.perAttack), perSec: R.n(e.perAttack * wpn._aps) }));
   }
 
   // ---------------- affinity and dark rooms ----------------
