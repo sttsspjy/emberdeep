@@ -1,10 +1,10 @@
 // Usage: node tools/simpool.js <heroes> <runs> <botSkill> <meta none|mid|max[,...]> [classes|-] [pact] [--pick=smart|random] [--start=random|class|generalist|rotate|<gateId>] [--gates=1|2] [--force=id[@slot],...] [--route=attack|skill1|skill2|element|random|rotate] [--fork=0|1|random|rotate] [--weapon=0|1|2|rotate] [--mastery=smart|fork]
-//   [--seed0=N] [--explore=minLight] [--strata=N] [--jobs=N] [--patch=file.js] [--out=rows.json] [--pair=rows.json] [--detail]   (every flag of tools/sim.js is forwarded)
-// Parallel batch runs of tools/sim.js bots across worker processes (default: cores - 1) at idle priority. One result line per meta profile;
+//   [--seed0=N] [--explore=minLight] [--strata=N] [--jobs=N] [--patch=file.js] [--out=rows.json] [--pair=rows.json] [--detail] [--nice]   (every flag of tools/sim.js is forwarded)
+// Parallel batch runs of tools/sim.js bots across worker processes (default: cores - 1) at normal priority (--nice: idle priority, which Windows may throttle to a crawl while the machine is unattended). One result line per meta profile;
 // --detail prints the full sim.js summary of each. --patch=file.js loads a module exporting function (ED) that edits tables (ED.World.THREAT, ED.ENEMIES, ...) in every worker.
 // --out writes one row per run for paired measurement; --pair prints the paired mean difference to such a baseline file.
 // Results are deterministic per seed, so the same command always prints the same numbers regardless of --jobs.
-require('os').setPriority(19);
+if (process.argv.includes('--nice')) require('os').setPriority(19); // workers inherit the priority class
 const cp = require('child_process');
 const os = require('os');
 const path = require('path');
