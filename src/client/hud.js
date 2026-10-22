@@ -227,7 +227,10 @@
     let n = 0;
     const put = (x, y, r) => { if (n < FP_MAX) { const i = n++ * 3; fp[i] = ox + x * sc; fp[i + 1] = oy + y * sc; fp[i + 2] = r * sc; } };
     for (const p of view.players.values()) if (!p.dead) put(p.x, p.y - 12, 14);
-    for (const e of view.enemies) if (e.hp > 0 && !e.burrowed) put(e.x, e.y - e.r - (e.def.fly ? 8 : 0), e.r * 1.3);
+    for (const e of view.enemies) if (e.hp > 0 && !e.burrowed) { // circle over the body's drawn height: the atlas anchor, else the procedural size
+      const an = R.actorAnchor ? R.actorAnchor(e) : null, tp = an ? an.top : -e.r - (e.def.fly ? 8 : 0);
+      put(e.x, e.y + tp * 0.5, Math.max(e.r * 1.3, -tp * 0.6));
+    }
     for (const k of view.pickups) put(k.x, k.y - 6, 8);
     const s = ED.Game.s, I = ED.Input, m = I.mouse; // the cursor while attacking or previewing a ground skill (screen space, radius 1.2u)
     if (s && s.aim && s.aim.pointer && m.inside && n < FP_MAX && (s.aim.ground.length || I.held('attack'))) { const i = n++ * 3; fp[i] = m.x * R.dpr * rk; fp[i + 1] = m.y * R.dpr * rk; fp[i + 2] = 1.2 * u; }
@@ -581,15 +584,15 @@
       const s = ctl.picks + ' boon' + (ctl.picks > 1 ? 's' : '') + ' ready', gl = 0.55 + 0.45 * Math.sin(t * 4);
       const cw = adv(s, u * 1.15, 800) + u * 2;
       pill(L.xx + (w - cw) / 2, ay - u * 2, cw, u * 2, K.emberHi, 0.18 + 0.12 * gl);
-      T(s, W / 2, ay - u * 1.0 + u * 0.05, u * 1.15, K.emberHi, FB, 'center', 800); ay -= u * 2.6;
+      T(s, L.xx + w / 2, ay - u * 1.0 + u * 0.05, u * 1.15, K.emberHi, FB, 'center', 800); ay -= u * 2.6;
     }
-    if (view.waitMsg) T(view.waitMsg, W / 2, ay - u * 0.9, u * 1.2, K.gold, FB, 'center', 800, true);
+    if (view.waitMsg) T(view.waitMsg, L.xx + w / 2, ay - u * 0.9, u * 1.2, K.gold, FB, 'center', 800, true);
   }
 
   // ---------------- relics (bottom-right) ----------------
   function relics(me) {
     const n = me.relics ? me.relics.length : 0; if (!n) return;
-    const s = u * 2.5, g = u * 0.35, per = 9, rows = Math.ceil(n / per);
+    const s = u * 2.5, g = u * 0.35, per = U.clamp(Math.floor((W - L.m - (L.xx + L.xw) - u) / (s + g)), 1, 9), rows = Math.ceil(n / per); // icons per row: the room right of the xp plate
     fadeStart('relics', W - L.m - Math.min(n, per) * (s + g), Hh - L.m - rows * (s + g) + g, Math.min(n, per) * (s + g), rows * (s + g));
     for (let i = 0; i < n; i++) {
       const col = i % per, row = Math.floor(i / per), inRow = Math.min(per, n - row * per);
@@ -605,6 +608,7 @@
     for (let i = 0; i < en.length; i++) if (en[i].boss && en[i].hp > 0) { boss = en[i]; break; }
     if (!boss) return;
     const pw = L.bw, bw = pw - u * 3, ph = u * 5.6, x = (W - pw) / 2, y = L.m;
+    fadeStart('boss', x, y, pw, ph);
     plate(x, y, pw, ph);
     T(boss.def.name, W / 2, y + u * 1.65, u * 1.7, K.bone, FD, 'center', 900);
     const fr = boss.hp / boss.maxHp;
@@ -613,6 +617,7 @@
     bar(x + u * 1.5, by, bw, bh, fr, boss.exposed ? '#ff9a3a' : '#c0392b', ghost.boss);
     c.fillStyle = K.gold; for (const mk2 of marks) c.fillRect(Math.round(x + u * 1.5 + bw * mk2) - 1, by - u * 0.3, 3, bh + u * 0.6);
     if (boss.exposed) T('Exposed', x + pw - u * 1.5, y + u * 1.65, u * 1.0, '#ffb870', FB, 'right', 800);
+    endFade();
   }
 
   // ---------------- interaction prompt ----------------

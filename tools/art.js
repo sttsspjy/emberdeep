@@ -346,10 +346,12 @@ function build() {
       else if (pv === 'grip') { ax = e.anchors.grip[0]; ay = e.anchors.grip[1]; }
       else { ax = feetX; ay = feetY; }
       const anchors = {};
-      anchors.centre = [Math.floor((ux0 + ux1 + 1) / 2), Math.floor((uy0 + uy1 + 1) / 2)]; anchors.top = uy0;
+      let at = uy0; // head line: the set union, or the anim's own when a foe/boss pose stands more than 3 art px under it (a shorter idle); smaller steps keep the union so direction sets do not wobble
+      if (/^(foe|boss)\./.test(e.id) && !e.anchorsFrom) { let own = 1e9; for (const fid of ids) { const q = meta.frames[fid]; if (q.h > 0) own = Math.min(own, q.oy); } if (own < 1e9 && own - uy0 > 3) at = own; }
+      anchors.centre = [Math.floor((ux0 + ux1 + 1) / 2), Math.floor((at + uy1 + 1) / 2)]; anchors.top = at;
       if (e.anchors) for (const k of Object.keys(e.anchors)) anchors[k] = e.anchors[k];
       if (e.handRel) anchors.hand = [feetX + e.handRel[0], feetY + e.handRel[1]];
-      if (e.eye === 'auto') anchors.eye = [[anchors.centre[0], uy0 + Math.round((uy1 - uy0 + 1) * 0.3)]];
+      if (e.eye === 'auto') anchors.eye = [[anchors.centre[0], at + Math.round((uy1 - at + 1) * 0.3)]];
       else if (Array.isArray(e.eye)) anchors.eye = e.eye;
       if (anchors.grip) { // tip = opaque pixel of frame 0 farthest from the grip (ties: top, then left)
         const b = a.fr[0]; let best = null;

@@ -306,8 +306,11 @@ boss('bonewarden', [['idle', 'lm_sk_idle', 150, 150, 4, 6, true, ST], ['walk', '
   ['shield', 'lm_sk_shield', 150, 150, 4, 8, false, ST], ['hit', 'lm_sk_hit', 150, 150, 4, 12, false, ST], ['death', 'lm_sk_death', 150, 150, 4, 6, false, ST]]);
 boss('drownedking', [['idle', 'lm_k_idle', 160, 111, 8, 8, true, ST], ['walk', 'lm_k_run', 160, 111, 8, 12, true, ST], ['attack1', 'lm_k_a1', 160, 111, 4, 10, false, ST],
   ['attack2', 'lm_k_a2', 160, 111, 4, 10, false, ST], ['attack3', 'lm_k_a3', 160, 111, 4, 10, false, ST], ['hit', 'lm_k_hit', 160, 111, 4, 12, false, ST], ['death', 'lm_k_death', 160, 111, 6, 8, false, ST]]);
-boss('hollowking', [['idle', 'lm_w_idle', 150, 150, 8, 8, true, ST], ['walk', 'lm_w_move', 150, 150, 8, 10, true, ST], ['attack', 'lm_w_attack', 150, 150, 8, 12, false, ST],
-  ['hit', 'lm_w_hit', 150, 150, 4, 12, false, ST], ['death', 'lm_w_death', 150, 150, 5, 8, false, ST]]);
+// anchors.crown[frame] = [x, y] art px of the crown overlay's bottom centre per frame: the head column and the first skin row (#fac786) + 1, measured per frame (the head moves 10-20 art px between poses).
+const HK = (crown) => Object.assign({ anchors: { crown } }, ST);
+boss('hollowking', [['idle', 'lm_w_idle', 150, 150, 8, 8, true, HK([[72, 57], [72, 58], [72, 59], [72, 59], [72, 59], [72, 58], [72, 57], [72, 57]])], ['walk', 'lm_w_move', 150, 150, 8, 10, true, HK([[82, 60], [82, 60], [82, 60], [82, 60], [82, 60], [82, 60], [82, 60], [82, 60]])],
+  ['attack', 'lm_w_attack', 150, 150, 8, 12, false, HK([[72, 57], [72, 57], [72, 57], [72, 57], [72, 57], [72, 57], [72, 57], [72, 57]])],
+  ['hit', 'lm_w_hit', 150, 150, 4, 12, false, HK([[72, 57], [72, 57], [68, 57], [70, 57]])], ['death', 'lm_w_death', 150, 150, 5, 8, false, HK([[70, 57], [76, 62], [79, 68], [85, 79], [84, 77]])]]);
 boss('sporemother', [['idle', 'nb_bamboo_idle', 62, 62, 6, 6, true], ['walk', 'nb_bamboo_walk', 62, 62, 12, 10, true], ['attack', 'nb_bamboo_attack', 62, 62, 5, 10, false],
   ['charge', 'nb_bamboo_charge', 62, 62, 3, 8, false], ['hit', 'nb_bamboo_hit', 62, 62, 4, 12, false]]);
 boss('forgelord', [['idle', 'nb_cyc_idle', 50, 50, 5, 6, true], ['walk', 'nb_cyc_walk', 50, 50, 6, 9, true], ['hit', 'nb_cyc_hit', 50, 50, 3, 12, false]]);

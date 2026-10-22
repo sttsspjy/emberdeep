@@ -162,7 +162,7 @@
   A.variant = (id, key, make) => { const r = rec(id); return !!(r && variantRec(r, key, make)); };
 
   // ---------------- RotSprite-lite ----------------
-  const NSTEP = 32, rotCache = new Map(), rotQueue = []; let rotLeft = 4;
+  const NSTEP = 32, rotCache = new Map(), rotQueue = [], rotNeed = [], rotPend = new Set(); let rotLeft = 4; // rotNeed: bakes a draw asked for past the per-frame allowance (worked before rotQueue, the background prebake)
   function scale2x(src, w, h) {
     const dst = new Uint32Array(w * h * 4), W2 = w * 2;
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
@@ -223,8 +223,9 @@
   // Per frame: resets the inline bake allowance and works the prebake queue for at most `ms` milliseconds.
   A.tick = (ms) => {
     rotLeft = 4;
-    if (!rotQueue.length) return;
+    if (!rotNeed.length && !rotQueue.length) return;
     const t0 = performance.now(), lim = ms === undefined ? 1.5 : ms;
+    while (rotNeed.length && performance.now() - t0 < lim) { const q = rotNeed.shift(); rotPend.delete(rotKey(q[0], q[1], q[2], q[3], q[4], q[5])); A.rotSprite(q[0], q[1], q[2], q[3], q[4], q[5]); }
     while (rotQueue.length && performance.now() - t0 < lim) { const q = rotQueue.shift(); A.rotSprite(q[0], q[1], q[2], q[3], q[4], q[5]); }
   };
 
@@ -241,13 +242,16 @@
       const st = Math.round(o.rot / (Math.PI * 2) * NSTEP) & (NSTEP - 1);
       if (st) {
         const an2 = o.anchor || '';
-        let s = rotCache.get(rotKey(id, i, st, flip, an2, vk));
+        const rk = rotKey(id, i, st, flip, an2, vk);
+        let s = rotCache.get(rk);
         if (!s) {
           if (rotLeft > 0) { rotLeft--; s = A.rotSprite(id, i, st, flip, an2, vk); }
-          else for (let d = 1; d < NSTEP && !s; d++) s = rotCache.get(rotKey(id, i, (st + d) & 31, flip, an2, vk)) || rotCache.get(rotKey(id, i, (st - d) & 31, flip, an2, vk));
-          if (!s) s = A.rotSprite(id, i, st, flip, an2, vk);
+          else {
+            for (let d = 1; d < NSTEP && !s; d++) s = rotCache.get(rotKey(id, i, (st + d) & 31, flip, an2, vk)) || rotCache.get(rotKey(id, i, (st - d) & 31, flip, an2, vk));
+            if (!s && !rotPend.has(rk)) { rotPend.add(rk); rotNeed.push([id, i, st, flip, an2, vk]); } // nothing of this sprite is baked and the frame's allowance is spent: the unrotated frame stands in until Atlas.tick bakes it
+          }
         }
-        return blitTo(c, s.src, s.sx, s.sy, s.w, s.h, x - s.ox * K, y - s.oy * K, s.w * K, s.h * K, false, o);
+        if (s) return blitTo(c, s.src, s.sx, s.sy, s.w, s.h, x - s.ox * K, y - s.oy * K, s.w * K, s.h * K, false, o);
       }
     }
     src = A.pages[f.p]; sx = f.x; sy = f.y; sw = f.w; sh = f.h;
