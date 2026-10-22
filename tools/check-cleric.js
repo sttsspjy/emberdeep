@@ -333,7 +333,7 @@ const castSanct = (w, p, dx) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x +
   S.a.stun = 0; S.el.stun = 0; run(S.w, 1.9, S.ev.step); ok(S.a.stun <= 0, 'no pulse before 2 s'); run(S.w, 0.2, S.ev.step); ok(S.a.stun > 0.15 && S.ev.all.filter(v => v.t === 'aegispulse').length === 2, 'the second pulse stuns again at 2 s');
   run(S.w, 2.1, S.ev.step); ok(S.ev.all.filter(v => v.t === 'aegispulse').length === 3, 'a third pulse at 4 s'); run(S.w, 3, S.ev.step); ok(S.ev.all.filter(v => v.t === 'aegispulse').length === 3 && !S.w.zones.some(q => q.kind === 'sanct'), 'the aura (5.5 s) ends with three pulses');
   { const T = setup(3); castSanct(T.w, T.p); T.a.stun = 0; T.a.stunCd = 0; T.w.zones.find(q => q.kind === 'sanct').gA = 2; T.w.update(1 / 60); ok(!(T.a.stun > 0), 'a foe pulsed less than 2 s ago is skipped even when another pulse comes due'); }
-  // damage taken: combat.js clamps a Sanctuary at 40% until it reads z.drCap (then the Aegis ally takes 51)
+  // damage taken: a Sanctuary clamps at 40%, the Aegis at z.drCap
   const hit = (S2, who, src) => { who.hp = who.maxHp; who.invuln = 0; S2.w.hurtPlayer(who, 100, src || {}); return who.maxHp - who.hp; };
   const R3 = setup(3), R2 = setup(2); castSanct(R3.w, R3.p); castSanct(R2.w, R2.p);
   const c3 = hit(R3, R3.ally), c2 = hit(R2, R2.ally);

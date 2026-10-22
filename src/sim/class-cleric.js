@@ -72,7 +72,7 @@
     for (const o of this.players.values()) if (!o.downed && !o.dead && (o === p || U.dist2(o.x, o.y, p.x, p.y) < 180 * 180)) this.healPlayer(o, o.maxHp * C.SANCT_HEAL);
     const z = this.addZone({ kind: 'sanct', x: g.x, y: g.y, r: q.r, dur: q.dur, dps: q.dmg, owner: p.pid, team: 0, clsEl: st.element, rad: 0.25, dr: 0.15 + st.sanctDR + st.aegisDR, part: 'sanctuary.zone' });
     if (aura) z.follow = p.pid;
-    if (st.aegis) { z.drCap = C.DR_FLOOR; z.w = 9; } // drCap: the cut this zone may reach (combat.js hurtPlayer still clamps every Sanctuary at 40%); w 9 marks Radiant Aegis for the renderer
+    if (st.aegis) { z.drCap = C.DR_FLOOR; z.w = 9; } // drCap: the cut this zone may reach (other Sanctuaries clamp at 40%); w 9 marks Radiant Aegis for the renderer
     if (st.wrath) z.w = 8; // Wrath of Heaven
     if (st.sanctJudge || (aura && st.auraDmg) || st.wrath || st.aegis) z.update = sanctTick;
     const out = { x: rnd(g.x), y: rnd(g.y) };

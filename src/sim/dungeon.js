@@ -16,7 +16,7 @@
   const DARK_COUNT = 2; // normal combat rooms per floor flagged `dark` (part of COMBAT_COUNT)
   const PATTERN_AREA = 294; // tile area the base pool and scatter counts are written for: both scale by room area / PATTERN_AREA
   const EVENTS = ['fountain', 'altar', 'gamble', 'trial'];
-  const REWARD_ODDS = [['boon', 60], ['gold', 19], ['vigor', 13], ['forge', 8]]; // normal combat reward weights
+  const REWARD_ODDS = [['boon', 38], ['gold', 42], ['vigor', 12], ['forge', 8]]; // normal combat reward weights
   const BOUND = 4; // grid cells span -BOUND..BOUND on both axes
   const MIN_BOSS_DIST = 4;
   const ATTEMPTS = 120;

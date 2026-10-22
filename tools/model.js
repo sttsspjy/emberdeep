@@ -49,7 +49,7 @@ module.exports = (ED, opts) => {
       keep *= (1 - dr * up) * (1 - st.bannerWeak * up); out.note.push(`War Banner -${Math.round(dr * 100)}% and foes -${Math.round(st.bannerWeak * 100)}% x ${Math.round(up * 100)}% uptime`);
     }
     if (p.cls === 'cleric') {
-      const N = St.skillNums('sanctuary', st), z = N.p.zone, up = Math.min(1, z.dur / N.cdEff), dr = Math.min(st.aegis > 0 ? C.DR_FLOOR : 0.4, 0.15 + st.sanctDR + st.aegisDR); // Radiant Aegis may cut up to the DR floor (combat.js still clamps a Sanctuary at 40% until it reads z.drCap)
+      const N = St.skillNums('sanctuary', st), z = N.p.zone, up = Math.min(1, z.dur / N.cdEff), dr = Math.min(st.aegis > 0 ? C.DR_FLOOR : 0.4, 0.15 + st.sanctDR + st.aegisDR); // Radiant Aegis may cut up to the DR floor (z.drCap); other Sanctuaries clamp at 40%
       keep *= 1 - dr * up; out.note.push(`Sanctuary -${Math.round(dr * 100)}% x ${Math.round(up * 100)}% uptime`);
     }
     if (st.lich > 0) { // Lich Form: the Brace channel for lichT seconds after every Bone Harvest

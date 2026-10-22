@@ -906,7 +906,7 @@
     let braceF = 1, sanctF = 1;
     if (p.braceT > 0) braceF = 1 - Math.min(0.4, st.braceDR);
     for (const q of this.players.values()) if (q !== p && q.braceT > 0 && q.stats.braceAura && !q.downed && !q.dead && U.dist2(q.x, q.y, p.x, p.y) < 100 * 100) braceF = Math.min(braceF, 1 - Math.min(0.4, q.stats.braceDR));
-    for (const z of this.zones) if (z.kind === 'sanct' && U.dist2(z.x, z.y, p.x, p.y) < z.r * z.r) sanctF = Math.min(sanctF, 1 - Math.min(0.4, z.dr === undefined ? 0.15 : z.dr));
+    for (const z of this.zones) if (z.kind === 'sanct' && U.dist2(z.x, z.y, p.x, p.y) < z.r * z.r) sanctF = Math.min(sanctF, 1 - Math.min(z.drCap || 0.4, z.dr === undefined ? 0.15 : z.dr));
     dmg *= Math.max(ED.CONST.DR_FLOOR, braceF * sanctF);
     if (p.guardT > 0) dmg *= 0.4;
     const e = src.e;
