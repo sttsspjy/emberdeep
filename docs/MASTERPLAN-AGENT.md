@@ -1,7 +1,6 @@
 # Wickdeep — Agent Kanban
 
 ## Todo
-- PR `feat/v3-overhaul` → `main` (merge commit) after the Firefox check; delete merged branches.
 - Playtest 3 feedback (user) → triage first; it can reorder everything.
 - Balance gaps after sign-off (priority, reason):
   1. Fresh-profile difficulty: fresh smart wins 1% (target 5–10%), fresh depth 4.6 (target 2.5–3.5). Reason: decision 2026-10-20 (a veteran can win fresh, bots 5–10%); depth above target with wins below target means an easy early game and a hard end. Needs a lever, then the two Fresh rows again.
@@ -20,9 +19,11 @@
 - Unverified by a human: sound mix, presentation above 100 Hz.
 
 ## In-progress
-- Firefox perf verification of the v3 renderer: frame times in Firefox and Chromium, solo and 4 players, 80 foes, 2560 High; v2 reference in HANDOFF-2026-10-21 (solo peak 3.7 ms, 4P 6.9 ms, 80 foes 4.0 ms). The result goes here.
+- (none)
 
 ## Done
+- v3 merged to `main` (PR #2, merge commit).
+- Firefox perf verified at `cd1074d` (one machine, 240 Hz, dpr 1): Firefox 150 and Zen 158 hold 240 fps in crowd70, solo8 and real play (v2 main 142–208); main-thread 2.0–2.2 ms per frame (v2 3.6–3.7); accel-off Gecko 150–231 (v2 22–38); Chromium 230–240.
 - Phase 3b balance signed off at `cd1074d` (skill 0.75; GAME-DESIGN §10 holds every number): class routes, hero base stats, threat damage V and VI, party foe HP `1 + 0.85n + 0.3n(n−1)`.
 - Phase 3a render review fixes: hit flash never from DoT ticks, boss flash as a 50% overlay, wind-up outline always visible, damage numbers summed and stacked, boss bar fades like a panel.
 - v2 (live on main): paths, statuses, lantern rooms, UI, juice, perf, bot balance; see HANDOFF-2026-10-21.
@@ -58,4 +59,4 @@
 ## Logs
 - 2026-10-20: rework on `feat/wickdeep-rework`; W1–W7 + P2-A/B.
 - 2026-10-21: F1, F2 (pacing, sustain, lantern), UI, juice, perf, balance merged; v2 PR to main; handoff HANDOFF-2026-10-21.md.
-- 2026-10-22: v3 overhaul on `feat/v3-overhaul` (art, paths, classes, aim, sheet, save v4, review fixes); docs pass; balance signed off at `cd1074d`, render fixes merged, Firefox check open; handoff HANDOFF-2026-10-22.md.
+- 2026-10-22: v3 overhaul on `feat/v3-overhaul` (art, paths, classes, aim, sheet, save v4, review fixes); docs pass; balance signed off at `cd1074d`, render fixes merged, Firefox perf verified; merged to main (PR #2); handoff HANDOFF-2026-10-22.md.

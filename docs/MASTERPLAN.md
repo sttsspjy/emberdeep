@@ -21,6 +21,6 @@ North-star: a co-op browser roguelite where builds are chosen, not rolled. Rules
 - [x] Save code v4 and the "The Deep has changed" notice
 - [x] Balance pass: classes, then global; signed off with bots (fresh-profile difficulty gap stays open)
 - [x] Render review fixes
-- [ ] Firefox speed check
-- [ ] PR to main
+- [x] Firefox speed check
+- [x] PR to main
 - [ ] Your playtest of v3
