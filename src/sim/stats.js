@@ -16,7 +16,8 @@
     + ' channel chanStep chanCap aftershock lavaPool overheat novaEcho novaPull novaRing mantle mantleBurst twinMeteor meteorites comet cometStun wInfFire searSkill burnCrit heatEngine heatChain'
     + ' momentum momMax execCrit execMom bladeStorm stepStack stackMax assassinate stepTwin afterimage afterPull smokeVuln stealthSpd stealthDur ambushMul nightsEdge ambushCleave veil veilBlind shroud veins exsang rupture bloodbloom'
     + ' waveEvery waveMul waveBig waveStun waveBurst waveHome litany sanctDR sanctStun sanctJudge aura auraDmg judgeDur judgeWeak twinHammer thirdLeg secondFlight verdict verdictJudge wInfHoly smiteBig guardLight smiteJudge smiteBeam beamJumps'
-    + ' hex hexMul wRaise hexSpread hexSelf hexHaste spikeRaise knights knightLife knightStun harvestRaise corpse corpseMul boneLance boneArmor boneCap boneField minionInfuse mInfShadow tollMul abyssMin abyssDoom reapRaise tideMul').split(' ');
+    + ' hex hexMul wRaise hexSpread hexSelf hexHaste spikeRaise knights knightLife knightStun harvestRaise corpse corpseMul boneLance boneArmor boneCap boneField minionInfuse mInfShadow tollMul abyssMin abyssDoom reapRaise tideMul'
+    + ' avalanche avaCrack avaStun phalanx bannerSlow bannerWeak bannerDur tempest vortexMul vortexDur bastion deathMark deathWave thornburst thornRoot starfall thornstorm').split(' ');
 
   const BASE = () => {
     const s = {
@@ -209,15 +210,20 @@
       q.r = d.rOf ? out.p[d.rOf].r * d.rMul : d.r ? d.r * A * (1 + sA) * (d.rMul || 1) : 0;
       if (d.mulKey) q.mulv = st[d.mulKey];
       if (d.durKey) q.dur = (d.dur || 0) + st[d.durKey]; else if (d.dur !== undefined) q.dur = d.dur + (d.durFix ? 0 : sU); // durFix: a fixed length, no slot duration
+      if (d.durMulKey && st[d.durMulKey] > 0 && q.dur !== undefined) q.dur *= st[d.durMulKey]; // durMulKey: the stat is a length factor (Storm of Thorns)
+      if (d.durCd && st[d.durCd] && q.dur !== undefined) q.dur = cdEff; // durCd: lasts until the skill is cast again (Bastion)
       if (d.capCd && q.dur !== undefined) q.dur = Math.min(q.dur, d.capCd * cdEff);
-      if (d.n !== undefined) q.n = d.n + sN;
+      if (d.n !== undefined) q.n = d.n + (d.nFix ? 0 : sN); // nFix: a count the slot's count does not change
+      if (d.nOf) q.n = out.p[d.nOf].n; // the count of another part (Death Mark's later waves)
+      if (d.ringKey && st[d.ringKey] > 0) { q.n = st[d.ringKey]; q.fan = U.TAU; q.ring = true; } // ringKey: the stat is the arrow count of a full ring (Thornburst)
+      if (d.stunKey) q.stun = st[d.stunKey];
       if (d.per === 'tick') q.count = Math.round(q.dur / d.every);
       else if (d.per === 'sec') q.count = Math.ceil(q.dur / 0.5 - 1e-9);
       // sheet fields: raw = dmg before the hero multiplier; selfVuln = the vulnerability the part sets before its own hit; oneFoe = hits on one foe per cast (undefined: a fan or a per-minion count the sheet resolves)
       q.raw = dmg; q.noCrit = !!d.noCrit;
       const sv = d.selfVuln;
       q.selfVuln = !sv ? 0 : typeof sv === 'number' ? sv : (!sv.if || st[sv.if]) ? sv.v : 0;
-      if (d.oneEvery) q.oneFoe = Math.floor((q.dur || 0) / d.every + 1e-9);
+      if (d.oneEvery) { q.oneFoe = Math.floor((q.dur || 0) / d.every + 1e-9); if (d.oneMul) for (const k in d.oneMul) if (st[k]) q.oneFoe *= d.oneMul[k]; }
       else if (d.oneFoe !== undefined) { q.oneFoe = d.oneFoe; if (d.oneMul) for (const k in d.oneMul) if (st[k]) q.oneFoe *= d.oneMul[k]; }
       else if (d.perMinion) q.oneFoe = undefined; // one hit per minion: the sheet counts the minions
       else if (d.per === 'tick' || d.per === 'sec') q.oneFoe = q.count;

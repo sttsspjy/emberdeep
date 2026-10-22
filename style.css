@@ -730,6 +730,21 @@ body:has(#ov-sheet:not([hidden])) #ov-boon { visibility: hidden; }
 .credits-body a:hover, .credits-body a:focus-visible { color: var(--gold); }
 #modal { z-index: 20; background: rgba(3, 2, 2, 0.72); }
 
+/* fork rank reveal: a banner card near the top of the run screen, no input */
+.fork-reveal { position: fixed; top: 12%; left: 50%; transform: translateX(-50%); z-index: 55; display: flex; align-items: center; gap: 1.2rem; width: min(46rem, calc(100vw - 2rem)); padding: 1rem 1.6rem 1rem 1.2rem; pointer-events: none; color: var(--text);
+  background: linear-gradient(180deg, rgba(48, 36, 26, 0.97), rgba(20, 14, 10, 0.97)); border: 2px solid var(--gold-lo); border-top: 5px solid var(--gold); border-radius: var(--r-md); box-shadow: var(--bevel), 0 1.2rem 3rem rgba(0, 0, 0, 0.7), 0 0 2.4rem rgba(255, 190, 80, 0.25); animation: forkIn 0.45s var(--ease) both, forkOut 0.6s ease-in 7.4s forwards; }
+.fork-reveal[hidden] { display: none; }
+.fork-reveal.big { border-color: var(--gold); box-shadow: var(--bevel), 0 1.2rem 3rem rgba(0, 0, 0, 0.75), 0 0 4.4rem rgba(255, 190, 80, 0.55); }
+.fork-reveal .fr-icon { flex: none; width: 5.2rem; height: 5.2rem; padding: 0.6rem; border-radius: 50%; border: 3px solid var(--gold); background: radial-gradient(circle, #2a1c10, #0d0806 75%); box-shadow: 0 0 1.8rem rgba(255, 190, 80, 0.5); }
+.fork-reveal.big .fr-icon { width: 6.4rem; height: 6.4rem; }
+.fork-reveal .fr-body { min-width: 0; }
+.fork-reveal .fr-kick { font: 800 var(--fs-md) var(--f-body); color: var(--muted); letter-spacing: 0.03em; }
+.fork-reveal .fr-name { font: 700 var(--fs-xl)/1.1 var(--f-display); color: var(--bone); text-shadow: 0 2px 0 rgba(0, 0, 0, 0.6); }
+.fork-reveal.big .fr-name { font-size: calc(var(--fs-xl) * 1.45); color: var(--gold); text-shadow: 0 0 1.6rem rgba(255, 190, 80, 0.55), 0 2px 0 rgba(0, 0, 0, 0.6); }
+.fork-reveal .fr-text { margin-top: 0.3rem; font-size: var(--fs-lg); line-height: 1.35; }
+@keyframes forkIn { from { opacity: 0; transform: translate(-50%, -1.2rem) scale(0.94); } }
+@keyframes forkOut { to { opacity: 0; transform: translate(-50%, -0.8rem); } }
+@media (prefers-reduced-motion: reduce) { .fork-reveal { animation: none; } }
 #toasts { position: absolute; top: max(1rem, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 0.6rem; align-items: center; z-index: 50; pointer-events: none; }
 body.hud-on #toasts { top: 8rem; width: max-content; max-width: max(20rem, calc(100vw - 44rem)); } /* in a run: below the boss bar (ends 6.8rem), between the party and map columns (each <= 20.2rem wide) */
 .toast { display: flex; align-items: center; gap: 0.7rem; padding: 0.6rem 1.4rem; background: linear-gradient(180deg, rgba(40, 30, 22, 0.98), rgba(20, 14, 10, 0.98)); border: 2px solid var(--gold-lo); border-radius: 2rem; box-shadow: var(--bevel), 0 0.8rem 2rem rgba(0, 0, 0, 0.6); color: var(--text); font-size: var(--fs-md); animation: toastIn 0.3s ease-out, toastOut 0.4s ease-in forwards; animation-delay: 0s, var(--life, 3.4s); }

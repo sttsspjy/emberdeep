@@ -24,18 +24,22 @@
     desc: 'Shield Charge recharges {s1Cdr} faster and deals +{s1Dmg}. After a Charge you are Braced for {brace:s}: {braceDR} less damage taken (at most once per 4 s).', mods: { s1Cdr: 0.3, s1Dmg: 0.25, brace: 1.5, braceDR: 0.25 } });
   card('knight', 'skill1', 2, 'k_s1_a', { name: 'Juggernaut', icon: 'star', tag: 'Burst',
     desc: 'Shield Charge goes 60% farther, deals +{s1Dmg}, and ends in a shockwave (radius 90) for {jugShock} of its impact.',
-    rider: 'Shield Bash: each Charge ends by hurling a free Shield Throw along it at {bash} (no cooldown; it does not stun).', mods: { s1Range: 90, s1Dmg: 0.1, jugShock: 0.4 }, up: { s1Dmg: 0.1, jugShock: 0.1 }, r3: { bash: 0.6 } });
+    rider2: 'Shield Bash: each Charge ends by hurling a free Shield Throw along it at {bash} (no cooldown; it does not stun).', mods: { s1Range: 90, s1Dmg: 0.1, jugShock: 0.4 }, up: { s1Dmg: 0.1, jugShock: 0.1 }, r2: { bash: 0.6 }, r3: { avalanche: 2, avaCrack: 0.5, avaStun: 0.8 },
+    form: { name: 'Avalanche', desc: "Foes in the Charge's path are carried along with you (elites are knocked aside, bosses stand). The shockwave becomes a giant slam (radius 160) for {avalanche} of the impact that stuns foes {avaStun:s}, and 3 cracks run 220 outward from it and erupt 0.3 s later for {avaCrack} of the impact. Bosses take ×1.5 from the slam and are never stunned." } });
   card('knight', 'skill1', 2, 'k_s1_b', { name: 'Rallying Charge', icon: 'banner', tag: 'Guard', coop: true,
     desc: 'Where Shield Charge ends, you and allies within 100 gain a shield of {rally} max health (allies at most once per 8 s each). Its stun lasts {chargeStun:s} longer; Brace is {braceDR} stronger; Shield Charge deals +{s1Dmg}.',
-    rider: 'Hold the Line: while you are Braced, allies within 100 are Braced too.', mods: { rally: 0.02, chargeStun: 0.5, braceDR: 0.1, s1Dmg: 0.1 }, up: { braceDR: 0.025, rally: 0.0025 }, r3: { braceAura: 100 } });
+    rider2: 'Hold the Line: while you are Braced, allies within 100 are Braced too.', mods: { rally: 0.02, chargeStun: 0.5, braceDR: 0.1, s1Dmg: 0.1 }, up: { braceDR: 0.025, rally: 0.0025 }, r2: { braceAura: 100 }, r3: { phalanx: 1, bannerSlow: 0.4, bannerWeak: 0.25, bannerDur: 5 },
+    form: { name: 'Iron Phalanx', desc: 'The Charge sweeps a band 70 wide and destroys enemy shots in it. Where it ends it plants a War Banner for {bannerDur:s} (radius 120) and pulses a 0.4 s stun: foes inside are slowed {bannerSlow} and deal {bannerWeak} less damage (bosses half as much), and you and allies inside are Braced.' } });
   card('knight', 'skill2', 1, 'k_s2', { name: 'Shieldmaster', icon: 'bulwark', forks: ['k_s2_a', 'k_s2_b'], plays: 'throw into every pack, catch, repeat.',
     desc: 'Shield Throw ricochets to {s2N:n} more foes, strikes +{s2Dmg}, and recharges {s2Cdr} faster.', mods: { s2N: 2, s2Dmg: 0.2, s2Cdr: 0.167 } });
   card('knight', 'skill2', 2, 'k_s2_a', { name: 'Shield Storm', icon: 'twin', tag: 'Burst',
     desc: 'Throw two shields in a narrow V, each at {twinShield}, each with its own ricochets.[ Shield Throw deals +{s2Dmg}.]',
-    rider: "Gathering Force: each ricochet adds +{gather} to that shield's next strike.", mods: { twinShield: 0.7 }, up: { s2Dmg: 0.1 }, r3: { gather: 0.15 } });
+    rider2: "Gathering Force: each ricochet adds +{gather} to that shield's next strike.", mods: { twinShield: 0.7 }, up: { s2Dmg: 0.1 }, r2: { gather: 0.15 }, r3: { tempest: 3, vortexMul: 0.25, vortexDur: 2.5 },
+    form: { name: 'Aegis Tempest', desc: 'Throws {tempest:n} shields instead of two, in a wider fan. When their ricochets end they converge on the last foe struck and spin into a vortex for {vortexDur:s} (radius 100): it pulls foes in (not bosses) and strikes every foe inside 4 times a second for {vortexMul} of a strike. Then the shields return.' } });
   card('knight', 'skill2', 2, 'k_s2_b', { name: 'Shield Orbit', icon: 'shieldgold', tag: 'Guard',
     desc: 'After you catch it, the shield orbits you for {orbit:s}, striking foes it passes for {orbitMul} of a strike (each once per 0.75 s), stunning them {orbitStun:s} (at most once per 1 s per foe) and destroying enemy shots it touches; each shot destroyed shortens the orbit by 0.75 s.',
-    rider: 'Return to Sender: each shot the orbit destroys flies back as a shard at the nearest foe within 300 for {orbitReflect} of a strike.', mods: { orbit: 3.5, orbitMul: 0.15, orbitStun: 0.3 }, up: { orbit: 0.5, orbitMul: 0.05 }, r3: { orbitReflect: 0.5 } });
+    rider2: 'Return to Sender: each shot the orbit destroys flies back as a shard at the nearest foe within 300 for {orbitReflect} of a strike.', mods: { orbit: 3.5, orbitMul: 0.15, orbitStun: 0.3 }, up: { orbit: 0.5, orbitMul: 0.05 }, r2: { orbitReflect: 0.5 }, r3: { bastion: 1, orbitMul: 0.05 },
+    form: { name: 'Bastion', desc: 'A second shield joins the first and orbits opposite it (radius 60); orbit strikes deal {orbitMul} of a strike. The orbit no longer times out: it lasts until your next Throw, and destroyed shots no longer shorten it.' } });
   card('knight', 'element', 1, 'k_el', { name: 'Oath of Ruin', icon: 'fang', forks: ['k_el_a', 'k_el_b'], plays: 'everything you hit bleeds; stack ailments, then cash them in.', desc: BLEED, mods: { bleedAll: 0.16, statusPow: 0.15 } });
   card('knight', 'element', 2, 'k_el_a', { name: 'Brand of Ruin', icon: 'eye', tag: 'Focus', coop: true,
     desc: '+{brand} damage to a foe for each ailment on it (up to 4), from any hero.',
@@ -57,18 +61,22 @@
     desc: 'Volley fires {s1N:n} more arrows and recharges {s1Cdr} faster.', mods: { s1N: 3, s1Cdr: 0.2 } });
   card('ranger', 'skill1', 2, 'r_s1_a', { name: "Hunter's Mark", icon: 'eye', tag: 'Burst', coop: true,
     desc: 'Volley marks every foe it hits for {volleyMark:s}: marked foes take +{markV} damage from everyone.',
-    rider: 'Relentless Hunt: when a marked foe dies, the mark leaps to the nearest unmarked foe within 120.', mods: { volleyMark: 4, markV: 0.12 }, up: { markV: 0.04 }, r3: { markLeap: 1 } });
+    rider2: 'Relentless Hunt: when a marked foe dies, the mark leaps to the nearest unmarked foe within 120.', mods: { volleyMark: 4, markV: 0.12 }, up: { markV: 0.04 }, r2: { markLeap: 1 }, r3: { deathMark: 0.5, deathWave: 0.6 },
+    form: { name: 'Death Mark', desc: 'Volley looses 3 waves 0.12 s apart (the 2nd and 3rd at {deathWave}), and its arrows steer gently toward marked foes. A marked foe that dies bursts into 4 piercing arrows, each {deathMark} of a Volley arrow.' } });
   card('ranger', 'skill1', 2, 'r_s1_b', { name: 'Scattershot', icon: 'boot', tag: 'Guard',
     desc: 'Volley arrows deal +{volleyClose} to foes within 110 and knock them back 3× as hard, every arrow slows its foe {volleySlow} for 1.2 s (bosses half as much), and Volley hops you 70 back from the cursor.',
-    rider: 'Caltrops: the hop scatters caltrops where you stood (radius 50, 2.5 s): foes inside are slowed 40% and take 12 per second.', mods: { volleyClose: 0.4, volleyHop: 70, volleySlow: 0.3 }, up: { volleyClose: 0.1 }, r3: { caltrops: 1 } });
+    rider2: 'Caltrops: the hop scatters caltrops where you stood (radius 50, 2.5 s): foes inside are slowed 40% and take 12 per second.', mods: { volleyClose: 0.4, volleyHop: 70, volleySlow: 0.3 }, up: { volleyClose: 0.1 }, r2: { caltrops: 1 }, r3: { thornburst: 20, thornRoot: 0.5 },
+    form: { name: 'Thornburst', desc: 'Volley becomes a full ring of {thornburst:n} arrows (the close-range bonus stays) and still hops you back. The caltrops cover three times the area (radius 87) and root foes that enter them for {thornRoot:s} (not bosses; once per foe per patch).' } });
   card('ranger', 'skill2', 1, 'r_s2', { name: 'Rainmaker', icon: 'rain', forks: ['r_s2_a', 'r_s2_b'], plays: 'drop a kill zone, kite foes through it.',
     desc: 'Rain of Arrows: +{s2Area} radius, lasts {s2Dur:s} longer, +{s2Dmg} damage.', mods: { s2Area: 0.3, s2Dur: 1, s2Dmg: 0.1 } });
   card('ranger', 'skill2', 2, 'r_s2_a', { name: 'Skyfall', icon: 'star', tag: 'Burst',
     desc: "The whole Rain lands at once 0.5 s after the cast: every volley's damage in one hit over a 30% wider area, stunning foes 0.5 s (not bosses).[ Rain deals +{s2Dmg} and is +{s2Area} wider.]",
-    rider: 'Twin Sky: a second Skyfall lands 0.8 s later on the same spot at {skyTwin}.', mods: { skyfall: 1 }, up: { s2Dmg: 0.1, s2Area: 0.05 }, r3: { skyTwin: 0.5 } });
+    rider2: 'Twin Sky: a second Skyfall lands 0.8 s later on the same spot at {skyTwin}.', mods: { skyfall: 1 }, up: { s2Dmg: 0.1, s2Area: 0.05 }, r2: { skyTwin: 0.5 }, r3: { starfall: 0.6 },
+    form: { name: 'Starfall Barrage', desc: 'Skyfall becomes 5 impacts that walk from you to the cursor, 0.12 s apart (replacing the single landing and Twin Sky): each lands in radius 70 for {starfall} of a Skyfall and stuns foes 0.4 s (not bosses).' } });
   card('ranger', 'skill2', 2, 'r_s2_b', { name: 'Hail of Thorns', icon: 'thorn', tag: 'Guard', coop: true,
     desc: 'Foes in the Rain are slowed 50% and take +20% damage (does not stack with other +20% vulnerabilities).[ Rain deals +{s2Dmg}.]',
-    rider: 'Second Shower: when the Rain ends, it falls again on the same spot for 2 s at {shower}.', mods: { rainHail: 1 }, up: { s2Dmg: 0.1 }, r3: { shower: 0.4 } });
+    rider2: 'Second Shower: when the Rain ends, it falls again on the same spot for 2 s at {shower}.', mods: { rainHail: 1 }, up: { s2Dmg: 0.1 }, r2: { shower: 0.4 }, r3: { thornstorm: 2 },
+    form: { name: 'Storm of Thorns', desc: 'The Rain follows your cursor at 120 per second and lasts {thornstorm:n} times as long, leaving a bramble patch (radius 40, 3 s, slowing foes 30%) every 0.5 s along its path. The Second Shower falls where the Rain ends.' } });
   card('ranger', 'element', 1, 'r_el', { name: "Trapper's Craft", icon: 'leaf', forks: ['r_el_a', 'r_el_b'], plays: 'wound everything, and let the wounds work.', desc: BLEED, mods: { bleedAll: 0.1, statusPow: 0.15 } });
   card('ranger', 'element', 2, 'r_el_a', { name: 'Infected Wounds', icon: 'drop', tag: 'Focus',
     desc: 'Volley and Rain build your statuses {skillInfK} faster; your Bleed and Burn tick {bleedMul} harder.',
@@ -282,23 +290,24 @@
     return fw && fw !== bw ? { rate: fw.rate / bw.rate, dmg: fw.dmg / bw.dmg } : FORK_NOMINAL[b.weapon.kind] || { rate: 1, dmg: 1 };
   };
   // Player-facing text of a boon: a class card at `rank` (default 1) with its numbers filled in (critK from the hero's stats `st`), else the boon's own desc.
-  // rider2 joins from rank 2 (numbers at max(rank, 2)), rider from rank 3 (numbers at rank 3); *Full holds the sentence before its rank; form is the rank-3 transform ({ name, desc } or null).
+  // rider2 joins from rank 2 (numbers at max(rank, 2)), rider from rank 3 (numbers at rank 3); *Full holds the sentence before its rank; form is the rank-3 transform ({ name, desc } with its numbers filled in, or null; formFull: the same before rank 3).
   // Returns the pieces; ED.boonText joins them.
   ED.cardParts = (id, rank, st) => {
     const b = ED.BOONS[id];
-    if (!b || !b.route) return { text: b ? b.desc : '', rider: '', riderName: '', rider2: '', rider2Name: '', form: null };
+    if (!b || !b.route) return { text: b ? b.desc : '', rider: '', riderName: '', rider2: '', rider2Name: '', form: null, formFull: null };
     rank = Math.max(1, Math.min(b.max || 1, rank | 0 || 1));
     const tot = ED.cardTotals(b, rank), ck = (st && st.critK) || 1;
     if (b.weapon && b.weapon.kind) { const fk = forkRatios(b, st); tot.fkRate = fk.rate; tot.fkDmg = fk.dmg; }
     const text = render(b.desc, tot, ck);
     const split = (s, at) => { const m = s ? /^([^:]+): (.*)$/.exec(s) : null; return m ? [m[1], render(m[2], ED.cardTotals(b, at), ck)] : ['', '']; };
     const [riderName, rider] = split(b.rider, 3), [rider2Name, rider2] = split(b.rider2, Math.max(2, rank));
-    return { text, rider: rank >= 3 ? rider : '', riderName, riderFull: rider, rider2: rank >= 2 ? rider2 : '', rider2Name, rider2Full: rider2, form: b.form && rank >= 3 ? b.form : null };
+    const formAt = (r) => (b.form ? { name: b.form.name, desc: render(b.form.desc, ED.cardTotals(b, r), ck) } : null);
+    return { text, rider: rank >= 3 ? rider : '', riderName, riderFull: rider, rider2: rank >= 2 ? rider2 : '', rider2Name, rider2Full: rider2, form: rank >= 3 ? formAt(3) : null, formFull: formAt(3) };
   };
   ED.boonText = (id, rank, st) => {
     const b = ED.BOONS[id];
     if (!b || !b.route) return b ? b.desc : '';
     const p = ED.cardParts(id, rank, st);
-    return p.text + (p.rider2 ? ' ' + p.rider2Name + ': ' + p.rider2 : '') + (p.rider ? ' ' + p.riderName + ': ' + p.rider : '');
+    return p.text + (p.rider2 ? ' ' + p.rider2Name + ': ' + p.rider2 : '') + (p.rider ? ' ' + p.riderName + ': ' + p.rider : '') + (p.form ? ' ' + p.form.name + ': ' + p.form.desc : '');
   };
 })(globalThis.ED || (globalThis.ED = {}));
