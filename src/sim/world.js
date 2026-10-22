@@ -190,7 +190,7 @@
   W.prototype.threat = function () { return W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, this.stratum - 1))]; };
   W.prototype.emit = function (ev) { this.fx.push(ev); };
   W.prototype.partySize = function () { return Math.max(1, this.players.size); };
-  W.partyHpMul = (size) => { const n = size - 1; return 1 + 0.9 * n + 0.3 * n * (n - 1); }; // foe HP factor of a party of `size` (pure; the sheet reads it too)
+  W.partyHpMul = (size) => { const n = size - 1; return 1 + 0.85 * n + 0.3 * n * (n - 1); }; // foe HP factor of a party of `size` (pure; the sheet reads it too)
   W.dmgScale = (s) => 1 + 0.22 * (s - 1) + 0.03 * (s - 1) * (s - 1); // foe damage factor of stratum s
   W.prototype.partyHpMul = function () { return W.partyHpMul(this.partySize()); };
   W.prototype.alive = function (p) { return p && !p.downed && !p.dead; };
