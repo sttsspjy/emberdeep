@@ -1,7 +1,8 @@
 // Ranger: Volley and Rain of Arrows (base kits from ED.SKILLS numbers), the Ranger route cards that act on them and the hook table ED.CLS.ranger.
 // Skill forms (rank 3): Death Mark (three waves, homing, bursts), Thornburst (a ring, big rooting caltrops), Starfall Barrage (five walking impacts), Storm of Thorns (a Rain that follows the cursor and lays brambles).
-// Deadeye, Ballista, Quickdraw, Scattershot and Gangrene read the hit's source fields in hitMul (src.dist = distance flown, src.pass = foes passed, src.part = skill part); Hunter's Mark and Quickdraw's slow hang on hitDone,
-// Splitting Bolt on projHit, Flurry on attack, Relentless Hunt and Contagion on kill. Every factor is exact: it multiplies src.mul, not the shared hero multiplier.
+// Attack and element forms (rank 3): Siege Ballista (every siege-th shot is a wide piercing bolt that ends in a blast), Storm Bow (a ricochet per shot, a bigger Flurry), Hemorrhage (a Bleed pool pops), Plaguebearer (a dying foe bursts its pools).
+// Deadeye, Ballista, Quickdraw, Scattershot and Gangrene read the hit's source fields in hitMul (src.dist = distance flown, src.pass = foes passed, src.part = skill part); Hunter's Mark, Quickdraw's slow and Hemorrhage hang on hitDone,
+// Splitting Bolt, the siege guard stop and the ricochet on projHit, the siege blast on projEnd, Flurry and the siege shots on attack, Relentless Hunt, Contagion and Plaguebearer on kill. Every factor is exact: it multiplies src.mul, not the shared hero multiplier.
 (function (ED) {
   'use strict';
   const U = ED.U;
@@ -9,6 +10,9 @@
   // Deadeye grows from nothing at FAR_FROM px flown to its full bonus at FAR_TO; a hit from FAR_AT of that ramp carries the far-shot flag. LEAP_R: reach of Relentless Hunt. SPLIT_A / SPLIT_LIFE: Splitting Bolt's fan and flight.
   // FLURRY_A: Flurry's extra arrows (each at st.flurryMul of a shot). CALTROPS: the Scattershot patch, base + pow x P damage per second, slow, radius (fixed), seconds. HAIL_SLOW: slow of a Hail of Thorns foe. VOLLEY_SLOW_T: seconds a Scattershot arrow slows its foe.
   const FAR_FROM = 80, FAR_TO = 260, FAR_AT = 0.75, LEAP_R = 120, SPLIT_A = 0.3, SPLIT_LIFE = 0.4, FLURRY_A = 0.12;
+  // FLURRY_B: step of the extra arrows when Storm Bow adds more than two. SIEGE_R / SIEGE_WIDE: end blast radius and hit-radius factor of a siege bolt. RIC_R: reach of a Storm Bow ricochet.
+  // HEMO_CD / HEMO_BOSS_CD: seconds between two Hemorrhage pops on one foe (a boss). PLAGUE_R / PLAGUE_HOP: Plaguebearer burst radius and seconds from the death to the burst.
+  const FLURRY_B = 0.09, SIEGE_R = 60, SIEGE_WIDE = 2, RIC_R = 140, HEMO_CD = 1, HEMO_BOSS_CD = 4, PLAGUE_R = 90, PLAGUE_HOP = 0.05;
   const CALTROPS = { base: 6, pow: 0.5, r: 50, dur: 2.5, slow: 0.4 }, HAIL_SLOW = 0.5, VOLLEY_SLOW_T = 1.2;
   // WAVE_GAP: seconds between the Death Mark waves. HOME_R / HOME_TURN: reach (px) and turn rate (rad/s) of an arrow toward marked foes. BURST_LIFE / BURST_PIERCE: flight (s) and pierce of a Death Mark burst arrow.
   // STORM_SPEED: px/s the Storm of Thorns follows the cursor. BRAMBLE: patch laid by the Storm every `every` s (radius, seconds, slow).
@@ -205,13 +209,77 @@
     w.emit({ t: 'split', x: Math.round(pr.x), y: Math.round(pr.y), a: Math.round(h * 100) / 100, pid: pr.owner });
   }
 
-  // Flurry: two extra weapon arrows beside the aimed one, fired by W.fireWeapon so they carry everything the aimed arrow does (evolution blast and spectral copies, cloud, homing, burn).
+  // Flurry: 2 + flurryN extra weapon arrows beside the aimed one, fired by W.fireWeapon so they carry everything the aimed arrow does (evolution blast and spectral copies, cloud, homing, burn).
+  // The extras alternate left and right of the aim at FLURRY_A steps (FLURRY_B above two extras); an odd count puts its last arrow on the side that alternates with each Flurry.
   // fireWeapon shoots w.n + st.projN arrows: the one-arrow copy of the weapon has n = 1 - projN (cached per weapon object and projN).
   const ONE_ARROW = new WeakMap();
   function flurry(w, p, a, st, wp) {
     let c = ONE_ARROW.get(wp);
     if (!c || c.pn !== st.projN) ONE_ARROW.set(wp, c = { pn: st.projN, w1: Object.assign({}, wp, { n: 1 - st.projN }) });
-    for (let s = -1; s <= 1; s += 2) w.fireWeapon(p, a + s * FLURRY_A, c.w1, undefined, { mul: st.flurryMul });
+    const n = 2 + Math.max(0, Math.round(st.flurryN)), step = n > 2 ? FLURRY_B : FLURRY_A, flip = (n & 1) && (Math.round(p.atkCount / st.flurry) & 1) ? -1 : 1;
+    for (let k = 0; k < n; k++) w.fireWeapon(p, a + ((k & 1) ? 1 : -1) * flip * ((k >> 1) + 1) * step, c.w1, undefined, { mul: st.flurryMul });
+  }
+
+  // Siege Ballista: the weapon shots this attack just spawned (distance flown 0) become siege bolts: they pierce every foe, are SIEGE_WIDE times as wide and deal siegeMul times the damage.
+  function siegeShots(w, p, st) {
+    for (const pr of w.projs) {
+      if (pr.dist !== 0 || pr.owner !== p.pid || !pr.wpn || pr.hk || pr.team !== 0 || pr.siege) continue;
+      pr.siege = true; pr.pierce = 999; pr.r *= SIEGE_WIDE; pr.mul = (pr.mul || 1) * st.siegeMul;
+    }
+  }
+
+  // A siege bolt ends (wall, range or a guard) in a blast of siegeBlast of the shot (its damage with the siege factor), radius SIEGE_R x the area bonus.
+  function siegeBlast(w, pr, o) {
+    pr.siege = false;
+    w.explode(pr.x, pr.y, SIEGE_R * (1 + o.stats.area * 0.5), pr.dmg * (pr.mul || 1) * o.stats.siegeBlast, 0, o, 'siege', false, { wpn: true, part: 'siege.blast' });
+  }
+
+  // Storm Bow: the first hit of a weapon shot sends ricochet x its damage (crit as the hit) at the nearest other foe within RIC_R of the struck foe that the shot has not hit; a shot with no such foe tries again on its next hit.
+  function ricochet(w, pr, e, hs, o) {
+    let best = null, bd = RIC_R * RIC_R;
+    for (const f of w.enemies) {
+      if (f === e || f.hp <= 0 || f.spawnT > 0 || f.def.invuln || f.burrowed || (pr.hit && pr.hit.has(f.id))) continue;
+      const d2 = U.dist2(f.x, f.y, e.x, e.y);
+      if (d2 < bd) { bd = d2; best = f; }
+    }
+    if (!best) return;
+    pr.ric = true;
+    w.emit({ t: 'chain', k: 'r', pts: [[Math.round(e.x), Math.round(e.y - e.r * 0.5)], [Math.round(best.x), Math.round(best.y - best.r * 0.5)]] });
+    w.hitEnemy(best, pr.dmg, { p: o, kind: 'weapon', wpn: true, part: 'ranger.ric', crit: hs.critOut, mul: (pr.mul || 1) * o.stats.ricochet, x: e.x, y: e.y });
+  }
+
+  // Hemorrhage: after p's hit on e, a Bleed pool of hemoAt of its max health (a boss: hemoBoss) hits at once at hemoMul x the rate its ticks pay, and the pool is emptied; per foe at most every HEMO_CD s (a boss: HEMO_BOSS_CD).
+  function hemorrhage(w, p, e) {
+    const st = p.stats, boss = e.boss;
+    if (!(e.bleedPool >= (boss ? st.hemoBoss : st.hemoAt) * e.maxHp) || (e.hemoT || 0) > w.time) return;
+    const dmg = e.bleedPool * st.hemoMul * (1 + st.bleedMul);
+    e.bleedPool = 0; e.hemoT = w.time + (boss ? HEMO_BOSS_CD : HEMO_CD);
+    w.emit({ t: 'chain', k: 'm', pts: [[Math.round(e.x), Math.round(e.y - e.r * 0.5)], [Math.round(e.x), Math.round(e.y - e.r * 0.5)]], r: Math.round(e.r) });
+    w.hitEnemy(e, dmg, { p, kind: 'rupture', part: 'ranger.hemo', raw: true, noProc: true, crit: false, noGuard: true, bleed: true });
+  }
+
+  // Plaguebearer: the dying foe's Bleed and Burn pools (as they are at its death) are queued as a burst PLAGUE_HOP s later (p.plagueQ), so a chain of deaths plays out over ticks.
+  function plagueQueue(p, e) {
+    p.plagueQ.push({ t: PLAGUE_HOP, e, x: e.x, y: e.y, bleed: e.bleedPool, burn: e.burnPool });
+  }
+
+  // The due bursts (at most CHAIN_TICK per tick): the corpse loses both pools (before its status spread runs, one chain hop later), every foe within PLAGUE_R takes plagueBurst of them at the rate their ticks pay, one hit (Burn pools already carry the stratum affinity).
+  function plagueBursts(w, p, dt) {
+    const q = p.plagueQ, st = p.stats;
+    let ran = 0;
+    for (let i = 0; i < q.length && ran < ED.CONST.CHAIN_TICK;) {
+      const b = q[i];
+      if ((b.t -= dt) > 0) { i++; continue; }
+      q.splice(i, 1); ran++;
+      b.e.bleedPool = 0; b.e.burnPool = 0;
+      const dB = b.bleed * st.plagueBurst * (1 + st.bleedMul), dF = b.burn * st.plagueBurst * (1 + st.burnMul);
+      if (!(dB + dF > 0)) continue;
+      for (const o of w.enemies) {
+        if (o.hp <= 0 || o.spawnT > 0 || o.def.invuln || o.burrowed || U.dist2(o.x, o.y, b.x, b.y) >= (PLAGUE_R + o.r) ** 2) continue;
+        w.hitEnemy(o, dB + dF, Object.assign({ p, kind: 'rupture', part: 'ranger.plague', raw: true, noProc: true, crit: false, noGuard: true }, dF > dB ? { el: 'fire', affDone: true } : { bleed: true }));
+      }
+      w.emit({ t: 'chain', k: 'g', pts: [[Math.round(b.x), Math.round(b.y)], [Math.round(b.x) + PLAGUE_R, Math.round(b.y)]] });
+    }
   }
 
   // Hunter's Mark: foe e takes markV more damage from everyone for volleyMark seconds; the strongest value wins and its owner keeps the mark's leap.
@@ -237,11 +305,12 @@
 
   // ---------------- Ranger hook table ----------------
   ED.CLS.ranger = {
-    init(p) { p.volleyQ = []; },
-    // Death Mark: the queued waves and the arrows' steering.
+    init(p) { p.volleyQ = []; p.plagueQ = []; },
+    // Death Mark: the queued waves and the arrows' steering. Plaguebearer: the due bursts.
     tick(p, dt) {
       if (p.volleyQ.length) volleyWaves(this, p, dt);
       if (p.stats.deathMark > 0) homeArrows(this, p, dt);
+      if (p.plagueQ.length) plagueBursts(this, p, dt);
     },
     // Exact damage factors (src.mul): Deadeye (weapon shots, by distance flown), Ballista's pierce ramp (by foes passed), Scattershot (Volley arrows within 110 and triple knockback), Gangrene (Volley and Rain on foes with 3+ ailments).
     // A Quickdraw slow and a far shot are flagged on the source for the hit event (src.slow, src.far).
@@ -261,27 +330,41 @@
       if (st.festerHit && part && SKILL_PARTS.has(part) && this.ailments(e) >= 3) src.mul = (src.mul || 1) * (1 + st.festerHit);
       return 0;
     },
-    // Quickdraw slows a foe its weapon shot hit (not bosses); Hunter's Mark marks every foe a Volley arrow hits (even the one it kills: its mark can still leap).
+    // Quickdraw slows a foe its weapon shot hit (not bosses); Hunter's Mark marks every foe a Volley arrow hits (even the one it kills: its mark can still leap); Hemorrhage pops the Bleed pool after any direct hit (statuses, bursts and pops never trigger it).
     hitDone(p, e, dmg, crit, src) {
       const st = p.stats;
       if (src.slow && e.hp > 0) this.slowEnemy(e, st.hitSlow, 1);
       if (st.volleyMark && (src.part === 'volley.arrow' || src.part === 'volley.wave')) markFoe(e, p, st);
       if (st.volleySlow && src.part === 'volley.arrow' && e.hp > 0) this.slowEnemy(e, e.boss ? st.volleySlow * 0.5 : st.volleySlow, VOLLEY_SLOW_T);
+      if (st.hemo > 0 && e.hp > 0 && e.bleedPool > 0 && !src.noProc && !src.raw && src.kind !== 'dot') hemorrhage(this, p, e);
     },
+    // A weapon shot hit e: Storm Bow's ricochet, then either the siege bolt's blast when a guard stopped it or Splitting Bolt when the shot spent its last pierce.
     projHit(pr, e, hs) {
-      if (!pr.wpn || pr.noSplit || pr.pierce > 0 || hs.guarded) return;
+      if (!pr.wpn) return;
       const o = this.players.get(pr.owner);
-      if (o && o.stats.splitBolt) splitBolt(this, pr, o.stats);
+      if (!o) return;
+      const st = o.stats;
+      if (st.ricochet > 0 && !pr.ric && hs.critOut !== undefined) ricochet(this, pr, e, hs, o);
+      if (pr.siege && hs.guarded) siegeBlast(this, pr, o);
+      else if (st.splitBolt && !pr.noSplit && pr.pierce <= 0 && !hs.guarded) splitBolt(this, pr, st);
+    },
+    // A hero shot ended its flight: a siege bolt blasts.
+    projEnd(pr, owner) {
+      if (pr.siege && owner) siegeBlast(this, pr, owner);
     },
     attack(p, a, st, w) {
-      if (st.flurry && w.kind === 'proj' && p.atkCount % st.flurry === 0) flurry(this, p, a, st, w);
+      if (w.kind !== 'proj') return;
+      if (st.siege > 0 && p.atkCount % st.siege === 0) siegeShots(this, p, st);
+      if (st.flurry && p.atkCount % st.flurry === 0) flurry(this, p, a, st, w);
     },
     // Relentless Hunt (the dying foe's mark moves on) and Contagion / Outbreak (a foe with 2+ ailments that dies to the Ranger's damage passes its statuses to the nearest foes, queued like any status spread).
+    // Plaguebearer: the same foes burst instead (the pools go to the burst, the other statuses spread to every foe within PLAGUE_R); fodder deaths burst too.
     kill(e, p, src) {
       if (e.mark > 0 && e.markBy) { huntLeap(this, e); deathBurst(this, e); }
       if (p && p.stats.contagion > 0 && this.ailments(e) >= 2) {
-        const st = p.stats, out = st.contagionN > 0;
-        this.queuePayoff(p, { kind: 'spread', e, x: e.x, y: e.y, f: out ? 0.33 : st.contagion, n: out ? 3 : 2, r: 100 + st.contagionR, fx: 'c' });
+        const st = p.stats, out = st.contagionN > 0, plague = st.plague > 0;
+        if (plague) plagueQueue(p, e);
+        this.queuePayoff(p, { kind: 'spread', e, x: e.x, y: e.y, f: out ? st.outbreak : st.contagion, n: plague ? 99 : out ? 3 : 2, r: plague ? PLAGUE_R : 100 + st.contagionR, fx: 'c' });
       }
     },
   };

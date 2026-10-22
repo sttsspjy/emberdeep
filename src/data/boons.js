@@ -76,7 +76,17 @@
       const i = per(pr, 'shadow') > 0 ? st.shadowInfuse * (1 + st.doomMul) * aff : 0, share = 1 / (1 + i), big = 1 / (1 + i * (ED.CONST.DOOM_TOUGH + st.doomTough));
       return { label: (i > 0 ? `Reaps a foe once you deal ${Math.round(share * 100)}% of its health (elites ${Math.round(big * 100)}%)` : 'Marks no Doom yet') + `; bosses Toll at ${Math.round(ED.CONST.TOLL_AT * 100)}% Doom`, pct: share };
     } },
-    general: { rows: ['crit', 'critDmg', 'bleed', 'bleedAll', 'bleedMul', 'lacerate', 'execute'], est: (pr, st) => { const dps = (pr.bleed || 0) * (1 + st.bleedMul); return { label: `Bleed adds about ${n1(dps)} damage per second to a foe`, dps }; } },
+    general: { rows: ['crit', 'critDmg', 'bleed', 'bleedAll', 'bleedMul', 'lacerate', 'execute'], est: (pr, st, aff, ref) => {
+      let dps = (pr.bleed || 0) * (1 + st.bleedMul), pops = 0;
+      if (st.hemo > 0 && pr.bleed > 0 && pr.dps > 0) { // Hemorrhage: the pool fills at the Bleed input and drains 40% a second; it pops once it holds hemoAt of the foe's health (a cycle is at least the 1 s cooldown), within the time to kill the reference foe; each pop pays hemoMul x the pool instead of the 1 x the drain would
+        const fill = 0.4, at = st.hemoAt * ref.hp, ttk = ref.hp / pr.dps;
+        if (fill * at < pr.bleed) {
+          const t1 = -Math.log(1 - fill * at / pr.bleed) / fill;
+          if (ttk >= t1) { pops = (ttk - t1) / Math.max(1, t1) + 1; dps += pops * at * (st.hemoMul - 1) * (1 + st.bleedMul) / ttk; }
+        }
+      }
+      return { label: `Bleed adds about ${n1(dps)} damage per second to a foe` + (pops > 0 ? `, ${n1(pops)} Hemorrhage pops while a ${n1(ref.hp)} HP foe lasts` : ''), dps, pops };
+    } },
   };
   for (const id in PS) Object.assign(ED.PATHS[id], { infuse: id === 'general' ? 'bleed' : ED.ELEMENTS[id].inf, status: { fire: 'burn', ice: 'chill', lightning: 'charge', poison: 'venom', holy: 'radiance', shadow: 'doom', general: 'bleed' }[id], sheet: PS[id] });
   // Elemental affinity of the hero's stratum: x1.5 weak, x0.5 resisted, else x1 (General and physical hits ignore it). Class-skill hits take half of it (ED.affC).
