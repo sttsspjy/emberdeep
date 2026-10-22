@@ -860,6 +860,7 @@
     }
     // dash effects (host sees remote dashes through their state reports)
     if (p.dashing) {
+      if (this.room.breakables.length) { this.smashSeg(p, p.dashFx < 0 ? p.x : p.dashFx, p.dashFx < 0 ? p.y : p.dashFy, p.x, p.y, p.r); p.dashFx = p.x; p.dashFy = p.y; } // the path since the last tick
       if (st.dashDmg) {
         if (!p.dashHit) p.dashHit = new Set();
         const dmg = st.power * st.dashDmg, add = st.dashVenom || st.dashDoom ? { poison: st.dashVenom, shadow: st.dashDoom } : undefined;
@@ -887,7 +888,7 @@
         p.dashTrail -= dt;
         if (p.dashTrail <= 0) { p.dashTrail = 0.05; this.addZone({ kind: 'pfire', x: p.x, y: p.y, r: 22, dur: 2.2, dps: ED.procDmg(ED.BOONS.cindertrail, st), owner: p.pid, team: 0 }); }
       }
-    } else { p.dashHit = null; p.dashRing = false; }
+    } else { p.dashHit = null; p.dashRing = false; p.dashFx = -1; }
   };
 
   // ---------------- heroes take damage ----------------
@@ -966,6 +967,7 @@
         }
       }
       this.foeEnd();
+      this.smashCircle(owner, x, y, r);
     } else {
       for (const p of this.players.values()) if (Math.hypot(p.x - x, p.y - y) < r + p.r) this.hurtPlayer(p, dmg, { e: owner && owner.hp !== undefined && owner.def ? owner : null, x, y });
     }
@@ -1073,6 +1075,7 @@
       if (U.segDist2(e.x, e.y, x0, y0, x1, y1) < (e.r + 10) ** 2) this.hitEnemy(e, w.dmg * 0.8, { p, kind: 'evo', el: 'holy', crit: false, noGuard: true, x: x0, y: y0 });
     }
     this.foeEnd();
+    this.smashSeg(p, x0, y0, x1, y1, 10);
     this.emit({ t: 'lance', x0: Math.round(x0), y0: Math.round(y0), x1: Math.round(x1), y1: Math.round(y1), pid: p.pid });
   };
 
@@ -1099,6 +1102,7 @@
       if (hs.critOut) anyCrit = true;
     }
     this.foeEnd();
+    this.smashArc(p, a, reach, arc);
     if (w.shock && rep === 0) this.explode(p.x + Math.cos(a) * reach * 0.55, p.y + Math.sin(a) * reach * 0.55, w.shock.r * (1 + st.area * 0.5), w.dmg * w.shock.mul * mul, 0, p, 'shock', true, { wpn });
     if (cl && st.cShock) this.explode(p.x + Math.cos(a) * reach * 0.9, p.y + Math.sin(a) * reach * 0.9, 72 * (1 + st.area * 0.5), w.dmg * st.cShock, 0, p, 'shock', true, { wpn: true, stun: st.cStun });
     const ev = { t: 'swing', pid: p.pid, a: Math.round(a * 100) / 100, r: Math.round(reach), arc: Math.round(arc * 100) / 100 };
@@ -1200,6 +1204,7 @@
       let dead = false;
       if (pr.team === 0) {
         const owner = this.players.get(pr.owner);
+        if (room.breakables.length) this.smashSeg(owner, pr.x - pr.vx * dt, pr.y - pr.vy * dt, pr.x, pr.y, pr.r); // the step just flown; a breakable never stops the shot
         const q = this.foeScan(pr.x, pr.y, pr.r);
         for (let k = 0; k < q.length || this.foeTail(q); k++) {
           const e = q[k];

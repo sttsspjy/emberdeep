@@ -307,6 +307,7 @@
   Object.assign(N.CAPS, { dark: 2 }); Object.assign(N.CAPS_LOCAL, { dark: 1 }); // entering a dark room
   Object.assign(N.CAPS, { fhit: 12, fdie: 30 }); Object.assign(N.CAPS_LOCAL, { fhit: 4, fdie: 12 }); // non-crit fodder hits and fodder deaths (capKey)
   Object.assign(N.CAPS, { shoot: 10 }); Object.assign(N.CAPS_LOCAL, { shoot: 3 }); // foe shot sounds (boss volleys fire one per hero)
+  Object.assign(N.CAPS, { smash: 8 }); Object.assign(N.CAPS_LOCAL, { smash: 4 }); // breakable props smashed ({ i, x, y, k, r }: room breakables index, spot, decor kind, room id)
   // Venom bar level of a foe: 0-4 pips (one per 25 Venom), 5 = Corroded. Radiance fill 0-3 of the Smite gauge.
   N.venomLevel = (e) => (e.venom >= 100 ? 5 : e.venom > 0 ? Math.min(4, Math.ceil(e.venom / 25)) : 0);
   N.radLevel = (w, e) => (e.rad > 0 ? Math.min(3, Math.floor(4 * e.rad / w.smiteAt(e))) : 0);
@@ -337,6 +338,7 @@
     if (full) {
       s.O = w.props.map(p => [p.id, p.kind, r(p.x), r(p.y), p.state | 0, p.item || '', p.price || 0, p.group || 0, p.stype || '', p.text || '']);
       s.RS = w.floor.rooms.map(rm => { const st = w.roomState[rm.id]; return (st.visited ? 1 : 0) | (st.known ? 2 : 0) | (st.cleared ? 4 : 0); });
+      s.BR = w.floor.rooms.map(rm => w.roomState[rm.id].broken | 0); // broken-breakable bit mask of every room (bit i = room.breakables[i])
       s.RUN = { kills: w.run.kills, roomsCleared: w.run.roomsCleared, elitesKilled: w.run.elitesKilled, bosses: w.run.bosses, bossCount: w.run.bossCount, embers: w.run.embers, revives: w.run.revives, maxGold: w.run.maxGold, maxRelics: w.run.maxRelics, pact: w.pact,
         flawlessBoss: !!w.run.flawlessBoss, roomsVisited: w.run.roomsVisited, roomsTotal: w.run.roomsTotal, fullClear: !!w.run.fullClear, evolved: [...w.players.values()].some(p => !!p.stats.evo) };
     }
@@ -344,5 +346,5 @@
   };
 
   // Signature used by the host to decide when props / room state must be resent.
-  N.propSig = (w) => w.roomId + '|' + w.props.map(p => p.id + ':' + (p.state | 0)).join(',') + '|' + w.floor.rooms.map(rm => { const st = w.roomState[rm.id]; return (st.visited ? 1 : 0) + (st.known ? 2 : 0) + (st.cleared ? 4 : 0); }).join('');
+  N.propSig = (w) => w.roomId + '|' + w.props.map(p => p.id + ':' + (p.state | 0)).join(',') + '|' + w.floor.rooms.map(rm => { const st = w.roomState[rm.id]; return (st.visited ? 1 : 0) + (st.known ? 2 : 0) + (st.cleared ? 4 : 0); }).join('') + '|' + (w.roomState[w.roomId].broken | 0);
 })(globalThis.ED || (globalThis.ED = {}));

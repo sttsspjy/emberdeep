@@ -27,8 +27,8 @@
 //   tile.carpet.<red|beige>.{full,rug,run.fill,run.top,run.bot,band} (Sanctum),
 //   tile.fountain.{top.1..3,mid.red,mid.blue,basin.red,basin.blue}(3f), tile.torch.{wall,floor}(8f), tile.torch.unlit, tile.dark.floor.<1..6>   (0x72 base set; per-biome recolour at runtime)
 // prop.<chest.closed|chest.open|chest.empty|mimic.closed|mimic.open|plinth|plinth.stone|shrine.<0..4>|merchant|crate|bag|campfire|anvil|trial|portal|sign|column|column.wall>
-// deco.<bones.0..4|skull|moss.0..2|candle.0..3|urn.0..5|mushroom.0..3|root.0..1|puddle.0..3|crystal.0..2|shard.0..2|shell.0..2|seaweed.0..1|coral.0..1|pillarstub|chain|grate|banner.<blue|green|red|yellow>>
-// pickup.<coin|heart|heart.half|flask.red|flask.yellow|xp>
+// deco.<bones.0..4|skull|moss.0..2|candle.0..3|urn.0..5|mushroom.0..3|root.0..1|puddle.0..3|crystal.0..2|shard.0..2|shell.0..2|seaweed.0..1|coral.0..1|crate.0..1|pillarstub|chain|grate|banner.<blue|green|red|yellow>>
+// pickup.<coin|heart|flask.red|flask.yellow|xp>
 // proj.<arrow|bolt|knife|fireball|hammer|shield|bone|trident|skull|web|thorn>      hero/foe projectile sprites (the other kinds are procedural orbs)
 // fx.<cut|cutx|cslash|slash.arc|slash.small|hit.spark|explosion|flam|ice.burst|thunder|circle.spark|circle.white|shield.gold|spark.magic|smoke|smoke.ring|ember|glint|flame>
 // fx.<blast.red|blast.blue|foam|ring.shock|burst|puff>, fx.<star.stun|sigil.skull|glyph.corroded> (hand-authored)
@@ -397,11 +397,17 @@ add('tile.wall.grate', 'world', 'ext', [[64, 48, 16, 16]], { pivot: 'tl', fps: 0
   add('tile.carpet.' + c + '.run.bot', 'world', 'ext', [[x + 32, 304, 16, 16]], { pivot: 'tl', fps: 0 });
   add('tile.carpet.' + c + '.band', 'world', 'ext', [[x + 32, 320, 16, 32]], { pivot: 'tl', fps: 0 });
 });
+// Breakable crates (Cinderforge): iron-banded planks, an ember latch; the small one carries an X brace.
+const CRATES = [
+  ['kkkkkkkkkkk', 'kIiiiiiiiIk', 'kiWWdWWdWik', 'kiWWdWWdWik', 'kIiiioiiiIk', 'kiwwdwwdwik', 'kiwwdwwdwik', 'kiwwdwwdwik', 'kIiiiiiiiIk', 'kkkkkkkkkkk'],
+  ['kkkkkkkkk', 'kIiiiiiIk', 'kidWWWdik', 'kiWdWdWik', 'kiWWoWWik', 'kiWdWdWik', 'kidWWWdik', 'kIiiiiiIk', 'kkkkkkkkk'],
+];
+CRATES.forEach((rows, i) => add('deco.crate.' + i, 'world', null, null, { ascii: [rows], pal: { k: '#1a1210', W: '#8a603a', w: '#5e3f27', d: '#3a2616', i: '#5c6074', I: '#9aa0b8', o: '#e8641e' }, fps: 0 }));
 add('deco.chain', 'world', null, null, { ascii: [['.kk.', 'kSSk', 'kSSk', '.kk.', '.kk.', 'kSSk', 'kSSk', '.kk.', '.kk.', 'kSSk', 'kSSk', '.kk.']], pal: { k: '#222222', S: '#9aa6b0' }, fps: 0 });
 
 // --------------------------------------------------------------------------- fx page: pickups, projectiles, effects, font
 add('pickup.coin', 'fx', 'ox', oxn('coin_anim', 4), { fps: 8, loop: true });
-add('pickup.heart', 'fx', 'ox', ['ui_heart_full'], { fps: 0 }); add('pickup.heart.half', 'fx', 'ox', ['ui_heart_half'], { fps: 0 });
+add('pickup.heart', 'fx', null, null, { ascii: [['.kk.kk.', 'kwrkrRk', 'krrrrRk', '.krrRk.', '..kRk..', '...k...']], pal: { k: '#4a0a18', w: '#ffe0e0', r: '#ff5468', R: '#c8202e' }, fps: 0 }); // 7x6, the size of the coin and the xp gem
 add('pickup.flask.red', 'fx', 'ox', ['flask_big_red'], { fps: 0 }); add('pickup.flask.yellow', 'fx', 'ox', ['flask_big_yellow'], { fps: 0 });
 add('pickup.xp', 'fx', null, null, { ascii: [['.kk.', 'kwck', 'kcCk', 'kcCk', 'kcCk', '.kCk', '..k.']], pal: { k: '#12342c', w: '#ffffff', c: '#b4ffe9', C: '#34dcb0' }, fps: 0 });
 

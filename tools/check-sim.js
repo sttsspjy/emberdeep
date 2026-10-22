@@ -774,5 +774,106 @@ for (let s = 1; s <= 6; s++) {
   ok(v1.time === v2.time && v1.kills === v2.kills && v1.hp === v2.hp, 'a --vet run is deterministic per seed');
   ok(a.time === off.time && a.kills === off.kills && a.hp === off.hp, 'without --vet (or --vet=0) the bot is unchanged');
 }
+{ // breakable props: floor gen (kinds, counts, spots, determinism), hero hits break them and foes, foe shots and hazards never do, drops
+  const D = ED.Dungeon, T = ED.CONST.TILE;
+  const laneOf = (r, x, y) => { const cx = Math.floor(r.w / 2), cy = Math.floor(r.h / 2) + 1; return (Math.abs(x - cx) <= 2 && (y <= 4 || y >= r.h - 4)) || (Math.abs(y - cy) <= 2 && (x <= 3 || x >= r.w - 4)); };
+  let bad = [], fights = 0, others = 0, same = true;
+  for (let s = 1; s <= 6; s++) for (let seed = 1; seed <= 24; seed++) {
+    const fl = D.generate(s, seed * 7919 + 13), again = D.generate(s, seed * 7919 + 13), brk = ED.biomeFor(s).breakable;
+    for (const r of fl.rooms) {
+      if (JSON.stringify(r.breakables) !== JSON.stringify(again.rooms[r.id].breakables) || JSON.stringify(r.decor) !== JSON.stringify(again.rooms[r.id].decor)) same = false;
+      const fight = r.type === 'combat' || r.type === 'elite' || r.type === 'boss', c = D.center(r);
+      if (fight) { fights++; if (r.breakables.length < 4 || r.breakables.length > 8) bad.push(`${s}/${seed} ${r.type} holds ${r.breakables.length}`); } else { others++; if (r.breakables.length > 3) bad.push(`${s}/${seed} ${r.type} holds ${r.breakables.length}`); }
+      for (const d of r.decor) if (brk.includes(d.k)) bad.push(`${s}/${seed} ${d.k} baked into decor`);
+      for (const b of r.breakables) {
+        const tx = Math.floor(b.x), ty = Math.floor(b.y);
+        if (!brk.includes(b.k)) bad.push(`${s}/${seed} kind ${b.k}`);
+        if (r.tiles[ty * r.w + tx] !== 0) bad.push(`${s}/${seed} on tile code ${r.tiles[ty * r.w + tx]} (hazard, block, chasm or door)`);
+        if (laneOf(r, tx, ty)) bad.push(`${s}/${seed} ${r.type} on a door lane`);
+        if (Math.hypot(b.x * T - c.x, b.y * T - c.y) < T) bad.push(`${s}/${seed} ${r.type} within a tile of the centre`);
+      }
+    }
+  }
+  ok(same, 'floor gen is deterministic per (stratum, seed): breakables and decor');
+  ok(!bad.length, `${fights} combat, elite and boss rooms hold 4-8 breakables and the ${others} others at most 3, none baked into decor, none on a door lane, a hazard or the centre${bad.length ? ': ' + bad.slice(0, 4).join('; ') : ''}`);
+  ok(ED.BIOMES.map((b) => b.breakable.join()).join() === 'urn,mushroom,crystal,crate,coral,shard', `breakable kinds by stratum (${ED.BIOMES.map((b) => b.breakable.join())})`);
+  ok(ED.BIOMES.every((b) => b.breakable.every((k) => b.decor.includes(k))), 'every breakable kind is a decor kind of its stratum');
+
+  const arena = (cls) => { // a combat room with its breakables, no foes, the hero 40 px west of breakable 0
+    const { w, p } = stage(cls, {}, 11);
+    const rm = w.floor.rooms.find(r => r.type === 'combat' && !r.dark);
+    w.enterRoom(rm.id, null); w.enemies.length = 0; w.enc = null; w.locked = false; w.zones.length = 0; w.projs.length = 0; w.pickups.length = 0; w.fx.length = 0;
+    const b = rm.breakables[0], bx = b.x * T, by = b.y * T, rs = w.roomState[rm.id];
+    p.x = bx - 40; p.y = by;
+    return { w, p, rm, rs, b, bx, by };
+  };
+  const smashes = (w) => w.fx.filter((e) => e.t === 'smash');
+  { // a hero swing
+    const { w, p, rs, b, bx, by } = arena('knight');
+    ok(p.stats.weapon.kind === 'melee' && rs.broken === 0, 'the arena starts with every breakable whole');
+    p.x = bx - 20; w.playerAttack(p, 0);
+    ok(rs.broken === 1, `a melee swing breaks the breakable in front of it (mask ${rs.broken})`);
+    const ev = smashes(w);
+    ok(ev.length === 1 && ev[0].i === 0 && ev[0].k === b.k && ev[0].x === Math.round(bx) && ev[0].y === Math.round(by) && ev[0].r === w.roomId, `one smash event { i, x, y, k, r } (${JSON.stringify(ev)})`);
+    w.playerAttack(p, 0); ok(smashes(w).length === 1 && rs.broken === 1, 'a broken breakable breaks once');
+    const q = arena('knight'); q.p.x = q.bx - 20; q.w.playerAttack(q.p, Math.PI); ok(q.rs.broken === 0, 'a swing aimed away leaves it');
+    const r2 = arena('knight'); r2.p.x = r2.bx - 200; r2.w.playerAttack(r2.p, 0); ok(r2.rs.broken === 0, 'a swing that falls short leaves it');
+  }
+  { // a hero projectile flies on after the smash
+    const { w, p, rs, bx } = arena('ranger');
+    p.x = bx - 80; w.playerAttack(p, 0);
+    let flown = 0; for (; flown < 90 && !rs.broken; flown++) w.updateProjectiles(1 / 60);
+    ok(rs.broken === 1 && flown < 90, `an arrow breaks the breakable it passes over (after ${flown} ticks)`);
+    ok(w.projs.some(pr => pr.team === 0), 'the arrow is not consumed by it');
+  }
+  { // a blast, a skill blast, a dash
+    const a = arena('pyro'); a.w.explode(a.bx + 20, a.by, 30, 10, 0, a.p); ok(a.rs.broken === 1, 'a blast breaks a breakable within its radius');
+    const far = arena('pyro'); far.w.explode(far.bx + 80, far.by, 30, 10, 0, far.p); ok(far.rs.broken === 0, 'and leaves one outside it');
+    const s = arena('knight'); s.w.skillBlast(s.p, s.bx, s.by + 10, 20, 5, { p: s.p, kind: 'skill', part: 'test' }); ok(s.rs.broken === 1, 'a skill blast breaks a breakable');
+    const d = arena('shade'), x0 = d.bx - 90;
+    d.p.dashing = true; d.p.x = x0; d.w.updatePlayerCombat(d.p, 1 / 60); ok(d.rs.broken === 0, 'a dash that has not reached it leaves it');
+    d.p.x = d.bx + 90; d.w.updatePlayerCombat(d.p, 1 / 60); ok(d.rs.broken === 1, 'a dash breaks a breakable on the path it covered since the last tick');
+    d.p.dashing = false; d.w.updatePlayerCombat(d.p, 1 / 60); ok(d.p.dashFx < 0, 'the dash path restarts with the next dash');
+  }
+  { // the movement and throw skills: Shield Charge, Shield Throw, Shadowstep
+    const c = arena('knight'); c.p.x = c.bx - 80; c.w.playerSkill(c.p, 0, { x0: c.p.x, y0: c.p.y, x1: c.bx + 60, y1: c.by }, 0);
+    for (let i = 0; i < 40; i++) c.w.update(1 / 60);
+    ok(c.rs.broken === 1, `Shield Charge breaks a breakable on its run (mask ${c.rs.broken})`);
+    const t = arena('knight'); t.p.x = t.bx - 80; t.w.playerSkill(t.p, 0, { d: 200 }, 1);
+    for (let i = 0; i < 40; i++) t.w.update(1 / 60);
+    ok(t.rs.broken === 1, `a thrown shield breaks a breakable on its flight (mask ${t.rs.broken})`);
+    const s = arena('shade'); s.p.x = s.bx - 70; s.w.playerSkill(s.p, 0, { x0: s.p.x, y0: s.p.y, x1: s.bx + 60, y1: s.by }, 0);
+    ok(s.rs.broken === 1, `Shadowstep breaks a breakable on its path (mask ${s.rs.broken})`);
+  }
+  { // never: a foe shot, a foe blast, a hazard pool, a telegraph, a foe on top of it
+    const { w, p, rs, bx, by } = arena('knight');
+    p.x = bx; p.y = by + 300; p.invuln = 99;
+    w.spawnProj({ team: 1, kind: 'bolt', x: bx - 40, y: by, a: 0, speed: 300, r: 8, dmg: 5, life: 1, src: null });
+    for (let i = 0; i < 40; i++) w.updateProjectiles(1 / 60);
+    w.explode(bx, by, 60, 5, 1, null);
+    w.addZone({ kind: 'poison', x: bx, y: by, r: 60, dur: 5, dps: 20, team: 1 });
+    w.addZone({ kind: 'tele', x: bx, y: by, r: 60, dur: 0.1, dmg: 5, team: 1 });
+    const e = foe(w, bx, by);
+    for (let i = 0; i < 90; i++) w.updateZones(1 / 60);
+    ok(rs.broken === 0 && !smashes(w).length && e.hp > 0, `a foe shot, a foe blast, a hazard pool, a telegraph and a foe over it leave it whole (mask ${rs.broken})`);
+  }
+  { // drops: 25% gold of 1-3 (exact), 1% heart, no xp
+    const { w, rs } = arena('knight');
+    const N = 20000, amt = { 1: 0, 2: 0, 3: 0 };
+    let gold = 0, hearts = 0, xp = 0, odd = 0, evs = 0;
+    for (let i = 0; i < N; i++) {
+      rs.broken = 0; w.pickups.length = 0; w.fx.length = 0;
+      w.smashBreakable(0, null); evs += smashes(w).length;
+      const g = w.pickups.filter(q => q.kind === 'gold').reduce((a, q) => a + q.val, 0);
+      if (g) { gold++; if (amt[g] === undefined) odd++; else amt[g]++; }
+      if (w.pickups.some(q => q.kind === 'heart')) hearts++;
+      if (w.pickups.some(q => q.kind === 'xp')) xp++;
+    }
+    near(gold / N, 0.25, 0.02, 'gold drop rate over 20000 smashes');
+    ok(odd === 0 && [1, 2, 3].every(v => Math.abs(amt[v] / gold - 1 / 3) < 0.04), `gold amounts are 1, 2 or 3 in equal shares (${amt[1]}/${amt[2]}/${amt[3]}, other ${odd})`);
+    near(hearts / N, 0.01, 0.004, 'heart drop rate');
+    ok(xp === 0 && evs === N, `no xp, one event per smash (xp ${xp}, events ${evs})`);
+  }
+}
 console.log(`${n} checks, ${fails} failed`);
 process.exit(fails ? 1 : 0);

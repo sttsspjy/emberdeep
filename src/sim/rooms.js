@@ -483,4 +483,47 @@
       default: return;
     }
   };
+
+  // ---------------- breakable props ----------------
+  // room.breakables (floor gen) break to a hero hit: roomState.broken is a bit mask over them. A smash drops gold (SMASH_GOLD of the time, 1-3, exact: the gold multiplier does not apply twice) and, separately, a heart (SMASH_HEART); no xp.
+  const SMASH_R = 9, SMASH_GOLD = 0.25, SMASH_HEART = 0.01; // SMASH_R: px around a breakable's feet a hero hit must reach
+  W.smashBreakable = function (i, p) {
+    const bs = this.room.breakables, rs = this.roomState[this.roomId], b = bs[i];
+    if (!b || (rs.broken & (1 << i))) return false;
+    rs.broken |= 1 << i;
+    const x = Math.round(b.x * T), y = Math.round(b.y * T);
+    this.emit({ t: 'smash', i, x, y, k: b.k, r: this.roomId });
+    if (this.rng.chance(SMASH_GOLD)) this.dropGold(x, y, 1 + this.rng.int(0, 2), true);
+    if (this.rng.chance(SMASH_HEART)) this.spawnPickup('heart', x, y, 1);
+    return true;
+  };
+  // Hero hits on the room's unbroken breakables (at most 8, a plain loop): a circle (x, y, r), the segment (x0, y0)-(x1, y1) swept by a body of radius r, or the sector of reach and arc around the hero's facing a.
+  W.smashCircle = function (p, x, y, r) {
+    const bs = this.room.breakables; if (!bs.length) return;
+    const rs = this.roomState[this.roomId], rr = (SMASH_R + r) * (SMASH_R + r);
+    for (let i = 0; i < bs.length; i++) {
+      if (rs.broken & (1 << i)) continue;
+      const dx = bs[i].x * T - x, dy = bs[i].y * T - y;
+      if (dx * dx + dy * dy <= rr) this.smashBreakable(i, p);
+    }
+  };
+  W.smashSeg = function (p, x0, y0, x1, y1, r) {
+    const bs = this.room.breakables; if (!bs.length) return;
+    const rs = this.roomState[this.roomId], rr = (SMASH_R + r) * (SMASH_R + r);
+    for (let i = 0; i < bs.length; i++) {
+      if (rs.broken & (1 << i)) continue;
+      if (U.segDist2(bs[i].x * T, bs[i].y * T, x0, y0, x1, y1) <= rr) this.smashBreakable(i, p);
+    }
+  };
+  W.smashArc = function (p, a, reach, arc) {
+    const bs = this.room.breakables; if (!bs.length) return;
+    const rs = this.roomState[this.roomId];
+    for (let i = 0; i < bs.length; i++) {
+      if (rs.broken & (1 << i)) continue;
+      const dx = bs[i].x * T - p.x, dy = bs[i].y * T - p.y, d = Math.hypot(dx, dy);
+      if (d - SMASH_R > reach) continue;
+      if (arc < 6.2 && Math.abs(U.angDiff(a, Math.atan2(dy, dx))) > arc / 2 + Math.atan2(SMASH_R, Math.max(d, 1))) continue;
+      this.smashBreakable(i, p);
+    }
+  };
 })(globalThis.ED || (globalThis.ED = {}));

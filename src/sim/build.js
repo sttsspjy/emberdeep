@@ -8,7 +8,7 @@
   // ---------------- hooks called by world.js ----------------
   // Called from addPlayer before the first recalc: add build-only fields to the hero (offer queue, fork ranks due, Ascended picks this stratum, dash-boon state, Holy/Lantern/Aegis timers, Death Knell stacks, Judgment grants, shield accounting).
   W.initBuild = function (p) {
-    p.offers = []; p.picks = 0; p.forkDue = 0; p.ascN = 0; p.dashHit = null; p.dashTrail = 0; p.boltAt = 0;
+    p.offers = []; p.picks = 0; p.forkDue = 0; p.ascN = 0; p.dashHit = null; p.dashFx = -1; p.dashFy = 0; p.dashTrail = 0; p.boltAt = 0;
     p.knellN = 0; p.knellT = 0; p.holyT = 0; p.lanternT = 0; p.retT = 0; p.castN = 0; p.judgeGot = {}; p.shieldBy = {}; p.toughRoom = false;
   };
 

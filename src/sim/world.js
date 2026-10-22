@@ -524,7 +524,7 @@
     this.floorSeed = this.rng.seed();
     this.floor = D.generate(s, this.floorSeed);
     this.roomState = {};
-    for (const r of this.floor.rooms) this.roomState[r.id] = { visited: false, known: false, cleared: false, props: null };
+    for (const r of this.floor.rooms) this.roomState[r.id] = { visited: false, known: false, cleared: false, props: null, broken: 0 };
     this.run.roomsTotal += this.floor.rooms.length;
     this.allies.length = 0;
     for (const p of this.players.values()) {

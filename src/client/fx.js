@@ -565,6 +565,8 @@
   // mark = [fn(e) -> {id, ramp, stub} | null] adds a 14 px glyph (atlas anim id, Pix ramp, GLYPH stub key when the art is absent) to a foe's overhead mark row.
   // shot[kind] = fn(c, pr, t, x, y) runs after a projectile of that kind is drawn (unlit pass, world frame; x, y the body's centre on the pixel grid).
   const CFX = ED.ClassFx = { ev: {}, zone: {}, hero: [], mark: [], shot: {}, on(t, f) { (this.ev[t] || (this.ev[t] = [])).push(f); } };
+  // Shard colours of a smashed breakable by decor kind: [body, light, glows (a pop of the light colour)]; a mushroom's body is the stratum accent.
+  const SMASH_COL = { urn: ['#8a6a50', '#c4a07c', 0], mushroom: [null, '#e8f0d0', 1], crystal: ['#8fd8f0', '#e8fbff', 1], coral: ['#e0705a', '#ffb0a0', 0], shard: ['#9a6aff', '#e0c8ff', 1], crate: ['#7a5436', '#c8501a', 0] };
   // Translate one world event into effects. local: the viewing player's pid.
   F.handle = (ev, ctx) => {
     const local = ctx.localPid, A = ED.Audio, set = ED.App ? ED.App.settings : { dmg: true };
@@ -704,6 +706,14 @@
       case 'thud': F.addShake(ev.big ? 9 : 3); A.play('thud', ev.big ? 1 : 0.5); dust(ev.x, ev.y, 'dust', ev.big ? 4 : 2); F.burst(ev.x, ev.y, 10, { color: '#bba98a', sp: 80, life: 0.4, size: 3, kind: 'smoke' }); if (ev.big) { F.ring(ev.x, ev.y, 60, '#c9b98f', 0.4, 4); F.punch(0.5, 0); } break;
       case 'shoot': A.play('eshoot', 0.6); break;
       case 'chest': A.play('chest'); F.burst(ev.x, ev.y - 10, 30, { color: '#ffd36b', sp: 120, vy: -60, life: 0.9, size: 2.4, add: true }); F.pop(ev.x, ev.y - 14, 40, '#ffd36b', 0.35); break;
+      case 'smash': { // a breakable prop breaks (ev.k: its decor kind): light shards, a pop for the glowing kinds
+        const sc = SMASH_COL[ev.k] || SMASH_COL.urn;
+        A.play('smash', 0.8);
+        F.burst(ev.x, ev.y - 6, 8, { kind: 'shard', color: sc[0] || ED.biomeFor(ctx.stratum()).pal.accent, sp: 105, life: 0.55, size: 2.6, vz: 100, z: 6 });
+        F.burst(ev.x, ev.y - 6, 4, { kind: 'shard', color: sc[1], sp: 70, life: 0.45, size: 1.8, vz: 80, z: 6 });
+        if (sc[2]) F.pop(ev.x, ev.y - 8, 18, sc[1], 0.14);
+        break;
+      }
       case 'buy': A.play('buy'); break;
       case 'fountain': A.play('heal'); F.burst(ev.x, ev.y - 10, 40, { color: '#6fe6ff', sp: 100, vy: -80, life: 1.0, size: 2.6, add: true }); F.ring(ev.x, ev.y, 50, '#6fe6ff', 0.6, 3); break;
       case 'altar': A.play('hurt', 0.6); F.burst(ev.x, ev.y - 10, 30, { color: '#d43a5a', sp: 90, vy: -60, life: 0.8, size: 2.6, add: true }); F.pop(ev.x, ev.y - 16, 36, '#d43a5a', 0.3); break;
