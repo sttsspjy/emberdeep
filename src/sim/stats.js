@@ -24,7 +24,8 @@
     + ' siege siegeMul siegeBlast ricochet flurryN hemo hemoAt hemoMul hemoBoss plague plagueBurst outbreak'
     + ' wake waveReturn sunstrike prismN prismRad'
     + ' caldera fireDance dancerBurst whiteHot whiteT heatMax infernoMul'
-    + ' graveBolt graveN soulStorm maw mawHaste tideFree tideCap tideDoom').split(' ');
+    + ' graveBolt graveN soulStorm maw mawHaste tideFree tideCap tideDoom'
+    + ' guillotine cyclone arterial arterialN cascade cascadeN').split(' ');
 
   const BASE = () => {
     const s = {

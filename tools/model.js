@@ -125,6 +125,7 @@ module.exports = (ED, opts) => {
       const id = r.key || r.id, v = id === 'idol' ? 0.1 : r.value ? r.value(st) : st[r.key];
       sum += v * uptime(id, st, m, d);
     }
+    if (m.weapon._mom) sum += st.momentum * m.weapon._mom.avg; // Momentum: the stacks a hit sees on average (ED.Sheet shadeForms)
     const holy = m.mult.status.find(s => s.el === 'holy'), smites = !!(holy && holy.est.dps > 0);
     if (st.guardLight > 0 && smites) sum += st.guardLight * GL_UP;
     return (Math.max(0.1, st.dmg) + sum * st.dmgX) / Math.max(0.1, st.dmg) * judgeLight(p, m, smites); // the bonuses carry the Ascended damage factor (combat.js hitEnemy)

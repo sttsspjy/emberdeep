@@ -1,6 +1,8 @@
 // Shade: Shadowstep and Vanish (base kits from ED.SKILLS numbers), the Shade route cards that act on them (Momentum, execution crits, Whirlwind, Twin Cut, Afterimage, Ambush rules, Veil, Open Veins, Rupture) and the hook table ED.CLS.shade.
+// Attack and element forms (rank 3): Guillotine (an execution kill carries free execution strikes to weak neighbours), Cyclone (a spin on every attack at full Momentum and at the end of a dash), Arterial Strike (a crit on 3+ ailments hits harder and readies a crit), Crimson Cascade (a rupture kill leaps to the next bleeding foe).
 // Skill forms (rank 3): Death Blossom (a chain of blinks), Hall of Mirrors (three decoys), Eclipse (a dome where every attack is an Ambush), Umbral Veil (a shadow clone that repeats the weapon and draws foes).
 // Hero fields: momN / momT (Momentum), stepQ (Twin Cuts waiting), ambSet / ambTgt / ambMul / ambRef / ambRupt (the Ambush in flight: foes it struck, sweep targets, its damage factor, Shadowstep refunded, target ruptured),
+// gilAtk / gilLeft (the attack a Guillotine chain budget belongs to, strikes left), cyDash (was dashing last tick), arterT (seconds to the next Arterial crit readying), cascT / cascLeft (the tick a Cascade budget belongs to, leaps left),
 // bloom (Death Blossom chains), dome ({ z, room } of the Eclipse dome the hero stands in), ambFac / eclipseRe (the Ambush in flight is an Eclipse repeat at that damage factor), projMark (highest shot id seen by the last attack hook), clone ({ z, stand, room } of the Umbral Veil clone).
 (function (ED) {
   'use strict';
@@ -9,7 +11,8 @@
   const R = Math.round;
   // MOM_T: seconds Momentum lasts after the latest crit. LURE_T: the last seconds of an Afterimage fuse in which Lure pulls foes in. RUPT_R: splash radius of a Rupture, BLOOM_R: reach of Bloodbloom.
   // BLOSSOM_GAP / BLOSSOM_REACH: seconds between two Death Blossom blinks and the px within which the next foe must stand. MIRROR_OFF: px from the start point of a Hall of Mirrors image.
-  Object.assign(C, { MOM_T: 2.5, LURE_T: 0.3, RUPT_R: 60, RUPT_MUL: 1.5, BLOOM_R: 80, BLOSSOM_GAP: 0.1, BLOSSOM_REACH: 120, MIRROR_OFF: 50 });
+  // GIL_R: reach of a Guillotine carry, CASC_R: of a Crimson Cascade leap. ARTER_CD: seconds between two Arterial crit readyings, ARTER_AT: ailments an Arterial crit needs, ARTER_CAP: readied crits the stack may reach that way.
+  Object.assign(C, { MOM_T: 2.5, LURE_T: 0.3, RUPT_R: 60, RUPT_MUL: 1.5, BLOOM_R: 80, BLOSSOM_GAP: 0.1, BLOSSOM_REACH: 120, MIRROR_OFF: 50, GIL_R: 100, CASC_R: 120, ARTER_CD: 1, ARTER_AT: 3, ARTER_CAP: 3 });
 
   // Raises Momentum by n stacks (cap momMax) and restarts its timer.
   function gainMom(p, n) {
@@ -199,7 +202,7 @@
   }
 
   // Rupture of foe e by hero p: a share f of its Bleed and Burn pools hits at once at RUPT_MUL (the pools lose it), and half of that burst splashes foes within RUPT_R. part names the source (for the damage report);
-  // ambush marks the hits as the Ambush's (its kill refund). A foe the rupture kills hands its remaining Bleed to the 2 nearest foes within BLOOM_R with Bloodbloom. Returns the damage dealt to e.
+  // ambush marks the hits as the Ambush's (its kill refund). A foe the rupture kills hands its remaining Bleed to the 2 nearest foes within BLOOM_R with Bloodbloom and passes the rupture on with Crimson Cascade. Returns the damage dealt to e.
   W.rupture = function (e, p, f, part, ambush) {
     if (!e || e.hp <= 0 || !(f > 0)) return 0;
     const st = p.stats, share = Math.min(1, f), bl = share * e.bleedPool, bn = share * e.burnPool;
@@ -208,17 +211,37 @@
     const dB = bl * C.RUPT_MUL * (1 + st.bleedMul), dF = bn * C.RUPT_MUL * (1 + st.burnMul); // the pool's worth at the rate its ticks pay
     const fire = (o, dmg, bleed) => o.hp > 0 && dmg > 0 ? this.hitEnemy(o, dmg, bleed ? { p, kind: 'rupture', part, raw: true, noProc: true, crit: false, noGuard: true, rupt: true, ambush, bleed: true }
       : { p, kind: 'rupture', part, raw: true, noProc: true, crit: false, noGuard: true, rupt: true, ambush, el: 'fire', affDone: true }) : 0; // burn pools already carry the stratum affinity
-    const x = e.x, y = e.y;
+    const x = e.x, y = e.y, dead = [];
     const got = fire(e, dB, true) + fire(e, dF, false);
+    if (e.hp <= 0) dead.push(e);
     for (let i = 0, n = this.enemies.length; i < n; i++) {
       const o = this.enemies[i];
       if (o === e || !hittable(o) || U.dist2(o.x, o.y, x, y) >= (C.RUPT_R + o.r) ** 2) continue;
       fire(o, dB * 0.5, true); fire(o, dF * 0.5, false);
-      if (o.hp <= 0 && st.bloodbloom) this.bloodbloom(o, p);
+      if (o.hp <= 0) { dead.push(o); if (st.bloodbloom) this.bloodbloom(o, p); }
     }
     this.emit({ t: 'rupt', pid: p.pid, x: R(x), y: R(y), k: dB > 0 ? (dF > 0 ? 2 : 0) : 1, r: C.RUPT_R });
     if (e.hp <= 0 && st.bloodbloom) this.bloodbloom(e, p);
+    if (st.cascade > 0) for (const d of dead) this.cascade(d, p, part, ambush);
     return got;
+  };
+
+  // Crimson Cascade: the foe d a rupture killed (a horde foe too) passes the rupture on to the nearest foe within CASC_R holding a Bleed or Burn pool of at least 1, at cascade of its pools. The leaps of one cast (the ruptures of one tick) number at most cascadeN.
+  W.cascade = function (d, p, part, ambush) {
+    const st = p.stats;
+    if (p.cascT !== this.time) { p.cascT = this.time; p.cascLeft = st.cascadeN; }
+    if (!(p.cascLeft > 0)) return;
+    let tg = null, bd = C.CASC_R * C.CASC_R;
+    for (let i = 0, n = this.enemies.length; i < n; i++) {
+      const o = this.enemies[i];
+      if (o === d || !hittable(o) || !(o.bleedPool >= 1 || o.burnPool >= 1)) continue;
+      const d2 = U.dist2(o.x, o.y, d.x, d.y);
+      if (d2 < bd) { bd = d2; tg = o; }
+    }
+    if (!tg) return;
+    p.cascLeft--;
+    this.emit({ t: 'casc', pid: p.pid, x0: R(d.x), y0: R(d.y), x1: R(tg.x), y1: R(tg.y), n: st.cascadeN - p.cascLeft });
+    this.rupture(tg, p, st.cascade, part, ambush);
   };
 
   // Bloodbloom: half of the dead foe's remaining Bleed to each of the 2 nearest foes within BLOOM_R (a receiver takes at most the spread cap of its own health).
@@ -236,13 +259,59 @@
     if (pts.length) this.emit({ t: 'bloom', pid: p.pid, x: R(e.x), y: R(e.y), pts });
   };
 
+  // Guillotine: foe e died to an execution crit (source src). The nearest foe within GIL_R of it below the execution line takes a free execution strike: the weapon's damage at the killing hit's factor, a guaranteed crit.
+  // A strike that kills carries on through the kill hook. The strikes of one attack (the hero's attack count when the kill lands) number at most guillotine.
+  function guillotine(w, p, e, src) {
+    const st = p.stats;
+    if (p.gilAtk !== p.atkCount) { p.gilAtk = p.atkCount; p.gilLeft = st.guillotine; }
+    if (!(p.gilLeft > 0)) return;
+    let tg = null, bd = C.GIL_R * C.GIL_R;
+    for (let i = 0, n = w.enemies.length; i < n; i++) {
+      const o = w.enemies[i];
+      if (o === e || !hittable(o) || o.hp >= o.maxHp * st.execCrit) continue;
+      const d2 = U.dist2(o.x, o.y, e.x, e.y);
+      if (d2 < bd) { bd = d2; tg = o; }
+    }
+    if (!tg) return;
+    p.gilLeft--;
+    w.emit({ t: 'gill', pid: p.pid, x0: R(e.x), y0: R(e.y), x1: R(tg.x), y1: R(tg.y), n: st.guillotine - p.gilLeft });
+    const a = Math.atan2(tg.y - e.y, tg.x - e.x);
+    w.hitEnemy(tg, st.weapon.dmg, { p, kind: 'weapon', wpn: true, part: 'cull.chain', crit: true, mul: src.mul, knock: st.weapon.knock, kx: Math.cos(a), ky: Math.sin(a), x: e.x, y: e.y });
+  }
+
+  // A full-circle spin of the weapon at damage factor mul: a melee weapon swings all around the hero, a ranged one fires a ring of 6 shots. Its swing event is dropped for a whirl event (c: a Cyclone spin, drawn lighter).
+  function spin(w, p, a, mul, cyc) {
+    const st = p.stats, wp = st.weapon, n0 = w.fx.length;
+    let r;
+    if (wp.kind === 'melee') {
+      w.meleeSwing(p, a, Object.assign({}, wp, { arc: 6.3 }), undefined, 1, { mul, twin: true });
+      r = wp.range * (1 + st.area * 0.5 + st.meleeReach);
+      for (let i = w.fx.length - 1; i >= n0; i--) if (w.fx[i].t === 'swing' && w.fx[i].pid === p.pid) w.fx.splice(i, 1);
+    } else {
+      for (let i = 0; i < 6; i++) {
+        const an = a + i * U.TAU / 6;
+        w.spawnProj({ team: 0, kind: wp.proj, x: p.x + Math.cos(an) * 10, y: p.y - 4 + Math.sin(an) * 10, a: an, speed: wp.speed, r: wp.r, dmg: wp.dmg, mul, life: wp.life, pierce: wp.pierce + st.pierce, owner: p.pid, knock: wp.knock || 40 });
+      }
+      r = wp.speed * wp.life * 0.5;
+    }
+    w.emit({ t: 'whirl', pid: p.pid, x: R(p.x), y: R(p.y), r: R(r), k: wp.kind === 'melee' ? 0 : 1, c: cyc ? 1 : 0 });
+  }
+  const fullMom = (p, st) => st.momMax > 0 && p.momN >= st.momMax && p.momT > 0;
+
   ED.CLS.shade = {
     init(p) {
       p.stepQ = []; p.ambSet = null; p.ambTgt = []; p.ambMul = 1; p.ambRef = false; p.ambRupt = false; p.bloom = []; p.dome = null; p.ambFac = 1; p.eclipseRe = false; p.projMark = 0; p.clone = null;
+      p.gilAtk = -1; p.gilLeft = 0; p.cyDash = false; p.arterT = 0; p.cascT = -1; p.cascLeft = 0;
     },
     // Momentum runs out as a whole; Twin Cuts fire when their delay is up; the Ambush Sweep strikes after the Ambush's own hits have landed; Death Blossom chains hop and the Eclipse dome holds its Ambush ready.
     tick(p, dt) {
       if (p.momT > 0 && (p.momT -= dt) <= 0) p.momN = 0;
+      if (p.arterT > 0) p.arterT -= dt;
+      if (p.stats.cyclone > 0) { // a dash that ends at full Momentum ends in a spin
+        const d = !!p.dashing;
+        if (p.cyDash && !d && fullMom(p, p.stats)) spin(this, p, p.face || 0, p.stats.cyclone, true);
+        p.cyDash = d;
+      }
       if (p.bloom.length) stepBlossom(this, p, dt);
       if (p.dome) stepDome(this, p);
       if (p.stepQ.length) {
@@ -284,18 +353,28 @@
       if (!isExec(p, e, src)) return false;
       src.exec = true; return true;
     },
-    // Open Veins: crits deal +veins per ailment on the foe (up to 4). Eclipse: the Ambush crit of a repeat is eclipse of the full one (the Ambush is a forced crit, so this scales its whole damage).
+    // Open Veins: crits deal +veins per ailment on the foe (up to 4). Arterial Strike: a crit on a foe with ARTER_AT or more ailments deals +arterial more and is marked src.arter. Eclipse: the Ambush crit of a repeat is eclipse of the full one (the Ambush is a forced crit, so this scales its whole damage).
     critMul(p, e, src) {
-      const v = p.stats.veins;
-      let f = v > 0 ? 1 + v * Math.min(4, this.ailments(e)) : 1;
-      if (src.ambush && p.stats.eclipse > 0 && isRepeat(p, src)) { src.ambRe = true; f *= p.stats.eclipse; }
+      const st = p.stats, v = st.veins;
+      let f = 1;
+      if (v > 0 || st.arterial > 0) {
+        const n = this.ailments(e);
+        if (v > 0) f = 1 + v * Math.min(4, n);
+        if (st.arterial > 0 && n >= C.ARTER_AT) { f *= 1 + st.arterial; src.arter = true; }
+      }
+      if (src.ambush && st.eclipse > 0 && isRepeat(p, src)) { src.ambRe = true; f *= st.eclipse; }
       return f;
     },
-    // A crit builds Momentum; Exsanguinate: a crit on a foe with 4 ailments adds Bleed equal to exsang of the hit (damage before the affinity, status power applied).
+    // A crit builds Momentum; an Arterial crit readies arterialN crit attacks (once per ARTER_CD, never from a horde foe); Exsanguinate: a crit on a foe with 4 ailments adds Bleed equal to exsang of the hit (damage before the affinity, status power applied).
     procs(e, p, dmg, crit, src) {
       if (!crit) return;
       const st = p.stats;
       gainMom(p, 1);
+      if (src.arter) {
+        const k = p.arterT <= 0 && st.arterialN > 0 && !e.fodder ? 1 : 0;
+        if (k) { p.arterT = C.ARTER_CD; this.grantCrits(p, st.arterialN, C.ARTER_CAP, 'add'); }
+        this.emit({ t: 'arter', pid: p.pid, x: R(e.x), y: R(e.y), a: R(Math.atan2(e.y - p.y, e.x - p.x) * 100) / 100, k });
+      }
       if (st.exsang > 0 && e.hp > 0 && this.ailments(e) >= 4) this.addBleed(e, dmg / (src.affMul || 1) * st.exsang * (1 + st.statusPow), p);
     },
     // After a hit: the execution slash; an Ambush hit (Night's Edge: the first one on a foe that is not a horde foe refunds Shadowstep, never an Eclipse repeat; Rupture: each foe once; Ambush Sweep: remember the target).
@@ -312,8 +391,8 @@
       if (st.ambushCleave > 0) p.ambTgt.push({ x: e.x, y: e.y, mul: src.mul, re });
       if (st.rupture && e.hp > 0 && !p.ambRupt) { p.ambRupt = true; this.rupture(e, p, st.rupture, 'vanish.rupture', true); }
     },
-    // After an attack: an Eclipse repeat tags its shots (vanish.edge) and the next Ambush is armed again while the hero stands in the dome; the Umbral Veil clone repeats the attack; Whirlwind (Thousand Cuts rider):
-    // at full Momentum every 4th attack also spins around the hero at bladeStorm of the weapon (knives: a ring of 6).
+    // After an attack: an Eclipse repeat tags its shots (vanish.edge) and the next Ambush is armed again while the hero stands in the dome; the Umbral Veil clone repeats the attack; at full Momentum Whirlwind (Thousand Cuts rider 2) spins around the hero
+    // at bladeStorm of the weapon on every 4th attack (knives: a ring of 6) and Cyclone (rank 3) at cyclone on every other one (the 4th takes the larger of the two).
     attack(p, a, st, w) {
       if (st.eclipse > 0 && p.dome) {
         if (p.ambFac < 1) for (let i = this.projs.length - 1; i >= 0; i--) { const pr = this.projs[i]; if (pr.id <= p.projMark) break; if (pr.owner === p.pid && pr.ambush && !pr.part) pr.part = 'vanish.edge'; } // the shots this attack fired (ids above the mark of the last one)
@@ -321,29 +400,22 @@
         if (p.dome.room === this.room && p.dome.z.t < p.dome.z.dur && U.dist2(p.x, p.y, p.dome.z.x, p.dome.z.y) < p.dome.z.r * p.dome.z.r) { p.ambush = true; p.ambushT = Math.max(p.ambushT, 0.3); p.eclipseRe = true; p.stealthT = Math.max(p.stealthT, 0.3); }
       }
       if (st.umbral > 0 && p.clone) cloneAttack(this, p, a);
-      if (!(st.bladeStorm > 0) || !(st.momMax > 0) || p.momN < st.momMax || !(p.momT > 0) || p.atkCount % 4 !== 0) return;
-      let r;
-      if (w.kind === 'melee') {
-        this.meleeSwing(p, a, Object.assign({}, w, { arc: 6.3 }), undefined, 1, { mul: st.bladeStorm, twin: true });
-        r = w.range * (1 + st.area * 0.5 + st.meleeReach);
-      } else {
-        for (let i = 0; i < 6; i++) {
-          const an = a + i * U.TAU / 6;
-          this.spawnProj({ team: 0, kind: w.proj, x: p.x + Math.cos(an) * 10, y: p.y - 4 + Math.sin(an) * 10, a: an, speed: w.speed, r: w.r, dmg: w.dmg, mul: st.bladeStorm, life: w.life, pierce: w.pierce + st.pierce, owner: p.pid, knock: w.knock || 40 });
-        }
-        r = w.speed * w.life * 0.5;
-      }
-      this.emit({ t: 'whirl', pid: p.pid, x: R(p.x), y: R(p.y), r: R(r), k: w.kind === 'melee' ? 0 : 1 });
+      if (!fullMom(p, st)) return;
+      const w4 = st.bladeStorm > 0 && p.atkCount % 4 === 0;
+      if (w4 || st.cyclone > 0) spin(this, p, a, w4 ? Math.max(st.bladeStorm, st.cyclone) : st.cyclone, !w4);
     },
     // Kills: an Ambush kill refunds Vanish (Night's Edge, once per 3 s; never an Eclipse repeat); a Shadowstep kill refunds Shadowstep (Assassinate, once per 1.5 s); neither refund comes from a horde foe.
-    // A Death Blossom cut that kills a foe (not a horde foe) adds a blink to its chain; an execution crit that kills grants Momentum (Killing Rhythm).
+    // A Death Blossom cut that kills a foe (not a horde foe) adds a blink to its chain; an execution crit that kills grants Momentum (Killing Rhythm, never from a horde foe) and, with Guillotine, carries an execution strike to a weak neighbour (a horde foe's death carries too).
     kill(e, p, src) {
       if (!p || p.cls !== 'shade' || !src) return;
       const st = p.stats;
       if (src.ambush && st.nightsEdge && p.edgeT <= 0 && !e.fodder && !isRepeat(p, src)) { p.edgeT = 3; this.refundSkill(p, 1); this.emit({ t: 'sref', pid: p.pid, slot: 1, x: R(p.x), y: R(p.y) }); }
       if (st.assassinate && isStep(src.part) && p.stepRefT <= 0 && !e.fodder) { p.stepRefT = 1.5; this.refundSkill(p, 0); this.emit({ t: 'sref', pid: p.pid, slot: 0, x: R(p.x), y: R(p.y) }); }
       if (src.bloom && !e.fodder) src.bloom.extra++;
-      if (st.execMom > 0 && src.exec && src.critOut) gainMom(p, st.execMom);
+      if (src.exec && src.critOut) {
+        if (st.execMom > 0 && !e.fodder) gainMom(p, st.execMom);
+        if (st.guillotine > 0) guillotine(this, p, e, src);
+      }
     },
   };
 })(globalThis.ED || (globalThis.ED = {}));
