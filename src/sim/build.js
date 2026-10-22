@@ -20,23 +20,31 @@
   };
 
   // Called once per hero from startRun: meta bundle effects that apply at the start of a descent.
+  // Hearth upgrade entry and the hero's rank in it.
+  const hearth = (id) => ED.UPGRADES[ED.UPGRADE_IDX[id]];
+  const rankOf = (p, id) => (p.meta.up && p.meta.up[ED.UPGRADE_IDX[id]]) || 0;
+
+  // Second Wind revive health, Insight rerolls and the start offer; Head Start (xp) and Stash (gold) are party values: the highest rank among the heroes (xp, level and gold are shared).
   W.onRunStartBuild = function (p) {
-    const rk = (id) => (p.meta.up && p.meta.up[ED.UPGRADE_IDX[id]]) || 0;
-    const sw = rk('secondwind');
-    p.secondWind = sw > 0 ? 1 : 0; p.swPct = sw >= 2 ? 0.7 : 0.4;
-    p.rerolls = rk('insight') + (p.meta.mastery >= 8 ? 1 : 0);
+    const sw = rankOf(p, 'secondwind');
+    p.secondWind = sw > 0 ? 1 : 0; p.swPct = sw > 0 ? hearth('secondwind').pct[Math.min(sw, 2) - 1] : 0;
+    const ins = rankOf(p, 'insight');
+    p.rerolls = (ins > 0 ? hearth('insight').rerolls[Math.min(ins, 3) - 1] : 0) + (p.meta.mastery >= 8 ? 1 : 0);
     this.grantOffer(p, { src: 'start' });
-    for (let i = rk('headstart'); i > 0; i--) this.grantOffer(p, { src: 'level' });
-    const arm = rk('armory');
-    if (arm) {
-      const pool = ED.RELIC_IDS.filter(id => (arm >= 2 ? ED.RELICS[id].rar !== 'c' : ED.RELICS[id].rar === 'c') && !p.relics.includes(id));
-      if (pool.length) { p.relics.push(this.rng.pick(pool)); p.maxRelics = p.relics.length; this.recalc(p, true); }
-    }
+    const gold = rankOf(p, 'stash') * hearth('stash').gold;
+    if (gold > this.gold) this.gold = gold;
+  };
+
+  // Called once from startRun after every hero's onRunStartBuild: the party begins with the highest Head Start rank's xp (a level-up grants its offers as usual).
+  W.onPartyStartBuild = function () {
+    let r = 0;
+    for (const p of this.players.values()) r = Math.max(r, rankOf(p, 'headstart'));
+    if (r > 0) this.addXp(r * hearth('headstart').xp);
   };
 
   // Called once per hero from enterStratum (after downed/dead heroes are restored).
   W.onStratumBuild = function (p, s) {
-    const prov = 0.1 * ((p.meta.up && p.meta.up[ED.UPGRADE_IDX.provisions]) || 0);
+    const prov = hearth('provisions').heal * rankOf(p, 'provisions');
     const heal = prov + (p.stats.strataHeal || 0);
     if (s > 1 && heal > 0) this.healPlayer(p, p.maxHp * heal);
     p.angelUsed = false; p.ascN = 0;

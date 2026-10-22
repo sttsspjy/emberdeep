@@ -1,5 +1,5 @@
 // Usage: node tools/check-knight.js
-// Headless checks of the Knight Attack and Element route forks (rank 2: the rider; rank 3: the transform): Earthsplitter, Thousand Edges, Doombrand, Cataclysm. Card data and text, then each mechanic in a staged room.
+// Headless checks of the Knight Attack and Element route forks (rank 2: the rider; rank 3: the transform): Earthsplitter, Thousand Edges, Doombrand, Bloodquake. Card data and text, then each mechanic in a staged room.
 // Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
 let n = 0, fails = 0;
@@ -27,7 +27,7 @@ const ATK = { k_atk: 1 }, HEAVY = (r) => Object.assign({ k_atk_h: r }, ATK), SWI
 
 // ---------------- card data and text: the rider joins at rank 2, the transform and its name at rank 3 ----------------
 {
-  const CARDS = { k_atk_h: ['Oathbreaker', 'Follow-Through', 'Earthsplitter'], k_atk_s: ['Sworn Blade', 'Riposte', 'Thousand Edges'], k_el_a: ['Brand of Ruin', 'Ruin Seal', 'Doombrand'], k_el_b: ['Ruinous Blows', 'Ruin Spreads', 'Cataclysm'] };
+  const CARDS = { k_atk_h: ['Oathbreaker', 'Follow-Through', 'Earthsplitter'], k_atk_s: ['Sworn Blade', 'Riposte', 'Thousand Edges'], k_el_a: ['Brand of Ruin', 'Ruin Seal', 'Doombrand'], k_el_b: ['Ruinous Blows', 'Ruin Spreads', 'Bloodquake'] };
   for (const id in CARDS) {
     const [name, rider, form] = CARDS[id], b = ED.BOONS[id], P = [1, 2, 3].map(r => ED.cardParts(id, r, null));
     ok(!b.rider && b.rider2 && b.r2 && b.form && b.r3 && b.form.name === form, id + ' keeps its rider in rider2/r2 and its transform in form/r3');
@@ -44,12 +44,12 @@ const ATK = { k_atk: 1 }, HEAVY = (r) => Object.assign({ k_atk_h: r }, ATK), SWI
   near(t('k_atk_h', 2).chargeCleave, 0.5, 1e-9, 'Follow-Through moved to rank 2'); near(t('k_atk_h', 3).fissure, r3('k_atk_h', 'fissure'), 1e-9, 'Earthsplitter fissure from the card'); ok(!t('k_atk_h', 3).cleaveN && !('cleaveN' in ED.BOONS.k_atk_h.r3), 'Earthsplitter leaves the Cleave on every 3rd swing');
   near(t('k_atk_s', 2).riposte, 2, 1e-9, 'Riposte moved to rank 2'); near(t('k_atk_s', 3).bladeWave, r3('k_atk_s', 'bladeWave'), 1e-9, 'Thousand Edges wave from the card');
   near(t('k_el_a', 2).seal, 4, 1e-9, 'Ruin Seal moved to rank 2'); near(t('k_el_a', 3).brandCap, 6, 1e-9, 'Doombrand: Brand counts 6'); near(t('k_el_a', 2).brandCap, 4, 1e-9, 'rank 2: Brand counts 4'); near(t('k_el_a', 3).brandMark, r3('k_el_a', 'brandMark'), 1e-9, 'Doombrand Mark from the card');
-  near(t('k_el_b', 2).ruinSpread, 0.5, 1e-9, 'Ruin Spreads moved to rank 2'); near(t('k_el_b', 3).cataSplash, r3('k_el_b', 'cataSplash'), 1e-9, 'Cataclysm splash from the card');
+  near(t('k_el_b', 2).ruinSpread, 0.5, 1e-9, 'Ruin Spreads moved to rank 2'); near(t('k_el_b', 3).bloodquakeSplash, r3('k_el_b', 'bloodquakeSplash'), 1e-9, 'Bloodquake splash from the card');
   near(t('k_el_a', 3).brand, 0.06 + 0.01 * 2 + r3('k_el_a', 'brand'), 1e-9, 'Doombrand adds Brand per ailment at rank 3'); near(r3('k_el_a', 'brandMark'), ED.cardTotals(ED.BOONS.r_s1_a, 3).markV, 1e-9, "the Doombrand Mark equals Hunter's Mark at rank 3");
   ok([1, 2, 3].every(r => t('k_el_b', r).s1Dmg === t('k_el_b', r).s2Dmg) && t('k_el_b', 2).s1Dmg > t('k_el_b', 1).s1Dmg && t('k_el_b', 3).s1Dmg > t('k_el_b', 2).s1Dmg, 'Ruinous Blows raises Charge and Throw damage with every rank (the text prints one number)');
   const pc = (v) => Math.round(v * 100) + '%';
   ok(ED.boonText('k_atk_h', 3, null).indexOf(pc(r3('k_atk_h', 'fissure')) + ' weapon damage, stunning') >= 0 && ED.boonText('k_atk_s', 3, null).indexOf(pc(r3('k_atk_s', 'bladeWave')) + ' weapon damage') >= 0, 'the transform texts print the card numbers');
-  ok(ED.boonText('k_el_a', 3, null).indexOf('+' + pc(r3('k_el_a', 'brandMark')) + ' damage from every hero') >= 0 && ED.boonText('k_el_b', 3, null).indexOf(pc(r3('k_el_b', 'cataMul')) + ' more than it would have dealt, and ' + pc(r3('k_el_b', 'cataSplash')) + ' of the amount paid') >= 0, 'Doombrand and Cataclysm print the card numbers');
+  ok(ED.boonText('k_el_a', 3, null).indexOf('+' + pc(r3('k_el_a', 'brandMark')) + ' damage from every hero') >= 0 && ED.boonText('k_el_b', 3, null).indexOf(pc(r3('k_el_b', 'bloodquakeMul')) + ' more than it would have dealt, and ' + pc(r3('k_el_b', 'bloodquakeSplash')) + ' of the amount paid') >= 0, 'Doombrand and Bloodquake print the card numbers');
   ok(!/every \d\w\w swing/i.test(ED.boonText('k_atk_h', 3, null)) && /every 3rd swing/i.test(ED.boonText('k_atk', 1, null)), 'Earthsplitter text leaves the Cleave cadence to Oath of Steel');
   ok(/first 4 ailments/.test(ED.boonText('k_el_a', 2, null)) && /first 6 ailments/.test(ED.boonText('k_el_a', 3, null)), 'Brand text shows its cap per rank');
 }
@@ -161,47 +161,47 @@ const ATK = { k_atk: 1 }, HEAVY = (r) => Object.assign({ k_atk_h: r }, ATK), SWI
   }
 }
 
-// ---------------- Cataclysm: a strike on a foe with 3 ailments pays its Bleed pool out and bursts a share to its neighbours ----------------
+// ---------------- Bloodquake: a strike on a foe with 3 ailments pays its Bleed pool out and bursts a share to its neighbours ----------------
 {
   const strike = (w, p, e, part) => w.hitEnemy(e, 10, { p, kind: 'skill', part: part || 'shieldthrow.strike', noProc: true, crit: false, knock: 0 });
-  const nCata = (t) => hitsOf(t.log, 'cataclysm').length;
-  const cata = (rank, ails) => { // x: 1000 Bleed, Burn and Chill (3 ailments); near 60 away, far 105 away, small (100 health) 70 away
+  const nBquake = (t) => hitsOf(t.log, 'bloodquake').length;
+  const bq = (rank, ails) => { // x: 1000 Bleed, Burn and Chill (3 ailments); near 60 away, far 105 away, small (100 health) 70 away
     const t = stage('knight', RUIN(rank)), { w, p } = t; t.log = spy(w);
     t.x = foe(w, 300, 200); t.near = foe(w, 360, 200); t.near.maxHp = t.near.hp = 50000; t.far = foe(w, 405, 200); t.small = foe(w, 300, 270); t.small.maxHp = t.small.hp = 100;
     t.x.bleedPool = 1000; t.x.bleedOwner = p; t.x.bleedTick = 99; if (ails !== 2) t.x.burnPool = 600; t.x.burnTick = 99; t.x.chill = 90; t.x.chillT = 99;
     return t;
   };
   { // the detonation
-    const t = cata(3), { w, p } = t, st = p.stats, hp0 = t.x.hp, paid = 1000 * (1 + st.bleedMul) * (1 + st.cataMul);
+    const t = bq(3), { w, p } = t, st = p.stats, hp0 = t.x.hp, paid = 1000 * (1 + st.bleedMul) * (1 + st.bloodquakeMul);
     ok(w.ailments(t.x) === 3, 'the staged foe holds 3 ailments: ' + w.ailments(t.x));
     strike(w, p, t.x);
-    const ch = hitsOf(t.log, 'cataclysm');
-    ok(ch.length === 1 && Math.abs(ch[0].d - paid) < 1e-6 && t.x.bleedPool === 0, 'the Bleed pool hits the foe at once for (1 + cataMul) times what it would have dealt (' + (ch[0] && ch[0].d) + ')');
+    const ch = hitsOf(t.log, 'bloodquake');
+    ok(ch.length === 1 && Math.abs(ch[0].d - paid) < 1e-6 && t.x.bleedPool === 0, 'the Bleed pool hits the foe at once for (1 + bloodquakeMul) times what it would have dealt (' + (ch[0] && ch[0].d) + ')');
     ok(hp0 - t.x.hp >= paid + 10 - 1e-6, 'on top of the strike');
-    near(t.near.bleedPool, paid * st.cataSplash, 1e-6, 'a foe within 80 starts Bleeding for cataSplash of the amount paid'); near(t.far.bleedPool, 0, 1e-9, 'a foe 105 away does not'); ok(t.near.bleedOwner === p, 'the burst Bleed belongs to the Knight');
+    near(t.near.bleedPool, paid * st.bloodquakeSplash, 1e-6, 'a foe within 80 starts Bleeding for bloodquakeSplash of the amount paid'); near(t.far.bleedPool, 0, 1e-9, 'a foe 105 away does not'); ok(t.near.bleedOwner === p, 'the burst Bleed belongs to the Knight');
     near(t.small.bleedPool, ED.CONST.SPREAD_CAP * 100, 1e-6, 'the burst gives a foe at most 25% of its own health');
-    ok(w.fx.some(f => f.t === 'cata' && f.r === 80), 'a cata event for the viewer');
-    t.x.bleedPool = 500; strike(w, p, t.x); ok(nCata(t) === 1 && t.x.bleedPool === 500, 'at most once per second per foe');
-    w.time += 1.01; strike(w, p, t.x); ok(nCata(t) === 2, 'it detonates again after 1 s');
+    ok(w.fx.some(f => f.t === 'bquake' && f.r === 80), 'a bq event for the viewer');
+    t.x.bleedPool = 500; strike(w, p, t.x); ok(nBquake(t) === 1 && t.x.bleedPool === 500, 'at most once per second per foe');
+    w.time += 1.01; strike(w, p, t.x); ok(nBquake(t) === 2, 'it detonates again after 1 s');
   }
   { // what does not detonate
-    const a = cata(3, 2); strike(a.w, a.p, a.x); ok(nCata(a) === 0 && a.x.bleedPool === 1000, 'a foe with only 2 ailments does not detonate');
-    const r = cata(2); strike(r.w, r.p, r.x); ok(nCata(r) === 0 && r.x.bleedPool === 1000, 'rank 2 has no Cataclysm');
-    const o = cata(3); strike(o.w, o.p, o.x, 'shieldthrow.return'); ok(nCata(o) === 0, 'only strikes detonate, not the return pass');
-    const c = cata(3); strike(c.w, c.p, c.x, 'charge.impact'); ok(nCata(c) === 1, 'a Shield Charge impact detonates');
-    const b = cata(3); b.x.bleedPool = 0; b.x.burnPool = 600; strike(b.w, b.p, b.x); ok(nCata(b) === 0 && !(b.x.cataT > b.w.time), 'with no Bleed pool there is nothing to detonate and no cooldown is spent');
+    const a = bq(3, 2); strike(a.w, a.p, a.x); ok(nBquake(a) === 0 && a.x.bleedPool === 1000, 'a foe with only 2 ailments does not detonate');
+    const r = bq(2); strike(r.w, r.p, r.x); ok(nBquake(r) === 0 && r.x.bleedPool === 1000, 'rank 2 has no Bloodquake');
+    const o = bq(3); strike(o.w, o.p, o.x, 'shieldthrow.return'); ok(nBquake(o) === 0, 'only strikes detonate, not the return pass');
+    const c = bq(3); strike(c.w, c.p, c.x, 'charge.impact'); ok(nBquake(c) === 1, 'a Shield Charge impact detonates');
+    const b = bq(3); b.x.bleedPool = 0; b.x.burnPool = 600; strike(b.w, b.p, b.x); ok(nBquake(b) === 0 && !(b.x.bquakeT > b.w.time), 'with no Bleed pool there is nothing to detonate and no cooldown is spent');
   }
   { // a foe the strike kills still bursts; fodder takes part and nothing of the refund / shield / stack kind comes of it
-    const t = cata(3), { w, p } = t; t.x.fodder = true; t.near.fodder = true; t.x.hp = 5;
+    const t = bq(3), { w, p } = t; t.x.fodder = true; t.near.fodder = true; t.x.hp = 5;
     strike(w, p, t.x); ok(t.x.hp <= 0, 'the fodder foe dies to the strike');
-    ok(nCata(t) === 0 && Math.abs(t.near.bleedPool - 1000 * (1 + p.stats.bleedMul) * (1 + p.stats.cataMul) * p.stats.cataSplash) < 1e-6, 'a dead foe pays nothing but its fodder neighbour still catches the burst');
+    ok(nBquake(t) === 0 && Math.abs(t.near.bleedPool - 1000 * (1 + p.stats.bleedMul) * (1 + p.stats.bloodquakeMul) * p.stats.bloodquakeSplash) < 1e-6, 'a dead foe pays nothing but its fodder neighbour still catches the burst');
     ok(p.shield === 0 && !(p.kWardT > 0) && !(p.critStacks > 0) && !w.msgs.some(m => m.t === 'refund'), 'no shield, ward, crit stack or refund comes of it');
   }
   { // in play: a Shield Throw down a line of fodder holding 3 ailments detonates each of them once
     const t = stage('knight', Object.assign({ k_s2: 1 }, RUIN(3))), { w, p } = t, log = spy(w), es = [1, 2, 3, 4].map(k => foe(w, p.x + 45 * k, p.y));
     const ready = () => { for (const e of es) { e.fodder = true; e.maxHp = e.hp = 50000; if (!(e.bleedPool > 0)) { e.bleedPool = 600; e.bleedOwner = p; } e.burnPool = Math.max(e.burnPool, 600); e.chill = 90; e.chillT = 99; } };
     ready(); w.playerSkill(p, 0, { d: 280 }, 1); run(w, 3, ready);
-    const ch = hitsOf(log, 'cataclysm');
+    const ch = hitsOf(log, 'bloodquake');
     ok(ch.length >= 3 && es.filter(e => ch.some(h => h.e === e)).length >= 3, 'a Shield Throw detonates the foes it strikes (' + ch.length + ' detonations on fodder)');
     ok(es.every(e => ch.filter(h => h.e === e).length <= 1), 'once per foe within a second');
   }

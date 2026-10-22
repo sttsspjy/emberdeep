@@ -173,6 +173,25 @@ const ranks = (w, pid) => w.msgs.filter(m => m.t === 'forkRank' && m.to === pid)
   near(add * (1 + last.v), asc.dmg, 1e-9, 'breakdown rows reproduce the stat (sum x factor)');
 }
 
+// ---------------- Ascended: the damage factor reaches conditional and class damage ----------------
+{
+  const hit = (boons) => { // one skill hit on a foe that meets Execute, Lacerate, Brittle, Death Knell and Shade Momentum at once
+    const { w, p } = stage('shade', boons);
+    Object.assign(p.stats, { execute: 0.4, lacerate: 0.3, brittle: 0.2, knell: 5, momentum: 0.05, classElMul: 0.25 });
+    p.knellT = 6; p.knellN = 3; p.momT = 5; p.momN = 4;
+    const e = w.spawnEnemy('skeleton', p.x + 40, p.y); e.spd = 0; e.cd = 9999; e.maxHp = 1e6; e.hp = 1e5; e.bleedPool = 50; e.chill = 50;
+    return { got: w.hitEnemy(e, 100, { p, kind: 'skill', crit: false, noProc: true, clsEl: 'shadow' }), st: p.stats };
+  };
+  const a = hit({ edge: 2 }), b = hit({ edge: 2, asc_edge: 1 }), c = hit({ edge: 2, split: 2, pierce: 2, asc_split: 1, asc_pierce: 1, asc_edge: 1 });
+  ok(a.st.dmgX === 1 && build('shade', {}).dmgX === 1, 'dmgX is 1 without an Ascended damage card');
+  near(b.st.dmgX, 1.15, 1e-12, 'Honed Edge: dmgX 1.15');
+  near(b.got / a.got, 1.15, 1e-9, 'Honed Edge: a hit on a foe meeting every conditional row (and class Momentum) is exactly 1.15 x the same hit without the card');
+  near(c.st.dmgX, 1.1 * 1.1 * 1.15, 1e-12, 'three damage cards: dmgX is the product of their factors');
+  near(c.got / hit({ edge: 2, split: 2, pierce: 2 }).got, 1.1 * 1.1 * 1.15, 1e-9, 'three damage cards scale the conditional hit by their product');
+  const rows = (boons) => { const { w, p } = stage('shade', boons); Object.assign(p.stats, { execute: 0.4, brittle: 0.2 }); return ED.Sheet.compute(p, ED.Sheet.ctx(w, p), { raw: true }).mult.cond; };
+  near(rows({ edge: 2, asc_edge: 1 }).find(r => r.id === 'execute').v, 0.4 * 1.15, 1e-9, 'the sheet shows a conditional row x dmgX'); near(rows({ edge: 2 }).find(r => r.id === 'execute').v, 0.4, 1e-9, 'and unchanged without the card');
+}
+
 // ---------------- Ascended: sheet ----------------
 {
   const { w, p } = stage('ranger', { edge: 2, split: 2, asc_edge: 1, asc_split: 1 }, { stratum: 4 });

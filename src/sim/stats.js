@@ -18,16 +18,21 @@
     + ' supernova supernovaPull phoenixMul phoenixDur dashTrail cataclysm sunDive diveTrail blossom blossomN blossomMax mirrorHall eclipse eclipseDur umbral cloneMul'
     + ' waveEvery waveMul waveBig waveStun waveBurst waveHome litany sanctDR sanctStun sanctJudge aura auraDmg judgeDur judgeWeak twinHammer thirdLeg secondFlight verdict verdictJudge wInfHoly smiteBig guardLight smiteJudge smiteBeam beamJumps'
     + ' hex hexMul wRaise hexSpread hexSelf hexHaste spikeRaise knights knightLife knightStun harvestRaise corpse corpseMul boneLance boneArmor boneCap boneField minionInfuse mInfShadow tollMul abyssMin abyssDoom reapRaise tideMul'
-    + ' wrath wrathNova wrathPillar aegis aegisR aegisDR aegisStun storm stormMul fjEcho fjR fjStun bloom bloomField bloomBomb dk dkMul dkArc dkTaunt carrionN carrionShard lich lichT lichMul lichLife'
+    + ' wrath wrathNova wrathPillar dawn aegisR aegisDR aegisStun storm stormMul fjEcho fjR fjStun bloom bloomField bloomBomb dk dkMul dkArc dkTaunt carrionN carrionShard lich lichT lichMul lichLife'
     + ' avalanche avaCrack avaStun phalanx bannerSlow bannerWeak bannerDur tempest vortexMul vortexDur bastion deathMark deathWave thornburst thornRoot starfall thornstorm'
-    + ' fissure bladeWave doombrand brandMark brandCap cataclysm cataMul cataSplash'
-    + ' siege siegeMul siegeBlast ricochet flurryN hemo hemoAt hemoMul hemoBoss plague plagueBurst outbreak').split(' ');
+    + ' bannerDmg thornMul thornR phoenixSlow shroudDmg aegisMul craterMul'
+    + ' fissure bladeWave doombrand brandMark brandCap bloodquake bloodquakeMul bloodquakeSplash'
+    + ' siege siegeMul siegeBlast ricochet flurryN hemo hemoAt hemoMul hemoBoss plague plagueBurst outbreak'
+    + ' wake waveReturn sunstrike prismN prismRad'
+    + ' caldera fireDance dancerBurst whiteHot whiteT heatMax infernoMul'
+    + ' graveBolt graveN soulStorm maw mawHaste tideFree tideCap tideDoom'
+    + ' guillotine cyclone arterial arterialN cascade cascadeN').split(' ');
 
   const BASE = () => {
     const s = {
-      hp: 0, hpMul: 1, armor: 0, spd: 1, dmg: 1, atk: 1, crit: 0, critDmg: 0, cdr: 0,
+      hp: 0, hpMul: 1, armor: 0, spd: 1, dmg: 1, dmgX: 1, atk: 1, crit: 0, critDmg: 0, cdr: 0,
       pickup: 0, xp: 0, gold: 0, luck: 0, heal: 0, projN: 0, pierce: 0, area: 0, dodge: 0, thorns: 0,
-      dashcdr: 0, dashDmg: 0, dashFire: 0, dashBomb: 0, execute: 0,
+      dashcdr: 0, dashN: 0, dashDmg: 0, dashFire: 0, dashBomb: 0, execute: 0,
       overcharge: 0, guardian: 0, trance: 0, forager: 0, roomWard: 0, openRank: 0,
       charges: 0,
       minions: 0, minionDmg: 0, boneSpikes: 0, phoenix: 0, strataHeal: 0, wardrum: 0,
@@ -132,6 +137,7 @@
     }
     s.s1Dmg = m1 - 1; s.s2Dmg = m2 - 1;
     for (const x of asc) for (const k in x) s[k] = (s[k] || 0) * (1 + x[k]); // Ascended bucket: after every additive source, before the derived values
+    for (const x of asc) if (x.dmg) s.dmgX *= 1 + x.dmg; // dmgX: the Ascended damage factor; combat.js scales the conditional (additive) damage by it so a hit stays exactly dmgX x the same hit without the card
 
     const out = s;
     out.power = cls.power; out.element = cls.element || null; // Class Power scales every non-attack proc (ED.procDmg)
@@ -153,7 +159,7 @@
     const cdr = St.cdrEff(s.cdr), rc = (n) => 1 - Math.min(C.ROUTE_CDR_MAX, s['s' + n + 'Cdr']);
     out.skillCd = ED.SKILLS[cls.skill].cd * (1 - cdr) * rc(1);
     out.skill2Cd = cls.skill2 && ED.SKILLS[cls.skill2] ? ED.SKILLS[cls.skill2].cd * (1 - cdr) * rc(2) : 0;
-    out.dashCd = 1.5; out.dashCharges = 1; // recharge seconds per charge, max charges
+    out.dashCd = Math.max(1, 1.5 * (1 - s.dashcdr)); out.dashCharges = Math.min(3, 1 + s.dashN); // recharge seconds per charge (base 1.5, floor 1.0), max charges (base 1, cap 3)
     out.pickupR = 46 * (1 + s.pickup);
     out.critMult = 1.75 + s.critDmg;
     out.crit = Math.min(0.95, s.crit);
@@ -214,7 +220,7 @@
       if (d.mulFirst) for (const k of d.mulFirst) if (st[k]) { dmg *= st[k]; break; } // mulFirst: the first listed stat that is set is the factor (Hammerstorm before Twin Hammers)
       q.dmg = dmg;
       q.r = d.rOf ? out.p[d.rOf].r * d.rMul : d.r ? d.r * A * (1 + sA) * (d.rMul || 1) : 0;
-      if (d.rAddKey && q.r > 0) q.r += st[d.rAddKey]; // rAddKey: the stat adds px to the radius after every scaling (Radiant Aegis, Final Judgment)
+      if (d.rAddKey && q.r > 0) q.r += st[d.rAddKey]; // rAddKey: the stat adds px to the radius after every scaling (Aegis of Dawn, Final Judgment)
       if (d.mulKey) q.mulv = st[d.mulKey];
       if (d.durKey) q.dur = (d.dur || 0) + st[d.durKey]; else if (d.dur !== undefined) q.dur = d.dur + (d.durFix ? 0 : sU); // durFix: a fixed length, no slot duration
       if (d.durMulKey && st[d.durMulKey] > 0 && q.dur !== undefined) q.dur *= st[d.durMulKey]; // durMulKey: the stat is a length factor (Storm of Thorns)
@@ -223,7 +229,7 @@
       if (d.n !== undefined) q.n = d.n + (d.nFix ? 0 : sN); // nFix: a count the slot's count does not change
       if (d.nOf) q.n = out.p[d.nOf].n; // the count of another part (Death Mark's later waves)
       if (d.nKey) q.n = st[d.nKey]; // nKey: the stat is the count (Death Blossom's cuts)
-      if (d.ringKey && st[d.ringKey] > 0) { q.n = st[d.ringKey]; q.fan = U.TAU; q.ring = true; } // ringKey: the stat is the arrow count of a full ring (Thornburst)
+      if (d.ringKey && st[d.ringKey] > 0) { q.n = st[d.ringKey]; q.fan = U.TAU; q.ring = true; if (d.ringPierce) q.pierce = (d.pierce || 0) + d.ringPierce; } // ringKey: the stat is the arrow count of a full ring (Thornburst), ringPierce the pierce it adds
       if (d.stunKey && st[d.stunKey] > 0) q.stun = st[d.stunKey]; // stunKey: the stat is the stun while it is set
       if (d.perAtk && q.dur !== undefined) q.attacks = Math.floor(q.dur / st.atkInterval + 1e-9) + (d.perAtk === 'skip' ? 0 : 1); // perAtk: one hit per weapon attack from the cast on within dur ('skip': the attack at the cast itself is the Ambush, so only the later ones count)
       if (d.per === 'tick') q.count = Math.round(q.dur / d.every);

@@ -173,7 +173,7 @@
     this.time = 0; this.roomTime = 0; this.state = 'play'; this.stratum = 0; this.floorSeed = 0;
     this.locked = false; this.enc = null; this.boss = null; this.pendingStratum = null;
     this.run = { kills: 0, fodderKills: 0, roomsCleared: 0, elitesKilled: 0, bosses: 0, bossCount: 0, revives: 0, maxGold: 0, maxRelics: 0, flawlessBoss: false,
-      fullClear: false, roomsVisited: 0, roomsTotal: 0,
+      fullClear: false, roomsVisited: 0, roomsTotal: 0, darkCleared: 0,
       embers: { rooms: 0, elites: 0, bosses: 0, victory: 0 } };
     this.fullClearDone = 0;
     this.roomState = {};
@@ -227,7 +227,7 @@
   // Xp a threat foe is worth before the dark-room multiplier and the room's budget scale (enc.xpK).
   W.threatXp = (def, s, elite) => (def.xp || 0) * (1 + 0.35 * (s - 1)) * (elite ? 3 : 1);
   // Room xp budget by stratum (solo, per room; x DARK_LOOT in a dark room, not scaled by the party): threat drops, fodder motes (FODDER_XP_SHARE of it, spread over the quota) and the clear pile together drop exactly this.
-  W.ROOM_XP = { combat: [38, 61, 96, 136, 173, 196], elite: [71, 103, 139, 187, 257, 290] }; W.FODDER_XP_SHARE = 0.5;
+  W.ROOM_XP = { combat: [24, 38, 60, 84, 107, 122], elite: [44, 64, 86, 116, 159, 180] }; W.FODDER_XP_SHARE = 0.5;
   // Gold dropped by a 'gold' room reward (shared with the UI): 15 + 8 per stratum, times the global gold multiplier.
   W.rewardGold = (stratum) => Math.round((15 + 8 * stratum) * W.GOLD_MUL);
   W.GOLD_MUL = 0.65; // every gold drop (kills, rooms, chests, rewards) is scaled by this; shops sell at full price
@@ -521,6 +521,7 @@
       this.onRunStartBuild(p);
       this.sendBuild(p);
     }
+    this.onPartyStartBuild();
     this.enterStratum(1);
   };
 
@@ -596,12 +597,12 @@
     const players = {};
     for (const p of this.players.values()) players[p.pid] = { cls: p.cls, name: p.name, kills: p.kills, dealt: Math.round(p.dealt), emberBonus: p.stats.emberBonus || 0, relics: p.relics.length, evo: p.stats.evo || null, maxRelics: p.maxRelics, revivesGiven: p.revivesGiven };
     return {
-      victory: this.victory, retreat: !!this.retreat, abandoned: !!this.abandoned, stratum: this.stratum, time: Math.round(this.time), kills: this.run.kills,
+      victory: this.victory, retreat: !!this.retreat, abandoned: !!this.abandoned, stratum: this.stratum, time: Math.round(this.time), kills: this.run.kills, fodderKills: this.run.fodderKills,
       roomsCleared: this.run.roomsCleared, elitesKilled: this.run.elitesKilled, bosses: this.run.bosses, bossCount: this.run.bossCount,
       embers: Object.assign({}, this.run.embers), pact: this.pact, party: this.partySize(), level: this.level,
       revives: this.run.revives, flawlessBoss: this.run.flawlessBoss, maxGold: this.run.maxGold, maxRelics: this.run.maxRelics, players,
       evolved: [...this.players.values()].some(p => !!p.stats.evo), fullClear: this.run.fullClear,
-      roomsVisited: this.run.roomsVisited, roomsTotal: this.run.roomsTotal,
+      roomsVisited: this.run.roomsVisited, roomsTotal: this.run.roomsTotal, darkCleared: this.run.darkCleared,
     };
   };
 
@@ -866,8 +867,13 @@
     this.pickups.push({ id: U.uid(), kind, x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, val, t: 0 });
   };
 
-  // Gold and xp dropped in a dark room are x DARK_LOOT.
-  W.prototype.lootMul = function () { return this.room && this.room.dark ? W.DARK_LOOT : 1; };
+  // Gold and xp dropped in a dark room are x darkLoot(): DARK_LOOT x (1 + Deep Wick loot x the highest Deep Wick rank in the party).
+  W.prototype.darkLoot = function () {
+    let r = 0;
+    for (const p of this.players.values()) r = Math.max(r, (p.meta.up && p.meta.up[ED.UPGRADE_IDX.deepwick]) || 0);
+    return W.DARK_LOOT * (1 + ED.UPGRADES[ED.UPGRADE_IDX.deepwick].loot * r);
+  };
+  W.prototype.lootMul = function () { return this.room && this.room.dark ? this.darkLoot() : 1; };
   W.prototype.dropGold = function (x, y, total, exact) {
     total = Math.round((exact ? total : total * W.GOLD_MUL) * this.lootMul());
     while (total > 0) { const v = Math.min(total, total > 30 ? 10 : total > 8 ? 4 : 1); this.spawnPickup('gold', x, y, v); total -= v; }

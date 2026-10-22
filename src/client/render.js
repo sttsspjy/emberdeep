@@ -849,7 +849,7 @@
         }
         case 'sanct': {
           if (z.w === 7 && ED.ClassFx.zone.banner) { ED.ClassFx.zone.banner(c, z, pass, t, k, view); break; } // an Iron Phalanx War Banner (cls-knight.js)
-          if (z.w === 8 && ED.ClassFx.zone.wrath) ED.ClassFx.zone.wrath(c, z, pass, t, k, view); else if (z.w === 9 && ED.ClassFx.zone.aegis) ED.ClassFx.zone.aegis(c, z, pass, t, k, view); // Wrath of Heaven's sun wheel and Radiant Aegis's wings join the plain Sanctuary (cls-cleric.js)
+          if (z.w === 8 && ED.ClassFx.zone.wrath) ED.ClassFx.zone.wrath(c, z, pass, t, k, view); else if (z.w === 9 && ED.ClassFx.zone.aegis) ED.ClassFx.zone.aegis(c, z, pass, t, k, view); // Wrath of Heaven's sun wheel and Aegis of Dawn's wings join the plain Sanctuary (cls-cleric.js)
           const fade = Math.min(1, (z.dur - z.t) * 2, z.t * 5), au = z.fol || z.follow ? 0.4 : 1; // au: an Aura of Faith sits on its Cleric, so its light and circle are softer
           if (pass === 0) { // ground: fill, dashed rim and the CodeManu protection circle at its native 2 px density under the actors
             R.light(z.x, z.y, z.r * 1.9, '#ffe9a0', 0.8 * fade * au); discPut(c, z.x, z.y, z.r, '#ffe9a0', 0.25 * fade);

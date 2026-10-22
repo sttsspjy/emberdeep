@@ -61,7 +61,7 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   ok(Math.abs(part(k1, 1, 'strike').raw - 0.7 * part(k0, 1, 'strike').raw) < 1e-6 && part(k1, 1, 'strike').oneFoe === 2, 'Shield Storm: two shields at 70% each in the strike part');
   ok(k1.skills[1].perCast > k0.skills[1].perCast * 1.2, 'Shield Storm raises the Shield Throw per cast: ' + k0.skills[1].perCast.toFixed(1) + ' -> ' + k1.skills[1].perCast.toFixed(1));
   const m0 = model('pyro', { p_s2: 1 }), m3 = model('pyro', { p_s2: 1, p_s2_b: 3 });
-  ok(Math.abs(part(m3, 1, 'impact').raw / part(m0, 1, 'impact').raw - 1.6) < 1e-6, 'Sun Dive (Comet rank 3): impact x1.6: ' + (part(m3, 1, 'impact').raw / part(m0, 1, 'impact').raw).toFixed(3));
+  ok(Math.abs(part(m3, 1, 'impact').raw / part(m0, 1, 'impact').raw - 1.2 * 1.4 * 0.8) < 1e-6, 'Sun Dive (Comet rank 3): the impact part is the mean of the two landings (+20% each, the second at 60%) and the card Meteor damage +40%: x1.344: ' + (part(m3, 1, 'impact').raw / part(m0, 1, 'impact').raw).toFixed(3));
   ok(part(m3, 1, 'impact').oneFoe === 2 && part(m0, 1, 'impact').oneFoe === 1, 'Sun Dive lands twice: the impact part counts two hits on one foe');
   ok(part(model('knight', {}), 1, 'strike').r === 0 && part(model('knight', {}), 1, 'return').r === 0, 'projectile hit radii stay out of the sheet parts');
 }
@@ -73,8 +73,16 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   const base = { cls: 'knight', weapon: 'longsword', boons: {}, relics: [], meta: META(), pact: 0 };
   const st0 = ED.Stats.compute(base);
   ok(st0.dashCd === 1.5 && st0.dashCharges === 1, 'a fresh hero has 1 dash charge, 1.5 s each: ' + st0.dashCd + ' / ' + st0.dashCharges);
-  const sm = ED.Stats.compute(Object.assign({}, base, { boons: { lightstep: 2 } }));
-  ok(sm.dashCd === 1.5 && sm.dashCharges === 1, 'dashcdr is ignored by the charge stats until it becomes charges');
+  { // Light Step: +1 charge per rank; Shadow Cloak: a 1.0 s recharge; the recharge floors at 1.0 s and the charges cap at 3
+    const dash = (boons, relics) => { const s = ED.Stats.compute(Object.assign({}, base, { boons, relics: relics || [] })); return s.dashCharges + ' / ' + s.dashCd; };
+    ok(dash({ lightstep: 1 }) === '2 / 1.5' && dash({ lightstep: 2 }) === '3 / 1.5', 'Light Step: ranks 1 and 2 give 2 and 3 charges, recharge unchanged: ' + dash({ lightstep: 1 }) + ', ' + dash({ lightstep: 2 }));
+    ok(dash({}, ['cloak']) === '1 / 1', 'Shadow Cloak: 1 charge, recharge 1.0 s: ' + dash({}, ['cloak']));
+    ok(dash({ lightstep: 2 }, ['cloak']) === '3 / 1', 'Light Step 2 + Shadow Cloak: 3 charges, 1.0 s each: ' + dash({ lightstep: 2 }, ['cloak']));
+    ED.RELICS.zzdash = { name: 'T', rar: 'c', icon: 'coin', desc: '', mods: { dashcdr: 0.9 } };
+    ok(dash({ lightstep: 5 }, ['zzdash']) === '3 / 1', 'the recharge floors at 1.0 s and the charges cap at 3: ' + dash({ lightstep: 5 }, ['zzdash']));
+    delete ED.RELICS.zzdash;
+    ok(ED.Sheet.text('lightstep', 1) === 'Dash: +1 charge.' && ED.Sheet.text('lightstep', 2) === 'Dash: +2 charges.' && ED.Sheet.nextText('lightstep', 1) === '+2 charges' && ED.Sheet.STAT_INFO.dashN.label === 'Dash charges' && ED.Sheet.STAT_INFO.dashcdr.label === 'Dash recharge', 'Light Step card text and the sheet labels: ' + ED.Sheet.text('lightstep', 2));
+  }
   const stats = ED.Stats.compute(base); stats.sn = {};
   const p = { pid: 'p', name: 'T', cls: 'knight', weapon: base.weapon, boons: {}, relics: [], meta: base.meta, stats, hp: stats.maxHp, maxHp: stats.maxHp, shield: 0, picks: 0, slot: 0 };
   const sh = ED.Sheet.compute(p, ED.Sheet.ctx ? ED.Sheet.ctx({ stratum: 1, pact: 0, players: new Map(), allies: [] }, p) : {}, { raw: true }).dash;

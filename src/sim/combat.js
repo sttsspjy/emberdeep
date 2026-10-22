@@ -132,11 +132,11 @@
     let dmg = base, crit = false, shatter = false, guarded = false;
     if (p && !src.raw) {
       crit = src.crit === undefined ? !!((ch && ch.hitCrit && ch.hitCrit.call(this, p, e, src)) || this.rng.chance(st.crit)) : !!src.crit;
-      let mul = st.dmg;
-      for (let i = 0; i < COND_PRE.length; i++) { const r = COND_PRE[i]; if (r.key === null || st[r.key]) mul += r.hit(st, e, p, this, src); }
-      if (ch && ch.hitMul) mul += ch.hitMul.call(this, p, e, src) || 0;
-      for (let i = 0; i < COND_POST.length; i++) { const r = COND_POST[i]; if (st[r.key]) mul += r.hit(st, e, p, this, src); }
-      dmg *= Math.max(0.1, mul);
+      let add = 0; // conditional and class additions, scaled by the Ascended damage factor st.dmgX (st.dmg already carries it)
+      for (let i = 0; i < COND_PRE.length; i++) { const r = COND_PRE[i]; if (r.key === null || st[r.key]) add += r.hit(st, e, p, this, src); }
+      if (ch && ch.hitMul) add += ch.hitMul.call(this, p, e, src) || 0;
+      for (let i = 0; i < COND_POST.length; i++) { const r = COND_POST[i]; if (st[r.key]) add += r.hit(st, e, p, this, src); }
+      dmg *= Math.max(0.1, st.dmg + add * st.dmgX);
       if (crit) { dmg *= st.critMult; if (ch && ch.critMul) dmg *= ch.critMul.call(this, p, e, src) || 1; }
     }
     if (src.mul) dmg *= src.mul;
@@ -293,14 +293,14 @@
     if (own) this.curChain = null;
   };
 
-  // A Smite of stored amount amt on e by o: holy damage, then the owner's duo effects and shields for heroes within HOLY_R of the smitten foe (HOLY_GRANT_MAX per grant, once per HOLY_CD per hero).
+  // A Smite of stored amount amt on e by o: holy damage, then the owner's duo effects and shields for heroes within HOLY_R of the smitten foe (HOLY_GRANT_MAX per grant, once per HOLY_CD per hero). Sunstrike (the Cleric hook CLS.cleric.sunstrike says whether this Smite is one): x sunstrike damage, double shield.
   W.smite = function (e, o, amt) {
-    const st = o.stats, C = ED.CONST, corroded = e.venom >= 100, big = e.elite || e.boss;
-    const dmg = amt * (1 + st.smiteMul + (big ? st.smiteBig : 0)) * (st.hoarlight && e.frozen > 0 ? 2 : 1) * (st.purge && corroded ? 1.5 : 1);
+    const st = o.stats, C = ED.CONST, corroded = e.venom >= 100, big = e.elite || e.boss, sun = st.sunstrike > 0 && CLS.cleric.sunstrike.call(this, e, o);
+    const dmg = amt * (1 + st.smiteMul + (big ? st.smiteBig : 0)) * (st.hoarlight && e.frozen > 0 ? 2 : 1) * (st.purge && corroded ? 1.5 : 1) * (sun ? st.sunstrike : 1);
     const x = e.x, y = e.y, pre = dmg / this.elemAff('holy'); // pre: the Smite before the holy affinity, the base of its duo statuses (each status applies its own element's affinity)
     this.hitEnemy(e, dmg, { p: o, kind: 'smite', raw: true, noProc: true, crit: false, noGuard: true, el: 'holy', affDone: true });
     let n = 0;
-    const g = Math.min(C.HOLY_GRANT_MAX, st.smiteShield * (big ? 2 : 1) * (st.purge && corroded ? 2 : 1));
+    const g = Math.min(C.HOLY_GRANT_MAX, st.smiteShield * (big ? 2 : 1) * (sun ? 2 : 1) * (st.purge && corroded ? 2 : 1));
     for (const q of this.players.values()) {
       if (q.downed || q.dead || q.holyT > 0 || U.dist2(q.x, q.y, x, y) > C.HOLY_R * C.HOLY_R) continue;
       this.addShield(q, q.maxHp * g, q.maxHp * st.holyCap, 'holy');
@@ -378,7 +378,7 @@
     if (own) this.curChain = null;
   };
 
-  // Death Knell and Death's Edge: each Reap or Toll.
+  // Death Knell and Death's Edge: each Reap (deathPayoffs skips fodder) or Toll.
   W.onDoomPayoff = function (o) {
     const st = o.stats;
     if (st.knell) { o.knellN = Math.min(st.knell, o.knellN + 1); o.knellT = 6; }
@@ -808,7 +808,7 @@
     const own = this.openChain(), x = e.x, y = e.y, half = e.elite ? 0.5 : 1;
     if (src.kind === 'reap' && p) {
       const rs = p.stats;
-      this.onDoomPayoff(p);
+      if (!e.fodder) this.onDoomPayoff(p); // Death Knell and Death's Edge stacks never come from fodder; the chains below still fire
       if (rs.blackflame && e.burnPool > 0) {
         const nx = this.nearestEnemy(x, y, 90);
         if (nx) { if (!(nx.burnPool > 0)) nx.burnTick = 0.5; nx.burnPool += e.burnPool; nx.burn = 1; nx.burnOwner = p; e.burnPool = 0; }

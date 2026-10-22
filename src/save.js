@@ -226,7 +226,7 @@
     const ci = ED.CLASS_IDS.indexOf(run.cls);
     if (ci >= 0) p.mastery[ci] += rewards.masteryXp;
     if (S.runCounts(run)) p.stats.runs += 1; // descents toward unlocks: at least one room cleared
-    p.stats.kills += run.kills | 0;
+    p.stats.kills += Math.max(0, (run.kills | 0) - (run.fodderKills | 0)); // lifetime kills (First Blood, Slayer, Legend) count foes that are not horde fodder
     p.stats.deepest = Math.max(p.stats.deepest, run.stratum | 0);
     p.stats.bossKills += run.bossCount | 0;
     p.bosses |= (run.bosses | 0);

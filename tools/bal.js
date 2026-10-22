@@ -1,4 +1,4 @@
-// Usage: node tools/bal.js [--cells=a,b] [--full] [--save=file.json] [--pair=file.json] [--jobs=N] [--speed=X] [--nice] [--list] [--flag[=value] ...]
+// Usage: node tools/bal.js [--cells=a,b] [--full] [--runs=N] [--power] [--save=file.json] [--pair=file.json] [--jobs=N] [--speed=X] [--nice] [--list] [--flag[=value] ...]
 // Fixed quick balance suite: the GAME-DESIGN section 10 cells (fresh random, fresh smart, half-upgraded, fully upgraded, Pact 5, two and three heroes; six heroes in rotation, skill 0.75, --pick=smart unless noted) plus the fresh legacy-pick cell
 // run in one worker pool (tools/simpool.js), one line per cell: wins % +-se, depth +-se, mean win time, target bands, PASS/FAIL (a band is met when the estimate lies inside it; a cell with no band for a figure ignores it). Exit code is always 0 (a report).
 // Every cell moves with the veteran bot (--vet, the human proxy; --vet=0 turns it off). Bands are the v4 difficulty contract: fresh random <= 1%, fresh smart 10-20%, a small Hearth (max at most half the knowledge gap above fresh smart),
@@ -8,6 +8,8 @@
 // --cells=a,b runs only those cells (--list shows them). --save=file.json writes one row per run (label = cell id). --pair=file.json prints, per cell, the mean win and depth difference to such a saved baseline over the same seeds (plus sim.js pairReport).
 // Every other --flag is forwarded to every cell (e.g. --from=4, --explore=0.4, --seed0=7000, --pick=random, --patch=file.js) and overrides the cell's own flag of that name. With --from=N bands describe whole runs, so verdicts print "-".
 // Cell lines for the half-upgraded and fully upgraded cells add the win rate per hero (small samples: about 20 runs per hero at the default size).
+// --runs=N sets every cell to N runs. --power adds, under each cell line, the boss-arrival read of every stratum (tools/sim.js: power = model damage x effective health, geometric mean +-se; team level; picks at the last boss reached),
+// and after the cells the power ratios smart/rand (knowledge gap) and max/smart (Hearth gap) per stratum: the mean of the per-seed ln ratios over the seeds both cells ran (the same seed is the same hero and floors), +-se.
 const os = require('os');
 const fs = require('fs');
 const sim = require('./sim.js');
@@ -24,7 +26,7 @@ const CELLS = [
   { id: 'duo', title: 'two heroes, half-upgraded', n: 2, meta: 'mid', pact: 0, flags: { pick: 'smart', vet: '1' }, runs: [60, 192], cost: 0.9, win: [0.10, 0.35] },
   { id: 'trio', title: 'three heroes, half-upgraded', n: 3, meta: 'mid', pact: 0, flags: { pick: 'smart', vet: '1' }, runs: [60, 192], cost: 1.65, win: [0.10, 0.35] },
 ];
-const SPEED = 5, OWN = new Set(['cells', 'full', 'save', 'pair', 'jobs', 'speed', 'nice', 'list']);
+const SPEED = 5, OWN = new Set(['cells', 'full', 'runs', 'power', 'save', 'pair', 'jobs', 'speed', 'nice', 'list']);
 const U = sim.ED.U;
 
 const { flags, args } = pool.parseArgs(process.argv.slice(2));
@@ -34,7 +36,7 @@ const want = flags.cells ? flags.cells.split(',') : CELLS.map(c => c.id);
 const bad = want.filter(id => !CELLS.some(c => c.id === id));
 if (bad.length) { console.log('unknown cell ' + bad.join(', ') + '; cells: ' + CELLS.map(c => c.id).join(', ')); process.exit(0); }
 const cells = CELLS.filter(c => want.includes(c.id)), full = !!flags.full;
-const runsOf = (c) => c.runs[full ? 1 : 0];
+const runsOf = (c) => (+flags.runs > 0 ? +flags.runs : c.runs[full ? 1 : 0]);
 const workers = Math.max(1, +(flags.jobs || Math.min(os.cpus().length - 1, 8))); // simpool's default of cores - 1 gains nothing over 6 to 8 on the dev machine
 const speed = +(flags.speed || Math.min(workers, SPEED));
 const estimate = Math.round(cells.reduce((s, c) => s + runsOf(c) * c.cost, 0) / speed + 2);
@@ -52,6 +54,19 @@ const se = (a) => { if (a.length < 2) return NaN; const m = avg(a); return Math.
 const f = (v, d) => (Number.isFinite(v) ? v.toFixed(d) : '-');
 const inBand = (v, b) => !b || (v >= b[0] - 1e-9 && v <= b[1] + 1e-9);
 
+// --power: the boss-arrival read of a cell's runs (sim.arrivalStats) per stratum: power +-se, team level (runs that reached the boss room), and the picks by source at the last boss reached.
+function powerLines(rs) {
+  const st = sim.ROMAN.map((_, i) => sim.arrivalStats(rs, i + 1)), per = (g) => st.map((a, i) => sim.ROMAN[i] + ' ' + (a.n ? g(a) : '-')).join(' | ');
+  const out = [`power (model dmg x ehp at boss arrival, geometric mean +-se): ${per(a => sim.fmtPow(a.gm) + (a.n > 1 ? ' +-' + sim.fmtPow(a.gmSe) : ''))}`, `team lvl at boss arrival (runs): ${per(a => f(avg(a.runs.map(q => q.lvl)), 1) + ' (' + a.n + ')')}`];
+  let k = st.length - 1;
+  while (k >= 0 && !st[k].n) k--;
+  if (k >= 0) {
+    const q = st[k].runs, tot = avg(q.map(x => x.pk.reduce((u, v) => u + v, 0)));
+    out.push(`picks at boss ${sim.ROMAN[k]}: ${f(tot, 1)} (${sim.PICK_SRC.map((s, j) => [s, avg(q.map(x => x.pk[j]))]).filter(x => x[0] !== 'other' || x[1] > 0).map(x => x[0] + ' ' + f(x[1], 1)).join(', ')})`);
+  }
+  return out;
+}
+
 // jobs per cell (simpool's job builder), longest cells first so the pool's tail is short; results come back by job index
 const plan = [];
 for (const c of cells) {
@@ -65,8 +80,8 @@ console.log(`bal ${full ? 'full' : 'quick'}: ${cells.map(c => c.id).join(',')} |
 
 const t0 = Date.now();
 pool.runPool(plan.map(p => p.job), { jobs: workers, patch: flags.patch }).then((res) => {
-  const by = {}, rows = [];
-  plan.forEach((p, i) => { (by[p.c.id] = by[p.c.id] || []).push(res[i]); rows.push(sim.rowOf(res[i], p.c.id, p.job.seed)); });
+  const by = {}, seedsOf = {}, rows = [];
+  plan.forEach((p, i) => { (by[p.c.id] = by[p.c.id] || []).push(res[i]); (seedsOf[p.c.id] = seedsOf[p.c.id] || []).push(p.job.seed); rows.push(sim.rowOf(res[i], p.c.id, p.job.seed)); });
   rows.sort((a, b) => cells.findIndex(c => c.id === a.label) - cells.findIndex(c => c.id === b.label) || a.seed - b.seed);
   if (flags.save) fs.writeFileSync(flags.save, JSON.stringify(rows));
   let pass = 0, judged = 0;
@@ -83,13 +98,27 @@ pool.runPool(plan.map(p => p.job), { jobs: workers, patch: flags.patch }).then((
       const heroes = [...new Set(rs.map(r => r.cls))];
       console.log('       by hero: ' + heroes.map(h => { const hr = rs.filter(r => r.cls === h); return `${h} ${Math.round(100 * hr.filter(r => r.victory).length / hr.length)}%`; }).join(' ') + ` (${Math.round(n / heroes.length)} runs each)`);
     }
+    if (flags.power) powerLines(rs).forEach(l => console.log('       ' + l));
   }
   const winRate = (id) => (by[id] ? by[id].filter(r => r.victory).length / by[id].length : NaN);
+  const ratioOf = (a, b, s) => { // power of cell b over cell a at stratum s: exp of the mean per-seed ln difference over the seeds both cells reached, se from the same differences
+    const A = sim.arrivalStats(by[a], s), B = sim.arrivalStats(by[b], s), ma = new Map(A.idx.map((k, j) => [seedsOf[a][k], A.ln[j]])), d = [];
+    B.idx.forEach((k, j) => { const v = ma.get(seedsOf[b][k]); if (v !== undefined) d.push(B.ln[j] - v); });
+    const r = Math.exp(avg(d));
+    return { n: d.length, r, se: r * se(d) };
+  };
   if (from <= 1 && by.rand && by.smart && by.max) { // difficulty contract: the Hearth gap (max - fresh, smart picks) is at most half the knowledge gap (smart - random, fresh)
     const sdiff = (a, b) => 100 * Math.sqrt(a.p * (1 - a.p) / a.n + b.p * (1 - b.p) / b.n), P = (id) => ({ p: winRate(id), n: by[id].length });
     const know = 100 * (winRate('smart') - winRate('rand')), hearth = 100 * (winRate('max') - winRate('smart')), ok = hearth <= know / 2;
     judged++; if (ok) pass++;
     console.log(`gaps (win points): knowledge (smart - random, fresh) ${know >= 0 ? '+' : ''}${f(know, 1)} +-${f(sdiff(P('smart'), P('rand')), 1)} | Hearth (max - fresh, smart) ${hearth >= 0 ? '+' : ''}${f(hearth, 1)} +-${f(sdiff(P('max'), P('smart')), 1)} | Hearth <= 1/2 knowledge: ${ok ? 'PASS' : 'FAIL'}`);
+  }
+  if (flags.power) {
+    for (const [a, b, name] of [['rand', 'smart', 'smart/rand (knowledge gap, fresh)'], ['smart', 'max', 'max/smart (Hearth gap, smart picks)']]) {
+      if (!by[a] || !by[b]) continue;
+      const rs = sim.ROMAN.map((_, i) => ratioOf(a, b, i + 1));
+      console.log(`power ratio ${name}, paired by seed: ${rs.map((x, i) => sim.ROMAN[i] + ' ' + (x.n ? 'x' + f(x.r, 2) + (x.n > 1 ? ' +-' + f(x.se, 2) : '') : '-')).join(' | ')} (pairs ${rs[0].n}..${rs[5].n})`);
+    }
   }
   console.log(`${judged ? pass + '/' + judged + ' PASS' : 'no verdicts'} in ${((Date.now() - t0) / 1000).toFixed(0)} s (estimated ${estimate} s)`);
   if (flags.pair) {

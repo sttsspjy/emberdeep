@@ -49,12 +49,12 @@ const SK = [ // class, skill, part, dmg
   ['cleric', 'sanctuary', 'zone', 30.4], ['cleric', 'judgment', 'leg', 41.8], ['necro', 'legion', 'minion', 11.4], ['necro', 'harvest', 'burst', 40.2],
 ];
 for (const [cls, sk, part, dmg] of SK) near(ED.Stats.skillNums(sk, build(cls)).p[part].dmg, dmg, 0.06, `${sk}.${part}`);
-near(ED.Stats.skillNums('legion', build('necro', 0, { n_s1: 1, n_s1_a: 1 })).p.spikes.dmg, 23.5 * 1.2, 0.06, 'legion.spikes (rank 1, Endless Legion +20%)');
+{ const st = build('necro', 0, { n_s1: 1, n_s1_a: 1 }); near(ED.Stats.skillNums('legion', st).p.spikes.dmg, 5 + 0.8 * st.power, 1e-9, 'legion.spikes (rank 1: 5 + 0.8 x Power)'); }
 const sky = ED.Stats.skillNums('rain', build('ranger', 0, { r_s2: 1, r_s2_a: 1 }));
 near(sky.p.sky.dmg, 124.08, 0.1, 'Rainmaker + Skyfall sky');
 ok(!ED.Stats.skillNums('rain', build('ranger')).p.sky.on && sky.p.sky.on, 'Skyfall part gated by its stat');
 near(build('knight', 0, { k_s1: 1, k_s1_a: 1 }).s1Dmg, 0.375, 1e-9, 'slot damage compounds (Vanguard x1.25, Juggernaut x1.1)');
-near(build('cleric', 0, { c_s1: 1, c_s1_b: 1 }).s1Dmg, 1.5 * 0.9 - 1, 1e-9, 'slot damage compounds (Sanctum x1.5, Aura x0.9)');
+near(build('cleric', 0, { c_s1: 1, c_s1_b: 1 }).s1Dmg, 1.5 * 1.3 - 1, 1e-9, 'slot damage compounds (Sanctum x1.5, Aura x1.3)');
 const jug3 = build('knight', 0, { k_s1: 1, k_s1_a: 3 });
 near(jug3.jugShock, 0.6, 1e-9, 'Juggernaut rank 3 shock (0.4 + 2 x 0.1)'); near(jug3.bash, 0.6, 1e-9, 'Juggernaut rank 3 Shield Bash');
 near(build('knight', 0, { k_s2: 1 }).skill2Cd, 9 * (1 - 0.167), 0.001, 'Shield Throw cooldown with Shieldmaster'); near(ED.Stats.skillNums('charge', build('knight', 0, { k_s1: 1, k_s1_a: 1 })).range, 240, 1e-9, 'Juggernaut Charge range');
@@ -282,14 +282,14 @@ const charge = (w, p, len) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x1: p.x + 
     for (const k in b.r3) ok(t3[k] > 0 && (k in b.mods || k in (b.up || {}) ? t3[k] > t2[k] : !t2[k] && !t1[k]), id + ' stat ' + k + ' (rank 3 transform)');
   }
   const tt = (id, r) => ED.cardTotals(ED.BOONS[id], r);
-  near(tt('k_s1_a', 3).avalanche, 2, 1e-9, 'Avalanche slam 200% of the impact'); near(tt('k_s1_a', 3).avaStun, 0.8, 1e-9, 'Avalanche stun 0.8'); near(tt('k_s1_a', 3).avaCrack, 0.5, 1e-9, 'Avalanche cracks 50%');
+  near(tt('k_s1_a', 3).avalanche, 0.9, 1e-9, 'Avalanche slam 90% of the impact'); near(tt('k_s1_a', 3).avaStun, 0.8, 1e-9, 'Avalanche stun 0.8'); near(tt('k_s1_a', 3).avaCrack, 0.3, 1e-9, 'Avalanche cracks 30%');
   near(tt('k_s1_b', 3).bannerDur, 5, 1e-9, 'War Banner 5 s'); near(tt('k_s1_b', 3).bannerSlow, 0.4, 1e-9, 'War Banner slow 40%'); near(tt('k_s1_b', 3).bannerWeak, 0.25, 1e-9, 'War Banner weakens 25%');
-  near(tt('k_s2_a', 3).tempest, 3, 1e-9, 'Aegis Tempest three shields'); near(tt('k_s2_a', 3).vortexMul, 0.25, 1e-9, 'vortex 25% of a strike'); near(tt('k_s2_a', 3).vortexDur, 2.5, 1e-9, 'vortex 2.5 s'); near(tt('k_s2_b', 3).orbitMul, 0.3, 1e-9, 'Bastion strike 30%');
+  near(tt('k_s2_a', 3).tempest, 3, 1e-9, 'Aegis Tempest three shields'); near(tt('k_s2_a', 3).vortexMul, 0.08, 1e-9, 'vortex 8% of a strike'); near(tt('k_s2_a', 3).vortexDur, 2.5, 1e-9, 'vortex 2.5 s'); near(tt('k_s2_b', 3).orbitMul, 0.15, 1e-9, 'Bastion strike 15%');
   const N3 = ED.Stats.skillNums('charge', build('knight', 0, { k_s1: 1, k_s1_a: 3 }));
-  near(N3.p.quake.dmg, N3.p.impact.dmg * 2, 1e-6, 'quake part: 200% of the impact'); near(N3.p.crack.dmg, N3.p.impact.dmg * 0.5, 1e-6, 'crack part: 50% of the impact');
+  near(N3.p.quake.dmg, N3.p.impact.dmg * 0.9, 1e-6, 'quake part: 90% of the impact'); near(N3.p.crack.dmg, N3.p.impact.dmg * 0.3, 1e-6, 'crack part: 30% of the impact');
   ok(!N3.p.shock.on && ED.Stats.skillNums('charge', build('knight', 0, { k_s1: 1, k_s1_a: 2 })).p.shock.on, 'the slam replaces the shockwave part at rank 3 only');
 }
-{ // Avalanche (k_s1_a rank 3): the Charge carries foes, slams for 200% (r160, stun 0.8, bosses x1.5 never stunned), 3 cracks erupt after 0.3 s at 50% (a foe struck by one); ranks 1 and 2 do none of it
+{ // Avalanche (k_s1_a rank 3): the Charge carries foes, slams for 90% (r160, stun 0.8, bosses x1.5 never stunned), 3 cracks erupt after 0.3 s at 30% (a foe struck by one); ranks 1 and 2 do none of it
   const go = (rank) => {
     const { w, p } = stage('knight', { k_s1: 1, k_s1_a: rank }); p.x = 60; p.y = 192; const log = spy(w), x1 = p.x + 144; // castMove stops on 8 px steps
     const path = [40, 60, 80, 100, 120].map((d, i) => foe(w, p.x + d, p.y + (i % 2 ? 12 : -12))), elite = foe(w, p.x + 70, p.y + 18), side = foe(w, x1, p.y + 90), boss = foe(w, x1 - 10, p.y - 30), lone = foe(w, x1 + 190, p.y), gap = foe(w, x1 + 190 * Math.cos(1.05), p.y + 190 * Math.sin(1.05));
@@ -305,11 +305,11 @@ const charge = (w, p, len) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x1: p.x + 
   ok(Math.abs(r3.elite.x - r3.x1) > 50 && Math.abs(r3.elite.y - r3.p.y) > 24, `an elite is knocked aside, not carried (${Math.round(r3.elite.x - r3.x1)}, ${Math.round(r3.elite.y - r3.p.y)})`);
   ok(Math.abs(r3.boss.x - (r3.x1 - 10)) < 24, 'a boss stands');
   const q = partHits(r3.log, 'charge.quake');
-  ok(q.length === 8 && q.every(h => Math.abs(h.d / imp - (h.e === r3.boss ? 3 : 2)) < 0.01), `the slam hits ${q.length} foes at 200% of the impact, the boss at 300% (${q.map(h => (h.d / imp).toFixed(2)).join(' ')})`);
+  ok(q.length === 8 && q.every(h => Math.abs(h.d / imp - (h.e === r3.boss ? 1.35 : 0.9)) < 0.01), `the slam hits ${q.length} foes at 90% of the impact, the boss at 135% (${q.map(h => (h.d / imp).toFixed(2)).join(' ')})`);
   ok(!q.some(h => h.e === r3.lone || h.e === r3.gap), 'the slam stops at radius 160');
   ok(r3.stunSide > 0.6 && r3.stunSide <= 0.8 + 1e-9, `the slam stuns a foe off the path 0.8 s (${r3.stunSide.toFixed(2)})`); ok(!(r3.stunBoss > 0), 'a boss is never stunned by the slam');
   const cr = partHits(r3.log, 'charge.crack');
-  ok(r3.kinds.filter(k => k === 'crack').length >= 3 && cr.length >= 2 && cr.every(h => Math.abs(h.d / imp - 0.5) < 0.01), `the cracks erupt on the foes along them at 50% (${cr.length} hits)`);
+  ok(r3.kinds.filter(k => k === 'crack').length >= 3 && cr.length >= 2 && cr.every(h => Math.abs(h.d / imp - 0.3) < 0.01), `the cracks erupt on the foes along them at 30% (${cr.length} hits)`);
   ok(cr.some(h => h.e === r3.lone) && !cr.some(h => h.e === r3.gap), 'a foe on a crack is struck, one between two cracks is not');
   ok(new Set(cr.map(h => h.e.id)).size === cr.length, 'a foe is struck by at most one crack');
   { const tc = r3.log.find(h => h.part === 'charge.crack'), tq = r3.log.find(h => h.part === 'charge.quake'); ok(tc && tq && Math.abs((tc.t - tq.t) - 0.3) < 0.04, 'the cracks erupt 0.3 s after the slam'); }
@@ -361,7 +361,7 @@ const charge = (w, p, len) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x1: p.x + 
   const lastStrike = partHits(t3.log, 'shieldthrow.strike').pop();
   ok(t3.vz && lastStrike && Math.hypot(t3.vz.x - lastStrike.px, t3.vz.y - lastStrike.py) < 1, 'the vortex forms on the last foe struck');
   const vh = partHits(t3.log, 'shieldthrow.vortex');
-  ok(vh.length >= 20 && vh.every(h => Math.abs(h.d / strike - 0.25) < 0.01), `the vortex strikes for 25% of a strike (${vh.length} hits, ${vh[0] ? (vh[0].d / strike).toFixed(2) : '-'})`);
+  ok(vh.length >= 20 && vh.every(h => Math.abs(h.d / strike - 0.08) < 0.01), `the vortex strikes for 8% of a strike (${vh.length} hits, ${vh[0] ? (vh[0].d / strike).toFixed(2) : '-'})`);
   const perFoe = {}; for (const h of vh) perFoe[h.e.id] = (perFoe[h.e.id] || 0) + 1; const counts = Object.values(perFoe).sort((a, b) => b - a);
   ok(counts.length >= 2 && counts[0] >= 9 && counts[0] <= 11, `a foe inside the whole time is struck 4 times a second for 2.5 s (${counts.join(',')})`);
   ok(t3.pull && t3.pull.d1 && t3.pull.d.some((d0, i) => d0 > 40 && d0 < 100 && d0 - t3.pull.d1[i] > 40), `foes inside are pulled in about 60 px/s (${t3.pull && t3.pull.d1 ? t3.pull.d.map((d0, i) => Math.round(d0) + '>' + Math.round(t3.pull.d1[i])).join(' ') : '-'})`);
@@ -379,7 +379,7 @@ const charge = (w, p, len) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x1: p.x + 
     ok(f.vz && partHits(f.log, 'shieldthrow.vortex').length > 0, 'the vortex still forms on fodder and strikes it');
   }
 }
-{ // Bastion (k_s2_b rank 3): two shields orbit opposite each other (r60) until the next Throw, strike for 30%, never shortened by shots; a Throw sends one, a room change keeps the pair
+{ // Bastion (k_s2_b rank 3): two shields orbit opposite each other (r60) until the next Throw, strike for 15%, never shortened by shots; a Throw sends one, a room change keeps the pair
   const prime = (rank) => { const t = stage('knight', { k_s2: 1, k_s2_b: rank }); t.p.stats.crit = 0; t.es = [1, 2].map(k => foe(t.w, t.p.x + 40 * k, t.p.y)); t.w.playerSkill(t.p, 0, { d: 200 }, 1); let n = 0; while (n++ < 400 && !(t.p.shields.some(s => s.leg === 'orbit'))) run(t.w, 0.05); return t; };
   const b = prime(3), o = prime(2), orbiting = (t) => t.p.shields.filter(s => s.leg === 'orbit');
   b.w.enemies.length = 0; run(b.w, 0.1);
@@ -394,10 +394,10 @@ const charge = (w, p, len) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x1: p.x + 
     for (let i = 0; i < 4; i++) { const s = orbiting(t)[0]; t.w.spawnProj({ team: 1, kind: 'bone', x: s.pr.x, y: s.pr.y, a: 0, speed: 1, r: 4, dmg: 1, life: 5, owner: null, src: e }); run(t.w, 0.1); for (const f of t.w.fx) if (f.t === 'deflect') swat++; t.w.fx.length = 0; }
     ok(swat >= 3 && orbiting(t).length === 2 && orbiting(t)[0].orbitDur === Infinity, `shots are destroyed (${swat}) and the orbit stays`);
   }
-  { // orbit strikes: 30% of a strike, 0.3 s stun
+  { // orbit strikes: 15% of a strike, 0.3 s stun
     const t = prime(3), N = ED.Stats.skillNums('shieldthrow', t.p.stats), log = spy(t.w); t.w.enemies.length = 0; run(t.w, 0.1);
     const s = orbiting(t)[0], f1 = foe(t.w, s.pr.x, s.pr.y); f1.stun = 0; f1.stunCd = 0; run(t.w, 0.06);
-    const oh = partHits(log, 'shieldthrow.orbit'); ok(oh.length >= 1 && Math.abs(oh[0].d / N.p.strike.dmg - 0.3) < 0.01, `an orbit strike deals 30% of a strike (${oh[0] ? (oh[0].d / N.p.strike.dmg).toFixed(2) : '-'})`);
+    const oh = partHits(log, 'shieldthrow.orbit'); ok(oh.length >= 1 && Math.abs(oh[0].d / N.p.strike.dmg - 0.15) < 0.01, `an orbit strike deals 15% of a strike (${oh[0] ? (oh[0].d / N.p.strike.dmg).toFixed(2) : '-'})`);
     ok(f1.stun > 0.2 && f1.stun <= 0.3 + 1e-9, 'and stuns 0.3 s');
   }
   { // a Throw sends one shield out, the other keeps orbiting; the sent one rejoins opposite it
