@@ -93,7 +93,7 @@
 
   W.makeElite = function (e, affix) {
     e.elite = affix || this.rng.pick(ED.AFFIX_IDS);
-    e.hp *= ED.World.ELITE.hp + ED.World.ELITE.hpStep * (this.stratum - 1); e.maxHp = e.hp; e.dmg *= ED.World.ELITE.dmg; e.r = Math.round(e.r * 1.22); // elite HP x2.8 at stratum I up to x5.3 at VI
+    e.hp *= ED.World.ELITE.hp + ED.World.ELITE.hpStep * (this.stratum - 1); e.maxHp = e.hp; e.dmg *= ED.World.ELITE.dmg; e.r = Math.round(e.r * 1.22); // elite HP x2.4 at stratum I up to x4.4 at VI
     if (e.elite === 'swift') e.spd *= 1.4;
     if (e.elite === 'brutal') e.dmg *= 1.4;
     if (e.elite === 'warded') { e.ward = e.maxHp * 0.45; e.wardMax = e.ward; }
