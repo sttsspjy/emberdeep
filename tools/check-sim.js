@@ -728,5 +728,42 @@ for (let s = 1; s <= 6; s++) {
     go(w, 20); ok(trick.length === n1 && w.hostiles() === 0 && !w.zones.some(z => z.kind === 'spawn'), 'no pack after the boss dies');
   }
 }
+{ // veteran preset (sim.js --vet): flag parsing, the dodge plan against a shot and a telegraph (reaction time, walk, dash), the rider heading, skill charges, determinism, and an unchanged bot without the flag
+  const { parseVet, vetThreats, vetRisk, vetPlan, vetRider } = require('./sim.js');
+  const all = parseVet('1');
+  ok(parseVet(undefined) === null && parseVet('0') === null && all.size === 4 && all.has('charges') && all.has('hazard') && parseVet('dodge,rider').has('rider') && !parseVet('dodge,rider').has('hazard'), '--vet parses to a feature set, off when absent or 0');
+  const { w, p } = stage('knight', {});
+  const t0 = w.time, c = { dashN: 1 }, SPD = 200, REACT = 0.18;
+  w.spawnProj({ team: 1, kind: 'arrow', x: p.x + 150, y: p.y, a: Math.PI, speed: 300, r: 6, dmg: 20, life: 4 });
+  ok(vetThreats(w, p, SPD, REACT) === null, 'a shot the hero has not yet had the reaction time to see is not dodged');
+  w.time = t0 + 0.3;
+  const T = vetThreats(w, p, SPD, REACT);
+  ok(T && T.pj.length === 1, 'a shot older than the reaction time is a threat');
+  const plan = vetPlan(w, p, c, -1, 0, SPD, T);
+  ok(plan.risk > 0.5 && Math.abs(plan.my) > 0.3, `walking into a shot's line is risky (${plan.risk.toFixed(2)}) and the plan leaves the line (${plan.mx.toFixed(2)}, ${plan.my.toFixed(2)})`);
+  ok(vetRisk(T, p, plan.mx, plan.my, 100, SPD, false) < 0.05, 'the planned heading clears the shot');
+  const keep = vetPlan(w, p, c, 0, -1, SPD, T);
+  ok(keep.risk === 0 && keep.mx === 0 && keep.my === -1, 'a wanted heading that is safe is kept');
+  w.projs.length = 0;
+  const e = foe(w, p.x + 200, p.y), z = w.addZone({ kind: 'teleCone', x: p.x + 60, y: p.y, a: Math.PI, r: 120, arc: 1.6, dur: 0.6, dmg: 20, team: 1, src: e });
+  z.t = 0.3;
+  const Tz = vetThreats(w, p, SPD, REACT), pz = vetPlan(w, p, c, 0, 0, SPD, Tz);
+  ok(Tz && Tz.zn.length === 1 && pz.risk > 0.5 && (pz.mx || pz.my) && !pz.dash, `standing in a cone with 0.3 s left: the plan walks out (${pz.mx.toFixed(2)}, ${pz.my.toFixed(2)}), no dash`);
+  z.t = 0.5; // 0.1 s left: walking cannot clear it, a dash is untouchable through the hit
+  const Td = vetThreats(w, p, SPD, REACT), pd = vetPlan(w, p, c, 0, 0, SPD, Td), pn = vetPlan(w, p, { dashN: 0 }, 0, 0, SPD, Td);
+  ok(pd.dash && vetRisk(Td, p, pd.dash[0], pd.dash[1], 72, SPD, true) < 0.05 && pn.dash === null, 'with 0.1 s left a dash heading clears the cone; without a charge there is none');
+  w.zones.length = 0; w.enemies.length = 0;
+  const r = stage('ranger', { bladedash: 1 }), row = [30, 55, 80].map(d => foe(r.w, r.p.x + d, r.p.y));
+  const hd = vetRider(r.w, r.p, { dashN: 1 }, row, null, SPD);
+  ok(hd && hd[0] > 0.9, `a row of 3 foes ahead: the rider dash goes through them (${hd && hd.map(v => v.toFixed(2))})`);
+  ok(vetRider(r.w, r.p, { dashN: 0 }, row, null, SPD) === null && vetRider(r.w, r.p, { dashN: 1 }, row.slice(0, 2), null, SPD) === null, 'no rider dash without a charge or with 2 foes');
+  const nr = stage('ranger', {}); ok(vetRider(nr.w, nr.p, { dashN: 1 }, [30, 55, 80].map(d => foe(nr.w, nr.p.x + d, nr.p.y)), null, SPD) === null, 'no rider dash without a dash rider');
+  const run = (o) => runBot(Object.assign({ seed: 1000, n: 1, cls: ['ranger'], skill: 0.75, up: ED.UPGRADES.map(() => 0), mastery: 1, pick: 'smart', force: ['echo'], maxStratum: 1 }, o));
+  const a = run({}), b = run({ vet: 'charges' }), id = ED.CLASSES.ranger.skill;
+  ok(b.cnt.casts[id] > a.cnt.casts[id], `the second Echo charge is used (${a.cnt.casts[id]} -> ${b.cnt.casts[id]} casts of ${id})`);
+  const v1 = run({ vet: '1' }), v2 = run({ vet: '1' }), off = run({ vet: '0' });
+  ok(v1.time === v2.time && v1.kills === v2.kills && v1.hp === v2.hp, 'a --vet run is deterministic per seed');
+  ok(a.time === off.time && a.kills === off.kills && a.hp === off.hp, 'without --vet (or --vet=0) the bot is unchanged');
+}
 console.log(`${n} checks, ${fails} failed`);
 process.exit(fails ? 1 : 0);

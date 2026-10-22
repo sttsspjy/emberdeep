@@ -1,11 +1,12 @@
 // Usage: node tools/sim.js <heroes> <runs> <botSkill 0-1> <meta none|mid|max> [classes|-] [pact] [--pick=random|smart|legacy] [--start=random|class|generalist|rotate|<gateId>] [--gates=1|2] [--force=id[@slot],...]
-//   [--route=attack|skill1|skill2|element|random|rotate] [--fork=0|1|random|rotate] [--weapon=0|1|2|rotate] [--aimnoise=<angle rad>,<point px>|0] [--seed0=N] [--dark=smart|always|never] [--strata=N] [--out=rows.json] [--pair=rows.json] [--quiet] [--explain]   (parallel batches: tools/simpool.js)
+//   [--route=attack|skill1|skill2|element|random|rotate] [--fork=0|1|random|rotate] [--weapon=0|1|2|rotate] [--aimnoise=<angle rad>,<point px>|0] [--seed0=N] [--dark=smart|always|never] [--strata=N] [--vet[=charges,rider,dodge,hazard]] [--vetreact=<s>] [--out=rows.json] [--pair=rows.json] [--quiet] [--explain]   (parallel batches: tools/simpool.js)
 // Headless simulation harness: loads the game's sim files into this Node context and drives bot heroes through full runs (deterministic per seed: the bot has its own seeded RNG).
 // Bot policy: fight, claim room rewards, use rest sites and shops, explore every unvisited room nearest-first, then head for the boss.
 // Dark rooms follow --dark: smart (default) enters one while every living hero has at least DARK_HP of max HP, always enters, never skips them.
 // Pick policies: 'random' takes a random card; 'smart' takes the card of best marginal value (tools/pick.js: damage and effective health over the next three strata from the sheet model, folded mechanics, milestone value of keystone / evolution / duo; start card, forge, rerolls and relics by the same value);
 // 'legacy' is the v3 smart order in smartScore (evolution > keystone > duo > own-path boon > element gate while a slot is free > open General > anything), kept for paired comparison. --explain prints every pick of a single run with its value parts.
 // Skill (0-1) is the share of ticks the bot pays attention to floor hazards; the rest of the time it moves on instinct.
+// --vet: the veteran preset, a bot that plays like a skilled player (see "veteran preset" below); --vetreact=<s> sets its reaction time (default 0.18); without --vet every number is unchanged.
 // The summary reports win rate, pacing, hits and time to kill, hero DPS, damage share by source, cooldown reduction, the dark-room lines and the path lines (see summarize); every mean prints its standard error.
 // Per cleared combat / elite / dark room it also reports kills (threat/fodder), peak live foes and the xp dropped against the room budget. Bot fights: nearest threat foe within weapon reach, else the nearest fodder; with 4+ foes within 80 px it steps toward the emptier side (crowd slow).
 // --start: how the start offer is picked (default: the best gain under --pick=smart, else uniform over its cards; random: always uniform; class: the class element's gate; a gate id or generalist forces that card; rotate: run i takes fire, ice, lightning, poison, holy, shadow, generalist in turn).
@@ -103,6 +104,201 @@ function crowdEscape(w, p, near) {
     let s = t === 1 || t === 2 || t === 3 || (t === 5 && w.locked) ? 99 : 0;
     for (const e of near) if (live(e) && U.dist2(e.x, e.y, qx, qy) < r2) s++;
     if (s < bs) { bs = s; best = [Math.cos(a), Math.sin(a)]; }
+  }
+  return best;
+}
+
+// ---------------- veteran preset (--vet) ----------------
+// A skilled player's habits on top of the bot: extra skill charges, dash riders through packs, a look-ahead dodge of shots, telegraphs and body-hit lunges (walk first, dash when walking cannot clear them), a constant watch on the ground.
+// --vet turns every feature on, --vet=charges,rider,dodge,hazard only the named ones; without the flag none of this code runs.
+const VET_ALL = ['charges', 'rider', 'dodge', 'hazard'];
+const parseVet = (v) => (v === undefined || v === '0' || v === 'off' ? null : new Set(v === '1' || v === 'all' ? VET_ALL : String(v).split(',')));
+const VH = 1, VDT = 0.05, VN = 20; // look-ahead (s), sample step (s), samples
+let VR = 0.18; // reaction time (s), --vetreact=<s>: a shot, telegraph or lunge older than this is dodged; in a lapse of attention (c.attn false) VLAPSE s more
+const VLAPSE = 0.3;
+const SEEN = new WeakMap(), SWING = new WeakMap(); // first-seen time of each foe shot, wind-up record of each lunging foe
+const VDIRS = Array.from({ length: 16 }, (_, k) => [Math.cos(k * U.TAU / 16), Math.sin(k * U.TAU / 16)]);
+
+// Distance a hero of radius r walks from (x, y) along the unit heading (ux, uy) within maxD: walls, chasms and locked doors stop it.
+function reachDist(room, locked, x, y, ux, uy, maxD, r) {
+  let d = 0;
+  for (let s = 6; ; s += 6) {
+    const q = Math.min(s, maxD), t = D.tileAt(room, x + ux * (q + r), y + uy * (q + r));
+    if (t === 1 || t === 2 || t === 3 || (t === 5 && locked)) break;
+    d = q;
+    if (q >= maxD) break;
+  }
+  return d;
+}
+
+// Threats to hero p over the next VH seconds, or null when none reaches it: foe shots (flight sampled every VDT), wind-up telegraphs resolving within VH (tl: time left), standing fields, and body-hit lunges and bashes (a foe still, then moving along its aim). Only what the hero had time to see (react seconds) counts.
+function vetThreats(w, p, speed, react) {
+  const room = w.room, locked = w.locked, R = speed * VH + 60, mhp = p.maxHp, low = 2 - p.hp / mhp;
+  const wt = (dmg) => (0.5 + Math.min(2.5, 8 * dmg / mhp)) * low;
+  let T = null;
+  const get = () => T || (T = { room, pj: [], hm: [], zn: [], ar: [], mv: [], ln: [] });
+  if (D.tileAt(room, p.x, p.y) === 4) get(); // standing on a hazard tile: the plan walks off it
+  for (const pr of w.projs) {
+    if (pr.team !== 1 || pr.dead || pr.ghost) continue;
+    let t0 = SEEN.get(pr);
+    if (t0 === undefined) SEEN.set(pr, t0 = w.time);
+    if (w.time - t0 < react) continue;
+    const sp = Math.hypot(pr.vx, pr.vy) || 1, far = sp * Math.min(VH, pr.life) * Math.exp((pr.accel || 0) * VH);
+    if (pr.homing) { // a homing shot turns toward the hero: simulated per heading in vetRisk
+      if (U.dist2(p.x, p.y, pr.x, pr.y) < (R + far) ** 2) get().hm.push({ x: pr.x, y: pr.y, vx: pr.vx, vy: pr.vy, rate: pr.homing, n: Math.min(VN, Math.floor((pr.life - 1e-6) / VDT)), hr: p.r + pr.r + 1, wt: wt(pr.dmg) });
+      continue;
+    }
+    if (!pr.turn && U.segDist2(p.x, p.y, pr.x, pr.y, pr.x + pr.vx / sp * far, pr.y + pr.vy / sp * far) > (R + pr.r + p.r) ** 2) continue;
+    let x = pr.x, y = pr.y, vx = pr.vx, vy = pr.vy, n = 0;
+    const xs = [x], ys = [y], ac = Math.exp((pr.accel || 0) * VDT);
+    for (let j = 1; j <= VN && j * VDT < pr.life; j++) {
+      if (pr.turn) { const a = Math.atan2(vy, vx) + pr.turn * VDT, s = Math.hypot(vx, vy); vx = Math.cos(a) * s; vy = Math.sin(a) * s; }
+      vx *= ac; vy *= ac; x += vx * VDT; y += vy * VDT;
+      if (D.blocksShots(D.tileAt(room, x, y), locked)) break;
+      xs.push(x); ys.push(y); n = j;
+    }
+    if (n) get().pj.push({ xs, ys, n, hr: p.r + pr.r + 1, wt: wt(pr.dmg) });
+  }
+  for (const z of w.zones) {
+    if (z.team !== 1 || z.dead) continue;
+    const k = z.kind;
+    if (k === 'tele' || k === 'teleLine' || k === 'teleCone') {
+      const tl = z.dur - z.t;
+      if (tl > VH || tl < -0.02 || z.t < react) continue;
+      const x1 = z.x + Math.cos(z.a || 0) * (z.len || 0), y1 = z.y + Math.sin(z.a || 0) * (z.len || 0);
+      if (k === 'teleLine' ? U.segDist2(p.x, p.y, z.x, z.y, x1, y1) > (z.w / 2 + R) ** 2 : U.dist2(z.x, z.y, p.x, p.y) > (z.r + R) ** 2) continue;
+      const s = z.src, laser = !!s && !!s.def && !!s.def.pattern && s.def.pattern.type === 'laser'; // a warn-only line is the caster's aimed shot, dive, charge or beam (4 ticks): weighed by the caster's damage
+      get().zn.push({ z, tl: Math.max(0, tl), x1, y1, ext: laser ? 0.4 : 0, wt: z.dmg > 0 ? wt(z.dmg) : s && s.dmg > 0 ? wt(s.dmg * (laser ? 4 : 1)) : 0.35 * low });
+    } else if ((k === 'poison' || k === 'fire' || k === 'mire') && U.dist2(z.x, z.y, p.x, p.y) < (z.r + R) ** 2) get().ar.push({ x: z.x, y: z.y, r: z.r + p.r * 0.5, wt: k === 'mire' ? 0.12 : 0.5 * low });
+    else if (k === 'laser' && z.t < z.dur && U.segDist2(p.x, p.y, z.x, z.y, z.x + Math.cos(z.a) * z.len, z.y + Math.sin(z.a) * z.len) < (z.w / 2 + R) ** 2) get().ln.push({ z, x1: z.x + Math.cos(z.a) * z.len, y1: z.y + Math.sin(z.a) * z.len, left: z.dur - z.t, wt: wt(z.dmg) });
+  }
+  for (const e of w.enemies) {
+    if (e.hp <= 0 || e.spawnT > 0 || e.burrowed) continue;
+    const d = e.def, M = d.ai === 'chaser' && d.lunge ? d.lunge : d.ai === 'tank' && d.bash ? d.bash : null;
+    if (!M) continue;
+    let r = SWING.get(e); // r.ok: the wind-up this state follows lasted `react`, so the hero saw it coming
+    if (!r || r.st !== e.st) SWING.set(e, r = { st: e.st, t0: w.time, ok: !!r && r.st === 'windup' && w.time - r.t0 >= react });
+    if (U.dist2(e.x, e.y, p.x, p.y) > (R + 140) ** 2) continue;
+    const bash = d.ai === 'tank', go = bash ? 'bash' : 'lunge';
+    let tw = -1, dur = M.dur;
+    if (e.st === 'windup' && (!bash || e.vars.atk === 'bash')) { if (w.time - r.t0 >= react) tw = e.t; } else if (e.st === go && r.ok) { tw = 0; dur = e.t; }
+    if (tw < 0 || tw > VH) continue;
+    get().mv.push({ x: e.x, y: e.y, ca: Math.cos(e.aimA), sa: Math.sin(e.aimA), tw, sp: M.speed, dur, hr: e.r + p.r + 1, wt: wt(e.dmg) });
+  }
+  return T;
+}
+
+// Risk of hero p taking a heading (ux, uy) at `speed` (px/s; a dash: the dash speed, untouchable for DASH.t) against threats T: summed weights of the hits it would take, plus a small cost for standing on hazard tiles.
+// reach = distance the heading allows; the hero stops there.
+function vetRisk(T, p, ux, uy, reach, speed, dash) {
+  const DT = ED.CONST.DASH.t, DS = ED.CONST.DASH.speed;
+  const at = (t) => Math.min(dash ? DS * Math.min(t, DT) : speed * t, reach);
+  let risk = 0;
+  for (const q of T.pj) {
+    for (let j = 1; j <= q.n; j++) {
+      const t = j * VDT;
+      if (dash && t <= DT) continue;
+      const d = at(t);
+      if (U.segDist2(p.x + ux * d, p.y + uy * d, q.xs[j - 1], q.ys[j - 1], q.xs[j], q.ys[j]) < q.hr * q.hr) { risk += q.wt; break; }
+    }
+  }
+  for (const q of T.hm) {
+    let x = q.x, y = q.y, vx = q.vx, vy = q.vy;
+    const sp = Math.hypot(vx, vy);
+    for (let j = 1; j <= q.n; j++) {
+      const t = j * VDT, d = at(t), hx = p.x + ux * d, hy = p.y + uy * d, cur = Math.atan2(vy, vx);
+      const na = cur + U.clamp(U.angDiff(cur, Math.atan2(hy - y, hx - x)), -q.rate * VDT, q.rate * VDT), nx = x + Math.cos(na) * sp * VDT, ny = y + Math.sin(na) * sp * VDT;
+      if (!(dash && t <= DT) && U.segDist2(hx, hy, x, y, nx, ny) < q.hr * q.hr) { risk += q.wt; break; }
+      vx = Math.cos(na) * sp; vy = Math.sin(na) * sp; x = nx; y = ny;
+    }
+  }
+  for (const q of T.zn) {
+    if (dash && q.tl <= DT) continue;
+    const z = q.z;
+    for (let k = 0; k < (q.ext ? 2 : 1); k++) { // a beam also hits for q.ext s after its warning ends
+      const d = at(q.tl + k * q.ext), hx = p.x + ux * d, hy = p.y + uy * d;
+      let hit;
+      if (z.kind === 'tele') hit = U.dist2(hx, hy, z.x, z.y) < (z.r + p.r * 0.6 + 6) ** 2;
+      else if (z.kind === 'teleLine') hit = U.segDist2(hx, hy, z.x, z.y, q.x1, q.y1) < (z.w / 2 + p.r * (z.warnOnly ? 0.9 : 0.6) + 6) ** 2;
+      else { const dx = hx - z.x, dy = hy - z.y, dd = Math.hypot(dx, dy); hit = dd < z.r + p.r + 4 && Math.abs(U.angDiff(z.a, Math.atan2(dy, dx))) < z.arc / 2 + 6 / Math.max(dd, 30); }
+      if (hit) { risk += q.wt; break; }
+    }
+  }
+  for (const q of T.ln) { // a live beam hits every 0.12 s
+    for (let t = 0.06; t <= q.left; t += 0.12) {
+      if (dash && t <= DT) continue;
+      const d = at(t);
+      if (U.segDist2(p.x + ux * d, p.y + uy * d, q.z.x, q.z.y, q.x1, q.y1) < (q.z.w / 2 + p.r) ** 2) risk += q.wt;
+    }
+  }
+  for (const q of T.ar) {
+    let n = 0;
+    for (let j = 1; j <= VN; j++) { const t = j * VDT; if (dash && t <= DT) continue; const d = at(t); if (U.dist2(p.x + ux * d, p.y + uy * d, q.x, q.y) < q.r * q.r) n++; }
+    risk += q.wt * n / VN;
+  }
+  for (const q of T.mv) {
+    for (let j = 1; j <= VN; j++) {
+      const t = j * VDT;
+      if (t < q.tw || (dash && t <= DT)) continue;
+      const m = Math.min(t - q.tw, q.dur) * q.sp, d = at(t);
+      if (U.dist2(p.x + ux * d, p.y + uy * d, q.x + q.ca * m, q.y + q.sa * m) < q.hr * q.hr) { risk += q.wt; break; }
+    }
+  }
+  for (let j = 2; j <= VN; j += 2) {
+    const t = j * VDT;
+    if (dash && t <= DT) continue;
+    const d = at(t);
+    if (D.tileAt(T.room, p.x + ux * d, p.y + uy * d) === 4) risk += 0.05;
+  }
+  return risk;
+}
+
+// The dodge: (wx, wy) is the heading the fight wants. Keeps it when it is safe, else the safest of staying and 16 headings (a small cost for leaving the wanted heading); when even that risks a real hit, a dash heading that clears it.
+// Returns { mx, my, risk (of the wanted heading), dash: [ux, uy] | null }.
+function vetPlan(w, p, c, wx, wy, speed, T) {
+  const room = w.room, locked = w.locked, wl = Math.hypot(wx, wy), has = wl > 0.05, wux = has ? wx / wl : 0, wuy = has ? wy / wl : 0;
+  const risk0 = vetRisk(T, p, wux, wuy, has ? reachDist(room, locked, p.x, p.y, wux, wuy, speed * VH, p.r) : 0, speed, false);
+  if (risk0 <= 0.02) return { mx: wx, my: wy, risk: 0, dash: null };
+  let best = { mx: 0, my: 0, risk: vetRisk(T, p, 0, 0, 0, speed, false) }, bc = best.risk + (has ? 0.15 : 0);
+  for (const [ux, uy] of VDIRS) {
+    const r = vetRisk(T, p, ux, uy, reachDist(room, locked, p.x, p.y, ux, uy, speed * VH, p.r), speed, false), cost = r + (has ? 0.3 * (1 - (ux * wux + uy * wuy)) / 2 : 0.12);
+    if (cost < bc) { bc = cost; best = { mx: ux, my: uy, risk: r }; }
+  }
+  let dash = null;
+  if (best.risk >= 0.7 && c.dashN >= 1 && !p.skillMove && !(p.dashT > 0)) {
+    let br = best.risk - 0.35;
+    for (const [ux, uy] of VDIRS) {
+      const r = vetRisk(T, p, ux, uy, reachDist(room, locked, p.x, p.y, ux, uy, ED.CONST.DASH.speed * ED.CONST.DASH.t, p.r), speed, true);
+      if (r < br) { br = r; dash = [ux, uy]; }
+    }
+  }
+  return { mx: best.mx, my: best.my, risk: risk0, dash };
+}
+
+// A dash heading for the owned dash riders, or null: dashDmg needs 3 foes struck by the 72 px path, dashFire 3 foes within 24 px of it, dashFrost / dashBomb the foes within 80 / 60 px of the start (counts add up, 3 are needed).
+// The heading must be safe (no hazard landing, no hit waiting) and among equals lands farthest from the foes; one charge stays for dodging when the hero holds several.
+function vetRider(w, p, c, foes, T, speed) {
+  const st = p.stats, dmg = st.dashDmg > 0, fire = st.dashFire > 0, frost = st.dashFrost > 0, bomb = st.dashBomb > 0;
+  if (!(dmg || fire || frost || bomb) || c.dashN < ((st.dashCharges | 0) > 1 ? 2 : 1) || p.skillMove || p.dashT > 0) return null;
+  const near = foes.filter(e => U.dist2(e.x, e.y, p.x, p.y) < 160 * 160);
+  if (near.length < 3) return null;
+  const start = (frost ? near.filter(e => U.dist2(e.x, e.y, p.x, p.y) < (80 + e.r) ** 2).length : 0) + (bomb ? near.filter(e => U.dist2(e.x, e.y, p.x, p.y) < (60 + e.r) ** 2).length : 0);
+  const len = ED.CONST.DASH.speed * ED.CONST.DASH.t;
+  let best = null, bs = 2.5;
+  for (const [ux, uy] of VDIRS) {
+    const rd = reachDist(w.room, w.locked, p.x, p.y, ux, uy, len, p.r);
+    if (rd < 40) continue;
+    const x1 = p.x + ux * rd, y1 = p.y + uy * rd;
+    let struck = 0, trail = 0, away = 1e9;
+    for (const e of near) {
+      const d2 = U.segDist2(e.x, e.y, p.x, p.y, x1, y1);
+      if (d2 < (e.r + p.r + 8) ** 2) struck++;
+      if (d2 < (e.r + 24) ** 2) trail++;
+      away = Math.min(away, Math.hypot(e.x - x1, e.y - y1));
+    }
+    const n = start + (dmg && struck >= 3 ? struck : 0) + (fire && trail >= 3 ? trail : 0) + away / 1e4;
+    if (n <= bs || D.tileAt(w.room, x1, y1) === 4 || (T && vetRisk(T, p, ux, uy, rd, speed, true) >= 0.3)) continue;
+    bs = n; best = [ux, uy];
   }
   return best;
 }
@@ -334,6 +530,8 @@ const bareDps = (cls, weapon) => { const wp = ED.WEAPONS[weapon]; return wp.dmg 
 function runBot(opts) {
   U.resetUid(1);
   const brng = U.RNG((opts.seed ^ 0xb07b07) >>> 0), policy = opts.pick || process.env.PICK || 'random';
+  VR = opts.vetReact >= 0 ? opts.vetReact : 0.18;
+  const vet = parseVet(opts.vet), vetC = !!vet && vet.has('charges'), vetR = !!vet && vet.has('rider'), vetD = !!vet && vet.has('dodge'), vetH = !!vet && vet.has('hazard');
   AIM[0] = opts.aimNoise ? opts.aimNoise[0] : 0.12; AIM[1] = opts.aimNoise ? opts.aimNoise[1] : 36;
   const forced = (opts.force || []).map(f => { const m = /^([a-z_]+)(?:@(\d+))?$/.exec(f); return m ? { id: m[1], slot: m[2] === undefined ? null : +m[2] } : null; }).filter(Boolean);
   const ctx = { force: forced.filter(f => ED.BOONS[f.id] && ED.BOONS[f.id].gate), gatesCap: opts.gates || 2, start: opts.start || 'random', startAuto: !opts.start, explain: !!opts.explain, w: null };
@@ -454,7 +652,7 @@ function runBot(opts) {
     return r;
   };
   const ctl = {};
-  for (const p of w.players.values()) ctl[p.pid] = { atk: 0, skill: 0, skill2: 0, dashN: p.stats.dashCharges, dashT: 0, goal: null, attn: true, attnT: 0 };
+  for (const p of w.players.values()) ctl[p.pid] = { atk: 0, skill: 0, skill2: 0, dashN: p.stats.dashCharges, dashT: 0, goal: null, attn: true, attnT: 0, chg: p.stats.maxCharges, mchg: p.stats.maxCharges, vgap: 0, appT: 0 };
   const dt = 1 / 60, touch = [], crowd = [];
   let steps = 0;
   const maxSteps = 60 * MAX_SECONDS;
@@ -466,7 +664,13 @@ function runBot(opts) {
     steps++;
     for (const p of w.players.values()) {
       const c = ctl[p.pid];
-      c.atk -= dt; c.skill -= dt; c.skill2 -= dt; ED.Sim.dashTick(c, p.stats, dt); c.goal = null;
+      c.atk -= dt; c.skill2 -= dt; ED.Sim.dashTick(c, p.stats, dt); c.goal = null;
+      if (vetC) { // skill charges as the client keeps them: a charge refills each skillCd while below the maximum, a new maximum (Echo) grants its charge at once
+        const mc = p.stats.maxCharges;
+        if (mc > c.mchg) c.chg += mc - c.mchg;
+        c.mchg = mc; c.chg = Math.min(c.chg, mc); c.vgap -= dt;
+        if (c.chg < mc) { c.skill -= dt; while (c.skill <= 0 && c.chg < mc) { c.chg++; c.skill = c.chg < mc ? c.skill + p.stats.skillCd : 0; } }
+      } else c.skill -= dt;
       if (p.offer) {
         let ix = pickIndex(p, p.offers[0], policy, brng, ctx);
         if (ix < 0) { w.reroll(p.pid); ix = pickIndex(p, p.offers[0], policy, brng, ctx, true); } // one reroll per offer
@@ -483,19 +687,26 @@ function runBot(opts) {
         if (nf && (!tgt || Math.sqrt(bd) - (p.stats.melee ? tgt.r : 0) >= (p.stats.melee ? p.stats.weapon.range : 380))) { tgt = nf; bd = fd; }
         const d = Math.sqrt(bd);
         const ideal = p.stats.melee ? (p.stats.weapon.range * 0.6 + tgt.r) : (p.stats.deadeye ? 230 : 170); // Deadeye keeps its distance
+        if (vetH) c.appT = d > ideal + 30 ? c.appT + dt : 0; // seconds spent closing in without arriving
         let dir;
         if (d > ideal + 10) dir = bfsDir(w.room, w.locked, p.x, p.y, tgt.x, tgt.y);
         else if (d < ideal - 20) dir = [p.x - tgt.x, p.y - tgt.y];
         else dir = [-(tgt.y - p.y), tgt.x - p.x];
         // dodge projectiles
         let danger = false;
-        for (const pr of w.projs) if (pr.team === 1 && U.dist2(pr.x, pr.y, p.x, p.y) < 55 * 55) { danger = true; dir = [dir[0] + (p.x - pr.x) * 2, dir[1] + (p.y - pr.y) * 2]; }
-        for (const z of w.zones) if ((z.kind === 'tele' || z.kind === 'poison' || z.kind === 'fire') && z.team === 1 && U.dist2(z.x, z.y, p.x, p.y) < (z.r + 12) ** 2) { danger = true; dir = [p.x - z.x + dir[0] * 0.2, p.y - z.y + dir[1] * 0.2]; }
+        if (!vetD) { // --vet dodge: the look-ahead plan below replaces these
+          for (const pr of w.projs) if (pr.team === 1 && U.dist2(pr.x, pr.y, p.x, p.y) < 55 * 55) { danger = true; dir = [dir[0] + (p.x - pr.x) * 2, dir[1] + (p.y - pr.y) * 2]; }
+          for (const z of w.zones) if ((z.kind === 'tele' || z.kind === 'poison' || z.kind === 'fire') && z.team === 1 && U.dist2(z.x, z.y, p.x, p.y) < (z.r + 12) ** 2) { danger = true; dir = [p.x - z.x + dir[0] * 0.2, p.y - z.y + dir[1] * 0.2]; }
+        }
         let l = Math.hypot(dir[0], dir[1]) || 1;
         const esc = crowdEscape(w, p, w.foesNear(p.x, p.y, CROWD_R + 60, crowd));
         if (esc) { dir = [esc[0] + dir[0] / l * 0.35, esc[1] + dir[1] / l * 0.35]; l = Math.hypot(dir[0], dir[1]) || 1; } // out of a crowd (the walking slow), keeping a little of the chase
         mx = dir[0] / l; my = dir[1] / l;
         if (brng.next() > skill) { mx += (brng.next() - 0.5) * 1.5; my += (brng.next() - 0.5) * 1.5; }
+        let plan = null, T = null;
+        const spd = vetD || vetR ? p.stats.moveSpeed * ED.Stats.moveRate(p) : 0;
+        if (vetD || vetR) T = vetThreats(w, p, spd, c.attn ? VR : VR + VLAPSE);
+        if (vetD && T) { plan = vetPlan(w, p, c, mx, my, spd, T); mx = plan.mx; my = plan.my; danger = plan.risk > 0.02; }
         const a = Math.atan2(tgt.y - p.y, tgt.x - p.x), st = p.stats;
         const inRange = st.melee ? d - tgt.r < st.weapon.range : d < 380;
         if (st.channel && (c.holdT = (c.holdT || 0) - dt) <= 0) { c.hold = brng.next() < skill; c.holdT = 0.5; } // Pyroclast: the choice to stand still is renewed every 0.5 s (a roll per tick would break Channel within a few ticks)
@@ -504,10 +715,14 @@ function runBot(opts) {
           w.playerAttack(p, a + gauss(brng) * AIM[0] * (1 - skill));
           c.atk = Math.max(c.atk, -dt) + ED.Stats.attackInterval(p); // carries the overshoot of this tick, as the client does
         }
-        if (c.skill <= 0 && botCast(w, p, 0, tgt, d, a, foes, brng, skill)) c.skill = st.skillCd;
+        if (vetC) { if (c.chg > 0 && c.vgap <= 0 && !p.skillMove && botCast(w, p, 0, tgt, d, a, foes, brng, skill)) { if (c.chg === st.maxCharges) c.skill = st.skillCd; c.chg--; c.vgap = 0.35; } }
+        else if (c.skill <= 0 && botCast(w, p, 0, tgt, d, a, foes, brng, skill)) c.skill = st.skillCd;
         if (c.skill2 <= 0 && st.skill2Cd && botCast(w, p, 1, tgt, d, a, foes, brng, skill)) c.skill2 = st.skill2Cd;
-        if (danger && c.dashN >= 1 && brng.next() < skill * 0.5) { p.dashT = ED.CONST.DASH.t; p.dashDx = mx; p.dashDy = my; w.playerDash(p, mx, my); ED.Sim.dashTry(c, p.stats); }
-        else if (!danger && c.dashN >= 1 && d <= 90 && (p.stats.dashDmg || p.stats.dashFire || p.stats.dashFrost || p.stats.dashBomb) && brng.next() < skill * 0.5) { // dash rider: dash through the target
+        let dd = null; // --vet: the dash heading of the dodge plan, else of a rider dash through a pack
+        if (vetD && plan && plan.dash) dd = plan.dash; else if (vetR && !danger) dd = vetRider(w, p, c, foes, T, spd);
+        if (dd) { p.dashT = ED.CONST.DASH.t; p.dashDx = dd[0]; p.dashDy = dd[1]; w.playerDash(p, dd[0], dd[1]); ED.Sim.dashTry(c, p.stats); }
+        else if (!vetD && danger && c.dashN >= 1 && brng.next() < skill * 0.5) { p.dashT = ED.CONST.DASH.t; p.dashDx = mx; p.dashDy = my; w.playerDash(p, mx, my); ED.Sim.dashTry(c, p.stats); }
+        else if (!vetR && !danger && c.dashN >= 1 && d <= 90 && (p.stats.dashDmg || p.stats.dashFire || p.stats.dashFrost || p.stats.dashBomb) && brng.next() < skill * 0.5) { // dash rider: dash through the target
           const l2 = Math.hypot(tgt.x - p.x, tgt.y - p.y) || 1, ddx = (tgt.x - p.x) / l2, ddy = (tgt.y - p.y) / l2;
           p.dashT = ED.CONST.DASH.t; p.dashDx = ddx; p.dashDy = ddy; w.playerDash(p, ddx, ddy); ED.Sim.dashTry(c, p.stats);
         }
@@ -524,8 +739,8 @@ function runBot(opts) {
         if (dir) { const l = Math.hypot(dir[0], dir[1]) || 1; mx = dir[0] / l; my = dir[1] / l; }
       }
       // floor hazards: the bot watches the ground on a share `skill` of its ticks (redrawn every 0.25 s) and steers off or around hazard tiles
-      if ((c.attnT -= dt) <= 0) { c.attn = brng.next() < skill; c.attnT = 0.25; }
-      if (c.attn && (mx || my)) { const v = avoidHazard(w.room, p, mx, my); mx = v[0]; my = v[1]; }
+      if ((c.attnT -= dt) <= 0) { c.attn = brng.next() < (vetD ? 1 - (1 - skill) / 2 : skill); c.attnT = 0.25; } // --vet dodge: half the lapses
+      if ((c.attn || (vetH && foes.length && c.appT < 3)) && (mx || my)) { const v = avoidHazard(w.room, p, mx, my); mx = v[0]; my = v[1]; } // --vet hazard: always watches the ground in a fight, unless 3 s of closing in on a foe have not arrived (it stands across hazard floor)
       if (opts.trace) opts.trace(w, p, mx, my, foes, c);
       ED.Sim.movePlayer(p, { mx, my }, dt, w.room, w.locked, w.zones, w.foesNear(p.x, p.y, 40, touch));
     }
@@ -551,7 +766,7 @@ function runBot(opts) {
       for (const z of w.zones) if (z.owner === p0id && z.team === 0) nz++;
       if (np > rec.peak.projs) rec.peak.projs = np; if (nz > rec.peak.zones) rec.peak.zones = nz;
     }
-    for (const m of w.msgs) if (m.t === 'refund' && ctl[m.to]) { const k = ctl[m.to]; rec.cnt.refunds++; if (m.slot === 1) k.skill2 = m.s ? k.skill2 - m.s : 0; else k.skill = m.s ? k.skill - m.s : 0; } // cooldown refunds { slot, s }
+    for (const m of w.msgs) if (m.t === 'refund' && ctl[m.to]) { const k = ctl[m.to]; rec.cnt.refunds++; if (m.slot === 1) k.skill2 = m.s ? k.skill2 - m.s : 0; else if (vetC && !m.s) k.chg = Math.min(k.mchg, k.chg + 1); else k.skill = m.s ? k.skill - m.s : 0; } // cooldown refunds { slot, s }
     for (const ev of w.fx) {
       if (ev.t === 'smite') rec.cnt.smite++; else if (ev.t === 'reap') rec.cnt.reap++; else if (ev.t === 'toll') rec.cnt.toll++; else if (ev.t === 'lance') rec.cnt.lance++;
       else if (ev.t === 'parry') rec.cnt.parries++;
@@ -748,7 +963,7 @@ const optsFromFlags = (flags) => ({
   pick: flags.pick || process.env.PICK || 'random', start: flags.start, gates: flags.gates === undefined ? undefined : +flags.gates, route: flags.route, fork: flags.fork === undefined || isNaN(+flags.fork) ? flags.fork : +flags.fork,
   weapon: flags.weapon === undefined || isNaN(+flags.weapon) ? flags.weapon : +flags.weapon, explain: !!flags.explain,
   aimNoise: flags.aimnoise === undefined ? undefined : flags.aimnoise.split(',').map(Number).concat([0]).slice(0, 2).map(v => (Number.isFinite(v) ? v : 0)),
-  force: flags.force ? flags.force.split(',') : [], dark: flags.dark, maxStratum: flags.strata === undefined ? undefined : +flags.strata,
+  force: flags.force ? flags.force.split(',') : [], dark: flags.dark, maxStratum: flags.strata === undefined ? undefined : +flags.strata, vet: flags.vet, vetReact: flags.vetreact === undefined ? undefined : +flags.vetreact,
 });
 
 // Expands the rotating flags for run i of a batch over nc classes: route = floor(i / nc) mod 4, fork = floor(i / (nc x 4)) mod 2, weapon = floor(i / (nc x 8)) mod 3, start = the six gates then generalist.
@@ -774,7 +989,7 @@ function pairReport(rows, base) {
   }).join('\n');
 }
 
-module.exports = { runBot, summarize, classLines, metaProfile, rowOf, optsFromFlags, jobOpts, pairReport, ED };
+module.exports = { runBot, summarize, classLines, metaProfile, rowOf, optsFromFlags, jobOpts, pairReport, ED, parseVet, vetThreats, vetRisk, vetPlan, vetRider };
 if (require.main === module) {
   const flags = {}, args = [];
   for (const a of process.argv.slice(2)) { const m = /^--([a-z0-9]+)(?:=(.*))?$/i.exec(a); if (m) flags[m[1]] = m[2] === undefined ? '1' : m[2]; else args.push(a); }
@@ -792,7 +1007,7 @@ if (require.main === module) {
       for (const l of r.log) console.log(l);
     }
   }
-  console.log(`\npick=${pick}${o.start ? ' start=' + o.start : ''}${o.gates ? ' gates=' + o.gates : ''}${force.length ? ' force=' + force.join(',') : ''}${flags.strata ? ' strata<=' + flags.strata + ' (capped runs: win, depth and death lines do not apply)' : ''}\n` + summarize(results));
+  console.log(`\npick=${pick}${o.vet && o.vet !== '0' ? ' vet=' + o.vet + (o.vetReact >= 0 ? ' react=' + o.vetReact : '') : ''}${o.start ? ' start=' + o.start : ''}${o.gates ? ' gates=' + o.gates : ''}${force.length ? ' force=' + force.join(',') : ''}${flags.strata ? ' strata<=' + flags.strata + ' (capped runs: win, depth and death lines do not apply)' : ''}\n` + summarize(results));
   const rows = results.map((r, i) => rowOf(r, meta, seed0 + i * 7));
   if (flags.out) fs.writeFileSync(flags.out, JSON.stringify(rows));
   if (flags.pair) console.log(pairReport(rows, JSON.parse(fs.readFileSync(flags.pair, 'utf8'))));
