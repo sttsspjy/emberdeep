@@ -11,7 +11,7 @@ Canonical rules and numbers. Code follows this file; a balance pass changes numb
 
 ## 1. Damage model
 
-- Foe HP = base × `1 + 0.65(s−1) + 0.08(s−1)²` × **threat HP** × party multiplier. Foe damage = base × `1 + 0.22(s−1) + 0.03(s−1)²` × **threat damage** (below 1 in strata I–V). Boss HP is absolute (below), scaled by party, pact and dread.
+- Foe HP = base × `1 + 0.65(s−1) + 0.08(s−1)²` × **threat HP** × party multiplier. Foe damage = base × `1 + 0.22(s−1) + 0.03(s−1)²` × **threat damage** (below 1 in every stratum). Boss HP is absolute (below), scaled by party, pact and dread.
 - **Threat** per stratum (`World.THREAT`): HP ×, damage ×, wave budget ×, attack-cooldown rate `cdRate` (foe cooldowns tick faster by this fraction, negative = slower, only while the foe can act; wind-ups never change; bosses are exempt), boss pause × (time between boss attacks):
 
 | Stratum | HP × | Damage × | Wave × | `cdRate` | Boss pause × |
@@ -20,13 +20,13 @@ Canonical rules and numbers. Code follows this file; a balance pass changes numb
 | II | 1.62 | 0.5 | 0.75 | −30% | 1.7 |
 | III | 1.3 | 0.5 | 0.7 | −10% | 1.4 |
 | IV | 1 | 0.4 | 0.66 | 0 | 1.2 |
-| V | 1.07 | 0.8 | 0.62 | +15% | 1 |
-| VI | 1.02 | 1 | 0.6 | +30% | 0.9 |
+| V | 1.07 | 0.78 | 0.62 | +15% | 1 |
+| VI | 1.02 | 0.98 | 0.6 | +30% | 0.9 |
 
-  Effective foe HP multiplier (depth curve × threat HP): 2.2 / 2.8 / 3.4 / 3.7 / 5.2 / 6.4. Effective foe damage multiplier: 0.5 / 0.6 / 0.8 / 0.8 / 1.9 / 2.9.
+  Effective foe HP multiplier (depth curve × threat HP): 2.2 / 2.8 / 3.4 / 3.7 / 5.2 / 6.4. Effective foe damage multiplier (depth curve × threat damage): 0.5 / 0.6 / 0.8 / 0.8 / 1.8 / 2.8.
 - Boss HP: Bone Warden 4,350 · Sporemother 5,950 · Rimeheart 16,500 · Forgelord 17,400 · Drowned King 50,400 · Hollow King 59,000. Boss base damage 6.4 (Forgelord 5.5, Drowned King 8, Hollow King 7.5). A foe still alive 45 s into its encounter (bosses 78 s) is **exposed**: ×1.5 damage taken, ×1.5 speed, and it loses 4% of its max HP per second (bosses 1.2%).
 - Elite HP × `2.4 + 0.4(s−1)` (`World.ELITE`), damage × 0.9, radius × 1.22. Affixes: swift (×1.4 speed, wind-ups ×0.7 but never under 0.4 s), brutal (×1.4 damage), warded (ward = 45% of max HP), volatile (explodes on death), vampiric (heals ×3 the damage it deals a hero).
-- Party multiplier (n = other heroes): foe HP `1 + 0.9n + 0.3n(n−1)`, wave budget `1 + 0.6n + 0.2n(n−1)`. A downed hero bleeds out in 18 s when no ally revives them (solo: at once).
+- Party multiplier (n = other heroes): foe HP `1 + 0.85n + 0.3n(n−1)` (two heroes ×1.85, three ×3.3, four ×5.35), wave budget `1 + 0.6n + 0.2n(n−1)`. A downed hero bleeds out in 18 s when no ally revives them (solo: at once).
 - HP-relative statuses (Chill and Venom build-up, Conflagration, Wildfire) measure against foe HP before the stratum lever (bosses: `refHp`, the design HP 800–7,800), so inflating HP does not weaken them.
 - Contact damage: touching a foe outside an attack state = `0.4 × dmg`, contact cooldown 1.0 s. Attack states (`lunge`, `charge`, `leap`, `bash`, `dive`) and the Gloom = `1.0 × dmg`. Boss contact damage × 0.8.
 - Every hit's damage is the same no matter how it was produced; statuses build from **damage dealt, never from hit count**, so attack speed and damage scale them equally.
@@ -69,7 +69,7 @@ Status ticks, Smites, Tolls and discharges are `raw` hits: no hero multiplier, n
 ### Stopping shots, stuns and moves
 
 - Enemy projectiles are stopped only by: the Shield Throw in flight, Shield Orbit, Bone Knights, and Mirror Shard (chance). No weapon deflects.
-- **Hero stuns** (`stunFoe`): bosses are never stunned; elites take half; a stun sets `stunCd = dur + 2 s` and one landing while `stunCd > 0` lasts half as long; repeating sources (waves, shocks, Overload) skip while `stunCd > 0` and set it to at least 1 s.
+- **Hero stuns** (`stunFoe`): bosses are never stunned; elites take half; a stun sets `stunCd = dur + 2 s` and one landing while `stunCd > 0` lasts half as long; repeating sources (waves, shocks, Overload, Shield Orbit contacts, Bone Knight strikes) skip while `stunCd > 0` and set it to at least 1 s.
 - **Stagger**: a Heavy weapon's direct hit stuns a non-boss foe 0.2 s (elites 0.1 s), once per 2 s per foe, never while `stunCd > 0`; it does not set `stunCd`. Hit-stop is client render only; the sim never pauses.
 - **Parry** (Sworn Blade): a Cleave that starts in the last 0.3 s of a foe's wind-up cancels it and stuns 0.6 s (elites: stun 0.3 s, no cancel; never bosses), once per 2.5 s per hero and 4 s per foe.
 - Skill moves (Charge, Shadowstep, Comet, Scattershot hop) never fire dash riders; their i-frames last the `iframes` seconds of the move.
@@ -86,10 +86,10 @@ Weapon index 0 is available at once, index 1 at mastery 3, index 2 at mastery 6.
 | Ranger | Longbow | 12 · 0.34 | arrows | Greatbow 23.8 · 0.612 | Hunting Bow 7.26 · 0.187 |
 | | Heavy Crossbow | 24 · 0.72 | pierce 2 | Arbalest 47.5 · 1.296 | Repeater 14.5 · 0.396 |
 | | Twin Shortbows | 4.5 · 0.25 | 2 arrows | Twin Recurves 8.91 · 0.45 | Twin Flatbows 2.72 · 0.138 |
-| Pyromancer | Fire Staff | 12 · 0.5 | blast r40 at 60% | Magma Staff 23.8 · 0.9 | Spark Staff 7.26 · 0.275 |
+| Pyromancer | Fire Staff | 15 · 0.5 | blast r40 at 60% | Magma Staff 29.7 · 0.9 | Spark Staff 9.08 · 0.275 |
 | | Ember Wand | 6 · 0.15 | sparks build 15% Burn | Cinder Rod 11.9 · 0.27 | Flicker Wand 5.28 · 0.12 |
 | | Inferno Tome | 30 · 1.0 | blast r72 at 80% | Tome of Ruin 42.9 · 1.3 | Pocket Grimoire 18.2 · 0.55 |
-| Shade | Twin Daggers | 10 · 0.21 | range 42 | Twin Kukris 19.8 · 0.378 | Stilettos 6.29 · 0.12 |
+| Shade | Twin Daggers | 11 · 0.21 | range 42 | Twin Kukris 21.8 · 0.378 | Stilettos 6.91 · 0.12 |
 | | Throwing Knives | 7 · 0.36 | fan of 3 | Chakrams 13.9 · 0.648 | Darts 4.24 · 0.198 |
 | | Crescent Scythes | 16 · 0.48 | full circle | Great Scythes 31.7 · 0.864 | Sickles 9.68 · 0.264 |
 | Cleric | Holy Mace | 17 · 0.42 | wave every 3rd swing, 90% | Morning Star 33.7 · 0.756 | Flail 10.3 · 0.231 |
@@ -99,7 +99,7 @@ Weapon index 0 is available at once, index 1 at mastery 3, index 2 at mastery 6.
 | | Soul Scythe | 17 · 0.56 | kills raise +12% more often | Death Scythe 33.7 · 1.008 | Soul Sickle 10.3 · 0.308 |
 | | Plague Staff | 6 · 0.6 | cloud r44, 10 dps, 2.6 s | Plague Totem 11.9 · 1.08 | Plague Rod 3.63 · 0.33 |
 
-Base hero HP: Knight 135 · Ranger 117 · Pyromancer 89 · Shade 97 · Cleric 121 · Necromancer 91.
+Base hero HP: Knight 135 · Ranger 117 · Pyromancer 106 · Shade 116 · Cleric 121 · Necromancer 91 (armor and Class Power: §5).
 
 ## 2. Elements and statuses
 
@@ -286,16 +286,16 @@ vigor (c,3: +15 max HP, heal 15) · plating (c,2: +5 armor) · fleet (c,2: +7% m
 
 ## 5. Heroes, skills and class routes
 
-Class Power **P** scales every skill and proc: Knight 18 · Ranger 12 · Pyromancer 12 · Shade 10 · Cleric 17 · Necromancer 9. Per-attack extras scale from the equipped (forked) weapon's damage; per-cast attack modifiers (Ambush, crit-stack grants) are fork-neutral. Skill damage = (base + k × P) × (1 + slot damage) before the hero multiplier, crit and affinity.
+Class Power **P** (table below) scales every skill and proc. Per-attack extras scale from the equipped (forked) weapon's damage; per-cast attack modifiers (Ambush, crit-stack grants) are fork-neutral. Skill damage = (base + k × P) × (1 + slot damage) before the hero multiplier, crit and affinity.
 
-| Hero | HP | Armor | Speed | Crit | Unlock |
-|---|---|---|---|---|---|
-| Knight | 135 | 8 | 116 | 5% | start |
-| Ranger | 117 | 5 | 128 | 10% | start |
-| Pyromancer (fire) | 89 | 2 | 120 | 5% | start |
-| Shade | 97 | 3 | 138 | 12% | defeat the Bone Warden |
-| Cleric (holy) | 121 | 7 | 114 | 5% | complete 4 descents |
-| Necromancer (shadow) | 91 | 2 | 120 | 5% | defeat the Sporemother |
+| Hero | HP | Armor | Power P | Speed | Crit | Unlock |
+|---|---|---|---|---|---|---|
+| Knight | 135 | 8 | 18 | 116 | 5% | start |
+| Ranger | 117 | 5 | 12 | 128 | 10% | start |
+| Pyromancer (fire) | 106 | 4 | 17 | 120 | 5% | start |
+| Shade | 116 | 5 | 13 | 138 | 12% | defeat the Bone Warden |
+| Cleric (holy) | 121 | 7 | 17 | 114 | 5% | complete 4 descents |
+| Necromancer (shadow) | 91 | 2 | 9 | 120 | 5% | defeat the Sporemother |
 
 ### Skills (skill 1 = slot 0, skill 2 = slot 1)
 
@@ -330,7 +330,7 @@ A fork replaces the weapon with a derived version (`ED.forkWeapon`, pure), so a 
 
 | | Attack time | Damage per hit | Other |
 |---|---|---|---|
-| Heavy | ×1.8 (never over 1.3 s) | × 1.1 × the time factor (nominal ×1.98) | Melee reach ×1.1, arc ×1.1, knockback ×1.6; shots r ×1.2, speed ×0.9, life ×1.1, knockback ×2; blasts ×1.15. Hits Stagger. |
+| Heavy | ×1.8 (never over 1.3 s) | × 1.1 × the time factor (nominal ×1.98) | Melee reach ×1.1, arc ×1.1, knockback ×1.3; shots r ×1.2, speed ×0.9, life ×1.1, knockback ×2; blasts ×1.15. Hits Stagger. |
 | Swift | ×0.55 (never under the floor) | × 1.1 × the time factor (nominal ×0.605) | Knockback ×0.5; shots speed ×1.2, life ×0.85, spread ×0.85. Flow: +15% move speed for 0.5 s after each attack. |
 
 Crit-stack grants (Shadowstep, Riposte, Death's Edge) are multiplied by `critK = base interval / fork interval`.
@@ -344,29 +344,29 @@ Crit-stack grants (Shadowstep, Riposte, Death's Edge) are multiplied by `critK =
 
 | Hero | Route | Route card | Fork A | Fork B |
 |---|---|---|---|---|
-| Knight | Attack | **Oath of Steel**: every 3rd swing is a Cleave: +60%, +40% reach and arc, ×2 knockback | **Oathbreaker** (Heavy): Cleaves crack the ground (shock r72, 50% of the weapon, stun 0.5 s). Rider Follow-Through: the swing after a Charge Cleaves | **Sworn Blade** (Swift): Cleave +30%, Parry. Rider Riposte: a Parry readies 2 crits |
-| | Skill 1 | **Vanguard**: Charge cooldown −30%, +25% damage; Brace 1.5 s after a Charge: −25% damage taken | **Juggernaut** (Burst): +90 px range, +10%, shockwave r90 at 40%. Rider Shield Bash: a free Shield Throw at 60% | **Rallying Charge** (Guard, co-op): shield 2% max HP to you and allies within 100, stun +0.5 s. Rider Hold the Line: allies braced with you |
-| | Skill 2 | **Shieldmaster**: Throw +2 ricochets, +20%, cooldown −16.7% | **Shield Storm** (Burst): two shields in a V at 70% each. Rider Gathering Force +15% per ricochet | **Shield Orbit** (Guard): the caught shield orbits 3 s, strikes at 15% and destroys shots. Rider Return to Sender |
-| | Element | **Oath of Ruin**: all hits Bleed for 10%, statuses +15% | **Brand of Ruin** (Focus, co-op): +6% per ailment (≤ 4) from every hero. Rider Ruin Seal | **Ruinous Blows** (Spread): Charge and Throw +15%, statuses ×2, 25% of statuses carry on a ricochet. Rider Ruin Spreads |
-| Ranger | Attack | **Deadeye**: +0% at 80 px rising to +30% at 260 | **Ballista** (Heavy): shots ×1.28 faster, +2 pierce, +15% per foe passed. Rider Splitting Bolt | **Quickdraw** (Swift): +10% weapon, slows 15% (not bosses). Rider Flurry: every 5th shot fires 2 extra arrows |
-| | Skill 1 | **Fletcher**: Volley +3 arrows, cooldown −20% | **Hunter's Mark** (Burst, co-op): marks hit foes 4 s, +12% damage from everyone. Rider Relentless Hunt | **Scattershot** (Guard): +40% within 110, ×3 knockback, hop 70 back. Rider Caltrops |
-| | Skill 2 | **Rainmaker**: Rain +30% radius, +1 s, +10% | **Skyfall** (Burst): the whole Rain lands at once after 0.6 s, stun 0.5 s. Rider Twin Sky | **Hail of Thorns** (Guard, co-op): foes in the Rain slowed 50%, +20% damage. Rider Second Shower |
+| Knight | Attack | **Oath of Steel**: every 3rd swing is a Cleave: +60%, +40% reach and arc, ×2 knockback | **Oathbreaker** (Heavy): Cleaves crack the ground (shock r72, 50% of the weapon, stun 0.3 s). Rider Follow-Through: the swing after a Charge Cleaves | **Sworn Blade** (Swift): Cleave +30%, Parry. Rider Riposte: a Parry readies 2 crits |
+| | Skill 1 | **Vanguard**: Charge cooldown −30%, +25% damage; Brace 1.5 s after a Charge: −25% damage taken | **Juggernaut** (Burst): +90 px range, +10%, shockwave r90 at 40%. Rider Shield Bash: a free Shield Throw at 60% | **Rallying Charge** (Guard, co-op): shield 2% max HP to you and allies within 100, stun +0.5 s, Charge +10%, Brace 10 points stronger (−35%, cap −40%). Rider Hold the Line: allies braced with you |
+| | Skill 2 | **Shieldmaster**: Throw +2 ricochets, +20%, cooldown −16.7% | **Shield Storm** (Burst): two shields in a V at 70% each. Rider Gathering Force +15% per ricochet | **Shield Orbit** (Guard): the caught shield orbits 3.5 s, strikes at 15%, stuns 0.3 s (repeating) and destroys shots. Rider Return to Sender |
+| | Element | **Oath of Ruin**: all hits Bleed for 16%, statuses +15% | **Brand of Ruin** (Focus, co-op): +6% per ailment (≤ 4) from every hero. Rider Ruin Seal | **Ruinous Blows** (Spread): Charge and Throw +15%, statuses ×2, 25% of statuses carry on a ricochet. Rider Ruin Spreads |
+| Ranger | Attack | **Deadeye**: +0% at 80 px rising to +40% at 260 | **Ballista** (Heavy): shots ×1.28 faster, +2 pierce, +15% per foe passed, +10% damage. Rider Splitting Bolt | **Quickdraw** (Swift): +10% weapon, slows 15% (not bosses). Rider Flurry: every 5th shot fires 2 extra arrows, each at 25% of a shot |
+| | Skill 1 | **Fletcher**: Volley +3 arrows, cooldown −20% | **Hunter's Mark** (Burst, co-op): marks hit foes 4 s, +12% damage from everyone. Rider Relentless Hunt | **Scattershot** (Guard): +40% within 110, ×3 knockback, every arrow slows 30% for 1.2 s (bosses half as much), hop 70 back in 0.25 s (untouchable). Rider Caltrops |
+| | Skill 2 | **Rainmaker**: Rain +30% radius, +1 s, +10% | **Skyfall** (Burst): the whole Rain lands at once after 0.5 s over a 30% wider area, stun 0.5 s. Rider Twin Sky | **Hail of Thorns** (Guard, co-op): foes in the Rain slowed 50%, +20% damage. Rider Second Shower |
 | | Element | **Trapper's Craft**: all hits Bleed for 10%, statuses +15% | **Infected Wounds** (Focus): Volley and Rain build statuses +50%, Bleed and Burn +20%. Rider Gangrene | **Contagion** (Spread): a foe with ≥ 2 ailments dying passes 50% of its statuses to the 2 nearest within 100. Rider Outbreak |
 | Pyromancer | Attack | **Pyroclast**: standing still builds Channel: +10% per 0.3 s up to +50% | **Magma Heart** (Heavy): blasts erupt again 0.4 s later at 30%. Rider Lava Pools | **Ember Rush** (Swift): Channel twice as fast, cap +60%. Rider Overheat |
 | | Skill 1 | **Firestorm**: Nova +25% radius, +20%, cooldown −21% | **Twin Nova** (Burst): second eruption 0.6 s later at 40%. Rider Collapse | **Phoenix Mantle** (Guard): ring of fire 3 s; a Nova that hits shields you 3% (once per 10 s). Rider Rebirth Flare |
 | | Skill 2 | **Starfall**: Meteor +15%, crater +2 s | **Twin Meteor** (Burst): a second Meteor at 60% on the nearest foe. Rider Meteor Shower | **Comet** (Guard): you ride the Meteor, untouchable 0.35 s, land as the impact +30%. Rider Impact Crater |
 | | Element | **Living Flame**: skills +25% Fire; the weapon sets foes alight for 15% of each hit | **White Heat** (Focus): Burn +20%, burning foes take +10% from skills. Rider Flashpoint | **Heat Engine** (Spread): each burning foe a skill hits cuts 0.15 s from the other's cooldown. Rider Chain Reaction |
 | Shade | Attack | **Bladedancer**: +8% crit; each crit grants Momentum: +4% damage 2.5 s, 5 stacks | **Culling Blades** (Heavy): hits on foes below 25% HP always crit. Rider Killing Rhythm | **Thousand Cuts** (Swift): Momentum +2 stacks. Rider Whirlwind |
-| | Skill 1 | **Ghost Walk**: Shadowstep +20%, cooldown −20%, each foe cut readies +1 crit attack | **Assassinate** (Burst): +40% below half HP, a kill refunds it. Rider Twin Cut | **Afterimage** (Guard): a decoy bursts after 1.2 s (r80, blinds 1 s). Rider Lure |
-| | Skill 2 | **Nightfall**: Vanish cooldown −27%, smoke +40% wide, +2 s, +20% damage to foes inside, +30% move speed unseen | **Night's Edge** (Burst): Ambush ×4 the weapon; an Ambush refunds Shadowstep, an Ambush kill refunds Vanish. Rider Ambush Sweep | **Veil of Night** (Guard): Vanish shields 3% (once per 12 s), longer blind and stealth. Rider Shroud |
-| | Element | **Cruel Arts**: all hits Bleed for 10%, statuses +15% | **Open Veins** (Focus, co-op): crits +10% per ailment (≤ 4). Rider Exsanguinate | **Rupture** (Spread): Shadowstep and Ambush rupture 50% of Bleed and Burn pools at 150%. Rider Bloodbloom |
+| | Skill 1 | **Ghost Walk**: Shadowstep +20%, cooldown −20%, each foe cut readies +1 crit attack | **Assassinate** (Burst): +30% below half HP, a kill refunds it. Rider Twin Cut | **Afterimage** (Guard): a decoy bursts after 1.2 s (r80, blinds 1 s). Rider Lure |
+| | Skill 2 | **Nightfall**: Vanish cooldown −27%, smoke +40% wide, +2 s, +20% damage to foes inside, +30% move speed unseen | **Night's Edge** (Burst): Ambush ×3.75 the weapon; an Ambush refunds Shadowstep, an Ambush kill refunds Vanish. Rider Ambush Sweep | **Veil of Night** (Guard): Vanish shields 3% (once per 12 s), longer blind and stealth, Ambush ×3 the weapon. Rider Shroud |
+| | Element | **Cruel Arts**: all hits Bleed for 10%, statuses +15% | **Open Veins** (Focus, co-op): crits +15% per ailment (≤ 4). Rider Exsanguinate | **Rupture** (Spread): Shadowstep and Ambush rupture 50% of Bleed and Burn pools at 150%. Rider Bloodbloom |
 | Cleric | Attack | **Dawnbringer**: waves every 2nd attack, +30%; the Lantern gains waves | **Sunhammer** (Heavy): waves twice as wide, 60% farther, stun 0.4 s. Rider Solar Flare | **Crusader** (Swift): waves steer toward foes within 25°, +10%. Rider Litany: every 6th attack fans 3 waves |
-| | Skill 1 | **Sanctum**: Sanctuary +30% radius, +2 s, +50%, allies take 25% less | **Holy Fury** (Burst): +40%, stun 1 s on cast. Rider Hallowed Ground: foes inside Judged | **Aura of Faith** (Guard, co-op): Sanctuary follows you, −40% damage. Rider Embolden: allies inside +10% damage |
-| | Skill 2 | **Hammer of Judgment**: Judgment +30%, +40% range, Judged +2 s, cooldown −16.7% | **Twin Hammers** (Burst): two hammers at 60%. Rider Second Flight | **Verdict** (Guard, co-op): Judged foes deal 20% less, a Judged foe dying bursts (r70, stun 0.4 s). Rider Sentence |
+| | Skill 1 | **Sanctum**: Sanctuary +30% radius, +2 s, +50%, allies take 25% less | **Holy Fury** (Burst): +20%, stun 0.5 s on cast. Rider Hallowed Ground: foes inside Judged | **Aura of Faith** (Guard, co-op): Sanctuary follows you, −10% damage, damage taken inside cut a further 10%. Rider Embolden: allies inside +10% damage |
+| | Skill 2 | **Hammer of Judgment**: Judgment +25%, +40% range, Judged +1 s, cooldown −16.7% | **Twin Hammers** (Burst): two hammers at 55%. Rider Second Flight: each flies out once more, that flight at 25% of a hit | **Verdict** (Guard, co-op): Judged foes deal 40% less (bosses half that), a Judged foe dying bursts (r70, stun 0.4 s). Rider Sentence |
 | | Element | **Radiant Faith**: skills +25% Holy; the weapon stores Radiance for 12% of each hit | **Guardian Light** (Focus, co-op): Smites on elites and bosses +50%; shielded heroes +8% damage 6 s. Rider Judging Light | **Prism** (Spread): Smites +30%, a beam to the nearest other foe for 50%. Rider Sunburst |
 | Necromancer | Attack | **Soul Command**: weapon +20%, Hexes what it hits 3 s; minions rush the Hexed foe and deal +20% to it | **Gravecaller** (Heavy): foes your weapon kills rise as minions. Rider Hex Burst | **Soul Barrage** (Swift): Hexed foes take +10% from you. Rider Quickened Dead |
-| | Skill 1 | **Endless Legion**: +1 max minion, Legion raises 1 more, minions +20% | **Bone Spikes** (Burst): minions burst on expiry (r60, marks Doom). Rider Boneyard | **Bone Knights** (Guard): at most 2 minions, ×1.5 damage, cleave, block shots. Rider Ironbone |
-| | Skill 2 | **Grim Harvest**: Harvest +40%, 20% wider, always raises 2 | **Corpse Explosion** (Burst): detonates up to 4 recent corpses at 70%. Rider Bone Lances | **Bone Armor** (Guard): shield 2% max HP per minion harvested (≤ 5%, once per 12 s). Rider Marrow Field |
+| | Skill 1 | **Endless Legion**: +1 max minion, Legion raises 1 more, minions +20% | **Bone Spikes** (Burst): minions burst on expiry (r60, marks Doom). Rider Boneyard | **Bone Knights** (Guard): at most 2 minions, ×2 damage, cleave, block shots, strikes stun 0.5 s (repeating, not bosses). Rider Ironbone: last 50% longer |
+| | Skill 2 | **Grim Harvest**: Harvest +40%, 20% wider, always raises 2 | **Corpse Explosion** (Burst): detonates up to 4 recent corpses at 70%. Rider Bone Lances | **Bone Armor** (Guard): shield 3% max HP per minion harvested (≤ 5%, once per 12 s). Rider Marrow Field |
 | | Element | **Grave Pact**: skills +25% Shadow; minions apply statuses at 75% and mark Doom for 20% | **Abyssal Toll** (Focus): Tolls +40%, empower minions. Rider Abyssal Hunger | **Rise Again** (Spread): every Reaped foe rises as a minion. Rider Risen Tide |
 
 ## 6. Floors, rooms and rewards
@@ -437,26 +437,33 @@ Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat
 
 ## 10. Balance targets (bots, `tools/sim.js`, skill 0.75)
 
-Measured cells read **pending sign-off** until the runs below are recorded after a balance pass. Smart pick policy unless noted; 384 runs each, six heroes in rotation. Skill 0.75 is the share of ticks the bot pays attention to floor hazards and the lantern flare, and the chance it reads each Gloom lunge telegraph; hazard tiles are routed around. The `mid` and `max` presets carry the Codex relics (mid: start relics plus Codex relics costing ≤ 70 without a boss requirement). Runs (`node tools/simpool.js <args>`): Fresh random `1 384 0.75 none --pick=random`; Fresh smart, Half-upgraded and Fully upgraded `1 384 0.75 none,mid,max --pick=smart`; Pact 5 `1 384 0.75 max - 5 --pick=smart`; Two heroes `2 384 0.75 mid --pick=smart`; Three heroes `3 384 0.75 mid --pick=smart`.
+Measured cells are the sign-off batch at skill 0.75, taken at `cd1074d` (solo rows on the commit before its party HP change, which solo runs do not read). Smart pick policy unless noted; 384 runs each (two and three heroes: 192), six heroes in rotation. Skill 0.75 is the share of ticks the bot pays attention to floor hazards and the lantern flare, and the chance it reads each Gloom lunge telegraph; hazard tiles are routed around. The `mid` and `max` presets carry the Codex relics (mid: start relics plus Codex relics costing ≤ 70 without a boss requirement). Runs (`node tools/simpool.js <args>`): Fresh random `1 384 0.75 none --pick=random`; Fresh smart, Half-upgraded and Fully upgraded `1 384 0.75 none,mid,max --pick=smart`; Pact 5 `1 384 0.75 max - 5 --pick=smart`; Two heroes `2 192 0.75 mid --pick=smart`; Three heroes `3 192 0.75 mid --pick=smart`. `simpool.js` runs at normal priority; `--nice` opts into idle priority, which Windows throttles while the machine is unattended.
 
 | Profile | Target win | Measured | Target depth | Measured |
 |---|---|---|---|---|
-| Fresh, random picks | ≤ 5% | pending sign-off | 2.5–3.5 | pending sign-off |
-| Fresh, smart picks | 5–10% | pending sign-off | 2.5–3.5 | pending sign-off |
-| Half-upgraded | 25–40% | pending sign-off | — | pending sign-off |
-| Fully upgraded | 65–80% | pending sign-off | — | pending sign-off |
-| Fully upgraded, Pact 5 | 20–35% | pending sign-off | — | pending sign-off |
-| Two heroes, half-upgraded | 45–70% | pending sign-off | — | pending sign-off |
-| Three heroes, half-upgraded | 45–70% | pending sign-off | — | pending sign-off |
+| Fresh, random picks | ≤ 5% | 2% | 2.5–3.5 | 4.59 |
+| Fresh, smart picks | 5–10% | 1% | 2.5–3.5 | 4.62 |
+| Half-upgraded | 25–40% | 34% | — | 5.68 |
+| Fully upgraded | 65–80% | 65% | — | 5.91 |
+| Fully upgraded, Pact 5 | 20–35% | 25% | — | 5.66 |
+| Two heroes, half-upgraded | 45–70% | 51% | — | 5.86 |
+| Three heroes, half-upgraded | 45–70% | 42% | — | 5.90 |
 
-- **Paths** (96-run batches, mid, smart, paired by seed): offers per stratum 5.5–6.5; keystone on the main path median stratum II; evolution quartiles for element mains [3 3 4], 60–85% evolved by stratum IV entry; Generalist median evolution not earlier than the element-main median; duo taken in ≥ 60% of two-gate runs by the end of stratum IV, median stratum III. Spread (paired mean depth): forced starts within 0.3 strata of each other; none more than 0.2 above a random start; Generalist within ±0.2 of random; Poison co-op party at most 0.2 above random + random.
+- **Paths** (96-run batches, mid, smart, paired by seed): offers per stratum 5.5–6.5; keystone on the main path median stratum II; evolution quartiles for element mains [3 3 4], 60–85% evolved by stratum IV entry; Generalist median evolution not earlier than the element-main median; duo taken in ≥ 60% of two-gate runs by the end of stratum IV, median stratum III. Spread (paired mean depth): forced starts within 0.3 strata of each other; none more than 0.2 above a random start; Generalist within ±0.2 of random; Poison co-op party at most 0.2 above random + random. Measured: spread 0.21 strata, best forced start +0.06 over random, Generalist −0.10 against random, Poison co-op +0.06; a two-gate pair kills a boss in 0.91–0.96 of a mono-gate build's time.
 - **Classes** (`tools/sheet.js` first, then `--route=rotate --fork=rotate --weapon=rotate`): each skill route raises its own skill's share of direct damage by ≥ 8 points; the attack route raises the weapon share by ≥ 8 points over the mean of the two skill arms; the element route raises the status share by ≥ 6 points. Each route's boss time to kill at strata II and IV within ±15% of the class median; each weapon within ±15% of its class median (knob: that weapon's `dmg`); Heavy within ±10% of Swift in packs; Guard forks lose 60–85% of the HP of their Burst sibling; ≥ 90% of runs that kill the stratum IV boss reach fork rank 3 under `--mastery=fork`.
-- **No sustain by default**: HP lost per combat room ≥ 4.5% of max HP and per elite room ≥ 7.5% for every fork and base kit; a Knight on Shield Orbit takes ≥ 50% of the attack arm's projectile damage; class shield absorbed per boss-fight second ≤ 0.3% max HP, all sources ≤ 0.6%.
+- **No sustain by default**: HP lost per combat room ≥ 4.5% of max HP and per elite room ≥ 7.5% for every fork and base kit; a Knight on Shield Orbit takes ≥ 50% of the attack arm's projectile damage; class shield absorbed per boss-fight second ≤ 0.3% max HP, all sources ≤ 0.6%. Measured: no heal per kill or per hit; Holy shields absorb 0.09–0.12% max HP per boss-fight second.
 - **Control caps**: trash stun uptime per hero ≤ 40%; Brace uptime ≤ 40%; Sanctuary DR uptime ≤ 60%; smoke blind per foe ≤ 50%. Perf: peak projectiles alive per hero ≤ 40; live zones per hero ≤ 8; hit events ≤ 60 per second per hero.
 - **Pacing targets** (half-upgraded): a regular foe dies in 2–4 weapon hits on strata I–II, an elite in 5–8 s, boss fights last 45–90 s (fresh up to 110 s), a winning descent takes 22–28 min.
-- **Hero spread** (half-upgraded win rate per hero) is reported at sign-off, with the weapon share by main path (≥ 20% each).
+- **Hero spread** (solo, 64 runs per hero): half-upgraded Cleric 45% · Ranger 44% · Knight 42% · Necromancer 27% · Pyromancer 22% · Shade 22% (a paired 384-run Pyromancer + Shade batch at seeds 20000+ read 28%); fully upgraded Ranger 73% · Necromancer 72% · Knight 69% · Cleric 66% · Pyromancer 55% · Shade 55%.
 - **Explore sweep**: `--explore=<minLight>` (default 0.3, `EXPLORE_MIN_LIGHT`; negative = explore everything) makes the bot explore the nearest unvisited room while paying its cost leaves the lantern at or above the value. Intent: the win rate peaks at an interior value, because a hero that explores everything meets the Deep's full stack, up to 3 Glooms and halved healing.
 - Power curve (`tools/sim.js` summary lines): damage share by source, weapon share by main path ≥ 20% each, hero damage per second over the bare weapon by stratum, cooldown reduction at run end.
+- **Open gaps at sign-off**:
+  - Fresh smart picks win 1% (target 5–10%) and fresh depth is about 4.6 (target 2.5–3.5).
+  - Three heroes, half-upgraded win 42% (target 45–70%).
+  - Guard forks: 5 of 12 Guard/Burst HP-lost ratios sit inside 0.60–0.85 (bot noise ±0.15 at n = 20–48).
+  - Ranger forks lose 3.5–4.4% max HP per combat room (floor 4.5%).
+  - Peak live zones per hero exceed 8 in some Pyromancer and Knight runs.
+  - The weapon-arm target (index 1 and 2 weapons) is not measured.
 
 ## 11. Interface, renderer and art
 
@@ -476,7 +483,7 @@ Canvas `#hud` above the world at device resolution (capped by pixel count); unit
 - **Top-left**: party frames (name, class, health; DOWN with revive progress; Fallen).
 - **Top-right**: stratum name, stratum number, weak/resists chips, minimap (light cost on unvisited rooms), then the lantern panel: tier, percent, meter with tint zones and ticks at 50% and 25%, one effect line, room costs and the boss-door reward.
 - **Bottom-centre**: level, xp bar, gold; a pending-boon pill above it. **Bottom-right**: relics. **Top-centre**: boss bar with phase marks.
-- **Panel fade**: every panel eases to 35% alpha in 0.15 s while a hero, foe or pickup is on screen beneath it, and back 0.2 s after the last overlap; the boss bar, prompts and messages never fade.
+- **Panel fade**: every panel eases to 35% alpha in 0.15 s while a hero, foe or pickup is on screen beneath it, and back 0.2 s after the last overlap (the boss bar is a panel too); prompts and messages never fade.
 - **In the world**: hero names print at the hero; a downed hero shows `DOWN` (own) or `REVIVE` (ally). World text is the 8 px pixel font at 2 world px per font px (16 world px line height); foe health bars are 2 world px (3 when scale is below 2); elite labels use the affix colour. A hero who owns Brand, Open Veins, Contagion or Gangrene sees ailment pips under foe bars; Sworn Blade shows the Parry rim on a foe in the last 0.3 s of a wind-up.
 - **Cursor and aim extras** (`src/client/aim.js`): a procedural reticle cursor (or the system crosshair; three sizes and colours) that lights over foes; an attack-cooldown arc, an attack pulse and a crit flash; the landing preview of ground skills (setting "Skill aim preview"); a chevron on a pad.
 - **Toasts** (DOM, in a run): top-centre below the boss bar. **At the prop**: interaction prompt with the attack key and a description card; tutorial and stratum signs draw as a screen-space card using `{attack}`, `{aim}`, `{skill1}`, `{skill2}`, `{dash}`, `{flare}`, `{map}` tokens. The aim sign stands beside the solo spawn.
@@ -487,6 +494,7 @@ Canvas `#hud` above the world at device resolution (capped by pixel count); unit
 - The world draws into one small offscreen buffer at 1 buffer px = 1 world px (two alternating buffers); the present step upscales it to the screen (sharp-bilinear in WebGL, nearest on the 2D fallback) and applies the fractional camera offset, so scrolling stays smooth. The screen scale `R.scale` snaps to half steps so one art px (2 world px) is a whole number of screen px; the minimum view is 720 × 420 world px and the snap can show a little more.
 - WebGL post (`post.js`): bloom at half the buffer, per-biome colour grade, vignette, grain, chromatic aberration. It is optional: Low quality uses plain 2D, and a software GL context switches to it at a reduced resolution.
 - Cached art is a canvas first and swaps to an `ImageBitmap` once ready (`ED.Bmp`); recolours and rotated sprites are cached, never rebuilt per frame. Frame pacing: the loop measures the display rate and presents every n-th frame while frames keep missing vsync (setting Frame cap: Auto, Uncapped, 144, 120 or 60 fps).
+- **Hit feedback** (visual only): a foe flashes for 66 ms on a hit and cannot flash again until 120 ms after that flash ended; damage over time and zone ticks never flash. An ordinary foe's flash is a white silhouette over its body, a boss gets a 50% white overlay on its normal body, and the red wind-up outline shows under both. Damage numbers of one style that land within 150 ms at one spot add into a single number that pops again; a spot keeps at most 3 live numbers (the oldest goes first) and numbers over the same spot stack upward by one text height.
 
 ### Art
 

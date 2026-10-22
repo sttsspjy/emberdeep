@@ -238,7 +238,9 @@ node tools/simpool.js 1 384 0.75 none,mid,max --pick=smart   # same bots in para
 node tools/sheet.js --cls=all --routes --weapons             # analytic hero numbers, no bot runs
 ```
 
-Headless checks (each prints failures and exits 1 on any): `node tools/check-sim.js`, `check-classes.js`, `check-ranger.js`, `check-pyro.js`, `check-shade.js`, `check-cleric.js`, `check-necro.js`, `check-save.js`, `check-ux.js` and `sheet-check.js`; `node tools/art.js --check` verifies that `src/art/` matches a rebuild of `art-src/`. Targets for the bots live in docs/GAME-DESIGN.md §10.
+`simpool.js` runs its workers at normal priority; add `--nice` for idle priority (Windows throttles idle priority while the machine is unattended).
+
+Headless checks (each prints failures and exits 1 on any): `node tools/check-sim.js`, `check-classes.js`, `check-ranger.js`, `check-pyro.js`, `check-shade.js`, `check-cleric.js`, `check-necro.js`, `check-save.js`, `check-ux.js`, `check-render.js` (hit flash rules and art anchors) and `sheet-check.js`; `node tools/art.js --check` verifies that `src/art/` matches a rebuild of `art-src/`. Targets for the bots live in docs/GAME-DESIGN.md §10.
 
 ## Credits
 
