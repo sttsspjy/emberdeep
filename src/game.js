@@ -478,6 +478,15 @@
   const unterp = (w) => { for (const k of MOVERS) { const a = w[k]; for (let i = 0; i < a.length; i++) { const o = a[i]; if (o.rx !== undefined) { o.x = o.rx; o.y = o.ry; } } } };
   // Mirrors World.isSafe: calm room, no live foe except the invulnerable Gloom, no descent pending (clients see no pendingStratum).
   const isSafe = (v) => !v.locked && !v.pendingStratum && !v.enemies.some(e => e.hp > 0 && !e.def.gloom);
+  // Music level from the viewed foe list (host, solo and client alike): 0 calm, 1 foes alive or the room locked, 2 heavy at 25 live foes (held until fewer than 12);
+  // a boss piece plays its phase (1 -> 0 .. 3 -> 2), lifted to 1 by 8 or more summons.
+  const musicLevel = (v, prev) => {
+    let n = 0, boss = null;
+    for (const e of v.enemies) { if (e.hp <= 0 || e.def.gloom || e.spawnT > 0) continue; if (e.boss) boss = e; else n++; }
+    if (boss) return Math.max(Math.min(2, (boss.phase | 0) - 1), n >= 8 ? 1 : 0);
+    if (n >= 25 || (prev === 2 && n >= 12)) return 2;
+    return v.locked || n > 0 ? 1 : 0;
+  };
   G.update = (dt, inp) => {
     const s = G.s; if (!s) return;
     const now = performance.now() / 1000;
@@ -532,6 +541,7 @@
       }
     }
     ED.FX.update(frozen ? 0 : dt);
+    if ((s.musT = (s.musT || 0) - dt) <= 0) { s.musT = 0.1; s.musLv = musicLevel(s.view, s.musLv); ED.Audio.setIntensity(s.musLv); }
     ED.Render.updateCamera(s.view, s.me.dead ? ([...s.view.players.values()].find(p => !p.dead) || s.me) : s.me, dt, false);
   };
 

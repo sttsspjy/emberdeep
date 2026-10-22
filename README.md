@@ -42,7 +42,7 @@ Playing alone, the world waits while the sheet is open; in a party the descent g
 
 ## A descent
 
-- Six strata in a fixed order: the Ossuary, Glowmire Grotto, Rimefrost Halls, the Cinderforge, the Drowned Sanctum and the Starless Abyss. Each has its own palette, lighting, hazards, music, enemy roster, boss and elemental weakness.
+- Six strata in a fixed order: the Ossuary, Glowmire Grotto, Rimefrost Halls, the Cinderforge, the Drowned Sanctum and the Starless Abyss. Each has its own palette, lighting, hazards, composed music (it thickens as the room fills and a boss brings its own variant of the theme), enemy roster, boss and elemental weakness.
 - Each stratum is a floor of 12 to 14 rooms: combat rooms, an elite room (two from stratum IV on), a treasure room, a shop, an event shrine (fountain, altar, gamble shrine or champion's trial), a rest site and the boss. Every door shows what waits inside before you open it.
 - **Room rewards.** A normal fight pays a boon (drawn from your own paths), gold, a Vigor blessing (+max health), a forge (rank up one boon) or lantern oil. Elite rooms usually pay a relic and sometimes an epic boon. Rewards appear in the middle of the room once it is clear; boons and forges are claimed by each hero, gold, oil and relics are shared.
 - **Rest sites** have a campfire (heal 35%) and, in strata I, III and V, an anvil (forge one boon); each hero uses one of them. **Shops** sell relics, a healing draught, lantern oil and one build item: an epic boon in strata I, III and V, a forge in strata II, IV and VI. The bosses of strata III and V also grant an epic boon.
@@ -215,7 +215,7 @@ src/sim/                  simulation: dungeon generation, stats, world, combat, 
                           skills, class-<hero>.js (each hero's skills and route hooks), enemy AI, bosses, rooms, sheet (the Tab sheet model)
 src/net.js                transports (PeerJS / local), host and client sessions, snapshots
 src/game.js               a run in progress: local controller, client mirror, network routing
-src/client/               input, aim, audio synth, icons, art atlas and actors, sprites, room art, effects (fx, pixfx, cls-<hero>.js),
+src/client/               input, aim, audio synth, adaptive score (score.js), icons, art atlas and actors, sprites, room art, effects (fx, pixfx, cls-<hero>.js),
                           renderer, post (WebGL), HUD, camp, menus, the Tab sheet UI
 src/main.js               app state machine and frame loop
 src/art/                  generated atlas pages (data URIs) built from art-src/
