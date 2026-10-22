@@ -452,6 +452,8 @@ const cast0 = (w, p) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x + 60, y: 
     ok(T.p.stats.weapon.kind === 'melee' && T.p.stats.heavy, 'the Soul Scythe is a melee Heavy weapon');
     for (let i = 1; i <= 5; i++) { const h0 = lost(e); T.w.playerAttack(T.p, 0); d.push(lost(e) - h0); }
     ok(Math.abs(d[2] / d[0] - 1.5) < 0.01 && Math.abs(d[1] / d[0] - 1) < 0.01 && Math.abs(d[3] / d[0] - 1) < 0.01 && !T.p.graveSwing, `scythe swings deal ${d.map(v => v.toFixed(1))}: the 3rd is x1.5`);
+    { const M = stage({ n_atk: 1, n_atk_h: 3 }, 7, 1), me = foe(M.w, M.p.x + 30, M.p.y); M.p.stats.masterstroke = 1; const hit = (n) => { M.p.atkCount = n - 1; const h0 = lost(me); M.w.playerAttack(M.p, 0); return lost(me) - h0; };
+      const ms = hit(4), both = hit(12); ok(Math.abs(both / ms - 1.5) < 0.01, `a Grave swing that is also a Masterstroke keeps its x1.5 (${both.toFixed(1)} vs ${ms.toFixed(1)})`); }
     const K = stage({ n_atk: 1, n_atk_h: 3 }, 7, 1); K.p.atkCount = 2; const ks = [30, 38].map(r => { const q = foe(K.w, K.p.x + r, K.p.y); q.hp = 1; return q; }); K.w.playerAttack(K.p, 0); ok(ks.every(q => q.hp <= 0) && mine(K.w, K.p).length === 2, 'a Grave swing that kills two foes raises two minions');
     const J = stage({ n_atk: 1, n_atk_h: 3 }, 7, 1); J.p.atkCount = 3; const js = [30, 38].map(r => { const q = foe(J.w, J.p.x + r, J.p.y); q.hp = 1; return q; }); J.w.playerAttack(J.p, 0); ok(js.every(q => q.hp <= 0) && mine(J.w, J.p).length === 1, 'a plain swing keeps the Gravecaller limit (one rise)');
   }
