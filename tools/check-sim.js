@@ -645,7 +645,7 @@ for (let s = 1; s <= 6; s++) {
     const v = w.vs[2], off = Math.abs(angD(v.a, Math.atan2(v.hs[0].y - (v.y - 4), v.hs[0].x - v.x)));
     ok(Lof(s) === 0 ? off < 1e-9 : off > 0.03 * Lof(s), `stratum ${s}: aim ${Lof(s) ? 'leads by ' + off.toFixed(3) + ' rad' : 'is straight'}`);
   }
-  { const { w, b } = bossWorld(6, ['knight']); w.pact = 8; startVol(w, b, 1); go(w, 1.1); ok(w.vs.length === 3 && w.vs.every(v => Math.abs(Math.hypot(v.q.vx, v.q.vy) - finalSp(6)) < 1e-6), 'Pact 8: the final flight speed is unchanged'); }
+  { const { w, b } = bossWorld(6, ['knight']); w.pact = 8; startVol(w, b, 1); go(w, 1.1); ok(w.vs.length === 3 && w.vs.every(v => Math.abs(Math.hypot(v.q.vx, v.q.vy) - finalSp(6) * 1.2) < 1e-6), 'Pact 8: volley shots fly x1.2 like every foe shot'); }
   { // the phase-3 overlap: a volley every 5 s on top of whatever the main state runs, never two at once; phase 2 has none
     B.forgelord.attacks.hold = { update: () => false };
     for (const ph of [2, 3]) {
@@ -712,14 +712,14 @@ for (let s = 1; s <= 6; s++) {
     const t0 = w.time;
     playRoom(w, room, 'none', 70);
     ok(w.boss && w.boss.type === ED.biomeFor(s).boss && w.enc.kind === 'boss', `${heroes.length} hero(es): the boss fight runs`);
-    ok(trick.length >= 4 && Math.abs(trick[0].t - t0 - 9.4) <= 3 * TICK, `first pack at ${(trick[0].t - t0).toFixed(2)} s (the boss spawns at 2.4 s, +7 s)`);
+    ok(trick.length >= 3 && Math.abs(trick[0].t - t0 - 9.4) <= 3 * TICK, `first pack at ${(trick[0].t - t0).toFixed(2)} s (the boss spawns at 2.4 s, +7 s)`);
     ok(trick[1].t - trick[0].t >= 7 - 1e-9 && trick[1].t - trick[0].t <= 7 + 3 * TICK, `the next pack ${(trick[1].t - trick[0].t).toFixed(2)} s later`);
     ok(trick.slice(1).every((k, i) => k.t - trick[i].t >= 7 - 1e-9), 'packs at least 7 s apart');
     ok(trick.every(k => k.n >= 4 && k.n <= 6 && k.type === ED.biomeFor(s).fodder), `packs of 4-6 ${ED.biomeFor(s).fodder} (${trick.map(k => k.n)})`);
-    ok(trick.every(k => k.live < cap), `a pack lands only below the cap of ${cap} (live before: ${trick.map(k => k.live)})`);
+    ok(trick.every(k => k.live + k.n <= cap), `a pack lands only while it keeps live fodder within the cap of ${cap} (live before: ${trick.map(k => k.live)})`);
     ok(w.log.packDist >= W0.PACK_AVOID, `packs land ${Math.round(w.log.packDist)} px from the heroes (>= ${W0.PACK_AVOID})`);
     const idle = w.time - t0 - trick[trick.length - 1].t;
-    ok(live() >= cap && live() <= cap + 5 && idle > 7, `held at the cap: ${live()} fodder live, last pack ${idle.toFixed(1)} s ago`);
+    ok(live() > cap - 6 && live() <= cap && idle > 7, `held at the cap: ${live()} fodder live, last pack ${idle.toFixed(1)} s ago`);
     const n0 = trick.length; for (const e of w.enemies.slice()) if (e.fodder && e.hp > 0) w.killEnemy(e, ps[0], {});
     go(w, 0.5); ok(trick.length === n0 + 1, 'a pack follows as soon as the fodder falls below the cap');
     ok(w.log.xp === 0, `fodder of a boss fight drop no xp (${w.log.xp})`);

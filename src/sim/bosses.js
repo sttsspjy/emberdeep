@@ -40,9 +40,9 @@
 
   // ---------- aimed volley (every boss) ----------
   // e.vol runs beside the main state: per living, unhidden hero (else the boss's target) a warn line follows the led aim and locks for the last BOSS_VOL.lock s, then BOSS_VOL.n[phase] shots come BOSS_VOL.gap apart,
-  // each angled by World.leadAngle at its release; the heroes' sequences start BOSS_VOL.seq s apart. Flight speed speed + step per stratum: enemyShoot gets it divided by the factors it re-applies (boss shot factor, Pact 8).
+  // each angled by World.leadAngle at its release; the heroes' sequences start BOSS_VOL.seq s apart. Flight speed speed + step per stratum (x1.2 under Pact 8+): enemyShoot gets it divided by the factors it re-applies (boss shot factor, Pact 8).
   const VOL_KIND = { bonewarden: 'bone', sporemother: 'spore', rimeheart: 'ice', forgelord: 'fire', drownedking: 'trident', hollowking: 'void' };
-  const volSpeed = (w) => Wd.BOSS_VOL.speed + Wd.BOSS_VOL.step * (w.stratum - 1);
+  const volSpeed = (w) => (Wd.BOSS_VOL.speed + Wd.BOSS_VOL.step * (w.stratum - 1)) * (w.pact >= 8 ? 1.2 : 1);
   const volAim = (w, e, tg) => Wd.leadAngle(e.x, e.y - 4, tg, volSpeed(w), Wd.LEAD[U.clamp(w.stratum - 1, 0, Wd.LEAD.length - 1)]);
   const volShot = (w, e, kind, tg) => {
     w.enemyShoot(e, volAim(w, e, tg), volSpeed(w) / (Wd.bossShotSpd(w.stratum) * (w.pact >= 8 ? 1.2 : 1)), kind, Wd.BOSS_VOL.dmg, 6);

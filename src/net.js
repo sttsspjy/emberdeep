@@ -306,6 +306,7 @@
   Object.assign(N.CAPS, { solar: 6, verdict: 8, hturn: 8, chain: 24 }); Object.assign(N.CAPS_LOCAL, { solar: 2, verdict: 3, hturn: 3, chain: 8 }); // Cleric events
   Object.assign(N.CAPS, { dark: 2 }); Object.assign(N.CAPS_LOCAL, { dark: 1 }); // entering a dark room
   Object.assign(N.CAPS, { fhit: 12, fdie: 30 }); Object.assign(N.CAPS_LOCAL, { fhit: 4, fdie: 12 }); // non-crit fodder hits and fodder deaths (capKey)
+  Object.assign(N.CAPS, { shoot: 10 }); Object.assign(N.CAPS_LOCAL, { shoot: 3 }); // foe shot sounds (boss volleys fire one per hero)
   // Venom bar level of a foe: 0-4 pips (one per 25 Venom), 5 = Corroded. Radiance fill 0-3 of the Smite gauge.
   N.venomLevel = (e) => (e.venom >= 100 ? 5 : e.venom > 0 ? Math.min(4, Math.ceil(e.venom / 25)) : 0);
   N.radLevel = (w, e) => (e.rad > 0 ? Math.min(3, Math.floor(4 * e.rad / w.smiteAt(e))) : 0);
