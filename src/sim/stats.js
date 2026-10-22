@@ -11,7 +11,7 @@
 
   // Stat keys of the class routes (DESIGN-classes section 16): slot stats first, then one group per class, all 0 until a card sets them.
   const ROUTE_KEYS = ('s1Dmg s1Area s1Dur s1N s1Cdr s1Range s2Dmg s2Area s2Dur s2N s2Cdr s2Range wDmg bleedAll'
-    + ' cleave cleaveN cShock cStun chargeCleave parry riposte brace braceDR braceAura jugShock bash rally chargeStun twinShield gather orbit orbitMul orbitReflect ruinInf carry ruinSpread brand seal'
+    + ' cleave cleaveN cShock cStun chargeCleave parry riposte brace braceDR braceAura jugShock bash rally chargeStun twinShield gather orbit orbitMul orbitStun orbitReflect ruinInf carry ruinSpread brand seal'
     + ' deadeye pierceRamp splitBolt hitSlow flurry flurryMul volleySlow volleyClose volleyHop caltrops volleyMark markV markLeap skyfall skyTwin rainHail shower skillInfK festerHit contagion contagionR contagionN'
     + ' channel chanStep chanCap aftershock lavaPool overheat novaEcho novaPull novaRing mantle mantleBurst twinMeteor meteorites comet cometStun wInfFire searSkill burnCrit heatEngine heatChain'
     + ' momentum momMax execCrit execMom bladeStorm stepStack stackMax assassinate stepTwin afterimage afterPull smokeVuln stealthSpd stealthDur ambushMul nightsEdge ambushCleave veil veilBlind shroud veins exsang rupture bloodbloom'

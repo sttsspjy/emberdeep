@@ -221,6 +221,11 @@ const run = (w, secs, f) => { for (let i = 0; i < Math.round(secs * 60); i++) { 
   const pr0 = p.shields[0].pr; w.playerSkill(p, 0, { d: 280 }, 1);
   ok(p.shields.length === 1 && p.shields[0].leg === 'out' && p.shields[0].pr === pr0 && w.projs.filter(q => q.kind === 'shield').length === 1, 'a new throw relaunches the orbiting shield');
   w.clearShields(p); ok(!p.shieldOut && !p.shields.length, 'clearShields clears shieldOut'); void es;
+  { // the orbit's contact stuns a non-boss foe 0.3 s (repeating: once per cooldown), bosses never
+    const o = stage('knight', { k_s2: 1, k_s2_b: 1 }); o.w.playerSkill(o.p, 0, { d: 280 }, 1); let u = 0; while (u < 4 && !(o.p.shields[0] && o.p.shields[0].leg === 'orbit')) { run(o.w, 0.05); u += 0.05; }
+    const sp = o.p.shields[0].pr, f1 = foe(o.w, sp.x, sp.y), bs = foe(o.w, sp.x, sp.y); bs.boss = true; f1.stun = 0; f1.stunCd = 0; run(o.w, 0.05);
+    ok(f1.stun > 0.2 && f1.stun <= 0.3 + 1e-9, 'Shield Orbit contact stuns 0.3 s (' + f1.stun.toFixed(2) + ')'); ok(!(bs.stun > 0), 'bosses are not stunned by the orbit'); ok(f1.stunCd > 0.5, 'the repeating stun sets the stun cooldown');
+  }
   const sw = stage('knight'); sw.w.playerSkill(sw.p, 0, { d: 200 }, 1); sw.p.downed = true; sw.p.bleed = 99; sw.w.update(1 / 60); ok(!sw.p.shieldOut, 'a downed hero has no shieldOut');
 }
 // Stagger needs a Heavy weapon hit of kind weapon (not a cloud tick or a blast); Shadowstep knocks foes back; Rain parts carry their radius and the Second Shower a fixed 2 s

@@ -195,6 +195,7 @@
             if (s.leg === 'back') { if (s.hit.has(e.id)) continue; s.hit.add(e.id); } else { if ((s.orbitSeen.get(e.id) || -9) > this.time - rq.every) continue; s.orbitSeen.set(e.id, this.time); }
             const d = Math.hypot(e.x - pr.x, e.y - pr.y) || 1;
             this.hitEnemy(e, rq.dmg, this.partSrc(p, N, s.leg === 'back' ? 'return' : 'orbit', { x: pr.x, y: pr.y, kx: (e.x - pr.x) / d, ky: (e.y - pr.y) / d, mul: s.leg === 'back' && s.mul !== 1 ? s.mul : undefined, infK: 1 + st.ruinInf, knock: s.leg === 'back' ? rq.knock : 40 }));
+            if (s.leg === 'orbit' && st.orbitStun && e.hp > 0) this.stunFoe(e, st.orbitStun, true); // the orbit's contact stuns (repeating: skipped on a stun cooldown)
           }
         }
       }

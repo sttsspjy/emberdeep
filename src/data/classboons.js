@@ -33,8 +33,8 @@
     desc: 'Throw two shields in a narrow V, each at {twinShield}, each with its own ricochets.[ Shield Throw deals +{s2Dmg}.]',
     rider: "Gathering Force: each ricochet adds +{gather} to that shield's next strike.", mods: { twinShield: 0.7 }, up: { s2Dmg: 0.1 }, r3: { gather: 0.15 } });
   card('knight', 'skill2', 2, 'k_s2_b', { name: 'Shield Orbit', icon: 'shieldgold', tag: 'Guard',
-    desc: 'After you catch it, the shield orbits you for {orbit:s}, striking foes it passes for {orbitMul} of a strike (each once per 0.75 s) and destroying enemy shots it touches; each shot destroyed shortens the orbit by 0.75 s.',
-    rider: 'Return to Sender: each shot the orbit destroys flies back as a shard at the nearest foe within 300 for {orbitReflect} of a strike.', mods: { orbit: 3.5, orbitMul: 0.15 }, up: { orbit: 0.5, orbitMul: 0.05 }, r3: { orbitReflect: 0.5 } });
+    desc: 'After you catch it, the shield orbits you for {orbit:s}, striking foes it passes for {orbitMul} of a strike (each once per 0.75 s), stunning them {orbitStun:s} (at most once per 1 s per foe) and destroying enemy shots it touches; each shot destroyed shortens the orbit by 0.75 s.',
+    rider: 'Return to Sender: each shot the orbit destroys flies back as a shard at the nearest foe within 300 for {orbitReflect} of a strike.', mods: { orbit: 3.5, orbitMul: 0.15, orbitStun: 0.3 }, up: { orbit: 0.5, orbitMul: 0.05 }, r3: { orbitReflect: 0.5 } });
   card('knight', 'element', 1, 'k_el', { name: 'Oath of Ruin', icon: 'fang', forks: ['k_el_a', 'k_el_b'], plays: 'everything you hit bleeds; stack ailments, then cash them in.', desc: BLEED, mods: { bleedAll: 0.16, statusPow: 0.15 } });
   card('knight', 'element', 2, 'k_el_a', { name: 'Brand of Ruin', icon: 'eye', tag: 'Focus', coop: true,
     desc: '+{brand} damage to a foe for each ailment on it (up to 4), from any hero.',
