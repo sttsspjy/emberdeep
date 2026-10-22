@@ -154,7 +154,7 @@
   const rosterMedian = () => {
     if (medianHp) return medianHp;
     const hs = [];
-    for (const k in ED.ENEMIES) { const e = ED.ENEMIES[k]; if (!e.boss && !e.minion && !e.ally && e.hp > 0) hs.push(e.hp); }
+    for (const k in ED.ENEMIES) { const e = ED.ENEMIES[k]; if (!e.boss && !e.minion && !e.ally && !e.fodder && e.hp > 0) hs.push(e.hp); }
     hs.sort((a, b) => a - b);
     return (medianHp = hs[hs.length >> 1] || 30);
   };

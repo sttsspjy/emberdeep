@@ -8,8 +8,9 @@ const { ED } = require('./sim.js');
 const U = ED.U, D = ED.Dungeon, T = ED.CONST.TILE;
 const argv = process.argv.slice(2);
 const flag = (k, d) => { const a = argv.find(x => x.startsWith('--' + k + '=')); return a ? +a.split('=')[1] : d; };
-const TIMED = [{ cls: 'ranger', kite: false, hp: 25 }, { cls: 'pyro', kite: false, hp: 25 }];
-const AUDITED = [{ cls: 'ranger', kite: true, hp: 1 }, { cls: 'pyro', kite: false, hp: 1 }, { cls: 'ranger', kite: false, hp: 1 }];
+// fodder: how many of the live foes are stratum I fodder (the rest are roster types); counts: the foe counts timed for the scenario (default COUNTS).
+const TIMED = [{ cls: 'ranger', kite: false, hp: 25 }, { cls: 'pyro', kite: false, hp: 25 }, { cls: 'ranger', kite: false, hp: 25, fodder: 100, counts: [150] }];
+const AUDITED = [{ cls: 'ranger', kite: true, hp: 1 }, { cls: 'pyro', kite: false, hp: 1 }, { cls: 'ranger', kite: false, hp: 1 }, { cls: 'ranger', kite: true, hp: 1, fodder: 100 }];
 const CARRY = flag('carry', 10); // px per tick that the audit's hero effect moves the foes around the hero (the grid tolerates 42)
 const COUNTS = [70, 150, 200], TICKS = 600, DT = 1 / 60, WARM = 200, VOLLEY = 4; // VOLLEY: attacks per attack interval (multishot and attack speed of a late build)
 // Gate: ms per tick at 150 foes. Measured on these scenarios: 0.6 before the foe grid, 0.2 after; 0.5 fails the old sim and leaves the new one 2x room (the frame is 16.7 ms, shared with snapshots and rendering).
@@ -46,17 +47,17 @@ function stage(sc) {
 // Spawns foes on floor tiles until n are alive: the first fill lands 50-260 px from the hero (a pile), later ones at least 140 px away.
 function topUp(s, n) {
   const { w, p, rng, sc } = s, room = w.room, near = s.c.first;
-  let live = 0;
-  for (const e of w.enemies) if (e.hp > 0) live++;
+  let live = 0, fod = 0;
+  for (const e of w.enemies) if (e.hp > 0) { live++; if (e.fodder) fod++; }
   while (live < n) {
     let x, y;
     if (near) { const a = rng.next() * U.TAU, d = 50 + rng.next() * 210; x = p.x + Math.cos(a) * d; y = p.y + Math.sin(a) * d; }
     else { x = (1 + rng.next() * (room.w - 2)) * T; y = (1 + rng.next() * (room.h - 2)) * T; if (U.dist2(x, y, p.x, p.y) < 140 * 140) continue; }
     if (D.tileAt(room, x, y) !== 0) continue;
-    const type = rosterTypes[Math.floor(rng.next() * rosterTypes.length)];
+    const horde = fod < (sc.fodder || 0), type = horde ? ED.biomeFor(w.stratum).fodder : rosterTypes[Math.floor(rng.next() * rosterTypes.length)];
     const e = w.spawnEnemy(type, x, y);
     e.hp = e.maxHp = e.hp * sc.hp;
-    live++;
+    live++; if (horde) fod++;
   }
   s.c.first = false;
 }
@@ -200,22 +201,21 @@ let fails = 0;
 // Timing runs first: the audit wraps methods on its worlds, which would make the property reads of the timed worlds polymorphic.
 if (!argv.includes('--audit-only')) {
   for (const sc of TIMED) {
-    const res = {};
-    for (const n of COUNTS) {
+    const res = {}, tag = sc.cls + (sc.fodder ? ' horde' : '');
+    for (const n of sc.counts || COUNTS) {
       let best = null;
       for (let r = 0; r < REPS; r++) { const m = runCount(sc, n); if (!best || m.mean < best.mean) best = m; }
       res[n] = best;
-      console.log(`${sc.cls.padEnd(7)} ${String(n).padStart(3)} foes: ${best.mean.toFixed(3)} ms/tick (worst tick ${best.worst.toFixed(2)} ms) digest ${best.digest}`);
+      console.log(`${tag.padEnd(12)} ${String(n).padStart(3)} foes${sc.fodder ? ' (' + sc.fodder + ' fodder)' : ''}: ${best.mean.toFixed(3)} ms/tick (worst tick ${best.worst.toFixed(2)} ms) digest ${best.digest}`);
     }
-    if (res[150].mean > LIMIT) { fails++; console.log(`FAIL ${sc.cls} at 150 foes: ${res[150].mean.toFixed(3)} ms/tick > ${LIMIT} ms`); }
-    const scale = res[200].mean / res[70].mean;
-    console.log(`${sc.cls} cost 200 vs 70 foes: x${scale.toFixed(2)} (x2.86 = linear in foes)`);
+    if (res[150].mean > LIMIT) { fails++; console.log(`FAIL ${tag} at 150 foes: ${res[150].mean.toFixed(3)} ms/tick > ${LIMIT} ms`); }
+    if (res[200] && res[70]) console.log(`${tag} cost 200 vs 70 foes: x${(res[200].mean / res[70].mean).toFixed(2)} (x2.86 = linear in foes)`);
   }
 }
 for (const sc of AUDITED) {
   for (const n of [40, 150, 200]) {
     const a = audit(sc, n);
-    console.log(`audit ${sc.cls}${sc.kite ? ' kiting' : ''} ${n} foes: ${a.calls} foesNear calls, ${a.bad} bad${a.first ? ' first ' + a.first : ''}, separate differs on ${a.sep} ticks, ${a.leaks} unpaired foeScan ticks${a.note ? ' (' + a.note + ')' : ''}`);
+    console.log(`audit ${sc.cls}${sc.kite ? ' kiting' : ''}${sc.fodder ? ' horde' : ''} ${n} foes: ${a.calls} foesNear calls, ${a.bad} bad${a.first ? ' first ' + a.first : ''}, separate differs on ${a.sep} ticks, ${a.leaks} unpaired foeScan ticks${a.note ? ' (' + a.note + ')' : ''}`);
     if (a.bad || a.sep || a.leaks) fails++;
   }
 }

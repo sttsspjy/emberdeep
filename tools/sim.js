@@ -89,6 +89,23 @@ function avoidHazard(room, p, mx, my) {
   return [mx, my];
 }
 
+// Crowd escape: with CROWD_N or more foes within CROWD_R of the hero, the unit heading (one of 8) whose point 60 px ahead has the fewest foes within CROWD_R (a wall or chasm there counts 99); null otherwise. near: the foes around the hero (w.foesNear).
+const CROWD_R = 80, CROWD_N = 4;
+function crowdEscape(w, p, near) {
+  const live = (e) => e.hp > 0 && e.spawnT <= 0, r2 = CROWD_R * CROWD_R;
+  let n = 0;
+  for (const e of near) if (live(e) && U.dist2(e.x, e.y, p.x, p.y) < r2) n++;
+  if (n < CROWD_N) return null;
+  let best = null, bs = Infinity;
+  for (let k = 0; k < 8; k++) {
+    const a = k * U.TAU / 8, qx = p.x + Math.cos(a) * 60, qy = p.y + Math.sin(a) * 60, t = D.tileAt(w.room, qx, qy);
+    let s = t === 1 || t === 2 || t === 3 || (t === 5 && w.locked) ? 99 : 0;
+    for (const e of near) if (live(e) && U.dist2(e.x, e.y, qx, qy) < r2) s++;
+    if (s < bs) { bs = s; best = [Math.cos(a), Math.sin(a)]; }
+  }
+  return best;
+}
+
 // Aim noise: Gaussian draws from the bot rng (Box-Muller), sigma = AIM_SIGMA x (1 - bot skill).
 const AIM = [0.12, 36]; // sigma of the angle (rad) and of the ground point (px) at skill 0; --aimnoise=<A>,<P> sets them, --aimnoise=0 turns the noise off
 const gauss = (rng) => Math.sqrt(-2 * Math.log(1 - rng.next())) * Math.cos(U.TAU * rng.next());
@@ -425,9 +442,19 @@ function runBot(opts) {
   w.grantOffer = function (p, spec) { const k = spec && spec.src === 'room' ? 'room' : spec && spec.src || 'level'; rec.offers[k] = (rec.offers[k] || 0) + 1; return grant0.call(this, p, spec); };
   w.giveRelic = function (p, id) { const k = this.room ? this.room.type : '?'; rec.relicsBy[k] = (rec.relicsBy[k] || 0) + 1; return give0.call(this, p, id); };
   w.dropGold = function (x, y, total, exact) { rec.goldIn += Math.round(exact ? total : total * ED.World.GOLD_MUL); return drop0.call(this, x, y, total, exact); };
+  // per-room tally: kills (threat / fodder) and the xp dropped, counted from the pickups a drop appends
+  rec.room = { th: 0, fo: 0, xp: 0, clip: 0 };
+  const kill1 = w.killEnemy, xp1 = w.dropXp;
+  w.killEnemy = function (e, p, src) { if (!e.killed && !e.boss) { if (e.fodder) rec.room.fo++; else rec.room.th++; } return kill1.call(this, e, p, src); };
+  w.dropXp = function (x, y, total, exact) {
+    const n0 = this.pickups.length, r = xp1.call(this, x, y, total, exact);
+    for (let i = n0; i < this.pickups.length; i++) if (this.pickups[i].kind === 'xp') rec.room.xp += this.pickups[i].val;
+    if (this.enc && this.enc.xpClip) rec.room.clip = this.enc.xpClip;
+    return r;
+  };
   const ctl = {};
   for (const p of w.players.values()) ctl[p.pid] = { atk: 0, skill: 0, skill2: 0, dashN: p.stats.dashCharges, dashT: 0, goal: null, attn: true, attnT: 0 };
-  const dt = 1 / 60;
+  const dt = 1 / 60, touch = [], crowd = [];
   let steps = 0;
   const maxSteps = 60 * MAX_SECONDS;
   const log = [];
@@ -449,8 +476,10 @@ function runBot(opts) {
       const foes = w.enemies.filter(e => e.hp > 0 && e.spawnT <= 0);
       const skill = opts.skill ?? 0.75;
       if (foes.length) {
-        let tgt = null, bd = 1e9;
-        for (const e of foes) { const d = U.dist2(e.x, e.y, p.x, p.y); if (d < bd) { bd = d; tgt = e; } }
+        // target: the nearest threat foe when it is within weapon reach (or when no fodder stands), else the nearest fodder
+        let tgt = null, bd = 1e9, nf = null, fd = 1e9;
+        for (const e of foes) { const d2 = U.dist2(e.x, e.y, p.x, p.y); if (e.fodder) { if (d2 < fd) { fd = d2; nf = e; } } else if (d2 < bd) { bd = d2; tgt = e; } }
+        if (nf && (!tgt || Math.sqrt(bd) - (p.stats.melee ? tgt.r : 0) >= (p.stats.melee ? p.stats.weapon.range : 380))) { tgt = nf; bd = fd; }
         const d = Math.sqrt(bd);
         const ideal = p.stats.melee ? (p.stats.weapon.range * 0.6 + tgt.r) : (p.stats.deadeye ? 230 : 170); // Deadeye keeps its distance
         let dir;
@@ -461,7 +490,10 @@ function runBot(opts) {
         let danger = false;
         for (const pr of w.projs) if (pr.team === 1 && U.dist2(pr.x, pr.y, p.x, p.y) < 55 * 55) { danger = true; dir = [dir[0] + (p.x - pr.x) * 2, dir[1] + (p.y - pr.y) * 2]; }
         for (const z of w.zones) if ((z.kind === 'tele' || z.kind === 'poison' || z.kind === 'fire') && z.team === 1 && U.dist2(z.x, z.y, p.x, p.y) < (z.r + 12) ** 2) { danger = true; dir = [p.x - z.x + dir[0] * 0.2, p.y - z.y + dir[1] * 0.2]; }
-        const l = Math.hypot(dir[0], dir[1]) || 1; mx = dir[0] / l; my = dir[1] / l;
+        let l = Math.hypot(dir[0], dir[1]) || 1;
+        const esc = crowdEscape(w, p, w.foesNear(p.x, p.y, CROWD_R + 60, crowd));
+        if (esc) { dir = [esc[0] + dir[0] / l * 0.35, esc[1] + dir[1] / l * 0.35]; l = Math.hypot(dir[0], dir[1]) || 1; } // out of a crowd (the walking slow), keeping a little of the chase
+        mx = dir[0] / l; my = dir[1] / l;
         if (brng.next() > skill) { mx += (brng.next() - 0.5) * 1.5; my += (brng.next() - 0.5) * 1.5; }
         const a = Math.atan2(tgt.y - p.y, tgt.x - p.x), st = p.stats;
         const inRange = st.melee ? d - tgt.r < st.weapon.range : d < 380;
@@ -494,7 +526,7 @@ function runBot(opts) {
       if ((c.attnT -= dt) <= 0) { c.attn = brng.next() < skill; c.attnT = 0.25; }
       if (c.attn && (mx || my)) { const v = avoidHazard(w.room, p, mx, my); mx = v[0]; my = v[1]; }
       if (opts.trace) opts.trace(w, p, mx, my, foes, c);
-      ED.Sim.movePlayer(p, { mx, my }, dt, w.room, w.locked, w.zones);
+      ED.Sim.movePlayer(p, { mx, my }, dt, w.room, w.locked, w.zones, w.foesNear(p.x, p.y, 40, touch));
     }
     if (w.locked && w.stratum >= 1 && w.hostiles() > 0) rec.combatS[w.stratum - 1] += dt;
     if (w.boss && w.boss.hp > 0) rec.bossSecs += dt;
@@ -525,14 +557,15 @@ function runBot(opts) {
       else if (ev.t === 'ric' && ev.pid === p0id) { rec.cnt.rics++; if (ev.g) rec.cnt.gRics++; } else if (ev.t === 'catch' && ev.pid === p0id) rec.cnt.catches++;
       else if (ev.t === 'skill' && ev.pid === p0id) rec.cnt.casts[ev.k] = (rec.cnt.casts[ev.k] || 0) + 1;
       if (ev.t === 'boon' && ev.pid === p0id) { const b = ED.BOONS[ev.id]; if (b.key && !rec.keyAt) rec.keyAt = w.stratum; if (b.duo && !rec.duoAt) rec.duoAt = w.stratum; }
-      if (ev.t === 'room') { rec.roomDmg = 0; rec.maxHost = 0; }
+      if (ev.t === 'room') { rec.roomDmg = 0; rec.maxHost = 0; rec.room = { th: 0, fo: 0, xp: 0, clip: 0 }; }
       if (ev.t === 'clear' && !ev.trial && w.room && w.room.type === 'combat') rec.htk[w.stratum - 1].push(hitsToKill(w, w.players.values().next().value, w.stratum));
       if (ev.t === 'evolve' && ev.pid === p0id && !rec.evoAt) rec.evoAt = { s: w.stratum, lvl: w.level };
       if (ev.t === 'dark') rec.dark[w.stratum - 1]++;
       if (ev.t === 'descend') rec.left.push({ s: w.stratum, missed: w.floor.rooms.filter(r => !w.roomState[r.id].visited && !r.dark).length, dark: w.floor.rooms.filter(r => r.dark).length }); // rooms left unvisited (dark rooms apart) when the party takes the portal
       if (ev.t === 'bossSpawn') { bossStart = w.time; rec.bossTry.push({ s: w.stratum, kill: false }); }
       if (ev.t === 'bossDown') { rec.bossTry[rec.bossTry.length - 1].kill = true; rec.bossTimes[w.stratum] = Math.round(w.time - bossStart); log.push(`  boss ${ev.type} down in ${(w.time - bossStart).toFixed(0)}s (t=${U.fmtTime(w.time)}, lvl ${w.level})`); }
-      if (ev.t === 'clear' && !ev.trial && w.room && (w.room.type === 'combat' || w.room.type === 'elite')) rec.clears.push({ s: w.stratum, type: w.room.type, dark: !!w.room.dark, t: Math.round(w.roomTime * 10) / 10, d: Math.round(1000 * rec.roomDmg / Math.max(1, w.players.values().next().value.maxHp)) / 1000, n: rec.maxHost });
+      if (ev.t === 'clear' && !ev.trial && w.room && (w.room.type === 'combat' || w.room.type === 'elite')) rec.clears.push({ s: w.stratum, type: w.room.type, dark: !!w.room.dark, t: Math.round(w.roomTime * 10) / 10, d: Math.round(1000 * rec.roomDmg / Math.max(1, w.players.values().next().value.maxHp)) / 1000, n: rec.maxHost,
+        th: rec.room.th, fo: rec.room.fo, xp: rec.room.xp, clip: rec.room.clip, bud: ED.World.ROOM_XP ? Math.round(ED.World.ROOM_XP[w.room.type][w.stratum - 1] * (w.room.dark ? ED.World.DARK_LOOT : 1)) : null });
       if (ev.t === 'stratum') {
         const dealt = totalDealt();
         if (ev.s > 1) { strata.push(Math.round(w.time - stratumStart)); rec.dealtStrata.push(Math.round(dealt - dealt0)); log.push(`  stratum ${ev.s - 1} took ${(w.time - stratumStart).toFixed(0)}s`); }
@@ -648,6 +681,12 @@ function summarize(results) {
   lines.push(`damage taken ${top(dmg, 5).map(([k, v]) => `${k} ${(100 * v / dTot).toFixed(0)}%`).join(', ')}; first downed by ${top(downed, 5).map(([k, v]) => `${k} ${v}`).join(', ')}`);
   const byS = S.map(k => { const o = {}; for (const r of results) for (const who in (r.dmgByS[k] || {})) o[who] = (o[who] || 0) + r.dmgByS[k][who]; const t = Object.values(o).reduce((x, y) => x + y, 0) || 1; return `${k}: ` + Object.entries(o).sort((x, y) => y[1] - x[1]).slice(0, 4).map(([w, v]) => `${w} ${Math.round(100 * v / t)}%`).join(' '); });
   lines.push('damage taken by stratum: ' + byS.join(' | '));
+  const grpOf = { combat: (c) => c.type === 'combat' && !c.dark, elite: (c) => c.type === 'elite' && !c.dark, dark: (c) => c.dark };
+  const perS = (g, f) => S.map(s => { const cs = results.flatMap(r => r.clears.filter(c => c.s === s && grpOf[g](c))); return cs.length ? f(cs) : '-'; });
+  const roomLine = (label, f) => `${label}: ` + Object.keys(grpOf).map(g => `${g} [${perS(g, f).join(' ')}]`).join(' ');
+  lines.push(roomLine('kills per cleared room by stratum (threat/fodder)', (cs) => `${f1(avg(cs.map(c => c.th)))}/${f1(avg(cs.map(c => c.fo)))}`));
+  lines.push(roomLine('peak live foes per room by stratum (mean/max)', (cs) => `${f1(avg(cs.map(c => c.n)))}/${Math.max(...cs.map(c => c.n))}`));
+  lines.push(roomLine('room xp dropped by stratum (mean/budget, rooms off budget, mean threat xp cut by the budget)', (cs) => `${f1(avg(cs.map(c => c.xp)))}${cs[0].bud === null ? '' : '/' + f1(avg(cs.map(c => c.bud))) + ' off ' + cs.filter(c => Math.abs(c.xp - c.bud) > 0.5).length + ' cut ' + f1(avg(cs.map(c => c.clip)))}`));
   lines.push(classLines(results));
   const darkC = results.flatMap(r => r.clears.filter(c => c.dark)), normC = results.flatMap(r => r.clears.filter(c => c.type === 'combat' && !c.dark));
   lines.push(`dark rooms: ${darkC.length} cleared in ${n} runs | clear s ${f1(avg(darkC.map(c => c.t)))} vs normal combat ${f1(avg(normC.map(c => c.t)))} | room hp lost ${f2(avg(darkC.map(c => c.d)))} vs ${f2(avg(normC.map(c => c.d)))} (fraction of max HP)`);

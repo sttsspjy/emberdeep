@@ -59,8 +59,8 @@
     const def = ED.ENEMIES[type];
     const s = this.stratum, pact = this.pact;
     let hp = def.hp, dmg = def.dmg;
-    if (!def.boss) hp *= ED.World.hpScale(s);
-    hp *= this.partyHpMul();
+    if (def.fodder) hp *= 1 + 0.25 * (s - 1); // fodder: depth and pact only (no threat lever, party multiplier or elite)
+    else { if (!def.boss) hp *= ED.World.hpScale(s); hp *= this.partyHpMul(); }
     if (pact >= 1) hp *= 1.25;
     if (def.boss && pact >= 5) hp *= 1.35;
     if (pact >= 10) hp *= 1.2;
@@ -69,19 +69,19 @@
     const e = {
       id: U.uid(), type, def, x, y, r: def.r, hp, maxHp: hp, dmg, spd: def.spd * (pact >= 6 ? 1.15 : 1),
       kbx: 0, kby: 0, st: 'move', t: 0, cd: this.rng.range(0.6, 1.6), face: 1, flash: -1, stun: 0, frozen: 0, elite: null, ward: 0, wardMax: 0,
-      boss: !!def.boss, fly: !!def.fly, target: null, tgtT: 0, aimA: 0, guardA: 0, contactCd: 0, spawnT: opts.spawnT || 0,
+      boss: !!def.boss, fodder: !!def.fodder, age: 0, fly: !!def.fly, target: null, tgtT: 0, aimA: 0, guardA: 0, contactCd: 0, spawnT: opts.spawnT || 0,
       phase: 1, vars: {}, strafe: this.rng.sign(), wob: this.rng.range(0, 6.28), exposed: false, recoil: 0,
       // statuses: burn/bleed pools, chill, charge, Venom (0-100; venomBy = bitmask of hero slots that added it), Radiance, Doom (HP units), hero debuffs (judged = Cleric Judgment, vulnT = Rain/Smoke vulnerability); slow/windMul/dmgTakenMul are read by ai.js and hitEnemy
       // cid = last chain id this foe paid out in; wrathQ = charge made by Wrath of Heaven bolts; stunCd / blindCd = per-foe cooldowns of Overload / Dawn Stride
       burn: 0, burnPool: 0, burnTick: 0, burnOwner: null, bleedPool: 0, bleedTick: 0, bleedOwner: null,
       chill: 0, chillT: 0, chillOwner: null, freezeRes: 0, freezeResT: 0, charge: 0, chargeOwner: null, dischargeT: 0,
       venom: 0, venomT: 0, venomOwner: null, venomBy: 0, corrode: 0, plagueT: 0, rad: 0, radOwner: null, doom: 0, doomOwner: null, cid: 0, cidMask: 0, wrathQ: 0, stunCd: 0, blindCd: 0,
-      hpLever: def.boss ? def.hp / def.refHp : this.threat().hp, // HP-relative statuses (chill, Conflagration, Wildfire) ignore this stratum lever
+      hpLever: def.boss ? def.hp / def.refHp : def.fodder ? 1 : this.threat().hp, // HP-relative statuses (chill, Conflagration, Wildfire) ignore this stratum lever (fodder carries none)
       mark: 0, judged: 0, vulnT: 0, blind: 0, sunder: 0, sunderOwner: null, slow: 1, slowAmt: 0, slowT: 0, windMul: 1, dmgTakenMul: 1, invulnT: 0, killed: false,
       // class-route foe states: shieldStunT (stunned by a thrown shield), staggerT / parryT (per-foe cooldowns), hexT + hexBy (slot mask), markV (mark vulnerability), sealT, weakT + weakV (Verdict weaken)
       shieldStunT: 0, staggerT: 0, parryT: 0, hexT: 0, hexBy: 0, markV: 0, sealT: 0, weakT: 0, weakV: 0,
     };
-    if (opts.elite) this.makeElite(e, opts.affix);
+    if (opts.elite && !def.fodder) this.makeElite(e, opts.affix);
     this.enemies.push(e);
     this.foeLate(this.enemies.length - 1);
     return e;
@@ -166,6 +166,7 @@
       if (kind === 'skill') ev.s = 1; // a class-skill hit: the viewer's aggregated skill impact cue (k: 0 hit, 1 status DoT, 2 skill-zone tick)
       if (src.wpn && kind === 'weapon' && st && st.heavy) ev.h = 1; // heavy weapon hit: the viewer's hit-stop
       if (src.far) ev.f = 1; // a far shot (Deadeye): the viewer's bright spark
+      if (e.fodder) ev.fd = 1; // the target is fodder (f is taken by the far shot)
       if (src.slow) ev.sl = 1; // a hit that slows (Quickdraw): the viewer's frost streak
       this.emit(ev);
     }
@@ -767,11 +768,13 @@
     src = src || {};
     const def = e.def, s = this.stratum;
     this.run.kills++;
+    if (def.fodder) this.run.fodderKills++;
     if (p) p.kills++;
     this.emit({ t: 'die', x: Math.round(e.x), y: Math.round(e.y), type: e.type, el: e.elite ? 1 : 0, r: e.r });
     this.onEnemyKilledSkill(e, p, src);
     if (def.boss) { this.onBossKilled(e); return; }
     this.deathPayoffs(e, p, src);
+    if (def.fodder) { this.fodderMote(e.x, e.y); return; } // fodder drop no gold, heart or Grail growth, split or leave a cloud: only the room's xp mote
     const xpMul = 1 + 0.35 * (s - 1);
     this.dropXp(e.x, e.y, def.xp * xpMul * (e.elite ? 3 : 1));
     if (this.rng.chance(e.elite ? 1 : 0.12)) this.dropGold(e.x, e.y, (1 + Math.floor((s - 1) / 2)) * (e.elite ? 3 : this.rng.int(1, 2)));
@@ -904,6 +907,7 @@
     if (e && e.weakT > 0) dmg *= 1 - e.weakV;
     if (e && e.chill > 0 && e.chillOwner) dmg *= 1 - e.chillOwner.stats.chillWeaken;
     dmg = Math.max(1, Math.round(dmg));
+    if (e && e.fodder) dmg = Math.max(1, Math.min(dmg, Math.round(ED.CONST.FODDER_CAP * p.maxHp))); // fodder touches never exceed FODDER_CAP of max health (before the shield)
     if (p.shield > 0) {
       const ab = Math.min(p.shield, dmg); p.shield -= ab; dmg -= ab;
       const hc = CLS[p.cls];
@@ -1299,6 +1303,7 @@
         if (done) { if (z.onEnd) z.onEnd(this, z); continue; }
       } else if (z.kind === 'spawn') {
         if (done) {
+          if (z.n) { this.spawnPack(z); continue; } // a fodder pack
           const e = this.spawnEnemy(z.type, z.x, z.y, { elite: z.elite, affix: z.affix });
           this.emit({ t: 'spawned', x: Math.round(z.x), y: Math.round(z.y), el: z.elite ? 1 : 0 });
           if (z.after) z.after(e);
@@ -1381,7 +1386,8 @@
       const f = Math.max(0, 1 - 9 * dt); e.kbx *= f; e.kby *= f;
       if (Math.abs(e.kbx) + Math.abs(e.kby) < 4) { e.kbx = 0; e.kby = 0; }
     }
-    if (!e.exposed && !e.def.invuln && this.enc && ((!e.boss && this.roomTime > 45) || (e.boss && this.roomTime > 78))) { e.exposed = true; this.emit({ t: 'expose', x: e.x, y: e.y, boss: e.boss ? 1 : 0 }); }
+    e.age += dt;
+    if (!e.exposed && !e.def.invuln && !e.fodder && this.enc && e.age > (e.boss ? 78 : 45)) { e.exposed = true; this.emit({ t: 'expose', x: e.x, y: e.y, boss: e.boss ? 1 : 0 }); }
     if (e.exposed && !e.def.invuln) e.hp -= e.maxHp * (e.boss ? 0.012 : 0.04) * dt;
     if (e.hp <= 0) { this.killEnemy(e, null, {}); return; }
     if (e.frozen > 0 || e.stun > 0) return;
