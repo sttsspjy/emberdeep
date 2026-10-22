@@ -474,9 +474,14 @@
   // Card body of a class route or fork card: the text at the offered rank (+ rider from rank 3), "Plays as" and "Forks" on a route card, the rank-3 rider name on lower ranks, the fork weapon of an Attack fork.
   function classBody(b, id, have, me) {
     const rk = Math.min(b.max, have + 1), P = ED.cardParts(id, rk, me && me.stats);
-    let h = `<div class="bd">${esc(P.text)}${P.rider ? ` <b>${esc(P.riderName)}</b>: ${esc(P.rider)}` : ''}</div>`;
+    let h = `<div class="bd">${esc(P.text)}${P.rider2 ? ` <b>${esc(P.rider2Name)}</b>: ${esc(P.rider2)}` : ''}${P.rider ? ` <b>${esc(P.riderName)}</b>: ${esc(P.rider)}` : ''}${P.form ? ` <b>${esc(P.form.name)}</b>: ${esc(P.form.desc)}` : ''}</div>`;
     if (b.tier === 1) h += `<div class="bplay">Plays as: ${esc(b.plays)}</div><div class="bplay">Forks: ${b.forks.map(f => esc(ED.BOONS[f].name)).join(' / ')}</div>`;
-    else if (P.riderName && !P.rider) h += `<div class="bplay">Rank 3: ${esc(P.riderName)}</div>`;
+    else {
+      const nx = [];
+      if (P.rider2Name && !P.rider2) nx.push('Rank 2: ' + P.rider2Name);
+      if (b.form && !P.form) nx.push('Rank 3: ' + b.form.name); else if (P.riderName && !P.rider && !b.form) nx.push('Rank 3: ' + P.riderName);
+      if (nx.length) h += `<div class="bplay">${esc(nx.join(' · '))}</div>`;
+    }
     if (b.weapon && b.weapon.kind && me && ED.CLASSES[me.cls]) {
       const base = me.stats && me.stats.weaponId ? me.stats.weaponId.split('@')[0] : me.weapon, fw = ED.forkWeapon(base, id);
       h += `<div class="bweap" data-w="${base}@${b.weapon.kind}"><div><span>${esc(fw.name)}</span><small>${fw.dmg.toFixed(1)} damage every ${fw.rate.toFixed(2)} s</small></div></div>`;
@@ -563,6 +568,23 @@
     if (ED.Game.s) { ED.Game.s.offerOpen = false; ED.Game.s.offer = null; }
   };
   UI.hideBoons = () => { boonOffer = null; $('ov-boon').hidden = true; };
+
+  // ---------------- fork rank reveal ----------------
+  // A card at the top of the screen for FORK_REVEAL_MS when a boss ranks the hero's fork up ({ id, rank }): rank 2 names the new behaviour, rank 3 the transform big, with its text and the card's art. It takes no input.
+  const FORK_REVEAL_MS = 8000;
+  let forkTimer = 0;
+  UI.forkReveal = (m) => {
+    const b = ED.BOONS[m.id], el = $('ov-fork');
+    if (!b || !el || !(m.rank >= 2)) return;
+    const me = ED.Game.s && ED.Game.s.me, P = ED.cardParts(m.id, m.rank, me && me.stats), big = m.rank >= 3, form = big && P.form;
+    const name = form ? P.form.name : P.rider2Name || P.riderName || ED.cardName(m.id, m.rank), text = form ? P.form.desc : big && P.rider ? P.rider : P.rider2;
+    const route = b.route ? ED.routeLabel(b.cls, b.route) : '';
+    el.className = 'fork-reveal ' + (big ? 'big' : 'small');
+    el.innerHTML = `<img class="fr-icon" alt="" src="${ED.Icons.boonUrl(m.id)}"><div class="fr-body"><div class="fr-kick">${esc(route)}${route ? ' · ' : ''}${esc(b.name)} · rank ${m.rank}${form ? ' · transformed' : ''}</div><div class="fr-name">${esc(name)}</div><div class="fr-text">${esc(text || '')}</div></div>`;
+    el.hidden = true; void el.offsetWidth; el.hidden = false; // restarts the animation of a card that is still up
+    clearTimeout(forkTimer);
+    forkTimer = setTimeout(() => { el.hidden = true; }, FORK_REVEAL_MS);
+  };
 
   // ---------------- results ----------------
   UI.renderResults = (sum, res, note) => {

@@ -192,7 +192,7 @@
   });
   const clampI = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
   // Shots of a fan that reach a foe at REF.d: those whose lateral offset there is within REF.r + the shot radius.
-  const fanHits = (offsets, projR) => { let n = 0; for (let i = 0; i < offsets.length; i++) if (Sh.REF.d * Math.abs(Math.sin(offsets[i])) < Sh.REF.r + projR) n++; return n; };
+  const fanHits = (offsets, projR) => { let n = 0; for (let i = 0; i < offsets.length; i++) if (Math.cos(offsets[i]) > 0 && Sh.REF.d * Math.abs(Math.sin(offsets[i])) < Sh.REF.r + projR) n++; return n; }; // an arrow flying away from the foe (a ring) never reaches it
   const buildOf = (p, ctx) => ({ cls: p.cls, weapon: p.weapon, boons: p.boons || {}, relics: p.relics || [], meta: p.meta, pact: ctx.pact | 0, chaliceHp: p.chaliceHp || 0, bonusHp: p.bonusHp || 0 });
   // Drops the internal raw-number fields (names starting with an underscore) from a model.
   const strip = (o) => {

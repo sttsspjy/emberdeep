@@ -83,7 +83,8 @@
   // aimIf { stat: aim } overrides aim while the stat is set; moveIf { stat: { k: 'charge' | 'hop' | 'leap', ... } } moves the caster with the cast (iframes seconds untouchable, default = the move time).
   // parts feed ED.Stats.skillNums (the one source for sim, sheet and bots): dmg = (base + pow x X) x (1 + slot damage), X = Power (on 'P'), the equipped weapon's dmg ('W') or the unforked weapon ('B');
   // powKey adds a stat to pow; of + mul / mul1 derive a part from another (mul1: x (1 + stat); times 'ticks': x the tick count); if = the stat that enables the part; mulIf = { stat: factor };
-  // r scales with area (x(1 + 0.5 area) x (1 + slot area)), rOf + rMul derive it from another part (pRad: r is a projectile's hit radius; the sheet leaves it out); dur adds slot duration (durFix: none) and is capped at capCd x the effective cooldown; n adds slot count; per: 'hit' | 'tick' | 'sec' | 'minion' | 'status'.
+  // r scales with area (x(1 + 0.5 area) x (1 + slot area)), rOf + rMul derive it from another part (pRad: r is a projectile's hit radius; the sheet leaves it out); dur adds slot duration (durFix: none) and is capped at capCd x the effective cooldown; n adds slot count (nFix: none); per: 'hit' | 'tick' | 'sec' | 'minion' | 'status'.
+  // Form keys (see Stats.skillNums): durMulKey (the stat multiplies dur), durCd (dur = the cooldown while the stat is set), ringKey (the stat is the arrow count of a full ring), nOf (the count of another part), stunKey (the stat is the stun), oneMul with oneEvery; ref (Starfall: reference cast distance for the sheet).
   ED.SKILLS = {
     charge: { name: 'Shield Charge', slot: 0, cd: 6, icon: 'shield', aim: 'move', range: 150, rangeMin: 60, rangeAdd: 's1Range', move: { k: 'charge', speed: 600 },
       desc: 'Charge toward the cursor, untouchable, smashing and stunning every foe you run into. A thrown shield flies back to you; foes stunned by your shield take +40% (Crush).',
@@ -92,7 +93,7 @@
         { id: 'shock', label: 'Shockwave', if: 'jugShock', ifNot: 'avalanche', of: 'impact', mul: 'jugShock', per: 'hit', r: 90, knock: 220, proc: false },
         { id: 'bash', label: 'Shield Bash', if: 'bash', per: 'hit', mulKey: 'bash', proc: true },
         { id: 'quake', label: 'Avalanche slam', if: 'avalanche', of: 'impact', mul: 'avalanche', per: 'hit', r: 160, knock: 300, stunKey: 'avaStun', bossMul: 1.5, proc: true },
-        { id: 'crack', label: 'Ground cracks', if: 'avalanche', of: 'impact', mul: 'avaCrack', per: 'hit', n: 3, len: 220, w: 44, delay: 0.3, knock: 120, proc: true },
+        { id: 'crack', label: 'Ground cracks', if: 'avalanche', of: 'impact', mul: 'avaCrack', per: 'hit', n: 3, nFix: true, len: 220, w: 44, delay: 0.3, knock: 120, proc: true },
         { id: 'banner', label: 'War Banner', if: 'phalanx', per: 'zone', r: 120, durKey: 'bannerDur', stun: 0.4 },
       ] },
     shieldthrow: { name: 'Shield Throw', slot: 1, cd: 9, icon: 'bulwark', aim: 'dir', range: 280, rangeMin: 120,
@@ -109,7 +110,7 @@
       parts: [
         { id: 'arrow', label: 'Arrow', base: 4, pow: 1.2, per: 'hit', n: 7, fan: 1.2, ringKey: 'thornburst', pierce: 1, speed: 480, life: 0.8, pr: 5, knock: 60, proc: true, close: 110 },
         { id: 'wave', label: 'Waves 2 and 3', if: 'deathMark', of: 'arrow', mul: 'deathWave', per: 'hit', nOf: 'arrow', fan: 1.2, waves: 2, pr: 5, proc: true },
-        { id: 'burst', label: 'Death burst', if: 'deathMark', of: 'arrow', mul: 'deathMark', per: 'hit', n: 4, proc: true },
+        { id: 'burst', label: 'Death burst', if: 'deathMark', of: 'arrow', mul: 'deathMark', per: 'hit', n: 4, nFix: true, proc: true },
       ] },
     nova: { name: 'Flame Nova', slot: 0, cd: 7, icon: 'flame', aim: 'self',
       desc: 'Erupt in a ring of fire that burns everything nearby.',
@@ -145,7 +146,7 @@
         { id: 'tick', label: 'Arrows', ifNot: 'skyfall', base: 4, pow: 0.45, per: 'tick', every: 0.25, dur: 2, durMulKey: 'thornstorm', delay: 0.35, r: 80, proc: true },
         { id: 'sky', label: 'Skyfall', if: 'skyfall', ifNot: 'starfall', of: 'tick', times: 'ticks', per: 'hit', delay: 0.5, rOf: 'tick', rMul: 1.3, stun: 0.5, proc: true },
         { id: 'sky2', label: 'Twin Sky', if: 'skyTwin', ifNot: 'starfall', of: 'sky', mul: 'skyTwin', per: 'hit', delay: 0.8, rOf: 'sky', rMul: 1, proc: true },
-        { id: 'star', label: 'Starfall', if: 'starfall', of: 'sky', mul: 'starfall', per: 'hit', n: 5, every: 0.12, r: 70, delay: 0.35, stun: 0.4, ref: 160, proc: true },
+        { id: 'star', label: 'Starfall', if: 'starfall', of: 'sky', mul: 'starfall', per: 'hit', n: 5, nFix: true, every: 0.12, r: 70, delay: 0.35, stun: 0.4, ref: 160, proc: true },
         { id: 'shower', label: 'Second Shower', if: 'shower', of: 'tick', mul: 'shower', per: 'tick', every: 0.25, dur: 2, durFix: true, rOf: 'tick', rMul: 1, proc: true },
         { id: 'bramble', label: 'Bramble patches', if: 'thornstorm', per: 'zone', r: 40, dur: 3, durFix: true, slow: 0.3 },
       ] },

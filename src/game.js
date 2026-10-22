@@ -246,10 +246,7 @@
     else if (m.t === 'offerDone') { s.offer = null; s.offerOpen = false; ED.UI.hideBoons(); }
     else if (m.t === 'claimed') s.claimed[m.group] = true;
     else if (m.t === 'toast') { ED.UI.toast(m.text); if (!m.info) ED.Audio.play('deny'); } // info toasts are not refusals
-    else if (m.t === 'forkRank') { // a fork rank granted at a boss { id, rank }: a toast with the rank's new behaviour
-      const P = ED.cardParts(m.id, m.rank, s.me && s.me.stats), tx = P.rider ? `${P.riderName}: ${P.rider}` : P.rider2 ? `${P.rider2Name}: ${P.rider2}` : '', e = ED.UI.esc;
-      ED.UI.toast(`<b>${e(ED.cardName(m.id, m.rank))}</b>: rank ${m.rank}${tx ? '<br>' + e(tx) : ''}`, ED.Icons.boonUrl(m.id), 6);
-    }
+    else if (m.t === 'forkRank') ED.UI.forkReveal(m); // a fork rank granted at a boss { id, rank }: the reveal card
     else if (m.t === 'refund') { // cooldown refund { slot, s }: s seconds off (a charge returns when the cooldown reaches 0), no s = in full
       const c = s.ctl;
       if (m.slot === 1) c.skill2Cd = m.s ? Math.max(0, c.skill2Cd - m.s) : 0;
@@ -265,7 +262,7 @@
     if (d.t === 'in') {
       const p = w.players.get(pid);
       if (p && d.e === w.roomEpoch && !p.downed && !p.dead) {
-        p.x = +d.x || p.x; p.y = +d.y || p.y; p.face = +d.f || 0; p.moving = !!d.mv; p.dashing = !!d.d; p.skillIfr = !!d.m; p.vx = +d.vx || 0; p.vy = +d.vy || 0;
+        p.x = +d.x || p.x; p.y = +d.y || p.y; p.face = +d.f || 0; if (isFinite(d.ax) && isFinite(d.ay)) { p.aimX = +d.ax; p.aimY = +d.ay; } p.moving = !!d.mv; p.dashing = !!d.d; p.skillIfr = !!d.m; p.vx = +d.vx || 0; p.vy = +d.vy || 0;
         Sim.resolve(p, w.room, w.locked, false);
       }
     } else if (d.t === 'act') G.applyAction(w, pid, d.a);
@@ -296,6 +293,7 @@
     if (s.offerOpen) { mx = 0; my = 0; }
     const aim = aimOf(s, me, inp);
     me.face = aim;
+    { const aw = ED.AimFx.want(me, s.aim, 260); me.aimX = aw.x; me.aimY = aw.y; } // the cursor point (a ground skill that follows it, Storm of Thorns, reads it on the host)
     // interaction prompt
     s.prompt = null;
     let near = null, nd = 50 * 50;
@@ -530,7 +528,7 @@
         if (s.inT <= 0) {
           s.inT = 1 / ED.CONST.INPUT_HZ;
           const me = s.me;
-          s.net.send({ t: 'in', x: Math.round(me.x * 10) / 10, y: Math.round(me.y * 10) / 10, f: Math.round(me.face * 100) / 100, mv: me.moving ? 1 : 0, d: me.dashT > 0 ? 1 : 0, m: me.skillIfr ? 1 : 0, vx: Math.round(me.vx || 0), vy: Math.round(me.vy || 0), e: s.epoch });
+          s.net.send({ t: 'in', x: Math.round(me.x * 10) / 10, y: Math.round(me.y * 10) / 10, f: Math.round(me.face * 100) / 100, ax: Math.round(me.aimX || 0), ay: Math.round(me.aimY || 0), mv: me.moving ? 1 : 0, d: me.dashT > 0 ? 1 : 0, m: me.skillIfr ? 1 : 0, vx: Math.round(me.vx || 0), vy: Math.round(me.vy || 0), e: s.epoch });
         }
         s.me.dashing = s.me.dashT > 0;
       }

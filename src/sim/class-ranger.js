@@ -24,12 +24,12 @@
     return {};
   };
 
-  // One wave of Volley arrows from the hero at damage factor mul; a Death Mark arrow (pr.dm) steers toward marked foes (homeArrows).
+  // One wave of Volley arrows from the hero at damage factor mul (the later Death Mark waves count as part volley.wave); a Death Mark arrow (pr.dm) steers toward marked foes (homeArrows).
   function volleyArrows(w, p, a, st, q, mul) {
     const n = q.n, dm = st.deathMark > 0;
     for (let i = 0; i < n; i++) {
       const ang = q.ring ? a + i * q.fan / n : a + (n > 1 ? (i / (n - 1) - 0.5) * q.fan : 0);
-      const pr = w.spawnProj({ team: 0, kind: 'arrow', x: p.x, y: p.y - 4, a: ang, speed: q.speed, r: q.pr, dmg: q.dmg * mul, life: q.life, pierce: q.pierce + st.pierce, owner: p.pid, knock: q.knock, hk: 'skill', part: 'volley.arrow', infK: 1 + st.skillInfK });
+      const pr = w.spawnProj({ team: 0, kind: 'arrow', x: p.x, y: p.y - 4, a: ang, speed: q.speed, r: q.pr, dmg: q.dmg * mul, life: q.life, pierce: q.pierce + st.pierce, owner: p.pid, knock: q.knock, hk: 'skill', part: mul === 1 ? 'volley.arrow' : 'volley.wave', infK: 1 + st.skillInfK });
       if (dm) pr.dm = true;
     }
   }
@@ -134,6 +134,7 @@
       },
       onEnd: o.onEnd || undefined });
     z.t = t0; z.patchT = -9; z.px = NaN; z.py = NaN;
+    if (o.follow) z.w = 5; // wire marker of a Storm of Thorns field (the renderer adds its thorns)
     return z;
   }
 
@@ -264,7 +265,7 @@
     hitDone(p, e, dmg, crit, src) {
       const st = p.stats;
       if (src.slow && e.hp > 0) this.slowEnemy(e, st.hitSlow, 1);
-      if (st.volleyMark && src.part === 'volley.arrow') markFoe(e, p, st);
+      if (st.volleyMark && (src.part === 'volley.arrow' || src.part === 'volley.wave')) markFoe(e, p, st);
       if (st.volleySlow && src.part === 'volley.arrow' && e.hp > 0) this.slowEnemy(e, e.boss ? st.volleySlow * 0.5 : st.volleySlow, VOLLEY_SLOW_T);
     },
     projHit(pr, e, hs) {

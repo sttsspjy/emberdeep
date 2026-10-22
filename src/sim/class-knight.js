@@ -375,6 +375,14 @@
         }
       }
     }
+    if (st.bastion > 0) { // the pair keeps exactly opposite, whichever of the two the loop moved first
+      const o = p.shields.filter(x => x.leg === 'orbit');
+      if (o.length === 2) {
+        const b = o[1], pr = b.pr;
+        b.orbitA = o[0].orbitA + Math.PI;
+        pr.x = hx + Math.cos(b.orbitA) * BASTION_R; pr.y = hy + Math.sin(b.orbitA) * BASTION_R; pr.vx = Math.cos(b.orbitA + Math.PI / 2) * BASTION_R * U.TAU / 0.9; pr.vy = Math.sin(b.orbitA + Math.PI / 2) * BASTION_R * U.TAU / 0.9;
+      }
+    }
   };
 
   // ---------------- Knight hook table ----------------

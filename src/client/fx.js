@@ -753,6 +753,15 @@
         F.burst(x, y - 12, 44, { color: col, sp: 110, a: -1.57, spread: 4.4, life: 1.2, size: 2.6, add: true, drag: 1.2 });
         F.burst(x, y - 12, 14, { kind: 'streak', color: '#ffffff', sp: 320, life: 0.5, size: 2 });
         F.pop(x, y - 14, 80, col, 0.5, true); F.punch(1.2, 0.9); F.addShake(5); A.play('evolve', ev.pid === local ? 1 : 0.6); if (ev.pid === local) F.flash = { color: col, t: 0.3, a: 0.3 }; break; }
+      case 'forkRank': { // a fork ranked up at a boss (rank 3 = the transform): rings and rising sparks on the hero for everyone, a flash and the evolve cue for the owner
+        const p = ctx.player(ev.pid), big = ev.rank >= 3, col = big ? '#ffd36b' : '#ffe9b0', x = ev.x !== undefined ? ev.x : (p ? p.x : 0), y = ev.y !== undefined ? ev.y : (p ? p.y : 0), mine = ev.pid === local;
+        F.ring(x, y, big ? 110 : 70, col, 0.7, big ? 5 : 3); F.ring(x, y, big ? 64 : 40, '#ffffff', 0.45, 2);
+        F.burst(x, y - 12, big ? 36 : 20, { color: col, sp: 100, a: -1.57, spread: 4.4, life: 1.0, size: 2.6, add: true, drag: 1.2 });
+        F.burst(x, y - 12, big ? 12 : 6, { kind: 'streak', color: '#ffffff', sp: 300, life: 0.4, size: 1.8 });
+        F.pop(x, y - 14, big ? 70 : 44, col, 0.4, true);
+        F.text(x, y - 42, ED.cardName(ev.id, ev.rank), col, big ? 13 : 11, { pop: true, life: 1.8, max: 1.8, vy: -20 });
+        if (mine) { F.punch(big ? 1.1 : 0.6, big ? 0.7 : 0.4); F.addShake(big ? 4 : 2); F.flash = { color: col, t: 0.3, a: big ? 0.3 : 0.18 }; }
+        A.play('evolve', mine ? (big ? 1 : 0.7) : 0.4); break; }
       case 'dread': { const tier = ev.tier | 0, worse = tier > F.dread; F.dread = tier; A.play('dread', worse ? 0.9 : 0.5, tier);
         if (worse) { F.punch(0.7, 0); F.addShake(2 + tier); if (!calm()) F.flash = { color: '#02010a', t: 0.5, a: 0.55 }; } break; }
       case 'howl': F.ring(ev.x, ev.y - 8, ev.r || 200, '#e8d8b0', 0.6, 4); F.ring(ev.x, ev.y - 8, (ev.r || 200) * 0.5, '#ffffff', 0.4, 2); F.burst(ev.x, ev.y - 14, 10, { kind: 'streak', color: '#e8d8b0', sp: (ev.r || 200) * 1.4, life: 0.4, size: 1.6 }); F.pop(ev.x, ev.y - 14, 24, '#e8d8b0', 0.25); F.addShake(2); A.play('howl', 0.7); break;

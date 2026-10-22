@@ -213,7 +213,7 @@
       if (d.durMulKey && st[d.durMulKey] > 0 && q.dur !== undefined) q.dur *= st[d.durMulKey]; // durMulKey: the stat is a length factor (Storm of Thorns)
       if (d.durCd && st[d.durCd] && q.dur !== undefined) q.dur = cdEff; // durCd: lasts until the skill is cast again (Bastion)
       if (d.capCd && q.dur !== undefined) q.dur = Math.min(q.dur, d.capCd * cdEff);
-      if (d.n !== undefined) q.n = d.n + sN;
+      if (d.n !== undefined) q.n = d.n + (d.nFix ? 0 : sN); // nFix: a count the slot's count does not change
       if (d.nOf) q.n = out.p[d.nOf].n; // the count of another part (Death Mark's later waves)
       if (d.ringKey && st[d.ringKey] > 0) { q.n = st[d.ringKey]; q.fan = U.TAU; q.ring = true; } // ringKey: the stat is the arrow count of a full ring (Thornburst)
       if (d.stunKey) q.stun = st[d.stunKey];

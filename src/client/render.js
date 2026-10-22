@@ -827,6 +827,7 @@
           break;
         }
         case 'sanct': {
+          if (z.w === 7 && ED.ClassFx.zone.banner) { ED.ClassFx.zone.banner(c, z, pass, t, k, view); break; } // an Iron Phalanx War Banner (cls-knight.js)
           const fade = Math.min(1, (z.dur - z.t) * 2, z.t * 5), au = z.fol || z.follow ? 0.4 : 1; // au: an Aura of Faith sits on its Cleric, so its light and circle are softer
           if (pass === 0) { // ground: fill, dashed rim and the CodeManu protection circle at its native 2 px density under the actors
             R.light(z.x, z.y, z.r * 1.9, '#ffe9a0', 0.8 * fade * au); discPut(c, z.x, z.y, z.r, '#ffe9a0', 0.25 * fade);
@@ -843,6 +844,7 @@
           break;
         }
         case 'rain': case 'skyfall': { // Rain of Arrows: faint ground disc, then arrows falling inside the circle (Skyfall: one curtain landing together)
+          if (z.w === 5 && ED.ClassFx.zone.thornstorm) ED.ClassFx.zone.thornstorm(c, z, pass, t, k, view); // a Storm of Thorns adds its thorn ring (cls-ranger.js)
           const sky = z.kind === 'skyfall', fade = sky ? 1 : Math.min(1, (z.dur - z.t) * 2.5, z.t * 4), warm = !sky && z.t < 0.35;
           if (pass === 0) {
             discPut(c, z.x, z.y, z.r, '#e8d8b0', (warm ? 0.12 : 0.25) * fade);
