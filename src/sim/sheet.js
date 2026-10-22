@@ -419,6 +419,7 @@
 
     const proc = procModel(p, st, wpn, skills);
     elementForms(st, wpn, skills, proc, ref, R);
+    shadeForms(st, wpn, skills, proc, ref, s, R);
     if (st.contagion > 0) poolExtras(wpn, st, proc, s, R);
 
     // offense multipliers, each with its sources
@@ -629,10 +630,87 @@
       }
     }
   }
+  // ---------------- Shade attack and element routes (class-shade.js) ----------------
+  // Momentum: the chance q that an attack crits (crit chance, the crits Shadowstep readies, executions below the line, Arterial readyings, Killing Rhythm) feeds the stacks; a gap of MOM_T s without a crit drops them all,
+  // so a hit sees ES x (1 - rho) stacks on average (rho = (1 - q)^K, K = attacks in MOM_T s, ES = stacks right after a crit) and a spin needs the full count (pFull of the time). The foe is fought long enough to reach this steady state.
+  // MOM_THREAT: share of the hero's kills that are foes Killing Rhythm counts (horde foes never do). DASH_SPINS: dashes per second ending at full Momentum (Cyclone).
+  // GIL_*: a Guillotine carry looks at the PACK_REF - 1 other foes of the pack, each below the line with the chance the line gives; GIL_CORR scales that for foes that are hurt together (a swing that kills one foe of a pack usually kills its neighbours:
+  // a staged pack of 4 inside one swing made 0.37-0.44 of the independent estimate, a horde spread over the room 1; the model takes 0.5). RUPT_NET: what a rupture adds over the ticks it replaces (RUPT_MUL less the half of the share those would have paid).
+  // BLOOM_PAY: share of a handed-over Bleed pool the receivers pay out. CASC_FILL / CASC_CROWD / CASC_SPLASH: share of its leaps a Shadowstep cast makes, the most it makes and the factor the splash of each rupture adds to a leap's damage,
+  // in the horde the cut foes stand in (fitted to staged casts through a crowd of 12 to 20 foes at random health, every foe holding a pool: 0.81-0.83 N leaps for N = 2 and 4 (0.95 N at stratum VI), +70 to +120 foe health removed
+  // per leap against 66 to 93 for the leap alone; a pack of 4 would run out of foes, a room horde of 40 allows about 10 leaps).
+  const DASH_SPINS = 0.3, MOM_THREAT = 0.5, GIL_CORR = 0.5, RUPT_NET = 1, BLOOM_PAY = 0.6, CASC_FILL = 0.85, CASC_CROWD = 10, CASC_SPLASH = 1.4;
+  // The crit chance per attack and the Momentum it builds: { q, ra (Arterial readyings per attack), avg (stacks a hit sees), pFull }.
+  function momentumState(st, wpn, ref) {
+    const aps = wpn._aps, c = st.crit, N = St.skillNums('step', st), P3 = atLeast(ailmentDist(st), 3);
+    const ready = Math.min(Math.round((3 + st.stackMax) * st.critK), Math.round((3 + st.stepStack) * st.critK)), rs = Math.min(0.9, ready / (N.cdEff * aps));
+    let q0 = 1 - (1 - c) * (1 - st.execCrit) * (1 - rs);
+    if (st.execMom > 0) q0 = Math.min(0.95, q0 + st.execMom * MOM_THREAT * (wpn.dps / ref.hp) / aps);
+    let q = q0, ra = 0;
+    if (st.arterial > 0) for (let i = 0; i < 6; i++) { ra = Math.min(1 / (C.ARTER_CD * aps), q * P3); q = 1 - (1 - q0) * (1 - ra); }
+    const mx = st.momMax, K = Math.max(1, Math.floor(C.MOM_T * aps + 1e-9)), rho = Math.pow(1 - q, K);
+    let es = mx * Math.pow(1 - rho, mx - 1);
+    for (let k = 1; k < mx; k++) es += k * rho * Math.pow(1 - rho, k - 1);
+    return { q, ra, avg: mx > 0 ? es * (1 - rho) : 0, pFull: mx > 0 ? Math.pow(1 - rho, mx) : 0 };
+  }
+  // Mean of min(strike, health left) for a foe left with a uniform share of 0..line of its health hp.
+  const chainValue = (strike, line, hp) => { const L = line * hp; return !(L > 0) ? 0 : strike >= L ? L / 2 : strike - strike * strike / (2 * L); };
+
+  // Adds the Shade cards' extras to the weapon card and their parts to the skills: the execution crits, Whirlwind and Cyclone, Guillotine's carries, Open Veins, Exsanguinate and Arterial Strike, Rupture, Bloodbloom and Crimson Cascade.
+  // wpn._mom holds the Momentum state for tools/model.js (the damage the stacks add is part of its conditional factor).
+  function shadeForms(st, wpn, skills, proc, ref, s, R) {
+    if (!(st.momMax > 0 || st.veins > 0 || st.rupture > 0)) return;
+    const w = st.weapon, melee = w.kind === 'melee', c = st.crit, cm = st.critMult, aps = wpn._aps, hit = wpn._hit, one = wpn.oneFoe;
+    const mom = momentumState(st, wpn, ref), q = mom.q, dist = ailmentDist(st), P3 = atLeast(dist, 3), P4 = atLeast(dist, 4), nAil = meanMin(dist, 4);
+    const ex = wpn._extras, add = (label, perAttack, o) => { if (perAttack > 0) ex.push(Object.assign({ label, perAttack, proc: false }, o)); };
+    if (st.momMax > 0) wpn._mom = mom;
+    // execution crits: the weapon hits on foes below the line (execCrit of the attacks) crit for sure
+    if (st.execCrit > 0) add('Execution', st.execCrit * hit * (1 - c) * (cm - 1) * one, { proc: true, note: `weapon hits on foes below ${Math.round(st.execCrit * 100)}% health always crit (about that share of the attacks)` });
+    // Whirlwind: every 4th attack at full Momentum spins; Cyclone: every attack does, the 4th at the larger of the two, and a dash ends in a spin
+    if (st.momMax > 0 && (st.bladeStorm > 0 || st.cyclone > 0)) {
+      const per = st.cyclone > 0 ? (3 * st.cyclone + Math.max(st.bladeStorm, st.cyclone)) / 4 : st.bladeStorm / 4, dash = st.cyclone > 0 ? DASH_SPINS / aps * st.cyclone : 0;
+      add(st.cyclone > 0 ? 'Cyclone' : 'Whirlwind', mom.pFull * (per + dash) * wpn._avg, { proc: true, crit: true, note: `at full Momentum (about ${Math.round(mom.pFull * 100)}% of the time) ${st.cyclone > 0 ? 'every attack and the end of a dash spin' : 'every 4th attack spins'} ${melee ? 'all around you' : 'a ring of 6'}` });
+    }
+    // Guillotine: an execution kill carries free execution strikes to the weak foes of the pack, at most guillotine per attack; a pack of PACK_REF foes dies PACK_REF x avg / hp kills per attack
+    if (st.guillotine > 0) {
+      const hits = melee ? PACK_REF : Math.min(PACK_REF, one * (1 + (w.pierce || 0) + st.pierce)), kills = Math.min(1, hits * wpn._avg / ref.hp), line = st.execCrit;
+      const strikes = Math.min(st.guillotine, (PACK_REF - 1) * line), strike = hit * cm, total = GIL_CORR * kills * strikes * chainValue(strike, line, ref.hp);
+      add('Guillotine', total / PACK_REF, { packOnly: true, proc: true, note: `an execution kill carries up to ${Math.round(st.guillotine)} free execution strikes to weak foes within 100, in a pack` });
+    }
+    // crit damage per attack on one foe (weapon) and per second (skills): what Open Veins and Arterial Strike scale
+    let critSk = 0;
+    for (const k of skills) for (const p of k.parts) if (p.kind !== 'zone' && p.kind !== 'status' && p.kind !== 'minion' && p._r) critSk += p._r.hit * cm * p.kc * (1 + p.selfVuln) * p.oneFoe / k._cd;
+    const critAtk = hit * cm * q * one + ex.reduce((a, e) => a + (e.crit ? e.perAttack * c * cm / (1 + c * (cm - 1)) : 0), 0) + critSk / aps;
+    if (st.veins > 0) add('Open Veins', st.veins * nAil * critAtk, { proc: true, note: `crits deal +${Math.round(st.veins * 100)}% per ailment (about ${trim(nAil.toFixed(1))} on a foe)` });
+    if (st.arterial > 0) {
+      const n3 = atLeast(dist, 3) > 0 ? dist.reduce((a, v, i) => a + (i >= 3 ? v * Math.min(4, i) : 0), 0) / P3 : 3;
+      add('Arterial Strike', st.arterial * P3 * (1 + st.veins * n3) * critAtk, { proc: true, note: `a crit on a foe with 3+ ailments (about ${Math.round(P3 * 100)}% of the time) deals +${Math.round(st.arterial * 100)}%` });
+      add('Arterial crits', mom.ra * (1 - c) * hit * one * (cm * (1 + st.veins * n3) - 1), { proc: true, note: `each Arterial crit readies ${Math.round(st.arterialN)} crit attack, at most once per ${C.ARTER_CD} s (about ${trim((mom.ra * aps).toFixed(1))} per second)` });
+    }
+    // Exsanguinate: a crit on a foe with 4 ailments adds Bleed (a share of the hit) to its pool; the pool pays out at the Bleed rate
+    if (st.exsang > 0) proc.bleed += critAtk * aps * P4 * st.exsang * (1 + st.statusPow);
+    // Rupture: a share of the Bleed and Burn pools (POOL_K x the income) bursts at RUPT_MUL; Shadowstep ruptures every foe it cuts, an Ambush its target
+    if (st.rupture > 0 && skills.length > 1) {
+      const bm = 1 + st.bleedMul, bleedInc = proc.bleed * bm, burnInc = ((proc.rate.fire || 0) * ED.elemMul(s, 'fire') + (proc.pool.fire || 0)) * (1 + st.burnMul), pool = POOL_K * (bleedInc + burnInc);
+      const share = Math.min(1, st.rupture), net = share * RUPT_NET * pool, k1 = skills[0], k2 = skills[1], slash = k1.parts.find(p => p.id === 'slash');
+      const part = (id, label, note, total, r) => finish({ id, label, per: 'hit', kind: 'hit', el: null, aff: 1, r, proc: false, note, raw: total, hit: total, avg: total, pre: total, here: total, total, oneFoe: 0, kc: 0, alwaysCrit: false, noCrit: true, selfVuln: 0 }, R);
+      const bump = (k, v) => { k.perCast = R.n(k.perCast + v); k.perCastAll = R.n(k.perCastAll + v); k.dpsCd = R.n(k.perCast / k._cd); };
+      k1.parts.push(part('rupture', 'Rupture', `${Math.round(share * 100)}% of the Bleed and Burn pools of every foe the blink cuts burst at ×${C.RUPT_MUL} (the pools lose it)`, net, C.RUPT_R)); bump(k1, net);
+      k2.parts.push(part('rupture', 'Rupture', `the Ambush ruptures ${Math.round(share * 100)}% of its target's pools`, net, 0)); bump(k2, net);
+      const pk = slash ? Math.min(1, (slash._r.pre + share * C.RUPT_MUL * pool) / ref.hp) : 0.5; // a cut foe at a uniform share of its health dies to the blink and the burst with this chance
+      if (st.bloodbloom > 0) k1.parts.push(part('bloodbloom', 'Bloodbloom', `a foe the rupture kills (about ${Math.round(pk * 100)}%) hands the rest of its Bleed to the 2 nearest foes within 80, in a pack`, pk * (1 - share) * POOL_K * bleedInc * BLOOM_PAY, C.RUPT_R));
+      if (st.cascade > 0) { // each rupture kill leaps to a foe with a pool and ruptures it at cascade x the burst; a leap deals at most the foe's health (uniform share of it left)
+        const leaps = Math.min(st.cascadeN * CASC_FILL, CASC_CROWD), burst = st.cascade * C.RUPT_MUL * pool;
+        k1.parts.push(part('cascade', 'Crimson Cascade', `a rupture kill leaps to the nearest foe with a pool within 120 and ruptures all of it at ×${trim((st.cascade * C.RUPT_MUL).toFixed(2))} (about ${trim(leaps.toFixed(1))} leaps per blink in a horde)`, leaps * CASC_SPLASH * chainValue(burst, 1, ref.hp) / PACK_REF, C.RUPT_R));
+      }
+    }
+    refit(wpn, R);
+  }
+
   // Rebuilds the weapon model's totals and extras list after an extra was pushed on wpn._extras.
   function refit(wpn, R) {
     let sum = 0;
-    for (const e of wpn._extras) sum += e.perAttack;
+    for (const e of wpn._extras) if (!e.packOnly) sum += e.perAttack; // a pack-only extra is not in the damage on one foe
     wpn.dps = R.n((wpn._avg * wpn.oneFoe + sum) * wpn._aps); wpn.dpsAll = R.n((wpn._avg * wpn.n + sum) * wpn._aps);
     wpn.extras = wpn._extras.map(e => Object.assign({}, e, { perAttack: R.n(e.perAttack), perSec: R.n(e.perAttack * wpn._aps) }));
   }
@@ -656,7 +734,7 @@
   }
 
   // ---------------- build tab ----------------
-  const AILMENT_STATS = ['brand', 'veins', 'contagion', 'festerHit', 'exsang']; // stats that read the ailment count of a foe (World.ailments)
+  const AILMENT_STATS = ['brand', 'veins', 'contagion', 'festerHit', 'exsang', 'arterial']; // stats that read the ailment count of a foe (World.ailments)
   const ROUTE_WHEN = { t1: 'Offered at team level 3', fork: 'Offered when the stratum I boss falls', r2: 'Rank 2 when the stratum II boss falls', r3: 'Rank 3 when the stratum IV boss falls' };
   const KIND_ORDER = { gate: 0, path: 1, open: 1, route: 0, fork: 1, keystone: 2, evolution: 3, duo: 0, ascended: 0 };
   function buildModel(p, st, ctx, R) {

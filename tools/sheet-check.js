@@ -298,6 +298,51 @@ for (const [cls, boons, tag] of [['ranger', { r_atk: 1, r_atk_s: 2 }, 'Flurry (Q
   const pb = c3.find(e => e.label === 'Plaguebearer burst'); ok(pb.perAttack > c2.perAttack * 2, 'the burst is worth more than the spread');
 }
 
+// Shade attack and element forms (ED.Sheet shadeForms): the execution extra, Whirlwind and Cyclone spins and the Momentum state against the sim; the pack-only and skill-part extras by structure
+{
+  const shadeBoons = (t1, fk, r) => ({ [t1]: 1, [fk]: r });
+  const wm = (boons, o) => modelOf('shade', boons, (o && o.wi) || 0, Object.assign({ stat: { crit: 0 } }, o)).weapon, ex = (m, l) => m.extras.find(e => e.label === l);
+  const MD = require('./model.js')(ED, { pack: 4 });
+  // execution: against a foe always below the line every hit crits for sure; the weapon's damage per attack is hit x critMult (crit chance 0, no Momentum)
+  { const r = weaponRun('shade', 0, shadeBoons('s_atk', 's_atk_h', 2), { secs: 24, stat: { execCrit: 1, momentum: 0 } });
+    rel(r.total / r.atk, r.m.weapon.dps / r.m.weapon.aps, 0.05, 'Culling Blades: execution crits on a foe below the line, damage per attack');
+    ok(ex(r.m.weapon, 'Execution') && Math.abs(ex(r.m.weapon, 'Execution').perAttack - r.m.weapon.hit * (r.m.weapon.critMult - 1)) < 1e-6, 'Execution adds (critMult - 1) x hit per attack when every attack executes'); }
+  // Whirlwind and Cyclone at full Momentum (crit 1 fills the stacks at once and keeps them full): the spin hits (weapon hits that are not the weapon's own) per attack against the extra less the dash term and the Momentum bonus of the sim
+  for (const [boons, label, tag] of [[shadeBoons('s_atk', 's_atk_s', 2), 'Whirlwind', 'Whirlwind (rank 2)'], [shadeBoons('s_atk', 's_atk_s', 3), 'Cyclone', 'Cyclone (rank 3)']]) {
+    const r = weaponRun('shade', 0, boons, { secs: 24, crit: 1 }), m = r.m.weapon, st = ED.Stats.compute({ cls: 'shade', weapon: 'daggers', boons, relics: [], meta: META(), pact: 0 });
+    const spin = hits.filter(h => h.kind === 'weapon' && !h.wpn && !h.raw).reduce((a, h) => a + h.dealt, 0), bonus = (st.dmg + st.momentum * st.momMax) / st.dmg, e = ex(m, label);
+    const dash = st.cyclone > 0 ? 0.3 / m.aps * st.cyclone * m._avg * m._mom.pFull : 0; // the model counts a dash every 3 s, the run makes none
+    ok(!!e && m._mom.pFull > 0.99, `${tag}: the weapon card lists ${label} and Momentum is full at crit 1`);
+    rel(spin / r.atk / bonus, e.perAttack - dash, 0.06, `${tag}: spin damage per attack at full Momentum`);
+  }
+  // Momentum: the stacks a hit sees, against the sim (crit 20%, no readied crits; the first seconds of the run are the ramp)
+  for (const [boons, tag] of [[shadeBoons('s_atk', 's_atk_s', 2), 'Thousand Cuts rank 2'], [shadeBoons('s_atk', 's_atk_s', 3), 'Thousand Cuts rank 3']]) {
+    const { w, p } = stage('shade', boons, 0, { stackMax: -3 }, null, 30, 0.2), m = sheetOf(w, p).weapon;
+    let next = 0, sum = 0, cnt = 0;
+    run(w, 150, () => { if (w.time >= next) { sum += p.momT > 0 ? p.momN : 0; cnt++; w.playerAttack(p, 0); next = w.time + ED.Stats.attackInterval(p); } });
+    rel(sum / cnt, m._mom.avg, 0.06, `${tag}: Momentum stacks a hit sees (${(sum / cnt).toFixed(2)} of ${p.stats.momMax})`);
+  }
+  // the pack-only and skill-part extras by structure: they appear at their rank, grow with their numbers and stay out of the damage on one foe
+  { const a = wm(shadeBoons('s_atk', 's_atk_h', 2)), b = wm(shadeBoons('s_atk', 's_atk_h', 3));
+    ok(!ex(a, 'Guillotine') && ex(b, 'Guillotine') && ex(b, 'Guillotine').packOnly && ex(b, 'Execution').perAttack > ex(a, 'Execution').perAttack, 'Guillotine appears at rank 3 as a pack-only extra and the higher line raises Execution');
+    const one = (m) => (m.avg * m.oneFoe + m.extras.filter(e => !e.packOnly).reduce((s, e) => s + e.perAttack, 0)) * m.aps; near(b.dps, one(b), 0.01 * b.dps, 'the Guillotine chain is not in the damage on one foe');
+    const g = (n) => ex(wm(shadeBoons('s_atk', 's_atk_h', 3), { stat: { crit: 0, guillotine: n } }), 'Guillotine').perAttack; ok(g(1) > 0 && g(3) >= g(1), 'more strikes per attack never lower the Guillotine extra'); }
+  { const s2 = wm(shadeBoons('s_atk', 's_atk_s', 2)), s3 = wm(shadeBoons('s_atk', 's_atk_s', 3)), s1 = wm(shadeBoons('s_atk', 's_atk_s', 1));
+    ok(!ex(s1, 'Whirlwind') && ex(s2, 'Whirlwind') && !ex(s2, 'Cyclone') && ex(s3, 'Cyclone') && !ex(s3, 'Whirlwind') && ex(s3, 'Cyclone').perAttack > ex(s2, 'Whirlwind').perAttack, 'Whirlwind from rank 2, Cyclone from rank 3 instead of it, the spin worth more'); }
+  { const gates = { kindle: 1, frostbite: 1 }, v1 = wm(Object.assign({}, gates, shadeBoons('s_el', 's_el_a', 1))), v3 = wm(Object.assign({}, gates, shadeBoons('s_el', 's_el_a', 3))); // two gates make 3 ailments common and 4 possible
+    ok(ex(v1, 'Open Veins') && !ex(v1, 'Arterial Strike') && ex(v3, 'Arterial Strike') && ex(v3, 'Arterial crits') && ex(v3, 'Open Veins').perAttack > ex(v1, 'Open Veins').perAttack, 'Open Veins lists its extra; Arterial Strike adds the bonus and the readied crits at rank 3');
+    ok(modelOf('shade', Object.assign({}, gates, shadeBoons('s_el', 's_el_a', 2)), 0).proc.bleed > modelOf('shade', Object.assign({}, gates, shadeBoons('s_el', 's_el_a', 1)), 0).proc.bleed, 'Exsanguinate adds to the Bleed input from rank 2'); }
+  { const sk = (r, o) => modelOf('shade', Object.assign({ kindle: 1 }, shadeBoons('s_el', 's_el_b', r)), 0, o).skills, part = (k, s, id) => k[s].parts.find(q => q.id === id);
+    const k1 = sk(1), k2 = sk(2), k3 = sk(3);
+    ok(part(k1, 0, 'rupture') && part(k1, 1, 'rupture') && !part(k1, 0, 'bloodbloom') && part(k2, 0, 'bloodbloom') && !part(k2, 0, 'cascade') && part(k3, 0, 'cascade') && part(k3, 0, 'bloodbloom'), 'Rupture parts: Shadowstep and Ambush from rank 1, Bloodbloom from rank 2, Crimson Cascade from rank 3');
+    ok(k1[0].perCast > modelOf('shade', { kindle: 1 }, 0).skills[0].perCast && k1[1].perCast > modelOf('shade', { kindle: 1 }, 0).skills[1].perCast, 'a rupture adds to the damage of a Shadowstep cast and of an Ambush on one foe');
+    ok(part(k3, 0, 'cascade').total > 0 && Math.abs(k3[0].perCast - k2[0].perCast) < k2[0].perCast * 0.12, 'Crimson Cascade is a pack part: it needs other foes and leaves the damage of one foe to the rupture share');
+    const c = (n) => part(sk(3, { stat: { cascadeN: n } }), 0, 'cascade').total; ok(c(8) > c(4) && c(4) > c(2), 'more leaps per cast raise the Cascade part'); }
+  // model.js: the stacks a hit sees are part of the conditional factor of a Momentum build, and only of one
+  { const fac = (boons) => { const m = modelOf('shade', boons, 0), p = { cls: 'shade', stats: ED.Stats.compute({ cls: 'shade', weapon: 'daggers', boons, relics: [], meta: META(), pact: 0 }) }; return MD.condFactor(p, m, MD.defence(p, m)); };
+    ok(fac({}) === 1 && fac(shadeBoons('s_atk', 's_atk_s', 2)) > 1.2 && fac({ s_el: 1 }) === 1, 'the conditional factor adds Momentum only for a Momentum build'); }
+}
+
 // ---------------- shield window: the readout equals what addShield granted in the last 10 s ----------------
 {
   const { w, p } = stage('knight', {}, 0, {});

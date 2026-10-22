@@ -113,6 +113,7 @@ module.exports = (ED, opts) => {
       const id = r.key || r.id, v = id === 'idol' ? 0.1 : r.value ? r.value(st) : st[r.key];
       sum += v * uptime(id, st, m, d);
     }
+    if (m.weapon._mom) sum += st.momentum * m.weapon._mom.avg; // Momentum: the stacks a hit sees on average (ED.Sheet shadeForms)
     return (Math.max(0.1, st.dmg) + sum) / Math.max(0.1, st.dmg);
   }
 

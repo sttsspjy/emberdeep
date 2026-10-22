@@ -136,7 +136,7 @@
     desc: '+{crit} crit chance. Each crit grants Momentum: +{momentum} damage for 2.5 s, stacking {momMax:n} times.', mods: { crit: 0.08, momentum: 0.04, momMax: 5 } });
   card('shade', 'attack', 2, 's_atk_h', { name: 'Culling Blades', icon: 'wingblade', tag: 'Heavy', weapon: { kind: 'heavy' },
     desc: 'Heavy blades (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit, Stagger, wider reach): weapon hits on foes below {execCrit} health always crit.[ Crits deal +{critDmg} more.]',
-    rider2: 'Killing Rhythm: an execution crit that kills grants {execMom:n} Momentum (not on horde foes).', mods: { execCrit: 0.25 }, up: { critDmg: 0.1 }, r2: { execMom: 3 }, r3: { execCrit: 0.1, guillotine: 3 },
+    rider2: 'Killing Rhythm: an execution crit that kills grants {execMom:n} Momentum (not on horde foes).', mods: { execCrit: 0.25 }, up: { critDmg: 0.1 }, r2: { execMom: 3 }, r3: { execCrit: 0.15, guillotine: 3 },
     form: { name: 'Guillotine', desc: 'The execution line rises to {execCrit} health. An execution crit that kills carries to the nearest foe within 100 below that line: a free execution strike at the same damage, up to {guillotine:n} times per attack.' } });
   card('shade', 'attack', 2, 's_atk_s', { name: 'Thousand Cuts', icon: 'blades', tag: 'Swift', weapon: { kind: 'swift' },
     desc: 'Swift blades (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit, Flow). Momentum holds {momMax:n} more stacks.',
