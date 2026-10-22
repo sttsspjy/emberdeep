@@ -291,9 +291,10 @@
     sp(sid(I.label('skill1'))); sp(scd > 0 ? 1 : 0); sp(ctl.charges | 0); sp(st ? st.maxCharges | 0 : 1); sp(st ? Math.round(st.skillCd * 100) : 0);
     const s2 = cls.skill2 && ED.SKILLS[cls.skill2], cd2 = ctl.skill2Cd > 0 ? ctl.skill2Cd : 0;
     if (s2) { sp(sid(I.label('skill2'))); sp(cd2 > 0 ? 1 : 0); sp(shieldOut(me) ? 1 : 0); sp(Math.round(((st && st.skill2Cd) || s2.cd) * 100)); if (cd2 > 0.04) anim = true; }
-    sp(sid(I.label('dash'))); sp(ctl.dashCd > 0 ? 1 : 0); sp(st ? Math.round(st.dashCd * 100) : 0);
+    const dmx = st ? st.dashCharges | 0 : 1, dsw = ctl.dashN < dmx && ctl.dashT > 0 ? ctl.dashT : 0; // dash recharge sweep: seconds to the next charge
+    sp(sid(I.label('dash'))); sp(ctl.dashN | 0); sp(dmx); sp(dsw > 0 ? 1 : 0); sp(st ? Math.round(st.dashCd * 100) : 0);
     sp(sid(I.label('flare'))); sp(canFlare ? 1 : 0); sp(view.lightMax > 0 ? 1 : 0);
-    if (scd > 0.04 || ctl.dashCd > 0.04) anim = true; // sweeps
+    if (scd > 0.04 || dsw > 0.04) anim = true; // sweeps
     for (const fx of slotFx) if (fx && fx.t > 0) anim = true; // ready flash
     const pl = pips(me); sp(pl.length); for (let i = 0; i < pl.length; i += 2) { sp(sid(pl[i])); sp(pl[i + 1]); } sp(sid(st && st.evo || ''));
     const ch = chipList(view, me); sp(ch.length); for (let i = 0; i < ch.length; i += 2) sp(sid(ch[i]));
@@ -420,8 +421,8 @@
       const tot = Math.max(0.1, (st && st.skill2Cd) || s2.cd), up = shieldOut(me), cd2 = ctl.skill2Cd > 0 ? ctl.skill2Cd : 0; // a thrown shield lights the slot until it is caught
       slot(i++, I.label('skill2'), cd2, tot, cd2 <= 0 && !up, s2.icon, up ? '#ffe9a0' : cls.col.c, 0, 1, 0);
     }
-    const dcd = ctl.dashCd > 0 ? ctl.dashCd : 0;
-    slot(i++, I.label('dash'), dcd, st ? st.dashCd : 1, dcd <= 0, 'wing', '#bfe9ff', 0, 1, 0);
+    const dmx = st ? st.dashCharges | 0 : 1, dcd = ctl.dashN < dmx && ctl.dashT > 0 ? ctl.dashT : 0; // the sweep is the next charge; the slot is lit while one is left
+    slot(i++, I.label('dash'), dcd, st ? st.dashCd : 1, ctl.dashN > 0, 'wing', '#bfe9ff', ctl.dashN, dmx, 0);
     if (view.lightMax > 0) slot(i++, I.label('flare'), 0, 1, canFlare, 'lantern', '#ffb35c', 0, 1, FL.cost);
 
     // path pips: each owned gate with its affinity ring (keystone tick, evolution at full); a star on the evolved path

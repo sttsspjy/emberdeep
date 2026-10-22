@@ -13,6 +13,7 @@
     SNAP_HZ: 20,
     INPUT_HZ: 30,
     STRATA: 6,
+    DASH: { t: 0.15, speed: 480 }, // seconds untouchable and px/s of a hero dash (72 px)
     VERSION: '1.0.0',
   };
 

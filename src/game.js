@@ -148,7 +148,7 @@
       for (const p of s.world.players.values()) p.mastery10 = p.meta && p.meta.mastery >= 10;
     }
     s.view.pact = cfg.pact;
-    s.ctl = { atkCd: 0, skillCd: 0, skill2Cd: 0, charges: s.me.stats.maxCharges, dashCd: 0, tranceT: 0, latch: false, aimA: 0 };
+    s.ctl = { atkCd: 0, skillCd: 0, skill2Cd: 0, charges: s.me.stats.maxCharges, dashN: s.me.stats.dashCharges, dashT: 0, tranceT: 0, latch: false, aimA: 0 };
     // Aim state read by ED.AimFx: cursor in CSS px (sx, sy) and world (wx, wy), device, angle, push fraction (frac) for stick or keyboard-only ground skills, ready ground skills, cooldown fraction, pulse/crit timestamps.
     s.aim = { sx: 0, sy: 0, wx: 0, wy: 0, a: 0, device: 'mouse', pointer: false, show: false, dead: false, foe: false, frac: 0.6, cd: 0, ground: [], pulseT: -9, critT: -9 };
     if (ED.AimFx) ED.AimFx.applyCursor();
@@ -279,7 +279,8 @@
   // ---------------- local hero control ----------------
   function control(s, inp, dt) {
     const me = s.me, view = s.view, ctl = s.ctl, st = me.stats;
-    ctl.atkCd -= dt; ctl.dashCd -= dt; ctl.tranceT -= dt; ctl.skill2Cd -= dt;
+    ctl.atkCd -= dt; ctl.tranceT -= dt; ctl.skill2Cd -= dt;
+    if (Sim.dashTick(ctl, st, dt) && ED.FX && ED.FX.cue) ED.FX.cue('dcharge'); // a charge refilled
     if (s.mode === 'client') for (const k of MIRROR_TIMERS) if (me[k] > 0) me[k] -= dt; // a mirror hero has no world tick
     if (s.mode === 'client') { me.atkAge = (me.atkAge === undefined ? 9 : me.atkAge) + dt; me.chanT = st.channel > 0 && !me.moving && me.atkAge < ED.chanWindow(me) ? (me.chanT || 0) + dt : 0; } // Channel (a client's chip estimates the host's value)
     if (ctl.charges < st.maxCharges) { ctl.skillCd -= dt; while (ctl.skillCd <= 0 && ctl.charges < st.maxCharges) { ctl.charges++; ctl.skillCd = ctl.charges < st.maxCharges ? ctl.skillCd + st.skillCd : 0; } } // a refund past the running cooldown carries into the next charge
@@ -364,12 +365,11 @@
         if (st.trance) { ctl.tranceT = 4; if (s.mode === 'client') me.tranceT = 4; }
       }
       if (inp.flare && view.light >= ED.World.FLARE.cost && view.room.type !== 'boss') G.act({ t: 'flare' }); // host checks light, room and cooldown
-      if (inp.dash && ctl.dashCd <= 0 && !me.skillMove) {
+      if (inp.dash && !me.skillMove && Sim.dashTry(ctl, st)) {
         let dx = mx, dy = my;
         if (Math.hypot(dx, dy) < 0.2) { dx = Math.cos(aim); dy = Math.sin(aim); }
         const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
-        me.dashT = 0.17; me.dashDx = dx; me.dashDy = dy;
-        ctl.dashCd = st.dashCd;
+        me.dashT = ED.CONST.DASH.t; me.dashDx = dx; me.dashDy = dy;
         G.act({ t: 'dash', dx, dy });
       }
     }

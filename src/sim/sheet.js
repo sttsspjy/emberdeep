@@ -360,8 +360,8 @@
     for (const [i, id] of [cls.skill, cls.skill2].entries()) if (id && ED.SKILLS[id]) skills.push(skillModel(id, i, p, st, ctx, wpn, R));
     const M = Math.max(0.1, st.dmg), cm = st.critMult, c = st.crit, EC = 1 + c * (cm - 1);
 
-    // dash: cooldown, i-frames and the dash boons' hits
-    const dash = { cd: R.x(st.dashCd), ifr: 0.17, parts: [] };
+    // dash: recharge per charge, charges, i-frames and the dash boons' hits
+    const dash = { cd: R.x(st.dashCd), charges: st.dashCharges, ifr: ED.CONST.DASH.t, parts: [] };
     if (st.dashDmg) dash.parts.push({ label: 'Dash hit', dmg: R.n(st.power * st.dashDmg * M * EC), per: 'foe passed', note: `${Math.round(st.dashDmg * 100)}% of Power, once per dash` });
     if (st.dashFrost) dash.parts.push({ label: 'Frost ring', dmg: R.n(st.power * st.dashFrost * M * EC), r: 80, note: `${Math.round(st.dashFrost * 100)}% of Power, chills` });
     if (st.dashFire) dash.parts.push({ label: 'Burning trail', dmg: R.n(ED.procDmg(ED.BOONS.cindertrail, st) * M), per: 'second', note: 'for 2.2 s, Fire' });
