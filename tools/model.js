@@ -11,9 +11,11 @@ module.exports = (ED, opts) => {
     const w = m.weapon, st = null; void st;
     const hitsBase = w.kind === 'melee' ? n : Math.min(n, (w.n || 1) * (1 + (w.pierce || 0)));
     let sum = w._avg * hitsBase;
-    for (const e of w._extras) sum += e.perAttack * (e.label === 'Twin Fang' ? hitsBase / (w.oneFoe || 1) : e.label === 'Lich bolts' ? 1 : n); // the two Lich bolts seek one foe each: the same total in a pack
+    for (const e of w._extras) sum += e.perAttack * (e.label === 'Twin Fang' ? hitsBase / (w.oneFoe || 1) : ONE_STREAM.has(e.label) ? 1 : FEW[e.label] ? Math.min(n, FEW[e.label]) : n);
     return sum * w._aps;
   }
+  // Extras that do not grow with the pack: the two Lich bolts seek one foe each (the same total), Guardian Light's Smites ride the one Smite stream the status estimate counts; a Solar Flare burst (radius 50) and a Dawn's Wake strip (44 wide) catch about two foes of a pack.
+  const ONE_STREAM = new Set(['Lich bolts', 'Heavy Smites', 'Sunstrike']), FEW = { 'Solar Flare': 2, "Dawn's Wake": 2 };
   function directDamage(m, n) {
     if (n === 1) return m.weapon.dps + m.skills.reduce((s, k) => s + k.dpsCd, 0);
     let sum = packWeapon(m, n);
@@ -104,7 +106,17 @@ module.exports = (ED, opts) => {
       default: return 0.5;
     }
   }
-  // The factor on hero hit damage: (Damage + sum of the owned conditional bonuses x uptime x dmgX) / Damage.
+  // Cleric Smite cards. GL_UP: share of the time Guardian Light's buff is up on the Cleric (a Smite shields the Cleric every 3 s and the buff lasts 6 s). JUDGE_UP: share of a foe's life that a Smite's Judged window can cover (the first Smite and the last foes miss it);
+  // JUDGE_HIT: share of Judgment casts that Judge the reference foe. Judging Light's +20% is the same +20% as Judgment's, so only the time Judgment leaves uncovered counts.
+  const GL_UP = 0.9, JUDGE_UP = 0.75, JUDGE_HIT = 0.8;
+  function judgeLight(p, m, smites) {
+    const st = p.stats, h = m.mult.status.find(s => s.el === 'holy');
+    if (!(st.smiteJudge > 0) || !smites) return 1;
+    const own = Math.min(1, st.smiteJudge / Math.max(1e-3, h.est.secs || 99)) * JUDGE_UP;
+    const hammer = ED.CLASSES[p.cls].skill2 === 'judgment' ? Math.min(1, (4 + st.judgeDur) / St.skillNums('judgment', st).cdEff) * JUDGE_HIT : 0;
+    return 1 + 0.2 * own * (1 - hammer);
+  }
+  // The factor on hero hit damage: (Damage + sum of the owned conditional bonuses x uptime x dmgX) / Damage, times Judging Light's Judged window.
   function condFactor(p, m, d) {
     const st = p.stats; let sum = 0;
     for (const r of ED.COND_DMG) {
@@ -113,7 +125,9 @@ module.exports = (ED, opts) => {
       const id = r.key || r.id, v = id === 'idol' ? 0.1 : r.value ? r.value(st) : st[r.key];
       sum += v * uptime(id, st, m, d);
     }
-    return (Math.max(0.1, st.dmg) + sum * st.dmgX) / Math.max(0.1, st.dmg); // the bonuses carry the Ascended damage factor (combat.js hitEnemy)
+    const holy = m.mult.status.find(s => s.el === 'holy'), smites = !!(holy && holy.est.dps > 0);
+    if (st.guardLight > 0 && smites) sum += st.guardLight * GL_UP;
+    return (Math.max(0.1, st.dmg) + sum * st.dmgX) / Math.max(0.1, st.dmg) * judgeLight(p, m, smites); // the bonuses carry the Ascended damage factor (combat.js hitEnemy)
   }
 
   // ---- one hero in one context: the sheet model, its defence, the conditional factor, hero damage on one foe and in a pack of `pack` ----

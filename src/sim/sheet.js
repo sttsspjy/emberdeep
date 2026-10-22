@@ -213,6 +213,9 @@
   // RIC_HIT: share of shots whose ricochet finds a second foe. PLAGUE_KEEP / PLAGUE_PACK: share of its pool inputs a dying foe (2+ ailments) still holds, and the pool input of a pack against one foe (skills hit every foe);
   // both and SPREAD_PAY (the share of a burst's value that a status spread pays) are fitted to a staged fight of a stratum III mid build against a pack of 4 trash foes. FESTER_UP: uptime of 3+ ailments for Gangrene.
   const PACK_REF = 4, SIEGE_BLAST_HIT = 0.5, RIC_HIT = 0.8, PLAGUE_KEEP = 0.9, PLAGUE_PACK = 1.5, SPREAD_PAY = 0.5, FESTER_UP = 0.5;
+  // Assumptions of the Cleric attack forms (waves, class-cleric.js). FLARE_HIT: share of waves whose end burst (radius 50, written for the wave's far end) catches a given foe. WAKE_ON: seconds a foe stands on the strip of one wave
+  // (the strip burns about 2.9 s and a foe in front of the Cleric is covered by about half of that). RET_HIT: share of returning waves that strike a foe the outward wave struck (foes chase the hero, the return leg ends on the hero).
+  const FLARE_HIT = 0.3, WAKE_ON = 1.5, RET_HIT = 0.75;
   // Damage numbers are per landed hit before the stratum affinity and any status; dps counts every attack landing on one foe (a fan: the shots that reach it at REF).
   // extras: damage each attack adds besides the main hits (blasts, shocks, waves, clouds, evolution strikes, relics): { label, perAttack, perSec, proc (feeds statuses), el?, note? }.
   function weaponModel(p, st, ctx, R) {
@@ -234,7 +237,19 @@
     if (blast) add('Blast', Wd * blast.mul * M * one, { proc: true, r: Math.round(blast.r), note: 'each shot that lands, no crit' });
     if (blast && st.aftershock) add('Aftershock', Wd * blast.mul * M * st.aftershock * one, { r: Math.round(blast.r), note: '0.4 s after each blast' });
     if (!melee && w.cloud) { const ticks = w.cloud.dur / 0.5; add('Plague cloud', ticks * w.cloud.dps * 0.5 * M * one, { r: Math.round(w.cloud.r * area), note: `about ${n1(ticks)} ticks over ${n1(w.cloud.dur)}s per shot (clouds that merge tick on one 0.5 s grid), no crit` }); }
-    if (w.wave) { const every = Math.max(1, w.wave.every + st.waveEvery); add('Wave of light', Wd * w.wave.mul * (1 + st.waveMul) * M * EC / every, { proc: true, crit: true, note: (every === 1 ? 'every attack' : `every ${ordinal(every)} attack`) + ', pierces every foe in line' }); }
+    if (w.wave) {
+      const every = Math.max(1, w.wave.every + st.waveEvery), waveRaw = Wd * w.wave.mul * (1 + st.waveMul), waveHit = waveRaw * M, ev = every === 1 ? 'every attack' : `every ${ordinal(every)} attack`;
+      add('Wave of light', waveHit * EC / every, { proc: true, crit: true, note: ev + ', pierces every foe in line' });
+      // Cleric attack forks (class-cleric.js): Solar Flare's end burst, Dawn's Wake's strip (class-element damage, a quarter of each tick stored as Radiance), Litany's two side waves (and their return legs), Returning Light's second pass
+      if (st.waveBurst > 0) add('Solar Flare', waveHit * st.waveBurst * FLARE_HIT / every, { proc: true, r: Math.round(50 * area), note: `${ev}: the wave ends in a burst (radius 50) for ${Math.round(st.waveBurst * 100)}% of it, catching a foe about ${Math.round(FLARE_HIT * 100)}% of the time, no crit` });
+      if (st.wake > 0) {
+        const cls = (M + st.classElMul) * ED.affC(ctx.stratum || 1, 'holy'), secs = WAKE_ON * st.wake;
+        add("Dawn's Wake", waveRaw * secs * cls / every, { radiance: waveRaw * secs * 0.25 / every, note: `${ev}: a strip burns 2 s after its wave, ${Math.round(st.wake * 100)}% of the wave per second; a foe stands on it about ${n1(WAKE_ON)} s, no crit` });
+      }
+      const ret = st.waveReturn > 0 ? 1 + st.waveReturn * RET_HIT : 1;
+      if (st.litany > 0) add('Litany', waveHit * EC * 2 * ret / st.litany, { proc: true, crit: true, note: `every ${ordinal(st.litany)} attack: 2 more waves in a fan, both reach a foe at ${Sh.REF.d}` });
+      if (st.waveReturn > 0) add('Returning Light', waveHit * EC * st.waveReturn * RET_HIT / every, { proc: true, crit: true, note: `${ev}: the wave flies home and strikes again for ${Math.round(st.waveReturn * 100)}% (about ${Math.round(RET_HIT * 100)}% of foes are on its way)` });
+    }
     if (st.gauntlet) add('Thunder Gauntlet', Wd * 2.2 * M / 6, { proc: true, el: 'lightning', note: 'every 6th attack, no crit' });
     // evolution strikes (data on the evolution boon)
     const evoBoon = evo && ED.BOONS['evo_' + evo], attackTotal = avg * one + (blast ? Wd * blast.mul * M * one : 0);
@@ -421,6 +436,7 @@
 
     const proc = procModel(p, st, wpn, skills);
     elementForms(st, wpn, skills, proc, ref, R);
+    smiteForms(st, wpn, proc, s, R);
     if (st.contagion > 0) poolExtras(wpn, st, proc, s, R);
 
     // offense multipliers, each with its sources
@@ -492,7 +508,7 @@
   function debuffs(p, st) {
     const out = [], add = (id, text, v, short) => out.push({ id, name: ED.STATUS[id].name, color: ED.STATUS[id].color, text, v: v || 0, short: short || '' });
     if (st.iceInfuse > 0) add('frozen', ED.STATUS.frozen.rule, 0.25, 'while frozen');
-    if (ED.CLASSES[p.cls].skill2 === 'judgment') add('judged', 'Judgment Judges every foe it hits: it takes +20% damage for ' + n1(4 + st.judgeDur) + ' s. Does not stack with other +20% vulnerability.', 0.2, `for ${n1(4 + st.judgeDur)} s (does not stack with other +20%)`);
+    if (ED.CLASSES[p.cls].skill2 === 'judgment') add('judged', 'Judgment Judges every foe it hits: it takes +20% damage for ' + n1(4 + st.judgeDur) + ' s.' + (st.smiteJudge > 0 ? ` Your Smites Judge their foe for ${n1(st.smiteJudge)} s as well.` : '') + ' Does not stack with other +20% vulnerability.', 0.2, `for ${n1(4 + st.judgeDur)} s (does not stack with other +20%)`);
     if (st.rainHail) add('judged', 'Foes in your Rain take +20% damage (the same +20% as Judged).', 0.2, 'inside your Rain');
     if (st.smokeVuln) add('judged', 'Foes in your smoke take +20% damage (the same +20% as Judged).', 0.2, 'inside your smoke');
     if (st.markV) add('marked', `Marked foes take +${Math.round(st.markV * 100)}% damage from every hero` + (st.volleyMark ? ` for ${n1(st.volleyMark)} s.` : '.'), st.markV, 'from every hero');
@@ -520,7 +536,7 @@
     if (st.chillWeaken) S.push({ label: 'Permafrost', text: `chilled foes deal ${Math.round(st.chillWeaken * 100)}% less damage` });
     if (st.frozenHeart) S.push({ label: 'Frozen Heart', text: 'when hit, freezes foes within 120 (8 s cooldown)' });
     if (st.thorns) S.push({ label: 'Thorns', text: `attackers take ${n1(st.thorns)} damage` });
-    if (st.holyInfuse > 0 || st.element === 'holy') sh.push({ label: 'Holy Smite', text: `${pc(Math.min(C.HOLY_GRANT_MAX, st.smiteShield))} per Smite (twice from elites and bosses), once per ${C.HOLY_CD} s per hero, up to ${pc(st.holyCap)}` });
+    if (st.holyInfuse > 0 || st.element === 'holy') sh.push({ label: 'Holy Smite', text: `${pc(Math.min(C.HOLY_GRANT_MAX, st.smiteShield))} per Smite (twice from elites and bosses${st.sunstrike > 0 ? ' and from a Sunstrike' : ''}), once per ${C.HOLY_CD} s per hero, up to ${pc(st.holyCap)}` });
     if (p.cls === 'knight') sh.push({ label: 'Shield Throw catch', text: `${pc(C.CATCH_PER)} per foe struck, up to ${pc(C.CATCH_MAX)}, once per ${C.KWARD_CD} s` });
     if (st.rally) sh.push({ label: 'Rallying Charge', text: `${pc(st.rally)} for you and allies within 100` });
     if (st.mantle) sh.push({ label: 'Phoenix Mantle', text: `${pc(st.mantle)} after a Nova that hits a foe (once per 10 s)` });
@@ -570,6 +586,7 @@
     critDps += wpn._hit * cm * one * aps * (ms ? (1 - 1 / ms.every) * c + ms.mul / ms.every : c);
     const msBleed = ms ? wpn._hit * cm * ms.mul / ms.every * one * aps * Math.max(0, ms.bleed - st.bleed) * pow : 0; // the Bleed it adds above the Bleed on crits
     for (const e of wpn._extras) if (e.proc && !e.packOnly) { const ps = e.perAttack * aps; wDps += ps; critDps += e.crit ? ps * c * cm / (1 + c * (cm - 1)) : 0; feed(ps, 1, null, e.el ? null : wInf); }
+    for (const e of wpn._extras) if (e.radiance) rate.holy = (rate.holy || 0) + e.radiance * aps; // Dawn's Wake: a quarter of each tick, before the hero multiplier, stored as Radiance
     if (st.weapon.burn) pool.fire = (pool.fire || 0) + direct * st.weapon.burn * pow;
     split.weapon = wDps; all += wDps;
     for (const sk of skills) {
@@ -631,10 +648,31 @@
       }
     }
   }
+  // ---------------- Cleric element routes: Guardian Light and Prism ----------------
+  // S is the Smite damage per second the holy status estimate credits one foe's Radiance stream (one stream however big the pack). BIG_SHARE: share of the Smite damage that lands on elites and bosses, which hold most of the health a run deals damage to (Guardian Light's bonus).
+  // TOUGH_SHARE: share that lands on foes which take 3 or more Smites (those and trash that lives long), the only ones that reach a Sunstrike; every 3rd of their Smites is one at x sunstrike.
+  // Beams need a second foe, so they are pack-only extras written per foe of a PACK_REF pack (every foe's stream beams to the others: PACK_REF - 1 targets); Sunburst's jump is one more hop at half of a beam.
+  // Spectrum's Radiance puts prismRad of a Smite into the stream of each foe struck, which pays back (1 + smiteMul) times as Smite damage, once per beam a foe receives (first order: the loop it forms is ignored).
+  const BIG_SHARE = 0.6, TOUGH_SHARE = 0.7;
+  function smiteForms(st, wpn, proc, stratum, R) {
+    const S = (proc.rate.holy || 0) * ED.elemMul(stratum, 'holy') * (1 + st.smiteMul), aps = wpn._aps;
+    if (!(S > 0)) return;
+    let any = false;
+    const push = (label, dps, o) => { if (!(dps > 0)) return; any = true; wpn._extras.push(Object.assign({ label, perAttack: dps / aps, proc: false }, o)); };
+    if (st.smiteBig > 0) push('Heavy Smites', S / (1 + st.smiteMul) * st.smiteBig * BIG_SHARE, { note: `Smites on elites and bosses deal +${Math.round(st.smiteBig * 100)}% (about ${Math.round(BIG_SHARE * 100)}% of your Smite damage lands there)` });
+    if (st.sunstrike > 0) push('Sunstrike', S * TOUGH_SHARE * (st.sunstrike - 1) / 3, { note: `every 3rd Smite on a foe that takes three or more (about ${Math.round(TOUGH_SHARE * 100)}% of your Smite damage) is ×${n1(st.sunstrike)}` });
+    if (st.smiteBeam > 0) {
+      const split = st.prismN > 0 ? Math.min(Math.round(st.prismN), PACK_REF - 1) : 1, beam = S * st.smiteBeam;
+      push('Prism beam', beam, { packOnly: true, note: `a beam to the nearest other foe for ${Math.round(st.smiteBeam * 100)}% of each Smite, in a pack` });
+      if (st.beamJumps > 0) push('Sunburst', beam * 0.5 * st.beamJumps, { packOnly: true, note: 'the beam jumps once more at half again, in a pack' });
+      if (st.prismN > 0) push('Spectrum', beam * (split - 1) + S * st.prismRad * (1 + st.smiteMul) * split, { packOnly: true, note: `${split} beams in a pack of ${PACK_REF}; each foe struck stores ${Math.round(st.prismRad * 100)}% of the Smite as Radiance` });
+    }
+    if (any) refit(wpn, R);
+  }
   // Rebuilds the weapon model's totals and extras list after an extra was pushed on wpn._extras.
   function refit(wpn, R) {
     let sum = 0;
-    for (const e of wpn._extras) sum += e.perAttack;
+    for (const e of wpn._extras) if (!e.packOnly) sum += e.perAttack; // a pack-only extra needs a second foe: it stays out of the damage on one foe
     wpn.dps = R.n((wpn._avg * wpn.oneFoe + sum) * wpn._aps); wpn.dpsAll = R.n((wpn._avg * wpn.n + sum) * wpn._aps);
     wpn.extras = wpn._extras.map(e => Object.assign({}, e, { perAttack: R.n(e.perAttack), perSec: R.n(e.perAttack * wpn._aps) }));
   }
