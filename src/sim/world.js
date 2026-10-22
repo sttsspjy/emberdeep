@@ -171,7 +171,7 @@
   W.ELITE_BODIES = 4; // plain-foe budget one elite displaces from its wave in any tier but Bright
   W.REWARD_UP = { gold: 'vigor', vigor: 'forge', forge: 'epic', boon: 'epic' }; // darkness upgrades a room reward one step
   // Per-stratum threat on top of the base scales: foe HP, wave budget, `cdRate` = extra cooldown recovery (0.2 = attack timers tick 20% faster, -0.2 = 20% slower) and the boss pause between attacks (x).
-  W.THREAT = [{ hp: 2.2, dmg: 0.5, wave: 0.8, cdRate: -0.4, pause: 2 }, { hp: 1.62, dmg: 0.5, wave: 0.75, cdRate: -0.3, pause: 1.7 }, { hp: 1.3, dmg: 0.5, wave: 0.7, cdRate: -0.1, pause: 1.4 }, { hp: 1, dmg: 0.4, wave: 0.66, cdRate: 0, pause: 1.2 }, { hp: 1.07, dmg: 0.8, wave: 0.62, cdRate: 0.15, pause: 1 }, { hp: 1.02, dmg: 1, wave: 0.6, cdRate: 0.3, pause: 0.9 }];
+  W.THREAT = [{ hp: 2.2, dmg: 0.5, wave: 0.8, cdRate: -0.4, pause: 2 }, { hp: 1.62, dmg: 0.5, wave: 0.75, cdRate: -0.3, pause: 1.7 }, { hp: 1.3, dmg: 0.5, wave: 0.7, cdRate: -0.1, pause: 1.4 }, { hp: 1, dmg: 0.4, wave: 0.66, cdRate: 0, pause: 1.2 }, { hp: 1.07, dmg: 0.72, wave: 0.62, cdRate: 0.15, pause: 1 }, { hp: 1.02, dmg: 0.9, wave: 0.6, cdRate: 0.3, pause: 0.9 }];
   // Foe HP multiplier of stratum s: the depth curve times the threat HP.
   W.hpScale = (s) => (1 + 0.65 * (s - 1) + 0.08 * (s - 1) * (s - 1)) * W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, s - 1))].hp;
   // Wave pacing of combat rooms: seconds before the first wave, spawn telegraph (+ random extra), minimum gap before the next wave, the share of a wave that may still stand when the next one is called, the seconds after which the next wave comes regardless, and the minimum spawn distance from heroes (turrets keep more).
