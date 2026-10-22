@@ -95,7 +95,7 @@
         if (U.dist2(pr.x, pr.y, e.x, e.y) > (e.r + pr.r) ** 2) continue;
         h.hit.add(e.id);
         judgeFoe(e, p, 4 + st.judgeDur, true, this); // judged before the hit lands: the leg itself takes the +20%
-        this.hitEnemy(e, q.dmg, this.partSrc(p, N, 'leg', { knock: 90, kx: pr.vx / sp, ky: pr.vy / sp, x: pr.x, y: pr.y, infAdd: { holy: 0.5 } }));
+        this.hitEnemy(e, q.dmg, this.partSrc(p, N, 'leg', { knock: 90, kx: pr.vx / sp, ky: pr.vy / sp, x: pr.x, y: pr.y, infAdd: { holy: 0.5 }, mul: h.leg >= 2 ? st.secondFlight || 1 : undefined })); // Second Flight legs hit at secondFlight of a hit
       }
       h.x = pr.x; h.y = pr.y;
       keep.push(h);

@@ -38,11 +38,11 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
     [{ c_atk: 1, c_atk_h: 1 }, { waveBig: 1, waveStun: 0.4, waveMul: 0.3, waveBurst: 0 }], [{ c_atk: 1, c_atk_h: 2 }, { waveMul: 0.4, waveBurst: 0 }], [{ c_atk: 1, c_atk_h: 3 }, { waveMul: 0.5, waveBurst: 0.5 }],
     [{ c_atk: 1, c_atk_s: 1 }, { waveHome: 2, waveMul: 0.4, litany: 0 }], [{ c_atk: 1, c_atk_s: 2 }, { waveMul: 0.5 }], [{ c_atk: 1, c_atk_s: 3 }, { waveMul: 0.6, litany: 6 }],
     [{ c_s1: 1 }, { s1Area: 0.3, s1Dur: 2, sanctDR: 0.1, s1Dmg: 0.5 }],
-    [{ c_s1: 1, c_s1_a: 1 }, { sanctStun: 1, s1Dmg: 1.5 * 1.4 - 1, sanctJudge: 0 }], [{ c_s1: 1, c_s1_a: 2 }, { s1Dmg: 1.5 * 1.5 - 1 }], [{ c_s1: 1, c_s1_a: 3 }, { s1Dmg: 1.5 * 1.6 - 1, sanctJudge: 1 }],
-    [{ c_s1: 1, c_s1_b: 1 }, { aura: 1, s1Dmg: 1.5 * 0.6 - 1, sanctDR: 0.1, auraDmg: 0 }], [{ c_s1: 1, c_s1_b: 2 }, { sanctDR: 0.12 }], [{ c_s1: 1, c_s1_b: 3 }, { sanctDR: 0.14, auraDmg: 0.1 }],
+    [{ c_s1: 1, c_s1_a: 1 }, { sanctStun: 0.5, s1Dmg: 1.5 * 1.25 - 1, sanctJudge: 0 }], [{ c_s1: 1, c_s1_a: 2 }, { s1Dmg: 1.5 * 1.35 - 1 }], [{ c_s1: 1, c_s1_a: 3 }, { s1Dmg: 1.5 * 1.45 - 1, sanctJudge: 1 }],
+    [{ c_s1: 1, c_s1_b: 1 }, { aura: 1, s1Dmg: 1.5 * 0.9 - 1, sanctDR: 0.2, auraDmg: 0 }], [{ c_s1: 1, c_s1_b: 2 }, { sanctDR: 0.22 }], [{ c_s1: 1, c_s1_b: 3 }, { sanctDR: 0.24, auraDmg: 0.1 }],
     [{ c_s2: 1 }, { s2Dmg: 0.3, s2Range: 0.4, judgeDur: 2, s2Cdr: 0.167 }],
     [{ c_s2: 1, c_s2_a: 1 }, { twinHammer: 0.6, thirdLeg: 0 }], [{ c_s2: 1, c_s2_a: 2 }, { s2Dmg: 1.3 * 1.1 - 1 }], [{ c_s2: 1, c_s2_a: 3 }, { thirdLeg: 1, s2Dmg: 1.3 * 1.2 - 1 }],
-    [{ c_s2: 1, c_s2_b: 1 }, { verdict: 1, judgeWeak: 0.2, verdictJudge: 0 }], [{ c_s2: 1, c_s2_b: 2 }, { s2Dmg: 1.3 * 1.1 - 1 }], [{ c_s2: 1, c_s2_b: 3 }, { verdictJudge: 1, s2Dmg: 1.3 * 1.2 - 1 }],
+    [{ c_s2: 1, c_s2_b: 1 }, { verdict: 1, judgeWeak: 0.4, verdictJudge: 0 }], [{ c_s2: 1, c_s2_b: 2 }, { s2Dmg: 1.3 * 1.1 - 1 }], [{ c_s2: 1, c_s2_b: 3 }, { verdictJudge: 1, s2Dmg: 1.3 * 1.2 - 1 }],
     [{ c_el: 1 }, { classElMul: 0.25, wInfHoly: 0.12 }],
     [{ c_el: 1, c_el_a: 1 }, { smiteBig: 0.5, guardLight: 0.08, smiteJudge: 0 }], [{ c_el: 1, c_el_a: 2 }, { guardLight: 0.1 }], [{ c_el: 1, c_el_a: 3 }, { guardLight: 0.12, smiteJudge: 3 }],
     [{ c_el: 1, c_el_b: 1 }, { smiteMul: 0.3, smiteBeam: 0.5, beamJumps: 0 }], [{ c_el: 1, c_el_b: 2 }, { smiteMul: 0.4 }], [{ c_el: 1, c_el_b: 3 }, { smiteMul: 0.5, beamJumps: 1 }],
@@ -120,11 +120,11 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
 
 // ---------------- Holy Fury: +40% damage, a 1 s stun when cast; Hallowed Ground Judges the foes inside ----------------
 {
-  const st = build(0, { c_s1: 1, c_s1_a: 1 }); near(ED.Stats.skillNums('sanctuary', st).p.zone.dmg, (10 + 1.2 * 17) * 1.5 * 1.4, 1e-9, 'Holy Fury zone damage x1.5 x1.4');
+  const st = build(0, { c_s1: 1, c_s1_a: 1 }); near(ED.Stats.skillNums('sanctuary', st).p.zone.dmg, (10 + 1.2 * 17) * 1.5 * 1.25, 1e-9, 'Holy Fury zone damage x1.5 x1.25');
   const { w, p } = stage({ c_s1: 1, c_s1_a: 1 }); const e = foe(w, p.x + 60, p.y), el = foe(w, p.x + 70, p.y + 10, { elite: 'swift' }), bs = foe(w, p.x + 80, p.y - 10); bs.boss = true; const out = foe(w, p.x + 380, p.y);
   w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x + 60, y: p.y }, 0);
   const sk = evs(w, 'skill')[0]; ok(sk && sk.hf === 1 && !sk.au && sk.k === 'sanctuary', 'skill event carries hf (Holy Fury)');
-  near(e.stun, 1, 1e-9, 'foe inside is stunned 1 s'); near(el.stun, 0.5, 1e-9, 'elite stun halved'); near(bs.stun, 0, 1e-9, 'bosses are not stunned'); near(out.stun, 0, 1e-9, 'foe outside is not stunned'); ok(e.stunCd > 0, 'cast stun sets the stun cooldown');
+  near(e.stun, 0.5, 1e-9, 'foe inside is stunned 0.5 s'); near(el.stun, 0.25, 1e-9, 'elite stun halved'); near(bs.stun, 0, 1e-9, 'bosses are not stunned'); near(out.stun, 0, 1e-9, 'foe outside is not stunned'); ok(e.stunCd > 0, 'cast stun sets the stun cooldown');
   const r1 = stage({ c_s1: 1, c_s1_a: 1 }); const e1 = foe(r1.w, r1.p.x + 60, r1.p.y); r1.w.playerSkill(r1.p, 0, { x0: r1.p.x, y0: r1.p.y, x: r1.p.x + 60, y: r1.p.y }, 0); run(r1.w, 1); ok(lost(e1) > 0 && e1.judged <= 0, 'Holy Fury burns foes inside; no Judged below rank 3');
   const g = stage({ c_s1: 1, c_s1_a: 3 }); const gi = foe(g.w, g.p.x + 60, g.p.y), go = foe(g.w, g.p.x + 380, g.p.y);
   g.w.playerSkill(g.p, 0, { x0: g.p.x, y0: g.p.y, x: g.p.x + 60, y: g.p.y }, 0); run(g.w, 0.2); ok(gi.judged > 0.3 && go.judged <= 0, 'Hallowed Ground: foes inside are Judged, foes outside are not');
@@ -136,9 +136,9 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
 {
   const { w, p } = stage({ c_s1: 1, c_s1_b: 3 }); const a = ally(w, 'ranger', p.x + 40, p.y), far = ally(w, 'knight', p.x + 500, p.y);
   const st = p.stats, N = ED.Stats.skillNums('sanctuary', st);
-  ok(N.aim === 'self', 'Aura of Faith casts on the Cleric (aim self)'); near(N.p.zone.dmg, (10 + 1.2 * 17) * 1.5 * 0.6, 1e-9, 'Aura damage x1.5 x0.6');
+  ok(N.aim === 'self', 'Aura of Faith casts on the Cleric (aim self)'); near(N.p.zone.dmg, (10 + 1.2 * 17) * 1.5 * 0.9, 1e-9, 'Aura damage x1.5 x0.9');
   w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x + 150, y: p.y + 90 }, 0); // the cursor is ignored
-  const z = w.zones.find(q => q.kind === 'sanct'); ok(z && z.follow === p.pid && z.x === p.x && z.y === p.y, 'zone is at the caster and follows them'); near(z.dr, 0.15 + 0.14, 1e-9, 'Aura rank 3: 15% + 10% + 4%');
+  const z = w.zones.find(q => q.kind === 'sanct'); ok(z && z.follow === p.pid && z.x === p.x && z.y === p.y, 'zone is at the caster and follows them'); near(z.dr, 0.15 + 0.24, 1e-9, 'Aura rank 3: 15% + 10% + 10% + 4%');
   const sk = evs(w, 'skill')[0]; ok(sk && sk.au === 1 && sk.x === Math.round(p.x), 'skill event carries au'); w.fx.length = 0;
   p.x += 30; run(w, 0.05); ok(Math.abs(z.x - p.x) < 1e-9 && Math.abs(z.y - p.y) < 1e-9, 'the aura moves with the Cleric');
   ok(a.auraT > 0, 'allies inside are Emboldened'); near(a.auraV, 0.1, 1e-9, 'Embolden +10%'); ok(!(p.auraT > 0), 'the Cleric itself is not Emboldened'); ok(!(far.auraT > 0), 'allies outside are not');
@@ -146,7 +146,7 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
   a.auraT = 0; const noBuff = hitBy(a); a.auraT = 1; a.auraV = 0.1; near(hitBy(a) / noBuff, (a.stats.dmg + 0.1) / a.stats.dmg, 0.01, 'Embolden adds 10% to the damage multiplier');
   run(w, 0.5); a.x = p.x + 600; run(w, 0.5); ok(!(a.auraT > 0), 'Embolden lapses 0.3 s after leaving the aura');
   const r1 = stage({ c_s1: 1, c_s1_b: 1 }); r1.w.playerSkill(r1.p, 0, { x0: r1.p.x, y0: r1.p.y, x: r1.p.x, y: r1.p.y }, 0); const al = ally(r1.w, 'ranger', r1.p.x + 20, r1.p.y); run(r1.w, 0.1); ok(!(al.auraT > 0), 'no Embolden before rank 3');
-  near(build(0, { c_s1: 1, c_s1_b: 1 }).sanctDR, 0.1, 1e-9, 'Aura rank 1 keeps Sanctum DR'); near(build(0, { c_s1: 1, c_s1_b: 2 }).sanctDR, 0.12, 1e-9, 'Aura +2% damage reduction per rank');
+  near(build(0, { c_s1: 1, c_s1_b: 1 }).sanctDR, 0.2, 1e-9, 'Aura rank 1 adds 10% to Sanctum DR'); near(build(0, { c_s1: 1, c_s1_b: 2 }).sanctDR, 0.22, 1e-9, 'Aura +2% damage reduction per rank');
 }
 
 // ---------------- Hammer of Judgment: damage, range, Judged length, recharge ----------------
@@ -173,6 +173,7 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
   const th = stage({ c_s2: 1, c_s2_a: 1 }); th.w.playerSkill(th.p, 0, {}, 1); const angs = th.p.hammers.map(h => Math.atan2(h.pr.vy, h.pr.vx)).sort((a, b) => a - b); near(angs[0], -0.2, 1e-9, 'V angle -0.2'); near(angs[1], 0.2, 1e-9, 'V angle +0.2');
   const tl = ED.Stats.skillNums('judgment', th.p.stats).p.leg.dmg; near(tl, (18 + 1.4 * 17) * 1.3 * 0.6, 1e-9, 'each Twin hammer deals 60%');
   ok(sf.n0 === 2 && sf.hits === 8, `Second Flight: four legs each (hits ${sf.hits})`); ok(sf.turns.slice(0, 4).sort().join() === '1,1,2,2' && sf.left === 0 && sf.projs === 0, `Second Flight turns ${sf.turns.join()} and the hammers are gone`);
+  { const S = stage({ c_s2: 1, c_s2_a: 3 }); near(S.p.stats.secondFlight, 0.25, 1e-9, 'Second Flight deals 25% of a hit'); const e = foe(S.w, S.p.x + 40, S.p.y), muls = []; const orig = S.w.hitEnemy; S.w.hitEnemy = function (f, d, src) { if (src && src.part === 'judgment.leg') muls.push(src.mul || 1); return orig.call(this, f, d, src); }; S.w.playerSkill(S.p, 0, {}, 1); run(S.w, 12); ok(muls.length === 8 && muls.filter(m => m === 1).length === 4 && muls.filter(m => Math.abs(m - 0.25) < 1e-9).length === 4, `legs 1-2 at full damage, the second flight at 25% (${muls.join()})`); void e; }
   const rk = build(0, { c_s2: 1, c_s2_a: 2 }); near(ED.Stats.skillNums('judgment', rk).p.leg.dmg, (18 + 1.4 * 17) * 1.3 * 1.1 * 0.6, 1e-9, 'Twin Hammers rank 2: +10%');
   // a wall on the way out turns the hammer (and the second out leg too)
   const wl = stage({ c_s2: 1, c_s2_a: 3 }); wl.w.playerSkill(wl.p, Math.PI, {}, 1); let turned = false; run(wl.w, 0.1); for (let i = 0; i < 400 && wl.p.hammers.length; i++) { wl.w.update(DT); if (wl.p.hammers.some(h => h.leg >= 1)) turned = true; } ok(turned, 'a hammer that meets a wall turns for home');
@@ -182,9 +183,9 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
 {
   const { w, p } = stage({ c_s2: 1, c_s2_b: 1 });
   const jt = foe(w, p.x + 60, p.y), jb = foe(w, p.x + 70, p.y + 14); jb.boss = true; w.playerSkill(p, 0, {}, 1); run(w, 0.4);
-  ok(jt.weakT > 5 && Math.abs(jt.weakV - 0.2) < 1e-9 && jb.weakT > 5 && Math.abs(jb.weakV - 0.1) < 1e-9, 'Judged foes are weakened by 20% (bosses 10%)');
+  ok(jt.weakT > 5 && Math.abs(jt.weakV - 0.4) < 1e-9 && jb.weakT > 5 && Math.abs(jb.weakV - 0.2) < 1e-9, 'Judged foes are weakened by 40% (bosses 20%)');
   const q = ally(w, 'knight', p.x, p.y - 60); q.stats.armor = 0; const dmgFrom = (e) => { q.hp = q.maxHp; q.invuln = 0; w.hurtPlayer(q, 100, { e }); return q.maxHp - q.hp; };
-  const plain = foe(w, p.x + 900, p.y); const full = dmgFrom(plain); near(dmgFrom(jt) / full, 0.8, 0.02, 'a weakened foe deals 20% less'); near(dmgFrom(jb) / full, 0.9, 0.02, 'a weakened boss deals 10% less');
+  const plain = foe(w, p.x + 900, p.y); const full = dmgFrom(plain); near(dmgFrom(jt) / full, 0.6, 0.02, 'a weakened foe deals 40% less'); near(dmgFrom(jb) / full, 0.8, 0.02, 'a weakened boss deals 20% less');
   jt.weakT = 0; near(dmgFrom(jt) / full, 1, 0.01, 'the weaken ends with the timer');
 }
 {

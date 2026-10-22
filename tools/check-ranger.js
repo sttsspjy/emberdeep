@@ -45,7 +45,7 @@ const RAD = (a) => a * Math.PI / 180;
 {
   const { w, p } = stage({ r_atk: 1 }); const e = foe(w, 300, 212), wp = { kind: 'weapon', wpn: true };
   const d = (dist, src) => hit(w, p, e, 100, Object.assign({ dist }, wp, src)); w.fx.length = 0;
-  near(d(80), 100, 1e-6, 'Deadeye +0% at 80'); near(d(170), 115, 1e-6, 'Deadeye +15% at 170'); near(d(260), 130, 1e-6, 'Deadeye +30% at 260'); near(d(500), 130, 1e-6, 'Deadeye stops at +30%'); near(d(40), 100, 1e-6, 'Deadeye: nothing close');
+  near(d(80), 100, 1e-6, 'Deadeye +0% at 80'); near(d(170), 120, 1e-6, 'Deadeye +20% at 170'); near(d(260), 140, 1e-6, 'Deadeye +40% at 260'); near(d(500), 140, 1e-6, 'Deadeye stops at +40%'); near(d(40), 100, 1e-6, 'Deadeye: nothing close');
   const far = w.fx.filter(ev => ev.t === 'hit' && ev.f).length; ok(far === 2, `far-shot flag on hits at >= 75% of the ramp (got ${far})`);
   near(hit(w, p, e, 100, { kind: 'skill', part: 'volley.arrow', dist: 300 }), 100, 1e-6, 'Deadeye: Volley arrows are not weapon shots');
   near(hit(w, p, e, 100, { kind: 'weapon', wpn: false, dist: 300 }), 100, 1e-6, 'Deadeye: twin and spectral repeats are not weapon hits');
@@ -102,7 +102,7 @@ const RAD = (a) => a * Math.PI / 180;
   for (let i = 0; i < 10; i++) { w.projs.length = 0; w.playerAttack(p, 0.3); const sh = w.projs.filter(q => q.team === 0); counts.push(sh.length); if (i === 4) for (const q of sh) ang.push(Math.atan2(q.vy, q.vx)); }
   ok(counts.join() === '1,1,1,1,3,1,1,1,1,3', `Flurry fires 2 extra arrows on every 5th shot (got ${counts.join()})`);
   ang.sort((a, b) => a - b); near(ang[0], 0.18, 1e-6, 'Flurry: -0.12 rad'); near(ang[1], 0.3, 1e-6, 'Flurry: the aimed arrow'); near(ang[2], 0.42, 1e-6, 'Flurry: +0.12 rad');
-  w.projs.length = 0; p.atkCount = 4; w.playerAttack(p, 0); const sh = w.projs.filter(q => q.team === 0); ok(sh.every(q => Math.abs(q.dmg - p.stats.weapon.dmg) < 1e-9 && q.wpn), 'Flurry arrows are full weapon arrows');
+  w.projs.length = 0; p.atkCount = 4; w.playerAttack(p, 0); const sh = w.projs.filter(q => q.team === 0); ok(sh.every(q => Math.abs(q.dmg - p.stats.weapon.dmg) < 1e-9 && q.wpn), 'Flurry arrows are weapon arrows'); near(p.stats.flurryMul, 0.25, 1e-9, 'Flurry arrows deal 25% of a shot'); ok(sh.filter(q => Math.abs((q.mul || 1) - 0.25) < 1e-9).length === 2 && sh.filter(q => !q.mul).length === 1, 'the two extra arrows carry the 25% multiplier, the aimed arrow none');
   const tb = stage({ r_atk_s: 3 }, 2); tb.p.atkCount = 4; tb.w.projs.length = 0; tb.w.playerAttack(tb.p, 0); ok(tb.w.projs.filter(q => q.team === 0).length === 4, 'Twin Flatbows: the pair plus two Flurry arrows');
   const noF = stage({ r_atk_s: 2 }); noF.p.atkCount = 4; noF.w.projs.length = 0; noF.w.playerAttack(noF.p, 0); ok(noF.w.projs.filter(q => q.team === 0).length === 1, 'no Flurry below rank 3');
 }
@@ -155,10 +155,11 @@ const RAD = (a) => a * Math.PI / 180;
 // ---- Scattershot (r_s1_b): +40% within 110 and triple knockback, a 70 px hop, Caltrops at rank 3 ----
 {
   const { w, p } = stage({ r_s1: 1, r_s1_b: 1 }); const e = foe(w, 300, 212), mv = ED.Stats.skillNums('volley', p.stats).move;
-  ok(mv && mv.k === 'hop' && mv.dist === 70 && mv.dir === -1 && mv.t === 0.15 && mv.iframes === 0.15, 'Volley hops 70 px back over 0.15 s with 0.15 s of i-frames');
+  ok(mv && mv.k === 'hop' && mv.dist === 70 && mv.dir === -1 && mv.t === 0.25 && mv.iframes === 0.25, 'Volley hops 70 px back over 0.25 s with 0.25 s of i-frames');
   const sh = (dist) => { e.kbx = e.kby = 0; const d = hit(w, p, e, 10, { kind: 'skill', part: 'volley.arrow', dist, knock: 60, kx: 1, ky: 0 }); return [d, e.kbx]; };
   let r = sh(50); near(r[0], 14, 1e-6, 'Scattershot +40% close'); near(r[1], 180, 1e-6, 'and triple knockback'); r = sh(109); near(r[0], 14, 1e-6, 'close up to 110');
   r = sh(111); near(r[0], 10, 1e-6, 'plain beyond 110'); near(r[1], 60, 1e-6, 'plain knockback beyond 110');
+  e.slowT = 0; e.slowAmt = 0; sh(50); near(e.slowAmt, 0.3, 1e-9, 'every Volley arrow slows its foe 30%'); near(e.slowT, 1.2, 1e-9, 'for 1.2 s'); const bsl = foe(w, 340, 212); bsl.boss = true; hit(w, p, bsl, 10, { kind: 'skill', part: 'volley.arrow', dist: 50 }); ok(!(bsl.slowT > 0), 'bosses are not slowed'); const wsl = foe(w, 360, 212); hit(w, p, wsl, 10, { kind: 'weapon', wpn: true, dist: 50 }); ok(!(wsl.slowT > 0), 'weapon shots do not slow'); void wsl;
   near(stage({ r_s1_b: 2 }).p.stats.volleyClose, 0.5, 1e-9, 'rank 2: +10% close bonus'); ok(!stage({ r_s1_b: 2 }).p.stats.caltrops, 'no Caltrops below rank 3');
   w.projs.length = 0; w.zones.length = 0; w.playerSkill(p, 0, {}, 0); ok(!w.zones.some(z => z.kind === 'shards'), 'no caltrops without the rider');
 }
@@ -180,16 +181,16 @@ const RAD = (a) => a * Math.PI / 180;
   ok(log.filter(s => s === 'rain.tick').length === 12, `12 arrow ticks (got ${log.filter(s => s === 'rain.tick').length})`); w.hitEnemy = hk; void e;
 }
 
-// ---- Skyfall (r_s2_a): the whole Rain lands once after 0.6 s, 15% wider, 0.5 s stun; Twin Sky 0.8 s later at 50% ----
+// ---- Skyfall (r_s2_a): the whole Rain lands once after 0.5 s, 30% wider, 0.5 s stun; Twin Sky 0.8 s later at 50% ----
 {
   const { w, p } = stage({ r_s2: 1, r_s2_a: 1 }); const rn = ED.Stats.skillNums('rain', p.stats);
-  near(rn.p.sky.dmg, 124.08, 0.1, 'Skyfall 124 in one hit'); near(rn.p.sky.r, 104 * 1.15, 1e-6, 'Skyfall is 15% wider'); ok(!rn.p.sky2.on, 'no Twin Sky at rank 1');
-  near(ED.skillRadius('rain', p.stats), 104 * 1.15, 1e-6, 'the aim circle shows the wider Skyfall radius'); near(ED.skillRadius('rain', stage({ r_s2: 1 }).p.stats), 104, 1e-6, 'and the Rain radius without Skyfall');
-  const inn = foe(w, 200, 212), edge = foe(w, 200 + 104 * 1.15 + 6, 212), out = foe(w, 200 + 104 * 1.15 + 40, 212), bs = foe(w, 200, 240); bs.boss = true;
+  near(rn.p.sky.dmg, 124.08, 0.1, 'Skyfall 124 in one hit'); near(rn.p.sky.r, 104 * 1.3, 1e-6, 'Skyfall is 30% wider'); ok(!rn.p.sky2.on, 'no Twin Sky at rank 1');
+  near(ED.skillRadius('rain', p.stats), 104 * 1.3, 1e-6, 'the aim circle shows the wider Skyfall radius'); near(ED.skillRadius('rain', stage({ r_s2: 1 }).p.stats), 104, 1e-6, 'and the Rain radius without Skyfall');
+  const inn = foe(w, 200, 212), edge = foe(w, 200 + 104 * 1.3 + 6, 212), out = foe(w, 200 + 104 * 1.3 + 40, 212), bs = foe(w, 200, 240); bs.boss = true;
   const evs = tap(w), log = []; const hk = w.hitEnemy; w.hitEnemy = function (f, b, s) { const d = hk.call(this, f, b, s); if (s && s.part) log.push({ part: s.part, e: f, d }); return d; };
   w.zones.length = 0; w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: 200, y: 212 }, 1);
-  ok(w.zones.length === 1 && w.zones[0].kind === 'skyfall' && Math.abs(w.zones[0].dur - 0.6) < 1e-9, 'a skyfall zone of 0.6 s (no tick zone)');
-  run(w, 0.55, evs.step); ok(log.length === 0 && inn.hp === 5000, 'nothing lands before 0.6 s'); run(w, 0.1, evs.step);
+  ok(w.zones.length === 1 && w.zones[0].kind === 'skyfall' && Math.abs(w.zones[0].dur - 0.5) < 1e-9, 'a skyfall zone of 0.5 s (no tick zone)');
+  run(w, 0.45, evs.step); ok(log.length === 0 && inn.hp === 5000, 'nothing lands before 0.5 s'); run(w, 0.1, evs.step);
   const hits = log.filter(h => h.part === 'rain.sky'); ok(hits.length === 3 && hits.every(h => Math.abs(h.d - 124.08) < 0.3), `the centre, edge and boss foes each take one 124 hit (got ${hits.map(h => h.d.toFixed(1))})`);
   ok(!log.some(h => h.e === out), 'a foe outside the circle is not hit'); ok(inn.stun > 0.4 && inn.stun <= 0.5 + 1e-9, `non-boss foes are stunned 0.5 s (got ${inn.stun.toFixed(2)})`); ok(!(bs.stun > 0), 'bosses are never stunned');
   ok(evs.all.filter(v => v.t === 'skyfx' && v.k === 0).length === 1, 'a landing event'); run(w, 1.5, evs.step); ok(log.length === 3 && log.every(h => h.part === 'rain.sky'), 'no further hits without Twin Sky'); w.hitEnemy = hk; void edge;
@@ -203,11 +204,11 @@ const RAD = (a) => a * Math.PI / 180;
   ok(evs.all.filter(v => v.t === 'skyfx').map(v => v.k).join() === '0,1', 'two landing events'); w.hitEnemy = hk;
 }
 
-// ---- Hail of Thorns (r_s2_b): foes in the Rain slowed 50% and +20% damage; Second Shower at rank 3 ----
+// ---- Hail of Thorns (r_s2_b): foes in the Rain slowed 40% and +20% damage; Second Shower at rank 3 ----
 {
   const { w, p } = stage({ r_s2: 1, r_s2_b: 1 }); const e = foe(w, 200, 212), out = foe(w, 330, 212);
   w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: 200, y: 212 }, 1); run(w, 0.3); ok(!(e.slowAmt > 0), 'no slow before the arrows fall'); run(w, 0.2);
-  near(e.slowAmt, 0.5, 1e-9, 'foes in the Rain are slowed 50%'); ok(e.vulnT > 0, 'and vulnerable'); ok(!(out.slowT > 0), 'foes outside the Rain are not slowed');
+  near(e.slowAmt, 0.4, 1e-9, 'foes in the Rain are slowed 40%'); ok(e.vulnT > 0, 'and vulnerable'); ok(!(out.slowT > 0), 'foes outside the Rain are not slowed');
   near(hit(w, p, e, 100, { kind: 'weapon' }) / hit(w, p, out, 100, { kind: 'weapon' }), 1.2, 1e-6, 'vulnerable foes take +20%');
   near(stage({ r_s2_b: 2 }).p.stats.s2Dmg, 0.1, 1e-9, 'rank 2 adds +10% Rain damage');
 }

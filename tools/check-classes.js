@@ -10,23 +10,23 @@ const build = (cls, wi, boons) => ED.Stats.compute({ cls, weapon: ED.CLASSES[cls
 
 // ---- 36 fork weapons: dmg / rate and the fields the rule changes ----
 const FORKS = [ // base, kind, dmg, rate, {field: value}
-  ['longsword', 'heavy', 35.6, 0.756, { range: 55, arc: 2.09, knock: 208 }], ['longsword', 'swift', 10.9, 0.231, { range: 50, knock: 65 }],
-  ['warhammer', 'heavy', 59.3, 1.3, { range: 59.4, arc: 2.42, knock: 320 }], ['warhammer', 'swift', 20.6, 0.451, { range: 54, knock: 120 }],
-  ['glaive', 'heavy', 39.6, 0.9, { range: 90.2, arc: 0.83, knock: 240 }], ['glaive', 'swift', 12.1, 0.275, { range: 82, knock: 75 }],
+  ['longsword', 'heavy', 35.6, 0.756, { range: 55, arc: 2.09, knock: 169 }], ['longsword', 'swift', 10.9, 0.231, { range: 50, knock: 65 }],
+  ['warhammer', 'heavy', 59.3, 1.3, { range: 59.4, arc: 2.42, knock: 312 }], ['warhammer', 'swift', 20.6, 0.451, { range: 54, knock: 120 }],
+  ['glaive', 'heavy', 39.6, 0.9, { range: 90.2, arc: 0.83, knock: 195 }], ['glaive', 'swift', 12.1, 0.275, { range: 82, knock: 75 }],
   ['longbow', 'heavy', 23.8, 0.612, { r: 4.8, speed: 396, life: 0.94, knock: 80 }], ['longbow', 'swift', 7.26, 0.187, { speed: 528, life: 0.72 }],
   ['crossbow', 'heavy', 47.5, 1.296, { r: 6, speed: 504, life: 0.88, pierce: 2, knock: 240 }], ['crossbow', 'swift', 14.5, 0.396, { speed: 672, life: 0.68, pierce: 2, knock: 60 }],
   ['twinbows', 'heavy', 8.91, 0.45, { r: 4.8, speed: 378, life: 0.77, knock: 80 }], ['twinbows', 'swift', 2.72, 0.1375, { speed: 504, life: 0.6, spread: 0.12 }],
   ['firestaff', 'heavy', 23.8, 0.9, { r: 7.2, speed: 279 }], ['firestaff', 'swift', 7.26, 0.275, { speed: 372 }],
   ['emberwand', 'heavy', 11.9, 0.27, { r: 4.8, speed: 351 }], ['emberwand', 'swift', 5.28, 0.12, { speed: 468 }],
   ['inferno', 'heavy', 42.9, 1.3, { r: 10.8, speed: 225 }], ['inferno', 'swift', 18.2, 0.55, { speed: 300 }],
-  ['daggers', 'heavy', 19.8, 0.378, { range: 46.2, arc: 1.43, knock: 96 }], ['daggers', 'swift', 6.29, 0.12, { range: 42, knock: 30 }],
+  ['daggers', 'heavy', 19.8, 0.378, { range: 46.2, arc: 1.43, knock: 78 }], ['daggers', 'swift', 6.29, 0.12, { range: 42, knock: 30 }],
   ['knives', 'heavy', 13.9, 0.648, { r: 4.8, speed: 432, knock: 80 }], ['knives', 'swift', 4.24, 0.198, { speed: 576, spread: 0.19 }],
-  ['scythes', 'heavy', 31.68, 0.864, { range: 57.2, arc: 6.3, knock: 144 }], ['scythes', 'swift', 9.68, 0.264, { range: 52, knock: 45 }],
-  ['mace', 'heavy', 33.7, 0.756, { range: 50.6, arc: 1.87, knock: 224 }], ['mace', 'swift', 10.3, 0.231, { range: 46, knock: 70 }],
-  ['dawnhammer', 'heavy', 63.4, 1.296, { range: 57.2, arc: 2.42, knock: 320 }], ['dawnhammer', 'swift', 19.4, 0.396, { range: 52, knock: 110 }],
+  ['scythes', 'heavy', 31.68, 0.864, { range: 57.2, arc: 6.3, knock: 117 }], ['scythes', 'swift', 9.68, 0.264, { range: 52, knock: 45 }],
+  ['mace', 'heavy', 33.7, 0.756, { range: 50.6, arc: 1.87, knock: 182 }], ['mace', 'swift', 10.3, 0.231, { range: 46, knock: 70 }],
+  ['dawnhammer', 'heavy', 63.4, 1.296, { range: 57.2, arc: 2.42, knock: 286 }], ['dawnhammer', 'swift', 19.4, 0.396, { range: 52, knock: 110 }],
   ['lantern', 'heavy', 24.75, 0.756, { r: 7.2, speed: 270, pierce: 1, knock: 80 }], ['lantern', 'swift', 7.563, 0.231, { speed: 360, pierce: 1 }],
   ['bonewand', 'heavy', 17.8, 0.72, { r: 6, speed: 315, homing: 4 }], ['bonewand', 'swift', 5.45, 0.22, { speed: 420 }],
-  ['soulscythe', 'heavy', 33.7, 1.008, { range: 57.2, arc: 2.64, knock: 176, raise: 0.12 }], ['soulscythe', 'swift', 10.3, 0.308, { range: 52, knock: 55 }],
+  ['soulscythe', 'heavy', 33.7, 1.008, { range: 57.2, arc: 2.64, knock: 143, raise: 0.12 }], ['soulscythe', 'swift', 10.3, 0.308, { range: 52, knock: 55 }],
   ['plaguestaff', 'heavy', 11.9, 1.08, {}], ['plaguestaff', 'swift', 3.63, 0.33, {}],
 ];
 const CARD = { knight: ['k_atk_h', 'k_atk_s'], ranger: ['r_atk_h', 'r_atk_s'], pyro: ['p_atk_h', 'p_atk_s'], shade: ['s_atk_h', 's_atk_s'], cleric: ['c_atk_h', 'c_atk_s'], necro: ['n_atk_h', 'n_atk_s'] };
@@ -54,7 +54,7 @@ const sky = ED.Stats.skillNums('rain', build('ranger', 0, { r_s2: 1, r_s2_a: 1 }
 near(sky.p.sky.dmg, 124.08, 0.1, 'Rainmaker + Skyfall sky');
 ok(!ED.Stats.skillNums('rain', build('ranger')).p.sky.on && sky.p.sky.on, 'Skyfall part gated by its stat');
 near(build('knight', 0, { k_s1: 1, k_s1_a: 1 }).s1Dmg, 0.375, 1e-9, 'slot damage compounds (Vanguard x1.25, Juggernaut x1.1)');
-near(build('cleric', 0, { c_s1: 1, c_s1_b: 1 }).s1Dmg, 1.5 * 0.6 - 1, 1e-9, 'slot damage compounds (Sanctum x1.5, Aura x0.6)');
+near(build('cleric', 0, { c_s1: 1, c_s1_b: 1 }).s1Dmg, 1.5 * 0.9 - 1, 1e-9, 'slot damage compounds (Sanctum x1.5, Aura x0.9)');
 const jug3 = build('knight', 0, { k_s1: 1, k_s1_a: 3 });
 near(jug3.jugShock, 0.6, 1e-9, 'Juggernaut rank 3 shock (0.4 + 2 x 0.1)'); near(jug3.bash, 0.6, 1e-9, 'Juggernaut rank 3 Shield Bash');
 near(build('knight', 0, { k_s2: 1 }).skill2Cd, 9 * (1 - 0.167), 0.001, 'Shield Throw cooldown with Shieldmaster'); near(ED.Stats.skillNums('charge', build('knight', 0, { k_s1: 1, k_s1_a: 1 })).range, 240, 1e-9, 'Juggernaut Charge range');
@@ -230,7 +230,7 @@ const run = (w, secs, f) => { for (let i = 0; i < Math.round(secs * 60); i++) { 
   ok(a.stun === 0 && b.stun === 0 && c.stun > 0, 'Stagger only from a Heavy weapon hit of kind weapon');
   near(ED.Stats.skillNums('step', build('shade')).p.slash.knock, 60, 1e-9, 'Shadowstep knockback');
   const rn = ED.Stats.skillNums('rain', build('ranger', 0, { r_s2: 1, r_s2_a: 3, r_s2_b: 3 })), tk = rn.p.tick;
-  near(rn.p.sky.r, tk.r * 1.15, 1e-6, 'Skyfall radius'); near(rn.p.sky2.r, rn.p.sky.r, 1e-6, 'Twin Sky radius'); near(rn.p.shower.r, tk.r, 1e-6, 'Second Shower radius');
+  near(rn.p.sky.r, tk.r * 1.3, 1e-6, 'Skyfall radius'); near(rn.p.sky2.r, rn.p.sky.r, 1e-6, 'Twin Sky radius'); near(rn.p.shower.r, tk.r, 1e-6, 'Second Shower radius');
   near(tk.dur, 3, 1e-9, 'Rainmaker lengthens the Rain'); near(rn.p.shower.dur, 2, 1e-9, 'Second Shower is a fixed 2 s'); near(rn.p.shower.count, 8, 1e-9, 'Second Shower ticks');
 }
 // shared seams: cone homing, shot end hook, shot distance, Toll factor and hook, Abyssal Hunger

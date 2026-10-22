@@ -6,9 +6,9 @@
   const U = ED.U;
 
   // Deadeye grows from nothing at FAR_FROM px flown to its full bonus at FAR_TO; a hit from FAR_AT of that ramp carries the far-shot flag. LEAP_R: reach of Relentless Hunt. SPLIT_A / SPLIT_LIFE: Splitting Bolt's fan and flight.
-  // FLURRY_A: Flurry's extra arrows. CALTROPS: the Scattershot patch, base + pow x P damage per second, slow, radius (fixed), seconds.
+  // FLURRY_A: Flurry's extra arrows (each at st.flurryMul of a shot). CALTROPS: the Scattershot patch, base + pow x P damage per second, slow, radius (fixed), seconds. HAIL_SLOW: slow of a Hail of Thorns foe. VOLLEY_SLOW_T: seconds a Scattershot arrow slows its foe.
   const FAR_FROM = 80, FAR_TO = 260, FAR_AT = 0.75, LEAP_R = 120, SPLIT_A = 0.3, SPLIT_LIFE = 0.4, FLURRY_A = 0.12;
-  const CALTROPS = { base: 6, pow: 0.5, r: 50, dur: 2.5, slow: 0.4 };
+  const CALTROPS = { base: 6, pow: 0.5, r: 50, dur: 2.5, slow: 0.4 }, HAIL_SLOW = 0.4, VOLLEY_SLOW_T = 1.2;
   const SKILL_PARTS = new Set(['volley.arrow', 'rain.tick', 'rain.sky', 'rain.sky2', 'rain.shower']); // Gangrene's parts
 
   // Volley: a fan of piercing arrows toward the cursor. Caltrops (Scattershot rank 3) seed the spot the hop leaves.
@@ -61,7 +61,7 @@
         if (tick) k++;
         for (const e of world.enemies) {
           if (e.hp <= 0 || e.spawnT > 0 || U.dist2(e.x, e.y, z.x, z.y) >= (z.r + e.r) ** 2) continue;
-          if (o.hail) { world.slowEnemy(e, 0.5, 0.3); e.vulnT = Math.max(e.vulnT || 0, 0.3); }
+          if (o.hail) { world.slowEnemy(e, HAIL_SLOW, 0.3); e.vulnT = Math.max(e.vulnT || 0, 0.3); }
           if (tick) world.hitEnemy(e, q.dmg, { p: ow, kind: 'skill', part, noGuard: true, x: z.x, y: z.y, infK: o.infK });
         }
       },
@@ -102,7 +102,7 @@
   function flurry(w, p, a, st, wp) {
     let c = ONE_ARROW.get(wp);
     if (!c || c.pn !== st.projN) ONE_ARROW.set(wp, c = { pn: st.projN, w1: Object.assign({}, wp, { n: 1 - st.projN }) });
-    for (let s = -1; s <= 1; s += 2) w.fireWeapon(p, a + s * FLURRY_A, c.w1);
+    for (let s = -1; s <= 1; s += 2) w.fireWeapon(p, a + s * FLURRY_A, c.w1, undefined, { mul: st.flurryMul });
   }
 
   // Hunter's Mark: foe e takes markV more damage from everyone for volleyMark seconds; the strongest value wins and its owner keeps the mark's leap.
@@ -151,6 +151,7 @@
       const st = p.stats;
       if (src.slow && e.hp > 0) this.slowEnemy(e, st.hitSlow, 1);
       if (st.volleyMark && src.part === 'volley.arrow') markFoe(e, p, st);
+      if (st.volleySlow && src.part === 'volley.arrow' && e.hp > 0 && !e.boss) this.slowEnemy(e, st.volleySlow, VOLLEY_SLOW_T);
     },
     projHit(pr, e, hs) {
       if (!pr.wpn || pr.noSplit || pr.pierce > 0 || hs.guarded) return;
