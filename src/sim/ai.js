@@ -3,7 +3,7 @@
 // Body-hit states (full contact damage): lunge, charge, leap, bash, dive.
 (function (ED) {
   'use strict';
-  const U = ED.U, Sim = ED.Sim, D = ED.Dungeon, TAU = U.TAU;
+  const U = ED.U, Sim = ED.Sim, D = ED.Dungeon, TAU = U.TAU, VIEW_W = ED.CONST.VIEW_W, VIEW_H = ED.CONST.VIEW_H;
   const AI = ED.AI = {};
 
   const move = (w, e, dx, dy, speed, dt) => {
@@ -20,6 +20,8 @@
   const rate = (e) => (e.elite === 'swift' ? 0.7 : 1);
   const wind = (e, t) => Math.max(t * rate(e), Math.min(t, 0.4)) * (e.windMul || 1); // every wind-up: swift foes shorten it but never below 0.4 s, chill (windMul) stretches it
   const blind = (e) => e.blind > 0;
+  // Ranged foes (not bosses) start an attack only while on the target's screen (minimum view minus a 24 px margin); off-screen they close in instead.
+  const onScreen = (w, e) => Math.abs(e.x - e.target.x) <= VIEW_W / 2 - 24 && Math.abs(e.y - e.target.y) <= VIEW_H / 2 - 24;
 
   // Warn-only line that follows the foe's aim while it winds up.
   const aimLine = (w, e, len, width, dur) => w.addZone({ kind: 'teleLine', x: e.x, y: e.y, a: e.aimA, len, w: width, dur, dmg: 0, team: 1, src: e, warnOnly: true,
@@ -49,7 +51,7 @@
     if (d < keep[0]) {
       const a = Math.atan2(e.y - e.target.y, e.x - e.target.x);
       if (move(w, e, Math.cos(a), Math.sin(a), sp(e) * 0.7, dt)) e.strafe = -e.strafe;
-    } else if (d > keep[1] || !hasLos(w, e)) {
+    } else if (d > keep[1] || !hasLos(w, e) || !onScreen(w, e)) {
       toward(w, e, e.target.x, e.target.y, sp(e), dt);
     } else {
       e.vars.strafeT = (e.vars.strafeT || 0) - dt;
@@ -169,7 +171,7 @@
     if (V) {
       e.vars.orb = (e.vars.orb ?? w.rng.range(O.t[0], O.t[1])) - dt;
       if (e.vars.orb <= 0 && e.cd <= 0 && d > V.min && d < V.range && hasLos(w, e)) { e.vars.orb = w.rng.range(O.t[0], O.t[1]); diveStart(w, e, V); }
-    } else if (B && e.cd <= 0 && d < 420 && hasLos(w, e)) {
+    } else if (B && e.cd <= 0 && d < 420 && hasLos(w, e) && onScreen(w, e)) {
       e.st = 'aim'; e.t = wind(e, B.windup); e.aimA = aimAt(e);
       aimLine(w, e, 380, 8, e.t);
     }
@@ -190,7 +192,7 @@
       return;
     }
     kite(w, e, dt, e.def.keep);
-    if (e.cd <= 0 && hasLos(w, e) && distT(e) < 360 && !blind(e)) {
+    if (e.cd <= 0 && hasLos(w, e) && distT(e) < 360 && !blind(e) && onScreen(w, e)) {
       e.vars.shots = (e.vars.shots || 0) + 1;
       e.vars.fan = !!S.fan && e.vars.shots % S.fan.every === 0;
       e.st = 'aim'; e.t = wind(e, S.windup * (e.vars.fan ? 1.2 : 1));
@@ -237,7 +239,7 @@
       if (e.t <= 0) { e.st = 'move'; e.cd = P.cd * rate(e); }
       return;
     }
-    if (e.cd <= 0 && distT(e) < 420 && hasLos(w, e) && !blind(e)) {
+    if (e.cd <= 0 && distT(e) < 420 && hasLos(w, e) && !blind(e) && onScreen(w, e)) {
       e.st = 'aim'; e.t = wind(e, P.windup);
       e.aimA = Math.atan2(e.target.y - e.y, e.target.x - e.x);
       if (P.glob) e.vars.glob = (e.vars.n = (e.vars.n || 0) + 1) % 2 === 0; // spread, glob, spread, ...
@@ -284,7 +286,7 @@
       return;
     }
     const d = distT(e);
-    if (Wb && e.vars.wcd <= 0 && d > Wb.range[0] && d < Wb.range[1] && hasLos(w, e) && !blind(e)) {
+    if (Wb && e.vars.wcd <= 0 && d > Wb.range[0] && d < Wb.range[1] && hasLos(w, e) && !blind(e) && onScreen(w, e)) {
       e.st = 'aim'; e.t = wind(e, Wb.windup); e.aimA = aimAt(e); e.face = Math.cos(e.aimA) > 0 ? 1 : -1;
       return;
     }
@@ -420,7 +422,7 @@
     }
     if (S && e.vars.stepCd <= 0 && distT(e) < S.near && stepStart(w, e, S)) return;
     kite(w, e, dt, [100, 230]);
-    if (e.cd <= 0 && hasLos(w, e) && !blind(e)) { e.st = 'cast'; e.t = wind(e, C.windup); }
+    if (e.cd <= 0 && hasLos(w, e) && !blind(e) && onScreen(w, e)) { e.st = 'cast'; e.t = wind(e, C.windup); }
   };
 
   // Bone Priest: raises skeletons beside itself (telegraphed spawn) or wards the most-hurt ally.
@@ -438,7 +440,7 @@
       return;
     }
     kite(w, e, dt, [140, 260]);
-    if (e.cd > 0 || blind(e)) return;
+    if (e.cd > 0 || blind(e) || !onScreen(w, e)) return;
     let ally = null, low = 0.85;
     for (const x of w.enemies) {
       if (x === e || x.hp <= 0 || x.boss || x.burrowed || x.def.gloom || x.ward > 0 || x.spawnT > 0) continue;
@@ -558,7 +560,7 @@
       return;
     }
     kite(w, e, dt, [170, 290]);
-    if (blind(e)) return;
+    if (blind(e) || !onScreen(w, e)) return;
     if (e.vars.rcd <= 0 && owned(w, e, 'summonedBy') <= R.cap - R.n) {
       const heroes = w.alivePlayers();
       e.st = 'cast'; e.vars.kind = 'rift'; e.t = wind(e, R.windup); e.vars.rcd = R.cd * rate(e);
@@ -613,7 +615,7 @@
       return;
     }
     kite(w, e, dt, e.def.keep);
-    if (e.cd <= 0 && distT(e) < 300 && !blind(e)) { e.st = 'aim'; e.t = wind(e, L.windup); }
+    if (e.cd <= 0 && distT(e) < 300 && !blind(e) && onScreen(w, e)) { e.st = 'aim'; e.t = wind(e, L.windup); }
   };
 
   AI.boss = (w, e, dt) => { const b = ED.Bosses[e.type]; if (b) b(w, e, dt); };
