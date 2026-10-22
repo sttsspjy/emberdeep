@@ -83,7 +83,7 @@
       '<b>Relics:</b> the Codex is gone. Every relic can drop from your first descent, and relics no longer belong to an element.',
       `<b>Element relics are path boons now:</b> ${MOVED_RELICS.map(id => `${esc(ED.BOONS[id].name)} (${pathName(ED.BOONS[id].path, true)})`).join(', ')}. The other element relics are gone: their paths already hold the same effects as boons.`,
       p.refunded > 0 ? `<b>Refunded:</b> the ${p.refunded} embers you spent on the Codex are back in your purse.` : '',
-      '<b>Hearth:</b> every upgrade rank can be refunded for its full cost, and Reset all returns everything at once. The Armory upgrade is now the Reliquary.',
+      '<b>Hearth:</b> every upgrade rank can be refunded for its full cost, and Reset all returns everything at once. Upgrades are small now, so your build choices decide a descent. The Reliquary became the Stash (starting gold), Head Start raises your starting level and Deep Wick boosts the gold and experience of dark rooms.',
       '<b>Aim:</b> attacks and ground skills go toward the mouse cursor (right stick on a pad). The Auto-aim setting is gone.',
       `<b>Paths:</b> follow up to ${ED.MAX_ELEMENTS} of ${ED.ELEMENT_IDS.map(k => pathName(k, true)).join(', ')}, or take the ${pathName('general', true)} path alone as a Generalist. Blood and Spirit are gone.`,
       '<b>No life steal:</b> hits do not heal you any more. Shields take their place.',

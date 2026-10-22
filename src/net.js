@@ -341,7 +341,7 @@
       s.RS = w.floor.rooms.map(rm => { const st = w.roomState[rm.id]; return (st.visited ? 1 : 0) | (st.known ? 2 : 0) | (st.cleared ? 4 : 0); });
       s.BR = w.floor.rooms.map(rm => w.roomState[rm.id].broken | 0); // broken-breakable bit mask of every room (bit i = room.breakables[i])
       s.RUN = { kills: w.run.kills, roomsCleared: w.run.roomsCleared, elitesKilled: w.run.elitesKilled, bosses: w.run.bosses, bossCount: w.run.bossCount, embers: w.run.embers, revives: w.run.revives, maxGold: w.run.maxGold, maxRelics: w.run.maxRelics, pact: w.pact,
-        flawlessBoss: !!w.run.flawlessBoss, roomsVisited: w.run.roomsVisited, roomsTotal: w.run.roomsTotal, fullClear: !!w.run.fullClear, evolved: [...w.players.values()].some(p => !!p.stats.evo) };
+        flawlessBoss: !!w.run.flawlessBoss, roomsVisited: w.run.roomsVisited, roomsTotal: w.run.roomsTotal, fullClear: !!w.run.fullClear, darkCleared: w.run.darkCleared, evolved: [...w.players.values()].some(p => !!p.stats.evo) };
     }
     return s;
   };

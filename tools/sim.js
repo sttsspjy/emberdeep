@@ -881,7 +881,7 @@ function runBot(opts) {
       if (ev.t === 'bossSpawn') { bossStart = w.time; rec.bossTry.push({ s: w.stratum, kill: false }); }
       if (ev.t === 'bossDown') { rec.bossTry[rec.bossTry.length - 1].kill = true; rec.bossTimes[w.stratum] = Math.round(w.time - bossStart); log.push(`  boss ${ev.type} down in ${(w.time - bossStart).toFixed(0)}s (t=${U.fmtTime(w.time)}, lvl ${w.level})`); }
       if (ev.t === 'clear' && !ev.trial && w.room && (w.room.type === 'combat' || w.room.type === 'elite')) rec.clears.push({ s: w.stratum, type: w.room.type, dark: !!w.room.dark, t: Math.round(w.roomTime * 10) / 10, d: Math.round(1000 * rec.roomDmg / Math.max(1, w.players.values().next().value.maxHp)) / 1000, n: rec.maxHost,
-        th: rec.room.th, fo: rec.room.fo, xp: rec.room.xp, clip: rec.room.clip, bud: ED.World.ROOM_XP ? Math.round(ED.World.ROOM_XP[w.room.type][w.stratum - 1] * (w.room.dark ? ED.World.DARK_LOOT : 1)) : null });
+        th: rec.room.th, fo: rec.room.fo, xp: rec.room.xp, clip: rec.room.clip, bud: ED.World.ROOM_XP ? Math.round(ED.World.ROOM_XP[w.room.type][w.stratum - 1] * (w.room.dark ? w.darkLoot() : 1)) : null });
       if (ev.t === 'stratum') {
         const dealt = totalDealt();
         if (ev.s > 1) { strata.push(Math.round(w.time - stratumStart)); rec.dealtStrata.push(Math.round(dealt - dealt0)); log.push(`  stratum ${ev.s - 1} took ${(w.time - stratumStart).toFixed(0)}s`); }
