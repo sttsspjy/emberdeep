@@ -1,7 +1,8 @@
 // Class routes: every hero has four routes (Attack, Skill 1, Skill 2, Element), each a tier-1 card (the route) with two tier-2 forks. 72 cards, merged into ED.BOONS.
-// The route card is offered to every hero at team level 3, the fork at the first boss; fork ranks 2 and 3 come with the second and fourth boss (see build.js rollOffer 'class').
-// Card total at rank r = mods + up x (r - 1) + (r >= 3 ? r3 : 0) for every stat key (Stats.compute); slot damage (s1Dmg, s2Dmg) compounds across cards. Route and fork cards have no path: they never count toward affinity.
-// Fields: tag (Heavy | Swift | Burst | Guard | Focus | Spread), plays (a T1 card's style line), forks ([idA, idB]), rider ('Name: sentence', appended from rank 3), coop (helps allies),
+// The route card is offered to every hero at team level 3, the fork at the first boss; fork ranks 2 and 3 are granted at the second and fourth boss (build.js W.grantForkRank).
+// Card total at rank r = mods + up x (r - 1) + (r >= 2 ? r2 : 0) + (r >= 3 ? r3 : 0) for every stat key (Stats.compute); slot damage (s1Dmg, s2Dmg) compounds across cards. Route and fork cards have no path: they never count toward affinity.
+// Fields: tag (Heavy | Swift | Burst | Guard | Focus | Spread), plays (a T1 card's style line), forks ([idA, idB]), rider2 ('Name: sentence', appended from rank 2), rider ('Name: sentence', appended from rank 3),
+// form ({ name, desc }: the rank-3 transform; its name replaces the card name from rank 3, see ED.cardName), coop (helps allies),
 // weapon { kind: 'heavy' | 'swift', extra } (an attack fork's weapon transform; extra { mul: {field: factor}, add: {field: n}, ifNone: {field: value} } edits the fork after the rule).
 // desc tokens: {key} the card's total as a percentage, {key:n} a number, {key:s} seconds, {key:ck} a number x the weapon's critK, {key:ck3} (3 + number) x critK, {key:a25} 2.5 + number, {key:r100} 100 + number, {key:dr} 15% + number; [text with tokens] is dropped while a token inside is 0.
 (function (ED) {
@@ -241,13 +242,19 @@
     }
     return out;
   };
-  // Total of every stat a class card gives at `rank`: mods + up x (rank - 1) + r3 from rank 3.
+  // Total of every stat a class card gives at `rank`: mods + up x (rank - 1) + r2 from rank 2 + r3 from rank 3.
   ED.cardTotals = (b, rank) => {
     const t = {};
     for (const k in b.mods) t[k] = b.mods[k];
     if (rank >= 2 && b.up) for (const k in b.up) t[k] = (t[k] || 0) + b.up[k] * (rank - 1);
+    if (rank >= 2 && b.r2) for (const k in b.r2) t[k] = (t[k] || 0) + b.r2[k];
     if (rank >= 3 && b.r3) for (const k in b.r3) t[k] = (t[k] || 0) + b.r3[k];
     return t;
+  };
+  // Display name of a boon at `rank`: a class card's form name from rank 3, else its name.
+  ED.cardName = (id, rank) => {
+    const b = ED.BOONS[id];
+    return !b ? id : b.form && rank >= 3 ? b.form.name : b.name;
   };
   const trim = (v, d) => String(parseFloat(v.toFixed(d)));
   const fmtVal = (v, f, critK) => {
@@ -275,22 +282,23 @@
     return fw && fw !== bw ? { rate: fw.rate / bw.rate, dmg: fw.dmg / bw.dmg } : FORK_NOMINAL[b.weapon.kind] || { rate: 1, dmg: 1 };
   };
   // Player-facing text of a boon: a class card at `rank` (default 1) with its numbers filled in (critK from the hero's stats `st`), else the boon's own desc.
-  // The rider sentence joins from rank 3. Returns the string; ED.cardParts gives the pieces.
+  // rider2 joins from rank 2 (numbers at max(rank, 2)), rider from rank 3 (numbers at rank 3); *Full holds the sentence before its rank; form is the rank-3 transform ({ name, desc } or null).
+  // Returns the pieces; ED.boonText joins them.
   ED.cardParts = (id, rank, st) => {
     const b = ED.BOONS[id];
-    if (!b || !b.route) return { text: b ? b.desc : '', rider: '', riderName: '' };
+    if (!b || !b.route) return { text: b ? b.desc : '', rider: '', riderName: '', rider2: '', rider2Name: '', form: null };
     rank = Math.max(1, Math.min(b.max || 1, rank | 0 || 1));
     const tot = ED.cardTotals(b, rank), ck = (st && st.critK) || 1;
     if (b.weapon && b.weapon.kind) { const fk = forkRatios(b, st); tot.fkRate = fk.rate; tot.fkDmg = fk.dmg; }
     const text = render(b.desc, tot, ck);
-    let rider = '', riderName = '';
-    if (b.rider) { const m = /^([^:]+): (.*)$/.exec(b.rider); riderName = m ? m[1] : ''; rider = m ? render(m[2], ED.cardTotals(b, 3), ck) : ''; }
-    return { text, rider: rank >= 3 ? rider : '', riderName, riderFull: rider };
+    const split = (s, at) => { const m = s ? /^([^:]+): (.*)$/.exec(s) : null; return m ? [m[1], render(m[2], ED.cardTotals(b, at), ck)] : ['', '']; };
+    const [riderName, rider] = split(b.rider, 3), [rider2Name, rider2] = split(b.rider2, Math.max(2, rank));
+    return { text, rider: rank >= 3 ? rider : '', riderName, riderFull: rider, rider2: rank >= 2 ? rider2 : '', rider2Name, rider2Full: rider2, form: b.form && rank >= 3 ? b.form : null };
   };
   ED.boonText = (id, rank, st) => {
     const b = ED.BOONS[id];
     if (!b || !b.route) return b ? b.desc : '';
     const p = ED.cardParts(id, rank, st);
-    return p.text + (p.rider ? ' ' + p.riderName + ': ' + p.rider : '');
+    return p.text + (p.rider2 ? ' ' + p.rider2Name + ': ' + p.rider2 : '') + (p.rider ? ' ' + p.riderName + ': ' + p.rider : '');
   };
 })(globalThis.ED || (globalThis.ED = {}));

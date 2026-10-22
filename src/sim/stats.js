@@ -76,7 +76,7 @@
       if (!b || !(n > 0)) continue;
       if (!b.route) { out.push({ kind: 'boon', id, label: b.name + (n > 1 ? ' ×' + n : ''), mods: b.mods, n }); continue; }
       if (b.cls !== build.cls) continue;
-      out.push({ kind: 'card', id, label: b.name + (n > 1 ? ' ×' + n : ''), mods: ED.cardTotals(b, n), n: 1, rank: n, card: true }); // card total per rank: mods + up x (rank - 1) + r3
+      out.push({ kind: 'card', id, label: ED.cardName(id, n) + (n > 1 ? ' ×' + n : ''), mods: ED.cardTotals(b, n), n: 1, rank: n, card: true }); // card total per rank: mods + up x (rank - 1) + r2 + r3
     }
     const relics = build.relics || [];
     for (const id of relics) if (ED.RELICS[id]) out.push({ kind: 'relic', id, label: ED.RELICS[id].name, mods: ED.RELICS[id].mods, n: 1 });
