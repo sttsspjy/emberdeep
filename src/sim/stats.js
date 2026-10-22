@@ -25,7 +25,7 @@
 
   const BASE = () => {
     const s = {
-      hp: 0, hpMul: 1, armor: 0, spd: 1, dmg: 1, atk: 1, crit: 0, critDmg: 0, cdr: 0,
+      hp: 0, hpMul: 1, armor: 0, spd: 1, dmg: 1, dmgX: 1, atk: 1, crit: 0, critDmg: 0, cdr: 0,
       pickup: 0, xp: 0, gold: 0, luck: 0, heal: 0, projN: 0, pierce: 0, area: 0, dodge: 0, thorns: 0,
       dashcdr: 0, dashDmg: 0, dashFire: 0, dashBomb: 0, execute: 0,
       overcharge: 0, guardian: 0, trance: 0, forager: 0, roomWard: 0, openRank: 0,
@@ -132,6 +132,7 @@
     }
     s.s1Dmg = m1 - 1; s.s2Dmg = m2 - 1;
     for (const x of asc) for (const k in x) s[k] = (s[k] || 0) * (1 + x[k]); // Ascended bucket: after every additive source, before the derived values
+    for (const x of asc) if (x.dmg) s.dmgX *= 1 + x.dmg; // dmgX: the Ascended damage factor; combat.js scales the conditional (additive) damage by it so a hit stays exactly dmgX x the same hit without the card
 
     const out = s;
     out.power = cls.power; out.element = cls.element || null; // Class Power scales every non-attack proc (ED.procDmg)
