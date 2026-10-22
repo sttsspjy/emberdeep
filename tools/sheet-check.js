@@ -23,7 +23,7 @@ function modelOf(cls, boons, wi, o) {
 }
 {
   const V = { // weapon hit, avg, aps, dps; armor taken
-    knight: [18, 18.675, 2.381, 44.47, 0.8824], ranger: [12, 12.9, 2.941, 37.94, 0.9231], pyro: [12, 12.45, 2.0, 39.3, 0.9677], shade: [10, 10.9, 4.762, 51.9, 0.9524], cleric: [17, 17.64, 2.381, 54.6, 0.8955], necro: [9, 9.34, 2.5, 23.35, 0.9677],
+    knight: [18, 18.675, 2.381, 44.47, 0.8824], ranger: [12, 12.9, 2.941, 37.94, 0.9231], pyro: [15, 15.5625, 2.0, 49.125, 0.8824], shade: [11, 11.99, 4.762, 57.1, 0.8696], cleric: [17, 17.64, 2.381, 54.6, 0.8955], necro: [9, 9.34, 2.5, 23.35, 0.9677],
   };
   for (const cls in V) { // every class: hit, avg at crit 0 (= hit), avg and dps at the class crit, attacks per second, armor
     const m = modelOf(cls, {}, 0, { stat: { crit: 0 } }), mc = modelOf(cls, {}, 0), v = V[cls], w = m.weapon;
@@ -40,20 +40,20 @@ function modelOf(cls, boons, wi, o) {
   near(arrow.raw, 18.4, 0.05, 'Volley arrow'); ok(arrow.oneFoe === 3 && arrow.fanN === 7, `Volley: 3 of 7 arrows reach a foe at REF (got ${arrow.oneFoe} of ${arrow.fanN})`);
   near(rg.skills[0].perCast, 55.2, 0.1, 'Volley per cast on one foe'); near(rg.skills[0].perCastAll, 128.8, 0.1, 'Volley per cast, all 7'); near(rg.skills[1].perCast, 75.2, 0.1, 'Rain per cast (9.4 x 8)');
   const py = modelOf('pyro', {}, 0, { stat: { crit: 0 } });
-  near(py.weapon.extras[0].perAttack, 7.2, 0.05, 'Fire Staff blast'); near(by(py, 0, 'blast').raw, 52, 0.05, 'Nova blast'); near(by(py, 0, 'burn').raw, 40.8, 0.05, 'Nova burn add'); near(by(py, 1, 'impact').raw, 72, 0.05, 'Meteor impact');
-  near(by(py, 1, 'crater').here * by(py, 1, 'crater').oneFoe, 52.8, 0.1, 'Meteor crater, 6 ticks');
+  near(py.weapon.extras[0].perAttack, 9, 0.05, 'Fire Staff blast'); near(by(py, 0, 'blast').raw, 64.5, 0.05, 'Nova blast'); near(by(py, 0, 'burn').raw, 52.8, 0.05, 'Nova burn add'); near(by(py, 1, 'impact').raw, 89.5, 0.05, 'Meteor impact');
+  near(by(py, 1, 'crater').here * by(py, 1, 'crater').oneFoe, 64.8, 0.1, 'Meteor crater, 6 ticks');
   const sh = modelOf('shade', {}, 0, { stat: { crit: 0 } });
-  near(by(sh, 0, 'slash').raw, 34, 0.05, 'Shadowstep'); near(by(sh, 0, 'slash').avg, 59.5, 0.05, 'Shadowstep always crits'); near(by(sh, 1, 'ambush').avg, 43.75, 0.05, 'Ambush');
+  near(by(sh, 0, 'slash').raw, 40.6, 0.05, 'Shadowstep'); near(by(sh, 0, 'slash').avg, 71.05, 0.05, 'Shadowstep always crits'); near(by(sh, 1, 'ambush').avg, 48.125, 0.05, 'Ambush');
   const cl = modelOf('cleric', {}, 0, { stat: { crit: 0 }, ctx: { stratum: 3 } }), leg = by(cl, 1, 'leg');
   near(leg.pre, 50.16, 0.05, 'Judgment leg with its own vulnerability'); near(cl.skills[1].perCast, 100.3, 0.1, 'Judgment per cast (two legs)'); near(by(cl, 0, 'zone').here * 7, 106.4, 0.1, 'Sanctuary 7 ticks');
   const nc = modelOf('necro', {}, 0, { stat: { crit: 0 } }), mn = by(nc, 0, 'minion');
   near(mn.here, 9.69, 0.01, 'Minion hit'); ok(mn.oneFoe === 51, `Minions: 3 x 17 hits (got ${mn.oneFoe})`); near(by(nc, 1, 'burst').raw, 40.2, 0.05, 'Harvest burst');
   // Set 2: Sharpened Edge x2, Stoke x1, weak to Fire (stratum III), crit 5%. DEVIATION from DESIGN-ux A4: a class-element skill takes half the affinity (combat.js affC: x1.25, not x1.5), so Nova blast and crater use 1.25; statuses (Nova burn, Meteor burn add) take the full x1.5.
   const e2 = modelOf('pyro', { edge: 2, stoke: 1, kindle: 1 }, 0, { ctx: { stratum: 3 }, stat: { crit: 0.05 } });
-  near(e2.mult.dmg.total, 1.2, 1e-9, 'Set 2 damage'); near(by(e2, 0, 'blast').here, 52 * 1.2 * (1 + 0.05 * 0.75) * 1.25, 0.05, 'Set 2 Nova blast (class skill: half affinity)');
-  near(by(e2, 0, 'burn').here, 40.8 * 1.5 * 1.25, 0.05, 'Set 2 Nova burn (full affinity, Burn strength)');
+  near(e2.mult.dmg.total, 1.2, 1e-9, 'Set 2 damage'); near(by(e2, 0, 'blast').here, 64.5 * 1.2 * (1 + 0.05 * 0.75) * 1.25, 0.05, 'Set 2 Nova blast (class skill: half affinity)');
+  near(by(e2, 0, 'burn').here, 52.8 * 1.5 * 1.25, 0.05, 'Set 2 Nova burn (full affinity, Burn strength)');
   near(by(e2, 1, 'impact').statusAdd.here, 0.5 * by(e2, 1, 'impact').pre * 1.5 * 1.25, 0.05, 'Set 2 Meteor burn add (affinity once)');
-  near(by(e2, 1, 'crater').here * by(e2, 1, 'crater').oneFoe, 6 * 8.8 * 1.2 * 1.25, 0.1, 'Set 2 crater, 6 ticks');
+  near(by(e2, 1, 'crater').here * by(e2, 1, 'crater').oneFoe, 6 * 10.8 * 1.2 * 1.25, 0.1, 'Set 2 crater, 6 ticks');
 }
 
 // ---------------- affinity chips: the class element's skills take half the affinity whichever source lists the element ----------------

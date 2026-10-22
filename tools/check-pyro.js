@@ -46,8 +46,8 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
   near(w1.explode.r, 40, 1e-9, 'Magma Heart gives a blast-less weapon a blast (r40)'); near(w1.explode.mul, 0.5, 1e-9, 'Magma Heart blast 50%');
   near(w2.explode.r, 46, 0.01, 'Magma Staff keeps its own (15% bigger) blast'); near(w2.explode.mul, 0.6, 1e-9, 'Magma Staff blast mul');
   const tn = ED.Stats.skillNums('nova', st({ p_s1: 1, p_s1_a: 1 }));
-  near(tn.p.echo.dmg, 62.4 * 0.4, 0.01, 'echo part = blast x 0.4'); near(tn.p.echo.r, tn.p.blast.r, 1e-9, 'echo radius = blast radius');
-  near(ED.Stats.skillNums('meteor', st({ p_s2: 1, p_s2_a: 1 })).p.twin.dmg, 72 * 1.15 * 0.6, 0.01, 'twin part = impact x 0.6'); near(ED.Stats.skillNums('meteor', st({ p_s2: 1, p_s2_a: 3 })).p.rocks.dmg, 72 * 1.15 * 0.3, 0.01, 'rocks part = impact x 0.3');
+  near(tn.p.echo.dmg, 77.4 * 0.4, 0.01, 'echo part = blast x 0.4'); near(tn.p.echo.r, tn.p.blast.r, 1e-9, 'echo radius = blast radius');
+  near(ED.Stats.skillNums('meteor', st({ p_s2: 1, p_s2_a: 1 })).p.twin.dmg, 89.5 * 1.15 * 0.6, 0.01, 'twin part = impact x 0.6'); near(ED.Stats.skillNums('meteor', st({ p_s2: 1, p_s2_a: 3 })).p.rocks.dmg, 89.5 * 1.15 * 0.3, 0.01, 'rocks part = impact x 0.3');
   const cm = ED.Stats.skillNums('meteor', st({ p_s2: 1, p_s2_b: 1 })).move;
   ok(cm && cm.k === 'leap' && cm.t === 0.6 && cm.iframes === 0.35 && !ED.Stats.skillNums('meteor', st({})).move, 'Comet adds the leap move (0.6 s, untouchable 0.35 s)');
 }
@@ -111,7 +111,7 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
 {
   const s = stage({ p_atk: 1, p_atk_h: 1 }, 0), { w, p } = s; p.moving = true; // moving: no Channel, so the blast and the aftershock compare cleanly
   foe(w, p.x + 90, p.y);
-  near(p.stats.weapon.dmg, 23.8, 0.05, 'Magma Staff damage');
+  near(p.stats.weapon.dmg, 29.7, 0.05, 'Magma Staff damage');
   w.playerAttack(p, 0);
   run(s, 1.0);
   const blast = s.log.filter(h => h.kind === 'explode' && h.src.part === undefined), after = parts(s, 'aftershock');
@@ -126,7 +126,7 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
   w3.playerAttack(p3, 0); run(s3, 0.9);
   let pools = w3.zones.filter(z => z.lava);
   ok(pools.length === 1, `a Lava Pool appears (got ${pools.length})`);
-  near(pools[0].r, 46 * 0.6, 0.05, 'Lava Pool radius = blast radius x 0.6'); near(pools[0].dps, 23.8 * 0.3, 0.05, 'Lava Pool dps = 30% of the shot'); near(pools[0].dur, 2, 1e-9, 'Lava Pool lasts 2 s');
+  near(pools[0].r, 46 * 0.6, 0.05, 'Lava Pool radius = blast radius x 0.6'); near(pools[0].dps, 29.7 * 0.3, 0.05, 'Lava Pool dps = 30% of the shot'); near(pools[0].dur, 2, 1e-9, 'Lava Pool lasts 2 s');
   ok(pools[0].untagged && pools[0].kind === 'pfire', 'Lava Pool is untagged ground fire'); near(pools[0].w, C.LAVA_TAG, 0, 'Lava Pool carries the look tag');
   const burn0 = e3.burnPool; run(s3, 0.6); ok(e3.burnPool === burn0, 'Lava Pool builds no Burn and is not Fire-tagged');
   ok(s3.log.some(h => h.kind === 'dot' && !h.src.el && h.d > 0), 'Lava Pool ticks as untagged damage');
@@ -167,7 +167,7 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
   foe(w, p.x + 70, p.y);
   cast(s, 0, 0, 0);
   const ring = w.zones.find(z => z.kind === 'pfire' && !z.lava);
-  ok(ring && Math.abs(ring.dur - 3) < 1e-9 && Math.abs(ring.dps - 24) < 0.01, `ring of fire 3 s, 20 x 1.2 per s (got ${ring && ring.dps})`);
+  ok(ring && Math.abs(ring.dur - 3) < 1e-9 && Math.abs(ring.dps - 30) < 0.01, `ring of fire 3 s, 25 x 1.2 per s (got ${ring && ring.dps})`);
   near(p.shield, 0.03 * M, 1e-6, 'Mantle shield: 3% (the class shield window caps a class grant at 3% per 10 s)'); near(p.stats.mantle, 0.03, 1e-9, 'Mantle stat equals what the window grants (the card text is true)'); near(p.mantleAmt, p.shield, 1e-9, 'mantleAmt tracks the Mantle part'); near(p.mantleT, 10, 1e-9, 'Mantle cooldown 10 s');
   ok(w.fx.some(ev => ev.t === 'pyMantle'), 'Mantle event');
   p.shield = 0; p.mantleAmt = 0; cast(s, 0, 0, 0); near(p.shield, 0, 1e-9, 'no second Mantle inside 10 s');
