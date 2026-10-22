@@ -131,11 +131,11 @@
     let dmg = base, crit = false, shatter = false, guarded = false;
     if (p && !src.raw) {
       crit = src.crit === undefined ? !!((ch && ch.hitCrit && ch.hitCrit.call(this, p, e, src)) || this.rng.chance(st.crit)) : !!src.crit;
-      let mul = st.dmg;
-      for (let i = 0; i < COND_PRE.length; i++) { const r = COND_PRE[i]; if (r.key === null || st[r.key]) mul += r.hit(st, e, p, this, src); }
-      if (ch && ch.hitMul) mul += ch.hitMul.call(this, p, e, src) || 0;
-      for (let i = 0; i < COND_POST.length; i++) { const r = COND_POST[i]; if (st[r.key]) mul += r.hit(st, e, p, this, src); }
-      dmg *= Math.max(0.1, mul);
+      let add = 0; // conditional and class additions, scaled by the Ascended damage factor st.dmgX (st.dmg already carries it)
+      for (let i = 0; i < COND_PRE.length; i++) { const r = COND_PRE[i]; if (r.key === null || st[r.key]) add += r.hit(st, e, p, this, src); }
+      if (ch && ch.hitMul) add += ch.hitMul.call(this, p, e, src) || 0;
+      for (let i = 0; i < COND_POST.length; i++) { const r = COND_POST[i]; if (st[r.key]) add += r.hit(st, e, p, this, src); }
+      dmg *= Math.max(0.1, st.dmg + add * st.dmgX);
       if (crit) { dmg *= st.critMult; if (ch && ch.critMul) dmg *= ch.critMul.call(this, p, e, src) || 1; }
     }
     if (src.mul) dmg *= src.mul;
@@ -377,7 +377,7 @@
     if (own) this.curChain = null;
   };
 
-  // Death Knell and Death's Edge: each Reap or Toll.
+  // Death Knell and Death's Edge: each Reap (deathPayoffs skips fodder) or Toll.
   W.onDoomPayoff = function (o) {
     const st = o.stats;
     if (st.knell) { o.knellN = Math.min(st.knell, o.knellN + 1); o.knellT = 6; }
@@ -807,7 +807,7 @@
     const own = this.openChain(), x = e.x, y = e.y, half = e.elite ? 0.5 : 1;
     if (src.kind === 'reap' && p) {
       const rs = p.stats;
-      this.onDoomPayoff(p);
+      if (!e.fodder) this.onDoomPayoff(p); // Death Knell and Death's Edge stacks never come from fodder; the chains below still fire
       if (rs.blackflame && e.burnPool > 0) {
         const nx = this.nearestEnemy(x, y, 90);
         if (nx) { if (!(nx.burnPool > 0)) nx.burnTick = 0.5; nx.burnPool += e.burnPool; nx.burn = 1; nx.burnOwner = p; e.burnPool = 0; }

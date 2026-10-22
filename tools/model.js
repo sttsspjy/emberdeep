@@ -104,7 +104,7 @@ module.exports = (ED, opts) => {
       default: return 0.5;
     }
   }
-  // The factor on hero hit damage: (Damage + sum of the owned conditional bonuses x uptime) / Damage.
+  // The factor on hero hit damage: (Damage + sum of the owned conditional bonuses x uptime x dmgX) / Damage.
   function condFactor(p, m, d) {
     const st = p.stats; let sum = 0;
     for (const r of ED.COND_DMG) {
@@ -113,7 +113,7 @@ module.exports = (ED, opts) => {
       const id = r.key || r.id, v = id === 'idol' ? 0.1 : r.value ? r.value(st) : st[r.key];
       sum += v * uptime(id, st, m, d);
     }
-    return (Math.max(0.1, st.dmg) + sum) / Math.max(0.1, st.dmg);
+    return (Math.max(0.1, st.dmg) + sum * st.dmgX) / Math.max(0.1, st.dmg); // the bonuses carry the Ascended damage factor (combat.js hitEnemy)
   }
 
   // ---- one hero in one context: the sheet model, its defence, the conditional factor, hero damage on one foe and in a pack of `pack` ----

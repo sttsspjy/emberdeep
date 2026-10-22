@@ -15,7 +15,7 @@ No build step, no backend, no install. It is a static site: open it from any web
 | Left mouse or `J` | Attack (hold). Also interacts with chests, shops and shrines |
 | `Q` or right mouse | Skill 1 (rerolls the boon cards while they are open) |
 | `E` | Skill 2 |
-| `Space` | Dash: invulnerable while it lasts; a used charge refills in 1.5 seconds |
+| `Space` | Dash: invulnerable while it lasts; a used charge refills in 1.5 seconds (1 with Shadow Cloak); Light Step adds a charge per rank, up to 3 |
 | `Tab` | Character sheet: build, combat numbers and the map |
 | `Esc` | Pause (also backs out of any menu) |
 
