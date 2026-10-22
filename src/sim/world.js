@@ -104,7 +104,7 @@
   };
 
   // Hero movement: walking, dash, skill-move, hazards and pull zones.
-  Sim.movePlayer =(p, inp, dt, room, locked, zones) => {
+  Sim.movePlayer = (p, inp, dt, room, locked, zones) => {
     if (p.downed || p.dead) { p.moving = false; p.skillMove = null; p.skillIfr = false; return; }
     const speed = p.stats.moveSpeed * (ED.Stats.moveRate ? ED.Stats.moveRate(p) : 1);
     if (p.skillMove) { // a skill's own movement { dx, dy, speed, t (seconds left), iframes (untouchable for this long), age }
@@ -117,7 +117,7 @@
     }
     p.skillIfr = false;
     if (p.dashT > 0) {
-      p.dashT -= dt;
+      p.dashT -= dt; if (p.dashT < 1e-6) p.dashT = 0; // float residue would add a tick past DASH.t at the fixed step
       const ds = ED.CONST.DASH.speed;
       Sim.moveCircle(p, p.dashDx * ds * dt, p.dashDy * ds * dt, room, locked, false);
       p.moving = true;
