@@ -13,7 +13,7 @@
   const SIZE = { start: [15, 11], treasure: [13, 11], shop: [17, 13], event: [15, 11], rest: [15, 11], boss: [31, 19] };
   const COMBAT_COUNT = [4, 4, 4, 4, 4, 4]; // normal combat rooms per stratum
   const ELITE_COUNT = [1, 1, 1, 1, 2, 2]; // elite combat rooms per stratum
-  const DARK_COUNT = 2; // normal combat rooms per floor flagged `dark`
+  const DARK_COUNT = 2; // normal combat rooms per floor flagged `dark` (part of COMBAT_COUNT)
   const PATTERN_AREA = 294; // tile area the base pool and scatter counts are written for: both scale by room area / PATTERN_AREA
   const EVENTS = ['fountain', 'altar', 'gamble', 'trial'];
   const REWARD_ODDS = [['boon', 60], ['gold', 19], ['vigor', 13], ['forge', 8]]; // normal combat reward weights
@@ -40,6 +40,7 @@
   }
 
   // BFS distance from the start for every cell; boss = farthest qualifying dead end (ties broken by rng).
+  // A tree needs DARK_COUNT dead ends besides the boss and the start (the dark rooms), else it is rejected.
   function analyse(rng, cells) {
     const list = Object.values(cells);
     const dist = {};
@@ -53,7 +54,7 @@
     }
     for (const c of list) c.dist = dist[key(c.gx, c.gy)];
     let ends = list.slice(1).filter(c => neighborCount(cells, c) === 1 && c.dist >= MIN_BOSS_DIST);
-    if (!ends.length) return null;
+    if (!ends.length || list.slice(1).filter(c => neighborCount(cells, c) === 1).length < DARK_COUNT + 1) return null;
     if (rng) ends = rng.shuffle(ends);
     ends.sort((a, b) => b.dist - a.dist);
     return { cells, list, boss: ends[0] };
@@ -75,12 +76,15 @@
     const specials = [stratum % 2 ? 'treasure' : 'event', 'shop', 'rest']; // treasure on odd strata, event on even ones
     const total = 2 + specials.length + nCombat + nElite;
     const { cells, list, boss } = layout(rng, total);
-    const others = list.slice(1).filter(c => c !== boss);
     boss.type = 'boss';
     list[0].type = 'start';
-    // utility rooms prefer dead ends, elite rooms prefer distance >= 3
     const isLeaf = (c) => neighborCount(cells, c) === 1;
-    const pool = rng.shuffle(others.filter(isLeaf)).concat(rng.shuffle(others.filter(c => !isLeaf(c))));
+    // dark rooms are normal combat rooms on dead ends other than the boss and the start (off the start->boss path, skipping one cuts off nothing), farther first, ties by their own RNG stream
+    const darkRng = U.RNG((seed ^ 0x2545f491) + stratum * 7907);
+    for (const c of darkRng.shuffle(list.slice(1).filter(c => c !== boss && isLeaf(c))).sort((a, b) => b.dist - a.dist).slice(0, DARK_COUNT)) { c.type = 'combat'; c.dark = true; }
+    const others = list.slice(1).filter(c => c !== boss && !c.dark);
+    // utility rooms prefer the remaining dead ends, elite rooms prefer distance >= 3
+    const pool =rng.shuffle(others.filter(isLeaf)).concat(rng.shuffle(others.filter(c => !isLeaf(c))));
     for (const sp of specials) pool.shift().type = sp;
     const near = pool.filter(c => c.dist < 3).sort((a, b) => b.dist - a.dist);
     pool.filter(c => c.dist >= 3).concat(near).forEach((c, i) => { c.type = i < nElite ? 'elite' : 'combat'; });
@@ -95,25 +99,10 @@
       rooms.push(room);
     }
     assignRewards(rooms, stratum, seed);
-    markDark(rooms, list, cells, boss, stratum, seed);
     for (const r of rooms) carveDoors(r);
     for (const r of rooms) { finalizeInterior(r, stratum); decorate(r, stratum); }
     return { stratum, seed, rooms, start: 0, boss: boss.id };
   };
-
-  // Flags up to DARK_COUNT normal combat rooms `dark`: never on the start->boss path, dead ends first, then the larger BFS distance, ties by its own RNG stream.
-  function markDark(rooms, list, cells, boss, stratum, seed) {
-    const rng = U.RNG((seed ^ 0x2545f491) + stratum * 7907);
-    const onPath = new Set();
-    for (let c = boss; c; ) {
-      onPath.add(c);
-      const cur = c;
-      c = cur.dist > 0 ? list.find(n => Math.abs(n.gx - cur.gx) + Math.abs(n.gy - cur.gy) === 1 && n.dist === cur.dist - 1) : null;
-    }
-    const leaf = (c) => (neighborCount(cells, c) === 1 ? 1 : 0);
-    const pick = rng.shuffle(list.filter(c => c.type === 'combat' && !onPath.has(c))).sort((a, b) => leaf(b) - leaf(a) || b.dist - a.dist);
-    for (let i = 0; i < Math.min(DARK_COUNT, pick.length); i++) rooms[pick[i].id].dark = true;
-  }
 
   // Rewards are fixed per floor and shown before entry. Normal combat: boon (drawn from the claiming hero's own paths), gold, vigor, forge,
   // each kind getting its REWARD_ODDS share of the floor's combat rooms (rounded by weighted draw on the remainders). Elite: relic, or epic at 25%.
@@ -173,7 +162,7 @@
       id: c.id, gx: c.gx, gy: c.gy, type: c.type, w, h, tiles, seed, stratum,
       dist: c.dist, danger: 1 + 0.05 * c.dist, reward: null,
       doors: { n: -1, s: -1, e: -1, w: -1 },
-      decor: [], torches: [], dark: false,
+      decor: [], torches: [], dark: !!c.dark,
       event: c.type === 'event' ? EVENTS[seed % EVENTS.length] : null,
       pattern: 'open',
     };
@@ -259,8 +248,9 @@
     const w = room.w, h = room.h, area = w * h / PATTERN_AREA;
     const hazard = 4;
     if (p === 'pillars4') {
-      const px = Math.floor(w / 4), py = Math.floor((h + 2) / 4) + 1;
-      for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) sym(room, px + dx, py + dy, 2);
+      const s = Math.max(2, Math.round(2 * Math.sqrt(area))); // block side: block area scales with room area
+      const px = Math.floor(w / 4), py = Math.min(Math.floor((h + 2) / 4) + 1, Math.floor(h / 2) - s); // the mirrored blocks keep a 2-row gap
+      for (let dy = 0; dy < s; dy++) for (let dx = 0; dx < s; dx++) sym(room, px + dx, py + dy, 2);
     } else if (p === 'grid') {
       const x0 = (w - 1 - 4 * Math.floor((w - 9) / 4)) >> 1; // columns centred on the room
       for (let y = 4; y < h - 3; y += 3) for (let x = x0; x < w - x0; x += 4) setT(room, x, y, 2);
