@@ -4,7 +4,6 @@
   const U = ED.U, Sim = ED.Sim, D = ED.Dungeon;
   const W = ED.World.prototype;
 
-  ED.CONST.GLOOM_CAP = 0.25; // max HP fraction one Gloom touch may take
   ED.CONST.ARC_MUL = 0.6; // a discharge's arc targets take this fraction of what the charged foe takes
   ED.CONST.BOLT_CD = 0.6; // seconds between one hero's Thunderhead bolts
   ED.CONST.SPLASH_MUL = 0.6; // foes next to a combusting foe take this fraction of the pool
@@ -66,11 +65,7 @@
     if (def.boss && pact >= 5) hp *= 1.35;
     if (pact >= 10) hp *= 1.2;
     dmg *= ED.World.dmgScale(s) * (pact >= 2 ? 1.25 : 1) * (pact >= 8 ? 1.2 : 1) * this.threat().dmg;
-    const dr = this.dread;
-    if (dr && !def.minion && !def.gloom && !def.ally && !opts.ally) {
-      const deep = 1 + ED.World.DEEP * Math.min(ED.World.DEEP_MAX, this.deepRooms); // the Deep hits harder with every room entered Dark or Lightless this stratum
-      hp *= dr.hp; dmg *= dr.dmg * deep;
-    }
+    if (this.room && this.room.dark && !def.minion && !def.ally && !opts.ally) dmg *= ED.World.DARK_DMG; // every foe of a dark room
     const e = {
       id: U.uid(), type, def, x, y, r: def.r, hp, maxHp: hp, dmg, spd: def.spd * (pact >= 6 ? 1.15 : 1),
       kbx: 0, kby: 0, st: 'move', t: 0, cd: this.rng.range(0.6, 1.6), face: 1, flash: -1, stun: 0, frozen: 0, elite: null, ward: 0, wardMax: 0,
@@ -878,7 +873,6 @@
     if (e && e.weakT > 0) dmg *= 1 - e.weakV;
     if (e && e.chill > 0 && e.chillOwner) dmg *= 1 - e.chillOwner.stats.chillWeaken;
     dmg = Math.max(1, Math.round(dmg));
-    if (e && e.def.gloom) dmg = Math.min(dmg, Math.max(1, Math.round(p.maxHp * ED.CONST.GLOOM_CAP)));
     if (p.shield > 0) {
       const ab = Math.min(p.shield, dmg); p.shield -= ab; dmg -= ab;
       const hc = CLS[p.cls];
@@ -1362,7 +1356,7 @@
         if (p.downed || p.dead) continue;
         const rr = e.r + p.r - 3;
         if (U.dist2(e.x, e.y, p.x, p.y) < rr * rr) {
-          const full = FULL_CONTACT.has(e.st) || e.def.gloom;
+          const full = FULL_CONTACT.has(e.st);
           if (this.hurtPlayer(p, e.dmg * (full ? 1 : 0.4) * (e.boss ? 0.8 : 1), { e, x: e.x, y: e.y })) { e.contactCd = 1.0; e.recoil = 0.35; }
           break;
         }

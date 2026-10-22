@@ -9,15 +9,14 @@
     'Aim with {aim}. Hold {attack} to attack where you aim.',
     '{skill1} and {skill2} cast your skills where you aim: some fly toward it, some land on it. {dash} dashes through danger.',
     'Clear a room to open its doors. The reward inside is shown on the door.',
-    'Every new room costs lantern light (shown on its door). In the dark the Gloom hunts: press {flare} to flare it away.',
+    'Some doors are marked dark: harder fights, richer rewards. You choose whether to enter.',
     'The skull on your map marks the stratum boss. {map} opens your build, combat numbers and the map ({skill1} / {skill2} switch tabs).',
   ];
 
   // Regular foes of a biome that exist in the enemy table (rosters may name foes whose definitions land later).
-  const rosterOf = (biome) => biome.enemies.filter(r => { const d = ED.ENEMIES[r[0]]; return d && !d.boss && !d.gloom && !d.ally && !d.minion; });
+  const rosterOf = (biome) => biome.enemies.filter(r => { const d = ED.ENEMIES[r[0]]; return d && !d.boss && !d.ally && !d.minion; });
 
-  // Spawn zones that gate wave progress (the Gloom's telegraph does not).
-  const pendingSpawns = (w) => w.zones.some(z => z.kind === 'spawn' && !z.gloom);
+  const pendingSpawns = (w) => w.zones.some(z => z.kind === 'spawn');
 
   // ---------------- encounters ----------------
   W.beginEncounter = function (room, rs) {
@@ -37,12 +36,12 @@
     }
   };
 
-  // Budget = base x party x room danger (1 + 0.05 x distance) x dread wave multiplier. Elite rooms: 2 guaranteed elites (3 waves at Pact 10).
+  // Budget = base x party x room danger (1 + 0.05 x distance). Elite rooms: 2 guaranteed elites (3 waves at Pact 10). A dark room's last wave gets one more elite with an affix from DARK_AFFIXES.
   W.planWaves = function (room) {
-    const s = this.stratum, n = this.partySize(), dr = this.dread;
+    const s = this.stratum, n = this.partySize();
     const biome = ED.biomeFor(s), isElite = room.type === 'elite';
     const nW = 2 + (this.pact >= 10 ? 1 : 0);
-    const budget = (7 + 2 * s) * this.threat().wave * (1 + 0.6 * (n - 1) + 0.2 * (n - 1) * (n - 2)) * (this.tutorial && s === 1 ? 0.75 : 1) * (room.danger || 1) * dr.wave;
+    const budget = (7 + 2 * s) * this.threat().wave * (1 + 0.6 * (n - 1) + 0.2 * (n - 1) * (n - 2)) * (this.tutorial && s === 1 ? 0.75 : 1) * (room.danger || 1);
     let roster = rosterOf(biome);
     if (s >= 2 && this.rng.chance(0.35)) {
       const prev = rosterOf(ED.biomeFor(s - 1)).map(([id, w]) => [id, w * 0.35]);
@@ -65,18 +64,18 @@
       const first = waves[0];
       if (first.length) first[this.rng.int(0, first.length - 1)].elite = true;
       else first.push({ type: biome.elite, elite: true });
-      return this.darkWaves(waves);
+      return waves;
     }
     let eliteCh = 0.28 + (this.pact >= 3 ? 0.4 : 0) + (s >= 4 ? 0.1 : 0);
     if (this.tutorial && s === 1) eliteCh = 0.1;
-    eliteCh += dr.elite;
     if (this.rng.chance(eliteCh)) {
       const wv = waves[this.rng.int(Math.min(1, nW - 1), nW - 1)];
       if (this.rng.chance(0.5)) wv.push({ type: biome.elite, elite: true });
       else if (wv.length) wv[this.rng.int(0, wv.length - 1)].elite = true;
     }
     if (s >= 3 && this.rng.chance(0.2 + (this.pact >= 3 ? 0.3 : 0))) waves[nW - 1].push({ type: biome.elite, elite: true });
-    return this.darkWaves(waves);
+    if (room.dark) waves[nW - 1].push({ type: biome.elite, elite: true, affix: this.rng.pick(ED.World.DARK_AFFIXES) });
+    return waves;
   };
 
   W.updateEncounter = function (dt) {
@@ -129,23 +128,26 @@
     }
   };
 
-  // Clearing pays embers and gold (x dread bonus) and leaves the room's pre-announced reward at its centre.
+  // Clearing pays embers and gold and leaves the room's pre-announced reward at its centre (a dark room's reward goes up one REWARD_UP step, announced by an 'upgrade' event).
   W.roomCleared = function () {
     const rs = this.roomState[this.roomId], room = this.room;
     rs.cleared = true;
     this.locked = false; this.enc = null;
     for (const q of this.players.values()) q.mantleAmt = 0; // a Mantle shield is spent with the room
-    const s = this.stratum, bonus = this.dread.gold;
+    const s = this.stratum;
     this.run.roomsCleared++;
-    this.run.embers.rooms += Math.round((1 + Math.round(s / 2)) * bonus);
+    this.run.embers.rooms += 1 + Math.round(s / 2);
     const c = this.alivePlayers()[0] || D.center(room);
-    this.dropGold(c.x, c.y, (3 + Math.round(1.5 * s)) * bonus);
+    this.dropGold(c.x, c.y, 3 + Math.round(1.5 * s));
     let heartCh = 0.36; // +10% per Forager rank in the party, at most 80%
     for (const q of this.players.values()) heartCh += 0.1 * q.stats.forager;
     if (this.rng.chance(Math.min(0.8, heartCh))) this.spawnPickup('heart', c.x, c.y, 1);
     if (room.reward) {
       const m = D.clearSpot(room, D.center(room).x, D.center(room).y);
-      this.props.push({ id: U.uid(), kind: 'reward', x: m.x, y: m.y, item: this.darkReward(room.reward, m.x, m.y), group: U.uid(), state: 0 });
+      let item = room.reward;
+      const up = room.dark ? ED.World.REWARD_UP[item] : null;
+      if (up) { item = up; this.emit({ t: 'upgrade', to: up, x: Math.round(m.x), y: Math.round(m.y) }); }
+      this.props.push({ id: U.uid(), kind: 'reward', x: m.x, y: m.y, item, group: U.uid(), state: 0 });
     }
     this.checkFullClear();
     this.computeFlow();
@@ -157,7 +159,6 @@
     this.run.bosses |= 1 << (s - 1);
     this.run.bossCount++;
     this.run.embers.bosses += 8 * s;
-    if (this.bossTier === 3) this.run.lightlessBoss = true;
     if (![...this.players.values()].some(p => p.hitThisBoss)) this.run.flawlessBoss = true;
     for (const x of this.enemies) if (x !== e && x.hp > 0) { x.hp = 0; this.emit({ t: 'die', x: Math.round(x.x), y: Math.round(x.y), type: x.type, el: 0, r: x.r }); }
     for (const q of this.projs) if (q.team !== 0) q.dead = true; // flagged, not refiltered: the kill may land inside the projectile/zone loops, which end by reassigning their own keep list
@@ -227,7 +228,6 @@
       for (let i = 0; i < nRelics; i++) { const r = this.rollRelic('c', taken, null, i < gens); taken.add(r); items.push({ type: 'relic', item: r }); }
       items.push({ type: s % 2 ? 'boon' : 'forge' }); // one build item per shop: epic boon on odd strata, forge on even
       items.push({ type: 'potion' });
-      items.push({ type: 'oil' });
       items.forEach((it, i) => {
         props.push({ id: id(), kind: 'shop', x: c.x + (i - (items.length - 1) / 2) * 62, y: c.y + 24, item: it.item || it.type, stype: it.type, price: this.priceOf(it), state: 0 });
       });
@@ -240,12 +240,11 @@
     return props;
   };
 
-  // Lantern oil (+OIL_LIGHT light) is 45 + 15s and a forge is 60 + 15s; everything else scales 12% per stratum. Favor (-10% per rank), the discount stat and the Pact 7 markup (x1.4) apply to all; rounded to 5, minimum 5.
+  // A forge is 60 + 15s; everything else scales 12% per stratum. Favor (-10% per rank), the discount stat and the Pact 7 markup (x1.4) apply to all; rounded to 5, minimum 5.
   W.priceOf = function (it) {
     const s = this.stratum;
     let base;
-    if (it.type === 'oil') base = 45 + 15 * s;
-    else if (it.type === 'forge') base = 60 + 15 * s;
+    if (it.type === 'forge') base = 60 + 15 * s;
     else base = (it.type === 'relic' ? ED.RELIC_PRICE[ED.RELICS[it.item].rar] : it.type === 'boon' ? 75 : 30) * (1 + 0.12 * (s - 1));
     let favor = 0, discount = 0;
     for (const p of this.players.values()) {
@@ -287,8 +286,7 @@
           if (allClaimed(this, pr.group)) pr.state = 1;
         } else {
           pr.state = 1;
-          if (item === 'gold') this.dropGold(pr.x, pr.y + 18, ED.World.rewardGold(s, this.dread.gold), true);
-          else if (item === 'oil') this.addLight(ED.World.OIL_LIGHT, pr.x, pr.y);
+          if (item === 'gold') this.dropGold(pr.x, pr.y + 18, ED.World.rewardGold(s), true);
           else if (item === 'relic') this.spawnRelicChoices(pr.x, pr.y + 46, 'r');
         }
         this.emit({ t: 'claim', pid, item, x: pr.x, y: pr.y });
@@ -319,7 +317,6 @@
         break;
       }
       case 'shop': {
-        if (pr.stype === 'oil' && this.light >= this.lightMax - 0.5) { this.msgs.push({ to: pid, t: 'toast', text: 'Your lantern is already full.' }); return; }
         if (this.gold < pr.price) { this.msgs.push({ to: pid, t: 'toast', text: 'Not enough gold.' }); return; }
         this.gold -= pr.price; pr.state = 1;
         this.emit({ t: 'buy', pid, x: pr.x, y: pr.y });
@@ -327,7 +324,6 @@
         else if (pr.stype === 'potion') this.healPlayer(p, p.maxHp * 0.4);
         else if (pr.stype === 'boon') this.grantOffer(p, { src: 'epic' });
         else if (pr.stype === 'forge') this.grantOffer(p, { src: 'forge' });
-        else if (pr.stype === 'oil') this.addLight(ED.World.OIL_LIGHT, pr.x, pr.y);
         break;
       }
       case 'fountain': {

@@ -4,7 +4,7 @@
 (function (ED) {
   'use strict';
   const U = ED.U, T = ED.CONST.TILE, Sp = ED.Sprites, Bmp = ED.Bmp, AC = ED.Actors, Pix = ED.Pix;
-  const R = ED.Render = { cam: { x: 0, y: 0 }, scale: 2, W: 0, H: 0, dpr: 1, bw: 1, bh: 1, ix: 0, iy: 0, fx: 0, fy: 0, ox: 0, oy: 0, shx: 0, shy: 0, bakeScale: 1, quality: 'high', lightLevel: 1, posting: false, stats: { n: 0, world: 0, post: 0 } };
+  const R = ED.Render = { cam: { x: 0, y: 0 }, scale: 2, W: 0, H: 0, dpr: 1, bw: 1, bh: 1, ix: 0, iy: 0, fx: 0, fy: 0, ox: 0, oy: 0, shx: 0, shy: 0, bakeScale: 1, quality: 'high', darkLevel: 0, posting: false, stats: { n: 0, world: 0, post: 0 } };
   const BQ = R.bakeScale; // texels per world px of baked sprites and room art (world resolution)
   const glowCache = {}, lightCache = {};
   const PIX_MAX = 8.4e6, PIX_SOFT = 1.1e6; // screen canvas pixel caps: 3840x2160 renders native on every quality (the world costs buffer pixels, the present is one blit or quad); PIX_SOFT: software-rasterised canvases (no GPU)
@@ -162,10 +162,10 @@
     R.stats.post += performance.now() - t0;
     R.posting = false;
   };
-  // Post parameters from the FX state (chromatic aberration, flashes) and the lantern.
+  // Post parameters from the FX state (chromatic aberration, flashes) and the dark-room level.
   R.postOpts = (biome, t, extra) => {
     const F = ED.FX;
-    return Object.assign({ biome, t, aberr: F.aberr || 0, flash: F.kick > 0.01 ? [1, 0.92, 0.8, F.kick * 0.22] : null, lightLevel: 0.6 + 0.4 * R.lightLevel }, extra); // post-process darkening (saturation, vignette) stays mild
+    return Object.assign({ biome, t, aberr: F.aberr || 0, flash: F.kick > 0.01 ? [1, 0.92, 0.8, F.kick * 0.22] : null, lightLevel: 1 - 0.3 * R.darkLevel }, extra); // post-process darkening (saturation, vignette) stays mild
   };
 
   // ---------------- light buffer (buffer-pixel space, reused by the camp) ----------------
@@ -200,7 +200,8 @@
     c.drawImage(lightCv, 0, 0, R.bw, R.bh);
     c.restore();
   };
-  // Ambient colour: palette darkColor gives the hue, darkness gives the level; a lower lantern deepens it.
+  const DARK_AMBIENT = 0.3; // darkness added to the biome's own while the hero is in a dark room (R.darkLevel 1)
+  // Ambient colour: palette darkColor gives the hue, darkness gives the level; extraDark deepens it.
   const ambCache = {}, ambOut = [0, 0, 0];
   R.ambient = (biome, extraDark, redden) => {
     const P = biome.pal;
@@ -1027,17 +1028,17 @@
   };
   R.propPrompt = (p, view) => {
     if (p.kind === 'relic') return 'Take ' + ED.RELICS[p.item].name;
-    if (p.kind === 'shop') { const name = p.stype === 'relic' ? ED.RELICS[p.item].name : p.stype === 'boon' ? 'Epic boon' : p.stype === 'oil' ? 'Lantern oil' : p.stype === 'forge' ? 'Forge' : 'Healing draught'; return `Buy ${name} — ${p.price}g`; }
+    if (p.kind === 'shop') { const name = p.stype === 'relic' ? ED.RELICS[p.item].name : p.stype === 'boon' ? 'Epic boon' : p.stype === 'forge' ? 'Forge' : 'Healing draught'; return `Buy ${name} — ${p.price}g`; }
     if (p.kind === 'reward') {
-      if (p.item === 'gold') { const amt = ED.World.rewardGold ? ED.World.rewardGold(view.stratum, ED.World.DREAD[view.dread ? view.dread.tier | 0 : 0].gold) : 0; return amt ? `Claim: ${amt} gold` : 'Claim: Gold'; }
+      if (p.item === 'gold') { const amt = ED.World.rewardGold ? ED.World.rewardGold(view.stratum) : 0; return amt ? `Claim: ${amt} gold` : 'Claim: Gold'; }
       return 'Claim: ' + R.rewardLabel(p.item);
     }
     if (p.kind === 'campfire') return 'Rest at the campfire';
     if (p.kind === 'anvil') return 'Temper at the anvil';
     return PROP_LABEL[p.kind] ? PROP_LABEL[p.kind](p) : null;
   };
-  const REWARD_DESC = { gold: 'Gold for the whole party, more when the lantern is low.', vigor: 'Permanently raises your maximum health and heals you.', forge: 'Rank up one of your boons.', oil: 'Refills part of the lantern for the whole party.', boon: 'A boon from your paths (a new path while you have a free slot).', epic: 'Choose from epic boons.', relic: 'A hoard of relics: each hero takes one.' };
-  const SHOP_DESC = { boon: 'Grants an extra boon pick with no common options.', oil: 'Lantern oil: refills part of the lantern for the whole party.', forge: 'Forge: rank up one of your boons.', potion: 'Heals a good chunk of your health.' };
+  const REWARD_DESC = { gold: 'Gold for the whole party.', vigor: 'Permanently raises your maximum health and heals you.', forge: 'Rank up one of your boons.', boon: 'A boon from your paths (a new path while you have a free slot).', epic: 'Choose from epic boons.', relic: 'A hoard of relics: each hero takes one.' };
+  const SHOP_DESC = { boon: 'Grants an extra boon pick with no common options.', forge: 'Forge: rank up one of your boons.', potion: 'Heals a good chunk of your health.' };
   // Longer explanation shown above the prompt (null when there is none).
   R.propDesc = (p) => {
     if (p.kind === 'reward') {
@@ -1051,21 +1052,21 @@
   R.interactable = (p) => !p.state && p.kind !== 'sign' && p.kind !== 'merchant';
 
   const PATH_COL = { fire: '#ff7a2a', ice: '#7fe3ff', lightning: '#ffe66b', poison: '#9be33c', holy: '#fff0c2', shadow: '#a070ff', general: '#d9dfe8' };
-  // Colour of a reward-type string such as 'boon', 'gold', 'oil', 'relic' (unknown -> warm white). 'boon' wears the colour of the local hero's deepest path (R.mainPath).
+  // Colour of a reward-type string such as 'boon', 'gold', 'relic' (unknown -> warm white). 'boon' wears the colour of the local hero's deepest path (R.mainPath).
   function rewardColor(s) {
     s = String(s || '');
     if (s === 'boon') return PATH_COL[R.mainPath] || '#ffe9a0';
-    return { gold: '#ffd36b', vigor: '#ff4a5a', forge: '#ff9a3a', oil: '#ffb35c', epic: '#c98bff', relic: '#ffb02e', campfire: '#ff9a3a', anvil: '#ffb066' }[s] || '#ffe9a0';
+    return { gold: '#ffd36b', vigor: '#ff4a5a', forge: '#ff9a3a', epic: '#c98bff', relic: '#ffb02e', campfire: '#ff9a3a', anvil: '#ffb066' }[s] || '#ffe9a0';
   }
   R.rewardColor = rewardColor;
-  const REWARD_LABEL = { boon: 'Boon', gold: 'Gold', vigor: 'Vigor', forge: 'Forge', oil: 'Lantern oil', relic: 'Relic hoard', epic: 'Epic boon', campfire: 'Rest', anvil: 'Temper' };
+  const REWARD_LABEL = { boon: 'Boon', gold: 'Gold', vigor: 'Vigor', forge: 'Forge', relic: 'Relic hoard', epic: 'Epic boon', campfire: 'Rest', anvil: 'Temper' };
   // Short name of a reward string: 'boon' -> 'Boon'.
   R.rewardLabel = (s) => REWARD_LABEL[String(s || '')] || 'Reward';
   // [icon, colour] for a reward string; 'boon' shows the icon of the local hero's deepest path (a Generalist sees General).
   R.rewardIcon = (s, cls) => {
     s = String(s || '');
     if (s === 'boon') { const pa = ED.PATHS[R.mainPath]; return pa ? [pa.icon, pa.color] : ['star', '#ffe9a0']; }
-    return { gold: ['coin', '#ffd36b'], vigor: ['heart', '#ff4a5a'], forge: ['anvil', '#ff9a3a'], oil: ['oil', '#ffb35c'], epic: ['star', '#c98bff'], relic: ['chest', '#ffb02e'], campfire: ['campfire', '#ff9a3a'], anvil: ['anvil', '#ffb066'] }[s] || ['star', '#ffe9a0'];
+    return { gold: ['coin', '#ffd36b'], vigor: ['heart', '#ff4a5a'], forge: ['anvil', '#ff9a3a'], epic: ['star', '#c98bff'], relic: ['chest', '#ffb02e'], campfire: ['campfire', '#ff9a3a'], anvil: ['anvil', '#ffb066'] }[s] || ['star', '#ffe9a0'];
   };
   // Map/door glyph of a floor room: { icon, color, badge? } (null for plain rooms). Elite rooms add a skull badge.
   R.roomIcon = (rm, cls) => {
@@ -1077,13 +1078,14 @@
     return { icon: ri[0], color: ri[1], badge: rm.type === 'elite' ? 'skull' : null };
   };
 
-  // Reward previews over the doors of the current room: neighbours not yet cleared, bobbing in front of each doorway, with the lantern light the room costs (boss door: the heal on offer).
+  // Reward previews over the doors of the current room: neighbours not yet cleared, bobbing in front of each doorway; an unvisited dark room carries a purple skull.
+  const DARK_COL = '#a070ff', DARK_TEXT = 'Dark room: harder fights, richer rewards';
   const dpList = [], dpPool = [];
   function doorPreviews(view, room, t) {
     const out = dpList; let n = 0; // pooled: the list is consumed before the next call
     out.length = 0;
     if (view.locked || !view.floor) return out;
-    const me = view.players.get(R.local), cls = me ? me.cls : null, h = room.h * T, w = room.w * T, Wd = ED.World, lm = view.lightMax, lf = lm > 0 ? U.clamp(view.light / lm, 0, 1) : 0;
+    const me = view.players.get(R.local), cls = me ? me.cls : null, h = room.h * T, w = room.w * T;
     for (const d in room.doors) {
       const id = room.doors[d]; if (id < 0) continue;
       const nb = view.floor.rooms[id], st = view.roomState && view.roomState[id];
@@ -1092,12 +1094,8 @@
       const r = ED.Dungeon.doorRect(room, d), cx = (r.x0 + r.x1 + 1) / 2 * T, cy = (r.y0 + r.y1 + 1) / 2 * T;
       let x = cx, y = cy;
       if (d === 'n') y = T - 2; else if (d === 's') y = h - T - 6; else if (d === 'w') x = T * 0.5 + 6; else x = w - T * 0.5 - 6;
-      let o = dpPool[n]; if (!o) o = dpPool[n] = { x: 0, y: 0, color: '', ri: null, d: '', lab: '', lc: '' };
-      o.x = x; o.y = y + Math.sin(t * 2.2 + x * 0.03 + y * 0.02) * 1.8; o.color = ri.color; o.ri = ri; o.d = d; o.lab = ''; o.lc = '';
-      if (lm > 0) { // lantern label: the light an unvisited room costs (red when it drops the tier), or the boss-door heal
-        if (nb.type === 'boss') { const hp = Math.round(Wd.bossLight(lf, view.stratum).heal * 100); if (hp > 0) { o.lab = '+' + hp + '%'; o.lc = '#86d38f'; } }
-        else if (!(st && st.visited)) { const cost = Wd.roomCost(nb.type); if (cost > 0) { o.lab = '−' + cost; o.lc = Wd.tierOf(Math.max(0, view.light - cost) / lm) > Wd.tierOf(lf) ? '#ff7a5a' : '#ffd9a0'; } }
-      }
+      let o = dpPool[n]; if (!o) o = dpPool[n] = { x: 0, y: 0, color: '', ri: null, d: '', dark: false };
+      o.x = x; o.y = y + Math.sin(t * 2.2 + x * 0.03 + y * 0.02) * 1.8; o.color = ri.color; o.ri = ri; o.d = d; o.dark = !!nb.dark && !(st && st.visited);
       out[n++] = o;
     }
     return out;
@@ -1111,11 +1109,15 @@
       c.globalAlpha = a;
       c.drawImage(ED.Icons.canvas(pv.ri.icon, pv.color, 22), qx - 11, qy - 11); // icons are drawn at their cached size: 1 texel = 1 buffer px
       if (pv.ri.badge) c.drawImage(ED.Icons.canvas('skull', '#ff7a3a', 12), qx + 3, qy + 2);
-      if (pv.lab) { // lantern label on the room side of the icon; stays readable up close
+      if (pv.dark) { // dark-room mark on the room side of the icon (stays readable up close); the rule text fades in as a hero nears, kept inside the room
         c.globalAlpha = Math.max(a, 0.7);
-        const tw = R.labelW(pv.lab), lx = Math.round(pv.x - (tw + 13) / 2), ly = Math.round(pv.d === 's' ? pv.y - 18 : pv.y + 18);
-        c.drawImage(ED.Icons.canvas('lantern', pv.lc, 11), lx, ly - 5);
-        R.label(c, pv.lab, lx + 13 + tw / 2, ly, pv.lc);
+        const sy = Math.round(pv.d === 's' ? pv.y - 18 : pv.y + 18);
+        c.drawImage(ED.Icons.canvas('skull', DARK_COL, 11), qx - 5, sy - 5);
+        const ta = U.clamp((90 - near) / 40, 0, 1);
+        if (ta > 0) {
+          const tw = R.labelW(DARK_TEXT), tx = pv.d === 'w' ? qx - 8 + tw / 2 : pv.d === 'e' ? qx + 8 - tw / 2 : qx;
+          R.label(c, DARK_TEXT, tx, sy + (pv.d === 's' ? -12 : 12), DARK_COL, undefined, ta);
+        }
       }
     }
     c.globalAlpha = 1;
@@ -1196,7 +1198,6 @@
           let col = '#ffffff', icon = null, flask = null;
           if (p.kind === 'relic' || p.stype === 'relic') { const r = ED.RELICS[p.item]; col = ED.RARITY[r.rar].color; icon = ED.Icons.relicCanvas(p.item, 20); }
           else if (p.stype === 'boon') { col = ED.RARITY.e.color; icon = ED.Icons.canvas('star', col, 20); }
-          else if (p.stype === 'oil') { col = '#ffb35c'; flask = 'pickup.flask.yellow'; }
           else if (p.stype === 'forge') { col = '#ff9a3a'; icon = ED.Icons.canvas('anvil', col, 20); }
           else { col = '#ff4a5a'; flask = 'pickup.flask.red'; }
           G(0, -42 + bob, 24, col, 0.65); L(0, -42, 80, col, 0.8);
@@ -1305,7 +1306,6 @@
             let col = '#ffffff', icon = null;
             if (p.kind === 'relic' || p.stype === 'relic') { const r = ED.RELICS[p.item]; col = ED.RARITY[r.rar].color; icon = ED.Icons.relicCanvas(p.item, 20); }
             else if (p.stype === 'boon') { col = ED.RARITY.e.color; icon = ED.Icons.canvas('star', col, 20); }
-            else if (p.stype === 'oil') { col = '#ffb35c'; icon = ED.Icons.canvas('oil', col, 20); }
             else if (p.stype === 'forge') { col = '#ff9a3a'; icon = ED.Icons.canvas('anvil', col, 20); }
             else { col = '#ff4a5a'; icon = ED.Icons.canvas('potion', col, 20); }
             G(0, -22 + bob, 24, col, 0.65); L(0, -22, 80, col, 0.8);
@@ -1823,18 +1823,18 @@
   // ---------------- lighting ----------------
   function rimAdd(x, y, r, col, k) { if (rimN < 40) { let L = rimSrc[rimN]; if (!L) L = rimSrc[rimN] = { x: 0, y: 0, r: 0, c: '', k: 0 }; L.x = x; L.y = y; L.r = r; L.c = col; L.k = k; rimN++; } }
   function drawLighting(c, view, room, biome, local, t, ix, iy) { // lights are added in buffer px: world position minus the buffer origin
-    const P = biome.pal, ll = R.lightLevel, dv = R.lightDiv;
-    const amb = R.ambient(biome, (1 - ll) * 0.1, view.pact > 0 ? Math.min(0.5, view.pact * 0.05) : 0);
+    const P = biome.pal, dv = R.lightDiv;
+    const amb = R.ambient(biome, R.darkLevel * DARK_AMBIENT, view.pact > 0 ? Math.min(0.5, view.pact * 0.05) : 0);
     R.lightBegin(amb);
     const gm = ED.Tiles.glowmap(room, BQ);
     if (gm) { lctx.globalAlpha = 0.5; lctx.drawImage(gm, -ix / dv, -iy / dv, gm.width / gm.px / dv, gm.height / gm.px / dv); lctx.globalAlpha = 1; }
     rimN = 0;
     const src = rimAdd;
-    // hero lanterns: warm core plus a wider tinted fill; radius shrinks by at most 15% and flickers as the lantern fails
+    // hero lanterns: warm core plus a wider tinted fill
     for (const p of view.players.values()) {
       if (p.dead) continue;
-      const base = (p.stats ? p.stats.lightR : 175) * (p.downed ? 0.6 : 1) * (0.85 + 0.15 * ll);
-      const fl = 1 + Math.sin(t * 7 + (p.slot || 0)) * 0.03 + Math.sin(t * 19 + (p.slot || 0) * 2) * 0.02 * (1 + (1 - ll) * 3);
+      const base = (p.stats ? p.stats.lightR : 175) * (p.downed ? 0.6 : 1);
+      const fl = 1 + Math.sin(t * 7 + (p.slot || 0)) * 0.03 + Math.sin(t * 19 + (p.slot || 0) * 2) * 0.02;
       const col = U.mix('#ffc27a', ED.PLAYER_COLORS[p.slot] || '#ffc27a', 0.12);
       R.lightAdd(p.x - ix, p.y - 10 - iy, base * 1.15 * fl, U.mix(col, P.light, 0.2), 0.9);
       R.lightAdd(p.x - ix, p.y - 10 - iy, base * 0.52 * fl, '#ffd9a0', 0.45);

@@ -22,7 +22,6 @@
     this.floor = null; this.room = null; this.roomId = -1; this.roomState = {}; this.stratum = 0; this.floorSeed = 0;
     this.gold = 0; this.level = 1; this.xp = 0; this.xpNext = 20; this.time = 0; this.locked = false; this.waitMsg = '';
     this.snaps = []; this.renderT = 0; this.run = null; this.eMap = new Map();
-    this.light = 100; this.lightMax = 100; this.dread = { tier: 0 }; this.deepRooms = 0;
   }
   Mirror.prototype.recalc = function (p) {
     p.stats = ED.Stats.compute({ cls: p.cls, weapon: p.weapon, boons: p.boons, relics: p.relics, meta: p.meta, pact: this.pact, chaliceHp: p.chaliceHp, bonusHp: p.bonusHp });
@@ -41,7 +40,6 @@
       for (const p of this.players.values()) p.toughRoom = tough; // War Drum doubles in these rooms
     }
     this.locked = !!d.L; this.gold = d.g; this.xp = d.x; this.xpNext = d.n; this.level = d.l; this.waitMsg = d.wm; this.time = d.T;
-    this.light = d.li; this.lightMax = d.lm || 100; this.dread = { tier: d.dr | 0 }; this.deepRooms = d.dp | 0;
     if (d.O) this.props = d.O.map(a => ({ id: a[0], kind: a[1], x: a[2], y: a[3], state: a[4], item: a[5], price: a[6], group: a[7], stype: a[8], text: a[9] }));
     if (d.RS) d.RS.forEach((b, i) => { this.roomState[i] = { visited: !!(b & 1), known: !!(b & 2), cleared: !!(b & 4) }; });
     if (d.RUN) this.run = d.RUN;
@@ -132,7 +130,7 @@
   // ---------------- session lifecycle ----------------
   G.start = (mode, cfg) => {
     ED.FX.reset();
-    ED.Render.lightLevel = 1;
+    ED.Render.darkLevel = 0;
     U.resetUid(1);
     if (ED.Actors) ED.Actors.reset();
     const s = G.s = { mode, cfg, localPid: cfg.localPid, net: cfg.net || null, fxBuf: [], snapT: 0, snapN: 0, inT: 0, acc: 0, alpha: 1, epoch: 0, offer: null, offerOpen: false, ended: false, paused: false, prompt: null, sig: '', claimed: {} };
@@ -175,7 +173,6 @@
       case 'atk': w.playerAttack(p, +a.a || 0); break;
       case 'skill': if ((a.slot | 0) === 0 || (a.slot | 0) === 1) w.playerSkill(p, +a.a || 0, a.data, a.slot | 0); break;
       case 'dash': w.playerDash(p, +a.dx || 0, +a.dy || 0); break;
-      case 'flare': w.flare(p); break;
       case 'interact': w.interact(pid, a.id); break;
       case 'pick': w.pickBoon(pid, a.i | 0); break;
       case 'reroll': w.reroll(pid); break;
@@ -202,7 +199,7 @@
     w.msgs.length = 0;
   };
 
-  const SHEET_EVENTS = { build: 1, boon: 1, evolve: 1, levelup: 1, dread: 1, room: 1, relic: 1, stratum: 1 }; // events that change what the open character sheet shows
+  const SHEET_EVENTS = { build: 1, boon: 1, evolve: 1, levelup: 1, room: 1, relic: 1, stratum: 1 }; // events that change what the open character sheet shows
   G.localEvent = (ev) => {
     const s = G.s; if (!s) return;
     if (SHEET_EVENTS[ev.t]) ED.UI.sheetDirty();
@@ -309,8 +306,7 @@
       if (near.kind === 'relic' || near.stype === 'relic') { const r = ED.RELICS[near.item]; desc = r.desc; color = ED.RARITY[r.rar].color; }
       else if (near.kind === 'portal') desc = 'Step down into ' + ED.biomeFor(view.stratum + 1).name + '.';
       else { desc = ED.Render.propDesc(near, view); if (near.kind === 'reward') color = ED.Render.rewardColor(near.item); }
-      const full = near.stype === 'oil' && view.light >= view.lightMax - 0.5;
-      s.prompt = { x: near.x, y: near.y, text, desc, color, can: near.kind === 'shop' || near.kind === 'gamble' ? view.gold >= near.price && !full : true };
+      s.prompt = { x: near.x, y: near.y, text, desc, color, can: near.kind === 'shop' || near.kind === 'gamble' ? view.gold >= near.price : true };
     }
     if (!s.offerOpen) {
       if (inp.atkPressed && near) { G.act({ t: 'interact', id: near.id }); ctl.latch = true; ctl.atkCd = Math.max(ctl.atkCd, 0.25); }
@@ -364,7 +360,6 @@
         ctl.skill2Cd = st.skill2Cd;
         if (st.trance) { ctl.tranceT = 4; if (s.mode === 'client') me.tranceT = 4; }
       }
-      if (inp.flare && view.light >= ED.World.FLARE.cost && view.room.type !== 'boss') G.act({ t: 'flare' }); // host checks light, room and cooldown
       if (inp.dash && !me.skillMove && Sim.dashTry(ctl, st)) {
         let dx = mx, dy = my;
         if (Math.hypot(dx, dy) < 0.2) { dx = Math.cos(aim); dy = Math.sin(aim); }
@@ -476,13 +471,13 @@
     }
   };
   const unterp = (w) => { for (const k of MOVERS) { const a = w[k]; for (let i = 0; i < a.length; i++) { const o = a[i]; if (o.rx !== undefined) { o.x = o.rx; o.y = o.ry; } } } };
-  // Mirrors World.isSafe: calm room, no live foe except the invulnerable Gloom, no descent pending (clients see no pendingStratum).
-  const isSafe = (v) => !v.locked && !v.pendingStratum && !v.enemies.some(e => e.hp > 0 && !e.def.gloom);
+  // Mirrors World.isSafe: calm room, no live foe, no descent pending (clients see no pendingStratum).
+  const isSafe = (v) => !v.locked && !v.pendingStratum && !v.enemies.some(e => e.hp > 0);
   G.update = (dt, inp) => {
     const s = G.s; if (!s) return;
     const now = performance.now() / 1000;
     const alone = G.alone(), frozen = alone && s.paused;
-    // Alone, the world waits while you read boon cards (offers only open in a safe room), so the Gloom's delay never runs while you pick.
+    // Alone, the world waits while you read boon cards (offers only open in a safe room).
     const hold = alone && s.offerOpen;
     s.alpha = 1; // frozen, held or client: draw the newest state
     const sdt = alone ? dt * ED.FX.timeScale : dt; // hit-stop slows only a world nobody else shares; effects keep real time
@@ -545,8 +540,8 @@
   };
   const drawFrame = (s, t, dt) => {
     const c = ED.Render.ctx;
-    const v = s.view, R = ED.Render, lit = v.room && v.lightMax > 0 ? U.clamp(v.light / v.lightMax, 0, 1) : 1;
-    R.lightLevel += (lit - R.lightLevel) * Math.min(1, dt * 2.5); // eased so a refill or a tier drop never pops
+    const v = s.view, R = ED.Render;
+    R.darkLevel += ((v.room && v.room.dark ? 1 : 0) - R.darkLevel) * Math.min(1, dt * 2.5); // eased so crossing a door never pops
     R.claimed = s.claimed;
     R.frame(s.view, s.localPid, t, dt);
     const ob = document.getElementById('ov-boon'), cover = s.offerOpen || !!(ob && !ob.hidden); // the boon overlay owns the screen: no banners or prompts under it

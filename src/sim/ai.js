@@ -443,7 +443,7 @@
     if (e.cd > 0 || blind(e) || !onScreen(w, e)) return;
     let ally = null, low = 0.85;
     for (const x of w.enemies) {
-      if (x === e || x.hp <= 0 || x.boss || x.burrowed || x.def.gloom || x.ward > 0 || x.spawnT > 0) continue;
+      if (x === e || x.hp <= 0 || x.boss || x.burrowed || x.ward > 0 || x.spawnT > 0) continue;
       const f = x.hp / x.maxHp;
       if (f < low) { low = f; ally = x; }
     }
@@ -572,33 +572,6 @@
       return;
     }
     if (e.cd <= 0 && hasLos(w, e)) { e.st = 'cast'; e.vars.kind = 'orb'; e.t = wind(e, C.windup); }
-  };
-
-  // The Gloom: invulnerable hunter that drifts through walls at `speed` x the hero's move speed, keeps `keep` px away, and every `cd` s winds up
-  // (aim line fixed at the hero's spot) then lunges `lunge` px; touch deals full damage (state 'lunge' is a body-hit state, see combat.js).
-  const GLOOM = { speed: 1.05, keep: 100, range: 230, windup: 0.55, lunge: 170, lungeSpeed: 520, cd: 1.6 };
-  AI.GLOOM = GLOOM;
-  AI.gloom = (w, e, dt) => {
-    e.spd = 0; // spd 0 keeps world.separate() from wall-resolving it
-    const G = GLOOM, v = e.vars;
-    if (e.st === 'windup') { e.t -= dt; if (e.t <= 0) { e.st = 'lunge'; e.t = G.lunge / G.lungeSpeed; } return; }
-    if (e.st === 'lunge') {
-      e.t -= dt;
-      e.x += Math.cos(e.aimA) * G.lungeSpeed * dt; e.y += Math.sin(e.aimA) * G.lungeSpeed * dt;
-      if (e.t <= 0) { e.st = 'move'; v.lcd = G.cd; }
-      return;
-    }
-    v.lcd = (v.lcd === undefined ? 1 : v.lcd) - dt;
-    const dx = e.target.x - e.x, dy = e.target.y - e.y, d = Math.hypot(dx, dy) || 1, hero = (e.target.stats && e.target.stats.moveSpeed) || 115;
-    e.face = dx > 0 ? 1 : -1;
-    if (v.lcd <= 0 && d < G.range && !blind(e)) {
-      e.aimA = Math.atan2(dy, dx); e.st = 'windup'; e.t = wind(e, G.windup);
-      fixedLine(w, e, G.lunge + e.r, e.r * 2, e.t);
-      return;
-    }
-    e.st = 'move';
-    const s = hero * G.speed * dt * (d > G.keep ? 1 : d < G.keep - 30 ? -0.5 : 0);
-    e.x += dx / d * s; e.y += dy / d * s;
   };
 
   AI.lobber = (w, e, dt) => {

@@ -151,7 +151,7 @@
   const rosterMedian = () => {
     if (medianHp) return medianHp;
     const hs = [];
-    for (const k in ED.ENEMIES) { const e = ED.ENEMIES[k]; if (!e.boss && !e.minion && !e.gloom && !e.ally && e.hp > 0) hs.push(e.hp); }
+    for (const k in ED.ENEMIES) { const e = ED.ENEMIES[k]; if (!e.boss && !e.minion && !e.ally && e.hp > 0) hs.push(e.hp); }
     hs.sort((a, b) => a - b);
     return (medianHp = hs[hs.length >> 1] || 30);
   };
@@ -161,7 +161,7 @@
     const hp = rosterMedian() * W.hpScale(s) * W.partyHpMul(ctx.party || 1) * (pact >= 1 ? 1.25 : 1) * (pact >= 10 ? 1.2 : 1);
     return { hp, statusHp: hp / thr, r: Sh.REF.r };
   };
-  // The numbers about the run the sheet needs from a World or a Mirror (duck-typed: players, allies, floor, roomState, dread, light, gold, level, xp, deepRooms).
+  // The numbers about the run the sheet needs from a World or a Mirror (duck-typed: players, allies, floor, roomState, room, gold, level, xp).
   Sh.ctx = (view, p) => {
     let allyNear = 0, minions = 0;
     const party = [];
@@ -171,12 +171,16 @@
     }
     if (view.allies) for (const a of view.allies) if (a.owner === p.pid) minions++;
     const rooms = view.floor ? view.floor.rooms : [];
-    let seen = 0;
-    for (const r of rooms) { const s = view.roomState && view.roomState[r.id]; if (s && s.visited) seen++; }
+    let seen = 0, darkTotal = 0, darkLeft = 0;
+    for (const r of rooms) {
+      const s = view.roomState && view.roomState[r.id], visited = !!(s && s.visited);
+      if (visited) seen++;
+      if (r.dark) { darkTotal++; if (!visited) darkLeft++; }
+    }
     return {
-      stratum: view.stratum || 1, pact: view.pact | 0, gold: view.gold | 0, level: view.level || 1, xp: Math.floor(view.xp || 0), xpNext: view.xpNext || 1, light: view.light === undefined ? 100 : view.light, lightMax: view.lightMax || 100,
-      tier: view.dread ? view.dread.tier | 0 : 0, deep: view.deepRooms === undefined || view.deepRooms === null ? null : view.deepRooms, allyNear, minions, room: view.room ? { type: view.room.type, id: view.roomId } : null,
-      party: view.players ? view.players.size : 1, rooms: { seen, total: rooms.length }, heroes: party, time: view.time || 0,
+      stratum: view.stratum || 1, pact: view.pact | 0, gold: view.gold | 0, level: view.level || 1, xp: Math.floor(view.xp || 0), xpNext: view.xpNext || 1,
+      dark: !!(view.room && view.room.dark), allyNear, minions, room: view.room ? { type: view.room.type, id: view.roomId } : null,
+      party: view.players ? view.players.size : 1, rooms: { seen, total: rooms.length, darkTotal, darkLeft }, heroes: party, time: view.time || 0,
     };
   };
 
@@ -354,7 +358,7 @@
   // opts.raw keeps every number unrounded (tools, tests); otherwise numbers carry their display precision, so equal builds give equal JSON.
   Sh.compute = (p, ctx, opts) => {
     const R = rounders(opts && opts.raw), st = p.stats, build = buildOf(p, ctx), cls = ED.CLASSES[p.cls];
-    const ref = Sh.refFoe(ctx), s = ctx.stratum || 1, tier = clampI(ctx.tier | 0, 0, W.DREAD.length - 1), dread = W.DREAD[tier], thr = W.THREAT[clampI(s - 1, 0, W.THREAT.length - 1)];
+    const ref = Sh.refFoe(ctx), s = ctx.stratum || 1, thr = W.THREAT[clampI(s - 1, 0, W.THREAT.length - 1)];
     const wpn = weaponModel(p, st, ctx, R);
     const skills = [];
     for (const [i, id] of [cls.skill, cls.skill2].entries()) if (id && ED.SKILLS[id]) skills.push(skillModel(id, i, p, st, ctx, wpn, R));
@@ -404,14 +408,13 @@
 
     // defence
     const armorMul = St.armorMul(st.armor), taken = armorMul * (1 + st.vuln), maxHp = p.maxHp || st.maxHp;
-    const deepOn = ctx.deep !== null && ctx.deep !== undefined, deepMul = deepOn ? 1 + W.DEEP * Math.min(W.DEEP_MAX, ctx.deep) : 1;
-    const pactMul = (ctx.pact >= 2 ? 1.25 : 1) * (ctx.pact >= 8 ? 1.2 : 1), foeHere = W.dmgScale(s) * thr.dmg * pactMul * dread.dmg * deepMul;
+    const pactMul = (ctx.pact >= 2 ? 1.25 : 1) * (ctx.pact >= 8 ? 1.2 : 1), darkMul = ctx.dark ? W.DARK_DMG : 1, foeHere = W.dmgScale(s) * thr.dmg * pactMul * darkMul;
     const def = {
       maxHp, hpBase: R.n(st.hp), hpMul: R.x(st.hpMul), hpRows: rowsOf(build, 'hp'), hpMulRows: rowsOf(build, 'hpMul'),
       armor: R.n(st.armor), armorMul: R.f(armorMul), reduction: R.f(1 - armorMul), armorRows: rowsOf(build, 'armor'), vuln: R.f(st.vuln), vulnRows: rowsOf(build, 'vuln'), taken: R.x(taken),
       dodge: R.f(st.dodge), dodgeRows: rowsOf(build, 'dodge'), ehp: R.n(maxHp / taken / (1 - st.dodge)),
-      foeHere: R.x(foeHere), foeParts: { depth: R.x(W.dmgScale(s)), threat: R.x(thr.dmg), pact: R.x(pactMul), dread: R.x(dread.dmg), deep: deepOn ? R.x(deepMul) : null }, deepKnown: deepOn,
-      healMul: R.x(st.healMul), heal: R.x(st.healMul * (dread.heal === undefined ? 1 : dread.heal)), healRows: rowsOf(build, 'heal'), pactHeal: R.x(St.pactHeal(ctx.pact | 0)),
+      foeHere: R.x(foeHere), foeParts: { depth: R.x(W.dmgScale(s)), threat: R.x(thr.dmg), pact: R.x(pactMul), dark: ctx.dark ? R.x(darkMul) : null },
+      healMul: R.x(st.healMul), healRows: rowsOf(build, 'heal'), pactHeal: R.x(St.pactHeal(ctx.pact | 0)),
       shield: Math.ceil(p.shield || 0), ready: [], situational: [], shields: [], heals: [], window: shieldWin(p, ctx, maxHp, R),
     };
     for (let i = 0; i < Sh.READY.length; i++) { const r = Sh.READY[i]; if (r.owned(st)) def.ready.push({ id: r.id, name: r.name, ready: readyOf(p, i), once: r.id === 'angel' || r.id === 'phoenix' }); }
@@ -419,7 +422,7 @@
 
     const hero = { pid: p.pid, name: p.name, cls: p.cls, clsName: cls.name, title: cls.title, level: ctx.level, xp: ctx.xp, xpNext: ctx.xpNext, hp: Math.ceil(p.hp), maxHp, shield: Math.ceil(p.shield || 0), gold: ctx.gold, picks: p.picks | 0, power: st.power, element: st.element, weaponName: wpn.name, slot: p.slot | 0 };
     const model = {
-      hero, ctx: { stratum: s, pact: ctx.pact | 0, tier, party: ctx.party }, weapon: wpn, skills, dash, proc: procOut(proc, R), mult, def, aff: affModel(p, st, ctx), build: buildModel(p, st, ctx, R), lantern: lanternModel(ctx, R, s),
+      hero, ctx: { stratum: s, pact: ctx.pact | 0, dark: !!ctx.dark, party: ctx.party }, weapon: wpn, skills, dash, proc: procOut(proc, R), mult, def, aff: affModel(p, st, ctx), build: buildModel(p, st, ctx, R), dark: darkModel(ctx),
       ref: { hp: R.n(ref.hp), statusHp: R.n(ref.statusHp), r: ref.r }, procs: procList(st, M, R),
     };
     return opts && opts.raw ? model : strip(model);
@@ -476,7 +479,7 @@
     if (p.cls === 'cleric') sh.push({ label: 'Judgment kill', text: '3% for allies within 160, once per cast' });
     if (p.weapon === 'lantern') sh.push({ label: 'Sacred Lantern', text: `${pc(0.015)} of an ally's health per orb, at most once per ${C.LANTERN_CD} s per ally, up to ${pc(C.CLASS_SHIELD_CAP)}; counts toward the class-shield limit of ${pc(C.SHIELD_WIN_CLASS)} per ${C.SHIELD_WIN_T} s` });
     for (const k of skills) for (const h of k.heals) def.heals.push({ label: k.name, text: h.perMinion ? `${pc(h.perMinion)} of max health per minion, up to ${pc(h.cap)}` : `${pc(h.frac)} of max health for you and allies within 180` });
-    def.limits = `Class shields give at most ${pc(C.SHIELD_WIN_CLASS)} of max health per ${C.SHIELD_WIN_T} s and all sources ${pc(C.SHIELD_WIN_ALL)}; Battle Ward and the boss door are exempt.`;
+    def.limits = `Class shields give at most ${pc(C.SHIELD_WIN_CLASS)} of max health per ${C.SHIELD_WIN_T} s and all sources ${pc(C.SHIELD_WIN_ALL)}; Battle Ward is exempt.`;
   }
 
   // ---------------- statuses fed by the hero's damage ----------------
@@ -525,7 +528,7 @@
     return { dps: R.n(pr.dps), critDps: R.n(pr.critDps), rate, pool, bleed: R.n(pr.bleed), split: { weapon: R.n(pr.split.weapon), skills: R.n(pr.split.skills), minions: R.n(pr.split.minions) } };
   }
 
-  // ---------------- affinity and lantern ----------------
+  // ---------------- affinity and dark rooms ----------------
   function affModel(p, st, ctx) {
     const mine = [], seen = {};
     const push = (el, why) => { if (!el || seen[el] || !ED.PATHS[el] || !ED.PATHS[el].element) return; seen[el] = 1; mine.push({ el, name: ED.PATHS[el].name, color: ED.PATHS[el].color, why }); };
@@ -539,14 +542,9 @@
     const s = clampI(ctx.stratum || 1, 1, ED.BIOMES.length);
     return { now: at(s), next: s < ED.BIOMES.length ? at(s + 1) : null };
   }
-  function lanternModel(ctx, R, s) {
-    const lm = Math.max(1, ctx.lightMax), light = ctx.light, f = clampI(light / lm, 0, 1), tier = clampI(ctx.tier | 0, 0, W.DREAD.length - 1), D = W.DREAD[tier];
-    const pts = (v) => ({ pts: R.n(v), pct: R.f(v / lm) });
-    const boss = W.bossLight(f, s);
-    return {
-      tier, name: ['Bright', 'Dim', 'Dark', 'Lightless'][tier], light: R.n(light), lightMax: R.n(lm), pct: R.f(f), effect: { dmg: D.dmg, elite: D.elite, gloom: D.gloom, glooms: D.glooms, heal: D.heal, gold: D.gold, up: D.up },
-      cost: { combat: pts(W.ROOM_COST.combat), elite: pts(W.ROOM_COST.elite), other: pts(W.ROOM_COST.shop) }, boss: { heal: R.f(boss.heal), shield: R.f(boss.shield), gold: boss.gold, embers: boss.embers }, flare: pts(W.FLARE.cost), rooms: ctx.rooms,
-    };
+  // Dark rooms of the floor: unvisited / total, whether the hero stands in one, and the rule constants (foe damage, gold and xp multiplier).
+  function darkModel(ctx) {
+    return { left: ctx.rooms.darkLeft, total: ctx.rooms.darkTotal, here: !!ctx.dark, dmg: W.DARK_DMG, loot: W.DARK_LOOT, rooms: ctx.rooms };
   }
 
   // ---------------- build tab ----------------

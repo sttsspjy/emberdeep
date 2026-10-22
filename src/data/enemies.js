@@ -102,13 +102,10 @@
     voidknight: { name: 'Hollow Knight', ai: 'tank', look: 'knight', col: { a: '#3d2d63', b: '#140c26', c: '#ff7ad9' }, hp: 120, spd: 50, dmg: 21, r: 15, xp: 13, cost: 5,
       slam: { range: 56, radius: 72, windup: 0.75, cd: 2.2, ring: { n: 12, speed: 175, kind: 'void' } } },
 
-    // ---------------- Lightless stalker (any stratum; spawned by the world, ignored by room-clear checks) ----------------
-    gloom: { name: 'The Gloom', ai: 'gloom', look: 'gloom', col: { a: '#0d0818', b: '#1d1230', c: '#ff5a2a' }, hp: 9999, spd: 50, dmg: 35, r: 14, xp: 0, cost: 0, fly: true, gloom: true, invuln: true },
-
     // ---------------- Allies ----------------
     minion: { name: 'Risen Bones', ai: 'ally', look: 'skeleton', col: { a: '#b6ffe0', b: '#4c8f78', c: '#7dffd9' }, hp: 40, spd: 95, dmg: 10, r: 9, xp: 0, cost: 0, ally: true },
 
-    // ---------------- Bosses (absolute HP, scaled by party, pact and dread; refHp = design HP that chill, Conflagration and Wildfire measure against) ----------------
+    // ---------------- Bosses (absolute HP, scaled by party and pact; refHp = design HP that chill, Conflagration and Wildfire measure against) ----------------
     bonewarden: { name: 'The Bone Warden', title: 'Keeper of the First Graves', ai: 'boss', look: 'b_warden', col: { a: '#ece4cc', b: '#7d745f', c: '#ff5a3a' },
       hp: 4350, refHp: 800, spd: 60, dmg: 6.4, r: 24, xp: 40, boss: true, quote: 'None leave the Ossuary. Not even the dead.' },
     sporemother: { name: 'The Sporemother', title: 'Bloom of the Glowmire', ai: 'boss', look: 'b_spore', col: { a: '#c86bff', b: '#5b2a7a', c: '#7dffd9' },

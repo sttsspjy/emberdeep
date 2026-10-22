@@ -88,7 +88,7 @@
       `<b>Paths:</b> follow up to ${ED.MAX_ELEMENTS} of ${ED.ELEMENT_IDS.map(k => pathName(k, true)).join(', ')}, or take the ${pathName('general', true)} path alone as a Generalist. Blood and Spirit are gone.`,
       '<b>No life steal:</b> hits do not heal you any more. Shields take their place.',
       '<b>Knight:</b> Shield Throw replaces Bulwark.',
-      '<b>Lantern:</b> light no longer drains on its own. It is spent on new rooms and flares.',
+      '<b>Dark rooms:</b> the lantern, the Gloom and oil are gone. Each floor has two optional dark rooms: harder fights, richer rewards.',
       relics.length ? '<b>Relics you own changed:</b><br>' + relics.join('<br>') : '',
     ].filter(Boolean).map(t => `<p>${t}</p>`).join('');
     $('ov-news').hidden = false;
@@ -231,7 +231,7 @@
       const gen = ED.CLASS_IDS.filter(c => !ED.CLASSES[c].element).map(c => ED.CLASSES[c].name); // heroes without a class element can go Generalist
       lines.push('<b>Aim:</b> aim with the mouse; skills go to the cursor. At level 3 you choose a class route.');
       lines.push(`<b>Paths:</b> follow up to ${ED.MAX_ELEMENTS} of ${ED.ELEMENT_IDS.map(k => pathName(k, true)).join(', ')}, or, as ${gen.slice(0, -1).join(', ')} or ${gen[gen.length - 1]}, take the ${pathName('general', true)} path alone as a Generalist. Each stratum is weak to one element.`);
-      lines.push(`<b>Lantern:</b> every new room costs light (shown on its door). In the dark elites and the Gloom hunt you, but rooms pay more; <kbd>${esc(ED.Input.label('flare'))}</kbd> flares the Gloom away, and spare light shields you at the boss door.`);
+      lines.push('<b>Dark rooms:</b> a door marked dark leads to an optional dead end: foes hit harder and an extra elite joins, but the reward is a step richer and gold and experience drop in larger piles.');
     }
     if (p.stats.runs === 0) lines.push('<b>First goal:</b> reach the Bone Warden at the end of the Ossuary. Every descent pays embers, win or lose.');
     else if (next) lines.push(`<b>Next hero:</b> ${ED.CLASSES[next].name} (${esc(ED.CLASSES[next].unlock.text)}).`);
@@ -578,11 +578,9 @@
       : sum.abandoned ? `${sum.party > 1 ? 'Your party' : 'You'} turned back in ${biome.name}. ${tail}` : `You fell in ${biome.name}. ${tail}`);
     // world-summary fields below may be missing from a client's partial summary
     const total = sum.roomsTotal | 0, seen = Math.min(total, sum.roomsVisited | 0);
-    const lights = Array.isArray(sum.lightAtBoss) ? sum.lightAtBoss.filter(v => typeof v === 'number') : [];
     $('res-stats').innerHTML = [
       ['Deepest stratum', `${U.roman(sum.stratum || 1)} · ${biome.short}`], ['Time', U.fmtTime(sum.time || 0)], ['Level reached', sum.level || 1],
       ['Rooms cleared', sum.roomsCleared || 0], total > 0 ? ['Rooms explored', `${seen} / ${total} (${Math.round(seen / total * 100)}%)`] : null,
-      lights.length ? ['Average light at boss', Math.round(lights.reduce((a, b) => a + b, 0) / lights.length * 100) + '%'] : null,
       ['Foes slain', sum.kills || 0], ['Bosses slain', sum.bossCount || 0], ['Party', (sum.party || 1) + (sum.party > 1 ? ' heroes' : ' hero')],
       sum.pact ? ['Pact', sum.pact] : null,
     ].filter(Boolean).map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');

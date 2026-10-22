@@ -1,4 +1,4 @@
-// Screen-space HUD on its own device-resolution canvas (#hud): hero block, ability slots, party, map + lantern, xp, boss bar, prompts, signs, messages, banners; panels fade while the world is under them.
+// Screen-space HUD on its own device-resolution canvas (#hud): hero block, ability slots, party, map, xp, boss bar, prompts, signs, messages, banners; panels fade while the world is under them.
 // Scale unit u mirrors style.css (1u = 1rem). Static art (plates, keycaps, bar fills, portrait) is cached offscreen and rebuilt when u changes.
 (function (ED) {
   'use strict';
@@ -6,12 +6,11 @@
   const H = ED.HUD = {};
   const FD = '"Cinzel", Georgia, serif', FB = '"Alegreya Sans", "Segoe UI", system-ui, sans-serif';
   const K = { line: '#4a3626', brass: '#8a6a42', brassHi: '#c9a063', ember: '#ff8a3d', emberHi: '#ffb56b', gold: '#f0cf8a', bone: '#f6ecda', muted: '#c5b49d', faint: '#8f7f6c', danger: '#ef5a46', good: '#8fdc98', warm: '#ffd9a0' };
-  const TIER = [['Bright', '#ffd36b'], ['Dim', '#e6a050'], ['Dark', '#c0603a'], ['Lightless', '#a83232']];
 
   let cv = null, c = null, W = 0, Hh = 0, hd = 1, u = 13, cssW = 0, cssH = 0, lowQ = false, shown = false, dtc = 0, rk = 1, lastDpr = 0;
   let frameN = 0, drawSeq = 0, lastDrawT = 0, dtAcc = 0, fdt = 0, forceDirty = true; // redraw scheduling (see H.draw)
   const L = {}; // layout rects in canvas px, rebuilt with u
-  const ghost = {}, slotFx = [], lantern = { view: null, tier: 0, hint: '', t: 99, fx: '', fxTier: -1 };
+  const ghost = {}, slotFx = [];
   // Panel fade: a panel eases to FADE_MIN alpha while a hero, foe or pickup is under it (held FADE_HOLD s after the last overlap), then back. ga = alpha of the panel being drawn.
   const FADE_MIN = 0.35, FADE_RATE = (1 - FADE_MIN) / 0.15, FADE_HOLD = 0.2, FP_MAX = 640;
   const fade = {}, fp = new Float32Array(FP_MAX * 3); // fp: x, y, radius of each world object in canvas px
@@ -215,7 +214,6 @@
     L.ch = u * 1.7; L.cy = L.sy - u * 0.5 - L.ch;
     L.pw = u * 18; L.ph = u * 3.5;
     L.mw = u * 19; L.mx = W - m - L.mw; L.my = m; L.mh = u * 17.9;
-    L.lh = u * 10.8; L.ly = L.my + L.mh + u * 0.6;
     L.xw = U.clamp(W - 2 * (L.hx + L.hw + u * 1.5), u * 22, u * 40); L.xh = u * 3.6; L.xx = Math.max((W - L.xw) / 2, L.hx + L.hw + u * 0.8); L.xw = Math.min(L.xw, W - m - L.xx); L.xy = Hh - m - L.xh;
     L.bw = Math.min(u * 55, W - 2 * (L.mw + m * 2)); // boss plate width, clear of the map column
   }
@@ -286,14 +284,12 @@
     const st = me.stats, frac = me.maxHp > 0 ? me.hp / me.maxHp : 0, cls = ED.CLASSES[me.cls], gk = 'p' + me.pid;
     sp(sid(me.name)); sp(sid(me.cls)); sp(me.slot | 0); sp(sid(String(me.weapon))); sp(Math.ceil(me.hp)); sp(me.maxHp); sp(Math.ceil(me.shield || 0)); sp(Math.round(frac * 1024)); sp(sid(H.weaponName(me)));
     if ((ghost[gk] !== undefined && ghost[gk] > frac + 0.0005) || (frac < 0.3 && me.hp > 0)) anim = true; // damage ghost easing out, low-health pulse
-    const FL = ED.World.FLARE, canFlare = view.lightMax > 0 && view.light >= FL.cost && !(view.room && view.room.type === 'boss');
     const scd = ctl.skillCd > 0 && ctl.charges <= 0 ? ctl.skillCd : 0;
     sp(sid(I.label('skill1'))); sp(scd > 0 ? 1 : 0); sp(ctl.charges | 0); sp(st ? st.maxCharges | 0 : 1); sp(st ? Math.round(st.skillCd * 100) : 0);
     const s2 = cls.skill2 && ED.SKILLS[cls.skill2], cd2 = ctl.skill2Cd > 0 ? ctl.skill2Cd : 0;
     if (s2) { sp(sid(I.label('skill2'))); sp(cd2 > 0 ? 1 : 0); sp(shieldOut(me) ? 1 : 0); sp(Math.round(((st && st.skill2Cd) || s2.cd) * 100)); if (cd2 > 0.04) anim = true; }
     const dmx = st ? st.dashCharges | 0 : 1, dsw = ctl.dashN < dmx && ctl.dashT > 0 ? ctl.dashT : 0; // dash recharge sweep: seconds to the next charge
     sp(sid(I.label('dash'))); sp(ctl.dashN | 0); sp(dmx); sp(dsw > 0 ? 1 : 0); sp(st ? Math.round(st.dashCd * 100) : 0);
-    sp(sid(I.label('flare'))); sp(canFlare ? 1 : 0); sp(view.lightMax > 0 ? 1 : 0);
     if (scd > 0.04 || dsw > 0.04) anim = true; // sweeps
     for (const fx of slotFx) if (fx && fx.t > 0) anim = true; // ready flash
     const pl = pips(me); sp(pl.length); for (let i = 0; i < pl.length; i += 2) { sp(sid(pl[i])); sp(pl[i + 1]); } sp(sid(st && st.evo || ''));
@@ -313,10 +309,6 @@
       for (const r of fl.rooms) { const s = rs[r.id]; h = (h * 7 + (s ? (s.known ? 1 : 0) | (s.visited ? 2 : 0) | (s.cleared ? 4 : 0) : 0)) | 0; }
       sp(h);
     } else sp(0);
-    // lantern
-    const lf = view.lightMax > 0 ? clamp01(view.light / view.lightMax) : 0, tier = U.clamp((view.dread && view.dread.tier) | 0, 0, 3);
-    sp(view.lightMax > 0 ? 1 : 0); sp(Math.round(lf * 2048)); sp(tier);
-    if (view.lightMax > 0 && (tier === 3 || (lantern.t < 6 && lantern.hint) || lantern.view !== view)) anim = true; // pulse, tier-change hint fade
     // xp
     sp(view.level | 0); sp(Math.round(view.xp / (view.xpNext || 1) * 1024)); sp(view.gold | 0); sp(ctl.picks | 0); sp(ctl.offerOpen ? 1 : 0); sp(sid(view.waitMsg || ''));
     if ((ctl.picks | 0) > 0 && !ctl.offerOpen) anim = true;
@@ -371,7 +363,6 @@
       const chips = heroBlock(view, me, ctl, t);
       party(view, me);
       mapBlock(view, biome, t);
-      lanternBlock(view, t);
       xpBlock(view, ctl, extra, t);
       relics(me);
       bossBar(view, t);
@@ -411,19 +402,17 @@
     T(`${Math.ceil(me.hp)} / ${me.maxHp}` + (shield > 0 ? ` +${Math.ceil(shield)}` : ''), bx + bw / 2, by + bh / 2 + u * 0.05, u * 1.2, '#ffffff', FB, 'center', 800, true);
 
     // ability slots
-    const FL = ED.World.FLARE, canFlare = view.lightMax > 0 && view.light >= FL.cost && !(view.room && view.room.type === 'boss');
     let i = 0;
     const sk = ED.SKILLS[cls.skill];
     const scd = ctl.skillCd > 0 && ctl.charges <= 0 ? ctl.skillCd : 0, mx = st ? st.maxCharges : 1;
-    slot(i++, I.label('skill1'), scd, st ? st.skillCd : sk.cd, ctl.charges > 0, sk.icon, cls.col.c, ctl.charges, mx, 0);
+    slot(i++, I.label('skill1'), scd, st ? st.skillCd : sk.cd, ctl.charges > 0, sk.icon, cls.col.c, ctl.charges, mx);
     const s2 = cls.skill2 && ED.SKILLS[cls.skill2];
     if (s2) {
       const tot = Math.max(0.1, (st && st.skill2Cd) || s2.cd), up = shieldOut(me), cd2 = ctl.skill2Cd > 0 ? ctl.skill2Cd : 0; // a thrown shield lights the slot until it is caught
-      slot(i++, I.label('skill2'), cd2, tot, cd2 <= 0 && !up, s2.icon, up ? '#ffe9a0' : cls.col.c, 0, 1, 0);
+      slot(i++, I.label('skill2'), cd2, tot, cd2 <= 0 && !up, s2.icon, up ? '#ffe9a0' : cls.col.c, 0, 1);
     }
     const dmx = st ? st.dashCharges | 0 : 1, dcd = ctl.dashN < dmx && ctl.dashT > 0 ? ctl.dashT : 0; // the sweep is the next charge; the slot is lit while one is left
-    slot(i++, I.label('dash'), dcd, st ? st.dashCd : 1, ctl.dashN > 0, 'wing', '#bfe9ff', ctl.dashN, dmx, 0);
-    if (view.lightMax > 0) slot(i++, I.label('flare'), 0, 1, canFlare, 'lantern', '#ffb35c', 0, 1, FL.cost);
+    slot(i++, I.label('dash'), dcd, st ? st.dashCd : 1, ctl.dashN > 0, 'wing', '#bfe9ff', ctl.dashN, dmx);
 
     // path pips: each owned gate with its affinity ring (keystone tick, evolution at full); a star on the evolved path
     const gates = me.boons ? ED.gatePaths(me.boons) : [];
@@ -449,8 +438,8 @@
     return any;
   }
 
-  // One ability slot: plate, icon, cooldown sweep + seconds, ready ring and flash, charge pips, cost tag, keycap.
-  function slot(i, key, secs, total, ready, icon, col, charges, maxCharges, cost) {
+  // One ability slot: plate, icon, cooldown sweep + seconds, ready ring and flash, charge pips, keycap.
+  function slot(i, key, secs, total, ready, icon, col, charges, maxCharges) {
     const x = L.sx + i * (L.ss + L.sg), y = L.sy, s = L.ss, ins = u * 0.3, fx = slotFx[i] || (slotFx[i] = { r: ready, t: 0 });
     if (ready && !fx.r) fx.t = 0.5; fx.r = ready; if (fx.t > 0) fx.t -= dtc;
     plate(x, y, s, s, u * 0.6);
@@ -467,7 +456,6 @@
       const d = u * 0.8;
       for (let k = 0; k < maxCharges; k++) { const px = x + ins + k * (d + u * 0.2); c.fillStyle = k < charges ? K.emberHi : 'rgba(0,0,0,0.7)'; c.fillRect(px, y + ins, d, d); c.lineWidth = 1; c.strokeStyle = '#000'; c.strokeRect(px + 0.5, y + ins + 0.5, d - 1, d - 1); }
     }
-    if (cost > 0) T('−' + cost, x + ins, y + ins + u * 0.55, u * 0.95, ready ? K.warm : K.faint, FB, 'left', 800, true);
     const kc = capArt(key, false); c.drawImage(kc.cv, Math.round(x + s / 2 - kc.w / 2), Math.round(y + s - kc.h * 0.45));
   }
 
@@ -492,11 +480,11 @@
   }
 
   // ---------------- map + stratum (top-right) ----------------
-  // The panel height follows the floor: cells are as large as the panel width allows (at most 4.2u, grid height within 17u), the lantern panel sits below.
+  // The panel height follows the floor: cells are as large as the panel width allows (at most 4.2u, grid height within 17u).
   function mapBlock(view, biome, t) {
     const x = L.mx, y = L.my, w = L.mw, fl = view.floor, G = fl && gridOf(fl), top = u * 5.8, mw = w - u * 1.2;
-    const hCap = Math.max(u * 6, Math.min(u * 17, Hh - 2 * L.m - top - u * 1.3 - L.lh)), cell = G ? Math.min(mw / G.cols, hCap / G.rows, 4.2 * u) : 0, mh = G ? Math.ceil(G.rows * cell) : u * 4;
-    L.mh = top + mh + u * 0.7; L.ly = L.my + L.mh + u * 0.6;
+    const hCap = Math.max(u * 6, Math.min(u * 17, Hh - 2 * L.m - top - u * 1.3)), cell = G ? Math.min(mw / G.cols, hCap / G.rows, 4.2 * u) : 0, mh = G ? Math.ceil(G.rows * cell) : u * 4;
+    L.mh = top + mh + u * 0.7;
     fadeStart('map', x, y, w, L.mh);
     plate(x, y, w, L.mh);
     T(biome.name, x + w / 2, y + u * 1.55, u * 1.3, biome.pal.ui, FD, 'center', 700);
@@ -514,58 +502,6 @@
       }
     }
     H.drawMap(c, view, x + u * 0.6, y + top, mw, mh, u, t);
-    endFade();
-  }
-
-  // ---------------- lantern (under the map) ----------------
-  function lanternBlock(view, t) {
-    if (!(view.lightMax > 0)) return;
-    const x = L.mx, y = L.ly, w = L.mw, Wd = ED.World, I = ED.Input;
-    const tier = U.clamp((view.dread && view.dread.tier) | 0, 0, 3), lf = clamp01(view.light / view.lightMax), pl = tier === 3 ? 0.5 + 0.5 * Math.sin(t * 5) : 1;
-    if (lantern.view !== view) { lantern.view = view; lantern.tier = tier; lantern.hint = ''; lantern.t = 99; }
-    else if (tier !== lantern.tier) {
-      lantern.hint = tier > lantern.tier ? ['', 'Elites stir. The Deep pays more.', `The Gloom hunts. Flare (${I.label('flare')}) or oil.`, 'Lightless! Only oil drives the Gloom off.'][tier] : tier === 0 ? 'The lantern burns bright.' : 'The light pushes the dark back.';
-      lantern.t = 0; lantern.tier = tier;
-    }
-    lantern.t += dtc;
-    if (lantern.fxTier !== tier) { // effect line of the tier, rebuilt on a tier change
-      const D = Wd.DREAD && Wd.DREAD[tier], parts = [];
-      if (D) { if (D.dmg > 1) parts.push(`Dmg +${Math.round((D.dmg - 1) * 100)}%`); if (D.heal < 1) parts.push(`Heal −${Math.round((1 - D.heal) * 100)}%`); if (D.elite > 0) parts.push(`Elites +${Math.round(D.elite * 100)}%`); if (D.gold > 1) parts.push(`Gold ×${D.gold}`); }
-      lantern.fx = parts.length ? parts.join(' · ') : 'Foes at normal strength'; lantern.fxTier = tier;
-    }
-    const tc = tier === 3 ? U.mix('#8a2a2a', '#ff5a40', pl) : TIER[tier][1];
-    fadeStart('lantern', x, y, w, L.lh);
-    plate(x, y, w, L.lh);
-    ic(c, 'lantern', tc, x + u * 0.9, y + u * 0.7, u * 2.1);
-    T(TIER[tier][0], x + u * 3.4, y + u * 1.75, u * 1.45, tc, FD, 'left', 700);
-    T(Math.round(lf * 100) + '%', x + w - u * 1.1, y + u * 1.75, u * 1.3, tc, FB, 'right', 800);
-    // meter: tier zones tinted behind the fill; ticks at the Dim (50%) and Dark (25%) thresholds
-    const mx = x + u * 1, mw = w - u * 2, my = y + u * 3.6, mh = u * 1.5, b = Math.max(1, Math.round(u * 0.07));
-    c.fillStyle = '#000'; c.fillRect(mx - b, my - b, mw + 2 * b, mh + 2 * b);
-    c.fillStyle = U.rgba(TIER[2][1], 0.22); c.fillRect(mx, my, mw * 0.25, mh);
-    c.fillStyle = U.rgba(TIER[1][1], 0.2); c.fillRect(mx + mw * 0.25, my, mw * 0.25, mh);
-    c.fillStyle = U.rgba(TIER[0][1], 0.16); c.fillRect(mx + mw * 0.5, my, mw * 0.5, mh);
-    if (lf > 0) { const f = fillArt(tc, mh); c.drawImage(f.cv, 0, 0, 4, f.h, mx, my, mw * lf, mh); }
-    c.fillStyle = 'rgba(246,236,218,0.75)'; c.fillRect(Math.round(mx + mw * 0.5) - 1, my - u * 0.3, 2, mh + u * 0.6); c.fillRect(Math.round(mx + mw * 0.25) - 1, my - u * 0.3, 2, mh + u * 0.6);
-    if (tier === 3) { c.strokeStyle = U.rgba('#ff4a3a', 0.35 + 0.5 * pl); c.lineWidth = lw(); c.strokeRect(mx - b * 2, my - b * 2, mw + b * 4, mh + b * 4); }
-    // one line of what the tier does (a fresh tier change shows its warning for a few seconds instead)
-    const hint = lantern.t < 6 && lantern.hint;
-    c.globalAlpha = ga * (hint ? clamp01(6 - lantern.t) : 1);
-    const fxs = hint || lantern.fx, fxw = adv(fxs, u * 0.95, 700); // shrink a long effect line to the panel, not below 0.85u
-    T(fxs, x + w / 2, y + u * 6.35, fxw > w - u * 1.2 ? Math.max(u * 0.85, u * 0.95 * (w - u * 1.2) / fxw) : u * 0.95, hint ? tc : K.muted, FB, 'center', 700);
-    c.globalAlpha = ga;
-    // what the light is worth: each unvisited room costs light (numbers on the doors and map); light left at the boss door guards the party
-    const WC = Wd.ROOM_COST;
-    T(`Room −${WC.combat} · Elite −${WC.elite} · Other −${WC.shop}`, x + w / 2, y + u * 7.9, u * 0.95, K.warm, FB, 'center', 700);
-    const bl = Wd.bossLight(lf, view.stratum), by = y + u * 9.4;
-    if (bl.heal > 0) {
-      const seg = [['heart', '#ff6a7a', Math.round(bl.heal * 100) + '%'], ['shield', '#7fc8ff', Math.round(bl.shield * 100) + '%'], ['coin', '#ffd36b', '+' + bl.gold]];
-      const bdw = adv('Boss door', u * 0.95, 800);
-      let tw = bdw + u * 0.7; for (let k = 0; k < 3; k++) tw += u * 1.3 + u * 0.3 + adv(seg[k][2], u * 0.95, 800) + u * 0.7;
-      let cx = x + (w - tw + u * 0.7) / 2;
-      T('Boss door', cx, by, u * 0.95, K.muted, FB, 'left', 700); cx += bdw + u * 0.7;
-      for (let k = 0; k < 3; k++) { ic(c, seg[k][0], seg[k][1], cx, by - u * 0.65, u * 1.3); cx += u * 1.6; T(seg[k][2], cx, by, u * 0.95, K.good, FB, 'left', 800); cx += adv(seg[k][2], u * 0.95, 800) + u * 0.7; }
-    } else T('Boss door: no light to spare', x + w / 2, by, u * 0.95, K.faint, FB, 'center', 700);
     endFade();
   }
 
@@ -723,7 +659,6 @@
     }
     const ICON = { boss: ['skull', '#ff5a3a'], shop: ['coin', '#ffd36b'], treasure: ['chest', '#ffd36b'], event: ['star', '#7dffd9'], elite: ['skull', '#ff7a3a'], rest: ['campfire', '#ff9a3a'] };
     const meP = ED.Game.s && ED.Game.s.me, cls = meP ? meP.cls : null;
-    const fpx = Math.max(0.85 * un, cell * 0.36);
     for (const r of fl.rooms) {
       const st = rs[r.id]; if (!st || !st.known) continue;
       const s = cell * 0.8, rx = cx(r) - s / 2, ry = cy(r) - s / 2;
@@ -737,11 +672,7 @@
         const ri = ED.Render.rewardIcon(r.reward, cls), big = r.type === 'combat', z = big ? s * 0.76 : s * 0.5;
         ic(g, ri[0], ri[1], big ? rx + s * 0.12 : rx + s - z * 0.9, big ? ry + s * 0.12 : ry + s - z * 0.9, z);
       }
-      const cost = st.visited ? 0 : ED.World.roomCost(r.type); // light the unvisited room costs, bottom-right of its cell
-      if (cost > 0) {
-        const e = textArt(String(cost), fpx, K.warm, FB, 800, true); // cached text bitmap, right edge and baseline at the cell's bottom-right
-        g.drawImage(e.cv, Math.round(rx + s + 1 - e.pad - e.adv), Math.round(ry + s + 1 - fpx * 0.35 - e.h / 2));
-      }
+      if (r.dark && !st.visited) { const z = s * 0.5; ic(g, 'skull', '#a070ff', rx + s - z * 0.9, ry + s - z * 0.9, z); } // dark-room mark, bottom-right of its cell
     }
   };
 })(globalThis.ED || (globalThis.ED = {}));
