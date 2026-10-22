@@ -1,12 +1,12 @@
 # Wickdeep — Agent Kanban
 
 ## Todo
-- Sign-off batch after Phase 3b: `node tools/simpool.js 1 384 0.75 none,mid,max --pick=smart` (one invocation); fill the "Measured" column of GAME-DESIGN §10 (every cell says pending sign-off).
+- Sign-off batch after Phase 3b: the five `simpool` invocations (seven rows) listed in GAME-DESIGN §10; fill its "Measured" column (every cell says pending sign-off).
 - Firefox perf verification of the v3 renderer: frame times in Firefox and Chromium, solo and 4 players, 80 foes, 2560 High; v2 reference in HANDOFF-2026-10-21 (solo peak 3.7 ms, 4P 6.9 ms, 80 foes 4.0 ms).
 - PR `feat/v3-overhaul` → `main` (merge commit) after sign-off and the render fixes; delete merged branches.
 - Playtest 3 feedback (user) → triage first; it can reorder everything.
 - Re-check after Phase 3b (open in the last worker reports): Guard forks lose too much HP versus Burst siblings (Veil of Night 0.92, Bone Armor 0.99–1.04, Pyromancer Guard forks 0.99–1.02 against 0.60–0.85); attack-route weapon-share target for crit and Momentum cards; Open Veins is the weakest Shade fork; Ember Rush and Magma Heart rarely reach full Channel in bot fights.
-- Deeds are a 32-bit mask: a 33rd deed needs new storage and a `CODE_VERSION` bump (26 today).
+- Deeds are a 31-bit mask in profile storage and decode (`1 << i`, load clamps to 2^31 − 1): a 32nd deed resets every deed on reload and needs new profile storage; the save code's 6-bit deed count holds 63, so no `CODE_VERSION` bump (26 today).
 - Aim banner for party clients on their first descent (host-solo tutorial signs only).
 - Tooling: `simpool.js` workers run at idle priority and starve under CPU load; killed parents leave orphaned `--worker` processes.
 - Unverified by a human: sound mix, presentation above 100 Hz.

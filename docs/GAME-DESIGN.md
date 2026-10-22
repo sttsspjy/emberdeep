@@ -1,6 +1,6 @@
 # Wickdeep — Game Design Spec
 
-Canonical rules and numbers. Code follows this file; balance passes may retune numbers here and in code together. Numbers marked "pending sign-off" are being retuned; read the code constant named beside them.
+Canonical rules and numbers. Code follows this file; a balance pass changes numbers here and in code together.
 
 ## Pillars
 
@@ -12,7 +12,7 @@ Canonical rules and numbers. Code follows this file; balance passes may retune n
 ## 1. Damage model
 
 - Foe HP = base × `1 + 0.65(s−1) + 0.08(s−1)²` × **threat HP** × party multiplier. Foe damage = base × `1 + 0.22(s−1) + 0.03(s−1)²` × **threat damage** (below 1 in strata I–V). Boss HP is absolute (below), scaled by party, pact and dread.
-- **Threat** per stratum (`World.THREAT`): HP ×, damage ×, wave budget ×, attack-cooldown rate `cdRate` (foe cooldowns tick faster by this fraction, negative = slower, only while the foe can act; wind-ups never change), boss pause × (time between boss attacks):
+- **Threat** per stratum (`World.THREAT`): HP ×, damage ×, wave budget ×, attack-cooldown rate `cdRate` (foe cooldowns tick faster by this fraction, negative = slower, only while the foe can act; wind-ups never change; bosses are exempt), boss pause × (time between boss attacks):
 
 | Stratum | HP × | Damage × | Wave × | `cdRate` | Boss pause × |
 |---|---|---|---|---|---|
@@ -35,7 +35,7 @@ Canonical rules and numbers. Code follows this file; balance passes may retune n
 
 1. **Hero multiplier** (one additive sum, at least ×0.1): `dmg` stat + conditional rows (execute: foes below 30% HP; searing: burning; lacerate: bleeding; malice: carrying Doom; brittle: chilled or frozen; fester: envenomed; opportunist: stunned, frozen or blinded; Death Knell stacks; Brand per ailment; Guardian Light; Embolden) + the class hook (`hitMul`: Momentum, Channel, Soul Barrage…) + class-element skill hits (`classElMul`), Golden Idol (+1% per 15 party gold, at most 20%), Banner of Unity.
 2. **Crit** × `critMult` (1.75 + crit damage; chance capped at 95%), then the class `critMul`.
-3. The hit's own factor `src.mul` (Cleave, Ambush, Deadeye by distance flown, Ballista's pierce ramp, Gathering Force, Gangrene, …); a hit on a frozen foe ends the freeze and takes the Shatter bonus.
+3. The hit's own factor `src.mul` (Cleave, Ambush, Deadeye by distance flown, Ballista's pierce ramp, Gathering Force, Gangrene, …); with the Shatter boon, a hit on a frozen foe takes its bonus and ends the freeze.
 4. **Foe vulnerability** `1 + Σ`: Marked (Hunter's Mark, `markV`) · Judged or `vulnT` (+0.2, once: Judgment, Hail of Thorns, smoke do not stack) · Frozen +0.25 · Sunder +0.04 per stack (own stacks, max 10) · Venom `venom/100 × (0.25 + corrode)` (full from the hero who added Venom, ×0.5 from allies). Co-op debuffs are single foe states: the strongest value wins, they never add.
 5. **Element affinity** (§2): ×1.5 weak, ×0.5 resisted. Class-skill parts tagged `el: class` take half of it (×1.25 / ×0.75); their statuses take the full value.
 6. `exposed` ×1.5.
@@ -57,7 +57,7 @@ Status ticks, Smites, Tolls and discharges are `raw` hits: no hero multiplier, n
 ### Shields
 
 - Every shield a hero receives passes one sliding 10 s window in `World.addShield`, except Battle Ward and the boss door: **class sources give at most 3% of max HP per window, all sources together at most 6%** (`SHIELD_WIN_CLASS`, `SHIELD_WIN_ALL`). Holy (Smite) and Bone Armor shields count only in the all-sources window.
-- Sources: Rallying Charge, Shield Throw catch, Phoenix Mantle, Veil of Night, Verdict kill shield, Sacred Lantern orbs (class window); Smites (Holy); Bone Armor; Battle Ward (5% max HP when an elite room locks); the boss door.
+- Sources: Rallying Charge, Shield Throw catch, Phoenix Mantle, Veil of Night, Judgment kill shield, Sacred Lantern orbs (class window); Smites (Holy); Bone Armor; Battle Ward (5% max HP when an elite room locks); the boss door.
 - Shields fade by 2% of max HP per second while no room is locked and outside boss rooms (`SHIELD_DECAY`). A shield above its cap is never lowered. Dread's healing multiplier scales shield gains. A downed or dead hero gains none.
 
 ### Healing
@@ -310,8 +310,8 @@ Class Power **P** scales every skill and proc: Knight 18 · Ranger 12 · Pyroman
 | Shade | **Shadowstep** | 4.5 | move 40–140 px toward the cursor | Blink; every foe on the path takes a guaranteed crit of 12 + 2.2P; the next 3 attacks crit. |
 | Shade | **Vanish** | 11 | self | Smoke r75 for 3 s (foes inside slowed 40%, blinded up to 2 s each, elites half, never bosses). Unseen for 2.5 s: foes lose you and attack the spot they last saw you. The next attack is an **Ambush**: guaranteed crit for 2.5 × the unforked weapon's damage. Attacking ends stealth. |
 | Cleric | **Sanctuary** | 11 | ground, ≤ 200 | Heals you and allies within 180 for 7% max HP. Holy ground r100 for 3.5 s: foes take 10 + 1.2P per second (stores Radiance from a quarter of each tick); allies inside take 15% less damage. |
-| Cleric | **Judgment** | 9 | direction | A hammer flies out and returns, piercing; each leg hits a foe once for 18 + 1.4P (it takes the Judged +20% itself) and Judges it for 4 s (+20% damage taken). |
-| Necromancer | **Raise Legion** | 12 | ground, ≤ 160, standable | 3 minions for 12 s (max 3 minions); each strikes every 0.7 s for 6 + 0.6P. Foes your minions or weapon kill may rise for 10 s (12%, +weapon raise). |
+| Cleric | **Judgment** | 9 | direction | A hammer flies out and returns, piercing; each leg hits a foe once for 18 + 1.4P (it takes the Judged +20% itself) and Judges it for 4 s (+20% damage taken). A foe that dies while the hammer's own Judged window runs shields heroes within 160 for 3% max HP, once per cast (class window). |
+| Necromancer | **Raise Legion** | 12 | ground, ≤ 160, standable | 3 minions for 12 s (max 3 minions); each strikes every 0.7 s for 6 + 0.6P. Any non-boss foe you are credited with (weapon, skills, Reaps, status damage, minions) may rise for 10 s (12%, +weapon raise). |
 | Necromancer | **Bone Harvest** | 10 | self | Each minion bursts (r60, 24 + 1.8P, Shadow) and heals you 3% max HP (at most 6%); then 1 new minion rises (2 when you had none). |
 
 - Class-element parts (Fire, Holy, Shadow) take half affinity; Bleed-route heroes have none. Minion damage × 0.85 (`COMP_MUL`); minions infuse at 50%.
@@ -322,7 +322,7 @@ Class Power **P** scales every skill and proc: Knight 18 · Ranger 12 · Pyroman
 
 - Defaults (every action has two rebindable slots, keyboard codes or mouse buttons, saved in settings): move WASD / arrows; attack left mouse / J (also interacts); skill 1 Q / right mouse (rerolls boon cards while they are open); skill 2 E; dash Space; lantern flare F; map and sheet Tab; pause Esc. Hotkeys use `e.code`. Prompts and signs show the live binding (`{action}` tokens).
 - **Gamepad** (fixed layout): left stick moves, right stick aims, X or RT attacks, B or RB skill 1, Y or LT skill 2, A or LB dashes, L3 flare, Back opens the sheet, Start pauses. In menus and the sheet LB/RB switch tabs, B goes back, Y rerolls an offer (cycles heroes in the sheet).
-- **Aim is manual.** There is no auto-aim and no aim assist. The aim origin is the projectile spawn point (hero x, y − 4). Attacks and `dir` skills fly toward the cursor; `ground` skills (Rain, Meteor, Sanctuary, Raise Legion) land on the cursor, clamped to range and cut at the first wall (chasms do not stop them; Raise Legion lands on a standable spot); `move` skills (Charge, Shadowstep) travel toward it; `self` skills ignore it. The last angle is kept when the cursor is within 12 px of the origin or outside the window; before the first pointer event the aim follows the walking direction. On a pad the right stick aims (held 0.35 s after release), else the left stick, else the last angle; ground skills reach `range × stick push`.
+- **Aim is manual.** There is no auto-aim and no aim assist. The aim origin is the projectile spawn point (hero x, y − 4). Attacks and `dir` skills fly toward the cursor; `ground` skills (Rain, Meteor, Sanctuary, Raise Legion) land on the cursor, clamped to range and cut at the first wall (chasms do not stop them; Raise Legion lands on a standable spot); `move` skills (Charge, Shadowstep) travel toward it; `self` skills ignore it. The last angle is kept when the cursor is within 12 px of the origin or outside the window; before the first pointer event the aim follows the walking direction. On a pad the right stick aims (held 0.35 s after release), else the left stick, else the last angle; ground skills reach `range × clamp((push − 0.45) / 0.5, 0.3, 1)` of the right stick's push.
 
 ### Heavy and Swift (attack forks)
 
@@ -433,11 +433,11 @@ Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat
 - Profile key `wickdeep.profile.v1`, save code prefix `WD1-`, peer prefix `wickdeep-v1-`. No other profile key is imported; Emberdeep `ED1-` codes are refused.
 - **Save code** (`CODE_VERSION` 4): positional lists (UPGRADES, non-start RELIC_IDS, CLASS_IDS mastery, DEEDS) each carry a count prefix, so appending an entry never shifts what follows; the decoder skips extra entries and leaves missing ones at 0. Versions 2 and 3 still decode; a newer version is refused with "reload the page"; a code with more than 127 Codex relics cannot be written. Changing a relic's start flag, reordering or removing an entry bumps `CODE_VERSION`.
 - **Returning players**: a profile with runs from before this ruleset (profile `v` below 2, or a version-2 code with runs) gets `news = 1`; a one-time "The Deep has changed" notice lists the changes and the owned relics that were renamed or reworked, then clears the flag.
-- Settings (`wickdeep.settings.v1`): volumes, quality, frame cap, screen shake, damage numbers, key bindings, cursor, cursor size, cursor colour, skill aim preview.
+- Settings (`wickdeep.settings.v1`): volumes, quality, frame cap, screen shake, damage numbers, key bindings, cursor, cursor size, cursor colour, skill aim preview, last Tab-sheet tab (`sheetTab`).
 
 ## 10. Balance targets (bots, `tools/sim.js`, skill 0.75)
 
-Measured values are **pending sign-off**: the class and global balance passes are retuning numbers, and the Advisor fills this column after the sign-off batch. Smart pick policy unless noted; 384 runs each, six heroes in rotation, `node tools/simpool.js 1 384 0.75 none,mid,max --pick=smart`. Skill 0.75 is the share of ticks the bot pays attention to floor hazards and the lantern flare, and the chance it reads each Gloom lunge telegraph; hazard tiles are routed around. The `mid` and `max` presets carry the Codex relics (mid: start relics plus Codex relics costing ≤ 70 without a boss requirement).
+Measured cells read **pending sign-off** until the runs below are recorded after a balance pass. Smart pick policy unless noted; 384 runs each, six heroes in rotation. Skill 0.75 is the share of ticks the bot pays attention to floor hazards and the lantern flare, and the chance it reads each Gloom lunge telegraph; hazard tiles are routed around. The `mid` and `max` presets carry the Codex relics (mid: start relics plus Codex relics costing ≤ 70 without a boss requirement). Runs (`node tools/simpool.js <args>`): Fresh random `1 384 0.75 none --pick=random`; Fresh smart, Half-upgraded and Fully upgraded `1 384 0.75 none,mid,max --pick=smart`; Pact 5 `1 384 0.75 max - 5 --pick=smart`; Two heroes `2 384 0.75 mid --pick=smart`; Three heroes `3 384 0.75 mid --pick=smart`.
 
 | Profile | Target win | Measured | Target depth | Measured |
 |---|---|---|---|---|

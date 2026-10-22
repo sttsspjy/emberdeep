@@ -24,7 +24,7 @@ Every key and mouse button can be changed in **Settings > Controls**: click an a
 
 **Aiming is manual.** Attacks and many skills fly toward the cursor; ground skills (Rain of Arrows, Meteor, Sanctuary, Raise Legion) land on it; Shield Charge and Shadowstep travel toward it. There is no auto-aim. The cursor lights up over foes, and a landing preview shows where a ground skill will fall. **Settings > Controls** changes the cursor (reticle or system crosshair), its size and colour, and turns the skill aim preview on or off.
 
-**Gamepad** (fixed layout): left stick moves, right stick aims (let go and you aim where you walk), `X` or right trigger attacks, `B` or right bumper is skill 1, `Y` or left trigger is skill 2, `A` or left bumper dashes, pressing the left stick fires the lantern flare, `Back` opens the character sheet, `Start` pauses. In the sheet the bumpers switch tabs and `B` closes it; `Y` rerolls boon cards.
+**Gamepad** (fixed layout): left stick moves, right stick aims (let go and you aim where you walk), `X` or right trigger attacks, `B` or right bumper is skill 1, `Y` or left trigger is skill 2, `A` or left bumper dashes, pressing the left stick fires the lantern flare, `Back` opens the character sheet, `Start` pauses. In the sheet the bumpers switch tabs, `B` closes it and `Y` switches the hero you view; on the boon offer screen `Y` rerolls the cards.
 
 ### The screen
 
@@ -89,7 +89,7 @@ Boons belong to **paths**: six element paths and General. A hero follows at most
 - **Duo boons:** two element paths that both reach affinity 4 offer a duo that combines them: Thermal Shock (Fire and Ice), Plasma (Fire and Lightning), Firedamp (Fire and Poison), Sunfire (Fire and Holy), Black Flame (Fire and Shadow), Superconductor (Ice and Lightning), Cryotoxin (Ice and Poison), Hoarlight (Ice and Holy), Black Ice (Ice and Shadow), Galvanic Venom (Lightning and Poison), Wrath of Heaven (Lightning and Holy), Black Lightning (Lightning and Shadow), Purge (Poison and Holy), Necrosis (Poison and Shadow) and Twilight (Holy and Shadow).
 - **Forge:** picking a forge card ranks an owned boon up by one.
 - A room that rewards "a boon" offers one new element gate (while you have a free slot) and boons of the paths you follow. Level-ups offer open boons, boons of your paths, keystones and duos.
-- **No life steal.** Hits and kills never heal you. Healing comes from hearts, campfires, healing draughts, the fountain, Vigor, the Hearth's Provisions and the Elixir Flask, Sanctuary and Bone Harvest, the light you carry into the boss room, and revives. **Shields** take the place of sustain: class shields give at most 3% of your max health per 10 seconds, all shield sources together at most 6%, and shields fade between fights.
+- **No life steal.** Hits and kills never heal you. Healing comes from hearts, campfires, healing draughts, the fountain, Vigor, the Hearth's Provisions and the Elixir Flask, Sanctuary and Bone Harvest, the light you carry into the boss room, and revives. **Shields** take the place of sustain: class shields give at most 3% of your max health per 10 seconds, all shield sources together at most 6% (the Battle Ward an elite room grants and the boss-door shield are exempt), and shields fade between fights.
 
 ### Class routes
 
@@ -136,7 +136,7 @@ You start with the **Knight**, **Ranger** and **Pyromancer**. Each hero has thre
 | Ranger | Volley, 5 s | Rain of Arrows, 10 s: a storm of arrows on a point | Start |
 | Pyromancer | Flame Nova, 7 s | Meteor, 12 s: telegraphed impact and burning crater | Start |
 | Shade | Shadowstep, 4.5 s | Vanish, 11 s: smoke, stealth and a guaranteed-crit ambush | Defeat the Bone Warden |
-| Cleric | Sanctuary, 11 s: heals the party, then holy ground that burns foes and cuts the damage allies take | Judgment, 9 s: a returning hammer that judges foes | Complete 4 descents |
+| Cleric | Sanctuary, 11 s: heals you and allies near you, then holy ground that burns foes and cuts the damage allies take | Judgment, 9 s: a returning hammer that judges foes | Complete 4 descents |
 | Necromancer | Raise Legion, 12 s | Bone Harvest, 10 s: minions explode, then rise again | Defeat the Sporemother |
 
 ## The menus
@@ -217,6 +217,7 @@ src/net.js                transports (PeerJS / local), host and client sessions,
 src/game.js               a run in progress: local controller, client mirror, network routing
 src/client/               input, aim, audio synth, icons, art atlas and actors, sprites, room art, effects (fx, pixfx, cls-<hero>.js),
                           renderer, post (WebGL), HUD, camp, menus, the Tab sheet UI
+src/main.js               app state machine and frame loop
 src/art/                  generated atlas pages (data URIs) built from art-src/
 art-src/                  vendored CC0 and CC-BY source art, with SOURCES.md (packs, licences, hashes)
 tools/                    headless balance simulators and checks (Node), the art packer
