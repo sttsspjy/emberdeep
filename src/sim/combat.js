@@ -4,7 +4,6 @@
   const U = ED.U, Sim = ED.Sim, D = ED.Dungeon;
   const W = ED.World.prototype;
 
-  ED.CONST.GLOOM_CAP = 0.25; // max HP fraction one Gloom touch may take
   ED.CONST.ARC_MUL = 0.6; // a discharge's arc targets take this fraction of what the charged foe takes
   ED.CONST.BOLT_CD = 0.6; // seconds between one hero's Thunderhead bolts
   ED.CONST.SPLASH_MUL = 0.6; // foes next to a combusting foe take this fraction of the pool
@@ -60,43 +59,46 @@
     const def = ED.ENEMIES[type];
     const s = this.stratum, pact = this.pact;
     let hp = def.hp, dmg = def.dmg;
-    if (!def.boss) hp *= ED.World.hpScale(s);
-    hp *= this.partyHpMul();
-    if (pact >= 1) hp *= 1.25;
-    if (def.boss && pact >= 5) hp *= 1.35;
-    if (pact >= 10) hp *= 1.2;
-    dmg *= ED.World.dmgScale(s) * (pact >= 2 ? 1.25 : 1) * (pact >= 8 ? 1.2 : 1) * this.threat().dmg;
-    const dr = this.dread;
-    if (dr && !def.minion && !def.gloom && !def.ally && !opts.ally) {
-      const deep = 1 + ED.World.DEEP * Math.min(ED.World.DEEP_MAX, this.deepRooms); // the Deep hits harder with every room entered Dark or Lightless this stratum
-      hp *= dr.hp; dmg *= dr.dmg * deep;
+    if (def.fodder) hp = ED.World.fodderHp(def, s, pact);
+    else {
+      if (!def.boss) hp *= ED.World.hpScale(s);
+      hp *= this.partyHpMul();
+      if (pact >= 1) hp *= 1.25;
+      if (def.boss && pact >= 5) hp *= 1.35;
+      if (pact >= 10) hp *= 1.2;
     }
+    dmg *= ED.World.dmgScale(s) * (pact >= 2 ? 1.25 : 1) * (pact >= 8 ? 1.2 : 1) * this.threat().dmg;
+    if (this.room && this.room.dark && !def.minion && !def.ally && !opts.ally) dmg *= ED.World.DARK_DMG; // every foe of a dark room
     const e = {
-      id: U.uid(), type, def, x, y, r: def.r, hp, maxHp: hp, dmg, spd: def.spd * (pact >= 6 ? 1.15 : 1),
-      kbx: 0, kby: 0, st: 'move', t: 0, cd: this.rng.range(0.6, 1.6), face: 1, flash: -1, stun: 0, frozen: 0, elite: null, ward: 0, wardMax: 0,
-      boss: !!def.boss, fly: !!def.fly, target: null, tgtT: 0, aimA: 0, guardA: 0, contactCd: 0, spawnT: opts.spawnT || 0,
+      id: U.uid(), type, def, x, y, r: def.r, hp, maxHp: hp, dmg, spd: def.spd * (pact >= 6 ? 1.15 : 1) * (def.boss || def.fodder ? 1 : ED.World.foeSpd(s)),
+      kbx: 0, kby: 0, st: 'move', t: 0, cd: this.rng.range(0.6, 1.6), face: 1, flash: -1, stun: 0, frozen: 0, elite: null, elite2: null, ward: 0, wardMax: 0,
+      boss: !!def.boss, fodder: !!def.fodder, plan: !!opts.plan, age: 0, fly: !!def.fly, target: null, tgtT: 0, aimA: 0, guardA: 0, contactCd: 0, spawnT: opts.spawnT || 0,
       phase: 1, vars: {}, strafe: this.rng.sign(), wob: this.rng.range(0, 6.28), exposed: false, recoil: 0,
       // statuses: burn/bleed pools, chill, charge, Venom (0-100; venomBy = bitmask of hero slots that added it), Radiance, Doom (HP units), hero debuffs (judged = Cleric Judgment, vulnT = Rain/Smoke vulnerability); slow/windMul/dmgTakenMul are read by ai.js and hitEnemy
       // cid = last chain id this foe paid out in; wrathQ = charge made by Wrath of Heaven bolts; stunCd / blindCd = per-foe cooldowns of Overload / Dawn Stride
       burn: 0, burnPool: 0, burnTick: 0, burnOwner: null, bleedPool: 0, bleedTick: 0, bleedOwner: null,
       chill: 0, chillT: 0, chillOwner: null, freezeRes: 0, freezeResT: 0, charge: 0, chargeOwner: null, dischargeT: 0,
       venom: 0, venomT: 0, venomOwner: null, venomBy: 0, corrode: 0, plagueT: 0, rad: 0, radOwner: null, doom: 0, doomOwner: null, cid: 0, cidMask: 0, wrathQ: 0, stunCd: 0, blindCd: 0,
-      hpLever: def.boss ? def.hp / def.refHp : this.threat().hp, // HP-relative statuses (chill, Conflagration, Wildfire) ignore this stratum lever
+      hpLever: def.boss ? def.hp / def.refHp : def.fodder ? 1 : this.threat().hp, // HP-relative statuses (chill, Conflagration, Wildfire) ignore this stratum lever (fodder carries none)
       mark: 0, judged: 0, vulnT: 0, blind: 0, sunder: 0, sunderOwner: null, slow: 1, slowAmt: 0, slowT: 0, windMul: 1, dmgTakenMul: 1, invulnT: 0, killed: false,
       // class-route foe states: shieldStunT (stunned by a thrown shield), staggerT / parryT (per-foe cooldowns), hexT + hexBy (slot mask), markV (mark vulnerability), sealT, weakT + weakV (Verdict weaken)
       shieldStunT: 0, staggerT: 0, parryT: 0, hexT: 0, hexBy: 0, markV: 0, sealT: 0, weakT: 0, weakV: 0,
     };
-    if (opts.elite) this.makeElite(e, opts.affix);
+    if (opts.elite && !def.fodder) this.makeElite(e, opts.affix);
     this.enemies.push(e);
+    this.foeLate(this.enemies.length - 1);
     return e;
   };
 
+  // Elite: HP and damage multipliers apply once; a second affix (e.elite2, never equal to the first) rolls at World.AFFIX2[stratum - 1]; each affix effect applies once, whichever slot holds it.
   W.makeElite = function (e, affix) {
     e.elite = affix || this.rng.pick(ED.AFFIX_IDS);
+    const p2 = ED.World.AFFIX2[this.stratum - 1];
+    if (p2 > 0 && this.rng.chance(p2)) e.elite2 = this.rng.pick(ED.AFFIX_IDS.filter(id => id !== e.elite));
     e.hp *= ED.World.ELITE.hp + ED.World.ELITE.hpStep * (this.stratum - 1); e.maxHp = e.hp; e.dmg *= ED.World.ELITE.dmg; e.r = Math.round(e.r * 1.22); // elite HP x2.4 at stratum I up to x4.4 at VI
-    if (e.elite === 'swift') e.spd *= 1.4;
-    if (e.elite === 'brutal') e.dmg *= 1.4;
-    if (e.elite === 'warded') { e.ward = e.maxHp * 0.45; e.wardMax = e.ward; }
+    if (ED.hasAffix(e, 'swift')) e.spd *= 1.4;
+    if (ED.hasAffix(e, 'brutal')) e.dmg *= 1.4;
+    if (ED.hasAffix(e, 'warded')) { e.ward = e.maxHp * 0.45; e.wardMax = e.ward; }
   };
 
   // Stratum affinity: weak x1.5, resist x0.5, else x1 (el = one of ED.ELEMENT_IDS; General and physical hits pass nothing).
@@ -170,6 +172,7 @@
       if (kind === 'skill') ev.s = 1; // a class-skill hit: the viewer's aggregated skill impact cue (k: 0 hit, 1 status DoT, 2 skill-zone tick)
       if (src.wpn && kind === 'weapon' && st && st.heavy) ev.h = 1; // heavy weapon hit: the viewer's hit-stop
       if (src.far) ev.f = 1; // a far shot (Deadeye): the viewer's bright spark
+      if (e.fodder) ev.fd = 1; // the target is fodder (f is taken by the far shot)
       if (src.slow) ev.sl = 1; // a hit that slows (Quickdraw): the viewer's frost streak
       this.emit(ev);
     }
@@ -242,11 +245,13 @@
     e.burnPool = 0; e.burn = 0;
     const dmg = pool * (1 + p.stats.burnMul), r = 70;
     this.emit({ t: 'combust', x: Math.round(e.x), y: Math.round(e.y), r });
-    for (let i = 0, n = this.enemies.length; i < n; i++) {
-      const o = this.enemies[i];
+    const q = this.foeScan(e.x, e.y, r);
+    for (let k = 0; k < q.length; k++) {
+      const o = q[k];
       if (o.hp <= 0 || o.spawnT > 0 || o.def.invuln || (o !== e && U.dist2(o.x, o.y, e.x, e.y) > (r + o.r) ** 2)) continue;
       this.hitEnemy(o, o === e ? dmg : dmg * ED.CONST.SPLASH_MUL, { p, kind: 'explode', raw: true, noProc: true, crit: false, noGuard: true, el: 'fire', affDone: true });
     }
+    this.foeEnd();
   };
 
   // Chill build-up (aff, chillMul, boss/elite resistance; Thermal Shock and Cryotoxin build it 25% faster on burning / envenomed foes); reaching the threshold freezes. Frozen foes gain none.
@@ -303,7 +308,9 @@
     }
     this.emit({ t: 'smite', x: Math.round(x), y: Math.round(y), pid: o.pid, n });
     if (st.beacon || st.sunfire || st.hoarlight) {
-      for (const f of this.enemies) {
+      const q = this.foeScan(x, y, 70);
+      for (let k = 0; k < q.length || this.foeTail(q); k++) {
+        const f = q[k];
         if (f === e || f.hp <= 0 || f.spawnT > 0 || f.def.invuln || f.burrowed) continue;
         const d2 = U.dist2(f.x, f.y, x, y);
         if (st.beacon && d2 <= (70 + f.r) ** 2) this.hitEnemy(f, dmg * st.beacon, { p: o, kind: 'smite', raw: true, noProc: true, crit: false, noGuard: true, el: 'holy', affDone: true });
@@ -311,6 +318,7 @@
         if (st.sunfire && d2 <= (60 + f.r) ** 2) this.addBurn(f, pre * 0.6, o);
         if (st.hoarlight && d2 <= (70 + f.r) ** 2) this.addChill(f, hpFrac(f, pre) * C.CHILL_K, o);
       }
+      this.foeEnd();
     }
     if (e.hp > 0) {
       if (st.smiteJudge) e.judged = Math.max(e.judged, st.smiteJudge); // Judging Light
@@ -508,12 +516,14 @@
 
   // Area payoff of a forced chain entry: damage dmg of element el to foes within r of (x, y), credited to the trigger hero (affDone: dmg already carries the affinity); onHit(foe, dealt) for each foe still standing.
   W.payBlast = function (tr, x, y, r, dmg, el, boom, onHit, affDone, skip, kind) {
-    for (let i = 0, n = this.enemies.length; i < n; i++) {
-      const o = this.enemies[i];
+    const q = this.foeScan(x, y, r);
+    for (let k = 0; k < q.length; k++) {
+      const o = q[k];
       if (o === skip || o.hp <= 0 || o.spawnT > 0 || U.dist2(o.x, o.y, x, y) > (r + o.r) ** 2) continue;
       const got = this.hitEnemy(o, dmg, { p: tr, kind, raw: true, noProc: true, crit: false, noGuard: true, el, x, y, affDone: !!affDone });
       if (onHit && got > 0 && o.hp > 0) onHit(o, got);
     }
+    this.foeEnd();
     this.emit({ t: 'boom', x: Math.round(x), y: Math.round(y), r, k: boom });
   };
 
@@ -540,12 +550,14 @@
         this.discharge(e, tr, 1 + st.shortCircuit);
         break;
       case 'spread': { // a share en.f of the dead foe e's statuses passes to each of the en.n nearest foes within en.r (Ruin Spreads, Contagion, Bloodbloom); a foe receives at most once per chain id
-        const near = [];
-        for (const o of this.enemies) {
+        const near = [], q = this.foeScan(en.x, en.y, en.r || 80);
+        for (let k = 0; k < q.length; k++) {
+          const o = q[k];
           if (o === e || o.hp <= 0 || o.spawnT > 0 || o.def.invuln || o.burrowed || (o.cid === en.cid && (o.cidMask & PAID.spread))) continue;
           const d2 = U.dist2(o.x, o.y, en.x, en.y);
           if (d2 < ((en.r || 80) + o.r) ** 2) near.push({ d2, o });
         }
+        this.foeEnd();
         near.sort((a, b) => a.d2 - b.d2);
         for (let i = 0; i < (en.n || 2) && i < near.length; i++) { firstPay(near[i].o, en.cid, 'spread'); this.moveStatuses(e, near[i].o, en.f); }
         if (en.fx) for (let i = 0; i < (en.n || 2) && i < near.length; i++) this.emit({ t: 'chain', k: en.fx, pts: [[Math.round(en.x), Math.round(en.y)], [Math.round(near[i].o.x), Math.round(near[i].o.y)]] }); // en.fx: the thread's look (Contagion 'c')
@@ -553,11 +565,14 @@
       }
       case 'twilight': { // each Reap forces a Smite on the nearest foe within 120 this chain has not touched, joined by a black-gold beam
         let best = null, bd = 120 * 120;
-        for (const o of this.enemies) {
+        const q = this.foeScan(en.x, en.y, 120);
+        for (let k = 0; k < q.length; k++) {
+          const o = q[k];
           if (o.hp <= 0 || o.spawnT > 0 || o.def.invuln || o.burrowed || o.invulnT > 0 || (o.cid === en.cid && (o.cidMask & PAID.twilightHit))) continue;
           const d2 = U.dist2(o.x, o.y, en.x, en.y);
           if (d2 < bd) { bd = d2; best = o; }
         }
+        this.foeEnd();
         if (!best) break;
         firstPay(best, en.cid, 'twilightHit');
         this.emit({ t: 'chain', k: 't', pts: [[Math.round(en.x), Math.round(en.y)], [Math.round(best.x), Math.round(best.y)]] });
@@ -586,10 +601,12 @@
       if (own) this.curChain = null;
     }
     if (st.frostNova) {
-      for (let i = 0, n = this.enemies.length; i < n; i++) {
-        const o = this.enemies[i];
+      const q = this.foeScan(e.x, e.y, 100);
+      for (let k = 0; k < q.length; k++) {
+        const o = q[k];
         if (o !== e && o.hp > 0 && o.spawnT <= 0 && U.dist2(o.x, o.y, e.x, e.y) < (100 + o.r) ** 2) this.addChill(o, 60, p);
       }
+      this.foeEnd();
       this.emit({ t: 'nova', x: e.x, y: e.y, r: 100, c: '#7fe3ff' });
     }
   };
@@ -599,11 +616,13 @@
     e.frozen = 0;
     const r = 60;
     this.emit({ t: 'shatter', x: Math.round(e.x), y: Math.round(e.y), r });
-    for (let i = 0, n = this.enemies.length; i < n; i++) {
-      const o = this.enemies[i];
+    const q = this.foeScan(e.x, e.y, r);
+    for (let k = 0; k < q.length; k++) {
+      const o = q[k];
       if (o === e || o.hp <= 0 || o.spawnT > 0 || U.dist2(o.x, o.y, e.x, e.y) > (r + o.r) ** 2) continue;
       this.hitEnemy(o, dmg * 0.5, { p, kind: 'explode', raw: true, crit: false, noShatter: true, noGuard: true, el: 'ice', x: e.x, y: e.y });
     }
+    this.foeEnd();
   };
 
   // Charge build-up; the first charge arms the discharge timer (1 s, 0.5 s for a Tempest hero). wrath: charge made by a Wrath of Heaven bolt (returns no Radiance when it discharges).
@@ -628,12 +647,14 @@
     const froz = !!st.supercond && e.frozen > 0; // Superconductor: a frozen foe's discharge deals +50% and arcs to 2 more foes at full strength
     const dmg = ch * (1 + (st.shockMul || 0)) * (mul || 1) * (froz ? 1.5 : 1);
     const range = 140 * (1 + (st.arcRange || 0));
-    const near = [];
-    for (const o of this.enemies) {
+    const near = [], q = this.foeScan(e.x, e.y, range);
+    for (let k = 0; k < q.length; k++) {
+      const o = q[k];
       if (o === e || o.hp <= 0 || o.spawnT > 0 || o.def.invuln || o.burrowed) continue;
       const d2 = U.dist2(o.x, o.y, e.x, e.y);
       if (d2 < (range + o.r) ** 2) near.push({ d2, o });
     }
+    this.foeEnd();
     near.sort((a, b) => a.d2 - b.d2);
     const n = 3 + (st.arcs || 0) + (froz ? 2 : 0) + (st.plasma && e.burnPool > 0 ? 1 : 0) + (st.galvanic && e.venom >= 100 ? 1 : 0), armMul = froz ? 1 : ED.CONST.ARC_MUL;
     const tg = [e];
@@ -665,12 +686,14 @@
 
   // Chain pulse of the Venom pool: a Corroded foe gives its Pandemic owner's share of Venom to the 2 nearest foes within 90 that hold less (moved Venom; the receivers inherit venomBy and corrode).
   W.pandemic = function (e, o) {
-    const near = [];
-    for (const x of this.enemies) {
+    const near = [], q = this.foeScan(e.x, e.y, 90);
+    for (let k = 0; k < q.length; k++) {
+      const x = q[k];
       if (x === e || x.hp <= 0 || x.spawnT > 0 || x.def.invuln || x.burrowed || x.venom >= e.venom) continue;
       const d2 = U.dist2(x.x, x.y, e.x, e.y);
       if (d2 < (90 + x.r) ** 2) near.push({ d2, x });
     }
+    this.foeEnd();
     near.sort((a, b) => a.d2 - b.d2);
     for (let i = 0; i < 2 && i < near.length; i++) {
       const x = near[i].x;
@@ -751,18 +774,19 @@
     src = src || {};
     const def = e.def, s = this.stratum;
     this.run.kills++;
+    if (def.fodder) this.run.fodderKills++;
     if (p) p.kills++;
-    this.emit({ t: 'die', x: Math.round(e.x), y: Math.round(e.y), type: e.type, el: e.elite ? 1 : 0, r: e.r });
+    this.emit(def.fodder ? { t: 'die', x: Math.round(e.x), y: Math.round(e.y), type: e.type, el: 0, r: e.r, fd: 1 } : { t: 'die', x: Math.round(e.x), y: Math.round(e.y), type: e.type, el: e.elite ? 1 : 0, r: e.r });
     this.onEnemyKilledSkill(e, p, src);
     if (def.boss) { this.onBossKilled(e); return; }
     this.deathPayoffs(e, p, src);
-    const xpMul = 1 + 0.35 * (s - 1);
-    this.dropXp(e.x, e.y, def.xp * xpMul * (e.elite ? 3 : 1));
+    if (def.fodder) { this.fodderMote(e.x, e.y); return; } // fodder drop no gold, heart or Grail growth, split or leave a cloud: only the room's xp mote
+    this.dropFoeXp(e);
     if (this.rng.chance(e.elite ? 1 : 0.12)) this.dropGold(e.x, e.y, (1 + Math.floor((s - 1) / 2)) * (e.elite ? 3 : this.rng.int(1, 2)));
     if (this.rng.chance(e.elite ? 0.4 : 0.04)) this.spawnPickup('heart', e.x, e.y, 1);
     if (e.elite) {
       this.run.elitesKilled++; this.run.embers.elites += 2 + Math.floor(s / 2);
-      if (e.elite === 'volatile') this.addZone({ kind: 'tele', x: e.x, y: e.y, r: 70, dur: 0.7, team: 1, dmg: e.dmg * 1.2, boom: 'fire' });
+      if (ED.hasAffix(e, 'volatile')) this.addZone({ kind: 'tele', x: e.x, y: e.y, r: 70, dur: 0.7, team: 1, dmg: e.dmg * 1.2, boom: 'fire' });
     }
     if (def.split) for (let i = 0; i < def.split.n; i++) {
       const c = this.spawnEnemy(def.split.into, e.x + this.rng.range(-8, 8), e.y + this.rng.range(-8, 8));
@@ -796,20 +820,24 @@
     if (bo && e.burnPool > 0) {
       const bs = bo.stats;
       if (bs.wildfire) {
-        for (let i = 0, n = this.enemies.length; i < n; i++) {
-          const o = this.enemies[i];
+        const q = this.foeScan(x, y, 80);
+        for (let k = 0; k < q.length; k++) {
+          const o = q[k];
           if (o !== e && o.hp > 0 && o.spawnT <= 0 && U.dist2(o.x, o.y, x, y) < (80 + o.r) ** 2) this.addBurn(o, e.maxHp / e.hpLever * bs.wildfire, bo);
         }
+        this.foeEnd();
         this.emit({ t: 'boom', x: Math.round(x), y: Math.round(y), r: 80, k: 'fire' });
       }
       if (bs.firedamp && e.venom > 0) this.queuePayoff(bo, { kind: 'firedamp', e, x, y, amt: e.maxHp * 0.2 * half });
     }
     const vo = e.venomOwner;
     if (vo && e.venom > 0 && vo.stats.sporeBurst) {
-      for (let i = 0, n = this.enemies.length; i < n; i++) {
-        const o = this.enemies[i];
+      const q = this.foeScan(x, y, 80);
+      for (let k = 0; k < q.length; k++) {
+        const o = q[k];
         if (o !== e && o.hp > 0 && o.spawnT <= 0 && U.dist2(o.x, o.y, x, y) < (80 + o.r) ** 2) this.addVenom(o, e.venom * vo.stats.sporeBurst, vo, true);
       }
+      this.foeEnd();
       this.emit({ t: 'boom', x: Math.round(x), y: Math.round(y), r: 80, k: 'acid' });
     }
     const co = e.chargeOwner;
@@ -832,10 +860,13 @@
     }
     // dash effects (host sees remote dashes through their state reports)
     if (p.dashing) {
+      if (this.room.breakables.length) { this.smashSeg(p, p.dashFx < 0 ? p.x : p.dashFx, p.dashFx < 0 ? p.y : p.dashFy, p.x, p.y, p.r); p.dashFx = p.x; p.dashFy = p.y; } // the path since the last tick
       if (st.dashDmg) {
         if (!p.dashHit) p.dashHit = new Set();
         const dmg = st.power * st.dashDmg, add = st.dashVenom || st.dashDoom ? { poison: st.dashVenom, shadow: st.dashDoom } : undefined;
-        for (const e of this.enemies) {
+        const fq = this.foeScan(p.x, p.y, p.r + 8);
+        for (let k = 0; k < fq.length || this.foeTail(fq); k++) {
+          const e = fq[k];
           if (e.hp <= 0 || p.dashHit.has(e.id)) continue;
           if (U.dist2(e.x, e.y, p.x, p.y) < (e.r + p.r + 8) ** 2) {
             p.dashHit.add(e.id);
@@ -843,18 +874,21 @@
             if (st.dashBlind && e.hp > 0 && !e.boss && e.blindCd <= 0) { e.blind = Math.max(e.blind, e.elite ? 0.5 : 1); e.blindCd = ED.CONST.BLIND_CD; }
           }
         }
+        this.foeEnd();
       }
       if (st.dashFrost && !p.dashRing) {
         p.dashRing = true;
         const dmg = st.power * st.dashFrost;
-        for (const e of this.enemies) if (e.hp > 0 && e.spawnT <= 0 && U.dist2(e.x, e.y, p.x, p.y) < (80 + e.r) ** 2) this.hitEnemy(e, dmg, { p, kind: 'dash', noGuard: true });
+        const fq = this.foeScan(p.x, p.y, 80);
+        for (let k = 0; k < fq.length || this.foeTail(fq); k++) { const e = fq[k]; if (e.hp > 0 && e.spawnT <= 0 && U.dist2(e.x, e.y, p.x, p.y) < (80 + e.r) ** 2) this.hitEnemy(e, dmg, { p, kind: 'dash', noGuard: true }); }
+        this.foeEnd();
         this.emit({ t: 'nova', x: p.x, y: p.y, r: 80, c: '#7fe3ff' });
       }
       if (st.dashFire) {
         p.dashTrail -= dt;
         if (p.dashTrail <= 0) { p.dashTrail = 0.05; this.addZone({ kind: 'pfire', x: p.x, y: p.y, r: 22, dur: 2.2, dps: ED.procDmg(ED.BOONS.cindertrail, st), owner: p.pid, team: 0 }); }
       }
-    } else { p.dashHit = null; p.dashRing = false; }
+    } else { p.dashHit = null; p.dashRing = false; p.dashFx = -1; }
   };
 
   // ---------------- heroes take damage ----------------
@@ -879,7 +913,7 @@
     if (e && e.weakT > 0) dmg *= 1 - e.weakV;
     if (e && e.chill > 0 && e.chillOwner) dmg *= 1 - e.chillOwner.stats.chillWeaken;
     dmg = Math.max(1, Math.round(dmg));
-    if (e && e.def.gloom) dmg = Math.min(dmg, Math.max(1, Math.round(p.maxHp * ED.CONST.GLOOM_CAP)));
+    if (e && e.fodder) dmg = Math.max(1, Math.min(dmg, Math.round(ED.CONST.FODDER_CAP * p.maxHp))); // fodder touches never exceed FODDER_CAP of max health (before the shield)
     if (p.shield > 0) {
       const ab = Math.min(p.shield, dmg); p.shield -= ab; dmg -= ab;
       const hc = CLS[p.cls];
@@ -895,13 +929,15 @@
     else this.emit({ t: 'block', x: p.x, y: p.y, k: 'aegis' });
     if (e && e.hp > 0) {
       if (st.thorns) this.hitEnemy(e, st.thorns, { p, kind: 'thorns', noProc: true, crit: false });
-      if (e.elite === 'vampiric') e.hp = Math.min(e.maxHp, e.hp + dmg * 3);
+      if (ED.hasAffix(e, 'vampiric')) e.hp = Math.min(e.maxHp, e.hp + dmg * 3);
       if (e.def.chillHit) p.chilled = 1.5;
     }
     if (st.guardian && p.hp > 0 && p.hp < p.maxHp * 0.3 && p.guardCd <= 0) { p.guardT = 3; p.guardCd = 20; this.emit({ t: 'guard', pid: p.pid }); }
     if (st.frozenHeart && p.frozenCd <= 0) {
       p.frozenCd = 8;
-      for (const en of this.enemies) if (en.hp > 0 && !en.boss && !en.def.invuln && en.spawnT <= 0 && !en.burrowed && U.dist2(en.x, en.y, p.x, p.y) < 120 * 120) this.freezeEnemy(en, p);
+      const q = this.foeScan(p.x, p.y, 120);
+      for (let k = 0; k < q.length || this.foeTail(q); k++) { const en = q[k]; if (en.hp > 0 && !en.boss && !en.def.invuln && en.spawnT <= 0 && !en.burrowed && U.dist2(en.x, en.y, p.x, p.y) < 120 * 120) this.freezeEnemy(en, p); }
+      this.foeEnd();
       this.emit({ t: 'nova', x: p.x, y: p.y, r: 120, c: '#9fefff' });
     }
     if (p.hp <= 0) this.playerLethal(p);
@@ -920,7 +956,9 @@
   // Area damage. team 0 = heroes' blast (hurts foes), team 1 = hostile blast (hurts heroes). opts merges into each hit's src.
   W.explode = function (x, y, r, dmg, team, owner, look, noProc, opts) {
     if (team === 0) {
-      for (const e of this.enemies) {
+      const q = this.foeScan(x, y, r);
+      for (let k = 0; k < q.length || this.foeTail(q); k++) {
+        const e = q[k];
         if (e.hp <= 0 || e.spawnT > 0) continue;
         const d = Math.hypot(e.x - x, e.y - y);
         if (d < r + e.r) {
@@ -928,6 +966,8 @@
           if (opts && opts.stun && e.hp > 0) this.stunFoe(e, opts.stun, true); // opts.stun: a repeating stun (shocks, waves)
         }
       }
+      this.foeEnd();
+      this.smashCircle(owner, x, y, r);
     } else {
       for (const p of this.players.values()) if (Math.hypot(p.x - x, p.y - y) < r + p.r) this.hurtPlayer(p, dmg, { e: owner && owner.hp !== undefined && owner.def ? owner : null, x, y });
     }
@@ -1028,10 +1068,14 @@
   W.holyLance = function (p, a, w) {
     const len = w.kind === 'melee' ? 150 : 260, end = Sim.castMove(this.room, p.x, p.y, a, len, 2, this.locked);
     const x0 = p.x, y0 = p.y - 4, x1 = end.x, y1 = end.y - 4;
-    for (const e of this.enemies) {
+    const q = this.foeScan((x0 + x1) / 2, (y0 + y1) / 2, Math.hypot(x1 - x0, y1 - y0) / 2 + 10);
+    for (let k = 0; k < q.length || this.foeTail(q); k++) {
+      const e = q[k];
       if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed) continue;
       if (U.segDist2(e.x, e.y, x0, y0, x1, y1) < (e.r + 10) ** 2) this.hitEnemy(e, w.dmg * 0.8, { p, kind: 'evo', el: 'holy', crit: false, noGuard: true, x: x0, y: y0 });
     }
+    this.foeEnd();
+    this.smashSeg(p, x0, y0, x1, y1, 10);
     this.emit({ t: 'lance', x0: Math.round(x0), y0: Math.round(y0), x1: Math.round(x1), y1: Math.round(y1), pid: p.pid });
   };
 
@@ -1044,7 +1088,9 @@
     const arc = Math.min(6.3, w.arc * (1 + st.area * 0.4) * (cl ? 1.4 : 1));
     const mul = (o.mul || 1) * (cl ? 1 + o.cleave : 1);
     let anyCrit = false;
-    for (const e of this.enemies) {
+    const q = this.foeScan(p.x, p.y, reach);
+    for (let k = 0; k < q.length || this.foeTail(q); k++) {
+      const e = q[k];
       if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed) continue;
       const d = Math.hypot(e.x - p.x, e.y - p.y);
       if (d - e.r > reach) continue;
@@ -1055,6 +1101,8 @@
       this.hitEnemy(e, w.dmg, hs);
       if (hs.critOut) anyCrit = true;
     }
+    this.foeEnd();
+    this.smashArc(p, a, reach, arc);
     if (w.shock && rep === 0) this.explode(p.x + Math.cos(a) * reach * 0.55, p.y + Math.sin(a) * reach * 0.55, w.shock.r * (1 + st.area * 0.5), w.dmg * w.shock.mul * mul, 0, p, 'shock', true, { wpn });
     if (cl && st.cShock) this.explode(p.x + Math.cos(a) * reach * 0.9, p.y + Math.sin(a) * reach * 0.9, 72 * (1 + st.area * 0.5), w.dmg * st.cShock, 0, p, 'shock', true, { wpn: true, stun: st.cStun });
     const ev = { t: 'swing', pid: p.pid, a: Math.round(a * 100) / 100, r: Math.round(reach), arc: Math.round(arc * 100) / 100 };
@@ -1108,8 +1156,9 @@
     return pr;
   };
 
+  // Foe shot speed x 1.2 under Pact 8+ x the stratum's shot factor (World.shotSpd; bosses World.bossShotSpd).
   W.enemyShoot = function (e, a, speed, kind, dmgMul, r, extra) {
-    const mul = this.pact >= 8 ? 1.2 : 1;
+    const mul = (this.pact >= 8 ? 1.2 : 1) * (e.boss ? ED.World.bossShotSpd(this.stratum) : ED.World.shotSpd(this.stratum));
     return this.spawnProj(Object.assign({ team: 1, kind, x: e.x + Math.cos(a) * e.r * 0.6, y: e.y - 4 + Math.sin(a) * e.r * 0.6, a, speed: speed * mul, r: r || 6, dmg: e.dmg * (dmgMul || 1), life: 4, src: e }, extra || {}));
   };
 
@@ -1155,7 +1204,10 @@
       let dead = false;
       if (pr.team === 0) {
         const owner = this.players.get(pr.owner);
-        for (const e of this.enemies) {
+        if (room.breakables.length) this.smashSeg(owner, pr.x - pr.vx * dt, pr.y - pr.vy * dt, pr.x, pr.y, pr.r); // the step just flown; a breakable never stops the shot
+        const q = this.foeScan(pr.x, pr.y, pr.r);
+        for (let k = 0; k < q.length || this.foeTail(q); k++) {
+          const e = q[k];
           if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed) continue;
           if (pr.hit && pr.hit.has(e.id)) continue;
           const rr = e.r + pr.r;
@@ -1175,6 +1227,7 @@
           if (hs.guarded || pr.pierce-- <= 0) { dead = true; break; }
           pr.pass++;
         }
+        this.foeEnd();
         if (!dead && pr.shieldAlly && owner) { // Sacred Lantern: an orb shields an ally it touches once (up to CLASS_SHIELD_CAP of max HP, once per LANTERN_CD per ally)
           for (const q of this.players.values()) {
             if (q === owner || q.downed || q.dead || q.lanternT > 0) continue;
@@ -1261,7 +1314,8 @@
         if (done) { if (z.onEnd) z.onEnd(this, z); continue; }
       } else if (z.kind === 'spawn') {
         if (done) {
-          const e = this.spawnEnemy(z.type, z.x, z.y, { elite: z.elite, affix: z.affix });
+          if (z.n) { this.spawnPack(z); continue; } // a fodder pack
+          const e = this.spawnEnemy(z.type, z.x, z.y, { elite: z.elite, affix: z.affix, plan: z.plan });
           this.emit({ t: 'spawned', x: Math.round(z.x), y: Math.round(z.y), el: z.elite ? 1 : 0 });
           if (z.after) z.after(e);
           continue;
@@ -1288,11 +1342,14 @@
             let dps = z.dps;
             const zk = !!(z.clsEl || z.part || z.lava || z.kind === 'shards'); // a class-skill field (Sanctuary, Pyro ring, crater, lava, caltrops) rings; boon and weapon fields stay silent
             if (z.parts) { dps = 0; let k = 0; for (const q of z.parts) if (q.until > z.t) { dps += q.dps; z.parts[k++] = q; } z.parts.length = k; }
-            for (const e of this.enemies) {
+            const q = this.foeScan(z.x, z.y, z.r);
+            for (let k = 0; k < q.length || this.foeTail(q); k++) {
+              const e = q[k];
               if (e.hp <= 0 || e.spawnT > 0 || U.dist2(z.x, z.y, e.x, e.y) >= (z.r + e.r) ** 2) continue;
               this.hitEnemy(e, dps * 0.5, { p: owner, kind: 'dot', noProc: true, crit: false, el, clsEl: z.clsEl, wpn: z.wpn, part: z.part, zone: zk });
               if (z.rad && e.hp > 0 && owner) this.addRadiance(e, dps * 0.5 * z.rad, owner); // z.rad: share of each tick stored as Radiance (Sanctuary)
             }
+            this.foeEnd();
           } else if (z.dps) {
             for (const p of this.players.values()) if (U.dist2(z.x, z.y, p.x, p.y) < (z.r + p.r * 0.5) ** 2) this.hurtPlayer(p, z.dps * 0.5, { hazard: true, x: z.x, y: z.y });
           }
@@ -1340,7 +1397,8 @@
       const f = Math.max(0, 1 - 9 * dt); e.kbx *= f; e.kby *= f;
       if (Math.abs(e.kbx) + Math.abs(e.kby) < 4) { e.kbx = 0; e.kby = 0; }
     }
-    if (!e.exposed && !e.def.invuln && this.enc && ((!e.boss && this.roomTime > 45) || (e.boss && this.roomTime > 78))) { e.exposed = true; this.emit({ t: 'expose', x: e.x, y: e.y, boss: e.boss ? 1 : 0 }); }
+    e.age += dt;
+    if (!e.exposed && !e.def.invuln && !e.fodder && this.enc && e.age > (e.boss ? 78 : 45)) { e.exposed = true; this.emit({ t: 'expose', x: e.x, y: e.y, boss: e.boss ? 1 : 0 }); }
     if (e.exposed && !e.def.invuln) e.hp -= e.maxHp * (e.boss ? 0.012 : 0.04) * dt;
     if (e.hp <= 0) { this.killEnemy(e, null, {}); return; }
     if (e.frozen > 0 || e.stun > 0) return;
@@ -1364,7 +1422,7 @@
         if (p.downed || p.dead) continue;
         const rr = e.r + p.r - 3;
         if (U.dist2(e.x, e.y, p.x, p.y) < rr * rr) {
-          const full = FULL_CONTACT.has(e.st) || e.def.gloom;
+          const full = FULL_CONTACT.has(e.st);
           if (this.hurtPlayer(p, e.dmg * (full ? 1 : 0.4) * (e.boss ? 0.8 : 1), { e, x: e.x, y: e.y })) { e.contactCd = 1.0; e.recoil = 0.35; }
           break;
         }

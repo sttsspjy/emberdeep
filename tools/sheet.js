@@ -17,7 +17,7 @@ const { packWeapon, directDamage, heroDamage, defence, condFactor, COND_NOTE } =
 const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
 const GATE2 = { knight: ['kindle', 'frostbite'], ranger: ['kindle', 'frostbite'], pyro: ['kindle', 'staticcharge'], shade: ['kindle', 'frostbite'], cleric: ['consecrate', 'frostbite'], necro: ['doommark', 'envenom'] };
 const MID = (cls) => Object.assign({}, ...GATE2[cls].map(id => ({ [id]: 1 })), { edge: 2, quick: 2, focus: 1, stalwart: 1 });
-const ctx = () => ({ stratum: STRATUM, pact: 0, gold: 0, level: 8, xp: 0, xpNext: 100, light: 100, lightMax: 100, tier: 0, deep: null, allyNear: 0, minions: 0, room: null, party: 1, rooms: { seen: 1, total: 10 }, heroes: [], time: 0 });
+const ctx = () => ({ stratum: STRATUM, pact: 0, gold: 0, level: 8, xp: 0, xpNext: 100, dark: false, allyNear: 0, minions: 0, room: null, party: 1, rooms: { seen: 1, total: 10, darkTotal: 2, darkLeft: 2 }, heroes: [], time: 0 });
 function hero(cls, wi, boons) {
   const b = { cls, weapon: ED.CLASSES[cls].weapons[wi || 0], boons: boons || {}, relics: [], meta: META(), pact: 0 };
   const stats = St.compute(b);

@@ -1,6 +1,6 @@
 // Authoritative simulation. Runs on the host (or locally in solo play); clients mirror it from snapshots.
 // Split across files by prototype extension: combat.js (damage, attacks, skills), ai.js (enemy brains),
-// bosses.js (boss scripts), rooms.js (encounters, props, interactions). This file also owns the lantern and dread tiers.
+// bosses.js (boss scripts), rooms.js (encounters, props, interactions).
 (function (ED) {
   'use strict';
   const U = ED.U, T = ED.CONST.TILE, D = ED.Dungeon;
@@ -84,8 +84,41 @@
     return e;
   };
 
-  // Hero movement: walking, dash, skill-move, hazards and pull zones.
-  Sim.movePlayer = (p, inp, dt, room, locked, zones) => {
+  // Dash charges on a controller { dashN charges, dashT seconds to the next }: one charge refills every st.dashCd while below st.dashCharges. Returns the charges refilled.
+  Sim.dashTick = (c, st, dt) => {
+    const mx = st.dashCharges | 0;
+    if (c.dashN > mx) c.dashN = mx;
+    if (c.dashN >= mx) { c.dashT = 0; return 0; }
+    if (!(c.dashT > 0)) c.dashT = st.dashCd;
+    let n = 0;
+    c.dashT -= dt;
+    while (c.dashT <= 0 && c.dashN < mx) { c.dashN++; n++; c.dashT = c.dashN < mx ? c.dashT + st.dashCd : 0; } // an overshoot carries into the next charge
+    return n;
+  };
+  // Spends one charge (false when none is left); spending from a full set starts the recharge timer.
+  Sim.dashTry = (c, st) => {
+    if (!(c.dashN >= 1)) return false;
+    if (c.dashN >= (st.dashCharges | 0)) c.dashT = st.dashCd;
+    c.dashN--;
+    return true;
+  };
+
+  // Walking-speed factor of a crowd: CROWD.per for every non-boss foe overlapping the hero (distance < foe.r + p.r), never below CROWD.floor. foes: any list of { x, y, r, hp, boss, spawnT }.
+  Sim.crowdMul = (p, foes) => {
+    if (!foes) return 1;
+    let n = 0;
+    for (let i = 0; i < foes.length; i++) {
+      const e = foes[i];
+      if (!(e.hp > 0) || e.boss || e.spawnT > 0) continue;
+      const rr = e.r + p.r, dx = e.x - p.x, dy = e.y - p.y;
+      if (dx * dx + dy * dy < rr * rr) n++;
+    }
+    const C = ED.CONST.CROWD;
+    return Math.max(C.floor, 1 - C.per * n);
+  };
+
+  // Hero movement: walking, dash, skill-move, hazards and pull zones. foes (optional): the foes near the hero; a crowd slows the walk (dashes and skill moves ignore it).
+  Sim.movePlayer = (p, inp, dt, room, locked, zones, foes) => {
     if (p.downed || p.dead) { p.moving = false; p.skillMove = null; p.skillIfr = false; return; }
     const speed = p.stats.moveSpeed * (ED.Stats.moveRate ? ED.Stats.moveRate(p) : 1);
     if (p.skillMove) { // a skill's own movement { dx, dy, speed, t (seconds left), iframes (untouchable for this long), age }
@@ -98,8 +131,9 @@
     }
     p.skillIfr = false;
     if (p.dashT > 0) {
-      p.dashT -= dt;
-      Sim.moveCircle(p, p.dashDx * 430 * dt, p.dashDy * 430 * dt, room, locked, false);
+      p.dashT -= dt; if (p.dashT < 1e-6) p.dashT = 0; // float residue would add a tick past DASH.t at the fixed step
+      const ds = ED.CONST.DASH.speed;
+      Sim.moveCircle(p, p.dashDx * ds * dt, p.dashDy * ds * dt, room, locked, false);
       p.moving = true;
       return;
     }
@@ -111,6 +145,7 @@
     let sp = speed;
     if (hz === 'water') sp *= 0.62;
     if (hz === 'poison') sp *= 0.85;
+    if (foes) sp *= Sim.crowdMul(p, foes);
     if (zones) for (const z of zones) if (z.kind === 'mire' && z.team === 1 && U.dist2(z.x, z.y, p.x, p.y) < z.r * z.r) { sp *= 0.55; break; }
     const accel = hz === 'ice' ? 3.2 : 22;
     p.vx = (p.vx || 0) + (mx * sp - (p.vx || 0)) * Math.min(1, accel * dt);
@@ -137,11 +172,10 @@
     this.gold = 0; this.xp = 0; this.level = 1; this.xpNext = W.xpFor(1);
     this.time = 0; this.roomTime = 0; this.state = 'play'; this.stratum = 0; this.floorSeed = 0;
     this.locked = false; this.enc = null; this.boss = null; this.pendingStratum = null;
-    this.run = { kills: 0, roomsCleared: 0, elitesKilled: 0, bosses: 0, bossCount: 0, revives: 0, maxGold: 0, maxRelics: 0, flawlessBoss: false,
-      lightlessBoss: false, fullClear: false, roomsVisited: 0, roomsTotal: 0, lightAtBoss: [],
+    this.run = { kills: 0, fodderKills: 0, roomsCleared: 0, elitesKilled: 0, bosses: 0, bossCount: 0, revives: 0, maxGold: 0, maxRelics: 0, flawlessBoss: false,
+      fullClear: false, roomsVisited: 0, roomsTotal: 0,
       embers: { rooms: 0, elites: 0, bosses: 0, victory: 0 } };
-    this.light = 100; this.lightMax = 100; this.dread = Object.assign({}, W.DREAD[0]); // lantern and dread tier (see updateLantern)
-    this.gloomT = null; this.gloomN = 0; this.deepRooms = 0; this.bossTier = 0; this.fullClearDone = 0;
+    this.fullClearDone = 0;
     this.roomState = {};
     this.endTimer = -1; this.result = null; this.victory = false;
     this.flowT = 0; this.flow = null; this.tick = 0; this.waitMsg = '';
@@ -150,42 +184,47 @@
     for (const pd of opts.players) this.addPlayer(pd);
   };
   W.xpFor = (L) => Math.round(30 + 3 * (L - 1) + 6 * (L - 1) * (L - 1)); // xp from level L to L+1
-  // Dread tiers by light fraction (>= 0.5, >= 0.25, > 0, 0): foe hp (1 in every tier: darkness never adds HP) and damage multipliers, elite chance added to a room's, wave budget multiplier, room gold & embers multiplier,
-  // chance (up) that a cleared room's reward is upgraded, seconds after entering a room until the Gloom hunts (gloom 0 = none), Glooms hunting at once (glooms), healing multiplier (heal).
-  W.DREAD = [
-    { tier: 0, hp: 1, dmg: 1, elite: 0, wave: 1, gold: 1, up: 0, gloom: 0, glooms: 0, heal: 1 },
-    { tier: 1, hp: 1, dmg: 1.1, elite: 0.2, wave: 1, gold: 1.25, up: 0, gloom: 0, glooms: 0, heal: 1 },
-    { tier: 2, hp: 1, dmg: 1.6, elite: 0.4, wave: 1, gold: 1.5, up: 0.12, gloom: 8, glooms: 1, heal: 0.7 },
-    { tier: 3, hp: 1, dmg: 2.3, elite: 0.6, wave: 1, gold: 1.75, up: 0.2, gloom: 3, glooms: 1, heal: 0.5 },
-  ];
   W.ELITE = { hp: 2.4, hpStep: 0.4, dmg: 0.9 }; // elite HP multiplier at stratum I (+ hpStep per stratum) and damage multiplier
   W.HAZARD_MUL = 0.5; // floor hazard damage multiplier
-  W.LANTERN_MUL = [1.3, 1.2, 1.1, 1, 1, 1]; // lantern size per stratum: the first strata are bright
-  W.GLOOM_GAP = 4; // seconds between the Glooms of one room when its tier hunts with more than one
-  W.GLOOM_STEP = 1; W.GLOOM_MAX = 3; // Lightless hunts with 1 + floor(deepRooms / GLOOM_STEP) Glooms, at most GLOOM_MAX
-  W.DEEP = 0.28; W.DEEP_MAX = 5; // every new room entered Dark or Lightless raises foe damage by DEEP for the rest of the stratum (up to DEEP_MAX rooms)
-  W.GLOOM_HIT = 0.19; // Gloom touch damage as a fraction of the toughest living hero's max HP
-  W.OIL_LIGHT = 35; // light gained from a lantern oil reward or shop oil
-  W.FLARE = { cost: 6, banish: 12, blind: 1.5, r: 160 }; // lantern flare (F): light spent, seconds the Gloom stays away, foe blind seconds, blind radius
-  W.DARK_AFFIXES = ['brutal', 'vampiric', 'warded', 'swift']; // affix pool of elites made at Dark and Lightless (the volatile affix is left out)
-  W.ELITE_BODIES = 4; // plain-foe budget one elite displaces from its wave in any tier but Bright
-  W.REWARD_UP = { gold: 'vigor', vigor: 'forge', forge: 'epic', boon: 'epic' }; // darkness upgrades a room reward one step
+  // Dark rooms (room.dark, set by floor gen: 2 opt-in combat dead ends per floor): foe damage multiplier, gold and xp multiplier of everything dropped there, multiplier of the fodder quota.
+  W.DARK_DMG = 1.3; W.DARK_LOOT = 1.5; W.DARK_FODDER = 1.5;
+  W.DARK_AFFIXES = ['brutal', 'vampiric', 'warded', 'swift']; // affix pool of the extra elite of a dark room's last wave (the volatile affix is left out)
+  W.REWARD_UP = { gold: 'vigor', vigor: 'forge', forge: 'epic', boon: 'epic' }; // a dark room's reward goes up one step
+  // Stratum behaviour (index s - 1): the share of its target's velocity a foe leads an aimed shot by; foe and boss shot speed factors; non-boss, non-fodder ground speed factor.
+  W.LEAD = [0, 0, 0.35, 0.5, 0.7, 0.85];
+  W.shotSpd = (s) => 1 + 0.08 * (s - 1);
+  W.bossShotSpd = (s) => 1 + 0.1 * (s - 1);
+  W.foeSpd = (s) => 1 + 0.04 * (s - 1);
+  // Mixed rosters (s >= 2): chance a room's roster also holds the previous biome's foes (at weight 0.35 each); AFFIX2 = chance (index s - 1) that an elite rolls a second affix.
+  W.MIX_PREV = 0.6; W.AFFIX2 = [0, 0, 0, 0.35, 0.6, 0.85];
+  // Angle from (x, y) toward where target t stands when a shot of this speed reaches it, leading by share L of t's measured velocity (t.lvx / t.lvy; 0 for targets without one); flight time from two refinements, capped at 1.2 s. L 0 aims straight at t.
+  W.leadAngle = (x, y, t, speed, L) => {
+    let ax = t.x, ay = t.y;
+    const vx = (t.lvx || 0) * L, vy = (t.lvy || 0) * L;
+    if ((vx || vy) && speed > 0) for (let k = 0; k < 2; k++) { const ti = Math.min(1.2, Math.hypot(ax - x, ay - y) / speed); ax = t.x + vx * ti; ay = t.y + vy * ti; }
+    return Math.atan2(ay - y, ax - x);
+  };
   // Per-stratum threat on top of the base scales: foe HP, wave budget, `cdRate` = extra cooldown recovery (0.2 = attack timers tick 20% faster, -0.2 = 20% slower) and the boss pause between attacks (x).
   W.THREAT = [{ hp: 2.2, dmg: 0.5, wave: 0.8, cdRate: -0.4, pause: 2 }, { hp: 1.62, dmg: 0.5, wave: 0.75, cdRate: -0.3, pause: 1.7 }, { hp: 1.3, dmg: 0.5, wave: 0.7, cdRate: -0.1, pause: 1.4 }, { hp: 1, dmg: 0.4, wave: 0.66, cdRate: 0, pause: 1.2 }, { hp: 1.07, dmg: 0.78, wave: 0.62, cdRate: 0.15, pause: 1 }, { hp: 1.02, dmg: 0.98, wave: 0.6, cdRate: 0.3, pause: 0.9 }];
   // Foe HP multiplier of stratum s: the depth curve times the threat HP.
   W.hpScale = (s) => (1 + 0.65 * (s - 1) + 0.08 * (s - 1) * (s - 1)) * W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, s - 1))].hp;
   // Wave pacing of combat rooms: seconds before the first wave, spawn telegraph (+ random extra), minimum gap before the next wave, the share of a wave that may still stand when the next one is called, the seconds after which the next wave comes regardless, and the minimum spawn distance from heroes (turrets keep more).
   W.PACE = { first: 0.5, spawn: 0.7, spawnVar: 0.25, gap: 0.9, nextAt: 0.45, maxAge: 6, avoid: 100, avoidTurret: 130 };
-  // Entering a room not yet visited costs this much light (of 100, not scaled by Deep Wick); revisits, the start room and the boss room are free. Shown on doors and the map.
-  W.ROOM_COST = { combat: 12, elite: 17, treasure: 8, shop: 8, event: 8, rest: 8 };
-  W.roomCost = (type) => W.ROOM_COST[type] || 0;
-  // Dread tier of a light fraction.
-  W.tierOf = (f) => f >= 0.5 ? 0 : f >= 0.25 ? 1 : f > 0 ? 2 : 3;
-  // Boss-door reward for the light left (fraction f): every living hero heals `heal` and gains a `shield` (both fractions of max HP); the party gains `gold` and `embers`.
-  W.bossLight = (f, stratum) => ({ heal: 0.5 * f, shield: 0.8 * f, gold: Math.round(f * (10 + 5 * stratum)), embers: Math.round(f * (2 + stratum)) });
-
-  // Gold dropped by a 'gold' room reward (shared with the UI): 15 + 8 per stratum, times the dread gold bonus and the global gold multiplier.
-  W.rewardGold = (stratum, dreadGold) => Math.round((15 + 8 * stratum) * (dreadGold || 1) * W.GOLD_MUL);
+  // Horde of a combat or elite room (fodder beside the threat waves): kills to spawn by stratum (x0.6 in an elite room, x(1 + 0.5 (n - 1)) per party, x0.6 at stratum I of the tutorial, x DARK_FODDER in a dark room),
+  // fodder per pack, seconds between packs, minimum pack distance from every hero (relaxed in 40 px steps once a pack has waited PACK_WAIT s), live-foe cap (solo, 2+ heroes).
+  W.FODDER_Q = [40, 55, 70, 85, 100, 120]; W.PACK_N = [6, 12]; W.PACK_GAP = [2.0, 3.0]; W.PACK_AVOID = 220; W.PACK_WAIT = 4; W.LIVE_CAP = [120, 180];
+  // Boss fights. Aimed volley (every boss, bosses.js): shots by phase I-III, telegraph s (x the boss's windMul), s before the first release at which the warn line locks, s between shots, s between the heroes' sequences,
+  // flight speed at stratum I (+ step per stratum) and damage x boss damage; in phase 3 a volley also starts every BOSS_OV_GAP s. Fodder trickle after the boss spawns: pack size, s between packs, live-fodder cap (solo, 2+ heroes).
+  W.BOSS_VOL = { n: [3, 4, 5], tele: 0.5, lock: 0.15, gap: 0.12, seq: 0.15, speed: 320, step: 20, dmg: 0.6 }; W.BOSS_OV_GAP = 5;
+  W.BOSS_PACK_N = [4, 6]; W.BOSS_PACK_GAP = 7; W.BOSS_FODDER_CAP = [20, 30];
+  // Fodder max HP: depth (+25% per stratum) and pact only, no threat lever, party multiplier or elite (pure; the client mirror rebuilds it from the wire fraction).
+  W.fodderHp = (def, s, pact) => def.hp * (1 + 0.25 * (s - 1)) * (pact >= 1 ? 1.25 : 1) * (pact >= 10 ? 1.2 : 1);
+  // Xp a threat foe is worth before the dark-room multiplier and the room's budget scale (enc.xpK).
+  W.threatXp = (def, s, elite) => (def.xp || 0) * (1 + 0.35 * (s - 1)) * (elite ? 3 : 1);
+  // Room xp budget by stratum (solo, per room; x DARK_LOOT in a dark room, not scaled by the party): threat drops, fodder motes (FODDER_XP_SHARE of it, spread over the quota) and the clear pile together drop exactly this.
+  W.ROOM_XP = { combat: [38, 61, 96, 136, 173, 196], elite: [71, 103, 139, 187, 257, 290] }; W.FODDER_XP_SHARE = 0.5;
+  // Gold dropped by a 'gold' room reward (shared with the UI): 15 + 8 per stratum, times the global gold multiplier.
+  W.rewardGold = (stratum) => Math.round((15 + 8 * stratum) * W.GOLD_MUL);
   W.GOLD_MUL = 0.65; // every gold drop (kills, rooms, chests, rewards) is scaled by this; shops sell at full price
   W.prototype.threat = function () { return W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, this.stratum - 1))]; };
   W.prototype.emit = function (ev) { this.fx.push(ev); };
@@ -195,7 +234,7 @@
   W.prototype.partyHpMul = function () { return W.partyHpMul(this.partySize()); };
   W.prototype.alive = function (p) { return p && !p.downed && !p.dead; };
   W.prototype.alivePlayers = function () { const out = []; for (const p of this.players.values()) if (!p.downed && !p.dead) out.push(p); return out; };
-  W.prototype.hostiles = function () { let n = 0; for (const e of this.enemies) if (e.hp > 0 && !e.def.gloom) n++; return n; };
+  W.prototype.hostiles = function (threatOnly) { let n = 0; for (const e of this.enemies) if (e.hp > 0 && !(threatOnly && e.fodder)) n++; return n; };
 
   W.prototype.nearestPlayer = function (x, y) {
     let best = null, bd = Infinity;
@@ -209,13 +248,155 @@
   // Nearest living foe within maxD of (x, y), skipping the ids in exclude; with cone > 0 only foes within cone radians of the direction a0.
   W.prototype.nearestEnemy = function (x, y, maxD, exclude, a0, cone) {
     let best = null, bd = maxD * maxD;
-    for (const e of this.enemies) {
-      if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed || (exclude && exclude.has(e.id))) continue;
+    const q = this.foeScan(x, y, maxD);
+    for (let k = 0; k < q.length; k++) {
+      const e = q[k];
+      if (e.spawnT > 0 || e.def.invuln || e.burrowed || (exclude && exclude.has(e.id))) continue;
       if (cone > 0 && Math.abs(U.angDiff(a0, Math.atan2(e.y - y, e.x - x))) > cone) continue;
       const d = U.dist2(x, y, e.x, e.y);
       if (d < bd) { bd = d; best = e; }
     }
+    this.foeEnd();
     return best;
+  };
+
+  // ---------------- foe grid ----------------
+  // Uniform grid of this.enemies indices behind foesNear / foeScan / nearestEnemy. update() builds it at tick start and after separate() and drops it at the end of the tick; outside update() every query rebuilds from the live positions.
+  // Late list (every query returns it): foes spawned since the build and foes further than GRID_DRIFT from their build position. Foes with r > GRID_BIG are always returned. Query results are ascending in this.enemies index, live (hp > 0) foes only.
+  const GRID_CELL = 64, GRID_INV = 1 / GRID_CELL, GRID_DRIFT = 16, GRID_BIG = 22;
+  const GRID_MIN = 32; // below this many foes every scan takes all of them and separate() pairs every j > i: the grids cost more than they save
+  // Query margin >= 2 x GRID_BIG + 16: a foe's radius (22) + 42 of move allowed between a build and a query (GRID_DRIFT 16 before foeDrift flags it, +26 inside its own updateEnemy call or a hero/zone effect that carries or pulls it).
+  const GRID_PAD = 64;
+
+  // Grows the per-index arrays to hold n foes (keeps their contents).
+  const fgFit = (g, n) => {
+    if (g.cap >= n) return;
+    const cap = Math.max(256, 1 << (32 - Math.clz32(n + 63)));
+    const grow = (A, old) => { const a = new A(cap); a.set(old); return a; };
+    g.mark = grow(Uint8Array, g.mark); g.cell = grow(Int32Array, g.cell); g.items = grow(Int32Array, g.items); g.qi = new Int32Array(cap);
+    g.gx = grow(Float32Array, g.gx); g.gy = grow(Float32Array, g.gy); g.bits = new Uint32Array((cap >> 5) + 1); g.cap = cap;
+  };
+
+  // Rebuilds the grid from the live positions: counting sort of the live foes into cells (indices ascending in each cell), foes with r > GRID_BIG into the big list, the late list cleared.
+  W.prototype.foeGrid = function () {
+    const es = this.enemies, n = es.length, room = this.room;
+    let g = this.fg;
+    if (!g) g = this.fg = { cap: 0, cw: 1, ch: 1, start: new Int32Array(2), cur: new Int32Array(1), mark: new Uint8Array(0), cell: new Int32Array(0), items: new Int32Array(0), qi: new Int32Array(0), gx: new Float32Array(0), gy: new Float32Array(0), bits: new Uint32Array(1), big: [], late: [], pool: [], qd: 0, ok: false, live: false, direct: true, n: 0, es: null };
+    const big = g.big, late = g.late, mark = g.mark;
+    for (let k = 0; k < late.length; k++) mark[late[k]] = 0;
+    late.length = 0; big.length = 0;
+    g.n = n; g.es = es; g.ok = true; g.direct = n < GRID_MIN;
+    if (g.direct) return g;
+    fgFit(g, n);
+    const cw = room ? Math.ceil(room.w * T / GRID_CELL) : 1, ch = room ? Math.ceil(room.h * T / GRID_CELL) : 1, nc = cw * ch;
+    if (g.start.length < nc + 1) { g.start = new Int32Array(nc + 1); g.cur = new Int32Array(nc); }
+    g.cw = cw; g.ch = ch;
+    const start = g.start, cur = g.cur, cell = g.cell, items = g.items, gx = g.gx, gy = g.gy;
+    start.fill(0, 0, nc + 1);
+    for (let i = 0; i < n; i++) {
+      const e = es[i];
+      gx[i] = e.x; gy[i] = e.y;
+      if (e.hp <= 0) { cell[i] = -1; continue; }
+      if (e.r > GRID_BIG) { cell[i] = -1; big.push(i); continue; }
+      let cx = (e.x * GRID_INV) | 0, cy = (e.y * GRID_INV) | 0;
+      if (cx < 0) cx = 0; else if (cx >= cw) cx = cw - 1;
+      if (cy < 0) cy = 0; else if (cy >= ch) cy = ch - 1;
+      const c = cy * cw + cx;
+      cell[i] = c; start[c + 1]++;
+    }
+    for (let c = 0; c < nc; c++) { start[c + 1] += start[c]; cur[c] = start[c]; }
+    for (let i = 0; i < n; i++) { const c = cell[i]; if (c >= 0) items[cur[c]++] = i; }
+    return g;
+  };
+
+  // The grid when it is current (inside update(), built for this foe array with GRID_MIN or more foes), else a fresh build.
+  W.prototype.fgReady = function () {
+    const g = this.fg;
+    return g && g.live && g.ok && !g.direct && g.es === this.enemies && this.enemies.length >= g.n ? g : this.foeGrid();
+  };
+
+  // A foe appended to this.enemies after the build joins the late list.
+  W.prototype.foeLate = function (i) {
+    const g = this.fg;
+    if (!g || !g.ok || g.direct) return;
+    fgFit(g, i + 1);
+    if (g.mark[i]) return;
+    g.mark[i] = 1; g.late.push(i);
+  };
+
+  // Foe i moved: once it is further than GRID_DRIFT from its build position it joins the late list.
+  W.prototype.foeDrift = function (i) {
+    const g = this.fg;
+    if (!g.ok || g.direct || i >= g.n || g.mark[i]) return;
+    const e = this.enemies[i], dx = e.x - g.gx[i], dy = e.y - g.gy[i];
+    if (dx * dx + dy * dy > GRID_DRIFT * GRID_DRIFT) { g.mark[i] = 1; g.late.push(i); }
+  };
+
+  // Fills g.qi with the ascending indices of the live foes whose cells overlap the circle (x, y, r + GRID_PAD), plus the big and late lists; returns the count. A wide query takes every live foe.
+  W.prototype.fgQuery = function (g, x, y, r) {
+    const es = this.enemies, n = es.length;
+    fgFit(g, n);
+    const qi = g.qi, R = r + GRID_PAD, cw = g.cw, ch = g.ch;
+    let x0 = Math.floor((x - R) * GRID_INV), x1 = Math.floor((x + R) * GRID_INV), y0 = Math.floor((y - R) * GRID_INV), y1 = Math.floor((y + R) * GRID_INV), cnt = 0;
+    x0 = x0 < 0 ? 0 : x0 >= cw ? cw - 1 : x0; x1 = x1 < 0 ? 0 : x1 >= cw ? cw - 1 : x1;
+    y0 = y0 < 0 ? 0 : y0 >= ch ? ch - 1 : y0; y1 = y1 < 0 ? 0 : y1 >= ch ? ch - 1 : y1;
+    if (!(R < 4096) || (x1 - x0 + 1) * (y1 - y0 + 1) * 2 > n) {
+      for (let i = 0; i < n; i++) if (es[i].hp > 0) qi[cnt++] = i;
+      return cnt;
+    }
+    const bits = g.bits, start = g.start, items = g.items, big = g.big, late = g.late;
+    let wlo = 0x7fffffff, whi = -1;
+    for (let cy = y0; cy <= y1; cy++) {
+      for (let k = start[cy * cw + x0], ke = start[cy * cw + x1 + 1]; k < ke; k++) {
+        const i = items[k], wi = i >> 5;
+        bits[wi] |= 1 << (i & 31);
+        if (wi < wlo) wlo = wi;
+        if (wi > whi) whi = wi;
+      }
+    }
+    for (let k = 0; k < big.length; k++) { const i = big[k], wi = i >> 5; bits[wi] |= 1 << (i & 31); if (wi < wlo) wlo = wi; if (wi > whi) whi = wi; }
+    for (let k = 0; k < late.length; k++) { const i = late[k]; if (i >= n) continue; const wi = i >> 5; bits[wi] |= 1 << (i & 31); if (wi < wlo) wlo = wi; if (wi > whi) whi = wi; }
+    for (let wi = wlo; wi <= whi; wi++) {
+      let v = bits[wi];
+      if (v === 0) continue;
+      bits[wi] = 0;
+      const base = wi << 5;
+      do {
+        const lsb = v & -v;
+        const i = base + 31 - Math.clz32(lsb);
+        v ^= lsb;
+        if (es[i].hp > 0) qi[cnt++] = i;
+      } while (v !== 0);
+    }
+    return cnt;
+  };
+
+  // Fills the caller-owned array out with the live foes near the circle (x, y, r): every foe whose centre is within r + its radius is among them, in this.enemies order. Callers keep their own exact test on the live positions.
+  // out.n is the foe count at the query: a loop whose body can spawn foes (splits) visits the later ones with foeTail, as a for-of over this.enemies did.
+  W.prototype.foesNear = function (x, y, r, out) {
+    const es = this.enemies, n = es.length;
+    let c = 0;
+    if (n < GRID_MIN) { for (let i = 0; i < n; i++) if (es[i].hp > 0) out[c++] = es[i]; }
+    else { const g = this.fgReady(), cnt = this.fgQuery(g, x, y, r), qi = g.qi; for (; c < cnt; c++) out[c] = es[qi[c]]; }
+    out.length = c; out.n = n;
+    return out;
+  };
+
+  // foesNear into a pooled array (scans nest through hits and kills); every foeScan is paired with one foeEnd after its loop.
+  W.prototype.foeScan = function (x, y, r) {
+    const g = this.fg || this.foeGrid(), d = g.qd++;
+    return this.foesNear(x, y, r, g.pool[d] || (g.pool[d] = []));
+  };
+  W.prototype.foeEnd = function () { this.fg.qd--; };
+
+  // Appends the foes spawned since out was filled; true when it added any (loop: `k < out.length || this.foeTail(out)`).
+  W.prototype.foeTail = function (out) {
+    const es = this.enemies, m = es.length;
+    let k = out.n, added = false;
+    if (k >= m) return false;
+    out.n = m;
+    for (; k < m; k++) if (es[k].hp > 0) { out.push(es[k]); added = true; }
+    return added;
   };
 
   // ---------------- players ----------------
@@ -224,7 +405,7 @@
       pid: pd.pid, name: pd.name || 'Hero', slot: pd.slot | 0, cls: pd.cls, weapon: pd.weapon,
       meta: pd.meta || { up: [], mastery: 1, relics: [] },
       boons: {}, relics: [], stats: null,
-      x: 0, y: 0, r: 10, face: 0, vx: 0, vy: 0, mvx: 1, mvy: 0, moving: false,
+      x: 0, y: 0, r: 10, face: 0, vx: 0, vy: 0, mvx: 1, mvy: 0, moving: false, lvx: 0, lvy: 0, lpx: null, lpy: null,
       hp: 1, maxHp: 1, dashT: 0, dashDx: 0, dashDy: 0, dashing: false, skillMove: null,
       invuln: 0, hurtT: 0, downed: false, bleed: 0, revive: 0, dead: false,
       phoenixUsed: false, secondWind: 0, swPct: 0.4, angelUsed: false, aegisT: 0, guardCd: 0, guardT: 0,
@@ -264,19 +445,19 @@
   // Heals up to max HP (no heal ever overflows into a shield). Returns the HP actually restored.
   W.prototype.healPlayer = function (p, amt, silent) {
     if (!p || p.downed || p.dead || p.hp >= p.maxHp) return 0;
-    const v = Math.min(p.maxHp - p.hp, amt * p.stats.healMul * (this.dread.heal ?? 1));
+    const v = Math.min(p.maxHp - p.hp, amt * p.stats.healMul);
     p.hp += v;
     if (!silent && v >= 1) this.emit({ t: 'heal', pid: p.pid, v: Math.round(v), x: p.x, y: p.y });
     return v;
   };
 
-  // Every shield a hero receives except Battle Ward ('ward') and the boss door passes one sliding window of SHIELD_WIN_T seconds (10 one-second slots in p.shWin): class sources (any k but 'holy' and 'bone') give at most
+  // Every shield a hero receives except Battle Ward ('ward') passes one sliding window of SHIELD_WIN_T seconds (10 one-second slots in p.shWin): class sources (any k but 'holy' and 'bone') give at most
   // SHIELD_WIN_CLASS of max HP per window, all sources together SHIELD_WIN_ALL; what the window refuses is logged in p.shieldClip[k].
   Object.assign(ED.CONST, { SHIELD_WIN_T: 10, SHIELD_WIN_CLASS: 0.03, SHIELD_WIN_ALL: 0.06 });
-  // Adds amt (x the dread heal multiplier) to p's absorb shield up to cap (a shield above the cap is never lowered); k labels the source in p.shieldBy. Returns the shield gained.
+  // Adds amt to p's absorb shield up to cap (a shield above the cap is never lowered); k labels the source in p.shieldBy. Returns the shield gained.
   W.prototype.addShield = function (p, amt, cap, k) {
     if (!p || p.downed || p.dead || !(amt > 0) || !(p.shield < cap)) return 0;
-    let gain = Math.min(cap, p.shield + amt * (this.dread.heal ?? 1)) - p.shield;
+    let gain = Math.min(cap, p.shield + amt) - p.shield;
     if (k !== 'ward') {
       const C = ED.CONST, win = p.shWin, now = Math.floor(this.time);
       let c = 0, a = 0;
@@ -343,9 +524,8 @@
     this.floorSeed = this.rng.seed();
     this.floor = D.generate(s, this.floorSeed);
     this.roomState = {};
-    for (const r of this.floor.rooms) this.roomState[r.id] = { visited: false, known: false, cleared: false, props: null };
+    for (const r of this.floor.rooms) this.roomState[r.id] = { visited: false, known: false, cleared: false, props: null, broken: 0 };
     this.run.roomsTotal += this.floor.rooms.length;
-    this.lightMax = this.lanternMax(); this.light = this.lightMax; this.updateDread(); this.deepRooms = 0;
     this.allies.length = 0;
     for (const p of this.players.values()) {
       if (p.dead) { p.dead = false; p.downed = false; p.hp = Math.round(p.maxHp * 0.3); p.invuln = 2; }
@@ -359,18 +539,14 @@
   W.prototype.enterRoom = function (id, fromDir) {
     this.collectAll();
     this.enemies.length = 0; this.projs.length = 0; this.zones.length = 0; this.chainQ.length = 0; this.curChain = null; this.corpses.length = 0;
+    if (this.fg) this.fg.ok = false;
     this.boss = null; this.enc = null;
     this.roomId = id;
     this.roomEpoch = (this.roomEpoch || 0) + 1;
     const room = this.room = this.floor.rooms[id];
     const rs = this.roomState[id];
-    let cost = 0, atBoss = false;
-    if (!rs.visited) { this.run.roomsVisited++; cost = W.roomCost(room.type); }
+    if (!rs.visited) this.run.roomsVisited++;
     rs.visited = true; rs.known = true;
-    if (cost > 0) { this.light = Math.max(0, this.light - cost); this.updateDread(); } // paid before the room's encounter is planned
-    this.gloomT = null; this.gloomN = 0;
-    if (cost > 0 && this.dread.tier >= 2) this.deepRooms++;
-    if (room.type === 'boss' && !rs.cleared) { this.bossTier = this.dread.tier; this.run.lightAtBoss.push(Math.round(this.light / this.lightMax * 100) / 100); atBoss = true; }
     for (const d in room.doors) if (room.doors[d] >= 0) this.roomState[room.doors[d]].known = true;
     let k = 0;
     const pos = [];
@@ -389,8 +565,8 @@
     if (!rs.cleared) this.beginEncounter(room, rs);
     this.checkFullClear();
     this.computeFlow();
-    this.emit({ t: 'room', id, from: fromDir || '', pos, locked: this.locked, ep: this.roomEpoch, lc: cost });
-    if (atBoss) this.bossLantern();
+    this.emit({ t: 'room', id, from: fromDir || '', pos, locked: this.locked, ep: this.roomEpoch });
+    if (room.dark && !rs.cleared) this.emit({ t: 'dark' });
   };
 
   W.prototype.collectAll = function () {
@@ -419,8 +595,8 @@
       roomsCleared: this.run.roomsCleared, elitesKilled: this.run.elitesKilled, bosses: this.run.bosses, bossCount: this.run.bossCount,
       embers: Object.assign({}, this.run.embers), pact: this.pact, party: this.partySize(), level: this.level,
       revives: this.run.revives, flawlessBoss: this.run.flawlessBoss, maxGold: this.run.maxGold, maxRelics: this.run.maxRelics, players,
-      evolved: [...this.players.values()].some(p => !!p.stats.evo), lightlessBoss: this.run.lightlessBoss, fullClear: this.run.fullClear,
-      roomsVisited: this.run.roomsVisited, roomsTotal: this.run.roomsTotal, lightAtBoss: this.run.lightAtBoss.slice(),
+      evolved: [...this.players.values()].some(p => !!p.stats.evo), fullClear: this.run.fullClear,
+      roomsVisited: this.run.roomsVisited, roomsTotal: this.run.roomsTotal,
     };
   };
 
@@ -439,20 +615,23 @@
       if (this.pendingStratum.t <= 0) { const s = this.pendingStratum.s; this.pendingStratum = null; this.enterStratum(s); }
       return;
     }
-    this.updateLantern(dt);
+    const fg = this.foeGrid(); fg.live = true; fg.qd = 0;
     this.updateShields(dt);
     for (const p of this.players.values()) this.updatePlayer(p, dt);
+    if (!fg.direct) for (let i = 0; i < fg.n; i++) this.foeDrift(i); // hero effects that carry or pull foes (Sim.moveCircle) move them outside updateEnemy
     this.flowT -= dt;
     if (this.flowT <= 0) { this.computeFlow(); this.flowT = 0.25; }
     this.updateEncounter(dt);
-    for (let i = 0; i < this.enemies.length; i++) this.updateEnemy(this.enemies[i], dt);
+    for (let i = 0; i < this.enemies.length; i++) { this.updateEnemy(this.enemies[i], dt); if (!fg.direct) this.foeDrift(i); }
     this.separate();
+    this.foeGrid();
     this.updateAllies(dt);
     this.updateProjectiles(dt);
     this.updateZones(dt);
     this.updateChains();
     this.updatePickups(dt);
     if (this.enemies.some(e => e.hp <= 0)) this.enemies = this.enemies.filter(e => e.hp > 0);
+    fg.live = false;
     this.checkDoors(dt);
     this.updateOffers(dt);
     this.checkDefeat();
@@ -460,6 +639,10 @@
   };
 
   W.prototype.updatePlayer = function (p, dt) {
+    // p.lvx / p.lvy: measured velocity (px/s, eased over ~0.1 s) from the position change since the last tick, local and remote heroes alike; a jump over 24 px (room change, teleport) resets it. Foes lead their shots by it.
+    const jx = p.lpx === null ? 0 : p.x - p.lpx, jy = p.lpy === null ? 0 : p.y - p.lpy;
+    if (jx * jx + jy * jy > 576) { p.lvx = 0; p.lvy = 0; } else { const k = Math.min(1, dt * 10); p.lvx += (jx / dt - p.lvx) * k; p.lvy += (jy / dt - p.lvy) * k; }
+    p.lpx = p.x; p.lpy = p.y;
     p.invuln = Math.max(0, p.invuln - dt);
     p.hurtT -= dt;
     if (!p.remote) p.dashing = p.dashT > 0;
@@ -560,22 +743,90 @@
     return [(gx - e.x) / d, (gy - e.y) / d];
   };
 
+  // Pushes the overlapping pair a, b apart (movable foes only); returns whether it did.
+  const sepPair = (a, b) => {
+    const dx = b.x - a.x, dy = b.y - a.y, rr = (a.r + b.r) * 0.9;
+    const d2 = dx * dx + dy * dy;
+    if (d2 >= rr * rr || d2 < 1e-4) return false;
+    const am = a.spd > 0 && !a.boss, bm = b.spd > 0 && !b.boss;
+    if (!am && !bm) return false;
+    const d = Math.sqrt(d2), push = rr - d;
+    const wa = am && bm ? 0.5 : am ? 1 : 0, wb = 1 - wa;
+    const ux = dx / d, uy = dy / d;
+    a.x -= ux * push * wa; a.y -= uy * push * wa;
+    b.x += ux * push * wb; b.y += uy * push * wb;
+    return true;
+  };
+
+  // Cells of the pair grid behind separate(): its own 32 px grid, relinked whenever a push moves a foe across a cell edge, so it always holds the exact positions.
+  const SEP_CELL = 32, SEP_INV = 1 / SEP_CELL, SEP_SLACK = 8;
+  const sepCell = (e, cw, ch) => {
+    let cx = (e.x * SEP_INV) | 0, cy = (e.y * SEP_INV) | 0;
+    if (cx < 0) cx = 0; else if (cx >= cw) cx = cw - 1;
+    if (cy < 0) cy = 0; else if (cy >= ch) cy = ch - 1;
+    return cy * cw + cx;
+  };
+  // Fills s.cand with the ascending indices j > i of the foes in the cells within H of (x, y); returns the count.
+  const sepGather = (s, cw, ch, x, y, H, i) => {
+    const head = s.head, next = s.next, cand = s.cand;
+    let x0 = Math.floor((x - H) * SEP_INV), x1 = Math.floor((x + H) * SEP_INV), y0 = Math.floor((y - H) * SEP_INV), y1 = Math.floor((y + H) * SEP_INV), m = 0;
+    x0 = x0 < 0 ? 0 : x0 >= cw ? cw - 1 : x0; x1 = x1 < 0 ? 0 : x1 >= cw ? cw - 1 : x1;
+    y0 = y0 < 0 ? 0 : y0 >= ch ? ch - 1 : y0; y1 = y1 < 0 ? 0 : y1 >= ch ? ch - 1 : y1;
+    for (let cy = y0; cy <= y1; cy++) for (let c = cy * cw + x0, ce = cy * cw + x1; c <= ce; c++) for (let j = head[c]; j >= 0; j = next[j]) if (j > i) cand[m++] = j;
+    for (let p = 1; p < m; p++) { const v = cand[p]; let q = p - 1; while (q >= 0 && cand[q] > v) { cand[q + 1] = cand[q]; q--; } cand[q + 1] = v; }
+    return m;
+  };
+  // Moves foe idx to the cell of its position.
+  const sepMove = (s, e, idx, cw, ch) => {
+    const c = sepCell(e, cw, ch), o = s.cell[idx];
+    if (c === o) return;
+    const head = s.head, next = s.next;
+    if (head[o] === idx) head[o] = next[idx];
+    else { let p = head[o]; while (next[p] !== idx) p = next[p]; next[p] = next[idx]; }
+    next[idx] = head[c]; head[c] = idx; s.cell[idx] = c;
+  };
+
+  // Separates overlapping foes pair by pair in (i, j > i) order. With GRID_MIN or more foes the j come from the pair grid: the foes within 0.9 (a.r + the largest radius) + SEP_SLACK of a, sorted by index
+  // and gathered again once a has moved SEP_SLACK; fewer foes pair every j > i. The same pairs move in the same order either way.
   W.prototype.separate = function () {
     const es = this.enemies, n = es.length;
-    for (let i = 0; i < n; i++) {
-      const a = es[i]; if (a.hp <= 0 || a.def.gloom) continue;
-      for (let j = i + 1; j < n; j++) {
-        const b = es[j]; if (b.hp <= 0 || b.def.gloom) continue;
-        const dx = b.x - a.x, dy = b.y - a.y, rr = (a.r + b.r) * 0.9;
-        const d2 = dx * dx + dy * dy;
-        if (d2 >= rr * rr || d2 < 1e-4) continue;
-        const am = a.spd > 0 && !a.boss, bm = b.spd > 0 && !b.boss;
-        if (!am && !bm) continue;
-        const d = Math.sqrt(d2), push = rr - d;
-        const wa = am && bm ? 0.5 : am ? 1 : 0, wb = 1 - wa;
-        const ux = dx / d, uy = dy / d;
-        a.x -= ux * push * wa; a.y -= uy * push * wa;
-        b.x += ux * push * wb; b.y += uy * push * wb;
+    if (n < GRID_MIN) {
+      for (let i = 0; i < n; i++) {
+        const a = es[i]; if (a.hp <= 0) continue;
+        for (let j = i + 1; j < n; j++) {
+          const b = es[j]; if (b.hp <= 0) continue;
+          sepPair(a, b);
+        }
+      }
+    } else {
+      let s = this.sg;
+      if (!s) s = this.sg = { cap: 0, head: new Int32Array(0), next: new Int32Array(0), cell: new Int32Array(0), cand: new Int32Array(0) };
+      const room = this.room, cw = Math.ceil(room.w * T / SEP_CELL), ch = Math.ceil(room.h * T / SEP_CELL), nc = cw * ch;
+      if (s.head.length < nc) s.head = new Int32Array(nc);
+      if (s.cap < n) { const cap = Math.max(256, 1 << (32 - Math.clz32(n + 63))); s.next = new Int32Array(cap); s.cell = new Int32Array(cap); s.cand = new Int32Array(cap); s.cap = cap; }
+      const head = s.head, next = s.next, cell = s.cell, cand = s.cand;
+      head.fill(-1, 0, nc);
+      let rmax = 0;
+      for (let i = n - 1; i >= 0; i--) { // descending: each cell's list starts out ascending
+        const e = es[i];
+        if (e.hp <= 0) { cell[i] = -1; continue; }
+        if (e.r > rmax) rmax = e.r;
+        const c = sepCell(e, cw, ch);
+        cell[i] = c; next[i] = head[c]; head[c] = i;
+      }
+      for (let i = 0; i < n; i++) {
+        if (cell[i] < 0) continue;
+        const a = es[i], H = 0.9 * (a.r + rmax) + SEP_SLACK;
+        let qx = a.x, qy = a.y, m = sepGather(s, cw, ch, qx, qy, H, i), k = 0;
+        while (k < m) {
+          const j = cand[k++], b = es[j];
+          if (!sepPair(a, b)) continue;
+          sepMove(s, a, i, cw, ch); sepMove(s, b, j, cw, ch);
+          if (U.dist2(a.x, a.y, qx, qy) > SEP_SLACK * SEP_SLACK) {
+            qx = a.x; qy = a.y; m = sepGather(s, cw, ch, qx, qy, H, i); k = 0;
+            while (k < m && cand[k] <= j) k++;
+          }
+        }
       }
     }
     for (const e of es) if (e.hp > 0 && e.spd > 0) Sim.resolve(e, this.room, this.locked, e.fly);
@@ -610,13 +861,34 @@
     this.pickups.push({ id: U.uid(), kind, x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, val, t: 0 });
   };
 
+  // Gold and xp dropped in a dark room are x DARK_LOOT.
+  W.prototype.lootMul = function () { return this.room && this.room.dark ? W.DARK_LOOT : 1; };
   W.prototype.dropGold = function (x, y, total, exact) {
-    total = Math.round(exact ? total : total * W.GOLD_MUL);
+    total = Math.round((exact ? total : total * W.GOLD_MUL) * this.lootMul());
     while (total > 0) { const v = Math.min(total, total > 30 ? 10 : total > 8 ? 4 : 1); this.spawnPickup('gold', x, y, v); total -= v; }
   };
-  W.prototype.dropXp = function (x, y, total) {
-    total = Math.max(1, Math.round(total));
+  // Drops total xp (x lootMul unless exact: fodder motes and the clear pile) and returns the amount dropped. In a room with an xp budget (enc.xpBudget) a threat drop is scaled by enc.xpK (the planned waves fill enc.xpThrCap, the budget less the fodder share),
+  // its fraction carried in enc.xpThrAcc, and cut to what is left of xpThrCap (unplanned summons); an exact drop is cut to what is left of the budget. enc.xpOut counts everything dropped, enc.xpThr the threat part, enc.xpClip what the cuts removed.
+  // A threat foe's xp: its threatXp, except that in a room with an xp budget only the planned wave foes (e.plan) pay; summons and splits drop none there.
+  W.prototype.dropFoeXp = function (e) {
+    const enc = this.enc;
+    if (enc && enc.xpBudget !== undefined && !e.plan) return;
+    this.dropXp(e.x, e.y, W.threatXp(e.def, this.stratum, e.elite));
+  };
+  W.prototype.dropXp = function (x, y, total, exact) {
+    const enc = this.enc, led = !!enc && enc.xpBudget !== undefined;
+    if (exact) total = Math.round(total);
+    else if (led) { enc.xpThrAcc += total * this.lootMul() * enc.xpK; total = Math.floor(enc.xpThrAcc); enc.xpThrAcc -= total; }
+    else total = Math.max(1, Math.round(total * this.lootMul()));
+    if (led) {
+      const left = Math.max(0, exact ? enc.xpBudget - enc.xpOut : enc.xpThrCap - enc.xpThr);
+      if (total > left) { enc.xpClip += total - left; total = left; }
+      enc.xpOut += total;
+      if (!exact) enc.xpThr += total;
+    }
+    const out = total;
     while (total > 0) { const v = Math.min(total, total > 40 ? 12 : total > 10 ? 4 : 1); this.spawnPickup('xp', x, y, v); total -= v; }
+    return out;
   };
 
   W.prototype.updatePickups = function (dt) {
@@ -649,129 +921,6 @@
     if (pk.kind === 'gold') { const v = Math.max(1, Math.round(pk.val * (1 + p.stats.gold))); this.gold += v; this.emit({ t: 'gold', v, pid: p.pid }); }
     else if (pk.kind === 'xp') { this.addXp(pk.val * (1 + p.stats.xp)); this.emit({ t: 'xp', pid: p.pid }); }
     else if (pk.kind === 'heart') { this.healPlayer(p, p.maxHp * (0.22 + 0.03 * p.stats.forager) + 6); }
-  };
-
-  // ---------------- lantern and dread ----------------
-  // Best Deep Wick rank in the party sets the lantern capacity.
-  W.prototype.lanternMax = function () {
-    let rank = 0;
-    for (const p of this.players.values()) rank = Math.max(rank, (p.meta.up && p.meta.up[ED.UPGRADE_IDX.deepwick]) || 0);
-    return 100 * (1 + 0.06 * rank) * (W.LANTERN_MUL[this.stratum - 1] || 1);
-  };
-
-  // Dark and Lightless tiers stalk regular rooms with a Gloom. The lantern only loses light through room costs and the flare.
-  W.prototype.updateLantern = function (dt) {
-    const room = this.room;
-    if (!room) return;
-    const hold = this.offerHold(); // an open boon pick in a safe room pauses the Gloom's delay
-    const gl = this.dread.gloom;
-    if (gl > 0 && room.type !== 'boss' && room.type !== 'start' && this.gloomN < this.gloomWant() && ED.ENEMIES.gloom) {
-      this.gloomT = (this.gloomT === null ? (this.gloomN ? W.GLOOM_GAP : gl) : this.gloomT) - (hold ? 0 : dt);
-      if (this.gloomT <= 0) { this.gloomN++; this.gloomT = null; this.spawnGloom(); }
-    } else if (!(gl > 0)) this.gloomT = null;
-  };
-
-  // Glooms hunting in this room: the tier's count; Lightless adds one per GLOOM_STEP dark rooms entered this stratum (this one included).
-  W.prototype.gloomWant = function () {
-    const n = this.dread.glooms || 1;
-    return this.dread.tier >= 3 ? Math.min(W.GLOOM_MAX, n + Math.floor(this.deepRooms / W.GLOOM_STEP)) : n;
-  };
-
-  // Recomputes the dread tier from the light fraction; w.dread carries the multipliers read at spawn and at room rewards.
-  W.prototype.updateDread = function () {
-    const f = this.lightMax > 0 ? this.light / this.lightMax : 0;
-    const tier = W.tierOf(f);
-    if (tier === this.dread.tier) return;
-    this.dread = Object.assign({}, W.DREAD[tier]);
-    this.emit({ t: 'dread', tier });
-  };
-
-  // True while the room is safe and a hero has a boon offer open.
-  W.prototype.offerHold = function () {
-    if (!this.isSafe()) return false;
-    for (const p of this.players.values()) if (p.offer) return true;
-    return false;
-  };
-
-  // Any light gained banishes the Gloom (it hunts again once the lantern is Dark or Lightless, after its usual delay).
-  W.prototype.addLight = function (amt, x, y) {
-    this.light = Math.min(this.lightMax, this.light + amt);
-    this.updateDread();
-    this.emit({ t: 'oil', x, y, v: amt });
-    if (amt > 0) this.banishGloom(null);
-  };
-
-  // Removes the Gloom and its spawn telegraph; `hold` = seconds until it may return (null: the tier's delay).
-  W.prototype.banishGloom = function (hold) {
-    for (const e of this.enemies) if (e.def.gloom && e.hp > 0) { e.hp = 0; this.emit({ t: 'banish', x: Math.round(e.x), y: Math.round(e.y) }); }
-    this.zones = this.zones.filter(z => !z.gloom);
-    this.gloomN = 0; this.gloomT = hold;
-  };
-
-  // Lantern flare (F): spends light to banish the Gloom for FLARE.banish seconds and blind the foes around the hero. Returns whether it fired.
-  W.prototype.flare = function (p) {
-    const F = W.FLARE, room = this.room;
-    if (!p || p.downed || p.dead || this.state !== 'play' || this.pendingStratum || !room || room.type === 'boss' || this.light < F.cost || this.time < (this.flareAt || 0)) return false;
-    this.flareAt = this.time + 1;
-    this.light -= F.cost; this.updateDread();
-    this.banishGloom(F.banish);
-    for (const e of this.enemies) if (e.hp > 0 && !e.boss && !e.def.gloom && U.dist2(e.x, e.y, p.x, p.y) < F.r * F.r) e.blind = Math.max(e.blind || 0, F.blind);
-    this.emit({ t: 'flare', pid: p.pid, x: Math.round(p.x), y: Math.round(p.y), r: F.r });
-    return true;
-  };
-
-  // Dim and darker: each elite displaces ELITE_BODIES of plain-foe budget from its wave (fewer, nastier bodies; one plain foe always stays); Dark and Lightless elites roll from DARK_AFFIXES.
-  W.prototype.darkWaves = function (waves) {
-    const dr = this.dread;
-    if (dr.tier === 0) return waves;
-    for (const wv of waves) {
-      let owe = 0;
-      for (const it of wv) if (it.elite) { owe += W.ELITE_BODIES; if (dr.tier >= 2) it.affix = this.rng.pick(W.DARK_AFFIXES); }
-      for (let i = wv.length - 1; i >= 0 && owe > 0 && wv.filter(x => !x.elite).length > 1; i--) {
-        if (wv[i].elite) continue;
-        owe -= ED.ENEMIES[wv[i].type].cost || 2; wv.splice(i, 1);
-      }
-    }
-    return waves;
-  };
-
-  // Dark and Lightless: a cleared room's reward may be upgraded one step (chance dread.up); announced by an 'upgrade' event at the reward's spot.
-  W.prototype.darkReward = function (item, x, y) {
-    if (!(this.dread.up > 0) || !this.rng.chance(this.dread.up)) return item;
-    const to = W.REWARD_UP[item];
-    if (!to) return item;
-    this.emit({ t: 'upgrade', to, x: Math.round(x), y: Math.round(y) });
-    return to;
-  };
-
-  // Entering the boss room turns the light left into a reward (see W.bossLight): heals and shields the living heroes, drops gold, adds embers.
-  W.prototype.bossLantern = function () {
-    const f = this.lightMax > 0 ? this.light / this.lightMax : 0;
-    if (f <= 0) return;
-    const R = W.bossLight(f, this.stratum), heroes = this.alivePlayers();
-    for (const p of heroes) {
-      this.healPlayer(p, p.maxHp * R.heal);
-      const to = Math.max(p.shield || 0, p.maxHp * R.shield);
-      p.shieldBy.door = (p.shieldBy.door || 0) + (to - (p.shield || 0)); p.shield = to;
-    }
-    this.run.embers.rooms += R.embers;
-    if (R.gold > 0 && heroes.length) this.dropGold(heroes[0].x, heroes[0].y, R.gold, true);
-    this.emit({ t: 'wick', f: Math.round(f * 100), heal: Math.round(R.heal * 100), shield: Math.round(R.shield * 100), gold: R.gold, embers: R.embers });
-  };
-
-  // Telegraphed spawn at the floor point farthest from every living hero.
-  W.prototype.spawnGloom = function () {
-    const room = this.room, heroes = this.alivePlayers();
-    let best = null, bd = -1;
-    for (let ty = 2; ty < room.h - 1; ty++) for (let tx = 1; tx < room.w - 1; tx++) {
-      if (room.tiles[ty * room.w + tx] !== 0) continue;
-      const x = (tx + 0.5) * T, y = (ty + 0.5) * T;
-      let d = Infinity;
-      for (const p of heroes) d = Math.min(d, U.dist2(x, y, p.x, p.y));
-      if (d > bd) { bd = d; best = { x, y }; }
-    }
-    if (best) this.addZone({ kind: 'spawn', x: best.x, y: best.y, r: ED.ENEMIES.gloom.r + 4, dur: 1.5, type: 'gloom', elite: false, gloom: true,
-      after: (e) => { e.dmg = W.GLOOM_HIT * Math.max(1, ...heroes.map(p => p.maxHp)); } }); // a touch takes GLOOM_HIT of the toughest hero's max HP
   };
 
   // Marks the stratum fully explored once every non-boss room has been cleared (non-combat rooms clear on entry).

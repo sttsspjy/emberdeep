@@ -9,12 +9,14 @@
   const OPP = { n: 's', s: 'n', e: 'w', w: 'e' };
   const D = ED.Dungeon = { DIRS, OPP };
 
-  const COMBAT_SIZES = [[17, 13], [19, 13], [21, 13], [21, 15], [23, 15], [19, 15], [25, 15]];
-  const SIZE = { start: [15, 11], treasure: [13, 11], shop: [17, 13], event: [15, 11], rest: [15, 11], boss: [27, 19] };
-  const COMBAT_COUNT = [5, 5, 6, 6, 6, 6]; // normal combat rooms per stratum
-  const ELITE_COUNT = [1, 1, 1, 2, 2, 2]; // elite combat rooms per stratum
+  const COMBAT_SIZES = [[33, 17], [35, 17], [31, 19], [37, 17], [29, 19], [39, 15], [33, 19]];
+  const SIZE = { start: [15, 11], treasure: [13, 11], shop: [17, 13], event: [15, 11], rest: [15, 11], boss: [31, 19] };
+  const COMBAT_COUNT = [4, 4, 4, 4, 4, 4]; // normal combat rooms per stratum
+  const ELITE_COUNT = [1, 1, 1, 1, 2, 2]; // elite combat rooms per stratum
+  const DARK_COUNT = 2; // normal combat rooms per floor flagged `dark` (part of COMBAT_COUNT)
+  const PATTERN_AREA = 294; // tile area the base pool and scatter counts are written for: both scale by room area / PATTERN_AREA
   const EVENTS = ['fountain', 'altar', 'gamble', 'trial'];
-  const REWARD_ODDS = [['boon', 50], ['gold', 19], ['vigor', 13], ['forge', 8], ['oil', 10]]; // normal combat reward weights
+  const REWARD_ODDS = [['boon', 60], ['gold', 19], ['vigor', 13], ['forge', 8]]; // normal combat reward weights
   const BOUND = 4; // grid cells span -BOUND..BOUND on both axes
   const MIN_BOSS_DIST = 4;
   const ATTEMPTS = 120;
@@ -38,6 +40,7 @@
   }
 
   // BFS distance from the start for every cell; boss = farthest qualifying dead end (ties broken by rng).
+  // A tree needs DARK_COUNT dead ends besides the boss and the start (the dark rooms), else it is rejected.
   function analyse(rng, cells) {
     const list = Object.values(cells);
     const dist = {};
@@ -51,7 +54,7 @@
     }
     for (const c of list) c.dist = dist[key(c.gx, c.gy)];
     let ends = list.slice(1).filter(c => neighborCount(cells, c) === 1 && c.dist >= MIN_BOSS_DIST);
-    if (!ends.length) return null;
+    if (!ends.length || list.slice(1).filter(c => neighborCount(cells, c) === 1).length < DARK_COUNT + 1) return null;
     if (rng) ends = rng.shuffle(ends);
     ends.sort((a, b) => b.dist - a.dist);
     return { cells, list, boss: ends[0] };
@@ -70,14 +73,17 @@
   D.generate = (stratum, seed) => {
     const rng = U.RNG(seed ^ (stratum * 7919));
     const nCombat = COMBAT_COUNT[stratum - 1] || 5, nElite = ELITE_COUNT[stratum - 1] || 1;
-    const specials = ['treasure', 'shop', 'event', 'rest'];
+    const specials = [stratum % 2 ? 'treasure' : 'event', 'shop', 'rest']; // treasure on odd strata, event on even ones
     const total = 2 + specials.length + nCombat + nElite;
     const { cells, list, boss } = layout(rng, total);
-    const others = list.slice(1).filter(c => c !== boss);
     boss.type = 'boss';
     list[0].type = 'start';
-    // utility rooms prefer dead ends, elite rooms prefer distance >= 3
     const isLeaf = (c) => neighborCount(cells, c) === 1;
+    // dark rooms are normal combat rooms on dead ends other than the boss and the start (off the start->boss path, skipping one cuts off nothing), farther first, ties by their own RNG stream
+    const darkRng = U.RNG((seed ^ 0x2545f491) + stratum * 7907);
+    for (const c of darkRng.shuffle(list.slice(1).filter(c => c !== boss && isLeaf(c))).sort((a, b) => b.dist - a.dist).slice(0, DARK_COUNT)) { c.type = 'combat'; c.dark = true; }
+    const others = list.slice(1).filter(c => c !== boss && !c.dark);
+    // utility rooms prefer the remaining dead ends, elite rooms prefer distance >= 3
     const pool = rng.shuffle(others.filter(isLeaf)).concat(rng.shuffle(others.filter(c => !isLeaf(c))));
     for (const sp of specials) pool.shift().type = sp;
     const near = pool.filter(c => c.dist < 3).sort((a, b) => b.dist - a.dist);
@@ -98,7 +104,7 @@
     return { stratum, seed, rooms, start: 0, boss: boss.id };
   };
 
-  // Rewards are fixed per floor and shown before entry. Normal combat: boon (drawn from the claiming hero's own paths), gold, vigor, forge, oil,
+  // Rewards are fixed per floor and shown before entry. Normal combat: boon (drawn from the claiming hero's own paths), gold, vigor, forge,
   // each kind getting its REWARD_ODDS share of the floor's combat rooms (rounded by weighted draw on the remainders). Elite: relic, or epic at 25%.
   function assignRewards(rooms, stratum, seed) {
     const rng = U.RNG((seed ^ 0x5bd1e995) + stratum * 15485863);
@@ -156,7 +162,7 @@
       id: c.id, gx: c.gx, gy: c.gy, type: c.type, w, h, tiles, seed, stratum,
       dist: c.dist, danger: 1 + 0.05 * c.dist, reward: null,
       doors: { n: -1, s: -1, e: -1, w: -1 },
-      decor: [], torches: [],
+      decor: [], breakables: [], torches: [], dark: !!c.dark,
       event: c.type === 'event' ? EVENTS[seed % EVENTS.length] : null,
       pattern: 'open',
     };
@@ -239,22 +245,24 @@
   }
 
   function applyPattern(room, p, rng) {
-    const w = room.w, h = room.h;
+    const w = room.w, h = room.h, area = w * h / PATTERN_AREA;
     const hazard = 4;
     if (p === 'pillars4') {
-      const px = Math.floor(w / 4), py = Math.floor((h + 2) / 4) + 1;
-      for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) sym(room, px + dx, py + dy, 2);
+      const s = Math.max(2, Math.round(2 * Math.sqrt(area))); // block side: block area scales with room area
+      const px = Math.floor(w / 4), py = Math.min(Math.floor((h + 2) / 4) + 1, Math.floor(h / 2) - s); // the mirrored blocks keep a 2-row gap
+      for (let dy = 0; dy < s; dy++) for (let dx = 0; dx < s; dx++) sym(room, px + dx, py + dy, 2);
     } else if (p === 'grid') {
-      for (let y = 4; y < h - 3; y += 3) for (let x = 4; x < w - 3; x += 4) setT(room, x, y, 2);
+      const x0 = (w - 1 - 4 * Math.floor((w - 9) / 4)) >> 1; // columns centred on the room
+      for (let y = 4; y < h - 3; y += 3) for (let x = x0; x < w - x0; x += 4) setT(room, x, y, 2);
     } else if (p === 'center') {
-      const cx = Math.floor(w / 2), cy = Math.floor(h / 2) + 1;
-      for (let y = cy - 1; y <= cy + 1; y++) for (let x = cx - 1; x <= cx + 1; x++) room.tiles[y * w + x] = 2;
+      const cx = Math.floor(w / 2), cy = Math.floor(h / 2) + 1, hx = Math.max(1, Math.round(w / 22)), hy = Math.max(1, Math.round(h / 14));
+      for (let y = cy - hy; y <= cy + hy; y++) for (let x = cx - hx; x <= cx + hx; x++) room.tiles[y * w + x] = 2;
     } else if (p === 'chasm') {
       const cx = Math.floor(w / 2), cy = Math.floor(h / 2) + 1;
       const rx = Math.max(2, Math.floor(w / 6)), ry = Math.max(1, Math.floor(h / 6));
       for (let y = cy - ry; y <= cy + ry; y++) for (let x = cx - rx; x <= cx + rx; x++) room.tiles[y * w + x] = 3;
     } else if (p === 'pools' || p === 'bossPools') {
-      const n = p === 'bossPools' ? 4 : rng.int(2, 3);
+      const n = p === 'bossPools' ? 4 : rng.int(Math.round(2 * area), Math.round(3 * area));
       for (let i = 0; i < n; i++) {
         const px = rng.int(3, Math.floor(w / 2) - 2), py = rng.int(4, Math.floor(h / 2));
         const rw = rng.int(1, 2), rh = rng.int(1, 2);
@@ -263,11 +271,12 @@
         }
       }
     } else if (p === 'cross') {
-      const cx = Math.floor(w / 2), cy = Math.floor(h / 2) + 1;
-      for (let x = cx - 4; x <= cx + 4; x++) if (Math.abs(x - cx) > 1) room.tiles[cy * w + x] = 2;
-      for (let y = cy - 3; y <= cy + 3; y++) if (Math.abs(y - cy) > 1) room.tiles[y * w + cx] = 2;
+      const cx = Math.floor(w / 2), cy = Math.floor(h / 2) + 1, ax = Math.max(4, Math.round(w * 0.19));
+      const ay = Math.max(2, Math.min(Math.round(h * 0.21), cy - 4, h - 4 - cy)); // the vertical arms stop at the door aprons, mirrored about cy
+      for (let x = cx - ax; x <= cx + ax; x++) if (Math.abs(x - cx) > 1) room.tiles[cy * w + x] = 2;
+      for (let y = cy - ay; y <= cy + ay; y++) if (Math.abs(y - cy) > 1) room.tiles[y * w + cx] = 2;
     } else if (p === 'scatter') {
-      const n = rng.int(4, 6);
+      const n = rng.int(Math.round(4 * area), Math.round(6 * area));
       for (let i = 0; i < n; i++) sym(room, rng.int(2, Math.floor(w / 2) - 1), rng.int(3, Math.floor(h / 2)), 2);
     } else if (p === 'bossPillars') {
       for (const [x, y] of [[5, 5], [w - 6, 5], [5, h - 4], [w - 6, h - 4]]) {
@@ -304,15 +313,40 @@
   }
 
   // ---------------- decoration (cosmetic, deterministic) ----------------
+  // Breakables ({ k, x, y, v, s } in tiles, like decor) are the decor kinds of biome.breakable: smashable props, never baked into the floor. Combat, elite and boss rooms hold BREAK_MIN..BREAK_MAX of them, every other room at most BREAK_SPARE.
+  const BREAK_MIN = 4, BREAK_MAX = 8, BREAK_SPARE = 3, BREAK_GAP = 1.1; // BREAK_GAP: least distance in tiles between two
+  const FIGHT = { combat: 1, elite: 1, boss: 1 };
+
+  // A breakable stands on plain floor, off every door lane, clear of the prop spot (1.5 tiles around the centre; in a room without a fight the whole band its props and signs span) and BREAK_GAP from the others in `list`.
+  function breakFree(room, x, y, list) {
+    const tx = Math.floor(x), ty = Math.floor(y);
+    if (room.tiles[ty * room.w + tx] !== 0 || inDoorLane(room, tx, ty)) return false;
+    const cx = room.w / 2, cy = room.h / 2 + 0.5;
+    if (FIGHT[room.type] ? Math.hypot(x - cx, y - cy) < 1.5 : Math.abs(x - cx) < 5.8 && Math.abs(y - cy) < 2.9) return false;
+    for (const b of list) if (Math.hypot(b.x - x, b.y - y) < BREAK_GAP) return false;
+    return true;
+  }
+
   function decorate(room, stratum) {
     const rng = U.RNG(room.seed ^ 0xdec0);
-    const biome = ED.biomeFor(stratum);
+    const biome = ED.biomeFor(stratum), brk = biome.breakable || [];
     const n = Math.floor(room.w * room.h / 22);
     for (let i = 0; i < n; i++) {
       const x = rng.int(1, room.w - 2), y = rng.int(2, room.h - 2);
       if (room.tiles[y * room.w + x] !== 0) continue;
-      room.decor.push({ k: rng.pick(biome.decor), x: x + rng.range(0.15, 0.85), y: y + rng.range(0.2, 0.85), v: rng.next(), s: rng.range(0.7, 1.2) });
+      const d = { k: rng.pick(biome.decor), x: x + rng.range(0.15, 0.85), y: y + rng.range(0.2, 0.85), v: rng.next(), s: rng.range(0.7, 1.2) };
+      if (brk.indexOf(d.k) < 0) room.decor.push(d);
+      else if (breakFree(room, d.x, d.y, room.breakables)) room.breakables.push(d);
     }
+    if (FIGHT[room.type] && brk.length) { // top up to BREAK_MIN from a stream of its own (the decor and torch rolls stay as they are)
+      const top = U.RNG(room.seed ^ 0xb7ea);
+      for (let i = 0; i < 200 && room.breakables.length < BREAK_MIN; i++) {
+        const x = top.int(1, room.w - 2), y = top.int(2, room.h - 2);
+        const d = { k: top.pick(brk), x: x + top.range(0.15, 0.85), y: y + top.range(0.2, 0.85), v: top.next(), s: top.range(0.7, 1.2) };
+        if (breakFree(room, d.x, d.y, room.breakables)) room.breakables.push(d);
+      }
+    }
+    room.breakables.length = Math.min(room.breakables.length, FIGHT[room.type] ? BREAK_MAX : BREAK_SPARE);
     // torches along the top wall face, avoiding the door
     const cx = Math.floor(room.w / 2);
     for (let x = 3; x < room.w - 2; x += rng.int(4, 6)) {

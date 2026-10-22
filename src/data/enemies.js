@@ -102,13 +102,10 @@
     voidknight: { name: 'Hollow Knight', ai: 'tank', look: 'knight', col: { a: '#3d2d63', b: '#140c26', c: '#ff7ad9' }, hp: 120, spd: 50, dmg: 21, r: 15, xp: 13, cost: 5,
       slam: { range: 56, radius: 72, windup: 0.75, cd: 2.2, ring: { n: 12, speed: 175, kind: 'void' } } },
 
-    // ---------------- Lightless stalker (any stratum; spawned by the world, ignored by room-clear checks) ----------------
-    gloom: { name: 'The Gloom', ai: 'gloom', look: 'gloom', col: { a: '#0d0818', b: '#1d1230', c: '#ff5a2a' }, hp: 9999, spd: 50, dmg: 35, r: 14, xp: 0, cost: 0, fly: true, gloom: true, invuln: true },
-
     // ---------------- Allies ----------------
     minion: { name: 'Risen Bones', ai: 'ally', look: 'skeleton', col: { a: '#b6ffe0', b: '#4c8f78', c: '#7dffd9' }, hp: 40, spd: 95, dmg: 10, r: 9, xp: 0, cost: 0, ally: true },
 
-    // ---------------- Bosses (absolute HP, scaled by party, pact and dread; refHp = design HP that chill, Conflagration and Wildfire measure against) ----------------
+    // ---------------- Bosses (absolute HP, scaled by party and pact; refHp = design HP that chill, Conflagration and Wildfire measure against) ----------------
     bonewarden: { name: 'The Bone Warden', title: 'Keeper of the First Graves', ai: 'boss', look: 'b_warden', col: { a: '#ece4cc', b: '#7d745f', c: '#ff5a3a' },
       hp: 4350, refHp: 800, spd: 60, dmg: 6.4, r: 24, xp: 40, boss: true, quote: 'None leave the Ossuary. Not even the dead.' },
     sporemother: { name: 'The Sporemother', title: 'Bloom of the Glowmire', ai: 'boss', look: 'b_spore', col: { a: '#c86bff', b: '#5b2a7a', c: '#7dffd9' },
@@ -121,6 +118,16 @@
       hp: 50400, refHp: 5600, spd: 62, dmg: 8, r: 26, xp: 120, boss: true, quote: 'Kneel. The sea has already taken your breath.' },
     hollowking: { name: 'The Hollow King', title: 'Crown of the Starless Abyss', ai: 'boss', look: 'b_hollow', col: { a: '#2a1f44', b: '#0e0820', c: '#ff7ad9' },
       hp: 59000, refHp: 7800, spd: 70, dmg: 7.5, r: 24, xp: 160, boss: true, quote: 'You came so far down... only to fill my empty crown.' },
+
+    // ---------------- Fodder (one per biome, appended last: the wire index follows the order; never in a roster) ----------------
+    // Horde filler: untelegraphed touch damage capped at FODDER_CAP of the victim's max health, no drops of their own (the room's xp budget pays through motes), never elite or exposed.
+    // art names the foe type whose animations the renderer reuses, tinted with col; hp scales 1 + 0.25 per stratum only.
+    bonemite: { name: 'Bone Mite', ai: 'swarm', look: 'bat', art: 'bat', col: { a: '#4a4150', b: '#2a2430', c: '#b8503f' }, hp: 7, spd: 84, dmg: 6, r: 6, xp: 0, cost: 0, fodder: true, fly: true },
+    sporeling: { name: 'Sporeling', ai: 'swarm', look: 'slime', art: 'glowlet', col: { a: '#5c8f86', b: '#2c4f49', c: '#0a1f1b' }, hp: 7, spd: 66, dmg: 6, r: 7, xp: 0, cost: 0, fodder: true },
+    rimemote: { name: 'Rime Mote', ai: 'swarm', look: 'wisp', art: 'frostwisp', col: { a: '#8aa6b8', b: '#4a6578', c: '#d6e6ee' }, hp: 7, spd: 78, dmg: 6, r: 6, xp: 0, cost: 0, fodder: true, fly: true },
+    ashimp: { name: 'Ash Imp', ai: 'swarm', look: 'bat', art: 'cinderbat', col: { a: '#4a3a35', b: '#241815', c: '#c98a3a' }, hp: 7, spd: 80, dmg: 6, r: 7, xp: 0, cost: 0, fodder: true, fly: true },
+    brinepolyp: { name: 'Brine Polyp', ai: 'swarm', look: 'jelly', art: 'jellet', col: { a: '#8f6f88', b: '#5a3a55', c: '#d8c4d4' }, hp: 7, spd: 70, dmg: 6, r: 7, xp: 0, cost: 0, fodder: true, fly: true },
+    voidmote: { name: 'Void Mote', ai: 'swarm', look: 'star', art: 'starspawn', col: { a: '#6f6585', b: '#352c4d', c: '#b8a8d8' }, hp: 7, spd: 90, dmg: 6, r: 6, xp: 0, cost: 0, fodder: true, fly: true },
   };
 
   ED.ENEMY_IDS = Object.keys(E);
@@ -135,6 +142,7 @@
     vampiric: { name: 'Vampiric', color: '#d43a5a', desc: 'heals when it hurts you' },
   };
   ED.AFFIX_IDS = Object.keys(ED.AFFIXES);
+  ED.hasAffix = (e, id) => e.elite === id || e.elite2 === id; // either affix slot
 
   // Projectile kinds share one table for both teams so the renderer knows how to draw them.
   ED.PROJ_KINDS = ['bone', 'spore', 'ice', 'fire', 'water', 'void', 'arrow', 'bolt', 'firebolt', 'spark', 'fireball', 'knife', 'holy', 'soul', 'plague', 'wave', 'wisp', 'shard', 'blade', 'orb', 'trident', 'skull',

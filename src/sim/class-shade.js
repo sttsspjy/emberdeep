@@ -23,6 +23,7 @@
   function cutPath(w, p, N, part, x0, y0, x1, y1, a) {
     const st = p.stats, q = N.p[part], sl = N.p.slash, kx = Math.cos(a), ky = Math.sin(a);
     let cut = 0;
+    w.smashSeg(p, x0, y0, x1, y1, sl.reach);
     for (let i = 0, n = w.enemies.length; i < n; i++) {
       const e = w.enemies[i];
       if (!hittable(e) || U.segDist2(e.x, e.y, x0, y0, x1, y1) >= (e.r + sl.reach) ** 2) continue;

@@ -22,7 +22,6 @@
     this.floor = null; this.room = null; this.roomId = -1; this.roomState = {}; this.stratum = 0; this.floorSeed = 0;
     this.gold = 0; this.level = 1; this.xp = 0; this.xpNext = 20; this.time = 0; this.locked = false; this.waitMsg = '';
     this.snaps = []; this.renderT = 0; this.run = null; this.eMap = new Map();
-    this.light = 100; this.lightMax = 100; this.dread = { tier: 0 }; this.deepRooms = 0;
   }
   Mirror.prototype.recalc = function (p) {
     p.stats = ED.Stats.compute({ cls: p.cls, weapon: p.weapon, boons: p.boons, relics: p.relics, meta: p.meta, pact: this.pact, chaliceHp: p.chaliceHp, bonusHp: p.bonusHp });
@@ -32,7 +31,7 @@
       this.stratum = d.s; this.floorSeed = d.fs;
       this.floor = ED.Dungeon.generate(d.s, d.fs);
       this.roomState = {};
-      for (const rm of this.floor.rooms) this.roomState[rm.id] = { visited: false, known: false, cleared: false };
+      for (const rm of this.floor.rooms) this.roomState[rm.id] = { visited: false, known: false, cleared: false, broken: 0 };
       this.roomId = -1;
     }
     if (d.r !== this.roomId) {
@@ -41,16 +40,16 @@
       for (const p of this.players.values()) p.toughRoom = tough; // War Drum doubles in these rooms
     }
     this.locked = !!d.L; this.gold = d.g; this.xp = d.x; this.xpNext = d.n; this.level = d.l; this.waitMsg = d.wm; this.time = d.T;
-    this.light = d.li; this.lightMax = d.lm || 100; this.dread = { tier: d.dr | 0 }; this.deepRooms = d.dp | 0;
     if (d.O) this.props = d.O.map(a => ({ id: a[0], kind: a[1], x: a[2], y: a[3], state: a[4], item: a[5], price: a[6], group: a[7], stype: a[8], text: a[9] }));
-    if (d.RS) d.RS.forEach((b, i) => { this.roomState[i] = { visited: !!(b & 1), known: !!(b & 2), cleared: !!(b & 4) }; });
+    if (d.RS) d.RS.forEach((b, i) => { this.roomState[i] = { visited: !!(b & 1), known: !!(b & 2), cleared: !!(b & 4), broken: d.BR ? d.BR[i] | 0 : 0 }; });
     if (d.RUN) this.run = d.RUN;
-    const P = new Map(), E = new Map(), K = new Map(), A = new Map();
+    const P = new Map(), E = new Map(), H = new Map(), K = new Map(), A = new Map();
     for (const a of d.P) P.set(a[0], a);
     for (const a of d.E) E.set(a[0], a);
+    if (d.H) for (const a of d.H) H.set(a[0], a);
     for (const a of d.K) K.set(a[0], a);
     for (const a of d.A) A.set(a[0], a);
-    this.snaps.push({ T: d.T, recv: now, P, E, K, A });
+    this.snaps.push({ T: d.T, recv: now, P, E, H, K, A });
     if (this.snaps.length > 6) this.snaps.shift();
     // per-player vitals are taken straight from the newest snapshot
     for (const a of d.P) {
@@ -107,8 +106,24 @@
       const st = N.ST[rb[8]] || 'move';
       if (e.boss) { e.pose = st; e.st = 'atk'; } else e.st = st;
       e.burrowed = st === 'burrow' && !e.boss;
-      e.aimA = rb[9]; e.elite = rb[10] >= 0 ? ED.AFFIX_IDS[rb[10]] : null; e.ward = rb[11]; e.wardMax = rb[12]; e.phase = rb[13]; e.face = rb[14]; e.t = rb[15];
+      e.aimA = rb[9]; e.elite = rb[10] >= 0 ? ED.AFFIX_IDS[rb[10]] : null; e.elite2 = rb[18] >= 0 ? ED.AFFIX_IDS[rb[18]] : null; e.ward = rb[11]; e.wardMax = rb[12]; e.phase = rb[13]; e.face = rb[14]; e.t = rb[15];
       out.push(e);
+    }
+    // fodder rows (net.js H): HP is the sent fraction of World.fodderHp (what spawnEnemy gives), the rest of the foe state is the default one
+    if (b.H.size) {
+      const s = this.stratum || 1, pact = this.pact;
+      for (const [id, rb] of b.H) {
+        let e = this.eMap.get(id);
+        if (!e || !e.fodder) {
+          const type = ED.ENEMY_IDS[rb[1]], def = ED.ENEMIES[type];
+          e = { id, type, def, fodder: true, x: 0, y: 0, hp: 1, maxHp: 1, r: def.r, face: 1, flash: 0, frozen: 0, stun: 0, chill: 0, burn: 0, burnPool: 0, burnLvl: 0, st: 'move', elite: null, boss: false, ward: 0, wardMax: 0, phase: 1, aimA: 0, t: 0, burrowed: false };
+          this.eMap.set(id, e);
+        }
+        const xy = lerpXY(a.H.get(id), rb), fl = rb[5];
+        e.x = xy[0]; e.y = xy[1]; e.maxHp = ED.World.fodderHp(e.def, s, pact); e.hp = rb[4] / 255 * e.maxHp;
+        e.flash = fl & 1 ? 0.05 : 0; e.frozen = fl & 2 ? 1 : 0; e.stun = fl & 4 ? 1 : 0; e.chill = fl & 8 ? 40 : 0; e.burnLvl = fl & 16 ? 1 : 0; e.burn = e.burnPool = e.burnLvl; e.face = fl & 32 ? -1 : 1; // the wire carries chilled and burning as flags: drawn at a mid chill and one flame
+        out.push(e);
+      }
     }
     if (this.eMap.size > out.length * 2 + 40) { const keep = new Map(); for (const e of out) keep.set(e.id, e); this.eMap = keep; }
     this.enemies = out;
@@ -129,10 +144,11 @@
     }
   };
 
+  G.Mirror = Mirror; // the client mirror constructor (headless checks)
   // ---------------- session lifecycle ----------------
   G.start = (mode, cfg) => {
     ED.FX.reset();
-    ED.Render.lightLevel = 1;
+    ED.Render.darkLevel = 0;
     U.resetUid(1);
     if (ED.Actors) ED.Actors.reset();
     const s = G.s = { mode, cfg, localPid: cfg.localPid, net: cfg.net || null, fxBuf: [], snapT: 0, snapN: 0, inT: 0, acc: 0, alpha: 1, epoch: 0, offer: null, offerOpen: false, ended: false, paused: false, prompt: null, sig: '', claimed: {} };
@@ -148,7 +164,7 @@
       for (const p of s.world.players.values()) p.mastery10 = p.meta && p.meta.mastery >= 10;
     }
     s.view.pact = cfg.pact;
-    s.ctl = { atkCd: 0, skillCd: 0, skill2Cd: 0, charges: s.me.stats.maxCharges, dashCd: 0, tranceT: 0, latch: false, aimA: 0 };
+    s.ctl = { atkCd: 0, skillCd: 0, skill2Cd: 0, charges: s.me.stats.maxCharges, dashN: s.me.stats.dashCharges, dashT: 0, tranceT: 0, latch: false, aimA: 0 };
     // Aim state read by ED.AimFx: cursor in CSS px (sx, sy) and world (wx, wy), device, angle, push fraction (frac) for stick or keyboard-only ground skills, ready ground skills, cooldown fraction, pulse/crit timestamps.
     s.aim = { sx: 0, sy: 0, wx: 0, wy: 0, a: 0, device: 'mouse', pointer: false, show: false, dead: false, foe: false, frac: 0.6, cd: 0, ground: [], pulseT: -9, critT: -9 };
     if (ED.AimFx) ED.AimFx.applyCursor();
@@ -175,7 +191,6 @@
       case 'atk': w.playerAttack(p, +a.a || 0); break;
       case 'skill': if ((a.slot | 0) === 0 || (a.slot | 0) === 1) w.playerSkill(p, +a.a || 0, a.data, a.slot | 0); break;
       case 'dash': w.playerDash(p, +a.dx || 0, +a.dy || 0); break;
-      case 'flare': w.flare(p); break;
       case 'interact': w.interact(pid, a.id); break;
       case 'pick': w.pickBoon(pid, a.i | 0); break;
       case 'reroll': w.reroll(pid); break;
@@ -202,7 +217,7 @@
     w.msgs.length = 0;
   };
 
-  const SHEET_EVENTS = { build: 1, boon: 1, evolve: 1, levelup: 1, dread: 1, room: 1, relic: 1, stratum: 1 }; // events that change what the open character sheet shows
+  const SHEET_EVENTS = { build: 1, boon: 1, evolve: 1, levelup: 1, room: 1, relic: 1, stratum: 1 }; // events that change what the open character sheet shows
   G.localEvent = (ev) => {
     const s = G.s; if (!s) return;
     if (SHEET_EVENTS[ev.t]) ED.UI.sheetDirty();
@@ -224,6 +239,8 @@
       }
     } else if (ev.t === 'boon' && s.mode !== 'client' && ev.pid === s.localPid) {
       if (s.me.stats.maxCharges > s.ctl.charges && ED.BOONS[ev.id].mods.charges) s.ctl.charges++;
+    } else if (ev.t === 'smash') {
+      if (s.mode === 'client') { const rs = s.mirror.roomState[ev.r]; if (rs) rs.broken |= 1 << ev.i; } // the host world already holds its own bit
     } else if (ev.t === 'end') {
       if (s.mode === 'host' && !s.ended) {
         // flush everything (including this event) before the session is torn down, then confirm directly
@@ -280,7 +297,8 @@
   // ---------------- local hero control ----------------
   function control(s, inp, dt) {
     const me = s.me, view = s.view, ctl = s.ctl, st = me.stats;
-    ctl.atkCd -= dt; ctl.dashCd -= dt; ctl.tranceT -= dt; ctl.skill2Cd -= dt;
+    ctl.atkCd -= dt; ctl.tranceT -= dt; ctl.skill2Cd -= dt;
+    if (Sim.dashTick(ctl, st, dt) && ED.FX && ED.FX.cue) ED.FX.cue('dcharge'); // a charge refilled
     if (s.mode === 'client') for (const k of MIRROR_TIMERS) if (me[k] > 0) me[k] -= dt; // a mirror hero has no world tick
     if (s.mode === 'client') { me.atkAge = (me.atkAge === undefined ? 9 : me.atkAge) + dt; me.chanT = st.channel > 0 && !me.moving && me.atkAge < ED.chanWindow(me) ? (me.chanT || 0) + dt : 0; } // Channel (a client's chip estimates the host's value)
     if (ctl.charges < st.maxCharges) { ctl.skillCd -= dt; while (ctl.skillCd <= 0 && ctl.charges < st.maxCharges) { ctl.charges++; ctl.skillCd = ctl.charges < st.maxCharges ? ctl.skillCd + st.skillCd : 0; } } // a refund past the running cooldown carries into the next charge
@@ -310,8 +328,7 @@
       if (near.kind === 'relic' || near.stype === 'relic') { const r = ED.RELICS[near.item]; desc = r.desc; color = ED.RARITY[r.rar].color; }
       else if (near.kind === 'portal') desc = 'Step down into ' + ED.biomeFor(view.stratum + 1).name + '.';
       else { desc = ED.Render.propDesc(near, view); if (near.kind === 'reward') color = ED.Render.rewardColor(near.item); }
-      const full = near.stype === 'oil' && view.light >= view.lightMax - 0.5;
-      s.prompt = { x: near.x, y: near.y, text, desc, color, can: near.kind === 'shop' || near.kind === 'gamble' ? view.gold >= near.price && !full : true };
+      s.prompt = { x: near.x, y: near.y, text, desc, color, can: near.kind === 'shop' || near.kind === 'gamble' ? view.gold >= near.price : true };
     }
     if (!s.offerOpen) {
       if (inp.atkPressed && near) { G.act({ t: 'interact', id: near.id }); ctl.latch = true; ctl.atkCd = Math.max(ctl.atkCd, 0.25); }
@@ -365,17 +382,15 @@
         ctl.skill2Cd = st.skill2Cd;
         if (st.trance) { ctl.tranceT = 4; if (s.mode === 'client') me.tranceT = 4; }
       }
-      if (inp.flare && view.light >= ED.World.FLARE.cost && view.room.type !== 'boss') G.act({ t: 'flare' }); // host checks light, room and cooldown
-      if (inp.dash && ctl.dashCd <= 0 && !me.skillMove) {
+      if (inp.dash && !me.skillMove && Sim.dashTry(ctl, st)) {
         let dx = mx, dy = my;
         if (Math.hypot(dx, dy) < 0.2) { dx = Math.cos(aim); dy = Math.sin(aim); }
         const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
-        me.dashT = 0.17; me.dashDx = dx; me.dashDy = dy;
-        ctl.dashCd = st.dashCd;
+        me.dashT = ED.CONST.DASH.t; me.dashDx = dx; me.dashDy = dy;
         G.act({ t: 'dash', dx, dy });
       }
     }
-    Sim.movePlayer(me, { mx, my }, dt, view.room, view.locked, view.zones);
+    Sim.movePlayer(me, { mx, my }, dt, view.room, view.locked, view.zones, view.enemies); // a crowd of foes touching the hero slows the walk
     if (s.mode !== 'client') me.dashing = me.dashT > 0; // a skill's own move is not a dash (no dash riders) and keeps its own i-frames (me.skillIfr)
     aimExtras(s, me, view);
   }
@@ -478,13 +493,13 @@
     }
   };
   const unterp = (w) => { for (const k of MOVERS) { const a = w[k]; for (let i = 0; i < a.length; i++) { const o = a[i]; if (o.rx !== undefined) { o.x = o.rx; o.y = o.ry; } } } };
-  // Mirrors World.isSafe: calm room, no live foe except the invulnerable Gloom, no descent pending (clients see no pendingStratum).
-  const isSafe = (v) => !v.locked && !v.pendingStratum && !v.enemies.some(e => e.hp > 0 && !e.def.gloom);
+  // Mirrors World.isSafe: calm room, no live foe, no descent pending (clients see no pendingStratum).
+  const isSafe = (v) => !v.locked && !v.pendingStratum && !v.enemies.some(e => e.hp > 0);
   // Music level from the viewed foe list (host, solo and client alike): 0 calm, 1 foes alive or the room locked, 2 heavy at 25 live foes (held until fewer than 12);
   // a boss piece plays its phase (1 -> 0 .. 3 -> 2), lifted to 1 by 8 or more summons.
   const musicLevel = (v, prev) => {
     let n = 0, boss = null;
-    for (const e of v.enemies) { if (e.hp <= 0 || e.def.gloom || e.spawnT > 0) continue; if (e.boss) boss = e; else n++; }
+    for (const e of v.enemies) { if (e.hp <= 0 || e.spawnT > 0) continue; if (e.boss) boss = e; else n++; }
     if (boss) return Math.max(Math.min(2, (boss.phase | 0) - 1), n >= 8 ? 1 : 0);
     if (n >= 25 || (prev === 2 && n >= 12)) return 2;
     return v.locked || n > 0 ? 1 : 0;
@@ -493,7 +508,7 @@
     const s = G.s; if (!s) return;
     const now = performance.now() / 1000;
     const alone = G.alone(), frozen = alone && s.paused;
-    // Alone, the world waits while you read boon cards (offers only open in a safe room), so the Gloom's delay never runs while you pick.
+    // Alone, the world waits while you read boon cards (offers only open in a safe room).
     const hold = alone && s.offerOpen;
     s.alpha = 1; // frozen, held or client: draw the newest state
     const sdt = alone ? dt * ED.FX.timeScale : dt; // hit-stop slows only a world nobody else shares; effects keep real time
@@ -557,8 +572,8 @@
   };
   const drawFrame = (s, t, dt) => {
     const c = ED.Render.ctx;
-    const v = s.view, R = ED.Render, lit = v.room && v.lightMax > 0 ? U.clamp(v.light / v.lightMax, 0, 1) : 1;
-    R.lightLevel += (lit - R.lightLevel) * Math.min(1, dt * 2.5); // eased so a refill or a tier drop never pops
+    const v = s.view, R = ED.Render;
+    R.darkLevel += ((v.room && v.room.dark ? 1 : 0) - R.darkLevel) * Math.min(1, dt * 2.5); // eased so crossing a door never pops
     R.claimed = s.claimed;
     R.frame(s.view, s.localPid, t, dt);
     const ob = document.getElementById('ov-boon'), cover = s.offerOpen || !!(ob && !ob.hidden); // the boon overlay owns the screen: no banners or prompts under it

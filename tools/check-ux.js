@@ -65,5 +65,55 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   ok(part(model('knight', {}), 1, 'strike').r === 0 && part(model('knight', {}), 1, 'return').r === 0, 'projectile hit radii stay out of the sheet parts');
 }
 
+// ---------------- dash charges: the shared constant, the stat block, the sheet row and the charge model of Sim.dashTick / Sim.dashTry ----------------
+{
+  const D = ED.CONST.DASH, S = ED.Sim;
+  ok(D.t === 0.15 && D.speed === 480, 'ED.CONST.DASH is 0.15 s at 480 px/s: ' + JSON.stringify(D));
+  const base = { cls: 'knight', weapon: 'longsword', boons: {}, relics: [], meta: META(), pact: 0 };
+  const st0 = ED.Stats.compute(base);
+  ok(st0.dashCd === 1.5 && st0.dashCharges === 1, 'a fresh hero has 1 dash charge, 1.5 s each: ' + st0.dashCd + ' / ' + st0.dashCharges);
+  const sm = ED.Stats.compute(Object.assign({}, base, { boons: { lightstep: 2 } }));
+  ok(sm.dashCd === 1.5 && sm.dashCharges === 1, 'dashcdr is ignored by the charge stats until it becomes charges');
+  const stats = ED.Stats.compute(base); stats.sn = {};
+  const p = { pid: 'p', name: 'T', cls: 'knight', weapon: base.weapon, boons: {}, relics: [], meta: base.meta, stats, hp: stats.maxHp, maxHp: stats.maxHp, shield: 0, picks: 0, slot: 0 };
+  const sh = ED.Sheet.compute(p, ED.Sheet.ctx ? ED.Sheet.ctx({ stratum: 1, pact: 0, players: new Map(), allies: [] }, p) : {}, { raw: true }).dash;
+  ok(sh.cd === 1.5 && sh.charges === 1 && sh.ifr === D.t, 'sheet dash row: recharge per charge, charges, i-frame seconds: ' + JSON.stringify({ cd: sh.cd, charges: sh.charges, ifr: sh.ifr }));
+  const run = (c, st, secs) => { let r = 0; for (let i = Math.round(secs / 0.01); i > 0; i--) r += S.dashTick(c, st, 0.01); return r; };
+  const mk = (cap) => ({ c: { dashN: cap, dashT: 0 }, st: { dashCharges: cap, dashCd: 1.5 } });
+  { // (a) one charge: the second dash in a row is refused
+    const { c, st } = mk(1);
+    ok(S.dashTry(c, st) === true && S.dashTry(c, st) === false && c.dashN === 0, '1 charge: the first dash passes, the second is refused');
+    // (b) a refill after 1.5 s
+    run(c, st, 1.45); ok(c.dashN === 0 && S.dashTry(c, st) === false, '1 charge: no dash at 1.45 s');
+    const r = run(c, st, 0.1); ok(r === 1 && c.dashN === 1 && c.dashT === 0 && S.dashTry(c, st) === true, '1 charge: a dash is possible again after 1.5 s');
+  }
+  { // (c) three charges back to back, then one refill per 1.5 s
+    const { c, st } = mk(3);
+    ok(S.dashTry(c, st) && S.dashTry(c, st) && S.dashTry(c, st) && !S.dashTry(c, st) && c.dashN === 0, '3 charges: three dashes back to back, the fourth is refused');
+    const seen = [];
+    run(c, st, 1.45); for (let k = 1; k <= 3; k++) { seen.push(c.dashN); run(c, st, 0.1); seen.push(c.dashN); run(c, st, 1.4); } // sampled 0.05 s before and after each 1.5 s mark
+    ok(seen.join() === '0,1,1,2,2,3', '3 charges: one charge per 1.5 s, one at a time: ' + seen.join());
+    ok(c.dashT === 0 && run(c, st, 5) === 0 && c.dashN === 3, '3 charges: full means the timer rests');
+  }
+  { // spending while recharging keeps the running timer
+    const { c, st } = mk(3);
+    S.dashTry(c, st); run(c, st, 1.0); S.dashTry(c, st);
+    ok(c.dashN === 1 && Math.abs(c.dashT - 0.5) < 0.02, '3 charges: a second spend does not restart the timer: ' + c.dashT.toFixed(2));
+    run(c, st, 0.55); ok(c.dashN === 2, '3 charges: the refill lands 1.5 s after the first spend: ' + c.dashN);
+  }
+  { // (d) the cap drops from 3 to 1 (stat recalc): the charges clamp; a rise while full starts a refill
+    const { c, st } = mk(3);
+    st.dashCharges = 1; S.dashTick(c, st, 0);
+    ok(c.dashN === 1 && c.dashT === 0, 'dashCharges 3 -> 1 clamps the charges: ' + c.dashN);
+    st.dashCharges = 3; run(c, st, 1.45); ok(c.dashN === 1, 'a raised cap starts the timer: still 1 at 1.45 s');
+    run(c, st, 0.1); ok(c.dashN === 2, 'a raised cap: +1 charge at 1.5 s: ' + c.dashN);
+  }
+  { // a long frame carries its overshoot into the next charge
+    const { c, st } = mk(3);
+    c.dashN = 0; c.dashT = 1.5;
+    ok(S.dashTick(c, st, 2.0) === 1 && c.dashN === 1 && Math.abs(c.dashT - 1.0) < 1e-9, 'a 2.0 s frame refills 1 charge and keeps 0.5 s of overshoot: ' + c.dashT);
+  }
+}
+
 console.log(`${n} checks, ${fails} failed`);
 process.exit(fails ? 1 : 0);

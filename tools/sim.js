@@ -1,12 +1,14 @@
 // Usage: node tools/sim.js <heroes> <runs> <botSkill 0-1> <meta none|mid|max> [classes|-] [pact] [--pick=random|smart|legacy] [--start=random|class|generalist|rotate|<gateId>] [--gates=1|2] [--force=id[@slot],...]
-//   [--route=attack|skill1|skill2|element|random|rotate] [--fork=0|1|random|rotate] [--weapon=0|1|2|rotate] [--aimnoise=<angle rad>,<point px>|0] [--seed0=N] [--explore=minLight] [--strata=N] [--from=N] [--out=rows.json] [--pair=rows.json] [--quiet] [--explain]   (parallel batches: tools/simpool.js, fixed quick suite: tools/bal.js)
+//   [--route=attack|skill1|skill2|element|random|rotate] [--fork=0|1|random|rotate] [--weapon=0|1|2|rotate] [--aimnoise=<angle rad>,<point px>|0] [--seed0=N] [--dark=smart|always|never] [--strata=N] [--from=N] [--vet[=charges,rider,dodge,hazard]] [--vetreact=<s>] [--out=rows.json] [--pair=rows.json] [--quiet] [--explain]   (parallel batches: tools/simpool.js, fixed quick suite: tools/bal.js)
 // Headless simulation harness: loads the game's sim files into this Node context and drives bot heroes through full runs (deterministic per seed: the bot has its own seeded RNG).
-// Bot policy: fight, claim room rewards, use rest sites and shops, then explore unvisited rooms nearest-first while entering the next one
-// (its light cost paid) leaves the lantern at least EXPLORE_MIN_LIGHT full, else head for the boss (the exploration/lantern trade-off).
+// Bot policy: fight, claim room rewards, use rest sites and shops, explore every unvisited room nearest-first, then head for the boss.
+// Dark rooms follow --dark: smart (default) enters one while every living hero has at least DARK_HP of max HP, always enters, never skips them.
 // Pick policies: 'random' takes a random card; 'smart' takes the card of best marginal value (tools/pick.js: damage and effective health over the next three strata from the sheet model, folded mechanics, milestone value of keystone / evolution / duo; start card, forge, rerolls and relics by the same value);
 // 'legacy' is the v3 smart order in smartScore (evolution > keystone > duo > own-path boon > element gate while a slot is free > open General > anything), kept for paired comparison. --explain prints every pick of a single run with its value parts.
-// Skill (0-1) is the share of ticks the bot pays attention (floor hazards, lantern flare) and the chance it reads a Gloom lunge telegraph; the rest of the time it moves on instinct.
-// The summary reports win rate, pacing, hits and time to kill, hero DPS, damage share by source, cooldown reduction, the lantern/Gloom lines and the path lines (see summarize); every mean prints its standard error.
+// Skill (0-1) is the share of ticks the bot pays attention to floor hazards; the rest of the time it moves on instinct.
+// --vet: the veteran preset, a bot that plays like a skilled player (see "veteran preset" below); --vetreact=<s> sets its reaction time (default 0.18); without --vet every number is unchanged.
+// The summary reports win rate, pacing, hits and time to kill, hero DPS, damage share by source, cooldown reduction, the dark-room lines and the path lines (see summarize); every mean prints its standard error.
+// Per cleared combat / elite / dark room it also reports kills (threat/fodder), peak live foes and the xp dropped against the room budget. Bot fights: nearest threat foe within weapon reach, else the nearest fodder; with 4+ foes within 80 px it steps toward the emptier side (crowd slow).
 // --start: how the start offer is picked (default: the best gain under --pick=smart, else uniform over its cards; random: always uniform; class: the class element's gate; a gate id or generalist forces that card; rotate: run i takes fire, ice, lightning, poison, holy, shadow, generalist in turn).
 // --gates=1: a hero never takes a second element gate (mono-element arm).
 // --force: gate ids (and generalist) replace the start pick, then are taken whenever offered; other boons and relics are granted at run start (a fork id also grants its route card). id@slot limits an id to one hero.
@@ -29,7 +31,7 @@ const ED = globalThis.ED;
 const U = ED.U, T = ED.CONST.TILE, D = ED.Dungeon;
 const PICK = require('./pick.js')(ED, require('./model.js')(ED)); // card values by marginal gain (--pick=smart)
 
-const EXPLORE_MIN_LIGHT = 0.3; // the bot stops exploring when the next room would leave the lantern below this fraction, and goes for the boss
+const DARK_HP = 0.6; // --dark=smart: the bot enters a dark room while every living hero has at least this share of max HP
 const PER_HERO_REWARDS = ['boon', 'forge', 'epic', 'vigor'];
 const MAX_SECONDS = 60 * 60; // a run that is still going after an hour of game time counts as a loss
 // Open General boons in the order a sensible player takes them (damage and defence first).
@@ -90,8 +92,217 @@ function avoidHazard(room, p, mx, my) {
   return [mx, my];
 }
 
-// Direction perpendicular to the Gloom's lunge line, on the side the hero already stands.
-function sidestep(g, p) { const a = g.aimA, side = ((p.x - g.x) * -Math.sin(a) + (p.y - g.y) * Math.cos(a)) >= 0 ? 1 : -1; return [-Math.sin(a) * side, Math.cos(a) * side]; }
+// Crowd escape: with CROWD_N or more foes within CROWD_R of the hero, the unit heading (one of 8) whose point 60 px ahead has the fewest foes within CROWD_R (a wall or chasm there counts 99); null otherwise. near: the foes around the hero (w.foesNear).
+const CROWD_R = 80, CROWD_N = 4;
+function crowdEscape(w, p, near) {
+  const live = (e) => e.hp > 0 && e.spawnT <= 0, r2 = CROWD_R * CROWD_R;
+  let n = 0;
+  for (const e of near) if (live(e) && U.dist2(e.x, e.y, p.x, p.y) < r2) n++;
+  if (n < CROWD_N) return null;
+  let best = null, bs = Infinity;
+  for (let k = 0; k < 8; k++) {
+    const a = k * U.TAU / 8, qx = p.x + Math.cos(a) * 60, qy = p.y + Math.sin(a) * 60, t = D.tileAt(w.room, qx, qy);
+    let s = t === 1 || t === 2 || t === 3 || (t === 5 && w.locked) ? 99 : 0;
+    for (const e of near) if (live(e) && U.dist2(e.x, e.y, qx, qy) < r2) s++;
+    if (s < bs) { bs = s; best = [Math.cos(a), Math.sin(a)]; }
+  }
+  return best;
+}
+
+// ---------------- veteran preset (--vet) ----------------
+// A skilled player's habits on top of the bot: extra skill charges, dash riders through packs, a look-ahead dodge of shots, telegraphs and body-hit lunges (walk first, dash when walking cannot clear them), a constant watch on the ground.
+// --vet turns every feature on, --vet=charges,rider,dodge,hazard only the named ones; without the flag none of this code runs.
+const VET_ALL = ['charges', 'rider', 'dodge', 'hazard'];
+const parseVet = (v) => (v === undefined || v === '0' || v === 'off' ? null : new Set(v === '1' || v === 'all' ? VET_ALL : String(v).split(',')));
+const VH = 1, VDT = 0.05, VN = 20; // look-ahead (s), sample step (s), samples
+let VR = 0.18; // reaction time (s), --vetreact=<s>: a shot, telegraph or lunge older than this is dodged; in a lapse of attention (c.attn false) VLAPSE s more
+const VLAPSE = 0.3;
+const SEEN = new WeakMap(), SWING = new WeakMap(); // first-seen time of each foe shot, wind-up record of each lunging foe
+const VDIRS = Array.from({ length: 16 }, (_, k) => [Math.cos(k * U.TAU / 16), Math.sin(k * U.TAU / 16)]);
+
+// Distance a hero of radius r walks from (x, y) along the unit heading (ux, uy) within maxD: walls, chasms and locked doors stop it.
+function reachDist(room, locked, x, y, ux, uy, maxD, r) {
+  let d = 0;
+  for (let s = 6; ; s += 6) {
+    const q = Math.min(s, maxD), t = D.tileAt(room, x + ux * (q + r), y + uy * (q + r));
+    if (t === 1 || t === 2 || t === 3 || (t === 5 && locked)) break;
+    d = q;
+    if (q >= maxD) break;
+  }
+  return d;
+}
+
+// Threats to hero p over the next VH seconds, or null when none reaches it: foe shots (flight sampled every VDT), wind-up telegraphs resolving within VH (tl: time left), standing fields, and body-hit lunges and bashes (a foe still, then moving along its aim). Only what the hero had time to see (react seconds) counts.
+function vetThreats(w, p, speed, react) {
+  const room = w.room, locked = w.locked, R = speed * VH + 60, mhp = p.maxHp, low = 2 - p.hp / mhp;
+  const wt = (dmg) => (0.5 + Math.min(2.5, 8 * dmg / mhp)) * low;
+  let T = null;
+  const get = () => T || (T = { room, pj: [], hm: [], zn: [], ar: [], mv: [], ln: [] });
+  if (D.tileAt(room, p.x, p.y) === 4) get(); // standing on a hazard tile: the plan walks off it
+  for (const pr of w.projs) {
+    if (pr.team !== 1 || pr.dead || pr.ghost) continue;
+    let t0 = SEEN.get(pr);
+    if (t0 === undefined) SEEN.set(pr, t0 = w.time);
+    if (w.time - t0 < react) continue;
+    const sp = Math.hypot(pr.vx, pr.vy) || 1, far = sp * Math.min(VH, pr.life) * Math.exp((pr.accel || 0) * VH);
+    if (pr.homing) { // a homing shot turns toward the hero: simulated per heading in vetRisk
+      if (U.dist2(p.x, p.y, pr.x, pr.y) < (R + far) ** 2) get().hm.push({ x: pr.x, y: pr.y, vx: pr.vx, vy: pr.vy, rate: pr.homing, n: Math.min(VN, Math.floor((pr.life - 1e-6) / VDT)), hr: p.r + pr.r + 1, wt: wt(pr.dmg) });
+      continue;
+    }
+    if (!pr.turn && U.segDist2(p.x, p.y, pr.x, pr.y, pr.x + pr.vx / sp * far, pr.y + pr.vy / sp * far) > (R + pr.r + p.r) ** 2) continue;
+    let x = pr.x, y = pr.y, vx = pr.vx, vy = pr.vy, n = 0;
+    const xs = [x], ys = [y], ac = Math.exp((pr.accel || 0) * VDT);
+    for (let j = 1; j <= VN && j * VDT < pr.life; j++) {
+      if (pr.turn) { const a = Math.atan2(vy, vx) + pr.turn * VDT, s = Math.hypot(vx, vy); vx = Math.cos(a) * s; vy = Math.sin(a) * s; }
+      vx *= ac; vy *= ac; x += vx * VDT; y += vy * VDT;
+      if (D.blocksShots(D.tileAt(room, x, y), locked)) break;
+      xs.push(x); ys.push(y); n = j;
+    }
+    if (n) get().pj.push({ xs, ys, n, hr: p.r + pr.r + 1, wt: wt(pr.dmg) });
+  }
+  for (const z of w.zones) {
+    if (z.team !== 1 || z.dead) continue;
+    const k = z.kind;
+    if (k === 'tele' || k === 'teleLine' || k === 'teleCone') {
+      const tl = z.dur - z.t;
+      if (tl > VH || tl < -0.02 || z.t < react) continue;
+      const x1 = z.x + Math.cos(z.a || 0) * (z.len || 0), y1 = z.y + Math.sin(z.a || 0) * (z.len || 0);
+      if (k === 'teleLine' ? U.segDist2(p.x, p.y, z.x, z.y, x1, y1) > (z.w / 2 + R) ** 2 : U.dist2(z.x, z.y, p.x, p.y) > (z.r + R) ** 2) continue;
+      const s = z.src, laser = !!s && !!s.def && !!s.def.pattern && s.def.pattern.type === 'laser'; // a warn-only line is the caster's aimed shot, dive, charge or beam (4 ticks): weighed by the caster's damage
+      get().zn.push({ z, tl: Math.max(0, tl), x1, y1, ext: laser ? 0.4 : 0, wt: z.dmg > 0 ? wt(z.dmg) : s && s.dmg > 0 ? wt(s.dmg * (laser ? 4 : 1)) : 0.35 * low });
+    } else if ((k === 'poison' || k === 'fire' || k === 'mire') && U.dist2(z.x, z.y, p.x, p.y) < (z.r + R) ** 2) get().ar.push({ x: z.x, y: z.y, r: z.r + p.r * 0.5, wt: k === 'mire' ? 0.12 : 0.5 * low });
+    else if (k === 'laser' && z.t < z.dur && U.segDist2(p.x, p.y, z.x, z.y, z.x + Math.cos(z.a) * z.len, z.y + Math.sin(z.a) * z.len) < (z.w / 2 + R) ** 2) get().ln.push({ z, x1: z.x + Math.cos(z.a) * z.len, y1: z.y + Math.sin(z.a) * z.len, left: z.dur - z.t, wt: wt(z.dmg) });
+  }
+  for (const e of w.enemies) {
+    if (e.hp <= 0 || e.spawnT > 0 || e.burrowed) continue;
+    const d = e.def, M = d.ai === 'chaser' && d.lunge ? d.lunge : d.ai === 'tank' && d.bash ? d.bash : null;
+    if (!M) continue;
+    let r = SWING.get(e); // r.ok: the wind-up this state follows lasted `react`, so the hero saw it coming
+    if (!r || r.st !== e.st) SWING.set(e, r = { st: e.st, t0: w.time, ok: !!r && r.st === 'windup' && w.time - r.t0 >= react });
+    if (U.dist2(e.x, e.y, p.x, p.y) > (R + 140) ** 2) continue;
+    const bash = d.ai === 'tank', go = bash ? 'bash' : 'lunge';
+    let tw = -1, dur = M.dur;
+    if (e.st === 'windup' && (!bash || e.vars.atk === 'bash')) { if (w.time - r.t0 >= react) tw = e.t; } else if (e.st === go && r.ok) { tw = 0; dur = e.t; }
+    if (tw < 0 || tw > VH) continue;
+    get().mv.push({ x: e.x, y: e.y, ca: Math.cos(e.aimA), sa: Math.sin(e.aimA), tw, sp: M.speed, dur, hr: e.r + p.r + 1, wt: wt(e.dmg) });
+  }
+  return T;
+}
+
+// Risk of hero p taking a heading (ux, uy) at `speed` (px/s; a dash: the dash speed, untouchable for DASH.t) against threats T: summed weights of the hits it would take, plus a small cost for standing on hazard tiles.
+// reach = distance the heading allows; the hero stops there.
+function vetRisk(T, p, ux, uy, reach, speed, dash) {
+  const DT = ED.CONST.DASH.t, DS = ED.CONST.DASH.speed;
+  const at = (t) => Math.min(dash ? DS * Math.min(t, DT) : speed * t, reach);
+  let risk = 0;
+  for (const q of T.pj) {
+    for (let j = 1; j <= q.n; j++) {
+      const t = j * VDT;
+      if (dash && t <= DT) continue;
+      const d = at(t);
+      if (U.segDist2(p.x + ux * d, p.y + uy * d, q.xs[j - 1], q.ys[j - 1], q.xs[j], q.ys[j]) < q.hr * q.hr) { risk += q.wt; break; }
+    }
+  }
+  for (const q of T.hm) {
+    let x = q.x, y = q.y, vx = q.vx, vy = q.vy;
+    const sp = Math.hypot(vx, vy);
+    for (let j = 1; j <= q.n; j++) {
+      const t = j * VDT, d = at(t), hx = p.x + ux * d, hy = p.y + uy * d, cur = Math.atan2(vy, vx);
+      const na = cur + U.clamp(U.angDiff(cur, Math.atan2(hy - y, hx - x)), -q.rate * VDT, q.rate * VDT), nx = x + Math.cos(na) * sp * VDT, ny = y + Math.sin(na) * sp * VDT;
+      if (!(dash && t <= DT) && U.segDist2(hx, hy, x, y, nx, ny) < q.hr * q.hr) { risk += q.wt; break; }
+      vx = Math.cos(na) * sp; vy = Math.sin(na) * sp; x = nx; y = ny;
+    }
+  }
+  for (const q of T.zn) {
+    if (dash && q.tl <= DT) continue;
+    const z = q.z;
+    for (let k = 0; k < (q.ext ? 2 : 1); k++) { // a beam also hits for q.ext s after its warning ends
+      const d = at(q.tl + k * q.ext), hx = p.x + ux * d, hy = p.y + uy * d;
+      let hit;
+      if (z.kind === 'tele') hit = U.dist2(hx, hy, z.x, z.y) < (z.r + p.r * 0.6 + 6) ** 2;
+      else if (z.kind === 'teleLine') hit = U.segDist2(hx, hy, z.x, z.y, q.x1, q.y1) < (z.w / 2 + p.r * (z.warnOnly ? 0.9 : 0.6) + 6) ** 2;
+      else { const dx = hx - z.x, dy = hy - z.y, dd = Math.hypot(dx, dy); hit = dd < z.r + p.r + 4 && Math.abs(U.angDiff(z.a, Math.atan2(dy, dx))) < z.arc / 2 + 6 / Math.max(dd, 30); }
+      if (hit) { risk += q.wt; break; }
+    }
+  }
+  for (const q of T.ln) { // a live beam hits every 0.12 s
+    for (let t = 0.06; t <= q.left; t += 0.12) {
+      if (dash && t <= DT) continue;
+      const d = at(t);
+      if (U.segDist2(p.x + ux * d, p.y + uy * d, q.z.x, q.z.y, q.x1, q.y1) < (q.z.w / 2 + p.r) ** 2) risk += q.wt;
+    }
+  }
+  for (const q of T.ar) {
+    let n = 0;
+    for (let j = 1; j <= VN; j++) { const t = j * VDT; if (dash && t <= DT) continue; const d = at(t); if (U.dist2(p.x + ux * d, p.y + uy * d, q.x, q.y) < q.r * q.r) n++; }
+    risk += q.wt * n / VN;
+  }
+  for (const q of T.mv) {
+    for (let j = 1; j <= VN; j++) {
+      const t = j * VDT;
+      if (t < q.tw || (dash && t <= DT)) continue;
+      const m = Math.min(t - q.tw, q.dur) * q.sp, d = at(t);
+      if (U.dist2(p.x + ux * d, p.y + uy * d, q.x + q.ca * m, q.y + q.sa * m) < q.hr * q.hr) { risk += q.wt; break; }
+    }
+  }
+  for (let j = 2; j <= VN; j += 2) {
+    const t = j * VDT;
+    if (dash && t <= DT) continue;
+    const d = at(t);
+    if (D.tileAt(T.room, p.x + ux * d, p.y + uy * d) === 4) risk += 0.05;
+  }
+  return risk;
+}
+
+// The dodge: (wx, wy) is the heading the fight wants. Keeps it when it is safe, else the safest of staying and 16 headings (a small cost for leaving the wanted heading); when even that risks a real hit, a dash heading that clears it.
+// Returns { mx, my, risk (of the wanted heading), dash: [ux, uy] | null }.
+function vetPlan(w, p, c, wx, wy, speed, T) {
+  const room = w.room, locked = w.locked, wl = Math.hypot(wx, wy), has = wl > 0.05, wux = has ? wx / wl : 0, wuy = has ? wy / wl : 0;
+  const risk0 = vetRisk(T, p, wux, wuy, has ? reachDist(room, locked, p.x, p.y, wux, wuy, speed * VH, p.r) : 0, speed, false);
+  if (risk0 <= 0.02) return { mx: wx, my: wy, risk: 0, dash: null };
+  let best = { mx: 0, my: 0, risk: vetRisk(T, p, 0, 0, 0, speed, false) }, bc = best.risk + (has ? 0.15 : 0);
+  for (const [ux, uy] of VDIRS) {
+    const r = vetRisk(T, p, ux, uy, reachDist(room, locked, p.x, p.y, ux, uy, speed * VH, p.r), speed, false), cost = r + (has ? 0.3 * (1 - (ux * wux + uy * wuy)) / 2 : 0.12);
+    if (cost < bc) { bc = cost; best = { mx: ux, my: uy, risk: r }; }
+  }
+  let dash = null;
+  if (best.risk >= 0.7 && c.dashN >= 1 && !p.skillMove && !(p.dashT > 0)) {
+    let br = best.risk - 0.35;
+    for (const [ux, uy] of VDIRS) {
+      const r = vetRisk(T, p, ux, uy, reachDist(room, locked, p.x, p.y, ux, uy, ED.CONST.DASH.speed * ED.CONST.DASH.t, p.r), speed, true);
+      if (r < br) { br = r; dash = [ux, uy]; }
+    }
+  }
+  return { mx: best.mx, my: best.my, risk: risk0, dash };
+}
+
+// A dash heading for the owned dash riders, or null: dashDmg needs 3 foes struck by the 72 px path, dashFire 3 foes within 24 px of it, dashFrost / dashBomb the foes within 80 / 60 px of the start (counts add up, 3 are needed).
+// The heading must be safe (no hazard landing, no hit waiting) and among equals lands farthest from the foes; one charge stays for dodging when the hero holds several.
+function vetRider(w, p, c, foes, T, speed) {
+  const st = p.stats, dmg = st.dashDmg > 0, fire = st.dashFire > 0, frost = st.dashFrost > 0, bomb = st.dashBomb > 0;
+  if (!(dmg || fire || frost || bomb) || c.dashN < ((st.dashCharges | 0) > 1 ? 2 : 1) || p.skillMove || p.dashT > 0) return null;
+  const near = foes.filter(e => U.dist2(e.x, e.y, p.x, p.y) < 160 * 160);
+  if (near.length < 3) return null;
+  const start = (frost ? near.filter(e => U.dist2(e.x, e.y, p.x, p.y) < (80 + e.r) ** 2).length : 0) + (bomb ? near.filter(e => U.dist2(e.x, e.y, p.x, p.y) < (60 + e.r) ** 2).length : 0);
+  const len = ED.CONST.DASH.speed * ED.CONST.DASH.t;
+  let best = null, bs = 2.5;
+  for (const [ux, uy] of VDIRS) {
+    const rd = reachDist(w.room, w.locked, p.x, p.y, ux, uy, len, p.r);
+    if (rd < 40) continue;
+    const x1 = p.x + ux * rd, y1 = p.y + uy * rd;
+    let struck = 0, trail = 0, away = 1e9;
+    for (const e of near) {
+      const d2 = U.segDist2(e.x, e.y, p.x, p.y, x1, y1);
+      if (d2 < (e.r + p.r + 8) ** 2) struck++;
+      if (d2 < (e.r + 24) ** 2) trail++;
+      away = Math.min(away, Math.hypot(e.x - x1, e.y - y1));
+    }
+    const n = start + (dmg && struck >= 3 ? struck : 0) + (fire && trail >= 3 ? trail : 0) + away / 1e4;
+    if (n <= bs || D.tileAt(w.room, x1, y1) === 4 || (T && vetRisk(T, p, ux, uy, rd, speed, true) >= 0.3)) continue;
+    bs = n; best = [ux, uy];
+  }
+  return best;
+}
 
 // Aim noise: Gaussian draws from the bot rng (Box-Muller), sigma = AIM_SIGMA x (1 - bot skill).
 const AIM = [0.12, 36]; // sigma of the angle (rad) and of the ground point (px) at skill 0; --aimnoise=<A>,<P> sets them, --aimnoise=0 turns the noise off
@@ -162,16 +373,15 @@ function relicScore(w, p, x) {
   return v;
 }
 
-// Next prop worth walking to, or null. Per-hero rewards respect p.claimed; shop and rest choices follow the lantern and HP.
+// Next prop worth walking to, or null. Per-hero rewards respect p.claimed; shop and rest choices follow HP.
 function wantedProp(w, p) {
-  const lightFrac = w.lightMax ? w.light / w.lightMax : 1;
   const hurt = p.hp < p.maxHp * 0.6;
   let best = null, bs = 0;
   for (const x of w.props) {
     if (x.state) continue;
     let s = 0;
     switch (x.kind) {
-      case 'reward': s = PER_HERO_REWARDS.includes(x.item) ? (p.claimed[x.group] ? 0 : 9) : (x.item === 'oil' && lightFrac > 0.85 ? 3 : 9); break;
+      case 'reward': s = PER_HERO_REWARDS.includes(x.item) && p.claimed[x.group] ? 0 : 9; break;
       case 'chest': s = 8; break;
       case 'relic': s = p.claimed[x.group] ? 0 : 7 + (w.botSmart ? relicScore(w, p, x) : 0); break;
       case 'campfire': s = !p.claimed[x.group] && hurt ? 8 : 0; break;
@@ -180,8 +390,7 @@ function wantedProp(w, p) {
       case 'altar': s = p.hp > p.maxHp * 0.6 ? 5 : 0; break;
       case 'shop':
         if (w.gold < x.price) break;
-        if (x.stype === 'oil') s = lightFrac < 0.4 ? 10 : 0;
-        else if (x.stype === 'potion') s = p.hp < p.maxHp * 0.7 ? 6 : 0;
+        if (x.stype === 'potion') s = p.hp < p.maxHp * 0.7 ? 6 : 0;
         else s = x.stype === 'relic' ? 6 + (w.botSmart ? relicScore(w, p, x) : 0) : 7;
         break;
       default: break;
@@ -191,31 +400,33 @@ function wantedProp(w, p) {
   return best;
 }
 
-// Direction toward the next room to visit: the nearest unvisited non-boss room while entering it (its light cost paid) leaves the lantern at or above minLight, else the boss.
-// rec.turn[stratum] logs the light when it first heads for the boss.
-function exploreDir(w, p, rec, minLight) {
+// Next room on the way to the room to visit, as { step: room id, dd: door key }, or null: the nearest unvisited non-boss room (a dark room only when the policy lets the party in), else the boss.
+// policy: smart = every living hero has DARK_HP of max HP or more, always, never. Dark rooms are dead ends, so skipping one never blocks the way.
+function nextRoom(w, policy) {
   const room = w.room, fl = w.floor;
-  const frac = w.lightMax ? w.light / w.lightMax : 1;
-  const search = (target) => { // BFS from the current room: nearest unvisited non-boss room (target null) or the target room
+  const darkOk = policy === 'always' || (policy !== 'never' && [...w.players.values()].every(q => q.dead || q.downed || q.hp >= q.maxHp * DARK_HP));
+  const search = (target) => { // BFS from the current room: nearest enterable unvisited non-boss room (target null) or the target room
     const prev = {}; prev[room.id] = -1; const q = [room.id];
     while (q.length) {
       const id = q.shift(); const r = fl.rooms[id];
-      if (id !== room.id && ((target === null && !w.roomState[id].visited && r.type !== 'boss') || id === target)) return { found: id, prev };
+      if (id !== room.id && ((target === null && !w.roomState[id].visited && r.type !== 'boss' && (!r.dark || darkOk)) || id === target)) return { found: id, prev };
       for (const dd in r.doors) { const n = r.doors[dd]; if (n >= 0 && prev[n] === undefined) { if (fl.rooms[n].type === 'boss' && target === null) continue; prev[n] = id; q.push(n); } }
     }
     return { found: null, prev };
   };
   let hit = search(null);
-  const exploring = hit.found !== null && (!w.lightMax || (w.light - ED.World.roomCost(fl.rooms[hit.found].type)) / w.lightMax >= (minLight ?? EXPLORE_MIN_LIGHT));
-  if (!exploring) {
-    if (rec && !rec.turn[w.stratum]) rec.turn[w.stratum] = { light: Math.round(frac * 100) / 100, explored: hit.found === null };
-    hit = search(fl.boss);
-  }
+  if (hit.found === null) hit = search(fl.boss);
   const { found, prev } = hit;
   if (found === null) return null;
   let step = found; while (prev[step] !== room.id) step = prev[step];
-  const dd = Object.keys(room.doors).find(k => room.doors[k] === step);
-  const r = D.doorRect(room, dd);
+  return { step, dd: Object.keys(room.doors).find(k => room.doors[k] === step) };
+}
+
+// Direction toward the door of nextRoom, or null.
+function exploreDir(w, p, policy) {
+  const room = w.room, nx = nextRoom(w, policy);
+  if (!nx) return null;
+  const dd = nx.dd, r = D.doorRect(room, dd);
   const gx = (r.x0 + r.x1 + 1) / 2 * T + (dd === 'e' ? 30 : dd === 'w' ? -30 : 0), gy = (r.y0 + r.y1 + 1) / 2 * T + (dd === 's' ? 30 : dd === 'n' ? -30 : 0);
   return bfsDir(room, w.locked, p.x, p.y, U.clamp(gx, 4, room.w * T - 4), U.clamp(gy, 4, room.h * T - 4));
 }
@@ -312,7 +523,7 @@ function rowOf(r, label, seed) {
 // Weapon hits to kill a regular foe of stratum s: median over the roster (weighted) of ceil(foe HP / expected hit), expected hit = weapon damage x damage stat x crit factor (party and pact excluded).
 function hitsToKill(w, p, s) {
   const st = p.stats, per = st.weapon.dmg * st.dmg * (1 + st.crit * (st.critMult - 1));
-  const rows = ED.biomeFor(s).enemies.filter(([id]) => { const d = ED.ENEMIES[id]; return d && !d.boss && !d.gloom && !d.ally && !d.minion; })
+  const rows = ED.biomeFor(s).enemies.filter(([id]) => { const d = ED.ENEMIES[id]; return d && !d.boss && !d.ally && !d.minion; })
     .map(([id, wt]) => ({ h: Math.ceil(ED.ENEMIES[id].hp * ED.World.hpScale(s) / per), wt })).sort((a, b) => a.h - b.h);
   const tot = rows.reduce((a, r) => a + r.wt, 0);
   let acc = 0;
@@ -334,14 +545,14 @@ function takeOffer(w, p, policy, brng, ctx) {
 const entryOf = (w, p) => ({ level: w.level, boons: Object.values(p.boons).reduce((a, b) => a + b, 0), relics: p.relics.length, gold: w.gold, maxHp: p.maxHp, hp: Math.round(p.hp), keys: Object.keys(p.boons).filter(id => ED.BOONS[id].key).length, evo: p.stats.evo ? 1 : 0 });
 
 // --from=N stage start: plays strata 1..N-1 without fighting and leaves the party at the start of stratum N.
-// Each floor is its real Dungeon.generate floor. The rooms are the bot's exploration route (nearest unvisited room while its cost leaves the lantern at minLight or more, then the boss), entered with World.enterRoom;
+// Each floor is its real Dungeon.generate floor. The rooms are the bot's exploration route (nextRoom with the --dark policy), entered with World.enterRoom;
 // every foe dies the tick it exists, so the room's own wave timers, kill drops (xp, gold, hearts), clear reward and boss reward run as in play. Between rooms the bot claims every prop wantedProp names and picks every offer with its
 // pick policy; the portal starts the next floor. Heroes are untouchable, hero 0 collects every pickup. Returns { t0 (game time at the end), from, keyAt, duoAt, evoAt (hero 0, first stratum), bad (reason the walk stopped early, or null) }.
-function skipStrata(w, from, ctx, policy, brng, minLight) {
+function skipStrata(w, from, ctx, policy, brng, darkPolicy) {
   const dt = 1 / 60, heroes = [...w.players.values()], lead = heroes[0], out = { t0: 0, from, keyAt: null, duoAt: null, evoAt: null, bad: null };
   const tick = () => {
     for (const p of heroes) { if (p.offer) takeOffer(w, p, policy, brng, ctx); p.invuln = 1; }
-    for (const e of w.enemies.slice()) if (e.hp > 0 && !e.def.gloom) w.killEnemy(e, lead, { kind: 'weapon' });
+    for (const e of w.enemies.slice()) if (e.hp > 0) w.killEnemy(e, lead, { kind: 'weapon' });
     w.update(dt);
     for (const pk of w.pickups) w.collect(lead, pk);
     for (const ev of w.fx) {
@@ -364,24 +575,7 @@ function skipStrata(w, from, ctx, policy, brng, minLight) {
     }
     settle();
   };
-  // Next room on the bot's route as [room id, door key], or null (mirrors exploreDir's room choice).
-  const hop = () => {
-    const room = w.room, fl = w.floor;
-    const search = (target) => {
-      const prev = { [room.id]: -1 }, q = [room.id];
-      while (q.length) {
-        const id = q.shift(), r = fl.rooms[id];
-        if (id !== room.id && ((target === null && !w.roomState[id].visited && r.type !== 'boss') || id === target)) return { found: id, prev };
-        for (const dd in r.doors) { const n = r.doors[dd]; if (n >= 0 && prev[n] === undefined) { if (fl.rooms[n].type === 'boss' && target === null) continue; prev[n] = id; q.push(n); } }
-      }
-      return { found: null, prev };
-    };
-    let hit = search(null);
-    if (hit.found === null || (w.lightMax && (w.light - ED.World.roomCost(fl.rooms[hit.found].type)) / w.lightMax < (minLight ?? EXPLORE_MIN_LIGHT))) hit = search(fl.boss);
-    if (hit.found === null) return null;
-    let step = hit.found; while (hit.prev[step] !== room.id) step = hit.prev[step];
-    return [step, Object.keys(room.doors).find(k => room.doors[k] === step)];
-  };
+  const hop = () => { const nx = nextRoom(w, darkPolicy); return nx ? [nx.step, nx.dd] : null; }; // the bot's route (exploreDir's room choice)
   for (let s = 1; s < from && w.state === 'play' && !out.bad; s++) {
     settle();
     claim();
@@ -401,7 +595,7 @@ function skipStrata(w, from, ctx, policy, brng, minLight) {
   for (const p of heroes) p.invuln = 0;
   settle();
   w.fx.length = 0; w.msgs.length = 0;
-  w.run.kills = 0; w.run.roomsVisited = 1; w.run.roomsTotal = w.floor.rooms.length; w.run.lightAtBoss.length = 0; // the run's stats start at stratum N
+  w.run.kills = 0; w.run.roomsVisited = 1; w.run.roomsTotal = w.floor.rooms.length; // the run's stats start at stratum N
   out.t0 = w.time;
   return out;
 }
@@ -409,6 +603,8 @@ function skipStrata(w, from, ctx, policy, brng, minLight) {
 function runBot(opts) {
   U.resetUid(1);
   const brng = U.RNG((opts.seed ^ 0xb07b07) >>> 0), policy = opts.pick || process.env.PICK || 'random';
+  VR = opts.vetReact >= 0 ? opts.vetReact : 0.18;
+  const vet = parseVet(opts.vet), vetC = !!vet && vet.has('charges'), vetR = !!vet && vet.has('rider'), vetD = !!vet && vet.has('dodge'), vetH = !!vet && vet.has('hazard');
   AIM[0] = opts.aimNoise ? opts.aimNoise[0] : 0.12; AIM[1] = opts.aimNoise ? opts.aimNoise[1] : 36;
   const forced = (opts.force || []).map(f => { const m = /^([a-z_]+)(?:@(\d+))?$/.exec(f); return m ? { id: m[1], slot: m[2] === undefined ? null : +m[2] } : null; }).filter(Boolean);
   const ctx = { force: forced.filter(f => ED.BOONS[f.id] && ED.BOONS[f.id].gate), gatesCap: opts.gates || 2, start: opts.start || 'random', startAuto: !opts.start, explain: !!opts.explain, w: null };
@@ -444,8 +640,8 @@ function runBot(opts) {
       }
     }
   }
-  const skip = opts.from > 1 ? skipStrata(w, Math.min(opts.from | 0, ED.CONST.STRATA), ctx, policy, brng, opts.exploreMin) : null; // --from: strata 1..N-1 are played before the recorders below are installed
-  const rec = { flares: 0, gloomHits: 0, gloomSecs: 0, turn: {}, clears: [], bossTimes: [], dmgBy: {}, downedBy: [], dealtStrata: [], heal: {}, dmgByS: {}, spawns: {}, offers: {}, relicsBy: {}, goldIn: 0, roomDmg: 0, dmgStrata: [], hpFrac: [], healSrc: 'other' };
+  const skip = opts.from > 1 ? skipStrata(w, Math.min(opts.from | 0, ED.CONST.STRATA), ctx, policy, brng, opts.dark) : null; // --from: strata 1..N-1 are played before the recorders below are installed
+  const rec = { dark: [0, 0, 0, 0, 0, 0], left: [], clears: [], bossTimes: [], dmgBy: {}, downedBy: [], dealtStrata: [], heal: {}, dmgByS: {}, spawns: {}, offers: {}, relicsBy: {}, goldIn: 0, roomDmg: 0, dmgStrata: [], hpFrac: [], healSrc: 'other' };
   rec.evoAt = null; // { s: stratum, lvl: team level } when hero 0 takes its evolution
   rec.keyAt = null; rec.duoAt = null; // stratum when hero 0 takes its keystone / duo
   rec.cnt = { smite: 0, reap: 0, toll: 0, lance: 0, dashHits: 0, reapHp: 0, kills0: 0, refunds: 0, parries: 0, staggers: 0, rics: 0, gRics: 0, catches: 0, casts: {} };
@@ -493,19 +689,12 @@ function runBot(opts) {
       let tot = 0; for (const k in mix) tot += mix[k];
       for (const k in mix) { const take = tot > 0 ? ab * mix[k] / tot : 0; mix[k] -= take; rec.shield.absorbed[k] = (rec.shield.absorbed[k] || 0) + take; if (k === 'holy' && this.boss) rec.shield.holyBoss += take / p.maxHp; }
     }
-    if (who === 'gloom') rec.gloomHits++;
     if (!was && p.downed) rec.downedBy.push(who + '@s' + this.stratum);
     return r;
   };
-  // shield make-up by source: gains (addShield, the boss door) add to it, decay scales it
-  const add0 = w.addShield, door0 = w.bossLantern, dec0 = w.updateShields, reap0 = w.checkReap;
+  // shield make-up by source: gains (addShield) add to it, decay scales it
+  const add0 = w.addShield, dec0 = w.updateShields, reap0 = w.checkReap;
   w.addShield = function (p, amt, cap, k) { const g = add0.call(this, p, amt, cap, k); if (g > 0) { const m = shMix.get(p.pid); m[k] = (m[k] || 0) + g; rec.shield.gained[k] = (rec.shield.gained[k] || 0) + g; } return g; };
-  w.bossLantern = function () {
-    const before = [...this.players.values()].map(p => p.shield || 0);
-    door0.call(this);
-    let i = 0;
-    for (const p of this.players.values()) { const g = (p.shield || 0) - before[i++]; if (g > 0) { const m = shMix.get(p.pid); m.door = (m.door || 0) + g; rec.shield.gained.door = (rec.shield.gained.door || 0) + g; } }
-  };
   w.updateShields = function (dt) {
     const before = [...this.players.values()].map(p => p.shield);
     dec0.call(this, dt);
@@ -528,9 +717,19 @@ function runBot(opts) {
   w.grantOffer = function (p, spec) { const k = spec && spec.src === 'room' ? 'room' : spec && spec.src || 'level'; rec.offers[k] = (rec.offers[k] || 0) + 1; return grant0.call(this, p, spec); };
   w.giveRelic = function (p, id) { const k = this.room ? this.room.type : '?'; rec.relicsBy[k] = (rec.relicsBy[k] || 0) + 1; return give0.call(this, p, id); };
   w.dropGold = function (x, y, total, exact) { rec.goldIn += Math.round(exact ? total : total * ED.World.GOLD_MUL); return drop0.call(this, x, y, total, exact); };
+  // per-room tally: kills (threat / fodder) and the xp dropped, counted from the pickups a drop appends
+  rec.room = { th: 0, fo: 0, xp: 0, clip: 0 };
+  const kill1 = w.killEnemy, xp1 = w.dropXp;
+  w.killEnemy = function (e, p, src) { if (!e.killed && !e.boss) { if (e.fodder) rec.room.fo++; else rec.room.th++; } return kill1.call(this, e, p, src); };
+  w.dropXp = function (x, y, total, exact) {
+    const n0 = this.pickups.length, r = xp1.call(this, x, y, total, exact);
+    for (let i = n0; i < this.pickups.length; i++) if (this.pickups[i].kind === 'xp') rec.room.xp += this.pickups[i].val;
+    if (this.enc && this.enc.xpClip) rec.room.clip = this.enc.xpClip;
+    return r;
+  };
   const ctl = {};
-  for (const p of w.players.values()) ctl[p.pid] = { atk: 0, skill: 0, skill2: 0, dash: 0, goal: null, gl: {}, attn: true, attnT: 0 };
-  const dt = 1 / 60;
+  for (const p of w.players.values()) ctl[p.pid] = { atk: 0, skill: 0, skill2: 0, dashN: p.stats.dashCharges, dashT: 0, goal: null, attn: true, attnT: 0, chg: p.stats.maxCharges, mchg: p.stats.maxCharges, vgap: 0, appT: 0 };
+  const dt = 1 / 60, touch = [], crowd = [];
   let steps = 0;
   const maxSteps = 60 * MAX_SECONDS;
   const log = skip && skip.bad ? ['  FROM: ' + skip.bad] : [];
@@ -542,40 +741,45 @@ function runBot(opts) {
     steps++;
     for (const p of w.players.values()) {
       const c = ctl[p.pid];
-      c.atk -= dt; c.skill -= dt; c.skill2 -= dt; c.dash -= dt; c.goal = null;
+      c.atk -= dt; c.skill2 -= dt; ED.Sim.dashTick(c, p.stats, dt); c.goal = null;
+      if (vetC) { // skill charges as the client keeps them: a charge refills each skillCd while below the maximum, a new maximum (Echo) grants its charge at once
+        const mc = p.stats.maxCharges;
+        if (mc > c.mchg) c.chg += mc - c.mchg;
+        c.mchg = mc; c.chg = Math.min(c.chg, mc); c.vgap -= dt;
+        if (c.chg < mc) { c.skill -= dt; while (c.skill <= 0 && c.chg < mc) { c.chg++; c.skill = c.chg < mc ? c.skill + p.stats.skillCd : 0; } }
+      } else c.skill -= dt;
       if (p.offer) takeOffer(w, p, policy, brng, ctx);
       if (p.downed || p.dead) continue;
       let mx = 0, my = 0;
-      const foes = w.enemies.filter(e => e.hp > 0 && e.spawnT <= 0 && !e.def.gloom);
-      const glooms = w.enemies.filter(e => e.hp > 0 && e.def.gloom && e.spawnT <= 0);
-      let gloom = null; // the nearest Gloom drives flare and keep-away
-      for (const g of glooms) if (!gloom || U.dist2(g.x, g.y, p.x, p.y) < U.dist2(gloom.x, gloom.y, p.x, p.y)) gloom = g;
-      if (gloom && c.attn && U.dist2(gloom.x, gloom.y, p.x, p.y) < 120 * 120 && !p.downed && w.flare(p)) rec.flares++; // lantern flare when the Gloom closes in on a tick the bot pays attention (needs the light; no flare while it is still far)
+      const foes = w.enemies.filter(e => e.hp > 0 && e.spawnT <= 0);
       const skill = opts.skill ?? 0.75;
-      // the bot reads each Gloom lunge telegraph with probability `skill` (decided once per wind-up) and sidesteps the line of the nearest one it read
-      let dg = null;
-      for (const g of glooms) {
-        if (g.st !== 'windup') { delete c.gl[g.id]; continue; }
-        if (c.gl[g.id] === undefined) c.gl[g.id] = brng.next() < skill;
-        if (c.gl[g.id] && U.dist2(g.x, g.y, p.x, p.y) < 260 * 260 && (!dg || U.dist2(g.x, g.y, p.x, p.y) < U.dist2(dg.x, dg.y, p.x, p.y))) dg = g;
-      }
       if (foes.length) {
-        let tgt = null, bd = 1e9;
-        for (const e of foes) { const d = U.dist2(e.x, e.y, p.x, p.y); if (d < bd) { bd = d; tgt = e; } }
+        // target: the nearest threat foe when it is within weapon reach (or when no fodder stands), else the nearest fodder
+        let tgt = null, bd = 1e9, nf = null, fd = 1e9;
+        for (const e of foes) { const d2 = U.dist2(e.x, e.y, p.x, p.y); if (e.fodder) { if (d2 < fd) { fd = d2; nf = e; } } else if (d2 < bd) { bd = d2; tgt = e; } }
+        if (nf && (!tgt || Math.sqrt(bd) - (p.stats.melee ? tgt.r : 0) >= (p.stats.melee ? p.stats.weapon.range : 380))) { tgt = nf; bd = fd; }
         const d = Math.sqrt(bd);
         const ideal = p.stats.melee ? (p.stats.weapon.range * 0.6 + tgt.r) : (p.stats.deadeye ? 230 : 170); // Deadeye keeps its distance
+        if (vetH) c.appT = d > ideal + 30 ? c.appT + dt : 0; // seconds spent closing in without arriving
         let dir;
         if (d > ideal + 10) dir = bfsDir(w.room, w.locked, p.x, p.y, tgt.x, tgt.y);
         else if (d < ideal - 20) dir = [p.x - tgt.x, p.y - tgt.y];
         else dir = [-(tgt.y - p.y), tgt.x - p.x];
         // dodge projectiles
         let danger = false;
-        for (const pr of w.projs) if (pr.team === 1 && U.dist2(pr.x, pr.y, p.x, p.y) < 55 * 55) { danger = true; dir = [dir[0] + (p.x - pr.x) * 2, dir[1] + (p.y - pr.y) * 2]; }
-        for (const z of w.zones) if ((z.kind === 'tele' || z.kind === 'poison' || z.kind === 'fire') && z.team === 1 && U.dist2(z.x, z.y, p.x, p.y) < (z.r + 12) ** 2) { danger = true; dir = [p.x - z.x + dir[0] * 0.2, p.y - z.y + dir[1] * 0.2]; }
-        if (gloom && U.dist2(gloom.x, gloom.y, p.x, p.y) < 90 * 90) { danger = true; dir = [p.x - gloom.x, p.y - gloom.y]; }
-        if (dg) { danger = true; dir = sidestep(dg, p); }
-        const l = Math.hypot(dir[0], dir[1]) || 1; mx = dir[0] / l; my = dir[1] / l;
+        if (!vetD) { // --vet dodge: the look-ahead plan below replaces these
+          for (const pr of w.projs) if (pr.team === 1 && U.dist2(pr.x, pr.y, p.x, p.y) < 55 * 55) { danger = true; dir = [dir[0] + (p.x - pr.x) * 2, dir[1] + (p.y - pr.y) * 2]; }
+          for (const z of w.zones) if ((z.kind === 'tele' || z.kind === 'poison' || z.kind === 'fire') && z.team === 1 && U.dist2(z.x, z.y, p.x, p.y) < (z.r + 12) ** 2) { danger = true; dir = [p.x - z.x + dir[0] * 0.2, p.y - z.y + dir[1] * 0.2]; }
+        }
+        let l = Math.hypot(dir[0], dir[1]) || 1;
+        const esc = crowdEscape(w, p, w.foesNear(p.x, p.y, CROWD_R + 60, crowd));
+        if (esc) { dir = [esc[0] + dir[0] / l * 0.35, esc[1] + dir[1] / l * 0.35]; l = Math.hypot(dir[0], dir[1]) || 1; } // out of a crowd (the walking slow), keeping a little of the chase
+        mx = dir[0] / l; my = dir[1] / l;
         if (brng.next() > skill) { mx += (brng.next() - 0.5) * 1.5; my += (brng.next() - 0.5) * 1.5; }
+        let plan = null, T = null;
+        const spd = vetD || vetR ? p.stats.moveSpeed * ED.Stats.moveRate(p) : 0;
+        if (vetD || vetR) T = vetThreats(w, p, spd, c.attn ? VR : VR + VLAPSE);
+        if (vetD && T) { plan = vetPlan(w, p, c, mx, my, spd, T); mx = plan.mx; my = plan.my; danger = plan.risk > 0.02; }
         const a = Math.atan2(tgt.y - p.y, tgt.x - p.x), st = p.stats;
         const inRange = st.melee ? d - tgt.r < st.weapon.range : d < 380;
         if (st.channel && (c.holdT = (c.holdT || 0) - dt) <= 0) { c.hold = brng.next() < skill; c.holdT = 0.5; } // Pyroclast: the choice to stand still is renewed every 0.5 s (a roll per tick would break Channel within a few ticks)
@@ -584,12 +788,16 @@ function runBot(opts) {
           w.playerAttack(p, a + gauss(brng) * AIM[0] * (1 - skill));
           c.atk = Math.max(c.atk, -dt) + ED.Stats.attackInterval(p); // carries the overshoot of this tick, as the client does
         }
-        if (c.skill <= 0 && botCast(w, p, 0, tgt, d, a, foes, brng, skill)) c.skill = st.skillCd;
+        if (vetC) { if (c.chg > 0 && c.vgap <= 0 && !p.skillMove && botCast(w, p, 0, tgt, d, a, foes, brng, skill)) { if (c.chg === st.maxCharges) c.skill = st.skillCd; c.chg--; c.vgap = 0.35; } }
+        else if (c.skill <= 0 && botCast(w, p, 0, tgt, d, a, foes, brng, skill)) c.skill = st.skillCd;
         if (c.skill2 <= 0 && st.skill2Cd && botCast(w, p, 1, tgt, d, a, foes, brng, skill)) c.skill2 = st.skill2Cd;
-        if (danger && c.dash <= 0 && brng.next() < skill * 0.5) { p.dashT = 0.17; p.dashDx = mx; p.dashDy = my; w.playerDash(p, mx, my); c.dash = p.stats.dashCd; }
-        else if (!danger && c.dash <= 0 && d <= 90 && (p.stats.dashDmg || p.stats.dashFire || p.stats.dashFrost || p.stats.dashBomb) && brng.next() < skill * 0.5) { // dash rider: dash through the target
+        let dd = null; // --vet: the dash heading of the dodge plan, else of a rider dash through a pack
+        if (vetD && plan && plan.dash) dd = plan.dash; else if (vetR && !danger) dd = vetRider(w, p, c, foes, T, spd);
+        if (dd) { p.dashT = ED.CONST.DASH.t; p.dashDx = dd[0]; p.dashDy = dd[1]; w.playerDash(p, dd[0], dd[1]); ED.Sim.dashTry(c, p.stats); }
+        else if (!vetD && danger && c.dashN >= 1 && brng.next() < skill * 0.5) { p.dashT = ED.CONST.DASH.t; p.dashDx = mx; p.dashDy = my; w.playerDash(p, mx, my); ED.Sim.dashTry(c, p.stats); }
+        else if (!vetR && !danger && c.dashN >= 1 && d <= 90 && (p.stats.dashDmg || p.stats.dashFire || p.stats.dashFrost || p.stats.dashBomb) && brng.next() < skill * 0.5) { // dash rider: dash through the target
           const l2 = Math.hypot(tgt.x - p.x, tgt.y - p.y) || 1, ddx = (tgt.x - p.x) / l2, ddy = (tgt.y - p.y) / l2;
-          p.dashT = 0.17; p.dashDx = ddx; p.dashDy = ddy; w.playerDash(p, ddx, ddy); c.dash = p.stats.dashCd;
+          p.dashT = ED.CONST.DASH.t; p.dashDx = ddx; p.dashDy = ddy; w.playerDash(p, ddx, ddy); ED.Sim.dashTry(c, p.stats);
         }
       } else if (!w.locked) {
         // loot first, then the portal, then the next room to visit
@@ -600,22 +808,15 @@ function runBot(opts) {
         if (goal) {
           if (U.dist(goal.x, goal.y, p.x, p.y) < 40) w.interact(p.pid, goal.id);
           dir = bfsDir(w.room, w.locked, p.x, p.y, goal.x, goal.y);
-        } else dir = exploreDir(w, p, rec, opts.exploreMin);
-
-        if (gloom && U.dist2(gloom.x, gloom.y, p.x, p.y) < 110 * 110) {
-          dir = [p.x - gloom.x, p.y - gloom.y];
-          if (c.dash <= 0 && U.dist2(gloom.x, gloom.y, p.x, p.y) < 60 * 60) { const l2 = Math.hypot(dir[0], dir[1]) || 1; p.dashT = 0.17; p.dashDx = dir[0] / l2; p.dashDy = dir[1] / l2; w.playerDash(p, p.dashDx, p.dashDy); c.dash = p.stats.dashCd; }
-        }
-        if (dg) dir = sidestep(dg, p);
+        } else dir = exploreDir(w, p, opts.dark);
         if (dir) { const l = Math.hypot(dir[0], dir[1]) || 1; mx = dir[0] / l; my = dir[1] / l; }
       }
       // floor hazards: the bot watches the ground on a share `skill` of its ticks (redrawn every 0.25 s) and steers off or around hazard tiles
-      if ((c.attnT -= dt) <= 0) { c.attn = brng.next() < skill; c.attnT = 0.25; }
-      if (c.attn && (mx || my)) { const v = avoidHazard(w.room, p, mx, my); mx = v[0]; my = v[1]; }
+      if ((c.attnT -= dt) <= 0) { c.attn = brng.next() < (vetD ? 1 - (1 - skill) / 2 : skill); c.attnT = 0.25; } // --vet dodge: half the lapses
+      if ((c.attn || (vetH && foes.length && c.appT < 3)) && (mx || my)) { const v = avoidHazard(w.room, p, mx, my); mx = v[0]; my = v[1]; } // --vet hazard: always watches the ground in a fight, unless 3 s of closing in on a foe have not arrived (it stands across hazard floor)
       if (opts.trace) opts.trace(w, p, mx, my, foes, c);
-      ED.Sim.movePlayer(p, { mx, my }, dt, w.room, w.locked, w.zones);
+      ED.Sim.movePlayer(p, { mx, my }, dt, w.room, w.locked, w.zones, w.foesNear(p.x, p.y, 40, touch));
     }
-    if (w.enemies.some(e => e.def.gloom && e.hp > 0)) rec.gloomSecs += dt;
     if (w.locked && w.stratum >= 1 && w.hostiles() > 0) rec.combatS[w.stratum - 1] += dt;
     if (w.boss && w.boss.hp > 0) rec.bossSecs += dt;
     w.update(dt);
@@ -625,7 +826,7 @@ function runBot(opts) {
       u.brace[1]++; if (h0.braceT > 0) u.brace[0]++;
       u.sanct[1]++; for (const z of w.zones) if (z.kind === 'sanct' && U.dist2(z.x, z.y, h0.x, h0.y) < z.r * z.r) { u.sanct[0]++; break; }
       u.mom[1]++; u.mom[0] += h0.momN | 0;
-      for (const e of w.enemies) if (e.hp > 0 && !e.boss && !e.elite && e.spawnT <= 0 && !e.def.gloom) { u.stun[1]++; if (e.stun > 0) u.stun[0]++; }
+      for (const e of w.enemies) if (e.hp > 0 && !e.boss && !e.elite && e.spawnT <= 0) { u.stun[1]++; if (e.stun > 0) u.stun[0]++; }
       for (const z of w.zones) if (z.kind === 'smoke' && z.owner === p0id) for (const e of w.enemies) if (e.hp > 0 && !e.boss && e.spawnT <= 0 && U.dist2(z.x, z.y, e.x, e.y) < (z.r + e.r) ** 2) { // blind seconds per foe per smoke, as a share of Vanish's cooldown
         const key = z.id + ':' + e.id;
         if (!rec.smokeSeen.has(key)) { rec.smokeSeen.add(key); u.smoke[1]++; u.smoke[2] += ED.Stats.skillNums('vanish', h0.stats).cdEff; }
@@ -638,19 +839,22 @@ function runBot(opts) {
       for (const z of w.zones) if (z.owner === p0id && z.team === 0) nz++;
       if (np > rec.peak.projs) rec.peak.projs = np; if (nz > rec.peak.zones) rec.peak.zones = nz;
     }
-    for (const m of w.msgs) if (m.t === 'refund' && ctl[m.to]) { const k = ctl[m.to]; rec.cnt.refunds++; if (m.slot === 1) k.skill2 = m.s ? k.skill2 - m.s : 0; else k.skill = m.s ? k.skill - m.s : 0; } // cooldown refunds { slot, s }
+    for (const m of w.msgs) if (m.t === 'refund' && ctl[m.to]) { const k = ctl[m.to]; rec.cnt.refunds++; if (m.slot === 1) k.skill2 = m.s ? k.skill2 - m.s : 0; else if (vetC && !m.s) k.chg = Math.min(k.mchg, k.chg + 1); else k.skill = m.s ? k.skill - m.s : 0; } // cooldown refunds { slot, s }
     for (const ev of w.fx) {
       if (ev.t === 'smite') rec.cnt.smite++; else if (ev.t === 'reap') rec.cnt.reap++; else if (ev.t === 'toll') rec.cnt.toll++; else if (ev.t === 'lance') rec.cnt.lance++;
       else if (ev.t === 'parry') rec.cnt.parries++;
       else if (ev.t === 'ric' && ev.pid === p0id) { rec.cnt.rics++; if (ev.g) rec.cnt.gRics++; } else if (ev.t === 'catch' && ev.pid === p0id) rec.cnt.catches++;
       else if (ev.t === 'skill' && ev.pid === p0id) rec.cnt.casts[ev.k] = (rec.cnt.casts[ev.k] || 0) + 1;
       if (ev.t === 'boon' && ev.pid === p0id) { const b = ED.BOONS[ev.id]; if (b.key && !rec.keyAt) rec.keyAt = w.stratum; if (b.duo && !rec.duoAt) rec.duoAt = w.stratum; }
-      if (ev.t === 'room') { rec.roomDmg = 0; rec.maxHost = 0; }
+      if (ev.t === 'room') { rec.roomDmg = 0; rec.maxHost = 0; rec.room = { th: 0, fo: 0, xp: 0, clip: 0 }; }
       if (ev.t === 'clear' && !ev.trial && w.room && w.room.type === 'combat') rec.htk[w.stratum - 1].push(hitsToKill(w, w.players.values().next().value, w.stratum));
       if (ev.t === 'evolve' && ev.pid === p0id && !rec.evoAt) rec.evoAt = { s: w.stratum, lvl: w.level };
-      if (ev.t === 'bossSpawn') { bossStart = w.time; rec.bossTry.push({ s: w.stratum, tier: w.bossTier, kill: false }); }
+      if (ev.t === 'dark') rec.dark[w.stratum - 1]++;
+      if (ev.t === 'descend') rec.left.push({ s: w.stratum, missed: w.floor.rooms.filter(r => !w.roomState[r.id].visited && !r.dark).length, dark: w.floor.rooms.filter(r => r.dark).length }); // rooms left unvisited (dark rooms apart) when the party takes the portal
+      if (ev.t === 'bossSpawn') { bossStart = w.time; rec.bossTry.push({ s: w.stratum, kill: false }); }
       if (ev.t === 'bossDown') { rec.bossTry[rec.bossTry.length - 1].kill = true; rec.bossTimes[w.stratum] = Math.round(w.time - bossStart); log.push(`  boss ${ev.type} down in ${(w.time - bossStart).toFixed(0)}s (t=${U.fmtTime(w.time)}, lvl ${w.level})`); }
-      if (ev.t === 'clear' && !ev.trial && w.room && (w.room.type === 'combat' || w.room.type === 'elite')) rec.clears.push({ s: w.stratum, type: w.room.type, t: Math.round(w.roomTime * 10) / 10, d: Math.round(1000 * rec.roomDmg / Math.max(1, w.players.values().next().value.maxHp)) / 1000, n: rec.maxHost });
+      if (ev.t === 'clear' && !ev.trial && w.room && (w.room.type === 'combat' || w.room.type === 'elite')) rec.clears.push({ s: w.stratum, type: w.room.type, dark: !!w.room.dark, t: Math.round(w.roomTime * 10) / 10, d: Math.round(1000 * rec.roomDmg / Math.max(1, w.players.values().next().value.maxHp)) / 1000, n: rec.maxHost,
+        th: rec.room.th, fo: rec.room.fo, xp: rec.room.xp, clip: rec.room.clip, bud: ED.World.ROOM_XP ? Math.round(ED.World.ROOM_XP[w.room.type][w.stratum - 1] * (w.room.dark ? ED.World.DARK_LOOT : 1)) : null });
       if (ev.t === 'stratum') {
         const dealt = totalDealt();
         if (ev.s > 1) { strata.push(Math.round(w.time - stratumStart)); rec.dealtStrata.push(Math.round(dealt - dealt0)); log.push(`  stratum ${ev.s - 1} took ${(w.time - stratumStart).toFixed(0)}s`); }
@@ -666,9 +870,9 @@ function runBot(opts) {
   rec.dealtStrata.push(Math.round(totalDealt() - dealt0));
   const p0 = [...w.players.values()][0];
   const sum = w.summary ? w.summary() : null;
-  return { flares: rec.flares, gloomHits: rec.gloomHits, gloomSecs: rec.gloomSecs, state: w.state, victory: w.victory, stratum: w.stratum, time: w.time - (skip ? skip.t0 : 0), from: skip ? skip.from : 0, entry: rec.entry, level: w.level, kills: w.run.kills, relics: p0.relics.length, log, sum, hp: p0.hp | 0, maxHp: p0.maxHp,
-    rooms: { visited: w.run.roomsVisited, total: w.run.roomsTotal }, lightAtBoss: w.run.lightAtBoss.slice(), strata, light: w.light / w.lightMax,
-    clears: rec.clears, dmgByS: rec.dmgByS, spawns: rec.spawns, heal: rec.heal, offers: rec.offers, relicsBy: rec.relicsBy, goldIn: rec.goldIn, dmgStrata: rec.dmgStrata, bossTimes: rec.bossTimes.slice(), turn: rec.turn, dmgBy: rec.dmgBy, downedBy: rec.downedBy, dealtStrata: rec.dealtStrata,
+  return { dark: rec.dark, left: rec.left, state: w.state, victory: w.victory, stratum: w.stratum, time: w.time - (skip ? skip.t0 : 0), from: skip ? skip.from : 0, entry: rec.entry, level: w.level, kills: w.run.kills, relics: p0.relics.length, log, sum, hp: p0.hp | 0, maxHp: p0.maxHp,
+    rooms: { visited: w.run.roomsVisited, total: w.run.roomsTotal }, strata,
+    clears: rec.clears, dmgByS: rec.dmgByS, spawns: rec.spawns, heal: rec.heal, offers: rec.offers, relicsBy: rec.relicsBy, goldIn: rec.goldIn, dmgStrata: rec.dmgStrata, bossTimes: rec.bossTimes.slice(), dmgBy: rec.dmgBy, downedBy: rec.downedBy, dealtStrata: rec.dealtStrata,
     evoAt: rec.evoAt, aff: ED.PATH_IDS.map(k => ED.pathAffinity(p0.boons, k)).sort((a, b) => b - a),
     bossTry: rec.bossTry, cls: p0.cls, main: ED.PATH_IDS.map(k => [k, ED.pathAffinity(p0.boons, k)]).sort((a, b) => b[1] - a[1])[0][0], heroes: players.length, bare: avg(players.map(p => bareDps(p.cls, p.weapon))), src: rec.src, combatS: rec.combatS, hits: rec.hits, ttk: rec.ttk, ttkElite: rec.ttkElite, htk: rec.htk, htkBare: rec.htkBare, cdr: p0.stats.cdr, cdrAfter: ED.Stats.cdrEff ? ED.Stats.cdrEff(p0.stats.cdr) : p0.stats.cdr,
     endRoom: w.room ? w.room.type : '', evo: p0.stats.evo || null, gates: ED.gatePaths(p0.boons), boonCount: Object.values(p0.boons).reduce((a, b) => a + b, 0), keystones: Object.keys(p0.boons).filter(id => ED.BOONS[id].key).length,
@@ -685,20 +889,17 @@ const se = (a) => { if (a.length < 2) return NaN; const m = avg(a); return Math.
 const ms = (a, d = 1) => (a.length ? avg(a).toFixed(d) + (a.length > 1 ? ' +-' + se(a).toFixed(d) : '') : '-');
 const pctOf = (a, b) => (b ? Math.round(100 * a / b) : 0);
 
-// One-block summary of a batch of runBot results: win rate, depth, pacing per stratum, lantern, damage sources.
+// One-block summary of a batch of runBot results: win rate, depth, pacing per stratum, dark rooms, damage sources.
 function summarize(results) {
   const n = results.length, wins = results.filter(r => r.victory), S = [1, 2, 3, 4, 5, 6];
   const clear = (type, s) => avg(results.flatMap(r => r.clears.filter(c => c.type === type && (s === 0 || c.s === s)).map(c => c.t)));
   const bossT = (s) => avg(results.map(r => r.bossTimes[s]).filter(v => v !== undefined));
   const strataSum = [], strataN = [];
-  let bossLight = 0, nBoss = 0, bossLightless = 0, vis = 0, tot = 0;
-  const turns = [], dmg = {}, downed = {};
-  let floors = 0, lanternEnded = 0;
+  let vis = 0, tot = 0;
+  const dmg = {}, downed = {};
   for (const r of results) {
     vis += r.rooms.visited; tot += r.rooms.total;
-    for (const l of r.lightAtBoss) { bossLight += l; nBoss++; if (l <= 0) bossLightless++; }
     r.strata.forEach((t, k) => { strataSum[k] = (strataSum[k] || 0) + t; strataN[k] = (strataN[k] || 0) + 1; });
-    for (const s in r.turn) { turns.push(r.turn[s].light); floors++; if (!r.turn[s].explored) lanternEnded++; }
     for (const k in r.dmgBy) dmg[k] = (dmg[k] || 0) + r.dmgBy[k];
     for (const k of r.downedBy.slice(0, 1)) downed[k.split('@')[0]] = (downed[k.split('@')[0]] || 0) + 1; // the first downing of each run
   }
@@ -712,7 +913,8 @@ function summarize(results) {
   lines.push('wins by hero: ' + [...new Set(results.map(r => r.cls))].map(c => { const rs = results.filter(r => r.cls === c); return `${c} ${Math.round(100 * rs.filter(r => r.victory).length / rs.length)}% (depth ${f1(avg(rs.map(r => r.stratum)))})`; }).join(', '));
   lines.push(`deaths by stratum [${hist.join(' ')}] (${atBoss} of ${n - wins.length} at a boss)`);
   lines.push(`wins ${wins.length}/${n} (${(100 * wins.length / n).toFixed(0)}% +-${(100 * Math.sqrt(wins.length / n * (1 - wins.length / n) / n)).toFixed(1)}) avg depth ${ms(results.map(r => r.stratum), 2)} depth incl. partial stratum ${ms(results.map(r => rowOf(r).depth), 2)} avg time ${U.fmtTime(avg(results.map(r => r.time)))} winners ${wins.length ? U.fmtTime(avg(wins.map(r => r.time))) : '-'} lvl ${f1(avg(results.map(r => r.level)))} (winners ${wins.length ? f1(avg(wins.map(r => r.level))) : '-'})`);
-  lines.push(`rooms visited ${(100 * vis / Math.max(1, tot)).toFixed(0)}% (${(vis / n).toFixed(1)}/run) light at boss ${nBoss ? (bossLight / nBoss).toFixed(2) : '-'} (Lightless ${bossLightless}/${nBoss}) light when heading for boss ${turns.length ? avg(turns).toFixed(2) : '-'} (lantern ended exploration on ${floors ? Math.round(100 * lanternEnded / floors) : 0}% of floors) avg stratum time [${strataSum.map((t, k) => U.fmtTime(t / strataN[k])).join(' ')}]`);
+  const darkS = S.map(s => avg(results.map(r => r.dark[s - 1] || 0)));
+  lines.push(`rooms visited ${(100 * vis / Math.max(1, tot)).toFixed(0)}% (${(vis / n).toFixed(1)}/run) dark rooms entered ${f2(darkS.reduce((a, b) => a + b, 0))}/run, per stratum [${darkS.map(f2).join(' ')}] avg stratum time [${strataSum.map((t, k) => U.fmtTime(t / strataN[k])).join(' ')}]`);
   lines.push(`clear s  combat [${S.map(s => f1(clear('combat', s))).join(' ')}] all ${f1(clear('combat', 0))}  elite [${S.map(s => f1(clear('elite', s))).join(' ')}] all ${f1(clear('elite', 0))}  boss [${S.map(s => f1(bossT(s))).join(' ')}]`);
   const flat = (key, s) => results.flatMap(r => r[key][s - 1]);
   const medClear = (type, s) => median(results.flatMap(r => r.clears.filter(c => c.type === type && c.s === s).map(c => c.t)));
@@ -729,8 +931,6 @@ function summarize(results) {
   lines.push(`damage share (all strata | strata IV-VI): all ${share(results, 0)} | ${share(results, 3)}`);
   lines.push('  by main path (strata IV-VI): ' + ED.PATH_IDS.map(k => { const rs = results.filter(r => r.main === k); return `${k} (${rs.length}) ${share(rs, 3)}`; }).join(' | '));
   lines.push('  weapon share by main path (all strata; each path should keep at least 20%): ' + ED.PATH_IDS.map(k => { const rs = results.filter(r => r.main === k); const sh = (b) => { let t = 0, a = 0; for (const r of rs) for (const o of r.src) if (o) for (const x in o) { a += o[x]; if (x === b) t += o[x]; } return a ? Math.round(100 * t / a) : NaN; }; return `${k} ${Number.isFinite(sh('weapon')) ? sh('weapon') + '%' : '-'}`; }).join(' | '));
-  const tries = results.flatMap(r => r.bossTry);
-  lines.push('boss fights won by the lantern tier at the door (Bright/Dim/Dark/Lightless): ' + [0, 1, 2, 3].map(t => { const a = tries.filter(x => x.tier === t); return `${a.length ? Math.round(100 * a.filter(x => x.kill).length / a.length) : '-'}% of ${a.length}`; }).join(' | '));
   const cd = results.map(r => r.cdr);
   lines.push(`cooldown reduction at run end (raw stat): mean ${f2(avg(cd))} max ${f2(Math.max(...cd))} above 0.4 in ${Math.round(100 * cd.filter(v => v > 0.4).length / n)}% above 0.65 in ${Math.round(100 * cd.filter(v => v > 0.65).length / n)}% | effective after the soft cap mean ${f2(avg(results.map(r => r.cdrAfter)))}`);
   lines.push(`dealt/stratum [${S.map(s => Math.round(avg(results.map(r => r.dealtStrata[s - 1]).filter(v => v !== undefined)))).join(' ')}]  evo ${(100 * results.filter(r => r.evo).length / n).toFixed(0)}% keystones ${f1(avg(results.map(r => r.keystones)))} boons ${f1(avg(results.map(r => r.boonCount)))} relics ${f1(avg(results.map(r => r.relics)))}`);
@@ -773,9 +973,15 @@ function summarize(results) {
   lines.push(`damage taken ${top(dmg, 5).map(([k, v]) => `${k} ${(100 * v / dTot).toFixed(0)}%`).join(', ')}; first downed by ${top(downed, 5).map(([k, v]) => `${k} ${v}`).join(', ')}`);
   const byS = S.map(k => { const o = {}; for (const r of results) for (const who in (r.dmgByS[k] || {})) o[who] = (o[who] || 0) + r.dmgByS[k][who]; const t = Object.values(o).reduce((x, y) => x + y, 0) || 1; return `${k}: ` + Object.entries(o).sort((x, y) => y[1] - x[1]).slice(0, 4).map(([w, v]) => `${w} ${Math.round(100 * v / t)}%`).join(' '); });
   lines.push('damage taken by stratum: ' + byS.join(' | '));
-  const downsAll = results.reduce((a, r) => a + r.downedBy.length, 0), downsGloom = results.reduce((a, r) => a + r.downedBy.filter(k => k.startsWith('gloom@')).length, 0);
+  const grpOf = { combat: (c) => c.type === 'combat' && !c.dark, elite: (c) => c.type === 'elite' && !c.dark, dark: (c) => c.dark };
+  const perS = (g, f) => S.map(s => { const cs = results.flatMap(r => r.clears.filter(c => c.s === s && grpOf[g](c))); return cs.length ? f(cs) : '-'; });
+  const roomLine = (label, f) => `${label}: ` + Object.keys(grpOf).map(g => `${g} [${perS(g, f).join(' ')}]`).join(' ');
+  lines.push(roomLine('kills per cleared room by stratum (threat/fodder)', (cs) => `${f1(avg(cs.map(c => c.th)))}/${f1(avg(cs.map(c => c.fo)))}`));
+  lines.push(roomLine('peak live foes per room by stratum (mean/max)', (cs) => `${f1(avg(cs.map(c => c.n)))}/${Math.max(...cs.map(c => c.n))}`));
+  lines.push(roomLine('room xp dropped by stratum (mean/budget, rooms off budget, mean threat xp cut by the budget)', (cs) => `${f1(avg(cs.map(c => c.xp)))}${cs[0].bud === null ? '' : '/' + f1(avg(cs.map(c => c.bud))) + ' off ' + cs.filter(c => Math.abs(c.xp - c.bud) > 0.5).length + ' cut ' + f1(avg(cs.map(c => c.clip)))}`));
   lines.push(classLines(results));
-  lines.push(`gloom: downs ${f2(downsGloom / n)}/run (${(100 * downsGloom / Math.max(1, downsAll)).toFixed(0)}% of ${f2(downsAll / n)} downs/run), damage ${(100 * (dmg.gloom || 0) / dTot).toFixed(0)}% of taken, flares ${f2(avg(results.map(r => r.flares)))}/run, Gloom out ${Math.round(avg(results.map(r => r.gloomSecs)))} s/run, ${f2(avg(results.map(r => r.gloomHits)))} touches/run`);
+  const darkC = results.flatMap(r => r.clears.filter(c => c.dark)), normC = results.flatMap(r => r.clears.filter(c => c.type === 'combat' && !c.dark));
+  lines.push(`dark rooms: ${darkC.length} cleared in ${n} runs | clear s ${f1(avg(darkC.map(c => c.t)))} vs normal combat ${f1(avg(normC.map(c => c.t)))} | room hp lost ${f2(avg(darkC.map(c => c.d)))} vs ${f2(avg(normC.map(c => c.d)))} (fraction of max HP)`);
   return lines.join('\n');
 }
 
@@ -833,7 +1039,7 @@ const optsFromFlags = (flags) => ({
   pick: flags.pick || process.env.PICK || 'random', start: flags.start, gates: flags.gates === undefined ? undefined : +flags.gates, route: flags.route, fork: flags.fork === undefined || isNaN(+flags.fork) ? flags.fork : +flags.fork,
   weapon: flags.weapon === undefined || isNaN(+flags.weapon) ? flags.weapon : +flags.weapon, explain: !!flags.explain,
   aimNoise: flags.aimnoise === undefined ? undefined : flags.aimnoise.split(',').map(Number).concat([0]).slice(0, 2).map(v => (Number.isFinite(v) ? v : 0)),
-  force: flags.force ? flags.force.split(',') : [], exploreMin: flags.explore === undefined ? undefined : +flags.explore, maxStratum: flags.strata === undefined ? undefined : +flags.strata,
+  force: flags.force ? flags.force.split(',') : [], dark: flags.dark, maxStratum: flags.strata === undefined ? undefined : +flags.strata, vet: flags.vet, vetReact: flags.vetreact === undefined ? undefined : +flags.vetreact,
   from: flags.from === undefined ? undefined : +flags.from,
 });
 
@@ -860,7 +1066,7 @@ function pairReport(rows, base) {
   }).join('\n');
 }
 
-module.exports = { runBot, summarize, classLines, metaProfile, rowOf, optsFromFlags, jobOpts, pairReport, ED };
+module.exports = { runBot, summarize, classLines, metaProfile, rowOf, optsFromFlags, jobOpts, pairReport, ED, parseVet, vetThreats, vetRisk, vetPlan, vetRider };
 if (require.main === module) {
   const flags = {}, args = [];
   for (const a of process.argv.slice(2)) { const m = /^--([a-z0-9]+)(?:=(.*))?$/i.exec(a); if (m) flags[m[1]] = m[2] === undefined ? '1' : m[2]; else args.push(a); }
@@ -874,11 +1080,11 @@ if (require.main === module) {
     const r = runBot(Object.assign({ seed: seed0 + i * 7, n, cls: [cls[i % cls.length]].concat(cls), skill, up, pact: +(args[5] || 0), mastery }, jobOpts(o, i, cls.length)));
     results.push(r);
     if (!flags.quiet) {
-      console.log(`run ${i} ${cls[i % cls.length]}: ${r.victory ? 'WIN' : r.state} stratum ${r.stratum} time ${U.fmtTime(r.time)} lvl ${r.level} kills ${r.kills} relics ${r.relics} rooms ${r.rooms.visited}/${r.rooms.total} lightAtBoss [${r.lightAtBoss.join(' ')}] strata [${r.strata.map(U.fmtTime).join(' ')}] (${Date.now() - t0}ms)`);
+      console.log(`run ${i} ${cls[i % cls.length]}: ${r.victory ? 'WIN' : r.state} stratum ${r.stratum} time ${U.fmtTime(r.time)} lvl ${r.level} kills ${r.kills} relics ${r.relics} rooms ${r.rooms.visited}/${r.rooms.total} dark [${r.dark.join(' ')}] strata [${r.strata.map(U.fmtTime).join(' ')}] (${Date.now() - t0}ms)`);
       for (const l of r.log) console.log(l);
     }
   }
-  console.log(`\npick=${pick}${o.start ? ' start=' + o.start : ''}${o.gates ? ' gates=' + o.gates : ''}${force.length ? ' force=' + force.join(',') : ''}${flags.strata ? ' strata<=' + flags.strata + ' (capped runs: win, depth and death lines do not apply)' : ''}${o.from > 1 ? ' from=' + o.from : ''}\n` + summarize(results));
+  console.log(`\npick=${pick}${o.vet && o.vet !== '0' ? ' vet=' + o.vet + (o.vetReact >= 0 ? ' react=' + o.vetReact : '') : ''}${o.start ? ' start=' + o.start : ''}${o.gates ? ' gates=' + o.gates : ''}${force.length ? ' force=' + force.join(',') : ''}${flags.strata ? ' strata<=' + flags.strata + ' (capped runs: win, depth and death lines do not apply)' : ''}${o.from > 1 ? ' from=' + o.from : ''}\n` + summarize(results));
   const rows = results.map((r, i) => rowOf(r, meta, seed0 + i * 7));
   if (flags.out) fs.writeFileSync(flags.out, JSON.stringify(rows));
   if (flags.pair) console.log(pairReport(rows, JSON.parse(fs.readFileSync(flags.pair, 'utf8'))));

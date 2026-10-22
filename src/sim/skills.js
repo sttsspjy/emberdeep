@@ -78,7 +78,9 @@
 
   // Area hit of a skill on foes within r of (x, y): src is the hit's source fields (W.partSrc); calls onHit(e, dealt, damage before the affinity) per foe struck.
   W.skillBlast = function (p, x, y, r, dmg, src, onHit) {
-    for (const e of this.enemies) {
+    const q = this.foeScan(x, y, r);
+    for (let k = 0; k < q.length || this.foeTail(q); k++) {
+      const e = q[k];
       if (e.hp <= 0 || e.spawnT > 0) continue;
       const d = Math.hypot(e.x - x, e.y - y);
       if (d >= r + e.r) continue;
@@ -86,6 +88,8 @@
       const dealt = this.hitEnemy(e, dmg, s);
       if (onHit) onHit(e, dealt, dealt / (s.affMul || 1));
     }
+    this.foeEnd();
+    this.smashCircle(p, x, y, r);
   };
 
   // Cooldown refund for the hero's own client (cooldowns are client-authoritative): slot 0 or 1, s seconds off, or a full refund when s is omitted.

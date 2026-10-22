@@ -282,18 +282,20 @@
   N.CAPS = { hit: 24, smite: 12, reap: 12, toll: 12, lance: 12, ric: 12, parry: 6, catch: 4, kblock: 6, blance: 8 };
   N.CAPS_LOCAL = { hit: 8, smite: 4, reap: 4, toll: 4, lance: 4, ric: 4, parry: 2, catch: 2, kblock: 3, blance: 4 };
   Object.assign(N.CAPS, { exec: 8, rupt: 8, bloom: 6, sweep: 6 }); Object.assign(N.CAPS_LOCAL, { exec: 3, rupt: 3, bloom: 2, sweep: 2 }); // Shade execution cuts, ruptures, Bloodbloom lines and Ambush Sweep rings
+  // Cap key of an event: a non-crit fodder hit counts as 'fhit' and a fodder death as 'fdie', so a horde never crowds out crits, threat hits and threat deaths.
+  const capKey = (ev) => (ev.fd ? (ev.t === 'hit' && !ev.c ? 'fhit' : ev.t === 'die' ? 'fdie' : ev.t) : ev.t);
   N.capFx = (fx, caps) => {
     let over = false, n = null;
     for (let i = 0; i < fx.length; i++) {
-      const c = caps[fx[i].t];
+      const t = capKey(fx[i]), c = caps[t];
       if (c === undefined) continue;
       n = n || {};
-      if ((n[fx[i].t] = (n[fx[i].t] || 0) + 1) > c) over = true;
+      if ((n[t] = (n[t] || 0) + 1) > c) over = true;
     }
     if (!over) return fx;
     const out = []; n = {};
     for (let i = 0; i < fx.length; i++) {
-      const t = fx[i].t, c = caps[t];
+      const t = capKey(fx[i]), c = caps[t];
       if (c !== undefined && (n[t] = (n[t] || 0) + 1) > c) continue;
       out.push(fx[i]);
     }
@@ -302,15 +304,20 @@
   Object.assign(N.CAPS, { skyfx: 6, hunt: 6, split: 8 }); Object.assign(N.CAPS_LOCAL, { skyfx: 2, hunt: 2, split: 3 }); // Ranger: Skyfall and Second Shower, mark leap, Splitting Bolt
   Object.assign(N.CAPS, { quake: 4, crack: 6, banner: 4, wave: 6, dmburst: 8, forkRank: 4 }); Object.assign(N.CAPS_LOCAL, { quake: 2, crack: 3, banner: 2, wave: 3, dmburst: 3, forkRank: 2 }); // Avalanche slam and cracks, War Banner plant, Death Mark waves and bursts, fork rank grants
   Object.assign(N.CAPS, { solar: 6, verdict: 8, hturn: 8, chain: 24 }); Object.assign(N.CAPS_LOCAL, { solar: 2, verdict: 3, hturn: 3, chain: 8 }); // Cleric events
+  Object.assign(N.CAPS, { dark: 2 }); Object.assign(N.CAPS_LOCAL, { dark: 1 }); // entering a dark room
+  Object.assign(N.CAPS, { fhit: 12, fdie: 30 }); Object.assign(N.CAPS_LOCAL, { fhit: 4, fdie: 12 }); // non-crit fodder hits and fodder deaths (capKey)
+  Object.assign(N.CAPS, { shoot: 10 }); Object.assign(N.CAPS_LOCAL, { shoot: 3 }); // foe shot sounds (boss volleys fire one per hero)
+  Object.assign(N.CAPS, { smash: 8 }); Object.assign(N.CAPS_LOCAL, { smash: 4 }); // breakable props smashed ({ i, x, y, k, r }: room breakables index, spot, decor kind, room id)
   // Venom bar level of a foe: 0-4 pips (one per 25 Venom), 5 = Corroded. Radiance fill 0-3 of the Smite gauge.
   N.venomLevel = (e) => (e.venom >= 100 ? 5 : e.venom > 0 ? Math.min(4, Math.ceil(e.venom / 25)) : 0);
   N.radLevel = (w, e) => (e.rad > 0 ? Math.min(3, Math.floor(4 * e.rad / w.smiteAt(e))) : 0);
   // Hero flags (bit n = 1 << n): 0 moving, 1 dashing, 2 downed, 3 dead, 4 invulnerable, 5 hurt, 6 shield thrown, 7 stealth, 8 ambush, 9 airborne (Comet), 10 Guardian Light buff, 11 Emboldened, 12 Battle Trance, 20 braced.
   // Zone rows end with the owner slot + 1 of a zone that follows its owner (Aura of Faith), else 0.
+  // Fodder foes (e.fodder) skip E and ride in H as [id, ENEMY_IDX, x, y, hpQ, fl]: hpQ = round(255 hp / maxHp) in 1..255; fl bits 0 flash, 1 frozen, 2 stunned, 3 chilled, 4 burning, 5 faces left.
   // Foe flags: 0 flash, 1 frozen, 2 stunned, 4 chilled, 5 exposed, 6 charged, 7 bleeding, 8 judged, 9 blind, 10 vulnerable, 11-12 burn level, 13-15 Venom level, 16-17 Radiance fill, 18 Hexed, 19 Marked, 20 Sealed, 21-23 ailment count (0-7).
 
   N.encodeSnap = (w, fx, full) => {
-    const P = [], E = [], B = [], K = [], Z = [], A = [];
+    const P = [], E = [], H = [], B = [], K = [], Z = [], A = [];
     for (const p of w.players.values()) {
       const sw = ED.Sheet.shieldWindow(p, w.time);
       const fl = (p.moving ? 1 : 0) | (p.dashing ? 2 : 0) | (p.downed ? 4 : 0) | (p.dead ? 8 : 0) | (p.invuln > 0 ? 16 : 0) | (p.hurtT > 0 ? 32 : 0) | (p.shieldOut ? 64 : 0) | (p.stealthT > 0 ? 128 : 0) | (p.ambush ? 256 : 0) | (p.cometT > 0 ? 512 : 0) | (p.glT > 0 ? 1024 : 0) | (p.auraT > 0 ? 2048 : 0) | (p.tranceT > 0 ? 4096 : 0) | (p.braceT > 0 ? 1 << 20 : 0);
@@ -318,24 +325,26 @@
     }
     for (const e of w.enemies) {
       if (e.hp <= 0) continue;
+      if (e.fodder) { H.push([e.id, ED.ENEMY_IDX[e.type], r(e.x), r(e.y), Math.max(1, Math.min(255, r(255 * e.hp / e.maxHp))), (e.flash > 0 ? 1 : 0) | (e.frozen > 0 ? 2 : 0) | (e.stun > 0 ? 4 : 0) | (e.chill > 0 ? 8 : 0) | (N.burnLevel(e) > 0 ? 16 : 0) | (e.face < 0 ? 32 : 0)]); continue; }
       const fl = (e.flash > 0 ? 1 : 0) | (e.frozen > 0 ? 2 : 0) | (e.stun > 0 ? 4 : 0) | (e.chill > 0 ? 16 : 0) | (e.exposed ? 32 : 0) | (e.charge > 0 ? 64 : 0) | (e.bleedPool > 0 ? 128 : 0) | (e.judged > 0 ? 256 : 0) | (e.blind > 0 ? 512 : 0) | (e.vulnT > 0 ? 1024 : 0) | (N.burnLevel(e) << 11) | (N.venomLevel(e) << 13) | (N.radLevel(w, e) << 16) | (e.hexT > 0 ? 1 << 18 : 0) | (e.mark > 0 ? 1 << 19 : 0) | (e.sealT > 0 ? 1 << 20 : 0) | (Math.min(7, w.ailments(e)) << 21);
-      E.push([e.id, ED.ENEMY_IDX[e.type], r(e.x), r(e.y), Math.ceil(e.hp), r(e.maxHp), e.r, fl, ST_IDX[e.boss ? (e.pose || 'idle') : e.st] | 0, r2(e.aimA || 0), e.elite ? ED.AFFIX_IDS.indexOf(e.elite) : -1, r(e.ward || 0), r(e.wardMax || 0), e.phase | 0, e.face < 0 ? -1 : 1, r2(e.t || 0), r(e.chill || 0), e.boss ? r(e.doom || 0) : r(w.doomLine(e))]);
+      E.push([e.id, ED.ENEMY_IDX[e.type], r(e.x), r(e.y), Math.ceil(e.hp), r(e.maxHp), e.r, fl, ST_IDX[e.boss ? (e.pose || 'idle') : e.st] | 0, r2(e.aimA || 0), e.elite ? ED.AFFIX_IDS.indexOf(e.elite) : -1, r(e.ward || 0), r(e.wardMax || 0), e.phase | 0, e.face < 0 ? -1 : 1, r2(e.t || 0), r(e.chill || 0), e.boss ? r(e.doom || 0) : r(w.doomLine(e)), e.elite2 ? ED.AFFIX_IDS.indexOf(e.elite2) : -1]);
     }
     for (const pr of w.projs) B.push([pr.id, ED.PROJ_IDX[pr.kind] | 0, r(pr.x), r(pr.y), r(pr.vx), r(pr.vy), pr.r, pr.team]);
     for (const pk of w.pickups) K.push([pk.id, PK_IDX[pk.kind], r(pk.x), r(pk.y)]);
     for (const z of w.zones) Z.push([z.id, ZK_IDX[z.kind] | 0, r(z.x), r(z.y), r(z.r || 0), r2(z.t), r2(z.dur), r2(z.a || 0), r(z.len || 0), r(z.w || 0), r2(z.arc || 0), z.team | 0, z.elite ? 1 : 0, z.lob ? z.lob[0] : -99999, z.lob ? z.lob[1] : 0, r2(z.warm || 0), r(z.str || 0), z.follow && w.players.has(z.follow) ? 1 + w.players.get(z.follow).slot : 0]);
     for (const a of w.allies) A.push([a.id, a.owner, r(a.x), r(a.y), a.face]);
-    const s = { t: 's', T: r2(w.time), s: w.stratum, fs: w.floorSeed, r: w.roomId, ep: w.roomEpoch | 0, L: w.locked ? 1 : 0, g: w.gold, x: Math.floor(w.xp), n: w.xpNext, l: w.level, li: Math.round(w.light * 10) / 10, lm: r(w.lightMax), dr: w.dread.tier | 0, dp: w.deepRooms | 0,
-      wm: w.waitMsg || '', P, E, B, K, Z, A, F: N.capFx(fx, N.CAPS) };
+    const s = { t: 's', T: r2(w.time), s: w.stratum, fs: w.floorSeed, r: w.roomId, ep: w.roomEpoch | 0, L: w.locked ? 1 : 0, g: w.gold, x: Math.floor(w.xp), n: w.xpNext, l: w.level,
+      wm: w.waitMsg || '', P, E, B, K, Z, A, H, F: N.capFx(fx, N.CAPS) };
     if (full) {
       s.O = w.props.map(p => [p.id, p.kind, r(p.x), r(p.y), p.state | 0, p.item || '', p.price || 0, p.group || 0, p.stype || '', p.text || '']);
       s.RS = w.floor.rooms.map(rm => { const st = w.roomState[rm.id]; return (st.visited ? 1 : 0) | (st.known ? 2 : 0) | (st.cleared ? 4 : 0); });
+      s.BR = w.floor.rooms.map(rm => w.roomState[rm.id].broken | 0); // broken-breakable bit mask of every room (bit i = room.breakables[i])
       s.RUN = { kills: w.run.kills, roomsCleared: w.run.roomsCleared, elitesKilled: w.run.elitesKilled, bosses: w.run.bosses, bossCount: w.run.bossCount, embers: w.run.embers, revives: w.run.revives, maxGold: w.run.maxGold, maxRelics: w.run.maxRelics, pact: w.pact,
-        flawlessBoss: !!w.run.flawlessBoss, roomsVisited: w.run.roomsVisited, roomsTotal: w.run.roomsTotal, lightAtBoss: w.run.lightAtBoss.slice(), lightlessBoss: !!w.run.lightlessBoss, fullClear: !!w.run.fullClear, evolved: [...w.players.values()].some(p => !!p.stats.evo) };
+        flawlessBoss: !!w.run.flawlessBoss, roomsVisited: w.run.roomsVisited, roomsTotal: w.run.roomsTotal, fullClear: !!w.run.fullClear, evolved: [...w.players.values()].some(p => !!p.stats.evo) };
     }
     return s;
   };
 
   // Signature used by the host to decide when props / room state must be resent.
-  N.propSig = (w) => w.roomId + '|' + w.props.map(p => p.id + ':' + (p.state | 0)).join(',') + '|' + w.floor.rooms.map(rm => { const st = w.roomState[rm.id]; return (st.visited ? 1 : 0) + (st.known ? 2 : 0) + (st.cleared ? 4 : 0); }).join('');
+  N.propSig = (w) => w.roomId + '|' + w.props.map(p => p.id + ':' + (p.state | 0)).join(',') + '|' + w.floor.rooms.map(rm => { const st = w.roomState[rm.id]; return (st.visited ? 1 : 0) + (st.known ? 2 : 0) + (st.cleared ? 4 : 0); }).join('') + '|' + (w.roomState[w.roomId].broken | 0);
 })(globalThis.ED || (globalThis.ED = {}));
