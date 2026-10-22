@@ -58,7 +58,7 @@
     desc: 'Volley marks every foe it hits for {volleyMark:s}: marked foes take +{markV} damage from everyone.',
     rider: 'Relentless Hunt: when a marked foe dies, the mark leaps to the nearest unmarked foe within 120.', mods: { volleyMark: 4, markV: 0.12 }, up: { markV: 0.04 }, r3: { markLeap: 1 } });
   card('ranger', 'skill1', 2, 'r_s1_b', { name: 'Scattershot', icon: 'boot', tag: 'Guard',
-    desc: 'Volley arrows deal +{volleyClose} to foes within 110 and knock them back 3× as hard, every arrow slows its foe {volleySlow} for 1.2 s (not bosses), and Volley hops you 70 back from the cursor.',
+    desc: 'Volley arrows deal +{volleyClose} to foes within 110 and knock them back 3× as hard, every arrow slows its foe {volleySlow} for 1.2 s (bosses half as much), and Volley hops you 70 back from the cursor.',
     rider: 'Caltrops: the hop scatters caltrops where you stood (radius 50, 2.5 s): foes inside are slowed 40% and take 12 per second.', mods: { volleyClose: 0.4, volleyHop: 70, volleySlow: 0.3 }, up: { volleyClose: 0.1 }, r3: { caltrops: 1 } });
   card('ranger', 'skill2', 1, 'r_s2', { name: 'Rainmaker', icon: 'rain', forks: ['r_s2_a', 'r_s2_b'], plays: 'drop a kill zone, kite foes through it.',
     desc: 'Rain of Arrows: +{s2Area} radius, lasts {s2Dur:s} longer, +{s2Dmg} damage.', mods: { s2Area: 0.3, s2Dur: 1, s2Dmg: 0.1 } });
@@ -66,7 +66,7 @@
     desc: "The whole Rain lands at once 0.5 s after the cast: every volley's damage in one hit over a 30% wider area, stunning foes 0.5 s (not bosses).[ Rain deals +{s2Dmg} and is +{s2Area} wider.]",
     rider: 'Twin Sky: a second Skyfall lands 0.8 s later on the same spot at {skyTwin}.', mods: { skyfall: 1 }, up: { s2Dmg: 0.1, s2Area: 0.05 }, r3: { skyTwin: 0.5 } });
   card('ranger', 'skill2', 2, 'r_s2_b', { name: 'Hail of Thorns', icon: 'thorn', tag: 'Guard', coop: true,
-    desc: 'Foes in the Rain are slowed 40% and take +20% damage (does not stack with other +20% vulnerabilities).[ Rain deals +{s2Dmg}.]',
+    desc: 'Foes in the Rain are slowed 50% and take +20% damage (does not stack with other +20% vulnerabilities).[ Rain deals +{s2Dmg}.]',
     rider: 'Second Shower: when the Rain ends, it falls again on the same spot for 2 s at {shower}.', mods: { rainHail: 1 }, up: { s2Dmg: 0.1 }, r3: { shower: 0.4 } });
   card('ranger', 'element', 1, 'r_el', { name: "Trapper's Craft", icon: 'leaf', forks: ['r_el_a', 'r_el_b'], plays: 'wound everything, and let the wounds work.', desc: BLEED, mods: { bleedAll: 0.1, statusPow: 0.15 } });
   card('ranger', 'element', 2, 'r_el_a', { name: 'Infected Wounds', icon: 'drop', tag: 'Focus',
@@ -123,7 +123,7 @@
     desc: 'Shadowstep: +{s1Dmg} damage, recharges {s1Cdr} faster, and each foe it cuts readies {stepStack:ck} more crit attack (up to {stackMax:ck3}).', mods: { s1Cdr: 0.2, s1Dmg: 0.2, stepStack: 1, stackMax: 2 } });
   card('shade', 'skill1', 2, 's_s1_a', { name: 'Assassinate', icon: 'dagger', tag: 'Burst',
     desc: 'Shadowstep deals +{assassinate} to foes below 50% health, and a Shadowstep kill refunds it (at most once per 1.5 s).[ Shadowstep deals +{s1Dmg}.]',
-    rider: 'Twin Cut: a second slash runs the Shadowstep path 0.15 s later at {stepTwin}.', mods: { assassinate: 0.4 }, up: { s1Dmg: 0.1 }, r3: { stepTwin: 0.5 } });
+    rider: 'Twin Cut: a second slash runs the Shadowstep path 0.15 s later at {stepTwin}.', mods: { assassinate: 0.3 }, up: { s1Dmg: 0.1 }, r3: { stepTwin: 0.5 } });
   card('shade', 'skill1', 2, 's_s1_b', { name: 'Afterimage', icon: 'mirror', tag: 'Guard',
     desc: 'Shadowstep leaves an afterimage where you stood; 1.2 s later it bursts (radius 80), hurting foes and blinding them 1 s (elites 0.5 s, not bosses).[ Shadowstep deals +{s1Dmg}.]',
     rider: 'Lure: just before it bursts, the afterimage pulls foes within {afterPull:n} toward it.', mods: { afterimage: 1 }, up: { s1Dmg: 0.1 }, r3: { afterPull: 120 } });
@@ -131,10 +131,10 @@
     desc: 'Vanish recharges {s2Cdr} faster; its smoke is {s2Area} wider, lasts {s2Dur:s} longer and foes inside take +20% damage; you move {stealthSpd} faster while unseen.', mods: { s2Cdr: 0.27, s2Area: 0.4, s2Dur: 2, smokeVuln: 1, stealthSpd: 0.3 } });
   card('shade', 'skill2', 2, 's_s2_a', { name: "Night's Edge", icon: 'mask', tag: 'Burst',
     desc: "Ambush deals ×{ambushMul:a25} of your weapon's base damage. An Ambush refunds Shadowstep; an Ambush kill refunds Vanish (at most once per 3 s).",
-    rider: 'Ambush Sweep: Ambush also strikes every foe within {ambushCleave:n} of its target.', mods: { ambushMul: 1.5, nightsEdge: 1 }, up: { ambushMul: 0.25 }, r3: { ambushCleave: 70 } });
+    rider: 'Ambush Sweep: Ambush also strikes every foe within {ambushCleave:n} of its target.', mods: { ambushMul: 1.25, nightsEdge: 1 }, up: { ambushMul: 0.25 }, r3: { ambushCleave: 70 } });
   card('shade', 'skill2', 2, 's_s2_b', { name: 'Veil of Night', icon: 'cloak', tag: 'Guard',
-    desc: 'Vanish shields you for {veil} max health (at most once per 12 s); your smoke blinds each foe {veilBlind:s} longer (elites half); stealth lasts {stealthDur:s} longer.',
-    rider: 'Shroud: your smoke slows foes 60% (from 40%) and lasts {s2Dur:s} longer.', mods: { veil: 0.03, veilBlind: 1, stealthDur: 1 }, up: { stealthDur: 0.5 }, r3: { shroud: 1, s2Dur: 2 } });
+    desc: 'Vanish shields you for {veil} max health (at most once per 12 s); your smoke blinds each foe {veilBlind:s} longer (elites half); stealth lasts {stealthDur:s} longer; Ambush deals ×{ambushMul:a25} of your weapon\'s base damage.',
+    rider: 'Shroud: your smoke slows foes 60% (from 40%) and lasts {s2Dur:s} longer.', mods: { veil: 0.03, veilBlind: 1, stealthDur: 1, ambushMul: 0.5 }, up: { stealthDur: 0.5 }, r3: { shroud: 1, s2Dur: 2 } });
   card('shade', 'element', 1, 's_el', { name: 'Cruel Arts', icon: 'fang', forks: ['s_el_a', 's_el_b'], plays: 'open wounds, then rip them open.', desc: BLEED, mods: { bleedAll: 0.1, statusPow: 0.15 } });
   card('shade', 'element', 2, 's_el_a', { name: 'Open Veins', icon: 'drop', tag: 'Focus', coop: true,
     desc: 'Your crits deal +{veins} for each ailment on the foe (up to 4).',
@@ -156,7 +156,7 @@
     desc: 'Sanctuary: +{s1Area} radius, lasts {s1Dur:s} longer (at most 60% of its cooldown), +{s1Dmg} damage; allies inside take {sanctDR:dr} less damage.', mods: { s1Area: 0.3, s1Dur: 2, s1Dmg: 0.5, sanctDR: 0.1 } });
   card('cleric', 'skill1', 2, 'c_s1_a', { name: 'Holy Fury', icon: 'star', tag: 'Burst',
     desc: 'Sanctuary deals +{s1Dmg} and stuns foes inside for {sanctStun:s} when cast (not bosses).',
-    rider: 'Hallowed Ground: foes inside Sanctuary are Judged (+20% damage taken).', mods: { s1Dmg: 0.25, sanctStun: 0.5 }, up: { s1Dmg: 0.1 }, r3: { sanctJudge: 1 } });
+    rider: 'Hallowed Ground: foes inside Sanctuary are Judged (+20% damage taken).', mods: { s1Dmg: 0.2, sanctStun: 0.5 }, up: { s1Dmg: 0.1 }, r3: { sanctJudge: 1 } });
   card('cleric', 'skill1', 2, 'c_s1_b', { name: 'Aura of Faith', icon: 'lantern', tag: 'Guard', coop: true,
     desc: 'Sanctuary centres on you and moves with you, but deals 10% less. Damage taken inside is cut by a further {sanctDR}.',
     rider: 'Embolden: allies (not you) inside your aura deal +{auraDmg} damage.', mods: { aura: 1, s1Dmg: -0.1, sanctDR: 0.1 }, up: { sanctDR: 0.02 }, r3: { auraDmg: 0.1 } });
@@ -164,7 +164,7 @@
     desc: 'Judgment: +{s2Dmg} damage, flies {s2Range} farther, Judged lasts {judgeDur:s} longer, recharges {s2Cdr} faster.', mods: { s2Dmg: 0.3, s2Range: 0.4, judgeDur: 2, s2Cdr: 0.167 } });
   card('cleric', 'skill2', 2, 'c_s2_a', { name: 'Twin Hammers', icon: 'twin', tag: 'Burst',
     desc: 'Judgment throws two hammers in a narrow V, each at {twinHammer}.[ Judgment deals +{s2Dmg}.]',
-    rider: 'Second Flight: each hammer flies out once more after it returns (out, back, out, back), the second flight at {secondFlight} of a hit.', mods: { twinHammer: 0.6 }, up: { s2Dmg: 0.1 }, r3: { thirdLeg: 1, secondFlight: 0.25 } });
+    rider: 'Second Flight: each hammer flies out once more after it returns (out, back, out, back), the second flight at {secondFlight} of a hit.', mods: { twinHammer: 0.55 }, up: { s2Dmg: 0.1 }, r3: { thirdLeg: 1, secondFlight: 0.25 } });
   card('cleric', 'skill2', 2, 'c_s2_b', { name: 'Verdict', icon: 'scroll', tag: 'Guard', coop: true,
     desc: 'Judged foes deal {judgeWeak} less damage (bosses half that). A Judged foe that dies bursts (radius 70) for Holy damage, stunning foes in it 0.4 s (not bosses).[ Judgment deals +{s2Dmg}.]',
     rider: 'Sentence: Verdict bursts Judge the foes they hit.', mods: { verdict: 1, judgeWeak: 0.4 }, up: { s2Dmg: 0.1 }, r3: { verdictJudge: 1 } });

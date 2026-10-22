@@ -159,7 +159,7 @@ const RAD = (a) => a * Math.PI / 180;
   const sh = (dist) => { e.kbx = e.kby = 0; const d = hit(w, p, e, 10, { kind: 'skill', part: 'volley.arrow', dist, knock: 60, kx: 1, ky: 0 }); return [d, e.kbx]; };
   let r = sh(50); near(r[0], 14, 1e-6, 'Scattershot +40% close'); near(r[1], 180, 1e-6, 'and triple knockback'); r = sh(109); near(r[0], 14, 1e-6, 'close up to 110');
   r = sh(111); near(r[0], 10, 1e-6, 'plain beyond 110'); near(r[1], 60, 1e-6, 'plain knockback beyond 110');
-  e.slowT = 0; e.slowAmt = 0; sh(50); near(e.slowAmt, 0.3, 1e-9, 'every Volley arrow slows its foe 30%'); near(e.slowT, 1.2, 1e-9, 'for 1.2 s'); const bsl = foe(w, 340, 212); bsl.boss = true; hit(w, p, bsl, 10, { kind: 'skill', part: 'volley.arrow', dist: 50 }); ok(!(bsl.slowT > 0), 'bosses are not slowed'); const wsl = foe(w, 360, 212); hit(w, p, wsl, 10, { kind: 'weapon', wpn: true, dist: 50 }); ok(!(wsl.slowT > 0), 'weapon shots do not slow'); void wsl;
+  e.slowT = 0; e.slowAmt = 0; sh(50); near(e.slowAmt, 0.3, 1e-9, 'every Volley arrow slows its foe 30%'); near(e.slowT, 1.2, 1e-9, 'for 1.2 s'); const bsl = foe(w, 340, 212); bsl.boss = true; hit(w, p, bsl, 10, { kind: 'skill', part: 'volley.arrow', dist: 50 }); near(bsl.slowAmt, 0.15, 1e-9, 'bosses are slowed half as much'); const wsl = foe(w, 360, 212); hit(w, p, wsl, 10, { kind: 'weapon', wpn: true, dist: 50 }); ok(!(wsl.slowT > 0), 'weapon shots do not slow'); void wsl;
   near(stage({ r_s1_b: 2 }).p.stats.volleyClose, 0.5, 1e-9, 'rank 2: +10% close bonus'); ok(!stage({ r_s1_b: 2 }).p.stats.caltrops, 'no Caltrops below rank 3');
   w.projs.length = 0; w.zones.length = 0; w.playerSkill(p, 0, {}, 0); ok(!w.zones.some(z => z.kind === 'shards'), 'no caltrops without the rider');
 }
@@ -204,11 +204,11 @@ const RAD = (a) => a * Math.PI / 180;
   ok(evs.all.filter(v => v.t === 'skyfx').map(v => v.k).join() === '0,1', 'two landing events'); w.hitEnemy = hk;
 }
 
-// ---- Hail of Thorns (r_s2_b): foes in the Rain slowed 40% and +20% damage; Second Shower at rank 3 ----
+// ---- Hail of Thorns (r_s2_b): foes in the Rain slowed 50% and +20% damage; Second Shower at rank 3 ----
 {
   const { w, p } = stage({ r_s2: 1, r_s2_b: 1 }); const e = foe(w, 200, 212), out = foe(w, 330, 212);
   w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: 200, y: 212 }, 1); run(w, 0.3); ok(!(e.slowAmt > 0), 'no slow before the arrows fall'); run(w, 0.2);
-  near(e.slowAmt, 0.4, 1e-9, 'foes in the Rain are slowed 40%'); ok(e.vulnT > 0, 'and vulnerable'); ok(!(out.slowT > 0), 'foes outside the Rain are not slowed');
+  near(e.slowAmt, 0.5, 1e-9, 'foes in the Rain are slowed 50%'); ok(e.vulnT > 0, 'and vulnerable'); ok(!(out.slowT > 0), 'foes outside the Rain are not slowed');
   near(hit(w, p, e, 100, { kind: 'weapon' }) / hit(w, p, out, 100, { kind: 'weapon' }), 1.2, 1e-6, 'vulnerable foes take +20%');
   near(stage({ r_s2_b: 2 }).p.stats.s2Dmg, 0.1, 1e-9, 'rank 2 adds +10% Rain damage');
 }

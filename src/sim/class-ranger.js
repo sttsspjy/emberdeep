@@ -8,7 +8,7 @@
   // Deadeye grows from nothing at FAR_FROM px flown to its full bonus at FAR_TO; a hit from FAR_AT of that ramp carries the far-shot flag. LEAP_R: reach of Relentless Hunt. SPLIT_A / SPLIT_LIFE: Splitting Bolt's fan and flight.
   // FLURRY_A: Flurry's extra arrows (each at st.flurryMul of a shot). CALTROPS: the Scattershot patch, base + pow x P damage per second, slow, radius (fixed), seconds. HAIL_SLOW: slow of a Hail of Thorns foe. VOLLEY_SLOW_T: seconds a Scattershot arrow slows its foe.
   const FAR_FROM = 80, FAR_TO = 260, FAR_AT = 0.75, LEAP_R = 120, SPLIT_A = 0.3, SPLIT_LIFE = 0.4, FLURRY_A = 0.12;
-  const CALTROPS = { base: 6, pow: 0.5, r: 50, dur: 2.5, slow: 0.4 }, HAIL_SLOW = 0.4, VOLLEY_SLOW_T = 1.2;
+  const CALTROPS = { base: 6, pow: 0.5, r: 50, dur: 2.5, slow: 0.4 }, HAIL_SLOW = 0.5, VOLLEY_SLOW_T = 1.2;
   const SKILL_PARTS = new Set(['volley.arrow', 'rain.tick', 'rain.sky', 'rain.sky2', 'rain.shower']); // Gangrene's parts
 
   // Volley: a fan of piercing arrows toward the cursor. Caltrops (Scattershot rank 3) seed the spot the hop leaves.
@@ -151,7 +151,7 @@
       const st = p.stats;
       if (src.slow && e.hp > 0) this.slowEnemy(e, st.hitSlow, 1);
       if (st.volleyMark && src.part === 'volley.arrow') markFoe(e, p, st);
-      if (st.volleySlow && src.part === 'volley.arrow' && e.hp > 0 && !e.boss) this.slowEnemy(e, st.volleySlow, VOLLEY_SLOW_T);
+      if (st.volleySlow && src.part === 'volley.arrow' && e.hp > 0) this.slowEnemy(e, e.boss ? st.volleySlow * 0.5 : st.volleySlow, VOLLEY_SLOW_T);
     },
     projHit(pr, e, hs) {
       if (!pr.wpn || pr.noSplit || pr.pierce > 0 || hs.guarded) return;
