@@ -343,7 +343,7 @@
       if (S.resetUpgrades(p) > 0) { ED.Audio.play('buy'); ED.App.afterMetaChange(); } else paintReset(reset);
     };
     foot.appendChild(reset);
-    grid.appendChild(foot);
+    grid.insertBefore(foot, grid.firstChild); // above the first tier, visible without scrolling
     restoreFocus(grid, fk);
   }
 

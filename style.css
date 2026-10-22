@@ -313,7 +313,7 @@ input[type=range]::-moz-range-thumb { width: 1.2rem; height: 1.2rem; transform: 
 .up-card.maxed { border-color: var(--gold-lo); background: linear-gradient(90deg, rgba(240, 207, 138, 0.08), transparent 60%), var(--card); }
 .badge-max { font: 800 var(--fs-md) var(--f-body); color: var(--good); padding: 0 0.4rem; }
 .up-act { display: flex; flex-direction: column; gap: 0.4rem; align-items: stretch; }
-.up-foot { grid-column: 1 / -1; display: flex; justify-content: flex-end; margin-top: 0.8rem; }
+.up-foot { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
 .btn-reset { min-width: 12rem; }
 
 /* heroes view (roster + mastery) */
