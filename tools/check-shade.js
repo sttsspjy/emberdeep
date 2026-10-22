@@ -42,13 +42,13 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   const nf = build({ s_s2: 1 }), sm = ED.Stats.skillNums('vanish', nf);
   near(nf.skill2Cd, 11 * 0.73, 1e-9, 'Nightfall cooldown 8 s'); near(sm.p.smoke.r, 105, 1e-9, 'Nightfall smoke radius +40%'); near(sm.p.smoke.dur, 5, 1e-9, 'Nightfall smoke +2 s'); near(nf.stealthSpd, 0.3, 1e-9, 'Nightfall stealth speed');
   near(ED.Stats.moveRate({ stats: nf, flowT: 0, stealthT: 1 }) / ED.Stats.moveRate({ stats: nf, flowT: 0, stealthT: 0 }), 1.3, 1e-9, 'moveRate adds stealthSpd while unseen');
-  near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_a: 1 })).p.ambush.dmg, 40, 1e-9, "Night's Edge Ambush x4 of 10"); near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_a: 3 })).p.ambush.dmg, 45, 1e-9, "Night's Edge rank 3 x4.5");
-  near(ED.Stats.skillNums('vanish', build({})).p.ambush.dmg, 25, 1e-9, 'plain Ambush x2.5'); near(build({ s_s2: 1, s_s2_a: 3 }).ambushCleave, 70, 1e-9, 'Ambush Sweep radius');
+  near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_a: 1 })).p.ambush.dmg, 37.5, 1e-9, "Night's Edge Ambush x3.75 of 10"); near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_a: 3 })).p.ambush.dmg, 42.5, 1e-9, "Night's Edge rank 3 x4.25");
+  near(ED.Stats.skillNums('vanish', build({})).p.ambush.dmg, 25, 1e-9, 'plain Ambush x2.5'); near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_b: 1 })).p.ambush.dmg, 30, 1e-9, 'Veil of Night Ambush x3'); near(build({ s_s2: 1, s_s2_a: 3 }).ambushCleave, 70, 1e-9, 'Ambush Sweep radius');
   near(build({ s_s2: 1, s_s2_b: 1 }).veil, 0.03, 1e-9, 'Veil 3%'); near(build({ s_s2: 1, s_s2_b: 3 }).veil, 0.03, 1e-9, 'Veil stays 3% at rank 3 (the class shield window)');
   near(build({ s_s2: 1, s_s2_b: 1 }).stealthDur, 1, 1e-9, 'Veil stealth +1 s'); near(build({ s_s2: 1, s_s2_b: 3 }).stealthDur, 2, 1e-9, 'Veil rank 3 stealth +2 s (+0.5 s per rank)');
   near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_b: 3 })).p.smoke.dur, 7, 1e-9, 'Shroud: the sheet smoke lasts 3 + 2 (Nightfall) + 2 (Shroud) s');
   ok(ED.boonText('s_s2_b', 1).indexOf('3%') >= 0 && ED.boonText('s_s2_b', 3).indexOf('lasts 2 s longer') >= 0, 'Veil card text shows 3% and the Shroud rider shows 2 s'); near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_b: 1 })).p.blind.dur, 3, 1e-9, 'Veil blind budget 3 s');
-  near(build({ s_el: 1, s_el_a: 1 }).veins, 0.1, 1e-9, 'Open Veins 10%'); near(build({ s_el: 1, s_el_a: 3 }).veins, 0.14, 1e-9, 'Open Veins rank 3'); near(build({ s_el: 1, s_el_a: 3 }).exsang, 0.25, 1e-9, 'Exsanguinate');
+  near(build({ s_el: 1, s_el_a: 1 }).veins, 0.15, 1e-9, 'Open Veins 15%'); near(build({ s_el: 1, s_el_a: 3 }).veins, 0.21, 1e-9, 'Open Veins rank 3'); near(build({ s_el: 1, s_el_a: 3 }).exsang, 0.25, 1e-9, 'Exsanguinate');
   near(build({ s_el: 1, s_el_b: 3 }).rupture, 0.7, 1e-9, 'Rupture rank 3 70%'); near(build({ s_el: 1, s_el_b: 1 }).bloodbloom, 0, 1e-9, 'Bloodbloom is a rank 3 rider'); near(build({ s_el: 1, s_el_b: 3 }).bloodbloom, 1, 1e-9, 'Bloodbloom rank 3');
   near(build({ s_el: 1 }).bleedAll, 0.1, 1e-9, 'Cruel Arts Bleed share'); near(build({ s_el: 1 }).statusPow, 0.15, 1e-9, 'Cruel Arts status power');
 }
@@ -124,7 +124,7 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   const { w, p } = stage({ s_s1: 1, s_s1_a: 3 }); const low = foe(w, p.x + 40, p.y - 40), hi = foe(w, p.x + 40, p.y + 40); low.hp = low.maxHp * 0.4; hi.hp = hi.maxHp * 0.6;
   const q = ED.Stats.skillNums('step', p.stats).p.slash, st = p.stats;
   w.playerSkill(p, 0, { x0: p.x, y0: p.y - 40, x1: p.x + 100, y1: p.y - 40 }, 0); w.playerSkill(p, 0, { x0: p.x, y0: p.y + 40, x1: p.x + 100, y1: p.y + 40 }, 0);
-  const base = q.dmg * st.critMult; near((hi.maxHp * 0.6 - hi.hp) / base, 1, 0.02, 'Shadowstep slash'); near((low.maxHp * 0.4 - low.hp) / (hi.maxHp * 0.6 - hi.hp), 1.4, 0.02, 'Assassinate: +40% below half health (first slash)');
+  const base = q.dmg * st.critMult; near((hi.maxHp * 0.6 - hi.hp) / base, 1, 0.02, 'Shadowstep slash'); near((low.maxHp * 0.4 - low.hp) / (hi.maxHp * 0.6 - hi.hp), 1.3, 0.02, 'Assassinate: +30% below half health (first slash)');
 }
 {
   const { w, p } = stage({ s_s1: 1, s_s1_a: 1 }); const a = foe(w, p.x + 40, p.y), b = foe(w, p.x + 60, p.y + 6); a.hp = 3; b.hp = 3;
@@ -180,9 +180,9 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   const ambush = (boons, wi, setup) => { const { w, p } = stage(boons, wi); const e = foe(w, p.x + 30, p.y); if (setup) setup(w, p, e); w.playerSkill(p, 0, {}, 1); w.msgs.length = 0; w.fx.length = 0; w.playerAttack(p, 0); run(w, 0.6); return { w, p, e }; };
   const plain = ambush({}), edge = ambush({ s_s2: 1, s_s2_a: 1 }), r3 = ambush({ s_s2: 1, s_s2_a: 3 });
   const crit = plain.p.stats.critMult;
-  near(lost(plain.e), 10 * 2.5 * crit, 0.05, 'plain Ambush: x2.5 of the base weapon, crit'); near(lost(edge.e), 10 * 4 * crit * 1 / 1, 0.05, "Night's Edge: x4"); near(lost(r3.e), 10 * 4.5 * crit, 0.05, "Night's Edge rank 3: x4.5");
-  const sw = ambush({ s_s2: 1, s_s2_a: 1, s_atk: 1, s_atk_s: 1 }); near(lost(sw.e), 10 * 4 * crit, 0.05, 'Ambush is fork neutral (Swift daggers deal the base weapon x4)');
-  const hv = ambush({ s_s2: 1, s_s2_a: 1, s_atk: 1, s_atk_h: 1 }); near(lost(hv.e), 10 * 4 * crit, 0.05, 'Ambush is fork neutral (Heavy kukris deal the base weapon x4)');
+  near(lost(plain.e), 10 * 2.5 * crit, 0.05, 'plain Ambush: x2.5 of the base weapon, crit'); near(lost(edge.e), 10 * 3.75 * crit, 0.05, "Night's Edge: x3.75"); near(lost(r3.e), 10 * 4.25 * crit, 0.05, "Night's Edge rank 3: x4.25");
+  const sw = ambush({ s_s2: 1, s_s2_a: 1, s_atk: 1, s_atk_s: 1 }); near(lost(sw.e), 10 * 3.75 * crit, 0.05, 'Ambush is fork neutral (Swift daggers deal the base weapon x3.75)');
+  const hv = ambush({ s_s2: 1, s_s2_a: 1, s_atk: 1, s_atk_h: 1 }); near(lost(hv.e), 10 * 3.75 * crit, 0.05, 'Ambush is fork neutral (Heavy kukris deal the base weapon x3.75)');
   ok(refunds(edge.w).length === 1 && refunds(edge.w)[0].slot === 0 && !refunds(edge.w)[0].s, "Night's Edge: the Ambush refunds Shadowstep"); ok(refunds(plain.w).length === 0, 'a plain Ambush refunds nothing');
   const kn = ambush({ s_s2: 1, s_s2_a: 1 }, 1); ok(refunds(kn.w).filter(m => m.slot === 0).length === 1, "Night's Edge with 3 knives: one Shadowstep refund per Ambush");
   ok(plain.p.ambush === false, 'the Ambush is spent');
@@ -193,7 +193,7 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   // Ambush Sweep: strikes every foe within 70 of its target, once each
   const sp = stage({ s_s2: 1, s_s2_a: 3 }); const A = foe(sp.w, sp.p.x + 30, sp.p.y), B = foe(sp.w, sp.p.x + 85, sp.p.y + 10), Cf = foe(sp.w, sp.p.x + 250, sp.p.y), D = foe(sp.w, sp.p.x + 28, sp.p.y + 20), Bk = foe(sp.w, sp.p.x - 40, sp.p.y);
   sp.w.playerSkill(sp.p, 0, {}, 1); sp.w.playerAttack(sp.p, 0); run(sp.w, 0.1);
-  const ac = sp.p.stats.critMult, want = 10 * 4.5 * ac;
+  const ac = sp.p.stats.critMult, want = 10 * 4.25 * ac;
   near(lost(A), want, 0.1, 'the Ambush hits its target'); near(lost(B), want, 0.1, 'the sweep hits a foe 55 px from the target once'); ok(Cf.hp === Cf.maxHp, 'a foe 220 px away is untouched'); near(lost(D), want, 0.1, 'a foe in the swing and near the target is hit once, not twice'); ok(Bk.hp === Bk.maxHp || Math.hypot(Bk.x - A.x, Bk.y - A.y) > 70, 'a foe behind the hero out of the sweep is untouched');
   const nos = stage({ s_s2: 1, s_s2_a: 2 }); const A2 = foe(nos.w, nos.p.x + 30, nos.p.y), B2 = foe(nos.w, nos.p.x + 85, nos.p.y + 10); nos.w.playerSkill(nos.p, 0, {}, 1); nos.w.playerAttack(nos.p, 0); run(nos.w, 0.1); ok(A2.hp < A2.maxHp && B2.hp === B2.maxHp, 'no sweep before the rank 3 rider');
 }
@@ -221,8 +221,8 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
     const h = e.hp; w.hitEnemy(e, 100, { p, kind: 'skill', crit: true, noProc: true }); return h - e.hp;
   };
   const base = dmgAt({ s_el: 1 }, 0), ov = (n, r) => dmgAt({ s_el: 1, s_el_a: r }, n) / dmgAt({ s_el: 1 }, n);
-  near(dmgAt({ s_el: 1, s_el_a: 1 }, 0) / base, 1, 1e-9, 'no ailments, no bonus'); near(ov(2, 1), 1.2, 1e-9, 'Open Veins: +10% per ailment'); near(ov(4, 1), 1.4, 1e-9, 'four ailments +40%'); near(ov(5, 1), 1.4, 1e-9, 'capped at 4 ailments');
-  near(ov(3, 3), 1 + 0.14 * 3, 1e-9, 'rank 3 +14% per ailment');
+  near(dmgAt({ s_el: 1, s_el_a: 1 }, 0) / base, 1, 1e-9, 'no ailments, no bonus'); near(ov(2, 1), 1.3, 1e-9, 'Open Veins: +15% per ailment'); near(ov(4, 1), 1.6, 1e-9, 'four ailments +60%'); near(ov(5, 1), 1.6, 1e-9, 'capped at 4 ailments');
+  near(ov(3, 3), 1 + 0.21 * 3, 1e-9, 'rank 3 +21% per ailment');
   const nc = dmgAt({ s_el: 1, s_el_a: 1 }, 3); const { w, p } = stage({ s_el: 1, s_el_a: 1 }); const e = foe(w, p.x + 30, p.y); const h = e.hp; w.hitEnemy(e, 100, { p, kind: 'skill', crit: false, noProc: true }); ok(h - e.hp < nc, 'Open Veins applies to crits only');
   // Exsanguinate: a crit on a foe with 4 ailments adds Bleed = 25% of the hit
   const bleedGain = (r) => {

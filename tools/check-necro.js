@@ -45,7 +45,7 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
   near(ED.Stats.skillNums('harvest', s).p.burst.dmg, 40.2 * 1.4, 1e-6, 'Harvest burst 40.2 x 1.4'); near(ED.Stats.skillNums('harvest', s).p.burst.r, 72, 1e-9, 'Harvest radius 60 x 1.2');
   s = tot({ n_s2: 1, n_s2_a: 3 }); near(s.corpse, 6, 1e-9, 'Corpse Explosion 4 + 1 per rank'); near(s.corpseMul, 0.7, 1e-9, 'corpse burst 70%'); near(s.boneLance, 0.25, 1e-9, 'Bone Lances +25%');
   const hp = ED.Stats.skillNums('harvest', s).p; near(hp.corpse.dmg, hp.burst.dmg * 0.7, 1e-9, 'corpse part 70% of the burst'); near(hp.lance.dmg, hp.burst.dmg * 1.25, 1e-9, 'lance part +25%'); near(hp.corpse.r, hp.burst.r, 1e-9, 'corpse radius = burst radius'); ok(hp.corpse.on && hp.lance.on, 'corpse and lance parts on');
-  s = tot({ n_s2: 1, n_s2_b: 3 }); near(s.boneArmor, 0.02, 1e-9, 'Bone Armor 2% per minion'); near(s.boneCap, 0.06, 1e-9, 'Bone Armor cap 5% + 0.5% per rank'); ok(s.boneField === 1, 'Marrow Field at rank 3');
+  s = tot({ n_s2: 1, n_s2_b: 3 }); near(s.boneArmor, 0.03, 1e-9, 'Bone Armor 3% per minion'); near(s.boneCap, 0.06, 1e-9, 'Bone Armor cap 5% + 0.5% per rank'); ok(s.boneField === 1, 'Marrow Field at rank 3');
   s = tot({ n_el: 1 }); near(s.classElMul, 0.25, 1e-9, 'Grave Pact +25% Shadow skills'); near(s.minionInfuse, 0.25, 1e-9, 'minion infusion 0.75'); near(s.mInfShadow, 0.2, 1e-9, 'minion Doom 20%');
   s = tot({ n_el: 1, n_el_a: 3 }); near(s.tollMul, 0.6, 1e-9, 'Abyssal Toll +40%, +10% per rank'); near(s.abyssMin, 0.25, 1e-9, 'empower +25%'); ok(s.abyssDoom === 1, 'Abyssal Hunger at rank 3');
   s = tot({ n_el: 1, n_el_b: 3 }); ok(s.reapRaise === 1, 'Rise Again'); near(s.minionDmg, 0.2, 1e-9, 'Rise Again +10% minions per rank'); near(s.tideMul, 0.3, 1e-9, 'Risen Tide +30%');
@@ -145,8 +145,8 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
   const { w, p } = stage({ n_s1: 1, n_s1_b: 3 }); w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x + 60, y: p.y }, 0);
   const ks = mine(w, p); near(ks[0].life, 18, 1e-9, 'Ironbone: 12 s x 1.5'); near(p.stats.minionDmg, 0.2, 1e-9, 'rank 3 minion damage +20%');
   const e = foe(w, p.x + 200, p.y); w.allies.length = 0; const a = minionAt(w, p, e); w.updateAllies(0);
-  near(lost(e), 11.4 * 1.2 * 1.2 * C.COMP_MUL * C.KNIGHT_MUL, 0.01, 'rank 3 knight hit'); ok(e.stun >= 0.49 && e.stun <= 0.51, `Ironbone: the first foe a Bone Knight strikes is stunned 0.5 s (${e.stun})`);
-  ok(evs(w, 'kstun').length === 1, 'Ironbone emits a kstun event'); e.stun = 0; e.stunCd = 0; a.cd = 0; w.updateAllies(0); ok(e.stun === 0 && evs(w, 'kstun').length === 1, 'only the first strike stuns');
+  near(lost(e), 11.4 * 1.2 * 1.2 * C.COMP_MUL * C.KNIGHT_MUL, 0.01, 'rank 3 knight hit'); ok(e.stun >= 0.49 && e.stun <= 0.51, `a Bone Knight's strike stuns its foe 0.5 s (${e.stun})`);
+  ok(evs(w, 'kstun').length === 1, 'the stun emits a kstun event'); e.stun = 0; a.cd = 0; w.updateAllies(0); ok(e.stun === 0 && evs(w, 'kstun').length === 1, 'a foe on stun cooldown is not stunned again'); e.stunCd = 0; a.cd = 0; w.updateAllies(0); ok(e.stun > 0.49 && evs(w, 'kstun').length === 2, 'and is stunned again once the cooldown is over');
   const boss = foe(w, p.x + 200, p.y + 100); boss.boss = true; const b2 = minionAt(w, p, boss); w.updateAllies(0); ok(boss.stun === 0, 'bosses are never stunned');
   const { w: w1, p: p1 } = stage({ n_s1: 1, n_s1_b: 2 }); w1.spawnMinion(p1, p1.x, p1.y, 12); near(mine(w1, p1)[0].life, 12, 1e-9, 'no Ironbone life before rank 3'); void b2;
 }
@@ -189,9 +189,9 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
 {
   const { w, p } = stage({ n_s2: 1, n_s2_b: 1 }); const M = p.maxHp;
   for (let i = 0; i < 2; i++) w.spawnMinion(p, p.x, p.y, 12); p.hp = 1; w.playerSkill(p, 0, {}, 1);
-  near(p.shield, 0.04 * M, 0.01, 'Bone Armor 2% x 2 = 4% of max health (the card text)'); near(p.boneT, 12, 1e-9, 'Bone Armor once per 12 s'); ok(p.shieldBy.bone > 0 && !p.shieldBy.class && !(p.shieldClip.bone > 0), 'a bone shield outside the class window, nothing clipped');
+  near(p.shield, 0.05 * M, 0.01, 'Bone Armor 3% x 2 = 6%, capped at 5% of max health (the card text)'); near(p.boneT, 12, 1e-9, 'Bone Armor once per 12 s'); ok(p.shieldBy.bone > 0 && !p.shieldBy.class && !(p.shieldClip.bone > 0), 'a bone shield outside the class window, nothing clipped');
   ok(evs(w, 'shielded').some(s => s.k === 'bone' && s.pid === 'p0'), 'shielded event with source bone');
-  near(w.addShield(p, M, M, 'class'), 0.02 * M, 0.01, 'the class window is still empty: a class grant takes the rest of the 6% all-source window');
+  near(w.addShield(p, M, M, 'class'), 0.01 * M, 0.01, 'the class window is still empty: a class grant takes the rest of the 6% all-source window');
   const { w: w3, p: p3 } = stage({ n_s2: 1, n_s2_b: 1 }); for (let i = 0; i < 3; i++) w3.spawnMinion(p3, p3.x, p3.y, 12); w3.playerSkill(p3, 0, {}, 1); near(p3.shield, 0.05 * M, 0.01, 'rank 1: 3 minions give the 5% cap, not 6%');
   const { w: w4, p: p4 } = stage({ n_s2: 1, n_s2_b: 3 }); for (let i = 0; i < 3; i++) w4.spawnMinion(p4, p4.x, p4.y, 12); w4.playerSkill(p4, 0, {}, 1); near(p4.shield, 0.06 * M, 0.01, 'rank 3: 3 minions give 6% (cap 5% + 2 x 0.5%)');
   const s0 = p.shield; for (let i = 0; i < 2; i++) w.spawnMinion(p, p.x, p.y, 12); w.playerSkill(p, 0, {}, 1); near(p.shield, s0, 1e-9, 'no second shield while boneT runs');

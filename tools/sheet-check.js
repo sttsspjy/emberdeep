@@ -95,7 +95,7 @@ for (const key in ED.SKILL_SHEET) { const [sid, pid] = key.split('.'); ok(ED.SKI
     let bare = 0;
     for (const id of ED.BOON_IDS) { const b = ED.BOONS[id]; for (let r = 1; r < (b.max || 1); r++) for (const piece of S.nextText(id, r, st).split(' · ')) if (!/[A-Za-z]{3,}/.test(piece.replace(/\d+(?:\.\d+)?\s?s\b/g, ''))) { bare++; console.log(`FAIL bare next-rank piece ${id} rank ${r}: "${piece}"`); } }
     ok(bare === 0, 'Next rank lines are never bare numbers');
-    ok(S.nextText('k_s1_a', 1, st) === 'deals +20% · 50% of its impact' && S.nextText('k_s2_b', 1, st) === 'orbits you for 3.5 s · 20% of a strike', 'Juggernaut and Shield Orbit name their numbers: ' + S.nextText('k_s1_a', 1, st) + ' / ' + S.nextText('k_s2_b', 1, st));
+    ok(S.nextText('k_s1_a', 1, st) === 'deals +20% · 50% of its impact' && S.nextText('k_s2_b', 1, st) === 'orbits you for 4 s · 20% of a strike', 'Juggernaut and Shield Orbit name their numbers: ' + S.nextText('k_s1_a', 1, st) + ' / ' + S.nextText('k_s2_b', 1, st));
     ok(S.text('r_el_b', 2, st).indexOf('within 120.') >= 0 && S.text('r_el_b', 3, st).indexOf('within 140') >= 0 && S.nextText('r_el_b', 1, st) === 'foes within 120', 'Contagion shows its total radius: ' + S.nextText('r_el_b', 1, st));
     ok(S.nextText('p_s2_b', 1, st) === 'impact (+40%)', 'Comet names what the +40% belongs to: ' + S.nextText('p_s2_b', 1, st));
   }

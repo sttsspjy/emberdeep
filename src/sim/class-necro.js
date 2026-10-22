@@ -5,7 +5,7 @@
   const W = ED.World.prototype;
   // COMP_MUL: minion damage factor. HEX_R: Hexed foes within this of the owner are rushed by its minions. CORPSE_T / CORPSE_N: longest age (s) and ring size of the corpse list. KNIGHT_MUL / KNIGHT_R: Bone Knight damage factor and body radius.
   // GRAVE_CD / YARD_CD / RISE_CD: seconds between Gravecaller, Boneyard and Rise Again raises. TIDE_LIFE: extra seconds of a Risen Tide minion. ABYSS_T: length of the Abyssal empower. BONE_CD: seconds between Bone Armor shields.
-  Object.assign(C, { COMP_MUL: 0.85, HEX_R: 400, CORPSE_T: 4, CORPSE_N: 16, KNIGHT_MUL: 1.5, KNIGHT_R: 13, GRAVE_CD: 1, YARD_CD: 2, RISE_CD: 1.5, TIDE_LIFE: 4, ABYSS_T: 6, BONE_CD: 12 });
+  Object.assign(C, { COMP_MUL: 0.85, HEX_R: 400, CORPSE_T: 4, CORPSE_N: 16, KNIGHT_MUL: 2, KNIGHT_R: 13, GRAVE_CD: 1, YARD_CD: 2, RISE_CD: 1.5, TIDE_LIFE: 4, ABYSS_T: 6, BONE_CD: 12 });
 
   // Raise Legion: minions fan out around the cursor point for the part's duration.
   ED.CAST.legion = function (p, a, data, st, N) {
@@ -57,7 +57,7 @@
     const mine = this.allies.filter(a => a.owner === owner.pid && a.life > 0);
     if (mine.length >= st.maxMinions) { mine.sort((a, b) => a.life - b.life); mine[0].life = 0; }
     const l = (life + (tide ? C.TIDE_LIFE : 0)) * (kn ? 1 + st.knightLife : 1);
-    this.allies.push({ id: U.uid(), owner: owner.pid, x, y, r: kn ? C.KNIGHT_R : 9, life: l, maxLife: l, cd: 0.5, face: 1, knight: kn, tide: !!tide, struck: false,
+    this.allies.push({ id: U.uid(), owner: owner.pid, x, y, r: kn ? C.KNIGHT_R : 9, life: l, maxLife: l, cd: 0.5, face: 1, knight: kn, tide: !!tide,
       dmg: ED.Stats.skillNums('legion', st).p.minion.dmg * (1 + st.minionDmg) });
     const ev = { t: 'raise', x: Math.round(x), y: Math.round(y), pid: owner.pid };
     if (tide) ev.k = 'tide'; else if (kind) ev.k = kind;
@@ -93,7 +93,7 @@
   }
 
   // One strike of minion a on foe tgt. Damage: the minion's strike x COMP_MUL x Bone Knight x Hexed (hexMul) x Abyssal empower x Risen Tide; physical, raw, infuses at MINION_INFUSE (+ minionInfuse).
-  // Grave Pact marks Doom for mInfShadow of the damage (Mark of Doom's rate x k counts instead when higher). The first foe a Bone Knight strikes is stunned (Ironbone); a Bone Knight also cleaves the foes within 30 of its target.
+  // Grave Pact marks Doom for mInfShadow of the damage (Mark of Doom's rate x k counts instead when higher). A Bone Knight's strike stuns its foe (knightStun, a repeating stun); a Bone Knight also cleaves the foes within 30 of its target.
   function strike(w, a, owner, tgt) {
     const st = owner.stats, k = C.MINION_INFUSE + st.minionInfuse, bit = 1 << owner.slot, base = a.dmg * C.COMP_MUL * (a.knight ? C.KNIGHT_MUL : 1) * (owner.abyssT > 0 ? 1 + st.abyssMin : 1) * (a.tide ? 1 + st.tideMul : 1);
     const infAdd = st.mInfShadow ? { shadow: Math.max(0, st.mInfShadow / k - st.shadowInfuse) } : undefined;
@@ -106,7 +106,7 @@
     a.face = tgt.x >= a.x ? 1 : -1;
     hit(tgt);
     if (!a.knight) return;
-    if (st.knightStun && !a.struck) { a.struck = true; if (tgt.hp > 0 && w.stunFoe(tgt, st.knightStun, false) > 0) w.emit({ t: 'kstun', x: Math.round(tgt.x), y: Math.round(tgt.y) }); }
+    if (st.knightStun && tgt.hp > 0 && w.stunFoe(tgt, st.knightStun, true) > 0) w.emit({ t: 'kstun', x: Math.round(tgt.x), y: Math.round(tgt.y) });
     for (const o of w.enemies) if (o !== tgt && o.hp > 0 && o.spawnT <= 0 && !o.def.invuln && !o.burrowed && U.dist2(o.x, o.y, tgt.x, tgt.y) <= (30 + o.r) ** 2) hit(o);
   }
 

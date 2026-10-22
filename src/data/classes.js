@@ -100,7 +100,7 @@
         { id: 'orbit', label: 'Orbit', if: 'orbit', of: 'strike', mul: 'orbitMul', per: 'hit', durKey: 'orbit', every: 0.75, r: 44, proc: true },
         { id: 'reflect', label: 'Returned shard', if: 'orbitReflect', of: 'strike', mul: 'orbitReflect', per: 'hit', range: 300, proc: true },
       ] },
-    volley: { name: 'Volley', slot: 0, cd: 5, icon: 'arrows', aim: 'dir', moveIf: { volleyHop: { k: 'hop', dist: 70, dir: -1, t: 0.15, iframes: 0.15 } },
+    volley: { name: 'Volley', slot: 0, cd: 5, icon: 'arrows', aim: 'dir', moveIf: { volleyHop: { k: 'hop', dist: 70, dir: -1, t: 0.25, iframes: 0.25 } },
       desc: 'Loose a wide fan of piercing arrows toward the cursor.',
       parts: [
         { id: 'arrow', label: 'Arrow', base: 4, pow: 1.2, per: 'hit', n: 7, fan: 1.2, pierce: 1, speed: 480, life: 0.8, pr: 5, knock: 60, proc: true, close: 110 },
@@ -137,7 +137,7 @@
       desc: 'Mark a point at the cursor. After a moment arrows fall on it, hitting every foe inside.',
       parts: [
         { id: 'tick', label: 'Arrows', ifNot: 'skyfall', base: 4, pow: 0.45, per: 'tick', every: 0.25, dur: 2, delay: 0.35, r: 80, proc: true },
-        { id: 'sky', label: 'Skyfall', if: 'skyfall', of: 'tick', times: 'ticks', per: 'hit', delay: 0.6, rOf: 'tick', rMul: 1.15, stun: 0.5, proc: true },
+        { id: 'sky', label: 'Skyfall', if: 'skyfall', of: 'tick', times: 'ticks', per: 'hit', delay: 0.5, rOf: 'tick', rMul: 1.3, stun: 0.5, proc: true },
         { id: 'sky2', label: 'Twin Sky', if: 'skyTwin', of: 'sky', mul: 'skyTwin', per: 'hit', delay: 0.8, rOf: 'sky', rMul: 1, proc: true },
         { id: 'shower', label: 'Second Shower', if: 'shower', of: 'tick', mul: 'shower', per: 'tick', every: 0.25, dur: 2, durFix: true, rOf: 'tick', rMul: 1, proc: true },
       ] },
@@ -159,7 +159,7 @@
     judgment: { name: 'Judgment', slot: 1, cd: 9, icon: 'hammer', aim: 'dir',
       desc: 'Throw a hammer toward the cursor that flies out and returns, piercing. Each leg hits a foe once and Judges it (+20% damage taken).',
       parts: [
-        { id: 'leg', label: 'Hammer', base: 18, pow: 1.4, per: 'hit', r: 18, el: 'class', mulIf: { twinHammer: 0.6 }, proc: true },
+        { id: 'leg', label: 'Hammer', base: 18, pow: 1.4, per: 'hit', r: 18, el: 'class', mulIf: { twinHammer: 0.55 }, proc: true },
         { id: 'verdict', label: 'Verdict', if: 'verdict', base: 20, pow: 3, per: 'hit', r: 70, el: 'class', stun: 0.4, proc: true },
       ] },
     harvest: { name: 'Bone Harvest', slot: 1, cd: 10, icon: 'harvest', aim: 'self',
@@ -185,7 +185,7 @@
     'meteor.rocks': { oneFoe: 0, note: 'each meteorite lands at random within 80' },
     'rain.tick': { selfVuln: { v: 0.2, if: 'rainHail' } },
     'rain.shower': { selfVuln: { v: 0.2, if: 'rainHail' } },
-    'judgment.leg': { oneFoe: 2, oneMul: { twinHammer: 2, thirdLeg: 2 }, selfVuln: 0.2, infAdd: { holy: 0.5 }, note: 'out and back' },
+    'judgment.leg': { oneFoe: 2, oneMul: { twinHammer: 2, thirdLeg: 1.25 }, selfVuln: 0.2, infAdd: { holy: 0.5 }, note: 'out and back' },
     'judgment.verdict': { oneFoe: 0, infAdd: { holy: 0.5 }, note: 'when a Judged foe dies' },
     'vanish.ambush': { note: 'your next attack' },
   };
@@ -244,7 +244,7 @@
     w.rate = rate; w.dmg = b.dmg * 1.1 * k; w.fork = kind; w.base = baseId;
     w.name = ED.FORK_NAMES[baseId + '@' + kind] || b.name;
     if (b.kind === 'melee') {
-      if (heavy) { w.range = b.range * 1.1; w.arc = Math.min(6.3, b.arc * 1.1); w.knock = Math.min(320, b.knock * 1.6); } else w.knock = b.knock * 0.5;
+      if (heavy) { w.range = b.range * 1.1; w.arc = Math.min(6.3, b.arc * 1.1); w.knock = Math.min(320, b.knock * 1.3); } else w.knock = b.knock * 0.5;
       if (b.shock) w.shock = { r: b.shock.r * (heavy ? 1.15 : 1), mul: b.shock.mul };
     } else {
       if (heavy) { w.r = b.r * 1.2; w.speed = b.speed * 0.9; w.life = b.life * 1.1; w.knock = Math.max(80, (b.knock || 40) * 2); }
