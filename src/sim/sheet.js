@@ -212,7 +212,7 @@
   // Pack assumptions of the Ranger forms. PACK_REF: the pack size a pack-only extra is written for (tools/sheet.js counts every extra once per foe of its pack). SIEGE_BLAST_HIT: share of siege bolts whose end blast catches a pack foe.
   // RIC_HIT: share of shots whose ricochet finds a second foe. PLAGUE_KEEP / PLAGUE_PACK: share of its pool inputs a dying foe (2+ ailments) still holds, and the pool input of a pack against one foe (skills hit every foe);
   // both and SPREAD_PAY (the share of a burst's value that a status spread pays) are fitted to a staged fight of a stratum III mid build against a pack of 4 trash foes. FESTER_UP: uptime of 3+ ailments for Gangrene.
-  const PACK_REF = 4, SIEGE_BLAST_HIT = 0.5, RIC_HIT = 0.8, PLAGUE_KEEP = 0.9, PLAGUE_PACK = 1.5, SPREAD_PAY = 0.5, FESTER_UP = 0.5;
+  const PACK_REF = 4, SIEGE_BLAST_HIT = 0.5, RIC_HIT = 0.8, PLAGUE_KEEP = 0.9, PLAGUE_PACK = 1.5, SPREAD_PAY = 0.5, FESTER_UP = 0.5, ASSASSINATE_AT = 0.4;
   // Assumptions of the Cleric attack forms (waves, class-cleric.js). FLARE_HIT: share of waves whose end burst (radius 50, written for the wave's far end) catches a given foe. WAKE_ON: seconds a foe stands on the strip of one wave
   // (the strip burns about 2.9 s and a foe in front of the Cleric is covered by about half of that). RET_HIT: share of returning waves that strike a foe the outward wave struck (foes chase the hero, the return leg ends on the hero).
   const FLARE_HIT = 0.3, WAKE_ON = 1.5, RET_HIT = 0.75;
@@ -356,9 +356,12 @@
     let raw = q.dmg || 0, oneFoe = q.oneFoe;
     // Cast-time factors skillNums leaves out (the casts apply them): Shield Storm throws two shields (Aegis Tempest three) at twinShield each, all reach a foe at REF; Comet's impact lands at 1 + comet.
     if (skillId === 'shieldthrow' && (st.twinShield > 0 || st.tempest > 0) && (q.id === 'strike' || q.id === 'return')) { raw *= st.twinShield > 0 ? st.twinShield : 1; oneFoe = st.tempest > 0 ? Math.round(st.tempest) : 2; }
-    else if (skillId === 'meteor' && q.id === 'impact' && st.comet > 0) raw *= 1 + st.comet;
+    else if (skillId === 'meteor' && q.id === 'impact' && st.comet > 0) raw *= (1 + st.comet) * (st.sunDive > 0 ? (1 + st.sunDive) / 2 : 1); // Sun Dive's second landing deals sunDive of the first: the mean of the two landings (oneFoe counts both)
+    else if (skillId === 'volley' && q.id === 'arrow' && q.ring && st.thornMul > 0) raw *= st.thornMul; // a Thornburst ring arrow deals thornMul x
     const fester = st.festerHit > 0 && FESTER_PARTS.has(skillId + '.' + q.id) ? 1 + st.festerHit * FESTER_UP : 1; // Gangrene: Volley and Rain hits on foes with 3+ ailments, at an assumed uptime
-    const hit = raw * M * fester * (sec ? 0.5 : 1);
+    const close = skillId === 'volley' && q.id === 'arrow' && st.volleyClose > 0 ? 1 + st.volleyClose : 1; // Scattershot: the reference foe stands inside the close range
+    const assn = skillId === 'step' && st.assassinate > 0 && (q.id === 'slash' || q.id === 'twin' || q.id === 'blossom') ? 1 + st.assassinate * ASSASSINATE_AT : 1; // Assassinate: the share of the time a foe stands below half health
+    const hit = raw * M * fester * close * assn * (sec ? 0.5 : 1);
     if (q.fan) { // a fan spreads its arrows over fan radians (a ring: evenly round the circle); a later wave (q.waves) repeats the fan
       const offs = [];
       for (let i = 0; i < q.n; i++) offs.push(q.ring ? i / q.n * q.fan : q.n > 1 ? (i / (q.n - 1) - 0.5) * q.fan : 0);
@@ -367,6 +370,7 @@
     if (q.ref) { let hits = 0; for (let k = 0; k < q.n; k++) if (q.ref * (q.n - 1 - k) / q.n <= q.r + Sh.REF.r) hits++; oneFoe = hits; } // Starfall: the impacts walk from the hero to a target q.ref px away; a foe there is in reach of some of them
     if (q.id === 'ambush' && skillId === 'vanish') oneFoe = wpn.oneFoe; // each of the weapon's hits carries the Ambush value
     else if (skillId === 'vanish' && (q.id === 'edge' || q.id === 'clone')) oneFoe = wpn.oneFoe * (q.attacks || 0); // the Eclipse repeats and the clone's attacks: one weapon attack each
+    if (skillId === 'judgment' && q.id === 'leg' && st.thirdLeg > 0) oneFoe *= 1 + st.secondFlight; // Second Flight: two more legs at secondFlight of a hit each, on the two of the first flight
     if (skillId === 'judgment' && q.id === 'leg' && st.storm > 0) { // Hammerstorm: the fan of hammers (step 0.25 rad) that reach a foe at REF, four legs each
       const n = Math.round(st.storm), offs = [];
       for (let i = 0; i < n; i++) offs.push((i - (n - 1) / 2) * 0.25);
@@ -380,6 +384,8 @@
     const avg = hit * (1 + kc * (cm - 1)), pre = avg * (1 + o.selfVuln), here = pre * aff;
     Object.assign(o, { kind: sec ? 'sec' : q.per === 'tick' ? 'tick' : 'hit', raw, hit, avg, pre, here, oneFoe: oneFoe === undefined ? 1 : oneFoe, critHit: hit * cm, kc, _hit: hit });
     if (sec) o.tick = hit;
+    if (skillId === 'shieldthrow' && q.id === 'strike') o.gather = st.gather; // Gathering Force: the pack rule of tools/model.js reads it
+    if (skillId === 'harvest' && (q.id === 'corpse' || q.id === 'shard')) { o.cap = st.corpse; o.shardN = st.carrionN; } // the corpse rules of tools/model.js read the corpse cap and the shards per corpse
     if (q.statusAdd) { // a status add riding on the hit (Meteor): a share of the damage before affinity, built with the status' own affinity and strength
       for (const k in q.statusAdd) {
         const S = ED.STATUS[k], a2 = S && S.el ? ED.elemMul(stratum, S.el) : 1, mul = S && S.mulKey ? 1 + (st[S.mulKey] || 0) : 1;
@@ -387,7 +393,9 @@
       }
     }
     o.total = (here + (o.statusAdd ? o.statusAdd.here : 0)) * o.oneFoe;
-    return finish(o, R);
+    const out = finish(o, R);
+    if (skillId === 'vanish' && q.id === 'edge') out._r.total = Math.max(0, here - wpn._avg) * o.oneFoe; // an Eclipse repeat replaces the normal hit of its attack: only the surplus counts in the sums
+    return out;
   }
   // Keeps the raw numbers in underscore fields (for sums), then rounds the visible ones.
   function finish(o, R) {
@@ -445,6 +453,10 @@
     const wpn = weaponModel(p, st, ctx, R);
     const skills = [];
     for (const [i, id] of [cls.skill, cls.skill2].entries()) if (id && ED.SKILLS[id]) skills.push(skillModel(id, i, p, st, ctx, wpn, R));
+    if (st.nightsEdge > 0 && skills.length > 1) { // Night's Edge: every Ambush refunds Shadowstep, so it casts once more per Vanish cooldown
+      const k = skills[0];
+      k._cd = 1 / (1 / k._cd + 1 / skills[1]._cd); k.dpsCd = R.n(k.perCast / k._cd);
+    }
     const M = Math.max(0.1, st.dmg), cm = st.critMult, c = st.crit, EC = 1 + c * (cm - 1);
 
     // dash: recharge per charge, charges, i-frames and the dash boons' hits
@@ -555,7 +567,7 @@
     if (st.mirror) S.push({ label: 'Mirror Shard', text: `${Math.round(st.mirror * 100)}% to shrug off a projectile` });
     if (st.braceDR && st.lich > 0) S.push({ label: 'Lich Form', text: `${Math.round(Math.min(0.4, st.braceDR) * 100)}% less damage for ${n1(st.lichT)} s after Bone Harvest` });
     else if (st.braceDR) S.push({ label: 'Brace', text: `${Math.round(Math.min(0.4, st.braceDR) * 100)}% less damage for ${n1(st.brace)} s after a Shield Charge (once per ${C.BRACE_CD} s)` });
-    if (p.cls === 'cleric') S.push({ label: 'Sanctuary', text: `allies inside take ${Math.round(Math.min(st.aegis > 0 ? C.DR_FLOOR : 0.4, 0.15 + st.sanctDR + st.aegisDR) * 100)}% less damage` });
+    if (p.cls === 'cleric') S.push({ label: 'Sanctuary', text: `allies inside take ${Math.round(Math.min(st.dawn > 0 ? C.DR_FLOOR : 0.4, 0.15 + st.sanctDR + st.aegisDR) * 100)}% less damage` });
     if (st.judgeWeak) S.push({ label: 'Verdict', text: `Judged foes deal ${Math.round(st.judgeWeak * 100)}% less damage (bosses half)` });
     if (st.chillWeaken) S.push({ label: 'Permafrost', text: `chilled foes deal ${Math.round(st.chillWeaken * 100)}% less damage` });
     if (st.frozenHeart) S.push({ label: 'Frozen Heart', text: 'when hit, freezes foes within 120 (8 s cooldown)' });
