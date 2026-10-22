@@ -1,6 +1,8 @@
 // Necromancer: Raise Legion and Bone Harvest (base kits from ED.SKILLS numbers), the minions (spawnMinion, updateAllies) and the route cards that act on them (Hex, Bone Spikes, Bone Knights, corpses, Bone Armor, Abyssal empower, Rise Again); hook table ED.CLS.necro.
 // Skill forms (rank 3): Ossuary Bloom (bone fields and bone bombs), Death Knight (one huge taunting knight), Carrion Storm (shards from every corpse), Lich Form (a window of soul bolts, double-life minions and Brace-channel damage reduction).
-// Allies carry k for the wire: 0 minion, 1 Death Knight, 2 bone bomb; a bomb is never a minion (no cap, no Harvest).
+// Attack and element forms (rank 3): Grave Bolt (every graveN-th attack pierces, hits harder and raises its kills), Soul Storm (a Hexed foe's hit sends a soul to another foe), Abyssal Maw (a Toll or a Reaped elite opens a damaging, minion-hastening maw),
+// Tide of the Dead (Rise Again minions outside the cap that burst Doom when they fall). Fodder never rises, empowers or opens a maw (kill hook).
+// Allies carry k for the wire: 0 minion, 1 Death Knight, 2 bone bomb, 3 free Tide minion; a bomb is never a minion (no cap, no Harvest).
 (function (ED) {
   'use strict';
   const U = ED.U, Sim = ED.Sim, C = ED.CONST;
@@ -9,8 +11,11 @@
   // GRAVE_CD / YARD_CD / RISE_CD: seconds between Gravecaller, Boneyard and Rise Again raises. TIDE_LIFE: extra seconds of a Risen Tide minion. ABYSS_T: length of the Abyssal empower. BONE_CD: seconds between Bone Armor shields.
   // DK_R / DK_LIFE / DK_HIT / DK_REACH / DK_SPEED: Death Knight body radius, durability (seconds of life; a blocked shot costs 1, a touching foe DK_HIT per second, elites twice), cleave reach and speed.
   // BOMB_N / BOMB_LIFE / BOMB_SPEED: bone bombs a Legion cast raises, their life and speed. SHARD_R / SHARD_SPEED: reach and speed of a Carrion Storm shard. LICH_A: half-angle of the Lich Form bolts beside the aimed one.
+  // GRAVE_WIDE: hit-radius factor of a Grave Bolt shot. SOUL_R / SOUL_CD: reach of a Soul Storm soul and seconds between two souls from one foe. MAW_R / MAW_T / MAW_TICK / MAW_NEAR: Abyssal Maw radius, life, damage interval and the reach of its minion haste.
+  // TIDE_CD: seconds between two Tide of the Dead raises. TIDE_R: radius of the burst of a Tide minion that falls.
   Object.assign(C, { COMP_MUL: 0.85, HEX_R: 400, CORPSE_T: 4, CORPSE_N: 16, KNIGHT_MUL: 2, KNIGHT_R: 13, GRAVE_CD: 1, YARD_CD: 2, RISE_CD: 1.5, TIDE_LIFE: 4, ABYSS_T: 6, BONE_CD: 12,
-    DK_R: 18, DK_LIFE: 40, DK_HIT: 0.4, DK_REACH: 54, DK_SPEED: 90, BOMB_N: 2, BOMB_LIFE: 5, BOMB_SPEED: 190, SHARD_R: 260, SHARD_SPEED: 480, LICH_A: 0.22 });
+    DK_R: 18, DK_LIFE: 40, DK_HIT: 0.4, DK_REACH: 54, DK_SPEED: 90, BOMB_N: 2, BOMB_LIFE: 5, BOMB_SPEED: 190, SHARD_R: 260, SHARD_SPEED: 480, LICH_A: 0.22,
+    GRAVE_WIDE: 2, SOUL_R: 150, SOUL_CD: 1, MAW_R: 60, MAW_T: 3, MAW_TICK: 0.25, MAW_NEAR: 120, TIDE_CD: 0.5, TIDE_R: 60 });
   const rnd = Math.round;
 
   // Raise Legion: minions fan out around the cursor point for the part's duration. Death Knight: the minions fall and one Death Knight stands in their place. Ossuary Bloom: BOMB_N bone bombs run out as well.
@@ -97,17 +102,19 @@
   // Raises a minion for the owner (the oldest falls when the cap is full). kind labels the rise effect (gc Gravecaller, yard Boneyard, again Rise Again); tide: a Risen Tide minion (lasts TIDE_LIFE longer, hits harder).
   // Bone Knights (the owner holds knights) are armoured: bigger, longer-lived by knightLife.
   // A Death Knight counts as 2 minions against the cap and is never the one that falls. Lich Form doubles the life of what the Necromancer raises in its window.
+  // Tide of the Dead (tideFree): a tide minion is free (k 3): it stays outside the minion cap and has its own cap of tideCap, its oldest falling first.
   W.spawnMinion = function (owner, x, y, life, kind, tide) {
-    const st = owner.stats, kn = st.knights > 0;
+    const st = owner.stats, kn = st.knights > 0, free = !!tide && st.tideFree > 0;
     const mine = this.allies.filter(a => a.owner === owner.pid && a.life > 0 && !a.bomb);
-    let used = 0; for (const m of mine) used += m.dk ? 2 : 1;
-    if (used >= st.maxMinions) { // the cap is full: the oldest minion falls; a Death Knight is never the one (nothing else to free: the raise is refused)
-      const old = mine.filter(m => !m.dk).sort((u, v) => u.life - v.life)[0];
+    let used = 0, nFree = 0;
+    for (const m of mine) { if (m.free) nFree++; else used += m.dk ? 2 : 1; }
+    if (free ? nFree >= Math.round(st.tideCap) : used >= st.maxMinions) { // the cap is full: the oldest minion of its kind falls; a Death Knight is never the one (nothing else to free: the raise is refused)
+      const old = mine.filter(m => !m.dk && !!m.free === free).sort((u, v) => u.life - v.life)[0];
       if (!old) return null;
       old.life = 0;
     }
     const l = (life + (tide ? C.TIDE_LIFE : 0)) * (kn ? 1 + st.knightLife : 1) * (owner.lichT > 0 ? st.lichLife : 1);
-    const a = { id: U.uid(), owner: owner.pid, x, y, r: kn ? C.KNIGHT_R : 9, life: l, maxLife: l, cd: 0.5, face: 1, knight: kn, tide: !!tide, k: 0,
+    const a = { id: U.uid(), owner: owner.pid, x, y, r: kn ? C.KNIGHT_R : 9, life: l, maxLife: l, cd: 0.5, face: 1, knight: kn, tide: !!tide, free, k: free ? 3 : 0,
       dmg: ED.Stats.skillNums('legion', st).p.minion.dmg * (1 + st.minionDmg) };
     this.allies.push(a);
     const ev = { t: 'raise', x: Math.round(x), y: Math.round(y), pid: owner.pid };
@@ -154,6 +161,51 @@
     this.bloomField(owner, a.x, a.y);
   };
 
+  // Tide of the Dead: a free minion that expires or is replaced bursts (TIDE_R) and marks Doom worth tideDoom of its strike on every foe inside; a Reap it causes may raise, bursts of fodder Reap too.
+  W.tideBurst = function (owner, a) {
+    const st = owner.stats, amount = st.tideDoom * a.dmg * C.COMP_MUL * (a.tide ? 1 + st.tideMul : 1);
+    const q = this.foeScan(a.x, a.y, C.TIDE_R);
+    for (let k = 0; k < q.length || this.foeTail(q); k++) {
+      const e = q[k];
+      if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed || U.dist2(e.x, e.y, a.x, a.y) >= (C.TIDE_R + e.r) ** 2) continue;
+      this.addDoom(e, amount, owner);
+    }
+    this.foeEnd();
+    this.emit({ t: 'boom', x: rnd(a.x), y: rnd(a.y), r: C.TIDE_R, k: 'shadow', d: 1 });
+  };
+
+  // Abyssal Maw: a custom zone (wire: shards, w 11, arc 1) of radius MAW_R for MAW_T s that pays maw x amount per second every MAW_TICK s as Shadow (the Doom behind amount already carries the affinity).
+  // A Tolled boss (follow) keeps the maw under itself, takes the damage alone and ends it by falling; a Reaped elite leaves it where it stood and every foe inside pays. The owner's minions near a live maw strike faster (inMaw).
+  function openMaw(w, p, e, amount, follow) {
+    p.maws = p.maws.filter(q => q.t < q.dur);
+    const z = w.addZone({ kind: 'shards', w: 11, arc: 1, x: e.x, y: e.y, r: C.MAW_R, dur: C.MAW_T, team: 0, owner: p.pid, custom: true, nx: C.MAW_TICK,
+      update(wd, zz) {
+        if (follow) { if (follow.hp > 0) { zz.x = follow.x; zz.y = follow.y; } else { zz.dur = zz.t; return; } }
+        while (zz.t + 1e-9 >= zz.nx && zz.nx <= zz.dur + 1e-9) {
+          zz.nx += C.MAW_TICK;
+          const dmg = amount * p.stats.maw * C.MAW_TICK, src = { p, kind: 'dot', raw: true, noProc: true, crit: false, noGuard: true, el: 'shadow', affDone: true, part: 'abyss.maw' };
+          if (follow) { wd.hitEnemy(follow, dmg, src); continue; }
+          const q = wd.foeScan(zz.x, zz.y, zz.r);
+          for (let k = 0; k < q.length || wd.foeTail(q); k++) {
+            const f = q[k];
+            if (f.hp > 0 && f.spawnT <= 0 && U.dist2(f.x, f.y, zz.x, zz.y) < (zz.r + f.r) ** 2) wd.hitEnemy(f, dmg, src);
+          }
+          wd.foeEnd();
+        }
+      } });
+    p.maws.push(z);
+  }
+  // True while minion a stands within MAW_NEAR of a live maw of its owner (spent maws leave the list).
+  function inMaw(owner, a) {
+    const L = owner.maws;
+    for (let i = L.length - 1; i >= 0; i--) {
+      const z = L[i];
+      if (z.t >= z.dur) { L.splice(i, 1); continue; }
+      if (U.dist2(z.x, z.y, a.x, a.y) <= C.MAW_NEAR * C.MAW_NEAR) return true;
+    }
+    return false;
+  }
+
   // The Hexed foe (Hexed by this owner's slot) nearest the owner within HEX_R, or null.
   function hexTarget(w, owner) {
     const bit = 1 << owner.slot;
@@ -176,6 +228,7 @@
   }
 
   // One strike of minion a on foe tgt. Damage: the minion's strike x COMP_MUL x Bone Knight x Hexed (hexMul) x Abyssal empower x Risen Tide; physical, raw, infuses at MINION_INFUSE (+ minionInfuse).
+  // Quickened Dead cuts the strike interval against a Hexed foe, Abyssal Maw divides it by 1 + mawHaste near a live maw.
   // Grave Pact marks Doom for mInfShadow of the damage (Mark of Doom's rate x k counts instead when higher). A Bone Knight's strike stuns its foe (knightStun, a repeating stun); a Bone Knight also cleaves the foes within 30 of its target.
   // The Death Knight deals dkMul instead of the Bone Knight factor and cleaves every foe within DK_REACH of it inside an arc of dkArc centred on its target.
   function strike(w, a, owner, tgt) {
@@ -186,7 +239,7 @@
       const dd = Math.hypot(e.x - a.x, e.y - a.y) || 1;
       w.hitEnemy(e, base * (isHexed(e) ? 1 + st.hexMul : 1), { p: owner, kind: 'minion', comp: true, knock: 40, kx: (e.x - a.x) / dd, ky: (e.y - a.y) / dd, raw: true, infK: k, infAdd });
     };
-    a.cd = (a.knight ? 0.5 : 0.7) * (isHexed(tgt) ? 1 - st.hexHaste : 1);
+    a.cd = (a.knight ? 0.5 : 0.7) * (isHexed(tgt) ? 1 - st.hexHaste : 1) / (st.maw > 0 && inMaw(owner, a) ? 1 + st.mawHaste : 1);
     a.face = tgt.x >= a.x ? 1 : -1;
     hit(tgt);
     if (!a.knight) return;
@@ -240,6 +293,7 @@
       a.cd -= dt;
       if (a.life <= 0 || !owner) {
         if (owner && owner.stats.boneSpikes) this.boneSpikes(owner, a);
+        if (owner && a.free) this.tideBurst(owner, a);
         this.emit({ t: 'puff', x: a.x, y: a.y, c: '#7dffd9' });
         a.dead = true;
         continue;
@@ -273,53 +327,112 @@
   // Abyssal empower: the hero's minions deal +abyssMin for ABYSS_T seconds.
   function abyss(w, p) { p.abyssT = C.ABYSS_T; w.emit({ t: 'abyss', pid: p.pid }); }
 
+  // Grave Bolt: the weapon shots the attack just spawned (distance flown 0, weapon shots only) become Grave Bolts: they pierce every foe, are GRAVE_WIDE times as wide, deal graveBolt times the damage and hit as part 'grave.bolt' (the kill hook raises their kills).
+  // A bolt's cloud (Plague Staff) is held back and laid where the bolt ends (projEnd, or on a guard in projHit).
+  function graveShots(w, p, st) {
+    for (const pr of w.projs) {
+      if (pr.dist !== 0 || pr.owner !== p.pid || !pr.wpn || pr.hk || pr.team !== 0 || pr.grave) continue;
+      pr.grave = true; pr.kind = 'soul'; pr.pierce = 999; pr.r *= C.GRAVE_WIDE; pr.mul = (pr.mul || 1) * st.graveBolt; pr.part = 'grave.bolt';
+      if (pr.cloud) { pr.graveCloud = pr.cloud; pr.cloud = null; }
+    }
+  }
+  function graveCloud(w, pr) { if (pr.graveCloud) { const c = pr.graveCloud; pr.graveCloud = null; w.spawnCloud(pr.owner, pr.x, pr.y, c); } }
+
+  // Soul Storm: a weapon hit on a foe the hero had Hexed (dmg: what the hit dealt) releases a soul at the nearest other foe within SOUL_R, one the hero has not Hexed first, once per SOUL_CD per foe.
+  // The soul is a raw weapon hit (the Hex and the statuses of a weapon hit follow it) of soulStorm times the damage; part 'soul.storm' never releases another.
+  function soulStorm(w, p, e, dmg) {
+    if ((e.stormT || 0) > w.time) return;
+    const bit = 1 << p.slot, R2 = C.SOUL_R * C.SOUL_R, q = w.foeScan(e.x, e.y, C.SOUL_R);
+    let fresh = null, fd = R2, hexed = null, hd = R2;
+    for (let k = 0; k < q.length; k++) {
+      const o = q[k];
+      if (o === e || o.hp <= 0 || o.spawnT > 0 || o.def.invuln || o.burrowed) continue;
+      const d2 = U.dist2(o.x, o.y, e.x, e.y);
+      if (!(o.hexT > 0 && (o.hexBy & bit))) { if (d2 < fd) { fd = d2; fresh = o; } } else if (d2 < hd) { hd = d2; hexed = o; }
+    }
+    w.foeEnd();
+    const t = fresh || hexed;
+    if (!t) return;
+    e.stormT = w.time + C.SOUL_CD;
+    w.emit({ t: 'soulstorm', x: rnd(e.x), y: rnd(e.y - e.r * 0.5), x1: rnd(t.x), y1: rnd(t.y - t.r * 0.5), pid: p.pid });
+    w.hitEnemy(t, dmg * p.stats.soulStorm, { p, kind: 'weapon', wpn: true, raw: true, noGuard: true, part: 'soul.storm', x: e.x, y: e.y });
+  }
+
   ED.CLS.necro = {
-    init(p) { p.yardAt = -99; p.lichT = 0; }, // world time of the last Boneyard raise; seconds left of the Lich Form window
+    init(p) { p.yardAt = -99; p.lichT = 0; p.maws = []; p.graveSwing = false; }, // world time of the last Boneyard raise; seconds left of the Lich Form window; live Abyssal Maw zones; true while a Grave Bolt swing runs
     tick(p, dt) { if (p.lichT > 0) p.lichT -= dt; },
-    // Lich Form: inside the window every attack adds two soul bolts (a seeking weapon shot at lichMul of a hit, either side of the aim) whatever the weapon
-    attack(p, a, st) {
+    // Grave Bolt on a scythe: the graveN-th swing deals graveBolt times the damage (the flag spans the swing so the kill hook knows its kills)
+    attackOpts(p, st) {
+      if (!(st.graveBolt > 0) || !(st.graveN > 0) || st.weapon.kind !== 'melee' || p.atkCount % st.graveN) return null;
+      p.graveSwing = true;
+      return { mul: st.graveBolt };
+    },
+    // Grave Bolt: every graveN-th ranged attack. Lich Form: inside the window every attack adds two soul bolts (a seeking weapon shot at lichMul of a hit, either side of the aim) whatever the weapon
+    attack(p, a, st, w) {
+      p.graveSwing = false;
+      if (st.graveBolt > 0 && st.graveN > 0 && w.kind === 'proj' && p.atkCount % st.graveN === 0) graveShots(this, p, st);
       if (!(p.lichT > 0) || !(st.lich > 0)) return;
       for (let s = -1; s <= 1; s += 2) this.spawnProj({ team: 0, kind: 'soul', x: p.x, y: p.y - 4, a: a + s * C.LICH_A, speed: 350, r: 5, dmg: st.weapon.dmg * st.lichMul, life: 1.0, pierce: 0, owner: p.pid, knock: 40, homing: 4, wpn: true });
     },
+    // A Grave Bolt stopped by a guard still lays its held cloud; a bolt that ends in the air or on a wall lays it at once
+    projHit(pr, e, hs) { if (pr.graveCloud && hs.guarded) graveCloud(this, pr); },
+    projEnd(pr) { if (pr.graveCloud) graveCloud(this, pr); },
     // Soul Barrage: foes the hero Hexed take +hexSelf from the hero (added to the hero multiplier)
     hitMul(p, e) { return p.stats.hexSelf && e.hexT > 0 && (e.hexBy & (1 << p.slot)) ? p.stats.hexSelf : 0; },
-    // Soul Command: a weapon hit Hexes its foe for hex seconds; Hex Burst (hexSpread) spreads it to the foes within hexSpread of the hit
+    // Soul Command: a weapon hit Hexes its foe for hex seconds; Hex Burst (hexSpread) spreads it to the foes within hexSpread of the hit (a hexburst event when it Hexed a new foe); Soul Storm: a direct hit on a foe that was Hexed already sends a soul on (a soulstorm event)
     hitDone(p, e, dmg, crit, src) {
       const st = p.stats;
       if (!st.hex || !src.wpn || e.hp <= 0) return;
+      const was = e.hexT > 0 && (e.hexBy & (1 << p.slot));
       hexFoe(e, st.hex, p);
-      if (st.hexSpread) for (const o of this.enemies) if (o !== e && o.hp > 0 && o.spawnT <= 0 && !o.def.invuln && U.dist2(o.x, o.y, e.x, e.y) <= (st.hexSpread + o.r) ** 2) hexFoe(o, st.hex, p);
+      if (st.hexSpread) {
+        const q = this.foeScan(e.x, e.y, st.hexSpread), bit = 1 << p.slot;
+        let fresh = 0;
+        for (let k = 0; k < q.length; k++) {
+          const o = q[k];
+          if (o === e || o.hp <= 0 || o.spawnT > 0 || o.def.invuln || U.dist2(o.x, o.y, e.x, e.y) > (st.hexSpread + o.r) ** 2) continue;
+          if (!(o.hexT > 0 && (o.hexBy & bit))) fresh++;
+          hexFoe(o, st.hex, p);
+        }
+        this.foeEnd();
+        if (fresh) this.emit({ t: 'hexburst', x: rnd(e.x), y: rnd(e.y), r: st.hexSpread, pid: p.pid });
+      }
+      if (st.soulStorm > 0 && was && src.kind === 'weapon' && src.part !== 'soul.storm') soulStorm(this, p, e, dmg);
     },
-    // Every death: Corpse Explosion keeps a ring of recent corpses while some hero owns it. The Necromancer's own kills: Abyssal empower on a Reaped elite; Boneyard, Gravecaller and Rise Again raise one guaranteed minion
-    // (replacing the luck roll for that kill, each limited by its own cooldown); else a foe it kills may rise as a minion for 10 s (12% + the weapon's raise)
+    // Every death: Corpse Explosion keeps a ring of recent corpses while some hero owns it. The Necromancer's own kills: a fodder foe never rises, empowers or opens a maw; Abyssal empower and Abyssal Maw on a Reaped elite;
+    // Boneyard, Gravecaller and Rise Again raise one guaranteed minion (replacing the luck roll for that kill, each limited by its own cooldown; a Grave Bolt kill has none); else a foe it kills may rise as a minion for 10 s (12% + the weapon's raise)
     kill(e, p, src) {
       if (!e.boss) {
         for (const q of this.players.values()) if (q.stats.corpse) { this.corpses.push({ x: e.x, y: e.y, t: this.time }); if (this.corpses.length > C.CORPSE_N) this.corpses.shift(); break; }
       }
-      if (!p || p.cls !== 'necro' || e.boss || src.kind === 'minionBurst') return;
+      if (!p || p.cls !== 'necro' || e.boss || src.kind === 'minionBurst' || e.fodder) return;
       const st = p.stats;
-      if (src.kind === 'reap' && e.elite && st.abyssMin) abyss(this, p);
-      if (e.fodder) return; // fodder never rises
+      if (src.kind === 'reap' && e.elite) {
+        if (st.abyssMin) abyss(this, p);
+        if (st.maw > 0) openMaw(this, p, e, e.doom, null);
+      }
       if (st.spikeRaise && src.part === 'legion.spikes') {
         if (this.time >= p.yardAt + C.YARD_CD) { p.yardAt = this.time; this.spawnMinion(p, e.x, e.y, 10, 'yard'); }
         return;
       }
       if (st.wRaise && src.wpn) {
-        if (p.raiseT <= 0) { p.raiseT = C.GRAVE_CD; this.spawnMinion(p, e.x, e.y, 10, 'gc'); }
+        const grave = st.graveBolt > 0 && (src.part === 'grave.bolt' || (p.graveSwing && src.kind === 'weapon'));
+        if (grave || p.raiseT <= 0) { if (!grave) p.raiseT = C.GRAVE_CD; this.spawnMinion(p, e.x, e.y, 10, 'gc'); }
         return;
       }
       if (st.reapRaise && src.kind === 'reap') {
-        if (p.raiseT <= 0) { p.raiseT = C.RISE_CD; this.spawnMinion(p, e.x, e.y, 10, 'again', st.tideMul > 0); }
+        if (p.raiseT <= 0) { p.raiseT = st.tideFree > 0 ? C.TIDE_CD : C.RISE_CD; this.spawnMinion(p, e.x, e.y, 10, 'again', st.tideMul > 0); }
         return;
       }
       if (this.rng.chance(0.12 + (st.weapon.raise || 0))) this.spawnMinion(p, e.x, e.y, 10);
     },
-    // A boss Toll: Abyssal empower, and Rise Again raises a minion beside the boss on the Necromancer's side
-    toll(p, boss) {
+    // A boss Toll of d damage: Abyssal empower, an Abyssal Maw under the boss, and Rise Again raises a minion beside the boss on the Necromancer's side
+    toll(p, boss, d) {
       const st = p.stats;
       if (st.abyssMin) abyss(this, p);
+      if (st.maw > 0 && boss.hp > 0) openMaw(this, p, boss, d, boss);
       if (!st.reapRaise || boss.hp <= 0) return;
-      const an = Math.atan2(p.y - boss.y, p.x - boss.x), d = boss.r + 18, m = { x: boss.x + Math.cos(an) * d, y: boss.y + Math.sin(an) * d, r: 9 };
+      const an = Math.atan2(p.y - boss.y, p.x - boss.x), d0 = boss.r + 18, m = { x: boss.x + Math.cos(an) * d0, y: boss.y + Math.sin(an) * d0, r: 9 };
       Sim.resolve(m, this.room, this.locked, false);
       this.spawnMinion(p, m.x, m.y, 10, 'again', st.tideMul > 0);
     },

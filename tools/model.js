@@ -11,7 +11,7 @@ module.exports = (ED, opts) => {
     const w = m.weapon, st = null; void st;
     const hitsBase = w.kind === 'melee' ? n : Math.min(n, (w.n || 1) * (1 + (w.pierce || 0)));
     let sum = w._avg * hitsBase;
-    for (const e of w._extras) sum += e.perAttack * (e.label === 'Twin Fang' ? hitsBase / (w.oneFoe || 1) : ONE_STREAM.has(e.label) ? 1 : FEW[e.label] ? Math.min(n, FEW[e.label]) : e.pack ? Math.min(n, e.pack) : n) * (e.packMul === undefined ? 1 : e.packMul); // pack: the pack foes the extra reaches; packMul: its value per pack foe over its one-foe value
+    for (const e of w._extras) sum += e._pack ? e._pack(n) : e.perAttack * (e.label === 'Twin Fang' ? hitsBase / (w.oneFoe || 1) : ONE_STREAM.has(e.label) ? 1 : FEW[e.label] ? Math.min(n, FEW[e.label]) : e.pack ? Math.min(n, e.pack) : n) * (e.packMul === undefined ? 1 : e.packMul); // pack: the pack foes the extra reaches; packMul: its value per pack foe over its one-foe value
     return sum * w._aps;
   }
   // Extras that do not grow with the pack: the two Lich bolts seek one foe each (the same total), Guardian Light's Smites ride the one Smite stream the status estimate counts; a Solar Flare burst (radius 50) and a Dawn's Wake strip (44 wide) catch about two foes of a pack.

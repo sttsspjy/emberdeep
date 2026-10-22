@@ -460,6 +460,7 @@
     smiteForms(st, wpn, proc, s, R);
     pyroForms(st, wpn, skills, proc, ref, s, R);
     if (st.contagion > 0) poolExtras(wpn, st, proc, s, R);
+    if (p.cls === 'necro') { const ex = necroForms(st, wpn, skills, proc, ref, s, R); if (ex.length) { for (const e of ex) wpn._extras.push(e); refit(wpn, R); } }
 
     // offense multipliers, each with its sources
     const mult = {}, dmgExtra = [], atkExtra = [], rate = St.attackRate(p);
@@ -745,10 +746,95 @@
     }
     refit(wpn, R);
   }
+
+  // ---------------- Necromancer attack and element forms ----------------
+  // Fitted assumptions (the sheet reads a lone foe and a pack of PACK_REF; tools/sheet-check.js measures the staged parts that a fight can isolate).
+  // Hex: HEX_ONE the share of your hits that land on a foe already Hexed; HEX_BASE the share of a pack your weapon keeps Hexed on its own (a hit Hexes the foe it strikes for 3 s); HEX_PACK_R the radius a pack stands in (Hex Burst Hexes spread / HEX_PACK_R of the rest);
+  // GRAVE_HEX / STORM_HEX the share of the rest that a Grave Bolt's line / the souls of Soul Storm Hex; GRAVE_LINE the foes of a pack on a Grave Bolt's line; SOUL_FOES the foes a projectile weapon strikes per second in a pack (a homing shot picks one at a time, a swing hits the pack).
+  // Doom cards act on elites and bosses only: the lone foe of a Focus build is a boss (it Tolls: Toll bonus, Maw), the pack holds an elite TOUGH_PACK of the time (it is Reaped: empower, Maw on its neighbours), ELITE_UP the share of an elite fight that a 6 s empower or a 3 s maw covers.
+  // Rise Again: REAP_FRAC the share of kills that are Reaps, PACK_KILLS the kill-rate factor of a pack, FREE_ONE / FREE_PACK the share of the Tide cap that stands alive in the lone-foe / pack column.
+  const HEX_ONE = 0.95, HEX_BASE = 0.5, HEX_PACK_R = 90, GRAVE_HEX = 0.25, STORM_HEX = 0.7, GRAVE_LINE = 2.5, SOUL_FOES = 2;
+  const TOUGH_PACK = 0.5, ELITE_UP = 0.3, REAP_FRAC = 0.7, PACK_KILLS = 1.4, FREE_ONE = 0.6, FREE_PACK = 0.9;
+  // The share of a pack of n foes that carries the hero's Hex: the weapon alone, then Hex Burst, the line of a Grave Bolt and the souls of Soul Storm each reach a share of the rest.
+  function hexCov(st, n) {
+    if (n < 2) return 1;
+    let c = HEX_BASE;
+    if (st.hexSpread > 0) c += (1 - c) * Math.min(1, st.hexSpread / HEX_PACK_R);
+    if (st.graveBolt > 0) c += (1 - c) * GRAVE_HEX;
+    if (st.soulStorm > 0) c += (1 - c) * STORM_HEX;
+    return c;
+  }
+  // The Hex, Grave Bolt, Soul Storm, Abyssal and Tide effects of class-necro.js as weapon extras (damage per attack on one foe; _pack(n): the total per attack in a pack of n). Per-second values are divided by the attack rate.
+  function necroForms(st, wpn, skills, proc, ref, s, R) {
+    const aps = wpn._aps, avg = wpn._avg, melee = wpn.kind === 'melee', M = Math.max(0.1, st.dmg), one = wpn.oneFoe, hasHex = st.hex > 0, mine = [];
+    const pow = 1 + st.statusPow, kM = C.MINION_INFUSE + st.minionInfuse, aff = ED.elemMul(s, 'shadow') * (1 + st.doomMul), toughK = C.DOOM_TOUGH + st.doomTough;
+    const hb = (n) => (melee ? n : Math.min(n, (wpn.n || 1) * (1 + (wpn.pierce || 0)))); // foes one attack's normal hits reach (tools/model.js packWeapon)
+    let minionDps = 0, minionDoom = 0, minions = 0, strike = 0, dpsOne = avg * one * aps;
+    const spells = [];
+    for (const e of wpn._extras) if (!e.packOnly) dpsOne += e.perAttack * aps;
+    for (const sk of skills) for (const m of sk.parts) {
+      if (m.kind === 'zone' || m.kind === 'status') continue;
+      const d = m._r.total / sk._cd;
+      dpsOne += d;
+      if (m.kind === 'minion') { minionDps += d; minions = Math.max(minions, m.minions); strike = m._r.pre; minionDoom += d * Math.max(st.shadowInfuse * kM, st.mInfShadow) * pow; } else spells.push({ d, area: m.r > 0 });
+    }
+    const add = (label, one1, pack, note, o) => mine.push(Object.assign({ label, perAttack: one1 / aps, proc: false, note, _pack: (n) => pack(n) / aps }, o));
+    // Grave Bolt: every graveN-th attack, its shots (or a scythe swing) deal graveBolt times the damage; a shot pierces the pack along its line
+    let graveOne = 0, gravePack = () => 0;
+    if (st.graveBolt > 0 && st.graveN > 0) {
+      const gb = st.graveBolt, ev = st.graveN, shots = melee ? 1 : (wpn.n || 1);
+      graveOne = avg * one * (gb - 1) / ev * aps;
+      gravePack = (n) => (melee ? avg * n * (gb - 1) : avg * (shots * gb * Math.min(n, Math.max(1 + (wpn.pierce || 0), GRAVE_LINE)) - hb(n))) / ev * aps;
+      add('Grave Bolt', graveOne, gravePack, `every ${ordinal(ev)} attack: ×${trim(gb.toFixed(2))} damage${melee ? '' : ', twice as wide, pierces every foe'}; its kills rise`, { proc: true, crit: true });
+    }
+    // Soul Storm: a Hexed foe your weapon hits sends a soul (soulStorm of the hit) to another foe once per second; a lone foe has none to send it to
+    if (st.soulStorm > 0 && hasHex) {
+      const dealt = avg * (1 + st.hexSelf / M);
+      const storm = (n) => (n < 2 ? 0 : Math.min(n, melee ? n : SOUL_FOES) * HEX_ONE * st.soulStorm * dealt);
+      add('Soul Storm', storm(PACK_REF) / PACK_REF, storm, `a Hexed foe you hit sends a soul to another foe once per second, ${Math.round(st.soulStorm * 100)}% of the hit, in a pack`, { packOnly: true });
+    }
+    // Soul Barrage: your hits and area skills deal hexSelf more to Hexed foes (the minions are raw hits and read hexMul instead)
+    if (st.hexSelf > 0 && hasHex) {
+      const k = st.hexSelf / M, spell1 = spells.reduce((t, q) => t + q.d, 0);
+      add('Hexed foes', (avg * one * aps + graveOne + spell1) * k * HEX_ONE, (n) => (avg * hb(n) * aps + gravePack(n) + spells.reduce((t, q) => t + q.d * (q.area ? n : 1), 0)) * k * hexCov(st, n), `your weapon and skills deal +${Math.round(st.hexSelf * 100)}% to Hexed foes (about ${Math.round(HEX_ONE * 100)}% of your hits on one foe)`);
+    }
+    // Soul Command, Quickened Dead: Hexed foes take hexMul more from minions and the minions strike hexHaste faster; minions rush a Hexed foe whenever one lives
+    if (hasHex && minionDps > 0 && (st.hexMul > 0 || st.hexHaste > 0)) {
+      const f = (1 + st.hexMul) / (1 - st.hexHaste) - 1;
+      add('Hexed minions', minionDps * f, (n) => minionDps * f * (1 - (1 - hexCov(st, n)) ** 2), `minions strike Hexed foes ${Math.round(st.hexMul * 100)}% harder${st.hexHaste > 0 ? ' and ' + Math.round(st.hexHaste * 100) + '% faster' : ''}`);
+    }
+    // Abyssal Toll, Abyssal Maw: damage per second on a boss (the lone-foe column) or an elite (the pack column, TOUGH_PACK of the time). doomI: the Doom such a foe collects per second; a boss pays it back as Tolls, an elite is Reaped by it, both about 1:1.
+    // The Toll gap (a Toll per TOLL_AT of the boss' health in Doom) sets how often a boss' 6 s empower and 3 s maw run; an elite's covers ELITE_UP of its fight.
+    const doomI = (proc.rate.shadow || 0) * aff * toughK, boss = (n) => (n < 2 ? 1 : 0), tough = (n) => (n < 2 ? 1 : TOUGH_PACK);
+    if (doomI > 0 && (st.tollMul > 0 || st.abyssMin > 0 || st.maw > 0)) {
+      const gap = C.TOLL_AT * ED.ENEMIES[ED.biomeFor(s).boss].hp / doomI, up = (T, n) => boss(n) * Math.min(1, T / gap) + (1 - boss(n)) * ELITE_UP;
+      const toll = (n) => tough(n) * (doomI * st.tollMul * boss(n) + minionDps * st.abyssMin * up(C.ABYSS_T, n) + (st.abyssDoom > 0 ? minionDoom * aff * toughK * st.abyssDoom * (1 + st.tollMul * boss(n)) : 0));
+      if (st.tollMul > 0 || st.abyssMin > 0) add('Abyssal Toll', toll(1), toll, `on bosses and elites: Tolls +${Math.round(st.tollMul * 100)}%, minions +${Math.round(st.abyssMin * 100)}% after a Toll or a Reaped elite${st.abyssDoom > 0 ? ', minion Doom doubled' : ''}`);
+      if (st.maw > 0) {
+        const maw = (n) => tough(n) * (doomI * (1 + st.tollMul) * st.maw * C.MAW_T * boss(n) + (n < 2 ? 0 : doomI * st.maw * C.MAW_T * Math.min(2, n - 1)) + minionDps * st.mawHaste * up(C.MAW_T, n));
+        add('Abyssal Maw', maw(1), maw, `a Toll or a Reaped elite opens a maw for ${C.MAW_T} s: foes in it take ${Math.round(st.maw * 100)}% of the Toll per second, minions near it strike ${Math.round(st.mawHaste * 100)}% faster`);
+      }
+    }
+    // Risen Tide, Tide of the Dead: the minions risen from Reaps (rate: Reaps per second, the Reap share of the kills a hero's damage makes, held by the raise limit). Risen Tide buffs the share of the army they fill;
+    // Tide of the Dead adds tideCap free minions (an alive share of the cap) and their falling bursts of Doom, 1:1 damage on trash
+    if (st.reapRaise > 0 && minionDps > 0 && minions > 0) {
+      const life = 10 + C.TIDE_LIFE, per = minionDps / minions, kills = REAP_FRAC * dpsOne / ref.hp, rises = (n) => Math.min(1 / (st.tideFree > 0 ? C.TIDE_CD : C.RISE_CD), kills * (n < 2 ? 1 : PACK_KILLS));
+      if (st.tideFree > 0) {
+        const alive = (n) => Math.min(st.tideCap * (n < 2 ? FREE_ONE : FREE_PACK), rises(n) * life), tm = 1 + st.tideMul;
+        const tide = (n) => alive(n) * per * tm + alive(n) / life * (n < 2 ? 1 : Math.min(n, 3)) * st.tideDoom * strike * tm * aff;
+        add('Tide of the Dead', tide(1), tide, `${trim(st.tideCap.toFixed(1))} extra minions outside the cap (about ${Math.round(FREE_ONE * 100)}% alive on one foe), each bursting Doom when it falls`);
+      } else if (st.tideMul > 0) {
+        const tide = (n) => minionDps * st.tideMul * Math.min(1, rises(n) * life / Math.max(1, st.maxMinions));
+        add('Risen Tide', tide(1), tide, `minions risen from Reaps strike ${Math.round(st.tideMul * 100)}% harder and last longer`);
+      }
+    }
+    return mine;
+  }
+
   // Rebuilds the weapon model's totals and extras list after an extra was pushed on wpn._extras.
   function refit(wpn, R) {
     let sum = 0;
-    for (const e of wpn._extras) if (!e.packOnly) sum += e.perAttack; // a pack-only extra needs a second foe: it stays out of the damage on one foe
+    for (const e of wpn._extras) if (!e.packOnly) sum += e.perAttack;
     wpn.dps = R.n((wpn._avg * wpn.oneFoe + sum) * wpn._aps); wpn.dpsAll = R.n((wpn._avg * wpn.n + sum) * wpn._aps);
     wpn.extras = wpn._extras.map(e => Object.assign({}, e, { perAttack: R.n(e.perAttack), perSec: R.n(e.perAttack * wpn._aps) }));
   }

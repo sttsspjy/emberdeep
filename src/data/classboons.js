@@ -219,10 +219,12 @@
     desc: 'Your weapon deals +{wDmg} and Hexes what it hits for {hex:s}. Your minions rush the Hexed foe nearest you and deal +{hexMul} to Hexed foes.', mods: { wDmg: 0.2, hex: 3, hexMul: 0.2 } });
   card('necro', 'attack', 2, 'n_atk_h', { name: 'Gravecaller', icon: 'skull', tag: 'Heavy', weapon: { kind: 'heavy' },
     desc: 'Heavy weapon (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit, Stagger): each foe your weapon kills rises as a minion for 10 s (at most once per second).[ Hexed foes take +{hexMul} more from minions.]',
-    rider: "Hex Burst: your weapon's Hex also lands on foes within {hexSpread:n} of the hit.", mods: { wRaise: 1 }, up: { hexMul: 0.1 }, r3: { hexSpread: 50 } });
+    rider2: "Hex Burst: your weapon's Hex also lands on foes within {hexSpread:n} of the hit.", mods: { wRaise: 1 }, up: { hexMul: 0.1 }, r2: { hexSpread: 60, hexMul: 0.4 }, r3: { graveBolt: 1.5, graveN: 3 },
+    form: { name: 'Grave Bolt', desc: 'One attack in {graveN:n} is a Grave Bolt: the shot pierces every foe, is twice as wide and deals ×{graveBolt:x} damage (a scythe swing deals ×{graveBolt:x}). It Hexes every foe it hits, and every foe it kills (not a horde foe) rises as a minion with no Gravecaller limit.' } });
   card('necro', 'attack', 2, 'n_atk_s', { name: 'Soul Barrage', icon: 'orb', tag: 'Swift', weapon: { kind: 'swift' },
     desc: 'Swift weapon (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit, Flow): foes you Hexed take +{hexSelf} from you.',
-    rider: 'Quickened Dead: your minions attack {hexHaste} faster against foes you Hexed.', mods: { hexSelf: 0.1 }, up: { hexSelf: 0.05 }, r3: { hexHaste: 0.25 } });
+    rider2: 'Quickened Dead: your minions attack {hexHaste} faster against foes you Hexed.', mods: { hexSelf: 0.1 }, up: { hexSelf: 0.05 }, r2: { hexHaste: 0.25 }, r3: { soulStorm: 2.5 },
+    form: { name: 'Soul Storm', desc: 'Once per second, a foe you Hexed that your weapon hits releases a soul that seeks another foe within 150 (one you have not Hexed first), striking it for {soulStorm} of the hit and Hexing it.' } });
   card('necro', 'skill1', 1, 'n_s1', { name: 'Endless Legion', icon: 'skull', forks: ['n_s1_a', 'n_s1_b'], plays: 'a standing army.',
     desc: '+{minions:n} max minion, Raise Legion raises {s1N:n} more, and your minions deal +{s1Dmg}.', mods: { minions: 1, s1N: 1, s1Dmg: 0.2 } });
   card('necro', 'skill1', 2, 'n_s1_a', { name: 'Bone Spikes', icon: 'bomb', tag: 'Burst',
@@ -247,10 +249,12 @@
     desc: "Your skills deal +{classElMul} Shadow damage; your minions apply your statuses at 75% strength (from 50%) and mark Doom for {mInfShadow} of their damage (Mark of Doom's rate counts instead when it is higher).", mods: { classElMul: 0.25, minionInfuse: 0.25, mInfShadow: 0.2 } });
   card('necro', 'element', 2, 'n_el_a', { name: 'Abyssal Toll', icon: 'mask', tag: 'Focus',
     desc: 'Your Tolls deal +{tollMul}, and each Toll or Reaped elite empowers your minions +{abyssMin} for 6 s.',
-    rider: "Abyssal Hunger: your minions' Doom counts double on elites and bosses.", mods: { tollMul: 0.4, abyssMin: 0.25 }, up: { tollMul: 0.1 }, r3: { abyssDoom: 1 } });
+    rider2: "Abyssal Hunger: your minions' Doom counts double on elites and bosses.", mods: { tollMul: 0.4, abyssMin: 0.25 }, up: { tollMul: 0.1 }, r2: { abyssDoom: 1, tollMul: 0.4 }, r3: { maw: 0.3, mawHaste: 0.3 },
+    form: { name: 'Abyssal Maw', desc: 'Each Toll on a boss, and each Reaped elite, opens a maw (radius 60) beneath it for 3 s: foes in it take {maw} of the Toll per second (a Reaped elite counts its Doom as the Toll), and your minions within 120 of it attack {mawHaste} faster.' } });
   card('necro', 'element', 2, 'n_el_b', { name: 'Rise Again', icon: 'hand', tag: 'Spread',
     desc: 'Every foe your Doom Reaps rises as a minion (at most once per 1.5 s); every boss Toll raises one.[ Minions deal +{minionDmg} more.]',
-    rider: 'Risen Tide: minions risen this way deal +{tideMul} and last 4 s longer.', mods: { reapRaise: 1 }, up: { minionDmg: 0.1 }, r3: { tideMul: 0.3 } });
+    rider2: 'Risen Tide: minions risen this way deal +{tideMul} and last 4 s longer.', mods: { reapRaise: 1 }, up: { minionDmg: 0.1 }, r2: { tideMul: 0.5 }, r3: { tideFree: 1, tideCap: 2, tideDoom: 2 },
+    form: { name: 'Tide of the Dead', desc: 'Rise Again raises without its 1.5 s limit (at most 2 per second). The minions it raises do not count against your minion cap (up to {tideCap:n} extra), and each bursts when it falls (radius 60), marking Doom worth {tideDoom} of its strike on every foe inside. Horde foes never rise.' } });
 
   Object.assign(ED.BOONS, CB);
   ED.BOON_IDS = Object.keys(ED.BOONS);

@@ -298,6 +298,41 @@ for (const [cls, boons, tag] of [['ranger', { r_atk: 1, r_atk_s: 2 }, 'Flurry (Q
   const pb = c3.find(e => e.label === 'Plaguebearer burst'); ok(pb.perAttack > c2.perAttack * 2, 'the burst is worth more than the spread');
 }
 
+// Necromancer riders and forms: Grave Bolt and the Hexed-foe bonus on the weapon (a staged run), the pack and lone-foe values of the extras, and the power band of the four forks
+{
+  const ex = (wpn, l) => wpn.extras.find(e => e.label === l), MD = require('./model.js')(ED, { pack: 4 }), GATES = { doommark: 1, envenom: 1 }, MIDN = Object.assign({ edge: 2, quick: 2, focus: 1, stalwart: 1 }, GATES);
+  { const r = weaponRun('necro', 0, { n_atk: 1, n_atk_h: 3 }, { secs: 30 }), g = ex(r.m.weapon, 'Grave Bolt'); ok(g && g.perAttack > 0, 'Grave Bolt lists a weapon extra'); if (g) rel(r.total / r.atk, r.m.weapon.avg * r.m.weapon.oneFoe + g.perAttack, 0.04, 'Grave Bolt damage per attack on one foe'); }
+  { const r = weaponRun('necro', 0, { n_atk: 1, n_atk_s: 1 }, { secs: 30 }), h = ex(r.m.weapon, 'Hexed foes'); ok(h && h.perAttack > 0, 'Soul Barrage lists a Hexed foes extra'); if (h) rel(r.total / r.atk, r.m.weapon.avg * r.m.weapon.oneFoe + h.perAttack, 0.06, 'Soul Barrage damage per attack on a Hexed foe'); }
+  { const r = weaponRun('necro', 1, { n_atk: 1, n_atk_h: 3 }, { secs: 30 }), g = ex(r.m.weapon, 'Grave Bolt'); ok(g && g.perAttack > 0 && r.m.weapon.kind === 'melee', 'the Soul Scythe lists the Grave Bolt too'); if (g) rel(r.total / r.atk, r.m.weapon.avg * r.m.weapon.oneFoe + g.perAttack, 0.04, 'Grave swing damage per attack on one foe'); }
+  const wm = (boons) => modelOf('necro', Object.assign({}, GATES, boons), 0).weapon, mm = (boons) => modelOf('necro', Object.assign({}, GATES, boons), 0, { ctx: { stratum: 4 } });
+  { // the extras exist from the rank that brings them, and a pack gets what a lone foe cannot
+    const s2 = wm({ n_atk: 1, n_atk_s: 2 }), s3 = wm({ n_atk: 1, n_atk_s: 3 }), storm = ex(s3, 'Soul Storm');
+    ok(!ex(s2, 'Soul Storm') && storm && storm.packOnly && storm._pack(1) === 0 && storm._pack(4) > 0 && Math.abs(storm.perAttack * 4 - storm._pack(4)) < 1e-9, 'Soul Storm is a pack-only extra: nothing against a lone foe, a soul per Hexed foe in a pack');
+    ok(MD.packWeapon({ weapon: s3 }, 4) > MD.packWeapon({ weapon: s2 }, 4) * 1.05, 'Soul Storm raises the pack weapon damage');
+    const g1 = wm({ n_atk: 1, n_atk_h: 2 }), g3 = wm({ n_atk: 1, n_atk_h: 3 }), ge = ex(g3, 'Grave Bolt');
+    ok(!ex(g1, 'Grave Bolt') && ge && ge._pack(4) > ge.perAttack * 2, 'Grave Bolt pierces: a pack takes more of it than a lone foe');
+    const h1 = ex(wm({ n_atk: 1, n_atk_s: 2 }), 'Hexed minions'), h0 = ex(wm({ n_atk: 1, n_atk_s: 1 }), 'Hexed minions'); ok(h0 && h1 && h1.perAttack > h0.perAttack * 1.3 && h1._pack(4) < h1.perAttack && h1._pack(4) > h0._pack(4), 'Quickened Dead raises the Hexed minions extra; a pack keeps fewer foes Hexed than a lone foe');
+    const hb = ex(wm({ n_atk: 1, n_atk_h: 2 }), 'Hexed minions'), hb1 = ex(wm({ n_atk: 1, n_atk_h: 1 }), 'Hexed minions'); ok(hb._pack(4) / hb.perAttack > hb1._pack(4) / hb1.perAttack, 'Hex Burst keeps more of a pack Hexed');
+    const a1 = ex(wm({ n_el: 1, n_el_a: 1 }), 'Abyssal Toll'), a3 = wm({ n_el: 1, n_el_a: 3 }); ok(a1 && ex(a3, 'Abyssal Maw') && !ex(wm({ n_el: 1, n_el_a: 2 }), 'Abyssal Maw') && ex(a3, 'Abyssal Maw').perAttack > a1.perAttack, 'the Maw is a rank 3 extra and pays more than the Toll bonus');
+    const t2 = ex(wm({ n_el: 1, n_el_b: 2 }), 'Risen Tide'), t3 = ex(wm({ n_el: 1, n_el_b: 3 }), 'Tide of the Dead'); ok(!ex(wm({ n_el: 1, n_el_b: 1 }), 'Risen Tide') && t2 && t3 && t3._pack(4) > t3.perAttack && t3.perAttack > t2.perAttack, 'Risen Tide from rank 2, Tide of the Dead from rank 3, a pack raises more of the swarm');
+  }
+  { // the power band: against the class without the route card, the mean of one foe and a pack (tools/sheet.js --routes --mid) is +35% (+-10) at rank 2 and +60% (+-10) at rank 3, at strata IV and VI
+    const hero = (boons) => { const b = { cls: 'necro', weapon: 'bonewand', boons, relics: [], meta: META(), pact: 0 }, stats = ED.Stats.compute(b); stats.sn = {}; return { pid: 'p', name: 'T', cls: 'necro', weapon: b.weapon, boons, relics: [], meta: b.meta, stats, hp: stats.maxHp, maxHp: stats.maxHp, shield: 0, picks: 0, slot: 0 }; };
+    const ass = (boons, stratum) => MD.assess(hero(boons), CTX({ stratum }));
+    for (const stratum of [4, 6]) {
+      const base = ass(MIDN, stratum), line = [];
+      for (const [t1, f, lean] of [['n_atk', 'n_atk_h', 0], ['n_atk', 'n_atk_s', 1], ['n_el', 'n_el_a', 0], ['n_el', 'n_el_b', 1]]) {
+        const gain = (r) => { const a = ass(Object.assign({}, MIDN, { [t1]: 1, [f]: r }), stratum); return [a.one / base.one - 1, a.pack / base.pack - 1]; };
+        const g2 = gain(2), g3 = gain(3), m2 = (g2[0] + g2[1]) / 2, m3 = (g3[0] + g3[1]) / 2;
+        ok(m2 >= 0.25 && m2 <= 0.45, `${f} rank 2 at stratum ${stratum}: mean ${(m2 * 100).toFixed(0)}% (one foe ${(g2[0] * 100).toFixed(0)}%, pack ${(g2[1] * 100).toFixed(0)}%) is within 35% +- 10`);
+        ok(m3 >= 0.5 && m3 <= 0.7, `${f} rank 3 at stratum ${stratum}: mean ${(m3 * 100).toFixed(0)}% (one foe ${(g3[0] * 100).toFixed(0)}%, pack ${(g3[1] * 100).toFixed(0)}%) is within 60% +- 10`);
+        if (f === 'n_el_a') ok(g3[0] > g3[1], 'Abyssal Toll leans to a single foe'); else if (lean) ok(g3[1] > g3[0], `${f} leans to packs`);
+        line.push(f);
+      }
+    }
+  }
+}
+
 // ---------------- shield window: the readout equals what addShield granted in the last 10 s ----------------
 {
   const { w, p } = stage('knight', {}, 0, {});

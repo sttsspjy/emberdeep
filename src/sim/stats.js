@@ -23,7 +23,8 @@
     + ' fissure bladeWave doombrand brandMark brandCap bloodquake bloodquakeMul bloodquakeSplash'
     + ' siege siegeMul siegeBlast ricochet flurryN hemo hemoAt hemoMul hemoBoss plague plagueBurst outbreak'
     + ' wake waveReturn sunstrike prismN prismRad'
-    + ' caldera fireDance dancerBurst whiteHot whiteT heatMax infernoMul').split(' ');
+    + ' caldera fireDance dancerBurst whiteHot whiteT heatMax infernoMul'
+    + ' graveBolt graveN soulStorm maw mawHaste tideFree tideCap tideDoom').split(' ');
 
   const BASE = () => {
     const s = {
