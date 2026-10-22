@@ -273,7 +273,7 @@
     const rig = info.rig;
     if (rig) rigDraw(c, e, s, info, rig, ox, oy, fa, flip, t, true);
     let variant = flash ? stateVar(id, 'white') : frozen ? stateVar(id, 'frozen') : foeVar(e.type, id);
-    if (!flash && !frozen) {
+    if (!frozen) { // the wind-up outline stays under the white flash body
       if (P.wp >= 0) { const ov = outlineVar(id, RED); if (ov) put(c, id, fi, ox, oy, flip, ov, 0.45 + 0.55 * P.wp); }
       else if (e.elite) { const ov = outlineVar(id, ED.AFFIXES[e.elite].color); if (ov) put(c, id, fi, ox, oy, flip, ov, 0.65 + 0.35 * Math.sin(t * 5 + (e.id | 0))); }
     }
@@ -317,10 +317,10 @@
     }
   }
 
-  // Writes world-px anchors (relative to the feet) of anim record r into out: centre, top and the eye points; the draw offset (ox, extra rise) shifts them.
+  // Writes world-px anchors (relative to the feet) of anim record r into out: centre, top and the eye points; the draw offset (ox, extra rise) shifts them (out.rise keeps the rise, so a consumer can take the static anchors).
   function anchorFrom(out, r, flip, rise, ox) {
     const an = r.anchors, sg = flip ? -1 : 1, cen = an.centre || [r.ax, r.ay - 8];
-    out.cx = (cen[0] - r.ax) * K * sg + (ox || 0); out.cy = (cen[1] - r.ay) * K - rise;
+    out.rise = rise; out.cx = (cen[0] - r.ax) * K * sg + (ox || 0); out.cy = (cen[1] - r.ay) * K - rise;
     out.top = ((an.top === undefined ? cen[1] - 8 : an.top) - r.ay) * K - rise;
     const ey = an.eye;
     if (ey && ey.length) {
@@ -515,11 +515,15 @@
     // hammer under the body when it points up, over it otherwise
     const hm = B.hammer ? forgeHammer(e, s, t, pose, el) : null;
     if (hm && Math.sin(hm.ang) < -0.25) drawHammer(c, hm, ox, oy, flip);
-    const variant = flash ? stateVar(id, 'white') : frozen ? stateVar(id, 'frozen') : bossVar(e.type, id);
-    if (pose === 'wind' && !flash && !frozen) { const ov = outlineVar(id, RED); if (ov) put(c, id, fi, ox, oy, flip, ov, 0.45 + 0.55 * U.clamp(el / WD, 0, 1)); }
+    const variant = frozen ? stateVar(id, 'frozen') : bossVar(e.type, id);
+    if (pose === 'wind' && !frozen) { const ov = outlineVar(id, RED); if (ov) put(c, id, fi, ox, oy, flip, ov, 0.45 + 0.55 * U.clamp(el / WD, 0, 1)); } // the wind-up outline and the normal body stay under the hit flash
     put(c, id, fi, ox, oy, flip, variant, 1);
+    if (flash) { const wv = stateVar(id, 'white'), rc = REC; REC = null; if (wv) put(c, id, fi, ox, oy, flip, wv, 0.5); REC = rc; } // hit flash: a half-strength white overlay, the sprite is not replaced
     if (hm && !(Math.sin(hm.ang) < -0.25)) drawHammer(c, hm, ox, oy, flip);
-    if (B.crown && A.has('boss.hollowking.crown')) { const r = A.anim(id), cn = r.anchors.centre || [r.ax, r.ay - 30], tp = r.anchors.top === undefined ? r.ay - 60 : r.anchors.top; put(c, 'boss.hollowking.crown', 0, ox + (cn[0] - r.ax) * K * (flip ? -1 : 1), oy + (tp + 4 - r.ay) * K, flip, crownVar(), 1); }
+    if (B.crown && A.has('boss.hollowking.crown')) { // per-frame crown point (anchors.crown); anims without one use the head line
+      const r = A.anim(id), cr = r.anchors.crown, q = cr ? cr[Math.min(fi, cr.length - 1)] : null, cn = r.anchors.centre || [r.ax, r.ay - 30], tp = r.anchors.top === undefined ? r.ay - 60 : r.anchors.top;
+      put(c, 'boss.hollowking.crown', 0, ox + ((q ? q[0] : cn[0]) - r.ax) * K * (flip ? -1 : 1), oy + ((q ? q[1] : tp + 4) - r.ay) * K, flip, crownVar(), 1);
+    }
     c.globalAlpha = ga;
     anchorFrom(s.anc, A.anim(id), flip, air, ox);
     s.anc.eye.length = 1; s.anc.eye[0][1] = s.anc.top * (1 - B.eyeF) - air; // eye glow at the head (fraction of the height below the top), not the generic 30% line
@@ -561,7 +565,7 @@
       s.vx += (vx - s.vx) * k; s.vy += (vy - s.vy) * k; s.sp = Math.hypot(s.vx, s.vy);
     } else if (dt >= 0.5) { s.vx = s.vy = s.sp = 0; }
     s.lx = p.x; s.ly = p.y; s.lt = t;
-    if (p.dead && !s.wasDead) { s.deadT = t; F().sheet('fx.puff', p.x, p.y - 8); } // the body fades over 0.6 s under a puff
+    if (p.dead && !s.wasDead) { s.deadT = t; F().sheet('fx.puff', p.x, p.y - 8, { ramp: 'smoke', a: 0.85 }); } // the body fades over 0.6 s under a puff
     s.wasDead = !!p.dead;
     if (p.downed && !s.wasDown) s.downT = t; s.wasDown = !!p.downed;
     return s;
@@ -694,11 +698,14 @@
     c.globalAlpha = ga;
   }
 
+  const wpPre = new Set(); // hero weapon (anim | variant | flip) whose rotation steps are queued
   // The weapon of a hero. thr: thrust 0..1 (glaive), kick: ranged recoil, u: seconds into the attack animation (9 = idle).
   function heroWeapon(c, p, wd, hx, hy, wa, flip, thr, kick, t, u) {
     const w = wd.w, r = A.anim(wd.anim); if (!r) return;
     const ec = p.stats && p.stats.evo && ED.PATHS[p.stats.evo] ? ED.PATHS[p.stats.evo].color : null;
     const variant = ec ? outlineVar(wd.anim, ec) : '';
+    const pk = wd.anim + '|' + variant + '|' + (flip ? 1 : 0);
+    if (!wpPre.has(pk)) { wpPre.add(pk); A.prebake(wd.anim, 0, flip, '', variant); } // the first time a hero weapon shows, all 32 angles bake in the background (Atlas.tick)
     let x = hx, y = hy, ang = wa, extra = 0;
     const look = w.look, out = HELD_OUT[look] || 0; // ranged weapons are held out along the aim
     if (out) { x += Math.cos(wa) * out * K; y += Math.sin(wa) * out * K * 0.6; }

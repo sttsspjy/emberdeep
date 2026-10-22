@@ -73,7 +73,7 @@
     }
     const e = {
       id: U.uid(), type, def, x, y, r: def.r, hp, maxHp: hp, dmg, spd: def.spd * (pact >= 6 ? 1.15 : 1),
-      kbx: 0, kby: 0, st: 'move', t: 0, cd: this.rng.range(0.6, 1.6), face: 1, flash: 0, stun: 0, frozen: 0, elite: null, ward: 0, wardMax: 0,
+      kbx: 0, kby: 0, st: 'move', t: 0, cd: this.rng.range(0.6, 1.6), face: 1, flash: -1, stun: 0, frozen: 0, elite: null, ward: 0, wardMax: 0,
       boss: !!def.boss, fly: !!def.fly, target: null, tgtT: 0, aimA: 0, guardA: 0, contactCd: 0, spawnT: opts.spawnT || 0,
       phase: 1, vars: {}, strafe: this.rng.sign(), wob: this.rng.range(0, 6.28), exposed: false, recoil: 0,
       // statuses: burn/bleed pools, chill, charge, Venom (0-100; venomBy = bitmask of hero slots that added it), Radiance, Doom (HP units), hero debuffs (judged = Cleric Judgment, vulnT = Rain/Smoke vulnerability); slow/windMul/dmgTakenMul are read by ai.js and hitEnemy
@@ -159,7 +159,8 @@
     if (e.ward > 0) { const ab = Math.min(e.ward, dmg * 0.75); e.ward -= ab; dmg -= ab; if (e.ward <= 0) this.emit({ t: 'wardbreak', x: e.x, y: e.y }); }
     src.critOut = crit; src.guarded = guarded;
     if (dmg <= 0) return 0;
-    e.hp -= dmg; e.flash = 0.1;
+    e.hp -= dmg;
+    if (kind !== 'dot' && e.flash < -0.12) e.flash = 0.066; // visual only: status and zone ticks never flash, a flash is 66 ms and at least 120 ms apart
     if (src.knock && !e.boss) {
       const kb = src.knock * (e.elite ? 0.45 : 1) * (e.def.ai === 'tank' ? 0.35 : 1);
       e.kbx += (src.kx || 0) * kb; e.kby += (src.ky || 0) * kb;

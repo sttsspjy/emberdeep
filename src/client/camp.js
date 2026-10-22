@@ -131,7 +131,7 @@
     for (let i = 0; i < 6; i++) { c.save(); c.translate(fx, fy); c.rotate(-1.1 + i * 0.44); c.fillStyle = i % 2 ? '#2e1d12' : '#3a2616'; c.fillRect(-fs * 0.72, -fs * 0.08, fs * 1.44, fs * 0.16); c.fillStyle = 'rgba(255,255,255,0.1)'; c.fillRect(-fs * 0.72, -fs * 0.08, fs * 1.44, 1.5); c.restore(); }
     // the chosen hero by the fire
     if (heroCls && ED.CLASSES[heroCls]) {
-      c.save(); c.translate(fx + fs * 1.9, fy + fs * 0.15); const hs = fs / 26; c.scale(hs, hs);
+      c.save(); c.translate(Math.round(fx + fs * 1.9), Math.round(fy + fs * 0.15)); const hs = Math.max(1, Math.round(fs / 26)); c.scale(hs, hs); c.imageSmoothingEnabled = false; // whole-number scale: equal art pixels
       ED.Sprites.hero(c, { cls: heroCls, slot: 0, weapon: ED.CLASSES[heroCls].weapons[0], face: Math.PI * 0.85, moving: false, hp: 1, mastery10: false }, t, null);
       c.restore();
     }

@@ -7,7 +7,7 @@
   const U = ED.U, TAU = U.TAU, Pix = ED.Pix, s2 = Pix.s2;
   let hsUntil = 0; // wall-clock end of the current hit-stop
   const F = ED.FX = {
-    parts: [], texts: [], slashes: [], rings: [], bolts: [], pops: [], ghosts: [], stains: [], sheets: [], beams: [], holyT: {}, msgs: [], hurtAt: {}, banner: null, shake: 0, flash: null, fade: 0, anim: {}, hitstop: 0, time: 0, aberr: 0, kick: 0, dread: 0, crowd: 1, // crowd: burst-count factor, set by the renderer (below 1 with many live foes)
+    parts: [], texts: [], slashes: [], rings: [], bolts: [], pops: [], ghosts: [], stains: [], sheets: [], beams: [], holyT: {}, msgs: [], hurtAt: {}, banner: null, shake: 0, flash: null, fade: 0, anim: {}, hitstop: 0, time: 0, aberr: 0, kick: 0, dread: 0, addK: 1, crowd: 1, // crowd: burst-count factor, set by the renderer (below 1 with many live foes)
     // 1 normally, ~0.06 during a hit-stop; consumers (game loop) multiply their dt by it. Wall-clock based, so it is safe however dt is scaled.
     get timeScale() { return performance.now() / 1000 < hsUntil ? 0.06 : 1; },
     set timeScale(v) { /* derived value; assignments are ignored */ },
@@ -39,11 +39,19 @@
   F.burst = (x, y, n, o) => { const k = cnt(n), sp = o.sp || 90, life = o.life || 0.5; for (let i = 0; i < k; i++) F.part(x, y, o, sp * (0.4 + Math.random() * 0.8), life * (0.6 + Math.random() * 0.6)); };
   const NO_OPTS = {};
   F.text = (x, y, s, color, size, opts) => {
+    const o = opts || NO_OPTS; // opts: crit, pop, life, max, vy, ol (rim colour), sum (a damage number: it adds into a same-style number of the same spot born under 150 ms ago and pops again; a spot keeps at most 3 live numbers, the oldest goes first)
+    if (o.sum) {
+      let last = null, first = -1, nn = 0;
+      for (let i = 0; i < F.texts.length; i++) { const t = F.texts[i]; if (t.sum && Math.abs(t.bx - x) < 6 && Math.abs(t.by - y) < 6) { last = t; if (first < 0) first = i; nn++; } }
+      if (last && last.max - last.life < 0.15 && last.crit === !!o.crit && last.color === color) { last.s = String(Math.round(+last.s + +s)); last.size = Math.max(last.size, size || 10); last.life = last.max; return; }
+      if (nn >= 3) F.texts.splice(first, 1);
+    }
     if (F.texts.length > 80) F.texts.shift();
-    // numbers born in the same spot stack upward instead of overprinting
-    let yy = y; for (const t of F.texts) if (t.max - t.life < 0.3 && Math.abs(t.x - x) < 24 && Math.abs(t.y - yy) < 9) yy = t.y - 9;
-    const o = opts || NO_OPTS; // opts: crit, pop, life, max, vy, ol (rim colour)
-    F.texts.push({ x: x + (Math.random() - 0.5) * 10, y: yy, s: String(s), color, size: size || 10, life: o.life ?? 0.9, max: o.max ?? 0.9, vy: o.vy ?? -42, crit: !!o.crit, pop: !!o.pop, ol: o.ol || null });
+    // texts over the same spot stack upward by one text height (the pixel font is 2 world px per font px, plus its rim) instead of overprinting
+    const step = ED.Atlas && ED.Atlas.font ? ED.Atlas.font.h * 2 + 4 : 12;
+    let yy = y;
+    for (let k = 0; k < 4; k++) { let moved = false; for (const t of F.texts) if (Math.abs(t.x - x) < 24 && Math.abs(t.y - yy) < step) { yy = t.y - step; moved = true; } if (!moved) break; }
+    F.texts.push({ x: x + (Math.random() - 0.5) * 10, y: yy, s: String(s), color, size: size || 10, life: o.life ?? 0.9, max: o.max ?? 0.9, vy: o.vy ?? -42, crit: !!o.crit, pop: !!o.pop, ol: o.ol || null, sum: !!o.sum, bx: x, by: y });
   };
   F.ring = (x, y, r, color, life, width, inv) => { if (F.rings.length < 48) F.rings.push({ x, y, r, color, life: life || 0.4, max: life || 0.4, w: width || 3, inv: !!inv }); }; // inv: the ring shrinks instead of growing
   // One-shot (or looping) atlas sprite effect with the anim's pivot at world (x, y). o: ramp (recolour: ramp name or colour), add (additive pass instead of the unlit one), delay (s), speed (fps factor), a (alpha), flip, rot,
@@ -70,7 +78,8 @@
   };
   const CLEAVE_COL = '#ffd36b';
   // Bright impact flash that also lights the scene. star: flare lines (crits).
-  F.pop = (x, y, r, color, life, star) => { if (F.pops.length < 40) F.pops.push({ x, y, r, color, life: life || 0.16, max: life || 0.16, star: !!star }); };
+  // al: alpha factor (default 1); core: colour of the centre square and flare lines (default white).
+  F.pop = (x, y, r, color, life, star, al, core) => { if (F.pops.length < 40) F.pops.push({ x, y, r, color, life: life || 0.16, max: life || 0.16, star: !!star, al: al === undefined ? 1 : al, core: core || '#ffffff' }); };
   F.addShake = (v) => { if (ED.App && !ED.App.settings.shake) return; F.shake = Math.min(12, F.shake + v); };
   // Chromatic-aberration / white-flash punch for the post pass (0..~2 / 0..1.2).
   F.punch = (aberr, kick) => { if (calm()) return; F.aberr = Math.max(F.aberr, aberr || 0); F.kick = Math.max(F.kick, kick || 0); };
@@ -404,7 +413,7 @@
     if (ED.Actors && ED.Actors.on()) { // atlas body: the last drawn frame lies down, flattens or dissolves; a puff marks the spot
       if (F.ghosts.length >= 14) return;
       const sn = ED.Actors.foeSnap(ev.type, e, ev.x, ev.y), r = ev.r || d.r;
-      F.sheet(r > 14 || ev.el ? 'fx.smoke' : 'fx.puff', ev.x, ev.y - (sn ? sn.lift : 0) - (r > 14 ? 8 : 4));
+      F.sheet(r > 14 || ev.el ? 'fx.smoke' : 'fx.puff', ev.x, ev.y - (sn ? sn.lift : 0) - (r > 14 ? 8 : 4), { ramp: 'smoke', a: 0.85 }); // smoke ramp, not the white source colours
       if (!sn) return;
       const dur = sn.death ? sn.dur : DUR[fam] + (ev.el ? 0.1 : 0);
       F.ghosts.push({ k: 'die', at: sn, x: ev.x, y: ev.y, r, fam: sn.death ? 'anim' : fam, sgn: Math.cos(a) >= 0 ? 1 : -1, life: dur, max: dur });
@@ -526,7 +535,7 @@
   // ---------- sprite recipes (atlas art; each is a no-op while the art is missing) ----------
   const SP = (id, x, y, o) => F.sheet(id, x, y, o);
   // Vertical light pillar of width w ending at the ground point (x, y): white core, light and element edge; stepped width and alpha over its life.
-  F.beam = (x, y, h, w, col, life) => { if (F.beams.length < 12) F.beams.push({ x, y, h, w, col, life: life || 0.25, max: life || 0.25 }); };
+  F.beam = (x, y, h, w, col, life, al, core) => { if (F.beams.length < 12) F.beams.push({ x, y, h, w, col, life: life || 0.25, max: life || 0.25, al: al === undefined ? 1 : al, core: core || '#ffffff' }); }; // al: alpha factor, core: colour of the centre stripe
   // Explosion cluster for a blast of radius r at (x, y): one sprite under 50 px, two under 90, three beyond, staggered by 60 ms.
   function boomSheets(x, y, r, ramp) {
     const n = r < 50 ? 1 : r < 90 ? 2 : 3;
@@ -561,7 +570,7 @@
         if (set.dmg && (mine || ev.c || ev.v >= 20)) {
           const col = ec || (ev.c ? '#ffd36b' : ev.k ? '#ffab70' : (mine ? '#ffffff' : '#cfc6b6'));
           const size = (ev.c ? 14 : (ev.k ? 8 : 10)) + Math.min(5, Math.sqrt(ev.v) * 0.22);
-          F.text(ev.x, ev.y - 6, ev.v, col, size, { crit: !!ev.c, pop: true, life: ev.c ? 1.15 : 0.85, max: ev.c ? 1.15 : 0.85, vy: ev.c ? -58 : -42, ol: EL_OL[el] });
+          F.text(ev.x, ev.y - 6, ev.v, col, size, { crit: !!ev.c, pop: true, life: ev.c ? 1.15 : 0.85, max: ev.c ? 1.15 : 0.85, vy: ev.c ? -58 : -42, ol: EL_OL[el], sum: true });
         }
         if (!ev.k) {
           const e = foeAt(ev.x, ev.y), r = e ? e.r : 8, gy = e ? e.y : ev.y + r;
@@ -702,8 +711,8 @@
       // ---- path payoffs (own hero full size, allies at 70% size and 60% alpha; text labels for your own hero only) ----
       case 'smite': { // a gold light pillar on the foe, a ring on the ground, motes flying to the heroes it shields
         const mine = ev.pid === local, m = mine ? 1 : 0.7;
-        F.beam(ev.x, ev.y, 210, 12 * m, '#ffcf5a', 0.25); SP('fx.circle.white', ev.x, ev.y - 2, { ramp: 'holy', add: true, a: mine ? 1 : 0.6 });
-        F.pop(ev.x, ev.y - 20, 32 * m, '#fff0c2', 0.2, true);
+        F.beam(ev.x, ev.y, 210, 12 * m, '#ffcf5a', 0.25, mine ? 1 : 0.5, '#fff0c2'); SP('fx.circle.white', ev.x, ev.y - 2, { ramp: 'gold', add: true, a: mine ? 1 : 0.5 }); // gold ramp and a light-gold core instead of white; an ally's pillar at half alpha
+        F.pop(ev.x, ev.y - 20, 32 * m, '#ffcf5a', 0.2, true, mine ? 1 : 0.5, '#fff0c2');
         F.burst(ev.x, ev.y - 8, lk(6), { color: '#ffe9a0', sp: 40, vy: -85, life: 0.7, size: 2, add: true, drag: 1 });
         if (!lowFx()) for (const p of ctx.players()) if (!p.dead && U.dist2(p.x, p.y, ev.x, ev.y) < 160 * 160) fly(ev.x, ev.y - 10, p.x, p.y, '#ffe9a0', 3);
         A.play('boon', 0.25 * m); break; }
@@ -750,7 +759,7 @@
       case 'rift': F.burst(ev.x, ev.y - 12, 16, { color: '#b78cff', sp: 90, life: 0.6, size: 2.6, add: true }); F.burst(ev.x, ev.y - 12, 8, { kind: 'streak', color: '#e8c8ff', a: -1.57, spread: 3.1, sp: 200, life: 0.35, size: 1.6 }); F.burst(ev.x, ev.y - 6, 5, { kind: 'smoke', color: '#1a0830', sp: 30, life: 0.8, size: 7 }); F.ring(ev.x, ev.y, 30, '#b78cff', 0.45, 3); F.pop(ev.x, ev.y - 14, 34, '#c98bff', 0.3, true); A.play('rift', 0.6); break;
       case 'claim': { const col = R().rewardColor(ev.item), mine = ev.pid === local, y = ev.y - 18; F.burst(ev.x, y, mine ? 22 : 14, { color: col, sp: 80, vy: -50, life: 0.9, size: 2.4, add: true, drag: 1.3 }); F.ring(ev.x, ev.y - 8, 34, col, 0.5, 3); F.pop(ev.x, y, 28, col, 0.3);
         if (ev.item === 'campfire') F.burst(ev.x, y, 8, { kind: 'ember', color: '#ffb347', a: -1.57, spread: 2.4, sp: 50, life: 1.1, size: 2, drag: 1.4, lt: '#ff8a2a', ltr: 24 });
-        if (mine) F.text(ev.x, y - 14, R().rewardLabel(ev.item), col, 10, { life: 1.3, max: 1.3 });
+        if (mine && ev.item !== 'oil') F.text(ev.x, y - 14, R().rewardLabel(ev.item), col, 10, { life: 1.3, max: 1.3 }); // the oil event prints its own amount
         A.play('claim', mine ? 0.9 : 0.4); break; }
       case 'oil': F.burst(ev.x, ev.y - 14, 20, { kind: 'ember', color: '#ffc27a', a: -1.57, spread: 4.4, sp: 70, life: 1.3, size: 2, drag: 1.3, lt: '#ffb35c', ltr: 26 }); F.ring(ev.x, ev.y - 10, 60, '#ffb35c', 0.6, 4); F.pop(ev.x, ev.y - 16, 70, '#ffc27a', 0.6, true); F.text(ev.x, ev.y - 40, '+' + Math.round(ev.v || 0) + ' light', '#ffd36b', 11, { life: 1.4, max: 1.4 }); if (!calm()) F.flash = { color: '#ffb35c', t: 0.3, a: 0.2 }; A.play('oil', 0.9); break;
       case 'banish': F.burst(ev.x, ev.y - 8, 26, { kind: 'smoke', color: '#150a24', sp: 110, life: 0.9, size: 9, drag: 2.2 }); F.burst(ev.x, ev.y - 8, 18, { color: '#ffd9a0', sp: 160, life: 0.5, size: 2.6, add: true }); F.ring(ev.x, ev.y - 6, 70, '#ffb35c', 0.55, 4); F.pop(ev.x, ev.y - 10, 60, '#ffd9a0', 0.3, true); F.text(ev.x, ev.y - 34, 'Banished', '#ffd9a0', 11, { life: 1.4, max: 1.4 }); F.punch(0.5, 0); A.play('oil', 0.6); break;
@@ -819,6 +828,7 @@
     if (s.t < 0) return;
     const f = s.fixed >= 0 ? s.fixed : s.loop ? ((s.t * s.fps) | 0) % s.n : Math.min(s.n - 1, (s.t * s.fps) | 0);
     let a = s.a; if (s.fade && s.life) a *= Math.max(0.25, Math.ceil((1 - s.t / s.life) * 4) / 4);
+    if (s.add) a *= F.addK;
     Pix.draw(c, s.id, s.ramp, f, s2(s.x), s2(s.y + s.dy), a, s.flip, s.rot + s.spin * s.t);
   }
   // Unlit pass (after the lighting multiply, before the additive one): opaque sprite effects keep their colours in any light.
@@ -852,18 +862,19 @@
       const k = 1 - r.life / r.max, rr = r.inv ? r.r * (1 - 0.75 * U.easeOut(k)) : r.r * (0.3 + 0.7 * U.easeOut(k)), ra = Math.max(2, Math.round(rr / 4) * 2), tn = Math.max(1, Math.min(3, Math.round(r.w * (1 - k) * 0.5 + 0.5))), rp = Pix.ramp(r.color);
       Pix.put(c, Pix.ring(ra, tn, rp[2], rp[3], rp[4]), s2(r.x), s2(r.y), Math.max(0.25, Math.ceil((1 - k) * 4) / 4));
     }
+    const ak = F.addK; // additive strength set by the renderer per biome
     for (const p of F.pops) {
-      const k = p.life / p.max, e = 1 - k, sz = p.r * (0.5 + 0.8 * U.easeOut(e));
-      Rn.glow(c, p.x, p.y, sz * 1.6, p.color, 0.85 * k);
-      const d = k > 0.55 ? 4 : 2, o = d >> 1 & ~1; c.globalAlpha = 0.95 * k; c.fillStyle = '#ffffff'; c.fillRect(s2(p.x) - o, s2(p.y) - o, d, d);
-      if (p.star) { const L = Math.max(4, s2(sz * 1.5)); c.globalAlpha = 0.9 * k; c.fillRect(s2(p.x) - L, s2(p.y), L * 2, 2); c.fillRect(s2(p.x), s2(p.y) - L, 2, L * 2); }
+      const k = p.life / p.max, e = 1 - k, sz = p.r * (0.5 + 0.8 * U.easeOut(e)), pa = p.al * ak;
+      Rn.glow(c, p.x, p.y, sz * 1.6, p.color, 0.85 * k * pa);
+      const d = k > 0.55 ? 4 : 2, o = d >> 1 & ~1; c.globalAlpha = 0.95 * k * pa; c.fillStyle = p.core; c.fillRect(s2(p.x) - o, s2(p.y) - o, d, d);
+      if (p.star) { const L = Math.max(4, s2(sz * 1.5)); c.globalAlpha = 0.9 * k * pa; c.fillRect(s2(p.x) - L, s2(p.y), L * 2, 2); c.fillRect(s2(p.x), s2(p.y) - L, 2, L * 2); }
       c.globalAlpha = 1;
     }
-    for (const b of F.beams) { // light pillar: element edge, light body, white core; narrows and fades in quarter steps
-      const k = b.life / b.max, w = Math.max(4, s2(b.w * (0.35 + 0.65 * k))), x = s2(b.x), top = s2(b.y - b.h), h = s2(b.h), a = Math.max(0.25, Math.ceil(k * 4) / 4), rp = Pix.ramp(b.col);
+    for (const b of F.beams) { // light pillar: element edge, light body, core stripe (white unless b.core says otherwise); narrows and fades in quarter steps
+      const k = b.life / b.max, w = Math.max(4, s2(b.w * (0.35 + 0.65 * k))), x = s2(b.x), top = s2(b.y - b.h), h = s2(b.h), a = Math.max(0.25, Math.ceil(k * 4) / 4) * b.al * ak, rp = Pix.ramp(b.col);
       c.globalAlpha = 0.7 * a; c.fillStyle = rp[2]; c.fillRect(x - w / 2, top, w, h);
       c.globalAlpha = a; c.fillStyle = rp[3]; c.fillRect(x - w / 2 + 2, top, Math.max(2, w - 4), h);
-      c.fillStyle = '#ffffff'; c.fillRect(x - Math.max(1, (w - 8) / 2), top, Math.max(2, w - 8), h);
+      c.fillStyle = b.core; c.fillRect(x - Math.max(1, (w - 8) / 2), top, Math.max(2, w - 8), h);
       c.globalAlpha = 1;
     }
     let gl = 0; // glow blits of embers and dots, capped per frame

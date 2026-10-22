@@ -318,6 +318,7 @@
       const wp = atlasOn ? AC.windupP(e) : F.windupP(e); if (wp > 0.05) R.glow(c, e.x, e.y + (an ? an.cy : -e.r * 1.2), e.r * (1.5 + wp), wp > 0.8 ? '#ffd0a0' : '#ff5a3a', 0.12 + 0.5 * wp * wp);
     }
     for (let i = 0; i < ng; i++) { const g = glowQ[i]; R.glow(c, g.x, g.y, g.r, g.c, g.a); }
+    F.addK = biome.id === 'rimefrost' ? 0.55 : 1; // strength of pops, pillars and additive sprites: lowered on the pale Rimefrost floor
     F.drawGlow(c, t);
     c.globalCompositeOperation = 'source-over';
     // ---- overlays above lighting ----
@@ -450,7 +451,7 @@
   const numC = new Map();
   function freeSp(s) { if (s && !s.dead) { s.dead = true; live.delete(s); Bmp.free(s.cv); } }
   function dropText() { for (const s of txtCache.values()) freeSp(s); for (const s of numC.values()) freeSp(s); txtCache.clear(); numC.clear(); }
-  function sprClear() { for (const s of live) { s.dead = true; Bmp.free(s.cv); } live.clear(); spr.clear(); dropText(); sprPx = 0; sprGen++; }
+  function sprClear() { for (const s of live) { s.dead = true; Bmp.free(s.cv); } live.clear(); spr.clear(); geoms.clear(); dropText(); sprPx = 0; sprGen++; }
   if (typeof document !== 'undefined' && document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', dropText); // text baked with a fallback face is rebuilt once the webfont arrives
   // Bakes paint(g) into a canvas covering the box [x0,x1] x [y0,y1] of the painter's local space (add: additive compositing, so the blit equals drawing the parts additively).
   // Returns { cv, x, y, w, h }: the draw rectangle in the same local space (1 texel = 1 buffer pixel; the box snaps outward to the texel grid).
@@ -1430,10 +1431,12 @@
   const stLight = (x, y, r, col, k) => { if (stN < (R.quality === 'low' ? 8 : 26)) { stN++; R.light(x, y, r, col, k); R.emit(x, y, r * 0.45, col, k * 0.5); } };
   // Overlay geometry of a foe silhouette: radius r, body centre cy, half-height hh and top (feet-relative world px, up is negative) plus its baked status sprites; shared by every foe of that shape.
   // The numbers come from the atlas anchors (R.actorAnchor) when the actor drawing provides them, else from the per-look heights.
+  let gRise = 0; // current rise of the foe foeGeom last looked up (flyer bob, leap arc, hop): the geometry is the static body, the rise is added at draw time
   function foeGeom(e) {
     const r = e.r, an = R.actorAnchor ? R.actorAnchor(e) : null;
     let cy, top;
-    if (an) { cy = an.cy; top = an.top; }
+    gRise = an && an.rise || 0;
+    if (an) { cy = an.cy + gRise; top = an.top + gRise; }
     else { const fly = !!e.def.fly, bh = fly ? r * 2.6 : (LOOK_H[e.def.look] || r * 2.7) * (r / e.def.r); cy = fly ? -r * 1.7 : -bh * 0.5; top = -bh; }
     let G = e._sg;
     if (!G || G.r !== r || G.cy !== cy || G.top !== top) {
@@ -1527,8 +1530,8 @@
     const xm = ED.ClassFx.mark; let xn = 0;
     for (let i = 0; i < xm.length; i++) { const g = xm[i](e); if (g) xg[xn++] = g; }
     if (!(vl > 0 || skull || stun || chg || xn)) return;
-    const G = foeGeom(e), r = G.r, id = e.id | 0, af = e.elite ? ED.AFFIXES[e.elite] : null;
-    let b = e.boss ? s2(G.top) - 4 : s2(Math.min(G.top - 6, -(r * 2.6 + (e.def.fly ? 14 : 4)))) - 2; // bottom of the free space
+    const G = foeGeom(e), r = G.r, id = e.id | 0, af = e.elite ? ED.AFFIXES[e.elite] : null, top = G.top - gRise;
+    let b = e.boss ? s2(top) - 4 : s2(Math.min(top - 6, -(r * 2.6 + (e.def.fly ? 14 : 4)))) - 2; // bottom of the free space
     if (!e.boss) { if (e.ward > 0) b -= (R.scale >= 2 ? 2 : 3) + 1; if (af) b -= Math.ceil(R.labelH()) + 4; }
     const ox = Math.round(e.x), oy = Math.round(e.y) + b; // marks are laid out in the foe's feet frame with the baseline b, drawn at (ox, oy + ...)
     b = 0;
@@ -1558,18 +1561,18 @@
   // Chill, Freeze and Radiance halos are baked sprites (one blit each); the rest are atlas sprites and 2 px squares batched into one path per kind.
   function drawStatus(c, e, t, full) { // full = false (crowd LOD): the moving decoration (embers, bubbles, drips, motes, smoke) is skipped, every status keeps its icon, sprite or ring
     if (e.burrowed || e.hp <= 0) return;
-    const G = foeGeom(e), r = G.r, id = e.id | 0, cy = G.cy, hh = G.hh;
+    const G = foeGeom(e), r = G.r, id = e.id | 0, rise = gRise, cy = G.cy - rise, hh = G.hh;
     let s;
     if (e.ward > 0) {
       const sh = 0.5 + 0.2 * Math.sin(t * 4 + id), rx = Math.max(3, Math.round(r * 1.35 / 2)), ry = Math.max(3, Math.round(hh * 1.2 / 2));
       Pix.put(c, Pix.ell(rx, ry, '#7fc8ff', true), 0, s2(cy), sh * 0.22); Pix.put(c, Pix.ell(rx, ry, '#bfe3ff', false), 0, s2(cy), Math.ceil((sh + 0.25) * 4) / 4);
     }
     if (e.frozen > 0) {
-      s = frozenSprite(G); c.drawImage(s.cv, s.x, s.y, s.w, s.h);
+      s = frozenSprite(G); c.drawImage(s.cv, s.x, s.y - rise, s.w, s.h);
       stLight(e.x, e.y + cy, r * 3.2, '#8fe8ff', 0.5);
     } else if (e.chill > 0) {
       const ch = U.clamp(e.chill / 100, 0.1, 1);
-      s = chillSprite(G, Math.max(1, Math.round(ch * 8)), id & 3); c.drawImage(s.cv, s.x, s.y, s.w, s.h);
+      s = chillSprite(G, Math.max(1, Math.round(ch * 8)), id & 3); c.drawImage(s.cv, s.x, s.y - rise, s.w, s.h);
       if (R.actorTint) R.actorTint(c, e, '#c8f6ff', 0.15 + 0.2 * ch); // optional: the actor drawing tints its own silhouette
       stLight(e.x, e.y + cy, r * 2.6, '#7fe3ff', 0.15 + 0.35 * ch);
     }

@@ -121,8 +121,9 @@ void main(){
       glc.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;display:none;pointer-events:none';
       gl = glc.getContext('webgl', { alpha: false, antialias: false, depth: false, stencil: false, premultipliedAlpha: false, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
       if (!gl) throw new Error('webgl unavailable');
-      const di = gl.getExtension('WEBGL_debug_renderer_info');
-      Post.soft = /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(di ? String(gl.getParameter(di.UNMASKED_RENDERER_WEBGL)) : '');
+      let rn = String(gl.getParameter(gl.RENDERER) || ''); // Gecko reports the real renderer here; other engines mask it ('WebKit WebGL') and are asked through the debug extension
+      if (!/Firefox\//.test(navigator.userAgent) && /^(WebKit WebGL|Mozilla|)$/i.test(rn.trim())) { const di = gl.getExtension('WEBGL_debug_renderer_info'); if (di) rn = String(gl.getParameter(di.UNMASKED_RENDERER_WEBGL)); }
+      Post.soft = /SwiftShader|llvmpipe|softpipe|Software|Basic Render/i.test(rn);
       hud.parentNode.insertBefore(glc, hud);
       Post.canvas = glc;
       glc.addEventListener('webglcontextlost', (e) => { e.preventDefault(); Post.ready = false; Post.lost = true; glc.style.display = 'none'; });
