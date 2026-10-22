@@ -1,15 +1,18 @@
 // shade route-card visuals, client only: registers ED.ClassFx hooks (event, zone, hero and foe-mark hooks; contract in fx.js).
 // Events from src/sim/class-shade.js: exec, whirl, twincut, after, lure, sref, veil, sweep, rupt, bloom. Hero hook: Momentum pips and ribbons, stealth rim, Veil bubble. Zone hook: the Afterimage decoy. Mark hook: execution threshold.
+// Skill forms: blossom (a Death Blossom blink), after with k 1 (a Hall of Mirrors image shatters), clone / cloneswing (Umbral Veil), the decoy zone's mirror (tag 1) and clone (tag 2) looks, the Eclipse dome (smoke zone tag 2, called from render.js) and its sigil over the hero.
 // Everything is pixel art on the 2 world px grid (atlas sprites through FX.sheet, 2 px particles, cached Pix rings); each sprite effect is paired with particles, so it still reads without ED.ART.
 (function (ED) {
   'use strict';
-  const U = ED.U, TAU = U.TAU, Pix = ED.Pix, F = ED.FX, CFX = ED.ClassFx, s2 = Pix.s2;
+  const U = ED.U, TAU = U.TAU, Pix = ED.Pix, F = ED.FX, CFX = ED.ClassFx, s2 = Pix.s2, N = ED.Net;
   const SP = (id, x, y, o) => F.sheet(id, x, y, o);
   const VIOLET = '#b78cff', PALE = '#e8dcff', BLOOD = '#c01830', RED = '#ff3a4a';
   const A = () => ED.Audio, R = () => ED.Render;
   const low = () => !!R() && R().quality === 'low';
+  Object.assign(N.CAPS, { blossom: 8, clone: 3, cloneswing: 6 }); Object.assign(N.CAPS_LOCAL, { blossom: 4, clone: 2, cloneswing: 3 }); // a chain makes up to 6 blinks; clone attacks follow the hero's
   Pix.RAMP.execmark = ['#2a0408', '#6a0c18', '#c01830', '#e8283c', '#ff5a68']; // the skull of an executable foe: deep red, never white
   const dropOpts = (col, sp, life) => ({ kind: 'drop', color: col || BLOOD, sp: sp || 90, vz: 90, z: 8, life: life || 0.7, size: 2.4 });
+  const pick = (a) => a[(Math.random() * a.length) | 0];
   const mem = {}; // per hero: last Momentum count, next particle time, Veil bubble end
   const memOf = (pid) => mem[pid] || (mem[pid] = { n: 0, t: 0, veil: 0, full: false });
 
@@ -47,6 +50,14 @@
   // Afterimage burst (r80): a violet shockwave, dark smoke and a white flash; the blinded foes carry their own blind smoke.
   CFX.on('after', (ev, ctx, local) => {
     const m = ev.pid === local, r = ev.r || 80;
+    if (ev.k === 1) { // a Hall of Mirrors image shatters: a pale ring, a spray of glass and a white flash (three of these land together)
+      F.ring(ev.x, ev.y, r, '#dfe8ff', 0.36, 4); F.ring(ev.x, ev.y, r * 0.5, '#ffffff', 0.22, 2);
+      F.burst(ev.x, ev.y - 10, low() ? 8 : 16, { kind: 'shard', color: pick(['#ffffff', '#c9d6ff', PALE]), sp: r * 2.2, life: 0.6, size: 2.6, vz: 120, z: 8, add: true });
+      F.burst(ev.x, ev.y - 8, 6, { kind: 'streak', color: '#ffffff', sp: r * 2.6, life: 0.22, size: 1.8 }); F.pop(ev.x, ev.y - 10, r * 0.5, '#dfe8ff', 0.2, true);
+      if (m) { F.addShake(1.6); F.punch(0.3, 0); }
+      A().play('shatter', m ? 0.35 : 0.2); A().play('rift', m ? 0.25 : 0.12);
+      return true;
+    }
     F.ring(ev.x, ev.y, r, VIOLET, 0.4, 5); F.ring(ev.x, ev.y, r * 0.55, PALE, 0.26, 2);
     F.burst(ev.x, ev.y - 8, 14, { color: VIOLET, sp: r * 2.2, life: 0.45, size: 3, add: true });
     F.burst(ev.x, ev.y - 6, 6, { kind: 'smoke', color: '#241a3a', sp: r * 1.1, life: 0.6, size: 6, drag: 2.5 });
@@ -91,10 +102,46 @@
     F.burst(ev.x, ev.y - 6, 6, { color: VIOLET, sp: (ev.r || 70) * 1.6, life: 0.3, size: 2.4, add: true });
   });
 
-  // Night's Edge hits harder: the Ambush strike adds a wide violet-white cross at the hero.
+  // Night's Edge hits harder: the Ambush strike adds a wide violet-white cross at the hero. Eclipse: every attack is one, so inside the dome they are a quick pale crescent flick instead.
   CFX.on('ambush', (ev, ctx, local) => {
     const p = ctx.player(ev.pid); if (!p || !p.stats || !p.stats.nightsEdge) return;
+    if (p.stats.eclipse > 0 && p.dome !== undefined && p.ambFac < 1) return;
     F.ring(ev.x, ev.y, 34, PALE, 0.3, 3); F.ring(ev.x, ev.y, 20, VIOLET, 0.22, 2);
+  });
+
+  // ---------------- skill forms ----------------
+  // Death Blossom: each blink draws a violet line from where the hero stood to where it lands, leaves a fading silhouette there, and opens a petalled X on the foe it cut (higher chime with every blink).
+  CFX.on('blossom', (ev, ctx, local) => {
+    const m = ev.pid === local, a = Math.atan2(ev.ty - ev.y0, ev.tx - ev.x0), x = ev.tx, y = ev.ty - 8;
+    F.bolts.push({ pts: [[ev.x0, ev.y0 - 8], [ev.x1, ev.y1 - 8]], life: 0.2, max: 0.2, color: PALE, st: true }); if (F.bolts.length > 24) F.bolts.shift();
+    SP('hero.shade.idle', ev.x1, ev.y1, { ramp: 'shadow', frame: ev.n, life: 0.34, fade: true, a: 0.6 });
+    F.slash(x, y, a + 0.95, 46, 1.6, VIOLET, 0.24); F.slash(x, y, a - 0.95, 46, 1.6, PALE, 0.24); F.slash(x, y, a + Math.PI / 2, 38, 1.4, '#ffffff', 0.2); // a six-petal star
+    SP('fx.cutx', x, y, { ramp: 'shadow', add: true, a: m ? 1 : 0.7, lt: VIOLET, ltr: 60 });
+    F.burst(x, y, low() ? 7 : 14, { kind: 'shard', color: pick([PALE, VIOLET, '#ffffff']), sp: 170, life: 0.55, size: 2.6, vz: 60, z: 4, add: true, drag: 1.4 });
+    F.pop(x, y, 28, VIOLET, 0.2, true); F.ring(x, ev.ty, 22 + 4 * ev.n, PALE, 0.28, 2); F.ring(ev.x1, ev.y1, 16 + 3 * ev.n, VIOLET, 0.24, 2);
+    if (m) { F.hitStop(0.03); F.addShake(1.2 + 0.3 * ev.n); }
+    A().play('blossom', m ? 0.8 : 0.4, ev.n);
+  });
+  // Umbral Veil: the clone splits off the hero in a puff of shadow.
+  CFX.on('clone', (ev, ctx, local) => {
+    const m = ev.pid === local;
+    F.ring(ev.x, ev.y, 34, VIOLET, 0.4, 3); F.burst(ev.x, ev.y - 10, 10, { kind: 'smoke', color: '#241a3a', sp: 60, life: 0.6, size: 6, drag: 2.5 });
+    F.burst(ev.x, ev.y - 10, 8, { color: VIOLET, sp: 70, life: 0.4, size: 2.4, add: true }); SP('fx.smoke.ring', ev.x, ev.y + 2, { ramp: 'shadow' });
+    A().play('umbral', m ? 0.7 : 0.35);
+  });
+  // The clone's own swing (re-addressed from the hero's by the sim): a darker slash from the clone's spot.
+  CFX.on('cloneswing', (ev, ctx, local) => {
+    F.slash(ev.x, ev.y - 10, ev.a, ev.r, ev.arc, '#8e5cff', 0.2); F.pop(ev.x, ev.y - 10, 10, VIOLET, 0.1);
+    A().play('swing', ev.pid === local ? 0.2 : 0.1);
+  });
+  // Eclipse: the dome rises with Vanish - a dark ring races out, a low tone, a pale flash for the owner.
+  CFX.on('skill', (ev, ctx, local) => {
+    if (ev.k !== 'vanish' || !ev.dome) return;
+    const m = ev.pid === local, r = 140;
+    F.ring(ev.x, ev.y, r, '#6a4cc0', 0.5, 6); F.ring(ev.x, ev.y, r * 0.6, PALE, 0.4, 2);
+    F.burst(ev.x, ev.y - 8, 14, { color: VIOLET, sp: r * 1.6, life: 0.6, size: 3, add: true });
+    if (m) { F.punch(0.5, 0.2); F.addShake(2); }
+    A().play('eclipse', m ? 0.8 : 0.4);
   });
 
   // Rupture: the foe bursts at once - crimson droplets for the Bleed, embers for the Burn, a ring of the splash radius.
@@ -172,12 +219,16 @@
       c.fillStyle = '#ffffff'; c.fillRect(s2(Math.cos(t * 2) * rx), s2(cy + Math.sin(t * 2) * ry), 2, 2);
       c.globalAlpha = ga;
     }
+    // Eclipse: a small pale ring turns over the head while an Ambush is held ready
+    if (st.eclipse > 0 && p.ambush && !p.downed) { const an = R().actorAnchor ? R().actorAnchor(p) : null, ga = c.globalAlpha; c.globalAlpha = 1; Pix.put(c, Pix.ring(4, 1, '#2e1a5a', VIOLET, '#ffffff', 3, (t * 8) & 7), 0, s2(an ? an.top : -26) - 8, 0.85); c.globalAlpha = ga; }
   });
 
   // ---------------- zone hook: the Afterimage decoy ----------------
   // A translucent Shade silhouette stands where the hero was, inside a dashed ring of the burst radius; as the fuse burns a ring fills in, cracks spread across the silhouette and it flashes white just before the burst.
   CFX.zone.decoy = (c, z, pass, t, k, view) => {
     const x = s2(z.x), y = s2(z.y), fuse = z.dur - z.t;
+    if (z.w === 2) return cloneBody(c, z, pass, t, k, x, y);
+    if (z.w === 1) return mirrorBody(c, z, pass, t, k, view, x, y, fuse);
     if (pass === 0) {
       const flash = k > 0.82 && Math.sin(t * 36) > 0, a = flash ? 0.9 : 0.45 + Math.sin(t * 14) * 0.12;
       Pix.put(c, Pix.ring(Math.max(2, Math.round(z.r / 2)), 1, '#8e5cff', VIOLET, PALE, 3, (t * 4) & 7), x, y, 0.35 + 0.4 * k);
@@ -196,6 +247,66 @@
         R().glow(c, z.x, z.y - 12, z.r * (1.3 - fuse), '#c9b3ff', 0.35 * (1 - fuse / 0.3));
       }
     }
+  };
+
+  // Hall of Mirrors image (decoy zone, tag 1): a pale pane with the hero's silhouette in silver, the burst radius dashed on the ground, a thin pale triangle joining the three images, cracks as the fuse burns and a white flicker before it shatters.
+  function mirrorBody(c, z, pass, t, k, view, x, y, fuse) {
+    const fade = Math.min(1, z.t * 5);
+    if (pass === 0) {
+      const flash = k > 0.85 && Math.sin(t * 40) > 0, a = (flash ? 0.95 : 0.7 + Math.sin(t * 10 + z.id) * 0.1) * fade;
+      Pix.put(c, Pix.ring(Math.max(2, Math.round(z.r / 2)), 1, '#7a86c8', '#c9d6ff', '#ffffff', 3, (t * 3) & 7), x, y, (0.28 + 0.4 * k) * fade);
+      Pix.put(c, Pix.ring(Math.max(2, Math.round(z.r * Math.max(0.08, k) / 2)), 1, '#7a86c8', '#ffffff', '#ffffff'), x, y, 0.5 * fade);
+      c.globalAlpha = 0.3 * fade; c.fillStyle = '#c9d6ff'; c.fillRect(x - 8, y - 32, 16, 32); c.globalAlpha = 0.8 * fade; c.fillStyle = '#ffffff'; c.fillRect(x - 8, y - 32, 2, 32); c.fillRect(x - 8, y - 32, 16, 2); c.fillRect(x + 6, y - 32, 2, 32); c.globalAlpha = 1;
+      if (!Pix.draw(c, 'hero.shade.idle', 'general', (t * 6.7) | 0, x, y, a)) Pix.put(c, Pix.ell(4, 6, flash ? '#ffffff' : '#c9d6ff', true), x, y - 12, a);
+      if (k > 0.3) { // cracks across the pane
+        const n = 1 + Math.floor((k - 0.3) * 9), sd = z.id * 5.3;
+        c.fillStyle = '#ffffff'; c.globalAlpha = 0.9 * fade; c.beginPath();
+        for (let i = 0; i < n; i++) { const a0 = Pix.hash(sd + i) * TAU, l = 8 + Pix.hash(sd + i * 3) * 12, bx = x + Math.cos(a0) * 3, by = y - 16 + Math.sin(a0) * 8; Pix.line(c, bx, by, bx + Math.cos(a0 + 0.6) * l * 0.5, by + Math.sin(a0 + 0.6) * l * 0.5, 2); Pix.line(c, bx + Math.cos(a0 + 0.6) * l * 0.5, by + Math.sin(a0 + 0.6) * l * 0.5, bx + Math.cos(a0) * l, by + Math.sin(a0) * l, 2); }
+        c.fill(); c.globalAlpha = 1;
+      }
+      R().light(z.x, z.y - 10, 50 + 24 * k, '#c9d6ff', (0.3 + 0.45 * k) * fade);
+    } else if (pass === 1) {
+      R().glow(c, z.x, z.y - 14, 20 + k * 20, '#dfe8ff', (0.22 + 0.3 * k) * fade);
+      if (view) { // the triangle: each image draws its lines to the images of the same cast that came after it
+        c.fillStyle = '#dfe8ff'; c.globalAlpha = 0.28 * fade; c.beginPath();
+        for (const o of view.zones) if (o !== z && o.kind === 'decoy' && o.w === 1 && o.owner === z.owner && o.id > z.id) Pix.line(c, z.x, z.y - 4, o.x, o.y - 4, 2);
+        c.fill(); c.globalAlpha = 1;
+      }
+    }
+  }
+  // Umbral Veil clone (decoy zone, tag 2): the hero's shadow standing where Vanish was cast, flickering, ringed in violet, shadow motes rising; it fades in and out.
+  function cloneBody(c, z, pass, t, k, x, y) {
+    const fade = Math.min(1, z.t * 4, (z.dur - z.t) * 2.5), flick = 0.72 + 0.14 * Math.sin(t * 9 + z.id);
+    if (fade <= 0.01) return;
+    if (pass === 0) {
+      Pix.put(c, Pix.ell(6, 3, '#0a0414', true), x, y, 0.45 * fade);
+      Pix.put(c, Pix.ell(9, 4, VIOLET, false, 2, (t * 4) & 7), x, y + 2, 0.75 * fade);
+      if (!Pix.draw(c, 'hero.shade.idle', 'shadow', (t * 6.7) | 0, x, y, flick * fade)) Pix.put(c, Pix.ell(4, 6, '#2a1f44', true), x, y - 12, flick * fade);
+      R().light(z.x, z.y - 10, 56, VIOLET, 0.4 * fade);
+    } else if (pass === 1) {
+      R().glow(c, z.x, z.y - 12, 24, VIOLET, 0.35 * fade);
+      c.fillStyle = PALE;
+      for (let i = 0; i < 3; i++) { const kk = (t * 0.7 + i / 3 + z.id * 0.13) % 1; c.globalAlpha = Math.max(0.25, Math.ceil((1 - kk) * 4) / 4) * fade; c.fillRect(s2(z.x + Math.sin(t * 2 + i * 2.1) * 6), s2(z.y - 6 - kk * 32), 2, 2); }
+      c.globalAlpha = 1;
+    }
+  }
+  // Eclipse dome (smoke zone, tag 2, called from render.js): a dark disc with the bright rim of an eclipse, twinkling stars inside, a faint violet corona.
+  CFX.zone.dome = (c, z, pass, t) => {
+    const fade = Math.min(1, (z.dur - z.t) * 1.5, z.t * 4), x = s2(z.x), y = s2(z.y), ra = Math.max(2, Math.round(z.r / 2));
+    if (fade <= 0.01) return;
+    if (pass === 0) {
+      Pix.put(c, Pix.disc(ra, '#06030f'), x, y, 0.36 * fade); Pix.put(c, Pix.disc(Math.max(1, Math.round(ra * 0.62)), '#0a0418'), x, y, 0.3 * fade);
+      Pix.put(c, Pix.ring(ra, 3, '#2e1a5a', VIOLET, PALE, 5, (-t * 3) & 7), x, y, 0.9 * fade);
+      c.fillStyle = PALE;
+      for (let i = 0, n = low() ? 9 : 22; i < n; i++) { // stars at fixed spots of the dome, each twinkling on its own beat
+        const a = Pix.hash(z.id * 3.1 + i) * TAU, d = Math.sqrt(Pix.hash(z.id * 7.3 + i * 1.9)) * z.r * 0.92;
+        const big = (i % 5) === 0, sx = s2(z.x + Math.cos(a) * d), sy = s2(z.y + Math.sin(a) * d * 0.9);
+        c.globalAlpha = (Math.sin(t * 2.6 + i * 1.9) > 0.1 ? 1 : 0.3) * fade; c.fillRect(sx, sy, 2, 2);
+        if (big) { c.fillRect(sx - 2, sy, 6, 2); c.fillRect(sx, sy - 2, 2, 6); } // a few stars are crosses
+      }
+      c.globalAlpha = 1;
+      R().light(z.x, z.y, z.r * 1.25, '#6a4cc0', 0.3 * fade);
+    } else if (pass === 1) R().glow(c, z.x, z.y, z.r * 1.08, '#8e5cff', 0.14 * fade);
   };
 
   // ---------------- foe mark: execution threshold ----------------

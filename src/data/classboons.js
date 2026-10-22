@@ -137,7 +137,7 @@
   card('shade', 'skill1', 2, 's_s1_a', { name: 'Assassinate', icon: 'dagger', tag: 'Burst',
     desc: 'Shadowstep deals +{assassinate} to foes below 50% health, and a Shadowstep kill refunds it (at most once per 1.5 s).[ Shadowstep deals +{s1Dmg}.]',
     rider2: 'Twin Cut: a second slash runs the Shadowstep path 0.15 s later at {stepTwin}.', mods: { assassinate: 0.3 }, up: { s1Dmg: 0.1 }, r2: { stepTwin: 0.5 }, r3: { blossom: 0.7, blossomN: 3, blossomMax: 6 },
-    form: { name: 'Death Blossom', desc: 'After the blink you cut on: you blink to the nearest foe not yet cut within 120 of where you stand, {blossomN:n} more times, 0.1 s apart and untouchable meanwhile. Each cut is a guaranteed critical hit for {blossom} of a Shadowstep slash. Killing a foe (not a horde foe) adds one more cut, up to {blossomMax:n}.' } });
+    form: { name: 'Death Blossom', desc: 'After the blink you blink on to the nearest foe not yet cut within 120 of where you stand, {blossomN:n} more times, 0.1 s apart and untouchable meanwhile. Each blink cuts for a guaranteed critical hit of {blossom} of a Shadowstep slash. Killing a foe (not a horde foe) adds one more blink, up to {blossomMax:n}.' } });
   card('shade', 'skill1', 2, 's_s1_b', { name: 'Afterimage', icon: 'mirror', tag: 'Guard',
     desc: 'Shadowstep leaves an afterimage where you stood; 1.2 s later it bursts (radius 80), hurting foes and blinding them 1 s (elites 0.5 s, not bosses).[ Shadowstep deals +{s1Dmg}.]',
     rider2: 'Lure: just before it bursts, the afterimage pulls foes within {afterPull:n} toward it.', mods: { afterimage: 1 }, up: { s1Dmg: 0.1 }, r2: { afterPull: 120 }, r3: { mirrorHall: 1 },
@@ -147,11 +147,11 @@
   card('shade', 'skill2', 2, 's_s2_a', { name: "Night's Edge", icon: 'mask', tag: 'Burst',
     desc: "Ambush deals ×{ambushMul:a25} of your weapon's base damage. An Ambush refunds Shadowstep; an Ambush kill refunds Vanish (at most once per 3 s).",
     rider2: 'Ambush Sweep: Ambush also strikes every foe within {ambushCleave:n} of its target.', mods: { ambushMul: 1.25, nightsEdge: 1 }, up: { ambushMul: 0.25 }, r2: { ambushCleave: 70 }, r3: { eclipse: 0.6, eclipseDur: 4 },
-    form: { name: 'Eclipse', desc: "Vanish's smoke becomes a dark dome (radius 140) that lasts {eclipseDur:s}. While you stand inside you stay unseen and every attack is an Ambush at {eclipse}, not only the next one (the extra Ambushes refund nothing). Foes inside take +20% damage." } });
+    form: { name: 'Eclipse', desc: "Vanish's smoke becomes a dark dome (radius 140) that lasts {eclipseDur:s}. While you stand inside you stay unseen and every attack is an Ambush for {eclipse} of the full one, not only the next (the extra Ambushes refund nothing). Foes inside take +20% damage." } });
   card('shade', 'skill2', 2, 's_s2_b', { name: 'Veil of Night', icon: 'cloak', tag: 'Guard',
     desc: 'Vanish shields you for {veil} max health (at most once per 12 s); your smoke blinds each foe {veilBlind:s} longer (elites half); stealth lasts {stealthDur:s} longer; Ambush deals ×{ambushMul:a25} of your weapon\'s base damage.',
     rider2: 'Shroud: your smoke slows foes 60% (from 40%) and lasts {s2Dur:s} longer.', mods: { veil: 0.03, veilBlind: 1, stealthDur: 1, ambushMul: 0.5 }, up: { stealthDur: 0.5 }, r2: { shroud: 1, s2Dur: 2 }, r3: { umbral: 2, cloneMul: 0.5 },
-    form: { name: 'Umbral Veil', desc: 'Vanish leaves a shadow clone where you stood for 4 s. It repeats each of your weapon attacks from its own spot toward your aim at {cloneMul}, and foes (not bosses) go for it as if it were you. Your smoke blinds {umbral:n} times as long (the cooldown cap still holds).' } });
+    form: { name: 'Umbral Veil', desc: 'Vanish leaves a shadow clone where you stood for 4 s. It repeats each of your weapon attacks from its own spot toward your aim for {cloneMul} of the damage, and foes (not bosses) go for it as if it were you. Your smoke blinds {umbral:n} times as long (the cooldown cap still holds).' } });
   card('shade', 'element', 1, 's_el', { name: 'Cruel Arts', icon: 'fang', forks: ['s_el_a', 's_el_b'], plays: 'open wounds, then rip them open.', desc: BLEED, mods: { bleedAll: 0.1, statusPow: 0.15 } });
   card('shade', 'element', 2, 's_el_a', { name: 'Open Veins', icon: 'drop', tag: 'Focus', coop: true,
     desc: 'Your crits deal +{veins} for each ailment on the foe (up to 4).',

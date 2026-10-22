@@ -254,7 +254,7 @@
     for (const s of ED.Tiles.statics(room)) qDraw(dn++, s.key, 3, s); // tall pieces of the room art (columns, standing decor, door arch)
     if (artProps) for (const p of view.props) qDraw(dn++, p.y, 4, p); // pixel-art props sort with the entities
     crowdLod(view, local, nFoe, dn);
-    for (const z of view.zones) if ((z.kind === 'fire' || z.kind === 'pfire') && fireFade(z) > 0.01) { // fire flames: kind 5 entries (3 and 4 are the room's statics and props), d = flame index
+    for (const z of view.zones) if ((z.kind === 'fire' || z.kind === 'pfire') && z.w !== 10 && fireFade(z) > 0.01) { // (the Phoenix ring draws its own tongues) fire flames: kind 5 entries (3 and 4 are the room's statics and props), d = flame index
       const nf = fireCount(z), vis = Math.max(1, Math.ceil(nf * fireFade(z)));
       for (let i = 0; i < vis; i++) { flamePos(z, i); qDraw(dn, flY, 5, z); drawPool[dn++].d = i; }
     }
@@ -809,7 +809,8 @@
           break;
         }
         case 'fire': case 'pfire': {
-          if (z.w === 9 && ED.ClassFx.lava) { ED.ClassFx.lava(c, z, pass, t); break; } // a Lava Pool (Magma Heart) draws its own molten ground
+          if (z.w === 9 && ED.ClassFx.lava) { ED.ClassFx.lava(c, z, pass, t); break; } // a Lava Pool (Magma Heart) and the Cataclysm field draw their own molten ground
+          if (z.w === 10 && ED.ClassFx.zone.phoenix) { ED.ClassFx.zone.phoenix(c, z, pass, t); break; } // the Phoenix Form ring that follows its hero (cls-pyro.js)
           const fade = Math.min(1, (z.dur - z.t) * 2, z.t * 5), pf = z.kind === 'pfire';
           if (pass === 0) {
             if (pf) discPut(c, z.x, z.y, z.r, '#ffb347', 0.25 * fade);
@@ -886,6 +887,7 @@
           break;
         }
         case 'smoke': { // Vanish cloud: billowing violet-grey puffs (fx.smoke loops), translucent so the hero inside stays readable
+          if (z.w === 2 && ED.ClassFx.zone.dome) { ED.ClassFx.zone.dome(c, z, pass, t, k, view); break; } // the Eclipse dome (cls-shade.js)
           const fade = Math.min(1, (z.dur - z.t) * 1.5, z.t * 3);
           if (pass === 0) {
             discPut(c, z.x, z.y - 2, z.r * 0.95, '#3a3552', 0.3 * fade);

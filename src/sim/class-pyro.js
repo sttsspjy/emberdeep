@@ -16,7 +16,7 @@
   // Seconds after an attack that keep Channel alive: CHAN_IDLE, or 1.25 x the hero's attack interval when that is longer (a Heavy weapon attacks less often than every 0.6 s and would never build it).
   ED.chanWindow = (p) => Math.max(C.CHAN_IDLE, 1.25 * ED.Stats.attackInterval(p));
 
-  const burningSet = (w) => { const s = new Set(); for (const e of w.enemies) if (e.hp > 0 && e.burnPool > 0) s.add(e.id); return s; };
+  const burningSet = (w) => { const s = new Set(); for (const e of w.enemies) if (e.hp > 0 && e.burnPool > 0 && !e.fodder) s.add(e.id); return s; }; // Heat Engine refunds count foes that are not horde foes
 
   // Heat Engine: n distinct burning foes hit by a cast of skill `slot` cut HEAT_MAX at most from the other skill's cooldown (heatEngine seconds each); Chain Reaction (n >= heatChain, once per HEAT_CD) refunds it in full.
   function heat(w, p, slot, n) {
@@ -61,7 +61,7 @@
     let hit = 0;
     this.skillBlast(p, p.x, p.y, q.r, q.dmg, this.partSrc(p, N, 'blast'), (e, dealt) => {
       if (!(dealt > 0)) return;
-      hit++;
+      if (!e.fodder) hit++; // the Mantle shield needs a foe that is not a horde foe
       if (burning && burning.has(e.id)) seen.add(e.id);
       if (e.hp > 0) this.addBurn(e, b.dmg * (1 + st.classElMul), p);
     });
@@ -124,7 +124,7 @@
       }
       if (k < 1) continue;
       L.splice(i, 1);
-      if (st.supernovaPull > 0) { pull(w, v.x, v.y, v.r1, st.supernovaPull); w.emit({ t: 'pyPull', pid: p.pid, x: Math.round(v.x), y: Math.round(v.y), r: Math.round(v.r1), px: st.supernovaPull }); }
+      if (st.supernovaPull > 0) { pull(w, v.x, v.y, v.r1, st.supernovaPull); w.emit({ t: 'pyPull', pid: p.pid, x: Math.round(v.x), y: Math.round(v.y), r: Math.round(v.r1), px: st.supernovaPull, sn: 1 }); }
     }
   }
 
@@ -138,7 +138,7 @@
     else this.castMeteor(p, t.x, t.y, comet ? N.move.t : N.p.impact.delay, comet ? 1 + st.comet : 1, comet ? 'comet' : 'main');
     if (comet) {
       p.cometT = N.move.t;
-      this.emit({ t: 'pyComet', pid: p.pid, x: Math.round(p.x), y: Math.round(p.y), tx: Math.round(t.x), ty: Math.round(t.y), d: N.move.t });
+      this.emit({ t: 'pyComet', pid: p.pid, x: Math.round(p.x), y: Math.round(p.y), tx: Math.round(t.x), ty: Math.round(t.y), d: N.move.t, sd: st.sunDive > 0 ? 1 : 0 });
       if (st.sunDive > 0) { p.diveAt = this.time + N.move.t + C.SUN_GAP; p.diveRoom = this.room; }
     }
     return { tx: Math.round(t.x), ty: Math.round(t.y) };
@@ -167,7 +167,7 @@
     const g = Sim.groundPoint(w.room, w.locked, p.x, p.y, tx, ty, N.range, false);
     w.castMeteor(p, g.x, g.y, mv.t, 1 + st.comet, 'comet');
     p.cometT = mv.t;
-    w.emit({ t: 'pyComet', pid: p.pid, x: Math.round(p.x), y: Math.round(p.y), tx: Math.round(g.x), ty: Math.round(g.y), d: mv.t });
+    w.emit({ t: 'pyComet', pid: p.pid, x: Math.round(p.x), y: Math.round(p.y), tx: Math.round(g.x), ty: Math.round(g.y), d: mv.t, sd: 1 });
     if (p.remote) w.msgs.push({ to: p.pid, t: 'leap', x: Math.round(g.x), y: Math.round(g.y), d: mv.t, i: mv.iframes });
     else p.skillMove = ED.leapMove(w.room, w.locked, p, g.x, g.y, mv);
   }
@@ -195,6 +195,7 @@
       }
     });
     w.emit({ t: 'boom', x: Math.round(z.x), y: Math.round(z.y), r: Math.round(z.r), k: rock ? 'fire' : 'bigfire' });
+    if (comet && st.sunDive > 0) w.emit({ t: 'pyDive', pid: o.pid, x: Math.round(z.x), y: Math.round(z.y), r: Math.round(z.r) });
     if (own) w.addZone({ kind: 'pfire', x: z.x, y: z.y, r: cr.r, dur: cr.dur, dps: cr.dmg, owner: o.pid, team: 0, clsEl: st.element });
     if (storm) {
       if (--grp.left > 0) return;

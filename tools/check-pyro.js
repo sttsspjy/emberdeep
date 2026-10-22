@@ -293,6 +293,13 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
   s = mk({}, 4, 0); cast(s, 0, 0, 0); ok(refunds(s.w).length === 0, 'no refund without the card');
 }
 
+// ---- fodder contract: horde foes never feed a shield or a refund ----
+{
+  const s = stage({ p_s1: 1, p_s1_b: 1 }), e = foe(s.w, s.p.x + 70, s.p.y); e.fodder = true; cast(s, 0, 0, 0); near(s.p.shield, 0, 1e-9, 'Mantle: a Nova that only hit horde foes shields nobody'); near(s.p.mantleT, 0, 1e-9, 'and starts no Mantle cooldown'); ok(parts(s, 'nova.blast').length === 1, 'the horde foe was still struck');
+  const h = stage({ p_el: 1, p_el_b: 1 }); for (let i = 0; i < 4; i++) { const f = foe(h.w, h.p.x + 30 + i * 5, h.p.y - 10 + i * 6); f.burnPool = 60; f.burnOwner = h.p; f.burnTick = 99; f.burn = 1; f.fodder = i < 3; } h.w.msgs.length = 0; cast(h, 0, 0, 0);
+  const rf = h.w.msgs.filter(m => m.t === 'refund'); ok(rf.length === 1 && Math.abs(rf[0].s - 0.15) < 1e-9, 'Heat Engine counts the one burning foe that is not a horde foe (0.15 s of 4 burning foes)');
+}
+
 // ================= skill forms: rank 2 keeps the old rider, rank 3 is the transform =================
 const U_ = ED.U, hurt = (w, p) => { p.invuln = 0; return w.hurtPlayer(p, 1, { hazard: true }); };
 { // card text and totals of the four skill forks

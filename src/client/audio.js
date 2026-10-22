@@ -76,7 +76,7 @@
   };
   const rnd = (a, b) => a + Math.random() * (b - a);
 
-  const GAP = { hit: 0.035, ohit: 0.035, crit: 0.05, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1, freeze: 0.05, shatter: 0.06, combust: 0.06, guardhit: 0.06, block: 0.05, clang: 0.03, throw: 0.08, catch: 0.08, parry: 0.1, bell: 0.06, charge: 0.2, chargehit: 0.2, volley: 0.15, raincast: 0.15, smash: 0.05, dark: 0.5, dcharge: 0.08 };
+  const GAP = { hit: 0.035, ohit: 0.035, crit: 0.05, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1, freeze: 0.05, shatter: 0.06, combust: 0.06, guardhit: 0.06, block: 0.05, clang: 0.03, throw: 0.08, catch: 0.08, parry: 0.1, bell: 0.06, charge: 0.2, chargehit: 0.2, volley: 0.15, raincast: 0.15, smash: 0.05, dark: 0.5, dcharge: 0.08, blossom: 0.05, implode: 0.2 };
   const PRIO = { hurt: 3, down: 3, revive: 3, dread: 3, lock: 3, roar: 3, victory: 3, defeat: 3, crit: 2, level: 2, boon: 2, relic: 2, ohit: 0, spark: 0, eshoot: 0, xp: 0, gold: 0, spawn: 0 };
   // arg: cue-specific parameter (dread: the new tier; hit and crit: { w damage share, el element, n hits this frame }; clang: { n, g }; victory: 'boss' for the short one)
   A.play = (name, vol, arg, pr) => {
@@ -154,6 +154,15 @@
       case 'rupt': noise('lowpass', 2000, 180, 0.18, 0.26 * v, 1); tone('sine', 150, 55, 0.14, 0.2 * v); noise('highpass', 4200, 2200, 0.08, 0.08 * v); break;
       case 'sref': tone('sine', 880, 1320, 0.07, 0.09 * v); tone('sine', 1320, 1760, 0.1, 0.09 * v, null, t + 0.07); break;
       case 'veil': noise('highpass', 3200, 1400, 0.3, 0.06 * v, 0.7); tone('triangle', 330, 520, 0.28, 0.07 * v); tone('sine', 660, 780, 0.3, 0.04 * v); break;
+      // Skill forms. Pyromancer: Supernova swells and bursts, its collapse sucks in; Phoenix Form rises on a bright chord; Cataclysm rumbles; Sun Dive screams past. Shade: a blossom cut chimes higher with every blink (arg n), Eclipse is a low shadow, the clone breathes out
+      case 'supernova': noise('lowpass', 2600, 110, 0.75, 0.42 * v); tone('sine', 120, 26, 0.65, 0.42 * v); tone('sawtooth', 200, 900, 0.3, 0.1 * v); noise('highpass', 3000, 7000, 0.45, 0.12 * v); [660, 990, 1320].forEach((f, i) => tone('sine', f, f, 0.5, 0.05 * v, null, t + 0.05 + i * 0.05)); break;
+      case 'implode': noise('bandpass', 2400, 180, 0.24, 0.22 * v, 1.5); tone('sine', 760, 80, 0.24, 0.13 * v); break;
+      case 'phoenix': tone('triangle', 520, 1040, 0.4, 0.08 * v); noise('lowpass', 1800, 300, 0.45, 0.15 * v); [880, 1175, 1568].forEach((f, i) => tone('sine', f, f * 1.01, 0.5, 0.06 * v, null, t + 0.06 + i * 0.07)); break;
+      case 'sundive': noise('highpass', 800, 6000, 0.42, 0.2 * v, 0.7); tone('sawtooth', 160, 720, 0.4, 0.08 * v); tone('sine', 1320, 1760, 0.35, 0.05 * v); break;
+      case 'cataclysm': tone('sawtooth', 92, 38, 1.0, 0.14 * v); noise('lowpass', 520, 70, 1.0, 0.26 * v); tone('sine', 58, 38, 0.9, 0.22 * v); break;
+      case 'blossom': { const k = Math.pow(2, 2 * (Math.min(6, arg | 0) - 1) / 12); noise('bandpass', 3600 * k, 900, 0.07, 0.18 * v, 3); tone('triangle', 1175 * k, 880 * k, 0.12, 0.06 * v); tone('sine', 120, 55, 0.08, 0.14 * v); break; }
+      case 'eclipse': tone('sine', 82, 52, 1.2, 0.22 * v); tone('sine', 123, 96, 1.2, 0.1 * v); noise('lowpass', 320, 110, 1.0, 0.1 * v); tone('sine', 1640, 1560, 0.5, 0.03 * v, null, t + 0.1); break;
+      case 'umbral': noise('highpass', 2400, 900, 0.3, 0.07 * v, 0.7); tone('sine', 220, 330, 0.3, 0.07 * v); tone('triangle', 440, 330, 0.3, 0.05 * v); break;
       case 'evolve': [262, 330, 392, 523, 659].forEach((f, i) => { tone('triangle', f, f * 1.005, 0.9, 0.08 * v, null, t + i * 0.07); tone('sine', f * 2, f * 2, 0.7, 0.03 * v, null, t + i * 0.07); }); tone('sine', 131, 131, 1.0, 0.12 * v); noise('highpass', 7000, 4000, 0.6, 0.03 * v, 1, null, t + 0.3); break;
       case 'dread': { // low bell, deeper and more dissonant per tier
         const tier = arg | 0, f = [196, 147, 110, 73][Math.min(3, tier)];
