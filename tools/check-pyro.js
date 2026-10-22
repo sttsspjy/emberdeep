@@ -42,7 +42,7 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
   near(st({ p_s1: 1, p_s1_b: 2 }).s1Dmg, 1.2 * 1.1 - 1, 1e-9, 'Phoenix Mantle rank 2 Nova +10% (compounds)');
   near(st({ p_s2: 1, p_s2_a: 3 }).twinMeteor, 0.8, 1e-9, 'Twin Meteor 0.6 + 2 x 0.1'); near(st({ p_s2: 1, p_s2_b: 2 }).comet, 0.4, 1e-9, 'Comet 0.3 + 0.1'); near(st({ p_s2: 1, p_s2_b: 3 }).comet, 0.6, 1e-9, 'Sun Dive: every landing +60% (0.3 + 2 x 0.1 + 0.1)');
   near(st({ p_s2: 1, p_s2_b: 2 }).cometStun, 0.5, 1e-9, 'Impact Crater at rank 2'); near(st({ p_s2: 1, p_s2_b: 1 }).cometStun, 0, 1e-9, 'no Impact Crater at rank 1');
-  near(st({ p_el: 1, p_el_a: 3 }).burnMul, 0.4, 1e-9, 'White Heat burn 0.2 + 2 x 0.1'); near(st({ p_el: 1, p_el_a: 2 }).burnCrit, 0.05, 1e-9, 'Flashpoint at rank 2'); near(st({ p_el: 1, p_el_a: 1 }).burnCrit, 0, 1e-9, 'no Flashpoint at rank 1'); near(st({ p_el: 1, p_el_b: 3 }).heatEngine, 0.25, 1e-9, 'Heat Engine 0.15 + 2 x 0.05'); near(st({ p_el: 1, p_el_b: 2 }).heatChain, 2, 1e-9, 'Chain Reaction needs 2 from rank 2'); near(st({ p_el: 1, p_el_b: 1 }).heatChain, 0, 1e-9, 'no Chain Reaction at rank 1');
+  near(st({ p_el: 1, p_el_a: 3 }).burnMul, 0.4, 1e-9, 'White Heat burn 0.2 + 2 x 0.1'); near(st({ p_el: 1, p_el_a: 2 }).burnCrit, 0.05, 1e-9, 'Flashpoint at rank 2'); near(st({ p_el: 1, p_el_a: 1 }).burnCrit, 0, 1e-9, 'no Flashpoint at rank 1'); near(st({ p_el: 1, p_el_b: 3 }).heatEngine, 0.25, 1e-9, 'Heat Engine 0.15 + 2 x 0.05'); near(st({ p_el: 1, p_el_b: 2 }).heatChain, 2, 1e-9, 'Chain Reaction needs 2 from rank 2'); near(st({ p_el: 1, p_el_b: 1 }).heatChain, 0, 1e-9, 'no Chain Reaction at rank 1'); near(st({ p_el: 1, p_el_b: 2 }).s1Dmg, 0.3, 1e-9, 'Heat Engine rank 2: Nova +30%'); near(st({ p_el: 1, p_el_b: 2 }).s2Dmg, 0.3, 1e-9, 'Heat Engine rank 2: Meteor +30%'); near(st({ p_el: 1, p_el_b: 1 }).s1Dmg, 0, 1e-9, 'no skill damage at rank 1'); near(st({ p_el: 1, p_el_b: 3 }).s2Dmg, 0.3, 1e-9, 'rank 3 keeps it');
   const w1 = st({ p_atk: 1, p_atk_h: 1 }, 'emberwand').weapon, w2 = st({ p_atk: 1, p_atk_h: 1 }).weapon;
   near(w1.explode.r, 40, 1e-9, 'Magma Heart gives a blast-less weapon a blast (r40)'); near(w1.explode.mul, 0.5, 1e-9, 'Magma Heart blast 50%');
   near(w2.explode.r, 46, 0.01, 'Magma Staff keeps its own (15% bigger) blast'); near(w2.explode.mul, 0.6, 1e-9, 'Magma Staff blast mul');
@@ -291,6 +291,7 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
   s = mk({ p_el: 1, p_el_b: 2 }, 1, 0); cast(s, 0, 0, 0); ok(refunds(s.w)[0].s !== undefined, '1 burning foe: a partial cut only'); s = mk({ p_el: 1, p_el_b: 1 }, 4, 0); cast(s, 0, 0, 0); ok(refunds(s.w)[0].s !== undefined, 'rank 1: 4 burning foes cut only, no Chain Reaction');
   s = mk({ p_el: 1, p_el_b: 1 }, 4, 0); const e0 = s.w.enemies[0]; cast(s, 1, e0.x, e0.y); ok(refunds(s.w).length === 0, 'Meteor: nothing at the cast'); run(s, 1.0); r = refunds(s.w); ok(r.length === 1 && r[0].slot === 0 && r[0].s > 0, 'Meteor impact cuts the Nova cooldown');
   s = mk({}, 4, 0); cast(s, 0, 0, 0); ok(refunds(s.w).length === 0, 'no refund without the card');
+  { const dmgOf = (r) => { const q = stage({ p_el: 1, p_el_b: r }); foe(q.w, q.p.x + 60, q.p.y); cast(q, 0, 0, 0); return parts(q, 'nova.blast')[0].d; }; near(dmgOf(2) / dmgOf(1), 1.3, 1e-6, 'Heat Engine rank 2: the Nova deals +30%'); near(dmgOf(3) / dmgOf(2), 1, 1e-6, 'rank 3 adds no more to the plain Nova'); }
 }
 
 // ---- fodder contract: horde foes never feed a shield or a refund ----
@@ -577,7 +578,7 @@ const evAll = (s, t) => s.evs.concat(s.w.fx).filter(e => e.t === t);
   const one = stage({ p_el: 1, p_el_a: 3 }), e3 = foe(one.w, one.p.x + 60, one.p.y); burn(one.p, e3); run(one, 2.2, () => burn(one.p, e3)); ok(e3.wf.p0 >= 2 && e3.wf.p1 === undefined, 'the timer is kept per hero');
 }
 
-// ---- Inferno Engine: burning foes (not horde foes) a Nova or Meteor hits store Heat (a boss 3) up to 4; at full Heat the next cast is an Inferno (r x1.4, x5 damage and Burn) and the Heat empties ----
+// ---- Inferno Engine: burning foes (not horde foes) a Nova or Meteor hits store Heat (a boss 3) up to 4; at full Heat the next cast is an Inferno (r x1.4, x3 damage and Burn) and the Heat empties ----
 {
   const mk = (boons) => stage(Object.assign({ p_el: 1, p_el_b: 3 }, boons));
   const lit = (p, e) => { e.burnPool = 60; e.burnOwner = p; e.burnTick = 99; e.burn = 1; return e; };
@@ -594,15 +595,15 @@ const evAll = (s, t) => s.evs.concat(s.w.fx).filter(e => e.t === t);
   // the Inferno Nova
   const f = mk({}); f.p.heat = 4; const near1 = foe(f.w, f.p.x + 70, f.p.y), edge = foe(f.w, f.p.x + N.p.blast.r * 1.25 + 4, f.p.y), edge0 = foe(f.w, f.p.x - (N.p.blast.r * 1.4 + 24), f.p.y);
   cast(f, 0, 0, 0);
-  const bl = parts(f, 'nova.blast'); near(bl.find(h => h.e === near1).d / blast0, 5, 1e-6, 'the Inferno blast deals x5'); ok(bl.some(h => h.e === edge) && !bl.some(h => h.e === edge0), 'its radius is x1.4 (a foe beyond the plain radius is struck)');
-  near(f.adds.find(a => a.e === near1).amount / burn0, 5, 1e-6, 'its Burn add is x5'); near(f.p.heat, 0, 0, 'the Heat empties'); const go = evAll(f, 'pyEng').filter(x => x.go === 1); ok(go.length === 1 && go[0].n === 0 && Math.abs(go[0].r - N.p.blast.r * 1.4) <= 1, 'the Inferno event carries its radius');
+  const bl = parts(f, 'nova.blast'); near(bl.find(h => h.e === near1).d / blast0, 3, 1e-6, 'the Inferno blast deals x3'); ok(bl.some(h => h.e === edge) && !bl.some(h => h.e === edge0), 'its radius is x1.4 (a foe beyond the plain radius is struck)');
+  near(f.adds.find(a => a.e === near1).amount / burn0, 3, 1e-6, 'its Burn add is x3'); near(f.p.heat, 0, 0, 'the Heat empties'); const go = evAll(f, 'pyEng').filter(x => x.go === 1); ok(go.length === 1 && go[0].n === 0 && Math.abs(go[0].r - N.p.blast.r * 1.4) <= 1, 'the Inferno event carries its radius');
   f.log.length = 0; f.adds.length = 0; near1.hp = near1.maxHp = 5000; cast(f, 0, 0, 0); near(parts(f, 'nova.blast').find(h => h.e === near1).d / blast0, 1, 1e-6, 'the next Nova is plain again');
   // the Inferno Meteor
   const q = mk({}), q0 = mk({}); q.p.heat = 4;
   const mt = (s0) => { const a = foe(s0.w, s0.p.x + 200, s0.p.y), o = foe(s0.w, s0.p.x + 200 + 95 + 12 + 20, s0.p.y); cast(s0, 1, s0.p.x + 200, s0.p.y); const z = s0.w.zones.find(zz => zz.kind === 'meteor'), r = z.r; run(s0, 1.2); return { a, o, r, hit: parts(s0, 'meteor.impact') }; };
   const A = mt(q), B = mt(q0);
-  near(A.r / B.r, 1.4, 1e-9, 'the Inferno Meteor falls x1.4 wider'); near(A.hit.find(h => h.e === A.a).d / B.hit.find(h => h.e === B.a).d, 5, 1e-6, 'and deals x5'); ok(A.hit.some(h => h.e === A.o) && !B.hit.some(h => h.e === B.o), 'a foe past the plain radius is struck by the Inferno only');
-  ok(q.adds.length >= 1 && Math.abs(q.adds[0].amount / q0.adds[0].amount - 5) < 1e-6, 'its Burn add is x5'); near(q.p.heat, 0, 0, 'the Heat is spent at the cast'); ok(evAll(q, 'pyEng').filter(x => x.go === 1 && x.k === 1).length === 1 && evAll(q, 'pyEng').filter(x => x.go === 2).length === 1, 'a telegraph event at the cast and a landing event');
+  near(A.r / B.r, 1.4, 1e-9, 'the Inferno Meteor falls x1.4 wider'); near(A.hit.find(h => h.e === A.a).d / B.hit.find(h => h.e === B.a).d, 3, 1e-6, 'and deals x3'); ok(A.hit.some(h => h.e === A.o) && !B.hit.some(h => h.e === B.o), 'a foe past the plain radius is struck by the Inferno only');
+  ok(q.adds.length >= 1 && Math.abs(q.adds[0].amount / q0.adds[0].amount - 3) < 1e-6, 'its Burn add is x3'); near(q.p.heat, 0, 0, 'the Heat is spent at the cast'); ok(evAll(q, 'pyEng').filter(x => x.go === 1 && x.k === 1).length === 1 && evAll(q, 'pyEng').filter(x => x.go === 2).length === 1, 'a telegraph event at the cast and a landing event');
   // no Inferno below full Heat or without the form
   const h3 = mk({}); h3.p.heat = 3; foe(h3.w, h3.p.x + 70, h3.p.y); cast(h3, 0, 0, 0); near(parts(h3, 'nova.blast')[0].d / blast0, 1, 1e-6, 'Heat 3 of 4 is not an Inferno'); near(h3.p.heat, 3, 0, 'and is kept');
   const r2 = mk({ p_el_b: 2 }); r2.p.heat = 9; foe(r2.w, r2.p.x + 70, r2.p.y); cast(r2, 0, 0, 0); near(parts(r2, 'nova.blast')[0].d / blast0, 1, 1e-6, 'rank 2 has no Inferno');

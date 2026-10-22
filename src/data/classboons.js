@@ -131,8 +131,8 @@
     rider2: 'Flashpoint: Nova and Meteor always crit foes whose Burn exceeds {burnCrit} of their health.', mods: { burnMul: 0.2, searSkill: 0.1 }, up: { burnMul: 0.1 }, r2: { burnCrit: 0.05 }, r3: { whiteHot: 0.5, whiteT: 2 },
     form: { name: 'White Flame', desc: 'A foe that has kept burning for {whiteT:s} without a break turns white-hot: it takes +{whiteHot} damage from your hits, and Flashpoint always counts it.' } });
   card('pyro', 'element', 2, 'p_el_b', { name: 'Heat Engine', icon: 'hourglass', tag: 'Spread',
-    desc: "Each burning foe your Nova or Meteor hits cuts {heatEngine:s} from the other skill's cooldown (up to 1.5 s per cast).",
-    rider2: 'Chain Reaction: hitting {heatChain:n} or more burning foes with one cast refunds the other skill fully (at most once per 6 s).', mods: { heatEngine: 0.15 }, up: { heatEngine: 0.05 }, r2: { heatChain: 2 }, r3: { heatMax: 4, infernoMul: 5 },
+    desc: "Each burning foe your Nova or Meteor hits cuts {heatEngine:s} from the other skill's cooldown (up to 1.5 s per cast).[ Nova and Meteor deal +{s1Dmg}.]",
+    rider2: 'Chain Reaction: hitting {heatChain:n} or more burning foes with one cast refunds the other skill fully (at most once per 6 s).', mods: { heatEngine: 0.15 }, up: { heatEngine: 0.05 }, r2: { heatChain: 2, s1Dmg: 0.3, s2Dmg: 0.3 }, r3: { heatMax: 4, infernoMul: 3 },
     form: { name: 'Inferno Engine', desc: 'Each burning foe your Nova or Meteor hits stores 1 Heat (a boss 3), up to {heatMax:n}. At full Heat your next Nova or Meteor is an Inferno: radius ×1.4, ×{infernoMul:x} damage and Burn, and the Heat empties.' } });
 
   // ---------------- Shade (Shadowstep · Vanish) ----------------
