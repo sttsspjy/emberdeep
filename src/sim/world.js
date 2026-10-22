@@ -301,74 +301,30 @@
     for (const p of this.players.values()) if (p.shield > 0) p.shield = Math.max(0, p.shield - ED.CONST.SHIELD_DECAY * p.maxHp * dt);
   };
 
-  // Relics any party member has unlocked can drop for everyone (shared progression); with nobody holding any unlocks, the start relics.
-  W.prototype.unlockedRelics = function () {
-    const set = new Set();
-    for (const p of this.players.values()) for (const id of (p.meta.relics || [])) set.add(id);
-    if (!set.size) ED.RELIC_IDS.filter(id => ED.RELICS[id].start).forEach(id => set.add(id));
-    return set;
-  };
+  // Every relic can drop; relics no hero holds come first, else the whole list.
   W.prototype.relicPool = function () {
-    const set = this.unlockedRelics();
     const held = new Set();
     for (const p of this.players.values()) for (const id of p.relics) held.add(id);
-    let pool = [...set].filter(id => !held.has(id));
-    if (!pool.length) pool = [...set];
-    return pool;
+    const pool = ED.RELIC_IDS.filter(id => !held.has(id));
+    return pool.length ? pool : ED.RELIC_IDS;
   };
-  // A relic roll at least minRar. forHero: only relics that fit that hero (no element relics for a Generalist); without it, relics that fit at least one living hero, an element some living hero follows weighs x2 and any other element x0.5.
-  // noElement: element relics are left out (the first picks of a hoard or shop for each Generalist in the party).
-  W.prototype.rollRelic = function (minRar, exclude, forHero, noElement) {
+  // A relic roll at least minRar and not in `exclude`, weighted by rarity and stratum.
+  W.prototype.rollRelic = function (minRar, exclude) {
     const order = { c: 0, r: 1, e: 2, l: 3 };
-    const heroes = forHero ? [forHero] : this.alivePlayers();
-    const fits = (id) => (!ED.RELICS[id].el || !noElement) && (!heroes.length || heroes.some(q => ED.relicFits(q, id)));
-    const base = this.relicPool().filter(fits);
+    const base = this.relicPool();
     let pool = base.filter(id => order[ED.RELICS[id].rar] >= order[minRar || 'c'] && !(exclude && exclude.has(id)));
-    if (!pool.length) pool = base.length ? base : this.relicPool();
+    if (!pool.length) pool = base;
     const s = this.stratum;
     const w = { c: 50, r: 34 + s * 3, e: 14 + s * 3, l: 3 + s };
-    const owned = new Set();
-    if (!forHero) for (const q of heroes) for (const k of ED.elementGates(q.boons)) owned.add(k);
-    return this.rng.weighted(pool, id => { const r = ED.RELICS[id]; return w[r.rar] * (r.el && !forHero ? (owned.has(r.el) ? 2 : 0.5) : 1); });
+    return this.rng.weighted(pool, id => w[ED.RELICS[id].rar]);
   };
 
-  // A Generalist forsakes an element relic: it becomes a random unowned non-element relic of the same rarity (else the next rarity down, else 40 gold). Returns the new id or null.
-  W.prototype.transmuteRelic = function (p, id) {
-    const order = ['c', 'r', 'e', 'l'], set = this.unlockedRelics(), held = new Set();
-    for (const q of this.players.values()) for (const x of q.relics) held.add(x);
-    for (let i = order.indexOf(ED.RELICS[id].rar); i >= 0; i--) {
-      const pool = [...set].filter(x => !ED.RELICS[x].el && ED.RELICS[x].rar === order[i] && !held.has(x));
-      if (pool.length) return this.rng.pick(pool);
-    }
-    this.gold += 40;
-    return null;
-  };
-
-  // A Generalist who owns element relics swaps each one (Armory, or any picked before the Generalist gate).
-  W.prototype.forsakeRelics = function (p) {
-    for (let i = 0; i < p.relics.length; i++) {
-      const id = p.relics[i];
-      if (ED.relicFits(p, id)) continue;
-      const to = this.transmuteRelic(p, id);
-      this.msgs.push({ to: p.pid, t: 'toast', info: true, text: to ? `A Generalist forsakes element relics: ${ED.RELICS[id].name} becomes ${ED.RELICS[to].name}.` : `A Generalist forsakes element relics: ${ED.RELICS[id].name} is sold for 40 gold.` });
-      if (to) p.relics[i] = to; else { p.relics.splice(i, 1); i--; }
-    }
-    this.recalc(p, false);
-    this.sendBuild(p);
-  };
-
-  // Gives p a relic; a Generalist's element relic transmutes (the price paid stays paid).
+  // Gives p a relic and rebuilds its stats.
   W.prototype.giveRelic = function (p, id) {
-    if (!ED.relicFits(p, id)) {
-      const to = this.transmuteRelic(p, id);
-      this.msgs.push({ to: p.pid, t: 'toast', info: true, text: to ? `A Generalist forsakes element relics: ${ED.RELICS[id].name} becomes ${ED.RELICS[to].name}.` : `A Generalist forsakes element relics: ${ED.RELICS[id].name} is sold for 40 gold.` });
-      if (!to) return;
-      id = to;
-    }
     p.relics.push(id);
     this.recalc(p, false);
     this.run.maxRelics = Math.max(this.run.maxRelics, p.relics.length);
-    p.maxRelics = Math.max(p.maxRelics, p.relics.length); // the most this hero held (a Generalist's transmute can shrink the list)
+    p.maxRelics = Math.max(p.maxRelics, p.relics.length); // the most this hero held
     this.emit({ t: 'relic', pid: p.pid, id, x: p.x, y: p.y });
     this.sendBuild(p);
   };

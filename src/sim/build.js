@@ -29,7 +29,7 @@
     for (let i = rk('headstart'); i > 0; i--) this.grantOffer(p, { src: 'level' });
     const arm = rk('armory');
     if (arm) {
-      const pool = (p.meta.relics || []).filter(id => (arm >= 2 ? ED.RELICS[id].rar !== 'c' : ED.RELICS[id].rar === 'c') && !p.relics.includes(id));
+      const pool = ED.RELIC_IDS.filter(id => (arm >= 2 ? ED.RELICS[id].rar !== 'c' : ED.RELICS[id].rar === 'c') && !p.relics.includes(id));
       if (pool.length) { p.relics.push(this.rng.pick(pool)); p.maxRelics = p.relics.length; this.recalc(p, true); }
     }
   };
@@ -274,7 +274,6 @@
     const b = ED.BOONS[id];
     p.boons[id] = (p.boons[id] || 0) + 1;
     this.recalc(p, false);
-    if (id === 'generalist') this.forsakeRelics(p);
     if (b.heal) this.healPlayer(p, b.heal);
     if (b.mods.charges) p.chargeBonus = true;
     if (b.asc) p.ascN++;

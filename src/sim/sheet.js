@@ -531,7 +531,6 @@
     const push = (el, why) => { if (!el || seen[el] || !ED.PATHS[el] || !ED.PATHS[el].element) return; seen[el] = 1; mine.push({ el, name: ED.PATHS[el].name, color: ED.PATHS[el].color, why }); };
     for (const k of ED.elementGates(p.boons || {})) push(k, 'path');
     if (st.element) push(st.element, 'class');
-    for (const id of p.relics || []) if (ED.RELICS[id] && ED.RELICS[id].el) push(ED.RELICS[id].el, 'relic');
     const at = (stratum) => {
       const b = ED.BIOMES[stratum - 1];
       return { stratum, name: b.name, short: b.short, weak: b.weak, resist: b.resist, mine: mine.map(m => ({ el: m.el, name: m.name, color: m.color, why: m.why, mul: ED.elemMul(stratum, m.el), skillMul: m.el === st.element ? ED.affC(stratum, m.el) : null })) }; // mul: statuses and tagged hits; skillMul: the class element's skills (half the affinity), whichever source listed the element
@@ -594,7 +593,7 @@
     const groups = gates.map(k => 'path:' + k).concat(['duo', 'route', 'asc', 'open']).map(g => ({ group: g, path: g.indexOf('path:') === 0 ? g.slice(5) : null, items: rows.filter(r => r.group === g).sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind]) })).filter(g => g.items.length);
     const relics = (p.relics || []).map(id => {
       const r = ED.RELICS[id], i = Sh.READY.findIndex(x => x.id === id);
-      return { id, name: r.name, icon: r.icon, rar: r.rar, text: r.desc, live: relicLive(id, p, st, ctx), state: i >= 0 ? (readyOf(p, i) ? 'ready' : id === 'angel' || id === 'phoenix' ? 'used' : 'recharging') : null, el: r.el || null };
+      return { id, name: r.name, icon: r.icon, rar: r.rar, text: r.desc, live: relicLive(id, p, st, ctx), state: i >= 0 ? (readyOf(p, i) ? 'ready' : id === 'angel' || id === 'phoenix' ? 'used' : 'recharging') : null };
     });
     const statuses = [];
     for (const m of ED.ELEMENT_IDS) if (st[ED.ELEMENTS[m].inf] > 0 || st.element === m) { const S = ED.STATUS[ED.PATHS[m].status]; statuses.push({ id: ED.PATHS[m].status, name: S.name, color: S.color, rule: S.rule, el: m }); }
