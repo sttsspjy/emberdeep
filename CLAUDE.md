@@ -49,10 +49,10 @@ docs/                    GAME-DESIGN.md · MASTERPLAN.md · MASTERPLAN-AGENT.md 
 7. **All hotkeys use `e.code`** — `e.key` breaks on non-Latin layouts.
 8. **Save code is positional** (UPGRADES, CLASS_IDS, ARMORY per class, DEEDS order): append only, each list carries a count prefix (`CODE_VERSION` 5); reordering or removing bumps `CODE_VERSION`. The v4 relic table in `src/save.js` is frozen (old profiles and codes decode against it).
 9. **Balance claims need numbers** — run `tools/bal.js` (quick suite, ≤ 3 min; `--from=N` starts bots at stratum N, `--vet` is the human-proxy bot) or `tools/simpool.js` before/after and report win rate, depth, time. One `--full` confirm at the end, never repeated long batches.
-13. **Browser checks are headless** — `tools/browse.js` only; never open a visible browser window. The user does the vsync fps check.
 10. **Low quality must stay fast** — WebGL post-process is optional; the 2D path must work without it.
 11. **Rules and numbers follow [docs/GAME-DESIGN.md](docs/GAME-DESIGN.md)** — change the doc and the code together.
 12. **`src/art/` is generated** — edit `art-src/` or `tools/art-manifest.js`, run `node tools/art.js`, and keep `node tools/art.js --check` passing; attribution for CC-BY packs stays in the README Credits and the in-game Credits screen.
+13. **Browser checks are headless** — `tools/browse.js` only; never open a visible browser window. The user does the vsync fps check.
 
 ## Git rules
 
