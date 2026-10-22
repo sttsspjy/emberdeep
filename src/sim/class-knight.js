@@ -1,6 +1,7 @@
 // Knight: Shield Charge (a contact sweep at CHARGE_SPEED), Shield Throw (a thrown shield that ricochets, stuns, swats shots and returns) and the Knight route cards that act on them.
 // Cleave, Parry, Brace, Brand and the shared engines live in combat.js; this file owns the two skills, the shield's flight and the Knight hook table ED.CLS.knight.
 // Skill forms (rank 3): Avalanche (carry + slam + cracks), Iron Phalanx (wide band + War Banner), Aegis Tempest (three shields + vortex), Bastion (two orbiting shields).
+// Route forms (rank 3): Earthsplitter (a fissure per Cleave), Thousand Edges (blade waves per Cleave), Doombrand (Mark at 4 ailments, Brand counts 6), Cataclysm (a strike detonates the Bleed pool); they run through the hook table at the end.
 (function (ED) {
   'use strict';
   const U = ED.U, D = ED.Dungeon, Sim = ED.Sim, C = ED.CONST;
@@ -385,14 +386,102 @@
     }
   };
 
+  // ---------------- route forms: Earthsplitter, Thousand Edges, Doombrand, Cataclysm ----------------
+  // Fodder: these only damage, spread statuses and mark; none grants a refund, a shield or a stack, so a fodder foe takes part like any other.
+  // FISSURE_*: reach, width and delay of an Earthsplitter fissure. BLADE_*: reach, half width and speed of a Thousand Edges wave; FAN: angle between the waves of a Parry fan.
+  // DOOM_AT / DOOM_T / DOOM_EVERY: ailments that Doombrand a foe, seconds it stays Marked, seconds between scans. CATA_AT / CATA_R / CATA_CD: ailments, burst radius and per-foe cooldown of Cataclysm.
+  const FISSURE_LEN = 180, FISSURE_W = 36, FISSURE_T = 0.25, BLADE_LEN = 180, BLADE_R = 12, BLADE_SPEED = 480, FAN = 0.35;
+  const DOOM_AT = 4, DOOM_T = 4, DOOM_EVERY = 0.1, CATA_AT = 3, CATA_R = 80, CATA_CD = 1;
+  const CATA_PARTS = new Set(['charge.impact', 'shieldthrow.strike']);
+
+  // True when the attack whose events began at w.fx[p.fx0] swung a Cleave (meleeSwing emits one 'swing' event with k 'cleave' per Cleave).
+  function cleaved(w, p) {
+    for (let i = p.fx0; i < w.fx.length; i++) { const ev = w.fx[i]; if (ev.t === 'swing' && ev.k === 'cleave' && ev.pid === p.pid) return true; }
+    return false;
+  }
+
+  // Earthsplitter: a 'crack' zone (arc 1 marks the fissure look) from the hero along a, clipped at walls (castMove walks in 8 px steps, so it looks 4 px past the reach); when it ends every foe on it takes `fissure` x the weapon damage once and a repeating stun of cStun.
+  function fissure(w, p, a) {
+    const end = Sim.castMove(w.room, p.x, p.y, a, FISSURE_LEN + 4, 4, w.locked), len = Math.min(FISSURE_LEN, Math.hypot(end.x - p.x, end.y - p.y)), pid = p.pid;
+    if (len < 12) return;
+    w.addZone({ kind: 'crack', x: p.x, y: p.y, a, len, w: FISSURE_W, arc: 1, dur: FISSURE_T, team: 0, owner: pid, custom: true,
+      onEnd: (world, z) => {
+        const ow = world.players.get(pid);
+        if (!ow || !(ow.stats.fissure > 0)) return;
+        const st = ow.stats, cs = Math.cos(z.a), sn = Math.sin(z.a), x1 = z.x + cs * z.len, y1 = z.y + sn * z.len;
+        for (const e of world.enemies) {
+          if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed || U.segDist2(e.x, e.y, z.x, z.y, x1, y1) >= (z.w / 2 + e.r) ** 2) continue;
+          world.hitEnemy(e, st.weapon.dmg * st.fissure, { p: ow, kind: 'explode', wpn: true, noProc: true, crit: false, noGuard: true, x: z.x, y: z.y, kx: cs, ky: sn, part: 'fissure' });
+          if (e.hp > 0) world.stunFoe(e, st.cStun, true);
+        }
+        world.emit({ t: 'fissure', x: Math.round(z.x), y: Math.round(z.y), a: Math.round(z.a * 100) / 100, len: Math.round(z.len), pid });
+      } });
+  }
+
+  // Thousand Edges: one piercing blade wave along a (a Parry: three, FAN apart) at bladeWave x the weapon damage; each wave is an ordinary hero shot (it can crit and builds statuses).
+  function bladeWaves(w, p, a, st, parried) {
+    const n = parried ? 3 : 1, dmg = st.weapon.dmg * st.bladeWave;
+    for (let i = 0; i < n; i++) {
+      w.spawnProj({ team: 0, kind: 'blade', x: p.x, y: p.y - 4, a: a + (i - (n - 1) / 2) * FAN, speed: BLADE_SPEED, r: BLADE_R, dmg, life: BLADE_LEN / BLADE_SPEED, pierce: 99, owner: p.pid, knock: 40, wpn: true, part: 'bladewave' });
+    }
+  }
+
+  // Doombrand: every foe holding DOOM_AT ailments (from any hero) stays Marked for DOOM_T s at brandMark. The Mark is shared with Hunter's Mark: the strongest value wins (a tie keeps the existing one) and only a Hunter's Mark keeps markBy, which owns the leap.
+  function doombrand(w, p) {
+    const v = p.stats.brandMark;
+    for (const e of w.enemies) {
+      if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed || w.ailments(e) < DOOM_AT) continue;
+      if (!(e.mark > 0) || v > e.markV) { e.markV = v; e.markBy = 0; }
+      e.mark = Math.max(e.mark, DOOM_T);
+    }
+  }
+
+  // Cataclysm: a Charge impact or Throw strike on a foe with CATA_AT ailments and a Bleed pool pays the pool x (1 + bleedMul) x (1 + cataMul) at once (a foe the strike just killed takes nothing) and bursts cataSplash of the amount paid to foes within CATA_R as new Bleed (SPREAD_CAP of their HP at most).
+  function cataclysm(w, p, e) {
+    const st = p.stats, pool = e.bleedPool;
+    if (!(pool > 0)) return;
+    e.cataT = w.time + CATA_CD; e.bleedPool = 0;
+    const paid = pool * (1 + st.bleedMul) * (1 + st.cataMul);
+    if (e.hp > 0) w.hitEnemy(e, paid, { p, kind: 'explode', raw: true, noProc: true, crit: false, noGuard: true, bleed: true, part: 'cataclysm' });
+    const give = paid * st.cataSplash, cap = C.SPREAD_CAP;
+    for (const o of w.enemies) {
+      if (o === e || o.hp <= 0 || o.spawnT > 0 || o.def.invuln || o.burrowed || U.dist2(o.x, o.y, e.x, e.y) >= (CATA_R + o.r) ** 2) continue;
+      w.addBleed(o, Math.min(give, cap * o.maxHp), p);
+    }
+    if (!(w.time - p.cataFxT < 0.05)) { p.cataFxT = w.time; w.emit({ t: 'cata', x: Math.round(e.x), y: Math.round(e.y - e.r * 0.5), r: CATA_R, pid: p.pid }); } // one burst cue per 50 ms: a crowd detonates in the same tick
+  }
+
   // ---------------- Knight hook table ----------------
   ED.CLS.knight = {
-    init(p) { p.bastionKeep = false; },
-    // Bastion: after a room change the orbiting pair returns to the hero.
-    tick(p) {
+    // fx0 / parry0: where the attack's events began and Parry's clock before it (attackOpts and attack pair up); doomT: seconds to the next Doombrand scan; cataFxT: world time of the last Cataclysm cue.
+    init(p) { p.bastionKeep = false; p.fx0 = 0; p.parry0 = 0; p.doomT = 0; p.cataFxT = -99; },
+    // Bastion: after a room change the orbiting pair returns to the hero. Doombrand scans the foes every DOOM_EVERY s.
+    tick(p, dt) {
+      if (p.stats.doombrand > 0 && (p.doomT -= dt) <= 0) { p.doomT = DOOM_EVERY; doombrand(this, p); }
       if (!p.bastionKeep) return;
       p.bastionKeep = false;
       if (p.stats.bastion > 0 && !p.shields.length) { spawnOrbit(this, p, 0); spawnOrbit(this, p, Math.PI); }
+    },
+    // Earthsplitter and Thousand Edges follow the Cleave of the attack just made, and a Parry in it: attackOpts notes the start, attack reads what the swing did.
+    attackOpts(p, st) {
+      if (st.fissure > 0 || st.bladeWave > 0) { p.fx0 = this.fx.length; p.parry0 = p.parryT; }
+      return null;
+    },
+    attack(p, a, st) {
+      if (!(st.fissure > 0 || st.bladeWave > 0) || !cleaved(this, p)) return;
+      if (st.fissure > 0) fissure(this, p, a);
+      if (st.bladeWave > 0) bladeWaves(this, p, a, st, p.parryT > p.parry0);
+    },
+    // Doombrand: Brand counts brandCap ailments (combat.js adds the first 4).
+    hitMul(p, e) {
+      const st = p.stats;
+      if (!(st.brandCap > 4) || !(st.brand > 0)) return 0;
+      const n = this.ailments(e);
+      return n > 4 ? st.brand * (Math.min(st.brandCap, n) - 4) : 0;
+    },
+    // Cataclysm: a Charge or Throw strike on a foe with enough ailments (once per CATA_CD per foe).
+    hitDone(p, e, dmg, crit, src) {
+      if (p.stats.cataclysm > 0 && src.part && CATA_PARTS.has(src.part) && !(e.cataT > this.time) && this.ailments(e) >= CATA_AT) cataclysm(this, p, e);
     },
     // Ruin Spreads: a foe killed by a shield strike hands its statuses on (queued, one hop at a time; see runPayoff 'spread')
     kill(e, p, src) {
