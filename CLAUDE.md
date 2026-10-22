@@ -22,7 +22,7 @@ Vanilla JS (ES2020, no modules, global `ED` namespace) + Canvas2D with a WebGL p
 ```
 index.html, style.css    page shell, DOM menus/overlays, styling
 src/util.js              constants, math, seeded RNG, colour helpers
-src/data/                biomes (palette, roster, affinity) · enemies · classes (heroes, weapons, skills) · boons (paths, duos) · classboons (class routes) · relics · meta (Hearth upgrades, pacts, deeds)
+src/data/                biomes (palette, roster, affinity) · enemies · classes (heroes, weapons, skills) · boons (paths, duos) · classboons (class routes) · ascended (Ascended boons) · relics · meta (Hearth upgrades, pacts, deeds)
 src/save.js              profile storage + save code
 src/sim/                 dungeon (floor gen) · stats (stat block) · world (run flow, rooms, light, pickups) · combat (damage, statuses, projectiles, zones)
                          build (offers, paths, evolutions, class routes) · skills (cast dispatcher, class hooks) · class-<hero>.js (each hero's skills and route hooks) · sheet (Tab sheet model)

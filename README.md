@@ -87,7 +87,8 @@ Boons belong to **paths**: six element paths and General. A hero follows at most
 - **Keystone:** at affinity 5 (General 6) a path can offer its keystone, a build-defining epic boon.
 - **Evolution:** at affinity 10 (General 12) with the keystone, your next offers include the path's legendary weapon evolution. A path holds 12 ranks (General 15), so this takes a real commitment. One evolution per run.
 - **Duo boons:** two element paths that both reach affinity 4 offer a duo that combines them: Thermal Shock (Fire and Ice), Plasma (Fire and Lightning), Firedamp (Fire and Poison), Sunfire (Fire and Holy), Black Flame (Fire and Shadow), Superconductor (Ice and Lightning), Cryotoxin (Ice and Poison), Hoarlight (Ice and Holy), Black Ice (Ice and Shadow), Galvanic Venom (Lightning and Poison), Wrath of Heaven (Lightning and Holy), Black Lightning (Lightning and Shadow), Purge (Poison and Holy), Necrosis (Poison and Shadow) and Twilight (Holy and Shadow).
-- **Forge:** picking a forge card ranks an owned boon up by one.
+- **Forge:** picking a forge card ranks an owned boon up by one (never a route or fork card: bosses rank those).
+- **Ascended boons:** from stratum IV, a boon you have taken to its top rank can offer its **Ascended** upgrade (Honed Edge, Blur, Arrow Storm, Impaler, Hawk Eye, Savage, Vast, Titan, Bastion; Hemorrhage, Headsman and Bloodletting for Generalists). It sits first on a boon offer, takes no path, and multiplies the bonus you already hold instead of adding to it. At most two per stratum.
 - A room that rewards "a boon" offers one new element gate (while you have a free slot) and boons of the paths you follow. Level-ups offer open boons, boons of your paths, keystones and duos.
 - **No life steal.** Hits and kills never heal you. Healing comes from hearts, campfires, healing draughts, the fountain, Vigor, the Hearth's Provisions and the Elixir Flask, Sanctuary and Bone Harvest, the light you carry into the boss room, and revives. **Shields** take the place of sustain: class shields give at most 3% of your max health per 10 seconds, all shield sources together at most 6% (the Battle Ward an elite room grants and the boss-door shield are exempt), and shields fade between fights.
 
@@ -97,7 +98,7 @@ Every hero also chooses a **route**: how their kit grows.
 
 - At **team level 3** you pick one of four route cards: **Attack** (how your weapon fights), **Skill 1**, **Skill 2** or **Element** (the status your hero builds: Bleed for the Knight, Ranger and Shade; Fire, Holy or Shadow for the others).
 - At the **boss of stratum I** you pick a **fork** of your route: a Heavy or a Swift weapon (Attack), Burst or Guard (a skill), Focus or Spread (Element). A Heavy weapon hits slower and harder and Staggers foes; a Swift weapon hits fast, trades damage per hit for speed, and gives a burst of move speed after each attack.
-- At the bosses of strata II and IV your fork gains **ranks**; rank 3 adds a named rider. Each class has 12 route cards.
+- At the bosses of strata II and IV your fork gains a **rank** on its own, with no pick, and a message names what it adds: rank 2 a new behaviour, rank 3 a transform with a named rider. Each class has 12 route cards.
 
 ### Elemental weaknesses
 
