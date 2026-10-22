@@ -308,7 +308,7 @@ const arrowsOf = (w, part) => w.projs.filter(q => q.team === 0 && q.part === par
     const d = bw(3), other = foe(d.w, 350, 312); hit(d.w, d.p, d.f, 1e9, { kind: 'weapon' }); run(d.w, 0.9); ok(other.hp < 5000 && !(other.mark > 0), 'burst arrows hit a foe past the mark leap (r120) and do not mark it');
   }
 }
-{ // Thornburst (r_s1_b rank 3): a ring of 20 arrows, the hop and the close bonus stay, caltrops cover 3x the area and root a foe 0.5 s once per patch (not bosses)
+{ // Thornburst (r_s1_b rank 3): a ring of 20 arrows at x3 damage piercing 3, the hop and the close bonus stay, caltrops cover 3x the area and root a foe 0.5 s once per patch (not bosses)
   const { w, p } = stage({ r_s1: 1, r_s1_b: 3 }), N = ED.Stats.skillNums('volley', p.stats), q = N.p.arrow;
   ok(q.n === 20 && q.ring && Math.abs(q.fan - 2 * Math.PI) < 1e-9, 'Thornburst: a full ring of 20 arrows'); const mv = N.move; ok(mv && mv.k === 'hop' && mv.dist === 70, 'and the hop');
   w.projs.length = 0; w.playerSkill(p, 0.4, {}, 0); const as = arrowsOf(w, 'volley.arrow'), ang = as.map(a => Math.atan2(a.vy, a.vx)).sort((x, y) => x - y);
@@ -338,7 +338,7 @@ const arrowsOf = (w, part) => w.projs.filter(q => q.team === 0 && q.part === par
   run(st.w, 1.2, () => { stunned = Math.max(stunned, s1.stun); bossStun = Math.max(bossStun, s2.stun); }); ok(stunned > 0.3 && stunned <= 0.4 + 1e-9 && bossStun === 0, `impacts stun 0.4 s, never a boss (${stunned.toFixed(2)})`);
   const r2 = stage({ r_s2: 1, r_s2_a: 2 }); r2.w.zones.length = 0; r2.w.playerSkill(r2.p, 0, { x0: r2.p.x, y0: r2.p.y, x: 300, y: 212 }, 1); ok(r2.w.zones.length === 1 && r2.w.zones[0].kind === 'skyfall', 'rank 2 casts the single Skyfall (and Twin Sky)');
 }
-{ // Storm of Thorns (r_s2_b rank 3): the Rain follows the cursor at 120 px/s for twice as long and lays bramble patches (r40, 3 s, slow 30%) every 0.5 s; the Second Shower falls where it ended
+{ // Storm of Thorns (r_s2_b rank 3): the Rain follows the cursor at 120 px/s for 1.5 times as long and lays bramble patches (r40, 3 s, slow 30%) every 0.5 s; the Second Shower falls where it ended
   const { w, p } = stage({ r_s2: 1, r_s2_b: 3 }), N = ED.Stats.skillNums('rain', p.stats), tk = N.p.tick;
   near(tk.dur, 4.5, 1e-9, 'the Rain lasts 1.5 times as long (3 s to 4.5 s)'); near(tk.count, 18, 1e-9, '18 ticks'); ok(ED.Stats.skillNums('rain', stage({ r_s2: 1, r_s2_b: 2 }).p.stats).p.tick.count === 12, 'rank 2: 12 ticks');
   p.aimX = 320; p.aimY = 212; w.zones.length = 0; w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: 140, y: 212 }, 1); const z = w.zones.find(q => q.kind === 'rain'); const xs = {}, patches = new Set(), evs = tap(w);
