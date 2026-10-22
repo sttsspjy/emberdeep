@@ -43,12 +43,13 @@
     if (d.O) this.props = d.O.map(a => ({ id: a[0], kind: a[1], x: a[2], y: a[3], state: a[4], item: a[5], price: a[6], group: a[7], stype: a[8], text: a[9] }));
     if (d.RS) d.RS.forEach((b, i) => { this.roomState[i] = { visited: !!(b & 1), known: !!(b & 2), cleared: !!(b & 4) }; });
     if (d.RUN) this.run = d.RUN;
-    const P = new Map(), E = new Map(), K = new Map(), A = new Map();
+    const P = new Map(), E = new Map(), H = new Map(), K = new Map(), A = new Map();
     for (const a of d.P) P.set(a[0], a);
     for (const a of d.E) E.set(a[0], a);
+    if (d.H) for (const a of d.H) H.set(a[0], a);
     for (const a of d.K) K.set(a[0], a);
     for (const a of d.A) A.set(a[0], a);
-    this.snaps.push({ T: d.T, recv: now, P, E, K, A });
+    this.snaps.push({ T: d.T, recv: now, P, E, H, K, A });
     if (this.snaps.length > 6) this.snaps.shift();
     // per-player vitals are taken straight from the newest snapshot
     for (const a of d.P) {
@@ -108,6 +109,22 @@
       e.aimA = rb[9]; e.elite = rb[10] >= 0 ? ED.AFFIX_IDS[rb[10]] : null; e.ward = rb[11]; e.wardMax = rb[12]; e.phase = rb[13]; e.face = rb[14]; e.t = rb[15];
       out.push(e);
     }
+    // fodder rows (net.js H): HP is the sent fraction of the max HP that spawnEnemy gives (depth curve, party size, pact), the rest of the foe state is the default one
+    if (b.H.size) {
+      const pact = this.pact, hpMul = ED.World.hpScale(this.stratum || 1) * ED.World.partyHpMul(Math.max(1, this.players.size)) * (pact >= 1 ? 1.25 : 1) * (pact >= 10 ? 1.2 : 1);
+      for (const [id, rb] of b.H) {
+        let e = this.eMap.get(id);
+        if (!e || !e.fodder) {
+          const type = ED.ENEMY_IDS[rb[1]], def = ED.ENEMIES[type];
+          e = { id, type, def, fodder: true, x: 0, y: 0, hp: 1, maxHp: 1, r: def.r, face: 1, flash: 0, frozen: 0, stun: 0, chill: 0, burn: 0, burnPool: 0, burnLvl: 0, st: 'move', elite: null, boss: false, ward: 0, wardMax: 0, phase: 1, aimA: 0, t: 0, burrowed: false };
+          this.eMap.set(id, e);
+        }
+        const xy = lerpXY(a.H.get(id), rb), fl = rb[5];
+        e.x = xy[0]; e.y = xy[1]; e.maxHp = e.def.hp * hpMul; e.hp = rb[4] / 255 * e.maxHp;
+        e.flash = fl & 1 ? 0.05 : 0; e.frozen = fl & 2 ? 1 : 0; e.stun = fl & 4 ? 1 : 0; e.chill = fl & 8 ? 40 : 0; e.burnLvl = fl & 16 ? 1 : 0; e.burn = e.burnPool = e.burnLvl; e.face = fl & 32 ? -1 : 1; // the wire carries chilled and burning as flags: drawn at a mid chill and one flame
+        out.push(e);
+      }
+    }
     if (this.eMap.size > out.length * 2 + 40) { const keep = new Map(); for (const e of out) keep.set(e.id, e); this.eMap = keep; }
     this.enemies = out;
     // pickups & allies
@@ -127,6 +144,7 @@
     }
   };
 
+  G.Mirror = Mirror; // the client mirror constructor (headless checks)
   // ---------------- session lifecycle ----------------
   G.start = (mode, cfg) => {
     ED.FX.reset();

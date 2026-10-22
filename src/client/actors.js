@@ -101,8 +101,10 @@
     return [lo, mid, body, lift(U.mix(col.a, '#ffffff', 0.28), Math.max(lumOf(body) + 0.12, 0.72))];
   }
   const FOE_STOPS = { lavahound: ['#4a1a10', '#a03a1a', '#e8702e', '#ffc884'] }; // hand-set ramps (dark to light) where the data colours are too dark to read: the Lava Hound is ember-rust, not brown, against Stratum IV's basalt
+  // A def with `art` (fodder) wears the anims of foe.<art>.* in its own colours.
+  const artOf = (type) => ED.ENEMIES[type].art || type;
   function foeMapOf(type, colOv) {
-    const def = ED.ENEMIES[type], col = colOv || def.col, pre = 'foe.' + type + '.', set = new Set(), acc = ACC[type] || {};
+    const def = ED.ENEMIES[type], art = artOf(type), col = colOv || def.col, pre = 'foe.' + art + '.', set = new Set(), acc = ACC[art] || {};
     for (const id in ED.ART.pal) if (id.startsWith(pre)) for (const h of ED.ART.pal[id]) set.add(h);
     set.delete(OUTLINE);
     const list = [...set].filter((h) => !acc[h]).sort((a, b) => lumOf(a) - lumOf(b)), n = list.length, m = {};
@@ -113,8 +115,8 @@
   }
   function foeVar(type, anim) {
     if (NATIVE[type]) return '';
-    const mk = foeMakers[type] || (foeMakers[type] = () => foeMapOf(type));
-    return A.variant(anim, 'pal:f', mk) ? 'pal:f' : '';
+    const mk = foeMakers[type] || (foeMakers[type] = () => foeMapOf(type)), key = ED.ENEMIES[type].art ? 'pal:f:' + type : 'pal:f'; // an aliased def shares its art's anims: one variant key per def
+    return A.variant(anim, key, mk) ? key : '';
   }
   // Minions and Bone Knights wear the minion palette (own variant key: the knight body is also the Skeleton Knight's).
   const minionMk = {};
@@ -131,7 +133,7 @@
   function foeInfo(type) {
     let f = FOEI.get(type);
     if (f) return f;
-    const p = 'foe.' + type + '.', def = ED.ENEMIES[type];
+    const art = artOf(type), p = 'foe.' + art + '.', def = ED.ENEMIES[type];
     f = { type, def, k: 0, fly: !!def.fly };
     if (A.has(p + 'walk')) { f.k = 2; f.walk = p + 'walk'; f.idle = A.has(p + 'idle') ? p + 'idle' : f.walk; }
     else if (A.has(p + 'walk.d')) { f.k = 4; f.walk = { d: p + 'walk.d', u: p + 'walk.u', l: p + 'walk.l', r: p + 'walk.r' }; if (A.has(p + 'cast.d')) f.cast = { d: p + 'cast.d', u: p + 'cast.u', l: p + 'cast.l', r: p + 'cast.r' }; }
@@ -140,10 +142,11 @@
       for (let i = 0; i < 8; i++) { f.walk.push(p + 'walk.' + i); f.atk.push(A.has(p + 'atk.' + i) ? p + 'atk.' + i : null); f.howl.push(A.has(p + 'howl.' + i) ? p + 'howl.' + i : null); }
     }
     f.death = A.has(p + 'death') ? p + 'death' : null;
-    f.rig = RIG[type] || null;
+    f.rig = RIG[type] || RIG[art] || null;
     FOEI.set(type, f);
     return f;
   }
+  AC.foeInfo = foeInfo; AC.foeVar = foeVar;
 
   // Held weapon / shield of a foe: hand = pivot in art px from the feet of the right-facing body; rest / up / down: weapon angles (right-facing, radians) at rest, wound up and after the slam.
   const RIG = {
@@ -414,7 +417,7 @@
   const animsOf = new Map(), wq = [];
   function foeAnims(type) {
     let l = animsOf.get(type);
-    if (!l) { l = []; const pre = 'foe.' + type + '.'; for (const id in ED.ART.anims) if (id.startsWith(pre) && A.has(id)) l.push(id); animsOf.set(type, l); }
+    if (!l) { l = []; const pre = 'foe.' + artOf(type) + '.'; for (const id in ED.ART.anims) if (id.startsWith(pre) && A.has(id)) l.push(id); animsOf.set(type, l); }
     return l;
   }
   AC.warm = (stratum) => {
@@ -422,6 +425,8 @@
     const b = ED.biomeFor(stratum), roster = b.enemies;
     const add = (id, type) => { wq.push(id, type, 2, id, type, 1, id, type, 3, id, type, 0); }; // popped last-in-first-out: recolour (0), light-floor silhouette (3), white flash (1), wind-up outline (2)
     if (b.boss) for (const id in ED.ART.anims) if (id.startsWith('boss.' + b.boss + '.') && A.has(id)) add(id, b.boss);
+    const fod = b.fodder || []; // fodder ids of the stratum: built after the roster
+    for (let i = fod.length - 1; i >= 0; i--) { const t = fod[i]; if (ED.ENEMIES[t]) for (const id of foeAnims(t)) add(id, t); }
     for (let i = roster.length - 1; i >= 0; i--) for (const id of foeAnims(roster[i][0])) add(id, roster[i][0]);
   };
   AC.pump = () => {

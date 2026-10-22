@@ -308,10 +308,11 @@
   N.radLevel = (w, e) => (e.rad > 0 ? Math.min(3, Math.floor(4 * e.rad / w.smiteAt(e))) : 0);
   // Hero flags (bit n = 1 << n): 0 moving, 1 dashing, 2 downed, 3 dead, 4 invulnerable, 5 hurt, 6 shield thrown, 7 stealth, 8 ambush, 9 airborne (Comet), 10 Guardian Light buff, 11 Emboldened, 12 Battle Trance, 20 braced.
   // Zone rows end with the owner slot + 1 of a zone that follows its owner (Aura of Faith), else 0.
+  // Fodder foes (e.fodder) skip E and ride in H as [id, ENEMY_IDX, x, y, hpQ, fl]: hpQ = round(255 hp / maxHp) in 1..255; fl bits 0 flash, 1 frozen, 2 stunned, 3 chilled, 4 burning, 5 faces left.
   // Foe flags: 0 flash, 1 frozen, 2 stunned, 4 chilled, 5 exposed, 6 charged, 7 bleeding, 8 judged, 9 blind, 10 vulnerable, 11-12 burn level, 13-15 Venom level, 16-17 Radiance fill, 18 Hexed, 19 Marked, 20 Sealed, 21-23 ailment count (0-7).
 
   N.encodeSnap = (w, fx, full) => {
-    const P = [], E = [], B = [], K = [], Z = [], A = [];
+    const P = [], E = [], H = [], B = [], K = [], Z = [], A = [];
     for (const p of w.players.values()) {
       const sw = ED.Sheet.shieldWindow(p, w.time);
       const fl = (p.moving ? 1 : 0) | (p.dashing ? 2 : 0) | (p.downed ? 4 : 0) | (p.dead ? 8 : 0) | (p.invuln > 0 ? 16 : 0) | (p.hurtT > 0 ? 32 : 0) | (p.shieldOut ? 64 : 0) | (p.stealthT > 0 ? 128 : 0) | (p.ambush ? 256 : 0) | (p.cometT > 0 ? 512 : 0) | (p.glT > 0 ? 1024 : 0) | (p.auraT > 0 ? 2048 : 0) | (p.tranceT > 0 ? 4096 : 0) | (p.braceT > 0 ? 1 << 20 : 0);
@@ -319,6 +320,7 @@
     }
     for (const e of w.enemies) {
       if (e.hp <= 0) continue;
+      if (e.fodder) { H.push([e.id, ED.ENEMY_IDX[e.type], r(e.x), r(e.y), Math.max(1, Math.min(255, r(255 * e.hp / e.maxHp))), (e.flash > 0 ? 1 : 0) | (e.frozen > 0 ? 2 : 0) | (e.stun > 0 ? 4 : 0) | (e.chill > 0 ? 8 : 0) | (N.burnLevel(e) > 0 ? 16 : 0) | (e.face < 0 ? 32 : 0)]); continue; }
       const fl = (e.flash > 0 ? 1 : 0) | (e.frozen > 0 ? 2 : 0) | (e.stun > 0 ? 4 : 0) | (e.chill > 0 ? 16 : 0) | (e.exposed ? 32 : 0) | (e.charge > 0 ? 64 : 0) | (e.bleedPool > 0 ? 128 : 0) | (e.judged > 0 ? 256 : 0) | (e.blind > 0 ? 512 : 0) | (e.vulnT > 0 ? 1024 : 0) | (N.burnLevel(e) << 11) | (N.venomLevel(e) << 13) | (N.radLevel(w, e) << 16) | (e.hexT > 0 ? 1 << 18 : 0) | (e.mark > 0 ? 1 << 19 : 0) | (e.sealT > 0 ? 1 << 20 : 0) | (Math.min(7, w.ailments(e)) << 21);
       E.push([e.id, ED.ENEMY_IDX[e.type], r(e.x), r(e.y), Math.ceil(e.hp), r(e.maxHp), e.r, fl, ST_IDX[e.boss ? (e.pose || 'idle') : e.st] | 0, r2(e.aimA || 0), e.elite ? ED.AFFIX_IDS.indexOf(e.elite) : -1, r(e.ward || 0), r(e.wardMax || 0), e.phase | 0, e.face < 0 ? -1 : 1, r2(e.t || 0), r(e.chill || 0), e.boss ? r(e.doom || 0) : r(w.doomLine(e))]);
     }
@@ -327,7 +329,7 @@
     for (const z of w.zones) Z.push([z.id, ZK_IDX[z.kind] | 0, r(z.x), r(z.y), r(z.r || 0), r2(z.t), r2(z.dur), r2(z.a || 0), r(z.len || 0), r(z.w || 0), r2(z.arc || 0), z.team | 0, z.elite ? 1 : 0, z.lob ? z.lob[0] : -99999, z.lob ? z.lob[1] : 0, r2(z.warm || 0), r(z.str || 0), z.follow && w.players.has(z.follow) ? 1 + w.players.get(z.follow).slot : 0]);
     for (const a of w.allies) A.push([a.id, a.owner, r(a.x), r(a.y), a.face]);
     const s = { t: 's', T: r2(w.time), s: w.stratum, fs: w.floorSeed, r: w.roomId, ep: w.roomEpoch | 0, L: w.locked ? 1 : 0, g: w.gold, x: Math.floor(w.xp), n: w.xpNext, l: w.level,
-      wm: w.waitMsg || '', P, E, B, K, Z, A, F: N.capFx(fx, N.CAPS) };
+      wm: w.waitMsg || '', P, E, B, K, Z, A, H, F: N.capFx(fx, N.CAPS) };
     if (full) {
       s.O = w.props.map(p => [p.id, p.kind, r(p.x), r(p.y), p.state | 0, p.item || '', p.price || 0, p.group || 0, p.stype || '', p.text || '']);
       s.RS = w.floor.rooms.map(rm => { const st = w.roomState[rm.id]; return (st.visited ? 1 : 0) | (st.known ? 2 : 0) | (st.cleared ? 4 : 0); });
