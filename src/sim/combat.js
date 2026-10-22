@@ -1149,8 +1149,9 @@
     return pr;
   };
 
+  // Foe shot speed x 1.2 under Pact 8+ x the stratum's shot factor (World.shotSpd; bosses World.bossShotSpd).
   W.enemyShoot = function (e, a, speed, kind, dmgMul, r, extra) {
-    const mul = this.pact >= 8 ? 1.2 : 1;
+    const mul = (this.pact >= 8 ? 1.2 : 1) * (e.boss ? ED.World.bossShotSpd(this.stratum) : ED.World.shotSpd(this.stratum));
     return this.spawnProj(Object.assign({ team: 1, kind, x: e.x + Math.cos(a) * e.r * 0.6, y: e.y - 4 + Math.sin(a) * e.r * 0.6, a, speed: speed * mul, r: r || 6, dmg: e.dmg * (dmgMul || 1), life: 4, src: e }, extra || {}));
   };
 

@@ -191,6 +191,18 @@
   W.DARK_AFFIXES = ['brutal', 'vampiric', 'warded', 'swift']; // affix pool of the extra elite of a dark room's last wave (the volatile affix is left out)
   W.REWARD_UP = { gold: 'vigor', vigor: 'forge', forge: 'epic', boon: 'epic' }; // a dark room's reward goes up one step
   // Per-stratum threat on top of the base scales: foe HP, wave budget, `cdRate` = extra cooldown recovery (0.2 = attack timers tick 20% faster, -0.2 = 20% slower) and the boss pause between attacks (x).
+  // Stratum behaviour (index s - 1): the share of its target's velocity a foe leads an aimed shot by; foe and boss shot speed factors; non-boss, non-fodder ground speed factor.
+  W.LEAD = [0, 0, 0.35, 0.5, 0.7, 0.85];
+  W.shotSpd = (s) => 1 + 0.08 * (s - 1);
+  W.bossShotSpd = (s) => 1 + 0.1 * (s - 1);
+  W.foeSpd = (s) => 1 + 0.04 * (s - 1);
+  // Angle from (x, y) toward where target t stands when a shot of this speed reaches it, leading by share L of t's measured velocity (t.lvx / t.lvy; 0 for targets without one); flight time from two refinements, capped at 1.2 s. L 0 aims straight at t.
+  W.leadAngle = (x, y, t, speed, L) => {
+    let ax = t.x, ay = t.y;
+    const vx = (t.lvx || 0) * L, vy = (t.lvy || 0) * L;
+    if ((vx || vy) && speed > 0) for (let k = 0; k < 2; k++) { const ti = Math.min(1.2, Math.hypot(ax - x, ay - y) / speed); ax = t.x + vx * ti; ay = t.y + vy * ti; }
+    return Math.atan2(ay - y, ax - x);
+  };
   W.THREAT = [{ hp: 2.2, dmg: 0.5, wave: 0.8, cdRate: -0.4, pause: 2 }, { hp: 1.62, dmg: 0.5, wave: 0.75, cdRate: -0.3, pause: 1.7 }, { hp: 1.3, dmg: 0.5, wave: 0.7, cdRate: -0.1, pause: 1.4 }, { hp: 1, dmg: 0.4, wave: 0.66, cdRate: 0, pause: 1.2 }, { hp: 1.07, dmg: 0.78, wave: 0.62, cdRate: 0.15, pause: 1 }, { hp: 1.02, dmg: 0.98, wave: 0.6, cdRate: 0.3, pause: 0.9 }];
   // Foe HP multiplier of stratum s: the depth curve times the threat HP.
   W.hpScale = (s) => (1 + 0.65 * (s - 1) + 0.08 * (s - 1) * (s - 1)) * W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, s - 1))].hp;
@@ -387,7 +399,7 @@
       pid: pd.pid, name: pd.name || 'Hero', slot: pd.slot | 0, cls: pd.cls, weapon: pd.weapon,
       meta: pd.meta || { up: [], mastery: 1, relics: [] },
       boons: {}, relics: [], stats: null,
-      x: 0, y: 0, r: 10, face: 0, vx: 0, vy: 0, mvx: 1, mvy: 0, moving: false,
+      x: 0, y: 0, r: 10, face: 0, vx: 0, vy: 0, mvx: 1, mvy: 0, moving: false, lvx: 0, lvy: 0, lpx: null, lpy: null,
       hp: 1, maxHp: 1, dashT: 0, dashDx: 0, dashDy: 0, dashing: false, skillMove: null,
       invuln: 0, hurtT: 0, downed: false, bleed: 0, revive: 0, dead: false,
       phoenixUsed: false, secondWind: 0, swPct: 0.4, angelUsed: false, aegisT: 0, guardCd: 0, guardT: 0,
@@ -621,6 +633,10 @@
   };
 
   W.prototype.updatePlayer = function (p, dt) {
+    // p.lvx / p.lvy: measured velocity (px/s, eased over ~0.1 s) from the position change since the last tick, local and remote heroes alike; a jump over 24 px (room change, teleport) resets it. Foes lead their shots by it.
+    const jx = p.lpx === null ? 0 : p.x - p.lpx, jy = p.lpy === null ? 0 : p.y - p.lpy;
+    if (jx * jx + jy * jy > 576) { p.lvx = 0; p.lvy = 0; } else { const k = Math.min(1, dt * 10); p.lvx += (jx / dt - p.lvx) * k; p.lvy += (jy / dt - p.lvy) * k; }
+    p.lpx = p.x; p.lpy = p.y;
     p.invuln = Math.max(0, p.invuln - dt);
     p.hurtT -= dt;
     if (!p.remote) p.dashing = p.dashT > 0;

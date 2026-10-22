@@ -456,5 +456,19 @@ for (let s = 1; s <= 6; s++) {
   const gaps = times.slice(1).map((t, i) => t[0] - times[i][0]);
   ok(gaps.every(g => g >= 2.0 - 1e-9 && g <= 3.0 + 0.05), `packs 2-3 s apart (${gaps.map(g => g.toFixed(2)).join(' ')})`);
 }
+{ // measured hero velocity and lead aim: a hero walking at a constant velocity is led toward the intercept point; L 0 aims straight at it; a jump resets the velocity; shot speed follows the stratum
+  const { w, p } = stage('knight', {});
+  p.lpx = null; p.lpy = null; p.lvx = 0; p.lvy = 0;
+  for (let i = 0; i < 60; i++) { p.x += 100 * TICK; w.updatePlayer(p, TICK); }
+  near(p.lvx, 100, 0.5, 'a hero walking 100 px/s to the right measures lvx 100'); near(p.lvy, 0, 1e-9, 'and lvy 0');
+  near(W0.leadAngle(p.x, p.y + 300, p, 300, 0), -Math.PI / 2, 1e-9, 'L 0 aims straight at the hero');
+  near(W0.leadAngle(p.x, p.y + 300, p, 300, 1), Math.atan2(-300, 300 * Math.sqrt(1 / 8)), 0.005, 'L 1 aims at the intercept point (shot 300 px/s, hero 100 px/s across, 300 px away)');
+  near(W0.leadAngle(p.x, p.y + 300, { x: p.x, y: p.y }, 300, 1), -Math.PI / 2, 1e-9, 'a target without a measured velocity is aimed at straight');
+  p.x += 100; w.updatePlayer(p, TICK); ok(p.lvx === 0 && p.lvy === 0, 'a jump over 24 px resets the measured velocity');
+  ok(W0.LEAD[0] === 0 && W0.LEAD[1] === 0 && W0.LEAD[5] === 0.85, 'no lead on strata I-II, 0.85 at VI');
+  const e = w.spawnEnemy('bonearcher', p.x + 100, p.y), b = w.spawnEnemy('bonewarden', p.x + 100, p.y);
+  w.stratum = 6; const q = w.enemyShoot(e, 0, 200, 'arrow', 1, 6), qb = w.enemyShoot(b, 0, 200, 'bone', 1, 6);
+  near(Math.hypot(q.vx, q.vy), 200 * W0.shotSpd(6), 1e-6, 'a foe shot at stratum VI flies x1.4'); near(Math.hypot(qb.vx, qb.vy), 200 * W0.bossShotSpd(6), 1e-6, 'a boss shot at stratum VI flies x1.5');
+}
 console.log(`${n} checks, ${fails} failed`);
 process.exit(fails ? 1 : 0);
