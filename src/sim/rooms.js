@@ -31,7 +31,7 @@
       for (const p of this.players.values()) if (!p.downed && !p.dead) this.onRoomLockBuild(p, room);
     } else if (room.type === 'boss') {
       this.locked = true;
-      this.enc = { kind: 'boss', t: 2.4, spawned: false };
+      this.enc = { kind: 'boss', t: 2.4, spawned: false, edges: ['n', 's', 'e', 'w'], packT: 0 };
       const def = ED.ENEMIES[ED.biomeFor(this.stratum).boss];
       this.emit({ t: 'bossIntro', type: ED.biomeFor(this.stratum).boss, name: def.name, title: def.title, quote: def.quote });
       this.emit({ t: 'lock' });
@@ -149,6 +149,19 @@
     enc.packT = this.rng.range(Wc.PACK_GAP[0], Wc.PACK_GAP[1]);
   };
 
+  // Boss-fight trickle (from the boss's spawn until it dies): every BOSS_PACK_GAP s a pack of BOSS_PACK_N biome fodder lands on a room edge PACK_AVOID from every hero; it waits while live fodder stands at BOSS_FODDER_CAP. A boss room has no xp budget, so these foes drop none.
+  W.updateBossFodder = function (enc, dt) {
+    const Wc = ED.World;
+    if (enc.packT > 0 && (enc.packT -= dt) > 0) return;
+    let live = 0;
+    for (const e of this.enemies) if (e.fodder && e.hp > 0) live++;
+    if (live >= Wc.BOSS_FODDER_CAP[this.partySize() > 1 ? 1 : 0]) return;
+    const spot = this.packSpot(enc, Wc.PACK_AVOID);
+    if (!spot) { enc.packT = 0.25; return; }
+    this.addZone({ kind: 'spawn', x: spot.x, y: spot.y, r: 40, dur: Wc.PACE.spawn, type: ED.biomeFor(this.stratum).fodder, n: this.rng.int(Wc.BOSS_PACK_N[0], Wc.BOSS_PACK_N[1]) });
+    enc.packT = Wc.BOSS_PACK_GAP;
+  };
+
   // A resolved pack zone: z.n fodder at random points within z.r that are floor tiles (the zone's centre when a point is not).
   W.spawnPack = function (z) {
     const room = this.room, rng = this.rng;
@@ -198,7 +211,8 @@
         this.boss = e;
         for (const p of this.players.values()) p.hitThisBoss = false;
         this.emit({ t: 'bossSpawn', type });
-      }
+        enc.packT = ED.World.BOSS_PACK_GAP;
+      } else if (enc.spawned && this.boss) this.updateBossFodder(enc, dt);
     } else if (enc.kind === 'trial') {
       const alive = this.hostiles(), pending = pendingSpawns(this);
       if (enc.wave < enc.waves.length - 1 && enc.t <= 0 && !pending && alive === 0) {

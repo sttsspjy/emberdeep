@@ -602,5 +602,131 @@ for (let s = 1; s <= 6; s++) {
     ok(va.hp > va.maxHp / 2, 'vampiric in slot 2: heals when it hurts a hero');
   }
 }
+{ // boss fights: aimed volley (count per phase, flight speed, lead at release, projectile kind), the phase-3 overlap, one sequence per living hero, grown summon lists, the fodder trickle
+  const BV = W0.BOSS_VOL, B = ED.Bosses, Dn = ED.Dungeon, angD = ED.U.angDiff, KIND = { bonewarden: 'bone', sporemother: 'spore', rimeheart: 'ice', forgelord: 'fire', drownedking: 'trident', hollowking: 'void' };
+  // A boss of stratum s's biome (or `type`) standing still left of the heroes in the start room, hp out of reach; its volley shots (damage x0.6) are logged in w.vs with the heroes' state at the release.
+  function bossWorld(s, classes, type) {
+    const w = hordeWorld(s, classes), ps = [...w.players.values()], c = Dn.center(w.room);
+    ps.forEach((p, i) => { p.x = c.x + 100; p.y = c.y + (i - (ps.length - 1) / 2) * 70; p.invuln = 1e9; });
+    const b = w.spawnEnemy(type || ED.biomeFor(s).boss, c.x - 140, c.y);
+    b.spd = 0; b.cd = 9999; b.hp = b.maxHp = 1e9; b.target = ps[0];
+    const vs = w.vs = [], es = w.enemyShoot;
+    w.enemyShoot = function (e, a, speed, kind, m, r, x) {
+      const q = es.call(this, e, a, speed, kind, m, r, x);
+      if (m === BV.dmg) vs.push({ t: this.time - w.t0, a, kind, q, x: e.x, y: e.y, hs: ps.map(p => ({ x: p.x, y: p.y, lvx: p.lvx, lvy: p.lvy, up: this.alive(p) })) });
+      return q;
+    };
+    w.t0 = w.time;
+    return { w, b, ps, c };
+  }
+  const go = (w, secs, each) => { for (let i = 0, n = Math.round(secs * 60); i < n; i++) { for (const p of w.players.values()) p.invuln = 1e9; if (each) each(i); w.update(TICK); } };
+  const startVol = (w, b, phase) => { b.phase = phase || 1; b.st = 'atk'; b.atk = 'volley'; b.t = 0; b.vars = { wm: 1 }; B[b.type].attacks.volley.start(w, b); };
+  const finalSp = (s) => BV.speed + BV.step * (s - 1), Lof = (s) => W0.LEAD[s - 1];
+  const lead = (v, h, s) => W0.leadAngle(v.x, v.y - 4, h, finalSp(s), Lof(s)); // the angle a shot released at v should have toward hero state h
+  ok(BV.speed === 320 && BV.step === 20 && BV.n.join() === '3,4,5' && W0.BOSS_OV_GAP === 5, 'volley constants');
+  for (const type of Object.keys(KIND)) ok(B[type].attacks.volley && B[type].attacks.volley.w === 2 && !B[type].attacks.volley.phase, `${type} has the volley entry (weight 2, every phase)`);
+  for (let ph = 1; ph <= 3; ph++) { // shots by phase, the first 0.5 s after the start, 0.12 s apart, then the main state moves on
+    const { w, b } = bossWorld(4, ['knight']);
+    startVol(w, b, ph); ok(b.vol && b.vol.n === BV.n[ph - 1], `phase ${ph}: volley of ${BV.n[ph - 1]}`);
+    go(w, 1.15);
+    ok(w.vs.length === BV.n[ph - 1], `phase ${ph}: ${w.vs.length} shots (want ${BV.n[ph - 1]})`);
+    ok(w.vs.every((v, i) => Math.abs(v.t - w.vs[0].t - i * BV.gap) <= 1.5 * TICK) && w.vs[0].t >= BV.tele - 1e-9 && w.vs[0].t <= BV.tele + 2 * TICK, `phase ${ph}: first shot at ${w.vs[0].t.toFixed(2)} s, ${BV.gap} s apart`);
+    ok(!b.vol && b.st === 'idle', `phase ${ph}: the main state resumes after the volley (${b.st})`);
+    ok(w.zones.every(z => !(z.kind === 'teleLine' && z.src === b)), `phase ${ph}: the warn line is gone`);
+  }
+  for (let s = 1; s <= 6; s++) { // flight speed 320 + 20 per stratum, the biome's kind, damage x0.6, the angle led by the stratum's share of a walking hero's velocity at the release
+    const { w, b, ps } = bossWorld(s, ['knight']), p = ps[0];
+    p.y -= 60; startVol(w, b, 1);
+    go(w, 1.1, () => { p.y += 90 * TICK; });
+    ok(w.vs.length === 3, `stratum ${s}: 3 shots (${w.vs.length})`);
+    ok(w.vs.every(v => Math.abs(Math.hypot(v.q.vx, v.q.vy) - finalSp(s)) < 1e-6), `stratum ${s}: shots fly ${finalSp(s)} px/s (${w.vs.map(v => Math.hypot(v.q.vx, v.q.vy).toFixed(2))})`);
+    ok(w.vs.every(v => v.kind === KIND[b.type] && v.q.kind === KIND[b.type] && Math.abs(v.q.dmg - 0.6 * b.dmg) < 1e-9), `stratum ${s}: ${KIND[b.type]} shots at 0.6 x boss damage`);
+    ok(w.vs.every(v => Math.abs(angD(v.a, lead(v, v.hs[0], s))) < 1e-9 && Math.abs(angD(Math.atan2(v.q.vy, v.q.vx), v.a)) < 1e-9), `stratum ${s}: each shot is angled by leadAngle at its release`);
+    const v = w.vs[2], off = Math.abs(angD(v.a, Math.atan2(v.hs[0].y - (v.y - 4), v.hs[0].x - v.x)));
+    ok(Lof(s) === 0 ? off < 1e-9 : off > 0.03 * Lof(s), `stratum ${s}: aim ${Lof(s) ? 'leads by ' + off.toFixed(3) + ' rad' : 'is straight'}`);
+  }
+  { const { w, b } = bossWorld(6, ['knight']); w.pact = 8; startVol(w, b, 1); go(w, 1.1); ok(w.vs.length === 3 && w.vs.every(v => Math.abs(Math.hypot(v.q.vx, v.q.vy) - finalSp(6)) < 1e-6), 'Pact 8: the final flight speed is unchanged'); }
+  { // the phase-3 overlap: a volley every 5 s on top of whatever the main state runs, never two at once; phase 2 has none
+    B.forgelord.attacks.hold = { update: () => false };
+    for (const ph of [2, 3]) {
+      const { w, b } = bossWorld(4, ['knight']);
+      b.phase = ph; b.st = 'atk'; b.atk = 'hold'; b.t = 0; b.vars = { wm: 1 };
+      const starts = [], lines = [0]; let prev = null, mainKept = true;
+      go(w, 16.2, () => {
+        if (b.vol && b.vol !== prev) starts.push(w.time - w.t0);
+        prev = b.vol;
+        lines[0] = Math.max(lines[0], w.zones.filter(z => z.kind === 'teleLine' && z.src === b && !z.dead).length);
+        if (b.vol && (b.st !== 'atk' || b.atk !== 'hold')) mainKept = false;
+      });
+      if (ph === 2) { ok(starts.length === 0 && w.vs.length === 0, `phase 2: no overlap volley (${starts.length})`); continue; }
+      ok(starts.length === 3 && Math.abs(starts[0] - 5) <= 3 * TICK && starts.every((t, i) => i === 0 || (t - starts[i - 1] >= 5 - 1e-9 && t - starts[i - 1] <= 5 + 2 * TICK)), `phase 3: volleys at ${starts.map(t => t.toFixed(2))} s (want 5, then every 5)`);
+      ok(mainKept && b.st === 'atk' && b.atk === 'hold', 'phase 3: the volley overlaps a running main attack and leaves it alone');
+      ok(w.vs.length === 3 * BV.n[2], `phase 3: ${w.vs.length} shots (want ${3 * BV.n[2]})`);
+      ok(lines[0] === 1, `phase 3: never two volleys at once (${lines[0]} warn lines at most, one hero)`);
+      const vol = B.forgelord.attacks.volley; vol.start(w, b); const run = b.vol; vol.start(w, b);
+      ok(run && b.vol === run && !vol.ok(w, b), 'a running volley is neither restarted nor chosen again');
+    }
+    delete B.forgelord.attacks.hold;
+  }
+  { // frozen: the sub-machine and its warn line stall; blindness and a phase change drop it
+    const { w, b } = bossWorld(4, ['knight']);
+    startVol(w, b, 1); go(w, 0.2); const t0 = b.vol.t; b.frozen = 5; go(w, 1); ok(b.vol && b.vol.t === t0 && w.vs.length === 0, 'a frozen boss does not tick its volley');
+    b.frozen = 0; b.blind = 3; go(w, 0.1); ok(!b.vol && w.zones.every(z => !(z.kind === 'teleLine' && z.src === b)), 'a blinded boss drops its volley and its warn line');
+    b.blind = 0; startVol(w, b, 1); go(w, 0.2); b.hp = b.maxHp * 0.5; go(w, 0.1); ok(!b.vol && b.phase === 2, 'a phase change drops the volley');
+  }
+  { // party: one sequence per living hero, each at its own hero, 0.15 s apart; a downed hero gets none
+    const { w, b, ps } = bossWorld(3, ['knight', 'ranger', 'pyro', 'shade']);
+    ps[3].downed = true; startVol(w, b, 2);
+    ok(b.vol.seqs.length === 3, `3 living heroes: ${b.vol.seqs.length} sequences`);
+    go(w, 1.6);
+    const per = [0, 0, 0, 0], first = [Infinity, Infinity, Infinity, Infinity];
+    for (const v of w.vs) { const i = v.hs.findIndex(h => h.up && Math.abs(angD(v.a, lead(v, h, 3))) < 1e-9); if (i >= 0) { per[i]++; first[i] = Math.min(first[i], v.t); } }
+    ok(per.join() === '4,4,4,0' && w.vs.length === 12, `4 shots at each living hero, none at the downed one (${per})`);
+    ok(Math.abs(first[1] - first[0] - BV.seq) <= 1.5 * TICK && Math.abs(first[2] - first[1] - BV.seq) <= 1.5 * TICK, `sequences ${BV.seq} s apart (${(first[1] - first[0]).toFixed(2)}, ${(first[2] - first[1]).toFixed(2)})`);
+    ok(w.vs.every(v => v.t - first[0] <= BV.seq * 2 + BV.gap * 3 + 1.5 * TICK), 'the whole party volley ends 0.3 + 0.36 s after its first shot');
+  }
+  { // grown summon lists: +1 per living hero beyond the first, at most +3, drawn from the list
+    const c4 = ['knight', 'ranger', 'pyro', 'shade'];
+    const count = (cls, down, type, atk, ph) => {
+      const { w, b, ps } = bossWorld(1, cls, type); for (let i = 0; i < down; i++) ps[ps.length - 1 - i].downed = true;
+      b.phase = ph || 1; b.vars = { wm: 1 }; B[type].attacks[atk].start(w, b);
+      return w.zones.filter(z => z.kind === 'spawn' && !z.n).map(z => z.type);
+    };
+    ok(count(c4.slice(0, 1), 0, 'bonewarden', 'summon').length === 3, 'solo: the 3-entry list stays');
+    ok(count(c4.slice(0, 2), 0, 'bonewarden', 'summon').length === 4, '2 heroes: 4 entries');
+    ok(count(c4, 0, 'bonewarden', 'summon').length === 6, '4 heroes: 6 entries (+3)');
+    ok(count(c4, 2, 'bonewarden', 'summon').length === 4, '4 heroes, 2 downed: 4 entries (living heroes count)');
+    const l5 = count(c4, 0, 'bonewarden', 'summon', 2);
+    ok(l5.length === 8 && l5.every(t => t === 'skeleton' || t === 'bat'), `phase 2, 4 heroes: 8 entries from the list (${l5})`);
+    ok(count(c4.slice(0, 2), 0, 'forgelord', 'drones').length === 3 && count(c4, 0, 'forgelord', 'totems', 2).join() === Array(5).fill('flameturret').join(), 'drones and totems grow from their own lists');
+    const { w, b } = bossWorld(1, ['knight'], 'bonewarden');
+    for (let i = 0; i < 12; i++) w.spawnEnemy('bonemite', b.x + 50, b.y + 50);
+    ok(B.bonewarden.attacks.summon.ok(w, b), 'fodder does not block a boss summon');
+    for (let i = 0; i < 6; i++) w.spawnEnemy('skeleton', b.x + 50, b.y + 50);
+    ok(!B.bonewarden.attacks.summon.ok(w, b), 'six regular foes do');
+  }
+  for (const heroes of [['knight'], ['knight', 'ranger']]) { // the fodder trickle: packs of 4-6 every 7 s from the boss's spawn, edges 220 px from the heroes, held at the cap, none after the boss dies
+    const s = 4, w = hordeWorld(s, heroes), room = w.floor.rooms.find(r => r.type === 'boss'), ps = [...w.players.values()], cap = W0.BOSS_FODDER_CAP[heroes.length > 1 ? 1 : 0];
+    const live = () => w.enemies.filter(e => e.fodder && e.hp > 0).length, az = w.addZone, trick = [];
+    w.addZone = function (z) { if (z.kind === 'spawn' && z.n) trick.push({ t: this.time, n: z.n, type: z.type, live: live() }); return az.call(this, z); };
+    const t0 = w.time;
+    playRoom(w, room, 'none', 70);
+    ok(w.boss && w.boss.type === ED.biomeFor(s).boss && w.enc.kind === 'boss', `${heroes.length} hero(es): the boss fight runs`);
+    ok(trick.length >= 4 && Math.abs(trick[0].t - t0 - 9.4) <= 3 * TICK, `first pack at ${(trick[0].t - t0).toFixed(2)} s (the boss spawns at 2.4 s, +7 s)`);
+    ok(trick[1].t - trick[0].t >= 7 - 1e-9 && trick[1].t - trick[0].t <= 7 + 3 * TICK, `the next pack ${(trick[1].t - trick[0].t).toFixed(2)} s later`);
+    ok(trick.slice(1).every((k, i) => k.t - trick[i].t >= 7 - 1e-9), 'packs at least 7 s apart');
+    ok(trick.every(k => k.n >= 4 && k.n <= 6 && k.type === ED.biomeFor(s).fodder), `packs of 4-6 ${ED.biomeFor(s).fodder} (${trick.map(k => k.n)})`);
+    ok(trick.every(k => k.live < cap), `a pack lands only below the cap of ${cap} (live before: ${trick.map(k => k.live)})`);
+    ok(w.log.packDist >= W0.PACK_AVOID, `packs land ${Math.round(w.log.packDist)} px from the heroes (>= ${W0.PACK_AVOID})`);
+    const idle = w.time - t0 - trick[trick.length - 1].t;
+    ok(live() >= cap && live() <= cap + 5 && idle > 7, `held at the cap: ${live()} fodder live, last pack ${idle.toFixed(1)} s ago`);
+    const n0 = trick.length; for (const e of w.enemies.slice()) if (e.fodder && e.hp > 0) w.killEnemy(e, ps[0], {});
+    go(w, 0.5); ok(trick.length === n0 + 1, 'a pack follows as soon as the fodder falls below the cap');
+    ok(w.log.xp === 0, `fodder of a boss fight drop no xp (${w.log.xp})`);
+    w.killEnemy(w.boss, ps[0], {}); const n1 = trick.length;
+    ok(!w.enc && w.hostiles() === 0, 'the boss dies: the fight ends and every foe goes');
+    go(w, 20); ok(trick.length === n1 && w.hostiles() === 0 && !w.zones.some(z => z.kind === 'spawn'), 'no pack after the boss dies');
+  }
+}
 console.log(`${n} checks, ${fails} failed`);
 process.exit(fails ? 1 : 0);

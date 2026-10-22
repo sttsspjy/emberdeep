@@ -213,6 +213,10 @@
   // Horde of a combat or elite room (fodder beside the threat waves): kills to spawn by stratum (x0.6 in an elite room, x(1 + 0.5 (n - 1)) per party, x0.6 at stratum I of the tutorial, x DARK_FODDER in a dark room),
   // fodder per pack, seconds between packs, minimum pack distance from every hero (relaxed in 40 px steps once a pack has waited PACK_WAIT s), live-foe cap (solo, 2+ heroes).
   W.FODDER_Q = [40, 55, 70, 85, 100, 120]; W.PACK_N = [6, 12]; W.PACK_GAP = [2.0, 3.0]; W.PACK_AVOID = 220; W.PACK_WAIT = 4; W.LIVE_CAP = [120, 180];
+  // Boss fights. Aimed volley (every boss, bosses.js): shots by phase I-III, telegraph s (x the boss's windMul), s before the first release at which the warn line locks, s between shots, s between the heroes' sequences,
+  // flight speed at stratum I (+ step per stratum) and damage x boss damage; in phase 3 a volley also starts every BOSS_OV_GAP s. Fodder trickle after the boss spawns: pack size, s between packs, live-fodder cap (solo, 2+ heroes).
+  W.BOSS_VOL = { n: [3, 4, 5], tele: 0.5, lock: 0.15, gap: 0.12, seq: 0.15, speed: 320, step: 20, dmg: 0.6 }; W.BOSS_OV_GAP = 5;
+  W.BOSS_PACK_N = [4, 6]; W.BOSS_PACK_GAP = 7; W.BOSS_FODDER_CAP = [20, 30];
   // Fodder max HP: depth (+25% per stratum) and pact only, no threat lever, party multiplier or elite (pure; the client mirror rebuilds it from the wire fraction).
   W.fodderHp = (def, s, pact) => def.hp * (1 + 0.25 * (s - 1)) * (pact >= 1 ? 1.25 : 1) * (pact >= 10 ? 1.2 : 1);
   // Xp a threat foe is worth before the dark-room multiplier and the room's budget scale (enc.xpK).
