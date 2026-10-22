@@ -196,6 +196,8 @@
   W.shotSpd = (s) => 1 + 0.08 * (s - 1);
   W.bossShotSpd = (s) => 1 + 0.1 * (s - 1);
   W.foeSpd = (s) => 1 + 0.04 * (s - 1);
+  // Mixed rosters (s >= 2): chance a room's roster also holds the previous biome's foes (at weight 0.35 each); AFFIX2 = chance (index s - 1) that an elite rolls a second affix.
+  W.MIX_PREV = 0.6; W.AFFIX2 = [0, 0, 0, 0.35, 0.6, 0.85];
   // Angle from (x, y) toward where target t stands when a shot of this speed reaches it, leading by share L of t's measured velocity (t.lvx / t.lvy; 0 for targets without one); flight time from two refinements, capped at 1.2 s. L 0 aims straight at t.
   W.leadAngle = (x, y, t, speed, L) => {
     let ax = t.x, ay = t.y;

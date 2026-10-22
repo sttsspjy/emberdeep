@@ -17,7 +17,16 @@
   const distT = (e) => Math.hypot(e.target.x - e.x, e.target.y - e.y);
   const hasLos = (w, e) => Sim.los(w.room, e.x, e.y, e.target.x, e.target.y, w.locked);
   const aimAt = (e) => Math.atan2(e.target.y - e.y, e.target.x - e.x);
-  const rate = (e) => (e.elite === 'swift' ? 0.7 : 1);
+  // Aimed shots lead the target by World.LEAD of its measured velocity; flightSpd = the final flight speed of a shot of base speed `speed` (Pact 8+ x1.2, x the stratum shot factor, as enemyShoot applies).
+  const leadK = (w) => ED.World.LEAD[w.stratum - 1] || 0;
+  const flightSpd = (w, e, speed) => speed * (w.pact >= 8 ? 1.2 : 1) * (e.boss ? ED.World.bossShotSpd(w.stratum) : ED.World.shotSpd(w.stratum));
+  const lead = (w, e, speed) => ED.World.leadAngle(e.x, e.y - 4, e.target, flightSpd(w, e, speed), leadK(w));
+  // Landing point of a lob with flight time fl: the target led by its measured velocity over fl; a point inside a wall is cut back along the lead.
+  const lobPoint = (w, e, fl) => {
+    const t = e.target, k = leadK(w) * fl, dx = (t.lvx || 0) * k, dy = (t.lvy || 0) * k, px = t.x + dx, py = t.y + dy;
+    return (dx || dy) && D.blocksShots(D.tileAt(w.room, px, py), w.locked) ? Sim.castMove(w.room, t.x, t.y, Math.atan2(dy, dx), Math.hypot(dx, dy), 6, w.locked) : { x: px, y: py };
+  };
+  const rate = (e) => (ED.hasAffix(e, 'swift') ? 0.7 : 1);
   const wind = (e, t) => Math.max(t * rate(e), Math.min(t, 0.4)) * (e.windMul || 1); // every wind-up: swift foes shorten it but never below 0.4 s, chill (windMul) stretches it
   const blind = (e) => e.blind > 0;
   // Ranged foes (not bosses) start an attack only while on the target's screen (minimum view minus a 24 px margin); off-screen they close in instead.
@@ -149,7 +158,7 @@
     if (B) {
       if (e.st === 'aim') {
         e.t -= dt;
-        if (e.t > 0.15) e.aimA = aimAt(e); // aim locks for the last 0.15 s
+        if (e.t > 0.15) e.aimA = lead(w, e, B.speed); // aim locks for the last 0.15 s
         if (e.t <= 0) { e.st = 'cast'; e.vars.shots = B.n; e.vars.gap = 0; }
         return;
       }
@@ -172,7 +181,7 @@
       e.vars.orb = (e.vars.orb ?? w.rng.range(O.t[0], O.t[1])) - dt;
       if (e.vars.orb <= 0 && e.cd <= 0 && d > V.min && d < V.range && hasLos(w, e)) { e.vars.orb = w.rng.range(O.t[0], O.t[1]); diveStart(w, e, V); }
     } else if (B && e.cd <= 0 && d < 420 && hasLos(w, e) && onScreen(w, e)) {
-      e.st = 'aim'; e.t = wind(e, B.windup); e.aimA = aimAt(e);
+      e.st = 'aim'; e.t = wind(e, B.windup); e.aimA = lead(w, e, B.speed);
       aimLine(w, e, 380, 8, e.t);
     }
   };
@@ -182,7 +191,7 @@
     e.cd -= dt;
     if (e.st === 'aim') {
       e.t -= dt;
-      e.aimA = Math.atan2(e.target.y - e.y, e.target.x - e.x);
+      e.aimA = lead(w, e, S.speed);
       if (e.t <= 0) {
         const n = e.vars.fan ? S.fan.n : S.n, spread = e.vars.fan ? S.fan.spread : S.spread;
         for (let i = 0; i < n; i++) w.enemyShoot(e, e.aimA + (i - (n - 1) / 2) * spread, S.speed, S.kind, 1, S.r);
@@ -195,10 +204,10 @@
     if (e.cd <= 0 && hasLos(w, e) && distT(e) < 360 && !blind(e) && onScreen(w, e)) {
       e.vars.shots = (e.vars.shots || 0) + 1;
       e.vars.fan = !!S.fan && e.vars.shots % S.fan.every === 0;
-      e.st = 'aim'; e.t = wind(e, S.windup * (e.vars.fan ? 1.2 : 1));
+      e.st = 'aim'; e.t = wind(e, S.windup * (e.vars.fan ? 1.2 : 1)); e.aimA = lead(w, e, S.speed);
       if (e.vars.fan) {
         const arc = S.fan.spread * (S.fan.n - 1) + 0.16;
-        w.addZone({ kind: 'teleCone', x: e.x, y: e.y, a: aimAt(e), r: 230, arc, dur: e.t, dmg: 0, team: 1, src: e, warnOnly: true, update: (ww, z) => { z.x = e.x; z.y = e.y; z.a = e.aimA; } });
+        w.addZone({ kind: 'teleCone', x: e.x, y: e.y, a: e.aimA, r: 230, arc, dur: e.t, dmg: 0, team: 1, src: e, warnOnly: true, update: (ww, z) => { z.x = e.x; z.y = e.y; z.a = e.aimA; } });
       }
     }
   };
@@ -209,12 +218,12 @@
     e.face = e.target.x > e.x ? 1 : -1;
     if (e.st === 'aim') {
       e.t -= dt;
-      if (P.type !== 'laser') e.aimA = Math.atan2(e.target.y - e.y, e.target.x - e.x);
+      if (P.type !== 'laser') e.aimA = P.type === 'spread' ? lead(w, e, P.speed) : aimAt(e);
       if (e.t <= 0) {
         if (P.type === 'spread' && e.vars.glob) {
           // lobbed spore glob: telegraphed landing circle, leaves a slowing mire
-          const G = P.glob, tx = e.target.x + (e.target.vx || 0) * 0.3, ty = e.target.y + (e.target.vy || 0) * 0.3;
-          w.addZone({ kind: 'tele', x: tx, y: ty, r: G.radius, dur: wind(e, G.flight), dmg: e.dmg, team: 1, src: e, detached: true, boom: 'spore', lob: [Math.round(e.x), Math.round(e.y - 10)],
+          const G = P.glob, fl = wind(e, G.flight), pt = lobPoint(w, e, fl);
+          w.addZone({ kind: 'tele', x: pt.x, y: pt.y, r: G.radius, dur: fl, dmg: e.dmg, team: 1, src: e, detached: true, boom: 'spore', lob: [Math.round(e.x), Math.round(e.y - 10)],
             onEnd: (ww, z) => ww.addZone({ kind: 'mire', x: z.x, y: z.y, r: G.radius * 0.9, dur: G.mire, team: 1 }) });
           e.st = 'move'; e.cd = P.cd * rate(e);
         } else if (P.type === 'spread') {
@@ -264,10 +273,11 @@
     }
     if (e.st === 'aim') { // web shot: the landing circle is the warning, the mire forms where it lands
       e.t -= dt;
-      e.aimA = aimAt(e);
+      e.aimA = lead(w, e, Wb.speed);
       if (e.t <= 0) {
-        const pt = Sim.castMove(w.room, e.x, e.y, e.aimA, Math.min(distT(e) + (e.target.vx || 0) * 0.2, Wb.range[1]), 4, true);
-        const dd = Math.max(40, Math.hypot(pt.x - e.x, pt.y - e.y)), fl = dd / Wb.speed;
+        const fs = flightSpd(w, e, Wb.speed), d0 = distT(e), tv = (e.target.lvx || 0) * Math.cos(e.aimA) + (e.target.lvy || 0) * Math.sin(e.aimA); // d0 + closing speed x flight time = distance of the lead point
+        const pt = Sim.castMove(w.room, e.x, e.y, e.aimA, Math.min(d0 + tv * leadK(w) * d0 / fs, Wb.range[1]), 4, true);
+        const dd = Math.max(40, Math.hypot(pt.x - e.x, pt.y - e.y)), fl = dd / fs;
         w.enemyShoot(e, e.aimA, Wb.speed, 'web', 0.35, 6, { life: fl });
         w.addZone({ kind: 'tele', x: pt.x, y: pt.y, r: Wb.r, dur: fl, dmg: 0, team: 1, src: e, detached: true, warnOnly: true,
           onEnd: (ww, z) => ww.addZone({ kind: 'mire', x: z.x, y: z.y, r: Wb.r, dur: Wb.mire, team: 1 }) });
@@ -287,7 +297,7 @@
     }
     const d = distT(e);
     if (Wb && e.vars.wcd <= 0 && d > Wb.range[0] && d < Wb.range[1] && hasLos(w, e) && !blind(e) && onScreen(w, e)) {
-      e.st = 'aim'; e.t = wind(e, Wb.windup); e.aimA = aimAt(e); e.face = Math.cos(e.aimA) > 0 ? 1 : -1;
+      e.st = 'aim'; e.t = wind(e, Wb.windup); e.aimA = lead(w, e, Wb.speed); e.face = Math.cos(e.aimA) > 0 ? 1 : -1;
       return;
     }
     if (e.cd <= 0 && d < C.range && d > 50 && hasLos(w, e) && !blind(e)) {
@@ -375,7 +385,7 @@
 
   // Casts of the caster family: ring, wave or homing orbs.
   const fireCast = (w, e, C) => {
-    const a0 = aimAt(e);
+    const a0 = C.type === 'ring' ? 0 : lead(w, e, C.speed);
     if (C.type === 'ring') {
       const off = w.rng.range(0, 1);
       for (let i = 0; i < C.n; i++) w.enemyShoot(e, (i + off) * TAU / C.n, C.speed, C.kind, 0.9, C.r);
@@ -580,8 +590,8 @@
     if (e.st === 'aim') {
       e.t -= dt;
       if (e.t <= 0) {
-        const tx = e.target.x + (e.target.vx || 0) * 0.3, ty = e.target.y + (e.target.vy || 0) * 0.3;
-        w.addZone({ kind: 'tele', x: tx, y: ty, r: L.radius, dur: wind(e, L.flight), dmg: e.dmg, team: 1, src: e, detached: true, boom: 'fire', lob: [Math.round(e.x), Math.round(e.y - 10)],
+        const fl = wind(e, L.flight), pt = lobPoint(w, e, fl);
+        w.addZone({ kind: 'tele', x: pt.x, y: pt.y, r: L.radius, dur: fl, dmg: e.dmg, team: 1, src: e, detached: true, boom: 'fire', lob: [Math.round(e.x), Math.round(e.y - 10)],
           onEnd: (ww, z) => ww.addZone({ kind: 'fire', x: z.x, y: z.y, r: L.radius * 0.6, dur: L.fire, dps: e.dmg * 0.45, team: 1 }) });
         e.st = 'move'; e.cd = L.cd * rate(e);
       }
