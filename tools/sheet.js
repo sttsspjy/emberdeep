@@ -41,6 +41,7 @@ function directDamage(m, n) {
     let mul = q.r > 0 || SWEEP.has(key) ? n : 1;
     if (key === 'volley.arrow' || key === 'volley.wave') mul = Math.min(n, q.fanN * 2) * (q.waves || 1) / Math.max(1, q.oneFoe) * (args.surround ? Math.min(1, q.fan / (2 * Math.PI)) : 1); // --surround: the pack stands all round the hero, a fan reaches only the share of it that its angle covers
     if (key === 'volley.burst') { sum += q.here * n * Math.min(2, n - 1) / k._cd; continue; } // a marked foe's burst reaches 2 other foes of the pack, one burst per foe of the pack
+    if (key === 'step.blossom') { sum += q.here * Math.min(n - 1, q.n) / k._cd; continue; } // Death Blossom: the chain cuts one more foe of the pack per blink (the Shadowstep cut the first)
     if (key === 'shieldthrow.strike') mul = Math.min(n, 4 + 2);
     if (q.kind === 'minion') mul = 1;
     if (key === 'vanish.ambush') mul = (m.weapon.kind === 'melee' ? n : Math.min(n, m.weapon.n)) / Math.max(1, q.oneFoe);

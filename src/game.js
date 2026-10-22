@@ -247,6 +247,11 @@
     else if (m.t === 'claimed') s.claimed[m.group] = true;
     else if (m.t === 'toast') { ED.UI.toast(m.text); if (!m.info) ED.Audio.play('deny'); } // info toasts are not refusals
     else if (m.t === 'forkRank') ED.UI.forkReveal(m); // a fork rank granted at a boss { id, rank }: the reveal card
+    else if (m.t === 'blink' && s.me) { s.me.x = m.x; s.me.y = m.y; s.me.vx = 0; s.me.vy = 0; } // a Death Blossom blink of a hero the host does not move (a joined client): its place
+    else if (m.t === 'leap' && s.me) { // the second Sun Dive leap { x, y, d (flight seconds), i (untouchable seconds) } of a joined client
+      s.me.skillMove = ED.leapMove(s.view.room, s.view.locked, s.me, m.x, m.y, { t: m.d, iframes: m.i });
+      if (s.me.skillMove) s.me.cometT = m.d;
+    }
     else if (m.t === 'refund') { // cooldown refund { slot, s }: s seconds off (a charge returns when the cooldown reaches 0), no s = in full
       const c = s.ctl;
       if (m.slot === 1) c.skill2Cd = m.s ? Math.max(0, c.skill2Cd - m.s) : 0;
@@ -273,7 +278,7 @@
       const fx = s.mirror.apply(d, performance.now() / 1000);
       for (const ev of fx) G.localEvent(ev);
     } else if (d.t === 'end') G.localEvent({ t: 'end', summary: d.summary });
-    else if (d.t === 'offer' || d.t === 'offerDone' || d.t === 'claimed' || d.t === 'toast' || d.t === 'refund' || d.t === 'forkRank') G.message(d);
+    else if (d.t === 'offer' || d.t === 'offerDone' || d.t === 'claimed' || d.t === 'toast' || d.t === 'refund' || d.t === 'forkRank' || d.t === 'blink' || d.t === 'leap') G.message(d);
   };
   G.onPeerLeft = (pid) => { const s = G.s; if (s && s.mode === 'host') { s.world.removePlayer(pid); } };
 

@@ -98,18 +98,22 @@
     desc: 'Flame Nova: +{s1Area} radius, +{s1Dmg} damage, recharges {s1Cdr} faster.', mods: { s1Area: 0.25, s1Dmg: 0.2, s1Cdr: 0.21 } });
   card('pyro', 'skill1', 2, 'p_s1_a', { name: 'Twin Nova', icon: 'twin', tag: 'Burst',
     desc: 'Nova erupts a second time 0.6 s later around you at {novaEcho}.',
-    rider: 'Collapse: before the second eruption, foes within its radius are pulled {novaPull:n} px toward you.', mods: { novaEcho: 0.4 }, up: { novaEcho: 0.1 }, r3: { novaPull: 40 } });
+    rider2: 'Collapse: before the second eruption, foes within its radius are pulled {novaPull:n} px toward you.', mods: { novaEcho: 0.4 }, up: { novaEcho: 0.1 }, r2: { novaPull: 40 }, r3: { supernova: 2, novaEcho: 0.4, supernovaPull: 30 },
+    form: { name: 'Supernova', desc: "The second eruption becomes a shockwave that grows from the Nova's radius to radius 220 over 0.5 s, striking every foe it crosses for {novaEcho} of the Nova. Then the centre collapses and pulls foes {supernovaPull:n} px inward (not bosses). The Nova's Burn is {supernova:n} times as strong." } });
   card('pyro', 'skill1', 2, 'p_s1_b', { name: 'Phoenix Mantle', icon: 'feather', tag: 'Guard',
     desc: 'Nova leaves a ring of fire (3 s), and if it hits a foe it shields you for {mantle} max health (at most once per 10 s).[ Nova deals +{s1Dmg}.]',
-    rider: "Rebirth Flare: when the Mantle shield is used up, it bursts (radius 90) for {mantleBurst} of Nova's blast and knocks foes back.", mods: { novaRing: 1, mantle: 0.03 }, up: { s1Dmg: 0.1 }, r3: { mantleBurst: 0.5 } });
+    rider2: "Rebirth Flare: when the Mantle shield is used up, it bursts (radius 90) for {mantleBurst} of Nova's blast and knocks foes back.", mods: { novaRing: 1, mantle: 0.03 }, up: { s1Dmg: 0.1 }, r2: { mantleBurst: 0.5 }, r3: { phoenixMul: 2, phoenixDur: 4, dashTrail: 0.5 },
+    form: { name: 'Phoenix Form', desc: "The ring of fire follows you for {phoenixDur:s} (radius 70) and burns {phoenixMul:n} times as hard. While it burns, every dash leaves a trail of fire patches (radius 24, 2 s) that deal {dashTrail} of the ring's damage per second." } });
   card('pyro', 'skill2', 1, 'p_s2', { name: 'Starfall', icon: 'meteor', forks: ['p_s2_a', 'p_s2_b'], plays: 'call the sky down on every pack.',
     desc: 'Meteor: +{s2Dmg} damage; its crater lasts {s2Dur:s} longer.', mods: { s2Dmg: 0.15, s2Dur: 2 } });
   card('pyro', 'skill2', 2, 'p_s2_a', { name: 'Twin Meteor', icon: 'star', tag: 'Burst',
     desc: 'A second Meteor lands 0.6 s later on the foe nearest the impact (within 300) at {twinMeteor}.',
-    rider: 'Meteor Shower: 0.3 s after each Meteor lands, 3 meteorites strike within 80 of it (radius 45, {meteorites} of the impact each).', mods: { twinMeteor: 0.6 }, up: { twinMeteor: 0.1 }, r3: { meteorites: 0.3 } });
+    rider2: 'Meteor Shower: 0.3 s after each Meteor lands, 3 meteorites strike within 80 of it (radius 45, {meteorites} of the impact each).', mods: { twinMeteor: 0.6 }, up: { twinMeteor: 0.1 }, r2: { meteorites: 0.3 }, r3: { cataclysm: 0.6 },
+    form: { name: 'Cataclysm', desc: "Meteor falls as five: one on the cursor and four around it at 80 px, 0.1 s apart, each for {cataclysm} of an impact (they replace the second Meteor and the Shower). Their craters merge into one lava field (radius 140) that burns for the crater's duration." } });
   card('pyro', 'skill2', 2, 'p_s2_b', { name: 'Comet', icon: 'wing', tag: 'Guard',
     desc: 'You ride the Meteor: leap to the target point in 0.6 s (untouchable for the first 0.35 s) and land as the impact (+{comet}).',
-    rider: 'Impact Crater: landing knocks foes back twice as far and stuns them {cometStun:s} (not bosses).', mods: { comet: 0.3 }, up: { comet: 0.1 }, r3: { cometStun: 0.5 } });
+    rider2: 'Impact Crater: landing knocks foes back twice as far and stuns them {cometStun:s} (not bosses).', mods: { comet: 0.3 }, up: { comet: 0.1 }, r2: { cometStun: 0.5 }, r3: { sunDive: 1, comet: 0.1, diveTrail: 0.5 },
+    form: { name: 'Sun Dive', desc: "You are untouchable for the whole leap. 0.5 s after you land you leap again toward the cursor (as far as the Meteor reaches) and land as a second impact; every landing is +{comet}. Both flights leave a burning trail that deals {diveTrail} of the crater's damage per second." } });
   card('pyro', 'element', 1, 'p_el', { name: 'Living Flame', icon: 'ember', forks: ['p_el_a', 'p_el_b'], plays: 'everything burns; weak and resisted strata matter.',
     desc: "Your skills deal +{classElMul} Fire damage, and your weapon sets foes alight for {wInfFire} of each hit (Kindle's rate counts instead when it is higher).", mods: { classElMul: 0.25, wInfFire: 0.15 } });
   card('pyro', 'element', 2, 'p_el_a', { name: 'White Heat', icon: 'flame', tag: 'Focus',
@@ -132,18 +136,22 @@
     desc: 'Shadowstep: +{s1Dmg} damage, recharges {s1Cdr} faster, and each foe it cuts readies {stepStack:ck} more crit attack (up to {stackMax:ck3}).', mods: { s1Cdr: 0.2, s1Dmg: 0.2, stepStack: 1, stackMax: 2 } });
   card('shade', 'skill1', 2, 's_s1_a', { name: 'Assassinate', icon: 'dagger', tag: 'Burst',
     desc: 'Shadowstep deals +{assassinate} to foes below 50% health, and a Shadowstep kill refunds it (at most once per 1.5 s).[ Shadowstep deals +{s1Dmg}.]',
-    rider: 'Twin Cut: a second slash runs the Shadowstep path 0.15 s later at {stepTwin}.', mods: { assassinate: 0.3 }, up: { s1Dmg: 0.1 }, r3: { stepTwin: 0.5 } });
+    rider2: 'Twin Cut: a second slash runs the Shadowstep path 0.15 s later at {stepTwin}.', mods: { assassinate: 0.3 }, up: { s1Dmg: 0.1 }, r2: { stepTwin: 0.5 }, r3: { blossom: 0.7, blossomN: 3, blossomMax: 6 },
+    form: { name: 'Death Blossom', desc: 'After the blink you cut on: you blink to the nearest foe not yet cut within 120 of where you stand, {blossomN:n} more times, 0.1 s apart and untouchable meanwhile. Each cut is a guaranteed critical hit for {blossom} of a Shadowstep slash. Killing a foe (not a horde foe) adds one more cut, up to {blossomMax:n}.' } });
   card('shade', 'skill1', 2, 's_s1_b', { name: 'Afterimage', icon: 'mirror', tag: 'Guard',
     desc: 'Shadowstep leaves an afterimage where you stood; 1.2 s later it bursts (radius 80), hurting foes and blinding them 1 s (elites 0.5 s, not bosses).[ Shadowstep deals +{s1Dmg}.]',
-    rider: 'Lure: just before it bursts, the afterimage pulls foes within {afterPull:n} toward it.', mods: { afterimage: 1 }, up: { s1Dmg: 0.1 }, r3: { afterPull: 120 } });
+    rider2: 'Lure: just before it bursts, the afterimage pulls foes within {afterPull:n} toward it.', mods: { afterimage: 1 }, up: { s1Dmg: 0.1 }, r2: { afterPull: 120 }, r3: { mirrorHall: 1 },
+    form: { name: 'Hall of Mirrors', desc: 'Shadowstep leaves three mirror images in a triangle (radius 50) around where you stood, instead of one afterimage. Each pulls foes in like the afterimage and bursts 1.5 s later (radius 80, blinds 1 s, elites 0.5 s, not bosses) for {mirrorHall} of a Shadowstep slash.' } });
   card('shade', 'skill2', 1, 's_s2', { name: 'Nightfall', icon: 'vanish', forks: ['s_s2_a', 's_s2_b'], plays: 'vanish, reposition, ambush.',
     desc: 'Vanish recharges {s2Cdr} faster; its smoke is {s2Area} wider, lasts {s2Dur:s} longer and foes inside take +20% damage; you move {stealthSpd} faster while unseen.', mods: { s2Cdr: 0.27, s2Area: 0.4, s2Dur: 2, smokeVuln: 1, stealthSpd: 0.3 } });
   card('shade', 'skill2', 2, 's_s2_a', { name: "Night's Edge", icon: 'mask', tag: 'Burst',
     desc: "Ambush deals ×{ambushMul:a25} of your weapon's base damage. An Ambush refunds Shadowstep; an Ambush kill refunds Vanish (at most once per 3 s).",
-    rider: 'Ambush Sweep: Ambush also strikes every foe within {ambushCleave:n} of its target.', mods: { ambushMul: 1.25, nightsEdge: 1 }, up: { ambushMul: 0.25 }, r3: { ambushCleave: 70 } });
+    rider2: 'Ambush Sweep: Ambush also strikes every foe within {ambushCleave:n} of its target.', mods: { ambushMul: 1.25, nightsEdge: 1 }, up: { ambushMul: 0.25 }, r2: { ambushCleave: 70 }, r3: { eclipse: 0.6, eclipseDur: 4 },
+    form: { name: 'Eclipse', desc: "Vanish's smoke becomes a dark dome (radius 140) that lasts {eclipseDur:s}. While you stand inside you stay unseen and every attack is an Ambush at {eclipse}, not only the next one (the extra Ambushes refund nothing). Foes inside take +20% damage." } });
   card('shade', 'skill2', 2, 's_s2_b', { name: 'Veil of Night', icon: 'cloak', tag: 'Guard',
     desc: 'Vanish shields you for {veil} max health (at most once per 12 s); your smoke blinds each foe {veilBlind:s} longer (elites half); stealth lasts {stealthDur:s} longer; Ambush deals ×{ambushMul:a25} of your weapon\'s base damage.',
-    rider: 'Shroud: your smoke slows foes 60% (from 40%) and lasts {s2Dur:s} longer.', mods: { veil: 0.03, veilBlind: 1, stealthDur: 1, ambushMul: 0.5 }, up: { stealthDur: 0.5 }, r3: { shroud: 1, s2Dur: 2 } });
+    rider2: 'Shroud: your smoke slows foes 60% (from 40%) and lasts {s2Dur:s} longer.', mods: { veil: 0.03, veilBlind: 1, stealthDur: 1, ambushMul: 0.5 }, up: { stealthDur: 0.5 }, r2: { shroud: 1, s2Dur: 2 }, r3: { umbral: 2, cloneMul: 0.5 },
+    form: { name: 'Umbral Veil', desc: 'Vanish leaves a shadow clone where you stood for 4 s. It repeats each of your weapon attacks from its own spot toward your aim at {cloneMul}, and foes (not bosses) go for it as if it were you. Your smoke blinds {umbral:n} times as long (the cooldown cap still holds).' } });
   card('shade', 'element', 1, 's_el', { name: 'Cruel Arts', icon: 'fang', forks: ['s_el_a', 's_el_b'], plays: 'open wounds, then rip them open.', desc: BLEED, mods: { bleedAll: 0.1, statusPow: 0.15 } });
   card('shade', 'element', 2, 's_el_a', { name: 'Open Veins', icon: 'drop', tag: 'Focus', coop: true,
     desc: 'Your crits deal +{veins} for each ailment on the foe (up to 4).',

@@ -61,7 +61,8 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   ok(Math.abs(part(k1, 1, 'strike').raw - 0.7 * part(k0, 1, 'strike').raw) < 1e-6 && part(k1, 1, 'strike').oneFoe === 2, 'Shield Storm: two shields at 70% each in the strike part');
   ok(k1.skills[1].perCast > k0.skills[1].perCast * 1.2, 'Shield Storm raises the Shield Throw per cast: ' + k0.skills[1].perCast.toFixed(1) + ' -> ' + k1.skills[1].perCast.toFixed(1));
   const m0 = model('pyro', { p_s2: 1 }), m3 = model('pyro', { p_s2: 1, p_s2_b: 3 });
-  ok(Math.abs(part(m3, 1, 'impact').raw / part(m0, 1, 'impact').raw - 1.5) < 1e-6, 'Comet rank 3: impact x1.5: ' + (part(m3, 1, 'impact').raw / part(m0, 1, 'impact').raw).toFixed(3));
+  ok(Math.abs(part(m3, 1, 'impact').raw / part(m0, 1, 'impact').raw - 1.6) < 1e-6, 'Sun Dive (Comet rank 3): impact x1.6: ' + (part(m3, 1, 'impact').raw / part(m0, 1, 'impact').raw).toFixed(3));
+  ok(part(m3, 1, 'impact').oneFoe === 2 && part(m0, 1, 'impact').oneFoe === 1, 'Sun Dive lands twice: the impact part counts two hits on one foe');
   ok(part(model('knight', {}), 1, 'strike').r === 0 && part(model('knight', {}), 1, 'return').r === 0, 'projectile hit radii stay out of the sheet parts');
 }
 

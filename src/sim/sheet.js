@@ -271,14 +271,16 @@
     const stratum = ctx.stratum, clsEl = q.el === 'class' && st.element ? st.element : null, tag = clsEl || (q.el && q.el !== 'class' ? q.el : null);
     const aff = clsEl ? ED.affC(stratum, clsEl) : tag ? ED.elemMul(stratum, tag) : 1;
     const M = Math.max(0.1, st.dmg + (clsEl ? st.classElMul : 0)), cm = st.critMult, c = st.crit, EC = 1 + c * (cm - 1);
-    const o = { id: q.id, label: q.label, per: q.per, el: tag, aff: R.x(aff), r: q.r && !q.pRad ? Math.round(q.r) : 0, dur: q.dur, every: q.every, delay: q.delay, count: q.count, n: q.n, stun: q.stun, knock: q.knock, note: q.note || '', proc: procDefault(q), radiance: q.radiance || 0, noCrit: !!q.noCrit, alwaysCrit: q.crit === true, selfVuln: q.selfVuln || 0, infAdd: q.infAdd || null };
+    const o = { id: q.id, label: q.label, per: q.per, el: tag, aff: R.x(aff), r: q.r && !q.pRad ? Math.round(q.r) : 0, dur: q.dur, every: q.every, delay: q.delay, count: q.count, n: q.n, attacks: q.attacks, stun: q.stun, knock: q.knock, note: q.note || '', proc: procDefault(q), radiance: q.radiance || 0, noCrit: !!q.noCrit, alwaysCrit: q.crit === true, selfVuln: q.selfVuln || 0, infAdd: q.infAdd || null };
     if (q.per === 'minion') {
       const per = q.dmg * (1 + st.minionDmg) * (C.COMP_MUL || 0.85), live = Math.min(ctx.minions > 0 ? ctx.minions : q.n, st.maxMinions || 3), hits = Math.floor((q.dur || 0) / q.every + 1e-9);
       Object.assign(o, { kind: 'minion', raw: q.dmg, hit: per, avg: per, pre: per, here: per, hitsEach: hits, minions: live, oneFoe: live * hits, total: per * live * hits, kc: 0 });
       return finish(o, R);
     }
     if (q.per === 'status') {
-      const S = ED.STATUS[q.status], mul = S && S.mulKey ? 1 + (st[S.mulKey] || 0) : 1, aff2 = S && S.el ? ED.elemMul(stratum, S.el) : 1, pool = q.dmg * (q.status === 'burn' ? 1 + st.classElMul : 1);
+      const S = ED.STATUS[q.status], mul = S && S.mulKey ? 1 + (st[S.mulKey] || 0) : 1, aff2 = S && S.el ? ED.elemMul(stratum, S.el) : 1;
+      let pool = q.dmg * (q.status === 'burn' ? 1 + st.classElMul : 1);
+      if (skillId === 'nova' && q.status === 'burn' && st.novaEcho > 0) pool *= 1 + st.novaEcho; // the second eruption (or the Supernova wave) adds the Burn again at novaEcho
       Object.assign(o, { kind: 'status', raw: q.dmg, status: q.status, statusName: S ? S.name : q.status, statusEl: S ? S.el : null, aff: R.x(aff2), pool, hit: 0, avg: pool, pre: pool, here: pool * aff2 * mul, total: pool * aff2 * mul, oneFoe: 1, kc: 0 });
       return finish(o, R);
     }
@@ -296,6 +298,7 @@
     }
     if (q.ref) { let hits = 0; for (let k = 0; k < q.n; k++) if (q.ref * (q.n - 1 - k) / q.n <= q.r + Sh.REF.r) hits++; oneFoe = hits; } // Starfall: the impacts walk from the hero to a target q.ref px away; a foe there is in reach of some of them
     if (q.id === 'ambush' && skillId === 'vanish') oneFoe = wpn.oneFoe; // each of the weapon's hits carries the Ambush value
+    else if (skillId === 'vanish' && (q.id === 'edge' || q.id === 'clone')) oneFoe = wpn.oneFoe * (q.attacks || 0); // the Eclipse repeats and the clone's attacks: one weapon attack each
     if (q.perMinion) { // one hit per minion: the minions you have now (all of them when none), or the ones this cast raises
       oneFoe = q.perMinion === 'cast' ? St.skillNums('legion', st).p.minion.n : ctx.minions > 0 ? Math.min(ctx.minions, st.maxMinions || 3) : st.maxMinions || 3;
       o.perMinion = true;
