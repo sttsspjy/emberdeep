@@ -7,6 +7,7 @@
 // 'legacy' is the v3 smart order in smartScore (evolution > keystone > duo > own-path boon > element gate while a slot is free > open General > anything), kept for paired comparison. --explain prints every pick of a single run with its value parts.
 // Skill (0-1) is the share of ticks the bot pays attention to floor hazards; the rest of the time it moves on instinct.
 // The summary reports win rate, pacing, hits and time to kill, hero DPS, damage share by source, cooldown reduction, the dark-room lines and the path lines (see summarize); every mean prints its standard error.
+// Per cleared combat / elite / dark room it also reports kills (threat/fodder), peak live foes and the xp dropped against the room budget. Bot fights: nearest threat foe within weapon reach, else the nearest fodder; with 4+ foes within 80 px it steps toward the emptier side (crowd slow).
 // --start: how the start offer is picked (default: the best gain under --pick=smart, else uniform over its cards; random: always uniform; class: the class element's gate; a gate id or generalist forces that card; rotate: run i takes fire, ice, lightning, poison, holy, shadow, generalist in turn).
 // --gates=1: a hero never takes a second element gate (mono-element arm).
 // --force: gate ids (and generalist) replace the start pick, then are taken whenever offered; other boons and relics are granted at run start (a fork id also grants its route card). id@slot limits an id to one hero.

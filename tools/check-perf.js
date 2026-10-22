@@ -1,6 +1,6 @@
 // Usage: node tools/check-perf.js [--audit-only] [--limit=<ms per tick at 150 foes>] [--reps=N]
 // Headless sim cost per tick against the live foe count (hordes: up to 120 foes solo, 180 in a party). One hero stands in the largest combat room (37x17 tiles) and fires volleys at the nearest foe while N mixed foes
-// (every non-boss roster type) pile up around it; foes carry 25x HP so the count holds. Per count: 200 warm-up ticks, then 600 ticks at dt 1/60; the best of N runs, mean of its fastest 95% of ticks.
+// (every non-boss roster type) pile up around it; foes carry 25x HP so the count holds. A horde scenario times 150 foes of which 100 are fodder (radius 6-7) and audits the same with 40-200. Per count: 200 warm-up ticks, then 600 ticks at dt 1/60; the best of N runs, mean of its fastest 95% of ticks.
 // Fails when 150 foes cost more than the limit or when the audit finds a difference; the 200 / 70 cost ratio is printed (x2.86 would be linear in the foe count).
 // Audit (normal foe HP, respawns, a kiting hero, kills and splits): every foesNear call must return each foe that a full scan finds within the circle, ascending and alive, including random probes inside the foe loop of
 // update(); every foeScan must be paired with a foeEnd; separate() must leave every foe where the original O(n^2) loops leave it, in the sim and in random packs.

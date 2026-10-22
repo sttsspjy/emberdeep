@@ -1,6 +1,7 @@
 // Usage: node tools/check-sim.js
 // Headless regression checks of sim review fixes: crit-stack grants never lower the count, a boss kill purges hostile shots and pools whichever loop lands it, Smite duo statuses use the pre-affinity Smite,
-// Frozen Heart goes through freezeEnemy, a departed hero leaves no thrown shield, fork and crit card text follows the hero's weapon. Prints failures and exits 1 when any check fails.
+// Frozen Heart goes through freezeEnemy, a departed hero leaves no thrown shield, fork and crit card text follows the hero's weapon, and the fodder horde (quota, drops, health, damage cap, xp budget, crowd slow, exposure, pack spots, live cap).
+// Prints failures and exits 1 when any check fails; -v prints one line per played room.
 const { ED, runBot } = require('./sim.js');
 let n = 0, fails = 0;
 const ok = (c, msg) => { n++; if (!c) { fails++; console.log('FAIL ' + msg); } };
