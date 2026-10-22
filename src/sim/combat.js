@@ -292,14 +292,14 @@
     if (own) this.curChain = null;
   };
 
-  // A Smite of stored amount amt on e by o: holy damage, then the owner's duo effects and shields for heroes within HOLY_R of the smitten foe (HOLY_GRANT_MAX per grant, once per HOLY_CD per hero).
+  // A Smite of stored amount amt on e by o: holy damage, then the owner's duo effects and shields for heroes within HOLY_R of the smitten foe (HOLY_GRANT_MAX per grant, once per HOLY_CD per hero). Sunstrike (the Cleric hook CLS.cleric.sunstrike says whether this Smite is one): x sunstrike damage, double shield.
   W.smite = function (e, o, amt) {
-    const st = o.stats, C = ED.CONST, corroded = e.venom >= 100, big = e.elite || e.boss;
-    const dmg = amt * (1 + st.smiteMul + (big ? st.smiteBig : 0)) * (st.hoarlight && e.frozen > 0 ? 2 : 1) * (st.purge && corroded ? 1.5 : 1);
+    const st = o.stats, C = ED.CONST, corroded = e.venom >= 100, big = e.elite || e.boss, sun = st.sunstrike > 0 && CLS.cleric.sunstrike.call(this, e, o);
+    const dmg = amt * (1 + st.smiteMul + (big ? st.smiteBig : 0)) * (st.hoarlight && e.frozen > 0 ? 2 : 1) * (st.purge && corroded ? 1.5 : 1) * (sun ? st.sunstrike : 1);
     const x = e.x, y = e.y, pre = dmg / this.elemAff('holy'); // pre: the Smite before the holy affinity, the base of its duo statuses (each status applies its own element's affinity)
     this.hitEnemy(e, dmg, { p: o, kind: 'smite', raw: true, noProc: true, crit: false, noGuard: true, el: 'holy', affDone: true });
     let n = 0;
-    const g = Math.min(C.HOLY_GRANT_MAX, st.smiteShield * (big ? 2 : 1) * (st.purge && corroded ? 2 : 1));
+    const g = Math.min(C.HOLY_GRANT_MAX, st.smiteShield * (big ? 2 : 1) * (sun ? 2 : 1) * (st.purge && corroded ? 2 : 1));
     for (const q of this.players.values()) {
       if (q.downed || q.dead || q.holyT > 0 || U.dist2(q.x, q.y, x, y) > C.HOLY_R * C.HOLY_R) continue;
       this.addShield(q, q.maxHp * g, q.maxHp * st.holyCap, 'holy');
