@@ -625,6 +625,34 @@ function statusRun(boons, stratum, secs, until) {
   }
 }
 
+// The power budget of the 24 skill forks (tools/sheet.js --parity): mid build, the mean of the 1 foe and pack columns (whole percents) against the class without the route card.
+// Stratum IV at rank 2: a non-Guard fork 31.5-38.5, a Guard fork >= 28. Stratum VI at rank 3: non-Guard 54-66, Guard >= 48 and +25% EHP or 30% stun.
+{
+  const MD = require('./model.js')(ED, { pack: 4 }), col = (v) => Math.round(v * 100);
+  const GATE2 = { knight: ['kindle', 'frostbite'], ranger: ['kindle', 'frostbite'], pyro: ['kindle', 'staticcharge'], shade: ['kindle', 'frostbite'], cleric: ['consecrate', 'frostbite'], necro: ['doommark', 'envenom'] };
+  const assess = (cls, boons, stratum) => {
+    const b = { cls, weapon: ED.CLASSES[cls].weapons[0], boons, relics: [], meta: META(), pact: 0 }, stats = ED.Stats.compute(b);
+    return MD.assess({ pid: 'p', name: 'T', cls, weapon: b.weapon, boons, relics: [], meta: b.meta, stats, hp: stats.maxHp, maxHp: stats.maxHp, shield: 0, picks: 0, slot: 0 }, CTX({ stratum, level: 8 }));
+  };
+  for (const cls of ED.CLASS_IDS) {
+    const mid = Object.assign({}, ...GATE2[cls].map(id => ({ [id]: 1 })), { edge: 2, quick: 2, focus: 1, stalwart: 1 });
+    for (const [stratum, rank, lo, hi, gmin] of [[4, 2, 31.5, 38.5, 28], [6, 3, 54, 66, 48]]) {
+      const base = assess(cls, mid, stratum);
+      for (const route of ['skill1', 'skill2']) {
+        const e = ED.CLASS_CARDS[cls][route];
+        for (const fid of e.forks) {
+          const a = assess(cls, Object.assign({}, mid, { [e.t1]: 1, [fid]: rank }), stratum), v = (col(a.one / base.one - 1) + col(a.pack / base.pack - 1)) / 2, guard = ED.BOONS[fid].tag === 'Guard';
+          if (!guard) ok(v >= lo && v <= hi, `${fid} (${ED.BOONS[fid].name}) rank ${rank} at stratum ${stratum}: ${v} within ${lo}-${hi}`);
+          else {
+            ok(v >= gmin, `${fid} (${ED.BOONS[fid].name}, Guard) rank ${rank} at stratum ${stratum}: ${v} reaches ${gmin}`);
+            if (rank === 3) ok(col(a.ehp / base.ehp - 1) >= 25 || col(a.d.stun) >= 30, `${fid} rank 3 holds +25% EHP or 30% stun (EHP ${col(a.ehp / base.ehp - 1)}%, stun ${col(a.d.stun)}%)`);
+          }
+        }
+      }
+    }
+  }
+}
+
 // the sheet shows the shield the way the HUD does (rounded up), so the host and a client reading the snapshot agree
 { const m = modelOf('knight', {}, 0, { shield: 2.4 }); ok(m.def.shield === 3 && m.hero.shield === 3, `shield 2.4 reads ${m.def.shield} (defence) and ${m.hero.shield} (header), want 3`); }
 

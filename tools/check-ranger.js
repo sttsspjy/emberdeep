@@ -182,7 +182,7 @@ const RAD = (a) => a * Math.PI / 180;
   ok(log.filter(s => s === 'rain.tick').length === 12, `12 arrow ticks (got ${log.filter(s => s === 'rain.tick').length})`); w.hitEnemy = hk; void e;
 }
 
-// ---- Skyfall (r_s2_a): the whole Rain lands once after 0.5 s, 30% wider, 0.5 s stun; Twin Sky 0.8 s later at 50% ----
+// ---- Skyfall (r_s2_a): the whole Rain lands once after 0.5 s, 30% wider, 0.5 s stun; Twin Sky 0.8 s later at 40% ----
 {
   const { w, p } = stage({ r_s2: 1, r_s2_a: 1 }); const rn = ED.Stats.skillNums('rain', p.stats);
   near(rn.p.sky.dmg, 124.08, 0.1, 'Skyfall 124 in one hit'); near(rn.p.sky.r, 104 * 1.3, 1e-6, 'Skyfall is 30% wider'); ok(!rn.p.sky2.on, 'no Twin Sky at rank 1');
@@ -196,12 +196,12 @@ const RAD = (a) => a * Math.PI / 180;
   ok(!log.some(h => h.e === out), 'a foe outside the circle is not hit'); ok(inn.stun > 0.4 && inn.stun <= 0.5 + 1e-9, `non-boss foes are stunned 0.5 s (got ${inn.stun.toFixed(2)})`); ok(!(bs.stun > 0), 'bosses are never stunned');
   ok(evs.all.filter(v => v.t === 'skyfx' && v.k === 0).length === 1, 'a landing event'); run(w, 1.5, evs.step); ok(log.length === 3 && log.every(h => h.part === 'rain.sky'), 'no further hits without Twin Sky'); w.hitEnemy = hk; void edge;
 }
-{ // Twin Sky: a second landing 0.8 s after the first at 50%, same spot, no stun; rank 2 adds damage and radius
-  const { w, p } = stage({ r_s2: 1, r_s2_a: 2 }); const rn = ED.Stats.skillNums('rain', p.stats); near(rn.p.sky.dmg, 9.4 * 1.1 * 1.1 * 12, 0.2, 'rank 2 Skyfall damage (Rainmaker +10%, Skyfall +10% at rank 2)'); near(rn.p.sky2.dmg, rn.p.sky.dmg * 0.5, 1e-9, 'Twin Sky at 50%');
+{ // Twin Sky: a second landing 0.8 s after the first at 40%, same spot, no stun; rank 2 adds damage and radius
+  const { w, p } = stage({ r_s2: 1, r_s2_a: 2 }); const rn = ED.Stats.skillNums('rain', p.stats); near(rn.p.sky.dmg, 9.4 * 1.1 * 1.1 * 12, 0.2, 'rank 2 Skyfall damage (Rainmaker +10%, Skyfall +10% at rank 2)'); near(rn.p.sky2.dmg, rn.p.sky.dmg * 0.4, 1e-9, 'Twin Sky at 40%');
   const e = foe(w, 200, 212), evs = tap(w), log = []; const hk = w.hitEnemy; w.hitEnemy = function (f, b, s) { const d = hk.call(this, f, b, s); if (s && s.part) log.push({ part: s.part, t: w.time, d, stun: f.stun }); return d; };
   w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: 200, y: 212 }, 1); run(w, 0.7, evs.step); e.stun = 0; e.stunCd = 0; run(w, 1.0, evs.step);
   const a = log.find(h => h.part === 'rain.sky'), b = log.find(h => h.part === 'rain.sky2');
-  ok(a && b && Math.abs((b.t - a.t) - 0.8) < 0.03, `Twin Sky lands 0.8 s later (${a && b ? (b.t - a.t).toFixed(2) : '-'})`); near(b.d / a.d, 0.5, 1e-6, 'Twin Sky deals half'); ok(!(e.stun > 0), 'Twin Sky does not stun again');
+  ok(a && b && Math.abs((b.t - a.t) - 0.8) < 0.03, `Twin Sky lands 0.8 s later (${a && b ? (b.t - a.t).toFixed(2) : '-'})`); near(b.d / a.d, 0.4, 1e-6, 'Twin Sky deals 40%'); ok(!(e.stun > 0), 'Twin Sky does not stun again');
   ok(evs.all.filter(v => v.t === 'skyfx').map(v => v.k).join() === '0,1', 'two landing events'); w.hitEnemy = hk;
 }
 
