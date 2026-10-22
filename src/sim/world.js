@@ -103,8 +103,22 @@
     return true;
   };
 
-  // Hero movement: walking, dash, skill-move, hazards and pull zones.
-  Sim.movePlayer = (p, inp, dt, room, locked, zones) => {
+  // Walking-speed factor of a crowd: CROWD.per for every non-boss foe overlapping the hero (distance < foe.r + p.r), never below CROWD.floor. foes: any list of { x, y, r, hp, boss, spawnT }.
+  Sim.crowdMul = (p, foes) => {
+    if (!foes) return 1;
+    let n = 0;
+    for (let i = 0; i < foes.length; i++) {
+      const e = foes[i];
+      if (!(e.hp > 0) || e.boss || e.spawnT > 0) continue;
+      const rr = e.r + p.r, dx = e.x - p.x, dy = e.y - p.y;
+      if (dx * dx + dy * dy < rr * rr) n++;
+    }
+    const C = ED.CONST.CROWD;
+    return Math.max(C.floor, 1 - C.per * n);
+  };
+
+  // Hero movement: walking, dash, skill-move, hazards and pull zones. foes (optional): the foes near the hero; a crowd slows the walk (dashes and skill moves ignore it).
+  Sim.movePlayer = (p, inp, dt, room, locked, zones, foes) => {
     if (p.downed || p.dead) { p.moving = false; p.skillMove = null; p.skillIfr = false; return; }
     const speed = p.stats.moveSpeed * (ED.Stats.moveRate ? ED.Stats.moveRate(p) : 1);
     if (p.skillMove) { // a skill's own movement { dx, dy, speed, t (seconds left), iframes (untouchable for this long), age }
@@ -131,6 +145,7 @@
     let sp = speed;
     if (hz === 'water') sp *= 0.62;
     if (hz === 'poison') sp *= 0.85;
+    if (foes) sp *= Sim.crowdMul(p, foes);
     if (zones) for (const z of zones) if (z.kind === 'mire' && z.team === 1 && U.dist2(z.x, z.y, p.x, p.y) < z.r * z.r) { sp *= 0.55; break; }
     const accel = hz === 'ice' ? 3.2 : 22;
     p.vx = (p.vx || 0) + (mx * sp - (p.vx || 0)) * Math.min(1, accel * dt);
@@ -157,7 +172,7 @@
     this.gold = 0; this.xp = 0; this.level = 1; this.xpNext = W.xpFor(1);
     this.time = 0; this.roomTime = 0; this.state = 'play'; this.stratum = 0; this.floorSeed = 0;
     this.locked = false; this.enc = null; this.boss = null; this.pendingStratum = null;
-    this.run = { kills: 0, roomsCleared: 0, elitesKilled: 0, bosses: 0, bossCount: 0, revives: 0, maxGold: 0, maxRelics: 0, flawlessBoss: false,
+    this.run = { kills: 0, fodderKills: 0, roomsCleared: 0, elitesKilled: 0, bosses: 0, bossCount: 0, revives: 0, maxGold: 0, maxRelics: 0, flawlessBoss: false,
       fullClear: false, roomsVisited: 0, roomsTotal: 0,
       embers: { rooms: 0, elites: 0, bosses: 0, victory: 0 } };
     this.fullClearDone = 0;
@@ -181,6 +196,11 @@
   W.hpScale = (s) => (1 + 0.65 * (s - 1) + 0.08 * (s - 1) * (s - 1)) * W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, s - 1))].hp;
   // Wave pacing of combat rooms: seconds before the first wave, spawn telegraph (+ random extra), minimum gap before the next wave, the share of a wave that may still stand when the next one is called, the seconds after which the next wave comes regardless, and the minimum spawn distance from heroes (turrets keep more).
   W.PACE = { first: 0.5, spawn: 0.7, spawnVar: 0.25, gap: 0.9, nextAt: 0.45, maxAge: 6, avoid: 100, avoidTurret: 130 };
+  // Horde of a combat or elite room (fodder beside the threat waves): kills to spawn by stratum (x0.6 in an elite room, x(1 + 0.5 (n - 1)) per party, x0.6 at stratum I of the tutorial, x DARK_FODDER in a dark room),
+  // fodder per pack, seconds between packs, minimum pack distance from every hero (relaxed in 40 px steps once a pack has waited PACK_WAIT s), live-foe cap (solo, 2+ heroes).
+  W.FODDER_Q = [40, 55, 70, 85, 100, 120]; W.PACK_N = [6, 12]; W.PACK_GAP = [2.0, 3.0]; W.PACK_AVOID = 220; W.PACK_WAIT = 4; W.LIVE_CAP = [120, 180];
+  // Room xp budget by stratum (solo, per room; x DARK_LOOT in a dark room, not scaled by the party): threat drops, fodder motes (FODDER_XP_SHARE of it, spread over the quota) and the clear pile together drop exactly this.
+  W.ROOM_XP = { combat: [38, 61, 96, 136, 173, 196], elite: [71, 103, 139, 187, 257, 290] }; W.FODDER_XP_SHARE = 0.5;
   // Gold dropped by a 'gold' room reward (shared with the UI): 15 + 8 per stratum, times the global gold multiplier.
   W.rewardGold = (stratum) => Math.round((15 + 8 * stratum) * W.GOLD_MUL);
   W.GOLD_MUL = 0.65; // every gold drop (kills, rooms, chests, rewards) is scaled by this; shops sell at full price
@@ -192,7 +212,7 @@
   W.prototype.partyHpMul = function () { return W.partyHpMul(this.partySize()); };
   W.prototype.alive = function (p) { return p && !p.downed && !p.dead; };
   W.prototype.alivePlayers = function () { const out = []; for (const p of this.players.values()) if (!p.downed && !p.dead) out.push(p); return out; };
-  W.prototype.hostiles = function () { let n = 0; for (const e of this.enemies) if (e.hp > 0) n++; return n; };
+  W.prototype.hostiles = function (threatOnly) { let n = 0; for (const e of this.enemies) if (e.hp > 0 && !(threatOnly && e.fodder)) n++; return n; };
 
   W.prototype.nearestPlayer = function (x, y) {
     let best = null, bd = Infinity;
@@ -821,9 +841,20 @@
     total = Math.round((exact ? total : total * W.GOLD_MUL) * this.lootMul());
     while (total > 0) { const v = Math.min(total, total > 30 ? 10 : total > 8 ? 4 : 1); this.spawnPickup('gold', x, y, v); total -= v; }
   };
-  W.prototype.dropXp = function (x, y, total) {
-    total = Math.max(1, Math.round(total * this.lootMul()));
+  // Drops total xp (x lootMul unless exact: fodder motes and the clear pile) and returns the amount dropped. In a room with an xp budget (enc.xpBudget) a threat drop is cut to what is left of enc.xpThrCap (the budget less the fodder share),
+  // an exact drop to what is left of the budget: enc.xpOut counts everything dropped, enc.xpThr the threat part, enc.xpClip what the cuts removed.
+  W.prototype.dropXp = function (x, y, total, exact) {
+    total = exact ? Math.round(total) : Math.max(1, Math.round(total * this.lootMul()));
+    const enc = this.enc;
+    if (enc && enc.xpBudget !== undefined) {
+      const left = Math.max(0, exact ? enc.xpBudget - enc.xpOut : enc.xpThrCap - enc.xpThr);
+      if (total > left) { enc.xpClip += total - left; total = left; }
+      enc.xpOut += total;
+      if (!exact) enc.xpThr += total;
+    }
+    const out = total;
     while (total > 0) { const v = Math.min(total, total > 40 ? 12 : total > 10 ? 4 : 1); this.spawnPickup('xp', x, y, v); total -= v; }
+    return out;
   };
 
   W.prototype.updatePickups = function (dt) {

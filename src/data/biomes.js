@@ -18,6 +18,7 @@
       enemies: [['skeleton', 4], ['bat', 3], ['bonearcher', 2], ['slime', 2], ['priest', 1]],
       elite: 'skelknight',
       boss: 'bonewarden',
+      fodder: 'bonemite', // horde filler of combat and elite rooms (never in `enemies`)
     },
     {
       id: 'glowmire', name: 'Glowmire Grotto', short: 'Glowmire',
@@ -34,6 +35,7 @@
       enemies: [['myconid', 3], ['sporepuff', 3], ['spitter', 2], ['cavespider', 3], ['glowslime', 2], ['mireworm', 2]],
       elite: 'shroomhulk',
       boss: 'sporemother',
+      fodder: 'sporeling',
     },
     {
       id: 'rimefrost', name: 'Rimefrost Halls', short: 'Rimefrost',
@@ -50,6 +52,7 @@
       enemies: [['icewolf', 3], ['frostwisp', 3], ['rimemage', 2], ['frozenskel', 3], ['icegolem', 1], ['sentinel', 1]],
       elite: 'frostknight',
       boss: 'rimeheart',
+      fodder: 'rimemote',
     },
     {
       id: 'cinderforge', name: 'The Cinderforge', short: 'Cinderforge',
@@ -66,6 +69,7 @@
       enemies: [['imp', 3], ['lavahound', 3], ['automaton', 1], ['flameturret', 2], ['cinderbat', 3], ['drone', 2]],
       elite: 'forgeknight',
       boss: 'forgelord',
+      fodder: 'ashimp',
     },
     {
       id: 'sanctum', name: 'Drowned Sanctum', short: 'Sanctum',
@@ -82,6 +86,7 @@
       enemies: [['drowned', 3], ['eel', 3], ['siren', 2], ['crab', 2], ['jelly', 2], ['reaver', 2]],
       elite: 'tidecaller',
       boss: 'drownedking',
+      fodder: 'brinepolyp',
     },
     {
       id: 'abyss', name: 'The Starless Abyss', short: 'Abyss',
@@ -98,6 +103,7 @@
       enemies: [['shade', 3], ['starspawn', 3], ['voideye', 2], ['voidwraith', 2], ['horror', 1], ['riftcaller', 1]],
       elite: 'voidknight',
       boss: 'hollowking',
+      fodder: 'voidmote',
     },
   ];
 

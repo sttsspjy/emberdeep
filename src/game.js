@@ -370,7 +370,7 @@
         G.act({ t: 'dash', dx, dy });
       }
     }
-    Sim.movePlayer(me, { mx, my }, dt, view.room, view.locked, view.zones);
+    Sim.movePlayer(me, { mx, my }, dt, view.room, view.locked, view.zones, view.enemies); // a crowd of foes touching the hero slows the walk
     if (s.mode !== 'client') me.dashing = me.dashT > 0; // a skill's own move is not a dash (no dash riders) and keeps its own i-frames (me.skillIfr)
     aimExtras(s, me, view);
   }
