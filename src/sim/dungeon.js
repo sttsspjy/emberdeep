@@ -84,7 +84,7 @@
     for (const c of darkRng.shuffle(list.slice(1).filter(c => c !== boss && isLeaf(c))).sort((a, b) => b.dist - a.dist).slice(0, DARK_COUNT)) { c.type = 'combat'; c.dark = true; }
     const others = list.slice(1).filter(c => c !== boss && !c.dark);
     // utility rooms prefer the remaining dead ends, elite rooms prefer distance >= 3
-    const pool =rng.shuffle(others.filter(isLeaf)).concat(rng.shuffle(others.filter(c => !isLeaf(c))));
+    const pool = rng.shuffle(others.filter(isLeaf)).concat(rng.shuffle(others.filter(c => !isLeaf(c))));
     for (const sp of specials) pool.shift().type = sp;
     const near = pool.filter(c => c.dist < 3).sort((a, b) => b.dist - a.dist);
     pool.filter(c => c.dist >= 3).concat(near).forEach((c, i) => { c.type = i < nElite ? 'elite' : 'combat'; });
