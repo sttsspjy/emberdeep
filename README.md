@@ -54,7 +54,7 @@ Playing alone, the world waits while the sheet is open; in a party the descent g
 
 ### Dark rooms
 
-Every floor has two **dark rooms**: combat rooms on dead ends, marked with a violet skull on the door and the map. They are optional. Inside, foes hit 30% harder and the last wave brings an extra elite with a nasty affix; in return gold and experience pay 50% more and the room's reward is always one step better (gold becomes Vigor, Vigor a forge, a forge or a boon an epic boon). The door already shows the better reward.
+Every floor has two **dark rooms**: combat rooms on dead ends, marked with a violet skull on the door and the map. They are optional. Inside, foes hit 30% harder and the last wave brings an extra elite with a nasty affix; in return gold and experience pay 50% more (the Hearth's **Deep Wick** adds 10% of that per rank) and the room's reward is always one step better (gold becomes Vigor, Vigor a forge, a forge or a boon an epic boon). The door already shows the better reward.
 
 ## Builds: paths, routes, weaknesses, evolutions
 
@@ -135,11 +135,11 @@ The main menu has five entries. **Descend** picks your hero, weapon and pact, th
 
 ## Between descents (the Hearth)
 
-- **Embers** are earned on every descent that clears at least one room, win or lose. Spend them on 16 permanent upgrades, including **Deep Wick** (+6% lantern light per rank) and the **Reliquary** (begin a descent with a relic). Deeper strata reveal new upgrades.
+- **Embers** are earned on every descent that clears at least one room, win or lose. Spend them on 16 permanent upgrades. They are deliberately small (a point of health, half a percent of damage, a few gold): what you know about the paths wins runs, not what you grind. **Deep Wick** adds 10% gold and experience in dark rooms per rank, **Head Start** begins the descent with a little experience, the **Stash** with a little gold, and **Second Wind** revives you once at a sliver of health. Deeper strata reveal new upgrades.
 - **Refunds are free:** every upgrade rank has a **Refund** button that returns its full cost, and **Reset all** (press it twice to confirm) returns every rank at once, so you can rebuild the Hearth for a new path.
 - **Armory:** each hero can have sidegrade unlocks listed under the upgrades (refundable like the ranks). The lists are empty for now.
-- **Heroes:** every descent trains the hero you took, up to mastery 10. Mastery unlocks weapons and permanent bonuses.
-- **Deeds:** 26 achievements with ember rewards (including Evolved, Into the Dark and Cartographer).
+- **Heroes:** every descent trains the hero you took, up to mastery 10. Mastery unlocks weapons and tiny permanent bonuses.
+- **Deeds:** 26 achievements with ember rewards, including Evolved, **Into the Dark** (clear 6 dark rooms in one descent) and **Cartographer** (clear every room of a stratum, both dark rooms included).
 - **Pacts:** ten optional difficulty tiers unlocked by winning, each paying more embers.
 - The Hearth camp changes as you progress: more tents and lanterns, a banner per slain boss, a gate that glows with the colour of the deepest stratum you have reached, and a blood moon under a pact.
 

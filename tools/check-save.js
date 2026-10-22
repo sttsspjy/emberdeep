@@ -212,8 +212,9 @@ const STORED_V2 = {"v":2,"news":0,"name":"Stored","embers":100,"lifetime":900,"u
 {
   const p = S.defaultProfile(); p.embers = 1000; p.lifetime = 5000;
   const vi = ED.UPGRADE_IDX.vitality;
-  ok(S.buyUpgrade(p, 'vitality') && S.buyUpgrade(p, 'vitality') && S.buyUpgrade(p, 'vitality') && p.embers === 1000 - 155 && p.up[vi] === 3, 'three Vitality ranks cost 25 + 50 + 80');
-  ok(S.refundUpgrade(p, 'vitality') && p.embers === 925 && p.up[vi] === 2, 'a refund returns the cost of the rank given up (80)');
+  const vc = ED.UPGRADES[vi].costs, v3 = vc[0] + vc[1] + vc[2];
+  ok(S.buyUpgrade(p, 'vitality') && S.buyUpgrade(p, 'vitality') && S.buyUpgrade(p, 'vitality') && p.embers === 1000 - v3 && p.up[vi] === 3, `three Vitality ranks cost ${vc[0]} + ${vc[1]} + ${vc[2]}`);
+  ok(S.refundUpgrade(p, 'vitality') && p.embers === 1000 - v3 + vc[2] && p.up[vi] === 2, `a refund returns the cost of the rank given up (${vc[2]})`);
   ok(S.refundUpgrade(p, 'vitality') && S.refundUpgrade(p, 'vitality') && p.embers === 1000 && p.up[vi] === 0, 'refunding every rank restores the purse');
   ok(!S.refundUpgrade(p, 'vitality') && !S.refundUpgrade(p, 'no_such_upgrade') && !S.buyUpgrade(p, 'no_such_upgrade') && p.embers === 1000, 'nothing to refund at rank 0, unknown ids are refused');
   ok(!S.buyUpgrade(p, 'alacrity') && p.embers === 1000, 'a tier-3 upgrade stays closed before stratum III');
@@ -244,7 +245,8 @@ const STORED_V2 = {"v":2,"news":0,"name":"Stored","embers":100,"lifetime":900,"u
     ok(!S.refundArmory(a, 'knight', 'zz_k1') && !S.refundArmory(a, 'knight', 'no_such') && a.embers === 120, 'an unowned entry cannot be refunded');
     a.embers = 500; a.armory = S.defaultProfile().armory;
     S.buyArmory(a, 'knight', 'zz_k3'); S.buyArmory(a, 'pyro', 'zz_p1'); S.buyUpgrade(a, 'might');
-    ok(S.refundTotal(a) === 60 + 25 + 30 && S.resetUpgrades(a) === 115 && a.embers === 500 && a.armory.knight.every(v => v === 0) && a.up.every(v => v === 0), 'Reset all also refunds Armory entries');
+    const m1 = ED.UPGRADES[ED.UPGRADE_IDX.might].costs[0];
+    ok(S.refundTotal(a) === 60 + 25 + m1 && S.resetUpgrades(a) === 85 + m1 && a.embers === 500 && a.armory.knight.every(v => v === 0) && a.up.every(v => v === 0), 'Reset all also refunds Armory entries');
     // a profile older than the entries gets bits padded on first use
     const old = S.defaultProfile(); old.armory = { knight: [], pyro: [] }; old.embers = 100;
     ok(S.buyArmory(old, 'knight', 'zz_k2') && old.armory.knight.length === 3 && old.armory.knight[1] === 1 && S.normalize(JSON.parse(JSON.stringify(old))).armory.necro.length === 1, 'a profile with a shorter Armory row is padded');
@@ -264,6 +266,29 @@ const STORED_V2 = {"v":2,"news":0,"name":"Stored","embers":100,"lifetime":900,"u
   const got = S.checkDeeds(p, { maxRelics: 10 });
   ok(got.some(d => d.id === 'archivist') && (p.deeds & (1 << 21)) && p.embers === 60 && p.lifetime === 60, 'Relic Keeper pays 60 embers once');
   ok(!S.checkDeeds(p, { maxRelics: 12 }).some(d => d.id === 'archivist'), 'and does not pay again');
+}
+
+// ---- deeds Into the Dark and Cartographer; the small Hearth keeps its save positions ----
+{
+  const I = ED.DEEDS[ED.DEED_IDX.intothedark], C = ED.DEEDS[ED.DEED_IDX.cartographer], p = S.defaultProfile();
+  ok(I.desc === 'Clear 6 dark rooms in one descent' && I.reward === 50 && ED.DEED_IDX.intothedark === 24, 'Into the Dark: 6 dark rooms in one descent, 50 embers, same slot');
+  ok(!I.check(p, null) && !I.check(p, {}) && !I.check(p, { darkCleared: 5 }) && I.check(p, { darkCleared: 6 }) && I.check(p, { darkCleared: 12 }) && !I.check(p, { lightlessBoss: true }), 'Into the Dark needs run.darkCleared >= 6');
+  ok(/dark rooms/.test(C.desc) && C.reward === 40 && !C.check(p, {}) && C.check(p, { fullClear: true }), 'Cartographer names the dark rooms and keeps its fullClear check');
+  const got = S.checkDeeds(p, { darkCleared: 7 });
+  ok(got.some(d => d.id === 'intothedark') && !got.some(d => d.id === 'cartographer') && (p.deeds & (1 << 24)), 'a run with 7 dark rooms cleared pays Into the Dark only');
+  // the summary a client receives after the run (net.js 'end' event) carries darkCleared as a plain number
+  ok(I.check(p, JSON.parse(JSON.stringify({ darkCleared: 6 }))), 'the check reads a plain summary');
+}
+{ // positions: ids and rank counts are the save code layout; a maxed profile round-trips; the full Hearth stays small
+  ok(ED.UPGRADES.map(u => u.id).join() === 'vitality,might,fortune,fleet,provisions,bulwark,precision,wisdom,insight,headstart,alacrity,stash,attunement,favor,secondwind,deepwick', 'upgrade order is the save code position order');
+  ok(ED.UPGRADES.map(u => u.costs.length).join() === '5,5,3,3,2,3,3,3,3,2,3,2,4,2,2,3', 'rank counts are unchanged');
+  const p = S.defaultProfile(); p.up = ED.UPGRADES.map(u => u.costs.length);
+  same(S.decode(S.encode(p)).up, p.up, 'every maxed rank survives the code');
+  const st = (meta) => ED.Stats.compute({ cls: 'knight', weapon: 'longsword', boons: {}, relics: [], meta, pact: 0 });
+  const a = st({ up: ED.UPGRADES.map(() => 0), mastery: 1 }), b = st({ up: ED.UPGRADES.map(u => u.costs.length), mastery: 10 });
+  const d = (k) => b[k] - a[k];
+  ok(Math.abs(d('dmg') - 0.0225) < 1e-9 && Math.abs(d('hp') - 3.5) < 1e-9 && Math.abs(d('crit') - 0.01) < 1e-9 && Math.abs(d('cdr') - 0.0125) < 1e-9 && Math.abs(d('armor') - 0.75) < 1e-9 && Math.abs(d('spd') - 0.0075) < 1e-9 && Math.abs(d('xp') - 0.03) < 1e-9 && Math.abs(d('gold') - 0.06) < 1e-9,
+    `full Hearth + mastery 10: +2.25% damage, +3.5 health, +1% crit, +1.25% recharge, +0.75 armor, +0.75% speed, +3% xp, +6% gold (got ${['dmg', 'hp', 'crit', 'cdr', 'armor', 'spd', 'xp', 'gold'].map(k => d(k).toFixed(3))})`);
 }
 
 // ---- relics: the whole list is in the pool, no element tag, 14 removed ----

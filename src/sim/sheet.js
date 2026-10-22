@@ -166,9 +166,11 @@
   };
   // The numbers about the run the sheet needs from a World or a Mirror (duck-typed: players, allies, floor, roomState, room, gold, level, xp).
   Sh.ctx = (view, p) => {
-    let allyNear = 0, minions = 0;
+    const wickOf = (q) => (q.meta && q.meta.up && q.meta.up[ED.UPGRADE_IDX.deepwick]) || 0;
+    let allyNear = 0, minions = 0, wick = wickOf(p);
     const party = [];
     if (view.players) for (const q of view.players.values()) {
+      wick = Math.max(wick, wickOf(q));
       party.push({ pid: q.pid, name: q.name, cls: q.cls, hp: Math.ceil(q.hp), maxHp: q.maxHp, slot: q.slot | 0, downed: !!q.downed, dead: !!q.dead });
       if (q !== p && !q.downed && !q.dead && U.dist2(q.x, q.y, p.x, p.y) < 200 * 200) allyNear++;
     }
@@ -182,7 +184,7 @@
     }
     return {
       stratum: view.stratum || 1, pact: view.pact | 0, gold: view.gold | 0, level: view.level || 1, xp: Math.floor(view.xp || 0), xpNext: view.xpNext || 1,
-      dark: !!(view.room && view.room.dark), allyNear, minions, room: view.room ? { type: view.room.type, id: view.roomId } : null,
+      dark: !!(view.room && view.room.dark), darkLoot: W.DARK_LOOT * (1 + ED.UPGRADES[ED.UPGRADE_IDX.deepwick].loot * wick), allyNear, minions, room: view.room ? { type: view.room.type, id: view.roomId } : null,
       party: view.players ? view.players.size : 1, rooms: { seen, total: rooms.length, darkTotal, darkLeft }, heroes: party, time: view.time || 0,
     };
   };
@@ -650,9 +652,9 @@
     const s = clampI(ctx.stratum || 1, 1, ED.BIOMES.length);
     return { now: at(s), next: s < ED.BIOMES.length ? at(s + 1) : null };
   }
-  // Dark rooms of the floor: unvisited / total, whether the hero stands in one, and the rule constants (foe damage, gold and xp multiplier).
+  // Dark rooms of the floor: unvisited / total, whether the hero stands in one, and the rule constants (foe damage, gold and xp multiplier including the party's Deep Wick).
   function darkModel(ctx) {
-    return { left: ctx.rooms.darkLeft, total: ctx.rooms.darkTotal, here: !!ctx.dark, dmg: W.DARK_DMG, loot: W.DARK_LOOT, rooms: ctx.rooms };
+    return { left: ctx.rooms.darkLeft, total: ctx.rooms.darkTotal, here: !!ctx.dark, dmg: W.DARK_DMG, loot: ctx.darkLoot || W.DARK_LOOT, rooms: ctx.rooms };
   }
 
   // ---------------- build tab ----------------

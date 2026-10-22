@@ -220,6 +220,54 @@ for (const s of [1, 2]) {
   ok(n.reward === ED.World.rewardGold(1) && d.reward === Math.round(ED.World.rewardGold(1) * L), `a claimed gold reward x1.5 (${n.reward} -> ${d.reward})`);
   ok(d.clear > n.clear && d.embers === n.embers, `the room-clear gold x1.5 (${n.clear} -> ${d.clear}), embers unchanged`);
 }
+{ // Deep Wick: darkLoot() = DARK_LOOT x (1 + 0.1 x the highest rank in the party), used by drops, the xp budget and the Tab sheet; clearing a dark room counts in run.darkCleared (summary and snapshot)
+  const L = ED.World.DARK_LOOT, G = ED.World.GOLD_MUL, up = (r) => ED.UPGRADES.map(u => (u.id === 'deepwick' ? r : 0));
+  const mk = (ranks) => {
+    const w = new ED.World({ seed: 7, pact: 0, players: ranks.map((r, i) => ({ pid: 'p' + i, name: 'T' + i, slot: i, cls: 'knight', weapon: 'longsword', meta: { up: up(r), mastery: 1, relics: [] } })) });
+    w.startRun(); for (const p of w.players.values()) { p.offers.length = 0; p.picks = 0; p.offer = null; }
+    w.enemies.length = 0; w.enc = null; w.locked = false; w.room.type = 'combat'; w.room.reward = null; w.room.dark = true;
+    return w;
+  };
+  const sum = (w, kind) => w.pickups.filter(k => k.kind === kind).reduce((a, k) => a + k.val, 0);
+  near(mk([0]).darkLoot(), L, 1e-9, 'no Deep Wick: DARK_LOOT');
+  near(mk([3]).darkLoot(), L * 1.3, 1e-9, 'rank 3: +30%');
+  near(mk([1, 2]).darkLoot(), L * 1.2, 1e-9, 'a party takes its highest rank, not the sum');
+  const w = mk([2]), p = w.players.values().next().value;
+  w.pickups.length = 0; w.dropGold(p.x, p.y, 100); near(sum(w, 'gold'), Math.round(100 * G * L * 1.2), 0, 'foe gold uses darkLoot');
+  w.pickups.length = 0; w.dropXp(p.x, p.y, 40); near(sum(w, 'xp'), Math.round(40 * L * 1.2), 0, 'xp uses darkLoot');
+  const enc = { waves: [[]] }; w.planHorde(w.room, enc);
+  ok(enc.xpBudget === Math.round(ED.World.ROOM_XP.combat[0] * L * 1.2), `the dark room's xp budget uses darkLoot (${enc.xpBudget})`);
+  w.room.dark = false; w.pickups.length = 0; w.dropGold(p.x, p.y, 100); near(sum(w, 'gold'), Math.round(100 * G), 0, 'a normal room is unaffected');
+  w.room.dark = true; w.roomState[w.roomId].cleared = false; w.enc = { kind: 'waves' };
+  w.roomCleared();
+  if (!ED.Net) require('vm').runInThisContext(require('fs').readFileSync(require('path').join(__dirname, '..', 'src', 'net.js'), 'utf8'), { filename: 'net.js' });
+  ok(w.run.darkCleared === 1 && w.summary().darkCleared === 1 && ED.Net.encodeSnap(w, [], true).RUN.darkCleared === 1, 'a dark room clear counts in the run summary and the snapshot');
+  w.room.dark = false; w.roomState[w.roomId].cleared = false; w.enc = { kind: 'waves' }; w.roomCleared();
+  ok(w.run.darkCleared === 1, 'a normal room clear does not');
+}
+{ // Hearth effects at run start and stratum entry: Head Start xp, Stash gold (party maxima), Second Wind health, Insight rerolls, Provisions heal, Merchant's Favor prices
+  const U = ED.UPGRADES, up = (o) => U.map(u => o[u.id] || 0);
+  const mk = (metas) => {
+    const w = new ED.World({ seed: 7, pact: 0, players: metas.map((m, i) => ({ pid: 'p' + i, name: 'T' + i, slot: i, cls: 'knight', weapon: 'longsword', meta: { up: up(m), mastery: m.mastery || 1, relics: [] } })) });
+    w.startRun(); return w;
+  };
+  const w0 = mk([{}]), p0 = w0.players.get('p0');
+  ok(w0.level === 1 && w0.gold === 0 && p0.rerolls === 0 && !p0.secondWind && p0.offers.length === 1 && p0.offers[0].src === 'start', 'no upgrades: level 1, no gold, no reroll, no revive, only the start offer');
+  const w1 = mk([{ headstart: 1 }]), q1 = w1.players.get('p0');
+  ok(w1.level === 1 && w1.xp === 15 && q1.offers.map(o => o.src).join() === 'start', `Head Start 1: 15 xp, no level yet (level ${w1.level}, xp ${w1.xp})`);
+  const w2 = mk([{ headstart: 2 }, {}]);
+  ok(w2.level === 2 && w2.xp === 0 && w2.players.get('p1').offers.map(o => o.src).join() === 'start,level', 'Head Start 2 (one hero in a party): 30 xp is level 2 for the whole party, with its level offer');
+  ok(mk([{ stash: 2 }, { stash: 1 }]).gold === 10 && mk([{ stash: 1 }]).gold === 5, 'Stash: 5 gold per rank, the highest rank of the party');
+  const sw = (r) => { const q = mk([{ secondwind: r }]).players.get('p0'); return [q.secondWind, q.swPct]; };
+  ok(sw(1).join() === '1,0.05' && sw(2).join() === '1,0.1' && sw(0).join() === '0,0', 'Second Wind revives at 5% (rank 1) or 10% (rank 2); rank 0 has none');
+  const rr = (r, ml) => mk([{ insight: r, mastery: ml || 1 }]).players.get('p0').rerolls;
+  ok(rr(1) === 1 && rr(2) === 1 && rr(3) === 2 && rr(3, 8) === 3 && rr(0, 8) === 1, 'Insight gives 1, 1, 2 rerolls; mastery 8 adds one');
+  const w3 = mk([{ provisions: 2 }]), q3 = w3.players.get('p0'); q3.hp = Math.round(q3.maxHp * 0.5); w3.onStratumBuild(q3, 2);
+  near(q3.hp, Math.round(q3.maxHp * 0.5) + 0.04 * q3.maxHp, 1, 'Provisions 2 heals 4% of max health at stratum II');
+  q3.hp = Math.round(q3.maxHp * 0.5); w3.onStratumBuild(q3, 1); ok(q3.hp === Math.round(q3.maxHp * 0.5), 'and nothing at stratum I');
+  const price = (r) => mk([{ favor: r }]).priceOf({ type: 'boon' });
+  ok(price(0) === 75 && price(1) === 70 && price(2) === 70, "Merchant's Favor: 4% cheaper per rank (the 75-gold epic boon: 75, 70, 70)");
+}
 { // bot exploration: --dark=never visits every non-dark room, --dark=always also the two dark rooms
   for (const [seed, cls] of [[1000, 'knight'], [1007, 'ranger'], [1014, 'pyro']]) {
     for (const dark of ['never', 'always']) {

@@ -173,7 +173,7 @@
     this.time = 0; this.roomTime = 0; this.state = 'play'; this.stratum = 0; this.floorSeed = 0;
     this.locked = false; this.enc = null; this.boss = null; this.pendingStratum = null;
     this.run = { kills: 0, fodderKills: 0, roomsCleared: 0, elitesKilled: 0, bosses: 0, bossCount: 0, revives: 0, maxGold: 0, maxRelics: 0, flawlessBoss: false,
-      fullClear: false, roomsVisited: 0, roomsTotal: 0,
+      fullClear: false, roomsVisited: 0, roomsTotal: 0, darkCleared: 0,
       embers: { rooms: 0, elites: 0, bosses: 0, victory: 0 } };
     this.fullClearDone = 0;
     this.roomState = {};
@@ -516,6 +516,7 @@
       this.onRunStartBuild(p);
       this.sendBuild(p);
     }
+    this.onPartyStartBuild();
     this.enterStratum(1);
   };
 
@@ -596,7 +597,7 @@
       embers: Object.assign({}, this.run.embers), pact: this.pact, party: this.partySize(), level: this.level,
       revives: this.run.revives, flawlessBoss: this.run.flawlessBoss, maxGold: this.run.maxGold, maxRelics: this.run.maxRelics, players,
       evolved: [...this.players.values()].some(p => !!p.stats.evo), fullClear: this.run.fullClear,
-      roomsVisited: this.run.roomsVisited, roomsTotal: this.run.roomsTotal,
+      roomsVisited: this.run.roomsVisited, roomsTotal: this.run.roomsTotal, darkCleared: this.run.darkCleared,
     };
   };
 
@@ -861,8 +862,13 @@
     this.pickups.push({ id: U.uid(), kind, x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, val, t: 0 });
   };
 
-  // Gold and xp dropped in a dark room are x DARK_LOOT.
-  W.prototype.lootMul = function () { return this.room && this.room.dark ? W.DARK_LOOT : 1; };
+  // Gold and xp dropped in a dark room are x darkLoot(): DARK_LOOT x (1 + Deep Wick loot x the highest Deep Wick rank in the party).
+  W.prototype.darkLoot = function () {
+    let r = 0;
+    for (const p of this.players.values()) r = Math.max(r, (p.meta.up && p.meta.up[ED.UPGRADE_IDX.deepwick]) || 0);
+    return W.DARK_LOOT * (1 + ED.UPGRADES[ED.UPGRADE_IDX.deepwick].loot * r);
+  };
+  W.prototype.lootMul = function () { return this.room && this.room.dark ? this.darkLoot() : 1; };
   W.prototype.dropGold = function (x, y, total, exact) {
     total = Math.round((exact ? total : total * W.GOLD_MUL) * this.lootMul());
     while (total > 0) { const v = Math.min(total, total > 30 ? 10 : total > 8 ? 4 : 1); this.spawnPickup('gold', x, y, v); total -= v; }
