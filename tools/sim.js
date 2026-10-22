@@ -1,5 +1,5 @@
 // Usage: node tools/sim.js <heroes> <runs> <botSkill 0-1> <meta none|mid|max> [classes|-] [pact] [--pick=random|smart] [--start=random|class|generalist|rotate|<gateId>] [--gates=1|2] [--force=id[@slot],...]
-//   [--route=attack|skill1|skill2|element|random|rotate] [--fork=0|1|random|rotate] [--weapon=0|1|2|rotate] [--mastery=smart|fork] [--aimnoise=<angle rad>,<point px>|0] [--seed0=N] [--explore=minLight] [--strata=N] [--out=rows.json] [--pair=rows.json] [--quiet]   (parallel batches: tools/simpool.js)
+//   [--route=attack|skill1|skill2|element|random|rotate] [--fork=0|1|random|rotate] [--weapon=0|1|2|rotate] [--mastery=smart|fork] [--aimnoise=<angle rad>,<point px>|0] [--seed0=N] [--explore=minLight] [--strata=N] [--from=N] [--out=rows.json] [--pair=rows.json] [--quiet]   (parallel batches: tools/simpool.js, fixed quick suite: tools/bal.js)
 // Headless simulation harness: loads the game's sim files into this Node context and drives bot heroes through full runs (deterministic per seed: the bot has its own seeded RNG).
 // Bot policy: fight, claim room rewards, use rest sites and shops, then explore unvisited rooms nearest-first while entering the next one
 // (its light cost paid) leaves the lantern at least EXPLORE_MIN_LIGHT full, else head for the boss (the exploration/lantern trade-off).
@@ -14,6 +14,7 @@
 // --mastery: smart (default) scores a fork rank-up in the mastery offers like any card (rank 2: 700, rank 3: 760, below evolutions, keystones and duos); fork always takes the fork.
 // Casting follows ED.SKILLS: aim 'dir' throws along the target angle, 'ground' lands on the foe, 'move' runs or blinks through it, 'self' fires around the hero; aim noise shrinks with the bot's skill (angle 0.12 rad, ground point 36 px at skill 0).
 // --out=file.json writes one row per run (seed, class, depth, win, boss time to kill and HP lost per stratum, evolution stratum, main path, gates); --pair=file.json prints the mean difference to such a baseline for the same seeds.
+// --from=N: the bots start at stratum N with the build strata 1..N-1 give (skipStrata plays them without fighting); stats, wins and depth then cover strata >= N (depth counts the skipped bosses as beaten, time counts from stratum N, `entry` holds the hero state at each stratum start).
 // meta: none = fresh profile (start relics); mid = half the upgrade ranks, mastery 5, start relics plus the Codex relics costing <= 70 without a boss requirement; max = every rank, mastery 10, every relic. runBot takes opts.relics to override the relic pool.
 const fs = require('fs');
 const vm = require('vm');
@@ -292,9 +293,9 @@ const median = (a) => { if (!a.length) return NaN; a = a.slice().sort((x, y) => 
 function rowOf(r, label, seed) {
   const kills = r.bossTry.filter(b => b.kill).length, ROOMS = [6, 6, 7, 8, 8, 8];
   const inS = r.clears.filter(c => c.s === r.stratum).length;
-  const depth = r.victory ? 6 : kills + Math.min(1, inS / ROOMS[Math.max(0, r.stratum - 1)]);
-  return { label, seed, cls: r.cls, route: r.route.route, fork: r.route.fork, rank: r.route.rank, wi: r.wi, win: r.victory ? 1 : 0, depth: Math.round(depth * 1000) / 1000, bossTtk: [1, 2, 3, 4, 5, 6].map(s => r.bossTimes[s] === undefined ? null : r.bossTimes[s]),
-    hpLost: [1, 2, 3, 4, 5, 6].map(s => r.dmgStrata[s - 1] === undefined ? null : Math.round(1000 * r.dmgStrata[s - 1] / Math.max(1, r.maxHp)) / 1000), evoS: r.evoAt ? r.evoAt.s : null, main: r.main, gates: r.gates.length, gen: r.gen ? 1 : 0 };
+  const depth = r.victory ? 6 : (r.from > 1 ? r.from - 1 : 0) + kills + Math.min(1, inS / ROOMS[Math.max(0, r.stratum - 1)]);
+  return Object.assign({ label, seed, cls: r.cls, route: r.route.route, fork: r.route.fork, rank: r.route.rank, wi: r.wi, win: r.victory ? 1 : 0, depth: Math.round(depth * 1000) / 1000, bossTtk: [1, 2, 3, 4, 5, 6].map(s => r.bossTimes[s] === undefined ? null : r.bossTimes[s]),
+    hpLost: [1, 2, 3, 4, 5, 6].map(s => r.dmgStrata[s - 1] === undefined ? null : Math.round(1000 * r.dmgStrata[s - 1] / Math.max(1, r.maxHp)) / 1000), evoS: r.evoAt ? r.evoAt.s : null, main: r.main, gates: r.gates.length, gen: r.gen ? 1 : 0 }, r.from > 1 ? { from: r.from } : null);
 }
 
 // Weapon hits to kill a regular foe of stratum s: median over the roster (weighted) of ceil(foe HP / expected hit), expected hit = weapon damage x damage stat x crit factor (party and pact excluded).
@@ -310,6 +311,82 @@ function hitsToKill(w, p, s) {
 
 // Damage per second of the starting weapon with no boons (every attack hits once).
 const bareDps = (cls, weapon) => { const wp = ED.WEAPONS[weapon]; return wp.dmg * (wp.n || 1) / wp.rate; };
+
+// Hero p at a stratum start: team level, boon ranks, relics, gold, max HP, HP, keystones, evolved.
+const entryOf = (w, p) => ({ level: w.level, boons: Object.values(p.boons).reduce((a, b) => a + b, 0), relics: p.relics.length, gold: w.gold, maxHp: p.maxHp, hp: Math.round(p.hp), keys: Object.keys(p.boons).filter(id => ED.BOONS[id].key).length, evo: p.stats.evo ? 1 : 0 });
+
+// --from=N stage start: plays strata 1..N-1 without fighting and leaves the party at the start of stratum N.
+// Each floor is its real Dungeon.generate floor. The rooms are the bot's exploration route (nearest unvisited room while its cost leaves the lantern at minLight or more, then the boss), entered with World.enterRoom;
+// every foe dies the tick it exists, so the room's own wave timers, kill drops (xp, gold, hearts), clear reward and boss reward run as in play. Between rooms the bot claims every prop wantedProp names and picks every offer with its
+// pick policy; the portal starts the next floor. Heroes are untouchable, hero 0 collects every pickup. Returns { t0 (game time at the end), from, keyAt, duoAt, evoAt (hero 0, first stratum), bad (reason the walk stopped early, or null) }.
+function skipStrata(w, from, ctx, policy, brng, minLight) {
+  const dt = 1 / 60, heroes = [...w.players.values()], lead = heroes[0], out = { t0: 0, from, keyAt: null, duoAt: null, evoAt: null, bad: null };
+  const tick = () => {
+    for (const p of heroes) { if (p.offer) w.pickBoon(p.pid, pickIndex(p, p.offers[0], policy, brng, ctx)); p.invuln = 1; }
+    for (const e of w.enemies.slice()) if (e.hp > 0 && !e.def.gloom) w.killEnemy(e, lead, { kind: 'weapon' });
+    w.update(dt);
+    for (const pk of w.pickups) w.collect(lead, pk);
+    for (const ev of w.fx) {
+      if (ev.pid !== lead.pid) continue;
+      if (ev.t === 'boon') { const b = ED.BOONS[ev.id]; if (b.key && !out.keyAt) out.keyAt = w.stratum; if (b.duo && !out.duoAt) out.duoAt = w.stratum; } else if (ev.t === 'evolve' && !out.evoAt) out.evoAt = { s: w.stratum, lvl: w.level };
+    }
+    w.pickups.length = 0; w.fx.length = 0; w.msgs.length = 0;
+  };
+  const settle = () => { for (let i = 0; i < 900 && heroes.some(p => p.offer || p.offers.length); i++) tick(); };
+  const claim = () => {
+    for (let guard = 0; guard < 80; guard++) {
+      let did = false;
+      for (const p of heroes) {
+        const pr = wantedProp(w, p);
+        if (!pr) continue;
+        p.x = pr.x; p.y = pr.y; w.interact(p.pid, pr.id); did = true;
+        tick();
+      }
+      if (!did) break;
+    }
+    settle();
+  };
+  // Next room on the bot's route as [room id, door key], or null (mirrors exploreDir's room choice).
+  const hop = () => {
+    const room = w.room, fl = w.floor;
+    const search = (target) => {
+      const prev = { [room.id]: -1 }, q = [room.id];
+      while (q.length) {
+        const id = q.shift(), r = fl.rooms[id];
+        if (id !== room.id && ((target === null && !w.roomState[id].visited && r.type !== 'boss') || id === target)) return { found: id, prev };
+        for (const dd in r.doors) { const n = r.doors[dd]; if (n >= 0 && prev[n] === undefined) { if (fl.rooms[n].type === 'boss' && target === null) continue; prev[n] = id; q.push(n); } }
+      }
+      return { found: null, prev };
+    };
+    let hit = search(null);
+    if (hit.found === null || (w.lightMax && (w.light - ED.World.roomCost(fl.rooms[hit.found].type)) / w.lightMax < (minLight ?? EXPLORE_MIN_LIGHT))) hit = search(fl.boss);
+    if (hit.found === null) return null;
+    let step = hit.found; while (hit.prev[step] !== room.id) step = hit.prev[step];
+    return [step, Object.keys(room.doors).find(k => room.doors[k] === step)];
+  };
+  for (let s = 1; s < from && w.state === 'play' && !out.bad; s++) {
+    settle();
+    claim();
+    for (let rooms = 0; rooms < 40 && w.state === 'play' && !w.props.some(x => x.kind === 'portal'); rooms++) {
+      const h = hop();
+      if (!h) break;
+      w.enterRoom(h[0], h[1]);
+      for (let i = 0; i < 60 * 150 && w.locked && w.state === 'play'; i++) tick();
+      claim();
+    }
+    const portal = w.props.find(x => x.kind === 'portal' && !x.state);
+    if (!portal) { out.bad = `no portal on stratum ${s} (room ${w.roomId} ${w.room.type})`; break; }
+    lead.x = portal.x; lead.y = portal.y; w.interact(lead.pid, portal.id);
+    for (let i = 0; i < 600 && w.stratum === s && w.state === 'play'; i++) tick();
+    if (w.stratum === s) out.bad = `stuck on stratum ${s}`;
+  }
+  for (const p of heroes) p.invuln = 0;
+  settle();
+  w.fx.length = 0; w.msgs.length = 0;
+  w.run.kills = 0; w.run.roomsVisited = 1; w.run.roomsTotal = w.floor.rooms.length; w.run.lightAtBoss.length = 0; // the run's stats start at stratum N
+  out.t0 = w.time;
+  return out;
+}
 
 function runBot(opts) {
   U.resetUid(1);
@@ -349,6 +426,7 @@ function runBot(opts) {
       }
     }
   }
+  const skip = opts.from > 1 ? skipStrata(w, Math.min(opts.from | 0, ED.CONST.STRATA), ctx, policy, brng, opts.exploreMin) : null; // --from: strata 1..N-1 are played before the recorders below are installed
   const rec = { flares: 0, gloomHits: 0, gloomSecs: 0, turn: {}, clears: [], bossTimes: [], dmgBy: {}, downedBy: [], dealtStrata: [], heal: {}, dmgByS: {}, spawns: {}, offers: {}, relicsBy: {}, goldIn: 0, roomDmg: 0, dmgStrata: [], hpFrac: [], healSrc: 'other' };
   rec.evoAt = null; // { s: stratum, lvl: team level } when hero 0 takes its evolution
   rec.keyAt = null; rec.duoAt = null; // stratum when hero 0 takes its keystone / duo
@@ -359,6 +437,8 @@ function runBot(opts) {
   rec.shield = { gained: {}, absorbed: {}, holyBoss: 0 }; rec.bossSecs = 0;
   const shMix = new Map(); for (const p of w.players.values()) shMix.set(p.pid, {}); // shield composition per hero by source (absorption is attributed pro rata)
   const p0id = w.players.keys().next().value;
+  rec.entry = {}; // hero state at the start of each stratum (stratum -> entryOf)
+  if (skip) { rec.evoAt = skip.evoAt; rec.keyAt = skip.keyAt; rec.duoAt = skip.duoAt; rec.entry[w.stratum] = entryOf(w, w.players.get(p0id)); }
   // damage metrics: hero damage by source per stratum, combat seconds, observed hits/time to kill, analytic hits to kill, cooldown reduction
   Object.assign(rec, { src: [], combatS: [0, 0, 0, 0, 0, 0], hits: [[], [], [], [], [], []], ttk: [[], [], [], [], [], []], ttkElite: [[], [], [], [], [], []], htk: [[], [], [], [], [], []], htkBare, bossTry: [] });
   const hit0 = w.hitEnemy, VAMP = ED.CONST.VENOM_AMP, VALLY = ED.CONST.VENOM_ALLY;
@@ -435,9 +515,10 @@ function runBot(opts) {
   const dt = 1 / 60;
   let steps = 0;
   const maxSteps = 60 * MAX_SECONDS;
-  const log = [];
-  const strata = []; // seconds spent per stratum
-  let stratumStart = 0, bossStart = 0, dealt0 = 0;
+  const log = skip && skip.bad ? ['  FROM: ' + skip.bad] : [];
+  const strata = skip ? new Array(skip.from - 1) : []; // seconds spent per stratum (index = stratum - 1; the skipped strata stay empty)
+  if (skip) rec.dealtStrata = new Array(skip.from - 1);
+  let stratumStart = skip ? skip.t0 : 0, bossStart = 0, dealt0 = 0;
   const totalDealt = () => { let d = 0; for (const p of w.players.values()) d += p.dealt; return d; };
   while (w.state !== 'over' && steps < maxSteps) {
     steps++;
@@ -555,7 +636,7 @@ function runBot(opts) {
       if (ev.t === 'stratum') {
         const dealt = totalDealt();
         if (ev.s > 1) { strata.push(Math.round(w.time - stratumStart)); rec.dealtStrata.push(Math.round(dealt - dealt0)); log.push(`  stratum ${ev.s - 1} took ${(w.time - stratumStart).toFixed(0)}s`); }
-        stratumStart = w.time; dealt0 = dealt;
+        stratumStart = w.time; dealt0 = dealt; rec.entry[ev.s] = entryOf(w, w.players.get(p0id));
       }
     }
     w.fx.length = 0; w.msgs.length = 0;
@@ -567,7 +648,7 @@ function runBot(opts) {
   rec.dealtStrata.push(Math.round(totalDealt() - dealt0));
   const p0 = [...w.players.values()][0];
   const sum = w.summary ? w.summary() : null;
-  return { flares: rec.flares, gloomHits: rec.gloomHits, gloomSecs: rec.gloomSecs, state: w.state, victory: w.victory, stratum: w.stratum, time: w.time, level: w.level, kills: w.run.kills, relics: p0.relics.length, log, sum, hp: p0.hp | 0, maxHp: p0.maxHp,
+  return { flares: rec.flares, gloomHits: rec.gloomHits, gloomSecs: rec.gloomSecs, state: w.state, victory: w.victory, stratum: w.stratum, time: w.time - (skip ? skip.t0 : 0), from: skip ? skip.from : 0, entry: rec.entry, level: w.level, kills: w.run.kills, relics: p0.relics.length, log, sum, hp: p0.hp | 0, maxHp: p0.maxHp,
     rooms: { visited: w.run.roomsVisited, total: w.run.roomsTotal }, lightAtBoss: w.run.lightAtBoss.slice(), strata, light: w.light / w.lightMax,
     clears: rec.clears, dmgByS: rec.dmgByS, spawns: rec.spawns, heal: rec.heal, offers: rec.offers, relicsBy: rec.relicsBy, goldIn: rec.goldIn, dmgStrata: rec.dmgStrata, bossTimes: rec.bossTimes.slice(), turn: rec.turn, dmgBy: rec.dmgBy, downedBy: rec.downedBy, dealtStrata: rec.dealtStrata,
     evoAt: rec.evoAt, aff: ED.PATH_IDS.map(k => ED.pathAffinity(p0.boons, k)).sort((a, b) => b - a),
@@ -606,7 +687,10 @@ function summarize(results) {
   const top = (o, k) => Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, k);
   const dTot = Object.values(dmg).reduce((a, b) => a + b, 0) || 1;
   const lines = [];
-  const hist = S.map(k => results.filter(r => !r.victory && r.stratum === k).length), atBoss = results.filter(r => !r.victory && r.endRoom === 'boss').length;
+  const from = results[0].from, entries = results.map(r => r.entry && r.entry[from || 4]).filter(Boolean);
+  if (from) lines.push(`FROM STRATUM ${from}: strata 1..${from - 1} were skipped, so wins, depth, times, counts and rates below cover strata >= ${from} only (depth counts the skipped bosses as beaten)`);
+  if (entries.length) lines.push(`entry to stratum ${from || 4} (${entries.length} runs): team lvl ${ms(entries.map(e => e.level))} boons ${ms(entries.map(e => e.boons))} relics ${ms(entries.map(e => e.relics))} gold ${ms(entries.map(e => e.gold), 0)} max HP ${ms(entries.map(e => e.maxHp), 0)} hp ${ms(entries.map(e => e.hp / e.maxHp), 2)} keystones ${ms(entries.map(e => e.keys))} evolved ${pctOf(entries.filter(e => e.evo).length, entries.length)}%`);
+  const hist =S.map(k => results.filter(r => !r.victory && r.stratum === k).length), atBoss = results.filter(r => !r.victory && r.endRoom === 'boss').length;
   lines.push('wins by hero: ' + [...new Set(results.map(r => r.cls))].map(c => { const rs = results.filter(r => r.cls === c); return `${c} ${Math.round(100 * rs.filter(r => r.victory).length / rs.length)}% (depth ${f1(avg(rs.map(r => r.stratum)))})`; }).join(', '));
   lines.push(`deaths by stratum [${hist.join(' ')}] (${atBoss} of ${n - wins.length} at a boss)`);
   lines.push(`wins ${wins.length}/${n} (${(100 * wins.length / n).toFixed(0)}% +-${(100 * Math.sqrt(wins.length / n * (1 - wins.length / n) / n)).toFixed(1)}) avg depth ${ms(results.map(r => r.stratum), 2)} depth incl. partial stratum ${ms(results.map(r => rowOf(r).depth), 2)} avg time ${U.fmtTime(avg(results.map(r => r.time)))} winners ${wins.length ? U.fmtTime(avg(wins.map(r => r.time))) : '-'} lvl ${f1(avg(results.map(r => r.level)))} (winners ${wins.length ? f1(avg(wins.map(r => r.level))) : '-'})`);
@@ -733,6 +817,7 @@ const optsFromFlags = (flags) => ({
   weapon: flags.weapon === undefined || isNaN(+flags.weapon) ? flags.weapon : +flags.weapon, cardMastery: flags.mastery,
   aimNoise: flags.aimnoise === undefined ? undefined : flags.aimnoise.split(',').map(Number).concat([0]).slice(0, 2).map(v => (Number.isFinite(v) ? v : 0)),
   force: flags.force ? flags.force.split(',') : [], exploreMin: flags.explore === undefined ? undefined : +flags.explore, maxStratum: flags.strata === undefined ? undefined : +flags.strata,
+  from: flags.from === undefined ? undefined : +flags.from,
 });
 
 // Expands the rotating flags for run i of a batch over nc classes: route = floor(i / nc) mod 4, fork = floor(i / (nc x 4)) mod 2, weapon = floor(i / (nc x 8)) mod 3, start = the six gates then generalist.
@@ -776,7 +861,7 @@ if (require.main === module) {
       for (const l of r.log) console.log(l);
     }
   }
-  console.log(`\npick=${pick}${o.start ? ' start=' + o.start : ''}${o.gates ? ' gates=' + o.gates : ''}${force.length ? ' force=' + force.join(',') : ''}${flags.strata ? ' strata<=' + flags.strata + ' (capped runs: win, depth and death lines do not apply)' : ''}\n` + summarize(results));
+  console.log(`\npick=${pick}${o.start ? ' start=' + o.start : ''}${o.gates ? ' gates=' + o.gates : ''}${force.length ? ' force=' + force.join(',') : ''}${flags.strata ? ' strata<=' + flags.strata + ' (capped runs: win, depth and death lines do not apply)' : ''}${o.from > 1 ? ' from=' + o.from : ''}\n` + summarize(results));
   const rows = results.map((r, i) => rowOf(r, meta, seed0 + i * 7));
   if (flags.out) fs.writeFileSync(flags.out, JSON.stringify(rows));
   if (flags.pair) console.log(pairReport(rows, JSON.parse(fs.readFileSync(flags.pair, 'utf8'))));
