@@ -250,7 +250,7 @@
     if (!artProps) drawProps(c, view, local, t);
     let dn = 0, nFoe = 0;
     for (const p of view.players.values()) qDraw(dn++, p.y, 0, p);
-    for (const e of view.enemies) if (e.hp > 0) { qDraw(dn++, e.y, 1, e); nFoe++; }
+    for (const e of view.enemies) if (e.hp > 0) { qFoe(dn++, e); nFoe++; }
     for (const a of view.allies) qDraw(dn++, a.y, 2, a);
     for (const s of ED.Tiles.statics(room)) qDraw(dn++, s.key, 3, s); // tall pieces of the room art (columns, standing decor, door arch)
     if (artProps) for (const p of view.props) qDraw(dn++, p.y, 4, p); // pixel-art props sort with the entities
@@ -264,7 +264,7 @@
       if (it.k === 3) { ED.Tiles.drawStatic(c, room, biome, it.o, view, t); continue; }
       if (it.k === 4) { shDX = shDY = 0; drawProp(c, it.o, view, local, t); continue; }
       if (it.k === 5) { drawFlame(c, it.o, it.d, t); continue; }
-      const o = it.o, rim = low ? null : rimLight(o.x, o.y, it.k === 0 ? 16 : 0), still = atlasOn && it.k < 2 && AC.still(o), px = still ? Math.round(o.x / 2) * 2 : Math.round(o.x), py = still ? Math.round(o.y / 2) * 2 : Math.round(o.y); // feet on the buffer pixel grid (the 2 px art grid while standing still)
+      const o = it.o, rim = low || o.fodder ? null : rimLight(o.x, o.y, it.k === 0 ? 16 : 0), still = atlasOn && it.k < 2 && AC.still(o), px = still ? Math.round(o.x / 2) * 2 : Math.round(o.x), py = still ? Math.round(o.y / 2) * 2 : Math.round(o.y); // feet on the buffer pixel grid (the 2 px art grid while standing still)
       if (rim) { shDX = -rim.dx * 0.28; shDY = -rim.dy * 0.12; } else { shDX = 0; shDY = 0; }
       if (it.k === 1) { // foe: atlas art (pose offsets are art-px steps), else the procedural look with pose offset, lean and squash (F.xform) in one matrix with the mirror
         const bx = px - ix, by = py - iy;
@@ -275,7 +275,7 @@
         }
         c.setTransform(1, 0, 0, 1, bx, by);
         if (rim && rim.s > 0.35 && it.full) R.glowOnce(c, 0, -o.r * 1.2, o.r * 1.5, rim.col, 0.14 * rim.s, rim.dx * o.r * 0.55, rim.dy * o.r * 0.4);
-        drawStatus(c, o, t, it.full);
+        if (statusOn(o)) drawStatus(c, o, t, it.full);
         c.setTransform(1, 0, 0, 1, -ix, -iy);
       } else {
         c.save(); c.translate(px, py);
@@ -335,6 +335,7 @@
   // Y-sorted entity list: items are pooled by index, so a frame allocates nothing.
   const drawList = [], drawPool = [], byY = (a, b) => a.y - b.y;
   const qDraw = (i, y, k, o) => { let it = drawPool[i]; if (!it) it = drawPool[i] = { y: 0, k: 0, o: null, full: true, d: 0 }; it.y = y; it.k = k; it.o = o; it.full = true; drawList[i] = it; };
+  const qFoe = (i, e) => { qDraw(i, e.y, 1, e); drawPool[i].full = !e.fodder; }; // fodder never draws at full detail
 
   // One-shot additive-style glow drawn at an offset (rim-light stand-in for plain enemies).
   R.glowOnce = (c, x, y, r, color, a, dx, dy) => {
@@ -587,7 +588,8 @@
     if (stratum !== foeStratum) {
       foeStratum = stratum; foeClear();
       const defs = [];
-      for (const [id] of ED.biomeFor(stratum).enemies) { const d = ED.ENEMIES[id]; if (d && Sp.FOE[d.look] && defs.indexOf(d) < 0) defs.push(d); }
+      const bm = ED.biomeFor(stratum);
+      for (const id of bm.enemies.map((r) => r[0]).concat(bm.fodder || [])) { const d = ED.ENEMIES[id]; if (d && Sp.FOE[d.look] && defs.indexOf(d) < 0) defs.push(d); }
       for (let f = 0; f < 40; f++) for (const d of defs) if (f < Sp.FOE[d.look].N) warmQ.push({ def: d, r: d.r, face: 1, id: 0, st: 'move', f });
     } else if (foePx >= FOE_PX_MAX) { // over the cap: drop the least recently used looks down to 70%
       for (const [d, tc] of [...foeTC].sort((a, b) => a[1].u - b[1].u)) { if (foePx < FOE_PX_MAX * 0.7) break; foeTC.delete(d); foePx -= tc.px; freeLook(tc); }
@@ -599,6 +601,7 @@
     }
   }
   // Above CROWD_N live foes only elites, bosses and the NEAR_N foes nearest the hero keep full detail (rim light, second shadow layer, eye glow) and FX bursts thin out.
+  // Fodder (qDraw sets full = false) never has full detail and is not counted among the NEAR_N.
   const CROWD_N = 30, NEAR_N = 12;
   let nearD = new Float64Array(128);
   function crowdLod(view, local, n, dn) {
@@ -607,10 +610,14 @@
     const me = view.players.get(local), cx = me ? me.x : R.cam.x, cy = me ? me.y : R.cam.y;
     if (nearD.length < n) nearD = new Float64Array(n * 2);
     let m = 0;
-    for (let i = 0; i < dn; i++) { const it = drawList[i]; if (it.k !== 1) continue; const dx = it.o.x - cx, dy = it.o.y - cy; it.d = dx * dx + dy * dy; nearD[m++] = it.d; }
-    const thr = nearD.subarray(0, m).sort()[NEAR_N - 1];
-    for (let i = 0; i < dn; i++) { const it = drawList[i]; if (it.k === 1) it.full = !!(it.o.elite || it.o.boss) || it.d <= thr; }
+    for (let i = 0; i < dn; i++) { const it = drawList[i]; if (it.k !== 1 || it.o.fodder) continue; const dx = it.o.x - cx, dy = it.o.y - cy; it.d = dx * dx + dy * dy; nearD[m++] = it.d; }
+    const thr = m >= NEAR_N ? nearD.subarray(0, m).sort()[NEAR_N - 1] : Infinity;
+    for (let i = 0; i < dn; i++) { const it = drawList[i]; if (it.k === 1 && !it.o.fodder) it.full = !!(it.o.elite || it.o.boss) || it.d <= thr; }
   }
+  // Fodder is never decorated: its status pass runs only for freeze, chill and burn (the statuses the wire carries; always at the foe's own detail, full = false) and its overhead marks only for the stun stars.
+  const statusOn = (e) => !e.fodder || e.frozen > 0 || e.chill > 0 || e.burn > 0 || e.burnPool > 0;
+  const marksOn = (e) => !e.fodder || e.stun > 0;
+  R.lod = { push: qFoe, run: crowdLod, list: drawList, status: statusOn, marks: marksOn }; // the foe draw list and its detail pass (headless checks)
 
   // ---------------- zones ----------------
   // Three passes: 0 = everything on the ground (fills, rims, rings, caltrops, smoke, the Sanctuary circle; lit by the scene and drawn before the actors), 1 = unlit additive edges and glows, 2 = unlit airborne sprites drawn over the actors (falling arrows, the meteor, a lobbed orb). Everything is pixel art on the 2 px grid:
@@ -1930,6 +1937,8 @@
     const sp = R.numSprite(t.s, t.color, t.size, t.crit, t.ol), q = fs / sp.fs;
     c.globalAlpha = a; c.drawImage(sp.cv, Math.round(t.x + sp.x * q), Math.round(t.y + sp.y * q), sp.w * q, sp.h * q);
   };
+  // Fill height in px of a foe's health bar (bh for a normal foe; 0 = no bar): shown once damaged, always for an elite; fodder gets a 1 px bar.
+  R.foeBarH = (e, bh) => (e.hp / e.maxHp >= 0.999 && !e.elite ? 0 : e.fodder ? 1 : bh);
   // HP bar (frame, dark base, fill, sheen) baked per colour / width / fill px / height; sprite origin = bar left-top.
   function barSprite(bc, w, fw, h) {
     return sprite('hb' + bc + '|' + w + '|' + fw + '|' + h, -1, -1, w + 1, h + 1, false, (g) => {
@@ -1967,18 +1976,19 @@
     lblN = 0;
     const lp = view.players.get(local), cuePips = ED.HUD.wantsPips(lp), cueParry = !!(lp && lp.stats && lp.stats.parry);
     if (cuePips || cueParry) for (const e of view.enemies) { // class route cues of the local hero: ailment pips under the bar (Brand, Open Veins, Contagion, Gangrene), the Parry rim on a foe in the last 0.3 s of a wind-up
-      if (e.hp <= 0 || e.boss || e.burrowed) continue;
+      if (e.hp <= 0 || e.boss || e.burrowed || e.fodder) continue;
       if (cuePips && view.ailments) e.ailN = view.ailments(e); // host and solo foes are sim objects: they count their own ailments (mirror foes carry the host's count)
       if (cuePips && e.ailN) ED.HUD.foePips(c, e, Math.round(e.x - (e.elite ? 15 : 9)), Math.round(e.y - e.r * 2.6 - (e.def.fly ? 14 : 4)) + bh + 2);
       if (cueParry && (e.st === 'windup' || e.st === 'aim' || e.st === 'cast') && e.t > 0 && e.t <= ED.CONST.PARRY_WIN) parryRim(c, e);
     }
     for (const e of view.enemies) {
       if (e.hp <= 0 || e.boss || e.burrowed) continue;
+      const h = R.foeBarH(e, bh);
+      if (!h) continue;
       const frac = e.hp / e.maxHp;
-      if (frac >= 0.999 && !e.elite) continue;
       const an = AC.on() ? AC.anchor(e) : null; // bar 6 px over the top of the sprite
-      const w = e.elite ? 30 : 18, y = an ? Math.round(e.y + an.top) - 6 : Math.round(e.y - e.r * 2.6 - (e.def.fly ? 14 : 4)), af = e.elite ? ED.AFFIXES[e.elite] : null, bx = Math.round(e.x - w / 2);
-      blit(c, barSprite(af ? af.color : '#e2513f', w, Math.round(U.clamp(frac, 0, 1) * w), bh), bx, y);
+      const w = e.elite ? 30 : e.fodder ? 12 : 18, y = an ? Math.round(e.y + an.top) - 6 : Math.round(e.y - e.r * 2.6 - (e.def.fly ? 14 : 4)), af = e.elite ? ED.AFFIXES[e.elite] : null, bx = Math.round(e.x - w / 2);
+      blit(c, barSprite(af ? af.color : '#e2513f', w, Math.round(U.clamp(frac, 0, 1) * w), h), bx, y);
       if (e.ward > 0) { c.fillStyle = '#7fc8ff'; c.fillRect(bx, y - 1 - bh, Math.max(1, Math.round(w * (e.ward / (e.wardMax || 1)))), Math.max(1, bh - 1)); }
       if (af) { eliteQ.push(e, y); labelAdd(e.x, y + bh / 2, w / 2, bh / 2); } // the bar blocks the labels of the elites beside it
     }
@@ -1989,7 +1999,7 @@
       R.label(c, str, e.x, placeLabel(e.x, ly, R.labelW(str), lh2), af.color);
     }
     eliteQ.length = 0;
-    for (const e of view.enemies) if (e.hp > 0 && !e.burrowed) drawMarks(c, e, t);
+    for (const e of view.enemies) if (e.hp > 0 && !e.burrowed && marksOn(e)) drawMarks(c, e, t);
     // hero names (the local hero first; a name that would overlap another steps up) and revive rings with a DOWN / REVIVE label
     const multi = view.players.size > 1, lh = lhh * 1.1;
     for (let pass = 0; pass < 2; pass++) for (const p of view.players.values()) {
