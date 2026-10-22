@@ -261,7 +261,7 @@ for (const s of [1, 2]) {
   const sw = (r) => { const q = mk([{ secondwind: r }]).players.get('p0'); return [q.secondWind, q.swPct]; };
   ok(sw(1).join() === '1,0.05' && sw(2).join() === '1,0.1' && sw(0).join() === '0,0', 'Second Wind revives at 5% (rank 1) or 10% (rank 2); rank 0 has none');
   const rr = (r, ml) => mk([{ insight: r, mastery: ml || 1 }]).players.get('p0').rerolls;
-  ok(rr(1) === 1 && rr(2) === 1 && rr(3) === 2 && rr(3, 8) === 3 && rr(0, 8) === 1, 'Insight gives 1, 1, 2 rerolls; mastery 8 adds one');
+  ok(rr(1) === 1 && rr(2) === 2 && rr(3) === 3 && rr(3, 8) === 4 && rr(0, 8) === 1, 'Insight gives one reroll per rank; mastery 8 adds one');
   const w3 = mk([{ provisions: 2 }]), q3 = w3.players.get('p0'); q3.hp = Math.round(q3.maxHp * 0.5); w3.onStratumBuild(q3, 2);
   near(q3.hp, Math.round(q3.maxHp * 0.5) + 0.04 * q3.maxHp, 1, 'Provisions 2 heals 4% of max health at stratum II');
   q3.hp = Math.round(q3.maxHp * 0.5); w3.onStratumBuild(q3, 1); ok(q3.hp === Math.round(q3.maxHp * 0.5), 'and nothing at stratum I');

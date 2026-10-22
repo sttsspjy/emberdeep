@@ -456,24 +456,24 @@ Per stratum: start, boss, three utility rooms (treasure on odd strata or an even
 
 | Upgrade | Tier | Per rank | Costs |
 |---|---|---|---|
-| Vitality | 1 | +0.5 max health | 10 / 20 / 35 / 55 / 80 |
-| Might | 1 | +0.25% damage | 12 / 25 / 45 / 70 / 100 |
+| Vitality | 1 | +1 max health | 10 / 20 / 35 / 55 / 80 |
+| Might | 1 | +0.5% damage | 12 / 25 / 45 / 70 / 100 |
 | Fortune | 1 | +2% gold | 15 / 30 / 50 |
-| Fleetness | 1 | +0.25% move speed | 10 / 25 / 45 |
+| Fleetness | 1 | +1% move speed | 10 / 25 / 45 |
 | Provisions | 1 | heal 2% of max health when a stratum after the first begins | 25 / 55 |
 | Deep Wick | 1 | +10% gold and xp dropped in dark rooms (§7), the party's highest rank counts | 40 / 90 / 160 |
-| Bulwark | 2 | +0.25 armor | 15 / 30 / 55 |
-| Precision | 2 | +0.25% crit | 15 / 30 / 55 |
-| Wisdom | 2 | +1% xp | 15 / 30 / 55 |
-| Insight | 2 | boon rerolls per descent: 1 / 1 / 2 | 25 / 15 / 90 |
+| Bulwark | 2 | +1 armor | 15 / 30 / 55 |
+| Precision | 2 | +1% crit | 15 / 30 / 55 |
+| Wisdom | 2 | +2% xp | 15 / 30 / 55 |
+| Insight | 2 | +1 boon reroll per descent | 25 / 50 / 90 |
 | Head Start | 2 | begin the descent with 15 xp (30 = level 2); the party's highest rank counts | 15 / 35 |
-| Alacrity | 3 | +0.25% skill recharge | 20 / 40 / 65 |
+| Alacrity | 3 | +1% skill recharge | 20 / 40 / 65 |
 | Stash | 3 | begin with 5 gold (the party's highest rank; the slot of the Reliquary, id `stash`) | 20 / 45 |
 | Ember Attunement | 3 | +10% embers earned | 80 / 160 / 255 / 385 |
 | Merchant's Favor | 3 | shops −4% | 30 / 65 |
 | Second Wind | 4 | once per descent a fallen hero rises at 5% health (rank 2: 10%), invulnerable 2.2 s | 90 / 200 |
 
-- **Mastery** has 10 levels per hero: 2 +0.5% damage · 3 second weapon · 4 +1 max health · 5 skills recharge 0.5% faster · 6 third weapon · 7 +0.25% crit · 8 +1 boon reroll · 9 +0.5% damage · 10 golden aura. A full Hearth with mastery 10 adds +2.25% damage, +3.5 health, +1% crit, +1.25% recharge, +0.75 armor, +0.75% move speed, +3% xp and +6% gold, plus the one-offs of the table. Deep Wick reaches `W.prototype.darkLoot()`; Head Start, Stash, Second Wind, Insight and Provisions are read in `sim/build.js` (`onRunStartBuild`, `onPartyStartBuild`, `onStratumBuild`), Merchant's Favor in `rooms.js` (`priceOf`).
+- **Mastery** has 10 levels per hero: 2 +1% damage · 3 second weapon · 4 +2 max health · 5 skills recharge 1% faster · 6 third weapon · 7 +1% crit · 8 +1 boon reroll · 9 +1% damage · 10 golden aura. A full Hearth with mastery 10 adds +4.5% damage, +7 health, +4% crit, +4% recharge, +3 armor, +3% move speed, +6% xp and +6% gold, plus the one-offs of the table. Visible but small: the boss-arrival power read (`tools/bal.js --power`) puts full Hearth at ×1.1–1.3 over fresh smart at strata IV–VI. Deep Wick reaches `W.prototype.darkLoot()`; Head Start, Stash, Second Wind, Insight and Provisions are read in `sim/build.js` (`onRunStartBuild`, `onPartyStartBuild`, `onStratumBuild`), Merchant's Favor in `rooms.js` (`priceOf`).
 - **Refunds**: every upgrade rank and Armory entry refunds its full cost on demand (`S.refundUpgrade`, `S.refundArmory`); Reset all (`S.resetUpgrades`, a two-step confirm in the UI: the first press arms it for 3 s) refunds every rank and entry at once. `lifetime` embers never change on a purchase or refund.
 - **Armory**: `ED.ARMORY[hero]` lists per-hero sidegrade unlocks `{ id, name, desc, cost }`, bought and refunded in the Upgrades page below the upgrades (a hero's section shows while its list is non-empty and the hero is unlocked). The lists are empty until content lands. The meta bundle carries each hero's owned entry ids (`meta.armory`); the profile stores `armory: { hero: [0|1 per entry] }`.
 - 26 deeds including Evolved (evolve a weapon, 40) · Into the Dark (clear 6 dark rooms in one descent, 50; `run.darkCleared` counts dark-room clears and rides the run summary and the snapshot's `RUN` row) · Cartographer (clear every room of a stratum, both dark rooms included, 40; the check is `run.fullClear`, every non-boss room) · Relic Keeper (hold 10 relics in one descent, 60; the slot of the removed Archivist). Ten pacts raise difficulty and embers (`PACT_EMBER_BONUS` 0.08 per level).
@@ -497,7 +497,7 @@ Measured cells are the sign-off batch at skill 0.75, taken at `cd1074d` (solo ro
 | Two heroes, half-upgraded | 45–70% | 51% | — | 5.86 |
 | Three heroes, half-upgraded | 45–70% | 42% | — | 5.90 |
 
-- **Hearth rule (v4, veteran bot)**: (fully upgraded − fresh smart) ≤ ½ × (fresh smart − fresh random), in win points; `tools/bal.js` prints the line. The three rows above carry the v4 targets; their Measured cells and the other rows are the v3 sign-off and wait for the encounter retune. Measured with a patch scaling foe HP ×3.4 (`hpScale`, `fodderHp`, boss `hp`) and foe damage ×2.2 (`dmgScale`) until fresh smart read 12.5% (48 runs per cell, seeds 1000 + 7i, six heroes, skill 0.75, `--vet`): fresh random 0.0% (depth 3.31), fresh smart 12.5% (3.46), full Hearth with mastery 10 18.8% (4.08); knowledge gap 12.5 points, Hearth gap 6.3 (±7), rule met on the estimate. The Hearth of the v3 values read 64.6% (5.77) in the same regime. Re-run after the encounter retune.
+- **Hearth rule (v4, veteran bot)**: (fully upgraded − fresh smart) ≤ ½ × (fresh smart − fresh random), in win points; `tools/bal.js` prints the line, and `--power` reads it as boss-arrival power (model damage × effective health): at bosses IV–VI ln(max/smart) ≤ ½ ln(smart/rand), per stratum and on the mean. The three rows above carry the v4 targets; their Measured cells and the other rows are the v3 sign-off and wait for the encounter retune. Power read (unpatched, 16 runs per cell, seeds 1000 + 7i, six heroes, skill 0.75, `--vet`): smart/rand ×1.17 · 1.36 · 1.53 · 1.92 · 1.74 · 1.57 (strata I–VI), max/smart ×1.12 · 1.17 · 1.11 · 1.09 · 1.28 · 1.21 (±0.05–0.12), inside the rule at IV–VI. Patched win read (foe HP ×3.4, foe damage ×2.2 so that fresh smart sits near 15%; 48 runs per cell): fresh smart 14.6% (depth 3.46), full Hearth with mastery 10 27.1% (4.50), a gap of 12.5 points (±8) against about 7 allowed, so the win-point rule is not met on that estimate. Re-run both after the encounter retune.
 - **Paths** (96-run batches, mid, smart, paired by seed): offers per stratum 5.5–6.5; keystone on the main path median stratum II; evolution quartiles for element mains [3 3 4], 60–85% evolved by stratum IV entry; Generalist median evolution not earlier than the element-main median; duo taken in ≥ 60% of two-gate runs by the end of stratum IV, median stratum III. Spread (paired mean depth): forced starts within 0.3 strata of each other; none more than 0.2 above a random start; Generalist within ±0.2 of random; Poison co-op party at most 0.2 above random + random. Measured: spread 0.21 strata, best forced start +0.06 over random, Generalist −0.10 against random, Poison co-op +0.06; a two-gate pair kills a boss in 0.91–0.96 of a mono-gate build's time.
 - **Classes** (`tools/sheet.js` first, then `--route=rotate --fork=rotate --weapon=rotate`): each skill route raises its own skill's share of direct damage by ≥ 8 points; the attack route raises the weapon share by ≥ 8 points over the mean of the two skill arms; the element route raises the status share by ≥ 6 points. Each route's boss time to kill at strata II and IV within ±15% of the class median; each weapon within ±15% of its class median (knob: that weapon's `dmg`); Heavy within ±10% of Swift in packs; Guard forks lose 60–85% of the HP of their Burst sibling; ≥ 90% of runs that kill the stratum IV boss reach fork rank 3 under `--mastery=fork`.
 - **No sustain by default**: HP lost per combat room ≥ 4.5% of max HP and per elite room ≥ 7.5% for every fork and base kit; a Knight on Shield Orbit takes ≥ 50% of the attack arm's projectile damage; class shield absorbed per boss-fight second ≤ 0.3% max HP, all sources ≤ 0.6%. Measured: no heal per kill or per hit; Holy shields absorb 0.09–0.12% max HP per boss-fight second.

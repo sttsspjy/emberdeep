@@ -135,7 +135,7 @@ The main menu has five entries. **Descend** picks your hero, weapon and pact, th
 
 ## Between descents (the Hearth)
 
-- **Embers** are earned on every descent that clears at least one room, win or lose. Spend them on 16 permanent upgrades. They are deliberately small (a point of health, half a percent of damage, a few gold): what you know about the paths wins runs, not what you grind. **Deep Wick** adds 10% gold and experience in dark rooms per rank, **Head Start** begins the descent with a little experience, the **Stash** with a little gold, and **Second Wind** revives you once at a sliver of health. Deeper strata reveal new upgrades.
+- **Embers** are earned on every descent that clears at least one room, win or lose. Spend them on 16 permanent upgrades. They are deliberately small (a point of health, half a percent of damage, a point of armor, a boon reroll, a few gold): what you know about the paths wins runs, not what you grind. **Deep Wick** adds 10% gold and experience in dark rooms per rank, **Head Start** begins the descent with a little experience, the **Stash** with a little gold, and **Second Wind** revives you once at a sliver of health. Deeper strata reveal new upgrades.
 - **Refunds are free:** every upgrade rank has a **Refund** button that returns its full cost, and **Reset all** (press it twice to confirm) returns every rank at once, so you can rebuild the Hearth for a new path.
 - **Armory:** each hero can have sidegrade unlocks listed under the upgrades (refundable like the ranks). The lists are empty for now.
 - **Heroes:** every descent trains the hero you took, up to mastery 10. Mastery unlocks weapons and tiny permanent bonuses.

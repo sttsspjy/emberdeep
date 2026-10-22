@@ -287,8 +287,8 @@ const STORED_V2 = {"v":2,"news":0,"name":"Stored","embers":100,"lifetime":900,"u
   const st = (meta) => ED.Stats.compute({ cls: 'knight', weapon: 'longsword', boons: {}, relics: [], meta, pact: 0 });
   const a = st({ up: ED.UPGRADES.map(() => 0), mastery: 1 }), b = st({ up: ED.UPGRADES.map(u => u.costs.length), mastery: 10 });
   const d = (k) => b[k] - a[k];
-  ok(Math.abs(d('dmg') - 0.0225) < 1e-9 && Math.abs(d('hp') - 3.5) < 1e-9 && Math.abs(d('crit') - 0.01) < 1e-9 && Math.abs(d('cdr') - 0.0125) < 1e-9 && Math.abs(d('armor') - 0.75) < 1e-9 && Math.abs(d('spd') - 0.0075) < 1e-9 && Math.abs(d('xp') - 0.03) < 1e-9 && Math.abs(d('gold') - 0.06) < 1e-9,
-    `full Hearth + mastery 10: +2.25% damage, +3.5 health, +1% crit, +1.25% recharge, +0.75 armor, +0.75% speed, +3% xp, +6% gold (got ${['dmg', 'hp', 'crit', 'cdr', 'armor', 'spd', 'xp', 'gold'].map(k => d(k).toFixed(3))})`);
+  ok(Math.abs(d('dmg') - 0.045) < 1e-9 && Math.abs(d('hp') - 7) < 1e-9 && Math.abs(d('crit') - 0.04) < 1e-9 && Math.abs(d('cdr') - 0.04) < 1e-9 && Math.abs(d('armor') - 3) < 1e-9 && Math.abs(d('spd') - 0.03) < 1e-9 && Math.abs(d('xp') - 0.06) < 1e-9 && Math.abs(d('gold') - 0.06) < 1e-9,
+    `full Hearth + mastery 10: +4.5% damage, +7 health, +4% crit, +4% recharge, +3 armor, +3% speed, +6% xp, +6% gold (got ${['dmg', 'hp', 'crit', 'cdr', 'armor', 'spd', 'xp', 'gold'].map(k => d(k).toFixed(3))})`);
 }
 
 // ---- relics: the whole list is in the pool, no element tag, 14 removed ----

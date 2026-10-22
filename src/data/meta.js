@@ -6,17 +6,17 @@
   // Entries with `mods` add to the stat block per rank; the rest are read by id in sim/build.js (Provisions `heal`, Head Start `xp`, Stash `gold`, Second Wind `pct`, Insight `rerolls`), rooms.js (Merchant's Favor `discount`) and world.js (Deep Wick `loot`, via W.prototype.darkLoot).
   // The save code stores ranks by position and never reads ids: keep the order and each costs.length.
   ED.UPGRADES = [
-    { id: 'vitality', name: 'Vitality', icon: 'heart', tier: 1, desc: r => `+${0.5 * r} max health`, mods: { hp: 0.5 }, step: '+0.5 max health', costs: [10, 20, 35, 55, 80] },
-    { id: 'might', name: 'Might', icon: 'sword', tier: 1, desc: r => `+${0.25 * r}% damage`, mods: { dmg: 0.0025 }, step: '+0.25% damage', costs: [12, 25, 45, 70, 100] },
+    { id: 'vitality', name: 'Vitality', icon: 'heart', tier: 1, desc: r => `+${r} max health`, mods: { hp: 1 }, step: '+1 max health', costs: [10, 20, 35, 55, 80] },
+    { id: 'might', name: 'Might', icon: 'sword', tier: 1, desc: r => `+${0.5 * r}% damage`, mods: { dmg: 0.005 }, step: '+0.5% damage', costs: [12, 25, 45, 70, 100] },
     { id: 'fortune', name: 'Fortune', icon: 'coin', tier: 1, desc: r => `+${2 * r}% gold`, mods: { gold: 0.02 }, step: '+2% gold', costs: [15, 30, 50] },
-    { id: 'fleet', name: 'Fleetness', icon: 'boot', tier: 1, desc: r => `+${0.25 * r}% move speed`, mods: { spd: 0.0025 }, step: '+0.25% move speed', costs: [10, 25, 45] },
+    { id: 'fleet', name: 'Fleetness', icon: 'boot', tier: 1, desc: r => `+${r}% move speed`, mods: { spd: 0.01 }, step: '+1% move speed', costs: [10, 25, 45] },
     { id: 'provisions', name: 'Provisions', icon: 'potion', tier: 1, desc: r => `Heal ${2 * r}% at each stratum`, heal: 0.02, step: 'Heal 2% at each stratum', costs: [25, 55] },
-    { id: 'bulwark', name: 'Bulwark', icon: 'shield', tier: 2, desc: r => `+${0.25 * r} armor`, mods: { armor: 0.25 }, step: '+0.25 armor', costs: [15, 30, 55] },
-    { id: 'precision', name: 'Precision', icon: 'eye', tier: 2, desc: r => `+${0.25 * r}% critical chance`, mods: { crit: 0.0025 }, step: '+0.25% critical chance', costs: [15, 30, 55] },
-    { id: 'wisdom', name: 'Wisdom', icon: 'scroll', tier: 2, desc: r => `+${r}% experience`, mods: { xp: 0.01 }, step: '+1% experience', costs: [15, 30, 55] },
-    { id: 'insight', name: 'Insight', icon: 'clover', tier: 2, rerolls: [1, 1, 2], desc: r => `${r >= 3 ? 2 : 1} boon reroll${r >= 3 ? 's' : ''} per descent`, step: 'Boon rerolls per descent: 1, 1, 2', costs: [25, 15, 90] },
+    { id: 'bulwark', name: 'Bulwark', icon: 'shield', tier: 2, desc: r => `+${r} armor`, mods: { armor: 1 }, step: '+1 armor', costs: [15, 30, 55] },
+    { id: 'precision', name: 'Precision', icon: 'eye', tier: 2, desc: r => `+${r}% critical chance`, mods: { crit: 0.01 }, step: '+1% critical chance', costs: [15, 30, 55] },
+    { id: 'wisdom', name: 'Wisdom', icon: 'scroll', tier: 2, desc: r => `+${2 * r}% experience`, mods: { xp: 0.02 }, step: '+2% experience', costs: [15, 30, 55] },
+    { id: 'insight', name: 'Insight', icon: 'clover', tier: 2, rerolls: [1, 2, 3], desc: r => `${r} boon reroll${r === 1 ? '' : 's'} per descent`, step: '+1 boon reroll per descent', costs: [25, 50, 90] },
     { id: 'headstart', name: 'Head Start', icon: 'star', tier: 2, xp: 15, desc: r => `Begin the descent with ${15 * r} experience`, step: 'Begin with 15 more experience', costs: [15, 35] },
-    { id: 'alacrity', name: 'Alacrity', icon: 'hourglass', tier: 3, desc: r => `Skills recharge ${0.25 * r}% faster`, mods: { cdr: 0.0025 }, step: 'Skills recharge 0.25% faster', costs: [20, 40, 65] },
+    { id: 'alacrity', name: 'Alacrity', icon: 'hourglass', tier: 3, desc: r => `Skills recharge ${r}% faster`, mods: { cdr: 0.01 }, step: 'Skills recharge 1% faster', costs: [20, 40, 65] },
     { id: 'stash', name: 'Stash', icon: 'chest', tier: 3, gold: 5, desc: r => `Begin with ${5 * r} gold`, step: 'Begin with 5 more gold', costs: [20, 45] },
     { id: 'attunement', name: 'Ember Attunement', icon: 'ember', tier: 3, desc: r => `+${10 * r}% embers earned`, step: '+10% embers earned', costs: [80, 160, 255, 385] },
     { id: 'favor', name: "Merchant's Favor", icon: 'scroll', tier: 3, desc: r => `Shops are ${4 * r}% cheaper`, discount: 0.04, step: 'Shops are 4% cheaper', costs: [30, 65] },
@@ -47,18 +47,18 @@
   // Mastery XP thresholds for levels 1..10.
   ED.MASTERY_XP = [0, 120, 300, 550, 850, 1200, 1650, 2200, 2850, 3600];
   // Stat mods a mastery level adds (every level up to the hero's own applies); ED.MASTERY_REWARDS is the text. Level 8 gives one boon reroll (sim/build.js).
-  ED.MASTERY_MODS = { 2: { dmg: 0.005 }, 4: { hp: 1 }, 5: { cdr: 0.005 }, 7: { crit: 0.0025 }, 9: { dmg: 0.005 } };
+  ED.MASTERY_MODS = { 2: { dmg: 0.01 }, 4: { hp: 2 }, 5: { cdr: 0.01 }, 7: { crit: 0.01 }, 9: { dmg: 0.01 } };
   ED.MASTERY_REWARDS = [
     null,
     'Hero unlocked',
-    '+0.5% damage',
+    '+1% damage',
     'Second weapon',
-    '+1 max health',
-    'Skills recharge 0.5% faster',
+    '+2 max health',
+    'Skills recharge 1% faster',
     'Third weapon',
-    '+0.25% critical chance',
+    '+1% critical chance',
     '+1 boon reroll per descent',
-    '+0.5% damage',
+    '+1% damage',
     'Gilded: a golden aura',
   ];
   ED.masteryLevel = (xp) => { let l = 1; for (let i = 0; i < ED.MASTERY_XP.length; i++) if (xp >= ED.MASTERY_XP[i]) l = i + 1; return l; };
