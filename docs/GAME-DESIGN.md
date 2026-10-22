@@ -6,12 +6,12 @@ Canonical rules and numbers. Code follows this file; a balance pass changes numb
 
 1. **Builds are chosen, not rolled.** Paths gate boons, rooms show their reward before you enter, commitment unlocks a keystone and a weapon evolution, and every hero picks a class route (attack, skill 1, skill 2 or element) with a fork.
 2. **Every element has a job.** Fire = sustained damage, Ice = control and burst, Lightning = crowds, Poison = amplifier, Holy = Smite and shields, Shadow = Reap and execute, General = crits and Bleed. Each stratum is weak to one element and resists another.
-3. **Exploring is a wager.** More rooms = more power, but every new room costs lantern light and the Deep grows stronger as it dims; light you keep shields and heals you at the boss door.
+3. **Darkness is a wager.** Every floor has two optional dark rooms: harder fights for richer loot and a stepped-up reward, shown before you enter.
 4. **Fights are read, not out-healed.** Low chip damage, heavy telegraphed damage, no sustain by default: nothing heals from hits or kills, and shields are windowed.
 
 ## 1. Damage model
 
-- Foe HP = base × `1 + 0.65(s−1) + 0.08(s−1)²` × **threat HP** × party multiplier. Foe damage = base × `1 + 0.22(s−1) + 0.03(s−1)²` × **threat damage** (below 1 in every stratum). Boss HP is absolute (below), scaled by party, pact and dread.
+- Foe HP = base × `1 + 0.65(s−1) + 0.08(s−1)²` × **threat HP** × party multiplier. Foe damage = base × `1 + 0.22(s−1) + 0.03(s−1)²` × **threat damage** (below 1 in every stratum). Boss HP is absolute (below), scaled by party and pact.
 - **Threat** per stratum (`World.THREAT`): HP ×, damage ×, wave budget ×, attack-cooldown rate `cdRate` (foe cooldowns tick faster by this fraction, negative = slower, only while the foe can act; wind-ups never change; bosses are exempt), boss pause × (time between boss attacks):
 
 | Stratum | HP × | Damage × | Wave × | `cdRate` | Boss pause × |
@@ -28,7 +28,7 @@ Canonical rules and numbers. Code follows this file; a balance pass changes numb
 - Elite HP × `2.4 + 0.4(s−1)` (`World.ELITE`), damage × 0.9, radius × 1.22. Affixes: swift (×1.4 speed, wind-ups ×0.7 but never under 0.4 s), brutal (×1.4 damage), warded (ward = 45% of max HP), volatile (explodes on death), vampiric (heals ×3 the damage it deals a hero).
 - Party multiplier (n = other heroes): foe HP `1 + 0.85n + 0.3n(n−1)` (two heroes ×1.85, three ×3.3, four ×5.35), wave budget `1 + 0.6n + 0.2n(n−1)`. A downed hero bleeds out in 18 s when no ally revives them (solo: at once).
 - HP-relative statuses (Chill and Venom build-up, Conflagration, Wildfire) measure against foe HP before the stratum lever (bosses: `refHp`, the design HP 800–7,800), so inflating HP does not weaken them.
-- Contact damage: touching a foe outside an attack state = `0.4 × dmg`, contact cooldown 1.0 s. Attack states (`lunge`, `charge`, `leap`, `bash`, `dive`) and the Gloom = `1.0 × dmg`. Boss contact damage × 0.8.
+- Contact damage: touching a foe outside an attack state = `0.4 × dmg`, contact cooldown 1.0 s. Attack states (`lunge`, `charge`, `leap`, `bash`, `dive`) = `1.0 × dmg`. Boss contact damage × 0.8.
 - Every hit's damage is the same no matter how it was produced; statuses build from **damage dealt, never from hit count**, so attack speed and damage scale them equally.
 
 ### Damage dealt by a hero (order, `hitEnemy`)
@@ -51,19 +51,19 @@ Status ticks, Smites, Tolls and discharges are `raw` hits: no hero multiplier, n
 2. Mirror Shard (25% chance to shrug off a projectile), then dodge (cap 60%, not against hazards; 0.25 s untouchable after), then Aegis Charm (blocks one hit per 10 s).
 3. `amount × 60/(60 + armor) × (1 + vuln)`.
 4. **Brace** (Knight, Vanguard) × the best **Sanctuary** here; their product never goes below ×0.5 (`DR_FLOOR`). Then Last Stand ×0.4, then a Judged foe's weakening (Verdict), then Chill (`chillWeaken`).
-5. Rounded, at least 1. A Gloom touch is at most 25% of max HP (`GLOOM_CAP`).
+5. Rounded, at least 1.
 6. The **shield** absorbs first, then health. Thorns strike the attacker; a vampiric elite heals 3× the damage dealt.
 
 ### Shields
 
-- Every shield a hero receives passes one sliding 10 s window in `World.addShield`, except Battle Ward and the boss door: **class sources give at most 3% of max HP per window, all sources together at most 6%** (`SHIELD_WIN_CLASS`, `SHIELD_WIN_ALL`). Holy (Smite) and Bone Armor shields count only in the all-sources window.
-- Sources: Rallying Charge, Shield Throw catch, Phoenix Mantle, Veil of Night, Judgment kill shield, Sacred Lantern orbs (class window); Smites (Holy); Bone Armor; Battle Ward (5% max HP when an elite room locks); the boss door.
-- Shields fade by 2% of max HP per second while no room is locked and outside boss rooms (`SHIELD_DECAY`). A shield above its cap is never lowered. Dread's healing multiplier scales shield gains. A downed or dead hero gains none.
+- Every shield a hero receives passes one sliding 10 s window in `World.addShield`, except Battle Ward: **class sources give at most 3% of max HP per window, all sources together at most 6%** (`SHIELD_WIN_CLASS`, `SHIELD_WIN_ALL`). Holy (Smite) and Bone Armor shields count only in the all-sources window.
+- Sources: Rallying Charge, Shield Throw catch, Phoenix Mantle, Veil of Night, Judgment kill shield, Sacred Lantern orbs (class window); Smites (Holy); Bone Armor; Battle Ward (5% max HP when an elite room locks).
+- Shields fade by 2% of max HP per second while no room is locked and outside boss rooms (`SHIELD_DECAY`). A shield above its cap is never lowered. A downed or dead hero gains none.
 
 ### Healing
 
-- No life steal: hits, kills, damage over time and shield overflow never heal. Heal sources: hearts 22% max HP + 6 (+3% per Forager rank); campfire 35% (once per hero); healing draught 40% (shop); fountain 50% (also raises the downed); Vigor reward 20%; Vigor boon 15; Provisions (Hearth) 10% per rank and Elixir Flask 20% at each stratum after the first; Sanctuary 7% on cast (you and allies within 180); Bone Harvest 3% per minion harvested, at most 6%; the boss door (§7); revive; Second Wind, Phoenix Feather and Guardian Angel (one-off saves).
-- Healing received × `healMul` = (1 + Mending, Heartwood and Elixir bonuses) × pact × the dread tier (§7).
+- No life steal: hits, kills, damage over time and shield overflow never heal. Heal sources: hearts 22% max HP + 6 (+3% per Forager rank); campfire 35% (once per hero); healing draught 40% (shop); fountain 50% (also raises the downed); Vigor reward 20%; Vigor boon 15; Provisions (Hearth) 10% per rank and Elixir Flask 20% at each stratum after the first; Sanctuary 7% on cast (you and allies within 180); Bone Harvest 3% per minion harvested, at most 6%; revive; Second Wind, Phoenix Feather and Guardian Angel (one-off saves).
+- Healing received × `healMul` = (1 + Mending, Heartwood and Elixir bonuses) × pact.
 - Hearts drop from kills (4%, elites 40%), cleared rooms (36%, +10% per Forager rank in the party, at most 80%) and bosses (two).
 
 ### Stopping shots, stuns and moves
@@ -72,6 +72,7 @@ Status ticks, Smites, Tolls and discharges are `raw` hits: no hero multiplier, n
 - **Hero stuns** (`stunFoe`): bosses are never stunned; elites take half; a stun sets `stunCd = dur + 2 s` and one landing while `stunCd > 0` lasts half as long; repeating sources (waves, shocks, Overload, Shield Orbit contacts, Bone Knight strikes) skip while `stunCd > 0` and set it to at least 1 s.
 - **Stagger**: a Heavy weapon's direct hit stuns a non-boss foe 0.2 s (elites 0.1 s), once per 2 s per foe, never while `stunCd > 0`; it does not set `stunCd`. Hit-stop is client render only; the sim never pauses.
 - **Parry** (Sworn Blade): a Cleave that starts in the last 0.3 s of a foe's wind-up cancels it and stuns 0.6 s (elites: stun 0.3 s, no cancel; never bosses), once per 2.5 s per hero and 4 s per foe.
+- **Dash** (`ED.CONST.DASH`): 0.15 s at 480 px/s (72 px), untouchable for the whole dash. A hero holds `dashCharges` charges (1); a spent charge refills after `dashCd` (1.5 s), one charge at a time. `dashcdr` is not read.
 - Skill moves (Charge, Shadowstep, Comet, Scattershot hop) never fire dash riders; their i-frames last the `iframes` seconds of the move.
 
 ### Weapons
@@ -346,8 +347,8 @@ Class Power **P** (table below) scales every skill and proc. Per-attack extras s
 
 ### Controls and aim
 
-- Defaults (every action has two rebindable slots, keyboard codes or mouse buttons, saved in settings): move WASD / arrows; attack left mouse / J (also interacts); skill 1 Q / right mouse (rerolls boon cards while they are open); skill 2 E; dash Space; lantern flare F; map and sheet Tab; pause Esc. Hotkeys use `e.code`. Prompts and signs show the live binding (`{action}` tokens).
-- **Gamepad** (fixed layout): left stick moves, right stick aims, X or RT attacks, B or RB skill 1, Y or LT skill 2, A or LB dashes, L3 flare, Back opens the sheet, Start pauses. In menus and the sheet LB/RB switch tabs, B goes back, Y rerolls an offer (cycles heroes in the sheet).
+- Defaults (every action has two rebindable slots, keyboard codes or mouse buttons, saved in settings): move WASD / arrows; attack left mouse / J (also interacts); skill 1 Q / right mouse (rerolls boon cards while they are open); skill 2 E; dash Space; map and sheet Tab; pause Esc. Hotkeys use `e.code`. Prompts and signs show the live binding (`{action}` tokens).
+- **Gamepad** (fixed layout): left stick moves, right stick aims, X or RT attacks, B or RB skill 1, Y or LT skill 2, A or LB dashes, Back opens the sheet, Start pauses. In menus and the sheet LB/RB switch tabs, B goes back, Y rerolls an offer (cycles heroes in the sheet).
 - **Aim is manual.** There is no auto-aim and no aim assist. The aim origin is the projectile spawn point (hero x, y − 4). Attacks and `dir` skills fly toward the cursor; `ground` skills (Rain, Meteor, Sanctuary, Raise Legion) land on the cursor, clamped to range and cut at the first wall (chasms do not stop them; Raise Legion lands on a standable spot); `move` skills (Charge, Shadowstep) travel toward it; `self` skills ignore it. The last angle is kept when the cursor is within 12 px of the origin or outside the window; before the first pointer event the aim follows the walking direction. On a pad the right stick aims (held 0.35 s after release), else the left stick, else the last angle; ground skills reach `range × clamp((push − 0.45) / 0.5, 0.3, 1)` of the right stick's push.
 
 ### Heavy and Swift (attack forks)
@@ -397,48 +398,35 @@ Crit-stack grants (Shadowstep, Riposte, Death's Edge) are multiplied by `critK =
 
 ## 6. Floors, rooms and rewards
 
-Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat `[5,5,6,6,6,6][s−1]`, elite combat `[1,1,1,2,2,2][s−1]` → 12–14 rooms. Grid bounds ±4, tree layout. Boss = farthest dead end, BFS distance ≥ 4. Utility rooms prefer dead ends; elite rooms prefer distance ≥ 3. Floor generation is pure per `(stratum, seed)`.
+Per stratum: start, boss, three utility rooms (treasure on odd strata or an event shrine on even strata, shop, rest site), 4 normal combat rooms (2 of them dark, §7) and elite combat `[1,1,1,1,2,2][s−1]` → 10–11 rooms. Grid bounds ±4, tree layout; a tree with fewer than 3 dead ends besides the start is redrawn. Boss = farthest dead end, BFS distance ≥ 4. Dark rooms take the farthest other dead ends, utility rooms prefer the remaining dead ends, elite rooms prefer distance ≥ 3. Floor generation is pure per `(stratum, seed)`.
 
-- Wave budget = `(7 + 2s)` × threat wave × party × `danger = 1 + 0.05 × distance` × dread wave. Pacing (`World.PACE`): the first wave 0.5 s after the lock, spawn telegraph 0.7–0.95 s, the next wave when at most 45% of the current one stands (gap ≥ 0.9 s) or the current one is 6 s old; foes spawn ≥ 100 px from every hero (turrets 130). Elite rooms: same budget, 2 waves + 2 elites guaranteed (3 waves under Pact 10).
+- **Room sizes** (tiles of 32 px): combat and elite rooms draw from 33×17, 35×17, 31×19, 37×17, 29×19, 39×15, 33×19 (wider than the 720×420 minimum view, so the camera scrolls); boss 31×19; start, event and rest 15×11; treasure 13×11; shop 17×13. Interior patterns scale their counts and block sizes by room area / 294.
+- Wave budget = `(7 + 2s)` × threat wave × party × `danger = 1 + 0.05 × distance`. Pacing (`World.PACE`): the first wave 0.5 s after the lock, spawn telegraph 0.7–0.95 s, the next wave when at most 45% of the current one stands (gap ≥ 0.9 s) or the current one is 6 s old; foes spawn ≥ 100 px from every hero (turrets 130). Elite rooms: same budget, 2 waves + 2 elites guaranteed (3 waves under Pact 10).
 - **Rewards** are fixed at generation and shown on doors and the map before entering:
-  - normal combat: `boon` 50% · `gold` 19% · `vigor` 13% · `forge` 8% · `oil` 10%. Each kind gets its share of the floor's combat rooms (rounded by a weighted draw on the remainders). A `boon` reward is claimed by each hero as a room offer drawn from that hero's own paths; no room pays a class card.
+  - normal combat: `boon` 60% · `gold` 19% · `vigor` 13% · `forge` 8%. Each kind gets its share of the floor's combat rooms (rounded by a weighted draw on the remainders). A `boon` reward is claimed by each hero as a room offer drawn from that hero's own paths; no room pays a class card.
   - elite: `relic` 75% · `epic` 25%.
-- On clear, a `reward` prop appears at the room centre. Per-hero claims: `boon`, `forge`, `epic`, `vigor` (+12 max HP, heal 20%). Party claims (once): `gold` (`round((15 + 8s) × dread bonus × 0.65)`), `oil` (+35 light), `relic` (a relic hoard, one pick per hero).
+- On clear, a `reward` prop appears at the room centre. Per-hero claims: `boon`, `forge`, `epic`, `vigor` (+12 max HP, heal 20%). Party claims (once): `gold` (`round((15 + 8s) × 0.65)`), `relic` (a relic hoard, one pick per hero).
 - **Boss**: 2 hearts, gold and the class offer of strata I, II, IV (§5). Stratum II and IV: a relic hoard (rarity ≥ r). Stratum III and V: an `epic` offer per hero. Stratum VI ends the run.
 - **Rest site**: a campfire (heal 35%) and, on odd strata only, an anvil (forge offer); each hero uses one.
-- **Shop**: 2 relics (+1 with Merchant's Favor 2), healing draught (40%), lantern oil (+35 light, `45 + 15s` gold) and one build item: an epic boon (75 gold) on odd strata, a forge (`60 + 15s` gold) on even strata. Relic, epic boon and draught prices scale 12% per stratum; every price is −10% per Favor rank, −25% with Merchant's Ledger, ×1.4 under Pact 7, rounded to 5 (minimum 5).
+- **Shop**: 2 relics (+1 with Merchant's Favor 2), healing draught (40%) and one build item: an epic boon (75 gold) on odd strata, a forge (`60 + 15s` gold) on even strata. Relic, epic boon and draught prices scale 12% per stratum; every price is −10% per Favor rank, −25% with Merchant's Ledger, ×1.4 under Pact 7, rounded to 5 (minimum 5).
 - **Event shrines**: fountain (heals the party 50%, raises the downed), altar (pay 20% max HP for an epic offer), gamble shrine (`35 + 18s` gold for a random relic: 12% epic, 38% rare, 50% common), champion's trial (an elite fight for a rare relic).
 - **Relics**: 31, all in the drop pool from the first descent (common 8, rare 12, epic 6, legendary 5). No relic carries an element: the 14 element relics are gone and their unique effects are the path boons Storm Call, Thunder Gauntlet, Frozen Heart and Soul Jar (§3). There is no Codex and no Generalist relic rule. `RELIC_PRICE` c 70 · r 110 · e 160 · l 220. A roll draws at or above the requested rarity from the relics no hero holds (the whole list when every relic is held); weights c 50, r 34 + 3s, e 14 + 3s, l 3 + s. The Reliquary upgrade (§9) starts a descent with a random common (rank 1) or rare-or-better (rank 2) relic.
 - XP from level L to L+1: `round(30 + 3(L−1) + 6(L−1)²)`. Even levels grant a `level` offer; level 3 also grants the route card.
 - Every gold drop (kills, room clears, chests, rewards, bosses) is scaled by ×0.65 (`World.GOLD_MUL`); shop prices are not scaled.
 
-## 7. Lantern and Dread
+## 7. Dark rooms
 
-- `w.light` ∈ [0, lightMax]; `lightMax = 100 × (1 + 0.06 × Deep Wick rank) × World.LANTERN_MUL[s−1]` (best Deep Wick in party; `LANTERN_MUL` = 1.3 / 1.2 / 1.1 / 1 / 1 / 1, so strata I–III are bright). Refills to max at each stratum.
-- **The lantern never drains by itself.** Light is spent only on new rooms and flares, and gained from oil.
-- **Room cost**: entering a room not yet visited costs light, paid before its encounter is planned (the tier it leaves you in applies to that room): `World.ROOM_COST` combat 12 · elite 17 · treasure, shop, event, rest 8 (not scaled by Deep Wick or `LANTERN_MUL`). Revisits, the start room and the boss room are free. Light cannot go below 0 (running over means Lightless, never a block). Clients derive the cost from the room type: the number is drawn on each unvisited door preview (red when it drops the tier) and on each unvisited map cell; the room event carries `lc` (cost paid).
-- **Oil** (room reward or shop, `World.OIL_LIGHT`) gives +35 light.
-- **Boss door**: on first entering the boss room the light left converts into a reward, `World.bossLight(f, s)` with `f = light / lightMax`: every living hero heals `0.5 f` of max HP (healing multipliers apply) and gains a shield of `0.8 f` of max HP (never lowers a bigger one; outside the shield window), the party gets `round(f (10 + 5s))` gold (not scaled by dread or the gold multiplier) and `round(f (2 + s))` embers. Light is not consumed. Emits `{t:'wick', f, heal, shield, gold, embers}`; the door preview and the HUD lantern panel show what is on offer.
-- **Dread tier** by `light / lightMax`: ≥ 0.5 Bright (0) · ≥ 0.25 Dim (1) · > 0 Dark (2) · 0 Lightless (3). **Darkness never adds foe HP** (trash stays quick to kill): it adds foe damage, elites, a hunter and lost healing.
-
-| Tier | Foe damage | Elite chance | Healing | Gold & embers from rooms | Reward upgrade chance | Gloom hunts |
-|---|---|---|---|---|---|---|
-| Bright | ×1 | +0 | ×1 | ×1 | 0 | no |
-| Dim | ×1.1 | +0.2 | ×1 | ×1.25 | 0 | no |
-| Dark | ×1.6 | +0.4 | ×0.7 | ×1.5 | 0.12 | 8 s after entering a room |
-| Lightless | ×2.3 | +0.6 | ×0.5 | ×1.75 | 0.2 | 3 s after entering a room |
-
-- `w.dread` holds the tier's `{hp, dmg, elite, wave: 1, gold, up, gloom, glooms, heal}`; `hp`/`dmg` apply at spawn, not to minions, allies or the Gloom; `heal` multiplies every heal and shield a hero receives. The boss takes the tier of the moment its room is entered.
-- **The Deep hits harder**: every new room entered Dark or Lightless adds to a stratum counter (`w.deepRooms`, counted up to `DEEP_MAX` 5, reset each stratum). Foes spawned from then on in the stratum, bosses too, deal `1 + DEEP × deepRooms` (`World.DEEP` 0.28) times the damage of their tier; HP never changes.
-- **Fewer, nastier** (Dim and darker): each elite in a wave displaces `World.ELITE_BODIES` (4) budget of plain foes (one plain foe always stays); Dark and Lightless elites roll their affix from brutal / vampiric / warded / swift.
-- **Darkness pays**: at Dark and Lightless a cleared room's reward is upgraded one step with chance `up` (gold → vigor → forge → epic, boon → epic; relic, epic and oil stay); `{t:'upgrade', to, x, y}` announces it.
-- **The Gloom** (Dark and Lightless, non-boss non-start rooms): a telegraphed spawn (1.5 s) at the floor point farthest from the heroes, then a hunter: invulnerable, passes through walls, speed 1.05 × the target's move speed (a dash only breaks away for a moment), keeps 100 px away, and every 1.6 s winds up 0.55 s with a fixed aim line toward the hero, then lunges 170 px. A touch deals `World.GLOOM_HIT` (0.19) of the toughest living hero's max HP, at most 25% of the victim's max HP. Dark hunts with 1 Gloom; Lightless with 1 plus `floor(deepRooms / GLOOM_STEP)` (1), at most `GLOOM_MAX` (3), each spawning `GLOOM_GAP` (4) s after the last. Ignored by room-clear checks; despawns when you leave the room.
-- **Driving it off**: any light gained (`addLight`: oil) banishes every Gloom and resets its timer. **Lantern flare** (`F`, pad L3; action `flare`): costs 6 light, needs light ≥ 6, not in the boss room, 1 s cooldown; banishes the Gloom for 12 s and blinds non-boss foes within 160 px for 1.5 s. It can push the lantern into a darker tier. At 0 light only oil answers the Gloom.
-- Emits `{t:'dread', tier}` on tier change. A safe room with an open boon offer holds the Gloom's delay (and, solo, freezes the world).
+- Every floor flags exactly 2 normal combat rooms `dark` (`DARK_COUNT`), on dead ends other than the start and the boss, so skipping one cuts off nothing; the pick has its own stream `(seed ^ 0x2545f491) + 7907s`. They are optional: nothing needs them.
+- **Read before entering**: an unvisited dark room carries a violet skull on its door preview and its map cell; the preview's line "Dark room: harder fights, richer rewards" fades in as a hero nears; reward icons show the reward after its step up.
+- **Harder**: foes deal ×1.3 damage while the room is dark (`World.DARK_DMG`; minions and allies excluded); the last wave gets one more elite with an affix from brutal / vampiric / warded / swift (`World.DARK_AFFIXES`).
+- **Richer**: gold and xp dropped in the room ×1.5 (`World.DARK_LOOT`, `lootMul`); on clear the reward goes up one step, always (`World.REWARD_UP`: gold → vigor → forge → epic, boon → epic), announced by `{t:'upgrade', to, x, y}`. No extra boon offer.
+- Entering an uncleared dark room emits `{t:'dark'}`. The client eases the scene darker while its hero stands in one (ambient +0.3, post-process light level ×0.7).
+- There is no lantern, light, oil, flare, dread tier or Gloom.
 
 ## 8. Enemies
 
 - Every telegraphed wind-up (lob flights included) lasts `max(t × rate, min(t, 0.4)) × e.windMul`: `rate` 0.7 for swift elites, 1 otherwise; `windMul` default 1. Foes with `e.blind > 0` cannot start attacks. Stunned or frozen foes do nothing.
+- **Ranged foes shoot only on screen**: a non-boss ranged attack (shooter, turret, orbiter burst) starts only while the foe stands within the target's minimum view minus 24 px (`|dx| ≤ 336`, `|dy| ≤ 186`); a kiting foe outside it closes in.
 - A wind-up telegraph (zone with `src`) stalls while its caster is frozen or stunned and is cancelled, without hitting, when it dies. Ground bursts placed on their own (lobbed globs, web, boss spikes, spore fields, mire, fire rain) are `detached`: they resolve on their own clock.
 - **No untelegraphed teleports.** When a hero is within 80 and the step is off cooldown (7 s), casters telegraph 0.6 s (marker at origin and destination) and step 150 away.
 - Signature foe per biome:
@@ -448,7 +436,6 @@ Per stratum: start, boss, treasure, shop, event shrine, rest site, normal combat
   - IV **Ember Drone** (orbiter): circles the hero at ~160, fires 3-shot bursts.
   - V **Drowned Reaver** (leaper): leaps to the hero's position (landing circle), cleaving cone on landing.
   - VI **Rift Caller** (summoner): opens a telegraphed rift that spawns 2 starspawn every 6 s.
-  - **Gloom** (Dark and Lightless hunter, any stratum).
 - Bosses use telegraphed attacks in three phases (HP 66% / 33%; the Hollow King 60% / 30%); the pause between attacks is 1.05 / 0.7 / 0.45 s by phase × 0.8 under Pact 5+ × the stratum's boss pause. After a boss falls, hostile shots and pools are removed.
 - Floor hazards (spikes, poison, lava, void) hurt for 4-6 per tick × `World.HAZARD_MUL` (0.5), scaled by 20% per stratum.
 
@@ -484,7 +471,7 @@ Measured cells are the sign-off batch at skill 0.75, taken at `cd1074d` (solo ro
 - **Control caps**: trash stun uptime per hero ≤ 40%; Brace uptime ≤ 40%; Sanctuary DR uptime ≤ 60%; smoke blind per foe ≤ 50%. Perf: peak projectiles alive per hero ≤ 40; live zones per hero ≤ 8; hit events ≤ 60 per second per hero.
 - **Pacing targets** (half-upgraded): a regular foe dies in 2–4 weapon hits on strata I–II, an elite in 5–8 s, boss fights last 45–90 s (fresh up to 110 s), a winning descent takes 22–28 min.
 - **Hero spread** (solo, 64 runs per hero): half-upgraded Cleric 45% · Ranger 44% · Knight 42% · Necromancer 27% · Pyromancer 22% · Shade 22% (a paired 384-run Pyromancer + Shade batch at seeds 20000+ read 28%); fully upgraded Ranger 73% · Necromancer 72% · Knight 69% · Cleric 66% · Pyromancer 55% · Shade 55%.
-- **Explore sweep**: `--explore=<minLight>` (default 0.3, `EXPLORE_MIN_LIGHT`; negative = explore everything) makes the bot explore the nearest unvisited room while paying its cost leaves the lantern at or above the value. Intent: the win rate peaks at an interior value, because a hero that explores everything meets the Deep's full stack, up to 3 Glooms and halved healing.
+- **Dark-room policy**: `--dark=smart|always|never` (default smart: the bot enters a dark room while every living hero has at least 60% of max HP, `DARK_HP`); it explores every other room nearest-first. The summary compares dark and normal combat clears (time, HP lost).
 - Power curve (`tools/sim.js` summary lines): damage share by source, weapon share by main path ≥ 20% each, hero damage per second over the bare weapon by stratum, cooldown reduction at run end.
 - **Open gaps at sign-off**:
   - Fresh smart picks win 1% (target 5–10%) and fresh depth is about 4.6 (target 2.5–3.5).
@@ -501,21 +488,21 @@ Measured cells are the sign-off batch at skill 0.75, taken at `cd1074d` (solo ro
 `Tab` (pad Back) opens the sheet in a run, also while a boon offer is open (an offer does not close it). Solo, the world freezes while it is open; in a party the descent continues. It opens on the last tab used. Q/E (pad LB/RB) or 1–3 switch tabs; Tab or Esc (pad B) closes; in a party a click on the party list or Y (pad) switches the viewed hero. Every number comes from `ED.Sheet.compute` (`src/sim/sheet.js`, pure, identical on host, client and Node) and refreshes live, at most twice a second.
 
 - **Build**: owned element paths (or General) with affinity, keystone and evolution state; duos (owned, available, or what each second gate would unlock); the class route tree with forks and next-rank text; every boon at its current rank with full text and the next-rank delta; statuses the build applies with their rules; relics with live values.
-- **Combat**: weapon card (damage per hit and crit, attacks per second, reach, extras, damage per second on one foe); a card per skill (effective cooldown, aim, every part with its per-hit damage, radius, duration, count, per cast on one foe, damage per second); dash; offence multipliers each with its sources (damage, attack speed, crit, area, skill cooldown raw → effective, projectiles, a status row per owned element); defence (max HP, armor reduction, dodge, taken multiplier, healing received, current shield and the shield window); foes that spawn now hit ×(depth × threat × pact × dread × Deep).
-- **Map**: the stratum card (affinity now and next), the lantern (tier, light, room costs, boss-door reward, flare), the room map, the party.
+- **Combat**: weapon card (damage per hit and crit, attacks per second, reach, extras, damage per second on one foe); a card per skill (effective cooldown, aim, every part with its per-hit damage, radius, duration, count, per cast on one foe, damage per second); dash; offence multipliers each with its sources (damage, attack speed, crit, area, skill cooldown raw → effective, projectiles, a status row per owned element); defence (max HP, armor reduction, dodge, taken multiplier, healing received, current shield and the shield window); foes here hit ×(depth × threat × pact × dark room).
+- **Map**: the stratum card (affinity now and next), dark rooms (left on the floor, their damage and loot multipliers), the room map, the party.
 
 ### HUD
 
 Canvas `#hud` above the world at device resolution (capped by pixel count); unit `u = clamp(13, min(W / 110, H / 62), 36)` CSS px, the same as `style.css`; minimum text 0.85u; panels use the menu look (soot fill, 2 px line, brass corner brackets). It repaints only when a signature of the shown values changes, an animation runs, or a safety interval passes. Fixed anchors, nothing floats:
 
-- **Bottom-left, hero block**: portrait medallion, name, weapon (fork and evolution names), large health bar (numbers, pale shield segment after the health, damage ghost, pulse under 30%); above it the ability slots skill 1, skill 2, dash and flare with live key caps, cooldown sweep and seconds, charge pips (a thrown shield lights skill 2 until it is caught); path rings (a ring fills to the evolution threshold, a tick marks the keystone threshold, a star marks the evolved path); the route sigil; status chips (Brace, Momentum, Channel, Hexed foes, the next Cleave, Guardian Light, Embolden); the message feed stacks above.
+- **Bottom-left, hero block**: portrait medallion, name, weapon (fork and evolution names), large health bar (numbers, pale shield segment after the health, damage ghost, pulse under 30%); above it the ability slots skill 1, skill 2 and dash with live key caps, cooldown sweep and seconds (dash: the next charge), charge pips (skill and dash charges) (a thrown shield lights skill 2 until it is caught); path rings (a ring fills to the evolution threshold, a tick marks the keystone threshold, a star marks the evolved path); the route sigil; status chips (Brace, Momentum, Channel, Hexed foes, the next Cleave, Guardian Light, Embolden); the message feed stacks above.
 - **Top-left**: party frames (name, class, health; DOWN with revive progress; Fallen).
-- **Top-right**: stratum name, stratum number, weak/resists chips, minimap (light cost on unvisited rooms), then the lantern panel: tier, percent, meter with tint zones and ticks at 50% and 25%, one effect line, room costs and the boss-door reward.
+- **Top-right**: stratum name, stratum number, weak/resists chips, minimap (reward icons; a violet skull on unvisited dark rooms).
 - **Bottom-centre**: level, xp bar, gold; a pending-boon pill above it. **Bottom-right**: relics. **Top-centre**: boss bar with phase marks.
 - **Panel fade**: every panel eases to 35% alpha in 0.15 s while a hero, foe or pickup is on screen beneath it, and back 0.2 s after the last overlap (the boss bar is a panel too); prompts and messages never fade.
 - **In the world**: hero names print at the hero; a downed hero shows `DOWN` (own) or `REVIVE` (ally). World text is the 8 px pixel font at 2 world px per font px (16 world px line height); foe health bars are 2 world px (3 when scale is below 2); elite labels use the affix colour. A hero who owns Brand, Open Veins, Contagion or Gangrene sees ailment pips under foe bars; Sworn Blade shows the Parry rim on a foe in the last 0.3 s of a wind-up.
 - **Cursor and aim extras** (`src/client/aim.js`): a procedural reticle cursor (or the system crosshair; three sizes and colours) that lights over foes; an attack-cooldown arc, an attack pulse and a crit flash; the landing preview of ground skills (setting "Skill aim preview"); a chevron on a pad.
-- **Toasts** (DOM, in a run): top-centre below the boss bar. **At the prop**: interaction prompt with the attack key and a description card; tutorial and stratum signs draw as a screen-space card using `{attack}`, `{aim}`, `{skill1}`, `{skill2}`, `{dash}`, `{flare}`, `{map}` tokens. The aim sign stands beside the solo spawn.
+- **Toasts** (DOM, in a run): top-centre below the boss bar. **At the prop**: interaction prompt with the attack key and a description card; tutorial and stratum signs draw as a screen-space card using `{attack}`, `{aim}`, `{skill1}`, `{skill2}`, `{dash}`, `{map}` tokens. The aim sign stands beside the solo spawn.
 - **Menus**: Descend, Hearth, Heroes, Settings, Credits. Settings: Sound (master, music, effects), Display (quality High/Low, frame cap, screen shake, damage numbers), Controls (cursor, cursor size, cursor colour, skill aim preview, key bindings), Profile. The Credits screen shows the CC-BY attribution.
 
 ### Renderer
