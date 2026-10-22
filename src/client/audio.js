@@ -76,8 +76,8 @@
   };
   const rnd = (a, b) => a + Math.random() * (b - a);
 
-  const GAP = { hit: 0.035, ohit: 0.035, crit: 0.05, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1, freeze: 0.05, shatter: 0.06, combust: 0.06, guardhit: 0.06, block: 0.05, clang: 0.03, throw: 0.08, catch: 0.08, parry: 0.1, bell: 0.06, charge: 0.2, chargehit: 0.2, volley: 0.15, raincast: 0.15, smash: 0.05, dark: 0.5, dcharge: 0.08, blossom: 0.05, implode: 0.2 };
-  const PRIO = { hurt: 3, down: 3, revive: 3, dark: 3, lock: 3, roar: 3, victory: 3, defeat: 3, crit: 2, level: 2, boon: 2, relic: 2, ohit: 0, spark: 0, eshoot: 0, xp: 0, gold: 0, spawn: 0 };
+  const GAP = { hit: 0.035, ohit: 0.035, crit: 0.05, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1, freeze: 0.05, shatter: 0.06, combust: 0.06, guardhit: 0.06, block: 0.05, clang: 0.03, throw: 0.08, catch: 0.08, parry: 0.1, bell: 0.06, charge: 0.2, chargehit: 0.2, volley: 0.15, raincast: 0.15, smash: 0.05, dark: 0.5, fury: 1, dcharge: 0.08, blossom: 0.05, implode: 0.2 };
+  const PRIO = { hurt: 3, down: 3, revive: 3, dark: 3, lock: 3, roar: 3, fury: 3, victory: 3, defeat: 3, crit: 2, level: 2, boon: 2, relic: 2, ohit: 0, spark: 0, eshoot: 0, xp: 0, gold: 0, spawn: 0 };
   // arg: cue-specific parameter (hit and crit: { w damage share, el element, n hits this frame }; clang: { n, g }; victory: 'boss' for the short one)
   A.play = (name, vol, arg, pr) => {
     if (!A.ready || !live()) return;
@@ -128,6 +128,7 @@
       case 'dash': noise('highpass', 900, 3500, 0.16, 0.14 * v, 0.7); break;
       case 'skill': tone('sawtooth', 200, 800, 0.22, 0.08 * v); noise('bandpass', 600, 2500, 0.25, 0.12 * v); break;
       case 'roar': tone('sawtooth', 110, 48, 1.3, 0.22 * v); tone('sawtooth', 116, 51, 1.3, 0.18 * v); noise('lowpass', 700, 100, 1.2, 0.25 * v); break;
+      case 'fury': tone('sawtooth', 70, 150, 1, 0.2 * v); tone('sawtooth', 75, 158, 1, 0.16 * v); noise('bandpass', 300, 1800, 0.9, 0.2 * v, 2); [0.95, 1.2].forEach((d) => { tone('sine', 62, 34, 0.22, 0.32 * v, null, t + d); noise('lowpass', 500, 90, 0.18, 0.2 * v, 1, null, t + d); }); break; // boss fury: a rising detuned growl, then two heavy heartbeats
       case 'click': tone('triangle', 900, 700, 0.04, 0.06 * v); break;
       case 'hover': tone('sine', 1200, 1100, 0.03, 0.025 * v); break;
       case 'chest': noise('bandpass', 400, 900, 0.3, 0.12 * v, 4); [784, 988, 1175].forEach((f, i) => tone('sine', f, f, 0.3, 0.07 * v, null, t + 0.25 + i * 0.07)); break;
