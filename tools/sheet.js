@@ -1,8 +1,10 @@
-// Usage: node tools/sheet.js [--cls=all|knight,ranger,...] [--routes] [--weapons] [--rank=1,2,3] [--stratum=3] [--pack=4] [--surround] [--mid] [--json]
+// Usage: node tools/sheet.js [--cls=all|knight,ranger,...] [--routes] [--parity [--strict]] [--weapons] [--rank=1,2,3] [--stratum=3] [--pack=4] [--surround] [--mid] [--json]
 // The analytic sheet (DESIGN-classes 13.1 step 1): hero numbers from ED.Sheet.compute for synthetic builds, in milliseconds, before any bot hours are spent.
 //   (default)   per class: the fresh hero (weapon, skills with their parts, shares of direct damage, effective health)
 //   --routes    per class x route x fork x rank: change in hero damage (one foe | a pack of 4) against the class without the card, for a fresh and a mid build (--mid prints only the mid build),
 //               effective health with the uptime of the route's defence, shield income and stun uptime (stuns plus slows, blinds and taunts at their strength)
+//   --parity    the power-budget bands on the mid build (ignores --stratum and --rank): stratum IV with every fork at rank 2, stratum VI at rank 3. Per class one line per fork: value (mean of the 1 foe and pack columns, %), the change against the class median, EHP and stun.
+//               IV rank 2: a non-Guard fork 31.5-38.5, a Guard fork >= 28. VI rank 3: non-Guard 54-66, Guard >= 48 and EHP >= +25% or stun >= 30%. Marks the forks outside; --strict exits 1 when any fork fails
 //   --weapons   per weapon: damage per second on one foe and in a pack of 4 at the class Power, and the damage factor that puts it on the class median
 // Hero damage = (weapon dps + skill damage per cooldown) x the conditional-damage factor (ED.COND_DMG rows the build owns at assumed uptimes, see COND_NOTE) + status estimates; a pack of 4: melee arcs, blasts, sweeps, waves and ricochets hit all four foes, a fan hits as many as it has arrows and pierces.
 // The mid build: the class element's gate (else Fire) and a second gate, Sharpened Edge x2, Quickened Hands x2, Focus and Stalwart.
@@ -10,7 +12,8 @@ const { ED } = require('./sim.js');
 const args = {};
 for (const a of process.argv.slice(2)) { const m = /^--([a-z0-9]+)(?:=(.*))?$/i.exec(a); if (m) args[m[1]] = m[2] === undefined ? '1' : m[2]; }
 const CLS = !args.cls || args.cls === 'all' ? ED.CLASS_IDS : args.cls.split(',');
-const RANKS = (args.rank || '1,2,3').split(',').map(Number), STRATUM = +(args.stratum || 3);
+const RANKS = (args.rank || '1,2,3').split(',').map(Number);
+let STRATUM = +(args.stratum || 3); // --parity sets it per pass
 const St = ED.Stats;
 const M = require('./model.js')(ED, { pack: +(args.pack || 4), surround: !!args.surround }); // hero damage, defence and conditional factor live in the shared model (tools/pick.js reads the same one)
 const { packWeapon, directDamage, heroDamage, echoK, defence, condFactor, COND_NOTE } = M, PACK = M.pack;
@@ -34,7 +37,7 @@ const rows = [];
 const out = (s) => { if (args.json) rows.push(s); else console.log(s); };
 
 // ---- default: the fresh hero ----
-if (!args.routes && !args.weapons || args.fresh) {
+if (!args.routes && !args.weapons && !args.parity || args.fresh) {
   for (const cls of CLS) {
     const p = hero(cls), m = model(p), tot = directDamage(m, 1);
     out(`\n== ${ED.CLASSES[cls].name} (Power ${p.stats.power}, ${m.weapon.name}) stratum ${STRATUM}`);
@@ -49,28 +52,62 @@ if (!args.routes && !args.weapons || args.fresh) {
 }
 
 // ---- routes ----
+// One class under the `base` boons: the base numbers, then per route the route card alone (fork null) and each fork at each of `ranks`; every change is against the class without the route card.
+function routeRows(cls, base, ranks) {
+  const pb = hero(cls, 0, base), mb = model(pb), db = defence(pb, mb), kb = condFactor(pb, mb, db), b1 = heroDamage(mb, 1, kb), b4 = heroDamage(mb, PACK, kb, echoK(pb, mb, PACK)), rows = [];
+  for (const r of ED.ROUTES) {
+    const e = ED.CLASS_CARDS[cls][r];
+    const add = (name, fork, rank, boons) => {
+      const p = hero(cls, 0, boons), m = model(p), d = defence(p, m), k = condFactor(p, m, d), h1 = heroDamage(m, 1, k), h4 = heroDamage(m, PACK, k, echoK(p, m, PACK));
+      rows.push({ route: r, name, fork, rank, d1: h1 / b1 - 1, d4: h4 / b4 - 1, ehp: d.ehp / db.ehp - 1, shield: d.shield, stun: d.stun, wdps: m.weapon.dps, s1: m.skills[0].dpsCd, s2: m.skills[1] ? m.skills[1].dpsCd : 0, note: d.note.join('; ') });
+    };
+    add(`${ED.routeLabel(cls, r)} (${ED.BOONS[e.t1].name})`, null, 0, Object.assign({}, base, { [e.t1]: 1 }));
+    for (const fid of e.forks) for (const rank of ranks) add(`   ${ED.BOONS[fid].name} r${rank}`, fid, rank, Object.assign({}, base, { [e.t1]: 1, [fid]: rank }));
+  }
+  return { b1, b4, ehp: db.ehp, rows };
+}
 function routeTable(label, boonsFor) {
   out(`\n###### ${label}`);
   out(`  (${COND_NOTE})`);
   for (const cls of CLS) {
-    const base = boonsFor(cls), pb = hero(cls, 0, base), mb = model(pb), db = defence(pb, mb), kb = condFactor(pb, mb, db), b1 = heroDamage(mb, 1, kb), b4 = heroDamage(mb, PACK, kb, echoK(pb, mb, PACK));
-    out(`\n== ${ED.CLASSES[cls].name}: base ${f1(b1)} one foe | ${f1(b4)} pack, effective health ${f1(db.ehp)}`);
+    const t = routeRows(cls, boonsFor(cls), RANKS);
+    out(`\n== ${ED.CLASSES[cls].name}: base ${f1(t.b1)} one foe | ${f1(t.b4)} pack, effective health ${f1(t.ehp)}`);
     out(`  ${pad('route / fork', 34)} ${rpad('1 foe', 7)} ${rpad('pack', 7)} ${rpad('EHP', 6)} ${rpad('shield/s', 9)} ${rpad('stun', 5)}  weapon dps  skill1  skill2   notes`);
-    for (const r of ED.ROUTES) {
-      const e = ED.CLASS_CARDS[cls][r];
-      const emit = (name, boons) => {
-        const p = hero(cls, 0, boons), m = model(p), d = defence(p, m), k = condFactor(p, m, d), h1 = heroDamage(m, 1, k), h4 = heroDamage(m, PACK, k, echoK(p, m, PACK));
-        out(`  ${pad(name, 34)} ${rpad(sign(h1 / b1 - 1), 7)} ${rpad(sign(h4 / b4 - 1), 7)} ${rpad(sign(d.ehp / db.ehp - 1), 6)} ${rpad(pct(d.shield, 2), 9)} ${rpad(pct(d.stun), 5)}  ${rpad(f1(m.weapon.dps), 10)}  ${rpad(f1(m.skills[0].dpsCd), 6)}  ${rpad(f1(m.skills[1] ? m.skills[1].dpsCd : 0), 6)}   ${d.note.join('; ')}`);
-      };
-      emit(`${ED.routeLabel(cls, r)} (${ED.BOONS[e.t1].name})`, Object.assign({}, base, { [e.t1]: 1 }));
-      for (const fid of e.forks) for (const rank of RANKS) emit(`   ${ED.BOONS[fid].name} r${rank}`, Object.assign({}, base, { [e.t1]: 1, [fid]: rank }));
-    }
+    for (const w of t.rows) out(`  ${pad(w.name, 34)} ${rpad(sign(w.d1), 7)} ${rpad(sign(w.d4), 7)} ${rpad(sign(w.ehp), 6)} ${rpad(pct(w.shield, 2), 9)} ${rpad(pct(w.stun), 5)}  ${rpad(f1(w.wdps), 10)}  ${rpad(f1(w.s1), 6)}  ${rpad(f1(w.s2), 6)}   ${w.note}`);
   }
 }
 if (args.routes) {
   if (!args.mid) routeTable('fresh build', () => ({}));
   routeTable('mid build (2 gates, Sharpened Edge x2, Quickened Hands x2, Focus, Stalwart)', MID);
 }
+
+// ---- parity ----
+// Fixed bands on the printed columns (whole percents): the fork value is the mean of the 1 foe and pack columns, the EHP and stun columns are read the same way.
+const PARITY = { passes: [{ stratum: 4, rank: 2, lo: 31.5, hi: 38.5, guard: 28 }, { stratum: 6, rank: 3, lo: 54, hi: 66, guard: 48, ehp: 25, stun: 30 }] };
+let parityFails = 0;
+function parityTable() {
+  const col = (v) => +(v * 100).toFixed(0), cpct = (n) => (n >= 0 ? '+' : '') + n + '%';
+  for (const P of PARITY.passes) {
+    STRATUM = P.stratum;
+    out(`\n###### parity: mid build, stratum ${P.stratum}, forks at rank ${P.rank} (value = mean of 1 foe and pack, %; non-Guard ${P.lo}-${P.hi}, Guard >= ${P.guard}${P.ehp ? `, and EHP >= +${P.ehp}% or stun >= ${P.stun}%` : ''}; the median is for information)`);
+    for (const cls of CLS) {
+      const forks = routeRows(cls, MID(cls), [P.rank]).rows.filter(w => w.fork).map(w => Object.assign(w, { value: (col(w.d1) + col(w.d4)) / 2, guard: ED.BOONS[w.fork].tag === 'Guard', ehpC: col(w.ehp), stunC: col(w.stun) }));
+      const v = forks.map(w => w.value).sort((a, b) => a - b), med = (v[v.length / 2 - 1] + v[v.length / 2]) / 2;
+      out(`\n== ${ED.CLASSES[cls].name}: median ${f1(med)}`);
+      out(`  ${pad('fork', 34)} ${rpad('value', 7)} ${rpad('vs med', 7)} ${rpad('EHP', 6)} ${rpad('stun', 5)}`);
+      for (const w of forks) {
+        const why = [];
+        if (!w.guard && (w.value < P.lo || w.value > P.hi)) why.push(`${f1(w.value)} outside ${P.lo}-${P.hi}`);
+        if (w.guard && w.value < P.guard) why.push(`${f1(w.value)} below ${P.guard}`);
+        if (w.guard && P.ehp && w.ehpC < P.ehp && w.stunC < P.stun) why.push(`EHP ${cpct(w.ehpC)} < +${P.ehp}% and stun ${w.stunC}% < ${P.stun}%`);
+        if (why.length) parityFails++;
+        out(`  ${pad(w.name.trim() + (w.guard ? ' [Guard]' : ''), 34)} ${rpad(f1(w.value), 7)} ${rpad(sign(w.value / med - 1), 7)} ${rpad(cpct(w.ehpC), 6)} ${rpad(w.stunC + '%', 5)}${why.length ? '  FAIL ' + why.join('; ') : ''}`);
+      }
+    }
+  }
+  out(`\n${parityFails} fork${parityFails === 1 ? '' : 's'} outside the bands`);
+}
+if (args.parity) parityTable();
 
 // ---- weapons ----
 if (args.weapons) {
@@ -86,3 +123,4 @@ if (args.weapons) {
   }
 }
 if (args.json) console.log(JSON.stringify(rows));
+if (args.parity && args.strict && parityFails) process.exitCode = 1;
