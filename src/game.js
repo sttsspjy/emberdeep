@@ -134,6 +134,7 @@
     ED.FX.reset();
     ED.Render.lightLevel = 1;
     U.resetUid(1);
+    if (ED.Actors) ED.Actors.reset();
     const s = G.s = { mode, cfg, localPid: cfg.localPid, net: cfg.net || null, fxBuf: [], snapT: 0, snapN: 0, inT: 0, acc: 0, alpha: 1, epoch: 0, offer: null, offerOpen: false, ended: false, paused: false, prompt: null, sig: '', claimed: {} };
     if (mode === 'client') {
       s.mirror = new Mirror(cfg, cfg.localPid);

@@ -70,7 +70,7 @@
         if (f && A.pages[f.p]) r = { id, f: [f], n: 1, fps: 1, loop: false, ax: f.ox + f.w / 2, ay: f.oy + f.h, fw: f.ox + f.w, fh: f.oy + f.h, anchors: {}, vars: null, rots: null };
       }
     }
-    recs.set(id, r);
+    if (r || A.ok) recs.set(id, r); // a miss before the pages decode is retried later
     return r;
   }
   // Named anchor of a record as [x, y] in untrimmed-frame art px (accepts [x, y], { x, y } or a list of those; the first entry of a list wins).
@@ -82,6 +82,7 @@
   }
   A.has = (id) => !!rec(id);
   A.anim = (id) => rec(id);
+  A.forget = (id) => recs.delete(id); // drops a cached record (a runtime anim registered under an id probed earlier)
   A.frame = (id, i) => { const r = rec(id); return r ? r.f[((i | 0) % r.n + r.n) % r.n] : null; };
   // Frame index of anim `id` at time t seconds (by its fps; looping anims wrap, others hold the last frame).
   A.frameAt = (id, t) => {

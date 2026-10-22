@@ -554,6 +554,7 @@
 
   // ---------------- heroes ----------------
   const HS = new Map();
+  AC.reset = () => { FS.clear(); HS.clear(); }; // a new session restarts entity ids at 1: drop every per-entity state
   function hsOf(p, t) {
     const key = p.pid;
     let s = key === undefined ? null : HS.get(key);

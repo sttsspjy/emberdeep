@@ -92,6 +92,7 @@
       Bmp.from(cn, (b) => { if (At.pages[pg] === cn) At.pages[pg] = b; else Bmp.free(b); }); // the page becomes an ImageBitmap once decoded (cheap blits on Gecko)
     });
     art.anims[id] = { f, fps: fps || 1, loop: !!loop, fw: cvs[0].width, fh: cvs[0].height, ax, ay, anchors: anchors || {} };
+    At.forget(id);
     Pix.baked += cvs.length;
     return true;
   };
