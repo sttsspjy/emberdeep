@@ -385,7 +385,7 @@
 
   // Casts of the caster family: ring, wave or homing orbs.
   const fireCast = (w, e, C) => {
-    const a0 = C.type === 'ring' ? 0 : lead(w, e, C.speed);
+    const a0 = C.type === 'ring' ? 0 : C.type === 'wave' ? e.aimA : lead(w, e, C.speed);
     if (C.type === 'ring') {
       const off = w.rng.range(0, 1);
       for (let i = 0; i < C.n; i++) w.enemyShoot(e, (i + off) * TAU / C.n, C.speed, C.kind, 0.9, C.r);
@@ -427,12 +427,18 @@
     if (e.st === 'fade') { stepTick(w, e, dt, S); return; }
     if (e.st === 'cast') {
       e.t -= dt;
+      if (C.type === 'wave') e.aimA = lead(w, e, C.speed);
       if (e.t <= 0) { fireCast(w, e, C); e.st = 'move'; e.cd = C.cd * rate(e); }
       return;
     }
     if (S && e.vars.stepCd <= 0 && distT(e) < S.near && stepStart(w, e, S)) return;
     kite(w, e, dt, [100, 230]);
-    if (e.cd <= 0 && hasLos(w, e) && !blind(e) && onScreen(w, e)) { e.st = 'cast'; e.t = wind(e, C.windup); }
+    if (e.cd <= 0 && hasLos(w, e) && !blind(e) && onScreen(w, e)) {
+      e.st = 'cast'; e.t = wind(e, C.windup);
+      // the wind-up telegraph: a wave casts a cone that follows the led aim; a ring or homing cast a warn circle on the caster
+      if (C.type === 'wave') { e.aimA = lead(w, e, C.speed); w.addZone({ kind: 'teleCone', x: e.x, y: e.y, a: e.aimA, r: 230, arc: 0.17 * (C.n - 1) + 0.16, dur: e.t, dmg: 0, team: 1, src: e, warnOnly: true, update: (ww, z) => { z.x = e.x; z.y = e.y; z.a = e.aimA; } }); }
+      else w.addZone({ kind: 'tele', x: e.x, y: e.y, r: e.r + 30, dur: e.t, dmg: 0, team: 1, src: e, warnOnly: true, update: (ww, z) => { z.x = e.x; z.y = e.y; } });
+    }
   };
 
   // Bone Priest: raises skeletons beside itself (telegraphed spawn) or wards the most-hurt ally.

@@ -548,6 +548,15 @@ for (let s = 1; s <= 6; s++) {
     ok(until(w, e, () => shots(w).length === C.n), 'the siren casts its wave');
     ok(Math.abs(dev(shots(w), want(e, p, C.speed, 5))) < 1e-9, 'the wave is centred on the lead angle');
   }
+  { // caster wind-up telegraphs: a wave shows a cone that follows the led aim, a ring or homing cast a warn circle on the caster; both belong to the caster
+    const { w, p, e } = duel(5, 'siren', 100, 30);
+    ok(until(w, e, () => e.st === 'cast'), 'the siren winds up');
+    const zc = w.zones.find(z => z.kind === 'teleCone' && z.src === e && z.warnOnly);
+    ok(zc && Math.abs(zc.dur - e.t) < 1e-9 && zc.a === e.aimA, 'a wave wind-up shows a warn cone on the led aim for the whole wind-up');
+    const r = duel(5, 'tidecaller', 100, 30);
+    ok(until(r.w, r.e, () => r.e.st === 'cast'), 'the tidecaller winds up');
+    ok(r.w.zones.some(z => z.kind === 'tele' && z.src === r.e && z.warnOnly && Math.abs(z.dur - r.e.t) < 1e-9), 'a ring wind-up shows a warn circle on the caster');
+  }
   { // a spiral pattern starts straight at the hero (ring, laser and dive patterns are not led either)
     const { w, p, e } = duel(6, 'flameturret', 150, 0);
     ok(until(w, e, () => e.st === 'aim'), 'the totem winds up');
