@@ -209,13 +209,155 @@
   // Nearest living foe within maxD of (x, y), skipping the ids in exclude; with cone > 0 only foes within cone radians of the direction a0.
   W.prototype.nearestEnemy = function (x, y, maxD, exclude, a0, cone) {
     let best = null, bd = maxD * maxD;
-    for (const e of this.enemies) {
-      if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed || (exclude && exclude.has(e.id))) continue;
+    const q = this.foeScan(x, y, maxD);
+    for (let k = 0; k < q.length; k++) {
+      const e = q[k];
+      if (e.spawnT > 0 || e.def.invuln || e.burrowed || (exclude && exclude.has(e.id))) continue;
       if (cone > 0 && Math.abs(U.angDiff(a0, Math.atan2(e.y - y, e.x - x))) > cone) continue;
       const d = U.dist2(x, y, e.x, e.y);
       if (d < bd) { bd = d; best = e; }
     }
+    this.foeEnd();
     return best;
+  };
+
+  // ---------------- foe grid ----------------
+  // Uniform grid of this.enemies indices behind foesNear / foeScan / nearestEnemy. update() builds it at tick start and after separate() and drops it at the end of the tick; outside update() every query rebuilds from the live positions.
+  // Late list (every query returns it): foes spawned since the build and foes further than GRID_DRIFT from their build position. Foes with r > GRID_BIG are always returned. Query results are ascending in this.enemies index, live (hp > 0) foes only.
+  const GRID_CELL = 64, GRID_INV = 1 / GRID_CELL, GRID_DRIFT = 16, GRID_BIG = 22;
+  const GRID_MIN = 32; // below this many foes every scan takes all of them and separate() pairs every j > i: the grids cost more than they save
+  // Query margin >= 2 x GRID_BIG + 16: a foe's radius (22) + 42 of move allowed between a build and a query (GRID_DRIFT 16 before foeDrift flags it, +26 inside its own updateEnemy call or a hero/zone effect that carries or pulls it).
+  const GRID_PAD = 64;
+
+  // Grows the per-index arrays to hold n foes (keeps their contents).
+  const fgFit = (g, n) => {
+    if (g.cap >= n) return;
+    const cap = Math.max(256, 1 << (32 - Math.clz32(n + 63)));
+    const grow = (A, old) => { const a = new A(cap); a.set(old); return a; };
+    g.mark = grow(Uint8Array, g.mark); g.cell = grow(Int32Array, g.cell); g.items = grow(Int32Array, g.items); g.qi = new Int32Array(cap);
+    g.gx = grow(Float32Array, g.gx); g.gy = grow(Float32Array, g.gy); g.bits = new Uint32Array((cap >> 5) + 1); g.cap = cap;
+  };
+
+  // Rebuilds the grid from the live positions: counting sort of the live foes into cells (indices ascending in each cell), foes with r > GRID_BIG into the big list, the late list cleared.
+  W.prototype.foeGrid = function () {
+    const es = this.enemies, n = es.length, room = this.room;
+    let g = this.fg;
+    if (!g) g = this.fg = { cap: 0, cw: 1, ch: 1, start: new Int32Array(2), cur: new Int32Array(1), mark: new Uint8Array(0), cell: new Int32Array(0), items: new Int32Array(0), qi: new Int32Array(0), gx: new Float32Array(0), gy: new Float32Array(0), bits: new Uint32Array(1), big: [], late: [], pool: [], qd: 0, ok: false, live: false, direct: true, n: 0, es: null };
+    const big = g.big, late = g.late, mark = g.mark;
+    for (let k = 0; k < late.length; k++) mark[late[k]] = 0;
+    late.length = 0; big.length = 0;
+    g.n = n; g.es = es; g.ok = true; g.direct = n < GRID_MIN;
+    if (g.direct) return g;
+    fgFit(g, n);
+    const cw = room ? Math.ceil(room.w * T / GRID_CELL) : 1, ch = room ? Math.ceil(room.h * T / GRID_CELL) : 1, nc = cw * ch;
+    if (g.start.length < nc + 1) { g.start = new Int32Array(nc + 1); g.cur = new Int32Array(nc); }
+    g.cw = cw; g.ch = ch;
+    const start = g.start, cur = g.cur, cell = g.cell, items = g.items, gx = g.gx, gy = g.gy;
+    start.fill(0, 0, nc + 1);
+    for (let i = 0; i < n; i++) {
+      const e = es[i];
+      gx[i] = e.x; gy[i] = e.y;
+      if (e.hp <= 0) { cell[i] = -1; continue; }
+      if (e.r > GRID_BIG) { cell[i] = -1; big.push(i); continue; }
+      let cx = (e.x * GRID_INV) | 0, cy = (e.y * GRID_INV) | 0;
+      if (cx < 0) cx = 0; else if (cx >= cw) cx = cw - 1;
+      if (cy < 0) cy = 0; else if (cy >= ch) cy = ch - 1;
+      const c = cy * cw + cx;
+      cell[i] = c; start[c + 1]++;
+    }
+    for (let c = 0; c < nc; c++) { start[c + 1] += start[c]; cur[c] = start[c]; }
+    for (let i = 0; i < n; i++) { const c = cell[i]; if (c >= 0) items[cur[c]++] = i; }
+    return g;
+  };
+
+  // The grid when it is current (inside update(), built for this foe array with GRID_MIN or more foes), else a fresh build.
+  W.prototype.fgReady = function () {
+    const g = this.fg;
+    return g && g.live && g.ok && !g.direct && g.es === this.enemies && this.enemies.length >= g.n ? g : this.foeGrid();
+  };
+
+  // A foe appended to this.enemies after the build joins the late list.
+  W.prototype.foeLate = function (i) {
+    const g = this.fg;
+    if (!g || !g.ok || g.direct) return;
+    fgFit(g, i + 1);
+    if (g.mark[i]) return;
+    g.mark[i] = 1; g.late.push(i);
+  };
+
+  // Foe i moved: once it is further than GRID_DRIFT from its build position it joins the late list.
+  W.prototype.foeDrift = function (i) {
+    const g = this.fg;
+    if (!g.ok || g.direct || i >= g.n || g.mark[i]) return;
+    const e = this.enemies[i], dx = e.x - g.gx[i], dy = e.y - g.gy[i];
+    if (dx * dx + dy * dy > GRID_DRIFT * GRID_DRIFT) { g.mark[i] = 1; g.late.push(i); }
+  };
+
+  // Fills g.qi with the ascending indices of the live foes whose cells overlap the circle (x, y, r + GRID_PAD), plus the big and late lists; returns the count. A wide query takes every live foe.
+  W.prototype.fgQuery = function (g, x, y, r) {
+    const es = this.enemies, n = es.length;
+    fgFit(g, n);
+    const qi = g.qi, R = r + GRID_PAD, cw = g.cw, ch = g.ch;
+    let x0 = Math.floor((x - R) * GRID_INV), x1 = Math.floor((x + R) * GRID_INV), y0 = Math.floor((y - R) * GRID_INV), y1 = Math.floor((y + R) * GRID_INV), cnt = 0;
+    x0 = x0 < 0 ? 0 : x0 >= cw ? cw - 1 : x0; x1 = x1 < 0 ? 0 : x1 >= cw ? cw - 1 : x1;
+    y0 = y0 < 0 ? 0 : y0 >= ch ? ch - 1 : y0; y1 = y1 < 0 ? 0 : y1 >= ch ? ch - 1 : y1;
+    if (!(R < 4096) || (x1 - x0 + 1) * (y1 - y0 + 1) * 2 > n) {
+      for (let i = 0; i < n; i++) if (es[i].hp > 0) qi[cnt++] = i;
+      return cnt;
+    }
+    const bits = g.bits, start = g.start, items = g.items, big = g.big, late = g.late;
+    let wlo = 0x7fffffff, whi = -1;
+    for (let cy = y0; cy <= y1; cy++) {
+      for (let k = start[cy * cw + x0], ke = start[cy * cw + x1 + 1]; k < ke; k++) {
+        const i = items[k], wi = i >> 5;
+        bits[wi] |= 1 << (i & 31);
+        if (wi < wlo) wlo = wi;
+        if (wi > whi) whi = wi;
+      }
+    }
+    for (let k = 0; k < big.length; k++) { const i = big[k], wi = i >> 5; bits[wi] |= 1 << (i & 31); if (wi < wlo) wlo = wi; if (wi > whi) whi = wi; }
+    for (let k = 0; k < late.length; k++) { const i = late[k]; if (i >= n) continue; const wi = i >> 5; bits[wi] |= 1 << (i & 31); if (wi < wlo) wlo = wi; if (wi > whi) whi = wi; }
+    for (let wi = wlo; wi <= whi; wi++) {
+      let v = bits[wi];
+      if (v === 0) continue;
+      bits[wi] = 0;
+      const base = wi << 5;
+      do {
+        const lsb = v & -v;
+        const i = base + 31 - Math.clz32(lsb);
+        v ^= lsb;
+        if (es[i].hp > 0) qi[cnt++] = i;
+      } while (v !== 0);
+    }
+    return cnt;
+  };
+
+  // Fills the caller-owned array out with the live foes near the circle (x, y, r): every foe whose centre is within r + its radius is among them, in this.enemies order. Callers keep their own exact test on the live positions.
+  // out.n is the foe count at the query: a loop whose body can spawn foes (splits) visits the later ones with foeTail, as a for-of over this.enemies did.
+  W.prototype.foesNear = function (x, y, r, out) {
+    const es = this.enemies, n = es.length;
+    let c = 0;
+    if (n < GRID_MIN) { for (let i = 0; i < n; i++) if (es[i].hp > 0) out[c++] = es[i]; }
+    else { const g = this.fgReady(), cnt = this.fgQuery(g, x, y, r), qi = g.qi; for (; c < cnt; c++) out[c] = es[qi[c]]; }
+    out.length = c; out.n = n;
+    return out;
+  };
+
+  // foesNear into a pooled array (scans nest through hits and kills); every foeScan is paired with one foeEnd after its loop.
+  W.prototype.foeScan = function (x, y, r) {
+    const g = this.fg || this.foeGrid(), d = g.qd++;
+    return this.foesNear(x, y, r, g.pool[d] || (g.pool[d] = []));
+  };
+  W.prototype.foeEnd = function () { this.fg.qd--; };
+
+  // Appends the foes spawned since out was filled; true when it added any (loop: `k < out.length || this.foeTail(out)`).
+  W.prototype.foeTail = function (out) {
+    const es = this.enemies, m = es.length;
+    let k = out.n, added = false;
+    if (k >= m) return false;
+    out.n = m;
+    for (; k < m; k++) if (es[k].hp > 0) { out.push(es[k]); added = true; }
+    return added;
   };
 
   // ---------------- players ----------------
@@ -403,6 +545,7 @@
   W.prototype.enterRoom = function (id, fromDir) {
     this.collectAll();
     this.enemies.length = 0; this.projs.length = 0; this.zones.length = 0; this.chainQ.length = 0; this.curChain = null; this.corpses.length = 0;
+    if (this.fg) this.fg.ok = false;
     this.boss = null; this.enc = null;
     this.roomId = id;
     this.roomEpoch = (this.roomEpoch || 0) + 1;
@@ -483,20 +626,24 @@
       if (this.pendingStratum.t <= 0) { const s = this.pendingStratum.s; this.pendingStratum = null; this.enterStratum(s); }
       return;
     }
+    const fg = this.foeGrid(); fg.live = true; fg.qd = 0;
     this.updateLantern(dt);
     this.updateShields(dt);
     for (const p of this.players.values()) this.updatePlayer(p, dt);
+    if (!fg.direct) for (let i = 0; i < fg.n; i++) this.foeDrift(i); // hero effects that carry or pull foes (Sim.moveCircle) move them outside updateEnemy
     this.flowT -= dt;
     if (this.flowT <= 0) { this.computeFlow(); this.flowT = 0.25; }
     this.updateEncounter(dt);
-    for (let i = 0; i < this.enemies.length; i++) this.updateEnemy(this.enemies[i], dt);
+    for (let i = 0; i < this.enemies.length; i++) { this.updateEnemy(this.enemies[i], dt); if (!fg.direct) this.foeDrift(i); }
     this.separate();
+    this.foeGrid();
     this.updateAllies(dt);
     this.updateProjectiles(dt);
     this.updateZones(dt);
     this.updateChains();
     this.updatePickups(dt);
     if (this.enemies.some(e => e.hp <= 0)) this.enemies = this.enemies.filter(e => e.hp > 0);
+    fg.live = false;
     this.checkDoors(dt);
     this.updateOffers(dt);
     this.checkDefeat();
@@ -604,22 +751,90 @@
     return [(gx - e.x) / d, (gy - e.y) / d];
   };
 
+  // Pushes the overlapping pair a, b apart (movable foes only); returns whether it did.
+  const sepPair = (a, b) => {
+    const dx = b.x - a.x, dy = b.y - a.y, rr = (a.r + b.r) * 0.9;
+    const d2 = dx * dx + dy * dy;
+    if (d2 >= rr * rr || d2 < 1e-4) return false;
+    const am = a.spd > 0 && !a.boss, bm = b.spd > 0 && !b.boss;
+    if (!am && !bm) return false;
+    const d = Math.sqrt(d2), push = rr - d;
+    const wa = am && bm ? 0.5 : am ? 1 : 0, wb = 1 - wa;
+    const ux = dx / d, uy = dy / d;
+    a.x -= ux * push * wa; a.y -= uy * push * wa;
+    b.x += ux * push * wb; b.y += uy * push * wb;
+    return true;
+  };
+
+  // Cells of the pair grid behind separate(): its own 32 px grid, relinked whenever a push moves a foe across a cell edge, so it always holds the exact positions.
+  const SEP_CELL = 32, SEP_INV = 1 / SEP_CELL, SEP_SLACK = 8;
+  const sepCell = (e, cw, ch) => {
+    let cx = (e.x * SEP_INV) | 0, cy = (e.y * SEP_INV) | 0;
+    if (cx < 0) cx = 0; else if (cx >= cw) cx = cw - 1;
+    if (cy < 0) cy = 0; else if (cy >= ch) cy = ch - 1;
+    return cy * cw + cx;
+  };
+  // Fills s.cand with the ascending indices j > i of the foes in the cells within H of (x, y); returns the count.
+  const sepGather = (s, cw, ch, x, y, H, i) => {
+    const head = s.head, next = s.next, cand = s.cand;
+    let x0 = Math.floor((x - H) * SEP_INV), x1 = Math.floor((x + H) * SEP_INV), y0 = Math.floor((y - H) * SEP_INV), y1 = Math.floor((y + H) * SEP_INV), m = 0;
+    x0 = x0 < 0 ? 0 : x0 >= cw ? cw - 1 : x0; x1 = x1 < 0 ? 0 : x1 >= cw ? cw - 1 : x1;
+    y0 = y0 < 0 ? 0 : y0 >= ch ? ch - 1 : y0; y1 = y1 < 0 ? 0 : y1 >= ch ? ch - 1 : y1;
+    for (let cy = y0; cy <= y1; cy++) for (let c = cy * cw + x0, ce = cy * cw + x1; c <= ce; c++) for (let j = head[c]; j >= 0; j = next[j]) if (j > i) cand[m++] = j;
+    for (let p = 1; p < m; p++) { const v = cand[p]; let q = p - 1; while (q >= 0 && cand[q] > v) { cand[q + 1] = cand[q]; q--; } cand[q + 1] = v; }
+    return m;
+  };
+  // Moves foe idx to the cell of its position.
+  const sepMove = (s, e, idx, cw, ch) => {
+    const c = sepCell(e, cw, ch), o = s.cell[idx];
+    if (c === o) return;
+    const head = s.head, next = s.next;
+    if (head[o] === idx) head[o] = next[idx];
+    else { let p = head[o]; while (next[p] !== idx) p = next[p]; next[p] = next[idx]; }
+    next[idx] = head[c]; head[c] = idx; s.cell[idx] = c;
+  };
+
+  // Separates overlapping foes pair by pair in (i, j > i) order. With GRID_MIN or more foes the j come from the pair grid: the foes within 0.9 (a.r + the largest radius) + SEP_SLACK of a, sorted by index
+  // and gathered again once a has moved SEP_SLACK; fewer foes pair every j > i. The same pairs move in the same order either way.
   W.prototype.separate = function () {
     const es = this.enemies, n = es.length;
-    for (let i = 0; i < n; i++) {
-      const a = es[i]; if (a.hp <= 0 || a.def.gloom) continue;
-      for (let j = i + 1; j < n; j++) {
-        const b = es[j]; if (b.hp <= 0 || b.def.gloom) continue;
-        const dx = b.x - a.x, dy = b.y - a.y, rr = (a.r + b.r) * 0.9;
-        const d2 = dx * dx + dy * dy;
-        if (d2 >= rr * rr || d2 < 1e-4) continue;
-        const am = a.spd > 0 && !a.boss, bm = b.spd > 0 && !b.boss;
-        if (!am && !bm) continue;
-        const d = Math.sqrt(d2), push = rr - d;
-        const wa = am && bm ? 0.5 : am ? 1 : 0, wb = 1 - wa;
-        const ux = dx / d, uy = dy / d;
-        a.x -= ux * push * wa; a.y -= uy * push * wa;
-        b.x += ux * push * wb; b.y += uy * push * wb;
+    if (n < GRID_MIN) {
+      for (let i = 0; i < n; i++) {
+        const a = es[i]; if (a.hp <= 0 || a.def.gloom) continue;
+        for (let j = i + 1; j < n; j++) {
+          const b = es[j]; if (b.hp <= 0 || b.def.gloom) continue;
+          sepPair(a, b);
+        }
+      }
+    } else {
+      let s = this.sg;
+      if (!s) s = this.sg = { cap: 0, head: new Int32Array(0), next: new Int32Array(0), cell: new Int32Array(0), cand: new Int32Array(0) };
+      const room = this.room, cw = Math.ceil(room.w * T / SEP_CELL), ch = Math.ceil(room.h * T / SEP_CELL), nc = cw * ch;
+      if (s.head.length < nc) s.head = new Int32Array(nc);
+      if (s.cap < n) { const cap = Math.max(256, 1 << (32 - Math.clz32(n + 63))); s.next = new Int32Array(cap); s.cell = new Int32Array(cap); s.cand = new Int32Array(cap); s.cap = cap; }
+      const head = s.head, next = s.next, cell = s.cell, cand = s.cand;
+      head.fill(-1, 0, nc);
+      let rmax = 0;
+      for (let i = n - 1; i >= 0; i--) { // descending: each cell's list starts out ascending
+        const e = es[i];
+        if (e.hp <= 0 || e.def.gloom) { cell[i] = -1; continue; }
+        if (e.r > rmax) rmax = e.r;
+        const c = sepCell(e, cw, ch);
+        cell[i] = c; next[i] = head[c]; head[c] = i;
+      }
+      for (let i = 0; i < n; i++) {
+        if (cell[i] < 0) continue;
+        const a = es[i], H = 0.9 * (a.r + rmax) + SEP_SLACK;
+        let qx = a.x, qy = a.y, m = sepGather(s, cw, ch, qx, qy, H, i), k = 0;
+        while (k < m) {
+          const j = cand[k++], b = es[j];
+          if (!sepPair(a, b)) continue;
+          sepMove(s, a, i, cw, ch); sepMove(s, b, j, cw, ch);
+          if (U.dist2(a.x, a.y, qx, qy) > SEP_SLACK * SEP_SLACK) {
+            qx = a.x; qy = a.y; m = sepGather(s, cw, ch, qx, qy, H, i); k = 0;
+            while (k < m && cand[k] <= j) k++;
+          }
+        }
       }
     }
     for (const e of es) if (e.hp > 0 && e.spd > 0) Sim.resolve(e, this.room, this.locked, e.fly);
