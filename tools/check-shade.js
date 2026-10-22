@@ -38,12 +38,12 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   near(build({ s_atk: 1, s_atk_h: 1 }).critMult, 1.75, 1e-9, 'Culling Blades rank 1 crit damage'); near(build({ s_atk: 1, s_atk_h: 2 }).critMult, 1.85, 1e-9, 'Culling Blades rank 2 crit damage'); near(build({ s_atk: 1, s_atk_h: 3 }).critMult, 1.95, 1e-9, 'Culling Blades rank 3 crit damage');
   near(build({ s_atk: 1, s_atk_h: 2 }).execMom, 0, 1e-9, 'Killing Rhythm is a rank 3 rider'); near(build({ s_atk: 1, s_atk_h: 3 }).execMom, 3, 1e-9, 'Killing Rhythm rank 3'); near(build({ s_atk: 1, s_atk_h: 1 }).execCrit, 0.25, 1e-9, 'execution threshold');
   const g = build({ s_s1: 1 }); near(g.skillCd, 4.5 * 0.8, 1e-9, 'Ghost Walk cooldown 3.6 s'); near(ED.Stats.skillNums('step', g).p.slash.dmg, 40.6 * 1.2, 1e-6, 'Ghost Walk +20% Shadowstep');
-  near(build({ s_s1: 1, s_s1_a: 3 }).stepTwin, 0.5, 1e-9, 'Twin Cut 50%'); near(ED.Stats.skillNums('step', build({ s_s1: 1, s_s1_b: 1 })).p.after.dmg, 44 * 1.2, 1e-6, 'Afterimage 44 base, +20% Ghost Walk');
+  near(build({ s_s1: 1, s_s1_a: 3 }).stepTwin, 0.6, 1e-9, 'Twin Cut 60%'); near(ED.Stats.skillNums('step', build({ s_s1: 1, s_s1_b: 1 })).p.after.dmg, 44 * 1.2, 1e-6, 'Afterimage 44 base, +20% Ghost Walk');
   const nf = build({ s_s2: 1 }), sm = ED.Stats.skillNums('vanish', nf);
   near(nf.skill2Cd, 11 * 0.73, 1e-9, 'Nightfall cooldown 8 s'); near(sm.p.smoke.r, 105, 1e-9, 'Nightfall smoke radius +40%'); near(sm.p.smoke.dur, 5, 1e-9, 'Nightfall smoke +2 s'); near(nf.stealthSpd, 0.3, 1e-9, 'Nightfall stealth speed');
   near(ED.Stats.moveRate({ stats: nf, flowT: 0, stealthT: 1 }) / ED.Stats.moveRate({ stats: nf, flowT: 0, stealthT: 0 }), 1.3, 1e-9, 'moveRate adds stealthSpd while unseen');
-  near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_a: 1 })).p.ambush.dmg, 41.25, 1e-9, "Night's Edge Ambush x3.75 of 11"); near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_a: 3 })).p.ambush.dmg, 46.75, 1e-9, "Night's Edge rank 3 x4.25");
-  near(ED.Stats.skillNums('vanish', build({})).p.ambush.dmg, 27.5, 1e-9, 'plain Ambush x2.5'); near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_b: 1 })).p.ambush.dmg, 33, 1e-9, 'Veil of Night Ambush x3'); near(build({ s_s2: 1, s_s2_a: 3 }).ambushCleave, 70, 1e-9, 'Ambush Sweep radius');
+  near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_a: 1 })).p.ambush.dmg, 44, 1e-9, "Night's Edge Ambush x4 of 11"); near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_a: 3 })).p.ambush.dmg, 88, 1e-9, "Night's Edge rank 3 x8");
+  near(ED.Stats.skillNums('vanish', build({})).p.ambush.dmg, 27.5, 1e-9, 'plain Ambush x2.5'); near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_b: 1 })).p.ambush.dmg, 49.5, 1e-9, 'Veil of Night Ambush x4.5'); near(build({ s_s2: 1, s_s2_a: 3 }).ambushCleave, 70, 1e-9, 'Ambush Sweep radius');
   near(build({ s_s2: 1, s_s2_b: 1 }).veil, 0.03, 1e-9, 'Veil 3%'); near(build({ s_s2: 1, s_s2_b: 3 }).veil, 0.03, 1e-9, 'Veil stays 3% at rank 3 (the class shield window)');
   near(build({ s_s2: 1, s_s2_b: 1 }).stealthDur, 1, 1e-9, 'Veil stealth +1 s'); near(build({ s_s2: 1, s_s2_b: 3 }).stealthDur, 2, 1e-9, 'Veil rank 3 stealth +2 s (+0.5 s per rank)');
   near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_b: 3 })).p.smoke.dur, 7, 1e-9, 'Shroud: the sheet smoke lasts 3 + 2 (Nightfall) + 2 (Shroud) s');
@@ -124,7 +124,7 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   const { w, p } = stage({ s_s1: 1, s_s1_a: 3 }); const low = foe(w, p.x + 40, p.y - 40), hi = foe(w, p.x + 40, p.y + 40); low.hp = low.maxHp * 0.4; hi.hp = hi.maxHp * 0.6;
   const q = ED.Stats.skillNums('step', p.stats).p.slash, st = p.stats;
   w.playerSkill(p, 0, { x0: p.x, y0: p.y - 40, x1: p.x + 100, y1: p.y - 40 }, 0); w.playerSkill(p, 0, { x0: p.x, y0: p.y + 40, x1: p.x + 100, y1: p.y + 40 }, 0);
-  const base = q.dmg * st.critMult; near((hi.maxHp * 0.6 - hi.hp) / base, 1, 0.02, 'Shadowstep slash'); near((low.maxHp * 0.4 - low.hp) / (hi.maxHp * 0.6 - hi.hp), 1.3, 0.02, 'Assassinate: +30% below half health (first slash)');
+  const base = q.dmg * st.critMult; near((hi.maxHp * 0.6 - hi.hp) / base, 1, 0.02, 'Shadowstep slash'); near((low.maxHp * 0.4 - low.hp) / (hi.maxHp * 0.6 - hi.hp), 1.4, 0.02, 'Assassinate: +40% below half health (first slash)');
 }
 {
   const { w, p } = stage({ s_s1: 1, s_s1_a: 1 }); const a = foe(w, p.x + 40, p.y), b = foe(w, p.x + 60, p.y + 6); a.hp = 3; b.hp = 3;
@@ -139,7 +139,7 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   const q = ED.Stats.skillNums('step', p.stats).p, st = p.stats;
   w.playerSkill(p, 0, { x0: p.x, y0: p.y, x1: p.x + 100, y1: p.y }, 0); near(lost(e), q.slash.dmg * st.critMult, 0.01, 'slash lands at the cast');
   run(w, 0.12); near(lost(e), q.slash.dmg * st.critMult, 0.01, 'the twin has not struck at 0.12 s');
-  run(w, 0.06); near(lost(e), q.slash.dmg * st.critMult * 1.5, 0.05, 'the twin strikes at 50% after 0.15 s'); ok(evs(w, 'twincut').length === 1, 'a twincut event');
+  run(w, 0.06); near(lost(e), q.slash.dmg * st.critMult * 1.6, 0.05, 'the twin strikes at 60% after 0.15 s'); ok(evs(w, 'twincut').length === 1, 'a twincut event');
   ok(p.critStacks === 4, 'the twin readies no extra crits (3 + 1 for the foe the slash cut)');
 }
 
@@ -180,9 +180,9 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   const ambush = (boons, wi, setup) => { const { w, p } = stage(boons, wi); const e = foe(w, p.x + 30, p.y); if (setup) setup(w, p, e); w.playerSkill(p, 0, {}, 1); w.msgs.length = 0; w.fx.length = 0; w.playerAttack(p, 0); run(w, 0.6); return { w, p, e }; };
   const plain = ambush({}), edge = ambush({ s_s2: 1, s_s2_a: 1 }), r3 = ambush({ s_s2: 1, s_s2_a: 3 });
   const crit = plain.p.stats.critMult;
-  near(lost(plain.e), 11 * 2.5 * crit, 0.05, 'plain Ambush: x2.5 of the base weapon, crit'); near(lost(edge.e), 11 * 3.75 * crit, 0.05, "Night's Edge: x3.75"); near(lost(r3.e), 11 * 4.25 * crit, 0.05, "Night's Edge rank 3: x4.25");
-  const sw = ambush({ s_s2: 1, s_s2_a: 1, s_atk: 1, s_atk_s: 1 }); near(lost(sw.e), 11 * 3.75 * crit, 0.05, 'Ambush is fork neutral (Swift daggers deal the base weapon x3.75)');
-  const hv = ambush({ s_s2: 1, s_s2_a: 1, s_atk: 1, s_atk_h: 1 }); near(lost(hv.e), 11 * 3.75 * crit, 0.05, 'Ambush is fork neutral (Heavy kukris deal the base weapon x3.75)');
+  near(lost(plain.e), 11 * 2.5 * crit, 0.05, 'plain Ambush: x2.5 of the base weapon, crit'); near(lost(edge.e), 11 * 4 * crit, 0.05, "Night's Edge: x4"); near(lost(r3.e), 11 * 8 * crit, 0.05, "Night's Edge rank 3: x8");
+  const sw = ambush({ s_s2: 1, s_s2_a: 1, s_atk: 1, s_atk_s: 1 }); near(lost(sw.e), 11 * 4 * crit, 0.05, 'Ambush is fork neutral (Swift daggers deal the base weapon x4)');
+  const hv = ambush({ s_s2: 1, s_s2_a: 1, s_atk: 1, s_atk_h: 1 }); near(lost(hv.e), 11 * 4 * crit, 0.05, 'Ambush is fork neutral (Heavy kukris deal the base weapon x4)');
   ok(refunds(edge.w).length === 1 && refunds(edge.w)[0].slot === 0 && !refunds(edge.w)[0].s, "Night's Edge: the Ambush refunds Shadowstep"); ok(refunds(plain.w).length === 0, 'a plain Ambush refunds nothing');
   const kn = ambush({ s_s2: 1, s_s2_a: 1 }, 1); ok(refunds(kn.w).filter(m => m.slot === 0).length === 1, "Night's Edge with 3 knives: one Shadowstep refund per Ambush");
   ok(plain.p.ambush === false, 'the Ambush is spent');
@@ -193,7 +193,7 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   // Ambush Sweep: strikes every foe within 70 of its target, once each
   const sp = stage({ s_s2: 1, s_s2_a: 2 }); const A = foe(sp.w, sp.p.x + 30, sp.p.y), B = foe(sp.w, sp.p.x + 85, sp.p.y + 10), Cf = foe(sp.w, sp.p.x + 250, sp.p.y), D = foe(sp.w, sp.p.x + 28, sp.p.y + 20), Bk = foe(sp.w, sp.p.x - 40, sp.p.y);
   sp.w.playerSkill(sp.p, 0, {}, 1); sp.w.playerAttack(sp.p, 0); run(sp.w, 0.1);
-  const ac = sp.p.stats.critMult, want = 11 * 4.0 * ac;
+  const ac = sp.p.stats.critMult, want = 11 * 6.0 * ac;
   near(lost(A), want, 0.1, 'the Ambush hits its target'); near(lost(B), want, 0.1, 'the sweep hits a foe 55 px from the target once'); ok(Cf.hp === Cf.maxHp, 'a foe 220 px away is untouched'); near(lost(D), want, 0.1, 'a foe in the swing and near the target is hit once, not twice'); ok(Bk.hp === Bk.maxHp || Math.hypot(Bk.x - A.x, Bk.y - A.y) > 70, 'a foe behind the hero out of the sweep is untouched');
   const nos = stage({ s_s2: 1, s_s2_a: 1 }); const A2 = foe(nos.w, nos.p.x + 30, nos.p.y), B2 = foe(nos.w, nos.p.x + 85, nos.p.y + 10); nos.w.playerSkill(nos.p, 0, {}, 1); nos.w.playerAttack(nos.p, 0); run(nos.w, 0.1); ok(A2.hp < A2.maxHp && B2.hp === B2.maxHp, 'no sweep before the rank 2 rider');
 }
@@ -311,14 +311,14 @@ const step = (w, p, x0, y0, x1, y1) => { place(p, x1, y1); w.playerSkill(p, 0, {
     for (const k in b.r3) ok(t3[k] > 0 && (k in b.mods || k in (b.up || {}) ? t3[k] > t2[k] : !t2[k] && !t1[k]), id + ' stat ' + k + ' (rank 3 transform)');
   }
   const tt = (id, r) => ED.cardTotals(ED.BOONS[id], r), tx = (id) => ED.cardParts(id, 3, null).form.desc;
-  near(tt('s_s1_a', 3).blossom, 0.7, 1e-9, 'Death Blossom cut 70%'); near(tt('s_s1_a', 3).blossomN, 3, 1e-9, 'three blinks'); near(tt('s_s1_a', 3).blossomMax, 6, 1e-9, 'at most six'); near(tt('s_s1_a', 3).stepTwin, 0.5, 1e-9, 'Twin Cut stays at rank 3');
-  near(tt('s_s1_b', 3).mirrorHall, 1, 1e-9, 'Hall of Mirrors 100% of a slash'); near(tt('s_s1_b', 3).afterPull, 120, 1e-9, 'Lure stays at rank 3');
-  near(tt('s_s2_a', 3).eclipse, 0.6, 1e-9, 'Eclipse repeats at 60%'); near(tt('s_s2_a', 3).eclipseDur, 4, 1e-9, 'dome 4 s'); near(tt('s_s2_a', 3).ambushCleave, 70, 1e-9, 'Ambush Sweep stays at rank 3');
+  near(tt('s_s1_a', 3).blossom, 1.3, 1e-9, 'Death Blossom cut 130%'); near(tt('s_s1_a', 3).blossomN, 3, 1e-9, 'three blinks'); near(tt('s_s1_a', 3).blossomMax, 6, 1e-9, 'at most six'); near(tt('s_s1_a', 3).stepTwin, 0.6, 1e-9, 'Twin Cut stays at rank 3');
+  near(tt('s_s1_b', 3).mirrorHall, 0.7, 1e-9, 'Hall of Mirrors 70% of a slash'); near(tt('s_s1_b', 3).afterPull, 120, 1e-9, 'Lure stays at rank 3');
+  near(tt('s_s2_a', 3).eclipse, 0.1, 1e-9, 'Eclipse repeats at 10%'); near(tt('s_s2_a', 3).eclipseDur, 4, 1e-9, 'dome 4 s'); near(tt('s_s2_a', 3).ambushCleave, 70, 1e-9, 'Ambush Sweep stays at rank 3');
   near(tt('s_s2_b', 3).umbral, 2, 1e-9, 'Umbral Veil blind x2'); near(tt('s_s2_b', 3).cloneMul, 0.5, 1e-9, 'clone repeats at 50%'); near(tt('s_s2_b', 3).veil, 0.03, 1e-9, 'Umbral Veil adds no shield (3% stays)'); near(tt('s_s2_b', 3).shroud, 1, 1e-9, 'Shroud stays at rank 3');
-  ok(tx('s_s1_a').indexOf('70%') >= 0 && tx('s_s1_a').indexOf('up to 6') >= 0 && tx('s_s1_b').indexOf('100%') >= 0 && tx('s_s2_a').indexOf('4 s') >= 0 && tx('s_s2_a').indexOf('60%') >= 0 && tx('s_s2_b').indexOf('50%') >= 0 && tx('s_s2_b').indexOf('2 times') >= 0, 'form texts carry their numbers');
+  ok(tx('s_s1_a').indexOf('130%') >= 0 && tx('s_s1_a').indexOf('up to 6') >= 0 && tx('s_s1_b').indexOf('70%') >= 0 && tx('s_s2_a').indexOf('4 s') >= 0 && tx('s_s2_a').indexOf('10%') >= 0 && tx('s_s2_b').indexOf('50%') >= 0 && tx('s_s2_b').indexOf('2 times') >= 0, 'form texts carry their numbers');
 }
 
-{ // Death Blossom (s_s1_a rank 3): after the blink the hero blinks on to the nearest foe not yet cut within 120 of where it stands, 3 times, 0.1 s apart, a crit for 70% of a slash each; a kill adds a blink (at most 6)
+{ // Death Blossom (s_s1_a rank 3): after the blink the hero blinks on to the nearest foe not yet cut within 120 of where it stands, 3 times, 0.1 s apart, a crit for 130% of a slash each; a kill adds a blink (at most 6)
   const mk = (boons, mod) => {
     const { w, p } = stage(boons); place(p, 50, 176);
     const path = foe(w, 100, 176), chain = [210, 280, 350, 420].map(x => foe(w, x, 176)), g = foe(w, 210, 286), far = foe(w, 150, 300); void far;
@@ -328,13 +328,13 @@ const step = (w, p, x0, y0, x1, y1) => { place(p, x1, y1); w.playerSkill(p, 0, {
     return { w, p, path, chain, g, log, N };
   };
   const t3 = mk({ s_s1: 1, s_s1_a: 3 }); void t3;
-  const q = ED.Stats.skillNums('step', t3.p.stats); near(q.p.blossom.dmg, 0.7 * q.p.slash.dmg, 1e-9, 'blossom part = 70% of a slash'); ok(q.p.blossom.n === 3 && q.p.blossom.on && q.p.blossom.crit === true, 'three blinks, a guaranteed crit');
+  const q = ED.Stats.skillNums('step', t3.p.stats); near(q.p.blossom.dmg, 1.3 * q.p.slash.dmg, 1e-9, 'blossom part = 130% of a slash'); ok(q.p.blossom.n === 3 && q.p.blossom.on && q.p.blossom.crit === true, 'three blinks, a guaranteed crit');
   ok(partHits(t3.log, 'step.slash').length === 1 && t3.log[0].e === t3.path && !partHits(t3.log, 'step.blossom').length, 'the Shadowstep cuts the foe on its path first; the chain waits 0.1 s');
   const sl = q.p.slash.dmg * t3.p.stats.critMult;
   run(t3.w, 0.7); const bl = partHits(t3.log, 'step.blossom');
   ok(bl.length === 3 && bl.map(h => h.e).join() === t3.chain.slice(0, 3).join(), `the chain visits the nearest foe each time (${bl.length} cuts)`);
   ok(bl.every((h, i) => Math.abs(h.t - (0.1 * (i + 1) + 0.017)) < 0.04), `0.1 s apart (${bl.map(h => h.t.toFixed(2)).join(' ')})`);
-  ok(bl.every(h => h.crit === true && Math.abs(h.d - 0.7 * sl) < 0.01), `each cut is a guaranteed crit for 70% of a slash (${bl.map(h => h.d.toFixed(1)).join(' ')} of ${(0.7 * sl).toFixed(1)})`);
+  ok(bl.every(h => h.crit === true && Math.abs(h.d - 1.3 * sl) < 0.01), `each cut is a guaranteed crit for 130% of a slash (${bl.map(h => h.d.toFixed(1)).join(' ')} of ${(1.3 * sl).toFixed(1)})`);
   ok(t3.chain[3].hp === 5000 && t3.g.hp === 5000 && !t3.log.some(h => h.e === t3.g), 'the fourth foe in the line and the foes off the chain are untouched');
   ok(Math.abs(t3.p.x - (350 - 10 - 10 - 2)) < 6 && t3.p.y === 176, `the hero ends beside the last foe (x ${t3.p.x.toFixed(0)})`);
   const bev = evs(t3.w, 'blossom'); ok(bev.length === 3 && bev[0].x0 === 150 && bev[2].tx === 350 && bev.map(b => b.n).join() === '1,2,3', 'a blossom event per blink');
@@ -361,7 +361,7 @@ const step = (w, p, x0, y0, x1, y1) => { place(p, x1, y1); w.playerSkill(p, 0, {
   { const s = stage({ s_s1: 1, s_s1_a: 3 }); place(s.p, 50, 176); const a = foe(s.w, 100, 176), b = foe(s.w, 190, 176); const log = spy(s.w); step(s.w, s.p, 50, 176, 150, 176); run(s.w, 0.5); ok(partHits(log, 'step.blossom').length === 1 && partHits(log, 'step.blossom')[0].e === b && !partHits(log, 'step.blossom').some(h => h.e === a), 'the chain skips foes the Shadowstep already cut'); }
 }
 
-{ // Hall of Mirrors (s_s1_b rank 3): three images in a triangle (r50) round the start point, each lures and bursts 1.5 s later (r80, blind 1 s) for 100% of a slash; rank 2 leaves one afterimage with Lure
+{ // Hall of Mirrors (s_s1_b rank 3): three images in a triangle (r50) round the start point, each lures and bursts 1.5 s later (r80, blind 1.5 s) for 70% of a slash; rank 2 leaves one afterimage with Lure
   const go = (boons, mod) => {
     const { w, p } = stage(boons); place(p, 200, 176);
     const mid = foe(w, 200, 176), near1 = foe(w, 200 + 70, 176 + 70), lured = foe(w, 200, 176 - 110), elite = foe(w, 200 - 60, 176 + 20), boss = foe(w, 200 + 60, 176 - 20), far = foe(w, 360, 300); elite.elite = 'swift'; boss.boss = true;
@@ -379,9 +379,9 @@ const step = (w, p, x0, y0, x1, y1) => { place(p, x1, y1); w.playerSkill(p, 0, {
   const mh = partHits(t.log, 'step.mirror'), slash = t.N.p.slash.dmg;
   ok(!w_decoys(t.w).length && partHits(t.log, 'step.after').length === 0, 'the images are gone and no plain afterimage burst');
   ok(mh.filter(h => h.e === t.mid).length === 3, `a foe between the images is struck by all three bursts (${mh.filter(h => h.e === t.mid).length})`);
-  ok(mh.every(h => Math.abs(h.t - 1.5) < 0.04 && Math.abs(h.d - slash) < 0.01), `each burst deals 100% of a Shadowstep slash, not a crit (${mh[0] && mh[0].d.toFixed(1)} of ${slash.toFixed(1)})`);
+  ok(mh.every(h => Math.abs(h.t - 1.5) < 0.04 && Math.abs(h.d - 0.7 * slash) < 0.01), `each burst deals 70% of a Shadowstep slash, not a crit (${mh[0] && mh[0].d.toFixed(1)} of ${(0.7 * slash).toFixed(1)})`);
   ok(mh.some(h => h.e === t.lured), 'Lure drew a foe at 110 into a burst'); ok(t.far.hp === 5000, 'a foe far away is untouched');
-  ok(t.mid.blind > 0 && t.mid.blindCd > 3, 'the bursts blind 1 s and start the blind cooldown'); ok(t.boss.blind === 0 && t.boss.hp < 5000, 'bosses are hurt, never blinded'); ok(t.elite.blind > 0 && t.elite.blind < t.mid.blind + 0.01, 'elites are blinded half as long');
+  ok(t.mid.blind > 0 && t.mid.blind <= 1.5 && t.mid.blindCd > 3, 'the bursts blind 1.5 s and start the blind cooldown'); ok(t.boss.blind === 0 && t.boss.hp < 5000, 'bosses are hurt, never blinded'); ok(t.elite.blind > 0 && t.elite.blind < t.mid.blind + 0.01, 'elites are blinded half as long');
   ok(evs(t.w, 'after').length === 3 && evs(t.w, 'after').every(e => e.k === 1) && evs(t.w, 'lure').length === 3, 'three burst events (tag 1) and three lure events');
   const r2 = go({ s_s1: 1, s_s1_b: 2 }); ok(r2.w.zones.filter(z => z.kind === 'decoy').length === 1 && r2.w.zones.find(z => z.kind === 'decoy').w === 0 && Math.abs(r2.w.zones.find(z => z.kind === 'decoy').dur - 1.2) < 1e-9, 'rank 2: one afterimage, fuse 1.2 s'); run(r2.w, 1.4); ok(partHits(r2.log, 'step.after').length > 0 && !partHits(r2.log, 'step.mirror').length, 'rank 2 bursts as the afterimage');
   { const f = go({ s_s1: 1, s_s1_b: 3 }, (w) => { for (const e of w.enemies) e.fodder = true; }); run(f.w, 1.6); ok(partHits(f.log, 'step.mirror').length >= 3, 'horde foes are burst too'); }
@@ -390,7 +390,7 @@ const step = (w, p, x0, y0, x1, y1) => { place(p, x1, y1); w.playerSkill(p, 0, {
 function w_decoys(w) { return w.zones.filter(z => z.kind === 'decoy'); }
 function U_ang(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
 
-{ // Eclipse (s_s2_a rank 3): Vanish's smoke is a dome (r140, 4 s); inside it the hero stays unseen and every attack is an Ambush at 60% of the first; foes inside take +20%; the extra Ambushes refund nothing
+{ // Eclipse (s_s2_a rank 3): Vanish's smoke is a dome (r140, 4 s); inside it the hero stays unseen and every attack is an Ambush at 10% of the first; foes inside take +20%; the extra Ambushes refund nothing
   const mk = (boons, wi, mod) => {
     const { w, p } = stage(boons, wi); place(p, 200, 176);
     const e = foe(w, 230, 176); if (mod) mod(w, p, e);
@@ -403,9 +403,9 @@ function U_ang(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
   near(ED.Stats.skillNums('vanish', build({ s_s2_a: 3 })).p.dome.r, 100, 1e-9, 'dome part radius without Nightfall'); near(ED.Stats.skillNums('vanish', build({ s_s2: 1 })).p.smoke.r, 105, 1e-9, 'plain smoke radius with Nightfall');
   near(build({ s_s2: 1 }).s2Area, 0.4, 1e-9, 'Nightfall makes areas 40% wider (the dome: 100 x 1.4 = 140)'); ok(!N.p.smoke.on && N.p.dome.on && N.p.edge.on, 'the dome replaces the smoke part');
   near(t.p.stealthT, 4, 1e-9, 'unseen for the dome\'s 4 s'); ok(t.p.ambush && t.p.dome && t.p.dome.z === z, 'the first attack is the Ambush; the hero knows its dome');
-  const d1 = swing(t); near(d1, 11 * 4.25 * cm, 0.05, 'the first attack is the full Ambush (x4.25 of the base weapon, crit)');
+  const d1 = swing(t); near(d1, 11 * 8 * cm, 0.05, 'the first attack is the full Ambush (x8 of the base weapon, crit)');
   ok(t.p.ambush === true && t.p.stealthT > 0.2 && t.p.eclipseRe === true, 'attacking inside the dome keeps the hero unseen and arms the next Ambush');
-  const d2 = swing(t), d3 = swing(t); near(d2 / d1, 0.6, 1e-6, 'the second attack is an Ambush at 60%'); near(d3 / d1, 0.6, 1e-6, 'and so is every one after it');
+  const d2 = swing(t), d3 = swing(t); near(d2 / d1, 0.1, 1e-6, 'the second attack is an Ambush at 10%'); near(d3 / d1, 0.1, 1e-6, 'and so is every one after it');
   ok(t.w.nearestPlayer(0, 0) === null, 'foes cannot see the hero inside the dome');
   ok(refunds(t.w).filter(m => m.slot === 0).length === 1 && refunds(t.w).filter(m => m.slot === 1).length === 0, "Night's Edge refunds Shadowstep once, for the true Ambush only");
   run(t.w, 0.3); ok(t.e.slowAmt >= 0.4 && t.e.vulnT > 0, 'foes in the dome are slowed and take +20%'); const hv = t.e.hp; t.w.hitEnemy(t.e, 100, { p: t.p, kind: 'skill', crit: false }); const out = foe(t.w, 20, 300); const ho = out.hp; t.w.hitEnemy(out, 100, { p: t.p, kind: 'skill', crit: false });
@@ -413,24 +413,24 @@ function U_ang(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
   // leaving the dome ends it: the next attack is a plain one; the dome ends at 4 s
   { const l = mk({ s_s2: 1, s_s2_a: 3 }); swing(l); ok(l.p.eclipseRe, 'armed inside'); place(l.p, 20, 300); run(l.w, 0.05); ok(!l.p.eclipseRe && !l.p.ambush, 'leaving the dome drops the extra Ambush'); }
   { const l = mk({ s_s2: 1, s_s2_a: 3 }); swing(l); run(l.w, 4.5); ok(l.p.dome === null && !l.p.eclipseRe && !l.p.ambush && l.p.stealthT <= 0, 'the dome ends: no Ambush, no stealth'); }
-  { const l = mk({ s_s2: 1, s_s2_a: 3 }); run(l.w, 0.05); const x = swing(l); run(l.w, 1.0); ok(l.p.ambush && l.p.eclipseRe && l.p.stealthT > 0, 'standing idle inside keeps the Ambush ready and the hero unseen'); const d = swing(l); near(d / x, 0.6, 1e-6, 'the Ambush after a pause is an Eclipse repeat'); }
+  { const l = mk({ s_s2: 1, s_s2_a: 3 }); run(l.w, 0.05); const x = swing(l); run(l.w, 1.0); ok(l.p.ambush && l.p.eclipseRe && l.p.stealthT > 0, 'standing idle inside keeps the Ambush ready and the hero unseen'); const d = swing(l); near(d / x, 0.1, 1e-6, 'the Ambush after a pause is an Eclipse repeat'); }
   // rank 2: the plain Ambush
   { const r2 = mk({ s_s2: 1, s_s2_a: 2 }); const zz = r2.w.zones.find(q => q.kind === 'smoke'); ok(zz.w === 0 && !r2.p.dome, 'rank 2 casts the plain smoke'); swing(r2); ok(!r2.p.ambush && r2.p.stealthT === 0, 'and the Ambush is spent by one attack'); }
   // a kill by the true Ambush refunds Vanish; a kill by a repeat refunds nothing; a horde kill refunds nothing
   { const k = mk({ s_s2: 1, s_s2_a: 3 }, 0, (w, p, e) => { e.hp = 5; }); k.w.playerAttack(k.p, 0); ok(k.e.hp <= 0 && refunds(k.w).filter(m => m.slot === 1).length === 1, "the true Ambush's kill refunds Vanish");
     const e2 = foe(k.w, 230, 180); e2.hp = 5; k.p.edgeT = 0; k.w.msgs.length = 0; k.w.playerAttack(k.p, 0); ok(e2.hp <= 0 && refunds(k.w).filter(m => m.slot === 1).length === 0, 'an Eclipse repeat that kills refunds nothing'); }
   { const k = mk({ s_s2: 1, s_s2_a: 3 }, 0, (w, p, e) => { e.hp = 5; e.fodder = true; }); k.w.playerAttack(k.p, 0); ok(k.e.hp <= 0 && refunds(k.w).length === 0 && k.p.edgeT <= 0, 'a horde foe killed by the Ambush refunds nothing'); }
-  // Ambush Sweep: the repeats sweep too, at their 60%
-  { const s = mk({ s_s2: 1, s_s2_a: 3 }, 0, (w, p, e) => { }); const side = foe(s.w, 230 + 55, 176); run(s.w, 0.05); const h0 = lost(side); s.w.playerAttack(s.p, 0); run(s.w, 0.05); const first = lost(side) - h0; s.w.playerAttack(s.p, 0); run(s.w, 0.05); const second = lost(side) - h0 - first; ok(first > 0 && Math.abs(second / first - 0.6) < 0.01, `the sweep of a repeat is 60% of the first (${(second / first).toFixed(3)})`); }
-  // a ranged hero: each shot of a repeat carries the tag and 60%
+  // Ambush Sweep: the repeats sweep too, at their 10%
+  { const s = mk({ s_s2: 1, s_s2_a: 3 }, 0, (w, p, e) => { }); const side = foe(s.w, 230 + 55, 176); run(s.w, 0.05); const h0 = lost(side); s.w.playerAttack(s.p, 0); run(s.w, 0.05); const first = lost(side) - h0; s.w.playerAttack(s.p, 0); run(s.w, 0.05); const second = lost(side) - h0 - first; ok(first > 0 && Math.abs(second / first - 0.1) < 0.01, `the sweep of a repeat is 10% of the first (${(second / first).toFixed(3)})`); }
+  // a ranged hero: each shot of a repeat carries the tag and 10%
   { const k = mk({ s_s2: 1, s_s2_a: 3 }, 1); k.w.playerAttack(k.p, 0); const s1 = k.w.projs.filter(q => q.team === 0 && q.ambush); ok(s1.length === 3 && s1.every(q => !q.part), 'knives: the first volley is the plain Ambush');
     k.w.playerAttack(k.p, 0); const s2 = k.w.projs.filter(q => q.team === 0 && q.ambush && !s1.includes(q)); ok(s2.length === 3 && s2.every(q => q.part === 'vanish.edge') && s1.every(q => !q.part), 'the next volley is tagged vanish.edge, the first stays untagged'); run(k.w, 0.4);
-    const eh = partHits(k.log, 'vanish.ambush'), ee = partHits(k.log, 'vanish.edge'); ok(eh.length > 0 && ee.length > 0 && Math.abs(ee[0].d / eh[0].d - 0.6) < 0.01, `a repeat's shots deal 60% when they land (${ee[0] && eh[0] ? (ee[0].d / eh[0].d).toFixed(3) : '-'})`); }
+    const eh = partHits(k.log, 'vanish.ambush'), ee = partHits(k.log, 'vanish.edge'); ok(eh.length > 0 && ee.length > 0 && Math.abs(ee[0].d / eh[0].d - 0.1) < 0.01, `a repeat's shots deal 10% when they land (${ee[0] && eh[0] ? (ee[0].d / eh[0].d).toFixed(3) : '-'})`); }
   // the blind budget is the same as the smoke's: min(2, half the cooldown) seconds per foe per cast, elites half
   { const b = (elite) => { const k = mk({ s_s2: 1, s_s2_a: 3 }, 0, (w, p, e) => { if (elite) e.elite = 'swift'; }); let tt = 0; run(k.w, 9, () => { if (k.e.blind > 0) tt += 1 / 60; }); return tt; }; near(b(false), 2, 0.4, 'the dome blinds a foe about 2 s per cast'); near(b(true), 1, 0.4, 'elites half that'); near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_a: 3 })).p.blind.dur, Math.min(2, 0.5 * ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_a: 3 })).cdEff), 1e-9, 'the budget is capped at half the cooldown'); }
   { const bs = mk({ s_s2: 1, s_s2_a: 3 }, 0, (w, p, e) => { e.boss = true; }); run(bs.w, 0.3); ok(bs.e.blind <= 0 && bs.e.slowAmt > 0, 'bosses are slowed, never blinded'); }
-  // the sheet numbers: the repeats are floor(4 s / interval) - 1 attacks of 60%
-  { const st = build({ s_s2: 1, s_s2_a: 3 }), q = ED.Stats.skillNums('vanish', st).p; near(q.edge.dmg, 0.6 * q.ambush.dmg, 1e-9, 'edge part = 60% of the Ambush'); ok(q.edge.attacks === Math.floor(4 / st.atkInterval + 1e-9) && q.edge.oneFoe === q.edge.attacks && q.edge.crit === true, `edge part: ${q.edge.attacks} attacks, forced crits`); }
+  // the sheet numbers: the repeats are floor(4 s / interval) - 1 attacks of 10%
+  { const st = build({ s_s2: 1, s_s2_a: 3 }), q = ED.Stats.skillNums('vanish', st).p; near(q.edge.dmg, 0.1 * q.ambush.dmg, 1e-9, 'edge part = 10% of the Ambush'); ok(q.edge.attacks === Math.floor(4 / st.atkInterval + 1e-9) && q.edge.oneFoe === q.edge.attacks && q.edge.crit === true, `edge part: ${q.edge.attacks} attacks, forced crits`); }
 }
 
 { // Umbral Veil (s_s2_b rank 3): a shadow clone where Vanish was cast for 4 s repeats the weapon at 50% from its spot, foes (not bosses) go for it, the smoke blinds twice as long (capped)
@@ -471,6 +471,15 @@ function U_ang(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
   { const c = mk({ s_s2: 1, s_s2_b: 3 }); place(c.p, 350, 176); c.p.clone.room = {}; const a0 = lost(c.near1); c.w.playerAttack(c.p, 0); ok(lost(c.near1) === a0, 'the clone does not attack in another room'); }
   { const f = mk({ s_s2: 1, s_s2_b: 3 }, 0, (w, p, a) => { a.fodder = true; }); place(f.p, 350, 176); const a0 = lost(f.near1); f.w.playerAttack(f.p, 0); ok(lost(f.near1) > a0, 'a horde foe is struck by the clone'); }
   { const nw = stage({ s_s2: 1, s_s2_b: 3 }); place(nw.p, 200, 176); nw.w.playerSkill(nw.p, 0, {}, 1); const c1 = nw.p.clone.z; nw.w.playerSkill(nw.p, 0, {}, 1); run(nw.w, 0.1); ok(nw.p.clone.z !== c1 && !nw.w.zones.includes(c1) && nw.w.zones.filter(q => q.w === 2).length === 1, 'a new Vanish replaces the old clone'); }
+}
+
+{ // Shroud (s_s2_b rank 2): the smoke chokes every foe inside for 30% of an Ambush per second, a zone tick every 0.5 s (no crit); none at rank 1
+  const c2 = stage({ s_s2: 1, s_s2_b: 2 }), f2 = foe(c2.w, c2.p.x + 30, c2.p.y), out = foe(c2.w, c2.p.x + 200, c2.p.y), log = spy(c2.w), N2 = ED.Stats.skillNums('vanish', c2.p.stats);
+  c2.w.playerSkill(c2.p, 0, {}, 1); run(c2.w, 8);
+  const ch = partHits(log, 'vanish.choke');
+  near(N2.p.choke.dmg, N2.p.ambush.dmg * 0.3, 1e-9, 'the choke part is 30% of the Ambush per second'); ok(N2.p.choke.on && N2.p.choke.r === N2.p.smoke.r && N2.p.choke.dur === N2.p.smoke.dur, 'it lives as long and as wide as the smoke');
+  ok(ch.length === 14 && ch.every(h => h.e === f2 && h.crit === false && Math.abs(h.d - N2.p.choke.dmg * 0.5 * 1.2) < 0.01), `7 s of smoke choke the foe inside 14 times, half the part damage each, +20% in the smoke (${ch.length})`); ok(out.hp === out.maxHp, 'a foe outside the smoke takes nothing');
+  const c1 = stage({ s_s2: 1, s_s2_b: 1 }); foe(c1.w, c1.p.x + 30, c1.p.y); const l1 = spy(c1.w); c1.w.playerSkill(c1.p, 0, {}, 1); run(c1.w, 6); ok(!partHits(l1, 'vanish.choke').length, 'rank 1 has no choke');
 }
 
 console.log(`${n} checks, ${fails} failed`);
