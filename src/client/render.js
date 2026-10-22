@@ -1937,6 +1937,8 @@
     const sp = R.numSprite(t.s, t.color, t.size, t.crit, t.ol), q = fs / sp.fs;
     c.globalAlpha = a; c.drawImage(sp.cv, Math.round(t.x + sp.x * q), Math.round(t.y + sp.y * q), sp.w * q, sp.h * q);
   };
+  // Elite label: the affix names (second slot after the first) then the foe name, e.g. "Swift Brutal Skeleton Knight"; `affixes` drops the foe name. Bar and label colour stay the first affix's.
+  R.eliteLabel = (e, affixes) => ED.AFFIXES[e.elite].name + (e.elite2 ? ' ' + ED.AFFIXES[e.elite2].name : '') + (affixes ? '' : ' ' + e.def.name);
   // Fill height in px of a foe's health bar (bh for a normal foe; 0 = no bar): shown once damaged, always for an elite; fodder gets a 1 px bar.
   R.foeBarH = (e, bh) => (e.hp / e.maxHp >= 0.999 && !e.elite ? 0 : e.fodder ? 1 : bh);
   // HP bar (frame, dark base, fill, sheen) baked per colour / width / fill px / height; sprite origin = bar left-top.
@@ -1993,9 +1995,9 @@
       if (af) { eliteQ.push(e, y); labelAdd(e.x, y + bh / 2, w / 2, bh / 2); } // the bar blocks the labels of the elites beside it
     }
     for (let i = 0; i < eliteQ.length; i += 2) { // elite labels after every bar: close elites share the row, the label shortens to the affix, then steps up, instead of overprinting
-      const e = eliteQ[i], af = ED.AFFIXES[e.elite], ly = eliteQ[i + 1] - 2 - lhh / 2 - (e.ward > 0 ? bh : 0), full = af.name + ' ' + e.def.name, lh2 = lhh * 1.1;
+      const e = eliteQ[i], af = ED.AFFIXES[e.elite], ly = eliteQ[i + 1] - 2 - lhh / 2 - (e.ward > 0 ? bh : 0), full = R.eliteLabel(e), names = R.eliteLabel(e, true), lh2 = lhh * 1.1;
       let str = full;
-      if (labelHit(e.x, ly, R.labelW(full), lh2) && !labelHit(e.x, ly, R.labelW(af.name), lh2)) str = af.name;
+      if (labelHit(e.x, ly, R.labelW(full), lh2) && !labelHit(e.x, ly, R.labelW(names), lh2)) str = names;
       R.label(c, str, e.x, placeLabel(e.x, ly, R.labelW(str), lh2), af.color);
     }
     eliteQ.length = 0;

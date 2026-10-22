@@ -1,6 +1,6 @@
 // Usage: node tools/check-sim.js
 // Headless regression checks of sim review fixes: crit-stack grants never lower the count, a boss kill purges hostile shots and pools whichever loop lands it, Smite duo statuses use the pre-affinity Smite,
-// Frozen Heart goes through freezeEnemy, a departed hero leaves no thrown shield, fork and crit card text follows the hero's weapon, and the fodder horde (quota, drops, health, damage cap, xp budget, crowd slow, exposure, pack spots, live cap).
+// Frozen Heart goes through freezeEnemy, a departed hero leaves no thrown shield, fork and crit card text follows the hero's weapon, the fodder horde (quota, drops, health, damage cap, xp budget, crowd slow, exposure, pack spots, live cap) and the stratum behaviour (lead aim, ground speed, mixed rosters, two-affix elites).
 // Prints failures and exits 1 when any check fails; -v prints one line per played room.
 const { ED, runBot } = require('./sim.js');
 let n = 0, fails = 0;
@@ -469,6 +469,138 @@ for (let s = 1; s <= 6; s++) {
   const e = w.spawnEnemy('bonearcher', p.x + 100, p.y), b = w.spawnEnemy('bonewarden', p.x + 100, p.y);
   w.stratum = 6; const q = w.enemyShoot(e, 0, 200, 'arrow', 1, 6), qb = w.enemyShoot(b, 0, 200, 'bone', 1, 6);
   near(Math.hypot(q.vx, q.vy), 200 * W0.shotSpd(6), 1e-6, 'a foe shot at stratum VI flies x1.4'); near(Math.hypot(qb.vx, qb.vy), 200 * W0.bossShotSpd(6), 1e-6, 'a boss shot at stratum VI flies x1.5');
+}
+{ // stratum behaviour: lead aim of every aimed foe shot, ground speed, mixed rosters, two-affix elites
+  const LD = W0.LEAD, U0 = ED.U, shots = (w) => w.projs.filter(q => q.team === 1);
+  const until = (w, e, f, max) => { for (let i = 0; i < (max || 600); i++) { w.updateEnemy(e, TICK); if (f()) return true; } return false; };
+  const dev = (ps, a) => ps.reduce((s, q) => s + U0.angDiff(Math.atan2(q.vy, q.vx), a), 0) / ps.length; // mean angular deviation of the shots from angle a
+  // Forces the second affix: makeElite on a normal foe with the rng stubbed so the roll succeeds and picks `second`.
+  const withAffixes = (w, e, first, second) => {
+    const c = w.rng.chance, k = w.rng.pick; w.rng.chance = () => true; w.rng.pick = (a) => (a.includes(second) ? second : a[0]);
+    try { w.makeElite(e, first); } finally { w.rng.chance = c; w.rng.pick = k; }
+    return e;
+  };
+  // A knight at stratum s measured walking at (vx, vy) and a still foe 160 px left of it that attacks at once (web ready, no retreat step).
+  const duel = (s, type, vx, vy, aff) => {
+    const { w, p } = stage('knight', {}); w.stratum = s; p.lvx = vx; p.lvy = vy;
+    const e = w.spawnEnemy(type, p.x - 160, p.y); e.spawnT = 0; e.spd = 0; e.cd = 0; e.vars.wcd = 0; e.vars.stepCd = 99;
+    if (aff) withAffixes(w, e, aff[0], aff[1]);
+    return { w, p, e };
+  };
+  const want = (e, p, spd, s) => W0.leadAngle(e.x, e.y - 4, p, spd * W0.shotSpd(s), LD[s - 1]);
+  const straight = (e, p) => Math.atan2(p.y - (e.y - 4), p.x - e.x);
+  // shooter: strata I-II aim straight, III+ lead
+  for (const s of [1, 2, 3, 6]) {
+    const { w, p, e } = duel(s, 'bonearcher', 90, 60), S = e.def.shot;
+    ok(until(w, e, () => shots(w).length > 0), `stratum ${s}: the archer shoots`);
+    const d = dev(shots(w), want(e, p, S.speed, s));
+    ok(Math.abs(d) < 1e-9, `stratum ${s}: the archer's shots are centred on leadAngle with L ${LD[s - 1]} (off by ${d})`);
+    if (s < 3) ok(Math.abs(dev(shots(w), straight(e, p))) < 1e-9, `stratum ${s}: no lead, aimed straight`);
+    else ok(Math.abs(dev(shots(w), straight(e, p))) > 0.03, `stratum ${s}: the shot is led away from the straight line`);
+  }
+  { // the aim is recomputed every wind-up frame; a swift second affix shortens the wind-up
+    const { w, p, e } = duel(6, 'bonearcher', 90, 0), S = e.def.shot;
+    ok(until(w, e, () => e.st === 'aim'), 'the archer winds up'); near(e.t, S.windup, 1e-9, 'plain wind-up');
+    const a1 = e.aimA; p.lvy = -90; w.updateEnemy(e, TICK);
+    near(e.aimA, want(e, p, S.speed, 6), 1e-9, 'the aim is recomputed every wind-up frame'); ok(Math.abs(e.aimA - a1) > 0.01, 'and follows the hero turning');
+    const t = duel(6, 'bonearcher', 0, 0, ['brutal', 'swift']);
+    ok(until(t.w, t.e, () => t.e.st === 'aim'), 'the swift elite winds up'); near(t.e.t, S.windup * 0.7, 1e-9, 'swift in the second slot shortens the wind-up (x0.7)');
+  }
+  { // orbiter burst: leads during the aim phase, locks for the last 0.15 s
+    const { w, p, e } = duel(4, 'drone', 80, 0), B = e.def.burst;
+    ok(until(w, e, () => e.st === 'aim' && e.t <= 0.15), 'the drone aims');
+    const lock = e.aimA;
+    near(lock, want(e, p, B.speed, 4), 1e-9, 'the drone aims at the lead point (L 0.5)'); p.lvx = -200;
+    ok(until(w, e, () => shots(w).length > 0), 'the drone fires');
+    near(Math.atan2(shots(w)[0].vy, shots(w)[0].vx), lock, 1e-9, 'the burst keeps the angle locked in the last 0.15 s');
+  }
+  // turret spread, then the lobbed glob (the spitter alternates); the glob lands lvx x flight x L ahead
+  for (const s of [2, 5]) {
+    const { w, p, e } = duel(s, 'spitter', 100, 0), P = e.def.pattern;
+    ok(until(w, e, () => shots(w).length > 0), `stratum ${s}: the spitter spreads`);
+    ok(Math.abs(dev(shots(w), want(e, p, P.speed, s))) < 1e-9, `stratum ${s}: the turret spread is centred on leadAngle`);
+    e.cd = 0; w.projs.length = 0;
+    ok(until(w, e, () => w.zones.some(z => z.lob)), `stratum ${s}: the spitter lobs a glob`);
+    const z = w.zones.find(q => q.lob);
+    near(z.x, p.x + 100 * z.dur * LD[s - 1], 1e-6, `stratum ${s}: the glob lands ${LD[s - 1]} x lvx x flight ahead (flight ${z.dur})`); near(z.y, p.y, 1e-6, 'and on the hero row');
+  }
+  { const { w, p, e } = duel(5, 'imp', 0, -120);
+    ok(until(w, e, () => w.zones.some(z => z.lob)), 'the imp lobs a fireball');
+    const z = w.zones.find(q => q.lob); near(z.y, p.y - 120 * z.dur * LD[4], 1e-6, 'the lobber leads by lvy x flight x L'); near(z.x, p.x, 1e-6, 'and not sideways');
+  }
+  { // a lob whose lead point lies inside a wall lands on floor, short of it
+    const { w, p, e } = duel(6, 'spitter', 400, 0), D0 = ED.Dungeon;
+    let x = p.x; while (!D0.blocksShots(D0.tileAt(w.room, x, p.y), false) && x < p.x + 2000) x += 4;
+    p.x = x - 30; e.x = p.x - 160; e.vars.n = 1;
+    ok(until(w, e, () => w.zones.some(z => z.lob)), 'the glob is lobbed at a hero by a wall');
+    const z = w.zones.find(q => q.lob);
+    ok(!D0.blocksShots(D0.tileAt(w.room, z.x, z.y), false) && z.x < x && z.x > p.x, `a glob led into a wall lands on floor in front of it (x ${Math.round(z.x)}, wall at ${x}, hero ${Math.round(p.x)})`);
+  }
+  { // web shot: led, and its flight time matches the telegraphed landing circle at the final speed
+    const { w, p, e } = duel(5, 'cavespider', 100, 0), Wb = e.def.web;
+    ok(until(w, e, () => shots(w).some(q => q.kind === 'web')), 'the spider webs');
+    const q = shots(w).find(r => r.kind === 'web'), z = w.zones.find(r => r.detached);
+    ok(Math.abs(dev([q], want(e, p, Wb.speed, 5))) < 1e-9, 'the web is aimed at the lead point');
+    near(q.life * Math.hypot(q.vx, q.vy), Math.hypot(z.x - e.x, z.y - e.y), 1e-6, 'the web flies exactly to its landing circle at the stratum shot speed');
+  }
+  { // caster wave
+    const { w, p, e } = duel(5, 'siren', 100, 30), C = e.def.cast;
+    ok(until(w, e, () => shots(w).length === C.n), 'the siren casts its wave');
+    ok(Math.abs(dev(shots(w), want(e, p, C.speed, 5))) < 1e-9, 'the wave is centred on the lead angle');
+  }
+  { // a spiral pattern starts straight at the hero (ring, laser and dive patterns are not led either)
+    const { w, p, e } = duel(6, 'flameturret', 150, 0);
+    ok(until(w, e, () => e.st === 'aim'), 'the totem winds up');
+    near(e.aimA, Math.atan2(p.y - e.y, p.x - e.x), 1e-9, 'a spiral starts straight at the hero (no lead)');
+  }
+  { // ground speed: normal foes x foeSpd; bosses and fodder keep theirs
+    const { w } = stage('knight', {});
+    for (const s of [1, 4, 6]) {
+      w.stratum = s;
+      const sk = w.spawnEnemy('skeleton', 0, 0), bs = w.spawnEnemy('bonewarden', 0, 0), fd = w.spawnEnemy(fodderId(s), 0, 0);
+      near(sk.spd, ED.ENEMIES.skeleton.spd * W0.foeSpd(s), 1e-9, `stratum ${s}: a normal foe moves x${W0.foeSpd(s)}`);
+      ok(bs.spd === ED.ENEMIES.bonewarden.spd && fd.spd === ED.ENEMIES[fodderId(s)].spd, `stratum ${s}: a boss and a fodder foe keep their speed`);
+    }
+    near(W0.foeSpd(6), 1.2, 1e-9, 'x1.2 at stratum VI');
+  }
+  { // mixed rosters: the previous biome's foes join a room at MIX_PREV
+    ok(W0.MIX_PREV === 0.6, 'MIX_PREV is 0.6');
+    const w = hordeWorld(2, ['knight']), room = roomOf(w, 'combat');
+    const only = new Set(ED.biomeFor(1).enemies.map(r => r[0]).filter(id => !ED.biomeFor(2).enemies.some(r => r[0] === id)));
+    const share = (mp, n) => { W0.MIX_PREV = mp; let m = 0; for (let i = 0; i < n; i++) { w.rng = new U0.RNG(500 + i); if (w.planWaves(room).some(wv => wv.some(f => only.has(f.type)))) m++; } return m / n; };
+    try {
+      ok(only.size > 0 && share(0, 40) === 0, 'MIX_PREV 0: no foe of the previous biome');
+      const all = share(1, 300), f = share(0.6, 300); ok(all > 0.6, `MIX_PREV 1: most rooms hold previous-biome foes (${all.toFixed(2)})`);
+      ok(Math.abs(f - 0.6 * all) < 0.12, `MIX_PREV 0.6: ${f.toFixed(2)} of rooms hold previous-biome foes, 0.6 x ${all.toFixed(2)} expected`);
+    } finally { W0.MIX_PREV = 0.6; }
+  }
+  { // two-affix elites
+    const { w } = stage('knight', {});
+    ok(W0.AFFIX2.join() === '0,0,0,0.35,0.6,0.85', 'AFFIX2 by stratum');
+    const roll = (s, n, first) => {
+      w.stratum = s; let two = 0, bad = 0;
+      for (let i = 0; i < n; i++) {
+        const e = { hp: 100, maxHp: 100, dmg: 10, spd: 50, r: 10, ward: 0, wardMax: 0 }; w.makeElite(e, first);
+        if (e.elite2) two++;
+        if (e.elite2 && (e.elite2 === e.elite || !ED.AFFIXES[e.elite2])) bad++;
+        if (Math.abs(e.maxHp - 100 * (2.4 + 0.4 * (s - 1))) > 1e-9 || Math.abs(e.dmg - 9 * (ED.hasAffix(e, 'brutal') ? 1.4 : 1)) > 1e-9 || Math.abs(e.spd - 50 * (ED.hasAffix(e, 'swift') ? 1.4 : 1)) > 1e-9 || Math.abs(e.ward - (ED.hasAffix(e, 'warded') ? 0.45 * e.maxHp : 0)) > 1e-9) bad++;
+      }
+      return { p: two / n, bad };
+    };
+    for (const s of [1, 2, 3]) { const r = roll(s, 500); ok(r.p === 0 && r.bad === 0, `stratum ${s}: no second affix (${r.p})`); }
+    for (const s of [4, 5, 6]) { const r = roll(s, 1500); near(r.p, W0.AFFIX2[s - 1], 0.06, `stratum ${s}: second affix chance`); ok(r.bad === 0, `stratum ${s}: elite2 differs from elite, HP and damage multipliers apply once, each affix effect once`); }
+    ok(roll(6, 400, 'brutal').bad === 0, 'a given first affix (dark-room elite) is never repeated in slot 2');
+    ok(ED.hasAffix({ elite: 'swift', elite2: 'brutal' }, 'brutal') && ED.hasAffix({ elite: 'swift' }, 'swift') && !ED.hasAffix({ elite: 'swift' }, 'brutal') && !ED.hasAffix({ elite: null }, 'swift'), 'hasAffix reads both slots');
+    w.stratum = 4; const base = w.spawnEnemy('skeleton', 100, 100), mk = (first, second) => withAffixes(w, w.spawnEnemy('skeleton', 100, 100), first, second);
+    const sw = mk('brutal', 'swift');
+    near(sw.spd, base.spd * 1.4, 1e-9, 'swift in slot 2: speed x1.4'); near(sw.dmg, base.dmg * 0.9 * 1.4, 1e-9, 'brutal in slot 1: damage x1.4 once'); near(sw.maxHp, base.maxHp * (2.4 + 0.4 * 3), 1e-9, 'elite HP multiplier once');
+    near(mk('swift', 'brutal').dmg, base.dmg * 0.9 * 1.4, 1e-9, 'brutal in slot 2: damage x1.4');
+    const wd = mk('swift', 'warded'); near(wd.ward, wd.maxHp * 0.45, 1e-9, 'warded in slot 2: ward 45% of max HP');
+    const vo = mk('swift', 'volatile'); w.zones.length = 0; w.killEnemy(vo, null, {});
+    ok(w.zones.some(z => z.boom === 'fire' && z.r === 70), 'volatile in slot 2: explodes on death');
+    const va = mk('swift', 'vampiric'), p = w.players.get('p0'); p.invuln = 0; va.hp = va.maxHp / 2; w.hurtPlayer(p, 10, { e: va, x: va.x, y: va.y });
+    ok(va.hp > va.maxHp / 2, 'vampiric in slot 2: heals when it hurts a hero');
+  }
 }
 console.log(`${n} checks, ${fails} failed`);
 process.exit(fails ? 1 : 0);

@@ -70,8 +70,8 @@
     dmg *= ED.World.dmgScale(s) * (pact >= 2 ? 1.25 : 1) * (pact >= 8 ? 1.2 : 1) * this.threat().dmg;
     if (this.room && this.room.dark && !def.minion && !def.ally && !opts.ally) dmg *= ED.World.DARK_DMG; // every foe of a dark room
     const e = {
-      id: U.uid(), type, def, x, y, r: def.r, hp, maxHp: hp, dmg, spd: def.spd * (pact >= 6 ? 1.15 : 1),
-      kbx: 0, kby: 0, st: 'move', t: 0, cd: this.rng.range(0.6, 1.6), face: 1, flash: -1, stun: 0, frozen: 0, elite: null, ward: 0, wardMax: 0,
+      id: U.uid(), type, def, x, y, r: def.r, hp, maxHp: hp, dmg, spd: def.spd * (pact >= 6 ? 1.15 : 1) * (def.boss || def.fodder ? 1 : ED.World.foeSpd(s)),
+      kbx: 0, kby: 0, st: 'move', t: 0, cd: this.rng.range(0.6, 1.6), face: 1, flash: -1, stun: 0, frozen: 0, elite: null, elite2: null, ward: 0, wardMax: 0,
       boss: !!def.boss, fodder: !!def.fodder, plan: !!opts.plan, age: 0, fly: !!def.fly, target: null, tgtT: 0, aimA: 0, guardA: 0, contactCd: 0, spawnT: opts.spawnT || 0,
       phase: 1, vars: {}, strafe: this.rng.sign(), wob: this.rng.range(0, 6.28), exposed: false, recoil: 0,
       // statuses: burn/bleed pools, chill, charge, Venom (0-100; venomBy = bitmask of hero slots that added it), Radiance, Doom (HP units), hero debuffs (judged = Cleric Judgment, vulnT = Rain/Smoke vulnerability); slow/windMul/dmgTakenMul are read by ai.js and hitEnemy
@@ -90,12 +90,15 @@
     return e;
   };
 
+  // Elite: HP and damage multipliers apply once; a second affix (e.elite2, never equal to the first) rolls at World.AFFIX2[stratum - 1]; each affix effect applies once, whichever slot holds it.
   W.makeElite = function (e, affix) {
     e.elite = affix || this.rng.pick(ED.AFFIX_IDS);
+    const p2 = ED.World.AFFIX2[this.stratum - 1];
+    if (p2 > 0 && this.rng.chance(p2)) e.elite2 = this.rng.pick(ED.AFFIX_IDS.filter(id => id !== e.elite));
     e.hp *= ED.World.ELITE.hp + ED.World.ELITE.hpStep * (this.stratum - 1); e.maxHp = e.hp; e.dmg *= ED.World.ELITE.dmg; e.r = Math.round(e.r * 1.22); // elite HP x2.4 at stratum I up to x4.4 at VI
-    if (e.elite === 'swift') e.spd *= 1.4;
-    if (e.elite === 'brutal') e.dmg *= 1.4;
-    if (e.elite === 'warded') { e.ward = e.maxHp * 0.45; e.wardMax = e.ward; }
+    if (ED.hasAffix(e, 'swift')) e.spd *= 1.4;
+    if (ED.hasAffix(e, 'brutal')) e.dmg *= 1.4;
+    if (ED.hasAffix(e, 'warded')) { e.ward = e.maxHp * 0.45; e.wardMax = e.ward; }
   };
 
   // Stratum affinity: weak x1.5, resist x0.5, else x1 (el = one of ED.ELEMENT_IDS; General and physical hits pass nothing).
@@ -783,7 +786,7 @@
     if (this.rng.chance(e.elite ? 0.4 : 0.04)) this.spawnPickup('heart', e.x, e.y, 1);
     if (e.elite) {
       this.run.elitesKilled++; this.run.embers.elites += 2 + Math.floor(s / 2);
-      if (e.elite === 'volatile') this.addZone({ kind: 'tele', x: e.x, y: e.y, r: 70, dur: 0.7, team: 1, dmg: e.dmg * 1.2, boom: 'fire' });
+      if (ED.hasAffix(e, 'volatile')) this.addZone({ kind: 'tele', x: e.x, y: e.y, r: 70, dur: 0.7, team: 1, dmg: e.dmg * 1.2, boom: 'fire' });
     }
     if (def.split) for (let i = 0; i < def.split.n; i++) {
       const c = this.spawnEnemy(def.split.into, e.x + this.rng.range(-8, 8), e.y + this.rng.range(-8, 8));
@@ -925,7 +928,7 @@
     else this.emit({ t: 'block', x: p.x, y: p.y, k: 'aegis' });
     if (e && e.hp > 0) {
       if (st.thorns) this.hitEnemy(e, st.thorns, { p, kind: 'thorns', noProc: true, crit: false });
-      if (e.elite === 'vampiric') e.hp = Math.min(e.maxHp, e.hp + dmg * 3);
+      if (ED.hasAffix(e, 'vampiric')) e.hp = Math.min(e.maxHp, e.hp + dmg * 3);
       if (e.def.chillHit) p.chilled = 1.5;
     }
     if (st.guardian && p.hp > 0 && p.hp < p.maxHp * 0.3 && p.guardCd <= 0) { p.guardT = 3; p.guardCd = 20; this.emit({ t: 'guard', pid: p.pid }); }

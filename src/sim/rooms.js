@@ -47,7 +47,7 @@
     const nW = 2 + (this.pact >= 10 ? 1 : 0);
     const budget = (7 + 2 * s) * this.threat().wave * (1 + 0.6 * (n - 1) + 0.2 * (n - 1) * (n - 2)) * (this.tutorial && s === 1 ? 0.75 : 1) * (room.danger || 1);
     let roster = rosterOf(biome);
-    if (s >= 2 && this.rng.chance(0.35)) {
+    if (s >= 2 && this.rng.chance(ED.World.MIX_PREV)) {
       const prev = rosterOf(ED.biomeFor(s - 1)).map(([id, w]) => [id, w * 0.35]);
       roster = roster.concat(prev);
     }

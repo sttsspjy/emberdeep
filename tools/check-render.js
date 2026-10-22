@@ -219,6 +219,23 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     hit({ c: 1, v: 9 }); ok(F.texts.length === 2, 'a crit makes its own number');
     F.reset();
   }
+
+  // two-affix elites: the E row carries the second affix at index 18, the mirror decodes it, the label reads both names before the foe name
+  {
+    const w = room1(0), e1 = w.spawnEnemy('skeleton', 100, 100, {}), e2 = w.spawnEnemy('skeleton', 140, 100, {}), e3 = w.spawnEnemy('skeleton', 180, 100, {});
+    e1.elite = 'swift'; e1.elite2 = 'brutal'; e2.elite = 'volatile'; e2.elite2 = 'vampiric';
+    const s1 = wire(N.encodeSnap(w, [], false)), row = (e) => s1.E.find((r) => r[0] === e.id);
+    ok(row(e1).length === 19 && row(e1)[10] === ED.AFFIX_IDS.indexOf('swift') && row(e1)[18] === ED.AFFIX_IDS.indexOf('brutal'), `the E row ends with the second affix index (${row(e1)[18]})`);
+    ok(row(e2)[18] === ED.AFFIX_IDS.indexOf('vampiric') && row(e3)[10] === -1 && row(e3)[18] === -1, 'second affix of another elite; -1 for a foe without affixes');
+    e3.elite = 'warded'; const s2 = wire(N.encodeSnap(w, [], false));
+    ok(s2.E.find((r) => r[0] === e3.id)[18] === -1, 'an elite with one affix sends -1');
+    const m = mirrorOf(w); s1.T = 5; m.apply(s1, 0); m.renderT = 5; m.update(0, 0.1);
+    const v = (e) => m.enemies.find((q) => q.id === e.id);
+    ok(v(e1).elite === 'swift' && v(e1).elite2 === 'brutal' && v(e2).elite === 'volatile' && v(e2).elite2 === 'vampiric' && v(e3).elite === null && v(e3).elite2 === null, 'the mirror decodes elite and elite2');
+    const nm = (id) => ED.AFFIXES[id].name, fn = ED.ENEMIES.skeleton.name;
+    ok(R.eliteLabel(v(e1)) === `${nm('swift')} ${nm('brutal')} ${fn}` && R.eliteLabel(v(e1), true) === `${nm('swift')} ${nm('brutal')}`, `a two-affix elite reads both names before the foe name (${R.eliteLabel(v(e1))})`);
+    ok(R.eliteLabel({ elite: 'warded', elite2: null, def: ED.ENEMIES.skeleton }) === `${nm('warded')} ${fn}` && R.eliteLabel({ elite: 'warded', def: ED.ENEMIES.skeleton }, true) === nm('warded'), 'a one-affix elite keeps "Affix Foe"');
+  }
 }
 
 console.log(`${n} checks, ${fails} failed`);

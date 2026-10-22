@@ -106,7 +106,7 @@
       const st = N.ST[rb[8]] || 'move';
       if (e.boss) { e.pose = st; e.st = 'atk'; } else e.st = st;
       e.burrowed = st === 'burrow' && !e.boss;
-      e.aimA = rb[9]; e.elite = rb[10] >= 0 ? ED.AFFIX_IDS[rb[10]] : null; e.ward = rb[11]; e.wardMax = rb[12]; e.phase = rb[13]; e.face = rb[14]; e.t = rb[15];
+      e.aimA = rb[9]; e.elite = rb[10] >= 0 ? ED.AFFIX_IDS[rb[10]] : null; e.elite2 = rb[18] >= 0 ? ED.AFFIX_IDS[rb[18]] : null; e.ward = rb[11]; e.wardMax = rb[12]; e.phase = rb[13]; e.face = rb[14]; e.t = rb[15];
       out.push(e);
     }
     // fodder rows (net.js H): HP is the sent fraction of World.fodderHp (what spawnEnemy gives), the rest of the foe state is the default one
