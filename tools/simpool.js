@@ -1,4 +1,4 @@
-// Usage: node tools/simpool.js <heroes> <runs> <botSkill> <meta none|mid|max[,...]> [classes|-] [pact] [--pick=smart|random] [--start=random|class|generalist|rotate|<gateId>] [--gates=1|2] [--force=id[@slot],...] [--route=attack|skill1|skill2|element|random|rotate] [--fork=0|1|random|rotate] [--weapon=0|1|2|rotate] [--mastery=smart|fork]
+// Usage: node tools/simpool.js <heroes> <runs> <botSkill> <meta none|mid|max[,...]> [classes|-] [pact] [--pick=smart|legacy|random] [--start=random|class|generalist|rotate|<gateId>] [--gates=1|2] [--force=id[@slot],...] [--route=attack|skill1|skill2|element|random|rotate] [--fork=0|1|random|rotate] [--weapon=0|1|2|rotate]
 //   [--seed0=N] [--explore=minLight] [--strata=N] [--jobs=N] [--patch=file.js] [--out=rows.json] [--pair=rows.json] [--detail] [--nice]   (every flag of tools/sim.js is forwarded)
 // Parallel batch runs of tools/sim.js bots across worker processes (default: cores - 1) at normal priority (--nice: idle priority, which Windows may throttle to a crawl while the machine is unattended). One result line per meta profile;
 // --detail prints the full sim.js summary of each. --patch=file.js loads a module exporting function (ED) that edits tables (ED.World.THREAT, ED.ENEMIES, ...) in every worker.
@@ -43,7 +43,7 @@ if (process.argv[2] === '--worker') {
     jobs.forEach((j, i) => (all[j.label] = all[j.label] || []).push(res[i]));
     const rows = jobs.map((j, i) => sim.rowOf(res[i], j.label, j.seed));
     if (flags.out) fs.writeFileSync(flags.out, JSON.stringify(rows));
-    console.log(`pick=${pick}${o.route ? ' route=' + o.route : ''}${o.fork !== undefined ? ' fork=' + o.fork : ''}${o.weapon !== undefined ? ' weapon=' + o.weapon : ''}${o.cardMastery ? ' mastery=' + o.cardMastery : ''}${o.start ? ' start=' + o.start : ''}${o.gates ? ' gates=' + o.gates : ''}${force.length ? ' force=' + force.join(',') : ''}${exploreMin === undefined ? '' : ' explore=' + exploreMin}${maxStratum === undefined ? '' : ' strata<=' + maxStratum + ' (capped runs: wins and depth do not apply)'} heroes=${n} pact=${pact} runs=${runs} (${((Date.now() - t0) / 1000).toFixed(0)}s, ${W} workers)`);
+    console.log(`pick=${pick}${o.route ? ' route=' + o.route : ''}${o.fork !== undefined ? ' fork=' + o.fork : ''}${o.weapon !== undefined ? ' weapon=' + o.weapon : ''}${o.start ? ' start=' + o.start : ''}${o.gates ? ' gates=' + o.gates : ''}${force.length ? ' force=' + force.join(',') : ''}${exploreMin === undefined ? '' : ' explore=' + exploreMin}${maxStratum === undefined ? '' : ' strata<=' + maxStratum + ' (capped runs: wins and depth do not apply)'} heroes=${n} pact=${pact} runs=${runs} (${((Date.now() - t0) / 1000).toFixed(0)}s, ${W} workers)`);
     for (const meta of metas) {
       const rs = all[meta], wins = rs.filter(r => r.victory).length;
       if (flags.detail) console.log(`\n== ${meta}\n` + sim.summarize(rs));

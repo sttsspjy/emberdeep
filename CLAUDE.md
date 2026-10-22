@@ -33,7 +33,7 @@ src/client/              input · aim · audio · icons · atlas (ImageBitmap + 
 src/art/                 generated atlas pages (data URIs) from tools/art.js; never hand-edited
 art-src/                 vendored CC0/CC-BY source art + SOURCES.md (packs, licences, hashes)
 src/main.js              app state machine + frame loop
-tools/                   sim.js (headless bot runs) · simpool.js (parallel bot batches across worker processes at normal priority; `--nice` = idle priority) · journey.js (whole-profile simulation) · sheet.js (analytic hero numbers)
+tools/                   sim.js (headless bot runs) · simpool.js (parallel bot batches across worker processes at normal priority; `--nice` = idle priority) · journey.js (whole-profile simulation) · sheet.js (analytic hero numbers) · model.js (the sheet's shared damage and health model) · pick.js (smart bot card values by marginal gain)
                          art.js + art-manifest.js (art packer; `--check` verifies src/art) · check-*.js and sheet-check.js (headless regression checks, exit 1 on failure)
 docs/                    GAME-DESIGN.md · MASTERPLAN.md · MASTERPLAN-AGENT.md · HANDOFF-*.md
 ```
