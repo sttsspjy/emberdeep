@@ -59,17 +59,20 @@
     const def = ED.ENEMIES[type];
     const s = this.stratum, pact = this.pact;
     let hp = def.hp, dmg = def.dmg;
-    if (def.fodder) hp *= 1 + 0.25 * (s - 1); // fodder: depth and pact only (no threat lever, party multiplier or elite)
-    else { if (!def.boss) hp *= ED.World.hpScale(s); hp *= this.partyHpMul(); }
-    if (pact >= 1) hp *= 1.25;
-    if (def.boss && pact >= 5) hp *= 1.35;
-    if (pact >= 10) hp *= 1.2;
+    if (def.fodder) hp = ED.World.fodderHp(def, s, pact);
+    else {
+      if (!def.boss) hp *= ED.World.hpScale(s);
+      hp *= this.partyHpMul();
+      if (pact >= 1) hp *= 1.25;
+      if (def.boss && pact >= 5) hp *= 1.35;
+      if (pact >= 10) hp *= 1.2;
+    }
     dmg *= ED.World.dmgScale(s) * (pact >= 2 ? 1.25 : 1) * (pact >= 8 ? 1.2 : 1) * this.threat().dmg;
     if (this.room && this.room.dark && !def.minion && !def.ally && !opts.ally) dmg *= ED.World.DARK_DMG; // every foe of a dark room
     const e = {
       id: U.uid(), type, def, x, y, r: def.r, hp, maxHp: hp, dmg, spd: def.spd * (pact >= 6 ? 1.15 : 1),
       kbx: 0, kby: 0, st: 'move', t: 0, cd: this.rng.range(0.6, 1.6), face: 1, flash: -1, stun: 0, frozen: 0, elite: null, ward: 0, wardMax: 0,
-      boss: !!def.boss, fodder: !!def.fodder, age: 0, fly: !!def.fly, target: null, tgtT: 0, aimA: 0, guardA: 0, contactCd: 0, spawnT: opts.spawnT || 0,
+      boss: !!def.boss, fodder: !!def.fodder, plan: !!opts.plan, age: 0, fly: !!def.fly, target: null, tgtT: 0, aimA: 0, guardA: 0, contactCd: 0, spawnT: opts.spawnT || 0,
       phase: 1, vars: {}, strafe: this.rng.sign(), wob: this.rng.range(0, 6.28), exposed: false, recoil: 0,
       // statuses: burn/bleed pools, chill, charge, Venom (0-100; venomBy = bitmask of hero slots that added it), Radiance, Doom (HP units), hero debuffs (judged = Cleric Judgment, vulnT = Rain/Smoke vulnerability); slow/windMul/dmgTakenMul are read by ai.js and hitEnemy
       // cid = last chain id this foe paid out in; wrathQ = charge made by Wrath of Heaven bolts; stunCd / blindCd = per-foe cooldowns of Overload / Dawn Stride
@@ -770,13 +773,12 @@
     this.run.kills++;
     if (def.fodder) this.run.fodderKills++;
     if (p) p.kills++;
-    this.emit({ t: 'die', x: Math.round(e.x), y: Math.round(e.y), type: e.type, el: e.elite ? 1 : 0, r: e.r });
+    this.emit(def.fodder ? { t: 'die', x: Math.round(e.x), y: Math.round(e.y), type: e.type, el: 0, r: e.r, fd: 1 } : { t: 'die', x: Math.round(e.x), y: Math.round(e.y), type: e.type, el: e.elite ? 1 : 0, r: e.r });
     this.onEnemyKilledSkill(e, p, src);
     if (def.boss) { this.onBossKilled(e); return; }
     this.deathPayoffs(e, p, src);
     if (def.fodder) { this.fodderMote(e.x, e.y); return; } // fodder drop no gold, heart or Grail growth, split or leave a cloud: only the room's xp mote
-    const xpMul = 1 + 0.35 * (s - 1);
-    this.dropXp(e.x, e.y, def.xp * xpMul * (e.elite ? 3 : 1));
+    this.dropFoeXp(e);
     if (this.rng.chance(e.elite ? 1 : 0.12)) this.dropGold(e.x, e.y, (1 + Math.floor((s - 1) / 2)) * (e.elite ? 3 : this.rng.int(1, 2)));
     if (this.rng.chance(e.elite ? 0.4 : 0.04)) this.spawnPickup('heart', e.x, e.y, 1);
     if (e.elite) {
@@ -1304,7 +1306,7 @@
       } else if (z.kind === 'spawn') {
         if (done) {
           if (z.n) { this.spawnPack(z); continue; } // a fodder pack
-          const e = this.spawnEnemy(z.type, z.x, z.y, { elite: z.elite, affix: z.affix });
+          const e = this.spawnEnemy(z.type, z.x, z.y, { elite: z.elite, affix: z.affix, plan: z.plan });
           this.emit({ t: 'spawned', x: Math.round(z.x), y: Math.round(z.y), el: z.elite ? 1 : 0 });
           if (z.after) z.after(e);
           continue;

@@ -110,12 +110,13 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
 
   // H rows and the mirror
   {
-    const w = room1(10), mk = (i, x, y, f, set) => { const e = w.spawnEnemy(ids[i % ids.length], x, y, {}); e.fodder = true; e.hp = e.maxHp * f; Object.assign(e, set); return e; };
+    const w = room1(10), fod = ED.biomeFor(1).fodder, mk = (i, x, y, f, set) => { const e = w.spawnEnemy(fod, x, y, {}); e.hp = e.maxHp * f; Object.assign(e, set); return e; };
     const full = mk(0, 100.4, 200.6, 1, {}), low = mk(1, 130, 200, 0.0001, { face: -1 }), half = mk(2, 160, 200, 0.5, { flash: 0.05, frozen: 1 });
     const fx = mk(3, 190, 200, 0.9, { stun: 1, chill: 30, burn: 4 }), plain = w.spawnEnemy('skeleton', 220, 200, {}), dead = mk(0, 250, 200, 1, {});
     dead.hp = 0;
     const s1 = wire(N.encodeSnap(w, [], false)), row = (e) => s1.H.find((r) => r[0] === e.id);
     ok(s1.H.length === 4 && !row(dead) && !s1.H.some((r) => r[0] === plain.id) && s1.E.length === 1, 'H holds the live fodder foes only; a normal foe stays in E');
+    ok(full.fodder === true && Math.abs(full.maxHp - ED.World.fodderHp(ED.ENEMIES[fod], 1, 10)) < 1e-9, `a biome fodder spawns as fodder at World.fodderHp (${full.maxHp})`);
     ok(row(full)[1] === ED.ENEMY_IDX[full.type] && row(full)[2] === 100 && row(full)[3] === 201 && row(full)[4] === 255 && row(full)[5] === 0, `a full-health fodder row: [id, type index, x, y, 255, 0] (${row(full)})`);
     ok(row(low)[4] === 1 && (row(low)[5] & 32) === 32, `hpQ never reaches 0 while alive; bit 5 = faces left (${row(low)})`);
     ok(row(half)[4] === 128 && (row(half)[5] & 3) === 3, `half health is 128/255; flash and frozen are bits 0 and 1 (${row(half)})`);
@@ -128,7 +129,7 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     const vf = v(full);
     ok(vf.fodder === true && vf.type === full.type && vf.def === ED.ENEMIES[full.type] && vf.boss === false && vf.elite === null && vf.st === 'move' && vf.r === vf.def.r, 'a fodder view foe carries id, type, def, fodder, r, no elite, not a boss, state move');
     ok(Math.abs(vf.x - 100) < 1e-9 && Math.abs(vf.y - 201) < 1e-9 && Math.abs(v(low).x - 130) < 1e-9, 'positions are the rounded wire values');
-    ok(Math.abs(vf.maxHp - full.maxHp) < 1e-6 * full.maxHp && Math.abs(v(half).maxHp - half.maxHp) < 1e-6 * half.maxHp, `max HP follows spawnEnemy (depth curve, pact 10): ${vf.maxHp} vs ${full.maxHp}`);
+    ok(Math.abs(vf.maxHp - full.maxHp) < 1e-6 * full.maxHp && Math.abs(v(half).maxHp - half.maxHp) < 1e-6 * half.maxHp, `max HP follows spawnEnemy (World.fodderHp, pact 10): ${vf.maxHp} vs ${full.maxHp}`);
     ok(Math.abs(v(half).hp / v(half).maxHp - 0.5) < 1 / 255 && v(low).hp > 0 && v(low).hp / v(low).maxHp < 0.005 && vf.hp === vf.maxHp, 'hp = hpQ / 255 of the max HP');
     const vx = v(fx), vh = v(half), vl = v(low);
     ok(vh.flash > 0 && vh.frozen > 0 && !(vh.stun > 0) && vx.stun > 0 && vx.chill > 0 && vx.burn > 0 && vx.burnLvl === 1 && !(vx.frozen > 0) && !(vf.flash > 0 || vf.chill > 0 || vf.burn > 0), 'status flags decode: flash, frozen, stunned, chilled, burning');
@@ -161,7 +162,7 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     ok(src.length > 2 && src.every((h) => ma[h] && mb[h] && m0[h]), `the recolour maps every source colour of ${anim} (${src.length})`);
     ok(src.some((h) => ma[h] !== mb[h]) && src.some((h) => ma[h] !== m0[h]), 'two aliases of one art, and the art itself, get different colours');
     // warm-up builds the fodder sheets of the stratum
-    const bm = ED.biomeFor(1), had = bm.fodder; bm.fodder = ['fodtestB'];
+    const bm = ED.biomeFor(1), had = bm.fodder; bm.fodder = 'fodtestB';
     for (const k of Object.keys(vars)) delete vars[k];
     AC.warm(1); for (let i = 0; i < 4000; i++) AC.pump();
     ok(vars[anim + '|pal:f:fodtestB'], 'AC.warm queues the biome fodder ids');
@@ -205,16 +206,16 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     const ctx = { localPid: 'p0', player: () => ({ x: 0, y: 0, pid: 'p0', cls: 'knight' }), players: () => [], stratum: () => 1 };
     const hit = (o) => F.handle(Object.assign({ t: 'hit', x: 100, y: 100, v: 30, pid: 'p0' }, o), ctx);
     F.reset();
-    hit({ f: 1 }); ok(F.texts.length === 0, 'a non-crit fodder hit prints no number');
-    hit({ f: 1, v: 400 }); hit({ f: 1, pid: 'p1' }); ok(F.texts.length === 0, 'not even a big one or one of another hero');
-    hit({ f: 1, c: 1 }); ok(F.texts.length === 1 && F.texts[0].crit, 'a crit fodder hit prints its number');
-    hit({ f: 1 }); ok(F.texts.length === 1 && F.texts[0].s === '30', 'a non-crit fodder hit does not add into a crit number');
+    hit({ fd: 1 }); ok(F.texts.length === 0, 'a non-crit fodder hit prints no number');
+    hit({ fd: 1, v: 400 }); hit({ fd: 1, pid: 'p1' }); ok(F.texts.length === 0, 'not even a big one or one of another hero');
+    hit({ fd: 1, c: 1 }); ok(F.texts.length === 1 && F.texts[0].crit, 'a crit fodder hit prints its number');
+    hit({ fd: 1 }); ok(F.texts.length === 1 && F.texts[0].s === '30', 'a non-crit fodder hit does not add into a crit number');
     F.reset();
     hit({}); ok(F.texts.length === 1 && F.texts[0].s === '30', 'a normal hit prints a number');
-    hit({ f: 1, v: 12 }); ok(F.texts.length === 1 && F.texts[0].s === '42', `a non-crit fodder hit adds into the number of its spot (${F.texts[0].s})`);
-    hit({ f: 1, v: 5, x: 160 }); ok(F.texts.length === 1, 'a non-crit fodder hit elsewhere makes no number');
+    hit({ fd: 1, v: 12 }); ok(F.texts.length === 1 && F.texts[0].s === '42', `a non-crit fodder hit adds into the number of its spot (${F.texts[0].s})`);
+    hit({ fd: 1, v: 5, x: 160 }); ok(F.texts.length === 1, 'a non-crit fodder hit elsewhere makes no number');
     F.texts[0].life = F.texts[0].max - 0.2;
-    hit({ f: 1, v: 7 }); ok(F.texts.length === 1 && F.texts[0].s === '42', 'a number older than 150 ms takes no more');
+    hit({ fd: 1, v: 7 }); ok(F.texts.length === 1 && F.texts[0].s === '42', 'a number older than 150 ms takes no more');
     hit({ c: 1, v: 9 }); ok(F.texts.length === 2, 'a crit makes its own number');
     F.reset();
   }

@@ -199,6 +199,10 @@
   // Horde of a combat or elite room (fodder beside the threat waves): kills to spawn by stratum (x0.6 in an elite room, x(1 + 0.5 (n - 1)) per party, x0.6 at stratum I of the tutorial, x DARK_FODDER in a dark room),
   // fodder per pack, seconds between packs, minimum pack distance from every hero (relaxed in 40 px steps once a pack has waited PACK_WAIT s), live-foe cap (solo, 2+ heroes).
   W.FODDER_Q = [40, 55, 70, 85, 100, 120]; W.PACK_N = [6, 12]; W.PACK_GAP = [2.0, 3.0]; W.PACK_AVOID = 220; W.PACK_WAIT = 4; W.LIVE_CAP = [120, 180];
+  // Fodder max HP: depth (+25% per stratum) and pact only, no threat lever, party multiplier or elite (pure; the client mirror rebuilds it from the wire fraction).
+  W.fodderHp = (def, s, pact) => def.hp * (1 + 0.25 * (s - 1)) * (pact >= 1 ? 1.25 : 1) * (pact >= 10 ? 1.2 : 1);
+  // Xp a threat foe is worth before the dark-room multiplier and the room's budget scale (enc.xpK).
+  W.threatXp = (def, s, elite) => (def.xp || 0) * (1 + 0.35 * (s - 1)) * (elite ? 3 : 1);
   // Room xp budget by stratum (solo, per room; x DARK_LOOT in a dark room, not scaled by the party): threat drops, fodder motes (FODDER_XP_SHARE of it, spread over the quota) and the clear pile together drop exactly this.
   W.ROOM_XP = { combat: [38, 61, 96, 136, 173, 196], elite: [71, 103, 139, 187, 257, 290] }; W.FODDER_XP_SHARE = 0.5;
   // Gold dropped by a 'gold' room reward (shared with the UI): 15 + 8 per stratum, times the global gold multiplier.
@@ -841,12 +845,20 @@
     total = Math.round((exact ? total : total * W.GOLD_MUL) * this.lootMul());
     while (total > 0) { const v = Math.min(total, total > 30 ? 10 : total > 8 ? 4 : 1); this.spawnPickup('gold', x, y, v); total -= v; }
   };
-  // Drops total xp (x lootMul unless exact: fodder motes and the clear pile) and returns the amount dropped. In a room with an xp budget (enc.xpBudget) a threat drop is cut to what is left of enc.xpThrCap (the budget less the fodder share),
-  // an exact drop to what is left of the budget: enc.xpOut counts everything dropped, enc.xpThr the threat part, enc.xpClip what the cuts removed.
-  W.prototype.dropXp = function (x, y, total, exact) {
-    total = exact ? Math.round(total) : Math.max(1, Math.round(total * this.lootMul()));
+  // Drops total xp (x lootMul unless exact: fodder motes and the clear pile) and returns the amount dropped. In a room with an xp budget (enc.xpBudget) a threat drop is scaled by enc.xpK (the planned waves fill enc.xpThrCap, the budget less the fodder share),
+  // its fraction carried in enc.xpThrAcc, and cut to what is left of xpThrCap (unplanned summons); an exact drop is cut to what is left of the budget. enc.xpOut counts everything dropped, enc.xpThr the threat part, enc.xpClip what the cuts removed.
+  // A threat foe's xp: its threatXp, except that in a room with an xp budget only the planned wave foes (e.plan) pay; summons and splits drop none there.
+  W.prototype.dropFoeXp = function (e) {
     const enc = this.enc;
-    if (enc && enc.xpBudget !== undefined) {
+    if (enc && enc.xpBudget !== undefined && !e.plan) return;
+    this.dropXp(e.x, e.y, W.threatXp(e.def, this.stratum, e.elite));
+  };
+  W.prototype.dropXp = function (x, y, total, exact) {
+    const enc = this.enc, led = !!enc && enc.xpBudget !== undefined;
+    if (exact) total = Math.round(total);
+    else if (led) { enc.xpThrAcc += total * this.lootMul() * enc.xpK; total = Math.floor(enc.xpThrAcc); enc.xpThrAcc -= total; }
+    else total = Math.max(1, Math.round(total * this.lootMul()));
+    if (led) {
       const left = Math.max(0, exact ? enc.xpBudget - enc.xpOut : enc.xpThrCap - enc.xpThr);
       if (total > left) { enc.xpClip += total - left; total = left; }
       enc.xpOut += total;

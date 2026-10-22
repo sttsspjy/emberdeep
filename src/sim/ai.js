@@ -363,7 +363,7 @@
         if (e.def.look === 'puff') w.addZone({ kind: 'poison', x: e.x, y: e.y, r: e.def.boom * 0.7, dur: 2.2, dps: e.dmg * 0.3, team: 1 });
         e.hp = 0;
         w.emit({ t: 'die', x: Math.round(e.x), y: Math.round(e.y), type: e.type, el: 0, r: e.r });
-        w.dropXp(e.x, e.y, e.def.xp);
+        w.dropFoeXp(e);
       }
       return;
     }

@@ -425,7 +425,7 @@
     const b = ED.biomeFor(stratum), roster = b.enemies;
     const add = (id, type) => { wq.push(id, type, 2, id, type, 1, id, type, 3, id, type, 0); }; // popped last-in-first-out: recolour (0), light-floor silhouette (3), white flash (1), wind-up outline (2)
     if (b.boss) for (const id in ED.ART.anims) if (id.startsWith('boss.' + b.boss + '.') && A.has(id)) add(id, b.boss);
-    const fod = b.fodder || []; // fodder ids of the stratum: built after the roster
+    const fod = [].concat(b.fodder || []); // fodder id(s) of the stratum: built after the roster
     for (let i = fod.length - 1; i >= 0; i--) { const t = fod[i]; if (ED.ENEMIES[t]) for (const id of foeAnims(t)) add(id, t); }
     for (let i = roster.length - 1; i >= 0; i--) for (const id of foeAnims(roster[i][0])) add(id, roster[i][0]);
   };

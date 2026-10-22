@@ -282,18 +282,20 @@
   N.CAPS = { hit: 24, smite: 12, reap: 12, toll: 12, lance: 12, ric: 12, parry: 6, catch: 4, kblock: 6, blance: 8 };
   N.CAPS_LOCAL = { hit: 8, smite: 4, reap: 4, toll: 4, lance: 4, ric: 4, parry: 2, catch: 2, kblock: 3, blance: 4 };
   Object.assign(N.CAPS, { exec: 8, rupt: 8, bloom: 6, sweep: 6 }); Object.assign(N.CAPS_LOCAL, { exec: 3, rupt: 3, bloom: 2, sweep: 2 }); // Shade execution cuts, ruptures, Bloodbloom lines and Ambush Sweep rings
+  // Cap key of an event: a non-crit fodder hit counts as 'fhit' and a fodder death as 'fdie', so a horde never crowds out crits, threat hits and threat deaths.
+  const capKey = (ev) => (ev.fd ? (ev.t === 'hit' && !ev.c ? 'fhit' : ev.t === 'die' ? 'fdie' : ev.t) : ev.t);
   N.capFx = (fx, caps) => {
     let over = false, n = null;
     for (let i = 0; i < fx.length; i++) {
-      const c = caps[fx[i].t];
+      const t = capKey(fx[i]), c = caps[t];
       if (c === undefined) continue;
       n = n || {};
-      if ((n[fx[i].t] = (n[fx[i].t] || 0) + 1) > c) over = true;
+      if ((n[t] = (n[t] || 0) + 1) > c) over = true;
     }
     if (!over) return fx;
     const out = []; n = {};
     for (let i = 0; i < fx.length; i++) {
-      const t = fx[i].t, c = caps[t];
+      const t = capKey(fx[i]), c = caps[t];
       if (c !== undefined && (n[t] = (n[t] || 0) + 1) > c) continue;
       out.push(fx[i]);
     }
@@ -303,6 +305,7 @@
   Object.assign(N.CAPS, { quake: 4, crack: 6, banner: 4, wave: 6, dmburst: 8, forkRank: 4 }); Object.assign(N.CAPS_LOCAL, { quake: 2, crack: 3, banner: 2, wave: 3, dmburst: 3, forkRank: 2 }); // Avalanche slam and cracks, War Banner plant, Death Mark waves and bursts, fork rank grants
   Object.assign(N.CAPS, { solar: 6, verdict: 8, hturn: 8, chain: 24 }); Object.assign(N.CAPS_LOCAL, { solar: 2, verdict: 3, hturn: 3, chain: 8 }); // Cleric events
   Object.assign(N.CAPS, { dark: 2 }); Object.assign(N.CAPS_LOCAL, { dark: 1 }); // entering a dark room
+  Object.assign(N.CAPS, { fhit: 12, fdie: 30 }); Object.assign(N.CAPS_LOCAL, { fhit: 4, fdie: 12 }); // non-crit fodder hits and fodder deaths (capKey)
   // Venom bar level of a foe: 0-4 pips (one per 25 Venom), 5 = Corroded. Radiance fill 0-3 of the Smite gauge.
   N.venomLevel = (e) => (e.venom >= 100 ? 5 : e.venom > 0 ? Math.min(4, Math.ceil(e.venom / 25)) : 0);
   N.radLevel = (w, e) => (e.rad > 0 ? Math.min(3, Math.floor(4 * e.rad / w.smiteAt(e))) : 0);

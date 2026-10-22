@@ -83,7 +83,7 @@
   };
 
   // Horde and xp budget of a combat or elite room, beside its threat waves: q = fodder to spawn in all, spawned so far, the pack timer and size, the 2-4 edges packs come from,
-  // and the xp ledger (budget = ROOM_XP x DARK_LOOT in the units that drop, split into fod = the fodder motes' share and thrCap = what threat drops may take; out = dropped so far, thr = the threat part, clip = cut away, acc = mote fraction not yet dropped).
+  // and the xp ledger (budget = ROOM_XP x DARK_LOOT in the units that drop, split into fod = the fodder motes' share and thrCap = what threat drops may take; K = thrCap / the planned waves' threat xp; out = dropped so far, thr = the threat part, clip = cut away, acc / thrAcc = mote and threat fractions not yet dropped).
   W.planHorde = function (room, enc) {
     const s = this.stratum, n = this.partySize(), Wc = ED.World, kind = room.type === 'elite' ? 'elite' : 'combat';
     enc.q = Math.round(Wc.FODDER_Q[s - 1] * (kind === 'elite' ? 0.6 : 1) * (1 + 0.5 * (n - 1)) * (this.tutorial && s === 1 ? 0.6 : 1) * (room.dark ? Wc.DARK_FODDER : 1));
@@ -91,7 +91,11 @@
     enc.edges = this.rng.shuffle(['n', 's', 'e', 'w']).slice(0, this.rng.int(2, 4));
     enc.xpBudget = Math.round(Wc.ROOM_XP[kind][s - 1] * (room.dark ? Wc.DARK_LOOT : 1));
     enc.xpFod = Math.round(Wc.FODDER_XP_SHARE * enc.xpBudget); enc.xpThrCap = enc.xpBudget - enc.xpFod;
-    enc.xpOut = 0; enc.xpThr = 0; enc.xpClip = 0; enc.xpAcc = 0;
+    let plan = 0;
+    for (const wv of enc.waves) for (const f of wv) plan += Wc.threatXp(ED.ENEMIES[f.type], s, f.elite);
+    plan *= room.dark ? Wc.DARK_LOOT : 1;
+    enc.xpK = plan > 0 ? enc.xpThrCap / plan : 1;
+    enc.xpOut = 0; enc.xpThr = 0; enc.xpClip = 0; enc.xpAcc = 0; enc.xpThrAcc = 0;
   };
 
   // A floor point on edge d (n, s, e, w) of the room: just inside the edge's door when it has one, else a random floor tile of the wall ring. null when none is found.
@@ -215,7 +219,7 @@
     for (const it of list) {
       const def = ED.ENEMIES[it.type];
       const pt = D.randomFloor(this.room, this.rng, avoid, def.ai === 'turret' ? ED.World.PACE.avoidTurret : ED.World.PACE.avoid);
-      this.addZone({ kind: 'spawn', x: pt.x, y: pt.y, r: def.r + 4, dur: ED.World.PACE.spawn + this.rng.range(0, ED.World.PACE.spawnVar), type: it.type, elite: !!it.elite, affix: it.affix });
+      this.addZone({ kind: 'spawn', x: pt.x, y: pt.y, r: def.r + 4, dur: ED.World.PACE.spawn + this.rng.range(0, ED.World.PACE.spawnVar), type: it.type, elite: !!it.elite, affix: it.affix, plan: 1 });
     }
   };
 

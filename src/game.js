@@ -109,9 +109,9 @@
       e.aimA = rb[9]; e.elite = rb[10] >= 0 ? ED.AFFIX_IDS[rb[10]] : null; e.ward = rb[11]; e.wardMax = rb[12]; e.phase = rb[13]; e.face = rb[14]; e.t = rb[15];
       out.push(e);
     }
-    // fodder rows (net.js H): HP is the sent fraction of the max HP that spawnEnemy gives (depth curve, party size, pact), the rest of the foe state is the default one
+    // fodder rows (net.js H): HP is the sent fraction of World.fodderHp (what spawnEnemy gives), the rest of the foe state is the default one
     if (b.H.size) {
-      const pact = this.pact, hpMul = ED.World.hpScale(this.stratum || 1) * ED.World.partyHpMul(Math.max(1, this.players.size)) * (pact >= 1 ? 1.25 : 1) * (pact >= 10 ? 1.2 : 1);
+      const s = this.stratum || 1, pact = this.pact;
       for (const [id, rb] of b.H) {
         let e = this.eMap.get(id);
         if (!e || !e.fodder) {
@@ -120,7 +120,7 @@
           this.eMap.set(id, e);
         }
         const xy = lerpXY(a.H.get(id), rb), fl = rb[5];
-        e.x = xy[0]; e.y = xy[1]; e.maxHp = e.def.hp * hpMul; e.hp = rb[4] / 255 * e.maxHp;
+        e.x = xy[0]; e.y = xy[1]; e.maxHp = ED.World.fodderHp(e.def, s, pact); e.hp = rb[4] / 255 * e.maxHp;
         e.flash = fl & 1 ? 0.05 : 0; e.frozen = fl & 2 ? 1 : 0; e.stun = fl & 4 ? 1 : 0; e.chill = fl & 8 ? 40 : 0; e.burnLvl = fl & 16 ? 1 : 0; e.burn = e.burnPool = e.burnLvl; e.face = fl & 32 ? -1 : 1; // the wire carries chilled and burning as flags: drawn at a mid chill and one flame
         out.push(e);
       }

@@ -363,7 +363,7 @@ const budgetOf = (s, kind) => Math.round(W0.ROOM_XP[kind === 'elite' ? 'elite' :
   near(walk(mk(7), true), walk([], true), 1e-9, 'a dash ignores the crowd');
 }
 { // quotas: FODDER_Q by stratum, x0.6 elite, x1.5 dark, x(1 + 0.5 (n - 1)) party, x0.6 tutorial stratum I
-  const Q = (w, room) => { const enc = { }; w.planHorde(room, enc); return enc.q; };
+  const Q = (w, room) => { const enc = { waves: [] }; w.planHorde(room, enc); return enc.q; };
   for (let s = 1; s <= 6; s++) {
     const w = hordeWorld(s, ['knight']), w2 = hordeWorld(s, ['knight', 'ranger']), w4 = hordeWorld(s, ['knight', 'ranger', 'pyro', 'shade']), base = W0.FODDER_Q[s - 1];
     ok(Q(w, { type: 'combat', dark: false }) === base && Q(w, { type: 'combat', dark: true }) === Math.round(base * 1.5) && Q(w, { type: 'elite', dark: false }) === Math.round(base * 0.6), `stratum ${s} quota ${base} / dark / elite`);
@@ -383,21 +383,27 @@ for (let s = 1; s <= 6; s++) {
     if (process.argv.includes('-v')) console.log(`${s} ${kind}: ${r.t.toFixed(1)} s, ${w.log.packs.length} packs, fodder ${w.run.fodderKills}, threat ${w.run.kills - w.run.fodderKills}, xp ${w.log.xp}/${enc.xpBudget} (threat ${enc.xpThr}/${enc.xpThrCap}, cut ${enc.xpClip}), nearest hero ${Math.round(w.log.packDist)} px, sides ${[...w.log.sides].join('')}`);
     ok(r.cleared && enc.q === q && enc.spawned === q && w.run.fodderKills === q, `${tag}: the quota ${q} spawned (${enc.spawned}), was killed (${w.run.fodderKills}) and the room cleared in ${r.t.toFixed(0)} s`);
     ok(w.log.xp === budgetOf(s, kind) && enc.xpOut === budgetOf(s, kind), `${tag}: xp dropped ${w.log.xp} (ledger ${enc.xpOut}) = budget ${budgetOf(s, kind)}`);
+    ok(enc.xpClip <= 1, `${tag}: planned threat drops fill the threat cap without a cut (cut ${enc.xpClip} of a ${enc.xpThrCap} cap)`);
     ok(enc.xpThr <= enc.xpThrCap && w.log.packs.length >= Math.ceil(q / 12) && w.log.packs.every(z => z.type === fodderId(s) && z.n >= 1 && z.n <= 12 && z.r === 40 && z.dur === W0.PACE.spawn), `${tag}: ${w.log.packs.length} packs of the biome's fodder, 1-12 each`);
     ok(w.log.capBad === 0 && w.log.packDist >= W0.PACK_AVOID, `${tag}: packs land ${Math.round(w.log.packDist)} px from the hero, the live cap holds`);
     ok(w.log.fodGold === 0 && w.log.fodHearts === 0 && w.log.gold > 0, `${tag}: ${w.run.fodderKills} fodder kills dropped no gold or heart (the room dropped ${w.log.gold} gold, ${w.log.hearts} hearts)`);
   }
 }
-{ // the xp mote ledger: a fodder kill drops its share as whole units, exact in total; the threat part never passes its cap; the pile pays the rest
+{ // the xp mote ledger: a fodder kill drops its share as whole units, exact in total; threat drops are scaled so the planned waves fill their cap (xpK), never past it; the pile pays the rest
   const w = hordeWorld(1, ['knight']), room = roomOf(w, 'combat');
   const r = playRoom(w, room, 'none', 1);
   const enc = w.enc; ok(enc && enc.xpBudget === 38 && enc.xpFod === 19 && enc.xpThrCap === 19 && enc.q === 40, `ledger ${JSON.stringify({ b: enc.xpBudget, f: enc.xpFod, t: enc.xpThrCap, q: enc.q })}`);
   const p = w.players.get('p0'); let got = 0;
   for (let i = 0; i < enc.q; i++) { const e = w.spawnEnemy('bonemite', p.x, p.y); const before = w.log.xp; w.killEnemy(e, p, {}); got += w.log.xp - before; }
   ok(got >= enc.xpFod - 1 && got <= enc.xpFod && enc.xpOut === got, `40 fodder kills drop ${got} of ${enc.xpFod}`);
-  const sk = w.spawnEnemy('skelknight', p.x, p.y, { elite: true, affix: 'swift' }); const b0 = w.log.xp; w.killEnemy(sk, p, {});
-  ok(w.log.xp - b0 === Math.min(Math.round(10 * 3), enc.xpThrCap), `an elite's drop is cut to the threat cap (${w.log.xp - b0})`);
-  ok(enc.xpClip === Math.max(0, 30 - 19), `the cut is logged (${enc.xpClip})`);
+  let plan = 0; for (const wv of enc.waves) for (const f of wv) plan += W0.threatXp(ED.ENEMIES[f.type], 1, f.elite);
+  near(enc.xpK * plan, enc.xpThrCap, 1e-9, `xpK scales the planned threat xp (${plan.toFixed(1)}) to the threat cap ${enc.xpThrCap}`);
+  const un = w.spawnEnemy('skeleton', p.x, p.y), u0 = w.log.xp; w.killEnemy(un, p, {});
+  ok(w.log.xp === u0 && !un.plan, 'an unplanned threat foe (summon, split) drops no xp in a budgeted room');
+  const sk = w.spawnEnemy('skelknight', p.x, p.y, { elite: true, affix: 'swift', plan: 1 }), acc0 = enc.xpThrAcc, want = Math.floor(acc0 + W0.threatXp(ED.ENEMIES.skelknight, 1, true) * enc.xpK), room0 = enc.xpThrCap - enc.xpThr, b0 = w.log.xp;
+  w.killEnemy(sk, p, {});
+  ok(w.log.xp - b0 === Math.min(want, room0), `an elite's drop is scaled by xpK (whole units, the fraction carried) and cut to what is left of the threat cap (${w.log.xp - b0} of ${want}, ${room0} left)`);
+  ok(enc.xpClip === Math.max(0, want - room0), `the cut is logged (${enc.xpClip})`);
 }
 { // the horde never holds the threat waves back: with the fodder left standing, the waves still advance as the threat foes die; the room clears only after the last fodder
   const w = hordeWorld(3, ['knight']), room = roomOf(w, 'combat');

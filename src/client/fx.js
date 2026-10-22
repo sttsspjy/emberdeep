@@ -575,7 +575,7 @@
         if (set.dmg && (mine || ev.c || ev.v >= 20)) {
           const col = ec || (ev.c ? '#ffd36b' : ev.k ? '#ffab70' : (mine ? '#ffffff' : '#cfc6b6'));
           const size = (ev.c ? 14 : (ev.k ? 8 : 10)) + Math.min(5, Math.sqrt(ev.v) * 0.22);
-          F.text(ev.x, ev.y - 6, ev.v, col, size, { crit: !!ev.c, pop: true, life: ev.c ? 1.15 : 0.85, max: ev.c ? 1.15 : 0.85, vy: ev.c ? -58 : -42, ol: EL_OL[el], sum: true, only: !!ev.f && !ev.c }); // a fodder hit (f) prints a number only as a crit; otherwise it adds into a number that is already up
+          F.text(ev.x, ev.y - 6, ev.v, col, size, { crit: !!ev.c, pop: true, life: ev.c ? 1.15 : 0.85, max: ev.c ? 1.15 : 0.85, vy: ev.c ? -58 : -42, ol: EL_OL[el], sum: true, only: !!ev.fd && !ev.c }); // a fodder hit (fd) prints a number only as a crit; otherwise it adds into a number that is already up
         }
         if (!ev.k) {
           const e = foeAt(ev.x, ev.y), r = e ? e.r : 8, gy = e ? e.y : ev.y + r;
