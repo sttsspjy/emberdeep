@@ -64,7 +64,7 @@ Status ticks, Smites, Tolls and discharges are `raw` hits: no hero multiplier, n
 
 - No life steal: hits, kills, damage over time and shield overflow never heal. Heal sources: hearts 22% max HP + 6 (+3% per Forager rank); campfire 35% (once per hero); healing draught 40% (shop); fountain 50% (also raises the downed); Vigor reward 20%; Vigor boon 15; Provisions (Hearth) 10% per rank and Elixir Flask 20% at each stratum after the first; Sanctuary 7% on cast (you and allies within 180); Bone Harvest 3% per minion harvested, at most 6%; revive; Second Wind, Phoenix Feather and Guardian Angel (one-off saves).
 - Healing received × `healMul` = (1 + Mending, Heartwood and Elixir bonuses) × pact.
-- Hearts drop from kills (4%, elites 40%), cleared rooms (36%, +10% per Forager rank in the party, at most 80%) and bosses (two).
+- Hearts drop from kills (4%, elites 40%), cleared rooms (36%, +10% per Forager rank in the party, at most 80%), bosses (two) and breakable props (1%).
 
 ### Stopping shots, stuns and moves
 
@@ -409,6 +409,7 @@ Per stratum: start, boss, three utility rooms (treasure on odd strata or an even
   - elite: `relic` 75% · `epic` 25%.
 - On clear, a `reward` prop appears at the room centre. Per-hero claims: `boon`, `forge`, `epic`, `vigor` (+12 max HP, heal 20%). Party claims (once): `gold` (`round((15 + 8s) × 0.65)`), `relic` (a relic hoard, one pick per hero).
 - **Boss**: 2 hearts, gold and the class offer of strata I, II, IV (§5). Stratum II and IV: a relic hoard (rarity ≥ r). Stratum III and V: an `epic` offer per hero. Stratum VI ends the run.
+- **Breakable props** (`biome.breakable`: I urn, II mushroom, III crystal, IV crate, V coral, VI shard): floor gen puts decor of those kinds in `room.breakables` (never baked into the floor) on plain floor off door lanes, ≥ 1.1 tiles apart, ≥ 1.5 tiles from the centre (rooms without a fight: outside the prop band); combat, elite and boss rooms hold 4–8 (topped up from their own RNG stream), other rooms at most 3. A hero hit within 9 px breaks one (melee arc, hero projectile path, team-0 explosions and skill blasts, dash path, Holy lance, Shield Charge, Shield Throw, Shadowstep; damage-over-time zones, minions and beams do not); it drops 1–3 gold 25% of the time (exact, no gold multiplier) and a heart 1% of the time, never xp. `roomState.broken` is the room's bit mask, carried in full snapshots as `BR`; `{t:'smash', i, x, y, k, r}` announces each break.
 - **Rest site**: a campfire (heal 35%) and, on odd strata only, an anvil (forge offer); each hero uses one.
 - **Shop**: 2 relics (+1 with Merchant's Favor 2), healing draught (40%) and one build item: an epic boon (75 gold) on odd strata, a forge (`60 + 15s` gold) on even strata. Relic, epic boon and draught prices scale 12% per stratum; every price is −10% per Favor rank, −25% with Merchant's Ledger, ×1.4 under Pact 7, rounded to 5 (minimum 5).
 - **Event shrines**: fountain (heals the party 50%, raises the downed), altar (pay 20% max HP for an epic offer), gamble shrine (`35 + 18s` gold for a random relic: 12% epic, 38% rare, 50% common), champion's trial (an elite fight for a rare relic).
