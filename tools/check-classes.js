@@ -16,10 +16,10 @@ const FORKS = [ // base, kind, dmg, rate, {field: value}
   ['longbow', 'heavy', 23.8, 0.612, { r: 4.8, speed: 396, life: 0.94, knock: 80 }], ['longbow', 'swift', 7.26, 0.187, { speed: 528, life: 0.72 }],
   ['crossbow', 'heavy', 47.5, 1.296, { r: 6, speed: 504, life: 0.88, pierce: 2, knock: 240 }], ['crossbow', 'swift', 14.5, 0.396, { speed: 672, life: 0.68, pierce: 2, knock: 60 }],
   ['twinbows', 'heavy', 8.91, 0.45, { r: 4.8, speed: 378, life: 0.77, knock: 80 }], ['twinbows', 'swift', 2.72, 0.1375, { speed: 504, life: 0.6, spread: 0.12 }],
-  ['firestaff', 'heavy', 23.8, 0.9, { r: 7.2, speed: 279 }], ['firestaff', 'swift', 7.26, 0.275, { speed: 372 }],
+  ['firestaff', 'heavy', 29.7, 0.9, { r: 7.2, speed: 279 }], ['firestaff', 'swift', 9.08, 0.275, { speed: 372 }],
   ['emberwand', 'heavy', 11.9, 0.27, { r: 4.8, speed: 351 }], ['emberwand', 'swift', 5.28, 0.12, { speed: 468 }],
   ['inferno', 'heavy', 42.9, 1.3, { r: 10.8, speed: 225 }], ['inferno', 'swift', 18.2, 0.55, { speed: 300 }],
-  ['daggers', 'heavy', 19.8, 0.378, { range: 46.2, arc: 1.43, knock: 78 }], ['daggers', 'swift', 6.29, 0.12, { range: 42, knock: 30 }],
+  ['daggers', 'heavy', 21.78, 0.378, { range: 46.2, arc: 1.43, knock: 78 }], ['daggers', 'swift', 6.91, 0.12, { range: 42, knock: 30 }],
   ['knives', 'heavy', 13.9, 0.648, { r: 4.8, speed: 432, knock: 80 }], ['knives', 'swift', 4.24, 0.198, { speed: 576, spread: 0.19 }],
   ['scythes', 'heavy', 31.68, 0.864, { range: 57.2, arc: 6.3, knock: 117 }], ['scythes', 'swift', 9.68, 0.264, { range: 52, knock: 45 }],
   ['mace', 'heavy', 33.7, 0.756, { range: 50.6, arc: 1.87, knock: 182 }], ['mace', 'swift', 10.3, 0.231, { range: 46, knock: 70 }],
@@ -44,8 +44,8 @@ near(ED.forkWeapon('firestaff', 'p_atk_h').explode.r, 46, 0.05, 'Magma Staff bla
 const SK = [ // class, skill, part, dmg
   ['knight', 'charge', 'impact', 48.8], ['knight', 'shieldthrow', 'strike', 43.4], ['knight', 'shieldthrow', 'return', 21.7],
   ['ranger', 'volley', 'arrow', 18.4], ['ranger', 'rain', 'tick', 9.4],
-  ['pyro', 'nova', 'blast', 52], ['pyro', 'nova', 'burn', 40.8], ['pyro', 'meteor', 'impact', 72], ['pyro', 'meteor', 'crater', 17.6],
-  ['shade', 'step', 'slash', 34], ['shade', 'vanish', 'ambush', 25],
+  ['pyro', 'nova', 'blast', 64.5], ['pyro', 'nova', 'burn', 52.8], ['pyro', 'meteor', 'impact', 89.5], ['pyro', 'meteor', 'crater', 21.6],
+  ['shade', 'step', 'slash', 40.6], ['shade', 'vanish', 'ambush', 27.5],
   ['cleric', 'sanctuary', 'zone', 30.4], ['cleric', 'judgment', 'leg', 41.8], ['necro', 'legion', 'minion', 11.4], ['necro', 'harvest', 'burst', 40.2],
 ];
 for (const [cls, sk, part, dmg] of SK) near(ED.Stats.skillNums(sk, build(cls)).p[part].dmg, dmg, 0.06, `${sk}.${part}`);
