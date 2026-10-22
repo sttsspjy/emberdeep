@@ -615,7 +615,7 @@ function skipStrata(w, from, ctx, policy, brng, darkPolicy) {
   for (const p of heroes) p.invuln = 0;
   settle();
   w.fx.length = 0; w.msgs.length = 0;
-  w.run.kills = 0; w.run.roomsVisited = 1; w.run.roomsTotal = w.floor.rooms.length; // the run's stats start at stratum N
+  w.run.kills = 0; w.run.fodderKills = 0; w.run.roomsVisited = 1; w.run.roomsTotal = w.floor.rooms.length; // the run's stats start at stratum N
   out.t0 = w.time;
   return out;
 }
