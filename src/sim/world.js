@@ -84,8 +84,27 @@
     return e;
   };
 
+  // Dash charges on a controller { dashN charges, dashT seconds to the next }: one charge refills every st.dashCd while below st.dashCharges. Returns the charges refilled.
+  Sim.dashTick = (c, st, dt) => {
+    const mx = st.dashCharges | 0;
+    if (c.dashN > mx) c.dashN = mx;
+    if (c.dashN >= mx) { c.dashT = 0; return 0; }
+    if (!(c.dashT > 0)) c.dashT = st.dashCd;
+    let n = 0;
+    c.dashT -= dt;
+    while (c.dashT <= 0 && c.dashN < mx) { c.dashN++; n++; c.dashT = c.dashN < mx ? c.dashT + st.dashCd : 0; } // an overshoot carries into the next charge
+    return n;
+  };
+  // Spends one charge (false when none is left); spending from a full set starts the recharge timer.
+  Sim.dashTry = (c, st) => {
+    if (!(c.dashN >= 1)) return false;
+    if (c.dashN >= (st.dashCharges | 0)) c.dashT = st.dashCd;
+    c.dashN--;
+    return true;
+  };
+
   // Hero movement: walking, dash, skill-move, hazards and pull zones.
-  Sim.movePlayer = (p, inp, dt, room, locked, zones) => {
+  Sim.movePlayer =(p, inp, dt, room, locked, zones) => {
     if (p.downed || p.dead) { p.moving = false; p.skillMove = null; p.skillIfr = false; return; }
     const speed = p.stats.moveSpeed * (ED.Stats.moveRate ? ED.Stats.moveRate(p) : 1);
     if (p.skillMove) { // a skill's own movement { dx, dy, speed, t (seconds left), iframes (untouchable for this long), age }
@@ -99,7 +118,8 @@
     p.skillIfr = false;
     if (p.dashT > 0) {
       p.dashT -= dt;
-      Sim.moveCircle(p, p.dashDx * 430 * dt, p.dashDy * 430 * dt, room, locked, false);
+      const ds = ED.CONST.DASH.speed;
+      Sim.moveCircle(p, p.dashDx * ds * dt, p.dashDy * ds * dt, room, locked, false);
       p.moving = true;
       return;
     }

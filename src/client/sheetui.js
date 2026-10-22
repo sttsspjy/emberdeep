@@ -185,7 +185,7 @@
   }
   function dashCard(m, color) {
     const d = m.dash;
-    let h = `<div class="sh-card sh-f" data-k="dash" style="--pc:${color}"><div class="sh-ct"><kbd>${esc(ED.Input.label('dash'))}</kbd><img alt="" src="${ico('wing', color)}"><b>Dash</b><span class="sh-cd">${d.cd.toFixed(2)}s</span></div><div class="sh-sub">Untouchable for ${d.ifr}s while you dash</div>`;
+    let h = `<div class="sh-card sh-f" data-k="dash" style="--pc:${color}"><div class="sh-ct"><kbd>${esc(ED.Input.label('dash'))}</kbd><img alt="" src="${ico('wing', color)}"><b>Dash</b><span class="sh-cd">${d.cd.toFixed(2)}s${d.charges > 1 ? ' <small>each</small>' : ''}</span>${d.charges > 1 ? `<span class="sh-pips">${pips(d.charges, d.charges, color)}</span>` : ''}</div><div class="sh-sub">${d.charges > 1 ? d.charges + ' charges · ' : ''}Untouchable for ${d.ifr}s while you dash</div>`;
     for (const q of d.parts) h += `<div class="sh-part"><span class="sh-plab">${esc(q.label)}</span><span class="sh-pv">${q.dmg !== undefined ? n1(q.dmg) : ''}</span><span class="sh-pn">${q.per ? 'per ' + q.per + ' · ' : ''}${q.r ? 'radius ' + q.r + ' · ' : ''}${q.dur ? Sh.secs(q.dur) + 's · ' : ''}${esc(q.note || '')}</span></div>`;
     return h + '</div>';
   }
