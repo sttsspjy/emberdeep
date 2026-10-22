@@ -56,7 +56,7 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   near(build({ s_el: 1, s_el_a: 1 }).veins, 0.15, 1e-9, 'Open Veins 15%'); near(build({ s_el: 1, s_el_a: 3 }).veins, 0.21, 1e-9, 'Open Veins rank 3');
   near(build({ s_el: 1, s_el_a: 1 }).exsang, 0, 1e-9, 'Exsanguinate is a rank 2 rider'); ok(build({ s_el: 1, s_el_a: 2 }).exsang > 0, 'Exsanguinate rank 2'); near(build({ s_el: 1, s_el_a: 3 }).exsang, build({ s_el: 1, s_el_a: 2 }).exsang, 1e-9, 'Exsanguinate stays the same at rank 3');
   near(build({ s_el: 1, s_el_a: 2 }).arterial, 0, 1e-9, 'Arterial Strike is a rank 3 transform'); ok(build({ s_el: 1, s_el_a: 3 }).arterial > 0, 'Arterial bonus'); near(build({ s_el: 1, s_el_a: 3 }).arterialN, 1, 1e-9, 'Arterial readies 1 crit');
-  near(build({ s_el: 1, s_el_b: 3 }).rupture, 0.7, 1e-9, 'Rupture rank 3 70%'); near(build({ s_el: 1, s_el_b: 1 }).bloodbloom, 0, 1e-9, 'Bloodbloom is a rank 2 rider'); near(build({ s_el: 1, s_el_b: 2 }).bloodbloom, 1, 1e-9, 'Bloodbloom rank 2'); near(build({ s_el: 1, s_el_b: 3 }).bloodbloom, 1, 1e-9, 'Bloodbloom stays at rank 3');
+  near(build({ s_el: 1, s_el_b: 1 }).rupture, 0.5, 1e-9, 'Rupture rank 1 50%'); near(build({ s_el: 1, s_el_b: 2 }).rupture, 0.85, 1e-9, 'Rupture rank 2 85% (+10% per rank, +25% from Bloodbloom)'); near(build({ s_el: 1, s_el_b: 3 }).rupture, 0.95, 1e-9, 'Rupture rank 3 95%'); near(build({ s_el: 1, s_el_b: 1 }).bloodbloom, 0, 1e-9, 'Bloodbloom is a rank 2 rider'); near(build({ s_el: 1, s_el_b: 2 }).bloodbloom, 1, 1e-9, 'Bloodbloom rank 2'); near(build({ s_el: 1, s_el_b: 3 }).bloodbloom, 1, 1e-9, 'Bloodbloom stays at rank 3');
   near(build({ s_el: 1, s_el_b: 2 }).cascade, 0, 1e-9, 'Crimson Cascade is a rank 3 transform'); near(build({ s_el: 1, s_el_b: 3 }).cascade, 1, 1e-9, 'Cascade ruptures 100%'); ok(build({ s_el: 1, s_el_b: 3 }).cascadeN >= 1, 'Cascade leaps');
   near(build({ s_el: 1 }).bleedAll, 0.1, 1e-9, 'Cruel Arts Bleed share'); near(build({ s_el: 1 }).statusPow, 0.15, 1e-9, 'Cruel Arts status power');
 }
@@ -265,7 +265,7 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   // no pools, no rupture
   const e0 = foe(w, p.x + 100, p.y - 60); near(w.rupture(e0, p, 0.5, 't', false), 0, 0, 'nothing to rupture');
   // rank 2: 60%
-  const r2 = stage({ s_el: 1, s_el_b: 2 }); near(r2.p.stats.rupture, 0.6, 1e-9, 'rank 2 ruptures 60%');
+  const r2 = stage({ s_el: 1, s_el_b: 2 }); near(r2.p.stats.rupture, 0.85, 1e-9, 'rank 2 ruptures 85%'); { const hp = 400, e2 = foe(r2.w, r2.p.x + 100, r2.p.y); e2.bleedPool = hp; e2.bleedOwner = r2.p; const dealt = r2.w.rupture(e2, r2.p, r2.p.stats.rupture, 't', false); near(dealt, hp * 0.85 * 1.5, 0.01, 'a rank 2 rupture bursts 85% of the Bleed pool at 150%'); }
 }
 { // Shadowstep ruptures every foe it cuts
   const { w, p } = stage({ s_el: 1, s_el_b: 1 }); const a = foe(w, p.x + 40, p.y), b = foe(w, p.x + 70, p.y); for (const e of [a, b]) { e.bleedPool = 400; e.bleedOwner = p; }
@@ -538,7 +538,7 @@ function U_ang(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
     ok(ED.cardName(id, 1) === name && ED.cardName(id, 2) === name && ED.cardName(id, 3) === form, id + ' card name: ' + name + ' then ' + form);
     ok(ED.boonText(id, 2, null).indexOf(form) < 0 && ED.boonText(id, 3, null).indexOf(form + ':') >= 0, id + ' card text names the transform only at rank 3');
     const t1 = ED.cardTotals(b, 1), t2 = ED.cardTotals(b, 2), t3 = ED.cardTotals(b, 3);
-    for (const q in b.r2) ok(!t1[q] && t2[q] > 0 && t3[q] > 0, id + ' stat ' + q + ' (rank 2 rider)');
+    for (const q in b.r2) ok(t2[q] > 0 && t3[q] > 0 && (q in b.mods || q in (b.up || {}) ? t2[q] > t1[q] : !t1[q]), id + ' stat ' + q + ' (rank 2 rider)');
     for (const q in b.r3) ok(t3[q] > 0 && (q in b.mods || q in (b.up || {}) ? t3[q] > t2[q] : !t2[q] && !t1[q]), id + ' stat ' + q + ' (rank 3 transform)');
   }
   const tx = (id) => ED.cardParts(id, 3, null).form.desc, tr = (id) => ED.cardParts(id, 2, null).rider2, pc = (v) => Math.round(v * 100) + '%';
