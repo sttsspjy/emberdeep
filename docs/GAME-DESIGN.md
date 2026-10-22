@@ -33,7 +33,7 @@ Canonical rules and numbers. Code follows this file; a balance pass changes numb
 
 ### Damage dealt by a hero (order, `hitEnemy`)
 
-1. **Hero multiplier** (one additive sum, at least ×0.1): `dmg` stat + conditional rows (execute: foes below 30% HP; searing: burning; lacerate: bleeding; malice: carrying Doom; brittle: chilled or frozen; fester: envenomed; opportunist: stunned, frozen or blinded; Death Knell stacks; Brand per ailment; Guardian Light; Embolden) + the class hook (`hitMul`: Momentum, Channel, Soul Barrage…) + class-element skill hits (`classElMul`), Golden Idol (+1% per 15 party gold, at most 20%), Banner of Unity.
+1. **Hero multiplier** (one additive sum, at least ×0.1): `dmg` stat + conditional rows (execute: foes below 30% HP; searing: burning; lacerate: bleeding; malice: carrying Doom; brittle: chilled or frozen; fester: envenomed; opportunist: stunned, frozen or blinded; Death Knell stacks; Brand per ailment; Guardian Light; Embolden) + the class hook (`hitMul`: Momentum, Channel, Soul Barrage…) + class-element skill hits (`classElMul`), Golden Idol (+1% per 15 party gold, at most 20%), Banner of Unity. The `dmg` stat itself is `1 + Σ additive sources`, then **× (1 + x) for each owned Ascended boon** (§3): the Ascended bucket sits after every additive source of the stat block. Known gap: the conditional rows, the class hook and Idol/Banner are added to `dmg` inside `hitEnemy`, so an Ascended ×`dmg` multiplies only the stat part until the hit multiplier moves into `combat.js`.
 2. **Crit** × `critMult` (1.75 + crit damage; chance capped at 95%), then the class `critMul`.
 3. The hit's own factor `src.mul` (Cleave, Ambush, Deadeye by distance flown, Ballista's pierce ramp, Gathering Force, Gangrene, …); with the Shatter boon, a hit on a frozen foe takes its bonus and ends the freeze.
 4. **Foe vulnerability** `1 + Σ`: Marked (Hunter's Mark, `markV`) · Judged or `vulnT` (+0.2, once: Judgment, Hail of Thorns, smoke do not stack) · Frozen +0.25 · Sunder +0.04 per stack (own stacks, max 10) · Venom `venom/100 × (0.25 + corrode)` (full from the hero who added Venom, ×0.5 from allies). Co-op debuffs are single foe states: the strongest value wins, they never add.
@@ -239,7 +239,7 @@ Seven paths: six element paths and General. A hero follows at most **2 element p
 | lacerate | Lacerate | r | 2 | +12% damage to bleeding foes. |
 | execute | Executioner | r | 2 | +25% damage to foes below 30% HP. |
 | deepcuts | Deep Cuts | r | 2 | Bleed deals +30%. |
-| opportunist | Opportunist | r | 1 | +25% damage to stunned, frozen or blinded foes. |
+| opportunist | Opportunist | r | 1 | +25% damage to stunned, frozen or blinded foes. Offered only to a hero that can stun, freeze or blind (§4). |
 | sunder | Sunder | r | 1 | Each crit adds Sunder stacks to the foe (`(dmg / foeHp) × 60`, at most 2 per crit, max 10): +4% damage from you per stack. |
 | masterstroke | Masterstroke (key) | e | 1 | Every 4th attack is a guaranteed crit at +30% that Bleeds for at least 50% of the hit. |
 | evo_general | Masterwork Arms | l | 1 | Crits release a spectral strike (repeat swing or spectral shot) at 60%. +10% crit chance. |
@@ -270,17 +270,39 @@ One per run. The weapon is renamed with the prefix before its (fork) name: Cinde
 ### Open boons (every hero, no path, low caps)
 vigor (c,3: +15 max HP, heal 15) · plating (c,2: +5 armor) · fleet (c,2: +7% move) · focus (c,3: skills −10% cooldown) · lightstep (c,2: dash −20% cooldown) · magnet (c,2: +40% pickup, +10% xp) · edge (c,2: +10% damage) · quick (c,2: +10% attack speed) · bounty (c,2: +25% gold) · stalwart (c,2: +6% max HP) · mending (c,2: +15% healing received) · forager (c,2: hearts drop 10% more often and heal 3% more) · wide (r,2: +15% area) · evade (r,2: +6% dodge) · thorns (r,2: attackers take 10, +4 armor) · pierce (r,2, ranged: +1 pierce) · split (r,2, ranged: +1 projectile, −8% damage) · bladedash (r,1: dash through foes for 120% P) · battleward (r,1: shield 5% max HP when an elite room locks) · echo (e,1: skill 1 holds 2 charges) · laststand (e,1: below 30% HP, 3 s of −60% damage taken, 20 s cooldown) · glass (e,1: +30% damage, −15% max HP) · trance (e,1: a skill grants +30% attack speed 4 s) · overcharge (e,1: skills release a shockwave, 10 + 150% P, r85).
 
+### Ascended boons (rar `a`, max 1, no path; `src/data/ascended.js`)
+
+The upgrade of a maxed open or General boon, id `asc_<base>`, colour `#ff5fd2`. It counts toward no affinity and carries the base's weapon-kind need. Eligible when the stratum is IV or deeper (`ED.ASC_STRATUM`), the base boon is owned at its max rank for this hero (`ED.maxRank`: a Generalist needs open boons one rank higher), the card is not owned and fewer than 2 (`ED.ASC_PER_STRATUM`) Ascended cards were taken this stratum. Offer rules: §4.
+
+Stat rule: `x` multiplies the stat block after every additive source (`s[key] *= 1 + x`); `mods` add like a boon's. `dmg`, `atk`, `spd` and `hpMul` are totals around 1, so the factor is on the total; `crit`, `critDmg`, `area`, `armor`, `pierce`, `lacerate`, `execute` and `bleedMul` are sums, so it is on the bonus you hold. Several factors on one key multiply. The sheet lists a factor as `×1.15` after the additive rows of its stat. Known gap: §1 step 1 (hit-time damage rows).
+
+| base (max rank) | id | name | effect |
+|---|---|---|---|
+| edge (2) | asc_edge | Honed Edge | ×1.15 damage |
+| quick (2) | asc_quick | Blur | ×1.15 attack speed |
+| split (2, ranged) | asc_split | Arrow Storm | +1 projectile, ×1.1 damage |
+| pierce (2, ranged) | asc_pierce | Impaler | +2 pierce, ×1.1 damage |
+| keen (open rank 1) | asc_keen | Hawk Eye | ×1.3 crit chance |
+| brutal (open rank 1) | asc_brutal | Savage | ×1.5 crit damage bonus |
+| wide (2) | asc_wide | Vast | ×1.5 area |
+| vigor (3) | asc_vigor | Titan | ×1.12 max health |
+| plating (2) | asc_plating | Bastion | ×1.5 armor |
+| lacerate (2, Generalist) | asc_lacerate | Hemorrhage | ×2 damage to bleeding foes |
+| execute (2, Generalist) | asc_execute | Headsman | ×2 damage to foes below 30% HP |
+| deepcuts (2, Generalist) | asc_deepcuts | Bloodletting | ×1.5 Bleed damage |
+
 ## 4. Offers
 
 - A hero holds a queue `p.offers` of offer specs; `p.picks === p.offers.length`. Offers open only when the room is safe. API: `W.grantOffer(p, spec)`.
 - Spec `src`: `start` · `level` · `room` · `class` · `forge` · `epic`.
 - Cards: 3 (+1 with Crown of Choice); `epic` 4 (+1). An evolution card and a duo are prepended to `level`, `room` and `epic` offers and take no slot.
+- **Ascended pin** (`level`, `room`, `epic` only; never `start`, `class` or `forge`): when any Ascended card is eligible (§3), one of them (uniform) is slot 1 of the drawn cards, behind the prepended evolution and duo cards; the draw fills the other n − 1 slots. `p.ascN` counts the Ascended picks of the stratum (reset when a stratum starts).
 - **start** (once, at run start; the Head Start upgrade adds `level` offers): 4 cards. Pyromancer, Cleric, Necromancer: their class gate plus 3 random other element gates. Knight, Ranger, Shade: 3 random element gates plus the Generalist gate (last).
-- **level**: every even level (2, 4, 6, …). Pool: open boons, non-gate boons of the hero's own paths (a Generalist: gated General boons), element gates while a slot is free (and no Generalist gate), keystones at affinity ≥ 5 (General 6). Weight = rarity weight (`c` 60, `r` 30 + 2.5s + 60·luck, `e` 10 + 2s + 40·luck, other 10) × (own path 2.5) × (gate 0.8); at most one gate per offer. Weapon-kind boons (`pierce`, `split`) need a projectile weapon.
+- **level**: every even level (2, 4, 6, …). Pool: open boons, non-gate boons of the hero's own paths (a Generalist: gated General boons), element gates while a slot is free (and no Generalist gate), keystones at affinity ≥ 5 (General 6). Weight = rarity weight (`c` 60, `r` 30 + 2.5s + 60·luck, `e` 10 + 2s + 40·luck, other 10) × (own path 2.5) × (gate 0.8); at most one gate per offer. Weapon-kind boons (`pierce`, `split`) need a projectile weapon. **Hygiene**: Opportunist needs a hero that can stun, freeze or blind a foe (`W.canDaze`: a Heavy fork, Knight, Shade, an owned `iceInfuse`, `frozenHeart`, `arcStun`, `dashBlind`, `waveStun`, `sanctStun`, `cStun`, `chargeStun`, `orbitStun`, `knightStun`, `cometStun` or `parry`, or a stun or blind skill part whose stat is set: Skyfall, Verdict, Afterimage); from stratum IV the utility commons bounty, magnet, forager, fleet and mending weigh ×0.25.
 - **room** (reward `boon`): card 1 = one unowned element gate while a slot is free, weighted by coverage (weak this or next stratum ×2, weak where an owned gate is resisted ×2, resisted next stratum ×0.5, class element ×2); the rest from the hero's own paths, then open boons at rarity ≥ r. A Generalist draws the level pool.
 - **epic**: level pool, rarity ≥ r, 4 cards, keystones ×2. Sources: elite-room reward (25%), boss of stratum III and V, shop (odd strata), altar.
-- **forge**: up to 3 owned boons below max (no evolutions); picking ranks one up (a fork card may be ranked). None → level offer. Sources: normal-room reward (8%), rest-site anvil (odd strata), shop (even strata).
-- **class**: the route system (§5): team level 3 (route), boss I (fork), boss II and IV (fork ranks). Fixed cards, no draw padding, no prepends, no class rooms.
+- **forge**: up to 3 owned boons below max (no evolutions, never route or fork cards: fork ranks come from bosses, §5); picking ranks one up. None → level offer. Sources: normal-room reward (8%), rest-site anvil (odd strata), shop (even strata).
+- **class**: the route system (§5): team level 3 (route, `ctier` 1) and boss I (fork, `ctier` 2). Fixed cards, no draw padding, no prepends. A class spec of a hero that already holds a fork becomes a level offer. Fork ranks 2 and 3 are not offers (§5).
 - Offer message to client: `{t:'offer', boons, rerolls, picks, src, path, forge, ctier, route}`. Rerolls (Q on keyboard, Y on a pad; from Insight and mastery 8) work on every offer except forge, route and fork picks. In a party a pick untouched for 45 s is taken for the hero: the first non-evolution card (so never the Generalist gate), a random card for a route or fork pick.
 - **Pacing targets**: see §10.
 
@@ -338,7 +360,7 @@ Crit-stack grants (Shadowstep, Riposte, Death's Edge) are multiplied by `critK =
 ### Route system
 
 - Each hero has four routes: **Attack**, **Skill 1**, **Skill 2** and **Element** (the status route: Bleed for Knight, Ranger and Shade; Fire, Holy, Shadow for the others). A route is a tier-1 card with two tier-2 forks: 12 cards per class, 72 in all (`src/data/classboons.js`).
-- **Moments** (every hero, every party member): team level 3 → pick 1 of the 4 route cards; boss of stratum I → pick 1 of the route's 2 forks (rank 1); boss of stratum II → the fork at rank 2 beside 2 rare boons; boss of stratum IV → rank 3, which adds the fork's named rider (a fork already at rank 3, e.g. after a forge, makes that offer an epic-style offer instead). A downed hero receives the pick when back up.
+- **Moments** (every hero, every party member): team level 3 → pick 1 of the 4 route cards; boss of stratum I → pick 1 of the route's 2 forks (rank 1); boss of stratum II → the fork gains rank 2 (a new behaviour: the card's `r2` numbers and `rider2`); boss of stratum IV → rank 3 (a transform: `r3` numbers, the named rider and the `form` name). Ranks 2 and 3 are granted by `W.grantForkRank` with no pick, to every hero including downed and dead ones, and announced with a reveal (message `forkRank {id, rank}` to the hero, event `forkRank` to everyone); the other boss rewards are unchanged. A hero without a fork when a rank falls due banks it (`p.forkDue`) and gets the banked ranks when the fork card is picked. The forge never ranks route or fork cards. A downed hero receives the route and fork picks when back up.
 - Route and fork cards never count toward path affinity and appear only in class offers. Card totals: `mods + up × (rank − 1) + r3` (rank 3). Slot damage (`s1Dmg`, `s2Dmg`) compounds card by card. Co-op cards help allies. Card text on the offer and the sheet is the exact source of every number below.
 - Fork tags: Attack forks **Heavy** / **Swift**; skill forks **Burst** (damage) / **Guard** (shields, damage reduction, stuns, slows, blinds, shot swats); element forks **Focus** (single target, bosses) / **Spread** (packs).
 

@@ -443,8 +443,7 @@
     if (src === 'class') {
       const cn = me && ED.CLASSES[me.cls] ? ED.CLASSES[me.cls].name : 'Class', rt = me && me.boons ? ED.classRoute(me.boons, me.cls) : null;
       if (offer.ctier === 1) return ['Choose your route', `It shapes how ${cn} fights`, null];
-      if (offer.ctier === 2) return [`${rt && rt.route ? ED.routeLabel(me.cls, rt.route) : 'Route'}: choose your fork`, 'A fork changes how the route plays; later bosses deepen it', null];
-      return ['Route mastery', 'Deepen your fork, or take a boon', null];
+      return [`${rt && rt.route ? ED.routeLabel(me.cls, rt.route) : 'Route'}: choose your fork`, 'A fork changes how the route plays; the second and fourth bosses rank it up', null];
     }
     if (src === 'start') { // only heroes without a class element are offered the General gate
       const cl = me && ED.CLASSES[me.cls];
@@ -461,7 +460,7 @@
     if (b.cls) return [`<span class="bc-path">${esc(b.route ? ED.routeLabel(b.cls, b.route) : ED.CLASSES[b.cls].name)}</span>`, false];
     return ['<span class="bc-path">Open</span>', false];
   }
-  const boonRibbon = (b, id) => (b.evo ? 'Evolution' : b.duo ? 'Duo' : b.key ? 'Keystone' : id === 'generalist' ? 'Forsake the elements' : b.gate ? 'Path gate' : b.route ? (b.tag ? b.tag + (b.coop ? ' · co-op' : '') : 'Route') : '');
+  const boonRibbon = (b, id) => (b.evo ? 'Evolution' : b.asc ? 'Ascended' : b.duo ? 'Duo' : b.key ? 'Keystone' : id === 'generalist' ? 'Forsake the elements' : b.gate ? 'Path gate' : b.route ? (b.tag ? b.tag + (b.coop ? ' · co-op' : '') : 'Route') : '');
   // The fork weapon of a class card as a small canvas drawn from the pixel atlas (null without art): tilted up-right about its grip.
   function weaponThumb(wid) {
     const A = ED.Atlas, id = ED.Sprites.forkAnim(wid); // the baked fork look: the same sprite the hero holds
@@ -506,7 +505,7 @@
     const have = me && me.boons ? (me.boons[id] || 0) : 0;
     const path = b.path || (b.duo && b.duo[0]) || null, path2 = b.duo ? b.duo[1] : null;
     const el = document.createElement('button'); el.type = 'button';
-    el.className = ['boon-card', path ? 'path-' + path : b.cls ? 'class' : 'neutral', path2 && 'path2-' + path2, path2 && 'duo', b.key && 'key', b.evo && 'evo', offer.forge && 'forge'].filter(Boolean).join(' ');
+    el.className = ['boon-card', path ? 'path-' + path : b.cls ? 'class' : 'neutral', path2 && 'path2-' + path2, path2 && 'duo', b.key && 'key', b.evo && 'evo', b.asc && 'asc', offer.forge && 'forge'].filter(Boolean).join(' ');
     el.style.setProperty('--rc', ED.RARITY[b.rar].color);
     if (path && ED.PATHS[path]) el.style.setProperty('--pc', ED.PATHS[path].color);
     if (path2 && ED.PATHS[path2]) el.style.setProperty('--pc2', ED.PATHS[path2].color);
@@ -535,7 +534,7 @@
     $('boon-head').style.color = hp ? ED.PATHS[hp].color : '';
     $('boon-sub').textContent = sub; $('boon-sub').hidden = !sub;
     $('boon-count').textContent = offer.picks > 1 ? `(${offer.picks} waiting)` : '';
-    const fixed = offer.src === 'class' && offer.ctier < 3; // a route or fork pick is a fixed choice: no reroll
+    const fixed = offer.src === 'class'; // a route or fork pick is a fixed choice: no reroll
     const rr = $('btn-reroll'), canRe = offer.rerolls > 0 && !offer.forge && !fixed;
     const pad = ED.Input.device === 'pad';
     rr.hidden = !canRe; rr.innerHTML = `<kbd>${pad ? 'Y' : esc(ED.Input.label('skill1'))}</kbd> Reroll (${offer.rerolls})`;
@@ -550,7 +549,7 @@
   UI.boonMove = (d) => { if (!boonOffer) return; boonFocus = (boonFocus + d + boonOffer.boons.length) % boonOffer.boons.length; paintFocus(); ED.Audio.play('hover'); };
   UI.boonConfirm = () => { if (!boonOffer || performance.now() < boonLock) return; UI.pickBoon(boonFocus); };
   UI.boonReroll = (byKey) => {
-    if (!boonOffer || !(boonOffer.rerolls > 0) || boonOffer.forge || (boonOffer.src === 'class' && boonOffer.ctier < 3) || performance.now() < boonLock) return;
+    if (!boonOffer || !(boonOffer.rerolls > 0) || boonOffer.forge || boonOffer.src === 'class' || performance.now() < boonLock) return;
     boonLock = performance.now() + BOON_LOCK_MS; // the fresh hand arrives in a moment; don't send twice
     if (byKey) ED.Audio.play('click');
     ED.Game.act({ t: 'reroll' });

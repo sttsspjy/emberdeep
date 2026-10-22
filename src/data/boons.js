@@ -207,6 +207,7 @@
     e: { name: 'Epic', color: '#c98bff', w: 10 },
     l: { name: 'Legendary', color: '#ffb02e', w: 4 },
     d: { name: 'Duo', color: '#5ff2c0', w: 12 },
+    a: { name: 'Ascended', color: '#ff5fd2', w: 0 },
   };
 
   // Gate boon id per path.

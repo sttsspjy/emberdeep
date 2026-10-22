@@ -6,9 +6,9 @@
   const W = ED.World.prototype;
 
   // ---------------- hooks called by world.js ----------------
-  // Called from addPlayer before the first recalc: add build-only fields to the hero (offer queue, dash-boon state, Holy/Lantern/Aegis timers, Death Knell stacks, Judgment grants, shield accounting).
+  // Called from addPlayer before the first recalc: add build-only fields to the hero (offer queue, fork ranks due, Ascended picks this stratum, dash-boon state, Holy/Lantern/Aegis timers, Death Knell stacks, Judgment grants, shield accounting).
   W.initBuild = function (p) {
-    p.offers = []; p.picks = 0; p.dashHit = null; p.dashTrail = 0; p.boltAt = 0;
+    p.offers = []; p.picks = 0; p.forkDue = 0; p.ascN = 0; p.dashHit = null; p.dashTrail = 0; p.boltAt = 0;
     p.knellN = 0; p.knellT = 0; p.holyT = 0; p.lanternT = 0; p.retT = 0; p.castN = 0; p.judgeGot = {}; p.shieldBy = {}; p.toughRoom = false;
   };
 
@@ -39,7 +39,7 @@
     const prov = 0.1 * ((p.meta.up && p.meta.up[ED.UPGRADE_IDX.provisions]) || 0);
     const heal = prov + (p.stats.strataHeal || 0);
     if (s > 1 && heal > 0) this.healPlayer(p, p.maxHp * heal);
-    p.angelUsed = false;
+    p.angelUsed = false; p.ascN = 0;
     if (p.stats.cloverRerolls && s > 1) p.rerolls += p.stats.cloverRerolls;
   };
 
@@ -68,7 +68,7 @@
   };
 
   // ---------------- xp, levels and boons ----------------
-  // Every even level grants a level offer; odd levels only raise the level. Team level 3 grants every hero the class route offer (cls: 1 on the event); the bosses of strata I, II and IV grant the fork and its ranks (rooms.js).
+  // Every even level grants a level offer; odd levels only raise the level. Team level 3 grants every hero the class route offer (cls: 1 on the event); boss I grants the fork offer, bosses II and IV its ranks 2 and 3 (rooms.js, W.grantForkRank).
   W.addXp = function (v) {
     this.xp += v;
     while (this.xp >= this.xpNext) {
@@ -90,10 +90,10 @@
       if (p.offer) {
         p.offerT += dt;
         // AFK guard so a party is never stuck behind one player (a solo hero may take as long as they like); never auto-evolves and never makes a hero a Generalist (the Generalist card is last in the start offer);
-        // a route or fork pick is seeded random, a mastery pick takes the fork
+        // a route or fork pick is seeded random
         if (p.offerT > 45 && this.players.size > 1) {
           const sp = p.offers[0], cl = sp && sp.src === 'class';
-          this.pickBoon(p.pid, cl ? (sp.ctier < 3 ? this.rng.int(0, p.offer.length - 1) : 0) : Math.max(0, p.offer.findIndex(id => !ED.BOONS[id].evo)));
+          this.pickBoon(p.pid, cl ? this.rng.int(0, p.offer.length - 1) : Math.max(0, p.offer.findIndex(id => !ED.BOONS[id].evo)));
         }
       } else if (p.offers.length && safe && !p.downed && !p.dead) {
         p.offer = this.rollOffer(p, p.offers[0]); p.offerT = 0;
@@ -102,7 +102,7 @@
     }
   };
 
-  // Offer message for the hero's head spec: { to, t:'offer', boons, rerolls, picks, src, path, forge, ctier (class offers: 1 route, 2 fork, 3 mastery), route }.
+  // Offer message for the hero's head spec: { to, t:'offer', boons, rerolls, picks, src, path, forge, ctier (class offers: 1 route, 2 fork), route }.
   W.sendOffer = function (p) {
     const sp = p.offers[0];
     this.msgs.push({ to: p.pid, t: 'offer', boons: p.offer, rerolls: p.rerolls, picks: p.picks, src: sp.src, path: sp.path || null, forge: sp.src === 'forge', ctier: sp.src === 'class' ? sp.ctier | 0 : 0, route: sp.route || null });
@@ -134,24 +134,56 @@
     return w;
   }
 
+  // Ascended cards the hero may be offered now: stratum >= ASC_STRATUM, fewer than ASC_PER_STRATUM taken this stratum, the base boon at its max rank, the card not owned, the weapon kind fitting.
+  W.ascCards = function (p) {
+    const out = [], st = p.stats;
+    if (this.stratum < ED.ASC_STRATUM || p.ascN >= ED.ASC_PER_STRATUM) return out;
+    for (const id of ED.ASC_IDS) {
+      const a = ED.BOONS[id];
+      if (!p.boons[id] && !(a.need && a.need !== st.kind) && (p.boons[a.asc] || 0) >= ED.maxRank(ED.BOONS[a.asc], st)) out.push(id);
+    }
+    return out;
+  };
+
+  // Stat keys that stun, freeze or blind foes (Frostbite, Frozen Heart, Overload, Dawn Stride and the route stats); the Opportunist gate also reads Heavy Stagger and the hero's skill parts.
+  const DAZE_KEYS = ['iceInfuse', 'frozenHeart', 'arcStun', 'dashBlind', 'waveStun', 'sanctStun', 'cStun', 'chargeStun', 'orbitStun', 'knightStun', 'cometStun', 'parry'];
+  // True when the hero can stun, freeze or blind a foe: a Heavy weapon fork, a DAZE_KEYS stat above 0, or a stun / blind part of its two skills (a gated part needs its stat: skyfall, verdict, afterimage).
+  W.canDaze = function (p) {
+    const st = p.stats, cl = ED.CLASSES[p.cls];
+    if (st.heavy || DAZE_KEYS.some(k => st[k] > 0)) return true;
+    for (const sid of [cl.skill, cl.skill2]) {
+      const sk = ED.SKILLS[sid];
+      if (sk) for (const d of sk.parts) if ((d.stun || d.blind || d.id === 'blind') && (!d.if || st[d.if] > 0)) return true;
+    }
+    return false;
+  };
+
+  const UTILITY = new Set(['bounty', 'magnet', 'forager', 'fleet', 'mending']); // commons that weigh x0.25 from stratum IV
+  const ASC_SRC = new Set(['level', 'room', 'epic']); // offers that pin an Ascended card
+
   // Boon ids for one offer spec (evolution card first, then the duo, both prepended on top of the cards). A forge spec with nothing to rank up turns into a level spec.
   // Everyone sees 3 cards (epic 4, Crown +1): the start offer is 3 element gates plus the guaranteed card (Generalist for Knight, Ranger and Shade; the class element's gate for the others);
-  // a class spec returns exactly the cards of the hero's next route step (no draw padding, no evolution or duo prepended): the 4 route cards, the 2 forks of the chosen route, or at mastery the fork plus rare boons
-  // (a fork at rank 3 gives an epic-style offer instead); room, level and epic offers draw from the hero's own paths (element heroes) or the General path (Generalists) plus open boons.
+  // a class spec returns exactly the cards of the hero's next route step (no draw padding, no evolution or duo prepended): the 4 route cards or the 2 forks of the chosen route (a hero that holds a fork gets a level offer);
+  // room, level and epic offers draw from the hero's own paths (element heroes) or the General path (Generalists) plus open boons, and when an Ascended card is eligible one of them (uniform) takes slot 1 of the drawn cards.
+  // The forge offers owned boons below their max rank, never route or fork cards.
   W.rollOffer = function (p, spec) {
     spec = spec || { src: 'level' };
     const rng = this.rng, st = p.stats, s = Math.max(1, this.stratum), luck = st.luck || 0, kind = st.kind;
     const gen = ED.isGeneralist(p.boons), els = ED.elementGates(p.boons), aff = {};
     for (const k of ED.PATH_IDS) aff[k] = ED.pathAffinity(p.boons, k);
-    let epic = spec.src === 'epic';
-    let n = (epic ? 4 : 3) + (st.choices | 0);
-    const out = [];
+    const epic = spec.src === 'epic';
+    const n = (epic ? 4 : 3) + (st.choices | 0);
+    const out = [], asc = ASC_SRC.has(spec.src) ? this.ascCards(p) : [];
+    if (asc.length) out.push(rng.weighted(asc, () => 1));
+    const pinned = out.length; // cards the draws must not count (an Ascended card in slot 1)
     const rank = (id) => ED.BOONS[id].rar;
     const free = !gen && els.length < ED.MAX_ELEMENTS;
+    const daze = () => this.canDaze(p);
     const eligible = (id) => {
       const b = ED.BOONS[id];
-      if (b.evo || b.duo || b.cls || (b.need && b.need !== kind)) return false;
+      if (b.evo || b.duo || b.cls || b.asc || (b.need && b.need !== kind)) return false;
       if ((p.boons[id] || 0) >= ED.maxRank(b, st)) return false;
+      if (id === 'opportunist' && !daze()) return false; // nothing to stun, freeze or blind: the card would do nothing
       if (b.gate) return free && b.path !== 'general' && !els.includes(b.path); // the Generalist gate is only on the start offer
       if (b.path === 'general') return b.key ? gen && aff.general >= ED.KEY_AFFINITY_GENERAL : gen || !!b.openMax; // gated General: Generalists; Keen Eye and Brutality are open at rank 1
       if (b.path) return !gen && els.includes(b.path) && (!b.key || aff[b.path] >= ED.KEY_AFFINITY);
@@ -164,6 +196,7 @@
       if (own(b)) w *= 2.5;
       if (b.gate) w *= 0.8;
       if (epic && b.key) w *= 2;
+      if (s >= 4 && UTILITY.has(id)) w *= 0.25;
       return w;
     };
     // weighted draw without replacement until the offer holds n cards; at most one element gate per offer
@@ -180,7 +213,7 @@
     const openPool = () => ED.BOON_IDS.filter(id => { const b = ED.BOONS[id]; return (b.open || b.openMax) && !b.gate && eligible(id); });
     switch (spec.src) {
       case 'forge': {
-        const have = Object.keys(p.boons).filter(id => ED.BOONS[id] && !ED.BOONS[id].evo && p.boons[id] < ED.maxRank(ED.BOONS[id], st));
+        const have = Object.keys(p.boons).filter(id => ED.BOONS[id] && !ED.BOONS[id].evo && !ED.BOONS[id].route && p.boons[id] < ED.maxRank(ED.BOONS[id], st));
         rng.shuffle(have);
         if (have.length) return have.slice(0, n);
         spec.src = 'level';
@@ -199,13 +232,9 @@
         const tbl = ED.CLASS_CARDS[p.cls], rt = ED.classRoute(p.boons, p.cls);
         if (!tbl) { spec.src = 'level'; break; }
         if (!rt.route) { spec.ctier = 1; return ED.ROUTES.map(r => tbl[r].t1); }
-        spec.route = rt.route;
-        if (!rt.fork) { spec.ctier = 2; return tbl[rt.route].forks.slice(); }
-        spec.ctier = 3;
-        if (rt.rank < ED.BOONS[rt.fork].max) out.push(rt.fork); else { epic = true; n = 4 + (st.choices | 0); }
-        draw(level.filter(rare));
-        if (!out.length) out.push('vigor');
-        return out;
+        if (rt.fork) { spec.src = 'level'; break; } // the fork is held: its ranks come from W.grantForkRank
+        spec.route = rt.route; spec.ctier = 2;
+        return tbl[rt.route].forks.slice();
       }
       case 'epic': draw(level.filter(rare)); break;
       case 'room': {
@@ -216,13 +245,13 @@
         }
         draw(level.filter(id => own(ED.BOONS[id])));
         if (out.length < n) draw(openPool().filter(rare)); // the own pool ran dry: open General at rare and up
-        if (!out.length) out.push('vigor');
+        if (out.length <= pinned) out.push('vigor');
         return this.prependCards(p, out);
       }
     }
     draw(level);
-    if (!out.length) draw(openPool());
-    if (!out.length) out.push('vigor');
+    if (out.length <= pinned) draw(openPool());
+    if (out.length <= pinned) out.push('vigor');
     if (spec.src === 'forge') return out;
     return this.prependCards(p, out);
   };
@@ -248,17 +277,36 @@
     if (id === 'generalist') this.forsakeRelics(p);
     if (b.heal) this.healPlayer(p, b.heal);
     if (b.mods.charges) p.chargeBonus = true;
+    if (b.asc) p.ascN++;
     p.offers.shift(); p.picks = p.offers.length; p.offer = null;
     this.emit({ t: 'boon', pid, id, x: p.x, y: p.y });
     if (b.evo) this.emit({ t: 'evolve', pid, path: b.evo, x: p.x, y: p.y });
     this.sendBuild(p);
     this.msgs.push({ to: pid, t: 'offerDone' });
+    if (b.route && b.tier === 2) while (p.forkDue > 0) { p.forkDue--; if (p.boons[id] < b.max) this.rankFork(p, id); } // ranks granted at bosses before the fork was taken
+  };
+
+  // Fork ranks are auto-granted at bosses II and IV (rank 2, rank 3). A hero that holds a fork below its max rank gains one rank at once; a hero without a fork banks it in p.forkDue, applied when the fork card is picked.
+  W.grantForkRank = function (p) {
+    if (!p) return;
+    const rt = ED.classRoute(p.boons, p.cls);
+    if (!rt.fork) p.forkDue++;
+    else if (rt.rank < ED.BOONS[rt.fork].max) this.rankFork(p, rt.fork);
+  };
+
+  // One rank on fork card `id`: stats and build resent, { to, t: 'forkRank', id, rank } to the hero and a forkRank event for the effects.
+  W.rankFork = function (p, id) {
+    const rank = p.boons[id] = (p.boons[id] || 0) + 1;
+    this.recalc(p, false);
+    this.sendBuild(p);
+    this.msgs.push({ to: p.pid, t: 'forkRank', id, rank });
+    this.emit({ t: 'forkRank', pid: p.pid, id, rank, x: p.x, y: p.y });
   };
 
   W.reroll = function (pid) {
     const p = this.players.get(pid);
     if (!p || !p.offer || p.rerolls <= 0 || !p.offers.length || p.offers[0].src === 'forge') return;
-    if (p.offers[0].src === 'class' && p.offers[0].ctier < 3) return; // a route or fork pick is a fixed choice: no reroll, no cost
+    if (p.offers[0].src === 'class') return; // a route or fork pick is a fixed choice: no reroll, no cost
     p.rerolls--;
     p.offer = this.rollOffer(p, p.offers[0]);
     this.sendOffer(p);
