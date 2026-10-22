@@ -3,6 +3,9 @@
 // pyTwin (second Meteor queued), pyComet (Comet leap), pyFlash (Flashpoint crit), pyHeat (cooldown cut / Chain Reaction). Hero state shown from the hero hook: Channel heat, the echo ring, the Comet flight, the Mantle overlay.
 // Skill forms: pyWave (Supernova front; sparks ride it from the hero hook), pyPull with sn (its collapse), pyPhoenix and the Phoenix ring zone (pfire tag 10: orbiting flames), pyStorm and pyField (Cataclysm cast and lava field, the big look of CF.lava),
 // pyComet with sd and pyDive (Sun Dive: a golden flight with rays, a golden landing).
+// Route forms: pyGeyser (Caldera: the geyser column and the widened Lava Pool), pyRing (Fire Dancer: the ring of flame where a dash began; the Channel crown trails sparks while the hero moves),
+// White Flame (white sparks rise from foes the hero's Burn has held for whiteT seconds, estimated from the foe's burning flag, plus a white flame glyph in their mark row),
+// pyEng (Inferno Engine: n / mx the Heat count, shown as embers circling the hero; go 1 an Inferno cast: a Nova blast at the hero, or a Meteor's heated telegraph (k 1); go 2 the Meteor landing).
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = U.TAU, F = ED.FX, Pix = ED.Pix, CF = ED.ClassFx, N = ED.Net, s2 = Pix.s2, FIRE = Pix.RAMP.fire;
@@ -11,13 +14,14 @@
   const lowFx = () => R().quality === 'low';
 
   // Events a busy fight can send many of per snapshot are capped like the built-in ones.
-  Object.assign(N.CAPS, { pyAfter: 6, pyFlash: 6, pyLava: 4, pyPull: 2, pyEcho: 3, pyTwin: 3, pyWave: 3, pyPhoenix: 3, pyStorm: 3, pyField: 3, pyDive: 4 });
-  Object.assign(N.CAPS_LOCAL, { pyAfter: 3, pyFlash: 3, pyLava: 2, pyPull: 1, pyEcho: 2, pyTwin: 2, pyWave: 2, pyPhoenix: 2, pyStorm: 2, pyField: 2, pyDive: 2 });
+  Object.assign(N.CAPS, { pyAfter: 6, pyFlash: 6, pyLava: 4, pyPull: 2, pyEcho: 3, pyTwin: 3, pyWave: 3, pyPhoenix: 3, pyStorm: 3, pyField: 3, pyDive: 4, pyGeyser: 6, pyRing: 3, pyEng: 4 });
+  Object.assign(N.CAPS_LOCAL, { pyAfter: 3, pyFlash: 3, pyLava: 2, pyPull: 1, pyEcho: 2, pyTwin: 2, pyWave: 2, pyPhoenix: 2, pyStorm: 2, pyField: 2, pyDive: 2, pyGeyser: 3, pyRing: 2, pyEng: 2 });
 
   // Per-hero client state: chan (Channel estimate for heroes whose sim value this viewer does not own), lastAtk (event clock), t (last frame), steps / full (Channel shown last frame), echo / comet (running timelines),
-  // cmUp (the hero's cometT was positive last frame), predAt (F.time a Comet arc was started from the local cast, so the host's pyComet of that cast is not played twice).
+  // cmUp (the hero's cometT was positive last frame), predAt (F.time a Comet arc was started from the local cast, so the host's pyComet of that cast is not played twice),
+  // heat / heatMax / heatAt (Inferno Engine: the Heat count of the last pyEng and when it came; it counts as 0 once no event has refreshed it for 3.5 s).
   const hs = {};
-  const stateOf = (pid) => hs[pid] || (hs[pid] = { chan: 0, lastAtk: -9, t: 0, steps: 0, full: false, echo: null, comet: null, trail: 0, orb: 0, cmUp: false, predAt: -9 });
+  const stateOf = (pid) => hs[pid] || (hs[pid] = { chan: 0, lastAtk: -9, t: 0, steps: 0, full: false, echo: null, comet: null, trail: 0, orb: 0, cmUp: false, predAt: -9, heat: 0, heatMax: 0, heatAt: -9 });
   CF.on('atk', (ev) => { stateOf(ev.pid).lastAtk = F.time; });
 
   const pick = (a) => a[(Math.random() * a.length) | 0];
@@ -97,7 +101,7 @@
   // Channel: the hero's heat, one flame tongue per step in a crown over the head, a glow and a dashed ring at the feet that grow to the cap; a full cap blazes white; losing it snaps a burst of embers.
   function channel(c, p, st, s, t, dt, low) {
     if (!(st.channel > 0)) { s.steps = 0; s.full = false; return; }
-    const ch = typeof p.chanT === 'number' ? p.chanT : (s.chan = !p.moving && F.time - s.lastAtk < ED.chanWindow(p) ? s.chan + dt : 0);
+    const ch = typeof p.chanT === 'number' ? p.chanT : (s.chan = F.time - s.lastAtk < ED.chanWindow(p) ? (!p.moving ? s.chan + dt : st.fireDance > 0 ? s.chan : 0) : 0);
     const max = Math.max(1, Math.round(st.chanCap / st.channel)), steps = Math.min(max, Math.floor(ch / Math.max(0.05, st.chanStep))), fr = steps / max, full = steps >= max;
     const mine = R() && p.pid === R().local;
     if (s.steps >= 2 && steps === 0) { // the heat is lost
@@ -116,6 +120,7 @@
     if (mine && steps > s.steps && !full) A().play('magic', 0.08 + 0.04 * steps); // a soft tick per step, louder as the heat builds (the cap has its own flare sound)
     s.steps = steps; s.full = full;
     if (steps <= 0) return;
+    if (st.fireDance > 0 && p.moving && !low && Math.random() < 0.35) F.part(p.x + (Math.random() - 0.5) * 8, p.y - 2, { kind: 'ember', color: pick([FIRE[2], FIRE[3], FIRE[4]]), a: -1.57, spread: 1.2, sp: 30, life: 0.45, size: 2, drag: 1.4, lt: '#ff8a2a', ltr: 14 }); // Fire Dancer: the held heat sheds sparks as the hero moves
     const an = R().actorAnchor(p), top = s2(an ? an.top : -26), rp = FIRE;
     Pix.put(c, Pix.ell(8, 4, rp[2], false, 2, (t * 8) & 7), 0, 2, 0.2 + 0.55 * fr);
     const tg = low ? Math.min(steps, 3) : steps, hot = full ? 1 : 0;
@@ -193,6 +198,8 @@
     echoRing(c, p, s, t);
     flight(c, p, s, t, low);
     mantleOverlay(c, p, st, t, low);
+    heatOrbit(c, p, st, s, t, low);
+    if (st.whiteHot > 0) whiteFlames(p, st, low);
     if (waves.length) waveFx(p, low);
     if (st.phoenixMul > 0 && !low) phoenixEmbers(p); // Phoenix Form: sparks lift off the ring that follows the hero
   });
@@ -425,5 +432,94 @@
       if (m) F.text(p.x, p.y - 40, 'Chain Reaction', '#ffc24a', 10, { pop: true, life: 1.1, max: 1.1 });
       A().play('level', m ? 0.35 : 0.15);
     } else A().play('click', m ? 0.5 : 0.2);
+  });
+
+  // ---------------- route forms ----------------
+  // Caldera: a column of molten streaks and shards shoots up from the geyser, a pale ring spreads, and the Lava Pool's ring swells from its old radius (pr / 1.2) to the new one.
+  CF.on('pyGeyser', (ev, ctx, local) => {
+    const m = ev.pid === local, n = lowFx() ? 6 : 12;
+    F.ring(ev.px, ev.py, ev.pr, '#ff5a1a', 0.5, 3, false, ev.pr / 1.2);
+    F.ring(ev.x, ev.y, ev.r, '#ffb347', 0.3, 4); F.ring(ev.x, ev.y, ev.r * 0.55, '#fff4c0', 0.22, 2);
+    F.burst(ev.x, ev.y - 4, n, { kind: 'streak', color: '#ffb347', a: -1.57, spread: 0.3, sp: 330, life: 0.45, size: 2.2, drag: 2.2 });
+    F.burst(ev.x, ev.y - 2, n, { kind: 'shard', color: '#ff6a1a', a: -1.57, spread: 1.1, sp: ev.r * 1.2, life: 0.85, size: 3, vz: 250, z: 4, add: true });
+    F.burst(ev.x, ev.y - 6, 5, { kind: 'ember', color: '#ffe9a0', a: -1.57, spread: 0.6, sp: 120, life: 0.9, size: 2, drag: 1.1, lt: '#ff8a2a', ltr: 22 });
+    SP('fx.explosion', ev.x, ev.y - 8, { ramp: 'fire' }); SP('fx.ring.shock', ev.x, ev.y - 4, { add: true, ramp: 'fire', a: 0.7 });
+    F.pop(ev.x, ev.y - 12, ev.r * 0.45, '#fff4c0', 0.2, true);
+    stain(ev.x, ev.y, ev.r * 0.7, '#120503', 0.7, 8);
+    if (m) F.addShake(2.5);
+    A().play('thud', m ? 0.6 : 0.3); A().play('fire', m ? 0.35 : 0.15);
+  });
+
+  // Fire Dancer: two rings spread from where the dash began and a circle of flame tongues rises on the ring's edge.
+  CF.on('pyRing', (ev, ctx, local) => {
+    const m = ev.pid === local, n = lowFx() ? 10 : 20;
+    F.ring(ev.x, ev.y, ev.r, '#ffc24a', 0.45, 5); F.ring(ev.x, ev.y, ev.r * 0.7, '#ff7a2a', 0.35, 3);
+    for (let i = 0; i < n; i++) { const a = i * TAU / n + Math.random() * 0.2; F.part(ev.x + Math.cos(a) * ev.r * 0.9, ev.y + Math.sin(a) * ev.r * 0.7 - 2, { kind: 'ember', color: pick([FIRE[2], FIRE[3], FIRE[4]]), a: -1.57, spread: 0.5, sp: 55, life: 0.7, size: 2, drag: 1.3, add: true, lt: '#ff8a2a', ltr: 20 }); }
+    F.burst(ev.x, ev.y, lowFx() ? 6 : 12, { color: '#ffb347', sp: ev.r * 2.2, life: 0.35, size: 2.4, add: true });
+    SP('fx.circle.spark', ev.x, ev.y - 2, { ramp: 'fire', add: true, a: 0.9 });
+    stain(ev.x, ev.y, ev.r * 0.6, '#1c0a06', 0.5, 5);
+    A().play('fire', m ? 0.5 : 0.25); A().play('dash', m ? 0.3 : 0.12);
+  });
+
+  // White Flame: the white glyph of a white-hot foe (the hero hook marks the foe e.pyWhiteT each frame it is white-hot).
+  const WHITE = { id: 'fx.glyph.whiteflame', ramp: '', stub: '' };
+  let whiteOk = false;
+  function whiteGlyph() {
+    if (whiteOk) return true;
+    if (!ED.Atlas || !ED.Atlas.ok) return false;
+    const cv = document.createElement('canvas'); cv.width = cv.height = 7;
+    const g = cv.getContext('2d'), rows = ['...1...', '..121..', '..131..', '.12321.', '.13331.', '.13331.', '..111..'], col = { 1: '#ffd9a0', 2: '#fff0d0', 3: '#ffffff' };
+    for (let j = 0; j < 7; j++) for (let i = 0; i < 7; i++) { const ch = rows[j][i]; if (ch === '.') continue; g.fillStyle = col[ch]; g.fillRect(i, j, 1, 1); }
+    return (whiteOk = Pix.define(WHITE.id, cv, 3, 3));
+  }
+  CF.mark.push((e) => (F.time - e.pyWhiteT < 0.25 && whiteGlyph() ? WHITE : null));
+  // A foe is white-hot once it has burned whiteT seconds in a row (the viewer times the foe's burning flag); white sparks rise from it.
+  function whiteFlames(p, st, low) {
+    const g = ED.Game && ED.Game.s, v = g && g.view;
+    if (!v || !v.enemies) return;
+    const now = F.time;
+    for (const e of v.enemies) {
+      if (e.hp <= 0) continue;
+      if (!(e.burn > 0)) { e.pyB0 = 0; continue; }
+      if (!(e.pyB0 > 0)) e.pyB0 = now;
+      if (now - e.pyB0 < st.whiteT) continue;
+      e.pyWhiteT = now;
+      if (Math.random() < (low ? 0.1 : 0.3)) F.part(e.x + (Math.random() - 0.5) * e.r, e.y - e.r * 0.3, { kind: 'ember', color: pick(['#ffffff', '#fff4c0', '#ffe9a0']), a: -1.57, spread: 0.5, sp: 42, life: 0.5, size: 2, drag: 1.2, add: true, lt: '#fff4c0', ltr: 14 });
+    }
+  }
+
+  // Inferno Engine: one ember per stored Heat circles the hero (a full store burns white and wide).
+  function heatOrbit(c, p, st, s, t, low) {
+    if (!(st.infernoMul > 0)) { s.heat = 0; return; }
+    if (F.time - s.heatAt > 3.5) s.heat = 0;
+    const n = Math.min(s.heat | 0, 12);
+    if (n <= 0) return;
+    const mx = Math.max(1, s.heatMax || st.heatMax), fr = Math.min(1, n / mx), full = n >= mx, an = R().actorAnchor(p), cy = s2((an ? an.cy : -12) - (p.lift || 0)), rx = full ? 17 : 14;
+    for (let i = 0; i < n; i++) { // a 4 px ember (a white-hot core when full) on a flat ring round the body, a dim trail behind it
+      const a = t * (full ? 4.5 : 2.4) + i * TAU / n, x = s2(Math.cos(a) * rx), y = cy + s2(Math.sin(a) * 6), tx = s2(Math.cos(a - 0.35) * rx), ty = cy + s2(Math.sin(a - 0.35) * 6);
+      if (!low) { c.globalAlpha = 0.45; c.fillStyle = FIRE[2]; c.fillRect(tx - 1, ty - 1, 2, 2); c.globalAlpha = 1; }
+      c.fillStyle = full ? FIRE[4] : FIRE[3 - (i & 1)]; c.fillRect(x - 2, y - 2, 4, 4);
+      c.fillStyle = full ? '#ffffff' : FIRE[4]; c.fillRect(x - 1, y - 1, 2, 2);
+    }
+    R().emit(p.x, p.y - 12, 22 + 16 * fr, '#ff7a2a', 0.25 + 0.5 * fr);
+    R().light(p.x, p.y - 14, 40 + 50 * fr, full ? '#ffd36b' : '#ff8a2a', 0.3 + 0.5 * fr);
+  }
+  CF.on('pyEng', (ev, ctx, local) => {
+    const s = stateOf(ev.pid), m = ev.pid === local;
+    s.heat = ev.n; s.heatMax = ev.mx; s.heatAt = F.time;
+    if (!ev.go) return;
+    if (ev.k === 1 && ev.go === 1) { // the heated Meteor: a red ring closes on the target, the sky glows
+      F.ring(ev.x, ev.y, ev.r + 40, '#ff4a10', 0.9, 4, true); F.ring(ev.x, ev.y, ev.r, '#ffc24a', 0.9, 2);
+      SP('fx.circle.spark', ev.x, ev.y - 2, { ramp: 'gold', add: true, a: 0.85, speed: 0.8 });
+      A().play('combust', m ? 0.4 : 0.15);
+      return;
+    }
+    const x = ev.x, y = ev.y, r = ev.r; // the Inferno blast: a white-gold shockwave, a pillar of sparks and a flash
+    F.ring(x, y, r * 1.15, '#fff4c0', 0.5, 6); F.ring(x, y, r * 0.8, '#ffc24a', 0.4, 4); F.ring(x, y, r * 0.45, '#ff5a1a', 0.3, 3);
+    F.burst(x, y - 6, lowFx() ? 14 : 28, { color: '#ffe9a0', sp: r * 2.4, life: 0.5, size: 3, add: true });
+    F.burst(x, y - 8, 10, { kind: 'streak', color: '#ffffff', a: -1.57, spread: 1.2, sp: 320, life: 0.4, size: 1.8 });
+    F.pop(x, y - 8, r * 0.7, '#fff4c0', 0.28, true); SP('fx.blast.red', x, y - 8, { add: true, lt: '#ffd36b', ltr: r }); SP('fx.explosion', x, y - 6, { ramp: 'gold' });
+    if (m) { F.addShake(6); F.punch(0.8, 0.4); F.hitStop(0.05); }
+    A().play('supernova', m ? 0.6 : 0.3);
   });
 })(globalThis.ED || (globalThis.ED = {}));

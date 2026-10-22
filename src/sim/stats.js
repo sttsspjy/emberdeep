@@ -22,7 +22,8 @@
     + ' avalanche avaCrack avaStun phalanx bannerSlow bannerWeak bannerDur tempest vortexMul vortexDur bastion deathMark deathWave thornburst thornRoot starfall thornstorm'
     + ' fissure bladeWave doombrand brandMark brandCap bloodquake bloodquakeMul bloodquakeSplash'
     + ' siege siegeMul siegeBlast ricochet flurryN hemo hemoAt hemoMul hemoBoss plague plagueBurst outbreak'
-    + ' wake waveReturn sunstrike prismN prismRad').split(' ');
+    + ' wake waveReturn sunstrike prismN prismRad'
+    + ' caldera fireDance dancerBurst whiteHot whiteT heatMax infernoMul').split(' ');
 
   const BASE = () => {
     const s = {

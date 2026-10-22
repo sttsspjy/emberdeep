@@ -472,6 +472,79 @@ function statusRun(boons, stratum, secs, until) {
   }
 }
 
+// ---------------- Pyromancer Attack and Element forks in the model ----------------
+{
+  const MID = { kindle: 1, staticcharge: 1, edge: 2, quick: 2, focus: 1, stalwart: 1 };
+  const P = (boons, stat, stratum) => modelOf('pyro', Object.assign({}, MID, boons), 0, { stat: Object.assign({ crit: 0 }, stat), ctx: { stratum: stratum || 4 } });
+  const ex = (m, label) => m.weapon.extras.find(e => e.label === label);
+  const stOf = (boons) => ED.Stats.compute({ cls: 'pyro', weapon: 'firestaff', boons: Object.assign({}, MID, boons), relics: [], meta: META(), pact: 0 });
+  const MD = require('./model.js')(ED, { pack: 4 });
+  { // Channel: the weapon's hit multiplier takes its average (standing stretches of 3 s, 30% of the attacks on the move; Fire Dancer holds it through moving)
+    const chanAvg = (st, iv) => { // the same assumption written out
+      const step = st.chanStep, f = (t) => Math.min(st.chanCap, st.channel * Math.floor(t / step + 1e-9)), dance = st.fireDance > 0;
+      let sum = 0, n = 0;
+      for (let t = 0; t < (dance ? 8 : 3) - 1e-9; t += iv, n++) sum += f(dance ? 0.7 * t : t);
+      return sum / n * (dance ? 1 : 0.7);
+    };
+    for (const boons of [{ p_atk: 1 }, { p_atk: 1, p_atk_s: 2 }, { p_atk: 1, p_atk_s: 3 }, { p_atk: 1, p_atk_h: 2 }]) {
+      const m = P(boons), st = stOf(boons), want = st.weapon.dmg * (Math.max(0.1, st.dmg) + chanAvg(st, 1 / m.weapon.aps));
+      rel(m.weapon.hit, want, 0.002, 'Channel average in the hit of ' + JSON.stringify(boons));
+    }
+    const none = P({}), c1 = P({ p_atk: 1 }), e2 = P({ p_atk: 1, p_atk_s: 2 }), e3 = P({ p_atk: 1, p_atk_s: 3 });
+    ok(c1.weapon.hit > none.weapon.hit * 1.05 && c1.weapon.notes.some(t => /Channel averages/.test(t)) && !none.weapon.notes.some(t => /Channel/.test(t)), 'Pyroclast raises the hit and says how');
+    ok(e3.weapon.hit > e2.weapon.hit * 1.04 && e3.weapon.notes.some(t => /Fire Dancer/.test(t)), 'Fire Dancer raises the Channel average (it holds through moving)');
+  }
+  { // Lava Pools (rank 2), Geyser (rank 3): the pool burns the shot x lavaPool a second under a foe in the line of fire 70% of the time; the geyser replaces 70% of the aftershocks
+    const h1 = P({ p_atk: 1, p_atk_h: 1 }), h2 = P({ p_atk: 1, p_atk_h: 2 }), h3 = P({ p_atk: 1, p_atk_h: 3 }), st2 = stOf({ p_atk: 1, p_atk_h: 2 }), st3 = stOf({ p_atk: 1, p_atk_h: 3 });
+    ok(!ex(h1, 'Lava Pools') && ex(h2, 'Lava Pools') && ex(h3, 'Lava Pools') && !ex(h2, 'Geyser') && ex(h3, 'Geyser'), 'Lava Pools from rank 2, the Geyser at rank 3');
+    rel(ex(h2, 'Lava Pools').perAttack, st2.weapon.dmg * st2.lavaPool * Math.max(0.1, st2.dmg) / h2.weapon.aps * 0.7, 1e-6, 'Lava Pools: the shot x lavaPool x the multiplier over one attack interval, 70% of the time');
+    ok(ex(h2, 'Lava Pools').pack === 2 && ex(h3, 'Lava Pools').pack === 3, 'a pool covers 2 pack foes, a widened one 3');
+    rel(ex(h3, 'Geyser').perAttack, 0.7 * st3.weapon.dmg * (h3.weapon.hit / st3.weapon.dmg) * (st3.caldera - 0.6 * st3.aftershock) * h3.weapon.oneFoe, 1e-6, 'Geyser: 70% of the aftershocks, caldera x the shot minus the aftershock they replace');
+    ok(h3.weapon.dps > h2.weapon.dps * 1.05 && h2.weapon.dps > h1.weapon.dps * 1.05, 'each rank adds damage on one foe');
+    const lo = P({ p_atk: 1, p_atk_h: 3 }, { caldera: 0.4 }), hi = P({ p_atk: 1, p_atk_h: 3 }, { caldera: 1.2 }); ok(ex(hi, 'Geyser').perAttack > ex(lo, 'Geyser').perAttack * 2 && ex(lo, 'Geyser').perAttack > 0, 'the Geyser follows caldera');
+  }
+  { // Overheat (pack only) and the Flame ring
+    const e1 = P({ p_atk: 1, p_atk_s: 1 }), e2 = P({ p_atk: 1, p_atk_s: 2 }), e3 = P({ p_atk: 1, p_atk_s: 3 });
+    const ov = ex(e2, 'Overheat'); ok(!ex(e1, 'Overheat') && ov && ov.packOnly && ov.pack === 1 && ex(e3, 'Overheat').perAttack > ov.perAttack, 'Overheat is a pack-only extra from rank 2, larger when Fire Dancer keeps the Channel full');
+    near(e2.weapon.dps, (e2.weapon.avg * e2.weapon.oneFoe + e2.weapon.extras.filter(e => !e.packOnly).reduce((s, e) => s + e.perAttack, 0)) * e2.weapon.aps, 0.01 * e2.weapon.dps, 'Overheat adds nothing on one foe');
+    const rg = ex(e3, 'Flame ring'), st3 = stOf({ p_atk: 1, p_atk_s: 3 }); ok(!ex(e2, 'Flame ring') && rg && rg.r === 80 && rg.perAttack > 0, 'the Flame ring is a rank 3 extra of radius 80');
+    ok(rg.perAttack < ex(P({ p_atk: 1, p_atk_s: 3 }, { dancerBurst: 8 }), 'Flame ring').perAttack / 3, 'the ring follows dancerBurst (2 is less than a third of 8)');
+  }
+  { // Flashpoint and White Flame (Element Focus)
+    const w1 = P({ p_el: 1, p_el_a: 1 }), w2 = P({ p_el: 1, p_el_a: 2 }), w3 = P({ p_el: 1, p_el_a: 3 });
+    ok(!ex(w1, 'Flashpoint') && ex(w2, 'Flashpoint') && ex(w3, 'Flashpoint').perAttack > ex(w2, 'Flashpoint').perAttack, 'Flashpoint from rank 2, more often when White Flame counts');
+    ok(ex(P({ p_el: 1, p_el_a: 2 }, { burnCrit: 0.02 }), 'Flashpoint').perAttack > ex(P({ p_el: 1, p_el_a: 2 }, { burnCrit: 0.6 }), 'Flashpoint').perAttack, 'a lower Burn line crits more often');
+    const wf = ex(w3, 'White Flame'); ok(!ex(w2, 'White Flame') && wf && wf.perAttack > 0 && wf.packMul === 0, 'White Flame is a rank 3 extra worth nothing in the pack sum (the pack multiplier carries it)');
+    ok(w3.boost.pack > 0 && !w2.boost.pack && !w1.boost.pack, 'the model carries the pack multiplier of White Flame');
+    const dmg0 = MD.directDamage(Object.assign({}, w3, { boost: { pack: 0 } }), 4);
+    rel(MD.directDamage(w3, 4), dmg0 * (1 + w3.boost.pack), 1e-9, 'tools/model.js multiplies the pack damage by 1 + boost.pack');
+    const fast = P({ p_el: 1, p_el_a: 3 }, { whiteT: 0.5 }), slow = P({ p_el: 1, p_el_a: 3 }, { whiteT: 5 }); ok(ex(fast, 'White Flame').perAttack > ex(slow, 'White Flame').perAttack && fast.boost.pack > slow.boost.pack, 'a shorter burn time keeps foes white-hot for more of a fight');
+    ok(MD.heroDamage(w3, 1, 1) > MD.heroDamage(w2, 1, 1) && MD.heroDamage(w3, 4, 1) > MD.heroDamage(w2, 4, 1), 'rank 3 deals more than rank 2, on one foe and in a pack');
+  }
+  { // Heat Engine, Chain Reaction, Inferno Engine (Element Spread): skill casts per second
+    const g1 = P({ p_el: 1, p_el_b: 1 }), g2 = P({ p_el: 1, p_el_b: 2 }), g3 = P({ p_el: 1, p_el_b: 3 });
+    const he1 = ex(g1, 'Heat Engine'), he2 = ex(g2, 'Heat Engine'); ok(he1 && he2 && he1.perAttack > 0 && he2.packMul > he1.packMul, 'Heat Engine lists the extra casts from rank 1; Chain Reaction raises them in a pack more than on one foe');
+    ok(g2.skills[0].perCast > g1.skills[0].perCast * 1.29 && g2.skills[1].perCast > g1.skills[1].perCast * 1.29, 'Heat Engine rank 2 raises Nova and Meteor damage by 30%');
+    const noCr = P({ p_el: 1, p_el_b: 2 }, { heatChain: 0 }); ok(ex(noCr, 'Heat Engine').packMul < he2.packMul && Math.abs(ex(noCr, 'Heat Engine').perAttack - he2.perAttack) < 0.5 * he2.perAttack, 'without Chain Reaction a pack gains less');
+    const cr1 = P({ p_el: 1, p_el_b: 2 }, { heatChain: 1 }); ok(ex(cr1, 'Heat Engine').perAttack > he2.perAttack * 1.5, 'a Chain Reaction that one burning foe sets off helps on one foe');
+    ok(!ex(g2, 'Inferno') && ex(g3, 'Inferno') && ex(g3, 'Inferno').perAttack > 0 && ex(g3, 'Inferno').packMul > 1.5, 'Inferno is a rank 3 extra worth more per foe in a pack (casts reach full Heat sooner)');
+    const i1 = ex(P({ p_el: 1, p_el_b: 3 }, { infernoMul: 3 }), 'Inferno'), i2 = ex(P({ p_el: 1, p_el_b: 3 }, { infernoMul: 5 }), 'Inferno'); rel(i2.perAttack / i1.perAttack, 4 / 2, 1e-6, 'Inferno: the gain is (infernoMul - 1) per Inferno');
+    const m6 = ex(P({ p_el: 1, p_el_b: 3 }, { heatMax: 8 }), 'Inferno'), m3 = ex(P({ p_el: 1, p_el_b: 3 }, { heatMax: 2 }), 'Inferno'); ok(m3.perAttack > m6.perAttack, 'a smaller Heat store makes Infernos more frequent');
+    ok(MD.heroDamage(g3, 4, 1) > MD.heroDamage(g2, 4, 1) * 1.15 && MD.heroDamage(g3, 1, 1) > MD.heroDamage(g2, 1, 1), 'rank 3 deals more than rank 2');
+  }
+  { // the budget (MASTERPLAN-AGENT): rank 2 and 3 of the four forks against the class without the route card, mean of one foe and a pack of 4 at strata 4 and 6, the numbers of tools/sheet.js --routes --mid --cls=pyro. Heat Engine rank 2 adds +30% to Nova and Meteor beside Chain Reaction.
+    const hero = (boons) => { const b = { cls: 'pyro', weapon: 'firestaff', boons: Object.assign({}, MID, boons), relics: [], meta: META(), pact: 0 }, stats = ED.Stats.compute(b); return { pid: 'p', name: 'T', cls: 'pyro', weapon: b.weapon, boons: b.boons, relics: [], meta: b.meta, stats, hp: stats.maxHp, maxHp: stats.maxHp, shield: 0, picks: 0, slot: 0 }; };
+    const dmg = (boons, stratum) => MD.assess(hero(boons), CTX({ stratum }));
+    for (const stratum of [4, 6]) {
+      const b = dmg({}, stratum);
+      for (const [t1, id, lo2] of [['p_atk', 'p_atk_h', 0.25], ['p_atk', 'p_atk_s', 0.25], ['p_el', 'p_el_a', 0.25], ['p_el', 'p_el_b', 0.25]]) for (const [rank, lo, hi] of [[2, lo2, 0.45], [3, 0.5, 0.7]]) {
+        const m = dmg({ [t1]: 1, [id]: rank }, stratum), mean = ((m.one / b.one - 1) + (m.pack / b.pack - 1)) / 2;
+        ok(mean >= lo && mean <= hi, `${id} rank ${rank} at stratum ${stratum}: ${(mean * 100).toFixed(0)}% against the route-less hero (want ${lo * 100}-${hi * 100}%)`);
+      }
+    }
+  }
+}
+
 // the sheet shows the shield the way the HUD does (rounded up), so the host and a client reading the snapshot agree
 { const m = modelOf('knight', {}, 0, { shield: 2.4 }); ok(m.def.shield === 3 && m.hero.shield === 3, `shield 2.4 reads ${m.def.shield} (defence) and ${m.hero.shield} (header), want 3`); }
 

@@ -11,7 +11,7 @@ module.exports = (ED, opts) => {
     const w = m.weapon, st = null; void st;
     const hitsBase = w.kind === 'melee' ? n : Math.min(n, (w.n || 1) * (1 + (w.pierce || 0)));
     let sum = w._avg * hitsBase;
-    for (const e of w._extras) sum += e.perAttack * (e.label === 'Twin Fang' ? hitsBase / (w.oneFoe || 1) : ONE_STREAM.has(e.label) ? 1 : FEW[e.label] ? Math.min(n, FEW[e.label]) : n);
+    for (const e of w._extras) sum += e.perAttack * (e.label === 'Twin Fang' ? hitsBase / (w.oneFoe || 1) : ONE_STREAM.has(e.label) ? 1 : FEW[e.label] ? Math.min(n, FEW[e.label]) : e.pack ? Math.min(n, e.pack) : n) * (e.packMul === undefined ? 1 : e.packMul); // pack: the pack foes the extra reaches; packMul: its value per pack foe over its one-foe value
     return sum * w._aps;
   }
   // Extras that do not grow with the pack: the two Lich bolts seek one foe each (the same total), Guardian Light's Smites ride the one Smite stream the status estimate counts; a Solar Flare burst (radius 50) and a Dawn's Wake strip (44 wide) catch about two foes of a pack.
@@ -31,7 +31,7 @@ module.exports = (ED, opts) => {
       if (key === 'vanish.ambush') mul = (m.weapon.kind === 'melee' ? n : Math.min(n, m.weapon.n)) / Math.max(1, q.oneFoe);
       sum += q._r.total * mul / k._cd;
     }
-    return sum;
+    return sum * (1 + (m.boost ? m.boost.pack : 0)); // boost.pack: a damage multiplier on the whole pack's damage (White Flame)
   }
   const statusDamage = (m) => m.mult.status.reduce((s, x) => s + (x.est && x.est.dps || 0), 0);
   const heroDamage = (m, n, k, e) => directDamage(m, n) * (k || 1) * (e || 1) + statusDamage(m); // k: the conditional-damage factor of the build (condFactor); e: echoK; statuses are raw damage
