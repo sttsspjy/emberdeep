@@ -84,7 +84,8 @@
   // parts feed ED.Stats.skillNums (the one source for sim, sheet and bots): dmg = (base + pow x X) x (1 + slot damage), X = Power (on 'P'), the equipped weapon's dmg ('W') or the unforked weapon ('B');
   // powKey adds a stat to pow; of + mul / mul1 derive a part from another (mul1: x (1 + stat); times 'ticks': x the tick count); if = the stat that enables the part; mulIf = { stat: factor };
   // r scales with area (x(1 + 0.5 area) x (1 + slot area)), rOf + rMul derive it from another part (pRad: r is a projectile's hit radius; the sheet leaves it out); dur adds slot duration (durFix: none) and is capped at capCd x the effective cooldown; n adds slot count (nFix: none); per: 'hit' | 'tick' | 'sec' | 'minion' | 'status'.
-  // Form keys (see Stats.skillNums): durMulKey (the stat multiplies dur), durCd (dur = the cooldown while the stat is set), ringKey (the stat is the arrow count of a full ring), nOf (the count of another part), stunKey (the stat is the stun), oneMul with oneEvery; ref (Starfall: reference cast distance for the sheet).
+  // Form keys (see Stats.skillNums): durMulKey (the stat multiplies dur), durCd (dur = the cooldown while the stat is set), ringKey (the stat is the arrow count of a full ring), nOf (the count of another part), stunKey (the stat is the stun while set), oneMul with oneEvery; ref (Starfall: reference cast distance for the sheet);
+  // mulFix (a fixed factor of an `of` part), mulFirst (the first listed stat that is set is the damage factor), rAddKey (the stat adds px to the radius).
   ED.SKILLS = {
     charge: { name: 'Shield Charge', slot: 0, cd: 6, icon: 'shield', aim: 'move', range: 150, rangeMin: 60, rangeAdd: 's1Range', move: { k: 'charge', speed: 600 },
       desc: 'Charge toward the cursor, untouchable, smashing and stunning every foe you run into. A thrown shield flies back to you; foes stunned by your shield take +40% (Crush).',
@@ -131,13 +132,18 @@
     sanctuary: { name: 'Sanctuary', slot: 0, cd: 11, icon: 'sun', aim: 'ground', range: 200, aimIf: { aura: 'self' },
       desc: 'Consecrate the ground at the cursor: foes inside take Holy damage each second and allies inside take less damage. Heals the allies around you when cast.',
       parts: [
-        { id: 'zone', label: 'Holy ground', base: 10, pow: 1.2, per: 'sec', r: 100, dur: 3.5, capCd: 0.6, el: 'class' },
+        { id: 'zone', label: 'Holy ground', base: 10, pow: 1.2, per: 'sec', r: 100, rAddKey: 'aegisR', dur: 3.5, capCd: 0.6, el: 'class' },
+        { id: 'nova', label: 'Wrath nova', if: 'wrath', of: 'zone', mul: 'wrathNova', per: 'hit', rOf: 'zone', rMul: 1, knock: 120, el: 'class', proc: true },
+        { id: 'pillar', label: 'Pillars of light', if: 'wrath', of: 'zone', mul: 'wrathPillar', mulFix: 0.5, per: 'tick', every: 0.5, dur: 3.5, capCd: 0.6, knock: 60, el: 'class', proc: true },
+        { id: 'pulse', label: 'Aegis pulse', if: 'aegis', per: 'zone', every: 2, stunKey: 'aegisStun' },
       ] },
     legion: { name: 'Raise Legion', slot: 0, cd: 12, icon: 'skull', aim: 'ground', range: 160, walk: true, prevR: 35,
       desc: 'Raise skeletal minions at the cursor for a time. Kills may also raise minions.',
       parts: [
         { id: 'minion', label: 'Minion strike', base: 6, pow: 0.6, per: 'minion', n: 3, dur: 12, every: 0.7 },
         { id: 'spikes', label: 'Bone spikes', if: 'boneSpikes', base: 10, pow: 1.5, per: 'hit', r: 60, el: 'class', proc: true },
+        { id: 'field', label: 'Bone field', if: 'bloom', of: 'spikes', mul: 'bloomField', per: 'sec', r: 50, dur: 2, durFix: true, el: 'class' },
+        { id: 'bomb', label: 'Bone bombs', if: 'bloom', of: 'spikes', mul: 'bloomBomb', per: 'hit', rOf: 'spikes', rMul: 1, knock: 120, el: 'class', proc: true },
       ] },
     // Second skill (skill2 binding): one per class, cooldown reduction applies like the first.
     rain: { name: 'Rain of Arrows', slot: 1, cd: 10, icon: 'rain', aim: 'ground', range: 260,
@@ -168,8 +174,9 @@
     judgment: { name: 'Judgment', slot: 1, cd: 9, icon: 'hammer', aim: 'dir',
       desc: 'Throw a hammer toward the cursor that flies out and returns, piercing. Each leg hits a foe once and Judges it (+20% damage taken).',
       parts: [
-        { id: 'leg', label: 'Hammer', base: 18, pow: 1.4, per: 'hit', r: 18, el: 'class', mulIf: { twinHammer: 0.55 }, proc: true },
-        { id: 'verdict', label: 'Verdict', if: 'verdict', base: 20, pow: 3, per: 'hit', r: 70, el: 'class', stun: 0.4, proc: true },
+        { id: 'leg', label: 'Hammer', base: 18, pow: 1.4, per: 'hit', r: 18, el: 'class', mulFirst: ['stormMul', 'twinHammer'], proc: true },
+        { id: 'verdict', label: 'Verdict', if: 'verdict', base: 20, pow: 3, per: 'hit', r: 70, rAddKey: 'fjR', el: 'class', stun: 0.4, stunKey: 'fjStun', proc: true },
+        { id: 'echo', label: 'Echo', if: 'fjEcho', per: 'zone' },
       ] },
     harvest: { name: 'Bone Harvest', slot: 1, cd: 10, icon: 'harvest', aim: 'self',
       desc: 'Each of your minions explodes and heals you; then raise new minions.',
@@ -177,6 +184,7 @@
         { id: 'burst', label: 'Burst', base: 24, pow: 1.8, per: 'hit', r: 60, el: 'class', proc: true },
         { id: 'corpse', label: 'Corpse burst', if: 'corpse', of: 'burst', mul: 'corpseMul', per: 'hit', rOf: 'burst', rMul: 1, el: 'class', proc: true },
         { id: 'lance', label: 'Bone lance', if: 'boneLance', of: 'burst', mul1: 'boneLance', per: 'hit', rOf: 'burst', rMul: 1, el: 'class', proc: true },
+        { id: 'shard', label: 'Bone shards', if: 'carrionN', of: 'burst', mul: 'carrionShard', per: 'hit', knock: 60, proc: true },
       ] },
   };
 
@@ -201,6 +209,13 @@
     'rain.shower': { selfVuln: { v: 0.2, if: 'rainHail' } },
     'judgment.leg': { oneFoe: 2, oneMul: { twinHammer: 2, thirdLeg: 1.25 }, selfVuln: 0.2, infAdd: { holy: 0.5 }, note: 'out and back' },
     'judgment.verdict': { oneFoe: 0, infAdd: { holy: 0.5 }, note: 'when a Judged foe dies' },
+    'judgment.echo': { note: 'damage a Judged foe takes from you echoes to every other Judged foe within 200 (a chain, no on-hit effects)' },
+    'sanctuary.nova': { noCrit: true, infAdd: { holy: 0.5 }, note: 'when Sanctuary opens, every foe inside' },
+    'sanctuary.pillar': { noCrit: true, infAdd: { holy: 0.5 }, note: 'a random foe inside, every 0.5 s' },
+    'sanctuary.pulse': { note: 'stuns foes inside (never bosses)' },
+    'legion.field': { perMinion: 'cast', note: 'a field under every burst: 2 s, hits every 0.5 s' },
+    'legion.bomb': { oneFoe: 2, infAdd: { shadow: 0.5 }, note: 'two bombs run at the nearest foe' },
+    'harvest.shard': { oneFoe: 0, infAdd: { shadow: 0.5 }, note: '3 shards per corpse that explodes, at the nearest foes' },
     'vanish.ambush': { note: 'your next attack' },
   };
   for (const key in ED.SKILL_SHEET) {

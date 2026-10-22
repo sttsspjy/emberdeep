@@ -172,7 +172,7 @@
       party.push({ pid: q.pid, name: q.name, cls: q.cls, hp: Math.ceil(q.hp), maxHp: q.maxHp, slot: q.slot | 0, downed: !!q.downed, dead: !!q.dead });
       if (q !== p && !q.downed && !q.dead && U.dist2(q.x, q.y, p.x, p.y) < 200 * 200) allyNear++;
     }
-    if (view.allies) for (const a of view.allies) if (a.owner === p.pid) minions++;
+    if (view.allies) for (const a of view.allies) if (a.owner === p.pid && a.k !== 2) minions++; // a bone bomb (k 2) is not a minion
     const rooms = view.floor ? view.floor.rooms : [];
     let seen = 0;
     for (const r of rooms) { const s = view.roomState && view.roomState[r.id]; if (s && s.visited) seen++; }
@@ -237,6 +237,10 @@
       add(s.label, per, { proc: !!s.proc, crit: !!s.crit, el: s.el || null, note: s.every > 1 ? `every ${ordinal(s.every)} attack` : s.onCrit ? 'when you crit' : '' });
     }
     if (st.twinEvery) add('Twin Fang', attackTotal / st.twinEvery, { proc: true, note: `every ${ordinal(st.twinEvery)} attack strikes twice` });
+    if (st.lich > 0) { // Lich Form: two soul bolts of lichMul of a hit with every attack inside the window that follows each Bone Harvest
+      const up = Math.min(1, st.lichT / Math.max(st.lichT, St.skillNums('harvest', st).cdEff));
+      add('Lich bolts', 2 * st.lichMul * avg * up, { proc: true, crit: true, note: `2 soul bolts per attack for ${n1(st.lichT)} s after each Bone Harvest, averaged over its cooldown` });
+    }
     // Masterstroke (combat.js playerAttack): every MS.every-th attack crits for sure at MS.mul, and its blast and shock take the MS.mul too; the extra is that attack's surplus over a normal one
     const ms = st.masterstroke ? MS : null;
     if (ms) {
@@ -272,9 +276,9 @@
     const aff = clsEl ? ED.affC(stratum, clsEl) : tag ? ED.elemMul(stratum, tag) : 1;
     const M = Math.max(0.1, st.dmg + (clsEl ? st.classElMul : 0)), cm = st.critMult, c = st.crit, EC = 1 + c * (cm - 1);
     const o = { id: q.id, label: q.label, per: q.per, el: tag, aff: R.x(aff), r: q.r && !q.pRad ? Math.round(q.r) : 0, dur: q.dur, every: q.every, delay: q.delay, count: q.count, n: q.n, stun: q.stun, knock: q.knock, note: q.note || '', proc: procDefault(q), radiance: q.radiance || 0, noCrit: !!q.noCrit, alwaysCrit: q.crit === true, selfVuln: q.selfVuln || 0, infAdd: q.infAdd || null };
-    if (q.per === 'minion') {
-      const per = q.dmg * (1 + st.minionDmg) * (C.COMP_MUL || 0.85), live = Math.min(ctx.minions > 0 ? ctx.minions : q.n, st.maxMinions || 3), hits = Math.floor((q.dur || 0) / q.every + 1e-9);
-      Object.assign(o, { kind: 'minion', raw: q.dmg, hit: per, avg: per, pre: per, here: per, hitsEach: hits, minions: live, oneFoe: live * hits, total: per * live * hits, kc: 0 });
+    if (q.per === 'minion') { // a Bone Knight strikes every 0.5 s for x KNIGHT_MUL; the Death Knight (one unit) for x dkMul
+      const per = q.dmg * (1 + st.minionDmg) * (C.COMP_MUL || 0.85) * (st.dk > 0 ? st.dkMul : st.knights > 0 ? C.KNIGHT_MUL : 1), live = st.dk > 0 ? 1 : Math.min(ctx.minions > 0 ? ctx.minions : q.n, st.maxMinions || 3), hits = Math.floor((q.dur || 0) / (st.knights > 0 ? 0.5 : q.every) + 1e-9);
+      Object.assign(o, { kind: 'minion', raw: q.dmg, hit: per, avg: per, pre: per, here: per, hitsEach: hits, minions: live, oneFoe: live * hits, total: per * live * hits, kc: 0, dkCleave: st.dk > 0 });
       return finish(o, R);
     }
     if (q.per === 'status') {
@@ -296,8 +300,14 @@
     }
     if (q.ref) { let hits = 0; for (let k = 0; k < q.n; k++) if (q.ref * (q.n - 1 - k) / q.n <= q.r + Sh.REF.r) hits++; oneFoe = hits; } // Starfall: the impacts walk from the hero to a target q.ref px away; a foe there is in reach of some of them
     if (q.id === 'ambush' && skillId === 'vanish') oneFoe = wpn.oneFoe; // each of the weapon's hits carries the Ambush value
+    if (skillId === 'judgment' && q.id === 'leg' && st.storm > 0) { // Hammerstorm: the fan of hammers (step 0.25 rad) that reach a foe at REF, four legs each
+      const n = Math.round(st.storm), offs = [];
+      for (let i = 0; i < n; i++) offs.push((i - (n - 1) / 2) * 0.25);
+      oneFoe = fanHits(offs, q.r) * 4;
+    }
     if (q.perMinion) { // one hit per minion: the minions you have now (all of them when none), or the ones this cast raises
       oneFoe = q.perMinion === 'cast' ? St.skillNums('legion', st).p.minion.n : ctx.minions > 0 ? Math.min(ctx.minions, st.maxMinions || 3) : st.maxMinions || 3;
+      if (skillId === 'legion' && q.id === 'field') oneFoe = (oneFoe + (st.bloom > 0 ? C.BOMB_N : 0)) * q.count; // a bone field under every burst: the minions' and the bombs', each ticking q.count times
       o.perMinion = true;
     }
     const avg = hit * (1 + kc * (cm - 1)), pre = avg * (1 + o.selfVuln), here = pre * aff;
@@ -468,8 +478,9 @@
     if (st.guardian) S.push({ label: 'Last Stand', text: 'below 30% health: 60% less damage for 3 s (once per 20 s)' });
     if (st.aegis) S.push({ label: 'Aegis Charm', text: 'blocks the next hit completely; recharges in 10 s' });
     if (st.mirror) S.push({ label: 'Mirror Shard', text: `${Math.round(st.mirror * 100)}% to shrug off a projectile` });
-    if (st.braceDR) S.push({ label: 'Brace', text: `${Math.round(Math.min(0.4, st.braceDR) * 100)}% less damage for ${n1(st.brace)} s after a Shield Charge (once per ${C.BRACE_CD} s)` });
-    if (p.cls === 'cleric') S.push({ label: 'Sanctuary', text: `allies inside take ${Math.round(Math.min(0.4, 0.15 + st.sanctDR) * 100)}% less damage` });
+    if (st.braceDR && st.lich > 0) S.push({ label: 'Lich Form', text: `${Math.round(Math.min(0.4, st.braceDR) * 100)}% less damage for ${n1(st.lichT)} s after Bone Harvest` });
+    else if (st.braceDR) S.push({ label: 'Brace', text: `${Math.round(Math.min(0.4, st.braceDR) * 100)}% less damage for ${n1(st.brace)} s after a Shield Charge (once per ${C.BRACE_CD} s)` });
+    if (p.cls === 'cleric') S.push({ label: 'Sanctuary', text: `allies inside take ${Math.round(Math.min(st.aegis > 0 ? C.DR_FLOOR : 0.4, 0.15 + st.sanctDR + st.aegisDR) * 100)}% less damage` });
     if (st.judgeWeak) S.push({ label: 'Verdict', text: `Judged foes deal ${Math.round(st.judgeWeak * 100)}% less damage (bosses half)` });
     if (st.chillWeaken) S.push({ label: 'Permafrost', text: `chilled foes deal ${Math.round(st.chillWeaken * 100)}% less damage` });
     if (st.frozenHeart) S.push({ label: 'Frozen Heart', text: 'when hit, freezes foes within 120 (8 s cooldown)' });

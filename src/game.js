@@ -114,7 +114,7 @@
     this.enemies = out;
     // pickups & allies
     this.pickups = []; for (const [id, rb] of b.K) { const ra = a.K.get(id); const xy = lerpXY(ra, rb); this.pickups.push({ id, kind: N.PK[rb[1]], x: xy[0], y: xy[1] }); }
-    this.allies = []; for (const [id, rb] of b.A) { const ra = a.A.get(id); const xy = lerpXY(ra, rb); this.allies.push({ id, owner: rb[1], x: xy[0], y: xy[1], face: rb[4] }); }
+    this.allies = []; for (const [id, rb] of b.A) { const ra = a.A.get(id); const xy = lerpXY(ra, rb); this.allies.push({ id, owner: rb[1], x: xy[0], y: xy[1], face: rb[4], k: rb[5] | 0 }); }
     // projectiles: extrapolated to "now" so dodging reads true
     const pb = this.projBase;
     if (pb) {

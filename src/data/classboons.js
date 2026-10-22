@@ -165,18 +165,22 @@
     desc: 'Sanctuary: +{s1Area} radius, lasts {s1Dur:s} longer (at most 60% of its cooldown), +{s1Dmg} damage; allies inside take {sanctDR:dr} less damage.', mods: { s1Area: 0.3, s1Dur: 2, s1Dmg: 0.5, sanctDR: 0.1 } });
   card('cleric', 'skill1', 2, 'c_s1_a', { name: 'Holy Fury', icon: 'star', tag: 'Burst',
     desc: 'Sanctuary deals +{s1Dmg} and stuns foes inside for {sanctStun:s} when cast (not bosses).',
-    rider: 'Hallowed Ground: foes inside Sanctuary are Judged (+20% damage taken).', mods: { s1Dmg: 0.2, sanctStun: 0.5 }, up: { s1Dmg: 0.1 }, r3: { sanctJudge: 1 } });
+    rider2: 'Hallowed Ground: foes inside Sanctuary are Judged (+20% damage taken).', mods: { s1Dmg: 0.2, sanctStun: 0.5 }, up: { s1Dmg: 0.1 }, r2: { sanctJudge: 1 }, r3: { wrath: 1, wrathNova: 1.5, wrathPillar: 1.2 },
+    form: { name: 'Wrath of Heaven', desc: 'Sanctuary opens with a nova over its whole circle for {wrathNova} of a second of its damage. Then every half second a pillar of light falls on a random foe inside for {wrathPillar} of one of its half-second damage ticks (it prefers foes not struck in the last second).' } });
   card('cleric', 'skill1', 2, 'c_s1_b', { name: 'Aura of Faith', icon: 'lantern', tag: 'Guard', coop: true,
     desc: 'Sanctuary centres on you and moves with you, but deals 10% less. Damage taken inside is cut by a further {sanctDR}.',
-    rider: 'Embolden: allies (not you) inside your aura deal +{auraDmg} damage.', mods: { aura: 1, s1Dmg: -0.1, sanctDR: 0.1 }, up: { sanctDR: 0.02 }, r3: { auraDmg: 0.1 } });
+    rider2: 'Embolden: allies (not you) inside your aura deal +{auraDmg} damage.', mods: { aura: 1, s1Dmg: -0.1, sanctDR: 0.1 }, up: { sanctDR: 0.02 }, r2: { auraDmg: 0.1 }, r3: { aegis: 1, aegisR: 40, aegisDR: 0.1, aegisStun: 0.3 },
+    form: { name: 'Radiant Aegis', desc: 'The radius of the aura grows by {aegisR:n} and it pulses every 2 seconds, stunning foes inside {aegisStun:s} (not bosses). Allies inside take a further {aegisDR} less damage, and the Sanctuary may now cut up to 50%.' } });
   card('cleric', 'skill2', 1, 'c_s2', { name: 'Hammer of Judgment', icon: 'hammer', forks: ['c_s2_a', 'c_s2_b'], plays: 'judge the pack, then the team cashes in.',
     desc: 'Judgment: +{s2Dmg} damage, flies {s2Range} farther, Judged lasts {judgeDur:s} longer, recharges {s2Cdr} faster.', mods: { s2Dmg: 0.25, s2Range: 0.4, judgeDur: 1, s2Cdr: 0.167 } });
   card('cleric', 'skill2', 2, 'c_s2_a', { name: 'Twin Hammers', icon: 'twin', tag: 'Burst',
     desc: 'Judgment throws two hammers in a narrow V, each at {twinHammer}.[ Judgment deals +{s2Dmg}.]',
-    rider: 'Second Flight: each hammer flies out once more after it returns (out, back, out, back), the second flight at {secondFlight} of a hit.', mods: { twinHammer: 0.55 }, up: { s2Dmg: 0.1 }, r3: { thirdLeg: 1, secondFlight: 0.25 } });
+    rider2: 'Second Flight: each hammer flies out once more after it returns (out, back, out, back), the second flight at {secondFlight} of a hit.', mods: { twinHammer: 0.55 }, up: { s2Dmg: 0.1 }, r2: { thirdLeg: 1, secondFlight: 0.25 }, r3: { storm: 5, stormMul: 0.45 },
+    form: { name: 'Hammerstorm', desc: 'Judgment throws {storm:n} hammers in a wide fan instead of two. Each flies out and back twice, every leg at {stormMul} of a hit (the second flight is no weaker), and each leg still Judges the foes it strikes.' } });
   card('cleric', 'skill2', 2, 'c_s2_b', { name: 'Verdict', icon: 'scroll', tag: 'Guard', coop: true,
     desc: 'Judged foes deal {judgeWeak} less damage (bosses half that). A Judged foe that dies bursts (radius 70) for Holy damage, stunning foes in it 0.4 s (not bosses).[ Judgment deals +{s2Dmg}.]',
-    rider: 'Sentence: Verdict bursts Judge the foes they hit.', mods: { verdict: 1, judgeWeak: 0.4 }, up: { s2Dmg: 0.1 }, r3: { verdictJudge: 1 } });
+    rider2: 'Sentence: Verdict bursts Judge the foes they hit.', mods: { verdict: 1, judgeWeak: 0.4 }, up: { s2Dmg: 0.1 }, r2: { verdictJudge: 1 }, r3: { fjEcho: 0.2, fjR: 40, fjStun: 0.6 },
+    form: { name: 'Final Judgment', desc: 'Judged foes are bound together: damage a Judged foe takes from you echoes {fjEcho} of itself to every other Judged foe within 200 (an echo never echoes again and carries no on-hit effects). The Verdict burst grows {fjR:n} wider and stuns {fjStun:s}.' } });
   card('cleric', 'element', 1, 'c_el', { name: 'Radiant Faith', icon: 'sun', forks: ['c_el_a', 'c_el_b'], plays: 'every swing builds toward a Smite that shields the party.',
     desc: "Your skills deal +{classElMul} Holy damage, and your weapon stores Radiance for {wInfHoly} of each hit (Consecrate's rate counts instead when it is higher).", mods: { classElMul: 0.25, wInfHoly: 0.12 } });
   card('cleric', 'element', 2, 'c_el_a', { name: 'Guardian Light', icon: 'shieldgold', tag: 'Focus', coop: true,
@@ -199,18 +203,22 @@
     desc: '+{minions:n} max minion, Raise Legion raises {s1N:n} more, and your minions deal +{s1Dmg}.', mods: { minions: 1, s1N: 1, s1Dmg: 0.2 } });
   card('necro', 'skill1', 2, 'n_s1_a', { name: 'Bone Spikes', icon: 'bomb', tag: 'Burst',
     desc: 'Your minions burst when they expire, fall or are replaced (radius 60) for Shadow damage that marks Doom for half of it.[ Bursts deal +{s1Dmg} more.]',
-    rider: 'Boneyard: a foe a Bone Spikes burst kills rises as a minion (at most once per 2 s).', mods: { boneSpikes: 1 }, up: { s1Dmg: 0.1 }, r3: { spikeRaise: 1 } });
+    rider2: 'Boneyard: a foe a Bone Spikes burst kills rises as a minion (at most once per 2 s).', mods: { boneSpikes: 1 }, up: { s1Dmg: 0.1 }, r2: { spikeRaise: 1 }, r3: { bloom: 1, bloomField: 0.5, bloomBomb: 1.2 },
+    form: { name: 'Ossuary Bloom', desc: 'Minions also burst when Bone Harvest consumes them, and every burst leaves a field of bone spikes for 2 seconds that deals {bloomField} of the burst each second. Raise Legion also raises 2 bone bombs for 5 seconds: they run at the nearest foe and explode for {bloomBomb} of a burst, leaving a field of their own.' } });
   card('necro', 'skill1', 2, 'n_s1_b', { name: 'Bone Knights', icon: 'shield', tag: 'Guard',
     desc: 'Fewer, greater dead: at most 2 minions (Legion raises 2); each deals ×2, attacks every 0.5 s, cleaves foes within 30 of its target, and blocks enemy shots that touch it (each block costs it 1 s). Their strikes stun foes {knightStun:s} (at most once per 1 s per foe, not bosses).[ Minions deal +{minionDmg} more.]',
-    rider: 'Ironbone: Bone Knights last {knightLife} longer.', mods: { minions: -2, s1N: -2, knights: 1, knightStun: 0.5 }, up: { minionDmg: 0.1 }, r3: { knightLife: 0.5 } });
+    rider2: 'Ironbone: Bone Knights last {knightLife} longer.', mods: { minions: -2, s1N: -2, knights: 1, knightStun: 0.5 }, up: { minionDmg: 0.1 }, r2: { knightLife: 0.5 }, r3: { dk: 1, dkMul: 4.5, dkArc: 2.4, dkTaunt: 120 },
+    form: { name: 'Death Knight', desc: 'Raise Legion raises one Death Knight instead of the two Bone Knights: it strikes for ×{dkMul:x} the damage of a minion, cleaves a wide arc (about 140 degrees) and taunts every foe within {dkTaunt:n} (not bosses): they come for it, and it blocks their shots. It counts as 2 minions and stands until it falls or you raise another.' } });
   card('necro', 'skill2', 1, 'n_s2', { name: 'Grim Harvest', icon: 'harvest', forks: ['n_s2_a', 'n_s2_b'], plays: 'build up, detonate, rebuild.',
     desc: 'Bone Harvest explosions deal +{s2Dmg} and are {s2Area} wider; it always raises {harvestRaise:n} after.', mods: { s2Dmg: 0.4, s2Area: 0.2, harvestRaise: 2 } });
   card('necro', 'skill2', 2, 'n_s2_a', { name: 'Corpse Explosion', icon: 'bomb', tag: 'Burst',
     desc: "Harvest also detonates up to {corpse:n} corpses (foes that died in the last 4 s) within 220 of you, each at {corpseMul} of a minion's burst.",
-    rider: 'Bone Lances: before exploding, each minion flies to the foe nearest it within 200 and bursts on it for +{boneLance}.', mods: { corpse: 4, corpseMul: 0.7 }, up: { corpse: 1 }, r3: { boneLance: 0.25 } });
+    rider2: 'Bone Lances: before exploding, each minion flies to the foe nearest it within 200 and bursts on it for +{boneLance}.', mods: { corpse: 4, corpseMul: 0.7 }, up: { corpse: 1 }, r2: { boneLance: 0.25 }, r3: { corpse: 4, corpseMul: 0.2, carrionN: 3, carrionShard: 0.4 },
+    form: { name: 'Carrion Storm', desc: 'Every corpse Harvest detonates (up to {corpse:n}, now at {corpseMul}) launches {carrionN:n} bone shards at the nearest foes for {carrionShard} of a minion\'s burst each.' } });
   card('necro', 'skill2', 2, 'n_s2_b', { name: 'Bone Armor', icon: 'harvest', tag: 'Guard',
     desc: 'Harvest shields you for {boneArmor} max health per minion harvested (up to {boneCap}, at most once per 12 s).',
-    rider: 'Marrow Field: each harvested minion leaves bone shards (radius 40, 2 s) that slow foes 40%.', mods: { boneArmor: 0.03, boneCap: 0.05 }, up: { boneCap: 0.005 }, r3: { boneField: 1 } });
+    rider2: 'Marrow Field: each harvested minion leaves bone shards (radius 40, 2 s) that slow foes 40%.', mods: { boneArmor: 0.03, boneCap: 0.05 }, up: { boneCap: 0.005 }, r2: { boneField: 1 }, r3: { lich: 1, lichT: 5, lichMul: 0.4, lichLife: 2, braceDR: 0.2 },
+    form: { name: 'Lich Form', desc: 'For {lichT:s} after Bone Harvest your weapon fires 2 extra soul bolts at {lichMul} of a hit, the minions you raise last {lichLife:n} times as long, and you take {braceDR} less damage.' } });
   card('necro', 'element', 1, 'n_el', { name: 'Grave Pact', icon: 'scroll', forks: ['n_el_a', 'n_el_b'], plays: 'the army Reaps for you.',
     desc: "Your skills deal +{classElMul} Shadow damage; your minions apply your statuses at 75% strength (from 50%) and mark Doom for {mInfShadow} of their damage (Mark of Doom's rate counts instead when it is higher).", mods: { classElMul: 0.25, minionInfuse: 0.25, mInfShadow: 0.2 } });
   card('necro', 'element', 2, 'n_el_a', { name: 'Abyssal Toll', icon: 'mask', tag: 'Focus',

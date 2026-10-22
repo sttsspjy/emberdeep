@@ -29,7 +29,7 @@ function packWeapon(m, n) {
   const w = m.weapon, st = null; void st;
   const hitsBase = w.kind === 'melee' ? n : Math.min(n, (w.n || 1) * (1 + (w.pierce || 0)));
   let sum = w._avg * hitsBase;
-  for (const e of w._extras) sum += e.perAttack * (e.label === 'Twin Fang' ? hitsBase / (w.oneFoe || 1) : n);
+  for (const e of w._extras) sum += e.perAttack * (e.label === 'Twin Fang' ? hitsBase / (w.oneFoe || 1) : e.label === 'Lich bolts' ? 1 : n); // the two Lich bolts seek one foe each: the same total in a pack
   return sum * w._aps;
 }
 function directDamage(m, n) {
@@ -42,20 +42,23 @@ function directDamage(m, n) {
     if (key === 'volley.arrow' || key === 'volley.wave') mul = Math.min(n, q.fanN * 2) * (q.waves || 1) / Math.max(1, q.oneFoe) * (args.surround ? Math.min(1, q.fan / (2 * Math.PI)) : 1); // --surround: the pack stands all round the hero, a fan reaches only the share of it that its angle covers
     if (key === 'volley.burst') { sum += q.here * n * Math.min(2, n - 1) / k._cd; continue; } // a marked foe's burst reaches 2 other foes of the pack, one burst per foe of the pack
     if (key === 'shieldthrow.strike') mul = Math.min(n, 4 + 2);
-    if (q.kind === 'minion') mul = 1;
+    if (q.kind === 'minion') mul = q.dkCleave ? Math.min(n, 3) : 1; // the Death Knight cleaves a wide arc: about 3 foes of a pack
     if (key === 'vanish.ambush') mul = (m.weapon.kind === 'melee' ? n : Math.min(n, m.weapon.n)) / Math.max(1, q.oneFoe);
     sum += q._r.total * mul / k._cd;
   }
   return sum;
 }
 const statusDamage = (m) => m.mult.status.reduce((s, x) => s + (x.est && x.est.dps || 0), 0);
-const heroDamage = (m, n, k) => directDamage(m, n) * (k || 1) + statusDamage(m); // k: the conditional-damage factor of the build (condFactor); statuses are raw damage
+const heroDamage = (m, n, k, e) => directDamage(m, n) * (k || 1) * (e || 1) + statusDamage(m); // k: the conditional-damage factor of the build (condFactor); statuses are raw damage
+
+// Final Judgment: every hit on a Judged foe echoes fjEcho to each other Judged foe of the pack (judged for 4 s + judgeDur of every Judgment cooldown), so a pack of n takes 1 + fjEcho x (n - 1) x the Judged share.
+const echoK = (p, m, n) => (p.stats.fjEcho > 0 && n > 1 ? 1 + p.stats.fjEcho * (n - 1) * Math.min(1, (4 + p.stats.judgeDur) / St.skillNums('judgment', p.stats).cdEff) : 1);
 
 // ---- defence: effective health with the uptime of a guard ----
 function defence(p, m) {
   const st = p.stats, out = { ehp: m.def.ehp, note: [] };
   let keep = 1;
-  if (st.braceDR) {
+  if (st.braceDR && !(st.lich > 0)) {
     const N = St.skillNums('charge', st), up = Math.min(1, st.brace / Math.max(C.BRACE_CD, N.cdEff)), dr = Math.min(0.4, st.braceDR);
     keep *= 1 - dr * up; out.note.push(`Brace -${Math.round(dr * 100)}% x ${Math.round(up * 100)}% uptime`);
   }
@@ -64,8 +67,12 @@ function defence(p, m) {
     keep *= (1 - dr * up) * (1 - st.bannerWeak * up); out.note.push(`War Banner -${Math.round(dr * 100)}% and foes -${Math.round(st.bannerWeak * 100)}% x ${Math.round(up * 100)}% uptime`);
   }
   if (p.cls === 'cleric') {
-    const N = St.skillNums('sanctuary', st), z = N.p.zone, up = Math.min(1, z.dur / N.cdEff), dr = Math.min(0.4, 0.15 + st.sanctDR);
+    const N = St.skillNums('sanctuary', st), z = N.p.zone, up = Math.min(1, z.dur / N.cdEff), dr = Math.min(st.aegis > 0 ? C.DR_FLOOR : 0.4, 0.15 + st.sanctDR + st.aegisDR); // Radiant Aegis may cut up to the DR floor (combat.js still clamps a Sanctuary at 40% until it reads z.drCap)
     keep *= 1 - dr * up; out.note.push(`Sanctuary -${Math.round(dr * 100)}% x ${Math.round(up * 100)}% uptime`);
+  }
+  if (st.lich > 0) { // Lich Form: the Brace channel for lichT seconds after every Bone Harvest
+    const up = Math.min(1, st.lichT / Math.max(st.lichT, St.skillNums('harvest', st).cdEff)), dr = Math.min(0.4, st.braceDR);
+    keep *= 1 - dr * up; out.note.push(`Lich Form -${Math.round(dr * 100)}% x ${Math.round(up * 100)}% uptime`);
   }
   out.ehp = m.def.ehp / keep;
   // shield income (percent of max health per second, before the window caps)
@@ -83,6 +90,7 @@ function defence(p, m) {
   if (p.cls === 'knight') { const q = St.skillNums('charge', st).p.impact; src.push([q.stun + st.chargeStun, cd1]); src.push([St.skillNums('shieldthrow', st).p.strike.stun, cd2]); }
   if (st.cShock && st.cStun) src.push([st.cStun, (3 + st.cleaveN) * m.weapon.interval]);
   if (st.sanctStun) src.push([st.sanctStun, cd1]);
+  if (st.aegis > 0) src.push([st.aegisStun, 2]); // a Radiant Aegis pulse every 2 s
   if (st.waveStun && m.weapon.fork) src.push([st.waveStun, 3 * m.weapon.interval]);
   for (const [d, cd] of src) stun += Math.min(1, d / Math.max(cd, d + C.STUN_DR));
   out.stun = Math.min(1, stun);
@@ -154,13 +162,13 @@ function routeTable(label, boonsFor) {
   out(`\n###### ${label}`);
   out(`  (${COND_NOTE})`);
   for (const cls of CLS) {
-    const base = boonsFor(cls), pb = hero(cls, 0, base), mb = model(pb), db = defence(pb, mb), kb = condFactor(pb, mb, db), b1 = heroDamage(mb, 1, kb), b4 = heroDamage(mb, PACK, kb);
+    const base = boonsFor(cls), pb = hero(cls, 0, base), mb = model(pb), db = defence(pb, mb), kb = condFactor(pb, mb, db), b1 = heroDamage(mb, 1, kb), b4 = heroDamage(mb, PACK, kb, echoK(pb, mb, PACK));
     out(`\n== ${ED.CLASSES[cls].name}: base ${f1(b1)} one foe | ${f1(b4)} pack, effective health ${f1(db.ehp)}`);
     out(`  ${pad('route / fork', 34)} ${rpad('1 foe', 7)} ${rpad('pack', 7)} ${rpad('EHP', 6)} ${rpad('shield/s', 9)} ${rpad('stun', 5)}  weapon dps  skill1  skill2   notes`);
     for (const r of ED.ROUTES) {
       const e = ED.CLASS_CARDS[cls][r];
       const emit = (name, boons) => {
-        const p = hero(cls, 0, boons), m = model(p), d = defence(p, m), k = condFactor(p, m, d), h1 = heroDamage(m, 1, k), h4 = heroDamage(m, PACK, k);
+        const p = hero(cls, 0, boons), m = model(p), d = defence(p, m), k = condFactor(p, m, d), h1 = heroDamage(m, 1, k), h4 = heroDamage(m, PACK, k, echoK(p, m, PACK));
         out(`  ${pad(name, 34)} ${rpad(sign(h1 / b1 - 1), 7)} ${rpad(sign(h4 / b4 - 1), 7)} ${rpad(sign(d.ehp / db.ehp - 1), 6)} ${rpad(pct(d.shield, 2), 9)} ${rpad(pct(d.stun), 5)}  ${rpad(f1(m.weapon.dps), 10)}  ${rpad(f1(m.skills[0].dpsCd), 6)}  ${rpad(f1(m.skills[1] ? m.skills[1].dpsCd : 0), 6)}   ${d.note.join('; ')}`);
       };
       emit(`${ED.routeLabel(cls, r)} (${ED.BOONS[e.t1].name})`, Object.assign({}, base, { [e.t1]: 1 }));

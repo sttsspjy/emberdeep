@@ -179,7 +179,8 @@ const CASES = [
   ['pyro', {}, 0], ['pyro', {}, 1], ['pyro', { novaRing: 1 }, 0], ['pyro', { twinMeteor: 0.6 }, 1, 0, true], ['pyro', { comet: 0.3 }, 1],
   ['shade', {}, 0], ['shade', { stepTwin: 0.5 }, 0], ['shade', {}, 1, 28],
   ['cleric', {}, 0], ['cleric', {}, 1], ['cleric', { twinHammer: 0.75 }, 1],
-  ['necro', {}, 0], ['necro', { boneSpikes: 1 }, 0],
+  ['cleric', { wrath: 1, wrathNova: 1.5, wrathPillar: 1.2 }, 0], ['cleric', { aura: 1, aegis: 1, aegisR: 40, aegisDR: 0.1, aegisStun: 0.3 }, 0], ['cleric', { storm: 5, stormMul: 0.45, thirdLeg: 1, twinHammer: 0.55, secondFlight: 0.25 }, 1], ['cleric', { verdict: 1, fjEcho: 0.2, fjR: 40, fjStun: 0.6 }, 1],
+  ['necro', {}, 0], ['necro', { boneSpikes: 1 }, 0], ['necro', { boneSpikes: 1, bloom: 1, bloomField: 0.5, bloomBomb: 1.2 }, 0], ['necro', { knights: 1, maxMinions: 2, s1N: -2 }, 0], ['necro', { knights: 1, maxMinions: 2, s1N: -2, dk: 1, dkMul: 4.5, dkArc: 2.4, dkTaunt: 120 }, 0],
 ];
 for (const [cls, stat, slot, dist, skipImpact] of CASES) {
   const { w, p, e } = stage(cls, {}, 0, stat, null, dist);
@@ -213,6 +214,16 @@ for (const [cls, stat, slot, dist, skipImpact] of CASES) {
   const by = settle(w, e, 3), got = by['harvest.burst'];
   ok(got && got.n === q.oneFoe, `Bone Harvest: ${got ? got.n : 0} bursts on the foe, modelled ${q.oneFoe}`);
   if (got) rel(got.sum / got.n, q.here, 0.015, 'Bone Harvest burst per hit');
+}
+
+{ // Carrion Storm: every corpse that explodes launches 3 shards at the nearest foes; against one foe all of them land (the model's shard row is per corpse)
+  const { w, p, e } = stage('necro', {}, 0, { corpse: 10, corpseMul: 0.9, carrionN: 3, carrionShard: 0.4 });
+  w.corpses.push({ x: e.x + 20, y: e.y, t: w.time }, { x: e.x - 20, y: e.y + 10, t: w.time });
+  const q = sheetOf(w, p).skills[1].parts.find(x => x.id === 'shard');
+  cast(w, p, e, 1);
+  const by = settle(w, e, 3), got = by['harvest.shard'];
+  ok(got && got.n === 6 && by['harvest.corpse'] && by['harvest.corpse'].n === 2, `Carrion Storm: ${got ? got.n : 0} shard hits for 2 corpses, want 6`);
+  if (got) rel(got.sum / got.n, q.here, 0.015, 'Carrion Storm shard per hit');
 }
 
 // ---------------- weapons: attacks on one foe, then the clouds and shots in flight finish ----------------
