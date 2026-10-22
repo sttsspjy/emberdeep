@@ -129,16 +129,20 @@
   }
 
   // Vanish: smoke that slows foes and blinds each non-boss foe inside for a budget (elites half, then a cooldown); the hero is unseen for a while and the next attack is an Ambush.
-  // Veil of Night shields the hero once per 12 s (the class shield window bounds it); Shroud's longer smoke is the card's s2Dur.
+  // Veil of Night shields the hero once per 12 s (the class shield window bounds it); Shroud's longer smoke is the card's s2Dur and the smoke chokes every foe inside (the choke part, half of it every 0.5 s: a zone tick, no crit, no procs).
   // Eclipse: the smoke is a dome (zone tag w 2) the hero stays unseen in and where every attack is an Ambush (see stepDome); Umbral Veil: a shadow clone is left where the hero stood.
   ED.CAST.vanish = function (p, a, data, st, N) {
-    const dome = N.p.dome.on, sm = dome ? N.p.dome : N.p.smoke, bl = N.p.blind, stealth = dome ? sm.dur : 2.5 + st.stealthDur, bud = {};
+    const dome = N.p.dome.on, sm = dome ? N.p.dome : N.p.smoke, bl = N.p.blind, ch = N.p.choke, stealth = dome ? sm.dur : 2.5 + st.stealthDur, bud = {};
     p.stealthT = stealth; p.ambush = true; p.ambushT = stealth + 0.5; p.ambFac = 1; p.eclipseRe = false;
-    const zone = this.addZone({ kind: 'smoke', x: p.x, y: p.y, r: sm.r, dur: sm.dur, team: 0, owner: p.pid, custom: true, w: dome ? 2 : 0,
+    const zone = this.addZone({ kind: 'smoke', x: p.x, y: p.y, r: sm.r, dur: sm.dur, team: 0, owner: p.pid, custom: true, w: dome ? 2 : 0, ticks: 0,
       update: (world, z, dt) => {
+        const choke = ch.on && z.t >= 0.5 * (z.ticks + 1) - 1e-9;
+        if (choke) z.ticks++;
         for (const e of world.enemies) {
           if (e.hp <= 0 || e.spawnT > 0 || U.dist2(e.x, e.y, z.x, z.y) >= (z.r + e.r) ** 2) continue;
           world.slowEnemy(e, st.shroud ? 0.6 : sm.slow, 0.3);
+          if (choke) world.hitEnemy(e, ch.dmg * 0.5, { p, kind: 'dot', noProc: true, crit: false, part: 'vanish.choke', zone: true });
+          if (e.hp <= 0) continue;
           if (st.smokeVuln || dome) e.vulnT = Math.max(e.vulnT || 0, 0.3);
           if (e.boss) continue;
           const cap = bl.dur * (e.elite ? 0.5 : 1);

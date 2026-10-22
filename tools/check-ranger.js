@@ -163,13 +163,14 @@ const RAD = (a) => a * Math.PI / 180;
   near(stage({ r_s1_b: 2 }).p.stats.volleyClose, 0.5, 1e-9, 'rank 2: +10% close bonus'); ok(!stage({ r_s1_b: 1 }).p.stats.caltrops && stage({ r_s1_b: 2 }).p.stats.caltrops, 'Caltrops come with rank 2');
   w.projs.length = 0; w.zones.length = 0; w.playerSkill(p, 0, {}, 0); ok(!w.zones.some(z => z.kind === 'shards'), 'no caltrops without the rider');
 }
-{ // Caltrops: where the hero stood, r 50, 2.5 s, slow 40%, 12 per second
+{ // Caltrops: where the hero stood, r 50, 2.5 s, slow 40%, 30% of a Volley arrow per second (the volley.caltrops part)
   const { w, p } = stage({ r_s1: 1, r_s1_b: 2 }); const inside = foe(w, 60 + 30, 212), outside = foe(w, 60 + 90, 212), x0 = p.x, y0 = p.y; w.zones.length = 0;
+  const cp = ED.Stats.skillNums('volley', p.stats).p; near(cp.caltrops.dmg, cp.arrow.dmg * 0.3, 1e-9, 'the caltrops part is 30% of a Volley arrow per second');
   w.playerSkill(p, Math.PI, {}, 0); w.projs.length = 0; const z = w.zones.find(q => q.kind === 'shards'); // aimed at the wall: the arrows stay out of the way
-  ok(z && z.x === x0 && z.y === y0 && z.r === 50 && z.dur === 2.5 && z.team === 0, 'a shards zone on the hero feet, r 50, 2.5 s'); near(z.dps, 12, 1e-9, 'Caltrops 6 + 0.5 P = 12 per second');
+  ok(z && z.x === x0 && z.y === y0 && z.r === 50 && z.dur === 2.5 && z.team === 0 && z.part === 'volley.caltrops', 'a shards zone on the hero feet, r 50, 2.5 s'); near(z.dps, cp.caltrops.dmg, 1e-9, 'Caltrops deal the part damage per second');
   p.x = 400; run(w, 1.0); near(inside.slowAmt, 0.4, 1e-9, 'foes inside are slowed 40%'); ok(!(outside.slowT > 0), 'foes outside are not'); run(w, 2.2);
-  near(5000 - inside.hp, 30, 0.5, 'Caltrops deal 12 per second for 2.5 s = 30'); ok(outside.hp === 5000, 'foes outside take nothing'); ok(!w.zones.some(q => q.kind === 'shards'), 'the patch ends'); ok(inside.slowAmt === 0, 'and the slow wears off');
-  const big = stage({ r_s1: 1, r_s1_b: 2 }); big.p.stats.area = 1; big.w.zones.length = 0; big.w.playerSkill(big.p, Math.PI, {}, 0); near(big.w.zones.find(q => q.kind === 'shards').r, 50, 1e-9, 'the patch radius is fixed (no area scaling)');
+  near(5000 - inside.hp, cp.caltrops.dmg * 2.5, 0.5, 'Caltrops deal their dps for 2.5 s'); ok(outside.hp === 5000, 'foes outside take nothing'); ok(!w.zones.some(q => q.kind === 'shards'), 'the patch ends'); ok(inside.slowAmt === 0, 'and the slow wears off');
+  const big = stage({ r_s1: 1, r_s1_b: 2 }); big.p.stats.area = 1; big.w.zones.length = 0; big.w.playerSkill(big.p, Math.PI, {}, 0); near(big.w.zones.find(q => q.kind === 'shards').r, 75, 1e-9, 'the patch radius follows the area (50 x (1 + area / 2))');
 }
 
 // ---- Rainmaker (r_s2): +30% radius, +1 s (12 ticks), +10% damage ----
@@ -210,15 +211,15 @@ const RAD = (a) => a * Math.PI / 180;
   w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: 200, y: 212 }, 1); run(w, 0.3); ok(!(e.slowAmt > 0), 'no slow before the arrows fall'); run(w, 0.2);
   near(e.slowAmt, 0.5, 1e-9, 'foes in the Rain are slowed 50%'); ok(e.vulnT > 0, 'and vulnerable'); ok(!(out.slowT > 0), 'foes outside the Rain are not slowed');
   near(hit(w, p, e, 100, { kind: 'weapon' }) / hit(w, p, out, 100, { kind: 'weapon' }), 1.2, 1e-6, 'vulnerable foes take +20%');
-  near(stage({ r_s2_b: 2 }).p.stats.s2Dmg, 0.1, 1e-9, 'rank 2 adds +10% Rain damage');
+  near(stage({ r_s2_b: 2 }).p.stats.s2Dmg, 0, 1e-9, 'Hail of Thorns adds no Rain damage of its own');
 }
-{ // Second Shower: when the Rain ends it falls again on the same spot for 2 s at 40% per tick
+{ // Second Shower: when the Rain ends it falls again on the same spot for 2 s at 15% per tick
   const { w, p } = stage({ r_s2: 1, r_s2_b: 2 }); const e = foe(w, 200, 212), evs = tap(w), log = []; const hk = w.hitEnemy; w.hitEnemy = function (f, b, s) { const d = hk.call(this, f, b, s); if (s && s.part) log.push({ part: s.part, t: w.time, b }); return d; };
-  const rn = ED.Stats.skillNums('rain', p.stats); near(rn.p.shower.dmg, rn.p.tick.dmg * 0.4, 1e-9, 'Second Shower at 40% of a tick');
+  const rn = ED.Stats.skillNums('rain', p.stats); near(rn.p.shower.dmg, rn.p.tick.dmg * 0.15, 1e-9, 'Second Shower at 15% of a tick');
   w.zones.length = 0; w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: 200, y: 212 }, 1); run(w, 6.2, evs.step);
   const tk = log.filter(h => h.part === 'rain.tick'), sh = log.filter(h => h.part === 'rain.shower');
   ok(tk.length === 12, `the Rain keeps its 12 ticks (got ${tk.length})`); ok(sh.length === 8, `the Shower lasts 2 s = 8 ticks (got ${sh.length})`);
-  near(sh[0].b / tk[0].b, 0.4, 1e-6, 'a Shower tick is 40% of a Rain tick'); ok(sh[0].t >= tk[11].t - 1e-9 && sh[0].t - tk[11].t < 0.3, 'the Shower starts when the Rain ends');
+  near(sh[0].b / tk[0].b, 0.15, 1e-6, 'a Shower tick is 15% of a Rain tick'); ok(sh[0].t >= tk[11].t - 1e-9 && sh[0].t - tk[11].t < 0.3, 'the Shower starts when the Rain ends');
   ok(evs.all.some(v => v.t === 'skyfx' && v.k === 2), 'a Shower event'); ok(w.zones.length === 0, 'no zone is left'); ok(e.slowAmt === 0, 'the slow wears off'); w.hitEnemy = hk;
   const no = stage({ r_s2: 1, r_s2_b: 1 }); const f = foe(no.w, 200, 212), l2 = []; const h2 = no.w.hitEnemy; no.w.hitEnemy = function (g, b, s) { if (s && s.part) l2.push(s.part); return h2.call(this, g, b, s); };
   no.w.playerSkill(no.p, 0, { x0: no.p.x, y0: no.p.y, x: 200, y: 212 }, 1); run(no.w, 6, null); ok(!l2.includes('rain.shower'), 'no Shower at rank 1'); void f;
@@ -285,7 +286,7 @@ const arrowsOf = (w, part) => w.projs.filter(q => q.team === 0 && q.part === par
   const at = (g, lo, hi) => g.filter(a => a.t >= lo && a.t < hi);
   ok(at(w3, 0, 0.05).length === 10 && at(w3, 0.1, 0.17).length === 10 && at(w3, 0.22, 0.3).length === 10 && w3.length === 30, `Death Mark: three waves of ${base.n} arrows (${at(w3, 0, 0.05).length}, ${at(w3, 0.1, 0.17).length}, ${at(w3, 0.22, 0.3).length})`);
   ok(Math.abs(at(w3, 0.1, 0.17)[0].t - 0.12) < 0.03 && Math.abs(at(w3, 0.22, 0.3)[0].t - 0.24) < 0.03, 'the waves follow 0.12 s apart');
-  near(at(w3, 0.1, 0.17)[0].dmg / at(w3, 0, 0.05)[0].dmg, 0.6, 1e-6, 'waves 2 and 3 deal 60%'); near(at(w3, 0.22, 0.3)[0].dmg / at(w3, 0, 0.05)[0].dmg, 0.6, 1e-6, 'wave 3 deals 60%');
+  near(at(w3, 0.1, 0.17)[0].dmg / at(w3, 0, 0.05)[0].dmg, 0.1, 1e-6, 'waves 2 and 3 deal 10%'); near(at(w3, 0.22, 0.3)[0].dmg / at(w3, 0, 0.05)[0].dmg, 0.1, 1e-6, 'wave 3 deals 10%');
   ok(w2.length === 10, 'rank 2 looses one wave');
   const heading = (rank, marked, foeAt) => {
     const { w, p } = stage({ r_s1: 1, r_s1_a: rank }); const f = foe(w, foeAt[0], foeAt[1]); if (marked) { f.mark = 5; f.markV = 0.12; f.markBy = 'p0'; }
@@ -299,7 +300,7 @@ const arrowsOf = (w, part) => w.projs.filter(q => q.team === 0 && q.part === par
     const bw = (rank, marked) => { const { w, p } = stage({ r_s1: 1, r_s1_a: rank }); const f = foe(w, 250, 212); if (marked !== false) { f.mark = 5; f.markV = 0.12; f.markBy = 'p0'; } return { w, p, f }; };
     const a = bw(3), N = ED.Stats.skillNums('volley', a.p.stats), evs = tap(a.w); a.f.fodder = true; hit(a.w, a.p, a.f, 1e9, { kind: 'weapon' }); const bursts = arrowsOf(a.w, 'volley.burst'); evs.step();
     ok(bursts.length === 4, `a marked foe (fodder too) bursts into 4 arrows (${bursts.length})`);
-    ok(bursts.every(q => Math.abs(q.dmg - N.p.arrow.dmg * 0.5) < 1e-9 && q.pierce === 3 && q.hk === 'skill'), 'each at 50% of a Volley arrow, piercing 3');
+    ok(bursts.every(q => Math.abs(q.dmg - N.p.arrow.dmg * 0.2) < 1e-9 && q.pierce === 3 && q.hk === 'skill'), 'each at 20% of a Volley arrow, piercing 3');
     const angs = bursts.map(q => Math.atan2(q.vy, q.vx)).sort((x, y) => x - y); near(angs[1] - angs[0], Math.PI / 2, 1e-6, 'a cross, 90 degrees apart'); ok(evs.all.some(v => v.t === 'dmburst'), 'a burst event for the viewer');
     const b = bw(3, false); hit(b.w, b.p, b.f, 1e9, { kind: 'weapon' }); ok(arrowsOf(b.w, 'volley.burst').length === 0, 'an unmarked foe bursts nothing');
     const c = bw(2); hit(c.w, c.p, c.f, 1e9, { kind: 'weapon' }); ok(arrowsOf(c.w, 'volley.burst').length === 0, 'rank 2 has no burst');
@@ -307,14 +308,14 @@ const arrowsOf = (w, part) => w.projs.filter(q => q.team === 0 && q.part === par
     const d = bw(3), other = foe(d.w, 350, 312); hit(d.w, d.p, d.f, 1e9, { kind: 'weapon' }); run(d.w, 0.9); ok(other.hp < 5000 && !(other.mark > 0), 'burst arrows hit a foe past the mark leap (r120) and do not mark it');
   }
 }
-{ // Thornburst (r_s1_b rank 3): a ring of 20 arrows, the hop and the close bonus stay, caltrops cover 3x the area and root a foe 0.5 s once per patch (not bosses)
+{ // Thornburst (r_s1_b rank 3): a ring of 20 arrows at x3 damage piercing 3, the hop and the close bonus stay, caltrops cover 3x the area and root a foe 0.5 s once per patch (not bosses)
   const { w, p } = stage({ r_s1: 1, r_s1_b: 3 }), N = ED.Stats.skillNums('volley', p.stats), q = N.p.arrow;
   ok(q.n === 20 && q.ring && Math.abs(q.fan - 2 * Math.PI) < 1e-9, 'Thornburst: a full ring of 20 arrows'); const mv = N.move; ok(mv && mv.k === 'hop' && mv.dist === 70, 'and the hop');
   w.projs.length = 0; w.playerSkill(p, 0.4, {}, 0); const as = arrowsOf(w, 'volley.arrow'), ang = as.map(a => Math.atan2(a.vy, a.vx)).sort((x, y) => x - y);
-  ok(as.length === 20 && Math.abs(ang[1] - ang[0] - 2 * Math.PI / 20) < 1e-6 && as.every(a => a.dmg === q.dmg), 'twenty evenly spaced arrows of full damage'); ok(as.some(a => Math.abs(Math.atan2(a.vy, a.vx) - 0.4) < 1e-6), 'one of them flies along the aim');
+  ok(as.length === 20 && Math.abs(ang[1] - ang[0] - 2 * Math.PI / 20) < 1e-6 && as.every(a => Math.abs(a.dmg - q.dmg * 3) < 1e-9 && a.pierce === 3), 'twenty evenly spaced arrows at x3 damage, piercing 3'); ok(as.some(a => Math.abs(Math.atan2(a.vy, a.vx) - 0.4) < 1e-6), 'one of them flies along the aim');
   const e = foe(w, 300, 212); near(hit(w, p, e, 10, { kind: 'skill', part: 'volley.arrow', dist: 50, knock: 60, kx: 1, ky: 0 }), 16, 1e-6, 'the close bonus stays (+60% at rank 3)');
   ok(ED.Stats.skillNums('volley', stage({ r_s1: 1, r_s1_b: 2 }).p.stats).p.arrow.n === 10, 'rank 2 keeps the fan of 10');
-  const z0 = w.zones.find(z => z.kind === 'shards'); near(z0.r, 50 * Math.sqrt(3), 1e-9, 'the caltrops cover three times the area (r 86.6)');
+  const z0 = w.zones.find(z => z.kind === 'shards'); near(z0.r, 87, 1e-9, 'the caltrops cover three times the area (r 87)');
   const t = stage({ r_s1: 1, r_s1_b: 3 }); t.w.zones.length = 0; t.w.playerSkill(t.p, Math.PI, {}, 0); t.w.projs.length = 0; const inside = foe(t.w, 60 + 30, 212), boss = foe(t.w, 60, 212 + 40); boss.boss = true; const away = foe(t.w, 60 + 110, 212); t.p.x = 400;
   run(t.w, 1 / 60); near(inside.slowAmt, 1, 1e-9, 'a foe entering is rooted'); near(boss.slowAmt, 0.4, 1e-9, 'a boss is only slowed 40%'); ok(away.slowAmt === 0, 'a foe outside (r 86.6 plus its body) is untouched');
   run(t.w, 0.3); near(inside.slowAmt, 1, 1e-9, 'still rooted 0.3 s in'); run(t.w, 0.3); near(inside.slowAmt, 0.4, 1e-9, 'after 0.5 s the root ends and the 40% slow remains');
@@ -324,29 +325,29 @@ const arrowsOf = (w, part) => w.projs.filter(q => q.team === 0 && q.part === par
 }
 { // Starfall Barrage (r_s2_a rank 3): five Skyfall impacts walk from the hero to the cursor, 0.12 s apart, r70 at 60%, stun 0.4 s (not bosses); rank 2 keeps Skyfall and Twin Sky
   const { w, p } = stage({ r_s2: 1, r_s2_a: 3 }), N = ED.Stats.skillNums('rain', p.stats), q = N.p.star;
-  ok(q.on && !N.p.sky.on && !N.p.sky2.on && q.n === 5, 'the barrage replaces the single landing and Twin Sky'); near(q.dmg, N.p.sky.dmg * 0.6, 1e-9, 'each impact is 60% of a Skyfall'); near(q.r, 70 * 1.4, 1e-6, 'impact radius 70 (with the Rain area)');
+  ok(q.on && !N.p.sky.on && !N.p.sky2.on && q.n === 5, 'the barrage replaces the single landing and Twin Sky'); near(q.dmg, N.p.sky.dmg * 0.45, 1e-9, 'each impact is 45% of a Skyfall'); near(q.r, 70 * 1.4, 1e-6, 'impact radius 70 (with the Rain area)');
   const near1 = foe(w, 250, 212), tgt = foe(w, 300, 212), bs = foe(w, 252, 240), start = foe(w, 80, 212); bs.boss = true;
   const log = spy(w), evs = tap(w); w.zones.length = 0; w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: 300, y: 212 }, 1);
   const zs = w.zones.filter(z => z.kind === 'starfall'); ok(zs.length === 5 && !w.zones.some(z => z.kind === 'skyfall' || z.kind === 'rain'), 'five starfall zones, no Skyfall');
   ok(zs.every((z, k) => Math.abs(z.x - (60 + 240 * (k + 1) / 5)) < 1e-6 && Math.abs(z.y - 212) < 1e-6 && Math.abs(z.dur - (0.35 + 0.12 * k)) < 1e-9 && z.r === q.r), 'they walk from the hero to the cursor, 0.12 s apart');
   run(w, 1.2, evs.step); const hs = partHits(log, 'rain.star'), land = evs.all.filter(v => v.t === 'skyfx' && v.k === 3);
-  ok(land.length === 5, `five landing events (${land.length})`); ok(hs.length > 5 && hs.every(h => Math.abs(h.d - q.dmg) < 0.2), `every foe in reach takes 60% of a Skyfall (${hs.length} hits)`);
+  ok(land.length === 5, `five landing events (${land.length})`); ok(hs.length > 5 && hs.every(h => Math.abs(h.d - q.dmg) < 0.2), `every foe in reach takes 45% of a Skyfall (${hs.length} hits)`);
   ok(hs.filter(h => h.e === tgt).length >= 3 && hs.filter(h => h.e === start).length >= 1, 'a foe at the end is in reach of several impacts');
   ok(!partHits(log, 'rain.sky').length && !partHits(log, 'rain.sky2').length, 'no Skyfall or Twin Sky hit');
   const st = stage({ r_s2: 1, r_s2_a: 3 }), s1 = foe(st.w, 300, 212), s2 = foe(st.w, 300, 250); s2.boss = true; let stunned = 0, bossStun = 0; st.w.playerSkill(st.p, 0, { x0: st.p.x, y0: st.p.y, x: 300, y: 212 }, 1);
   run(st.w, 1.2, () => { stunned = Math.max(stunned, s1.stun); bossStun = Math.max(bossStun, s2.stun); }); ok(stunned > 0.3 && stunned <= 0.4 + 1e-9 && bossStun === 0, `impacts stun 0.4 s, never a boss (${stunned.toFixed(2)})`);
   const r2 = stage({ r_s2: 1, r_s2_a: 2 }); r2.w.zones.length = 0; r2.w.playerSkill(r2.p, 0, { x0: r2.p.x, y0: r2.p.y, x: 300, y: 212 }, 1); ok(r2.w.zones.length === 1 && r2.w.zones[0].kind === 'skyfall', 'rank 2 casts the single Skyfall (and Twin Sky)');
 }
-{ // Storm of Thorns (r_s2_b rank 3): the Rain follows the cursor at 120 px/s for twice as long and lays bramble patches (r40, 3 s, slow 30%) every 0.5 s; the Second Shower falls where it ended
+{ // Storm of Thorns (r_s2_b rank 3): the Rain follows the cursor at 120 px/s for 1.5 times as long and lays bramble patches (r40, 3 s, slow 30%) every 0.5 s; the Second Shower falls where it ended
   const { w, p } = stage({ r_s2: 1, r_s2_b: 3 }), N = ED.Stats.skillNums('rain', p.stats), tk = N.p.tick;
-  near(tk.dur, 6, 1e-9, 'the Rain lasts twice as long (3 s to 6 s)'); near(tk.count, 24, 1e-9, '24 ticks'); ok(ED.Stats.skillNums('rain', stage({ r_s2: 1, r_s2_b: 2 }).p.stats).p.tick.count === 12, 'rank 2: 12 ticks');
+  near(tk.dur, 4.5, 1e-9, 'the Rain lasts 1.5 times as long (3 s to 4.5 s)'); near(tk.count, 18, 1e-9, '18 ticks'); ok(ED.Stats.skillNums('rain', stage({ r_s2: 1, r_s2_b: 2 }).p.stats).p.tick.count === 12, 'rank 2: 12 ticks');
   p.aimX = 320; p.aimY = 212; w.zones.length = 0; w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: 140, y: 212 }, 1); const z = w.zones.find(q => q.kind === 'rain'); const xs = {}, patches = new Set(), evs = tap(w);
   run(w, 1.7, () => { xs[Math.round((z.t) * 60)] = z.x; for (const b of w.zones) if (b.kind === 'bramble') patches.add(b.id); evs.step(); });
   near(xs[Math.round(1.2 * 60)] - xs[Math.round(0.2 * 60)], 120, 4, 'the Rain follows the cursor at 120 px/s'); ok(z.x <= 320 + 1e-6 && z.x > 300, `and stops at the cursor, within range (${z.x.toFixed(0)})`);
   ok(patches.size >= 3, `a bramble patch about every 0.5 s along its path (${patches.size} in 1.7 s)`);
   const br = w.zones.find(b => b.kind === 'bramble'); ok(br && br.r === 40 && Math.abs(br.dur - 3) < 1e-9, 'patches: r40, 3 s'); const slowed = foe(w, br.x, br.y); run(w, 1 / 30); near(slowed.slowAmt, 0.3, 1e-9, 'foes in a patch are slowed 30%');
   const s = stage({ r_s2: 1, r_s2_b: 3 }); s.p.aimX = 140; s.p.aimY = 212; const f = foe(s.w, 140, 212), log = spy(s.w), ev2 = tap(s.w); s.w.playerSkill(s.p, 0, { x0: s.p.x, y0: s.p.y, x: 140, y: 212 }, 1); run(s.w, 8.8, ev2.step);
-  ok(partHits(log, 'rain.tick').length === 24, `a still Storm ticks 24 times (${partHits(log, 'rain.tick').length})`); ok(partHits(log, 'rain.shower').length === 8, 'and the Second Shower follows (8 ticks)');
+  ok(partHits(log, 'rain.tick').length === 18, `a still Storm ticks 18 times (${partHits(log, 'rain.tick').length})`); ok(partHits(log, 'rain.shower').length === 8, 'and the Second Shower follows (8 ticks)');
   ok(ev2.all.some(v => v.t === 'skyfx' && v.k === 2 && Math.abs(v.x - 140) < 3), 'the Shower falls where the Storm ended');
   const r2 = stage({ r_s2: 1, r_s2_b: 2 }); r2.p.aimX = 320; r2.p.aimY = 212; r2.w.zones.length = 0; r2.w.playerSkill(r2.p, 0, { x0: r2.p.x, y0: r2.p.y, x: 140, y: 212 }, 1); const z2 = r2.w.zones.find(q => q.kind === 'rain'); run(r2.w, 1.5);
   ok(Math.abs(z2.x - 140) < 1e-6 && !r2.w.zones.some(q => q.kind === 'bramble'), 'rank 2: the Rain stays put and lays nothing');

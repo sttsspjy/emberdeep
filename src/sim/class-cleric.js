@@ -1,6 +1,6 @@
 // Cleric: Sanctuary and Judgment (base kits from ED.SKILLS numbers), the Judgment hammers, the wave hooks of the Attack route, the Verdict and Prism payoffs and the Cleric hook table ED.CLS.cleric.
 // Judged = e.judged seconds (+20% damage taken); Verdict also weakens a Judged foe (e.weakT / e.weakV, read by hurtPlayer). Only a hammer hit stamps e.judgeOwner / e.judgeCast / e.judgeUntil (the kill shield of Judgment needs the hammer's own Judged window).
-// Skill forms (rank 3): Wrath of Heaven (nova + pillars of light), Radiant Aegis (a wider aura that pulses a stun), Hammerstorm (five hammers, two round trips), Final Judgment (Judged foes echo the damage they take).
+// Skill forms (rank 3): Wrath of Heaven (nova + pillars of light), Aegis of Dawn (a wider aura that pulses a stun and a strike), Hammerstorm (five hammers, two round trips), Final Judgment (Judged foes echo the damage they take).
 // Route forms (rank 3): Dawn's Wake (a burning strip per wave), Returning Light (every wave turns back to the hero), Sunstrike (every 3rd Smite on a foe; combat.js smite calls the sunstrike hook), Spectrum (the Prism beam splits).
 (function (ED) {
   'use strict';
@@ -43,23 +43,27 @@
     w.emit({ t: 'pillar', x: rnd(e.x), y: rnd(e.y), pid: o.pid });
   }
 
-  // Radiant Aegis: a pulse stuns (repeating) every non-boss foe inside, each at most once per AEGIS_T seconds; the event carries the circle for the viewers.
-  function aegisPulse(w, z, o, st) {
+  // Aegis of Dawn: a pulse stuns (repeating) every non-boss foe inside, each at most once per AEGIS_T seconds; every pulse after the cast's also strikes every foe inside for the pulse part (a zone tick: no crit, no procs).
+  // The event carries the circle for the viewers.
+  function aegisPulse(w, z, o, st, strike) {
+    const N = strike ? ED.Stats.skillNums('sanctuary', st) : null;
     for (const e of w.enemies) {
-      if (!live(e) || e.boss || e.aegisAt > w.time - AEGIS_T + 1e-6 || U.dist2(e.x, e.y, z.x, z.y) >= (z.r + e.r) ** 2) continue;
+      if (!live(e) || U.dist2(e.x, e.y, z.x, z.y) >= (z.r + e.r) ** 2) continue;
+      if (N) w.hitEnemy(e, N.p.pulse.dmg, w.partSrc(o, N, 'pulse', { crit: false, noProc: true, noGuard: true, x: z.x, y: z.y }));
+      if (e.hp <= 0 || e.boss || e.aegisAt > w.time - AEGIS_T + 1e-6) continue;
       if (w.stunFoe(e, st.aegisStun, true) > 0) e.aegisAt = w.time;
     }
     w.emit({ t: 'aegispulse', x: rnd(z.x), y: rnd(z.y), r: rnd(z.r), pid: o.pid });
   }
 
   // Zone update of a Sanctuary (z.update, every tick): Hallowed Ground keeps the foes inside Judged, Embolden gives the allies inside an Aura of Faith +auraDmg damage for AURA_T,
-  // Wrath of Heaven strikes pillars (z.pA seconds since the last) and Radiant Aegis pulses (z.gA).
+  // Wrath of Heaven strikes pillars (z.pA seconds since the last) and Aegis of Dawn pulses (z.gA).
   function sanctTick(w, z, dt) {
     const o = w.players.get(z.owner);
     if (!o) return;
     const st = o.stats;
     if (st.wrath && (z.pA = (z.pA || 0) + dt) >= PILLAR_T - 1e-9) { z.pA -= PILLAR_T; wrathPillar(w, z, o, st); }
-    if (st.aegis && (z.gA = (z.gA || 0) + dt) >= AEGIS_T - 1e-9) { z.gA -= AEGIS_T; aegisPulse(w, z, o, st); }
+    if (st.dawn && (z.gA = (z.gA || 0) + dt) >= AEGIS_T - 1e-9) { z.gA -= AEGIS_T; aegisPulse(w, z, o, st, true); }
     if (st.sanctJudge) for (const e of w.enemies) if (live(e) && U.dist2(e.x, e.y, z.x, z.y) < (z.r + e.r) ** 2) e.judged = Math.max(e.judged, HG_JUDGE);
     if (z.follow && st.auraDmg && !o.downed && !o.dead) {
       for (const q of w.players.values()) {
@@ -76,9 +80,9 @@
     for (const o of this.players.values()) if (!o.downed && !o.dead && (o === p || U.dist2(o.x, o.y, p.x, p.y) < 180 * 180)) this.healPlayer(o, o.maxHp * C.SANCT_HEAL);
     const z = this.addZone({ kind: 'sanct', x: g.x, y: g.y, r: q.r, dur: q.dur, dps: q.dmg, owner: p.pid, team: 0, clsEl: st.element, rad: 0.25, dr: 0.15 + st.sanctDR + st.aegisDR, part: 'sanctuary.zone' });
     if (aura) z.follow = p.pid;
-    if (st.aegis) { z.drCap = C.DR_FLOOR; z.w = 9; } // drCap: the cut this zone may reach (other Sanctuaries clamp at 40%); w 9 marks Radiant Aegis for the renderer
+    if (st.dawn) { z.drCap = C.DR_FLOOR; z.w = 9; } // drCap: the cut this zone may reach (other Sanctuaries clamp at 40%); w 9 marks Aegis of Dawn for the renderer
     if (st.wrath) z.w = 8; // Wrath of Heaven
-    if (st.sanctJudge || (aura && st.auraDmg) || st.wrath || st.aegis) z.update = sanctTick;
+    if (st.sanctJudge || (aura && st.auraDmg) || st.wrath || st.dawn) z.update = sanctTick;
     const out = { x: rnd(g.x), y: rnd(g.y) };
     if (st.sanctStun) {
       out.hf = 1;
@@ -89,7 +93,7 @@
       this.skillBlast(p, g.x, g.y, nv.r, nv.dmg, this.partSrc(p, N, 'nova', { crit: false, knock: nv.knock, infAdd: { holy: 0.5 } }));
       out.wr = 1;
     }
-    if (st.aegis) aegisPulse(this, z, p, st); // the first pulse comes with the cast
+    if (st.dawn) aegisPulse(this, z, p, st); // the first pulse comes with the cast
     if (aura) out.au = 1;
     return out;
   };

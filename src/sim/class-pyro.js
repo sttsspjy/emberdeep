@@ -11,8 +11,8 @@
   // CHAN_IDLE: shortest pause between attacks that ends Channel (ED.chanWindow). AFTERSHOCK_T: delay of Magma Heart's second eruption. PULL_LEAD: Collapse pulls this long before the echo. LAVA_T / LAVA_R: Lava Pool life and radius share of the blast.
   // LAVA_MAX: most Lava Pools a hero keeps alive. MANTLE_CD: seconds between Mantle shields. HEAT_MAX: most cooldown one cast cuts. HEAT_CD: seconds between Chain Reactions. LAVA_TAG: zone field w of a Lava Pool (and of the Cataclysm field), COMET_TAG: of the Meteor a Comet rides,
   // PHOENIX_TAG: of the Phoenix Form ring (the tags only tell the renderer which look to draw). SUN_GAP: seconds between the landing and the second Sun Dive leap. STORM_GAP / STORM_OFF: seconds between the Cataclysm meteors and px from the cursor point of the four outer ones.
-  // TRAIL_STEP / DIVE_STEP: px between two trail patches of a dash and of a Sun Dive flight.
-  Object.assign(C, { CHAN_IDLE: 0.6, AFTERSHOCK_T: 0.4, PULL_LEAD: 0.15, LAVA_T: 2, LAVA_R: 0.6, MANTLE_CD: 10, HEAT_MAX: 1.5, HEAT_CD: 6, LAVA_TAG: 9, COMET_TAG: 1, LAVA_MAX: 4, PHOENIX_TAG: 10, SUN_GAP: 0.5, STORM_GAP: 0.1, STORM_OFF: 80, TRAIL_STEP: 20, DIVE_STEP: 28 });
+  // TRAIL_STEP / DIVE_STEP: px between two trail patches of a dash and of a Sun Dive flight. SUN_GRACE: seconds the hero stays untouchable after a Sun Dive landing.
+  Object.assign(C, { CHAN_IDLE: 0.6, AFTERSHOCK_T: 0.4, PULL_LEAD: 0.15, LAVA_T: 2, LAVA_R: 0.6, MANTLE_CD: 10, HEAT_MAX: 1.5, HEAT_CD: 6, LAVA_TAG: 9, COMET_TAG: 1, LAVA_MAX: 4, PHOENIX_TAG: 10, SUN_GAP: 0.5, SUN_GRACE: 0.6, STORM_GAP: 0.1, STORM_OFF: 80, TRAIL_STEP: 20, DIVE_STEP: 28 });
 
   // Seconds after an attack that keep Channel alive: CHAN_IDLE, or 1.25 x the hero's attack interval when that is longer (a Heavy weapon attacks less often than every 0.6 s and would never build it).
   ED.chanWindow = (p) => Math.max(C.CHAN_IDLE, 1.25 * ED.Stats.attackInterval(p));
@@ -96,6 +96,17 @@
     w.emit({ t: 'pyPhoenix', pid: p.pid, r: Math.round(ph.r), d: ph.dur });
   }
 
+  // Phoenix Form: foes inside the ring that follows the hero are slowed phoenixSlow (bosses half as much), refreshed every tick.
+  function phoenixSlow(w, p, st) {
+    const r = ED.Stats.skillNums('nova', st).p.phoenix.r, q = w.foeScan(p.x, p.y, r);
+    for (let k = 0; k < q.length || w.foeTail(q); k++) {
+      const e = q[k];
+      if (e.hp <= 0 || e.spawnT > 0 || U.dist2(e.x, e.y, p.x, p.y) >= (r + e.r) ** 2) continue;
+      w.slowEnemy(e, e.boss ? st.phoenixSlow / 2 : st.phoenixSlow, 0.3);
+    }
+    w.foeEnd();
+  }
+
   // A patch of burning ground on the path of a dash or a Sun Dive flight, one per `step` px of travel (p.trailAt remembers the last one; null when the hero is not moving that way).
   function layTrail(w, p, q, step) {
     if (p.trailAt && U.dist2(p.trailAt[0], p.trailAt[1], p.x, p.y) < step * step) return;
@@ -166,7 +177,7 @@
     w.emit({ t: 'pyStorm', pid: p.pid, x: Math.round(t.x), y: Math.round(t.y), r: Math.round(C.STORM_OFF) });
   }
 
-  // The second Sun Dive leap: toward the cursor (clamped to the Meteor's range and cut at walls), landing as another Comet impact after the leap time. The hero's own client moves it: a hero this world moves gets its skillMove here,
+  // The second Sun Dive leap: toward the cursor (clamped to the Meteor's range and cut at walls), landing as another Comet impact at sunDive of the first after the leap time. The hero's own client moves it: a hero this world moves gets its skillMove here,
   // a remote one a 'leap' message (the client starts the same move).
   function diveAgain(w, p) {
     const st = p.stats, N = ED.Stats.skillNums('meteor', st), mv = N.move;
@@ -174,7 +185,7 @@
     let tx = p.aimX, ty = p.aimY;
     if (!fin(tx) || !fin(ty)) { tx = p.x + Math.cos(p.face) * 200; ty = p.y + Math.sin(p.face) * 200; }
     const g = Sim.groundPoint(w.room, w.locked, p.x, p.y, tx, ty, N.range, false);
-    w.castMeteor(p, g.x, g.y, mv.t, 1 + st.comet, 'comet');
+    w.castMeteor(p, g.x, g.y, mv.t, (1 + st.comet) * st.sunDive, 'comet');
     p.cometT = mv.t;
     w.emit({ t: 'pyComet', pid: p.pid, x: Math.round(p.x), y: Math.round(p.y), tx: Math.round(g.x), ty: Math.round(g.y), d: mv.t, sd: 1 });
     if (p.remote) w.msgs.push({ to: p.pid, t: 'leap', x: Math.round(g.x), y: Math.round(g.y), d: mv.t, i: mv.iframes });
@@ -204,7 +215,10 @@
       }
     });
     w.emit({ t: 'boom', x: Math.round(z.x), y: Math.round(z.y), r: Math.round(z.r), k: rock ? 'fire' : 'bigfire' });
-    if (comet && st.sunDive > 0) w.emit({ t: 'pyDive', pid: o.pid, x: Math.round(z.x), y: Math.round(z.y), r: Math.round(z.r) });
+    if (comet && st.sunDive > 0) {
+      o.invuln = Math.max(o.invuln, C.SUN_GRACE);
+      w.emit({ t: 'pyDive', pid: o.pid, x: Math.round(z.x), y: Math.round(z.y), r: Math.round(z.r) });
+    }
     if (own) w.addZone({ kind: 'pfire', x: z.x, y: z.y, r: cr.r, dur: cr.dur, dps: cr.dmg, owner: o.pid, team: 0, clsEl: st.element });
     if (storm) {
       if (--grp.left > 0) return;
@@ -360,6 +374,7 @@
       if (p.pyroQ.length) runQueue(this, p);
       if (p.waves.length) stepWaves(this, p);
       if (p.phoenixT > 0) p.phoenixT -= dt;
+      if (p.phoenixT > 0 && st.phoenixSlow > 0) phoenixSlow(this, p, st);
       if (p.phoenixT > 0 && st.phoenixMul > 0 && (p.dashing || p.dashT > 0)) layTrail(this, p, ED.Stats.skillNums('nova', st).p.trail, C.TRAIL_STEP);
       else if (p.cometT > 0 && st.sunDive > 0) layTrail(this, p, ED.Stats.skillNums('meteor', st).p.trail, C.DIVE_STEP);
       else p.trailAt = null;
