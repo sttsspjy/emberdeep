@@ -121,20 +121,23 @@
   }
 
   // Iron Phalanx: where the run ends a 0.4 s stun pulse and a War Banner. The banner is a 'sanct' zone (w 7) so hurtPlayer's damage reduction (the owner's Brace, at most 40%) covers every hero inside;
-  // each tick foes inside are slowed and weakened (bosses half as much).
+  // each tick foes inside are slowed and weakened (bosses half as much), and every 0.5 s they take half of the banner part's damage per second (a zone tick: no crit, no procs).
   function plantBanner(w, p, c, N, st) {
     const q = N.p.banner, x = c.x1, y = c.y1, pid = p.pid;
     for (const e of w.enemies) if (e.hp > 0 && e.spawnT <= 0 && U.dist2(e.x, e.y, x, y) < (q.r + e.r) ** 2) w.stunFoe(e, q.stun, false);
     w.emit({ t: 'banner', x: Math.round(x), y: Math.round(y), r: Math.round(q.r), pid });
-    w.addZone({ kind: 'sanct', w: 7, x, y, r: q.r, dur: q.dur, dr: Math.min(0.4, st.braceDR), team: 0, owner: pid, custom: true,
+    w.addZone({ kind: 'sanct', w: 7, x, y, r: q.r, dur: q.dur, dr: Math.min(0.4, st.braceDR), team: 0, owner: pid, custom: true, ticks: 0,
       update: (world, z) => {
         const ow = world.players.get(pid), sl = ow ? ow.stats.bannerSlow : st.bannerSlow, wk = ow ? ow.stats.bannerWeak : st.bannerWeak;
+        const tick = z.t >= 0.5 * (z.ticks + 1) - 1e-9, dmg = tick && ow ? ED.Stats.skillNums('charge', ow.stats).p.banner.dmg * 0.5 : 0;
+        if (tick) z.ticks++;
         for (const e of world.enemies) {
           if (e.hp <= 0 || e.spawnT > 0 || U.dist2(e.x, e.y, z.x, z.y) >= (z.r + e.r) ** 2) continue;
           const v = e.boss ? wk / 2 : wk;
           world.slowEnemy(e, e.boss ? sl / 2 : sl, 0.3);
           if (!(e.weakT > 0) || v > e.weakV) e.weakV = v;
           e.weakT = Math.max(e.weakT, 0.3);
+          if (dmg > 0) world.hitEnemy(e, dmg, { p: ow, kind: 'dot', noProc: true, crit: false, part: 'charge.banner', zone: true });
         }
       } });
   }

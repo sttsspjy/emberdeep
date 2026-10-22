@@ -8,12 +8,13 @@
   const U = ED.U;
 
   // Deadeye grows from nothing at FAR_FROM px flown to its full bonus at FAR_TO; a hit from FAR_AT of that ramp carries the far-shot flag. LEAP_R: reach of Relentless Hunt. SPLIT_A / SPLIT_LIFE: Splitting Bolt's fan and flight.
-  // FLURRY_A: Flurry's extra arrows (each at st.flurryMul of a shot). CALTROPS: the Scattershot patch, base + pow x P damage per second, slow, radius (fixed), seconds. HAIL_SLOW: slow of a Hail of Thorns foe. VOLLEY_SLOW_T: seconds a Scattershot arrow slows its foe.
+  // FLURRY_A: Flurry's extra arrows (each at st.flurryMul of a shot). CALTROPS: slow of the Scattershot patch (its damage, radius and seconds are the volley.caltrops part). HAIL_SLOW: slow of a Hail of Thorns foe. VOLLEY_SLOW_T: seconds a Scattershot arrow slows its foe.
   const FAR_FROM = 80, FAR_TO = 260, FAR_AT = 0.75, LEAP_R = 120, SPLIT_A = 0.3, SPLIT_LIFE = 0.4, FLURRY_A = 0.12;
   // FLURRY_B: step of the extra arrows when Storm Bow adds more than two. SIEGE_R / SIEGE_WIDE: end blast radius and hit-radius factor of a siege bolt. RIC_R: reach of a Storm Bow ricochet.
   // HEMO_CD / HEMO_BOSS_CD: seconds between two Hemorrhage pops on one foe (a boss). PLAGUE_R / PLAGUE_HOP: Plaguebearer burst radius and seconds from the death to the burst.
   const FLURRY_B = 0.09, SIEGE_R = 60, SIEGE_WIDE = 2, RIC_R = 140, HEMO_CD = 1, HEMO_BOSS_CD = 4, PLAGUE_R = 90, PLAGUE_HOP = 0.05;
-  const CALTROPS = { base: 6, pow: 0.5, r: 50, dur: 2.5, slow: 0.4 }, HAIL_SLOW = 0.5, VOLLEY_SLOW_T = 1.2;
+  const CALTROPS = { slow: 0.4 }, HAIL_SLOW = 0.5, VOLLEY_SLOW_T = 1.2;
+  Object.assign(ED.CONST, { CALTROP_SLOW: CALTROPS.slow, HAIL_SLOW, VOLLEY_SLOW_T }); // read by the defence model of tools/model.js
   // WAVE_GAP: seconds between the Death Mark waves. HOME_R / HOME_TURN: reach (px) and turn rate (rad/s) of an arrow toward marked foes. BURST_LIFE / BURST_PIERCE: flight (s) and pierce of a Death Mark burst arrow.
   // STORM_SPEED: px/s the Storm of Thorns follows the cursor. BRAMBLE: patch laid by the Storm every `every` s (radius, seconds, slow).
   const WAVE_GAP = 0.12, HOME_R = 300, HOME_TURN = 3, BURST_LIFE = 0.5, BURST_PIERCE = 3, STORM_SPEED = 120, BRAMBLE = { r: 40, dur: 3, slow: 0.3, every: 0.5 };
@@ -24,16 +25,16 @@
   ED.CAST.volley = function (p, a, data, st, N) {
     volleyArrows(this, p, a, st, N.p.arrow, 1);
     if (st.deathMark > 0) for (let k = 1; k <= 2; k++) p.volleyQ.push({ t: WAVE_GAP * k, a, mul: st.deathWave });
-    if (st.caltrops) caltrops(this, p, st);
+    if (st.caltrops) caltrops(this, p, st, N.p.caltrops);
     return {};
   };
 
-  // One wave of Volley arrows from the hero at damage factor mul (the later Death Mark waves count as part volley.wave); a Death Mark arrow (pr.dm) steers toward marked foes (homeArrows).
+  // One wave of Volley arrows from the hero at damage factor mul (the later Death Mark waves count as part volley.wave); a Death Mark arrow (pr.dm) steers toward marked foes (homeArrows). A Thornburst ring arrow deals thornMul x.
   function volleyArrows(w, p, a, st, q, mul) {
-    const n = q.n, dm = st.deathMark > 0;
+    const n = q.n, dm = st.deathMark > 0, ringMul = q.ring && st.thornMul > 0 ? st.thornMul : 1;
     for (let i = 0; i < n; i++) {
       const ang = q.ring ? a + i * q.fan / n : a + (n > 1 ? (i / (n - 1) - 0.5) * q.fan : 0);
-      const pr = w.spawnProj({ team: 0, kind: 'arrow', x: p.x, y: p.y - 4, a: ang, speed: q.speed, r: q.pr, dmg: q.dmg * mul, life: q.life, pierce: q.pierce + st.pierce, owner: p.pid, knock: q.knock, hk: 'skill', part: mul === 1 ? 'volley.arrow' : 'volley.wave', infK: 1 + st.skillInfK });
+      const pr = w.spawnProj({ team: 0, kind: 'arrow', x: p.x, y: p.y - 4, a: ang, speed: q.speed, r: q.pr, dmg: q.dmg * mul * ringMul, life: q.life, pierce: q.pierce + st.pierce, owner: p.pid, knock: q.knock, hk: 'skill', part: mul === 1 ? 'volley.arrow' : 'volley.wave', infK: 1 + st.skillInfK });
       if (dm) pr.dm = true;
     }
   }
@@ -77,11 +78,11 @@
     w.emit({ t: 'dmburst', x: Math.round(e.x), y: Math.round(e.y), pid: o.pid });
   }
 
-  // Caltrops: a patch on the hero's feet; foes inside are slowed and take CALTROPS.base + pow x P per second (the zone's damage-over-time branch).
-  // Thornburst: three times the area (radius x sqrt 3) and a foe that enters (not a boss) is rooted st.thornRoot seconds, once per foe per patch (the plain slow waits until the root ends).
-  function caltrops(w, p, st) {
-    const C = CALTROPS, big = st.thornburst > 0, root = big ? st.thornRoot : 0, rooted = root > 0 ? new Map() : null;
-    w.addZone({ kind: 'shards', x: p.x, y: p.y, r: big ? C.r * Math.sqrt(3) : C.r, dur: C.dur, dps: C.base + C.pow * st.power, team: 0, owner: p.pid,
+  // Caltrops: a patch on the hero's feet; foes inside are slowed and take the volley.caltrops part's damage per second (radius, seconds and damage from the part; the zone's damage-over-time branch).
+  // Thornburst: the part's radius grows to 87 and a foe that enters (not a boss) is rooted st.thornRoot seconds, once per foe per patch (the plain slow waits until the root ends).
+  function caltrops(w, p, st, q) {
+    const C = CALTROPS, root = st.thornburst > 0 ? st.thornRoot : 0, rooted = root > 0 ? new Map() : null;
+    w.addZone({ kind: 'shards', x: p.x, y: p.y, r: q.r, dur: q.dur, dps: q.dmg, part: 'volley.caltrops', team: 0, owner: p.pid,
       update: (world, z) => {
         for (const e of world.enemies) {
           if (e.hp <= 0 || e.spawnT > 0 || U.dist2(e.x, e.y, z.x, z.y) >= (z.r + e.r) ** 2) continue;

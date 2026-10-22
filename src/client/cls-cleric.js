@@ -1,6 +1,6 @@
 // cleric route-card visuals, client only: registers ED.ClassFx hooks (event, zone, hero and foe-mark hooks; contract in fx.js; the wave look is a body replacement, ED.ClassFx.shotBody[kind] of render.js shotBody).
 // Everything is read from what the snapshot already carries: events (skill hf / au, hturn, solar, verdict, chain k 'b'), the foe flags (Judged), the hero flags (glBuff, embolden) and the zone follow slot (z.fol); the cards a hero owns come from its boons.
-// Skill forms (rank 3): Wrath of Heaven (nova ring, falling pillars, a turning sun wheel on the Sanctuary: zone w 8), Radiant Aegis (wings, pulse rings, a haloed aura: zone w 9), Hammerstorm (golden afterimages round the hammers), Final Judgment (gold echo chains between Judged foes, a bigger Verdict).
+// Skill forms (rank 3): Wrath of Heaven (nova ring, falling pillars, a turning sun wheel on the Sanctuary: zone w 8), Aegis of Dawn (wings, pulse rings, a haloed aura: zone w 9), Hammerstorm (golden afterimages round the hammers), Final Judgment (gold echo chains between Judged foes, a bigger Verdict).
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = U.TAU, Pix = ED.Pix, CFX = ED.ClassFx;
@@ -21,7 +21,7 @@
     }
     return has[key] || null;
   }
-  const KEYS = ['verdict', 'waveBig', 'waveHome', 'sanctJudge', 'aura', 'guardLight', 'auraDmg', 'storm', 'fjEcho', 'aegis'];
+  const KEYS = ['verdict', 'waveBig', 'waveHome', 'sanctJudge', 'aura', 'guardLight', 'auraDmg', 'storm', 'fjEcho', 'dawn'];
 
   // ---------------- sounds ----------------
   const bell = (n, v) => { if (ED.Audio) ED.Audio.play('bell', v, n); };
@@ -129,7 +129,7 @@
       Pix.put(c, Pix.ell(9, 3, GOLD, false, 3, (t * 5) & 7), 0, y, 0.85 * fade); Pix.put(c, Pix.ell(8, 2, PALE, false, 2, (-t * 6) & 7), 0, y, 0.6 * fade);
       if (!low) { rects.length = 0; for (let i = 0; i < 4; i++) { const a = t * 2.4 + i * TAU / 4; rects.push(s2(Math.cos(a) * 20), s2(y + Math.sin(a) * 7) - 2, 2, 2); } fillC(c, '#fff3c4', fade, rects); }
       if (Rn && !low) Rn.emit(p.x, p.y + y, 18, PALE, 0.22 * fade);
-      if (p.stats.aegis) { const flap = Math.round(Math.sin(t * 3 + slot) * 1) * 2; Pix.put(c, aegisWing(true), -14, y - 8 + flap, 0.95 * fade); Pix.put(c, aegisWing(false), 14, y - 8 + flap, 0.95 * fade); } // Radiant Aegis: a pair of wings at the shoulders
+      if (p.stats.dawn) { const flap = Math.round(Math.sin(t * 3 + slot) * 1) * 2; Pix.put(c, aegisWing(true), -14, y - 8 + flap, 0.95 * fade); Pix.put(c, aegisWing(false), 14, y - 8 + flap, 0.95 * fade); } // Aegis of Dawn: a pair of wings at the shoulders
       c.globalAlpha = ga;
     }
     // Embolden: gold arrowheads rise along the body of an ally inside a Cleric's aura, over a gold ring on the ground
@@ -248,7 +248,7 @@
       for (let y = 0; y < 9; y++) for (let x = 0; x < 9; x++) { const ch = WING[y][left ? 8 - x : x]; if (ch !== '.') b[y * w + x] = col[ch]; }
     });
   };
-  // Radiant Aegis aura (zone 'sanct' with w 9): an inner ring, a bright halo and six small wings turning round the rim.
+  // Aegis of Dawn aura (zone 'sanct' with w 9): an inner ring, a bright halo and six small wings turning round the rim.
   CFX.zone.aegis = (c, z, pass, t) => {
     const R = ED.Render, fade = Math.min(1, (z.dur - z.t) * 2, z.t * 5), x = s2(z.x), y = s2(z.y), rp = Pix.RAMP.holy;
     if (pass === 0) {
