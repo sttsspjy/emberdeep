@@ -551,7 +551,8 @@
   const atLeast = (d, k) => d.reduce((s, v, i) => s + (i >= k ? v : 0), 0), meanMin = (d, cap) => d.reduce((s, v, i) => s + v * Math.min(i, cap), 0);
   const DOOM_AT = 4, CATA_AT = 3, CATA_R = 80, POOL_K = 2.5, PACK = 4; // POOL_K: a Bleed pool drains 40% a second, so it holds 2.5 s of income. PACK: the foes of the pack tools/sheet.js reads (the other 3 catch a burst)
   // Doombrand adds one weapon extra, the damage that the Mark (foes holding DOOM_AT ailments take +brandMark from every hero) and the two extra Brand ailments add to the weapon and the skills of the hero's own hits (co-op allies gain more, not counted).
-  // Cataclysm adds a Shield Throw part with no hit on one foe: a pack-only burst of Bleed. A strike detonates a foe holding CATA_AT ailments at most once a second; each of the PACK - 1 others within CATA_R catches cataSplash of the pool (a pool holds POOL_K x the Bleed income), at most SPREAD_CAP of a foe's health.
+  // Cataclysm adds the extra damage of its payout (pool x cataMul, one strike per cast on a foe) to the Shield Throw's damage on one foe, and a part for packs: each of the PACK - 1 others within CATA_R catches cataSplash of the amount paid (a pool holds POOL_K x the Bleed income), at most SPREAD_CAP of a foe's health.
+  // A strike detonates a foe holding CATA_AT ailments at most once a second.
   function elementForms(st, wpn, skills, proc, ref, R) {
     if (st.doombrand > 0) {
       const d = ailmentDist(st), M = Math.max(0.1, st.dmg), p4 = atLeast(d, DOOM_AT), fBrand = st.brand * (meanMin(d, st.brandCap) - meanMin(d, 4)) / M, fMark = p4 * st.brandMark, f = (1 + fBrand) * (1 + fMark) - 1;
@@ -565,9 +566,11 @@
     if (st.cataclysm > 0 && skills.length > 1) {
       const k2 = skills[1], k1 = skills[0], strike = k2.parts.find(q => q.id === 'strike'), p3 = atLeast(ailmentDist(st), CATA_AT);
       if (strike) {
-        const pool = POOL_K * proc.bleed, give = Math.min(st.cataSplash * pool, C.SPREAD_CAP * ref.hp) * (1 + st.bleedMul), det = p3 * (Math.min(PACK, strike.n || 1) / k2._cd + PACK / k1._cd), gain = det * (PACK - 1) * give;
-        const q = { id: 'cataclysm', label: 'Cataclysm burst', per: 'hit', kind: 'hit', el: null, aff: 1, r: CATA_R, proc: false, note: `a Charge or Throw strike on a foe with ${CATA_AT} ailments pays out its Bleed pool and bursts ${Math.round(st.cataSplash * 100)}% of it to each foe near it (a pack only)`, raw: give, hit: give, avg: give, pre: give, here: give, total: gain * k2._cd / PACK, oneFoe: 0, kc: 0, alwaysCrit: false, noCrit: true, selfVuln: 0 };
+        const bm = 1 + st.bleedMul, pool = POOL_K * proc.bleed, paid = pool * bm * (1 + st.cataMul), own = pool * bm * st.cataMul, give = Math.min(st.cataSplash * paid, C.SPREAD_CAP * ref.hp) * bm;
+        const one = p3 * (k2._cd / k2._cd + k2._cd / k1._cd) * own, det = p3 * (Math.min(PACK, strike.n || 1) + PACK * k2._cd / k1._cd), gain = det * (own + (PACK - 1) * give);
+        const q = { id: 'cataclysm', label: 'Cataclysm', per: 'hit', kind: 'hit', el: null, aff: 1, r: CATA_R, proc: false, note: `a Charge or Throw strike on a foe with ${CATA_AT} ailments pays out its Bleed pool at +${Math.round(st.cataMul * 100)}% and bursts ${Math.round(st.cataSplash * 100)}% of that to each foe near it (a pack only)`, raw: paid, hit: paid, avg: paid, pre: paid, here: paid, total: gain / PACK, oneFoe: 0, kc: 0, alwaysCrit: false, noCrit: true, selfVuln: 0 };
         k2.parts.push(finish(q, R));
+        k2.perCast = R.n(k2.perCast + one); k2.perCastAll = R.n(k2.perCastAll + one); k2.dpsCd = R.n(k2.perCast / k2._cd);
       }
     }
   }

@@ -37,32 +37,34 @@ const ATK = { k_atk: 1 }, HEAVY = (r) => Object.assign({ k_atk_h: r }, ATK), SWI
     for (let r = 1; r <= 3; r++) ok(!/[{}\[\]]/.test(ED.boonText(id, r, null)), id + ' rank ' + r + ' text has no left-over token');
     ok(!/[{}\[\]]/.test(P[0].formFull.desc), id + ' previews its transform before rank 3');
     const t1 = ED.cardTotals(b, 1), t2 = ED.cardTotals(b, 2), t3 = ED.cardTotals(b, 3);
-    for (const k in b.r2) ok(!t1[k] && t2[k] > 0 && t3[k] > 0, id + ' stat ' + k + ' (rank 2 rider)');
+    for (const k in b.r2) ok(t2[k] > (t1[k] || 0) && t3[k] > 0, id + ' stat ' + k + ' (rank 2 rider)');
     for (const k in b.r3) ok(k in ED.Stats.compute({ cls: 'knight', weapon: 'longsword', boons: {}, relics: [], meta: META(), pact: 0 }) && t3[k] !== t2[k], id + ' stat ' + k + ' (rank 3 transform)');
   }
   const t = (id, r) => ED.cardTotals(ED.BOONS[id], r), r3 = (id, k) => ED.BOONS[id].r3[k];
-  near(t('k_atk_h', 2).chargeCleave, 0.5, 1e-9, 'Follow-Through moved to rank 2'); near(t('k_atk_h', 3).fissure, r3('k_atk_h', 'fissure'), 1e-9, 'Earthsplitter fissure from the card'); near(3 + t('k_atk_h', 3).cleaveN, 2, 1e-9, 'Earthsplitter Cleave every 2nd swing'); ok(!t('k_atk_h', 2).cleaveN, 'rank 2 keeps every 3rd');
+  near(t('k_atk_h', 2).chargeCleave, 0.5, 1e-9, 'Follow-Through moved to rank 2'); near(t('k_atk_h', 3).fissure, r3('k_atk_h', 'fissure'), 1e-9, 'Earthsplitter fissure from the card'); ok(!t('k_atk_h', 3).cleaveN && !('cleaveN' in ED.BOONS.k_atk_h.r3), 'Earthsplitter leaves the Cleave on every 3rd swing');
   near(t('k_atk_s', 2).riposte, 2, 1e-9, 'Riposte moved to rank 2'); near(t('k_atk_s', 3).bladeWave, r3('k_atk_s', 'bladeWave'), 1e-9, 'Thousand Edges wave from the card');
   near(t('k_el_a', 2).seal, 4, 1e-9, 'Ruin Seal moved to rank 2'); near(t('k_el_a', 3).brandCap, 6, 1e-9, 'Doombrand: Brand counts 6'); near(t('k_el_a', 2).brandCap, 4, 1e-9, 'rank 2: Brand counts 4'); near(t('k_el_a', 3).brandMark, r3('k_el_a', 'brandMark'), 1e-9, 'Doombrand Mark from the card');
   near(t('k_el_b', 2).ruinSpread, 0.5, 1e-9, 'Ruin Spreads moved to rank 2'); near(t('k_el_b', 3).cataSplash, r3('k_el_b', 'cataSplash'), 1e-9, 'Cataclysm splash from the card');
+  near(t('k_el_a', 3).brand, 0.06 + 0.01 * 2 + r3('k_el_a', 'brand'), 1e-9, 'Doombrand adds Brand per ailment at rank 3'); near(r3('k_el_a', 'brandMark'), ED.cardTotals(ED.BOONS.r_s1_a, 3).markV, 1e-9, "the Doombrand Mark equals Hunter's Mark at rank 3");
+  ok([1, 2, 3].every(r => t('k_el_b', r).s1Dmg === t('k_el_b', r).s2Dmg) && t('k_el_b', 2).s1Dmg > t('k_el_b', 1).s1Dmg && t('k_el_b', 3).s1Dmg > t('k_el_b', 2).s1Dmg, 'Ruinous Blows raises Charge and Throw damage with every rank (the text prints one number)');
   const pc = (v) => Math.round(v * 100) + '%';
   ok(ED.boonText('k_atk_h', 3, null).indexOf(pc(r3('k_atk_h', 'fissure')) + ' weapon damage, stunning') >= 0 && ED.boonText('k_atk_s', 3, null).indexOf(pc(r3('k_atk_s', 'bladeWave')) + ' weapon damage') >= 0, 'the transform texts print the card numbers');
-  ok(ED.boonText('k_el_a', 3, null).indexOf('+' + pc(r3('k_el_a', 'brandMark')) + ' damage from every hero') >= 0 && ED.boonText('k_el_b', 3, null).indexOf(pc(r3('k_el_b', 'cataSplash')) + ' of that amount') >= 0, 'Doombrand and Cataclysm print the card numbers');
-  ok(/every 2nd swing/.test(ED.boonText('k_atk_h', 3, null)) && /every 3rd swing/i.test(ED.boonText('k_atk', 1, null)), 'the cadence reads from the stat: 2nd with Earthsplitter');
+  ok(ED.boonText('k_el_a', 3, null).indexOf('+' + pc(r3('k_el_a', 'brandMark')) + ' damage from every hero') >= 0 && ED.boonText('k_el_b', 3, null).indexOf(pc(r3('k_el_b', 'cataMul')) + ' more than it would have dealt, and ' + pc(r3('k_el_b', 'cataSplash')) + ' of the amount paid') >= 0, 'Doombrand and Cataclysm print the card numbers');
+  ok(!/every \d\w\w swing/i.test(ED.boonText('k_atk_h', 3, null)) && /every 3rd swing/i.test(ED.boonText('k_atk', 1, null)), 'Earthsplitter text leaves the Cleave cadence to Oath of Steel');
   ok(/first 4 ailments/.test(ED.boonText('k_el_a', 2, null)) && /first 6 ailments/.test(ED.boonText('k_el_a', 3, null)), 'Brand text shows its cap per rank');
 }
 
-// ---------------- Earthsplitter: Cleave every 2nd swing, a fissure that strikes every foe on it once ----------------
+// ---------------- Earthsplitter: a fissure on every Cleave that strikes every foe on it once ----------------
 {
   const cleaves = (boons, nSwings) => { const { w, p } = stage('knight', boons), out = []; for (let i = 0; i < nSwings; i++) { w.fx.length = 0; w.playerAttack(p, 0); out.push(swings(w, p).some(s => s.k === 'cleave')); } return out.map(c => (c ? 1 : 0)).join(''); };
-  ok(cleaves(HEAVY(3), 6) === '010101', 'Earthsplitter Cleaves swings 2, 4 and 6: ' + cleaves(HEAVY(3), 6));
+  ok(cleaves(HEAVY(3), 6) === '001001', 'Earthsplitter keeps the Cleave on swings 3 and 6: ' + cleaves(HEAVY(3), 6));
   ok(cleaves(HEAVY(2), 6) === '001001', 'rank 2 Cleaves swings 3 and 6: ' + cleaves(HEAVY(2), 6));
   const go = (rank, o) => {
     o = o || {};
     const { w, p } = stage('knight', HEAVY(rank)), log = spy(w), x0 = p.x, y0 = p.y, st = p.stats;
     const line = [40, 90, 140, 175].map((d, i) => foe(w, x0 + d, y0 + (i % 2 ? 8 : -8))), edge = foe(w, x0 + 150, y0 + 30), wide = foe(w, x0 + 120, y0 + 60), far = foe(w, x0 + 235, y0), back = foe(w, x0 - 60, y0);
     if (o.fodder) for (const e of line) e.fodder = true;
-    p.atkCount = 1; w.fx.length = 0; w.playerAttack(p, 0);
+    p.atkCount = 2; w.fx.length = 0; w.playerAttack(p, 0);
     const cleave = swings(w, p).some(s => s.k === 'cleave'), zone0 = w.zones.find(z => z.kind === 'crack' && z.arc > 0), hp1 = line.map(e => e.hp);
     run(w, 0.2); const early = hitsOf(log, 'fissure').length;
     run(w, 0.2);
@@ -81,7 +83,7 @@ const ATK = { k_atk: 1 }, HEAVY = (r) => Object.assign({ k_atk_h: r }, ATK), SWI
   { // a swing that is not a Cleave plants nothing; a fissure is cut short by a wall
     const { w, p } = stage('knight', HEAVY(3)); p.atkCount = 0; w.playerAttack(p, 0); ok(!w.zones.some(z => z.kind === 'crack'), 'a plain swing plants no fissure');
     let best = 999, ang = 0; for (let k = 0; k < 16; k++) { const a = k * Math.PI / 8, e = ED.Sim.castMove(w.room, p.x, p.y, a, 180, 4, w.locked), d = Math.hypot(e.x - p.x, e.y - p.y); if (d < best) { best = d; ang = a; } }
-    p.atkCount = 1; w.playerAttack(p, ang); const z = w.zones.find(q => q.kind === 'crack'); ok(best >= 180 ? !!z : !z || z.len <= best + 1, `a wall cuts the fissure short (open ${best.toFixed(0)}, zone ${z ? z.len.toFixed(0) : 'none'})`);
+    p.atkCount = 2; w.playerAttack(p, ang); const z = w.zones.find(q => q.kind === 'crack'); ok(best >= 180 ? !!z : !z || z.len <= best + 1, `a wall cuts the fissure short (open ${best.toFixed(0)}, zone ${z ? z.len.toFixed(0) : 'none'})`);
   }
   { // fodder on the line is struck like any other foe
     const f = go(3, { fodder: true }); ok(hitsOf(f.log, 'fissure').filter(h => f.line.includes(h.e)).length === 4, 'fodder on the fissure is struck');
@@ -165,18 +167,18 @@ const ATK = { k_atk: 1 }, HEAVY = (r) => Object.assign({ k_atk_h: r }, ATK), SWI
   const nCata = (t) => hitsOf(t.log, 'cataclysm').length;
   const cata = (rank, ails) => { // x: 1000 Bleed, Burn and Chill (3 ailments); near 60 away, far 105 away, small (100 health) 70 away
     const t = stage('knight', RUIN(rank)), { w, p } = t; t.log = spy(w);
-    t.x = foe(w, 300, 200); t.near = foe(w, 360, 200); t.far = foe(w, 405, 200); t.small = foe(w, 300, 270); t.small.maxHp = t.small.hp = 100;
+    t.x = foe(w, 300, 200); t.near = foe(w, 360, 200); t.near.maxHp = t.near.hp = 50000; t.far = foe(w, 405, 200); t.small = foe(w, 300, 270); t.small.maxHp = t.small.hp = 100;
     t.x.bleedPool = 1000; t.x.bleedOwner = p; t.x.bleedTick = 99; if (ails !== 2) t.x.burnPool = 600; t.x.burnTick = 99; t.x.chill = 90; t.x.chillT = 99;
     return t;
   };
   { // the detonation
-    const t = cata(3), { w, p } = t, st = p.stats, hp0 = t.x.hp;
+    const t = cata(3), { w, p } = t, st = p.stats, hp0 = t.x.hp, paid = 1000 * (1 + st.bleedMul) * (1 + st.cataMul);
     ok(w.ailments(t.x) === 3, 'the staged foe holds 3 ailments: ' + w.ailments(t.x));
     strike(w, p, t.x);
     const ch = hitsOf(t.log, 'cataclysm');
-    ok(ch.length === 1 && Math.abs(ch[0].d - 1000 * (1 + st.bleedMul)) < 1e-6 && t.x.bleedPool === 0, 'the Bleed pool hits the foe at once and empties (' + (ch[0] && ch[0].d) + ')');
-    ok(hp0 - t.x.hp >= 1000 + 10 - 1e-6, 'on top of the strike');
-    near(t.near.bleedPool, 600, 1e-6, 'a foe within 80 starts Bleeding for 60% of the pool'); near(t.far.bleedPool, 0, 1e-9, 'a foe 105 away does not'); ok(t.near.bleedOwner === p, 'the burst Bleed belongs to the Knight');
+    ok(ch.length === 1 && Math.abs(ch[0].d - paid) < 1e-6 && t.x.bleedPool === 0, 'the Bleed pool hits the foe at once for (1 + cataMul) times what it would have dealt (' + (ch[0] && ch[0].d) + ')');
+    ok(hp0 - t.x.hp >= paid + 10 - 1e-6, 'on top of the strike');
+    near(t.near.bleedPool, paid * st.cataSplash, 1e-6, 'a foe within 80 starts Bleeding for cataSplash of the amount paid'); near(t.far.bleedPool, 0, 1e-9, 'a foe 105 away does not'); ok(t.near.bleedOwner === p, 'the burst Bleed belongs to the Knight');
     near(t.small.bleedPool, ED.CONST.SPREAD_CAP * 100, 1e-6, 'the burst gives a foe at most 25% of its own health');
     ok(w.fx.some(f => f.t === 'cata' && f.r === 80), 'a cata event for the viewer');
     t.x.bleedPool = 500; strike(w, p, t.x); ok(nCata(t) === 1 && t.x.bleedPool === 500, 'at most once per second per foe');
@@ -192,7 +194,7 @@ const ATK = { k_atk: 1 }, HEAVY = (r) => Object.assign({ k_atk_h: r }, ATK), SWI
   { // a foe the strike kills still bursts; fodder takes part and nothing of the refund / shield / stack kind comes of it
     const t = cata(3), { w, p } = t; t.x.fodder = true; t.near.fodder = true; t.x.hp = 5;
     strike(w, p, t.x); ok(t.x.hp <= 0, 'the fodder foe dies to the strike');
-    ok(nCata(t) === 0 && Math.abs(t.near.bleedPool - 600) < 1e-6, 'a dead foe pays nothing but its fodder neighbour still catches the burst');
+    ok(nCata(t) === 0 && Math.abs(t.near.bleedPool - 1000 * (1 + p.stats.bleedMul) * (1 + p.stats.cataMul) * p.stats.cataSplash) < 1e-6, 'a dead foe pays nothing but its fodder neighbour still catches the burst');
     ok(p.shield === 0 && !(p.kWardT > 0) && !(p.critStacks > 0) && !w.msgs.some(m => m.t === 'refund'), 'no shield, ward, crit stack or refund comes of it');
   }
   { // in play: a Shield Throw down a line of fodder holding 3 ailments detonates each of them once

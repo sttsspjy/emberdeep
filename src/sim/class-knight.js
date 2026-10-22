@@ -436,13 +436,14 @@
     }
   }
 
-  // Cataclysm: a Charge impact or Throw strike on a foe with CATA_AT ailments and a Bleed pool pays the pool out at once (a foe the strike just killed pays nothing) and bursts cataSplash of it to foes within CATA_R as new Bleed (SPREAD_CAP of their HP at most).
+  // Cataclysm: a Charge impact or Throw strike on a foe with CATA_AT ailments and a Bleed pool pays the pool x (1 + bleedMul) x (1 + cataMul) at once (a foe the strike just killed takes nothing) and bursts cataSplash of the amount paid to foes within CATA_R as new Bleed (SPREAD_CAP of their HP at most).
   function cataclysm(w, p, e) {
     const st = p.stats, pool = e.bleedPool;
     if (!(pool > 0)) return;
     e.cataT = w.time + CATA_CD; e.bleedPool = 0;
-    if (e.hp > 0) w.hitEnemy(e, pool * (1 + st.bleedMul), { p, kind: 'explode', raw: true, noProc: true, crit: false, noGuard: true, bleed: true, part: 'cataclysm' });
-    const give = pool * st.cataSplash, cap = C.SPREAD_CAP;
+    const paid = pool * (1 + st.bleedMul) * (1 + st.cataMul);
+    if (e.hp > 0) w.hitEnemy(e, paid, { p, kind: 'explode', raw: true, noProc: true, crit: false, noGuard: true, bleed: true, part: 'cataclysm' });
+    const give = paid * st.cataSplash, cap = C.SPREAD_CAP;
     for (const o of w.enemies) {
       if (o === e || o.hp <= 0 || o.spawnT > 0 || o.def.invuln || o.burrowed || U.dist2(o.x, o.y, e.x, e.y) >= (CATA_R + o.r) ** 2) continue;
       w.addBleed(o, Math.min(give, cap * o.maxHp), p);

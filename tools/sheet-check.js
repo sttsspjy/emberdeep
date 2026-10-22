@@ -338,10 +338,10 @@ function statusRun(boons, stratum, secs, until) {
 {
   const K = (boons, stratum) => modelOf('knight', Object.assign({ edge: 2, quick: 2, focus: 1, stalwart: 1, kindle: 1, frostbite: 1 }, boons), 0, { ctx: { stratum: stratum || 3 } });
   const ex = (m, label) => m.weapon.extras.find(e => e.label === label);
-  { // Earthsplitter: Cleave every 2nd swing, plus a fissure and a blade wave per Cleave
+  { // Earthsplitter: a fissure per Cleave (every 3rd swing), Thousand Edges: a blade wave per Cleave
     const h2 = K({ k_atk: 1, k_atk_h: 2 }), h3 = K({ k_atk: 1, k_atk_h: 3 }), fis = ED.BOONS.k_atk_h.r3.fissure;
-    ok(!ex(h2, 'Fissure') && ex(h3, 'Fissure') && ex(h3, 'Cleave').note.indexOf('2nd swing') >= 0 && ex(h2, 'Cleave').note.indexOf('3rd swing') >= 0, 'Earthsplitter: Cleave every 2nd swing and a Fissure extra, none at rank 2');
-    rel(ex(h3, 'Fissure').perAttack, h3.weapon.hit * fis / 2, 0.01, 'Fissure damage per attack = weapon hit x fissure / 2');
+    ok(!ex(h2, 'Fissure') && ex(h3, 'Fissure') && ex(h3, 'Cleave').note.indexOf('3rd swing') >= 0 && ex(h2, 'Cleave').note.indexOf('3rd swing') >= 0, 'Earthsplitter: a Fissure extra at rank 3 only, the Cleave stays every 3rd swing');
+    rel(ex(h3, 'Fissure').perAttack, h3.weapon.hit * fis / 3, 0.01, 'Fissure damage per attack = weapon hit x fissure / 3');
     const s2 = K({ k_atk: 1, k_atk_s: 2 }), s3 = K({ k_atk: 1, k_atk_s: 3 });
     ok(!ex(s2, 'Blade wave') && ex(s3, 'Blade wave'), 'Thousand Edges: a Blade wave extra at rank 3 only');
     rel(ex(s3, 'Blade wave').perAttack, s3.weapon.avg * ED.BOONS.k_atk_s.r3.bladeWave / 3, 0.01, 'Blade wave per attack = weapon avg x bladeWave / 3');
@@ -354,12 +354,13 @@ function statusRun(boons, stratum, secs, until) {
     const lo = K({ k_el: 1, k_el_a: 3 }), hi = modelOf('knight', { edge: 2, quick: 2, focus: 1, stalwart: 1, kindle: 1, frostbite: 1, k_el: 1, k_el_a: 3 }, 0, { ctx: { stratum: 3 }, stat: { brandMark: ED.BOONS.k_el_a.r3.brandMark * 2 } });
     ok(hi.weapon.dps > lo.weapon.dps, 'a stronger Mark raises the Doombrand extra');
   }
-  { // Cataclysm: a pack-only part on Shield Throw (nothing on one foe), the burst follows the splash and stays inside the SPREAD_CAP
+  { // Cataclysm: the payout multiplier raises the Shield Throw's damage on one foe, a part for packs on top; the pack burst follows cataSplash
     const r2 = K({ k_el: 1, k_el_b: 2 }), r3 = K({ k_el: 1, k_el_b: 3 }), q = r3.skills[1].parts.find(x => x.id === 'cataclysm');
-    ok(!r2.skills[1].parts.some(x => x.id === 'cataclysm') && q && q.oneFoe === 0 && q.r === 80 && r3.skills[1].perCast === r2.skills[1].perCast && r3.skills[1].dpsCd === r2.skills[1].dpsCd, 'Cataclysm adds a pack-only part and leaves the damage on one foe alone');
-    ok(q._r.total > 0 && q.here <= ED.CONST.SPREAD_CAP * r3.ref.hp + 1e-6, 'the burst a foe catches is capped at 25% of its health');
-    const mid = { edge: 2, quick: 2, focus: 1, stalwart: 1, kindle: 1, frostbite: 1, k_el: 1, k_el_b: 3 }, part = (stat) => modelOf('knight', mid, 0, { ctx: { stratum: 3 }, stat }).skills[1].parts.find(x => x.id === 'cataclysm'), lo = part({ cataSplash: 0.1 }), hi = part({ cataSplash: 0.3 });
-    ok(hi.here > lo.here && hi._r.total > lo._r.total && lo._r.total > 0, 'the burst follows cataSplash');
+    ok(!r2.skills[1].parts.some(x => x.id === 'cataclysm') && q && q.oneFoe === 0 && q.r === 80, 'Cataclysm adds a part with no hit of its own on one foe, none at rank 2');
+    rel(q.here, 2.5 * r3.proc.bleed * (1 + ED.BOONS.k_el_b.r3.cataMul), 1e-6, 'the Cataclysm payout is the Bleed pool (2.5 s of income) x (1 + cataMul)');
+    const mid = { edge: 2, quick: 2, focus: 1, stalwart: 1, kindle: 1, frostbite: 1, k_el: 1, k_el_b: 3 }, part = (stat) => modelOf('knight', mid, 0, { ctx: { stratum: 3 }, stat }).skills[1].parts.find(x => x.id === 'cataclysm'), lo = part({ cataSplash: 0.1 }), hi = part({ cataSplash: 0.3 }), one = (stat) => modelOf('knight', mid, 0, { ctx: { stratum: 3 }, stat }).skills[1].perCast;
+    ok(hi._r.total > lo._r.total && lo._r.total > 0, 'the pack burst follows cataSplash');
+    ok(one({ cataMul: 2 }) > one({ cataMul: 1 }) && one({ cataMul: 1 }) > one({ cataclysm: 0 }) && one({ cataSplash: 0.1 }) === one({ cataSplash: 0.9 }), 'on one foe only cataMul counts: the Throw deals more with it, the splash adds nothing');
     ok(modelOf('knight', { k_el: 1, k_el_b: 3 }, 0).skills[1].parts.find(x => x.id === 'cataclysm')._r.total === 0, 'a build with fewer than 3 ailment sources never detonates');
   }
 }
