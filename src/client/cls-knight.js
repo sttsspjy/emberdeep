@@ -215,14 +215,16 @@
     const g = Math.min(1, k * 1.8), n = Math.max(3, Math.round(z.len / 6)), cs = Math.cos(z.a), sn = Math.sin(z.a), hot = k > 0.7 && Math.floor(t * 30) % 2 === 0;
     const pt = (i) => { const d = i / n * z.len, j = jag(z, i, 3); return [z.x + cs * d - sn * j, z.y + sn * d * 0.8 + cs * j]; };
     if (pass === 0) {
-      c.globalAlpha = 0.8; c.fillStyle = '#1a120b'; c.beginPath();
-      for (let i = 0, m = Math.floor(n * g); i < m; i++) { const a = pt(i), b = pt(i + 1); Pix.line(c, a[0], a[1], b[0], b[1], 6); }
+      c.globalAlpha = 0.9; c.fillStyle = '#120c07'; c.beginPath();
+      for (let i = 0, m = Math.floor(n * g); i < m; i++) { const a = pt(i), b = pt(i + 1); Pix.line(c, a[0], a[1], b[0], b[1], 10 - Math.round(i / n * 4)); }
       c.fill();
-      c.globalAlpha = 1; c.fillStyle = hot ? '#ffffff' : '#ffb347'; c.beginPath();
+      c.globalAlpha = 1; c.fillStyle = hot ? '#ffffff' : '#ff9a2a'; c.beginPath();
+      for (let i = 0, m = Math.floor(n * g); i < m; i++) { const a = pt(i), b = pt(i + 1); Pix.line(c, a[0], a[1], b[0], b[1], 4); }
+      c.fill(); c.fillStyle = hot ? '#ffffff' : '#ffe9a0'; c.beginPath();
       for (let i = 0, m = Math.floor(n * g); i < m; i++) { const a = pt(i), b = pt(i + 1); Pix.line(c, a[0], a[1], b[0], b[1], 2); }
       c.fill();
     } else if (pass === 1) {
-      for (let i = 2; i < n * g; i += 5) { const a = pt(i); ED.Render.glow(c, a[0], a[1], 22, hot ? '#ffffff' : '#ffb347', 0.45); }
+      for (let i = 2; i < n * g; i += 4) { const a = pt(i); ED.Render.glow(c, a[0], a[1], 26, hot ? '#ffffff' : '#ff9a2a', 0.55); }
     }
   };
 
@@ -244,15 +246,17 @@
       Pix.put(c, Pix.ring(Math.max(2, Math.round(z.r / 2)), 2, rp[2], rp[3], rp[3], 4, (t * 5) & 7), x, y, 0.85 * fade);
       Pix.put(c, Pix.ring(Math.max(2, Math.round(z.r * 0.31)), 1, rp[1], rp[2], rp[2], 3, (-t * 4) & 7), x, y, 0.35 * fade);
       R.light(z.x, z.y, z.r * 1.5, '#ffe39a', 0.5 * fade);
-      c.globalAlpha = fade; // the pole and its pennant, feet at the centre
-      c.fillStyle = '#4a3a28'; c.fillRect(x - 2, y - 40, 4, 40);
-      c.fillStyle = '#e8e2c8'; c.fillRect(x - 4, y - 44, 8, 4);
-      const wv = Math.sin(t * 5 + z.id) * 2;
-      for (let i = 0; i < 7; i++) { const off = s2(Math.sin(t * 5 + i * 0.7 + z.id) * 2); c.fillStyle = i % 3 === 2 ? '#7a1a1a' : rp[3]; c.fillRect(x + 2 + i * 2, y - 40 + off, 2, 14 - Math.abs(3 - i) * 0); }
-      c.fillStyle = rp[4]; c.fillRect(x + 2, y - 40 + s2(wv), 14, 2);
+      c.globalAlpha = fade; // the pole and its pennant (a dark outline under both), feet at the centre
+      c.fillStyle = '#120c07'; c.fillRect(x - 4, y - 66, 8, 68); c.fillRect(x - 2, y - 70, 4, 4);
+      c.fillStyle = '#8a7a5c'; c.fillRect(x - 2, y - 64, 4, 64); c.fillStyle = '#ffe9a0'; c.fillRect(x - 2, y - 68, 4, 4);
+      for (let i = 0; i < 12; i++) { // the pennant: 12 columns of 20 px, each swaying a little more than the last, a red stripe through the gold
+        const off = s2(Math.sin(t * 5 + i * 0.6 + z.id) * (1 + i * 0.25)), cx = x + 2 + i * 2, top = y - 62 + off, h = 22 - Math.floor(i * 0.8) * 2;
+        c.fillStyle = '#120c07'; c.fillRect(cx, top - 2, 2, h + 4);
+        c.fillStyle = rp[3]; c.fillRect(cx, top, 2, h); c.fillStyle = '#a82a2a'; c.fillRect(cx, top + 8, 2, 4); c.fillStyle = rp[4]; c.fillRect(cx, top, 2, 2);
+      }
       c.globalAlpha = 1;
     } else if (pass === 1) {
-      R.glow(c, z.x, z.y - 30, 34, '#ffd36b', 0.3 * fade);
+      R.glow(c, z.x, z.y - 40, 44, '#ffd36b', 0.4 * fade);
       c.fillStyle = '#fff3c4';
       for (let i = 0; i < 8; i++) { const kk = (t * 0.5 + i * 0.125 + z.id * 0.1) % 1, a = i * 2.39996 + z.id; c.globalAlpha = Math.max(0.25, Math.ceil(Math.sin(kk * Math.PI) * 4) / 4) * fade; c.fillRect(s2(z.x + Math.cos(a) * z.r * 0.92), s2(z.y + Math.sin(a) * z.r * 0.92 * 0.8 - kk * 26), 2, 2); }
       c.globalAlpha = 1;
@@ -264,15 +268,18 @@
     const on = z.t >= z.warm, fade = Math.min(1, (z.dur - z.t) * 3, on ? 1 : 0.35 + z.t / Math.max(0.05, z.warm) * 0.5), rp = Pix.ramp(GOLD), x = s2(z.x), y = s2(z.y), R = ED.Render, low = R.quality === 'low';
     if (pass === 0) {
       Pix.put(c, Pix.disc(Math.max(1, Math.round(z.r / 2)), '#9fb4cc'), x, y, 0.1 * fade);
-      Pix.put(c, Pix.ring(Math.max(2, Math.round(z.r / 2)), 1, rp[2], rp[3], rp[3], 4, (t * 7) & 7), x, y, 0.7 * fade);
-      R.light(z.x, z.y, z.r * 1.4, '#cfe6ff', 0.55 * fade);
+      Pix.put(c, Pix.ring(Math.max(2, Math.round(z.r / 2)), 2, rp[2], rp[3], rp[3], 4, (t * 7) & 7), x, y, 0.85 * fade);
+      Pix.put(c, Pix.ring(Math.max(2, Math.round(z.r * 0.34)), 1, '#9fb4cc', '#dff1ff', '#ffffff', 3, (-t * 9) & 7), x, y, 0.7 * fade);
+      Pix.put(c, Pix.ring(Math.max(2, Math.round(z.r * 0.17)), 1, '#9fb4cc', '#dff1ff', '#ffffff', 2, (t * 11) & 7), x, y, 0.8 * fade);
+      R.light(z.x, z.y, z.r * 1.4, '#cfe6ff', 0.7 * fade);
     } else if (pass === 1) {
       R.glow(c, z.x, z.y, z.r * 0.5, '#bfe3ff', 0.35 * fade);
       const arms = low ? 3 : 4, per = low ? 8 : 12;
       for (let a = 0; a < arms; a++) for (let i = 0; i < per; i++) {
         const u = 1 - ((i / per + t * 0.8) % 1), rad = z.r * (0.12 + 0.88 * u), ang = a * U.TAU / arms + t * 4 + (1 - u) * 5;
         c.globalAlpha = Math.max(0.25, Math.ceil((1 - u) * 4) / 4) * fade * 0.9; c.fillStyle = i % 3 === 0 ? '#ffe9a0' : '#dff1ff';
-        c.fillRect(s2(z.x + Math.cos(ang) * rad), s2(z.y + Math.sin(ang) * rad * 0.8), 2, 2);
+        const sz = u < 0.5 ? 4 : 2;
+        c.fillRect(s2(z.x + Math.cos(ang) * rad) - (sz - 2) / 2, s2(z.y + Math.sin(ang) * rad * 0.8) - (sz - 2) / 2, sz, sz);
       }
       c.globalAlpha = 1;
     }

@@ -580,7 +580,7 @@
     const name = form ? P.form.name : P.rider2Name || P.riderName || ED.cardName(m.id, m.rank), text = form ? P.form.desc : big && P.rider ? P.rider : P.rider2;
     const route = b.route ? ED.routeLabel(b.cls, b.route) : '';
     el.className = 'fork-reveal ' + (big ? 'big' : 'small');
-    el.innerHTML = `<img class="fr-icon" alt="" src="${ED.Icons.boonUrl(m.id)}"><div class="fr-body"><div class="fr-kick">${esc(route)}${route ? ' · ' : ''}${esc(b.name)} · rank ${m.rank}${form ? ' · transformed' : ''}</div><div class="fr-name">${esc(name)}</div><div class="fr-text">${esc(text || '')}</div></div>`;
+    el.innerHTML = `<img class="fr-icon" alt="" src="${ED.Icons.boonUrl(m.id)}"><div class="fr-body"><div class="fr-kick">${esc(route)}${route ? ' · ' : ''}${esc(b.name)} · rank ${m.rank}${form ? ' · transformed' : ''}</div><div class="fr-name">${esc(name)}</div><div class="fr-text">${esc(text ? text.charAt(0).toUpperCase() + text.slice(1) : '')}</div></div>`;
     el.hidden = true; void el.offsetWidth; el.hidden = false; // restarts the animation of a card that is still up
     clearTimeout(forkTimer);
     forkTimer = setTimeout(() => { el.hidden = true; }, FORK_REVEAL_MS);

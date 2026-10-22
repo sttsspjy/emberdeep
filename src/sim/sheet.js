@@ -292,7 +292,7 @@
     if (q.fan) { // a fan spreads its arrows over fan radians (a ring: evenly round the circle); a later wave (q.waves) repeats the fan
       const offs = [];
       for (let i = 0; i < q.n; i++) offs.push(q.ring ? i / q.n * q.fan : q.n > 1 ? (i / (q.n - 1) - 0.5) * q.fan : 0);
-      oneFoe = fanHits(offs, q.pr || 5) * (q.waves || 1); o.fanN = q.n; o.waves = q.waves || 1;
+      oneFoe = fanHits(offs, q.pr || 5) * (q.waves || 1); o.fanN = q.n; o.waves = q.waves || 1; o.fan = q.fan;
     }
     if (q.ref) { let hits = 0; for (let k = 0; k < q.n; k++) if (q.ref * (q.n - 1 - k) / q.n <= q.r + Sh.REF.r) hits++; oneFoe = hits; } // Starfall: the impacts walk from the hero to a target q.ref px away; a foe there is in reach of some of them
     if (q.id === 'ambush' && skillId === 'vanish') oneFoe = wpn.oneFoe; // each of the weapon's hits carries the Ambush value

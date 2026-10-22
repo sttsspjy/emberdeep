@@ -170,12 +170,12 @@
         R.light(sx, sy, 50 + 70 * q, '#ffd36b', 0.5 + 0.5 * q);
       }
     } else if (pass === 1) {
-      if (q > 0) R.glow(c, sx, sy, 20 + 18 * q, '#ffe9a0', 0.85);
+      if (q > 0) R.glow(c, sx, sy, 34 + 26 * q, '#ffe9a0', 0.95);
     } else if (pass === 2 && q > 0) { // the star and its trail, airborne
       c.fillStyle = '#ffd36b'; c.beginPath();
-      for (let i = 1; i <= 6; i++) { const kk = i / 6, tx = sx - (z.x - sx) / Math.max(1, Math.hypot(z.x - sx, z.y - sy)) * kk * 40, ty = sy - (z.y - sy) / Math.max(1, Math.hypot(z.x - sx, z.y - sy)) * kk * 40; c.globalAlpha = 1 - kk; c.rect(Pix.s2(tx), Pix.s2(ty), i < 3 ? 4 : 2, i < 3 ? 4 : 2); }
+      for (let i = 1; i <= 9; i++) { const kk = i / 9, d = Math.max(1, Math.hypot(z.x - sx, z.y - sy)), tx = sx - (z.x - sx) / d * kk * 70, ty = sy - (z.y - sy) / d * kk * 70; c.globalAlpha = 1 - kk; c.rect(Pix.s2(tx) - 2, Pix.s2(ty) - 2, i < 4 ? 6 : 4, i < 4 ? 6 : 4); }
       c.fill(); c.globalAlpha = 1;
-      Pix.put(c, Pix.orb(4, '#5a3c08', '#e8b43a', '#ffd36b', '#ffffff'), Pix.s2(sx), Pix.s2(sy));
+      Pix.put(c, Pix.orb(6, '#5a3c08', '#e8b43a', '#ffd36b', '#ffffff'), Pix.s2(sx), Pix.s2(sy));
     }
   };
 
@@ -194,11 +194,11 @@
     const R = ED.Render, fade = Math.min(1, (z.dur - z.t) * 2, z.t * 5), grow = Math.min(1, z.t * 5), n = Math.max(6, Math.round(z.r / 5));
     if (pass !== 0) return;
     R.light(z.x, z.y, z.r * 1.3, '#7fbf3a', 0.18 * fade);
-    Pix.put(c, Pix.disc(Math.max(1, Math.round(z.r / 2)), '#1f3a10'), Pix.s2(z.x), Pix.s2(z.y), 0.22 * fade);
-    Pix.put(c, Pix.ring(Math.max(2, Math.round(z.r / 2)), 1, '#3f7a18', '#9be33c', '#9be33c', 3, 0), Pix.s2(z.x), Pix.s2(z.y), 0.6 * fade);
+    Pix.put(c, Pix.disc(Math.max(1, Math.round(z.r / 2)), '#1f3a10'), Pix.s2(z.x), Pix.s2(z.y), 0.45 * fade);
+    Pix.put(c, Pix.ring(Math.max(2, Math.round(z.r / 2)), 2, '#3f7a18', '#9be33c', '#d2ff82', 3, 0), Pix.s2(z.x), Pix.s2(z.y), 0.85 * fade);
     c.globalAlpha = fade;
     for (let i = 0; i < n; i++) { // a thorn: a stem with a side barb and a bright tip, leaning with the patch
-      const a = i * 2.39996 + z.id, rr = Math.sqrt((i + 0.5) / n) * z.r * 0.85, px = Pix.s2(z.x + Math.cos(a) * rr), py = Pix.s2(z.y + Math.sin(a) * rr * 0.7), h = Math.round((6 + (i % 3) * 2) * grow / 2) * 2, lean = (i & 1) ? 2 : -2;
+      const a = i * 2.39996 + z.id, rr = Math.sqrt((i + 0.5) / n) * z.r * 0.85, px = Pix.s2(z.x + Math.cos(a) * rr), py = Pix.s2(z.y + Math.sin(a) * rr * 0.7), h = Math.round((10 + (i % 3) * 3) * grow / 2) * 2, lean = (i & 1) ? 2 : -2;
       c.fillStyle = '#2f5a14'; c.fillRect(px, py - h, 2, h); c.fillRect(px + lean, py - h + 2, 2, 2); c.fillRect(px - lean, py - Math.round(h / 2 / 2) * 2, 2, 2);
       c.fillStyle = '#b8f060'; c.fillRect(px, py - h - 2, 2, 2);
     }
