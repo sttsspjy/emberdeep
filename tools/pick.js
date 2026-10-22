@@ -10,7 +10,7 @@ module.exports = (ED, model) => {
 
   // ---------------- constants ----------------
   const W_STRATA = [0.5, 0.3, 0.2]; // weights of strata s, s+1, s+2
-  const LAMBDA = 0.4; // default weight of ln effective health against ln damage (fixed mode)
+  const LAMBDA = 2; // default weight of ln effective health against ln damage (fixed mode)
   const LEVER_HIT = 0.1; // auto mode: lambda_t = x0 when a typical foe or boss hit of stratum t takes this share of a hero's base max health (mean over the classes)
   const GAMMA = 0.75; // discount per rank still missing to a milestone
   const MIN_TERM = 0.1; // a milestone discounted below this share of its gain is dropped (speed)
