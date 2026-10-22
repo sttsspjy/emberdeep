@@ -108,6 +108,11 @@ for (const key in ED.SKILL_SHEET) { const [sid, pid] = key.split('.'); ok(ED.SKI
   ok(modelOf('knight', { masterstroke: 1 }, 0).build.statuses.some(x => x.id === 'bleed'), 'Masterstroke lists the Bleed rule');
   const fk = modelOf('knight', { k_atk: 1, k_atk_h: 1 }, 0).build.route.nodes.find(n => n.route === 'attack').forks;
   ok(fk.find(x => x.id === 'k_atk_h').closed === false && fk.find(x => x.id === 'k_atk_s').closed === true && fk.find(x => x.id === 'k_atk_s').when === '', 'the sibling of the taken fork is closed');
+  { // a fork at rank 3 carries its transform's name on the sheet (the route node and the boon list)
+    const m3 = modelOf('knight', { k_s1: 1, k_s1_a: 3 }, 0), m2 = modelOf('knight', { k_s1: 1, k_s1_a: 2 }, 0), fn = (m) => m.build.route.nodes.find(n => n.route === 'skill1').forks.find(f => f.id === 'k_s1_a');
+    ok(fn(m3).name === 'Avalanche' && fn(m2).name === 'Juggernaut' && fn(m3).text.indexOf('Avalanche:') >= 0 && fn(m2).text.indexOf('Avalanche') < 0, 'the route node names the transform from rank 3: ' + fn(m3).name + ' / ' + fn(m2).name);
+    ok([].concat(...m3.build.groups.map(g => g.items)).some(r => r.id === 'k_s1_a' && r.name === 'Avalanche'), 'the boon list names the transform too');
+  }
   const open = modelOf('knight', { k_atk: 1 }, 0).build.route.nodes.find(n => n.route === 'attack').forks;
   ok(open.every(x => !x.closed && x.when), 'before a fork both are open and say when they are offered');
   ok(ED.Sheet.shieldWindow({ shwC: 1.5, shwA: 2.5 }, 0).a === 2.5 && ED.Sheet.shieldWindow({ shwC: 1.5, shwA: 2.5 }, 0).c === 1.5, 'a mirror hero carries the shield window in shwC and shwA');

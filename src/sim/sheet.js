@@ -587,7 +587,7 @@
       const e = tbl[r], b = ED.BOONS[e.t1];
       route.nodes.push({
         route: r, label: ED.routeLabel(p.cls, r), id: e.t1, name: b.name, icon: b.icon, chosen: rt.route === r, closed: !!rt.route && rt.route !== r, plays: b.plays, text: Sh.text(e.t1, 1, st), when: ROUTE_WHEN.t1,
-        forks: e.forks.map((fid) => { const fb = ED.BOONS[fid], rank = boons[fid] | 0; return { id: fid, name: fb.name, icon: fb.icon, tag: fb.tag || '', coop: !!fb.coop, owned: rank > 0, rank, max: fb.max, closed: !!rt.fork && rt.fork !== fid, text: Sh.text(fid, rank || 1, st), when: rank ? (rank < fb.max ? ROUTE_WHEN[rank === 1 ? 'r2' : 'r3'] : '') : rt.fork ? '' : ROUTE_WHEN.fork, weapon: fb.weapon && fb.weapon.kind ? ED.forkWeapon(p.weapon, fid).name : null }; }),
+        forks: e.forks.map((fid) => { const fb = ED.BOONS[fid], rank = boons[fid] | 0; return { id: fid, name: ED.cardName(fid, rank), icon: fb.icon, tag: fb.tag || '', coop: !!fb.coop, owned: rank > 0, rank, max: fb.max, closed: !!rt.fork && rt.fork !== fid, text: Sh.text(fid, rank || 1, st), when: rank ? (rank < fb.max ? ROUTE_WHEN[rank === 1 ? 'r2' : 'r3'] : '') : rt.fork ? '' : ROUTE_WHEN.fork, weapon: fb.weapon && fb.weapon.kind ? ED.forkWeapon(p.weapon, fid).name : null }; }),
       });
     }
     // boons grouped by owned path (gate, boons, keystone, evolution), duo, class route and open
@@ -597,7 +597,7 @@
       if (!b || !(rank > 0) || (b.cls && b.cls !== p.cls)) continue;
       const max = ED.maxRank(b, st), kind = b.evo ? 'evolution' : b.asc ? 'ascended' : b.key ? 'keystone' : b.gate ? 'gate' : b.duo ? 'duo' : b.route ? (b.tier === 1 ? 'route' : 'fork') : b.path && !b.open ? 'path' : 'open';
       const group = b.cls ? 'route' : b.duo ? 'duo' : b.asc ? 'asc' : b.path && !b.open && gates.includes(b.path) ? 'path:' + b.path : 'open';
-      rows.push({ id, name: b.name, icon: b.icon, rar: b.rar, rank, max, kind, group, path: b.path || (b.duo ? b.duo[0] : null), path2: b.duo ? b.duo[1] : null, tag: b.tag || '', coop: !!b.coop, text: Sh.text(id, rank, st), next: rank < max ? Sh.nextText(id, rank, st) : null });
+      rows.push({ id, name: ED.cardName(id, rank), icon: b.icon, rar: b.rar, rank, max, kind, group, path: b.path || (b.duo ? b.duo[0] : null), path2: b.duo ? b.duo[1] : null, tag: b.tag || '', coop: !!b.coop, text: Sh.text(id, rank, st), next: rank < max ? Sh.nextText(id, rank, st) : null });
     }
     const groups = gates.map(k => 'path:' + k).concat(['duo', 'route', 'asc', 'open']).map(g => ({ group: g, path: g.indexOf('path:') === 0 ? g.slice(5) : null, items: rows.filter(r => r.group === g).sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind]) })).filter(g => g.items.length);
     const relics = (p.relics || []).map(id => {
