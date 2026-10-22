@@ -301,7 +301,7 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
 }
 
 // ================= skill forms: rank 2 keeps the old rider, rank 3 is the transform =================
-const U_ = ED.U, hurt = (w, p) => { p.invuln = 0; return w.hurtPlayer(p, 1, { hazard: true }); };
+const hurt = (w, p) => { p.invuln = 0; return w.hurtPlayer(p, 1, { hazard: true }); };
 { // card text and totals of the four skill forks
   const FORKS = { p_s1_a: ['Twin Nova', 'Collapse', 'Supernova'], p_s1_b: ['Phoenix Mantle', 'Rebirth Flare', 'Phoenix Form'], p_s2_a: ['Twin Meteor', 'Meteor Shower', 'Cataclysm'], p_s2_b: ['Comet', 'Impact Crater', 'Sun Dive'] };
   for (const id in FORKS) {
@@ -362,7 +362,7 @@ const U_ = ED.U, hurt = (w, p) => { p.invuln = 0; return w.hurtPlayer(p, 1, { ha
 }
 
 { // Phoenix Form (p_s1_b rank 3): the ring of fire follows the hero (r70, 4 s, 2x), dashes leave trail patches (r24, 2 s, 50% of the ring dps) while it burns; the shield stays 3%
-  const s = stage({ p_s1_b: 3 }), { w, p } = s, M = p.maxHp, N = ED.Stats.skillNums('nova', p.stats), s2 = stage({ p_s1_b: 2 });
+  const s = stage({ p_s1_b: 3 }), { w, p } = s, N = ED.Stats.skillNums('nova', p.stats), s2 = stage({ p_s1_b: 2 });
   const e = foe(w, p.x + 200, p.y);
   cast(s, 0, 0, 0); cast(s2, 0, 0, 0);
   const ring = w.zones.filter(z => z.kind === 'pfire' && z.w === C.PHOENIX_TAG), old = s2.w.zones.filter(z => z.kind === 'pfire' && z.w !== C.PHOENIX_TAG);
@@ -386,7 +386,7 @@ const U_ = ED.U, hurt = (w, p) => { p.invuln = 0; return w.hurtPlayer(p, 1, { ha
   const t4 = stage({ p_s1_b: 3 }); cast(t4, 0, 0, 0); run(t4, 4.3); t4.w.zones.length = 0; dash(t4, 0.3); ok(!patches(t4).length, 'no trail once the ring has burned out (4 s)');
   // a second Nova inside the ring's life renews it instead of adding a second ring
   const t5 = stage({ p_s1_b: 3 }); cast(t5, 0, 0, 0); run(t5, 2); cast(t5, 0, 0, 0); ok(t5.w.zones.filter(z => z.w === C.PHOENIX_TAG).length === 1 && t5.w.zones.find(z => z.w === C.PHOENIX_TAG).t === 0, 'a second Nova renews the ring');
-  ok(evOf(t5, 'pyPhoenix').length + t5.w.fx.filter(ev => ev.t === 'pyPhoenix').length === 1, 'renewing the ring announces no second one'); void M;
+  ok(evOf(t5, 'pyPhoenix').length + t5.w.fx.filter(ev => ev.t === 'pyPhoenix').length === 1, 'renewing the ring announces no second one');
 }
 
 { // Cataclysm (p_s2_a rank 3): five meteors (the cursor point and four around it at 80 px, 0.1 s apart, 60% each), one lava field r140 for the crater duration; rank 2 keeps the twin and the shower

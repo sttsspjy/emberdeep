@@ -413,7 +413,7 @@ function U_ang(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
   // leaving the dome ends it: the next attack is a plain one; the dome ends at 4 s
   { const l = mk({ s_s2: 1, s_s2_a: 3 }); swing(l); ok(l.p.eclipseRe, 'armed inside'); place(l.p, 20, 300); run(l.w, 0.05); ok(!l.p.eclipseRe && !l.p.ambush, 'leaving the dome drops the extra Ambush'); }
   { const l = mk({ s_s2: 1, s_s2_a: 3 }); swing(l); run(l.w, 4.5); ok(l.p.dome === null && !l.p.eclipseRe && !l.p.ambush && l.p.stealthT <= 0, 'the dome ends: no Ambush, no stealth'); }
-  { const l = mk({ s_s2: 1, s_s2_a: 3 }); run(l.w, 0.05); const x = swing(l); void x; run(l.w, 1.0); ok(l.p.ambush && l.p.eclipseRe && l.p.stealthT > 0, 'standing idle inside keeps the Ambush ready and the hero unseen'); const d = swing(l); near(d / (x * 1), 0.6, 1e-6, 'the Ambush after a pause is an Eclipse repeat'); }
+  { const l = mk({ s_s2: 1, s_s2_a: 3 }); run(l.w, 0.05); const x = swing(l); run(l.w, 1.0); ok(l.p.ambush && l.p.eclipseRe && l.p.stealthT > 0, 'standing idle inside keeps the Ambush ready and the hero unseen'); const d = swing(l); near(d / x, 0.6, 1e-6, 'the Ambush after a pause is an Eclipse repeat'); }
   // rank 2: the plain Ambush
   { const r2 = mk({ s_s2: 1, s_s2_a: 2 }); const zz = r2.w.zones.find(q => q.kind === 'smoke'); ok(zz.w === 0 && !r2.p.dome, 'rank 2 casts the plain smoke'); swing(r2); ok(!r2.p.ambush && r2.p.stealthT === 0, 'and the Ambush is spent by one attack'); }
   // a kill by the true Ambush refunds Vanish; a kill by a repeat refunds nothing; a horde kill refunds nothing

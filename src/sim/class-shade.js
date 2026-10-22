@@ -1,7 +1,7 @@
 // Shade: Shadowstep and Vanish (base kits from ED.SKILLS numbers), the Shade route cards that act on them (Momentum, execution crits, Whirlwind, Twin Cut, Afterimage, Ambush rules, Veil, Open Veins, Rupture) and the hook table ED.CLS.shade.
 // Skill forms (rank 3): Death Blossom (a chain of blinks), Hall of Mirrors (three decoys), Eclipse (a dome where every attack is an Ambush), Umbral Veil (a shadow clone that repeats the weapon and draws foes).
 // Hero fields: momN / momT (Momentum), stepQ (Twin Cuts waiting), ambSet / ambTgt / ambMul / ambRef / ambRupt (the Ambush in flight: foes it struck, sweep targets, its damage factor, Shadowstep refunded, target ruptured),
-// bloom (Death Blossom chains), dome ({ z, room } of the Eclipse dome the hero stands in), ambFac / eclipseRe (the Ambush in flight is an Eclipse repeat at that damage factor), clone ({ z, stand, room } of the Umbral Veil clone).
+// bloom (Death Blossom chains), dome ({ z, room } of the Eclipse dome the hero stands in), ambFac / eclipseRe (the Ambush in flight is an Eclipse repeat at that damage factor), projMark (highest shot id seen by the last attack hook), clone ({ z, stand, room } of the Umbral Veil clone).
 (function (ED) {
   'use strict';
   const U = ED.U, C = ED.CONST, W = ED.World.prototype;
