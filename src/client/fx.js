@@ -54,7 +54,7 @@
     for (let k = 0; k < 4; k++) { let moved = false; for (const t of F.texts) if (Math.abs(t.x - x) < 24 && Math.abs(t.y - yy) < step) { yy = t.y - step; moved = true; } if (!moved) break; }
     F.texts.push({ x: x + (Math.random() - 0.5) * 10, y: yy, s: String(s), color, size: size || 10, life: o.life ?? 0.9, max: o.max ?? 0.9, vy: o.vy ?? -42, crit: !!o.crit, pop: !!o.pop, ol: o.ol || null, sum: !!o.sum, bx: x, by: y });
   };
-  F.ring = (x, y, r, color, life, width, inv) => { if (F.rings.length < 48) F.rings.push({ x, y, r, color, life: life || 0.4, max: life || 0.4, w: width || 3, inv: !!inv }); }; // inv: the ring shrinks instead of growing
+  F.ring = (x, y, r, color, life, width, inv, r0) => { if (F.rings.length < 48) F.rings.push({ x, y, r, color, life: life || 0.4, max: life || 0.4, w: width || 3, inv: !!inv, r0 }); }; // inv: the ring shrinks instead of growing; r0: it grows linearly from radius r0 to r (a shockwave front)
   // One-shot (or looping) atlas sprite effect with the anim's pivot at world (x, y). o: ramp (recolour: ramp name or colour), add (additive pass instead of the unlit one), delay (s), speed (fps factor), a (alpha), flip, rot,
   // spin (rad/s), loop + life (s), fade (alpha falls to 0 over life), vx / vy (px/s), frame (fixed frame of a static sprite), dy (draw offset), lt / ltr (scene light colour / radius),
   // pid + fdy (follows that hero, pivot fdy px below its feet point). Capped at 72 (28 on Low), the oldest goes first.
@@ -835,7 +835,7 @@
     c.globalAlpha = 1;
     for (const b of F.beams) Rn.light(b.x, b.y - 30, 90, b.col, 0.9 * (b.life / b.max));
     for (const p of F.pops) Rn.light(p.x, p.y, p.r * 3.2, p.color, 0.9 * (p.life / p.max));
-    for (const r of F.rings) { const k = 1 - r.life / r.max; if (r.r > 40) Rn.light(r.x, r.y, r.r * (0.3 + 0.7 * U.easeOut(k)) * 1.2, r.color, 0.5 * (1 - k)); }
+    for (const r of F.rings) { const k = 1 - r.life / r.max; if (r.r > 40) Rn.light(r.x, r.y, (r.r0 !== undefined ? r.r0 + (r.r - r.r0) * k : r.r * (0.3 + 0.7 * U.easeOut(k))) * 1.2, r.color, 0.5 * (1 - k)); }
     for (const b of F.bolts) { const k = b.life / b.max; for (let i = 1; i < b.pts.length; i += 2) Rn.light(b.pts[i][0], b.pts[i][1] - 10, 60, b.color, 0.8 * k); }
     for (const s of F.slashes) Rn.light(s.x + Math.cos(s.a) * s.r * 0.6, s.y + Math.sin(s.a) * s.r * 0.6, s.r * 1.1, s.color, 0.5 * (s.life / s.max));
   };
@@ -879,7 +879,7 @@
       Rn.glow(c, s.x + Math.cos(he) * rad * 0.95, s.y + Math.sin(he) * rad * 0.95, s.r * 0.3, s.color, 0.65 * fa);
     }
     for (const r of F.rings) { // pixel ring: radius in steps of 2 art px, 1-3 px thick, bands element / light / white, alpha in quarters
-      const k = 1 - r.life / r.max, rr = r.inv ? r.r * (1 - 0.75 * U.easeOut(k)) : r.r * (0.3 + 0.7 * U.easeOut(k)), ra = Math.max(2, Math.round(rr / 4) * 2), tn = Math.max(1, Math.min(3, Math.round(r.w * (1 - k) * 0.5 + 0.5))), rp = Pix.ramp(r.color);
+      const k = 1 - r.life / r.max, rr = r.r0 !== undefined ? r.r0 + (r.r - r.r0) * k : r.inv ? r.r * (1 - 0.75 * U.easeOut(k)) : r.r * (0.3 + 0.7 * U.easeOut(k)), ra =Math.max(2, Math.round(rr / 4) * 2), tn = Math.max(1, Math.min(3, Math.round(r.w * (1 - k) * 0.5 + 0.5))), rp = Pix.ramp(r.color);
       Pix.put(c, Pix.ring(ra, tn, rp[2], rp[3], rp[4]), s2(r.x), s2(r.y), Math.max(0.25, Math.ceil((1 - k) * 4) / 4));
     }
     const ak = F.addK; // additive strength set by the renderer per biome

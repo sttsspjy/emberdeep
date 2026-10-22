@@ -97,7 +97,8 @@ for (const key in ED.SKILL_SHEET) { const [sid, pid] = key.split('.'); ok(ED.SKI
     ok(bare === 0, 'Next rank lines are never bare numbers');
     ok(S.nextText('k_s1_a', 1, st) === 'deals +20% · 50% of its impact · unlocks Shield Bash' && S.nextText('k_s2_b', 1, st) === 'orbits you for 4 s · 20% of a strike · unlocks Return to Sender' && S.nextText('k_s1_a', 2, st).indexOf('unlocks Avalanche') >= 0 && S.nextText('r_s2_b', 2, st).indexOf('unlocks Storm of Thorns') >= 0, 'Juggernaut and Shield Orbit name their numbers: ' + S.nextText('k_s1_a', 1, st) + ' / ' + S.nextText('k_s2_b', 1, st));
     ok(S.text('r_el_b', 2, st).indexOf('within 120.') >= 0 && S.text('r_el_b', 3, st).indexOf('within 140') >= 0 && S.nextText('r_el_b', 1, st) === 'foes within 120 · unlocks Outbreak', 'Contagion shows its total radius: ' + S.nextText('r_el_b', 1, st));
-    ok(S.nextText('p_s2_b', 1, st) === 'impact (+40%)', 'Comet names what the +40% belongs to: ' + S.nextText('p_s2_b', 1, st));
+    ok(S.nextText('p_s2_b', 1, st) === 'impact (+40%) · unlocks Impact Crater' && S.nextText('p_s2_b', 2, st) === 'impact (+60%) · unlocks Sun Dive', 'Comet names what the +40% belongs to and what each rank unlocks: ' + S.nextText('p_s2_b', 1, st) + ' / ' + S.nextText('p_s2_b', 2, st));
+    ok(['p_s1_a:Collapse:Supernova', 'p_s1_b:Rebirth Flare:Phoenix Form', 'p_s2_a:Meteor Shower:Cataclysm', 's_s1_a:Twin Cut:Death Blossom', 's_s1_b:Lure:Hall of Mirrors', 's_s2_a:Ambush Sweep:Eclipse', 's_s2_b:Shroud:Umbral Veil'].every(x => { const [id, r2, r3] = x.split(':'); return S.nextText(id, 1, st).indexOf('unlocks ' + r2) >= 0 && S.nextText(id, 2, st).indexOf('unlocks ' + r3) >= 0; }), 'the Pyromancer and Shade skill forks name their rank 2 rider and rank 3 transform in the Next rank line');
   }
   ok(S.nextText('k_el_a', 1, st).indexOf('unlocks Ruin Seal') >= 0 && S.nextText('k_el_a', 2, st).indexOf('unlocks Doombrand') >= 0 && S.nextText('k_el_a', 2, st).indexOf('6 ailments') >= 0, 'a route card names the rider it unlocks at rank 2 and the transform at rank 3');
   ok(S.fmt('arcStun', 0.25, 'sec') === '0.25s' && S.fmt('arcStun', 0.5, 'sec') === '0.5s' && S.fmt('venomHold', 2, 'sec') === '2s' && S.fmt('venomHold', 12, 'sec') === '12s', 'seconds keep two decimals below 1 s');
@@ -177,19 +178,27 @@ const CASES = [
   ['knight', {}, 0], ['knight', {}, 1], ['knight', { jugShock: 0.4, s1Range: 90 }, 0], ['knight', { avalanche: 2, avaCrack: 0.5, avaStun: 0.8, jugShock: 0.4, s1Range: 90 }, 0], ['knight', { tempest: 3, twinShield: 0.7, vortexMul: 0.25, vortexDur: 2.5 }, 1], ['knight', { orbit: 3, orbitMul: 0.15 }, 1], ['knight', { twinShield: 0.7 }, 1],
   ['ranger', {}, 0], ['ranger', {}, 1], ['ranger', { deathMark: 0.5, deathWave: 0.6 }, 0], ['ranger', { thornburst: 20 }, 0], ['ranger', { skyfall: 1, starfall: 0.6 }, 1, 160], ['ranger', { thornstorm: 2 }, 1], ['ranger', { rainHail: 1 }, 1], ['ranger', { skyfall: 1 }, 1], ['ranger', { skyTwin: 0.5, skyfall: 1 }, 1], ['ranger', { shower: 0.4, rainHail: 1 }, 1],
   ['pyro', {}, 0], ['pyro', {}, 1], ['pyro', { novaRing: 1 }, 0], ['pyro', { twinMeteor: 0.6 }, 1, 0, true], ['pyro', { comet: 0.3 }, 1],
+  ['pyro', { novaEcho: 0.5 }, 0], ['pyro', { novaEcho: 1, supernova: 2, supernovaPull: 30 }, 0], ['pyro', { novaRing: 1, phoenixMul: 2, phoenixDur: 4, dashTrail: 0.5 }, 0], ['pyro', { cataclysm: 0.6 }, 1],
+  ['pyro', { comet: 0.6, sunDive: 1, diveTrail: 0.5 }, 1, undefined, false, { setup: (w, p, e) => { p.aimX = e.x; p.aimY = e.y; }, skip: ['crater', 'trail'] }],
   ['shade', {}, 0], ['shade', { stepTwin: 0.5 }, 0], ['shade', {}, 1, 28],
+  ['shade', { blossom: 0.7, blossomN: 3, blossomMax: 6 }, 0], ['shade', { afterimage: 1, mirrorHall: 1 }, 0, 1],
+  ['shade', { eclipse: 0.6, eclipseDur: 4 }, 1, 28, false, { drive: true }], ['shade', { umbral: 2, cloneMul: 0.5 }, 1, 28, false, { drive: true, skip: ['clone'] }],
   ['cleric', {}, 0], ['cleric', {}, 1], ['cleric', { twinHammer: 0.75 }, 1],
   ['necro', {}, 0], ['necro', { boneSpikes: 1 }, 0],
 ];
-for (const [cls, stat, slot, dist, skipImpact] of CASES) {
+for (const [cls, stat, slot, dist, skipImpact, opt] of CASES) {
   const { w, p, e } = stage(cls, {}, 0, stat, null, dist);
   const id = slot ? ED.CLASSES[cls].skill2 : ED.CLASSES[cls].skill, tag = `${cls}.${id}${Object.keys(stat).length ? '+' + Object.keys(stat).join(',') : ''}`;
+  if (opt && opt.setup) opt.setup(w, p, e);
   const m = sheetOf(w, p), sk = m.skills[slot];
   cast(w, p, e, slot);
-  if (id === 'vanish') w.playerAttack(p, 0); // the Ambush
+  if (opt && opt.drive) { // Vanish forms: attack through the form's window (the first attack is the Ambush; a tick passes first so the dome's vulnerability is on)
+    let next = 0.02; run(w, 0.02);
+    run(w, 4.3, () => { if (w.time >= next) { w.playerAttack(p, 0); next = w.time + ED.Stats.attackInterval(p); } });
+  } else if (id === 'vanish') w.playerAttack(p, 0); // the Ambush
   const by = settle(w, e, 20);
   for (const q of sk.parts) {
-    if (q.kind === 'zone') continue;
+    if (q.kind === 'zone' || (opt && opt.skip && opt.skip.indexOf(q.id) >= 0)) continue;
     const key = q.kind === 'sec' && !by[id + '.' + q.id] ? 'zone' : id + '.' + q.id, got = by[key]; // zone ticks: by part when the zone carries one
     if (q.kind === 'status') { const s = by['status:' + q.statusEl]; ok(s && Math.abs(s.sum - q.here) <= q.here * 0.03 + 0.2, `${tag} ${q.id}: status damage ${s ? s.sum.toFixed(1) : 0} vs ${q.here.toFixed(1)}`); continue; }
     if (q.oneFoe === 0 && !q.fanN) continue; // conditional parts (per minion, per corpse, per kill)
@@ -200,7 +209,7 @@ for (const [cls, stat, slot, dist, skipImpact] of CASES) {
     rel(per, q.here, 0.015, `${tag} ${q.id} per hit`);
     if (q.kind === 'minion') continue; // minions walk to the foe: the count is reported, not compared
     if (stat.tempest && q.id === 'return') continue; // which of the vortex shields cross the foe on the way home depends on where each spun: the damage per hit is compared, not the count
-    ok(got.n === q.oneFoe, `${tag} ${q.id}: ${got.n} ${q.fanN ? 'arrows reached' : 'hits on'} the foe, modelled ${q.oneFoe}`);
+    ok(q.attacks !== undefined ? Math.abs(got.n - q.oneFoe) <= 1 : got.n === q.oneFoe, `${tag} ${q.id}: ${got.n} ${q.fanN ? 'arrows reached' : 'hits on'} the foe, modelled ${q.oneFoe}${q.attacks !== undefined ? ' (one attack more or less is the timing of the first)' : ''}`);
     if (q.statusAdd) { const s = by['status:' + q.statusAdd.el]; ok(s && Math.abs(s.sum - q.statusAdd.here * q.oneFoe) <= q.statusAdd.here * q.oneFoe * 0.03 + 0.2, `${tag} ${q.id}: status add ${s ? s.sum.toFixed(1) : 0} vs ${(q.statusAdd.here * q.oneFoe).toFixed(1)}`); }
   }
 }

@@ -1,6 +1,8 @@
 // pyro route-card visuals, client only: registers ED.ClassFx hooks (event, zone, hero and foe-mark hooks; contract in fx.js).
 // Events of src/sim/class-pyro.js: pyAfter (aftershock queued), pyLava (a Lava Pool begins), pyEcho (Nova echo queued / erupting), pyPull (Collapse), pyMantle (Mantle shield), pyRebirth (Rebirth Flare),
 // pyTwin (second Meteor queued), pyComet (Comet leap), pyFlash (Flashpoint crit), pyHeat (cooldown cut / Chain Reaction). Hero state shown from the hero hook: Channel heat, the echo ring, the Comet flight, the Mantle overlay.
+// Skill forms: pyWave (Supernova front; sparks ride it from the hero hook), pyPull with sn (its collapse), pyPhoenix and the Phoenix ring zone (pfire tag 10: orbiting flames), pyStorm and pyField (Cataclysm cast and lava field, the big look of CF.lava),
+// pyComet with sd and pyDive (Sun Dive: a golden flight with rays, a golden landing).
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = U.TAU, F = ED.FX, Pix = ED.Pix, CF = ED.ClassFx, N = ED.Net, s2 = Pix.s2, FIRE = Pix.RAMP.fire;
@@ -9,8 +11,8 @@
   const lowFx = () => R().quality === 'low';
 
   // Events a busy fight can send many of per snapshot are capped like the built-in ones.
-  Object.assign(N.CAPS, { pyAfter: 6, pyFlash: 6, pyLava: 4, pyPull: 2, pyEcho: 3, pyTwin: 3 });
-  Object.assign(N.CAPS_LOCAL, { pyAfter: 3, pyFlash: 3, pyLava: 2, pyPull: 1, pyEcho: 2, pyTwin: 2 });
+  Object.assign(N.CAPS, { pyAfter: 6, pyFlash: 6, pyLava: 4, pyPull: 2, pyEcho: 3, pyTwin: 3, pyWave: 3, pyPhoenix: 3, pyStorm: 3, pyField: 3, pyDive: 4 });
+  Object.assign(N.CAPS_LOCAL, { pyAfter: 3, pyFlash: 3, pyLava: 2, pyPull: 1, pyEcho: 2, pyTwin: 2, pyWave: 2, pyPhoenix: 2, pyStorm: 2, pyField: 2, pyDive: 2 });
 
   // Per-hero client state: chan (Channel estimate for heroes whose sim value this viewer does not own), lastAtk (event clock), t (last frame), steps / full (Channel shown last frame), echo / comet (running timelines),
   // cmUp (the hero's cometT was positive last frame), predAt (F.time a Comet arc was started from the local cast, so the host's pyComet of that cast is not played twice).
@@ -58,7 +60,9 @@
     Pix.put(c, lavaSprite(rA, f), x, y, 0.55 * fade);
     R().glow(c, z.x, z.y - 2, z.r * 1.5, '#ff4a10', 0.4 * fade);
     c.fillStyle = '#ffc24a';
-    for (let i = 0; i < 3; i++) { const kk = (t * 0.9 + i / 3 + z.id * 0.17) % 1, a = i * 2.4 + z.id; c.globalAlpha = Math.max(0.25, Math.ceil((1 - kk) * 4) / 4) * fade; c.fillRect(s2(z.x + Math.cos(a) * z.r * 0.55), s2(z.y + Math.sin(a) * z.r * 0.3 - kk * 24), 2, 2); }
+    const big = z.r > 100, ns = big ? (lowFx() ? 6 : 14) : 3; // the Cataclysm field (r140): a pulsing rim and many more sparks
+    if (big) { Pix.put(c, Pix.ring(Math.max(2, Math.round(z.r / 2)), 2, FIRE[1], FIRE[3], FIRE[4], 4, (t * 5) & 7), x, y, (0.55 + 0.25 * Math.sin(t * 6)) * fade); R().emit(z.x, z.y - 4, z.r * 0.9, '#ff5a1a', 0.12 * fade); }
+    for (let i = 0; i < ns; i++) { const kk = (t * 0.9 + i / ns + z.id * 0.17) % 1, a = i * 2.4 + z.id; c.globalAlpha = Math.max(0.25, Math.ceil((1 - kk) * 4) / 4) * fade; c.fillRect(s2(z.x + Math.cos(a) * z.r * 0.55), s2(z.y + Math.sin(a) * z.r * 0.3 - kk * (big ? 40 : 24)), 2, 2); }
     c.globalAlpha = 1;
   };
 
@@ -77,7 +81,7 @@
     if (!cm) return (p.lift = 0);
     const k = (F.time - cm.t0) / cm.d;
     if (k >= 1 || k < 0) { if (k >= 1) s.comet = null; return (p.lift = 0); }
-    return (p.lift = Math.round(Math.sin(k * Math.PI) * 17) * 2);
+    return (p.lift = Math.round(Math.sin(k * Math.PI) * (cm.sd ? 24 : 17)) * 2);
   };
 
   // ---------------- hero hook ----------------
@@ -131,7 +135,11 @@
     const k = (F.time - e.t0) / e.d;
     if (k >= 1.1 || k < 0) { if (k >= 1.1) s.echo = null; return; }
     const rr = e.r * (1 - 0.7 * U.clamp(k, 0, 1)), ra = Math.max(2, Math.round(rr / 2));
-    Pix.put(c, Pix.ring(ra, 2, FIRE[2], FIRE[3], FIRE[4], 4, (t * 6) & 7), 0, 0, 0.45 + 0.55 * U.clamp(k, 0, 1));
+    Pix.put(c, Pix.ring(ra, e.k ? 3 : 2, FIRE[2], FIRE[3], FIRE[4], 4, (t * 6) & 7), 0, 0, 0.45 + 0.55 * U.clamp(k, 0, 1));
+    if (e.k) { // Supernova: the gathering star - a second, white-hot ring and a glow that swells toward the burst
+      Pix.put(c, Pix.ring(Math.max(2, Math.round(rr * 0.55 / 2)), 2, FIRE[3], FIRE[4], '#ffffff', 4, (-t * 8) & 7), 0, 0, 0.5 + 0.5 * U.clamp(k, 0, 1));
+      R().light(p.x, p.y - 8, 40 + 90 * U.clamp(k, 0, 1), '#ffd36b', 0.3 + 0.5 * U.clamp(k, 0, 1)); R().emit(p.x, p.y - 8, 20 + 40 * U.clamp(k, 0, 1), '#ffb347', 0.2 + 0.5 * U.clamp(k, 0, 1));
+    }
   }
 
   // Comet: the shadow stays on the ground while the hero arcs; a tail of fire streams back along the leap and embers fall from the body.
@@ -139,16 +147,23 @@
     const cm = s.comet; if (!cm) return;
     const k = (F.time - cm.t0) / cm.d;
     if (k >= 1 || k < 0) return;
-    const lift = p.lift || 0, ux = cm.tx - cm.x0, uy = cm.ty - cm.y0, ul = Math.hypot(ux, uy) || 1, dx = ux / ul, dy = uy / ul;
-    R().shadow(c, 10, 0.4 * (1 - 0.45 * Math.sin(k * Math.PI)));
-    for (let j = 1; j <= (low ? 3 : 6); j++) { // tail: squares along the way back, the fire ramp fading with distance
-      const q = j * 6, a = Math.max(0.25, Math.ceil((1 - j / 7) * 4) / 4);
-      c.globalAlpha = a; c.fillStyle = FIRE[Math.max(1, 4 - (j >> 1))];
-      const sz = j < 3 ? 6 : 4;
+    const lift = p.lift || 0, ux = cm.tx - cm.x0, uy = cm.ty - cm.y0, ul = Math.hypot(ux, uy) || 1, dx = ux / ul, dy = uy / ul, sun = !!cm.sd;
+    R().shadow(c, sun ? 13 : 10, 0.4 * (1 - 0.45 * Math.sin(k * Math.PI)));
+    for (let j = 1; j <= (low ? 3 : sun ? 10 : 6); j++) { // tail: squares along the way back, the fire ramp fading with distance (Sun Dive: longer, wider, whiter)
+      const q = j * 6, a = Math.max(0.25, Math.ceil((1 - j / (sun ? 11 : 7)) * 4) / 4);
+      c.globalAlpha = a; c.fillStyle = sun && j < 5 ? '#fff4c0' : FIRE[Math.max(1, 4 - (j >> 1))];
+      const sz = j < 3 ? (sun ? 8 : 6) : 4;
       c.fillRect(s2(-dx * q * 1.2 - sz / 2), s2(-dy * q * 0.8 - lift - 12 - sz / 2), sz, sz);
     }
     c.globalAlpha = 1;
-    R().emit(p.x, p.y - lift - 12, 28, '#ff7a2a', 0.65); R().light(p.x, p.y - lift - 12, 90, '#ff8a2a', 0.8);
+    if (sun) { // the sun: a bright core, eight rays turning round it and a wide golden light
+      const cy = s2(-lift - 12), rot = t * 5;
+      Pix.put(c, Pix.orb(5, FIRE[1], FIRE[3], FIRE[4], '#ffffff'), 0, cy, 0.95);
+      c.fillStyle = '#ffe9a0';
+      for (let i = 0; i < 8; i++) { const a = rot + i * TAU / 8, l = 9 + (i & 1) * 5; c.globalAlpha = 0.9; c.fillRect(s2(Math.cos(a) * l) - 1, cy + s2(Math.sin(a) * l) - 1, 2, 2); c.fillRect(s2(Math.cos(a) * (l + 5)) - 1, cy + s2(Math.sin(a) * (l + 5)) - 1, 2, 2); }
+      c.globalAlpha = 1;
+      R().emit(p.x, p.y - lift - 12, 44, '#ffd36b', 0.8); R().light(p.x, p.y - lift - 12, 150, '#ffc24a', 1);
+    } else { R().emit(p.x, p.y - lift - 12, 28, '#ff7a2a', 0.65); R().light(p.x, p.y - lift - 12, 90, '#ff8a2a', 0.8); }
     if (t - s.trail > (low ? 0.06 : 0.03)) {
       s.trail = t;
       F.part(p.x - dx * 6 + (Math.random() - 0.5) * 6, p.y - lift - 12, { kind: 'ember', color: pick([FIRE[2], FIRE[3], FIRE[4]]), a: -1.57, spread: 3.2, sp: 24, life: 0.5, size: 2, lt: '#ff8a2a', ltr: 22, drag: 1.2 });
@@ -178,7 +193,18 @@
     echoRing(c, p, s, t);
     flight(c, p, s, t, low);
     mantleOverlay(c, p, st, t, low);
+    if (waves.length) waveFx(p, low);
+    if (st.phoenixMul > 0 && !low) phoenixEmbers(p); // Phoenix Form: sparks lift off the ring that follows the hero
   });
+  function phoenixEmbers(p) {
+    const g = ED.Game && ED.Game.s, v = g && g.view;
+    if (!v || Math.random() > 0.6) return;
+    for (const z of v.zones) {
+      if (z.w !== 10 || !(z.fol === (p.slot | 0) + 1 || z.owner === p.pid)) continue;
+      const a = Math.random() * TAU;
+      F.part(z.x + Math.cos(a) * z.r, z.y + Math.sin(a) * z.r * 0.92 - 4, { kind: 'ember', color: pick([FIRE[2], FIRE[3], FIRE[4]]), a: -1.57, spread: 1.2, sp: 38, life: 0.8, size: 2, drag: 1.3, lt: '#ff8a2a', ltr: 18 });
+    }
+  }
 
   // ---------------- events ----------------
   // Aftershock queued: a spark circle spans the delay at the blast, a ring closes on it, embers lift off the ground and a scorch mark stays.
@@ -206,7 +232,7 @@
   // Twin Nova: the echo is announced by the ring closing on the hero; Collapse sucks streaks in; the second eruption is a thinner, paler ring.
   CF.on('pyEcho', (ev, ctx, local) => {
     const s = stateOf(ev.pid), m = ev.pid === local;
-    if (!ev.go) { s.echo = { t0: F.time, d: ev.d, r: ev.r }; return; }
+    if (!ev.go) { s.echo = { t0: F.time, d: ev.d, r: ev.r, k: ev.k }; return; }
     s.echo = null;
     F.ring(ev.x, ev.y, ev.r, '#ffb347', 0.4, 2); F.ring(ev.x, ev.y, ev.r * 0.6, '#fff4c0', 0.28, 1);
     F.burst(ev.x, ev.y, 14, { color: '#ff9a3a', sp: ev.r * 2.2, life: 0.4, size: 3, add: true });
@@ -223,7 +249,94 @@
       F.part(ev.x + Math.cos(a) * d, ev.y + Math.sin(a) * d * 0.7 - 6, { kind: 'streak', color: '#ffb347', a: a + Math.PI, spread: 0.05, sp: Math.min(ev.px * 6, d / 0.16), life: 0.17, size: 2, drag: 0 });
     }
     F.ring(ev.x, ev.y, ev.r, '#fff4c0', 0.16, 2, true);
-    A().play('dash', ev.pid === local ? 0.45 : 0.2);
+    if (ev.sn) { // Supernova's collapse: the whole field implodes - a white flash on the centre, a second shrinking ring, sparks pulled in
+      F.ring(ev.x, ev.y, ev.r * 0.7, '#ffb347', 0.22, 4, true); F.pop(ev.x, ev.y - 8, ev.r * 0.35, '#ffffff', 0.22, true);
+      F.burst(ev.x, ev.y - 6, 14, { color: '#ffe9a0', sp: ev.r * 1.4, life: 0.25, size: 2.4, add: true, drag: 3 });
+      if (ev.pid === local) { F.addShake(4); F.punch(0.8, 0.3); }
+    }
+    A().play(ev.sn ? 'implode' : 'dash', ev.pid === local ? 0.45 : 0.2);
+  });
+
+  // ---------------- Supernova ----------------
+  // The wave: three rings grow in step with the sim's front (linear from the Nova's radius to the full one), a white flash on the centre and a burst of embers; the hero hook then scatters sparks on the front each frame.
+  const waves = [];
+  CF.on('pyWave', (ev, ctx, local) => {
+    const m = ev.pid === local;
+    waves.push({ pid: ev.pid, x: ev.x, y: ev.y, r0: ev.r0, r1: ev.r1, t0: F.time, d: ev.d });
+    if (waves.length > 8) waves.shift();
+    F.ring(ev.x, ev.y, ev.r1, '#fff4c0', ev.d, 6, false, ev.r0); F.ring(ev.x, ev.y, ev.r1 * 0.93, '#ffb347', ev.d, 4, false, ev.r0 * 0.93); F.ring(ev.x, ev.y, ev.r1 * 0.85, '#ff7a2a', ev.d, 3, false, ev.r0 * 0.85);
+    F.pop(ev.x, ev.y - 8, ev.r0 * 0.9, '#fff4c0', 0.32, true);
+    SP('fx.blast.red', ev.x, ev.y - 8, { add: true, lt: '#ffd36b', ltr: ev.r1 }); SP('fx.explosion', ev.x, ev.y - 6, { ramp: 'gold' });
+    F.burst(ev.x, ev.y - 6, lowFx() ? 16 : 34, { color: '#ffe9a0', sp: ev.r1 * 1.7, life: 0.5, size: 3, add: true }); F.burst(ev.x, ev.y - 8, 12, { kind: 'streak', color: '#ffffff', sp: ev.r1 * 2.4, life: 0.3, size: 1.8 });
+    F.punch(1.1, 0.7); if (m) { F.addShake(8); F.hitStop(0.07); F.flash = { color: '#ffe9a0', t: 0.25, a: 0.25 }; }
+    A().play('supernova', m ? 1 : 0.5);
+  });
+  // Sparks and embers riding the front of a running wave of this hero.
+  function waveFx(p, low) {
+    for (let i = waves.length - 1; i >= 0; i--) {
+      const v = waves[i];
+      if (v.pid !== p.pid) continue;
+      const k = (F.time - v.t0) / v.d;
+      if (k > 1.05 || k < 0) { if (k > 1.05) waves.splice(i, 1); continue; }
+      const R0 = v.r0 + (v.r1 - v.r0) * Math.min(1, k);
+      for (let j = 0, n = low ? 2 : 6; j < n; j++) {
+        const a = Math.random() * TAU;
+        F.part(v.x + Math.cos(a) * R0, v.y + Math.sin(a) * R0 - 4, { kind: j & 1 ? 'ember' : 'spark', color: pick([FIRE[3], FIRE[4], '#ffffff']), a: a, spread: 0.6, sp: 60, life: 0.35, size: 2, drag: 2.5, add: j & 1 ? false : true, lt: '#ff8a2a', ltr: 18 });
+      }
+    }
+  }
+
+  // ---------------- Phoenix Form ----------------
+  CF.on('pyPhoenix', (ev, ctx, local) => {
+    const p = ctx.player(ev.pid); if (!p) return;
+    const m = ev.pid === local;
+    SP('fx.circle.spark', p.x, p.y - 4, { ramp: 'gold', add: true, a: 0.9 });
+    F.ring(p.x, p.y - 6, ev.r * 1.2, '#ffc24a', 0.5, 5); F.ring(p.x, p.y - 6, ev.r * 0.7, '#fff4c0', 0.3, 2);
+    for (let i = 0; i < 12; i++) { const a = -1.57 + (i / 11 - 0.5) * 2.6; F.part(p.x, p.y - 12, { kind: 'shard', color: pick([FIRE[2], FIRE[3], FIRE[4]]), a, spread: 0.2, sp: 110 + (i % 3) * 25, life: 0.8, size: 2.8, add: true, vz: 60, z: 6, drag: 1.6 }); }
+    F.pop(p.x, p.y - 14, ev.r * 0.6, '#ffe9a0', 0.3, true);
+    if (m) F.addShake(2.5);
+    A().play('phoenix', m ? 0.8 : 0.4);
+  });
+  // The ring that follows the hero (pfire zone, tag 10, called from render.js): a dashed ring on the ground, tongues of flame turning on it and a warm light; it flares in, and gutters out in its last half second.
+  CF.zone.phoenix = (c, z, pass, t) => {
+    const fade = Math.min(1, (z.dur - z.t) * 2, z.t * 6), x = s2(z.x), y = s2(z.y), flick = 0.85 + 0.15 * Math.sin(t * 17 + z.id);
+    if (fade <= 0.01) return;
+    if (pass === 0) {
+      Pix.put(c, Pix.ring(Math.max(2, Math.round(z.r / 2)), 2, FIRE[1], FIRE[2], FIRE[3], 4, (t * 7) & 7), x, y, 0.8 * fade);
+      Pix.put(c, Pix.disc(Math.max(1, Math.round(z.r / 2)), FIRE[2]), x, y, 0.07 * fade);
+      R().light(z.x, z.y - 6, z.r * 2.4, '#ffb347', 0.8 * fade * flick);
+      return;
+    }
+    if (pass !== 1) return;
+    R().glow(c, z.x, z.y - 6, z.r * 1.15, '#ff7a2a', 0.3 * fade);
+    const n = Math.max(10, Math.round(z.r / 4.5));
+    for (let i = 0; i < n; i++) { // flame tongues round the ring (a second, shorter row just inside it); the whole ring turns, each tongue breathes at its own pace
+      const a = i * TAU / n + t * 1.1, h = Pix.hash(i * 3.1 + z.id), rows = 3 + Math.floor((0.5 + 0.5 * Math.sin(t * 9 + i * 1.7)) * 2 * fade + h);
+      tongue(c, s2(z.x + Math.cos(a) * z.r), s2(z.y + Math.sin(a) * z.r * 0.92 - 2), Math.min(4, rows), (i & 1) === 0, true);
+      if ((i & 1) === 0) tongue(c, s2(z.x + Math.cos(a + 0.12) * (z.r - 6)), s2(z.y + Math.sin(a + 0.12) * (z.r - 6) * 0.92 - 2), 2, false, false);
+    }
+  };
+
+  // ---------------- Cataclysm ----------------
+  // The cast: a wide ring closes on the cursor point and the sky glows; the meteors announce themselves one by one with their own marks.
+  CF.on('pyStorm', (ev, ctx, local) => {
+    const m = ev.pid === local;
+    F.ring(ev.x, ev.y, ev.r + 95, '#ff7a2a', 0.9, 4, true); F.ring(ev.x, ev.y, ev.r * 0.6, '#ffc27a', 0.9, 2, true);
+    SP('fx.circle.spark', ev.x, ev.y - 2, { ramp: 'fire', add: true, a: 0.8, speed: 0.8 });
+    F.burst(ev.x, ev.y - 4, 8, { kind: 'ember', color: '#ffb347', a: -1.57, spread: 3.4, sp: 50, life: 0.9, size: 2, drag: 1.3, lt: '#ff8a2a', ltr: 22 });
+    if (m) { F.punch(0.5, 0.2); if (!lowFx()) F.flash = { color: '#ff4a10', t: 0.25, a: 0.14 }; }
+    A().play('cataclysm', m ? 0.8 : 0.35);
+  });
+  // The craters merge: a molten ring sweeps out to the field's edge, the ground heaves and ash falls.
+  CF.on('pyField', (ev, ctx, local) => {
+    const m = ev.pid === local;
+    F.ring(ev.x, ev.y, ev.r * 1.1, '#ff5a1a', 0.55, 7); F.ring(ev.x, ev.y, ev.r * 0.7, '#ffc24a', 0.4, 4); F.ring(ev.x, ev.y, ev.r * 0.35, '#fff4c0', 0.3, 2);
+    F.burst(ev.x, ev.y, lowFx() ? 10 : 22, { kind: 'shard', color: '#ff6a1a', sp: ev.r * 1.7, life: 0.8, size: 3, vz: 130, z: 6, add: true });
+    F.burst(ev.x, ev.y - 6, 12, { kind: 'ember', color: '#ffb347', a: -1.57, spread: 3.4, sp: 90, life: 1.1, size: 2, drag: 1.2, lt: '#ff8a2a', ltr: 24 });
+    stain(ev.x, ev.y, ev.r * 0.8, '#120503', 0.8, 10); SP('fx.ring.shock', ev.x, ev.y - 4, { add: true, ramp: 'fire' });
+    F.pop(ev.x, ev.y - 8, ev.r * 0.5, '#ffb347', 0.3);
+    if (m) { F.addShake(7); F.punch(0.6, 0.4); F.hitStop(0.06); }
+    A().play('thud', m ? 0.8 : 0.4);
   });
 
   // Phoenix Mantle: the built-in blue bubble pop is replaced by a gold-orange one with rising feathers of fire.
@@ -261,24 +374,34 @@
   });
 
   // Comet: the hero leaves the ground in a burst of fire and a rush of air. age = seconds the leap has already run.
-  function launch(pid, x0, y0, tx, ty, d, age, m) {
-    stateOf(pid).comet = { t0: F.time - age, d, x0, y0, tx, ty };
-    SP('fx.blast.red', x0, y0 - 6, { add: true, lt: '#ff8a4a', ltr: 70 });
-    F.ring(x0, y0, 26, '#ff7a2a', 0.3, 3); F.burst(x0, y0 - 6, 12, { kind: 'streak', color: '#ffb347', a: Math.atan2(ty - y0, tx - x0) + Math.PI, spread: 1.4, sp: 220, life: 0.25, size: 1.8 });
+  function launch(pid, x0, y0, tx, ty, d, age, m, sd) {
+    stateOf(pid).comet = { t0: F.time - age, d, x0, y0, tx, ty, sd: !!sd };
+    SP('fx.blast.red', x0, y0 - 6, { add: true, lt: sd ? '#ffd36b' : '#ff8a4a', ltr: sd ? 110 : 70 });
+    F.ring(x0, y0, sd ? 40 : 26, sd ? '#ffe9a0' : '#ff7a2a', 0.3, 3); F.burst(x0, y0 - 6, sd ? 20 : 12, { kind: 'streak', color: sd ? '#fff4c0' : '#ffb347', a: Math.atan2(ty - y0, tx - x0) + Math.PI, spread: 1.4, sp: 220, life: 0.25, size: 1.8 });
     F.dust(x0, y0 + 2, 'dust', 2);
-    A().play('dash', m ? 0.8 : 0.4); A().play('fire', m ? 0.6 : 0.3);
+    A().play('dash', m ? 0.8 : 0.4); A().play(sd ? 'sundive' : 'fire', m ? 0.6 : 0.3);
+    if (sd && m) F.addShake(2.5);
   }
   // The local hero's own cast: the arc from where the leap began to where it ends (p.skillMove: direction, speed, seconds left, seconds run).
   function predict(p, s) {
-    const sm = p.skillMove, age = sm ? sm.age || 0 : 0, d = sm ? sm.t + age : p.cometT;
+    const sm = p.skillMove, age = sm ? sm.age || 0 : 0, d = sm ? sm.t + age : p.cometT, sd = p.stats && p.stats.sunDive > 0;
     s.predAt = F.time;
-    if (!sm) return launch(p.pid, p.x, p.y, p.x, p.y, d, 0, true);
-    launch(p.pid, p.x - sm.dx * sm.speed * age, p.y - sm.dy * sm.speed * age, p.x + sm.dx * sm.speed * sm.t, p.y + sm.dy * sm.speed * sm.t, d, age, true);
+    if (!sm) return launch(p.pid, p.x, p.y, p.x, p.y, d, 0, true, sd);
+    launch(p.pid, p.x - sm.dx * sm.speed * age, p.y - sm.dy * sm.speed * age, p.x + sm.dx * sm.speed * sm.t, p.y + sm.dy * sm.speed * sm.t, d, age, true, sd);
   }
   CF.on('pyComet', (ev, ctx, local) => {
     const m = ev.pid === local;
     if (m && F.time - stateOf(ev.pid).predAt < 1) return; // the client started this arc at its own cast
-    launch(ev.pid, ev.x, ev.y, ev.tx, ev.ty, ev.d, 0, m);
+    launch(ev.pid, ev.x, ev.y, ev.tx, ev.ty, ev.d, 0, m, ev.sd);
+  });
+  // Sun Dive landing: a golden shockwave with a pillar of sparks; the pilot feels it.
+  CF.on('pyDive', (ev, ctx, local) => {
+    const m = ev.pid === local, r = ev.r;
+    F.ring(ev.x, ev.y, r * 1.25, '#ffe9a0', 0.5, 6); F.ring(ev.x, ev.y, r * 0.7, '#ffffff', 0.32, 3);
+    F.burst(ev.x, ev.y - 6, 22, { color: '#ffd36b', sp: r * 2.6, life: 0.5, size: 3, add: true }); F.burst(ev.x, ev.y - 8, 12, { kind: 'streak', color: '#fff4c0', a: -1.57, spread: 1.4, sp: 300, life: 0.4, size: 1.8 });
+    F.pop(ev.x, ev.y - 10, r * 0.9, '#fff4c0', 0.3, true); SP('fx.ring.shock', ev.x, ev.y - 4, { add: true, ramp: 'gold' });
+    if (m) { F.addShake(5); F.punch(0.7, 0.4); F.hitStop(0.05); }
+    A().play('sundive', m ? 0.8 : 0.35);
   });
 
   // Flashpoint: a forced crit on a burning foe flares white-hot.

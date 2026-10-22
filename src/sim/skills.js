@@ -33,6 +33,15 @@
     return 0;
   };
 
+  // The skillMove (see Sim.movePlayer) of a leap of hero p toward (tx, ty) in mv.t s: clipped at walls, untouchable for mv.iframes; null when it would not move. The client cast, the sim's second Sun Dive leap and the 'leap' message share it.
+  ED.leapMove = (room, locked, p, tx, ty, mv) => {
+    const dist = Math.hypot(tx - p.x, ty - p.y);
+    if (!(dist > 4)) return null;
+    const end = ED.Sim.castMove(room, p.x, p.y, Math.atan2(ty - p.y, tx - p.x), dist, p.r, locked), real = Math.hypot(end.x - p.x, end.y - p.y);
+    if (real < 4) return null;
+    return { dx: (end.x - p.x) / real, dy: (end.y - p.y) / real, speed: real / mv.t, t: mv.t, iframes: mv.iframes === undefined ? mv.t : mv.iframes, age: 0 };
+  };
+
   // Landing point of ground skill `id`: from the client's origin (accepted within 48 px of the host's hero) to its {x, y}, else along the aim at min(200, range); clamped to range, cut at walls (chasms do not stop it).
   W.groundTarget = function (p, a, data, id) {
     const fin = (v) => typeof v === 'number' && isFinite(v), ai = ED.skillAim(id, p.stats);
