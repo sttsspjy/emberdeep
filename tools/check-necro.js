@@ -1,5 +1,5 @@
 // Usage: node tools/check-necro.js
-// Headless checks of the Necromancer's 12 route cards against DESIGN-classes section 9 in staged rooms: stat totals per rank, then every behaviour and rider (Hex, Gravecaller, Soul Barrage, Endless Legion, Bone Spikes,
+// Headless checks of the Necromancer's 12 route cards against docs/GAME-DESIGN.md section 5 in staged rooms: stat totals per rank, then every behaviour and rider (Hex, Gravecaller, Soul Barrage, Endless Legion, Bone Spikes,
 // Bone Knights, Grim Harvest, Corpse Explosion, Bone Armor, Grave Pact, Abyssal Toll, Rise Again). Prints failures and exits 1 when any check fails.
 const fs = require('fs');
 const vm = require('vm');
@@ -52,8 +52,8 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
   near(s.minionDmg, 0.1, 1e-9, 'Bone Knights +10% per rank'); near(s.knightLife, 0.5, 1e-9, 'Ironbone life +50%'); near(s.knightStun, 0.5, 1e-9, 'Ironbone stun 0.5 s');
   s = tot({ n_s2: 1 }); near(s.s2Dmg, 0.4, 1e-9, 'Grim Harvest +40%'); near(s.s2Area, 0.2, 1e-9, 'Grim Harvest +20% wider'); near(s.harvestRaise, 2, 1e-9, 'Grim Harvest raises 2');
   near(ED.Stats.skillNums('harvest', s).p.burst.dmg, 40.2 * 1.4, 1e-6, 'Harvest burst 40.2 x 1.4'); near(ED.Stats.skillNums('harvest', s).p.burst.r, 72, 1e-9, 'Harvest radius 60 x 1.2');
-  s = tot({ n_s2: 1, n_s2_a: 2 }); near(s.corpse, 5, 1e-9, 'Corpse Explosion 4 + 1 per rank'); near(s.corpseMul, 0.3, 1e-9, 'corpse burst 30%'); near(s.boneLance, 0.15, 1e-9, 'Bone Lances +15%');
-  const hp = ED.Stats.skillNums('harvest', s).p; near(hp.corpse.dmg, hp.burst.dmg * 0.3, 1e-9, 'corpse part 30% of the burst'); near(hp.lance.dmg, hp.burst.dmg * 1.15, 1e-9, 'lance part +15%'); near(hp.corpse.r, hp.burst.r, 1e-9, 'corpse radius = burst radius'); ok(hp.corpse.on && hp.lance.on, 'corpse and lance parts on');
+  s = tot({ n_s2: 1, n_s2_a: 2 }); near(s.corpse, 5, 1e-9, 'Corpse Explosion 4 + 1 per rank'); near(s.corpseMul, 0.3, 1e-9, 'corpse burst 30%'); near(s.boneLance, 0.37, 1e-9, 'Bone Lances +37%');
+  const hp = ED.Stats.skillNums('harvest', s).p; near(hp.corpse.dmg, hp.burst.dmg * 0.3, 1e-9, 'corpse part 30% of the burst'); near(hp.lance.dmg, hp.burst.dmg * 1.37, 1e-9, 'lance part +37%'); near(hp.corpse.r, hp.burst.r, 1e-9, 'corpse radius = burst radius'); ok(hp.corpse.on && hp.lance.on, 'corpse and lance parts on');
   s = tot({ n_s2: 1, n_s2_b: 3 }); near(s.boneArmor, 0.03, 1e-9, 'Bone Armor 3% per minion'); near(s.boneCap, 0.06, 1e-9, 'Bone Armor cap 5% + 0.5% per rank'); ok(s.boneField === 1 && !tot({ n_s2: 1, n_s2_b: 1 }).boneField && tot({ n_s2: 1, n_s2_b: 2 }).boneField === 1, 'Marrow Field from rank 2');
   s = tot({ n_el: 1 }); near(s.classElMul, 0.25, 1e-9, 'Grave Pact +25% Shadow skills'); near(s.minionInfuse, 0.25, 1e-9, 'minion infusion 0.75'); near(s.mInfShadow, 0.2, 1e-9, 'minion Doom 20%');
   s = tot({ n_el: 1, n_el_a: 3 }); near(s.tollMul, 0.4 + 0.2 + 0.4, 1e-9, 'Abyssal Toll +40%, +10% per rank, +40% from rank 2'); near(s.abyssMin, 0.25, 1e-9, 'empower +25%'); ok(s.abyssDoom === 1, 'Abyssal Hunger at rank 3'); near(s.maw, 0.3, 1e-9, 'Maw 30% of the Toll per second'); near(s.mawHaste, 0.3, 1e-9, 'Maw haste 30%');
@@ -197,9 +197,9 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
   const { w: w6, p: p6 } = stage({ n_s2: 1, n_s2_a: 1 }); for (let i = 0; i < 20; i++) weaponHit(w6, p6, foe(w6, p6.x + 50, p6.y), 1e6); ok(w6.corpses.length === C.CORPSE_N, 'the corpse ring holds CORPSE_N');
   const bos = foe(w6, p6.x + 50, p6.y); bos.boss = true; const c0 = w6.corpses.length; weaponHit(w6, p6, bos, 1e6); ok(w6.corpses.length === c0, 'bosses leave no corpse');
 }
-{ // Bone Lances: each minion bursts on the foe nearest it within 200, for +15%
+{ // Bone Lances: each minion bursts on the foe nearest it within 200, for +37%
   const { w, p } = stage({ n_s2: 1, n_s2_a: 2 }); const e = foe(w, p.x + 160, p.y), far = foe(w, p.x - 250, p.y); const m = minionAt(w, p, e); m.x = p.x; m.y = p.y; w.fx.length = 0;
-  w.playerSkill(p, 0, {}, 1); near(lost(e), burstOf(p, 1.15) * aff(w), 0.05, 'a lance bursts on the foe for +15%'); ok(far.hp === 5000, 'a foe beyond 200 of the minion is not chosen');
+  w.playerSkill(p, 0, {}, 1); near(lost(e), burstOf(p, 1.37) * aff(w), 0.05, 'a lance bursts on the foe for +37%'); ok(far.hp === 5000, 'a foe beyond 200 of the minion is not chosen');
   const l = evs(w, 'blance'); ok(l.length === 1 && l[0].x1 === Math.round(e.x) && l[0].pid === 'p0', 'blance event from the minion to the foe');
   const { w: w2, p: p2 } = stage({ n_s2: 1, n_s2_a: 2 }); const f = foe(w2, p2.x + 400, p2.y); const m2 = minionAt(w2, p2, f); m2.x = p2.x; m2.y = p2.y; w2.fx.length = 0; w2.playerSkill(p2, 0, {}, 1); ok(f.hp === 5000 && evs(w2, 'blance').length === 0, 'no foe within 200: the minion bursts where it stands');
 }
@@ -367,7 +367,7 @@ const cast0 = (w, p) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x + 60, y: 
     S.live = (foes || []).map(([dx, dy]) => foe(S.w, S.p.x + dx, S.p.y + dy)); S.N = ED.Stats.skillNums('harvest', S.p.stats); S.log.length = 0; return S;
   };
   const S = setup(3, 12, [[30, 0], [-40, 20], [10, -50]]), hp = S.N.p;
-  ok(S.p.stats.corpse === 10 && Math.abs(S.p.stats.corpseMul - 0.7) < 1e-9 && S.p.stats.carrionN === 3 && Math.abs(S.p.stats.carrionShard - 0.5) < 1e-9 && Math.abs(S.p.stats.boneLance - 0.15) < 1e-9, 'Carrion Storm stats: 10 corpses, 70%, 3 shards at 50% (Bone Lances keeps its +15%)');
+  ok(S.p.stats.corpse === 10 && Math.abs(S.p.stats.corpseMul - 0.7) < 1e-9 && S.p.stats.carrionN === 3 && Math.abs(S.p.stats.carrionShard - 0.5) < 1e-9 && Math.abs(S.p.stats.boneLance - 0.37) < 1e-9, 'Carrion Storm stats: 10 corpses, 70%, 3 shards at 50% (Bone Lances keeps its +37%)');
   near(hp.corpse.dmg, hp.burst.dmg * 0.7, 1e-9, 'a corpse part is 70% of a burst'); near(hp.shard.dmg, hp.burst.dmg * 0.5, 1e-9, 'a shard is 50% of a burst'); ok(S.w.corpses.length === 12, 'twelve corpses (fodder too) are on record');
   S.w.playerSkill(S.p, 0, {}, 1); S.ev.step();
   const booms = S.ev.all.filter(v => v.t === 'boom' && v.c === 1), shards = S.w.projs.filter(q => q.part === 'harvest.shard');

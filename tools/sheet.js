@@ -1,5 +1,5 @@
 // Usage: node tools/sheet.js [--cls=all|knight,ranger,...] [--routes] [--parity [--strict]] [--weapons] [--rank=1,2,3] [--stratum=3] [--pack=4] [--surround] [--mid] [--json]
-// The analytic sheet (DESIGN-classes 13.1 step 1): hero numbers from ED.Sheet.compute for synthetic builds, in milliseconds, before any bot hours are spent.
+// The analytic sheet (docs/GAME-DESIGN.md section 10): hero numbers from ED.Sheet.compute for synthetic builds, in milliseconds, before any bot hours are spent.
 //   (default)   per class: the fresh hero (weapon, skills with their parts, shares of direct damage, effective health)
 //   --routes    per class x route x fork x rank: change in hero damage (one foe | a pack of 4) against the class without the card, for a fresh and a mid build (--mid prints only the mid build),
 //               effective health with the uptime of the route's defence, shield income and stun uptime (stuns plus slows, blinds and taunts at their strength)

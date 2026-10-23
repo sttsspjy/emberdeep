@@ -68,7 +68,7 @@
   };
 
   // The "Next rank" line: the changed numbers of the text at rank + 1 (runs of words the text at rank lacks, found by a word-level diff that ignores trailing punctuation), a lone number with up to NEXT_WORDS - 1 words after it ("+30% damage"),
-  // joined with " · ", and the rider a route card gains at rank 3.
+  // joined with " · ", and the rider2 / transform a route card gains at rank 2 / 3.
   const NEXT_WORDS = 3, NEXT_RUN = 6, NEXT_STOP = /^(to|of|the|a|an|and|or|from|for|in|on|at|by|with|as|that|their|its|is|are|your|you|than|per|each)$/i;
   const wordKey = (w) => w.replace(/[.,;:]+$/, '');
   const bareNum = (ph) => !/[A-Za-z]{3,}/.test(ph.join(' ').replace(/\d+(?:\.\d+)?\s?s\b/g, '')); // numbers and units only, no noun
@@ -122,8 +122,8 @@
       if (bareNum(ph)) ph = withNoun(Z, j0 + (ph0 ? d : 0), ph, same);
       out.push(wordKey(ph.join(' ')));
     }
-    if (b.route && (rank + 1 === 2 || rank + 1 === 3)) { // the rider a route card gains at rank 2 (rider2) or 3 (rider, or the transform's name)
-      const P = ED.cardParts(id, 3, st), nm = rank + 1 === 2 ? P.rider2Name : P.form ? P.form.name : P.riderName;
+    if (b.route && (rank + 1 === 2 || rank + 1 === 3)) { // the rider a route card gains at rank 2 (rider2) or the transform's name at rank 3
+      const P = ED.cardParts(id, 3, st), nm = rank + 1 === 2 ? P.rider2Name : P.form ? P.form.name : '';
       if (nm) out.push('unlocks ' + nm);
     }
     return out.join(' · ');
@@ -368,6 +368,8 @@
       oneFoe = fanHits(offs, q.pr || 5) * (q.waves || 1); o.fanN = q.n; o.waves = q.waves || 1; o.fan = q.fan;
     }
     if (q.ref) { let hits = 0; for (let k = 0; k < q.n; k++) if (q.ref * (q.n - 1 - k) / q.n <= q.r + Sh.REF.r) hits++; oneFoe = hits; } // Starfall: the impacts walk from the hero to a target q.ref px away; a foe there is in reach of some of them
+    if (skillId === 'nova' && q.id === 'flare') oneFoe = Math.min(1, St.skillNums('nova', st).cdEff / C.MANTLE_CD); // Rebirth Flare: the Mantle shield (one per MANTLE_CD) bursts once it is used up, so a Nova cooling down faster than that casts it only in some casts
+    if (skillId === 'meteor' && q.id === 'rocks') { o.sets = st.twinMeteor > 0 ? 2 : 1; oneFoe = o.sets * q.n * Math.min(1, ((q.r + Sh.REF.r) / ROCK_SCATTER) ** 2); } // Meteor Shower: 3 meteorites fall at random within ROCK_SCATTER of every impact (the twin's too); a lone foe at the impact is under a share of them
     if (q.id === 'ambush' && skillId === 'vanish') oneFoe = wpn.oneFoe; // each of the weapon's hits carries the Ambush value
     else if (skillId === 'vanish' && (q.id === 'edge' || q.id === 'clone')) oneFoe = wpn.oneFoe * (q.attacks || 0); // the Eclipse repeats and the clone's attacks: one weapon attack each
     if (skillId === 'judgment' && q.id === 'leg' && st.thirdLeg > 0) oneFoe *= 1 + st.secondFlight; // Second Flight: two more legs at secondFlight of a hit each, on the two of the first flight
@@ -379,11 +381,13 @@
     if (q.perMinion) { // one hit per minion: the minions you have now (all of them when none), or the ones this cast raises
       oneFoe = q.perMinion === 'cast' ? St.skillNums('legion', st).p.minion.n : ctx.minions > 0 ? Math.min(ctx.minions, st.maxMinions || 3) : st.maxMinions || 3;
       if (skillId === 'legion' && q.id === 'field') oneFoe = (oneFoe + (st.bloom > 0 ? C.BOMB_N : 0)) * q.count; // a bone field under every burst: the minions' and the bombs', each ticking q.count times
+      if (skillId === 'harvest' && q.id === 'burst' && st.boneLance > 0) oneFoe = 0; // Bone Lances: the lance replaces the burst of every minion that has a foe within 200
       o.perMinion = true;
     }
     const avg = hit * (1 + kc * (cm - 1)), pre = avg * (1 + o.selfVuln), here = pre * aff;
     Object.assign(o, { kind: sec ? 'sec' : q.per === 'tick' ? 'tick' : 'hit', raw, hit, avg, pre, here, oneFoe: oneFoe === undefined ? 1 : oneFoe, critHit: hit * cm, kc, _hit: hit });
     if (sec) o.tick = hit;
+    if (skillId === 'vanish' && q.id === 'ambush') o.sweepR = st.ambushCleave; // Ambush Sweep: the radius around the struck foe that the pack rule of tools/model.js reads
     if (skillId === 'shieldthrow' && q.id === 'strike') o.gather = st.gather; // Gathering Force: the pack rule of tools/model.js reads it
     if (skillId === 'harvest' && (q.id === 'corpse' || q.id === 'shard')) { o.cap = st.corpse; o.shardN = st.carrionN; } // the corpse rules of tools/model.js read the corpse cap and the shards per corpse
     if (q.statusAdd) { // a status add riding on the hit (Meteor): a share of the damage before affinity, built with the status' own affinity and strength
@@ -410,9 +414,10 @@
   function bashPart(q, st, R) {
     const N = St.skillNums('shieldthrow', st), a = N.p.strike, b = N.p.return, M = Math.max(0.1, st.dmg), EC = 1 + st.crit * (st.critMult - 1), k = st.bash;
     const hit = (a.dmg + b.dmg) / 2 * k * M;
-    return finish({ id: q.id, label: q.label, per: 'hit', kind: 'hit', el: null, aff: 1, r: 0, proc: true, note: 'a free Shield Throw along the run, no stun', raw: (a.dmg + b.dmg) * k, hit, avg: hit * EC, pre: hit * EC, here: hit * EC, total: hit * EC * 2, oneFoe: 2, kc: st.crit, alwaysCrit: false, noCrit: false, selfVuln: 0 }, R);
+    return finish({ id: q.id, label: q.label, per: 'hit', kind: 'hit', el: null, aff: 1, r: 0, proc: true, note: 'a free Shield Throw along the run, no stun', raw: (a.dmg + b.dmg) * k, hit, avg: hit * EC, pre: hit * EC, here: hit * EC, total: hit * EC * 2, oneFoe: 2, kc: st.crit, alwaysCrit: false, noCrit: false, selfVuln: 0, bashStrike: a.dmg * k * M * EC, bashReturn: b.dmg * k * M * EC, bashN: a.n }, R); // bash*: the strike and return hits and the ricochet count, for the pack rule of tools/model.js
   }
 
+  const ROCK_SCATTER = 80; // px a Meteor Shower meteorite may land from its impact (class-pyro.js)
   const AIM_TEXT = { dir: 'toward the cursor', ground: 'lands on the cursor', move: 'toward the cursor', self: 'around you' };
   function skillModel(id, slot, p, st, ctx, wpn, R) {
     const sk = ED.SKILLS[id], N = St.skillNums(id, st), parts = [];

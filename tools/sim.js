@@ -1036,7 +1036,7 @@ function summarize(results) {
   return lines.join('\n');
 }
 
-// Class route lines (DESIGN-classes section 12): arms per class x route, per fork and per class x weapon, damage share by skill part, HP lost per combat and elite room, shots, shields, heal, uptimes, counts and peaks.
+// Class route lines (docs/GAME-DESIGN.md section 10): arms per class x route, per fork and per class x weapon, damage share by skill part, HP lost per combat and elite room, shots, shields, heal, uptimes, counts and peaks.
 const bossT = (rs, s) => rs.map(r => r.bossTimes[s]).filter(v => v !== undefined);
 const meanOf = (a) => (a.length ? avg(a) : NaN);
 function classLines(results) {
