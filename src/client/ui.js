@@ -6,7 +6,7 @@
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   UI.esc = esc;
-  const LOCK = '<svg class="ico-lock" viewBox="0 0 16 16" aria-hidden="true"><path d="M5 7V5a3 3 0 0 1 6 0v2h1.2c.4 0 .8.4.8.8v6.4c0 .4-.4.8-.8.8H3.8c-.4 0-.8-.4-.8-.8V7.8c0-.4.4-.8.8-.8zm1.6 0h2.8V5a1.4 1.4 0 0 0-2.8 0z"/></svg>';
+  const LOCK = '<i class="px-lock" aria-hidden="true"></i>'; // pixel padlock (screenart.js 'lock')
   const keys = (action) => ED.Input.labels(action).map(k => `<kbd>${esc(k)}</kbd>`).join('');
 
   UI.show = (name) => {
@@ -300,6 +300,11 @@
     for (const b of document.querySelectorAll('.btn-reset')) paintReset(b);
   }
 
+  // Buy feedback: the bought entry's key and time; the re-render right after marks that card .burst (plaque flash and ember burst, 0.45 s) and its new rank pip .new.
+  let bought = { key: '', t: 0 };
+  const markBuy = (key) => { bought = { key, t: performance.now() }; };
+  const fresh = (key) => bought.key === key && performance.now() - bought.t < 500;
+
   function renderUpgrades(grid) {
     const p = ED.App.profile;
     grid = grid || $('up-grid');
@@ -312,15 +317,15 @@
       h.textContent = open ? (tier === 1 ? 'Foundations' : `Revealed at stratum ${U.roman(tier)}`) : `Reach stratum ${U.roman(tier)} to reveal`;
       grid.appendChild(h);
       for (const u of list) {
-        const i = ED.UPGRADE_IDX[u.id], r = p.up[i], max = u.costs.length;
+        const i = ED.UPGRADE_IDX[u.id], r = p.up[i], max = u.costs.length, key = 'u:' + u.id, hot = fresh(key);
         const card = document.createElement('div');
-        card.className = 'up-card' + (open ? '' : ' locked') + (r >= max ? ' maxed' : '');
-        const pips = Array.from({ length: max }, (_, k) => `<span class="pip${k < r ? ' on' : ''}"></span>`).join('');
-        card.innerHTML = `<img alt="" src="${ED.Icons.url(u.icon, '#ff9a4a')}"><div><div class="un">${u.name}${r >= max ? ' <span class="badge-max">Max</span>' : ''}</div><div class="ud">${open ? (r ? esc(u.desc(r)) : 'Not learned yet') : '???'}</div>${open && r < max ? `<div class="un2">Next: ${esc(u.step)}</div>` : ''}<div class="pips">${pips}</div></div>`;
+        card.className = 'up-card' + (open ? '' : ' locked') + (r >= max ? ' maxed' : '') + (hot ? ' burst' : '');
+        const pips = Array.from({ length: max }, (_, k) => `<span class="pip${k < r ? ' on' : ''}${hot && k === r - 1 ? ' new' : ''}"></span>`).join('');
+        card.innerHTML = `${open ? '<span class="up-ember" aria-hidden="true"></span>' : ''}<img alt="" src="${ED.Icons.url(u.icon, '#ff9a4a')}"><div><div class="un">${u.name}${r >= max ? ' <span class="badge-max">Max</span>' : ''}</div><div class="ud">${open ? (r ? esc(u.desc(r)) : 'Not learned yet') : '???'}</div>${open && r < max ? `<div class="un2">Next: ${esc(u.step)}</div>` : ''}<div class="pips">${pips}</div></div>`;
         if (r > 0 || (open && r < max)) {
           const back = r > 0 ? refundButton(u.costs[r - 1], `Refund ${u.name} rank ${r}: +${u.costs[r - 1]} embers`, () => { if (S.refundUpgrade(p, u.id)) ED.App.afterMetaChange(); }) : null;
           const cost = u.costs[r];
-          const buy = open && r < max ? buyButton(cost, p.embers >= cost, `Buy ${u.name}: ${u.step} for ${cost} embers`, () => { if (S.buyUpgrade(p, u.id)) { ED.Audio.play('buy'); ED.App.afterMetaChange(); } }) : null;
+          const buy = open && r < max ? buyButton(cost, p.embers >= cost, `Buy ${u.name}: ${u.step} for ${cost} embers`, () => { if (S.buyUpgrade(p, u.id)) { markBuy(key); ED.Audio.play('buy'); ED.App.afterMetaChange(); } }) : null;
           actionsCell(card, 'u:' + u.id, back, buy);
         }
         grid.appendChild(card);
@@ -336,11 +341,11 @@
       list.forEach((e, i) => {
         const own = armoryHas(p, c, i), open = S.armoryOpen(p, c, e.id), bw = e.weapon && ED.WEAPONS[e.weapon], wi = e.weapon ? ED.weaponIndex(c, e.weapon) : 0;
         const req = bw ? (open ? `Variant of the ${bw.name}` : `${LOCK}Variant of the ${bw.name}, which unlocks at mastery ${wi === 1 ? 3 : 6}`) : '';
-        const card = document.createElement('div');
-        card.className = 'up-card' + (own ? ' maxed' : '') + (open || own ? '' : ' locked');
+        const card = document.createElement('div'), key = `a:${c}:${e.id}`;
+        card.className = 'up-card arm' + (own ? ' maxed' : '') + (open || own ? '' : ' locked') + (fresh(key) ? ' burst' : '');
         card.innerHTML = `<img alt="" src="${ED.Icons.url(e.icon || (bw ? cl.icon : 'chest'), cl.col.c)}"><div><div class="un">${esc(e.name)}${own ? ' <span class="badge-max">Owned</span>' : ''}</div><div class="ud">${esc(e.desc)}</div>${req ? `<div class="un2">${req}</div>` : ''}</div>`;
-        if (own) actionsCell(card, `a:${c}:${e.id}`, refundButton(e.cost, `Refund ${e.name}: +${e.cost} embers`, () => { if (S.refundArmory(p, c, e.id)) ED.App.afterMetaChange(); }), null);
-        else if (open) actionsCell(card, `a:${c}:${e.id}`, null, buyButton(e.cost, p.embers >= e.cost, `Buy ${e.name} for ${e.cost} embers`, () => { if (S.buyArmory(p, c, e.id)) { ED.Audio.play('buy'); ED.App.afterMetaChange(); } }));
+        if (own) actionsCell(card, key, refundButton(e.cost, `Refund ${e.name}: +${e.cost} embers`, () => { if (S.refundArmory(p, c, e.id)) ED.App.afterMetaChange(); }), null);
+        else if (open) actionsCell(card, key, null, buyButton(e.cost, p.embers >= e.cost, `Buy ${e.name} for ${e.cost} embers`, () => { if (S.buyArmory(p, c, e.id)) { markBuy(key); ED.Audio.play('buy'); ED.App.afterMetaChange(); } }));
         grid.appendChild(card);
       });
     }
@@ -411,7 +416,7 @@
     const sl = $('strata-list'); sl.innerHTML = '';
     ED.BIOMES.forEach((b, i) => {
       const seen = st.deepest > i, slain = !!(p.bosses & (1 << i));
-      sl.insertAdjacentHTML('beforeend', `<div class="stratum${seen ? '' : ' unseen'}"><i style="background:radial-gradient(circle at 40% 35%, ${b.pal.accent}, ${b.pal.floorA})"></i><div><b>${U.roman(i + 1)}. ${seen ? b.name : '???'}</b><small>${seen ? esc(slain ? ED.LORE[i] : b.blurb) : 'Undiscovered'}</small><div class="aff-list">${affChips(b)}</div></div></div>`);
+      sl.insertAdjacentHTML('beforeend', `<div class="stratum${seen ? '' : ' unseen'}"><i style="--sa:${b.pal.accent};--sb:${b.pal.floorA}"></i><div><b>${U.roman(i + 1)}. ${seen ? b.name : '???'}</b><small>${seen ? esc(slain ? ED.LORE[i] : b.blurb) : 'Undiscovered'}</small><div class="aff-list">${affChips(b)}</div></div></div>`);
     });
   }
 
@@ -434,7 +439,7 @@
       const div = document.createElement('div');
       if (!m) { div.className = 'member empty'; div.textContent = 'Waiting for a hero…'; mem.appendChild(div); continue; }
       div.className = 'member';
-      div.style.borderColor = ED.PLAYER_COLORS[m.slot];
+      div.style.setProperty('--pc', ED.PLAYER_COLORS[m.slot]);
       div.appendChild(portrait(m.cls, 64, m.slot, m.weapon));
       div.insertAdjacentHTML('beforeend', `<div><div class="mn" style="color:${ED.PLAYER_COLORS[m.slot]}">${esc(m.name)}${m.pid === myPid ? ' (you)' : ''}</div><div class="mc">${ED.CLASSES[m.cls].name} · ${ED.WEAPONS[m.weapon].name}</div></div><div class="mr${m.ready || m.isHost ? ' ready' : ''}">${m.isHost ? 'Host' : m.ready ? 'Ready' : 'Not ready'}</div>`);
       mem.appendChild(div);
@@ -642,7 +647,7 @@
     const win = sum.victory;
     const banner = $('res-banner');
     banner.textContent = win ? 'Victory' : sum.abandoned ? 'Retreat' : note ? 'Disconnected' : 'Fallen';
-    banner.classList.toggle('win', !!win);
+    banner.classList.toggle('win', !!win); banner.parentNode.classList.toggle('win', !!win); // the flag frame around the word
     const biome = ED.biomeFor(sum.stratum || 1);
     const tail = res.rewards.total > 0 ? 'The embers you carried still count.' : 'Clear at least one room for a descent to pay out.';
     $('res-sub').textContent = note || (win ? 'The Hollow King is broken. The Deep remembers your name.'
@@ -762,8 +767,12 @@
     });
   }
 
+  // <html data-quality="high|low">: menu CSS pauses its idle animations under Low quality.
+  const markQuality = () => { document.documentElement.dataset.quality = ED.App.settings.quality; };
+
   UI.init = () => {
     const A = ED.App;
+    markQuality();
     // title
     $('btn-begin').onclick = () => A.createProfile($('inp-name').value);
     $('inp-name').addEventListener('keydown', (e) => { if (e.code === 'Enter' || e.code === 'NumpadEnter') A.createProfile($('inp-name').value); });
@@ -827,7 +836,7 @@
       s.quality = $('set-quality').value; s.frameCap = $('set-framecap').value; s.shake = $('set-shake').checked; s.dmg = $('set-dmg').checked;
       s.cursor = $('set-cursor').value; s.reticle = $('set-reticle').value; s.reticleCol = $('set-retcol').value; s.aimPreview = $('set-aimprev').checked;
       if (e && e.target.type === 'range') fill(e.target);
-      A.applySettings();
+      A.applySettings(); markQuality();
       if (ED.AimFx) ED.AimFx.applyCursor();
     };
     for (const id of ['set-master', 'set-music', 'set-sfx', 'set-quality', 'set-framecap', 'set-shake', 'set-dmg', 'set-cursor', 'set-reticle', 'set-retcol', 'set-aimprev']) $(id).addEventListener('input', setChange);

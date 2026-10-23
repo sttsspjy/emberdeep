@@ -1,5 +1,5 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it.
-// Usage: node tools/browse.js [--scen=smoke,crowd70,shots,swing,picks] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
+// Usage: node tools/browse.js [--scen=smoke,crowd70,shots,screens,swing,picks] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
 //   [--quality=low,high] [--ops] [--json] [--seed=1] [--strat=1] [--embers=N] [--mortal] [--software] [--forcepost] [--sync] [--warm=2.5] [--timeout=300]
 // Mechanism: headless only (no headed option, no window calls); one browser per invocation, one fresh context per scenario page, all closed at exit, on error and on SIGINT.
 //   A read-only node http server on 127.0.0.1 (random port) serves --root (default: this repo). Playwright resolves via require('playwright'), else %LOCALAPPDATA%\npm-cache\_npx\*\node_modules (best match for the installed browsers).
@@ -8,6 +8,8 @@
 //   crowdN: N live foes staged in the largest combat room through World.spawnEnemy / enterRoom (room cleared, held locked, topped up to N), hero kept alive; after --warm (2.5) s
 //     measures --seconds (6) of main-thread ms per frame (Game.update, Game.render, Render.frame, HUD.draw, Post.render, whole rAF callback; busy% = rAF callback time over wall time, sys% = whole-machine CPU use during the window) at each --quality (low,high);
 //     --ops adds a 3 s pass counting canvas/WebGL calls per frame by target (buf = world buffer, screen = visible canvas, other = offscreen bakes).
+//   screens: 19 screenshots of every menu screen without a run (name, menu, Descend, Hearth with a buy mid-burst, Armory, Chronicle, Heroes, a staged party lobby and its Hearth,
+//     results victory and fallen, the news notice, settings tabs, a confirm dialog, credits, pause); fails when ArrowDown / ArrowRight do not move focus on the menu / Hearth tabs.
 //   shots: 16 screenshots: boot name screen, menu, Descend, Hearth tabs (the Armory scrolled into view), Heroes, Settings, Credits, boon offer, a run in combat, the Tab sheet tabs, the pause menu (profile gets 400 embers unless --embers).
 //   swing: one contact-sheet PNG per melee weapon of --cls, its Armory variants included (or per --weapon id, forks as id@fork) (aimed --aim degrees, 0 = right, 90 = down, drawn at --zoom canvas px per world px, 2): frames at fixed times over two consecutive attacks (a combo weapon: one per step), the hold and the ease back to idle, hero and smear drawn by the game's own renderer.
 //   picks: every boon id resolves to a PickFx card kind; one PNG per pick burst (each kind, fire-big, holy-ally) on the solo hero about 0.25 s after FX.handle gets the 'boon' / 'relic' event;
@@ -45,7 +47,7 @@ function parseArgs(argv) {
   if (!vp) throw new Fail('--viewport is WxH, e.g. 1920x1080');
   o.vw = +vp[1]; o.vh = +vp[2];
   o.scens = o.scen.split(',').map(s => s.trim()).filter(Boolean);
-  for (const s of o.scens) if (!/^(smoke|shots|swing|picks|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, swing, picks, crowdN)');
+  for (const s of o.scens) if (!/^(smoke|shots|screens|swing|picks|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, screens, swing, picks, crowdN)');
   if (!o.scens.length) throw new Fail('--scen is empty');
   o.qualities = o.quality ? o.quality.split(',').map(s => s.trim()) : null;
   if (o.qualities && o.qualities.some(q => q !== 'low' && q !== 'high')) throw new Fail('--quality is low, high or low,high');
@@ -693,6 +695,68 @@ async function scenShots() {
   return res;
 }
 
+// Every menu screen without a run: name screen, menu, Descend, Hearth (a buy mid-burst, refunds, Armory, Chronicle), Heroes, a staged party lobby and its Hearth,
+// results (victory with an evolution, fallen), the news notice, settings tabs, a confirm dialog, pause, credits; checks keyboard focus on the menu and the Hearth tabs.
+async function scenScreens() {
+  const o = S.opt, res = newResult('screens');
+  const { ctx, page, errors } = await openPage();
+  const tryShot = async (name, fn, settle) => { try { if (fn) await fn(); await wait(settle == null ? 450 : settle); await shoot(page, res, name); } catch (e) { notes(res, 'shot ' + name + ' skipped: ' + String(e.message).split('\n')[0]); } };
+  const ev = (fn, arg) => page.evaluate(fn, arg);
+  const focused = () => ev(() => { const a = document.activeElement; return a ? (a.id || a.dataset.tab || a.dataset.stab || a.className) : ''; });
+  try {
+    await ev(() => { const A = window.__ED.App; A.settings.frameCap = 'off'; A.applySettings(); });
+    await tryShot('01-name');
+    await call(page, 'profile', o.cls, o.embers >= 0 ? o.embers : 400, o.weapon ? o.weapon.split(',')[0] : '');
+    await tryShot('02-menu', () => ev(() => { window.__ED.App.goHome(); document.getElementById('mm-descend').focus(); }), 600);
+    await page.keyboard.press('ArrowDown');
+    if ((await focused()) !== 'mm-hearth') fail(res, 'ArrowDown on the menu did not focus Hearth (focus: ' + (await focused()) + ')');
+    await tryShot('03-descend', () => ev(() => window.__ED.App.enterHearth('descend')));
+    // 04: one rank bought by a click, shot inside the 0.45 s burst
+    await tryShot('04-hearth-buy', () => ev(() => { window.__ED.App.enterHearth('upgrades'); const b = document.querySelector('#up-grid .buy:not(:disabled)'); if (!b) throw new Error('nothing affordable'); b.click(); }), 120);
+    const burst = await ev(() => !!document.querySelector('#up-grid .up-card.burst .up-ember'));
+    if (!burst) fail(res, 'the bought plaque has no .burst after the click');
+    await tryShot('05-hearth-upgrades', () => ev(() => { const E = window.__ED, p = E.App.profile; let n = 0; for (const u of E.UPGRADES) if (n < 2 && E.Save.buyUpgrade(p, u.id)) n++; E.App.afterMetaChange(); document.querySelector('#hearth-tabs .tab.on').focus(); }));
+    await page.keyboard.press('ArrowRight');
+    if ((await focused()) !== 'chronicle') fail(res, 'ArrowRight on the Hearth tabs did not focus Chronicle (focus: ' + (await focused()) + ')');
+    await tryShot('06-hearth-armory', () => ev(() => { const h = [...document.querySelectorAll('#up-grid .tier-head')].find(x => /Armory/.test(x.textContent)); if (h) h.scrollIntoView({ block: 'start' }); }));
+    await tryShot('07-hearth-chronicle', () => ev(() => window.__ED.App.enterHearth('chronicle')));
+    await tryShot('08-heroes', () => ev(() => window.__ED.App.enterHearth('heroes')));
+    // 09: a staged lobby (no network): this profile hosts, a second hero waits
+    await tryShot('09-lobby', () => ev(() => {
+      const E = window.__ED, A = E.App, UI = E.UI;
+      A.state = 'lobby'; UI.show('lobby');
+      A.lobbyState = { code: 'K7QX2', pact: 0, members: [
+        { slot: 0, pid: 'host', name: A.profile.name, cls: A.sel.cls, weapon: A.sel.weapon, isHost: true, ready: true },
+        { slot: 1, pid: 'p2', name: 'Brann', cls: 'ranger', weapon: E.CLASSES.ranger.weapons[0], ready: false },
+        { slot: 2, pid: 'p3', name: 'Ysolde', cls: 'cleric', weapon: E.CLASSES.cleric.weapons[0], ready: true }] };
+      UI.renderLobby(A.lobbyState, 'host', true); UI.lobbyStatus('Party open. Share the code or the invite link.');
+    }));
+    await tryShot('10-party-hearth', () => ev(() => window.__ED.UI.openPartyHearth()));
+    // 11, 12: results from Save.applyRun on synthetic summaries
+    const results = (win) => ev((w) => {
+      const E = window.__ED, A = E.App, UI = E.UI;
+      document.getElementById('ov-hearth').hidden = true; A.lobbyState = null;
+      const run = w ? { victory: true, stratum: 6, time: 1534, level: 22, roomsCleared: 40, roomsTotal: 52, roomsVisited: 47, kills: 1800, bossCount: 6, party: 1, pact: 0, cls: A.sel.cls, myEvo: { path: 'fire', weapon: 'Longsword' }, evolved: true, embers: { rooms: 80, elites: 30, bosses: 60, victory: 40 } }
+        : { victory: false, stratum: 2, time: 512, level: 7, roomsCleared: 9, roomsTotal: 26, roomsVisited: 14, kills: 300, bossCount: 1, party: 1, pact: 0, cls: A.sel.cls, embers: { rooms: 18, elites: 5, bosses: 10, victory: 0 } };
+      const r = E.Save.applyRun(A.profile, run);
+      A.state = 'results'; UI.renderResults(run, r); UI.show('results');
+    }, win);
+    await tryShot('11-results-victory', () => results(true));
+    await tryShot('12-results-fallen', () => results(false));
+    await tryShot('13-news', () => ev(() => { const E = window.__ED, A = E.App; A.profile.news = 1; A.profile.refunded = 120; A.goHome(); }));
+    await ev(() => document.getElementById('btn-news-close').click());
+    for (const [n, tab] of [['14-settings-sound', 'sound'], ['15-settings-controls', 'controls'], ['16-settings-profile', 'profile']]) await tryShot(n, () => ev((t) => window.__ED.UI.openSettings(t), tab));
+    await tryShot('17-modal', () => ev(() => document.getElementById('btn-reset').click()));
+    await ev(() => { document.getElementById('modal').hidden = true; window.__ED.UI.closeSettings(); });
+    await tryShot('18-credits', () => ev(() => document.getElementById('mm-credits').click()));
+    await ev(() => document.getElementById('btn-credits-close').click());
+    await tryShot('19-pause', () => ev(() => { document.getElementById('pause-note').textContent = 'The Deep waits for you.'; document.getElementById('ov-pause').hidden = false; document.getElementById('btn-resume').focus(); }));
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  if (res.shots.length < 15) fail(res, 'only ' + res.shots.length + ' screenshots were taken');
+  return res;
+}
+
 // ---------------- output ----------------
 const f1 = (v) => (typeof v === 'number' ? v.toFixed(1) : '-');
 const tri = (s) => (s ? [s.p50, s.p95, s.max].map(f1).join('/') : '-');
@@ -700,7 +764,7 @@ const pad = (s, n) => String(s).padEnd(n);
 function table(results) {
   const out = [];
   for (const r of results) {
-    out.push(`${r.name} [${r.browser}${r.name === 'shots' ? '' : ', ' + r.cls}] ${r.ok ? 'PASS' : 'FAIL'}  ${(r.wallMs / 1000).toFixed(1)} s`);
+    out.push(`${r.name} [${r.browser}${r.name === 'shots' || r.name === 'screens' ? '' : ', ' + r.cls}] ${r.ok ? 'PASS' : 'FAIL'}  ${(r.wallMs / 1000).toFixed(1)} s`);
     for (const n of r.notes) out.push('  ' + n);
     for (const e of r.errors) out.push(`  ${e.kind}${e.quality ? ' (' + e.quality + ')' : ''}: ${e.text}`);
     if (r.name.startsWith('crowd')) {
@@ -743,7 +807,7 @@ async function main() {
       const t0 = Date.now();
       log('scenario ' + sc + ' ...');
       let r;
-      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
+      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'screens' ? await scenScreens() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
       r.wallMs = Date.now() - t0;
       r.browserVersion = bv;
       if (S.server.missing.size) r.missing = [...S.server.missing];
