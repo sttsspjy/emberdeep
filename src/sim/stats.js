@@ -71,7 +71,7 @@
   // (n is 1) and compounds slot damage. An Ascended boon (kind 'asc') adds its mods like a boon and carries x { key: f }: St.compute multiplies s[key] by 1 + f once every additive source is summed. build: { cls, weapon, boons: {id: n}, relics: [id], meta: { up: [], mastery }, pact, chaliceHp, bonusHp }.
   St.sources = (build) => {
     const cls = ED.CLASSES[build.cls], meta = build.meta || { up: [], mastery: 1 }, out = [];
-    out.push({ kind: 'class', id: build.cls, label: cls.name, mods: { hp: cls.hp, armor: cls.armor, crit: cls.crit }, n: 1 });
+    out.push({ kind: 'class', id: build.cls, label: cls.name, mods: { hp: cls.hp, armor: cls.armor, crit: cls.crit, dodge: cls.dodge || 0 }, n: 1 });
     for (const u of ED.UPGRADES) {
       const n = u.mods && meta.up && meta.up[ED.UPGRADE_IDX[u.id]] || 0;
       if (n > 0) out.push({ kind: 'hearth', id: u.id, label: u.name + ' ' + n, mods: u.mods, n });

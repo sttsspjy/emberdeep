@@ -319,7 +319,7 @@ input[type=range]::-moz-range-thumb { width: 1.2rem; height: 1.2rem; transform: 
 /* heroes view (roster + mastery) */
 .heroes-view { display: grid; grid-template-columns: 21rem minmax(0, 1fr); gap: 1.2rem; align-items: start; }
 .hv-detail { padding: 1.4rem 1.6rem; display: flex; flex-direction: column; gap: 1.1rem; }
-.hd-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.6rem; }
+.hd-stats { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 0.6rem; }
 .hd-stat { background: rgba(0, 0, 0, 0.3); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 0.5rem 0.8rem; }
 .hd-stat b { display: block; font: 800 var(--fs-xl)/1.1 var(--f-display); color: var(--bone); font-variant-numeric: tabular-nums; }
 .hd-stat span { font-size: var(--fs-sm); color: var(--muted); }
@@ -776,7 +776,7 @@ html { scrollbar-color: #5a4232 transparent; scrollbar-width: thin; }
 }
 @media (max-width: 520px) {
   .weapon-row { grid-template-columns: minmax(0, 1fr); }
-  .hd-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hd-stats { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mast-rewards { grid-template-columns: minmax(0, 1fr); }
   .roster { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .roster.compact { grid-template-columns: minmax(0, 1fr); }
