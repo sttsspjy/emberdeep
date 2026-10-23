@@ -35,7 +35,7 @@ function modelOf(cls, boons, wi, o) {
     near(m.def.taken, v[4], 0.0005, cls + ' damage taken');
   }
   const by = (m, s, p) => m.skills[s].parts.find(q => q.id === p);
-  near(by(modelOf('knight', {}, 0, { stat: { crit: 0 } }), 0, 'impact').raw, 63.44, 0.05, 'Charge impact'); near(modelOf('knight', {}, 0).def.ehp, 272.9, 1, 'Knight effective health');
+  near(by(modelOf('knight', {}, 0, { stat: { crit: 0 } }), 0, 'impact').raw, 63.44, 0.05, 'Charge impact'); near(modelOf('knight', {}, 0).def.ehp, 69, 0.5, 'Knight effective health');
   const rg = modelOf('ranger', {}, 0, { stat: { crit: 0 } }), arrow = by(rg, 0, 'arrow');
   near(arrow.raw, 18.4, 0.05, 'Volley arrow'); ok(arrow.oneFoe === 3 && arrow.fanN === 7, `Volley: 3 of 7 arrows reach a foe at REF (got ${arrow.oneFoe} of ${arrow.fanN})`);
   near(rg.skills[0].perCast, 55.2, 0.1, 'Volley per cast on one foe'); near(rg.skills[0].perCastAll, 128.8, 0.1, 'Volley per cast, all 7'); near(rg.skills[1].perCast, 75.2, 0.1, 'Rain per cast (9.4 x 8)');
@@ -450,10 +450,10 @@ for (const [cls, boons, tag] of [['ranger', { r_atk: 1, r_atk_s: 2 }, 'Flurry (Q
 // ---------------- shield window: the readout equals what addShield granted in the last 10 s ----------------
 {
   const { w, p } = stage('knight', {}, 0, {});
-  w.addShield(p, 3, 100, 'catch'); w.addShield(p, 2, 100, 'holy');
+  w.addShield(p, 0.8, 100, 'catch'); w.addShield(p, 0.5, 100, 'holy'); // under the 3% / 6% windows of a 45-health Knight
   let m = sheetOf(w, p);
-  near(m.def.window.cls, 3, 0.01, 'shield window, class sources'); near(m.def.window.all, 5, 0.01, 'shield window, all sources');
-  near(m.def.window.clsPct, 3 / p.maxHp, 1e-6, 'shield window as a share of max health');
+  near(m.def.window.cls, 0.8, 0.01, 'shield window, class sources'); near(m.def.window.all, 1.3, 0.01, 'shield window, all sources');
+  near(m.def.window.clsPct, 0.8 / p.maxHp, 1e-6, 'shield window as a share of max health');
   run(w, 11);
   m = sheetOf(w, p); near(m.def.window.all, 0, 0.001, 'the window empties after 10 s');
 }
@@ -468,7 +468,7 @@ for (const [stratum, pact, dark, party, boons] of [[1, 0, false, 1, {}], [3, 2, 
   const e = w.spawnEnemy('skeleton', p.x + 80, p.y), e2 = w.spawnEnemy('frozenskel', p.x + 90, p.y);
   rel(e.dmg / ED.ENEMIES.skeleton.dmg, m.def.foeHere, 1e-9, `foes that spawn now hit (${tag})`);
   rel(e2.hp, m.ref.hp, 1e-9, `reference foe health (${tag})`); rel(e2.hp / e2.hpLever, m.ref.statusHp, 1e-9, `reference foe status health (${tag})`);
-  p.hp = p.maxHp; p.invuln = 0; w.hurtPlayer(p, 100, { hazard: true }); near(p.maxHp - p.hp, Math.max(1, Math.round(100 * m.def.taken)), 1, `damage taken from a 100 hit (${tag})`);
+  const mh = p.maxHp; p.maxHp = p.hp = 1e4; p.invuln = 0; w.hurtPlayer(p, 100, { hazard: true }); near(p.maxHp - p.hp, Math.max(1, Math.round(100 * m.def.taken)), 1, `damage taken from a 100 hit (${tag})`); p.maxHp = mh; // 1e4 health: the probe hit must not down the hero
   p.hp = 1; const got = w.healPlayer(p, 10, true); rel(got, 10 * m.def.healMul, 1e-9, `healing received (${tag})`);
   ok(m.ctx.dark === dark && (m.def.foeParts.dark === null) === !dark, `dark-room flag of the sheet (${tag})`);
   ok(m.def.maxHp === p.maxHp && m.def.ehp > 0, `max health (${tag})`);

@@ -108,7 +108,7 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
   const st = build(0, { c_s1: 1 }), N = ED.Stats.skillNums('sanctuary', st), q = N.p.zone;
   near(q.r, 130, 1e-9, 'Sanctum radius 100 x 1.3'); near(q.dur, 5.5, 1e-9, 'Sanctum lasts 3.5 + 2 s'); near(q.dmg, (13.5 + 1.2 * 23) * 1.5, 1e-9, 'Sanctum damage +50%'); near(N.cdEff, 11, 1e-9, 'Sanctuary cooldown 11 s');
   const quick = build(0, { c_s1: 1 }); quick.cdr = 0.4; quick.sn = null; near(ED.Stats.skillNums('sanctuary', quick).p.zone.dur, 0.6 * 11 * 0.6, 1e-9, 'Sanctuary lasts at most 60% of its cooldown (cdr 40%: 3.96 s)');
-  const { w, p } = stage({ c_s1: 1 }); const a = ally(w, 'ranger', p.x + 40, p.y); a.stats.armor = p.stats.armor; const hit = (who) => { who.hp = who.maxHp; who.invuln = 0; w.hurtPlayer(who, 100, {}); return who.maxHp - who.hp; };
+  const { w, p } = stage({ c_s1: 1 }); const a = ally(w, 'ranger', p.x + 40, p.y); a.stats.armor = p.stats.armor; const hit = (who) => { who.maxHp = who.hp = 1e4; who.invuln = 0; w.hurtPlayer(who, 100, {}); return who.maxHp - who.hp; };
   const base = hit(a);
   w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x + 40, y: p.y }, 0);
   const z = w.zones.find(q2 => q2.kind === 'sanct');
@@ -184,7 +184,7 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
   const { w, p } = stage({ c_s2: 1, c_s2_b: 1 });
   const jt = foe(w, p.x + 60, p.y), jb = foe(w, p.x + 70, p.y + 14); jb.boss = true; w.playerSkill(p, 0, {}, 1); run(w, 0.4);
   ok(jt.weakT > 4 && Math.abs(jt.weakV - 0.5) < 1e-9 && jb.weakT > 4 && Math.abs(jb.weakV - 0.25) < 1e-9, 'Judged foes are weakened by 50% (bosses 25%)');
-  const q = ally(w, 'knight', p.x, p.y - 60); q.stats.armor = 0; const dmgFrom = (e) => { q.hp = q.maxHp; q.invuln = 0; w.hurtPlayer(q, 100, { e }); return q.maxHp - q.hp; };
+  const q = ally(w, 'knight', p.x, p.y - 60); q.stats.armor = 0; const dmgFrom = (e) => { q.maxHp = q.hp = 1e4; q.invuln = 0; w.hurtPlayer(q, 100, { e }); return q.maxHp - q.hp; };
   const plain = foe(w, p.x + 900, p.y); const full = dmgFrom(plain); near(dmgFrom(jt) / full, 0.5, 0.02, 'a weakened foe deals 50% less'); near(dmgFrom(jb) / full, 0.75, 0.02, 'a weakened boss deals 25% less');
   jt.weakT = 0; near(dmgFrom(jt) / full, 1, 0.01, 'the weaken ends with the timer');
 }
@@ -338,7 +338,7 @@ const castSanct = (w, p, dx) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x +
     ok(ph.every(h => Math.abs(h.d - N.p.pulse.dmg * mul) < 0.05 && (Math.abs(h.t - 2) < 0.1 || Math.abs(h.t - 4) < 0.1) && h.crit === false), 'at 2 s and 4 s, never a crit, the part damage'); }
   { const T = setup(3); castSanct(T.w, T.p); T.a.stun = 0; T.a.stunCd = 0; T.w.zones.find(q => q.kind === 'sanct').gA = 2; T.w.update(1 / 60); ok(!(T.a.stun > 0), 'a foe pulsed less than 2 s ago is skipped even when another pulse comes due'); }
   // damage taken: a Sanctuary clamps at 40%, the Aegis at z.drCap
-  const hit = (S2, who, src) => { who.hp = who.maxHp; who.invuln = 0; S2.w.hurtPlayer(who, 100, src || {}); return who.maxHp - who.hp; };
+  const hit = (S2, who, src) => { who.maxHp = who.hp = 1e4; who.invuln = 0; S2.w.hurtPlayer(who, 100, src || {}); return who.maxHp - who.hp; };
   const R3 = setup(3), R2 = setup(2); castSanct(R3.w, R3.p); castSanct(R2.w, R2.p);
   const c3 = hit(R3, R3.ally), c2 = hit(R2, R2.ally);
   ok(c3 <= c2 && c3 >= 50, `an ally in the Aegis takes at most what it takes in the Aura and at least 50% (${c3} vs ${c2})`);

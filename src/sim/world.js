@@ -677,7 +677,7 @@
       p.hzT = (p.hzT || 0) - dt;
       if (p.hzT <= 0) {
         const s = this.stratum;
-        const dmg = hz === 'spikes' ? 6 : hz === 'poison' ? 4 : hz === 'lava' ? 6 : hz === 'void' ? 6 : 0; // damage per tick; every floor hazard stays near 7-10 damage per second
+        const dmg = hz === 'spikes' ? 1.5 : hz === 'poison' ? 1 : hz === 'lava' ? 1.5 : hz === 'void' ? 1.5 : 0; // damage per tick before HAZARD_MUL, in hero health points
         if (dmg) this.hurtPlayer(p, dmg * (1 + 0.2 * (s - 1)) * W.HAZARD_MUL, { hazard: true });
         p.hzT = hz === 'spikes' ? 0.9 : 0.6;
       }
@@ -931,7 +931,7 @@
   W.prototype.collect = function (p, pk) {
     if (pk.kind === 'gold') { const v = Math.max(1, Math.round(pk.val * (1 + p.stats.gold))); this.gold += v; this.emit({ t: 'gold', v, pid: p.pid }); }
     else if (pk.kind === 'xp') { this.addXp(pk.val * (1 + p.stats.xp)); this.emit({ t: 'xp', pid: p.pid }); }
-    else if (pk.kind === 'heart') { this.healPlayer(p, p.maxHp * (0.22 + 0.03 * p.stats.forager) + 6); }
+    else if (pk.kind === 'heart') { this.healPlayer(p, p.maxHp * (0.22 + 0.03 * p.stats.forager) + 1.5); }
   };
 
   // Marks the stratum fully explored once every non-boss room has been cleared (non-combat rooms clear on entry).

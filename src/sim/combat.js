@@ -19,7 +19,8 @@
   // Class-route rules. DR_FLOOR: Brace x best Sanctuary never cut damage taken below this factor. A hero stun on a non-boss foe lasts ELITE_STUN x on elites, a second one while stunCd > 0 lasts half,
   // and each sets stunCd = duration + STUN_DR (repeating sources skip while stunCd > 0). Heavy weapon hits Stagger for STAGGER s (elites half) once per STAGGER_CD per foe.
   // Parry (Sworn Blade): stun PARRY_STUN on a foe in the last PARRY_WIN of a wind-up, once per PARRY_CD per hero and PARRY_FOE_CD per foe. SPREAD_CAP: a status move gives a foe at most this share of its own HP per pool.
-  Object.assign(ED.CONST, { DR_FLOOR: 0.5, ELITE_STUN: 0.5, STUN_DR: 2, STAGGER: 0.2, STAGGER_CD: 2, PARRY_STUN: 0.6, PARRY_CD: 2.5, PARRY_FOE_CD: 4, PARRY_WIN: 0.3, SPREAD_CAP: 0.25, WAVE_CONE: 25 * Math.PI / 180 });
+  // HP_K: foe-HP units per hero health point (hero health is on a 4x smaller scale than foe health): damage a hero takes or absorbs converts to foe-HP units by it (vampiric heal, Radiant Aegis strike).
+  Object.assign(ED.CONST, { HP_K: 4, DR_FLOOR: 0.5, ELITE_STUN: 0.5, STUN_DR: 2, STAGGER: 0.2, STAGGER_CD: 2, PARRY_STUN: 0.6, PARRY_CD: 2.5, PARRY_FOE_CD: 4, PARRY_WIN: 0.3, SPREAD_CAP: 0.25, WAVE_CONE: 25 * Math.PI / 180 });
   const EL_IDX = { fire: 1, ice: 2, lightning: 3, poison: 5, holy: 6, shadow: 7 }; // hit-event element index (4 = bleed)
   const NO_GUARD = { dot: 1, chain: 1, explode: 1 }; // hit kinds that ignore a foe's frontal guard
   const FULL_CONTACT = new Set(['lunge', 'charge', 'leap', 'bash', 'dive']); // attack states whose body contact deals full damage
@@ -797,9 +798,9 @@
     if (def.deathCloud) this.addZone({ kind: 'poison', x: e.x, y: e.y, r: def.deathCloud.r, dur: def.deathCloud.dur, dps: def.deathCloud.dps * (1 + 0.2 * (s - 1)), team: 1 });
     if (p && src.kind !== 'minionBurst') {
       const st = p.stats;
-      if (st.chalice && p.chaliceHp < 30) { // Grail of Ages: +1 max health per 3 kills (growth does not heal)
+      if (st.chalice && p.chaliceHp < ED.RELICS.chalice.full.hp) { // Grail of Ages: +1 max health per RELICS.chalice.kills kills (growth does not heal)
         p.chaliceKills++;
-        if (p.chaliceKills % 3 === 0) { p.chaliceHp++; const hp = p.hp; this.recalc(p, false); p.hp = hp; if (p.chaliceHp % 5 === 0) this.sendBuild(p); }
+        if (p.chaliceKills % ED.RELICS.chalice.kills === 0) { p.chaliceHp++; const hp = p.hp; this.recalc(p, false); p.hp = hp; if (p.chaliceHp % 5 === 0) this.sendBuild(p); }
       }
     }
   };
@@ -920,9 +921,9 @@
       const ab = Math.min(p.shield, dmg); p.shield -= ab; dmg -= ab;
       const hc = CLS[p.cls];
       if (hc && hc.absorb) hc.absorb.call(this, p, ab, src);
-      if (st.radiantAegis && e && e.hp > 0 && p.retT <= 0) { // Radiant Aegis: the shield strikes the attacker for 200% of what it absorbed (0.25 s apart)
+      if (st.radiantAegis && e && e.hp > 0 && p.retT <= 0) { // Radiant Aegis: the shield strikes the attacker for 2 x HP_K x what it absorbed (0.25 s apart)
         p.retT = 0.25;
-        this.hitEnemy(e, ab * 2, { p, kind: 'retribution', raw: true, noProc: true, crit: false, noGuard: true, el: 'holy' });
+        this.hitEnemy(e, ab * 2 * ED.CONST.HP_K, { p, kind: 'retribution', raw: true, noProc: true, crit: false, noGuard: true, el: 'holy' });
       }
     }
     p.hp -= dmg; p.invuln = src.hazard ? 0.3 : 0.6; p.hurtT = 0.3;
@@ -931,7 +932,7 @@
     else this.emit({ t: 'block', x: p.x, y: p.y, k: 'aegis' });
     if (e && e.hp > 0) {
       if (st.thorns) this.hitEnemy(e, st.thorns, { p, kind: 'thorns', noProc: true, crit: false });
-      if (ED.hasAffix(e, 'vampiric')) e.hp = Math.min(e.maxHp, e.hp + dmg * 3);
+      if (ED.hasAffix(e, 'vampiric')) e.hp = Math.min(e.maxHp, e.hp + dmg * 3 * ED.CONST.HP_K);
       if (e.def.chillHit) p.chilled = 1.5;
     }
     if (st.guardian && p.hp > 0 && p.hp < p.maxHp * 0.3 && p.guardCd <= 0) { p.guardT = 3; p.guardCd = 20; this.emit({ t: 'guard', pid: p.pid }); }

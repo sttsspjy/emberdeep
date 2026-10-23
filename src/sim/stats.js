@@ -141,7 +141,7 @@
 
     const out = s;
     out.power = cls.power; out.element = cls.element || null; // Class Power scales every non-attack proc (ED.procDmg)
-    out.maxHp = Math.max(20, Math.round(s.hp * Math.max(0.3, s.hpMul)));
+    out.maxHp = Math.max(5, Math.round(s.hp * Math.max(0.3, s.hpMul)));
     out.moveSpeed = cls.spd * U.clamp(s.spd, 0.5, 2.2);
     // weapon: the fork transform of an owned attack fork, card extras, wDmg, and the attack-interval floor (speed beyond the floor becomes damage)
     const fw = fork ? ED.forkWeapon(build.weapon, fork) : base, kind = fork ? ED.BOONS[fork].weapon.kind : null;

@@ -79,6 +79,7 @@ Boons belong to **paths**: six element paths and General. A hero follows at most
 - **Forge:** picking a forge card ranks an owned boon up by one (never a route or fork card: bosses rank those).
 - **Ascended boons:** from stratum IV, a boon you have taken to its top rank can offer its **Ascended** upgrade (Honed Edge, Blur, Arrow Storm, Impaler, Hawk Eye, Savage, Vast, Titan, Bastion; Hemorrhage, Headsman and Bloodletting for Generalists). It sits first on a boon offer, takes no path, and multiplies the bonus you already hold instead of adding to it. At most two per stratum.
 - A room that rewards "a boon" offers one new element gate (while you have a free slot) and boons of the paths you follow. Level-ups offer open boons, boons of your paths, keystones and duos.
+- **Health is a small whole number.** A Knight starts at 45, a Necromancer at 23; every hit costs at least 1, so each one counts. A Vigor blessing is +2, a Heartstone +4, a Hearth Vitality rank +1.
 - **No life steal.** Hits and kills never heal you. Healing comes from hearts, campfires, healing draughts, the fountain, Vigor, the Hearth's Provisions and the Elixir Flask, Sanctuary and Bone Harvest, and revives. **Shields** take the place of sustain: class shields give at most 3% of your max health per 10 seconds, all shield sources together at most 6% (the Battle Ward an elite room grants is exempt), and shields fade between fights.
 
 ### Class routes
