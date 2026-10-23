@@ -1,5 +1,5 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it.
-// Usage: node tools/browse.js [--scen=smoke,crowd70,shots,swing] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
+// Usage: node tools/browse.js [--scen=smoke,crowd70,shots,swing,picks] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
 //   [--quality=low,high] [--ops] [--json] [--seed=1] [--strat=1] [--embers=N] [--mortal] [--software] [--forcepost] [--sync] [--no-fonts] [--warm=2.5] [--timeout=300]
 // Mechanism: headless only (no headed option, no window calls); one browser per invocation, one fresh context per scenario page, all closed at exit, on error and on SIGINT.
 //   A read-only node http server on 127.0.0.1 (random port) serves --root (default: this repo). Playwright resolves via require('playwright'), else %LOCALAPPDATA%\npm-cache\_npx\*\node_modules (best match for the installed browsers).
@@ -10,6 +10,8 @@
 //     --ops adds a 3 s pass counting canvas/WebGL calls per frame by target (buf = world buffer, screen = visible canvas, other = offscreen bakes).
 //   shots: 16 screenshots: boot name screen, menu, Descend, Hearth tabs (the Armory scrolled into view), Heroes, Settings, Credits, boon offer, a run in combat, the Tab sheet tabs, the pause menu (profile gets 400 embers unless --embers).
 //   swing: one contact-sheet PNG per melee weapon of --cls, its Armory variants included (or per --weapon id, forks as id@fork) (aimed --aim degrees, 0 = right, 90 = down, drawn at --zoom canvas px per world px, 2): frames at fixed times over two consecutive attacks (a combo weapon: one per step), the hold and the ease back to idle, hero and smear drawn by the game's own renderer.
+//   picks: every boon id resolves to a PickFx card kind; one PNG per pick burst (each kind, fire-big, holy-ally) on the solo hero about 0.25 s after FX.handle gets the 'boon' / 'relic' event;
+//     each pick cue (and the Hearth 'buy') rendered in an OfflineAudioContext: voices, peak, rms, audible length; fails on a throw, a silent cue or one longer than 0.9 s.
 // Output: compact table (or --json on stdout, logs on stderr); result-<browser>.json and the PNGs in --outdir (default <tmp>/wickdeep-browse). Exit 0 pass, 1 scenario failure, 2 harness error.
 // Notes: Chromium runs headless on the real GPU (ANGLE D3D11, no window); --software forces SwiftShader, where the game reports Post.soft and skips post at 'high' unless --forcepost. Firefox uses its own headless GL.
 //   --sync forces each frame's raster/GPU work to finish before the timer stops. Google Fonts load from the network (the only external hosts allowed); --no-fonts serves them empty.
@@ -43,7 +45,7 @@ function parseArgs(argv) {
   if (!vp) throw new Fail('--viewport is WxH, e.g. 1920x1080');
   o.vw = +vp[1]; o.vh = +vp[2];
   o.scens = o.scen.split(',').map(s => s.trim()).filter(Boolean);
-  for (const s of o.scens) if (!/^(smoke|shots|swing|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, swing, crowdN)');
+  for (const s of o.scens) if (!/^(smoke|shots|swing|picks|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, swing, picks, crowdN)');
   if (!o.scens.length) throw new Fail('--scen is empty');
   o.qualities = o.quality ? o.quality.split(',').map(s => s.trim()) : null;
   if (o.qualities && o.qualities.some(q => q !== 'low' && q !== 'high')) throw new Fail('--quality is low, high or low,high');
@@ -362,6 +364,43 @@ function pageBoot(cfg) {
   BR.offerOpen = () => { const s = window.__ED.Game.s; return !!(s && s.offerOpen); };
   BR.take = () => { const ED = window.__ED; if (ED.Game.s && ED.Game.s.offerOpen) ED.UI.boonConfirm(); return BR.offerOpen(); };
 
+  // picks: every boon id resolves to a PickFx kind; a pick burst (name: kind, kind-big or kind-ally) fired through FX.handle on a cleared effect layer; the pick cues rendered offline
+  BR.pickKinds = () => {
+    const ED = window.__ED, P = ED.PickFx, bad = [], by = {};
+    for (const id in ED.BOONS) { const k = P.kind(id); if (!P.KINDS.includes(k)) bad.push(id + ':' + k); by[k] = (by[k] || 0) + 1; }
+    return { bad, by, n: Object.keys(ED.BOONS).length };
+  };
+  BR.pickBurst = (name) => {
+    const ED = window.__ED, P = ED.PickFx, s = ED.Game.s, me = s.me, [kind, v] = name.split('-'), big = v === 'big';
+    let id = kind === 'relic' ? Object.keys(ED.RELICS)[0] : null;
+    if (!id) for (const k in ED.BOONS) if (P.kind(k) === kind && P.big(k) === big && (kind !== 'route' || ED.BOONS[k].cls === me.cls)) { id = k; break; }
+    if (!id) throw new Error('no card of kind ' + name);
+    ED.FX.reset();
+    ED.FX.handle({ t: kind === 'relic' ? 'relic' : 'boon', pid: v === 'ally' ? 'ally-fake' : me.pid, id, x: me.x, y: me.y }, s.fxCtx);
+    const R = ED.Render, d = R.dpr || 1, sp = R.toScreen(me.x, me.y);
+    return { id, x: sp.x / d, y: sp.y / d, k: R.scale / d };
+  };
+  // list: [{ label, cue, arg }], one cue every 1.5 s of an OfflineAudioContext; per cue: voices spawned, peak, rms, audible length (last sample above 1e-3)
+  BR.pickAudio = async (list) => {
+    const ED = window.__ED, A = ED.Audio, sr = 22050, step = 1.5, oc = new OfflineAudioContext(1, Math.ceil(sr * step * list.length), sr), rows = [];
+    A.attach(oc, { offline: true });
+    list.forEach((c, i) => {
+      A.clock = i * step + 0.05;
+      let err = null;
+      try { A.play(c.cue, 1, c.arg); } catch (e) { err = String((e && e.message) || e); }
+      rows.push({ label: c.label, voices: A.voices(), err });
+    });
+    A.ready = false; A.clock = null; // the game schedules nothing more into the offline graph
+    const d = (await oc.startRendering()).getChannelData(0);
+    rows.forEach((r, i) => {
+      const a = Math.floor((i * step + 0.05) * sr), b = Math.min(d.length, Math.floor((i + 1) * step * sr));
+      let pk = 0, last = a, ss = 0;
+      for (let j = a; j < b; j++) { const x = Math.abs(d[j]); if (x > pk) pk = x; if (x > 1e-3) last = j; ss += x * x; }
+      r.peak = r3(pk); r.rms = Math.round(1e4 * Math.sqrt(ss / Math.max(1, b - a))) / 1e4; r.len = r3((last - a) / sr);
+    });
+    return rows;
+  };
+
   BR.measure = async (n) => {
     for (const k in M) if (Array.isArray(M[k])) M[k] = [];
     const ED = window.__ED, w = ED.Game.s && ED.Game.s.world, k0 = w ? w.run.kills : 0, t0 = performance.now();
@@ -571,6 +610,47 @@ async function scenSwing() {
   return res;
 }
 
+const PICK_SHOTS = ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'route', 'duo', 'asc', 'relic', 'purse', 'fire-big', 'holy-ally'];
+const PICK_CUES = ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'route', 'asc', 'relic', 'purse'].map(k => ({ label: k, cue: 'pick', arg: k }))
+  .concat([{ label: 'duo fire+ice', cue: 'pick', arg: { k: 'duo', els: ['fire', 'ice'] } }, { label: 'duo (no pair)', cue: 'pick', arg: 'duo' }, { label: 'fire big', cue: 'pick', arg: { k: 'fire', big: true } },
+    { label: 'holy big', cue: 'pick', arg: { k: 'holy', big: true } }, { label: 'buy (hearth)', cue: 'buy' }]);
+async function scenPicks() {
+  const o = S.opt, res = newResult('picks'), q = qualitiesOr(['high'])[0];
+  const { ctx, page, errors } = await openPage();
+  try {
+    await call(page, 'profile', o.cls, o.embers);
+    await call(page, 'settings', q);
+    await call(page, 'install');
+    if ((await call(page, 'start')) !== 'run') fail(res, 'run did not start');
+    await wait(1200);
+    for (let i = 0; i < 6 && await call(page, 'offerOpen'); i++) { await call(page, 'take'); await wait(400); }
+    await wait(1400);
+    const kk = await call(page, 'pickKinds');
+    if (kk.bad.length) fail(res, 'boon ids without a pick kind: ' + kk.bad.slice(0, 8).join(', '));
+    notes(res, `${kk.n} boon ids: ` + Object.entries(kk.by).map(([k, n]) => k + ' ' + n).join(', '));
+    for (const name of PICK_SHOTS) {
+      const r = await call(page, 'pickBurst', name);
+      await wait(220); // the shot lands about 0.25 s after the burst
+      const w = Math.round(220 * r.k), h = Math.round(280 * r.k), x = Math.max(0, Math.min(o.vw - w, Math.round(r.x - w / 2))), y = Math.max(0, Math.min(o.vh - h, Math.round(r.y - 220 * r.k)));
+      const file = path.join(o.outdir, ['picks', tag(), o.cls, q, name].join('-') + '.png');
+      await page.screenshot({ path: file, clip: { x, y, width: Math.min(w, o.vw), height: Math.min(h, o.vh) } });
+      res.shots.push(file);
+      notes(res, `burst ${name}: ${r.id}`);
+      await wait(1000);
+    }
+    const rows = await call(page, 'pickAudio', PICK_CUES);
+    for (const r of rows) {
+      notes(res, `cue ${r.label}: ${r.voices} voices, peak ${r.peak}, rms ${r.rms}, ${r.len} s${r.err ? ', error ' + r.err : ''}`);
+      if (r.err) fail(res, 'cue ' + r.label + ' threw: ' + r.err);
+      else if (!(r.peak > 0.003)) fail(res, 'cue ' + r.label + ' rendered silent');
+      else if (r.len > 0.9) fail(res, 'cue ' + r.label + ' lasts ' + r.len + ' s (over 0.9 s)');
+    }
+    res.rows = rows;
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
 async function scenShots() {
   const o = S.opt, res = newResult('shots'), q = qualitiesOr(['high'])[0];
   const { ctx, page, errors } = await openPage();
@@ -666,7 +746,7 @@ async function main() {
       const t0 = Date.now();
       log('scenario ' + sc + ' ...');
       let r;
-      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'swing' ? await scenSwing() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
+      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
       r.wallMs = Date.now() - t0;
       r.browserVersion = bv;
       if (S.server.missing.size) r.missing = [...S.server.missing];

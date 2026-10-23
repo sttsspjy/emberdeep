@@ -282,7 +282,7 @@
     const b = ED.BOONS[id];
     if (b.purse) { // gold, no rank: the party gold gains a gold room's reward
       const v = ED.World.rewardGold(this.stratum);
-      this.gold += v; this.emit({ t: 'gold', v, pid });
+      this.gold += v; this.emit({ t: 'gold', v, pid }); this.emit({ t: 'boon', pid, id, x: p.x, y: p.y });
       p.offers.shift(); p.picks = p.offers.length; p.offer = null;
       this.msgs.push({ to: pid, t: 'offerDone' });
       return;
