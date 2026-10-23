@@ -9,7 +9,7 @@
   // FLOW_SPD / FLOW_T: Swift forks give +15% move speed for 0.5 s after each attack. ROUTE_CDR_MAX: cap of a route's cooldown cut (s1Cdr, s2Cdr), applied after the soft cap.
   Object.assign(ED.CONST, { ATK_FLOOR: 0.12, ATK_FLOOR_SHOT: 0.06, FLOW_SPD: 0.15, FLOW_T: 0.5, ROUTE_CDR_MAX: 0.4 });
 
-  // Stat keys of the class routes (DESIGN-classes section 16): slot stats first, then one group per class, all 0 until a card sets them.
+  // Stat keys of the class routes (docs/GAME-DESIGN.md section 5): slot stats first, then one group per class, all 0 until a card sets them.
   const ROUTE_KEYS = ('s1Dmg s1Area s1Dur s1N s1Cdr s1Range s2Dmg s2Area s2Dur s2N s2Cdr s2Range wDmg bleedAll'
     + ' cleave cleaveN cShock cStun chargeCleave parry riposte brace braceDR braceAura jugShock bash rally chargeStun twinShield gather orbit orbitMul orbitStun orbitReflect ruinInf carry ruinSpread brand seal'
     + ' deadeye pierceRamp splitBolt hitSlow flurry flurryMul volleySlow volleyClose volleyHop caltrops volleyMark markV markLeap skyfall skyTwin rainHail shower skillInfK festerHit contagion contagionR contagionN'

@@ -1,5 +1,5 @@
 // Usage: node tools/check-cleric.js
-// Headless checks of the 12 Cleric route cards against DESIGN-classes section 8 in staged rooms: waves (Dawnbringer, Sunhammer, Crusader), Sanctuary (Sanctum, Holy Fury, Aura of Faith), Judgment (Hammer of Judgment, Twin Hammers, Verdict)
+// Headless checks of the 12 Cleric route cards against docs/GAME-DESIGN.md section 5 in staged rooms: waves (Dawnbringer, Sunhammer, Crusader), Sanctuary (Sanctum, Holy Fury, Aura of Faith), Judgment (Hammer of Judgment, Twin Hammers, Verdict)
 // and the Holy element route (Radiant Faith, Guardian Light, Prism), the rank 2 riders and rank 3 forms of the skill forks and of the attack and element forks (Dawn's Wake, Returning Light, Sunstrike, Spectrum) with the fodder audit, plus the wire fields they use. Prints failures and exits 1 when any check fails.
 const fs = require('fs');
 const vm = require('vm');
