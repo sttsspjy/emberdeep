@@ -35,10 +35,10 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
 {
   const b = build({ s_atk: 1 });
   near(b.crit, 0.12 + 0.08, 1e-9, 'Bladedancer crit'); near(b.momentum, 0.04, 1e-9, 'Bladedancer momentum'); near(b.momMax, 5, 1e-9, 'Bladedancer stacks');
-  near(build({ s_atk: 1, s_atk_s: 1 }).momMax, 7, 1e-9, 'Thousand Cuts rank 1 stacks'); near(build({ s_atk: 1, s_atk_s: 3 }).momMax, 9, 1e-9, 'Thousand Cuts rank 3 stacks');
-  near(build({ s_atk: 1, s_atk_h: 1 }).critMult, 1.75, 1e-9, 'Culling Blades rank 1 crit damage'); near(build({ s_atk: 1, s_atk_h: 2 }).critMult, 1.85, 1e-9, 'Culling Blades rank 2 crit damage'); near(build({ s_atk: 1, s_atk_h: 3 }).critMult, 1.95, 1e-9, 'Culling Blades rank 3 crit damage');
+  near(build({ s_atk: 1, s_atk_s: 1 }).momMax, 6, 1e-9, 'Thousand Cuts rank 1 stacks'); near(build({ s_atk: 1, s_atk_s: 3 }).momMax, 8, 1e-9, 'Thousand Cuts rank 3 stacks');
+  near(build({ s_atk: 1, s_atk_h: 1 }).critMult, 1.75, 1e-9, 'Culling Blades rank 1 crit damage'); near(build({ s_atk: 1, s_atk_h: 2 }).critMult, 1.78, 1e-9, 'Culling Blades rank 2 crit damage'); near(build({ s_atk: 1, s_atk_h: 3 }).critMult, 1.81, 1e-9, 'Culling Blades rank 3 crit damage');
   near(build({ s_atk: 1, s_atk_h: 1 }).execMom, 0, 1e-9, 'Killing Rhythm is a rank 2 rider'); near(build({ s_atk: 1, s_atk_h: 2 }).execMom, 3, 1e-9, 'Killing Rhythm rank 2'); near(build({ s_atk: 1, s_atk_h: 3 }).execMom, 3, 1e-9, 'Killing Rhythm stays at rank 3');
-  near(build({ s_atk: 1, s_atk_h: 1 }).execCrit, 0.25, 1e-9, 'execution threshold'); near(build({ s_atk: 1, s_atk_h: 2 }).execCrit, 0.25, 1e-9, 'execution threshold at rank 2'); near(build({ s_atk: 1, s_atk_h: 3 }).execCrit, 0.25 + CT('s_atk_h', 3).execCrit - 0.25, 1e-9, 'Guillotine raises the line'); ok(build({ s_atk: 1, s_atk_h: 3 }).execCrit > 0.25, 'Guillotine line above 25%');
+  near(build({ s_atk: 1, s_atk_h: 1 }).execCrit, 0.1, 1e-9, 'execution threshold'); near(build({ s_atk: 1, s_atk_h: 2 }).execCrit, 0.1, 1e-9, 'execution threshold at rank 2'); near(build({ s_atk: 1, s_atk_h: 3 }).execCrit, 0.5, 1e-9, 'Guillotine raises the line'); ok(build({ s_atk: 1, s_atk_h: 3 }).execCrit > build({ s_atk: 1, s_atk_h: 2 }).execCrit, 'Guillotine line above the rank 2 line');
   near(build({ s_atk: 1, s_atk_h: 2 }).guillotine, 0, 1e-9, 'Guillotine is a rank 3 transform'); ok(build({ s_atk: 1, s_atk_h: 3 }).guillotine >= 1, 'Guillotine carries strikes per attack');
   near(build({ s_atk: 1, s_atk_s: 1 }).bladeStorm, 0, 1e-9, 'Whirlwind is a rank 2 rider'); ok(build({ s_atk: 1, s_atk_s: 2 }).bladeStorm > 0, 'Whirlwind rank 2'); near(build({ s_atk: 1, s_atk_s: 3 }).bladeStorm, build({ s_atk: 1, s_atk_s: 2 }).bladeStorm, 1e-9, 'Whirlwind stays the same at rank 3');
   near(build({ s_atk: 1, s_atk_s: 2 }).cyclone, 0, 1e-9, 'Cyclone is a rank 3 transform'); ok(build({ s_atk: 1, s_atk_s: 3 }).cyclone > 0, 'Cyclone spins');
@@ -72,7 +72,7 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   near(d5 / d1, (p.stats.dmg + 0.2) / p.stats.dmg, 1e-6, 'five stacks add 20% damage');
   p.momN = 5; p.momT = 2.5; run(w, 2); hit(w, p, e, { crit: true }); near(p.momT, 2.5, 1e-9, 'a crit restarts the timer'); run(w, 2.4); ok(p.momN === 5, 'Momentum holds inside 2.5 s'); run(w, 0.2); near(p.momN, 0, 0, 'Momentum drops when the timer ends');
   const sw = stage({ s_atk: 1, s_atk_s: 1 }); const e2 = foe(sw.w, sw.p.x + 40, sw.p.y);
-  for (let i = 0; i < 12; i++) hit(sw.w, sw.p, e2, { crit: true }); near(sw.p.momN, 7, 0, 'Thousand Cuts caps at 7');
+  for (let i = 0; i < 12; i++) hit(sw.w, sw.p, e2, { crit: true }); near(sw.p.momN, 6, 0, 'Thousand Cuts caps at 6');
   const nm = stage({}); const e3 = foe(nm.w, nm.p.x + 40, nm.p.y); hit(nm.w, nm.p, e3, { crit: true }); near(nm.p.momN, 0, 0, 'no Momentum without Bladedancer');
   // wire: P[17] carries the stacks
   try {
@@ -86,9 +86,9 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
 // ---------------- Culling Blades ----------------
 {
   const { w, p } = stage({ s_atk: 1, s_atk_h: 2 }); const lowE = foe(w, p.x + 40, p.y), hiE = foe(w, p.x + 40, p.y + 30), skillE = foe(w, p.x + 40, p.y - 30), boss = foe(w, p.x + 40, p.y + 60);
-  lowE.hp = lowE.maxHp * 0.24; hiE.hp = hiE.maxHp * 0.26; skillE.hp = skillE.maxHp * 0.24; boss.boss = true; boss.hp = boss.maxHp * 0.2;
-  const s1 = { p, kind: 'weapon', wpn: true }; w.hitEnemy(lowE, 1, s1); ok(s1.critOut === true && s1.exec === true, 'a weapon hit on a foe below 25% always crits');
-  const s2 = { p, kind: 'weapon', wpn: true }; w.hitEnemy(hiE, 1, s2); ok(!s2.critOut && !s2.exec, 'a foe at 26% takes no forced crit');
+  const LN = CT('s_atk_h', 2).execCrit; lowE.hp = lowE.maxHp * (LN - 0.01); hiE.hp = hiE.maxHp * (LN + 0.01); skillE.hp = skillE.maxHp * (LN - 0.01); boss.boss = true; boss.hp = boss.maxHp * (LN - 0.02);
+  const s1 = { p, kind: 'weapon', wpn: true }; w.hitEnemy(lowE, 1, s1); ok(s1.critOut === true && s1.exec === true, 'a weapon hit on a foe below 10% always crits');
+  const s2 = { p, kind: 'weapon', wpn: true }; w.hitEnemy(hiE, 1, s2); ok(!s2.critOut && !s2.exec, 'a foe at 11% takes no forced crit');
   const s3 = { p, kind: 'skill', part: 'step.slash', crit: undefined }; w.hitEnemy(skillE, 1, s3); ok(!s3.critOut, 'a skill hit is not an execution');
   const s4 = { p, kind: 'weapon', wpn: true }; w.hitEnemy(boss, 1, s4); ok(s4.critOut === true, 'bosses are executed too');
   ok(evs(w, 'exec').length === 2, 'an exec event per execution crit');
@@ -96,7 +96,7 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   p.momN = 0; p.momT = 0; const k = foe(w, p.x + 80, p.y); k.hp = 5; hit(w, p, k, {}); near(p.momN, 4, 0, 'Killing Rhythm: 1 from the crit + 3 from the execution kill');
   p.momN = 0; const k2 = foe(w, p.x + 80, p.y + 10); k2.hp = 5; hit(w, p, k2, {}); ok(p.momN === 4, 'second execution kill');
   p.momN = 0; const k3 = foe(w, p.x + 80, p.y + 20); k3.hp = 4000; hit(w, p, k3, { crit: true, mul: 1e6 }); ok(k3.hp <= 0 && p.momN === 1, 'a kill from high health grants no Rhythm (only the crit stack)');
-  p.momN = 0; const k4 = foe(w, p.x + 80, p.y + 30); k4.hp = 5; hit(w, p, k4, { crit: true }); near(p.momN, 4, 0, 'a readied crit on a foe below 25% that kills also counts');
+  p.momN = 0; const k4 = foe(w, p.x + 80, p.y + 30); k4.hp = 5; hit(w, p, k4, { crit: true }); near(p.momN, 4, 0, 'a readied crit on a foe below 10% that kills also counts');
   { const am = stage({ s_atk: 1, s_atk_h: 2, s_s2: 1 }); const ke = foe(am.w, am.p.x + 30, am.p.y); ke.hp = 5; am.w.playerSkill(am.p, 0, {}, 1); am.w.fx.length = 0; am.w.playerAttack(am.p, 0); run(am.w, 0.6);
     ok(ke.hp <= 0 && evs(am.w, 'exec').length === 1 && am.p.momN === 4, 'an Ambush execution kill grants Killing Rhythm (1 from the crit + 3; got ' + am.p.momN + ')'); }
   const r1 = stage({ s_atk: 1, s_atk_h: 1 }); const k5 = foe(r1.w, r1.p.x + 80, r1.p.y); k5.hp = 5; hit(r1.w, r1.p, k5, {}); near(r1.p.momN, 1, 0, 'no Rhythm at rank 1');
@@ -120,7 +120,7 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   const k = stage({ s_atk: 1, s_atk_s: 2 }, 1); k.p.momN = k.p.stats.momMax; k.p.momT = 2.5; k.p.atkCount = 3; k.w.playerAttack(k.p, 0);
   const ring = k.w.projs.filter(q => q.mul === k.p.stats.bladeStorm); ok(ring.length === 6, 'knives: a ring of 6 at bladeStorm (got ' + ring.length + ')');
   const angs = ring.map(q => Math.atan2(q.vy, q.vx)).sort((a, b) => a - b); ok(angs.every((a, i) => i === 0 || Math.abs(angs[i] - angs[i - 1] - Math.PI / 3) < 1e-6 || i === 0), 'the ring is evenly spaced');
-  const kk = stage({ s_atk: 1, s_atk_s: 1 }, 1); kk.p.momN = kk.p.stats.momMax; kk.p.momT = 2.5; kk.p.atkCount = 3; kk.w.playerAttack(kk.p, 0); ok(!kk.w.projs.some(q => q.mul === 0.25), 'no ring at rank 1');
+  const kk = stage({ s_atk: 1, s_atk_s: 1 }, 1); kk.p.momN = kk.p.stats.momMax; kk.p.momT = 2.5; kk.p.atkCount = 3; kk.w.playerAttack(kk.p, 0); ok(!kk.w.projs.some(q => q.mul === CT('s_atk_s', 2).bladeStorm), 'no ring at rank 1');
 }
 
 // ---------------- Ghost Walk: crit stacks ----------------
@@ -550,11 +550,11 @@ function U_ang(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
 
 { // Cyclone (s_atk_s rank 3): at full Momentum every attack also spins at cyclone (the 4th at Whirlwind's bladeStorm), a dash that ends at full Momentum spins; rank 2 spins on every 4th attack only
   const CY = CT('s_atk_s', 3).cyclone, BS = CT('s_atk_s', 3).bladeStorm;
-  ok(CY < BS, 'Cyclone spins weaker than the Whirlwind spin (the 4th attack takes the larger of the two)');
+  const TOP = Math.max(CY, BS); // the 4th attack takes the larger of the two
   const mk = (boons, wi, mom) => { const t = stage(boons, wi); place(t.p, 200, 176); t.front = foe(t.w, 230, 176); t.back = foe(t.w, 170, 176); t.p.momN = mom === undefined ? t.p.stats.momMax : mom; t.p.momT = 2.5; t.log = spy(t.w); return t; };
   const t = mk({ s_atk: 1, s_atk_s: 3 }), st = t.p.stats, mul = (m) => st.weapon.dmg * m * (st.dmg + st.momentum * st.momMax), seq = [];
   for (let i = 0; i < 5; i++) { const h = lost(t.back); t.w.playerAttack(t.p, 0); seq.push(lost(t.back) - h); }
-  ok(seq.every((d, i) => Math.abs(d - mul(i === 3 ? BS : CY)) < 0.01), 'every attack spins at cyclone, the 4th at bladeStorm (' + seq.map(d => (d / mul(1)).toFixed(2)).join(' ') + ' of the weapon)');
+  ok(seq.every((d, i) => Math.abs(d - mul(i === 3 ? TOP : CY)) < 0.01), 'every attack spins at cyclone, the 4th at the larger of cyclone and bladeStorm (' + seq.map(d => (d / mul(1)).toFixed(2)).join(' ') + ' of the weapon)');
   const wh = evs(t.w, 'whirl'); ok(wh.length === 5 && wh.map(e => e.c).join() === '1,1,1,0,1' && wh.every(e => e.k === 0 && e.r > 30), 'a whirl event per spin, c 1 for a Cyclone spin');
   ok(evs(t.w, 'swing').length === 5, 'the spins add no swing events (one per attack)');
   { const b = mk({ s_atk: 1, s_atk_s: 3 }, 0, 4); b.w.playerAttack(b.p, 0); ok(b.back.hp === 5000 && !evs(b.w, 'whirl').length, 'one stack short of full Momentum: no spin'); }
@@ -565,9 +565,9 @@ function U_ang(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
   { const d = mk({ s_atk: 1, s_atk_s: 3 }); const g0 = lost(d.back); d.p.dashT = 0.15; d.w.update(1 / 60); ok(lost(d.back) === g0 && d.p.dashing, 'nothing spins while the dash runs'); d.p.dashT = 0; d.w.update(1 / 60); near(lost(d.back) - g0, mul(CY), 0.01, 'the dash ends in a spin at cyclone'); ok(evs(d.w, 'whirl').length === 1 && evs(d.w, 'whirl')[0].c === 1, 'one whirl event'); }
   { const d = mk({ s_atk: 1, s_atk_s: 3 }, 0, 3); ok(dash(d) === 0, 'a dash below full Momentum does not spin'); }
   { const d = mk({ s_atk: 1, s_atk_s: 2 }); ok(dash(d) === 0, 'rank 2: a dash does not spin'); }
-  // knives: a ring of 6 at cyclone on every attack, at bladeStorm on the 4th
+  // knives: a ring of 6 at cyclone on every attack, at the larger of cyclone and bladeStorm on the 4th
   { const k = mk({ s_atk: 1, s_atk_s: 3 }, 1); k.p.atkCount = 0; k.w.playerAttack(k.p, 0); ok(k.w.projs.filter(q => q.mul === CY).length === 6 && !k.w.projs.some(q => q.mul === BS), 'knives: a ring of 6 at cyclone');
-    k.p.atkCount = 3; k.w.projs.length = 0; k.w.playerAttack(k.p, 0); ok(k.w.projs.filter(q => q.mul === BS).length === 6 && !k.w.projs.some(q => q.mul === CY), 'knives: the 4th attack fires its ring at bladeStorm, not both'); }
+    k.p.atkCount = 3; k.w.projs.length = 0; k.w.playerAttack(k.p, 0); ok(k.w.projs.filter(q => q.mul === TOP).length === 6 && k.w.projs.filter(q => q.mul).length === 6, 'knives: the 4th attack fires one ring at the larger of cyclone and bladeStorm, not both'); }
 }
 
 { // Arterial Strike (s_el_a rank 3): a crit on a foe with 3 or more ailments deals +arterial and readies 1 crit attack, at most once per second and never from a horde foe; rank 2 has neither
