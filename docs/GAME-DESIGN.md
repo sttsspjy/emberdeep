@@ -19,12 +19,12 @@ Canonical rules and numbers. Code follows this file; a balance pass changes numb
 | I | 2.2 | 0.5 | 0.8 | −40% | 2 |
 | II | 1.62 | 0.5 | 0.75 | −30% | 1.7 |
 | III | 1.3 | 0.5 | 0.7 | −10% | 1.4 |
-| IV | 1 | 0.7 | 0.66 | 0 | 0.75 |
-| V | 1.07 | 1.05 | 0.62 | +15% | 0.6 |
-| VI | 1.02 | 1.25 | 0.6 | +30% | 0.6 |
+| IV | 1 | 0.75 | 0.66 | 0 | 0.75 |
+| V | 1.07 | 1.1 | 0.62 | +15% | 0.6 |
+| VI | 1.02 | 1.3 | 0.6 | +30% | 0.6 |
 
-  Effective foe HP multiplier (depth curve × threat HP): 2.2 / 2.8 / 3.4 / 3.7 / 5.2 / 6.4. Effective foe damage multiplier (depth curve × threat damage): 0.5 / 0.6 / 0.8 / 1.4 / 2.5 / 3.6.
-- Boss HP: Bone Warden 4,350 · Sporemother 5,950 · Rimeheart 16,500 · Forgelord 26,600 · Drowned King 85,700 · Hollow King 90,300. Boss base damage 6.4 (Forgelord 10, Drowned King 13.4, Hollow King 12). A foe still alive 45 s after its own spawn (`e.age`; bosses 78 s, except in strata with a boss fury (§8), where bosses are never exposed; fodder never) is **exposed**: ×1.5 damage taken, ×1.5 speed, and it loses 4% of its max HP per second (bosses 1.2%).
+  Effective foe HP multiplier (depth curve × threat HP): 2.2 / 2.8 / 3.4 / 3.7 / 5.2 / 6.4. Effective foe damage multiplier (depth curve × threat damage): 0.5 / 0.6 / 0.8 / 1.4 / 2.6 / 3.7.
+- Boss HP: Bone Warden 4,350 · Sporemother 5,950 · Rimeheart 16,500 · Forgelord 26,600 · Drowned King 85,700 · Hollow King 90,300. Boss base damage 6.4 (Forgelord 11.2, Drowned King 15, Hollow King 13.4). A foe still alive 45 s after its own spawn (`e.age`; bosses 78 s, except in strata with a boss fury (§8), where bosses are never exposed; fodder never) is **exposed**: ×1.5 damage taken, ×1.5 speed, and it loses 4% of its max HP per second (bosses 1.2%).
 - Elite HP × `2.4 + 0.4(s−1)` (`World.ELITE`), damage × 0.9, radius × 1.22. Affixes: swift (×1.4 speed, wind-ups ×0.7 but never under 0.4 s), brutal (×1.4 damage), warded (ward = 45% of max HP), volatile (explodes on death), vampiric (heals ×3 the damage it deals a hero). From stratum IV an elite rolls a second, different affix (`elite2`) with chance `World.AFFIX2` 35% / 60% / 85% (IV–VI); HP and damage multipliers apply once, each affix effect once whichever slot holds it (`ED.hasAffix`); the label names both ("Swift Brutal Skeleton Knight").
 - Party multiplier (n = other heroes): foe HP `1 + 0.85n + 0.3n(n−1)` (two heroes ×1.85, three ×3.3, four ×5.35), wave budget `1 + 0.6n + 0.2n(n−1)`. A downed hero bleeds out in 18 s when no ally revives them (solo: at once).
 - HP-relative statuses (Chill and Venom build-up, Conflagration, Wildfire) measure against foe HP before the stratum lever (bosses: `refHp`, the design HP 800–7,800), so inflating HP does not weaken them.
