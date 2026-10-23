@@ -77,10 +77,11 @@
     if (h && h.tick) h.tick.call(this, p, dt);
   };
 
-  // Source fields of a hit by part `partId` of skill nums N: kind 'skill', the part name, knockback and the class element for 'el: class' parts; o adds or overrides fields.
+  // Source fields of a hit by part `partId` of skill nums N: kind 'skill', the part name, knockback, the part's boss factor (hitEnemy applies it to bosses) and the class element for 'el: class' parts; o adds or overrides fields.
   W.partSrc = function (p, N, partId, o) {
     const q = N.p[partId], src = { p, kind: 'skill', part: N.id + '.' + partId };
     if (q.knock) src.knock = q.knock;
+    if (q.bossMul) src.bossMul = q.bossMul;
     if (q.el === 'class') src.clsEl = p.stats.element;
     return o ? Object.assign(src, o) : src;
   };

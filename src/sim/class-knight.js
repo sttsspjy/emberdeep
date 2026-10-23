@@ -28,7 +28,7 @@
     return { tx: Math.round(end.x), ty: Math.round(end.y) };
   };
 
-  // Each tick the sweep covers the path from where it was to where the hero is by now: foes within their radius + the part's reach take the impact once (Crush on shield-stunned foes), then the stun.
+  // Each tick the sweep covers the path from where it was to where the hero is by now: foes within their radius + the part's reach take the impact once (Crush on shield-stunned foes, bosses take its bossMul), then the stun (a boss is never stunned).
   // Avalanche carries the non-elite foes it hits along with the front of the run (elites are knocked sideways, bosses stand); Iron Phalanx widens the band and destroys enemy shots in it.
   // At the end of the path: Juggernaut's shockwave or Avalanche's slam and cracks, Iron Phalanx's War Banner, Shield Bash's free shield, Rallying Charge's shields, and Follow-Through's Cleave.
   W.updateCharge = function (p, dt) {
@@ -98,7 +98,7 @@
       if (e.hp <= 0 || e.spawnT > 0) continue;
       const d = Math.hypot(e.x - x, e.y - y);
       if (d >= q.r + e.r) continue;
-      w.hitEnemy(e, q.dmg, w.partSrc(p, N, 'quake', { kx: (e.x - x) / (d || 1), ky: (e.y - y) / (d || 1), x, y, crit: false, noGuard: true, mul: e.boss ? q.bossMul : undefined, infK }));
+      w.hitEnemy(e, q.dmg, w.partSrc(p, N, 'quake', { kx: (e.x - x) / (d || 1), ky: (e.y - y) / (d || 1), x, y, crit: false, noGuard: true, infK }));
       if (e.hp > 0 && !e.boss) w.stunFoe(e, q.stun, false);
     }
     w.emit({ t: 'quake', x: Math.round(x), y: Math.round(y), r: Math.round(q.r), pid });
@@ -262,8 +262,7 @@
     if (!e.fodder) s.grp.strikes++;
     s.grp.any = true; s.grp.lx = e.x; s.grp.ly = e.y;
     if (st.carry && s.lastFoe && s.lastFoe !== e) w.moveStatuses(s.lastFoe, e, st.carry);
-    let mul = s.mul * (1 + st.gather * (s.strikes - 1));
-    if (e.boss) mul *= q.bossMul;
+    const mul = s.mul * (1 + st.gather * (s.strikes - 1));
     const src = w.partSrc(p, N, 'strike', { x: pr.x, y: pr.y, kx: (e.x - pr.x) / d, ky: (e.y - pr.y) / d, mul: mul === 1 ? undefined : mul, infK: 1 + st.ruinInf });
     w.hitEnemy(e, q.dmg, src);
     if (e.hp > 0) {
