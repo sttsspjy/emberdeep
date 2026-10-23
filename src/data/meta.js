@@ -20,7 +20,7 @@
     { id: 'stash', name: 'Stash', icon: 'chest', tier: 3, gold: 5, desc: r => `Begin with ${5 * r} gold`, step: 'Begin with 5 more gold', costs: [20, 45] },
     { id: 'attunement', name: 'Ember Attunement', icon: 'ember', tier: 3, desc: r => `+${10 * r}% embers earned`, step: '+10% embers earned', costs: [80, 160, 255, 385] },
     { id: 'favor', name: "Merchant's Favor", icon: 'scroll', tier: 3, desc: r => `Shops are ${4 * r}% cheaper`, discount: 0.04, step: 'Shops are 4% cheaper', costs: [30, 65] },
-    { id: 'secondwind', name: 'Second Wind', icon: 'feather', tier: 4, pct: [0.05, 0.1], desc: r => (r ? `Once per descent, revive at ${r >= 2 ? 10 : 5}% health` : 'Once per descent, revive'), step: 'Revive once per descent (rank 2: 10% health)', costs: [90, 200] },
+    { id: 'secondwind', name: 'Second Wind', icon: 'feather', tier: 4, pct: [0.05, 0.1], desc: r => (r ? `Once per descent, outside boss fights, revive at ${r >= 2 ? 10 : 5}% health` : 'Once per descent, outside boss fights, revive'), step: 'Revive once per descent outside boss fights (rank 2: 10% health)', costs: [90, 200] },
     { id: 'deepwick', name: 'Deep Wick', icon: 'skull', tier: 1, loot: 0.1, desc: r => `+${10 * r}% gold and experience from dark rooms`, step: '+10% gold and experience from dark rooms', costs: [40, 90, 160] },
   ];
   ED.UPGRADE_IDX = ED.U.indexer(ED.UPGRADES.map(u => u.id));
@@ -34,7 +34,7 @@
     { name: 'Sharper Fangs', desc: 'Foes deal +25% damage.' },
     { name: 'Champions', desc: 'Elite foes appear far more often.' },
     { name: 'Scarcity', desc: 'Healing is 40% less effective.', heroMul: { heal: 0.6 } },
-    { name: 'Tyrants', desc: 'Bosses have +35% health and attack faster.' },
+    { name: 'Tyrants', desc: 'Bosses have +20% health and attack faster.' },
     { name: 'Frenzy', desc: 'Foes move 15% faster.' },
     { name: 'Greed', desc: 'Shop prices are 40% higher.' },
     { name: 'Storm of Shot', desc: 'Enemy shots fly 20% faster and foes hit 20% harder.' },

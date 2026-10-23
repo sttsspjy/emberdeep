@@ -2,6 +2,7 @@
 // rar: c common, r rare, e epic (keystones), l legendary (evolutions), d duo. need: 'proj' | 'melee' restricts by weapon kind. cls restricts to a hero (class boons live in classboons.js).
 // Path boons: path = owning path, gate (opens the path; a hero owns MAX_ELEMENTS element gates or the Generalist gate), key (keystone, needs path affinity >= keyAffinity),
 // evo (evolution card), duo [a, b] (needs both element gates), open (offered to every hero, never gated, counts toward no affinity), openMax (rank cap of a gated boon for a hero that is not a Generalist),
+// purse (gold card: only the exhausted-pool fallback offers it; picking it pays the room gold reward to the party gold and records no rank),
 // pw { base, k } (a proc damage of base + k x Class Power, see ED.procDmg).
 (function (ED) {
   'use strict';
@@ -96,6 +97,7 @@
   const B = ED.BOONS = {
     // ---- open General: offered to every hero ----
     vigor: { name: 'Vigor', rar: 'c', icon: 'heart', open: true, desc: '+{hp} max health and heal 8.', mods: { hp: 8 }, heal: 8, max: 3 },
+    purse: { name: 'Purse', rar: 'c', icon: 'coin', open: true, purse: true, desc: '+{gold} gold for the party.', mods: {}, max: 1 },
     plating: { name: 'Plating', rar: 'c', icon: 'shield', open: true, desc: '+{armor} armor.', mods: { armor: 3 }, max: 2 },
     fleet: { name: 'Fleet Foot', rar: 'c', icon: 'boot', open: true, desc: '+{spd} move speed.', mods: { spd: 0.07 }, max: 2 },
     focus: { name: 'Focus', rar: 'c', icon: 'hourglass', open: true, desc: 'Skills recharge {cdr} faster.', mods: { cdr: 0.10 }, max: 3 },
