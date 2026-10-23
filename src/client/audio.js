@@ -90,7 +90,7 @@
   const rnd = (a, b) => a + Math.random() * (b - a);
 
   const GAP = { hit: 0.035, ohit: 0.035, crit: 0.05, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1, freeze: 0.05, shatter: 0.06, combust: 0.06, guardhit: 0.06, block: 0.05, clang: 0.03, throw: 0.08, catch: 0.08, parry: 0.1, bell: 0.06, charge: 0.2, chargehit: 0.2, volley: 0.15, raincast: 0.15, smash: 0.05, dark: 0.5, fury: 1, dcharge: 0.08, blossom: 0.05, implode: 0.2, pick: 0.08 };
-  const PRIO = { hurt: 3, down: 3, revive: 3, dark: 3, lock: 3, roar: 3, fury: 3, victory: 3, defeat: 3, crit: 2, level: 2, boon: 2, relic: 2, pick: 2, ohit: 0, spark: 0, eshoot: 0, xp: 0, gold: 0, spawn: 0 };
+  const PRIO = { hurt: 3, down: 3, revive: 3, dark: 3, lock: 3, roar: 3, fury: 3, victory: 3, defeat: 3, crit: 2, level: 2, boon: 2, relic: 2, pick: 2, shop: 2, ohit: 0, spark: 0, eshoot: 0, xp: 0, gold: 0, spawn: 0 };
   // arg: cue-specific parameter (hit and crit: { w damage share, el element, n hits this frame }; clang: { n, g }; victory: 'boss' for the short one; pick: a card kind or { k kind, big, els: a duo's two elements })
   A.play = (name, vol, arg, pr) => {
     if (!A.ready || !live()) return;
@@ -149,7 +149,12 @@
       case 'down': [440, 330, 220].forEach((f, i) => tone('triangle', f, f * 0.95, 0.25, 0.1 * v, null, t + i * 0.12)); break;
       case 'revive': [330, 440, 554, 660].forEach((f, i) => tone('triangle', f, f, 0.2, 0.09 * v, null, t + i * 0.08)); break;
       case 'portal': tone('sine', 200, 900, 1.2, 0.12 * v); tone('sine', 300, 1350, 1.2, 0.08 * v); noise('bandpass', 400, 3000, 1.2, 0.08 * v, 3); break;
-      case 'buy': // Hearth (and shop) purchase: an anvil strike, then an ember whoosh with a few crackles
+      case 'shop': // in-run shop purchase (0.45 s): three coins drop and bounce on a counter, then a two-note register clink
+        [0, 0.06, 0.11].forEach((d, i) => { const f = 2400 + i * 260; tone('sine', f, f * 0.98, 0.06, 0.07 * v, null, t + d); tone('square', f * 1.5, f * 1.45, 0.02, 0.025 * v, null, t + d); noise('highpass', 5200, 3000, 0.02, 0.05 * v, 1, null, t + d); });
+        tone('sine', 260, 120, 0.06, 0.12 * v, null, t + 0.02);
+        tone('triangle', 1568, 1568, 0.22, 0.07 * v, null, t + 0.2); tone('triangle', 2093, 2093, 0.22, 0.06 * v, null, t + 0.26); noise('bandpass', 3800, 2600, 0.03, 0.07 * v, 4, null, t + 0.2);
+        break;
+      case 'buy': // Hearth purchase: an anvil strike, then an ember whoosh with a few crackles
         tone('square', 880, 870, 0.1, 0.07 * v); tone('sine', 1760, 1750, 0.5, 0.07 * v); tone('sine', 2640, 2630, 0.3, 0.035 * v); noise('bandpass', 2600, 1400, 0.05, 0.2 * v, 2.5); tone('sine', 130, 60, 0.14, 0.22 * v);
         noise('bandpass', 300, 2400, 0.25, 0.14 * v, 1.2, null, t + 0.05, 0.15);
         for (let i = 0; i < 3; i++) noise('highpass', rnd(3500, 6000), 2500, 0.012, 0.06 * v, 0.8, null, t + 0.2 + Math.random() * 0.3);

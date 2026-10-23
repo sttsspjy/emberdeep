@@ -1912,14 +1912,14 @@
   const fontK = (size) => ((size || LBL) >= 26 ? 4 : 2);
   const PF = (str) => ED.Atlas.covers(str);
   const PX = (str) => (/[\u2212\u2013\u2014]/.test(str) ? str.replace(/[\u2212\u2013\u2014]/g, '-') : str); // typographic minus / dashes -> the font's hyphen
-  const fbPx = (size) => (ED.Atlas.font ? ED.Atlas.font.h * 2 : size || LBL) * 0.9; // canvas-font px of the fallback for a nominal label height
+  const fbPx = (size) => 16 * Math.max(1, Math.round((ED.Atlas.font ? ED.Atlas.font.h * 2 : size || LBL) / 16)); // canvas-font px of the fallback for a nominal label height: Pixel Operator at 16n (whole font px)
   // Outlined text baked once per (string, colour, size in px); sprite origin = text centre.
   function textSprite(str, color, fs) {
     const key = color + '|' + fs + '|' + str;
     let s = txtCache.get(key);
     if (s) return s;
     if (!mctx) mctx = document.createElement('canvas').getContext('2d');
-    const font = '800 ' + fs.toFixed(2) + 'px "Alegreya Sans", sans-serif';
+    const font = '700 ' + fs + 'px "Pixel Operator", system-ui, sans-serif';
     mctx.font = font;
     const hw = mctx.measureText(str).width / 2 + fs * 0.45, hh = fs * 0.85;
     s = bake(-hw, -hh, hw, hh, false, (g) => { g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.lineWidth = Math.max(2, fs * 0.3); g.strokeStyle = 'rgba(0,0,0,0.85)'; g.strokeText(str, 0, 0); g.fillStyle = color; g.fillText(str, 0, 0); });
@@ -1931,7 +1931,7 @@
   R.labelW = (str, size) => {
     if (PF(PX(str))) return ED.Atlas.textW(PX(str), fontK(size));
     if (!mctx) mctx = document.createElement('canvas').getContext('2d');
-    mctx.font = '800 ' + fbPx(size).toFixed(2) + 'px "Alegreya Sans", sans-serif';
+    mctx.font = '700 ' + fbPx(size) + 'px "Pixel Operator", system-ui, sans-serif';
     return Math.ceil(mctx.measureText(str).width + fbPx(size) * 0.9);
   };
   // Label centred at world (x, y) in the current (integer-translated) transform; size = nominal height in world px.
@@ -1947,7 +1947,7 @@
     let s = numC.get(key);
     if (s) return s;
     if (!mctx) mctx = document.createElement('canvas').getContext('2d');
-    const font = '800 ' + bs + 'px "Alegreya Sans", system-ui, sans-serif'; mctx.font = font;
+    const font = '700 ' + bs + 'px "Pixel Operator", system-ui, sans-serif'; mctx.font = font;
     const hw = mctx.measureText(str).width / 2 + bs * 0.4, hh = bs * 0.75;
     s = bake(-hw, -hh, hw, hh, false, (g) => {
       g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';

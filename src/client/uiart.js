@@ -148,4 +148,47 @@
   });
   // dither: 2 x 2 checker for stepped scrims (background-size: calc(2 * var(--p))).
   U.frame('dither', { rows: ['o.', '.o'], pal: { o: 'rgba(3, 2, 2, 0.4)' } });
+
+  // ---------------------------------------------------------------- HUD (canvas, drawn with PixUI.nine by src/client/hud.js)
+  // hpanel: the plate mask with HUD states: dim (party), danger (low health blink), fury (boss fury blink). slice 6, visible frame 3.
+  U.frame('hpanel', Object.assign({}, U.frames.panel.def, {
+    variants: { dim: { B: '--brass', b: '--line-hi', L: '--line' }, danger: { B: '#ff8a7a', b: '--danger', L: '#a03a2c' }, fury: { B: '--ember-hi', b: '--ember', L: '--ember-lo' } },
+  }));
+  // hsmall: compact plate for prompts and signs (any height from 8 art px). slice 4, visible frame 2.
+  U.frame('hsmall', {
+    rows: [
+      '.oooooooo.',
+      'oBBLLLLBBo',
+      'oBkkkkkkBo',
+      'oLkffffkLo',
+      'oLkffffkLo',
+      'oLkffffkLo',
+      'oLkffffkLo',
+      'oBkkkkkkBo',
+      'oBBLLLLBBo',
+      '.oooooooo.',
+    ],
+    pal: { o: OL, B: '--brass-hi', L: '--line-hi', k: '#0b0806', f: '--panel-solid' },
+    slice: 4, border: 2,
+    variants: { hot: { B: '#ffe0bd', L: '--brass-hi' } },
+  });
+  // hslot: ability slot well, brass rim over a dark inset line. slice 3, visible frame 2; ready = bright rim, off = iron rim.
+  U.frame('hslot', {
+    rows: [
+      '.ooooooo.',
+      'oBBBBBBBo',
+      'oBdddddBo',
+      'oBdfffdBo',
+      'oBdfffdBo',
+      'oBdfffdBo',
+      'oBdddddBo',
+      'oBBBBBBBo',
+      '.ooooooo.',
+    ],
+    pal: { o: OL, B: '--brass', d: '#070504', f: '#120c09' },
+    slice: 3, border: 2,
+    variants: { ready: { B: '--brass-hi' }, off: { B: '--line-hi' } },
+  });
+  // hkey: keycap (the kbd mask) with an ember hot state for the interact prompt. slice 3 (visible 2 top and sides, 3 bottom).
+  U.frame('hkey', Object.assign({}, U.frames.kbd.def, { variants: { hot: { B: '#ffe2c0', f: '--ember', b: '--ember-lo' } } }));
 })(globalThis.ED || (globalThis.ED = {}));

@@ -746,7 +746,7 @@
         if (sc[2]) F.pop(ev.x, ev.y - 8, 18, sc[1], 0.14);
         break;
       }
-      case 'buy': A.play('buy'); break;
+      case 'buy': A.play('shop'); break; // in-run shop purchase
       case 'fountain': A.play('heal'); F.burst(ev.x, ev.y - 10, 40, { color: '#6fe6ff', sp: 100, vy: -80, life: 1.0, size: 2.6, add: true }); F.ring(ev.x, ev.y, 50, '#6fe6ff', 0.6, 3); break;
       case 'altar': A.play('hurt', 0.6); F.burst(ev.x, ev.y - 10, 30, { color: '#d43a5a', sp: 90, vy: -60, life: 0.8, size: 2.6, add: true }); F.pop(ev.x, ev.y - 16, 36, '#d43a5a', 0.3); break;
       case 'gamble': A.play('chest'); break;
