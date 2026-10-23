@@ -128,7 +128,7 @@
         { id: 'trail', label: 'Dash trail', if: 'phoenixMul', of: 'phoenix', mul: 'dashTrail', per: 'sec', rOf: 'blast', rMul: 24 / 105, dur: 2, durFix: true, el: 'class' },
       ] },
     step: { name: 'Shadowstep', slot: 0, cd: 4.5, icon: 'cloak', aim: 'move', range: 140, rangeMin: 40,
-      desc: 'Blink toward the cursor, cutting through foes. Your next attacks are critical hits.',
+      desc: 'Blink toward the cursor, cutting through foes; you are untouchable for 0.35 s as you land. Your next attacks are critical hits.',
       parts: [
         { id: 'slash', label: 'Slash', base: 12, pow: 2.2, per: 'hit', crit: true, proc: true, reach: 20, knock: 60 },
         { id: 'after', label: 'Afterimage', if: 'afterimage', ifNot: 'mirrorHall', base: 5, pow: 3, per: 'hit', r: 80, delay: 1.2, blind: 1, proc: false },

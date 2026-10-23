@@ -615,5 +615,14 @@ function U_ang(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
   const c1 = stage({ s_s2: 1, s_s2_b: 1 }); foe(c1.w, c1.p.x + 30, c1.p.y); const l1 = spy(c1.w); c1.w.playerSkill(c1.p, 0, {}, 1); run(c1.w, 6); ok(!partHits(l1, 'vanish.choke').length, 'rank 1 has no choke');
 }
 
+{ // Shadowstep landing grace: untouchable STEP_GRACE s after the blink lands, a hit inside it does nothing, one after it lands
+  const g = stage({}); place(g.p, 100, 176); g.p.invuln = 0;
+  step(g.w, g.p, 100, 176, 200, 176);
+  near(g.p.invuln, ED.CONST.STEP_GRACE, 1e-9, 'Shadowstep leaves the hero untouchable for STEP_GRACE (' + ED.CONST.STEP_GRACE + ' s)');
+  const hp0 = g.p.hp; g.w.hurtPlayer(g.p, 10, {}); ok(g.p.hp === hp0, 'a hit inside the grace does nothing');
+  run(g.w, ED.CONST.STEP_GRACE + 0.05); const hp1 = g.p.hp; g.w.hurtPlayer(g.p, 10, {}); ok(g.p.hp < hp1, 'a hit after the grace lands');
+  ok(/untouchable for 0.35 s/.test(ED.SKILLS.step.desc) && ED.CONST.STEP_GRACE === 0.35, 'the skill text names the grace');
+}
+
 console.log(`${n} checks, ${fails} failed`);
 process.exit(fails ? 1 : 0);
