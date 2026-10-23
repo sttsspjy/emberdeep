@@ -11,7 +11,7 @@ Canonical rules and numbers. Code follows this file; a balance pass changes numb
 
 ## 1. Damage model
 
-- Foe HP = base × `1 + 0.65(s−1) + 0.08(s−1)²` × **threat HP** × party multiplier. Foe damage = base × `1 + 0.22(s−1) + 0.03(s−1)²` × **threat damage** (below 1 in every stratum). Boss HP is absolute (below), scaled by party and pact.
+- Foe HP = base × `1 + 0.65(s−1) + 0.08(s−1)²` × **threat HP** × party multiplier. Foe damage = base × `1 + 0.22(s−1) + 0.03(s−1)²` × **threat damage** (below 1 in strata I–V). Boss HP is absolute (below), scaled by party and pact.
 - **Threat** per stratum (`World.THREAT`): HP ×, damage ×, wave budget ×, attack-cooldown rate `cdRate` (foe cooldowns tick faster by this fraction, negative = slower, only while the foe can act; wind-ups never change; bosses are exempt), boss pause × (time between boss attacks):
 
 | Stratum | HP × | Damage × | Wave × | `cdRate` | Boss pause × |
@@ -35,7 +35,7 @@ Canonical rules and numbers. Code follows this file; a balance pass changes numb
 
 1. **Hero multiplier** (`max(0.1, dmg + Σ additions × dmgX)`): `dmg` stat, then the additions, each a row below, times `dmgX` (the product of the owned Ascended damage factors, 1 without one): conditional rows (execute: foes below 30% HP; searing: burning; lacerate: bleeding; malice: carrying Doom; brittle: chilled or frozen; fester: envenomed; opportunist: stunned, frozen or blinded; Death Knell stacks; Brand per ailment; Guardian Light; Embolden) + the class hook (`hitMul`: Momentum, Channel, White Flame, Soul Barrage…) + class-element skill hits (`classElMul`), Golden Idol (+1% per 15 party gold, at most 20%), Banner of Unity. The `dmg` stat itself is `1 + Σ additive sources`, then **× (1 + x) for each owned Ascended boon** (§3): the Ascended bucket sits after every additive source of the stat block. The additions carry `dmgX`, so an Ascended ×`dmg` card multiplies the whole multiplier: a conditional hit is exactly that factor times the same hit without the card.
 2. **Crit** × `critMult` (1.75 + crit damage; chance capped at 95%), then the class `critMul`.
-3. The hit's own factor `src.mul` (Cleave, Ambush, Deadeye by distance flown, Ballista's pierce ramp, Gathering Force, Gangrene, …); with the Shatter boon, a hit on a frozen foe takes its bonus and ends the freeze.
+3. The hit's own factor `src.mul` (Cleave, Ambush, Deadeye by distance flown, Ballista's pierce ramp, Gathering Force, Gangrene, …) and, on a boss, a skill part's `bossMul`; with the Shatter boon, a hit on a frozen foe takes its bonus and ends the freeze.
 4. **Foe vulnerability** `1 + Σ`: Marked (Hunter's Mark, `markV`) · Judged or `vulnT` (+0.2, once: Judgment, Hail of Thorns, smoke do not stack) · Frozen +0.25 · Sunder +0.04 per stack (own stacks, max 10) · Venom `venom/100 × (0.25 + corrode)` (full from the hero who added Venom, ×0.5 from allies). Co-op debuffs are single foe states: the strongest value wins, they never add.
 5. **Element affinity** (§2): ×1.5 weak, ×0.5 resisted. Class-skill parts tagged `el: class` take half of it (×1.25 / ×0.75); their statuses take the full value.
 6. `exposed` ×1.5.
@@ -58,17 +58,17 @@ Status ticks, Smites, Tolls and discharges are `raw` hits: no hero multiplier, n
 
 - Every shield a hero receives passes one sliding 10 s window in `World.addShield`, except Battle Ward: **class sources give at most 3% of max HP per window, all sources together at most 6%** (`SHIELD_WIN_CLASS`, `SHIELD_WIN_ALL`). Holy (Smite) and Bone Armor shields count only in the all-sources window.
 - Sources: Rallying Charge, Shield Throw catch, Phoenix Mantle, Veil of Night, Judgment kill shield, Sacred Lantern orbs (class window); Smites (Holy); Bone Armor; Battle Ward (3% max HP when an elite room locks).
-- Shields fade by 2% of max HP per second while no room is locked and outside boss rooms (`SHIELD_DECAY`). A shield above its cap is never lowered. A downed or dead hero gains none.
+- Shields fade by 2% of max HP per second while no room is locked and outside boss rooms (`SHIELD_DECAY`). A source fills the shield only up to its cap: class sources and Bone Armor 8% of max HP (`CLASS_SHIELD_CAP`), Smites `holyCap` (6% base), Battle Ward its own 3%; a shield above its cap is never lowered. A downed or dead hero gains none.
 
 ### Healing
 
-- No life steal: hits, kills, damage over time and shield overflow never heal. Heal sources: hearts 22% max HP + 6 (+3% per Forager rank); campfire 35% (once per hero); healing draught 40% (shop); fountain 50% (also raises the downed); Vigor reward 20%; Vigor boon 15; Provisions (Hearth) 2% per rank and Elixir Flask 20% at each stratum after the first; Sanctuary 7% on cast (you and allies within 180); Bone Harvest 3% per minion harvested, at most 6%; revive; Second Wind, Phoenix Feather and Guardian Angel (one-off saves).
+- No life steal: hits, kills, damage over time and shield overflow never heal. Heal sources: hearts 22% max HP + 6 (+3% per Forager rank); campfire 35% (once per hero); healing draught 40% (shop); fountain 50% (also raises the downed); Vigor reward 20%; Vigor boon 8; Provisions (Hearth) 2% per rank and Elixir Flask 20% at each stratum after the first; Sanctuary 7% on cast (you and allies within 180); Bone Harvest 3% per minion harvested, at most 6%; revive 35%; Second Wind and Phoenix Feather (once per descent) and Guardian Angel (once per stratum) are one-off saves.
 - Healing received × `healMul` = (1 + Mending, Heartwood and Elixir bonuses) × pact.
 - Hearts drop from kills (4%, elites 40%), cleared rooms (36%, +10% per Forager rank in the party, at most 80%), bosses (two) and breakable props (1%).
 
 ### Stopping shots, stuns and moves
 
-- Enemy projectiles are stopped only by: the Shield Throw in flight, Shield Orbit, Bone Knights, and Mirror Shard (chance). No weapon deflects.
+- Enemy projectiles are stopped only by: the Shield Throw in flight, Shield Orbit, Iron Phalanx's Charge sweep, Bone Knights, and Mirror Shard (chance). No weapon deflects.
 - **Hero stuns** (`stunFoe`): bosses are never stunned; elites take half; a stun sets `stunCd = dur + 2 s` and one landing while `stunCd > 0` lasts half as long; repeating sources (waves, shocks, Overload, Shield Orbit contacts, Bone Knight strikes) skip while `stunCd > 0` and set it to at least 1 s.
 - **Stagger**: a Heavy weapon's direct hit stuns a non-boss foe 0.2 s (elites 0.1 s), once per 2 s per foe, never while `stunCd > 0`; it does not set `stunCd`. Hit-stop is client render only; the sim never pauses.
 - **Parry** (Sworn Blade): a Cleave that starts in the last 0.3 s of a foe's wind-up cancels it and stuns 0.6 s (elites: stun 0.3 s, no cancel; never bosses), once per 2.5 s per hero and 4 s per foe.
@@ -117,7 +117,7 @@ Seven statuses: Burn, Chill (Freeze included), Charge, Venom, Radiance, Doom (el
 | V Drowned Sanctum | lightning | poison |
 | VI Starless Abyss | poison | lightning |
 
-**Infusion**: a path gate sets an infusion stat (`fireInfuse`, `iceInfuse`, `lightningInfuse`, `poisonInfuse`, `holyInfuse`, `shadowInfuse`). Every direct hero hit (weapon, skills, dash riders, evolution strikes; minions at half strength) applies each owned infusion from the hit's damage **before** its affinity: amount = unit × rate × (1 + `statusPow`), where the unit is the damage (Burn, Charge, Radiance, Doom) or the share of the foe's HP before the stratum lever (Chill ×340, Venom ×300). Each adder applies its own affinity once. Class skill parts add rates (`infAdd`) without a gate; relics add to the infusion stat. Status ticks, Smites, Tolls, discharges and explosions flagged `noProc` never infuse.
+**Infusion**: a path gate sets an infusion stat (`fireInfuse`, `iceInfuse`, `lightningInfuse`, `poisonInfuse`, `holyInfuse`, `shadowInfuse`). Every direct hero hit (weapon, skills, dash riders, evolution strikes; minions at half strength) applies each owned infusion from the hit's damage **before** its affinity: amount = unit × rate × (1 + `statusPow`), where the unit is the damage (Burn, Charge, Radiance, Doom) or the share of the foe's HP before the stratum lever (Chill ×340, Venom ×300). Each adder applies its own affinity once. Class skill parts add rates (`infAdd`) without a gate; a class element route's weapon or minion rate counts instead of the gate's when higher. Status ticks, Smites, Tolls, discharges and explosions flagged `noProc` never infuse.
 
 ### Burn (fire)
 - `burnPool += amount × aff`. Every 0.5 s the pool pays `max(1, pool × 0.2)` (never more than the pool) as Fire damage × (1 + `burnMul`), credited to the Burn owner; it never crits. Conflagration (keystone) checks after every addition.
@@ -146,7 +146,7 @@ Seven statuses: Burn, Chill (Freeze included), Charge, Venom, Radiance, Doom (el
 ### Ailments and spreads
 - A foe's **ailments** (0–9, read as at most 4): one each for a Burn, Bleed or Charge pool worth 1% of its HP; Chill ≥ 25 or Frozen; Venom above 25; Radiance a quarter of the way to a Smite; Doom worth 2% of its HP; Dazed (stunned or blinded); Sealed. The host sends the count. Brand, Open Veins, Contagion and Gangrene read it.
 - A **spread** moves pools: a recipient takes at most 25% of its own HP per pool (`SPREAD_CAP`), Frozen is never copied, each foe receives at most once per chain.
-- **Chain queue**: payoffs of duos and keystones (Smite, Reap, Toll, discharge, freeze, a death) open a chain id; the payoffs they spawn queue behind it 0.08 s per hop, each foe pays at most once per chain id, and a trigger hero runs at most 6 entries per tick.
+- **Chain queue**: payoffs of duos and keystones (Smite, Reap, Toll, discharge, freeze, a death) open a chain id; the payoffs they spawn queue behind it 0.08 s per hop, each foe pays each payoff kind at most once per chain id, and a trigger hero runs at most 6 entries per tick. Fodder (§8) pays and receives chains and explosions but grants no refund, shield, stack or raise.
 
 ## 3. Paths
 
@@ -300,15 +300,15 @@ Stat rule: `x` multiplies the stat block after every additive source (`s[key] *=
 
 - A hero holds a queue `p.offers` of offer specs; `p.picks === p.offers.length`. Offers open only when the room is safe. API: `W.grantOffer(p, spec)`.
 - Spec `src`: `start` · `level` · `room` · `class` · `forge` · `epic`.
-- Cards: 3 (+1 with Crown of Choice); `epic` 4 (+1). An evolution card and a duo are prepended to `level`, `room` and `epic` offers and take no slot.
+- Cards: 3 (+1 with Crown of Choice); `epic` 4 (+1). An evolution card and a duo are prepended to `level`, `room` and `epic` offers and take no slot. A draw that finds no card (pool exhausted) shows a Vigor card.
 - **Ascended pin** (`level`, `room`, `epic` only; never `start`, `class` or `forge`): when any Ascended card is eligible (§3), one of them (uniform) is slot 1 of the drawn cards, behind the prepended evolution and duo cards; the draw fills the other n − 1 slots. `p.ascN` counts the Ascended picks of the stratum (reset when a stratum starts).
 - **start** (once, at run start; Head Start begins the party at a higher level, so its level offers come at once): 4 cards. Pyromancer, Cleric, Necromancer: their class gate plus 3 random other element gates. Knight, Ranger, Shade: 3 random element gates plus the Generalist gate (last).
 - **level**: every even level (2, 4, 6, …). Pool: open boons, non-gate boons of the hero's own paths (a Generalist: gated General boons), element gates while a slot is free (and no Generalist gate), keystones at affinity ≥ 5 (General 6). Weight = rarity weight (`c` 60, `r` 30 + 2.5s + 60·luck, `e` 10 + 2s + 40·luck, other 10) × (own path 2.5) × (gate 0.8); at most one gate per offer. Weapon-kind boons (`pierce`, `split`) need a projectile weapon. **Hygiene**: Opportunist needs a hero that can stun, freeze or blind a foe (`W.canDaze`: a Heavy fork, Knight, Shade, an owned `iceInfuse`, `frozenHeart`, `arcStun`, `dashBlind`, `waveStun`, `sanctStun`, `cStun`, `chargeStun`, `orbitStun`, `knightStun`, `cometStun` or `parry`, or a stun or blind skill part whose stat is set: Skyfall, Verdict, Afterimage); from stratum IV the utility commons bounty, magnet, forager, fleet and mending weigh ×0.25.
-- **room** (reward `boon`): card 1 = one unowned element gate while a slot is free, weighted by coverage (weak this or next stratum ×2, weak where an owned gate is resisted ×2, resisted next stratum ×0.5, class element ×2); the rest from the hero's own paths, then open boons at rarity ≥ r. A Generalist draws the level pool.
-- **epic**: level pool, rarity ≥ r, 4 cards, keystones ×2. Sources: elite-room reward (25%), boss of stratum III and V, shop (odd strata), altar.
+- **room** (reward `boon`): the first drawn card (after a pinned Ascended card) = one unowned element gate while a slot is free, weighted by coverage (weak this or next stratum ×2, weak where an owned gate is resisted ×2, resisted next stratum ×0.5, class element ×2); the rest from the hero's own paths, then open boons at rarity ≥ r. A Generalist draws the level pool.
+- **epic**: level pool, rarity ≥ r (commons fill the offer when fewer than 4 qualify), 4 cards, keystones ×2. Sources: elite-room reward (25%), boss of stratum III and V, shop (odd strata), altar.
 - **forge**: up to 3 owned boons below max (no evolutions, never route or fork cards: fork ranks come from bosses, §5); picking ranks one up. None → level offer. Sources: normal-room reward (8%), rest-site anvil (odd strata), shop (even strata).
-- **class**: the route system (§5): team level 3 (route, `ctier` 1) and boss I (fork, `ctier` 2). Fixed cards, no draw padding, no prepends. A class spec of a hero that already holds a fork becomes a level offer. Fork ranks 2 and 3 are not offers (§5).
-- Offer message to client: `{t:'offer', boons, rerolls, picks, src, path, forge, ctier, route}`. Rerolls (Q on keyboard, Y on a pad; from Insight and mastery 8) work on every offer except forge, route and fork picks. In a party a pick untouched for 45 s is taken for the hero: the first non-evolution card (so never the Generalist gate), a random card for a route or fork pick.
+- **class**: the route system (§5): team level 3 (route, `ctier` 1) and boss I (fork, `ctier` 2). Fixed cards, no draw padding, no prepends. A class spec of a hero that already holds a fork becomes a level offer. Fork ranks 2 and 3 are not offers: bosses II and IV grant them (§5).
+- Offer message to client: `{t:'offer', boons, rerolls, picks, src, path, forge, ctier, route}`. Rerolls (Q on keyboard, Y on a pad; from Insight, mastery 8 and the Four-Leaf Clover's +1 at each stratum after the first) work on every offer except forge, route and fork picks. In a party a pick untouched for 45 s is taken for the hero: the first non-evolution card (so never the Generalist gate), a random card for a route or fork pick.
 - **Pacing targets**: see §10.
 
 ## 5. Heroes, skills and class routes
@@ -462,7 +462,6 @@ Per stratum: start, boss, three utility rooms (treasure on odd strata or an even
 | Fortune | 1 | +2% gold | 15 / 30 / 50 |
 | Fleetness | 1 | +1% move speed | 10 / 25 / 45 |
 | Provisions | 1 | heal 2% of max health when a stratum after the first begins | 25 / 55 |
-| Deep Wick | 1 | +10% gold and xp dropped in dark rooms (§7), the party's highest rank counts | 40 / 90 / 160 |
 | Bulwark | 2 | +1 armor | 15 / 30 / 55 |
 | Precision | 2 | +1% crit | 15 / 30 / 55 |
 | Wisdom | 2 | +2% xp | 15 / 30 / 55 |
@@ -473,6 +472,7 @@ Per stratum: start, boss, three utility rooms (treasure on odd strata or an even
 | Ember Attunement | 3 | +10% embers earned | 80 / 160 / 255 / 385 |
 | Merchant's Favor | 3 | shops −4% | 30 / 65 |
 | Second Wind | 4 | once per descent a fallen hero rises at 5% health (rank 2: 10%), invulnerable 2.2 s | 90 / 200 |
+| Deep Wick | 1 | +10% gold and xp dropped in dark rooms (§7), the party's highest rank counts | 40 / 90 / 160 |
 
 - **Mastery** has 10 levels per hero: 2 +1% damage · 3 second weapon · 4 +2 max health · 5 skills recharge 1% faster · 6 third weapon · 7 +1% crit · 8 +1 boon reroll · 9 +1% damage · 10 golden aura. A full Hearth with mastery 10 adds +4.5% damage, +7 health, +4% crit, +4% recharge, +3 armor, +3% move speed, +6% xp and +6% gold, plus the one-offs of the table. Visible but small: the boss-arrival power read (`tools/bal.js --power`) puts full Hearth at ×1.1–1.3 over fresh smart at strata IV–VI. Deep Wick reaches `W.prototype.darkLoot()`; Head Start, Stash, Second Wind, Insight and Provisions are read in `sim/build.js` (`onRunStartBuild`, `onPartyStartBuild`, `onStratumBuild`), Merchant's Favor in `rooms.js` (`priceOf`).
 - **Refunds**: every upgrade rank and Armory entry refunds its full cost on demand (`S.refundUpgrade`, `S.refundArmory`); Reset all (`S.resetUpgrades`, a two-step confirm in the UI: the first press arms it for 3 s) refunds every rank and entry at once. `lifetime` embers never change on a purchase or refund.
