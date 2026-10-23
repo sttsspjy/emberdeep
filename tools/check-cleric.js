@@ -56,12 +56,12 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
   const { w, p } = stage({ c_atk: 1 }); let k = 0, dmg = 0, rate = [];
   for (let i = 0; i < 6; i++) { w.projs.length = 0; w.playerAttack(p, 0); const ws = waves(w); k += ws.length; rate.push(ws.length); if (ws.length) dmg = ws[0].dmg; }
   ok(rate.join() === '0,1,0,1,0,1', `Dawnbringer: a wave on attacks 2, 4, 6 (got ${rate.join()})`);
-  near(dmg, 17 * 0.9 * 1.3, 1e-6, 'Holy Mace wave damage 17 x 0.9 x 1.3');
+  near(dmg, 23 * 0.9 * 1.3, 1e-6, 'Holy Mace wave damage 23 x 0.9 x 1.3');
   const base = stage({}); let b = 0; for (let i = 0; i < 6; i++) { base.w.projs.length = 0; base.w.playerAttack(base.p, 0); b += waves(base.w).length; }
   ok(b === 2, `no route: a wave every 3rd attack (got ${b})`);
   const L = stage({ c_atk: 1 }, 2); let lw = 0, ld = 0;
   for (let i = 0; i < 6; i++) { L.w.projs.length = 0; L.w.playerAttack(L.p, 0); const ws = waves(L.w); lw += ws.length; if (ws.length) ld = ws[0].dmg; }
-  ok(lw === 3 && L.p.stats.weapon.wave.every === 3 && L.p.stats.weapon.wave.mul === 0.6, 'Sacred Lantern gains a wave (60%) with Dawnbringer'); near(ld, 12.5 * 0.6 * 1.3, 1e-6, 'Lantern wave damage 12.5 x 0.6 x 1.3');
+  ok(lw === 3 && L.p.stats.weapon.wave.every === 3 && L.p.stats.weapon.wave.mul === 0.6, 'Sacred Lantern gains a wave (60%) with Dawnbringer'); near(ld, 16.9 * 0.6 * 1.3, 1e-6, 'Lantern wave damage 16.9 x 0.6 x 1.3');
   ok(!stage({}, 2).p.stats.weapon.wave, 'the Lantern has no wave without Dawnbringer');
 }
 

@@ -53,7 +53,7 @@ const RAD = (a) => a * Math.PI / 180;
   w.fx.length = 0; e.x = 60 + 270; e.hp = 5000; const hp0 = e.hp; w.playerAttack(p, 0); run(w, 1);
   const hv = w.fx.find(ev => ev.t === 'hit' && ev.pid === 'p0');
   ok(hv && hv.f === 1, 'a real far arrow carries the far-shot flag'); near(hp0 - e.hp, 12 * (1 + 0.3 * (246 - 80) / 180), 1.2, 'a real far arrow deals the ramped damage');
-  const near1 = stage({ r_atk: 1 }); const e2 = foe(near1.w, 60 + 70, 212); near1.w.playerAttack(near1.p, 0); run(near1.w, 0.6); near(5000 - e2.hp, 12, 1e-6, 'a close arrow deals the plain 12');
+  const near1 = stage({ r_atk: 1 }); const e2 = foe(near1.w, 60 + 70, 212); near1.w.playerAttack(near1.p, 0); run(near1.w, 0.6); near(5000 - e2.hp, 11, 1e-6, 'a close arrow deals the plain 11');
 }
 
 // ---- Ballista (r_atk_h): heavy shots, +28% speed, +2 pierce, +15% per foe passed, Splitting Bolt from rank 2, Siege Ballista at rank 3 ----
@@ -90,7 +90,7 @@ const RAD = (a) => a * Math.PI / 180;
 // ---- Quickdraw (r_atk_s): swift shots, +10% damage, 15% slow for 1 s (not bosses), Flurry every 4th shot from rank 2, Storm Bow at rank 3 ----
 {
   const { w, p } = stage({ r_atk_s: 1 }), wp = p.stats.weapon;
-  ok(p.stats.swift, 'Quickdraw is a Swift fork'); near(wp.dmg, 7.26 * 1.1, 0.01, 'Quickdraw: +10% weapon damage'); near(p.stats.atkInterval, 0.187, 0.002, 'Quickdraw: x0.55 interval');
+  ok(p.stats.swift, 'Quickdraw is a Swift fork'); near(wp.dmg, 6.655 * 1.1, 0.01, 'Quickdraw: +10% weapon damage'); near(p.stats.atkInterval, 0.187, 0.002, 'Quickdraw: x0.55 interval');
   const e = foe(w, 300, 212), b = foe(w, 330, 212); b.boss = true; const evs = tap(w); w.fx.length = 0;
   hit(w, p, e, 10, { kind: 'weapon', wpn: true }); near(e.slowAmt, 0.15, 1e-9, 'weapon hit slows 15%'); near(e.slowT, 1, 1e-9, 'for 1 s'); ok(w.fx.some(v => v.t === 'hit' && v.sl === 1), 'the hit event carries the slow flag');
   hit(w, p, b, 10, { kind: 'weapon', wpn: true }); ok(!(b.slowT > 0), 'bosses are not slowed');

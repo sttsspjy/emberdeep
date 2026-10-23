@@ -81,26 +81,26 @@ Weapon index 0 is available at once, index 1 at mastery 3, index 2 at mastery 6.
 
 | Hero | Weapon | dmg · interval | Notes | Heavy | Swift |
 |---|---|---|---|---|---|
-| Knight | Longsword | 18 · 0.42 | arc 1.9, range 50 | Greatsword 35.6 · 0.756 | Saber 10.9 · 0.231 |
-| | Warhammer | 34 · 0.82 | shockwave r72 at 50% | Maul 59.3 · 1.3 | War Pick 20.6 · 0.451 |
-| | Glaive | 20 · 0.5 | range 82, arc 0.75 | Halberd 39.6 · 0.9 | Spear 12.1 · 0.275 |
-| Ranger | Longbow | 12 · 0.34 | arrows | Greatbow 23.8 · 0.612 | Hunting Bow 7.26 · 0.187 |
-| | Heavy Crossbow | 24 · 0.72 | pierce 2 | Arbalest 47.5 · 1.296 | Repeater 14.5 · 0.396 |
-| | Twin Shortbows | 4.5 · 0.25 | 2 arrows | Twin Recurves 8.91 · 0.45 | Twin Flatbows 2.72 · 0.138 |
+| Knight | Longsword | 23.4 · 0.42 | arc 1.9, range 50 | Greatsword 46.3 · 0.756 | Saber 14.2 · 0.231 |
+| | Warhammer | 44.2 · 0.82 | shockwave r72 at 50% | Maul 77.1 · 1.3 | War Pick 26.7 · 0.451 |
+| | Glaive | 26 · 0.5 | range 82, arc 0.75 | Halberd 51.5 · 0.9 | Spear 15.7 · 0.275 |
+| Ranger | Longbow | 11 · 0.34 | arrows | Greatbow 21.8 · 0.612 | Hunting Bow 6.66 · 0.187 |
+| | Heavy Crossbow | 22.1 · 0.72 | pierce 2 | Arbalest 43.8 · 1.296 | Repeater 13.4 · 0.396 |
+| | Twin Shortbows | 4.1 · 0.25 | 2 arrows | Twin Recurves 8.12 · 0.45 | Twin Flatbows 2.48 · 0.138 |
 | Pyromancer | Fire Staff | 15 · 0.5 | blast r40 at 60% | Magma Staff 29.7 · 0.9 | Spark Staff 9.08 · 0.275 |
 | | Ember Wand | 6 · 0.15 | sparks build 15% Burn | Cinder Rod 11.9 · 0.27 | Flicker Wand 5.28 · 0.12 |
 | | Inferno Tome | 30 · 1.0 | blast r72 at 80% | Tome of Ruin 42.9 · 1.3 | Pocket Grimoire 18.2 · 0.55 |
 | Shade | Twin Daggers | 11 · 0.21 | range 42 | Twin Kukris 21.8 · 0.378 | Stilettos 6.91 · 0.12 |
 | | Throwing Knives | 7 · 0.36 | fan of 3 | Chakrams 13.9 · 0.648 | Darts 4.24 · 0.198 |
 | | Crescent Scythes | 16 · 0.48 | full circle | Great Scythes 31.7 · 0.864 | Sickles 9.68 · 0.264 |
-| Cleric | Holy Mace | 17 · 0.42 | wave every 3rd swing, 90% | Morning Star 33.7 · 0.756 | Flail 10.3 · 0.231 |
-| | Dawn Hammer | 32 · 0.72 | wave every 3rd swing, 100% | Sunforged Maul 63.4 · 1.296 | Dawn Pick 19.4 · 0.396 |
-| | Sacred Lantern | 12.5 · 0.42 | pierce 1; orbs shield allies | Great Lantern 24.8 · 0.756 | Censer 7.56 · 0.231 |
-| Necromancer | Bone Wand | 9 · 0.4 | seeking bolts | Skull Staff 17.8 · 0.72 | Finger Wand 5.45 · 0.22 |
-| | Soul Scythe | 17 · 0.56 | kills raise +12% more often | Death Scythe 33.7 · 1.008 | Soul Sickle 10.3 · 0.308 |
-| | Plague Staff | 6 · 0.6 | cloud r44, 10 dps, 2.6 s | Plague Totem 11.9 · 1.08 | Plague Rod 3.63 · 0.33 |
+| Cleric | Holy Mace | 23 · 0.42 | wave every 3rd swing, 90% | Morning Star 45.5 · 0.756 | Flail 13.9 · 0.231 |
+| | Dawn Hammer | 43.2 · 0.72 | wave every 3rd swing, 100% | Sunforged Maul 85.5 · 1.296 | Dawn Pick 26.1 · 0.396 |
+| | Sacred Lantern | 16.9 · 0.42 | pierce 1; orbs shield allies | Great Lantern 33.5 · 0.756 | Censer 10.2 · 0.231 |
+| Necromancer | Bone Wand | 13.5 · 0.4 | seeking bolts | Skull Staff 26.7 · 0.72 | Finger Wand 8.17 · 0.22 |
+| | Soul Scythe | 25.5 · 0.56 | kills raise +12% more often | Death Scythe 50.5 · 1.008 | Soul Sickle 15.4 · 0.308 |
+| | Plague Staff | 9 · 0.6 | cloud r44, 10 dps, 2.6 s | Plague Totem 17.8 · 1.08 | Plague Rod 5.45 · 0.33 |
 
-Base hero HP: Knight 135 · Ranger 117 · Pyromancer 106 · Shade 116 · Cleric 121 · Necromancer 91 (armor and Class Power: §5).
+Base hero HP: Knight 135 · Ranger 117 · Pyromancer 106 · Shade 133 · Cleric 121 · Necromancer 91 (armor and Class Power: §5).
 
 ## 2. Elements and statuses
 
@@ -320,7 +320,7 @@ Class Power **P** (table below) scales every skill and proc. Per-attack extras s
 | Knight | 135 | 8 | 18 | 116 | 5% | start |
 | Ranger | 117 | 5 | 12 | 128 | 10% | start |
 | Pyromancer (fire) | 106 | 4 | 17 | 120 | 5% | start |
-| Shade | 116 | 5 | 13 | 138 | 12% | defeat the Bone Warden |
+| Shade | 133 | 7 | 13 | 138 | 12% | defeat the Bone Warden |
 | Cleric (holy) | 121 | 7 | 17 | 114 | 5% | complete 4 descents |
 | Necromancer (shadow) | 91 | 2 | 9 | 120 | 5% | defeat the Sporemother |
 
