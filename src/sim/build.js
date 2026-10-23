@@ -173,7 +173,7 @@
   // Everyone sees 3 cards (epic 4, Crown +1): the start offer is 3 element gates plus the guaranteed card (Generalist for Knight, Ranger and Shade; the class element's gate for the others);
   // a class spec returns exactly the cards of the hero's next route step (no draw padding, no evolution or duo prepended): the 4 route cards or the 2 forks of the chosen route (a hero that holds a fork gets a level offer);
   // room, level and epic offers draw from the hero's own paths (element heroes) or the General path (Generalists) plus open boons, and when an Ascended card is eligible one of them (uniform) takes slot 1 of the drawn cards.
-  // The forge offers owned boons below their max rank, never route or fork cards.
+  // The forge offers owned boons below their max rank, never route or fork cards. A card at its max rank is never offered; a draw that finds no card (pool exhausted) offers the Purse, which no pool draws.
   W.rollOffer = function (p, spec) {
     spec = spec || { src: 'level' };
     const rng = this.rng, st = p.stats, s = Math.max(1, this.stratum), luck = st.luck || 0, kind = st.kind;
@@ -189,7 +189,7 @@
     const daze = () => this.canDaze(p);
     const eligible = (id) => {
       const b = ED.BOONS[id];
-      if (b.evo || b.duo || b.cls || b.asc || (b.need && b.need !== kind)) return false;
+      if (b.evo || b.duo || b.cls || b.asc || b.purse || (b.need && b.need !== kind)) return false;
       if ((p.boons[id] || 0) >= ED.maxRank(b, st)) return false;
       if (id === 'opportunist' && !daze()) return false; // nothing to stun, freeze or blind: the card would do nothing
       if (b.gate) return free && b.path !== 'general' && !els.includes(b.path); // the Generalist gate is only on the start offer
@@ -253,13 +253,13 @@
         }
         draw(level.filter(id => own(ED.BOONS[id])));
         if (out.length < n) draw(openPool().filter(rare)); // the own pool ran dry: open General at rare and up
-        if (out.length <= pinned) out.push('vigor');
+        if (out.length <= pinned) out.push('purse');
         return this.prependCards(p, out);
       }
     }
     draw(level);
     if (out.length <= pinned) draw(openPool());
-    if (out.length <= pinned) out.push('vigor');
+    if (out.length <= pinned) out.push('purse');
     if (spec.src === 'forge') return out;
     return this.prependCards(p, out);
   };
@@ -280,17 +280,29 @@
     if (!p || !p.offer) return;
     const id = p.offer[U.clamp(idx | 0, 0, p.offer.length - 1)];
     const b = ED.BOONS[id];
-    p.boons[id] = (p.boons[id] || 0) + 1;
-    this.recalc(p, false);
-    if (b.heal) this.healPlayer(p, b.heal);
-    if (b.mods.charges) p.chargeBonus = true;
-    if (b.asc) p.ascN++;
+    if (b.purse) { // gold, no rank: the party gold gains a gold room's reward
+      const v = ED.World.rewardGold(this.stratum);
+      this.gold += v; this.emit({ t: 'gold', v, pid });
+      p.offers.shift(); p.picks = p.offers.length; p.offer = null;
+      this.msgs.push({ to: pid, t: 'offerDone' });
+      return;
+    }
+    const gain = (p.boons[id] || 0) < ED.maxRank(b, p.stats); // a pick of a card at its max rank pays nothing but still ends the offer
+    if (gain) {
+      p.boons[id] = (p.boons[id] || 0) + 1;
+      this.recalc(p, false);
+      if (b.heal) this.healPlayer(p, b.heal);
+      if (b.mods.charges) p.chargeBonus = true;
+      if (b.asc) p.ascN++;
+    }
     p.offers.shift(); p.picks = p.offers.length; p.offer = null;
-    this.emit({ t: 'boon', pid, id, x: p.x, y: p.y });
-    if (b.evo) this.emit({ t: 'evolve', pid, path: b.evo, x: p.x, y: p.y });
-    this.sendBuild(p);
+    if (gain) {
+      this.emit({ t: 'boon', pid, id, x: p.x, y: p.y });
+      if (b.evo) this.emit({ t: 'evolve', pid, path: b.evo, x: p.x, y: p.y });
+      this.sendBuild(p);
+    }
     this.msgs.push({ to: pid, t: 'offerDone' });
-    if (b.route && b.tier === 2) while (p.forkDue > 0) { p.forkDue--; if (p.boons[id] < b.max) this.rankFork(p, id); } // ranks granted at bosses before the fork was taken
+    if (gain && b.route && b.tier === 2) while (p.forkDue > 0) { p.forkDue--; if (p.boons[id] < b.max) this.rankFork(p, id); } // ranks granted at bosses before the fork was taken
   };
 
   // Fork ranks are auto-granted at bosses II and IV (rank 2, rank 3). A hero that holds a fork below its max rank gains one rank at once; a hero without a fork banks it in p.forkDue, applied when the fork card is picked.

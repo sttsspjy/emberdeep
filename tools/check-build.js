@@ -241,5 +241,79 @@ const ranks = (w, pid) => w.msgs.filter(m => m.t === 'forkRank' && m.to === pid)
   for (const id of ['edge', 'quick', 'vigor', 'plating']) ok(w4[id] === w3[id] && w3[id] === 60, `${id}: weight unchanged`);
 }
 
+// ---------------- exhausted pool: the Purse; picks respect max rank ----------------
+{
+  // Takes every card each level offer shows (to its max rank) until the offer is the Purse; returns the staged hero and the offers it took.
+  const exhaust = (cls, boons) => {
+    const { w, p } = stage(cls, boons); let i = 0;
+    for (; i < 400; i++) {
+      const o = w.rollOffer(p, { src: 'level' });
+      if (o.includes('purse')) break;
+      for (const id of o) p.boons[id] = ED.maxRank(ED.BOONS[id], p.stats);
+      w.recalc(p, true);
+    }
+    return { w, p, i };
+  };
+  const bare = (o) => o.filter(id => !ED.BOONS[id].evo && !ED.BOONS[id].duo);
+  const pick = (w, p, offer, i) => { p.offer = offer.slice(); p.offers = [{ src: 'level', path: null }]; p.picks = 1; w.msgs.length = 0; w.fx.length = 0; w.pickBoon('p0', i || 0); };
+
+  // (a) a hero with an exhausted pool is offered the Purse, never Vigor
+  const ex = exhaust('knight', { generalist: 1 });
+  ok(ex.i > 3 && ex.i < 400, `a Generalist Knight exhausts the pool after ${ex.i} offers`);
+  for (const src of ['level', 'room', 'epic']) {
+    const o = ex.w.rollOffer(ex.p, { src });
+    ok(bare(o).join() === 'purse', `exhausted pool, ${src} offer: the Purse alone (${o})`);
+  }
+  const ex2 = exhaust('ranger', { kindle: 1 });
+  ok(ex2.i < 400 && ex2.p.boons.vigor === ED.maxRank(ED.BOONS.vigor, ex2.p.stats) && bare(ex2.w.rollOffer(ex2.p, { src: 'room' })).join() === 'purse', 'an element hero with every card maxed: Vigor at its max rank, then the Purse');
+  { // the Purse is in no pool: 300 offers of every source, none with it
+
+    const st = stage('ranger', { kindle: 1 }); let seen = 0;
+    for (const src of ['level', 'room', 'epic', 'forge']) for (let i = 0; i < 75; i++) if (st.w.rollOffer(st.p, { src }).includes('purse')) seen++;
+    ok(!seen, 'a hero with open cards left is never offered the Purse');
+  }
+  // (b) picking the Purse pays a gold room's reward to the party and records no rank
+  {
+    const { w, p } = stage('ranger', { kindle: 1 }, { stratum: 3 }), g0 = w.gold, b0 = JSON.stringify(p.boons), aff0 = ED.pathAffinity(p.boons, 'fire');
+    pick(w, p, ['purse']);
+    ok(w.gold - g0 === ED.World.rewardGold(3) && ED.World.rewardGold(3) === Math.round(39 * ED.World.GOLD_MUL), `the Purse pays the gold room reward (${w.gold - g0} at stratum III)`);
+    ok(JSON.stringify(p.boons) === b0 && !('purse' in p.boons) && ED.pathAffinity(p.boons, 'fire') === aff0, 'the Purse leaves p.boons and the path affinity untouched');
+    ok(p.offer === null && p.offers.length === 0 && p.picks === 0 && w.msgs.some(m => m.t === 'offerDone' && m.to === 'p0'), 'the Purse pick ends the offer');
+    ok(!w.fx.some(e => e.t === 'build' || e.t === 'boon') && w.fx.some(e => e.t === 'gold' && e.v === ED.World.rewardGold(3)), 'no build or boon event; a gold event instead');
+    ok(ED.Sheet.text('purse', 1, p.stats, 3) === `+${ED.World.rewardGold(3)} gold for the party.` && !/[{}]/.test(ED.Sheet.text('purse', 1, p.stats)), 'the card text names the real amount');
+    for (let s = 1; s <= 6; s++) ok(ED.World.rewardGold(s) > 0, `the Purse pays gold at stratum ${s}`);
+  }
+  // (c) a pick of a card at its max rank grants nothing but still consumes the offer
+  {
+    const { w, p } = stage('ranger', { kindle: 1, edge: 2, r_atk: 1, r_atk_h: 3 }), dmg = p.stats.dmg, b0 = JSON.stringify(p.boons);
+    pick(w, p, ['edge', 'plating']);
+    ok(p.boons.edge === 2 && p.stats.dmg === dmg && JSON.stringify(p.boons) === b0, 'edge at its max rank: a pick changes nothing');
+    ok(p.offer === null && p.offers.length === 0 && p.picks === 0 && w.msgs.some(m => m.t === 'offerDone') && !w.fx.some(e => e.t === 'boon' || e.t === 'build'), 'the offer is consumed and no boon event is sent');
+    p.forkDue = 0; pick(w, p, ['r_atk_h']);
+    ok(p.boons.r_atk_h === 3 && !w.msgs.some(m => m.t === 'forkRank'), 'a fork at rank 3 stays at rank 3');
+    pick(w, p, ['edge', 'plating'], 1); ok(p.boons.plating === 1, 'a card below its max rank is still granted');
+    pick(w, p, ['kindle']); ok(p.boons.kindle === 1, 'a max-1 card already owned stays at 1');
+    const g = stage('knight', { generalist: 1, edge: 3 }); pick(g.w, g.p, ['edge']); ok(g.p.boons.edge === 3, 'a Generalist caps open cards at max + 1');
+    const g2 = stage('knight', { generalist: 1, edge: 2 }); pick(g2.w, g2.p, ['edge']); ok(g2.p.boons.edge === 3, 'a Generalist takes the extra rank');
+  }
+  // (d) Vigor never exceeds rank 3 (4 for a Generalist), by picks and by the pool run dry
+  {
+    const { w, p } = stage('ranger', { kindle: 1 });
+    for (let i = 0; i < 6; i++) pick(w, p, ['vigor']);
+    ok(p.boons.vigor === 3, `Vigor stays at rank 3 after six picks (got ${p.boons.vigor})`);
+    ok(ex2.p.boons.vigor === 3, 'Vigor is 3 after the pool ran dry (never raised by the fallback)');
+    const hp = p.stats.maxHp; pick(w, p, ['vigor']); ok(p.stats.maxHp === hp, 'a seventh Vigor adds no health');
+    ok(ex.p.boons.vigor === 4, 'a Generalist holds Vigor to 4 (open cards gain a rank)');
+  }
+}
+
+// ---------------- Second Wind: rises outside boss fights only ----------------
+{
+  const { w, p } = stage('knight'); p.secondWind = 1; p.swPct = 0.1;
+  w.boss = { id: 'x' }; p.hp = 0; w.playerLethal(p); ok(p.downed && p.secondWind === 1, 'Second Wind does not fire during a boss fight');
+  const b = stage('knight'), q = b.p; q.secondWind = 1; q.swPct = 0.1; b.w.boss = null; q.hp = 0; b.w.playerLethal(q);
+  ok(!q.downed && q.secondWind === 0, 'Second Wind fires outside a boss fight'); near(q.hp, Math.round(q.maxHp * 0.1), 1e-9, 'rises at 10% health');
+}
+
 console.log(`${n} checks, ${fails} failed`);
 process.exit(fails ? 1 : 0);

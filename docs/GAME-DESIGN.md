@@ -19,12 +19,12 @@ Canonical rules and numbers. Code follows this file; a balance pass changes numb
 | I | 2.2 | 0.5 | 0.8 | −40% | 2 |
 | II | 1.62 | 0.5 | 0.75 | −30% | 1.7 |
 | III | 1.3 | 0.5 | 0.7 | −10% | 1.4 |
-| IV | 1 | 0.5 | 0.66 | 0 | 0.85 |
-| V | 1.07 | 0.85 | 0.62 | +15% | 0.7 |
-| VI | 1.02 | 1.05 | 0.6 | +30% | 0.7 |
+| IV | 1 | 0.84 | 0.66 | 0 | 0.75 |
+| V | 1.07 | 1.19 | 0.62 | +15% | 0.6 |
+| VI | 1.02 | 1.39 | 0.6 | +30% | 0.6 |
 
-  Effective foe HP multiplier (depth curve × threat HP): 2.2 / 2.8 / 3.4 / 3.7 / 5.2 / 6.4. Effective foe damage multiplier (depth curve × threat damage): 0.5 / 0.6 / 0.8 / 1.0 / 2.0 / 3.0.
-- Boss HP: Bone Warden 4,350 · Sporemother 5,950 · Rimeheart 16,500 · Forgelord 31,320 · Drowned King 100,800 · Hollow King 106,200. Boss base damage 6.4 (Forgelord 7.15, Drowned King 9.6, Hollow King 8.6). A foe still alive 45 s after its own spawn (`e.age`; bosses 78 s, except in strata with a boss fury (§8), where bosses are never exposed; fodder never) is **exposed**: ×1.5 damage taken, ×1.5 speed, and it loses 4% of its max HP per second (bosses 1.2%).
+  Effective foe HP multiplier (depth curve × threat HP): 2.2 / 2.8 / 3.4 / 3.7 / 5.2 / 6.4. Effective foe damage multiplier (depth curve × threat damage): 0.5 / 0.6 / 0.8 / 1.6 / 2.8 / 4.0.
+- Boss HP: Bone Warden 4,350 · Sporemother 5,950 · Rimeheart 16,500 · Forgelord 26,600 · Drowned King 85,700 · Hollow King 90,300. Boss base damage 6.4 (Forgelord 13.2, Drowned King 17.7, Hollow King 15.7). A foe still alive 45 s after its own spawn (`e.age`; bosses 78 s, except in strata with a boss fury (§8), where bosses are never exposed; fodder never) is **exposed**: ×1.5 damage taken, ×1.5 speed, and it loses 4% of its max HP per second (bosses 1.2%).
 - Elite HP × `2.4 + 0.4(s−1)` (`World.ELITE`), damage × 0.9, radius × 1.22. Affixes: swift (×1.4 speed, wind-ups ×0.7 but never under 0.4 s), brutal (×1.4 damage), warded (ward = 45% of max HP), volatile (explodes on death), vampiric (heals ×3 the damage it deals a hero). From stratum IV an elite rolls a second, different affix (`elite2`) with chance `World.AFFIX2` 35% / 60% / 85% (IV–VI); HP and damage multipliers apply once, each affix effect once whichever slot holds it (`ED.hasAffix`); the label names both ("Swift Brutal Skeleton Knight").
 - Party multiplier (n = other heroes): foe HP `1 + 0.85n + 0.3n(n−1)` (two heroes ×1.85, three ×3.3, four ×5.35), wave budget `1 + 0.6n + 0.2n(n−1)`. A downed hero bleeds out in 18 s when no ally revives them (solo: at once).
 - HP-relative statuses (Chill and Venom build-up, Conflagration, Wildfire) measure against foe HP before the stratum lever (bosses: `refHp`, the design HP 800–7,800), so inflating HP does not weaken them.
@@ -100,7 +100,7 @@ Weapon index 0 is available at once, index 1 at mastery 3, index 2 at mastery 6.
 | | Soul Scythe | 25.5 · 0.56 | kills raise +12% more often | Death Scythe 50.5 · 1.008 | Soul Sickle 15.4 · 0.308 |
 | | Plague Staff | 9 · 0.6 | cloud r44, 10 dps, 2.6 s | Plague Totem 17.8 · 1.08 | Plague Rod 5.45 · 0.33 |
 
-Base hero HP: Knight 135 · Ranger 117 · Pyromancer 106 · Shade 133 · Cleric 121 · Necromancer 91 (armor and Class Power: §5).
+Base hero HP: Knight 178 · Ranger 117 · Pyromancer 106 · Shade 192 · Cleric 175 · Necromancer 91 (armor and Class Power: §5).
 
 ## 2. Elements and statuses
 
@@ -179,7 +179,7 @@ Seven paths: six element paths and General. A hero follows at most **2 element p
 | brittle | Brittle Cold | c | 2 | +10% damage to chilled or frozen foes. |
 | coldsnap | Cold Snap | r | 1 | Dashing releases a frost ring (r80) for 50% P that chills. |
 | permafrost | Permafrost | c | 2 | Freeze lasts 30% longer; chilled foes deal 10% less. |
-| frostheart | Frozen Heart | r | 1 | When hit, freezes foes within 120 (8 s cooldown; was an element relic). |
+| frostheart | Frozen Heart | r | 1 | When hit, freezes foes within 120 (8 s cooldown). |
 | abszero | Absolute Zero (key) | e | 1 | Freezing a foe releases a frost nova adding 60 chill to foes within 100. |
 | evo_ice | Glacial Arms | l | 1 | Every 3rd attack fires 5 piercing ice shards in a fan (50% each, infused). Chill +25%. |
 
@@ -192,8 +192,8 @@ Seven paths: six element paths and General. A hero follows at most **2 element p
 | shortcircuit | Short Circuit | r | 2 | A charged foe that dies discharges at once at +25%. |
 | thunderstep | Thunderstep | r | 1 | Foes you dash through take 100% P (charges them). |
 | overload | Overload | c | 2 | Discharges stun non-boss foes 0.25 s (elites half), at most once per second per foe. |
-| stormcall | Storm Call | r | 1 | Critical hits charge foes with 60% of their damage (was an element relic). |
-| thundergauntlet | Thunder Gauntlet | r | 1 | Every 6th attack calls lightning on its target (220% of weapon damage, r40, no crit; was an element relic). |
+| stormcall | Storm Call | r | 1 | Critical hits charge foes with 60% of their damage. |
+| thundergauntlet | Thunder Gauntlet | r | 1 | Every 6th attack calls lightning on its target (220% of weapon damage, r40, no crit). |
 | thunderhead | Thunderhead (key) | e | 1 | Each discharge has a 25% chance to drop a thunderbolt: 200% P, r60; one hero drops at most one per 0.6 s. |
 | evo_lightning | Tempest Arms | l | 1 | Every 4th attack calls lightning on the foe nearest the point 80 ahead of your aim, within 220 (150% weapon damage, r50). Foes discharge every 0.5 s. |
 
@@ -230,7 +230,7 @@ Seven paths: six element paths and General. A hero follows at most **2 element p
 | inevitable | Inevitable | r | 2 | Elites and bosses take 15% more of your Doom (full at rank 2). |
 | deathknell | Death Knell | r | 2 | Each Reap (not of a horde foe) or Toll grants +4% damage for 6 s, stacking up to 5 times per rank. |
 | deathsedge | Death's Edge | r | 1 | Each Reap (not of a horde foe) or Toll readies 1 guaranteed crit (up to 3 stored; scaled by the weapon fork). |
-| souljar | Soul Jar | c | 2 | Your hits mark 20% more Doom (`doomMul`; was an element relic). |
+| souljar | Soul Jar | c | 2 | Your hits mark 20% more Doom (`doomMul`). |
 | umbralstep | Umbral Step | r | 1 | Foes you dash through take 80% P and gain Doom from that hit at +60%. |
 | reaper | Reaper (key) | e | 1 | A Reaped foe implodes: 20% of its max HP (elites 10%) as Shadow damage to foes within 80. |
 | evo_shadow | Umbral Arms | l | 1 | A shadow twin repeats every attack 0.15 s later at 40%; twin hits mark double Doom. |
@@ -273,7 +273,7 @@ One per run. The weapon is renamed with the prefix before its (fork) name: Cinde
 | twilight Twilight | holy+shadow | Smites mark their damage as Doom. Each Reap forces a Smite on the nearest foe within 120 (Radiance × 1.5, at least half a Smite). |
 
 ### Open boons (every hero, no path, low caps)
-vigor (c,3: +8 max HP, heal 8) · plating (c,2: +3 armor) · fleet (c,2: +7% move) · focus (c,3: skills −10% cooldown) · lightstep (c,2: +1 dash charge) · magnet (c,2: +40% pickup, +10% xp) · edge (c,2: +10% damage) · quick (c,2: +10% attack speed) · bounty (c,2: +25% gold) · stalwart (c,2: +4% max HP) · mending (c,2: +15% healing received) · forager (c,2: hearts drop 10% more often and heal 3% more) · wide (r,2: +15% area) · evade (r,2: +4% dodge) · thorns (r,2: attackers take 10, +2 armor) · pierce (r,2, ranged: +1 pierce) · split (r,2, ranged: +1 projectile, −8% damage) · bladedash (r,1: dash through foes for 120% P) · battleward (r,1: shield 3% max HP when an elite room locks) · echo (e,1: skill 1 holds 2 charges) · laststand (e,1: below 30% HP, 3 s of −60% damage taken, 20 s cooldown) · glass (e,1: +30% damage, −15% max HP) · trance (e,1: a skill grants +30% attack speed 4 s) · overcharge (e,1: skills release a shockwave, 10 + 150% P, r85).
+vigor (c,3: +8 max HP, heal 8) · plating (c,2: +3 armor) · fleet (c,2: +7% move) · focus (c,3: skills −10% cooldown) · lightstep (c,2: +1 dash charge) · magnet (c,2: +40% pickup, +10% xp) · edge (c,2: +10% damage) · quick (c,2: +10% attack speed) · bounty (c,2: +25% gold) · stalwart (c,2: +4% max HP) · mending (c,2: +15% healing received) · forager (c,2: hearts drop 10% more often and heal 3% more) · wide (r,2: +15% area) · evade (r,2: +4% dodge) · thorns (r,2: attackers take 10, +2 armor) · pierce (r,2, ranged: +1 pierce) · split (r,2, ranged: +1 projectile, −8% damage) · bladedash (r,1: dash through foes for 120% P) · battleward (r,1: shield 3% max HP when an elite room locks) · echo (e,1: skill 1 holds 2 charges) · laststand (e,1: below 30% HP, 3 s of −60% damage taken, 20 s cooldown) · glass (e,1: +30% damage, −15% max HP) · trance (e,1: a skill grants +30% attack speed 4 s) · overcharge (e,1: skills release a shockwave, 10 + 150% P, r85). The Purse is no open card: the exhausted-pool fallback of §4.
 
 ### Ascended boons (rar `a`, max 1, no path; `src/data/ascended.js`)
 
@@ -306,6 +306,7 @@ Stat rule: `x` multiplies the stat block after every additive source (`s[key] *=
 - **level**: every even level (2, 4, 6, …). Pool: open boons, non-gate boons of the hero's own paths (a Generalist: gated General boons), element gates while a slot is free (and no Generalist gate), keystones at affinity ≥ 5 (General 6). Weight = rarity weight (`c` 60, `r` 30 + 2.5s + 60·luck, `e` 10 + 2s + 40·luck, other 10) × (own path 2.5) × (gate 0.8); at most one gate per offer. Weapon-kind boons (`pierce`, `split`) need a projectile weapon. **Hygiene**: Opportunist needs a hero that can stun, freeze or blind a foe (`W.canDaze`: a Heavy fork, Knight, Shade, an owned `iceInfuse`, `frozenHeart`, `arcStun`, `dashBlind`, `waveStun`, `sanctStun`, `cStun`, `chargeStun`, `orbitStun`, `knightStun`, `cometStun` or `parry`, or a stun or blind skill part whose stat is set: Skyfall, Verdict, Afterimage); from stratum IV the utility commons bounty, magnet, forager, fleet and mending weigh ×0.25.
 - **room** (reward `boon`): the first drawn card (after a pinned Ascended card) = one unowned element gate while a slot is free, weighted by coverage (weak this or next stratum ×2, weak where an owned gate is resisted ×2, resisted next stratum ×0.5, class element ×2); the rest from the hero's own paths, then open boons at rarity ≥ r. A Generalist draws the level pool.
 - **epic**: level pool, rarity ≥ r (commons fill the offer when fewer than 4 qualify), 4 cards, keystones ×2. Sources: elite-room reward (25%), boss of stratum III and V, shop (odd strata), altar.
+- **Max rank and the Purse**: a card at its max rank (`ED.maxRank`) is never offered, and `W.pickBoon` grants nothing for one (it still ends the offer). A draw that finds no card (pool exhausted, e.g. a Generalist with every card maxed) shows a Purse card (`purse`, flagged `purse: true`, in no pool): picking it adds `World.rewardGold(s)` (`round((15 + 8s) × 0.65)`, the gold a gold room reward pays) to the party gold and records no rank, so it has no sheet entry, affinity or deed count.
 - **forge**: up to 3 owned boons below max (no evolutions, never route or fork cards: fork ranks come from bosses, §5); picking ranks one up. None → level offer. Sources: normal-room reward (8%), rest-site anvil (odd strata), shop (even strata).
 - **class**: the route system (§5): team level 3 (route, `ctier` 1) and boss I (fork, `ctier` 2). Fixed cards, no draw padding, no prepends. A class spec of a hero that already holds a fork becomes a level offer. Fork ranks 2 and 3 are not offers: bosses II and IV grant them (§5).
 - Offer message to client: `{t:'offer', boons, rerolls, picks, src, path, forge, ctier, route}`. Rerolls (Q on keyboard, Y on a pad; from Insight, mastery 8 and the Four-Leaf Clover's +1 at each stratum after the first) work on every offer except forge, route and fork picks. In a party a pick untouched for 45 s is taken for the hero: the first non-evolution card (so never the Generalist gate), a random card for a route or fork pick.
@@ -317,11 +318,11 @@ Class Power **P** (table below) scales every skill and proc. Per-attack extras s
 
 | Hero | HP | Armor | Power P | Speed | Crit | Unlock |
 |---|---|---|---|---|---|---|
-| Knight | 135 | 8 | 23.4 | 116 | 5% | start |
+| Knight | 178 | 32 | 23.4 | 116 | 5% | start |
 | Ranger | 117 | 5 | 12 | 128 | 10% | start |
 | Pyromancer (fire) | 106 | 4 | 17 | 120 | 5% | start |
-| Shade | 133 | 7 | 13 | 138 | 12% | defeat the Bone Warden |
-| Cleric (holy) | 121 | 7 | 23 | 114 | 5% | complete 4 descents |
+| Shade | 192 | 32 | 13 | 138 | 12% | defeat the Bone Warden |
+| Cleric (holy) | 175 | 14 | 23 | 114 | 5% | complete 4 descents |
 | Necromancer (shadow) | 91 | 2 | 13.5 | 120 | 5% | defeat the Sporemother |
 
 ### Skills (skill 1 = slot 0, skill 2 = slot 1)
@@ -447,7 +448,7 @@ Per stratum: start, boss, three utility rooms (treasure on odd strata or an even
   - **Aimed volley** (every boss, `World.BOSS_VOL`; an attack of weight 2 in every phase, run beside the main state): a warn line per living, visible hero follows the led aim for 0.5 s × the boss's chill wind-up factor and locks 0.15 s before the first release; then 3 / 4 / 5 shots (phase I / II / III) 0.12 s apart, each led at its release by `World.LEAD`, 0.6 × boss damage, flying `320 + 20(s − 1)` px/s (× 1.2 under Pact 8). Party: one sequence per living hero, 0.15 s apart. Freezing or stunning the boss stalls it; blinding it or a phase change cancels it.
   - **Phase 3 overlap**: in phase 3 a volley also starts every `BOSS_OV_GAP` (5 s) whatever the main attack is, never two at once.
   - **Party**: every summon list gains one entry per living hero beyond the first (at most +3), drawn from the list. Summon guards count threat foes only.
-  - **Fury** (strata IV–VI; `World.BOSS_FURY` t 75 / 80 / 85 s, ramp 0.05, max ×4, warn 10 s; strata I–III never): `e.furyT` counts fight seconds from the boss's spawn, through phases, freezes, stuns and blinds. Past t, `m = min(max, 1 + ramp × (furyT − t))` (`World.furyMul`): boss damage × m for every attack made from then on and the pause between its attacks ÷ m; wind-ups and telegraphs are unchanged; summons and fodder are not affected. One `{t:'fury', type, x, y}` at the start. Boss rows carry the clock as `E[19]`. The boss bar shows a fury track under the HP bar (fight time up to the cap, a notch at t) that pulses from t − warn; past t the plate burns ember with `Fury ×m`, and the boss wears an ember aura that grows with m.
+  - **Fury** (strata IV–VI; `World.BOSS_FURY` t 95 / 95 / 90 s, ramp 0.12, max ×4, warn 10 s; strata I–III never): `e.furyT` counts fight seconds from the boss's spawn, through phases, freezes, stuns and blinds. Past t, `m = min(max, 1 + ramp × (furyT − t))` (`World.furyMul`): boss damage × m for every attack made from then on and the pause between its attacks ÷ m; wind-ups and telegraphs are unchanged; summons and fodder are not affected. One `{t:'fury', type, x, y}` at the start. Boss rows carry the clock as `E[19]`. The boss bar shows a fury track under the HP bar (fight time up to the cap, a notch at t) that pulses from t − warn; past t the plate burns ember with `Fury ×m`, and the boss wears an ember aura that grows with m.
   - **Fodder trickle** (`BOSS_PACK_N`, `BOSS_PACK_GAP`, `BOSS_FODDER_CAP`): 7 s after the boss spawns and every 7 s, a pack of 4–6 biome fodder at a room edge ≥ 220 px from every hero, waiting while live and pending fodder plus the pack would pass 20 (30 with 2+ heroes); no xp; none after the boss falls.
 - Floor hazards (spikes, poison, lava, void) hurt for 4-6 per tick × `World.HAZARD_MUL` (0.5), scaled by 20% per stratum.
 
@@ -468,16 +469,16 @@ Per stratum: start, boss, three utility rooms (treasure on odd strata or an even
 | Insight | 2 | +1 boon reroll per descent | 25 / 50 / 90 |
 | Head Start | 2 | begin the descent with 15 xp (30 = level 2); the party's highest rank counts | 15 / 35 |
 | Alacrity | 3 | +1% skill recharge | 20 / 40 / 65 |
-| Stash | 3 | begin with 5 gold (the party's highest rank; the slot of the Reliquary, id `stash`) | 20 / 45 |
+| Stash | 3 | begin with 5 gold (the party's highest rank; id `stash`, UPGRADES index 11) | 20 / 45 |
 | Ember Attunement | 3 | +10% embers earned | 80 / 160 / 255 / 385 |
 | Merchant's Favor | 3 | shops −4% | 30 / 65 |
-| Second Wind | 4 | once per descent a fallen hero rises at 5% health (rank 2: 10%), invulnerable 2.2 s | 90 / 200 |
+| Second Wind | 4 | once per descent a hero who falls outside a boss fight rises at 5% health (rank 2: 10%), invulnerable 2.2 s | 90 / 200 |
 | Deep Wick | 1 | +10% gold and xp dropped in dark rooms (§7), the party's highest rank counts | 40 / 90 / 160 |
 
 - **Mastery** has 10 levels per hero: 2 +1% damage · 3 second weapon · 4 +2 max health · 5 skills recharge 1% faster · 6 third weapon · 7 +1% crit · 8 +1 boon reroll · 9 +1% damage · 10 golden aura. A full Hearth with mastery 10 adds +4.5% damage, +7 health, +4% crit, +4% recharge, +3 armor, +3% move speed, +6% xp and +6% gold, plus the one-offs of the table. Visible but small: the boss-arrival power read (`tools/bal.js --power`) puts full Hearth at ×1.1–1.3 over fresh smart at strata IV–VI. Deep Wick reaches `W.prototype.darkLoot()`; Head Start, Stash, Second Wind, Insight and Provisions are read in `sim/build.js` (`onRunStartBuild`, `onPartyStartBuild`, `onStratumBuild`), Merchant's Favor in `rooms.js` (`priceOf`).
 - **Refunds**: every upgrade rank and Armory entry refunds its full cost on demand (`S.refundUpgrade`, `S.refundArmory`); Reset all (`S.resetUpgrades`, a two-step confirm in the UI: the first press arms it for 3 s) refunds every rank and entry at once. `lifetime` embers never change on a purchase or refund.
 - **Armory**: `ED.ARMORY[hero]` lists per-hero sidegrade unlocks `{ id, name, desc, cost }`, bought and refunded in the Upgrades page below the upgrades (a hero's section shows while its list is non-empty and the hero is unlocked). The lists are empty until content lands. The meta bundle carries each hero's owned entry ids (`meta.armory`); the profile stores `armory: { hero: [0|1 per entry] }`.
-- 26 deeds including Evolved (evolve a weapon, 40) · Into the Dark (clear 6 dark rooms in one descent, 50; `run.darkCleared` counts dark-room clears and rides the run summary and the snapshot's `RUN` row) · Cartographer (clear every room of a stratum, both dark rooms included, 40; the check is `run.fullClear`, every non-boss room) · Relic Keeper (hold 10 relics in one descent, 60; the slot of the removed Archivist). Ten pacts raise difficulty and embers (`PACT_EMBER_BONUS` 0.08 per level).
+- 26 deeds including Evolved (evolve a weapon, 40) · Into the Dark (clear 6 dark rooms in one descent, 50; `run.darkCleared` counts dark-room clears and rides the run summary and the snapshot's `RUN` row) · Cartographer (clear every room of a stratum, both dark rooms included, 40; the check is `run.fullClear`, every non-boss room) · Relic Keeper (hold 10 relics in one descent, 60; deed id `archivist`, DEEDS index 21). Ten pacts raise difficulty and embers (`PACT_EMBER_BONUS` 0.08 per level).
 - Profile key `wickdeep.profile.v1`, save code prefix `WD1-`, peer prefix `wickdeep-v1-`. No other profile key is imported; Emberdeep `ED1-` codes are refused.
 - **Save code** (`CODE_VERSION` 5): positional lists (UPGRADES, CLASS_IDS mastery, then the Armory, then DEEDS) each carry a count prefix, so appending an entry never shifts what follows; the decoder skips extra entries and leaves missing ones at 0. The Armory section follows mastery: a hero count (4 bits), then per hero an entry count (6 bits) and 1 bit per entry (at most 63 entries per hero; more cannot be written). Versions 2, 3 and 4 still decode (their relic bits are read against the frozen v4 relic table and refunded as embers); a newer version is refused with "reload the page". Reordering or removing an entry bumps `CODE_VERSION`.
 - **Codex migration**: a stored profile below era 3 (profile `v` 3 has no `relics` array) or a v2-v4 code holds the old Codex relics; their costs (the frozen v4 table in `save.js`) are added to `embers` once (never to `lifetime`), the amount is kept in `profile.refunded`, and `S.load` writes the migrated profile back so a reload cannot refund again.
