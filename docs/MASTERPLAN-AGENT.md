@@ -20,6 +20,7 @@
 
 ## In-progress
 - Playtest of v4 on main (user).
+- UI pixel overhaul (game-ui, `feat/ui-pixel` from `feat/v4-1`): phase 1 kit (`feat/ui-kit`: embedded fonts, `ED.PixUI` grid + frames, base components), pixel icons (`feat/ui-icons`), pick feedback (`feat/ui-pick`: `ED.PickFx` kinds, cues, hero bursts) · phase 2 cards, screens, HUD, Tab sheet.
 
 ## Done
 - v4 merged to `main` (2026-10-23): Phase 0–3 and the retune: bal.js, `--from`, `--vet`, browse.js · grid, rooms, hordes, fodder, dark rooms, dash charges, crowd slow, lead aim, volleys, breakables, boss fury IV–VI · Ascended, fork ranks, attack/element/skill transforms for all six heroes, Codex removed, Armory shell, refunds, save v5 · adaptive score, hit/kill/skill SFX, fury cue · all 48 forks in the parity bands · boss TTK band · IV–VI calibration (fury as the knowledge check) · Second Wind outside bosses, Purse card · melee hero EHP, Shadowstep grace.
@@ -32,6 +33,7 @@
 - 2026-10-22 (v3): embedded pixel art, Firefox speed, no auto-aim, Tab sheet, class routes, six elements + General, no life steal, Knight Shield Throw.
 - 2026-10-22 (playtest 3, all recommended options): lantern meter, room costs, Gloom and flare removed, 2 opt-in Dark doors per floor · ARPG hordes (about 40 kills per room at I to 120 at VI, ≤ 120 live) · rooms about 2× area with a scrolling camera, 9–10 rooms per floor, a win in 30–40 min · dash charges · crowds slow the hero (floor ×0.5) · fodder touch damage ≤ 3% max HP, untelegraphed · late power from Ascended boons, fork transforms (rank 2 and 3, auto-granted) and skill transforms, per hero and fork · about 32 boon picks per run · chains and explosions trigger on fodder, refunds, shields and stacks do not · Codex removed, non-element relics in the pool from the start, element relics become path boons, embers refunded · per-hero Armory of sidegrade unlocks inside Upgrades · free refunds and Reset all · small Hearth stats stay · dark-fantasy synth music per stratum with intensity layers and a boss theme · fodder shows only crits and summed numbers · breakable props · solo-first tuning, co-op bot-checked · mid playtest with Ranger and Knight complete · headless testing only.
 - 2026-10-23: small Hearth (full Hearth adds at most half of what smart picks add; bal.js bands: fresh random <= 1%, fresh smart 10-20%, mid 12-24%, max 15-27%, pact 5 5-15%, every cell with --vet) · boss fury (soft enrage, visible on the boss bar) on the bosses of strata IV-VI only · v4 to main by 12:06 for an office playtest.
+- 2026-10-23 (UI): full pixel UI on an integer grid; titles Jacquard 24 / Jacquarda Bastarda 9 (OFL), body Pixel Operator (CC0), embedded, no Google Fonts; 13 card identities (6 elements, General, route, duo, Ascended, relic, Purse, Hearth) by frame, idle motion, pick animation, cue; pick feedback = card + hero burst seen by the party (existing boon/relic events, no snapshot change).
 
 ## Known traps
 - See CLAUDE.md "Known default traps".
