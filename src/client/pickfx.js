@@ -100,7 +100,6 @@
       F.burst(x, y - 6, nn(o, 10), { kind: 'streak', color: '#e8eef6', a: -1.57, spread: 2.4, sp: 260, life: 0.3, size: 2.4 });
       for (let i = 0; i < 4; i++) { const q = i * TAU / 4 + 0.785; SP(o, 'fx.hit.spark', x + Math.cos(q) * R * 0.7, y + Math.sin(q) * R * 0.45, { ramp: 'general', add: true, delay: 0.06 + i * 0.04 }); } // sparks where the ring passes
       F.pop(x, y - 6, 16, '#f2f5f9', 0.14, true, o.al * 0.8);
-      if (!o.dim && !o.low) F.addShake(1.2);
       if (o.big) F.burst(x, y - 10, nn(o, 6), { kind: 'shard', color: '#d9dfe8', sp: 140, life: 0.6, size: 2.6, vz: 90, z: 8 });
     },
     route(o, b) { // banner streaks rise in the class colour (five ribbons of stepped squares), then the crest flashes over the head

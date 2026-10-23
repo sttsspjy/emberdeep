@@ -519,7 +519,7 @@
     hpBar(bx, by, bw - pw + k, bh, { hp: me.hp, max: me.maxHp, sh: shield, gh: ghost[gk] * me.maxHp, col: low ? (blink ? '#ff5a3a' : '#b8301f') : '#d9443a' });
     ring(c, plx, by, pw, bh, k, K.ol, true); c.fillStyle = K.sh; c.fillRect(plx + k, by + k, pw - 2 * k, bh - 2 * k);
     ring(c, plx + k, by + k, pw - 2 * k, bh - 2 * k, f, low && blink ? '#8a2a1c' : K.line, false);
-    const hs = Math.ceil(me.hp) + '/' + me.maxHp, ss = shield > 0 ? '+' + shTxt(shield) : '', hc = low ? (blink ? '#ffd0c4' : '#ff7a5e') : '#ffffff';
+    const hs = Math.ceil(me.hp) + '/' + me.maxHp, ss = shield >= 0.05 ? '+' + shTxt(shield) : '', hc = low ? (blink ? '#ffd0c4' : '#ff7a5e') : '#ffffff';
     const ha = textArt(hs, tV, hc, 'b', 700, 0).adv, tw = ha + (ss ? ng + textArt(ss, tV, '#cfe3ff', 'b', 700, 0).adv : 0), tx = plx + Math.round((pw - tw) / 2), ty = by + bh / 2; // HP and shield centred together
     T(hs, tx, ty, tV, hc, 'b', 'left', 700);
     if (ss) T(ss, tx + ha + ng, ty, tV, '#cfe3ff', 'b', 'left', 700);
