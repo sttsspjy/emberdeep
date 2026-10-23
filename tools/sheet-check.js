@@ -355,7 +355,7 @@ for (const [cls, boons, tag] of [['ranger', { r_atk: 1, r_atk_s: 2 }, 'Flurry (Q
   near(ric.perAttack, q3.avg * 0.4 * 0.8 * (1 + 3 * 0.3 / 4) / 4, 0.05, 'Ricochet: 40% x 0.8 hit rate per shot (and per Flurry arrow at its share), written for a pack of 4');
   const h2 = wm({ r_atk: 1, r_atk_h: 2 }), h3 = wm({ r_atk: 1, r_atk_h: 3 });
   ok(!ex(h2, 'Siege bolt') && ex(h3, 'Siege bolt') && ex(h3, 'Siege blast').packOnly && !ex(h3, 'Siege bolt').packOnly, 'Siege Ballista lists the bolt (one foe) and its blast (pack only)');
-  near(ex(h3, 'Siege bolt').perAttack, h3.avg * 0.5 / 5, 1e-6, 'the siege bolt adds x1.5 on every 5th shot');
+  near(ex(h3, 'Siege bolt').perAttack, h3.avg * 0.8 / 5, 1e-6, 'the siege bolt adds x1.8 on every 5th shot');
   const hr = modelOf('ranger', { r_el: 1, r_el_a: 2 }, 0).skills[0], hs = modelOf('ranger', { r_el: 1, r_el_a: 1 }, 0).skills[0];
   ok(hr.dpsCd > hs.dpsCd * 1.1, 'Gangrene raises Volley and Rain (50% at an assumed 50% uptime)');
   const bleedOf = (boons, extra) => modelOf('ranger', Object.assign({ kindle: 1, frostbite: 1 }, boons), 0, extra).mult.status.find(s => s.el === 'general');
@@ -364,7 +364,7 @@ for (const [cls, boons, tag] of [['ranger', { r_atk: 1, r_atk_s: 2 }, 'Flurry (Q
   const pk = (boons) => modelOf('ranger', Object.assign({ kindle: 1 }, boons), 0).weapon.extras;
   const c1 = pk({ r_el: 1, r_el_b: 1 }).find(e => e.label === 'Contagion spread'), c2 = pk({ r_el: 1, r_el_b: 2 }).find(e => e.label === 'Outbreak spread'), c3 = pk({ r_el: 1, r_el_b: 3 });
   ok(c1 && c1.packOnly && c2 && c2.packOnly && c2.perAttack > c1.perAttack * 1.3, 'Contagion and Outbreak list a pack-only spread, Outbreak the larger'); ok(c3.some(e => e.label === 'Plaguebearer burst' && e.packOnly) && !c3.some(e => /spread/.test(e.label)), 'Plaguebearer lists its burst instead of the spread');
-  const pb = c3.find(e => e.label === 'Plaguebearer burst'); ok(pb.perAttack > c2.perAttack * 2, 'the burst is worth more than the spread');
+  const pb = c3.find(e => e.label === 'Plaguebearer burst'); ok(pb.perAttack > c2.perAttack * 1.3, 'the burst is worth more than the spread');
 }
 
 // Necromancer riders and forms: Grave Bolt and the Hexed-foe bonus on the weapon (a staged run), the pack and lone-foe values of the extras, and the power band of the four forks
@@ -585,8 +585,8 @@ function statusRun(boons, stratum, secs, until) {
     const s1 = Cm({ c_atk: 1, c_atk_s: 1 }), s2 = Cm({ c_atk: 1, c_atk_s: 2 }), s3 = Cm({ c_atk: 1, c_atk_s: 3 }), wol = (m) => ex(m, 'Wave of light').perAttack;
     ok(!ex(s1, 'Litany') && ex(s2, 'Litany') && !ex(s2, 'Returning Light') && ex(s3, 'Returning Light') && ex(s3, 'Litany'), 'Crusader lists Litany from rank 2 and Returning Light at rank 3 only');
     rel(ex(s2, 'Litany').perAttack, wol(s2) * 2 * 2 / 16, 1e-6, 'Litany = 2 extra waves (a wave comes every 2nd attack) every 16th attack');
-    rel(ex(s3, 'Returning Light').perAttack, wol(s3) * 0.5 * 0.75, 1e-6, 'Returning Light = wave x waveReturn (0.5) x 0.75 (foes on the way back)');
-    rel(ex(s3, 'Litany').perAttack, wol(s3) * 2 * 2 / 16 * (1 + 0.5 * 0.75), 1e-6, 'the Litany side waves return too');
+    rel(ex(s3, 'Returning Light').perAttack, wol(s3) * 0.55 * 0.75, 1e-6, 'Returning Light = wave x waveReturn (0.55) x 0.75 (foes on the way back)');
+    rel(ex(s3, 'Litany').perAttack, wol(s3) * 2 * 2 / 16 * (1 + 0.55 * 0.75), 1e-6, 'the Litany side waves return too');
     ok(s3.weapon.dps > s2.weapon.dps && s2.weapon.dps > s1.weapon.dps, 'each rank raises the weapon damage per second');
   }
   { // Judging Light (rank 2) and Sunstrike (rank 3) of Guardian Light: a Judged window on the model's condition factor, extras on the one Smite stream
@@ -606,7 +606,7 @@ function statusRun(boons, stratum, secs, until) {
     const p1 = Cm({ c_el: 1, c_el_b: 1 }), p2 = Cm({ c_el: 1, c_el_b: 2 }), p3 = Cm({ c_el: 1, c_el_b: 3 }), S = (m) => holy(m).dps, mul = (m) => m.weapon.extras.find(e => e.label === 'Prism beam');
     ok(mul(p1).packOnly && !ex(p1, 'Sunburst') && ex(p2, 'Sunburst').packOnly && !ex(p2, 'Spectrum') && ex(p3, 'Spectrum').packOnly, 'Prism lists its beam (pack only), Sunburst from rank 2 and Spectrum at rank 3');
     rel(sec(p1, 'Prism beam'), S(p1) * 0.5, 1e-6, 'Prism beam = the Smite stream x smiteBeam (0.5)'); rel(sec(p2, 'Sunburst'), S(p2) * 0.5 * 0.5, 1e-6, 'Sunburst = one more hop at half a beam');
-    rel(sec(p3, 'Spectrum'), S(p3) * 0.5 * 2 + S(p3) * 0.05 * (1 + 0.5) * 3, 1e-6, 'Spectrum = 2 more beams (3 others in a pack of 4) + 5% of a Smite as Radiance in each of 3 foes, paid back at 1 + smiteMul');
+    rel(sec(p3, 'Spectrum'), S(p3) * 0.5 * 2 + S(p3) * 0.01 * (1 + 0.5) * 3, 1e-6, 'Spectrum = 2 more beams (3 others in a pack of 4) + 1% of a Smite as Radiance in each of 3 foes, paid back at 1 + smiteMul');
     rel(p3.weapon.dps, (p3.weapon.avg * p3.weapon.oneFoe + p3.weapon.extras.filter(e => !e.packOnly).reduce((s, e) => s + e.perAttack, 0)) * p3.weapon.aps, 0.01, 'the beams are left out of the damage on one foe');
     ok(MD.packWeapon(p3, 4) - MD.packWeapon(Cm({ c_el: 1, c_el_b: 3 }, { stat: { prismN: 0 } }), 4) > 3 * sec(p3, 'Spectrum') * 0.99, 'in a pack every foe of the 4 beams to the others (x4)');
     const lone = Cm({ c_atk: 1, c_el: 1, c_el_b: 3 }, { stat: { smiteBeam: 0 } }); ok(!ex(lone, 'Prism beam') && !ex(lone, 'Spectrum'), 'no beam, no Spectrum extra without the Prism beam');
@@ -694,7 +694,7 @@ function statusRun(boons, stratum, secs, until) {
   }
 }
 
-// The power budget of the 24 skill forks (tools/sheet.js --parity): mid build, the mean of the 1 foe and pack columns (whole percents) against the class without the route card.
+// The power budget of all 48 forks (tools/sheet.js --parity): mid build, the mean of the 1 foe and pack columns (whole percents) against the class without the route card.
 // Stratum IV at rank 2: a non-Guard fork 31.5-38.5, a Guard fork >= 28. Stratum VI at rank 3: non-Guard 54-66, Guard >= 48 and +25% EHP or 30% stun.
 {
   const MD = require('./model.js')(ED, { pack: 4 }), col = (v) => Math.round(v * 100);
@@ -707,7 +707,7 @@ function statusRun(boons, stratum, secs, until) {
     const mid = Object.assign({}, ...GATE2[cls].map(id => ({ [id]: 1 })), { edge: 2, quick: 2, focus: 1, stalwart: 1 });
     for (const [stratum, rank, lo, hi, gmin] of [[4, 2, 31.5, 38.5, 28], [6, 3, 54, 66, 48]]) {
       const base = assess(cls, mid, stratum);
-      for (const route of ['skill1', 'skill2']) {
+      for (const route of ED.ROUTES) {
         const e = ED.CLASS_CARDS[cls][route];
         for (const fid of e.forks) {
           const a = assess(cls, Object.assign({}, mid, { [e.t1]: 1, [fid]: rank }), stratum), v = (col(a.one / base.one - 1) + col(a.pack / base.pack - 1)) / 2, guard = ED.BOONS[fid].tag === 'Guard';

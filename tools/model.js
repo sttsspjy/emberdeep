@@ -10,11 +10,12 @@ module.exports = (ED, opts) => {
   const SCATTER_R = 80; // px a Meteor Shower meteorite may land from the impact (class-pyro.js)
   // Death bursts: a pack stands within PACK_R of its centre; a burst of radius r covers (r / PACK_R)^2 of it (at most all) and no more than NEIGH foes stand round one corpse.
   const PACK_R = 90, NEIGH = 3;
+  const PIERCE_LINE = 0.5; // share of the pack foes behind the first that a piercing shot reaches (bot runs: a pierce-2 shot hits 2.07 of 3 foes with 4+ foes round the first, a pierce-3 shot 2.42 of 4)
   const cover = (r) => Math.min(1, (r / PACK_R) ** 2);
   const deathPairs = (n) => { let s = 0; for (let j = 1; j <= n; j++) s += Math.min(NEIGH, n - j); return s; }; // the pack dies one foe at a time: each death bursts on the foes still alive
   function packWeapon(m, n) {
     const w = m.weapon, st = null; void st;
-    const hitsBase = w.kind === 'melee' ? n : Math.min(n, (w.n || 1) * (1 + (w.pierce || 0)));
+    const hitsBase = w.kind === 'melee' ? n : Math.min(n, w.n || 1) + PIERCE_LINE * (Math.min(n, (w.n || 1) * (1 + (w.pierce || 0))) - Math.min(n, w.n || 1));
     let sum = w._avg * hitsBase;
     for (const e of w._extras) sum += e._pack ? e._pack(n) : e.perAttack * (e.label === 'Twin Fang' ? hitsBase / (w.oneFoe || 1) : ONE_STREAM.has(e.label) ? 1 : FEW[e.label] ? Math.min(n, FEW[e.label]) : e.pack ? Math.min(n, e.pack) : n) * (e.packMul === undefined ? 1 : e.packMul); // pack: the pack foes the extra reaches; packMul: its value per pack foe over its one-foe value
     return sum * w._aps;
