@@ -15,17 +15,14 @@
 - **Testing**: agents never open a visible browser window (headless only, one reused browser); the user does the vsync fps check. Bot checks ≤ 3 min (`tools/bal.js`), one final confirm ≤ 15 min.
 
 ## Todo
-- Phase 0: spatial foe grid + headless perf gate 150 foes ≤ 4 ms per frame (88) · bot pick scoring by marginal value with synergies, re-baseline (6a) · `tools/bal.js`, stage start `--from=N`, `tools/browse.js`, harness speed (f1).
-- Phase 1: E1 (88) · Ascended, fork-rank grant, attack and element transforms, pool hygiene, Codex → Armory, refunds, save v5 (6a) · skill transforms and skill numbers, skill and kill SFX with a voice cap, per-stratum adaptive music (f1). Ranger and Knight first.
-- Phase 2: stratum behaviour (lead aim, speeds, mixed rosters, two-affix elites) and bosses (fast aimed volleys, phase 3 overlap, party scaling) (88) · retune with `tools/bal.js` (all) · mid playtest build, Ranger and Knight complete.
-- Phase 3: transforms for the other four heroes · breakable props, small heart (88) · bot co-op check · one final confirm · docs, README, PR to `main`.
+- Next (priority order; HANDOFF-2026-10-23): Hearth rule (+10.0 vs 8.95; refunds before rank cuts) · Armory content · path payoff · boss melee windows, then take back melee EHP · deterministic Shade evasion · sheet model gaps from the audits (Bone Knights cleave, Death Blossom, Throw return, Volley pack, Burn double count, Contagion one-foe term, Siege reach) · in-class weapon spreads · bot co-op check.
 - Carried over: dead `minionBurst` guard (`class-necro.js`, `combat.js`) · two Necromancers with Soul Command show no command stream · deeds are a 31-bit mask (a 32nd deed needs new profile storage) · aim banner for party clients · orphaned `simpool.js --worker` processes after a killed parent · Cleric Sacred Lantern ally shield gets its own allowance · optional key that opens the sheet on Map · DawnLike "Platino" sprite hidden somewhere.
 
 ## In-progress
-- Phase 2 retune: bot pick policy (smart = strongest policy, HP trim) and attack/element fork parity with the pierce model fix (6a) · skill-fork parity and `sheet --parity` (f1) · robust check-perf, then THREAT and boss calibration to the difficulty bands and the TTK band (88) · docs §5 skills, §11 audio, README (f1).
+- Playtest of v4 on main (user).
 
 ## Done
-- v4 Phase 0 and 1, Phase 2 mechanics, Phase 3 transforms (on `feat/v4`): bal.js, `--from`, `--vet`, browse.js · grid, rooms, hordes, fodder, dark rooms, dash charges, crowd slow, lead aim, volleys, breakables, boss fury IV–VI · Ascended, fork ranks, attack/element/skill transforms for all six heroes, Codex removed, Armory shell, refunds, save v5 · adaptive score, hit/kill/skill SFX, fury cue · skill forks trimmed to the band (1876f0f).
+- v4 merged to `main` (2026-10-23): Phase 0–3 and the retune: bal.js, `--from`, `--vet`, browse.js · grid, rooms, hordes, fodder, dark rooms, dash charges, crowd slow, lead aim, volleys, breakables, boss fury IV–VI · Ascended, fork ranks, attack/element/skill transforms for all six heroes, Codex removed, Armory shell, refunds, save v5 · adaptive score, hit/kill/skill SFX, fury cue · all 48 forks in the parity bands · boss TTK band · IV–VI calibration (fury as the knowledge check) · Second Wind outside bosses, Purse card · melee hero EHP, Shadowstep grace.
 - v3 merged to `main` (PR #2): art, paths, class routes, aim, Tab sheet, no life steal, save v4, Firefox perf, balance sign-off at `cd1074d`.
 - v2 (live on main): paths, statuses, lantern rooms, UI, juice, perf, bot balance; see HANDOFF-2026-10-21.
 
@@ -34,7 +31,7 @@
 - 2026-10-21: merge v2 to main without playtest 2.
 - 2026-10-22 (v3): embedded pixel art, Firefox speed, no auto-aim, Tab sheet, class routes, six elements + General, no life steal, Knight Shield Throw.
 - 2026-10-22 (playtest 3, all recommended options): lantern meter, room costs, Gloom and flare removed, 2 opt-in Dark doors per floor · ARPG hordes (about 40 kills per room at I to 120 at VI, ≤ 120 live) · rooms about 2× area with a scrolling camera, 9–10 rooms per floor, a win in 30–40 min · dash charges · crowds slow the hero (floor ×0.5) · fodder touch damage ≤ 3% max HP, untelegraphed · late power from Ascended boons, fork transforms (rank 2 and 3, auto-granted) and skill transforms, per hero and fork · about 32 boon picks per run · chains and explosions trigger on fodder, refunds, shields and stacks do not · Codex removed, non-element relics in the pool from the start, element relics become path boons, embers refunded · per-hero Armory of sidegrade unlocks inside Upgrades · free refunds and Reset all · small Hearth stats stay · dark-fantasy synth music per stratum with intensity layers and a boss theme · fodder shows only crits and summed numbers · breakable props · solo-first tuning, co-op bot-checked · mid playtest with Ranger and Knight complete · headless testing only.
-- 2026-10-23: small Hearth (full Hearth adds at most half of what smart picks add; bal.js bands: fresh random <= 1%, fresh smart 10-20%, mid 12-24%, max 15-27%, pact 5 5-15%, every cell with --vet) · boss fury (soft enrage, visible on the boss bar) on the bosses of strata IV-VI only.
+- 2026-10-23: small Hearth (full Hearth adds at most half of what smart picks add; bal.js bands: fresh random <= 1%, fresh smart 10-20%, mid 12-24%, max 15-27%, pact 5 5-15%, every cell with --vet) · boss fury (soft enrage, visible on the boss bar) on the bosses of strata IV-VI only · v4 to main by 12:06 for an office playtest.
 
 ## Known traps
 - See CLAUDE.md "Known default traps".
@@ -53,3 +50,4 @@
 - 2026-10-21: F1, F2 (pacing, sustain, lantern), UI, juice, perf, balance merged; v2 PR to main; handoff HANDOFF-2026-10-21.md.
 - 2026-10-22: v3 overhaul merged to main (PR #2); handoff HANDOFF-2026-10-22.md.
 - 2026-10-22: playtest 3 triage by three advisors (f1, 6a, 88); v4 on `feat/v4`.
+- 2026-10-23: v4 retune and release to main under a 3-hour deadline; handoff HANDOFF-2026-10-23.md.
