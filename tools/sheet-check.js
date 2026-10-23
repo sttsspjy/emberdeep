@@ -505,7 +505,7 @@ function statusRun(boons, stratum, secs, until) {
     const h1 = Cm({ c_atk: 1, c_atk_h: 1 }), h2 = Cm({ c_atk: 1, c_atk_h: 2 }), h3 = Cm({ c_atk: 1, c_atk_h: 3 }), wol = (m) => ex(m, 'Wave of light').perAttack;
     ok(!ex(h1, 'Solar Flare') && ex(h2, 'Solar Flare') && ex(h3, 'Solar Flare') && !ex(h2, "Dawn's Wake") && ex(h3, "Dawn's Wake"), 'Sunhammer lists Solar Flare from rank 2 and Dawn’s Wake at rank 3 only');
     rel(ex(h2, 'Solar Flare').perAttack, wol(h2) * 0.8 * 0.3, 1e-6, 'Solar Flare = wave x waveBurst (0.8) x 0.3 (the share of waves whose burst catches a foe)');
-    rel(ex(h3, "Dawn's Wake").perAttack, wol(h3) * 0.45 * 1.5 * ED.affC(4, 'holy'), 1e-6, "Dawn's Wake = wave x wake (0.45) x 1.5 s on the strip x the Holy class affinity (no crit)");
+    rel(ex(h3, "Dawn's Wake").perAttack, wol(h3) * 0.6 * 1.5 * ED.affC(4, 'holy'), 1e-6, "Dawn's Wake = wave x wake (0.6) x 1.5 s on the strip x the Holy class affinity (no crit)");
     ok(!ex(h3, 'Solar Flare').packOnly && !ex(h3, "Dawn's Wake").packOnly && ex(h3, "Dawn's Wake").radiance > 0, 'both count on one foe; the strip also stores Radiance');
     const w0 = Cm({ c_atk: 1, c_atk_h: 3 }, { stat: { wake: 0 } });
     ok(h3.proc.rate.holy > w0.proc.rate.holy && Math.abs(h3.proc.rate.holy - w0.proc.rate.holy - ex(h3, "Dawn's Wake").radiance * h3.weapon.aps) < 1e-6, 'the strip adds a quarter of its raw damage to the Radiance income');
@@ -515,15 +515,15 @@ function statusRun(boons, stratum, secs, until) {
   { // Litany (rank 2) and Returning Light (rank 3) of Crusader: two side waves per Litany attacks, a second pass at waveReturn
     const s1 = Cm({ c_atk: 1, c_atk_s: 1 }), s2 = Cm({ c_atk: 1, c_atk_s: 2 }), s3 = Cm({ c_atk: 1, c_atk_s: 3 }), wol = (m) => ex(m, 'Wave of light').perAttack;
     ok(!ex(s1, 'Litany') && ex(s2, 'Litany') && !ex(s2, 'Returning Light') && ex(s3, 'Returning Light') && ex(s3, 'Litany'), 'Crusader lists Litany from rank 2 and Returning Light at rank 3 only');
-    rel(ex(s2, 'Litany').perAttack, wol(s2) * 2 * 2 / 24, 1e-6, 'Litany = 2 extra waves (a wave comes every 2nd attack) every 24th attack');
-    rel(ex(s3, 'Returning Light').perAttack, wol(s3) * 0.62 * 0.75, 1e-6, 'Returning Light = wave x waveReturn (0.62) x 0.75 (foes on the way back)');
-    rel(ex(s3, 'Litany').perAttack, wol(s3) * 2 * 2 / 24 * (1 + 0.62 * 0.75), 1e-6, 'the Litany side waves return too');
+    rel(ex(s2, 'Litany').perAttack, wol(s2) * 2 * 2 / 16, 1e-6, 'Litany = 2 extra waves (a wave comes every 2nd attack) every 16th attack');
+    rel(ex(s3, 'Returning Light').perAttack, wol(s3) * 0.55 * 0.75, 1e-6, 'Returning Light = wave x waveReturn (0.55) x 0.75 (foes on the way back)');
+    rel(ex(s3, 'Litany').perAttack, wol(s3) * 2 * 2 / 16 * (1 + 0.55 * 0.75), 1e-6, 'the Litany side waves return too');
     ok(s3.weapon.dps > s2.weapon.dps && s2.weapon.dps > s1.weapon.dps, 'each rank raises the weapon damage per second');
   }
   { // Judging Light (rank 2) and Sunstrike (rank 3) of Guardian Light: a Judged window on the model's condition factor, extras on the one Smite stream
     const g1 = Cm({ c_el: 1, c_el_a: 1 }), g2 = Cm({ c_el: 1, c_el_a: 2 }), g3 = Cm({ c_el: 1, c_el_a: 3 }), S = (m) => holy(m).dps;
     ok(ex(g1, 'Heavy Smites') && ex(g2, 'Heavy Smites') && !ex(g2, 'Sunstrike') && ex(g3, 'Sunstrike') && !ex(g3, 'Sunstrike').packOnly, 'Guardian Light lists Heavy Smites and, at rank 3, Sunstrike (one foe)');
-    rel(sec(g1, 'Heavy Smites'), S(g1) * 0.6 * 0.6, 1e-6, 'Heavy Smites = the Smite stream x smiteBig (0.6) x 0.6 (the share that lands on elites and bosses)');
+    rel(sec(g1, 'Heavy Smites'), S(g1) * 0.5 * 0.6, 1e-6, 'Heavy Smites = the Smite stream x smiteBig (0.5) x 0.6 (the share that lands on elites and bosses)');
     rel(sec(g3, 'Sunstrike'), S(g3) * 0.7 * (4 - 1) / 3, 1e-6, 'Sunstrike = the Smite stream x 0.7 (foes taking 3+ Smites) x (4 - 1) / 3');
     rel(MD.packWeapon(g3, 4) - MD.packWeapon(Cm({ c_el: 1, c_el_a: 3 }, { stat: { sunstrike: 0 } }), 4), ex(g3, 'Sunstrike').perAttack * g3.weapon.aps, 1e-6, 'Sunstrike and Heavy Smites ride the one Smite stream: nothing more in a pack');
     const k = (boons, stat) => { const p = heroOf(boons, stat), m = ED.Sheet.compute(p, { stratum: 4, pact: 0, gold: 0, level: 5, xp: 0, xpNext: 100, dark: false, allyNear: 0, minions: 0, room: null, party: 1, rooms: { seen: 1, total: 10, darkTotal: 2, darkLeft: 2 }, heroes: [], time: 0 }, { raw: true, numbers: true }); return MD.condFactor(p, m, MD.defence(p, m)); };
@@ -537,7 +537,7 @@ function statusRun(boons, stratum, secs, until) {
     const p1 = Cm({ c_el: 1, c_el_b: 1 }), p2 = Cm({ c_el: 1, c_el_b: 2 }), p3 = Cm({ c_el: 1, c_el_b: 3 }), S = (m) => holy(m).dps, mul = (m) => m.weapon.extras.find(e => e.label === 'Prism beam');
     ok(mul(p1).packOnly && !ex(p1, 'Sunburst') && ex(p2, 'Sunburst').packOnly && !ex(p2, 'Spectrum') && ex(p3, 'Spectrum').packOnly, 'Prism lists its beam (pack only), Sunburst from rank 2 and Spectrum at rank 3');
     rel(sec(p1, 'Prism beam'), S(p1) * 0.5, 1e-6, 'Prism beam = the Smite stream x smiteBeam (0.5)'); rel(sec(p2, 'Sunburst'), S(p2) * 0.5 * 0.5, 1e-6, 'Sunburst = one more hop at half a beam');
-    rel(sec(p3, 'Spectrum'), S(p3) * 0.5 * 2 + S(p3) * 0.01 * (1 + 0.55) * 3, 1e-6, 'Spectrum = 2 more beams (3 others in a pack of 4) + 1% of a Smite as Radiance in each of 3 foes, paid back at 1 + smiteMul');
+    rel(sec(p3, 'Spectrum'), S(p3) * 0.5 * 2 + S(p3) * 0.01 * (1 + 0.5) * 3, 1e-6, 'Spectrum = 2 more beams (3 others in a pack of 4) + 1% of a Smite as Radiance in each of 3 foes, paid back at 1 + smiteMul');
     rel(p3.weapon.dps, (p3.weapon.avg * p3.weapon.oneFoe + p3.weapon.extras.filter(e => !e.packOnly).reduce((s, e) => s + e.perAttack, 0)) * p3.weapon.aps, 0.01, 'the beams are left out of the damage on one foe');
     ok(MD.packWeapon(p3, 4) - MD.packWeapon(Cm({ c_el: 1, c_el_b: 3 }, { stat: { prismN: 0 } }), 4) > 3 * sec(p3, 'Spectrum') * 0.99, 'in a pack every foe of the 4 beams to the others (x4)');
     const lone = Cm({ c_atk: 1, c_el: 1, c_el_b: 3 }, { stat: { smiteBeam: 0 } }); ok(!ex(lone, 'Prism beam') && !ex(lone, 'Spectrum'), 'no beam, no Spectrum extra without the Prism beam');

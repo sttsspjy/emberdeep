@@ -16,7 +16,7 @@
     desc: 'Every 3rd swing is a Cleave: +{cleave} damage, 40% more reach and arc, double knockback.', mods: { cleave: 0.6 } });
   card('knight', 'attack', 2, 'k_atk_h', { name: 'Oathbreaker', icon: 'hammer', tag: 'Heavy', weapon: { kind: 'heavy' },
     desc: 'Your weapon becomes heavy (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit; hits Stagger). Cleaves crack the ground: a shock at the swing tip (radius 72) deals {cShock} weapon damage and stuns {cStun:s}.[ Cleaves deal +{cleave} more.]',
-    rider2: 'Follow-Through: your first swing after a Shield Charge is a Cleave at +{chargeCleave}.', mods: { cShock: 0.15, cStun: 0.3 }, up: { cleave: 0.1, cShock: 0.15 }, r2: { chargeCleave: 0.5 }, r3: { fissure: 0.8 },
+    rider2: 'Follow-Through: your first swing after a Shield Charge is a Cleave at +{chargeCleave}.', mods: { cShock: 0.25, cStun: 0.3 }, up: { cleave: 0.1, cShock: 0.15 }, r2: { chargeCleave: 0.5 }, r3: { fissure: 0.8 },
     form: { name: 'Earthsplitter', desc: 'Each Cleave splits the ground ahead: a fissure runs 180 forward along your aim, erupts 0.25 s later and strikes every foe on it once for {fissure} weapon damage, stunning them {cStun:s}.' } });
   card('knight', 'attack', 2, 'k_atk_s', { name: 'Sworn Blade', icon: 'blades', tag: 'Swift', weapon: { kind: 'swift' },
     desc: "Your weapon becomes swift (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit; attacks give Flow). Cleaves deal +{cleave} more.[ +{atk} attack speed.] Parry: a Cleave that starts in the last 0.3 s of a foe's wind-up (its rim flashes white) cancels that attack and stuns it 0.6 s (elites: 0.3 s stun, no cancel; never bosses), at most once per 2.5 s.",
@@ -49,7 +49,7 @@
     form: { name: 'Doombrand', desc: 'Brand now counts up to {brandCap:n} ailments. A foe holding 4 or more ailments is Doombranded for 4 s: Marked, it takes +{brandMark} damage from every hero (the strongest Mark on a foe applies).' } });
   card('knight', 'element', 2, 'k_el_b', { name: 'Ruinous Blows', icon: 'axe', tag: 'Spread',
     desc: "Shield Charge and Shield Throw deal +{s1Dmg} and build your statuses at double strength, and the thrown shield carries wounds: each ricochet moves {carry} of the last foe's statuses to the next foe it strikes.",
-    rider2: 'Ruin Spreads: a foe killed by a shield strike hands {ruinSpread} of its statuses to each of the 2 nearest foes within 80.', mods: { ruinInf: 1, carry: 0.25, s1Dmg: 0.15, s2Dmg: 0.15 }, up: { carry: 0.1, s1Dmg: 0.25, s2Dmg: 0.25 }, r2: { ruinSpread: 0.5, s1Dmg: 0.65, s2Dmg: 0.65 }, r3: { bloodquake: 1, bloodquakeMul: 1, bloodquakeSplash: 0.8 },
+    rider2: 'Ruin Spreads: a foe killed by a shield strike hands {ruinSpread} of its statuses to each of the 2 nearest foes within 80.', mods: { ruinInf: 1, carry: 0.25, s1Dmg: 0.15, s2Dmg: 0.15 }, up: { carry: 0.1, s1Dmg: 0.15, s2Dmg: 0.15 }, r2: { ruinSpread: 0.5, s1Dmg: 0.55, s2Dmg: 0.55 }, r3: { bloodquake: 1, bloodquakeMul: 1, bloodquakeSplash: 0.8 },
     form: { name: 'Bloodquake', desc: 'A Shield Charge or Shield Throw strike on a foe with 3 or more ailments detonates its wounds: its Bleed pool hits it at once for {bloodquakeMul} more than it would have dealt, and {bloodquakeSplash} of the amount paid bursts to foes within 80, who start Bleeding for it (at most once per second per foe).' } });
 
   // ---------------- Ranger (Volley · Rain of Arrows) ----------------
@@ -181,11 +181,11 @@
     desc: 'Your waves of light come every 2nd attack and deal +{waveMul}; the Sacred Lantern gains waves too (60% of its damage).', mods: { waveEvery: -1, waveMul: 0.3 } });
   card('cleric', 'attack', 2, 'c_atk_h', { name: 'Sunhammer', icon: 'hammer', tag: 'Heavy', weapon: { kind: 'heavy' },
     desc: 'Heavy weapon (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit, Stagger). Your waves are twice as wide, travel 60% farther and stun foes {waveStun:s} (not bosses).[ Waves deal +{waveMul} more.]',
-    rider2: 'Solar Flare: each wave ends in a burst of light (radius 50) for {waveBurst} of the wave.', mods: { waveBig: 1, waveStun: 0.4 }, up: { waveMul: 0.1 }, r2: { waveBurst: 0.8 }, r3: { wake: 0.45 },
+    rider2: 'Solar Flare: each wave ends in a burst of light (radius 50) for {waveBurst} of the wave.', mods: { waveBig: 1, waveStun: 0.4 }, up: { waveMul: 0.1 }, r2: { waveBurst: 0.8 }, r3: { wake: 0.6 },
     form: { name: "Dawn's Wake", desc: "Each wave leaves a strip of holy fire along its whole path for 2 s: foes on it take {wake} of the wave's damage per second as Holy damage, and the fire stores Radiance." } });
   card('cleric', 'attack', 2, 'c_atk_s', { name: 'Crusader', icon: 'wing', tag: 'Swift', weapon: { kind: 'swift' },
     desc: 'Swift weapon (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit, Flow). Your waves steer toward foes within 25 degrees of where you aimed them and deal +{waveMul}.',
-    rider2: 'Litany: every {litany:n}th attack sends 3 waves in a fan.', mods: { waveHome: 2, waveMul: 0.05 }, up: { waveMul: 0.05 }, r2: { litany: 24 }, r3: { waveReturn: 0.62 },
+    rider2: 'Litany: every {litany:n}th attack sends 3 waves in a fan.', mods: { waveHome: 2, waveMul: 0.05 }, up: { waveMul: 0.05 }, r2: { litany: 16 }, r3: { waveReturn: 0.55 },
     form: { name: 'Returning Light', desc: 'Every wave turns back at the end of its flight and flies home to you, striking each foe on the way for {waveReturn} of its damage and steering like the outward wave. Litany fans return too.' } });
   card('cleric', 'skill1', 1, 'c_s1', { name: 'Sanctum', icon: 'sun', forks: ['c_s1_a', 'c_s1_b'], plays: 'fight from holy ground.',
     desc: 'Sanctuary: +{s1Area} radius, lasts {s1Dur:s} longer (at most 60% of its cooldown), +{s1Dmg} damage; allies inside take {sanctDR:dr} less damage.', mods: { s1Area: 0.3, s1Dur: 2, s1Dmg: 0.5, sanctDR: 0.1 } });
@@ -211,11 +211,11 @@
     desc: "Your skills deal +{classElMul} Holy damage, and your weapon stores Radiance for {wInfHoly} of each hit (Consecrate's rate counts instead when it is higher).", mods: { classElMul: 0.25, wInfHoly: 0.12 } });
   card('cleric', 'element', 2, 'c_el_a', { name: 'Guardian Light', icon: 'shieldgold', tag: 'Focus', coop: true,
     desc: 'Your Smites on elites and bosses deal +{smiteBig}, and heroes your Smites shield deal +{guardLight} damage for 6 s.',
-    rider2: 'Judging Light: your Smites Judge the foe for {smiteJudge:s}.', mods: { smiteBig: 0.6, guardLight: 0.08 }, up: { guardLight: 0.02 }, r2: { smiteJudge: 3, smiteBig: 0.4, guardLight: 0.02 }, r3: { sunstrike: 4, smiteBig: 0.5, guardLight: 0.04 },
+    rider2: 'Judging Light: your Smites Judge the foe for {smiteJudge:s}.', mods: { smiteBig: 0.5, guardLight: 0.08 }, up: { guardLight: 0.02 }, r2: { smiteJudge: 3, smiteBig: 0.4, guardLight: 0.02 }, r3: { sunstrike: 4, smiteBig: 0.5, guardLight: 0.04 },
     form: { name: 'Sunstrike', desc: 'Every 3rd Smite on the same foe (never a horde foe) is a Sunstrike: ×{sunstrike:x} damage, and the shield it grants is doubled (at most 3% of max health).' } });
   card('cleric', 'element', 2, 'c_el_b', { name: 'Prism', icon: 'arc', tag: 'Spread',
     desc: 'Your Smites deal +{smiteMul}, and a beam strikes the nearest other foe within 120 for {smiteBeam} of the Smite.',
-    rider2: 'Sunburst: the beam jumps once more, to another foe within 120, at half again.', mods: { smiteMul: 0.55, smiteBeam: 0.5 }, r2: { beamJumps: 1 }, r3: { prismN: 4, prismRad: 0.01 },
+    rider2: 'Sunburst: the beam jumps once more, to another foe within 120, at half again.', mods: { smiteMul: 0.5, smiteBeam: 0.5 }, r2: { beamJumps: 1 }, r3: { prismN: 4, prismRad: 0.01 },
     form: { name: 'Spectrum', desc: 'The beam splits into up to {prismN:n} beams, one to each of the nearest other foes within 160, each for {smiteBeam} of the Smite (Sunburst still jumps from the nearest). Each foe a beam strikes, a horde foe excepted, stores Radiance toward its next Smite ({prismRad} of this one). Beams never Smite.' } });
 
   // ---------------- Necromancer (Raise Legion · Bone Harvest) ----------------
@@ -227,7 +227,7 @@
     form: { name: 'Grave Bolt', desc: 'One attack in {graveN:n} is a Grave Bolt: the shot pierces every foe, is twice as wide and deals ×{graveBolt:x} damage (a scythe swing deals ×{graveBolt:x}). It Hexes every foe it hits, and every foe it kills (not a horde foe) rises as a minion with no Gravecaller limit.' } });
   card('necro', 'attack', 2, 'n_atk_s', { name: 'Soul Barrage', icon: 'orb', tag: 'Swift', weapon: { kind: 'swift' },
     desc: 'Swift weapon (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit, Flow): foes you Hexed take +{hexSelf} from you.',
-    rider2: 'Quickened Dead: your minions attack {hexHaste} faster against foes you Hexed.', mods: { hexSelf: 0.08 }, up: { hexSelf: 0.05 }, r2: { hexHaste: 0.25 }, r3: { soulStorm: 2.5 },
+    rider2: 'Quickened Dead: your minions attack {hexHaste} faster against foes you Hexed.', mods: { hexSelf: 0.1 }, up: { hexSelf: 0.05 }, r2: { hexHaste: 0.25 }, r3: { soulStorm: 2.5 },
     form: { name: 'Soul Storm', desc: 'Once per second, a foe you Hexed that your weapon hits releases a soul that seeks another foe within 150 (one you have not Hexed first), striking it for {soulStorm} of the hit and Hexing it.' } });
   card('necro', 'skill1', 1, 'n_s1', { name: 'Endless Legion', icon: 'skull', forks: ['n_s1_a', 'n_s1_b'], plays: 'a standing army.',
     desc: '+{minions:n} max minion and Raise Legion raises {s1N:n} more.', mods: { minions: 1, s1N: 1 } });
@@ -253,11 +253,11 @@
     desc: "Your skills deal +{classElMul} Shadow damage; your minions apply your statuses at 75% strength (from 50%) and mark Doom for {mInfShadow} of their damage (Mark of Doom's rate counts instead when it is higher).", mods: { classElMul: 0.25, minionInfuse: 0.25, mInfShadow: 0.2 } });
   card('necro', 'element', 2, 'n_el_a', { name: 'Abyssal Toll', icon: 'mask', tag: 'Focus',
     desc: 'Your Tolls deal +{tollMul}, and each Toll or Reaped elite empowers your minions +{abyssMin} for 6 s.',
-    rider2: "Abyssal Hunger: your minions' Doom counts double on elites and bosses.", mods: { tollMul: 0.4, abyssMin: 0.25 }, up: { tollMul: 0.1 }, r2: { abyssDoom: 1, tollMul: 0.9 }, r3: { maw: 0.2, mawHaste: 0.3 },
+    rider2: "Abyssal Hunger: your minions' Doom counts double on elites and bosses.", mods: { tollMul: 0.4, abyssMin: 0.25 }, up: { tollMul: 0.1 }, r2: { abyssDoom: 1, tollMul: 0.75 }, r3: { maw: 0.2, mawHaste: 0.3 },
     form: { name: 'Abyssal Maw', desc: 'Each Toll on a boss, and each Reaped elite, opens a maw (radius 60) beneath it for 3 s: foes in it take {maw} of the Toll per second (a Reaped elite counts its Doom as the Toll), and your minions within 120 of it attack {mawHaste} faster.' } });
   card('necro', 'element', 2, 'n_el_b', { name: 'Rise Again', icon: 'hand', tag: 'Spread',
     desc: 'Every foe your Doom Reaps rises as a minion (at most once per 1.5 s); every boss Toll raises one.[ Minions deal +{minionDmg} more.]',
-    rider2: 'Risen Tide: minions risen this way deal +{tideMul} and last 4 s longer.', mods: { reapRaise: 1 }, up: { minionDmg: 0.19 }, r2: { tideMul: 0.55 }, r3: { tideFree: 1, tideCap: 2, tideDoom: 2 },
+    rider2: 'Risen Tide: minions risen this way deal +{tideMul} and last 4 s longer.', mods: { reapRaise: 1 }, up: { minionDmg: 0.13 }, r2: { tideMul: 0.5 }, r3: { tideFree: 1, tideCap: 2, tideDoom: 2 },
     form: { name: 'Tide of the Dead', desc: 'Rise Again raises without its 1.5 s limit (at most 2 per second). The minions it raises do not count against your minion cap (up to {tideCap:n} extra), and each bursts when it falls (radius 60), marking Doom worth {tideDoom} of its strike on every foe inside. Horde foes never rise.' } });
 
   Object.assign(ED.BOONS, CB);
