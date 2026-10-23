@@ -36,7 +36,7 @@
     desc: 'Shield Throw ricochets to {s2N:n} more foes, strikes +{s2Dmg}, and recharges {s2Cdr} faster.', mods: { s2N: 2, s2Dmg: 0.2, s2Cdr: 0.167 } });
   card('knight', 'skill2', 2, 'k_s2_a', { name: 'Shield Storm', icon: 'twin', tag: 'Burst',
     desc: 'Throw two shields in a narrow V, each at {twinShield}, each with its own ricochets.[ Shield Throw deals +{s2Dmg}.]',
-    rider2: "Gathering Force: each ricochet adds +{gather} to that shield's next strike.", mods: { twinShield: 0.7 }, r2: { gather: 0.3, s2Dmg: 0.55 }, r3: { tempest: 3, vortexMul: 0.08, vortexDur: 2.5 },
+    rider2: "Gathering Force: each ricochet adds +{gather} to that shield's next strike.", mods: { twinShield: 0.7 }, r2: { gather: 0.3, s2Dmg: 0.7 }, r3: { tempest: 3, vortexMul: 0.03, vortexDur: 2.5 },
     form: { name: 'Aegis Tempest', desc: 'Throws {tempest:n} shields instead of two, in a wider fan. When their ricochets end they converge on the last foe struck and spin into a vortex for {vortexDur:s} (radius 100): it pulls foes in (not bosses) and strikes every foe inside 4 times a second for {vortexMul} of a strike. Then the shields return.' } });
   card('knight', 'skill2', 2, 'k_s2_b', { name: 'Shield Orbit', icon: 'shieldgold', tag: 'Guard',
     desc: 'After you catch it, the shield orbits you for {orbit:s}, striking foes it passes for {orbitMul} of a strike (each once per 0.75 s), stunning them {orbitStun:s} (at most once per 1 s per foe) and destroying enemy shots it touches; each shot destroyed shortens the orbit by 0.75 s.[ Shield Throw deals +{s2Dmg}.]',
@@ -77,7 +77,7 @@
     desc: 'Rain of Arrows: +{s2Area} radius, lasts {s2Dur:s} longer, +{s2Dmg} damage.', mods: { s2Area: 0.3, s2Dur: 1, s2Dmg: 0.1 } });
   card('ranger', 'skill2', 2, 'r_s2_a', { name: 'Skyfall', icon: 'star', tag: 'Burst',
     desc: "The whole Rain lands at once 0.5 s after the cast: every volley's damage in one hit over a 30% wider area, stunning foes 0.5 s (not bosses).[ Rain deals +{s2Dmg} and is +{s2Area} wider.]",
-    rider2: 'Twin Sky: a second Skyfall lands 0.8 s later on the same spot at {skyTwin}.', mods: { skyfall: 1 }, up: { s2Dmg: 0.1, s2Area: 0.05 }, r2: { skyTwin: 0.5 }, r3: { starfall: 0.45 },
+    rider2: 'Twin Sky: a second Skyfall lands 0.8 s later on the same spot at {skyTwin}.', mods: { skyfall: 1 }, up: { s2Dmg: 0.1, s2Area: 0.05 }, r2: { skyTwin: 0.4 }, r3: { starfall: 0.45 },
     form: { name: 'Starfall Barrage', desc: 'Skyfall becomes 5 impacts that walk from you to the cursor, 0.12 s apart (replacing the single landing and Twin Sky): each lands in radius 70 for {starfall} of a Skyfall and stuns foes 0.4 s (not bosses).' } });
   card('ranger', 'skill2', 2, 'r_s2_b', { name: 'Hail of Thorns', icon: 'thorn', tag: 'Guard', coop: true,
     desc: 'Foes in the Rain are slowed 50% and take +20% damage (does not stack with other +20% vulnerabilities).',
@@ -108,7 +108,7 @@
     desc: 'Flame Nova: +{s1Area} radius, +{s1Dmg} damage, recharges {s1Cdr} faster.', mods: { s1Area: 0.25, s1Dmg: 0.2, s1Cdr: 0.21 } });
   card('pyro', 'skill1', 2, 'p_s1_a', { name: 'Twin Nova', icon: 'twin', tag: 'Burst',
     desc: 'Nova erupts a second time 0.6 s later around you at {novaEcho}.',
-    rider2: 'Collapse: before the second eruption, foes within its radius are pulled {novaPull:n} px toward you.', mods: { novaEcho: 0.5 }, up: { novaEcho: 0.3 }, r2: { novaPull: 40 }, r3: { supernova: 1.5, novaEcho: 0.3, supernovaPull: 30 },
+    rider2: 'Collapse: before the second eruption, foes within its radius are pulled {novaPull:n} px toward you.', mods: { novaEcho: 0.65 }, up: { novaEcho: 0.35 }, r2: { novaPull: 40 }, r3: { supernova: 1.2, novaEcho: 0.2, supernovaPull: 30 },
     form: { name: 'Supernova', desc: "The second eruption becomes a shockwave that grows from the Nova's radius to radius 220 over 0.5 s, striking every foe it crosses for {novaEcho} of the Nova. Then the centre collapses and pulls foes {supernovaPull:n} px inward (not bosses). The Nova's Burn is {supernova:n} times as strong." } });
   card('pyro', 'skill1', 2, 'p_s1_b', { name: 'Phoenix Mantle', icon: 'feather', tag: 'Guard',
     desc: 'Nova leaves a ring of fire (3 s), and if it hits a foe it shields you for {mantle} max health (at most once per 10 s).[ Nova deals +{s1Dmg}.]',
@@ -160,7 +160,7 @@
     desc: 'Vanish recharges {s2Cdr} faster; its smoke is {s2Area} wider, lasts {s2Dur:s} longer and foes inside take +20% damage; you move {stealthSpd} faster while unseen.', mods: { s2Cdr: 0.27, s2Area: 0.4, s2Dur: 2, smokeVuln: 1, stealthSpd: 0.3 } });
   card('shade', 'skill2', 2, 's_s2_a', { name: "Night's Edge", icon: 'mask', tag: 'Burst',
     desc: "Vanish recharges {s2Cdr} faster. Ambush deals ×{ambushMul:a25} of your weapon's base damage. An Ambush refunds Shadowstep; an Ambush kill refunds Vanish (at most once per 3 s).",
-    rider2: 'Ambush Sweep: Ambush also strikes every foe within {ambushCleave:n} of its target.', mods: { ambushMul: 1.5, nightsEdge: 1, s2Cdr: 0.13 }, up: { ambushMul: 2 }, r2: { ambushCleave: 70 }, r3: { eclipse: 0.1, eclipseDur: 4 },
+    rider2: 'Ambush Sweep: Ambush also strikes every foe within {ambushCleave:n} of its target.', mods: { ambushMul: 3, nightsEdge: 1, s2Cdr: 0.13 }, up: { ambushMul: 2 }, r2: { ambushCleave: 70 }, r3: { eclipse: 0.06, eclipseDur: 4 },
     form: { name: 'Eclipse', desc: "Vanish's smoke becomes a dark dome (radius 140) that lasts {eclipseDur:s}. While you stand inside you stay unseen and every attack is an Ambush for {eclipse} of the full one, not only the next (the extra Ambushes refund nothing). Foes inside take +20% damage." } });
   card('shade', 'skill2', 2, 's_s2_b', { name: 'Veil of Night', icon: 'cloak', tag: 'Guard',
     desc: 'Vanish shields you for {veil} max health (at most once per 12 s) and recharges {s2Cdr} faster; your smoke blinds each foe {veilBlind:s} longer (elites half); stealth lasts {stealthDur:s} longer; Ambush deals ×{ambushMul:a25} of your weapon\'s base damage.',
@@ -243,7 +243,7 @@
     desc: 'Bone Harvest explosions deal +{s2Dmg} and are {s2Area} wider; it always raises {harvestRaise:n} after.', mods: { s2Dmg: 0.4, s2Area: 0.2, harvestRaise: 2 } });
   card('necro', 'skill2', 2, 'n_s2_a', { name: 'Corpse Explosion', icon: 'bomb', tag: 'Burst',
     desc: "Harvest also detonates up to {corpse:n} corpses (foes that died in the last 4 s) within 220 of you, each at {corpseMul} of a minion's burst.",
-    rider2: 'Bone Lances: before exploding, each minion flies to the foe nearest it within 200 and bursts on it for +{boneLance}.', mods: { corpse: 4, corpseMul: 0.5 }, up: { corpse: 1 }, r2: { boneLance: 0.15 }, r3: { corpse: 4, corpseMul: 0.2, carrionN: 3, carrionShard: 0.5 },
+    rider2: 'Bone Lances: before exploding, each minion flies to the foe nearest it within 200 and bursts on it for +{boneLance}.', mods: { corpse: 4, corpseMul: 0.3 }, up: { corpse: 1 }, r2: { boneLance: 0.15 }, r3: { corpse: 4, corpseMul: 0.4, carrionN: 3, carrionShard: 0.5 },
     form: { name: 'Carrion Storm', desc: 'Every corpse Harvest detonates (up to {corpse:n}, now at {corpseMul}) launches {carrionN:n} bone shards at the nearest foes for {carrionShard} of a minion\'s burst each.' } });
   card('necro', 'skill2', 2, 'n_s2_b', { name: 'Bone Armor', icon: 'harvest', tag: 'Guard',
     desc: 'Harvest shields you for {boneArmor} max health per minion harvested (up to {boneCap}, at most once per 12 s). [ Bone Harvest explosions deal +{s2Dmg}.]',

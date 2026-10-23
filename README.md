@@ -149,7 +149,7 @@ Progress autosaves to the browser. **Settings > Profile** shows a portable save 
 
 Wickdeep starts fresh profiles: saves and codes from Emberdeep (`ED1-…`) do not carry over, and the game says so if you paste one.
 
-If you played an earlier version of Wickdeep, the first launch shows a one-time **"The Deep has changed"** notice. It lists what is different (the relic Codex is gone and every relic drops from the start, the element relics became path boons, free Hearth refunds, mouse aim, the new paths, shields instead of life steal, the Knight's Shield Throw, optional dark rooms in place of the lantern) and how many embers the Codex refunded.
+If you played an earlier version of Wickdeep, the first launch shows a one-time **"The Deep has changed"** notice. It lists what is different (the relic Codex is gone and every relic drops from the start, the element relics became path boons, free Hearth refunds, mouse aim, the new paths, shields instead of life steal, the Knight's Shield Throw, optional dark rooms in place of the lantern, bigger rooms with hordes, dash charges, rank 2 and rank 3 transforms at the bosses, Ascended boons, boss fury, music per stratum) and how many embers the Codex refunded.
 
 Two tabs open on the same profile stay in step: each adopts the other's saved progress instead of overwriting it.
 
