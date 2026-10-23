@@ -10,7 +10,7 @@
     knight: {
       name: 'Knight', title: 'Oathsworn Shield', icon: 'shield',
       desc: 'Sturdy frontliner. Sweeping blades cut down crowds; the thrown shield stuns whole packs and swats arrows.',
-      hp: 135, armor: 8, spd: 116, crit: 0.05, power: 23.4, element: null,
+      hp: 178, armor: 8, spd: 116, crit: 0.05, power: 23.4, element: null,
       weapons: ['longsword', 'warhammer', 'glaive'], skill: 'charge', skill2: 'shieldthrow',
       col: { a: '#a7b0ba', b: '#5d6670', c: '#d6aa55', d: '#2b3038' }, unlock: null,
     },
@@ -31,14 +31,14 @@
     shade: {
       name: 'Shade', title: 'Blade in the Dark', icon: 'dagger',
       desc: 'Fastest hero alive. Blinks through foes and lands guaranteed crits.',
-      hp: 133, armor: 7, spd: 138, crit: 0.12, power: 13, element: null,
+      hp: 192, armor: 7, spd: 138, crit: 0.12, power: 13, element: null,
       weapons: ['daggers', 'knives', 'scythes'], skill: 'step', skill2: 'vanish',
       col: { a: '#3a3550', b: '#1f1b2e', c: '#b78cff', d: '#121018' }, unlock: { boss: 1, text: 'Defeat The Bone Warden' },
     },
     cleric: {
       name: 'Cleric', title: 'Lantern of the Faithful', icon: 'sun',
       desc: 'Holy bruiser. Consecrates the ground and shields the whole party; a natural co-op anchor.',
-      hp: 121, armor: 7, spd: 114, crit: 0.05, power: 23, element: 'holy',
+      hp: 175, armor: 7, spd: 114, crit: 0.05, power: 23, element: 'holy',
       weapons: ['mace', 'dawnhammer', 'lantern'], skill: 'sanctuary', skill2: 'judgment',
       col: { a: '#e8e0c8', b: '#a69a78', c: '#ffd36b', d: '#4a4232' }, unlock: { runs: 4, text: 'Complete 4 descents (clear a room in each)' },
     },
