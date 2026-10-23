@@ -36,7 +36,6 @@
   --panel-a: #1d1510;
   --panel-b: #120d09;
   --panel-solid: #17110d;
-  --card: linear-gradient(180deg, rgba(36, 27, 20, 0.96), rgba(22, 16, 12, 0.97));
   --line: #4a3626;
   --line-hi: #6f5338;
   --brass: #8a6a42;
@@ -546,22 +545,26 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 .prog-line b { font-family: var(--f-num); color: var(--gold); }
 
 /* ---------- overlays ---------- */
-.overlay { display: flex; align-items: center; justify-content: center; background: radial-gradient(ellipse at 50% 42%, rgba(12, 7, 4, 0.6), rgba(3, 2, 2, 0.88)); padding: max(1rem, env(safe-area-inset-top)) 1.2rem; animation: fadeIn 0.25s ease-out; }
-.overlay.sheet { background: radial-gradient(ellipse at 50% 42%, rgba(12, 7, 4, 0.72), rgba(3, 2, 2, 0.92)); }
-#ov-sheet { background: radial-gradient(ellipse at 50% 42%, rgba(12, 7, 4, 0.95), rgba(3, 2, 2, 0.985)); }
+/* scrims: a flat dark wash under the 2 x 2 art px dither (denser lockdither where the world must not read through) */
+.overlay { display: flex; align-items: center; justify-content: center; background: var(--fr-dither) 0 0 / calc(2 * var(--p)) calc(2 * var(--p)), rgba(5, 3, 2, 0.8); image-rendering: pixelated; padding: max(1rem, env(safe-area-inset-top)) 1.2rem; animation: fadeIn 0.2s steps(3); }
+.overlay.sheet { background: var(--fr-dither) 0 0 / calc(2 * var(--p)) calc(2 * var(--p)), rgba(5, 3, 2, 0.88); }
+#ov-sheet { background: var(--fr-lockdither) 0 0 / calc(2 * var(--p)) calc(2 * var(--p)), rgba(5, 3, 2, 0.96); }
 @keyframes fadeIn { from { opacity: 0; } }
 
 /* boon picker: the hand of cards over a dithered scrim; a pick animates the chosen card (.picked) and drops the rest (.picking) */
-#ov-boon { overflow-y: auto; background: var(--fr-dither) 0 0 / calc(2 * var(--p)) calc(2 * var(--p)), rgba(5, 3, 2, 0.72); image-rendering: pixelated; animation: none; }
-.boon-wrap { margin: auto; width: min(100%, 100rem); display: flex; flex-direction: column; align-items: center; gap: calc(var(--fu) / 2); }
+#ov-boon { overflow-y: auto; background: var(--fr-lockdither) 0 0 / calc(2 * var(--p)) calc(2 * var(--p)), rgba(5, 3, 2, 0.93); image-rendering: pixelated; animation: none; }
+.boon-wrap { margin: auto; width: min(100%, 108rem); display: flex; flex-direction: column; align-items: center; gap: calc(var(--fu) / 2); }
 .boon-title { font: 400 var(--fs-title)/1.1 var(--f-title); color: var(--gold); text-align: center; text-shadow: 0 var(--fpx) 0 var(--px-ol); }
 #boon-count { font: 700 var(--fs-lg)/1 var(--f-body); color: var(--ember-hi); vertical-align: middle; }
 .boon-sub { color: var(--muted); font: 400 var(--fs-lg)/1.375 var(--f-body); text-align: center; text-shadow: 0 var(--fpx) 0 var(--px-ol); }
-/* --n cards per row; a card is a whole even number of art px wide so its 9-slice edges, crests and sprites land on the art grid */
-.boon-cards { --gap: calc(14 * var(--p)); --n: 4; display: flex; flex-wrap: wrap; justify-content: center; align-items: stretch; gap: calc(22 * var(--p)) var(--gap); width: 100%; padding: calc(18 * var(--p)) 0 calc(10 * var(--p)); }
+/* --n cards per row; a card is a whole even number of art px wide so its 9-slice edges, crests and sprites land on the art grid.
+   --orn = the frame ornament outside a card box (8 art px; 12 with Ascended wings): the row is inset by it and cards sit 2 --orn + 4 art px apart, so ornaments never cross.
+   Rows sit 28 art px apart: a crest or spark (14 art px over the box) under a drip (13 art px below the box). */
+.boon-cards { --orn: calc(8 * var(--p)); --gap: calc(2 * var(--orn) + 4 * var(--p)); --n: 4; display: flex; flex-wrap: wrap; justify-content: center; align-items: stretch; gap: calc(28 * var(--p)) var(--gap); width: 100%; padding: calc(18 * var(--p)) var(--orn) calc(10 * var(--p)); }
+.boon-cards:not(.dense):has(.k-asc) { --orn: calc(12 * var(--p)); }
 .boon-cards.n1 { --n: 1; } .boon-cards.n2 { --n: 2; } .boon-cards.n3 { --n: 3; }
 
-/* card: ::before the body (soot with stepped bands of the path hue), ::after the kind's frame (--cf, 9-slice, 4 art px of ornament outside the box), .bc-art the sprites */
+/* card: ::before the body (soot with stepped bands of the path hue), ::after the kind's frame (--cf, 9-slice, 8 art px of ornament outside the box), .bc-art the sprites */
 #boon-cards .boon-card { flex: none; }
 .boon-card { --pc: var(--path-general); --cb: #15100d; --sd: 1s; --spd: 1; position: relative; isolation: isolate; width: 22rem; width: round(down, min(22rem, (100% - (var(--n) - 1) * var(--gap)) / var(--n)), calc(2 * var(--p)));
   display: flex; flex-direction: column; align-items: center; gap: calc(var(--fu) / 2); padding: calc(11 * var(--p)) calc(9 * var(--p)) calc(12 * var(--p)); text-align: center; color: var(--text); font: inherit;
@@ -668,8 +671,8 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 }
 
 /* five or six cards (or a phone-width screen): a wider card per row segment, icon beside the text */
-.boon-cards.dense { --n: 2; row-gap: calc(14 * var(--p)); }
-.boon-cards.dense .boon-card { width: 30rem; width: round(down, min(30rem, (100% - var(--gap)) / 2), calc(2 * var(--p))); display: grid; grid-template-columns: var(--ic2) minmax(0, 1fr); column-gap: calc(var(--fu) / 2); row-gap: calc(var(--fu) / 4); align-items: start; align-content: start; text-align: left; padding: calc(10 * var(--p)) calc(8 * var(--p)) calc(11 * var(--p)); }
+.boon-cards.dense { --n: 3; }
+.boon-cards.dense .boon-card { width: 30rem; width: round(down, min(30rem, (100% - (var(--n) - 1) * var(--gap)) / var(--n)), calc(2 * var(--p))); display: grid; grid-template-columns: var(--ic2) minmax(0, 1fr); column-gap: calc(var(--fu) / 2); row-gap: calc(var(--fu) / 4); align-items: start; align-content: start; text-align: left; padding: calc(10 * var(--p)) calc(8 * var(--p)) calc(11 * var(--p)); }
 .boon-cards.dense .boon-card.k-route { padding-top: calc(12 * var(--p)); }
 .boon-cards.dense .boon-card.k-route:has(.ca-pips) { padding-top: calc(17 * var(--p)); }
 .boon-cards.dense .boon-card.k-asc { margin: 0; padding-top: calc(12 * var(--p)); padding-bottom: calc(12 * var(--p)); }
@@ -1071,6 +1074,22 @@ body.hud-on #toasts { top: 8rem; width: max-content; max-width: max(20rem, calc(
 ::-webkit-scrollbar-corner { background: #0f0a07; }
 @supports not selector(::-webkit-scrollbar) { html { scrollbar-color: var(--brass) #0f0a07; scrollbar-width: thin; } }
 
+/* ---------- short screens: Descend fits 1280 x 720 without scrolling (tighter blocks, smaller portraits, the solo button at the large size) ---------- */
+@media (max-height: 800px) {
+  #scr-hearth .stage { margin-top: 0; gap: calc(3 * var(--p)); }
+  .pane[data-pane=descend] { gap: calc(3 * var(--p)); }
+  .pane[data-pane=descend] .hero-tile { gap: 0; padding: var(--p) calc(2 * var(--p)) calc(2 * var(--p)); }
+  .pane[data-pane=descend] .hero-tile canvas { width: calc(20 * var(--p)); height: calc(20 * var(--p)); }
+  .pane[data-pane=descend] :is(.hero-detail, .loadout) { padding: calc(5 * var(--p)) calc(6 * var(--p)); gap: calc(3 * var(--p)); }
+  .pane[data-pane=descend] .loadout { gap: calc(2 * var(--p)); }
+  .pane[data-pane=descend] .hd-top { grid-template-columns: calc(20 * var(--p)) minmax(0, 1fr); }
+  .pane[data-pane=descend] .hd-top canvas { width: calc(20 * var(--p)); height: calc(20 * var(--p)); }
+  .pane[data-pane=descend] .hd-skills { gap: calc(2 * var(--p)); }
+  .pane[data-pane=descend] .weapon-row { margin-bottom: calc(2 * var(--p)); }
+  .pane[data-pane=descend] .go-bar { margin-top: 0; }
+  .pane[data-pane=descend] .go-bar .btn-xl { min-height: 3.4rem; }
+}
+
 /* ---------- narrow screens ---------- */
 @media (max-width: 900px) {
   .roster { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -1104,7 +1123,7 @@ body.hud-on #toasts { top: 8rem; width: max-content; max-width: max(20rem, calc(
   #hearth-tabs .tab, #set-tabs .tab, #ph-tabs .tab { padding-left: calc(4 * var(--p)); padding-right: calc(4 * var(--p)); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .btn-primary, .menu-primary, .logo-word, .logo-rule i, .ember-ico, .px-strip, .px-caret, .menu-btn::before, .menu-btn::after, .boon-card, .boon-card.key::after, .boon-card.evo, .unlock-pill, .overlay, .toast, .bind-slot.listening { animation: none; }
+  .btn-primary, .menu-primary, .logo-word, .logo-rule i, .ember-ico, .px-strip, .px-caret, .menu-btn::before, .menu-btn::after, .boon-card, .unlock-pill, .overlay, .toast, .bind-slot.listening { animation: none; }
   .btn, .hero-tile, .boon-card, .menu-btn, .btn:hover { transition: none; transform: none; }
   .up-ember::before, .up-ember::after, .up-card.burst, .pip.new, .toast { animation: none; }
   .up-card.burst::after { display: none; }
