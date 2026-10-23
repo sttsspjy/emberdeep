@@ -190,11 +190,11 @@
     return o;
   }
   // Metal pixels (cool or grey) re-mapped onto the ramp of a tint colour by luminance; wood, brass and warm colours stay.
-  function ftint(s, hex) {
+  function ftint(s, hex, all) {
     const rp = ED.Pix.ramp(hex).map((h) => U.hexToRgb(h));
     for (let i = 0; i < s.d.length; i++) {
       const v = s.d[i]; if (!v || v === OUTC) continue;
-      const r = v & 255, g = (v >> 8) & 255, b = (v >> 16) & 255; if (b < r - 6) continue;
+      const r = v & 255, g = (v >> 8) & 255, b = (v >> 16) & 255; if (b < r - 6 && !all) continue; // all (ED.FORK_LOOKS all: true): warm pixels too
       const l = (r * 0.299 + g * 0.587 + b * 0.114) / 255, t = U.clamp((l - 0.25) / 0.6, 0, 1) * (rp.length - 1), a = Math.min(rp.length - 2, t | 0), f = t - a, p = rp[a], q = rp[a + 1];
       s.d[i] = ((255 << 24) | (Math.round(p[2] + (q[2] - p[2]) * f) << 16) | (Math.round(p[1] + (q[1] - p[1]) * f) << 8) | Math.round(p[0] + (q[0] - p[0]) * f)) >>> 0;
     }
@@ -346,7 +346,7 @@
       const cls = classOfWeapon(base), br = A.anim('weapon.' + root), X = { heavy: L.op === 'H', col: ED.CLASSES[cls].col.c, baseH: br.anchors.dir === 90 ? br.fw : br.fh, widen: L.art === 'weapon.alt.big_hammer' };
       let s = fpad(fread(L.art), P8);
       fstrip(s);
-      if (WEAR[root] && PACK(L.art) && root === base) fwear(s, 'weapon.' + root); else if (L.tint) ftint(s, L.tint); // a pre-coloured base (the gold Dawn Hammer) lends its palette to the pack sprite
+      if (WEAR[root] && PACK(L.art) && root === base) fwear(s, 'weapon.' + root); else if (L.tint) ftint(s, L.tint, L.all); // a pre-coloured base (the gold Dawn Hammer) lends its palette to the pack sprite
       const fam = FAMILY[root];
       if (!L.op) { if (L.len && L.len !== 1) s = fscale(s, L.len); s.studs = []; }
       else s = fam ? fam(s, L, X) : fUp(s, L, UP[L.art] || [s.h - 2 * P8 - 8, 2, 8, 0], X);

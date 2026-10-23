@@ -33,18 +33,19 @@
       V('knight', 'armingsword'), V('knight', 'earthbreaker'), V('knight', 'hookglaive'),
     ],
     ranger: [
-      V('ranger', 'burstbows'),
+      V('ranger', 'seekerbow'), V('ranger', 'boltthrower'), V('ranger', 'burstbows'),
     ],
     pyro: [
+      V('pyro', 'sunlance'), V('pyro', 'cinderscatter'), V('pyro', 'mortar'),
     ],
     shade: [
-      V('shade', 'katars'), V('shade', 'chainsickle'),
+      V('shade', 'katars'), V('shade', 'boomerang'), V('shade', 'chainsickle'),
     ],
     cleric: [
-      V('cleric', 'radiantmace'), V('cleric', 'gavel'),
+      V('cleric', 'radiantmace'), V('cleric', 'gavel'), V('cleric', 'votive'),
     ],
     necro: [
-      V('necro', 'gravewhirl'),
+      V('necro', 'splinter'), V('necro', 'gravewhirl'), V('necro', 'miasma'),
     ],
   };
   // The weapon a hero wields for a stored choice `id`: a base weapon unlocked at mastery level ml, or a variant whose id is in `owned` (the meta bundle's armory ids) and whose base is unlocked;

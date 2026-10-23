@@ -6,6 +6,7 @@
   const $ = (id) => document.getElementById(id);
   const esc = UI.esc, n1 = Sh.n1;
   const TABS = ['build', 'combat', 'map'];
+  const SHAPE = { beam: ' · a beam through every foe on its line', lob: ' · lobbed onto the cursor', boomerang: ' · flies out and back, every foe once each way', pool: ' · ends in a pool of light', trail: ' · leaves a trail of clouds' }; // weapon flight shapes (sheet weapon.shape)
   const SH = { tab: 'build', viewPid: null, model: null, dirty: true, t: 99, sig: {}, live: {}, focusEl: null, focusKey: null, held: {}, mapKey: '', opened: false };
   UI.sheetState = SH;
 
@@ -145,7 +146,7 @@
     let h = `<div class="sh-card sh-f" data-k="weapon" style="--pc:${color}"><div class="sh-ct"><img alt="" src="${ico(WEAPON_ICON[w.look] || 'sword', color)}"><b>${esc(w.name)}</b><span class="sh-chip">${w.kind === 'melee' ? 'melee' : 'ranged'}</span>${w.fork ? `<span class="sh-chip">${w.fork}</span>` : ''}</div>`;
     h += `<div class="sh-big">${n1(w.hit)}<small>per hit</small><span class="sh-crit">${n1(w.crit)} crit <small>(${pc(w.critChance)} · ${X(w.critMult)})</small></span></div>`;
     h += `<div class="sh-row"><b>${w.aps.toFixed(2)}</b> attacks/s <span class="mut">(base ${w.apsBase.toFixed(2)})</span>`;
-    h += w.kind === 'melee' ? ` · reach ${w.reach} · ${w.allAround ? 'all around' : w.arcDeg + '°'}` : ` · ${w.n} ${w.n > 1 ? 'projectiles' : 'projectile'} · range ${w.range}${w.pierce ? ` · pierce ${w.pierce}` : ''}${w.homing ? ' · seeking' : ''}${w.blast ? ` · blast radius ${w.blast.r}` : ''}`;
+    h += w.kind === 'melee' ? ` · reach ${w.reach} · ${w.allAround ? 'all around' : w.arcDeg + '°'}` : ` · ${w.n} ${w.n > 1 ? 'projectiles' : 'projectile'} · range ${w.range}${SHAPE[w.shape] || ''}${w.pierce && !w.line ? ` · pierce ${w.pierce}` : ''}${w.homing ? ' · seeking' : ''}${w.blast ? ` · blast radius ${w.blast.r}` : ''}`;
     h += '</div>';
     if (w.fan) h += `<div class="sh-row mut">${w.oneFoe} of ${w.n} shots reach one foe at ${Sh.REF.d} px; all ${w.n} point-blank</div>`;
     for (const e of w.extras) h += `<div class="sh-row sh-ex"><span>${esc(e.label)}</span> <b>${n1(e.perAttack)}</b><span class="mut"> per attack${e.r ? ` (radius ${e.r})` : ''}${e.note ? ' · ' + esc(e.note) : ''}${e.el ? ' · ' + cap1(e.el) : ''}</span></div>`;
