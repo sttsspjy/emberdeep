@@ -6,7 +6,7 @@
 //   --parity    the power-budget bands on the mid build (ignores --stratum and --rank): stratum IV with every fork at rank 2, stratum VI at rank 3. Per class one line per fork: value (mean of the 1 foe and pack columns, %), the change against the class median, EHP and stun.
 //               IV rank 2: a non-Guard fork 31.5-38.5, a Guard fork >= 28. VI rank 3: non-Guard 54-66, Guard >= 48 and EHP >= +25% or stun >= 30%. Marks the forks outside; --strict exits 1 when any fork fails
 //   --weapons   per weapon: damage per second on one foe and in a pack of 4 at the class Power, and the damage factor that puts it on the class median
-// Hero damage = (weapon dps + skill damage per cooldown) x the conditional-damage factor (ED.COND_DMG rows the build owns at assumed uptimes, see COND_NOTE) + status estimates; a pack of 4: melee arcs, blasts, sweeps, waves and ricochets hit all four foes, a fan hits as many as it has arrows and pierces.
+// Hero damage = (weapon dps + skill damage per cooldown) x the conditional-damage factor (ED.COND_DMG rows the build owns at assumed uptimes, see COND_NOTE) + status estimates; a pack of 4: melee arcs, blasts, sweeps, waves and ricochets hit all four foes, a fan hits as many as it has arrows; a piercing shot hits the first foe and half of the other foes it could pierce (tools/model.js PIERCE_LINE).
 // The mid build: the class element's gate (else Fire) and a second gate, Sharpened Edge x2, Quickened Hands x2, Focus and Stalwart.
 const { ED } = require('./sim.js');
 const args = {};

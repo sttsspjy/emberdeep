@@ -53,7 +53,7 @@ const RAD = (a) => a * Math.PI / 180;
   w.fx.length = 0; e.x = 60 + 270; e.hp = 5000; const hp0 = e.hp; w.playerAttack(p, 0); run(w, 1);
   const hv = w.fx.find(ev => ev.t === 'hit' && ev.pid === 'p0');
   ok(hv && hv.f === 1, 'a real far arrow carries the far-shot flag'); near(hp0 - e.hp, 12 * (1 + 0.3 * (246 - 80) / 180), 1.2, 'a real far arrow deals the ramped damage');
-  const near1 = stage({ r_atk: 1 }); const e2 = foe(near1.w, 60 + 70, 212); near1.w.playerAttack(near1.p, 0); run(near1.w, 0.6); near(5000 - e2.hp, 12, 1e-6, 'a close arrow deals the plain 12');
+  const near1 = stage({ r_atk: 1 }); const e2 = foe(near1.w, 60 + 70, 212); near1.w.playerAttack(near1.p, 0); run(near1.w, 0.6); near(5000 - e2.hp, 11, 1e-6, 'a close arrow deals the plain 11');
 }
 
 // ---- Ballista (r_atk_h): heavy shots, +28% speed, +2 pierce, +15% per foe passed, Splitting Bolt from rank 2, Siege Ballista at rank 3 ----
@@ -87,15 +87,15 @@ const RAD = (a) => a * Math.PI / 180;
   near(stage({ r_atk_h: 2 }).p.stats.splitBolt, 0.5, 1e-9, 'rank 2: Splitting Bolt 50%'); near(stage({ r_atk_h: 3 }).p.stats.splitBolt, 0.5, 1e-9, 'rank 3 keeps it'); ok(!stage({ r_atk_h: 1 }).p.stats.splitBolt, 'no Splitting Bolt at rank 1');
 }
 
-// ---- Quickdraw (r_atk_s): swift shots, +10% damage, 15% slow for 1 s (not bosses), Flurry every 4th shot from rank 2, Storm Bow at rank 3 ----
+// ---- Quickdraw (r_atk_s): swift shots, +7% damage, 15% slow for 1 s (not bosses), Flurry every 4th shot from rank 2, Storm Bow at rank 3 ----
 {
   const { w, p } = stage({ r_atk_s: 1 }), wp = p.stats.weapon;
-  ok(p.stats.swift, 'Quickdraw is a Swift fork'); near(wp.dmg, 7.26 * 1.1, 0.01, 'Quickdraw: +10% weapon damage'); near(p.stats.atkInterval, 0.187, 0.002, 'Quickdraw: x0.55 interval');
+  ok(p.stats.swift, 'Quickdraw is a Swift fork'); near(wp.dmg, 6.655 * 1.07, 0.01, 'Quickdraw: +7% weapon damage'); near(p.stats.atkInterval, 0.187, 0.002, 'Quickdraw: x0.55 interval');
   const e = foe(w, 300, 212), b = foe(w, 330, 212); b.boss = true; const evs = tap(w); w.fx.length = 0;
   hit(w, p, e, 10, { kind: 'weapon', wpn: true }); near(e.slowAmt, 0.15, 1e-9, 'weapon hit slows 15%'); near(e.slowT, 1, 1e-9, 'for 1 s'); ok(w.fx.some(v => v.t === 'hit' && v.sl === 1), 'the hit event carries the slow flag');
   hit(w, p, b, 10, { kind: 'weapon', wpn: true }); ok(!(b.slowT > 0), 'bosses are not slowed');
   const e2 = foe(w, 360, 212); hit(w, p, e2, 10, { kind: 'skill', part: 'volley.arrow' }); ok(!(e2.slowT > 0), 'skills do not slow'); void evs;
-  const r2 = stage({ r_atk_s: 2 }).p.stats; near(r2.wDmg, 0.15, 1e-9, 'rank 2: +5% damage'); near(r2.deadeye, 0.05, 1e-9, 'rank 2: Deadeye +5%');
+  const r2 = stage({ r_atk_s: 2 }).p.stats; near(r2.wDmg, 0.12, 1e-9, 'rank 2: +5% damage (7% + 5%)'); near(r2.deadeye, 0.05, 1e-9, 'rank 2: Deadeye +5%');
 }
 { // Flurry (rank 2): every 4th attack fires two more arrows +-0.12 rad
   const { w, p } = stage({ r_atk_s: 2 }); near(p.stats.flurry, 4, 0, 'rank 2: every 4th shot'); const counts = [], ang = [];
@@ -241,16 +241,16 @@ const RAD = (a) => a * Math.PI / 180;
   near(bn({ r_el_a: 1 }) / bn({}), 1.2, 1e-6, 'Burn ticks 20% harder');
 }
 { // Gangrene (rank 2)
-  const { w, p } = stage({ r_el_a: 2 }); near(p.stats.festerHit, 0.5, 1e-9, 'rank 2: Gangrene 50%'); near(stage({ r_el_a: 3 }).p.stats.festerHit, 0.5, 1e-9, 'rank 3 keeps Gangrene');
+  const { w, p } = stage({ r_el_a: 2 }); near(p.stats.festerHit, 0.7, 1e-9, 'rank 2: Gangrene 70%'); near(stage({ r_el_a: 3 }).p.stats.festerHit, 0.7, 1e-9, 'rank 3 keeps Gangrene');
   const mk = (n) => { const e = foe(w, 200, 212); if (n >= 1) e.burnPool = 600; if (n >= 2) e.bleedPool = 400; if (n >= 3) e.chill = 30; return e; };
   const base = hit(w, p, mk(0), 100, { kind: 'skill', part: 'volley.arrow', noGuard: true });
-  near(hit(w, p, mk(3), 100, { kind: 'skill', part: 'volley.arrow' }) / base, 1.5, 1e-6, 'Volley +50% on a foe with 3 ailments'); near(hit(w, p, mk(3), 100, { kind: 'skill', part: 'rain.tick' }) / base, 1.5, 1e-6, 'Rain +50% on a foe with 3 ailments');
-  near(hit(w, p, mk(3), 100, { kind: 'skill', part: 'rain.sky' }) / base, 1.5, 1e-6, 'Skyfall +50% too'); near(hit(w, p, mk(2), 100, { kind: 'skill', part: 'volley.arrow' }) / base, 1, 1e-6, 'no bonus with 2 ailments');
+  near(hit(w, p, mk(3), 100, { kind: 'skill', part: 'volley.arrow' }) / base, 1.7, 1e-6, 'Volley +70% on a foe with 3 ailments'); near(hit(w, p, mk(3), 100, { kind: 'skill', part: 'rain.tick' }) / base, 1.7, 1e-6, 'Rain +70% on a foe with 3 ailments');
+  near(hit(w, p, mk(3), 100, { kind: 'skill', part: 'rain.sky' }) / base, 1.7, 1e-6, 'Skyfall +70% too'); near(hit(w, p, mk(2), 100, { kind: 'skill', part: 'volley.arrow' }) / base, 1, 1e-6, 'no bonus with 2 ailments');
   near(hit(w, p, mk(3), 100, { kind: 'weapon', wpn: true }) / base, 1, 1e-6, 'weapon shots get no Gangrene'); ok(w.ailments(mk(3)) === 3, 'three ailments counted');
   const lo = stage({ r_el_a: 1 }); const e = foe(lo.w, 200, 212); e.burnPool = 600; e.bleedPool = 400; e.chill = 30; near(hit(lo.w, lo.p, e, 100, { kind: 'skill', part: 'volley.arrow' }), 100, 1e-6, 'no Gangrene at rank 1');
 }
 
-// ---- Contagion (r_el_b): a foe with 2+ ailments that dies to the Ranger passes 50% of each status to the 2 nearest foes within 100 (+20 per rank); Outbreak (rank 2): 3 foes at 50%; Plaguebearer (rank 3) ----
+// ---- Contagion (r_el_b): a foe with 2+ ailments that dies to the Ranger passes 50% of each status to the 2 nearest foes within 100 (+20 per rank); Outbreak (rank 2): 3 foes at 120%; Plaguebearer (rank 3) ----
 {
   const spread = (cards, setup) => {
     const { w, p } = stage(cards); const a = foe(w, 200, 212), ring = [[90, 0], [0, 70], [-95, 0], [60, 60], [130, 0]].map(([dx, dy]) => foe(w, 200 + dx, 212 + dy)); const evs = tap(w);
@@ -265,7 +265,7 @@ const RAD = (a) => a * Math.PI / 180;
   s = spread({ r_el_b: 2 }); ok(s.got.filter(v => v > 0).length === 3 && s.got[1] > 0 && s.got[3] > 0 && s.got[0] > 0 && s.got[2] === 0 && s.got[4] === 0, 'rank 2 (reach 120): Outbreak passes to the three nearest, not the fourth (95)');
   const far = stage({ r_el_b: 1 }); const a = foe(far.w, 200, 212), f = foe(far.w, 200 + 118, 212); a.burnPool = 600; a.burnOwner = far.p; a.bleedPool = 400; a.bleedOwner = far.p; hit(far.w, far.p, a, 1e9, { kind: 'weapon' }); run(far.w, 0.4); ok(f.burnPool === 0, 'a foe at 118 is out of reach at rank 1');
   const r2 = stage({ r_el_b: 2 }); const a2 = foe(r2.w, 200, 212), f2 = foe(r2.w, 200 + 118, 212); a2.burnPool = 600; a2.burnOwner = r2.p; a2.bleedPool = 400; a2.bleedOwner = r2.p; hit(r2.w, r2.p, a2, 1e9, { kind: 'weapon' }); run(r2.w, 0.4); ok(f2.burnPool > 0, 'and in reach at rank 2 (120)');
-  s = spread({ r_el_b: 2 }); near(s.got[1], 600 * 0.5, 1e-6, 'Outbreak: 50% each'); near(s.bl[1], 200, 1e-6, 'of the Bleed too'); ok(s.evs.filter(v => v.t === 'chain' && v.k === 'c').length === 3, 'three threads'); near(stage({ r_el_b: 1 }).p.stats.outbreak, 0, 0, 'no Outbreak at rank 1');
+  s = spread({ r_el_b: 2 }); near(s.got[1], 600 * 1.2, 1e-6, 'Outbreak: 120% each'); near(s.bl[1], 400 * 1.2, 1e-6, 'of the Bleed too'); ok(s.evs.filter(v => v.t === 'chain' && v.k === 'c').length === 3, 'three threads'); near(stage({ r_el_b: 1 }).p.stats.outbreak, 0, 0, 'no Outbreak at rank 1');
   // someone else's kill, or a kill by a hero without the card, does not spread
   const o = stage({ r_el_b: 1 }, 0, [{ pid: 'p1' }]); const b = foe(o.w, 200, 212), g = foe(o.w, 240, 212); b.burnPool = 600; b.bleedPool = 400; hit(o.w, o.w.players.get('p1'), b, 1e9, { kind: 'weapon' }); run(o.w, 0.4); ok(g.burnPool === 0, 'a kill by a hero without Contagion does not spread');
   const dead = stage({ r_el_b: 1 }); const d1 = foe(dead.w, 200, 212), d2 = foe(dead.w, 230, 212); d2.hp = 0; d2.killed = true; d1.burnPool = 600; d1.bleedPool = 400; d1.burnOwner = d1.bleedOwner = dead.p; hit(dead.w, dead.p, d1, 1e9, { kind: 'weapon' }); run(dead.w, 0.3); ok(d2.burnPool === 0, 'dead foes receive nothing');
@@ -356,12 +356,12 @@ const arrowsOf = (w, part) => w.projs.filter(q => q.team === 0 && q.part === par
 
 // ---- attack and element forms (rank 3 transforms): Siege Ballista, Storm Bow, Hemorrhage, Plaguebearer ----
 const wShots = (w) => w.projs.filter(q => q.team === 0 && q.wpn);
-{ // Siege Ballista (r_atk_h rank 3): every 5th shot is a siege bolt (pierces all, twice as wide, x1.5)
+{ // Siege Ballista (r_atk_h rank 3): every 5th shot is a siege bolt (pierces all, twice as wide, x1.8)
   const { w, p } = stage({ r_atk: 1, r_atk_h: 3 }), wr = p.stats.weapon.r, flags = [];
-  near(p.stats.siege, 5, 0, 'rank 3: one shot in 5'); near(p.stats.siegeMul, 1.5, 1e-9, 'siege x1.5'); near(p.stats.siegeBlast, 0.3, 1e-9, 'blast 30%'); ok(p.stats.splitBolt === 0.5, 'rank 3 keeps Splitting Bolt');
+  near(p.stats.siege, 5, 0, 'rank 3: one shot in 5'); near(p.stats.siegeMul, 1.8, 1e-9, 'siege x1.8'); near(p.stats.siegeBlast, 0.3, 1e-9, 'blast 30%'); ok(p.stats.splitBolt === 0.5, 'rank 3 keeps Splitting Bolt');
   for (let i = 0; i < 10; i++) {
     w.projs.length = 0; w.playerAttack(p, 0.3); const q = wShots(w)[0]; flags.push(q.siege ? 'S' : 'n');
-    if (q.siege) ok(q.pierce === 999 && Math.abs(q.r - 2 * wr) < 1e-9 && Math.abs(q.mul - 1.5) < 1e-9, 'a siege bolt pierces every foe, is twice as wide and deals x1.5');
+    if (q.siege) ok(q.pierce === 999 && Math.abs(q.r - 2 * wr) < 1e-9 && Math.abs(q.mul - 1.8) < 1e-9, 'a siege bolt pierces every foe, is twice as wide and deals x1.8');
     else ok(!q.mul && q.r === wr && q.pierce === 2, 'a plain shot is unchanged');
   }
   ok(flags.join('') === 'nnnnSnnnnS', `the 5th and 10th shot are siege bolts (got ${flags.join('')})`);
@@ -372,7 +372,7 @@ const wShots = (w) => w.projs.filter(q => q.team === 0 && q.wpn);
   const line = (count) => { const { w, p } = stage({ r_atk: 1, r_atk_h: 3 }), es = [100, 130, 160, 190, 220, 250].map(x => foe(w, x, 212)); p.atkCount = count; w.projs.length = 0; w.playerAttack(p, 0); run(w, 0.5); return { es, hurt: es.filter(e => e.hp < 5000).length }; };
   const s = line(4), n = line(0);
   ok(s.hurt === 6, `a siege bolt hits all six foes in line (got ${s.hurt})`); ok(n.hurt === 4 && n.es[3].hp > n.es[2].hp, `a plain shot hits three (pierce 2); the fourth is only reached by the split arrows (got ${n.hurt})`);
-  near((5000 - s.es[0].hp) / (5000 - n.es[0].hp), 1.5, 1e-6, 'the first foe takes x1.5');
+  near((5000 - s.es[0].hp) / (5000 - n.es[0].hp), 1.8, 1e-6, 'the first foe takes x1.8');
   // the arrows fly at y 208 (4 px above the hero's feet)
   const side = (count) => { const { w, p } = stage({ r_atk: 1, r_atk_h: 3 }), e = foe(w, 200, 212); e.y = 208 + e.r + 7; p.atkCount = count; w.projs.length = 0; w.playerAttack(p, 0); run(w, 0.5); return e.hp < 5000; };
   ok(side(4) && !side(0), 'the doubled radius reaches a foe 7 px beyond where a plain shot misses');
@@ -422,28 +422,28 @@ const wShots = (w) => w.projs.filter(q => q.team === 0 && q.wpn);
   [-0.09, 0, 0.09, 0.18].forEach((v, i) => near(angs[0][i], v, 1e-6, 'Flurry arrow ' + i)); [-0.18, -0.09, 0, 0.09].forEach((v, i) => near(angs[1][i], v, 1e-6, 'the next Flurry, mirrored: arrow ' + i));
 }
 
-// ---- Hemorrhage (r_el_a rank 3): a hit on a foe whose Bleed is 4% of its health (a boss 0.3%) pops the pool at x4 ----
+// ---- Hemorrhage (r_el_a rank 3): a hit on a foe whose Bleed is 4% of its health (a boss 0.3%) pops the pool at x3 ----
 {
   const mk = (rank, boss) => { const s = stage({ r_el: 1, r_el_a: rank }); s.e = foe(s.w, 200, 212); s.e.boss = !!boss; s.e.bleedOwner = s.p; return s; };
   let s = mk(3);
-  near(s.p.stats.hemoAt, 0.04, 1e-9, 'rank 3: Bleed at 4%'); near(s.p.stats.hemoMul, 4, 1e-9, 'pops x4'); near(s.p.stats.hemoBoss, 0.003, 1e-9, 'bosses 0.3%'); ok(!stage({ r_el: 1, r_el_a: 2 }).p.stats.hemo, 'no Hemorrhage at rank 2');
+  near(s.p.stats.hemoAt, 0.04, 1e-9, 'rank 3: Bleed at 4%'); near(s.p.stats.hemoMul, 3, 1e-9, 'pops x3'); near(s.p.stats.hemoBoss, 0.003, 1e-9, 'bosses 0.3%'); ok(!stage({ r_el: 1, r_el_a: 2 }).p.stats.hemo, 'no Hemorrhage at rank 2');
   const bm = s.p.stats.bleedMul, plain = hit(s.w, s.p, s.e, 100, { kind: 'weapon' }), add = plain * s.p.stats.bleedAll * (1 + s.p.stats.statusPow); // add: the Bleed the hit itself builds before it can pop
   s.e.hp = 5000; s.e.bleedPool = 199 - add - 1; const d0 = hit(s.w, s.p, s.e, 100, { kind: 'weapon' }); ok(s.e.bleedPool > 150 && Math.abs(d0 - plain) < 1e-6, 'a pool just under 4% of the health does not pop');
   s = mk(3); s.e.bleedPool = 200; const evs = tap(s.w), d1 = hit(s.w, s.p, s.e, 100, { kind: 'weapon' }); evs.step();
-  near(d1, plain + (200 + add) * 4 * (1 + bm), 1e-6, 'a 4% pool pops for x4 (with the Bleed damage bonus), on top of the hit'); near(s.e.bleedPool, 0, 1e-9, 'and is emptied'); ok(evs.all.filter(v => v.t === 'chain' && v.k === 'm').length === 1, 'one pop event for the viewer');
+  near(d1, plain + (200 + add) * 3 * (1 + bm), 1e-6, 'a 4% pool pops for x3 (with the Bleed damage bonus), on top of the hit'); near(s.e.bleedPool, 0, 1e-9, 'and is emptied'); ok(evs.all.filter(v => v.t === 'chain' && v.k === 'm').length === 1, 'one pop event for the viewer');
   s.e.bleedPool = 400; near(hit(s.w, s.p, s.e, 100, { kind: 'weapon' }), plain, 1e-6, 'the same foe does not pop again within 1 s'); run(s.w, 1.05); s.e.bleedPool = 400;
-  near(hit(s.w, s.p, s.e, 100, { kind: 'weapon' }), plain + (400 + add) * 4 * (1 + bm), 1e-6, 'and does after 1 s');
+  near(hit(s.w, s.p, s.e, 100, { kind: 'weapon' }), plain + (400 + add) * 3 * (1 + bm), 1e-6, 'and does after 1 s');
   s = mk(3); const o = foe(s.w, 260, 212); o.bleedPool = 400; o.bleedOwner = s.p; s.e.bleedPool = 400; hit(s.w, s.p, s.e, 100, { kind: 'weapon' }); near(o.bleedPool, 400, 1e-9, 'only the struck foe pops');
   s = mk(3); s.e.bleedPool = 400; near(hit(s.w, s.p, s.e, 100, { kind: 'dot', bleed: true, noProc: true, raw: true }), 100, 1e-6, 'a status tick never pops it'); near(s.e.bleedPool, 400, 1e-9, 'and leaves the pool');
-  s = mk(3); s.e.bleedPool = 400; ok(hit(s.w, s.p, s.e, 100, { kind: 'skill', part: 'volley.arrow' }) > 400 * 4, 'a skill hit pops it too');
+  s = mk(3); s.e.bleedPool = 400; ok(hit(s.w, s.p, s.e, 100, { kind: 'skill', part: 'volley.arrow' }) > 400 * 3, 'a skill hit pops it too');
   s = mk(3); s.e.fodder = true; s.e.bleedPool = 400; hit(s.w, s.p, s.e, 1, { kind: 'weapon' }); near(s.e.bleedPool, 0, 1e-9, 'a fodder foe pops too');
   s = mk(3, true); s.e.bleedPool = 14 - add - 1; hit(s.w, s.p, s.e, 100, { kind: 'weapon' }); ok(s.e.bleedPool > 10 - add, 'a boss pool under 0.3% does not pop');
-  s = mk(3, true); s.e.bleedPool = 16 - add; const db = hit(s.w, s.p, s.e, 100, { kind: 'weapon' }); near(db, plain + 16 * 4 * (1 + bm), 1e-6, 'a boss pops at 0.3%');
+  s = mk(3, true); s.e.bleedPool = 16 - add; const db = hit(s.w, s.p, s.e, 100, { kind: 'weapon' }); near(db, plain + 16 * 3 * (1 + bm), 1e-6, 'a boss pops at 0.3%');
   const again = (secs) => { run(s.w, secs); s.e.bleedPool = 50; return hit(s.w, s.p, s.e, 100, { kind: 'weapon' }); };
-  near(again(2), plain, 1e-6, 'a boss does not pop again after 2 s'); near(again(1.1), plain, 1e-6, 'nor after 3.1 s'); near(again(1), plain + (50 + add) * 4 * (1 + bm), 1e-6, 'but does after 4 s');
+  near(again(2), plain, 1e-6, 'a boss does not pop again after 2 s'); near(again(1.1), plain, 1e-6, 'nor after 3.1 s'); near(again(1), plain + (50 + add) * 3 * (1 + bm), 1e-6, 'but does after 4 s');
 }
 
-// ---- Plaguebearer (r_el_b rank 3): a dying foe with 2+ ailments bursts (r90): 60% of its Bleed and Burn to every foe inside, its other statuses spread ----
+// ---- Plaguebearer (r_el_b rank 3): a dying foe with 2+ ailments bursts (r90): 85% of its Bleed and Burn to every foe inside, its other statuses spread ----
 {
   const mk = (rank, cfg) => {
     const { w, p } = stage({ r_el: 1, r_el_b: rank }), a = foe(w, 200, 212), n1 = foe(w, 240, 212), n2 = foe(w, 200, 285), outside = foe(w, 200, 312), evs = tap(w);
@@ -451,18 +451,18 @@ const wShots = (w) => w.projs.filter(q => q.team === 0 && q.wpn);
     return { w, p, a, n1, n2, outside, evs };
   };
   let s = mk(3);
-  near(s.p.stats.plagueBurst, 0.6, 1e-9, 'rank 3: bursts 60%'); ok(!stage({ r_el: 1, r_el_b: 2 }).p.stats.plague, 'no Plaguebearer at rank 2');
+  near(s.p.stats.plagueBurst, 0.85, 1e-9, 'rank 3: bursts 85%'); ok(!stage({ r_el: 1, r_el_b: 2 }).p.stats.plague, 'no Plaguebearer at rank 2');
   hit(s.w, s.p, s.a, 1e9, { kind: 'weapon' }); run(s.w, 0.03, s.evs.step); ok(s.n1.hp === 5000 && !s.evs.all.some(v => v.k === 'g'), 'the burst waits 0.05 s');
-  run(s.w, 0.1, s.evs.step); near(5000 - s.n1.hp, 0.6 * 1000, 1e-6, 'a foe inside takes 60% of the Bleed and Burn (1000)'); near(5000 - s.n2.hp, 0.6 * 1000, 1e-6, 'every foe inside takes it (a second one 73 away too)'); ok(s.outside.hp === 5000, 'a foe 100 away does not');
+  run(s.w, 0.1, s.evs.step); near(5000 - s.n1.hp, 0.85 * 1000, 1e-6, 'a foe inside takes 85% of the Bleed and Burn (1000)'); near(5000 - s.n2.hp, 0.85 * 1000, 1e-6, 'every foe inside takes it (a second one 73 away too)'); ok(s.outside.hp === 5000, 'a foe 100 away does not');
   ok(s.evs.all.filter(v => v.t === 'chain' && v.k === 'g').length === 1, 'one burst event'); near(s.a.bleedPool + s.a.burnPool, 0, 1e-9, 'the corpse gives up both pools');
   ok(s.n1.chill > 0 && s.n2.chill > 0, 'the other statuses (Chill) spread to every foe inside'); ok(s.n1.burnPool === 0 && s.n1.bleedPool === 0, 'Burn and Bleed do not spread as pools'); ok(s.outside.chill === 0, 'nor to a foe outside');
   s = mk(3, a => { a.bleedPool = 0; a.chill = 0; }); hit(s.w, s.p, s.a, 1e9, { kind: 'weapon' }); run(s.w, 0.3); ok(s.n1.hp === 5000, 'a foe with one ailment bursts nothing');
-  s = mk(3); s.a.fodder = true; hit(s.w, s.p, s.a, 1e9, { kind: 'weapon' }); run(s.w, 0.3); near(5000 - s.n1.hp, 600, 1e-6, 'a fodder foe bursts too');
+  s = mk(3); s.a.fodder = true; hit(s.w, s.p, s.a, 1e9, { kind: 'weapon' }); run(s.w, 0.3); near(5000 - s.n1.hp, 850, 1e-6, 'a fodder foe bursts too');
   s = mk(2); hit(s.w, s.p, s.a, 1e9, { kind: 'weapon' }); run(s.w, 0.3); ok(s.n1.hp === 5000 && s.n1.burnPool > 0, 'at rank 2 the pools spread as pools (Outbreak) and nothing bursts');
   const o2 = stage({ r_el: 1, r_el_b: 3 }, 0, [{ pid: 'p1' }]), b = foe(o2.w, 200, 212), g = foe(o2.w, 240, 212); b.burnPool = 600; b.bleedPool = 400; hit(o2.w, o2.w.players.get('p1'), b, 1e9, { kind: 'weapon' }); run(o2.w, 0.3); ok(g.hp === 5000, 'a kill by a hero without the card bursts nothing');
   const { w, p } = stage({ r_el: 1, r_el_b: 3 }), a = foe(w, 200, 212), c1 = foe(w, 270, 212), c2 = foe(w, 340, 212); a.burnPool = 600; a.burnOwner = p; a.bleedPool = 400; a.bleedOwner = p; // a chain of deaths
   c1.maxHp = c1.hp = 500; c1.burnTick = c1.bleedTick = 5; c1.burnPool = 300; c1.burnOwner = p; c1.bleedPool = 200; c1.bleedOwner = p; hit(w, p, a, 1e9, { kind: 'weapon' }); run(w, 0.6);
-  ok(c1.hp <= 0, 'the burst kills a weak neighbour'); near(5000 - c2.hp, 0.6 * 500, 1e-6, 'whose own burst, at its own pools, reaches the next foe');
+  ok(c1.hp <= 0, 'the burst kills a weak neighbour'); near(5000 - c2.hp, 0.85 * 500, 1e-6, 'whose own burst, at its own pools, reaches the next foe');
 }
 
 // ---- events and the wire ----

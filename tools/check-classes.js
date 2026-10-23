@@ -10,24 +10,24 @@ const build = (cls, wi, boons) => ED.Stats.compute({ cls, weapon: ED.CLASSES[cls
 
 // ---- 36 fork weapons: dmg / rate and the fields the rule changes ----
 const FORKS = [ // base, kind, dmg, rate, {field: value}
-  ['longsword', 'heavy', 35.6, 0.756, { range: 55, arc: 2.09, knock: 169 }], ['longsword', 'swift', 10.9, 0.231, { range: 50, knock: 65 }],
-  ['warhammer', 'heavy', 59.3, 1.3, { range: 59.4, arc: 2.42, knock: 312 }], ['warhammer', 'swift', 20.6, 0.451, { range: 54, knock: 120 }],
-  ['glaive', 'heavy', 39.6, 0.9, { range: 90.2, arc: 0.83, knock: 195 }], ['glaive', 'swift', 12.1, 0.275, { range: 82, knock: 75 }],
-  ['longbow', 'heavy', 23.8, 0.612, { r: 4.8, speed: 396, life: 0.94, knock: 80 }], ['longbow', 'swift', 7.26, 0.187, { speed: 528, life: 0.72 }],
-  ['crossbow', 'heavy', 47.5, 1.296, { r: 6, speed: 504, life: 0.88, pierce: 2, knock: 240 }], ['crossbow', 'swift', 14.5, 0.396, { speed: 672, life: 0.68, pierce: 2, knock: 60 }],
-  ['twinbows', 'heavy', 8.91, 0.45, { r: 4.8, speed: 378, life: 0.77, knock: 80 }], ['twinbows', 'swift', 2.72, 0.1375, { speed: 504, life: 0.6, spread: 0.12 }],
+  ['longsword', 'heavy', 46.33, 0.756, { range: 55, arc: 2.09, knock: 169 }], ['longsword', 'swift', 14.16, 0.231, { range: 50, knock: 65 }],
+  ['warhammer', 'heavy', 77.08, 1.3, { range: 59.4, arc: 2.42, knock: 312 }], ['warhammer', 'swift', 26.74, 0.451, { range: 54, knock: 120 }],
+  ['glaive', 'heavy', 51.48, 0.9, { range: 90.2, arc: 0.83, knock: 195 }], ['glaive', 'swift', 15.73, 0.275, { range: 82, knock: 75 }],
+  ['longbow', 'heavy', 21.78, 0.612, { r: 4.8, speed: 396, life: 0.94, knock: 80 }], ['longbow', 'swift', 6.655, 0.187, { speed: 528, life: 0.72 }],
+  ['crossbow', 'heavy', 43.76, 1.296, { r: 6, speed: 504, life: 0.88, pierce: 2, knock: 240 }], ['crossbow', 'swift', 13.37, 0.396, { speed: 672, life: 0.68, pierce: 2, knock: 60 }],
+  ['twinbows', 'heavy', 8.118, 0.45, { r: 4.8, speed: 378, life: 0.77, knock: 80 }], ['twinbows', 'swift', 2.481, 0.1375, { speed: 504, life: 0.6, spread: 0.12 }],
   ['firestaff', 'heavy', 29.7, 0.9, { r: 7.2, speed: 279 }], ['firestaff', 'swift', 9.08, 0.275, { speed: 372 }],
   ['emberwand', 'heavy', 11.9, 0.27, { r: 4.8, speed: 351 }], ['emberwand', 'swift', 5.28, 0.12, { speed: 468 }],
   ['inferno', 'heavy', 42.9, 1.3, { r: 10.8, speed: 225 }], ['inferno', 'swift', 18.2, 0.55, { speed: 300 }],
   ['daggers', 'heavy', 21.78, 0.378, { range: 46.2, arc: 1.43, knock: 78 }], ['daggers', 'swift', 6.91, 0.12, { range: 42, knock: 30 }],
   ['knives', 'heavy', 13.9, 0.648, { r: 4.8, speed: 432, knock: 80 }], ['knives', 'swift', 4.24, 0.198, { speed: 576, spread: 0.19 }],
   ['scythes', 'heavy', 31.68, 0.864, { range: 57.2, arc: 6.3, knock: 117 }], ['scythes', 'swift', 9.68, 0.264, { range: 52, knock: 45 }],
-  ['mace', 'heavy', 33.7, 0.756, { range: 50.6, arc: 1.87, knock: 182 }], ['mace', 'swift', 10.3, 0.231, { range: 46, knock: 70 }],
-  ['dawnhammer', 'heavy', 63.4, 1.296, { range: 57.2, arc: 2.42, knock: 286 }], ['dawnhammer', 'swift', 19.4, 0.396, { range: 52, knock: 110 }],
-  ['lantern', 'heavy', 24.75, 0.756, { r: 7.2, speed: 270, pierce: 1, knock: 80 }], ['lantern', 'swift', 7.563, 0.231, { speed: 360, pierce: 1 }],
-  ['bonewand', 'heavy', 17.8, 0.72, { r: 6, speed: 315, homing: 4 }], ['bonewand', 'swift', 5.45, 0.22, { speed: 420 }],
-  ['soulscythe', 'heavy', 33.7, 1.008, { range: 57.2, arc: 2.64, knock: 143, raise: 0.12 }], ['soulscythe', 'swift', 10.3, 0.308, { range: 52, knock: 55 }],
-  ['plaguestaff', 'heavy', 11.9, 1.08, {}], ['plaguestaff', 'swift', 3.63, 0.33, {}],
+  ['mace', 'heavy', 45.54, 0.756, { range: 50.6, arc: 1.87, knock: 182 }], ['mace', 'swift', 13.91, 0.231, { range: 46, knock: 70 }],
+  ['dawnhammer', 'heavy', 85.54, 1.296, { range: 57.2, arc: 2.42, knock: 286 }], ['dawnhammer', 'swift', 26.14, 0.396, { range: 52, knock: 110 }],
+  ['lantern', 'heavy', 33.46, 0.756, { r: 7.2, speed: 270, pierce: 1, knock: 80 }], ['lantern', 'swift', 10.22, 0.231, { speed: 360, pierce: 1 }],
+  ['bonewand', 'heavy', 26.73, 0.72, { r: 6, speed: 315, homing: 4 }], ['bonewand', 'swift', 8.168, 0.22, { speed: 420 }],
+  ['soulscythe', 'heavy', 50.49, 1.008, { range: 57.2, arc: 2.64, knock: 143, raise: 0.12 }], ['soulscythe', 'swift', 15.43, 0.308, { range: 52, knock: 55 }],
+  ['plaguestaff', 'heavy', 17.82, 1.08, {}], ['plaguestaff', 'swift', 5.445, 0.33, {}],
 ];
 const CARD = { knight: ['k_atk_h', 'k_atk_s'], ranger: ['r_atk_h', 'r_atk_s'], pyro: ['p_atk_h', 'p_atk_s'], shade: ['s_atk_h', 's_atk_s'], cleric: ['c_atk_h', 'c_atk_s'], necro: ['n_atk_h', 'n_atk_s'] };
 for (const [base, kind, dmg, rate, f] of FORKS) {
@@ -42,14 +42,14 @@ near(ED.forkWeapon('firestaff', 'p_atk_h').explode.r, 46, 0.05, 'Magma Staff bla
 
 // ---- skill numbers at class Power (1.3) ----
 const SK = [ // class, skill, part, dmg
-  ['knight', 'charge', 'impact', 48.8], ['knight', 'shieldthrow', 'strike', 43.4], ['knight', 'shieldthrow', 'return', 21.7],
+  ['knight', 'charge', 'impact', 63.44], ['knight', 'shieldthrow', 'strike', 56.42], ['knight', 'shieldthrow', 'return', 28.21],
   ['ranger', 'volley', 'arrow', 18.4], ['ranger', 'rain', 'tick', 9.4],
   ['pyro', 'nova', 'blast', 64.5], ['pyro', 'nova', 'burn', 52.8], ['pyro', 'meteor', 'impact', 89.5], ['pyro', 'meteor', 'crater', 21.6],
   ['shade', 'step', 'slash', 40.6], ['shade', 'vanish', 'ambush', 27.5],
-  ['cleric', 'sanctuary', 'zone', 30.4], ['cleric', 'judgment', 'leg', 41.8], ['necro', 'legion', 'minion', 11.4], ['necro', 'harvest', 'burst', 40.2],
+  ['cleric', 'sanctuary', 'zone', 41.1], ['cleric', 'judgment', 'leg', 56.5], ['necro', 'legion', 'minion', 17.1], ['necro', 'harvest', 'burst', 60.3],
 ];
 for (const [cls, sk, part, dmg] of SK) near(ED.Stats.skillNums(sk, build(cls)).p[part].dmg, dmg, 0.06, `${sk}.${part}`);
-{ const st = build('necro', 0, { n_s1: 1, n_s1_a: 1 }); near(ED.Stats.skillNums('legion', st).p.spikes.dmg, 5 + 0.8 * st.power, 1e-9, 'legion.spikes (rank 1: 5 + 0.8 x Power)'); }
+{ const st = build('necro', 0, { n_s1: 1, n_s1_a: 1 }); near(ED.Stats.skillNums('legion', st).p.spikes.dmg, 7.5 + 0.8 * st.power, 1e-9, 'legion.spikes (rank 1: 7.5 + 0.8 x Power)'); }
 const sky = ED.Stats.skillNums('rain', build('ranger', 0, { r_s2: 1, r_s2_a: 1 }));
 near(sky.p.sky.dmg, 124.08, 0.1, 'Rainmaker + Skyfall sky');
 ok(!ED.Stats.skillNums('rain', build('ranger')).p.sky.on && sky.p.sky.on, 'Skyfall part gated by its stat');
