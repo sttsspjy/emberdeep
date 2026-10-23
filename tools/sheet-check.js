@@ -722,8 +722,11 @@ function statusRun(boons, stratum, secs, until) {
   }
 }
 
-// the sheet shows the shield the way the HUD does (rounded up), so the host and a client reading the snapshot agree
-{ const m = modelOf('knight', {}, 0, { shield: 2.4 }); ok(m.def.shield === 3 && m.hero.shield === 3, `shield 2.4 reads ${m.def.shield} (defence) and ${m.hero.shield} (header), want 3`); }
+// the sheet shows the shield the way the HUD does (one decimal under 10, whole above), so the host and a client reading the snapshot agree
+for (const [v, want, txt] of [[0.24, 0.2, '0.2'], [2.46, 2.5, '2.5'], [9.94, 9.9, '9.9'], [12.6, 13, '13']]) {
+  const m = modelOf('knight', {}, 0, { shield: v });
+  ok(m.def.shield === want && m.hero.shield === want && ED.Sheet.n1(m.hero.shield) === txt, `shield ${v} reads ${m.def.shield} (defence) and ${m.hero.shield} (header) as ${ED.Sheet.n1(m.hero.shield)}, want ${txt}`);
+}
 
 W.hitEnemy = oHit; W.updateEnemy = oUpd;
 console.log(`${n} checks, ${fails} failed` + (pend ? `, ${pend} pending (class routes still to be built by their streams)` : ''));
