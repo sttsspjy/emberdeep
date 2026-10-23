@@ -106,7 +106,7 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
 // ---------------- Sanctum: radius, length (60% of the cooldown at most), damage, damage reduction ----------------
 {
   const st = build(0, { c_s1: 1 }), N = ED.Stats.skillNums('sanctuary', st), q = N.p.zone;
-  near(q.r, 130, 1e-9, 'Sanctum radius 100 x 1.3'); near(q.dur, 5.5, 1e-9, 'Sanctum lasts 3.5 + 2 s'); near(q.dmg, (10 + 1.2 * 17) * 1.5, 1e-9, 'Sanctum damage +50%'); near(N.cdEff, 11, 1e-9, 'Sanctuary cooldown 11 s');
+  near(q.r, 130, 1e-9, 'Sanctum radius 100 x 1.3'); near(q.dur, 5.5, 1e-9, 'Sanctum lasts 3.5 + 2 s'); near(q.dmg, (13.5 + 1.2 * 23) * 1.5, 1e-9, 'Sanctum damage +50%'); near(N.cdEff, 11, 1e-9, 'Sanctuary cooldown 11 s');
   const quick = build(0, { c_s1: 1 }); quick.cdr = 0.4; quick.sn = null; near(ED.Stats.skillNums('sanctuary', quick).p.zone.dur, 0.6 * 11 * 0.6, 1e-9, 'Sanctuary lasts at most 60% of its cooldown (cdr 40%: 3.96 s)');
   const { w, p } = stage({ c_s1: 1 }); const a = ally(w, 'ranger', p.x + 40, p.y); a.stats.armor = p.stats.armor; const hit = (who) => { who.hp = who.maxHp; who.invuln = 0; w.hurtPlayer(who, 100, {}); return who.maxHp - who.hp; };
   const base = hit(a);
@@ -120,7 +120,7 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
 
 // ---------------- Holy Fury: +40% damage, a 1 s stun when cast; Hallowed Ground Judges the foes inside ----------------
 {
-  const st = build(0, { c_s1: 1, c_s1_a: 1 }); near(ED.Stats.skillNums('sanctuary', st).p.zone.dmg, (10 + 1.2 * 17) * 1.5 * 1.2, 1e-9, 'Holy Fury zone damage x1.5 x1.2');
+  const st = build(0, { c_s1: 1, c_s1_a: 1 }); near(ED.Stats.skillNums('sanctuary', st).p.zone.dmg, (13.5 + 1.2 * 23) * 1.5 * 1.2, 1e-9, 'Holy Fury zone damage x1.5 x1.2');
   const { w, p } = stage({ c_s1: 1, c_s1_a: 1 }); const e = foe(w, p.x + 60, p.y), el = foe(w, p.x + 70, p.y + 10, { elite: 'swift' }), bs = foe(w, p.x + 80, p.y - 10); bs.boss = true; const out = foe(w, p.x + 380, p.y);
   w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x + 60, y: p.y }, 0);
   const sk = evs(w, 'skill')[0]; ok(sk && sk.hf === 1 && !sk.au && sk.k === 'sanctuary', 'skill event carries hf (Holy Fury)');
@@ -136,7 +136,7 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
 {
   const { w, p } = stage({ c_s1: 1, c_s1_b: 2 }); const a = ally(w, 'ranger', p.x + 40, p.y), far = ally(w, 'knight', p.x + 500, p.y);
   const st = p.stats, N = ED.Stats.skillNums('sanctuary', st);
-  ok(N.aim === 'self', 'Aura of Faith casts on the Cleric (aim self)'); near(N.p.zone.dmg, (10 + 1.2 * 17) * 1.5 * 1.6, 1e-9, 'Aura damage x1.5 x1.6 (rank 2)');
+  ok(N.aim === 'self', 'Aura of Faith casts on the Cleric (aim self)'); near(N.p.zone.dmg, (13.5 + 1.2 * 23) * 1.5 * 1.6, 1e-9, 'Aura damage x1.5 x1.6 (rank 2)');
   w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x + 150, y: p.y + 90 }, 0); // the cursor is ignored
   const z = w.zones.find(q => q.kind === 'sanct'); ok(z && z.follow === p.pid && z.x === p.x && z.y === p.y, 'zone is at the caster and follows them'); near(z.dr, 0.15 + 0.22, 1e-9, 'Aura rank 2: 15% + 10% + 10% + 2%');
   const sk = evs(w, 'skill')[0]; ok(sk && sk.au === 1 && sk.x === Math.round(p.x), 'skill event carries au'); w.fx.length = 0;
@@ -155,7 +155,7 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
   const turnAt = (S) => { let t = 0; const real = ED.Dungeon.blocksShots; ED.Dungeon.blocksShots = () => false; S.w.playerSkill(S.p, 0, {}, 1); const h = S.p.hammers[0]; for (let i = 0; i < 120 && !t; i++) { S.w.update(DT); if (h.leg === 1 && !t) t = h.t; } ED.Dungeon.blocksShots = real; return t; }; // the staged room is too small for the full flight: walls off, time the turn
   const tb = turnAt(base), tc = turnAt(s);
   near(tb, 0.55, 0.02, 'the hammer turns after 0.55 s'); near(tc, 0.55 * 1.4, 0.02, 'Hammer of Judgment flies 40% farther (turns after 0.77 s)');
-  near(ED.Stats.skillNums('judgment', s.p.stats).p.leg.dmg, (18 + 1.4 * 17) * 1.25, 1e-9, 'Judgment leg damage +25%'); near(s.p.stats.skill2Cd, 9 * (1 - 0.167), 1e-9, 'Judgment recharges 17% faster (7.5 s)');
+  near(ED.Stats.skillNums('judgment', s.p.stats).p.leg.dmg, (24.3 + 1.4 * 23) * 1.25, 1e-9, 'Judgment leg damage +25%'); near(s.p.stats.skill2Cd, 9 * (1 - 0.167), 1e-9, 'Judgment recharges 17% faster (7.5 s)');
   const j = stage({ c_s2: 1 }); const e = foe(j.w, j.p.x + 60, j.p.y); j.w.playerSkill(j.p, 0, {}, 1); let t = 0; run(j.w, 0.4, () => { if (e.judged > 0 && !t) t = e.judged; });
   near(t, 5, 0.1, 'Judged lasts 4 + 1 s'); ok(e.judgeOwner === 'p0' && e.judgeCast === 1, 'a hammer hit stamps the cast');
   const jb = stage({}); const eb = foe(jb.w, jb.p.x + 60, jb.p.y); jb.w.playerSkill(jb.p, 0, {}, 1); let t4 = 0; run(jb.w, 0.4, () => { if (eb.judged > 0 && !t4) t4 = eb.judged; }); near(t4, 4, 0.1, 'Judged lasts 4 s without the card');
@@ -171,10 +171,10 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
   ok(one.n0 === 1 && one.hits === 2 && one.turns.join() === '1,4', `one hammer hits a foe on the axis twice (out and back); turns ${one.turns.join()}`);
   ok(tw.n0 === 2 && tw.hits === 4, `Twin Hammers: two hammers, two legs each (hits ${tw.hits})`);
   const th = stage({ c_s2: 1, c_s2_a: 1 }); th.w.playerSkill(th.p, 0, {}, 1); const angs = th.p.hammers.map(h => Math.atan2(h.pr.vy, h.pr.vx)).sort((a, b) => a - b); near(angs[0], -0.2, 1e-9, 'V angle -0.2'); near(angs[1], 0.2, 1e-9, 'V angle +0.2');
-  const tl = ED.Stats.skillNums('judgment', th.p.stats).p.leg.dmg; near(tl, (18 + 1.4 * 17) * 1.25 * 0.55, 1e-9, 'each Twin hammer deals 55%');
+  const tl = ED.Stats.skillNums('judgment', th.p.stats).p.leg.dmg; near(tl, (24.3 + 1.4 * 23) * 1.25 * 0.55, 1e-9, 'each Twin hammer deals 55%');
   ok(sf.n0 === 2 && sf.hits === 8, `Second Flight: four legs each (hits ${sf.hits})`); ok(sf.turns.slice(0, 4).sort().join() === '1,1,2,2' && sf.left === 0 && sf.projs === 0, `Second Flight turns ${sf.turns.join()} and the hammers are gone`);
   { const S = stage({ c_s2: 1, c_s2_a: 2 }); near(S.p.stats.secondFlight, 0.55, 1e-9, 'Second Flight deals 55% of a hit'); const e = foe(S.w, S.p.x + 40, S.p.y), muls = []; const orig = S.w.hitEnemy; S.w.hitEnemy = function (f, d, src) { if (src && src.part === 'judgment.leg') muls.push(src.mul || 1); return orig.call(this, f, d, src); }; S.w.playerSkill(S.p, 0, {}, 1); run(S.w, 12); ok(muls.length === 8 && muls.filter(m => m === 1).length === 4 && muls.filter(m => Math.abs(m - 0.55) < 1e-9).length === 4, `legs 1-2 at full damage, the second flight at 55% (${muls.join()})`); void e; }
-  const rk = build(0, { c_s2: 1, c_s2_a: 2 }); near(ED.Stats.skillNums('judgment', rk).p.leg.dmg, (18 + 1.4 * 17) * 1.25 * 1.1 * 0.55, 1e-9, 'Twin Hammers rank 2: +10%');
+  const rk = build(0, { c_s2: 1, c_s2_a: 2 }); near(ED.Stats.skillNums('judgment', rk).p.leg.dmg, (24.3 + 1.4 * 23) * 1.25 * 1.1 * 0.55, 1e-9, 'Twin Hammers rank 2: +10%');
   // a wall on the way out turns the hammer (and the second out leg too)
   const wl = stage({ c_s2: 1, c_s2_a: 2 }); wl.w.playerSkill(wl.p, Math.PI, {}, 1); let turned = false; run(wl.w, 0.1); for (let i = 0; i < 400 && wl.p.hammers.length; i++) { wl.w.update(DT); if (wl.p.hammers.some(h => h.leg >= 1)) turned = true; } ok(turned, 'a hammer that meets a wall turns for home');
 }
@@ -195,7 +195,7 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
   w.hitEnemy(dead, 999, { p, kind: 'weapon', crit: false }); ok(dead.hp <= 0, 'the Judged foe dies'); near(near1.stun, 0, 1e-9, 'the burst is queued, not instant'); ok(w.chainQ.some(en => en.kind === 'verdict'), 'Verdict queues a payoff');
   let stunN = 0, stunE = 0, stunB = 0; for (let i = 0; i < 40 && !evs(w, 'verdict').length; i++) { w.update(DT); if (evs(w, 'verdict').length) { stunN = near1.stun; stunE = el.stun; stunB = bs.stun; } }
   const v = ED.Stats.skillNums('judgment', p.stats).p.verdict, vev = evs(w, 'verdict')[0];
-  near(v.dmg, (20 + 3 * 17) * 1.25 * 2.5, 1e-9, 'Verdict burst 71 x s2Dmg x the card 2.5'); near(v.r, 70, 1e-9, 'Verdict radius 70'); ok(vev && vev.r === 70 && Math.abs(vev.x - dead.x) < 1, 'verdict event at the dead foe');
+  near(v.dmg, (27 + 3 * 23) * 1.25 * 2.5, 1e-9, 'Verdict burst 96 x s2Dmg x the card 2.5'); near(v.r, 70, 1e-9, 'Verdict radius 70'); ok(vev && vev.r === 70 && Math.abs(vev.x - dead.x) < 1, 'verdict event at the dead foe');
   near(lost(near1), v.dmg * p.stats.dmg * w.affC(p.stats.element), 0.2, 'burst damage to a foe within 70 (Holy, class affinity)'); ok(lost(far) === 0 && lost(plainDead) === 0, 'foes beyond 70 are untouched');
   near(stunN, 0.4, 0.01, 'burst stun 0.4 s'); ok(Math.hypot(el.x - dead.x, el.y - dead.y) < 70 + el.r && stunE > 0.19 && stunE < 0.21, `elite burst stun is half (${stunE})`); ok(stunB === 0 && lost(bs) > 0, 'bosses take the burst but are not stunned');
   const q2 = stage({ c_s2: 1, c_s2_b: 1 }); const d2 = foe(q2.w, q2.p.x - 120, q2.p.y), n2 = foe(q2.w, q2.p.x - 80, q2.p.y); d2.hp = 5; q2.w.hitEnemy(d2, 99, { p: q2.p, kind: 'weapon', crit: false }); run(q2.w, 0.3); ok(lost(n2) === 0, 'a foe that was not Judged bursts nothing');
@@ -350,7 +350,7 @@ const castSanct = (w, p, dx) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x +
 }
 { // Hammerstorm (c_s2_a rank 3): five hammers in a fan of +-0.5 rad, two round trips each, every leg at 40%, each leg hits a foe once and Judges it
   const S = stage({ c_s2: 1, c_s2_a: 3 }), N = ED.Stats.skillNums('judgment', S.p.stats);
-  near(N.p.leg.dmg, (18 + 1.4 * 17) * 1.25 * 1.2 * 0.4, 1e-9, 'a leg is 40% of a hit'); ok(S.p.stats.storm === 5 && S.p.stats.thirdLeg === 1, 'Hammerstorm keeps Second Flight (two round trips)');
+  near(N.p.leg.dmg, (24.3 + 1.4 * 23) * 1.25 * 1.2 * 0.4, 1e-9, 'a leg is 40% of a hit'); ok(S.p.stats.storm === 5 && S.p.stats.thirdLeg === 1, 'Hammerstorm keeps Second Flight (two round trips)');
   S.w.playerSkill(S.p, 0, {}, 1); const angs = S.p.hammers.map(h => Math.atan2(h.pr.vy, h.pr.vx)).sort((a, b) => a - b), sk = S.w.fx.find(v => v.t === 'skill');
   ok(S.p.hammers.length === 5 && angs.every((a, i) => Math.abs(a - (-0.5 + 0.25 * i)) < 1e-9), `five hammers fan out from -0.5 to +0.5 rad (${angs.map(a => a.toFixed(2))})`); ok(sk && sk.st === 1, 'the skill event carries st');
   const T = stage({ c_s2: 1, c_s2_a: 3 }); const e = foe(T.w, T.p.x + 40, T.p.y), bs = foe(T.w, T.p.x + 40, T.p.y - 2), fo = foe(T.w, T.p.x + 40, T.p.y + 2), far = foe(T.w, T.p.x + 150, T.p.y + 150); bs.boss = true; fo.fodder = true; const log = spy(T.w), ev = tap(T.w);

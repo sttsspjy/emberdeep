@@ -51,7 +51,7 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
   s = tot({ n_s1: 1, n_s1_b: 2 }); near(s.maxMinions, 2, 1e-9, 'Bone Knights: at most 2'); near(ED.Stats.skillNums('legion', s).p.minion.n, 2, 1e-9, 'Legion raises 2'); ok(s.knights === 1, 'knights flag');
   near(s.minionDmg, 0.1, 1e-9, 'Bone Knights +10% per rank'); near(s.knightLife, 0.5, 1e-9, 'Ironbone life +50%'); near(s.knightStun, 0.5, 1e-9, 'Ironbone stun 0.5 s');
   s = tot({ n_s2: 1 }); near(s.s2Dmg, 0.4, 1e-9, 'Grim Harvest +40%'); near(s.s2Area, 0.2, 1e-9, 'Grim Harvest +20% wider'); near(s.harvestRaise, 2, 1e-9, 'Grim Harvest raises 2');
-  near(ED.Stats.skillNums('harvest', s).p.burst.dmg, 40.2 * 1.4, 1e-6, 'Harvest burst 40.2 x 1.4'); near(ED.Stats.skillNums('harvest', s).p.burst.r, 72, 1e-9, 'Harvest radius 60 x 1.2');
+  near(ED.Stats.skillNums('harvest', s).p.burst.dmg, 60.3 * 1.4, 1e-6, 'Harvest burst 60.3 x 1.4'); near(ED.Stats.skillNums('harvest', s).p.burst.r, 72, 1e-9, 'Harvest radius 60 x 1.2');
   s = tot({ n_s2: 1, n_s2_a: 2 }); near(s.corpse, 5, 1e-9, 'Corpse Explosion 4 + 1 per rank'); near(s.corpseMul, 0.3, 1e-9, 'corpse burst 30%'); near(s.boneLance, 0.15, 1e-9, 'Bone Lances +15%');
   const hp = ED.Stats.skillNums('harvest', s).p; near(hp.corpse.dmg, hp.burst.dmg * 0.3, 1e-9, 'corpse part 30% of the burst'); near(hp.lance.dmg, hp.burst.dmg * 1.15, 1e-9, 'lance part +15%'); near(hp.corpse.r, hp.burst.r, 1e-9, 'corpse radius = burst radius'); ok(hp.corpse.on && hp.lance.on, 'corpse and lance parts on');
   s = tot({ n_s2: 1, n_s2_b: 3 }); near(s.boneArmor, 0.03, 1e-9, 'Bone Armor 3% per minion'); near(s.boneCap, 0.06, 1e-9, 'Bone Armor cap 5% + 0.5% per rank'); ok(s.boneField === 1 && !tot({ n_s2: 1, n_s2_b: 1 }).boneField && tot({ n_s2: 1, n_s2_b: 2 }).boneField === 1, 'Marrow Field from rank 2');
@@ -133,15 +133,15 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
 // ---- Bone Spikes: minions burst on expiry, replacement and fall; Boneyard raises ----
 {
   const { w, p } = stage({ n_s1: 1, n_s1_a: 1 }); const e = foe(w, p.x + 80, p.y), N = ED.Stats.skillNums('legion', p.stats);
-  near(N.p.spikes.dmg, 5 + 0.8 * 9, 0.001, 'Spikes 5 + 0.8 x Power 9'); const a = minionAt(w, p, e, 0.001); a.cd = 99; w.updateAllies(1 / 60);
-  near(lost(e), 12.2 * aff(w), 0.01, 'a minion bursts on expiry for 12.2 Shadow (class affinity)'); ok(mine(w, p).length === 0, 'the burst minion is gone');
+  near(N.p.spikes.dmg, 7.5 + 0.8 * 13.5, 0.001, 'Spikes 7.5 + 0.8 x Power 13.5'); const a = minionAt(w, p, e, 0.001); a.cd = 99; w.updateAllies(1 / 60);
+  near(lost(e), 18.3 * aff(w), 0.01, 'a minion bursts on expiry for 18.3 Shadow (class affinity)'); ok(mine(w, p).length === 0, 'the burst minion is gone');
   const ba = evs(w, 'boom').filter(b => b.k === 'bone' && b.s === 1); ok(ba.length === 1 && ba[0].r === 60, 'boom event carries the Spikes flag and radius 60');
-  near(e.doom, 12.2 * 0.5 * w.elemAff('shadow'), 0.01, 'the burst marks Doom for half of its damage');
+  near(e.doom, 18.3 * 0.5 * w.elemAff('shadow'), 0.01, 'the burst marks Doom for half of its damage');
   const { w: w2, p: p2 } = stage({ n_s1: 1, n_s1_a: 1 }); const e2 = foe(w2, p2.x + 80, p2.y);
   for (let i = 0; i < 4; i++) { const m = minionAt(w2, p2, e2); m.cd = 99; m.x = p2.x + 200; m.y = p2.y; m.life = 12 - i; }
   const oldest = mine(w2, p2).sort((u, v) => u.life - v.life)[0]; oldest.x = e2.x - 10; oldest.y = e2.y; w2.spawnMinion(p2, p2.x, p2.y, 12); w2.updateAllies(1 / 60);
-  near(lost(e2), 12.2 * aff(w2), 0.01, 'the replaced (oldest) minion bursts'); ok(mine(w2, p2).length === 4, 'cap 4 holds');
-  const { w: w4, p: p4 } = stage({ n_s1: 1, n_s1_a: 2 }); near(ED.Stats.skillNums('legion', p4.stats).p.spikes.dmg, 12.2 * 1.05, 0.01, 'Spikes rank 2: +5% per rank');
+  near(lost(e2), 18.3 * aff(w2), 0.01, 'the replaced (oldest) minion bursts'); ok(mine(w2, p2).length === 4, 'cap 4 holds');
+  const { w: w4, p: p4 } = stage({ n_s1: 1, n_s1_a: 2 }); near(ED.Stats.skillNums('legion', p4.stats).p.spikes.dmg, 18.3 * 1.05, 0.01, 'Spikes rank 2: +5% per rank');
   const k1 = foe(w4, p4.x + 80, p4.y), k2 = foe(w4, p4.x + 100, p4.y); k1.hp = k2.hp = 5; const m = minionAt(w4, p4, k1, 0.001); m.cd = 99; w4.updateAllies(1 / 60);
   ok(k1.hp <= 0 && k2.hp <= 0 && mine(w4, p4).length === 1, 'Boneyard: a foe the burst kills rises, at most once per 2 s (two died, one rose)');
   ok(evs(w4, 'raise').some(r => r.k === 'yard'), 'Boneyard raise event');
@@ -154,7 +154,7 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
   const ks = mine(w, p); ok(ks.length === 2 && ks.every(a => a.knight && a.r === C.KNIGHT_R), 'Legion raises 2 Bone Knights (r 13)');
   const e = foe(w, p.x + 300, p.y), side = foe(w, e.x + 25, e.y + 10), far = foe(w, e.x + 60, e.y); w.allies.length = 0;
   const a = minionAt(w, p, e); w.updateAllies(0);
-  near(lost(e), 11.4 * C.COMP_MUL * C.KNIGHT_MUL, 0.01, 'a Bone Knight hits x KNIGHT_MUL'); near(a.cd, 0.5, 1e-9, 'attacks every 0.5 s'); near(lost(side), lost(e), 0.01, 'cleaves a foe within 30 of its target'); ok(far.hp === 5000, 'but not one farther away');
+  near(lost(e), 17.1 * C.COMP_MUL * C.KNIGHT_MUL, 0.01, 'a Bone Knight hits x KNIGHT_MUL'); near(a.cd, 0.5, 1e-9, 'attacks every 0.5 s'); near(lost(side), lost(e), 0.01, 'cleaves a foe within 30 of its target'); ok(far.hp === 5000, 'but not one farther away');
   const shot = (kn) => { w.projs.length = 0; w.fx.length = 0; w.spawnProj({ team: 1, kind: 'bone', x: kn.x + 6, y: kn.y, a: Math.PI, speed: 10, r: 4, dmg: 5, life: 3, owner: null, src: e }); const L = kn.life; w.updateAllies(0); return L - kn.life; };
   const kn = mine(w, p)[0]; near(shot(kn), 1, 1e-9, 'a Bone Knight blocks an enemy shot and loses 1 s'); ok(w.projs.every(q => q.life <= 0) && evs(w, 'kblock').length === 1, 'the shot is removed and a kblock event is emitted');
   const { w: wp, p: pp } = stage({ n_s1: 1 }); wp.spawnMinion(pp, pp.x, pp.y, 12); const pl = mine(wp, pp)[0]; pl.cd = 99;
@@ -164,7 +164,7 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
   const { w, p } = stage({ n_s1: 1, n_s1_b: 2 }); w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x + 60, y: p.y }, 0);
   const ks = mine(w, p); near(ks[0].life, 18, 1e-9, 'Ironbone: 12 s x 1.5'); near(p.stats.minionDmg, 0.1, 1e-9, 'rank 2 minion damage +10%');
   const e = foe(w, p.x + 200, p.y); w.allies.length = 0; const a = minionAt(w, p, e); w.updateAllies(0);
-  near(lost(e), 11.4 * 1.1 * C.COMP_MUL * C.KNIGHT_MUL, 0.01, 'rank 2 knight hit'); ok(e.stun >= 0.49 && e.stun <= 0.51, `a Bone Knight's strike stuns its foe 0.5 s (${e.stun})`);
+  near(lost(e), 17.1 * 1.1 * C.COMP_MUL * C.KNIGHT_MUL, 0.01, 'rank 2 knight hit'); ok(e.stun >= 0.49 && e.stun <= 0.51, `a Bone Knight's strike stuns its foe 0.5 s (${e.stun})`);
   ok(evs(w, 'kstun').length === 1, 'the stun emits a kstun event'); e.stun = 0; a.cd = 0; w.updateAllies(0); ok(e.stun === 0 && evs(w, 'kstun').length === 1, 'a foe on stun cooldown is not stunned again'); e.stunCd = 0; a.cd = 0; w.updateAllies(0); ok(e.stun > 0.49 && evs(w, 'kstun').length === 2, 'and is stunned again once the cooldown is over');
   const boss = foe(w, p.x + 200, p.y + 100); boss.boss = true; const b2 = minionAt(w, p, boss); w.updateAllies(0); ok(boss.stun === 0, 'bosses are never stunned');
   const { w: w1, p: p1 } = stage({ n_s1: 1, n_s1_b: 1 }); w1.spawnMinion(p1, p1.x, p1.y, 12); near(mine(w1, p1)[0].life, 12, 1e-9, 'no Ironbone life at rank 1'); void b2;
@@ -233,7 +233,7 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
   const e = foe(w, p.x + 100, p.y); w.spawnMinion(p, e.x, e.y, 12); w.playerSkill(p, 0, {}, 1);
   near(lost(e), burstOf(p) * 1.25 * aff(w), 0.05, 'Grave Pact: Harvest bursts +25% Shadow'); void e;
   const f = foe(w, p.x + 100, p.y + 300), a = minionAt(w, p, f); w.updateAllies(0); const dmg = lost(f);
-  near(dmg, 11.4 * C.COMP_MUL, 0.01, 'minion hits stay physical (no class bonus)'); near(f.doom, dmg * 0.2 * w.elemAff('shadow'), 0.01, 'minions mark Doom for 20% of their damage'); void a;
+  near(dmg, 17.1 * C.COMP_MUL, 0.01, 'minion hits stay physical (no class bonus)'); near(f.doom, dmg * 0.2 * w.elemAff('shadow'), 0.01, 'minions mark Doom for 20% of their damage'); void a;
   const { w: w2, p: p2 } = stage({ n_el: 1, doommark: 1 }); near(p2.stats.shadowInfuse, 0.3, 1e-9, 'Mark of Doom 0.3'); const g = foe(w2, p2.x + 100, p2.y); const b2 = minionAt(w2, p2, g); w2.updateAllies(0); near(g.doom, lost(g) * 0.225 * w2.elemAff('shadow'), 0.01, 'Mark of Doom x k (22.5%) counts instead when higher');
   const { w: w3, p: p3 } = stage({}); const h = foe(w3, p3.x + 100, p3.y); minionAt(w3, p3, h); w3.updateAllies(0); near(h.doom, 0, 1e-9, 'no Doom without a gate or Grave Pact');
   void b2;
@@ -243,8 +243,8 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
 {
   const { w, p } = stage({ n_el: 1, n_el_a: 1 }); const bos = foe(w, p.x + 100, p.y); bos.boss = true; bos.maxHp = bos.hp = 5000; bos.doomOwner = p; w.fx.length = 0;
   w.addDoom(bos, 800, p); ok(p.abyssT === C.ABYSS_T && evs(w, 'abyss').length === 1 && evs(w, 'toll').length === 1, 'a boss Toll empowers the minions for 6 s');
-  const f = foe(w, p.x + 100, p.y + 300); const m = minionAt(w, p, f); w.updateAllies(0); near(lost(f), 11.4 * C.COMP_MUL * 1.25, 0.01, 'empowered minions hit +25%');
-  p.abyssT = 0; f.hp = 5000; m.cd = 0; w.updateAllies(0); near(lost(f), 11.4 * C.COMP_MUL, 0.01, 'back to normal after the empower');
+  const f = foe(w, p.x + 100, p.y + 300); const m = minionAt(w, p, f); w.updateAllies(0); near(lost(f), 17.1 * C.COMP_MUL * 1.25, 0.01, 'empowered minions hit +25%');
+  p.abyssT = 0; f.hp = 5000; m.cd = 0; w.updateAllies(0); near(lost(f), 17.1 * C.COMP_MUL, 0.01, 'back to normal after the empower');
   const common = foe(w, p.x + 100, p.y + 150); common.hp = 200; w.addDoom(common, 900, p); ok(common.hp <= 0 && p.abyssT === 0, 'a Reaped common foe does not empower');
   const elite = foe(w, p.x + 100, p.y - 150); elite.elite = 'swift'; elite.hp = 200; w.addDoom(elite, 1500, p); ok(elite.hp <= 0 && p.abyssT === C.ABYSS_T, 'a Reaped elite empowers the minions');
   const { w: w1, p: p1 } = stage({}); const b1 = foe(w1, p1.x + 100, p1.y); b1.boss = true; w1.addDoom(b1, 800, p1); ok(p1.abyssT === 0, 'no empower without the card');

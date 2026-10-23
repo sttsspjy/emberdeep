@@ -317,29 +317,29 @@ Class Power **P** (table below) scales every skill and proc. Per-attack extras s
 
 | Hero | HP | Armor | Power P | Speed | Crit | Unlock |
 |---|---|---|---|---|---|---|
-| Knight | 135 | 8 | 18 | 116 | 5% | start |
+| Knight | 135 | 8 | 23.4 | 116 | 5% | start |
 | Ranger | 117 | 5 | 12 | 128 | 10% | start |
 | Pyromancer (fire) | 106 | 4 | 17 | 120 | 5% | start |
 | Shade | 133 | 7 | 13 | 138 | 12% | defeat the Bone Warden |
-| Cleric (holy) | 121 | 7 | 17 | 114 | 5% | complete 4 descents |
-| Necromancer (shadow) | 91 | 2 | 9 | 120 | 5% | defeat the Sporemother |
+| Cleric (holy) | 121 | 7 | 23 | 114 | 5% | complete 4 descents |
+| Necromancer (shadow) | 91 | 2 | 13.5 | 120 | 5% | defeat the Sporemother |
 
 ### Skills (skill 1 = slot 0, skill 2 = slot 1)
 
 | Hero | Skill | cd | Aim | Effect |
 |---|---|---|---|---|
-| Knight | **Shield Charge** | 6 | move 60–150 px toward the cursor | Run at 600 px/s, untouchable. Every foe passed takes 20 + 1.6P, stun 1.0 s, knock 260; ×1.4 on foes your shield stunned (Crush); bosses ×3 and never stunned (the shockwave, cracks and banner read the plain impact). |
-| Knight | **Shield Throw** | 9 | direction; the cursor's distance (120–280 px) sets the flight | The shield strikes up to 4 foes (ricochet reach 180): 20 + 1.3P each, stun 0.9 s; bosses ×2 and never stunned. It returns (10 + 0.65P to foes it passes) and is caught: shield 0.5% max HP per foe struck, at most 2%, once per 6 s. In flight it swats enemy shots. |
+| Knight | **Shield Charge** | 6 | move 60–150 px toward the cursor | Run at 600 px/s, untouchable. Every foe passed takes 26 + 1.6P, stun 1.0 s, knock 260; ×1.4 on foes your shield stunned (Crush); bosses ×3 and never stunned (the shockwave, cracks and banner read the plain impact). |
+| Knight | **Shield Throw** | 9 | direction; the cursor's distance (120–280 px) sets the flight | The shield strikes up to 4 foes (ricochet reach 180): 26 + 1.3P each, stun 0.9 s; bosses ×2 and never stunned. It returns (13 + 0.65P to foes it passes) and is caught: shield 0.5% max HP per foe struck, at most 2%, once per 6 s. In flight it swats enemy shots. |
 | Ranger | **Volley** | 5 | direction | 7 piercing arrows (fan 1.2 rad, pierce 1), 4 + 1.2P each. |
 | Ranger | **Rain of Arrows** | 10 | ground, ≤ 260 | After 0.35 s, every 0.25 s for 2 s all foes within r80 take 4 + 0.45P. |
 | Pyromancer | **Flame Nova** | 7 | self | Blast r105: 22 + 2.5P, knock 200, Fire; every foe struck gains a Burn add of 12 + 2.4P. |
 | Pyromancer | **Meteor** | 12 | ground, ≤ 300 | 0.9 s telegraph, impact r95: 30 + 3.5P, knock 220, Fire, adds Burn = 50% of the impact; crater r60 for 3 s: 8 + 0.8P per second. |
 | Shade | **Shadowstep** | 4.5 | move 40–140 px toward the cursor | Blink; every foe on the path takes a guaranteed crit of 12 + 2.2P; the next 3 attacks crit. |
 | Shade | **Vanish** | 11 | self | Smoke r75 for 3 s (foes inside slowed 40%, blinded up to 2 s each, elites half, never bosses). Unseen for 2.5 s: foes lose you and attack the spot they last saw you. The next attack is an **Ambush**: guaranteed crit for 2.5 × the unforked weapon's damage. Attacking ends stealth. |
-| Cleric | **Sanctuary** | 11 | ground, ≤ 200 | Heals you and allies within 180 for 7% max HP. Holy ground r100 for 3.5 s: foes take 10 + 1.2P per second (stores Radiance from a quarter of each tick); allies inside take 15% less damage. |
-| Cleric | **Judgment** | 9 | direction | A hammer flies out and returns, piercing; each leg hits a foe once for 18 + 1.4P (it takes the Judged +20% itself) and Judges it for 4 s (+20% damage taken); bosses take ×2 from every hammer leg (Verdict and the echo carry no boss factor). A foe that dies while the hammer's own Judged window runs shields heroes within 160 for 3% max HP, once per cast (class window). |
-| Necromancer | **Raise Legion** | 12 | ground, ≤ 160, standable | 3 minions for 12 s (max 3 minions); each strikes every 0.7 s for 6 + 0.6P. Any non-boss foe you are credited with (weapon, skills, Reaps, status damage, minions) may rise for 10 s (12%, +weapon raise). |
-| Necromancer | **Bone Harvest** | 10 | self | Each minion bursts (r60, 24 + 1.8P, Shadow) and heals you 3% max HP (at most 6%); then 1 new minion rises (2 when you had none). |
+| Cleric | **Sanctuary** | 11 | ground, ≤ 200 | Heals you and allies within 180 for 7% max HP. Holy ground r100 for 3.5 s: foes take 13.5 + 1.2P per second (stores Radiance from a quarter of each tick); allies inside take 15% less damage. |
+| Cleric | **Judgment** | 9 | direction | A hammer flies out and returns, piercing; each leg hits a foe once for 24.3 + 1.4P (it takes the Judged +20% itself) and Judges it for 4 s (+20% damage taken); bosses take ×2 from every hammer leg (Verdict and the echo carry no boss factor). A foe that dies while the hammer's own Judged window runs shields heroes within 160 for 3% max HP, once per cast (class window). |
+| Necromancer | **Raise Legion** | 12 | ground, ≤ 160, standable | 3 minions for 12 s (max 3 minions); each strikes every 0.7 s for 9 + 0.6P. Any non-boss foe you are credited with (weapon, skills, Reaps, status damage, minions) may rise for 10 s (12%, +weapon raise). |
+| Necromancer | **Bone Harvest** | 10 | self | Each minion bursts (r60, 36 + 1.8P, Shadow) and heals you 3% max HP (at most 6%); then 1 new minion rises (2 when you had none). |
 
 - Class-element parts (Fire, Holy, Shadow) take half affinity; Bleed-route heroes have none. Minion damage × 0.85 (`COMP_MUL`); minions infuse at 50%.
 - Skill cooldown reduction applies to both slots and counts fully up to 0.4, half above it, at most 0.65 (`Stats.cdrEff`); route cooldown cuts (`s1Cdr`, `s2Cdr`, at most 0.4 each) multiply after. Cooldowns are client-authoritative; refunds reach the client as `refund` messages.

@@ -42,14 +42,14 @@ near(ED.forkWeapon('firestaff', 'p_atk_h').explode.r, 46, 0.05, 'Magma Staff bla
 
 // ---- skill numbers at class Power (1.3) ----
 const SK = [ // class, skill, part, dmg
-  ['knight', 'charge', 'impact', 48.8], ['knight', 'shieldthrow', 'strike', 43.4], ['knight', 'shieldthrow', 'return', 21.7],
+  ['knight', 'charge', 'impact', 63.44], ['knight', 'shieldthrow', 'strike', 56.42], ['knight', 'shieldthrow', 'return', 28.21],
   ['ranger', 'volley', 'arrow', 18.4], ['ranger', 'rain', 'tick', 9.4],
   ['pyro', 'nova', 'blast', 64.5], ['pyro', 'nova', 'burn', 52.8], ['pyro', 'meteor', 'impact', 89.5], ['pyro', 'meteor', 'crater', 21.6],
   ['shade', 'step', 'slash', 40.6], ['shade', 'vanish', 'ambush', 27.5],
-  ['cleric', 'sanctuary', 'zone', 30.4], ['cleric', 'judgment', 'leg', 41.8], ['necro', 'legion', 'minion', 11.4], ['necro', 'harvest', 'burst', 40.2],
+  ['cleric', 'sanctuary', 'zone', 41.1], ['cleric', 'judgment', 'leg', 56.5], ['necro', 'legion', 'minion', 17.1], ['necro', 'harvest', 'burst', 60.3],
 ];
 for (const [cls, sk, part, dmg] of SK) near(ED.Stats.skillNums(sk, build(cls)).p[part].dmg, dmg, 0.06, `${sk}.${part}`);
-{ const st = build('necro', 0, { n_s1: 1, n_s1_a: 1 }); near(ED.Stats.skillNums('legion', st).p.spikes.dmg, 5 + 0.8 * st.power, 1e-9, 'legion.spikes (rank 1: 5 + 0.8 x Power)'); }
+{ const st = build('necro', 0, { n_s1: 1, n_s1_a: 1 }); near(ED.Stats.skillNums('legion', st).p.spikes.dmg, 7.5 + 0.8 * st.power, 1e-9, 'legion.spikes (rank 1: 7.5 + 0.8 x Power)'); }
 const sky = ED.Stats.skillNums('rain', build('ranger', 0, { r_s2: 1, r_s2_a: 1 }));
 near(sky.p.sky.dmg, 124.08, 0.1, 'Rainmaker + Skyfall sky');
 ok(!ED.Stats.skillNums('rain', build('ranger')).p.sky.on && sky.p.sky.on, 'Skyfall part gated by its stat');

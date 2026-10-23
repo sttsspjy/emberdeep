@@ -35,7 +35,7 @@ function modelOf(cls, boons, wi, o) {
     near(m.def.taken, v[4], 0.0005, cls + ' damage taken');
   }
   const by = (m, s, p) => m.skills[s].parts.find(q => q.id === p);
-  near(by(modelOf('knight', {}, 0, { stat: { crit: 0 } }), 0, 'impact').raw, 48.8, 0.05, 'Charge impact'); near(modelOf('knight', {}, 0).def.ehp, 153, 1, 'Knight effective health');
+  near(by(modelOf('knight', {}, 0, { stat: { crit: 0 } }), 0, 'impact').raw, 63.44, 0.05, 'Charge impact'); near(modelOf('knight', {}, 0).def.ehp, 153, 1, 'Knight effective health');
   const rg = modelOf('ranger', {}, 0, { stat: { crit: 0 } }), arrow = by(rg, 0, 'arrow');
   near(arrow.raw, 18.4, 0.05, 'Volley arrow'); ok(arrow.oneFoe === 3 && arrow.fanN === 7, `Volley: 3 of 7 arrows reach a foe at REF (got ${arrow.oneFoe} of ${arrow.fanN})`);
   near(rg.skills[0].perCast, 55.2, 0.1, 'Volley per cast on one foe'); near(rg.skills[0].perCastAll, 128.8, 0.1, 'Volley per cast, all 7'); near(rg.skills[1].perCast, 75.2, 0.1, 'Rain per cast (9.4 x 8)');
@@ -45,9 +45,9 @@ function modelOf(cls, boons, wi, o) {
   const sh = modelOf('shade', {}, 0, { stat: { crit: 0 } });
   near(by(sh, 0, 'slash').raw, 40.6, 0.05, 'Shadowstep'); near(by(sh, 0, 'slash').avg, 71.05, 0.05, 'Shadowstep always crits'); near(by(sh, 1, 'ambush').avg, 48.125, 0.05, 'Ambush');
   const cl = modelOf('cleric', {}, 0, { stat: { crit: 0 }, ctx: { stratum: 3 } }), leg = by(cl, 1, 'leg');
-  near(leg.pre, 50.16, 0.05, 'Judgment leg with its own vulnerability'); near(cl.skills[1].perCast, 100.3, 0.1, 'Judgment per cast (two legs)'); near(by(cl, 0, 'zone').here * 7, 106.4, 0.1, 'Sanctuary 7 ticks');
+  near(leg.pre, 67.8, 0.05, 'Judgment leg with its own vulnerability'); near(cl.skills[1].perCast, 135.6, 0.1, 'Judgment per cast (two legs)'); near(by(cl, 0, 'zone').here * 7, 143.85, 0.1, 'Sanctuary 7 ticks');
   const nc = modelOf('necro', {}, 0, { stat: { crit: 0 } }), mn = by(nc, 0, 'minion');
-  near(mn.here, 9.69, 0.01, 'Minion hit'); ok(mn.oneFoe === 51, `Minions: 3 x 17 hits (got ${mn.oneFoe})`); near(by(nc, 1, 'burst').raw, 40.2, 0.05, 'Harvest burst');
+  near(mn.here, 14.535, 0.01, 'Minion hit'); ok(mn.oneFoe === 51, `Minions: 3 x 17 hits (got ${mn.oneFoe})`); near(by(nc, 1, 'burst').raw, 60.3, 0.05, 'Harvest burst');
   // Set 2: Sharpened Edge x2, Stoke x1, weak to Fire (stratum III), crit 5%. DEVIATION from DESIGN-ux A4: a class-element skill takes half the affinity (combat.js affC: x1.25, not x1.5), so Nova blast and crater use 1.25; statuses (Nova burn, Meteor burn add) take the full x1.5.
   const e2 = modelOf('pyro', { edge: 2, stoke: 1, kindle: 1 }, 0, { ctx: { stratum: 3 }, stat: { crit: 0.05 } });
   near(e2.mult.dmg.total, 1.2, 1e-9, 'Set 2 damage'); near(by(e2, 0, 'blast').here, 64.5 * 1.2 * (1 + 0.05 * 0.75) * 1.25, 0.05, 'Set 2 Nova blast (class skill: half affinity)');
@@ -78,7 +78,7 @@ for (const key in ED.SKILL_SHEET) { const [sid, pid] = key.split('.'); ok(ED.SKI
   for (const id of ED.BOON_IDS) { const b = ED.BOONS[id]; for (let r = 1; r <= (b.max || 5) + 1; r++) { const t = ED.Sheet.text(id, r, st); if (!t || /[{}\[\]]/.test(t)) { bad++; console.log('FAIL boon text ' + id + ' rank ' + r + ': ' + t); } } }
   ok(bad === 0, 'boon texts resolve at every rank');
   ok(ED.Sheet.text('edge', 1, st) === '+10% damage.' && ED.Sheet.text('edge', 2, st) === '+20% damage.', 'Sharpened Edge text follows the rank');
-  ok(ED.Sheet.text('overcharge', 1, st).indexOf('37 damage') >= 0, 'Overcharge shows its damage at the Knight Power (10 + 1.5 x 18)');
+  ok(ED.Sheet.text('overcharge', 1, st).indexOf('45 damage') >= 0, 'Overcharge shows its damage at the Knight Power (10 + 1.5 x 23.4)');
   ok(ED.Sheet.text('forager', 2, st).indexOf('20% more often') >= 0 && ED.Sheet.text('forager', 2, st).indexOf('6% more max') >= 0, 'Forager numbers scale with the rank');
   ok(ED.Sheet.text('sanctity', 2, st).indexOf('0.5% more') >= 0 && ED.Sheet.text('sanctity', 2, st).indexOf('6% more') >= 0, 'small percentages keep their decimals');
   ok(ED.Sheet.text('k_atk_h', 3, st).indexOf('Follow-Through') >= 0, 'class cards render through boonText');
