@@ -100,7 +100,7 @@ Weapon index 0 is available at once, index 1 at mastery 3, index 2 at mastery 6.
 | | Soul Scythe | 25.5 · 0.56 | kills raise +12% more often | Death Scythe 50.5 · 1.008 | Soul Sickle 15.4 · 0.308 |
 | | Plague Staff | 9 · 0.6 | cloud r44, 10 dps, 2.6 s | Plague Totem 17.8 · 1.08 | Plague Rod 5.45 · 0.33 |
 
-Base hero HP: Knight 135 · Ranger 117 · Pyromancer 106 · Shade 133 · Cleric 121 · Necromancer 91 (armor and Class Power: §5).
+Base hero HP: Knight 178 · Ranger 117 · Pyromancer 106 · Shade 192 · Cleric 175 · Necromancer 91 (armor and Class Power: §5).
 
 ## 2. Elements and statuses
 
@@ -318,11 +318,11 @@ Class Power **P** (table below) scales every skill and proc. Per-attack extras s
 
 | Hero | HP | Armor | Power P | Speed | Crit | Unlock |
 |---|---|---|---|---|---|---|
-| Knight | 135 | 8 | 23.4 | 116 | 5% | start |
+| Knight | 178 | 32 | 23.4 | 116 | 5% | start |
 | Ranger | 117 | 5 | 12 | 128 | 10% | start |
 | Pyromancer (fire) | 106 | 4 | 17 | 120 | 5% | start |
-| Shade | 133 | 7 | 13 | 138 | 12% | defeat the Bone Warden |
-| Cleric (holy) | 121 | 7 | 23 | 114 | 5% | complete 4 descents |
+| Shade | 192 | 32 | 13 | 138 | 12% | defeat the Bone Warden |
+| Cleric (holy) | 175 | 14 | 23 | 114 | 5% | complete 4 descents |
 | Necromancer (shadow) | 91 | 2 | 13.5 | 120 | 5% | defeat the Sporemother |
 
 ### Skills (skill 1 = slot 0, skill 2 = slot 1)
