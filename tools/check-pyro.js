@@ -176,7 +176,7 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
 }
 {
   const s = stage({ p_s1: 1, p_s1_b: 2 }), { w, p } = s, e = foe(w, p.x + 80, p.y), far = foe(w, p.x + 300, p.y);
-  cast(s, 0, 0, 0); const m = p.mantleAmt; ok(m > 0, 'Mantle up');
+  cast(s, 0, 0, 0); ok(p.mantleAmt > 0, 'Mantle up'); p.shield = p.mantleAmt = 3; const m = p.mantleAmt; // 3 health: a hit of 1 (the minimum) takes only part of it
   const kb0 = e.kbx; s.log.length = 0; s.evs.length = 0; w.fx.length = 0;
   p.invuln = 0; w.hurtPlayer(p, 1, {}); ok(p.mantleAmt > 0 && p.mantleAmt < m && !parts(s, 'nova.flare').length, 'a partial absorb keeps the Mantle');
   p.invuln = 0; w.hurtPlayer(p, 500, {});

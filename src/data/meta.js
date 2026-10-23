@@ -81,13 +81,13 @@
   // Mastery XP thresholds for levels 1..10.
   ED.MASTERY_XP = [0, 120, 300, 550, 850, 1200, 1650, 2200, 2850, 3600];
   // Stat mods a mastery level adds (every level up to the hero's own applies); ED.MASTERY_REWARDS is the text. Level 8 gives one boon reroll (sim/build.js).
-  ED.MASTERY_MODS = { 2: { dmg: 0.01 }, 4: { hp: 2 }, 5: { cdr: 0.01 }, 7: { crit: 0.01 }, 9: { dmg: 0.01 } };
+  ED.MASTERY_MODS = { 2: { dmg: 0.01 }, 4: { hp: 1 }, 5: { cdr: 0.01 }, 7: { crit: 0.01 }, 9: { dmg: 0.01 } };
   ED.MASTERY_REWARDS = [
     null,
     'Hero unlocked',
     '+1% damage',
     'Second weapon',
-    '+2 max health',
+    '+1 max health',
     'Skills recharge 1% faster',
     'Third weapon',
     '+1% critical chance',

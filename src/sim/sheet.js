@@ -1038,8 +1038,8 @@
     const n = (p.relics || []).length;
     if (id === 'idol') return `Now +${Math.round(Math.min(0.2, Math.floor((ctx.gold || 0) / 15) * 0.01) * 100)}% damage`;
     if (id === 'banner') return `Now +${Math.round(st.banner * (1 + (ctx.allyNear | 0)) * 100)}% damage`;
-    if (id === 'chalice') return `Now +${p.chaliceHp | 0} of 30 health` + ((p.chaliceHp | 0) >= 30 ? ', +10% damage' : '');
-    if (id === 'stone') return `Now +${2 * n}% damage, +${2 * n} health`;
+    if (id === 'chalice') { const cap = ED.RELICS.chalice.full.hp; return `Now +${p.chaliceHp | 0} of ${cap} health` + ((p.chaliceHp | 0) >= cap ? ', +10% damage' : ''); }
+    if (id === 'stone') return `Now +${2 * n}% damage, +${Math.round(ED.RELICS.stone.perRelic.hp * n)} health`;
     if (id === 'wardrum') return p.toughRoom ? 'Now +20% (elite or boss room)' : null;
     return null;
   }

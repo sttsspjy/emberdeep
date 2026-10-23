@@ -389,7 +389,7 @@ const cast0 = (w, p) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x + 60, y: 
 { // Lich Form (n_s2_b rank 3): 6.5 s after Bone Harvest the weapon fires 2 extra soul bolts at 30%, raised minions last twice as long, 35% less damage taken through the Brace channel (under the DR floor); the shield stays as Bone Armor gives it
   const S = stage({ n_s2: 1, n_s2_b: 3 }), st = S.p.stats; S.p.stats.armor = 0;
   ok(st.lich === 1 && st.lichT === 6.5 && Math.abs(st.lichMul - 0.3) < 1e-9 && st.lichLife === 2 && Math.abs(st.braceDR - 0.35) < 1e-9 && st.boneField === 1, 'Lich Form stats: 6.5 s, 30%, x2 life, 35% less damage (Marrow Field kept)');
-  const hurt = (S2) => { S2.p.hp = S2.p.maxHp; S2.p.invuln = 0; S2.p.shield = 0; S2.w.hurtPlayer(S2.p, 30, {}); return S2.p.maxHp - S2.p.hp; };
+  const hurt = (S2) => { S2.p.maxHp = S2.p.hp = 1e4; S2.p.invuln = 0; S2.p.shield = 0; S2.w.hurtPlayer(S2.p, 30, {}); return S2.p.maxHp - S2.p.hp; };
   const base = hurt(S); ok(!(S.p.lichT > 0), 'no window before Bone Harvest');
   for (let i = 0; i < 3; i++) S.w.spawnMinion(S.p, S.p.x, S.p.y, 12); S.w.fx.length = 0; S.w.playerSkill(S.p, 0, {}, 1);
   ok(S.p.lichT === 6.5 && S.p.braceT === 6.5 && S.w.fx.some(v => v.t === 'lich' && v.pid === 'p0'), 'Bone Harvest opens the window (a lich event, the Brace channel 6.5 s)');
