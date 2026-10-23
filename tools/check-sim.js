@@ -385,6 +385,7 @@ const budgetOf = (s, kind) => Math.round(W0.ROOM_XP[kind === 'elite' ? 'elite' :
   a.age = 45.01; w.updateEnemy(a, TICK); ok(a.exposed, 'exposed past 45 s of age');
   bo.age = 77.9; w.updateEnemy(bo, TICK); ok(!bo.exposed, 'a boss is not exposed at 77.9 s'); bo.age = 78.01; w.updateEnemy(bo, TICK); ok(bo.exposed, 'a boss is exposed past 78 s');
   f.age = 500; w.updateEnemy(f, TICK); ok(!f.exposed, 'fodder are never exposed');
+  w.stratum = 4; const b4 = w.spawnEnemy('forgelord', p.x + 300, p.y + 120); b4.spd = 0; b4.cd = 9999; b4.age = 200; w.updateEnemy(b4, TICK); ok(!b4.exposed, 'a boss of a fury stratum (IV) is never exposed'); w.stratum = 1;
   const sp = foe(w, p.x + 300, p.y + 100); sp.spawnT = 1; w.updateEnemy(sp, TICK); ok(sp.age === 0 && sp.spawnT < 1, 'a spawning foe does not age');
 }
 { // crowd slow: 8% per overlapping non-boss foe, at most 50%; spawning, dead and boss foes do not count; dashes and skill moves ignore it
