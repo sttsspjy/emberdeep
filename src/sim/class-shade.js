@@ -11,8 +11,8 @@
   const R = Math.round;
   // MOM_T: seconds Momentum lasts after the latest crit. LURE_T: the last seconds of an Afterimage fuse in which Lure pulls foes in. RUPT_R: splash radius of a Rupture, BLOOM_R: reach of Bloodbloom.
   // BLOSSOM_GAP / BLOSSOM_REACH: seconds between two Death Blossom blinks and the px within which the next foe must stand. MIRROR_OFF: px from the start point of a Hall of Mirrors image.
-  // GIL_R: reach of a Guillotine carry, CASC_R: of a Crimson Cascade leap. ARTER_CD: seconds between two Arterial crit readyings, ARTER_AT: ailments an Arterial crit needs, ARTER_CAP: readied crits the stack may reach that way.
-  Object.assign(C, { MOM_T: 2.5, LURE_T: 0.3, RUPT_R: 60, RUPT_MUL: 1.5, BLOOM_R: 80, BLOSSOM_GAP: 0.1, BLOSSOM_REACH: 120, MIRROR_OFF: 50, GIL_R: 100, CASC_R: 120, ARTER_CD: 1, ARTER_AT: 3, ARTER_CAP: 3 });
+  // STEP_GRACE: seconds the hero stays untouchable after a Shadowstep lands. GIL_R: reach of a Guillotine carry, CASC_R: of a Crimson Cascade leap. ARTER_CD: seconds between two Arterial crit readyings, ARTER_AT: ailments an Arterial crit needs, ARTER_CAP: readied crits the stack may reach that way.
+  Object.assign(C, { STEP_GRACE: 0.35, MOM_T: 2.5, LURE_T: 0.3, RUPT_R: 60, RUPT_MUL: 1.5, BLOOM_R: 80, BLOSSOM_GAP: 0.1, BLOSSOM_REACH: 120, MIRROR_OFF: 50, GIL_R: 100, CASC_R: 120, ARTER_CD: 1, ARTER_AT: 3, ARTER_CAP: 3 });
 
   // Raises Momentum by n stacks (cap momMax) and restarts its timer.
   function gainMom(p, n) {
@@ -47,13 +47,14 @@
     return dealt > 0;
   }
 
-  // Shadowstep: the client has already moved the hero from (x0, y0) to (x1, y1); every foe on that path takes a guaranteed crit and the hero readies crit attacks (3, +stepStack per foe cut, scaled by the weapon's critK).
+  // Shadowstep: the client has already moved the hero from (x0, y0) to (x1, y1); every foe on that path takes a guaranteed crit, the hero stays untouchable STEP_GRACE s after landing and readies crit attacks (3, +stepStack per foe cut, scaled by the weapon's critK).
   // Twin Cut queues the same path again; Afterimage leaves a decoy at the start that bursts (and, with Lure, first pulls foes in); Hall of Mirrors leaves three; Death Blossom starts a chain of blinks from the landing point.
   ED.CAST.step = function (p, a, data, st, N) {
     const near = (x, y) => fin(x) && fin(y) && U.dist2(x, y, p.x, p.y) < (N.range + 80) ** 2;
     const x0 = near(data.x0, data.y0) ? data.x0 : p.x, y0 = near(data.x0, data.y0) ? data.y0 : p.y, x1 = near(data.x1, data.y1) ? data.x1 : p.x, y1 = near(data.x1, data.y1) ? data.y1 : p.y;
     const seen = N.p.blossom.on ? new Set() : null;
     const cut = cutPath(this, p, N, 'slash', x0, y0, x1, y1, a, seen);
+    p.invuln = Math.max(p.invuln, C.STEP_GRACE);
     this.grantCrits(p, 3 + st.stepStack * cut, 3 + st.stackMax, 'set');
     if (N.p.twin.on) p.stepQ.push({ t: N.p.twin.delay, x0, y0, x1, y1, a, room: this.room });
     if (N.p.mirror.on) for (let k = 0; k < N.p.mirror.n; k++) {
