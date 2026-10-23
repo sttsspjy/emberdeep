@@ -11,20 +11,20 @@ Canonical rules and numbers. Code follows this file; a balance pass changes numb
 
 ## 1. Damage model
 
-- Foe HP = base × `1 + 0.65(s−1) + 0.08(s−1)²` × **threat HP** × party multiplier. Foe damage = base × `1 + 0.22(s−1) + 0.03(s−1)²` × **threat damage** (below 1 in strata I–V). Boss HP is absolute (below), scaled by party and pact.
+- Foe HP = base × `1 + 0.65(s−1) + 0.08(s−1)²` × **threat HP** × party multiplier. Foe damage = base × `1 + 0.22(s−1) + 0.03(s−1)²` × **threat damage** (1 in strata I–III, below 1 in IV). Boss HP is absolute (below), scaled by party and pact.
 - **Health unit**: hero health is a small whole number (§5: Knight 45, Necromancer 23). Every foe damage value (`dmg`, `dps`, hazard ticks, boss damage) is in the same points; foe HP and hero damage are on their own scale (`HP_K` 4 converts a hero point to foe HP where a hero's damage taken or absorbed becomes foe damage or healing). Each hit rounds to a whole number, at least 1. Flat health: Vigor +2, Heartstone +4, Grail of Ages +1 per 12 kills (max +8), Philosopher's Stone +1 per 2 relics, Hearth Vitality +1 per rank, mastery 4 +1; max health never falls under 5.
 - **Threat** per stratum (`World.THREAT`): HP ×, damage ×, wave budget ×, attack-cooldown rate `cdRate` (foe cooldowns tick faster by this fraction, negative = slower, only while the foe can act; wind-ups never change; bosses are exempt), boss pause × (time between boss attacks):
 
 | Stratum | HP × | Damage × | Wave × | `cdRate` | Boss pause × |
 |---|---|---|---|---|---|
-| I | 2.2 | 0.5 | 0.8 | −40% | 2 |
-| II | 1.62 | 0.5 | 0.75 | −30% | 1.7 |
-| III | 1.3 | 0.5 | 0.7 | −10% | 1.4 |
+| I | 2.2 | 1 | 0.8 | −40% | 2 |
+| II | 1.62 | 1 | 0.75 | −30% | 1.7 |
+| III | 1.3 | 1 | 0.7 | −10% | 1.4 |
 | IV | 1 | 0.84 | 0.66 | 0 | 0.75 |
 | V | 1.07 | 1.19 | 0.62 | +15% | 0.6 |
 | VI | 1.02 | 1.39 | 0.6 | +30% | 0.6 |
 
-  Effective foe HP multiplier (depth curve × threat HP): 2.2 / 2.8 / 3.4 / 3.7 / 5.2 / 6.4. Effective foe damage multiplier (depth curve × threat damage): 0.5 / 0.6 / 0.8 / 1.6 / 2.8 / 4.0.
+  Effective foe HP multiplier (depth curve × threat HP): 2.2 / 2.8 / 3.4 / 3.7 / 5.2 / 6.4. Effective foe damage multiplier (depth curve × threat damage): 1 / 1.25 / 1.56 / 1.6 / 2.8 / 4.0. Target: a Knight's mean hit from a regular or elite foe in strata I–III is 3–5% of max health (about 2 of 45); lighter heroes take relatively more; fodder, hazard ticks and the boss volleys of strata I–III land the minimum 1 point.
 - Boss HP: Bone Warden 4,350 · Sporemother 5,950 · Rimeheart 16,500 · Forgelord 26,600 · Drowned King 85,700 · Hollow King 90,300. Boss base damage 1.6 (Forgelord 3.3, Drowned King 4.425, Hollow King 3.925). A foe still alive 45 s after its own spawn (`e.age`; bosses 78 s, except in strata with a boss fury (§8), where bosses are never exposed; fodder never) is **exposed**: ×1.5 damage taken, ×1.5 speed, and it loses 4% of its max HP per second (bosses 1.2%).
 - Elite HP × `2.4 + 0.4(s−1)` (`World.ELITE`), damage × 0.9, radius × 1.22. Affixes: swift (×1.4 speed, wind-ups ×0.7 but never under 0.4 s), brutal (×1.4 damage), warded (ward = 45% of max HP), volatile (explodes on death), vampiric (heals 12× the damage it deals a hero: ×3 in the old health unit, times `HP_K` 4). From stratum IV an elite rolls a second, different affix (`elite2`) with chance `World.AFFIX2` 35% / 60% / 85% (IV–VI); HP and damage multipliers apply once, each affix effect once whichever slot holds it (`ED.hasAffix`); the label names both ("Swift Brutal Skeleton Knight").
 - Party multiplier (n = other heroes): foe HP `1 + 0.85n + 0.3n(n−1)` (two heroes ×1.85, three ×3.3, four ×5.35), wave budget `1 + 0.6n + 0.2n(n−1)`. A downed hero bleeds out in 18 s when no ally revives them (solo: at once).
