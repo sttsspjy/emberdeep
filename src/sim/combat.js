@@ -950,7 +950,7 @@
     const st = p.stats;
     if (st.phoenix && !p.phoenixUsed) { p.phoenixUsed = true; p.hp = Math.round(p.maxHp * 0.5); p.invuln = 2.2; this.emit({ t: 'rise', pid: p.pid, k: 'phoenix', x: p.x, y: p.y }); this.explode(p.x, p.y, 110, ED.procDmg(ED.RELICS.phoenix, st), 0, p, 'fire'); return; }
     if (st.angel && !p.angelUsed) { p.angelUsed = true; p.hp = 1; p.invuln = 2.2; this.emit({ t: 'rise', pid: p.pid, k: 'angel', x: p.x, y: p.y }); return; }
-    if (p.secondWind > 0) { p.secondWind--; p.hp = Math.round(p.maxHp * p.swPct); p.invuln = 2.2; this.emit({ t: 'rise', pid: p.pid, k: 'wind', x: p.x, y: p.y }); return; }
+    if (p.secondWind > 0 && !this.boss) { p.secondWind--; p.hp = Math.round(p.maxHp * p.swPct); p.invuln = 2.2; this.emit({ t: 'rise', pid: p.pid, k: 'wind', x: p.x, y: p.y }); return; }
     p.hp = 0; p.downed = true; p.bleed = this.partySize() > 1 ? 18 : 0.01; p.revive = 0;
     this.emit({ t: 'down', pid: p.pid, x: p.x, y: p.y });
   };

@@ -473,7 +473,7 @@ Per stratum: start, boss, three utility rooms (treasure on odd strata or an even
 | Stash | 3 | begin with 5 gold (the party's highest rank; id `stash`, UPGRADES index 11) | 20 / 45 |
 | Ember Attunement | 3 | +10% embers earned | 80 / 160 / 255 / 385 |
 | Merchant's Favor | 3 | shops −4% | 30 / 65 |
-| Second Wind | 4 | once per descent a fallen hero rises at 5% health (rank 2: 10%), invulnerable 2.2 s | 90 / 200 |
+| Second Wind | 4 | once per descent a hero who falls outside a boss fight rises at 5% health (rank 2: 10%), invulnerable 2.2 s | 90 / 200 |
 
 - **Mastery** has 10 levels per hero: 2 +1% damage · 3 second weapon · 4 +2 max health · 5 skills recharge 1% faster · 6 third weapon · 7 +1% crit · 8 +1 boon reroll · 9 +1% damage · 10 golden aura. A full Hearth with mastery 10 adds +4.5% damage, +7 health, +4% crit, +4% recharge, +3 armor, +3% move speed, +6% xp and +6% gold, plus the one-offs of the table. Visible but small: the boss-arrival power read (`tools/bal.js --power`) puts full Hearth at ×1.1–1.3 over fresh smart at strata IV–VI. Deep Wick reaches `W.prototype.darkLoot()`; Head Start, Stash, Second Wind, Insight and Provisions are read in `sim/build.js` (`onRunStartBuild`, `onPartyStartBuild`, `onStratumBuild`), Merchant's Favor in `rooms.js` (`priceOf`).
 - **Refunds**: every upgrade rank and Armory entry refunds its full cost on demand (`S.refundUpgrade`, `S.refundArmory`); Reset all (`S.resetUpgrades`, a two-step confirm in the UI: the first press arms it for 3 s) refunds every rank and entry at once. `lifetime` embers never change on a purchase or refund.

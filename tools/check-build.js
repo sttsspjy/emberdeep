@@ -307,5 +307,13 @@ const ranks = (w, pid) => w.msgs.filter(m => m.t === 'forkRank' && m.to === pid)
   }
 }
 
+// ---------------- Second Wind: rises outside boss fights only ----------------
+{
+  const { w, p } = stage('knight'); p.secondWind = 1; p.swPct = 0.1;
+  w.boss = { id: 'x' }; p.hp = 0; w.playerLethal(p); ok(p.downed && p.secondWind === 1, 'Second Wind does not fire during a boss fight');
+  const b = stage('knight'), q = b.p; q.secondWind = 1; q.swPct = 0.1; b.w.boss = null; q.hp = 0; b.w.playerLethal(q);
+  ok(!q.downed && q.secondWind === 0, 'Second Wind fires outside a boss fight'); near(q.hp, Math.round(q.maxHp * 0.1), 1e-9, 'rises at 10% health');
+}
+
 console.log(`${n} checks, ${fails} failed`);
 process.exit(fails ? 1 : 0);
