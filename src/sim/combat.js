@@ -1215,12 +1215,18 @@
     this.emit({ t: 'beam', pid: p.pid, x0: Math.round(x0), y0: Math.round(y0), x1: Math.round(x0 + ca * cut), y1: Math.round(y0 + sa * cut), w: Math.round(hw) });
   };
 
-  // A lobbed shot (w.lob): a shell arcs over foes and walls to the hero's aim point (p.atkD: the attack's cursor distance, else the cursor point aimX / aimY, else full range) along ang, clamped to LOB_MIN..w.speed x w.life and cut at the first wall,
+  // A lobbed shot (w.lob): a shell arcs over foes and walls to the hero's aim point (p.atkD: the attack's cursor distance, else the cursor point aimX / aimY, else the nearest foe on the aim line, else full range) along ang, clamped to LOB_MIN..w.speed x w.life and cut at the first wall,
   // landing w.lob.t s later as its blast (ex): every foe in it takes a weapon hit (it may crit, Staggers on Heavy; dist = the flight distance). The landing spot shows as a friendly 'tele' zone with the lob arc (z.lob = the launch point).
   ED.CONST.LOB_MIN = 30;
   W.lobShot = function (p, ang, w, crit, o, ex, wpn, acid) {
     const max = w.speed * w.life, fin = (v) => typeof v === 'number' && isFinite(v);
-    let d = fin(p.atkD) ? p.atkD : fin(p.aimX) && fin(p.aimY) ? Math.hypot(p.aimX - p.x, p.aimY - p.y) : max;
+    let d = fin(p.atkD) ? p.atkD : fin(p.aimX) && fin(p.aimY) ? Math.hypot(p.aimX - p.x, p.aimY - p.y) : -1;
+    if (d < 0) { // no cursor distance: the nearest foe whose centre lies within half the blast radius of the aim line, else full range
+      const cx = Math.cos(ang), cy = Math.sin(ang), half = (ex ? ex.r : 40) * 0.5, es = this.foeScan(p.x, p.y, max);
+      d = max;
+      for (const e of es) { if (e.hp <= 0) continue; const dx = e.x - p.x, dy = e.y - p.y, t = dx * cx + dy * cy; if (t > 0 && t < d && Math.abs(dx * cy - dy * cx) <= half + e.r) d = t; }
+      this.foeEnd();
+    }
     d = U.clamp(d, ED.CONST.LOB_MIN, max);
     const g = Sim.groundPoint(this.room, this.locked, p.x, p.y, p.x + Math.cos(ang) * d, p.y + Math.sin(ang) * d, max, false);
     const r = ex ? ex.r : 40, flown = Math.hypot(g.x - p.x, g.y - p.y);
