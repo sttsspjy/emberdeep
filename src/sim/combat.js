@@ -1413,7 +1413,7 @@
     }
     e.age += dt;
     if (e.boss) this.tickFury(e, dt);
-    if (!e.exposed && !e.def.invuln && !e.fodder && this.enc && e.age > (e.boss ? 78 : 45)) { e.exposed = true; this.emit({ t: 'expose', x: e.x, y: e.y, boss: e.boss ? 1 : 0 }); }
+    if (!e.exposed && !e.def.invuln && !e.fodder && this.enc && e.age > (e.boss ? 78 : 45) && !(e.boss && ED.World.furyAt(this.stratum) > 0)) { e.exposed = true; this.emit({ t: 'expose', x: e.x, y: e.y, boss: e.boss ? 1 : 0 }); } // a boss of a fury stratum is never exposed (fury ends its stalls)
     if (e.exposed && !e.def.invuln) e.hp -= e.maxHp * (e.boss ? 0.012 : 0.04) * dt;
     if (e.hp <= 0) { this.killEnemy(e, null, {}); return; }
     if (e.frozen > 0 || e.stun > 0) return;

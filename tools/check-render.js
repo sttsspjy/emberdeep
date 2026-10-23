@@ -320,7 +320,7 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
       ok(!IV.labels.some((l) => /Fury/.test(l.text)) && !IVw.labels.some((l) => /Fury/.test(l.text)), 'no fury label before the start');
       ok(IV.fills.includes('#b88a4a') && IVw.fills.some((f) => /^rgba\(255, ?181, ?107/.test(f)) && IVf.fills.some((f) => /^rgba\(255, ?90, ?26/.test(f)), 'the track fill is amber, pulses light from the warning on, burns ember past the start');
       const lab = IVf.labels.find((l) => /^Fury/.test(l.text));
-      ok(lab && lab.text === 'Fury ×1.4', `the fury label reads the multiplier ten seconds in (${lab && lab.text})`);
+      ok(lab && lab.text === 'Fury ×' + (1 + 10 * ED.World.BOSS_FURY.ramp).toFixed(1), `the fury label reads the multiplier ten seconds in (${lab && lab.text})`);
       ok(!II.labels.some((l) => /Fury/.test(l.text)), 'no label on a II boss');
       const both = bar(4, 'forgelord', tIV + 10, { exposed: true }), ex = both.labels.find((l) => l.text === 'Exposed'), fu = both.labels.find((l) => /^Fury/.test(l.text));
       ok(ex && fu && ex.x + ex.w <= fu.x, `Exposed and Fury sit side by side without overlap (Exposed ${ex && ex.x}+${ex && ex.w}, Fury ${fu && fu.x})`);
