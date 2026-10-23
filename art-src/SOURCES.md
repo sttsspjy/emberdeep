@@ -1,6 +1,8 @@
 # art-src sources
 
-Vendored source art for `tools/art.js` (it reads only this folder). Every file is a byte-for-byte copy of a pack download retrieved 2026-10-21; licences were checked on each author's page that day and against the licence file inside the pack where one exists. Only the sheets referenced by `tools/art-manifest.js` plus each pack's README or licence file are kept; the build output is `src/art/*.js`.
+Vendored source art for `tools/art.js` (it reads only this folder). Every file is a byte-for-byte copy of a pack download retrieved 2026-10-21 (fonts: 2026-10-23); licences were checked on each author's page that day and against the licence file inside the pack where one exists. Only the sheets referenced by `tools/art-manifest.js` (fonts: the `FONTS` list in `tools/art.js`) plus each pack's README or licence file are kept; the build output is `src/art/*.js` and `src/art/fonts.css`.
+
+Fonts (`fonts/`): `tools/art.js` re-grids each font so 1 em = 16 font pixels (unitsPerEm rewritten; outlines untouched), sets one set of vertical metrics (hhea = OS/2 typo = win, whole font pixels, no line gap) and packs it as WOFF 1.0. The Jacquard fonts are therefore Modified Versions under the OFL 1.1; they keep their copyright and licence in the `name` table and the notice in `src/art/fonts.css`. Credits: Jacquard 24 and Jacquarda Bastarda 9 by Sarah Cadigan-Fried (OFL 1.1, notice required with the font); Pixel Operator by Jayvee Enaguas (CC0, courtesy credit).
 
 ## Required attribution (CC-BY 4.0)
 
@@ -15,6 +17,9 @@ Changes made to all packs by `tools/art.js`: frames cropped and packed into atla
 |---|---|---|---|---|
 | `0x72/` | 16x16 DungeonTileset II v1.7 | https://0x72.itch.io/dungeontileset-ii | Robert "0x72" | CC0 1.0 (itch licence field; the pack ships no licence file, only README and tile_list_v1.7) |
 | `ext/` | Dungeon Tileset II Extended v1.1 | https://nijikokun.itch.io/dungeontileset-ii-extended | nijikokun | CC0 1.0 (itch licence field; no licence file in the download) |
+| `fonts/jacquard24/` | Jacquard 24 (font) | https://github.com/google/fonts/tree/main/ofl/jacquard24 (upstream https://github.com/scfried/soft-type-jacquard) | Sarah Cadigan-Fried (Copyright 2023 The Soft Type Project Authors) | SIL OFL 1.1 (OFL.txt; no Reserved Font Name) |
+| `fonts/jacquardabastarda9/` | Jacquarda Bastarda 9 (font) | https://github.com/google/fonts/tree/main/ofl/jacquardabastarda9 (upstream https://github.com/scfried/soft-type-jacquarda-bastarda) | Sarah Cadigan-Fried (Copyright 2023 The Soft Type Project Authors) | SIL OFL 1.1 (OFL.txt; no Reserved Font Name) |
+| `fonts/pixel-operator/` | Pixel Operator (font, 2018 release) | https://www.dafont.com/pixel-operator.font (author upload; the upstream notabug.org/HarvettFox96/ttf-pixeloperator returned 404 on 2026-10-23) | Jayvee Enaguas (HarvettFox96) | CC0 1.0 (LICENSE.txt) |
 | `kosinaz/` | 16x16 Dark Dungeon Tileset | https://kosinaz.itch.io/16x16-dark-dungeon-tileset | kosinaz | CC0 1.0 (itch licence field; no licence file in the download) |
 | `kenney/` | Tiny Dungeon 1.0 | https://kenney.nl/assets/tiny-dungeon | Kenney | CC0 1.0 (License.txt) |
 | `ninja/` | Ninja Adventure Asset Pack | https://pixel-boy.itch.io/ninja-adventure-asset-pack | Pixel-boy and AAA | CC0 1.0 (LICENSE.txt, README.md) |
@@ -65,6 +70,16 @@ Changes made to all packs by `tools/art.js`: frames cropped and packed into atla
 | `dawnlike/Objects/Ground0.png` | 3497 | DawnLike 16x16 Universal Rogue-like Tileset v1.81 | https://opengameart.org/content/dawnlike-16x16-universal-rogue-like-tileset-v181 | DragonDePlatino (palette: DawnBringer DB16) | CC-BY 4.0 | `a6e4a6a2f0d959a1340c61999ae9c14f95aef91ca182d2800bdb36da9cd581db` |
 | `dawnlike/README.txt` | 7760 | DawnLike 16x16 Universal Rogue-like Tileset v1.81 | https://opengameart.org/content/dawnlike-16x16-universal-rogue-like-tileset-v181 | DragonDePlatino (palette: DawnBringer DB16) | CC-BY 4.0 | `d0e8fcaee5b5eb1a5388981b5a3b3ea8f8df8726455453ea844d542c957e8c93` |
 | `ext/dungeontileset-extended.png` | 62726 | Dungeon Tileset II Extended v1.1 | https://nijikokun.itch.io/dungeontileset-ii-extended | nijikokun | CC0 1.0 | `40e776203f82615a00f4969a4cf0dcea781fc39610be91222d7cb77fa6fe1657` |
+| `fonts/jacquard24/Jacquard24-Regular.ttf` | 313588 | Jacquard 24 | https://github.com/google/fonts/tree/main/ofl/jacquard24 | Sarah Cadigan-Fried (The Soft Type Project Authors) | OFL 1.1 | `8e5b1bdb8b6087d6175f1d9edd2634e38b10fb109c0955c24ad55272a866ed49` |
+| `fonts/jacquard24/OFL.txt` | 4397 | Jacquard 24 | https://github.com/google/fonts/tree/main/ofl/jacquard24 | Sarah Cadigan-Fried (The Soft Type Project Authors) | OFL 1.1 | `dea0ea45c7835a51c20d24b9ef2ac03f5beec858995f5eda085540f1f7c713b7` |
+| `fonts/jacquardabastarda9/JacquardaBastarda9-Regular.ttf` | 100960 | Jacquarda Bastarda 9 | https://github.com/google/fonts/tree/main/ofl/jacquardabastarda9 | Sarah Cadigan-Fried (The Soft Type Project Authors) | OFL 1.1 | `7d8e5c30bd58598913fc5fd297bc875d1fab1c05fc407c2dfc406a0be9c5a22c` |
+| `fonts/jacquardabastarda9/OFL.txt` | 4407 | Jacquarda Bastarda 9 | https://github.com/google/fonts/tree/main/ofl/jacquardabastarda9 | Sarah Cadigan-Fried (The Soft Type Project Authors) | OFL 1.1 | `de769fdfdef9f647a840e14f8f3a1d60eaeb05cf646388cf4178bf824a7e4630` |
+| `fonts/pixel-operator/LICENSE.txt` | 7169 | Pixel Operator (2018) | https://www.dafont.com/pixel-operator.font | Jayvee Enaguas (HarvettFox96) | CC0 1.0 | `f4e7f373b9b996950337e8d41a4a2939c2d90b7725e9baf3d5084a22717ad328` |
+| `fonts/pixel-operator/PixelOperator-Bold.ttf` | 16984 | Pixel Operator (2018) | https://www.dafont.com/pixel-operator.font | Jayvee Enaguas (HarvettFox96) | CC0 1.0 | `c1963fa21043a357212e0a9e8ae1986bc375c1759e68bd3533c4f71b164614b0` |
+| `fonts/pixel-operator/PixelOperator.ttf` | 17272 | Pixel Operator (2018) | https://www.dafont.com/pixel-operator.font | Jayvee Enaguas (HarvettFox96) | CC0 1.0 | `8d805274eaf227855147153182a96a86ff395ddbc7d2d378095af8831b764a3e` |
+| `fonts/pixel-operator/PixelOperator8-Bold.ttf` | 18624 | Pixel Operator (2018) | https://www.dafont.com/pixel-operator.font | Jayvee Enaguas (HarvettFox96) | CC0 1.0 | `b46a109cdac6c2f7acb4a57451dc3c8f7e2d391b871500270eadf139f0ac906e` |
+| `fonts/pixel-operator/PixelOperator8.ttf` | 19944 | Pixel Operator (2018) | https://www.dafont.com/pixel-operator.font | Jayvee Enaguas (HarvettFox96) | CC0 1.0 | `5cccb9ef6cf18977b6e5721d49a1a6e78dd6a6f1c4f69537470f7dc1dc829ffc` |
+| `fonts/pixel-operator/PixelOperatorMono.ttf` | 16972 | Pixel Operator (2018) | https://www.dafont.com/pixel-operator.font | Jayvee Enaguas (HarvettFox96) | CC0 1.0 | `e171000f12d196e7a8a1a91c1a429ef3264a0ff007d5f62fa3dc44ef8df51226` |
 | `kenney/License.txt` | 570 | Tiny Dungeon 1.0 | https://kenney.nl/assets/tiny-dungeon | Kenney | CC0 1.0 | `9f574a2f1f636a3db8a0665ba90212f34e2b5e61ecb533d77c05237766374111` |
 | `kenney/tilemap_packed.png` | 5294 | Tiny Dungeon 1.0 | https://kenney.nl/assets/tiny-dungeon | Kenney | CC0 1.0 | `d24e60a41e4ac7a745c0304dfde121143688557f40215f23221c29cfe683825f` |
 | `kosinaz/DarkDungeon.png` | 23689 | 16x16 Dark Dungeon Tileset | https://kosinaz.itch.io/16x16-dark-dungeon-tileset | kosinaz | CC0 1.0 | `ac386b397881c999de4f2a89ef15ec68cb69058be22d277b68acb0e47c30195b` |

@@ -1,6 +1,6 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it.
 // Usage: node tools/browse.js [--scen=smoke,crowd70,shots,swing] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
-//   [--quality=low,high] [--ops] [--json] [--seed=1] [--strat=1] [--embers=N] [--mortal] [--software] [--forcepost] [--sync] [--no-fonts] [--warm=2.5] [--timeout=300]
+//   [--quality=low,high] [--ops] [--json] [--seed=1] [--strat=1] [--embers=N] [--mortal] [--software] [--forcepost] [--sync] [--warm=2.5] [--timeout=300]
 // Mechanism: headless only (no headed option, no window calls); one browser per invocation, one fresh context per scenario page, all closed at exit, on error and on SIGINT.
 //   A read-only node http server on 127.0.0.1 (random port) serves --root (default: this repo). Playwright resolves via require('playwright'), else %LOCALAPPDATA%\npm-cache\_npx\*\node_modules (best match for the installed browsers).
 //   The game runs under window.__ED with a seeded Math.random (--seed) and frameCap off; scripted input goes through ED.Input (keys, pressed, mouse) like a player.
@@ -12,7 +12,7 @@
 //   swing: one contact-sheet PNG per melee weapon of --cls (or per --weapon id, forks as id@fork) (aimed --aim degrees, 0 = right, 90 = down, drawn at --zoom canvas px per world px, 2): 14 frames at fixed times over two consecutive attacks, the hold and the ease back to idle, hero and smear drawn by the game's own renderer.
 // Output: compact table (or --json on stdout, logs on stderr); result-<browser>.json and the PNGs in --outdir (default <tmp>/wickdeep-browse). Exit 0 pass, 1 scenario failure, 2 harness error.
 // Notes: Chromium runs headless on the real GPU (ANGLE D3D11, no window); --software forces SwiftShader, where the game reports Post.soft and skips post at 'high' unless --forcepost. Firefox uses its own headless GL.
-//   --sync forces each frame's raster/GPU work to finish before the timer stops. Google Fonts load from the network (the only external hosts allowed); --no-fonts serves them empty.
+//   --sync forces each frame's raster/GPU work to finish before the timer stops. Every external host is blocked (fonts and art are embedded data URIs).
 //   Firefox runs with layout.frame_rate 60 (headless rAF is otherwise uncapped). Timings share the machine: read sys% before trusting a number.
 'use strict';
 const fs = require('fs'), os = require('os'), path = require('path'), http = require('http');
@@ -21,7 +21,7 @@ const fs = require('fs'), os = require('os'), path = require('path'), http = req
 const FLAGS = {
   scen: 's', cls: 's', browser: 's', viewport: 's', outdir: 's', root: 's', quality: 's',
   seconds: 'n', seed: 'n', strat: 'n', embers: 'n', warm: 'n', timeout: 'n', aim: 'n', zoom: 'n', weapon: 's',
-  json: 'b', ops: 'b', mortal: 'b', forcepost: 'b', software: 'b', sync: 'b', 'no-fonts': 'b', help: 'b',
+  json: 'b', ops: 'b', mortal: 'b', forcepost: 'b', software: 'b', sync: 'b', help: 'b',
 };
 class Fail extends Error { constructor(msg, code) { super(msg); this.code = code || 2; } }
 function parseArgs(argv) {
@@ -33,7 +33,7 @@ function parseArgs(argv) {
     const m = /^--([\w-]+)(?:=(.*))?$/.exec(a);
     if (!m || !FLAGS[m[1]]) throw new Fail('unknown argument: ' + a + '\n(see the usage header of tools/browse.js)');
     const k = m[1], t = FLAGS[k];
-    if (t === 'b') o[k === 'no-fonts' ? 'noFonts' : k] = true;
+    if (t === 'b') o[k] = true;
     else if (m[2] === undefined || m[2] === '') throw new Fail('--' + k + ' needs a value');
     else if (t === 'n') { const v = Number(m[2]); if (!isFinite(v)) throw new Fail('--' + k + ' needs a number'); o[k] = v; }
     else o[k] = m[2];
@@ -431,10 +431,7 @@ async function openPage() {
   const ctx = await S.browser.newContext({ viewport: { width: o.vw, height: o.vh }, deviceScaleFactor: 1, serviceWorkers: 'block', locale: 'en-US' });
   await ctx.addInitScript({ content: '(' + pageBoot.toString() + ')(' + JSON.stringify({ seed: o.seed, mortal: !!o.mortal, forcepost: !!o.forcepost, sync: !!o.sync }) + ')' });
   const local = S.server.base;
-  await ctx.route((u) => u.protocol.startsWith('http') && u.origin !== local, (route) => {
-    const h = new URL(route.request().url()).hostname;
-    if (/^fonts\.(googleapis|gstatic)\.com$/.test(h)) { if (o.noFonts) route.fulfill({ status: 200, contentType: h.includes('apis') ? 'text/css' : 'font/woff2', body: '' }); else route.continue(); } else route.abort('blockedbyclient');
-  });
+  await ctx.route((u) => u.protocol.startsWith('http') && u.origin !== local, (route) => route.abort('blockedbyclient'));
   const page = await ctx.newPage();
   const errors = [];
   const add = (kind, text, url) => { if (errors.length < 40) errors.push({ kind, text: String(text).replace(/\s+/g, ' ').slice(0, 400), url: url || '' }); };
@@ -443,7 +440,7 @@ async function openPage() {
   page.on('console', (m) => {
     if (m.type() !== 'error') return;
     const url = (m.location() && m.location().url) || '';
-    if (url && !url.startsWith(local) && !url.startsWith('data:') && !url.startsWith('blob:')) return; // external fetch (fonts, blocked hosts): not a game bug
+    if (url && !url.startsWith(local) && !url.startsWith('data:') && !url.startsWith('blob:')) return; // external fetch (blocked hosts): not a game bug
     add('console', m.text(), url);
   });
   await page.goto(local + '/index.html', { waitUntil: 'load' });
