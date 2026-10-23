@@ -4,12 +4,12 @@
 // Mechanism: headless only (no headed option, no window calls); one browser per invocation, one fresh context per scenario page, all closed at exit, on error and on SIGINT.
 //   A read-only node http server on 127.0.0.1 (random port) serves --root (default: this repo). Playwright resolves via require('playwright'), else %LOCALAPPDATA%\npm-cache\_npx\*\node_modules (best match for the installed browsers).
 //   The game runs under window.__ED with a seeded Math.random (--seed) and frameCap off; scripted input goes through ED.Input (keys, pressed, mouse) like a player.
-//   smoke: profile -> menu shot -> solo run of --cls -> key-event check -> --seconds (20) of circling, attacking the nearest foe, both skills, dash, boon picks, room hops -> run shot; fails on any pageerror or console error.
+//   smoke: profile -> menu shot -> solo run of --cls (wielding the first --weapon, an Armory variant included) -> key-event check -> --seconds (20) of circling, attacking the nearest foe, both skills, dash, boon picks, room hops -> run shot; fails on any pageerror or console error.
 //   crowdN: N live foes staged in the largest combat room through World.spawnEnemy / enterRoom (room cleared, held locked, topped up to N), hero kept alive; after --warm (2.5) s
 //     measures --seconds (6) of main-thread ms per frame (Game.update, Game.render, Render.frame, HUD.draw, Post.render, whole rAF callback; busy% = rAF callback time over wall time, sys% = whole-machine CPU use during the window) at each --quality (low,high);
 //     --ops adds a 3 s pass counting canvas/WebGL calls per frame by target (buf = world buffer, screen = visible canvas, other = offscreen bakes).
-//   shots: 15 screenshots: boot name screen, menu, Descend, Hearth tabs, Heroes, Settings, Credits, boon offer, a run in combat, the Tab sheet tabs, the pause menu (profile gets 400 embers unless --embers).
-//   swing: one contact-sheet PNG per melee weapon of --cls (or per --weapon id, forks as id@fork) (aimed --aim degrees, 0 = right, 90 = down, drawn at --zoom canvas px per world px, 2): 14 frames at fixed times over two consecutive attacks, the hold and the ease back to idle, hero and smear drawn by the game's own renderer.
+//   shots: 16 screenshots: boot name screen, menu, Descend, Hearth tabs (the Armory scrolled into view), Heroes, Settings, Credits, boon offer, a run in combat, the Tab sheet tabs, the pause menu (profile gets 400 embers unless --embers).
+//   swing: one contact-sheet PNG per melee weapon of --cls, its Armory variants included (or per --weapon id, forks as id@fork) (aimed --aim degrees, 0 = right, 90 = down, drawn at --zoom canvas px per world px, 2): frames at fixed times over two consecutive attacks (a combo weapon: one per step), the hold and the ease back to idle, hero and smear drawn by the game's own renderer.
 // Output: compact table (or --json on stdout, logs on stderr); result-<browser>.json and the PNGs in --outdir (default <tmp>/wickdeep-browse). Exit 0 pass, 1 scenario failure, 2 harness error.
 // Notes: Chromium runs headless on the real GPU (ANGLE D3D11, no window); --software forces SwiftShader, where the game reports Post.soft and skips post at 'high' unless --forcepost. Firefox uses its own headless GL.
 //   --sync forces each frame's raster/GPU work to finish before the timer stops. Google Fonts load from the network (the only external hosts allowed); --no-fonts serves them empty.
@@ -142,15 +142,22 @@ function pageBoot(cfg) {
     };
   };
 
-  // profile with a name, the tutorial off, the hero chosen; embers >= 0 sets the purse
-  BR.profile = (cls, embers) => {
+  // profile with a name, the tutorial off, the hero chosen; embers >= 0 sets the purse; weapon (a weapon id of the hero, an Armory variant included): mastery 6, the variant owned, the weapon chosen
+  BR.profile = (cls, embers, weapon) => {
     const ED = window.__ED, A = ED.App;
     if (!ED.CLASSES[cls]) throw new Error('unknown hero ' + cls + ' (have ' + ED.CLASS_IDS.join(', ') + ')');
     if (!A.hasProfile) A.createProfile('Tester');
     A.profile.stats.runs = Math.max(A.profile.stats.runs | 0, 5);
     if (embers >= 0) A.profile.embers = embers;
+    if (weapon) {
+      if (ED.weaponIndex(cls, weapon) < 0) throw new Error('unknown weapon ' + weapon + ' of ' + cls + ' (have ' + ED.weaponChoices(cls).join(', ') + ')');
+      const ci = ED.CLASS_IDS.indexOf(cls), ai = ED.ARMORY[cls].findIndex(e => e.id === weapon);
+      A.profile.mastery[ci] = Math.max(A.profile.mastery[ci] | 0, ED.MASTERY_XP[5]);
+      if (ai >= 0) A.profile.armory[cls][ai] = 1;
+    }
     A.persist();
     A.selectClass(cls);
+    if (weapon) { A.sel.weapon = weapon; A.saveSel(); if (A.weaponFor(cls) !== weapon) throw new Error('the weapon choice ' + weapon + ' did not hold'); }
     return A.state;
   };
   BR.settings = (quality) => {
@@ -298,19 +305,21 @@ function pageBoot(cfg) {
     if (t >= D.td) { I.pressed.add('Space'); D.td = t + 2.4; }
   }, 33);
 
-  // contact sheet of the melee swings of `cls` aimed `aimDeg` degrees (0 = right, 90 = down): one PNG per weapon, 14 frames at fixed times (idle, attack 1, attack 2 one weapon-rate later, hold, ease to idle),
-  // the hero drawn by Sprites.hero from a fake player and the smear by FX.drawGlow; needs a run (FX.playerAttackAnim reads the world view)
+  // contact sheet of the melee swings of `cls` aimed `aimDeg` degrees (0 = right, 90 = down): one PNG per weapon (its Armory variants included), frames at fixed times (idle, then per attack wind, strike, end, settled,
+  // then hold and ease to idle): two attacks, or one per step of a combo weapon (each drawn with its step's form); the hero drawn by Sprites.hero from a fake player and the smear (a slam: FX.slam) by FX.drawGlow; needs a run (FX.playerAttackAnim reads the world view)
   BR.swingStrip = (cls, aimDeg, zoom, weapons) => {
     const ED = window.__ED, F = ED.FX, view = ED.Game.s.view, out = [], pid = 'sw-fake', face = aimDeg * Math.PI / 180, K2 = zoom, CW = 120 * zoom, CH = 140 * zoom, COLS = zoom > 2 ? 5 : 7;
     F.reset();
-    for (const wid of weapons.length ? weapons : ED.CLASSES[cls].weapons) {
+    for (const wid of weapons.length ? weapons : ED.weaponChoices(cls)) {
       const w = ED.Sprites.weaponArt({ cls, weapon: wid }).w; if (w.kind !== 'melee') continue;
-      const p = { pid, cls, slot: 0, weapon: wid, face, moving: false, hp: 1, x: 0, y: 0 };
+      const p = { pid, cls, slot: 0, weapon: wid, face, moving: false, hp: 1, x: 0, y: 0 }, fst = { weapon: w }, nA = w.combo ? w.combo.steps.length : 2;
+      const sw = (k) => (w.combo ? ED.Stats.stepWeapon(fst, k) : null);
       view.players.set(pid, p);
-      const mk = () => { if (F.anim[pid]) F.anim[pid].atkT = 9; F.playerAttackAnim(pid, face); return Object.assign({}, F.anim[pid]); };
-      const S = [mk(), mk()], an = F.anim[pid], t0 = S[0].t0, t1 = S[0].t1, D = S[0].D, st = (f) => t0 + (t1 - t0) * f;
-      const fr = [[-1, 9, 'idle'], [0, t0 * 0.9, 'a1 wind'], [0, st(0.3), 'a1 strike'], [0, st(0.6), 'a1 strike'], [0, t1, 'a1 end'], [0, D, 'a1 settled'],
-        [1, t0 * 0.9, 'a2 wind'], [1, st(0.3), 'a2 strike'], [1, st(0.6), 'a2 strike'], [1, t1, 'a2 end'], [1, D, 'a2 settled'], [1, D + 0.5, 'hold'], [1, D + 0.9, 'ease'], [1, D + 1.3, 'idle']];
+      const mk = (k) => { if (F.anim[pid]) F.anim[pid].atkT = 9; F.playerAttackAnim(pid, face, sw(k)); return Object.assign({}, F.anim[pid]); };
+      const S = []; for (let k = 0; k < nA; k++) S.push(mk(k));
+      const an = F.anim[pid], t0 = S[0].t0, t1 = S[0].t1, D = S[0].D, st = (f) => t0 + (t1 - t0) * f, fr = [[-1, 9, 'idle']];
+      for (let k = 0; k < nA; k++) { const a = 'a' + (k + 1); fr.push([k, t0 * 0.9, a + ' wind'], [k, st(0.3), a + ' strike'], [k, st(0.6), a + ' strike'], [k, t1, a + ' end'], [k, D, a + ' settled']); }
+      fr.push([nA - 1, D + 0.5, 'hold'], [nA - 1, D + 0.9, 'ease'], [nA - 1, D + 1.3, 'idle']);
       const cv = document.createElement('canvas'); cv.width = COLS * CW; cv.height = Math.ceil(fr.length / COLS) * CH;
       const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
       for (let pass = 0; pass < 2; pass++) { // the first pass queues every weapon rotation, Atlas.tick bakes them all, the second pass is the one kept
@@ -323,7 +332,8 @@ function pageBoot(cfg) {
         F.lastAnim = an;
         ED.Sprites.hero(c, p, 0, an);
         if (f[0] >= 0 && f[1] >= an.t0 && f[1] < an.D + 0.1) {
-          F.slash(0, -10, face, w.range, Math.min(6.3, w.arc), ED.PLAYER_COLORS[0]);
+          const ws = sw(f[0]) || w;
+          if (ws.ahead) { F.slam(0, -10, face, ws.range, ws.ahead.r, ED.PLAYER_COLORS[0], true); F.rings.length = 0; F.pops.length = 0; } else F.slash(0, -10, face, ws.range, Math.min(6.3, ws.arc), ED.PLAYER_COLORS[0]);
           const sl = F.slashes[F.slashes.length - 1]; sl.life = sl.max - f[1];
           c.globalCompositeOperation = 'lighter'; F.drawGlow(c, 0); c.globalCompositeOperation = 'source-over';
           F.slashes.length = 0;
@@ -333,7 +343,7 @@ function pageBoot(cfg) {
       });
       if (!pass) ED.Atlas.tick(10000);
       }
-      out.push({ weapon: wid, url: cv.toDataURL('image/png'), side: [S[0].side, S[1].side], times: [t0, t1, D] });
+      out.push({ weapon: wid, url: cv.toDataURL('image/png'), side: S.map(q => q.side), times: [t0, t1, D] });
       view.players.delete(pid);
     }
     return out;
@@ -474,7 +484,7 @@ async function scenSmoke() {
   const o = S.opt, res = newResult('smoke'), secs = o.seconds || 20, q = qualitiesOr(['high'])[0];
   const { ctx, page, errors } = await openPage();
   try {
-    await call(page, 'profile', o.cls, o.embers);
+    await call(page, 'profile', o.cls, o.embers, o.weapon ? o.weapon.split(',')[0] : ''); // --weapon: the smoke run wields it
     await wait(900);
     const menu = await page.evaluate(() => ({ state: window.__ED.App.state, title: !document.getElementById('scr-title').hidden, menu: !document.getElementById('title-menu').hidden }));
     if (menu.state !== 'title' || !menu.title || !menu.menu) fail(res, 'menu not shown: ' + JSON.stringify(menu));
@@ -569,7 +579,7 @@ async function scenShots() {
   try {
     await ev((quality) => { const A = window.__ED.App; A.settings.frameCap = 'off'; A.settings.quality = quality; A.applySettings(); }, q);
     await tryShot('01-boot-name');
-    await call(page, 'profile', o.cls, o.embers >= 0 ? o.embers : 400);
+    await call(page, 'profile', o.cls, o.embers >= 0 ? o.embers : 400, o.weapon ? o.weapon.split(',')[0] : ''); // --weapon: owned and chosen (the Descend and Hearth shots show it)
     await tryShot('02-menu', () => wait(500));
     for (const [n, tab] of [['03-descend', 'descend'], ['04-hearth-upgrades', 'upgrades']]) await tryShot(n, () => ev((t) => window.__ED.App.enterHearth(t), tab));
     // 05: three ranks bought (Refund buttons) and Reset all armed by one click
@@ -579,6 +589,8 @@ async function scenShots() {
       E.App.afterMetaChange(); E.App.enterHearth('upgrades');
       const b = document.querySelector('.btn-reset'); if (b) b.click();
     }));
+    // 05b: the Armory sections of the Upgrades page scrolled into view (an owned variant, buyable and locked entries)
+    await tryShot('05b-hearth-armory', () => ev(() => { const E = window.__ED; E.App.enterHearth('upgrades'); const h = [...document.querySelectorAll('.tier-head')].find(x => /Armory/.test(x.textContent)); if (h) h.scrollIntoView({ block: 'start' }); }));
     for (const [n, tab] of [['06-hearth-chronicle', 'chronicle'], ['07-heroes', 'heroes']]) await tryShot(n, () => ev((t) => window.__ED.App.enterHearth(t), tab));
     await tryShot('08-settings', () => ev(() => { window.__ED.App.goHome(); window.__ED.UI.openSettings(); }));
     await tryShot('09-credits', () => ev(() => { window.__ED.UI.closeSettings(); document.getElementById('mm-credits').click(); }));

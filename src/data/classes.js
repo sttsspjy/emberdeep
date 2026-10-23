@@ -52,6 +52,13 @@
   };
   ED.CLASS_IDS = Object.keys(ED.CLASSES);
 
+  // Weapons. kind 'melee' (dmg per hit, rate = attack interval s, range px, arc rad, knock) or 'proj' (n shots, spread, speed, life, pierce, r, proj kind). Optional shape fields (combat.js playerAttack / meleeSwing):
+  // shock { r, mul } a blast with each swing; wave { every, mul, n?, fan? } a wave of light every Nth attack (n waves fanned fan rad apart); explode, cloud, homing, burn, raise, shieldAlly, jitter as their names say;
+  // combo { reset, steps: [{ rate, mul, range, arc, pose }] } attacks cycle through the steps (rate: interval factor, normalised so `rate` stays the mean interval; mul, range, arc: factors on dmg, range, arc;
+  //   pose 'thrust' | 'spin' for the viewer); the cycle restarts after `reset` s without attacking;
+  // pull (melee) px a hit drags a foe toward the hero instead of knocking it back (elites half, bosses never); ahead { r } (melee) the hit is a circle of radius r centred `range` px along the aim, hitting every foe inside (the shock centres there);
+  // ring { every, r, mul } (melee) every Nth attack a ring of radius r around the hero for mul x dmg (the class element; Dawnbringer's waveEvery, waveMul, waveStun and waveBig apply).
+  // An Armory variant (ED.ARMORY) carries variant: '<base weapon id>'; it is wielded where its base is unlocked and counts as its base for unlocks and the route cards.
   ED.WEAPONS = {
     // Knight
     longsword: { name: 'Longsword', desc: 'Balanced sweeping cuts.', kind: 'melee', dmg: 23.4, rate: 0.42, range: 50, arc: 1.9, knock: 130, look: 'sword' },
@@ -77,7 +84,28 @@
     bonewand: { name: 'Bone Wand', desc: 'Seeking soul bolts.', kind: 'proj', dmg: 13.5, rate: 0.4, speed: 350, n: 1, spread: 0, pierce: 0, r: 5, life: 1.0, proj: 'soul', homing: 4, look: 'wand' },
     soulscythe: { name: 'Soul Scythe', desc: 'Wide reaping arcs; reaped foes rise more often.', kind: 'melee', dmg: 25.5, rate: 0.56, range: 52, arc: 2.4, knock: 110, look: 'scythe', raise: 0.12 },
     plaguestaff: { name: 'Plague Staff', desc: 'Bolts that burst into lingering plague.', kind: 'proj', dmg: 9, rate: 0.6, speed: 260, n: 1, spread: 0, pierce: 0, r: 6, life: 0.8, proj: 'plague', cloud: { r: 44, dps: 10, dur: 2.6 }, look: 'staff' },
+    // Armory variants: the base weapon's power in another shape (docs/GAME-DESIGN.md section 1)
+    armingsword: { name: 'Arming Sword', desc: 'Two quick slashes, then a lunging thrust that reaches far.', variant: 'longsword', kind: 'melee', dmg: 15.6, rate: 0.35, range: 50, arc: 1.6, knock: 130, look: 'sword',
+      combo: { reset: 1.2, steps: [{ rate: 0.75 }, { rate: 0.75 }, { rate: 1, range: 1.6, arc: 0.5 / 1.6, mul: 1.9, pose: 'thrust' }] } },
+    earthbreaker: { name: 'Earthbreaker', desc: 'Each blow slams the ground ahead, striking every foe in the circle, with a shockwave.', variant: 'warhammer', kind: 'melee', dmg: 44.2, rate: 0.82, range: 58, arc: 2.2, knock: 240, look: 'hammer', ahead: { r: 48 }, shock: { r: 72, mul: 0.5 } },
+    hookglaive: { name: 'Hooked Glaive', desc: 'Wider hooked sweeps that drag foes toward you.', variant: 'glaive', kind: 'melee', dmg: 25.5, rate: 0.5, range: 76, arc: 1.1, knock: 0, look: 'spear', pull: 34 },
+    burstbows: { name: 'Burst Bows', desc: 'Three quick paired shots, then a reload.', variant: 'twinbows', kind: 'proj', dmg: 4.1, rate: 0.25, speed: 420, n: 2, spread: 0.14, pierce: 0, r: 4, life: 0.7, proj: 'arrow', look: 'bow',
+      combo: { reset: 0.9, steps: [{ rate: 0.1 }, { rate: 0.1 }, { rate: 0.55 }] } },
+    katars: { name: 'Katars', desc: 'Stab, stab, then a spinning cut all around you.', variant: 'daggers', kind: 'melee', dmg: 9.8, rate: 0.21, range: 44, arc: 0.9, knock: 60, look: 'dagger',
+      combo: { reset: 1, steps: [{}, {}, { range: 46 / 44, arc: 7, mul: 1.6, pose: 'spin' }] } },
+    chainsickle: { name: 'Chain Sickle', desc: 'A long chained cut that drags foes toward you.', variant: 'scythes', kind: 'melee', dmg: 16, rate: 0.48, range: 96, arc: 0.9, knock: 0, look: 'scythe', pull: 30 },
+    radiantmace: { name: 'Radiant Mace', desc: 'Every 3rd swing a ring of light bursts around you.', variant: 'mace', kind: 'melee', dmg: 23, rate: 0.42, range: 46, arc: 1.7, knock: 140, look: 'mace', ring: { every: 3, r: 74, mul: 0.85 } },
+    gavel: { name: "Judge's Gavel", desc: 'Slams the ground ahead; every 3rd slam sends three waves in a fan.', variant: 'dawnhammer', kind: 'melee', dmg: 43.2, rate: 0.72, range: 58, arc: 2.2, knock: 220, look: 'hammer', ahead: { r: 48 }, wave: { every: 3, mul: 0.36, n: 3, fan: 0.35 } },
+    gravewhirl: { name: 'Grave Whirl', desc: 'Reaping whirls all around you; reaped foes rise more often.', variant: 'soulscythe', kind: 'melee', dmg: 25, rate: 0.56, range: 46, arc: 6.3, knock: 110, look: 'scythe', raise: 0.12 },
   };
+  // Combo step intervals as factors of the weapon's mean interval (iv, averaging 1).
+  for (const id in ED.WEAPONS) {
+    const c = ED.WEAPONS[id].combo;
+    if (c) { const s = c.steps.reduce((a, q) => a + (q.rate || 1), 0); c.iv = c.steps.map(q => (q.rate || 1) * c.steps.length / s); }
+  }
+  // Base weapon id of a weapon id (an Armory variant's base; a plain weapon is its own) and its index in the hero's weapon list (-1 when it is not the hero's).
+  ED.weaponBase = (id) => { const w = ED.WEAPONS[id]; return w && w.variant ? w.variant : id; };
+  ED.weaponIndex = (cls, id) => (ED.CLASSES[cls] ? ED.CLASSES[cls].weapons.indexOf(ED.weaponBase(id)) : -1);
 
   // Skills. slot 0 = K, 1 = L. aim: 'dir' flies toward the cursor, 'ground' lands on it (clamped to range; walk: on a standable spot), 'move' travels toward it (rangeMin..range, + the stat in rangeAdd), 'self' ignores it.
   // aimIf { stat: aim } overrides aim while the stat is set; moveIf { stat: { k: 'charge' | 'hop' | 'leap', ... } } moves the caster with the cast (iframes seconds untouchable, default = the move time).
@@ -257,6 +285,9 @@
     'daggers@heavy': 'Twin Kukris', 'daggers@swift': 'Stilettos', 'knives@heavy': 'Chakrams', 'knives@swift': 'Darts', 'scythes@heavy': 'Great Scythes', 'scythes@swift': 'Sickles',
     'mace@heavy': 'Morning Star', 'mace@swift': 'Flail', 'dawnhammer@heavy': 'Sunforged Maul', 'dawnhammer@swift': 'Dawn Pick', 'lantern@heavy': 'Great Lantern', 'lantern@swift': 'Censer',
     'bonewand@heavy': 'Skull Staff', 'bonewand@swift': 'Finger Wand', 'soulscythe@heavy': 'Death Scythe', 'soulscythe@swift': 'Soul Sickle', 'plaguestaff@heavy': 'Plague Totem', 'plaguestaff@swift': 'Plague Rod',
+    'armingsword@heavy': 'Bastard Sword', 'armingsword@swift': 'Shortsword', 'earthbreaker@heavy': 'Quake Maul', 'earthbreaker@swift': 'Stonepick', 'hookglaive@heavy': 'Guisarme', 'hookglaive@swift': 'Hook Spear',
+    'burstbows@heavy': 'Burst Recurves', 'burstbows@swift': 'Burst Flatbows', 'katars@heavy': 'Great Katars', 'katars@swift': 'Needle Katars', 'chainsickle@heavy': 'Chain Scythe', 'chainsickle@swift': 'Chain Hook',
+    'radiantmace@heavy': 'Radiant Star', 'radiantmace@swift': 'Radiant Flail', 'gavel@heavy': "Judge's Maul", 'gavel@swift': "Judge's Mallet", 'gravewhirl@heavy': 'Grave Reaper', 'gravewhirl@swift': 'Grave Sickle',
   };
   // Look of each fork for the sprite baker: art = ED.ART anim id (a pack sprite, or the base weapon's art for an overlay look), op = silhouette overlay H (head x1.4, studs, brass band; thicker shafts) or S (head x0.6, wrapped grip, thinner shafts), tint, len = sprite length factor, dup = drawn twice.
   const LOOK = (art, op, len, extra) => Object.assign({ art, op, len }, extra);
@@ -279,7 +310,15 @@
     'bonewand@heavy': LOOK('weapon.bonewand', 'H', 1.15, { skull: true }), 'bonewand@swift': LOOK('weapon.bonewand', 'S', 0.9),
     'soulscythe@heavy': LOOK('weapon.soulscythe', 'H', 1.15, { dup: 1, tint: '#4fd8c0' }), 'soulscythe@swift': LOOK('weapon.soulscythe', 'S', 0.9, { tint: '#4fd8c0' }),
     'plaguestaff@heavy': LOOK('weapon.plaguestaff', 'H', 1.15, { tint: '#7fbf3a' }), 'plaguestaff@swift': LOOK('weapon.plaguestaff', 'S', 0.9, { tint: '#7fbf3a' }),
+    // Armory variants (op null: the sprite as it is, tinted and scaled by len); a variant's forks are its base weapon's fork looks in the variant's tint (filled in below)
+    armingsword: LOOK('weapon.alt.duel_sword', null, 0.95, { tint: '#c9d4de' }), earthbreaker: LOOK('weapon.warhammer', null, 1.15, { tint: '#8a7a68' }), hookglaive: LOOK('weapon.glaive', null, 1, { tint: '#7fa0b8' }),
+    burstbows: LOOK('weapon.twinbows', null, 1, { tint: '#8fb36a', dup: 2 }), katars: LOOK('weapon.daggers', null, 1, { tint: '#d06a8a', dup: 2 }), chainsickle: LOOK('weapon.scythes', null, 1, { tint: '#8a96a8', dup: 2 }),
+    radiantmace: LOOK('weapon.mace', null, 1, { tint: '#ffe08a' }), gavel: LOOK('weapon.warhammer', null, 1, { tint: '#e0c060' }), gravewhirl: LOOK('weapon.soulscythe', null, 1, { tint: '#9a7fd8' }),
   };
+  for (const id in ED.WEAPONS) {
+    const v = ED.WEAPONS[id].variant, L = ED.FORK_LOOKS[id];
+    if (v && L) for (const k of ['@heavy', '@swift']) if (!ED.FORK_LOOKS[id + k] && ED.FORK_LOOKS[v + k]) ED.FORK_LOOKS[id + k] = Object.assign({}, ED.FORK_LOOKS[v + k], { tint: L.tint });
+  }
 
   const forkMemo = new Map();
   // The Heavy / Swift version of weapon baseId for a fork card (id or card object), derived from the base so it follows any re-tune of the base; pure and memoized.

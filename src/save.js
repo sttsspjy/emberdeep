@@ -95,7 +95,7 @@
     d.news = old ? (d.stats.runs > 0 || d.refunded > 0 ? 1 : 0) : int(p.news, 0, 1);
     const sel = obj(p.sel);
     d.sel = { cls: ED.CLASS_IDS.indexOf(sel.cls) >= 0 ? sel.cls : 'knight', weapon: {}, pact: int(sel.pact, 0, 10) };
-    for (const c of ED.CLASS_IDS) { const wid = obj(sel.weapon)[c]; if (ED.CLASSES[c].weapons.indexOf(wid) >= 0) d.sel.weapon[c] = wid; }
+    for (const c of ED.CLASS_IDS) { const wid = obj(sel.weapon)[c]; if (ED.weaponIndex(c, wid) >= 0) d.sel.weapon[c] = wid; } // a base weapon or an Armory variant of the hero
     return d;
   };
 
@@ -150,9 +150,11 @@
     while (a.length < armoryList(cls).length) a.push(0);
     return a;
   };
+  // A weapon variant can be bought once the hero has unlocked its base weapon.
+  S.armoryOpen = (p, cls, id) => { const e = armoryList(cls)[armoryIdx(cls, id)]; return !!e && (!e.weapon || ED.weaponUnlocked(cls, ED.weaponIndex(cls, e.weapon), S.masteryLevel(p, cls))); };
   S.buyArmory = (p, cls, id) => {
     const i = armoryIdx(cls, id);
-    if (i < 0) return false;
+    if (i < 0 || !S.armoryOpen(p, cls, id)) return false;
     const a = armoryRow(p, cls), cost = armoryList(cls)[i].cost;
     if (a[i] || p.embers < cost) return false;
     p.embers -= cost; a[i] = 1;
