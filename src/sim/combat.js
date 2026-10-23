@@ -64,7 +64,7 @@
       if (!def.boss) hp *= ED.World.hpScale(s);
       hp *= this.partyHpMul();
       if (pact >= 1) hp *= 1.25;
-      if (def.boss && pact >= 5) hp *= 1.35;
+      if (def.boss && pact >= 5) hp *= 1.2;
       if (pact >= 10) hp *= 1.2;
     }
     dmg *= ED.World.dmgScale(s) * (pact >= 2 ? 1.25 : 1) * (pact >= 8 ? 1.2 : 1) * this.threat().dmg;

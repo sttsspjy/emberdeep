@@ -34,7 +34,7 @@
     { name: 'Sharper Fangs', desc: 'Foes deal +25% damage.' },
     { name: 'Champions', desc: 'Elite foes appear far more often.' },
     { name: 'Scarcity', desc: 'Healing is 40% less effective.', heroMul: { heal: 0.6 } },
-    { name: 'Tyrants', desc: 'Bosses have +35% health and attack faster.' },
+    { name: 'Tyrants', desc: 'Bosses have +20% health and attack faster.' },
     { name: 'Frenzy', desc: 'Foes move 15% faster.' },
     { name: 'Greed', desc: 'Shop prices are 40% higher.' },
     { name: 'Storm of Shot', desc: 'Enemy shots fly 20% faster and foes hit 20% harder.' },
