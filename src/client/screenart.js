@@ -134,16 +134,19 @@
   // Elliptical darkening behind the menu column: 4x4 Bayer ordered dither between 5 alpha levels, one texel per art px, so the falloff has no edge.
   const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
   let vsig = '';
+  // Texels that touch the camp moon (ED.Camp.moonCss, CSS px) stay clear, so the dither never checkers the disc.
   function vignette(P) {
-    const dpr = P.dpr || 1, w = Math.ceil((window.innerWidth || 1280) * dpr / P.k), h = Math.ceil((window.innerHeight || 720) * dpr / P.k), s = w + 'x' + h;
+    const dpr = P.dpr || 1, w = Math.ceil((window.innerWidth || 1280) * dpr / P.k), h = Math.ceil((window.innerHeight || 720) * dpr / P.k), tx = P.k / dpr;
+    const mn = ED.Camp && ED.Camp.moonCss, s = w + 'x' + h + (mn ? ':' + [mn.x, mn.y, mn.r].map(Math.round).join(',') : '');
     if (s === vsig) return; vsig = s;
+    const mr = mn ? mn.r / tx + 0.71 : 0, mx = mn ? mn.x / tx : 0, my = mn ? mn.y / tx : 0; // moon in texels, grown by half a texel diagonal
     const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
     const g = cv.getContext('2d'), img = g.createImageData(w, h), d = img.data, LV = 4, AMAX = 0.62;
     const cx = w / 2, cy = h * 0.47, rx = Math.max(w * 0.27, 150), ry = h * 0.5;
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const e = Math.hypot((x + 0.5 - cx) / rx, (y + 0.5 - cy) / ry), v = Math.min(1, Math.max(0, (1.75 - e) / 0.95)); // 1 inside the core, 0 beyond 1.75 radii
       const q = Math.min(LV, Math.floor(v * LV + BAYER[(y & 3) * 4 + (x & 3)] / 16));
-      if (!q) continue;
+      if (!q || (mn && Math.hypot(x + 0.5 - mx, y + 0.5 - my) < mr)) continue;
       const i = (y * w + x) * 4; d[i] = 4; d[i + 1] = 2; d[i + 2] = 2; d[i + 3] = Math.round(255 * AMAX * q / LV);
     }
     g.putImageData(img, 0, 0);
@@ -152,6 +155,7 @@
     st.setProperty('--menu-vw', w); st.setProperty('--menu-vh', h);
   }
   vignette(U);
+  U.menuVignette = () => vignette(U); // camp.js calls it when its moon moves
   U.on(vignette);
   window.addEventListener('resize', () => vignette(U)); // a resize that keeps k still changes the art size
 })(globalThis.ED || (globalThis.ED = {}));

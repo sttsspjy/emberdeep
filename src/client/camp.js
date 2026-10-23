@@ -14,6 +14,26 @@
   }
   function pine(c, x, y, s) { c.beginPath(); for (let i = 0; i < 4; i++) { const w = s * (0.9 - i * 0.18), yy = y - i * s * 0.55; c.moveTo(x - w, yy); c.lineTo(x, yy - s * 0.85); c.lineTo(x + w, yy); } c.fill(); c.fillRect(x - s * 0.07, y, s * 0.14, s * 0.3); }
 
+  // Pixel moon centred on (cx, cy) buffer px, radius r art px of A buffer px: halo rings (r + 1..4, r + 4..8 at 10% / 5%), outline ring, then bands by the
+  // lit fraction of a sphere lit from the upper left (light, mid, dark) and four crater cells one band darker.
+  function moonDisc(s, cx, cy, r, A, col) {
+    const bands = [U.mix(col, '#ffffff', 0.6), col, U.shade(col, -0.22), U.shade(col, -0.42)];
+    const L = [-0.55, -0.6, 0.58], craters = [[0.32, -0.18, 0.2], [-0.34, 0.3, 0.15], [0.14, 0.5, 0.11], [-0.24, -0.44, 0.09]], R = r + 8;
+    for (let j = -R; j < R; j++) for (let i = -R; i < R; i++) {
+      const x = i + 0.5, y = j + 0.5, d = Math.hypot(x, y);
+      let c = null;
+      if (d <= r) {
+        const nx = x / r, ny = y / r, nz = Math.sqrt(Math.max(0, 1 - nx * nx - ny * ny)), lit = nx * L[0] + ny * L[1] + nz * L[2];
+        let b = lit > 0.78 ? 0 : lit > 0.42 ? 1 : 2;
+        if (craters.some(([cx2, cy2, cr]) => Math.hypot(nx - cx2, ny - cy2) <= cr)) b++;
+        c = bands[Math.min(3, b)];
+      } else if (d <= r + 1) c = '#222222';
+      else if (d <= r + 4) c = U.rgba(col, 0.1);
+      else if (d <= R) c = U.rgba(col, 0.05);
+      if (c) { s.fillStyle = c; s.fillRect(cx + i * A, cy + j * A, A, A); }
+    }
+  }
+
   // Static layers: `bg` is lit by the light buffer; `sky` (sky, stars, moon with the landscape cut out) is added afterwards.
   function buildBg(W, H, profile, biome, o) {
     const mk = () => { const cv = document.createElement('canvas'); cv.width = W; cv.height = H; return cv; };
@@ -30,15 +50,11 @@
       const x = rng.next() * W, y = rng.next() * H * 0.55, r = rng.next() * 1.4 + 0.3, a = 0.2 + rng.next() * 0.5;
       s.fillStyle = `rgba(255,240,225,${a})`; s.fillRect(x, y, r, r);
     }
-    // moon (red under a pact)
-    const mx = W * 0.2, my = H * 0.17, mr = Math.min(W, H) * 0.05;
+    // moon (red under a pact): a pixel disc on the 2 world px art grid, 1 art px #222222 outline, 3 lit bands and craters, stepped halo rings
     const moonCol = o.pact > 0 ? U.mix('#f3e3c0', '#d3302a', Math.min(1, o.pact / 6)) : '#f3e3c0';
-    const halo = s.createRadialGradient(mx, my, mr * 0.8, mx, my, mr * 5); halo.addColorStop(0, U.rgba(moonCol, 0.3)); halo.addColorStop(1, U.rgba(moonCol, 0));
-    s.fillStyle = halo; s.fillRect(mx - mr * 5, my - mr * 5, mr * 10, mr * 10);
-    const mg = s.createRadialGradient(mx - mr * 0.3, my - mr * 0.3, mr * 0.1, mx, my, mr); mg.addColorStop(0, '#fffbe8'); mg.addColorStop(1, moonCol);
-    s.fillStyle = mg; s.beginPath(); s.arc(mx, my, mr, 0, U.TAU); s.fill();
-    s.fillStyle = 'rgba(60,40,20,0.16)';
-    for (const [dx, dy, r] of [[0.3, -0.2, 0.25], [-0.35, 0.3, 0.18], [0.1, 0.45, 0.14], [-0.2, -0.4, 0.1]]) { s.beginPath(); s.arc(mx + dx * mr, my + dy * mr, r * mr, 0, U.TAU); s.fill(); }
+    const A = 2, mx = Math.round(W * 0.1) * A, my = Math.round(H * 0.085) * A, mr = Math.max(6, Math.round(Math.min(W, H) * 0.05 / A)); // centre on an art px corner, radius in art px
+    moonDisc(s, mx, my, mr, A, moonCol);
+    Camp.moon = { x: mx, y: my, r: (mr + 1) * A }; // buffer px: the disc and its outline (screenart.js keeps the menu vignette off it)
     const sil = (fill, build, cutSky) => { c.fillStyle = fill; c.beginPath(); build(c); c.fill(); if (cutSky !== false) { s.globalCompositeOperation = 'destination-out'; s.fillStyle = '#000'; s.beginPath(); build(s); s.fill(); s.globalCompositeOperation = 'source-over'; } };
     // mountain ranges with fog between them
     const layers = [[0.5, 0.06, 7, '#0e0b18'], [0.57, 0.05, 11, '#130d17'], [0.62, 0.035, 19, '#18100f']];
@@ -105,7 +121,12 @@
     const ups = profile ? profile.up.reduce((a, b) => a + b, 0) : 0;
     const tents = Math.min(4, 1 + Math.floor(ups / 6)), lanterns = Math.min(10, 2 + Math.floor((profile ? profile.lifetime : 0) / 120));
     const key = [W, H, deepest, pact > 0 ? Math.min(6, pact) : 0, tents, lanterns].join(':');
-    if (key !== Camp.bgKey) { Camp.bg = buildBg(W, H, profile, biome, { pact, tents, lanterns }); Camp.bgKey = key; }
+    if (key !== Camp.bgKey) {
+      Camp.bg = buildBg(W, H, profile, biome, { pact, tents, lanterns }); Camp.bgKey = key;
+      const m = Camp.moon, k = R.scale / (R.dpr || 1); // the buffer presents at R.scale device px per px from the top-left
+      Camp.moonCss = { x: m.x * k, y: m.y * k, r: m.r * k };
+      if (ED.PixUI && ED.PixUI.menuVignette) ED.PixUI.menuVignette();
+    }
     const fx = W * 0.58, fy = H * 0.8, fs = Math.min(W, H) * 0.06, gx = W * 0.82, gy = H * 0.64, gw = Math.min(W, H) * 0.2;
     const fl = 1 + Math.sin(t * 8) * 0.04 + Math.sin(t * 13.7) * 0.04 + Math.sin(t * 3.1) * 0.03;
     // ---- lit pass ----
