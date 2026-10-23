@@ -391,7 +391,7 @@
     const bx = x + u * 6.4, bw = w - u * 7.4;
     T(me.name, bx, y + u * 1.55, u * 1.25, K.gold, FD, 'left', 700);
     const evoP = st && st.evo && ED.PATHS[st.evo];
-    const wname = evoP || (st && st.weaponId && st.weaponId.indexOf('@') > 0) ? H.weaponName(me) : cls.name; // an evolved or forked weapon shows its name
+    const wname = evoP || (st && st.weaponId && (st.weaponId.indexOf('@') > 0 || ED.weaponBase(st.weaponId) !== st.weaponId)) ? H.weaponName(me) : cls.name; // an evolved, forked or Armory variant weapon shows its name
     T(wname, bx + bw, y + u * 1.55, u * 0.95, evoP ? evoP.color : K.muted, FB, 'right', 700);
     const sig = routeIcon(me);
     if (sig) ic(c, sig, cls.col.c, bx + bw - adv(wname, u * 0.95, 700) - u * 2.1, y + u * 0.55, u * 1.8);

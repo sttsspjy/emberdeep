@@ -233,7 +233,8 @@
   // Damage numbers are per landed hit before the stratum affinity and any status; dps counts every attack landing on one foe (a fan: the shots that reach it at REF).
   // extras: damage each attack adds besides the main hits (blasts, shocks, waves, clouds, evolution strikes, relics): { label, perAttack, perSec, proc (feeds statuses), el?, note? }.
   function weaponModel(p, st, ctx, R) {
-    const w = st.weapon, melee = w.kind === 'melee', M = Math.max(0.1, st.dmg), c = st.crit, cm = st.critMult, EC = 1 + c * (cm - 1), Wd = w.dmg, evo = st.evo, area = 1 + 0.5 * st.area;
+    const w = st.weapon, melee = w.kind === 'melee', M = Math.max(0.1, st.dmg), c = st.crit, cm = st.critMult, EC = 1 + c * (cm - 1), evo = st.evo, area = 1 + 0.5 * st.area;
+    const Wd = w.dmg * (w.combo ? w.combo.steps.reduce((a, q) => a + (q.mul || 1), 0) / w.combo.steps.length : 1); // a combo weapon: the mean of its steps' damage factors (the attacks cycle through them)
     const aps = 1 / St.attackInterval(p), apsBase = 1 / st.atkInterval;
     const n = melee ? 1 : (w.n || 1) + st.projN, sp = n > 1 ? Math.max(w.spread || 0, 0.13) : 0, offs = [];
     for (let i = 0; i < n; i++) offs.push((i - (n - 1) / 2) * sp);
@@ -259,8 +260,10 @@
     if (chan && st.fireDance && st.dancerBurst) add('Flame ring', chan.full * Wd * st.dancerBurst * (M + st.chanCap) / aps / DANCE_EVERY, { r: Math.round(80 * area), note: `a dash at full Channel (about every ${DANCE_EVERY} s) leaves a ring of flame where it started` });
     if (!melee && w.cloud) { const ticks = w.cloud.dur / 0.5; add('Plague cloud', ticks * w.cloud.dps * 0.5 * M * one, { r: Math.round(w.cloud.r * area), note: `about ${n1(ticks)} ticks over ${n1(w.cloud.dur)}s per shot (clouds that merge tick on one 0.5 s grid), no crit` }); }
     if (w.wave) {
-      const every = Math.max(1, w.wave.every + st.waveEvery), waveRaw = Wd * w.wave.mul * (1 + st.waveMul), waveHit = waveRaw * M, ev = every === 1 ? 'every attack' : `every ${ordinal(every)} attack`;
-      add('Wave of light', waveHit * EC / every, { proc: true, crit: true, note: ev + ', pierces every foe in line' });
+      const wn = w.wave.n || 1, wo = []; // a fan of wn waves: those that reach a foe at REF
+      for (let i = 0; i < wn; i++) wo.push((i - (wn - 1) / 2) * (w.wave.fan || 0));
+      const every = Math.max(1, w.wave.every + st.waveEvery), waveRaw = Wd * w.wave.mul * (1 + st.waveMul) * fanHits(wo, 16 * area), waveHit = waveRaw * M, ev = every === 1 ? 'every attack' : `every ${ordinal(every)} attack`;
+      add('Wave of light', waveHit * EC / every, { proc: true, crit: true, note: ev + (wn > 1 ? `: ${wn} waves in a fan, each pierces every foe in line` : ', pierces every foe in line') });
       // Cleric attack forks (class-cleric.js): Solar Flare's end burst, Dawn's Wake's strip (class-element damage, a quarter of each tick stored as Radiance), Litany's two side waves (and their return legs), Returning Light's second pass
       if (st.waveBurst > 0) add('Solar Flare', waveHit * st.waveBurst * FLARE_HIT / every, { proc: true, r: Math.round(50 * area), note: `${ev}: the wave ends in a burst (radius 50) for ${Math.round(st.waveBurst * 100)}% of it, catching a foe about ${Math.round(FLARE_HIT * 100)}% of the time, no crit` });
       if (st.wake > 0) {
@@ -270,6 +273,11 @@
       const ret = st.waveReturn > 0 ? 1 + st.waveReturn * RET_HIT : 1;
       if (st.litany > 0) add('Litany', waveHit * EC * 2 * ret / st.litany, { proc: true, crit: true, note: `every ${ordinal(st.litany)} attack: 2 more waves in a fan, both reach a foe at ${Sh.REF.d}` });
       if (st.waveReturn > 0) add('Returning Light', waveHit * EC * st.waveReturn * RET_HIT / every, { proc: true, crit: true, note: `${ev}: the wave flies home and strikes again for ${Math.round(st.waveReturn * 100)}% (about ${Math.round(RET_HIT * 100)}% of foes are on its way)` });
+    }
+    if (melee && w.ring) { // a ring of light around the hero every Nth attack (combat.js heroRing): a class-element weapon hit on every foe within its radius
+      const every = Math.max(1, w.ring.every + st.waveEvery), el = st.element, k = el ? (M + st.classElMul) * ED.affC(ctx.stratum || 1, el) : M;
+      const lit = st.litany > 0 ? 2 * every / st.litany : 0, ret = 1 + (st.waveReturn || 0); // Litany: its attack's ring at x3; Returning Light: every ring rings again at waveReturn
+      add('Ring of light', Wd * w.ring.mul * (1 + st.waveMul) * k * EC * (1 + lit) * ret / every, { proc: true, crit: true, r: Math.round(w.ring.r * area * (st.waveBig ? 1.5 : 1)), note: `every ${ordinal(every)} attack: every foe around you${st.litany > 0 ? `; every ${ordinal(st.litany)} attack rings x3` : ''}${st.waveReturn > 0 ? `; rings again 0.35 s later for ${Math.round(st.waveReturn * 100)}%` : ''}` });
     }
     if (st.gauntlet) add('Thunder Gauntlet', Wd * 2.2 * M / 6, { proc: true, el: 'lightning', note: 'every 6th attack, no crit' });
     // evolution strikes (data on the evolution boon)
@@ -316,6 +324,9 @@
     const notes = [];
     if (st.atkOver > 1.0001) notes.push(`Attack speed cap ${n1(1 / st.atkFloor)}/s: the excess adds +${Math.round((st.atkOver - 1) * 100)}% damage`);
     if (chan) notes.push(`Channel averages +${Math.round(chan.avg * 100)}% damage on the weapon's hits, taking ${Math.round(CHAN_MOVE * 100)}% of the attacks as made on the move${st.fireDance ? ' (Fire Dancer holds it through moving)' : ''}`);
+    if (w.combo) notes.push(`Combo of ${w.combo.steps.length} attacks (the interval and hit are their means); it restarts after ${n1(w.combo.reset)} s without attacking`);
+    if (w.ahead) notes.push(`Slams the ground ${Math.round(w.range * (1 + 0.5 * st.area + st.meleeReach))} px ahead: every foe within ${Math.round(w.ahead.r * area)} of that point`);
+    if (w.pull) notes.push(`Hits pull foes ${w.pull} px toward you (elites half, bosses never)`);
     if (st.heavy) notes.push(`Heavy: a hit Staggers a foe for ${C.STAGGER} s (elites half)`);
     if (st.swift) notes.push(`Swift: +${Math.round(C.FLOW_SPD * 100)}% move speed for ${C.FLOW_T} s after each attack`);
     const out = {

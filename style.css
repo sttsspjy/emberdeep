@@ -271,6 +271,8 @@ input[type=range]::-moz-range-thumb { width: 1.2rem; height: 1.2rem; transform: 
 .weapon-chip.on b { color: var(--gold); }
 .weapon-chip.locked { opacity: 0.55; cursor: not-allowed; }
 .weapon-chip.locked small { color: var(--ember-hi); }
+.weapon-chip { grid-column: var(--wc, auto); grid-row: 1; }
+.weapon-chip.variant { grid-row: 2; border-style: dashed; } /* an Armory variant sits under its base weapon */
 .pact-block { display: flex; flex-direction: column; gap: 0.5rem; padding-top: 1rem; border-top: 1px solid var(--line); }
 .pact-block .plate-h { margin: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 0.6rem; }
 .pact-val { font: 900 var(--fs-xl) var(--f-display); color: #ff6b4a; }
@@ -776,6 +778,7 @@ html { scrollbar-color: #5a4232 transparent; scrollbar-width: thin; }
 }
 @media (max-width: 520px) {
   .weapon-row { grid-template-columns: minmax(0, 1fr); }
+  .weapon-chip, .weapon-chip.variant { grid-column: auto; grid-row: auto; }
   .hd-stats { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mast-rewards { grid-template-columns: minmax(0, 1fr); }
   .roster { grid-template-columns: repeat(2, minmax(0, 1fr)); }

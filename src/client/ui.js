@@ -83,7 +83,7 @@
       '<b>Relics:</b> the Codex is gone. Every relic can drop from your first descent, and relics no longer belong to an element.',
       `<b>Element relics are path boons now:</b> ${MOVED_RELICS.map(id => `${esc(ED.BOONS[id].name)} (${pathName(ED.BOONS[id].path, true)})`).join(', ')}. The other element relics are gone: their paths already hold the same effects as boons.`,
       p.refunded > 0 ? `<b>Refunded:</b> the ${p.refunded} embers you spent on the Codex are back in your purse.` : '',
-      '<b>Hearth:</b> every upgrade rank can be refunded for its full cost, and Reset all returns everything at once. Upgrades are small now, so your build choices decide a descent. The Reliquary became the Stash (starting gold), Head Start begins the descent with some experience and Deep Wick boosts the gold and experience of dark rooms. Each hero has an Armory list for sidegrade unlocks (empty in this release).',
+      '<b>Hearth:</b> every upgrade rank can be refunded for its full cost, and Reset all returns everything at once. Upgrades are small now, so your build choices decide a descent. The Reliquary became the Stash (starting gold), Head Start begins the descent with some experience and Deep Wick boosts the gold and experience of dark rooms. Each hero has an Armory of weapon variants: the same power in another shape, bought with embers once the base weapon is unlocked.',
       '<b>Builds:</b> generic health and armor boons are smaller; a path (its boons, keystone and weapon evolution) is what makes a build strong. Kill effects that spread, chain or explode work on fodder; refunds, shields, healing and stacks need the foes that matter.',
       '<b>Aim:</b> attacks and ground skills go toward the mouse cursor (right stick on a pad). The Auto-aim setting is gone.',
       `<b>Paths:</b> follow up to ${ED.MAX_ELEMENTS} of ${ED.ELEMENT_IDS.map(k => pathName(k, true)).join(', ')}, or take the ${pathName('general', true)} path alone as a Generalist. Blood and Spirit are gone.`,
@@ -116,7 +116,7 @@
   const armoryOf = (cls) => ED.ARMORY[cls] || [];
   const armoryHas = (p, cls, i) => !!(p.armory && p.armory[cls] && p.armory[cls][i]);
   // An Armory entry of an unlocked hero is affordable.
-  const canBuyArmory = (p) => ED.CLASS_IDS.some(c => S.classUnlocked(p, c) && armoryOf(c).some((e, i) => !armoryHas(p, c, i) && p.embers >= e.cost));
+  const canBuyArmory = (p) => ED.CLASS_IDS.some(c => S.classUnlocked(p, c) && armoryOf(c).some((e, i) => !armoryHas(p, c, i) && p.embers >= e.cost && S.armoryOpen(p, c, e.id)));
   const canBuy = (p) => canBuyUpgrade(p) || canBuyArmory(p);
 
   UI.renderHearth = () => {
@@ -149,18 +149,21 @@
     }
   }
 
+  // The hero's base weapons, each followed by its owned Armory variants; a variant is wieldable where its base is unlocked.
   function weaponChips(container, cls, selected, onPick) {
-    const p = ED.App.profile, ml = S.masteryLevel(p, cls);
+    const p = ED.App.profile, ml = S.masteryLevel(p, cls), owned = S.metaBundle(p, cls).armory;
     container.innerHTML = '';
-    ED.CLASSES[cls].weapons.forEach((wid, i) => {
-      const w = ED.WEAPONS[wid], ok = ED.weaponUnlocked(cls, i, ml);
+    for (const wid of ED.weaponChoices(cls)) {
+      const w = ED.WEAPONS[wid], i = ED.weaponIndex(cls, wid), ok = ED.weaponUnlocked(cls, i, ml);
+      if (w.variant && owned.indexOf(wid) < 0) continue;
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'weapon-chip' + (wid === selected ? ' on' : '') + (ok ? '' : ' locked');
-      b.innerHTML = `<b>${w.name}</b><small>${ok ? esc(w.desc) : LOCK + 'Unlocks at mastery ' + (i === 1 ? 3 : 6)}</small>`;
+      b.className = 'weapon-chip' + (wid === selected ? ' on' : '') + (ok ? '' : ' locked') + (w.variant ? ' variant' : '');
+      b.style.setProperty('--wc', String(i + 1)); // column of the base weapon; a variant takes the row below it
+      b.innerHTML = `<b>${w.name}</b><small>${ok ? esc(w.desc) : LOCK + (w.variant ? ED.WEAPONS[w.variant].name + ' unlocks' : 'Unlocks') + ' at mastery ' + (i === 1 ? 3 : 6)}</small>`;
       if (ok) b.onclick = () => { ED.Audio.play('click'); onPick(wid); };
       container.appendChild(b);
-    });
+    }
   }
 
   // Pact levels 0..max as steps; every step up to the chosen one is lit because pacts stack.
@@ -323,7 +326,7 @@
         grid.appendChild(card);
       }
     }
-    // Armory: each unlocked hero's sidegrade entries (a hero section is absent while its list is empty)
+    // Armory: each unlocked hero's weapon variants (a hero section is absent while its list is empty); an entry names its base weapon and stays locked until that weapon is unlocked
     for (const c of ED.CLASS_IDS) {
       const list = armoryOf(c);
       if (!list.length || !S.classUnlocked(p, c)) continue;
@@ -331,12 +334,13 @@
       const h = document.createElement('div'); h.className = 'tier-head'; h.textContent = `${cl.name} Armory`;
       grid.appendChild(h);
       list.forEach((e, i) => {
-        const own = armoryHas(p, c, i);
+        const own = armoryHas(p, c, i), open = S.armoryOpen(p, c, e.id), bw = e.weapon && ED.WEAPONS[e.weapon], wi = e.weapon ? ED.weaponIndex(c, e.weapon) : 0;
+        const req = bw ? (open ? `Variant of the ${bw.name}` : `${LOCK}Variant of the ${bw.name}, which unlocks at mastery ${wi === 1 ? 3 : 6}`) : '';
         const card = document.createElement('div');
-        card.className = 'up-card' + (own ? ' maxed' : '');
-        card.innerHTML = `<img alt="" src="${ED.Icons.url(e.icon || 'chest', cl.col.c)}"><div><div class="un">${esc(e.name)}${own ? ' <span class="badge-max">Owned</span>' : ''}</div><div class="ud">${esc(e.desc)}</div></div>`;
+        card.className = 'up-card' + (own ? ' maxed' : '') + (open || own ? '' : ' locked');
+        card.innerHTML = `<img alt="" src="${ED.Icons.url(e.icon || (bw ? cl.icon : 'chest'), cl.col.c)}"><div><div class="un">${esc(e.name)}${own ? ' <span class="badge-max">Owned</span>' : ''}</div><div class="ud">${esc(e.desc)}</div>${req ? `<div class="un2">${req}</div>` : ''}</div>`;
         if (own) actionsCell(card, `a:${c}:${e.id}`, refundButton(e.cost, `Refund ${e.name}: +${e.cost} embers`, () => { if (S.refundArmory(p, c, e.id)) ED.App.afterMetaChange(); }), null);
-        else actionsCell(card, `a:${c}:${e.id}`, null, buyButton(e.cost, p.embers >= e.cost, `Buy ${e.name} for ${e.cost} embers`, () => { if (S.buyArmory(p, c, e.id)) { ED.Audio.play('buy'); ED.App.afterMetaChange(); } }));
+        else if (open) actionsCell(card, `a:${c}:${e.id}`, null, buyButton(e.cost, p.embers >= e.cost, `Buy ${e.name} for ${e.cost} embers`, () => { if (S.buyArmory(p, c, e.id)) { ED.Audio.play('buy'); ED.App.afterMetaChange(); } }));
         grid.appendChild(card);
       });
     }

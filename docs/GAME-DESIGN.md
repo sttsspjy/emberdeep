@@ -77,27 +77,36 @@ Status ticks, Smites, Tolls and discharges are `raw` hits: no hero multiplier, n
 
 ### Weapons
 
-Weapon index 0 is available at once, index 1 at mastery 3, index 2 at mastery 6. Attack interval is `rate / attack speed`, never under `max(0.12 s, 0.06 s × shots)`: attack speed beyond that floor becomes weapon damage. Fork columns are the Heavy and Swift versions (§5).
+Weapon index 0 is available at once, index 1 at mastery 3, index 2 at mastery 6. Attack interval is `rate / attack speed`, never under `max(0.12 s, 0.06 s × shots)`: attack speed beyond that floor becomes weapon damage. Fork columns are the Heavy and Swift versions (§5). Rows marked ↳ are Armory variants (§9): the base weapon's damage per second in another shape (sim on one foe and on a tight pack of 4: the mean within ±10% of the base's), wielded where the base is unlocked; route cards treat a variant as its base. A combo weapon's interval is the mean of its steps' intervals; the sheet's hit takes the mean of its steps' damage factors.
 
 | Hero | Weapon | dmg · interval | Notes | Heavy | Swift |
 |---|---|---|---|---|---|
 | Knight | Longsword | 23.4 · 0.42 | arc 1.9, range 50 | Greatsword 46.3 · 0.756 | Saber 14.2 · 0.231 |
+| | ↳ Arming Sword | 15.6 · 0.35 mean | combo: two slashes (0.75 of the thrust's interval, arc 1.6), then a thrust (range ×1.6, arc 0.5, ×1.9); restarts after 1.2 s idle | Bastard Sword 30.9 · 0.63 | Shortsword 9.44 · 0.193 |
 | | Warhammer | 44.2 · 0.82 | shockwave r72 at 50% | Maul 77.1 · 1.3 | War Pick 26.7 · 0.451 |
+| | ↳ Earthbreaker | 44.2 · 0.82 | slam: every foe in a circle r48 centred 58 ahead; shockwave r72 at 50% on the slam point | Quake Maul 77.1 · 1.3 | Stonepick 26.7 · 0.451 |
 | | Glaive | 26 · 0.5 | range 82, arc 0.75 | Halberd 51.5 · 0.9 | Spear 15.7 · 0.275 |
+| | ↳ Hooked Glaive | 25.5 · 0.5 | range 76, arc 1.1; hits pull 34 px toward you (elites half, bosses never), no knockback | Guisarme 50.5 · 0.9 | Hook Spear 15.4 · 0.275 |
 | Ranger | Longbow | 11 · 0.34 | arrows | Greatbow 21.8 · 0.612 | Hunting Bow 6.66 · 0.187 |
 | | Heavy Crossbow | 22.1 · 0.72 | pierce 2 | Arbalest 43.8 · 1.296 | Repeater 13.4 · 0.396 |
 | | Twin Shortbows | 4.1 · 0.25 | 2 arrows | Twin Recurves 8.12 · 0.45 | Twin Flatbows 2.48 · 0.138 |
+| | ↳ Burst Bows | 4.1 · 0.25 mean | 2 arrows; combo: 3 shots 0.1 s apart, then a 0.55 s reload | Burst Recurves 8.12 · 0.45 | Burst Flatbows 2.48 · 0.138 |
 | Pyromancer | Fire Staff | 15 · 0.5 | blast r40 at 60% | Magma Staff 29.7 · 0.9 | Spark Staff 9.08 · 0.275 |
 | | Ember Wand | 6 · 0.15 | sparks build 15% Burn | Cinder Rod 11.9 · 0.27 | Flicker Wand 5.28 · 0.12 |
 | | Inferno Tome | 30 · 1.0 | blast r72 at 80% | Tome of Ruin 42.9 · 1.3 | Pocket Grimoire 18.2 · 0.55 |
 | Shade | Twin Daggers | 11 · 0.21 | range 42 | Twin Kukris 21.8 · 0.378 | Stilettos 6.91 · 0.12 |
+| | ↳ Katars | 9.8 · 0.21 | combo: stab, stab (range 44, arc 0.9), spin (full circle, range 46, ×1.6) | Great Katars 19.4 · 0.378 | Needle Katars 6.16 · 0.12 |
 | | Throwing Knives | 7 · 0.36 | fan of 3 | Chakrams 13.9 · 0.648 | Darts 4.24 · 0.198 |
 | | Crescent Scythes | 16 · 0.48 | full circle | Great Scythes 31.7 · 0.864 | Sickles 9.68 · 0.264 |
+| | ↳ Chain Sickle | 16 · 0.48 | range 96, arc 0.9; hits pull 30 px (elites half, bosses never) | Chain Scythe 31.7 · 0.864 | Chain Hook 9.68 · 0.264 |
 | Cleric | Holy Mace | 23 · 0.42 | wave every 3rd swing, 90% | Morning Star 45.5 · 0.756 | Flail 13.9 · 0.231 |
+| | ↳ Radiant Mace | 23 · 0.42 | no wave; every 3rd swing a ring r74 around you, 85% as Holy class damage (Dawnbringer's wave rules apply: every 2nd, waveMul, Sunhammer r ×1.5 and stun, Litany ×3, Returning Light rings again 0.35 s later) | Radiant Star 45.5 · 0.756 | Radiant Flail 13.9 · 0.231 |
 | | Dawn Hammer | 43.2 · 0.72 | wave every 3rd swing, 100% | Sunforged Maul 85.5 · 1.296 | Dawn Pick 26.1 · 0.396 |
+| | ↳ Judge's Gavel | 43.2 · 0.72 | slam r48 centred 58 ahead; every 3rd slam 3 waves in a fan 0.35 rad apart, 36% each (Litany: the middle wave only) | Judge's Maul 85.5 · 1.296 | Judge's Mallet 26.1 · 0.396 |
 | | Sacred Lantern | 16.9 · 0.42 | pierce 1; orbs shield allies | Great Lantern 33.5 · 0.756 | Censer 10.2 · 0.231 |
 | Necromancer | Bone Wand | 13.5 · 0.4 | seeking bolts | Skull Staff 26.7 · 0.72 | Finger Wand 8.17 · 0.22 |
 | | Soul Scythe | 25.5 · 0.56 | kills raise +12% more often | Death Scythe 50.5 · 1.008 | Soul Sickle 15.4 · 0.308 |
+| | ↳ Grave Whirl | 25 · 0.56 | full circle, range 46; kills raise +12% more often | Grave Reaper 49.5 · 1.008 | Grave Sickle 15.1 · 0.308 |
 | | Plague Staff | 9 · 0.6 | cloud r44, 10 dps, 2.6 s | Plague Totem 17.8 · 1.08 | Plague Rod 5.45 · 0.33 |
 
 Base hero HP: Knight 178 · Ranger 117 · Pyromancer 106 · Shade 165 · Cleric 175 · Necromancer 91 (armor, the Shade's 35% base dodge and Class Power: §5).
@@ -477,7 +486,7 @@ Per stratum: start, boss, three utility rooms (treasure on odd strata or an even
 
 - **Mastery** has 10 levels per hero: 2 +1% damage · 3 second weapon · 4 +2 max health · 5 skills recharge 1% faster · 6 third weapon · 7 +1% crit · 8 +1 boon reroll · 9 +1% damage · 10 golden aura. A full Hearth with mastery 10 adds +4.5% damage, +7 health, +4% crit, +4% recharge, +3 armor, +3% move speed, +6% xp and +6% gold, plus the one-offs of the table. Visible but small: the boss-arrival power read (`tools/bal.js --power`) puts full Hearth at ×1.1–1.3 over fresh smart at strata IV–VI. Deep Wick reaches `W.prototype.darkLoot()`; Head Start, Stash, Second Wind, Insight and Provisions are read in `sim/build.js` (`onRunStartBuild`, `onPartyStartBuild`, `onStratumBuild`), Merchant's Favor in `rooms.js` (`priceOf`).
 - **Refunds**: every upgrade rank and Armory entry refunds its full cost on demand (`S.refundUpgrade`, `S.refundArmory`); Reset all (`S.resetUpgrades`, a two-step confirm in the UI: the first press arms it for 3 s) refunds every rank and entry at once. `lifetime` embers never change on a purchase or refund.
-- **Armory**: `ED.ARMORY[hero]` lists per-hero sidegrade unlocks `{ id, name, desc, cost }`, bought and refunded in the Upgrades page below the upgrades (a hero's section shows while its list is non-empty and the hero is unlocked). The lists are empty until content lands. The meta bundle carries each hero's owned entry ids (`meta.armory`); the profile stores `armory: { hero: [0|1 per entry] }`.
+- **Armory**: `ED.ARMORY[hero]` lists per-hero weapon variants `{ id (the variant's weapon id), weapon (its base), name, desc, cost }` (§1, rows ↳), ordered by the base weapon's index; a variant of weapon 0 / 1 / 2 costs 40 / 60 / 80 embers and can be bought once its base weapon is unlocked (the entry names its base and, while locked, the mastery the base needs). Bought and refunded in the Upgrades page below the upgrades (a hero's section shows while the hero is unlocked). An owned variant is a weapon choice of its own under its base in the weapon picker; a stored choice of a refunded variant falls back to its base. The meta bundle carries each hero's owned entry ids (`meta.armory`); the host accepts a guest's variant only when its id is in that bundle (else the base). The profile stores `armory: { hero: [0|1 per entry] }`.
 - 26 deeds including Evolved (evolve a weapon, 40) · Into the Dark (clear 6 dark rooms in one descent, 50; `run.darkCleared` counts dark-room clears and rides the run summary and the snapshot's `RUN` row) · Cartographer (clear every room of a stratum, both dark rooms included, 40; the check is `run.fullClear`, every non-boss room) · Relic Keeper (hold 10 relics in one descent, 60; deed id `archivist`, DEEDS index 21). Ten pacts raise difficulty and embers (`PACT_EMBER_BONUS` 0.08 per level).
 - Profile key `wickdeep.profile.v1`, save code prefix `WD1-`, peer prefix `wickdeep-v1-`. No other profile key is imported; Emberdeep `ED1-` codes are refused.
 - **Save code** (`CODE_VERSION` 5): positional lists (UPGRADES, CLASS_IDS mastery, then the Armory, then DEEDS) each carry a count prefix, so appending an entry never shifts what follows; the decoder skips extra entries and leaves missing ones at 0. The Armory section follows mastery: a hero count (4 bits), then per hero an entry count (6 bits) and 1 bit per entry (at most 63 entries per hero; more cannot be written). Versions 2, 3 and 4 still decode (their relic bits are read against the frozen v4 relic table and refunded as embers); a newer version is refused with "reload the page". Reordering or removing an entry bumps `CODE_VERSION`.

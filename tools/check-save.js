@@ -10,12 +10,12 @@ const same = (a, b, msg) => ok(JSON.stringify(a) === JSON.stringify(b), `${msg}:
 const throws = (f, re, msg) => { let m = null; try { f(); } catch (e) { m = e.message; } ok(m !== null && re.test(m), `${msg}: ${m === null ? 'did not throw' : m}`); };
 const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1 });
 
-// Temporary Armory entries (the table is empty in the data): knight 3, pyro 2, necro 1.
+// Temporary Armory tables in place of the data's: knight 3, pyro 2, necro 1 entries, the other heroes none.
 const ARM = (id, cost) => ({ id, name: id, desc: '', cost });
 function withArmory(f) {
-  const adds = { knight: [ARM('zz_k1', 30), ARM('zz_k2', 45), ARM('zz_k3', 60)], pyro: [ARM('zz_p1', 25), ARM('zz_p2', 80)], necro: [ARM('zz_n1', 100)] };
-  for (const c in adds) ED.ARMORY[c].push(...adds[c]);
-  try { return f(); } finally { for (const c in adds) ED.ARMORY[c].length -= adds[c].length; }
+  const adds = { knight: [ARM('zz_k1', 30), ARM('zz_k2', 45), ARM('zz_k3', 60)], pyro: [ARM('zz_p1', 25), ARM('zz_p2', 80)], necro: [ARM('zz_n1', 100)] }, keep = Object.assign({}, ED.ARMORY);
+  for (const c of ED.CLASS_IDS) ED.ARMORY[c] = adds[c] || [];
+  try { return f(); } finally { Object.assign(ED.ARMORY, keep); }
 }
 
 // ---- a code writer independent of save.js, so a hand-built code (any version) can be decoded ----

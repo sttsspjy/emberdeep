@@ -582,12 +582,14 @@
   // hold at that end for HOLD s, then ease to the idle carry over RELAX s. Thrusts retract and spins end where they began. The aim eases from the aim at the click (an.a) to the live aim over the settle. Timing comes from Sprites.atkTimes.
   const HOLD = 0.7, RELAX = 0.35, IDLE_LOW = 0.75; // IDLE_LOW: rad the idle blade is lowered from the aim
   AC.HOLD = HOLD;
-  const SW = { wa: 0, push: 0, thr: 0, kick: 0 };
+  const SW = { wa: 0, push: 0, thr: 0, kick: 0, thrust: false }; // thr is 0 unless the attack is a thrust
+  // A combo step (an.w, its arc and pose) picks the form of this attack.
   function swing(w, an, face, u, side, ri) {
     const base = an.a !== undefined ? an.a : face;
-    let wa = base, push = 0, thr = 0, kick = 0;
+    let wa = base, push = 0, thr = 0, kick = 0, thrusting = false;
+    if (an.w && an.w.kind === w.kind) w = an.w;
     if (w.kind === 'melee') {
-      const t0 = an.t0, t1 = an.t1, D = an.D, spin = w.arc > 6, thrust = w.arc < 1, half = spin ? 0 : thrust ? 0.1 : w.arc * 0.6, pull = thrust ? 0.1 : spin ? 0.4 : 0.14;
+      const t0 = an.t0, t1 = an.t1, D = an.D, spin = w.pose === 'spin' || w.arc > 6, thrust = !spin && (w.pose === 'thrust' || w.arc < 1), half = spin ? 0 : thrust ? 0.1 : w.arc * 0.6, pull = thrust ? 0.1 : spin ? 0.4 : 0.14;
       const k0 = u < t0 ? u / t0 : 1, k1 = U.clamp((u - t0) / (t1 - t0), 0, 1), k2 = U.clamp((u - t1) / (D - t1), 0, 1), e1 = 1 - Math.pow(1 - k1, 3), e2 = U.easeInOut(k2);
       const st = -side * half, wt = -side * (half + pull), en = spin ? wt + side * TAU : side * half; // start end, wind-up pose, end of the strike (relative to the aim; a spin ends where it began)
       let aim = base, off = ri;
@@ -600,9 +602,10 @@
         else if (thrust) { const os = k2 < 0.2 ? 0.18 * U.easeOut(k2 / 0.2) : 0.18, back = k2 < 0.2 ? 0 : U.easeInOut((k2 - 0.2) / 0.8); off = side * ((half + os) * (1 - back)); }
         else off = en + side * 0.12 * (k2 < 0.25 ? U.easeOut(k2 / 0.25) : 1 - U.easeInOut((k2 - 0.25) / 0.75)); // overshoot 0.12 rad, back to the end
       } else if (!spin && !thrust) off = en + (ri - en) * U.easeInOut(U.clamp((u - D - HOLD) / RELAX, 0, 1));
-      wa = aim + off;
+      else if (thrust) off = ri * U.easeInOut(U.clamp((u - D) / RELAX, 0, 1)); // a thrust step of an arc weapon eases from the aim back to its lowered carry
+      wa = aim + off; thrusting = thrust;
     } else { kick = Math.exp(-u * 26); push = -0.8 * kick; }
-    SW.wa = wa; SW.push = push; SW.thr = thr; SW.kick = kick;
+    SW.wa = wa; SW.push = push; SW.thr = thrusting ? thr : 0; SW.kick = kick; SW.thrust = thrusting;
     return SW;
   }
   // Melee arm: the shoulder sits SHOULDER art px from the body's hand anchor (front, upper torso), the grip ARM art px from it along the blade (y squashed for the 3/4 view), on whole art px. The off-hand shoulder is OFF_SH art px behind.
@@ -693,7 +696,7 @@
       const base = anim.a !== undefined ? anim.a : face;
       swing(w, anim, face, anim.atkT, anim.side || 1, ri);
       wa = SW.wa; push = SW.push; thr = SW.thr; kick = SW.kick;
-      const L = melee ? (w.arc < 1 ? 6 : 4) : 2;
+      const L = melee ? (SW.thrust ? 6 : 4) : 2;
       bx = q2(Math.cos(base) * push * L); by = q2(Math.sin(base) * push * L * 0.5); // lunge and pull-back in whole art px
     }
     if (hit) { bx -= sg * 2; }
@@ -741,9 +744,14 @@
     let x = hx, y = hy, ang = wa, extra = 0;
     const look = w.look, out = HELD_OUT[look] || 0; // ranged weapons are held out along the aim
     if (out) { x += Math.cos(wa) * out * K; y += Math.sin(wa) * out * K * 0.6; }
-    if (thr > 0 && w.arc < 1) { const d = thr * 6 * K; x += Math.cos(wa) * d; y += Math.sin(wa) * d * 0.5; }
+    if (thr > 0) { const d = thr * 6 * K; x += Math.cos(wa) * d; y += Math.sin(wa) * d * 0.5; }
     if (kick > 0.02) { const d = kick * 2 * K; x -= Math.cos(wa) * d; y -= Math.sin(wa) * d * 0.5; }
     if (sx !== undefined) armAt(c, sx, sy, x, y, ED.CLASSES[p.cls].col.a); // a melee weapon is held at arm's length from the shoulder
+    if (thr > 0 && w.pull && w.range > 80) { // a chained weapon is thrown out along the aim on its chain (1 art px links, alternating light and dark) and hauled back
+      const ext = thr * (w.range - 30), n = Math.max(1, Math.floor(ext / (2 * K))), cx = Math.cos(wa), cy = Math.sin(wa) * 0.5;
+      for (let i = 0; i < n; i++) { c.fillStyle = i & 1 ? '#6b7480' : '#c8d0d8'; c.fillRect(q2(x + cx * i * 2 * K), q2(y + cy * i * 2 * K), K, K); }
+      x += cx * ext; y += cy * ext;
+    }
     if (look === 'lantern') { // held up at the side, hanging from the hand: swings, and is thrown forward on release
       const fl = flip ? -1 : 1, rot = Math.sin(t * 2.6 + (p.slot | 0)) * 0.14 - fl * 0.9 * Math.exp(-u * 10);
       put(c, wd.anim, 0, hx, hy - 16, flip, variant, 1, nrm(rot));
