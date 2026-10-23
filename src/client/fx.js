@@ -330,7 +330,7 @@
   const EL_COL = ['', '#ff9a3a', '#9fefff', '#ffe66b', '#ff4a5a', '#9be33c', '#fff0c2', '#a070ff']; // hit-event el: 0 physical, 1 fire, 2 ice, 3 lightning, 4 bleed, 5 poison, 6 holy, 7 shadow
   const EL_OL = [null, null, null, '#bfe6ff', '#b8c0cc', null, '#ffcf5a', null]; // 1 px rim of a hit number where the fill alone is hard to tell apart (Lightning, Bleed, Holy); the others keep the dark outline
   const PATH_COL = { fire: '#ff7a2a', ice: '#7fe3ff', lightning: '#ffe66b', poison: '#9be33c', holy: '#fff0c2', shadow: '#a070ff', general: '#d9dfe8' };
-  const PROJ_COLOR = { bone: '#e6dfc9', spore: '#9cff6a', ice: '#9fefff', fire: '#ff8a2a', water: '#6fe6ff', void: '#d48cff', arrow: '#e8d8b0', bolt: '#cfd6de', firebolt: '#ff9a3a', spark: '#ffcf4a', fireball: '#ff6a1a', knife: '#d9dfe8', holy: '#ffe9a0', soul: '#7dffd9', plague: '#9cff6a', wave: '#ffe9a0', wisp: '#bff0ff', shard: '#b78cff', blade: '#cfd6de', orb: '#ff7ad9', trident: '#e8c66b', skull: '#e6dfc9',
+  const PROJ_COLOR = { bone: '#e6dfc9', spore: '#9cff6a', ice: '#9fefff', fire: '#ff8a2a', water: '#6fe6ff', void: '#d48cff', arrow: '#e8d8b0', bolt: '#cfd6de', firebolt: '#ff9a3a', spark: '#ffcf4a', fireball: '#ff6a1a', knife: '#d9dfe8', boomerang: '#d9c8ff', holy: '#ffe9a0', soul: '#7dffd9', plague: '#9cff6a', wave: '#ffe9a0', wisp: '#bff0ff', shard: '#b78cff', blade: '#cfd6de', orb: '#ff7ad9', trident: '#e8c66b', skull: '#e6dfc9',
     hammer: '#ffe9a0', shield: '#ffe9a0', crescent: '#ff9a3a', iceshard: '#9fefff', bloodscythe: '#d43a5a', spectral: '#bcd0ff', web: '#e8e6f0', droneshot: '#ff9a3a', thorn: '#9cff6a' };
   F.projColor = (k) => PROJ_COLOR[k] || '#ffffff';
   const BOOM = { fire: ['#ff9a3a', '#ffcf4a'], bigfire: ['#ff6a1a', '#ffd36b'], shock: ['#e8e2c8', '#ffffff'], slam: ['#c9b98f', '#ffffff'], spore: ['#9cff6a', '#e8ffd0'], ice: ['#9fefff', '#ffffff'], bolt: ['#bfe9ff', '#ffffff'], bone: ['#7dffd9', '#e6dfc9'], burst: ['#ff6a4a', '#ffd36b'], shadow: ['#b78cff', '#2a1f44'], acid: ['#9be33c', '#e8ffd0'], firedamp: ['#ff8a2a', '#ffe9a0'] };
@@ -778,6 +778,12 @@
         F.ring(ev.x, ev.y - 10, 90 * m, '#5a2fb0', 0.5, 6, true); F.ring(ev.x, ev.y - 10, 50 * m, '#c9b3ff', 0.4, 3, true);
         for (let i = 0, n = lowFx() ? 1 : 3; i < n; i++) SP('fx.smoke', ev.x + (i - 1) * 14, ev.y - 12, { ramp: 'shadow', delay: i * 0.06, a: mine ? 1 : 0.6 });
         F.pop(ev.x, ev.y - 12, 50 * m, '#a070ff', 0.3, true); F.addShake(3 * m); A.play('boom', 0.4 * m); break; }
+      case 'beam': { // Sunlance: a straight flame line along the beam (wider with Overheat), a flash at each end
+        const m = ev.pid === local ? 1 : 0.7;
+        F.bolts.push({ pts: [[ev.x0, ev.y0 + 4], [ev.x1, ev.y1 + 4]], life: 0.16, max: 0.16, color: ev.w > 7 ? '#ffd36b' : '#ff9a3a', st: true }); if (F.bolts.length > 24) F.bolts.shift();
+        F.pop(ev.x0, ev.y0 - 6, 14 * m, '#ffcf5a', 0.12); F.pop(ev.x1, ev.y1 - 6, 18 * m, '#ff8a2a', 0.16);
+        if (!lowFx()) F.burst(ev.x1, ev.y1 - 6, 5, { kind: 'ember', color: '#ffb347', sp: 70, life: 0.4, size: 1.6, add: true });
+        break; }
       case 'lance': { // a straight gold line (2 art px) from the shielded hero to the foe
         const m = ev.pid === local ? 1 : 0.7;
         F.bolts.push({ pts: [[ev.x0, ev.y0], [ev.x1, ev.y1]], life: 0.3, max: 0.3, color: '#ffcf5a', st: true }); if (F.bolts.length > 24) F.bolts.shift();
