@@ -35,4 +35,5 @@ North-star: a co-op browser roguelite where builds are chosen, not rolled. Rules
 - [x] Music per stratum; hit and kill sounds for skills
 - [ ] Your mid playtest (Ranger and Knight complete)
 - [x] Transforms for the other four heroes, breakable props, smaller hearts
-- [ ] Final balance and PR to main
+- [x] Retune and PR to main (v4 live)
+- [ ] Balance gaps left: full Hearth too strong, random picks win 2% (target ≤ 1%), Pact 5 too hard
