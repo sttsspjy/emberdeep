@@ -1,6 +1,8 @@
 // knight route-card visuals, client only: registers ED.ClassFx hooks (event, zone, hero and foe-mark hooks; contract in fx.js).
 // Events: ric (a shield strike), catch, parry, deflect (a shot swatted), ward (Rallying Charge) and the boom 'shock' of Juggernaut / Oathbreaker; hero hook: Brace plate, Hold the Line ring, catch glint, Riposte shimmer, Charge streaks;
 // shot hook: the thrown shield's rim glint and the Shield Orbit ring. Everything is pixel art on the 2 px grid.
+// Skill forms: Avalanche (quake slam, crack fissures), Iron Phalanx (wide streaks, War Banner), Aegis Tempest (vortex zone), Bastion (the orbit ring at radius 60).
+// Route forms: Earthsplitter (the fissure zone and its 'fissure' event), Thousand Edges (the 'blade' shot body), Doombrand (a foe mark glyph), Bloodquake (the 'bquake' event).
 (function (ED) {
   'use strict';
   const CFX = ED.ClassFx, F = ED.FX, U = ED.U, Pix = ED.Pix, TAU = U.TAU, s2 = Pix.s2;
@@ -59,6 +61,9 @@
       const len = ev.tx !== undefined ? Math.hypot(ev.tx - ev.x, ev.ty - ev.y) : 100;
       chargeEnd[ev.pid] = { x: ev.tx !== undefined ? ev.tx : ev.x, y: ev.ty !== undefined ? ev.ty : ev.y, t0: F.time, t1: F.time + len / ED.CONST.CHARGE_SPEED };
       F.burst(ev.x, ev.y - 8, 8, { kind: 'streak', color: '#e8e2c8', a: (ev.a || 0) + Math.PI, spread: 0.5, sp: 220, life: 0.25, size: 1.8 });
+      const hp = ctx.player(ev.pid), hs = hp && hp.stats;
+      if (hs && hs.avalanche > 0) { F.dust(ev.x, ev.y + 2, 'dust', 5); F.burst(ev.x, ev.y - 4, 10, { kind: 'shard', color: '#9a8a6a', a: (ev.a || 0) + Math.PI, spread: 1.4, sp: 150, life: 0.5, size: 2.6, vz: 90, z: 2 }); } // Avalanche: the run kicks up rubble
+      if (hs && hs.phalanx > 0) F.burst(ev.x, ev.y - 8, 6, { kind: 'spark', color: '#ffe6a8', a: (ev.a || 0), spread: 2.4, sp: 160, life: 0.25, size: 1.6, drag: 5 });
     }
   });
   // A hit by the charging hero: the shield rings off the foe (spark, short streaks along the run, 2 px shake for the local knight).
@@ -119,6 +124,7 @@
   function braced(p, view) {
     if (p.braceT > 0) return 1;
     if (!view) return 0;
+    for (const z of view.zones) if (z.kind === 'sanct' && z.w === 7 && U.dist2(z.x, z.y, p.x, p.y) < z.r * z.r) return 2; // inside a War Banner
     for (const q of view.players.values()) if (q !== p && q.braceT > 0 && q.stats && q.stats.braceAura && !q.downed && !q.dead && U.dist2(q.x, q.y, p.x, p.y) < 10000) return 2;
     return 0;
   }
@@ -153,7 +159,8 @@
     if (ch !== undefined && F.time - ch < 0.45 && chargeEnd[p.pid] && F.time <= chargeEnd[p.pid].t1 + 0.05) { // Shield Charge: pixel speed lines trail behind the runner
       const f = p.face || 0, k = 1 - (F.time - ch) / 0.45, cx = Math.cos(f), cy = Math.sin(f);
       c.globalAlpha = Math.max(0.3, k); c.fillStyle = '#e8e2c8'; c.beginPath();
-      for (let i = -1; i <= 1; i++) { const ox = -cy * i * 8, oy = cx * i * 5, l0 = 12 + (i & 1) * 6, l1 = 26 - Math.abs(i) * 6; Pix.line(c, -cx * l0 + ox, -10 - cy * l0 * 0.6 + oy, -cx * (l0 + l1) + ox, -10 - cy * (l0 + l1) * 0.6 + oy, 2); }
+      const wide = st && st.phalanx > 0 ? 3 : 1, sp = wide > 1 ? 12 : 8; // Iron Phalanx: seven lines across the 70 px band
+      for (let i = -wide; i <= wide; i++) { const ox = -cy * i * sp, oy = cx * i * sp * 0.6, l0 = 12 + (i & 1) * 6, l1 = 26 - Math.abs(i) * 3; Pix.line(c, -cx * l0 + ox, -10 - cy * l0 * 0.6 + oy, -cx * (l0 + l1) + ox, -10 - cy * (l0 + l1) * 0.6 + oy, 2); }
       c.fill(); c.globalAlpha = 1;
     }
   });
@@ -168,11 +175,199 @@
     if (pr.team !== 0) return;
     if (Math.floor(t * 12.5 + (pr.id & 3)) & 1) { const a = t * 9 + pr.id, gx = x + Math.cos(a) * 9, gy = y + Math.sin(a) * 9; c.fillStyle = '#ffffff'; c.fillRect(s2(gx) - 1, s2(gy) - 1, 2, 2); }
     const sp = Math.hypot(pr.vx, pr.vy);
-    if (sp > 270 && sp < 345) {
+    if (sp > 270 && sp < 440) {
       const v = gview(); if (!v) return;
       let best = null, bd = 60 * 60;
       for (const p of v.players.values()) { if (p.cls !== 'knight' || !p.shieldOut || !p.stats || !(p.stats.orbit > 0)) continue; const d = U.dist2(p.x, p.y - 4, pr.x, pr.y); if (d < bd && d > 25 * 25) { bd = d; best = p; } } // only a Knight with Shield Orbit circles a shield
-      if (best) { const rp = Pix.ramp(GOLD); Pix.put(c, Pix.ring(22, 1, rp[2], rp[3], rp[3], 3, (t * 4) & 7), s2(best.x), s2(best.y - 4), 0.3); }
+      if (best) { const rp = Pix.ramp(GOLD); Pix.put(c, Pix.ring(best.stats.bastion > 0 ? 30 : 22, 1, rp[2], rp[3], rp[3], 3, (t * 4) & 7), s2(best.x), s2(best.y - 4), 0.3); }
     }
   };
+  // ---- skill forms ----
+  const away = (ctx, x, y) => { const me = ctx.player(ctx.localPid); return me ? Math.hypot(me.x - x, me.y - y) : 9999; }; // far events do not shake the screen
+  const jag = (z, i, amp) => Math.sin(i * 2.1 + z.id * 1.7) * amp + Math.sin(i * 5.3 + z.id) * amp * 0.5; // a fixed wobble along a crack
+
+  // Avalanche slam: three gold rings, a dust cloud, rock shards thrown up, a column of white streaks, a heavy shake and hit-stop for the Knight who made it.
+  CFX.on('quake', (ev, ctx, local) => {
+    const mine = ev.pid === local, r = ev.r, d = away(ctx, ev.x, ev.y), A = ED.Audio;
+    F.ring(ev.x, ev.y, r, GOLD, 0.55, 6); F.ring(ev.x, ev.y, r * 0.62, PALE, 0.42, 4); F.ring(ev.x, ev.y, r * 0.3, '#ffffff', 0.3, 3);
+    F.burst(ev.x, ev.y, 26, { kind: 'shard', color: '#9a8a6a', sp: r * 2.2, life: 0.75, size: 3, vz: 150, z: 2 });
+    F.burst(ev.x, ev.y, 12, { kind: 'smoke', color: '#8a7a5a', sp: r * 1.2, life: 1.0, size: 8, drag: 2.5 });
+    F.burst(ev.x, ev.y - 4, 18, { kind: 'streak', color: PALE, a: -Math.PI / 2, spread: 2.8, sp: 340, life: 0.38, size: 2 });
+    F.pop(ev.x, ev.y - 6, r * 0.85, GOLD, 0.32, true);
+    SP('fx.ring.shock', ev.x, ev.y - 4, { add: true, ramp: 'gold', speed: 0.8 });
+    F.dust(ev.x, ev.y, 'dust', 6);
+    A.play('thud', mine ? 1 : d < 400 ? 0.7 : 0.3); A.play('heavy', mine ? 0.9 : 0.35);
+    if (mine) { F.addShake(9); F.hitStop(0.1); F.punch(0.9, 0.4); } else if (d < 400) F.addShake(3);
+  });
+  // A crack erupts: shards and a flash along its length, a short shake close by.
+  CFX.on('crack', (ev, ctx, local) => {
+    const cs = Math.cos(ev.a), sn = Math.sin(ev.a);
+    for (let d = 10; d <= ev.len; d += 26) {
+      const x = ev.x + cs * d, y = ev.y + sn * d;
+      F.burst(x, y, 3, { kind: 'shard', color: '#b8a070', sp: 70, life: 0.5, size: 2.4, vz: 120, z: 2 });
+      F.burst(x, y - 2, 2, { kind: 'streak', color: '#fff3c4', a: -Math.PI / 2, spread: 1.2, sp: 260, life: 0.25, size: 1.8 });
+      if (d % 52 < 26) F.pop(x, y - 4, 14, GOLD, 0.16);
+    }
+    if (away(ctx, ev.x, ev.y) < 300) F.addShake(ev.pid === local ? 1.5 : 0.6);
+    if (ev.pid === local) ED.Audio.play('thud', 0.4);
+  });
+  // The glowing fissure that runs outward for 0.3 s before it erupts (zone 'crack': x, y the slam, a the direction, len and w its size).
+  CFX.zone.crack = (c, z, pass, t, k) => {
+    const g = Math.min(1, k * 1.8), n = Math.max(3, Math.round(z.len / 6)), cs = Math.cos(z.a), sn = Math.sin(z.a), hot = k > 0.7 && Math.floor(t * 30) % 2 === 0;
+    const pt = (i) => { const d = i / n * z.len, j = jag(z, i, 3); return [z.x + cs * d - sn * j, z.y + sn * d * 0.8 + cs * j]; };
+    if (pass === 0) {
+      c.globalAlpha = 0.9; c.fillStyle = '#120c07'; c.beginPath();
+      for (let i = 0, m = Math.floor(n * g); i < m; i++) { const a = pt(i), b = pt(i + 1); Pix.line(c, a[0], a[1], b[0], b[1], 10 - Math.round(i / n * 4)); }
+      c.fill();
+      c.globalAlpha = 1; c.fillStyle = hot ? '#ffffff' : '#ff9a2a'; c.beginPath();
+      for (let i = 0, m = Math.floor(n * g); i < m; i++) { const a = pt(i), b = pt(i + 1); Pix.line(c, a[0], a[1], b[0], b[1], 4); }
+      c.fill(); c.fillStyle = hot ? '#ffffff' : '#ffe9a0'; c.beginPath();
+      for (let i = 0, m = Math.floor(n * g); i < m; i++) { const a = pt(i), b = pt(i + 1); Pix.line(c, a[0], a[1], b[0], b[1], 2); }
+      c.fill();
+    } else if (pass === 1) {
+      for (let i = 2; i < n * g; i += 4) { const a = pt(i); ED.Render.glow(c, a[0], a[1], 26, hot ? '#ffffff' : '#ff9a2a', 0.55); }
+    }
+  };
+
+  // War Banner plant: a gold ring the size of the banner, a pulse of steel sparks and a rising flare; the local Knight feels a thud.
+  CFX.on('banner', (ev, ctx, local) => {
+    const mine = ev.pid === local;
+    F.ring(ev.x, ev.y, ev.r, GOLD, 0.6, 5); F.ring(ev.x, ev.y, ev.r * 0.5, PALE, 0.4, 3);
+    F.burst(ev.x, ev.y, 14, { kind: 'spark', color: '#e8e2c8', sp: ev.r * 1.5, life: 0.35, size: 1.8, drag: 4 });
+    F.burst(ev.x, ev.y - 6, 8, { color: GOLD, sp: 40, vy: -90, life: 0.7, size: 2.2, add: true, drag: 1.2 });
+    F.pop(ev.x, ev.y - 20, 40, GOLD, 0.3, true);
+    ED.Audio.play('clang', mine ? 0.9 : 0.5); ED.Audio.play('thud', mine ? 0.7 : 0.3);
+    if (mine) { F.addShake(4); F.hitStop(0.05); }
+  });
+  // The banner itself (a 'sanct' zone with w 7, drawn through render.js): a dashed ring and a faint steel disc on the ground, a pole with a waving gold pennant, motes rising round the rim.
+  CFX.zone.banner = (c, z, pass, t, k) => {
+    const fade = Math.min(1, (z.dur - z.t) * 2, z.t * 5), rp = Pix.ramp(GOLD), x = s2(z.x), y = s2(z.y), R = ED.Render;
+    if (pass === 0) {
+      Pix.put(c, Pix.disc(Math.max(1, Math.round(z.r / 2)), '#8a95a6'), x, y, 0.12 * fade);
+      Pix.put(c, Pix.ring(Math.max(2, Math.round(z.r / 2)), 2, rp[2], rp[3], rp[3], 4, (t * 5) & 7), x, y, 0.85 * fade);
+      Pix.put(c, Pix.ring(Math.max(2, Math.round(z.r * 0.31)), 1, rp[1], rp[2], rp[2], 3, (-t * 4) & 7), x, y, 0.35 * fade);
+      R.light(z.x, z.y, z.r * 1.5, '#ffe39a', 0.5 * fade);
+      c.globalAlpha = fade; // the pole and its pennant (a dark outline under both), feet at the centre
+      c.fillStyle = '#120c07'; c.fillRect(x - 4, y - 66, 8, 68); c.fillRect(x - 2, y - 70, 4, 4);
+      c.fillStyle = '#8a7a5c'; c.fillRect(x - 2, y - 64, 4, 64); c.fillStyle = '#ffe9a0'; c.fillRect(x - 2, y - 68, 4, 4);
+      for (let i = 0; i < 12; i++) { // the pennant: 12 columns of 20 px, each swaying a little more than the last, a red stripe through the gold
+        const off = s2(Math.sin(t * 5 + i * 0.6 + z.id) * (1 + i * 0.25)), cx = x + 2 + i * 2, top = y - 62 + off, h = 22 - Math.floor(i * 0.8) * 2;
+        c.fillStyle = '#120c07'; c.fillRect(cx, top - 2, 2, h + 4);
+        c.fillStyle = rp[3]; c.fillRect(cx, top, 2, h); c.fillStyle = '#a82a2a'; c.fillRect(cx, top + 8, 2, 4); c.fillStyle = rp[4]; c.fillRect(cx, top, 2, 2);
+      }
+      c.globalAlpha = 1;
+    } else if (pass === 1) {
+      R.glow(c, z.x, z.y - 40, 44, '#ffd36b', 0.4 * fade);
+      c.fillStyle = '#fff3c4';
+      for (let i = 0; i < 8; i++) { const kk = (t * 0.5 + i * 0.125 + z.id * 0.1) % 1, a = i * 2.39996 + z.id; c.globalAlpha = Math.max(0.25, Math.ceil(Math.sin(kk * Math.PI) * 4) / 4) * fade; c.fillRect(s2(z.x + Math.cos(a) * z.r * 0.92), s2(z.y + Math.sin(a) * z.r * 0.92 * 0.8 - kk * 26), 2, 2); }
+      c.globalAlpha = 1;
+    }
+  };
+
+  // Aegis Tempest vortex (zone 'vortex': r, warm = seconds until the shields arrive): inward-spiralling arms of steel and gold motes, a bright eye, a dashed rim; the shields themselves are the spinning projectiles.
+  CFX.zone.vortex = (c, z, pass, t, k) => {
+    const on = z.t >= z.warm, fade = Math.min(1, (z.dur - z.t) * 3, on ? 1 : 0.35 + z.t / Math.max(0.05, z.warm) * 0.5), rp = Pix.ramp(GOLD), x = s2(z.x), y = s2(z.y), R = ED.Render, low = R.quality === 'low';
+    if (pass === 0) {
+      Pix.put(c, Pix.disc(Math.max(1, Math.round(z.r / 2)), '#9fb4cc'), x, y, 0.1 * fade);
+      Pix.put(c, Pix.ring(Math.max(2, Math.round(z.r / 2)), 2, rp[2], rp[3], rp[3], 4, (t * 7) & 7), x, y, 0.85 * fade);
+      Pix.put(c, Pix.ring(Math.max(2, Math.round(z.r * 0.34)), 1, '#9fb4cc', '#dff1ff', '#ffffff', 3, (-t * 9) & 7), x, y, 0.7 * fade);
+      Pix.put(c, Pix.ring(Math.max(2, Math.round(z.r * 0.17)), 1, '#9fb4cc', '#dff1ff', '#ffffff', 2, (t * 11) & 7), x, y, 0.8 * fade);
+      R.light(z.x, z.y, z.r * 1.4, '#cfe6ff', 0.7 * fade);
+    } else if (pass === 1) {
+      R.glow(c, z.x, z.y, z.r * 0.5, '#bfe3ff', 0.35 * fade);
+      const arms = low ? 3 : 4, per = low ? 8 : 12;
+      for (let a = 0; a < arms; a++) for (let i = 0; i < per; i++) {
+        const u = 1 - ((i / per + t * 0.8) % 1), rad = z.r * (0.12 + 0.88 * u), ang = a * U.TAU / arms + t * 4 + (1 - u) * 5;
+        c.globalAlpha = Math.max(0.25, Math.ceil((1 - u) * 4) / 4) * fade * 0.9; c.fillStyle = i % 3 === 0 ? '#ffe9a0' : '#dff1ff';
+        const sz = u < 0.5 ? 4 : 2;
+        c.fillRect(s2(z.x + Math.cos(ang) * rad) - (sz - 2) / 2, s2(z.y + Math.sin(ang) * rad * 0.8) - (sz - 2) / 2, sz, sz);
+      }
+      c.globalAlpha = 1;
+    }
+  };
+
+  // ---- route forms: Earthsplitter, Thousand Edges, Doombrand, Bloodquake (runtime bakes, no atlas art) ----
+  // Earthsplitter fissure: the host's 'crack' zone with arc 1 (z.x, z.y, a, len, w) draws a dark earth crack that runs outward over its 0.25 s and flares pale as it is about to strike; its eruption is the 'fissure' event (dust column, rubble and a short shake along the line).
+  const EARTH = '#b8a070', CRACK = '#1d130a';
+  const crackAvalanche = CFX.zone.crack;
+  CFX.zone.crack = (c, z, pass, t, k, view) => {
+    if (!(z.arc > 0)) return crackAvalanche(c, z, pass, t, k, view);
+    const g = Math.min(1, k * 2.2), n = Math.max(3, Math.round(z.len / 6)), cs = Math.cos(z.a), sn = Math.sin(z.a), flare = k > 0.6 && Math.floor(t * 30) % 2 === 0;
+    const pt = (i) => { const d = i / n * z.len, j = jag(z, i, 4); return [z.x + cs * d - sn * j, z.y + sn * d * 0.8 + cs * j]; };
+    if (pass === 0) {
+      const m = Math.floor(n * g);
+      c.globalAlpha = 0.9; c.fillStyle = '#120c07'; c.beginPath();
+      for (let i = 0; i < m; i++) { const a = pt(i), b = pt(i + 1); Pix.line(c, a[0], a[1], b[0], b[1], 12 - Math.round(i / n * 6)); }
+      c.fill(); c.globalAlpha = 1; c.fillStyle = flare ? PALE : CRACK; c.beginPath();
+      for (let i = 0; i < m; i++) { const a = pt(i), b = pt(i + 1); Pix.line(c, a[0], a[1], b[0], b[1], 6 - Math.round(i / n * 2)); }
+      c.fill(); c.fillStyle = flare ? '#ffffff' : '#6a4a22'; c.beginPath();
+      for (let i = 0; i < m; i++) { const a = pt(i), b = pt(i + 1); Pix.line(c, a[0], a[1], b[0], b[1], 2); }
+      c.fill();
+    } else if (pass === 1 && k > 0.5) {
+      for (let i = 3; i < n * g; i += 5) { const a = pt(i); ED.Render.glow(c, a[0], a[1], 18, flare ? PALE : '#c8a050', 0.3 * (k - 0.5) * 2); }
+    }
+  };
+  CFX.on('fissure', (ev, ctx, local) => {
+    const cs = Math.cos(ev.a), sn = Math.sin(ev.a), mine = ev.pid === local;
+    for (let d = 14; d <= ev.len; d += 22) {
+      const x = ev.x + cs * d, y = ev.y + sn * d;
+      F.burst(x, y, 2, { kind: 'shard', color: EARTH, sp: 80, life: 0.5, size: 2.4, vz: 130, z: 2 });
+      F.burst(x, y - 2, 2, { kind: 'streak', color: PALE, a: -Math.PI / 2, spread: 1, sp: 240, life: 0.22, size: 1.8 });
+      if (d % 44 < 22) F.dust(x, y, 'dust', 2);
+    }
+    F.pop(ev.x + cs * ev.len * 0.5, ev.y + sn * ev.len * 0.5 - 4, 26, GOLD, 0.14);
+    if (away(ctx, ev.x, ev.y) < 300) F.addShake(mine ? 2 : 0.8);
+    ED.Audio.play('thud', mine ? 0.7 : 0.3); ED.Audio.play('heavy', mine ? 0.5 : 0.2);
+  });
+
+  // Thousand Edges wave (the 'blade' shot of the hero's team): a steel crescent, 24 wide, opening backwards, baked per heading step.
+  const BLADE_LO = '#7f93ad', BLADE_MID = '#dff1ff';
+  const bladeSprite = (R2, st) => Pix.bake('blade|' + R2 + '|' + st, 2 * R2 + 6, 2 * R2 + 6, R2 + 3, R2 + 3, (b, w) => {
+    const S = 2 * R2 + 6, th = st / 32 * TAU, co = Math.cos(th), si = Math.sin(th), c0 = Pix.px32(BLADE_LO), c1 = Pix.px32(BLADE_MID), c2 = Pix.px32('#ffffff');
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const px = x + 0.5 - S / 2, py = y + 0.5 - S / 2, lx = px * co + py * si + 0.45 * R2, ly = -px * si + py * co, d = Math.hypot(lx, ly), ang = Math.atan2(ly, lx);
+      if (d > R2 || d <= R2 - 4 || Math.abs(ang) > 1.15 - (R2 - d) * 0.12) continue;
+      const band = R2 - d;
+      b[y * w + x] = band < 1 ? c2 : band < 2 ? c1 : band < 3 ? c0 : Pix.px32('#3c4a5e');
+    }
+  });
+  (CFX.shotBody || (CFX.shotBody = {})).blade = (c, pr, t, x, y, foe) => {
+    if (foe) return false;
+    Pix.put(c, bladeSprite(Math.max(6, Math.round(pr.r / 2) + 2), Math.round(Math.atan2(pr.vy, pr.vx) / TAU * 32) & 31), Pix.s2(x), Pix.s2(y));
+    return true;
+  };
+
+  // Doombrand mark: a branded blood-red ring with an ember core in the overhead row of a Marked foe that holds 4 or more ailments while a Doombrand Knight is in the viewed party (the Marked crosshair of cls-ranger.js shows too).
+  let brandOk = false, doomStamp = -1, doomHas = false;
+  const BRAND = { id: 'fx.glyph.doombrand', ramp: '', stub: '' };
+  function brandGlyph() {
+    if (brandOk) return true;
+    if (!ED.Atlas || !ED.Atlas.ok) return false;
+    const cv = document.createElement('canvas'); cv.width = cv.height = 7;
+    const g = cv.getContext('2d'), rows = ['..111..', '.12221.', '1223221', '1234321', '1223221', '.12221.', '..111..'], col = { 1: '#3c0610', 2: '#d43a3a', 3: '#ff7a6a', 4: '#ffe9a0' };
+    for (let j = 0; j < 7; j++) for (let i = 0; i < 7; i++) { const ch = rows[j][i]; if (ch === '.') continue; g.fillStyle = col[ch]; g.fillRect(i, j, 1, 1); }
+    return (brandOk = Pix.define(BRAND.id, cv, 3, 3));
+  }
+  function partyDoom(v) {
+    if (F.time !== doomStamp) { doomStamp = F.time; doomHas = false; for (const p of v.players.values()) if (p.cls === 'knight' && p.stats && p.stats.doombrand > 0) { doomHas = true; break; } }
+    return doomHas;
+  }
+  CFX.mark.push((e) => {
+    if (!(e.marked || e.mark > 0)) return null;
+    const v = gview();
+    if (!v || !partyDoom(v) || (e.ailN !== undefined ? e.ailN : v.ailments ? v.ailments(e) : 0) < 4) return null;
+    return brandGlyph() ? BRAND : null;
+  });
+
+  // Bloodquake: the detonated foe bursts in a blood-red ring of the burst radius, a spray of droplets, a flash and a dull thud.
+  CFX.on('bquake', (ev, ctx, local) => {
+    const mine = ev.pid === local;
+    F.ring(ev.x, ev.y, ev.r, '#d43a3a', 0.4, 4); F.ring(ev.x, ev.y, ev.r * 0.55, '#ff7a6a', 0.28, 2);
+    F.burst(ev.x, ev.y, 12, { color: '#c8283a', sp: ev.r * 2.2, life: 0.5, size: 2.4, vz: 70, z: 2, drag: 2 });
+    F.burst(ev.x, ev.y, 5, { kind: 'streak', color: '#ff9a8a', sp: 260, life: 0.2, size: 1.8 });
+    F.pop(ev.x, ev.y, 30, '#ff5a5a', 0.2, true);
+    SP('fx.circle.spark', ev.x, ev.y, { ramp: 'blood', add: true, speed: 1.2 });
+    ED.Audio.play('thud', mine ? 0.8 : 0.35); ED.Audio.play('guardhit', mine ? 0.5 : 0.2);
+    if (mine) F.addShake(2);
+  });
 })(globalThis.ED || (globalThis.ED = {}));

@@ -9,20 +9,30 @@
   // FLOW_SPD / FLOW_T: Swift forks give +15% move speed for 0.5 s after each attack. ROUTE_CDR_MAX: cap of a route's cooldown cut (s1Cdr, s2Cdr), applied after the soft cap.
   Object.assign(ED.CONST, { ATK_FLOOR: 0.12, ATK_FLOOR_SHOT: 0.06, FLOW_SPD: 0.15, FLOW_T: 0.5, ROUTE_CDR_MAX: 0.4 });
 
-  // Stat keys of the class routes (DESIGN-classes section 16): slot stats first, then one group per class, all 0 until a card sets them.
+  // Stat keys of the class routes (docs/GAME-DESIGN.md section 5): slot stats first, then one group per class, all 0 until a card sets them.
   const ROUTE_KEYS = ('s1Dmg s1Area s1Dur s1N s1Cdr s1Range s2Dmg s2Area s2Dur s2N s2Cdr s2Range wDmg bleedAll'
     + ' cleave cleaveN cShock cStun chargeCleave parry riposte brace braceDR braceAura jugShock bash rally chargeStun twinShield gather orbit orbitMul orbitStun orbitReflect ruinInf carry ruinSpread brand seal'
     + ' deadeye pierceRamp splitBolt hitSlow flurry flurryMul volleySlow volleyClose volleyHop caltrops volleyMark markV markLeap skyfall skyTwin rainHail shower skillInfK festerHit contagion contagionR contagionN'
     + ' channel chanStep chanCap aftershock lavaPool overheat novaEcho novaPull novaRing mantle mantleBurst twinMeteor meteorites comet cometStun wInfFire searSkill burnCrit heatEngine heatChain'
     + ' momentum momMax execCrit execMom bladeStorm stepStack stackMax assassinate stepTwin afterimage afterPull smokeVuln stealthSpd stealthDur ambushMul nightsEdge ambushCleave veil veilBlind shroud veins exsang rupture bloodbloom'
+    + ' supernova supernovaPull phoenixMul phoenixDur dashTrail cataclysm sunDive diveTrail blossom blossomN blossomMax mirrorHall eclipse eclipseDur umbral cloneMul'
     + ' waveEvery waveMul waveBig waveStun waveBurst waveHome litany sanctDR sanctStun sanctJudge aura auraDmg judgeDur judgeWeak twinHammer thirdLeg secondFlight verdict verdictJudge wInfHoly smiteBig guardLight smiteJudge smiteBeam beamJumps'
-    + ' hex hexMul wRaise hexSpread hexSelf hexHaste spikeRaise knights knightLife knightStun harvestRaise corpse corpseMul boneLance boneArmor boneCap boneField minionInfuse mInfShadow tollMul abyssMin abyssDoom reapRaise tideMul').split(' ');
+    + ' hex hexMul wRaise hexSpread hexSelf hexHaste spikeRaise knights knightLife knightStun harvestRaise corpse corpseMul boneLance boneArmor boneCap boneField minionInfuse mInfShadow tollMul abyssMin abyssDoom reapRaise tideMul'
+    + ' wrath wrathNova wrathPillar dawn aegisR aegisDR aegisStun storm stormMul fjEcho fjR fjStun bloom bloomField bloomBomb dk dkMul dkArc dkTaunt carrionN carrionShard lich lichT lichMul lichLife'
+    + ' avalanche avaCrack avaStun phalanx bannerSlow bannerWeak bannerDur tempest vortexMul vortexDur bastion deathMark deathWave thornburst thornRoot starfall thornstorm'
+    + ' bannerDmg thornMul thornR phoenixSlow shroudDmg aegisMul craterMul'
+    + ' fissure bladeWave doombrand brandMark brandCap bloodquake bloodquakeMul bloodquakeSplash'
+    + ' siege siegeMul siegeBlast ricochet flurryN hemo hemoAt hemoMul hemoBoss plague plagueBurst outbreak'
+    + ' wake waveReturn sunstrike prismN prismRad'
+    + ' caldera fireDance dancerBurst whiteHot whiteT heatMax infernoMul'
+    + ' graveBolt graveN soulStorm maw mawHaste tideFree tideCap tideDoom'
+    + ' guillotine cyclone arterial arterialN cascade cascadeN').split(' ');
 
   const BASE = () => {
     const s = {
-      hp: 0, hpMul: 1, armor: 0, spd: 1, dmg: 1, atk: 1, crit: 0, critDmg: 0, cdr: 0,
+      hp: 0, hpMul: 1, armor: 0, spd: 1, dmg: 1, dmgX: 1, atk: 1, crit: 0, critDmg: 0, cdr: 0,
       pickup: 0, xp: 0, gold: 0, luck: 0, heal: 0, projN: 0, pierce: 0, area: 0, dodge: 0, thorns: 0,
-      dashcdr: 0, dashDmg: 0, dashFire: 0, dashBomb: 0, execute: 0,
+      dashcdr: 0, dashN: 0, dashDmg: 0, dashFire: 0, dashBomb: 0, execute: 0,
       overcharge: 0, guardian: 0, trance: 0, forager: 0, roomWard: 0, openRank: 0,
       charges: 0,
       minions: 0, minionDmg: 0, boneSpikes: 0, phoenix: 0, strataHeal: 0, wardrum: 0,
@@ -56,12 +66,12 @@
     if (ex.ifNone) for (const k in ex.ifNone) if (!w[k]) w[k] = Object.assign({}, ex.ifNone[k]);
   }
 
-  // Every source of a stat block, in the order the stat block adds them: [{ kind, id, label, mods, n, rank?, card? }]; a source adds mods[key] x n to its key.
+  // Every source of a stat block, in the order the stat block adds them: [{ kind, id, label, mods, n, rank?, card?, x? }]; a source adds mods[key] x n to its key.
   // Order: class, Hearth upgrades, mastery levels, pacts, boons (insertion order), relics, Philosopher's Stone per relic held, reward health, a full Grail. A class card (card: true) carries its totals at `rank`
-  // (n is 1) and compounds slot damage. build: { cls, weapon, boons: {id: n}, relics: [id], meta: { up: [], mastery }, pact, chaliceHp, bonusHp }.
+  // (n is 1) and compounds slot damage. An Ascended boon (kind 'asc') adds its mods like a boon and carries x { key: f }: St.compute multiplies s[key] by 1 + f once every additive source is summed. build: { cls, weapon, boons: {id: n}, relics: [id], meta: { up: [], mastery }, pact, chaliceHp, bonusHp }.
   St.sources = (build) => {
     const cls = ED.CLASSES[build.cls], meta = build.meta || { up: [], mastery: 1 }, out = [];
-    out.push({ kind: 'class', id: build.cls, label: cls.name, mods: { hp: cls.hp, armor: cls.armor, crit: cls.crit }, n: 1 });
+    out.push({ kind: 'class', id: build.cls, label: cls.name, mods: { hp: cls.hp, armor: cls.armor, crit: cls.crit, dodge: cls.dodge || 0 }, n: 1 });
     for (const u of ED.UPGRADES) {
       const n = u.mods && meta.up && meta.up[ED.UPGRADE_IDX[u.id]] || 0;
       if (n > 0) out.push({ kind: 'hearth', id: u.id, label: u.name + ' ' + n, mods: u.mods, n });
@@ -74,9 +84,10 @@
     for (const id in boons) {
       const b = ED.BOONS[id], n = boons[id];
       if (!b || !(n > 0)) continue;
+      if (b.asc) { out.push({ kind: 'asc', id, label: b.name, mods: b.mods, n: 1, x: b.x }); continue; }
       if (!b.route) { out.push({ kind: 'boon', id, label: b.name + (n > 1 ? ' ×' + n : ''), mods: b.mods, n }); continue; }
       if (b.cls !== build.cls) continue;
-      out.push({ kind: 'card', id, label: b.name + (n > 1 ? ' ×' + n : ''), mods: ED.cardTotals(b, n), n: 1, rank: n, card: true }); // card total per rank: mods + up x (rank - 1) + r3
+      out.push({ kind: 'card', id, label: ED.cardName(id, n) + (n > 1 ? ' ×' + n : ''), mods: ED.cardTotals(b, n), n: 1, rank: n, card: true }); // card total per rank: mods + up x (rank - 1) + r2 + r3
     }
     const relics = build.relics || [];
     for (const id of relics) if (ED.RELICS[id]) out.push({ kind: 'relic', id, label: ED.RELICS[id].name, mods: ED.RELICS[id].mods, n: 1 });
@@ -87,15 +98,17 @@
     return out;
   };
 
-  // The contributions to stat `key` of every source: [{ kind, id, label, v, rank? }], preceded by a Base row (v 1) for the multiplicative stats. Slot damage (s1Dmg, s2Dmg) lists each card's factor part; the stat compounds them.
+  // The contributions to stat `key` of every source: [{ kind, id, label, v, rank?, mul? }], preceded by a Base row (v 1) for the multiplicative stats. Slot damage (s1Dmg, s2Dmg) lists each card's factor part; the stat compounds them.
+  // Additive rows come first; an Ascended multiplier row (mul: true) has v = f and multiplies the sum of the rows before it by 1 + f.
   const BASE_ONE = { dmg: 1, atk: 1, spd: 1, hpMul: 1 };
   St.breakdown = (build, key) => {
-    const rows = [];
+    const rows = [], src = St.sources(build);
     if (BASE_ONE[key]) rows.push({ kind: 'base', id: 'base', label: 'Base', v: BASE_ONE[key] });
-    for (const r of St.sources(build)) {
+    for (const r of src) {
       const m = r.mods[key];
       if (m) rows.push({ kind: r.kind, id: r.id, label: r.label, v: m * r.n, rank: r.rank });
     }
+    for (const r of src) if (r.x && r.x[key]) rows.push({ kind: r.kind, id: r.id, label: r.label, v: r.x[key], mul: true });
     return rows;
   };
 
@@ -112,9 +125,9 @@
     const base = ED.WEAPONS[build.weapon];
     const s = BASE();
     let m1 = 1, m2 = 1, fork = null; // slot damage compounds card by card (each card's text is its exact factor)
-    const extras = [];
+    const extras = [], asc = [];
     for (const r of St.sources(build)) {
-      if (!r.card) { for (const k in r.mods) s[k] = (s[k] || 0) + r.mods[k] * r.n; continue; }
+      if (!r.card) { for (const k in r.mods) s[k] = (s[k] || 0) + r.mods[k] * r.n; if (r.x) asc.push(r.x); continue; }
       const tot = r.mods;
       for (const k in tot) {
         if (k === 's1Dmg') m1 *= 1 + tot[k]; else if (k === 's2Dmg') m2 *= 1 + tot[k]; else s[k] = (s[k] || 0) + tot[k];
@@ -123,6 +136,8 @@
       if (b.weapon) { if (b.weapon.kind && !fork) fork = r.id; if (b.weapon.extra) extras.push(b.weapon.extra); }
     }
     s.s1Dmg = m1 - 1; s.s2Dmg = m2 - 1;
+    for (const x of asc) for (const k in x) s[k] = (s[k] || 0) * (1 + x[k]); // Ascended bucket: after every additive source, before the derived values
+    for (const x of asc) if (x.dmg) s.dmgX *= 1 + x.dmg; // dmgX: the Ascended damage factor; combat.js scales the conditional (additive) damage by it so a hit stays exactly dmgX x the same hit without the card
 
     const out = s;
     out.power = cls.power; out.element = cls.element || null; // Class Power scales every non-attack proc (ED.procDmg)
@@ -144,7 +159,7 @@
     const cdr = St.cdrEff(s.cdr), rc = (n) => 1 - Math.min(C.ROUTE_CDR_MAX, s['s' + n + 'Cdr']);
     out.skillCd = ED.SKILLS[cls.skill].cd * (1 - cdr) * rc(1);
     out.skill2Cd = cls.skill2 && ED.SKILLS[cls.skill2] ? ED.SKILLS[cls.skill2].cd * (1 - cdr) * rc(2) : 0;
-    out.dashCd = 1.1 * Math.max(0.3, 1 - s.dashcdr);
+    out.dashCd = Math.max(1, 1.5 * (1 - s.dashcdr)); out.dashCharges = Math.min(3, 1 + s.dashN); // recharge seconds per charge (base 1.5, floor 1.0), max charges (base 1, cap 3)
     out.pickupR = 46 * (1 + s.pickup);
     out.critMult = 1.75 + s.critDmg;
     out.crit = Math.min(0.95, s.crit);
@@ -195,25 +210,36 @@
       let dmg = 0;
       if (d.of) {
         const b = out.p[d.of];
-        dmg = b.dmg * (d.mul ? st[d.mul] : 1) * (d.mul1 ? 1 + st[d.mul1] : 1) * (d.times === 'ticks' ? b.count : 1);
+        dmg = b.dmg * (d.mul ? st[d.mul] : 1) * (d.mulFix || 1) * (d.mul1 ? 1 + st[d.mul1] : 1) * (d.times === 'ticks' ? b.count : 1);
       } else if (d.base !== undefined || d.pow !== undefined) {
         const X = d.on === 'W' ? st.weapon.dmg : d.on === 'B' ? st.baseWDmg : st.power;
         dmg = ((d.base || 0) + ((d.pow || 0) + (d.powKey ? st[d.powKey] : 0)) * X) * (1 + sD);
       }
       if (d.mulIf) for (const k in d.mulIf) if (st[k]) dmg *= d.mulIf[k];
+      if (d.mulStat && st[d.mulStat] > 0) dmg *= st[d.mulStat]; // mulStat: the stat is a damage factor (Supernova's Burn)
+      if (d.mulFirst) for (const k of d.mulFirst) if (st[k]) { dmg *= st[k]; break; } // mulFirst: the first listed stat that is set is the factor (Hammerstorm before Twin Hammers)
       q.dmg = dmg;
       q.r = d.rOf ? out.p[d.rOf].r * d.rMul : d.r ? d.r * A * (1 + sA) * (d.rMul || 1) : 0;
+      if (d.rAddKey && q.r > 0) q.r += st[d.rAddKey]; // rAddKey: the stat adds px to the radius after every scaling (Aegis of Dawn, Final Judgment)
       if (d.mulKey) q.mulv = st[d.mulKey];
       if (d.durKey) q.dur = (d.dur || 0) + st[d.durKey]; else if (d.dur !== undefined) q.dur = d.dur + (d.durFix ? 0 : sU); // durFix: a fixed length, no slot duration
+      if (d.durMulKey && st[d.durMulKey] > 0 && q.dur !== undefined) q.dur *= st[d.durMulKey]; // durMulKey: the stat is a length factor (Storm of Thorns)
+      if (d.durCd && st[d.durCd] && q.dur !== undefined) q.dur = cdEff; // durCd: lasts until the skill is cast again (Bastion)
       if (d.capCd && q.dur !== undefined) q.dur = Math.min(q.dur, d.capCd * cdEff);
-      if (d.n !== undefined) q.n = d.n + sN;
+      if (d.n !== undefined) q.n = d.n + (d.nFix ? 0 : sN); // nFix: a count the slot's count does not change
+      if (d.nOf) q.n = out.p[d.nOf].n; // the count of another part (Death Mark's later waves)
+      if (d.nKey) q.n = st[d.nKey]; // nKey: the stat is the count (Death Blossom's cuts)
+      if (d.ringKey && st[d.ringKey] > 0) { q.n = st[d.ringKey]; q.fan = U.TAU; q.ring = true; if (d.ringPierce) q.pierce = (d.pierce || 0) + d.ringPierce; } // ringKey: the stat is the arrow count of a full ring (Thornburst), ringPierce the pierce it adds
+      if (d.stunKey && st[d.stunKey] > 0) q.stun = st[d.stunKey]; // stunKey: the stat is the stun while it is set
+      if (d.perAtk && q.dur !== undefined) q.attacks = Math.floor(q.dur / st.atkInterval + 1e-9) + (d.perAtk === 'skip' ? 0 : 1); // perAtk: one hit per weapon attack from the cast on within dur ('skip': the attack at the cast itself is the Ambush, so only the later ones count)
       if (d.per === 'tick') q.count = Math.round(q.dur / d.every);
       else if (d.per === 'sec') q.count = Math.ceil(q.dur / 0.5 - 1e-9);
       // sheet fields: raw = dmg before the hero multiplier; selfVuln = the vulnerability the part sets before its own hit; oneFoe = hits on one foe per cast (undefined: a fan or a per-minion count the sheet resolves)
       q.raw = dmg; q.noCrit = !!d.noCrit;
       const sv = d.selfVuln;
       q.selfVuln = !sv ? 0 : typeof sv === 'number' ? sv : (!sv.if || st[sv.if]) ? sv.v : 0;
-      if (d.oneEvery) q.oneFoe = Math.floor((q.dur || 0) / d.every + 1e-9);
+      if (d.perAtk) q.oneFoe = q.attacks;
+      else if (d.oneEvery) { q.oneFoe = Math.floor((q.dur || 0) / d.every + 1e-9); if (d.oneMul) for (const k in d.oneMul) if (st[k]) q.oneFoe *= d.oneMul[k]; }
       else if (d.oneFoe !== undefined) { q.oneFoe = d.oneFoe; if (d.oneMul) for (const k in d.oneMul) if (st[k]) q.oneFoe *= d.oneMul[k]; }
       else if (d.perMinion) q.oneFoe = undefined; // one hit per minion: the sheet counts the minions
       else if (d.per === 'tick' || d.per === 'sec') q.oneFoe = q.count;

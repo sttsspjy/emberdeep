@@ -111,7 +111,7 @@
     const fg = c.createLinearGradient(0, 0, 0, 10); fg.addColorStop(0, 'rgba(0,0,0,0.5)'); fg.addColorStop(1, 'rgba(0,0,0,0)');
     c.fillStyle = fg; c.fillRect(0, 0, room.w * T, 10);
     c.strokeStyle = 'rgba(0,0,0,0.6)'; c.lineWidth = 3; c.strokeRect(1.5, 1.5, room.w * T - 3, room.h * T - 3);
-    return { canvas: cv, emis: ev, glowmap: gv };
+    return { canvas: cv, emis: ev, glowmap: gv, statics: breakStatics(room, biome, P, false) };
   }
 
   // ---------- floor ----------
@@ -488,6 +488,7 @@
         e.fillStyle = 'rgba(255,110,30,0.55)'; e.fillRect(-7, -5, 14, 10); glow(e, 0, 0, 16, '#ff7a2a', 0.4); break;
       case 'cinders': c.fillStyle = 'rgba(30,20,16,0.5)'; c.beginPath(); c.ellipse(0, 0, 9, 4, 0, 0, 7); c.fill(); for (let i = 0; i < 6; i++) { const px = Math.sin(i * 7 + v * 9) * 8, py = Math.cos(i * 5 + v * 9) * 4; c.fillStyle = 'rgba(255,140,60,0.7)'; c.fillRect(px, py, 1.6, 1.6); e.fillStyle = 'rgba(255,150,60,0.8)'; e.fillRect(px - 0.4, py - 0.4, 2.4, 2.4); } glow(e, 0, 0, 12, '#ff8a3a', 0.25); break;
       case 'coral': sh(7, 2.5, 0.25); c.strokeStyle = '#e0705a'; c.lineWidth = 2.4; c.beginPath(); c.moveTo(0, 0); c.lineTo(0, -8); c.lineTo(-4, -12); c.moveTo(0, -6); c.lineTo(4, -11); c.moveTo(0, -3); c.lineTo(-5, -6); c.stroke(); c.fillStyle = '#ffb0a0'; for (const [px, py] of [[-4, -12], [4, -11], [-5, -6], [0, -8]]) { c.beginPath(); c.arc(px, py, 1.5, 0, 7); c.fill(); } break;
+      case 'crate': sh(8, 3, 0.3); c.fillStyle = '#6a4a30'; c.fillRect(-6, -10, 12, 10); c.strokeRect(-6, -10, 12, 10); c.fillStyle = '#8a6240'; c.fillRect(-5, -9, 10, 3); c.strokeStyle = '#2a2220'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(-6, -10); c.lineTo(6, 0); c.moveTo(6, -10); c.lineTo(-6, 0); c.stroke(); c.fillStyle = '#c8501a'; c.fillRect(-6, -6, 12, 1.4); break;
       case 'seaweed': c.strokeStyle = '#2f7a4a'; c.lineWidth = 2.2; for (let i = -1; i <= 1; i++) { c.beginPath(); c.moveTo(i * 3, 0); c.quadraticCurveTo(i * 3 + 4, -6, i * 3, -12); c.stroke(); } c.strokeStyle = 'rgba(160,255,190,0.3)'; c.lineWidth = 0.8; for (let i = -1; i <= 1; i++) { c.beginPath(); c.moveTo(i * 3 + 0.8, 0); c.quadraticCurveTo(i * 3 + 4.8, -6, i * 3 + 0.8, -12); c.stroke(); } break;
       case 'goldtile': c.fillStyle = 'rgba(30,20,6,0.3)'; c.fillRect(-8, -8, 16, 16); c.strokeStyle = 'rgba(232,198,107,0.85)'; c.lineWidth = 1.4; c.strokeRect(-8, -8, 16, 16); c.beginPath(); c.moveTo(-8, 0); c.lineTo(0, -8); c.lineTo(8, 0); c.lineTo(0, 8); c.closePath(); c.stroke(); c.fillStyle = 'rgba(255,230,140,0.5)'; c.beginPath(); c.arc(0, 0, 2.2, 0, 7); c.fill();
         e.strokeStyle = 'rgba(255,214,110,0.5)'; e.lineWidth = 1.4; e.strokeRect(-8, -8, 16, 16); e.beginPath(); e.moveTo(-8, 0); e.lineTo(0, -8); e.lineTo(8, 0); e.lineTo(0, 8); e.closePath(); e.stroke(); glow(e, 0, 0, 12, '#ffd36b', 0.25); break;
@@ -656,9 +657,25 @@
     bones: ['deco.bones.', 5, 'bone', false], skull: ['deco.skull', 0, '', false], moss: ['deco.moss.', 3, 'moss', false], candle: ['deco.candle.', 4, '', true], urn: ['deco.urn.', 6, '', true],
     mushroom: ['deco.mushroom.', 4, 'glow', true], root: ['deco.root.', 2, 'root', false], puddle: ['deco.puddle.', 4, 'puddle', false], crystal: ['deco.crystal.', 3, '', true],
     shard: ['deco.shard.', 3, 'shard', true], pillarstub: ['deco.pillarstub', 0, 'stone', true], frozenbones: ['deco.bones.', 5, 'ice', false], chain: ['deco.chain', 0, '', false],
-    anvil: ['prop.anvil', 0, 'iron', true], grate: ['deco.grate', 0, '', false], coral: ['deco.coral.', 2, '', true], seaweed: ['deco.seaweed.', 2, '', true], shell: ['deco.shell.', 3, '', false],
+    anvil: ['prop.anvil', 0, 'iron', true], grate: ['deco.grate', 0, '', false], coral: ['deco.coral.', 2, '', true], seaweed: ['deco.seaweed.', 2, '', true], shell: ['deco.shell.', 3, '', false], crate: ['deco.crate.', 2, '', true],
   };
   const PUDDLE_V = { glowmire: [1, 2], sanctum: [2], ossuary: [3, 3], abyss: [2] }; // variants that suit the stratum (others: all)
+  // Smashable props of a room (room.breakables) as tall statics, never baked: { k: 'brk', bi (index = bit of roomState.broken), x, y, key, h, id + vk (atlas sprite and its tint; id '' = the procedural sprite), kind, bid, v, sc, gc / gr / gy / ga (glow colour, radius, height, alpha; gc null = none) }.
+  // The renderer drops the ones whose bit is set (R.liveStatics) and queues the glow of the rest.
+  function breakStatics(room, biome, P, art) {
+    const out = [], bid = biome.id;
+    for (let bi = 0; bi < room.breakables.length; bi++) {
+      const d = room.breakables[bi], spec = DECOR[d.k], wx = snap(d.x * T), wy = snap(d.y * T);
+      let id = '', vk = '';
+      if (art && spec) {
+        const n = spec[1], sid = n ? spec[0] + Math.min(n - 1, Math.floor(d.v * n)) : spec[0];
+        if (A.has(sid)) { id = sid; vk = spec[2] ? tintVariant(sid, spec[2], biome) : ''; }
+      }
+      const gl = d.k === 'mushroom' ? [bid === 'glowmire' ? P.accent : P.accent2, 15, 8, 0.5] : d.k === 'crystal' ? [P.accent, 14, 10, 0.45] : d.k === 'shard' ? ['#b78cff', 12, 8, 0.4] : null;
+      out.push({ k: 'brk', bi, x: wx, y: wy, key: wy, h: 0, id, vk, kind: d.k, bid, v: d.v, sc: Math.round(d.s * 5) / 5, gc: gl ? gl[0] : null, gr: gl ? gl[1] : 0, gy: gl ? gl[2] : 0, ga: gl ? gl[3] : 0 });
+    }
+    return out;
+  }
   // Tinted copies of decor sprites: luminance onto a ramp, dark outlines kept. key -> stops (hex list, dark to light).
   function tintStops(kind, biome) {
     const P = biome.pal, a = P.accent, a2 = P.accent2;
@@ -787,7 +804,7 @@
     const cv = mk(scale), g = cv.getContext('2d'); g.scale(scale, scale); g.imageSmoothingEnabled = false;
     const ev = mk(scale), e = ev.getContext('2d'); e.scale(scale, scale); e.globalCompositeOperation = 'lighter'; e.imageSmoothingEnabled = false;
     const gv = mk(scale * 0.5), gm = gv.getContext('2d'); gm.scale(scale * 0.5, scale * 0.5); gm.globalCompositeOperation = 'lighter';
-    const out = { canvas: cv, emis: ev, glowmap: gv, art: true, statics: [], hz: null, hzCells: [], spikes: [], fountains: [], doorArt: {} };
+    const out = { canvas: cv, emis: ev, glowmap: gv, art: true, statics: breakStatics(room, biome, P, true), hz: null, hzCells: [], spikes: [], fountains: [], doorArt: {} };
     const fill = (c, ax, ay, aw, ah, col) => { c.fillStyle = col; c.fillRect(ax * K, ay * K, aw * K, ah * K); };
     const adraw = (c, id, i, x, y, o) => { A.draw(c, id, i, x, y, o); c.imageSmoothingEnabled = false; }; // Atlas.draw leaves smoothing on
     const T_ = (x, y) => (x < 0 || y < 0 || x >= W || y >= H ? 1 : tiles[y * W + x]);
@@ -1066,7 +1083,7 @@
     return true;
   };
   // Tall static pieces of the room (columns, standing decor, the door arch) for the renderer's y-sorted list: [{ k, key (sort y), x, y, ... }].
-  Tl.statics = (room) => { const e = entry(room, bqOf()); return e.art ? e.statics : NOSTATIC; };
+  Tl.statics = (room) => entry(room, bqOf()).statics || NOSTATIC;
   const NOSTATIC = [];
   // True when a living entity stands behind (north of) a tall piece of height h at (x, y) and would be hidden by it.
   Tl.hides = (view, x, y, hw, h) => {
@@ -1074,7 +1091,22 @@
     for (const en of view.enemies) if (en.hp > 0 && en.y < y && en.y > y - h && Math.abs(en.x - x) < hw + en.r) return true;
     return false;
   };
+  // A breakable: its atlas sprite, else (no atlas, or art that lacks the kind) the procedural drawing baked once per stratum, kind, variant and scale.
+  const brkSpr = new Map();
+  function drawBreak(c, s) {
+    if (s.id) { A.draw(c, s.id, 0, s.x, s.y, s.vk ? { variant: s.vk } : undefined); return; }
+    const key = s.bid + '|' + s.kind + '|' + (s.v * 4 | 0) + '|' + (s.sc * 5 | 0);
+    let sp = brkSpr.get(key);
+    if (!sp) {
+      const bm = ED.BIOMES.find((b) => b.id === s.bid), mk = () => { const cv = document.createElement('canvas'); cv.width = cv.height = 56; return cv; }, cv = mk();
+      decor(cv.getContext('2d'), mk().getContext('2d'), bm, bm.pal, s.kind, 28, 44, ((s.v * 4 | 0) + 0.5) / 4, s.sc); // the emissive layer goes to a scratch canvas: the glow is queued per frame (R.emit)
+      sp = { cv };
+      brkSpr.set(key, sp);
+    }
+    c.drawImage(sp.cv, s.x - 28, s.y - 44);
+  }
   Tl.drawStatic = (c, room, biome, s, view, t) => {
+    if (s.k === 'brk') { drawBreak(c, s); return; }
     const e = entry(room, bqOf()), sh = sheetFor(biome);
     if (s.k === 'col') {
       const a = Tl.hides(view, s.x, s.y, 24, s.h) ? 0.45 : 1;

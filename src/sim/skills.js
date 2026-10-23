@@ -33,6 +33,15 @@
     return 0;
   };
 
+  // The skillMove (see Sim.movePlayer) of a leap of hero p toward (tx, ty) in mv.t s: clipped at walls, untouchable for mv.iframes; null when it would not move. The client cast, the sim's second Sun Dive leap and the 'leap' message share it.
+  ED.leapMove = (room, locked, p, tx, ty, mv) => {
+    const dist = Math.hypot(tx - p.x, ty - p.y);
+    if (!(dist > 4)) return null;
+    const end = ED.Sim.castMove(room, p.x, p.y, Math.atan2(ty - p.y, tx - p.x), dist, p.r, locked), real = Math.hypot(end.x - p.x, end.y - p.y);
+    if (real < 4) return null;
+    return { dx: (end.x - p.x) / real, dy: (end.y - p.y) / real, speed: real / mv.t, t: mv.t, iframes: mv.iframes === undefined ? mv.t : mv.iframes, age: 0 };
+  };
+
   // Landing point of ground skill `id`: from the client's origin (accepted within 48 px of the host's hero) to its {x, y}, else along the aim at min(200, range); clamped to range, cut at walls (chasms do not stop it).
   W.groundTarget = function (p, a, data, id) {
     const fin = (v) => typeof v === 'number' && isFinite(v), ai = ED.skillAim(id, p.stats);
@@ -68,17 +77,20 @@
     if (h && h.tick) h.tick.call(this, p, dt);
   };
 
-  // Source fields of a hit by part `partId` of skill nums N: kind 'skill', the part name, knockback and the class element for 'el: class' parts; o adds or overrides fields.
+  // Source fields of a hit by part `partId` of skill nums N: kind 'skill', the part name, knockback, the part's boss factor (hitEnemy applies it to bosses) and the class element for 'el: class' parts; o adds or overrides fields.
   W.partSrc = function (p, N, partId, o) {
     const q = N.p[partId], src = { p, kind: 'skill', part: N.id + '.' + partId };
     if (q.knock) src.knock = q.knock;
+    if (q.bossMul) src.bossMul = q.bossMul;
     if (q.el === 'class') src.clsEl = p.stats.element;
     return o ? Object.assign(src, o) : src;
   };
 
   // Area hit of a skill on foes within r of (x, y): src is the hit's source fields (W.partSrc); calls onHit(e, dealt, damage before the affinity) per foe struck.
   W.skillBlast = function (p, x, y, r, dmg, src, onHit) {
-    for (const e of this.enemies) {
+    const q = this.foeScan(x, y, r);
+    for (let k = 0; k < q.length || this.foeTail(q); k++) {
+      const e = q[k];
       if (e.hp <= 0 || e.spawnT > 0) continue;
       const d = Math.hypot(e.x - x, e.y - y);
       if (d >= r + e.r) continue;
@@ -86,6 +98,8 @@
       const dealt = this.hitEnemy(e, dmg, s);
       if (onHit) onHit(e, dealt, dealt / (s.affMul || 1));
     }
+    this.foeEnd();
+    this.smashCircle(p, x, y, r);
   };
 
   // Cooldown refund for the hero's own client (cooldowns are client-authoritative): slot 0 or 1, s seconds off, or a full refund when s is omitted.

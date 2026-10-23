@@ -1,4 +1,4 @@
-// The six strata of the Deep. Each one changes palette, lighting, decor, ambient particles, music,
+// The six strata of the Deep. Each one changes palette, lighting, decor, ambient particles,
 // hazards and enemy roster so players always see where they are in the descent.
 (function (ED) {
   'use strict';
@@ -13,12 +13,13 @@
         chasm: '#020202', hazard: '#6d6a5e', hazardGlow: '#b8b2a0', ui: '#c9b98f',
       },
       decor: ['bones', 'skull', 'moss', 'crack', 'candle', 'urn'],
+      breakable: ['urn'], // decor kinds that stand as smashable props (room.breakables) instead of baked floor decor
       particle: { kind: 'dust', color: '#d9cfb4', rate: 6 },
       hazard: 'spikes',
       enemies: [['skeleton', 4], ['bat', 3], ['bonearcher', 2], ['slime', 2], ['priest', 1]],
       elite: 'skelknight',
       boss: 'bonewarden',
-      music: { root: 45, scale: [0, 2, 3, 5, 7, 8, 10], bpm: 66, pad: 'triangle', lead: 'sine' },
+      fodder: 'bonemite', // horde filler of combat and elite rooms (never in `enemies`)
     },
     {
       id: 'glowmire', name: 'Glowmire Grotto', short: 'Glowmire',
@@ -30,12 +31,13 @@
         chasm: '#010104', hazard: '#4c7a3a', hazardGlow: '#9cff6a', ui: '#7de8cf',
       },
       decor: ['mushroom', 'mushroom', 'root', 'puddle', 'crack', 'glowcap'],
+      breakable: ['mushroom'],
       particle: { kind: 'spore', color: '#7dffd9', color2: '#d38bff', rate: 9 },
       hazard: 'poison',
       enemies: [['myconid', 3], ['sporepuff', 3], ['spitter', 2], ['cavespider', 3], ['glowslime', 2], ['mireworm', 2]],
       elite: 'shroomhulk',
       boss: 'sporemother',
-      music: { root: 50, scale: [0, 3, 5, 7, 10], bpm: 72, pad: 'sine', lead: 'triangle' },
+      fodder: 'sporeling',
     },
     {
       id: 'rimefrost', name: 'Rimefrost Halls', short: 'Rimefrost',
@@ -47,12 +49,13 @@
         chasm: '#0a1420', hazard: '#d8f2ff', hazardGlow: '#ffffff', ui: '#b9e6ff',
       },
       decor: ['crystal', 'crystal', 'snow', 'frozenbones', 'crack', 'pillarstub'],
+      breakable: ['crystal'],
       particle: { kind: 'snow', color: '#ffffff', rate: 14 },
       hazard: 'ice',
       enemies: [['icewolf', 3], ['frostwisp', 3], ['rimemage', 2], ['frozenskel', 3], ['icegolem', 1], ['sentinel', 1]],
       elite: 'frostknight',
       boss: 'rimeheart',
-      music: { root: 52, scale: [0, 2, 4, 7, 9], bpm: 60, pad: 'sine', lead: 'sine' },
+      fodder: 'rimemote',
     },
     {
       id: 'cinderforge', name: 'The Cinderforge', short: 'Cinderforge',
@@ -63,13 +66,14 @@
         wallShadow: '#140907', accent: '#ff6a2a', accent2: '#ffd36b', light: '#ff9a4a', darkness: 0.44, darkColor: '#0a0302',
         chasm: '#1a0500', hazard: '#ff5a1a', hazardGlow: '#ffc04a', ui: '#ffab70',
       },
-      decor: ['lavacrack', 'lavacrack', 'chain', 'anvil', 'grate', 'cinders'],
+      decor: ['lavacrack', 'lavacrack', 'chain', 'anvil', 'grate', 'cinders', 'crate'],
+      breakable: ['crate'],
       particle: { kind: 'ember', color: '#ff9a3a', color2: '#ffd36b', rate: 12 },
       hazard: 'lava',
       enemies: [['imp', 3], ['lavahound', 3], ['automaton', 1], ['flameturret', 2], ['cinderbat', 3], ['drone', 2]],
       elite: 'forgeknight',
       boss: 'forgelord',
-      music: { root: 43, scale: [0, 1, 4, 5, 7, 8, 10], bpm: 84, pad: 'sawtooth', lead: 'square' },
+      fodder: 'ashimp',
     },
     {
       id: 'sanctum', name: 'Drowned Sanctum', short: 'Sanctum',
@@ -81,12 +85,13 @@
         chasm: '#000c12', hazard: '#1b6b84', hazardGlow: '#6fe6ff', ui: '#8fe8e0',
       },
       decor: ['coral', 'seaweed', 'goldtile', 'puddle', 'shell', 'crack'],
+      breakable: ['coral'],
       particle: { kind: 'bubble', color: '#bff8ff', rate: 8 },
       hazard: 'water',
       enemies: [['drowned', 3], ['eel', 3], ['siren', 2], ['crab', 2], ['jelly', 2], ['reaver', 2]],
       elite: 'tidecaller',
       boss: 'drownedking',
-      music: { root: 48, scale: [0, 2, 3, 7, 8], bpm: 64, pad: 'sine', lead: 'triangle' },
+      fodder: 'brinepolyp',
     },
     {
       id: 'abyss', name: 'The Starless Abyss', short: 'Abyss',
@@ -98,12 +103,13 @@
         chasm: '#000000', hazard: '#5a2a9a', hazardGlow: '#d48cff', ui: '#cdb3ff',
       },
       decor: ['voidcrack', 'rune', 'shard', 'starfield', 'crack', 'rune'],
+      breakable: ['shard'],
       particle: { kind: 'mote', color: '#d4bfff', color2: '#ff9be6', rate: 10 },
       hazard: 'void',
       enemies: [['shade', 3], ['starspawn', 3], ['voideye', 2], ['voidwraith', 2], ['horror', 1], ['riftcaller', 1]],
       elite: 'voidknight',
       boss: 'hollowking',
-      music: { root: 41, scale: [0, 1, 3, 6, 7, 10], bpm: 58, pad: 'sawtooth', lead: 'sine' },
+      fodder: 'voidmote',
     },
   ];
 

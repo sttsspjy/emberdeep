@@ -101,8 +101,10 @@
     return [lo, mid, body, lift(U.mix(col.a, '#ffffff', 0.28), Math.max(lumOf(body) + 0.12, 0.72))];
   }
   const FOE_STOPS = { lavahound: ['#4a1a10', '#a03a1a', '#e8702e', '#ffc884'] }; // hand-set ramps (dark to light) where the data colours are too dark to read: the Lava Hound is ember-rust, not brown, against Stratum IV's basalt
+  // A def with `art` (fodder) wears the anims of foe.<art>.* in its own colours.
+  const artOf = (type) => ED.ENEMIES[type].art || type;
   function foeMapOf(type, colOv) {
-    const def = ED.ENEMIES[type], col = colOv || def.col, pre = 'foe.' + type + '.', set = new Set(), acc = ACC[type] || {};
+    const def = ED.ENEMIES[type], art = artOf(type), col = colOv || def.col, pre = 'foe.' + art + '.', set = new Set(), acc = ACC[art] || {};
     for (const id in ED.ART.pal) if (id.startsWith(pre)) for (const h of ED.ART.pal[id]) set.add(h);
     set.delete(OUTLINE);
     const list = [...set].filter((h) => !acc[h]).sort((a, b) => lumOf(a) - lumOf(b)), n = list.length, m = {};
@@ -113,8 +115,8 @@
   }
   function foeVar(type, anim) {
     if (NATIVE[type]) return '';
-    const mk = foeMakers[type] || (foeMakers[type] = () => foeMapOf(type));
-    return A.variant(anim, 'pal:f', mk) ? 'pal:f' : '';
+    const mk = foeMakers[type] || (foeMakers[type] = () => foeMapOf(type)), key = ED.ENEMIES[type].art ? 'pal:f:' + type : 'pal:f'; // an aliased def shares its art's anims: one variant key per def
+    return A.variant(anim, key, mk) ? key : '';
   }
   // Minions and Bone Knights wear the minion palette (own variant key: the knight body is also the Skeleton Knight's).
   const minionMk = {};
@@ -131,7 +133,7 @@
   function foeInfo(type) {
     let f = FOEI.get(type);
     if (f) return f;
-    const p = 'foe.' + type + '.', def = ED.ENEMIES[type];
+    const art = artOf(type), p = 'foe.' + art + '.', def = ED.ENEMIES[type];
     f = { type, def, k: 0, fly: !!def.fly };
     if (A.has(p + 'walk')) { f.k = 2; f.walk = p + 'walk'; f.idle = A.has(p + 'idle') ? p + 'idle' : f.walk; }
     else if (A.has(p + 'walk.d')) { f.k = 4; f.walk = { d: p + 'walk.d', u: p + 'walk.u', l: p + 'walk.l', r: p + 'walk.r' }; if (A.has(p + 'cast.d')) f.cast = { d: p + 'cast.d', u: p + 'cast.u', l: p + 'cast.l', r: p + 'cast.r' }; }
@@ -140,10 +142,11 @@
       for (let i = 0; i < 8; i++) { f.walk.push(p + 'walk.' + i); f.atk.push(A.has(p + 'atk.' + i) ? p + 'atk.' + i : null); f.howl.push(A.has(p + 'howl.' + i) ? p + 'howl.' + i : null); }
     }
     f.death = A.has(p + 'death') ? p + 'death' : null;
-    f.rig = RIG[type] || null;
+    f.rig = RIG[type] || RIG[art] || null;
     FOEI.set(type, f);
     return f;
   }
+  AC.foeInfo = foeInfo; AC.foeVar = foeVar;
 
   // Held weapon / shield of a foe: hand = pivot in art px from the feet of the right-facing body; rest / up / down: weapon angles (right-facing, radians) at rest, wound up and after the slam.
   const RIG = {
@@ -262,7 +265,7 @@
     } else if (strike) { P.dx = q2(fc * 4); P.dy = q2(fsn * 2); }
     if (ha >= 0 && ha < 0.12 && fh) { const m = fh.m, g = fh.crit ? 3 : m >= 0.45 ? 2 : m >= 0.2 ? 1 : 0; P.dx += q2(fh.ax * g); P.dy += q2(fh.ay * g * 0.5); } // recoil: an art px away from the blow
     let lift = 0;
-    if (fly) lift = (def.gloom ? 6 : 12 + Math.round(e.r * 0.25)) + q2(Math.sin(t * 4 + (e.id | 0)) * 2);
+    if (fly) lift = 12 + Math.round(e.r * 0.25) + q2(Math.sin(t * 4 + (e.id | 0)) * 2);
     if (st === 'leap') lift += q2(Math.sin((1 - U.clamp(e.t / 0.35, 0, 1)) * PI) * 26); // the leaper's arc over its 0.35 s flight
     else if (!fly && moving && A.anim(id).n === 2 && Math.floor((t + ph) * 4) % 2) lift += 2; // two-frame walkers hop one art px at 2 Hz
     s.lift = lift;
@@ -414,7 +417,7 @@
   const animsOf = new Map(), wq = [];
   function foeAnims(type) {
     let l = animsOf.get(type);
-    if (!l) { l = []; const pre = 'foe.' + type + '.'; for (const id in ED.ART.anims) if (id.startsWith(pre) && A.has(id)) l.push(id); animsOf.set(type, l); }
+    if (!l) { l = []; const pre = 'foe.' + artOf(type) + '.'; for (const id in ED.ART.anims) if (id.startsWith(pre) && A.has(id)) l.push(id); animsOf.set(type, l); }
     return l;
   }
   AC.warm = (stratum) => {
@@ -422,6 +425,8 @@
     const b = ED.biomeFor(stratum), roster = b.enemies;
     const add = (id, type) => { wq.push(id, type, 2, id, type, 1, id, type, 3, id, type, 0); }; // popped last-in-first-out: recolour (0), light-floor silhouette (3), white flash (1), wind-up outline (2)
     if (b.boss) for (const id in ED.ART.anims) if (id.startsWith('boss.' + b.boss + '.') && A.has(id)) add(id, b.boss);
+    const fod = [].concat(b.fodder || []); // fodder id(s) of the stratum: built after the roster
+    for (let i = fod.length - 1; i >= 0; i--) { const t = fod[i]; if (ED.ENEMIES[t]) for (const id of foeAnims(t)) add(id, t); }
     for (let i = roster.length - 1; i >= 0; i--) for (const id of foeAnims(roster[i][0])) add(id, roster[i][0]);
   };
   AC.pump = () => {
@@ -511,6 +516,7 @@
     const ga = c.globalAlpha;
     shadowAt(c, e.r, 0.4);
     if (e.exposed) Sp.glow(c, 0, -e.r, e.r * 2.2, '#ff3a3a', 0.25 + Math.sin(t * 9) * 0.1);
+    Sp.furyGlow(c, e, t);
     const ox = shake - (pose === 'wind' ? Math.round(Math.cos(e.aimA || 0) * 2) : 0), oy = -air;
     // hammer under the body when it points up, over it otherwise
     const hm = B.hammer ? forgeHammer(e, s, t, pose, el) : null;
@@ -820,6 +826,7 @@
   // ---------------- minions ----------------
   // Risen skeletons (teal skeleton body); Bone Knights (the owner holds the Bone Knights fork) wear the armoured body.
   AC.minion = (c, a, t) => {
+    if (a.k === 2 && ED.ClassFx.bomb) return ED.ClassFx.bomb(c, a, t); // a bone bomb (cls-necro.js)
     const owner = view ? view.players.get(a.owner) : null, knight = !!(a.knight || (owner && owner.boons && owner.boons.n_s1_b)), base = knight ? 'skelknight' : 'minion';
     const walk = 'foe.' + base + '.walk', idle = 'foe.' + base + '.idle';
     if (!A.has(walk)) return false;
@@ -829,7 +836,9 @@
     const dt = t - s.lt;
     if (dt > 0.0001) { const v = Math.hypot(a.x - s.lx, a.y - s.ly) / dt; s.sp += (v - s.sp) * Math.min(1, dt * 14); if (v > 12) s.mv = t; s.lx = a.x; s.ly = a.y; s.lt = t; }
     const id = t - s.mv < 0.3 ? walk : (A.has(idle) ? idle : walk), flip = a.face < 0, fi = A.frameAt(id, t + (a.id | 0) * 0.37);
-    const ga = c.globalAlpha, m = c.getTransform();
+    const ga = c.globalAlpha, m = c.getTransform(), dk = a.k === 1 && ED.ClassFx.dk;
+    if (dk) ED.ClassFx.dk(c, a, t, false); // a Death Knight: the taunt ring and dark flame behind, the body at ClassFx.DK_SCALE (cls-necro.js)
+    if (dk) { c.save(); c.scale(ED.ClassFx.DK_SCALE, ED.ClassFx.DK_SCALE); }
     shadowAt(c, knight ? 13 : 9, 0.3);
     c.globalAlpha = ga * 0.9;
     beginRec(s, m.e, m.f);
@@ -838,6 +847,7 @@
     c.globalAlpha = ga;
     Sp.glow(c, 0, -10, 16, ED.ENEMIES.minion.col.c, 0.25);
     if (ED.ClassFx.minion) ED.ClassFx.minion(c, a, t, knight, flip); // Bone Knight gear, Abyssal glow (cls-necro.js)
+    if (dk) { c.restore(); ED.ClassFx.dk(c, a, t, true); }
     return true;
   };
 

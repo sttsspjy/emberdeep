@@ -20,7 +20,7 @@ function journey(seed0, quiet) {
     const ml = S.masteryLevel(p, cls);
     const wi = ml >= 6 ? 2 : ml >= 3 ? 1 : 0;
     const pact = p.stats.wins > 0 ? p.pactMax : 0;
-    const r = runBot({ seed: seed0 * 1000 + runs * 13, n: 1, cls: [cls], weapon: wi, skill, up: p.up.slice(), mastery: ml, pact, tutorial: p.stats.runs < 2, pick, relics: ED.RELIC_IDS.filter(id => S.relicUnlocked(p, id)) });
+    const r = runBot({ seed: seed0 * 1000 + runs * 13, n: 1, cls: [cls], weapon: wi, skill, up: p.up.slice(), mastery: ml, pact, tutorial: p.stats.runs < 2, pick });
     runs++; total += r.time * HUMAN + 45; // + time in the Hearth between runs
     const sum = r.sum; sum.cls = cls;
     rooms += r.rooms.visited; roomsTotal += r.rooms.total;
@@ -30,25 +30,21 @@ function journey(seed0, quiet) {
     if (sum.victory) mark('first victory');
     if (p.deeds & (1 << ED.DEED_IDX.evolved)) mark('first evolution');
     if (p.deeds & (1 << ED.DEED_IDX.cartographer)) mark('first full clear');
-    if (p.deeds & (1 << ED.DEED_IDX.intothedark)) mark('first Lightless boss');
     if (p.pactWin >= 3) mark('won pact 3');
     if (p.pactWin >= 6) mark('won pact 6');
-    // spend: cheapest available upgrade or relic first
+    // spend: cheapest available upgrade first
     for (let guard = 0; guard < 50; guard++) {
       const opts = [];
       ED.UPGRADES.forEach((u, i) => { if (S.upgradeAvailable(p, u) && p.up[i] < u.costs.length) opts.push({ cost: u.costs[p.up[i]], buy: () => S.buyUpgrade(p, u.id) }); });
-      ED.RELIC_IDS.forEach(id => { const d = ED.RELICS[id]; if (!S.relicUnlocked(p, id) && d.cost && S.relicReqMet(p, id)) opts.push({ cost: d.cost * 1.3, buy: () => S.unlockRelic(p, id) }); });
       opts.sort((a, b) => a.cost - b.cost);
       if (!opts.length || !opts[0].buy()) break;
     }
     S.checkDeeds(p, null);
     if (ED.CLASS_IDS.every(c => S.classUnlocked(p, c))) mark('all heroes unlocked');
     const upsDone = ED.UPGRADES.every((u, i) => p.up[i] >= u.costs.length);
-    const relicsDone = ED.RELIC_IDS.every(id => S.relicUnlocked(p, id));
     if (upsDone) mark('all Hearth upgrades');
-    if (relicsDone) mark('all relics');
     if (runs % 10 === 0 && !quiet) console.log(`run ${runs} ${U.fmtTime(total)} deepest ${p.stats.deepest} wins ${p.stats.wins} pactMax ${p.pactMax} embers ${p.embers} lifetime ${p.lifetime} ups ${p.up.reduce((a, b) => a + b, 0)} last: ${cls} s${sum.stratum} ${sum.victory ? 'WIN' : ''} ${U.fmtTime(r.time)}`);
-    if (until === 'win' ? sum.victory : upsDone && relicsDone && p.pactWin >= 10) break;
+    if (until === 'win' ? sum.victory : upsDone && p.pactWin >= 10) break;
   }
   return { p, marks, total, runs, rooms, roomsTotal };
 }

@@ -23,4 +23,17 @@ North-star: a co-op browser roguelite where builds are chosen, not rolled. Rules
 - [x] Render review fixes
 - [x] Firefox speed check
 - [x] PR to main
-- [ ] Your playtest of v3
+- [x] Your playtest of v3
+
+## v4: power curve and intensity
+- [x] Faster testing: quick bot suite, late-stratum starts, invisible browser checks
+- [x] Bigger scrolling rooms with trash hordes; Dark doors replace the lantern
+- [x] Dash charges; bosses and later strata get faster, smarter attacks; boss fury on strata IV–VI
+- [x] Late power: Ascended boons, fork and skill transforms at bosses II and IV
+- [x] Relics page removed; Hearth refunds and Reset all
+- [ ] Armory content: per-hero sidegrade unlocks in Upgrades (the page exists, lists are empty)
+- [x] Music per stratum; hit and kill sounds for skills
+- [ ] Your mid playtest (Ranger and Knight complete)
+- [x] Transforms for the other four heroes, breakable props, smaller hearts
+- [x] Retune and PR to main (v4 live)
+- [ ] Balance gaps left: full Hearth too strong, random picks win 2% (target ≤ 1%), Pact 5 too hard

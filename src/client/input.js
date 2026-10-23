@@ -1,7 +1,7 @@
 // Keyboard, mouse and gamepad. One binding table maps every action to two slots, each a KeyboardEvent.code or Mouse0..Mouse4.
-// Defaults: WASD move (arrows alternate), attack LMB / J, skill 1 Q / RMB, skill 2 E, dash Space, flare F, map Tab, pause Esc.
+// Defaults: WASD move (arrows alternate), attack LMB / J, skill 1 Q / RMB, skill 2 E, dash Space, map Tab, pause Esc.
 // Aim is the mouse cursor (I.mouse, CSS px; moved = time of the last pointer event, 0 before the first). Gamepad (fixed): left stick move,
-// right stick aim (latched 0.35 s after release), X / RT attack, B / RB skill 1, Y / LT skill 2, A / LB dash, L3 flare, Start pause, Back map.
+// right stick aim (latched 0.35 s after release), X / RT attack, B / RB skill 1, Y / LT skill 2, A / LB dash, Start pause, Back map.
 // I.device ('mouse' | 'pad') says which of the two currently aims. Menus read tabPrev / tabNext (Q / E, LB / RB), tabN (1-3), up / down / left / right (keys, d-pad), navX / navY (left stick, repeating), scrollY (right stick), back (B), reroll (Q, Y), cycle (Y).
 // I.mask([actions]) makes every key, mouse button and pad button held right now (only the keys of the listed actions, when given; pad buttons always) read as up until released (an overlay that closes must not pass its closing press to the game).
 (function (ED) {
@@ -21,13 +21,12 @@
     { id: 'left', label: 'Move left', group: 'Movement' }, { id: 'right', label: 'Move right', group: 'Movement' },
     { id: 'attack', label: 'Attack', group: 'Combat' }, { id: 'skill1', label: 'Skill 1', group: 'Combat' },
     { id: 'skill2', label: 'Skill 2', group: 'Combat' }, { id: 'dash', label: 'Dash', group: 'Combat' },
-    { id: 'flare', label: 'Lantern flare', group: 'Combat' },
     { id: 'map', label: 'Map and build', group: 'Interface' }, { id: 'pause', label: 'Pause', group: 'Interface' },
   ];
   I.DEFAULTS = {
     up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'],
     attack: ['Mouse0', 'KeyJ'], skill1: ['KeyQ', 'Mouse2'], skill2: ['KeyE', null], dash: ['Space', null],
-    flare: ['KeyF', null], map: ['Tab', null], pause: ['Escape', null],
+    map: ['Tab', null], pause: ['Escape', null],
   };
   const ACTION = {}; for (const a of I.ACTIONS) ACTION[a.id] = a;
   const CODE_RE = /^(Mouse[0-4]|[A-Za-z][A-Za-z0-9]{1,24})$/;
@@ -113,7 +112,7 @@
   const isMouse = (c) => /^Mouse/.test(c);
   I.labels = (action) => (codes[action] || []).map(I.keyName);
   // Gamepad button names (fixed layout, see I.poll): what HUD keycaps, prompts and signs show while I.device is 'pad'.
-  const PAD = { attack: 'X / RT', skill1: 'RB / B', skill2: 'LT / Y', dash: 'A / LB', flare: 'L3', map: 'Back', pause: 'Start' };
+  const PAD = { attack: 'X / RT', skill1: 'RB / B', skill2: 'LT / Y', dash: 'A / LB', map: 'Back', pause: 'Start' };
   // Primary label for HUD hints: the first keyboard binding, else the first mouse button; the pad button names on a pad.
   I.label = (action) => {
     if (I.device === 'pad' && PAD[action]) return PAD[action];
@@ -198,7 +197,7 @@
 
   // Snapshot of intent for this frame.
   I.read = () => {
-    const out = { mx: 0, my: 0, atk: false, skill: false, dash: false, atkPressed: false, tab: false, esc: false, confirm: false, left: false, right: false, aimX: null, aimY: null, skill2: false, flare: false };
+    const out = { mx: 0, my: 0, atk: false, skill: false, dash: false, atkPressed: false, tab: false, esc: false, confirm: false, left: false, right: false, aimX: null, aimY: null, skill2: false };
     if (down('up')) out.my -= 1;
     if (down('down')) out.my += 1;
     if (down('left')) out.mx -= 1;
@@ -208,7 +207,6 @@
     out.skill = hit('skill1');
     out.skill2 = hit('skill2');
     out.dash = hit('dash');
-    out.flare = hit('flare');
     out.tab = hit('map');
     out.esc = hit('pause') || hitCode('Escape'); // Esc always backs out of a menu, whatever pause is bound to
     out.confirm = codes.attack.some(c => !isMouse(c) && c !== 'Space' && I.pressed.has(c)) || hitCode('Enter', 'NumpadEnter'); // never Space: a dash mashed in combat must not pick a boon
@@ -242,7 +240,6 @@
       out.skill = out.skill || bp(1) || bp(5);
       out.skill2 = out.skill2 || bp(3) || bp(6);
       out.dash = out.dash || bp(0) || bp(4);
-      out.flare = out.flare || bp(10);
       out.esc = out.esc || bp(9);
       out.tab = out.tab || bp(8);
       out.confirm = out.confirm || bp(2);

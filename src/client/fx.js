@@ -7,7 +7,7 @@
   const U = ED.U, TAU = U.TAU, Pix = ED.Pix, s2 = Pix.s2;
   let hsUntil = 0; // wall-clock end of the current hit-stop
   const F = ED.FX = {
-    parts: [], texts: [], slashes: [], rings: [], bolts: [], pops: [], ghosts: [], stains: [], sheets: [], beams: [], holyT: {}, msgs: [], hurtAt: {}, banner: null, shake: 0, flash: null, fade: 0, anim: {}, hitstop: 0, time: 0, aberr: 0, kick: 0, dread: 0, addK: 1, crowd: 1, // crowd: burst-count factor, set by the renderer (below 1 with many live foes)
+    parts: [], texts: [], slashes: [], rings: [], bolts: [], pops: [], ghosts: [], stains: [], sheets: [], beams: [], holyT: {}, msgs: [], hurtAt: {}, banner: null, shake: 0, flash: null, fade: 0, anim: {}, hitstop: 0, time: 0, aberr: 0, kick: 0, addK: 1, crowd: 1, // crowd: burst-count factor, set by the renderer (below 1 with many live foes)
     // 1 normally, ~0.06 during a hit-stop; consumers (game loop) multiply their dt by it. Wall-clock based, so it is safe however dt is scaled.
     get timeScale() { return performance.now() / 1000 < hsUntil ? 0.06 : 1; },
     set timeScale(v) { /* derived value; assignments are ignored */ },
@@ -15,7 +15,7 @@
   let MAXP = 500, lastHs = 0, pickT = 0;
   const calm = () => !!(ED.App && ED.App.settings && !ED.App.settings.shake); // "screen shake off" also mutes flashes and hit-stop
 
-  F.reset = () => { F.parts.length = 0; F.texts.length = 0; for (const s of F.slashes) if (s.sm) smearPool.push(s.sm); F.slashes.length = 0; F.rings.length = 0; F.bolts.length = 0; F.pops.length = 0; releaseGhosts(); F.stains.length = 0; F.sheets.length = 0; F.beams.length = 0; F.holyT = {}; F.chargeT = {}; F.msgs.length = 0; F.hurtAt = {}; F.banner = null; F.shake = 0; F.flash = null; F.anim = {}; F.aberr = 0; F.kick = 0; F.dread = 0; hsUntil = 0; ent.clear(); hitN = 0; ED.Sprites.shotReset(); };
+  F.reset = () => { F.parts.length = 0; F.texts.length = 0; for (const s of F.slashes) if (s.sm) smearPool.push(s.sm); F.slashes.length = 0; F.rings.length = 0; F.bolts.length = 0; F.pops.length = 0; releaseGhosts(); F.stains.length = 0; F.sheets.length = 0; F.beams.length = 0; F.holyT = {}; F.chargeT = {}; F.msgs.length = 0; F.hurtAt = {}; F.banner = null; F.shake = 0; F.flash = null; F.anim = {}; F.aberr = 0; F.kick = 0; hsUntil = 0; ent.clear(); hitN = 0; ED.Sprites.shotReset(); };
   F.setQuality = (q) => { MAXP = q === 'low' ? 180 : 500; };
   const lowFx = () => MAXP < 300;
   const cnt = (n) => Math.ceil(n * (MAXP < 300 ? 0.5 : 1) * F.crowd);
@@ -39,11 +39,12 @@
   F.burst = (x, y, n, o) => { const k = cnt(n), sp = o.sp || 90, life = o.life || 0.5; for (let i = 0; i < k; i++) F.part(x, y, o, sp * (0.4 + Math.random() * 0.8), life * (0.6 + Math.random() * 0.6)); };
   const NO_OPTS = {};
   F.text = (x, y, s, color, size, opts) => {
-    const o = opts || NO_OPTS; // opts: crit, pop, life, max, vy, ol (rim colour), sum (a damage number: it adds into a same-style number of the same spot born under 150 ms ago and pops again; a spot keeps at most 3 live numbers, the oldest goes first)
+    const o = opts || NO_OPTS; // opts: crit, pop, life, max, vy, ol (rim colour), sum (a damage number: it adds into a same-style number of the same spot born under 150 ms ago and pops again; a spot keeps at most 3 live numbers, the oldest goes first), only (with sum: never creates a number, it only adds into one)
     if (o.sum) {
       let last = null, first = -1, nn = 0;
       for (let i = 0; i < F.texts.length; i++) { const t = F.texts[i]; if (t.sum && Math.abs(t.bx - x) < 6 && Math.abs(t.by - y) < 6) { last = t; if (first < 0) first = i; nn++; } }
       if (last && last.max - last.life < 0.15 && last.crit === !!o.crit && last.color === color) { last.s = String(Math.round(+last.s + +s)); last.size = Math.max(last.size, size || 10); last.life = last.max; return; }
+      if (o.only) return;
       if (nn >= 3) F.texts.splice(first, 1);
     }
     if (F.texts.length > 80) F.texts.shift();
@@ -53,7 +54,7 @@
     for (let k = 0; k < 4; k++) { let moved = false; for (const t of F.texts) if (Math.abs(t.x - x) < 24 && Math.abs(t.y - yy) < step) { yy = t.y - step; moved = true; } if (!moved) break; }
     F.texts.push({ x: x + (Math.random() - 0.5) * 10, y: yy, s: String(s), color, size: size || 10, life: o.life ?? 0.9, max: o.max ?? 0.9, vy: o.vy ?? -42, crit: !!o.crit, pop: !!o.pop, ol: o.ol || null, sum: !!o.sum, bx: x, by: y });
   };
-  F.ring = (x, y, r, color, life, width, inv) => { if (F.rings.length < 48) F.rings.push({ x, y, r, color, life: life || 0.4, max: life || 0.4, w: width || 3, inv: !!inv }); }; // inv: the ring shrinks instead of growing
+  F.ring = (x, y, r, color, life, width, inv, r0) => { if (F.rings.length < 48) F.rings.push({ x, y, r, color, life: life || 0.4, max: life || 0.4, w: width || 3, inv: !!inv, r0 }); }; // inv: the ring shrinks instead of growing; r0: it grows linearly from radius r0 to r (a shockwave front)
   // One-shot (or looping) atlas sprite effect with the anim's pivot at world (x, y). o: ramp (recolour: ramp name or colour), add (additive pass instead of the unlit one), delay (s), speed (fps factor), a (alpha), flip, rot,
   // spin (rad/s), loop + life (s), fade (alpha falls to 0 over life), vx / vy (px/s), frame (fixed frame of a static sprite), dy (draw offset), lt / ltr (scene light colour / radius),
   // pid + fdy (follows that hero, pivot fdy px below its feet point). Capped at 72 (28 on Low), the oldest goes first.
@@ -96,7 +97,11 @@
   // Ages every entry by dt and drops the expired ones in place (order and array identity kept, nothing allocated).
   const tick = (a, dt) => { let n = 0; for (let i = 0; i < a.length; i++) { const o = a[i]; o.life -= dt; if (o.life > 0) a[n++] = o; } a.length = n; };
 
+  // Plays a named audio cue without a world event (a dash charge refilled, a dark door, a breaking prop).
+  F.cue = (name, vol, arg) => { if (ED.Audio) ED.Audio.play(name, vol, arg); };
+  const SKILL_CUE = { charge: 'charge', volley: 'volley', rain: 'raincast' }; // skill events with their own cast cue
   F.update = (dt) => {
+    if (ED.Audio) ED.Audio.flush(); // the frame's hits, impacts and deaths become layered cues
     F.time += dt; snapBudget = 4;
     F.shake = Math.max(0, F.shake - dt * (10 + F.shake * 3));
     F.aberr = Math.max(0, F.aberr - dt * 2.4);
@@ -390,7 +395,7 @@
 
   // ---------- death: foes collapse by look family. A cached snapshot of the sprite (colour + white silhouette) is posed and faded; particles carry the rest. ----------
   const FAM = { skeleton: 'bone', zombie: 'bone', slime: 'goo', jelly: 'goo', puff: 'goo', shroom: 'goo', hulk: 'goo', spitter: 'goo', worm: 'goo',
-    wisp: 'spirit', wraith: 'spirit', shade: 'spirit', gloom: 'spirit', eye: 'spirit', imp: 'spirit', rift: 'spirit', star: 'spirit', robed: 'spirit', priest: 'spirit',
+    wisp: 'spirit', wraith: 'spirit', shade: 'spirit', eye: 'spirit', imp: 'spirit', rift: 'spirit', star: 'spirit', robed: 'spirit', priest: 'spirit',
     knight: 'metal', golem: 'metal', sentinel: 'metal', drone: 'metal', totem: 'metal' };
   const DUR = { bone: 0.5, goo: 0.42, spirit: 0.55, metal: 0.3, beast: 0.5 };
   const snapPool = [];
@@ -549,7 +554,7 @@
   F.dust = dust;
   // Shield Charge ends in an impact flare (red Aim blast, streaks along the charge, 4 px shake for your own hero); the renderer calls it when a charging hero stops.
   F.chargeT = {};
-  F.chargeHit = (x, y, a, mine) => { SP('fx.blast.red', x, y, { add: true, lt: '#ff8a4a', ltr: 70 }); F.burst(x, y, 8, { kind: 'streak', color: '#e8e2c8', a, spread: 1.2, sp: 260, life: 0.25, size: 1.8 }); F.pop(x, y, 22, '#ffe9b0', 0.18, true); if (mine) F.addShake(4); };
+  F.chargeHit = (x, y, a, mine) => { ED.Audio.play('chargehit', mine ? 1 : 0.5); SP('fx.blast.red', x, y, { add: true, lt: '#ff8a4a', ltr: 70 }); F.burst(x, y, 8, { kind: 'streak', color: '#e8e2c8', a, spread: 1.2, sp: 260, life: 0.25, size: 1.8 }); F.pop(x, y, 22, '#ffe9b0', 0.18, true); if (mine) F.addShake(4); };
   // Gold (or coloured) motes that fly from the burst point (x, y) to a hero at (tx, ty) in about 0.45 s.
   function fly(x, y, tx, ty, col, n) {
     for (let i = 0; i < n; i++) { const dx = tx - x, dy = ty - 10 - y; F.part(x + (Math.random() - 0.5) * 12, y + (Math.random() - 0.5) * 12, { color: col, size: 2, life: 0.5, add: true, drag: 0, vx: dx / 0.45, vy: dy / 0.45 }, 0, 0.45 + Math.random() * 0.08); }
@@ -560,6 +565,8 @@
   // mark = [fn(e) -> {id, ramp, stub} | null] adds a 14 px glyph (atlas anim id, Pix ramp, GLYPH stub key when the art is absent) to a foe's overhead mark row.
   // shot[kind] = fn(c, pr, t, x, y) runs after a projectile of that kind is drawn (unlit pass, world frame; x, y the body's centre on the pixel grid).
   const CFX = ED.ClassFx = { ev: {}, zone: {}, hero: [], mark: [], shot: {}, on(t, f) { (this.ev[t] || (this.ev[t] = [])).push(f); } };
+  // Shard colours of a smashed breakable by decor kind: [body, light, glows (a pop of the light colour)]; a mushroom's body is the stratum accent.
+  const SMASH_COL = { urn: ['#8a6a50', '#c4a07c', 0], mushroom: [null, '#e8f0d0', 1], crystal: ['#8fd8f0', '#e8fbff', 1], coral: ['#e0705a', '#ffb0a0', 0], shard: ['#9a6aff', '#e0c8ff', 1], crate: ['#7a5436', '#c8501a', 0] };
   // Translate one world event into effects. local: the viewing player's pid.
   F.handle = (ev, ctx) => {
     const local = ctx.localPid, A = ED.Audio, set = ED.App ? ED.App.settings : { dmg: true };
@@ -570,7 +577,7 @@
         if (set.dmg && (mine || ev.c || ev.v >= 20)) {
           const col = ec || (ev.c ? '#ffd36b' : ev.k ? '#ffab70' : (mine ? '#ffffff' : '#cfc6b6'));
           const size = (ev.c ? 14 : (ev.k ? 8 : 10)) + Math.min(5, Math.sqrt(ev.v) * 0.22);
-          F.text(ev.x, ev.y - 6, ev.v, col, size, { crit: !!ev.c, pop: true, life: ev.c ? 1.15 : 0.85, max: ev.c ? 1.15 : 0.85, vy: ev.c ? -58 : -42, ol: EL_OL[el], sum: true });
+          F.text(ev.x, ev.y - 6, ev.v, col, size, { crit: !!ev.c, pop: true, life: ev.c ? 1.15 : 0.85, max: ev.c ? 1.15 : 0.85, vy: ev.c ? -58 : -42, ol: EL_OL[el], sum: true, only: !!ev.fd && !ev.c }); // a fodder hit (fd) prints a number only as a crit; otherwise it adds into a number that is already up
         }
         if (!ev.k) {
           const e = foeAt(ev.x, ev.y), r = e ? e.r : 8, gy = e ? e.y : ev.y + r;
@@ -580,12 +587,15 @@
           const hm = hitMem[hitN++ & 7]; hm.x = ev.x; hm.y = gy; hm.a = a; hm.w = w; hm.t = F.time; hm.mine = mine;
           hitSplash(ev, e, r, gy, a, w, el, p);
           contactFx(ev, a, mine, p);
-          A.play(ev.c ? 'crit' : 'hit', mine ? 1 : 0.5, { w, el });
+          if (ev.s) { A.impact(p ? p.cls : '', mine, el); if (ev.c) A.hit(true, mine, w, el); } else A.hit(!!ev.c, mine, w, el); // aggregated per frame by A.flush
           if (mine && (ev.c || ev.v >= 60)) F.hitStop(ev.c ? 0.06 : 0.04);
           if (mine && ev.h) F.hitStop(0.07); // heavy weapon hit
           if (mine && w > 0.75 && !ev.c) F.addShake(1);
           if (ev.v >= 100) F.punch(0.5, 0);
-        } else if (el === 1) elemHit(ev.x, ev.y + 4, 1, 0, false);
+        } else {
+          if (ev.k === 2) A.impact(p ? p.cls : '', mine, el); // a skill-zone tick rings; a status DoT (k 1) stays silent
+          if (el === 1) elemHit(ev.x, ev.y + 4, 1, 0, false);
+        }
         if (ev.c && mine) { F.addShake(2.5); F.punch(0.35, 0); }
         break;
       }
@@ -600,7 +610,7 @@
         }
         F.pop(ev.x, ev.y - 8, big ? 26 : 14, col, 0.2);
         if (mem && mem.mine) { if (big || ev.r >= 10) F.hitStop(0.035); F.addShake(big ? 1.6 : 0.7); }
-        A.play('die', 0.7, ev.r);
+        A.kill(ev.type, ev.r, !!(mem && mem.mine));
         if (big) { F.ring(ev.x, ev.y, 30, col, 0.4); F.addShake(3); F.hitStop(0.06); }
         break;
       }
@@ -671,16 +681,17 @@
       case 'clear': A.play('unlock'); F.showBanner(ev.trial ? 'Trial complete' : 'Room cleared', '', 'small', 1.4); break;
       case 'bossIntro': F.showBanner(ev.name, ev.title, 'boss', 3.4); F.bossQuote = { text: ev.quote, t: 0 }; A.play('roar'); A.music({ s: ctx.stratum(), boss: true }); F.addShake(8); F.punch(0.9, 0); break;
       case 'bossSpawn': F.addShake(6); F.punch(0.6, 0); break;
-      case 'bossDown': F.showBanner('Vanquished', ED.ENEMIES[ev.type].name, 'victory', 3); F.flash = { color: '#ffffff', t: 0.5, a: 0.5 }; F.addShake(12); F.punch(2, 1); F.hitStop(0.3); A.play('roar', 0.6); A.play('victory', 0.7); A.music({ s: ctx.stratum() }); F.burst(ev.x, ev.y - 20, 60, { color: ED.ENEMIES[ev.type].col.c, sp: 220, life: 1.2, size: 3.5, add: true }); F.burst(ev.x, ev.y - 20, 18, { kind: 'streak', color: '#ffffff', sp: 380, life: 0.5, size: 2.4 }); F.ring(ev.x, ev.y, 160, ED.ENEMIES[ev.type].col.c, 0.8, 6); F.ring(ev.x, ev.y, 90, '#ffffff', 0.5, 3); F.pop(ev.x, ev.y - 20, 90, '#ffffff', 0.5); break;
+      case 'bossDown': F.showBanner('Vanquished', ED.ENEMIES[ev.type].name, 'victory', 3); F.flash = { color: '#ffffff', t: 0.5, a: 0.5 }; F.addShake(12); F.punch(2, 1); F.hitStop(0.3); A.play('roar', 0.6); if (ev.type !== 'hollowking') A.play('victory', 0.7, 'boss'); A.music({ s: ctx.stratum() }); F.burst(ev.x, ev.y - 20, 60, { color: ED.ENEMIES[ev.type].col.c, sp: 220, life: 1.2, size: 3.5, add: true }); F.burst(ev.x, ev.y - 20, 18, { kind: 'streak', color: '#ffffff', sp: 380, life: 0.5, size: 2.4 }); F.ring(ev.x, ev.y, 160, ED.ENEMIES[ev.type].col.c, 0.8, 6); F.ring(ev.x, ev.y, 90, '#ffffff', 0.5, 3); F.pop(ev.x, ev.y - 20, 90, '#ffffff', 0.5); break;
       case 'phase': F.addShake(8); F.punch(1.6, 0.8); A.play('roar', 0.8); F.ring(ev.x, ev.y, 120, '#ffffff', 0.5, 5); F.ring(ev.x, ev.y, 70, '#ff8a5a', 0.4, 3); F.pop(ev.x, ev.y - 20, 60, '#ffffff', 0.35); break;
+      case 'fury': { const en = ED.ENEMIES[ev.type]; F.addShake(5); F.punch(1.2, 0.5); A.play('fury', 0.8); F.ring(ev.x, ev.y, 130, '#ff5a1a', 0.55, 5); F.ring(ev.x, ev.y, 70, '#ffb56b', 0.4, 3); F.burst(ev.x, ev.y - 20, 36, { color: '#ff8a3d', sp: 150, vy: -40, life: 0.9, size: 2.8, add: true, drag: 1.6 }); F.pop(ev.x, ev.y - 20, 70, '#ff8a3d', 0.4); if (en) F.msg(en.name + ' is enraged!', '#ff8a3d'); break; }
       case 'stratum': { const b = ED.biomeFor(ev.s); F.showBanner(b.name, 'Stratum ' + U.roman(ev.s), 'stratum', 3.6); F.fade = 1; A.music({ s: ev.s }); break; }
-      case 'room': for (const p of ctx.players()) F.sheet('fx.circle.spark', p.x, p.y + 2, { add: true, a: 0.7, speed: 1.6 }); F.fade = Math.max(F.fade, 0.6); if (ev.lc > 0) F.msg(`−${ev.lc} light`, '#ffd9a0'); break;
+      case 'room': for (const p of ctx.players()) F.sheet('fx.circle.spark', p.x, p.y + 2, { add: true, a: 0.7, speed: 1.6 }); F.fade = Math.max(F.fade, 0.6); break;
       case 'down': { const p = ctx.player(ev.pid); A.play('down'); if (p) F.msg(ev.pid === local ? 'You are down! An ally can revive you.' : `${p.name} is down! Stand near them to revive.`, '#ff8a7a'); break; }
       case 'revived': { const p = ctx.player(ev.pid); A.play('revive'); if (p) { F.msg(`${p.name} is back on their feet`, '#86d38f'); F.burst(p.x, p.y - 10, 24, { color: '#ffe9a0', sp: 70, vy: -60, life: 0.9, size: 2.4, add: true }); F.ring(p.x, p.y, 40, '#ffe9a0', 0.5, 3); SP('fx.circle.spark', p.x, p.y - 4, { ramp: 'holy', add: true }); F.pop(p.x, p.y - 12, 30, '#ffe9a0', 0.3); } break; }
       case 'dead': { const p = ctx.player(ev.pid); if (p) F.msg(`${p.name} has fallen. They return at the next stratum.`, '#ff8a7a'); break; }
       case 'rise': { const p = ctx.player(ev.pid); const name = { phoenix: 'Phoenix Feather', angel: 'Guardian Angel', wind: 'Second Wind' }[ev.k]; F.showBanner(name, p ? p.name + ' refuses to fall' : '', 'small', 2); F.burst(ev.x, ev.y - 10, 40, { color: '#ffd36b', sp: 150, life: 0.9, size: 3, add: true }); F.ring(ev.x, ev.y, 70, '#ffd36b', 0.6, 4); F.pop(ev.x, ev.y - 12, 50, '#ffd36b', 0.4); F.punch(0.8, 0.4); A.play('revive'); break; }
       case 'dash': A.play('dash', ev.pid === local ? 0.8 : 0.3); dust(ev.x, ev.y + 2, 'dust'); break;
-      case 'skill': { A.play('skill', ev.pid === local ? 1 : 0.5); const p = ctx.player(ev.pid); if (ev.k === 'charge') { dust(ev.x, ev.y + 2, 'dust', 2); F.chargeT[ev.pid] = F.time; } if (p && ev.k === 'volley') { F.ring(p.x, p.y, 30, '#e8d8b0', 0.25); SP('fx.spark.magic', p.x + Math.cos(ev.a || 0) * 20, p.y - 12 + Math.sin(ev.a || 0) * 20, { add: true, ramp: 'general' }); } if (ev.k === 'legion' || ev.k === 'sanctuary') F.ring(ev.x, ev.y, ev.k === 'sanctuary' ? 100 : 40, ev.k === 'sanctuary' ? '#ffe9a0' : '#7dffd9', 0.5, 4); if (ev.slot === 1) skill2Fx(ev, ev.pid === local, A); break; }
+      case 'skill': { A.play(SKILL_CUE[ev.k] || 'skill', ev.pid === local ? 1 : 0.5); const p = ctx.player(ev.pid); if (ev.k === 'charge') { dust(ev.x, ev.y + 2, 'dust', 2); F.chargeT[ev.pid] = F.time; } if (p && ev.k === 'volley') { F.ring(p.x, p.y, 30, '#e8d8b0', 0.25); SP('fx.spark.magic', p.x + Math.cos(ev.a || 0) * 20, p.y - 12 + Math.sin(ev.a || 0) * 20, { add: true, ramp: 'general' }); } if (ev.k === 'legion' || ev.k === 'sanctuary') F.ring(ev.x, ev.y, ev.k === 'sanctuary' ? 100 : 40, ev.k === 'sanctuary' ? '#ffe9a0' : '#7dffd9', 0.5, 4); if (ev.slot === 1) skill2Fx(ev, ev.pid === local, A); break; }
       case 'blink': // violet smoke rings at both ends, four fading silhouettes along the path, a few motes
         SP('fx.smoke.ring', ev.x0, ev.y0 + 2, { ramp: 'shadow' }); SP('fx.smoke.ring', ev.x1, ev.y1 + 2, { ramp: 'shadow' });
         for (let i = 0; i <= 3; i++) { const k = i / 3; SP('hero.shade.idle', U.lerp(ev.x0, ev.x1, k), U.lerp(ev.y0, ev.y1, k), { ramp: 'shadow', frame: i, life: 0.3 + 0.05 * i, fade: true, a: 0.6 }); }
@@ -696,6 +707,14 @@
       case 'thud': F.addShake(ev.big ? 9 : 3); A.play('thud', ev.big ? 1 : 0.5); dust(ev.x, ev.y, 'dust', ev.big ? 4 : 2); F.burst(ev.x, ev.y, 10, { color: '#bba98a', sp: 80, life: 0.4, size: 3, kind: 'smoke' }); if (ev.big) { F.ring(ev.x, ev.y, 60, '#c9b98f', 0.4, 4); F.punch(0.5, 0); } break;
       case 'shoot': A.play('eshoot', 0.6); break;
       case 'chest': A.play('chest'); F.burst(ev.x, ev.y - 10, 30, { color: '#ffd36b', sp: 120, vy: -60, life: 0.9, size: 2.4, add: true }); F.pop(ev.x, ev.y - 14, 40, '#ffd36b', 0.35); break;
+      case 'smash': { // a breakable prop breaks (ev.k: its decor kind): light shards, a pop for the glowing kinds
+        const sc = SMASH_COL[ev.k] || SMASH_COL.urn;
+        A.play('smash', 0.8);
+        F.burst(ev.x, ev.y - 6, 8, { kind: 'shard', color: sc[0] || ED.biomeFor(ctx.stratum()).pal.accent, sp: 105, life: 0.55, size: 2.6, vz: 100, z: 6 });
+        F.burst(ev.x, ev.y - 6, 4, { kind: 'shard', color: sc[1], sp: 70, life: 0.45, size: 1.8, vz: 80, z: 6 });
+        if (sc[2]) F.pop(ev.x, ev.y - 8, 18, sc[1], 0.14);
+        break;
+      }
       case 'buy': A.play('buy'); break;
       case 'fountain': A.play('heal'); F.burst(ev.x, ev.y - 10, 40, { color: '#6fe6ff', sp: 100, vy: -80, life: 1.0, size: 2.6, add: true }); F.ring(ev.x, ev.y, 50, '#6fe6ff', 0.6, 3); break;
       case 'altar': A.play('hurt', 0.6); F.burst(ev.x, ev.y - 10, 30, { color: '#d43a5a', sp: 90, vy: -60, life: 0.8, size: 2.6, add: true }); F.pop(ev.x, ev.y - 16, 36, '#d43a5a', 0.3); break;
@@ -753,21 +772,23 @@
         F.burst(x, y - 12, 44, { color: col, sp: 110, a: -1.57, spread: 4.4, life: 1.2, size: 2.6, add: true, drag: 1.2 });
         F.burst(x, y - 12, 14, { kind: 'streak', color: '#ffffff', sp: 320, life: 0.5, size: 2 });
         F.pop(x, y - 14, 80, col, 0.5, true); F.punch(1.2, 0.9); F.addShake(5); A.play('evolve', ev.pid === local ? 1 : 0.6); if (ev.pid === local) F.flash = { color: col, t: 0.3, a: 0.3 }; break; }
-      case 'dread': { const tier = ev.tier | 0, worse = tier > F.dread; F.dread = tier; A.play('dread', worse ? 0.9 : 0.5, tier);
-        if (worse) { F.punch(0.7, 0); F.addShake(2 + tier); if (!calm()) F.flash = { color: '#02010a', t: 0.5, a: 0.55 }; } break; }
+      case 'forkRank': { // a fork ranked up at a boss (rank 3 = the transform): rings and rising sparks on the hero for everyone, a flash and the evolve cue for the owner
+        const p = ctx.player(ev.pid), big = ev.rank >= 3, col = big ? '#ffd36b' : '#ffe9b0', x = ev.x !== undefined ? ev.x : (p ? p.x : 0), y = ev.y !== undefined ? ev.y : (p ? p.y : 0), mine = ev.pid === local;
+        F.ring(x, y, big ? 110 : 70, col, 0.7, big ? 5 : 3); F.ring(x, y, big ? 64 : 40, '#ffffff', 0.45, 2);
+        F.burst(x, y - 12, big ? 36 : 20, { color: col, sp: 100, a: -1.57, spread: 4.4, life: 1.0, size: 2.6, add: true, drag: 1.2 });
+        F.burst(x, y - 12, big ? 12 : 6, { kind: 'streak', color: '#ffffff', sp: 300, life: 0.4, size: 1.8 });
+        F.pop(x, y - 14, big ? 70 : 44, col, 0.4, true);
+        F.text(x, y - 42, ED.cardName(ev.id, ev.rank), col, big ? 13 : 11, { pop: true, life: 1.8, max: 1.8, vy: -20 });
+        if (mine) { F.punch(big ? 1.1 : 0.6, big ? 0.7 : 0.4); F.addShake(big ? 4 : 2); F.flash = { color: col, t: 0.3, a: big ? 0.3 : 0.18 }; }
+        A.play('evolve', mine ? (big ? 1 : 0.7) : 0.4); break; }
       case 'howl': F.ring(ev.x, ev.y - 8, ev.r || 200, '#e8d8b0', 0.6, 4); F.ring(ev.x, ev.y - 8, (ev.r || 200) * 0.5, '#ffffff', 0.4, 2); F.burst(ev.x, ev.y - 14, 10, { kind: 'streak', color: '#e8d8b0', sp: (ev.r || 200) * 1.4, life: 0.4, size: 1.6 }); F.pop(ev.x, ev.y - 14, 24, '#e8d8b0', 0.25); F.addShake(2); A.play('howl', 0.7); break;
       case 'rift': F.burst(ev.x, ev.y - 12, 16, { color: '#b78cff', sp: 90, life: 0.6, size: 2.6, add: true }); F.burst(ev.x, ev.y - 12, 8, { kind: 'streak', color: '#e8c8ff', a: -1.57, spread: 3.1, sp: 200, life: 0.35, size: 1.6 }); F.burst(ev.x, ev.y - 6, 5, { kind: 'smoke', color: '#1a0830', sp: 30, life: 0.8, size: 7 }); F.ring(ev.x, ev.y, 30, '#b78cff', 0.45, 3); F.pop(ev.x, ev.y - 14, 34, '#c98bff', 0.3, true); A.play('rift', 0.6); break;
       case 'claim': { const col = R().rewardColor(ev.item), mine = ev.pid === local, y = ev.y - 18; F.burst(ev.x, y, mine ? 22 : 14, { color: col, sp: 80, vy: -50, life: 0.9, size: 2.4, add: true, drag: 1.3 }); F.ring(ev.x, ev.y - 8, 34, col, 0.5, 3); F.pop(ev.x, y, 28, col, 0.3);
         if (ev.item === 'campfire') F.burst(ev.x, y, 8, { kind: 'ember', color: '#ffb347', a: -1.57, spread: 2.4, sp: 50, life: 1.1, size: 2, drag: 1.4, lt: '#ff8a2a', ltr: 24 });
-        if (mine && ev.item !== 'oil') F.text(ev.x, y - 14, R().rewardLabel(ev.item), col, 10, { life: 1.3, max: 1.3 }); // the oil event prints its own amount
+        if (mine) F.text(ev.x, y - 14, R().rewardLabel(ev.item), col, 10, { life: 1.3, max: 1.3 });
         A.play('claim', mine ? 0.9 : 0.4); break; }
-      case 'oil': F.burst(ev.x, ev.y - 14, 20, { kind: 'ember', color: '#ffc27a', a: -1.57, spread: 4.4, sp: 70, life: 1.3, size: 2, drag: 1.3, lt: '#ffb35c', ltr: 26 }); F.ring(ev.x, ev.y - 10, 60, '#ffb35c', 0.6, 4); F.pop(ev.x, ev.y - 16, 70, '#ffc27a', 0.6, true); F.text(ev.x, ev.y - 40, '+' + Math.round(ev.v || 0) + ' light', '#ffd36b', 11, { life: 1.4, max: 1.4 }); if (!calm()) F.flash = { color: '#ffb35c', t: 0.3, a: 0.2 }; A.play('oil', 0.9); break;
-      case 'banish': F.burst(ev.x, ev.y - 8, 26, { kind: 'smoke', color: '#150a24', sp: 110, life: 0.9, size: 9, drag: 2.2 }); F.burst(ev.x, ev.y - 8, 18, { color: '#ffd9a0', sp: 160, life: 0.5, size: 2.6, add: true }); F.ring(ev.x, ev.y - 6, 70, '#ffb35c', 0.55, 4); F.pop(ev.x, ev.y - 10, 60, '#ffd9a0', 0.3, true); F.text(ev.x, ev.y - 34, 'Banished', '#ffd9a0', 11, { life: 1.4, max: 1.4 }); F.punch(0.5, 0); A.play('oil', 0.6); break;
-      case 'flare': F.ring(ev.x, ev.y - 8, ev.r || 160, '#ffd9a0', 0.55, 5); F.ring(ev.x, ev.y - 8, (ev.r || 160) * 0.55, '#ffffff', 0.35, 3); F.burst(ev.x, ev.y - 12, 26, { color: '#ffd9a0', sp: (ev.r || 160) * 1.6, life: 0.5, size: 3, add: true }); F.burst(ev.x, ev.y - 12, 10, { kind: 'streak', color: '#ffffff', sp: (ev.r || 160) * 2.2, life: 0.3, size: 1.8 }); F.pop(ev.x, ev.y - 12, (ev.r || 160) * 0.6, '#ffe9b0', 0.3, true); F.punch(0.5, 0.2); if (!calm()) F.flash = { color: '#ffd9a0', t: 0.3, a: 0.25 }; A.play('oil', ev.pid === local ? 0.9 : 0.5); break;
+      case 'dark': F.msg('Dark room: harder fights, richer rewards', '#a070ff'); F.addShake(1); if (!calm()) F.flash = { color: '#0a0418', t: 0.5, a: 0.4 }; A.play('dark', 0.8); break;
       case 'upgrade': { const col = R().rewardColor(ev.to); F.ring(ev.x, ev.y - 8, 44, col, 0.6, 4); F.burst(ev.x, ev.y - 14, 18, { color: col, sp: 80, vy: -50, life: 0.9, size: 2.4, add: true, drag: 1.3 }); F.msg('The dark pays more: ' + R().rewardLabel(ev.to), '#ffd36b'); break; }
-      case 'wick': { // boss door: the light left mends the party
-        for (const p of ctx.players()) { F.burst(p.x, p.y - 10, 16, { color: '#ffd9a0', sp: 70, vy: -60, life: 0.9, size: 2.2, add: true, drag: 1.4 }); F.ring(p.x, p.y, 38, '#ffb35c', 0.5, 3); F.pop(p.x, p.y - 12, 28, '#ffd9a0', 0.3); }
-        F.msg(`The lantern's light guards you: +${ev.heal}% health, ${ev.shield}% shield` + (ev.gold ? `, +${ev.gold} gold` : '') + (ev.embers ? `, +${ev.embers} embers` : ''), '#ffd36b'); A.play('oil', 0.5); break; }
       case 'ward': F.ring(ev.x, ev.y - 10, 24, '#7fc8ff', 0.4, 3); F.burst(ev.x, ev.y - 10, 8, { color: '#bfe3ff', sp: 50, vy: -30, life: 0.6, size: 2, add: true, drag: 1.5 }); F.pop(ev.x, ev.y - 12, 22, '#7fc8ff', 0.25); break;
       default: break;
     }
@@ -815,7 +836,7 @@
     c.globalAlpha = 1;
     for (const b of F.beams) Rn.light(b.x, b.y - 30, 90, b.col, 0.9 * (b.life / b.max));
     for (const p of F.pops) Rn.light(p.x, p.y, p.r * 3.2, p.color, 0.9 * (p.life / p.max));
-    for (const r of F.rings) { const k = 1 - r.life / r.max; if (r.r > 40) Rn.light(r.x, r.y, r.r * (0.3 + 0.7 * U.easeOut(k)) * 1.2, r.color, 0.5 * (1 - k)); }
+    for (const r of F.rings) { const k = 1 - r.life / r.max; if (r.r > 40) Rn.light(r.x, r.y, (r.r0 !== undefined ? r.r0 + (r.r - r.r0) * k : r.r * (0.3 + 0.7 * U.easeOut(k))) * 1.2, r.color, 0.5 * (1 - k)); }
     for (const b of F.bolts) { const k = b.life / b.max; for (let i = 1; i < b.pts.length; i += 2) Rn.light(b.pts[i][0], b.pts[i][1] - 10, 60, b.color, 0.8 * k); }
     for (const s of F.slashes) Rn.light(s.x + Math.cos(s.a) * s.r * 0.6, s.y + Math.sin(s.a) * s.r * 0.6, s.r * 1.1, s.color, 0.5 * (s.life / s.max));
   };
@@ -859,7 +880,7 @@
       Rn.glow(c, s.x + Math.cos(he) * rad * 0.95, s.y + Math.sin(he) * rad * 0.95, s.r * 0.3, s.color, 0.65 * fa);
     }
     for (const r of F.rings) { // pixel ring: radius in steps of 2 art px, 1-3 px thick, bands element / light / white, alpha in quarters
-      const k = 1 - r.life / r.max, rr = r.inv ? r.r * (1 - 0.75 * U.easeOut(k)) : r.r * (0.3 + 0.7 * U.easeOut(k)), ra = Math.max(2, Math.round(rr / 4) * 2), tn = Math.max(1, Math.min(3, Math.round(r.w * (1 - k) * 0.5 + 0.5))), rp = Pix.ramp(r.color);
+      const k = 1 - r.life / r.max, rr = r.r0 !== undefined ? r.r0 + (r.r - r.r0) * k : r.inv ? r.r * (1 - 0.75 * U.easeOut(k)) : r.r * (0.3 + 0.7 * U.easeOut(k)), ra =Math.max(2, Math.round(rr / 4) * 2), tn = Math.max(1, Math.min(3, Math.round(r.w * (1 - k) * 0.5 + 0.5))), rp = Pix.ramp(r.color);
       Pix.put(c, Pix.ring(ra, tn, rp[2], rp[3], rp[4]), s2(r.x), s2(r.y), Math.max(0.25, Math.ceil((1 - k) * 4) / 4));
     }
     const ak = F.addK; // additive strength set by the renderer per biome

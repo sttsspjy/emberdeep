@@ -1,13 +1,22 @@
 // Usage: node tools/check-save.js
-// Headless checks of the profile and save code: golden v2 (main era) and v3 (count prefix on relics only) codes still load, v4 round trips and survives appended upgrades/heroes/relics/deeds in both directions,
-// a code from a newer build and a Codex overflow report clearly, the pre-v3 profile gets its one-time news flag, and the per-hero deed counters (maxRelics, revivesGiven) in the run summary.
-// Prints failures and exits 1 when any check fails.
+// Headless checks of the profile and save code: golden v2 (main era), v3 and v4 codes still load with their Codex embers refunded, v5 round trips (also with Armory entries) and survives appended upgrades/heroes/Armory entries/deeds in both directions,
+// a code from a newer build and an Armory overflow report clearly, the one-time news flag and the stored-profile Codex migration, upgrade refunds, Reset all and Armory buy/refund, the repurposed deed, the relic pool and the moved element relics,
+// and the per-hero deed counters (maxRelics, revivesGiven) in the run summary. Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
 const S = ED.Save, U = ED.U;
 let n = 0, fails = 0;
 const ok = (c, msg) => { n++; if (!c) { fails++; console.log('FAIL ' + msg); } };
 const same = (a, b, msg) => ok(JSON.stringify(a) === JSON.stringify(b), `${msg}: got ${JSON.stringify(a)}, want ${JSON.stringify(b)}`);
 const throws = (f, re, msg) => { let m = null; try { f(); } catch (e) { m = e.message; } ok(m !== null && re.test(m), `${msg}: ${m === null ? 'did not throw' : m}`); };
+const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1 });
+
+// Temporary Armory entries (the table is empty in the data): knight 3, pyro 2, necro 1.
+const ARM = (id, cost) => ({ id, name: id, desc: '', cost });
+function withArmory(f) {
+  const adds = { knight: [ARM('zz_k1', 30), ARM('zz_k2', 45), ARM('zz_k3', 60)], pyro: [ARM('zz_p1', 25), ARM('zz_p2', 80)], necro: [ARM('zz_n1', 100)] };
+  for (const c in adds) ED.ARMORY[c].push(...adds[c]);
+  try { return f(); } finally { for (const c in adds) ED.ARMORY[c].length -= adds[c].length; }
+}
 
 // ---- a code writer independent of save.js, so a hand-built code (any version) can be decoded ----
 const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -25,7 +34,10 @@ function pack(bits) {
 }
 const bitsOf = (v, w) => { const o = []; for (let i = w - 1; i >= 0; i--) o.push((v >>> i) & 1); return o; };
 
-// ---- golden codes: written by main's save.js (version 2) and by the pre-count-prefix v3 build; values in GOLD2 / GOLD3 ----
+// ---- golden codes: written by main's save.js (version 2), the pre-count-prefix v3 build and the v4 build; values in GOLD2 / GOLD3 / GOLD4 ----
+// Costs of the 27 Codex relics of save code v4 in code order, written out here so the frozen table in save.js is checked against them.
+const CODEX_COST = [50, 50, 65, 45, 80, 80, 80, 105, 60, 70, 70, 50, 115, 70, 85, 80, 115, 90, 50, 130, 60, 85, 70, 70, 70, 60, 70];
+const refundOf = (bits) => bits.reduce((a, b, i) => a + (b ? CODEX_COST[i] : 0), 0);
 const GOLD2 = {
   code: 'WD1-ENRDZ-330MV-D9HWH-D9BTC-FCJSD-W3C0A-VE1AJ-4KEM9-7QGQH-MR5TQ-6KQ5D-4KBFM-6HGC9-3EX0V-E2',
   name: 'Old Hand', embers: 1234, lifetime: 98765, up: [1, 4, 3, 2, 1, 0, 3, 2, 1, 1, 3, 1, 2, 1, 1, 2],
@@ -38,97 +50,281 @@ const GOLD3 = {
   relicsNonStart: [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], mastery: [10, 0, 4000, 0, 250, 9],
   bosses: 53, deeds: 196613, pactMax: 2, pactWin: 0, stats: { runs: 12, wins: 1, deepest: 6, kills: 3100, bestTime: 1111, bossKills: 8 },
 };
-const nonStart = () => ED.RELIC_IDS.filter(id => !ED.RELICS[id].start);
-function checkGolden(g, label, wantNews) {
-  const p = S.decode(g.code);
-  ok(p.name === g.name && p.embers === g.embers && p.lifetime === g.lifetime, `${label}: name, embers, lifetime`);
+const GOLD4 = {
+  code: 'WD1-EE328-KKBMV-C43P2-M2F3B-S8FTJ-XZ8FY-8FDGW-WNP41-MTJM8-XTYWR-0EWE4-7H98P-NB46M-D596S-RWPC',
+  name: 'Veteran', embers: 321, lifetime: 12345, up: [1, 0, 3, 0, 0, 2, 3, 0, 1, 1, 3, 2, 1, 0, 2, 0],
+  relicsNonStart: [1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1], mastery: [10, 0, 4000, 0, 250, 9],
+  bosses: 21, deeds: 1234567, pactMax: 3, pactWin: 1, stats: { runs: 30, wins: 2, deepest: 5, kills: 8000, bestTime: 1500, bossKills: 12 },
+};
+ok(refundOf(GOLD4.relicsNonStart) === 570, 'GOLD4: its Codex relics cost 570 embers');
+function checkGolden(g, label) {
+  const p = S.decode(g.code), refund = refundOf(g.relicsNonStart);
+  ok(p.name === g.name && p.lifetime === g.lifetime, `${label}: name, lifetime (a refund never changes lifetime)`);
+  ok(p.embers === g.embers + refund && p.refunded === refund, `${label}: embers ${p.embers} = ${g.embers} + Codex refund ${refund}, refunded ${p.refunded}`);
   same(p.up, g.up.concat(ED.UPGRADES.slice(g.up.length).map(() => 0)), `${label}: upgrade ranks`);
-  const got = nonStart().map(id => p.relics[ED.RELIC_IDX[id]]);
-  same(got.slice(0, g.relicsNonStart.length), g.relicsNonStart, `${label}: Codex relics`);
-  ok(got.slice(g.relicsNonStart.length).every(v => v === 0), `${label}: relics appended since stay locked`);
+  ok(p.relics === undefined, `${label}: the profile has no relics array`);
   same(p.mastery, g.mastery, `${label}: mastery`);
   ok(p.bosses === g.bosses && p.deeds === g.deeds && p.pactMax === g.pactMax && p.pactWin === g.pactWin, `${label}: bosses, deeds, pacts`);
   same(p.stats, g.stats, `${label}: stats`);
-  ok(p.news === wantNews, `${label}: news flag is ${wantNews}, got ${p.news}`);
+  ok(p.news === 1, `${label}: a code from before v5 gets the notice, got ${p.news}`);
+  const q = S.decode(S.encode(p));
+  ok(q.embers === p.embers && q.refunded === 0 && q.news === 0, `${label}: re-encoded as v5 keeps the refunded embers and refunds nothing twice`);
 }
-checkGolden(GOLD2, 'v2 code from main', 1);
-checkGolden(GOLD3, 'v3 code', 0);
+checkGolden(GOLD2, 'v2 code from main');
+checkGolden(GOLD3, 'v3 code');
+checkGolden(GOLD4, 'v4 code');
 
-// ---- v4 round trips ----
+// ---- v5 round trips ----
 const rnd = U.RNG(4242);
 const ri = (a, b) => a + Math.floor(rnd.next() * (b - a + 1));
 function randomProfile() {
   const p = S.defaultProfile();
   p.name = S.sanitizeName('Hero ' + ri(0, 99999)); p.embers = ri(0, 99999); p.lifetime = p.embers + ri(0, 999999);
-  p.up = ED.UPGRADES.map(u => ri(0, u.costs.length)); p.relics = ED.RELIC_IDS.map(id => (ED.RELICS[id].start || rnd.next() < 0.5 ? 1 : 0));
+  p.up = ED.UPGRADES.map(u => ri(0, u.costs.length)); for (const c of ED.CLASS_IDS) p.armory[c] = p.armory[c].map(() => (rnd.next() < 0.5 ? 1 : 0));
   p.mastery = ED.CLASS_IDS.map(() => (rnd.next() < 0.3 ? 0 : ri(0, 200000))); p.bosses = ri(0, 63); p.deeds = ri(0, 2 ** 26 - 1);
   p.pactMax = ri(0, 10); p.pactWin = ri(-1, p.pactMax);
   p.stats = { runs: ri(0, 5000), wins: ri(0, 900), deepest: ri(0, 6), kills: ri(0, 1e7), bestTime: ri(0, 9000), bossKills: ri(0, 3000) };
   return S.normalize(p);
 }
-let rt = 0;
-for (let i = 0; i < 300; i++) {
-  const p = randomProfile(), q = S.decode(S.encode(p));
-  if (JSON.stringify(q) !== JSON.stringify(Object.assign({}, p, { sel: q.sel }))) { rt++; if (rt < 3) console.log('  round trip differs', JSON.stringify(p), JSON.stringify(q)); }
+const tripDiffs = (count) => {
+  let bad = 0;
+  for (let i = 0; i < count; i++) {
+    const p = randomProfile(), q = S.decode(S.encode(p));
+    if (JSON.stringify(q) !== JSON.stringify(Object.assign({}, p, { sel: q.sel }))) { bad++; if (bad < 3) console.log('  round trip differs', JSON.stringify(p), JSON.stringify(q)); }
+  }
+  return bad;
+};
+{
+  const rt = tripDiffs(300);
+  ok(rt === 0, `v5 round trip: ${rt} of 300 profiles differ`);
+  const ra = withArmory(() => tripDiffs(300));
+  ok(ra === 0, `v5 round trip with Armory entries: ${ra} of 300 profiles differ`);
+  ok(withArmory(() => { const p = randomProfile(); p.armory.knight = [1, 0, 1]; p.armory.pyro = [0, 1]; p.armory.necro = [1]; return JSON.stringify(S.decode(S.encode(p)).armory) === JSON.stringify(p.armory); }), 'Armory bits land on the right hero and entry');
 }
-ok(rt === 0, `v4 round trip: ${rt} of 300 profiles differ`);
 
 // ---- appended entries never shift what follows (both directions) ----
 function withAppended(f) {
   const u = { id: 'zz_up', name: 'Zz', tier: 1, costs: [1, 2, 3], icon: 'x', step: '', desc: () => '' };
-  ED.UPGRADES.push(u); ED.CLASS_IDS.push('zz_cls'); ED.CLASSES.zz_cls = { weapons: [] }; ED.RELIC_IDS.push('zz_rel'); ED.RELICS.zz_rel = { name: 'Zz', rar: 'c', start: false, cost: 10 };
+  ED.UPGRADES.push(u); ED.CLASS_IDS.push('zz_cls'); ED.CLASSES.zz_cls = { weapons: [] }; ED.ARMORY.zz_cls = [ARM('zz_a', 10)]; ED.ARMORY.knight.push(ARM('zz_ka', 15));
   ED.DEEDS.push({ id: 'zz_deed', name: 'Zz', desc: '', icon: 'x', reward: 1, check: () => false });
-  try { return f(); } finally { ED.UPGRADES.pop(); ED.CLASS_IDS.pop(); delete ED.CLASSES.zz_cls; ED.RELIC_IDS.pop(); delete ED.RELICS.zz_rel; ED.DEEDS.pop(); }
+  try { return f(); } finally { ED.UPGRADES.pop(); ED.CLASS_IDS.pop(); delete ED.CLASSES.zz_cls; delete ED.ARMORY.zz_cls; ED.ARMORY.knight.pop(); ED.DEEDS.pop(); }
 }
 {
-  const p = randomProfile(), old = S.encode(p);
-  const q = withAppended(() => S.decode(old)); // a code from before the append, read by a newer build
+  const p = withArmory(() => randomProfile()), old = withArmory(() => S.encode(p));
+  const q = withArmory(() => withAppended(() => S.decode(old))); // a code from before the append, read by a newer build
   same(q.up.slice(0, ED.UPGRADES.length), p.up, 'old code, newer build: upgrade ranks');
-  ok(q.up[ED.UPGRADES.length] === 0 && q.mastery[ED.CLASS_IDS.length] === 0 && q.relics[ED.RELIC_IDS.length] === 0, 'old code, newer build: appended entries start at 0');
+  ok(q.up[ED.UPGRADES.length] === 0 && q.mastery[ED.CLASS_IDS.length] === 0 && q.armory.zz_cls[0] === 0 && q.armory.knight[3] === 0, 'old code, newer build: appended entries start at 0');
   ok(q.name === p.name && q.embers === p.embers && q.lifetime === p.lifetime && q.bosses === p.bosses && q.deeds === p.deeds && q.pactMax === p.pactMax && q.pactWin === p.pactWin, 'old code, newer build: scalar fields intact');
   same(q.mastery.slice(0, ED.CLASS_IDS.length), p.mastery, 'old code, newer build: mastery');
-  same(q.relics.slice(0, ED.RELIC_IDS.length), p.relics, 'old code, newer build: relics');
+  same(q.armory.knight.slice(0, 3), p.armory.knight, 'old code, newer build: Armory bits of the old entries');
+  same([q.armory.pyro, q.armory.necro], [p.armory.pyro, p.armory.necro], 'old code, newer build: other heroes\' Armory bits');
   same(q.stats, p.stats, 'old code, newer build: stats');
-  const big = withAppended(() => { const b = randomProfile(); b.up[ED.UPGRADES.length - 1] = 3; b.mastery[ED.CLASS_IDS.length - 1] = 12345; b.relics[ED.RELIC_IDS.length - 1] = 1; return { b, code: S.encode(b) }; });
-  const r = S.decode(big.code); // a code from a newer build, read by this one
+  const big = withArmory(() => withAppended(() => { const b = randomProfile(); b.up[ED.UPGRADES.length - 1] = 3; b.mastery[ED.CLASS_IDS.length - 1] = 12345; b.armory.knight[3] = 1; b.armory.zz_cls[0] = 1; return { b, code: S.encode(b) }; }));
+  const r = withArmory(() => S.decode(big.code)); // a code from a newer build, read by this one
   same(r.up, big.b.up.slice(0, ED.UPGRADES.length), 'newer code, older build: upgrade ranks');
   same(r.mastery, big.b.mastery.slice(0, ED.CLASS_IDS.length), 'newer code, older build: mastery');
-  ok(r.name === big.b.name && r.embers === big.b.embers && r.bosses === big.b.bosses && r.pactMax === big.b.pactMax && JSON.stringify(r.stats) === JSON.stringify(big.b.stats), 'newer code, older build: fields after the lists intact');
+  same(r.armory.knight, big.b.armory.knight.slice(0, 3), 'newer code, older build: the extra knight entry is skipped');
+  ok(r.armory.zz_cls === undefined && r.armory.pyro.join() === big.b.armory.pyro.join() && r.armory.necro.join() === big.b.armory.necro.join(), 'newer code, older build: the extra hero is skipped, the others intact');
+  ok(r.name === big.b.name && r.embers === big.b.embers && r.bosses === big.b.bosses && r.deeds === big.b.deeds && r.pactMax === big.b.pactMax && JSON.stringify(r.stats) === JSON.stringify(big.b.stats), 'newer code, older build: fields after the lists intact');
 }
 
 // ---- clear errors ----
 throws(() => S.decode(pack(bitsOf(9, 8).concat(bitsOf(0, 120)))), /newer Wickdeep.*Reload/, 'code from a newer version');
 throws(() => S.decode(pack(bitsOf(1, 8).concat(bitsOf(0, 120)))), /unknown version or is damaged/, 'version 1 code');
 throws(() => S.decode(pack(bitsOf(4, 8).concat(bitsOf(0, 4), bitsOf(0xffffffff, 32), bitsOf(0xffffffff, 32), bitsOf(0xffffffff, 32)))), /unknown version or is damaged/, 'v4 code with a damaged body');
+throws(() => S.decode(pack(bitsOf(5, 8).concat(bitsOf(0, 4), bitsOf(0xffffffff, 32), bitsOf(0xffffffff, 32), bitsOf(0xffffffff, 32)))), /unknown version or is damaged/, 'v5 code with a damaged body');
 {
-  const extra = [];
-  for (let i = 0; i < 101; i++) { const id = 'zz_r' + i; ED.RELIC_IDS.push(id); ED.RELICS[id] = { name: 'Zz', rar: 'c', start: false, cost: 1 }; extra.push(id); }
-  try { throws(() => S.encode(S.defaultProfile()), /Too many Codex relics/, 'Codex relics beyond the 7-bit count'); }
-  finally { for (const id of extra) { ED.RELIC_IDS.pop(); delete ED.RELICS[id]; } }
+  ED.ARMORY.ranger.push(...Array.from({ length: 64 }, (_, i) => ARM('zz_o' + i, 1)));
+  try { throws(() => S.encode(S.defaultProfile()), /Too many Armory entries/, 'Armory entries beyond the 6-bit count'); }
+  finally { ED.ARMORY.ranger.length -= 64; }
 }
 ok(typeof S.encode(S.defaultProfile()) === 'string', 'encode works again after the overflow probe');
+
+// ---- a hand-built v4 code (written without save.js): the Codex bits become embers, bits beyond this build's list are skipped ----
+{
+  const varint = (v) => { const o = []; do { const chunk = v % 128; v = Math.floor(v / 128); o.push(...bitsOf(v > 0 ? 1 : 0, 1), ...bitsOf(chunk, 7)); } while (v > 0); return o; };
+  const build = (relicBits) => {
+    const bits = [...bitsOf(4, 8), ...bitsOf(6, 4)];
+    for (const ch of 'Tester') bits.push(...bitsOf(S.NAME_CHARS.indexOf(ch), 6));
+    bits.push(...varint(500), ...varint(2000), ...bitsOf(16, 6));
+    for (let i = 0; i < 16; i++) bits.push(...bitsOf(i % 3, 3));
+    bits.push(...bitsOf(relicBits.length, 7), ...relicBits);
+    bits.push(...bitsOf(6, 4)); for (const m of [0, 300, 0, 0, 0, 0]) bits.push(...varint(m));
+    bits.push(...bitsOf(5, 6), ...bitsOf(26, 6)); for (let i = 0; i < 26; i++) bits.push(i === 3 ? 1 : 0);
+    bits.push(...bitsOf(2, 4), ...bitsOf(1, 4), ...varint(5), ...varint(0), ...bitsOf(2, 3), ...varint(400), ...varint(0), ...varint(1));
+    return pack(bits);
+  };
+  const bits27 = new Array(27).fill(0); [0, 7, 19, 26].forEach(i => { bits27[i] = 1; }); // axe 50, crown 105, stone 130, venomgland 70
+  const p = S.decode(build(bits27));
+  ok(p.embers === 500 + 355 && p.refunded === 355 && p.lifetime === 2000 && p.news === 1 && p.name === 'Tester', `hand-built v4 code: embers ${p.embers}, refunded ${p.refunded}, lifetime ${p.lifetime}`);
+  ok(p.mastery[1] === 300 && p.deeds === 8 && p.bosses === 5 && p.pactMax === 2 && p.pactWin === 0 && p.stats.runs === 5 && p.stats.kills === 400 && p.stats.bossKills === 1, 'hand-built v4 code: the fields after the Codex bits are read from the right place');
+  const longer = bits27.concat([1, 1, 1]); // three relics this build has never heard of
+  ok(S.decode(build(longer)).embers === 855, 'hand-built v4 code: Codex bits beyond the frozen list add nothing');
+  ok(S.decode(build(bits27.slice(0, 20))).refunded === 50 + 105 + 130, 'hand-built v4 code: a shorter Codex list refunds what it holds');
+}
 
 // ---- the one-time news flag ----
 {
   const base = S.defaultProfile();
-  ok(base.news === 0 && base.v === 2, 'a new profile starts at era 2 with no news');
+  ok(base.news === 0 && base.v === 3 && base.refunded === 0 && base.relics === undefined, 'a new profile starts at era 3 with no news, no refund and no relics array');
   ok(S.normalize({ v: 1, stats: { runs: 3 } }).news === 1, 'era-1 profile with runs gets the news');
   ok(S.normalize({ stats: { runs: 3 } }).news === 1, 'profile with no era and runs gets the news');
   ok(S.normalize({ v: 1, stats: { runs: 0 } }).news === 0, 'era-1 profile without runs gets none');
-  ok(S.normalize({ v: 2, news: 1, stats: { runs: 3 } }).news === 1, 'pending news survives a reload');
-  ok(S.normalize({ v: 2, news: 0, stats: { runs: 3 } }).news === 0, 'cleared news stays cleared');
+  ok(S.normalize({ v: 2, news: 0, stats: { runs: 3 } }).news === 1, 'era-2 profile with runs gets the notice of the new rules even if it saw the old one');
+  ok(S.normalize({ v: 2, news: 0, stats: { runs: 0 } }).news === 0, 'era-2 profile without runs or refund gets none');
+  ok(S.normalize({ v: 3, news: 1, stats: { runs: 3 } }).news === 1, 'pending news survives a reload');
+  ok(S.normalize({ v: 3, news: 0, stats: { runs: 3 } }).news === 0, 'cleared news stays cleared');
   ok(S.normalize(JSON.parse(JSON.stringify(S.normalize({ v: 1, stats: { runs: 3 } })))).news === 1, 'stored news round-trips through JSON');
   const seen = S.normalize({ v: 1, stats: { runs: 3 } }); seen.news = 0;
   ok(S.normalize(JSON.parse(JSON.stringify(seen))).news === 0, 'once cleared and stored the notice does not return');
-  ok(S.decode(S.encode(Object.assign(randomProfile(), { news: 1 }))).news === 0, 'a v4 code carries no news');
+  ok(S.decode(S.encode(Object.assign(randomProfile(), { news: 1 }))).news === 0, 'a v5 code carries no news');
 }
 
-// ---- Codex relics and the repurposed ones the notice names ----
-for (const id of ['fang', 'wardrum', 'wispjar', 'crest', 'chalice', 'bloodstone']) ok(!!ED.RELICS[id], `relic ${id} still exists (the notice maps old names onto it)`);
+// ---- a stored profile of the Codex era: positional relics array, refunded once ----
+const STORED_V2 = {"v":2,"news":0,"name":"Stored","embers":100,"lifetime":900,"up":[1,0,3,0,0,2,3,0,1,1,3,2,1,0,2,0],"relics":[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,1,0,1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,0,1,1,1,1],"mastery":[10,0,4000,0,250,9],"bosses":3,"deeds":5,"pactMax":0,"pactWin":-1,"stats":{"runs":30,"wins":2,"deepest":5,"kills":8000,"bestTime":1500,"bossKills":12},"sel":{"cls":"knight","weapon":{}}};
+{
+  // axe 50, crown 105, wispjar 70, gauntlet 85, stone 130, bloodstone 60, venomgland 70 are the Codex relics held; halo and gravecandle are start relics
+  const p = S.normalize(JSON.parse(JSON.stringify(STORED_V2)));
+  ok(p.embers === 100 + 570 && p.refunded === 570 && p.lifetime === 900, `stored v2 profile: embers ${p.embers}, refunded ${p.refunded}, lifetime ${p.lifetime}`);
+  ok(p.v === 3 && p.news === 1 && p.relics === undefined, 'stored v2 profile: era 3, news pending, no relics array');
+  same(p.up, STORED_V2.up, 'stored v2 profile: upgrade ranks kept');
+  const again = S.normalize(JSON.parse(JSON.stringify(p)));
+  ok(again.embers === p.embers && again.refunded === 570, 'a migrated profile is never refunded twice');
+  const startOnly = JSON.parse(JSON.stringify(STORED_V2)); startOnly.relics = startOnly.relics.map((v, i) => (i < 16 || i === 42 || i === 43 ? 1 : 0)); startOnly.stats.runs = 0;
+  const q = S.normalize(startOnly);
+  ok(q.embers === 100 && q.refunded === 0 && q.news === 0, `a profile that owns only start relics gets no refund and (without runs) no notice: ${q.embers}/${q.refunded}/${q.news}`);
+  // S.load migrates once and writes the migrated copy back, so a reload cannot refund again
+  const mem = {};
+  globalThis.localStorage = { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: (k) => { delete mem[k]; } };
+  try {
+    mem[S.KEY] = JSON.stringify(STORED_V2);
+    const a = S.load(), stored = JSON.parse(mem[S.KEY]);
+    ok(a.embers === 670 && stored.v === 3 && stored.relics === undefined && stored.embers === 670 && stored.refunded === 570, 'S.load: refunded, and the stored copy is migrated');
+    const b = S.load();
+    ok(b.embers === 670 && b.news === 1 && b.refunded === 570, 'S.load again: no second refund, the notice still pending');
+    b.news = 0; b.refunded = 0; S.store(b);
+    const c = S.load();
+    ok(c.embers === 670 && c.news === 0 && c.refunded === 0, 'S.load after the notice was closed: nothing pending');
+  } finally { delete globalThis.localStorage; }
+}
+
+// ---- refunds, Reset all and the Armory ----
+{
+  const p = S.defaultProfile(); p.embers = 1000; p.lifetime = 5000;
+  const vi = ED.UPGRADE_IDX.vitality;
+  const vc = ED.UPGRADES[vi].costs, v3 = vc[0] + vc[1] + vc[2];
+  ok(S.buyUpgrade(p, 'vitality') && S.buyUpgrade(p, 'vitality') && S.buyUpgrade(p, 'vitality') && p.embers === 1000 - v3 && p.up[vi] === 3, `three Vitality ranks cost ${vc[0]} + ${vc[1]} + ${vc[2]}`);
+  ok(S.refundUpgrade(p, 'vitality') && p.embers === 1000 - v3 + vc[2] && p.up[vi] === 2, `a refund returns the cost of the rank given up (${vc[2]})`);
+  ok(S.refundUpgrade(p, 'vitality') && S.refundUpgrade(p, 'vitality') && p.embers === 1000 && p.up[vi] === 0, 'refunding every rank restores the purse');
+  ok(!S.refundUpgrade(p, 'vitality') && !S.refundUpgrade(p, 'no_such_upgrade') && !S.buyUpgrade(p, 'no_such_upgrade') && p.embers === 1000, 'nothing to refund at rank 0, unknown ids are refused');
+  ok(!S.buyUpgrade(p, 'alacrity') && p.embers === 1000, 'a tier-3 upgrade stays closed before stratum III');
+  ok(p.lifetime === 5000, 'lifetime never changes on purchase or refund');
+  // Reset all
+  const r = S.defaultProfile(); r.embers = 100000; r.lifetime = 100000; r.stats.deepest = 6;
+  for (const u of ED.UPGRADES) while (S.buyUpgrade(r, u.id));
+  const spent = 100000 - r.embers, allCosts = ED.UPGRADES.reduce((a, u) => a + u.costs.reduce((x, y) => x + y, 0), 0);
+  ok(spent === allCosts && S.refundTotal(r) === allCosts, `refundTotal is the sum of every rank bought (${spent} spent, ${S.refundTotal(r)} listed)`);
+  ok(S.resetUpgrades(r) === allCosts && r.embers === 100000 && r.up.every(v => v === 0) && r.lifetime === 100000, 'Reset all refunds every rank and keeps lifetime');
+  ok(S.resetUpgrades(r) === 0 && r.embers === 100000, 'a second Reset all refunds nothing');
+  // Armory (temporary entries)
+  withArmory(() => {
+    const a = S.defaultProfile(); a.embers = 20; a.lifetime = 77;
+    const a0 = a.armory.knight.length; // a profile made before the entries existed has no bits for them
+    ok(a0 === 3, 'a profile made inside the Armory has a bit per entry');
+    ok(!S.buyArmory(a, 'knight', 'zz_k1') && a.embers === 20, 'an entry costs embers');
+    a.embers = 200;
+    ok(S.buyArmory(a, 'knight', 'zz_k1') && a.embers === 170 && S.armoryOwned(a, 'knight', 'zz_k1'), 'buying takes the cost and marks the entry');
+    ok(!S.buyArmory(a, 'knight', 'zz_k1') && a.embers === 170, 'an owned entry cannot be bought twice');
+    ok(!S.buyArmory(a, 'ranger', 'zz_k1') && !S.buyArmory(a, 'knight', 'no_such') && !S.armoryOwned(a, 'ranger', 'zz_k1'), 'an entry belongs to its own hero; unknown ids are refused');
+    same(S.metaBundle(a, 'knight').armory, ['zz_k1'], 'the meta bundle lists the hero\'s owned entries');
+    same([S.metaBundle(a, 'pyro').armory, S.metaBundle(a, 'knight').relics], [[], undefined], 'other heroes carry none; the bundle has no relic list');
+    ok(S.buyArmory(a, 'pyro', 'zz_p2') && a.embers === 90, 'a second hero\'s entry');
+    const back = S.decode(S.encode(a));
+    same([back.armory.knight, back.armory.pyro, back.armory.necro], [[1, 0, 0], [0, 1], [0]], 'owned entries survive the save code');
+    ok(S.refundArmory(a, 'knight', 'zz_k1') && a.embers === 120 && !S.armoryOwned(a, 'knight', 'zz_k1'), 'refunding returns the cost');
+    ok(!S.refundArmory(a, 'knight', 'zz_k1') && !S.refundArmory(a, 'knight', 'no_such') && a.embers === 120, 'an unowned entry cannot be refunded');
+    a.embers = 500; a.armory = S.defaultProfile().armory;
+    S.buyArmory(a, 'knight', 'zz_k3'); S.buyArmory(a, 'pyro', 'zz_p1'); S.buyUpgrade(a, 'might');
+    const m1 = ED.UPGRADES[ED.UPGRADE_IDX.might].costs[0];
+    ok(S.refundTotal(a) === 60 + 25 + m1 && S.resetUpgrades(a) === 85 + m1 && a.embers === 500 && a.armory.knight.every(v => v === 0) && a.up.every(v => v === 0), 'Reset all also refunds Armory entries');
+    // a profile older than the entries gets bits padded on first use
+    const old = S.defaultProfile(); old.armory = { knight: [], pyro: [] }; old.embers = 100;
+    ok(S.buyArmory(old, 'knight', 'zz_k2') && old.armory.knight.length === 3 && old.armory.knight[1] === 1 && S.normalize(JSON.parse(JSON.stringify(old))).armory.necro.length === 1, 'a profile with a shorter Armory row is padded');
+  });
+  const e = S.defaultProfile();
+  ok(Object.keys(e.armory).join() === ED.CLASS_IDS.join() && ED.CLASS_IDS.every(c => e.armory[c].length === ED.ARMORY[c].length) && S.refundTotal(e) === 0, 'the Armory row of each hero is sized by its table (empty today)');
+}
+
+// ---- deeds: positional, the Archivist slot now Relic Keeper ----
+{
+  const D = ED.DEEDS[ED.DEED_IDX.archivist];
+  ok(ED.DEEDS.length === 26 && ED.DEED_IDX.archivist === 21 && ED.DEED_IDX.hearthkeeper === 22 && ED.DEED_IDX.cartographer === 25, 'deeds keep their positions');
+  ok(D.name === 'Relic Keeper' && D.desc === 'Hold 10 relics in one descent' && D.reward === 60, 'the repurposed deed reads Relic Keeper, 60 embers');
+  const p = S.defaultProfile();
+  ok(!D.check(p, null) && !D.check(p, { maxRelics: 9 }) && D.check(p, { maxRelics: 10 }), 'Relic Keeper needs 10 relics in one descent');
+  p.deeds = 1 << ED.DEED_IDX.collector; // Collector (8 relics) already earned
+  const got = S.checkDeeds(p, { maxRelics: 10 });
+  ok(got.some(d => d.id === 'archivist') && (p.deeds & (1 << 21)) && p.embers === 60 && p.lifetime === 60, 'Relic Keeper pays 60 embers once');
+  ok(!S.checkDeeds(p, { maxRelics: 12 }).some(d => d.id === 'archivist'), 'and does not pay again');
+}
+
+// ---- deeds Into the Dark and Cartographer; the small Hearth keeps its save positions ----
+{
+  const I = ED.DEEDS[ED.DEED_IDX.intothedark], C = ED.DEEDS[ED.DEED_IDX.cartographer], p = S.defaultProfile();
+  ok(I.desc === 'Clear 6 dark rooms in one descent' && I.reward === 50 && ED.DEED_IDX.intothedark === 24, 'Into the Dark: 6 dark rooms in one descent, 50 embers, same slot');
+  ok(!I.check(p, null) && !I.check(p, {}) && !I.check(p, { darkCleared: 5 }) && I.check(p, { darkCleared: 6 }) && I.check(p, { darkCleared: 12 }) && !I.check(p, { lightlessBoss: true }), 'Into the Dark needs run.darkCleared >= 6');
+  ok(/dark rooms/.test(C.desc) && C.reward === 40 && !C.check(p, {}) && C.check(p, { fullClear: true }), 'Cartographer names the dark rooms and keeps its fullClear check');
+  const got = S.checkDeeds(p, { darkCleared: 7 });
+  ok(got.some(d => d.id === 'intothedark') && !got.some(d => d.id === 'cartographer') && (p.deeds & (1 << 24)), 'a run with 7 dark rooms cleared pays Into the Dark only');
+  // the summary a client receives after the run (net.js 'end' event) carries darkCleared as a plain number
+  ok(I.check(p, JSON.parse(JSON.stringify({ darkCleared: 6 }))), 'the check reads a plain summary');
+}
+{ // positions: ids and rank counts are the save code layout; a maxed profile round-trips; the full Hearth stays small
+  ok(ED.UPGRADES.map(u => u.id).join() === 'vitality,might,fortune,fleet,provisions,bulwark,precision,wisdom,insight,headstart,alacrity,stash,attunement,favor,secondwind,deepwick', 'upgrade order is the save code position order');
+  ok(ED.UPGRADES.map(u => u.costs.length).join() === '5,5,3,3,2,3,3,3,3,2,3,2,4,2,2,3', 'rank counts are unchanged');
+  const p = S.defaultProfile(); p.up = ED.UPGRADES.map(u => u.costs.length);
+  same(S.decode(S.encode(p)).up, p.up, 'every maxed rank survives the code');
+  const st = (meta) => ED.Stats.compute({ cls: 'knight', weapon: 'longsword', boons: {}, relics: [], meta, pact: 0 });
+  const a = st({ up: ED.UPGRADES.map(() => 0), mastery: 1 }), b = st({ up: ED.UPGRADES.map(u => u.costs.length), mastery: 10 });
+  const d = (k) => b[k] - a[k];
+  ok(Math.abs(d('dmg') - 0.045) < 1e-9 && Math.abs(d('hp') - 7) < 1e-9 && Math.abs(d('crit') - 0.04) < 1e-9 && Math.abs(d('cdr') - 0.04) < 1e-9 && Math.abs(d('armor') - 3) < 1e-9 && Math.abs(d('spd') - 0.03) < 1e-9 && Math.abs(d('xp') - 0.06) < 1e-9 && Math.abs(d('gold') - 0.06) < 1e-9,
+    `full Hearth + mastery 10: +4.5% damage, +7 health, +4% crit, +4% recharge, +3 armor, +3% speed, +6% xp, +6% gold (got ${['dmg', 'hp', 'crit', 'cdr', 'armor', 'spd', 'xp', 'gold'].map(k => d(k).toFixed(3))})`);
+}
+
+// ---- relics: the whole list is in the pool, no element tag, 14 removed ----
+{
+  const gone = ['fang', 'embercharm', 'frostshard', 'stormidol', 'halo', 'gravecandle', 'wispjar', 'crest', 'gauntlet', 'frozenheart', 'brazier', 'glaciercore', 'lightningrod', 'venomgland'];
+  ok(gone.every(id => !ED.RELICS[id]), 'the 14 element relics are gone');
+  ok(ED.RELIC_IDS.length === 31 && ED.RELIC_IDS.every(id => { const r = ED.RELICS[id]; return !('start' in r) && !('cost' in r) && !('req' in r) && !('el' in r) && ED.RELIC_PRICE[r.rar]; }), 'every remaining relic is a plain pool entry with a shop price');
+  const byRar = {}; for (const id of ED.RELIC_IDS) byRar[ED.RELICS[id].rar] = (byRar[ED.RELICS[id].rar] || 0) + 1;
+  same(['c', 'r', 'e', 'l'].map(k => byRar[k]), [8, 12, 6, 5], 'relics per rarity (common, rare, epic, legendary)');
+  ok(ED.relicFits === undefined && S.relicUnlocked === undefined && S.unlockRelic === undefined && S.relicReqMet === undefined, 'the Codex API is gone');
+  // the four unique effects live on as path boons and read the same stats
+  const stats = (boons) => ED.Stats.compute({ cls: 'knight', weapon: 'longsword', boons, relics: [], meta: META(), pact: 0 });
+  ok(stats({ stormcall: 1 }).critCharge === 0.6 && stats({ thundergauntlet: 1 }).gauntlet === 1 && stats({ frostheart: 1 }).frozenHeart === 1 && stats({ souljar: 2 }).doomMul === 0.4, 'Storm Call, Thunder Gauntlet, Frozen Heart and Soul Jar set their stats');
+  const B = ED.BOONS;
+  ok(B.stormcall.path === 'lightning' && B.thundergauntlet.path === 'lightning' && B.frostheart.path === 'ice' && B.souljar.path === 'shadow' && B.souljar.max === 2 && B.frostheart.name === 'Frozen Heart', 'the moved boons sit in their paths');
+  ok(ED.pathAffinity({ staticcharge: 1, stormcall: 1, thundergauntlet: 1 }, 'lightning') === 3, 'and count toward their path');
+  // the pool in a world
+  const w = new ED.World({ seed: 5, pact: 0, players: [{ pid: 'a', name: 'A', slot: 0, cls: 'knight', weapon: 'longsword', meta: META() }] });
+  w.startRun();
+  const seen = new Set(), RAR = { c: 0, r: 1, e: 2, l: 3 };
+  for (let i = 0; i < 6000; i++) seen.add(w.rollRelic('c'));
+  ok(seen.size === ED.RELIC_IDS.length, `a roll reaches every relic (${seen.size} of ${ED.RELIC_IDS.length})`);
+  let low = 0; for (let i = 0; i < 400; i++) if (RAR[ED.RELICS[w.rollRelic('e')].rar] < 2) low++;
+  ok(low === 0, 'a minimum rarity is respected');
+  const rest = new Set(ED.RELIC_IDS); rest.delete('mask');
+  ok(w.rollRelic('c', rest) === 'mask', 'an exclude set is respected');
+  const hero = w.players.get('a'); for (const id of ED.RELIC_IDS) hero.relics.push(id);
+  ok(ED.RELIC_IDS.includes(w.rollRelic('c')), 'with every relic held a roll still returns one');
+  hero.relics.length = 0;
+  hero.relics.push('mask');
+  let mask = 0; for (let i = 0; i < 400; i++) if (w.rollRelic('c') === 'mask') mask++;
+  ok(mask === 0, 'a relic a hero holds does not drop again');
+}
 
 // ---- per-hero deed counters in the run summary ----
 {
-  const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   const w = new ED.World({ seed: 11, pact: 0, players: [
     { pid: 'a', name: 'A', slot: 0, cls: 'knight', weapon: 'longsword', meta: META() },
     { pid: 'b', name: 'B', slot: 1, cls: 'cleric', weapon: ED.CLASSES.cleric.weapons[0], meta: META() },
@@ -137,7 +333,7 @@ for (const id of ['fang', 'wardrum', 'wispjar', 'crest', 'chalice', 'bloodstone'
   const [a, b, c] = ['a', 'b', 'c'].map(k => w.players.get(k));
   const quiet = () => { w.enemies.length = 0; w.enc = null; w.locked = false; };
   quiet();
-  // relics: a holds 3 then loses 2 (a Generalist's transmute can shrink the list), b holds 1
+  // relics: a holds 3 then loses 2, b holds 1
   w.giveRelic(a, 'whetstone'); w.giveRelic(a, 'boots'); w.giveRelic(a, 'buckler'); w.giveRelic(b, 'coin');
   a.relics.length = 1;
   const s0 = w.summary();

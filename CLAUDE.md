@@ -22,19 +22,19 @@ Vanilla JS (ES2020, no modules, global `ED` namespace) + Canvas2D with a WebGL p
 ```
 index.html, style.css    page shell, DOM menus/overlays, styling
 src/util.js              constants, math, seeded RNG, colour helpers
-src/data/                biomes (palette, roster, affinity) · enemies · classes (heroes, weapons, skills) · boons (paths, duos) · classboons (class routes) · relics · meta (Hearth upgrades, pacts, deeds)
+src/data/                biomes (palette, roster, affinity) · enemies · classes (heroes, weapons, skills) · boons (paths, duos) · classboons (class routes) · ascended (Ascended boons) · relics · meta (Hearth upgrades, per-hero Armory, pacts, deeds)
 src/save.js              profile storage + save code
-src/sim/                 dungeon (floor gen) · stats (stat block) · world (run flow, rooms, light, pickups) · combat (damage, statuses, projectiles, zones)
+src/sim/                 dungeon (floor gen) · stats (stat block) · world (run flow, rooms, dark rooms, pickups) · combat (damage, statuses, projectiles, zones)
                          build (offers, paths, evolutions, class routes) · skills (cast dispatcher, class hooks) · class-<hero>.js (each hero's skills and route hooks) · sheet (Tab sheet model)
                          ai (enemy brains) · bosses · rooms (encounters, rewards, props)
 src/net.js               transports, host/client sessions, snapshot encoding
 src/game.js              run session: local hero control, client mirror, network routing
-src/client/              input · aim · audio · icons · atlas (ImageBitmap + art atlas runtime) · actors · sprites · tiles · pixfx · fx · cls-<hero>.js (ED.ClassFx hooks) · render · post (WebGL) · hud · camp · ui · sheetui
+src/client/              input · aim · audio (SFX, voice budget) · score (adaptive per-stratum music) · icons · atlas (ImageBitmap + art atlas runtime) · actors · sprites · tiles · pixfx · fx · cls-<hero>.js (ED.ClassFx hooks) · render · post (WebGL) · hud · camp · ui · sheetui
 src/art/                 generated atlas pages (data URIs) from tools/art.js; never hand-edited
 art-src/                 vendored CC0/CC-BY source art + SOURCES.md (packs, licences, hashes)
 src/main.js              app state machine + frame loop
-tools/                   sim.js (headless bot runs) · simpool.js (parallel bot batches across worker processes at normal priority; `--nice` = idle priority) · journey.js (whole-profile simulation) · sheet.js (analytic hero numbers)
-                         art.js + art-manifest.js (art packer; `--check` verifies src/art) · check-*.js and sheet-check.js (headless regression checks, exit 1 on failure)
+tools/                   sim.js (headless bot runs) · simpool.js (parallel bot batches across worker processes at normal priority; `--nice` = idle priority) · journey.js (whole-profile simulation) · sheet.js (analytic hero numbers) · model.js (the sheet's shared damage and health model) · pick.js (smart bot card values by marginal gain) · bal.js (fixed quick balance suite, ≤ 3 min; `--full` final confirm) · browse.js (headless browser smoke, crowd perf and screenshots; never a visible window)
+                         art.js + art-manifest.js (art packer; `--check` verifies src/art) · check-*.js and sheet-check.js (headless regression checks, exit 1 on failure) · check-perf.js (sim ms per tick at 70/150/200 foes, foe-grid and separate() audit)
 docs/                    GAME-DESIGN.md · MASTERPLAN.md · MASTERPLAN-AGENT.md · HANDOFF-*.md
 ```
 
@@ -47,11 +47,12 @@ docs/                    GAME-DESIGN.md · MASTERPLAN.md · MASTERPLAN-AGENT.md 
 5. **world.js/combat.js/rooms.js ↔ build.js/skills.js/class-*.js talk through hooks** — world.js calls `initBuild`, `initSkills`, `onRunStartBuild`, `onStratumBuild`, `updatePlayerBuild` (which calls `updateSkills`, and that runs `updateCharge`, `updateShieldThrow` and the class `tick` hook, then combat.js `updatePlayerCombat`), `updateOffers`, `updateAllies`, `addXp` and `clearShields` (defined in `class-knight.js`); combat.js calls `onEnemyKilledSkill` and the per-class hook tables `ED.CLS[cls]` (listed at the top of `skills.js`), and class files call combat.js `grantCrits`; minions (`spawnMinion`, `updateAllies`) live in `class-necro.js`; each skill's cast lives in `ED.CAST[skillId]` in its class file, which calls `refundSkill` for cooldown refunds; rooms.js calls `onRoomLockBuild` and `grantOffer`. Per-hero build/skill fields are created in `initBuild`/`initSkills` (and the class `init` hook), not in `addPlayer`. Keep the boundary.
 6. **Statuses build from damage dealt, never hit count** — attack speed must not out-scale damage.
 7. **All hotkeys use `e.code`** — `e.key` breaks on non-Latin layouts.
-8. **Save code is positional** (UPGRADES, CLASS_IDS, non-start RELIC_IDS, DEEDS order): append only, each list carries a count prefix (`CODE_VERSION` 4); changing a relic's start flag, reordering or removing bumps `CODE_VERSION`.
-9. **Balance claims need numbers** — run `tools/sim.js` (or `tools/simpool.js` for batches) before/after and report win rate, depth, time.
+8. **Save code is positional** (UPGRADES, CLASS_IDS, ARMORY per class, DEEDS order): append only, each list carries a count prefix (`CODE_VERSION` 5); reordering or removing bumps `CODE_VERSION`. The v4 relic table in `src/save.js` is frozen (old profiles and codes decode against it).
+9. **Balance claims need numbers** — run `tools/bal.js` (quick suite, ≤ 3 min; `--from=N` starts bots at stratum N, `--vet` is the human-proxy bot) or `tools/simpool.js` before/after and report win rate, depth, time. One `--full` confirm at the end, never repeated long batches.
 10. **Low quality must stay fast** — WebGL post-process is optional; the 2D path must work without it.
 11. **Rules and numbers follow [docs/GAME-DESIGN.md](docs/GAME-DESIGN.md)** — change the doc and the code together.
 12. **`src/art/` is generated** — edit `art-src/` or `tools/art-manifest.js`, run `node tools/art.js`, and keep `node tools/art.js --check` passing; attribution for CC-BY packs stays in the README Credits and the in-game Credits screen.
+13. **Browser checks are headless** — `tools/browse.js` only; never open a visible browser window. The user does the vsync fps check.
 
 ## Git rules
 

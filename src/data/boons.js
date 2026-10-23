@@ -2,6 +2,7 @@
 // rar: c common, r rare, e epic (keystones), l legendary (evolutions), d duo. need: 'proj' | 'melee' restricts by weapon kind. cls restricts to a hero (class boons live in classboons.js).
 // Path boons: path = owning path, gate (opens the path; a hero owns MAX_ELEMENTS element gates or the Generalist gate), key (keystone, needs path affinity >= keyAffinity),
 // evo (evolution card), duo [a, b] (needs both element gates), open (offered to every hero, never gated, counts toward no affinity), openMax (rank cap of a gated boon for a hero that is not a Generalist),
+// purse (gold card: only the exhausted-pool fallback offers it; picking it pays the room gold reward to the party gold and records no rank),
 // pw { base, k } (a proc damage of base + k x Class Power, see ED.procDmg).
 (function (ED) {
   'use strict';
@@ -76,7 +77,17 @@
       const i = per(pr, 'shadow') > 0 ? st.shadowInfuse * (1 + st.doomMul) * aff : 0, share = 1 / (1 + i), big = 1 / (1 + i * (ED.CONST.DOOM_TOUGH + st.doomTough));
       return { label: (i > 0 ? `Reaps a foe once you deal ${Math.round(share * 100)}% of its health (elites ${Math.round(big * 100)}%)` : 'Marks no Doom yet') + `; bosses Toll at ${Math.round(ED.CONST.TOLL_AT * 100)}% Doom`, pct: share };
     } },
-    general: { rows: ['crit', 'critDmg', 'bleed', 'bleedAll', 'bleedMul', 'lacerate', 'execute'], est: (pr, st) => { const dps = (pr.bleed || 0) * (1 + st.bleedMul); return { label: `Bleed adds about ${n1(dps)} damage per second to a foe`, dps }; } },
+    general: { rows: ['crit', 'critDmg', 'bleed', 'bleedAll', 'bleedMul', 'lacerate', 'execute'], est: (pr, st, aff, ref) => {
+      let dps = (pr.bleed || 0) * (1 + st.bleedMul), pops = 0;
+      if (st.hemo > 0 && pr.bleed > 0 && pr.dps > 0) { // Hemorrhage: the pool fills at the Bleed input and drains 40% a second; it pops once it holds hemoAt of the foe's health (a cycle is at least the 1 s cooldown), within the time to kill the reference foe; each pop pays hemoMul x the pool instead of the 1 x the drain would
+        const fill = 0.4, at = st.hemoAt * ref.hp, ttk = ref.hp / pr.dps;
+        if (fill * at < pr.bleed) {
+          const t1 = -Math.log(1 - fill * at / pr.bleed) / fill;
+          if (ttk >= t1) { pops = (ttk - t1) / Math.max(1, t1) + 1; dps += pops * at * (st.hemoMul - 1) * (1 + st.bleedMul) / ttk; }
+        }
+      }
+      return { label: `Bleed adds about ${n1(dps)} damage per second to a foe` + (pops > 0 ? `, ${n1(pops)} Hemorrhage pops while a ${n1(ref.hp)} HP foe lasts` : ''), dps, pops };
+    } },
   };
   for (const id in PS) Object.assign(ED.PATHS[id], { infuse: id === 'general' ? 'bleed' : ED.ELEMENTS[id].inf, status: { fire: 'burn', ice: 'chill', lightning: 'charge', poison: 'venom', holy: 'radiance', shadow: 'doom', general: 'bleed' }[id], sheet: PS[id] });
   // Elemental affinity of the hero's stratum: x1.5 weak, x0.5 resisted, else x1 (General and physical hits ignore it). Class-skill hits take half of it (ED.affC).
@@ -85,25 +96,26 @@
 
   const B = ED.BOONS = {
     // ---- open General: offered to every hero ----
-    vigor: { name: 'Vigor', rar: 'c', icon: 'heart', open: true, desc: '+{hp} max health and heal 15.', mods: { hp: 15 }, heal: 15, max: 3 },
-    plating: { name: 'Plating', rar: 'c', icon: 'shield', open: true, desc: '+{armor} armor.', mods: { armor: 5 }, max: 2 },
+    vigor: { name: 'Vigor', rar: 'c', icon: 'heart', open: true, desc: '+{hp} max health and heal 8.', mods: { hp: 8 }, heal: 8, max: 3 },
+    purse: { name: 'Purse', rar: 'c', icon: 'coin', open: true, purse: true, desc: '+{gold} gold for the party.', mods: {}, max: 1 },
+    plating: { name: 'Plating', rar: 'c', icon: 'shield', open: true, desc: '+{armor} armor.', mods: { armor: 3 }, max: 2 },
     fleet: { name: 'Fleet Foot', rar: 'c', icon: 'boot', open: true, desc: '+{spd} move speed.', mods: { spd: 0.07 }, max: 2 },
     focus: { name: 'Focus', rar: 'c', icon: 'hourglass', open: true, desc: 'Skills recharge {cdr} faster.', mods: { cdr: 0.10 }, max: 3 },
-    lightstep: { name: 'Light Step', rar: 'c', icon: 'wing', open: true, desc: 'Dash recharges {dashcdr} faster.', mods: { dashcdr: 0.2 }, max: 2 },
+    lightstep: { name: 'Light Step', rar: 'c', icon: 'wing', open: true, desc: 'Dash: +{dashN} charge(s).', mods: { dashN: 1 }, max: 2 },
     magnet: { name: 'Lodestar', rar: 'c', icon: 'magnet', open: true, desc: '+{pickup} pickup range and +{xp} experience.', mods: { pickup: 0.4, xp: 0.1 }, max: 2 },
     edge: { name: 'Sharpened Edge', rar: 'c', icon: 'sword', open: true, desc: '+{dmg} damage.', mods: { dmg: 0.10 }, max: 2 },
     quick: { name: 'Quickened Hands', rar: 'c', icon: 'hand', open: true, desc: '+{atk} attack speed.', mods: { atk: 0.10 }, max: 2 },
     bounty: { name: 'Bounty', rar: 'c', icon: 'coin', open: true, desc: '+{gold} gold.', mods: { gold: 0.25 }, max: 2 },
-    stalwart: { name: 'Stalwart', rar: 'c', icon: 'heart', open: true, desc: '+{hpMul} max health.', mods: { hpMul: 0.06 }, max: 2 },
+    stalwart: { name: 'Stalwart', rar: 'c', icon: 'heart', open: true, desc: '+{hpMul} max health.', mods: { hpMul: 0.04 }, max: 2 },
     mending: { name: 'Mending', rar: 'c', icon: 'potion', open: true, desc: '+{heal} healing received.', mods: { heal: 0.15 }, max: 2 },
     forager: { name: 'Forager', rar: 'c', icon: 'leaf', open: true, desc: 'Cleared rooms drop a heart {forager*10}% more often; hearts you pick up heal {forager*3}% more max health.', mods: { forager: 1 }, max: 2 },
     wide: { name: 'Wide Arcs', rar: 'r', icon: 'arc', open: true, desc: '+{area} area: melee reach, blasts and auras.', mods: { area: 0.15 }, max: 2 },
-    evade: { name: 'Evasion', rar: 'r', icon: 'cloak', open: true, desc: '+{dodge} chance to dodge attacks.', mods: { dodge: 0.06 }, max: 2 },
-    thorns: { name: 'Thornmail', rar: 'r', icon: 'thorn', open: true, desc: 'Attackers take {thorns} damage. +{armor} armor.', mods: { thorns: 10, armor: 4 }, max: 2 },
+    evade: { name: 'Evasion', rar: 'r', icon: 'cloak', open: true, desc: '+{dodge} chance to dodge attacks.', mods: { dodge: 0.04 }, max: 2 },
+    thorns: { name: 'Thornmail', rar: 'r', icon: 'thorn', open: true, desc: 'Attackers take {thorns} damage. +{armor} armor.', mods: { thorns: 10, armor: 2 }, max: 2 },
     pierce: { name: 'Piercing', rar: 'r', icon: 'arrow', open: true, desc: 'Projectiles pierce +{pierce} foe(s).', mods: { pierce: 1 }, need: 'proj', max: 2 },
     split: { name: 'Split Shot', rar: 'r', icon: 'arrows', open: true, desc: '+{projN} projectile(s) per attack, -{dmg} damage.', mods: { projN: 1, dmg: -0.08 }, need: 'proj', max: 2 },
     bladedash: { name: 'Blade Dash', rar: 'r', icon: 'wingblade', open: true, desc: 'Dashing through foes deals {dashDmg} Power ({dashDmg*P} damage).', mods: { dashDmg: 1.2 }, max: 1 },
-    battleward: { name: 'Battle Ward', rar: 'r', icon: 'shieldgold', open: true, desc: 'When an elite room locks, gain a shield of {roomWard} max health.', mods: { roomWard: 0.05 }, max: 1 },
+    battleward: { name: 'Battle Ward', rar: 'r', icon: 'shieldgold', open: true, desc: 'When an elite room locks, gain a shield of {roomWard} max health.', mods: { roomWard: 0.03 }, max: 1 },
     echo: { name: 'Echo', rar: 'e', icon: 'twinblue', open: true, desc: 'Your first skill holds a second charge.', mods: { charges: 1 }, max: 1 },
     laststand: { name: 'Last Stand', rar: 'e', icon: 'shieldgold', open: true, desc: 'Falling below 30% health grants 3s of 60% damage reduction (20s cooldown).', mods: { guardian: 1 }, max: 1 },
     glass: { name: 'Glass Heart', rar: 'e', icon: 'heartbroken', open: true, desc: '+30% damage, -15% max health.', mods: { dmg: 0.3, hpMul: -0.15 }, max: 1 },
@@ -127,6 +139,7 @@
     brittle: { name: 'Brittle Cold', rar: 'c', icon: 'gem', path: 'ice', desc: '+{brittle} damage to chilled or frozen foes.', mods: { brittle: 0.1 }, max: 2 },
     coldsnap: { name: 'Cold Snap', rar: 'r', icon: 'wing', path: 'ice', desc: 'Dashing releases a frost ring (radius 80) dealing {dashFrost} Power ({dashFrost*P} damage); it chills.', mods: { dashFrost: 0.5 }, max: 1 },
     permafrost: { name: 'Permafrost', rar: 'c', icon: 'shield', path: 'ice', desc: 'Freeze lasts {freezeDur} longer. Chilled foes deal {chillWeaken} less damage.', mods: { freezeDur: 0.3, chillWeaken: 0.1 }, max: 2 },
+    frostheart: { name: 'Frozen Heart', rar: 'r', icon: 'snow', path: 'ice', desc: 'When hit, freeze nearby foes (8s cooldown).', mods: { frozenHeart: 1 }, max: 1 },
     abszero: { name: 'Absolute Zero', rar: 'e', icon: 'snow', path: 'ice', key: true, desc: 'Freezing a foe releases a frost nova adding 60 chill to foes within 100.', mods: { frostNova: 1 }, max: 1 },
     evo_ice: { name: 'Glacial Arms', rar: 'l', icon: 'snow', path: 'ice', evo: 'ice', desc: 'Every 3rd attack fires 5 piercing ice shards in a fan along your aim (50% each). Chill +25%.', mods: { chillMul: 0.25 }, strikes: [{ label: 'Ice shards', on: 'any', mul: 0.5, every: 3, fan: { n: 5, step: 0.225, r: 5 }, crit: true, proc: true }], max: 1 },
 
@@ -137,6 +150,8 @@
     shortcircuit: { name: 'Short Circuit', rar: 'r', icon: 'bolt', path: 'lightning', desc: 'A charged foe that dies discharges at once at +{shortCircuit}.', mods: { shortCircuit: 0.25 }, max: 2 },
     thunderstep: { name: 'Thunderstep', rar: 'r', icon: 'wingblade', path: 'lightning', desc: 'Foes you dash through take {dashDmg} Power ({dashDmg*P} damage); it charges them.', mods: { dashDmg: 1 }, max: 1 },
     overload: { name: 'Overload', rar: 'c', icon: 'magnet', path: 'lightning', desc: 'Discharges stun non-boss foes for {arcStun:sec} (elites half), at most once per second per foe.', mods: { arcStun: 0.25 }, max: 2 },
+    stormcall: { name: 'Storm Call', rar: 'r', icon: 'bolt', path: 'lightning', desc: 'Critical hits charge foes with 60% of their damage.', mods: { critCharge: 0.6 }, max: 1 },
+    thundergauntlet: { name: 'Thunder Gauntlet', rar: 'r', icon: 'bolt', path: 'lightning', desc: 'Every 6th attack calls lightning on its target.', mods: { gauntlet: 1 }, max: 1 },
     thunderhead: { name: 'Thunderhead', rar: 'e', icon: 'bolt', path: 'lightning', key: true, desc: 'Each discharge has a {thunderbolt} chance to drop a thunderbolt: {pw} damage (200% Power), radius 60 (once per 0.6s).', mods: { thunderbolt: 0.25 }, pw: { k: 2 }, max: 1 },
     evo_lightning: { name: 'Tempest Arms', rar: 'l', icon: 'bolt', path: 'lightning', evo: 'lightning', desc: 'Every 4th attack calls lightning on the foe nearest the point 80 ahead of your aim, within 220 (150% weapon damage, radius 50). Foes discharge every 0.5s.', mods: {}, strikes: [{ label: 'Lightning strike', on: 'any', mul: 1.5, every: 4, n: 1, crit: false, proc: true, el: 'lightning' }], max: 1 },
 
@@ -165,14 +180,15 @@
     malignance: { name: 'Malignance', rar: 'c', icon: 'mask', path: 'shadow', desc: 'Hits mark {shadowInfuse} more of their damage as Doom.', mods: { shadowInfuse: 0.08 }, max: 2 },
     malice: { name: 'Malice', rar: 'c', icon: 'skull', path: 'shadow', desc: '+{malice} damage to foes carrying Doom.', mods: { malice: 0.1 }, max: 2 },
     inevitable: { name: 'Inevitable', rar: 'r', icon: 'skull', path: 'shadow', desc: 'Elites and bosses take {doomTough} more of your Doom (full at rank 2).', mods: { doomTough: 0.15 }, max: 2 },
-    deathknell: { name: 'Death Knell', rar: 'r', icon: 'drum', path: 'shadow', desc: 'Each Reap or Toll grants +4% damage for 6s, stacking up to {knell:n} times.', mods: { knell: 5 }, max: 2 },
-    deathsedge: { name: "Death's Edge", rar: 'r', icon: 'dagger', path: 'shadow', desc: 'Each Reap or Toll readies {deathsEdge*ck} guaranteed crit(s) (up to {deathsEdge*ck3} stored).', mods: { deathsEdge: 1 }, max: 1 },
+    deathknell: { name: 'Death Knell', rar: 'r', icon: 'drum', path: 'shadow', desc: 'Each Reap (not of a horde foe) or Toll grants +4% damage for 6s, stacking up to {knell:n} times.', mods: { knell: 5 }, max: 2 },
+    deathsedge: { name: "Death's Edge", rar: 'r', icon: 'dagger', path: 'shadow', desc: 'Each Reap (not of a horde foe) or Toll readies {deathsEdge*ck} guaranteed crit(s) (up to {deathsEdge*ck3} stored).', mods: { deathsEdge: 1 }, max: 1 },
+    souljar: { name: 'Soul Jar', rar: 'c', icon: 'orb', path: 'shadow', desc: 'Your hits mark {doomMul} more Doom.', mods: { doomMul: 0.2 }, max: 2 },
     umbralstep: { name: 'Umbral Step', rar: 'r', icon: 'cloak', path: 'shadow', desc: 'Foes you dash through take {dashDmg} Power ({dashDmg*P} damage); that hit marks +{dashDoom} of its damage as Doom.', mods: { dashDmg: 0.8, dashDoom: 0.6 }, max: 1 },
     reaper: { name: 'Reaper', rar: 'e', icon: 'axe', path: 'shadow', key: true, desc: 'A Reaped foe implodes: 20% of its health (elites 10%) as Shadow damage to foes within 80.', mods: { reaper: 0.2 }, max: 1 },
     evo_shadow: { name: 'Umbral Arms', rar: 'l', icon: 'mask', path: 'shadow', evo: 'shadow', desc: 'A shadow twin repeats every attack 0.15s later at 40%; twin hits mark double Doom.', mods: {}, strikes: [{ label: 'Shadow twin', on: 'any', mul: 0.4, every: 1, n: 1, crit: true, proc: true, of: 'attack' }], max: 1 },
 
     // ---- General (Generalist only; keen and brutal also open at rank 1 to element heroes) ----
-    generalist: { name: 'Generalist', rar: 'r', icon: 'sword', path: 'general', gate: true, desc: 'Forsake the elements: you never see element boons or relics. +15% damage, +5% crit chance; crits Bleed for 30% of the hit. Open boons can rank 1 higher.', mods: { dmg: 0.15, crit: 0.05, bleed: 0.3, openRank: 1 }, max: 1 },
+    generalist: { name: 'Generalist', rar: 'r', icon: 'sword', path: 'general', gate: true, desc: 'Forsake the elements: you never see element boons. +15% damage, +5% crit chance; crits Bleed for 30% of the hit. Open boons can rank 1 higher.', mods: { dmg: 0.15, crit: 0.05, bleed: 0.3, openRank: 1 }, max: 1 },
     keen: { name: 'Keen Eye', rar: 'c', icon: 'eye', path: 'general', openMax: 1, desc: '+{crit} crit chance.', mods: { crit: 0.05 }, max: 2 },
     brutal: { name: 'Brutality', rar: 'r', icon: 'skull', path: 'general', openMax: 1, desc: '+{critDmg} crit damage.', mods: { critDmg: 0.25 }, max: 3 },
     lacerate: { name: 'Lacerate', rar: 'r', icon: 'dagger', path: 'general', desc: '+{lacerate} damage to bleeding foes.', mods: { lacerate: 0.12 }, max: 2 },
@@ -207,6 +223,7 @@
     e: { name: 'Epic', color: '#c98bff', w: 10 },
     l: { name: 'Legendary', color: '#ffb02e', w: 4 },
     d: { name: 'Duo', color: '#5ff2c0', w: 12 },
+    a: { name: 'Ascended', color: '#ff5fd2', w: 0 },
   };
 
   // Gate boon id per path.
@@ -255,8 +272,6 @@
     if (b.openMax && !(st && st.openRank)) return b.openMax;
     return max + (b.open && max >= 2 && st && st.openRank ? 1 : 0);
   };
-  // Relics tagged with an element never reach a Generalist.
-  ED.relicFits = (p, id) => !ED.RELICS[id].el || !ED.isGeneralist(p.boons);
   // Damage of a proc defined as { pw: { base, k } } for a hero with Class Power st.power.
   ED.procDmg = (def, st) => (def.pw.base || 0) + def.pw.k * st.power;
 })(globalThis.ED || (globalThis.ED = {}));

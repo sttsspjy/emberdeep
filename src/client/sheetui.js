@@ -1,4 +1,4 @@
-// The Tab sheet: header, three tabs (Build, Combat, Map) rendered from ED.Sheet.compute, live refresh, spatial keyboard / mouse / gamepad focus, the lantern map canvas.
+// The Tab sheet: header, three tabs (Build, Combat, Map) rendered from ED.Sheet.compute, live refresh, spatial keyboard / mouse / gamepad focus, the map canvas.
 // A tab is rebuilt (innerHTML) only when its markup changes apart from its live cells (data-live text), which are patched in place; only the visible tab renders, at most twice a second.
 (function (ED) {
   'use strict';
@@ -25,8 +25,9 @@
   const pips = (rank, max, col) => { let s = ''; for (let i = 1; i <= max; i++) s += `<i class="${i <= rank ? 'on' : ''}"${i <= rank ? ` style="background:${col}"` : ''}></i>`; return s; };
   const col = (name, body, cls) => `<section class="plate sh-col${cls ? ' ' + cls : ''}" data-col="${name}"><div class="sh-in">${body}</div></section>`;
   const head = (title, small) => `<h3 class="plate-h">${title}${small ? ` <small>${small}</small>` : ''}</h3>`;
-  // Source chips of one stat: [{ label, kind, v }] -> "Base 100%", "Might 3 +12%"; a negative contribution is the only red on the sheet.
+  // Source chips of one stat: [{ label, kind, v, mul? }] -> "Base 100%", "Might 3 +12%", "Honed Edge ×1.15" (an Ascended multiplier); a negative contribution is the only red on the sheet.
   const chips = (rows, key) => rows.map(r => (r.kind === 'base' ? `<span>${esc(r.label)} <b>100%</b></span>`
+    : r.mul ? `<span class="asc">${esc(r.label)} <b>${Sh.fmt(key, 1 + r.v, 'x')}</b></span>`
     : `<span class="${r.v < 0 ? 'neg' : ''}${r.kind === 'temp' ? ' tmp' : ''}">${esc(r.label)} <b>${sgn(r.v, Sh.fmt(key, Math.abs(r.v)))}</b></span>`)).join('');
   // src: the chip row as a string, or [{ lab, html }] for several labelled rows.
   const srcRows = (src) => (Array.isArray(src) ? src.filter(g => g.html).map(g => `<div class="sh-src"><span class="sh-sk">${g.lab}</span>${g.html}</div>`).join('') : src ? `<div class="sh-src">${src}</div>` : '');
@@ -60,7 +61,7 @@
     $('sh-name').textContent = h.name; $('sh-name').style.color = color;
     $('sh-class').textContent = ' · ' + h.clsName;
     const rt = m.build.route;
-    $('sh-sub').textContent = m.weapon.name + (rt.route ? ' · ' + ED.routeLabel(h.cls, rt.route) + ' route' + (rt.fork ? ': ' + ED.BOONS[rt.fork].name + (rt.rank > 1 ? ' (rank ' + rt.rank + ')' : '') : '') : ' · no route yet');
+    $('sh-sub').textContent = m.weapon.name + (rt.route ? ' · ' + ED.routeLabel(h.cls, rt.route) + ' route' + (rt.fork ? ': ' + ED.cardName(rt.fork, rt.rank) + (rt.rank > 1 ? ' (rank ' + rt.rank + ')' : '') : '') : ' · no route yet');
     const xpf = U.clamp(h.xp / Math.max(1, h.xpNext), 0, 1);
     $('sh-lv').textContent = 'Lv ' + h.level; $('sh-xpbar').style.width = Math.round(100 * xpf) + '%'; $('sh-xp').textContent = Math.round(100 * xpf) + '%';
     $('sh-hp').textContent = `${h.hp} / ${h.maxHp}`; $('sh-hpbar').style.width = Math.round(100 * U.clamp(h.hp / Math.max(1, h.maxHp), 0, 1)) + '%';
@@ -98,7 +99,7 @@
     }
     return h;
   }
-  const KIND_LABEL = { gate: 'gate', keystone: 'keystone', evolution: 'evolution', duo: 'duo', route: 'route', fork: 'fork' };
+  const KIND_LABEL = { gate: 'gate', keystone: 'keystone', evolution: 'evolution', duo: 'duo', route: 'route', fork: 'fork', ascended: 'ascended' };
   function boonRow(b) {
     const P = b.path && ED.PATHS[b.path] ? ED.PATHS[b.path] : null, color = P ? P.color : '#b9ad9b', lab = KIND_LABEL[b.kind] || '';
     return `<div class="sh-boon sh-f" data-k="b:${b.id}" style="--pc:${color};--rc:${RAR(b.rar).color}"><img class="sh-bi" alt="" src="${ED.Icons.boonUrl(b.id)}"><div class="sh-bm">`
@@ -123,7 +124,7 @@
     left += head('Class route', B.route.route ? esc(ED.routeLabel(m.hero.cls, B.route.route)) : 'choose at level 3') + `<div class="sh-list">${routeBlock(B.route)}</div>`;
     let boons = B.groups.length ? '' : '<div class="sh-empty">No boons yet. The first pick comes from the start offer.</div>';
     for (const g of B.groups) {
-      const P = g.path ? ED.PATHS[g.path] : null, title = g.group === 'duo' ? 'Duo' : g.group === 'route' ? 'Class route' : P ? `${P.name} <small>affinity ${ED.pathAffinity(p.boons || {}, g.path)}</small>` : 'Open <small>any hero, no path</small>';
+      const P = g.path ? ED.PATHS[g.path] : null, title = g.group === 'duo' ? 'Duo' : g.group === 'route' ? 'Class route' : g.group === 'asc' ? 'Ascended <small>multiplies the bonuses you hold</small>' : P ? `${P.name} <small>affinity ${ED.pathAffinity(p.boons || {}, g.path)}</small>` : 'Open <small>any hero, no path</small>';
       boons += `<div class="sh-bg"><div class="sh-gh"${P ? ` style="--pc:${P.color}"` : ''}>${P ? `<img alt="" src="${pathIco(g.path)}">` : ''}${title}</div>${g.items.map(boonRow).join('')}</div>`;
     }
     let status = '';
@@ -185,7 +186,7 @@
   }
   function dashCard(m, color) {
     const d = m.dash;
-    let h = `<div class="sh-card sh-f" data-k="dash" style="--pc:${color}"><div class="sh-ct"><kbd>${esc(ED.Input.label('dash'))}</kbd><img alt="" src="${ico('wing', color)}"><b>Dash</b><span class="sh-cd">${d.cd.toFixed(2)}s</span></div><div class="sh-sub">Untouchable for ${d.ifr}s while you dash</div>`;
+    let h = `<div class="sh-card sh-f" data-k="dash" style="--pc:${color}"><div class="sh-ct"><kbd>${esc(ED.Input.label('dash'))}</kbd><img alt="" src="${ico('wing', color)}"><b>Dash</b><span class="sh-cd">${d.cd.toFixed(2)}s${d.charges > 1 ? ' <small>each</small>' : ''}</span>${d.charges > 1 ? `<span class="sh-pips">${pips(d.charges, d.charges, color)}</span>` : ''}</div><div class="sh-sub">${d.charges > 1 ? d.charges + ' charges · ' : ''}Untouchable for ${d.ifr}s while you dash</div>`;
     for (const q of d.parts) h += `<div class="sh-part"><span class="sh-plab">${esc(q.label)}</span><span class="sh-pv">${q.dmg !== undefined ? n1(q.dmg) : ''}</span><span class="sh-pn">${q.per ? 'per ' + q.per + ' · ' : ''}${q.r ? 'radius ' + q.r + ' · ' : ''}${q.dur ? Sh.secs(q.dur) + 's · ' : ''}${esc(q.note || '')}</span></div>`;
     return h + '</div>';
   }
@@ -198,7 +199,7 @@
     let h = '';
     h += stat('o:dmg', 'Damage', X(M.dmg.total), '', chips(M.dmg.rows, 'dmg'));
     h += stat('o:atk', 'Attack speed', X(M.atk.total), `${w.aps.toFixed(2)} attacks/s`, chips(M.atk.rows, 'atk'));
-    h += stat('o:crit', 'Critical', `${pc(M.crit.total)} · ${X(M.crit.mult)}`, `the average hit counts ${X(M.crit.expected)}`, [{ lab: 'Chance', html: chips(M.crit.rows, 'crit') }, { lab: 'Damage', html: `<span>Base <b>${X(M.crit.mult - M.crit.rowsDmg.reduce((a, r) => a + r.v, 0))}</b></span>` + chips(M.crit.rowsDmg, 'critDmg') }]);
+    h += stat('o:crit', 'Critical', `${pc(M.crit.total)} · ${X(M.crit.mult)}`, `the average hit counts ${X(M.crit.expected)}`, [{ lab: 'Chance', html: chips(M.crit.rows, 'crit') }, { lab: 'Damage', html: `<span>Base <b>${X(M.crit.base)}</b></span>` + chips(M.crit.rowsDmg, 'critDmg') }]);
     h += stat('o:area', 'Area', '+' + pc(M.area.total), `blasts and auras radius ${X(M.area.blast)} · melee arc ${X(M.area.arc)}`, chips(M.area.rows, 'area'));
     h += stat('o:cdr', 'Skill cooldown', M.cdr.eff > 0 ? '−' + pc(M.cdr.eff) : '0%', M.cdr.capped ? `raw ${pc(M.cdr.raw)}: full up to ${pc(M.cdr.soft)}, half above it, at most ${pc(M.cdr.max)}` : '', chips(M.cdr.rows, 'cdr'));
     if (M.projN.total || M.projN.pierce) h += stat('o:proj', 'Projectiles and pierce', `+${M.projN.total} · pierce +${M.projN.pierce}`, '', [{ lab: 'Projectiles', html: chips(M.projN.rows, 'projN') }, { lab: 'Pierce', html: chips(M.projN.rowsPierce, 'pierce') }]);
@@ -224,10 +225,9 @@
     h += stat('d:ehp', 'Effective health', n1(D.ehp), 'hits you can take, counting armor and dodge', '');
     const parts = [`${U.roman(m.ctx.stratum)} ${X(D.foeParts.depth * D.foeParts.threat)}`];
     if (D.foeParts.pact !== 1) parts.push(`pact ${X(D.foeParts.pact)}`);
-    parts.push(`${m.lantern.name} ${X(D.foeParts.dread)}`);
-    if (D.deepKnown) parts.push(`Dark rooms entered ${X(D.foeParts.deep)}`); // clients do not know the host's dark-room count
+    if (D.foeParts.dark !== null) parts.push(`dark room ${X(D.foeParts.dark)}`);
     h += stat('d:foe', 'Foes that spawn now hit', X(D.foeHere), parts.join(' · ') + '. Foes already alive keep the damage they spawned with.', '');
-    h += stat('d:heal', 'Healing received', X(D.heal), `${X(D.healMul)} from your stats${D.pactHeal !== 1 ? ' and pact' : ''} · ${X(m.lantern.effect.heal)} from the ${m.lantern.name} lantern`, chips(D.healRows, 'heal'));
+    h += stat('d:heal', 'Healing received', X(D.healMul), `from your stats${D.pactHeal !== 1 ? ' and pact' : ''}`, chips(D.healRows, 'heal'));
     for (const s of D.heals) h += stat('d:h:' + s.label, 'Heals: ' + esc(s.label), '', esc(s.text), '');
     h += stat('d:shield', 'Shield', live('shield', n1(D.shield)), `fades ${pc(0.02)} of max health per second between fights`, D.shields.map(s => `<span>${esc(s.label)} <b>${esc(s.text)}</b></span>`).join(''));
     const SW = D.window;
@@ -247,18 +247,16 @@
 
   // ---------------- Map tab ----------------
   function renderMapSide(m) {
-    const L = m.lantern, A = m.aff, biome = ED.biomeFor(m.ctx.stratum);
+    const K = m.dark, A = m.aff, biome = ED.biomeFor(m.ctx.stratum);
     let h = `<div class="sh-stat sh-f" data-k="m:strat"><div class="sh-sl"><span class="sh-l">${U.roman(m.ctx.stratum)} ${esc(biome.name)}</span></div><div class="sh-aff2">${affChips(A.now)}</div>`;
     const cls = A.now.mine.filter(x => x.skillMul !== null && x.skillMul !== x.mul);
     if (cls.length) h += `<div class="sh-sub">Your class skills take half the affinity: ${cls.map(x => `${esc(x.name)} ${X(x.skillMul)}`).join(', ')}.</div>`;
     if (A.next) h += `<div class="sh-sub">Next, ${esc(A.next.short)}:</div><div class="sh-aff2">${affChips(A.next)}</div>`;
     h += '</div>';
-    h += `<div class="sh-stat sh-f" data-k="m:lantern"><div class="sh-sl"><span class="sh-l">Lantern</span><span class="sh-v"><span class="sh-tier t${L.tier}">${L.name}</span></span></div>`
-      + `<div class="sh-sub">Light ${live('light', `${n1(L.light)} / ${n1(L.lightMax)} (${Math.round(L.pct * 100)}%)`)}</div>`
-      + `<div class="sh-cond">${L.name} lantern: foe damage ${X(L.effect.dmg)} · elite chance +${Math.round(L.effect.elite * 100)}%${L.effect.gloom ? ` · the Gloom hunts ${L.effect.gloom}s after you enter a room` : ''} · healing ${X(L.effect.heal)}</div>`
-      + `<div class="sh-cond">New room: fight −${n1(L.cost.combat.pts)} (−${Math.round(L.cost.combat.pct * 100)}%) · elite −${n1(L.cost.elite.pts)} (−${Math.round(L.cost.elite.pct * 100)}%) · other −${n1(L.cost.other.pts)} (−${Math.round(L.cost.other.pct * 100)}%)</div>`
-      + `<div class="sh-cond">Boss door now: heal ${Math.round(L.boss.heal * 100)}% · shield ${Math.round(L.boss.shield * 100)}% · ${L.boss.gold} gold · ${L.boss.embers} ${pl(L.boss.embers, 'ember')}</div>`
-      + `<div class="sh-cond">Rooms explored ${live('rooms', `${L.rooms.seen} / ${L.rooms.total}`)} · Flare −${n1(L.flare.pts)} (−${Math.round(L.flare.pct * 100)}%)</div></div>`;
+    h += `<div class="sh-stat sh-f" data-k="m:dark"><div class="sh-sl"><span class="sh-l">Dark rooms</span><span class="sh-v">${live('dark', `${K.left} left`)}</span></div>`
+      + `<div class="sh-sub">${K.left} of ${K.total} unvisited${K.here ? ' · you are in one' : ''}. They are optional dead ends, marked on doors and the map.</div>`
+      + `<div class="sh-cond">Foes hit ${X(K.dmg)} · the last wave brings one more elite · the reward goes up one step · gold and experience dropped there ${X(K.loot)}</div>`
+      + `<div class="sh-cond">Rooms explored ${live('rooms', `${K.rooms.seen} / ${K.rooms.total}`)}</div></div>`;
     h += `<div class="sh-stat sh-f" data-k="m:party"><div class="sh-sl"><span class="sh-l">Party</span></div>${m.partyRows}</div>`;
     return h;
   }
@@ -396,13 +394,13 @@
   }
 
   // ---------------- map canvas ----------------
-  // Sized from the column box (a hidden tab measures 0 and draws nothing); cells cap at 7.1 units; redrawn when the room, the room-state hash or the rounded light change.
+  // Sized from the column box (a hidden tab measures 0 and draws nothing); cells cap at 7.1 units; redrawn when the room or the room-state hash change.
   function mapDraw(force) {
     const v = ED.Game.s.view, box = $('sh-mapbox').getBoundingClientRect();
     if (!(box.width > 10 && box.height > 10)) return;
     const dpr = window.devicePixelRatio || 1, cw = Math.min(box.width, box.height * 6 / 5), ch = cw * 5 / 6, cv = $('map-canvas');
     let rs = ''; for (const id in v.roomState) { const q = v.roomState[id]; rs += (q.visited ? 1 : 0) + (q.known ? 2 : 0) + (q.cleared ? 4 : 0); }
-    const key = [Math.round(cw), Math.round(ch), dpr, v.roomId, rs, Math.round(v.light), v.floorSeed].join('|');
+    const key = [Math.round(cw), Math.round(ch), dpr, v.roomId, rs, v.floorSeed].join('|');
     if (!force && key === SH.mapKey) return;
     SH.mapKey = key;
     cv.style.width = Math.round(cw) + 'px'; cv.style.height = Math.round(ch) + 'px';

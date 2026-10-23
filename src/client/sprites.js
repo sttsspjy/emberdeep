@@ -1029,24 +1029,6 @@
     c.restore();
   };
 
-  LOOK.gloom = (c, e, C, t, s) => {
-    c.save(); c.scale(s, s); c.lineWidth = 1.2;
-    glow(c, 0, -26, 38, '#1b0b2e', 0.55);
-    // tall shroud with a ragged, swaying hem
-    c.globalAlpha = 0.93;
-    c.beginPath(); c.moveTo(-10, -2); c.quadraticCurveTo(-14, -34, -4, -50); c.quadraticCurveTo(0, -56, 4, -50); c.quadraticCurveTo(14, -34, 10, -2);
-    for (let i = 0; i <= 7; i++) c.lineTo(10 - i * 2.9, 4 + Math.sin(t * 4 + i * 1.4 + e.id) * 3.5 + (i % 2) * 4);
-    c.closePath(); c.fillStyle = C.a; c.fill(); c.strokeStyle = C.b; c.stroke();
-    // trailing wisps behind the drift direction
-    c.globalAlpha = 0.5; c.strokeStyle = C.b; c.lineWidth = 3; c.lineCap = 'round';
-    for (let i = 0; i < 4; i++) { const y = -12 - i * 9, sw = Math.sin(t * 3 + i * 1.7 + e.id) * 5; c.beginPath(); c.moveTo(-e.face * 8, y); c.quadraticCurveTo(-e.face * (18 + sw), y + 3, -e.face * (28 + i * 3 + sw), y + 9 + Math.sin(t * 5 + i) * 3); c.stroke(); }
-    c.globalAlpha = 1; c.lineCap = 'butt';
-    // burning eyes
-    const ey = -38;
-    for (const sd of [-1, 1]) { glow(c, sd * 4 + 1, ey, 9, C.c, 0.85); poly(c, [sd * 4 - 1.4, ey - 1.6, sd * 4 + 4.4, ey + 0.8, sd * 4 - 1, ey + 2.2], '#ffd9a0', false); }
-    c.restore();
-  };
-
   // ---------- bosses ----------
   LOOK.b_warden = (c, e, C, t, s) => {
     const dash = e.pose === 'dash', wind = e.pose === 'wind', cast = e.pose === 'cast';
@@ -1163,9 +1145,16 @@
   const FROZEN = { a: '#d8f4ff', b: '#9fd6ef', c: '#ffffff' };
   // Ground shadow plus the elite and exposed halos drawn under a foe (lite: single shadow layer).
   Sp.foeBack = (c, e, t, lite) => {
-    Sp.shadow(c, e.r, e.def.fly || e.def.gloom ? 0.22 : 0.35, lite);
+    Sp.shadow(c, e.r, e.def.fly ? 0.22 : 0.35, lite);
     if (e.elite) { const col = ED.AFFIXES[e.elite].color; glow(c, 0, -e.r, e.r * 2.6, col, 0.32 + Math.sin(t * 5) * 0.08); }
     if (e.exposed) glow(c, 0, -e.r, e.r * 2.2, '#ff3a3a', 0.25 + Math.sin(t * 9) * 0.1);
+  };
+  // Boss fury aura under a boss whose furyM > 1: one cached glow sprite, radius, strength and pulse rate rising with the multiplier (1 to World.BOSS_FURY.max); origin = the boss's feet.
+  Sp.furyGlow = (c, e, t) => {
+    const m = e.furyM;
+    if (!(m > 1)) return;
+    const k = Math.min(1, (m - 1) / (ED.World.BOSS_FURY.max - 1));
+    glow(c, 0, -e.r, e.r * (2.3 + 0.9 * k), k > 0.6 ? '#ff4a1a' : '#ff8a3d', 0.28 + 0.3 * k + Math.sin(t * (6 + 10 * k)) * (0.06 + 0.06 * k));
   };
   Sp.enemy = (c, e, t) => {
     const def = e.def;
@@ -1174,10 +1163,11 @@
     c.save();
     c.lineWidth = 1.6; c.strokeStyle = OUT; c.lineJoin = 'round'; c.lineCap = 'round';
     if (e.st === 'burrow') { drawMound(c, e, t); c.restore(); return; }
-    Sp.shadow(c, e.r, def.fly || def.gloom ? 0.22 : 0.35);
+    Sp.shadow(c, e.r, def.fly ? 0.22 : 0.35);
     if (e.st === 'fade') c.globalAlpha = 0.4 + Math.sin(t * 34) * 0.18;
     if (e.elite) { const col = ED.AFFIXES[e.elite].color; glow(c, 0, -e.r, e.r * 2.6, col, 0.32 + Math.sin(t * 5) * 0.08); }
     if (e.exposed) glow(c, 0, -e.r, e.r * 2.2, '#ff3a3a', 0.25 + Math.sin(t * 9) * 0.1);
+    if (e.boss) Sp.furyGlow(c, e, t);
     if ((e.st === 'windup' || e.st === 'aim' || e.st === 'cast' || e.pose === 'wind') && Math.floor(t * 14) % 2 === 0) c.translate(Math.sin(t * 60) * 0.8, 0);
     c.scale(e.face < 0 ? -1 : 1, 1);
     (LOOK[def.look] || LOOK.slime)(c, e, C, t, s);
@@ -1272,14 +1262,17 @@
 
   Sp.minion = (c, a, t) => {
     if (ED.Actors && ED.Actors.on() && ED.Actors.minion(c, a, t)) return;
-    const def = ED.ENEMIES.minion, kn = !!(ED.ClassFx.knight && ED.ClassFx.knight(a));
+    if (a.k === 2 && ED.ClassFx.bomb) { ED.ClassFx.bomb(c, a, t); return; } // a bone bomb (cls-necro.js)
+    const def = ED.ENEMIES.minion, kn = !!(ED.ClassFx.knight && ED.ClassFx.knight(a)), dk = a.k === 1 && ED.ClassFx.dk;
+    if (dk) ED.ClassFx.dk(c, a, t, false);
     c.save(); c.globalAlpha = 0.9;
-    if (kn) c.scale(1.4, 1.4); // Bone Knight body
+    if (dk) c.scale(1.4 * ED.ClassFx.DK_SCALE, 1.4 * ED.ClassFx.DK_SCALE); else if (kn) c.scale(1.4, 1.4); // Bone Knight body; a Death Knight is twice that
     Sp.shadow(c, 9, 0.3);
     glow(c, 0, -10, 16, def.col.c, 0.25);
     c.scale(a.face < 0 ? -1 : 1, 1); c.lineWidth = 1.5; c.strokeStyle = OUT;
     LOOK.skeleton(c, { id: a.id, st: 'move', def }, def.col, t, 0.85);
     c.restore();
     if (ED.ClassFx.minion) ED.ClassFx.minion(c, a, t, kn, a.face < 0);
+    if (dk) ED.ClassFx.dk(c, a, t, true);
   };
 })(globalThis.ED || (globalThis.ED = {}));
