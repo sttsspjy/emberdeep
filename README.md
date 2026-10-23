@@ -50,6 +50,7 @@ Playing alone, the world waits while the sheet is open; in a party the descent g
 - **Hordes.** Beside the foes that matter, every fight pours in packs of weak fodder from the room's edges: about 40 kills a fight in stratum I, up to 120 in stratum VI, more in elite and dark rooms. Fodder dies in a hit or two, nips for at most 3% of your health and slows you while it clings to you (down to half speed), so keep moving and dash out. It drops only experience motes, and every fight pays a fixed amount of experience however it goes (summoned and split foes pay nothing). Kill effects that spread, chain or explode trigger on fodder; cooldown refunds, shields, healing, stacks and raised minions come only from the foes that matter. A foe still standing 45 seconds after it appeared weakens and starts to wither.
 - **Deeper strata fight smarter.** From stratum III ranged foes aim where you are heading (more so the deeper you go), shots fly faster, rooms mix in foes from the stratum above, and from stratum IV elites can carry two affixes. Every boss fires aimed volleys at each hero (a warning line shows the path; change direction after it locks), adds one on top of everything else in its last phase, and fodder keeps trickling in during the fight. From stratum IV a boss that lives too long flies into a **fury**: the track under its health bar fills toward a notch, and past it the boss hits harder and attacks faster every second.
 - You level up from experience and gain a boon at every second level (2, 4, 6, ...) and your class route card at level 3. Offers open only when the room is safe. Playing alone, the world waits while the boon cards are open (and while paused).
+- A boon card shows what it is at a glance: its frame and icon wear its path (flame crown for Fire, ice shards, a lightning zigzag, dripping Poison, a Holy cathedral, torn Shadow, riveted steel for General), class route cards fly your hero's banner, duos split two frames, Ascended cards are gilded with wings, and the frame metal and the gem at the bottom show the rarity (iron common, silver rare, violet epic, gold legendary). Keystones, evolutions and path gates get a gold trim and a bigger gem. Taking a card plays its own animation and sound.
 - A winning descent takes about 30 to 40 minutes.
 
 ### Dark rooms
@@ -230,6 +231,7 @@ node tools/sheet.js --cls=all --routes --weapons             # analytic hero num
 node tools/bal.js                                            # quick balance suite against the difficulty targets, about 2 minutes
 node tools/browse.js                                         # headless browser smoke test
 node tools/browse.js --scen=swing --cls=knight               # contact sheet PNG per melee weapon swing (two attacks, hold, idle)
+node tools/browse.js --scen=cards --viewport=1920x1080       # every boon card kind, mid-pick frames, the fork reveal
 ```
 
 `simpool.js` runs its workers at normal priority; add `--nice` for idle priority (Windows throttles idle priority while the machine is unattended).

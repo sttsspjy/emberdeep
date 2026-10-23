@@ -560,31 +560,70 @@
     } catch (e) { return []; }
   }
   const deltaHtml = (list) => (list && list.length ? `<div class="bdl">${list.map(d => `<span class="${d.better ? 'up' : 'down'}">${esc(d.label)} ${ED.Sheet.n1(d.from)} → ${ED.Sheet.n1(d.to)}${d.unit ? ' ' + d.unit : ''}</span>`).join('')}</div>` : '');
+  // Card identity of boon `id`: kind (ED.PickFx), big (keystone, evolution, path gate), frame metal (rarity), the frame CSS value, identity colours and icon colour.
+  function cardLook(id, b) {
+    const PF = ED.PickFx, CA = ED.CardArt, kind = PF ? PF.kind(id) : 'general', big = !!(PF && PF.big(id)), metal = b.asc ? 'gold' : CA ? CA.metal(b.rar) : 'iron';
+    const path = b.path || (b.duo && b.duo[0]) || null, path2 = b.duo ? b.duo[1] : null, cl = b.cls ? ED.CLASSES[b.cls] : null;
+    const pc = kind === 'route' && cl ? cl.col.c : kind === 'asc' ? ED.RARITY.a.color : kind === 'purse' ? '#ffd36b' : path && ED.PATHS[path] ? ED.PATHS[path].color : ED.PATHS.general.color;
+    const frame = !CA ? '' : kind === 'duo' ? CA.frame('duo', metal, { a: path, b: path2 }) : kind === 'route' ? CA.frame('route', metal, { cls: b.cls }) : CA.frame(kind, metal, { big });
+    const icol = kind === 'duo' ? ED.RARITY.d.color : pc; // the icon wears the card's identity hue; rarity lives in the frame metal and the socket gem
+    return { kind, big, metal, path, path2, pc, pc2: path2 && ED.PATHS[path2] ? ED.PATHS[path2].color : '', frame, icol };
+  }
+  // Decoration layer of a card (aria-hidden): crest, idle sprites, focus carets and the rarity socket gem; kinds per ED.PickFx.
+  const IDLE = {
+    fire: '<i class="ca-spark s1"></i><i class="ca-spark s2"></i><i class="ca-spark s3"></i>',
+    ice: '<i class="ca-frost f1"></i><i class="ca-frost f2"></i>',
+    lightning: '<i class="ca-zap"></i>',
+    poison: '<i class="ca-bubble b1"></i><i class="ca-bubble b2"></i><i class="ca-drip d1"></i><i class="ca-drip d2"></i>',
+    holy: '<i class="ca-arch"></i><i class="ca-sweep"></i>',
+    shadow: '<i class="ca-eye"></i><i class="ca-wisp w1"></i><i class="ca-wisp w2"></i><i class="ca-wisp w3"></i>',
+    general: '', asc: '<i class="ca-wing l"></i><i class="ca-wing r"></i>', purse: '<i class="ca-knot"></i><i class="ca-glint"></i>',
+  };
+  function cardArt(L, b, have, max) {
+    const CA = ED.CardArt; if (!CA) return '';
+    let h = L.kind === 'duo' ? (IDLE[L.path] || '') + (IDLE[L.path2] || '').replace(/ca-(arch|eye)/, 'ca-off') : L.kind === 'route' ? '' : IDLE[L.kind] || '';
+    if (L.kind === 'route') {
+      const c = CA.crest(b.cls), cl = ED.CLASSES[b.cls], n = b.max || 1;
+      h += `<i class="ca-streamer l" style="--st:${c.streamer}"></i><i class="ca-streamer r" style="--st:${c.streamer}"></i><i class="ca-shield" style="--sh:${c.shield}"><img alt="" src="${CA.icon(cl.icon, cl.col.c)}"></i>`;
+      if (n > 1) h += `<i class="ca-pips">${Array.from({ length: n }, (_, k) => `<b class="${k < have ? 'own' : k === have ? 'next' : ''}"></b>`).join('')}</i>`;
+    }
+    return `<span class="bc-art" aria-hidden="true">${h}<i class="ca-car l"></i><i class="ca-car r"></i><i class="ca-gem" style="--gm:${CA.gem(b.rar, L.big)}"></i></span>`;
+  }
   function boonCard(id, i, offer, me, deltas) {
     const b = ED.BOONS[id], max = me && me.stats ? ED.maxRank(b, me.stats) : (b.max || 5);
     const have = me && me.boons ? (me.boons[id] || 0) : 0;
-    const path = b.path || (b.duo && b.duo[0]) || null, path2 = b.duo ? b.duo[1] : null;
+    const L = cardLook(id, b);
     const el = document.createElement('button'); el.type = 'button';
-    el.className = ['boon-card', path ? 'path-' + path : b.cls ? 'class' : 'neutral', path2 && 'path2-' + path2, path2 && 'duo', b.key && 'key', b.evo && 'evo', b.asc && 'asc', offer.forge && 'forge'].filter(Boolean).join(' ');
+    el.className = ['boon-card', 'k-' + L.kind, 'm-' + L.metal, L.big && 'big', b.key && 'key', b.evo && 'evo', b.gate && 'gate', offer.forge && 'forge'].filter(Boolean).join(' ');
+    el.dataset.kind = L.kind;
     el.style.setProperty('--rc', ED.RARITY[b.rar].color);
-    if (path && ED.PATHS[path]) el.style.setProperty('--pc', ED.PATHS[path].color);
-    if (path2 && ED.PATHS[path2]) el.style.setProperty('--pc2', ED.PATHS[path2].color);
+    el.style.setProperty('--pc', L.pc);
+    if (L.pc2) el.style.setProperty('--pc2', L.pc2);
+    if (L.frame) el.style.setProperty('--cf', L.frame);
     const rank = have ? (have < max ? `Rank ${have} → ${have + 1} (max ${max})` : `Rank ${have} (max)`) : max > 1 ? `Max rank ${max}` : '';
-    const ribbon = boonRibbon(b, id), [line, two] = boonPathLine(b);
-    el.innerHTML = `${ribbon ? `<span class="bc-ribbon${two ? ' two' : ''}">${ribbon}</span>` : ''}<div class="bc-top">${line}<span class="bc-rar">${ED.RARITY[b.rar].name}</span></div><img class="bc-icon" alt="" src="${ED.Icons.boonUrl(id)}"><div class="bn">${esc(b.name)}</div>${b.evo ? `<div class="bsub">${esc(UI.evoName(b.evo, heroWeaponName(me)))}</div>` : ''}${weakChip(b)}${b.route ? classBody(b, id, have, me) : `<div class="bd">${esc(ED.Sheet.text(id, Math.min(max, have + 1), me && me.stats, ED.Game.s && ED.Game.s.view && ED.Game.s.view.stratum))}</div>`}${deltaHtml(deltas)}${rank ? `<div class="bk${have ? ' own' : ''}">${rank}</div>` : ''}`;
+    const ribbon = boonRibbon(b, id), [line] = boonPathLine(b);
+    const icon = ED.CardArt ? ED.CardArt.icon(b.icon, L.icol) : ED.Icons.boonUrl(id);
+    el.innerHTML = `${cardArt(L, b, have, max)}${ribbon ? `<span class="bc-ribbon">${ribbon}</span>` : ''}<div class="bc-top">${line}<span class="bc-rar">${ED.RARITY[b.rar].name}</span></div><img class="bc-icon" alt="" src="${icon}"><div class="bn">${esc(b.name)}</div>${b.evo ? `<div class="bsub">${esc(UI.evoName(b.evo, heroWeaponName(me)))}</div>` : ''}${weakChip(b)}${b.route ? classBody(b, id, have, me) : `<div class="bd">${esc(ED.Sheet.text(id, Math.min(max, have + 1), me && me.stats, ED.Game.s && ED.Game.s.view && ED.Game.s.view.stratum))}</div>`}${deltaHtml(deltas)}${rank ? `<div class="bk${have ? ' own' : ''}">${rank}</div>` : ''}`;
     const wb = el.querySelector('.bweap');
     if (wb) { const th = weaponThumb(wb.dataset.w); if (th) wb.insertBefore(th, wb.firstChild); }
     el.onclick = () => { if (performance.now() >= boonLock) UI.pickBoon(i); };
-    el.onmouseenter = () => { boonFocus = i; paintFocus(); };
+    el.onmouseenter = () => { if (!boonOffer || boonFocus === i) return; boonFocus = i; paintFocus(); ED.Audio.play('hover'); };
     return el;
   }
 
   // Five or six cards, or a phone-width screen, use the compact card layout.
-  const paintDense = () => { $('boon-cards').classList.toggle('dense', !!boonOffer && (boonOffer.boons.length > 4 || window.innerWidth <= 560)); };
+  // n1-n3: hands of one to three cards size their cards for that many per row (CSS --n, 4 by default).
+  const paintDense = () => {
+    const w = $('boon-cards'), n = boonOffer ? boonOffer.boons.length : w.children.length, dense = n > 4 || window.innerWidth <= 560;
+    w.classList.toggle('dense', dense);
+    for (const k of [1, 2, 3]) w.classList.toggle('n' + k, !dense && n === k);
+  };
 
   UI.showBoons = (offer) => {
+    if (pickT) { pickNext = offer; return; } // the pick animation of the last hand finishes first
     boonOffer = offer; boonFocus = 0; boonLock = performance.now() + BOON_LOCK_MS;
-    const wrap = $('boon-cards'); wrap.innerHTML = '';
+    const wrap = $('boon-cards'); wrap.innerHTML = ''; wrap.classList.remove('picking');
+    $('ov-boon').classList.toggle('low', lowFx());
     const me = ED.Game.s && ED.Game.s.me;
     const dl = offerDeltas(offer, me);
     offer.boons.forEach((id, i) => wrap.appendChild(boonCard(id, i, offer, me, dl[i])));
@@ -614,15 +653,52 @@
     if (byKey) ED.Audio.play('click');
     ED.Game.act({ t: 'reroll' });
   };
+  // A pick sends the act at once, plays the kind's cue (ED.PickFx.play) and its card animation (PICK_MS, PICK_LOW_MS under Low quality or reduced motion), then hides the overlay.
+  // An offer that arrives meanwhile shows when the animation ends; hideBoons meanwhile only drops it.
+  const PICK_MS = 380, PICK_LOW_MS = 160;
+  let pickT = 0, pickNext = null;
+  const lowFx = () => (ED.Render && ED.Render.quality === 'low') || !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
   UI.pickBoon = (i) => {
     if (!boonOffer) return;
+    const id = boonOffer.boons[i];
     boonOffer = null;
-    $('ov-boon').hidden = true;
     ED.Input.mask(['attack', 'skill1', 'skill2', 'dash']); // the pick press (or a held attack) must not reach the hero; movement keys stay live
+    const PF = ED.PickFx;
+    if (PF && ED.BOONS[id]) PF.play(PF.kind(id), PF.big(id), id);
     ED.Game.act({ t: 'pick', i });
     if (ED.Game.s) { ED.Game.s.offerOpen = false; ED.Game.s.offer = null; }
+    pickAnim(i);
   };
-  UI.hideBoons = () => { boonOffer = null; $('ov-boon').hidden = true; };
+  function pickAnim(i) {
+    const wrap = $('boon-cards'), card = wrap.children[i], low = lowFx();
+    clearTimeout(pickT); pickNext = null;
+    if (!card) { pickT = 0; $('ov-boon').hidden = true; return; }
+    wrap.classList.add('picking'); card.classList.add('picked');
+    if (!low) pickFx(card);
+    pickT = setTimeout(pickDone, low ? PICK_LOW_MS : PICK_MS);
+  }
+  // Effect layer of the picked card (fixed over its box, so the card itself may clip, scale or fade): sprites per kind, CSS-animated.
+  const FX = {
+    fire: '<i class="pf-burn"></i>', ice: '<i class="pf-flash"></i>' + [0, 1, 2, 3, 4, 5, 6, 7].map(k => { const a = (k * 45 + 20) * Math.PI / 180; return `<i class="pf-shard" style="--dx:${Math.round(Math.cos(a) * 40)};--dy:${Math.round(Math.sin(a) * 48)};--sv:${k % 3}"></i>`; }).join(''),
+    lightning: '<i class="pf-flash"></i><i class="pf-bolt"></i>', poison: '<i class="pf-melt"></i>', holy: '<i class="pf-pillar"></i>', shadow: '<i class="pf-vortex"></i>',
+    general: '<i class="pf-anvil"></i><i class="pf-flash"></i>', route: '<i class="pf-banner"></i>', duo: '<i class="pf-l"></i><i class="pf-r"></i><i class="pf-flash"></i>',
+    asc: '<i class="pf-flash prism"></i>', purse: [0, 1, 2, 3, 4, 5].map(k => `<i class="pf-coin" style="--cx:${12 + k * 15}%;--cd:${(k % 3) * 0.04}s"></i>`).join(''),
+  };
+  function pickFx(card) {
+    const r = card.getBoundingClientRect(), kind = card.dataset.kind, fx = document.createElement('div');
+    fx.className = 'pick-fx k-' + kind; fx.setAttribute('aria-hidden', 'true');
+    fx.style.cssText = `left:${Math.round(r.left)}px;top:${Math.round(r.top)}px;width:${Math.round(r.width)}px;height:${Math.round(r.height)}px;--pc:${card.style.getPropertyValue('--pc')};--pc2:${card.style.getPropertyValue('--pc2') || card.style.getPropertyValue('--pc')}`;
+    fx.innerHTML = FX[kind] || '';
+    $('ov-boon').appendChild(fx);
+  }
+  function pickDone() {
+    pickT = 0;
+    for (const f of document.querySelectorAll('#ov-boon .pick-fx')) f.remove();
+    const ov = $('ov-boon'), next = pickNext; pickNext = null;
+    if (next && !ov.hidden) UI.showBoons(next);
+    else { ov.hidden = true; $('boon-cards').classList.remove('picking'); }
+  }
+  UI.hideBoons = () => { boonOffer = null; if (pickT) { pickNext = null; return; } $('ov-boon').hidden = true; };
 
   // ---------------- fork rank reveal ----------------
   // A card at the top of the screen for FORK_REVEAL_MS when a boss ranks the hero's fork up ({ id, rank }): rank 2 names the new behaviour, rank 3 the transform big, with its text and the card's art. It takes no input.
@@ -634,8 +710,15 @@
     const me = ED.Game.s && ED.Game.s.me, P = ED.cardParts(m.id, m.rank, me && me.stats), big = m.rank >= 3, form = big && P.form;
     const name = form ? P.form.name : P.rider2Name || P.riderName || ED.cardName(m.id, m.rank), text = form ? P.form.desc : big && P.rider ? P.rider : P.rider2;
     const route = b.route ? ED.routeLabel(b.cls, b.route) : '';
-    el.className = 'fork-reveal ' + (big ? 'big' : 'small');
-    el.innerHTML = `<img class="fr-icon" alt="" src="${ED.Icons.boonUrl(m.id)}"><div class="fr-body"><div class="fr-kick">${esc(route)}${route ? ' · ' : ''}${esc(b.name)} · rank ${m.rank}${form ? ' · transformed' : ''}</div><div class="fr-name">${esc(name)}</div><div class="fr-text">${esc(text ? text.charAt(0).toUpperCase() + text.slice(1) : '')}</div></div>`;
+    const CA = ED.CardArt, cl = ED.CLASSES[b.cls], col = cl ? cl.col.c : ED.RARITY[b.rar].color; // the route identity: class-coloured banner frame, silver at rank 2, gold at rank 3
+    el.className = 'fork-reveal k-route ' + (big ? 'big' : 'small');
+    el.style.setProperty('--pc', col);
+    let art = '';
+    if (CA) {
+      el.style.setProperty('--cf', CA.frame('route', big ? 'gold' : 'silver', { cls: b.cls }));
+      art = `<span class="bc-art" aria-hidden="true"><i class="ca-pips">${Array.from({ length: b.max || 3 }, (_, k) => `<b class="${k < m.rank ? 'own' : ''}"></b>`).join('')}</i></span>`;
+    }
+    el.innerHTML = `${art}<img class="fr-icon" alt="" src="${CA ? CA.icon(b.icon, col) : ED.Icons.boonUrl(m.id)}"><div class="fr-body"><div class="fr-kick">${esc(route)}${route ? ' · ' : ''}${esc(b.name)} · rank ${m.rank}${form ? ' · transformed' : ''}</div><div class="fr-name">${esc(name)}</div><div class="fr-text">${esc(text ? text.charAt(0).toUpperCase() + text.slice(1) : '')}</div></div>`;
     el.hidden = true; void el.offsetWidth; el.hidden = false; // restarts the animation of a card that is still up
     clearTimeout(forkTimer);
     forkTimer = setTimeout(() => { el.hidden = true; }, FORK_REVEAL_MS);

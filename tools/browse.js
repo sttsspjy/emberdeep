@@ -1,5 +1,5 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it.
-// Usage: node tools/browse.js [--scen=smoke,crowd70,shots,sheet,screens,swing,picks] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
+// Usage: node tools/browse.js [--scen=smoke,crowd70,shots,sheet,screens,swing,picks,cards] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
 //   [--quality=low,high] [--ops] [--json] [--seed=1] [--strat=1] [--embers=N] [--mortal] [--software] [--forcepost] [--sync] [--warm=2.5] [--timeout=300]
 // Mechanism: headless only (no headed option, no window calls); one browser per invocation, one fresh context per scenario page, all closed at exit, on error and on SIGINT.
 //   A read-only node http server on 127.0.0.1 (random port) serves --root (default: this repo). Playwright resolves via require('playwright'), else %LOCALAPPDATA%\npm-cache\_npx\*\node_modules (best match for the installed browsers).
@@ -16,6 +16,10 @@
 //   swing: one contact-sheet PNG per melee weapon of --cls, its Armory variants included (or per --weapon id, forks as id@fork) (aimed --aim degrees, 0 = right, 90 = down, drawn at --zoom canvas px per world px, 2): frames at fixed times over two consecutive attacks (a combo weapon: one per step), the hold and the ease back to idle, hero and smear drawn by the game's own renderer.
 //   picks: every boon id resolves to a PickFx card kind; one PNG per pick burst (each kind, fire-big, holy-ally) on the solo hero about 0.25 s after FX.handle gets the 'boon' / 'relic' event;
 //     each pick cue (and the Hearth 'buy') rendered in an OfflineAudioContext: voices, peak, rms, audible length; fails on a throw, a silent cue or one longer than 0.9 s.
+//   cards: a frame sheet PNG (every card frame mask at 6 x) and one PNG per boon hand staged through the sim (the hero's boons set so the cards are eligible): path gates,
+//     every element, open and General, purse, Ascended, keystones, duos, an evolution, the --cls route and fork offers, a 6-card dense hand; mid-pick frames (110 and 230 ms,
+//     the hide timer held, animations paused) for poison, holy, ice, lightning, shadow, general, fire-big, route and duo; the fork reveal at rank 2 and 3; a Low quality hand and pick.
+//     Fails on a missing card, a card whose kind differs from ED.PickFx.kind, a frame that did not resolve, equal path gate icons, a pick without an effect layer, or Low quality leftovers.
 // Output: compact table (or --json on stdout, logs on stderr); result-<browser>.json and the PNGs in --outdir (default <tmp>/wickdeep-browse). Exit 0 pass, 1 scenario failure, 2 harness error.
 // Notes: Chromium runs headless on the real GPU (ANGLE D3D11, no window); --software forces SwiftShader, where the game reports Post.soft and skips post at 'high' unless --forcepost. Firefox uses its own headless GL.
 //   --sync forces each frame's raster/GPU work to finish before the timer stops. Every external host is blocked (fonts and art are embedded data URIs).
@@ -49,7 +53,7 @@ function parseArgs(argv) {
   if (!vp) throw new Fail('--viewport is WxH, e.g. 1920x1080');
   o.vw = +vp[1]; o.vh = +vp[2];
   o.scens = o.scen.split(',').map(s => s.trim()).filter(Boolean);
-  for (const s of o.scens) if (!/^(smoke|shots|sheet|screens|swing|picks|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, sheet, screens, swing, picks, crowdN)');
+  for (const s of o.scens) if (!/^(smoke|shots|sheet|screens|swing|picks|cards|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, sheet, screens, swing, picks, cards, crowdN)');
   if (!o.scens.length) throw new Fail('--scen is empty');
   o.qualities = o.quality ? o.quality.split(',').map(s => s.trim()) : null;
   if (o.qualities && o.qualities.some(q => q !== 'low' && q !== 'high')) throw new Fail('--quality is low, high or low,high');
@@ -403,6 +407,58 @@ function pageBoot(cfg) {
     return { cls, els, boons: Object.keys(boons).length, relics: p.relics.length, stratum: w.stratum, ally: ally && ally.cls };
   };
 
+  // cards: a boon offer staged through the sim (the hero's boons set so the cards are eligible, the hand sent as the sim's own offer message); returns each card's kind
+  BR.cardHand = (boons, ids, spec) => {
+    const ED = window.__ED, s = ED.Game.s, w = s && s.world, p = s && s.me;
+    if (!w || !p) throw new Error('no run to stage cards in');
+    for (const id of ids) if (!ED.BOONS[id]) throw new Error('unknown boon ' + id);
+    ED.UI.hideBoons();
+    p.boons = Object.assign({}, boons); w.recalc(p, false); w.sendBuild(p);
+    p.offers = [Object.assign({ src: 'level', path: null }, spec || {})]; p.picks = 1; p.offer = ids.slice(); p.offerT = 0;
+    w.sendOffer(p);
+    return ids.map(id => ED.PickFx.kind(id) + (ED.PickFx.big(id) ? '+big' : ''));
+  };
+  // the shown hand: per card its kind, whether its frame resolved, its icon URL, its box; plus the overlay's low flag
+  BR.cardDom = () => {
+    const cards = [...document.querySelectorAll('#boon-cards .boon-card')];
+    return { open: !document.getElementById('ov-boon').hidden, low: document.getElementById('ov-boon').classList.contains('low'), cards: cards.map(c => { const r = c.getBoundingClientRect(); return { kind: c.dataset.kind, frame: getComputedStyle(c, '::after').borderImageSource !== 'none', icon: (c.querySelector('.bc-icon') || {}).src || '', w: r.width, h: r.height }; }) };
+  };
+  // the pick of card i through UI.pickBoon with its hide timer held; every animation paused at t ms (cardSeek moves them, cardRelease resumes and runs the held hide)
+  BR.cardPick = (i, t) => {
+    const ED = window.__ED, st = window.setTimeout;
+    let cb = null;
+    window.setTimeout = (f) => { cb = f; return 1e9; };
+    try { ED.UI.pickBoon(i); } finally { window.setTimeout = st; }
+    BR._held = cb;
+    for (const a of document.getAnimations()) { a.pause(); a.currentTime = t; }
+    return { held: !!cb, fx: document.querySelectorAll('#ov-boon .pick-fx').length };
+  };
+  BR.cardSeek = (t) => { for (const a of document.getAnimations()) a.currentTime = t; return true; };
+  BR.cardRelease = () => { for (const a of document.getAnimations()) a.play(); const cb = BR._held; BR._held = null; if (cb) cb(); return !document.getElementById('ov-boon').hidden; };
+  // the fork rank reveal of fork `id` at `rank`, its unfurl finished; returns its box
+  BR.forkShow = (id, rank) => {
+    const ED = window.__ED, el = document.getElementById('ov-fork');
+    ED.UI.forkReveal({ id, rank });
+    for (const a of el.getAnimations({ subtree: true })) { if (a.animationName === 'fork-out') a.pause(); else a.finish(); }
+    const r = el.getBoundingClientRect();
+    return { shown: !el.hidden, x: r.left, y: r.top, w: r.width, h: r.height };
+  };
+  // every card frame mask (kinds x metals, the big trims, three duo splits, a route frame per hero) drawn at 6 x on one sheet: PNG data URL
+  BR.cardSheet = (cls) => {
+    const ED = window.__ED, CA = ED.CardArt, PU = ED.PixUI, Z = 5, M = ['iron', 'silver', 'violet', 'gold'], rows = [];
+    for (const k of ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'asc', 'purse']) rows.push([k, M.map(m => CA.frame(k, m, {})).concat(k === 'asc' || k === 'purse' ? [] : [CA.frame(k, 'gold', { big: true })])]);
+    rows.push(['route', M.map(m => CA.frame('route', m, { cls }))]);
+    rows.push(['duo', [['fire', 'ice'], ['holy', 'shadow'], ['lightning', 'poison'], ['ice', 'fire']].map(([a, b]) => CA.frame('duo', 'violet', { a, b }))]);
+    const cw = CA.N * Z + 12, cv = document.createElement('canvas'); cv.width = 90 + cw * 5; cv.height = rows.length * cw + 12;
+    const g = cv.getContext('2d'); g.imageSmoothingEnabled = false; g.fillStyle = '#15100d'; g.fillRect(0, 0, cv.width, cv.height);
+    g.font = '16px "Pixel Operator", monospace'; g.fillStyle = '#f6ecda';
+    rows.forEach(([label, vars], j) => {
+      g.fillText(label, 8, j * cw + 30);
+      vars.forEach((v, i) => { const name = /--fr-([\w-]+)/.exec(v)[1], rec = PU.frames[name]; if (rec) g.drawImage(rec.img.base, 90 + i * cw, j * cw + 6, CA.N * Z, CA.N * Z); });
+    });
+    return cv.toDataURL();
+  };
+
   // picks: every boon id resolves to a PickFx kind; a pick burst (name: kind, kind-big or kind-ally) fired through FX.handle on a cleared effect layer; the pick cues rendered offline
   BR.pickKinds = () => {
     const ED = window.__ED, P = ED.PickFx, bad = [], by = {};
@@ -687,6 +743,85 @@ async function scenPicks() {
   return res;
 }
 
+// cards: hands staged through the sim that show every card kind; boons = the hero's build for the hand (so the cards are eligible), pick = [card index, kind] for mid-pick frames
+const R = (ids, n) => Object.fromEntries(ids.map((id, i) => [id, Array.isArray(n) ? n[i] : n || 1]));
+const CARD_HANDS = (cls) => [
+  { name: 'gates', spec: { src: 'start' }, boons: {}, ids: ['kindle', 'frostbite', 'staticcharge', 'envenom'], distinctIcons: true, pick: [3, 'poison'] },
+  { name: 'gates2', spec: { src: 'start' }, boons: {}, ids: ['consecrate', 'doommark', 'generalist'], distinctIcons: true, pick: [0, 'holy'] },
+  { name: 'fire-ice', spec: { src: 'room' }, boons: R(['kindle', 'fuel', 'stoke', 'searing', 'frostbite', 'deepcold', 'brittle', 'coldsnap'], [1, 2, 2, 1, 1, 1, 1, 1]), ids: ['wildfire', 'shatter', 'conflag', 'thermalshock'], pick: [1, 'ice'] },
+  { name: 'storm', spec: { src: 'room' }, boons: R(['staticcharge', 'conductor', 'highvoltage', 'shortcircuit', 'envenom', 'potency', 'caustic', 'fester'], [1, 2, 1, 1, 1, 2, 1, 1]), ids: ['overload', 'sporeburst', 'thunderhead', 'galvanic'], pick: [0, 'lightning'] },
+  { name: 'light', spec: { src: 'room' }, boons: R(['consecrate', 'fervor', 'zealotry', 'sanctity', 'doommark', 'malignance', 'malice'], [1, 2, 2, 1, 1, 2, 1]), ids: ['beacon', 'deathknell', 'radiantaegis', 'wrathofheaven'], pick: [1, 'shadow'] },
+  { name: 'open', spec: { src: 'epic' }, boons: { generalist: 1, keen: 1 }, ids: ['asc_edge', 'edge', 'brutal', 'purse'], pick: [1, 'general'] },
+  { name: 'evo', spec: { src: 'room' }, boons: R(['kindle', 'fuel', 'stoke', 'searing', 'wildfire', 'conflag'], [1, 2, 3, 2, 2, 1]), ids: ['evo_fire', 'cindertrail', 'vigor'], pick: [0, 'fire-big'] },
+  { name: 'route', spec: { src: 'class', ctier: 1 }, boons: {}, ids: ['atk', 's1', 's2', 'el'].map(k => cls[0] + '_' + k), pick: [0, 'route'] },
+  { name: 'fork', spec: { src: 'class', ctier: 2 }, boons: { [cls[0] + '_atk']: 1 }, ids: [cls[0] + '_atk_h', cls[0] + '_atk_s'] },
+  { name: 'dense6', spec: { src: 'epic' }, boons: R(['kindle', 'fuel', 'stoke', 'frostbite', 'deepcold', 'brittle'], [1, 2, 2, 1, 2, 1]), ids: ['searing', 'permafrost', 'thermalshock', 'asc_quick', 'plating', 'purse'], pick: [2, 'duo'] },
+];
+async function scenCards() {
+  const o = S.opt, res = newResult('cards'), q = qualitiesOr(['high'])[0], cls = o.cls;
+  const { ctx, page, errors } = await openPage();
+  try {
+    await call(page, 'profile', cls, o.embers);
+    await call(page, 'settings', q);
+    await call(page, 'install');
+    if ((await call(page, 'start')) !== 'run') fail(res, 'run did not start');
+    await wait(1200);
+    const sheet = path.join(o.outdir, ['cards', tag(), cls, 'frames'].join('-') + '.png');
+    fs.writeFileSync(sheet, Buffer.from((await call(page, 'cardSheet', cls)).split(',')[1], 'base64'));
+    res.shots.push(sheet);
+    const seen = new Set();
+    for (const h of CARD_HANDS(cls)) {
+      const kinds = await call(page, 'cardHand', h.boons, h.ids, h.spec);
+      await wait(900);
+      const d = await call(page, 'cardDom');
+      if (!d.open || d.cards.length !== h.ids.length) { fail(res, `hand ${h.name}: overlay ${d.open ? 'open' : 'closed'} with ${d.cards.length} of ${h.ids.length} cards`); continue; }
+      d.cards.forEach((c, i) => { if (c.kind !== kinds[i].split('+')[0]) fail(res, `hand ${h.name}: card ${h.ids[i]} shows kind ${c.kind}, PickFx says ${kinds[i]}`); if (!c.frame) fail(res, `hand ${h.name}: card ${h.ids[i]} has no frame`); seen.add(kinds[i]); });
+      if (h.distinctIcons && new Set(d.cards.map(c => c.icon)).size !== d.cards.length) fail(res, `hand ${h.name}: path gate icons are not distinct (path colours)`);
+      notes(res, `hand ${h.name}: ${h.ids.map((id, i) => id + ' ' + kinds[i]).join(', ')}; card ${Math.round(d.cards[0].w)}x${Math.round(d.cards[0].h)} px`);
+      await shoot(page, res, h.name);
+      if (h.pick) {
+        const [i, label] = h.pick, ph = await call(page, 'cardPick', i, 110);
+        if (!ph.held) fail(res, `hand ${h.name}: the pick set no hide timer`);
+        if (!ph.fx) fail(res, `hand ${h.name}: the pick made no effect layer`);
+        await shoot(page, res, 'pick-' + label + '-110ms');
+        await call(page, 'cardSeek', 230);
+        await shoot(page, res, 'pick-' + label + '-230ms');
+        if (await call(page, 'cardRelease')) fail(res, `hand ${h.name}: the overlay stayed up after the pick animation`);
+        await wait(300);
+      }
+    }
+    for (const k of ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'route', 'duo', 'asc', 'purse', 'fire+big']) if (![...seen].some(s => s === k || (k === 'fire+big' && /\+big$/.test(s)))) fail(res, 'no hand showed a ' + k + ' card');
+    // fork reveal: rank 2 (small, silver) and rank 3 (big, gold)
+    await page.evaluate(() => window.__ED.UI.hideBoons());
+    for (const rank of [2, 3]) {
+      const f = await call(page, 'forkShow', cls[0] + '_atk_h', rank);
+      if (!f.shown) { fail(res, 'fork reveal rank ' + rank + ' not shown'); continue; }
+      await wait(150);
+      const file = path.join(o.outdir, ['cards', tag(), cls, 'fork-rank' + rank].join('-') + '.png');
+      const pad = 80, x = Math.max(0, Math.floor(f.x - pad)), y = Math.max(0, Math.floor(f.y - pad));
+      await page.screenshot({ path: file, clip: { x, y, width: Math.min(o.vw - x, Math.ceil(f.w + 2 * pad)), height: Math.min(o.vh - y, Math.ceil(f.h + 2 * pad)) } });
+      res.shots.push(file);
+    }
+    await page.evaluate(() => { document.getElementById('ov-fork').hidden = true; });
+    // Low quality: idle sprites hidden, no effect layer, the overlay gone within 0.3 s of a pick
+    await call(page, 'settings', 'low');
+    await call(page, 'cardHand', R(['kindle', 'fuel'], [1, 1]), ['stoke', 'searing', 'vigor'], { src: 'room' });
+    await wait(900);
+    const low = await page.evaluate(() => { const s = document.querySelector('#boon-cards .ca-spark'); return { low: document.getElementById('ov-boon').classList.contains('low'), spark: s ? getComputedStyle(s).display : 'none' }; });
+    if (!low.low || low.spark !== 'none') fail(res, 'Low quality: overlay low ' + low.low + ', idle spark display ' + low.spark);
+    await shoot(page, res, 'low');
+    await page.evaluate(() => window.__ED.UI.pickBoon(0));
+    await wait(40);
+    const fxN = await page.evaluate(() => document.querySelectorAll('#ov-boon .pick-fx').length);
+    await wait(260);
+    const up = await page.evaluate(() => !document.getElementById('ov-boon').hidden);
+    if (fxN) fail(res, 'Low quality made a pick effect layer');
+    if (up) fail(res, 'Low quality: the overlay was still up 0.3 s after a pick');
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
 async function scenShots() {
   const o = S.opt, res = newResult('shots'), q = qualitiesOr(['high'])[0];
   const { ctx, page, errors } = await openPage();
@@ -896,7 +1031,7 @@ async function main() {
       const t0 = Date.now();
       log('scenario ' + sc + ' ...');
       let r;
-      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'sheet' ? await scenSheet() : sc === 'screens' ? await scenScreens() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
+      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'sheet' ? await scenSheet() : sc === 'screens' ? await scenScreens() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : sc === 'cards' ? await scenCards() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
       r.wallMs = Date.now() - t0;
       r.browserVersion = bv;
       if (S.server.missing.size) r.missing = [...S.server.missing];
