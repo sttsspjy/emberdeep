@@ -155,6 +155,7 @@
     const an = F.anim[pid] || (F.anim[pid] = { atkT: 9, side: 1, t0: 0.05, t1: 0.12, D: 0.3 });
     if (an.atkT < 0.03) return; // swing + atk events of one attack arrive together
     const s = ED.Game && ED.Game.s, p = s && s.view.players.get(pid), wd = p && ED.Sprites.weaponArt(p), w = wd && wd.w;
+    an.cold = an.atkT > an.D + (ED.Actors ? ED.Actors.HOLD : 0); // the last swing's hold has ended: the weapon starts this one from its idle carry
     an.atkT = 0; an.side = -an.side; an.a = a; an.fork = wd ? wd.fork : ''; F.lastAnim = an;
     const mp = p && p.boons ? ED.mainPath(p.boons) : null; an.col = mp && mp !== 'general' && PATH_COL[mp] ? PATH_COL[mp] : '#9fb0c0'; // smear outer band: the hero's path colour, steel without one
     if (w) {
@@ -221,7 +222,8 @@
         u[j * SM + i] = f > 0.72 ? cC : f > 0.38 ? cM : cO;
       }
     } else {
-      const Ro = sl.r * 0.94, base = sl.a - sd * arc / 2, Tm = Math.min(Ro * 0.9, U.clamp(sl.r * 0.4, 8, 24) * sl.tk), tail = Math.min(arc, 1.9), hdA = head * arc, inner = (Ro - Tm) * (Ro - Tm), outer = Ro * Ro;
+      // a full circle starts at the blade's wind-up pose (0.4 rad behind the aim), other arcs are centred on the aim
+      const Ro = sl.r * 0.94, base = sl.a - sd * (arc > 6 ? 0.4 : arc / 2), Tm = Math.min(Ro * 0.9, U.clamp(sl.r * 0.4, 8, 24) * sl.tk), tail = Math.min(arc, 1.9), hdA = head * arc, inner = (Ro - Tm) * (Ro - Tm), outer = Ro * Ro;
       const T0 = tail, T1 = tail * 0.5, T2 = tail * 0.2;
       for (let j = 0; j < W; j++) for (let i = 0; i < W; i++) {
         const dx = (i + 0.5 - half) * K2 + ex, dy = (j + 0.5 - half) * K2 + ey, r2 = dx * dx + dy * dy;

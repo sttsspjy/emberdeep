@@ -228,6 +228,7 @@ node tools/simpool.js 1 384 0.75 none,mid,max --pick=smart   # same bots in para
 node tools/sheet.js --cls=all --routes --weapons             # analytic hero numbers, no bot runs
 node tools/bal.js                                            # quick balance suite against the difficulty targets, about 2 minutes
 node tools/browse.js                                         # headless browser smoke test
+node tools/browse.js --scen=swing --cls=knight               # contact sheet PNG per melee weapon swing (two attacks, hold, idle)
 ```
 
 `simpool.js` runs its workers at normal priority; add `--nice` for idle priority (Windows throttles idle priority while the machine is unattended).
