@@ -1,7 +1,8 @@
 // Usage: node tools/check-perf.js [--audit-only] [--limit=<ms per tick at 150 foes>] [--reps=N]
 // Headless sim cost per tick against the live foe count (hordes: up to 120 foes solo, 180 in a party). One hero stands in the largest combat room (37x17 tiles) and fires volleys at the nearest foe while N mixed foes
 // (every non-boss roster type) pile up around it; foes carry 25x HP so the count holds. A horde scenario times 150 foes of which 100 are fodder (radius 6-7) and audits the same with 40-200. Per count: 200 warm-up ticks, then 600 ticks at dt 1/60; the best of N runs, mean of its fastest 95% of ticks.
-// Fails when 150 foes cost more than the limit or when the audit finds a difference; the 200 / 70 cost ratio is printed (x2.86 would be linear in the foe count).
+// Reps interleave the counts of a scenario so load hits all alike. Fails when 150 foes cost more than limit x load (load = a fixed pure-JS calibration workload over its idle time, at least 1), when the 200 / 70 cost ratio exceeds 4.0 (x2.86 is linear in the foe count, x8.2 quadratic), or when the audit finds a difference;
+// a scenario that misses a gate is re-measured once (calibration included) before it fails.
 // Audit (normal foe HP, respawns, a kiting hero, kills and splits): every foesNear call must return each foe that a full scan finds within the circle, ascending and alive, including random probes inside the foe loop of
 // update(); every foeScan must be paired with a foeEnd; separate() must leave every foe where the original O(n^2) loops leave it, in the sim and in random packs.
 const { ED } = require('./sim.js');
@@ -13,9 +14,34 @@ const TIMED = [{ cls: 'ranger', kite: false, hp: 25 }, { cls: 'pyro', kite: fals
 const AUDITED = [{ cls: 'ranger', kite: true, hp: 1 }, { cls: 'pyro', kite: false, hp: 1 }, { cls: 'ranger', kite: false, hp: 1 }, { cls: 'ranger', kite: true, hp: 1, fodder: 100 }];
 const CARRY = flag('carry', 10); // px per tick that the audit's hero effect moves the foes around the hero (the grid tolerates 42)
 const COUNTS = [70, 150, 200], TICKS = 600, DT = 1 / 60, WARM = 200, VOLLEY = 4; // VOLLEY: attacks per attack interval (multishot and attack speed of a late build)
-// Gate: ms per tick at 150 foes. Measured on these scenarios: 0.6 before the foe grid, 0.2 after; 0.5 fails the old sim and leaves the new one 2x room (the frame is 16.7 ms, shared with snapshots and rendering).
+// Gate: ms per tick at 150 foes, scaled by the machine load. Measured on these scenarios: 0.6 before the foe grid, 0.2 after; 0.5 fails the old sim and leaves the new one 2x room (the frame is 16.7 ms, shared with snapshots and rendering).
 const LIMIT = flag('limit', 0.5);
 const REPS = flag('reps', 5);
+const RATIO_MAX = 4.0; // 200 / 70 foes: load-independent scaling gate
+const CALIB_REF = 30; // ms of calib() on an idle dev box (8-core / 16-thread)
+
+// Fixed load probe, independent of the sim: float math, small-object allocation and array writes. Returns the best of 9 runs in ms.
+let calibSink = 0;
+function calib() {
+  const N = 2048, a = new Array(N), f = new Float64Array(N);
+  let best = Infinity;
+  for (let k = 0; k < 9; k++) {
+    const t0 = process.hrtime.bigint();
+    let s = 0, x = 0.5;
+    for (let r = 0; r < 720; r++) {
+      for (let i = 0; i < N; i++) {
+        x = x * 3.7 * (1 - x) + 1e-9 * i;
+        const o = { x, y: x * 0.5, v: i };
+        a[i] = o;
+        f[i] = Math.sqrt(o.x * o.x + o.y * o.y) + Math.sin(o.x * 6.28) * 0.01;
+      }
+      for (let i = 1; i < N; i++) s += f[i] - f[i - 1] * 0.5 + a[i].v * 1e-6;
+    }
+    calibSink += s;
+    best = Math.min(best, Number(process.hrtime.bigint() - t0) / 1e6);
+  }
+  return best;
+}
 const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
 
 const rosterTypes = (() => {
@@ -201,15 +227,24 @@ let fails = 0;
 // Timing runs first: the audit wraps methods on its worlds, which would make the property reads of the timed worlds polymorphic.
 if (!argv.includes('--audit-only')) {
   for (const sc of TIMED) {
-    const res = {}, tag = sc.cls + (sc.fodder ? ' horde' : '');
-    for (const n of sc.counts || COUNTS) {
-      let best = null;
-      for (let r = 0; r < REPS; r++) { const m = runCount(sc, n); if (!best || m.mean < best.mean) best = m; }
-      res[n] = best;
-      console.log(`${tag.padEnd(12)} ${String(n).padStart(3)} foes${sc.fodder ? ' (' + sc.fodder + ' fodder)' : ''}: ${best.mean.toFixed(3)} ms/tick (worst tick ${best.worst.toFixed(2)} ms) digest ${best.digest}`);
+    const tag = sc.cls + (sc.fodder ? ' horde' : ''), counts = sc.counts || COUNTS;
+    for (let attempt = 0; ; attempt++) {
+      // One round: calibration, REPS reps that time every count back to back (best per count), calibration; the slower calibration sets the load.
+      const c0 = calib(), res = {};
+      for (let r = 0; r < REPS; r++) for (const n of counts) { const m = runCount(sc, n); if (!res[n] || m.mean < res[n].mean) res[n] = m; }
+      const cal = Math.max(c0, calib()), load = Math.max(1, cal / CALIB_REF), lim = LIMIT * load, miss = [];
+      for (const n of counts) console.log(`${tag.padEnd(12)} ${String(n).padStart(3)} foes${sc.fodder ? ' (' + sc.fodder + ' fodder)' : ''}: ${res[n].mean.toFixed(3)} ms/tick (worst tick ${res[n].worst.toFixed(2)} ms) digest ${res[n].digest}`);
+      console.log(`${tag} at 150 foes: ${res[150].mean.toFixed(3)} ms/tick, limit ${LIMIT} x load ${load.toFixed(2)} = ${lim.toFixed(3)} ms (calibration ${cal.toFixed(1)} ms, idle ${CALIB_REF} ms)`);
+      if (res[150].mean > lim) miss.push(`${res[150].mean.toFixed(3)} ms/tick > ${lim.toFixed(3)} ms at 150 foes`);
+      if (res[200] && res[70]) {
+        const ratio = res[200].mean / res[70].mean;
+        console.log(`${tag} cost 200 vs 70 foes: x${ratio.toFixed(2)} (x2.86 = linear in foes, limit x${RATIO_MAX})`);
+        if (ratio > RATIO_MAX) miss.push(`cost 200 vs 70 foes x${ratio.toFixed(2)} > x${RATIO_MAX}`);
+      }
+      if (!miss.length) break;
+      if (attempt) { fails++; console.log(`FAIL ${tag}: ${miss.join('; ')}`); break; }
+      console.log(`${tag} missed (${miss.join('; ')}), measuring again`);
     }
-    if (res[150].mean > LIMIT) { fails++; console.log(`FAIL ${tag} at 150 foes: ${res[150].mean.toFixed(3)} ms/tick > ${LIMIT} ms`); }
-    if (res[200] && res[70]) console.log(`${tag} cost 200 vs 70 foes: x${(res[200].mean / res[70].mean).toFixed(2)} (x2.86 = linear in foes)`);
   }
 }
 for (const sc of AUDITED) {
