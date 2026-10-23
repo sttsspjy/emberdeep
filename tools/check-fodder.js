@@ -49,8 +49,9 @@ for (const type of [FODDER, THREAT]) {
   const { w, p } = stage('knight', {}, ['chalice']);
   for (let i = 0; i < 30; i++) w.killEnemy(mk(w, p, FODDER), p, {});
   ok(p.chaliceKills === 0 && p.chaliceHp === 0, `30 fodder kills: no Grail growth (${p.chaliceKills}/${p.chaliceHp})`);
-  for (let i = 0; i < 3; i++) w.killEnemy(mk(w, p, THREAT), p, {});
-  ok(p.chaliceKills === 3 && p.chaliceHp === 1, `3 other kills: +1 health (${p.chaliceKills}/${p.chaliceHp})`);
+  const per = ED.RELICS.chalice.kills;
+  for (let i = 0; i < per; i++) w.killEnemy(mk(w, p, THREAT), p, {});
+  ok(p.chaliceKills === per && p.chaliceHp === 1, `${per} other kills: +1 health (${p.chaliceKills}/${p.chaliceHp})`);
 }
 
 // ---- every kill counts for the run; the lifetime stat and its deeds count foes that are not fodder ----

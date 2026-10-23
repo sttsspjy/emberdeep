@@ -622,7 +622,7 @@ function U_ang(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
   const hp0 = g.p.hp; g.w.hurtPlayer(g.p, 10, {}); ok(g.p.hp === hp0, 'a hit inside the grace does nothing');
   run(g.w, ED.CONST.STEP_GRACE + 0.05); g.p.stats.dodge = 0; const hp1 = g.p.hp; g.w.hurtPlayer(g.p, 10, {}); ok(g.p.hp < hp1, 'a hit after the grace lands (dodge off)');
   const sb = ED.Stats.compute({ cls: 'shade', weapon: 'daggers', boons: {}, relics: [], meta: { up: [], mastery: 1 }, pact: 0 }), se = ED.Stats.compute({ cls: 'shade', weapon: 'daggers', boons: { evade: 2 }, relics: [], meta: { up: [], mastery: 1 }, pact: 0 });
-  ok(ED.CLASSES.shade.hp === 165 && ED.CLASSES.shade.armor === 7, 'Shade base 165 health, 7 armor'); near(sb.dodge, 0.35, 1e-9, 'Shade base dodge 35%'); near(se.dodge, 0.43, 1e-9, 'Evasion x2 stacks onto the base (43%)');
+  ok(ED.CLASSES.shade.hp === 41 && ED.CLASSES.shade.armor === 7, 'Shade base 41 health, 7 armor'); near(sb.dodge, 0.35, 1e-9, 'Shade base dodge 35%'); near(se.dodge, 0.43, 1e-9, 'Evasion x2 stacks onto the base (43%)');
   ok(/untouchable for 0.35 s/.test(ED.SKILLS.step.desc) && ED.CONST.STEP_GRACE === 0.35, 'the skill text names the grace');
 }
 

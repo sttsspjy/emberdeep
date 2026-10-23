@@ -390,7 +390,7 @@
           if (p.claimed[pr.group]) { this.msgs.push({ to: pid, t: 'toast', text: 'You already claimed this reward.' }); return; }
           p.claimed[pr.group] = true;
           if (item === 'boon') this.grantOffer(p, { src: 'room' });
-          else if (item === 'vigor') { p.bonusHp += 8; this.recalc(p, false); this.healPlayer(p, p.maxHp * 0.2); this.sendBuild(p); }
+          else if (item === 'vigor') { p.bonusHp += 2; this.recalc(p, false); this.healPlayer(p, p.maxHp * 0.2); this.sendBuild(p); }
           else this.grantOffer(p, { src: item });
           this.msgs.push({ to: pid, t: 'claimed', group: pr.group });
           if (allClaimed(this, pr.group)) pr.state = 1;
