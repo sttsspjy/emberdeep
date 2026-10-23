@@ -326,7 +326,7 @@ const roomOf = (w, kind) => w.floor.rooms.find(r => (kind === 'dark' ? r.dark : 
 const budgetOf = (s, kind) => Math.round(W0.ROOM_XP[kind === 'elite' ? 'elite' : 'combat'][s - 1] * (kind === 'dark' ? W0.DARK_LOOT : 1));
 { // fodder data: one per biome, in no roster, appended after every other entry
   const ids = ED.BIOMES.map(b => b.fodder), idx = ids.map(id => ED.ENEMY_IDX[id]);
-  ok(ids.length === 6 && new Set(ids).size === 6 && ids.every(id => ED.ENEMIES[id] && ED.ENEMIES[id].fodder && ED.ENEMIES[id].ai === 'swarm' && ED.ENEMIES[id].cost === 0 && ED.ENEMIES[id].xp === 0 && ED.ENEMIES[id].hp === 7 && ED.ENEMIES[id].dmg === 6), 'six fodder defs, one per biome, hp 7 dmg 6 xp 0');
+  ok(ids.length === 6 && new Set(ids).size === 6 && ids.every(id => ED.ENEMIES[id] && ED.ENEMIES[id].fodder && ED.ENEMIES[id].ai === 'swarm' && ED.ENEMIES[id].cost === 0 && ED.ENEMIES[id].xp === 0 && ED.ENEMIES[id].hp === 7 && ED.ENEMIES[id].dmg === 1.5), 'six fodder defs, one per biome, hp 7 dmg 1.5 xp 0');
   ok(idx.join() === [...Array(6)].map((_, i) => ED.ENEMY_IDS.length - 6 + i).join(), `fodder are the last six wire indices (${idx})`);
   ok(ED.BIOMES.every(b => !b.enemies.some(r => ED.ENEMIES[r[0]].fodder)), 'fodder are in no roster');
   ok(ids.every(id => { const d = ED.ENEMIES[id], a = ED.ENEMIES[d.art]; return d.r >= 6 && d.r <= 8 && d.spd >= 62 && d.spd <= 90 && !!a && !a.fodder && !!d.fly === !!a.fly && d.look === a.look; }), 'fodder: radius 6-8, speed 62-90, art names an existing non-fodder type with the same flight and look');

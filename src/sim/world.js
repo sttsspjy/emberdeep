@@ -205,7 +205,7 @@
     return Math.atan2(ay - y, ax - x);
   };
   // Per-stratum threat on top of the base scales: foe HP, wave budget, `cdRate` = extra cooldown recovery (0.2 = attack timers tick 20% faster, -0.2 = 20% slower) and the boss pause between attacks (x).
-  W.THREAT = [{ hp: 2.2, dmg: 0.5, wave: 0.8, cdRate: -0.4, pause: 2 }, { hp: 1.62, dmg: 0.5, wave: 0.75, cdRate: -0.3, pause: 1.7 }, { hp: 1.3, dmg: 0.5, wave: 0.7, cdRate: -0.1, pause: 1.4 }, { hp: 1, dmg: 0.84, wave: 0.66, cdRate: 0, pause: 0.75 }, { hp: 1.07, dmg: 1.19, wave: 0.62, cdRate: 0.15, pause: 0.6 }, { hp: 1.02, dmg: 1.39, wave: 0.6, cdRate: 0.3, pause: 0.6 }];
+  W.THREAT = [{ hp: 2.2, dmg: 1, wave: 0.8, cdRate: -0.4, pause: 2 }, { hp: 1.62, dmg: 1, wave: 0.75, cdRate: -0.3, pause: 1.7 }, { hp: 1.3, dmg: 1, wave: 0.7, cdRate: -0.1, pause: 1.4 }, { hp: 1, dmg: 0.84, wave: 0.66, cdRate: 0, pause: 0.75 }, { hp: 1.07, dmg: 1.19, wave: 0.62, cdRate: 0.15, pause: 0.6 }, { hp: 1.02, dmg: 1.39, wave: 0.6, cdRate: 0.3, pause: 0.6 }];
   // Foe HP multiplier of stratum s: the depth curve times the threat HP.
   W.hpScale = (s) => (1 + 0.65 * (s - 1) + 0.08 * (s - 1) * (s - 1)) * W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, s - 1))].hp;
   // Wave pacing of combat rooms: seconds before the first wave, spawn telegraph (+ random extra), minimum gap before the next wave, the share of a wave that may still stand when the next one is called, the seconds after which the next wave comes regardless, and the minimum spawn distance from heroes (turrets keep more).
@@ -677,7 +677,7 @@
       p.hzT = (p.hzT || 0) - dt;
       if (p.hzT <= 0) {
         const s = this.stratum;
-        const dmg = hz === 'spikes' ? 6 : hz === 'poison' ? 4 : hz === 'lava' ? 6 : hz === 'void' ? 6 : 0; // damage per tick; every floor hazard stays near 7-10 damage per second
+        const dmg = hz === 'spikes' ? 1.5 : hz === 'poison' ? 1 : hz === 'lava' ? 1.5 : hz === 'void' ? 1.5 : 0; // damage per tick before HAZARD_MUL, in hero health points
         if (dmg) this.hurtPlayer(p, dmg * (1 + 0.2 * (s - 1)) * W.HAZARD_MUL, { hazard: true });
         p.hzT = hz === 'spikes' ? 0.9 : 0.6;
       }
@@ -931,7 +931,7 @@
   W.prototype.collect = function (p, pk) {
     if (pk.kind === 'gold') { const v = Math.max(1, Math.round(pk.val * (1 + p.stats.gold))); this.gold += v; this.emit({ t: 'gold', v, pid: p.pid }); }
     else if (pk.kind === 'xp') { this.addXp(pk.val * (1 + p.stats.xp)); this.emit({ t: 'xp', pid: p.pid }); }
-    else if (pk.kind === 'heart') { this.healPlayer(p, p.maxHp * (0.22 + 0.03 * p.stats.forager) + 6); }
+    else if (pk.kind === 'heart') { this.healPlayer(p, p.maxHp * (0.22 + 0.03 * p.stats.forager) + 1.5); }
   };
 
   // Marks the stratum fully explored once every non-boss room has been cleared (non-combat rooms clear on entry).

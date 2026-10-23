@@ -151,9 +151,9 @@ const run = (w, secs, f) => { for (let i = 0; i < Math.round(secs * 60); i++) { 
 }
 // Brace cuts damage taken by braceDR, Hold the Line shares it, the best Sanctuary stacks with it and the product never falls below DR_FLOOR
 {
-  const { w, p } = stage('knight', { k_s1: 1, k_s1_b: 3 }); const q = ED.Stats.armorMul(p.stats.armor), hit = () => { p.hp = p.maxHp; p.invuln = 0; w.hurtPlayer(p, 100, {}); return p.maxHp - p.hp; };
+  const { w, p } = stage('knight', { k_s1: 1, k_s1_b: 3 }); const q = ED.Stats.armorMul(p.stats.armor), hit = () => { p.maxHp = p.hp = 1e4; p.invuln = 0; w.hurtPlayer(p, 100, {}); return p.maxHp - p.hp; }; // 1e4 health: the probe hit must not down the hero
   const base = hit(); p.braceT = 1; const braced = hit(); near(braced / base, 0.6, 0.03, 'Brace -40% (Vanguard 25 + Rallying rank 3: 15)');
-  p.braceT = 0; const ally = w.addPlayer({ pid: 'p1', name: 'A', slot: 1, cls: 'ranger', weapon: 'longbow', meta: META() }); ally.x = p.x + 40; ally.y = p.y; ally.hp = ally.maxHp;
+  p.braceT = 0; const ally = w.addPlayer({ pid: 'p1', name: 'A', slot: 1, cls: 'ranger', weapon: 'longbow', meta: META() }); ally.x = p.x + 40; ally.y = p.y; ally.maxHp = ally.hp = 1e4;
   p.braceT = 1; p.boons.k_s1_b = 3; w.recalc(p, false); ally.invuln = 0; const a0 = ally.hp; w.hurtPlayer(ally, 100, {}); const aHit = a0 - ally.hp;
   ally.hp = ally.maxHp; ally.invuln = 0; p.braceT = 0; w.hurtPlayer(ally, 100, {}); const aBase = ally.maxHp - ally.hp; near(aHit / aBase, 1 - Math.min(0.4, p.stats.braceDR), 0.04, 'Hold the Line braces allies within 100');
   p.braceT = 1; w.zones.push({ kind: 'sanct', x: p.x, y: p.y, r: 80, dr: 0.4, t: 0, dur: 9, team: 0, id: 99 }); const floor = hit(); near(floor / base, 0.5, 0.03, 'DR floor 0.5 (Brace x Sanctuary)');
@@ -332,7 +332,7 @@ const charge = (w, p, len) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x1: p.x + 
   ok(bz && Math.abs(bz.r - 120) < 1e-9 && Math.abs(bz.dur - 5) < 1e-9 && Math.abs(bz.x - (t3.end)) < 2 && !t2.w.zones.some(z => z.w === 7), 'a War Banner (r120, 5 s) at the end of the run; none at rank 2');
   ok(t3.in.stunCd > 0, 'the plant pulses a stun on foes inside'); near(t3.in.slowAmt, 0.4, 1e-9, 'foes inside are slowed 40%'); near(t3.boss.slowAmt, 0.2, 1e-9, 'bosses half as much'); ok(!(t3.out.slowT > 0), 'foes outside are not');
   near(t3.in.weakV, 0.25, 1e-9, 'foes inside deal 25% less'); near(t3.boss.weakV, 0.125, 1e-9, 'bosses 12.5% less');
-  const dmg = (t, who, src) => { who.hp = who.maxHp; who.invuln = 0; t.w.hurtPlayer(who, 100, src || {}); return who.maxHp - who.hp; };
+  const dmg = (t, who, src) => { who.maxHp = who.hp = 1e4; who.invuln = 0; t.w.hurtPlayer(who, 100, src || {}); return who.maxHp - who.hp; };
   const inBanner = dmg(t3, t3.ally), noBanner = dmg(t2, t2.ally);
   near(inBanner / noBanner, 1 - Math.min(0.4, t3.p.stats.braceDR), 0.04, "an ally inside is Braced (the Knight's Brace strength)");
   t3.ally.x = t3.end + 200; near(dmg(t3, t3.ally) / noBanner, 1, 0.04, 'an ally outside is not');
