@@ -37,7 +37,7 @@ module.exports = (ED, opts) => {
       if (key === 'meteor.rocks') { sum += q.here * q.n * n * Math.min(1, (q.r / SCATTER_R) ** 2) / k._cd; continue; } // Meteor Shower: each meteorite lands at random within SCATTER_R of the impact and strikes the share of a pack its circle covers
       if (key === 'shieldthrow.strike') { const h = Math.min(n, 4 + 2); mul = h * (1 + (q.gather || 0) * (h - 1) / 2); } // Gathering Force: strike k of a shield lands at 1 + gather x (k - 1)
       if (q.kind === 'minion') mul = q.dkCleave ? Math.min(n, 3) : 1; // the Death Knight cleaves a wide arc: about 3 foes of a pack
-      if (key === 'vanish.ambush') mul = (m.weapon.kind === 'melee' ? n : Math.min(n, m.weapon.n)) / Math.max(1, q.oneFoe);
+      if (key === 'vanish.ambush') { const hb = m.weapon.kind === 'melee' ? n : Math.min(n, m.weapon.n); mul = (hb + (n - hb) * (q.sweepR > 0 ? cover(q.sweepR) : 0)) / Math.max(1, q.oneFoe); } // Ambush Sweep: the pack foes the Ambush shots miss catch the sweep (those within sweepR of the target)
       sum += q._r.total * mul / k._cd;
     }
     return sum * (1 + (m.boost ? m.boost.pack : 0)); // boost.pack: a damage multiplier on the whole pack's damage (White Flame)

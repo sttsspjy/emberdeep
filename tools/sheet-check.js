@@ -124,7 +124,7 @@ const hits = []; // [{ part, kind, dealt, el }]
 const oHit = W.hitEnemy;
 W.hitEnemy = function (e, base, src) {
   const dealt = oHit.call(this, e, base, src);
-  if (e._dummy && dealt > 0) hits.push({ part: (src && src.part) || (src && src.ambush ? 'vanish.ambush' : src && src.kind === 'minion' ? 'legion.minion' : undefined), kind: (src && src.kind) || 'weapon', raw: !!(src && src.raw), el: src && (src.el || src.clsEl), bleed: !!(src && src.bleed), wpn: !!(src && src.wpn), dealt, t: this.time });
+  if (e._dummy && dealt > 0) hits.push({ part: (src && src.part) || (src && src.ambush ? 'vanish.ambush' : src && src.kind === 'minion' ? 'legion.minion' : undefined), kind: (src && src.kind) || 'weapon', raw: !!(src && src.raw), el: src && (src.el || src.clsEl), bleed: !!(src && src.bleed), wpn: !!(src && src.wpn), dealt, t: this.time, id: e.id });
   return dealt;
 };
 const oUpd = W.updateEnemy;
@@ -235,6 +235,23 @@ for (const [cls, stat, slot, dist, skipImpact, opt] of CASES) {
   const by = settle(w, e, 3), got = by['harvest.lance'];
   ok(got && got.n === lance.oneFoe && !by['harvest.burst'], `Bone Lances: ${got ? got.n : 0} lances and ${by['harvest.burst'] ? by['harvest.burst'].n : 0} bursts on the foe, modelled ${lance.oneFoe} and 0`);
   if (got) rel(got.sum / got.n, lance.here, 0.015, 'Bone Lance per hit');
+}
+
+{ // Ambush Sweep: a fan of knives strikes at most 3 foes of a pack; the sweep (every foe within ambushCleave of the target) reaches the rest, and the pack rule of tools/model.js counts it (a melee Ambush already strikes the whole pack)
+  const MDs = require('./model.js')(ED, { pack: 4 });
+  const packAmb = (cls, wi, cleave) => {
+    const { w, p } = stage(cls, {}, wi, { ambushCleave: cleave }, null, 28);
+    const spare = [[24, 0], [-12, 21], [-12, -21]].map(([dx, dy]) => { const f = w.spawnEnemy('skeleton', p.x + 28 + dx, p.y - 4 + dy); f._dummy = true; f.spd = 0; f.cd = 1e9; f.r = REF.r; f.hp = f.maxHp = 1e9; f.def = Object.assign({}, f.def, { guard: undefined }); return f; });
+    const first = w.enemies.find(f => f._dummy && !spare.includes(f));
+    w.playerSkill(p, Math.atan2(first.y - (p.y - 4), first.x - p.x), {}, 1); w.playerAttack(p, Math.atan2(first.y - (p.y - 4), first.x - p.x));
+    run(w, 2);
+    const m = sheetOf(w, p), q = m.skills[1].parts.find(x => x.id === 'ambush');
+    return { foes: new Set(hits.filter(h => h.part === 'vanish.ambush' || h.part === 'vanish.sweep').map(h => h.id)).size, pack: MDs.directDamage({ weapon: { kind: m.weapon.kind, _avg: 0, _extras: [], _aps: 1, n: m.weapon.n, pierce: m.weapon.pierce }, skills: [Object.assign({}, m.skills[1], { parts: [q], _cd: 1 })], boost: { pack: 0 } }, 4) / q._r.total, sweepR: q.sweepR };
+  };
+  const k0 = packAmb('shade', 1, 0), k1 = packAmb('shade', 1, 70), d1 = packAmb('shade', 0, 70);
+  ok(k0.foes <= 3 && k1.foes === 4, `Ambush Sweep: knives strike ${k0.foes} foes of the pack, with the sweep ${k1.foes}`);
+  ok(k1.sweepR === 70 && k0.pack === 3 && k1.pack > k0.pack && k1.pack <= 4, `Ambush Sweep: the pack rule counts ${k0.pack} foes without the sweep and ${k1.pack.toFixed(2)} with it (knives)`);
+  ok(d1.foes === 4 && d1.pack === 4, `Ambush Sweep: a melee Ambush already strikes the pack (${d1.foes} struck, modelled ${d1.pack})`);
 }
 
 { // Carrion Storm: every corpse that explodes launches 3 shards at the nearest foes; against one foe all of them land (the model's shard row is per corpse)
