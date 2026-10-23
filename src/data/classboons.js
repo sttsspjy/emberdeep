@@ -243,7 +243,7 @@
     desc: 'Bone Harvest explosions deal +{s2Dmg} and are {s2Area} wider; it always raises {harvestRaise:n} after.', mods: { s2Dmg: 0.4, s2Area: 0.2, harvestRaise: 2 } });
   card('necro', 'skill2', 2, 'n_s2_a', { name: 'Corpse Explosion', icon: 'bomb', tag: 'Burst',
     desc: "Harvest also detonates up to {corpse:n} corpses (foes that died in the last 4 s) within 220 of you, each at {corpseMul} of a minion's burst.",
-    rider2: 'Bone Lances: before exploding, each minion flies to the foe nearest it within 200 and bursts on it for +{boneLance}.', mods: { corpse: 4, corpseMul: 0.3 }, up: { corpse: 1 }, r2: { boneLance: 0.15 }, r3: { corpse: 4, corpseMul: 0.4, carrionN: 3, carrionShard: 0.5 },
+    rider2: 'Bone Lances: before exploding, each minion flies to the foe nearest it within 200 and bursts on it for +{boneLance}.', mods: { corpse: 4, corpseMul: 0.3 }, up: { corpse: 1 }, r2: { boneLance: 0.37 }, r3: { corpse: 4, corpseMul: 0.4, carrionN: 3, carrionShard: 0.5 },
     form: { name: 'Carrion Storm', desc: 'Every corpse Harvest detonates (up to {corpse:n}, now at {corpseMul}) launches {carrionN:n} bone shards at the nearest foes for {carrionShard} of a minion\'s burst each.' } });
   card('necro', 'skill2', 2, 'n_s2_b', { name: 'Bone Armor', icon: 'harvest', tag: 'Guard',
     desc: 'Harvest shields you for {boneArmor} max health per minion harvested (up to {boneCap}, at most once per 12 s). [ Bone Harvest explosions deal +{s2Dmg}.]',

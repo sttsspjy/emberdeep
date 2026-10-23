@@ -216,6 +216,7 @@
     'legion.spikes': { perMinion: 'cast', infAdd: { shadow: 0.5 }, note: 'one burst per minion when it expires' },
     'sanctuary.zone': { heal: { key: 'SANCT_HEAL', note: 'you and allies within 180 heal on cast' }, radiance: 0.25 },
     'harvest.burst': { perMinion: 'live', infAdd: { shadow: 0.5 }, note: 'one burst per minion you have', heal: { perMinion: 0.03, cap: 0.06, note: 'you heal on cast' } },
+    'harvest.lance': { perMinion: 'live', infAdd: { shadow: 0.5 }, note: 'each minion bursts on the foe nearest it instead of its own burst' },
     'harvest.corpse': { oneFoe: 0, note: 'per corpse that explodes on the foe' },
     'meteor.rocks': { oneFoe: 0, note: 'each meteorite lands at random within 80' },
     'meteor.impact': { oneFoe: 1, oneMul: { sunDive: 2 } },

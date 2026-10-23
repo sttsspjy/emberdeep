@@ -225,6 +225,18 @@ for (const [cls, stat, slot, dist, skipImpact, opt] of CASES) {
   if (got) rel(got.sum / got.n, q.here, 0.015, 'Bone Harvest burst per hit');
 }
 
+{ // Bone Lances: every minion's burst becomes a lance on the foe (the burst part drops out), so a cast pays one lance per minion and no burst
+  const { w, p, e } = stage('necro', {}, 0, { boneLance: 0.37 });
+  cast(w, p, e, 0); run(w, 0.5); hits.length = 0;
+  const m = ED.Sheet.compute(p, ED.Sheet.ctx(w, p), { raw: true }), k = m.skills[1], lance = k.parts.find(x => x.id === 'lance'), burst = k.parts.find(x => x.id === 'burst');
+  ok(burst.oneFoe === 0 && burst._r.total === 0 && lance.oneFoe === 3, `Bone Lances: the burst part drops out, the lance counts one per minion (burst ${burst.oneFoe}, lance ${lance.oneFoe})`);
+  near(k.perCast, lance._r.total, 1e-6, 'Bone Lances: the cast is the lances alone');
+  cast(w, p, e, 1);
+  const by = settle(w, e, 3), got = by['harvest.lance'];
+  ok(got && got.n === lance.oneFoe && !by['harvest.burst'], `Bone Lances: ${got ? got.n : 0} lances and ${by['harvest.burst'] ? by['harvest.burst'].n : 0} bursts on the foe, modelled ${lance.oneFoe} and 0`);
+  if (got) rel(got.sum / got.n, lance.here, 0.015, 'Bone Lance per hit');
+}
+
 { // Carrion Storm: every corpse that explodes launches 3 shards at the nearest foes; against one foe all of them land (the model's shard row is per corpse)
   const { w, p, e } = stage('necro', {}, 0, { corpse: 10, corpseMul: 0.9, carrionN: 3, carrionShard: 0.4 });
   w.corpses.push({ x: e.x + 20, y: e.y, t: w.time }, { x: e.x - 20, y: e.y + 10, t: w.time });

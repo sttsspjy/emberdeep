@@ -379,6 +379,7 @@
     if (q.perMinion) { // one hit per minion: the minions you have now (all of them when none), or the ones this cast raises
       oneFoe = q.perMinion === 'cast' ? St.skillNums('legion', st).p.minion.n : ctx.minions > 0 ? Math.min(ctx.minions, st.maxMinions || 3) : st.maxMinions || 3;
       if (skillId === 'legion' && q.id === 'field') oneFoe = (oneFoe + (st.bloom > 0 ? C.BOMB_N : 0)) * q.count; // a bone field under every burst: the minions' and the bombs', each ticking q.count times
+      if (skillId === 'harvest' && q.id === 'burst' && st.boneLance > 0) oneFoe = 0; // Bone Lances: the lance replaces the burst of every minion that has a foe within 200
       o.perMinion = true;
     }
     const avg = hit * (1 + kc * (cm - 1)), pre = avg * (1 + o.selfVuln), here = pre * aff;
