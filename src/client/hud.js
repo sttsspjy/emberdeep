@@ -108,12 +108,15 @@
     g.putImageData(img, 0, 0);
     e = hold({ cv: cvs, w: cw, h: ch, ox: 2 * n, base: (m.asc + 1) * n, adv: M.adv * n }); texts.set(key, e); return e;
   }
-  // Draws s with its cap height centred on y; al: 'left' (x = glyph origin), 'center', 'right'. n: canvas px per font px.
-  const T = (s, x, y, n, col, fam, al, wt, fx) => {
+  // Draws s into context g with its cap height centred on y; al: 'left' (x = glyph origin), 'center', 'right'. n: px of g per font px (whole, so glyphs stay crisp). Returns the advance in px of g.
+  // Shared with other canvases (aim.js landing labels); the sprite lives in the HUD text cache.
+  H.pixText = (g, s, x, y, n, col, fam, al, wt, fx) => {
     s = String(s); fam = fam || 'b';
     const e = textArt(s, n, col, fam, wt || 700, fx === undefined ? 0 : fx), gx = al === 'center' ? x - e.adv / 2 : al === 'right' ? x - e.adv : x;
-    c.drawImage(e.cv, Math.round(gx) - e.ox, Math.round(y + FM[fam].cap * n / 2) - e.base);
+    g.drawImage(e.cv, Math.round(gx) - e.ox, Math.round(y + FM[fam].cap * n / 2) - e.base);
+    return e.adv;
   };
+  const T = (s, x, y, n, col, fam, al, wt, fx) => H.pixText(c, s, x, y, n, col, fam, al, wt, fx);
   // Advance width of s at n canvas px per font px (cached per string and font).
   function adv(s, n, wt, fam) {
     const m = FM[fam || 'b'], fnt = (wt || 700) + ' 16px ' + m.f, key = fnt + '|' + s; let w = wcache.get(key);
@@ -323,7 +326,7 @@
   function layout() {
     const m = Math.max(2 * k, q(u * 1.2)), fl = (v) => Math.floor(v / k) * k;
     L.m = m;
-    L.hw = q(u * 26.5); L.hh = Math.max(12 * k, q(u * 6.4)); L.hx = m; L.hy = fl(Hh - m - L.hh);
+    L.hw = q(u * 33); L.hh = Math.max(12 * k, q(u * 6.4)); L.hx = m; L.hy = fl(Hh - m - L.hh);
     L.ss = q(u * 4); L.sg = Math.max(k, q(u * 0.5)); L.sx = m; L.sy = L.hy - q(u * 1.1) - L.ss;
     L.ch = chipH(); L.cy = L.sy - q(u * 0.5) - L.ch;
     L.pw = q(u * 18); L.ph = Math.max(12 * k, q(u * 3.5));
@@ -498,7 +501,7 @@
   function heroBlock(view, me, ctl, t) {
     const cls = ED.CLASSES[me.cls], st = me.stats, I = ED.Input;
     const x = L.hx, y = L.hy, w = L.hw, h = L.hh;
-    fadeStart('hero', x, L.sy, u * 29, Hh - L.sy);
+    fadeStart('hero', x, L.sy, w + q(u * 2.5), Hh - L.sy);
     const frac = me.maxHp > 0 ? me.hp / me.maxHp : 0, low = frac < 0.3 && me.hp > 0, blink = low && step(t, 4);
     frame(c, 'hpanel', blink ? 'danger' : 'base', x, y, w, h, k);
     const med = medallion(me); c.drawImage(med.cv, x + q(u * 0.8), y + q((h - med.h) / 2));
@@ -511,8 +514,15 @@
     if (sig) icon(c, sig, cls.col.c, bx + bw - adv(wname, tS) - 16 * js - f * 2, ny - 8 * js, js);
     const gk = 'p' + me.pid; ghost[gk] = ghost[gk] === undefined ? frac : Math.max(frac, ghost[gk] - dtc * 0.35);
     const by = y + q(u * 2.8), bh = q(u * 2.4), shield = me.shield || 0;
-    hpBar(bx, by, bw, bh, { hp: me.hp, max: me.maxHp, sh: shield, gh: ghost[gk] * me.maxHp, col: low ? (blink ? '#ff5a3a' : '#b8301f') : '#d9443a' });
-    T(`${Math.ceil(me.hp)} / ${me.maxHp}` + (shield > 0 ? ` +${shTxt(shield)}` : ''), bx + bw / 2, by + bh / 2, tV, '#ffffff', 'b', 'center', 700, 1);
+    // number plate at the bar's right end, sharing its outline column: dark inset, width fixed by max HP plus a shield slot so the segments never move
+    const pad = 4 * f, ng = 2 * f, pw = q(adv(me.maxHp + '/' + me.maxHp, tV) + ng + adv('+0.0', tV) + 2 * pad + 2 * k + 2 * f), plx = bx + bw - pw;
+    hpBar(bx, by, bw - pw + k, bh, { hp: me.hp, max: me.maxHp, sh: shield, gh: ghost[gk] * me.maxHp, col: low ? (blink ? '#ff5a3a' : '#b8301f') : '#d9443a' });
+    ring(c, plx, by, pw, bh, k, K.ol, true); c.fillStyle = K.sh; c.fillRect(plx + k, by + k, pw - 2 * k, bh - 2 * k);
+    ring(c, plx + k, by + k, pw - 2 * k, bh - 2 * k, f, low && blink ? '#8a2a1c' : K.line, false);
+    const hs = Math.ceil(me.hp) + '/' + me.maxHp, ss = shield > 0 ? '+' + shTxt(shield) : '', hc = low ? (blink ? '#ffd0c4' : '#ff7a5e') : '#ffffff';
+    const ha = textArt(hs, tV, hc, 'b', 700, 0).adv, tw = ha + (ss ? ng + textArt(ss, tV, '#cfe3ff', 'b', 700, 0).adv : 0), tx = plx + Math.round((pw - tw) / 2), ty = by + bh / 2; // HP and shield centred together
+    T(hs, tx, ty, tV, hc, 'b', 'left', 700);
+    if (ss) T(ss, tx + ha + ng, ty, tV, '#cfe3ff', 'b', 'left', 700);
 
     // ability slots
     let i = 0;

@@ -134,7 +134,7 @@
   }
 
   // Landing preview of each ready ground skill (and the Shadowstep diamond). The area equals the real one (ED.skillRadius).
-  function preview(c, view, me, a, uw, S, k0) {
+  function preview(c, view, me, a, uw, S) {
     let grounds = 0;
     for (let i = 0; i < a.ground.length; i++) if (!a.ground[i].move) grounds++;
     for (let i = 0; i < a.ground.length; i++) {
@@ -160,13 +160,8 @@
           c.beginPath(); c.moveTo(tx, ty); c.lineTo(lx, ly); c.stroke(); c.setLineDash([]); c.globalAlpha = 1;
         }
       }
-      if (grounds > 1) { // several ground skills ready: label each landing with its key
-        const fs = Math.max(12 * k0, 0.9 * uw);
-        c.font = '800 ' + fs + 'px sans-serif'; c.textAlign = 'left'; c.textBaseline = 'middle';
-        const label = ED.Input.label(g.slot ? 'skill2' : 'skill1'), tx2 = lx + g.r + fs * 0.3;
-        c.lineWidth = Math.max(1, fs * 0.18); c.strokeStyle = 'rgba(10,7,6,0.85)'; c.strokeText(label, tx2, ly);
-        c.fillStyle = '#ffd9a8'; c.fillText(label, tx2, ly);
-      }
+      if (grounds > 1) // several ground skills ready: label each landing with its key in the HUD's pixel font (1 buffer px per font px, outlined)
+        ED.HUD.pixText(c, ED.Input.label(g.slot ? 'skill2' : 'skill1'), lx + g.r + 4, ly, 1, '#ffd9a8', 'b', 'left', 700, 1);
     }
   }
 
@@ -181,7 +176,7 @@
     c.lineCap = 'butt';
     if (a.device === 'pad') chevron(c, me, a, uw, S);
     else if (a.pointer && m.inside) cursorExtras(c, a, uw, S, now);
-    if (set.aimPreview !== false && a.ground.length) preview(c, view, me, a, uw, S, k0);
+    if (set.aimPreview !== false && a.ground.length) preview(c, view, me, a, uw, S);
     c.restore();
   };
 })(globalThis.ED || (globalThis.ED = {}));

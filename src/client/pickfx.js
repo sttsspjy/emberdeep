@@ -53,14 +53,23 @@
       F.ring(x, y, 36, rc(o, c), 0.3, 3);
       if (o.big) { F.zap(x - 4, y - 120, x - 34, y + 4, c, 0.3); F.zap(x + 4, y - 110, x + 32, y + 2, c, 0.3); SP(o, 'fx.thunder', x, y - 30, { add: true, ramp: 'lightning', keep: true }); }
     },
-    poison(o) { // green bubbles rise, drips fall and the ring sinks inward
-      const F = o.F, x = o.x, y = o.y, c = '#9be33c';
-      F.burst(x, y - 8, nn(o, 24), { color: c, a: -1.57, spread: 1.8, sp: 50, vy: -28, life: 0.8 * o.L, size: 5, add: true, drag: 1.5 });
-      F.burst(x, y - 6, nn(o, 10), { color: '#d2ff82', a: -1.57, spread: 2, sp: 30, vy: -18, life: 0.7, size: 2, add: true, drag: 1 });
-      F.burst(x, y - 20, nn(o, 12), { kind: 'drop', color: '#3f7a18', sp: 35, life: 0.8 * o.L, size: 3, z: 18, vz: 30, drag: 1 });
-      for (let i = 0; i < 4; i++) SP(o, 'fx.puff', x + (i - 1.5) * 9, y - 6 - (i & 1) * 8, { ramp: 'poison', vy: -22, delay: i * 0.06, speed: 0.6, a: o.al, keep: i < 2 }); // bubbles swelling and popping
-      F.ring(x, y, 34, rc(o, c), 0.55 * o.L, 3, true); F.pop(x, y - 10, 28, c, 0.3, false, o.al * 0.8);
-      if (o.big) F.ring(x, y, 58, rc(o, '#d2ff82'), 0.6, 3, true);
+    poison(o) { // bubbles rise off the hero at their own speeds and pop one after another at their tops; drips fall onto a ring around the hero, splash, and the ring sinks inward
+      const F = o.F, x = o.x, y = o.y, c = '#9be33c', R = o.big ? 40 : 30, k = (o.low ? 0.5 : 1) * F.crowd;
+      const nb = Math.max(3, Math.ceil(8 * o.n * k));
+      for (let i = 0; i < nb; i++) { // bubble i: a green body with a shine pixel rising v px/s for tr s (no drag, so both stay together), then a pop where it ends
+        const bx = x + ((i * 5) % 7 - 3) * 5, by = y - 8 - (i % 3) * 5, tr = (0.22 + ((i * 3) % 8) * 0.07) * o.L, v = 60 + (i % 3) * 20, big = i % 3 === 0;
+        F.part(bx, by, { kind: 'dot', color: big ? '#5fbf1f' : '#7fd02a', size: big ? 6 : 4.5, a: -1.57, drag: 0, add: false }, v, tr);
+        F.part(bx - 2, by - 2, { kind: 'dot', color: '#e4ffa8', size: 1.6, a: -1.57, drag: 0, add: true }, v, tr);
+        SP(o, big ? 'fx.circle.white' : 'fx.hit.spark', bx, by - v * tr, { ramp: 'poison', add: !big, a: o.al, delay: tr, speed: big ? 1.5 : 1, keep: i < 3 });
+      }
+      F.burst(x, y - 10, nn(o, 8), { color: '#9be33c', a: -1.57, spread: 1.4, sp: 36, vy: -40, life: 0.6 * o.L, size: 2, add: true, drag: 1.2 }); // fizz
+      for (let i = 0; i < 3; i++) SP(o, 'fx.puff', x + (i - 1) * 10, y - 4, { ramp: 'poison', vy: -18, delay: i * 0.07, speed: 0.7, a: 0.85 * o.al, keep: i === 1 }); // a toxic cloud lifting off the feet
+      const nd = Math.max(4, Math.ceil(10 * o.n * k));
+      for (let i = 0; i < nd; i++) { const q = i * TAU / nd + 0.2; F.part(x + Math.cos(q) * R, y + Math.sin(q) * R * 0.6, { kind: 'drop', color: i & 1 ? '#3f8a18' : '#5fbf1f', size: 4, z: 34 + (i % 3) * 8, vz: 0, drag: 0 }, 0, 0.9 * o.L); } // drips falling onto the ring
+      SP(o, 'fx.smoke.ring', x, y + 2, { ramp: 'poison', delay: 0.42, keep: true }); // the drips splash down
+      F.ring(x, y, R + 8, rc(o, '#4f9a1a'), 0.9 * o.L, 3, true); F.ring(x, y, R - 4, rc(o, '#2f6a10'), 0.75 * o.L, 3, true);
+      F.pop(x, y - 10, 14, c, 0.2, false, o.al * 0.6, '#d2ff82');
+      if (o.big) F.ring(x, y, 62, rc(o, '#d2ff82'), 0.8, 3, true);
     },
     holy(o) { // a light pillar beams up, a halo over the head, motes rise
       const F = o.F, x = o.x, y = o.y;
@@ -82,24 +91,30 @@
       SP(o, 'fx.circle.spark', x, y - 6, { ramp: 'shadow', add: true, delay: T - 0.05, a: o.al, keep: true });
       if (o.big) SP(o, 'fx.soul.violet', x, y - 10, { add: true, delay: T - 0.1, keep: true });
     },
-    general(o) { // steel sparks and a stamp ring
-      const F = o.F, x = o.x, y = o.y;
-      F.burst(x, y - 10, nn(o, 18), { kind: 'spark', color: '#f2f5f9', a: -1.57, spread: 2.6, sp: 230, vy: -20, life: 0.35, size: 1.4, drag: 3 });
-      F.burst(x, y - 10, nn(o, 10), { kind: 'streak', color: '#d9dfe8', sp: 220, life: 0.3, size: 2.4 });
-      F.ring(x, y, 34, rc(o, '#d9dfe8'), 0.25, 4, false, 14); F.ring(x, y, 22, rc(o, '#ffffff'), 0.18, 2);
-      SP(o, 'fx.smoke.ring', x, y + 2, { ramp: 'dust', keep: true }); SP(o, 'fx.hit.spark', x, y - 14, {}); SP(o, 'fx.ring.shock', x, y - 2, { ramp: 'general', add: true, a: o.al, keep: true });
-      F.pop(x, y - 12, 24, '#ffffff', 0.18, true, o.al);
+    general(o) { // anvil stamp: a short impact square at the feet, a bright steel shock ring with a second ring behind it, sparks thrown low and bouncing
+      const F = o.F, x = o.x, y = o.y, R = o.big ? 52 : 40;
+      SP(o, 'fx.circle.spark', x, y - 2, { ramp: 'general', a: o.al, speed: 1.8, keep: true }); // impact square opening into a star (unlit: stays steel, not a white blob)
+      F.ring(x, y, R, rc(o, '#f2f5f9'), 0.4 * o.L, 4, false, 10); F.ring(x, y, R * 0.6, rc(o, '#d9dfe8'), 0.3, 3, false, 6); F.ring(x, y, R + 14, rc(o, '#8f9aa8'), 0.55 * o.L, 2, false, R * 0.5);
+      SP(o, 'fx.smoke.ring', x, y + 2, { ramp: 'dust', keep: true });
+      F.burst(x, y - 4, nn(o, 16), { kind: 'spark', color: '#ffffff', sp: 210, life: 0.55 * o.L, size: 1.6, vz: 120, z: 4, drag: 1.6 }); // sparks fly low and bounce off the floor
+      F.burst(x, y - 6, nn(o, 10), { kind: 'streak', color: '#e8eef6', a: -1.57, spread: 2.4, sp: 260, life: 0.3, size: 2.4 });
+      for (let i = 0; i < 4; i++) { const q = i * TAU / 4 + 0.785; SP(o, 'fx.hit.spark', x + Math.cos(q) * R * 0.7, y + Math.sin(q) * R * 0.45, { ramp: 'general', add: true, delay: 0.06 + i * 0.04 }); } // sparks where the ring passes
+      F.pop(x, y - 6, 16, '#f2f5f9', 0.14, true, o.al * 0.8);
+      if (!o.dim && !o.low) F.addShake(1.2);
       if (o.big) F.burst(x, y - 10, nn(o, 6), { kind: 'shard', color: '#d9dfe8', sp: 140, life: 0.6, size: 2.6, vz: 90, z: 8 });
     },
-    route(o, b) { // three banner columns of rising streaks in the class colour
-      const F = o.F, x = o.x, y = o.y, cl = b && ED.CLASSES[b.cls], c = cl ? cl.col.c : '#ffd36b', hi = U.mix(c, '#ffffff', 0.6);
-      for (const dx of [-12, 0, 12]) {
-        F.burst(x + dx, y - 4, nn(o, 5), { kind: 'streak', color: c, a: -1.57, spread: 0.15, sp: 220, life: 0.45, size: 2.4, drag: 1.2 });
-        F.beam(x + dx, y - 4, dx ? 40 : 54, 5, c, 0.4 * o.L, 0.8 * o.al, hi);
+    route(o, b) { // banner streaks rise in the class colour (five ribbons of stepped squares), then the crest flashes over the head
+      const F = o.F, x = o.x, y = o.y, cl = b && ED.CLASSES[b.cls], c = cl ? cl.col.c : '#ffd36b', hi = U.mix(c, '#ffffff', 0.35), lo = U.shade(c, -0.3);
+      for (const dx of [-16, -8, 0, 8, 16]) {
+        const mid = !dx, side = Math.abs(dx) > 8;
+        F.burst(x + dx, y - 2, nn(o, mid ? 8 : 6), { kind: 'dot', color: side ? lo : c, a: -1.57, spread: 0.05, sp: mid ? 170 : 130, life: 0.75 * o.L, size: 4, add: false, drag: 1.2 }); // ribbon body (unlit: keeps the class colour)
+        F.burst(x + dx, y - 2, nn(o, 3), { kind: 'streak', color: hi, a: -1.57, spread: 0.08, sp: 240, life: 0.4, size: 2, drag: 1 });
+        if (!side) F.beam(x + dx, y - 2, mid ? 60 : 42, 6, c, 0.45 * o.L, 0.55 * o.al, c);
       }
-      F.ring(x, y, 32, rc(o, c), 0.45, 3);
-      SP(o, 'fx.spark.magic', x, y - 28, { ramp: c, add: true, a: o.al, keep: true });
-      F.pop(x, y - 16, 20, c, 0.25, false, o.al);
+      F.ring(x, y, 34, rc(o, c), 0.45, 3);
+      SP(o, 'fx.circle.spark', x, y - 40, { ramp: c, add: true, a: o.al, delay: 0.12, keep: true }); // crest flash: a square badge opening into a star
+      SP(o, 'fx.spark.magic', x, y - 40, { ramp: c, add: true, a: o.al, delay: 0.2 });
+      F.pop(x, y - 40, 12, c, 0.3, true, o.al * 0.8, hi);
     },
     asc(o) { // prismatic burst in the six element colours and a big ring
       const F = o.F, x = o.x, y = o.y, c = ED.RARITY.a.color;
