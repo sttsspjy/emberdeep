@@ -68,7 +68,7 @@
   };
 
   // The "Next rank" line: the changed numbers of the text at rank + 1 (runs of words the text at rank lacks, found by a word-level diff that ignores trailing punctuation), a lone number with up to NEXT_WORDS - 1 words after it ("+30% damage"),
-  // joined with " · ", and the rider a route card gains at rank 3.
+  // joined with " · ", and the rider2 / transform a route card gains at rank 2 / 3.
   const NEXT_WORDS = 3, NEXT_RUN = 6, NEXT_STOP = /^(to|of|the|a|an|and|or|from|for|in|on|at|by|with|as|that|their|its|is|are|your|you|than|per|each)$/i;
   const wordKey = (w) => w.replace(/[.,;:]+$/, '');
   const bareNum = (ph) => !/[A-Za-z]{3,}/.test(ph.join(' ').replace(/\d+(?:\.\d+)?\s?s\b/g, '')); // numbers and units only, no noun
@@ -122,8 +122,8 @@
       if (bareNum(ph)) ph = withNoun(Z, j0 + (ph0 ? d : 0), ph, same);
       out.push(wordKey(ph.join(' ')));
     }
-    if (b.route && (rank + 1 === 2 || rank + 1 === 3)) { // the rider a route card gains at rank 2 (rider2) or 3 (rider, or the transform's name)
-      const P = ED.cardParts(id, 3, st), nm = rank + 1 === 2 ? P.rider2Name : P.form ? P.form.name : P.riderName;
+    if (b.route && (rank + 1 === 2 || rank + 1 === 3)) { // the rider a route card gains at rank 2 (rider2) or the transform's name at rank 3
+      const P = ED.cardParts(id, 3, st), nm = rank + 1 === 2 ? P.rider2Name : P.form ? P.form.name : '';
       if (nm) out.push('unlocks ' + nm);
     }
     return out.join(' · ');

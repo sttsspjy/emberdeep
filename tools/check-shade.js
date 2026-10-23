@@ -1,5 +1,5 @@
 // Usage: node tools/check-shade.js
-// Headless checks of the Shade route against DESIGN-classes section 7: card numbers, Momentum, Culling Blades, Thousand Cuts, Ghost Walk, Assassinate, Afterimage, Nightfall, Night's Edge, Veil of Night,
+// Headless checks of the Shade route against docs/GAME-DESIGN.md section 5: card numbers, Momentum, Culling Blades, Thousand Cuts, Ghost Walk, Assassinate, Afterimage, Nightfall, Night's Edge, Veil of Night,
 // Open Veins and Rupture, each in a staged room. Prints failures and exits 1 when any check fails.
 const fs = require('fs');
 const vm = require('vm');

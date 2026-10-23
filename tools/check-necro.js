@@ -1,5 +1,5 @@
 // Usage: node tools/check-necro.js
-// Headless checks of the Necromancer's 12 route cards against DESIGN-classes section 9 in staged rooms: stat totals per rank, then every behaviour and rider (Hex, Gravecaller, Soul Barrage, Endless Legion, Bone Spikes,
+// Headless checks of the Necromancer's 12 route cards against docs/GAME-DESIGN.md section 5 in staged rooms: stat totals per rank, then every behaviour and rider (Hex, Gravecaller, Soul Barrage, Endless Legion, Bone Spikes,
 // Bone Knights, Grim Harvest, Corpse Explosion, Bone Armor, Grave Pact, Abyssal Toll, Rise Again). Prints failures and exits 1 when any check fails.
 const fs = require('fs');
 const vm = require('vm');

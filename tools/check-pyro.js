@@ -1,5 +1,5 @@
 // Usage: node tools/check-pyro.js
-// Headless checks of the Pyromancer's 12 route cards against DESIGN-classes section 6 (rank 1 behaviour, ranks 2-3, rank-3 riders) in staged worlds: Channel, Magma Heart, Ember Rush, Twin Nova, Phoenix Mantle,
+// Headless checks of the Pyromancer's 12 route cards against docs/GAME-DESIGN.md section 5 (rank 1 behaviour, rank 2 riders, rank 3 forms) in staged worlds: Channel, Magma Heart, Ember Rush, Twin Nova, Phoenix Mantle,
 // Twin Meteor, Comet, Living Flame, White Heat and Heat Engine. Prints failures and exits 1 when any check fails.
 const fs = require('fs');
 const vm = require('vm');

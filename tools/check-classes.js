@@ -1,6 +1,6 @@
 // Usage: node tools/check-classes.js
-// Headless checks of the class-route engine against DESIGN-classes: fork weapon numbers (3.2), skill numbers at class Power (1.3), slot-damage compounding, the attack-interval floor (3.3),
-// the shield window (3.7), stun rules (3.9) and the Knight's Shield Throw and Shield Charge in a staged room. Prints failures and exits 1 when any check fails.
+// Headless checks of the class-route engine against docs/GAME-DESIGN.md section 5: fork weapon numbers, skill numbers at class Power, slot-damage compounding, the attack-interval floor,
+// the shield window, stun rules and the Knight's Shield Throw and Shield Charge in a staged room. Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
 let n = 0, fails = 0;
 const ok = (c, msg) => { n++; if (!c) { fails++; console.log('FAIL ' + msg); } };

@@ -511,15 +511,15 @@
     A.draw(c, id, 0, Math.round(44 - (vx * Math.cos(rot) - vy * Math.sin(rot))), Math.round(44 - (vx * Math.sin(rot) + vy * Math.cos(rot))), { rot, anchor: 'grip' });
     return cv;
   }
-  // Card body of a class route or fork card: the text at the offered rank (+ rider from rank 3), "Plays as" and "Forks" on a route card, the rank-3 rider name on lower ranks, the fork weapon of an Attack fork.
+  // Card body of a class route or fork card: the text at the offered rank (+ rider2 from rank 2, the transform from rank 3), "Plays as" and "Forks" on a route card, the next rank's rider and transform names on lower ranks, the fork weapon of an Attack fork.
   function classBody(b, id, have, me) {
     const rk = Math.min(b.max, have + 1), P = ED.cardParts(id, rk, me && me.stats);
-    let h = `<div class="bd">${esc(P.text)}${P.rider2 ? ` <b>${esc(P.rider2Name)}</b>: ${esc(P.rider2)}` : ''}${P.rider ? ` <b>${esc(P.riderName)}</b>: ${esc(P.rider)}` : ''}${P.form ? ` <b>${esc(P.form.name)}</b>: ${esc(P.form.desc)}` : ''}</div>`;
+    let h = `<div class="bd">${esc(P.text)}${P.rider2 ? ` <b>${esc(P.rider2Name)}</b>: ${esc(P.rider2)}` : ''}${P.form ? ` <b>${esc(P.form.name)}</b>: ${esc(P.form.desc)}` : ''}</div>`;
     if (b.tier === 1) h += `<div class="bplay">Plays as: ${esc(b.plays)}</div><div class="bplay">Forks: ${b.forks.map(f => esc(ED.BOONS[f].name)).join(' / ')}</div>`;
     else {
       const nx = [];
       if (P.rider2Name && !P.rider2) nx.push('Rank 2: ' + P.rider2Name);
-      if (b.form && !P.form) nx.push('Rank 3: ' + b.form.name); else if (P.riderName && !P.rider && !b.form) nx.push('Rank 3: ' + P.riderName);
+      if (b.form && !P.form) nx.push('Rank 3: ' + b.form.name);
       if (nx.length) h += `<div class="bplay">${esc(nx.join(' · '))}</div>`;
     }
     if (b.weapon && b.weapon.kind && me && ED.CLASSES[me.cls]) {
