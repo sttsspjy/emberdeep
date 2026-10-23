@@ -113,11 +113,11 @@
     rimeheart: { name: 'Rimeheart Colossus', title: 'The Frozen Oath', ai: 'boss', look: 'b_rime', col: { a: '#d8f0ff', b: '#6d93b5', c: '#3ad1ff' },
       hp: 16500, refHp: 2600, spd: 44, dmg: 6.4, r: 30, xp: 80, boss: true, quote: 'THE KING SAID: HOLD THE HALL. I HOLD.' },
     forgelord: { name: 'The Forgelord', title: 'Last Smith of the Empire', ai: 'boss', look: 'b_forge', col: { a: '#6a4636', b: '#2a1810', c: '#ff8a2a' },
-      hp: 31320, refHp: 4200, spd: 70, dmg: 7.15, r: 26, xp: 100, boss: true, quote: 'Steel remembers every hammer-blow. So will you.' },
+      hp: 26600, refHp: 4200, spd: 70, dmg: 10, r: 26, xp: 100, boss: true, quote: 'Steel remembers every hammer-blow. So will you.' },
     drownedking: { name: 'The Drowned King', title: 'Tyrant Beneath the Tide', ai: 'boss', look: 'b_king', col: { a: '#3f8f88', b: '#173d3b', c: '#e8c66b' },
-      hp: 100800, refHp: 5600, spd: 62, dmg: 9.6, r: 26, xp: 120, boss: true, quote: 'Kneel. The sea has already taken your breath.' },
+      hp: 85700, refHp: 5600, spd: 62, dmg: 13.4, r: 26, xp: 120, boss: true, quote: 'Kneel. The sea has already taken your breath.' },
     hollowking: { name: 'The Hollow King', title: 'Crown of the Starless Abyss', ai: 'boss', look: 'b_hollow', col: { a: '#2a1f44', b: '#0e0820', c: '#ff7ad9' },
-      hp: 106200, refHp: 7800, spd: 70, dmg: 8.6, r: 24, xp: 160, boss: true, quote: 'You came so far down... only to fill my empty crown.' },
+      hp: 90300, refHp: 7800, spd: 70, dmg: 12, r: 24, xp: 160, boss: true, quote: 'You came so far down... only to fill my empty crown.' },
 
     // ---------------- Fodder (one per biome, appended last: the wire index follows the order; never in a roster) ----------------
     // Horde filler: untelegraphed touch damage capped at FODDER_CAP of the victim's max health, no drops of their own (the room's xp budget pays through motes), never elite or exposed.
