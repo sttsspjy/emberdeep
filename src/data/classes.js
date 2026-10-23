@@ -85,12 +85,13 @@
   // powKey adds a stat to pow; of + mul / mul1 derive a part from another (mul1: x (1 + stat); times 'ticks': x the tick count); if = the stat that enables the part; mulIf = { stat: factor };
   // r scales with area (x(1 + 0.5 area) x (1 + slot area)), rOf + rMul derive it from another part (pRad: r is a projectile's hit radius; the sheet leaves it out); dur adds slot duration (durFix: none) and is capped at capCd x the effective cooldown; n adds slot count (nFix: none); per: 'hit' | 'tick' | 'sec' | 'minion' | 'status'.
   // Form keys (see Stats.skillNums): durMulKey (the stat multiplies dur), durCd (dur = the cooldown while the stat is set), ringKey (the stat is the arrow count of a full ring), nOf (the count of another part), stunKey (the stat is the stun while set), oneMul with oneEvery; ref (Starfall: reference cast distance for the sheet); mulStat (the stat multiplies the damage), nKey (the stat is the count), perAtk (one hit per weapon attack within dur; 'skip' drops the first);
-  // mulFix (a fixed factor of an `of` part), mulFirst (the first listed stat that is set is the damage factor), rAddKey (the stat adds px to the radius).
+  // mulFix (a fixed factor of an `of` part), mulFirst (the first listed stat that is set is the damage factor), rAddKey (the stat adds px to the radius);
+// bossMul (the part's hits on a boss take this factor: partSrc copies it to the hit, hitEnemy applies it; an `of` part does not inherit it).
   ED.SKILLS = {
     charge: { name: 'Shield Charge', slot: 0, cd: 6, icon: 'shield', aim: 'move', range: 150, rangeMin: 60, rangeAdd: 's1Range', move: { k: 'charge', speed: 600 },
-      desc: 'Charge toward the cursor, untouchable, smashing and stunning every foe you run into. A thrown shield flies back to you; foes stunned by your shield take +40% (Crush).',
+      desc: 'Charge toward the cursor, untouchable, smashing and stunning every foe you run into. A thrown shield flies back to you; foes stunned by your shield take +40% (Crush). Bosses take ×3 but are never stunned.',
       parts: [
-        { id: 'impact', label: 'Impact', base: 20, pow: 1.6, per: 'hit', proc: true, stun: 1.0, knock: 260, crush: 0.4, reach: 26, note: '+40% vs foes your shield stunned (Crush)' },
+        { id: 'impact', label: 'Impact', base: 20, pow: 1.6, per: 'hit', proc: true, stun: 1.0, knock: 260, crush: 0.4, reach: 26, bossMul: 3, note: '+40% vs foes your shield stunned (Crush); bosses ×3, never stunned' },
         { id: 'shock', label: 'Shockwave', if: 'jugShock', ifNot: 'avalanche', of: 'impact', mul: 'jugShock', per: 'hit', r: 90, knock: 220, proc: false },
         { id: 'bash', label: 'Shield Bash', if: 'bash', per: 'hit', mulKey: 'bash', proc: true },
         { id: 'quake', label: 'Avalanche slam', if: 'avalanche', of: 'impact', mul: 'avalanche', per: 'hit', r: 160, knock: 300, stunKey: 'avaStun', bossMul: 1.5, proc: true },
@@ -98,9 +99,9 @@
         { id: 'banner', label: 'War Banner', if: 'phalanx', of: 'impact', mul: 'bannerDmg', per: 'sec', r: 120, durKey: 'bannerDur', stun: 0.4, noCrit: true, note: 'per second to every foe inside; the planting pulse stuns' },
       ] },
     shieldthrow: { name: 'Shield Throw', slot: 1, cd: 9, icon: 'bulwark', aim: 'dir', range: 280, rangeMin: 120,
-      desc: 'Hurl your shield at the cursor. It strikes and stuns up to 4 foes as it ricochets between them, then flies back to your hand, striking again. Catching it shields you for 0.5% max health per foe struck (at most once per 6 s). In flight it swats enemy shots. Bosses take ×1.5 but are never stunned.',
+      desc: 'Hurl your shield at the cursor. It strikes and stuns up to 4 foes as it ricochets between them, then flies back to your hand, striking again. Catching it shields you for 0.5% max health per foe struck (at most once per 6 s). In flight it swats enemy shots. Bosses take ×2 but are never stunned.',
       parts: [
-        { id: 'strike', label: 'Strike', base: 20, pow: 1.3, per: 'hit', n: 4, proc: true, stun: 0.9, knock: 140, r: 14, pRad: true, bossMul: 1.5, note: 'bosses ×1.5, never stunned' },
+        { id: 'strike', label: 'Strike', base: 20, pow: 1.3, per: 'hit', n: 4, proc: true, stun: 0.9, knock: 140, r: 14, pRad: true, bossMul: 2, note: 'bosses ×2, never stunned' },
         { id: 'return', label: 'Return', base: 10, pow: 0.65, per: 'hit', proc: true, knock: 80, r: 14, pRad: true },
         { id: 'orbit', label: 'Orbit', if: 'orbit', of: 'strike', mul: 'orbitMul', per: 'hit', durKey: 'orbit', durCd: 'bastion', oneMul: { bastion: 2 }, every: 0.75, r: 44, proc: true },
         { id: 'reflect', label: 'Returned shard', if: 'orbitReflect', of: 'strike', mul: 'orbitReflect', per: 'hit', range: 300, proc: true },
@@ -185,9 +186,9 @@
         { id: 'clone', label: 'Clone attacks', if: 'umbral', pow: 0, powKey: 'cloneMul', on: 'W', per: 'hit', proc: true, dur: 4, durFix: true, perAtk: true },
       ] },
     judgment: { name: 'Judgment', slot: 1, cd: 9, icon: 'hammer', aim: 'dir',
-      desc: 'Throw a hammer toward the cursor that flies out and returns, piercing. Each leg hits a foe once and Judges it (+20% damage taken).',
+      desc: 'Throw a hammer toward the cursor that flies out and returns, piercing. Each leg hits a foe once and Judges it (+20% damage taken). Judgment falls hardest on the mighty: bosses take ×2 from the hammer.',
       parts: [
-        { id: 'leg', label: 'Hammer', base: 18, pow: 1.4, per: 'hit', r: 18, el: 'class', mulFirst: ['stormMul', 'twinHammer'], proc: true },
+        { id: 'leg', label: 'Hammer', base: 18, pow: 1.4, per: 'hit', r: 18, el: 'class', mulFirst: ['stormMul', 'twinHammer'], bossMul: 2, proc: true },
         { id: 'verdict', label: 'Verdict', if: 'verdict', mulStat: 'verdict', base: 20, pow: 3, per: 'hit', r: 70, rAddKey: 'fjR', el: 'class', stun: 0.4, stunKey: 'fjStun', proc: true },
         { id: 'echo', label: 'Echo', if: 'fjEcho', per: 'zone' },
       ] },
@@ -228,7 +229,7 @@
     'vanish.clone': { note: 'the clone repeats each of your attacks' },
     'rain.tick': { selfVuln: { v: 0.2, if: 'rainHail' } },
     'rain.shower': { selfVuln: { v: 0.2, if: 'rainHail' } },
-    'judgment.leg': { oneFoe: 2, oneMul: { twinHammer: 2 }, selfVuln: 0.2, infAdd: { holy: 0.5 }, note: 'out and back; the second flight of Second Flight adds its two legs at secondFlight of a hit' },
+    'judgment.leg': { oneFoe: 2, oneMul: { twinHammer: 2 }, selfVuln: 0.2, infAdd: { holy: 0.5 }, note: 'out and back, bosses ×2; the second flight of Second Flight adds its two legs at secondFlight of a hit' },
     'judgment.verdict': { oneFoe: 0, infAdd: { holy: 0.5 }, note: 'when a Judged foe dies' },
     'judgment.echo': { note: 'damage a Judged foe takes from you echoes to every other Judged foe within 200 (a chain, no on-hit effects)' },
     'sanctuary.nova': { noCrit: true, infAdd: { holy: 0.5 }, note: 'when Sanctuary opens, every foe inside' },

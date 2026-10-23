@@ -140,6 +140,7 @@
       if (crit) { dmg *= st.critMult; if (ch && ch.critMul) dmg *= ch.critMul.call(this, p, e, src) || 1; }
     }
     if (src.mul) dmg *= src.mul;
+    if (src.bossMul && e.boss) dmg *= src.bossMul; // a skill part's boss factor (W.partSrc copies the part's bossMul)
     if (p && !src.noProc && st.shatter && e.frozen > 0 && !src.noShatter) { dmg *= 1 + st.shatter; shatter = true; }
     let vuln = 1;
     if (e.mark > 0) vuln += e.markV;
