@@ -43,7 +43,7 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
   near(s.graveBolt, 1.5, 1e-9, 'Grave Bolt x1.5'); near(s.graveN, 3, 1e-9, 'a Grave Bolt every 3rd attack');
   s = tot({ n_atk: 1, n_atk_h: 1 }); near(s.hexSpread, 0, 1e-9, 'no Hex Burst before rank 2'); near(s.hexMul, 0.2, 1e-9, 'no extra Hex bonus at rank 1'); ok(!s.graveBolt, 'no Grave Bolt at rank 1');
   s = tot({ n_atk: 1, n_atk_h: 2 }); near(s.hexSpread, 60, 1e-9, 'Hex Burst from rank 2'); near(s.hexMul, 0.2 + 0.1 + 0.4, 1e-9, 'rank 2 Hex bonus'); ok(!s.graveBolt && !s.graveN, 'no Grave Bolt at rank 2');
-  s = tot({ n_atk: 1, n_atk_s: 3 }); ok(s.swift, 'Soul Barrage: Swift weapon'); near(s.hexSelf, 0.2, 1e-9, 'Soul Barrage +10%, +5% per rank'); near(s.hexHaste, 0.25, 1e-9, 'Quickened Dead 25%'); near(s.soulStorm, 2.5, 1e-9, 'Soul Storm 250% of the hit');
+  s = tot({ n_atk: 1, n_atk_s: 3 }); ok(s.swift, 'Soul Barrage: Swift weapon'); near(s.hexSelf, 0.18, 1e-9, 'Soul Barrage +8%, +5% per rank'); near(s.hexHaste, 0.25, 1e-9, 'Quickened Dead 25%'); near(s.soulStorm, 2.5, 1e-9, 'Soul Storm 250% of the hit');
   s = tot({ n_atk: 1, n_atk_s: 2 }); near(s.hexHaste, 0.25, 1e-9, 'Quickened Dead from rank 2'); ok(!s.soulStorm, 'no Soul Storm at rank 2'); ok(!tot({ n_atk: 1, n_atk_s: 1 }).hexHaste, 'no Quickened Dead at rank 1');
 
   s = tot({ n_s1: 1 }); near(s.s1Dmg, 0, 1e-9, 'Endless Legion adds no damage of its own'); near(s.maxMinions, 4, 1e-9, 'Endless Legion: 4 minions'); near(ED.Stats.skillNums('legion', s).p.minion.n, 4, 1e-9, 'Legion raises 4');
@@ -56,10 +56,10 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
   const hp = ED.Stats.skillNums('harvest', s).p; near(hp.corpse.dmg, hp.burst.dmg * 0.3, 1e-9, 'corpse part 30% of the burst'); near(hp.lance.dmg, hp.burst.dmg * 1.15, 1e-9, 'lance part +15%'); near(hp.corpse.r, hp.burst.r, 1e-9, 'corpse radius = burst radius'); ok(hp.corpse.on && hp.lance.on, 'corpse and lance parts on');
   s = tot({ n_s2: 1, n_s2_b: 3 }); near(s.boneArmor, 0.03, 1e-9, 'Bone Armor 3% per minion'); near(s.boneCap, 0.06, 1e-9, 'Bone Armor cap 5% + 0.5% per rank'); ok(s.boneField === 1 && !tot({ n_s2: 1, n_s2_b: 1 }).boneField && tot({ n_s2: 1, n_s2_b: 2 }).boneField === 1, 'Marrow Field from rank 2');
   s = tot({ n_el: 1 }); near(s.classElMul, 0.25, 1e-9, 'Grave Pact +25% Shadow skills'); near(s.minionInfuse, 0.25, 1e-9, 'minion infusion 0.75'); near(s.mInfShadow, 0.2, 1e-9, 'minion Doom 20%');
-  s = tot({ n_el: 1, n_el_a: 3 }); near(s.tollMul, 0.4 + 0.2 + 0.75, 1e-9, 'Abyssal Toll +40%, +10% per rank, +75% from rank 2'); near(s.abyssMin, 0.25, 1e-9, 'empower +25%'); ok(s.abyssDoom === 1, 'Abyssal Hunger at rank 3'); near(s.maw, 0.2, 1e-9, 'Maw 20% of the Toll per second'); near(s.mawHaste, 0.3, 1e-9, 'Maw haste 30%');
-  s = tot({ n_el: 1, n_el_a: 2 }); ok(s.abyssDoom === 1 && !s.maw && !s.mawHaste, 'Abyssal Hunger from rank 2, no Maw yet'); near(s.tollMul, 0.4 + 0.1 + 0.75, 1e-9, 'rank 2 Toll bonus'); ok(!tot({ n_el: 1, n_el_a: 1 }).abyssDoom && tot({ n_el: 1, n_el_a: 1 }).tollMul === 0.4, 'no Hunger and no extra Toll bonus at rank 1');
-  s = tot({ n_el: 1, n_el_b: 3 }); ok(s.reapRaise === 1, 'Rise Again'); near(s.minionDmg, 0.26, 1e-9, 'Rise Again +13% minions per rank'); near(s.tideMul, 0.5, 1e-9, 'Risen Tide +50%'); ok(s.tideFree === 1 && s.tideCap === 2 && s.tideDoom === 2, 'Tide of the Dead: free minions, cap 2, Doom 200% of a strike');
-  s = tot({ n_el: 1, n_el_b: 2 }); near(s.tideMul, 0.5, 1e-9, 'Risen Tide from rank 2'); ok(!s.tideFree && !s.tideCap, 'no free minions at rank 2'); ok(!tot({ n_el: 1, n_el_b: 1 }).tideMul, 'no Risen Tide at rank 1');
+  s = tot({ n_el: 1, n_el_a: 3 }); near(s.tollMul, 0.4 + 0.2 + 0.9, 1e-9, 'Abyssal Toll +40%, +10% per rank, +90% from rank 2'); near(s.abyssMin, 0.25, 1e-9, 'empower +25%'); ok(s.abyssDoom === 1, 'Abyssal Hunger at rank 3'); near(s.maw, 0.2, 1e-9, 'Maw 20% of the Toll per second'); near(s.mawHaste, 0.3, 1e-9, 'Maw haste 30%');
+  s = tot({ n_el: 1, n_el_a: 2 }); ok(s.abyssDoom === 1 && !s.maw && !s.mawHaste, 'Abyssal Hunger from rank 2, no Maw yet'); near(s.tollMul, 0.4 + 0.1 + 0.9, 1e-9, 'rank 2 Toll bonus'); ok(!tot({ n_el: 1, n_el_a: 1 }).abyssDoom && tot({ n_el: 1, n_el_a: 1 }).tollMul === 0.4, 'no Hunger and no extra Toll bonus at rank 1');
+  s = tot({ n_el: 1, n_el_b: 3 }); ok(s.reapRaise === 1, 'Rise Again'); near(s.minionDmg, 0.38, 1e-9, 'Rise Again +19% minions per rank'); near(s.tideMul, 0.55, 1e-9, 'Risen Tide +55%'); ok(s.tideFree === 1 && s.tideCap === 2 && s.tideDoom === 2, 'Tide of the Dead: free minions, cap 2, Doom 200% of a strike');
+  s = tot({ n_el: 1, n_el_b: 2 }); near(s.tideMul, 0.55, 1e-9, 'Risen Tide from rank 2'); ok(!s.tideFree && !s.tideCap, 'no free minions at rank 2'); ok(!tot({ n_el: 1, n_el_b: 1 }).tideMul, 'no Risen Tide at rank 1');
   for (const id of ED.BOON_IDS.filter(i => ED.BOONS[i].cls === 'necro')) for (const r of [1, 2, 3]) ok(!/[{}\[\]]/.test(ED.boonText(id, r, { critK: 1 })), `card text ${id} rank ${r} has no raw tokens`);
 }
 
@@ -111,11 +111,11 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
   }
 }
 
-// ---- Soul Barrage: Hexed foes take +10% from you; Quickened Dead: minions 25% faster against them ----
+// ---- Soul Barrage: Hexed foes take +8% from you; Quickened Dead: minions 25% faster against them ----
 {
   const { w, p } = stage({ n_atk: 1, n_atk_s: 1 }); const a = foe(w, p.x + 50, p.y), b = foe(w, p.x - 50, p.y); hexIt(a);
-  p.stats.hex = 0; weaponHit(w, p, a, 100); weaponHit(w, p, b, 100); near(lost(a) / lost(b), 1.1, 0.002, 'Hexed foes take +10% from the Necromancer');
-  const { w: w3, p: p3 } = stage({ n_atk: 1, n_atk_s: 3 }); const c = foe(w3, p3.x + 50, p3.y), d = foe(w3, p3.x - 50, p3.y); hexIt(c); p3.stats.hex = 0; weaponHit(w3, p3, c, 100); weaponHit(w3, p3, d, 100); near(lost(c) / lost(d), 1.2, 0.002, 'Soul Barrage rank 3: +20%');
+  p.stats.hex = 0; weaponHit(w, p, a, 100); weaponHit(w, p, b, 100); near(lost(a) / lost(b), 1.08, 0.002, 'Hexed foes take +8% from the Necromancer');
+  const { w: w3, p: p3 } = stage({ n_atk: 1, n_atk_s: 3 }); const c = foe(w3, p3.x + 50, p3.y), d = foe(w3, p3.x - 50, p3.y); hexIt(c); p3.stats.hex = 0; weaponHit(w3, p3, c, 100); weaponHit(w3, p3, d, 100); near(lost(c) / lost(d), 1.18, 0.002, 'Soul Barrage rank 3: +18%');
   const m = minionAt(w3, p3, c); w3.updateAllies(0); near(m.cd, 0.7 * 0.75, 1e-9, 'Quickened Dead: 25% faster against a Hexed foe');
   const m2 = minionAt(w3, p3, d); w3.updateAllies(0); near(m2.cd, 0.7, 1e-9, 'normal speed against others');
   const { w: w2, p: p2 } = stage({ n_atk: 1, n_atk_s: 2 }); const f = foe(w2, p2.x + 50, p2.y); hexIt(f); const m3 = minionAt(w2, p2, f); w2.updateAllies(0); near(m3.cd, 0.7 * 0.75, 1e-9, 'Quickened Dead from rank 2');
@@ -261,7 +261,7 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
 for (const rank of [2, 3]) {
   const { w, p } = stage({ n_el: 1, n_el_b: rank }); const e = foe(w, p.x + 100, p.y); e.hp = 100; w.addDoom(e, 900, p); const a = mine(w, p)[0];
   ok(a && a.tide && Math.abs(a.life - 14) < 1e-9, `rank ${rank} Risen Tide: a Reaped minion lasts 14 s`); ok(evs(w, 'raise').some(r => r.k === 'tide'), `rank ${rank} Risen Tide raise event kind tide`); const f = foe(w, p.x + 100, p.y + 300); a.x = f.x - 12; a.y = f.y; a.cd = 0; w.updateAllies(0);
-  near(lost(f), ED.Stats.skillNums('legion', p.stats).p.minion.dmg * (1 + 0.13 * (rank - 1)) * C.COMP_MUL * 1.5, 0.01, `rank ${rank} Risen Tide minions hit +50% (and minions +13% per rank)`);
+  near(lost(f), ED.Stats.skillNums('legion', p.stats).p.minion.dmg * (1 + 0.19 * (rank - 1)) * C.COMP_MUL * 1.55, 0.01, `rank ${rank} Risen Tide minions hit +55% (and minions +19% per rank)`);
   w.spawnMinion(p, p.x, p.y, 10); const plain = mine(w, p).find(m => !m.tide); ok(plain && Math.abs(plain.life - 10) < 1e-9, `rank ${rank}: other minions are unchanged`);
   const bos = foe(w, p.x + 200, p.y); bos.boss = true; bos.maxHp = bos.hp = 5000; bos.doomOwner = p; w.allies.length = 0; w.addDoom(bos, 800, p); const t = mine(w, p)[0]; ok(t && t.tide && Math.abs(t.life - 14) < 1e-9, `rank ${rank}: a Toll raise is a Risen Tide minion too`);
   ok(!a.free && !t.free && a.k === 0 || rank === 3, 'at rank 2 the risen minions count against the cap (not free)');
@@ -518,8 +518,8 @@ const cast0 = (w, p) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x + 60, y: 
 { // the burst of a free minion that falls
   const { w, p } = stage({ n_el: 1, n_el_b: 3 }); w.allies.length = 0; const a = w.spawnMinion(p, p.x + 100, p.y, 10, 'again', true); a.life = 0.001; const inside = foe(w, a.x + 40, a.y), edge = foe(w, a.x + 69, a.y), out = foe(w, a.x + 90, a.y), weak = foe(w, a.x, a.y + 30); weak.hp = 5; w.fx.length = 0;
   w.updateAllies(1 / 60);
-  const doom = 2 * a.dmg * C.COMP_MUL * 1.5 * w.elemAff('shadow');
-  near(inside.doom, doom, doom * 0.01, 'a falling free minion marks Doom worth 200% of its strike (x1.5 Risen Tide)'); ok(edge.doom > 0 && out.doom === 0, 'on every foe within 60 and not beyond'); ok(weak.hp <= 0, 'a foe the Doom lifts over its health is Reaped'); ok(mine(w, p).filter(m => m.life > 0).length === 1 && mine(w, p).filter(m => m.life > 0)[0].free, 'and rises as another free minion');
+  const doom = 2 * a.dmg * C.COMP_MUL * 1.55 * w.elemAff('shadow');
+  near(inside.doom, doom, doom * 0.01, 'a falling free minion marks Doom worth 200% of its strike (x1.55 Risen Tide)'); ok(edge.doom > 0 && out.doom === 0, 'on every foe within 60 and not beyond'); ok(weak.hp <= 0, 'a foe the Doom lifts over its health is Reaped'); ok(mine(w, p).filter(m => m.life > 0).length === 1 && mine(w, p).filter(m => m.life > 0)[0].free, 'and rises as another free minion');
   const b = evs(w, 'boom').filter(v => v.k === 'shadow' && v.d === 1); ok(b.length === 1 && b[0].r === 60, 'a shadow boom event with the Doom flag and radius 60');
   const { w: w2, p: p2 } = stage({ n_el: 1, n_el_b: 2 }); const q = w2.spawnMinion(p2, p2.x + 100, p2.y, 10, 'again', true); q.life = 0.001; const f2 = foe(w2, q.x + 30, q.y); w2.updateAllies(1 / 60); ok(f2.doom === 0 && !q.free, 'a rank 2 Risen Tide minion does not burst');
   const { w: w3, p: p3 } = stage({ n_el: 1, n_el_b: 3 }); w3.allies.length = 0; const q3 = w3.spawnMinion(p3, p3.x + 100, p3.y, 10, 'again', true); q3.life = 0.001; const fd = foe(w3, q3.x + 20, q3.y); fd.fodder = true; fd.hp = 5; w3.updateAllies(1 / 60); ok(fd.hp <= 0 && mine(w3, p3).filter(m => m.life > 0).length === 0 && p3.raiseT <= 0, 'a burst Reaps fodder (the chain runs) but fodder never rises');
