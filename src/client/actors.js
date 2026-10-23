@@ -580,7 +580,7 @@
   // Pose of the default attack, held until the next one: weapon angle wa (screen), body push -1..1 along the aim, thrust 0..1, ranged recoil kick 0..1. u = seconds since the attack began, ri = idle carry angle relative to the aim.
   // Arc melee is a two-ended swing: wind-up (0 - t0, a small pull behind the end the last swing left it at), strike (t0 - t1, eased sweep and lunge to the opposite end, side flips per attack), settle (t1 - D, overshoot back to the end),
   // hold at that end for HOLD s, then ease to the idle carry over RELAX s. Thrusts retract and spins end where they began. The aim eases from the aim at the click (an.a) to the live aim over the settle. Timing comes from Sprites.atkTimes.
-  const HOLD = 0.7, RELAX = 0.35;
+  const HOLD = 0.7, RELAX = 0.35, IDLE_LOW = 0.75; // IDLE_LOW: rad the idle blade is lowered from the aim
   AC.HOLD = HOLD;
   const SW = { wa: 0, push: 0, thr: 0, kick: 0 };
   function swing(w, an, face, u, side, ri) {
@@ -686,11 +686,12 @@
     // ---- attack pose ----
     const wd = Sp.weaponArt(p), w = wd.w, melee = w.kind === 'melee';
     const swinging = !!anim && anim.atkT < anim.D, posed = swinging || (melee && !!anim && anim.atkT < anim.D + HOLD + RELAX); // posed: the swing, then its hold and ease back (melee)
-    let wa = face, bx = 0, by = 0, thr = 0, kick = 0, push = 0;
+    const ri = melee && w.arc >= 1 ? IDLE_LOW * sg : 0; // idle carry: arc melee blades rest lowered toward the ground, thrusts level with the aim
+    let wa = face + ri, bx = 0, by = 0, thr = 0, kick = 0, push = 0;
     anim_D = anim ? anim.D : 0.3;
     if (posed) {
       const base = anim.a !== undefined ? anim.a : face;
-      swing(w, anim, face, anim.atkT, anim.side || 1, 0);
+      swing(w, anim, face, anim.atkT, anim.side || 1, ri);
       wa = SW.wa; push = SW.push; thr = SW.thr; kick = SW.kick;
       const L = melee ? (w.arc < 1 ? 6 : 4) : 2;
       bx = q2(Math.cos(base) * push * L); by = q2(Math.sin(base) * push * L * 0.5); // lunge and pull-back in whole art px
