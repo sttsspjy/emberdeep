@@ -1,7 +1,7 @@
 // Usage: node tools/check-perf.js [--audit-only] [--limit=<ms per tick at 150 foes>] [--reps=N]
 // Headless sim cost per tick against the live foe count (hordes: up to 120 foes solo, 180 in a party). One hero stands in the largest combat room (37x17 tiles) and fires volleys at the nearest foe while N mixed foes
 // (every non-boss roster type) pile up around it; foes carry 25x HP so the count holds. A horde scenario times 150 foes of which 100 are fodder (radius 6-7) and audits the same with 40-200. Per count: 200 warm-up ticks, then 600 ticks at dt 1/60; the best of N runs, mean of its fastest 95% of ticks.
-// Reps interleave the counts of a scenario so load hits all alike. Fails when 150 foes cost more than limit x load (load = a fixed pure-JS calibration workload over its idle time, at least 1), when the 200 / 70 cost ratio exceeds 4.0 (x2.86 is linear in the foe count, x8.2 quadratic), or when the audit finds a difference;
+// Reps interleave the counts of a scenario so load hits all alike. Fails when 150 foes cost more than limit x load (load = a fixed pure-JS calibration workload over its idle time, at least 1), when the 200 / 70 cost ratio exceeds RATIO_MAX (4.5) (x2.86 is linear in the foe count, x8.2 quadratic), or when the audit finds a difference;
 // a scenario that misses a gate is re-measured once (calibration included) before it fails.
 // Audit (normal foe HP, respawns, a kiting hero, kills and splits): every foesNear call must return each foe that a full scan finds within the circle, ascending and alive, including random probes inside the foe loop of
 // update(); every foeScan must be paired with a foeEnd; separate() must leave every foe where the original O(n^2) loops leave it, in the sim and in random packs.
@@ -17,7 +17,7 @@ const COUNTS = [70, 150, 200], TICKS = 600, DT = 1 / 60, WARM = 200, VOLLEY = 4;
 // Gate: ms per tick at 150 foes, scaled by the machine load. Measured on these scenarios: 0.6 before the foe grid, 0.2 after; 0.5 fails the old sim and leaves the new one 2x room (the frame is 16.7 ms, shared with snapshots and rendering).
 const LIMIT = flag('limit', 0.5);
 const REPS = flag('reps', 5);
-const RATIO_MAX = 4.0; // 200 / 70 foes: load-independent scaling gate
+const RATIO_MAX = 4.5; // 200 / 70 foes: load-independent scaling gate (good code x3.2-3.8, loaded outlier x4.3; an O(n^2) grid or separation regression x5.3-6.4)
 const CALIB_REF = 30; // ms of calib() on an idle dev box (8-core / 16-thread)
 
 // Fixed load probe, independent of the sim: float math, small-object allocation and array writes. Returns the best of 9 runs in ms.
