@@ -25,8 +25,21 @@
   ];
   ED.UPGRADE_IDX = ED.U.indexer(ED.UPGRADES.map(u => u.id));
 
-  // Armory: per-hero sidegrade unlocks in the Upgrades page, { id, name, desc, cost }. The save code stores one bit per entry by position (a 6-bit count per hero): append only.
-  ED.ARMORY = { knight: [], ranger: [], pyro: [], shade: [], cleric: [], necro: [] };
+  // Armory: per-hero weapon variants bought in the Upgrades page, { id (= the variant's ED.WEAPONS key), weapon (its base weapon), name, desc, cost }; an owned variant is a weapon choice of its own. The save code stores one bit per entry by position (a 6-bit count per hero): append only.
+  ED.ARMORY = {
+    knight: [
+    ],
+    ranger: [
+    ],
+    pyro: [
+    ],
+    shade: [
+    ],
+    cleric: [
+    ],
+    necro: [
+    ],
+  };
 
   ED.PACTS = [
     { name: 'No Pact', desc: 'The Deep as it is.' },
