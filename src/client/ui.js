@@ -90,6 +90,11 @@
       '<b>No life steal:</b> hits do not heal you any more. Shields take their place.',
       '<b>Knight:</b> Shield Throw replaces Bulwark.',
       '<b>Dark rooms:</b> the lantern, the Gloom and oil are gone. Each floor has two optional dark rooms: harder fights, richer rewards.',
+      '<b>Hordes:</b> fight rooms are about twice as big and scroll with you, and packs of weak fodder pour in beside the foes that matter.',
+      '<b>Dash:</b> dashing uses charges that refill one at a time; Light Step adds charges.',
+      '<b>Late power:</b> your route fork gains rank 2 at the stratum II boss and transforms at rank 3 at the stratum IV boss, skill forks included. From stratum IV, Ascended boons multiply a boon you have maxed.',
+      '<b>Bosses:</b> from stratum IV a boss that lives too long grows furious and hits harder and faster; its bar shows when.',
+      '<b>Sound:</b> every stratum has its own music, and it swells as a fight grows.',
     ].filter(Boolean).map(t => `<p>${t}</p>`).join('');
     $('ov-news').hidden = false;
     requestAnimationFrame(() => $('btn-news-close').focus({ preventScroll: true })); // after the screen's own focus

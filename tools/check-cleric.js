@@ -538,5 +538,28 @@ const castSanct = (w, p, dx) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x +
   const caps = ED.Net.CAPS; ok(caps.solar > 0 && caps.verdict > 0 && caps.hturn > 0 && caps.chain > 0, 'new events are capped'); const many = []; for (let i = 0; i < 40; i++) many.push({ t: 'solar' }); ok(ED.Net.capFx(many, caps).length === caps.solar, 'capFx trims solar');
 }
 
+// ---------------- Judgment's boss factor: a boss takes x2 from every hammer leg; Verdict and Sanctuary carry none ----------------
+{
+  const BOSS = 2;
+  const legs = (boons, boss) => { // one cast at a lone foe 60 px away (common or boss), held in place so every leg finds it
+    const S = stage(boons), e = foe(S.w, S.p.x + 60, S.p.y); if (boss) e.boss = true;
+    const log = spy(S.w); S.w.playerSkill(S.p, 0, {}, 1); run(S.w, 12, () => { e.kbx = 0; e.kby = 0; });
+    return { S, e, hits: partHits(log, 'judgment.leg') };
+  };
+  const leg = ED.SKILLS.judgment.parts.find(q => q.id === 'leg');
+  ok(leg.bossMul === BOSS && /bosses ×2/.test(leg.note) && /bosses take ×2 from the hammer/.test(ED.SKILLS.judgment.desc), 'skill data and text name the boss factor (Judgment x2)');
+  ok(!ED.SKILLS.judgment.parts.some(q => q.id !== 'leg' && q.bossMul) && !ED.SKILLS.sanctuary.parts.some(q => q.bossMul), 'Verdict, the echo and Sanctuary carry no boss factor');
+  for (const [name, boons, want] of [['one hammer', { c_s2: 1 }, 2], ['Second Flight', { c_s2: 1, c_s2_a: 2 }, 8], ['Hammerstorm', { c_s2: 1, c_s2_a: 3 }, 10]]) {
+    const a = legs(boons, false), b = legs(boons, true);
+    ok(a.hits.length >= want && b.hits.length === a.hits.length, `${name}: at least ${want} legs strike a common foe and a boss alike (${a.hits.length}, ${b.hits.length})`);
+    ok(a.hits.length === b.hits.length && a.hits.every((h, i) => Math.abs(b.hits[i].d / h.d - BOSS) < 1e-6), `${name}: every leg deals x2 to a boss`);
+  }
+  { // a common foe takes the plain leg (the hammer Judges it first: +20%)
+    const a = legs({ c_s2: 1 }, false), N = ED.Stats.skillNums('judgment', a.S.p.stats);
+    near(a.hits[0].d / (N.p.leg.dmg * a.S.p.stats.dmg * 1.2 * a.S.w.affC(a.S.p.stats.element)), 1, 0.01, 'a common foe takes the plain hammer leg');
+    ok(!(a.e.stun > 0), 'the hammer stuns nobody');
+  }
+}
+
 console.log(`${n} checks, ${fails} failed`);
 process.exit(fails ? 1 : 0);

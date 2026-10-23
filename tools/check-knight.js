@@ -207,5 +207,37 @@ const ATK = { k_atk: 1 }, HEAVY = (r) => Object.assign({ k_atk_h: r }, ATK), SWI
   }
 }
 
+// ---------------- boss factors of the Knight skills: Charge impact x3, Throw strike x2 (bosses are never stunned); parts derived from them keep their own ----------------
+{
+  const BOSS = { charge: 3, throw: 2 };
+  const go = (boons, slot, data, boss, secs, at, behind) => { // one cast at a foe (common or boss), held in place so every pass of the shield finds it; behind: a second common foe 70 px further on, the shield's next ricochet target (its way home passes the first foe)
+    const { w, p } = stage('knight', boons), log = spy(w), e = foe(w, p.x + (at ? at[0] : 60), p.y + (at ? at[1] : 0)), f = behind ? foe(w, e.x + 70, e.y) : e; if (boss) e.boss = true;
+    w.playerSkill(p, 0, data(p), slot); let stunned = 0, shieldStun = 0;
+    run(w, secs, () => { e.kbx = 0; e.kby = 0; f.kbx = 0; f.kby = 0; stunned = Math.max(stunned, e.stun); shieldStun = Math.max(shieldStun, e.shieldStunT); });
+    return { w, p, e, log, stunned, shieldStun };
+  };
+  const chargeData = (p) => ({ x0: p.x, y0: p.y, x1: p.x + 150, y1: p.y }), throwData = () => ({ d: 280 });
+  const imp = ED.SKILLS.charge.parts.find(q => q.id === 'impact'), stk = ED.SKILLS.shieldthrow.parts.find(q => q.id === 'strike');
+  ok(imp.bossMul === BOSS.charge && stk.bossMul === BOSS.throw && /bosses ×3/.test(imp.note) && /bosses ×2/.test(stk.note) && /Bosses take ×3 but are never stunned/.test(ED.SKILLS.charge.desc) && /Bosses take ×2 but are never stunned/.test(ED.SKILLS.shieldthrow.desc), 'skill data and text name the boss factors (Charge x3, Throw x2)');
+  { // Charge impact
+    const a = go({}, 0, chargeData, false, 0.7), b = go({}, 0, chargeData, true, 0.7), ha = hitsOf(a.log, 'charge.impact'), hb = hitsOf(b.log, 'charge.impact'), N = ED.Stats.skillNums('charge', a.p.stats);
+    ok(ha.length === 1 && hb.length === 1, `the Charge strikes a common foe and a boss once each (${ha.length}, ${hb.length})`);
+    near(hb[0].d / ha[0].d, BOSS.charge, 1e-6, 'a boss takes x3 from the Charge impact');
+    near(ha[0].d / (N.p.impact.dmg * a.p.stats.dmg), 1, 0.01, 'a common foe takes the plain impact');
+    ok(a.stunned > 0.5 && b.stunned === 0 && !(b.e.stunCd > 0) && b.shieldStun === 0, `the Charge stuns a common foe (${a.stunned.toFixed(2)} s) and never a boss (${b.stunned})`);
+  }
+  { // Juggernaut's shockwave is derived from the impact and takes no boss factor (the Avalanche slam keeps its own x1.5, checked in check-classes)
+    const sh = (boss) => go({ k_s1: 1, k_s1_a: 1 }, 0, chargeData, boss, 0.9, [144, 60]), a = sh(false), b = sh(true), ha = hitsOf(a.log, 'charge.shock'), hb = hitsOf(b.log, 'charge.shock');
+    ok(ha.length === 1 && hb.length === 1 && Math.abs(hb[0].d / ha[0].d - 1) < 1e-6, `Juggernaut's shockwave deals the same to a boss and a common foe (${ha.length}, ${hb.length})`);
+  }
+  { // Shield Throw strike: x2 on a boss, no stun on a boss; the return pass takes no boss factor
+    const a = go({}, 1, throwData, false, 2.5, null, true), b = go({}, 1, throwData, true, 2.5, null, true), ha = hitsOf(a.log, 'shieldthrow.strike').filter(h => h.e === a.e), hb = hitsOf(b.log, 'shieldthrow.strike').filter(h => h.e === b.e), ra = hitsOf(a.log, 'shieldthrow.return').filter(h => h.e === a.e), rb = hitsOf(b.log, 'shieldthrow.return').filter(h => h.e === b.e);
+    ok(ha.length >= 1 && hb.length >= 1, 'the Throw strikes a common foe and a boss');
+    near(hb[0].d / ha[0].d, BOSS.throw, 1e-6, 'a boss takes x2 from the Throw strike');
+    ok(a.stunned > 0.5 && a.shieldStun > 0 && b.stunned === 0 && b.shieldStun === 0, `the Throw stuns a common foe (${a.stunned.toFixed(2)} s) and never a boss (${b.stunned})`);
+    ok(ra.length >= 1 && rb.length >= 1 && Math.abs(rb[0].d / ra[0].d - 1) < 1e-6, `the return pass takes no boss factor (${ra.length}, ${rb.length} passes)`);
+  }
+}
+
 console.log(`${n} checks, ${fails} failed`);
 process.exit(fails ? 1 : 0);

@@ -385,6 +385,7 @@ const budgetOf = (s, kind) => Math.round(W0.ROOM_XP[kind === 'elite' ? 'elite' :
   a.age = 45.01; w.updateEnemy(a, TICK); ok(a.exposed, 'exposed past 45 s of age');
   bo.age = 77.9; w.updateEnemy(bo, TICK); ok(!bo.exposed, 'a boss is not exposed at 77.9 s'); bo.age = 78.01; w.updateEnemy(bo, TICK); ok(bo.exposed, 'a boss is exposed past 78 s');
   f.age = 500; w.updateEnemy(f, TICK); ok(!f.exposed, 'fodder are never exposed');
+  w.stratum = 4; const b4 = w.spawnEnemy('forgelord', p.x + 300, p.y + 120); b4.spd = 0; b4.cd = 9999; b4.age = 200; w.updateEnemy(b4, TICK); ok(!b4.exposed, 'a boss of a fury stratum (IV) is never exposed'); w.stratum = 1;
   const sp = foe(w, p.x + 300, p.y + 100); sp.spawnT = 1; w.updateEnemy(sp, TICK); ok(sp.age === 0 && sp.spawnT < 1, 'a spawning foe does not age');
 }
 { // crowd slow: 8% per overlapping non-boss foe, at most 50%; spawning, dead and boss foes do not count; dashes and skill moves ignore it
@@ -941,14 +942,14 @@ for (let s = 1; s <= 6; s++) {
     const { w, b } = fw(s), ev = run(w, b, 205);
     ok(ev.length === 0 && b.furyT === 0 && b.furyM === 1 && b.dmg === b.dmgBase && !w.fx.some(e => e.t === 'fury'), `stratum ${s}: no fury at 205 s (events ${ev.length}, clock ${b.furyT}, x${b.furyM})`);
   }
-  for (let s = 4; s <= 6; s++) { // starts at t exactly, once; x1.4 ten seconds on
+  const M10 = 1 + 10 * FB.ramp; for (let s = 4; s <= 6; s++) { // starts at t exactly, once; x(1 + 10 ramp) ten seconds on
     const t = FB.t[s - 1], { w, b } = fw(s);
     ok(b.dmgBase === b.dmg && b.furyT === 0 && b.furyM === 1, `stratum ${s}: a fresh boss holds its base damage and a zero clock`);
     const ev = run(w, b, t + 10);
     ok(ev.length === 1 && Math.abs(ev[0].i * TICK - t) <= 1.5 * TICK, `stratum ${s}: one fury event at tick ${ev.length && ev[0].i} (${ev.length && (ev[0].i * TICK).toFixed(3)} s, want ${t})`);
     ok(ev.length === 1 && ev[0].e.type === b.type && ev[0].e.x === Math.round(ev[0].x) && ev[0].e.y === Math.round(ev[0].y), `stratum ${s}: the event names the boss and its spot`);
     near(b.furyT, t + 10, 2 * TICK, `stratum ${s}: clock after ${t + 10} s`);
-    near(b.furyM, 1.4, 0.003, `stratum ${s}: x1.4 ten seconds in`);
+    near(b.furyM, M10, 0.003, `stratum ${s}: x(1 + 10 ramp) ten seconds in`);
     near(b.dmg, b.dmgBase * b.furyM, 1e-9, `stratum ${s}: boss damage = base x multiplier`);
     ok(run(w, b, 30).length === 0, `stratum ${s}: the event never repeats`);
   }
@@ -959,12 +960,12 @@ for (let s = 1; s <= 6; s++) {
   }
   { // new zones and shots carry the scaled damage: a Bone Warden spike field (x0.9 per pool, stratum IV), a shot (x0.6)
     const { w, b } = fw(4, 'bonewarden');
-    b.furyT = FB.t[3] + 10 - TICK; run(w, b, TICK); near(b.furyM, 1.4, 1e-9, 'jumped ten seconds past the start: x1.4');
+    b.furyT = FB.t[3] + 10 - TICK; run(w, b, TICK); near(b.furyM, M10, 1e-9, 'jumped ten seconds past the start: x(1 + 10 ramp)');
     b.st = 'atk'; b.atk = 'spikes'; b.vars = { wm: 1 }; w.zones.length = 0; Bs.bonewarden.attacks.spikes.start(w, b);
     const zs = w.zones.filter(z => z.src === b && z.kind === 'tele');
-    ok(zs.length > 3 && zs.every(z => Math.abs(z.dmg - b.dmgBase * 1.4 * 0.9) < 1e-9), `${zs.length} spike pools hit for base x1.4 x0.9 (${zs[0] && zs[0].dmg.toFixed(3)} vs ${(b.dmgBase * 1.4 * 0.9).toFixed(3)})`);
+    ok(zs.length > 3 && zs.every(z => Math.abs(z.dmg - b.dmgBase * M10 * 0.9) < 1e-9), `${zs.length} spike pools hit for base x(1 + 10 ramp) x0.9 (${zs[0] && zs[0].dmg.toFixed(3)} vs ${(b.dmgBase * M10 * 0.9).toFixed(3)})`);
     const q = w.enemyShoot(b, 0, 100, 'bone', 0.6, 6);
-    near(q.dmg, b.dmgBase * 1.4 * 0.6, 1e-9, 'a volley shot carries base x1.4 x0.6');
+    near(q.dmg, b.dmgBase * M10 * 0.6, 1e-9, 'a volley shot carries base x(1 + 10 ramp) x0.6');
     const sk = w.spawnEnemy('skeleton', b.x + 40, b.y);
     ok(sk.dmgBase === undefined && sk.furyM === undefined && sk.furyT === undefined, 'a summon during fury carries no fury state');
   }
@@ -974,7 +975,7 @@ for (let s = 1; s <= 6; s++) {
     b.furyT = 10; const t1 = after();
     near(t1, 1.05 * w.threat().pause, 1e-9, 'before the start the phase-1 pause is 1.05 x the stratum pause');
     b.furyT = FB.t[3] + 10 - TICK; const t2 = after();
-    near(t2 * 1.4, t1, 0.003, `ten seconds into fury the pause is divided by 1.4 (${t2.toFixed(4)} vs ${t1.toFixed(4)})`);
+    near(t2 * M10, t1, 0.003, `ten seconds into fury the pause is divided by 1 + 10 ramp (${t2.toFixed(4)} vs ${t1.toFixed(4)})`);
     b.furyT = 1e4; const t3 = after();
     near(t3, t1 / FB.max, 1e-9, 'at the cap the pause is divided by max');
     delete Bs.forgelord.attacks.hold;

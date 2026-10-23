@@ -205,7 +205,7 @@
     return Math.atan2(ay - y, ax - x);
   };
   // Per-stratum threat on top of the base scales: foe HP, wave budget, `cdRate` = extra cooldown recovery (0.2 = attack timers tick 20% faster, -0.2 = 20% slower) and the boss pause between attacks (x).
-  W.THREAT = [{ hp: 2.2, dmg: 0.5, wave: 0.8, cdRate: -0.4, pause: 2 }, { hp: 1.62, dmg: 0.5, wave: 0.75, cdRate: -0.3, pause: 1.7 }, { hp: 1.3, dmg: 0.5, wave: 0.7, cdRate: -0.1, pause: 1.4 }, { hp: 1, dmg: 0.4, wave: 0.66, cdRate: 0, pause: 1.2 }, { hp: 1.07, dmg: 0.78, wave: 0.62, cdRate: 0.15, pause: 1 }, { hp: 1.02, dmg: 0.98, wave: 0.6, cdRate: 0.3, pause: 0.9 }];
+  W.THREAT = [{ hp: 2.2, dmg: 0.5, wave: 0.8, cdRate: -0.4, pause: 2 }, { hp: 1.62, dmg: 0.5, wave: 0.75, cdRate: -0.3, pause: 1.7 }, { hp: 1.3, dmg: 0.5, wave: 0.7, cdRate: -0.1, pause: 1.4 }, { hp: 1, dmg: 0.5, wave: 0.66, cdRate: 0, pause: 0.85 }, { hp: 1.07, dmg: 0.85, wave: 0.62, cdRate: 0.15, pause: 0.7 }, { hp: 1.02, dmg: 1.05, wave: 0.6, cdRate: 0.3, pause: 0.7 }];
   // Foe HP multiplier of stratum s: the depth curve times the threat HP.
   W.hpScale = (s) => (1 + 0.65 * (s - 1) + 0.08 * (s - 1) * (s - 1)) * W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, s - 1))].hp;
   // Wave pacing of combat rooms: seconds before the first wave, spawn telegraph (+ random extra), minimum gap before the next wave, the share of a wave that may still stand when the next one is called, the seconds after which the next wave comes regardless, and the minimum spawn distance from heroes (turrets keep more).
@@ -218,7 +218,7 @@
   W.BOSS_VOL = { n: [3, 4, 5], tele: 0.5, lock: 0.15, gap: 0.12, seq: 0.15, speed: 320, step: 20, dmg: 0.6 }; W.BOSS_OV_GAP = 5;
   W.BOSS_PACK_N = [4, 6]; W.BOSS_PACK_GAP = 7; W.BOSS_FODDER_CAP = [20, 30];
   // Boss fury (soft enrage): t = fight seconds at which it starts, by stratum (0 = never), ramp = boss damage multiplier gained per second past t (the pause between attacks divides by the same factor), max = its cap, warn = seconds before t that the boss bar starts warning.
-  W.BOSS_FURY = { t: [0, 0, 0, 75, 80, 85], ramp: 0.04, max: 4, warn: 10 };
+  W.BOSS_FURY = { t: [0, 0, 0, 75, 80, 85], ramp: 0.05, max: 4, warn: 10 };
   W.furyAt = (s) => W.BOSS_FURY.t[Math.max(0, Math.min(W.BOSS_FURY.t.length - 1, s - 1))];
   // Fury multiplier at stratum s after ft fight seconds: 1 while t is 0 or ft <= t, then 1 + ramp x (ft - t) up to max (pure; the client mirror derives it from the synced clock).
   W.furyMul = (s, ft) => { const t = W.furyAt(s); return t > 0 && ft > t ? Math.min(W.BOSS_FURY.max, 1 + W.BOSS_FURY.ramp * (ft - t)) : 1; };

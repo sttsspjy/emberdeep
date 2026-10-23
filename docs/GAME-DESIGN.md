@@ -19,12 +19,12 @@ Canonical rules and numbers. Code follows this file; a balance pass changes numb
 | I | 2.2 | 0.5 | 0.8 | −40% | 2 |
 | II | 1.62 | 0.5 | 0.75 | −30% | 1.7 |
 | III | 1.3 | 0.5 | 0.7 | −10% | 1.4 |
-| IV | 1 | 0.4 | 0.66 | 0 | 1.2 |
-| V | 1.07 | 0.78 | 0.62 | +15% | 1 |
-| VI | 1.02 | 0.98 | 0.6 | +30% | 0.9 |
+| IV | 1 | 0.5 | 0.66 | 0 | 0.85 |
+| V | 1.07 | 0.85 | 0.62 | +15% | 0.7 |
+| VI | 1.02 | 1.05 | 0.6 | +30% | 0.7 |
 
-  Effective foe HP multiplier (depth curve × threat HP): 2.2 / 2.8 / 3.4 / 3.7 / 5.2 / 6.4. Effective foe damage multiplier (depth curve × threat damage): 0.5 / 0.6 / 0.8 / 0.8 / 1.8 / 2.8.
-- Boss HP: Bone Warden 4,350 · Sporemother 5,950 · Rimeheart 16,500 · Forgelord 17,400 · Drowned King 50,400 · Hollow King 59,000. Boss base damage 6.4 (Forgelord 5.5, Drowned King 8, Hollow King 7.5). A foe still alive 45 s after its own spawn (`e.age`; bosses 78 s; fodder never) is **exposed**: ×1.5 damage taken, ×1.5 speed, and it loses 4% of its max HP per second (bosses 1.2%).
+  Effective foe HP multiplier (depth curve × threat HP): 2.2 / 2.8 / 3.4 / 3.7 / 5.2 / 6.4. Effective foe damage multiplier (depth curve × threat damage): 0.5 / 0.6 / 0.8 / 1.0 / 2.0 / 3.0.
+- Boss HP: Bone Warden 4,350 · Sporemother 5,950 · Rimeheart 16,500 · Forgelord 31,320 · Drowned King 100,800 · Hollow King 106,200. Boss base damage 6.4 (Forgelord 7.15, Drowned King 9.6, Hollow King 8.6). A foe still alive 45 s after its own spawn (`e.age`; bosses 78 s, except in strata with a boss fury (§8), where bosses are never exposed; fodder never) is **exposed**: ×1.5 damage taken, ×1.5 speed, and it loses 4% of its max HP per second (bosses 1.2%).
 - Elite HP × `2.4 + 0.4(s−1)` (`World.ELITE`), damage × 0.9, radius × 1.22. Affixes: swift (×1.4 speed, wind-ups ×0.7 but never under 0.4 s), brutal (×1.4 damage), warded (ward = 45% of max HP), volatile (explodes on death), vampiric (heals ×3 the damage it deals a hero). From stratum IV an elite rolls a second, different affix (`elite2`) with chance `World.AFFIX2` 35% / 60% / 85% (IV–VI); HP and damage multipliers apply once, each affix effect once whichever slot holds it (`ED.hasAffix`); the label names both ("Swift Brutal Skeleton Knight").
 - Party multiplier (n = other heroes): foe HP `1 + 0.85n + 0.3n(n−1)` (two heroes ×1.85, three ×3.3, four ×5.35), wave budget `1 + 0.6n + 0.2n(n−1)`. A downed hero bleeds out in 18 s when no ally revives them (solo: at once).
 - HP-relative statuses (Chill and Venom build-up, Conflagration, Wildfire) measure against foe HP before the stratum lever (bosses: `refHp`, the design HP 800–7,800), so inflating HP does not weaken them.
@@ -328,8 +328,8 @@ Class Power **P** (table below) scales every skill and proc. Per-attack extras s
 
 | Hero | Skill | cd | Aim | Effect |
 |---|---|---|---|---|
-| Knight | **Shield Charge** | 6 | move 60–150 px toward the cursor | Run at 600 px/s, untouchable. Every foe passed takes 20 + 1.6P, stun 1.0 s, knock 260; ×1.4 on foes your shield stunned (Crush). |
-| Knight | **Shield Throw** | 9 | direction; the cursor's distance (120–280 px) sets the flight | The shield strikes up to 4 foes (ricochet reach 180): 20 + 1.3P each, stun 0.9 s; bosses ×1.5 and never stunned. It returns (10 + 0.65P to foes it passes) and is caught: shield 0.5% max HP per foe struck, at most 2%, once per 6 s. In flight it swats enemy shots. |
+| Knight | **Shield Charge** | 6 | move 60–150 px toward the cursor | Run at 600 px/s, untouchable. Every foe passed takes 20 + 1.6P, stun 1.0 s, knock 260; ×1.4 on foes your shield stunned (Crush); bosses ×3 and never stunned (the shockwave, cracks and banner read the plain impact). |
+| Knight | **Shield Throw** | 9 | direction; the cursor's distance (120–280 px) sets the flight | The shield strikes up to 4 foes (ricochet reach 180): 20 + 1.3P each, stun 0.9 s; bosses ×2 and never stunned. It returns (10 + 0.65P to foes it passes) and is caught: shield 0.5% max HP per foe struck, at most 2%, once per 6 s. In flight it swats enemy shots. |
 | Ranger | **Volley** | 5 | direction | 7 piercing arrows (fan 1.2 rad, pierce 1), 4 + 1.2P each. |
 | Ranger | **Rain of Arrows** | 10 | ground, ≤ 260 | After 0.35 s, every 0.25 s for 2 s all foes within r80 take 4 + 0.45P. |
 | Pyromancer | **Flame Nova** | 7 | self | Blast r105: 22 + 2.5P, knock 200, Fire; every foe struck gains a Burn add of 12 + 2.4P. |
@@ -337,7 +337,7 @@ Class Power **P** (table below) scales every skill and proc. Per-attack extras s
 | Shade | **Shadowstep** | 4.5 | move 40–140 px toward the cursor | Blink; every foe on the path takes a guaranteed crit of 12 + 2.2P; the next 3 attacks crit. |
 | Shade | **Vanish** | 11 | self | Smoke r75 for 3 s (foes inside slowed 40%, blinded up to 2 s each, elites half, never bosses). Unseen for 2.5 s: foes lose you and attack the spot they last saw you. The next attack is an **Ambush**: guaranteed crit for 2.5 × the unforked weapon's damage. Attacking ends stealth. |
 | Cleric | **Sanctuary** | 11 | ground, ≤ 200 | Heals you and allies within 180 for 7% max HP. Holy ground r100 for 3.5 s: foes take 10 + 1.2P per second (stores Radiance from a quarter of each tick); allies inside take 15% less damage. |
-| Cleric | **Judgment** | 9 | direction | A hammer flies out and returns, piercing; each leg hits a foe once for 18 + 1.4P (it takes the Judged +20% itself) and Judges it for 4 s (+20% damage taken). A foe that dies while the hammer's own Judged window runs shields heroes within 160 for 3% max HP, once per cast (class window). |
+| Cleric | **Judgment** | 9 | direction | A hammer flies out and returns, piercing; each leg hits a foe once for 18 + 1.4P (it takes the Judged +20% itself) and Judges it for 4 s (+20% damage taken); bosses take ×2 from every hammer leg (Verdict and the echo carry no boss factor). A foe that dies while the hammer's own Judged window runs shields heroes within 160 for 3% max HP, once per cast (class window). |
 | Necromancer | **Raise Legion** | 12 | ground, ≤ 160, standable | 3 minions for 12 s (max 3 minions); each strikes every 0.7 s for 6 + 0.6P. Any non-boss foe you are credited with (weapon, skills, Reaps, status damage, minions) may rise for 10 s (12%, +weapon raise). |
 | Necromancer | **Bone Harvest** | 10 | self | Each minion bursts (r60, 24 + 1.8P, Shadow) and heals you 3% max HP (at most 6%); then 1 new minion rises (2 when you had none). |
 
@@ -447,7 +447,7 @@ Per stratum: start, boss, three utility rooms (treasure on odd strata or an even
   - **Aimed volley** (every boss, `World.BOSS_VOL`; an attack of weight 2 in every phase, run beside the main state): a warn line per living, visible hero follows the led aim for 0.5 s × the boss's chill wind-up factor and locks 0.15 s before the first release; then 3 / 4 / 5 shots (phase I / II / III) 0.12 s apart, each led at its release by `World.LEAD`, 0.6 × boss damage, flying `320 + 20(s − 1)` px/s (× 1.2 under Pact 8). Party: one sequence per living hero, 0.15 s apart. Freezing or stunning the boss stalls it; blinding it or a phase change cancels it.
   - **Phase 3 overlap**: in phase 3 a volley also starts every `BOSS_OV_GAP` (5 s) whatever the main attack is, never two at once.
   - **Party**: every summon list gains one entry per living hero beyond the first (at most +3), drawn from the list. Summon guards count threat foes only.
-  - **Fury** (strata IV–VI; `World.BOSS_FURY` t 75 / 80 / 85 s, ramp 0.04, max ×4, warn 10 s; strata I–III never): `e.furyT` counts fight seconds from the boss's spawn, through phases, freezes, stuns and blinds. Past t, `m = min(max, 1 + ramp × (furyT − t))` (`World.furyMul`): boss damage × m for every attack made from then on and the pause between its attacks ÷ m; wind-ups and telegraphs are unchanged; summons and fodder are not affected. One `{t:'fury', type, x, y}` at the start. Boss rows carry the clock as `E[19]`. The boss bar shows a fury track under the HP bar (fight time up to the cap, a notch at t) that pulses from t − warn; past t the plate burns ember with `Fury ×m`, and the boss wears an ember aura that grows with m.
+  - **Fury** (strata IV–VI; `World.BOSS_FURY` t 75 / 80 / 85 s, ramp 0.05, max ×4, warn 10 s; strata I–III never): `e.furyT` counts fight seconds from the boss's spawn, through phases, freezes, stuns and blinds. Past t, `m = min(max, 1 + ramp × (furyT − t))` (`World.furyMul`): boss damage × m for every attack made from then on and the pause between its attacks ÷ m; wind-ups and telegraphs are unchanged; summons and fodder are not affected. One `{t:'fury', type, x, y}` at the start. Boss rows carry the clock as `E[19]`. The boss bar shows a fury track under the HP bar (fight time up to the cap, a notch at t) that pulses from t − warn; past t the plate burns ember with `Fury ×m`, and the boss wears an ember aura that grows with m.
   - **Fodder trickle** (`BOSS_PACK_N`, `BOSS_PACK_GAP`, `BOSS_FODDER_CAP`): 7 s after the boss spawns and every 7 s, a pack of 4–6 biome fodder at a room edge ≥ 220 px from every hero, waiting while live and pending fodder plus the pack would pass 20 (30 with 2+ heroes); no xp; none after the boss falls.
 - Floor hazards (spikes, poison, lava, void) hurt for 4-6 per tick × `World.HAZARD_MUL` (0.5), scaled by 20% per stratum.
 
