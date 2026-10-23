@@ -1,5 +1,5 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it.
-// Usage: node tools/browse.js [--scen=smoke,crowd70,shots,swing,picks] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
+// Usage: node tools/browse.js [--scen=smoke,crowd70,shots,sheet,swing,picks] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
 //   [--quality=low,high] [--ops] [--json] [--seed=1] [--strat=1] [--embers=N] [--mortal] [--software] [--forcepost] [--sync] [--warm=2.5] [--timeout=300]
 // Mechanism: headless only (no headed option, no window calls); one browser per invocation, one fresh context per scenario page, all closed at exit, on error and on SIGINT.
 //   A read-only node http server on 127.0.0.1 (random port) serves --root (default: this repo). Playwright resolves via require('playwright'), else %LOCALAPPDATA%\npm-cache\_npx\*\node_modules (best match for the installed browsers).
@@ -9,6 +9,8 @@
 //     measures --seconds (6) of main-thread ms per frame (Game.update, Game.render, Render.frame, HUD.draw, Post.render, whole rAF callback; busy% = rAF callback time over wall time, sys% = whole-machine CPU use during the window) at each --quality (low,high);
 //     --ops adds a 3 s pass counting canvas/WebGL calls per frame by target (buf = world buffer, screen = visible canvas, other = offscreen bakes).
 //   shots: 16 screenshots: boot name screen, menu, Descend, Hearth tabs (the Armory scrolled into view), Heroes, Settings, Credits, boon offer, a run in combat, the Tab sheet tabs, the pause menu (profile gets 400 embers unless --embers).
+//   sheet: a late build staged through the sim (BR.sheetStage: stratum --strat or V, two element paths, one evolved, their duo, open and Ascended boons, a fork at rank 3, six relics, a shield, an ally hero):
+//     the Tab sheet Build, Build scrolled to the end, Combat, Map, and Build viewing the ally; fails on a page error or when a sheet column overflows its panel sideways.
 //   swing: one contact-sheet PNG per melee weapon of --cls, its Armory variants included (or per --weapon id, forks as id@fork) (aimed --aim degrees, 0 = right, 90 = down, drawn at --zoom canvas px per world px, 2): frames at fixed times over two consecutive attacks (a combo weapon: one per step), the hold and the ease back to idle, hero and smear drawn by the game's own renderer.
 //   picks: every boon id resolves to a PickFx card kind; one PNG per pick burst (each kind, fire-big, holy-ally) on the solo hero about 0.25 s after FX.handle gets the 'boon' / 'relic' event;
 //     each pick cue (and the Hearth 'buy') rendered in an OfflineAudioContext: voices, peak, rms, audible length; fails on a throw, a silent cue or one longer than 0.9 s.
@@ -45,7 +47,7 @@ function parseArgs(argv) {
   if (!vp) throw new Fail('--viewport is WxH, e.g. 1920x1080');
   o.vw = +vp[1]; o.vh = +vp[2];
   o.scens = o.scen.split(',').map(s => s.trim()).filter(Boolean);
-  for (const s of o.scens) if (!/^(smoke|shots|swing|picks|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, swing, picks, crowdN)');
+  for (const s of o.scens) if (!/^(smoke|shots|sheet|swing|picks|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, sheet, swing, picks, crowdN)');
   if (!o.scens.length) throw new Fail('--scen is empty');
   o.qualities = o.quality ? o.quality.split(',').map(s => s.trim()) : null;
   if (o.qualities && o.qualities.some(q => q !== 'low' && q !== 'high')) throw new Fail('--quality is low, high or low,high');
@@ -363,6 +365,41 @@ function pageBoot(cfg) {
   // opens a boon offer when one is queued; true when the overlay is up
   BR.offerOpen = () => { const s = window.__ED.Game.s; return !!(s && s.offerOpen); };
   BR.take = () => { const ED = window.__ED; if (ED.Game.s && ED.Game.s.offerOpen) ED.UI.boonConfirm(); return BR.offerOpen(); };
+
+  // late build on the solo hero at stratum `strat`: two element paths (the first evolved, the second at its keystone), their duo, open boons, two Ascended, the first route with its first fork at rank 3,
+  // six relics, level 14, a shield, half the floor explored, and an ally hero (second class) beside the hero; returns a summary
+  BR.sheetStage = (strat) => {
+    const ED = window.__ED, s = ED.Game.s, w = s && s.world;
+    if (!w) throw new Error('no run to stage the sheet in');
+    if (strat && strat !== w.stratum) w.enterStratum(strat);
+    const p = s.me, B = ED.BOONS, cls = p.cls, els = ED.ELEMENT_IDS.filter(e => e !== ED.CLASSES[cls].element).slice(0, 2), boons = {};
+    const pathIds = (path) => Object.keys(B).filter(id => B[id].path === path && !B[id].open && !B[id].cls);
+    for (const [i, el] of els.entries()) {
+      const ids = pathIds(el), gate = ids.find(id => B[id].gate), key = ids.find(id => B[id].key), evo = ids.find(id => B[id].evo);
+      boons[gate] = 1;
+      const want = i === 0 ? ED.EVO_AFFINITY : ED.KEY_AFFINITY;
+      for (const id of ids) { if (B[id].gate || B[id].key || B[id].evo || B[id].need === (ED.CLASSES[cls].kind === 'melee' ? 'proj' : 'melee')) continue; if (ED.pathAffinity(boons, el) + 1 >= want) break; boons[id] = Math.min(B[id].max || 5, Math.max(1, want - 1 - ED.pathAffinity(boons, el))); }
+      if (key) boons[key] = 1;
+      if (i === 0 && evo) boons[evo] = 1;
+    }
+    const duo = ED.duoOf(els[0], els[1]); if (duo) boons[duo] = 1;
+    Object.keys(B).filter(id => B[id].open && !B[id].purse && !B[id].asc && !B[id].cls).slice(0, 4).forEach((id, i) => { boons[id] = Math.min(B[id].max || 5, i + 1); });
+    Object.keys(B).filter(id => B[id].asc).slice(0, 2).forEach(id => { boons[id] = 1; });
+    const route = ED.CLASS_CARDS[cls][ED.ROUTES[0]]; boons[route.t1] = 1; boons[route.forks[0]] = Math.min(3, B[route.forks[0]].max || 3);
+    p.boons = boons; p.relics = Object.keys(ED.RELICS).slice(0, 6);
+    w.recalc(p, true); w.sendBuild(p);
+    p.shield = Math.round(p.maxHp * 0.18 * 10) / 10 + 0.4;
+    w.level = Math.max(w.level | 0, 14); if (ED.World.xpFor) { w.xpNext = ED.World.xpFor(w.level); w.xp = Math.floor(w.xpNext * 0.62); } w.gold = 347;
+    p.hp = Math.max(1, Math.ceil(p.maxHp * 0.7) - 0.3);
+    const rooms = w.floor.rooms; rooms.forEach((r, i) => { if (i % 2 === 0) { w.roomState[r.id].visited = true; w.roomState[r.id].known = true; w.roomState[r.id].cleared = true; } else w.roomState[r.id].known = i % 4 === 1; });
+    let ally = null;
+    if (!w.players.has('ally')) {
+      const ac = ED.CLASS_IDS.find(c => c !== cls);
+      ally = w.addPlayer({ pid: 'ally', name: 'Wren', slot: 1, cls: ac, weapon: ED.weaponChoices(ac)[0] });
+      ally.x = p.x + 30; ally.y = p.y; ally.hp = Math.ceil(ally.maxHp * 0.6);
+    }
+    return { cls, els, boons: Object.keys(boons).length, relics: p.relics.length, stratum: w.stratum, ally: ally && ally.cls };
+  };
 
   // picks: every boon id resolves to a PickFx kind; a pick burst (name: kind, kind-big or kind-ally) fired through FX.handle on a cleared effect layer; the pick cues rendered offline
   BR.pickKinds = () => {
@@ -693,6 +730,58 @@ async function scenShots() {
   return res;
 }
 
+async function scenSheet() {
+  const o = S.opt, res = newResult('sheet'), q = qualitiesOr(['high'])[0];
+  const { ctx, page, errors } = await openPage();
+  const ev = (fn, arg) => page.evaluate(fn, arg);
+  try {
+    await call(page, 'profile', o.cls, o.embers);
+    await call(page, 'settings', q);
+    if ((await call(page, 'start')) !== 'run') fail(res, 'run did not start');
+    await wait(1100);
+    for (let i = 0; i < 6 && await call(page, 'offerOpen'); i++) { await call(page, 'take'); await wait(300); }
+    const st = await call(page, 'sheetStage', o.strat > 1 ? o.strat : 5);
+    notes(res, `staged ${st.cls}: paths ${st.els.join('+')}, ${st.boons} boons, ${st.relics} relics, stratum ${st.stratum}, ally ${st.ally}`);
+    await wait(300);
+    // sideways overflow: a sheet element wider than its column, or text spilling past its box
+    const audit = () => ev(() => {
+      const bad = [], cols = [...document.querySelectorAll('#ov-sheet .sh-col')].filter(c => c.offsetParent);
+      for (const c of cols) {
+        const cr = c.getBoundingClientRect(), inn = c.querySelector('.sh-in');
+        if (inn && inn.scrollWidth > inn.clientWidth + 1) bad.push(c.dataset.col + ': scrollWidth ' + inn.scrollWidth + ' > ' + inn.clientWidth);
+        for (const n of c.querySelectorAll('*')) { const r = n.getBoundingClientRect(); if (r.width && (r.right > cr.right + 1 || r.left < cr.left - 1)) { bad.push((c.dataset.col || '?') + ': ' + n.className + ' ' + Math.round(r.left) + '..' + Math.round(r.right) + ' outside ' + Math.round(cr.left) + '..' + Math.round(cr.right)); break; } }
+      }
+      const head = document.querySelector('#ov-sheet .sh-head'), hr = head.getBoundingClientRect();
+      for (const n of head.querySelectorAll('*')) { const r = n.getBoundingClientRect(); if (r.width && (r.right > hr.right + 1 || r.bottom > hr.bottom + 1)) { bad.push('header: ' + (n.id || n.className) + ' spills'); break; } }
+      return bad;
+    });
+    const shot = async (name, fn) => { await ev(fn); await wait(700); const bad = await audit(); for (const b of bad) fail(res, name + ' overflow: ' + b); await shoot(page, res, name); };
+    await shot('build', () => { const UI = window.__ED.UI; UI.toggleSheet(true); UI.sheetTab('build'); });
+    await shot('build-end', () => { for (const c of document.querySelectorAll('#shp-build .sh-in')) c.scrollTop = c.scrollHeight; });
+    await shot('combat', () => window.__ED.UI.sheetTab('combat'));
+    await shot('combat-end', () => { for (const c of document.querySelectorAll('#shp-combat .sh-in')) c.scrollTop = c.scrollHeight; });
+    await shot('map', () => window.__ED.UI.sheetTab('map'));
+    await shot('ally', () => { const r = document.querySelector('#ov-sheet .sh-party:not(.me)'); if (r) r.click(); window.__ED.UI.sheetTab('build'); });
+    // real key events: E / Q switch tabs, S moves the focus down, Tab closes
+    const navState = () => ev(() => { const S = window.__ED.UI.sheetState; return { tab: S.tab, focus: S.focusKey, open: !document.getElementById('ov-sheet').hidden }; });
+    const n0 = await navState();
+    await page.keyboard.press('KeyE'); await wait(250);
+    const n1 = await navState();
+    await page.keyboard.press('KeyQ'); await wait(250);
+    await page.keyboard.press('KeyS'); await wait(250);
+    const n2 = await navState();
+    await page.keyboard.press('Tab'); await wait(250);
+    const n3 = await navState();
+    notes(res, `keys: ${n0.tab} -E-> ${n1.tab} -Q-> ${n2.tab}; focus ${n0.focus} -S-> ${n2.focus}; Tab closes: ${!n3.open}`);
+    if (n1.tab !== 'combat' || n2.tab !== 'build') fail(res, 'E / Q did not switch the sheet tabs');
+    if (!n2.focus || n2.focus === n0.focus) fail(res, 'S did not move the sheet focus');
+    if (n3.open) fail(res, 'Tab did not close the sheet');
+    await ev(() => window.__ED.UI.toggleSheet(false));
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
 // ---------------- output ----------------
 const f1 = (v) => (typeof v === 'number' ? v.toFixed(1) : '-');
 const tri = (s) => (s ? [s.p50, s.p95, s.max].map(f1).join('/') : '-');
@@ -743,7 +832,7 @@ async function main() {
       const t0 = Date.now();
       log('scenario ' + sc + ' ...');
       let r;
-      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
+      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'sheet' ? await scenSheet() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
       r.wallMs = Date.now() - t0;
       r.browserVersion = bv;
       if (S.server.missing.size) r.missing = [...S.server.missing];

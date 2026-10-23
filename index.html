@@ -222,27 +222,27 @@
         <div class="sh-port" id="sh-port"></div>
         <div class="sh-id"><div class="sh-hero"><span id="sh-name">Hero</span><span id="sh-class"></span></div><div class="sh-subl" id="sh-sub"></div></div>
         <div class="sh-vit">
-          <div><span class="sh-lvl" id="sh-lv">Lv 1</span><div class="bar"><i id="sh-xpbar"></i></div><span class="mut" id="sh-xp"></span></div>
-          <div><span class="lbl">HP</span><b id="sh-hp"></b><div class="bar hp"><i id="sh-hpbar"></i></div><span class="sh-shield" id="sh-shield" hidden></span></div>
-          <div title="Gold"><img class="sh-coin" id="sh-coin" alt="" width="20" height="20"><b id="sh-gold">0</b></div>
+          <div class="sh-v1"><span class="sh-lvl" id="sh-lv">Lv 1</span><span class="sh-meter xp" id="sh-xpm"><i></i></span><span class="mut" id="sh-xp"></span></div>
+          <div class="sh-v1"><span class="lbl">HP</span><b id="sh-hp"></b><span class="sh-shield" id="sh-shield" hidden></span><span class="sh-meter hp" id="sh-hpm"><i></i><i class="sh"></i></span></div>
+          <div class="sh-v1" title="Gold"><img class="sh-coin" id="sh-coin" alt=""><b id="sh-gold">0</b></div>
         </div>
         <div class="sh-world"><span class="sh-strat" id="sh-strat"></span><span class="sh-aff" id="sh-aff"></span></div>
       </header>
-      <nav class="tabs sh-tabs" id="sh-tabs" role="tablist" aria-label="Sheet tabs">
+      <nav class="sh-tabs" id="sh-tabs" role="tablist" aria-label="Sheet tabs">
         <button type="button" role="tab" class="tab on" id="shtab-build" aria-controls="shp-build" aria-selected="true">Build</button>
         <button type="button" role="tab" class="tab" id="shtab-combat" aria-controls="shp-combat" aria-selected="false">Combat</button>
         <button type="button" role="tab" class="tab" id="shtab-map" aria-controls="shp-map" aria-selected="false">Map</button>
-        <div class="sh-tr"><span class="sh-keys" id="sh-keys"></span><span class="sh-pill" id="sh-pill" hidden></span><button type="button" class="btn btn-small" id="sh-view" hidden></button></div>
+        <div class="sh-tr"><span class="sh-keys" id="sh-keys"></span><span class="px-chip sh-pill" id="sh-pill" hidden></span><button type="button" class="btn btn-small" id="sh-view" hidden></button></div>
       </nav>
       <div class="sh-body">
         <div class="sh-panel" id="shp-build" role="tabpanel" aria-labelledby="shtab-build" data-t="build"></div>
         <div class="sh-panel" id="shp-combat" role="tabpanel" aria-labelledby="shtab-combat" data-t="combat" hidden></div>
         <div class="sh-panel" id="shp-map" role="tabpanel" aria-labelledby="shtab-map" data-t="map" hidden>
-          <section class="plate sh-col"><div class="sh-in"><h3 class="plate-h">Map</h3><div class="sh-mapbox" id="sh-mapbox"><canvas id="map-canvas" width="360" height="300"></canvas></div></div></section>
-          <section class="plate sh-col"><div class="sh-in"><h3 class="plate-h">Stratum and dark rooms</h3><div class="sh-list" id="shp-map-side"></div></div></section>
+          <section class="plate sh-col" data-col="map"><div class="sh-in"><h3 class="sh-h">Map</h3><div class="sh-mapbox" id="sh-mapbox"><canvas id="map-canvas" width="360" height="300"></canvas></div><div class="sh-legend" id="sh-legend"></div></div></section>
+          <section class="plate sh-col" data-col="side"><div class="sh-in"><h3 class="sh-h">Stratum and dark rooms</h3><div class="sh-list" id="shp-map-side"></div></div></section>
         </div>
       </div>
-      <footer class="sh-foot" id="sh-foot"></footer>
+      <footer class="sh-foot" id="sh-foot" data-px-snap></footer>
     </div>
   </div>
 
