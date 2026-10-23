@@ -31,7 +31,7 @@
     shade: {
       name: 'Shade', title: 'Blade in the Dark', icon: 'dagger',
       desc: 'Fastest hero alive. Blinks through foes and lands guaranteed crits.',
-      hp: 192, armor: 32, spd: 138, crit: 0.12, power: 13, element: null,
+      hp: 165, armor: 7, dodge: 0.35, spd: 138, crit: 0.12, power: 13, element: null,
       weapons: ['daggers', 'knives', 'scythes'], skill: 'step', skill2: 'vanish',
       col: { a: '#3a3550', b: '#1f1b2e', c: '#b78cff', d: '#121018' }, unlock: { boss: 1, text: 'Defeat The Bone Warden' },
     },

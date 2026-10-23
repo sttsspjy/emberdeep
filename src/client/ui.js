@@ -373,7 +373,7 @@
       const st = ED.Stats.compute({ cls, weapon: A.weaponFor(cls), boons: {}, relics: [], meta: S.metaBundle(p, cls), pact: 0 });
       html += `<div class="hd-stats">
         <div class="hd-stat"><b>${st.maxHp}</b><span>Health</span></div><div class="hd-stat"><b>${Math.round(st.armor)}</b><span>Armor</span></div>
-        <div class="hd-stat"><b>${Math.round(st.moveSpeed)}</b><span>Speed</span></div><div class="hd-stat"><b>${Math.round(st.crit * 100)}%</b><span>Crit</span></div></div>
+        <div class="hd-stat"><b>${Math.round(st.moveSpeed)}</b><span>Speed</span></div><div class="hd-stat"><b>${Math.round(st.crit * 100)}%</b><span>Crit</span></div>${st.dodge > 0 ? `<div class="hd-stat"><b>${Math.round(st.dodge * 100)}%</b><span>Dodge</span></div>` : ''}</div>
         <div><div class="mast-head"><b>Mastery ${ml}</b><span>${next !== null ? `${xp} / ${next} xp` : 'Complete'}</span></div><div class="bar"><i style="width:${Math.round(U.clamp(frac, 0, 1) * 100)}%"></i></div></div>
         <ul class="mast-rewards">${[2, 3, 4, 5, 6, 7, 8, 9, 10].map(l => {
     let label = ED.MASTERY_REWARDS[l];

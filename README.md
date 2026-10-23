@@ -125,7 +125,7 @@ You start with the **Knight**, **Ranger** and **Pyromancer**. Each hero has thre
 | Knight | Shield Charge, 6 s: run through a pack, untouchable, stunning what you hit | Shield Throw, 9 s: a shield that ricochets between foes, stuns them and swats arrows, then returns; catch it for a shield | Start |
 | Ranger | Volley, 5 s | Rain of Arrows, 10 s: a storm of arrows on a point | Start |
 | Pyromancer | Flame Nova, 7 s | Meteor, 12 s: telegraphed impact and burning crater | Start |
-| Shade | Shadowstep, 4.5 s | Vanish, 11 s: smoke, stealth and a guaranteed-crit ambush | Defeat the Bone Warden |
+| Shade (35% base dodge) | Shadowstep, 4.5 s | Vanish, 11 s: smoke, stealth and a guaranteed-crit ambush | Defeat the Bone Warden |
 | Cleric | Sanctuary, 11 s: heals you and allies near you, then holy ground that burns foes and cuts the damage allies take | Judgment, 9 s: a returning hammer that judges foes | Complete 4 descents |
 | Necromancer | Raise Legion, 12 s | Bone Harvest, 10 s: minions explode, then rise again | Defeat the Sporemother |
 
