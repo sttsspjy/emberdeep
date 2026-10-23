@@ -1,5 +1,5 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it.
-// Usage: node tools/browse.js [--scen=smoke,crowd70,shots] [--cls=knight] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
+// Usage: node tools/browse.js [--scen=smoke,crowd70,shots,swing] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
 //   [--quality=low,high] [--ops] [--json] [--seed=1] [--strat=1] [--embers=N] [--mortal] [--software] [--forcepost] [--sync] [--no-fonts] [--warm=2.5] [--timeout=300]
 // Mechanism: headless only (no headed option, no window calls); one browser per invocation, one fresh context per scenario page, all closed at exit, on error and on SIGINT.
 //   A read-only node http server on 127.0.0.1 (random port) serves --root (default: this repo). Playwright resolves via require('playwright'), else %LOCALAPPDATA%\npm-cache\_npx\*\node_modules (best match for the installed browsers).
@@ -9,6 +9,7 @@
 //     measures --seconds (6) of main-thread ms per frame (Game.update, Game.render, Render.frame, HUD.draw, Post.render, whole rAF callback; busy% = rAF callback time over wall time, sys% = whole-machine CPU use during the window) at each --quality (low,high);
 //     --ops adds a 3 s pass counting canvas/WebGL calls per frame by target (buf = world buffer, screen = visible canvas, other = offscreen bakes).
 //   shots: 15 screenshots: boot name screen, menu, Descend, Hearth tabs, Heroes, Settings, Credits, boon offer, a run in combat, the Tab sheet tabs, the pause menu (profile gets 400 embers unless --embers).
+//   swing: one contact-sheet PNG per melee weapon of --cls (or per --weapon id, forks as id@fork) (aimed --aim degrees, 0 = right, 90 = down, drawn at --zoom canvas px per world px, 2): 14 frames at fixed times over two consecutive attacks, the hold and the ease back to idle, hero and smear drawn by the game's own renderer.
 // Output: compact table (or --json on stdout, logs on stderr); result-<browser>.json and the PNGs in --outdir (default <tmp>/wickdeep-browse). Exit 0 pass, 1 scenario failure, 2 harness error.
 // Notes: Chromium runs headless on the real GPU (ANGLE D3D11, no window); --software forces SwiftShader, where the game reports Post.soft and skips post at 'high' unless --forcepost. Firefox uses its own headless GL.
 //   --sync forces each frame's raster/GPU work to finish before the timer stops. Google Fonts load from the network (the only external hosts allowed); --no-fonts serves them empty.
@@ -19,14 +20,14 @@ const fs = require('fs'), os = require('os'), path = require('path'), http = req
 // ---------------- arguments ----------------
 const FLAGS = {
   scen: 's', cls: 's', browser: 's', viewport: 's', outdir: 's', root: 's', quality: 's',
-  seconds: 'n', seed: 'n', strat: 'n', embers: 'n', warm: 'n', timeout: 'n',
+  seconds: 'n', seed: 'n', strat: 'n', embers: 'n', warm: 'n', timeout: 'n', aim: 'n', zoom: 'n', weapon: 's',
   json: 'b', ops: 'b', mortal: 'b', forcepost: 'b', software: 'b', sync: 'b', 'no-fonts': 'b', help: 'b',
 };
 class Fail extends Error { constructor(msg, code) { super(msg); this.code = code || 2; } }
 function parseArgs(argv) {
   const o = {
-    scen: 'smoke', cls: 'knight', browser: 'chromium', viewport: '1920x1080', outdir: path.join(os.tmpdir(), 'wickdeep-browse'), root: path.resolve(__dirname, '..'),
-    quality: '', seconds: 0, seed: 1, strat: 1, embers: -1, warm: 2.5, timeout: 300,
+    scen: 'smoke', cls: 'knight', weapon: '', browser: 'chromium', viewport: '1920x1080', outdir: path.join(os.tmpdir(), 'wickdeep-browse'), root: path.resolve(__dirname, '..'),
+    quality: '', seconds: 0, seed: 1, strat: 1, embers: -1, warm: 2.5, timeout: 300, aim: 0, zoom: 2,
   };
   for (const a of argv) {
     const m = /^--([\w-]+)(?:=(.*))?$/.exec(a);
@@ -42,7 +43,7 @@ function parseArgs(argv) {
   if (!vp) throw new Fail('--viewport is WxH, e.g. 1920x1080');
   o.vw = +vp[1]; o.vh = +vp[2];
   o.scens = o.scen.split(',').map(s => s.trim()).filter(Boolean);
-  for (const s of o.scens) if (!/^(smoke|shots|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, crowdN)');
+  for (const s of o.scens) if (!/^(smoke|shots|swing|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, swing, crowdN)');
   if (!o.scens.length) throw new Fail('--scen is empty');
   o.qualities = o.quality ? o.quality.split(',').map(s => s.trim()) : null;
   if (o.qualities && o.qualities.some(q => q !== 'low' && q !== 'high')) throw new Fail('--quality is low, high or low,high');
@@ -297,6 +298,47 @@ function pageBoot(cfg) {
     if (t >= D.td) { I.pressed.add('Space'); D.td = t + 2.4; }
   }, 33);
 
+  // contact sheet of the melee swings of `cls` aimed `aimDeg` degrees (0 = right, 90 = down): one PNG per weapon, 14 frames at fixed times (idle, attack 1, attack 2 one weapon-rate later, hold, ease to idle),
+  // the hero drawn by Sprites.hero from a fake player and the smear by FX.drawGlow; needs a run (FX.playerAttackAnim reads the world view)
+  BR.swingStrip = (cls, aimDeg, zoom, weapons) => {
+    const ED = window.__ED, F = ED.FX, view = ED.Game.s.view, out = [], pid = 'sw-fake', face = aimDeg * Math.PI / 180, K2 = zoom, CW = 120 * zoom, CH = 140 * zoom, COLS = zoom > 2 ? 5 : 7;
+    F.reset();
+    for (const wid of weapons.length ? weapons : ED.CLASSES[cls].weapons) {
+      const w = ED.Sprites.weaponArt({ cls, weapon: wid }).w; if (w.kind !== 'melee') continue;
+      const p = { pid, cls, slot: 0, weapon: wid, face, moving: false, hp: 1, x: 0, y: 0 };
+      view.players.set(pid, p);
+      const mk = () => { if (F.anim[pid]) F.anim[pid].atkT = 9; F.playerAttackAnim(pid, face); return Object.assign({}, F.anim[pid]); };
+      const S = [mk(), mk()], an = F.anim[pid], t0 = S[0].t0, t1 = S[0].t1, D = S[0].D, st = (f) => t0 + (t1 - t0) * f;
+      const fr = [[-1, 9, 'idle'], [0, t0 * 0.9, 'a1 wind'], [0, st(0.3), 'a1 strike'], [0, st(0.6), 'a1 strike'], [0, t1, 'a1 end'], [0, D, 'a1 settled'],
+        [1, t0 * 0.9, 'a2 wind'], [1, st(0.3), 'a2 strike'], [1, st(0.6), 'a2 strike'], [1, t1, 'a2 end'], [1, D, 'a2 settled'], [1, D + 0.5, 'hold'], [1, D + 0.9, 'ease'], [1, D + 1.3, 'idle']];
+      const cv = document.createElement('canvas'); cv.width = COLS * CW; cv.height = Math.ceil(fr.length / COLS) * CH;
+      const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
+      for (let pass = 0; pass < 2; pass++) { // the first pass queues every weapon rotation, Atlas.tick bakes them all, the second pass is the one kept
+      fr.forEach((f, i) => {
+        const x0 = (i % COLS) * CW, y0 = Math.floor(i / COLS) * CH;
+        c.save(); c.beginPath(); c.rect(x0, y0, CW, CH); c.clip();
+        c.fillStyle = '#2b2733'; c.fillRect(x0, y0, CW, CH);
+        c.setTransform(K2, 0, 0, K2, x0 + CW / 2, y0 + CH * 0.62);
+        if (f[0] >= 0) { Object.assign(an, S[f[0]]); an.atkT = f[1]; } else { Object.assign(an, S[0]); an.atkT = 9; }
+        F.lastAnim = an;
+        ED.Sprites.hero(c, p, 0, an);
+        if (f[0] >= 0 && f[1] >= an.t0 && f[1] < an.D + 0.1) {
+          F.slash(0, -10, face, w.range, Math.min(6.3, w.arc), ED.PLAYER_COLORS[0]);
+          const sl = F.slashes[F.slashes.length - 1]; sl.life = sl.max - f[1];
+          c.globalCompositeOperation = 'lighter'; F.drawGlow(c, 0); c.globalCompositeOperation = 'source-over';
+          F.slashes.length = 0;
+        }
+        c.setTransform(1, 0, 0, 1, 0, 0); c.fillStyle = '#d8d4e0'; c.font = '12px monospace'; c.fillText(f[2] + ' ' + (f[1] < 9 ? f[1].toFixed(2) : ''), x0 + 6, y0 + 15);
+        c.restore();
+      });
+      if (!pass) ED.Atlas.tick(10000);
+      }
+      out.push({ weapon: wid, url: cv.toDataURL('image/png'), side: [S[0].side, S[1].side], times: [t0, t1, D] });
+      view.players.delete(pid);
+    }
+    return out;
+  };
+
   BR.runState = () => {
     const ED = window.__ED, A = ED.App, s = ED.Game.s, w = s && s.world, me = s && s.me;
     return {
@@ -497,6 +539,28 @@ async function scenCrowd(name) {
   return res;
 }
 
+async function scenSwing() {
+  const o = S.opt, res = newResult('swing'), q = qualitiesOr(['high'])[0];
+  const { ctx, page, errors } = await openPage();
+  try {
+    await call(page, 'profile', o.cls, o.embers);
+    await call(page, 'settings', q);
+    await call(page, 'install');
+    if ((await call(page, 'start')) !== 'run') fail(res, 'run did not start');
+    await wait(400);
+    const strips = await call(page, 'swingStrip', o.cls, o.aim, o.zoom, o.weapon ? o.weapon.split(',') : []);
+    if (!strips.length) notes(res, o.cls + ' has no melee weapon');
+    for (const s of strips) {
+      const file = path.join(o.outdir, ['swing', tag(), o.cls, s.weapon.replace('@', '-'), 'aim' + o.aim].join('-') + '.png');
+      fs.writeFileSync(file, Buffer.from(s.url.split(',')[1], 'base64'));
+      res.shots.push(file);
+      notes(res, `${s.weapon}: sides ${s.side.join('/')}, strike ${s.times.map(v => v.toFixed(3)).join('/')} s`);
+    }
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
 async function scenShots() {
   const o = S.opt, res = newResult('shots'), q = qualitiesOr(['high'])[0];
   const { ctx, page, errors } = await openPage();
@@ -590,7 +654,7 @@ async function main() {
       const t0 = Date.now();
       log('scenario ' + sc + ' ...');
       let r;
-      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
+      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'swing' ? await scenSwing() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
       r.wallMs = Date.now() - t0;
       r.browserVersion = bv;
       if (S.server.missing.size) r.missing = [...S.server.missing];
