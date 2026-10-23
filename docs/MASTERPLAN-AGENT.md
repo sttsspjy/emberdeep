@@ -20,9 +20,9 @@
 
 ## In-progress
 - Playtest of v4 on main (user).
-- UI pixel overhaul (game-ui, `feat/ui-pixel` from `feat/v4-1`): phase 1 kit (`feat/ui-kit`: embedded fonts, `ED.PixUI` grid + frames, base components), pixel icons (`feat/ui-icons`), pick feedback (`feat/ui-pick`: `ED.PickFx` kinds, cues, hero bursts) · phase 2 cards, screens, HUD, Tab sheet.
 
 ## Done
+- UI pixel overhaul on `feat/ui-pixel` (2026-10-24, game-ui; not yet in `feat/v4-1`): embedded pixel fonts (no Google Fonts), `ED.PixUI` integer grid + 9-slice frames (`pixui.js`, `uiart.js`, `screenart.js`, `cardart.js`), 16×16 pixel icons, 13 card identities + pick animation (`ED.PickFx` cues and hero bursts), pixel menus/Hearth plaques/Armory racks/results banner, pixel HUD (glyph-mask text, segmented health, shield plate), pixel Tab sheet; browse scenarios `sheet`, `screens`, `cards`, `picks`.
 - v4 merged to `main` (2026-10-23): Phase 0–3 and the retune: bal.js, `--from`, `--vet`, browse.js · grid, rooms, hordes, fodder, dark rooms, dash charges, crowd slow, lead aim, volleys, breakables, boss fury IV–VI · Ascended, fork ranks, attack/element/skill transforms for all six heroes, Codex removed, Armory shell, refunds, save v5 · adaptive score, hit/kill/skill SFX, fury cue · all 48 forks in the parity bands · boss TTK band · IV–VI calibration (fury as the knowledge check) · Second Wind outside bosses, Purse card · melee hero EHP, Shadowstep grace.
 - v3 merged to `main` (PR #2): art, paths, class routes, aim, Tab sheet, no life steal, save v4, Firefox perf, balance sign-off at `cd1074d`.
 - v2 (live on main): paths, statuses, lantern rooms, UI, juice, perf, bot balance; see HANDOFF-2026-10-21.
@@ -36,6 +36,8 @@
 - 2026-10-23 (UI): full pixel UI on an integer grid; titles Jacquard 24 / Jacquarda Bastarda 9 (OFL), body Pixel Operator (CC0), embedded, no Google Fonts; 13 card identities (6 elements, General, route, duo, Ascended, relic, Purse, Hearth) by frame, idle motion, pick animation, cue; pick feedback = card + hero burst seen by the party (existing boon/relic events, no snapshot change).
 
 ## Known traps
+- **Pixel text**: DOM text is crisp only at font-size 16n device px and (Chromium/Windows) a .5 device-px origin (`PixUI.bias`, `PixUI.snap`, `data-px-snap`); canvas `fillText` is never crisp there, so HUD/aim text goes through `ED.HUD.pixText` (1-bit glyph masks). Never use rem font sizes; lay out in `--p`/device-px multiples.
+- **UI art**: frames are ASCII masks baked at boot (`PixUI.frame`); fonts are generated into `src/art/fonts.css` by `tools/art.js` (`--check` covers it). Blackletter only at ≥ `--fs-menu` for short titles.
 - See CLAUDE.md "Known default traps".
 - Bot results are seeded: the same simpool command prints identical numbers (also across `--jobs`).
 - Bots under-model a human: the v3 smart bot never took Split Shot (scored below Vigor), so v3 §10 rows measured a crippled projectile build.
@@ -53,3 +55,4 @@
 - 2026-10-22: v3 overhaul merged to main (PR #2); handoff HANDOFF-2026-10-22.md.
 - 2026-10-22: playtest 3 triage by three advisors (f1, 6a, 88); v4 on `feat/v4`.
 - 2026-10-23: v4 retune and release to main under a 3-hour deadline; handoff HANDOFF-2026-10-23.md.
+- 2026-10-24: UI pixel overhaul (game-ui) on `feat/ui-pixel`: 3 phase-1 + 4 phase-2 + 2 polish workers; handoff HANDOFF-2026-10-24-ui.md.
