@@ -324,7 +324,7 @@
     return fturnBack(s, 2);
   }
   const FAMILY = { longbow: fBow, twinbows: fBow, crossbow: fXbow, inferno: fTome, scythes: fDiag, soulscythe: fDiag, bonewand: fDiag, lantern: fLantern };
-  const classOfWeapon = (base) => ED.CLASS_IDS.find((c) => ED.CLASSES[c].weapons.indexOf(base) >= 0);
+  const classOfWeapon = (base) => ED.CLASS_IDS.find((c) => ED.weaponIndex(c, base) >= 0);
   // Fork weapon data (ED.forkWeapon) of a weapon id like 'longsword@heavy'; the base weapon for a plain id.
   Sp.forkData = (id) => {
     const i = id.indexOf('@'), base = id.slice(0, i < 0 ? undefined : i);
@@ -333,21 +333,23 @@
     return t ? ED.forkWeapon(base, t.forks[kind === 'heavy' ? 0 : 1]) : ED.WEAPONS[base] || null;
   };
   const FORKA = new Map();
-  // Atlas anim id of the weapon id `wid` ('<base>' or '<base>@heavy|swift'): the baked look of a fork, else the base weapon's art; null without an atlas.
+  // Atlas anim id of the weapon id `wid` ('<base>' or '<base>@heavy|swift', base a weapon or an Armory variant): the baked look of a fork or a variant, else the base weapon's art; null without an atlas.
+  // A variant's own look (op null) is its sprite as it is, tinted and scaled by len; its forks are the root weapon's fork looks in the variant's tint, edited as the root weapon's.
   Sp.forkAnim = (wid) => {
-    const i = wid.indexOf('@'), base = wid.slice(0, i < 0 ? undefined : i), plain = 'weapon.' + base;
-    if (i < 0) return plain;
+    const i = wid.indexOf('@'), base = wid.slice(0, i < 0 ? undefined : i), root = ED.weaponBase(base), plain = 'weapon.' + root;
+    if (i < 0 && root === base) return plain;
     let a = FORKA.get(wid);
     if (a) return a;
     const A = ED.Atlas, L = ED.FORK_LOOKS && ED.FORK_LOOKS[wid];
     if (!L || !A || !A.ok || !A.has(L.art) || !ED.Pix || !ED.Pix.define) return L && A && A.ok ? plain : null;
     try {
-      const cls = classOfWeapon(base), br = A.anim('weapon.' + base), X = { heavy: L.op === 'H', col: ED.CLASSES[cls].col.c, baseH: br.anchors.dir === 90 ? br.fw : br.fh, widen: L.art === 'weapon.alt.big_hammer' };
+      const cls = classOfWeapon(base), br = A.anim('weapon.' + root), X = { heavy: L.op === 'H', col: ED.CLASSES[cls].col.c, baseH: br.anchors.dir === 90 ? br.fw : br.fh, widen: L.art === 'weapon.alt.big_hammer' };
       let s = fpad(fread(L.art), P8);
       fstrip(s);
-      if (WEAR[base] && PACK(L.art)) fwear(s, 'weapon.' + base); else if (L.tint) ftint(s, L.tint); // a pre-coloured base (the gold Dawn Hammer) lends its palette to the pack sprite
-      const fam = FAMILY[base];
-      s = fam ? fam(s, L, X) : fUp(s, L, UP[L.art] || [s.h - 2 * P8 - 8, 2, 8, 0], X);
+      if (WEAR[root] && PACK(L.art) && root === base) fwear(s, 'weapon.' + root); else if (L.tint) ftint(s, L.tint); // a pre-coloured base (the gold Dawn Hammer) lends its palette to the pack sprite
+      const fam = FAMILY[root];
+      if (!L.op) { if (L.len && L.len !== 1) s = fscale(s, L.len); s.studs = []; }
+      else s = fam ? fam(s, L, X) : fUp(s, L, UP[L.art] || [s.h - 2 * P8 - 8, 2, 8, 0], X);
       if (!s.outlined) { const studs = s.studs; s = foutline(s); fstuds(s, studs); }
       s = fcrop(s);
       let tx = s.tx, ty = s.ty;
@@ -412,9 +414,9 @@
     const cls = ED.CLASSES[p.cls], id = String((p.stats && p.stats.weaponId) || p.weapon || (cls && cls.weapons[0]) || 'longsword');
     let d = WART[id];
     if (!d) {
-      const base = id.split('@')[0], w = Sp.forkData(id) || ED.WEAPONS[base] || ED.WEAPONS[cls.weapons[0]], fk = id.indexOf('@') > 0 ? id.slice(id.indexOf('@') + 1) : '', anim = Sp.forkAnim(id);
-      d = { id: base, w, anim: anim || 'weapon.' + base, look: w.look, twin: !!TWIN[base], fork: fk };
-      if (!fk || (anim && anim.indexOf('wk.') === 0)) WART[id] = d; // a fork waits for the atlas before it is remembered
+      const base = id.split('@')[0], root = ED.weaponBase(base), w = Sp.forkData(id) || ED.WEAPONS[base] || ED.WEAPONS[cls.weapons[0]], fk = id.indexOf('@') > 0 ? id.slice(id.indexOf('@') + 1) : '', anim = Sp.forkAnim(id);
+      d = { id: base, w, anim: anim || 'weapon.' + root, look: w.look, twin: !!TWIN[root], fork: fk };
+      if ((!fk && root === base) || (anim && anim.indexOf('wk.') === 0)) WART[id] = d; // a fork or a variant waits for the atlas before it is remembered
     }
     return d;
   };

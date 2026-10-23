@@ -5,7 +5,7 @@
 //               effective health with the uptime of the route's defence, shield income and stun uptime (stuns plus slows, blinds and taunts at their strength)
 //   --parity    the power-budget bands on the mid build (ignores --stratum and --rank): stratum IV with every fork at rank 2, stratum VI at rank 3. Per class one line per fork: value (mean of the 1 foe and pack columns, %), the change against the class median, EHP and stun.
 //               IV rank 2: a non-Guard fork 31.5-38.5, a Guard fork >= 28. VI rank 3: non-Guard 54-66, Guard >= 48 and EHP >= +25% or stun >= 30%. Marks the forks outside; --strict exits 1 when any fork fails
-//   --weapons   per weapon: damage per second on one foe and in a pack of 4 at the class Power, and the damage factor that puts it on the class median
+//   --weapons   per weapon (each base weapon, then its Armory variants indented with their change against the base): damage per second on one foe and in a pack of 4 at the class Power, and the damage factor that puts it on the median of the base weapons
 // Hero damage = (weapon dps + skill damage per cooldown) x the conditional-damage factor (ED.COND_DMG rows the build owns at assumed uptimes, see COND_NOTE) + status estimates; a pack of 4: melee arcs, blasts, sweeps, waves and ricochets hit all four foes, a fan hits as many as it has arrows; a piercing shot hits the first foe and half of the other foes it could pierce (tools/model.js PIERCE_LINE).
 // The mid build: the class element's gate (else Fire) and a second gate, Sharpened Edge x2, Quickened Hands x2, Focus and Stalwart.
 const { ED } = require('./sim.js');
@@ -22,7 +22,7 @@ const GATE2 = { knight: ['kindle', 'frostbite'], ranger: ['kindle', 'frostbite']
 const MID = (cls) => Object.assign({}, ...GATE2[cls].map(id => ({ [id]: 1 })), { edge: 2, quick: 2, focus: 1, stalwart: 1 });
 const ctx = () => ({ stratum: STRATUM, pact: 0, gold: 0, level: 8, xp: 0, xpNext: 100, dark: false, allyNear: 0, minions: 0, room: null, party: 1, rooms: { seen: 1, total: 10, darkTotal: 2, darkLeft: 2 }, heroes: [], time: 0 });
 function hero(cls, wi, boons) {
-  const b = { cls, weapon: ED.CLASSES[cls].weapons[wi || 0], boons: boons || {}, relics: [], meta: META(), pact: 0 };
+  const b = { cls, weapon: typeof wi === 'string' ? wi : ED.CLASSES[cls].weapons[wi || 0], boons: boons || {}, relics: [], meta: META(), pact: 0 }; // wi: a weapon index or a weapon id (an Armory variant)
   const stats = St.compute(b);
   return { pid: 'p', name: 'T', cls, weapon: b.weapon, boons: b.boons, relics: b.relics, meta: b.meta, stats, hp: stats.maxHp, maxHp: stats.maxHp, shield: 0, picks: 0, slot: 0 };
 }
@@ -113,13 +113,13 @@ if (args.parity) parityTable();
 if (args.weapons) {
   out(`\n###### weapons at the class Power (dps on one foe | pack of ${PACK} | mean; dmg factor to the class median)`);
   for (const cls of CLS) {
-    const list = ED.CLASSES[cls].weapons.map((id, wi) => {
-      const p = hero(cls, wi), m = model(p), one = m.weapon.dps, pack = packWeapon(m, PACK), hero1 = heroDamage(m, 1, condFactor(p, m, defence(p, m)));
-      return { id, name: m.weapon.name, one, pack, mean: (one + pack) / 2, hero1 };
+    const list = ED.weaponChoices(cls).map((id) => {
+      const p = hero(cls, id), m = model(p), one = m.weapon.dps, pack = packWeapon(m, PACK), hero1 = heroDamage(m, 1, condFactor(p, m, defence(p, m)));
+      return { id, name: m.weapon.name, one, pack, mean: (one + pack) / 2, hero1, variant: ED.WEAPONS[id].variant };
     });
-    const med = list.map(w => w.mean).sort((a, b) => a - b)[1];
+    const med = list.filter(w => !w.variant).map(w => w.mean).sort((a, b) => a - b)[1], baseOf = (w) => list.find(x => x.id === w.variant);
     out(`\n== ${ED.CLASSES[cls].name}`);
-    for (const w of list) out(`  ${pad(w.name, 18)} ${rpad(f1(w.one), 6)} | ${rpad(f1(w.pack), 6)} | ${rpad(f1(w.mean), 6)}   dmg x${(med / w.mean).toFixed(2)}   hero ${f1(w.hero1)} dps`);
+    for (const w of list) out(`  ${pad((w.variant ? '  ' : '') + w.name, 18)} ${rpad(f1(w.one), 6)} | ${rpad(f1(w.pack), 6)} | ${rpad(f1(w.mean), 6)}   dmg x${(med / w.mean).toFixed(2)}   hero ${f1(w.hero1)} dps${w.variant ? `   vs ${baseOf(w).name} ${sign(w.mean / baseOf(w).mean - 1)}` : ''}`);
   }
 }
 if (args.json) console.log(JSON.stringify(rows));

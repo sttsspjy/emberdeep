@@ -850,7 +850,7 @@
     if (own) this.curChain = null;
   };
 
-  // Called every tick from updatePlayerBuild for a living, standing hero: spectral twin queue and dash effects.
+  // Called every tick from updatePlayerBuild for a living, standing hero: spectral twin queue, ring echoes and dash effects.
   // Dash riders deal Class Power (not weapon damage): foes passed through take power x dashDmg once per dash (Dawn Stride also blinds, Noxious Step and Umbral Step add Venom and Doom), Cold Snap rings the hero for power x dashFrost.
   W.updatePlayerCombat = function (p, dt) {
     const st = p.stats, q = p.twinQ;
@@ -860,6 +860,8 @@
         if (q[i].t <= 0) { const a = q[i].a; q.splice(i, 1); this.playerAttack(p, a, 0.4); } else i++;
       }
     }
+    const rq = p.ringQ; // Returning Light echoes of a ring weapon
+    if (rq && rq.length) for (let i = 0; i < rq.length;) { const o = rq[i]; o.t -= dt; if (o.t <= 0) { rq.splice(i, 1); this.heroRing(p, o.w, o.co, st.waveReturn); } else i++; }
     // dash effects (host sees remote dashes through their state reports)
     if (p.dashing) {
       if (this.room.breakables.length) { this.smashSeg(p, p.dashFx < 0 ? p.x : p.dashFx, p.dashFx < 0 ? p.y : p.dashFy, p.x, p.y, p.r); p.dashFx = p.x; p.dashFy = p.y; } // the path since the last tick
@@ -979,9 +981,12 @@
   // ---------------- hero attacks ----------------
   // twinMul > 0: a spectral-twin repeat (weapon part only, scaled by twinMul).
   // A Knight with Oath of Steel swings a Cleave every (3 + cleaveN)th attack and on the first swing after a Charge with Follow-Through (o.cleave = its damage bonus); the class hook attackOpts adds per-hit options to every weapon hit, attack runs after the attack.
-  W.playerAttack = function (p, a, twinMul) {
+  // k: the combo step of a combo weapon as the attacker's own control decided it (ED.Stats.comboNext; anything else is decided here); a repeat (twinMul) uses the step of the last attack.
+  W.playerAttack = function (p, a, twinMul, k) {
     if (!p || p.downed || p.dead) return;
-    const st = p.stats, w = st.weapon, evo = evoOf(p), ch = CLS[p.cls], C = ED.CONST;
+    const st = p.stats, wb = st.weapon, evo = evoOf(p), ch = CLS[p.cls], C = ED.CONST;
+    if (wb.combo && !(twinMul > 0)) { p.comboK = k === (k | 0) && k >= 0 && k < wb.combo.steps.length ? k : ED.Stats.comboNext(p, this.time); p.comboAt = this.time; }
+    const w = wb.combo ? ED.Stats.stepWeapon(st, p.comboK | 0) : wb;
     if (twinMul > 0) {
       const o = { mul: twinMul, twin: true };
       if (evo === 'shadow') o.infAdd = { shadow: st.shadowInfuse }; // Umbral Arms: twin hits mark double Doom
@@ -1016,12 +1021,14 @@
       else this.fireWeapon(p, a + rep * 0.06, w, crit, o);
     }
     if (w.wave) {
-      const every = Math.max(1, w.wave.every + st.waveEvery);
-      if (p.atkCount % every === 0) {
-        const wv = this.spawnProj({ team: 0, kind: 'wave', x: p.x, y: p.y, a, speed: 320, r: 16 * (1 + st.area * 0.5), dmg: w.dmg * w.wave.mul * (1 + st.waveMul), life: 0.55, pierce: 99, owner: p.pid, knock: 120, wpn: true });
-        if (ch && ch.waveShot) ch.waveShot.call(this, p, wv, a, st); // class hook: edit the wave shot (width, range, stun, homing)
+      const every = Math.max(1, w.wave.every + st.waveEvery), n = w.wave.n || 1;
+      if (p.atkCount % every === 0) for (let i = 0; i < n; i++) { // a fan of n waves, fan rad apart; the side waves carry fanSide
+        const wa = a + (i - (n - 1) / 2) * (w.wave.fan || 0), wv = this.spawnProj({ team: 0, kind: 'wave', x: p.x, y: p.y, a: wa, speed: 320, r: 16 * (1 + st.area * 0.5), dmg: w.dmg * w.wave.mul * (1 + st.waveMul), life: 0.55, pierce: 99, owner: p.pid, knock: 120, wpn: true });
+        if (i !== (n - 1) / 2) wv.fanSide = true;
+        if (ch && ch.waveShot) ch.waveShot.call(this, p, wv, wa, st); // class hook: edit the wave shot (width, range, stun, homing)
       }
     }
+    if (w.ring && p.atkCount % Math.max(1, w.ring.every + st.waveEvery) === 0) this.heroRing(p, w, co);
     if (st.gauntlet && p.atkCount % 6 === 0) {
       const tgt = this.nearestEnemy(p.x + Math.cos(a) * 80, p.y + Math.sin(a) * 80, 220);
       if (tgt) { this.emit({ t: 'bolt', x: Math.round(tgt.x), y: Math.round(tgt.y) }); this.explode(tgt.x, tgt.y, 40, w.dmg * 2.2, 0, p, 'bolt', false, { el: 'lightning' }); }
@@ -1083,34 +1090,61 @@
 
   // o: { mul (extra damage multiplier), ambush, spectral, twin, infAdd, bleedMin, cleave (Cleave damage bonus) }
   // A Cleave reaches and sweeps 40% further, knocks back twice as hard, parries a foe in the last moments of its wind-up (Sworn Blade) and cracks the ground with Oathbreaker's shock.
+  // w.ahead: the swing is a slam circle (radius ahead.r, a Cleave's 40% larger) centred `reach` px along the aim; w.pull: a hit drags the foe toward the hero instead of knocking it back (elites half, bosses never).
   W.meleeSwing = function (p, a, w, crit, rep, o) {
     o = o || {};
     const st = p.stats, cl = o.cleave > 0, wpn = !o.twin && !o.spectral;
     const reach = w.range * (1 + st.area * 0.5 + st.meleeReach) * (cl ? 1.4 : 1);
     const arc = Math.min(6.3, w.arc * (1 + st.area * 0.4) * (cl ? 1.4 : 1));
     const mul = (o.mul || 1) * (cl ? 1 + o.cleave : 1);
-    let anyCrit = false;
-    const q = this.foeScan(p.x, p.y, reach);
+    const ah = !!w.ahead, sr = ah ? w.ahead.r * (1 + st.area * 0.5) * (cl ? 1.4 : 1) : 0, cx = ah ? p.x + Math.cos(a) * reach : p.x, cy = ah ? p.y + Math.sin(a) * reach : p.y;
+    let anyCrit = false, pulled = null;
+    const q = this.foeScan(cx, cy, ah ? sr : reach);
     for (let k = 0; k < q.length || this.foeTail(q); k++) {
       const e = q[k];
       if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed) continue;
       const d = Math.hypot(e.x - p.x, e.y - p.y);
-      if (d - e.r > reach) continue;
+      if (ah ? Math.hypot(e.x - cx, e.y - cy) - e.r > sr : d - e.r > reach) continue;
       const ang = Math.atan2(e.y - p.y, e.x - p.x);
-      if (arc < 6.2 && Math.abs(U.angDiff(a, ang)) > arc / 2 + Math.atan2(e.r, Math.max(d, 1))) continue;
+      if (!ah && arc < 6.2 && Math.abs(U.angDiff(a, ang)) > arc / 2 + Math.atan2(e.r, Math.max(d, 1))) continue;
       if (cl && st.parry && this.parry(e, p) && st.riposte) this.grantCrits(p, st.riposte, 5, 'add');
-      const hs = { p, kind: 'weapon', wpn, part: cl ? 'cleave' : undefined, crit, mul: mul === 1 ? undefined : mul, ambush: o.ambush, infAdd: o.infAdd, bleedMin: o.bleedMin, knock: cl ? w.knock * 2 : w.knock, kx: Math.cos(ang), ky: Math.sin(ang) };
+      const hs = { p, kind: 'weapon', wpn, part: cl ? 'cleave' : undefined, crit, mul: mul === 1 ? undefined : mul, ambush: o.ambush, infAdd: o.infAdd, bleedMin: o.bleedMin, knock: w.pull ? 0 : cl ? w.knock * 2 : w.knock, kx: Math.cos(ang), ky: Math.sin(ang) };
       this.hitEnemy(e, w.dmg, hs);
       if (hs.critOut) anyCrit = true;
+      if (w.pull && e.hp > 0 && !e.boss) { // knockback speed v decays at 9 per second: it travels v / 9 px
+        const v = 9 * Math.min(w.pull, Math.max(0, d - e.r - p.r - 4)) * (e.elite ? 0.5 : 1);
+        if (v > 0) { e.kbx -= Math.cos(ang) * v; e.kby -= Math.sin(ang) * v; if (wpn && (pulled || (pulled = [])).length < 6) pulled.push([Math.round(e.x), Math.round(e.y)]); }
+      }
     }
     this.foeEnd();
-    this.smashArc(p, a, reach, arc);
-    if (w.shock && rep === 0) this.explode(p.x + Math.cos(a) * reach * 0.55, p.y + Math.sin(a) * reach * 0.55, w.shock.r * (1 + st.area * 0.5), w.dmg * w.shock.mul * mul, 0, p, 'shock', true, { wpn });
+    if (ah) this.smashCircle(p, cx, cy, sr); else this.smashArc(p, a, reach, arc);
+    if (w.shock && rep === 0) { const sd = ah ? reach : reach * 0.55; this.explode(p.x + Math.cos(a) * sd, p.y + Math.sin(a) * sd, w.shock.r * (1 + st.area * 0.5), w.dmg * w.shock.mul * mul, 0, p, 'shock', true, { wpn }); }
     if (cl && st.cShock) this.explode(p.x + Math.cos(a) * reach * 0.9, p.y + Math.sin(a) * reach * 0.9, 72 * (1 + st.area * 0.5), w.dmg * st.cShock, 0, p, 'shock', true, { wpn: true, stun: st.cStun });
     const ev = { t: 'swing', pid: p.pid, a: Math.round(a * 100) / 100, r: Math.round(reach), arc: Math.round(arc * 100) / 100 };
     if (cl) ev.k = 'cleave';
+    if (ah) ev.sr = Math.round(sr); // a slam: a circle of radius sr, r px along a
+    if (w.step !== undefined) ev.c = w.step; // the combo step (the viewer's pose)
     this.emit(ev);
+    if (pulled) this.emit({ t: 'pull', pid: p.pid, pts: pulled });
     if (anyCrit && evoOf(p) === 'general' && !o.spectral && !o.twin) this.meleeSwing(p, a, w, undefined, 1, { mul: 0.6, spectral: true });
+  };
+
+  // A ring of light around the hero (weapon.ring): every foe within ring.r takes ring.mul x the attack's damage as a class-element weapon hit; co: the class attack options (infAdd).
+  // Dawnbringer's wave rules: waveMul, waveStun and waveBig (radius x1.5) apply; Litany's attack rings three times as hard; Returning Light rings again at waveReturn 0.35 s later (echo: that factor, no Litany, no further echo).
+  W.heroRing = function (p, w, co, echo) {
+    const st = p.stats, lit = !echo && st.litany && p.atkCount % st.litany === 0 ? 3 : 1, r = w.ring.r * (1 + st.area * 0.5) * (st.waveBig ? 1.5 : 1), dmg = w.dmg * w.ring.mul * (1 + st.waveMul) * (echo || lit), q = this.foeScan(p.x, p.y, r);
+    for (let k = 0; k < q.length || this.foeTail(q); k++) {
+      const e = q[k];
+      if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed) continue;
+      const d = Math.hypot(e.x - p.x, e.y - p.y);
+      if (d - e.r > r) continue;
+      this.hitEnemy(e, dmg, { p, kind: 'weapon', wpn: true, part: 'ring', clsEl: st.element || undefined, infAdd: co && co.infAdd, knock: 120, kx: (e.x - p.x) / (d || 1), ky: (e.y - p.y) / (d || 1), noGuard: true, x: p.x, y: p.y });
+      if (st.waveStun && e.hp > 0) this.stunFoe(e, st.waveStun, true);
+    }
+    this.foeEnd();
+    this.smashCircle(p, p.x, p.y, r);
+    this.emit({ t: 'hring', pid: p.pid, x: Math.round(p.x), y: Math.round(p.y), r: Math.round(r), k: echo ? 1 : lit > 1 ? 3 : 0 });
+    if (!echo && st.waveReturn > 0) (p.ringQ || (p.ringQ = [])).push({ t: 0.35, w, co });
   };
 
   W.fireWeapon = function (p, a, w, crit, o) {

@@ -26,19 +26,39 @@
   ED.UPGRADE_IDX = ED.U.indexer(ED.UPGRADES.map(u => u.id));
 
   // Armory: per-hero weapon variants bought in the Upgrades page, { id (= the variant's ED.WEAPONS key), weapon (its base weapon), name, desc, cost }; an owned variant is a weapon choice of its own. The save code stores one bit per entry by position (a 6-bit count per hero): append only.
+  // Each hero's list is ordered by its base weapon's index; the cost is 40 / 60 / 80 embers for a variant of weapon 0 / 1 / 2.
+  const V = (cls, id) => { const w = ED.WEAPONS[id]; return { id, weapon: w.variant, name: w.name, desc: w.desc, cost: 40 + 20 * ED.weaponIndex(cls, id) }; };
   ED.ARMORY = {
     knight: [
+      V('knight', 'armingsword'), V('knight', 'earthbreaker'), V('knight', 'hookglaive'),
     ],
     ranger: [
+      V('ranger', 'burstbows'),
     ],
     pyro: [
     ],
     shade: [
+      V('shade', 'katars'), V('shade', 'chainsickle'),
     ],
     cleric: [
+      V('cleric', 'radiantmace'), V('cleric', 'gavel'),
     ],
     necro: [
+      V('necro', 'gravewhirl'),
     ],
+  };
+  // The weapon a hero wields for a stored choice `id`: a base weapon unlocked at mastery level ml, or a variant whose id is in `owned` (the meta bundle's armory ids) and whose base is unlocked;
+  // anything else falls back to the base weapon when that is unlocked, else to weapon 0.
+  ED.weaponPick = (cls, id, ml, owned) => {
+    const list = ED.CLASSES[cls].weapons, i = ED.weaponIndex(cls, id);
+    if (i < 0 || !ED.weaponUnlocked(cls, i, ml)) return list[0];
+    return id === list[i] || (owned && owned.indexOf(id) >= 0) ? id : list[i];
+  };
+  // The weapon choices of a hero: each base weapon followed by its Armory variants.
+  ED.weaponChoices = (cls) => {
+    const out = [];
+    for (const b of ED.CLASSES[cls].weapons) { out.push(b); for (const e of ED.ARMORY[cls] || []) if (e.weapon === b) out.push(e.id); }
+    return out;
   };
 
   ED.PACTS = [
