@@ -633,7 +633,7 @@ function runBot(opts) {
   const players = [];
   for (let i = 0; i < opts.n; i++) {
     const cls = opts.cls[i % opts.cls.length];
-    players.push({ pid: 'p' + i, name: 'Bot' + i, slot: i, cls, weapon: ED.CLASSES[cls].weapons[opts.weapon || 0],
+    players.push({ pid: 'p' + i, name: 'Bot' + i, slot: i, cls, weapon: typeof opts.weapon === 'string' && ED.weaponIndex(cls, opts.weapon) >= 0 ? opts.weapon : ED.CLASSES[cls].weapons[opts.weapon || 0], // a weapon index, or a weapon id of the hero (an Armory variant)
       meta: { up: opts.up || ED.UPGRADES.map(() => 0), mastery: opts.mastery || 1 } });
   }
   const w = new ED.World({ seed: opts.seed, pact: opts.pact || 0, players, tutorial: opts.tutorial });
@@ -816,7 +816,7 @@ function runBot(opts) {
         if (c.atk <= 0 && inRange) {
           p.atkD = d; // the cursor on the target (a lobbed weapon lands there)
           w.playerAttack(p, a + gauss(brng) * AIM[0] * (1 - skill));
-          c.atk = Math.max(c.atk, -dt) + ED.Stats.attackInterval(p); // carries the overshoot of this tick, as the client does
+          c.atk = Math.max(c.atk, -dt) + ED.Stats.stepInterval(p); // carries the overshoot of this tick, as the client does
         }
         if (vetC) { if (c.chg > 0 && c.vgap <= 0 && !p.skillMove && botCast(w, p, 0, tgt, d, a, foes, brng, skill)) { if (c.chg === st.maxCharges) c.skill = st.skillCd; c.chg--; c.vgap = 0.35; } }
         else if (c.skill <= 0 && botCast(w, p, 0, tgt, d, a, foes, brng, skill)) c.skill = st.skillCd;
@@ -910,7 +910,7 @@ function runBot(opts) {
     endRoom: w.room ? w.room.type : '', evo: p0.stats.evo || null, gates: ED.gatePaths(p0.boons), boonCount: Object.values(p0.boons).reduce((a, b) => a + b, 0), keystones: Object.keys(p0.boons).filter(id => ED.BOONS[id].key).length,
     gen: ED.isGeneralist(p0.boons), elGates: ED.elementGates(p0.boons), startPath: ED.gatePaths(p0.boons)[0] || null, keyAt: rec.keyAt, duoAt: rec.duoAt, duo: Object.keys(p0.boons).some(id => ED.BOONS[id].duo), duoIds: Object.keys(p0.boons).filter(id => ED.BOONS[id].duo), boonIds: Object.keys(p0.boons), relicIds: p0.relics.slice(),
     cnt: rec.cnt, kills0: p0.kills, venom: rec.venom, shield: rec.shield, bossSecs: rec.bossSecs, hpFrac: rec.hpFrac, chainPeak: w.chainPeak, chainHops: w.chainHops, rerolls: p0.rerolls,
-    route: ED.classRoute(p0.boons, p0.cls), wi: ED.CLASSES[p0.cls].weapons.indexOf(p0.weapon), parts: rec.parts, projDmgS: rec.projDmgS, upt: rec.upt, peak: rec.peak, clip: Object.assign({}, p0.shieldClip), braceOn: p0.stats.brace > 0, hexOn: p0.stats.hex > 0 };
+    route: ED.classRoute(p0.boons, p0.cls), wi: ED.weaponIndex(p0.cls, p0.weapon), parts: rec.parts, projDmgS: rec.projDmgS, upt: rec.upt, peak: rec.peak, clip: Object.assign({}, p0.shieldClip), braceOn: p0.stats.brace > 0, hexOn: p0.stats.hex > 0 };
 }
 
 const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);

@@ -114,12 +114,14 @@
   // A guest's hero choice, made safe for the host's simulation: a malformed message must never break everyone's run.
   const cleanPick = (d) => {
     const cls = ED.CLASS_IDS.indexOf(d.cls) >= 0 ? d.cls : ED.CLASS_IDS[0];
-    const list = ED.CLASSES[cls].weapons, weapon = list.indexOf(d.weapon) >= 0 ? d.weapon : list[0];
     const m = d.meta && typeof d.meta === 'object' ? d.meta : {};
     const up = ED.UPGRADES.map((u, i) => U.clamp((Array.isArray(m.up) ? m.up[i] : 0) | 0, 0, u.costs.length));
     const known = (ED.ARMORY[cls] || []).map(e => e.id), armory = Array.isArray(m.armory) ? m.armory.filter(id => known.indexOf(id) >= 0) : [];
+    const list = ED.CLASSES[cls].weapons, wi = typeof d.weapon === 'string' ? ED.weaponIndex(cls, d.weapon) : -1; // a variant needs its id in the member's Armory, else its base is wielded
+    const weapon = wi < 0 ? list[0] : d.weapon === list[wi] || armory.indexOf(d.weapon) >= 0 ? d.weapon : list[wi];
     return { cls, weapon, meta: { up, mastery: U.clamp(m.mastery | 0, 1, 10), armory } };
   };
+  N.cleanPick = cleanPick;
 
   // ---------------- host session ----------------
   N.Host = function (me, handlers) {

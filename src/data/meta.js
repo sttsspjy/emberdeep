@@ -26,28 +26,40 @@
   ED.UPGRADE_IDX = ED.U.indexer(ED.UPGRADES.map(u => u.id));
 
   // Armory: per-hero weapon variants bought in the Upgrades page, { id (= the variant's ED.WEAPONS key), weapon (its base weapon), name, desc, cost }; an owned variant is a weapon choice of its own. The save code stores one bit per entry by position (a 6-bit count per hero): append only.
+  // Each hero's list is ordered by its base weapon's index; the cost is 40 / 60 / 80 embers for a variant of weapon 0 / 1 / 2.
+  const V = (cls, id) => { const w = ED.WEAPONS[id]; return { id, weapon: w.variant, name: w.name, desc: w.desc, cost: 40 + 20 * ED.weaponIndex(cls, id) }; };
   ED.ARMORY = {
     knight: [
+      V('knight', 'armingsword'), V('knight', 'earthbreaker'), V('knight', 'hookglaive'),
     ],
     ranger: [
-      { id: 'seekerbow', weapon: 'longbow', name: 'Seeker Bow', desc: 'Longbow variant: arrows that gently home on foes.', cost: 40 },
-      { id: 'boltthrower', weapon: 'crossbow', name: 'Bolt Thrower', desc: 'Heavy Crossbow variant: three bolts in a wide spread, short range, no pierce.', cost: 60 },
+      V('ranger', 'seekerbow'), V('ranger', 'boltthrower'), V('ranger', 'burstbows'),
     ],
     pyro: [
-      { id: 'sunlance', weapon: 'firestaff', name: 'Sunlance', desc: 'Fire Staff variant: an instant beam that pierces every foe on its line.', cost: 40 },
-      { id: 'cinderscatter', weapon: 'emberwand', name: 'Cinder Scatter', desc: 'Ember Wand variant: sprays five short-lived sparks that often ignite.', cost: 60 },
-      { id: 'mortar', weapon: 'inferno', name: 'Mortar Tome', desc: 'Inferno Tome variant: lobs a fireball over foes onto the cursor, a wide blast where it lands.', cost: 80 },
+      V('pyro', 'sunlance'), V('pyro', 'cinderscatter'), V('pyro', 'mortar'),
     ],
     shade: [
-      { id: 'boomerang', weapon: 'knives', name: 'Boomerang Blades', desc: 'Throwing Knives variant: one blade flies out and back, cutting every foe on each leg.', cost: 60 },
+      V('shade', 'katars'), V('shade', 'boomerang'), V('shade', 'chainsickle'),
     ],
     cleric: [
-      { id: 'votive', weapon: 'lantern', name: 'Votive Lamp', desc: 'Sacred Lantern variant: orbs end in a small pool of light that burns foes and shields allies inside.', cost: 80 },
+      V('cleric', 'radiantmace'), V('cleric', 'gavel'), V('cleric', 'votive'),
     ],
     necro: [
-      { id: 'splinter', weapon: 'bonewand', name: 'Bone Splinter', desc: 'Bone Wand variant: three bone shards in a spread, no seeking.', cost: 40 },
-      { id: 'miasma', weapon: 'plaguestaff', name: 'Miasma Staff', desc: 'Plague Staff variant: bolts leave a trail of three small plague clouds.', cost: 80 },
+      V('necro', 'splinter'), V('necro', 'gravewhirl'), V('necro', 'miasma'),
     ],
+  };
+  // The weapon a hero wields for a stored choice `id`: a base weapon unlocked at mastery level ml, or a variant whose id is in `owned` (the meta bundle's armory ids) and whose base is unlocked;
+  // anything else falls back to the base weapon when that is unlocked, else to weapon 0.
+  ED.weaponPick = (cls, id, ml, owned) => {
+    const list = ED.CLASSES[cls].weapons, i = ED.weaponIndex(cls, id);
+    if (i < 0 || !ED.weaponUnlocked(cls, i, ml)) return list[0];
+    return id === list[i] || (owned && owned.indexOf(id) >= 0) ? id : list[i];
+  };
+  // The weapon choices of a hero: each base weapon followed by its Armory variants.
+  ED.weaponChoices = (cls) => {
+    const out = [];
+    for (const b of ED.CLASSES[cls].weapons) { out.push(b); for (const e of ED.ARMORY[cls] || []) if (e.weapon === b) out.push(e.id); }
+    return out;
   };
 
   ED.PACTS = [

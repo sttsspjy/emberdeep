@@ -189,7 +189,7 @@
     const p = w.players.get(pid);
     if (!p || !a) return;
     switch (a.t) {
-      case 'atk': p.atkD = +a.d; w.playerAttack(p, +a.a || 0); break; // d: the cursor distance of the attack (a lobbed weapon lands there)
+      case 'atk': p.atkD = +a.d; w.playerAttack(p, +a.a || 0, 0, a.k); break; // d: the cursor distance of the attack (a lobbed weapon lands there)
       case 'skill': if ((a.slot | 0) === 0 || (a.slot | 0) === 1) w.playerSkill(p, +a.a || 0, a.data, a.slot | 0); break;
       case 'dash': w.playerDash(p, +a.dx || 0, +a.dy || 0); break;
       case 'interact': w.interact(pid, a.id); break;
@@ -340,16 +340,17 @@
       if (inp.atkPressed && near) { G.act({ t: 'interact', id: near.id }); ctl.latch = true; ctl.atkCd = Math.max(ctl.atkCd, 0.25); }
       if (!inp.atk) ctl.latch = false;
       if (inp.atk && !ctl.latch && ctl.atkCd <= 0 && !near) {
-        const w = st.weapon, cl = isCleave(me, st, w, view.time); // decided before the act: the sim spends the Follow-Through
-        G.act({ t: 'atk', a: aim, d: Math.round(Math.hypot(me.aimX - me.x, me.aimY - me.y)) });
-        if (s.mode === 'client') { me.atkCount = (me.atkCount | 0) + 1; if (st.swift) me.flowT = ED.CONST.FLOW_T; if (cl) me.cleaveNext = 0; } // the host spends Follow-Through on the Cleave it grants
+        const k = ED.Stats.comboNext(me, view.time), w = ED.Stats.stepWeapon(st, k), cl = isCleave(me, st, w, view.time); // decided before the act: the sim spends the Follow-Through; k: the combo step this attack plays (the host takes it)
+        G.act({ t: 'atk', a: aim, k, d: Math.round(Math.hypot(me.aimX - me.x, me.aimY - me.y)) });
+        if (s.mode === 'client') { me.atkCount = (me.atkCount | 0) + 1; if (st.swift) me.flowT = ED.CONST.FLOW_T; if (cl) me.cleaveNext = 0; if (st.weapon.combo) { me.comboK = k; me.comboAt = view.time; } } // the host spends Follow-Through on the Cleave it grants
         if (s.mode === 'client') me.atkAge = 0;
-        ctl.atkCd = Math.max(ctl.atkCd, -dt) + ED.Stats.attackInterval(me); // carries the overshoot of this frame so the real rate equals the shown one
+        ctl.atkCd = Math.max(ctl.atkCd, -dt) + ED.Stats.stepInterval(me); // carries the overshoot of this frame so the real rate equals the shown one
         s.aim.pulseT = performance.now();
-        ED.FX.playerAttackAnim(s.localPid, aim);
+        ED.FX.playerAttackAnim(s.localPid, aim, w);
         if (w.kind === 'melee') {
           const reach = w.range * (1 + st.area * 0.5 + st.meleeReach) * (cl ? 1.4 : 1), arc = Math.min(6.3, w.arc * (1 + st.area * 0.4) * (cl ? 1.4 : 1));
-          ED.FX.slash(me.x, me.y - 10, aim, reach, arc, cl ? '#ffd36b' : ED.PLAYER_COLORS[me.slot]);
+          if (w.ahead) ED.FX.slam(me.x, me.y - 10, aim, reach, w.ahead.r * (1 + st.area * 0.5) * (cl ? 1.4 : 1), cl ? '#ffd36b' : ED.PLAYER_COLORS[me.slot]);
+          else ED.FX.slash(me.x, me.y - 10, aim, reach, arc, cl ? '#ffd36b' : ED.PLAYER_COLORS[me.slot]);
           ED.Audio.play(cl || w.look === 'hammer' ? 'heavy' : 'swing');
           if (cl) ED.FX.hitStop(0.06);
         } else ED.Audio.play(w.proj === 'firebolt' || w.proj === 'fireball' || w.proj === 'spark' ? 'fire' : w.proj === 'soul' || w.proj === 'holy' || w.proj === 'plague' ? 'magic' : 'shoot', 0.8);

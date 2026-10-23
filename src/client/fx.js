@@ -77,6 +77,14 @@
     if (F.slashes.length < 24) F.slashes.push({ x, y, a, r, arc, color, hot: U.mix(color, '#ffffff', 0.6), life: L, max: L, side: an ? an.side : (F.slashes.length & 1 ? 1 : -1), t0: an ? an.t0 : 0.02, t1: an ? an.t1 : 0.1, sm: null, hr: -1, tk: tk * (cl ? 1.25 : 1) });
     if (cl && !lowFx()) { const ta = a, tx = x + Math.cos(ta) * r * 0.9, ty = y + Math.sin(ta) * r * 0.9; F.ring(tx, ty + 6, 22 * tk, CLEAVE_COL, 0.3, 3); } // Cleave shock ring at the tip of the blow
   };
+  // A slam ahead (weapon.ahead): a narrow overhead smear to the slam point d px along a from (x, y), then an impact ring of radius sr there (y + 10: the ground), dust and a shake for your own hero. remote: no shake.
+  F.slam = (x, y, a, d, sr, color, remote) => {
+    F.slash(x, y, a, d, 0.5, color, remote ? 0.22 : undefined);
+    const gx = x + Math.cos(a) * d, gy = y + 10 + Math.sin(a) * d;
+    F.ring(gx, gy, sr, color === CLEAVE_COL ? CLEAVE_COL : '#d8c8a0', 0.3, 4, false, sr * 0.3); F.pop(gx, gy - 4, sr * 0.45, '#fff2d0', 0.12);
+    if (!lowFx()) { dust(gx, gy, 'dust', 4); F.burst(gx, gy - 2, 8, { kind: 'shard', color: '#8a7a60', sp: sr * 2.2, life: 0.45, size: 2.2, vz: 90, z: 2 }); }
+    if (!remote) F.addShake(2.5);
+  };
   const CLEAVE_COL = '#ffd36b';
   // Bright impact flash that also lights the scene. star: flare lines (crits).
   // al: alpha factor (default 1); core: colour of the centre square and flare lines (default white).
@@ -151,10 +159,13 @@
   };
 
   // Starts a hero's attack animation (weapon sweep timing from Sprites.atkTimes); ranged weapons also get a muzzle flash.
-  F.playerAttackAnim = (pid, a) => {
+  // sw: the weapon of this attack's combo step (ED.Stats.stepWeapon; an.w, read by the swing pose), else the hero's weapon.
+  F.playerAttackAnim = (pid, a, sw) => {
     const an = F.anim[pid] || (F.anim[pid] = { atkT: 9, side: 1, t0: 0.05, t1: 0.12, D: 0.3 });
     if (an.atkT < 0.03) return; // swing + atk events of one attack arrive together
-    const s = ED.Game && ED.Game.s, p = s && s.view.players.get(pid), wd = p && ED.Sprites.weaponArt(p), w = wd && wd.w;
+    const s = ED.Game && ED.Game.s, p = s && s.view.players.get(pid), wd = p && ED.Sprites.weaponArt(p), w = sw && sw.step !== undefined ? sw : wd && wd.w;
+    an.w = sw && sw.step !== undefined ? sw : null;
+    an.cold = an.atkT > an.D + (ED.Actors ? ED.Actors.HOLD : 0); // the last swing's hold has ended: the weapon starts this one from its idle carry
     an.atkT = 0; an.side = -an.side; an.a = a; an.fork = wd ? wd.fork : ''; F.lastAnim = an;
     const mp = p && p.boons ? ED.mainPath(p.boons) : null; an.col = mp && mp !== 'general' && PATH_COL[mp] ? PATH_COL[mp] : '#9fb0c0'; // smear outer band: the hero's path colour, steel without one
     if (w) {
@@ -221,7 +232,8 @@
         u[j * SM + i] = f > 0.72 ? cC : f > 0.38 ? cM : cO;
       }
     } else {
-      const Ro = sl.r * 0.94, base = sl.a - sd * arc / 2, Tm = Math.min(Ro * 0.9, U.clamp(sl.r * 0.4, 8, 24) * sl.tk), tail = Math.min(arc, 1.9), hdA = head * arc, inner = (Ro - Tm) * (Ro - Tm), outer = Ro * Ro;
+      // a full circle starts at the blade's wind-up pose (0.4 rad behind the aim), other arcs are centred on the aim
+      const Ro = sl.r * 0.94, base = sl.a - sd * (arc > 6 ? 0.4 : arc / 2), Tm = Math.min(Ro * 0.9, U.clamp(sl.r * 0.4, 8, 24) * sl.tk), tail = Math.min(arc, 1.9), hdA = head * arc, inner = (Ro - Tm) * (Ro - Tm), outer = Ro * Ro;
       const T0 = tail, T1 = tail * 0.5, T2 = tail * 0.2;
       for (let j = 0; j < W; j++) for (let i = 0; i < W; i++) {
         const dx = (i + 0.5 - half) * K2 + ex, dy = (j + 0.5 - half) * K2 + ey, r2 = dx * dx + dy * dy;
@@ -651,9 +663,28 @@
         break;
       }
       case 'swing': {
-        if (ev.pid !== local) { const p = ctx.player(ev.pid); if (p) { F.playerAttackAnim(ev.pid, ev.a); F.slash(p.x, p.y - 10, ev.a, ev.r, ev.arc, ev.k === 'cleave' ? '#ffd36b' : ED.PLAYER_COLORS[p.slot]); } A.play(ev.k === 'cleave' ? 'heavy' : 'swing', ev.k === 'cleave' ? 0.5 : 0.35); }
+        if (ev.pid !== local) {
+          const p = ctx.player(ev.pid);
+          if (p) {
+            F.playerAttackAnim(ev.pid, ev.a, ev.c !== undefined && p.stats ? ED.Stats.stepWeapon(p.stats, ev.c) : null); // ev.c: the combo step, ev.sr: a slam ahead
+            const col = ev.k === 'cleave' ? '#ffd36b' : ED.PLAYER_COLORS[p.slot];
+            if (ev.sr) F.slam(p.x, p.y - 10, ev.a, ev.r, ev.sr, col, true); else F.slash(p.x, p.y - 10, ev.a, ev.r, ev.arc, col);
+          }
+          A.play(ev.k === 'cleave' || ev.sr ? 'heavy' : 'swing', ev.k === 'cleave' ? 0.5 : 0.35);
+        }
         break;
       }
+      case 'pull': { // a hooked weapon dragged foes toward the hero: a taut chain from the hero to each, a spark at the hook
+        const p = ctx.player(ev.pid); if (!p) break;
+        for (const [x, y] of ev.pts) { F.zap(p.x, p.y - 10, x, y - 8, '#c8d0da', 0.14); F.pop(x, y - 8, 7, '#e8e8e8', 0.1); }
+        A.play('clang', ev.pid === local ? 0.35 : 0.15);
+        break;
+      }
+      case 'hring': // a ring of light around the hero (Radiant Mace)
+        F.ring(ev.x, ev.y, ev.r, '#ffe9a0', 0.38, 4, false, 10); F.ring(ev.x, ev.y, ev.r * 0.7, '#fff6d0', 0.26, 2, false, 6); F.pop(ev.x, ev.y - 10, 22, '#ffe9a0', 0.2);
+        if (!lowFx()) F.burst(ev.x, ev.y - 8, 12, { kind: 'streak', color: '#fff3c4', sp: ev.r * 3, spread: 3.2, life: 0.25, size: 1.6 });
+        A.play('bell', ev.pid === local ? 0.45 : 0.2);
+        break;
       case 'atk': if (ev.pid !== local) { F.playerAttackAnim(ev.pid, ev.a); const p = ctx.player(ev.pid); if (p && p.stats && !p.stats.melee) A.play('shoot', 0.3); } break;
       case 'spark': { const c = F.projColor(ED.PROJ_KINDS[ev.k]); F.burst(ev.x, ev.y, 4, { color: c, sp: 80, life: 0.25, size: 1.8, add: true }); F.burst(ev.x, ev.y, 3, { kind: 'streak', color: c, sp: 130, life: 0.2, size: 1.3 }); F.pop(ev.x, ev.y, 7, c, 0.1); A.play('spark', 0.4); break; }
       case 'chain': { // star (hub, t1, hub, t2, ...): one forked arm per target; otherwise a plain polyline. k: h Wrath of Heaven bolt, t Twilight beam, s Superconductor discharge, b Prism beam
