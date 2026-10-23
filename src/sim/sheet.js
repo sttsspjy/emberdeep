@@ -50,15 +50,16 @@
 
   // ---------------- text at rank ----------------
   // Boon text at `rank`: {stat} renders |mods[stat]| x rank in the stat's format (":pct|flat|sec|x" overrides it), {stat*K} that number times K (K = P: the hero's Power; ck / ck3: see below), {pw} the proc damage of the boon at the hero's Power.
-  // Class cards render through ED.boonText. st (the hero's stat block) is optional: without it {pw} reads as its formula and {stat*P} as a Power share.
+  // Class cards render through ED.boonText. st (the hero's stat block) is optional: without it {pw} reads as its formula and {stat*P} as a Power share. {gold} of the Purse reads the room gold reward of `stratum`.
   const TOKEN = /\{(\w+)(?:\*(\w+(?:\.\d+)?))?(?::(\w+))?\}/g;
   const PLURAL = /(\d+(?:\.\d+)?)((?:\s+[\w-]+){1,2})\(s\)/g; // "+2 foe(s)" reads "+2 foes", "+1 foe(s)" reads "+1 foe"
-  Sh.text = (id, rank, st) => {
+  Sh.text = (id, rank, st, stratum) => {
     const b = ED.BOONS[id];
     if (!b) return '';
     rank = Math.max(1, rank | 0 || 1);
     if (b.route) return ED.boonText(id, rank, st);
     return b.desc.replace(TOKEN, (m, key, mulBy, f) => {
+      if (key === 'gold' && b.purse) return String(ED.World.rewardGold(stratum || 1)); // the Purse pays a gold room's reward at `stratum` (default 1)
       if (key === 'pw') return b.pw ? (st ? String(Math.round(ED.procDmg(b, st))) : `${Math.round(b.pw.k * 100)}% Power${b.pw.base ? ' + ' + b.pw.base : ''}`) : m;
       const v = Math.abs((b.mods && b.mods[key]) || 0) * rank;
       if (mulBy === 'ck' || mulBy === 'ck3') return String(Math.max(1, Math.round(v * (mulBy === 'ck3' ? 3 : 1) * ((st && st.critK) || 1)))); // *ck / *ck3: the number and three times it, x the hero's critK (as W.grantCrits scales a grant and its cap)
