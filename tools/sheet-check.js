@@ -211,7 +211,7 @@ for (const [cls, stat, slot, dist, skipImpact, opt] of CASES) {
     if (q.kind === 'minion') continue; // minions walk to the foe: the count is reported, not compared
     if (stat.tempest && q.id === 'return') continue; // which of the vortex shields cross the foe on the way home depends on where each spun: the damage per hit is compared, not the count
     ok(q.attacks !== undefined ? Math.abs(got.n - q.oneFoe) <= 1 : got.n === q.oneFoe, `${tag} ${q.id}: ${got.n} ${q.fanN ? 'arrows reached' : 'hits on'} the foe, modelled ${q.oneFoe}${q.attacks !== undefined ? ' (one attack more or less is the timing of the first)' : ''}`);
-    if (q.statusAdd) { const s = by['status:' + q.statusAdd.el]; ok(s && Math.abs(s.sum - q.statusAdd.here * q.oneFoe) <= q.statusAdd.here * q.oneFoe * 0.03 + 0.2, `${tag} ${q.id}: status add ${s ? s.sum.toFixed(1) : 0} vs ${(q.statusAdd.here * q.oneFoe).toFixed(1)}`); }
+    if (q.statusAdd) { const s = by['status:' + q.statusAdd.el], want = q.statusAdd.here * q.oneFoe + (skipImpact && q.id === 'twin' ? sk.parts.find(x => x.id === 'impact').statusAdd.here : 0); ok(s && Math.abs(s.sum - want) <= want * 0.03 + 0.2, `${tag} ${q.id}: status add ${s ? s.sum.toFixed(1) : 0} vs ${want.toFixed(1)}`); } // the twin case measures the impact's Burn add with the twin's
   }
 }
 
@@ -237,6 +237,39 @@ for (const [cls, stat, slot, dist, skipImpact, opt] of CASES) {
   if (got) rel(got.sum / got.n, lance.here, 0.015, 'Bone Lance per hit');
 }
 
+// Pack rules of tools/model.js against a tight pack of 4 pinned dummies (the first at the usual place, the others within 24 px of it): the parts that strike every foe of a pack in the sim count n foes in the pack column.
+const addPack = (w, p, dist) => [[24, 0], [-12, 21], [-12, -21]].map(([dx, dy]) => { const f = w.spawnEnemy('skeleton', p.x + (dist || REF.d) + dx, p.y - 4 + dy); f._dummy = true; f.spd = 0; f.cd = 1e9; f.r = REF.r; f.hp = f.maxHp = 1e9; f.def = Object.assign({}, f.def, { guard: undefined }); return f; });
+const MDp = require('./model.js')(ED, { pack: 4 });
+const partPack = (m, k, q, n) => MDp.directDamage({ weapon: { kind: 'melee', _avg: 0, _extras: [], _aps: 1 }, skills: [Object.assign({}, k, { parts: [q], _cd: 1 })], boost: { pack: 0 } }, n);
+{ // Twin Cut (Assassinate rank 2) cuts the whole path again: every pack foe the slash cuts; Avalanche cracks strike every carried foe; both count n foes
+  const { w, p, e } = stage('shade', {}, 0, { stepTwin: 0.5 }); addPack(w, p);
+  const m = sheetOf(w, p), k = m.skills[0], tw = k.parts.find(x => x.id === 'twin'), sl = k.parts.find(x => x.id === 'slash');
+  cast(w, p, e, 0); const by = settle(w, e, 3);
+  ok(by['step.twin'] && by['step.twin'].n === 4 && by['step.slash'].n === 4, `Twin Cut: ${by['step.twin'] ? by['step.twin'].n : 0} foes of the pack cut again, ${by['step.slash'].n} by the slash`);
+  rel(partPack(m, k, tw, 4), by['step.twin'].sum, 0.02, 'Twin Cut in a pack of 4 (pack rule vs measured)'); rel(partPack(m, k, sl, 4), by['step.slash'].sum, 0.02, 'Shadowstep slash in a pack of 4 (pack rule vs measured)');
+}
+{
+  const { w, p, e } = stage('knight', {}, 0, { avalanche: 0.9, avaCrack: 0.3, avaStun: 0.8, jugShock: 0.4, s1Range: 90 }); addPack(w, p);
+  const m = sheetOf(w, p), k = m.skills[0], cr = k.parts.find(x => x.id === 'crack');
+  cast(w, p, e, 0); const by = settle(w, e, 3);
+  ok(by['charge.crack'] && by['charge.crack'].n === 4, `Avalanche: ${by['charge.crack'] ? by['charge.crack'].n : 0} carried foes struck by a crack`);
+  rel(partPack(m, k, cr, 4), by['charge.crack'].sum, 0.02, 'Avalanche cracks in a pack of 4 (pack rule vs measured)');
+}
+{ // Shield Bash: the free shield ricochets over the pack (up to its strike count) and its return pass sweeps it, like a Throw; the measured pass (3 of 4 foes on the way home) is within 25% of the rule
+  const { w, p, e } = stage('knight', {}, 0, { bash: 0.3 }); addPack(w, p);
+  const m = sheetOf(w, p), k = m.skills[0], bs = k.parts.find(x => x.id === 'bash');
+  cast(w, p, e, 0); const by = settle(w, e, 4), got = (by['shieldthrow.strike'] ? by['shieldthrow.strike'].sum : 0) + (by['shieldthrow.return'] ? by['shieldthrow.return'].sum : 0);
+  ok(by['shieldthrow.strike'] && by['shieldthrow.strike'].n === 4, `Shield Bash: ${by['shieldthrow.strike'] ? by['shieldthrow.strike'].n : 0} strikes over the pack`);
+  rel(partPack(m, k, bs, 4), got, 0.25, 'Shield Bash in a pack of 4 (pack rule vs measured)');
+}
+{ // Meteor Shower: 3 meteorites fall at random within 80 of every impact, the twin's too (2 sets); the model counts the meteorites a lone foe takes (mean of 16 casts) and the burn each leaves
+  const { w, p, e } = stage('pyro', {}, 0, { twinMeteor: 0.3, meteorites: 0.18 });
+  const q = sheetOf(w, p).skills[1].parts.find(x => x.id === 'rocks');
+  let n = 0;
+  for (let i = 0; i < 16; i++) { cast(w, p, e, 1); const by = settle(w, e, 4); n += by['meteor.rocks'] ? by['meteor.rocks'].n : 0; hits.length = 0; w.zones.length = 0; }
+  ok(q.sets === 2 && Math.abs(n / 16 - q.oneFoe) <= 0.7, `Meteor Shower: ${(n / 16).toFixed(2)} meteorites a cast on a lone foe, modelled ${q.oneFoe.toFixed(2)} (2 sets of 3)`);
+  ok(q.statusAdd && q.statusAdd.pool > 0 && sheetOf(w, p).skills[1].parts.find(x => x.id === 'twin').statusAdd.pool > 0, 'Meteor Shower and Twin Meteor add Burn to the model');
+}
 { // Ambush Sweep: a fan of knives strikes at most 3 foes of a pack; the sweep (every foe within ambushCleave of the target) reaches the rest, and the pack rule of tools/model.js counts it (a melee Ambush already strikes the whole pack)
   const MDs = require('./model.js')(ED, { pack: 4 });
   const packAmb = (cls, wi, cleave) => {

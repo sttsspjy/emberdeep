@@ -40,7 +40,7 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
   near(st({ p_atk: 1, p_atk_h: 3 }).aftershock, 0.5, 1e-9, 'Magma Heart aftershock 0.3 + 2 x 0.1'); near(st({ p_atk: 1, p_atk_h: 2 }).lavaPool, 0.5, 1e-9, 'Lava Pools at rank 2'); near(st({ p_atk: 1, p_atk_h: 1 }).lavaPool, 0, 1e-9, 'no Lava Pool at rank 1');
   near(st({ p_s1: 1 }).s1Dmg, 0.2, 1e-9, 'Firestorm damage'); near(st({ p_s1: 1 }).s1Area, 0.25, 1e-9, 'Firestorm radius'); near(st({ p_s1: 1 }).skillCd, 7 * 0.79, 1e-9, 'Firestorm cooldown 5.5 s');
   near(st({ p_s1: 1, p_s1_b: 2 }).s1Dmg, 1.2 * 1.05 - 1, 1e-9, 'Phoenix Mantle rank 2 Nova +5% (compounds)');
-  near(st({ p_s2: 1, p_s2_a: 3 }).twinMeteor, 1.0, 1e-9, 'Twin Meteor 0.8 + 2 x 0.1'); near(st({ p_s2: 1, p_s2_b: 2 }).comet, 0.15, 1e-9, 'Comet 0.1 + 0.05'); near(st({ p_s2: 1, p_s2_b: 3 }).comet, 0.2, 1e-9, 'Sun Dive: every landing +20% (0.1 + 2 x 0.05)');
+  near(st({ p_s2: 1, p_s2_a: 3 }).twinMeteor, 0.5, 1e-9, 'Twin Meteor 0.3 + 2 x 0.1'); near(st({ p_s2: 1, p_s2_b: 2 }).comet, 0.15, 1e-9, 'Comet 0.1 + 0.05'); near(st({ p_s2: 1, p_s2_b: 3 }).comet, 0.2, 1e-9, 'Sun Dive: every landing +20% (0.1 + 2 x 0.05)');
   near(st({ p_s2: 1, p_s2_b: 2 }).cometStun, 0.5, 1e-9, 'Impact Crater at rank 2'); near(st({ p_s2: 1, p_s2_b: 1 }).cometStun, 0, 1e-9, 'no Impact Crater at rank 1');
   near(st({ p_el: 1, p_el_a: 3 }).burnMul, 0.4, 1e-9, 'White Heat burn 0.2 + 2 x 0.1'); near(st({ p_el: 1, p_el_a: 2 }).burnCrit, 0.05, 1e-9, 'Flashpoint at rank 2'); near(st({ p_el: 1, p_el_a: 1 }).burnCrit, 0, 1e-9, 'no Flashpoint at rank 1'); near(st({ p_el: 1, p_el_b: 3 }).heatEngine, 0.25, 1e-9, 'Heat Engine 0.15 + 2 x 0.05'); near(st({ p_el: 1, p_el_b: 2 }).heatChain, 2, 1e-9, 'Chain Reaction needs 2 from rank 2'); near(st({ p_el: 1, p_el_b: 1 }).heatChain, 0, 1e-9, 'no Chain Reaction at rank 1'); near(st({ p_el: 1, p_el_b: 2 }).s1Dmg, 0.3, 1e-9, 'Heat Engine rank 2: Nova +30%'); near(st({ p_el: 1, p_el_b: 2 }).s2Dmg, 0.3, 1e-9, 'Heat Engine rank 2: Meteor +30%'); near(st({ p_el: 1, p_el_b: 1 }).s1Dmg, 0, 1e-9, 'no skill damage at rank 1'); near(st({ p_el: 1, p_el_b: 3 }).s2Dmg, 0.3, 1e-9, 'rank 3 keeps it');
   const w1 = st({ p_atk: 1, p_atk_h: 1 }, 'emberwand').weapon, w2 = st({ p_atk: 1, p_atk_h: 1 }).weapon;
@@ -48,7 +48,7 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
   near(w2.explode.r, 46, 0.01, 'Magma Staff keeps its own (15% bigger) blast'); near(w2.explode.mul, 0.6, 1e-9, 'Magma Staff blast mul');
   const tn = ED.Stats.skillNums('nova', st({ p_s1: 1, p_s1_a: 1 }));
   near(tn.p.echo.dmg, 77.4 * 0.65, 0.01, 'echo part = blast x 0.65'); near(tn.p.echo.r, tn.p.blast.r, 1e-9, 'echo radius = blast radius');
-  near(ED.Stats.skillNums('meteor', st({ p_s2: 1, p_s2_a: 1 })).p.twin.dmg, 89.5 * 1.15 * 1.3 * 0.8, 0.01, 'twin part = impact x 0.8'); near(ED.Stats.skillNums('meteor', st({ p_s2: 1, p_s2_a: 3 })).p.rocks.dmg, 89.5 * 1.15 * 1.45 * 0.5, 0.01, 'rocks part = impact x 0.5');
+  near(ED.Stats.skillNums('meteor', st({ p_s2: 1, p_s2_a: 1 })).p.twin.dmg, 89.5 * 1.15 * 1.3 * 0.3, 0.01, 'twin part = impact x 0.3'); near(ED.Stats.skillNums('meteor', st({ p_s2: 1, p_s2_a: 3 })).p.rocks.dmg, 89.5 * 1.15 * 1.45 * 0.18, 0.01, 'rocks part = impact x 0.18');
   const cm = ED.Stats.skillNums('meteor', st({ p_s2: 1, p_s2_b: 1 })).move;
   ok(cm && cm.k === 'leap' && cm.t === 0.6 && cm.iframes === 0.35 && !ED.Stats.skillNums('meteor', st({})).move, 'Comet adds the leap move (0.6 s, untouchable 0.35 s)');
 }
@@ -196,9 +196,9 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
   const im = parts(s, 'meteor.impact'), tw = parts(s, 'meteor.twin');
   ok(im.length >= 1 && tw.length >= 1, `impact and twin (got ${im.length}, ${tw.length})`);
   const ia = im.find(h => h.e === a), ta = tw.find(h => h.e === a);
-  ok(ia && ta, 'the twin lands on the nearest foe (it stands 50 px from the impact)'); near(ta.d / ia.d, 0.8, 1e-6, 'twin = 80% of the impact'); near(ta.t - ia.t, 0.6, 0.03, 'twin 0.6 s after the impact'); near(ia.t, 0.9, 0.05, 'impact 0.9 s after the cast');
+  ok(ia && ta, 'the twin lands on the nearest foe (it stands 50 px from the impact)'); near(ta.d / ia.d, 0.3, 1e-6, 'twin = 30% of the impact'); near(ta.t - ia.t, 0.6, 0.03, 'twin 0.6 s after the impact'); near(ia.t, 0.9, 0.05, 'impact 0.9 s after the cast');
   ok(!tw.some(h => h.e === b), 'the far foe is not hit by the twin'); ok(w.zones.filter(z => z.kind === 'pfire').length === 1, 'the twin leaves no crater'); ok(s.adds.length >= 2, 'both impacts add Burn');
-  const s2 = stage({ p_s2: 1, p_s2_a: 2 }); foe(s2.w, s2.p.x + 200, s2.p.y); cast(s2, 1, s2.p.x + 150, s2.p.y); run(s2, 2.0); near(parts(s2, 'meteor.twin')[0].d / parts(s2, 'meteor.impact')[0].d, 0.9, 1e-6, 'twin 90% at rank 2');
+  const s2 = stage({ p_s2: 1, p_s2_a: 2 }); foe(s2.w, s2.p.x + 200, s2.p.y); cast(s2, 1, s2.p.x + 150, s2.p.y); run(s2, 2.0); near(parts(s2, 'meteor.twin')[0].d / parts(s2, 'meteor.impact')[0].d, 0.4, 1e-6, 'twin 40% at rank 2');
   const s0 = stage({ p_s2: 1, p_s2_a: 1 }); cast(s0, 1, s0.p.x + 150, s0.p.y); run(s0, 2.0); ok(!parts(s0, 'meteor.twin').length, 'no foe in reach, no twin');
 }
 {
@@ -214,8 +214,8 @@ const flags = (w) => ED.Net.encodeSnap(w, [], false).P[0][6];
   const { s, zs } = mk(7), rocks = zs.filter(z => z.r < 60), im = parts(s, 'meteor.impact'), rk = parts(s, 'meteor.rocks');
   ok(rocks.length === 6, `3 meteorites for the impact and 3 for the twin (got ${rocks.length})`);
   ok(rocks.slice(0, 3).every(z => Math.hypot(z.x - zs[0].x, z.y - zs[0].y) <= 80.01 && Math.abs(z.dur - 0.3) < 1e-9), 'meteorites fall within 80 of the impact, 0.3 s after it');
-  ok(rk.length > 0 && im.length > 0, 'meteorites hit'); const per = ED.Stats.skillNums('meteor', s.p.stats); near(per.p.rocks.dmg, per.p.impact.dmg * 0.5, 1e-9, 'meteorite = 50% of the impact'); near(per.p.rocks.r, 45, 1e-9, 'meteorite radius 45');
-  const e0 = im[0].e, r0 = rk.find(h => h.e === e0); ok(!r0 || Math.abs(r0.d / im[0].d - 0.5) < 1e-6, 'a meteorite deals 50% of an impact to the same foe');
+  ok(rk.length > 0 && im.length > 0, 'meteorites hit'); const per = ED.Stats.skillNums('meteor', s.p.stats); near(per.p.rocks.dmg, per.p.impact.dmg * 0.18, 1e-9, 'meteorite = 18% of the impact'); near(per.p.rocks.r, 45, 1e-9, 'meteorite radius 45');
+  const e0 = im[0].e, r0 = rk.find(h => h.e === e0); ok(!r0 || Math.abs(r0.d / im[0].d - 0.18) < 1e-6, 'a meteorite deals 18% of an impact to the same foe');
   ok(JSON.stringify(zs) === JSON.stringify(mk(7).zs), 'meteorite points are deterministic per seed'); ok(JSON.stringify(zs) !== JSON.stringify(mk(8).zs), 'and differ between seeds');
   ok(s.adds.length > im.length, 'meteorites add Burn');
 }
@@ -319,10 +319,10 @@ const hurt = (w, p) => { p.invuln = 0; return w.hurtPlayer(p, 1, { hazard: true 
   const tt = (id, r) => ED.cardTotals(ED.BOONS[id], r), tx = (id) => ED.cardParts(id, 3, null).form.desc;
   near(tt('p_s1_a', 3).novaEcho, 1.55, 1e-9, 'Supernova wave 155% of the Nova'); near(tt('p_s1_a', 3).supernova, 1.2, 1e-9, 'Supernova Burn x1.2'); near(tt('p_s1_a', 3).supernovaPull, 30, 1e-9, 'Supernova collapse 30 px'); near(tt('p_s1_a', 3).novaPull, 40, 1e-9, 'Collapse stays at rank 3');
   near(tt('p_s1_b', 3).phoenixMul, 1.4, 1e-9, 'Phoenix Form ring x1.4'); near(tt('p_s1_b', 3).phoenixSlow, 0.4, 1e-9, 'Phoenix Form slows 40%'); near(tt('p_s1_b', 2).phoenixSlow || 0, 0, 1e-9, 'no slow before rank 3'); near(tt('p_s1_b', 3).phoenixDur, 4, 1e-9, 'Phoenix Form 4 s'); near(tt('p_s1_b', 3).dashTrail, 0.5, 1e-9, 'Phoenix trail 50% of the ring'); near(tt('p_s1_b', 3).mantle, 0.03, 1e-9, 'Phoenix Form adds no shield (3% stays)'); near(tt('p_s1_b', 3).mantleBurst, 0.5, 1e-9, 'Rebirth Flare stays at rank 3');
-  near(tt('p_s2_a', 3).cataclysm, 0.5, 1e-9, 'Cataclysm meteor 50%'); near(tt('p_s2_a', 3).meteorites, 0.5, 1e-9, 'Meteor Shower stays in the totals');
+  near(tt('p_s2_a', 3).cataclysm, 0.48, 1e-9, 'Cataclysm meteor 48%'); near(tt('p_s2_a', 3).meteorites, 0.18, 1e-9, 'Meteor Shower stays in the totals');
   near(tt('p_s2_b', 3).sunDive, 0.6, 1e-9, 'Sun Dive second landing 60% of the first'); near(tt('p_s2_b', 3).diveTrail, 0.3, 1e-9, 'Sun Dive trail 30% of the crater'); near(tt('p_s2_b', 2).craterMul, 2, 1e-9, 'Impact Crater burns twice as hard from rank 2'); near(tt('p_s2_b', 1).craterMul || 0, 0, 1e-9, 'no hotter crater at rank 1');
   { const s = ED.Stats.compute({ cls: 'pyro', weapon: 'firestaff', boons: { p_s2: 1, p_s2_b: 2 }, relics: [], meta: META(), pact: 0 }), hot = ED.Stats.skillNums('meteor', s).p.crater.dmg; s.sn = {}; s.craterMul = 0; near(hot / ED.Stats.skillNums('meteor', s).p.crater.dmg, 2, 1e-9, 'the Comet crater burns twice as hard from rank 2'); }
-  ok(tx('p_s1_a').indexOf('155%') >= 0 && tx('p_s1_a').indexOf('30 px') >= 0 && tx('p_s1_b').indexOf('4 s') >= 0 && tx('p_s1_b').indexOf('slowed 40%') >= 0 && tx('p_s2_a').indexOf('50%') >= 0 && tx('p_s2_b').indexOf('60% of the first') >= 0, 'form texts carry their numbers');
+  ok(tx('p_s1_a').indexOf('155%') >= 0 && tx('p_s1_a').indexOf('30 px') >= 0 && tx('p_s1_b').indexOf('4 s') >= 0 && tx('p_s1_b').indexOf('slowed 40%') >= 0 && tx('p_s2_a').indexOf('48%') >= 0 && tx('p_s2_b').indexOf('60% of the first') >= 0, 'form texts carry their numbers');
 }
 
 { // Supernova (p_s1_a rank 3): the echo is a wave from the Nova's radius (105) to 220 over 0.5 s at 155%; the centre then collapses 30 px; the Nova's Burn is x1.2; rank 2 keeps the plain echo
@@ -406,9 +406,9 @@ const hurt = (w, p) => { p.invuln = 0; return w.hurtPlayer(p, 1, { hazard: true 
     return { s, w, p, mid, flank, inF, outF, cx, cy };
   };
   const r3 = go({ p_s2_a: 3 }), r2 = go({ p_s2_a: 2 }), N = ED.Stats.skillNums('meteor', r3.p.stats), sm = parts(r3.s, 'meteor.storm').filter(h => h.e === r3.mid);
-  near(N.p.storm.dmg, 0.5 * N.p.impact.dmg, 1e-9, 'storm part = 50% of an impact'); ok(N.p.storm.on && !N.p.impact.on && !N.p.crater.on && !N.p.twin.on && !N.p.rocks.on && N.p.field.on, 'Cataclysm turns the single impact, crater, twin and shower parts off'); near(N.p.field.r, 140, 1e-9, 'field radius 140'); near(N.p.field.dmg, N.p.crater.dmg, 1e-9, 'field dps = the crater dps'); near(N.p.field.dur, N.p.crater.dur, 1e-9, 'field lasts the crater duration');
+  near(N.p.storm.dmg, 0.48 * N.p.impact.dmg, 1e-9, 'storm part = 48% of an impact'); ok(N.p.storm.on && !N.p.impact.on && !N.p.crater.on && !N.p.twin.on && !N.p.rocks.on && N.p.field.on, 'Cataclysm turns the single impact, crater, twin and shower parts off'); near(N.p.field.r, 140, 1e-9, 'field radius 140'); near(N.p.field.dmg, N.p.crater.dmg, 1e-9, 'field dps = the crater dps'); near(N.p.field.dur, N.p.crater.dur, 1e-9, 'field lasts the crater duration');
   const pm = stage({}); foe(pm.w, pm.p.x + 200, pm.p.y); cast(pm, 1, pm.p.x + 200, pm.p.y); run(pm, 1.2); const im0 = parts(pm, 'meteor.impact')[0].d;
-  ok(sm.length === 5, `the foe at the cursor is struck by all five meteors (${sm.length})`); ok(sm.every(h => Math.abs(h.d / im0 - 0.5 * 1.45) < 1e-6), `each meteor deals 50% of a plain Meteor impact plus the card Meteor damage +45% (${sm.map(h => (h.d / im0).toFixed(3)).join(' ')})`);
+  ok(sm.length === 5, `the foe at the cursor is struck by all five meteors (${sm.length})`); ok(sm.every(h => Math.abs(h.d / im0 - 0.48 * 1.45) < 1e-6), `each meteor deals 48% of a plain Meteor impact plus the card Meteor damage +45% (${sm.map(h => (h.d / im0).toFixed(3)).join(' ')})`);
   ok(sm.every((h, i) => i === 0 || Math.abs(h.t - sm[i - 1].t - 0.1) < 0.03) && Math.abs(sm[0].t - 0.9) < 0.03, `0.1 s apart, the first after 0.9 s (${sm.map(h => h.t.toFixed(2)).join(' ')})`);
   ok(!parts(r3.s, 'meteor.impact').length && !parts(r3.s, 'meteor.twin').length && !parts(r3.s, 'meteor.rocks').length, 'no single impact, twin or meteorite at rank 3');
   ok(r3.flank.every(e => parts(r3.s, 'meteor.storm').some(h => h.e === e)), 'a foe on each of the four outer meteors is hit');

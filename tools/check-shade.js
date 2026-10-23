@@ -43,7 +43,7 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   near(build({ s_atk: 1, s_atk_s: 1 }).bladeStorm, 0, 1e-9, 'Whirlwind is a rank 2 rider'); ok(build({ s_atk: 1, s_atk_s: 2 }).bladeStorm > 0, 'Whirlwind rank 2'); near(build({ s_atk: 1, s_atk_s: 3 }).bladeStorm, build({ s_atk: 1, s_atk_s: 2 }).bladeStorm, 1e-9, 'Whirlwind stays the same at rank 3');
   near(build({ s_atk: 1, s_atk_s: 2 }).cyclone, 0, 1e-9, 'Cyclone is a rank 3 transform'); ok(build({ s_atk: 1, s_atk_s: 3 }).cyclone > 0, 'Cyclone spins');
   const g = build({ s_s1: 1 }); near(g.skillCd, 4.5 * 0.8, 1e-9, 'Ghost Walk cooldown 3.6 s'); near(ED.Stats.skillNums('step', g).p.slash.dmg, 40.6 * 1.2, 1e-6, 'Ghost Walk +20% Shadowstep');
-  near(build({ s_s1: 1, s_s1_a: 3 }).stepTwin, 0.6, 1e-9, 'Twin Cut 60%'); near(ED.Stats.skillNums('step', build({ s_s1: 1, s_s1_b: 1 })).p.after.dmg, 44 * 1.2, 1e-6, 'Afterimage 44 base, +20% Ghost Walk');
+  near(build({ s_s1: 1, s_s1_a: 3 }).stepTwin, 0.48, 1e-9, 'Twin Cut 48%'); near(ED.Stats.skillNums('step', build({ s_s1: 1, s_s1_b: 1 })).p.after.dmg, 44 * 1.2, 1e-6, 'Afterimage 44 base, +20% Ghost Walk');
   const nf = build({ s_s2: 1 }), sm = ED.Stats.skillNums('vanish', nf);
   near(nf.skill2Cd, 11 * 0.73, 1e-9, 'Nightfall cooldown 8 s'); near(sm.p.smoke.r, 105, 1e-9, 'Nightfall smoke radius +40%'); near(sm.p.smoke.dur, 5, 1e-9, 'Nightfall smoke +2 s'); near(nf.stealthSpd, 0.3, 1e-9, 'Nightfall stealth speed');
   near(ED.Stats.moveRate({ stats: nf, flowT: 0, stealthT: 1 }) / ED.Stats.moveRate({ stats: nf, flowT: 0, stealthT: 0 }), 1.3, 1e-9, 'moveRate adds stealthSpd while unseen');
@@ -152,7 +152,7 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   const q = ED.Stats.skillNums('step', p.stats).p, st = p.stats;
   w.playerSkill(p, 0, { x0: p.x, y0: p.y, x1: p.x + 100, y1: p.y }, 0); near(lost(e), q.slash.dmg * st.critMult, 0.01, 'slash lands at the cast');
   run(w, 0.12); near(lost(e), q.slash.dmg * st.critMult, 0.01, 'the twin has not struck at 0.12 s');
-  run(w, 0.06); near(lost(e), q.slash.dmg * st.critMult * 1.6, 0.05, 'the twin strikes at 60% after 0.15 s'); ok(evs(w, 'twincut').length === 1, 'a twincut event');
+  run(w, 0.06); near(lost(e), q.slash.dmg * st.critMult * 1.48, 0.05, 'the twin strikes at 48% after 0.15 s'); ok(evs(w, 'twincut').length === 1, 'a twincut event');
   ok(p.critStacks === 4, 'the twin readies no extra crits (3 + 1 for the foe the slash cut)');
 }
 
@@ -324,14 +324,14 @@ const step = (w, p, x0, y0, x1, y1) => { place(p, x1, y1); w.playerSkill(p, 0, {
     for (const k in b.r3) ok(t3[k] > 0 && (k in b.mods || k in (b.up || {}) ? t3[k] > t2[k] : !t2[k] && !t1[k]), id + ' stat ' + k + ' (rank 3 transform)');
   }
   const tt = (id, r) => ED.cardTotals(ED.BOONS[id], r), tx = (id) => ED.cardParts(id, 3, null).form.desc;
-  near(tt('s_s1_a', 3).blossom, 1.3, 1e-9, 'Death Blossom cut 130%'); near(tt('s_s1_a', 3).blossomN, 3, 1e-9, 'three blinks'); near(tt('s_s1_a', 3).blossomMax, 6, 1e-9, 'at most six'); near(tt('s_s1_a', 3).stepTwin, 0.6, 1e-9, 'Twin Cut stays at rank 3');
+  near(tt('s_s1_a', 3).blossom, 1.4, 1e-9, 'Death Blossom cut 140%'); near(tt('s_s1_a', 3).blossomN, 3, 1e-9, 'three blinks'); near(tt('s_s1_a', 3).blossomMax, 6, 1e-9, 'at most six'); near(tt('s_s1_a', 3).stepTwin, 0.48, 1e-9, 'Twin Cut stays at rank 3');
   near(tt('s_s1_b', 3).mirrorHall, 0.7, 1e-9, 'Hall of Mirrors 70% of a slash'); near(tt('s_s1_b', 3).afterPull, 120, 1e-9, 'Lure stays at rank 3');
   near(tt('s_s2_a', 3).eclipse, 0.06, 1e-9, 'Eclipse repeats at 6%'); near(tt('s_s2_a', 3).eclipseDur, 4, 1e-9, 'dome 4 s'); near(tt('s_s2_a', 3).ambushCleave, 70, 1e-9, 'Ambush Sweep stays at rank 3');
   near(tt('s_s2_b', 3).umbral, 2, 1e-9, 'Umbral Veil blind x2'); near(tt('s_s2_b', 3).cloneMul, 0.5, 1e-9, 'clone repeats at 50%'); near(tt('s_s2_b', 3).veil, 0.03, 1e-9, 'Umbral Veil adds no shield (3% stays)'); near(tt('s_s2_b', 3).shroud, 1, 1e-9, 'Shroud stays at rank 3');
-  ok(tx('s_s1_a').indexOf('130%') >= 0 && tx('s_s1_a').indexOf('up to 6') >= 0 && tx('s_s1_b').indexOf('70%') >= 0 && tx('s_s2_a').indexOf('4 s') >= 0 && tx('s_s2_a').indexOf('6%') >= 0 && tx('s_s2_b').indexOf('50%') >= 0 && tx('s_s2_b').indexOf('2 times') >= 0, 'form texts carry their numbers');
+  ok(tx('s_s1_a').indexOf('140%') >= 0 && tx('s_s1_a').indexOf('up to 6') >= 0 && tx('s_s1_b').indexOf('70%') >= 0 && tx('s_s2_a').indexOf('4 s') >= 0 && tx('s_s2_a').indexOf('6%') >= 0 && tx('s_s2_b').indexOf('50%') >= 0 && tx('s_s2_b').indexOf('2 times') >= 0, 'form texts carry their numbers');
 }
 
-{ // Death Blossom (s_s1_a rank 3): after the blink the hero blinks on to the nearest foe not yet cut within 120 of where it stands, 3 times, 0.1 s apart, a crit for 130% of a slash each; a kill adds a blink (at most 6)
+{ // Death Blossom (s_s1_a rank 3): after the blink the hero blinks on to the nearest foe not yet cut within 120 of where it stands, 3 times, 0.1 s apart, a crit for 140% of a slash each; a kill adds a blink (at most 6)
   const mk = (boons, mod) => {
     const { w, p } = stage(boons); place(p, 50, 176);
     const path = foe(w, 100, 176), chain = [210, 280, 350, 420].map(x => foe(w, x, 176)), g = foe(w, 210, 286), far = foe(w, 150, 300); void far;
@@ -341,13 +341,13 @@ const step = (w, p, x0, y0, x1, y1) => { place(p, x1, y1); w.playerSkill(p, 0, {
     return { w, p, path, chain, g, log, N };
   };
   const t3 = mk({ s_s1: 1, s_s1_a: 3 }); void t3;
-  const q = ED.Stats.skillNums('step', t3.p.stats); near(q.p.blossom.dmg, 1.3 * q.p.slash.dmg, 1e-9, 'blossom part = 130% of a slash'); ok(q.p.blossom.n === 3 && q.p.blossom.on && q.p.blossom.crit === true, 'three blinks, a guaranteed crit');
+  const q = ED.Stats.skillNums('step', t3.p.stats); near(q.p.blossom.dmg, 1.4 * q.p.slash.dmg, 1e-9, 'blossom part = 140% of a slash'); ok(q.p.blossom.n === 3 && q.p.blossom.on && q.p.blossom.crit === true, 'three blinks, a guaranteed crit');
   ok(partHits(t3.log, 'step.slash').length === 1 && t3.log[0].e === t3.path && !partHits(t3.log, 'step.blossom').length, 'the Shadowstep cuts the foe on its path first; the chain waits 0.1 s');
   const sl = q.p.slash.dmg * t3.p.stats.critMult;
   run(t3.w, 0.7); const bl = partHits(t3.log, 'step.blossom');
   ok(bl.length === 3 && bl.map(h => h.e).join() === t3.chain.slice(0, 3).join(), `the chain visits the nearest foe each time (${bl.length} cuts)`);
   ok(bl.every((h, i) => Math.abs(h.t - (0.1 * (i + 1) + 0.017)) < 0.04), `0.1 s apart (${bl.map(h => h.t.toFixed(2)).join(' ')})`);
-  ok(bl.every(h => h.crit === true && Math.abs(h.d - 1.3 * sl) < 0.01), `each cut is a guaranteed crit for 130% of a slash (${bl.map(h => h.d.toFixed(1)).join(' ')} of ${(1.3 * sl).toFixed(1)})`);
+  ok(bl.every(h => h.crit === true && Math.abs(h.d - 1.4 * sl) < 0.01), `each cut is a guaranteed crit for 140% of a slash (${bl.map(h => h.d.toFixed(1)).join(' ')} of ${(1.4 * sl).toFixed(1)})`);
   ok(t3.chain[3].hp === 5000 && t3.g.hp === 5000 && !t3.log.some(h => h.e === t3.g), 'the fourth foe in the line and the foes off the chain are untouched');
   ok(Math.abs(t3.p.x - (350 - 10 - 10 - 2)) < 6 && t3.p.y === 176, `the hero ends beside the last foe (x ${t3.p.x.toFixed(0)})`);
   const bev = evs(t3.w, 'blossom'); ok(bev.length === 3 && bev[0].x0 === 150 && bev[2].tx === 350 && bev.map(b => b.n).join() === '1,2,3', 'a blossom event per blink');

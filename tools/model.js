@@ -6,7 +6,7 @@ module.exports = (ED, opts) => {
   const pack = Math.max(1, Math.round(opts && opts.pack || 4)), surround = !!(opts && opts.surround);
 
   // ---- hero damage on one foe and in a pack ----
-  const SWEEP = new Set(['charge.impact', 'charge.shock', 'step.slash', 'judgment.leg', 'shieldthrow.return', 'vanish.ambush']);
+  const SWEEP = new Set(['charge.impact', 'charge.shock', 'charge.crack', 'step.slash', 'step.twin', 'judgment.leg', 'shieldthrow.return', 'vanish.ambush']);
   const SCATTER_R = 80; // px a Meteor Shower meteorite may land from the impact (class-pyro.js)
   // Death bursts: a pack stands within PACK_R of its centre; a burst of radius r covers (r / PACK_R)^2 of it (at most all) and no more than NEIGH foes stand round one corpse.
   const PACK_R = 90, NEIGH = 3;
@@ -30,11 +30,12 @@ module.exports = (ED, opts) => {
       let mul = q.r > 0 || SWEEP.has(key) ? n : 1;
       if (key === 'volley.arrow' || key === 'volley.wave') mul = Math.min(n, q.fanN * 2) * (q.waves || 1) / Math.max(1, q.oneFoe) * (surround ? Math.min(1, q.fan / (2 * Math.PI)) : 1);
       if (key === 'volley.burst') { sum += q.here * n * Math.min(2, n - 1) / k._cd; continue; } // a marked foe's burst reaches 2 other foes of the pack, one burst per foe of the pack
+      if (key === 'charge.bash') { sum += (q.bashStrike * Math.min(n, q.bashN) + q.bashReturn * n) / k._cd; continue; } // Shield Bash: the free shield ricochets over the pack and its return pass sweeps it, like a Throw
       if (key === 'step.blossom') { sum += q.here * Math.min(n - 1, q.n) / k._cd; continue; } // Death Blossom: the chain cuts one more foe of the pack per blink (the Shadowstep cut the first)
       if (key === 'judgment.verdict') { sum += q.here * deathPairs(n) * cover(q.r) / k._cd; continue; } // a Judged foe's death bursts on the foes still standing near it: the pack dies one foe at a time within a cooldown
       if (key === 'harvest.corpse') { sum += q.here * Math.min(q.cap, n) * Math.min(NEIGH, n - 1) * cover(q.r) / k._cd; continue; } // Harvest detonates the pack's kills of the cooldown (up to the corpse cap), each on the neighbours it left
       if (key === 'harvest.shard') { sum += q.here * Math.min(q.cap, n) * Math.min(q.shardN, n - 1) / k._cd; continue; } // Carrion Storm: each corpse sends its shards at the nearest foes left
-      if (key === 'meteor.rocks') { sum += q.here * q.n * n * Math.min(1, (q.r / SCATTER_R) ** 2) / k._cd; continue; } // Meteor Shower: each meteorite lands at random within SCATTER_R of the impact and strikes the share of a pack its circle covers
+      if (key === 'meteor.rocks') { sum += q.here * q.n * q.sets * n * Math.min(1, (q.r / SCATTER_R) ** 2) / k._cd; continue; } // Meteor Shower: each meteorite lands at random within SCATTER_R of the impact and strikes the share of a pack its circle covers
       if (key === 'shieldthrow.strike') { const h = Math.min(n, 4 + 2); mul = h * (1 + (q.gather || 0) * (h - 1) / 2); } // Gathering Force: strike k of a shield lands at 1 + gather x (k - 1)
       if (q.kind === 'minion') mul = q.dkCleave ? Math.min(n, 3) : 1; // the Death Knight cleaves a wide arc: about 3 foes of a pack
       if (key === 'vanish.ambush') { const hb = m.weapon.kind === 'melee' ? n : Math.min(n, m.weapon.n); mul = (hb + (n - hb) * (q.sweepR > 0 ? cover(q.sweepR) : 0)) / Math.max(1, q.oneFoe); } // Ambush Sweep: the pack foes the Ambush shots miss catch the sweep (those within sweepR of the target)

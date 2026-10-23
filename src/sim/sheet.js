@@ -368,6 +368,7 @@
       oneFoe = fanHits(offs, q.pr || 5) * (q.waves || 1); o.fanN = q.n; o.waves = q.waves || 1; o.fan = q.fan;
     }
     if (q.ref) { let hits = 0; for (let k = 0; k < q.n; k++) if (q.ref * (q.n - 1 - k) / q.n <= q.r + Sh.REF.r) hits++; oneFoe = hits; } // Starfall: the impacts walk from the hero to a target q.ref px away; a foe there is in reach of some of them
+    if (skillId === 'meteor' && q.id === 'rocks') { o.sets = st.twinMeteor > 0 ? 2 : 1; oneFoe = o.sets * q.n * Math.min(1, ((q.r + Sh.REF.r) / ROCK_SCATTER) ** 2); } // Meteor Shower: 3 meteorites fall at random within ROCK_SCATTER of every impact (the twin's too); a lone foe at the impact is under a share of them
     if (q.id === 'ambush' && skillId === 'vanish') oneFoe = wpn.oneFoe; // each of the weapon's hits carries the Ambush value
     else if (skillId === 'vanish' && (q.id === 'edge' || q.id === 'clone')) oneFoe = wpn.oneFoe * (q.attacks || 0); // the Eclipse repeats and the clone's attacks: one weapon attack each
     if (skillId === 'judgment' && q.id === 'leg' && st.thirdLeg > 0) oneFoe *= 1 + st.secondFlight; // Second Flight: two more legs at secondFlight of a hit each, on the two of the first flight
@@ -412,9 +413,10 @@
   function bashPart(q, st, R) {
     const N = St.skillNums('shieldthrow', st), a = N.p.strike, b = N.p.return, M = Math.max(0.1, st.dmg), EC = 1 + st.crit * (st.critMult - 1), k = st.bash;
     const hit = (a.dmg + b.dmg) / 2 * k * M;
-    return finish({ id: q.id, label: q.label, per: 'hit', kind: 'hit', el: null, aff: 1, r: 0, proc: true, note: 'a free Shield Throw along the run, no stun', raw: (a.dmg + b.dmg) * k, hit, avg: hit * EC, pre: hit * EC, here: hit * EC, total: hit * EC * 2, oneFoe: 2, kc: st.crit, alwaysCrit: false, noCrit: false, selfVuln: 0 }, R);
+    return finish({ id: q.id, label: q.label, per: 'hit', kind: 'hit', el: null, aff: 1, r: 0, proc: true, note: 'a free Shield Throw along the run, no stun', raw: (a.dmg + b.dmg) * k, hit, avg: hit * EC, pre: hit * EC, here: hit * EC, total: hit * EC * 2, oneFoe: 2, kc: st.crit, alwaysCrit: false, noCrit: false, selfVuln: 0, bashStrike: a.dmg * k * M * EC, bashReturn: b.dmg * k * M * EC, bashN: a.n }, R); // bash*: the strike and return hits and the ricochet count, for the pack rule of tools/model.js
   }
 
+  const ROCK_SCATTER = 80; // px a Meteor Shower meteorite may land from its impact (class-pyro.js)
   const AIM_TEXT = { dir: 'toward the cursor', ground: 'lands on the cursor', move: 'toward the cursor', self: 'around you' };
   function skillModel(id, slot, p, st, ctx, wpn, R) {
     const sk = ED.SKILLS[id], N = St.skillNums(id, st), parts = [];
