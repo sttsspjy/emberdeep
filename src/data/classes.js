@@ -74,9 +74,9 @@
     dawnhammer: { name: 'Dawn Hammer', desc: 'Heavy blows; every 3rd swing sends a wave.', kind: 'melee', dmg: 43.2, rate: 0.72, range: 52, arc: 2.2, knock: 220, look: 'hammer', wave: { every: 3, mul: 1.0 } },
     lantern: { name: 'Sacred Lantern', desc: 'Piercing holy orbs that shield allies they touch (1.5% max health per orb, at most once per 1.5 s per ally, up to 8%; class shields are limited to 3% of max health per 10 s).', kind: 'proj', dmg: 16.9, rate: 0.42, speed: 300, n: 1, spread: 0, pierce: 1, r: 6, life: 0.9, proj: 'holy', shieldAlly: 0.015, look: 'lantern' },
     // Necromancer
-    bonewand: { name: 'Bone Wand', desc: 'Seeking soul bolts.', kind: 'proj', dmg: 9, rate: 0.4, speed: 350, n: 1, spread: 0, pierce: 0, r: 5, life: 1.0, proj: 'soul', homing: 4, look: 'wand' },
-    soulscythe: { name: 'Soul Scythe', desc: 'Wide reaping arcs; reaped foes rise more often.', kind: 'melee', dmg: 17, rate: 0.56, range: 52, arc: 2.4, knock: 110, look: 'scythe', raise: 0.12 },
-    plaguestaff: { name: 'Plague Staff', desc: 'Bolts that burst into lingering plague.', kind: 'proj', dmg: 6, rate: 0.6, speed: 260, n: 1, spread: 0, pierce: 0, r: 6, life: 0.8, proj: 'plague', cloud: { r: 44, dps: 10, dur: 2.6 }, look: 'staff' },
+    bonewand: { name: 'Bone Wand', desc: 'Seeking soul bolts.', kind: 'proj', dmg: 13.5, rate: 0.4, speed: 350, n: 1, spread: 0, pierce: 0, r: 5, life: 1.0, proj: 'soul', homing: 4, look: 'wand' },
+    soulscythe: { name: 'Soul Scythe', desc: 'Wide reaping arcs; reaped foes rise more often.', kind: 'melee', dmg: 25.5, rate: 0.56, range: 52, arc: 2.4, knock: 110, look: 'scythe', raise: 0.12 },
+    plaguestaff: { name: 'Plague Staff', desc: 'Bolts that burst into lingering plague.', kind: 'proj', dmg: 9, rate: 0.6, speed: 260, n: 1, spread: 0, pierce: 0, r: 6, life: 0.8, proj: 'plague', cloud: { r: 44, dps: 10, dur: 2.6 }, look: 'staff' },
   };
 
   // Skills. slot 0 = K, 1 = L. aim: 'dir' flies toward the cursor, 'ground' lands on it (clamped to range; walk: on a standable spot), 'move' travels toward it (rangeMin..range, + the stat in rangeAdd), 'self' ignores it.
