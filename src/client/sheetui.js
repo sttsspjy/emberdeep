@@ -130,11 +130,11 @@
       + `<div class="sh-pl${evo === 'evolved' ? ' got' : ''}"><i class="mk star${star}"></i>${evo === 'evolved' ? '' : `Evolves at ${P.evo.at}${P.id === 'general' ? '' : ' with keystone'}: `}${evoTxt}</div></div>`;
   }
   // Route tree: the four route nodes (the chosen one framed in brass, the rest one dim line), the chosen route's forks under it on a brass trunk (owned gold, open dashed, closed dim).
-  function routeBlock(R) {
+  function routeBlock(R, cc) { // cc = the class colour (the route card's icon hue)
     let h = '';
     for (const nd of R.nodes) {
       if (R.route && !nd.chosen) { h += `<div class="shc off sh-route sh-f" data-k="r:${nd.route}"><div class="sh-rh"><b>${esc(nd.label)}</b> · ${esc(nd.name)} <span class="mut">(not taken)</span></div></div>`; continue; }
-      h += `<div class="shc ${nd.chosen ? '' : 'dash'} sh-route sh-f" data-k="r:${nd.route}"${nd.chosen ? ` style="${frc('shcard-route')}"` : ''}><div class="sh-rh">${img(ico(nd.icon, '#f0cf8a'), true)}<b>${esc(nd.label)}</b> · ${esc(nd.name)}${nd.chosen ? ' <span class="sh-check">✓</span>' : ''}</div>`
+      h += `<div class="shc ${nd.chosen ? '' : 'dash'} sh-route sh-f" data-k="r:${nd.route}"${nd.chosen ? ` style="${frc('shcard-route')}"` : ''}><div class="sh-rh">${img(ico(nd.icon, cc), true)}<b>${esc(nd.label)}</b> · ${esc(nd.name)}${nd.chosen ? ' <span class="sh-check">✓</span>' : ''}</div>`
         + `<div class="sh-btx">${nd.chosen ? esc(nd.text) : `${esc(nd.when)}. Plays as: ${esc(nd.plays)}`}</div></div>`;
       if (!nd.chosen) continue;
       let f2 = '';
@@ -147,10 +147,12 @@
     }
     return `<div class="sh-tree">${h}</div>`;
   }
+  // A boon row's icon wears its card's identity hue (UI.boonIconColor), not its rarity.
+  const boonIco = (id) => (UI.boonIconColor ? ico(ED.BOONS[id].icon, UI.boonIconColor(id)) : ED.Icons.boonUrl(id));
   const KIND_LABEL = { gate: 'gate', keystone: 'keystone', evolution: 'evolution', duo: 'duo', route: 'route', fork: 'fork', ascended: 'ascended' };
   function boonRow(b) {
     const P = b.path && ED.PATHS[b.path] ? ED.PATHS[b.path] : null, color = b.kind === 'ascended' ? 'var(--gold)' : b.kind === 'route' || b.kind === 'fork' ? 'var(--gold)' : P ? P.color : '#b9ad9b', lab = KIND_LABEL[b.kind] || '';
-    return `<div class="sh-boon sh-f${b.kind === 'ascended' ? ' asc' : ''}" data-k="b:${b.id}" style="--pc:${color};--rc:${RAR(b.rar).color}"><img class="sh-i2" alt="" src="${ED.Icons.boonUrl(b.id)}"><div class="sh-bm">`
+    return `<div class="sh-boon sh-f${b.kind === 'ascended' ? ' asc' : ''}" data-k="b:${b.id}" style="--pc:${color};--rc:${RAR(b.rar).color}"><img class="sh-i2" alt="" src="${boonIco(b.id)}"><div class="sh-bm">`
       + `<div class="sh-bt"><b class="sh-bn">${esc(b.name)}</b>${lab ? chip(lab + (b.kind === 'fork' && b.tag ? ' · ' + esc(b.tag) : '')) : ''}<span class="sh-rar">${RAR(b.rar).name}</span>${b.max > 1 ? pips(b.rank, b.max) : ''}</div>`
       + `<div class="sh-btx">${esc(b.text)}</div>${b.next ? `<div class="sh-next"><b>Next rank</b>${esc(b.next)}</div>` : ''}</div></div>`;
   }
@@ -169,7 +171,7 @@
     if (B.duoWith) for (const d of B.duoWith) duos += `<div class="shc sh-duo sh-f" data-k="d:${d.id}" style="${frc('shcard-' + d.with)}"><div class="sh-rh"><span class="mut">with</span>${img(pathIco(d.with))}<b style="color:${d.withColor}">${esc(d.withName)}</b><b>${esc(d.name)}</b></div><div class="sh-btx">${esc(d.text)}</div></div>`;
     let left = head('Paths', B.generalist ? 'Generalist' : `${B.paths.filter(q => q.element).length}/${B.slots}`) + `<div class="sh-list">${paths}</div>`;
     if (duos) left += head('Duos') + `<div class="sh-list">${duos}</div>`;
-    left += head('Class route', B.route.route ? esc(ED.routeLabel(m.hero.cls, B.route.route)) : 'at level 3') + routeBlock(B.route);
+    left += head('Class route', B.route.route ? esc(ED.routeLabel(m.hero.cls, B.route.route)) : 'at level 3') + routeBlock(B.route, ED.CLASSES[m.hero.cls].col.c);
     let boons = B.groups.length ? '' : '<div class="sh-empty">No boons yet. The first pick comes from the start offer.</div>';
     for (const g of B.groups) {
       const P = g.path ? ED.PATHS[g.path] : null, gc = g.group === 'asc' || g.group === 'route' ? 'var(--gold)' : P ? P.color : '';

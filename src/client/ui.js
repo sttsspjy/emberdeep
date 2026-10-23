@@ -561,12 +561,17 @@
   }
   const deltaHtml = (list) => (list && list.length ? `<div class="bdl">${list.map(d => `<span class="${d.better ? 'up' : 'down'}">${esc(d.label)} ${ED.Sheet.n1(d.from)} → ${ED.Sheet.n1(d.to)}${d.unit ? ' ' + d.unit : ''}</span>`).join('')}</div>` : '');
   // Card identity of boon `id`: kind (ED.PickFx), big (keystone, evolution, path gate), frame metal (rarity), the frame CSS value, identity colours and icon colour.
-  function cardLook(id, b) {
-    const PF = ED.PickFx, CA = ED.CardArt, kind = PF ? PF.kind(id) : 'general', big = !!(PF && PF.big(id)), metal = b.asc ? 'gold' : CA ? CA.metal(b.rar) : 'iron';
-    const path = b.path || (b.duo && b.duo[0]) || null, path2 = b.duo ? b.duo[1] : null, cl = b.cls ? ED.CLASSES[b.cls] : null;
+  // Identity hue of boon `id` (card kind per ED.PickFx): pc = the card's path colour (route: class colour, Ascended: its rarity colour, purse gold), icol = its icon colour (duo: the duo colour).
+  function boonHue(id, b) {
+    const kind = ED.PickFx ? ED.PickFx.kind(id) : 'general', path = b.path || (b.duo && b.duo[0]) || null, cl = b.cls ? ED.CLASSES[b.cls] : null;
     const pc = kind === 'route' && cl ? cl.col.c : kind === 'asc' ? ED.RARITY.a.color : kind === 'purse' ? '#ffd36b' : path && ED.PATHS[path] ? ED.PATHS[path].color : ED.PATHS.general.color;
+    return { kind, path, pc, icol: kind === 'duo' ? ED.RARITY.d.color : pc }; // the icon wears the card's identity hue; rarity lives in the frame metal and the socket gem
+  }
+  UI.boonIconColor = (id) => boonHue(id, ED.BOONS[id]).icol;
+  function cardLook(id, b) {
+    const PF = ED.PickFx, CA = ED.CardArt, { kind, path, pc, icol } = boonHue(id, b), big = !!(PF && PF.big(id)), metal = b.asc ? 'gold' : CA ? CA.metal(b.rar) : 'iron';
+    const path2 = b.duo ? b.duo[1] : null;
     const frame = !CA ? '' : kind === 'duo' ? CA.frame('duo', metal, { a: path, b: path2 }) : kind === 'route' ? CA.frame('route', metal, { cls: b.cls }) : CA.frame(kind, metal, { big });
-    const icol = kind === 'duo' ? ED.RARITY.d.color : pc; // the icon wears the card's identity hue; rarity lives in the frame metal and the socket gem
     return { kind, big, metal, path, path2, pc, pc2: path2 && ED.PATHS[path2] ? ED.PATHS[path2].color : '', frame, icol };
   }
   // Decoration layer of a card (aria-hidden): crest, idle sprites, focus carets and the rarity socket gem; kinds per ED.PickFx.
