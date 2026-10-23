@@ -85,20 +85,38 @@ Weapon index 0 is available at once, index 1 at mastery 3, index 2 at mastery 6.
 | | Warhammer | 44.2 · 0.82 | shockwave r72 at 50% | Maul 77.1 · 1.3 | War Pick 26.7 · 0.451 |
 | | Glaive | 26 · 0.5 | range 82, arc 0.75 | Halberd 51.5 · 0.9 | Spear 15.7 · 0.275 |
 | Ranger | Longbow | 11 · 0.34 | arrows | Greatbow 21.8 · 0.612 | Hunting Bow 6.66 · 0.187 |
+| | ↳ Seeker Bow (Armory 40) | 10.2 · 0.34 | arrows home (turn 2.5/s) | Raptor Bow 20.2 · 0.612 | Swallow Bow 6.17 · 0.187 |
 | | Heavy Crossbow | 22.1 · 0.72 | pierce 2 | Arbalest 43.8 · 1.296 | Repeater 13.4 · 0.396 |
+| | ↳ Bolt Thrower (Armory 60) | 16 · 0.72 | 3 bolts, spread 0.32, range 218, no pierce | Bolt Cannon 31.7 · 1.296 | Bolt Spitter 9.68 · 0.396 |
 | | Twin Shortbows | 4.1 · 0.25 | 2 arrows | Twin Recurves 8.12 · 0.45 | Twin Flatbows 2.48 · 0.138 |
 | Pyromancer | Fire Staff | 15 · 0.5 | blast r40 at 60% | Magma Staff 29.7 · 0.9 | Spark Staff 9.08 · 0.275 |
+| | ↳ Sunlance (Armory 40) | 25 · 0.5 | beam 230 long, half-width 6, pierces all | Solar Pike 49.5 · 0.9 | Sunneedle 15.1 · 0.275 |
 | | Ember Wand | 6 · 0.15 | sparks build 15% Burn | Cinder Rod 11.9 · 0.27 | Flicker Wand 5.28 · 0.12 |
+| | ↳ Cinder Scatter (Armory 60) | 4.5 · 0.45 | 5 sparks, spread 0.14, range 144, build 15% Burn | Cinder Fan 8.91 · 0.81 | Spark Spray 3.3 · 0.3 |
 | | Inferno Tome | 30 · 1.0 | blast r72 at 80% | Tome of Ruin 42.9 · 1.3 | Pocket Grimoire 18.2 · 0.55 |
+| | ↳ Mortar Tome (Armory 80) | 36 · 1.0 | lob to the aim point (30–260) in 0.55 s, blast r80 at 100% | Siege Tome 51.5 · 1.3 | Hand Mortar 21.8 · 0.55 |
 | Shade | Twin Daggers | 11 · 0.21 | range 42 | Twin Kukris 21.8 · 0.378 | Stilettos 6.91 · 0.12 |
 | | Throwing Knives | 7 · 0.36 | fan of 3 | Chakrams 13.9 · 0.648 | Darts 4.24 · 0.198 |
+| | ↳ Boomerang Blades (Armory 60) | 6.5 · 0.5 | flies 168 and returns, pierces all, hits each foe once per leg | Moonblade 12.9 · 0.9 | Swallowtails 3.93 · 0.275 |
 | | Crescent Scythes | 16 · 0.48 | full circle | Great Scythes 31.7 · 0.864 | Sickles 9.68 · 0.264 |
 | Cleric | Holy Mace | 23 · 0.42 | wave every 3rd swing, 90% | Morning Star 45.5 · 0.756 | Flail 13.9 · 0.231 |
 | | Dawn Hammer | 43.2 · 0.72 | wave every 3rd swing, 100% | Sunforged Maul 85.5 · 1.296 | Dawn Pick 26.1 · 0.396 |
 | | Sacred Lantern | 16.9 · 0.42 | pierce 1; orbs shield allies | Great Lantern 33.5 · 0.756 | Censer 10.2 · 0.231 |
+| | ↳ Votive Lamp (Armory 80) | 12 · 0.42 | no pierce; each orb leaves a pool r36, 2 s, 22% dps; pools shield allies | Altar Lamp 23.8 · 0.756 | Prayer Candle 7.26 · 0.231 |
 | Necromancer | Bone Wand | 13.5 · 0.4 | seeking bolts | Skull Staff 26.7 · 0.72 | Finger Wand 8.17 · 0.22 |
+| | ↳ Bone Splinter (Armory 40) | 7 · 0.4 | 3 shards, spread 0.26, no seeking | Femur Rod 13.9 · 0.72 | Shard Wand 4.24 · 0.22 |
 | | Soul Scythe | 25.5 · 0.56 | kills raise +12% more often | Death Scythe 50.5 · 1.008 | Soul Sickle 15.4 · 0.308 |
 | | Plague Staff | 9 · 0.6 | cloud r44, 10 dps, 2.6 s | Plague Totem 17.8 · 1.08 | Plague Rod 5.45 · 0.33 |
+| | ↳ Miasma Staff (Armory 80) | 9 · 0.6 | a cloud r30 (70% dps, 2.6 s) every 40 of flight (2 at most), then one where it ends | Blight Staff 17.8 · 1.08 | Fume Rod 5.45 · 0.33 |
+
+**Armory variants** (↳ rows): a variant is its own weapon choice, wieldable once its base is unlocked, bought per hero in the Armory (cost 40 / 60 / 80 by its base's index). Same power: its mean of sim dps on one dummy and on a tight pack of 4 sits within ±10% of its base's. It takes every route card of its base. Flight shapes (generic weapon fields, `ED.WEAPONS` header):
+- **Beam** (`beam`): an instant line of `speed × life` from the hero, stopped by walls and guards; it strikes every foe on it once (pierces all), in order along the line (Deadeye distance = distance along the beam). Overheat pierce makes it 50% wider per pierce. A blast, acid or Magma Heart aftershock lands on the last foe struck, else at the beam's end. A spectral strike adds a 60% hit on the same foe.
+- **Lob** (`lob.t`): flies over foes to the aim point (clamped to 30 … `speed × life`) as a gold telegraph for `lob.t` s; the landing blast is the shot's own weapon hit (may crit, Staggers on Heavy; Deadeye distance = flight distance). Overheat only widens the blast.
+- **Return** (`ret`): flies `speed × life` out, then back to the hero; it pierces all and strikes each foe once per leg. A guard or a wall turns it back. A blast triggers on each foe struck. The Shade's Whirlwind ring throws boomerangs.
+- **Pool** (`pool`): where the shot ends, a ground pool deals `mul × dmg` per s for `dur` s; a holy pool shields allies (not its owner) by the Sacred Lantern rule (1.5% max health per 1.5 s per ally, 8% cap).
+- **Trail** (`trail`): every `every` of flight the shot drops a cloud (`mul × dmg` per s, `dur` s), `n − 1` at most in flight, the last on impact; clouds that touch merge into one. A Grave Bolt keeps laying them.
+- Bolt Thrower: each bolt is a Ballista siege bolt. Bone Splinter: each shard can become a Grave Bolt. Dawnbringer waves read `dmg`.
+- Sheet model: a beam hits a third of the pack beyond its first foe (`LINE_ALL`); a trail cloud reaches 2/3 of each extra pack foe (`TRAIL_PACK`); a return weapon hits each foe twice when the foe stands inside its range.
 
 Base hero HP: Knight 178 · Ranger 117 · Pyromancer 106 · Shade 165 · Cleric 175 · Necromancer 91 (armor, the Shade's 35% base dodge and Class Power: §5).
 

@@ -22,7 +22,7 @@ const GATE2 = { knight: ['kindle', 'frostbite'], ranger: ['kindle', 'frostbite']
 const MID = (cls) => Object.assign({}, ...GATE2[cls].map(id => ({ [id]: 1 })), { edge: 2, quick: 2, focus: 1, stalwart: 1 });
 const ctx = () => ({ stratum: STRATUM, pact: 0, gold: 0, level: 8, xp: 0, xpNext: 100, dark: false, allyNear: 0, minions: 0, room: null, party: 1, rooms: { seen: 1, total: 10, darkTotal: 2, darkLeft: 2 }, heroes: [], time: 0 });
 function hero(cls, wi, boons) {
-  const b = { cls, weapon: ED.CLASSES[cls].weapons[wi || 0], boons: boons || {}, relics: [], meta: META(), pact: 0 };
+  const b = { cls, weapon: typeof wi === 'string' ? wi : ED.CLASSES[cls].weapons[wi || 0], boons: boons || {}, relics: [], meta: META(), pact: 0 }; // wi: the weapon index, or a weapon id (an Armory variant)
   const stats = St.compute(b);
   return { pid: 'p', name: 'T', cls, weapon: b.weapon, boons: b.boons, relics: b.relics, meta: b.meta, stats, hp: stats.maxHp, maxHp: stats.maxHp, shield: 0, picks: 0, slot: 0 };
 }
@@ -120,6 +120,10 @@ if (args.weapons) {
     const med = list.map(w => w.mean).sort((a, b) => a - b)[1];
     out(`\n== ${ED.CLASSES[cls].name}`);
     for (const w of list) out(`  ${pad(w.name, 18)} ${rpad(f1(w.one), 6)} | ${rpad(f1(w.pack), 6)} | ${rpad(f1(w.mean), 6)}   dmg x${(med / w.mean).toFixed(2)}   hero ${f1(w.hero1)} dps`);
+    for (const id of Object.keys(ED.WEAPONS).filter(k => ED.CLASSES[cls].weapons.includes(ED.WEAPONS[k].variant))) { // Armory variants: the same columns, and the mean against the base weapon's
+      const p = hero(cls, id), m = model(p), one = m.weapon.dps, pack = packWeapon(m, PACK), mean = (one + pack) / 2, b = list.find(w => w.id === ED.WEAPONS[id].variant);
+      out(`    ${pad(m.weapon.name, 16)} ${rpad(f1(one), 6)} | ${rpad(f1(pack), 6)} | ${rpad(f1(mean), 6)}   ${sign(mean / b.mean - 1)} vs ${b.name}`);
+    }
   }
 }
 if (args.json) console.log(JSON.stringify(rows));

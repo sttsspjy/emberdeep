@@ -52,6 +52,10 @@
   };
   ED.CLASS_IDS = Object.keys(ED.CLASSES);
 
+  // Weapons. variant: the base weapon an Armory variant replaces (same slot, same unlock). Flight shapes of a 'proj' weapon (combat.js fireWeapon; damage of the zones a share of the shot's dmg, radii x the area bonus):
+  // beam: an instant line w.speed x w.life long, w.r half-width, cut at walls, every foe on it hit once (W.fireBeam); lob { t }: a shell arcs to the cursor (up to w.speed x w.life, over foes) and lands after t s as its explode blast (W.lobShot);
+  // ret: a boomerang out to w.speed x w.life and back to the hero, every foe struck once per leg; pool { r, dur, mul, zk, ally }: the shot ends in a zone of kind zk (ally: shield share an ally inside gets, the lantern rule);
+  // trail { n, every, r, dur, mul }: n plague clouds, one every `every` px flown and the last where the shot ends. Multi-shot (n, spread) and homing are the plain fields.
   ED.WEAPONS = {
     // Knight
     longsword: { name: 'Longsword', desc: 'Balanced sweeping cuts.', kind: 'melee', dmg: 23.4, rate: 0.42, range: 50, arc: 1.9, knock: 130, look: 'sword' },
@@ -77,6 +81,16 @@
     bonewand: { name: 'Bone Wand', desc: 'Seeking soul bolts.', kind: 'proj', dmg: 13.5, rate: 0.4, speed: 350, n: 1, spread: 0, pierce: 0, r: 5, life: 1.0, proj: 'soul', homing: 4, look: 'wand' },
     soulscythe: { name: 'Soul Scythe', desc: 'Wide reaping arcs; reaped foes rise more often.', kind: 'melee', dmg: 25.5, rate: 0.56, range: 52, arc: 2.4, knock: 110, look: 'scythe', raise: 0.12 },
     plaguestaff: { name: 'Plague Staff', desc: 'Bolts that burst into lingering plague.', kind: 'proj', dmg: 9, rate: 0.6, speed: 260, n: 1, spread: 0, pierce: 0, r: 6, life: 0.8, proj: 'plague', cloud: { r: 44, dps: 10, dur: 2.6 }, look: 'staff' },
+    // Armory variants (projectile shapes)
+    seekerbow: { name: 'Seeker Bow', desc: 'Arrows that gently home on foes.', kind: 'proj', dmg: 10.2, rate: 0.34, speed: 400, n: 1, spread: 0, pierce: 0, r: 4, life: 0.95, proj: 'arrow', homing: 2.5, look: 'bow', variant: 'longbow' },
+    boltthrower: { name: 'Bolt Thrower', desc: 'Three bolts in a wide spread, short range.', kind: 'proj', dmg: 16, rate: 0.72, speed: 520, n: 3, spread: 0.32, pierce: 0, r: 5, life: 0.42, proj: 'bolt', look: 'crossbow', knock: 80, variant: 'crossbow' },
+    sunlance: { name: 'Sunlance', desc: 'An instant beam of fire that pierces every foe on its line.', kind: 'proj', dmg: 25, rate: 0.5, speed: 460, n: 1, spread: 0, pierce: 0, r: 6, life: 0.5, proj: 'firebolt', beam: true, look: 'staff', variant: 'firestaff' },
+    cinderscatter: { name: 'Cinder Scatter', desc: 'Sprays five short-lived sparks that often ignite.', kind: 'proj', dmg: 4.5, rate: 0.45, speed: 360, n: 5, spread: 0.14, pierce: 0, r: 4, life: 0.4, proj: 'spark', burn: 0.15, look: 'wand', variant: 'emberwand' },
+    mortar: { name: 'Mortar Tome', desc: 'Lobs a fireball over foes onto the cursor; a wide blast where it lands.', kind: 'proj', dmg: 36, rate: 1.0, speed: 520, n: 1, spread: 0, pierce: 0, r: 9, life: 0.5, proj: 'fireball', lob: { t: 0.55 }, explode: { r: 80, mul: 1 }, look: 'tome', variant: 'inferno' },
+    boomerang: { name: 'Boomerang Blades', desc: 'A spinning blade flies out and back, cutting every foe on each leg.', kind: 'proj', dmg: 6.5, rate: 0.5, speed: 420, n: 1, spread: 0, pierce: 0, r: 6, life: 0.4, proj: 'boomerang', ret: true, look: 'dagger', variant: 'knives' },
+    votive: { name: 'Votive Lamp', desc: 'Holy orbs that end in a small pool of light; allies standing in it are shielded (1.5% max health, at most once per 1.5 s per ally, up to 8%; class shields are limited to 3% of max health per 10 s).', kind: 'proj', dmg: 12, rate: 0.42, speed: 300, n: 1, spread: 0, pierce: 0, r: 6, life: 0.9, proj: 'holy', pool: { r: 36, dur: 2, mul: 0.22, zk: 'holypool', ally: 0.015 }, look: 'lantern', variant: 'lantern' },
+    splinter: { name: 'Bone Splinter', desc: 'Three bone shards in a spread.', kind: 'proj', dmg: 7, rate: 0.4, speed: 350, n: 3, spread: 0.26, pierce: 0, r: 5, life: 1.0, proj: 'bone', look: 'wand', variant: 'bonewand' },
+    miasma: { name: 'Miasma Staff', desc: 'Bolts that leave a trail of three small plague clouds.', kind: 'proj', dmg: 9, rate: 0.6, speed: 260, n: 1, spread: 0, pierce: 0, r: 6, life: 0.8, proj: 'plague', trail: { n: 3, every: 40, r: 30, dur: 2.6, mul: 0.7 }, look: 'staff', variant: 'plaguestaff' },
   };
 
   // Skills. slot 0 = K, 1 = L. aim: 'dir' flies toward the cursor, 'ground' lands on it (clamped to range; walk: on a standable spot), 'move' travels toward it (rangeMin..range, + the stat in rangeAdd), 'self' ignores it.
@@ -280,6 +294,18 @@
     'soulscythe@heavy': LOOK('weapon.soulscythe', 'H', 1.15, { dup: 1, tint: '#4fd8c0' }), 'soulscythe@swift': LOOK('weapon.soulscythe', 'S', 0.9, { tint: '#4fd8c0' }),
     'plaguestaff@heavy': LOOK('weapon.plaguestaff', 'H', 1.15, { tint: '#7fbf3a' }), 'plaguestaff@swift': LOOK('weapon.plaguestaff', 'S', 0.9, { tint: '#7fbf3a' }),
   };
+  // Armory variants (projectile shapes): the variant's own look (no op: its base art recoloured onto the tint) and its forks' looks (all: the tint covers every pixel).
+  const VLOOK = (base, tint, h, s) => [LOOK('weapon.' + base, '', 1, { tint }), LOOK('weapon.' + base, 'H', 1.15, Object.assign({ tint, all: true }, h)), LOOK('weapon.' + base, 'S', 0.9, Object.assign({ tint, all: true }, s))];
+  for (const [id, base, tint, heavy, swift, h, s] of [
+    ['seekerbow', 'longbow', '#7fcf6a', 'Raptor Bow', 'Swallow Bow'], ['boltthrower', 'crossbow', '#b0703a', 'Bolt Cannon', 'Bolt Spitter', null, { magazine: true }],
+    ['sunlance', 'firestaff', '#ffd36b', 'Solar Pike', 'Sunneedle', { gem: '#fff0a0' }], ['cinderscatter', 'emberwand', '#ff5a2a', 'Cinder Fan', 'Spark Spray'], ['mortar', 'inferno', '#7a4ab0', 'Siege Tome', 'Hand Mortar', { clasp: true }, { ribbon: true }],
+    ['boomerang', 'knives', '#b78cff', 'Moonblade', 'Swallowtails'], ['votive', 'lantern', '#ffe9a0', 'Altar Lamp', 'Prayer Candle', { cage: true }, { chain: true }],
+    ['splinter', 'bonewand', '#e6dfc9', 'Femur Rod', 'Shard Wand', { skull: true }], ['miasma', 'plaguestaff', '#5a9a2a', 'Blight Staff', 'Fume Rod'],
+  ]) {
+    const [l0, lh, ls] = VLOOK(base, tint, h, s);
+    ED.FORK_LOOKS[id] = l0; ED.FORK_LOOKS[id + '@heavy'] = lh; ED.FORK_LOOKS[id + '@swift'] = ls;
+    ED.FORK_NAMES[id + '@heavy'] = heavy; ED.FORK_NAMES[id + '@swift'] = swift;
+  }
 
   const forkMemo = new Map();
   // The Heavy / Swift version of weapon baseId for a fork card (id or card object), derived from the base so it follows any re-tune of the base; pure and memoized.

@@ -189,7 +189,7 @@
     const p = w.players.get(pid);
     if (!p || !a) return;
     switch (a.t) {
-      case 'atk': w.playerAttack(p, +a.a || 0); break;
+      case 'atk': p.atkD = +a.d; w.playerAttack(p, +a.a || 0); break; // d: the cursor distance of the attack (a lobbed weapon lands there)
       case 'skill': if ((a.slot | 0) === 0 || (a.slot | 0) === 1) w.playerSkill(p, +a.a || 0, a.data, a.slot | 0); break;
       case 'dash': w.playerDash(p, +a.dx || 0, +a.dy || 0); break;
       case 'interact': w.interact(pid, a.id); break;
@@ -341,7 +341,7 @@
       if (!inp.atk) ctl.latch = false;
       if (inp.atk && !ctl.latch && ctl.atkCd <= 0 && !near) {
         const w = st.weapon, cl = isCleave(me, st, w, view.time); // decided before the act: the sim spends the Follow-Through
-        G.act({ t: 'atk', a: aim });
+        G.act({ t: 'atk', a: aim, d: Math.round(Math.hypot(me.aimX - me.x, me.aimY - me.y)) });
         if (s.mode === 'client') { me.atkCount = (me.atkCount | 0) + 1; if (st.swift) me.flowT = ED.CONST.FLOW_T; if (cl) me.cleaveNext = 0; } // the host spends Follow-Through on the Cleave it grants
         if (s.mode === 'client') me.atkAge = 0;
         ctl.atkCd = Math.max(ctl.atkCd, -dt) + ED.Stats.attackInterval(me); // carries the overshoot of this frame so the real rate equals the shown one

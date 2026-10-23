@@ -190,11 +190,11 @@
     return o;
   }
   // Metal pixels (cool or grey) re-mapped onto the ramp of a tint colour by luminance; wood, brass and warm colours stay.
-  function ftint(s, hex) {
+  function ftint(s, hex, all) {
     const rp = ED.Pix.ramp(hex).map((h) => U.hexToRgb(h));
     for (let i = 0; i < s.d.length; i++) {
       const v = s.d[i]; if (!v || v === OUTC) continue;
-      const r = v & 255, g = (v >> 8) & 255, b = (v >> 16) & 255; if (b < r - 6) continue;
+      const r = v & 255, g = (v >> 8) & 255, b = (v >> 16) & 255; if (b < r - 6 && !all) continue; // all: warm pixels too (a variant's whole recolour), else only the cool metal
       const l = (r * 0.299 + g * 0.587 + b * 0.114) / 255, t = U.clamp((l - 0.25) / 0.6, 0, 1) * (rp.length - 1), a = Math.min(rp.length - 2, t | 0), f = t - a, p = rp[a], q = rp[a + 1];
       s.d[i] = ((255 << 24) | (Math.round(p[2] + (q[2] - p[2]) * f) << 16) | (Math.round(p[1] + (q[1] - p[1]) * f) << 8) | Math.round(p[0] + (q[0] - p[0]) * f)) >>> 0;
     }
@@ -324,7 +324,8 @@
     return fturnBack(s, 2);
   }
   const FAMILY = { longbow: fBow, twinbows: fBow, crossbow: fXbow, inferno: fTome, scythes: fDiag, soulscythe: fDiag, bonewand: fDiag, lantern: fLantern };
-  const classOfWeapon = (base) => ED.CLASS_IDS.find((c) => ED.CLASSES[c].weapons.indexOf(base) >= 0);
+  const rootOf = (id) => { const w = ED.WEAPONS[id]; return w && w.variant ? w.variant : id; }; // an Armory variant draws from its base weapon's art and family
+  const classOfWeapon = (base) => { const b = rootOf(base); return ED.CLASS_IDS.find((c) => ED.CLASSES[c].weapons.indexOf(b) >= 0); };
   // Fork weapon data (ED.forkWeapon) of a weapon id like 'longsword@heavy'; the base weapon for a plain id.
   Sp.forkData = (id) => {
     const i = id.indexOf('@'), base = id.slice(0, i < 0 ? undefined : i);
@@ -333,10 +334,11 @@
     return t ? ED.forkWeapon(base, t.forks[kind === 'heavy' ? 0 : 1]) : ED.WEAPONS[base] || null;
   };
   const FORKA = new Map();
-  // Atlas anim id of the weapon id `wid` ('<base>' or '<base>@heavy|swift'): the baked look of a fork, else the base weapon's art; null without an atlas.
+  // Atlas anim id of the weapon id `wid` ('<base>' or '<base>@heavy|swift'; base may be an Armory variant): the baked look of a fork or a variant, else the base weapon's art; null without an atlas.
+  // A variant's own look (ED.FORK_LOOKS[variant id], no op) is its base art recoloured by luminance onto the tint ramp; its forks edit the base art like any fork (all: the tint recolours every pixel, not only the metal).
   Sp.forkAnim = (wid) => {
-    const i = wid.indexOf('@'), base = wid.slice(0, i < 0 ? undefined : i), plain = 'weapon.' + base;
-    if (i < 0) return plain;
+    const i = wid.indexOf('@'), vid = wid.slice(0, i < 0 ? undefined : i), base = rootOf(vid), plain = 'weapon.' + base;
+    if (i < 0 && base === vid) return plain;
     let a = FORKA.get(wid);
     if (a) return a;
     const A = ED.Atlas, L = ED.FORK_LOOKS && ED.FORK_LOOKS[wid];
@@ -345,9 +347,9 @@
       const cls = classOfWeapon(base), br = A.anim('weapon.' + base), X = { heavy: L.op === 'H', col: ED.CLASSES[cls].col.c, baseH: br.anchors.dir === 90 ? br.fw : br.fh, widen: L.art === 'weapon.alt.big_hammer' };
       let s = fpad(fread(L.art), P8);
       fstrip(s);
-      if (WEAR[base] && PACK(L.art)) fwear(s, 'weapon.' + base); else if (L.tint) ftint(s, L.tint); // a pre-coloured base (the gold Dawn Hammer) lends its palette to the pack sprite
+      if (WEAR[base] && PACK(L.art)) fwear(s, 'weapon.' + base); else if (L.tint) ftint(s, L.tint, !L.op || L.all); // a pre-coloured base (the gold Dawn Hammer) lends its palette to the pack sprite
       const fam = FAMILY[base];
-      s = fam ? fam(s, L, X) : fUp(s, L, UP[L.art] || [s.h - 2 * P8 - 8, 2, 8, 0], X);
+      if (L.op) s = fam ? fam(s, L, X) : fUp(s, L, UP[L.art] || [s.h - 2 * P8 - 8, 2, 8, 0], X);
       if (!s.outlined) { const studs = s.studs; s = foutline(s); fstuds(s, studs); }
       s = fcrop(s);
       let tx = s.tx, ty = s.ty;
@@ -406,15 +408,15 @@
     return a;
   };
 
-  // Weapon art of hero p: { id (base weapon id, before any '@' fork suffix), w (the fork weapon, else the ED.WEAPONS entry), anim (atlas anim id: the baked fork look when the hero owns a fork), look, twin (off-hand copy), fork ('heavy' | 'swift' | '') }. The one place weapon looks are resolved.
+  // Weapon art of hero p: { id (base weapon id, before any '@' fork suffix; an Armory variant's base), w (the fork weapon, else the ED.WEAPONS entry), anim (atlas anim id: the baked fork look when the hero owns a fork), look, twin (off-hand copy), fork ('heavy' | 'swift' | '') }. The one place weapon looks are resolved.
   const WART = {}, TWIN = { daggers: 1, twinbows: 1, scythes: 1 };
   Sp.weaponArt = (p) => {
     const cls = ED.CLASSES[p.cls], id = String((p.stats && p.stats.weaponId) || p.weapon || (cls && cls.weapons[0]) || 'longsword');
     let d = WART[id];
     if (!d) {
-      const base = id.split('@')[0], w = Sp.forkData(id) || ED.WEAPONS[base] || ED.WEAPONS[cls.weapons[0]], fk = id.indexOf('@') > 0 ? id.slice(id.indexOf('@') + 1) : '', anim = Sp.forkAnim(id);
+      const vid = id.split('@')[0], base = rootOf(vid), w = Sp.forkData(id) || ED.WEAPONS[vid] || ED.WEAPONS[cls.weapons[0]], fk = id.indexOf('@') > 0 ? id.slice(id.indexOf('@') + 1) : '', anim = Sp.forkAnim(id);
       d = { id: base, w, anim: anim || 'weapon.' + base, look: w.look, twin: !!TWIN[base], fork: fk };
-      if (!fk || (anim && anim.indexOf('wk.') === 0)) WART[id] = d; // a fork waits for the atlas before it is remembered
+      if ((!fk && vid === base) || (anim && anim.indexOf('wk.') === 0)) WART[id] = d; // a fork or a variant waits for the atlas before it is remembered
     }
     return d;
   };

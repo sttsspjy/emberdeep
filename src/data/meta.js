@@ -30,14 +30,23 @@
     knight: [
     ],
     ranger: [
+      { id: 'seekerbow', weapon: 'longbow', name: 'Seeker Bow', desc: 'Longbow variant: arrows that gently home on foes.', cost: 40 },
+      { id: 'boltthrower', weapon: 'crossbow', name: 'Bolt Thrower', desc: 'Heavy Crossbow variant: three bolts in a wide spread, short range, no pierce.', cost: 60 },
     ],
     pyro: [
+      { id: 'sunlance', weapon: 'firestaff', name: 'Sunlance', desc: 'Fire Staff variant: an instant beam that pierces every foe on its line.', cost: 40 },
+      { id: 'cinderscatter', weapon: 'emberwand', name: 'Cinder Scatter', desc: 'Ember Wand variant: sprays five short-lived sparks that often ignite.', cost: 60 },
+      { id: 'mortar', weapon: 'inferno', name: 'Mortar Tome', desc: 'Inferno Tome variant: lobs a fireball over foes onto the cursor, a wide blast where it lands.', cost: 80 },
     ],
     shade: [
+      { id: 'boomerang', weapon: 'knives', name: 'Boomerang Blades', desc: 'Throwing Knives variant: one blade flies out and back, cutting every foe on each leg.', cost: 60 },
     ],
     cleric: [
+      { id: 'votive', weapon: 'lantern', name: 'Votive Lamp', desc: 'Sacred Lantern variant: orbs end in a small pool of light that burns foes and shields allies inside.', cost: 80 },
     ],
     necro: [
+      { id: 'splinter', weapon: 'bonewand', name: 'Bone Splinter', desc: 'Bone Wand variant: three bone shards in a spread, no seeking.', cost: 40 },
+      { id: 'miasma', weapon: 'plaguestaff', name: 'Miasma Staff', desc: 'Plague Staff variant: bolts leave a trail of three small plague clouds.', cost: 80 },
     ],
   };
 
