@@ -270,6 +270,13 @@ const partPack = (m, k, q, n) => MDp.directDamage({ weapon: { kind: 'melee', _av
   ok(q.sets === 2 && Math.abs(n / 16 - q.oneFoe) <= 0.7, `Meteor Shower: ${(n / 16).toFixed(2)} meteorites a cast on a lone foe, modelled ${q.oneFoe.toFixed(2)} (2 sets of 3)`);
   ok(q.statusAdd && q.statusAdd.pool > 0 && sheetOf(w, p).skills[1].parts.find(x => x.id === 'twin').statusAdd.pool > 0, 'Meteor Shower and Twin Meteor add Burn to the model');
 }
+{ // Rebirth Flare bursts when the Mantle shield is used up, and a Mantle comes at most once per 10 s: a Nova cast every ~5 s pays it in about half of the casts
+  const { w, p } = stage('pyro', {}, 0, { mantleBurst: 0.5, mantle: 0.03 });
+  const k = sheetOf(w, p).skills[0], fl = k.parts.find(x => x.id === 'flare');
+  near(fl.oneFoe, Math.min(1, k.cd / C.MANTLE_CD), 1e-9, `Rebirth Flare counts ${fl.oneFoe.toFixed(2)} bursts per cast (Nova every ${k.cd.toFixed(1)} s, Mantle every ${C.MANTLE_CD} s)`);
+  ok(fl.oneFoe > 0.3 && fl.oneFoe < 1, 'Rebirth Flare is a share of a burst per cast');
+}
+
 { // Ambush Sweep: a fan of knives strikes at most 3 foes of a pack; the sweep (every foe within ambushCleave of the target) reaches the rest, and the pack rule of tools/model.js counts it (a melee Ambush already strikes the whole pack)
   const MDs = require('./model.js')(ED, { pack: 4 });
   const packAmb = (cls, wi, cleave) => {

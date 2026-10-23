@@ -368,6 +368,7 @@
       oneFoe = fanHits(offs, q.pr || 5) * (q.waves || 1); o.fanN = q.n; o.waves = q.waves || 1; o.fan = q.fan;
     }
     if (q.ref) { let hits = 0; for (let k = 0; k < q.n; k++) if (q.ref * (q.n - 1 - k) / q.n <= q.r + Sh.REF.r) hits++; oneFoe = hits; } // Starfall: the impacts walk from the hero to a target q.ref px away; a foe there is in reach of some of them
+    if (skillId === 'nova' && q.id === 'flare') oneFoe = Math.min(1, St.skillNums('nova', st).cdEff / C.MANTLE_CD); // Rebirth Flare: the Mantle shield (one per MANTLE_CD) bursts once it is used up, so a Nova cooling down faster than that casts it only in some casts
     if (skillId === 'meteor' && q.id === 'rocks') { o.sets = st.twinMeteor > 0 ? 2 : 1; oneFoe = o.sets * q.n * Math.min(1, ((q.r + Sh.REF.r) / ROCK_SCATTER) ** 2); } // Meteor Shower: 3 meteorites fall at random within ROCK_SCATTER of every impact (the twin's too); a lone foe at the impact is under a share of them
     if (q.id === 'ambush' && skillId === 'vanish') oneFoe = wpn.oneFoe; // each of the weapon's hits carries the Ambush value
     else if (skillId === 'vanish' && (q.id === 'edge' || q.id === 'clone')) oneFoe = wpn.oneFoe * (q.attacks || 0); // the Eclipse repeats and the clone's attacks: one weapon attack each
