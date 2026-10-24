@@ -107,12 +107,12 @@ const RAD = (a) => a * Math.PI / 180;
   const noF = stage({ r_atk_s: 1 }); noF.p.atkCount = 3; noF.w.projs.length = 0; noF.w.playerAttack(noF.p, 0); ok(noF.w.projs.filter(q => q.team === 0).length === 1, 'no Flurry at rank 1');
 }
 { // Flurry arrows go through W.fireWeapon: evolution riders, homing and extra projectiles match the aimed arrow
-  const shots = (boons, setup) => { const s = stage(boons); setup(s.p.stats); s.p.atkCount = 3; s.w.projs.length = 0; s.w.playerAttack(s.p, 0); return s.w.projs.filter(q => q.team === 0); };
+  const shots = (boons, setup, after) => { const s = stage(boons); setup(s.p.stats); s.p.atkCount = 3; s.w.projs.length = 0; s.w.playerAttack(s.p, 0); if (after) after(s.w); return s.w.projs.filter(q => q.team === 0); };
   const rider = (q) => JSON.stringify([!!q.explode, !!q.spec, q.homing, q.burn, q.pierce, q.dmg, q.knock, q.r, q.speed]);
   for (const evo of ['fire', 'general']) {
-    const sh = shots({ r_atk_s: 2 }, (st) => { st.evo = evo; });
+    let zs = 0; const sh = shots({ r_atk_s: 2 }, (st) => { st.evo = evo; }, (w) => { zs = w.zones.filter(z => z.kind === 'cinder').length; });
     ok(sh.length === 3 && sh.every(q => rider(q) === rider(sh[0])), `Flurry arrows carry the ${evo} evolution rider of the aimed arrow`);
-    ok(evo !== 'fire' || sh.every(q => q.explode && q.explode.r === 40), 'Cinder Arms: every Flurry arrow explodes (r 40)');
+    ok(evo !== 'fire' || zs === 3, `Cinder Arms: every Flurry arrow scorches its line (${zs} cinder lines)`);
     ok(evo !== 'general' || sh.every(q => q.spec), 'Spectral Arms: every Flurry arrow can release a spectral copy');
   }
   for (const pn of [1, 2]) {

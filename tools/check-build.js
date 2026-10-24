@@ -316,5 +316,17 @@ const ranks = (w, pid) => w.msgs.filter(m => m.t === 'forkRank' && m.to === pid)
   ok(!q.downed && q.secondWind === 0, 'Second Wind fires outside a boss fight'); near(q.hp, Math.round(q.maxHp * 0.1), 1e-9, 'rises at 10% health');
 }
 
+// ---------------- element paths: live cards reach the keystone and evolution; Attunements carry both halves; Mutations hold no path ----------------
+{
+  for (const el of ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow']) {
+    let r = 0;
+    for (const id in ED.BOONS) { const b = ED.BOONS[id]; if (b.path === el && !b.retired && !b.key && !b.evo && !b.duo && !b.cls && !b.asc) r += b.max || 1; }
+    ok(r >= ED.KEY_AFFINITY && r + 1 >= ED.EVO_AFFINITY && r + 1 <= 13, `${el}: ${r} path ranks + keystone reach the evolution (${ED.EVO_AFFINITY}) without retired cards`);
+  }
+  const at = { fuel: ['fireInfuse', 'searing'], deepcold: ['chillMul', 'brittle'], stormattune: ['lightningInfuse', 'ionize'], potency: ['venomBuild', 'fester'], fervor: ['holyInfuse', 'hallow'], malignance: ['shadowInfuse', 'malice'] };
+  for (const id in at) { const st = build('ranger', { [id]: 1 }); ok(at[id].every(k => st[k] > 0), `${ED.BOONS[id].name}: build-up and conditional damage in one common`); }
+  ok(ED.MUT_IDS.every(id => !ED.BOONS[id].path), 'Mutations never count toward path affinity');
+}
+
 console.log(`${n} checks, ${fails} failed`);
 process.exit(fails ? 1 : 0);

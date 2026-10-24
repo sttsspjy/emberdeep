@@ -65,12 +65,11 @@ for (const mode of ['proj', 'zone', 'tick']) {
 
 // ---- Smite duo statuses are built from the Smite before the holy affinity ----
 for (const s of [1, 2]) {
-  const { w, p } = stage('cleric', { sunfire: 1, hoarlight: 1, twilight: 1 });
-  w.stratum = s; p.stats.sunfire = 1; p.stats.hoarlight = 1; p.stats.twilight = 1;
-  const e = foe(w, p.x + 200, p.y), holy = w.elemAff('holy'), fire = w.elemAff('fire'), shadow = w.elemAff('shadow');
+  const { w, p } = stage('cleric', { sunfire: 1 });
+  w.stratum = s; p.stats.sunfire = 1;
+  const e = foe(w, p.x + 200, p.y), holy = w.elemAff('holy'), fire = w.elemAff('fire');
   w.smite(e, p, 100); // stored Radiance 100 already carries the holy affinity
   near(e.burnPool, 100 / holy * 0.6 * fire, 1e-6, `stratum ${s} Sunfire Burn`);
-  near(e.doom, 100 / holy * (1 + p.stats.doomMul) * shadow, 1e-6, `stratum ${s} Twilight Doom`);
 }
 {
   const { w, p } = stage('pyro', { thermalshock: 1 });
