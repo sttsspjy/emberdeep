@@ -50,6 +50,8 @@
       holyInfuse: 0, smiteMul: 0, smiteShield: 0.01, holyCap: 0.06, beacon: 0, dashBlind: 0, radiantAegis: 0, // smiteShield and holyCap start at the base every hero smites with
       shadowInfuse: 0, doomMul: 0, doomTough: 0, malice: 0, knell: 0, deathsEdge: 0, dashDoom: 0, reaper: 0,
       bleed: 0, bleedMul: 0, lacerate: 0, sunder: 0, opportunist: 0, masterstroke: 0, twinEvery: 0,
+      // Twists (src/data/twists.js, src/sim/twist.js): 1 while held
+      twBlood: 0, twMetro: 0, twPacifist: 0, twHunted: 0,
       // duos
       thermal: 0, plasma: 0, supercond: 0, firedamp: 0, sunfire: 0, blackflame: 0, cryotoxin: 0, hoarlight: 0, blackice: 0, galvanic: 0, heavenwrath: 0, blackLight: 0, purge: 0, necrosis: 0, twilight: 0,
     };

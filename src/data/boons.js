@@ -224,6 +224,8 @@
     l: { name: 'Legendary', color: '#ffb02e', w: 4 },
     d: { name: 'Duo', color: '#5ff2c0', w: 12 },
     a: { name: 'Ascended', color: '#ff5fd2', w: 0 },
+    m: { name: 'Mutation', color: '#ff8a4a', w: 0 },
+    t: { name: 'Twist', color: '#e8344e', w: 0 },
   };
 
   // Gate boon id per path.

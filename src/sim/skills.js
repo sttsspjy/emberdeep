@@ -126,6 +126,7 @@
     const extra = fn.call(this, p, a, data || {}, st, ED.Stats.skillNums(skill, st));
     if (extra === false) return;
     this.onSkillCast(p, slot);
+    if (p.twist) ED.TWIST.onCast.call(this, p, slot); // TWIST hook (src/sim/twist.js)
     this.emit(Object.assign({ t: 'skill', pid: p.pid, k: skill, a: Math.round(a * 100) / 100, x: Math.round(p.x), y: Math.round(p.y), slot }, extra));
   };
 })(globalThis.ED || (globalThis.ED = {}));

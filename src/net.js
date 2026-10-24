@@ -276,7 +276,7 @@
   // ---------------- snapshots ----------------
   const ST = ['move', 'windup', 'lunge', 'aim', 'spin', 'charge', 'fuse', 'cast', 'idle', 'atk', 'dash', 'wind', 'slam', 'air', 'roar', 'fade', 'burrow', 'erupt', 'bash', 'leap', 'dive']; // append only: indices are the wire format
   const ST_IDX = U.indexer(ST);
-  const ZK = ['spawn', 'tele', 'teleLine', 'teleCone', 'laser', 'poison', 'fire', 'pfire', 'plague', 'sanct', 'pull', 'bomb', 'decoy', 'mire', 'rain', 'meteor', 'smoke', 'skyfall', 'shards', 'crack', 'vortex', 'starfall', 'bramble', 'holypool', 'bward']; // append only: indices are the wire format
+  const ZK = ['spawn', 'tele', 'teleLine', 'teleCone', 'laser', 'poison', 'fire', 'pfire', 'plague', 'sanct', 'pull', 'bomb', 'decoy', 'mire', 'rain', 'meteor', 'smoke', 'skyfall', 'shards', 'crack', 'vortex', 'starfall', 'bramble', 'holypool', 'bward', 'cinder', 'firebreak', 'pillar', 'anchor', 'vigil']; // append only: indices are the wire format
   const ZK_IDX = U.indexer(ZK);
   const PK = ['gold', 'xp', 'heart', 'orb'];
   const PK_IDX = U.indexer(PK);
@@ -290,7 +290,7 @@
     return k < 0.95 ? 1 : k < 1.25 ? 2 : 3;
   };
   // FX events kept per type in one snapshot (host to client), and per rendered frame on the host or solo machine (a third of it). Extras are dropped; sim state never is.
-  N.CAPS = { hit: 24, smite: 12, reap: 12, toll: 12, lance: 12, ric: 12, parry: 6, catch: 4, kblock: 6, blance: 8 };
+  N.CAPS = { hit: 24, smite: 12, reap: 12, toll: 12, lance: 12, ric: 12, parry: 6, catch: 4, kblock: 6, blance: 8, detonate: 16, tether: 8, rebuke: 6, reapchain: 8, shatter: 8, hurl: 8, reel: 8 };
   N.CAPS_LOCAL = { hit: 8, smite: 4, reap: 4, toll: 4, lance: 4, ric: 4, parry: 2, catch: 2, kblock: 3, blance: 4 };
   Object.assign(N.CAPS, { exec: 8, rupt: 8, bloom: 6, sweep: 6 }); Object.assign(N.CAPS_LOCAL, { exec: 3, rupt: 3, bloom: 2, sweep: 2 }); // Shade execution cuts, ruptures, Bloodbloom lines and Ambush Sweep rings
   // Cap key of an event: a non-crit fodder hit counts as 'fhit' and a fodder death as 'fdie', so a horde never crowds out crits, threat hits and threat deaths.
@@ -336,19 +336,19 @@
   };
   // Zone rows end with the owner slot + 1 of a zone that follows its owner (Aura of Faith), else 0.
   // Fodder foes (e.fodder) skip E and ride in H as [id, ENEMY_IDX, x, y, hpQ, fl]: hpQ = round(255 hp / maxHp) in 1..255; fl bits 0 flash, 1 frozen, 2 stunned, 3 chilled, 4 burning, 5 faces left.
-  // Foe flags: 0 flash, 1 frozen, 2 stunned, 4 chilled, 5 exposed, 6 charged, 7 bleeding, 8 judged, 9 blind, 10 vulnerable, 11-12 burn level, 13-15 Venom level, 16-17 Radiance fill, 18 Hexed, 19 Marked, 20 Sealed, 21-23 ailment count (0-7).
+  // Foe flags: 0 flash, 1 frozen, 2 stunned, 4 chilled, 5 exposed, 6 charged, 7 bleeding, 8 judged, 9 blind, 10 vulnerable, 11-12 burn level, 13-15 Venom level, 16-17 Radiance fill, 18 Hexed, 19 Marked, 20 Sealed, 21-23 ailment count (0-7), 24 Quarry, 25 carries a Venom dose, 26 affixes suppressed (Hex the Strong), 27 Hunted champion.
 
   N.encodeSnap = (w, fx, full) => {
     const P = [], E = [], H = [], B = [], K = [], Z = [], A = [];
     for (const p of w.players.values()) {
       const sw = ED.Sheet.shieldWindow(p, w.time);
       const fl = (p.moving ? 1 : 0) | (p.dashing ? 2 : 0) | (p.downed ? 4 : 0) | (p.dead ? 8 : 0) | (p.invuln > 0 ? 16 : 0) | (p.hurtT > 0 ? 32 : 0) | (p.shieldOut ? 64 : 0) | (p.stealthT > 0 ? 128 : 0) | (p.ambush ? 256 : 0) | (p.cometT > 0 ? 512 : 0) | (p.glT > 0 ? 1024 : 0) | (p.auraT > 0 ? 2048 : 0) | (p.tranceT > 0 ? 4096 : 0) | (p.braceT > 0 ? 1 << 20 : 0);
-      P.push([p.pid, r(p.x), r(p.y), r2(p.face), Math.ceil(p.hp), p.maxHp, fl, r2(p.revive), p.critStacks | 0, p.aegisT > 0 ? 1 : 0, p.guardT > 0 ? 1 : 0, p.secondWind | 0, p.phoenixUsed ? 1 : 0, p.picks | 0, p.rerolls | 0, Math.ceil((p.shield || 0) * 10 - 1e-9) / 10, ED.Sheet.readyBits(p), p.momN | 0, r2(sw.c), r2(sw.a), p.chaliceHp | 0, p.knellT > 0 ? p.knellN | 0 : 0, p.glT > 0 ? Math.round(p.glV * 1000) / 1000 : 0, p.auraT > 0 ? Math.round(p.auraV * 1000) / 1000 : 0, p.bells && p.bells.length ? N.bellRow(p, w) : 0]); // P[15] shield rounded up to tenths (a shield is a few health points); P[16] ready-state bits of the sheet's defensive items (ED.Sheet.READY); P[17] Momentum stacks; P[18] P[19] shield received in the window: class sources, all sources (health); P[20] Grail of Ages growth; P[21] Death Knell stacks; P[22] P[23] Guardian Light and Embolden damage bonus (0 = off); P[24] bells (N.bellRow)
+      P.push([p.pid, r(p.x), r(p.y), r2(p.face), Math.ceil(p.hp), p.maxHp, fl, r2(p.revive), p.critStacks | 0, p.aegisT > 0 ? 1 : 0, p.guardT > 0 ? 1 : 0, p.secondWind | 0, p.phoenixUsed ? 1 : 0, p.picks | 0, p.rerolls | 0, Math.ceil((p.shield || 0) * 10 - 1e-9) / 10, ED.Sheet.readyBits(p), p.momN | 0, r2(sw.c), r2(sw.a), p.chaliceHp | 0, p.knellT > 0 ? p.knellN | 0 : 0, p.glT > 0 ? Math.round(p.glV * 1000) / 1000 : 0, p.auraT > 0 ? Math.round(p.auraV * 1000) / 1000 : 0, p.bells && p.bells.length ? N.bellRow(p, w) : 0, p.metroN | 0]); // P[15] shield rounded up to tenths (a shield is a few health points); P[16] ready-state bits of the sheet's defensive items (ED.Sheet.READY); P[17] Momentum stacks; P[18] P[19] shield received in the window: class sources, all sources (health); P[20] Grail of Ages growth; P[21] Death Knell stacks; P[22] P[23] Guardian Light and Embolden damage bonus (0 = off); P[24] bells (N.bellRow); P[25] Metronome beat (attacks since the last x3 beat, 0-3)
     }
     for (const e of w.enemies) {
       if (e.hp <= 0) continue;
       if (e.fodder) { H.push([e.id, ED.ENEMY_IDX[e.type], r(e.x), r(e.y), Math.max(1, Math.min(255, r(255 * e.hp / e.maxHp))), (e.flash > 0 ? 1 : 0) | (e.frozen > 0 ? 2 : 0) | (e.stun > 0 ? 4 : 0) | (e.chill > 0 ? 8 : 0) | (N.burnLevel(e) > 0 ? 16 : 0) | (e.face < 0 ? 32 : 0)]); continue; }
-      const fl = (e.flash > 0 ? 1 : 0) | (e.frozen > 0 ? 2 : 0) | (e.stun > 0 ? 4 : 0) | (e.chill > 0 ? 16 : 0) | (e.exposed ? 32 : 0) | (e.charge > 0 ? 64 : 0) | (e.bleedPool > 0 ? 128 : 0) | (e.judged > 0 ? 256 : 0) | (e.blind > 0 ? 512 : 0) | (e.vulnT > 0 ? 1024 : 0) | (N.burnLevel(e) << 11) | (N.venomLevel(e) << 13) | (N.radLevel(w, e) << 16) | (e.hexT > 0 ? 1 << 18 : 0) | (e.mark > 0 ? 1 << 19 : 0) | (e.sealT > 0 ? 1 << 20 : 0) | (Math.min(7, w.ailments(e)) << 21);
+      const fl = (e.flash > 0 ? 1 : 0) | (e.frozen > 0 ? 2 : 0) | (e.stun > 0 ? 4 : 0) | (e.chill > 0 ? 16 : 0) | (e.exposed ? 32 : 0) | (e.charge > 0 ? 64 : 0) | (e.bleedPool > 0 ? 128 : 0) | (e.judged > 0 ? 256 : 0) | (e.blind > 0 ? 512 : 0) | (e.vulnT > 0 ? 1024 : 0) | (N.burnLevel(e) << 11) | (N.venomLevel(e) << 13) | (N.radLevel(w, e) << 16) | (e.hexT > 0 ? 1 << 18 : 0) | (e.mark > 0 ? 1 << 19 : 0) | (e.sealT > 0 ? 1 << 20 : 0) | (Math.min(7, w.ailments(e)) << 21) | (e.quarryT > 0 ? 1 << 24 : 0) | (e.doses && e.doses.length ? 1 << 25 : 0) | (e.affixOff ? 1 << 26 : 0) | (e.hunted ? 1 << 27 : 0);
       const row = [e.id, ED.ENEMY_IDX[e.type], r(e.x), r(e.y), Math.ceil(e.hp), r(e.maxHp), e.r, fl, ST_IDX[e.boss ? (e.pose || 'idle') : e.st] | 0, r2(e.aimA || 0), e.elite ? ED.AFFIX_IDS.indexOf(e.elite) : -1, r(e.ward || 0), r(e.wardMax || 0), e.phase | 0, e.face < 0 ? -1 : 1, r2(e.t || 0), r(e.chill || 0), e.boss ? r(e.doom || 0) : r(w.doomLine(e)), e.elite2 ? ED.AFFIX_IDS.indexOf(e.elite2) : -1];
       if (e.furyT > 0) row.push(r(e.furyT * 10) / 10); // E[19], bosses of a stratum with fury only: the fight clock in tenths of a second
       E.push(row);

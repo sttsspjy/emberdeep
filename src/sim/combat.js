@@ -139,6 +139,7 @@
       if (crit) { dmg *= st.critMult; if (ch && ch.critMul) dmg *= ch.critMul.call(this, p, e, src) || 1; }
     }
     if (src.mul) dmg *= src.mul;
+    if (p && p.twist) dmg *= ED.TWIST.hitMul.call(this, p, e, src); // TWIST hook (src/sim/twist.js)
     if (src.bossMul && e.boss) dmg *= src.bossMul; // a skill part's boss factor (W.partSrc copies the part's bossMul)
     if (p && !src.noProc && st.shatter && e.frozen > 0 && !src.noShatter) { dmg *= 1 + st.shatter; shatter = true; }
     let vuln = 1;
@@ -785,7 +786,7 @@
     if (def.fodder) { this.fodderMote(e.x, e.y); return; } // fodder drop no gold, heart or Grail growth, split or leave a cloud: only the room's xp mote
     this.dropFoeXp(e);
     if (this.rng.chance(e.elite ? 1 : 0.12)) this.dropGold(e.x, e.y, (1 + Math.floor((s - 1) / 2)) * (e.elite ? 3 : this.rng.int(1, 2)));
-    if (this.rng.chance(e.elite ? 0.4 : 0.04)) this.spawnPickup('heart', e.x, e.y, 1);
+    if (this.rng.chance(e.elite ? 0.4 : ED.World.HEART_KILL)) this.spawnPickup('heart', e.x, e.y, 1);
     if (e.elite) {
       this.run.elitesKilled++; this.run.embers.elites += 2 + Math.floor(s / 2);
       if (ED.hasAffix(e, 'volatile')) this.addZone({ kind: 'tele', x: e.x, y: e.y, r: 70, dur: 0.7, team: 1, dmg: e.dmg * 1.2, boom: 'fire' });
@@ -997,6 +998,7 @@
       return;
     }
     p.face = a; p.atkCount++; p.stealthT = 0; p.lastAtkT = this.time;
+    if (p.twist) ED.TWIST.onAttack.call(this, p); // TWIST hook (src/sim/twist.js)
     if (st.swift) p.flowT = C.FLOW_T;
     let crit, amb = null;
     if (p.critStacks > 0) { p.critStacks--; crit = true; }
@@ -1041,6 +1043,9 @@
     if (ch && ch.attack) ch.attack.call(this, p, a, st, w);
     this.emit({ t: 'atk', pid: p.pid, a: Math.round(a * 100) / 100, n: p.atkCount });
   };
+
+  // Evolution behaviour of one landed weapon hit or bell strike e at angle a (src: the hit's source); Bellwarden strikes call it from class-bell.js.
+  W.evoHit = function (p, e, a, src) {};
 
   // Evolution strikes launched with an attack. They count as hero hits (infuse) and never trigger further evolution extras.
   W.evoAttack = function (p, a, w, evo) {
