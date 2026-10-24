@@ -1,5 +1,5 @@
 // Usage: node tools/check-save.js
-// Headless checks of the profile and save code: golden v2 (main era), v3 and v4 codes still load with their Codex embers refunded, v5 round trips (also with Armory entries) and survives appended upgrades/heroes/Armory entries/deeds in both directions,
+// Headless checks of the profile and save code: golden v2 (main era), v3 and v4 codes still load with their Codex embers refunded, v6 round trips (also with Armory entries) and survives appended upgrades/heroes/Armory entries/deeds in both directions,
 // a code from a newer build and an Armory overflow report clearly, the one-time news flag and the stored-profile Codex migration, upgrade refunds, Reset all and Armory buy/refund, the repurposed deed, the relic pool and the moved element relics,
 // and the per-hero deed counters (maxRelics, revivesGiven) in the run summary. Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
@@ -68,13 +68,13 @@ function checkGolden(g, label) {
   same(p.stats, g.stats, `${label}: stats`);
   ok(p.news === 1, `${label}: a code from before v5 gets the notice, got ${p.news}`);
   const q = S.decode(S.encode(p));
-  ok(q.embers === p.embers && q.refunded === 0 && q.news === 0, `${label}: re-encoded as v5 keeps the refunded embers and refunds nothing twice`);
+  ok(q.embers === p.embers && q.refunded === 0 && q.news === 0, `${label}: re-encoded as v6 keeps the refunded embers and refunds nothing twice`);
 }
 checkGolden(GOLD2, 'v2 code from main');
 checkGolden(GOLD3, 'v3 code');
 checkGolden(GOLD4, 'v4 code');
 
-// ---- v5 round trips ----
+// ---- v6 round trips ----
 const rnd = U.RNG(4242);
 const ri = (a, b) => a + Math.floor(rnd.next() * (b - a + 1));
 function randomProfile() {
@@ -96,9 +96,9 @@ const tripDiffs = (count) => {
 };
 {
   const rt = tripDiffs(300);
-  ok(rt === 0, `v5 round trip: ${rt} of 300 profiles differ`);
+  ok(rt === 0, `v6 round trip: ${rt} of 300 profiles differ`);
   const ra = withArmory(() => tripDiffs(300));
-  ok(ra === 0, `v5 round trip with Armory entries: ${ra} of 300 profiles differ`);
+  ok(ra === 0, `v6 round trip with Armory entries: ${ra} of 300 profiles differ`);
   ok(withArmory(() => { const p = randomProfile(); p.armory.knight = [1, 0, 1]; p.armory.pyro = [0, 1]; p.armory.necro = [1]; return JSON.stringify(S.decode(S.encode(p)).armory) === JSON.stringify(p.armory); }), 'Armory bits land on the right hero and entry');
 }
 
@@ -164,20 +164,26 @@ ok(typeof S.encode(S.defaultProfile()) === 'string', 'encode works again after t
 }
 
 // ---- the one-time news flag ----
+const GOLD5 = 'WD1-EAS1G-HKDDH-N6AHN-1JB2A-9A3RT-T7RH2-975RT-4KPS8-46JHN-HR4MV-3PQ5D-761ZP-WJ4AN-B6Q3S-V784'; // v5: Five, 12 runs, the first Knight Armory entry
 {
   const base = S.defaultProfile();
-  ok(base.news === 0 && base.v === 3 && base.refunded === 0 && base.relics === undefined, 'a new profile starts at era 3 with no news, no refund and no relics array');
+  ok(base.news === 0 && base.v === 4 && base.refunded === 0 && base.relics === undefined, 'a new profile starts at era 4 with no news, no refund and no relics array');
   ok(S.normalize({ v: 1, stats: { runs: 3 } }).news === 1, 'era-1 profile with runs gets the news');
   ok(S.normalize({ stats: { runs: 3 } }).news === 1, 'profile with no era and runs gets the news');
   ok(S.normalize({ v: 1, stats: { runs: 0 } }).news === 0, 'era-1 profile without runs gets none');
   ok(S.normalize({ v: 2, news: 0, stats: { runs: 3 } }).news === 1, 'era-2 profile with runs gets the notice of the new rules even if it saw the old one');
   ok(S.normalize({ v: 2, news: 0, stats: { runs: 0 } }).news === 0, 'era-2 profile without runs or refund gets none');
-  ok(S.normalize({ v: 3, news: 1, stats: { runs: 3 } }).news === 1, 'pending news survives a reload');
-  ok(S.normalize({ v: 3, news: 0, stats: { runs: 3 } }).news === 0, 'cleared news stays cleared');
+  ok(S.normalize({ v: 3, news: 1, stats: { runs: 3 } }).news === 1, 'era-3 profile keeps its pending full notice');
+  ok(S.normalize({ v: 3, news: 0, stats: { runs: 3 } }).news === 3, 'era-3 profile with runs gets the newest changes even if it saw the old notice');
+  ok(S.normalize({ v: 3, news: 0, stats: { runs: 0 } }).news === 0, 'era-3 profile without runs gets none');
+  ok(S.normalize({ v: 4, news: 1, stats: { runs: 3 } }).news === 1 && S.normalize({ v: 4, news: 3, stats: { runs: 3 } }).news === 3, 'pending news survives a reload');
+  ok(S.normalize({ v: 4, news: 0, stats: { runs: 3 } }).news === 0, 'cleared news stays cleared');
   ok(S.normalize(JSON.parse(JSON.stringify(S.normalize({ v: 1, stats: { runs: 3 } })))).news === 1, 'stored news round-trips through JSON');
   const seen = S.normalize({ v: 1, stats: { runs: 3 } }); seen.news = 0;
   ok(S.normalize(JSON.parse(JSON.stringify(seen))).news === 0, 'once cleared and stored the notice does not return');
-  ok(S.decode(S.encode(Object.assign(randomProfile(), { news: 1 }))).news === 0, 'a v5 code carries no news');
+  ok(S.decode(S.encode(Object.assign(randomProfile(), { news: 1 }))).news === 0, 'a v6 code carries no news');
+  const g5 = S.decode(GOLD5);
+  ok(g5.news === 3 && g5.name === 'Five' && g5.stats.runs === 12 && g5.armory.knight[0] === 1, `a v5 code with runs gets the newest changes, got news ${g5.news}`);
 }
 
 // ---- a stored profile of the Codex era: positional relics array, refunded once ----
@@ -186,7 +192,7 @@ const STORED_V2 = {"v":2,"news":0,"name":"Stored","embers":100,"lifetime":900,"u
   // axe 50, crown 105, wispjar 70, gauntlet 85, stone 130, bloodstone 60, venomgland 70 are the Codex relics held; halo and gravecandle are start relics
   const p = S.normalize(JSON.parse(JSON.stringify(STORED_V2)));
   ok(p.embers === 100 + 570 && p.refunded === 570 && p.lifetime === 900, `stored v2 profile: embers ${p.embers}, refunded ${p.refunded}, lifetime ${p.lifetime}`);
-  ok(p.v === 3 && p.news === 1 && p.relics === undefined, 'stored v2 profile: era 3, news pending, no relics array');
+  ok(p.v === 4 && p.news === 1 && p.relics === undefined, 'stored v2 profile: era 4, news pending, no relics array');
   same(p.up, STORED_V2.up, 'stored v2 profile: upgrade ranks kept');
   const again = S.normalize(JSON.parse(JSON.stringify(p)));
   ok(again.embers === p.embers && again.refunded === 570, 'a migrated profile is never refunded twice');
@@ -199,7 +205,7 @@ const STORED_V2 = {"v":2,"news":0,"name":"Stored","embers":100,"lifetime":900,"u
   try {
     mem[S.KEY] = JSON.stringify(STORED_V2);
     const a = S.load(), stored = JSON.parse(mem[S.KEY]);
-    ok(a.embers === 670 && stored.v === 3 && stored.relics === undefined && stored.embers === 670 && stored.refunded === 570, 'S.load: refunded, and the stored copy is migrated');
+    ok(a.embers === 670 && stored.v === 4 && stored.relics === undefined && stored.embers === 670 && stored.refunded === 570, 'S.load: refunded, and the stored copy is migrated');
     const b = S.load();
     ok(b.embers === 670 && b.news === 1 && b.refunded === 570, 'S.load again: no second refund, the notice still pending');
     b.news = 0; b.refunded = 0; S.store(b);
