@@ -234,7 +234,8 @@
   W.prototype.threat = function () { return W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, this.stratum - 1))]; };
   W.prototype.emit = function (ev) { this.fx.push(ev); };
   W.prototype.partySize = function () { return Math.max(1, this.players.size); };
-  W.partyHpMul = (size) => { const n = size - 1; return 1 + 0.2 * n + 0.3 * n * (n - 1); }; // foe HP factor of a party of `size` (pure; the sheet reads it too)
+  W.PARTY_HP = [1, 1.2, 2, 2.6]; // foe HP factor by party size 1-4
+  W.partyHpMul = (size) => W.PARTY_HP[Math.max(1, Math.min(W.PARTY_HP.length, size)) - 1]; // foe HP factor of a party of `size` (pure; the sheet reads it too)
   W.FOE_DMG = 1.4; // every foe's damage (hits, shots, zones, bosses) x this
   W.dmgScale = (s) => W.FOE_DMG * (1 + 0.22 * (s - 1) + 0.03 * (s - 1) * (s - 1)); // foe damage factor of stratum s
   W.prototype.partyHpMul = function () { return W.partyHpMul(this.partySize()); };
