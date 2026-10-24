@@ -13,7 +13,7 @@
 //   shots: 16 screenshots: boot name screen, menu, Descend, Hearth tabs (the Armory scrolled into view), Heroes, Settings, Credits, boon offer, a run in combat, the Tab sheet tabs, the pause menu (profile gets 400 embers unless --embers).
 //   sheet: a late build staged through the sim (BR.sheetStage: stratum --strat or V, two element paths, one evolved, their duo, open and Ascended boons, a fork at rank 3, six relics, a shield, an ally hero):
 //     the Tab sheet Build, Build scrolled to the end, Combat, Map, and Build viewing the ally; fails on a page error or when a sheet column overflows its panel sideways.
-//   swing: one contact-sheet PNG per melee weapon of --cls, its Armory variants included (or per --weapon id, forks as id@fork) (aimed --aim degrees, 0 = right, 90 = down, drawn at --zoom canvas px per world px, 2): frames at fixed times over two consecutive attacks (a combo weapon: one per step), the hold and the ease back to idle, hero and smear drawn by the game's own renderer.
+//   swing: one contact-sheet PNG per melee weapon of --cls, its Armory variants included (or per --weapon id, forks as id@fork, ranged ones too) (aimed --aim degrees, 0 = right, 90 = down, drawn at --zoom canvas px per world px, 2): frames at fixed times over two consecutive attacks (a combo weapon: one per step), the hold and the ease back to idle, hero and smear drawn by the game's own renderer.
 //   picks: every boon id resolves to a PickFx card kind; one PNG per pick burst (each kind, fire-big, holy-ally) on the solo hero about 0.25 s after FX.handle gets the 'boon' / 'relic' event;
 //     each pick cue (and the Hearth 'buy') rendered in an OfflineAudioContext: voices, peak, rms, audible length; fails on a throw, a silent cue or one longer than 0.9 s.
 //   cards: a frame sheet PNG (every card frame mask at 6 x) and one PNG per boon hand staged through the sim (the hero's boons set so the cards are eligible): path gates,
@@ -321,7 +321,7 @@ function pageBoot(cfg) {
     const ED = window.__ED, F = ED.FX, view = ED.Game.s.view, out = [], pid = 'sw-fake', face = aimDeg * Math.PI / 180, K2 = zoom, CW = 120 * zoom, CH = 140 * zoom, COLS = zoom > 2 ? 5 : 7;
     F.reset();
     for (const wid of weapons.length ? weapons : ED.weaponChoices(cls)) {
-      const w = ED.Sprites.weaponArt({ cls, weapon: wid }).w; if (w.kind !== 'melee') continue;
+      const w = ED.Sprites.weaponArt({ cls, weapon: wid }).w; if (w.kind !== 'melee' && !weapons.length) continue; // a ranged weapon only when named by --weapon
       const p = { pid, cls, slot: 0, weapon: wid, face, moving: false, hp: 1, x: 0, y: 0 }, fst = { weapon: w }, nA = w.combo ? w.combo.steps.length : 2;
       const sw = (k) => (w.combo ? ED.Stats.stepWeapon(fst, k) : null);
       view.players.set(pid, p);
@@ -341,7 +341,7 @@ function pageBoot(cfg) {
         if (f[0] >= 0) { Object.assign(an, S[f[0]]); an.atkT = f[1]; } else { Object.assign(an, S[0]); an.atkT = 9; }
         F.lastAnim = an;
         ED.Sprites.hero(c, p, 0, an);
-        if (f[0] >= 0 && f[1] >= an.t0 && f[1] < an.D + 0.1) {
+        if (w.kind === 'melee' && f[0] >= 0 && f[1] >= an.t0 && f[1] < an.D + 0.1) {
           const ws = sw(f[0]) || w;
           if (ws.ahead) { F.slam(0, -10, face, ws.range, ws.ahead.r, ED.PLAYER_COLORS[0], true); F.rings.length = 0; F.pops.length = 0; } else F.slash(0, -10, face, ws.range, Math.min(6.3, ws.arc), ED.PLAYER_COLORS[0]);
           const sl = F.slashes[F.slashes.length - 1]; sl.life = sl.max - f[1];

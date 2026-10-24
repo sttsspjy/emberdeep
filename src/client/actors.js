@@ -620,9 +620,7 @@
       for (let i = 0; i <= n; i++) { const x = q2(sx + (n ? (gx - sx) * i / n : 0)), y = q2(sy + (n ? (gy - sy) * i / n : 0)); if (pass) c.fillRect(x, y, K, K); else if (x < BL || x >= BR) c.fillRect(x - K, y - K, 3 * K, 3 * K); }
     }
   }
-  // True when a melee blade at angle wa draws behind the body: pointing up or away from the facing (sg = 1 right, -1 left).
-  const behindBody = (wa, sg) => Math.sin(wa) < -0.2 || Math.cos(wa) * sg < -0.35;
-  const HELD_OUT = { bow: 4, crossbow: 2, staff: 8, wand: 1 }; // art px the grip sits ahead of the hand along the aim
+  const HELD_OUT = { bow: 4, crossbow: 2, staff: 6, wand: 1 }, LANTERN_OUT = 7; // art px the grip sits ahead of the hand along the aim (a held staff's butt stays behind the body's edge)
   // Anim-relative drawn direction of a weapon sprite (radians, screen angle: 0 right, clockwise); 'dir' in the art data is degrees clockwise from up.
   const dirOf = (r) => ((r.anchors.dir || 0) - 90) * PI / 180;
   const nrm = (a) => { a %= TAU; return a < 0 ? a + TAU : a; };
@@ -709,15 +707,13 @@
     const sx = hx + SHOULDER[0] * K * sg, sy = hy + SHOULDER[1] * K; // melee arm pivot
     BL = bx + (flip ? -(f0.ox + f0.w - body.ax) : f0.ox - body.ax) * K; BR = bx + (flip ? -(f0.ox - body.ax) : f0.ox + f0.w - body.ax) * K;
     if (melee) { gripOf(sx, sy, wa); hx = GR.x; hy = GR.y; }
-    // ---- draw order: pieces behind the body, the body, pieces in front ----
-    const wBehind = melee ? behindBody(wa, sg) : Math.sin(wa) < -0.25;
+    // ---- draw order: Swift ghosts, the twin off-hand and the held weapon (with its arm) under the body, then the shield, the body, its overlays ----
     if (swinging && wd.fork === 'swift' && melee && !(R() && R().quality === 'low')) swiftGhosts(c, wd, w, anim, sx, sy, flip);
     if (wd.twin) twinDraw(c, p, wd, anim, face, flip, melee ? sx - OFF_SH * K * sg : hx, melee ? sy : hy, t);
-    if (wBehind) heroWeapon(c, p, wd, hx, hy, wa, flip, thr, kick, t, swinging ? anim.atkT : 9, melee ? sx : undefined, sy);
+    heroWeapon(c, p, wd, hx, hy, wa, flip, thr, kick, t, swinging ? anim.atkT : 9, melee ? sx : undefined, sy);
     if (p.cls === 'knight' && !p.shieldOut) put(c, 'shield.kite', 0, bx - 5 * K * sg, by - 8 * K + bobA * K, flip, '', 1);
     if (p.stealthT > 0 && local) { const ov = outlineVar(id, '#b78cff'); if (ov) put(c, id, fi, bx, by, flip, ov, 1); }
     put(c, id, fi, bx, by, flip, variant, 1);
-    if (!wBehind) heroWeapon(c, p, wd, hx, hy, wa, flip, thr, kick, t, swinging ? anim.atkT : 9, melee ? sx : undefined, sy);
     if (p.cls === 'cleric') halo(c, bx, by + (f0.oy - body.ay) * K, t);
     if (p.mastery10) { c.strokeStyle = U.rgba('#ffd36b', 0.55 + Math.sin(t * 4) * 0.25); c.lineWidth = 1; c.beginPath(); c.ellipse(0, -2, 13, 4, 0, 0, TAU); c.stroke(); }
     c.globalAlpha = ga;
@@ -742,7 +738,7 @@
     const pk = wd.anim + '|' + variant + '|' + (flip ? 1 : 0);
     if (!wpPre.has(pk)) { wpPre.add(pk); A.prebake(wd.anim, 0, flip, '', variant); } // the first time a hero weapon shows, all 32 angles bake in the background (Atlas.tick)
     let x = hx, y = hy, ang = wa, extra = 0;
-    const look = w.look, out = HELD_OUT[look] || 0; // ranged weapons are held out along the aim
+    const look = w.look, wk = wd.k || 1, out = HELD_OUT[look] || 0; // ranged weapons are held out along the aim
     if (out) { x += Math.cos(wa) * out * K; y += Math.sin(wa) * out * K * 0.6; }
     if (thr > 0) { const d = thr * 6 * K; x += Math.cos(wa) * d; y += Math.sin(wa) * d * 0.5; }
     if (kick > 0.02) { const d = kick * 2 * K; x -= Math.cos(wa) * d; y -= Math.sin(wa) * d * 0.5; }
@@ -752,11 +748,11 @@
       for (let i = 0; i < n; i++) { c.fillStyle = i & 1 ? '#6b7480' : '#c8d0d8'; c.fillRect(q2(x + cx * i * 2 * K), q2(y + cy * i * 2 * K), K, K); }
       x += cx * ext; y += cy * ext;
     }
-    if (look === 'lantern') { // held up at the side, hanging from the hand: swings, and is thrown forward on release
-      const fl = flip ? -1 : 1, rot = Math.sin(t * 2.6 + (p.slot | 0)) * 0.14 - fl * 0.9 * Math.exp(-u * 10);
-      put(c, wd.anim, 0, hx, hy - 16, flip, variant, 1, nrm(rot));
-      lightGlow(c, hx, hy - 6, 0.5 + 0.1 * Math.sin(t * 7));
-      if (R() && p.x !== undefined) { R().light(p.x + hx, p.y + hy - 6, 64, '#ffe9a0', 0.3); R().emit(p.x + hx, p.y + hy - 6, 16, '#ffe9a0', 0.25); } // the lantern lights its surroundings
+    if (look === 'lantern') { // held up at arm's length (LANTERN_OUT art px ahead of the hand, clear of the body it is drawn under), hanging from its hook: swings, and is thrown forward on release
+      const fl = flip ? -1 : 1, rot = Math.sin(t * 2.6 + (p.slot | 0)) * 0.14 - fl * 0.9 * Math.exp(-u * 10), lx = hx + LANTERN_OUT * K * fl, ly = hy - 16 + 10 * wk; // ly: the flame, 5 art px (by the held scale) under the hook
+      put(c, wd.anim, 0, lx, hy - 16, flip, variant, 1, nrm(rot));
+      lightGlow(c, lx, ly, 0.5 + 0.1 * Math.sin(t * 7));
+      if (R() && p.x !== undefined) { R().light(p.x + lx, p.y + ly, 64, '#ffe9a0', 0.3); R().emit(p.x + lx, p.y + ly, 16, '#ffe9a0', 0.25); } // the lantern lights its surroundings
       return;
     }
     if (look === 'tome') { // floats open in front of the hand, tilting toward the aim
@@ -772,8 +768,8 @@
     if (look === 'bow' || look === 'crossbow') { // the next arrow is nocked 3 art px back once the string has recovered: hidden for the first 45% of the cycle, drawn back over the rest
       const D = (anim_D || 0.3), pr = U.clamp((u - D * 0.45) / (D * 0.55), 0, 1);
       if (u >= D * 0.45 || u > 5) {
-        const back = (u > 5 ? 3 : pr * 3) * K, id = look === 'crossbow' ? 'proj.bolt' : 'proj.arrow';
-        weaponAt(c, id, x - Math.cos(wa) * back + Math.cos(wa) * 4 * K, y - Math.sin(wa) * back * 0.6 + Math.sin(wa) * 4 * K * 0.6, wa, flip, '');
+        const back = ((u > 5 ? 3 : pr * 3) - 4) * K * wk, id = Sp.fitAnim(look === 'crossbow' ? 'proj.bolt' : 'proj.arrow', wk); // the arrow at the bow's held scale
+        weaponAt(c, id, x - Math.cos(wa) * back, y - Math.sin(wa) * back * 0.6, wa, flip, '');
       }
     }
     if (ec && !(R() && R().quality === 'low')) Sp.glow(c, x + Math.cos(wa) * 14, y + Math.sin(wa) * 14, 18, ec, 0.38 + Math.sin(t * 5) * 0.08);
@@ -838,9 +834,9 @@
     c.translate(Math.round(D * 0.44), Math.round(H * 0.04) + m * h); c.scale(m / K, m / K);
     const pseudo = { cls, slot: slot || 0, weapon: weapon || ED.CLASSES[cls].weapons[0] }, wd = Sp.weaponArt(pseudo), hand = r.anchors.hand || [r.ax + 3, r.ay - 6];
     const hx = (hand[0] - r.ax) * K, hy = (hand[1] - r.ay) * K;
-    if (wd.w.look !== 'lantern' && wd.w.look !== 'tome') weaponAt(c, wd.anim, hx, hy, -0.75, false, '');
-    put(c, idle, 0, 0, 0, false, heroVar(cls, slot || 0, idle), 1);
     if (wd.w.look === 'lantern' || wd.w.look === 'tome') heroWeapon(c, pseudo, wd, hx, hy, -0.4, false, 0, 0, 0, 9);
+    else weaponAt(c, wd.anim, hx + Math.cos(-0.75) * 4 * K, hy + Math.sin(-0.75) * 4 * K, -0.75, false, ''); // the grip 4 art px out along the blade, so the held-size weapon clears the body
+    put(c, idle, 0, 0, 0, false, heroVar(cls, slot || 0, idle), 1); // the weapon under the body, as in play
     c.restore();
     return true;
   };
