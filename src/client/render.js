@@ -266,15 +266,18 @@
     if (Cos) { const pets = Cos.pets(view, t, dt); for (let i = 0; i < pets.length; i++) qDraw(dn++, pets[i].y, 8, pets[i]); } // Wardrobe pets (client only): kind 8
     if (F.bellRing > 0) F.bellRing = Math.max(0, F.bellRing - dt);
     crowdLod(view, local, nFoe, dn);
-    for (const z of view.zones) if ((z.kind === 'fire' || z.kind === 'pfire') && z.w !== 10 && fireFade(z) > 0.01) { // (the Phoenix ring draws its own tongues) fire flames: kind 5 entries (3 and 4 are the room's statics and props), d = flame index
-      const nf = fireCount(z), vis = Math.max(1, Math.ceil(nf * fireFade(z)));
-      for (let i = 0; i < vis; i++) { flamePos(z, i); qDraw(dn, flY, 5, z); drawPool[dn++].d = i; }
+    for (const z of view.zones) { // standing zone pieces: kind 5 entries (3 and 4 are the room's statics and props), d = piece index (drawStand)
+      if ((z.kind === 'fire' || z.kind === 'pfire') && z.w !== 10 && fireFade(z) > 0.01) { // fire flames (the Phoenix ring draws its own tongues)
+        const nf = fireCount(z), vis = Math.max(1, Math.ceil(nf * fireFade(z)));
+        for (let i = 0; i < vis; i++) { flamePos(z, i); qDraw(dn, flY, 5, z); drawPool[dn++].d = i; }
+      } else if (z.kind === 'firebreak' && zFade(z, 2, 5) > 0.01) { const nf = breakN(z, low); for (let i = 0; i < nf; i++) { breakPos(z, i, nf); qDraw(dn, flY, 5, z); drawPool[dn++].d = i; } } // Firebreak wall flames
+      else if (z.kind === 'pillar' || z.kind === 'anchor') { qDraw(dn, z.y, 5, z); drawPool[dn++].d = 0; } // an ice pillar, a Storm Anchor rod
     }
     drawList.length = dn; drawList.sort(byY);
     for (const it of drawList) {
       if (it.k === 3) { ED.Tiles.drawStatic(c, room, biome, it.o, view, t); continue; }
       if (it.k === 4) { shDX = shDY = 0; drawProp(c, it.o, view, local, t); continue; }
-      if (it.k === 5) { drawFlame(c, it.o, it.d, t); continue; }
+      if (it.k === 5) { drawStand(c, it.o, it.d, t); continue; }
       if (it.k === 6) { if (it.o === room.bell) drawBell(c, it.o, F.bellRing || 0, t); else drawPlatino(c, it.o, t); continue; }
       if (it.k === 7) { shDX = shDY = 0; xbell(c, it.o, it.d, t, low, view); continue; }
       if (it.k === 8) { Cos.drawPet(c, it.o, t); continue; }
@@ -707,6 +710,86 @@
     const pf = z.kind === 'pfire', fade = fireFade(z), f = (t * 12 + z.id + i * 3) | 0, x = sx2(flX), y = sx2(flY) + 4; // the sprite's pivot is its feet
     if (!Pix.draw(c, 'fx.flame', pf ? '#ffb347' : '', f, x, y, fade)) flameStub(c, x, y, f, pf ? '#ffb347' : 'fire', fade, 3);
   }
+  // Fade of a zone: in over 1 / inK s, out over the last 1 / outK s (no duration: in only); 0 for a malformed clock.
+  const zFade = (z, outK, inK) => { const zt = +z.t || 0, v = z.dur ? Math.min(1, (z.dur - zt) * outK, zt * inK) : Math.min(1, zt * inK); return v > 0 ? v : 0; };
+  // Ground zone shapes (cinder, firebreak): a line when len > 0 (from x, y along a, width w), an arc band when arc > 0 (radius r about x, y, centred on a), else a disc of radius r.
+  const zoneLen = (z) => (z.len > 0 ? z.len : z.arc > 0 ? z.arc * (z.r || 30) : (z.r || 0) * 2);
+  const cinderN = (z) => U.clamp(Math.round(zoneLen(z) / 12), 1, 16);
+  const breakN = (z, low) => { const n = U.clamp(Math.round((z.len > 0 || z.arc > 0 ? zoneLen(z) : (z.r || 0) * 5.8) / 14), 4, 22); return low ? Math.ceil(n / 2) : n; }; // wall flames: about one per 14 px of the line or rim
+  let spX = 0, spY = 0, spR = 3;
+  // Spot i of n of a scorch: on the line, on the arc band or scattered inside the disc; writes spX, spY and spR (patch radius, art px).
+  function zoneSpot(z, i, n) {
+    const k = (i + 0.5) / n, id = z.id | 0, w = z.w > 0 ? z.w : 14;
+    if (z.len > 0) { const d = z.len * k, co = Math.cos(z.a || 0), si = Math.sin(z.a || 0), o = (hash1(id + i * 1.37) - 0.5) * w * 0.5; spX = z.x + co * d - si * o; spY = z.y + si * d + co * o; spR = Math.max(3, Math.round(w / 4)); }
+    else if (z.arc > 0) { const q = (z.a || 0) - z.arc / 2 + z.arc * k, rr = (z.r || 30) * (0.82 + (hash1(id + i) - 0.5) * 0.12); spX = z.x + Math.cos(q) * rr; spY = z.y + Math.sin(q) * rr; spR = Math.max(3, Math.round(w / 4)); }
+    else { const q = i * 2.39996 + id, rr = Math.sqrt(k) * (z.r || 20) * 0.75; spX = z.x + Math.cos(q) * rr; spY = z.y + Math.sin(q) * rr * 0.7; spR = Math.max(3, Math.round((z.r || 20) / 8)); }
+  }
+  // Wall flame i of n of a Firebreak: along its line or arc, else on its rim; writes flX, flY.
+  function breakPos(z, i, n) {
+    const k = (i + 0.5) / n;
+    if (z.len > 0) { const d = z.len * k, o = (i & 1 ? 1 : -1) * (z.w > 0 ? z.w : 16) * 0.2; flX = z.x + Math.cos(z.a || 0) * d - Math.sin(z.a || 0) * o; flY = z.y + Math.sin(z.a || 0) * d + Math.cos(z.a || 0) * o; }
+    else if (z.arc > 0) { const q = (z.a || 0) - z.arc / 2 + z.arc * k; flX = z.x + Math.cos(q) * (z.r || 30); flY = z.y + Math.sin(q) * (z.r || 30); }
+    else { const q = k * U.TAU + (z.id | 0), rr = (z.r || 20) * 0.92; flX = z.x + Math.cos(q) * rr; flY = z.y + Math.sin(q) * rr; }
+  }
+  // A Firebreak wall flame: a fire flame with a second, yellower tongue on top (twice a fire flame's height).
+  function drawWallFlame(c, z, i, t) {
+    breakPos(z, i, breakN(z, R.quality === 'low'));
+    const fade = zFade(z, 2, 5), f = (t * 12 + (z.id | 0) + i * 5) | 0, x = sx2(flX), y = sx2(flY) + 4, odd = i & 1;
+    if (!Pix.draw(c, 'fx.flame', '', f, x, y, fade)) { flameStub(c, x, y, f, 'fire', fade, odd ? 7 : 6); return; }
+    Pix.draw(c, 'fx.flame', '#ffd36b', f + 3, x + (odd ? 2 : -2), y - (odd ? 14 : 10), fade * 0.9);
+  }
+  // Ice pillar body (Glacial Arms): a pointed column of half-width rA art px in three ice tones with a dark rim and a glint stripe, pivot at its feet; crack: the expiring look with a crack down the front.
+  function pillarSprite(rA, crack) {
+    const H = Math.min(44, Math.round(rA * 2.8) + 4), tip = Math.max(3, Math.round(H * 0.28)), W = rA * 2 + 2, base = Math.max(2, Math.round(rA * 0.45));
+    return Pix.bake('icep|' + rA + '|' + (crack ? 1 : 0), W, H + base, rA + 1, H + Math.round(base / 2), (b, w) => {
+      const ol = Pix.px32('#24506a'), dk = Pix.px32('#5fa8c8'), md = Pix.px32('#9fe0f4'), lt = Pix.px32('#d4f6ff'), wh = Pix.px32('#ffffff'), cr = Pix.px32('#1e4a64');
+      for (let y = 0; y < H + base; y++) {
+        const hw = y < tip ? Math.max(1, Math.round(rA * (y + 1) / tip)) : y < H ? rA : Math.max(1, Math.round(rA * Math.sqrt(Math.max(0, 1 - ((y - H + 0.5) / base) ** 2))));
+        for (let x = -hw; x < hw; x++) {
+          const edge = x === -hw || x === hw - 1 || y === 0 || y === H + base - 1;
+          let col = edge ? ol : x < -hw * 0.35 ? dk : x > hw * 0.4 ? lt : md;
+          if (!edge && x === Math.round(-hw * 0.2) && y > tip && y < H - 2 && (y & 3)) col = wh;
+          b[y * w + x + rA + 1] = col;
+        }
+      }
+      if (crack) { let x = Math.round(rA * 0.15); for (let y = tip + 1; y < H; y++) { if (Pix.hash(y * 3.7 + rA) > 0.6) x += Pix.hash(y + rA * 1.3) > 0.5 ? 1 : -1; x = U.clamp(x, -rA + 2, rA - 3); b[y * w + x + rA + 1] = cr; if (y & 1) b[y * w + x + rA + 2] = wh; } }
+    });
+  }
+  const pillarR = (z) => U.clamp(Math.round((z.r || 14) / 2), 5, 16);
+  // The column: fades in over 0.12 s, cracks in its last second and trembles in its last half second.
+  function drawPillar(c, z, t) {
+    const left = z.dur ? z.dur - (+z.t || 0) : 9, a = Math.min(1, (+z.t || 0) * 8), sh = left < 0.5 ? (((t * 30) | 0) & 1) * 4 - 2 : 0;
+    if (a > 0) Pix.put(c, pillarSprite(pillarR(z), left < 1), sx2(z.x) + sh, sx2(z.y), Math.max(0.25, Math.ceil(a * 4) / 4));
+  }
+  // Storm Anchor rod: a stone foot, an iron rod with a hooked crossbar, a brass tip (art px; pivot at the feet). The tip sits 44 world px above the feet.
+  const ANCHOR_TIP = 44;
+  function anchorSprite() {
+    return Pix.bake('anchor', 11, 26, 5, 24, (b, w) => {
+      const st = Pix.px32('#4a4a58'), sl = Pix.px32('#6a6a7a'), ir = Pix.px32('#2a2a34'), ih = Pix.px32('#5a6070'), br = Pix.px32('#c9a063'), bh = Pix.px32('#ffe66b');
+      const put = (x, y, p) => { b[y * w + x] = p; };
+      for (let y = 21; y < 26; y++) for (let x = 1; x < 10; x++) put(x, y, y === 21 || x === 1 || x === 9 ? sl : st);
+      for (let y = 4; y < 21; y++) { put(4, y, ir); put(5, y, ir); put(6, y, ih); }
+      for (let x = 1; x < 10; x++) put(x, 8, ir);
+      put(1, 9, ir); put(9, 9, ir);
+      for (let y = 0; y < 4; y++) for (let x = 4; x < 7; x++) put(x, y, y === 0 || x === 4 ? br : bh);
+    });
+  }
+  function drawAnchorRod(c, z) { const a = zFade(z, 3, 6); if (a > 0) Pix.put(c, anchorSprite(), sx2(z.x), sx2(z.y), Math.max(0.25, Math.ceil(a * 4) / 4)); }
+  // A standing zone piece of the y-sorted list (kind 5, d = piece index): fire flame, Firebreak wall flame, ice pillar, Storm Anchor rod.
+  function drawStand(c, z, i, t) {
+    if (z.kind === 'firebreak') drawWallFlame(c, z, i, t); else if (z.kind === 'pillar') drawPillar(c, z, t); else if (z.kind === 'anchor') drawAnchorRod(c, z); else drawFlame(c, z, i, t);
+  }
+  // Vigil runes: 3 x 5 art px glyphs, eight on the rim turning slowly, added to one path.
+  const RUNE = [['.1.', '111', '.1.', '.1.', '1.1'], ['11.', '1.1', '11.', '1.1', '11.'], ['1.1', '.1.', '1.1', '.1.', '1.1'], ['111', '..1', '.1.', '1..', '111']];
+  function runes(c, z, r, t, col, a) {
+    c.fillStyle = col; c.globalAlpha = a; c.beginPath();
+    for (let i = 0; i < 8; i++) {
+      const q = t * 0.3 + i * U.TAU / 8, x0 = sx2(z.x + Math.cos(q) * r * 0.85) - 2, y0 = sx2(z.y + Math.sin(q) * r * 0.85) - 4, g = RUNE[(i + (z.id | 0)) & 3];
+      for (let j = 0; j < 5; j++) for (let k = 0; k < 3; k++) if (g[j][k] === '1') c.rect(x0 + k * 2, y0 + j * 2, 2, 2);
+    }
+    c.fill(); c.globalAlpha = 1;
+  }
+  R.zoneArt = { draw: drawZones, stand: drawStand, pillar: pillarSprite, anchor: anchorSprite, len: zoneLen }; // headless checks
   function drawZones(c, view, t, pass) {
     if (pass === 0) bakeLeft = BAKE_PER_FRAME;
     if (!view.zones.length) return;
@@ -962,6 +1045,93 @@
           c.fillStyle = '#6fe6ff';
           for (let i = 0; i < 4; i++) { const rr = ((t * 60 + i * 70) % 280), rad = z.r * (1 - rr / 280); c.globalAlpha = Math.max(0.25, Math.ceil((rr / 280) * 4) / 4) * 0.6; c.beginPath(); for (let a = 0; a < 3.5; a += 2 / Math.max(8, rad)) c.rect(sx2(z.x + Math.cos(t * 2 + i + a) * rad), sx2(z.y + Math.sin(t * 2 + i + a) * rad), 2, 2); c.fill(); }
           c.globalAlpha = 1;
+          break;
+        }
+        case 'cinder': { // Cinder Arms scorch (line, arc band or disc): charred blobs on the ground, ember flecks blinking over them
+          const fade = zFade(z, 3, 6), n = cinderN(z);
+          if (fade <= 0.01) break;
+          if (pass === 0) {
+            for (let i = 0; i < n; i++) { zoneSpot(z, i, n); Pix.put(c, patchSprite('#140a04', spR), sx2(spX), sx2(spY), 0.85 * fade); }
+            zoneSpot(z, n >> 1, n); R.light(spX, spY, Math.min(120, 30 + n * 8), '#ff6a1a', 0.45 * fade);
+          } else if (pass === 1) {
+            const per = R.quality === 'low' ? 1 : 2, id = z.id | 0;
+            c.fillStyle = '#ffb347'; c.globalAlpha = fade; c.beginPath();
+            for (let i = 0; i < n; i++) { zoneSpot(z, i, n); for (let j = 0; j < per; j++) { const h = hash1(id * 7.1 + i * 3.3 + j * 1.7); if (((t * 6 + h * 8) | 0) % 3 === 0) continue; c.rect(sx2(spX + (h - 0.5) * spR * 3), sx2(spY - 2 - ((t * 9 + h * 20) % 8)), 2, 2); } }
+            c.fill(); c.globalAlpha = 1;
+            if (R.quality !== 'low') { zoneSpot(z, n >> 1, n); R.glow(c, spX, spY, Math.min(90, 20 + n * 6), '#ff5a1a', 0.25 * fade); }
+          }
+          break;
+        }
+        case 'firebreak': { // Firebreak: burning ground foes route around: charred ground, a solid hot rim (a barrier, never dashed) and a wall of tall flames on its edge (y-sorted, drawStand)
+          const fade = zFade(z, 2, 5);
+          if (fade <= 0.01) break;
+          const line = z.len > 0, bw = Math.max(8, z.w || 16), cx = line ? z.x + Math.cos(z.a || 0) * z.len / 2 : z.x, cy = line ? z.y + Math.sin(z.a || 0) * z.len / 2 : z.y, L = zoneLen(z);
+          if (pass === 0) {
+            if (line) {
+              c.globalAlpha = 0.6 * fade; c.fillStyle = '#140804'; c.beginPath(); Pix.fillConvex(c, poly, lanePoly(z.x, z.y, z.a || 0, 0, z.len, bw)); c.fill();
+              c.globalAlpha = 0.9 * fade; c.fillStyle = '#ff6a1a'; c.beginPath(); Pix.edge(c, poly, lanePoly(z.x, z.y, z.a || 0, 0, z.len, bw), true); c.fill(); c.globalAlpha = 1;
+            } else if (z.arc > 0) { const n = cinderN(z); for (let i = 0; i < n; i++) { zoneSpot(z, i, n); Pix.put(c, patchSprite('#140804', spR + 1), sx2(spX), sx2(spY), 0.9 * fade); } }
+            else if (z.r > 0) {
+              Pix.put(c, patchSprite('#140804', Math.max(3, Math.round(z.r * 0.95 / 2))), sx2(z.x), sx2(z.y), 0.9 * fade);
+              ringPut(c, z.x, z.y, z.r, 2, ['#8a2a10', '#ff6a1a', '#ffd36b'], 0.95 * fade); ringPut(c, z.x, z.y, z.r * 0.8, 1, ['#5a1a08', '#c8401a', '#ff8a3a'], 0.55 * fade);
+            }
+            R.light(cx, cy - 8, Math.min(260, L * 0.8 + 40), '#ff6a1a', 0.9 * fade);
+          } else if (pass === 1) {
+            R.glow(c, cx, cy - 8, Math.min(160, L * 0.55 + 20), '#ff5a1a', 0.5 * fade);
+            if (R.quality !== 'low') { // sparks rising off the wall
+              const n = breakN(z, false); c.fillStyle = '#ffd36b'; c.globalAlpha = fade; c.beginPath();
+              for (let i = 0; i < n; i++) { const kk = (t * 1.2 + i * 0.37 + (z.id | 0) * 0.17) % 1; breakPos(z, i, n); c.rect(sx2(flX + Math.sin(i * 3 + t * 2) * 4), sx2(flY - 18 - kk * 30), 2, 2); }
+              c.fill(); c.globalAlpha = 1;
+            }
+          }
+          break;
+        }
+        case 'pillar': { // Glacial Arms ice pillar (solid): a shadow and a frost rim on the ground; the column stands in the y-sorted list (drawStand)
+          const rA = pillarR(z), H = Math.min(44, Math.round(rA * 2.8) + 4) * 2, fade = zFade(z, 3, 8);
+          if (pass === 0) {
+            Pix.put(c, Pix.ell(rA + 2, Math.max(2, Math.round(rA * 0.5)), '#000814', true), sx2(z.x), sx2(z.y), 0.4 * fade);
+            ringPut(c, z.x, z.y, rA * 2 + 8, 1, gb('#bfeaff'), 0.45 * fade, 2, 0);
+            R.light(z.x, z.y - H * 0.5, rA * 6, '#9fefff', 0.5 * fade);
+          } else if (pass === 1 && R.quality !== 'low') R.glow(c, z.x, z.y - H * 0.6, rA * 3, '#9fefff', 0.22 * fade);
+          break;
+        }
+        case 'anchor': { // Storm Anchor: a dashed ring at its zap radius r, the rod (drawStand), a pulsing tip and crackle arcs re-rolled at 12 Hz; it blinks in its last 0.6 s
+          const fade = zFade(z, 3, 6), left = z.dur ? z.dur - (+z.t || 0) : 9, bl = left < 0.6 && ((t * 16) | 0) & 1 ? 0.4 : 1, ty = z.y - ANCHOR_TIP;
+          if (fade <= 0.01) break;
+          if (pass === 0) {
+            Pix.put(c, Pix.ell(6, 3, '#000000', true), sx2(z.x), sx2(z.y), 0.35 * fade);
+            if (z.r >= 24) { discPut(c, z.x, z.y, z.r, '#ffe66b', 0.05 * fade); ringPut(c, z.x, z.y, z.r, 1, gb('#ffe66b'), 0.55 * fade * bl, 4, (t * 4) & 7); }
+            R.light(z.x, ty, 80, '#ffe66b', 0.7 * fade * bl);
+          } else if (pass === 1) {
+            R.glow(c, z.x, ty, 12 + Math.sin(t * 9 + (z.id | 0)) * 3, '#ffe66b', 0.8 * fade * bl);
+            const q = Math.floor(t * 12) + (z.id | 0) * 13, m = R.quality === 'low' ? 1 : 3, rr = Math.max(24, (z.r || 60) * 0.55);
+            c.fillStyle = '#fff6b0'; c.globalAlpha = fade * bl; c.beginPath();
+            for (let i = 0; i < m; i++) {
+              const a = hash1(q * 1.7 + i * 4.1) * U.TAU, d = rr * (0.5 + 0.5 * hash1(q * 2.3 + i)), ex = z.x + Math.cos(a) * d, ey = z.y + Math.sin(a) * d - 4;
+              const mx = (z.x + ex) / 2 + (hash1(q + i * 9.1) - 0.5) * 16, my = (ty + ey) / 2 + (hash1(q * 0.7 + i) - 0.5) * 12;
+              Pix.line(c, z.x, ty, mx, my, 2); Pix.line(c, mx, my, ex, ey, 2);
+            }
+            c.fill(); c.globalAlpha = 1;
+          }
+          break;
+        }
+        case 'vigil': { // Vigil: consecrated ground under a still hero: a gold disc, a solid rim, an inner dashed ring, eight runes turning on the edge, motes rising
+          const fade = zFade(z, 3, 4), r = z.r > 0 ? z.r : 70;
+          if (fade <= 0.01) break;
+          if (pass === 0) {
+            discPut(c, z.x, z.y, r, '#ffe9a0', 0.16 * fade);
+            ringPut(c, z.x, z.y, r, 2, gb('#ffd36b'), 0.85 * fade); ringPut(c, z.x, z.y, r * 0.7, 1, gb('#ffe9a0'), 0.45 * fade, 3, (t * 3) & 7);
+            runes(c, z, r, t, '#c8962e', 0.9 * fade);
+            R.light(z.x, z.y, r * 1.6, '#ffe9a0', 0.45 * fade);
+          } else if (pass === 1) {
+            R.glow(c, z.x, z.y, r * 0.95, '#ffe9a0', 0.18 * fade);
+            runes(c, z, r, t, '#fff3c4', Math.max(0.25, Math.ceil((0.5 + 0.5 * Math.sin(t * 3 + (z.id | 0))) * 4) / 4) * fade); // the runes breathe
+            if (R.quality !== 'low') {
+              c.fillStyle = '#fff6d0'; c.globalAlpha = fade; c.beginPath();
+              for (let i = 0; i < 5; i++) { const kk = (t * 0.5 + i * 0.2 + (z.id | 0) * 0.1) % 1, a = i * 2.39996 + (z.id | 0), rr = Math.sqrt((i + 0.5) / 5) * r * 0.75; c.rect(sx2(z.x + Math.cos(a) * rr), sx2(z.y + Math.sin(a) * rr - kk * 20), 2, 2); }
+              c.fill(); c.globalAlpha = 1;
+            }
+          }
           break;
         }
         default: {
@@ -1618,14 +1788,42 @@
     const rows = g.rows, x0 = cx - rows[0].length, y0 = bottom - rows.length * 2;
     for (let j = 0; j < rows.length; j++) for (let i = 0; i < rows[j].length; i++) { const ch = rows[j][i]; if (ch === '.') continue; c.fillStyle = g.c[ch]; c.fillRect(x0 + i * 2, y0 + j * 2, 2, 2); }
   }
+  // Overhead glyphs baked at runtime as 'fx.glyph.<key>' (Pix.define, 1 art px per char, one canvas per frame); the same rows draw as stubs until the atlas is ready.
+  const RTG = {
+    quarry: { f: [{ rows: ['.11.11.', '1.....1', '1..2..1', '..222..', '1..2..1', '1.....1', '.11.11.'], c: { 1: '#b78cff', 2: '#f0e0ff' } }] },
+    dose: { fps: 4, f: [{ rows: ['..3..', '..2..', '.111.', '11411', '11111', '.111.'], c: { 1: '#4a9a20', 2: '#8a6a3a', 3: '#ffe66b', 4: '#d8ff9a' } }, { rows: ['.3...', '..2..', '.111.', '11411', '11111', '.111.'], c: { 1: '#9be33c', 2: '#8a6a3a', 3: '#ff8a3a', 4: '#ffffff' } }] },
+    bounty: { f: [{ rows: ['...1...', '..121..', '.12321.', '1233321', '.12321.', '..121..', '...1...'], c: { 1: '#4a0810', 2: '#e8344e', 3: '#ffd36b' } }] },
+  };
+  const rtOk = {};
+  function rtGlyph(k) {
+    if (rtOk[k]) return true;
+    if (!ED.Atlas || !ED.Atlas.ok || typeof document === 'undefined') return false;
+    const cvs = RTG[k].f.map((fr) => {
+      const cv = document.createElement('canvas'), w = fr.rows[0].length, h = fr.rows.length; cv.width = w; cv.height = h;
+      const g = cv.getContext('2d');
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const ch = fr.rows[j][i]; if (ch === '.') continue; g.fillStyle = fr.c[ch]; g.fillRect(i, j, 1, 1); }
+      return cv;
+    });
+    return (rtOk[k] = !!Pix.define('fx.glyph.' + k, cvs.length > 1 ? cvs : cvs[0], cvs[0].width >> 1, cvs[0].height >> 1, null, RTG[k].fps || 1, cvs.length > 1));
+  }
+  // Runtime glyph k, frame fi, centred at (sx, sy).
+  function rtDraw(c, k, fi, sx, sy) {
+    if (rtGlyph(k) && Pix.draw(c, 'fx.glyph.' + k, '', fi, sx, sy)) return;
+    const fs = RTG[k].f, fr = fs[fi % fs.length]; glyphStub(c, fr, sx, sy + fr.rows.length);
+  }
+  // True while the local hero holds Capacitor (its charged foes show the stronger stored-charge marks); read once per frame.
+  let capStamp = -1, capHas = false;
+  const capOn = () => { const ft = ED.FX ? ED.FX.time : 0; if (ft !== capStamp) { capStamp = ft; const me = curView && curView.players && curView.players.get(R.local); capHas = !!(me && me.boons && me.boons.capacitor > 0); } return capHas; };
+  R.capOn = capOn; R.foeArt = { marks: drawMarks, status: drawStatus, view: (v) => { curView = v; capStamp = -1; } }; // headless checks
   // Overhead status marks of a foe, drawn with the HP bars above the lighting. Layout bottom-up from the bar line (bosses have no bar): ward bar and an elite's name, then the Venom pips on their own line,
   // then one row of glyphs left to right: stun stars, Doom skull (the Reap is near), Corroded cracked guard, Charge bolt. Nothing shares a point, whatever the combination.
   const xg = []; // class glyphs of the foe being drawn (ED.ClassFx.mark)
   function drawMarks(c, e, t) {
     const vl = venomOf(e), dl = doomOf(e), skull = dl > 0 && !e.boss && e.hp < 1.5 * dl, stun = e.stun > 0, chg = e.charge > 0, cor = vl >= 5;
+    const qy = e.quarryT > 0, dose = !!(e.dosed || (e.doses && e.doses.length)), hunt = !!e.hunted, cap = chg && capOn(); // Quarry, a planted Venom dose, a Hunted champion; cap: a charge the local hero's Capacitor will pop
     const xm = ED.ClassFx.mark; let xn = 0;
     for (let i = 0; i < xm.length; i++) { const g = xm[i](e); if (g) xg[xn++] = g; }
-    if (!(vl > 0 || skull || stun || chg || xn)) return;
+    if (!(vl > 0 || skull || stun || chg || qy || dose || hunt || xn)) return;
     const G = foeGeom(e), r = G.r, id = e.id | 0, af = e.elite ? ED.AFFIXES[e.elite] : null, top = G.top - gRise;
     let b = e.boss ? s2(top) - 4 : s2(Math.min(top - 6, -(r * 2.6 + (e.def.fly && !AC.on() ? 14 : 4)))) - 2; // bottom of the free space (procedural flyers float higher than r * 2.6)
     if (!e.boss) { if (e.ward > 0) b -= (R.scale >= 2 ? 2 : 3) + 1; if (af) b -= Math.ceil(R.labelH()) + 4; }
@@ -1637,9 +1835,9 @@
       for (let i = 0; i < 4; i++) { c.fillStyle = cor ? '#c8ff5a' : i < vl ? '#9be33c' : '#26340f'; c.fillRect(x0 + i * 6, oy - 2, 4, 2); }
       b = -6;
     } else b = -2;
-    const n = (stun ? 1 : 0) + (skull ? 1 : 0) + (cor ? 1 : 0) + (chg ? 1 : 0) + xn;
+    const n = (stun ? 1 : 0) + (skull ? 1 : 0) + (cor ? 1 : 0) + (chg ? 1 : 0) + (qy ? 1 : 0) + (dose ? 1 : 0) + (hunt ? 1 : 0) + xn;
     if (n) {
-      const w = (stun ? 26 : 0) + (skull ? 14 : 0) + (cor ? 14 : 0) + (chg ? 6 : 0) + xn * 14 + (n - 1) * 2;
+      const w = (stun ? 26 : 0) + (skull ? 14 : 0) + (cor ? 14 : 0) + (chg ? (cap ? 8 : 6) : 0) + (qy ? 14 : 0) + (dose ? 10 : 0) + (hunt ? 14 : 0) + xn * 14 + (n - 1) * 2;
       let x = s2(ox - w / 2);
       const by = oy + b; // bottom of the glyph row
       if (stun) { // three stars orbiting on a flat ellipse
@@ -1648,8 +1846,19 @@
       }
       if (skull) { const up = Math.sin(t * 4 + id) > 0 ? 2 : 0, sx = x + 6, sy = by - 7 - up; if (!Pix.draw(c, 'fx.sigil.skull', 'shadow', 0, sx, sy)) glyphStub(c, GLYPH.skull, sx, sy + 5); x += 16; }
       if (cor) { const up = Math.sin(t * 5 + id) > 0 ? 2 : 0, sx = x + 6, sy = by - 7 - up; if (!Pix.draw(c, 'fx.glyph.corroded', '', 0, sx, sy)) glyphStub(c, GLYPH.guard, sx, sy + 5); x += 16; }
-      if (chg && ((t * 3 + id) | 0) % 2 === 0) { c.fillStyle = '#ffe66b'; c.fillRect(x + 2, by - 8, 4, 2); c.fillRect(x, by - 6, 4, 2); c.fillRect(x + 2, by - 4, 2, 2); c.fillRect(x, by - 2, 4, 2); }
-      if (chg) x += 8;
+      if (cap) { // Capacitor: a steady bolt twice the plain one's height, its core flickering white, a glow behind it
+        const hot = ((t * 8 + id) | 0) & 1, y0 = by - 14;
+        if (R.quality !== 'low') { c.globalCompositeOperation = 'lighter'; R.glow(c, x + 4, y0 + 7, 12, '#ffe66b', 0.3 + 0.15 * hot); c.globalCompositeOperation = 'source-over'; } // the overheads draw after the queued glows: a direct one
+        c.fillStyle = '#ffe66b'; c.fillRect(x + 4, y0, 4, 2); c.fillRect(x + 2, y0 + 2, 4, 2); c.fillRect(x, y0 + 4, 4, 2); c.fillRect(x, y0 + 6, 8, 2); c.fillRect(x + 4, y0 + 8, 4, 2); c.fillRect(x + 2, y0 + 10, 4, 2); c.fillRect(x + 2, y0 + 12, 2, 2);
+        c.fillStyle = hot ? '#ffffff' : '#fff6b0'; c.fillRect(x + 2, y0 + 6, 4, 2); c.fillRect(x + 4, y0 + 8, 2, 2);
+        x += 10;
+      } else if (chg) {
+        if (((t * 3 + id) | 0) % 2 === 0) { c.fillStyle = '#ffe66b'; c.fillRect(x + 2, by - 8, 4, 2); c.fillRect(x, by - 6, 4, 2); c.fillRect(x + 2, by - 4, 2, 2); c.fillRect(x, by - 2, 4, 2); }
+        x += 8;
+      }
+      if (qy) { const sx = x + 6, sy = by - 7; rtDraw(c, 'quarry', 0, sx, sy); x += 16; } // Quarry: a violet target sigil, steady (it marks the foe your Reap is doubled on)
+      if (dose) { const sx = x + 4, sy = by - 6; rtDraw(c, 'dose', ((t * 4 + id) | 0) & 1, sx, sy); x += 12; } // Venom dose: a green bead with a burning fuse, pulsing
+      if (hunt) { const up = Math.sin(t * 3 + id) > 0 ? 2 : 0, sx = x + 6, sy = by - 7 - up; rtDraw(c, 'bounty', 0, sx, sy); x += 16; } // Hunted champion: a red-gold bounty diamond
       for (let i = 0; i < xn; i++) { const g = xg[i], up = Math.sin(t * 4 + id + i) > 0 ? 2 : 0, sx = x + 6, sy = by - 7 - up; if (!Pix.draw(c, g.id, g.ramp || '', 0, sx, sy) && GLYPH[g.stub]) glyphStub(c, GLYPH[g.stub], sx, sy + 5); x += 16; }
     }
   }
@@ -1692,6 +1901,17 @@
       for (let i = 0; i < ns; i++) { const a = hash1(q * 3.1 + i * 5.7) * U.TAU; c.rect(s2(Math.cos(a) * r * 0.85), s2(cy + Math.sin(a) * hh * 0.85), 2, 2); }
       c.fill();
       stLight(e.x, e.y + cy, r * 2.6, '#ffe66b', 0.45);
+      if (capOn()) { // Capacitor: a crackling dashed halo turning around the body, a brighter light
+        const rx = Math.max(4, Math.round(r * 1.3 / 2)), ry = Math.max(3, Math.round(hh * 1.15 / 2));
+        Pix.put(c, Pix.ell(rx, ry, '#ffe66b', false, 2, (t * 12) & 7), 0, s2(cy), 0.85);
+        stLight(e.x, e.y + cy, r * 3.4, '#fff3a0', 0.35);
+      }
+    }
+    if (e.hunted) { // Hunted champion: a crimson dashed ring at the feet turning the other way, a pulsing glow (a bounty diamond is its overhead mark)
+      const rx = Math.max(5, Math.round(r * 1.7 / 2));
+      Pix.put(c, Pix.ell(rx, Math.max(2, Math.round(rx * 0.5)), '#e8344e', false, 3, 7 - ((t * 6) & 7)), 0, -2, 0.9);
+      R.emit(e.x, e.y + cy, r * 2.4, '#e8344e', 0.18 + 0.08 * Math.sin(t * 4 + id));
+      stLight(e.x, e.y + cy, r * 3, '#ff4a5a', 0.45);
     }
     if (e.bleedPool > 0) { // red drips (1x2 art px) falling from the body
       c.fillStyle = '#c4182e'; c.beginPath();
@@ -2035,6 +2255,7 @@
     c.globalAlpha = a; c.drawImage(sp.cv, Math.round(t.x + sp.x * q), Math.round(t.y + sp.y * q), sp.w * q, sp.h * q);
   };
   // Elite label: the affix names (second slot after the first) then the foe name, e.g. "Swift Brutal Skeleton Knight"; `affixes` drops the foe name. Bar and label colour stay the first affix's.
+  const AFFIX_OFF = '#8a8478'; // bar and label of an elite whose affixes are suppressed
   R.eliteLabel = (e, affixes) => ED.AFFIXES[e.elite].name + (e.elite2 ? ' ' + ED.AFFIXES[e.elite2].name : '') + (affixes ? '' : ' ' + e.def.name);
   // Fill height in px of a foe's health bar (bh for a normal foe; 0 = no bar): shown once damaged, always for an elite; fodder gets a 1 px bar.
   R.foeBarH = (e, bh) => (e.hp / e.maxHp >= 0.999 && !e.elite ? 0 : e.fodder ? 1 : bh);
@@ -2087,7 +2308,7 @@
       const frac = e.hp / e.maxHp;
       const an = AC.on() ? AC.anchor(e) : null; // bar 6 px over the top of the sprite
       const w = e.elite ? 30 : e.fodder ? 12 : 18, y = an ? Math.round(e.y + an.top) - 6 : Math.round(e.y - e.r * 2.6 - (e.def.fly ? 14 : 4)), af = e.elite ? ED.AFFIXES[e.elite] : null, bx = Math.round(e.x - w / 2);
-      blit(c, barSprite(af ? af.color : '#e2513f', w, Math.round(U.clamp(frac, 0, 1) * w), h), bx, y);
+      blit(c, barSprite(af ? (e.affixOff ? AFFIX_OFF : af.color) : '#e2513f', w, Math.round(U.clamp(frac, 0, 1) * w), h), bx, y);
       if (e.ward > 0) { c.fillStyle = '#7fc8ff'; c.fillRect(bx, y - 1 - bh, Math.max(1, Math.round(w * (e.ward / (e.wardMax || 1)))), Math.max(1, bh - 1)); }
       if (af) { eliteQ.push(e, y); labelAdd(e.x, y + bh / 2, w / 2, bh / 2); } // the bar blocks the labels of the elites beside it
     }
@@ -2095,7 +2316,12 @@
       const e = eliteQ[i], af = ED.AFFIXES[e.elite], ly = eliteQ[i + 1] - 2 - lhh / 2 - (e.ward > 0 ? bh : 0), full = R.eliteLabel(e), names = R.eliteLabel(e, true), lh2 = lhh * 1.1;
       let str = full;
       if (labelHit(e.x, ly, R.labelW(full), lh2) && !labelHit(e.x, ly, R.labelW(names), lh2)) str = names;
-      R.label(c, str, e.x, placeLabel(e.x, ly, R.labelW(str), lh2), af.color);
+      const py = placeLabel(e.x, ly, R.labelW(str), lh2);
+      if (e.affixOff) { // Hex the Strong: the affixes are off, so the label greys out and a line strikes through the affix names
+        const W = R.labelW(str), aw = str === names ? W : Math.min(W, R.labelW(names));
+        R.label(c, str, e.x, py, AFFIX_OFF, undefined, 0.85);
+        c.fillStyle = '#e8e2d6'; c.fillRect(Math.round(e.x - W / 2), Math.round(py) - 1, Math.round(aw), 2);
+      } else R.label(c, str, e.x, py, af.color);
     }
     eliteQ.length = 0;
     for (const e of view.enemies) if (e.hp > 0 && !e.burrowed && marksOn(e)) drawMarks(c, e, t);
