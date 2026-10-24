@@ -196,7 +196,7 @@
     const w = m.weapon;
     let h = `<div class="shc sh-card sh-f" data-k="weapon" style="${heroFr(m)}"><div class="sh-ct">${img(ico(WEAPON_ICON[w.look] || 'sword', color), true)}<b>${esc(w.name)}</b>${chip(w.kind === 'melee' ? 'melee' : w.kind === 'bell' ? 'chained' : 'ranged', 'var(--muted)')}${w.fork ? chip(w.fork, 'var(--gold)') : ''}</div>`;
     h += `<div class="sh-big">${n1(w.hit)}<small>per hit</small><span class="sh-crit">${n1(w.crit)} crit <small>(${pc(w.critChance)} · ${X(w.critMult)})</small></span></div>`;
-    h += `<div class="sh-row"><b>${w.aps.toFixed(2)}</b> ${w.kind === 'bell' ? 'strikes/s on one foe' : 'attacks/s'} <span class="mut">(base ${w.apsBase.toFixed(2)})</span>`;
+    h += `<div class="sh-row"><b>${w.aps.toFixed(2)}</b> ${w.kind === 'bell' ? 'loops/s' : 'attacks/s'} <span class="mut">(base ${w.apsBase.toFixed(2)})</span>`;
     h += w.kind === 'bell' ? ` · ${w.bells} ${w.bells > 1 ? 'bells' : 'bell'} · chain ${w.chain} · orbit ${w.orbit}` : w.kind === 'melee' ? ` · reach ${w.reach} · ${w.allAround ? 'all around' : w.arcDeg + '°'}` : ` · ${w.n} ${w.n > 1 ? 'projectiles' : 'projectile'} · range ${w.range}${SHAPE[w.shape] || ''}${w.pierce && !w.line ? ` · pierce ${w.pierce}` : ''}${w.homing ? ' · seeking' : ''}${w.blast ? ` · blast radius ${w.blast.r}` : ''}`;
     h += '</div>';
     if (w.fan) h += `<div class="sh-row mut">${w.oneFoe} of ${w.n} shots reach one foe at ${Sh.REF.d} px; all ${w.n} point-blank</div>`;

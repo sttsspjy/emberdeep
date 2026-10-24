@@ -658,7 +658,7 @@
     }
     if (b.weapon && b.weapon.kind && me && ED.CLASSES[me.cls]) {
       const base = me.stats && me.stats.weaponId ? me.stats.weaponId.split('@')[0] : me.weapon, fw = ED.forkWeapon(base, id);
-      h += `<div class="bweap" data-w="${base}@${b.weapon.kind}"><div><span>${esc(fw.name)}</span><small>${fw.kind === 'bell' ? `${fw.dmg.toFixed(1)} per strike (x0.4 to x1.8 by its speed) · each foe once per ${fw.rate.toFixed(2)} s` : `${fw.dmg.toFixed(1)} damage every ${fw.rate.toFixed(2)} s`}</small></div></div>`;
+      h += `<div class="bweap" data-w="${base}@${b.weapon.kind}"><div><span>${esc(fw.name)}</span><small>${fw.kind === 'bell' ? `${(fw.dmg * ED.CONST.HURL_K).toFixed(1)} per full-wind hurl · winding strikes up to ${(fw.dmg * ED.CONST.WIND_CAP).toFixed(1)}, each foe once per ${fw.rate.toFixed(2)} s` : `${fw.dmg.toFixed(1)} damage every ${fw.rate.toFixed(2)} s`}</small></div></div>`;
     }
     return h;
   }
