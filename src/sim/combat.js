@@ -64,11 +64,9 @@
     else {
       if (!def.boss) hp *= ED.World.hpScale(s);
       hp *= this.partyHpMul();
-      if (pact >= 1) hp *= 1.25;
-      if (def.boss && pact >= 5) hp *= 1.2;
-      if (pact >= 10) hp *= 1.2;
+      hp *= ED.pactMul(pact, 'foeHp') * (def.boss ? ED.pactMul(pact, 'bossHp') : 1);
     }
-    dmg *= ED.World.dmgScale(s) * (pact >= 2 ? 1.25 : 1) * (pact >= 8 ? 1.2 : 1) * this.threat().dmg;
+    dmg *= ED.World.dmgScale(s) * ED.pactMul(pact, 'foeDmg') * this.threat().dmg;
     if (this.room && this.room.dark && !def.minion && !def.ally && !opts.ally) dmg *= ED.World.DARK_DMG; // every foe of a dark room
     const e = {
       id: U.uid(), type, def, x, y, r: def.r, hp, maxHp: hp, dmg, spd: def.spd * (pact >= 6 ? 1.15 : 1) * (def.boss || def.fodder ? 1 : ED.World.foeSpd(s)),

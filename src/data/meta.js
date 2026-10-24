@@ -2,21 +2,21 @@
 (function (ED) {
   'use strict';
 
-  // tier = deepest stratum that must have been reached before the upgrade is offered. The Hearth is small by rule: a full set adds at most half of what smart picks add (docs/GAME-DESIGN.md section 9).
+  // tier = deepest stratum that must have been reached before the upgrade is offered. Hearth and mastery carry the difficulty contract's progression (docs/GAME-DESIGN.md sections 9 and 10).
   // Entries with `mods` add to the stat block per rank; the rest are read by id in sim/build.js (Provisions `heal`, Head Start `xp`, Stash `gold`, Second Wind `pct`, Insight `rerolls`), rooms.js (Merchant's Favor `discount`) and world.js (Deep Wick `loot`, via W.prototype.darkLoot).
   // The save code stores ranks by position and never reads ids: keep the order and each costs.length.
   ED.UPGRADES = [
-    { id: 'vitality', name: 'Vitality', icon: 'heart', tier: 1, desc: r => `+${r} max health`, mods: { hp: 1 }, step: '+1 max health', costs: [10, 20, 35, 55, 80] },
-    { id: 'might', name: 'Might', icon: 'sword', tier: 1, desc: r => `+${0.5 * r}% damage`, mods: { dmg: 0.005 }, step: '+0.5% damage', costs: [12, 25, 45, 70, 100] },
+    { id: 'vitality', name: 'Vitality', icon: 'heart', tier: 1, desc: r => `+${2 * r} max health`, mods: { hp: 2 }, step: '+2 max health', costs: [10, 20, 35, 55, 80] },
+    { id: 'might', name: 'Might', icon: 'sword', tier: 1, desc: r => `+${3 * r}% damage`, mods: { dmg: 0.03 }, step: '+3% damage', costs: [12, 25, 45, 70, 100] },
     { id: 'fortune', name: 'Fortune', icon: 'coin', tier: 1, desc: r => `+${2 * r}% gold`, mods: { gold: 0.02 }, step: '+2% gold', costs: [15, 30, 50] },
     { id: 'fleet', name: 'Fleetness', icon: 'boot', tier: 1, desc: r => `+${r}% move speed`, mods: { spd: 0.01 }, step: '+1% move speed', costs: [10, 25, 45] },
     { id: 'provisions', name: 'Provisions', icon: 'potion', tier: 1, desc: r => `Heal ${2 * r}% at each stratum`, heal: 0.02, step: 'Heal 2% at each stratum', costs: [25, 55] },
-    { id: 'bulwark', name: 'Bulwark', icon: 'shield', tier: 2, desc: r => `+${r} armor`, mods: { armor: 1 }, step: '+1 armor', costs: [15, 30, 55] },
-    { id: 'precision', name: 'Precision', icon: 'eye', tier: 2, desc: r => `+${r}% critical chance`, mods: { crit: 0.01 }, step: '+1% critical chance', costs: [15, 30, 55] },
+    { id: 'bulwark', name: 'Bulwark', icon: 'shield', tier: 2, desc: r => `+${3 * r} armor`, mods: { armor: 3 }, step: '+3 armor', costs: [15, 30, 55] },
+    { id: 'precision', name: 'Precision', icon: 'eye', tier: 2, desc: r => `+${2 * r}% critical chance`, mods: { crit: 0.02 }, step: '+2% critical chance', costs: [15, 30, 55] },
     { id: 'wisdom', name: 'Wisdom', icon: 'scroll', tier: 2, desc: r => `+${2 * r}% experience`, mods: { xp: 0.02 }, step: '+2% experience', costs: [15, 30, 55] },
     { id: 'insight', name: 'Insight', icon: 'clover', tier: 2, rerolls: [1, 2, 3], desc: r => `${r} boon reroll${r === 1 ? '' : 's'} per descent`, step: '+1 boon reroll per descent', costs: [25, 50, 90] },
     { id: 'headstart', name: 'Head Start', icon: 'star', tier: 2, xp: 15, desc: r => `Begin the descent with ${15 * r} experience`, step: 'Begin with 15 more experience', costs: [15, 35] },
-    { id: 'alacrity', name: 'Alacrity', icon: 'hourglass', tier: 3, desc: r => `Skills recharge ${r}% faster`, mods: { cdr: 0.01 }, step: 'Skills recharge 1% faster', costs: [20, 40, 65] },
+    { id: 'alacrity', name: 'Alacrity', icon: 'hourglass', tier: 3, desc: r => `Skills recharge ${3 * r}% faster`, mods: { cdr: 0.03 }, step: 'Skills recharge 3% faster', costs: [20, 40, 65] },
     { id: 'stash', name: 'Stash', icon: 'chest', tier: 3, gold: 5, desc: r => `Begin with ${5 * r} gold`, step: 'Begin with 5 more gold', costs: [20, 45] },
     { id: 'attunement', name: 'Ember Attunement', icon: 'ember', tier: 3, desc: r => `+${10 * r}% embers earned`, step: '+10% embers earned', costs: [80, 160, 255, 385] },
     { id: 'favor', name: "Merchant's Favor", icon: 'scroll', tier: 3, desc: r => `Shops are ${4 * r}% cheaper`, discount: 0.04, step: 'Shops are 4% cheaper', costs: [30, 65] },
@@ -64,24 +64,27 @@
 
   ED.PACTS = [
     { name: 'No Pact', desc: 'The Deep as it is.' },
-    { name: 'Thicker Hides', desc: 'Foes have +25% health.' },
-    { name: 'Sharper Fangs', desc: 'Foes deal +25% damage.' },
-    { name: 'Champions', desc: 'Elite foes appear far more often.' },
-    { name: 'Scarcity', desc: 'Healing is 40% less effective.', heroMul: { heal: 0.6 } },
-    { name: 'Tyrants', desc: 'Bosses have +20% health and attack faster.' },
+    { name: 'Thicker Hides', desc: 'Foes have +20% health.', foeHp: 1.2 },
+    { name: 'Sharper Fangs', desc: 'Foes deal +10% damage.', foeDmg: 1.1 },
+    { name: 'Champions', desc: 'Elite foes appear far more often.', eliteCh: 0.4, eliteExtra: 0.3 },
+    { name: 'Scarcity', desc: 'Healing is 50% less effective and heroes have 10% less max health.', heroMul: { heal: 0.5 }, mods: { hpMul: -0.1 } },
+    { name: 'Tyrants', desc: 'Bosses have +10% health and attack faster.', bossHp: 1.1, bossPause: 0.8 },
     { name: 'Frenzy', desc: 'Foes move 15% faster.' },
     { name: 'Greed', desc: 'Shop prices are 40% higher.' },
-    { name: 'Storm of Shot', desc: 'Enemy shots fly 20% faster and foes hit 20% harder.' },
+    { name: 'Storm of Shot', desc: 'Enemy shots fly 20% faster and foes hit 20% harder.', foeDmg: 1.2 },
     { name: 'Frailty', desc: 'Heroes have 25% less max health.', mods: { hpMul: -0.25 } },
-    { name: 'The Deep Hungers', desc: 'Every combat room has an extra wave and foes have +20% health.' },
+    { name: 'The Deep Hungers', desc: 'Every combat room has an extra wave and foes have +20% health.', foeHp: 1.2 },
   ];
   ED.PACT_EMBER_BONUS = 0.08; // per pact level
-  // Pact stat effects (pacts stack): mods are added to the stat block, heroMul factors multiply a derived stat (ED.Stats.compute / sources).
+  // Pact stat effects (pacts stack): mods are added to the stat block, heroMul factors multiply a derived stat (ED.Stats.compute / sources); foeHp, foeDmg, bossHp, bossPause multiply foe numbers (ED.pactMul);
+  // Champions' eliteCh / eliteExtra add to the elite chances of a combat room (rooms.js).
+  // Product of field `key` over Pacts 1..pact (1 where a Pact has none).
+  ED.pactMul = (pact, key) => { let m = 1; for (let i = 1; i <= pact && i < ED.PACTS.length; i++) if (ED.PACTS[i][key]) m *= ED.PACTS[i][key]; return m; };
 
   // Mastery XP thresholds for levels 1..10.
   ED.MASTERY_XP = [0, 120, 300, 550, 850, 1200, 1650, 2200, 2850, 3600];
   // Stat mods a mastery level adds (every level up to the hero's own applies); ED.MASTERY_REWARDS is the text. Level 8 gives one boon reroll (sim/build.js).
-  ED.MASTERY_MODS = { 2: { dmg: 0.01 }, 4: { hp: 1 }, 5: { cdr: 0.01 }, 7: { crit: 0.01 }, 9: { dmg: 0.01 } };
+  ED.MASTERY_MODS = { 2: { dmg: 0.01 }, 4: { hp: 1 }, 5: { cdr: 0.01 }, 7: { crit: 0.03 }, 9: { dmg: 0.08 }, 10: { hp: 4 } };
   ED.MASTERY_REWARDS = [
     null,
     'Hero unlocked',
@@ -90,10 +93,10 @@
     '+1 max health',
     'Skills recharge 1% faster',
     'Third weapon',
-    '+1% critical chance',
+    '+3% critical chance',
     '+1 boon reroll per descent',
-    '+1% damage',
-    'Gilded: a golden aura',
+    '+8% damage',
+    '+4 max health; Gilded: a golden aura',
   ];
   ED.masteryLevel = (xp) => { let l = 1; for (let i = 0; i < ED.MASTERY_XP.length; i++) if (xp >= ED.MASTERY_XP[i]) l = i + 1; return l; };
 

@@ -223,7 +223,7 @@
   // Fury multiplier at stratum s after ft fight seconds: 1 while t is 0 or ft <= t, then 1 + ramp x (ft - t) up to max (pure; the client mirror derives it from the synced clock).
   W.furyMul = (s, ft) => { const t = W.furyAt(s); return t > 0 && ft > t ? Math.min(W.BOSS_FURY.max, 1 + W.BOSS_FURY.ramp * (ft - t)) : 1; };
   // Fodder max HP: depth (+25% per stratum) and pact only, no threat lever, party multiplier or elite (pure; the client mirror rebuilds it from the wire fraction).
-  W.fodderHp = (def, s, pact) => def.hp * (1 + 0.25 * (s - 1)) * (pact >= 1 ? 1.25 : 1) * (pact >= 10 ? 1.2 : 1);
+  W.fodderHp = (def, s, pact) => def.hp * (1 + 0.25 * (s - 1)) * ED.pactMul(pact, 'foeHp');
   // Xp a threat foe is worth before the dark-room multiplier and the room's budget scale (enc.xpK).
   W.threatXp = (def, s, elite) => (def.xp || 0) * (1 + 0.35 * (s - 1)) * (elite ? 3 : 1);
   // Room xp budget by stratum (solo, per room; x DARK_LOOT in a dark room, not scaled by the party): threat drops, fodder motes (FODDER_XP_SHARE of it, spread over the quota) and the clear pile together drop exactly this.
@@ -234,8 +234,9 @@
   W.prototype.threat = function () { return W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, this.stratum - 1))]; };
   W.prototype.emit = function (ev) { this.fx.push(ev); };
   W.prototype.partySize = function () { return Math.max(1, this.players.size); };
-  W.partyHpMul = (size) => { const n = size - 1; return 1 + 0.85 * n + 0.3 * n * (n - 1); }; // foe HP factor of a party of `size` (pure; the sheet reads it too)
-  W.dmgScale = (s) => 1 + 0.22 * (s - 1) + 0.03 * (s - 1) * (s - 1); // foe damage factor of stratum s
+  W.partyHpMul = (size) => { const n = size - 1; return 1 + 0.2 * n + 0.3 * n * (n - 1); }; // foe HP factor of a party of `size` (pure; the sheet reads it too)
+  W.FOE_DMG = 1.4; // every foe's damage (hits, shots, zones, bosses) x this
+  W.dmgScale = (s) => W.FOE_DMG * (1 + 0.22 * (s - 1) + 0.03 * (s - 1) * (s - 1)); // foe damage factor of stratum s
   W.prototype.partyHpMul = function () { return W.partyHpMul(this.partySize()); };
   W.prototype.alive = function (p) { return p && !p.downed && !p.dead; };
   W.prototype.alivePlayers = function () { const out = []; for (const p of this.players.values()) if (!p.downed && !p.dead) out.push(p); return out; };

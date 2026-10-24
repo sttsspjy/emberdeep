@@ -96,7 +96,7 @@
       e.t += dt;
       if (attacks[e.atk].update(w, e, dt, e.t)) {
         e.st = 'idle'; e.pose = 'idle';
-        e.t = (e.phase >= 3 ? 0.45 : e.phase === 2 ? 0.7 : 1.05) * (w.pact >= 5 ? 0.8 : 1) * w.threat().pause / (e.furyM || 1);
+        e.t = (e.phase >= 3 ? 0.45 : e.phase === 2 ? 0.7 : 1.05) * ED.pactMul(w.pact, 'bossPause') * w.threat().pause / (e.furyM || 1);
       }
       return;
     }

@@ -285,7 +285,7 @@ const STORED_V2 = {"v":2,"news":0,"name":"Stored","embers":100,"lifetime":900,"u
   // the summary a client receives after the run (net.js 'end' event) carries darkCleared as a plain number
   ok(I.check(p, JSON.parse(JSON.stringify({ darkCleared: 6 }))), 'the check reads a plain summary');
 }
-{ // positions: ids and rank counts are the save code layout; a maxed profile round-trips; the full Hearth stays small
+{ // positions: ids and rank counts are the save code layout; a maxed profile round-trips; the full Hearth's stat totals
   ok(ED.UPGRADES.map(u => u.id).join() === 'vitality,might,fortune,fleet,provisions,bulwark,precision,wisdom,insight,headstart,alacrity,stash,attunement,favor,secondwind,deepwick', 'upgrade order is the save code position order');
   ok(ED.UPGRADES.map(u => u.costs.length).join() === '5,5,3,3,2,3,3,3,3,2,3,2,4,2,2,3', 'rank counts are unchanged');
   const p = S.defaultProfile(); p.up = ED.UPGRADES.map(u => u.costs.length);
@@ -293,8 +293,8 @@ const STORED_V2 = {"v":2,"news":0,"name":"Stored","embers":100,"lifetime":900,"u
   const st = (meta) => ED.Stats.compute({ cls: 'knight', weapon: 'longsword', boons: {}, relics: [], meta, pact: 0 });
   const a = st({ up: ED.UPGRADES.map(() => 0), mastery: 1 }), b = st({ up: ED.UPGRADES.map(u => u.costs.length), mastery: 10 });
   const d = (k) => b[k] - a[k];
-  ok(Math.abs(d('dmg') - 0.045) < 1e-9 && Math.abs(d('hp') - 6) < 1e-9 && Math.abs(d('crit') - 0.04) < 1e-9 && Math.abs(d('cdr') - 0.04) < 1e-9 && Math.abs(d('armor') - 3) < 1e-9 && Math.abs(d('spd') - 0.03) < 1e-9 && Math.abs(d('xp') - 0.06) < 1e-9 && Math.abs(d('gold') - 0.06) < 1e-9,
-    `full Hearth + mastery 10: +4.5% damage, +6 health, +4% crit, +4% recharge, +3 armor, +3% speed, +6% xp, +6% gold (got ${['dmg', 'hp', 'crit', 'cdr', 'armor', 'spd', 'xp', 'gold'].map(k => d(k).toFixed(3))})`);
+  ok(Math.abs(d('dmg') - 0.24) < 1e-9 && Math.abs(d('hp') - 15) < 1e-9 && Math.abs(d('crit') - 0.09) < 1e-9 && Math.abs(d('cdr') - 0.1) < 1e-9 && Math.abs(d('armor') - 9) < 1e-9 && Math.abs(d('spd') - 0.03) < 1e-9 && Math.abs(d('xp') - 0.06) < 1e-9 && Math.abs(d('gold') - 0.06) < 1e-9,
+    `full Hearth + mastery 10: +24% damage, +15 health, +9% crit, +10% recharge, +9 armor, +3% speed, +6% xp, +6% gold (got ${['dmg', 'hp', 'crit', 'cdr', 'armor', 'spd', 'xp', 'gold'].map(k => d(k).toFixed(3))})`);
 }
 
 // ---- relics: the whole list is in the pool, no element tag, 14 removed ----
