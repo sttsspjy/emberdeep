@@ -266,10 +266,14 @@
     if ((me.momN | 0) > 0) o.push('Momentum ×' + me.momN, '#b78cff');
     if (st.channel > 0 && (me.chanT || 0) > 0) o.push('Channel +' + Math.round(100 * Math.min(st.chanCap, st.channel * Math.floor(me.chanT / Math.max(0.05, st.chanStep)))) + '%', '#ff9a3a');
     if (st.hex > 0) { let n = 0; for (const e of view.enemies) if (e.hexed || e.hexT > 0) n++; if (n) o.push('Hexed ' + n, '#7dffd9'); }
+    if (me.boons && me.boons.capacitor > 0) { let n = 0; for (const e of view.enemies) if (e.charge > 0 && e.hp > 0) n++; if (n) o.push('Charged ' + n, '#ffe66b'); } // Capacitor: foes your next cast detonates
     if (me.glBuff || (me.glT || 0) > 0) o.push('Guardian Light', '#ffcf5a'); // Cleric buffs on any hero: Guardian Light, Embolden
     if (me.embolden || (me.auraT || 0) > 0) o.push('Emboldened', '#ffcf5a');
     return o;
   }
+  // Metronome beat shown for a hero holding the Twist: 0 = none, else 1 + attacks since the last x3 beat (0-3; net.js P[25]).
+  const metroBeat = (me) => (me.stats && me.stats.twMetro > 0 ? 1 + U.clamp(me.metroN | 0, 0, 3) : 0);
+  H.cues = { beat: metroBeat, chips: (view, me) => chipList(view, me).slice() }; // headless checks
   const shieldOut = (p) => !!(p.shieldOut || (p.shields && p.shields.length));
   // Route sigil: the icon of the hero's route card in the class colour (nothing before the level-3 pick); returns its id for the redraw signature.
   const routeIcon = (p) => { const rt = p.boons ? ED.classRoute(p.boons, p.cls) : null; return rt && rt.t1 ? ED.BOONS[rt.t1].icon : ''; };
@@ -411,6 +415,7 @@
     for (const fx of slotFx) if (fx && fx.t > 0) anim = true; // ready flash
     const pl = pips(me); sp(pl.length); for (let i = 0; i < pl.length; i += 2) { sp(sid(pl[i])); sp(pl[i + 1]); } sp(sid(st && st.evo || ''));
     const ch = chipList(view, me); sp(ch.length); for (let i = 0; i < ch.length; i += 2) sp(sid(ch[i]));
+    const mb = metroBeat(me); sp(mb); if (mb === 4) sp(step(t, 4)); // Metronome beat and the x3 pulse
     sp(sid(routeIcon(me)));
     // party
     for (const p of view.players.values()) {
@@ -555,6 +560,19 @@
     const chip = (label, col) => { const cw = adv(label, tS) + 10 * f; chipBox(sx, L.cy, cw, L.ch, col); T(label, sx + cw / 2, L.cy + L.ch / 2, tS, col, 'b', 'center', 700, 2); sx += cw + q(u * 0.4); any = true; };
     const cl = chipList(view, me);
     for (let kk = 0; kk < cl.length; kk += 2) chip(cl[kk], cl[kk + 1]);
+    const mb = metroBeat(me);
+    if (mb) { // Metronome: 'Beat' and four pips, one lit per attack since the last x3 beat; the 4th is the x3 beat, ringed gold, filled and pulsing when the next attack is it
+      const lab = 'Beat', d = Math.max(4 * f, qf(L.ch * 0.42)), gp = 2 * f, n = mb - 1, hot = n === 3, col = hot ? '#ffd36b' : K.muted;
+      const cw = adv(lab, tS) + 4 * d + 3 * gp + 16 * f, px0 = sx + adv(lab, tS) + 10 * f, py = L.cy + qf((L.ch - d) / 2);
+      chipBox(sx, L.cy, cw, L.ch, col, hot ? 0.3 : 0.12); T(lab, sx + 5 * f + adv(lab, tS) / 2, L.cy + L.ch / 2, tS, col, 'b', 'center', 700, 2);
+      for (let i = 0; i < 4; i++) {
+        const x = px0 + i * (d + gp), last = i === 3;
+        c.fillStyle = last ? '#ffd36b' : K.ol; c.fillRect(x, py, d, d);
+        c.fillStyle = last ? (hot ? (step(t, 4) ? '#fff4d6' : '#ffd36b') : '#3a2a10') : i < n ? K.bone : '#2a1d15'; c.fillRect(x + f, py + f, d - 2 * f, d - 2 * f);
+      }
+      if (hot && step(t, 4)) ring(c, px0 + 3 * (d + gp) - f, py - f, d + 2 * f, d + 2 * f, f, '#fff4d6', false);
+      sx += cw + q(u * 0.4); any = true;
+    }
     endFade();
     return any;
   }
