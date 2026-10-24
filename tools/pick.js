@@ -96,6 +96,13 @@ module.exports = (ED, model) => {
   //   pacifist     Fold  weapon direct damage removed; the weapon share of every status build-up x PYRE
   //   bloodprice   Fold  skill damage x (1 + BLOOD_CASTS: the bot casts at the gap while above BLOOD_HP; guess), E x BLOOD_EHP (health spent; guess)
   //   hunted       Prior HUNT.card x HUNT.kill x HUNT.fights x strata left (extra boon cards; guess); Fold E x HUNT.ehp (one more affixed elite a room; guess)
+  //   b_atk        Sheet fullSwing (ED.Bell.cycle); Fold fullR: full-wind loops x pack weapon damage x FULLR_K (guess)
+  //   b_atk_h      Sheet wreck, demolish; model.js wreckStun; Fold hurlCarry: pack weapon damage x CARRY_K per 40 px (guess)
+  //   b_atk_s      Sheet haulAcc, perpetual, windCap (ED.Bell.cycle); Fold slipstream: the WIND_MOVE slow lifted for SLIP_WIND of a fight -> E like speed (guess)
+  //   b_s1         Sheet s1Cdr, s1Dmg; Fold leapR -> E (LEAP_E; guess)
+  //   b_s1_a       Sheet s1Dmg, s1Area, wreckSpin (skill part); model.js smashStun; Fold wrecker: WRECK_SAVE of a wind-up saved per Anchor Leap (guess)
+  //   b_s1_b       model.js hookShield, shackle; Fold leapIfr: untouchable share of the cooldown x IFR_HIT -> E, hookPull: PULL_N more pack foes per slam (guesses)
+  //   b_s2 b_s2_a b_s2_b b_el b_el_a b_el_b  Sheet (Peal parts, rod, stormBolt, chainArc, arcN, tollStorm); model.js Peal and rod stuns, Ward Bell
   //   boots        Fold  spd -> E (relic)
   //   coin         Fold  gold, luck -> bonus
   //   fang         Fold  poisonInfuse -> venom
@@ -156,6 +163,9 @@ module.exports = (ED, model) => {
   // HEAL_E: E per max HP healed a stratum (Mending's 0.1 per unit of heal); FORAGER_HEALS: heal sources a stratum that land below full health.
   const BRUSH_K = { melee: 0.5, ranged: 1.2 }, GLACIER_E = 0.3, SHATTER_NEAR = 1, CONDUCT_N = 2, ANCHOR_HIT = { melee: 0.6, ranged: 0.3 }, ANCHOR_ARC_K = 0.3, CAP_MIN = 0.2, NEURO_RED = 0.2;
   const MARTYR_RATE = 1 / 8, VIGIL_UP = { melee: 0.2, ranged: 0.4 }, CHAIN_REACH = 0.7, QUARRY_BIG = 0.5, UMBRAL_HIT = 0.5, HEAL_E = 0.08, FORAGER_HEALS = 2.5;
+  // Bellwarden terms (guesses): FULLR_K pack weapon damage per unit of Full Swing impact width; CARRY_K per 40 px of Unstoppable carry (struck foes bunch into the impact); SLIP_WIND share of a fight spent winding;
+  // LEAP_E E per unit of hand-leap reach; WRECK_SAVE share of a loop's wind-up a Wrecker landing saves; IFR_HIT share of untouchable seconds that dodge a hit; PULL_N extra pack foes a Reel In slam strikes.
+  const FULLR_K = 0.3, CARRY_K = 0.05, SLIP_WIND = 0.6, LEAP_E = 0.04, WRECK_SAVE = 0.5, IFR_HIT = 0.4, PULL_N = 1;
   const PRESENT_EL = (st, el) => st[ED.ELEMENTS[el].inf] > 0 || st.element === el; // an element is active: an infusion above 0 or the class element
 
   // ---------------- index of the path cards ----------------
@@ -176,7 +186,7 @@ module.exports = (ED, model) => {
   // ---------------- what the sheet leaves out ----------------
   // a: model.assess result at the stratum of ctx. Returns { one, pack, ehp, bonus }: damage per second on one foe and on a pack, effective health, additive value of the meta stats.
   function fold(p, a, ctx) {
-    const st = p.stats, m = a.m, k = a.k, ref = m.ref, t = ctx.stratum, melee = !!st.melee || st.kind === 'bell', wk = m.weapon, aps = wk._aps;
+    const st = p.stats, m = a.m, k = a.k, ref = m.ref, t = ctx.stratum, bell = st.kind === 'bell', melee = !!st.melee || bell, wk = m.weapon, aps = wk._aps;
     const sdTot = model.statusDamage(m), dOne = a.one - sdTot, dPack = a.pack - sdTot;
     const spk = 1 + (clamp(dPack / Math.max(1e-9, dOne), 1, PACK) - 1) * POOL_EFF; // a status builds on every foe the hits reach
     const sd = { fire: 0, lightning: 0, holy: 0, general: 0 };
@@ -297,11 +307,22 @@ module.exports = (ED, model) => {
     }
     // Holy shield: the Smite shield refills to its cap; Sanctity raises the cap and the grant
     if (st.holyInfuse > 0 || st.element === 'holy') eMul *= 1 + (st.holyCap - 0.06) * 0.6 + (st.smiteShield - 0.01) * 6;
+    // Bellwarden: Full Swing's wider impact, Unstoppable's carry, Wrecker's wound landing, Reel In's pull; Slipstream, the farther hand leap and Tether Hook's untouchable time -> E
+    if (bell) {
+      const cy = ED.Bell.cycle(st, 1, St.attackInterval(p), ED.Bell.rateGain(p)), lp = m.skills.find(q => q.id === 'heave'), cd1 = lp ? lp._cd : 5;
+      if (st.fullR) addN += wN * FULLR_K * st.fullR * cy.full;
+      if (st.hurlCarry) addN += wN * CARRY_K * st.hurlCarry / 40;
+      if (st.wrecker) { const g = Math.min(0.25, WRECK_SAVE * cy.tw / cd1); add1 += wOne * g; addN += wN * g; }
+      if (st.hookPull && lp) addN += lp.dpsCd * k * PULL_N;
+      if (st.slipstream) eMul *= 1 + 0.35 * (1 - C.WIND_MOVE) * SLIP_WIND;
+      if (st.leapR) eMul *= 1 + LEAP_E * st.leapR;
+      if (st.leapIfr) eMul /= 1 - Math.min(E_MAX_RED, IFR_HIT * st.leapIfr / cd1);
+    }
     // area: melee arcs and blasts catch more of a pack
     if (st.area) { mulN *= 1 + (melee ? 0.3 : 0.12) * st.area; }
     // Seeker Gem: homing shots miss less, melee reach hits first and catches more of a pack
     if (st.homing > 0 && !melee) { mul1 *= 1.08; mulN *= 1.08; }
-    if (st.meleeReach > 0 && melee) { mul1 *= 1 + 0.1 * st.meleeReach; mulN *= 1 + 0.3 * st.meleeReach; }
+    if (st.meleeReach > 0 && melee && !bell) { mul1 *= 1 + 0.1 * st.meleeReach; mulN *= 1 + 0.3 * st.meleeReach; }
     // guards and sustain the effective health leaves out
     if (st.guardian) eMul *= 1.12;
     if (st.aegis) eMul *= 1.15;
