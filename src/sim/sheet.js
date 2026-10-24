@@ -1005,7 +1005,7 @@
   // ---------------- build tab ----------------
   const AILMENT_STATS = ['brand', 'veins', 'contagion', 'festerHit', 'exsang', 'arterial']; // stats that read the ailment count of a foe (World.ailments)
   const ROUTE_WHEN = { t1: 'Offered at team level 3', fork: 'Offered when the stratum I boss falls', r2: 'Rank 2 when the stratum II boss falls', r3: 'Rank 3 when the stratum IV boss falls' };
-  const KIND_ORDER = { gate: 0, path: 1, open: 1, route: 0, fork: 1, keystone: 2, evolution: 3, duo: 0, ascended: 0 };
+  const KIND_ORDER = { gate: 0, path: 1, open: 1, route: 0, fork: 1, keystone: 2, evolution: 3, mutation: 4, duo: 0, ascended: 0, twist: 0 };
   function buildModel(p, st, ctx, R) {
     const boons = p.boons || {}, gen = ED.isGeneralist(boons), gates = ED.gatePaths(boons), evoPath = ED.evoOf(boons), paths = [];
     for (const k of gates) {
@@ -1035,16 +1035,19 @@
         forks: e.forks.map((fid) => { const fb = ED.BOONS[fid], rank = boons[fid] | 0; return { id: fid, name: ED.cardName(fid, rank), icon: fb.icon, tag: fb.tag || '', coop: !!fb.coop, owned: rank > 0, rank, max: fb.max, closed: !!rt.fork && rt.fork !== fid, text: Sh.text(fid, rank || 1, st), when: rank ? (rank < fb.max ? ROUTE_WHEN[rank === 1 ? 'r2' : 'r3'] : '') : rt.fork ? '' : ROUTE_WHEN.fork, weapon: fb.weapon && fb.weapon.kind ? ED.forkWeapon(p.weapon, fid).name : null }; }),
       });
     }
-    // boons grouped by owned path (gate, boons, keystone, evolution), duo, class route and open
+    // boons grouped by Twists first, then owned path (gate, boons, keystone, evolution, Mutation: under its parent's path), duo, class route and open; a Twist row carries its cost line
     const rows = [];
     for (const id in boons) {
       const b = ED.BOONS[id], rank = boons[id];
       if (!b || !(rank > 0) || (b.cls && b.cls !== p.cls)) continue;
-      const max = ED.maxRank(b, st), kind = b.evo ? 'evolution' : b.asc ? 'ascended' : b.key ? 'keystone' : b.gate ? 'gate' : b.duo ? 'duo' : b.route ? (b.tier === 1 ? 'route' : 'fork') : b.path && !b.open ? 'path' : 'open';
-      const group = b.cls ? 'route' : b.duo ? 'duo' : b.asc ? 'asc' : b.path && !b.open && gates.includes(b.path) ? 'path:' + b.path : 'open';
-      rows.push({ id, name: ED.cardName(id, rank), icon: b.icon, rar: b.rar, rank, max, kind, group, path: b.path || (b.duo ? b.duo[0] : null), path2: b.duo ? b.duo[1] : null, tag: b.tag || '', coop: !!b.coop, text: Sh.text(id, rank, st), next: rank < max ? Sh.nextText(id, rank, st) : null });
+      const par = b.mut ? ED.BOONS[b.mut] : null, parPath = par ? par.path || par.evo : null;
+      const max = ED.maxRank(b, st), kind = b.twist ? 'twist' : b.mut ? 'mutation' : b.evo ? 'evolution' : b.asc ? 'ascended' : b.key ? 'keystone' : b.gate ? 'gate' : b.duo ? 'duo' : b.route ? (b.tier === 1 ? 'route' : 'fork') : b.path && !b.open ? 'path' : 'open';
+      const group = b.twist ? 'twist' : b.cls ? 'route' : b.duo ? 'duo' : b.asc ? 'asc' : parPath && gates.includes(parPath) ? 'path:' + parPath : b.path && !b.open && gates.includes(b.path) ? 'path:' + b.path : 'open';
+      const row = { id, name: ED.cardName(id, rank), icon: b.icon, rar: b.rar, rank, max, kind, group, path: b.path || parPath || (b.duo ? b.duo[0] : null), path2: b.duo ? b.duo[1] : null, tag: b.tag || '', coop: !!b.coop, text: Sh.text(id, rank, st), next: rank < max ? Sh.nextText(id, rank, st) : null };
+      if (b.cost) row.cost = b.cost;
+      rows.push(row);
     }
-    const groups = gates.map(k => 'path:' + k).concat(['duo', 'route', 'asc', 'open']).map(g => ({ group: g, path: g.indexOf('path:') === 0 ? g.slice(5) : null, items: rows.filter(r => r.group === g).sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind]) })).filter(g => g.items.length);
+    const groups = ['twist'].concat(gates.map(k => 'path:' + k), ['duo', 'route', 'asc', 'open']).map(g => ({ group: g, path: g.indexOf('path:') === 0 ? g.slice(5) : null, items: rows.filter(r => r.group === g).sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind]) })).filter(g => g.items.length);
     const relics = (p.relics || []).map(id => {
       const r = ED.RELICS[id], i = Sh.READY.findIndex(x => x.id === id);
       return { id, name: r.name, icon: r.icon, rar: r.rar, text: r.desc, live: relicLive(id, p, st, ctx), state: i >= 0 ? (readyOf(p, i) ? 'ready' : id === 'angel' || id === 'phoenix' ? 'used' : 'recharging') : null };
