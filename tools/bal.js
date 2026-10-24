@@ -2,7 +2,7 @@
 // Fixed quick balance suite: the GAME-DESIGN section 10 cells (fresh random, fresh smart, half-upgraded, fully upgraded, fully upgraded at Pacts 1-5, two and three heroes fully upgraded at Pact 5; every hero in rotation,
 // skill 0.75, --pick=smart unless noted) run in one worker pool (tools/simpool.js), one line per cell: wins % +-se, depth +-se, mean win time, target bands, PASS/FAIL (a band is met when the estimate lies inside it;
 // a cell with no band for a figure ignores it). Exit code is always 0 (a report). Every cell moves with the veteran bot (--vet, the human proxy; --vet=0 turns it off).
-// Bands are the v5 difficulty contract: fresh random <= 1%, half-upgraded 20%, fully upgraded 40%, then 6 points less per Pact down to 10% at Pact 5; two to four heroes at Pact 5 20% (bots; a human party does better).
+// Bands are the v5 difficulty contract: fresh random <= 1%, half-upgraded 20%, fully upgraded 40%, gentle Pacts 1-3 (35, 31, 27%) and steep Pacts 4-5 (18, 10%); two to four heroes at Pact 5 20% (bots; a human party does better).
 // Fresh smart has no band; the order check wants fresh random <= fresh smart <= half-upgraded, and the Pact ladder line prints max and Pacts 1-5 with their monotonic read.
 // Optional cells (opt: legacy picks, the v4 half-upgraded duo and trio, four heroes at Pact 5) run only when --cells names them. The default sizes keep the suite near 3 minutes; --full runs the section 10 sign-off sizes
 // (384 runs per fresh, mid, max and Pact 5 cell, 192 for Pacts 1-4 and parties). The estimate is printed first: sum(runs x cost) / speed, where cost is the measured seconds of one run in one process and speed is the pool
@@ -25,7 +25,7 @@ const CELLS = [
   { id: 'smart', title: 'fresh, smart picks', n: 1, meta: 'none', pact: 0, flags: SMART, runs: [35, 385], cost: 1.6 },
   { id: 'mid', title: 'half-upgraded', n: 1, meta: 'mid', pact: 0, flags: SMART, runs: [63, 385], cost: 1.8, win: [0.17, 0.23], byHero: true },
   { id: 'max', title: 'fully upgraded', n: 1, meta: 'max', pact: 0, flags: SMART, runs: [63, 385], cost: 1.9, win: [0.36, 0.44], byHero: true },
-  pactCell(1, 0.34), pactCell(2, 0.28), pactCell(3, 0.22), pactCell(4, 0.16),
+  pactCell(1, 0.35), pactCell(2, 0.31), pactCell(3, 0.27), pactCell(4, 0.18),
   { id: 'pact5', title: 'fully upgraded, Pact 5', n: 1, meta: 'max', pact: 5, flags: SMART, runs: [49, 385], cost: 1.7, win: [0.07, 0.13] },
   { id: 'duo5', title: 'two heroes, fully upgraded, Pact 5', n: 2, meta: 'max', pact: 5, flags: SMART, runs: [28, 196], cost: 3.2, win: [0.15, 0.25] },
   { id: 'trio5', title: 'three heroes, fully upgraded, Pact 5', n: 3, meta: 'max', pact: 5, flags: SMART, runs: [21, 196], cost: 5.4, win: [0.15, 0.25] },

@@ -80,7 +80,7 @@ Boons belong to **paths**: six element paths and General. A hero follows at most
 - **Forge:** picking a forge card ranks an owned boon up by one (never a route or fork card: bosses rank those).
 - **Ascended boons:** from stratum IV, a boon you have taken to its top rank can offer its **Ascended** upgrade (Honed Edge, Blur, Arrow Storm, Impaler, Hawk Eye, Savage, Vast, Titan, Bastion; Hemorrhage, Headsman and Bloodletting for Generalists). It sits first on a boon offer, takes no path, and multiplies the bonus you already hold instead of adding to it. At most two per stratum.
 - A room that rewards "a boon" offers one new element gate (while you have a free slot) and boons of the paths you follow. Level-ups offer open boons, boons of your paths, keystones and duos.
-- **Health is a small whole number.** A Knight starts at 36, a Necromancer at 18, and a foe's hit on a Knight costs about 3 from the first stratum: every hit counts. A Vigor blessing is +2, a Heartstone +4, a Hearth Vitality rank +2.
+- **Health is a small whole number.** A Knight starts at 40, a Necromancer at 14, and a foe's hit costs 2 to 4 from the first stratum: every hit counts. A Vigor blessing is +2, a Heartstone +4, a Hearth Vitality rank +2.
 - **No life steal.** Hits and kills never heal you. Healing comes from hearts, campfires, healing draughts, the fountain, Vigor, the Hearth's Provisions and the Elixir Flask, Sanctuary and Bone Harvest, and revives. **Shields** take the place of sustain: class shields give at most 3% of your max health per 10 seconds, all shield sources together at most 6% (the Battle Ward an elite room grants is exempt), and shields fade between fights.
 
 ### Class routes
@@ -143,7 +143,7 @@ The main menu has five entries. **Descend** picks your hero, weapon and pact, th
 - **Heroes:** every descent trains the hero you took, up to mastery 10. Mastery unlocks weapons and tiny permanent bonuses.
 - **Deeds:** 26 achievements with ember rewards, including Evolved, **Into the Dark** (clear 6 dark rooms in one descent) and **Cartographer** (clear every room of a stratum, both dark rooms included).
 - **Wardrobe:** looks for your heroes in the Hearth (and the lobby's Hearth): skins bought with embers at mastery 4 and 7, a weapon tint for each weapon you evolve in three descents, a golden aura at mastery 10, and more for those who find the Deep's secrets. Hover an item to preview it on your hero. Your party sees what you wear. Looks never change how a hero fights, and Wardrobe embers are not refunded.
-- **Pacts:** ten optional difficulty tiers unlocked by winning, each paying more embers. They stack: tougher foes, harder hits, more elites, scarce healing and less health, stronger bosses, then speed, prices, shots, frailty and an extra wave.
+- **Pacts:** ten optional difficulty tiers unlocked by winning, each paying more embers. They stack: the first three (tougher foes, harder hits, more elites) are gentle, the next two (scarce healing and less health, stronger bosses) are steep, then speed, prices, shots, frailty and an extra wave.
 - The Hearth camp changes as you progress: more tents and lanterns, a banner per slain boss, a gate that glows with the colour of the deepest stratum you have reached, and a blood moon under a pact.
 
 ### Saving
@@ -152,7 +152,7 @@ Progress autosaves to the browser. **Settings > Profile** shows a portable save 
 
 Wickdeep starts fresh profiles: saves and codes from Emberdeep (`ED1-…`) do not carry over, and the game says so if you paste one.
 
-If you played an earlier version of Wickdeep, the first launch shows a one-time **"The Deep has changed"** notice. It lists what is different (the relic Codex is gone and every relic drops from the start, the element relics became path boons, free Hearth refunds and smaller upgrades, smaller generic health boons, a per-hero Armory list, kill effects on fodder, mouse aim, the new paths, shields instead of life steal, the Knight's Shield Throw, optional dark rooms in place of the lantern, bigger rooms with hordes, dash charges, rank 2 and rank 3 transforms at the bosses, Ascended boons, boss fury, music per stratum) and how many embers the Codex refunded. A profile from v4 sees only the newest part: small health numbers and harder hits, a stronger Hearth, the Armory weapon variants and the new melee swing.
+If you played an earlier version of Wickdeep, the first launch shows a one-time **"The Deep has changed"** notice. It lists what is different (the relic Codex is gone and every relic drops from the start, the element relics became path boons, free Hearth refunds and smaller upgrades, smaller generic health boons, a per-hero Armory list, kill effects on fodder, mouse aim, the new paths, shields instead of life steal, the Knight's Shield Throw, optional dark rooms in place of the lantern, bigger rooms with hordes, dash charges, rank 2 and rank 3 transforms at the bosses, Ascended boons, boss fury, music per stratum) and how many embers the Codex refunded. A profile from v4 or v4.1 sees only the newest part: small health numbers and harder hits, a stronger Hearth, the Armory weapon variants and the new melee swing.
 
 Two tabs open on the same profile stay in step: each adopts the other's saved progress instead of overwriting it.
 
