@@ -1,12 +1,11 @@
 // Usage: node tools/check-bell.js
-// Headless checks of the Bellwarden (src/sim/class-bell.js) in staged rooms: determinism of the bell physics, strike damage by speed, the Haul's spin-up and the analytic model,
-// walls, Heave and Peal parts (part ids, stuns, Thunderclap, Tether Hook), the whirl guard, fork weapons, the strike budget and finite state through a brawl with route cards.
-// Prints failures and exits 1 when any check fails.
+// Headless checks of the Bellwarden (src/sim/class-bell.js) in staged rooms: determinism, the wind (orbit, hero speed, winding strikes are no attacks), the hurl threshold and flight, the anchored bell in the world frame,
+// the reel (tap, drag, bosses), juggling, the snaps home (room change, downed, boss phase), Resonance (none from horde foes) and the Peal, an interactable in range never hurls, Anchor Leap, the variants,
+// every evolution held through a loop and finite state through a brawl with every route card. Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
-const U = ED.U, C = ED.CONST, St = ED.Stats;
+const C = ED.CONST, S = ED.Bell.STATES;
 let n = 0, fails = 0;
 const ok = (c, msg) => { n++; if (!c) { fails++; console.log('FAIL ' + msg); } };
-const near = (a, b, tol, msg) => ok(Math.abs(a - b) <= tol, `${msg}: got ${a}, want ${b}`);
 const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
 
 // ---- staged world: one Bellwarden, no foes, crit off ----
@@ -22,249 +21,223 @@ function stage(boons, o) {
 }
 const foe = (w, x, y, type) => { const e = w.spawnEnemy(type || 'skeleton', x, y); e.spawnT = 0; e.spd = 0; e.cd = 9999; e.maxHp = e.hp = 1e7; return e; };
 const run = (w, secs, f) => { for (let i = 0; i < Math.round(secs * 60); i++) { w.update(1 / 60); if (f) f(); } };
-const speed = (b) => Math.hypot(b.vx, b.vy);
 const hits = [];
 const oHit = ED.World.prototype.hitEnemy;
-ED.World.prototype.hitEnemy = function (e, base, src) { const d = oHit.call(this, e, base, src); hits.push({ e, base, d, src: src || {}, t: this.time }); return d; };
+ED.World.prototype.hitEnemy = function (e, base, src) { const d = oHit.call(this, e, base, src); hits.push({ e, d, src: src || {}, t: this.time }); return d; };
+const wind = (p) => Math.max(0, ...p.bells.filter(b => b.s === S.HAND).map(b => ED.Bell.windOf(p.stats, b)));
+const evs = (w, t) => w.fx.filter(f => f.t === t);
+// winds until ED.Bell.ready (at most 3 s), aims at (x, y) and releases for one tick; returns the wind it released at
+function hurlAt(w, p, x, y) {
+  p.haulIn = true;
+  for (let i = 0; i < 180 && !ED.Bell.ready(w, p); i++) w.update(1 / 60);
+  const v = wind(p);
+  p.aimX = x; p.aimY = y; p.face = Math.atan2(y - p.y, x - p.x); p.haulIn = false; w.update(1 / 60);
+  return v;
+}
+const flyOut = (w, p) => { for (let i = 0; i < 60 && p.bells.some(b => b.s === S.FLY); i++) w.update(1 / 60); };
+const walk = (w, p) => () => ED.Sim.movePlayer(p, { mx: 0, my: 0 }, 1 / 60, w.room, w.locked, w.zones); // the hero's own movement (its skill move): the controlling machine runs it
+const tap = (w, p) => { p.haulPress = (p.haulPress | 0) + 1; w.update(1 / 60); };
 
-// ---- determinism: the same seed and inputs give the same bells and foes ----
+// ---- determinism: the same seed and inputs give the same bells and foes through wind, hurl and reel ----
 {
   const sim = () => {
     const { w, p } = stage();
-    for (let i = 0; i < 6; i++) foe(w, p.x + 30 + 8 * i, p.y + (i - 3) * 12);
-    p.haulIn = true;
-    run(w, 6, () => { p.x += Math.sin(w.time * 3) * 1.2; });
-    return JSON.stringify({ b: p.bells.map(b => [b.x, b.y, b.vx, b.vy]), hp: w.enemies.map(e => e.hp) });
+    for (let i = 0; i < 6; i++) foe(w, p.x + 30 + 18 * i, p.y + (i - 3) * 12);
+    for (let k = 0; k < 3; k++) { hurlAt(w, p, p.x + 150, p.y); flyOut(w, p); tap(w, p); run(w, 0.5); }
+    return JSON.stringify({ b: p.bells.map(b => [b.x, b.y, b.vx, b.vy, b.s]), hp: w.enemies.map(e => e.hp), r: p.bellRes });
   };
   ok(sim() === sim(), 'the bell physics is deterministic');
 }
 
-// ---- spin-up: a hauled bell reaches the model's top speed on its orbit; let go, it slows ----
-for (const wid of ['bronzebell', 'greatbell', 'handbells', 'wreckbell', 'chimes', 'stormbell']) {
+// ---- wind: full within 1.5 s from rest, the orbit, the hero at WIND_MOVE (Slipstream: full speed), winding strikes are no attacks ----
+{
+  const { w, p } = stage();
+  const m0 = ED.Stats.moveRate(p);
+  p.haulIn = true; run(w, 1.5);
+  ok(wind(p) >= 1, `wound for 1.5 s the bell is at full wind (${wind(p).toFixed(2)})`);
+  const r = Math.hypot(p.bells[0].x - p.x, p.bells[0].y - p.y), O = ED.Bell.orbit(p.stats.weapon);
+  ok(Math.abs(r - O) < 6, `the wound bell orbits at ORBIT_K of the chain (${r.toFixed(0)} vs ${O.toFixed(0)})`);
+  ok(Math.abs(ED.Stats.moveRate(p) - m0 * C.WIND_MOVE) < 1e-6, 'the hero moves at WIND_MOVE while winding');
+  const s2 = stage({ b_atk: 1, b_atk_s: 2 });
+  s2.p.haulIn = true; run(s2.w, 0.5);
+  const mw = ED.Stats.moveRate(s2.p); s2.p.haulNear = true; s2.p.haulIn = false; s2.w.update(1 / 60);
+  ok(s2.p.stats.slipstream > 0 && Math.abs(mw - ED.Stats.moveRate(s2.p)) < 1e-6, 'Slipstream keeps full speed while winding');
+  const s3 = stage(), O3 = ED.Bell.orbit(s3.p.stats.weapon), e = foe(s3.w, s3.p.x + O3, s3.p.y);
+  s3.p.haulIn = true; hits.length = 0;
+  const a0 = s3.p.atkCount | 0;
+  run(s3.w, 3, () => { e.x = s3.p.x + O3; e.y = s3.p.y; });
+  const ws = hits.filter(h => h.src.part === 'bell.wind');
+  ok(ws.length >= 3, `winding strikes land on a foe on the orbit (${ws.length})`);
+  ok((s3.p.atkCount | 0) === a0, 'winding strikes never advance the attack count');
+  ok(ws.every(h => h.src.mul <= C.WIND_CAP + 1e-9), 'a winding strike deals at most WIND_CAP');
+}
+
+// ---- the hurl: below WIND_GO a release drops the bell; at or above it the bell flies HURL_D x wind, strikes the foe on its path, lands anchored; an attack; the event ----
+{
+  const { w, p } = stage();
+  p.haulIn = true; run(w, 0.05); p.haulIn = false; w.update(1 / 60);
+  ok(p.bells[0].s === S.HAND, `a release under WIND_GO wind drops the bell (wind ${wind(p).toFixed(2)})`);
+  const e = foe(w, p.x + 60, p.y), a0 = p.atkCount | 0; hits.length = 0; w.fx.length = 0;
+  const v = hurlAt(w, p, p.x + 400, p.y);
+  ok(p.bells[0].s === S.FLY && (p.atkCount | 0) === a0 + 1, `a release at wind ${v.toFixed(2)} hurls (an attack)`);
+  flyOut(w, p);
+  const b = p.bells[0], d = Math.hypot(b.x - p.x, b.y - p.y);
+  ok(b.s === S.ANCHOR, 'the hurl lands anchored');
+  ok(d <= C.HURL_D * v + 2 && d >= C.HURL_D * v - 12, `it flies HURL_D x wind (${d.toFixed(0)} px)`);
+  ok(hits.some(h => h.e === e && h.src.part === 'bell.hurl' && h.src.mul >= C.HURL_K * v * v - 1e-6), 'the hurl strikes the foe on its path at HURL_K x wind^2');
+  const ev = evs(w, 'hurl')[0];
+  ok(ev && ev.pid === 'p0' && ev.k > 0 && Math.abs(ev.x - b.x) <= 1, "the 'hurl' event carries pid, spot and k");
+}
+
+// ---- the anchored bell lies in the world frame (no carry) ----
+{
+  const { w, p } = stage();
+  hurlAt(w, p, p.x + 150, p.y); flyOut(w, p);
+  const b = p.bells[0], x = b.x, y = b.y;
+  for (let i = 0; i < 30; i++) { p.x -= 2; w.update(1 / 60); }
+  ok(b.s === S.ANCHOR && Math.abs(b.x - x) < 1e-6 && Math.abs(b.y - y) < 1e-6, 'the anchored bell stays where it landed while the hero walks');
+}
+
+// ---- the reel: a tap reels the anchored bell home; it strikes each foe on its line once and drags a non-boss foe toward the hero, at most REEL_DRAG; a boss is not dragged ----
+{
+  for (const boss of [false, true]) {
+    const { w, p } = stage();
+    hurlAt(w, p, p.x + 180, p.y); flyOut(w, p);
+    const b = p.bells[0], e = foe(w, p.x + 110, b.y, boss ? 'skelknight' : 'skeleton');
+    if (boss) e.boss = true;
+    const x0 = e.x; hits.length = 0; w.fx.length = 0;
+    tap(w, p);
+    ok(b.s === S.REEL && evs(w, 'reel').length === 1, `${boss ? 'boss: ' : ''}a tap reels the anchored bell (the 'reel' event)`);
+    run(w, 0.6);
+    const rs = hits.filter(h => h.e === e && h.src.part === 'bell.reel');
+    ok(rs.length === 1, `${boss ? 'boss: ' : ''}the reel strikes the foe on its line once (${rs.length})`);
+    ok(boss ? Math.abs(e.x - x0) < 1 : x0 - e.x > 20 && x0 - e.x <= C.REEL_DRAG + 1, `${boss ? 'a boss is not dragged' : 'the foe is dragged toward the hero'} (${(x0 - e.x).toFixed(0)} px)`);
+    ok(b.s === S.HAND, `${boss ? 'boss: ' : ''}the reeled bell is home`);
+  }
+  const { w, p } = stage();
+  hurlAt(w, p, p.x + 150, p.y); flyOut(w, p);
+  p.haulIn = true; run(w, 0.8);
+  ok(p.bells[0].s === S.HAND && wind(p) > 0.5, 'holding while anchored reels the bell and winds it again');
+}
+
+// ---- juggle: a release hurls only the most-wound bell; the others keep winding ----
+for (const wid of ['handbells', 'chimes']) {
   const { w, p } = stage({}, { weapon: wid });
-  p.haulIn = true;
-  run(w, 4);
-  const wp = p.stats.weapon, m = ED.Bell.model(p.stats, 1, St.attackInterval(p), ED.Bell.rateGain(p));
-  const v = p.bells.reduce((s, b) => s + speed(b), 0) / p.bells.length, d = Math.hypot(p.bells[0].x - p.x, p.bells[0].y - p.y);
-  ok(p.bells.length === (wp.n || 1), `${wid}: ${wp.n || 1} bell(s)`);
-  ok(Math.abs(v - m.top) < m.top * 0.04, `${wid}: hauled speed ${v.toFixed(0)} near the model's top ${m.top.toFixed(0)}`);
-  near(d, ED.Bell.orbit(wp), 1.5, `${wid}: the hauled chain is the orbit`);
-  ok(p.haul > 0.99, `${wid}: haul 1 while held`);
-  p.haulIn = false; run(w, 1.5);
-  ok(speed(p.bells[0]) < v * 0.3 && p.haul < 0.01 && p.bellL > ED.Bell.orbit(wp) + 1, `${wid}: let go, the bell slows and the chain lets out`);
-}
-{ // spin-up time: from rest to BELL_MIN within a second
-  const { w, p } = stage();
-  p.haulIn = true;
-  let t = -1;
-  run(w, 1.5, () => { if (t < 0 && speed(p.bells[0]) >= C.BELL_MIN) t = w.time; });
-  ok(t > 0 && t < 1, `the Haul spins the bell to strike speed in ${t.toFixed(2)} s`);
+  hurlAt(w, p, p.x + 150, p.y);
+  const fly = p.bells.filter(b => b.s === S.FLY).length, hand = p.bells.filter(b => b.s === S.HAND).length;
+  ok(fly === 1 && hand === p.bells.length - 1, `${wid}: one release hurls one bell (${fly} flying, ${hand} in hand)`);
+  run(w, C.JUGGLE_T * 0.8);
+  ok(p.bells.some(b => b.s === S.HAND && ED.Bell.windOf(p.stats, b) > 0.5), `${wid}: the other bells keep winding`);
 }
 
-// ---- strikes: damage = weapon dmg x clamp(speed / BELL_REF, 0.4, 1.8); none below BELL_MIN; a strike costs `loss` of the speed ----
+// ---- snaps home: a room change, the hero downed (ticks missed, or ED.CLS.bell.down), a boss phase change ----
 {
-  const { w, p } = stage();
-  const e = foe(w, p.x + ED.Bell.orbit(p.stats.weapon), p.y);
-  const ex = e.x, ey = e.y, pin = () => { e.x = ex; e.y = ey; e.kbx = e.kby = 0; }; // the foe holds its spot on the orbit
-  p.haulIn = true; hits.length = 0; w.fx.length = 0;
-  run(w, 5, pin);
-  const st = w.fx.filter(x => x.t === 'bstrike'), wh = hits.filter(h => h.e === e && h.src.kind === 'weapon');
-  ok(st.length > 4 && st.length === wh.length, `strikes land (${st.length} strikes, ${wh.length} weapon hits)`);
-  let worst = 0;
-  for (let i = 0; i < wh.length; i++) { const want = p.stats.weapon.dmg * U.clamp(st[i].v / C.BELL_REF, 0.4, 1.8) * p.stats.dmg; worst = Math.max(worst, Math.abs(wh[i].d - want) / want); }
-  ok(worst < 0.02, `strike damage follows the speed (worst error ${(worst * 100).toFixed(1)}%)`);
-  ok(st.every(x => x.v >= C.BELL_MIN), 'no strike below BELL_MIN');
-  const gaps = wh.slice(1).map((h, i) => h.t - wh[i].t);
-  ok(gaps.every(g => g >= St.attackInterval(p) - 1e-6), 'one strike per foe per lockout');
-}
-{ // a strike costs the bell `loss` of its speed (bosses x BOSS_LOSS)
-  const { w, p } = stage();
-  p.haulIn = true; run(w, 3);
-  const b = p.bells[0], v0 = speed(b);
-  p.haulIn = false;
-  const e = foe(w, b.x + b.vx / 60, b.y + b.vy / 60); // in the bell's path next tick
-  w.fx.length = 0;
-  for (let i = 0; i < 3 && !w.fx.some(x => x.t === 'bstrike'); i++) w.update(1 / 60);
-  ok(w.fx.some(x => x.t === 'bstrike') && speed(b) < v0 * (1 - p.stats.weapon.loss * 0.8), `a strike slows the bell (${v0.toFixed(0)} -> ${speed(b).toFixed(0)})`);
-  void e;
+  const out = (w, p) => { hurlAt(w, p, p.x + 150, p.y); flyOut(w, p); return p.bells[0].s === S.ANCHOR; };
+  let { w, p } = stage();
+  out(w, p); p.bellRoom = null; w.update(1 / 60);
+  ok(p.bells[0].s === S.HAND, 'a room change brings the bell home');
+  ({ w, p } = stage()); out(w, p); p.bellTickT = w.time - 1; w.update(1 / 60);
+  ok(p.bells[0].s === S.HAND, 'ticks missed (the hero was down) bring the bell home');
+  ({ w, p } = stage()); out(w, p); ED.CLS.bell.down.call(w, p);
+  ok(p.bells[0].s === S.HAND, 'ED.CLS.bell.down brings the bell home');
+  ({ w, p } = stage());
+  const bo = foe(w, p.x - 200, p.y, 'skelknight'); bo.boss = true; bo.phase = 1; w.boss = bo; w.update(1 / 60);
+  ok(out(w, p), 'staged: the bell lies anchored beside a boss');
+  bo.phase = 2; w.update(1 / 60);
+  ok(p.bells[0].s === S.HAND, 'a boss phase change brings the bell home');
 }
 
-// ---- the chain: a foe at the hero's feet is struck by the sweeping chain, once a revolution, at the bell's speed; knockback runs along the swing ----
+// ---- Resonance: none from horde foes; +1 per non-horde foe a hurl strikes and +1 for the hurl; the Peal spends it, its factor (>= 1) in p.pealResLast, and rings harder with it ----
 {
-  const { w, p } = stage();
-  const e = foe(w, p.x + 2, p.y + 1);
-  p.haulIn = true; run(w, 3);
-  hits.length = 0; w.fx.length = 0;
-  run(w, 6, () => { e.x = p.x + 2; e.y = p.y + 1; e.kbx = e.kby = 0; });
-  const st = w.fx.filter(x => x.t === 'bstrike'), m = ED.Bell.model(p.stats, 1, St.attackInterval(p), ED.Bell.rateGain(p)), rev = speed(p.bells[0]) / (2 * Math.PI * ED.Bell.orbit(p.stats.weapon));
-  ok(st.length > 0 && st.every(x => x.c === 1), `a foe over the hero is struck by the chain (${st.length} chain strikes)`);
-  ok(Math.abs(st.length / 6 - Math.min(rev, 1 / St.attackInterval(p))) < 0.35, `the chain strikes it once a revolution (${(st.length / 6).toFixed(2)}/s, ${rev.toFixed(2)} revolutions/s)`);
-  const wh = hits.filter(h => h.e === e && h.src.kind === 'weapon');
-  ok(wh.length === st.length && wh.every((h, i) => Math.abs(h.d - p.stats.weapon.dmg * U.clamp(st[i].v / C.BELL_REF, 0.4, 1.8) * p.stats.dmg) < 0.02 * h.d), 'a chain strike deals the bell strike of its speed');
-  const h0 = wh[0].src, rx = h0.x - p.x, ry = h0.y - p.y, dot = Math.abs(h0.kx * rx + h0.ky * ry) / (Math.hypot(rx, ry) || 1); // the bell's place at the strike: the swing is across the chain
-  ok(dot < 0.15, `knockback runs along the swing, across the chain (cos to the chain ${dot.toFixed(2)})`);
-  void m;
-}
-
-// ---- Chain Toll: with no other foe near, the arc grounds back into the struck foe at ARC_LONE ----
-{
-  const { w, p } = stage({ b_el: 1, b_el_b: 1 });
-  const e = foe(w, p.x + ED.Bell.orbit(p.stats.weapon), p.y), ex = e.x, ey = e.y;
-  p.haulIn = true; hits.length = 0;
-  run(w, 3, () => { e.x = ex; e.y = ey; e.kbx = e.kby = 0; });
-  const st = hits.filter(h => h.e === e && h.src.kind === 'weapon'), arc = hits.filter(h => h.e === e && h.src.part === 'bell.arc');
-  ok(st.length > 0 && arc.length === st.length, `a lone foe takes a Chain Toll arc per strike (${arc.length} arcs, ${st.length} strikes)`);
-}
-
-// ---- walls: a free bell bounces off a wall, a hauled bell whirls over it ----
-{
-  const { w, p } = stage();
-  const D = ED.Dungeon;
-  let wx = p.x; while (!D.blocksShots(D.tileAt(w.room, wx, p.y), false) && wx < p.x + 600) wx += 4;
-  p.x = wx - 60; p.lpx = p.x; w.update(1 / 60);
-  const b = p.bells[0];
-  b.x = p.x + 30; b.y = p.y; b.vx = 500; b.vy = 0; p.haulIn = false;
-  run(w, 0.25);
-  ok(b.vx < 0 && !D.blocksShots(D.tileAt(w.room, b.x, b.y), false), 'a free bell bounces off a wall');
-  p.haulIn = true; run(w, 3);
-  ok(speed(b) > C.BELL_REF, `a hauled bell beside a wall keeps its speed (${speed(b).toFixed(0)})`);
-}
-
-// ---- Heave: strike on the way out, reel on the way back, part ids; Wrecker smash; Tether Hook ----
-{
-  const { w, p } = stage();
-  const e = foe(w, p.x + 100, p.y);
-  hits.length = 0;
-  w.playerSkill(p, 0, {}, 0); run(w, 1.5);
-  const parts = hits.filter(h => h.e === e).map(h => h.src.part);
-  ok(parts.filter(x => x === 'heave.strike').length === 1 && parts.filter(x => x === 'heave.reel').length === 1, 'Heave strikes once out and reels once back: ' + parts.join(','));
-  const N = St.skillNums('heave', p.stats), h = hits.find(x => x.src.part === 'heave.strike');
-  near(h.d, N.p.strike.dmg * p.stats.dmg, 0.6, 'Heave strike damage');
-  ok(!p.heave, 'the Heave ends');
-}
-{
-  const { w, p } = stage({ b_s1: 1, b_s1_a: 2 });
-  const e = foe(w, p.x + 150, p.y), e2 = foe(w, p.x + 300, p.y + 40);
-  hits.length = 0;
-  w.playerSkill(p, 0, {}, 0); run(w, 1.5);
-  ok(hits.some(h => h.e === e && h.src.part === 'heave.smash') && e.stunCd > 0, 'Wrecker smashes where the flight ends and Ground Breaker stuns');
-  ok(!hits.some(h => h.e === e2 && h.src.part === 'heave.strike'), 'the Wrecker flight stops at the first foe (the one behind it is not struck)');
-}
-{ // a Heave hands the bells back at the speed they had: the swing goes on
-  const { w, p } = stage();
-  p.haulIn = true; run(w, 3);
-  const v0 = speed(p.bells[0]);
-  w.playerSkill(p, 0, {}, 0);
-  let t = 0; while (p.heave && t < 180) { w.update(1 / 60); t++; }
-  ok(!p.heave && Math.abs(speed(p.bells[0]) - v0) < v0 * 0.15, `after a Heave the bell swings on at ${speed(p.bells[0]).toFixed(0)} px/s (${v0.toFixed(0)} before)`);
-  ok(t / 60 <= ED.Bell.busy(p.stats).heave + 0.1, `the Heave takes ${(t / 60).toFixed(2)} s, the sheet's busy time ${ED.Bell.busy(p.stats).heave.toFixed(2)} s`);
-}
-{ // Wrecking Spin: the long chain sweeps a foe beside the hero, and the whirl guard holds through it
-  const { w, p } = stage({ b_s1: 1, b_s1_a: 3 });
-  const e = foe(w, p.x + 60, p.y), e2 = foe(w, p.x - 30, p.y + 10);
-  hits.length = 0;
-  let guard = false;
-  w.playerSkill(p, 0, {}, 0); run(w, 2, () => { if (p.heave && p.heave.phase === 'spin' && p.bellWhirl) guard = true; e2.x = p.x - 30; e2.y = p.y + 10; });
-  ok(hits.filter(h => h.e === e2 && h.src.part === 'heave.spin').length >= 2, 'the Wrecking Spin strikes a foe beside the hero');
-  ok(guard, 'the whirl guard holds through a Wrecking Spin');
-}
-{
-  const { w, p } = stage({ b_s1: 1, b_s1_b: 3 });
-  const e = foe(w, p.x + 130, p.y);
-  w.playerSkill(p, 0, {}, 0); run(w, 1.2);
-  const d = Math.hypot(e.x - p.x, e.y - p.y);
-  ok(d < p.stats.weapon.chain + 10 && e.stun > 0 && e.slowT > 0 && e.weakT > 0 && !e.hookedBy, `Tether Hook reels the foe in (130 -> ${d.toFixed(0)}), stuns and Shackles it`);
-  ok(p.shield > 0, 'a hook shields the hero');
-}
-
-// ---- Peal: a wave around the bell, x PEAL_REST at rest, full at speed; stuns foes, never bosses; Thunderclap discharges ----
-{
-  const one = (fast, boons, type) => {
-    const { w, p } = stage(boons);
-    run(w, 0.05);
-    const b = p.bells[0];
-    if (fast) { b.vx = 0; b.vy = C.BELL_REF + 100; }
-    const e = foe(w, b.x + 40, b.y, type);
-    hits.length = 0; w.fx.length = 0;
-    w.playerSkill(p, 0, {}, 1);
-    const h = hits.find(x => x.e === e && x.src.part === 'peal.wave');
-    run(w, 0.1);
-    return { w, p, e, h, b };
+  let { w, p } = stage();
+  const f = foe(w, p.x + 60, p.y); f.fodder = true;
+  hurlAt(w, p, p.x + 150, p.y); flyOut(w, p);
+  ok((p.bellRes | 0) === 0, `a hurl through a horde foe builds no Resonance (${p.bellRes})`);
+  ({ w, p } = stage());
+  foe(w, p.x + 60, p.y);
+  hurlAt(w, p, p.x + 150, p.y); flyOut(w, p);
+  ok((p.bellRes | 0) === 2, `a hurl through one foe builds 2 Resonance (${p.bellRes})`);
+  const peal = (res) => {
+    const s = stage(), e = foe(s.w, s.p.x + 40, s.p.y);
+    s.w.update(1 / 60); s.p.bellRes = res; hits.length = 0;
+    s.w.playerSkill(s.p, 0, null, 1); run(s.w, 0.1);
+    return { dmg: hits.filter(h => h.e === e && String(h.src.part || '').indexOf('peal') === 0).reduce((a, h) => a + h.d, 0), p: s.p };
   };
-  const slow = one(false), fast = one(true), N = St.skillNums('peal', fast.p.stats);
-  ok(fast.h && slow.h, 'the Peal hit carries the part id peal.wave');
-  near(fast.h.d / slow.h.d, 1 / C.PEAL_REST, 0.02, 'a Peal at rest deals PEAL_REST of one at full swing');
-  ok(speed(fast.b) < 1, 'the Peal stops the bell dead');
-  ok(fast.e.stun > 0 || fast.e.stunCd > 0, 'the Peal stuns a foe');
-  near(fast.h.base, N.p.wave.dmg, 0.01, 'Peal damage at full swing');
-  const boss = one(true, {}, 'bonewarden');
-  ok(boss.h && !(boss.e.stun > 0), 'the Peal never stuns a boss');
-  const clap = one(true, { b_s2: 1, b_s2_a: 1 });
-  ok(hits.some(x => x.e === clap.e && x.src.kind === 'chain'), 'Thunderclap discharges the foes the Peal charged');
-  { // Thunderclap discharges the Charge the wave left, not the pool the foe held
-    const { w, p } = stage({ b_s2: 1, b_s2_a: 1 });
-    run(w, 0.05);
-    const b = p.bells[0]; b.vx = 0; b.vy = C.BELL_REF + 100;
-    const e = foe(w, b.x + 40, b.y); e.charge = 5000; e.dischargeT = 9;
-    hits.length = 0;
-    w.playerSkill(p, 0, {}, 1);
-    const wave = hits.find(x => x.e === e && x.src.part === 'peal.wave'), dis = hits.filter(x => x.e === e && x.src.kind === 'chain').reduce((s, x) => s + x.d, 0);
-    ok(wave && dis > 0 && dis < wave.d * 2 && e.charge === 5000, `Thunderclap discharges the wave's own Charge (${dis.toFixed(0)} for a ${wave ? wave.d.toFixed(0) : 0} wave) and leaves the pool (${e.charge})`);
-  }
-  { // Ward Bell weakens the foes inside, never a boss
-    const { w, p } = stage({ b_s2: 1, b_s2_b: 3 });
-    run(w, 0.05);
-    const b = p.bells[0], e = foe(w, b.x + 30, b.y), bo = foe(w, b.x - 30, b.y, 'bonewarden');
-    w.playerSkill(p, 0, {}, 1); run(w, 0.5);
-    ok(e.weakT > 0 && e.weakV >= p.stats.wardWeak - 1e-9 && !(bo.weakT > 0), 'Ward Bell weakens a foe inside and never a boss');
-  }
+  const p0 = peal(0), p10 = peal(C.RES_MAX), want = 1 + C.RES_K * C.RES_MAX;
+  ok(p0.dmg > 0 && Math.abs(p10.dmg / p0.dmg - want) < 0.05 * want, `a Peal at full Resonance rings x${want} (${(p10.dmg / Math.max(1, p0.dmg)).toFixed(2)})`);
+  ok(p10.p.bellRes === 0 && Math.abs(p10.p.pealResLast - want) < 1e-9 && p0.p.pealResLast === 1, 'the Peal spends Resonance and sets p.pealResLast');
 }
 
-// ---- whirl guard: WHIRL_DR less damage while hauling a bell at strike speed ----
+// ---- an interactable in range: a release never hurls ----
 {
   const { w, p } = stage();
-  const e = foe(w, p.x + 200, p.y);
-  const take = (whirl) => { p.invuln = 0; p.hp = p.maxHp; p.bellWhirl = whirl; w.hurtPlayer(p, 10, { e }); return p.maxHp - p.hp; };
-  const plain = take(false), guard = take(true);
-  ok(guard < plain && Math.abs(guard / plain - (1 - C.WHIRL_DR)) < 0.15, `the whirl guard cuts damage taken (${plain} -> ${guard})`);
-  p.haulIn = true; run(w, 2);
-  ok(p.bellWhirl === true, 'hauling at speed raises the guard');
+  p.haulIn = true; run(w, 1.5); p.haulNear = true; p.haulIn = false; w.update(1 / 60);
+  ok(p.bells[0].s === S.HAND, 'with an interactable in range a release does not hurl');
 }
 
-// ---- forks: bell weapons stay bells, nominal 1.1x, Heavy strikes Stagger ----
-for (const base of ['bronzebell', 'greatbell', 'handbells', 'stormbell', 'wreckbell', 'chimes']) for (const fk of ['b_atk_h', 'b_atk_s']) {
-  const b = ED.WEAPONS[base], f = ED.forkWeapon(base, fk);
-  ok(f.kind === 'bell' && (f.n || 1) === (b.n || 1) && Math.abs(f.dmg / f.rate - 1.1 * b.dmg / b.rate) < 0.02 * b.dmg / b.rate && f.name !== b.name, `${base}@${fk}: a bell fork at 1.1x nominal (${f.name})`);
-}
+// ---- Anchor Leap: from the hand a short leap; with the bell anchored a yank to it, the bell home after the slam ----
 {
-  const { w, p } = stage({ b_atk: 1, b_atk_h: 1 });
-  const e = foe(w, p.x + ED.Bell.orbit(p.stats.weapon), p.y);
-  const ex = e.x, ey = e.y;
-  let stag = false;
-  p.haulIn = true; run(w, 3, () => { e.x = ex; e.y = ey; e.kbx = e.kby = 0; if (e.staggerT > 0) stag = true; });
-  ok(p.stats.heavy && stag, 'Wrecking Ball strikes Stagger');
+  let { w, p } = stage();
+  const x0 = p.x; p.aimX = p.x + 300; p.aimY = p.y;
+  w.playerSkill(p, 0, null, 0);
+  ok(!!p.skillMove && !!p.bellLeap, 'Anchor Leap from the hand leaps');
+  run(w, 0.6, walk(w, p));
+  ok(p.x - x0 > 40 && p.x - x0 <= C.LEAP_D * (1 + (p.stats.leapR || 0)) + 4, `it lands up to LEAP_D ahead (${(p.x - x0).toFixed(0)} px)`);
+  ({ w, p } = stage());
+  hurlAt(w, p, p.x + 190, p.y); flyOut(w, p);
+  const b = p.bells[0], bx = b.x, by = b.y; p.aimX = bx; p.aimY = by;
+  w.playerSkill(p, 0, null, 0); run(w, 0.6, walk(w, p));
+  ok(Math.hypot(p.x - bx, p.y - by) < 12 && b.s === S.HAND, `Anchor Leap yanks the hero to the anchored bell and brings it home (${Math.hypot(p.x - bx, p.y - by).toFixed(0)} px off)`);
 }
 
-// ---- strike budget and finite state: a brawl with every route card at rank 3 ----
-for (const set of [{ b_atk: 1, b_atk_h: 3, b_s1: 1, b_s1_a: 3, b_s2: 1, b_s2_a: 3, b_el: 1, b_el_a: 3 }, { b_atk: 1, b_atk_s: 3, b_s1: 1, b_s1_b: 3, b_s2: 1, b_s2_b: 3, b_el: 1, b_el_b: 3 }]) for (const wid of ['bronzebell', 'chimes']) {
-  const { w, p } = stage(set, { weapon: wid });
-  for (let i = 0; i < 40; i++) { const a = i / 40 * U.TAU, r = 30 + (i % 4) * 14; const e = foe(w, p.x + Math.cos(a) * r, p.y + Math.sin(a) * r); e.maxHp = e.hp = 400; }
-  p.haulIn = true; w.fx.length = 0;
-  let err = null, peak = 0, last = 0, cnt = 0, all = 0;
+// ---- variants: the Storm Bell rings on a hurl strike; the Wrecking Bell's hurl ricochets off a wall ----
+{
+  let { w, p } = stage({}, { weapon: 'stormbell' });
+  foe(w, p.x + 60, p.y); const e2 = foe(w, p.x + 60, p.y + 24); hits.length = 0;
+  hurlAt(w, p, p.x + 61, p.y); flyOut(w, p);
+  ok(hits.some(h => h.e === e2 && h.src.part === 'bell.ring'), 'a Storm Bell hurl strike rings the foe beside it');
+  ({ w, p } = stage({}, { weapon: 'wreckbell' }));
+  const end = ED.Sim.castMove(w.room, p.x, p.y, 0, 3000, p.r, false);
+  p.x = end.x - 90; w.update(1 / 60);
+  let legs = 0;
+  hurlAt(w, p, p.x + 200, p.y);
+  for (let i = 0; i < 60 && p.bells[0].s === S.FLY; i++) { w.update(1 / 60); if (p.bells[0].fly) legs = Math.max(legs, p.bells[0].fly.legs); }
+  ok(legs >= 1, `a Wrecking Bell hurl into a wall ricochets (${legs} legs)`);
+}
+
+// ---- every evolution held: wind, hurl, reel and Peal never throw ----
+for (const evo of Object.keys(ED.PATHS)) {
+  const { w, p } = stage();
+  p.stats.evo = evo; p.shield = 20;
+  for (let i = 0; i < 5; i++) foe(w, p.x + 40 + 25 * i, p.y + (i % 2) * 10);
+  let err = null;
   try {
-    run(w, 12, () => {
-      if (w.time % 3 < 1 / 60) w.playerSkill(p, w.time, {}, 0);
-      if (w.time % 5 < 1 / 60) w.playerSkill(p, 0, {}, 1);
-      const k = w.fx.filter(x => x.t === 'bstrike').length; cnt += k; all += k; w.fx.length = 0;
-      if (w.time - last >= 1) { peak = Math.max(peak, cnt); cnt = 0; last = w.time; }
-    });
-  } catch (x) { err = x; }
-  ok(!err, `${wid} brawl runs${err ? ': ' + err.stack : ''}`);
-  const fin = p.bells.every(b => [b.x, b.y, b.vx, b.vy].every(Number.isFinite)) && Number.isFinite(p.hp) && w.enemies.every(e => Number.isFinite(e.hp) && Number.isFinite(e.x));
-  ok(fin, `${wid} brawl: no NaN in bells, hero or foes`);
-  ok(all / 12 <= C.BELL_HITS && peak <= C.BELL_HITS * 1.1, `${wid} brawl: at most BELL_HITS strikes a second (mean ${(all / 12).toFixed(1)}, peak ${peak} with the 0.1 s burst)`);
+    for (let k = 0; k < 3; k++) { hurlAt(w, p, p.x + 150, p.y); flyOut(w, p); tap(w, p); run(w, 0.4); }
+    w.playerSkill(p, 0, null, 1); run(w, 0.5);
+  } catch (e) { err = e; }
+  ok(!err, `the ${evo} evolution through a loop and a Peal${err ? ': ' + err.message : ''}`);
 }
 
-ED.World.prototype.hitEnemy = oHit;
+// ---- a brawl with every route card at rank 3: finite bells, foes and Resonance ----
+{
+  const boons = {};
+  for (const route of ED.ROUTES) { const e = ED.CLASS_CARDS.bell[route]; boons[e.t1] = 1; for (const f of e.forks) boons[f] = 3; }
+  for (const wid of ['bronzebell', 'wreckbell', 'chimes']) {
+    const { w, p } = stage(boons, { weapon: wid });
+    for (let i = 0; i < 30; i++) { const a = i * 0.7, r = 50 + (i % 6) * 25, e = foe(w, p.x + Math.cos(a) * r, p.y + Math.sin(a) * r); e.spd = 40; e.hp = e.maxHp = 400; }
+    let rel = false, t = 0, err = null;
+    try {
+      run(w, 20, () => {
+        p.hp = p.maxHp; t++;
+        if (rel) { p.haulIn = true; rel = false; } else if (ED.Bell.ready(w, p)) { p.aimX = p.x + 120; p.aimY = p.y + 40; p.face = 0.3; p.haulIn = false; rel = true; } else p.haulIn = true;
+        if (t % 300 === 0) w.playerSkill(p, 0.5, null, 0);
+        if (t % 420 === 0) w.playerSkill(p, 0, null, 1);
+      });
+    } catch (e) { err = e; }
+    const fin = !err && p.bells.every(b => [b.x, b.y, b.vx, b.vy].every(Number.isFinite)) && w.enemies.every(e => Number.isFinite(e.x) && Number.isFinite(e.hp)) && Number.isFinite(p.bellRes);
+    ok(fin, `${wid} with every route card: finite state after a 20 s brawl${err ? ': ' + err.message : ''}`);
+  }
+}
+
 console.log(`${n} checks, ${fails} failed`);
 process.exit(fails ? 1 : 0);

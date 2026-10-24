@@ -15,7 +15,7 @@
   // ORBIT_K: the wound chain's share of its length. HAUL_T: seconds the chain takes to shorten or let out fully at haul 1. HAUL_ACC: px/s2 of orbit drive at haul 1 and the weapon's own rate (x the attack-rate gain^RATE_POW). HAUL_HOLD: attack intervals one 'atk' action holds the wind when no input flag is set.
   // BELL_HITS: winding strikes per second one hero may make. CHAIN_R: half-width (px) of a wound chain: a foe it sweeps across closer in is struck as by the bell (once a revolution). BELL_WALL: speed a trailing bell keeps off a wall (weapon.wall overrides). BOSS_LOSS: factor on a strike's speed cost against a boss.
   // WIND_CAP: the most a winding strike deals (x the weapon). WIND_FULL: wind 1 as a share of the weapon's own top speed. WIND_GO: the least wind that hurls. WIND_MOVE: the hero's speed factor while winding. JUGGLE_T: seconds the other wound bells keep winding after a juggled hurl.
-  // HURL_D / HURL_MIN / HURL_SPEED / HURL_K: farthest hurl at full wind, nearest, flight px/s, the strike factor at full wind (x wind^2). IMPACT_R: impact radius. BOUNCES: wall ricochets of a hurl that keeps its speed off walls (weapon.wall >= 1).
+  // HURL_D / HURL_MIN / HURL_SPEED / HURL_K: farthest hurl at full wind, nearest, flight px/s, the strike factor at full wind (x wind^2). IMPACT_R: impact radius. PATH_KNOCK: knockback of a strike on the hurl's path over the impact's (the bell passes through; the impact throws foes out, a reel strike drags instead). BOUNCES: wall ricochets of a hurl that keeps its speed off walls (weapon.wall >= 1).
   // REEL_SPEED / REEL_K / REEL_DRAG / REEL_KEEP: reel px/s, a reel strike over its hurl's, px a reel drags a foe, wind a reeled bell comes home with. LEASH: px an anchored bell lies from the hero before the chain drags it.
   // RES_MAX / RES_K / RES_R: Resonance stacks, Peal damage per stack, Peal radius at full Resonance. RES_HOLD / RES_DECAY: seconds Resonance holds after its last gain, then seconds per stack lost.
   // LEAP_D / LEAP_T: a leap from the hand (px toward the cursor, flight s); YANK_SPEED / YANK_T0 / YANK_T1: px/s and the flight time limits of a yank to the anchored bell; LEAP_IFR: untouchable seconds past the landing.
@@ -23,7 +23,7 @@
   Object.assign(C, { BELL_MIN: 140, BELL_REF: 320, BELL_CAP: 900, BELL_DRAG: 2.5, BELL_SUB: 4, ORBIT_K: 0.85, HAUL_T: 0.25, HAUL_ACC: 1700, RATE_POW: 0.6, HAUL_HOLD: 1.6,
     BELL_HITS: 60, CHAIN_R: 3, BELL_WALL: 0.5, BOSS_LOSS: 1, ARC_LONE: 1,
     WIND_CAP: 0.6, WIND_FULL: 0.9, WIND_GO: 0.5, WIND_MOVE: 0.7, JUGGLE_T: 0.5,
-    HURL_D: 200, HURL_MIN: 40, HURL_SPEED: 800, HURL_K: 2.5, IMPACT_R: 40, BOUNCES: 3,
+    HURL_D: 200, HURL_MIN: 40, HURL_SPEED: 800, HURL_K: 2.5, IMPACT_R: 40, PATH_KNOCK: 0.25, BOUNCES: 3,
     REEL_SPEED: 700, REEL_K: 0.5, REEL_DRAG: 60, REEL_KEEP: 0.4, LEASH: 280,
     RES_MAX: 10, RES_K: 0.15, RES_R: 0.25, RES_HOLD: 6, RES_DECAY: 0.5,
     LEAP_D: 110, LEAP_T: 0.28, YANK_SPEED: 900, YANK_T0: 0.15, YANK_T1: 0.35, LEAP_IFR: 0.1,
@@ -222,11 +222,11 @@
     w.emit({ t: 'bstrike', pid: p.pid, x: Math.round(b.x), y: Math.round(b.y), v: Math.round(sp), h: 0, c: 0 });
   }
   // A hurl or reel strike on foe e (fl: the hurl's record, or the reel's: { k, crit, ms, twin, full, part }): the weapon hit at k (Masterstroke x1.3 and its Bleed floor, Lightning Rod on a charged foe), Twin Fang's second hit,
-  // the ring of a ring weapon, the evolution (W.evoHit), Resonance from a non-horde foe, the route riders. Returns the hit's source.
-  function heavyStrike(w, p, b, e, fl, kx, ky) {
+  // the ring of a ring weapon, the evolution (W.evoHit), Resonance from a non-horde foe, the route riders. kn: share of the knockback (a path strike PATH_KNOCK, the impact 1, a reel strike 0). Returns the hit's source.
+  function heavyStrike(w, p, b, e, fl, kx, ky, kn) {
     const st = p.stats, wp = st.weapon, hurl = fl.part === 'bell.hurl', charged = e.charge > 0;
-    const mul = fl.k * (fl.tw || 1) * (hurl && st.rod > 0 && charged ? 1 + st.rod : 1), infAdd = bellInf(st), knock = wp.knock * Math.min(1.5, fl.k);
-    const src = { p, kind: 'weapon', wpn: !!fl.full, mul: fl.ms ? mul * 1.3 : mul, crit: fl.crit || fl.ms || undefined, bleedMin: fl.ms ? 0.5 : undefined, infAdd, knock, kx, ky, x: b.x, y: b.y, part: fl.part }; // wpn: a full-wind hurl (a Heavy bell's Stagger)
+    const mul = fl.k * (fl.tw || 1) * (hurl && st.rod > 0 && charged ? 1 + st.rod : 1), infAdd = bellInf(st), knock = wp.knock * Math.min(1.5, fl.k) * kn;
+    const src = { p, kind: 'weapon', wpn: !!fl.full, mul: fl.ms ? mul * 1.3 : mul, crit: fl.crit || fl.ms || undefined, bleedMin: fl.ms ? 0.5 : undefined, ms: fl.ms || undefined, infAdd, knock, kx, ky, x: b.x, y: b.y, part: fl.part }; // ms: a Masterstroke (Killing Stroke reads it); wpn: a full-wind hurl (a Heavy bell's Stagger)
     w.hitEnemy(e, wp.dmg, src);
     if (fl.twin && e.hp > 0) w.hitEnemy(e, wp.dmg, { p, kind: 'weapon', mul, crit: fl.crit || undefined, infAdd, knock, kx, ky, x: b.x, y: b.y, part: fl.part });
     w.emit({ t: 'bstrike', pid: p.pid, x: Math.round(b.x), y: Math.round(b.y), v: Math.round(fl.k * C.BELL_REF), h: 0, c: 0 }); // the hurl's own weight (hit-stop, shake) rides the 'hurl' event
@@ -270,12 +270,15 @@
     const want = fin ? Math.hypot(p.aimX - p.x, p.aimY - p.y) : C.HURL_D, dist = U.clamp(want, C.HURL_MIN, Math.max(C.HURL_MIN, C.HURL_D * wind));
     const tx = p.x + Math.cos(a) * dist, ty = p.y + Math.sin(a) * dist, left = dist;
     b.x = p.x; b.y = p.y;
-    p.atkCount++; p.lastAtkT = w.time; p.stealthT = 0;
-    const tw = p.twist && ED.TWIST ? ED.TWIST.onAttack.call(w, p) || 1 : 1; // TWIST hook (src/sim/twist.js): a hurl is a weapon attack; its factor applies to this hurl's strikes, never to the reel
-    let crit = false;
-    if (p.critStacks > 0) { p.critStacks--; crit = true; }
+    let crit = false, tw = 1, ms = false;
+    if (!w.pred) { // a client's prediction (game.js BELL_W) spends nothing the host decides
+      p.atkCount++; p.lastAtkT = w.time; p.stealthT = 0;
+      tw = p.twist && ED.TWIST ? ED.TWIST.onAttack.call(w, p) || 1 : 1; // TWIST hook (src/sim/twist.js): a hurl is a weapon attack; its factor applies to this hurl's strikes, never to the reel
+      if (p.critStacks > 0) { p.critStacks--; crit = true; }
+      if (st.masterstroke && (st.msOpen ? p.msReady : p.atkCount % 4 === 0)) { ms = true; p.msReady = false; } // Masterstroke: every 4th attack (Opening Stroke: the first after a dash)
+    }
     b.s = FLY; b.vx = (tx - b.x) / left * C.HURL_SPEED; b.vy = (ty - b.y) / left * C.HURL_SPEED;
-    b.fly = { tx, ty, x0: b.x, y0: b.y, left, k: hurlK(wind) * (full ? 1 + st.fullSwing : 1), full, crit, ms: !!st.masterstroke && p.atkCount % 4 === 0, twin: !!st.twinEvery && p.atkCount % st.twinEvery === 0,
+    b.fly = { tx, ty, x0: b.x, y0: b.y, left, k: hurlK(wind) * (full ? 1 + st.fullSwing : 1), full, crit, ms, twin: !!st.twinEvery && p.atkCount % st.twinEvery === 0,
       bolt: !!st.gauntlet && p.atkCount % 6 === 0, hit: new Set(), carry: [], legs: 0, res: false, part: 'bell.hurl', tw };
   }
 
@@ -287,7 +290,7 @@
       if (st.weapon.wall >= 1 && fl.legs < C.BOUNCES) { // ricochet: mirror the blocked axis, fly the distance left from here
         if (blocked(w, nx, b.y)) b.vx = -b.vx;
         if (blocked(w, b.x, ny) || !blocked(w, nx, b.y)) b.vy = -b.vy;
-        if (w.evoLine) w.evoLine(p, fl.x0, fl.y0, b.x, b.y, { p, kind: 'weapon', part: 'bell.hurl' });
+        if (w.evoLine) w.evoLine(p, fl.x0, fl.y0, b.x, b.y, { mul: fl.k * (fl.tw || 1), crit: fl.crit, hit: fl.hit });
         fl.legs++; fl.x0 = b.x; fl.y0 = b.y; fl.hit = new Set();
         return;
       }
@@ -297,7 +300,7 @@
       const e = foes[i];
       if (!live(e) || fl.hit.has(e.id) || U.segDist2(e.x, e.y, b.x, b.y, nx, ny) >= (br + e.r) ** 2) continue;
       fl.hit.add(e.id);
-      heavyStrike(w, p, b, e, fl, ux, uy);
+      heavyStrike(w, p, b, e, fl, ux, uy, C.PATH_KNOCK);
     }
     for (const g of fl.carry) { if (g.e.hp <= 0 || g.left <= 0) continue; const m = Math.min(g.left, step); g.left -= m; Sim.moveCircle(g.e, ux * m, uy * m, w.room, w.locked, g.e.fly); g.e.kbx = 0; g.e.kby = 0; }
     b.x = nx; b.y = ny; fl.left -= step;
@@ -312,7 +315,7 @@
     for (let k = 0; k < q.length; k++) { const e = q[k]; if (live(e) && !fl.hit.has(e.id) && U.dist2(e.x, e.y, x, y) < (r + e.r) ** 2) list.push(e); }
     w.foeEnd();
     const sp = relV(b) || 1;
-    for (const e of list) { fl.hit.add(e.id); const d = Math.hypot(e.x - x, e.y - y) || 1; heavyStrike(w, p, b, e, fl, d > 1 ? (e.x - x) / d : b.vx / sp, d > 1 ? (e.y - y) / d : b.vy / sp); }
+    for (const e of list) { fl.hit.add(e.id); const d = Math.hypot(e.x - x, e.y - y) || 1; heavyStrike(w, p, b, e, fl, d > 1 ? (e.x - x) / d : b.vx / sp, d > 1 ? (e.y - y) / d : b.vy / sp, 1); }
     if (fl.res) addRes(w, p, 1); // the hurl's own stack: it struck a foe that is not a horde foe
     const sd = st.weapon.dmg * fl.k;
     if (st.wreck > 0) { // Wrecking Ball: the impact cracks the ground (Demolisher: a Full Swing quakes twice as wide, stronger, knocking foes away)
@@ -322,7 +325,7 @@
     if (fl.bolt) { const tg = w.nearestEnemy(x, y, 220); if (tg) { w.emit({ t: 'bolt', x: Math.round(tg.x), y: Math.round(tg.y) }); w.explode(tg.x, tg.y, 40, sd * 2.2, 0, p, 'bolt', false, { el: 'lightning' }); } }
     if (st.stormBolt > 0) skyBolt(w, p, x, y);
     w.emit({ t: 'hurl', pid: p.pid, x: Math.round(x), y: Math.round(y), k: Math.round(fl.k * 100) / 100 });
-    if (w.evoLine) w.evoLine(p, fl.x0, fl.y0, x, y, { p, kind: 'weapon', part: 'bell.hurl' });
+    if (w.evoLine) w.evoLine(p, fl.x0, fl.y0, x, y, { mul: fl.k * (fl.tw || 1), crit: fl.crit, hit: fl.hit });
     b.s = ANCHOR; b.vx = 0; b.vy = 0; b.k = fl.k; b.fly = null; b.tickT = w.time + C.BOLT_EVERY;
     w.smashCircle(p, x, y, r);
     if (b.reelQ) { b.reelQ = false; startReel(w, p, b); }
@@ -342,7 +345,7 @@
     const st = p.stats;
     b.s = REEL; b.reel = { k: C.REEL_K * (b.k || hurlK(C.WIND_GO)), hit: new Set(), drag: [], part: 'bell.reel' };
     w.emit({ t: 'reel', pid: p.pid, x0: Math.round(b.x), y0: Math.round(b.y), x1: Math.round(p.x), y1: Math.round(p.y) });
-    if (w.evoLine) w.evoLine(p, b.x, b.y, p.x, p.y, { p, kind: 'weapon', part: 'bell.reel' });
+    if (w.evoLine) w.evoLine(p, b.x, b.y, p.x, p.y, { mul: b.reel.k, crit: false, hit: b.reel.hit });
     if (st.tollStorm > 0) {
       const d = Math.hypot(b.x - p.x, b.y - p.y), q = w.foeScan((p.x + b.x) / 2, (p.y + b.y) / 2, d / 2 + C.WIRE_W), list = [];
       for (let k = 0; k < q.length; k++) { const e = q[k]; if (live(e) && U.segDist2(e.x, e.y, p.x, p.y, b.x, b.y) < (C.WIRE_W + e.r) ** 2) list.push(e); }
@@ -363,7 +366,7 @@
       const e = foes[i];
       if (!live(e) || rl.hit.has(e.id) || U.segDist2(e.x, e.y, b.x, b.y, nx, ny) >= (br + e.r) ** 2) continue;
       rl.hit.add(e.id);
-      heavyStrike(w, p, b, e, rl, ux, uy);
+      heavyStrike(w, p, b, e, rl, ux, uy, 0);
       if (e.hp > 0 && !e.boss) rl.drag.push({ e, left: C.REEL_DRAG });
     }
     b.x = nx; b.y = ny;
@@ -376,7 +379,7 @@
       const e = foes[i];
       if (!live(e) || rl.hit.has(e.id) || U.segDist2(e.x, e.y, b.x, b.y, p.x, p.y) >= (br + e.r) ** 2) continue;
       rl.hit.add(e.id);
-      heavyStrike(w, p, b, e, rl, dx / d, dy / d);
+      heavyStrike(w, p, b, e, rl, dx / d, dy / d, 0);
     }
   }
   // The bell is back in hand on the orbit, swinging at REEL_KEEP wind.
@@ -561,7 +564,7 @@
   // ---------------- Bellwarden hook table ----------------
   ED.CLS.bell = {
     // bells: p.bells (see the file header), p.bellL (hand chain length now), p.haul (0..1 wound amount), p.bellSpin (turning sense of the wind), p.bellHauled (held last tick), p.haulUntil (end of the 'atk' hold window), p.haulIn (input flag; undefined until the input layer sets it),
-    // p.haulPress / p.bellPressN (presses counted by the input layer / seen here: a tap shorter than a tick still reels), p.bellWind (winding: the move factor), p.bellWhirl (a hand bell wound at strike speed), p.juggleT (the other wound bells wind until then),
+    // p.haulPress / p.bellPressN (presses counted by the input layer / seen here: a tap shorter than a tick still reels), p.haulNear (input: an interactable in range, a release does not hurl), p.bellWind (winding: the move factor), p.bellWhirl (a hand bell wound at strike speed), p.juggleT (the other wound bells wind until then),
     // p.bellLeap (an Anchor Leap in flight), p.spinT (Wrecking Spin left), p.bellTok (winding strike budget), p.bellQ (queued effects), p.hookT / p.pealT (shield cooldowns), p.bellRoom (the room the bells are in), p.bellPx / p.bellPy (where the hand bells were last carried to),
     // p.bellRes / p.bellResAt (Resonance and when it last grew), p.pealResLast (the last Peal's Resonance factor), p.bellTickT (world time of the last tick: a gap means the hero was down), p.bellBossId / p.bellPhase (the boss phase seen).
     init(p) { p.bells = []; p.bellL = 0; p.haul = 0; p.bellSpin = 1; p.haulUntil = -99; p.bellLeap = null; p.bellTok = 0; p.bellQ = []; p.hookT = 0; p.pealT = 0; p.bellRoom = null; p.bellHauled = false; p.bellWhirl = false; p.bellWind = false;
@@ -590,7 +593,7 @@
       if (haul && !p.bellHauled) p.bellSpin = spinOf(p);
       p.bellHauled = haul;
       if (press) for (const b of p.bells) { if (b.s === ANCHOR) startReel(this, p, b); else if (b.s === FLY) b.reelQ = true; }
-      if (release && !p.bellLeap) { // the most-wound hand bell flies at WIND_GO wind or more; the other wound bells keep winding JUGGLE_T
+      if (release && !p.bellLeap && !p.haulNear) { // the most-wound hand bell flies at WIND_GO wind or more; the other wound bells keep winding JUGGLE_T (never with an interactable in range: the attack interacts)
         let best = null, bw = -1;
         for (const b of p.bells) if (b.s === HAND) { const v = windOf(st, b); if (v > bw) { bw = v; best = b; } }
         if (best && bw >= C.WIND_GO) { hurl(this, p, best); if (p.bells.some(b => b.s === HAND)) p.juggleT = this.time + C.JUGGLE_T; }
