@@ -114,12 +114,12 @@ const ranks = (w, pid) => w.msgs.filter(m => m.t === 'forkRank' && m.to === pid)
   g.p.boons.edge = 3; g.w.recalc(g.p, false); ok(g.w.ascCards(g.p).sort().join() === 'asc_edge,asc_lacerate', 'Generalist: edge at 3 qualifies');
 }
 { // per-stratum cap: picks count in pickBoon and reset when a stratum starts
-  const { w, p } = stage('knight', { edge: 2, quick: 2, plating: 2 }, { stratum: 4 });
+  const { w, p } = stage('knight', { edge: 2, quick: 2, wide: 2 }, { stratum: 4 });
   p.offer = ['asc_edge', 'vigor']; p.offers.push({ src: 'level', path: null }); p.picks = 1; w.pickBoon('p0', 0);
   ok(p.boons.asc_edge === 1 && p.ascN === 1 && w.ascCards(p).length === 2, 'first pick counts');
   p.offer = ['asc_quick']; p.offers.push({ src: 'level', path: null }); p.picks = 1; w.pickBoon('p0', 0);
   ok(p.ascN === 2 && !w.ascCards(p).length, 'the second pick closes the stratum');
-  w.onStratumBuild(p, 5); w.stratum = 5; ok(p.ascN === 0 && w.ascCards(p).join() === 'asc_plating', 'a new stratum reopens it');
+  w.onStratumBuild(p, 5); w.stratum = 5; ok(p.ascN === 0 && w.ascCards(p).join() === 'asc_wide', 'a new stratum reopens it');
 }
 
 // ---------------- Ascended: offers ----------------
@@ -228,17 +228,18 @@ const ranks = (w, pid) => w.msgs.filter(m => m.t === 'forkRank' && m.to === pid)
   const { w, p } = stage('ranger', { generalist: 1 }); ok(!w.rollOffer(p, { src: 'room' }).includes('opportunist') && !w.rollOffer(p, { src: 'epic' }).includes('opportunist'), 'also absent from room and epic offers');
 }
 
-// ---------------- utility commons ----------------
+// ---------------- utility commons (level offers below stratum III; epic offers, where commons fill a hand of 24) ----------------
 {
-  const weights = (s) => {
+  const weights = (s, src) => {
     const { w, p } = stage('ranger', {}, { stratum: s }), seen = {}, orig = w.rng.weighted;
+    if (src === 'epic') p.stats.choices = 20;
     w.rng.weighted = (items, wf) => { for (const id of items) seen[id] = wf(id); return orig.call(w.rng, items, wf); };
-    for (let i = 0; i < 20; i++) w.rollOffer(p, { src: 'level' });
+    for (let i = 0; i < 20; i++) w.rollOffer(p, { src });
     return seen;
   };
-  const w3 = weights(3), w4 = weights(4), w6 = weights(6);
-  for (const id of ['bounty', 'magnet', 'forager', 'fleet', 'mending']) ok(w3[id] === 60 && w4[id] === 15 && w6[id] === 15, `${id}: weight 60 below stratum IV, 15 from stratum IV`);
-  for (const id of ['edge', 'quick', 'vigor', 'plating']) ok(w4[id] === w3[id] && w3[id] === 60, `${id}: weight unchanged`);
+  const w2 = weights(2, 'level'), e3 = weights(3, 'epic'), e4 = weights(4, 'epic'), e6 = weights(6, 'epic');
+  for (const id of ['bounty', 'magnet', 'forager', 'fleet', 'mending']) ok(w2[id] === 60 && e3[id] === 60 && e4[id] === 15 && e6[id] === 15, `${id}: weight 60 below stratum IV, 15 from stratum IV`);
+  for (const id of ['edge', 'quick', 'vigor', 'plating']) ok(e4[id] === w2[id] && e3[id] === 60 && w2[id] === 60, `${id}: weight unchanged`);
 }
 
 // ---------------- exhausted pool: the Purse; picks respect max rank ----------------
