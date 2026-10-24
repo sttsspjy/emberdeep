@@ -265,7 +265,7 @@
     desc: 'A hurl at full wind (the bell glows) is a Full Swing: +{fullSwing} damage and an impact {fullR} wider.', mods: { fullSwing: 0.25, fullR: 0.3 } });
   card('bell', 'attack', 2, 'b_atk_h', { name: 'Wrecking Ball', icon: 'hammer', tag: 'Heavy', weapon: { kind: 'heavy' },
     desc: 'Your bell becomes heavy (×{fkRate:x} lockout, ×{fkDmg:x} damage per strike; a full-wind hurl Staggers and its impact is 20% wider). Where a hurl lands it cracks the ground: a shock (radius 70) for {wreck} of the hurl that stuns {wreckStun:s} (not bosses).[ Full Swings deal +{fullSwing} more.]',
-    rider2: 'Unstoppable: a hurl carries the foes it strikes along its flight, up to {hurlCarry:n} px (not bosses).', mods: { wreck: 0.15, wreckStun: 0.3 }, up: { fullSwing: 0.05, wreck: 0.05 }, r2: { hurlCarry: 40 }, r3: { demolish: 0.35 },
+    rider2: 'Unstoppable: a hurl carries the foes it strikes along its flight, up to {hurlCarry:n} px (not bosses).', mods: { wreck: 0.1, wreckStun: 0.3 }, up: { fullSwing: 0.05, wreck: 0.05 }, r2: { hurlCarry: 40 }, r3: { demolish: 0.35 },
     form: { name: 'Demolisher', desc: 'A Full Swing lands as a quake: its shock is twice as wide (radius 140), deals {demolish} more of the hurl and throws foes away from the impact.' } });
   card('bell', 'attack', 2, 'b_atk_s', { name: 'Pendulum', icon: 'bolt', tag: 'Swift', weapon: { kind: 'swift' },
     desc: 'Your bell becomes swift (×{fkRate:x} lockout, ×{fkDmg:x} damage per strike; winding gives Flow and reels are 30% faster). Winding spins the bell up {haulAcc} faster.[ Full Swings deal +{fullSwing} more.]',
@@ -285,7 +285,7 @@
     desc: 'Peal: +{s2Area} radius and +{s2Dmg} damage.', mods: { s2Area: 0.3, s2Dmg: 0.25 } });
   card('bell', 'skill2', 2, 'b_s2_a', { name: 'Thunderclap', icon: 'bolt', tag: 'Burst',
     desc: 'The Peal charges the foes it strikes for half of its damage and discharges them at once at +{clap}. Peal deals +{s2Dmg}.',
-    rider2: 'Reverberation: the Peal rings again 0.5 s later on the same spot at {pealEcho}.', mods: { clap: 0.35, s2Dmg: 0.1 }, up: { clap: 0.15, s2Dmg: 0.1 }, r2: { pealEcho: 0.5 }, r3: { tollN: 3, tollBolt: 0.85 },
+    rider2: 'Reverberation: the Peal rings again 0.5 s later on the same spot at {pealEcho}.', mods: { clap: 0.5, s2Dmg: 0.2 }, up: { clap: 0.15, s2Dmg: 0.1 }, r2: { pealEcho: 0.5 }, r3: { tollN: 3, tollBolt: 0.85 },
     form: { name: 'Thunder Toll', desc: 'Every Peal also calls a thunderbolt on each of the {tollN:n} most charged foes within 220 of each bell (radius 50) for {tollBolt} of the Peal.' } });
   card('bell', 'skill2', 2, 'b_s2_b', { name: 'Warding Toll', icon: 'shieldgold', tag: 'Guard', coop: true,
     desc: 'Peal deals +{s2Dmg}, destroys enemy shots within half again its radius and shields you for {pealShield} max health per foe it strikes (up to {pealCap}, at most once per 10 s).',

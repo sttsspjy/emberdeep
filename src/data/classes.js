@@ -52,7 +52,7 @@
     bell: {
       name: 'Bellwarden', title: 'Keeper of the Drowned Bell', icon: 'bell',
       desc: 'Swings a temple bell on a chain. Hold attack to wind it up, let go to hurl it, press again to reel it home through everything in its way.',
-      hp: 44, armor: 30, spd: 132, crit: 0.05, power: 18, element: 'lightning',
+      hp: 36, armor: 30, spd: 132, crit: 0.05, power: 18, element: 'lightning',
       weapons: ['bronzebell', 'greatbell', 'handbells'], skill: 'heave', skill2: 'peal',
       col: { a: '#b08d57', b: '#6b5233', c: '#ffe66b', d: '#2a2116' }, unlock: { bell: true, text: '???', hint: 'In the drowned Sanctum, a bell waits for a hand that will not let go.' },
     },
@@ -270,7 +270,7 @@
     peal: { name: 'Peal', slot: 1, cd: 10, icon: 'bell', aim: 'self',
       desc: 'Ring every bell where it is, in your hand or anchored far away: a wave strikes and stuns every foe around it (not bosses). Resonance (built by hurl and reel strikes) adds up to +150% and a wider wave, then empties.',
       parts: [
-        { id: 'wave', label: 'Peal', base: 36, pow: 3.6, per: 'hit', r: 160, stun: 0.6, knock: 160, el: 'class', proc: true },
+        { id: 'wave', label: 'Peal', base: 27, pow: 2.7, per: 'hit', r: 160, stun: 0.6, knock: 160, el: 'class', proc: true },
         { id: 'clap', label: 'Thunderclap', if: 'clap', of: 'wave', mulFix: 0.5, mul1: 'clap', per: 'hit', el: 'class', proc: false },
         { id: 'echo', label: 'Reverberation', if: 'pealEcho', of: 'wave', mul: 'pealEcho', per: 'hit', delay: 0.5, rOf: 'wave', rMul: 1, el: 'class', proc: true },
         { id: 'bolt', label: 'Thunder Toll', if: 'tollBolt', of: 'wave', mul: 'tollBolt', per: 'hit', r: 50, el: 'class', proc: true },
