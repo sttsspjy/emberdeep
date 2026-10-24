@@ -304,6 +304,7 @@
     w.emit({ t: 'hunt', x0: Math.round(e.x), y0: Math.round(e.y - e.r * 0.5), x1: Math.round(best.x), y1: Math.round(best.y - best.r * 0.5), pid: o.pid });
   }
 
+  const LONGSHOT_N = 3;
   // ---------------- Ranger hook table ----------------
   ED.CLS.ranger = {
     init(p) { p.volleyQ = []; p.plagueQ = []; },
@@ -340,10 +341,12 @@
       if (st.hemo > 0 && e.hp > 0 && e.bleedPool > 0 && !src.noProc && !src.raw && src.kind !== 'dot') hemorrhage(this, p, e);
     },
     // A weapon shot hit e: Storm Bow's ricochet, then either the siege bolt's blast when a guard stopped it or Splitting Bolt when the shot spent its last pierce.
+    // Long Shot (secret): one weapon shot kills LONGSHOT_N foes (pr.kills).
     projHit(pr, e, hs) {
       if (!pr.wpn) return;
       const o = this.players.get(pr.owner);
       if (!o) return;
+      if (e.hp <= 0 && hs.kind === 'weapon' && (pr.kills = (pr.kills | 0) + 1) >= LONGSHOT_N) this.secretP(o, 'heroSecret');
       const st = o.stats;
       if (st.ricochet > 0 && !pr.ric && hs.critOut !== undefined) ricochet(this, pr, e, hs, o);
       if (pr.siege && hs.guarded) siegeBlast(this, pr, o);

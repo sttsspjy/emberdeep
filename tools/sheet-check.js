@@ -174,6 +174,7 @@ const PENDING = new Set(['sky', 'sky2', 'shower', 'twin', 'rocks', 'echo', 'afte
 let pend = 0;
 const pending = (msg) => { pend++; if (verbose) console.log('pending ' + msg); };
 // [class, stat switches, slot, dummy distance (default REF.d)]
+const BELL_FAST = (w, p) => { run(w, 0.05); for (const b of p.bells) { b.vx = 0; b.vy = C.BELL_REF + 80; } }; // a Peal at full swing: the bells laid out, then flying faster than BELL_REF
 const CASES = [
   ['knight', {}, 0], ['knight', {}, 1], ['knight', { jugShock: 0.4, s1Range: 90 }, 0], ['knight', { avalanche: 0.9, avaCrack: 0.3, avaStun: 0.8, jugShock: 0.4, s1Range: 90 }, 0], ['knight', { phalanx: 1, bannerDur: 5, bannerSlow: 0.4, bannerWeak: 0.25, bannerDmg: 0.1, braceDR: 0.1 }, 0], ['knight', { tempest: 3, twinShield: 0.7, vortexMul: 0.25, vortexDur: 2.5 }, 1], ['knight', { orbit: 3, orbitMul: 0.15 }, 1], ['knight', { twinShield: 0.7 }, 1],
   ['ranger', {}, 0], ['ranger', {}, 1], ['ranger', { deathMark: 0.5, deathWave: 0.6 }, 0], ['ranger', { thornburst: 20, thornMul: 3 }, 0], ['ranger', { caltrops: 0.3, thornR: 0 }, 0, 30, false, { skip: ['arrow'] }], ['ranger', { skyfall: 1, starfall: 0.6 }, 1, 160], ['ranger', { thornstorm: 2 }, 1], ['ranger', { rainHail: 1 }, 1], ['ranger', { skyfall: 1 }, 1], ['ranger', { skyTwin: 0.5, skyfall: 1 }, 1], ['ranger', { shower: 0.4, rainHail: 1 }, 1],
@@ -185,6 +186,8 @@ const CASES = [
   ['shade', { eclipse: 0.6, eclipseDur: 4 }, 1, 28, false, { drive: true }], ['shade', { umbral: 2, cloneMul: 0.5 }, 1, 28, false, { drive: true, skip: ['clone'] }], ['shade', { shroud: 1, shroudDmg: 0.3, s2Dur: 2 }, 1, 28],
   ['cleric', {}, 0], ['cleric', {}, 1], ['cleric', { twinHammer: 0.75 }, 1],
   ['cleric', { wrath: 1, wrathNova: 1.5, wrathPillar: 1.2 }, 0], ['cleric', { aura: 1, dawn: 1, aegisR: 40, aegisDR: 0.1, aegisStun: 0.3, aegisMul: 1 }, 0], ['cleric', { storm: 5, stormMul: 0.45, thirdLeg: 1, twinHammer: 0.55, secondFlight: 0.25 }, 1], ['cleric', { verdict: 1, fjEcho: 0.2, fjR: 40, fjStun: 0.6 }, 1],
+  ['bell', {}, 0], ['bell', { wrecker: 0.6, smashStun: 0.6 }, 0, 150], ['bell', { wrecker: 0.6, wreckSpin: 0.5, spinDur: 1.5 }, 0, 180, false, { skip: ['reel'] }],
+  ['bell', {}, 1, undefined, false, { setup: BELL_FAST }], ['bell', { clap: 0.5 }, 1, undefined, false, { setup: BELL_FAST, skip: ['clap'] }], ['bell', { pealEcho: 0.5 }, 1, undefined, false, { setup: BELL_FAST }], ['bell', { tollN: 3, tollBolt: 0.6, lightningInfuse: 0.3 }, 1, undefined, false, { setup: BELL_FAST }],
   ['necro', {}, 0], ['necro', { boneSpikes: 1 }, 0], ['necro', { boneSpikes: 1, bloom: 1, bloomField: 0.5, bloomBomb: 1.2 }, 0], ['necro', { knights: 1, maxMinions: 2, s1N: -2 }, 0], ['necro', { knights: 1, maxMinions: 2, s1N: -2, dk: 1, dkMul: 4.5, dkArc: 2.4, dkTaunt: 120 }, 0],
 ];
 for (const [cls, stat, slot, dist, skipImpact, opt] of CASES) {
@@ -307,19 +310,28 @@ const partPack = (m, k, q, n) => MDp.directDamage({ weapon: { kind: 'melee', _av
 // ---------------- weapons: attacks on one foe, then the clouds and shots in flight finish ----------------
 function weaponRun(cls, wi, boons, o) {
   o = o || {};
-  const probe = stage(cls, boons, wi, null), wp = probe.p.stats.weapon, reach = wp.kind === 'melee' ? wp.range * (1 + 0.5 * probe.p.stats.area + probe.p.stats.meleeReach) : 0;
-  const { w, p } = stage(cls, boons, wi, o.stat, null, reach ? reach * 0.55 : REF.d, o.crit);
+  const probe = stage(cls, boons, wi, null), wp = probe.p.stats.weapon, reach = wp.kind === 'melee' ? wp.range * (1 + 0.5 * probe.p.stats.area + probe.p.stats.meleeReach) : 0, bell = wp.kind === 'bell';
+  const { w, p } = stage(cls, boons, wi, o.stat, null, bell ? ED.Bell.orbit(wp) : reach ? reach * 0.55 : REF.d, o.crit);
   if (o.stratum) w.stratum = o.stratum;
   const m = sheetOf(w, p);
   let next = 0, atk = 0;
-  run(w, o.secs || 20, () => { if (w.time >= next) { w.playerAttack(p, 0); next = w.time + ED.Stats.attackInterval(p); atk++; } });
+  if (bell) { p.haulIn = true; run(w, 3); hits.length = 0; } // a bell: hauled from rest to its running speed, then measured; an attack is a strike
+  run(w, o.secs || 20, () => { if (bell) return; if (w.time >= next) { w.playerAttack(p, 0); next = w.time + ED.Stats.attackInterval(p); atk++; } });
   run(w, 4);
+  if (bell) atk = hits.filter(h => h.kind === 'weapon').length; // the bell keeps striking while the shots settle: every strike counts
   const total = hits.filter(h => !(h.kind === 'dot' && h.raw)).reduce((s, h) => s + h.dealt, 0), bleed = hits.filter(h => h.kind === 'dot' && h.raw && h.bleed).reduce((s, h) => s + h.dealt, 0);
-  return { m, total, atk, bleed, secs: o.secs || 20 };
+  return { m, total, atk, bleed, secs: (o.secs || 20) + (bell ? 4 : 0) };
 }
 for (const cls of ED.CLASS_IDS) for (let wi = 0; wi < 3; wi++) {
   const r = weaponRun(cls, wi, {}), id = ED.CLASSES[cls].weapons[wi];
   rel(r.total / r.atk, r.m.weapon.dps / r.m.weapon.aps, 0.04, `${id} damage per attack on one foe`);
+  if (cls === 'bell') rel(r.atk / r.secs, r.m.weapon.aps, 0.06, `${id} strikes per second on one foe`);
+}
+// Bellwarden forks and riders: Heavy and Swift bells, Momentum's Heavy Strikes, the Wrecking Ball shock
+for (const [boons, wi, tag] of [[{ b_atk: 1, b_atk_h: 1 }, 0, 'Tolling Bell'], [{ b_atk: 1, b_atk_s: 1 }, 0, 'Chiming Bell'], [{ b_atk: 1, b_atk_h: 2 }, 1, 'Cathedral Bell rank 2'], [{ b_atk: 1, b_atk_s: 3 }, 2, 'Sleigh Bells rank 3']]) {
+  const r = weaponRun('bell', wi, boons, { secs: 24 });
+  rel(r.total / r.atk, r.m.weapon.dps / r.m.weapon.aps, 0.05, `${tag} damage per strike`);
+  rel(r.atk / r.secs, r.m.weapon.aps, 0.08, `${tag} strikes per second`);
 }
 // forks and route weapons: Heavy, Swift and the Knight Cleave
 for (const [cls, boons, tag] of [['knight', { k_atk: 1 }, 'Oath of Steel'], ['knight', { k_atk: 1, k_atk_h: 1 }, 'Oathbreaker'], ['knight', { k_atk: 1, k_atk_s: 1 }, 'Sworn Blade'], ['knight', { k_atk: 1, k_atk_h: 3 }, 'Earthsplitter'], ['knight', { k_atk: 1, k_atk_s: 3 }, 'Thousand Edges'], ['ranger', { r_atk: 1, r_atk_h: 1 }, 'Ballista'], ['cleric', { c_atk: 1, c_atk_s: 1 }, 'Crusader']]) {
@@ -698,7 +710,7 @@ function statusRun(boons, stratum, secs, until) {
 // Stratum IV at rank 2: a non-Guard fork 31.5-38.5, a Guard fork >= 28. Stratum VI at rank 3: non-Guard 54-66, Guard >= 48 and +25% EHP or 30% stun.
 {
   const MD = require('./model.js')(ED, { pack: 4 }), col = (v) => Math.round(v * 100);
-  const GATE2 = { knight: ['kindle', 'frostbite'], ranger: ['kindle', 'frostbite'], pyro: ['kindle', 'staticcharge'], shade: ['kindle', 'frostbite'], cleric: ['consecrate', 'frostbite'], necro: ['doommark', 'envenom'] };
+  const GATE2 = { knight: ['kindle', 'frostbite'], ranger: ['kindle', 'frostbite'], pyro: ['kindle', 'staticcharge'], shade: ['kindle', 'frostbite'], cleric: ['consecrate', 'frostbite'], necro: ['doommark', 'envenom'], bell: ['staticcharge', 'frostbite'] };
   const assess = (cls, boons, stratum) => {
     const b = { cls, weapon: ED.CLASSES[cls].weapons[0], boons, relics: [], meta: META(), pact: 0 }, stats = ED.Stats.compute(b);
     return MD.assess({ pid: 'p', name: 'T', cls, weapon: b.weapon, boons, relics: [], meta: b.meta, stats, hp: stats.maxHp, maxHp: stats.maxHp, shield: 0, picks: 0, slot: 0 }, CTX({ stratum, level: 8 }));

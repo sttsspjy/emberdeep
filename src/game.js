@@ -21,7 +21,7 @@
     this.enemies = []; this.projs = []; this.pickups = []; this.zones = []; this.allies = []; this.props = [];
     this.floor = null; this.room = null; this.roomId = -1; this.roomState = {}; this.stratum = 0; this.floorSeed = 0;
     this.gold = 0; this.level = 1; this.xp = 0; this.xpNext = 20; this.time = 0; this.locked = false; this.waitMsg = '';
-    this.snaps = []; this.renderT = 0; this.run = null; this.eMap = new Map();
+    this.snaps = []; this.renderT = 0; this.run = null; this.eMap = new Map(); this.critter = null;
   }
   Mirror.prototype.recalc = function (p) {
     p.stats = ED.Stats.compute({ cls: p.cls, weapon: p.weapon, boons: p.boons, relics: p.relics, meta: p.meta, pact: this.pact, chaliceHp: p.chaliceHp, bonusHp: p.bonusHp });
@@ -49,7 +49,7 @@
     if (d.H) for (const a of d.H) H.set(a[0], a);
     for (const a of d.K) K.set(a[0], a);
     for (const a of d.A) A.set(a[0], a);
-    this.snaps.push({ T: d.T, recv: now, P, E, H, K, A });
+    this.snaps.push({ T: d.T, recv: now, P, E, H, K, A, C: d.C || null });
     if (this.snaps.length > 6) this.snaps.shift();
     // per-player vitals are taken straight from the newest snapshot
     for (const a of d.P) {
@@ -131,6 +131,8 @@
     // pickups & allies
     this.pickups = []; for (const [id, rb] of b.K) { const ra = a.K.get(id); const xy = lerpXY(ra, rb); this.pickups.push({ id, kind: N.PK[rb[1]], x: xy[0], y: xy[1] }); }
     this.allies = []; for (const [id, rb] of b.A) { const ra = a.A.get(id); const xy = lerpXY(ra, rb); this.allies.push({ id, owner: rb[1], x: xy[0], y: xy[1], face: rb[4], k: rb[5] | 0 }); }
+    const cb = b.C, ca = a.C; // the Platino (net.js C)
+    this.critter = cb ? { x: ca ? U.lerp(ca[0], cb[0], k) : cb[0], y: ca ? U.lerp(ca[1], cb[1], k) : cb[1], face: cb[2] } : null;
     // projectiles: extrapolated to "now" so dodging reads true
     const pb = this.projBase;
     if (pb) {

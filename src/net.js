@@ -7,7 +7,7 @@
   const N = ED.Net = {};
   const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const PREFIX = 'wickdeep-v1-';
-  N.VERSION = 10; // bump whenever snapshots or floor generation change: mixed versions would desync
+  N.VERSION = 11; // bump whenever snapshots or floor generation change: mixed versions would desync
   // Heartbeat: PeerJS 'close' does not fire when a tab crashes or a network drops, so both ends ping and
   // treat a few seconds of silence as a disconnect (longer in the lobby, where little else is sent).
   const PING_MS = 2000, TIMEOUT_RUN = 6000, TIMEOUT_LOBBY = 10000;
@@ -341,12 +341,15 @@
     for (const a of w.allies) A.push([a.id, a.owner, r(a.x), r(a.y), a.face, a.k | 0]); // A[5]: 0 minion, 1 Death Knight, 2 bone bomb
     const s = { t: 's', T: r2(w.time), s: w.stratum, fs: w.floorSeed, r: w.roomId, ep: w.roomEpoch | 0, L: w.locked ? 1 : 0, g: w.gold, x: Math.floor(w.xp), n: w.xpNext, l: w.level,
       wm: w.waitMsg || '', P, E, B, K, Z, A, H, F: N.capFx(fx, N.CAPS) };
+    if (w.critter) s.C = [r(w.critter.x), r(w.critter.y), w.critter.face]; // the Platino while it is out: x, y, facing (1 / -1)
     if (full) {
       s.O = w.props.map(p => [p.id, p.kind, r(p.x), r(p.y), p.state | 0, p.item || '', p.price || 0, p.group || 0, p.stype || '', p.text || '']);
       s.RS = w.floor.rooms.map(rm => { const st = w.roomState[rm.id]; return (st.visited ? 1 : 0) | (st.known ? 2 : 0) | (st.cleared ? 4 : 0); });
       s.BR = w.floor.rooms.map(rm => w.roomState[rm.id].broken | 0); // broken-breakable bit mask of every room (bit i = room.breakables[i])
       s.RUN = { kills: w.run.kills, roomsCleared: w.run.roomsCleared, elitesKilled: w.run.elitesKilled, bosses: w.run.bosses, bossCount: w.run.bossCount, embers: w.run.embers, revives: w.run.revives, maxGold: w.run.maxGold, maxRelics: w.run.maxRelics, pact: w.pact,
-        flawlessBoss: !!w.run.flawlessBoss, roomsVisited: w.run.roomsVisited, roomsTotal: w.run.roomsTotal, fullClear: !!w.run.fullClear, darkCleared: w.run.darkCleared, evolved: [...w.players.values()].some(p => !!p.stats.evo) };
+        flawlessBoss: !!w.run.flawlessBoss, roomsVisited: w.run.roomsVisited, roomsTotal: w.run.roomsTotal, fullClear: !!w.run.fullClear, darkCleared: w.run.darkCleared, evolved: [...w.players.values()].some(p => !!p.stats.evo),
+        gold777: !!w.run.gold777, oneFace: !!w.run.oneFace, pl: {} }; // pl: pid -> that hero's secret run fields (world.js summary carries the same in players[pid])
+      for (const p of w.players.values()) s.RUN.pl[p.pid] = Object.assign({}, p.sec);
     }
     return s;
   };

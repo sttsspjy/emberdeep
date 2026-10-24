@@ -1,5 +1,5 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it.
-// Usage: node tools/browse.js [--scen=smoke,crowd70,shots,sheet,screens,swing,picks,cards] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
+// Usage: node tools/browse.js [--scen=smoke,crowd70,shots,sheet,screens,wardrobe,swing,picks,cards] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
 //   [--quality=low,high] [--ops] [--json] [--seed=1] [--strat=1] [--embers=N] [--mortal] [--software] [--forcepost] [--sync] [--warm=2.5] [--timeout=300]
 // Mechanism: headless only (no headed option, no window calls); one browser per invocation, one fresh context per scenario page, all closed at exit, on error and on SIGINT.
 //   A read-only node http server on 127.0.0.1 (random port) serves --root (default: this repo). Playwright resolves via require('playwright'), else %LOCALAPPDATA%\npm-cache\_npx\*\node_modules (best match for the installed browsers).
@@ -10,6 +10,8 @@
 //     --ops adds a 3 s pass counting canvas/WebGL calls per frame by target (buf = world buffer, screen = visible canvas, other = offscreen bakes).
 //   screens: 19 screenshots of every menu screen without a run (name, menu, Descend, Hearth with a buy mid-burst, Armory, Chronicle, Heroes, a staged party lobby and its Hearth,
 //     results victory and fallen, the news notice, settings tabs, a confirm dialog, credits, pause); fails when ArrowDown / ArrowRight do not move focus on the menu / Hearth tabs.
+//   wardrobe: 9 screenshots: the Descend roster (a riddle hero as a silhouette named ??? with its hint; a locked Knight copy stands in while the data has none), the Wardrobe (a skin bought through its chip and the confirm, worn at once;
+//     ArrowRight along a row; the Blue Hearth worn), the Chronicle secrets block, the riddle hero on the Heroes page (fails if its name shows), the party Hearth Wardrobe, results with secrets from Save.applyRun.
 //   shots: 16 screenshots: boot name screen, menu, Descend, Hearth tabs (the Armory scrolled into view), Heroes, Settings, Credits, boon offer, a run in combat, the Tab sheet tabs, the pause menu (profile gets 400 embers unless --embers).
 //   sheet: a late build staged through the sim (BR.sheetStage: stratum --strat or V, two element paths, one evolved, their duo, open and Ascended boons, a fork at rank 3, six relics, a shield, an ally hero):
 //     the Tab sheet Build, Build scrolled to the end, Combat, Map, and Build viewing the ally; fails on a page error or when a sheet column overflows its panel sideways.
@@ -53,7 +55,7 @@ function parseArgs(argv) {
   if (!vp) throw new Fail('--viewport is WxH, e.g. 1920x1080');
   o.vw = +vp[1]; o.vh = +vp[2];
   o.scens = o.scen.split(',').map(s => s.trim()).filter(Boolean);
-  for (const s of o.scens) if (!/^(smoke|shots|sheet|screens|swing|picks|cards|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, sheet, screens, swing, picks, cards, crowdN)');
+  for (const s of o.scens) if (!/^(smoke|shots|sheet|screens|wardrobe|swing|picks|cards|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, sheet, screens, wardrobe, swing, picks, cards, crowdN)');
   if (!o.scens.length) throw new Fail('--scen is empty');
   o.qualities = o.quality ? o.quality.split(',').map(s => s.trim()) : null;
   if (o.qualities && o.qualities.some(q => q !== 'low' && q !== 'high')) throw new Fail('--quality is low, high or low,high');
@@ -941,7 +943,7 @@ async function scenScreens() {
     if (!burst) fail(res, 'the bought plaque has no .burst after the click');
     await tryShot('05-hearth-upgrades', () => ev(() => { const E = window.__ED, p = E.App.profile; let n = 0; for (const u of E.UPGRADES) if (n < 2 && E.Save.buyUpgrade(p, u.id)) n++; E.App.afterMetaChange(); document.querySelector('#hearth-tabs .tab.on').focus(); }));
     await page.keyboard.press('ArrowRight');
-    if ((await focused()) !== 'chronicle') fail(res, 'ArrowRight on the Hearth tabs did not focus Chronicle (focus: ' + (await focused()) + ')');
+    if ((await focused()) !== 'wardrobe') fail(res, 'ArrowRight on the Hearth tabs did not focus Wardrobe (focus: ' + (await focused()) + ')');
     await tryShot('06-hearth-armory', () => ev(() => { const h = [...document.querySelectorAll('#up-grid .tier-head')].find(x => /Armory/.test(x.textContent)); if (h) h.scrollIntoView({ block: 'start' }); }));
     await tryShot('07-hearth-chronicle', () => ev(() => window.__ED.App.enterHearth('chronicle')));
     await tryShot('08-heroes', () => ev(() => window.__ED.App.enterHearth('heroes')));
@@ -981,14 +983,83 @@ async function scenScreens() {
   return res;
 }
 
+async function scenWardrobe() {
+  const o = S.opt, res = newResult('wardrobe');
+  const { ctx, page, errors } = await openPage();
+  const tryShot = async (name, fn, settle) => { try { if (fn) await fn(); await wait(settle == null ? 450 : settle); await shoot(page, res, name); } catch (e) { notes(res, 'shot ' + name + ' skipped: ' + String(e.message).split('\n')[0]); } };
+  const ev = (fn, arg) => page.evaluate(fn, arg);
+  try {
+    await ev(() => { const A = window.__ED.App; A.settings.frameCap = 'off'; A.applySettings(); });
+    await call(page, 'profile', 'knight', 1000, '');
+    // a riddle hero for the roster when the data has none: a locked copy of the Knight with an unlock hint (removed again before the results)
+    const staged = await ev(() => {
+      const E = window.__ED;
+      if (E.CLASS_IDS.some(c => E.CLASSES[c].unlock && E.CLASSES[c].unlock.hint)) return false;
+      E.CLASSES.zz_riddle = Object.assign({}, E.CLASSES.knight, { name: 'Riddle', unlock: { bell: true, text: '???', hint: 'In the drowned Sanctum, a bell waits for a hand that will not let go.' } });
+      E.CLASS_IDS.push('zz_riddle'); E.ARMORY.zz_riddle = []; E.COS_SCOPE.zz_riddle = []; E.App.profile.mastery.push(0); E.App.profile.wear.zz_riddle = { tints: [] };
+      return true;
+    });
+    if (staged) notes(res, 'no riddle hero in the data: a locked Knight copy stands in');
+    await ev(() => {
+      const E = window.__ED, p = E.App.profile;
+      p.mastery[0] = E.MASTERY_XP[6]; p.mastery[2] = E.MASTERY_XP[9]; p.evo.longsword = 3; p.evo.warhammer = 1;
+      for (const id of ['hearthsitter', 'platino', 'knight']) E.Save.grantSecret(p, id);
+      E.App.persist();
+    });
+    await tryShot('w1-descend-roster', () => ev(() => window.__ED.App.enterHearth('descend')));
+    // from 720 px tall the Descend screen fits without scrolling: the solo button ends inside the window
+    const fit = await ev(() => ({ bottom: Math.round(document.getElementById('btn-solo').getBoundingClientRect().bottom), h: innerHeight, w: innerWidth }));
+    notes(res, `Descend: solo button bottom ${fit.bottom} of ${fit.h} px`);
+    if (fit.h >= 720 && fit.w >= 1200 && fit.bottom > fit.h) fail(res, `the Descend screen scrolls at ${fit.w}x${fit.h} (solo button bottom ${fit.bottom})`);
+    await tryShot('w2-wardrobe', () => ev(() => window.__ED.App.enterHearth('wardrobe')));
+    // buy the first skin through its chip and the confirm dialog; it is worn at once
+    await tryShot('w3-buy-confirm', () => ev(() => { const b = document.querySelector('#wardrobe-view .wd-item.open'); if (!b) throw new Error('no skin for sale'); b.click(); }), 200);
+    await ev(() => document.getElementById('modal-yes').click());
+    const after = await ev(() => { const p = window.__ED.App.profile; return { cos: p.cos.slice(), skin: p.wear.knight.skin }; });
+    if (after.cos.indexOf('skin.knight.a') < 0 || after.skin !== 'skin.knight.a') fail(res, 'buying the first Knight skin: ' + JSON.stringify(after));
+    await tryShot('w4-wardrobe-bought', null, 120);
+    // keyboard: ArrowRight moves along a slot row
+    const moved = await ev(() => { const row = document.querySelector('#wardrobe-view .wd-items'); const a = row.querySelector('.wd-item'); a.focus(); a.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight', bubbles: true })); return document.activeElement !== a && row.contains(document.activeElement); });
+    if (!moved) fail(res, 'ArrowRight did not move focus along a Wardrobe row');
+    const camp = await ev(() => { const b = [...document.querySelectorAll('#wardrobe-view .wd-item')].find(x => x.dataset.fk === 'w:camp:camp.bluehearth'); if (!b) return 'missing'; b.click(); return window.__ED.App.profile.wear.camp; });
+    if (camp !== 'camp.bluehearth') fail(res, 'wearing the Blue Hearth: ' + camp);
+    await tryShot('w5-wardrobe-scrolled', () => ev(() => { const s = [...document.querySelectorAll('#wardrobe-view .wd-slot')].pop(); if (s) s.scrollIntoView({ block: 'end' }); }));
+    await tryShot('w6-chronicle-secrets', () => ev(() => { window.__ED.App.enterHearth('chronicle'); document.getElementById('secret-list').scrollIntoView({ block: 'center' }); }));
+    const secretsTxt = await ev(() => document.getElementById('secret-list').textContent);
+    if (!/The Platino/.test(secretsTxt) || !/secrets remain/.test(secretsTxt) || /Exact Change/.test(secretsTxt)) fail(res, 'secret list: ' + secretsTxt.slice(0, 160));
+    await tryShot('w7-heroes-riddle', () => ev(() => { const E = window.__ED; E.App.enterHearth('heroes'); const id = E.CLASS_IDS.find(c => E.CLASSES[c].unlock && E.CLASSES[c].unlock.hint); E.UI.heroSel = id; E.UI.renderHearth(); }));
+    const leak = await ev(() => { const E = window.__ED, id = E.CLASS_IDS.find(c => E.CLASSES[c].unlock && E.CLASSES[c].unlock.hint); const t = document.getElementById('scr-hearth').textContent; return t.indexOf(E.CLASSES[id].name) >= 0 || /victory|Hollow King/i.test(document.getElementById('heroes-view').textContent); });
+    if (leak) fail(res, 'the riddle hero\'s name or condition shows on the Heroes page');
+    await tryShot('w8-party-wardrobe', () => ev(() => {
+      const E = window.__ED, A = E.App, UI = E.UI;
+      A.state = 'lobby'; UI.show('lobby');
+      A.lobbyState = { code: 'K7QX2', pact: 0, members: [{ slot: 0, pid: 'host', name: A.profile.name, cls: A.sel.cls, weapon: A.sel.weapon, isHost: true, ready: true }] };
+      UI.renderLobby(A.lobbyState, 'host', true); UI.phTab = 'wardrobe'; UI.openPartyHearth();
+    }));
+    await tryShot('w9-results-secrets', () => ev((st) => {
+      const E = window.__ED, A = E.App, UI = E.UI;
+      document.getElementById('ov-hearth').hidden = true; A.lobbyState = null;
+      if (st) { E.CLASS_IDS.pop(); delete E.CLASSES.zz_riddle; }
+      const run = { victory: true, stratum: 6, time: 1534, level: 22, roomsCleared: 40, roomsTotal: 52, roomsVisited: 47, kills: 1800, bossCount: 6, party: 1, pact: 10, cls: 'knight', gold777: true, evolved: true, weapon: 'warhammer', embers: { rooms: 80, elites: 30, bosses: 60, victory: 40 }, me: { thread: true, bellRung: true } };
+      const r = E.Save.applyRun(A.profile, run);
+      A.state = 'results'; UI.renderResults(run, r); UI.show('results');
+    }, staged));
+    const resTxt = await ev(() => document.getElementById('res-progress').textContent);
+    if (!/Secret uncovered: Exact Change/.test(resTxt) || !/Secret uncovered: Hollow Crown/.test(resTxt)) fail(res, 'results lack the secrets: ' + resTxt.replace(/\s+/g, ' ').slice(0, 200));
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  if (res.shots.length < 8) fail(res, 'only ' + res.shots.length + ' screenshots were taken');
+  return res;
+}
+
 // ---------------- output ----------------
-const f1 = (v) => (typeof v === 'number' ? v.toFixed(1) : '-');
+const f1 =(v) => (typeof v === 'number' ? v.toFixed(1) : '-');
 const tri = (s) => (s ? [s.p50, s.p95, s.max].map(f1).join('/') : '-');
 const pad = (s, n) => String(s).padEnd(n);
 function table(results) {
   const out = [];
   for (const r of results) {
-    out.push(`${r.name} [${r.browser}${r.name === 'shots' || r.name === 'screens' ? '' : ', ' + r.cls}] ${r.ok ? 'PASS' : 'FAIL'}  ${(r.wallMs / 1000).toFixed(1)} s`);
+    out.push(`${r.name} [${r.browser}${r.name === 'shots' || r.name === 'screens' || r.name === 'wardrobe' ? '' : ', ' + r.cls}] ${r.ok ? 'PASS' : 'FAIL'}  ${(r.wallMs / 1000).toFixed(1)} s`);
     for (const n of r.notes) out.push('  ' + n);
     for (const e of r.errors) out.push(`  ${e.kind}${e.quality ? ' (' + e.quality + ')' : ''}: ${e.text}`);
     if (r.name.startsWith('crowd')) {
@@ -1031,7 +1102,7 @@ async function main() {
       const t0 = Date.now();
       log('scenario ' + sc + ' ...');
       let r;
-      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'sheet' ? await scenSheet() : sc === 'screens' ? await scenScreens() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : sc === 'cards' ? await scenCards() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
+      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'sheet' ? await scenSheet() : sc === 'screens' ? await scenScreens() : sc === 'wardrobe' ? await scenWardrobe() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : sc === 'cards' ? await scenCards() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
       r.wallMs = Date.now() - t0;
       r.browserVersion = bv;
       if (S.server.missing.size) r.missing = [...S.server.missing];

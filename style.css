@@ -301,7 +301,7 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 #hearth-tabs:not([hidden]) + .sec-body { padding: calc(5 * var(--p)) calc(5 * var(--p)); }
 
 /* hero roster: dim panel tiles, hover = brass panel, chosen = ember panel with the gem on its top edge, locked = dithered */
-.roster { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: calc(3 * var(--p)); }
+.roster { display: grid; grid-template-columns: repeat(var(--heroes, 7), minmax(0, 1fr)); gap: calc(3 * var(--p)); } /* --heroes: the hero count (ui.js rosterTiles) */
 .hero-tile { --fr: var(--fr-panel-dim); position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: var(--p); padding: calc(2 * var(--p)) calc(2 * var(--p)) calc(3 * var(--p)); text-align: center; background: none;
   border: calc(3 * var(--p)) solid transparent; border-radius: 0; border-image: var(--fr) 6 fill / calc(6 * var(--p)); image-rendering: pixelated; cursor: pointer; color: var(--text); font: inherit; box-shadow: none; transition: none; }
 .hero-tile:hover:not(.locked) { --fr: var(--fr-panel); }
@@ -315,6 +315,12 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 .hero-tile .cm { font: 400 var(--fs-sm)/1.25 var(--f-body); color: var(--muted); }
 .hero-tile.locked .cn { color: var(--faint); }
 .hero-tile.locked .cm { color: var(--ember-hi); position: relative; z-index: 1; }
+/* a riddle hero: a black silhouette with a 1 art px rim on top, its hint in muted text */
+.hero-tile.mystery canvas, .hd-top.mystery canvas { filter: brightness(0) drop-shadow(0 calc(-1 * var(--p)) 0 #5a4c40); }
+.hero-tile.mystery .cm { color: var(--muted); font-style: normal; }
+.hero-tile > div { max-width: 100%; min-width: 0; }
+.hero-tile .cn { max-width: 100%; overflow: hidden; }
+.roster.tight .cn { font: 700 var(--fs-lg)/1.25 var(--f-body); } /* ui.js fitRoster: a name wider than its tile */
 .roster.compact { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(2 * var(--p)); }
 .roster.compact .hero-tile, .roster.list .hero-tile { flex-direction: row; justify-content: flex-start; text-align: left; gap: calc(3 * var(--p)); padding: calc(2 * var(--p)) calc(3 * var(--p)) calc(2 * var(--p)) calc(2 * var(--p)); }
 .roster.compact .hero-tile canvas, .roster.list .hero-tile canvas { width: calc(16 * var(--p)); height: calc(16 * var(--p)); flex: none; }
@@ -447,6 +453,32 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 .mast-rewards li b { flex: none; min-width: calc(4 * var(--fs-md)); color: var(--faint); font: 700 var(--fs-md) var(--f-num); }
 .mast-rewards li.got b { color: var(--ember-hi); }
 .hv-pick { align-self: flex-start; }
+/* wardrobe: the heroes view with slot rows of item chips (dim panel; worn = ember panel; owned = brass; for sale = ember label; locked = dithered) */
+.wd-detail { gap: calc(3 * var(--p)); }
+.wd-port { display: grid; place-items: center; min-height: calc(28 * var(--p)); }
+.wd-title { font: 700 var(--fs-lg)/1.25 var(--f-body); color: var(--bone); text-shadow: 0 var(--fpx) 0 var(--px-ol); }
+.wd-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 26rem), 1fr)); gap: calc(3 * var(--p)) calc(5 * var(--p)); }
+.wd-slot.wide { grid-column: 1 / -1; }
+.wd-slot .plate-h { margin-bottom: calc(2 * var(--p)); }
+.wd-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr)); gap: calc(2 * var(--p)); }
+.wd-item { --fr: var(--fr-panel-dim); position: relative; display: grid; grid-template-columns: var(--ic) minmax(0, 1fr); gap: calc(3 * var(--p)); align-items: center; text-align: left; padding: calc(2 * var(--p)) calc(3 * var(--p)); background: none;
+  border: calc(3 * var(--p)) solid transparent; border-radius: 0; border-image: var(--fr) 6 fill / calc(6 * var(--p)); image-rendering: pixelated; cursor: pointer; color: var(--text); font: inherit; min-width: 0; box-shadow: none; transition: none; }
+.wd-item img, .wd-ico { width: var(--ic); height: var(--ic); }
+.wd-ico.none { box-sizing: border-box; border: var(--p) solid var(--faint); }
+.wd-item b { display: block; font: 700 var(--fs-md)/1.25 var(--f-body); color: var(--bone); overflow-wrap: anywhere; }
+.wd-item small { display: block; font-size: var(--fs-sm); line-height: 1.25; color: var(--muted); }
+.wd-item small .ember-ico { vertical-align: -0.2em; margin-right: var(--pf); }
+.wd-item:hover:not(.locked), .wd-item.own { --fr: var(--fr-panel); }
+.wd-item.on { --fr: var(--fr-panel-ember); }
+.wd-item.on b { color: var(--gold); }
+.wd-item.on small { color: var(--good); }
+.wd-item.open small { color: var(--ember-hi); font-weight: 700; }
+.wd-item.locked { isolation: isolate; cursor: not-allowed; }
+.wd-item.locked b { color: var(--faint); }
+.wd-item.locked small { color: var(--ember-hi); position: relative; z-index: 1; }
+.wd-item.locked::before { content: ""; position: absolute; z-index: -1; inset: calc(-1 * var(--p)); pointer-events: none; background: var(--fr-lockdither) 0 0 / calc(2 * var(--p)) calc(2 * var(--p)); image-rendering: pixelated; }
+.wd-item:focus-visible { outline: var(--pf) solid var(--ember-hi); outline-offset: var(--pf); }
+.wd-item.burst { animation: px-flash 0.4s steps(1) 1; }
 
 /* chronicle */
 .chron-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: calc(6 * var(--p)); align-items: start; }
@@ -462,6 +494,8 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 .deed.done .dn { color: var(--gold); }
 .deed.done .dr { color: var(--good); }
 .deed:not(.done) img { filter: grayscale(1) brightness(0.6); }
+.deed.secret.done .dr { color: #b8a6ff; }
+.deed.secret:not(.done) .dn { color: var(--faint); }
 .records { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--p) calc(6 * var(--p)); margin: 0; padding: calc(6 * var(--p)) calc(7 * var(--p)); font-size: var(--fs-md); }
 .records dt { color: var(--muted); }
 .records dd { margin: 0; text-align: right; font: 700 var(--fs-md) var(--f-num); }
@@ -1093,7 +1127,7 @@ body.hud-on #toasts { top: 8rem; width: max-content; max-width: max(20rem, calc(
 
 /* ---------- narrow screens ---------- */
 @media (max-width: 900px) {
-  .roster { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .roster { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .descend-detail, .lobby-cols, .chron-grid, .heroes-view, .res-grid { grid-template-columns: minmax(0, 1fr); }
   .up-grid { grid-template-columns: minmax(0, 1fr); }
   .go-bar { grid-template-columns: minmax(0, 1fr); }
@@ -1128,6 +1162,7 @@ body.hud-on #toasts { top: 8rem; width: max-content; max-width: max(20rem, calc(
   .btn, .hero-tile, .boon-card, .menu-btn, .btn:hover { transition: none; transform: none; }
   .up-ember::before, .up-ember::after, .up-card.burst, .pip.new, .toast { animation: none; }
   .up-card.burst::after { display: none; }
+  .wd-item.burst { animation: none; }
 }
 /* Low quality: menu idle animations hold their first frame (answered input still animates) */
 :root[data-quality=low] .up-ember::before, :root[data-quality=low] .up-ember::after, :root[data-quality=low] .menu-btn::before, :root[data-quality=low] .menu-btn::after,

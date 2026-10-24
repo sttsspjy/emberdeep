@@ -90,7 +90,7 @@
   const rnd = (a, b) => a + Math.random() * (b - a);
 
   const GAP = { hit: 0.035, ohit: 0.035, crit: 0.05, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1, freeze: 0.05, shatter: 0.06, combust: 0.06, guardhit: 0.06, block: 0.05, clang: 0.03, throw: 0.08, catch: 0.08, parry: 0.1, bell: 0.06, charge: 0.2, chargehit: 0.2, volley: 0.15, raincast: 0.15, smash: 0.05, dark: 0.5, fury: 1, dcharge: 0.08, blossom: 0.05, implode: 0.2, pick: 0.08 };
-  const PRIO = { hurt: 3, down: 3, revive: 3, dark: 3, lock: 3, roar: 3, fury: 3, victory: 3, defeat: 3, crit: 2, level: 2, boon: 2, relic: 2, pick: 2, shop: 2, ohit: 0, spark: 0, eshoot: 0, xp: 0, gold: 0, spawn: 0 };
+  const PRIO = { drownbell: 3, hurt: 3, down: 3, revive: 3, dark: 3, lock: 3, roar: 3, fury: 3, victory: 3, defeat: 3, crit: 2, level: 2, boon: 2, relic: 2, pick: 2, shop: 2, ohit: 0, spark: 0, eshoot: 0, xp: 0, gold: 0, spawn: 0 };
   // arg: cue-specific parameter (hit and crit: { w damage share, el element, n hits this frame }; clang: { n, g }; victory: 'boss' for the short one; pick: a card kind or { k kind, big, els: a duo's two elements })
   A.play = (name, vol, arg, pr) => {
     if (!A.ready || !live()) return;
@@ -201,6 +201,11 @@
         tone('square', 880 * k, 800 * k, 0.12, 0.07 * v); tone('square', 1320 * k * 1.01, 1180 * k, 0.1, 0.05 * v); noise('bandpass', 2400 * k, 1500, 0.08, 0.12 * v, 3); tone('sine', 140, 70, 0.08, 0.1 * v);
         break;
       }
+      case 'drownbell': // the Drowned Bell: a low bronze strike with inharmonic partials, a beating pair for the crack and a long tail
+        noise('bandpass', 1800, 600, 0.06, 0.25 * v, 2); tone('sine', 196, 194, 2.6, 0.2 * v); tone('sine', 199.5, 197, 2.4, 0.12 * v); tone('sine', 196 * 2.4, 196 * 2.38, 1.6, 0.08 * v);
+        tone('sine', 196 * 3.01, 196 * 2.99, 1.1, 0.05 * v); tone('triangle', 196 * 4.2, 196 * 4.15, 0.7, 0.03 * v); tone('sine', 98, 96, 2.2, 0.12 * v);
+        break;
+      case 'platino': [1568, 2093, 2637, 3136].forEach((f, i) => tone('sine', f, f * 1.01, 0.18, 0.06 * v, null, t + i * 0.05)); noise('highpass', 6000, 4000, 0.25, 0.03 * v); break; // the Platino caught
       case 'catch': tone('sine', 140, 70, 0.14, 0.3 * v); noise('lowpass', 500, 150, 0.1, 0.16 * v, 1); if (arg) [1318, 1760].forEach((f, i) => tone('sine', f, f, 0.22, 0.06 * v, null, t + 0.03 + i * 0.06)); break;
       case 'bell': { // Cleric: a struck golden bell (arg: semitones above A5; lower for slams, higher for beams), with a bright partial and a soft fifth
         const k = Math.pow(2, ((arg | 0) || 0) / 12);

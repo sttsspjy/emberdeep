@@ -134,7 +134,7 @@
   // Eclipse: the smoke is a dome (zone tag w 2) the hero stays unseen in and where every attack is an Ambush (see stepDome); Umbral Veil: a shadow clone is left where the hero stood.
   ED.CAST.vanish = function (p, a, data, st, N) {
     const dome = N.p.dome.on, sm = dome ? N.p.dome : N.p.smoke, bl = N.p.blind, ch = N.p.choke, stealth = dome ? sm.dur : 2.5 + st.stealthDur, bud = {};
-    p.stealthT = stealth; p.ambush = true; p.ambushT = stealth + 0.5; p.ambFac = 1; p.eclipseRe = false;
+    p.stealthT = stealth; p.ambush = true; p.ambushT = stealth + 0.5; p.ambFac = 1; p.eclipseRe = false; p.unseenN = 0;
     const zone = this.addZone({ kind: 'smoke', x: p.x, y: p.y, r: sm.r, dur: sm.dur, team: 0, owner: p.pid, custom: true, w: dome ? 2 : 0, ticks: 0,
       update: (world, z, dt) => {
         const choke = ch.on && z.t >= 0.5 * (z.ticks + 1) - 1e-9;
@@ -303,10 +303,11 @@
   }
   const fullMom = (p, st) => st.momMax > 0 && p.momN >= st.momMax && p.momT > 0;
 
+  const UNSEEN_N = 5;
   ED.CLS.shade = {
     init(p) {
       p.stepQ = []; p.ambSet = null; p.ambTgt = []; p.ambMul = 1; p.ambRef = false; p.ambRupt = false; p.bloom = []; p.dome = null; p.ambFac = 1; p.eclipseRe = false; p.projMark = 0; p.clone = null;
-      p.gilAtk = -1; p.gilLeft = 0; p.cyDash = false; p.arterT = 0; p.cascT = -1; p.cascLeft = 0;
+      p.gilAtk = -1; p.gilLeft = 0; p.cyDash = false; p.arterT = 0; p.cascT = -1; p.cascLeft = 0; p.unseenN = 0; // unseenN: kills in the current Vanish window (Unseen)
     },
     // Momentum runs out as a whole; Twin Cuts fire when their delay is up; the Ambush Sweep strikes after the Ambush's own hits have landed; Death Blossom chains hop and the Eclipse dome holds its Ambush ready.
     tick(p, dt) {
@@ -411,8 +412,10 @@
     },
     // Kills: an Ambush kill refunds Vanish (Night's Edge, once per 3 s; never an Eclipse repeat); a Shadowstep kill refunds Shadowstep (Assassinate, once per 1.5 s); neither refund comes from a horde foe.
     // A Death Blossom cut that kills a foe (not a horde foe) adds a blink to its chain; an execution crit that kills grants Momentum (Killing Rhythm, never from a horde foe) and, with Guillotine, carries an execution strike to a weak neighbour (a horde foe's death carries too).
+    // Unseen (secret): UNSEEN_N kills while unseen or by Ambush hits within one Vanish window (the count restarts at each Vanish).
     kill(e, p, src) {
       if (!p || p.cls !== 'shade' || !src) return;
+      if ((p.stealthT > 0 || src.ambush) && ++p.unseenN >= UNSEEN_N) this.secretP(p, 'heroSecret');
       const st = p.stats;
       if (src.ambush && st.nightsEdge && p.edgeT <= 0 && !e.fodder && !isRepeat(p, src)) { p.edgeT = 3; this.refundSkill(p, 1); this.emit({ t: 'sref', pid: p.pid, slot: 1, x: R(p.x), y: R(p.y) }); }
       if (st.assassinate && isStep(src.part) && p.stepRefT <= 0 && !e.fodder) { p.stepRefT = 1.5; this.refundSkill(p, 0); this.emit({ t: 'sref', pid: p.pid, slot: 0, x: R(p.x), y: R(p.y) }); }

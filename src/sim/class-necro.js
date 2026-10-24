@@ -358,6 +358,8 @@
     w.hitEnemy(t, dmg * p.stats.soulStorm, { p, kind: 'weapon', wpn: true, raw: true, noGuard: true, part: 'soul.storm', x: e.x, y: e.y });
   }
 
+  // A foe the Necromancer killed rises as its minion for 10 s; an elite that rises is Risen Champion (secret).
+  const rise = (w, p, e, kind, tide) => { if (w.spawnMinion(p, e.x, e.y, 10, kind, tide) && e.elite) w.secretP(p, 'heroSecret'); };
   ED.CLS.necro = {
     init(p) { p.yardAt = -99; p.lichT = 0; p.maws = []; p.graveSwing = false; }, // world time of the last Boneyard raise; seconds left of the Lich Form window; live Abyssal Maw zones; true while a Grave Bolt swing runs
     tick(p, dt) { if (p.lichT > 0) p.lichT -= dt; },
@@ -412,19 +414,19 @@
         if (st.maw > 0) openMaw(this, p, e, e.doom, null);
       }
       if (st.spikeRaise && src.part === 'legion.spikes') {
-        if (this.time >= p.yardAt + C.YARD_CD) { p.yardAt = this.time; this.spawnMinion(p, e.x, e.y, 10, 'yard'); }
+        if (this.time >= p.yardAt + C.YARD_CD) { p.yardAt = this.time; rise(this, p, e, 'yard'); }
         return;
       }
       if (st.wRaise && src.wpn) {
         const grave = st.graveBolt > 0 && (src.part === 'grave.bolt' || (p.graveSwing && src.kind === 'weapon'));
-        if (grave || p.raiseT <= 0) { if (!grave) p.raiseT = C.GRAVE_CD; this.spawnMinion(p, e.x, e.y, 10, 'gc'); }
+        if (grave || p.raiseT <= 0) { if (!grave) p.raiseT = C.GRAVE_CD; rise(this, p, e, 'gc'); }
         return;
       }
       if (st.reapRaise && src.kind === 'reap') {
-        if (p.raiseT <= 0) { p.raiseT = st.tideFree > 0 ? C.TIDE_CD : C.RISE_CD; this.spawnMinion(p, e.x, e.y, 10, 'again', st.tideMul > 0); }
+        if (p.raiseT <= 0) { p.raiseT = st.tideFree > 0 ? C.TIDE_CD : C.RISE_CD; rise(this, p, e, 'again', st.tideMul > 0); }
         return;
       }
-      if (this.rng.chance(0.12 + (st.weapon.raise || 0))) this.spawnMinion(p, e.x, e.y, 10);
+      if (this.rng.chance(0.12 + (st.weapon.raise || 0))) rise(this, p, e);
     },
     // A boss Toll of d damage: Abyssal empower, an Abyssal Maw under the boss, and Rise Again raises a minion beside the boss on the Necromancer's side
     toll(p, boss, d) {

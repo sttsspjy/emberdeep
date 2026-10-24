@@ -248,6 +248,7 @@
     const s = this.stratum;
     this.run.roomsCleared++;
     if (room.dark) this.run.darkCleared++;
+    if (room.bell) this.bellClear();
     this.run.embers.rooms += 1 + Math.round(s / 2);
     const c = this.alivePlayers()[0] || D.center(room);
     const enc = this.enc;
@@ -267,10 +268,22 @@
     this.checkFullClear();
     this.computeFlow();
     this.emit({ t: 'clear' });
+    if (this.floor.platino === this.roomId) this.spawnPlatino();
   };
 
-  W.onBossKilled = function (e) {
+  // p, src: the killing hero and the hit's source (killEnemy). Secrets: One Face (a party of four of one hero downs a stratum boss); at the Hollow King, Thread of Life (a standing hero below THREAD_HP of max health),
+  // Toll for Thee (the Bellwarden's killing hit is a Peal hit: part 'peal.*') and the Against the Grain announcement (its field already holds; victory decides it in meta.js).
+  const THREAD_HP = 0.03;
+  W.onBossKilled = function (e, p, src) {
     const s = this.stratum;
+    if (this.players.size === ED.CONST.MAX_PLAYERS) { let one = null, same = true; for (const q of this.players.values()) { if (one === null) one = q.cls; else if (q.cls !== one) same = false; } if (same) this.secretW('oneFace'); }
+    if (s >= ED.CONST.STRATA) {
+      for (const q of this.players.values()) {
+        if (!q.downed && !q.dead && q.hp < q.maxHp * THREAD_HP) this.secretP(q, 'thread');
+        if (q.sec.contrarian) this.emit({ t: 'secret', pid: q.pid });
+      }
+      if (p && p.cls === 'bell' && src && src.part && src.part.indexOf('peal.') === 0) this.secretP(p, 'heroSecret');
+    }
     this.run.bosses |= 1 << (s - 1);
     this.run.bossCount++;
     this.run.embers.bosses += 8 * s;
@@ -482,6 +495,58 @@
     }
   };
 
+  // ---------------- the Drowned Bell (floor gen room.bell) ----------------
+  // A hero's damaging hit within BELL_R of the bell rings it once per hero per run while the room's fight is on ({ t: 'bellrung', pid, x, y }). From then until the room clears the hero stays at or above BELL_HP of max health
+  // (combat.js hurtPlayer breaks the watch) → p.sec.bellRung at the clear.
+  const BELL_R = 14;
+  ED.CONST.BELL_HP = 0.5;
+  W.ringBell = function (p) {
+    const b = this.room.bell;
+    if (!p || p.bellS || p.downed || p.dead || !this.locked || this.roomState[this.roomId].cleared) return;
+    p.bellS = p.hp < p.maxHp * ED.CONST.BELL_HP ? 2 : 1;
+    this.emit({ t: 'bellrung', pid: p.pid, x: Math.round(b.x), y: Math.round(b.y) });
+  };
+  W.bellClear = function () {
+    for (const p of this.players.values()) {
+      if (p.bellS !== 1) continue;
+      if (!p.downed && !p.dead && p.hp >= p.maxHp * ED.CONST.BELL_HP) { p.bellS = 3; this.secretP(p, 'bellRung'); } else p.bellS = 2;
+    }
+  };
+
+  // ---------------- the Platino (floor.platino: its room) ----------------
+  // Out on a floor spot (PLATINO.avoid from every hero) when its room clears: wanders at wander px/s, flees heroes within flee at speed px/s (steering at turn rad/s, probing probe px ahead for open floor), gone after life s with a puff.
+  // A hero touching it (within touch of the body) catches it: { t: 'platino', pid, x, y } and p.sec.platino. Own RNG stream; never in this.enemies (no hits, no aim, no bot target), drops nothing.
+  const PLATINO = { speed: 130, wander: 60, flee: 190, turn: 7, probe: 24, life: 12, r: 7, touch: 6, avoid: 140 };
+  ED.World.PLATINO = PLATINO;
+  W.spawnPlatino = function () {
+    const rng = U.RNG(((this.floorSeed ^ 0x51a7c0de) >>> 0) + this.roomId * 977);
+    const pt = D.randomFloor(this.room, rng, this.alivePlayers(), PLATINO.avoid);
+    this.critter = { x: pt.x, y: pt.y, r: PLATINO.r, a: rng.range(0, U.TAU), wa: 0, wt: 0, t: PLATINO.life, face: 1, rng };
+    this.emit({ t: 'puff', x: Math.round(pt.x), y: Math.round(pt.y), c: '#e8f0ff' });
+  };
+  const OPEN = (t) => t === 0 || t === 4;
+  W.updatePlatino = function (dt) {
+    const c = this.critter, room = this.room, P = PLATINO;
+    if ((c.t -= dt) <= 0) { this.critter = null; this.emit({ t: 'puff', x: Math.round(c.x), y: Math.round(c.y), c: '#e8f0ff' }); return; }
+    let fx = 0, fy = 0;
+    for (const p of this.players.values()) {
+      if (p.downed || p.dead) continue;
+      const dx = c.x - p.x, dy = c.y - p.y, d2 = dx * dx + dy * dy, rr = p.r + c.r + P.touch;
+      if (d2 < rr * rr) { this.critter = null; this.emit({ t: 'platino', pid: p.pid, x: Math.round(c.x), y: Math.round(c.y) }); this.secretP(p, 'platino'); return; }
+      if (d2 < P.flee * P.flee) { const d = Math.sqrt(d2) || 1, k = 1 - d / P.flee; fx += dx / d * k; fy += dy / d * k; }
+    }
+    const fleeing = fx !== 0 || fy !== 0;
+    if (fleeing) c.a += U.clamp(U.angDiff(c.a, Math.atan2(fy, fx)), -P.turn * dt, P.turn * dt);
+    else { if ((c.wt -= dt) <= 0) { c.wt = c.rng.range(0.5, 1.3); c.wa = c.rng.range(-2.5, 2.5); } c.a += c.wa * dt; }
+    for (let i = 0; i < 9; i++) { // the first heading of a, a ± 0.5, ± 1, ± 1.6, ± 2.4 with open floor probe px ahead
+      const a = c.a + (i === 0 ? 0 : (i & 1 ? 1 : -1) * [0.5, 1, 1.6, 2.4][(i - 1) >> 1]);
+      if (OPEN(D.tileAt(room, c.x + Math.cos(a) * P.probe, c.y + Math.sin(a) * P.probe))) { c.a = a; break; }
+    }
+    const sp = fleeing ? P.speed : P.wander;
+    ED.Sim.moveCircle(c, Math.cos(c.a) * sp * dt, Math.sin(c.a) * sp * dt, room, true, false);
+    if (Math.abs(Math.cos(c.a)) > 0.2) c.face = Math.cos(c.a) < 0 ? -1 : 1;
+  };
+
   // ---------------- breakable props ----------------
   // room.breakables (floor gen) break to a hero hit: roomState.broken is a bit mask over them. A smash drops gold (SMASH_GOLD of the time, 1-3, exact: the gold multiplier does not apply twice) and, separately, a heart (SMASH_HEART); no xp.
   const SMASH_R = 9, SMASH_GOLD = 0.25, SMASH_HEART = 0.01; // SMASH_R: px around a breakable's feet a hero hit must reach
@@ -495,8 +560,9 @@
     if (this.rng.chance(SMASH_HEART)) this.spawnPickup('heart', x, y, 1);
     return true;
   };
-  // Hero hits on the room's unbroken breakables (at most 8, a plain loop): a circle (x, y, r), the segment (x0, y0)-(x1, y1) swept by a body of radius r, or the sector of reach and arc around the hero's facing a.
+  // Hero hits on the room's unbroken breakables (at most 8, a plain loop) and on the Drowned Bell: a circle (x, y, r), the segment (x0, y0)-(x1, y1) swept by a body of radius r, or the sector of reach and arc around the hero's facing a.
   W.smashCircle = function (p, x, y, r) {
+    const bl = this.room.bell; if (bl && p && !p.bellS && U.dist2(bl.x, bl.y, x, y) <= (BELL_R + r) * (BELL_R + r)) this.ringBell(p);
     const bs = this.room.breakables; if (!bs.length) return;
     const rs = this.roomState[this.roomId], rr = (SMASH_R + r) * (SMASH_R + r);
     for (let i = 0; i < bs.length; i++) {
@@ -505,7 +571,8 @@
       if (dx * dx + dy * dy <= rr) this.smashBreakable(i, p);
     }
   };
-  W.smashSeg = function (p, x0, y0, x1, y1, r) {
+  W.smashSeg = function (p, x0, y0, x1, y1, r, noRing) {
+    const bl = this.room.bell; if (bl && p && !p.bellS && !noRing && U.segDist2(bl.x, bl.y, x0, y0, x1, y1) <= (BELL_R + r) * (BELL_R + r)) this.ringBell(p);
     const bs = this.room.breakables; if (!bs.length) return;
     const rs = this.roomState[this.roomId], rr = (SMASH_R + r) * (SMASH_R + r);
     for (let i = 0; i < bs.length; i++) {
@@ -514,6 +581,8 @@
     }
   };
   W.smashArc = function (p, a, reach, arc) {
+    const bl = this.room.bell;
+    if (bl && p && !p.bellS) { const d = Math.hypot(bl.x - p.x, bl.y - p.y); if (d - BELL_R <= reach && (arc >= 6.2 || Math.abs(U.angDiff(a, Math.atan2(bl.y - p.y, bl.x - p.x))) <= arc / 2 + Math.atan2(BELL_R, Math.max(d, 1)))) this.ringBell(p); }
     const bs = this.room.breakables; if (!bs.length) return;
     const rs = this.roomState[this.roomId];
     for (let i = 0; i < bs.length; i++) {

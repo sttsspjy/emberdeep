@@ -15,8 +15,9 @@
 //   Every foe has `walk`; `idle` exists for 0x72 foes; `atk`/`cast`/`howl`/`death` where the source has them (howl: icewolf, lavahound).
 //
 // ----------------------------------------------------------------------------- ID LIST (one line per family; the exhaustive list is generated into ID-LIST.md)
-// hero.<knight|ranger|pyro|shade|cleric|necro>.<idle|run|hit>   0x72 bodies facing right: idle 4f, run 4f, hit 1f; anchors.hand = weapon pivot on the body (feet + 3,-6)
-// weapon.<id>            the 18 game weapons (longsword warhammer glaive longbow crossbow twinbows firestaff emberwand inferno daggers knives scythes mace dawnhammer lantern bonewand soulscythe plaguestaff); anchors.grip/tip/dir
+// hero.<knight|ranger|pyro|shade|cleric|necro|bell>.<idle|run|hit>   0x72 bodies facing right: idle 4f, run 4f, hit 1f; anchors.hand = weapon pivot on the body (feet + 3,-6),
+//                        anchors.head[frame] = hat seat; skins are runtime swaps: ED.ART.swaps['<cls>.<a|b|secret|unkindled>'] (same shape as swaps[cls])
+// weapon.<id>            the 18 game weapons (longsword warhammer glaive longbow crossbow twinbows firestaff emberwand inferno daggers knives scythes mace dawnhammer lantern bonewand soulscythe plaguestaff) + bells bronzebell greatbell handbells; anchors.grip/tip/dir
 // weapon.alt.<name>      Route-fork and foe weapons: big_hammer waraxe double_axe anime_sword katana duel_sword machete saw_sword throwing_axe rusty_sword cleaver
 // shield.<wood|green|gold|round|kite|buckler|tower>   16x16 guard-side shields (DawnLike); proj.shield = the thrown kite shield (centre pivot)
 // foe.<id>.<state>[.dir] all 46 foes (state walk always; idle/atk/cast/death where the source has them), direction rule above; imp/skeleton keep native colours, the rest take pal(def.col) at runtime
@@ -28,10 +29,10 @@
 //   tile.fountain.{top.1..3,mid.red,mid.blue,basin.red,basin.blue}(3f), tile.torch.{wall,floor}(8f), tile.torch.unlit, tile.dark.floor.<1..6>   (0x72 base set; per-biome recolour at runtime)
 // prop.<chest.closed|chest.open|chest.empty|mimic.closed|mimic.open|plinth|plinth.stone|shrine.<0..4>|merchant|crate|bag|campfire|anvil|trial|portal|sign|column|column.wall>
 // deco.<bones.0..4|skull|moss.0..2|candle.0..3|urn.0..5|mushroom.0..3|root.0..1|puddle.0..3|crystal.0..2|shard.0..2|shell.0..2|seaweed.0..1|coral.0..1|crate.0..1|pillarstub|chain|grate|banner.<blue|green|red|yellow>>
-// pickup.<coin|heart|flask.red|flask.yellow|xp>
+// pickup.<coin|heart|flask.red|flask.yellow|xp>; cos.<crown|platino|ghost|coin> wardrobe sprites
 // proj.<arrow|bolt|knife|fireball|hammer|shield|bone|trident|skull|web|thorn>      hero/foe projectile sprites (the other kinds are procedural orbs)
 // fx.<cut|cutx|cslash|slash.arc|slash.small|hit.spark|explosion|flam|ice.burst|thunder|circle.spark|circle.white|shield.gold|spark.magic|smoke|smoke.ring|ember|glint|flame>
-// fx.<blast.red|blast.blue|foam|ring.shock|burst|puff>, fx.<star.stun|sigil.skull|glyph.corroded> (hand-authored)
+// fx.<blast.red|blast.blue|foam|ring.shock|burst|puff>, fx.<star.stun|sigil.skull|glyph.corroded|chain> (hand-authored)
 // fxbig.<firespin|protection|felspell|midnight|freezing>   CodeManu loops, 16 evenly sampled frames each (non-empty 100x100 cells, trimmed)
 // font.<hex code>        ED.ART.font.glyphs maps a character to its glyph anim id; draw glyphs at (pen, top + oy), pen += w + gap, space = font.space
 // ---------------------------------------------------------------------------------------------------------------
@@ -126,6 +127,9 @@ const sheets = {
   dl_door0: { file: 'dawnlike/Objects/Door0.png', outline: ['#140c1c'], edge: ['#452434'] },
   dl_door1: { file: 'dawnlike/Objects/Door1.png', outline: ['#140c1c'], edge: ['#452434'] },
   dl_ground0: { file: 'dawnlike/Objects/Ground0.png', outline: ['#140c1c'], edge: ['#452434'] },
+  dl_music: { file: 'dawnlike/Items/Music.png', outline: ['#140c1c'], edge: ['#452434'] },
+  dl_re0: { file: 'dawnlike/Characters/Reptile0.png', outline: ['#140c1c'], edge: ['#452434'] },
+  dl_re1: { file: 'dawnlike/Characters/Reptile1.png', outline: ['#140c1c'], edge: ['#452434'] },
   // LuizMelo (no outline in source: stamped at bake)
   lm_sk_idle: { file: 'luizmelo/skeleton/Idle.png' }, lm_sk_walk: { file: 'luizmelo/skeleton/Walk.png' }, lm_sk_attack: { file: 'luizmelo/skeleton/Attack.png' },
   lm_sk_shield: { file: 'luizmelo/skeleton/Shield.png' }, lm_sk_hit: { file: 'luizmelo/skeleton/Take Hit.png' }, lm_sk_death: { file: 'luizmelo/skeleton/Death.png' },
@@ -148,9 +152,11 @@ delete sheets.tileList;
 
 // --------------------------------------------------------------------------- heroes (0x72 bodies facing right)
 // Player-colour key colours and the exact palette swaps of ART-PLAN 4.1 are exported as ED.ART.swaps for the runtime recolour.
-const HEROES = { knight: 'knight_m', ranger: 'elf_f', pyro: 'wizzard_m', shade: 'elf_m', cleric: 'dwarf_m', necro: 'wizzard_f' };
+const HEAD_SKIP = { knight: ['#da4e38', '#ee8e2e'], bell: ['#9f294e', '#da4e38'] }; // plume / crest colours the hat seat ignores
+const HEROES = { knight: 'knight_m', ranger: 'elf_f', pyro: 'wizzard_m', shade: 'elf_m', cleric: 'dwarf_m', necro: 'wizzard_f', bell: 'lizard_f' };
 for (const [id, body] of Object.entries(HEROES)) {
-  const set = 'hero.' + id, base = { page: 'actors', src: 'ox', set, handRel: [3, -6] }; // hand = feet + (3,-6): torso height of the big-headed 0x72 bodies (the plan's -9 lands on the chin)
+  // hand = feet + (3,-6): torso height of the big-headed 0x72 bodies (the plan's -9 lands on the chin); head = per-frame hat seat (see art.js headAt)
+  const set = 'hero.' + id, base = { page: 'actors', src: 'ox', set, handRel: [3, -6], head: HEAD_SKIP[id] || true };
   add(set + '.idle', 'actors', 'ox', oxn(body + '_idle_anim', 4), Object.assign({}, base, { fps: 6.67, loop: true }));
   add(set + '.run', 'actors', 'ox', oxn(body + '_run_anim', 4), Object.assign({}, base, { fps: 10, loop: true }));
   add(set + '.hit', 'actors', 'ox', [body + '_hit_anim_f0'], Object.assign({}, base, { fps: 0, loop: false }));
@@ -162,7 +168,38 @@ const SWAPS = {
   shade: { base: { '#4ba747': '#3a3550', '#3d734f': '#1f1b2e', '#facb3e': '#2a2440', '#ee8e2e': '#4a3a6a', '#5698cc': '#b78cff', '#fccba3': '#d8b0a0', '#e2b694': '#b08c80' }, key: ['#5698cc'] },
   cleric: { base: { '#da4e38': '#efe6cc', '#c38d70': '#c8a46a', '#775c55': '#a69a78', '#7b8994': '#ffd36b' }, key: ['#e46e33'] },
   necro: { base: { '#5698cc': '#2f4a42', '#5956bd': '#17261f', '#fdf7ed': '#b6ffe0', '#b58057': '#8a7a6a' }, key: ['#5956bd'] },
+  bell: { base: { '#49a790': '#4fb8a4', '#417089': '#2a6a70', '#314152': '#1e3a44', '#d3bfa9': '#e0b070', '#8f4029': '#b0702e', '#62232f': '#6a3f1e' }, key: ['#9f294e', '#da4e38'] }, // verdigris scales, bronze belly and belt, crest = player colour
 };
+// Wardrobe skins: swaps['<cls>.<a|b|secret>'] = the hero's base swap with these colours replaced (same key colours); swaps['<cls>.unkindled'] = every
+// non-outline, non-key colour of the hero's anims ranked by luminance onto ASH (resolved by art.js). The renderer recolours hero.<cls>.* through them.
+const SKINS = {
+  knight: { a: { '#72d6ce': '#7090e0', '#417089': '#2c3a78', '#fdf7ed': '#e6eeff' }, // cobalt
+    b: { '#72d6ce': '#c0505a', '#417089': '#5e2030', '#fdf7ed': '#ffd8c8' }, // bloodsteel
+    secret: { '#72d6ce': '#ffd36b', '#417089': '#2a2238', '#fdf7ed': '#ffffff' } }, // black and gold
+  ranger: { a: { '#4ba747': '#c8763a', '#3d734f': '#7a3e22', '#facb3e': '#9a6a44', '#ee8e2e': '#6a4430' }, // autumn leather, brown hair
+    b: { '#4ba747': '#5fa8d8', '#3d734f': '#2e5a8a', '#facb3e': '#f4f4f0', '#ee8e2e': '#b0b8c8', '#5698cc': '#7de8ff' }, // frostwood, silver hair
+    secret: { '#4ba747': '#1f8a64', '#3d734f': '#0f4a34', '#facb3e': '#fff2c0', '#ee8e2e': '#e8b84a', '#5698cc': '#7dffd9', '#1f1833': '#ffd36b' } }, // emerald and gold, glowing eyes
+  pyro: { a: { '#5698cc': '#f0a030', '#5956bd': '#a85a18' }, // saffron
+    b: { '#5698cc': '#b04ad8', '#5956bd': '#5a1e7a', '#fdf7ed': '#ffe6f4', '#d3bfa9': '#d0a8c8' }, // violet pyre
+    secret: { '#5698cc': '#fff2c0', '#5956bd': '#ff8a2a', '#fdf7ed': '#ffd36b', '#d3bfa9': '#e8641e' } }, // white-hot robe, burning beard
+  shade: { a: { '#4ba747': '#6a2a3a', '#3d734f': '#3a121e', '#facb3e': '#3a1a22', '#ee8e2e': '#6a2a3a', '#314152': '#2a0e16' }, // crimson veil
+    b: { '#4ba747': '#c8c8d8', '#3d734f': '#8a8aa8', '#facb3e': '#e8e8f0', '#ee8e2e': '#a8a8c0', '#314152': '#5a5a78' }, // ashwhite
+    secret: { '#4ba747': '#2a1a4a', '#3d734f': '#140c24', '#facb3e': '#ffffff', '#ee8e2e': '#c8b0ff', '#fccba3': '#e8e0ff', '#e2b694': '#b8a8e0', '#314152': '#b78cff' } }, // void cloth, white hair, pale skin
+  cleric: { a: { '#da4e38': '#c8ccd8', '#c38d70': '#8a96b0', '#7b8994': '#e0e8ff', '#775c55': '#5a6070' }, // silverbeard
+    b: { '#da4e38': '#4a5a9a', '#c38d70': '#ffd36b', '#7b8994': '#fff2c0', '#775c55': '#2a3050' }, // midnight and gold
+    secret: { '#da4e38': '#ffe066', '#c38d70': '#ff9a2a', '#7b8994': '#ffffff', '#775c55': '#8a3a12' } }, // sunfire beard
+  necro: { a: { '#5698cc': '#7a2a36', '#d3bfa9': '#c89090', '#fdf7ed': '#ffe0e0', '#b58057': '#a08a80' }, // bloodbound
+    b: { '#5698cc': '#cfc6a8', '#d3bfa9': '#8a8470', '#fdf7ed': '#3a3a40', '#b58057': '#9a8c80' }, // bone robe, black hair
+    secret: { '#5698cc': '#7dffd9', '#d3bfa9': '#3ad6a8', '#fdf7ed': '#ffffff', '#b58057': '#c8d8d0' } }, // spectral mint
+  bell: { a: { '#49a790': '#3a6ab0', '#417089': '#24407a', '#314152': '#162a50', '#d3bfa9': '#a8e0e8', '#8f4029': '#d8d0b0', '#62232f': '#8a8070' }, // deep sea
+    b: { '#49a790': '#c8883a', '#417089': '#7a4a1e', '#314152': '#4a2a14', '#d3bfa9': '#7dffe8', '#8f4029': '#3a8a7a', '#62232f': '#1f4a44' }, // storm bronze
+    secret: { '#49a790': '#e8f4ff', '#417089': '#8aa8d8', '#314152': '#4a5a8a', '#d3bfa9': '#ffd36b', '#8f4029': '#ffd36b', '#62232f': '#c8922a' } }, // thunderhead white and gold
+};
+const ASH = ['#3a3836', '#6a6662', '#a29d96', '#d6d0c6'];
+for (const cls of Object.keys(SKINS)) {
+  for (const s of ['a', 'b', 'secret']) SWAPS[cls + '.' + s] = { base: Object.assign({}, SWAPS[cls].base, SKINS[cls][s]), key: SWAPS[cls].key };
+  SWAPS[cls + '.unkindled'] = { ash: ASH, key: SWAPS[cls].key };
+}
 
 // --------------------------------------------------------------------------- weapons (all point up, grip near the bottom, unless dir says otherwise)
 const W = (id, src, rect, grip, o) => { o = o || {}; return add(id, 'actors', src, [rect], Object.assign({ pivot: 'grip', fps: 0 }, o, { anchors: Object.assign({ grip, dir: 0 }, o.anchors) })); };
@@ -197,6 +234,28 @@ add('weapon.scythes', 'actors', 'dl_longwep', [[0, 48, 16, 16]], { pivot: 'grip'
 add('weapon.soulscythe', 'actors', 'dl_longwep', [[0, 48, 16, 16]], { pivot: 'grip', anchors: { grip: [3, 13], dir: 45 }, flip: true, ramp: ['#222222', '#17261f', '#2f7a68', '#7dffd9', '#e0fff4'], skip: ['#222222'], fps: 0 });
 add('weapon.lantern', 'actors', 'dl_light', [[48, 0, 16, 16]], { pivot: 'grip', anchors: { grip: [8, 2], dir: 180 }, fps: 0 });
 add('weapon.bonewand', 'actors', 'dl_wand', [[80, 80, 16, 16]], { pivot: 'grip', anchors: { grip: [3, 13], dir: 45 }, flip: true, fps: 0 });
+// Bellwarden bells (the chain-end body): grip = chain eye at the top centre, dir 180 = mouth down. Verdigris bronze with a patina lip; the great bell and
+// the handbell are hand-drawn in the same colours (DawnLike bell at about 1.5x and 0.6x).
+const BELL = { k: '#222222', a: '#5a3418', D: '#7a4620', B: '#b0702e', L: '#e0a858', H: '#fff0c8', P: '#2f7a68', p: '#1f5048', C: '#3a3a44' };
+add('weapon.bronzebell', 'actors', 'dl_music', [[0, 64, 16, 16]], { pivot: 'grip', anchors: { grip: [8, 3], dir: 180 }, swap: { '#452434': BELL.a, '#864d30': BELL.P, '#d37d2c': BELL.B, '#dbd75d': BELL.L, '#dfefd7': BELL.H }, fps: 0 });
+add('weapon.greatbell', 'actors', null, null, {
+  ascii: [[
+    '.....kk.....',
+    '....kLHk....',
+    '...kkaakk...',
+    '..kBHHLLDk..',
+    '..kBLHLLDk..',
+    '..kBLHLLDk..',
+    '.kBLLHLLLDk.',
+    '.kBLLHLLLDk.',
+    'kPBLLHLLLDPk',
+    'kpPPPPPPPPpk',
+    '.kkkkkkkkkk.',
+    '....kCCk....',
+    '.....kk.....'],
+  ], pal: BELL, pivot: 'grip', anchors: { grip: [6, 0], dir: 180 }, fps: 0,
+});
+add('weapon.handbells', 'actors', null, null, { ascii: [['..k..', '.kak.', '.kLk.', 'kHLDk', 'kHLDk', 'kPPpk', 'kkkkk', '.kCk.', '..k..']], pal: BELL, pivot: 'grip', anchors: { grip: [2, 0], dir: 180 }, fps: 0 });
 // Route forks and foe weapons
 OXW('weapon.alt.big_hammer', 'weapon_big_hammer', [5, 33]);
 OXW('weapon.alt.waraxe', 'weapon_waraxe', [6, 19]);
@@ -405,11 +464,18 @@ const CRATES = [
 CRATES.forEach((rows, i) => add('deco.crate.' + i, 'world', null, null, { ascii: [rows], pal: { k: '#1a1210', W: '#8a603a', w: '#5e3f27', d: '#3a2616', i: '#5c6074', I: '#9aa0b8', o: '#e8641e' }, fps: 0 }));
 add('deco.chain', 'world', null, null, { ascii: [['.kk.', 'kSSk', 'kSSk', '.kk.', '.kk.', 'kSSk', 'kSSk', '.kk.', '.kk.', 'kSSk', 'kSSk', '.kk.']], pal: { k: '#222222', S: '#9aa6b0' }, fps: 0 });
 
-// --------------------------------------------------------------------------- fx page: pickups, projectiles, effects, font
+// --------------------------------------------------------------------------- wardrobe cosmetics (page actors; cos.coin and fx.chain on the fx page)
+// cos.crown: the Hollow King's crown cut to hat size; its pivot (bottom centre) goes on a hero anim's anchors.head[frame].
+add('cos.crown', 'actors', null, null, { ascii: [['y..Y..y', 'yy.y.yy', 'yyyyyyy', 'yRyByRy', 'ooooooo']], pal: { y: '#ffd36b', Y: '#fff2c0', o: '#c8922a', R: '#d8442a', B: '#5fb8ff' }, stamp: true, fps: 0 });
+// cos.platino: DawnLike's Platino (Reptile0/1 cell 3,12), native colours, two-frame idle like the DawnLike foes.
+add('cos.platino', 'actors', null, null, { frames: [['dl_re0', [48, 192, 16, 16]], ['dl_re1', [48, 192, 16, 16]]], fps: 2.5, loop: true, eye: 'auto' });
+// cos.ghost: a legless spectral delver for the camp (0x72 knight_f idle cut above the legs, cold ramp; the camp draws it translucent).
+add('cos.ghost', 'actors', 'ox', strip(128, 68, 16, 26, 4), { fps: 4, loop: true, ramp: ['#2e4a7a', '#7aa8e0', '#c8e4ff', '#f4fcff'] });
 add('pickup.coin', 'fx', 'ox', oxn('coin_anim', 4), { fps: 8, loop: true });
 add('pickup.heart', 'fx', null, null, { ascii: [['.kk.kk.', 'kwrkrRk', 'krrrrRk', '.krrRk.', '..kRk..', '...k...']], pal: { k: '#4a0a18', w: '#ffe0e0', r: '#ff5468', R: '#c8202e' }, fps: 0 }); // 7x6, the size of the coin and the xp gem
 add('pickup.flask.red', 'fx', 'ox', ['flask_big_red'], { fps: 0 }); add('pickup.flask.yellow', 'fx', 'ox', ['flask_big_yellow'], { fps: 0 });
 add('pickup.xp', 'fx', null, null, { ascii: [['.kk.', 'kwck', 'kcCk', 'kcCk', 'kcCk', '.kCk', '..k.']], pal: { k: '#12342c', w: '#ffffff', c: '#b4ffe9', C: '#34dcb0' }, fps: 0 });
+add('cos.coin', 'fx', null, null, { use: 'pickup.coin', pick: [0], fps: 0 }); // footprint coin: the gold pickup's face-on frame
 
 const PR = (id, src, rect, dir, o) => add(id, 'fx', src, [rect], Object.assign({ pivot: 'centre', anchors: { dir }, fps: 0 }, o || {}));
 PR('proj.arrow', 'nf_arrow', [0, 0, 13, 5], 90);
@@ -442,6 +508,8 @@ FX('fx.ring.shock', 'an_ring', strip(0, 0, 32, 32, 7), 16, false); FX('fx.burst'
 FX('fx.puff', 'ol_puff', strip(0, 0, 16, 16, 4), 12, false);
 add('fx.star.stun', 'fx', null, null, { ascii: [['..y..', '.yYy.', 'yYWYy', '.yYy.', '..y..']], pal: { y: '#e8a62a', Y: '#ffe066', W: '#ffffff' }, pivot: 'centre', fps: 0 });
 add('fx.sigil.skull', 'fx', null, null, { ascii: [['.WWWWW.', 'WWWWWWW', 'WkkWkkW', 'WkkWkkW', '.WWkWW.', '.WkWkW.', '..WWW..']], pal: { W: '#e8d8ff', k: '#2a1840' }, pivot: 'centre', fps: 0 });
+// fx.chain: one 8 px period of an iron chain running left to right (face-on ring, then an edge-on link into the next ring); repeat it every fw px along the chain.
+add('fx.chain', 'fx', null, null, { ascii: [['.kkk....', 'kSsSkkkk', 'ksksSSSS', 'kSsSkkkk', '.kkk....']], pal: { k: '#222222', S: '#9aa6b0', s: '#5d6670' }, pivot: 'centre', anchors: { dir: 90 }, fps: 0 });
 add('fx.glyph.corroded', 'fx', null, null, { ascii: [['ggggggg', 'gGGkGGg', 'gGkGGGg', 'gGGkGGg', '.gGkGg.', '..gkg..', '...g...']], pal: { g: '#3d6b12', G: '#9be33c', k: '#1a2a08' }, pivot: 'centre', fps: 0 });
 
 // --------------------------------------------------------------------------- fxbig: CodeManu loops, 16 evenly sampled frames of the non-empty 100x100 cells

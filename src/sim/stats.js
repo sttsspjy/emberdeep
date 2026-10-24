@@ -26,7 +26,9 @@
     + ' wake waveReturn sunstrike prismN prismRad'
     + ' caldera fireDance dancerBurst whiteHot whiteT heatMax infernoMul'
     + ' graveBolt graveN soulStorm maw mawHaste tideFree tideCap tideDoom'
-    + ' guillotine cyclone arterial arterialN cascade cascadeN').split(' ');
+    + ' guillotine cyclone arterial arterialN cascade cascadeN'
+    + ' heavyHit wreck wreckStun heavyKnock demolish haulAcc strikeKeep perpetual heaveR wrecker smashStun wreckSpin spinDur hook hookStun hookShield hookN shackle shackleWeak'
+    + ' clap pealEcho tollN tollBolt pealSwat pealShield pealCap pealStun wardDur wardWeak wInfLightning rod rodStun stormBolt chainArc arcN tollStorm').split(' ');
 
   const BASE = () => {
     const s = {

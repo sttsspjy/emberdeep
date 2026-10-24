@@ -236,15 +236,28 @@
   }
   // Damage numbers are per landed hit before the stratum affinity and any status; dps counts every attack landing on one foe (a fan: the shots that reach it at REF).
   // extras: damage each attack adds besides the main hits (blasts, shocks, waves, clouds, evolution strikes, relics): { label, perAttack, perSec, proc (feeds statuses), el?, note? }.
+  // The Bellwarden riders of a strike (class-bell.js strike) as weapon extras: a ring weapon's ring (pack only), the Wrecking Ball shock of a Heavy Strike, Chain Toll's arcs (pack only), the Lightning Rod discharge, the Storm Bell bolt.
+  // _pack(n, b): the extra's total per strike in a pack of n foes on the orbit, b = wpn._bell(n) (tools/model.js packWeapon). ROD_UP: share of strikes that land on a foe holding Charge (a strike charges it, its discharge a second later clears it).
+  const ROD_UP = 0.5;
+  function bellExtras(st, w, bm, Wd, M, avg, aps, ctx, add) {
+    const area = 1 + 0.5 * st.area, el = st.element, k = el ? (M + st.classElMul) * ED.affC(ctx.stratum || 1, el) : M;
+    if (w.ring) { const v = Wd * w.ring.mul * M; add('Ring', v, { packOnly: true, r: Math.round(w.ring.r * area), _pack: (n, b) => v * b.k * Math.min(n - 1, 2), note: 'each strike rings the other foes near the bell, no crit' }); }
+    if (st.wreck > 0) { const sh = (b) => w.dmg * (st.wreck + st.demolish) * M * (b.mul + b.heavy * b.hmul); add('Wrecking shock', sh(bm), { _pack: (n, b) => sh(b) * Math.min(n, 3), r: Math.round((st.demolish > 0 ? 100 : 60) * area), stun: st.wreckStun, note: `each strike, twice from a Heavy Strike (about ${Math.round(bm.heavy * 100)}% of strikes), no crit` }); }
+    if (st.chainArc > 0) { const v = Wd * st.chainArc * M, j = 1 + (st.arcN | 0); add('Chain Toll', v, { packOnly: true, proc: true, el: 'lightning', _pack: (n, b) => v * b.k * Math.min(n - 1, j), note: `arcs to ${j} more foe${j > 1 ? 's' : ''} within 90, no crit` }); }
+    if (st.rod > 0) add('Lightning Rod', st.rod * ROD_UP * avg, { proc: true, crit: true, note: `+${Math.round(st.rod * 100)}% on a charged foe (about ${Math.round(ROD_UP * 100)}% of strikes); every 4th strike on one discharges it at once` });
+    if (st.stormBolt > 0) add('Storm Bell', Wd * st.stormBolt * k / 3, { proc: true, pack: 3, el: el || null, r: Math.round(50 * area), note: 'every 3rd strike: a thunderbolt on the struck foe, no crit' });
+  }
   function weaponModel(p, st, ctx, R) {
     const w = st.weapon, melee = w.kind === 'melee', M = Math.max(0.1, st.dmg), c = st.crit, cm = st.critMult, EC = 1 + c * (cm - 1), evo = st.evo, area = 1 + 0.5 * st.area;
-    const Wd = w.dmg * (w.combo ? w.combo.steps.reduce((a, q) => a + (q.mul || 1), 0) / w.combo.steps.length : 1); // a combo weapon: the mean of its steps' damage factors (the attacks cycle through them)
-    const aps = 1 / St.attackInterval(p), apsBase = 1 / st.atkInterval;
-    const n = melee ? 1 : (w.n || 1) + st.projN, sp = n > 1 ? Math.max(w.spread || 0, 0.13) : 0, offs = [];
+    // a bell (class-bell.js): an attack is one strike; aps is the strikes a second on one foe of the hauled bell (ED.Bell.model), the hit carries the mean speed factor of a strike
+    const bell = w.kind === 'bell', bm = bell ? ED.Bell.model(st, 1, St.attackInterval(p), ED.Bell.rateGain(p)) : null;
+    const Wd = w.dmg * (bell ? bm.mul : w.combo ? w.combo.steps.reduce((a, q) => a + (q.mul || 1), 0) / w.combo.steps.length : 1); // a combo weapon: the mean of its steps' damage factors (the attacks cycle through them)
+    const aps = bell ? bm.sps : 1 / St.attackInterval(p), apsBase = bell ? ED.Bell.model(st, 1, st.atkInterval, w.rate / st.atkInterval).sps : 1 / st.atkInterval;
+    const n = melee || bell ? 1 : (w.n || 1) + st.projN, sp = n > 1 ? Math.max(w.spread || 0, 0.13) : 0, offs = [];
     for (let i = 0; i < n; i++) offs.push((i - (n - 1) / 2) * sp);
     const chan = st.channel > 0 ? channelAvg(st, 1 / aps) : null, Mw = M + (chan ? chan.avg : 0); // Mw: the multiplier of a weapon hit (Pyromancer Channel at its assumed average)
     // Flight shapes (combat.js): a boomerang strikes a foe at REF on both legs; a lobbed shell never strikes directly (its blast is the hit, it crits); a beam or a boomerang leg strikes every foe on its line.
-    const legs = !melee && w.ret && w.speed * w.life > Sh.REF.d ? 2 : 1, fan1 = melee ? 1 : fanHits(offs, w.r), one = fan1 * legs, direct = w.lob ? 0 : one, hit = Wd * Mw, avg = hit * EC;
+    const legs = !melee && w.ret && w.speed * w.life > Sh.REF.d ? 2 : 1, fan1 = melee || bell ? 1 : fanHits(offs, w.r), one = fan1 * legs, direct = w.lob ? 0 : one, hit = Wd * Mw, avg = hit * EC;
     const extras = [], add = (label, perAttack, o) => { if (perAttack > 0) extras.push(Object.assign({ label, perAttack, proc: false }, o)); };
     const cleaveEvery = melee && st.cleave > 0 ? 3 + st.cleaveN : 0, cleaveK = cleaveEvery ? st.cleave / cleaveEvery : 0;
     if (cleaveEvery) add('Cleave', avg * cleaveK, { proc: true, crit: true, note: `every ${ordinal(cleaveEvery)} swing: +${Math.round(st.cleave * 100)}% damage, 40% more reach and arc` });
@@ -254,7 +267,7 @@
     if (cleaveEvery && st.bladeWave) add('Blade wave', Wd * st.bladeWave * M * EC / cleaveEvery, { proc: true, crit: true, note: 'each Cleave: a wave 180 long pierces every foe on it (a Parry fans three)' }); // Thousand Edges (class-knight.js bladeWaves)
     // the blast of a shot (its own, or the Cinder Arms blast of a plain shot), its aftershock, its cloud
     const pyre = evo === 'fire';
-    const blast = !melee ? (w.explode ? { r: w.explode.r * area * (pyre ? 1.3 : 1), mul: w.explode.mul } : pyre ? { r: 40 * area, mul: 0.5 } : null) : null;
+    const blast = !melee && !bell ? (w.explode ? { r: w.explode.r * area * (pyre ? 1.3 : 1), mul: w.explode.mul } : pyre ? { r: 40 * area, mul: 0.5 } : null) : null;
     if (blast) add('Blast', Wd * blast.mul * Mw * one * (w.lob ? EC : 1), { proc: true, crit: !!w.lob, r: Math.round(blast.r), note: w.lob ? 'the shell lands on the cursor, every foe in it, may crit' : 'each shot that lands, no crit' });
     if (blast && st.aftershock) add('Aftershock', Wd * blast.mul * Mw * st.aftershock * one, { r: Math.round(blast.r), note: '0.4 s after each blast' });
     // Pyromancer Attack forks (class-pyro.js). Lava Pools: untagged burning ground, one pool per spot, so a foe takes lavaPool x the shot a second whatever the shot count. Caldera: the share CALDERA_IN of aftershocks becomes a geyser (caldera x the shot, 1.5 x the radius) instead.
@@ -293,6 +306,7 @@
       add('Ring of light', Wd * w.ring.mul * (1 + st.waveMul) * k * EC * (1 + lit) * ret / every, { proc: true, crit: true, r: Math.round(w.ring.r * area * (st.waveBig ? 1.5 : 1)), note: `every ${ordinal(every)} attack: every foe around you${st.litany > 0 ? `; every ${ordinal(st.litany)} attack rings x3` : ''}${st.waveReturn > 0 ? `; rings again 0.35 s later for ${Math.round(st.waveReturn * 100)}%` : ''}` });
     }
     if (st.gauntlet) add('Thunder Gauntlet', Wd * 2.2 * M / 6, { proc: true, el: 'lightning', note: 'every 6th attack, no crit' });
+    if (bell) bellExtras(st, w, bm, Wd, M, avg, aps, ctx, add);
     // evolution strikes (data on the evolution boon)
     const evoBoon = evo && ED.BOONS['evo_' + evo], attackTotal = avg * direct + (blast ? Wd * blast.mul * M * one * (w.lob ? EC : 1) : 0);
     for (const s of (evoBoon && evoBoon.strikes) || []) {
@@ -349,7 +363,11 @@
       extras: extras.map(e => Object.assign({}, e, { perAttack: R.n(e.perAttack), perSec: R.n(e.perAttack * aps) })),
       _hit: hit, _avg: avg, _aps: aps, _extras: extras, _ms: ms,
     };
-    if (melee) { const arc = Math.min(6.3, w.arc * (1 + 0.4 * st.area)); out.reach = Math.round(w.range * (1 + 0.5 * st.area + st.meleeReach)); out.arcDeg = Math.round(arc * 57.2958); out.allAround = arc >= 6.2; }
+    if (bell) {
+      out.chain = Math.round(w.chain); out.orbit = Math.round(ED.Bell.orbit(w)); out.bells = w.n || 1; out.lockout = R.x(St.attackInterval(p)); out.speed = Math.round(bm.v); out.top = Math.round(bm.top); out.heavy = R.f(bm.heavy);
+      out._bell = (k) => { const b = ED.Bell.model(st, k, St.attackInterval(p), ED.Bell.rateGain(p)); return { sps: b.sps, k: bm.mul > 0 ? b.mul / bm.mul : 1, mul: b.mul, heavy: b.heavy, hmul: b.hmul }; }; // tools/model.js packWeapon: k foes on the orbit (strikes a second on each, damage factor over one foe's, Heavy Strike share and factor)
+      notes.push(`Hauled, the bell orbits at ${out.orbit} px at about ${out.speed} px/s (top ${out.top}); a strike deals x${n1(bm.mul)} by its speed on average, each foe at most once per ${n1(St.attackInterval(p))} s per bell`);
+    } else if (melee) { const arc = Math.min(6.3, w.arc * (1 + 0.4 * st.area)); out.reach = Math.round(w.range * (1 + 0.5 * st.area + st.meleeReach)); out.arcDeg = Math.round(arc * 57.2958); out.allAround = arc >= 6.2; }
     else { out.range = Math.round(w.speed * w.life); out.pierce = w.beam || w.ret ? 99 : (w.pierce || 0) + st.pierce; out.homing = (w.homing || 0) + (st.homing || 0) > 0; out.blast = blast ? { r: Math.round(blast.r), mul: blast.mul } : null; }
     return out;
   }
@@ -645,7 +663,7 @@
       }
     };
     // weapon: the attack's hits (the main hits feed with the class weapon rate) and the extras that run procs
-    const aps = wpn._aps, wInf = { fire: st.wInfFire || 0, holy: st.wInfHoly || 0 }, one = wpn.oneFoe;
+    const aps = wpn._aps, wInf = { fire: st.wInfFire || 0, holy: st.wInfHoly || 0, lightning: st.wInfLightning || 0 }, one = wpn.oneFoe;
     const direct = wpn._avg * one * aps;
     let wDps = direct;
     feed(direct, 1, null, wInf);

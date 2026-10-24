@@ -59,6 +59,7 @@
       </header>
       <nav class="tabs" id="hearth-tabs" role="tablist" hidden>
         <button role="tab" data-tab="upgrades" class="tab on">Upgrades<span class="dot" id="dot-upgrades" hidden></span></button>
+        <button role="tab" data-tab="wardrobe" class="tab">Wardrobe<span class="dot" id="dot-wardrobe" hidden></span></button>
         <button role="tab" data-tab="chronicle" class="tab">Chronicle</button>
       </nav>
 
@@ -99,12 +100,19 @@
         <div class="pane" data-pane="heroes" hidden>
           <div class="heroes-view" id="heroes-view"></div>
         </div>
+        <!-- WARDROBE -->
+        <div class="pane" data-pane="wardrobe" hidden>
+          <p class="sub">Looks for your heroes. Nothing here changes how a hero fights. Embers spent here are never refunded.</p>
+          <div class="heroes-view wardrobe" id="wardrobe-view"></div>
+        </div>
         <!-- CHRONICLE -->
         <div class="pane" data-pane="chronicle" hidden>
           <div class="chron-grid">
             <div>
               <h3 class="plate-h">Deeds</h3>
               <div class="deed-list" id="deed-list"></div>
+              <h3 class="plate-h">Secrets</h3>
+              <div class="deed-list" id="secret-list"></div>
             </div>
             <div>
               <h3 class="plate-h">Records</h3>
@@ -207,10 +215,12 @@
       <nav class="tabs" id="ph-tabs" role="tablist">
         <button role="tab" data-tab="upgrades" class="tab on">Upgrades<span class="dot" id="ph-dot-upgrades" hidden></span></button>
         <button role="tab" data-tab="heroes" class="tab">Heroes</button>
+        <button role="tab" data-tab="wardrobe" class="tab">Wardrobe</button>
       </nav>
       <div class="ph-body">
         <div class="up-grid" id="ph-upgrades"></div>
         <div class="heroes-view" id="ph-heroes" hidden></div>
+        <div class="heroes-view wardrobe" id="ph-wardrobe" hidden></div>
       </div>
       <div class="row end"><button class="btn btn-primary btn-lg" id="btn-ph-close" type="button">Back to the party</button></div>
     </div>
@@ -369,6 +379,7 @@
 <script src="src/sim/class-shade.js" defer></script>
 <script src="src/sim/class-cleric.js" defer></script>
 <script src="src/sim/class-necro.js" defer></script>
+<script src="src/sim/class-bell.js" defer></script>
 <script src="src/sim/ai.js" defer></script>
 <script src="src/sim/bosses.js" defer></script>
 <script src="src/sim/rooms.js" defer></script>

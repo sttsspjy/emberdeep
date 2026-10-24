@@ -108,7 +108,7 @@
 
   // ---------------- sections ----------------
   UI.tab = 'descend';
-  const SECTION = { descend: 'Descend', upgrades: 'Hearth', chronicle: 'Hearth', heroes: 'Heroes' };
+  const SECTION = { descend: 'Descend', upgrades: 'Hearth', wardrobe: 'Hearth', chronicle: 'Hearth', heroes: 'Heroes' };
   UI.setTab = (t) => {
     UI.tab = t;
     $('sec-title').textContent = SECTION[t] || 'Descend';
@@ -124,35 +124,51 @@
   // An Armory entry of an unlocked hero is affordable.
   const canBuyArmory = (p) => ED.CLASS_IDS.some(c => S.classUnlocked(p, c) && armoryOf(c).some((e, i) => !armoryHas(p, c, i) && p.embers >= e.cost && S.armoryOpen(p, c, e.id)));
   const canBuy = (p) => canBuyUpgrade(p) || canBuyArmory(p);
+  // A Wardrobe skin of an unlocked hero is open, unowned and affordable.
+  const canBuyCos = (p) => ED.COSMETICS.some(c => c.gate.cost && S.classUnlocked(p, c.cls) && S.cosOpen(p, c.id) && !ED.cosOwned(p, c.id, c.cls) && p.embers >= c.gate.cost);
 
   UI.renderHearth = () => {
     const p = ED.App.profile;
     $('hearth-embers').textContent = p.embers;
     $('dot-upgrades').hidden = !canBuy(p);
+    $('dot-wardrobe').hidden = !canBuyCos(p);
     if (UI.tab === 'descend') renderDescend();
     else if (UI.tab === 'upgrades') renderUpgrades();
     else if (UI.tab === 'heroes') renderHeroes($('heroes-view'));
+    else if (UI.tab === 'wardrobe') renderWardrobe($('wardrobe-view'));
     else if (UI.tab === 'chronicle') renderChronicle();
   };
 
+  // A locked hero whose unlock is a riddle (unlock.hint) shows as a silhouette named "???" with the hint, never its condition.
+  const mystery = (p, id) => !!ED.CLASSES[id].unlock && !!ED.CLASSES[id].unlock.hint && !S.classUnlocked(p, id);
   // Hero tiles. `inspect` lets locked heroes be picked too (Heroes view); otherwise a locked tile only says how to unlock it.
+  // A riddle tile in the one-row roster (Descend) says only "Locked" (its hint stands in the goal box, so the row keeps its height); list and compact rosters print the hint.
   function rosterTiles(container, selected, onPick, inspect) {
-    const p = ED.App.profile;
+    const p = ED.App.profile, row = !container.classList.contains('list') && !container.classList.contains('compact');
     container.innerHTML = '';
+    container.style.setProperty('--heroes', ED.CLASS_IDS.length);
     for (const id of ED.CLASS_IDS) {
       const c = ED.CLASSES[id];
-      const unlocked = S.classUnlocked(p, id);
+      const unlocked = S.classUnlocked(p, id), hid = mystery(p, id);
       const b = document.createElement('button');
-      b.className = 'hero-tile' + (id === selected ? ' on' : '') + (unlocked ? '' : ' locked');
+      b.className = 'hero-tile' + (id === selected ? ' on' : '') + (unlocked ? '' : ' locked') + (hid ? ' mystery' : '');
       b.type = 'button'; b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', id === selected ? 'true' : 'false');
       b.appendChild(portrait(id, 64));
       const info = document.createElement('div');
-      info.innerHTML = `<div class="cn">${c.name}</div><div class="cm">${unlocked ? 'Mastery ' + S.masteryLevel(p, id) : LOCK + esc(c.unlock.text)}</div>`;
+      info.innerHTML = `<div class="cn">${hid ? '???' : c.name}</div><div class="cm">${unlocked ? 'Mastery ' + S.masteryLevel(p, id) : LOCK + esc(hid ? (row ? 'Locked' : c.unlock.hint) : c.unlock.text)}</div>`;
       b.appendChild(info);
+      if (hid) b.setAttribute('aria-label', '??? (locked): ' + c.unlock.hint);
       if (unlocked || inspect) b.onclick = () => { ED.Audio.play('click'); onPick(id); };
-      else b.onclick = () => UI.toast(`${c.name} unlocks: ${esc(c.unlock.text)}`);
+      else b.onclick = () => UI.toast(hid ? esc(c.unlock.hint) : `${c.name} unlocks: ${esc(c.unlock.text)}`);
       container.appendChild(b);
     }
+    requestAnimationFrame(() => fitRoster(container));
+  }
+  // .tight on a roster whose hero names do not fit their tiles at the menu size (a narrow window): names drop to the body size.
+  function fitRoster(r) {
+    if (!r.offsetParent) return;
+    r.classList.remove('tight');
+    if ([...r.querySelectorAll('.cn')].some(n => n.scrollWidth > n.clientWidth + 1)) r.classList.add('tight');
   }
 
   // The hero's base weapons, each followed by its owned Armory variants; a variant is wieldable where its base is unlocked.
@@ -239,7 +255,7 @@
 
   // The single most useful next goal; the first two descents also get the two rules that shape a run.
   function goalText(p) {
-    const next = ED.CLASS_IDS.find(c => !S.classUnlocked(p, c));
+    const next = ED.CLASS_IDS.find(c => !S.classUnlocked(p, c) && !mystery(p, c)); // a riddle hero is never a stated goal
     const tierNext = ED.UPGRADES.find(u => u.tier > p.stats.deepest);
     const lines = [];
     if (p.stats.runs < 2) {
@@ -253,7 +269,9 @@
     else if (tierNext) lines.push(`<b>Reach stratum ${U.roman(tierNext.tier)}</b> to reveal new Hearth upgrades.`);
     else if (!p.stats.wins) lines.push('<b>Next goal:</b> defeat the Hollow King to complete a descent and unlock Pacts.');
     else if (p.pactMax < 10) lines.push(`<b>Pacts:</b> complete a descent under Pact ${p.pactMax} to unlock Pact ${p.pactMax + 1}.`);
+    else if (ED.CLASS_IDS.some(c => mystery(p, c))) lines.push('<b>Every pact is yours.</b> The Deep still keeps a secret or two.');
     else lines.push('<b>Every hero and pact is yours.</b> The Deep still has deeds to earn.');
+    for (const c of ED.CLASS_IDS) if (mystery(p, c) && p.stats.runs >= 2) lines.push(`<b>???:</b> ${esc(ED.CLASSES[c].unlock.hint)}`); // the riddle hero's hint (its roster tile only says Locked), once the first two descents' rules are gone
     return lines.map(l => '<p>' + l + '</p>').join('');
   }
 
@@ -381,9 +399,11 @@
     const xp = p.mastery[ci], ml = ED.masteryLevel(xp);
     const next = ED.MASTERY_XP[ml] !== undefined ? ED.MASTERY_XP[ml] : null, prev = ED.MASTERY_XP[ml - 1];
     const frac = next === null ? 1 : (xp - prev) / (next - prev);
-    let html = `<div class="hd-top"><div id="hv-port"></div><div><div class="hd-name">${c.name}</div><div class="hd-title">${c.title}</div><p class="hd-desc">${esc(c.desc)}</p></div></div>`;
+    const hid = mystery(p, cls);
+    let html = hid ? '<div class="hd-top mystery"><div id="hv-port"></div><div><div class="hd-name">???</div></div></div>'
+      : `<div class="hd-top"><div id="hv-port"></div><div><div class="hd-name">${c.name}</div><div class="hd-title">${c.title}</div><p class="hd-desc">${esc(c.desc)}</p></div></div>`;
     if (!un) {
-      html += `<div class="hd-skill"><div></div><div><div class="sk-head"><b>${LOCK}Locked</b></div><p>${esc(c.unlock.text)}</p></div></div>`;
+      html += `<div class="hd-skill"><div></div><div><div class="sk-head"><b>${LOCK}Locked</b></div><p>${esc(hid ? c.unlock.hint : c.unlock.text)}</p></div></div>`;
     } else {
       const st = ED.Stats.compute({ cls, weapon: A.weaponFor(cls), boons: {}, relics: [], meta: S.metaBundle(p, cls), pact: 0 });
       html += `<div class="hd-stats">
@@ -407,6 +427,91 @@
     }
   }
 
+  // ---------------- Wardrobe ----------------
+  // Optional preview hook (the cosmetic renderer sets it): UI.wardrobePreview(host, cls, wear, camp) draws hero `cls` wearing `wear` ({ skin, aura, hat, pet, trail, death, title, tints })
+  // into the element `host` (emptied first); `camp` is the worn Hearth item. Called on every render and with the hovered or focused item swapped in. Without it the host shows the plain portrait.
+  UI.wardrobePreview = null;
+  const SLOT_INFO = { skin: ['Skin', 'cloak'], tint: ['Weapon tint', 'gem'], aura: ['Aura', 'sun'], hat: ['Hat', 'crown'], pet: ['Companion', 'feather'], trail: ['Trail', 'boot'], death: ['Last breath', 'skull'], title: ['Title', 'scroll'], camp: ['The Hearth', 'campfire'] };
+  const cosName = (c, p, cls) => (c.gate.secret && !ED.cosOwned(p, c.id, cls) ? '???' : c.name); // a secret's reward stays unnamed until earned
+  // The reward text of a secret: "<item name>" (a reward whose item does not exist yet reads "a new look").
+  UI.secretReward = (s) => (ED.COSMETIC[s.reward] ? ED.COSMETIC[s.reward].name : 'a new look');
+  // Out of a run: "Secret uncovered" toast; the open Hearth section refreshes.
+  UI.secretToast = (s) => {
+    UI.toast(`Secret uncovered: <b>${esc(s.name)}</b> (${esc(UI.secretReward(s))})`, ED.Icons.url(s.icon, '#b8a6ff'), 5);
+    if (ED.App.state === 'hearth') UI.renderHearth(); else if (ED.App.state === 'lobby') UI.renderPartyHearth();
+  };
+
+  UI.wardSel = null;
+  function renderWardrobe(container) {
+    const A = ED.App, p = A.profile;
+    if (!UI.wardSel || !ED.CLASSES[UI.wardSel] || !S.classUnlocked(p, UI.wardSel)) UI.wardSel = A.sel.cls;
+    const cls = UI.wardSel, c = ED.CLASSES[cls];
+    const fk = document.activeElement && container.contains(document.activeElement) ? document.activeElement.dataset.fk : null;
+    container.innerHTML = '<div class="roster list"></div><div class="plate hv-detail wd-detail"></div>';
+    const list = container.firstChild, detail = container.lastChild;
+    rosterTiles(list, cls, (id) => { UI.wardSel = id; renderWardrobe(container); });
+    const worn = S.wearBundle(p, cls), camp = p.wear && p.wear.camp ? p.wear.camp : null;
+    detail.innerHTML = `<div class="hd-top"><div class="wd-port"></div><div><div class="hd-name">${esc(c.name)}${worn.title ? ` <small class="wd-title">${esc(ED.COSMETIC[worn.title].name)}</small>` : ''}</div><div class="hd-title">${esc(c.title)}</div><p class="hd-desc">Hover or focus an item to see it. Click an item you own to wear it; click it again to take it off.</p></div></div>`;
+    const host = detail.querySelector('.wd-port');
+    const preview = (slot, id) => {
+      if (!UI.wardrobePreview) return;
+      const w = Object.assign({}, worn, { tints: worn.tints.slice() });
+      let cp = camp;
+      if (slot === 'camp') cp = id; else if (slot === 'tint') { const wc = ED.COSMETIC[id]; if (wc && w.tints.indexOf(wc.weapon) < 0) w.tints.push(wc.weapon); } else if (slot) w[slot] = id;
+      host.innerHTML = '';
+      try { UI.wardrobePreview(host, cls, w, cp); } catch (e) { host.innerHTML = ''; host.appendChild(portrait(cls, 96, 0, A.weaponFor(cls))); }
+    };
+    if (UI.wardrobePreview) preview(null, null); else host.appendChild(portrait(cls, 96, 0, A.weaponFor(cls)));
+    const changed = () => { ED.App.afterMetaChange(); };
+    const slots = document.createElement('div'); slots.className = 'wd-slots';
+    detail.appendChild(slots);
+    for (const slot of ['skin', 'tint', 'aura', 'hat', 'pet', 'trail', 'death', 'title', 'camp']) {
+      const items = slot === 'tint' ? (ED.COS_SCOPE[cls] || []).filter(x => x.slot === 'tint') : ED.cosFor(slot === 'camp' ? null : cls, slot);
+      if (!items.length) continue;
+      const sec = document.createElement('div'); sec.className = 'wd-slot' + (items.length > 2 ? ' wide' : ''); // slots of up to two items share a row
+      sec.innerHTML = `<h3 class="plate-h">${SLOT_INFO[slot][0]}</h3>`;
+      const row = document.createElement('div'); row.className = 'wd-items';
+      const cur = slot === 'camp' ? camp : slot === 'tint' ? null : worn[slot];
+      const chip = (id, cls2, html, label, onClick) => {
+        const b = document.createElement('button'); b.type = 'button';
+        b.className = 'wd-item ' + cls2; b.innerHTML = html; b.dataset.fk = `w:${slot}:${id || 'none'}`;
+        b.setAttribute('aria-label', label); b.title = label;
+        b.onclick = onClick;
+        b.onmouseenter = b.onfocus = () => preview(slot, id);
+        b.onmouseleave = b.onblur = () => preview(null, null);
+        row.appendChild(b);
+        return b;
+      };
+      if (slot !== 'tint') {
+        chip(null, cur ? '' : 'on', `<span class="wd-ico none"></span><span><b>None</b><small>${cur ? 'Take off' : 'Worn'}</small></span>`, `${SLOT_INFO[slot][0]}: none`, () => {
+          if (cur && S.wear(p, slot === 'camp' ? null : cls, slot, null)) { ED.Audio.play('click'); changed(); }
+        });
+      }
+      for (const it of items) {
+        const own = ED.cosOwned(p, it.id, cls), on = slot === 'tint' ? worn.tints.indexOf(it.weapon) >= 0 : cur === it.id;
+        const open = !own && S.cosOpen(p, it.id), cost = it.gate.cost | 0, name = cosName(it, p, cls);
+        const state = on ? 'Worn' : own ? 'Owned' : open ? `<span class="ember-ico"></span>${cost} embers` : LOCK + esc(ED.cosGateText(it, p));
+        const ico = `<img alt="" src="${ED.Icons.url(SLOT_INFO[slot][1], on ? '#ffd36b' : own ? '#e6dcc8' : open ? '#ff9a4a' : '#6a5e52')}">`;
+        const label = `${name}: ${on ? 'worn' : own ? 'owned' : open ? `buy for ${cost} embers` : ED.cosGateText(it, p)}`;
+        chip(it.id, (on ? 'on' : own ? 'own' : open ? 'open' : 'locked') + (fresh('c:' + it.id) ? ' burst' : ''), `${ico}<span><b>${esc(name)}</b><small>${state}</small></span>`, label, () => {
+          if (own) {
+            const ok = slot === 'tint' ? S.wear(p, cls, 'tint', it.id, !on) : S.wear(p, slot === 'camp' ? null : cls, slot, on ? null : it.id);
+            if (ok) { ED.Audio.play('click'); changed(); }
+          } else if (open) {
+            if (p.embers < cost) { UI.toast(`${esc(it.name)} costs ${cost} embers; you have ${p.embers}.`); return; }
+            UI.confirm(`Buy ${it.name}?`, `${it.name} for the ${c.name} costs ${cost} embers. Wardrobe items are never refunded, and Reset all does not touch them.`, `Buy for ${cost}`, () => {
+              if (S.buyCosmetic(p, it.id)) { S.wear(p, cls, slot, it.id); markBuy('c:' + it.id); ED.Audio.play('buy'); changed(); }
+            });
+          } else UI.toast(`${esc(name)}: ${esc(ED.cosGateText(it, p))}`);
+        });
+      }
+      arrowNav(row, '.wd-item', 'ArrowLeft', 'ArrowRight');
+      sec.appendChild(row);
+      slots.appendChild(sec);
+    }
+    restoreFocus(detail, fk);
+  }
+
   function renderChronicle() {
     const p = ED.App.profile;
     const dl = $('deed-list'); dl.innerHTML = '';
@@ -414,6 +519,10 @@
       const done = !!(p.deeds & (1 << i));
       dl.insertAdjacentHTML('beforeend', `<div class="deed${done ? ' done' : ''}"><img alt="" src="${ED.Icons.url(d.icon, done ? '#e6c27a' : '#8a7a6a')}"><div><div class="dn">${esc(d.name)}</div><div class="dd">${esc(d.desc)}</div></div><div class="dr">${done ? 'Earned' : '+' + d.reward + ' embers'}</div></div>`);
     });
+    // secrets: the earned ones in full, the rest as one "???" line
+    const sec = $('secret-list'), left = ED.SECRETS.filter(s => !ED.secretHas(p, s.id)).length;
+    sec.innerHTML = ED.SECRETS.filter(s => ED.secretHas(p, s.id)).map(s => `<div class="deed done secret"><img alt="" src="${ED.Icons.url(s.icon, '#b8a6ff')}"><div><div class="dn">${esc(s.name)}</div><div class="dd">${esc(s.desc)}</div></div><div class="dr">${esc(UI.secretReward(s))}</div></div>`).join('')
+      + (left ? `<div class="deed secret"><img alt="" src="${ED.Icons.url('eye', '#8a7a6a')}"><div><div class="dn">???</div><div class="dd">${left} secret${left === 1 ? '' : 's'} remain${left === 1 ? 's' : ''}</div></div><div class="dr"></div></div>` : '');
     const st = p.stats;
     $('records').innerHTML = [
       ['Descents', st.runs], ['Victories', st.wins], ['Deepest stratum', st.deepest ? U.roman(st.deepest) : '—'], ['Foes slain', st.kills],
@@ -482,8 +591,9 @@
     $('ph-embers').textContent = p.embers;
     $('ph-dot-upgrades').hidden = !canBuy(p);
     for (const b of document.querySelectorAll('#ph-tabs .tab')) b.classList.toggle('on', b.dataset.tab === UI.phTab);
-    for (const t of ['upgrades', 'heroes']) $('ph-' + t).hidden = t !== UI.phTab;
+    for (const t of ['upgrades', 'heroes', 'wardrobe']) $('ph-' + t).hidden = t !== UI.phTab;
     if (UI.phTab === 'upgrades') renderUpgrades($('ph-upgrades'));
+    else if (UI.phTab === 'wardrobe') renderWardrobe($('ph-wardrobe'));
     else renderHeroes($('ph-heroes'));
   };
 
@@ -767,7 +877,8 @@
     $('res-progress').innerHTML = `
       <div class="prog-line">${ED.CLASSES[sum.cls].name} mastery ${ml} <small>(+${res.rewards.masteryXp} xp)</small><div class="bar"><i style="width:${Math.round(frac * 100)}%"></i></div></div>
       <div class="prog-line">Embers now: <b>${p.embers}</b></div>
-      ${res.deeds.map(d => `<div class="prog-line">Deed: <b>${esc(d.name)}</b> +${d.reward} embers</div>`).join('')}`;
+      ${res.deeds.map(d => `<div class="prog-line">Deed: <b>${esc(d.name)}</b> +${d.reward} embers</div>`).join('')}
+      ${(res.secrets || []).map(s => `<div class="prog-line secret">Secret uncovered: <b>${esc(s.name)}</b> — ${esc(UI.secretReward(s))}</div>`).join('')}`;
     const ul = $('res-unlocks'); ul.innerHTML = '';
     for (const u of res.unlocks) ul.insertAdjacentHTML('beforeend', `<span class="unlock-pill">${esc(u)}</span>`);
     $('res-code').textContent = S.encode(p);
@@ -936,7 +1047,7 @@
     for (const id of ['set-master', 'set-music', 'set-sfx', 'set-quality', 'set-framecap', 'set-shake', 'set-dmg', 'set-cursor', 'set-reticle', 'set-retcol', 'set-aimprev']) $(id).addEventListener('input', setChange);
     $('btn-bind-reset').onclick = () => { ED.Input.resetBinds(); A.settings.binds = ED.Input.exportBinds(); S.storeSettings(A.settings); renderBindings(); setBindMsg('Controls reset to defaults.', 'ok'); };
     $('btn-settings-close').onclick = () => UI.closeSettings();
-    window.addEventListener('resize', () => { if (!$('ov-boon').hidden) paintDense(); });
+    window.addEventListener('resize', () => { if (!$('ov-boon').hidden) paintDense(); for (const r of document.querySelectorAll('.roster')) fitRoster(r); });
     // Esc closes menu overlays and steps back outside a run (in a run the frame loop owns Esc)
     window.addEventListener('keydown', (e) => {
       if (e.code !== 'Escape' || A.inRun()) return;

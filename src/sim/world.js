@@ -173,8 +173,9 @@
     this.time = 0; this.roomTime = 0; this.state = 'play'; this.stratum = 0; this.floorSeed = 0;
     this.locked = false; this.enc = null; this.boss = null; this.pendingStratum = null;
     this.run = { kills: 0, fodderKills: 0, roomsCleared: 0, elitesKilled: 0, bosses: 0, bossCount: 0, revives: 0, maxGold: 0, maxRelics: 0, flawlessBoss: false,
-      fullClear: false, roomsVisited: 0, roomsTotal: 0, darkCleared: 0,
+      fullClear: false, roomsVisited: 0, roomsTotal: 0, darkCleared: 0, gold777: false, oneFace: false,
       embers: { rooms: 0, elites: 0, bosses: 0, victory: 0 } };
+    this.critter = null; // the Platino (rooms.js) while it is out
     this.fullClearDone = 0;
     this.roomState = {};
     this.endTimer = -1; this.result = null; this.victory = false;
@@ -233,6 +234,9 @@
   W.GOLD_MUL = 0.65; // every gold drop (kills, rooms, chests, rewards) is scaled by this; shops sell at full price
   W.prototype.threat = function () { return W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, this.stratum - 1))]; };
   W.prototype.emit = function (ev) { this.fx.push(ev); };
+  // Secret run fields (meta.js turns them into secrets): per hero p.sec[k] (build.js initBuild), world-wide run[k]. The first time one turns true it emits { t: 'secret', pid } (pid null for a world field).
+  W.prototype.secretP = function (p, k) { if (!p || p.sec[k]) return; p.sec[k] = true; this.emit({ t: 'secret', pid: p.pid }); };
+  W.prototype.secretW = function (k) { if (this.run[k]) return; this.run[k] = true; this.emit({ t: 'secret', pid: null }); };
   W.prototype.partySize = function () { return Math.max(1, this.players.size); };
   W.partyHpMul = (size) => { const n = size - 1; return 1 + 0.45 * n + 0.1 * n * (n - 1); }; // foe HP factor of a party of `size` (pure; the sheet reads it too)
   W.FOE_DMG = 1.5; // every foe's damage (hits, shots, zones, bosses) x this
@@ -547,7 +551,7 @@
     this.collectAll();
     this.enemies.length = 0; this.projs.length = 0; this.zones.length = 0; this.chainQ.length = 0; this.curChain = null; this.corpses.length = 0;
     if (this.fg) this.fg.ok = false;
-    this.boss = null; this.enc = null;
+    this.boss = null; this.enc = null; this.critter = null;
     this.roomId = id;
     this.roomEpoch = (this.roomEpoch || 0) + 1;
     const room = this.room = this.floor.rooms[id];
@@ -596,14 +600,14 @@
 
   W.prototype.summary = function () {
     const players = {};
-    for (const p of this.players.values()) players[p.pid] = { cls: p.cls, name: p.name, kills: p.kills, dealt: Math.round(p.dealt), emberBonus: p.stats.emberBonus || 0, relics: p.relics.length, evo: p.stats.evo || null, maxRelics: p.maxRelics, revivesGiven: p.revivesGiven };
+    for (const p of this.players.values()) players[p.pid] = Object.assign({ cls: p.cls, name: p.name, kills: p.kills, dealt: Math.round(p.dealt), emberBonus: p.stats.emberBonus || 0, relics: p.relics.length, evo: p.stats.evo || null, maxRelics: p.maxRelics, revivesGiven: p.revivesGiven }, p.sec);
     return {
       victory: this.victory, retreat: !!this.retreat, abandoned: !!this.abandoned, stratum: this.stratum, time: Math.round(this.time), kills: this.run.kills, fodderKills: this.run.fodderKills,
       roomsCleared: this.run.roomsCleared, elitesKilled: this.run.elitesKilled, bosses: this.run.bosses, bossCount: this.run.bossCount,
       embers: Object.assign({}, this.run.embers), pact: this.pact, party: this.partySize(), level: this.level,
       revives: this.run.revives, flawlessBoss: this.run.flawlessBoss, maxGold: this.run.maxGold, maxRelics: this.run.maxRelics, players,
       evolved: [...this.players.values()].some(p => !!p.stats.evo), fullClear: this.run.fullClear,
-      roomsVisited: this.run.roomsVisited, roomsTotal: this.run.roomsTotal, darkCleared: this.run.darkCleared,
+      roomsVisited: this.run.roomsVisited, roomsTotal: this.run.roomsTotal, darkCleared: this.run.darkCleared, gold777: !!this.run.gold777, oneFace: !!this.run.oneFace,
     };
   };
 
@@ -637,12 +641,14 @@
     this.updateZones(dt);
     this.updateChains();
     this.updatePickups(dt);
+    if (this.critter) this.updatePlatino(dt);
     if (this.enemies.some(e => e.hp <= 0)) this.enemies = this.enemies.filter(e => e.hp > 0);
     fg.live = false;
     this.checkDoors(dt);
     this.updateOffers(dt);
     this.checkDefeat();
     this.run.maxGold = Math.max(this.run.maxGold, this.gold);
+    if (this.gold === 777 && !this.run.gold777) this.secretW('gold777'); // party gold at a tick's end
   };
 
   W.prototype.updatePlayer = function (p, dt) {

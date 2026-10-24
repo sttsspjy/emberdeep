@@ -10,6 +10,18 @@
   W.initBuild = function (p) {
     p.offers = []; p.picks = 0; p.forkDue = 0; p.ascN = 0; p.dashHit = null; p.dashFx = -1; p.dashFy = 0; p.dashTrail = 0; p.boltAt = 0;
     p.knellN = 0; p.knellT = 0; p.holyT = 0; p.lanternT = 0; p.retT = 0; p.castN = 0; p.judgeGot = {}; p.shieldBy = {}; p.toughRoom = false;
+    p.sec = { platino: false, contrarian: false, thread: false, heroSecret: false, bellRung: false }; // secret run fields (world.js secretP)
+    p.ctrN = 0; p.ctrOff = false; // element-path cards taken of the element the stratum resists / any other element taken (Against the Grain)
+    p.bellS = 0; // Drowned Bell: 0 not rung, 1 rung (watching health), 2 broken, 3 kept (rooms.js)
+  };
+
+  // Against the Grain: an element-path card (a duo counts with both its elements) taken counts when the current stratum resists its element (one of a duo's two), any other breaks it for the run; p.sec.contrarian holds at CONTRARIAN_N counted cards.
+  const CONTRARIAN_N = 8;
+  W.contrarianPick = function (p, b) {
+    const els = b.duo || (b.path && ED.PATHS[b.path] && ED.PATHS[b.path].element ? [b.path] : null);
+    if (!els) return;
+    if (els.indexOf(ED.biomeFor(this.stratum).resist) >= 0) p.ctrN++; else p.ctrOff = true;
+    p.sec.contrarian = !p.ctrOff && p.ctrN >= CONTRARIAN_N;
   };
 
   // Queue an offer spec {src:'level'|'room'|'class'|'start'|'forge'|'epic', path?}; p.picks mirrors the queue length.
@@ -294,6 +306,7 @@
       if (b.heal) this.healPlayer(p, b.heal);
       if (b.mods.charges) p.chargeBonus = true;
       if (b.asc) p.ascN++;
+      this.contrarianPick(p, b);
     }
     p.offers.shift(); p.picks = p.offers.length; p.offer = null;
     if (gain) {
