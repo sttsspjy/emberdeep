@@ -28,9 +28,9 @@ const FORKS = [ // base, kind, dmg, rate, {field: value}
   ['bonewand', 'heavy', 26.73, 0.72, { r: 6, speed: 315, homing: 4 }], ['bonewand', 'swift', 8.168, 0.22, { speed: 420 }],
   ['soulscythe', 'heavy', 50.49, 1.008, { range: 57.2, arc: 2.64, knock: 143, raise: 0.12 }], ['soulscythe', 'swift', 15.43, 0.308, { range: 52, knock: 55 }],
   ['plaguestaff', 'heavy', 17.82, 1.08, {}], ['plaguestaff', 'swift', 5.445, 0.33, {}],
-  ['bronzebell', 'heavy', 37.062, 0.387, { chain: 77, br: 14.4, loss: 0.1125, haul: 0.85, knock: 78 }], ['bronzebell', 'swift', 19.836, 0.207, { br: 10.2, loss: 0.165, haul: 1.25, knock: 30 }],
-  ['greatbell', 'heavy', 61.77, 0.581, { chain: 92.4, br: 19.2, loss: 0.0675, haul: 0.612, knock: 130 }], ['greatbell', 'swift', 33.06, 0.311, { br: 13.6, haul: 0.9 }],
-  ['handbells', 'heavy', 12.695, 0.323, { chain: 63.8, br: 10.8, n: 2 }], ['handbells', 'swift', 6.794, 0.173, { br: 7.65, haul: 1.5625, n: 2 }],
+  ['bronzebell', 'heavy', 16.764, 0.36, { chain: 77, br: 19.2, loss: 0.112, haul: 0.85, knock: 78 }], ['bronzebell', 'swift', 8.382, 0.18, { br: 13.6, loss: 0.165, haul: 1.1, knock: 30 }],
+  ['greatbell', 'heavy', 23.496, 0.54, { chain: 92.4, br: 25.2, loss: 0.068, haul: 0.612, knock: 130 }], ['greatbell', 'swift', 11.748, 0.27, { br: 17.85, haul: 0.792 }],
+  ['handbells', 'heavy', 6.257, 0.3, { chain: 63.8, br: 14.4, n: 2 }], ['handbells', 'swift', 3.128, 0.15, { br: 10.2, haul: 1.375, n: 2 }],
 ];
 const CARD = { knight: ['k_atk_h', 'k_atk_s'], ranger: ['r_atk_h', 'r_atk_s'], pyro: ['p_atk_h', 'p_atk_s'], shade: ['s_atk_h', 's_atk_s'], cleric: ['c_atk_h', 'c_atk_s'], necro: ['n_atk_h', 'n_atk_s'], bell: ['b_atk_h', 'b_atk_s'] };
 for (const [base, kind, dmg, rate, f] of FORKS) {

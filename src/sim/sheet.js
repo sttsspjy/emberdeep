@@ -236,26 +236,29 @@
   }
   // Damage numbers are per landed hit before the stratum affinity and any status; dps counts every attack landing on one foe (a fan: the shots that reach it at REF).
   // extras: damage each attack adds besides the main hits (blasts, shocks, waves, clouds, evolution strikes, relics): { label, perAttack, perSec, proc (feeds statuses), el?, note? }.
-  // The Bellwarden riders of a strike (class-bell.js strike) as weapon extras: a ring weapon's ring (pack only), the Wrecking Ball shock of a Heavy Strike, Chain Toll's arcs (pack only), the Lightning Rod discharge, the Storm Bell bolt.
-  // _pack(n, b): the extra's total per strike in a pack of n foes on the orbit, b = wpn._bell(n) (tools/model.js packWeapon). ROD_UP: share of strikes that land on a foe holding Charge (a strike charges it, its discharge a second later clears it).
-  // BELL_EFF: strikes a second in a fight over the analytic model's (foes standing on the orbit), measured in the staged chase of tools/sheet-check.js (a hauling hero holding its spot, skeletons walking in;
-  // every bell weapon and fork within 10%): one = one foe, pack = a pack of 4. Foes walking through the bell's reach and the hero's own steps cost strikes the model gives.
-  const ROD_UP = 0.5, BELL_EFF = { one: 0.9, pack: 0.92 };
+  // A bell (class-bell.js): an attack is one wind -> hurl -> reel loop (ED.Bell.cycle); the hit is its hurl strike, the reel strike and the winding strikes of the loop are extras, as are the route riders (Wrecking shock, Chain Toll, Lightning Rod, Skybreaker, live wire, the ring).
+  // _pack(n, b): the extra's total per loop over a pack of n foes, b = wpn._bell(n) (tools/model.js packWeapon). ROD_UP: share of hurl strikes that land on a charged foe. HURL_PACK / REEL_PACK: share of the other pack foes a hurl / a reel strikes (a pack bunches at the hero's feet). BELL_MIX: weight of the pack's own drain in a pack loop.
+  // BELL_EFF: loops a second in a fight over the analytic model's (foes standing on the orbit), measured in the staged chase of tools/sheet-check.js (a hero holding its spot playing the loop, skeletons walking in): one = one foe, pack = a pack of 4.
+  const ROD_UP = 0.5, HURL_PACK = 0.9, REEL_PACK = 0.9, BELL_MIX = 0.9, BELL_EFF = { one: 0.95, pack: 1.15 };
   Sh.BELL_EFF = BELL_EFF;
-  function bellExtras(st, w, bm, Wd, M, avg, aps, ctx, add) {
-    const area = 1 + 0.5 * st.area, el = st.element, k = el ? (M + st.classElMul) * ED.affC(ctx.stratum || 1, el) : M;
-    if (w.ring) { const v = Wd * w.ring.mul * M; add('Ring', v, { packOnly: true, r: Math.round(w.ring.r * area), _pack: (n, b) => v * b.k * Math.min(n - 1, 3), note: 'each strike rings the other foes near the bell, no crit' }); }
-    if (st.wreck > 0) { const sh = (b) => w.dmg * (st.wreck + st.demolish) * M * (b.mul + b.heavy * b.hmul); add('Wrecking shock', sh(bm), { _pack: (n, b) => sh(b) * Math.min(n, 3), r: Math.round((st.demolish > 0 ? 80 : 50) * area), stun: st.wreckStun, note: `each strike, twice from a Heavy Strike (about ${Math.round(bm.heavy * 100)}% of strikes), no crit` }); }
-    if (st.chainArc > 0) { const v = Wd * st.chainArc * M, j = 1 + (st.arcN | 0), lone = ED.CONST.ARC_LONE; add('Chain Toll', v * lone, { proc: true, el: 'lightning', _pack: (n, b) => v * b.k * (n > 1 ? Math.min(n - 1, j) : lone), note: `arcs to ${j} more foe${j > 1 ? 's' : ''} within 90 (a lone foe: back into it at ${Math.round(lone * 100)}%), no crit` }); }
-    if (st.rod > 0) add('Lightning Rod', st.rod * ROD_UP * avg, { proc: true, crit: true, note: `+${Math.round(st.rod * 100)}% on a charged foe (about ${Math.round(ROD_UP * 100)}% of strikes); every 4th strike on one discharges it at once` });
-    if (st.stormBolt > 0) add('Storm Bell', Wd * st.stormBolt * k / 3, { proc: true, pack: 3, el: el || null, r: Math.round(50 * area), note: 'every 3rd strike: a thunderbolt on the struck foe, no crit' });
+  function bellExtras(st, w, cy, M, EC, ctx, add) {
+    const area = 1 + 0.5 * st.area, el = st.element, kEl = el ? (M + st.classElMul) * ED.affC(ctx.stratum || 1, el) : M, Cn = ED.CONST, hurl = w.dmg * cy.k, reel = w.dmg * cy.kReel;
+    const hN = (n) => 1 + HURL_PACK * (n - 1), rN = (n) => 1 + REEL_PACK * (n - 1);
+    add('Reel', reel * M * EC, { proc: true, crit: true, _pack: (n, b) => w.dmg * b.kReel * M * EC * rN(n), note: `the reel home strikes each foe on its line at ${Math.round(Cn.REEL_K * 100)}% of the hurl and drags it ${Cn.REEL_DRAG} px toward you` });
+    add('Winding strikes', w.dmg * cy.windMul * cy.windN * M * EC, { proc: true, crit: true, _pack: (n, b) => w.dmg * b.windMul * b.windN * n * M * EC, note: `about ${n1(cy.windN)} a loop on a foe on the orbit at x${n1(cy.windMul)} (never more than x${n1(st.windCap > 0 ? st.windCap : Cn.WIND_CAP)}); they are no attacks` });
+    if (w.ring) { const v = (hurl + reel) * w.ring.mul * M; add('Ring', v, { packOnly: true, r: Math.round(w.ring.r * area), _pack: (n, b) => w.dmg * (b.k * hN(n) + b.kReel * rN(n)) * w.ring.mul * M * Math.min(n - 1, 3), note: 'each hurl and reel strike rings the other foes near the bell, no crit' }); }
+    if (st.wreck > 0) { const sh = (b) => w.dmg * b.k * (st.wreck + (b.full && st.demolish > 0 ? st.demolish : 0)) * M; add('Wrecking shock', sh(cy), { _pack: (n, b) => sh(b) * Math.min(n, b.full && st.demolish > 0 ? 6 : 4), r: Math.round((cy.full && st.demolish > 0 ? 140 : 70) * area), stun: st.wreckStun, note: 'where each hurl lands, no crit' }); }
+    if (st.chainArc > 0) { const j = 1 + (st.arcN | 0), lone = Cn.ARC_LONE; add('Chain Toll', reel * st.chainArc * M * lone, { proc: true, el: 'lightning', _pack: (n, b) => w.dmg * b.kReel * st.chainArc * M * rN(n) * (n > 1 ? Math.min(n - 1, j) : lone), note: `each reel strike arcs to ${j} more foe${j > 1 ? 's' : ''} within 90 (a lone foe: back into it at ${Math.round(lone * 100)}%), no crit` }); }
+    if (st.tollStorm > 0) add('Live wire', reel * st.tollStorm * M, { proc: true, el: 'lightning', _pack: (n, b) => w.dmg * b.kReel * st.tollStorm * M * rN(n), note: 'each reel: every foe within 20 of the chain, as Lightning, no crit' });
+    if (st.rod > 0) add('Lightning Rod', st.rod * ROD_UP * hurl * M * EC, { proc: true, crit: true, _pack: (n, b) => st.rod * ROD_UP * w.dmg * b.k * M * EC * hN(n), note: `+${Math.round(st.rod * 100)}% on a charged foe (about ${Math.round(ROD_UP * 100)}% of hurl strikes), and it discharges` });
+    if (st.stormBolt > 0) add('Skybreaker', w.dmg * st.stormBolt * kEl, { proc: true, pack: 3, el: el || null, r: Math.round(50 * area), note: 'a thunderbolt where each hurl lands (and every second it lies there), no crit' });
   }
   function weaponModel(p, st, ctx, R) {
     const w = st.weapon, melee = w.kind === 'melee', M = Math.max(0.1, st.dmg), c = st.crit, cm = st.critMult, EC = 1 + c * (cm - 1), evo = st.evo, area = 1 + 0.5 * st.area;
-    // a bell (class-bell.js): an attack is one strike; aps is the strikes a second on one foe of the hauled bell (ED.Bell.model x BELL_EFF.one), the hit carries the mean speed factor of a strike
-    const bell = w.kind === 'bell', bm = bell ? ED.Bell.model(st, 1, St.attackInterval(p), ED.Bell.rateGain(p)) : null;
-    const Wd = w.dmg * (bell ? bm.mul : w.combo ? w.combo.steps.reduce((a, q) => a + (q.mul || 1), 0) / w.combo.steps.length : 1); // a combo weapon: the mean of its steps' damage factors (the attacks cycle through them)
-    const aps = bell ? bm.sps * BELL_EFF.one : 1 / St.attackInterval(p), apsBase = bell ? ED.Bell.model(st, 1, st.atkInterval, w.rate / st.atkInterval).sps * BELL_EFF.one : 1 / st.atkInterval;
+    // a bell (class-bell.js): an attack is one wind -> hurl -> reel loop of one bell (ED.Bell.cycle on one foe, nb bells taking turns, x BELL_EFF.one); the hit is the hurl strike at the loop's mean factor
+    const bell = w.kind === 'bell', cy = bell ? ED.Bell.cycle(st, 1, St.attackInterval(p), ED.Bell.rateGain(p)) : null;
+    const Wd = w.dmg * (bell ? cy.k : w.combo ? w.combo.steps.reduce((a, q) => a + (q.mul || 1), 0) / w.combo.steps.length : 1); // a combo weapon: the mean of its steps' damage factors (the attacks cycle through them)
+    const aps = bell ? cy.nb * BELL_EFF.one / cy.T : 1 / St.attackInterval(p), apsBase = bell ? cy.nb * BELL_EFF.one / ED.Bell.cycle(st, 1, st.atkInterval, w.rate / st.atkInterval).T : 1 / st.atkInterval;
     const n = melee || bell ? 1 : (w.n || 1) + st.projN, sp = n > 1 ? Math.max(w.spread || 0, 0.13) : 0, offs = [];
     for (let i = 0; i < n; i++) offs.push((i - (n - 1) / 2) * sp);
     const chan = st.channel > 0 ? channelAvg(st, 1 / aps) : null, Mw = M + (chan ? chan.avg : 0); // Mw: the multiplier of a weapon hit (Pyromancer Channel at its assumed average)
@@ -309,7 +312,7 @@
       add('Ring of light', Wd * w.ring.mul * (1 + st.waveMul) * k * EC * (1 + lit) * ret / every, { proc: true, crit: true, r: Math.round(w.ring.r * area * (st.waveBig ? 1.5 : 1)), note: `every ${ordinal(every)} attack: every foe around you${st.litany > 0 ? `; every ${ordinal(st.litany)} attack rings x3` : ''}${st.waveReturn > 0 ? `; rings again 0.35 s later for ${Math.round(st.waveReturn * 100)}%` : ''}` });
     }
     if (st.gauntlet) add('Thunder Gauntlet', Wd * 2.2 * M / 6, { proc: true, el: 'lightning', note: 'every 6th attack, no crit' });
-    if (bell) bellExtras(st, w, bm, Wd, M, avg, aps, ctx, add);
+    if (bell) bellExtras(st, w, cy, M, EC, ctx, add);
     // evolution strikes (data on the evolution boon)
     const evoBoon = evo && ED.BOONS['evo_' + evo], attackTotal = avg * direct + (blast ? Wd * blast.mul * M * one * (w.lob ? EC : 1) : 0);
     for (const s of (evoBoon && evoBoon.strikes) || []) {
@@ -367,12 +370,16 @@
       _hit: hit, _avg: avg, _aps: aps, _extras: extras, _ms: ms,
     };
     if (bell) {
-      out.chain = Math.round(w.chain); out.orbit = Math.round(ED.Bell.orbit(w)); out.bells = w.n || 1; out.lockout = R.x(St.attackInterval(p)); out.speed = Math.round(bm.v); out.top = Math.round(bm.top); out.heavy = R.f(bm.heavy);
-      out._bell = (k) => { const b = ED.Bell.model(st, k, St.attackInterval(p), ED.Bell.rateGain(p)); return { sps: b.sps * (k > 1 ? BELL_EFF.pack : BELL_EFF.one), k: bm.mul > 0 ? b.mul / bm.mul : 1, mul: b.mul, heavy: b.heavy, hmul: b.hmul }; }; // tools/model.js packWeapon: k foes (strikes a second on each at BELL_EFF, damage factor over one foe's, Heavy Strike share and factor)
-      const bz = ED.Bell.busy(st), up = Math.max(0, 1 - bz.heave / St.skillNums('heave', st).cdEff - bz.peal / St.skillNums('peal', st).cdEff);
-      out.uptime = R.f(up); out._up = up; // share of the time the bell strikes as a weapon, casting Heave and Peal on cooldown (tools/model.js scales the weapon by it)
-      notes.push(`Casting on cooldown, the bell strikes ${Math.round(up * 100)}% of the time (Heave ${n1(bz.heave)} s in the air, Peal ${n1(bz.peal)} s to spin up again)`);
-      notes.push(`Hauled, the bell orbits at ${out.orbit} px at about ${out.speed} px/s (top ${out.top}); a strike deals x${n1(bm.mul)} by its speed on average, each foe at most once per ${n1(St.attackInterval(p))} s per bell`);
+      out.chain = Math.round(w.chain); out.orbit = Math.round(ED.Bell.orbit(w)); out.bells = w.n || 1; out.lockout = R.x(St.attackInterval(p)); out.top = Math.round(cy.top); out.windT = R.x(cy.tw); out.loop = R.x(cy.T); out.hurlK = R.x(cy.k); out.reachMax = ED.CONST.HURL_D;
+      // tools/model.js packWeapon: a pack of k foes on the orbit: loops a second (at BELL_EFF), the loop's hurl and reel factors, Full Swing, its winding strikes on each foe; it sums the hurl's and every extra's _pack itself
+      out._bell = (k) => { // a pack: BELL_MIX of the loop with k foes on the orbit (their drain), the rest the one-foe loop (a moving pack is knocked off the orbit), x BELL_EFF.pack
+        const a = k > 1 ? ED.Bell.cycle(st, k, St.attackInterval(p), ED.Bell.rateGain(p)) : cy, f = k > 1 ? BELL_MIX : 0, mix = (q) => (1 - f) * cy[q] + f * a[q], kk = mix('k');
+        return { cps: (k > 1 ? BELL_EFF.pack : BELL_EFF.one) * ((1 - f) * cy.nb / cy.T + f * a.nb / a.T), k: kk, kReel: mix('kReel'), full: a.full, windN: mix('windN'), windMul: mix('windMul'), hurlN: 1 + HURL_PACK * (k - 1), kH: cy.k > 0 ? kk / cy.k : 1 };
+      };
+      const bz = ED.Bell.busy(st), up = Math.max(0, 1 - bz.heave / St.skillNums('heave', st).cdEff);
+      out.uptime = R.f(up); out._up = up; // share of the time the bell plays its loop, casting Anchor Leap on cooldown (tools/model.js scales the weapon by it)
+      notes.push(`One loop: wind ${n1(cy.tw)} s from the reel's ${Math.round(ED.CONST.REEL_KEEP * 100)}% wind to ${cy.full ? 'full wind' : Math.round(cy.wind * 100) + '% wind'}, hurl ${Math.round(cy.d)} px at x${n1(cy.k)}, reel home at x${n1(cy.kReel)}: ${n1(cy.T)} s`);
+      notes.push(`Wound, the bell orbits at ${out.orbit} px (top ${out.top} px/s); a hurl flies up to ${ED.CONST.HURL_D} px at full wind and strikes every foe on its path and within ${Math.round(ED.CONST.IMPACT_R * area)} of where it lands`);
     } else if (melee) { const arc = Math.min(6.3, w.arc * (1 + 0.4 * st.area)); out.reach = Math.round(w.range * (1 + 0.5 * st.area + st.meleeReach)); out.arcDeg = Math.round(arc * 57.2958); out.allAround = arc >= 6.2; }
     else { out.range = Math.round(w.speed * w.life); out.pierce = w.beam || w.ret ? 99 : (w.pierce || 0) + st.pierce; out.homing = (w.homing || 0) + (st.homing || 0) > 0; out.blast = blast ? { r: Math.round(blast.r), mul: blast.mul } : null; }
     return out;
@@ -407,6 +414,7 @@
     if (skillId === 'shieldthrow' && (st.twinShield > 0 || st.tempest > 0) && (q.id === 'strike' || q.id === 'return')) { raw *= st.twinShield > 0 ? st.twinShield : 1; oneFoe = st.tempest > 0 ? Math.round(st.tempest) : 2; }
     else if (skillId === 'meteor' && q.id === 'impact' && st.comet > 0) raw *= (1 + st.comet) * (st.sunDive > 0 ? (1 + st.sunDive) / 2 : 1); // Sun Dive's second landing deals sunDive of the first: the mean of the two landings (oneFoe counts both)
     else if (skillId === 'volley' && q.id === 'arrow' && q.ring && st.thornMul > 0) raw *= st.thornMul; // a Thornburst ring arrow deals thornMul x
+    else if (skillId === 'peal' && ED.Bell) raw *= 1 + C.RES_K * ED.Bell.pealRes(st); // a Peal rings at its Resonance: the mean a Peal cast on cooldown holds (class-bell.js)
     const fester = st.festerHit > 0 && FESTER_PARTS.has(skillId + '.' + q.id) ? 1 + st.festerHit * FESTER_UP : 1; // Gangrene: Volley and Rain hits on foes with 3+ ailments, at an assumed uptime
     const close = skillId === 'volley' && q.id === 'arrow' && st.volleyClose > 0 ? 1 + st.volleyClose : 1; // Scattershot: the reference foe stands inside the close range
     const assn = skillId === 'step' && st.assassinate > 0 && (q.id === 'slash' || q.id === 'twin' || q.id === 'blossom') ? 1 + st.assassinate * ASSASSINATE_AT : 1; // Assassinate: the share of the time a foe stands below half health
