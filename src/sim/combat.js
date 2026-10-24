@@ -103,12 +103,12 @@
     if (ED.hasAffix(e, 'warded')) { e.ward = e.maxHp * 0.45; e.wardMax = e.ward; }
   };
 
-  // Stratum affinity: weak x1.5, resist x0.5, else x1 (el = one of ED.ELEMENT_IDS; General and physical hits pass nothing).
+  // Stratum affinity: weak x1.5, resist ÷1.5 (fight length mirrors weak), else x1 (el = one of ED.ELEMENT_IDS; General and physical hits pass nothing).
   W.elemAff = function (el) {
     const b = ED.biomeFor(this.stratum);
-    return b.weak === el ? 1.5 : b.resist === el ? 0.5 : 1;
+    return b.weak === el ? 1.5 : b.resist === el ? 1 / 1.5 : 1;
   };
-  // Class-skill hits take half the affinity: x1.25 weak, x0.75 resisted. Their statuses use the full elemAff.
+  // Class-skill hits take half the affinity: x1.25 weak, x0.833 resisted. Their statuses use the full elemAff.
   W.affC = function (el) { return 1 + (this.elemAff(el) - 1) / 2; };
 
   // Slows a foe by amount (0..1) for dur seconds; the strongest slow and the longest duration win.
@@ -120,7 +120,7 @@
 
   // ---------------- damage to foes (order: hero mul, crit, vulnerability, affinity, exposed, guard, dmgTakenMul, ward) ----------------
   // src: { p, kind, crit, mul, el, clsEl, affDone, raw, noProc, noGuard, noShatter, comp, infAdd, infK, bleedMin, ambush, knock, kx, ky, x, y, part, wpn, dist, pass }. Writes back src.critOut / src.guarded / src.affMul.
-  // el tags a hit with an element (affinity x1.5 / x0.5 unless affDone); clsEl tags a class-skill hit (half affinity, +classElMul); infAdd { el: rate } adds a per-hit infusion rate that needs no gate; infK scales every infusion of the hit.
+  // el tags a hit with an element (affinity x1.5 / ÷1.5 unless affDone); clsEl tags a class-skill hit (half affinity, +classElMul); infAdd { el: rate } adds a per-hit infusion rate that needs no gate; infK scales every infusion of the hit.
   // part names the skill part ('charge.impact'); wpn marks a weapon hit (swing, shot, its blast, warhammer shock, plague cloud tick, wave); Stagger and the heavy hit-stop need kind 'weapon' (a direct swing or shot). The attacker's class hook table (ED.CLS[cls]) may add to the hero multiplier (hitMul), force or boost crits (hitCrit, critMul) and react (hitDone).
   W.hitEnemy = function (e, base, src) {
     if (!e || e.hp <= 0) return 0;

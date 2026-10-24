@@ -38,7 +38,7 @@ Canonical rules and numbers. Code follows this file; a balance pass changes numb
 2. **Crit** × `critMult` (1.75 + crit damage; chance capped at 95%), then the class `critMul`.
 3. The hit's own factor `src.mul` (Cleave, Ambush, Deadeye by distance flown, Ballista's pierce ramp, Gathering Force, Gangrene, …) and, on a boss, a skill part's `bossMul`; with the Shatter boon, a hit on a frozen foe takes its bonus and ends the freeze.
 4. **Foe vulnerability** `1 + Σ`: Marked (Hunter's Mark, `markV`) · Judged or `vulnT` (+0.2, once: Judgment, Hail of Thorns, smoke do not stack) · Frozen +0.25 · Sunder +0.04 per stack (own stacks, max 10) · Venom `venom/100 × (0.25 + corrode)` (full from the hero who added Venom, ×0.5 from allies). Co-op debuffs are single foe states: the strongest value wins, they never add.
-5. **Element affinity** (§2): ×1.5 weak, ×0.5 resisted. Class-skill parts tagged `el: class` take half of it (×1.25 / ×0.75); their statuses take the full value.
+5. **Element affinity** (§2): ×1.5 weak, ÷1.5 resisted (×0.667: weak cuts a fight to ⅔ of its length, resisted stretches it ×1.5). Class-skill parts tagged `el: class` take half of it (×1.25 / ×0.833); their statuses take the full value.
 6. `exposed` ×1.5.
 7. **Guard**: a foe with `guard {arc, mul}` takes ×mul from attacks inside the arc (damage over time, discharges and explosions ignore it; a Corroded foe has none). Emits `guardhit`.
 8. `dmgTakenMul` (default 1). Invulnerable, burrowed or `invulnT` foes take 0.
@@ -134,7 +134,7 @@ Base hero HP: Knight 45 · Ranger 29 · Pyromancer 27 · Shade 41 · Cleric 44 �
 
 Seven statuses: Burn, Chill (Freeze included), Charge, Venom, Radiance, Doom (element paths) and Bleed (General, physical). Elements: `fire`, `ice`, `lightning`, `poison`, `holy`, `shadow`. General and physical hits ignore affinity.
 
-**Affinity** `elemAff(el)`: stratum `biome.weak === el` → ×1.5, `biome.resist === el` → ×0.5, else ×1. It applies to that element's damage and status build-up. Each element is weak in exactly one stratum and resisted in exactly one.
+**Affinity** `elemAff(el)`: stratum `biome.weak === el` → ×1.5, `biome.resist === el` → ÷1.5 (×0.667), else ×1. It applies to that element's damage and status build-up. Each element is weak in exactly one stratum and resisted in exactly one.
 
 | Stratum | Weak | Resist |
 |---|---|---|

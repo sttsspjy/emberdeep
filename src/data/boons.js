@@ -90,8 +90,8 @@
     } },
   };
   for (const id in PS) Object.assign(ED.PATHS[id], { infuse: id === 'general' ? 'bleed' : ED.ELEMENTS[id].inf, status: { fire: 'burn', ice: 'chill', lightning: 'charge', poison: 'venom', holy: 'radiance', shadow: 'doom', general: 'bleed' }[id], sheet: PS[id] });
-  // Elemental affinity of the hero's stratum: x1.5 weak, x0.5 resisted, else x1 (General and physical hits ignore it). Class-skill hits take half of it (ED.affC).
-  ED.elemMul = (stratum, el) => { const b = ED.biomeFor(stratum); return !el || el === 'general' ? 1 : b.weak === el ? 1.5 : b.resist === el ? 0.5 : 1; };
+  // Elemental affinity of the hero's stratum: x1.5 weak, ÷1.5 resisted (x0.667), else x1 (General and physical hits ignore it). Class-skill hits take half of it (ED.affC).
+  ED.elemMul = (stratum, el) => { const b = ED.biomeFor(stratum); return !el || el === 'general' ? 1 : b.weak === el ? 1.5 : b.resist === el ? 1 / 1.5 : 1; };
   ED.affC = (stratum, el) => 1 + (ED.elemMul(stratum, el) - 1) / 2;
 
   const B = ED.BOONS = {
