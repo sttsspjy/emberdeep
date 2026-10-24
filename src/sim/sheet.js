@@ -22,7 +22,10 @@
     fireInfuse: SI('Burn from hits', 'pct', 'fire'), burnMul: SI('Burn damage', 'pct', 'fire'), searing: SI('Damage to burning', 'pct', 'fire'), wildfire: SI('Wildfire', 'pct', 'fire'), conflag: SI('Conflagration', 'flat', 'fire'),
     iceInfuse: SI('Chill from hits', 'pct', 'ice'), chillMul: SI('Chill build-up', 'pct', 'ice'), freezeDur: SI('Freeze length', 'pct', 'ice'), shatter: SI('Shatter', 'pct', 'ice'), brittle: SI('Damage to chilled', 'pct', 'ice'), chillWeaken: SI('Chilled foes deal', 'pct', 'ice'),
     lightningInfuse: SI('Charge from hits', 'pct', 'lightning'), shockMul: SI('Discharge damage', 'pct', 'lightning'), arcs: SI('Arc targets', 'flat', 'lightning'), arcRange: SI('Arc range', 'pct', 'lightning'), arcStun: SI('Discharge stun', 'sec', 'lightning'),
-    shortCircuit: SI('Short Circuit', 'pct', 'lightning'), thunderbolt: SI('Thunderbolt chance', 'pct', 'lightning'),
+    shortCircuit: SI('Short Circuit', 'pct', 'lightning'), ionize: SI('Damage to charged', 'pct', 'lightning'), conduct: SI('Conduction per foe', 'pct', 'lightning'), anchor: SI('Storm Anchor', 'flat', 'lightning'), capacitor: SI('Capacitor', 'flat', 'lightning'),
+    brushfire: SI('Brushfire spread', 'pct', 'fire'), firebreak: SI('Firebreak', 'flat', 'fire'), glacier: SI('Glacier', 'flat', 'ice'), refreeze: SI('Chill kept on thaw', 'pct', 'ice'),
+    venomSlow: SI('Venom fades slower', 'pct', 'poison'), neuro: SI('Neurotoxin', 'flat', 'poison'), hexStrong: SI('Hex the Strong', 'flat', 'poison'), hallow: SI('Damage to radiant', 'pct', 'holy'), rebuke: SI("Martyr's Rebuke", 'flat', 'holy'), vigil: SI('Vigil', 'flat', 'holy'),
+    reapChain: SI("Reaper's Chain", 'pct', 'shadow'), quarry: SI('Quarry', 'flat', 'shadow'), dashReap: SI('Umbral Step', 'flat', 'shadow'),
     poisonInfuse: SI('Venom from hits', 'pct', 'poison'), venomBuild: SI('Venom build-up', 'pct', 'poison'), venomHold: SI('Venom hold', 'sec', 'poison'), corrode: SI('Venom bonus', 'pct', 'poison'), fester: SI('Damage to envenomed', 'pct', 'poison'), sporeBurst: SI('Spore Burst', 'pct', 'poison'),
     holyInfuse: SI('Radiance from hits', 'pct', 'holy'), smiteMul: SI('Smite damage', 'pct', 'holy'), smiteShield: SI('Smite shield', 'pct', 'holy'), holyCap: SI('Holy shield cap', 'pct', 'holy'), beacon: SI('Beacon', 'pct', 'holy'),
     shadowInfuse: SI('Doom from hits', 'pct', 'shadow'), doomMul: SI('Doom strength', 'pct', 'shadow'), doomTough: SI('Doom on elites', 'pct', 'shadow'), malice: SI('Damage to Doomed', 'pct', 'shadow'), reaper: SI('Reaper', 'pct', 'shadow'),
@@ -269,8 +272,7 @@
     if (cleaveEvery && st.fissure) add('Fissure', Wd * st.fissure * M / cleaveEvery, { stun: st.cStun, note: 'each Cleave: a fissure 180 long strikes every foe on it once, no crit' }); // Earthsplitter (class-knight.js fissure)
     if (cleaveEvery && st.bladeWave) add('Blade wave', Wd * st.bladeWave * M * EC / cleaveEvery, { proc: true, crit: true, note: 'each Cleave: a wave 180 long pierces every foe on it (a Parry fans three)' }); // Thousand Edges (class-knight.js bladeWaves)
     // the blast of a shot (its own, or the Cinder Arms blast of a plain shot), its aftershock, its cloud
-    const pyre = evo === 'fire';
-    const blast = !melee && !bell ? (w.explode ? { r: w.explode.r * area * (pyre ? 1.3 : 1), mul: w.explode.mul } : pyre ? { r: 40 * area, mul: 0.5 } : null) : null;
+    const blast = !melee && !bell && w.explode ? { r: w.explode.r * area, mul: w.explode.mul } : null;
     if (blast) add('Blast', Wd * blast.mul * Mw * one * (w.lob ? EC : 1), { proc: true, crit: !!w.lob, r: Math.round(blast.r), note: w.lob ? 'the shell lands on the cursor, every foe in it, may crit' : 'each shot that lands, no crit' });
     if (blast && st.aftershock) add('Aftershock', Wd * blast.mul * Mw * st.aftershock * one, { r: Math.round(blast.r), note: '0.4 s after each blast' });
     // Pyromancer Attack forks (class-pyro.js). Lava Pools: untagged burning ground, one pool per spot, so a foe takes lavaPool x the shot a second whatever the shot count. Caldera: the share CALDERA_IN of aftershocks becomes a geyser (caldera x the shot, 1.5 x the radius) instead.
@@ -588,7 +590,9 @@
     const out = [], A = 1 + 0.5 * st.area;
     const row = (label, def, note, o) => out.push(Object.assign({ label, dmg: R.n(ED.procDmg(def, st) * M), note }, o));
     if (st.overcharge) row('Overcharge', ED.BOONS.overcharge, `a shockwave with every skill, r ${Math.round(85 * A)}`);
-    if (st.thunderbolt) row('Thunderhead', ED.BOONS.thunderhead, `${Math.round(st.thunderbolt * 100)}% per discharge, r 60, Lightning, once per ${C.BOLT_CD} s`, { el: 'lightning' });
+    if (st.anchor) row('Storm Anchor', ED.BOONS.stormanchor, `a zap every ${C.ANCHOR_ZAP} s within ${C.ANCHOR_REACH} of each anchor (one per skill cast, ${C.ANCHOR_T} s, at most ${C.ANCHOR_MAX}), Lightning`, { el: 'lightning' });
+    if (st.rebuke) row("Martyr's Rebuke", ED.BOONS.martyr, `when your shield breaks, r ${Math.round(C.REBUKE_R * A)}, x0.5 to x2 by the shield's size, Holy`, { el: 'holy' });
+    if (st.firebreak) row('Firebreak', ED.BOONS.firebreak, `per second on burning ground a burning death leaves (r ${C.FIREBREAK_R}, ${C.FIREBREAK_T} s)`, { el: 'fire' });
     if (st.dashBomb) row('Bomb Satchel', ED.RELICS.satchel, 'where you dash from, r 60');
     if (st.phoenix) row('Phoenix Feather', ED.RELICS.phoenix, 'once per descent when you fall, r 110');
     return out;

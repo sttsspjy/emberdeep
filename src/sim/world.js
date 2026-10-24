@@ -726,16 +726,74 @@
         if (t === 0 || t === 4 || (t === 5 && !locked)) { f[j] = d; q[qt++] = j; }
       }
     }
+    this.computeFireFlow(q, qt);
   };
 
-  // Desired unit direction from (x,y) toward the target, using line of sight or the flow field.
+  // Firebreak: tiles under a hero's blocking burning ground (zones with z.block) cost FIRE_PEN extra steps in a second field this.flowM (null when no such ground), from the same hero seeds (q[0..seeds) of computeFlow's queue order:
+  // the cells at distance 0). Non-elite ground foes path on it (pathDir), so they walk around the fire and a foe standing in it still walks out; elites, bosses and allies use this.flow.
+  const FIRE_PEN = 8;
+  W.prototype.computeFireFlow = function (q0, qn) {
+    const room = this.room, w = room.w, h = room.h, n = w * h;
+    let any = false;
+    for (const z of this.zones) if (z.block && !z.dead && z.t < z.dur) { any = true; break; }
+    if (!any) { this.flowM = null; return; }
+    if (!this.fireMask || this.fireMask.length !== n) { this.fireMask = new Uint8Array(n); this.flowM = null; }
+    const mask = this.fireMask, probe = { x: 0, y: 0, r: T * 0.35 };
+    mask.fill(0);
+    for (const z of this.zones) {
+      if (!z.block || z.dead || z.t >= z.dur) continue;
+      const R = z.len > 0 ? z.len + z.w : z.r + (z.w || 0), x0 = Math.max(0, Math.floor((z.x - R) / T)), x1 = Math.min(w - 1, Math.floor((z.x + R) / T)), y0 = Math.max(0, Math.floor((z.y - R) / T)), y1 = Math.min(h - 1, Math.floor((z.y + R) / T));
+      for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) { probe.x = (tx + 0.5) * T; probe.y = (ty + 0.5) * T; if (this.zoneHas(z, probe)) mask[ty * w + tx] = 1; }
+    }
+    if (!this.flowM || this.flowM.length !== n) this.flowM = new Int16Array(n);
+    const f = this.flowM, tiles = room.tiles, locked = this.locked, bk = this._fireBk || (this._fireBk = []);
+    f.fill(-1);
+    for (let b = 0; b <= FIRE_PEN + 1; b++) bk[b] = bk[b] || [], bk[b].length = 0;
+    for (let k = 0; k < qn && this.flow[q0[k]] === 0; k++) { f[q0[k]] = 0; bk[0].push(q0[k]); }
+    // Dial's algorithm: steps cost 1 or 1 + FIRE_PEN, buckets indexed by distance mod (FIRE_PEN + 2); a cell may be queued more than once, the first pop with its final distance wins
+    const B = FIRE_PEN + 2;
+    let left = bk[0].length;
+    for (let d = 0; left > 0; d++) {
+      const cur = bk[d % B];
+      for (let k = 0; k < cur.length; k++) {
+        const i = cur[k];
+        left--;
+        if (f[i] !== d) continue;
+        const x = i % w;
+        for (let s = 0; s < 4; s++) {
+          const j = s === 0 ? (x > 0 ? i - 1 : -1) : s === 1 ? (x < w - 1 ? i + 1 : -1) : s === 2 ? i - w : i + w;
+          if (j < 0 || j >= n) continue;
+          const t = tiles[j];
+          if (!(t === 0 || t === 4 || (t === 5 && !locked))) continue;
+          const nd = d + 1 + (mask[j] ? FIRE_PEN : 0);
+          if (f[j] !== -1 && f[j] <= nd) continue;
+          f[j] = nd; bk[nd % B].push(j); left++;
+        }
+      }
+      cur.length = 0;
+    }
+  };
+
+  // True when the line from (x0, y0) to (x1, y1) crosses no Firebreak tile after leaving the fire it starts in (samples every 10 px, as Sim.los).
+  W.prototype.fireClear = function (x0, y0, x1, y1) {
+    const room = this.room, w = room.w, mask = this.fireMask, d = Math.hypot(x1 - x0, y1 - y0), n = Math.ceil(d / 10);
+    let out = false;
+    for (let i = 0; i <= n; i++) {
+      const tx = Math.floor((x0 + (x1 - x0) * i / Math.max(1, n)) / T), ty = Math.floor((y0 + (y1 - y0) * i / Math.max(1, n)) / T);
+      if (tx < 0 || ty < 0 || tx >= w || ty >= room.h) continue;
+      if (mask[ty * w + tx]) { if (out) return false; } else out = true;
+    }
+    return true;
+  };
+
+  // Desired unit direction from (x,y) toward the target, using line of sight or the flow field. A non-elite ground foe paths on the Firebreak field (this.flowM) while one exists, and its line of sight must not cross fire.
   W.prototype.pathDir = function (e, tx, ty) {
-    const room = this.room;
-    if (e.fly || Sim.los(room, e.x, e.y, tx, ty, this.locked)) {
+    const room = this.room, fire = !!this.flowM && !!e.def && !e.elite && !e.boss && !e.fly;
+    if (e.fly || (Sim.los(room, e.x, e.y, tx, ty, this.locked) && (!fire || this.fireClear(e.x, e.y, tx, ty)))) {
       const d = Math.hypot(tx - e.x, ty - e.y) || 1;
       return [(tx - e.x) / d, (ty - e.y) / d];
     }
-    const w = room.w, f = this.flow;
+    const w = room.w, f = fire ? this.flowM : this.flow;
     const cx = Math.floor(e.x / T), cy = Math.floor(e.y / T);
     const here = f ? f[cy * w + cx] : -1;
     let best = here >= 0 ? here : 9999, bx = 0, by = 0;
@@ -757,12 +815,12 @@
     return [(gx - e.x) / d, (gy - e.y) / d];
   };
 
-  // Pushes the overlapping pair a, b apart (movable foes only); returns whether it did.
+  // Pushes the overlapping pair a, b apart (movable foes only: a boss, a still foe and a frozen Glacier foe never move); returns whether it did.
   const sepPair = (a, b) => {
     const dx = b.x - a.x, dy = b.y - a.y, rr = (a.r + b.r) * 0.9;
     const d2 = dx * dx + dy * dy;
     if (d2 >= rr * rr || d2 < 1e-4) return false;
-    const am = a.spd > 0 && !a.boss, bm = b.spd > 0 && !b.boss;
+    const am = a.spd > 0 && !a.boss && !(a.glacier && a.frozen > 0), bm = b.spd > 0 && !b.boss && !(b.glacier && b.frozen > 0);
     if (!am && !bm) return false;
     const d = Math.sqrt(d2), push = rr - d;
     const wa = am && bm ? 0.5 : am ? 1 : 0, wb = 1 - wa;
@@ -843,7 +901,29 @@
         }
       }
     }
+    this.solidOn = this.pushSolids();
     for (const e of es) if (e.hp > 0 && e.spd > 0) Sim.resolve(e, this.room, this.locked, e.fly);
+  };
+
+  // Solid zones (ice pillars, Storm Anchors: z.solid, solid radius z.sr or z.r) push every non-boss foe out of them. Returns whether any solid stands (one of those zones or a frozen Glacier foe): foe shots then test them (combat.js solidStops).
+  W.prototype.pushSolids = function () {
+    let any = false;
+    for (const z of this.zones) {
+      if (!z.solid || z.dead) continue;
+      any = true;
+      const R = z.sr || z.r, q = this.foeScan(z.x, z.y, R);
+      for (let k = 0; k < q.length; k++) {
+        const e = q[k];
+        if (e.hp <= 0 || e.boss || !(e.spd > 0)) continue;
+        const dx = e.x - z.x, dy = e.y - z.y, d = Math.hypot(dx, dy), m = R + e.r * 0.9;
+        if (d >= m) continue;
+        const ux = d > 1e-3 ? dx / d : 1, uy = d > 1e-3 ? dy / d : 0;
+        e.x = z.x + ux * m; e.y = z.y + uy * m;
+      }
+      this.foeEnd();
+    }
+    if (!any) for (const e of this.enemies) if (e.glacier && e.frozen > 0 && e.hp > 0) return true;
+    return any;
   };
 
   W.prototype.isSafe = function () { return !this.locked && this.hostiles() === 0 && !this.pendingStratum; };
