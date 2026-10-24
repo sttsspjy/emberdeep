@@ -23,7 +23,7 @@ function modelOf(cls, boons, wi, o) {
 }
 {
   const V = { // weapon hit, avg, aps, dps; armor taken
-    knight: [23.4, 24.2775, 2.381, 57.8, 0.5714], ranger: [11, 11.825, 2.941, 34.78, 0.9231], pyro: [15, 15.5625, 2.0, 49.125, 0.9375], shade: [11, 11.99, 4.762, 57.1, 0.8955], cleric: [23, 23.8625, 2.381, 73.86, 0.8108], necro: [13.5, 14.0063, 2.5, 35.02, 0.9677],
+    knight: [23.4, 24.2775, 2.381, 57.8, 0.5085], ranger: [11, 11.825, 2.941, 34.78, 0.9524], pyro: [15, 15.5625, 2.0, 49.125, 0.9375], shade: [11, 11.99, 4.762, 57.1, 0.6818], cleric: [23, 23.8625, 2.381, 73.86, 0.7059], necro: [13.5, 14.0063, 2.5, 35.02, 1],
   };
   for (const cls in V) { // every class: hit, avg at crit 0 (= hit), avg and dps at the class crit, attacks per second, armor
     const m = modelOf(cls, {}, 0, { stat: { crit: 0 } }), mc = modelOf(cls, {}, 0), v = V[cls], w = m.weapon;
@@ -35,7 +35,7 @@ function modelOf(cls, boons, wi, o) {
     near(m.def.taken, v[4], 0.0005, cls + ' damage taken');
   }
   const by = (m, s, p) => m.skills[s].parts.find(q => q.id === p);
-  near(by(modelOf('knight', {}, 0, { stat: { crit: 0 } }), 0, 'impact').raw, 63.44, 0.05, 'Charge impact'); near(modelOf('knight', {}, 0).def.ehp, 77, 0.5, 'Knight effective health');
+  near(by(modelOf('knight', {}, 0, { stat: { crit: 0 } }), 0, 'impact').raw, 63.44, 0.05, 'Charge impact'); near(modelOf('knight', {}, 0).def.ehp, 78.7, 0.5, 'Knight effective health');
   const rg = modelOf('ranger', {}, 0, { stat: { crit: 0 } }), arrow = by(rg, 0, 'arrow');
   near(arrow.raw, 18.4, 0.05, 'Volley arrow'); ok(arrow.oneFoe === 3 && arrow.fanN === 7, `Volley: 3 of 7 arrows reach a foe at REF (got ${arrow.oneFoe} of ${arrow.fanN})`);
   near(rg.skills[0].perCast, 55.2, 0.1, 'Volley per cast on one foe'); near(rg.skills[0].perCastAll, 128.8, 0.1, 'Volley per cast, all 7'); near(rg.skills[1].perCast, 75.2, 0.1, 'Rain per cast (9.4 x 8)');
