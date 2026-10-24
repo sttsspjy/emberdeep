@@ -107,11 +107,11 @@
 
     // ---------------- Bosses (absolute HP, scaled by party and pact; refHp = design HP that chill, Conflagration and Wildfire measure against) ----------------
     bonewarden: { name: 'The Bone Warden', title: 'Keeper of the First Graves', ai: 'boss', look: 'b_warden', col: { a: '#ece4cc', b: '#7d745f', c: '#ff5a3a' },
-      hp: 4350, refHp: 800, spd: 60, dmg: 1.6, r: 24, xp: 40, boss: true, quote: 'None leave the Ossuary. Not even the dead.' },
+      hp: 4350, refHp: 800, spd: 60, dmg: 2.4, r: 24, xp: 40, boss: true, quote: 'None leave the Ossuary. Not even the dead.' },
     sporemother: { name: 'The Sporemother', title: 'Bloom of the Glowmire', ai: 'boss', look: 'b_spore', col: { a: '#c86bff', b: '#5b2a7a', c: '#7dffd9' },
-      hp: 5950, refHp: 1500, spd: 34, dmg: 1.6, r: 32, xp: 60, boss: true, quote: 'Rest, little ones. Become soil. Become ME.' },
+      hp: 5950, refHp: 1500, spd: 34, dmg: 2.4, r: 32, xp: 60, boss: true, quote: 'Rest, little ones. Become soil. Become ME.' },
     rimeheart: { name: 'Rimeheart Colossus', title: 'The Frozen Oath', ai: 'boss', look: 'b_rime', col: { a: '#d8f0ff', b: '#6d93b5', c: '#3ad1ff' },
-      hp: 16500, refHp: 2600, spd: 44, dmg: 1.6, r: 30, xp: 80, boss: true, quote: 'THE KING SAID: HOLD THE HALL. I HOLD.' },
+      hp: 16500, refHp: 2600, spd: 44, dmg: 2.4, r: 30, xp: 80, boss: true, quote: 'THE KING SAID: HOLD THE HALL. I HOLD.' },
     forgelord: { name: 'The Forgelord', title: 'Last Smith of the Empire', ai: 'boss', look: 'b_forge', col: { a: '#6a4636', b: '#2a1810', c: '#ff8a2a' },
       hp: 26600, refHp: 4200, spd: 70, dmg: 3.3, r: 26, xp: 100, boss: true, quote: 'Steel remembers every hammer-blow. So will you.' },
     drownedking: { name: 'The Drowned King', title: 'Tyrant Beneath the Tide', ai: 'boss', look: 'b_king', col: { a: '#3f8f88', b: '#173d3b', c: '#e8c66b' },

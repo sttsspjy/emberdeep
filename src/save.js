@@ -10,7 +10,7 @@
   const LS_SETTINGS = 'wickdeep.settings.v1';
   const NAME_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -';
   const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-  const CODE_VERSION = 5; // 5: no relic bits, an Armory section (per hero: 6-bit count, 1 bit per entry) after mastery; 4: upgrades and heroes carry count prefixes too; 3: only the non-start relic bits do; 2 stored exactly V2_RELIC_BITS relic bits, V2_UPGRADES ranks and V2_HEROES mastery values. A count prefix keeps appended entries from shifting what follows.
+  const CODE_VERSION = 6; // 6: the layout of 5 (marks a code made after the health rescale); 5: no relic bits, an Armory section (per hero: 6-bit count, 1 bit per entry) after mastery; 4: upgrades and heroes carry count prefixes too; 3: only the non-start relic bits do; 2 stored exactly V2_RELIC_BITS relic bits, V2_UPGRADES ranks and V2_HEROES mastery values. A count prefix keeps appended entries from shifting what follows.
   const V2_RELIC_BITS = 26, V2_UPGRADES = 16, V2_HEROES = 6;
   // The relic list of save code v4 as [id, start, cost], in v4 RELIC_IDS order: old profiles (positional flags) and v2-v4 codes (non-start bits) decode against it, and the Codex embers they paid are refunded. Frozen.
   const V4_RELICS = [['whetstone', 1, 0], ['boots', 1, 0], ['buckler', 1, 0], ['heartstone', 1, 0], ['coin', 1, 0], ['hourglass', 1, 0], ['fang', 1, 0], ['embercharm', 1, 0], ['frostshard', 1, 0], ['lodestone', 1, 0], ['pauldron', 1, 0], ['wardrum', 1, 0], ['phoenix', 1, 0], ['stormidol', 1, 0], ['glasseye', 1, 0], ['elixir', 1, 0],
@@ -26,7 +26,7 @@
   const blankArmory = () => { const a = {}; for (const c of ED.CLASS_IDS) a[c] = armoryList(c).map(() => 0); return a; };
 
   S.defaultProfile = () => ({
-    v: 3, // profile era: below 3 a profile has a positional relics array; its Codex embers are refunded and news = 1 (the "Deep has changed" notice, cleared once shown) when it has runs or a refund
+    v: 4, // profile era: below 3 a profile has a positional relics array; its Codex embers are refunded and news = 1 (the full "Deep has changed" notice, cleared once shown) when it has runs or a refund; era 3 (before the health rescale) with runs gets news = 3 (only the newest changes)
     news: 0,
     refunded: 0, // Codex embers refunded by that migration, printed by the notice
     name: 'Wanderer',
@@ -55,7 +55,7 @@
     if (!raw) return null;
     try {
       const old = JSON.parse(raw), p = S.normalize(old);
-      if (old && typeof old === 'object' && (old.v | 0) < 3) S.store(p); // migrated once: the stored copy drops the relics array so the refund cannot repeat
+      if (old && typeof old === 'object' && (old.v | 0) < 4) S.store(p); // migrated once: the stored copy drops the relics array so the refund cannot repeat, and its notice flag is set once
       return p;
     } catch (e) {
       // unreadable: keep a copy aside before the fresh profile overwrites it
@@ -92,7 +92,8 @@
     d.pactWin = p.pactWin === undefined ? -1 : int(p.pactWin, -1, 10);
     const st = obj(p.stats);
     for (const k in d.stats) d.stats[k] = int(st[k], 0, k === 'deepest' ? 6 : BIG);
-    d.news = old ? (d.stats.runs > 0 || d.refunded > 0 ? 1 : 0) : int(p.news, 0, 1);
+    const played = d.stats.runs > 0 || d.refunded > 0;
+    d.news = old ? (played ? 1 : 0) : (p.v | 0) < 4 ? (int(p.news, 0, 1) || (played ? 3 : 0)) : int(p.news, 0, 3);
     const sel = obj(p.sel);
     d.sel = { cls: ED.CLASS_IDS.indexOf(sel.cls) >= 0 ? sel.cls : 'knight', weapon: {}, pact: int(sel.pact, 0, 10) };
     for (const c of ED.CLASS_IDS) { const wid = obj(sel.weapon)[c]; if (ED.weaponIndex(c, wid) >= 0) d.sel.weapon[c] = wid; } // a base weapon or an Armory variant of the hero
@@ -410,7 +411,8 @@
       p.stats.runs = r.varint(); p.stats.wins = r.varint(); p.stats.deepest = Math.min(6, r.get(3));
       p.stats.kills = r.varint(); p.stats.bestTime = r.varint(); p.stats.bossKills = r.varint();
       p.embers += refund; p.refunded = refund;
-      p.news = ver < 5 && (p.stats.runs > 0 || refund > 0) ? 1 : 0; // a code from before the v4 rules gets the notice
+      const played = p.stats.runs > 0 || refund > 0;
+      p.news = ver < 5 && played ? 1 : ver < 6 && played ? 3 : 0; // a code from before the v4 rules gets the full notice, one from before the health rescale its newest part
     } catch (e) {
       if (e && e.keep) throw e;
       throw new Error('That code is from an unknown version or is damaged.');
