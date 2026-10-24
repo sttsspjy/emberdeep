@@ -74,16 +74,21 @@
     if (jc) $('title-join-code').textContent = jc;
   };
 
-  // One-time notice for a profile made before the current rules (profile.news): relic and Hearth changes, then the v3 rules, and the embers the Codex refunded. Closing it clears the flag.
+  // One-time notice for a profile made before the current rules (profile.news): the newest changes, then (news 1 only) relic and Hearth changes, the v3 rules and the embers the Codex refunded. Closing it clears the flag.
   const MOVED_RELICS = ['stormcall', 'thundergauntlet', 'frostheart', 'souljar']; // the element relics that became path boons
+  const NEWEST = [
+    '<b>Health:</b> every health number is a quarter of its old size. A Knight has 45 health and a hit from a foe costs about 2; healing, shields and health from the Hearth, boons and relics are scaled to match. Strata I–III hit harder than before.',
+    '<b>Armory:</b> each hero has three weapon variants in the Hearth: the same power in another shape, bought with embers once the base weapon is unlocked. An owned variant is its own choice in the weapon picker.',
+    '<b>Melee:</b> blades swing from the hero\'s hand, from one side to the other, and rest lowered between strikes.',
+  ];
   UI.maybeNews = () => {
     const A = ED.App, p = A.profile;
     if (!A.hasProfile || !p.news) return;
-    $('news-body').innerHTML = [
+    $('news-body').innerHTML = (p.news === 3 ? NEWEST : NEWEST.concat([
       '<b>Relics:</b> the Codex is gone. Every relic can drop from your first descent, and relics no longer belong to an element.',
       `<b>Element relics are path boons now:</b> ${MOVED_RELICS.map(id => `${esc(ED.BOONS[id].name)} (${pathName(ED.BOONS[id].path, true)})`).join(', ')}. The other element relics are gone: their paths already hold the same effects as boons.`,
       p.refunded > 0 ? `<b>Refunded:</b> the ${p.refunded} embers you spent on the Codex are back in your purse.` : '',
-      '<b>Hearth:</b> every upgrade rank can be refunded for its full cost, and Reset all returns everything at once. Upgrades are small now, so your build choices decide a descent. The Reliquary became the Stash (starting gold), Head Start begins the descent with some experience and Deep Wick boosts the gold and experience of dark rooms. Each hero has an Armory of weapon variants: the same power in another shape, bought with embers once the base weapon is unlocked.',
+      '<b>Hearth:</b> every upgrade rank can be refunded for its full cost, and Reset all returns everything at once. Upgrades are small now, so your build choices decide a descent. The Reliquary became the Stash (starting gold), Head Start begins the descent with some experience and Deep Wick boosts the gold and experience of dark rooms.',
       '<b>Builds:</b> generic health and armor boons are smaller; a path (its boons, keystone and weapon evolution) is what makes a build strong. Kill effects that spread, chain or explode work on fodder; refunds, shields, healing and stacks need the foes that matter.',
       '<b>Aim:</b> attacks and ground skills go toward the mouse cursor (right stick on a pad). The Auto-aim setting is gone.',
       `<b>Paths:</b> follow up to ${ED.MAX_ELEMENTS} of ${ED.ELEMENT_IDS.map(k => pathName(k, true)).join(', ')}, or take the ${pathName('general', true)} path alone as a Generalist. Blood and Spirit are gone.`,
@@ -95,7 +100,7 @@
       '<b>Late power:</b> your route fork gains rank 2 at the stratum II boss and transforms at rank 3 at the stratum IV boss, skill forks included. From stratum IV, Ascended boons multiply a boon you have maxed.',
       '<b>Bosses:</b> from stratum IV a boss that lives too long grows furious and hits harder and faster; its bar shows when.',
       '<b>Sound:</b> every stratum has its own music, and it swells as a fight grows.',
-    ].filter(Boolean).map(t => `<p>${t}</p>`).join('');
+    ])).filter(Boolean).map(t => `<p>${t}</p>`).join('');
     $('ov-news').hidden = false;
     requestAnimationFrame(() => $('btn-news-close').focus({ preventScroll: true })); // after the screen's own focus
   };
