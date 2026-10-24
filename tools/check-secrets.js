@@ -258,7 +258,7 @@ function platRun(plat, ticks, moveHero) {
 
 // ---- net and summary ----
 {
-  ok(ED.Net.VERSION === 12, 'N.VERSION 12');
+  ok(ED.Net.VERSION === 13, 'N.VERSION 13');
   const { w, p } = stage(['knight', 'ranger']);
   p.sec.platino = true; w.run.gold777 = true;
   const s = ED.Net.encodeSnap(w, [], true);
