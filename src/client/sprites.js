@@ -114,9 +114,10 @@
     const d = s.d, src = d.slice(), w = s.w, h = s.h;
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = y * w + x; if (src[i] === OUTC && (x === 0 || y === 0 || x === w - 1 || y === h - 1 || !src[i - 1] || !src[i + 1] || !src[i - w] || !src[i + w])) d[i] = 0; }
   }
-  function foutline(s) {
-    const o = fpad(s, 1), d = o.d, src = d.slice(), w = o.w, h = o.h;
-    for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const i = y * w + x; if (!src[i] && (src[i - 1] || src[i + 1] || src[i - w] || src[i + w])) d[i] = OUTC; }
+  // 1 px outline around the opaque pixels (fill: around the non-outline pixels only, so kept outline-coloured lines are not thickened).
+  function foutline(s, fill) {
+    const o = fpad(s, 1), d = o.d, src = d.slice(), w = o.w, h = o.h, on = (v) => v && !(fill && v === OUTC);
+    for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) { const i = y * w + x; if (!src[i] && (on(src[i - 1]) || on(src[i + 1]) || on(src[i - w]) || on(src[i + w]))) d[i] = OUTC; }
     return o;
   }
   // Width of a run of w px after scaling by f: at least one px more at f >= 1.25 and one less at f <= 0.8 (down to 1).
@@ -180,6 +181,29 @@
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) o.d[y * w + x] = s.d[Math.min(s.h - 1, Math.floor((y + 0.5) * s.h / h)) * s.w + Math.min(s.w - 1, Math.floor((x + 0.5) * s.w / w))];
     o.gx = s.gx * w / s.w; o.gy = s.gy * h / s.h; o.tx = s.tx * w / s.w; o.ty = s.ty * h / s.h; o.dir = s.dir;
     return o;
+  }
+  // Box downscale by k < 1: a target px is opaque when any source px of its box is, in the commonest colour there other than the outline colour (outline only when the box holds nothing else),
+  // so 1 px strings, limbs, shafts and outline-coloured parts (a lantern cage) survive.
+  function fshrink(s, k) {
+    const w = Math.max(1, Math.round(s.w * k)), h = Math.max(1, Math.round(s.h * k)), o = fnew(w, h), cnt = new Map();
+    for (let y = 0; y < h; y++) {
+      const ya = Math.floor(y * s.h / h), yb = Math.max(ya + 1, Math.floor((y + 1) * s.h / h));
+      for (let x = 0; x < w; x++) {
+        const xa = Math.floor(x * s.w / w), xb = Math.max(xa + 1, Math.floor((x + 1) * s.w / w));
+        let best = 0, bn = 0, ol = 0; cnt.clear();
+        for (let yy = ya; yy < yb; yy++) for (let xx = xa; xx < xb; xx++) { const v = s.d[yy * s.w + xx]; if (!v) continue; if (v === OUTC) { ol = v; continue; } const n = (cnt.get(v) || 0) + 1; cnt.set(v, n); if (n > bn) { bn = n; best = v; } }
+        o.d[y * w + x] = best || ol;
+      }
+    }
+    o.gx = s.gx * w / s.w; o.gy = s.gy * h / s.h; o.tx = s.tx * w / s.w; o.ty = s.ty * h / s.h; o.dir = s.dir;
+    return o;
+  }
+  // Longest extent (art px) of sprite s: the larger of its pixel spans along and across its drawn direction.
+  function fext(s) {
+    const a = s.dir * Math.PI / 180, dx = Math.sin(a), dy = -Math.cos(a);
+    let p0 = 1e9, p1 = -1e9, q0 = 1e9, q1 = -1e9;
+    for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) if (s.d[y * s.w + x]) { const p = x * dx + y * dy, q = y * dx - x * dy; if (p < p0) p0 = p; if (p > p1) p1 = p; if (q < q0) q0 = q; if (q > q1) q1 = q; }
+    return p1 < p0 ? 0 : Math.max(p1 - p0, q1 - q0) + 1;
   }
   // Quarter turns clockwise (k = 1..3).
   function frot(s, k) {
@@ -379,43 +403,72 @@
     SHOTK.set(pr.id, k);
     return k;
   };
-  // Atlas anim of a shot sprite (every frame) scaled by k (nearest, one shared crop box; the outline rebuilt at 1 px, plain: the pixels as they are), cached per (id, k, plain); the original id when it cannot be baked.
-  Sp.shotAnim = (id, k, plain) => {
-    const key = id + '@' + k + (plain ? 'p' : '');
+  // Anim 'wk.<key>' of atlas anim `id` (every frame, one shared crop box, pivot kept) scaled by k. mode 'p': nearest, the pixels as they are; '': nearest, the outline stripped and rebuilt at 1 px;
+  // 'f': box-shrunk (fshrink) with a 1 px outline around its fill, grip / tip / dir anchors kept (a held weapon). The original id when it cannot be baked.
+  function fbake(id, k, key, mode) {
+    const A = ED.Atlas, r = A && A.ok ? A.anim(id) : null;
+    if (!r || !ED.Pix || !ED.Pix.define) return id;
+    try {
+      const fr = []; let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1;
+      for (let i = 0; i < r.n; i++) {
+        const q = fread(id, i); if (!mode) fstrip(q); const s = mode === 'p' ? fscale(q, k) : mode === 'f' ? foutline(fshrink(q, k), true) : foutline(fscale(q, k)); fr.push(s);
+        for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) if (s.d[y * s.w + x]) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      }
+      const w = x1 - x0 + 1, h = y1 - y0 + 1, f0 = fr[0], gx = f0.gx - x0, gy = f0.gy - y0, cvs = [];
+      for (const s of fr) {
+        const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+        const g = cv.getContext('2d'), im = g.createImageData(w, h), d = new Uint32Array(im.data.buffer);
+        for (let y = 0; y < h; y++) d.set(s.d.subarray((y + y0) * s.w + x0, (y + y0) * s.w + x0 + w), y * w);
+        g.putImageData(im, 0, 0); cvs.push(cv);
+      }
+      const an = mode === 'f' ? { grip: [gx, gy], tip: [f0.tx - x0, f0.ty - y0], dir: f0.dir, centre: [w / 2, h / 2], top: 0 } : { dir: f0.dir, centre: [gx, gy] };
+      if (ED.Pix.define('wk.' + key, cvs, gx, gy, an, r.fps, r.loop)) return 'wk.' + key;
+    } catch (e) { console.error('scaled look ' + key, e); }
+    return id;
+  }
+  function scaled(id, k, mode) {
+    const key = id + '@' + k + mode;
     let a = SHOTA.get(key);
     if (a) return a;
-    a = id;
-    const A = ED.Atlas, r = A && A.ok ? A.anim(id) : null;
-    if (r && ED.Pix && ED.Pix.define) {
-      try {
-        const fr = []; let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1;
-        for (let i = 0; i < r.n; i++) {
-          const q = fread(id, i); if (!plain) fstrip(q); const s = plain ? fscale(q, k) : foutline(fscale(q, k)); fr.push(s);
-          for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) if (s.d[y * s.w + x]) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-        }
-        const w = x1 - x0 + 1, h = y1 - y0 + 1, gx = fr[0].gx - x0, gy = fr[0].gy - y0, cvs = [];
-        for (const s of fr) {
-          const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
-          const g = cv.getContext('2d'), im = g.createImageData(w, h), d = new Uint32Array(im.data.buffer);
-          for (let y = 0; y < h; y++) d.set(s.d.subarray((y + y0) * s.w + x0, (y + y0) * s.w + x0 + w), y * w);
-          g.putImageData(im, 0, 0); cvs.push(cv);
-        }
-        if (ED.Pix.define('wk.' + key, cvs, gx, gy, { dir: fr[0].dir, centre: [gx, gy] }, r.fps, r.loop)) a = 'wk.' + key;
-      } catch (e) { console.error('shot look ' + key, e); }
-    }
-    if (A && A.ok) SHOTA.set(key, a);
+    a = fbake(id, k, key, mode);
+    if (ED.Atlas && ED.Atlas.ok) SHOTA.set(key, a);
     return a;
-  };
+  }
+  // Atlas anim of a shot sprite scaled by k (nearest; the outline rebuilt at 1 px, plain: the pixels as they are), cached per (id, k, plain); the original id when it cannot be baked.
+  Sp.shotAnim = (id, k, plain) => scaled(id, k, plain ? 'p' : '');
+  // Atlas anim of a held weapon sprite box-shrunk by k < 1 (fbake mode 'f'), cached per (id, k); id itself at k >= 1 or when it cannot be baked.
+  Sp.fitAnim = (id, k) => (k < 1 ? scaled(id, k, 'f') : id);
 
-  // Weapon art of hero p: { id (base weapon id, before any '@' fork suffix), w (the fork weapon, else the ED.WEAPONS entry), anim (atlas anim id: the baked fork look when the hero owns a fork), look, twin (off-hand copy), fork ('heavy' | 'swift' | '') }. The one place weapon looks are resolved.
+  // Held weapon size (visual only; reach and hitboxes are the sim's), against H = its hero's standing height (idle frame 0 in art px) and the longest extent (fext) of a sprite:
+  // a look (base, fork, variant) up to FIT_MAX * H stays as drawn; a longer one shrinks to its root weapon's share (FIT_BASE * H when the root is longer than FIT_MAX * H, nearest 0.05),
+  // never past FIT_MAX * H (0.05 steps down), the rebuilt 1 px outline included. FITK: look anim -> k (1 = as drawn).
+  const FIT_BASE = 0.65, FIT_MAX = 0.7, FITK = new Map();
+  function weaponK(anim, root) {
+    const A = ED.Atlas;
+    if (!A || !A.ok || !A.has(anim)) return null;
+    let k = FITK.get(anim);
+    if (k !== undefined) return k;
+    k = 1;
+    try {
+      const cls = classOfWeapon(root), hr = cls && A.anim('hero.' + cls + '.idle'), ext = (id) => { const s = fread(id); return s ? fext(s) : 0; };
+      const H = hr ? hr.f[0].h : 0, el = H ? ext(anim) : 0, eb = anim === 'weapon.' + root ? el : el ? ext('weapon.' + root) : 0;
+      if (el > FIT_MAX * H && eb) k = Math.min(eb > FIT_MAX * H ? Math.round((FIT_BASE * H - 2) / eb * 20) / 20 : 1, Math.floor((FIT_MAX * H - 2) / el * 20 + 1e-6) / 20);
+    } catch (e) { console.error('weapon fit ' + anim, e); }
+    FITK.set(anim, k);
+    return k;
+  }
+
+  // Weapon art of hero p: { id (base weapon id, before any '@' fork suffix), w (the fork weapon, else the ED.WEAPONS entry), anim (atlas anim id: the baked fork look when the hero owns a fork, shrunk to the held size by k),
+  // k (weaponK scale of the look, 1 without an atlas), look, twin (off-hand copy), fork ('heavy' | 'swift' | '') }. The one place weapon looks are resolved.
   const WART = {}, TWIN = { daggers: 1, twinbows: 1, scythes: 1 };
   Sp.weaponArt = (p) => {
     const cls = ED.CLASSES[p.cls], id = String((p.stats && p.stats.weaponId) || p.weapon || (cls && cls.weapons[0]) || 'longsword');
     let d = WART[id];
     if (!d) {
-      const base = id.split('@')[0], root = ED.weaponBase(base), w = Sp.forkData(id) || ED.WEAPONS[base] || ED.WEAPONS[cls.weapons[0]], fk = id.indexOf('@') > 0 ? id.slice(id.indexOf('@') + 1) : '', anim = Sp.forkAnim(id);
-      d = { id: base, w, anim: anim || 'weapon.' + root, look: w.look, twin: !!TWIN[root], fork: fk };
-      if ((!fk && root === base) || (anim && anim.indexOf('wk.') === 0)) WART[id] = d; // a fork or a variant waits for the atlas before it is remembered
+      const base = id.split('@')[0], root = ED.weaponBase(base), w = Sp.forkData(id) || ED.WEAPONS[base] || ED.WEAPONS[cls.weapons[0]], fk = id.indexOf('@') > 0 ? id.slice(id.indexOf('@') + 1) : '', src = Sp.forkAnim(id);
+      const k = src ? weaponK(src, root) : null, anim = k !== null ? Sp.fitAnim(src, k) : src;
+      d = { id: base, w, anim: anim || 'weapon.' + root, k: k || 1, look: w.look, twin: !!TWIN[root], fork: fk };
+      if (k !== null && ((!fk && root === base) || src.indexOf('wk.') === 0)) WART[id] = d; // remembered once the atlas is ready and a fork or variant look is baked
     }
     return d;
   };
@@ -463,7 +516,6 @@
         if (!spin) wa = face + off; else if (u >= t1) wa = face;
       } else { const kick = Math.exp(-u * 26); reach = 1 - 0.22 * kick; push = -0.8 * kick; }
     }
-    const behind = Math.sin(wa) < -0.25;
     if (swinging && push) { const L = w.arc < 1 ? 4.6 : 3.2; c.save(); c.translate(Math.cos(face) * push * L, Math.sin(face) * push * L * 0.5); c.scale(1 - 0.04 * push, 1 + 0.06 * push); }
     const drawWeapon = () => {
       c.save(); c.translate(0, -11 - bob); c.rotate(wa); c.scale(reach, Math.cos(wa) < 0 ? -1 : 1);
@@ -472,7 +524,7 @@
       if (ec) { glow(c, 20, 0, 24, ec, 0.5 + Math.sin(t * 5) * 0.1); c.strokeStyle = U.rgba(ec, 0.6); c.lineWidth = 2.2; c.beginPath(); c.moveTo(6, 0); c.lineTo(32, 0); c.stroke(); }
       c.restore();
     };
-    if (behind) drawWeapon();
+    drawWeapon(); // the weapon is drawn under the body
     // legs
     const step = p.moving ? Math.sin(t * 12 + (p.slot || 0)) * 3 : 0;
     rrect(c, -5 + step * 0.4, -4, 4, 6, 1.5, C.d || '#222');
@@ -498,7 +550,6 @@
     (HEADS[p.cls] || HEADS.knight)(c, C, pc);
     if (p.mastery10) { c.strokeStyle = U.rgba('#ffd36b', 0.55 + Math.sin(t * 4) * 0.25); c.lineWidth = 1.2; c.beginPath(); c.ellipse(0, -2, 13, 4, 0, 0, U.TAU); c.stroke(); c.strokeStyle = OUT; c.lineWidth = 1.6; }
     c.restore();
-    if (!behind) drawWeapon();
     if (swinging && push) c.restore();
   }
 
