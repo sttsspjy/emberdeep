@@ -456,6 +456,9 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 /* wardrobe: the heroes view with slot rows of item chips (dim panel; worn = ember panel; owned = brass; for sale = ember label; locked = dithered) */
 .wd-detail { gap: calc(3 * var(--p)); }
 .wd-port { display: grid; place-items: center; min-height: calc(28 * var(--p)); }
+.wd-detail .hd-top { grid-template-columns: min(calc(64 * var(--p)), 46vw) minmax(0, 1fr); }
+.hd-top canvas.wd-prev { width: min(calc(64 * var(--p)), 46vw); height: auto; aspect-ratio: 16 / 9; image-rendering: pixelated; }
+.wd-cap { font: 700 var(--fs-sm)/1.25 var(--f-body); color: var(--gold); text-align: center; overflow-wrap: anywhere; }
 .wd-title { font: 700 var(--fs-lg)/1.25 var(--f-body); color: var(--bone); text-shadow: 0 var(--fpx) 0 var(--px-ol); }
 .wd-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 26rem), 1fr)); gap: calc(3 * var(--p)) calc(5 * var(--p)); }
 .wd-slot.wide { grid-column: 1 / -1; }

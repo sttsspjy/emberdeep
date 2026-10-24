@@ -113,7 +113,7 @@
     const p = A.profile;
     const cfg = {
       localPid: 'solo', seed: (Math.random() * 4294967295) >>> 0, pact: A.sel.pact, tutorial: p.stats.runs < 2,
-      players: [{ pid: 'solo', name: p.name, slot: 0, cls: A.sel.cls, weapon: A.sel.weapon, meta: S.metaBundle(p, A.sel.cls) }],
+      players: [{ pid: 'solo', name: p.name, slot: 0, cls: A.sel.cls, weapon: A.sel.weapon, meta: S.metaBundle(p, A.sel.cls), wear: S.wearBundle(p, A.sel.cls) }],
     };
     A.beginRun('solo', cfg);
   };
@@ -184,7 +184,7 @@
   };
 
   // ---------------- multiplayer ----------------
-  const meMsg = () => ({ name: A.profile.name, cls: A.sel.cls, weapon: A.sel.weapon, meta: S.metaBundle(A.profile, A.sel.cls), pactMax: A.profile.pactMax });
+  const meMsg = () => ({ name: A.profile.name, cls: A.sel.cls, weapon: A.sel.weapon, meta: S.metaBundle(A.profile, A.sel.cls), wear: S.wearBundle(A.profile, A.sel.cls), pactMax: A.profile.pactMax }); // wear: the hero's Wardrobe set, shown on every peer
 
   A.inviteLink = () => {
     const code = A.host ? A.host.code : A.client ? A.client.code : '';
@@ -247,8 +247,8 @@
   };
 
   A.lobbyPick = () => {
-    if (A.host) A.host.setMe({ cls: A.sel.cls, weapon: A.sel.weapon, meta: S.metaBundle(A.profile, A.sel.cls) });
-    else if (A.client) A.client.send({ t: 'pick', cls: A.sel.cls, weapon: A.sel.weapon, meta: S.metaBundle(A.profile, A.sel.cls) });
+    if (A.host) A.host.setMe({ cls: A.sel.cls, weapon: A.sel.weapon, meta: S.metaBundle(A.profile, A.sel.cls), wear: S.wearBundle(A.profile, A.sel.cls) });
+    else if (A.client) A.client.send({ t: 'pick', cls: A.sel.cls, weapon: A.sel.weapon, meta: S.metaBundle(A.profile, A.sel.cls), wear: S.wearBundle(A.profile, A.sel.cls) });
     if (A.lobbyState) ED.UI.renderLobby(A.lobbyState, A.myPid, !!A.host);
   };
   A.setLobbyPact = (v) => {
@@ -262,7 +262,7 @@
     if (A.host) {
       if (!A.host.allReady()) return;
       const seed = (Math.random() * 4294967295) >>> 0;
-      const players = A.host.members.map(m => ({ pid: m.pid, name: m.name, slot: m.slot, cls: m.cls, weapon: m.weapon, meta: m.meta }));
+      const players = A.host.members.map(m => ({ pid: m.pid, name: m.name, slot: m.slot, cls: m.cls, weapon: m.weapon, meta: m.meta, wear: m.wear || null }));
       A.host.started = true;
       const pact = A.host.pact;
       A.host.broadcast({ t: 'start', seed, pact, players });
@@ -324,11 +324,11 @@
   let last = performance.now(), hiddenTick = null, sheetFrames = 0, drawnW = 0, drawnH = 0;
   const anyOverlay = () => ['ov-pause', 'ov-settings', 'modal', 'ov-sheet'].some(id => !$(id).hidden); // the boon cards are no blocker: a hero keeps moving under them (UI.pickBoon masks the attack keys itself)
   const EMPTY = { mx: 0, my: 0, atk: false, skill: false, dash: false, atkPressed: false };
-  // Hearthsitter: 180 s of camp menus (title, Hearth sections, lobby) with no key, pointer or pad input grants the secret; A.stillT resets on input (A.boot).
-  const STILL_S = 180;
+  // Hearthsitter: 180 s on the camp's Hearth screen (the Hearth section: Upgrades, Wardrobe, Chronicle) with no key, pointer or pad input grants the secret; leaving it or any input resets A.stillT (A.boot).
+  const STILL_S = 180, HEARTH_TABS = { upgrades: 1, wardrobe: 1, chronicle: 1 };
   A.stillT = 0;
   function hearthStill(dt, inp) {
-    const camp = A.hasProfile && (A.state === 'title' || A.state === 'hearth' || A.state === 'lobby');
+    const camp = A.hasProfile && A.state === 'hearth' && !!HEARTH_TABS[ED.UI.tab];
     if (!camp || inp.mx || inp.my || inp.scrollY || inp.navX || inp.navY || inp.atk || inp.skill || inp.skill2 || inp.dash || inp.esc || inp.confirm) { A.stillT = 0; return; }
     A.stillT += dt;
     if (A.stillT < STILL_S) return;

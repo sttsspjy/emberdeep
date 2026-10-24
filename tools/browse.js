@@ -1,5 +1,5 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it.
-// Usage: node tools/browse.js [--scen=smoke,crowd70,shots,sheet,screens,wardrobe,swing,picks,cards] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
+// Usage: node tools/browse.js [--scen=smoke,crowd70,shots,sheet,screens,wardrobe,cosmetics,swing,picks,cards,bell] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
 //   [--quality=low,high] [--ops] [--json] [--seed=1] [--strat=1] [--embers=N] [--mortal] [--software] [--forcepost] [--sync] [--warm=2.5] [--timeout=300]
 // Mechanism: headless only (no headed option, no window calls); one browser per invocation, one fresh context per scenario page, all closed at exit, on error and on SIGINT.
 //   A read-only node http server on 127.0.0.1 (random port) serves --root (default: this repo). Playwright resolves via require('playwright'), else %LOCALAPPDATA%\npm-cache\_npx\*\node_modules (best match for the installed browsers).
@@ -12,6 +12,8 @@
 //     results victory and fallen, the news notice, settings tabs, a confirm dialog, credits, pause); fails when ArrowDown / ArrowRight do not move focus on the menu / Hearth tabs.
 //   wardrobe: 9 screenshots: the Descend roster (a riddle hero as a silhouette named ??? with its hint; a locked Knight copy stands in while the data has none), the Wardrobe (a skin bought through its chip and the confirm, worn at once;
 //     ArrowRight along a row; the Blue Hearth worn), the Chronicle secrets block, the riddle hero on the Heroes page (fails if its name shows), the party Hearth Wardrobe, results with secrets from Save.applyRun.
+//   cosmetics: Hearthsitter counts only on the Hearth section; every Wardrobe item owned; 9 preview shots (one hovered item per slot; fails on a blank preview, a wrong title caption or a loop that keeps running once hidden);
+//     the camp and Hearth with the Blue Hearth and its ghost; a 4-hero party in different sets in a staged fight at High and Low (pets, coin trails, titles, crowns, sheens, auras, skins), Last Embers, the in-run secret toast; Game.render ms with and without the sets.
 //   shots: 16 screenshots: boot name screen, menu, Descend, Hearth tabs (the Armory scrolled into view), Heroes, Settings, Credits, boon offer, a run in combat, the Tab sheet tabs, the pause menu (profile gets 400 embers unless --embers).
 //   sheet: a late build staged through the sim (BR.sheetStage: stratum --strat or V, two element paths, one evolved, their duo, open and Ascended boons, a fork at rank 3, six relics, a shield, an ally hero):
 //     the Tab sheet Build, Build scrolled to the end, Combat, Map, and Build viewing the ally; fails on a page error or when a sheet column overflows its panel sideways.
@@ -22,6 +24,8 @@
 //     every element, open and General, purse, Ascended, keystones, duos, an evolution, the --cls route and fork offers, a 6-card dense hand; mid-pick frames (110 and 230 ms,
 //     the hide timer held, animations paused) for poison, holy, ice, lightning, shadow, general, fire-big, route and duo; the fork reveal at rank 2 and 3; a Low quality hand and pick.
 //     Fails on a missing card, a card whose kind differs from ED.PickFx.kind, a frame that did not resolve, equal path gate icons, a pick without an effect layer, or Low quality leftovers.
+//   bell: the hero, Heave and Peal icons and 6 screenshots of the Bellwarden (unlocked for the run; --weapon picks the bell): whirling in a staged fight with Momentum, a Heave in flight, a Peal, four Bellwardens in the crowd at High and Low quality,
+//     and a client's view from a two-peer net check in the same page (host World + client Game, JSON snapshots, 50 ms each way); fails on bad bells, missing bell events or a client that drifts from the host (see scenBell).
 // Output: compact table (or --json on stdout, logs on stderr); result-<browser>.json and the PNGs in --outdir (default <tmp>/wickdeep-browse). Exit 0 pass, 1 scenario failure, 2 harness error.
 // Notes: Chromium runs headless on the real GPU (ANGLE D3D11, no window); --software forces SwiftShader, where the game reports Post.soft and skips post at 'high' unless --forcepost. Firefox uses its own headless GL.
 //   --sync forces each frame's raster/GPU work to finish before the timer stops. Every external host is blocked (fonts and art are embedded data URIs).
@@ -55,7 +59,7 @@ function parseArgs(argv) {
   if (!vp) throw new Fail('--viewport is WxH, e.g. 1920x1080');
   o.vw = +vp[1]; o.vh = +vp[2];
   o.scens = o.scen.split(',').map(s => s.trim()).filter(Boolean);
-  for (const s of o.scens) if (!/^(smoke|shots|sheet|screens|wardrobe|swing|picks|cards|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, sheet, screens, wardrobe, swing, picks, cards, crowdN)');
+  for (const s of o.scens) if (!/^(smoke|shots|sheet|screens|wardrobe|cosmetics|swing|picks|cards|bell|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, sheet, screens, wardrobe, cosmetics, swing, picks, cards, bell, crowdN)');
   if (!o.scens.length) throw new Fail('--scen is empty');
   o.qualities = o.quality ? o.quality.split(',').map(s => s.trim()) : null;
   if (o.qualities && o.qualities.some(q => q !== 'low' && q !== 'high')) throw new Fail('--quality is low, high or low,high');
@@ -497,6 +501,120 @@ function pageBoot(cfg) {
     });
     return rows;
   };
+
+  // ---- bell: the Bellwarden ----
+  // the hero unlocked on the profile (its riddle is not part of the scenario); every FX event counted by type (bstrike with h counted as 'bstrike.h', skill events as 'skill.<k>')
+  BR.bellUnlock = () => { const A = window.__ED.App; if (!A.hasProfile) A.createProfile('Tester'); A.profile.bellUnlocked = true; A.persist(); return true; };
+  BR.bellCount = () => {
+    const F = window.__ED.FX;
+    if (!BR._bev) { BR._bev = {}; const h = F.handle; F.handle = function (ev) { if (ev) { const k = ev.t === 'bstrike' && ev.h ? 'bstrike.h' : ev.t === 'skill' ? 'skill.' + ev.k : ev.t; BR._bev[k] = (BR._bev[k] || 0) + 1; } return h.apply(this, arguments); }; }
+    return Object.assign({}, BR._bev);
+  };
+  // boons on the solo hero (Momentum makes full-swing strikes Heavy Strikes)
+  BR.bellBoons = (boons) => { const s = window.__ED.Game.s, w = s.world, p = s.me; p.boons = Object.assign({}, boons); w.recalc(p, true); w.sendBuild(p); return Object.keys(p.boons); };
+  // the local hero's bells: count, haul, whirl, Heave phase, top speed, chain, the farthest bell from the hero, all numbers finite
+  BR.bellState = () => {
+    const s = window.__ED.Game.s, p = s.me, b = p.bells || [];
+    let sp = 0, far = 0, fin = true;
+    for (const q of b) { sp = Math.max(sp, Math.hypot(q.vx, q.vy)); far = Math.max(far, Math.hypot(q.x - p.x, q.y - p.y)); for (const v of [q.x, q.y, q.vx, q.vy, q.ox, q.oy]) if (v !== undefined && !isFinite(v)) fin = false; }
+    return { n: b.length, haul: r3(p.haul || 0), whirl: !!p.bellWhirl, heave: p.heave ? p.heave.phase : null, sp: Math.round(sp), L: Math.round(p.bellL || 0), far: Math.round(far), fin, charges: s.ctl.charges, cd2: r3(s.ctl.skill2Cd) };
+  };
+  // input: hold or release the attack (the Haul), tap a skill key, put the cursor at world (x, y)
+  BR.bellInput = (o) => {
+    const ED = window.__ED, I = ED.Input, R = ED.Render, s = ED.Game.s;
+    if (o.haul !== undefined) { if (o.haul) I.keys.add('Mouse0'); else I.keys.delete('Mouse0'); }
+    if (o.key) I.pressed.add(o.key);
+    if (o.move !== undefined) { for (const k of ['KeyW', 'KeyA', 'KeyS', 'KeyD']) I.keys.delete(k); if (o.move) I.keys.add(o.move); }
+    if (o.at) { const sp = R.toScreen(o.at[0], o.at[1]); I.mouse.x = sp.x / (R.dpr || 1); I.mouse.y = sp.y / (R.dpr || 1); I.mouse.moved = performance.now(); I.mouse.inside = true; }
+    return s ? { x: Math.round(s.me.x), y: Math.round(s.me.y) } : null;
+  };
+  // three more Bellwardens hauling beside the solo hero (weapons: their weapon ids), for the four-hero crowd shot
+  BR.bellParty = (weapons) => {
+    const ED = window.__ED, s = ED.Game.s, w = s.world, me = s.me, out = [];
+    weapons.forEach((wid, i) => {
+      const pid = 'bp' + i; if (w.players.has(pid)) return;
+      const a = w.addPlayer({ pid, name: 'Bell ' + (i + 2), slot: i + 1, cls: 'bell', weapon: wid });
+      const ang = i * 2.1 + 0.6; a.x = me.x + Math.cos(ang) * 70; a.y = me.y + Math.sin(ang) * 50; a.haulIn = true; a.face = ang + Math.PI;
+      ED.Sim.resolve(a, w.room, w.locked, false); out.push(a.stats.weaponId);
+    });
+    return out;
+  };
+  // Two peers in one page: a host World (hero h0 hauling in place, hero c1 the client's) steps at 60 Hz and sends snapshots at 20 Hz through JSON, each way delayed lat s;
+  // this page runs Game as the client of c1 (prediction and reconciliation of its own bells, interpolation of h0's) under scripted input; ring: four still foes around c1 (host strikes slow its bell). Returns the client's reconcile stats and bell checks.
+  BR.bellNet = async (secs, lat, ring) => {
+    const ED = window.__ED, G = ED.Game, N = ED.Net, I = ED.Input, meta = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
+    const players = [{ pid: 'h0', name: 'Host', slot: 0, cls: 'bell', weapon: 'greatbell', meta: meta() }, { pid: 'c1', name: 'Client', slot: 1, cls: 'bell', weapon: 'bronzebell', meta: meta() }];
+    const w = new ED.World({ seed: cfg.seed, pact: 0, players: players.map(p => Object.assign({ remote: p.pid !== 'h0' }, p)) });
+    w.startRun();
+    const later = (f) => setTimeout(f, lat * 1000);
+    const net = { send: (m) => { const d = JSON.parse(JSON.stringify(m)); later(() => {
+      const p = w.players.get('c1'); if (!p) return;
+      if (d.t === 'in') { p.x = +d.x; p.y = +d.y; p.face = +d.f || 0; p.moving = !!d.mv; p.vx = +d.vx || 0; p.vy = +d.vy || 0; if (d.h !== undefined) { p.haulIn = !!d.h; p.inSeq = d.q | 0; p.inT = w.time; } }
+      else if (d.t === 'act') G.applyAction(w, 'c1', d.a);
+    }); }, sendTo: () => {}, broadcast: () => {} };
+    G.start('client', { localPid: 'c1', players, pact: 0, net });
+    const h0 = w.players.get('h0'); h0.haulIn = true;
+    let steps = 0, snaps = 0, foes = 0, hauledSeen = 0, remoteBad = 0, remoteN = 0;
+    const hz0 = performance.now(), host = setInterval(() => { while (steps < (performance.now() - hz0) * 0.06) hostStep(); }, 8); // 60 steps per second of wall time, as a real host
+    const hostStep = () => {
+      for (const p of w.players.values()) { p.hp = p.maxHp; p.downed = false; }
+      if (ring && !foes && steps > 30) { // a ring of still, tough foes around the client's hero: its bells strike and lose speed on the host
+        const c1 = w.players.get('c1'), type = ED.biomeFor(w.stratum).enemies.map(q => q[0]).find(id => { const d = ED.ENEMIES[id]; return d && !d.boss && !d.gloom && !d.ally && !d.minion && !d.fly; });
+        for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + 0.4, e = w.spawnEnemy(type, c1.x + Math.cos(a) * 44, c1.y + Math.sin(a) * 44); e.spd = 0; e.cd = 9999; e.maxHp = e.hp = 1e6; foes++; }
+      }
+      w.update(1 / 60); steps++;
+      w.msgs.length = 0;
+      if (steps % 3 === 0) { const d = JSON.parse(JSON.stringify(N.encodeSnap(w, w.fx, snaps % 30 === 0))); w.fx.length = 0; snaps++; later(() => G.onClientData(d)); }
+    };
+    const t0 = performance.now(), el = () => (performance.now() - t0) / 1000;
+    let w0 = null; // the client's correction totals after 1 s (the host world ran before the client's first snapshot: the first corrections settle that)
+    try {
+      I.keys.add('Mouse0');
+      while (el() < secs) {
+        const t = el(), s = G.s, R = ED.Render;
+        if (!s || !s.me) break;
+        const sp = R.toScreen(s.me.x + 80, s.me.y - 20); I.mouse.x = sp.x / (R.dpr || 1); I.mouse.y = sp.y / (R.dpr || 1); I.mouse.moved = performance.now(); I.mouse.inside = true;
+        for (const k of ['KeyW', 'KeyA', 'KeyS', 'KeyD']) I.keys.delete(k);
+        if (t > 1.5 && t < 2.3) I.keys.add('KeyD'); else if (t > 2.3 && t < 3.1) I.keys.add('KeyA');
+        if (t > 3.1 && t < 3.7) I.keys.delete('Mouse0'); else I.keys.add('Mouse0');
+        if (Math.abs(t - 4.2) < 0.03) I.pressed.add('KeyQ');
+        if (Math.abs(t - 5.6) < 0.03) I.pressed.add('KeyE');
+        if (!w0 && t > 1 && s.bp) w0 = { rn: s.bp.rn, re: s.bp.re, rb: s.bp.rb };
+        const rp = s.mirror.players.get('h0');
+        if (rp && rp.bells) { remoteN++; if (rp.bellHauled) hauledSeen++; for (const b of rp.bells) { const d = Math.hypot(b.ox, b.oy); if (!isFinite(d) || d > rp.stats.weapon.chain * 1.9 + 12) remoteBad++; } }
+        await sleep(16);
+      }
+    } finally { for (const k of ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Mouse0']) I.keys.delete(k); }
+    BR._bellHost = host; // stopped by bellNetEnd, after the screenshot
+    const s = G.s, B = s && s.bp, p = s && s.me;
+    let fin = !!p && !!p.bells && p.bells.length === 1, far = 0;
+    if (p && p.bells) for (const b of p.bells) { for (const v of [b.x, b.y, b.vx, b.vy, b.ox, b.oy]) if (!isFinite(v)) fin = false; far = Math.max(far, Math.hypot(b.x - p.x, b.y - p.y)); }
+    const hostC1 = w.players.get('c1');
+    const m = B && w0 && B.rn > w0.rn ? B.rn - w0.rn : 0;
+    return { steps, snaps, sent: B ? B.seq : 0, rn: m, err: m ? r3((B.re - w0.re) / m) : null, bias: m ? r3((B.rb - w0.rb) / m) : null, snapsToHost: B ? B.rs : 0, fin, far: Math.round(far), chain: p ? p.stats.weapon.chain : 0,
+      remoteN, remoteHauled: hauledSeen, remoteBad, hostStrikes: hostC1 ? hostC1.atkCount | 0 : 0, hostHaul: hostC1 ? !!hostC1.haulIn : null, version: N.VERSION };
+  };
+  // the Bellwarden's icons (hero, Heave, Peal) side by side at 128 px: PNG data URL
+  BR.bellIcons = () => {
+    const ED = window.__ED, cv = document.createElement('canvas'), ids = ['bell', 'heave', 'peal'], col = ED.CLASSES.bell.col.c;
+    cv.width = ids.length * 136 + 8; cv.height = 144;
+    const g = cv.getContext('2d'); g.fillStyle = '#15100d'; g.fillRect(0, 0, cv.width, cv.height); g.imageSmoothingEnabled = false;
+    ids.forEach((id, i) => g.drawImage(ED.Icons.canvas(id, col, 128), 8 + i * 136, 8, 128, 128));
+    return cv.toDataURL('image/png');
+  };
+  // Standing Bellwardens outside a run (no p.bells: camp, Wardrobe preview): each bell weapon, then the Bronze Bell with its worn sheen, at 4 canvas px per world px.
+  BR.bellIdle = (t) => {
+    const ED = window.__ED, ws = ['bronzebell', 'greatbell', 'handbells', 'chimes', 'bronzebell'], cv = document.createElement('canvas'), M = 4;
+    cv.width = ws.length * 50 * M; cv.height = 50 * M;
+    const g = cv.getContext('2d'); g.fillStyle = '#15100d'; g.fillRect(0, 0, cv.width, cv.height); g.imageSmoothingEnabled = false;
+    if (ED.Atlas && ED.Atlas.tick) ED.Atlas.tick(4);
+    ws.forEach((wid, i) => {
+      const hero = { pid: 'idle' + i, cls: 'bell', slot: i & 3, weapon: wid, face: 0, moving: false, hp: 1, maxHp: 1, wear: i === 4 ? { tints: ['bronzebell'] } : undefined };
+      g.save(); g.setTransform(M, 0, 0, M, (i * 50 + 18) * M, 40 * M); ED.Sprites.hero(g, hero, t, null); g.restore();
+    });
+    return cv.toDataURL('image/png');
+  };
+  BR.bellNetEnd = () => { clearInterval(BR._bellHost); BR._bellHost = null; window.__ED.Game.stop(); return true; };
 
   BR.measure = async (n) => {
     for (const k in M) if (Array.isArray(M[k])) M[k] = [];
@@ -1052,6 +1170,205 @@ async function scenWardrobe() {
   return res;
 }
 
+// bell: the Bellwarden (unlocked on the profile) wielding --weapon (default its first) in a staged fight of 14 foes with Momentum: whirl, a Heave in flight, a Peal, a four-Bellwarden crowd (High and Low quality),
+// then a two-peer net check in the same page (BR.bellNet: host World + client Game over JSON with 50 ms each way). Fails on a page error, a non-finite or runaway bell, no strike / Heavy Strike / Peal / Heave event,
+// a client whose bells drift from the host's (after 1 s: mean phase error over 0.3 rad, a lead or lag over 0.08 rad on open floor or 0.2 among foes, snaps beyond the first), remote bells that never show the host's Haul, or no strike on the host from the client's input.
+async function scenBell() {
+  const o = S.opt, cls0 = o.cls, q = qualitiesOr(['high'])[0], wid = o.weapon ? o.weapon.split(',')[0] : '';
+  o.cls = 'bell'; // shot names and the result row name the Bellwarden
+  const res = newResult('bell'), { ctx, page, errors } = await openPage();
+  const st = () => call(page, 'bellState');
+  const waitFor = async (pred, ms) => { const t0 = Date.now(); let s; do { s = await st(); if (pred(s)) return s; await wait(100); } while (Date.now() - t0 < ms); return s; };
+  try {
+    await call(page, 'bellUnlock');
+    await call(page, 'profile', 'bell', o.embers, wid);
+    await call(page, 'settings', q);
+    await call(page, 'install');
+    await call(page, 'bellCount');
+    const icons = path.join(o.outdir, ['bell', tag(), 'bell', 'icons'].join('-') + '.png');
+    fs.writeFileSync(icons, Buffer.from((await call(page, 'bellIcons')).split(',')[1], 'base64')); res.shots.push(icons);
+    await call(page, 'bellIdle', 0); await wait(400); await call(page, 'bellIdle', 0.4); await wait(300);
+    const idle = path.join(o.outdir, ['bell', tag(), 'bell', 'idle'].join('-') + '.png');
+    fs.writeFileSync(idle, Buffer.from((await call(page, 'bellIdle', 0.9)).split(',')[1], 'base64')); res.shots.push(idle);
+    if ((await call(page, 'start')) !== 'run') fail(res, 'run did not start');
+    await wait(1100);
+    for (let i = 0; i < 6 && await call(page, 'offerOpen'); i++) { await call(page, 'take'); await wait(300); }
+    const stg = await call(page, 'stage', 14, o.strat);
+    notes(res, `staged room ${stg.w}x${stg.h}, stratum ${stg.stratum}; boons ${(await call(page, 'bellBoons', { b_atk: 1 })).join(', ')}`);
+    await call(page, 'drive', true, false);
+    let whirl = 0, worst = null;
+    for (let i = 0; i < 25; i++) { await wait(120); const s = await st(); if (s.whirl) whirl++; if (!s.fin || s.far > s.L * 2 + 20) worst = s; }
+    await shoot(page, res, 'whirl');
+    await call(page, 'drive', false, false);
+    if (!whirl) fail(res, 'the hauled bell never reached strike speed in 3 s of driving');
+    if (worst) fail(res, 'a bell left its chain or went non-finite: ' + JSON.stringify(worst));
+    // a Heave in flight, then a Peal at full swing
+    const me = await call(page, 'bellInput', { haul: false });
+    await waitFor((s) => s.charges > 0 && !s.heave, 7000);
+    await call(page, 'bellInput', { at: [me.x + 120, me.y], key: 'KeyQ' });
+    const hv = await waitFor((s) => s.heave === 'fly', 600);
+    await shoot(page, res, 'heave');
+    if (hv.heave !== 'fly') notes(res, 'Heave shot: the bell was ' + (hv.heave || 'not in a Heave'));
+    await waitFor((s) => !s.heave && s.cd2 <= 0, 12000);
+    await call(page, 'bellInput', { haul: true });
+    await wait(1600);
+    await call(page, 'bellInput', { key: 'KeyE' });
+    await wait(90);
+    await shoot(page, res, 'peal');
+    await call(page, 'bellInput', { haul: false });
+    // four Bellwardens hauling in the crowd, High then Low quality
+    notes(res, 'party weapons: ' + (await call(page, 'bellParty', ['greatbell', 'handbells', 'chimes'])).join(', '));
+    await call(page, 'bellInput', { haul: true });
+    await wait(1500);
+    await shoot(page, res, 'party4');
+    await call(page, 'settings', 'low');
+    await wait(900);
+    await shoot(page, res, 'party4-low');
+    await call(page, 'settings', q);
+    await call(page, 'bellInput', { haul: false });
+    await call(page, 'stage', 0);
+    const ev = await call(page, 'bellCount');
+    notes(res, 'events: ' + ['bstrike', 'bstrike.h', 'peal', 'skill.heave', 'skill.peal', 'deflect', 'hit'].map(k => k + ' ' + (ev[k] | 0)).join(', '));
+    for (const k of ['bstrike', 'bstrike.h', 'peal', 'skill.heave']) if (!ev[k]) fail(res, 'no ' + k + ' event');
+    // two peers in one page: open floor (prediction alone), then a ring of foes (host strikes slow the bell: reconciliation)
+    for (const ring of [false, true]) {
+      const nt = await call(page, 'bellNet', ring ? 7 : 5, 0.05, ring), tag = ring ? 'foes' : 'open';
+      if (ring) await shoot(page, res, 'net-client');
+      await call(page, 'bellNetEnd');
+      notes(res, `net v${nt.version} ${tag}: ${nt.steps} host steps, ${nt.snaps} snapshots, ${nt.sent} inputs; client corrections after 1 s ${nt.rn}, phase error mean ${nt.err} rad (signed ${nt.bias}), snaps ${nt.snapsToHost}; own bell max ${nt.far} px (chain ${nt.chain}); host strikes from the client ${nt.hostStrikes}; remote haul seen ${nt.remoteHauled}/${nt.remoteN}`);
+      if (!nt.fin || nt.far > nt.chain * 2 + 20) fail(res, tag + ': the client\'s predicted bell is non-finite or off its chain');
+      if (!(nt.rn > 0)) fail(res, tag + ': the client never reconciled its bell against a snapshot');
+      else if (nt.err > 0.3 || Math.abs(nt.bias) > (ring ? 0.2 : 0.08)) fail(res, `${tag}: client bell phase error ${nt.err} rad on average (signed ${nt.bias})`); // noise: about one 60 Hz step of orbit; bias: the strikes the client learns of a round trip late (foes)
+      if (nt.snapsToHost > 1) fail(res, tag + ': the client snapped its bell to the host ' + nt.snapsToHost + ' times');
+      if (!nt.remoteHauled || nt.remoteBad) fail(res, `${tag}: remote bells: haul seen ${nt.remoteHauled}, ${nt.remoteBad} off their chain`);
+      if (ring && !nt.hostStrikes) fail(res, 'the client\'s Haul never struck on the host');
+    }
+  } finally { res.errors = errors; o.cls = cls0; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
+// Wardrobe cosmetics in play: Hearthsitter counts on the Hearth section only; every item owned; the Wardrobe preview per hovered item (a non-blank canvas, its loop stops when the pane hides);
+// the camp with the Blue Hearth and its ghost; a 4-hero party (Knight, Ranger, Pyromancer, Bellwarden), each in a different set, in a staged fight at High and Low quality (pets, coin trails, titles,
+// crowns, sheens, auras, skins), Last Embers on a fallen hero, the in-run secret toast; frame ms of the party with and without the sets.
+async function scenCosmetics() {
+  const o = S.opt, res = newResult('cosmetics');
+  const { ctx, page, errors } = await openPage();
+  const tryShot = async (name, fn, settle) => { try { if (fn) await fn(); await wait(settle == null ? 450 : settle); await shoot(page, res, name); } catch (e) { notes(res, 'shot ' + name + ' skipped: ' + String(e.message).split('\n')[0]); } };
+  const ev = (fn, arg) => page.evaluate(fn, arg);
+  try {
+    await ev(() => { const A = window.__ED.App; A.settings.frameCap = 'off'; A.settings.quality = 'high'; A.applySettings(); });
+    await call(page, 'profile', 'knight', 2000, '');
+    // Hearthsitter: 3 s from the line on the title screen grants nothing; on the Hearth section it does (no input reaches the headless page)
+    const still = await ev(async () => {
+      const E = window.__ED, A = E.App, sl = (n) => new Promise(r => setTimeout(r, n)), has = () => E.secretHas(A.profile, 'hearthsitter');
+      A.goHome(); A.stillT = 177; await sl(3500); const title = has(), tT = A.stillT;
+      A.enterHearth('descend'); A.stillT = 177; await sl(3500); const desc = has();
+      A.enterHearth('upgrades'); A.stillT = 177; await sl(3500); const hearth = has();
+      return { title, tT, desc, hearth };
+    });
+    if (still.title || still.desc || !still.hearth) fail(res, 'Hearthsitter must count on the Hearth section only: ' + JSON.stringify(still));
+    // every Wardrobe item owned
+    await ev(() => {
+      const E = window.__ED, p = E.App.profile;
+      for (const s of E.SECRETS) E.Save.grantSecret(p, s.id);
+      p.mastery = p.mastery.map(() => E.MASTERY_XP[E.MASTERY_XP.length - 1]);
+      for (const c of E.CLASS_IDS) for (const w of E.CLASSES[c].weapons) p.evo[w] = 3;
+      p.cos = E.COSMETICS.filter(c => c.gate.cost).map(c => c.id);
+      p.bellUnlocked = true;
+      E.App.persist();
+    });
+    // Wardrobe preview: hover items of each slot; the preview canvas draws the hovered set
+    await ev(() => window.__ED.App.enterHearth('wardrobe'));
+    const hov = async (fk, name) => { // the preview element alone, after 0.5 s of its animation
+      try {
+        await ev((k) => { const b = [...document.querySelectorAll('#wardrobe-view .wd-item')].find(x => x.dataset.fk === k); if (!b) throw new Error('no chip ' + k); b.dispatchEvent(new MouseEvent('mouseenter')); document.querySelector('#wardrobe-view .wd-port').scrollIntoView({ block: 'center' }); }, fk);
+        await wait(500);
+        const file = path.join(o.outdir, [res.name, tag(), o.cls, name].join('-') + '.png');
+        await page.locator('#wardrobe-view .wd-port').screenshot({ path: file }); res.shots.push(file);
+      } catch (e) { notes(res, 'shot ' + name + ' skipped: ' + String(e.message).split('\n')[0]); }
+      return ev(() => { const cv = document.querySelector('#wardrobe-view .wd-prev'); if (!cv) return -1; const d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data; let n = 0; for (let i = 3; i < d.length; i += 16) if (d[i] > 0) n++; return n; });
+    };
+    for (const [fk, nm] of [['w:skin:skin.knight.b', 'c01-preview-skin'], ['w:hat:hat.crown', 'c02-preview-crown'], ['w:pet:pet.platino', 'c03-preview-pet'], ['w:trail:trail.coins', 'c04-preview-trail'],
+      ['w:death:death.embers', 'c05-preview-embers'], ['w:title:title.contrarian', 'c06-preview-title'], ['w:tint:tint.longsword', 'c07-preview-tint'], ['w:camp:camp.bluehearth', 'c08-preview-bluehearth'], ['w:aura:aura.gilded', 'c09-preview-gilded']]) {
+      const n = await hov(fk, nm);
+      if (n <= 50) fail(res, `preview of ${fk} is blank (${n} opaque samples)`);
+    }
+    const cap = await ev(() => { const b = [...document.querySelectorAll('#wardrobe-view .wd-item')].find(x => x.dataset.fk === 'w:title:title.many'); b.dispatchEvent(new MouseEvent('mouseenter')); const c = document.querySelector('#wardrobe-view .wd-cap'); return c ? c.textContent : ''; });
+    if (cap !== 'Tester, One of Many') fail(res, 'preview title caption: ' + JSON.stringify(cap));
+    const petPng = await ev(() => { // review sheet at 4 canvas px per world px: the two source frames, the two pet frames (0.6 box-shrink), a pet frame in the silver 'general' ramp
+      const E = window.__ED, A = E.Atlas, id = E.Sprites.fitAnim('cos.platino', 0.6), cv = document.createElement('canvas'), c = cv.getContext('2d'); cv.width = 320; cv.height = 150; c.fillStyle = '#5a5a64'; c.fillRect(0, 0, 320, 150); c.imageSmoothingEnabled = false;
+      cv.width = 640; c.fillRect(0, 0, 640, 150); c.imageSmoothingEnabled = false;
+      c.setTransform(4, 0, 0, 4, 0, 0); A.draw(c, 'cos.platino', 0, 20, 36, {}); A.draw(c, 'cos.platino', 1, 56, 36, {}); A.draw(c, id, 0, 90, 36, {}); A.draw(c, id, 1, 114, 36, {});
+      A.draw(c, id, 0, 138, 36, { variant: E.Pix.variant(id, 'general') });
+      return { id, url: cv.toDataURL('image/png') };
+    });
+    { const file = path.join(o.outdir, [res.name, tag(), o.cls, 'c00-pet-frames'].join('-') + '.png'); fs.writeFileSync(file, Buffer.from(petPng.url.split(',')[1], 'base64')); res.shots.push(file); notes(res, 'pet look ' + petPng.id); }
+    const loop = await ev(async () => { const E = window.__ED, sl = (n) => new Promise(r => setTimeout(r, n)); const on = E.Cos.previewOn(); E.App.enterHearth('upgrades'); await sl(200); const off = E.Cos.previewOn(); return { on, off }; });
+    if (!loop.on || loop.off) fail(res, 'the preview loop must run on the Wardrobe and stop once it hides: ' + JSON.stringify(loop));
+    // the worn sets: one per hero, all different; the Blue Hearth at the camp
+    await ev(() => {
+      const E = window.__ED, p = E.App.profile, S = E.Save;
+      const set = (c, o) => { for (const k of Object.keys(o)) { if (k === 'tints') for (const w of o.tints) S.wear(p, c, 'tint', 'tint.' + w, true); else S.wear(p, c, k, o[k]); } };
+      set('knight', { skin: 'skin.knight.a', hat: 'hat.crown', aura: 'aura.gilded', trail: 'trail.coins', title: 'title.contrarian', tints: [E.CLASSES.knight.weapons[0]] });
+      set('ranger', { skin: 'skin.ranger.secret', pet: 'pet.platino', death: 'death.embers', title: 'title.many', aura: null });
+      set('pyro', { skin: 'skin.unkindled', hat: 'hat.crown', trail: 'trail.coins', aura: null, tints: [E.CLASSES.pyro.weapons[0]] });
+      if (E.CLASSES.bell) set('bell', { skin: 'skin.bell.b', pet: 'pet.platino', aura: 'aura.gilded', title: 'title.contrarian', tints: [E.CLASSES.bell.weapons[0]] });
+      S.wear(p, null, 'camp', 'camp.bluehearth');
+      E.App.persist();
+    });
+    await tryShot('c10-camp-bluehearth', () => ev(() => window.__ED.App.goHome()), 900);
+    await tryShot('c11-hearth-bluehearth', () => ev(() => window.__ED.App.enterHearth('upgrades')), 700);
+    // a 4-hero party in a staged fight
+    await call(page, 'install');
+    const party = await ev(() => {
+      const E = window.__ED, A = E.App, p = A.profile, ids = ['knight', 'ranger', 'pyro', E.CLASSES.bell ? 'bell' : 'shade'];
+      const players = ids.map((c, i) => ({ pid: i ? 'q' + i : 'solo', name: ['Tester', 'Mira', 'Oskar', 'Wren'][i], slot: i, cls: c, weapon: E.CLASSES[c].weapons[0], meta: E.Save.metaBundle(p, c), wear: E.Save.wearBundle(p, c) }));
+      A.beginRun('solo', { localPid: 'solo', seed: 7, pact: 0, tutorial: false, players });
+      return players.map(q => q.cls + ':' + Object.values(q.wear).filter(v => v && (!Array.isArray(v) || v.length)).length);
+    });
+    notes(res, 'party sets (items worn): ' + party.join(' '));
+    await wait(1200);
+    await call(page, 'stage', 24, 1);
+    await call(page, 'drive', true, false);
+    // the other heroes walk circles around the local one (their pets follow, their trails drop coins)
+    await ev(() => { const E = window.__ED; window.__cosWalk = setInterval(() => { const s = E.Game.s; if (!s || !s.world) return; const me = s.me, t = performance.now() / 1000; let i = 0; for (const p of s.world.players.values()) { if (p === me || p.dead) continue; i++; const a = t * 1.3 + i * 2.1; p.x = me.x + Math.cos(a) * 70; p.y = me.y + Math.sin(a) * 45; p.face = a + Math.PI / 2; p.moving = true; } }, 16); });
+    await tryShot('c12-party-fight-high', null, 3000);
+    const chk = await ev(() => { const E = window.__ED, s = E.Game.s; return { players: s.view.players.size, worn: [...s.view.players.values()].map(p => p.cls + ':' + (p.wear ? (p.wear.skin || '-') : 'none')) }; });
+    notes(res, 'in run: ' + chk.worn.join(' '));
+    if (chk.worn.some(w => /none$/.test(w))) fail(res, 'a hero runs without its set: ' + chk.worn.join(' '));
+    // Last Embers: the Ranger falls
+    const emb0 = await ev(() => window.__ED.FX.sheets.filter(q => q.id === 'fx.ember').length);
+    await tryShot('c13-last-embers', () => ev(() => { const s = window.__ED.Game.s, p = s.world.players.get('q1'); p.hp = 0; p.dead = true; }), 280);
+    const emb1 = await ev(() => window.__ED.FX.sheets.filter(q => q.id === 'fx.ember').length);
+    if (emb1 - emb0 < 3) fail(res, `Last Embers: the fallen Ranger scattered ${emb1 - emb0} ember sprites`);
+    // the in-run secret toast (a world field: everyone's)
+    const toast = await ev(async () => { const E = window.__ED; E.Game.localEvent({ t: 'secret', pid: null }); E.Game.localEvent({ t: 'secret', pid: 'q2' }); await new Promise(r => setTimeout(r, 120)); return [...document.querySelectorAll('#toasts .toast')].map(x => x.textContent); });
+    if (toast.filter(x => x === 'A secret is uncovered').length !== 1) fail(res, 'secret toasts (one for the party, none for another hero): ' + JSON.stringify(toast));
+    await tryShot('c14-secret-toast', null, 200);
+    // frame ms with and without the sets (High)
+    const cost = await ev(async () => {
+      const E = window.__ED, s = E.Game.s, keep = new Map();
+      const m1 = await window.__BR.measure(3000);
+      for (const p of s.world.players.values()) { keep.set(p.pid, p.wear); p.wear = null; }
+      const m0 = await window.__BR.measure(3000);
+      for (const p of s.world.players.values()) p.wear = keep.get(p.pid);
+      return { on: m1.render, off: m0.render };
+    });
+    res.rows.push({ quality: 'high', sets: 'on', ms: cost.on }, { quality: 'high', sets: 'off', ms: cost.off });
+    notes(res, `Game.render ms p50/p95 with sets ${cost.on && cost.on.p50}/${cost.on && cost.on.p95}, without ${cost.off && cost.off.p50}/${cost.off && cost.off.p95}`);
+    await ev(() => { const A = window.__ED.App; A.settings.quality = 'low'; A.applySettings(); });
+    await tryShot('c15-party-fight-low', null, 2500);
+    const costLow = await ev(async () => (await window.__BR.measure(3000)).render);
+    notes(res, `Low quality Game.render ms p50/p95 with sets ${costLow && costLow.p50}/${costLow && costLow.p95}`);
+    await ev(() => { clearInterval(window.__cosWalk); });
+    await call(page, 'drive', false, false);
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  if (res.shots.length < 12) fail(res, 'only ' + res.shots.length + ' screenshots were taken');
+  return res;
+}
+
 // ---------------- output ----------------
 const f1 =(v) => (typeof v === 'number' ? v.toFixed(1) : '-');
 const tri = (s) => (s ? [s.p50, s.p95, s.max].map(f1).join('/') : '-');
@@ -1102,7 +1419,7 @@ async function main() {
       const t0 = Date.now();
       log('scenario ' + sc + ' ...');
       let r;
-      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'sheet' ? await scenSheet() : sc === 'screens' ? await scenScreens() : sc === 'wardrobe' ? await scenWardrobe() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : sc === 'cards' ? await scenCards() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
+      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'sheet' ? await scenSheet() : sc === 'screens' ? await scenScreens() : sc === 'wardrobe' ? await scenWardrobe() : sc === 'cosmetics' ? await scenCosmetics() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : sc === 'cards' ? await scenCards() : sc === 'bell' ? await scenBell() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
       r.wallMs = Date.now() - t0;
       r.browserVersion = bv;
       if (S.server.missing.size) r.missing = [...S.server.missing];

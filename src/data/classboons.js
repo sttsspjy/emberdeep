@@ -265,17 +265,17 @@
     desc: 'Strikes at full swing (the bell glows: 90% of its top speed or more) are Heavy Strikes: +{heavyHit} damage and half again the knockback.', mods: { heavyHit: 0.25 } });
   card('bell', 'attack', 2, 'b_atk_h', { name: 'Wrecking Ball', icon: 'hammer', tag: 'Heavy', weapon: { kind: 'heavy' },
     desc: 'Your bell becomes heavy (×{fkRate:x} lockout, ×{fkDmg:x} damage per strike; strikes Stagger). Every strike cracks the ground: a shock (radius 60) for {wreck} of the strike, twice that from a Heavy Strike, which also stuns {wreckStun:s} (not bosses).[ Heavy Strikes deal +{heavyHit} more.]',
-    rider2: 'Unstoppable: Heavy Strikes knock foes twice as far.', mods: { wreck: 0.04, wreckStun: 0.3 }, up: { heavyHit: 0.1, wreck: 0.015 }, r2: { heavyHit: 0.15, heavyKnock: 1 }, r3: { demolish: 0.07 },
+    rider2: 'Unstoppable: Heavy Strikes knock foes twice as far.', mods: { wreck: 0.04, wreckStun: 0.3 }, up: { heavyHit: 0.1, wreck: 0.015 }, r2: { heavyKnock: 1 }, r3: { demolish: 0.07 },
     form: { name: 'Demolisher', desc: 'The shock grows to radius 100 and deals {demolish} more of the strike, and the bell striking a wall at full swing erupts a Heavy shock.' } });
   card('bell', 'attack', 2, 'b_atk_s', { name: 'Pendulum', icon: 'bolt', tag: 'Swift', weapon: { kind: 'swift' },
     desc: 'Your bell becomes swift (×{fkRate:x} lockout, ×{fkDmg:x} damage per strike; hauling gives Flow). Hauling spins the bell up {haulAcc} faster.[ Heavy Strikes deal +{heavyHit} more.]',
-    rider2: 'Counterweight: strikes cost the bell {strikeKeep} less speed.', mods: { haulAcc: 0.1 }, up: { haulAcc: 0.04, heavyHit: 0.1 }, r2: { strikeKeep: 0.2 }, r3: { perpetual: 0.14, strikeKeep: 0.2 },
+    rider2: 'Counterweight: strikes cost the bell {strikeKeep} less speed.', mods: { haulAcc: 0.12 }, up: { haulAcc: 0.04, heavyHit: 0.1 }, r2: { strikeKeep: 0.2 }, r3: { perpetual: 0.14, strikeKeep: 0.2 },
     form: { name: 'Perpetual Motion', desc: "The bell's top speed rises {perpetual}, and strikes cost it {strikeKeep} less speed in all." } });
   card('bell', 'skill1', 1, 'b_s1', { name: 'Long Chain', icon: 'bell', forks: ['b_s1_a', 'b_s1_b'], plays: 'heave into the pack, reel it back through.',
     desc: 'Heave flings the bell {heaveR} farther and recharges {s1Cdr} faster.', mods: { heaveR: 0.4, s1Cdr: 0.2 } });
   card('bell', 'skill1', 2, 'b_s1_a', { name: 'Wrecker', icon: 'bomb', tag: 'Burst',
     desc: 'Heave deals +{s1Dmg}, and where its flight ends the bell smashes the ground (radius 80) for {wrecker} of a Heave strike, knocking foes back.',
-    rider2: 'Ground Breaker: the smash stuns foes {smashStun:s} (not bosses).', mods: { s1Dmg: 0.2, wrecker: 0.6 }, up: { s1Dmg: 0.15, wrecker: 0.15 }, r2: { smashStun: 0.6 }, r3: { wreckSpin: 0.5, spinDur: 1.5 },
+    rider2: 'Ground Breaker: the smash stuns foes {smashStun:s} (not bosses).', mods: { s1Dmg: 0.2, wrecker: 0.42 }, up: { s1Dmg: 0.12, wrecker: 0.1 }, r2: { smashStun: 0.6 }, r3: { wreckSpin: 0.5, spinDur: 1.5 },
     form: { name: 'Wrecking Spin', desc: 'After the flight the bell keeps the long chain for {spinDur:s} and swings wide around you: every foe it passes takes {wreckSpin} of a Heave strike (each foe at most once per 0.4 s).' } });
   card('bell', 'skill1', 2, 'b_s1_b', { name: 'Tether Hook', icon: 'hand', tag: 'Guard',
     desc: 'Heave deals +{s1Dmg} and hooks the first foe it strikes (not elites or bosses), reeling it to your feet and stunning it {hookStun:s}. A hook shields you for {hookShield} max health (at most once per 8 s).',
@@ -285,7 +285,7 @@
     desc: 'Peal: +{s2Area} radius and +{s2Dmg} damage.', mods: { s2Area: 0.3, s2Dmg: 0.25 } });
   card('bell', 'skill2', 2, 'b_s2_a', { name: 'Thunderclap', icon: 'bolt', tag: 'Burst',
     desc: 'The Peal charges the foes it strikes for half of its damage and discharges them at once at +{clap}. Peal deals +{s2Dmg}.',
-    rider2: 'Reverberation: the Peal rings again 0.5 s later on the same spot at {pealEcho}.', mods: { clap: 1.6, s2Dmg: 0.5 }, up: { clap: 0.25, s2Dmg: 0.3 }, r2: { pealEcho: 0.5 }, r3: { tollN: 3, tollBolt: 1.4 },
+    rider2: 'Reverberation: the Peal rings again 0.5 s later on the same spot at {pealEcho}.', mods: { clap: 1.2, s2Dmg: 0.4 }, up: { clap: 0.25, s2Dmg: 0.3 }, r2: { pealEcho: 0.5 }, r3: { tollN: 3, tollBolt: 1 },
     form: { name: 'Thunder Toll', desc: 'Every Peal also calls a thunderbolt on each of the {tollN:n} most charged foes within 220 of the bell (radius 50) for {tollBolt} of the Peal.' } });
   card('bell', 'skill2', 2, 'b_s2_b', { name: 'Warding Toll', icon: 'shieldgold', tag: 'Guard', coop: true,
     desc: 'Peal deals +{s2Dmg}, destroys enemy shots within half again its radius and shields you for {pealShield} max health per foe it strikes (up to {pealCap}, at most once per 10 s).',

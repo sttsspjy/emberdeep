@@ -246,10 +246,14 @@
     drawDoors(c, view, room, P, t);
     drawZones(c, view, t, 0);
     drawPickups(c, view, t, 0);
+    const Cos = ED.Cos;
+    if (Cos) Cos.trails(c, view, t, low); // Trail of Coins footprints on the floor
     const artProps = R.propArt();
     if (!artProps) drawProps(c, view, local, t);
     let dn = 0, nFoe = 0;
     for (const p of view.players.values()) qDraw(dn++, p.y, 0, p);
+    const xbell = ED.ClassFx.bell;
+    if (xbell) for (const p of view.players.values()) if (p.bells && p.bells.length && !p.dead) for (let i = 0; i < p.bells.length; i++) { qDraw(dn, p.y + (p.bells[i].oy || 0) + 0.01, 7, p); drawPool[dn++].d = i; } // a hero's bells on their chains (cls-bell.js): kind 7, d = bell index
     for (const e of view.enemies) if (e.hp > 0) { qFoe(dn++, e); nFoe++; }
     for (const a of view.allies) qDraw(dn++, a.y, 2, a);
     for (const s of R.liveStatics(view, room)) { // tall pieces of the room art (columns, standing decor, door arch, unbroken breakables)
@@ -259,6 +263,7 @@
     if (artProps) for (const p of view.props) qDraw(dn++, p.y, 4, p); // pixel-art props sort with the entities
     if (room.bell) qDraw(dn++, room.bell.y, 6, room.bell); // the Drowned Bell (floor gen) and the Platino: kind 6
     if (view.critter) qDraw(dn++, view.critter.y, 6, view.critter);
+    if (Cos) { const pets = Cos.pets(view, t, dt); for (let i = 0; i < pets.length; i++) qDraw(dn++, pets[i].y, 8, pets[i]); } // Wardrobe pets (client only): kind 8
     if (F.bellRing > 0) F.bellRing = Math.max(0, F.bellRing - dt);
     crowdLod(view, local, nFoe, dn);
     for (const z of view.zones) if ((z.kind === 'fire' || z.kind === 'pfire') && z.w !== 10 && fireFade(z) > 0.01) { // (the Phoenix ring draws its own tongues) fire flames: kind 5 entries (3 and 4 are the room's statics and props), d = flame index
@@ -271,6 +276,8 @@
       if (it.k === 4) { shDX = shDY = 0; drawProp(c, it.o, view, local, t); continue; }
       if (it.k === 5) { drawFlame(c, it.o, it.d, t); continue; }
       if (it.k === 6) { if (it.o === room.bell) drawBell(c, it.o, F.bellRing || 0, t); else drawPlatino(c, it.o, t); continue; }
+      if (it.k === 7) { shDX = shDY = 0; xbell(c, it.o, it.d, t, low, view); continue; }
+      if (it.k === 8) { Cos.drawPet(c, it.o, t); continue; }
       const o = it.o, rim = low || o.fodder ? null : rimLight(o.x, o.y, it.k === 0 ? 16 : 0), still = atlasOn && it.k < 2 && AC.still(o), px = still ? Math.round(o.x / 2) * 2 : Math.round(o.x), py = still ? Math.round(o.y / 2) * 2 : Math.round(o.y); // feet on the buffer pixel grid (the 2 px art grid while standing still)
       if (rim) { shDX = -rim.dx * 0.28; shDY = -rim.dy * 0.12; } else { shDX = 0; shDY = 0; }
       if (it.k === 1) { // foe: atlas art (pose offsets are art-px steps), else the procedural look with pose offset, lean and squash (F.xform) in one matrix with the mirror
@@ -1315,15 +1322,26 @@
       default: return false;
     }
   }
-  // The Drowned Bell (room.bell): atlas weapon.greatbell when loaded, else a cracked green-bronze bell; ring = seconds of swing left after a 'bellrung' (fx.js sets ED.FX.bellRing).
+  // The Drowned Bell (room.bell): the Great Bell's art at 1.5x in sunken verdigris (BELL_DROWNED recolours its bronze) resting on its lip, a crack down its flank, else a cracked green-bronze bell drawn by hand;
+  // ring = seconds of swing left after a 'bellrung' (fx.js sets ED.FX.bellRing): it rocks on its lip.
+  const BELL_DROWNED = { '#5a3418': '#1a3a33', '#7a4620': '#245448', '#b0702e': '#357a66', '#e0a858': '#5fae94', '#fff0c8': '#bff8e8', '#2f7a68': '#7a6a3a', '#1f5048': '#4a4024' };
+  const BELL_CRACK = [[3, 6], [4, 8], [4, 10], [3, 12], [4, 14], [5, 16], [5, 18], [4, 20], [5, 22], [6, 24], [6, 26], [5, 28], [6, 30]]; // world px from the crown, right of centre
   function drawBell(c, b, ring, t) {
     const sw = ring > 0 ? Math.sin(ring * 14) * 0.35 * Math.min(1, ring / 1.6) : 0, x = Math.round(b.x), y = Math.round(b.y);
     R.light(x, y - 14, 70 + ring * 40, '#6fe6c8', 0.5 + ring * 0.4);
     if (ring > 0) R.emit(x, y - 16, 34 + ring * 20, '#bff8e8', 0.25 * ring);
     c.save(); c.translate(x, y);
     Sp.shadow(c, 15, 0.4);
-    const A = ED.Atlas;
-    if (A && A.ok && A.has('weapon.greatbell') && A.draw(c, 'weapon.greatbell', 0, 0, 0, sw ? { rot: sw } : undefined)) { c.restore(); return; }
+    const A = ED.Atlas, id = A && A.ok && A.has('weapon.greatbell') ? Sp.shotAnim('weapon.greatbell', 1.5) : null, r = id && A.anim(id);
+    if (r) {
+      const H = (r.f[0].oy + r.f[0].h - r.ay) * 2 - 2, rock = sw * 0.5, v = A.variant(id, 'pal:drowned', () => BELL_DROWNED) ? 'pal:drowned' : '';
+      if (A.draw(c, id, 0, Math.round(Math.sin(rock) * H), Math.round(-Math.cos(rock) * H), { rot: rock, variant: v })) {
+        c.rotate(rock); c.fillStyle = '#0d1a17';
+        for (const [dx, dy] of BELL_CRACK) c.fillRect(dx, dy - H, 2, 2);
+        c.fillStyle = '#7fc9a8'; c.fillRect(-8, 10 - H, 2, 8); // a glint of wet patina
+        c.restore(); return;
+      }
+    }
     c.rotate(sw); c.lineWidth = 1.5; c.strokeStyle = '#0b0806';
     c.fillStyle = '#2b5f52'; c.beginPath(); c.moveTo(-8, -30); c.quadraticCurveTo(-10, -12, -16, -2); c.lineTo(16, -2); c.quadraticCurveTo(10, -12, 8, -30); c.quadraticCurveTo(0, -35, -8, -30); c.closePath(); c.fill(); c.stroke();
     c.fillStyle = '#3f8a74'; c.beginPath(); c.moveTo(-6, -29); c.quadraticCurveTo(-8, -13, -12, -4); c.lineTo(-4, -4); c.quadraticCurveTo(-3, -16, -2, -31); c.closePath(); c.fill();

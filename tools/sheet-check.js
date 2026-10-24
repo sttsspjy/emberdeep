@@ -325,13 +325,39 @@ function weaponRun(cls, wi, boons, o) {
 for (const cls of ED.CLASS_IDS) for (let wi = 0; wi < 3; wi++) {
   const r = weaponRun(cls, wi, {}), id = ED.CLASSES[cls].weapons[wi];
   rel(r.total / r.atk, r.m.weapon.dps / r.m.weapon.aps, 0.04, `${id} damage per attack on one foe`);
-  if (cls === 'bell') rel(r.atk / r.secs, r.m.weapon.aps, 0.06, `${id} strikes per second on one foe`);
+  if (cls === 'bell') rel(r.atk / r.secs, r.m.weapon.aps / ED.Sheet.BELL_EFF.one, 0.06, `${id} strikes per second on one foe on the orbit (the model before BELL_EFF)`);
 }
 // Bellwarden forks and riders: Heavy and Swift bells, Momentum's Heavy Strikes, the Wrecking Ball shock
 for (const [boons, wi, tag] of [[{ b_atk: 1, b_atk_h: 1 }, 0, 'Tolling Bell'], [{ b_atk: 1, b_atk_s: 1 }, 0, 'Chiming Bell'], [{ b_atk: 1, b_atk_h: 2 }, 1, 'Cathedral Bell rank 2'], [{ b_atk: 1, b_atk_s: 3 }, 2, 'Sleigh Bells rank 3']]) {
   const r = weaponRun('bell', wi, boons, { secs: 24 });
   rel(r.total / r.atk, r.m.weapon.dps / r.m.weapon.aps, 0.05, `${tag} damage per strike`);
-  rel(r.atk / r.secs, r.m.weapon.aps, 0.08, `${tag} strikes per second`);
+  rel(r.atk / r.secs, r.m.weapon.aps / ED.Sheet.BELL_EFF.one, 0.08, `${tag} strikes per second`);
+}
+// Bellwarden calibration (sheet.js BELL_EFF): a staged chase, the hero holding its spot and hauling while skeletons (no hit hurts it) walk in from 140 px, 4 seeds x 30 s after 2 s;
+// the weapon damage a second on one foe and on a pack of 4 against the sheet's one-foe dps and tools/model.js packWeapon, within 10% for every bell weapon, Heavy and Swift
+{
+  const MDc = require('./model.js')(ED, { pack: 4 }), SECS = 30, SEEDS = 4;
+  const chase = (wid, boons, nf, seed) => {
+    const w = new ED.World({ seed, pact: 0, players: [{ pid: 'p0', name: 'T', slot: 0, cls: 'bell', weapon: wid, meta: META() }] });
+    w.startRun(); const p = w.players.get('p0');
+    Object.assign(p.boons, boons); w.recalc(p, true); p.offers.length = 0; p.picks = 0; p.offer = null; p.stats.crit = 0;
+    w.enemies.length = 0; w.enc = null; w.locked = false; w.zones.length = 0; w.projs.length = 0;
+    const m = sheetOf(w, p), foes = new Set();
+    for (let i = 0; i < nf; i++) { const a = i / nf * 2 * Math.PI + seed, e = w.spawnEnemy('skeleton', p.x + Math.cos(a) * 140, p.y + Math.sin(a) * 140); e.spawnT = 0; e.hp = e.maxHp = 1e9; foes.add(e); }
+    let dmg = 0, on = false;
+    const h0 = W.hitEnemy;
+    W.hitEnemy = function (e, b, s) { const d = h0.call(this, e, b, s); if (on && foes.has(e) && s && s.p === p && s.kind !== 'dot') dmg += d; return d; };
+    p.haulIn = true;
+    const x0 = p.x, y0 = p.y;
+    for (let t = 0; t < (SECS + 2) * 60; t++) { if (t === 120) on = true; p.hp = p.maxHp; p.x = x0; p.y = y0; w.update(1 / 60); }
+    W.hitEnemy = h0;
+    return { got: dmg / SECS, want: nf > 1 ? MDc.packWeapon({ weapon: m.weapon }, nf) : m.weapon.dps };
+  };
+  for (const wid of ['bronzebell', 'stormbell', 'greatbell', 'wreckbell', 'handbells', 'chimes']) for (const [tag, boons] of [['', {}], [' Heavy', { b_atk: 1, b_atk_h: 1 }], [' Swift', { b_atk: 1, b_atk_s: 1 }]]) for (const nf of [1, 4]) {
+    let got = 0, want = 0;
+    for (let s = 1; s <= SEEDS; s++) { const r = chase(wid, boons, nf, s); got += r.got / SEEDS; want = r.want; }
+    rel(got, want, 0.1, `${wid}${tag} weapon damage a second in a chase, ${nf > 1 ? 'a pack of ' + nf : 'one foe'} (sheet at BELL_EFF)`);
+  }
 }
 // forks and route weapons: Heavy, Swift and the Knight Cleave
 for (const [cls, boons, tag] of [['knight', { k_atk: 1 }, 'Oath of Steel'], ['knight', { k_atk: 1, k_atk_h: 1 }, 'Oathbreaker'], ['knight', { k_atk: 1, k_atk_s: 1 }, 'Sworn Blade'], ['knight', { k_atk: 1, k_atk_h: 3 }, 'Earthsplitter'], ['knight', { k_atk: 1, k_atk_s: 3 }, 'Thousand Edges'], ['ranger', { r_atk: 1, r_atk_h: 1 }, 'Ballista'], ['cleric', { c_atk: 1, c_atk_s: 1 }, 'Crusader']]) {

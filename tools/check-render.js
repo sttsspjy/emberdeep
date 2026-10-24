@@ -81,8 +81,65 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     variant: (id, key, make) => { if (!ART.anims[id]) return false; if (make && !vars[id + '|' + key]) vars[id + '|' + key] = make(ART.pal[id] || []); return true; } });
   ED.Pix = stub({ s2: (v) => Math.round(v / 2) * 2 });
   for (const k of ['Sprites', 'Bmp', 'Tiles', 'Audio', 'HUD', 'Input']) ED[k] = stub();
-  for (const f of ['client/actors.js', 'client/fx.js', 'client/render.js', 'game.js']) load(f);
+  for (const f of ['client/actors.js', 'client/fx.js', 'client/render.js', 'client/cosmetics.js', 'game.js']) load(f);
   const AC = ED.Actors, F = ED.FX, R = ED.Render, G = ED.Game;
+
+  // ---- Wardrobe in play: the pick's set made safe, skins as swap sheets, titles, sheens, pets and coin trails (cosmetics.js) ----
+  {
+    const Cos = ED.Cos, W = (o) => Object.assign({ skin: null, aura: null, hat: null, pet: null, trail: null, death: null, title: null, tints: [] }, o);
+    const cw = N.cleanWear;
+    ok(JSON.stringify(cw(null, 'knight')) === JSON.stringify(W({})) && JSON.stringify(cw('x', 'knight')) === JSON.stringify(W({})), 'cleanWear: a missing or malformed set wears nothing');
+    const mixed = cw({ skin: 'skin.ranger.a', aura: 'hat.crown', hat: 'hat.crown', pet: 42, trail: 'trail.coins', death: 'death.nope', title: 'title.contrarian', tints: ['longsword', 'bow', 'longsword', 7] }, 'knight');
+    ok(mixed.skin === null && mixed.aura === null && mixed.hat === 'hat.crown' && mixed.pet === null && mixed.trail === 'trail.coins' && mixed.death === null && mixed.title === 'title.contrarian', `cleanWear keeps known items of their own slot and hero only (${JSON.stringify(mixed)})`);
+    ok(JSON.stringify(mixed.tints) === JSON.stringify(ED.CLASSES.knight.weapons.filter(x => x === 'longsword')), `cleanWear keeps the hero's own base weapons once (${mixed.tints})`);
+    for (const c of ED.CLASS_IDS) {
+      const all = W({ skin: `skin.${c}.secret`, aura: 'aura.gilded', hat: 'hat.crown', pet: 'pet.platino', trail: 'trail.coins', death: 'death.embers', title: 'title.many', tints: ED.CLASSES[c].weapons.slice() });
+      ok(JSON.stringify(cw(all, c)) === JSON.stringify(all), `cleanWear keeps a full ${c} set`);
+      for (const sk of ['a', 'b', 'secret', 'unkindled']) {
+        const id = `hero.${c}.idle`, key = AC.heroVar(c, 1, id, sk), sw = ED.ART.swaps[c + '.' + sk], m = vars[id + '|' + key];
+        ok(key === 'pal:h1.' + sk && sw && m, `${c} skin ${sk}: its own sheet (${key})`);
+        if (!m || !sw) continue;
+        ok(Object.keys(sw.base).every(h => sw.key.indexOf(h) >= 0 || m[h] === sw.base[h]) && m[sw.key[0]] === ED.PLAYER_COLORS[1], `${c} skin ${sk}: the swap colours, the key colour in the player colour`);
+        ok(Cos.skinKey(W({ skin: sk === 'unkindled' ? 'skin.unkindled' : `skin.${c}.${sk}` })) === sk, `skin suffix of ${c} ${sk}`);
+      }
+      ok(AC.heroVar(c, 2, `hero.${c}.idle`, 'nope') === 'pal:h2' && AC.heroVar(c, 2, `hero.${c}.idle`, '') === 'pal:h2', `${c}: an unknown or no skin draws the hero's own colours`);
+    }
+    let hid = 0;
+    const hero = (o) => Object.assign({ pid: 'c' + (hid++), name: 'Mira', cls: 'knight', slot: 0, x: 100, y: 100, face: 0 }, o);
+    ok(Cos.nameOf(hero({ wear: W({ title: 'title.contrarian' }) })) === 'Mira the Contrarian' && Cos.nameOf(hero({ wear: W({ title: 'title.many' }) })) === 'Mira, One of Many' && Cos.nameOf(hero({})) === 'Mira', 'titles: "Mira the Contrarian", "Mira, One of Many", the bare name without one');
+    const kw = ED.CLASSES.knight.weapons, vk = (ED.ARMORY.knight || []).find(e => ED.weaponBase(e.id) === kw[0]), th = hero({ wear: W({ tints: [kw[0]] }) });
+    ok(Cos.tintOf(th, kw[0]) && Cos.tintOf(th, kw[0] + '@heavy') === Cos.tintOf(th, kw[0]) && (!vk || Cos.tintOf(th, vk.id) === Cos.tintOf(th, kw[0])) && !Cos.tintOf(th, kw[1]), 'a sheen tints its base weapon, its forks and its Armory variant, nothing else');
+    ok(Cos.tintRamp(kw[0]) !== Cos.tintRamp(kw[1]) && Cos.tintRamp(kw[1]) !== Cos.tintRamp(kw[2]), 'the three sheens of a hero differ');
+    // pets: follow with a lag, hide while down, snap back after a room change
+    Cos.reset();
+    const pp = hero({ pid: 'pet0', wear: W({ pet: 'pet.platino' }) }), pv = { players: new Map([['pet0', pp], ['bare', hero({ pid: 'bare' })]]) };
+    let pl = Cos.pets(pv, 0, 1 / 60);
+    ok(pl.length === 1 && Math.abs(pl[0].x - 82) < 1e-9 && pl[0].y === 104, `a pet appears behind its hero (${pl[0] && pl[0].x}, ${pl[0] && pl[0].y})`);
+    pp.x = 160; pl = Cos.pets(pv, 1 / 60, 1 / 60);
+    ok(pl[0].x > 82 && pl[0].x < 120, `the pet lags behind a moving hero (${pl[0].x})`);
+    pp.downed = true; ok(Cos.pets(pv, 0.1, 1 / 60).length === 0, 'no pet while its hero is down'); pp.downed = false;
+    pp.x = 900; pl = Cos.pets(pv, 0.2, 1 / 60); ok(Math.abs(pl[0].x - 882) < 1e-9, 'the pet snaps to its hero after a room change');
+    // coin trail: one gold footprint per 24 px walked, at most 10 a second, capped per hero, none across a jump; flat stamps at alpha <= 0.5, never the gold pickup sprite
+    const alphas = [], g = { globalAlpha: 1, fillStyle: '', fillRect() { alphas.push(this.globalAlpha); } }, tp = hero({ pid: 'tr0', x: 0, wear: W({ trail: 'trail.coins' }) }), tv = { players: new Map([['tr0', tp]]) };
+    let drawn = 0, T0 = 0, atlasUsed = 0;
+    const ad = ED.Atlas.draw; ED.Atlas.draw = () => { atlasUsed++; return true; };
+    const run = (from, to, sec, low) => { const n = Math.round(sec * 60); let last = 0; for (let i = 1; i <= n; i++) { tp.x = from + (to - from) * i / n; last = Cos.trails(g, tv, T0 + i / 60, low); } T0 += sec; return last; };
+    const slow = run(0, 120, 1); // 120 px/s: a coin per 24 px
+    ok(slow >= 4 && slow <= 5, `a hero walking 120 px in a second leaves 4 or 5 coins (${slow})`);
+    const fast = run(120, 720, 0.5); // 1200 px/s: held by the 0.1 s gap
+    ok(fast <= 14 && fast >= 9, `a fast hero is held to 10 coins a second and 14 live coins (${fast})`);
+    const lowN = run(720, 1320, 0.5, true); ok(lowN <= 6, `Low quality keeps at most 6 coins (${lowN})`);
+    tp.x = 5000; const jumpN = Cos.trails(g, tv, T0 + 0.05, true); T0 += 0.05;
+    ok(jumpN <= lowN, `a room change drops no coin across the jump (${lowN} -> ${jumpN})`);
+    drawn = Cos.trails(g, tv, T0 + 5, false); ok(drawn === 0, 'coins fade out within their life');
+    ok(atlasUsed === 0 && alphas.length > 0 && Math.max(...alphas) <= 0.5, `the trail stamps flat footprints at alpha <= 0.5, no pickup sprite (max ${Math.max(...alphas)}, atlas draws ${atlasUsed})`);
+    ED.Atlas.draw = ad;
+    // co-op: the start message's sets reach every peer's mirror, made safe
+    const m2 = new G.Mirror({ pact: 0, players: [{ pid: 'a', name: 'A', slot: 0, cls: 'ranger', weapon: ED.CLASSES.ranger.weapons[0], meta: META(), wear: { skin: 'skin.ranger.b', hat: 'hat.crown', aura: 'skin.ranger.a' } }, { pid: 'b', name: 'B', slot: 1, cls: 'knight', weapon: ED.CLASSES.knight.weapons[0], meta: META() }] }, 'b');
+    ok(m2.players.get('a').wear.skin === 'skin.ranger.b' && m2.players.get('a').wear.hat === 'hat.crown' && m2.players.get('a').wear.aura === null && m2.players.get('b').wear.skin === null, 'a client mirror carries every hero set, cleaned');
+    const pk = N.cleanPick({ cls: 'necro', weapon: ED.CLASSES.necro.weapons[0], meta: { up: [], mastery: 3, armory: [] }, wear: { skin: 'skin.necro.a', title: 'title.many', tints: ED.CLASSES.necro.weapons } });
+    ok(pk.wear.skin === 'skin.necro.a' && pk.wear.title === 'title.many' && pk.wear.tints.length === 3, 'the hero pick carries its set through cleanPick');
+  }
   const ids = ED.biomeFor(1).enemies.map((r) => r[0]).filter((t) => { const d = ED.ENEMIES[t]; return d && !d.boss && !d.ally && !d.minion; });
   const room1 = (pact) => {
     const w = new ED.World({ seed: 7, pact, players: [{ pid: 'p0', name: 'T', slot: 0, cls: 'knight', weapon: ED.CLASSES.knight.weapons[0], meta: META() }] });

@@ -1112,14 +1112,14 @@ const partyOf = (cls, i, n) => {
   const rest = cls.filter((c, k) => k !== i % L), k = Math.floor(i / L) % rest.length;
   return [lead].concat(rest.slice(k), rest.slice(0, k));
 };
-// Expands the rotating flags for run i of a batch over nc classes: route = floor(i / nc) mod 4, fork = floor(i / (nc x 4)) mod 2, weapon = floor(i / (nc x 8)) mod 3, start = the six gates then generalist.
+// Expands the rotating flags for run i of a batch over nc classes: route = floor(i / nc) mod 4, fork = floor(i / (nc x 4)) mod 2, weapon = floor(i / (nc x 8)) mod 3, start = floor(i / nc) mod 7 (the six gates then generalist; by run block, so it never locks to a hero).
 const ROT_START = ['kindle', 'frostbite', 'staticcharge', 'envenom', 'consecrate', 'doommark', 'generalist'];
 function jobOpts(o, i, nc) {
   const r = Object.assign({}, o);
   if (o.route === 'rotate') r.route = ED.ROUTES[Math.floor(i / nc) % 4];
   if (o.fork === 'rotate') r.fork = Math.floor(i / (nc * 4)) % 2;
   if (o.weapon === 'rotate') r.weapon = Math.floor(i / (nc * 8)) % 3;
-  if (o.start === 'rotate') r.start = ROT_START[i % 7];
+  if (o.start === 'rotate') r.start = ROT_START[Math.floor(i / nc) % ROT_START.length];
   return r;
 }
 
@@ -1140,7 +1140,7 @@ if (require.main === module) {
   const flags = {}, args = [];
   for (const a of process.argv.slice(2)) { const m = /^--([a-z0-9]+)(?:=(.*))?$/i.exec(a); if (m) flags[m[1]] = m[2] === undefined ? '1' : m[2]; else args.push(a); }
   const n = +(args[0] || 1), runs = +(args[1] || 5), skill = +(args[2] || 0.75), meta = args[3] || 'none';
-  const cls = (args[4] && args[4] !== '-' ? args[4] : 'knight,ranger,pyro,shade,cleric,necro').split(','); // '-' = every hero
+  const cls = (args[4] && args[4] !== '-' ? args[4] : ED.CLASS_IDS.join(',')).split(','); // '-' = every hero
   const { up, mastery } = metaProfile(meta);
   const o = optsFromFlags(flags), pick = o.pick, force = o.force, seed0 = +(flags.seed0 || 1000);
   const results = [];

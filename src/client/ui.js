@@ -39,7 +39,7 @@
   };
   const selectText = (el) => { if (!el) return; const r = document.createRange(); r.selectNodeContents(el); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); };
 
-  const portrait = (cls, size, slot, weapon) => { const cv = document.createElement('canvas'); cv.width = cv.height = size * 2; ED.Sprites.portrait(cv, cls, slot || 0, weapon); if (ED.Actors && ED.Actors.on()) ED.Actors.fit(cv, () => ED.Sprites.portrait(cv, cls, slot || 0, weapon)); return cv; };
+  const portrait = (cls, size, slot, weapon, skin) => { const cv = document.createElement('canvas'); cv.width = cv.height = size * 2; ED.Sprites.portrait(cv, cls, slot || 0, weapon, skin); if (ED.Actors && ED.Actors.on()) ED.Actors.fit(cv, () => ED.Sprites.portrait(cv, cls, slot || 0, weapon, skin)); return cv; }; // skin: a Wardrobe skin suffix (ED.Cos.skinKey)
   UI.portrait = portrait;
 
   // Path helpers: elements share ids with their paths (fire, ice, lightning, poison, holy, shadow).
@@ -555,8 +555,8 @@
       if (!m) { div.className = 'member empty'; div.textContent = 'Waiting for a hero…'; mem.appendChild(div); continue; }
       div.className = 'member';
       div.style.setProperty('--pc', ED.PLAYER_COLORS[m.slot]);
-      div.appendChild(portrait(m.cls, 64, m.slot, m.weapon));
-      div.insertAdjacentHTML('beforeend', `<div><div class="mn" style="color:${ED.PLAYER_COLORS[m.slot]}">${esc(m.name)}${m.pid === myPid ? ' (you)' : ''}</div><div class="mc">${ED.CLASSES[m.cls].name} · ${ED.WEAPONS[m.weapon].name}</div></div><div class="mr${m.ready || m.isHost ? ' ready' : ''}">${m.isHost ? 'Host' : m.ready ? 'Ready' : 'Not ready'}</div>`);
+      div.appendChild(portrait(m.cls, 64, m.slot, m.weapon, ED.Cos && m.wear ? ED.Cos.skinKey(m.wear) : ''));
+      div.insertAdjacentHTML('beforeend', `<div><div class="mn" style="color:${ED.PLAYER_COLORS[m.slot]}">${esc(ED.Cos ? ED.Cos.named(m.name, ED.Cos.titleOf(m.wear)) : m.name)}${m.pid === myPid ? ' (you)' : ''}</div><div class="mc">${ED.CLASSES[m.cls].name} · ${ED.WEAPONS[m.weapon].name}</div></div><div class="mr${m.ready || m.isHost ? ' ready' : ''}">${m.isHost ? 'Host' : m.ready ? 'Ready' : 'Not ready'}</div>`);
       mem.appendChild(div);
     }
     rosterTiles($('lobby-classes'), A.sel.cls, (id) => { A.selectClass(id); A.lobbyPick(); });
@@ -655,7 +655,7 @@
     }
     if (b.weapon && b.weapon.kind && me && ED.CLASSES[me.cls]) {
       const base = me.stats && me.stats.weaponId ? me.stats.weaponId.split('@')[0] : me.weapon, fw = ED.forkWeapon(base, id);
-      h += `<div class="bweap" data-w="${base}@${b.weapon.kind}"><div><span>${esc(fw.name)}</span><small>${fw.dmg.toFixed(1)} damage every ${fw.rate.toFixed(2)} s</small></div></div>`;
+      h += `<div class="bweap" data-w="${base}@${b.weapon.kind}"><div><span>${esc(fw.name)}</span><small>${fw.kind === 'bell' ? `${fw.dmg.toFixed(1)} per strike (x0.4 to x1.8 by its speed) · each foe once per ${fw.rate.toFixed(2)} s` : `${fw.dmg.toFixed(1)} damage every ${fw.rate.toFixed(2)} s`}</small></div></div>`;
     }
     return h;
   }

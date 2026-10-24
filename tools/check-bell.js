@@ -89,6 +89,23 @@ for (const wid of ['bronzebell', 'greatbell', 'handbells', 'wreckbell', 'chimes'
   void e;
 }
 
+// ---- the chain: a foe at the hero's feet is struck by the sweeping chain, once a revolution, at the bell's speed; knockback runs along the swing ----
+{
+  const { w, p } = stage();
+  const e = foe(w, p.x + 2, p.y + 1);
+  p.haulIn = true; run(w, 3);
+  hits.length = 0; w.fx.length = 0;
+  run(w, 6, () => { e.x = p.x + 2; e.y = p.y + 1; e.kbx = e.kby = 0; });
+  const st = w.fx.filter(x => x.t === 'bstrike'), m = ED.Bell.model(p.stats, 1, St.attackInterval(p), ED.Bell.rateGain(p)), rev = speed(p.bells[0]) / (2 * Math.PI * ED.Bell.orbit(p.stats.weapon));
+  ok(st.length > 0 && st.every(x => x.c === 1), `a foe over the hero is struck by the chain (${st.length} chain strikes)`);
+  ok(Math.abs(st.length / 6 - Math.min(rev, 1 / St.attackInterval(p))) < 0.35, `the chain strikes it once a revolution (${(st.length / 6).toFixed(2)}/s, ${rev.toFixed(2)} revolutions/s)`);
+  const wh = hits.filter(h => h.e === e && h.src.kind === 'weapon');
+  ok(wh.length === st.length && wh.every((h, i) => Math.abs(h.d - p.stats.weapon.dmg * U.clamp(st[i].v / C.BELL_REF, 0.4, 1.8) * p.stats.dmg) < 0.02 * h.d), 'a chain strike deals the bell strike of its speed');
+  const h0 = wh[0].src, rx = h0.x - p.x, ry = h0.y - p.y, dot = Math.abs(h0.kx * rx + h0.ky * ry) / (Math.hypot(rx, ry) || 1); // the bell's place at the strike: the swing is across the chain
+  ok(dot < 0.15, `knockback runs along the swing, across the chain (cos to the chain ${dot.toFixed(2)})`);
+  void m;
+}
+
 // ---- walls: a free bell bounces off a wall, a hauled bell whirls over it ----
 {
   const { w, p } = stage();
@@ -188,19 +205,19 @@ for (const set of [{ b_atk: 1, b_atk_h: 3, b_s1: 1, b_s1_a: 3, b_s2: 1, b_s2_a: 
   const { w, p } = stage(set, { weapon: wid });
   for (let i = 0; i < 40; i++) { const a = i / 40 * U.TAU, r = 30 + (i % 4) * 14; const e = foe(w, p.x + Math.cos(a) * r, p.y + Math.sin(a) * r); e.maxHp = e.hp = 400; }
   p.haulIn = true; w.fx.length = 0;
-  let err = null, peak = 0, last = 0, cnt = 0;
+  let err = null, peak = 0, last = 0, cnt = 0, all = 0;
   try {
     run(w, 12, () => {
       if (w.time % 3 < 1 / 60) w.playerSkill(p, w.time, {}, 0);
       if (w.time % 5 < 1 / 60) w.playerSkill(p, 0, {}, 1);
-      cnt += w.fx.filter(x => x.t === 'bstrike').length; w.fx.length = 0;
+      const k = w.fx.filter(x => x.t === 'bstrike').length; cnt += k; all += k; w.fx.length = 0;
       if (w.time - last >= 1) { peak = Math.max(peak, cnt); cnt = 0; last = w.time; }
     });
   } catch (x) { err = x; }
   ok(!err, `${wid} brawl runs${err ? ': ' + err.stack : ''}`);
   const fin = p.bells.every(b => [b.x, b.y, b.vx, b.vy].every(Number.isFinite)) && Number.isFinite(p.hp) && w.enemies.every(e => Number.isFinite(e.hp) && Number.isFinite(e.x));
   ok(fin, `${wid} brawl: no NaN in bells, hero or foes`);
-  ok(peak <= C.BELL_HITS, `${wid} brawl: at most BELL_HITS strikes a second (peak ${peak})`);
+  ok(all / 12 <= C.BELL_HITS && peak <= C.BELL_HITS * 1.1, `${wid} brawl: at most BELL_HITS strikes a second (mean ${(all / 12).toFixed(1)}, peak ${peak} with the 0.1 s burst)`);
 }
 
 ED.World.prototype.hitEnemy = oHit;

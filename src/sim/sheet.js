@@ -238,10 +238,13 @@
   // extras: damage each attack adds besides the main hits (blasts, shocks, waves, clouds, evolution strikes, relics): { label, perAttack, perSec, proc (feeds statuses), el?, note? }.
   // The Bellwarden riders of a strike (class-bell.js strike) as weapon extras: a ring weapon's ring (pack only), the Wrecking Ball shock of a Heavy Strike, Chain Toll's arcs (pack only), the Lightning Rod discharge, the Storm Bell bolt.
   // _pack(n, b): the extra's total per strike in a pack of n foes on the orbit, b = wpn._bell(n) (tools/model.js packWeapon). ROD_UP: share of strikes that land on a foe holding Charge (a strike charges it, its discharge a second later clears it).
-  const ROD_UP = 0.5;
+  // BELL_EFF: strikes a second in a fight over the analytic model's (foes standing on the orbit), measured in the staged chase of tools/sheet-check.js (a hauling hero holding its spot, skeletons walking in;
+  // every bell weapon and fork within 10%): one = one foe, pack = a pack of 4. Foes walking through the bell's reach and the hero's own steps cost strikes the model gives.
+  const ROD_UP = 0.5, BELL_EFF = { one: 0.9, pack: 0.92 };
+  Sh.BELL_EFF = BELL_EFF;
   function bellExtras(st, w, bm, Wd, M, avg, aps, ctx, add) {
     const area = 1 + 0.5 * st.area, el = st.element, k = el ? (M + st.classElMul) * ED.affC(ctx.stratum || 1, el) : M;
-    if (w.ring) { const v = Wd * w.ring.mul * M; add('Ring', v, { packOnly: true, r: Math.round(w.ring.r * area), _pack: (n, b) => v * b.k * Math.min(n - 1, 2), note: 'each strike rings the other foes near the bell, no crit' }); }
+    if (w.ring) { const v = Wd * w.ring.mul * M; add('Ring', v, { packOnly: true, r: Math.round(w.ring.r * area), _pack: (n, b) => v * b.k * Math.min(n - 1, 3), note: 'each strike rings the other foes near the bell, no crit' }); }
     if (st.wreck > 0) { const sh = (b) => w.dmg * (st.wreck + st.demolish) * M * (b.mul + b.heavy * b.hmul); add('Wrecking shock', sh(bm), { _pack: (n, b) => sh(b) * Math.min(n, 3), r: Math.round((st.demolish > 0 ? 100 : 60) * area), stun: st.wreckStun, note: `each strike, twice from a Heavy Strike (about ${Math.round(bm.heavy * 100)}% of strikes), no crit` }); }
     if (st.chainArc > 0) { const v = Wd * st.chainArc * M, j = 1 + (st.arcN | 0); add('Chain Toll', v, { packOnly: true, proc: true, el: 'lightning', _pack: (n, b) => v * b.k * Math.min(n - 1, j), note: `arcs to ${j} more foe${j > 1 ? 's' : ''} within 90, no crit` }); }
     if (st.rod > 0) add('Lightning Rod', st.rod * ROD_UP * avg, { proc: true, crit: true, note: `+${Math.round(st.rod * 100)}% on a charged foe (about ${Math.round(ROD_UP * 100)}% of strikes); every 4th strike on one discharges it at once` });
@@ -249,10 +252,10 @@
   }
   function weaponModel(p, st, ctx, R) {
     const w = st.weapon, melee = w.kind === 'melee', M = Math.max(0.1, st.dmg), c = st.crit, cm = st.critMult, EC = 1 + c * (cm - 1), evo = st.evo, area = 1 + 0.5 * st.area;
-    // a bell (class-bell.js): an attack is one strike; aps is the strikes a second on one foe of the hauled bell (ED.Bell.model), the hit carries the mean speed factor of a strike
+    // a bell (class-bell.js): an attack is one strike; aps is the strikes a second on one foe of the hauled bell (ED.Bell.model x BELL_EFF.one), the hit carries the mean speed factor of a strike
     const bell = w.kind === 'bell', bm = bell ? ED.Bell.model(st, 1, St.attackInterval(p), ED.Bell.rateGain(p)) : null;
     const Wd = w.dmg * (bell ? bm.mul : w.combo ? w.combo.steps.reduce((a, q) => a + (q.mul || 1), 0) / w.combo.steps.length : 1); // a combo weapon: the mean of its steps' damage factors (the attacks cycle through them)
-    const aps = bell ? bm.sps : 1 / St.attackInterval(p), apsBase = bell ? ED.Bell.model(st, 1, st.atkInterval, w.rate / st.atkInterval).sps : 1 / st.atkInterval;
+    const aps = bell ? bm.sps * BELL_EFF.one : 1 / St.attackInterval(p), apsBase = bell ? ED.Bell.model(st, 1, st.atkInterval, w.rate / st.atkInterval).sps * BELL_EFF.one : 1 / st.atkInterval;
     const n = melee || bell ? 1 : (w.n || 1) + st.projN, sp = n > 1 ? Math.max(w.spread || 0, 0.13) : 0, offs = [];
     for (let i = 0; i < n; i++) offs.push((i - (n - 1) / 2) * sp);
     const chan = st.channel > 0 ? channelAvg(st, 1 / aps) : null, Mw = M + (chan ? chan.avg : 0); // Mw: the multiplier of a weapon hit (Pyromancer Channel at its assumed average)
@@ -365,7 +368,7 @@
     };
     if (bell) {
       out.chain = Math.round(w.chain); out.orbit = Math.round(ED.Bell.orbit(w)); out.bells = w.n || 1; out.lockout = R.x(St.attackInterval(p)); out.speed = Math.round(bm.v); out.top = Math.round(bm.top); out.heavy = R.f(bm.heavy);
-      out._bell = (k) => { const b = ED.Bell.model(st, k, St.attackInterval(p), ED.Bell.rateGain(p)); return { sps: b.sps, k: bm.mul > 0 ? b.mul / bm.mul : 1, mul: b.mul, heavy: b.heavy, hmul: b.hmul }; }; // tools/model.js packWeapon: k foes on the orbit (strikes a second on each, damage factor over one foe's, Heavy Strike share and factor)
+      out._bell = (k) => { const b = ED.Bell.model(st, k, St.attackInterval(p), ED.Bell.rateGain(p)); return { sps: b.sps * (k > 1 ? BELL_EFF.pack : BELL_EFF.one), k: bm.mul > 0 ? b.mul / bm.mul : 1, mul: b.mul, heavy: b.heavy, hmul: b.hmul }; }; // tools/model.js packWeapon: k foes (strikes a second on each at BELL_EFF, damage factor over one foe's, Heavy Strike share and factor)
       notes.push(`Hauled, the bell orbits at ${out.orbit} px at about ${out.speed} px/s (top ${out.top}); a strike deals x${n1(bm.mul)} by its speed on average, each foe at most once per ${n1(St.attackInterval(p))} s per bell`);
     } else if (melee) { const arc = Math.min(6.3, w.arc * (1 + 0.4 * st.area)); out.reach = Math.round(w.range * (1 + 0.5 * st.area + st.meleeReach)); out.arcDeg = Math.round(arc * 57.2958); out.allAround = arc >= 6.2; }
     else { out.range = Math.round(w.speed * w.life); out.pierce = w.beam || w.ret ? 99 : (w.pierce || 0) + st.pierce; out.homing = (w.homing || 0) + (st.homing || 0) > 0; out.blast = blast ? { r: Math.round(blast.r), mul: blast.mul } : null; }

@@ -52,7 +52,7 @@
     bell: {
       name: 'Bellwarden', title: 'Keeper of the Drowned Bell', icon: 'bell',
       desc: 'Swings a temple bell on a chain. Hold attack to haul it into a whirling orbit; the faster it flies, the harder it rings.',
-      hp: 34, armor: 16, spd: 132, crit: 0.05, power: 18, element: 'lightning',
+      hp: 44, armor: 30, spd: 132, crit: 0.05, power: 18, element: 'lightning',
       weapons: ['bronzebell', 'greatbell', 'handbells'], skill: 'heave', skill2: 'peal',
       col: { a: '#b08d57', b: '#6b5233', c: '#ffe66b', d: '#2a2116' }, unlock: { bell: true, text: '???', hint: 'In the drowned Sanctum, a bell waits for a hand that will not let go.' },
     },
@@ -122,13 +122,13 @@
     gavel: { name: "Judge's Gavel", desc: 'Slams the ground ahead; every 3rd slam sends three waves in a fan.', variant: 'dawnhammer', kind: 'melee', dmg: 43.2, rate: 0.72, range: 58, arc: 2.2, knock: 220, look: 'hammer', ahead: { r: 48 }, wave: { every: 3, mul: 0.36, n: 3, fan: 0.35 } },
     gravewhirl: { name: 'Grave Whirl', desc: 'Reaping whirls all around you; reaped foes rise more often.', variant: 'soulscythe', kind: 'melee', dmg: 25, rate: 0.56, range: 46, arc: 6.3, knock: 110, look: 'scythe', raise: 0.12 },
     // Bellwarden (kind 'bell')
-    bronzebell: { name: 'Bronze Bell', desc: 'A temple bell on a chain. Hold attack to haul it into a whirling orbit; it strikes harder the faster it flies.', kind: 'bell', dmg: 45, rate: 0.3, chain: 70, br: 12, loss: 0.15, haul: 1, knock: 120, look: 'bell' },
-    greatbell: { name: 'Great Bell', desc: 'A huge bell on a long chain: slow to spin up, crushing at speed, barely slowed by what it strikes.', kind: 'bell', dmg: 75, rate: 0.45, chain: 84, br: 16, loss: 0.09, haul: 0.72, knock: 200, look: 'bell' },
-    handbells: { name: 'Handbells', desc: 'Two small bells on short chains: quick to spin up, lighter strikes.', kind: 'bell', dmg: 15.4, rate: 0.25, chain: 58, br: 9, loss: 0.17, haul: 1.25, knock: 80, n: 2, look: 'bell' },
+    bronzebell: { name: 'Bronze Bell', desc: 'A temple bell on a chain. Hold attack to haul it into a whirling orbit; it strikes harder the faster it flies.', kind: 'bell', dmg: 31.5, rate: 0.3, chain: 70, br: 12, loss: 0.15, haul: 1, knock: 60, look: 'bell' },
+    greatbell: { name: 'Great Bell', desc: 'A huge bell on a long chain: slow to spin up, crushing at speed, barely slowed by what it strikes.', kind: 'bell', dmg: 52.5, rate: 0.45, chain: 84, br: 16, loss: 0.09, haul: 0.72, knock: 100, look: 'bell' },
+    handbells: { name: 'Handbells', desc: 'Two small bells on short chains: quick to spin up, lighter strikes.', kind: 'bell', dmg: 10.8, rate: 0.25, chain: 58, br: 9, loss: 0.17, haul: 1.25, knock: 40, n: 2, look: 'bell' },
     // Armory variants: bells
-    stormbell: { name: 'Storm Bell', desc: 'Each strike rings out: every other foe within 40 of the bell takes a quarter of the strike.', variant: 'bronzebell', kind: 'bell', dmg: 33, rate: 0.3, chain: 70, br: 12, loss: 0.15, haul: 1, knock: 100, ring: { r: 40, mul: 0.25 }, look: 'bell' },
-    wreckbell: { name: 'Wrecking Bell', desc: 'A spiked bell on a very long chain that keeps its speed off walls.', variant: 'greatbell', kind: 'bell', dmg: 64, rate: 0.45, chain: 112, br: 16, loss: 0.1, haul: 0.8, knock: 200, wall: 1, look: 'bell' },
-    chimes: { name: 'Chimes', desc: 'Three tiny bells on short chains.', variant: 'handbells', kind: 'bell', dmg: 9.8, rate: 0.25, chain: 52, br: 8, loss: 0.17, haul: 1.25, knock: 60, n: 3, look: 'bell' },
+    stormbell: { name: 'Storm Bell', desc: 'Each strike rings out: every other foe within 40 of the bell takes a quarter of the strike.', variant: 'bronzebell', kind: 'bell', dmg: 23.1, rate: 0.3, chain: 70, br: 12, loss: 0.15, haul: 1, knock: 50, ring: { r: 40, mul: 0.25 }, look: 'bell' },
+    wreckbell: { name: 'Wrecking Bell', desc: 'A spiked bell on a very long chain that keeps its speed off walls.', variant: 'greatbell', kind: 'bell', dmg: 44.8, rate: 0.45, chain: 112, br: 16, loss: 0.1, haul: 0.8, knock: 100, wall: 1, look: 'bell' },
+    chimes: { name: 'Chimes', desc: 'Three tiny bells on short chains.', variant: 'handbells', kind: 'bell', dmg: 6.86, rate: 0.25, chain: 52, br: 8, loss: 0.17, haul: 1.25, knock: 30, n: 3, look: 'bell' },
   };
   // Combo step intervals as factors of the weapon's mean interval (iv, averaging 1).
   for (const id in ED.WEAPONS) {

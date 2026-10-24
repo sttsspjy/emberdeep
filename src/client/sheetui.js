@@ -60,7 +60,7 @@
   const img = (src, big) => `<img class="${big ? 'sh-i2' : 'sh-i1'}" alt="" src="${src}">`;
   const RAR = (r) => ED.RARITY[r];
   const rem = () => parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-  const WEAPON_ICON = { sword: 'sword', hammer: 'hammer', spear: 'arrow', bow: 'bow', crossbow: 'arrows', staff: 'flame', wand: 'star', tome: 'scroll', dagger: 'dagger', scythe: 'blades', mace: 'hammer', lantern: 'lantern' };
+  const WEAPON_ICON = { sword: 'sword', hammer: 'hammer', spear: 'arrow', bow: 'bow', crossbow: 'arrows', staff: 'flame', wand: 'star', tome: 'scroll', dagger: 'dagger', scythe: 'blades', mace: 'hammer', lantern: 'lantern', bell: 'bell' };
   const live = (key, text) => `<b data-live="${key}">${esc(text)}</b>`;
   const frc = (v) => `--frc:var(--fr-${v})`; // card frame variable for an inline style
   const chip = (text, color, cls) => `<span class="px-chip sh-chip${cls ? ' ' + cls : ''}"${color ? ` style="--pc:${color}"` : ''}>${text}</span>`;
@@ -194,10 +194,10 @@
   const heroFr = (m) => frc('shcard-p' + ((m.hero.slot | 0) % ED.PLAYER_COLORS.length));
   function weaponCard(m, color) {
     const w = m.weapon;
-    let h = `<div class="shc sh-card sh-f" data-k="weapon" style="${heroFr(m)}"><div class="sh-ct">${img(ico(WEAPON_ICON[w.look] || 'sword', color), true)}<b>${esc(w.name)}</b>${chip(w.kind === 'melee' ? 'melee' : 'ranged', 'var(--muted)')}${w.fork ? chip(w.fork, 'var(--gold)') : ''}</div>`;
+    let h = `<div class="shc sh-card sh-f" data-k="weapon" style="${heroFr(m)}"><div class="sh-ct">${img(ico(WEAPON_ICON[w.look] || 'sword', color), true)}<b>${esc(w.name)}</b>${chip(w.kind === 'melee' ? 'melee' : w.kind === 'bell' ? 'chained' : 'ranged', 'var(--muted)')}${w.fork ? chip(w.fork, 'var(--gold)') : ''}</div>`;
     h += `<div class="sh-big">${n1(w.hit)}<small>per hit</small><span class="sh-crit">${n1(w.crit)} crit <small>(${pc(w.critChance)} · ${X(w.critMult)})</small></span></div>`;
-    h += `<div class="sh-row"><b>${w.aps.toFixed(2)}</b> attacks/s <span class="mut">(base ${w.apsBase.toFixed(2)})</span>`;
-    h += w.kind === 'melee' ? ` · reach ${w.reach} · ${w.allAround ? 'all around' : w.arcDeg + '°'}` : ` · ${w.n} ${w.n > 1 ? 'projectiles' : 'projectile'} · range ${w.range}${SHAPE[w.shape] || ''}${w.pierce && !w.line ? ` · pierce ${w.pierce}` : ''}${w.homing ? ' · seeking' : ''}${w.blast ? ` · blast radius ${w.blast.r}` : ''}`;
+    h += `<div class="sh-row"><b>${w.aps.toFixed(2)}</b> ${w.kind === 'bell' ? 'strikes/s on one foe' : 'attacks/s'} <span class="mut">(base ${w.apsBase.toFixed(2)})</span>`;
+    h += w.kind === 'bell' ? ` · ${w.bells} ${w.bells > 1 ? 'bells' : 'bell'} · chain ${w.chain} · orbit ${w.orbit}` : w.kind === 'melee' ? ` · reach ${w.reach} · ${w.allAround ? 'all around' : w.arcDeg + '°'}` : ` · ${w.n} ${w.n > 1 ? 'projectiles' : 'projectile'} · range ${w.range}${SHAPE[w.shape] || ''}${w.pierce && !w.line ? ` · pierce ${w.pierce}` : ''}${w.homing ? ' · seeking' : ''}${w.blast ? ` · blast radius ${w.blast.r}` : ''}`;
     h += '</div>';
     if (w.fan) h += `<div class="sh-row mut">${w.oneFoe} of ${w.n} shots reach one foe at ${Sh.REF.d} px; all ${w.n} point-blank</div>`;
     for (const e of w.extras) h += `<div class="sh-row sh-ex"><span>${esc(e.label)}</span> <b>${n1(e.perAttack)}</b><span class="mut"> per attack${e.r ? ` (radius ${e.r})` : ''}${e.note ? ' · ' + esc(e.note) : ''}${e.el ? ' · ' + cap1(e.el) : ''}</span></div>`;

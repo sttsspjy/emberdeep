@@ -128,6 +128,7 @@ const sheets = {
   dl_door1: { file: 'dawnlike/Objects/Door1.png', outline: ['#140c1c'], edge: ['#452434'] },
   dl_ground0: { file: 'dawnlike/Objects/Ground0.png', outline: ['#140c1c'], edge: ['#452434'] },
   dl_music: { file: 'dawnlike/Items/Music.png', outline: ['#140c1c'], edge: ['#452434'] },
+  // dl_re0/dl_re1: the Platino reference cells (cos.platino is redrawn from them)
   dl_re0: { file: 'dawnlike/Characters/Reptile0.png', outline: ['#140c1c'], edge: ['#452434'] },
   dl_re1: { file: 'dawnlike/Characters/Reptile1.png', outline: ['#140c1c'], edge: ['#452434'] },
   // LuizMelo (no outline in source: stamped at bake)
@@ -467,10 +468,18 @@ add('deco.chain', 'world', null, null, { ascii: [['.kk.', 'kSSk', 'kSSk', '.kk.'
 // --------------------------------------------------------------------------- wardrobe cosmetics (page actors; cos.coin and fx.chain on the fx page)
 // cos.crown: the Hollow King's crown cut to hat size; its pivot (bottom centre) goes on a hero anim's anchors.head[frame].
 add('cos.crown', 'actors', null, null, { ascii: [['y..Y..y', 'yy.y.yy', 'yyyyyyy', 'yRyByRy', 'ooooooo']], pal: { y: '#ffd36b', Y: '#fff2c0', o: '#c8922a', R: '#d8442a', B: '#5fb8ff' }, stamp: true, fps: 0 });
-// cos.platino: DawnLike's Platino (Reptile0/1 cell 3,12), native colours, two-frame idle like the DawnLike foes.
-add('cos.platino', 'actors', null, null, { frames: [['dl_re0', [48, 192, 16, 16]], ['dl_re1', [48, 192, 16, 16]]], fps: 2.5, loop: true, eye: 'auto' });
+// cos.platino: derived from DawnLike's Platino (dl_re0/dl_re1 cell [48,192]), redrawn at 12x11 for a clear silhouette in its platinum, cream and cyan:
+// cyan ears and tail, one bright eye, cream belly. Frame 1 = the head and ears bob 1 px down (feet fixed).
+add('cos.platino', 'actors', null, null, {
+  ascii: [[
+    '...k...k....', '..kCk.kCk...', '..kSSkSSk...', '.kSSSSSSSk..', '.kSSSSkWDk..', '.kSSSSSSSSk.', 'kCkPPPSSkk..', 'kCSPPPPSSk..', '.kSSPPSSDk..', '..kDk.kDk...', '..kk..kk....'],
+    ['............', '...k...k....', '..kCk.kCk...', '.kSSSSSSSk..', '.kSSSSkWDk..', '.kSSSSSSSSk.', 'kCkPPPSSkk..', 'kCSPPPPSSk..', '.kSSPPSSDk..', '..kDk.kDk...', '..kk..kk....']],
+  pal: { k: '#222222', S: '#94aabb', D: '#566676', P: '#eef8e6', C: '#5fd8e0', W: '#a8fcff' }, fps: 2.5, loop: true, eye: 'auto',
+});
 // cos.ghost: a legless spectral delver for the camp (0x72 knight_f idle cut above the legs, cold ramp; the camp draws it translucent).
 add('cos.ghost', 'actors', 'ox', strip(128, 68, 16, 26, 4), { fps: 4, loop: true, ramp: ['#2e4a7a', '#7aa8e0', '#c8e4ff', '#f4fcff'] });
+
+// --------------------------------------------------------------------------- fx page: pickups, projectiles, effects, font
 add('pickup.coin', 'fx', 'ox', oxn('coin_anim', 4), { fps: 8, loop: true });
 add('pickup.heart', 'fx', null, null, { ascii: [['.kk.kk.', 'kwrkrRk', 'krrrrRk', '.krrRk.', '..kRk..', '...k...']], pal: { k: '#4a0a18', w: '#ffe0e0', r: '#ff5468', R: '#c8202e' }, fps: 0 }); // 7x6, the size of the coin and the xp gem
 add('pickup.flask.red', 'fx', 'ox', ['flask_big_red'], { fps: 0 }); add('pickup.flask.yellow', 'fx', 'ox', ['flask_big_yellow'], { fps: 0 });

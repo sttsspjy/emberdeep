@@ -86,11 +86,24 @@
     o.connect(lp); lp.connect(g); g.connect(sfxBus);
     o.start(t); o.stop(t + dur + 0.05);
   };
+  // Struck metal: a sine carrier at f, its frequency modulated by a sine at f x ratio (index idx x f, decaying to 2% over 0.6 dur): inharmonic bell partials; two voices.
+  const fmBell = (f, ratio, idx, dur, vol, at) => {
+    const ctx = A.ctx, t = at || now(), end = t + dur + 0.05;
+    if (ends.length + 2 > CAP[prio]) return;
+    ends.push(end, end);
+    const o = ctx.createOscillator(), m = ctx.createOscillator(), mg = ctx.createGain(), g = ctx.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(f, t); m.type = 'sine'; m.frequency.setValueAtTime(f * ratio, t);
+    mg.gain.setValueAtTime(idx * f, t); mg.gain.exponentialRampToValueAtTime(Math.max(1, idx * f * 0.02), t + dur * 0.6);
+    m.connect(mg); mg.connect(o.frequency);
+    env(g, t, 0.004, vol, dur);
+    o.connect(g); g.connect(sfxBus);
+    o.start(t); m.start(t); o.stop(end); m.stop(end);
+  };
   const lite = () => !!(ED.Render && ED.Render.quality === 'low');
   const rnd = (a, b) => a + Math.random() * (b - a);
 
-  const GAP = { hit: 0.035, ohit: 0.035, crit: 0.05, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1, freeze: 0.05, shatter: 0.06, combust: 0.06, guardhit: 0.06, block: 0.05, clang: 0.03, throw: 0.08, catch: 0.08, parry: 0.1, bell: 0.06, charge: 0.2, chargehit: 0.2, volley: 0.15, raincast: 0.15, smash: 0.05, dark: 0.5, fury: 1, dcharge: 0.08, blossom: 0.05, implode: 0.2, pick: 0.08 };
-  const PRIO = { drownbell: 3, hurt: 3, down: 3, revive: 3, dark: 3, lock: 3, roar: 3, fury: 3, victory: 3, defeat: 3, crit: 2, level: 2, boon: 2, relic: 2, pick: 2, shop: 2, ohit: 0, spark: 0, eshoot: 0, xp: 0, gold: 0, spawn: 0 };
+  const GAP = { hit: 0.035, ohit: 0.035, crit: 0.05, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1, freeze: 0.05, shatter: 0.06, combust: 0.06, guardhit: 0.06, block: 0.05, clang: 0.03, throw: 0.08, catch: 0.08, parry: 0.1, bell: 0.06, charge: 0.2, chargehit: 0.2, volley: 0.15, raincast: 0.15, smash: 0.05, dark: 0.5, fury: 1, dcharge: 0.08, blossom: 0.05, implode: 0.2, pick: 0.08, bstrike: 0.07, rattle: 0.06, peal: 0.08, heave: 0.15, reel: 0.2, bsmash: 0.08 };
+  const PRIO = { secret: 2, drownbell: 3, hurt: 3, down: 3, revive: 3, dark: 3, lock: 3, roar: 3, fury: 3, victory: 3, defeat: 3, crit: 2, level: 2, boon: 2, relic: 2, pick: 2, shop: 2, ohit: 0, spark: 0, eshoot: 0, xp: 0, gold: 0, spawn: 0 };
   // arg: cue-specific parameter (hit and crit: { w damage share, el element, n hits this frame }; clang: { n, g }; victory: 'boss' for the short one; pick: a card kind or { k kind, big, els: a duo's two elements })
   A.play = (name, vol, arg, pr) => {
     if (!A.ready || !live()) return;
@@ -205,6 +218,27 @@
         noise('bandpass', 1800, 600, 0.06, 0.25 * v, 2); tone('sine', 196, 194, 2.6, 0.2 * v); tone('sine', 199.5, 197, 2.4, 0.12 * v); tone('sine', 196 * 2.4, 196 * 2.38, 1.6, 0.08 * v);
         tone('sine', 196 * 3.01, 196 * 2.99, 1.1, 0.05 * v); tone('triangle', 196 * 4.2, 196 * 4.15, 0.7, 0.03 * v); tone('sine', 98, 96, 2.2, 0.12 * v);
         break;
+      // Bellwarden (arg of bstrike { v: bell speed px/s, h: Heavy Strike, c: the chain struck }; peal { v, e: an echo }; rattle: speed share 0..1): a bronze strike higher and louder with speed (a Heavy Strike a fifth lower with a thump), the Peal a long toll in the
+      // Drowned Bell's partials (hum, prime, minor-third tierce, nominal, the 2.4 partial, a beating pair) over an FM strike, the chain's rattle, the Heave's whoosh and its reel's ratchet, the Wrecker's crash
+      case 'bstrike': {
+        if (arg && arg.c) { noise('bandpass', rnd(3200, 4400), 2000, 0.03, 0.12 * v, 4); tone('square', rnd(1800, 2400), 1500, 0.03, 0.035 * v); break; } // the chain lashing a foe: an iron clank
+        const vk = Math.min(1.8, ((arg && arg.v) || 0) / 320), h = !!(arg && arg.h), f = (h ? 262 : 392) * Math.pow(2, (vk - 1) * 2 / 12) * rnd(0.98, 1.02), g = (0.45 + 0.4 * Math.min(1, vk / 1.4)) * v;
+        noise('bandpass', 2600, 900, 0.03, 0.16 * g, 2); fmBell(f, 1.41, h ? 2.2 : 1.4, h ? 0.8 : 0.32, 0.1 * g); tone('sine', f * 2.76, f * 2.7, h ? 0.35 : 0.16, 0.035 * g);
+        if (h) { tone('sine', 120, 52, 0.22, 0.26 * g); noise('lowpass', 900, 120, 0.16, 0.18 * g); }
+        break;
+      }
+      case 'peal': {
+        const vk = Math.min(1, ((arg && arg.v) || 0) / 320), e = !!(arg && arg.e), f = e ? 294 : 196, g = (0.6 + 0.4 * vk) * v * (e ? 0.5 : 1), d = e ? 1.2 : 2.6;
+        noise('bandpass', 1500, 500, 0.08, 0.3 * g, 2); fmBell(f, 1.4, 1.8, d * 0.7, 0.12 * g);
+        tone('sine', f * 0.5, f * 0.495, d, 0.16 * g); tone('sine', f, f * 0.995, d * 0.9, 0.12 * g); tone('sine', f * 1.19, f * 1.185, d * 0.6, 0.06 * g); tone('sine', f * 2, f * 1.99, d * 0.5, 0.05 * g); tone('sine', f * 2.4, f * 2.38, d * 0.35, 0.04 * g);
+        if (!e) { tone('sine', 82, 40, 0.5, 0.25 * g); noise('lowpass', 600, 90, 0.4, 0.18 * g); if (!lite()) tone('sine', f * 1.012, f * 1.005, d * 0.8, 0.06 * g); }
+        break;
+      }
+      case 'rattle': { const k = typeof arg === 'number' ? arg : 0.5; for (let i = 0, n = lite() ? 2 : 3; i < n; i++) { const at = t + i * (0.03 - 0.012 * k) + Math.random() * 0.01; noise('bandpass', rnd(3000, 5200), 2200, 0.02, 0.06 * v, 4, null, at); if (!i) tone('square', rnd(2400, 3400), 1900, 0.015, 0.02 * v, null, at); } break; }
+      case 'heave': noise('bandpass', 300, 2600, 0.28, 0.24 * v, 1.2); tone('sine', 160, 80, 0.2, 0.14 * v); [0.02, 0.07, 0.12].forEach((d) => noise('bandpass', rnd(3200, 4800), 2400, 0.02, 0.06 * v, 4, null, t + d)); break;
+      case 'reel': for (let i = 0; i < 6; i++) { const at = t + i * 0.05; noise('bandpass', 2400 + i * 300, 1600, 0.02, 0.07 * v, 4, null, at); if (!(i & 1)) tone('square', 900 + i * 120, 700, 0.02, 0.025 * v, null, at); } break;
+      case 'bsmash': tone('sine', 120, 35, 0.35, 0.4 * v); noise('lowpass', 1600, 100, 0.3, 0.3 * v); fmBell(150, 1.41, 1.6, 0.6, 0.08 * v); break;
+      case 'secret': [988, 1319, 1976].forEach((f, i) => tone('sine', f, f * 1.003, 0.5 - i * 0.1, 0.07 * v, null, t + i * 0.09)); tone('triangle', 494, 492, 0.6, 0.04 * v); break; // a secret uncovered: a soft rising three-note chime over a low hum
       case 'platino': [1568, 2093, 2637, 3136].forEach((f, i) => tone('sine', f, f * 1.01, 0.18, 0.06 * v, null, t + i * 0.05)); noise('highpass', 6000, 4000, 0.25, 0.03 * v); break; // the Platino caught
       case 'catch': tone('sine', 140, 70, 0.14, 0.3 * v); noise('lowpass', 500, 150, 0.1, 0.16 * v, 1); if (arg) [1318, 1760].forEach((f, i) => tone('sine', f, f, 0.22, 0.06 * v, null, t + 0.03 + i * 0.06)); break;
       case 'bell': { // Cleric: a struck golden bell (arg: semitones above A5; lower for slams, higher for beams), with a bright partial and a soft fifth

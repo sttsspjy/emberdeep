@@ -65,19 +65,22 @@
   };
 
   // ---------------- palettes ----------------
-  // Heroes: exact swap table of ED.ART.swaps plus the player colour on the key colours (the 2nd key colour is a lighter tone of it, so shaded plumes keep their form).
-  function heroMap(cls, slot) {
-    const sw = (ED.ART.swaps && ED.ART.swaps[cls]) || { base: {}, key: [] }, m = Object.assign({}, sw.base), pc = ED.PLAYER_COLORS[slot] || '#ffffff';
+  // Heroes: exact swap table of ED.ART.swaps (a Wardrobe skin: swaps['<cls>.<skin>']) plus the player colour on the key colours (the 2nd key colour is a lighter tone of it, so shaded plumes keep their form).
+  function heroMap(cls, slot, skin) {
+    const S = ED.ART.swaps || {}, sw = (skin && S[cls + '.' + skin]) || S[cls] || { base: {}, key: [] }, m = Object.assign({}, sw.base), pc = ED.PLAYER_COLORS[slot] || '#ffffff';
     for (let i = 0; i < sw.key.length; i++) m[sw.key[i]] = i ? U.shade(pc, 0.28) : pc;
     return m;
   }
   const heroKeys = {}, heroMakers = {};
-  // Variant key of the hero body for a player slot (registered on every anim before use through Atlas.variant).
-  function heroVar(cls, slot, anim) {
-    const kk = cls + slot, key = 'pal:h' + slot;
-    const mk = heroMakers[kk] || (heroMakers[kk] = () => heroMap(cls, slot));
+  // Variant key of the hero body for a player slot and skin suffix (ED.Cos.skin; '' = the hero's own colours), registered on every anim before use through Atlas.variant: one sheet per (anim, slot, skin).
+  function heroVar(cls, slot, anim, skin) {
+    const sk = skin && ED.ART.swaps && ED.ART.swaps[cls + '.' + skin] ? skin : '', kk = cls + slot + sk;
+    const key = heroKeys[kk] || (heroKeys[kk] = 'pal:h' + slot + (sk ? '.' + sk : ''));
+    const mk = heroMakers[kk] || (heroMakers[kk] = () => heroMap(cls, slot, sk));
     return A.variant(anim, key, mk) ? key : '';
   }
+  AC.heroVar = heroVar;
+  const Cos = () => ED.Cos; // cosmetics.js (absent in headless checks)
   // Flat silhouette in the player colour (dash afterimages).
   const silMakers = {};
   function silVar(slot, anim) {
@@ -572,7 +575,7 @@
       s.vx += (vx - s.vx) * k; s.vy += (vy - s.vy) * k; s.sp = Math.hypot(s.vx, s.vy);
     } else if (dt >= 0.5) { s.vx = s.vy = s.sp = 0; }
     s.lx = p.x; s.ly = p.y; s.lt = t;
-    if (p.dead && !s.wasDead) { s.deadT = t; F().sheet('fx.puff', p.x, p.y - 8, { ramp: 'smoke', a: 0.85 }); } // the body fades over 0.6 s under a puff
+    if (p.dead && !s.wasDead) { s.deadT = t; if (!(Cos() && Cos().death(p))) F().sheet('fx.puff', p.x, p.y - 8, { ramp: 'smoke', a: 0.85 }); } // the body fades over 0.6 s under a puff (Last Embers: an ember scatter)
     s.wasDead = !!p.dead;
     if (p.downed && !s.wasDown) s.downT = t; s.wasDown = !!p.downed;
     return s;
@@ -699,7 +702,7 @@
     }
     if (hit) { bx -= sg * 2; }
     // ---- body variant ----
-    let variant = hit && hurtA < 0.05 ? stateVar(id, 'white') : heroVar(p.cls, slot, id);
+    let variant = hit && hurtA < 0.05 ? stateVar(id, 'white') : heroVar(p.cls, slot, id, Cos() ? Cos().skin(p) : '');
     // ---- weapon pivot (the hand) ----
     const hand = body.anchors.hand || [body.ax + 3, body.ay - 6];
     const f0 = body.f[fi], ib = A.anim(idleId), bobA = Math.round(U.clamp((f0.oy - ib.f[0].oy) * 0.5, -2, 2)); // the hand follows the body's stretch and crouch
@@ -715,7 +718,10 @@
     if (p.stealthT > 0 && local) { const ov = outlineVar(id, '#b78cff'); if (ov) put(c, id, fi, bx, by, flip, ov, 1); }
     put(c, id, fi, bx, by, flip, variant, 1);
     if (p.cls === 'cleric') halo(c, bx, by + (f0.oy - body.ay) * K, t);
-    if (p.mastery10) { c.strokeStyle = U.rgba('#ffd36b', 0.55 + Math.sin(t * 4) * 0.25); c.lineWidth = 1; c.beginPath(); c.ellipse(0, -2, 13, 4, 0, 0, TAU); c.stroke(); }
+    if (Cos()) {
+      if (Cos().crowned(p)) { const hd = body.anchors.head; if (hd) { const q = hd[Math.min(fi, hd.length - 1)]; put(c, 'cos.crown', 0, bx + (q[0] - body.ax) * K * sg, by + (q[1] - body.ay) * K, flip, '', 1); } } // the Hollow Crown on this frame's hat seat
+      if (Cos().gilded(p)) { c.strokeStyle = U.rgba('#ffd36b', 0.55 + Math.sin(t * 4) * 0.25); c.lineWidth = 1; c.beginPath(); c.ellipse(0, -2, 13, 4, 0, 0, TAU); c.stroke(); } // the Gilded aura
+    }
     c.globalAlpha = ga;
     s.an = id; s.fi = fi; anchorFrom(s.anc, body, flip, 0, bx);
     s.anc.top = (ib.f[0].oy - ib.ay) * K; // head line of the standing pose: stable for name labels (the anim set's union box includes the taller hit pose)
@@ -734,15 +740,17 @@
   function heroWeapon(c, p, wd, hx, hy, wa, flip, thr, kick, t, u, sx, sy) {
     const w = wd.w, r = A.anim(wd.anim); if (!r) return;
     const ec = p.stats && p.stats.evo && ED.PATHS[p.stats.evo] ? ED.PATHS[p.stats.evo].color : null;
-    const variant = ec ? outlineVar(wd.anim, ec) : '';
+    const tc = Cos() ? Cos().tintOf(p, wd.id) : '', tv = tc && ED.Pix && ED.Pix.variant ? ED.Pix.variant(wd.anim, tc) : ''; // a worn sheen recolours the look (fork and variant shapes included) by luminance
+    const ov = ec ? outlineVar(wd.anim, ec) : '', variant = tv || ov, under = tv && ov ? ov : ''; // sheen and evolution: the outline sheet under the sheen sheet
     const pk = wd.anim + '|' + variant + '|' + (flip ? 1 : 0);
-    if (!wpPre.has(pk)) { wpPre.add(pk); A.prebake(wd.anim, 0, flip, '', variant); } // the first time a hero weapon shows, all 32 angles bake in the background (Atlas.tick)
+    if (!wpPre.has(pk)) { wpPre.add(pk); A.prebake(wd.anim, 0, flip, '', variant); if (under) A.prebake(wd.anim, 0, flip, '', under); } // the first time a hero weapon shows, all 32 angles bake in the background (Atlas.tick)
     let x = hx, y = hy, ang = wa, extra = 0;
     const look = w.look, wk = wd.k || 1, out = HELD_OUT[look] || 0; // ranged weapons are held out along the aim
     if (out) { x += Math.cos(wa) * out * K; y += Math.sin(wa) * out * K * 0.6; }
     if (thr > 0) { const d = thr * 6 * K; x += Math.cos(wa) * d; y += Math.sin(wa) * d * 0.5; }
     if (kick > 0.02) { const d = kick * 2 * K; x -= Math.cos(wa) * d; y -= Math.sin(wa) * d * 0.5; }
     if (sx !== undefined) armAt(c, sx, sy, x, y, ED.CLASSES[p.cls].col.a); // a melee weapon is held at arm's length from the shoulder
+    if (look === 'bell') { const hs = p.pid !== undefined ? HS.get(p.pid) : null; if (hs) { hs.hx = x; hs.hy = y; } chainGrip(c, x, y); if (!p.bells && ED.ClassFx && ED.ClassFx.bellIdle) ED.ClassFx.bellIdle(c, p, wd, x, y + K, t, flip); return; } // the bell flies on its chain (cls-bell.js draws it from AC.hand): the hand holds the chain's end; outside a run (no p.bells) it rests beside the hero
     if (thr > 0 && w.pull && w.range > 80) { // a chained weapon is thrown out along the aim on its chain (1 art px links, alternating light and dark) and hauled back
       const ext = thr * (w.range - 30), n = Math.max(1, Math.floor(ext / (2 * K))), cx = Math.cos(wa), cy = Math.sin(wa) * 0.5;
       for (let i = 0; i < n; i++) { c.fillStyle = i & 1 ? '#6b7480' : '#c8d0d8'; c.fillRect(q2(x + cx * i * 2 * K), q2(y + cy * i * 2 * K), K, K); }
@@ -750,6 +758,7 @@
     }
     if (look === 'lantern') { // held up at arm's length (LANTERN_OUT art px ahead of the hand, clear of the body it is drawn under), hanging from its hook: swings, and is thrown forward on release
       const fl = flip ? -1 : 1, rot = Math.sin(t * 2.6 + (p.slot | 0)) * 0.14 - fl * 0.9 * Math.exp(-u * 10), lx = hx + LANTERN_OUT * K * fl, ly = hy - 16 + 10 * wk; // ly: the flame, 5 art px (by the held scale) under the hook
+      if (under) put(c, wd.anim, 0, lx, hy - 16, flip, under, 1, nrm(rot));
       put(c, wd.anim, 0, lx, hy - 16, flip, variant, 1, nrm(rot));
       lightGlow(c, lx, ly, 0.5 + 0.1 * Math.sin(t * 7));
       if (R() && p.x !== undefined) { R().light(p.x + lx, p.y + ly, 64, '#ffe9a0', 0.3); R().emit(p.x + lx, p.y + ly, 16, '#ffe9a0', 0.25); } // the lantern lights its surroundings
@@ -758,11 +767,13 @@
     if (look === 'tome') { // floats open in front of the hand, tilting toward the aim
       const sgn = flip ? -1 : 1, bob = q2(Math.sin(t * 3 + (p.slot | 0)) * 1.2);
       x = hx + Math.cos(wa) * 6 * sgn * sgn; y = hy - 4 + bob + Math.sin(wa) * 3;
+      if (under) put(c, wd.anim, 0, x, y, flip, under, 1, nrm(sgn * (0.12 + 0.5 * Math.exp(-u * 12))));
       put(c, wd.anim, 0, x, y, flip, variant, 1, nrm(sgn * (0.12 + 0.5 * Math.exp(-u * 12))));
       tipOrb(c, w, x, y - 14, u, 0);
       return;
     }
     if (look === 'staff' || look === 'wand') extra = (Math.cos(wa) < 0 ? 1 : -1) * 0.5 * Math.exp(-u * 16); // the tip flicks up 30 degrees on the cast and settles
+    if (under) weaponAt(c, wd.anim, x, y, ang, flip, under, extra);
     weaponAt(c, wd.anim, x, y, ang, flip, variant, extra);
     if (look === 'staff' || look === 'wand') { const len = (r.ay - r.f[0].oy) * K, ta = wa + extra; tipOrb(c, w, x + Math.cos(ta) * len, y + Math.sin(ta) * len, u, 0); }
     if (look === 'bow' || look === 'crossbow') { // the next arrow is nocked 3 art px back once the string has recovered: hidden for the first 45% of the cycle, drawn back over the rest
@@ -775,6 +786,10 @@
     if (ec && !(R() && R().quality === 'low')) Sp.glow(c, x + Math.cos(wa) * 14, y + Math.sin(wa) * 14, 18, ec, 0.38 + Math.sin(t * 5) * 0.08);
   }
   let anim_D = 0.3; // length of the attack animation being drawn (set by drawHero)
+  // The chain's end wrapped in the fist: two iron links on the art grid at (x, y).
+  function chainGrip(c, x, y) { const px = q2(x), py = q2(y); c.fillStyle = OUTLINE; c.fillRect(px - K, py - K, 3 * K, 4 * K); c.fillStyle = '#9aa6b0'; c.fillRect(px, py, K, K); c.fillStyle = '#5d6670'; c.fillRect(px, py + K, K, K); }
+  // Hand of hero p in world px from its feet as last drawn (a bell's chain starts there), else null.
+  AC.hand = (p) => { const s = HS.get(p.pid); return s && s.hx !== undefined ? s : null; };
   // Element orb at the tip of a magic weapon: gone right after the cast, regrown over the rest of the cycle to 2 art px (u: seconds into the attack animation, 9 = idle).
   function tipOrb(c, w, x, y, u) {
     const k = u > 5 ? 1 : U.clamp((u - anim_D * 0.35) / (anim_D * 0.65), 0, 1); if (k < 0.3) return;
@@ -821,7 +836,7 @@
   }
   // ---------------- portraits ----------------
   // Hero bust for a canvas (HUD medallion, class cards, lobby): the idle frame at a whole number of canvas px per art px (head near the top, feet at the bottom edge) over the class-colour glow, weapon in hand.
-  AC.portrait = (canvas, cls, slot, weapon) => {
+  AC.portrait = (canvas, cls, slot, weapon, skin) => { // skin: a Wardrobe skin suffix (ED.Cos.skinKey)
     const idle = 'hero.' + cls + '.idle', r = A.anim(idle);
     if (!r) return false;
     const c = canvas.getContext('2d'), D = canvas.width, col = ED.CLASSES[cls].col.c;
@@ -835,8 +850,13 @@
     const pseudo = { cls, slot: slot || 0, weapon: weapon || ED.CLASSES[cls].weapons[0] }, wd = Sp.weaponArt(pseudo), hand = r.anchors.hand || [r.ax + 3, r.ay - 6];
     const hx = (hand[0] - r.ax) * K, hy = (hand[1] - r.ay) * K;
     if (wd.w.look === 'lantern' || wd.w.look === 'tome') heroWeapon(c, pseudo, wd, hx, hy, -0.4, false, 0, 0, 0, 9);
+    else if (wd.w.look === 'bell') { // the bell hangs from the fist on three links, mouth down (both handbells side by side)
+      const n = wd.w.n || 1, gx = q2(hx + 2 * K), gy = q2(hy);
+      for (let i = 0; i < 3; i++) { c.fillStyle = i & 1 ? '#5d6670' : '#9aa6b0'; c.fillRect(gx, gy + i * K, K, K); }
+      for (let i = 0; i < Math.min(2, n); i++) put(c, wd.anim, 0, gx + (i - (Math.min(2, n) - 1) / 2) * 6 * K, gy + 3 * K, false, '', 1);
+    }
     else weaponAt(c, wd.anim, hx + Math.cos(-0.75) * 4 * K, hy + Math.sin(-0.75) * 4 * K, -0.75, false, ''); // the grip 4 art px out along the blade, so the held-size weapon clears the body
-    put(c, idle, 0, 0, 0, false, heroVar(cls, slot || 0, idle), 1); // the weapon under the body, as in play
+    put(c, idle, 0, 0, 0, false, heroVar(cls, slot || 0, idle, skin), 1); // the weapon under the body, as in play
     c.restore();
     return true;
   };

@@ -2,7 +2,8 @@
 // Each bell { x, y, vx, vy, hit } in p.bells is a point mass on a chain anchored at the hero, moving in the hero's frame: every tick it is carried by the hero's step, (vx, vy) is its velocity about the hero.
 // It loses BELL_DRAG of that speed per second (an unhauled bell also feels the drag of the hero's own motion, p.lvx / p.lvy, so it trails a walking hero), a taut chain removes its outward speed
 // and pulls it in while the chain shortens; walls bounce a free bell, a hauled one whirls over them. Haul (the held attack input, p.haulIn, else HAUL_HOLD attack intervals after each 'atk' action) shortens the chain to its orbit (HAUL_K of its length, at most BELL_ORBIT) and drives the bell along its orbit.
-// A strike: a bell at BELL_MIN px/s or more overlapping a foe (each foe once per attack interval per bell), the weapon's dmg x clamp(speed / BELL_REF, 0.4, 1.8) through hitEnemy, costing the bell `loss` of its speed.
+// A strike: a bell at BELL_MIN px/s or more overlapping a foe (each foe once per attack interval per bell), the weapon's dmg x clamp(speed / BELL_REF, 0.4, 1.8) through hitEnemy, costing the bell `loss` of its speed;
+// a hauled chain sweeping a foe closer in strikes it as the bell. Knockback runs along the swing.
 // The motion runs in BELL_SUB substeps per tick from the class tick and reads no RNG: it is a pure function of the hero's inputs and the room.
 (function (ED) {
   'use strict';
@@ -11,11 +12,11 @@
 
   // BELL_MIN / BELL_REF / BELL_CAP: px/s a strike needs, the speed of a x1 strike, the speed limit. BELL_DRAG: share of speed lost per second (exponential). BELL_SUB: substeps per tick.
   // HAUL_K / BELL_ORBIT: chain share while hauled and the longest hauled chain (px; foes at a hero's side stay within reach). HAUL_T: seconds the chain takes to shorten or let out fully at haul 1. HAUL_ACC: px/s2 of orbit drive at haul 1 and the weapon's own rate (x the attack-rate gain to the power RATE_POW: damage and strikes both grow with speed, so damage per second follows the gain about linearly). HAUL_HOLD: attack intervals one 'atk' action holds the Haul.
-  // BELL_HITS: strikes per second one hero may make (the hit-event budget). BELL_WALL: speed a wall bounce keeps (weapon.wall overrides). BOSS_LOSS: factor on a strike's speed cost against a boss. HEAVY_K: a Heavy Strike's least speed as a share of the hauled bell's top speed (full swing).
+  // BELL_HITS: strikes per second one hero may make (the hit-event budget). CHAIN_R: half-width (px) of a hauled chain: a foe it sweeps across is struck as by the bell (once a revolution). BELL_WALL: speed a wall bounce keeps (weapon.wall overrides). BOSS_LOSS: factor on a strike's speed cost against a boss. HEAVY_K: a Heavy Strike's least speed as a share of the hauled bell's top speed (full swing).
   // HEAVE_SPEED / HEAVE_T: launch speed and longest flight of a Heave; REEL_SPEED: px/s the chain reels back in after it. HOOK_CD / PEAL_SH_CD: seconds between Tether Hook shields / Warding Toll shields. PEAL_REST: a Peal at rest as a share of one at full swing.
   // SPIN_SPEED: px/s of the Wrecking Spin; SWAT_K: Warding Toll swat radius over the Peal's; WALL_CD: seconds between two Demolisher wall shocks of one bell. WHIRL_DR: damage the hero takes less while it hauls a bell flying at BELL_MIN or more.
-  Object.assign(C, { BELL_MIN: 140, BELL_REF: 320, BELL_CAP: 900, BELL_DRAG: 2.5, BELL_SUB: 4, HAUL_K: 0.6, BELL_ORBIT: 48, HAUL_T: 0.25, HAUL_ACC: 1290, RATE_POW: 0.6, HAUL_HOLD: 1.6,
-    BELL_HITS: 60, BELL_WALL: 0.5, BOSS_LOSS: 1, HEAVY_K: 0.9, HEAVE_SPEED: 700, HEAVE_T: 0.45, REEL_SPEED: 600, HOOK_CD: 8, PEAL_SH_CD: 10, PEAL_REST: 0.6 / 1.4, SPIN_SPEED: 560, SWAT_K: 1.5, WALL_CD: 0.3, WHIRL_DR: 0.45 });
+  Object.assign(C, { BELL_MIN: 140, BELL_REF: 320, BELL_CAP: 900, BELL_DRAG: 2.5, BELL_SUB: 4, HAUL_K: 0.6, BELL_ORBIT: 30, HAUL_T: 0.25, HAUL_ACC: 1290, RATE_POW: 0.6, HAUL_HOLD: 1.6,
+    BELL_HITS: 60, CHAIN_R: 3, BELL_WALL: 0.5, BOSS_LOSS: 1, HEAVY_K: 0.9, HEAVE_SPEED: 700, HEAVE_T: 0.45, REEL_SPEED: 600, HOOK_CD: 8, PEAL_SH_CD: 10, PEAL_REST: 0.6 / 1.4, SPIN_SPEED: 560, SWAT_K: 1.5, WALL_CD: 0.3, WHIRL_DR: 0.45 });
 
   const blocked = (w, x, y) => D.blocksShots(D.tileAt(w.room, x, y), w.locked);
   const orbitOf = (wp) => Math.min(C.HAUL_K * wp.chain, C.BELL_ORBIT); // the hauled chain length (px)
@@ -105,7 +106,7 @@
 
   // One substep h of bell b: the orbit drive (hauled), drag (trail: also the hero's motion), the move with wall bounces, the chain (length Lc, changing at Ldot px/s), then the foes it overlaps.
   function stepBell(w, p, b, h, Lc, Ldot, drive, foes, drag, trail) {
-    const st = p.stats, wp = st.weapon, hx = p.x, hy = p.y;
+    const st = p.stats, wp = st.weapon, hx = p.x, hy = p.y, a0 = Math.atan2(b.y - hy, b.x - hx);
     let rx = b.x - hx, ry = b.y - hy, d = Math.hypot(rx, ry);
     if (drive > 0) {
       if (d < 2) { rx = Math.cos(p.face || 0) * 2; ry = Math.sin(p.face || 0) * 2; d = 2; }
@@ -141,23 +142,31 @@
       const e = foes[i];
       if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed || e.invulnT > 0 || e.hookedBy === p) continue;
       const rr = br + e.r;
-      if (U.dist2(e.x, e.y, b.x, b.y) >= rr * rr) continue;
+      let lash = false;
+      if (U.dist2(e.x, e.y, b.x, b.y) >= rr * rr) { // not on the bell: the hauled chain sweeping across a foe closer in strikes it as the bell (a foe at the hero's feet is not out of reach)
+        if (hv || !(drive > 0)) continue;
+        const df = Math.hypot(e.x - hx, e.y - hy);
+        if (df >= Math.hypot(b.x - hx, b.y - hy)) continue;
+        const sw = U.angDiff(a0, Math.atan2(b.y - hy, b.x - hx)), da = U.angDiff(a0, Math.atan2(e.y - hy, e.x - hx)), wa = df > e.r + C.CHAIN_R ? Math.asin((e.r + C.CHAIN_R) / df) : 0; // the chain's sweep this substep against the foe's bearing (a foe over the hero: its centre)
+        if (da < Math.min(0, sw) - wa || da > Math.max(0, sw) + wa) continue;
+        lash = true;
+      }
       if (hv) { heaveContact(w, p, b, e, hv); continue; }
       sp = relV(p, b);
       if (sp < C.BELL_MIN || p.bellTok < 1) continue;
       const last = b.hit.get(e.id);
       if (last !== undefined && w.time - last < ED.Stats.attackInterval(p) - 1e-9) continue;
       b.hit.set(e.id, w.time);
-      strike(w, p, b, e, sp);
+      strike(w, p, b, e, sp, lash);
     }
   }
 
   // ---------------- strikes ----------------
   // A strike of bell b at speed sp on foe e: the weapon hit (Heavy Strike bonus, crit stacks, Masterstroke, Twin Fang), the speed it costs, then everything a weapon attack carries (a ring weapon's ring,
-  // the evolution, Thunder Gauntlet) and the route riders; each strike counts as an attack (p.atkCount).
-  function strike(w, p, b, e, sp) {
+  // the evolution, Thunder Gauntlet) and the route riders; each strike counts as an attack (p.atkCount). lash: struck by the chain (the event sits on the foe).
+  function strike(w, p, b, e, sp, lash) {
     const st = p.stats, wp = st.weapon, f = speedMul(sp), heavy = st.heavyHit > 0 && sp >= p.bellHv;
-    const od = Math.hypot(e.x - p.x, e.y - p.y) || 1, kx0 = b.vx / sp + (e.x - p.x) / od, ky0 = b.vy / sp + (e.y - p.y) / od, kl = Math.hypot(kx0, ky0) || 1, ux = kx0 / kl, uy = ky0 / kl; // knock: half along the swing, half away from the hero
+    const ux = b.vx / sp, uy = b.vy / sp; // knock along the swing (foes stay in the bell's reach)
     p.bellTok -= 1; p.atkCount++; p.lastAtkT = w.time;
     let crit, mul = f * (heavy ? 1 + st.heavyHit : 1) * (st.rod > 0 && e.charge > 0 ? 1 + st.rod : 1), bleedMin; // Lightning Rod: +rod on a charged foe
     if (p.critStacks > 0) { p.critStacks--; crit = true; }
@@ -169,7 +178,7 @@
     if (st.twinEvery && p.atkCount % st.twinEvery === 0) w.hitEnemy(e, wp.dmg, { p, kind: 'weapon', wpn: true, mul, crit, infAdd, knock, kx: ux, ky: uy, x: b.x, y: b.y });
     const keep = 1 - wp.loss * (e.boss ? C.BOSS_LOSS : 1) * (1 - Math.min(1, st.strikeKeep)); // Counterweight / Perpetual Motion (strikeKeep) remove a share of the cost
     scaleRel(p, b, keep);
-    w.emit({ t: 'bstrike', pid: p.pid, x: Math.round(b.x), y: Math.round(b.y), v: Math.round(sp), h: heavy ? 1 : 0 });
+    w.emit({ t: 'bstrike', pid: p.pid, x: Math.round(lash ? e.x : b.x), y: Math.round(lash ? e.y : b.y), v: Math.round(sp), h: heavy ? 1 : 0, c: lash ? 1 : 0 }); // c: struck by the chain
     const area = 1 + 0.5 * st.area, a = Math.atan2(e.y - p.y, e.x - p.x);
     if (wp.ring) ringOf(w, p, b, e, sd * wp.ring.mul, wp.ring.r * area);
     if (st.evo === 'general' && src.critOut && e.hp > 0) w.hitEnemy(e, wp.dmg, { p, kind: 'weapon', wpn: true, mul: mul * 0.6, infAdd, knock: knock * 0.5, kx: ux, ky: uy, x: b.x, y: b.y }); // Masterwork Arms: a spectral strike
@@ -207,10 +216,10 @@
     else if (evo === 'shadow') p.bellQ.push({ at: w.time + 0.15, k: 'twin', e, dmg: sd * 0.4 });
   }
 
-  // Wrecking Ball: a shock (radius 60, Demolisher 100) at (x, y) for wreck (+ demolish) of the strike's damage sd, twice that and a repeating stun of wreckStun from a Heavy Strike; a weapon shock (no crit, no procs).
+  // Wrecking Ball: a shock (radius 60, Demolisher 100) at (x, y) for wreck (+ demolish) of the strike's damage sd, twice that and a repeating stun of wreckStun from a Heavy Strike; a weapon shock (no crit, no procs, no knockback: the pack stays in the bell's reach).
   function wreckShock(w, p, x, y, sd, heavy) {
     const st = p.stats, r = (st.demolish > 0 ? 100 : 60) * (1 + 0.5 * st.area);
-    w.explode(x, y, r, sd * (st.wreck + st.demolish) * (heavy ? 2 : 1), 0, p, 'shock', true, { wpn: true, stun: heavy ? st.wreckStun : 0, part: 'bell.wreck' });
+    w.explode(x, y, r, sd * (st.wreck + st.demolish) * (heavy ? 2 : 1), 0, p, 'shock', true, { wpn: true, stun: heavy ? st.wreckStun : 0, knock: 0, part: 'bell.wreck' });
   }
 
   // Chain Toll: the strike arcs to the nearest other foe within 90 of e (Forked Toll: arcN more, each from the last), a Lightning hit of dmg that charges like the strike.
