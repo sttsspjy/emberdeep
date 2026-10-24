@@ -102,7 +102,7 @@
   const lite = () => !!(ED.Render && ED.Render.quality === 'low');
   const rnd = (a, b) => a + Math.random() * (b - a);
 
-  const GAP = { hit: 0.035, ohit: 0.035, crit: 0.05, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1, freeze: 0.05, shatter: 0.06, combust: 0.06, guardhit: 0.06, block: 0.05, clang: 0.03, throw: 0.08, catch: 0.08, parry: 0.1, bell: 0.06, charge: 0.2, chargehit: 0.2, volley: 0.15, raincast: 0.15, smash: 0.05, dark: 0.5, fury: 1, dcharge: 0.08, blossom: 0.05, implode: 0.2, pick: 0.08, bstrike: 0.07, rattle: 0.06, peal: 0.08, heave: 0.15, reel: 0.2, bsmash: 0.08 };
+  const GAP = { hit: 0.035, ohit: 0.035, crit: 0.05, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1, freeze: 0.05, shatter: 0.06, combust: 0.06, guardhit: 0.06, block: 0.05, clang: 0.03, throw: 0.08, catch: 0.08, parry: 0.1, bell: 0.06, charge: 0.2, chargehit: 0.2, volley: 0.15, raincast: 0.15, smash: 0.05, dark: 0.5, fury: 1, dcharge: 0.08, blossom: 0.05, implode: 0.2, pick: 0.08, bstrike: 0.07, rattle: 0.06, peal: 0.08, heave: 0.15, reel: 0.2, bsmash: 0.08, bhurl: 0.06, bdrag: 0.15, detonate: 0.05, tether: 0.3, rebuke: 0.1, reapchain: 0.06 };
   const PRIO = { secret: 2, drownbell: 3, hurt: 3, down: 3, revive: 3, dark: 3, lock: 3, roar: 3, fury: 3, victory: 3, defeat: 3, crit: 2, level: 2, boon: 2, relic: 2, pick: 2, shop: 2, ohit: 0, spark: 0, eshoot: 0, xp: 0, gold: 0, spawn: 0 };
   // arg: cue-specific parameter (hit and crit: { w damage share, el element, n hits this frame }; clang: { n, g }; victory: 'boss' for the short one; pick: a card kind or { k kind, big, els: a duo's two elements })
   A.play = (name, vol, arg, pr) => {
@@ -238,6 +238,28 @@
       case 'heave': noise('bandpass', 300, 2600, 0.28, 0.24 * v, 1.2); tone('sine', 160, 80, 0.2, 0.14 * v); [0.02, 0.07, 0.12].forEach((d) => noise('bandpass', rnd(3200, 4800), 2400, 0.02, 0.06 * v, 4, null, t + d)); break;
       case 'reel': for (let i = 0; i < 6; i++) { const at = t + i * 0.05; noise('bandpass', 2400 + i * 300, 1600, 0.02, 0.07 * v, 4, null, at); if (!(i & 1)) tone('square', 900 + i * 120, 700, 0.02, 0.025 * v, null, at); } break;
       case 'bsmash': tone('sine', 120, 35, 0.35, 0.4 * v); noise('lowpass', 1600, 100, 0.3, 0.3 * v); fmBell(150, 1.41, 1.6, 0.6, 0.08 * v); break;
+      case 'bhurl': { // a hurled bell lands (arg: speed factor k 0.4-2.5): an impact thump and crash under a bronze FM clang that drops a few semitones and rings longer with k; a full-wind hurl adds a low boom and a debris rattle
+        const k = Math.max(0.4, Math.min(2.5, +arg || 1)), g = (0.55 + 0.25 * k) * v, f = 196 * Math.pow(2, -(k - 1) * 3 / 12) * rnd(0.98, 1.02);
+        tone('sine', 140, 38, 0.3 + 0.08 * k, 0.32 * g); noise('lowpass', 1400, 90, 0.28 + 0.05 * k, 0.26 * g); noise('bandpass', 2200, 700, 0.05, 0.18 * g, 2);
+        fmBell(f, 1.41, 1.8 + 0.3 * k, 0.7 + 0.25 * k, 0.11 * g); tone('sine', f * 2.76, f * 2.7, 0.3, 0.035 * g);
+        if (k >= 1.5 && !lite()) { tone('sine', 62, 34, 0.4, 0.22 * g); noise('highpass', 3000, 1200, 0.12, 0.08 * g, 0.8, null, t + 0.03); }
+        break;
+      }
+      case 'bdrag': // a reel drags the bell home: chain links rattling over a ground scrape
+        for (let i = 0, n = lite() ? 4 : 7; i < n; i++) { const at = t + i * 0.045 + Math.random() * 0.012; noise('bandpass', rnd(2800, 5000), 2000, 0.02, 0.06 * v, 4, null, at); if (!(i & 1)) tone('square', rnd(2200, 3200), 1800, 0.015, 0.02 * v, null, at); }
+        noise('lowpass', 700, 220, 0.32, 0.12 * v, 1.2); tone('sine', 90, 70, 0.3, 0.06 * v);
+        break;
+      // Element payoffs: a Capacitor burst (arg: foes detonated this frame, one cue for all) cracks and grows with log2(1 + n); a Tempest tether hums; Martyr's Rebuke strikes a bright bell over a rush; Reaper's Chain whooshes low
+      case 'detonate': {
+        const n = Math.max(1, arg | 0), lg = Math.log2(1 + n), s = Math.min(1.8, 0.8 + 0.3 * lg);
+        noise('highpass', 5200, 1800, 0.05, 0.24 * v * s, 0.7); tone('square', 2400, 600, 0.05, 0.05 * v); tone('sawtooth', 1400, 180, 0.09, 0.07 * v * s);
+        if (n >= 3) { tone('sine', 110, 45, 0.18, Math.min(0.3, 0.1 + 0.05 * lg) * v); noise('lowpass', 1600, 200, 0.14, 0.12 * v); }
+        for (let i = 1, m = Math.min(lite() ? 1 : 3, n - 1); i <= m; i++) noise('highpass', rnd(3500, 6000), 2200, 0.025, 0.08 * v, 0.8, null, t + i * 0.03 + Math.random() * 0.015);
+        break;
+      }
+      case 'tether': tone('sawtooth', rnd(110, 130), 100, 0.12, 0.025 * v); noise('highpass', 4800, 3000, 0.08, 0.03 * v, 0.7); break;
+      case 'rebuke': tone('sine', 1046, 1040, 0.6, 0.1 * v); tone('sine', 1568, 1560, 0.45, 0.06 * v); if (!lite()) tone('sine', 1046 * 2.76, 1046 * 2.7, 0.25, 0.03 * v); noise('highpass', 2500, 7000, 0.3, 0.1 * v, 0.7); tone('sine', 130, 60, 0.2, 0.22 * v); break;
+      case 'reapchain': noise('bandpass', 400, 1800, 0.26, 0.14 * v, 1.6); tone('sine', 220, 90, 0.28, 0.08 * v); tone('triangle', 466, 440, 0.3, 0.025 * v, null, t + 0.05); break;
       case 'secret': [988, 1319, 1976].forEach((f, i) => tone('sine', f, f * 1.003, 0.5 - i * 0.1, 0.07 * v, null, t + i * 0.09)); tone('triangle', 494, 492, 0.6, 0.04 * v); break; // a secret uncovered: a soft rising three-note chime over a low hum
       case 'platino': [1568, 2093, 2637, 3136].forEach((f, i) => tone('sine', f, f * 1.01, 0.18, 0.06 * v, null, t + i * 0.05)); noise('highpass', 6000, 4000, 0.25, 0.03 * v); break; // the Platino caught
       case 'catch': tone('sine', 140, 70, 0.14, 0.3 * v); noise('lowpass', 500, 150, 0.1, 0.16 * v, 1); if (arg) [1318, 1760].forEach((f, i) => tone('sine', f, f, 0.22, 0.06 * v, null, t + 0.03 + i * 0.06)); break;
