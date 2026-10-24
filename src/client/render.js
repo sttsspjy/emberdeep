@@ -1333,7 +1333,7 @@
       for (const d in room.sealed) if (room.sealed[d] && room.doors[d] >= 0) { const at = doorAt(room, d); c.drawImage(ED.Icons.canvas(ED.Icons.SEAL[0], ED.Icons.SEAL[1], 16), Math.round(at[0]) - 8, Math.round(at[1]) - 8); }
     }
     const list = doorPreviews(view, room, t); if (!list.length) { c.globalAlpha = 1; return; }
-    let alive = 0; for (const p of view.players.values()) if (!p.dead) alive++;
+    let alive = 0; for (const p of view.players.values()) if (!p.dead && !p.downed) alive++; // living heroes as World.checkDoors counts them
     for (const pv of list) {
       let near = 1e9; for (const p of view.players.values()) if (!p.dead) near = Math.min(near, Math.hypot(p.x - pv.x, p.y - pv.y));
       const a = U.clamp((near - 22) / 46, 0.22, 0.95), qx = Math.round(pv.x), qy = Math.round(pv.y), ri = pv.ri;
@@ -1352,7 +1352,7 @@
       dpLine(c, pv, li++, ri.label, pv.dark ? U.mix(pv.color, DARK_COL, 0.35) : pv.color, Math.max(a, 0.85));
       if (alive > 1) { // party door rule: who wants this door, out of the living heroes
         let k = 0, first = null;
-        for (const p of view.players.values()) if (!p.dead && R.doorWant(view, p) === pv.d) { k++; if (!first) first = p; }
+        for (const p of view.players.values()) if (!p.dead && !p.downed && R.doorWant(view, p) === pv.d) { k++; if (!first) first = p; }
         if (k) dpLine(c, pv, li++, `${first.name}${k > 1 ? ' +' + (k - 1) : ''} ${k > 1 ? 'want' : 'wants'} this door (${k}/${alive})`, ED.PLAYER_COLORS[first.slot] || '#fff3c4', 1);
       }
       if (ta > 0) {
