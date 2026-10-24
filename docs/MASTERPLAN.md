@@ -84,6 +84,7 @@ North-star: a co-op browser roguelite where builds are chosen, not rolled. Rules
 - [x] Twists: Bloodprice, Metronome, Pacifist's Pyre, Hunted (opt-in rules with a red price)
 - [x] Bots and smart picks know the new cards
 - [x] Bellwarden rework: wind the bell, hurl it, reel it home through foes, leap to where it lies, Peal it with built-up Resonance
-- [ ] Balance pass on the route floors (bots read 14% wins at full Hearth before retuning)
+- [x] Balance pass on the route floors: half Hearth 19%, full Hearth 40%, Pact 5 12%, every hero in band
+- [ ] Pact 1 and Pact 4 steps, two- and three-hero parties back in their bands
 - [ ] Your playtest: route choices, the new elements, Twists, the Bellwarden's hurl and reel
 - [ ] Other heroes' weapon forks (next round)
