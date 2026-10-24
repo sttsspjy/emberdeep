@@ -793,27 +793,27 @@
     const rx0 = (r) => ox + (r.gx - minX) * cell + so, ry0 = (r) => oy + (r.gy - minY) * cell + so, th = Math.max(px, Math.round(cell * 0.1 / px) * px);
     const sm = g.imageSmoothingEnabled; g.imageSmoothingEnabled = false;
     const ic2 = (name, col, ix, iy, z) => { const j = Math.min(Math.floor((z + 2 * px) / 16), Math.round(z / 16)); if (j >= 1) icon(g, name, col, ix + (z - 16 * j) / 2, iy + (z - 16 * j) / 2, j); else g.drawImage(ED.Icons.canvas(name, col, 64), Math.round(ix), Math.round(iy), Math.round(z), Math.round(z)); };
-    g.fillStyle = '#6b5a48';
+    // the whole floor from the start: route bits (ED.Icons.route) split rooms and corridors into here, walked, reachable and closed
+    const ga0 = g.globalAlpha, rt = ED.Icons.route(fl, view.roomId, rs), walk = (id) => rt[id] & 6, reach = (id) => rt[id] & 5;
     for (const r of fl.rooms) {
-      const st = rs[r.id]; if (!st || !st.known) continue;
-      const n1 = r.doors.e, n2 = r.doors.s, c0x = rx0(r) + (s - th) / 2, c0y = ry0(r) + (s - th) / 2;
-      if (n1 >= 0 && rs[n1] && rs[n1].known) g.fillRect(Math.round(c0x), Math.round(c0y), rx0(fl.rooms[n1]) - rx0(r), th);
-      if (n2 >= 0 && rs[n2] && rs[n2].known) g.fillRect(Math.round(c0x), Math.round(c0y), th, ry0(fl.rooms[n2]) - ry0(r));
-    }
-    const ICON = { boss: ['skull', '#ff5a3a'], shop: ['coin', '#ffd36b'], treasure: ['chest', '#ffd36b'], event: ['star', '#7dffd9'], elite: ['skull', '#ff7a3a'], rest: ['campfire', '#ff9a3a'] };
-    const meP = ED.Game.s && ED.Game.s.me, cls = meP ? meP.cls : null;
-    for (const r of fl.rooms) {
-      const st = rs[r.id]; if (!st || !st.known) continue;
-      const rx = rx0(r), ry = ry0(r), cur = r.id === view.roomId;
-      g.fillStyle = cur ? '#fff3c4' : K.ol; g.fillRect(rx, ry, s, s);
-      g.fillStyle = cur ? '#e6c27a' : st.visited ? (st.cleared ? '#5a4a3c' : '#8a3a2a') : '#3c3028'; g.fillRect(rx + px, ry + px, s - 2 * px, s - 2 * px);
-      const icn = ICON[r.type], open = !st.cleared, z = s - 2 * px; // utility rooms keep their glyph; a cleared elite room loses it
-      if (icn && (open || r.type !== 'elite')) ic2(icn[0], icn[1], rx + px, ry + px, z);
-      if (open && r.reward && (r.type === 'combat' || r.type === 'elite')) { // reward preview: whole icon in plain combat rooms, a corner badge in elite rooms
-        const ri = ED.Render.rewardIcon((r.dark && ED.World.REWARD_UP[r.reward]) || r.reward, cls), big = r.type === 'combat', zb = big ? z : Math.max(16, Math.floor(s * 0.5)); // a dark room previews its stepped-up reward
-        ic2(ri[0], ri[1], big ? rx + px : rx + s - zb, big ? ry + px : ry + s - zb, zb);
+      const c0x = Math.round(rx0(r) + (s - th) / 2), c0y = Math.round(ry0(r) + (s - th) / 2);
+      for (const d of ['e', 's']) {
+        const nb = r.doors[d]; if (!(nb >= 0)) continue;
+        g.fillStyle = walk(r.id) && walk(nb) ? '#e6c27a' : reach(r.id) && reach(nb) ? '#6b5a48' : '#2e2620';
+        if (d === 'e') g.fillRect(c0x, c0y, rx0(fl.rooms[nb]) - rx0(r), th); else g.fillRect(c0x, c0y, th, ry0(fl.rooms[nb]) - ry0(r));
       }
-      if (r.dark && !st.visited) { const zd = Math.max(16, Math.floor(s * 0.5)); ic2('skull', '#a070ff', rx + s - zd, ry + s - zd, zd); } // dark-room mark, bottom-right of its cell
+    }
+    for (const r of fl.rooms) {
+      const st = rs[r.id] || {}, b = rt[r.id], rx = rx0(r), ry = ry0(r), cur = b & 4, closed = !b;
+      g.fillStyle = cur ? '#fff3c4' : K.ol; g.fillRect(rx, ry, s, s);
+      g.fillStyle = cur ? '#e6c27a' : b & 2 ? (st.cleared ? '#5a4a3c' : '#8a3a2a') : closed ? '#1e1814' : '#3c3028'; g.fillRect(rx + px, ry + px, s - 2 * px, s - 2 * px);
+      const ri = ED.Render.roomIcon(r), z = s - 2 * px, zb = Math.max(16, Math.floor(s * 0.5));
+      if (!ri || (st.cleared && (r.type === 'combat' || r.type === 'elite'))) continue; // utility rooms keep their glyph; a cleared fight loses it
+      if (closed) g.globalAlpha = ga0 * 0.35;
+      ic2(ri.icon, ri.color, rx + px, ry + px, z);
+      if (ri.badge) ic2(ri.badge[0], ri.badge[1], rx + s - zb, ry + s - zb, zb); // elite / boss reward, bottom-right
+      if (r.dark && !st.visited) ic2(ED.Icons.DARK[0], ED.Icons.DARK[1], rx, ry + s - zb, zb); // dark-room moon, bottom-left
+      g.globalAlpha = ga0;
     }
     g.imageSmoothingEnabled = sm;
   };

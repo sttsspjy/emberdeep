@@ -306,7 +306,7 @@
     if (A.next) h += `<div class="sh-sub">Next, ${esc(A.next.short)}:</div><div class="sh-aff2">${affChips(A.next)}</div>`;
     h += '</div>';
     h += `<div class="sh-stat sh-f" data-k="m:dark"><div class="sh-sl"><span class="sh-l">Dark rooms</span><span class="sh-v">${live('dark', `${K.left} left`)}</span></div>`
-      + `<div class="sh-sub">${K.left} of ${K.total} unvisited${K.here ? ' · you are in one' : ''}. They are optional dead ends, marked on doors and the map.</div>`
+      + `<div class="sh-sub">${K.left} of ${K.total} unvisited${K.here ? ' · you are in one' : ''}. They are risky branches of the route, marked with a moon on doors and the map.</div>`
       + `<div class="sh-cond">Foes hit ${X(K.dmg)} · the last wave brings one more elite · the reward goes up one step · gold and experience dropped there ${X(K.loot)}</div>`
       + `<div class="sh-cond">Rooms explored ${live('rooms', `${K.rooms.seen} / ${K.rooms.total}`)}</div></div>`;
     h += `<div class="sh-stat sh-f" data-k="m:party"><div class="sh-sl"><span class="sh-l">Party</span></div>${m.partyRows}</div>`;
@@ -452,63 +452,71 @@
   }
 
   // ---------------- map canvas ----------------
-  // Room grid at whole UI art px (PixUI.k device px each): a cell pitch of whole art px, rooms as outlined squares with a 1 art px bevel, corridors 2 art px wide,
-  // room icons at whole multiples of 16 device px (ED.Icons draws them crisp at their own size). Redrawn when the box, the room or the room-state hash change.
-  const MAP_C = { here: '#e6c27a', cleared: '#5a4a3c', fight: '#8a3a2a', known: '#2c231c', dark: '#a070ff' };
-  const MAP_ICON = { boss: ['skull', '#ff5a3a'], shop: ['coin', '#ffd36b'], treasure: ['chest', '#ffd36b'], event: ['star', '#7dffd9'], elite: ['skull', '#ff7a3a'], rest: ['campfire', '#ff9a3a'] };
+  // The whole floor at whole UI art px (PixUI.k device px each): a cell pitch of whole art px plus a label band under each row, rooms as outlined squares with a 1 art px bevel,
+  // corridors 2 art px wide, room icons at whole multiples of 16 device px (ED.Icons draws them crisp at their own size), labels through ED.HUD.pixText.
+  // Route bits (ED.Icons.route) split rooms into here, walked, reachable and closed. Redrawn when the box, the room, the room-state hash or the boon colour change.
+  const MAP_C = { here: '#e6c27a', cleared: '#5a4a3c', fight: '#8a3a2a', known: '#4a3c30', closed: '#15100d', walk: '#e6c27a', corr: '#6f5338', corrOff: '#2e2620', threat: '#ff5a3a' };
   function mapLegend() {
     const el = $('sh-legend'); if (!el || el.firstChild) return;
-    el.innerHTML = [['here', 'you are here'], ['cleared', 'cleared'], ['fight', 'not cleared'], ['known', 'seen, not visited'], ['dark', 'dark room']].map(([k, t]) => `<span><i style="--c:${MAP_C[k]}"></i>${t}</span>`).join('');
+    const sq = (c, t) => `<span><i style="--c:${c}"></i>${t}</span>`, ic = (g, t) => `<span><img class="sh-lgi" src="${ED.Icons.url(g[0], g[1])}" alt="">${t}</span>`;
+    el.innerHTML = sq(MAP_C.here, 'you are here') + sq(MAP_C.cleared, 'walked, cleared') + sq(MAP_C.fight, 'walked, not cleared') + sq(MAP_C.known, 'reachable') + sq(MAP_C.closed, 'closed off')
+      + ic(ED.Icons.DARK, 'dark room: harder, richer') + sq(MAP_C.threat, 'threat') + sq(MAP_C.walk, 'your path');
   }
+  let lblCtx = null;
+  // Advance of s in font px (Pixel Operator 700 at 16 px = 1 px per font px).
+  const lblW = (s) => { if (!lblCtx) lblCtx = document.createElement('canvas').getContext('2d'); lblCtx.font = '700 16px "Pixel Operator", "Segoe UI", system-ui, sans-serif'; return Math.ceil(lblCtx.measureText(s).width); };
   function mapDraw(force) {
     const v = ED.Game.s.view, fl = v.floor, box = $('sh-mapbox'), cv = $('map-canvas');
     if (!fl) return;
     const dpr = window.devicePixelRatio || 1, W = Math.floor(box.clientWidth * dpr), H = Math.floor(box.clientHeight * dpr);
     if (W < 16 || H < 16) return; // a hidden tab measures 0 and draws nothing
     let rs = ''; for (const id in v.roomState) { const q = v.roomState[id]; rs += (q.visited ? 1 : 0) + (q.known ? 2 : 0) + (q.cleared ? 4 : 0); }
-    const k = PX ? PX.k : Math.max(1, Math.round(2 * dpr)), key = [W, H, k, v.roomId, rs, v.floorSeed].join('|');
+    const k = PX ? PX.k : Math.max(1, Math.round(2 * dpr)), key = [W, H, k, v.roomId, rs, v.floorSeed, ED.Render.mainPath].join('|');
     if (!force && key === SH.mapKey) return;
     SH.mapKey = key;
     cv.style.width = (W / dpr) + 'px'; cv.style.height = (H / dpr) + 'px';
     if (cv.width !== W) cv.width = W;
     if (cv.height !== H) cv.height = H;
-    const c = cv.getContext('2d'), st = v.roomState || {};
+    const c = cv.getContext('2d'), st = v.roomState || {}, rt = ED.Icons.route(fl, v.roomId, st);
     c.clearRect(0, 0, W, H); c.imageSmoothingEnabled = false;
     let x0 = 99, x1 = -99, y0 = 99, y1 = -99;
     for (const r of fl.rooms) { x0 = Math.min(x0, r.gx); x1 = Math.max(x1, r.gx); y0 = Math.min(y0, r.gy); y1 = Math.max(y1, r.gy); }
-    const cols = x1 - x0 + 1, rows = y1 - y0 + 1, pitch = Math.max(8, Math.min(Math.floor(W / k / cols), Math.floor(H / k / rows), 44)); // art px per cell
-    const gap = Math.max(3, Math.round(pitch * 0.2)), side = pitch - gap, P = pitch * k, S = side * k;
-    const ox = Math.floor((W - cols * P) / 2 + gap * k / 2), oy = Math.floor((H - rows * P) / 2 + gap * k / 2);
-    const at = (r) => [ox + (r.gx - x0) * P, oy + (r.gy - y0) * P];
+    const tn = Math.max(1, Math.round(k / 4)), lb = Math.ceil(13 * tn / k); // label text: tn device px per font px (16n device px type); lb: label band in art px
+    const cols = x1 - x0 + 1, rows = y1 - y0 + 1, pitch = Math.max(8, Math.min(Math.floor(W / k / cols), Math.floor(H / k / rows) - lb, 44)); // art px per cell
+    const gap = Math.max(3, Math.round(pitch * 0.2)), side = pitch - gap, P = pitch * k, PY = (pitch + lb) * k, S = side * k;
+    const ox = Math.floor((W - cols * P) / 2 + gap * k / 2), oy = Math.floor((H - rows * PY) / 2 + gap * k / 2);
+    const at = (r) => [ox + (r.gx - x0) * P, oy + (r.gy - y0) * PY];
     const rect = (col, x, y, w, h) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
-    const mid = Math.floor(side / 2) * k;
-    for (const r of fl.rooms) { // corridors: a 2 art px brass line in a 1 art px outline between known neighbours
-      const q = st[r.id]; if (!q || !q.known) continue;
+    const mid = Math.floor(side / 2) * k, walk = (id) => rt[id] & 6, reach = (id) => rt[id] & 5;
+    for (const r of fl.rooms) { // corridors: a 2 art px line in a 1 art px outline; gold along the walked path, brass while reachable, dark when closed
       for (const d of ['e', 's']) {
-        const n = r.doors[d]; if (!(n >= 0) || !st[n] || !st[n].known) continue;
-        const [ax, ay] = at(r), [bx, by] = at(fl.rooms[n]);
-        if (d === 'e') { rect('#222222', ax + S, ay + mid - 2 * k, bx - ax - S, 4 * k); rect('#6f5338', ax + S, ay + mid - k, bx - ax - S, 2 * k); }
-        else { rect('#222222', ax + mid - 2 * k, ay + S, 4 * k, by - ay - S); rect('#6f5338', ax + mid - k, ay + S, 2 * k, by - ay - S); }
+        const n = r.doors[d]; if (!(n >= 0)) continue;
+        const [ax, ay] = at(r), [bx, by] = at(fl.rooms[n]), col = walk(r.id) && walk(n) ? MAP_C.walk : reach(r.id) && reach(n) ? MAP_C.corr : MAP_C.corrOff;
+        if (d === 'e') { rect('#222222', ax + S, ay + mid - 2 * k, bx - ax - S, 4 * k); rect(col, ax + S, ay + mid - k, bx - ax - S, 2 * k); }
+        else { rect('#222222', ax + mid - 2 * k, ay + S, 4 * k, by - ay - S); rect(col, ax + mid - k, ay + S, 2 * k, by - ay - S); }
       }
     }
-    const meP = ED.Game.s && ED.Game.s.me, cls = meP ? meP.cls : null, icoPx = (n) => Math.floor(n / 16) * 16; // whole 16 device px
+    const icoPx = (n) => Math.floor(n / 16) * 16; // whole 16 device px
     for (const r of fl.rooms) {
-      const q = st[r.id]; if (!q || !q.known) continue;
-      const [x, y] = at(r), cur = r.id === v.roomId, fill = cur ? MAP_C.here : q.visited ? (q.cleared ? MAP_C.cleared : MAP_C.fight) : MAP_C.known;
+      const q = st[r.id] || {}, b = rt[r.id], closed = !b, [x, y] = at(r), cur = b & 4;
+      const fill = cur ? MAP_C.here : b & 2 ? (q.cleared ? MAP_C.cleared : MAP_C.fight) : closed ? MAP_C.closed : MAP_C.known;
       rect(cur ? '#fff3c4' : '#222222', x, y, S, S);
       rect(fill, x + k, y + k, S - 2 * k, S - 2 * k);
       rect(U.shade(fill, 0.22), x + k, y + k, S - 2 * k, k);
       rect(U.shade(fill, -0.35), x + k, y + S - 2 * k, S - 2 * k, k);
+      const ri = ED.Render.roomIcon(r);
+      if (!ri || (q.cleared && (r.type === 'combat' || r.type === 'elite'))) continue; // utility rooms keep their glyph and label; a cleared fight loses both
       const inner = S - 4 * k, big = icoPx(inner), small = icoPx(inner / 2) || Math.min(16, big);
       const draw = (name, color, z, cx, cy) => { if (z >= 16) c.drawImage(ED.Icons.canvas(name, color, z), cx, cy, z, z); };
-      const centre = (z) => [x + Math.floor((S - z) / 2), y + Math.floor((S - z) / 2)], corner = (z) => [x + S - z - k, y + S - z - k];
-      const icn = MAP_ICON[r.type], open = !q.cleared; // utility rooms keep their glyph; a cleared elite room loses it
-      if (icn && (open || r.type !== 'elite')) draw(icn[0], icn[1], big, ...centre(big));
-      if (open && r.reward && (r.type === 'combat' || r.type === 'elite') && ED.Render.rewardIcon) { // reward preview: whole icon in plain combat rooms, a corner badge in elite rooms
-        const ri = ED.Render.rewardIcon((r.dark && ED.World.REWARD_UP[r.reward]) || r.reward, cls);
-        if (r.type === 'combat') draw(ri[0], ri[1], big, ...centre(big)); else draw(ri[0], ri[1], small, ...corner(small));
-      }
-      if (r.dark && !q.visited) draw('skull', MAP_C.dark, small, ...corner(small)); // dark-room mark, bottom-right of its cell
+      c.globalAlpha = closed ? 0.4 : 1;
+      draw(ri.icon, ri.color, big, x + Math.floor((S - big) / 2), y + Math.floor((S - big) / 2));
+      if (ri.badge) draw(ri.badge[0], ri.badge[1], small, x + S - small - k, y + S - small - k); // elite / boss reward, bottom-right
+      if (r.dark && !q.visited) draw(ED.Icons.DARK[0], ED.Icons.DARK[1], small, x + k, y + S - small - k); // dark-room moon, bottom-left
+      const th = U.clamp(r.threat | 0, 0, 3);
+      for (let i = 0; i < th && !q.cleared; i++) { rect('#222222', x + (2 + 5 * i) * k, y + 2 * k, 4 * k, 4 * k); rect(MAP_C.threat, x + (3 + 5 * i) * k, y + 3 * k, 2 * k, 2 * k); } // threat pips, top-left
+      let lab = ri.label; if (lblW(lab) * tn > P - k && lab.indexOf(' ') > 0) lab = lab.slice(0, lab.indexOf(' ')); // "Elite Relic" -> "Elite" when the pitch is too narrow
+      ED.HUD.pixText(c, lab, x + Math.floor(S / 2), y + S + Math.round((PY - S) / 2), tn, closed ? U.mix(ri.color, '#3a302a', 0.55) : ri.color, 'b', 'center', 700, 1);
+      c.globalAlpha = 1;
     }
   }
 

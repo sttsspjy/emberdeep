@@ -999,6 +999,7 @@ body:has(#ov-sheet:not([hidden])) #ov-boon { visibility: hidden; }
 .sh-mapbox canvas { position: absolute; left: 0; top: 0; display: block; image-rendering: pixelated; }
 .sh-legend { display: flex; flex-wrap: wrap; gap: 0 calc(8 * var(--t1)); margin-top: calc(2 * var(--p)); font: 400 var(--fs-sm)/1.375 var(--f-body); color: var(--muted); }
 .sh-legend i { display: inline-block; width: calc(8 * var(--t1)); height: calc(8 * var(--t1)); margin-right: calc(3 * var(--t1)); vertical-align: calc(-1 * var(--t1)); background: var(--c); box-shadow: inset 0 0 0 var(--t1) var(--px-ol); }
+.sh-legend .sh-lgi { display: inline-block; width: calc(16 * var(--t1)); height: calc(16 * var(--t1)); margin-right: calc(3 * var(--t1)); vertical-align: calc(-4 * var(--t1)); image-rendering: pixelated; }
 #shp-map .sh-in { display: flex; flex-direction: column; }
 .sh-party { display: grid; grid-template-columns: minmax(0, 1fr) auto calc(24 * var(--p)); align-items: center; gap: calc(6 * var(--t1)); padding: calc(2 * var(--t1)) calc(2 * var(--t1)); font: 400 var(--fs-md)/1.375 var(--f-body); cursor: pointer; }
 .sh-party:hover { background: rgba(255, 214, 160, 0.06); }
