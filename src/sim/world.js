@@ -662,7 +662,7 @@
     p.invuln = Math.max(0, p.invuln - dt);
     p.hurtT -= dt;
     if (!p.remote) p.dashing = p.dashT > 0;
-    if (p.shields.length && (p.downed || p.dead)) this.clearShields(p);
+    if (p.downed || p.dead) { if (p.shields.length) this.clearShields(p); const ch = ED.CLS[p.cls]; if (ch && ch.down) ch.down.call(this, p); }
     if (p.dead) return;
     if (p.downed) {
       let helpers = 0;
