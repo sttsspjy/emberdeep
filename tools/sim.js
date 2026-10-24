@@ -1095,6 +1095,14 @@ const optsFromFlags = (flags) => ({
   from: flags.from === undefined ? undefined : +flags.from, lambda: flags.lambda,
 });
 
+// Heroes of run i over the class list cls (n heroes): the lead is cls[i mod L]; partners are the other heroes in list order rotated by floor(i / L) mod (L - 1), so over L x (L - 1) runs every lead meets every partner in each slot.
+// A solo run keeps [lead].concat(cls) (its seeds and rows are unchanged).
+const partyOf = (cls, i, n) => {
+  const L = cls.length, lead = cls[i % L];
+  if (n <= 1 || L < 2) return [lead].concat(cls);
+  const rest = cls.filter((c, k) => k !== i % L), k = Math.floor(i / L) % rest.length;
+  return [lead].concat(rest.slice(k), rest.slice(0, k));
+};
 // Expands the rotating flags for run i of a batch over nc classes: route = floor(i / nc) mod 4, fork = floor(i / (nc x 4)) mod 2, weapon = floor(i / (nc x 8)) mod 3, start = the six gates then generalist.
 const ROT_START = ['kindle', 'frostbite', 'staticcharge', 'envenom', 'consecrate', 'doommark', 'generalist'];
 function jobOpts(o, i, nc) {
@@ -1118,7 +1126,7 @@ function pairReport(rows, base) {
   }).join('\n');
 }
 
-module.exports = { runBot, summarize, classLines, metaProfile, rowOf, optsFromFlags, jobOpts, pairReport, ED, parseVet, vetThreats, vetRisk, vetPlan, vetRider, arrivalStats, fmtPow, ROMAN, PICK_SRC };
+module.exports = { partyOf, runBot, summarize, classLines, metaProfile, rowOf, optsFromFlags, jobOpts, pairReport, ED, parseVet, vetThreats, vetRisk, vetPlan, vetRider, arrivalStats, fmtPow, ROMAN, PICK_SRC };
 if (require.main === module) {
   const flags = {}, args = [];
   for (const a of process.argv.slice(2)) { const m = /^--([a-z0-9]+)(?:=(.*))?$/i.exec(a); if (m) flags[m[1]] = m[2] === undefined ? '1' : m[2]; else args.push(a); }
@@ -1129,7 +1137,7 @@ if (require.main === module) {
   const results = [];
   for (let i = 0; i < runs; i++) {
     const t0 = Date.now();
-    const r = runBot(Object.assign({ seed: seed0 + i * 7, n, cls: [cls[i % cls.length]].concat(cls), skill, up, pact: +(args[5] || 0), mastery }, jobOpts(o, i, cls.length)));
+    const r = runBot(Object.assign({ seed: seed0 + i * 7, n, cls: partyOf(cls, i, n), skill, up, pact: +(args[5] || 0), mastery }, jobOpts(o, i, cls.length)));
     results.push(r);
     if (!flags.quiet) {
       console.log(`run ${i} ${cls[i % cls.length]}: ${r.victory ? 'WIN' : r.state} stratum ${r.stratum} time ${U.fmtTime(r.time)} lvl ${r.level} kills ${r.kills} relics ${r.relics} rooms ${r.rooms.visited}/${r.rooms.total} dark [${r.dark.join(' ')}] strata [${r.strata.map(U.fmtTime).join(' ')}] (${Date.now() - t0}ms)`);
