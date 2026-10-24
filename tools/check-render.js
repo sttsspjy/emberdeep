@@ -373,6 +373,9 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
       F.reset(); plays.length = 0; const sh0 = F.shake; F.handle({ t: 'hurl', pid: 'p0', x: 0, y: 0, k: 2.5 }, fctx); const big = F.shake; F.reset(); F.handle({ t: 'hurl', pid: 'p0', x: 0, y: 0, k: 0.4 }, fctx); const small = F.shake; F.reset(); F.handle({ t: 'hurl', pid: 'p9', x: 0, y: 0, k: 2.5 }, fctx);
       ok(sh0 === 0 && big > small && small > 0 && F.shake === 0, `a hurl shakes its owner by k (k 2.5: ${big}, k 0.4: ${small}), another hero's not at all (${F.shake})`);
       ok(plays.filter((q) => q.name === 'bhurl').map((q) => q.arg).join() === '2.5,0.4,2.5', 'each hurl plays the bronze clang with its k');
+      const bctx = (tw) => ({ localPid: 'p0', player: (pid) => ({ x: 0, y: 0, pid, cls: 'knight', stats: { twBlood: tw } }), players: () => [], stratum: () => 1 });
+      plays.length = 0; F.handle({ t: 'skill', pid: 'p0', k: 'x', x: 0, y: 0 }, bctx(1)); F.handle({ t: 'skill', pid: 'p9', k: 'x', x: 0, y: 0 }, bctx(1)); F.handle({ t: 'skill', pid: 'p0', k: 'x', x: 0, y: 0 }, bctx(0));
+      ok(plays.filter((q) => q.name === 'blood').length === 1, 'Bloodprice: the own cast of a twBlood hero plays the heartbeat sting, no other cast does');
       F.reset(); ED.Audio = A0;
       // foe markers and the Capacitor cue: host-side fields (quarryT, doses) and the mirror's decoded ones (dosed) both draw
       const lp = { pid: 'p0', x: 0, y: 0, boons: {} }, fv = { players: new Map([['p0', lp]]), zones: [], enemies: [] };
