@@ -108,7 +108,7 @@
     bounty: { name: 'Bounty', rar: 'c', icon: 'coin', open: true, desc: '+{gold} gold.', mods: { gold: 0.25 }, max: 2 },
     stalwart: { name: 'Stalwart', rar: 'c', icon: 'heart', open: true, desc: '+{hpMul} max health.', mods: { hpMul: 0.04 }, max: 2 },
     mending: { name: 'Mending', rar: 'c', icon: 'potion', open: true, desc: '+{heal} healing received.', mods: { heal: 0.15 }, max: 2 },
-    forager: { name: 'Forager', rar: 'c', icon: 'leaf', open: true, desc: 'Cleared rooms drop a heart {forager*10}% more often; hearts you pick up heal {forager*3}% more max health.', mods: { forager: 1 }, max: 2 },
+    forager: { name: 'Forager', rar: 'c', icon: 'leaf', open: true, desc: 'Hearts, campfires, fountains, healing draughts and Vigor rewards heal you {forager*8}% more of your max health.', mods: { forager: 1 }, max: 2 },
     wide: { name: 'Wide Arcs', rar: 'r', icon: 'arc', open: true, desc: '+{area} area: melee reach, blasts and auras.', mods: { area: 0.15 }, max: 2 },
     evade: { name: 'Evasion', rar: 'r', icon: 'cloak', open: true, desc: '+{dodge} chance to dodge attacks.', mods: { dodge: 0.04 }, max: 2 },
     thorns: { name: 'Thornmail', rar: 'r', icon: 'thorn', open: true, desc: 'Attackers take {thorns} damage. +{armor} armor.', mods: { thorns: 10, armor: 2 }, max: 2 },

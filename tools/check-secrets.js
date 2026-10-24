@@ -1,6 +1,6 @@
 // Usage: node tools/check-secrets.js
 // Headless checks of the secret run fields (world.js secretP / secretW): each trigger fires in a constructed scenario and stays off in a near miss; the Drowned Bell (floor gen room.bell, rooms.js ringBell / bellClear)
-// sits only on stratum V, deterministic per seed; the Platino (floor.platino, rooms.js) is deterministic, harmless and leaves the world's RNG, foes and loot untouched; net.js carries every field.
+// sits only on stratum V, deterministic per seed; the Platino (floor.platino: the fight clear that lets it out, rooms.js) is deterministic, harmless and leaves the world's RNG, foes and loot untouched; net.js carries every field.
 // Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
 const fs = require('fs'), path = require('path'), vm = require('vm');
@@ -154,14 +154,14 @@ for (const [s, part, want] of [[ED.CONST.STRATA, 'peal.wave', true], [ED.CONST.S
     for (let s = 1; s <= ED.CONST.STRATA; s++) {
       const f = D.generate(s, seed * 7919), bells = f.rooms.filter(r => r.bell);
       if (s !== 5) { stray += bells.length; continue; }
-      if (bells.length !== 1 || !bells[0].dark) { miss++; continue; }
+      if (bells.length !== 2 || !bells.every(r => r.dark)) { miss++; continue; }
       const g = D.generate(s, seed * 7919), b = bells[0], b2 = g.rooms[b.id].bell;
       if (!b2 || b2.x !== b.bell.x || b2.y !== b.bell.y) same = false;
       if (D.tileAt(b, b.bell.x, b.bell.y) !== 0) floorOk = false;
     }
   }
   ok(stray === 0, `the Drowned Bell stands only on stratum V (${stray} elsewhere)`);
-  ok(miss === 0, `every stratum V floor holds one bell in a dark room (${miss} without)`);
+  ok(miss === 0, `every stratum V floor holds a bell in each of its two dark rooms (${miss} without)`);
   ok(same, 'bell placement is the same for the same seed');
   ok(floorOk, 'the bell stands on open floor');
 }
@@ -211,18 +211,18 @@ const rung = (w, pid) => w.fx.filter(ev => ev.t === 'bellrung' && ev.pid === pid
     const f = D.generate(s, seed * 104729), g = D.generate(s, seed * 104729);
     floors++;
     if (f.platino !== g.platino) same = false;
-    if (f.platino >= 0) { hits++; const t = f.rooms[f.platino].type; if (t !== 'combat' && t !== 'elite') wrong++; }
+    if (f.platino >= 0) { hits++; if (!(f.platino >= 1 && f.platino <= 3)) wrong++; }
   }
-  ok(same, 'the Platino room is the same for the same seed');
-  ok(wrong === 0, `the Platino room is a combat or elite room (${wrong} not)`);
+  ok(same, 'the Platino cue is the same for the same seed');
+  ok(wrong === 0, `the Platino comes out at the 1st to 3rd fight clear of its floor (${wrong} not)`);
   ok(hits / floors > 0.08 && hits / floors < 0.18, `about one floor in eight has a Platino (${hits}/${floors})`);
 }
-// Two worlds on one seed, entering the same combat room; `plat` lets the Platino out at its clear. Returns the world after `ticks` idle ticks past the clear.
+// Two worlds on one seed, entering the same combat room; `plat` lets the Platino out at its clear (the floor's first fight clear). Returns the world after `ticks` idle ticks past the clear.
 function platRun(plat, ticks, moveHero) {
   const { w, p } = stage(['knight'], 1, 11);
   const room = w.floor.rooms.find(r => r.type === 'combat' && !r.dark);
   w.enterRoom(room.id, null);
-  w.floor.platino = plat ? room.id : -1;
+  w.floor.platino = plat ? 1 : -1; w.floorFights = 0;
   w.enemies.length = 0; w.zones.length = 0; w.enc.q = 0; w.enc.spawned = 0; w.enc.wave = w.enc.waves.length - 1; w.enc.t = 0;
   for (let i = 0; i < ticks; i++) { if (moveHero) moveHero(w, p, i); w.update(DT); }
   return { w, p };

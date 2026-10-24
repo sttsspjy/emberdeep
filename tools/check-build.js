@@ -55,13 +55,13 @@ const ranks = (w, pid) => w.msgs.filter(m => m.t === 'forkRank' && m.to === pid)
 }
 { // ranks that come due before the fork is taken wait in forkDue and apply when the fork card is picked
   const { w, p } = stage('ranger', { r_atk: 1 });
-  bossDown(w, 2); bossDown(w, 4);
+  bossDown(w, 2); bossDown(w, 4); p.offers.length = 0; p.picks = 0; // drop the bosses' Twist offers: the class offer comes first below
   ok(p.forkDue === 2 && !p.boons.r_atk_h && !ranks(w, 'p0').length, 'no fork yet: both ranks are banked');
   w.grantOffer(p, { src: 'class' }); p.offer = w.rollOffer(p, p.offers[0]);
   ok(p.offers[0].ctier === 2 && p.offer.length === 2, 'the fork offer lists the two forks');
   w.pickBoon('p0', p.offer.indexOf('r_atk_h'));
   ok(p.boons.r_atk_h === 3 && p.forkDue === 0 && ranks(w, 'p0').join() === '2,3', 'picking the fork applies the banked ranks (2 then 3)');
-  const q = stage('ranger'); bossDown(q.w, 2);
+  const q = stage('ranger'); bossDown(q.w, 2); q.p.offers.length = 0; q.p.picks = 0;
   ok(q.p.forkDue === 1 && !q.p.boons.r_atk, 'no route yet: the rank is banked');
   q.w.grantOffer(q.p, { src: 'class' }); q.p.offer = q.w.rollOffer(q.p, q.p.offers[0]); q.w.pickBoon('p0', 0);
   q.w.grantOffer(q.p, { src: 'class' }); q.p.offer = q.w.rollOffer(q.p, q.p.offers[0]); q.w.pickBoon('p0', 0);

@@ -131,7 +131,7 @@
     { id: 'hearthkeeper', name: 'Hearthkeeper', desc: 'Buy 25 Hearth upgrade ranks', icon: 'ember', reward: 80, check: p => p.up.reduce((a, b) => a + b, 0) >= 25 },
     { id: 'evolved', name: 'Evolved', desc: 'Evolve a weapon', icon: 'wing', reward: 40, check: (p, run) => run && run.evolved },
     { id: 'intothedark', name: 'Into the Dark', desc: 'Clear 6 dark rooms in one descent', icon: 'eye', reward: 50, check: (p, run) => run && run.darkCleared >= 6 },
-    { id: 'cartographer', name: 'Cartographer', desc: 'Clear every room of a stratum, both its dark rooms included', icon: 'scroll', reward: 40, check: (p, run) => run && run.fullClear },
+    { id: 'cartographer', name: 'Cartographer', desc: 'Clear both dark rooms and every elite room of one stratum', icon: 'scroll', reward: 40, check: (p, run) => run && run.fullClear },
   ];
   ED.DEED_IDX = ED.U.indexer(ED.DEEDS.map(d => d.id));
   // Secrets: hidden achievements (no embers), each rewarding a Wardrobe item. check(profile, run, pl) runs at run end (save.js S.checkSecrets) with `pl` the local hero's entry of run.players;

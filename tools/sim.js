@@ -1,8 +1,8 @@
 // Usage: node tools/sim.js <heroes> <runs> <botSkill 0-1> <meta none|mid|max> [classes|-] [pact] [--pick=random|smart|legacy] [--start=random|class|generalist|rotate|<gateId>] [--gates=1|2] [--force=id[@slot],...]
 //   [--route=attack|skill1|skill2|element|random|rotate] [--fork=0|1|random|rotate] [--weapon=0|1|2|rotate] [--aimnoise=<angle rad>,<point px>|0] [--seed0=N] [--dark=smart|always|never] [--strata=N] [--from=N] [--vet[=charges,rider,dodge,hazard]] [--vetreact=<s>] [--lambda=<x>|auto[:<x0>]] [--out=rows.json] [--pair=rows.json] [--quiet] [--explain]   (parallel batches: tools/simpool.js, fixed quick suite: tools/bal.js)
 // Headless simulation harness: loads the game's sim files into this Node context and drives bot heroes through full runs (deterministic per seed: the bot has its own seeded RNG).
-// Bot policy: fight, claim room rewards, use rest sites and shops, explore every unvisited room nearest-first, then head for the boss.
-// Dark rooms follow --dark: smart (default) enters one while every living hero has at least DARK_HP of max HP, always enters, never skips them.
+// Bot policy: fight, claim room rewards, use rest sites and shops, take the best-valued route to the boss (nextRoom).
+// Dark rooms follow --dark: smart (default) enters one while every living hero has at least DARK_HP of max HP, always takes them when their route is worth it, never avoids them.
 // Pick policies: 'random' takes a random card; 'smart' takes the card of best marginal value (tools/pick.js: damage and effective health over the next three strata from the sheet model, folded mechanics, milestone value of keystone / evolution / duo; start card, forge, rerolls and relics by the same value);
 // 'legacy' is the v3 smart order in smartScore (evolution > keystone > duo > own-path boon > element gate while a slot is free > open General > anything), kept for paired comparison. --explain prints every pick of a single run with its value parts.
 // Skill (0-1) is the share of ticks the bot pays attention to floor hazards; the rest of the time it moves on instinct.
@@ -46,7 +46,7 @@ function arrivalOf(w, picks) {
 }
 
 const DARK_HP = 0.6; // --dark=smart: the bot enters a dark room while every living hero has at least this share of max HP
-const PER_HERO_REWARDS = ['boon', 'forge', 'epic', 'vigor'];
+const PER_HERO_REWARDS = ['boon', 'forge', 'epic', 'vigor', 'twist'];
 const MAX_SECONDS = 60 * 60; // a run that is still going after an hour of game time counts as a loss
 // Open General boons in the order a sensible player takes them (damage and defence first).
 const NEUTRAL_PREF = ['edge', 'quick', 'keen', 'brutal', 'vigor', 'stalwart', 'plating', 'battleward', 'focus', 'evade', 'wide', 'mending', 'forager', 'fleet', 'magnet', 'thorns', 'lightstep', 'bounty'];
@@ -422,26 +422,41 @@ function wantedProp(w, p) {
   return best;
 }
 
-// Next room on the way to the room to visit, as { step: room id, dd: door key }, or null: the nearest unvisited non-boss room (a dark room only when the policy lets the party in), else the boss.
-// policy: smart = every living hero has DARK_HP of max HP or more, always, never. Dark rooms are dead ends, so skipping one never blocks the way.
+// Route choice (floors are forward-only lattices, Dungeon.generate): the value of entering room r. A fight: FIGHT_VAL (its xp) + its reward (stepped up in a dark room), ROUTE_VAL order boon/epic > forge > vigor > gold, relic for an elite;
+// a dark room the --dark policy refuses, or an elite room while a living hero is below ELITE_HP, costs SHUN. Utility rooms by need: shop by party gold, rest site by health (an anvil on odd strata), treasure, event shrine by kind.
+const ROUTE_VAL = { epic: 6, boon: 5, twist: 4, relic: 4, forge: 4, vigor: 2, gold: 1 }, FIGHT_VAL = 2, SHUN = 100, ELITE_HP = 0.5;
+function roomValue(w, r, darkOk, eliteOk, low) {
+  if (r.type === 'boss' || w.roomState[r.id].cleared) return 0;
+  if (r.type === 'combat' || r.type === 'elite') {
+    const item = (r.dark && ED.World.REWARD_UP[r.reward]) || r.reward;
+    return FIGHT_VAL + (ROUTE_VAL[item] || 0) - ((r.dark && !darkOk) || (r.type === 'elite' && !eliteOk) ? SHUN : 0);
+  }
+  if (r.type === 'shop') return w.gold >= 110 ? 5 : w.gold >= 60 ? 3 : 0.5;
+  if (r.type === 'rest') return low < 0.6 ? 6 : w.stratum % 2 ? 4 : 1;
+  if (r.type === 'treasure') return 5;
+  if (r.type === 'event') return r.event === 'fountain' ? (low < 0.7 ? 6 : 1) : r.event === 'altar' ? (low > 0.6 ? 4 : 0) : r.event === 'gamble' ? (w.gold >= 35 + 18 * w.stratum ? 3 : 0) : 3;
+  return 0;
+}
+
+// Next room on the bot's route, as { step: room id, dd: door key }, or null: the door toward the best-valued route to the boss (sum of roomValue over the rooms ahead, longest-path DP over the forward doors; ties keep DOOR_DIRS order).
+// policy (--dark): smart = a dark room only while every living hero has DARK_HP of max HP or more, always, never. Every hero of a party gets the same door (the choice reads the world only).
 function nextRoom(w, policy) {
-  const room = w.room, fl = w.floor;
-  const darkOk = policy === 'always' || (policy !== 'never' && [...w.players.values()].every(q => q.dead || q.downed || q.hp >= q.maxHp * DARK_HP));
-  const search = (target) => { // BFS from the current room: nearest enterable unvisited non-boss room (target null) or the target room
-    const prev = {}; prev[room.id] = -1; const q = [room.id];
-    while (q.length) {
-      const id = q.shift(); const r = fl.rooms[id];
-      if (id !== room.id && ((target === null && !w.roomState[id].visited && r.type !== 'boss' && (!r.dark || darkOk)) || id === target)) return { found: id, prev };
-      for (const dd in r.doors) { const n = r.doors[dd]; if (n >= 0 && prev[n] === undefined) { if (fl.rooms[n].type === 'boss' && target === null) continue; prev[n] = id; q.push(n); } }
-    }
-    return { found: null, prev };
+  const room = w.room, fl = w.floor, live = w.alivePlayers();
+  const low = live.length ? Math.min(...live.map(q => q.hp / q.maxHp)) : 1;
+  const darkOk = policy === 'always' || (policy !== 'never' && low >= DARK_HP), eliteOk = policy === 'always' || low >= ELITE_HP;
+  const memo = new Map();
+  const best = (id) => {
+    if (memo.has(id)) return memo.get(id);
+    const r = fl.rooms[id];
+    let v = -Infinity;
+    for (const d of D.DOOR_DIRS) { const n = r.doors[d]; if (n >= 0) v = Math.max(v, best(n)); }
+    v = roomValue(w, r, darkOk, eliteOk, low) + (v === -Infinity ? 0 : v);
+    memo.set(id, v);
+    return v;
   };
-  let hit = search(null);
-  if (hit.found === null) hit = search(fl.boss);
-  const { found, prev } = hit;
-  if (found === null) return null;
-  let step = found; while (prev[step] !== room.id) step = prev[step];
-  return { step, dd: Object.keys(room.doors).find(k => room.doors[k] === step) };
+  let step = -1, dd = null, bv = -Infinity;
+  for (const d of D.DOOR_DIRS) { const n = room.doors[d]; if (n >= 0 && best(n) > bv) { bv = best(n); step = n; dd = d; } }
+  return step < 0 ? null : { step, dd };
 }
 
 // Direction toward the door of nextRoom, or null.
