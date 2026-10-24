@@ -16,12 +16,13 @@
 
 ## Todo
 - Next (priority order; HANDOFF-2026-10-25): Pact 3 Champions costs nothing (extra elites pay their own way) · fresh smart 5% (new players) · path payoff · boss melee windows, then take back melee EHP · deterministic Shade evasion · Armory variant art (tint only) · sheet model gaps from the audits (Bone Knights cleave, Death Blossom, Throw return, Volley pack, Burn double count, Contagion one-foe term, Siege reach) · in-class weapon spreads · bot co-op check.
-- Carried over: dead `minionBurst` guard (`class-necro.js`, `combat.js`) · two Necromancers with Soul Command show no command stream · deeds are a 31-bit mask (a 32nd deed needs new profile storage) · aim banner for party clients · orphaned `simpool.js --worker` processes after a killed parent · Cleric Sacred Lantern ally shield gets its own allowance · optional key that opens the sheet on Map · DawnLike "Platino" sprite hidden somewhere.
+- Carried over: dead `minionBurst` guard (`class-necro.js`, `combat.js`) · two Necromancers with Soul Command show no command stream · deeds are a 31-bit mask (a 32nd deed needs new profile storage; secrets have their own mask) · aim banner for party clients · orphaned `simpool.js --worker` processes after a killed parent · Cleric Sacred Lantern ally shield gets its own allowance · optional key that opens the sheet on Map · DawnLike "Platino" sprite hidden somewhere.
 
 ## In-progress
-- `feat/punish` (v5 difficulty) → `main` PR; playtest (user).
+- Playtest of v5 + Bellwarden, Wardrobe, secrets (user).
 
 ## Done
+- Bellwarden, secrets, Wardrobe on `feat/bellwarden` (2026-10-25): hero `bell` (chained-bell physics `class-bell.js`, Haul, Heave, Peal, 6 bell weapons, 12 route cards, bot play, sheet uptime + `BELL_EFF`), client `cls-bell.js` with own-bell prediction on the shared tick · `ED.SECRETS` 15 (sim triggers `p.sec`, `run.gold777`, `run.oneFace`; Drowned Bell prop stratum V unlock; Platino critter) · `ED.COSMETICS` + `cosmetics.js` (runtime skin swaps, co-op `N.cleanWear`) · save `CODE_VERSION` 8, `N.VERSION` 12 · confirm `2b5263a` 10/11 (P2 24%).
 - v5 difficulty on `feat/punish` (2026-10-25): hero HP Knight 40 · Ranger 21 · Pyro 21 · Shade 37 · Cleric 40 · Necro 14, armor carries class survival (Knight 58, Shade 28, Cleric 25) · `W.FOE_DMG` 1.5 · Hearth/mastery steps larger (Vitality +2, Might +3%, Bulwark +3, mastery 9 +8% dmg, 10 +4 HP) · Pacts as data (`ED.pactMul`) · party foe HP `1+0.45n+0.1n(n−1)` · bot parties rotate partners (`sim.partyOf`) · bal.js v5 cells · era 5 / code 7 news for v4.1 players.
 - v4.1 on `feat/v4-1` (2026-10-24): melee swing from the hand (two-ended, lowered idle) · hero health ÷4 (`HP_K` 4), threat I–III damage 1.0, bosses I–III 2.4 · 18 Armory weapon variants (`combo`, `ahead`, `pull`, `ring`, `beam`, `lob`, `ret`, `pool`, `trail`) · "Deep has changed" news 3 for era-3 profiles, profile era 4, `CODE_VERSION` 6 · resisted element ÷1.5 · UI pixel overhaul merged.
 - UI pixel overhaul on `feat/ui-pixel` (2026-10-24, game-ui; merged into `feat/v4-1`): embedded pixel fonts (no Google Fonts), `ED.PixUI` integer grid + 9-slice frames (`pixui.js`, `uiart.js`, `screenart.js`, `cardart.js`), 16×16 pixel icons, 13 card identities + pick animation (`ED.PickFx` cues and hero bursts), pixel menus/Hearth plaques/Armory racks/results banner, pixel HUD (glyph-mask text, segmented health, shield plate), pixel Tab sheet; browse scenarios `sheet`, `screens`, `cards`, `picks`.
@@ -37,6 +38,8 @@
 - 2026-10-23: small Hearth (full Hearth adds at most half of what smart picks add; bal.js bands: fresh random <= 1%, fresh smart 10-20%, mid 12-24%, max 15-27%, pact 5 5-15%, every cell with --vet) · boss fury (soft enrage, visible on the boss bar) on the bosses of strata IV-VI only · v4 to main by 12:06 for an office playtest.
 - 2026-10-23 (playtest 4): Armory = weapon variants (one per weapon, same power, another shape, embers) · hero health ÷4 with harder strata I–III · 2026-10-24: bosses I–III ×1.5 damage · Hearth health stays flat +1 (legibility over the Hearth rule) · Hearth gap accepted for v4.1 · resist ÷1.5 kept.
 - 2026-10-23 (UI): full pixel UI on an integer grid; titles Pixel Operator Bold (user, 2026-10-24: blackletter unreadable), body Pixel Operator (CC0), embedded, no Google Fonts; 13 card identities (6 elements, General, route, duo, Ascended, relic, Purse, Hearth) by frame, idle motion, pick animation, cue; pick feedback = card + hero burst seen by the party (existing boon/relic events, no snapshot change).
+
+- 2026-10-25: a hard-to-unlock seventh hero with a different playstyle (Bellwarden), hidden secrets that reward cosmetics, per-hero cosmetics gated by mastery + embers or secrets; README never reveals the unlock or the secret list.
 
 ## Known traps
 - **Pixel text**: DOM text is crisp only at font-size 16n device px and (Chromium/Windows) a .5 device-px origin (`PixUI.bias`, `PixUI.snap`, `data-px-snap`); canvas `fillText` is never crisp there, so HUD/aim text goes through `ED.HUD.pixText` (1-bit glyph masks). Never use rem font sizes; lay out in `--p`/device-px multiples.
@@ -61,3 +64,4 @@
 - 2026-10-24: UI pixel overhaul (game-ui) on `feat/ui-pixel`: 3 phase-1 + 4 phase-2 + 2 polish workers.
 - 2026-10-24: v4.1 (game-4a): swing, health ÷4, Armory variants, boss I–III damage, UI merge, full confirm `bba6113`; handoff HANDOFF-2026-10-24.md.
 - 2026-10-25: v5 difficulty contract on `feat/punish` (one worker, 4 fix rounds); handoff HANDOFF-2026-10-25.md.
+- 2026-10-25: Bellwarden, secrets, Wardrobe on `feat/bellwarden` (6 workers, 2 phases + fix rounds); handoff HANDOFF-2026-10-25b.md.
