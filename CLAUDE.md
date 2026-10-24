@@ -22,14 +22,14 @@ Vanilla JS (ES2020, no modules, global `ED` namespace) + Canvas2D with a WebGL p
 ```
 index.html, style.css    page shell, DOM menus/overlays, styling
 src/util.js              constants, math, seeded RNG, colour helpers
-src/data/                biomes (palette, roster, affinity) · enemies · classes (heroes, weapons, skills) · boons (paths, duos) · classboons (class routes) · ascended (Ascended boons) · relics · meta (Hearth upgrades, per-hero Armory, pacts, deeds)
+src/data/                biomes (palette, roster, affinity) · enemies · classes (heroes, weapons, skills) · boons (paths, duos) · classboons (class routes) · ascended (Ascended boons) · relics · meta (Hearth upgrades, per-hero Armory, pacts, deeds, secrets, Wardrobe cosmetics)
 src/save.js              profile storage + save code
 src/sim/                 dungeon (floor gen) · stats (stat block) · world (run flow, rooms, dark rooms, pickups) · combat (damage, statuses, projectiles, zones)
                          build (offers, paths, evolutions, class routes) · skills (cast dispatcher, class hooks) · class-<hero>.js (each hero's skills and route hooks) · sheet (Tab sheet model)
                          ai (enemy brains) · bosses · rooms (encounters, rewards, props)
 src/net.js               transports, host/client sessions, snapshot encoding
 src/game.js              run session: local hero control, client mirror, network routing
-src/client/              input · aim · audio (SFX, voice budget) · score (adaptive per-stratum music) · icons · atlas (ImageBitmap + art atlas runtime) · actors · sprites · tiles · pixfx · fx · cls-<hero>.js (ED.ClassFx hooks) · render · post (WebGL) · hud · camp · ui · sheetui
+src/client/              input · aim · audio (SFX, voice budget) · score (adaptive per-stratum music) · icons · atlas (ImageBitmap + art atlas runtime) · actors · sprites · tiles · pixfx · fx · cls-<hero>.js (ED.ClassFx hooks) · cosmetics (Wardrobe drawing, pets, trails, preview) · render · post (WebGL) · hud · camp · ui · sheetui
 src/art/                 generated atlas pages (data URIs) from tools/art.js; never hand-edited
 art-src/                 vendored CC0/CC-BY source art + SOURCES.md (packs, licences, hashes)
 src/main.js              app state machine + frame loop
