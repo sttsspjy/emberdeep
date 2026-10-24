@@ -106,6 +106,16 @@ for (const wid of ['bronzebell', 'greatbell', 'handbells', 'wreckbell', 'chimes'
   void m;
 }
 
+// ---- Chain Toll: with no other foe near, the arc grounds back into the struck foe at ARC_LONE ----
+{
+  const { w, p } = stage({ b_el: 1, b_el_b: 1 });
+  const e = foe(w, p.x + ED.Bell.orbit(p.stats.weapon), p.y), ex = e.x, ey = e.y;
+  p.haulIn = true; hits.length = 0;
+  run(w, 3, () => { e.x = ex; e.y = ey; e.kbx = e.kby = 0; });
+  const st = hits.filter(h => h.e === e && h.src.kind === 'weapon'), arc = hits.filter(h => h.e === e && h.src.part === 'bell.arc');
+  ok(st.length > 0 && arc.length === st.length, `a lone foe takes a Chain Toll arc per strike (${arc.length} arcs, ${st.length} strikes)`);
+}
+
 // ---- walls: a free bell bounces off a wall, a hauled bell whirls over it ----
 {
   const { w, p } = stage();
@@ -138,7 +148,25 @@ for (const wid of ['bronzebell', 'greatbell', 'handbells', 'wreckbell', 'chimes'
   hits.length = 0;
   w.playerSkill(p, 0, {}, 0); run(w, 1.5);
   ok(hits.some(h => h.e === e && h.src.part === 'heave.smash') && e.stunCd > 0, 'Wrecker smashes where the flight ends and Ground Breaker stuns');
-  void e2;
+  ok(!hits.some(h => h.e === e2 && h.src.part === 'heave.strike'), 'the Wrecker flight stops at the first foe (the one behind it is not struck)');
+}
+{ // a Heave hands the bells back at the speed they had: the swing goes on
+  const { w, p } = stage();
+  p.haulIn = true; run(w, 3);
+  const v0 = speed(p.bells[0]);
+  w.playerSkill(p, 0, {}, 0);
+  let t = 0; while (p.heave && t < 180) { w.update(1 / 60); t++; }
+  ok(!p.heave && Math.abs(speed(p.bells[0]) - v0) < v0 * 0.15, `after a Heave the bell swings on at ${speed(p.bells[0]).toFixed(0)} px/s (${v0.toFixed(0)} before)`);
+  ok(t / 60 <= ED.Bell.busy(p.stats).heave + 0.1, `the Heave takes ${(t / 60).toFixed(2)} s, the sheet's busy time ${ED.Bell.busy(p.stats).heave.toFixed(2)} s`);
+}
+{ // Wrecking Spin: the long chain sweeps a foe beside the hero, and the whirl guard holds through it
+  const { w, p } = stage({ b_s1: 1, b_s1_a: 3 });
+  const e = foe(w, p.x + 60, p.y), e2 = foe(w, p.x - 30, p.y + 10);
+  hits.length = 0;
+  let guard = false;
+  w.playerSkill(p, 0, {}, 0); run(w, 2, () => { if (p.heave && p.heave.phase === 'spin' && p.bellWhirl) guard = true; e2.x = p.x - 30; e2.y = p.y + 10; });
+  ok(hits.filter(h => h.e === e2 && h.src.part === 'heave.spin').length >= 2, 'the Wrecking Spin strikes a foe beside the hero');
+  ok(guard, 'the whirl guard holds through a Wrecking Spin');
 }
 {
   const { w, p } = stage({ b_s1: 1, b_s1_b: 3 });
@@ -173,6 +201,23 @@ for (const wid of ['bronzebell', 'greatbell', 'handbells', 'wreckbell', 'chimes'
   ok(boss.h && !(boss.e.stun > 0), 'the Peal never stuns a boss');
   const clap = one(true, { b_s2: 1, b_s2_a: 1 });
   ok(hits.some(x => x.e === clap.e && x.src.kind === 'chain'), 'Thunderclap discharges the foes the Peal charged');
+  { // Thunderclap discharges the Charge the wave left, not the pool the foe held
+    const { w, p } = stage({ b_s2: 1, b_s2_a: 1 });
+    run(w, 0.05);
+    const b = p.bells[0]; b.vx = 0; b.vy = C.BELL_REF + 100;
+    const e = foe(w, b.x + 40, b.y); e.charge = 5000; e.dischargeT = 9;
+    hits.length = 0;
+    w.playerSkill(p, 0, {}, 1);
+    const wave = hits.find(x => x.e === e && x.src.part === 'peal.wave'), dis = hits.filter(x => x.e === e && x.src.kind === 'chain').reduce((s, x) => s + x.d, 0);
+    ok(wave && dis > 0 && dis < wave.d * 2 && e.charge === 5000, `Thunderclap discharges the wave's own Charge (${dis.toFixed(0)} for a ${wave ? wave.d.toFixed(0) : 0} wave) and leaves the pool (${e.charge})`);
+  }
+  { // Ward Bell weakens the foes inside, never a boss
+    const { w, p } = stage({ b_s2: 1, b_s2_b: 3 });
+    run(w, 0.05);
+    const b = p.bells[0], e = foe(w, b.x + 30, b.y), bo = foe(w, b.x - 30, b.y, 'bonewarden');
+    w.playerSkill(p, 0, {}, 1); run(w, 0.5);
+    ok(e.weakT > 0 && e.weakV >= p.stats.wardWeak - 1e-9 && !(bo.weakT > 0), 'Ward Bell weakens a foe inside and never a boss');
+  }
 }
 
 // ---- whirl guard: WHIRL_DR less damage while hauling a bell at strike speed ----

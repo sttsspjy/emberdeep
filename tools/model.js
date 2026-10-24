@@ -20,7 +20,7 @@ module.exports = (ED, opts) => {
       const b = w._bell(n);
       let per = w._avg * b.k;
       for (const e of w._extras) per += e._pack ? e._pack(n, b) : e.packOnly ? 0 : e.perAttack * b.k * (e.pack ? Math.min(n, e.pack) : 1);
-      return per * b.sps * n;
+      return per * b.sps * n * (w._up === undefined ? 1 : w._up); // _up: the share of the time the bell strikes (Heave and Peal on cooldown take it away)
     }
     const shots = w.n || 1, first = Math.min(shots, (w.fanOne === undefined ? 1 : w.fanOne) + n - 1); // the shots of a fan that miss the first foe find one other foe each
     const hitsBase = w.kind === 'melee' ? n : w.lob ? 0 : (first + (w.line ? LINE_ALL : PIERCE_LINE) * (Math.min(n, shots * (1 + (w.pierce || 0))) - Math.min(n, shots))) * (w.legs || 1);
@@ -31,7 +31,7 @@ module.exports = (ED, opts) => {
   // Extras that do not grow with the pack: the two Lich bolts seek one foe each (the same total), Guardian Light's Smites ride the one Smite stream the status estimate counts; a Solar Flare burst (radius 50) and a Dawn's Wake strip (44 wide) catch about two foes of a pack.
   const ONE_STREAM = new Set(['Lich bolts', 'Heavy Smites', 'Sunstrike']), FEW = { 'Solar Flare': 2, "Dawn's Wake": 2 };
   function directDamage(m, n) {
-    if (n === 1) return m.weapon.dps + m.skills.reduce((s, k) => s + k.dpsCd, 0);
+    if (n === 1) return m.weapon.dps * (m.weapon._up === undefined ? 1 : m.weapon._up) + m.skills.reduce((s, k) => s + k.dpsCd, 0);
     let sum = packWeapon(m, n);
     for (const k of m.skills) for (const q of k.parts) {
       if (q.kind === 'zone') continue;

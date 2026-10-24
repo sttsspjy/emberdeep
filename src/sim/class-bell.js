@@ -12,11 +12,11 @@
 
   // BELL_MIN / BELL_REF / BELL_CAP: px/s a strike needs, the speed of a x1 strike, the speed limit. BELL_DRAG: share of speed lost per second (exponential). BELL_SUB: substeps per tick.
   // HAUL_K / BELL_ORBIT: chain share while hauled and the longest hauled chain (px; foes at a hero's side stay within reach). HAUL_T: seconds the chain takes to shorten or let out fully at haul 1. HAUL_ACC: px/s2 of orbit drive at haul 1 and the weapon's own rate (x the attack-rate gain to the power RATE_POW: damage and strikes both grow with speed, so damage per second follows the gain about linearly). HAUL_HOLD: attack intervals one 'atk' action holds the Haul.
-  // BELL_HITS: strikes per second one hero may make (the hit-event budget). CHAIN_R: half-width (px) of a hauled chain: a foe it sweeps across is struck as by the bell (once a revolution). BELL_WALL: speed a wall bounce keeps (weapon.wall overrides). BOSS_LOSS: factor on a strike's speed cost against a boss. HEAVY_K: a Heavy Strike's least speed as a share of the hauled bell's top speed (full swing).
+  // BELL_HITS: strikes per second one hero may make (the hit-event budget). CHAIN_R: half-width (px) of a hauled chain: a foe it sweeps across is struck as by the bell (once a revolution). HEAVE_W: px a Heaved bell's path is wider than the bell. WRECK_D: px of a Wrecker flight in the sheet (it stops at the first foe). ARC_LONE: a Chain Toll arc with no other foe near strikes the struck foe at this share. BELL_WALL: speed a wall bounce keeps (weapon.wall overrides). BOSS_LOSS: factor on a strike's speed cost against a boss. HEAVY_K: a Heavy Strike's least speed as a share of the hauled bell's top speed (full swing).
   // HEAVE_SPEED / HEAVE_T: launch speed and longest flight of a Heave; REEL_SPEED: px/s the chain reels back in after it. HOOK_CD / PEAL_SH_CD: seconds between Tether Hook shields / Warding Toll shields. PEAL_REST: a Peal at rest as a share of one at full swing.
   // SPIN_SPEED: px/s of the Wrecking Spin; SWAT_K: Warding Toll swat radius over the Peal's; WALL_CD: seconds between two Demolisher wall shocks of one bell. WHIRL_DR: damage the hero takes less while it hauls a bell flying at BELL_MIN or more.
   Object.assign(C, { BELL_MIN: 140, BELL_REF: 320, BELL_CAP: 900, BELL_DRAG: 2.5, BELL_SUB: 4, HAUL_K: 0.6, BELL_ORBIT: 30, HAUL_T: 0.25, HAUL_ACC: 1290, RATE_POW: 0.6, HAUL_HOLD: 1.6,
-    BELL_HITS: 60, CHAIN_R: 3, BELL_WALL: 0.5, BOSS_LOSS: 1, HEAVY_K: 0.9, HEAVE_SPEED: 700, HEAVE_T: 0.45, REEL_SPEED: 600, HOOK_CD: 8, PEAL_SH_CD: 10, PEAL_REST: 0.6 / 1.4, SPIN_SPEED: 560, SWAT_K: 1.5, WALL_CD: 0.3, WHIRL_DR: 0.45 });
+    BELL_HITS: 60, CHAIN_R: 3, HEAVE_W: 16, WRECK_D: 80, ARC_LONE: 1, BELL_WALL: 0.5, BOSS_LOSS: 1, HEAVY_K: 0.9, HEAVE_SPEED: 700, HEAVE_T: 0.45, REEL_SPEED: 1200, HOOK_CD: 8, PEAL_SH_CD: 10, PEAL_REST: 0.6 / 1.4, SPIN_SPEED: 900, SWAT_K: 1.5, WALL_CD: 0.3, WHIRL_DR: 0.45 });
 
   const blocked = (w, x, y) => D.blocksShots(D.tileAt(w.room, x, y), w.locked);
   const orbitOf = (wp) => Math.min(C.HAUL_K * wp.chain, C.BELL_ORBIT); // the hauled chain length (px)
@@ -62,6 +62,11 @@
       return (memo[key] = { v: sumV / Math.max(1, cnt), sps: nb * (cnt > 1 ? (cnt - 1) / (t1 - t0) : cnt / MODEL_MEAS) / nf, mul: cnt ? sumMul / cnt : 0, heavy: cnt ? heavy / cnt : 0, hmul: heavy ? sumH / heavy : 0, top });
     },
     speedMul, rateGain, orbit: orbitOf,
+    // Seconds of a cast the bell does not strike as a weapon: a Heave's flight (at most HEAVE_T), Wrecking Spin and reel back to the orbit; a Peal's spin-up from rest (the drag's time constant).
+    busy(st) {
+      const N = ED.Stats.skillNums('heave', st), reach = st.wrecker > 0 ? Math.min(C.WRECK_D, N.range * (1 + st.heaveR)) : N.range * (1 + st.heaveR), spin = N.p.spin.on ? N.p.spin.dur : 0; // Wrecker stops at the first foe (WRECK_D)
+      return { heave: Math.min(C.HEAVE_T, reach / C.HEAVE_SPEED) + spin + Math.max(0, reach - orbitOf(st.weapon)) / C.REEL_SPEED, peal: 1 / C.BELL_DRAG };
+    },
   };
 
   // ---------------- bells ----------------
@@ -141,10 +146,10 @@
     for (let i = 0; i < foes.length; i++) {
       const e = foes[i];
       if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed || e.invulnT > 0 || e.hookedBy === p) continue;
-      const rr = br + e.r;
+      const rr = br + (hv ? C.HEAVE_W : 0) + e.r; // a Heaved bell strikes a wider path (HEAVE_W)
       let lash = false;
       if (U.dist2(e.x, e.y, b.x, b.y) >= rr * rr) { // not on the bell: the hauled chain sweeping across a foe closer in strikes it as the bell (a foe at the hero's feet is not out of reach)
-        if (hv || !(drive > 0)) continue;
+        if (hv ? hv.phase !== 'spin' : !(drive > 0)) continue; // a hauled chain, or the long chain of a Wrecking Spin
         const df = Math.hypot(e.x - hx, e.y - hy);
         if (df >= Math.hypot(b.x - hx, b.y - hy)) continue;
         const sw = U.angDiff(a0, Math.atan2(b.y - hy, b.x - hx)), da = U.angDiff(a0, Math.atan2(e.y - hy, e.x - hx)), wa = df > e.r + C.CHAIN_R ? Math.asin((e.r + C.CHAIN_R) / df) : 0; // the chain's sweep this substep against the foe's bearing (a foe over the hero: its centre)
@@ -216,9 +221,9 @@
     else if (evo === 'shadow') p.bellQ.push({ at: w.time + 0.15, k: 'twin', e, dmg: sd * 0.4 });
   }
 
-  // Wrecking Ball: a shock (radius 60, Demolisher 100) at (x, y) for wreck (+ demolish) of the strike's damage sd, twice that and a repeating stun of wreckStun from a Heavy Strike; a weapon shock (no crit, no procs, no knockback: the pack stays in the bell's reach).
+  // Wrecking Ball: a shock (radius 50, Demolisher 80) at (x, y) for wreck (+ demolish) of the strike's damage sd, twice that and a repeating stun of wreckStun from a Heavy Strike; a weapon shock (no crit, no procs, no knockback: the pack stays in the bell's reach).
   function wreckShock(w, p, x, y, sd, heavy) {
-    const st = p.stats, r = (st.demolish > 0 ? 100 : 60) * (1 + 0.5 * st.area);
+    const st = p.stats, r = (st.demolish > 0 ? 80 : 50) * (1 + 0.5 * st.area);
     w.explode(x, y, r, sd * (st.wreck + st.demolish) * (heavy ? 2 : 1), 0, p, 'shock', true, { wpn: true, stun: heavy ? st.wreckStun : 0, knock: 0, part: 'bell.wreck' });
   }
 
@@ -228,7 +233,7 @@
     let from = e;
     for (let j = 0; j <= (p.stats.arcN | 0); j++) {
       const o = w.nearestEnemy(from.x, from.y, 90, seen);
-      if (!o) break;
+      if (!o) { if (j === 0 && e.hp > 0) w.hitEnemy(e, dmg * C.ARC_LONE, { p, kind: 'explode', el: 'lightning', crit: false, noGuard: true, infAdd, x: e.x, y: e.y, part: 'bell.arc' }); break; } // no other foe: the arc grounds back into the struck foe
       seen.add(o.id); pts.push([Math.round(o.x), Math.round(o.y)]);
       w.hitEnemy(o, dmg, { p, kind: 'explode', el: 'lightning', crit: false, noGuard: true, infAdd, x: from.x, y: from.y, part: 'bell.arc' });
       from = o;
@@ -238,16 +243,16 @@
 
   // ---------------- Heave ----------------
   // Cast: every bell is flung from the hero toward the cursor at HEAVE_SPEED (bells fanned 0.15 rad apart) on a chain let out to the skill's range x (1 + heaveR).
-  // p.heave = { phase 'fly' | 'spin' | 'reel', t, reach, a, hit (struck in flight), reel (struck on the way back), hooks (Tether Hook), wall }.
+  // p.heave = { phase 'fly' | 'spin' | 'reel', t, reach, a, v0 (the fastest bell's speed at the cast), hit (struck in flight), reel (struck on the way back), hooks (Tether Hook), wall }.
   ED.CAST.heave = function (p, a, data, st, N) {
     if (st.weapon.kind !== 'bell') return false;
     if (p.bellRoom !== this.room || !p.bells.length) resetBells(this, p, st.weapon);
-    const n = p.bells.length, reach = N.range * (1 + st.heaveR);
+    const n = p.bells.length, reach = N.range * (1 + st.heaveR), v0 = Math.max(...p.bells.map(b => relV(p, b)));
     p.bells.forEach((b, i) => {
       const aa = a + (i - (n - 1) / 2) * 0.15;
       b.x = p.x + Math.cos(aa) * 6; b.y = p.y + Math.sin(aa) * 6; b.vx = Math.cos(aa) * C.HEAVE_SPEED; b.vy = Math.sin(aa) * C.HEAVE_SPEED;
     });
-    p.heave = { phase: 'fly', t: 0, reach, a, hit: new Set(), reel: new Set(), hooks: [], wall: false, spinT: 0 };
+    p.heave = { phase: 'fly', t: 0, reach, a, v0, hit: new Set(), reel: new Set(), hooks: [], wall: false, spinT: 0 };
     p.bellL = reach;
     return { r: Math.round(reach) };
   };
@@ -260,6 +265,7 @@
       if (hv.hit.has(e.id)) return;
       hv.hit.add(e.id);
       w.hitEnemy(e, N.p.strike.dmg, w.partSrc(p, N, 'strike', o));
+      if (st.wrecker > 0 && !hv.stop) { hv.stop = true; hv.reach = Math.max(orbitOf(st.weapon), Math.hypot(b.x - p.x, b.y - p.y)); } // Wrecker: the flight stops at the first foe struck (the smash and a Wrecking Spin happen there)
       if (st.hook > 0 && e.hp > 0 && !e.boss && !e.elite && hv.hooks.length < 1 + (st.hookN | 0)) { hv.hooks.push(e); e.hookedBy = p; e.kbx = 0; e.kby = 0; }
     } else if (hv.phase === 'reel') {
       if (hv.reel.has(e.id) || hv.hooks.includes(e)) return;
@@ -273,13 +279,13 @@
     }
   }
 
-  // The Heave's phases each tick: the flight ends after HEAVE_T, at a wall, or when every bell is at the end of its chain (Wrecker smashes there); a Wrecking Spin swings the bells around at SPIN_SPEED for spinDur;
+  // The Heave's phases each tick: the flight ends after HEAVE_T, at a wall, at the first foe struck (Wrecker) or when every bell is at the end of its chain (Wrecker smashes there); a Wrecking Spin swings the bells around at SPIN_SPEED for spinDur;
   // then the chain reels in at REEL_SPEED to its length now, and the Heave ends (hooked foes land: stun, shield, Shackle). Returns the chain length and its rate of change this tick.
   function heaveTick(w, p, hv, dt, target) {
     const st = p.stats;
     hv.t += dt;
     if (hv.phase === 'fly') {
-      const done = hv.t >= C.HEAVE_T || hv.wall || p.bells.every(b => Math.hypot(b.x - p.x, b.y - p.y) >= hv.reach - 2);
+      const done = hv.t >= C.HEAVE_T || hv.wall || hv.stop || p.bells.every(b => Math.hypot(b.x - p.x, b.y - p.y) >= hv.reach - 2);
       if (done) {
         const N = ED.Stats.skillNums('heave', st);
         if (N.p.smash.on) for (const b of p.bells) {
@@ -306,11 +312,12 @@
     return { L, Ldot: -C.REEL_SPEED };
   }
 
-  // End of a Heave: the bells keep a third of their speed; each hooked foe lands stunned (hookStun), Shackled (Anchor Chain: slowed 50%, weakened shackleWeak); one hook shields the hero (hookShield, once per HOOK_CD).
+  // End of a Heave: the bells swing on round the hero (spin sense p.bellSpin) at the speed they had at the cast, at least a third of their own; each hooked foe lands stunned (hookStun), Shackled (Anchor Chain: slowed 50%, weakened shackleWeak); one hook shields the hero (hookShield, once per HOOK_CD).
   function endHeave(w, p, hv) {
     const st = p.stats;
     p.heave = null;
-    for (const b of p.bells) scaleRel(p, b, 0.3);
+    const s = p.bellSpin || 1;
+    for (const b of p.bells) { const rx = b.x - p.x, ry = b.y - p.y, d = Math.hypot(rx, ry) || 1, v = Math.max(hv.v0 || 0, 0.3 * relV(p, b)); b.vx = -ry / d * s * v; b.vy = rx / d * s * v; }
     let any = false;
     for (const e of hv.hooks) {
       e.hookedBy = null;
@@ -327,7 +334,7 @@
 
   // ---------------- Peal ----------------
   // Cast: every bell stops dead and rings a wave of the wave part around itself, x (PEAL_REST + (1 - PEAL_REST) x min(1, speed / BELL_REF)) by the speed it had; a foe is struck by one wave per cast.
-  // Struck foes are stunned (wave stun + pealStun; never bosses); Thunderclap charges them for half of the hit and discharges them at 1 + clap; Warding Toll swats shots and shields per foe struck; Reverberation rings again later;
+  // Struck foes are stunned (wave stun + pealStun; never bosses); Thunderclap charges them for half of the hit and discharges that Charge (only) at 1 + clap; Warding Toll swats shots and shields per foe struck; Reverberation rings again later;
   // Thunder Toll calls bolts on the most charged foes near the bell; Ward Bell leaves a ward zone.
   ED.CAST.peal = function (p, a, data, st, N) {
     if (st.weapon.kind !== 'bell') return false;
@@ -357,12 +364,12 @@
     let n = 0;
     for (const e of list) {
       seen.add(e.id);
-      const d = Math.hypot(e.x - x, e.y - y) || 1;
+      const d = Math.hypot(e.x - x, e.y - y) || 1, ch0 = e.charge > 0 ? e.charge : 0;
       w.hitEnemy(e, dmg, w.partSrc(p, N, pid, { kx: (e.x - x) / d, ky: (e.y - y) / d, x, y, noGuard: true, infAdd: st.clap > 0 ? { lightning: 0.5 } : undefined }));
       if (!e.fodder) n++;
       if (e.hp <= 0) continue;
       if (wave) w.stunFoe(e, N.p.wave.stun + st.pealStun, false);
-      if (st.clap > 0 && e.charge > 0) w.discharge(e, p, 1 + st.clap);
+      if (st.clap > 0 && e.charge > ch0) { e.charge -= ch0; w.discharge(e, p, 1 + st.clap); if (e.hp > 0) e.charge = ch0; } // Thunderclap discharges the Charge this wave left; the foe keeps what it held before
     }
     w.smashCircle(p, x, y, r);
     return n;
@@ -399,15 +406,14 @@
     }
   }
 
-  // Ward Bell: a custom zone (kind 'bward', radius r, dur s) that destroys every enemy shot inside and weakens the foes inside by wardWeak (bosses half) while they stand in it.
+  // Ward Bell: a custom zone (kind 'bward', radius r, dur s) that weakens the foes inside by wardWeak (not bosses) while they stand in it.
   function wardZone(w, p, x, y, r, dur) {
     const pid = p.pid, wk = p.stats.wardWeak;
     w.addZone({ kind: 'bward', x, y, r, dur, team: 0, owner: pid, custom: true,
       update: (world, z) => {
-        swat(world, z.x, z.y, z.r);
         for (const e of world.enemies) {
-          if (e.hp <= 0 || e.spawnT > 0 || U.dist2(e.x, e.y, z.x, z.y) >= (z.r + e.r) ** 2) continue;
-          const v = e.boss ? wk / 2 : wk;
+          if (e.hp <= 0 || e.spawnT > 0 || e.boss || U.dist2(e.x, e.y, z.x, z.y) >= (z.r + e.r) ** 2) continue;
+          const v = wk;
           if (!(e.weakT > 0) || v > e.weakV) e.weakV = v;
           e.weakT = Math.max(e.weakT, 0.3);
         }
@@ -469,7 +475,7 @@
       for (const b of p.bells) {
         if (b.hit.size > 48) for (const [id, t] of b.hit) if (this.time - t > 1) b.hit.delete(id);
         if (relV(p, b) < C.BELL_MIN) continue;
-        if (haul) whirl = true;
+        if (haul || (p.heave && p.heave.phase === 'spin')) whirl = true; // hauled, or swung round the hero by a Wrecking Spin
         this.smashCircle(p, b.x, b.y, bellR(st));
         swatPath(this, b, bellR(st));
       }

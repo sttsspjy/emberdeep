@@ -122,13 +122,13 @@
     gavel: { name: "Judge's Gavel", desc: 'Slams the ground ahead; every 3rd slam sends three waves in a fan.', variant: 'dawnhammer', kind: 'melee', dmg: 43.2, rate: 0.72, range: 58, arc: 2.2, knock: 220, look: 'hammer', ahead: { r: 48 }, wave: { every: 3, mul: 0.36, n: 3, fan: 0.35 } },
     gravewhirl: { name: 'Grave Whirl', desc: 'Reaping whirls all around you; reaped foes rise more often.', variant: 'soulscythe', kind: 'melee', dmg: 25, rate: 0.56, range: 46, arc: 6.3, knock: 110, look: 'scythe', raise: 0.12 },
     // Bellwarden (kind 'bell')
-    bronzebell: { name: 'Bronze Bell', desc: 'A temple bell on a chain. Hold attack to haul it into a whirling orbit; it strikes harder the faster it flies.', kind: 'bell', dmg: 31.5, rate: 0.3, chain: 70, br: 12, loss: 0.15, haul: 1, knock: 60, look: 'bell' },
-    greatbell: { name: 'Great Bell', desc: 'A huge bell on a long chain: slow to spin up, crushing at speed, barely slowed by what it strikes.', kind: 'bell', dmg: 52.5, rate: 0.45, chain: 84, br: 16, loss: 0.09, haul: 0.72, knock: 100, look: 'bell' },
-    handbells: { name: 'Handbells', desc: 'Two small bells on short chains: quick to spin up, lighter strikes.', kind: 'bell', dmg: 10.8, rate: 0.25, chain: 58, br: 9, loss: 0.17, haul: 1.25, knock: 40, n: 2, look: 'bell' },
+    bronzebell: { name: 'Bronze Bell', desc: 'A temple bell on a chain. Hold attack to haul it into a whirling orbit; it strikes harder the faster it flies.', kind: 'bell', dmg: 26.1, rate: 0.3, chain: 70, br: 12, loss: 0.15, haul: 1, knock: 60, look: 'bell' },
+    greatbell: { name: 'Great Bell', desc: 'A huge bell on a long chain: slow to spin up, crushing at speed, barely slowed by what it strikes.', kind: 'bell', dmg: 43.5, rate: 0.45, chain: 84, br: 16, loss: 0.09, haul: 0.72, knock: 100, look: 'bell' },
+    handbells: { name: 'Handbells', desc: 'Two small bells on short chains: quick to spin up, lighter strikes.', kind: 'bell', dmg: 8.94, rate: 0.25, chain: 58, br: 9, loss: 0.17, haul: 1.25, knock: 40, n: 2, look: 'bell' },
     // Armory variants: bells
-    stormbell: { name: 'Storm Bell', desc: 'Each strike rings out: every other foe within 40 of the bell takes a quarter of the strike.', variant: 'bronzebell', kind: 'bell', dmg: 23.1, rate: 0.3, chain: 70, br: 12, loss: 0.15, haul: 1, knock: 50, ring: { r: 40, mul: 0.25 }, look: 'bell' },
-    wreckbell: { name: 'Wrecking Bell', desc: 'A spiked bell on a very long chain that keeps its speed off walls.', variant: 'greatbell', kind: 'bell', dmg: 44.8, rate: 0.45, chain: 112, br: 16, loss: 0.1, haul: 0.8, knock: 100, wall: 1, look: 'bell' },
-    chimes: { name: 'Chimes', desc: 'Three tiny bells on short chains.', variant: 'handbells', kind: 'bell', dmg: 6.86, rate: 0.25, chain: 52, br: 8, loss: 0.17, haul: 1.25, knock: 30, n: 3, look: 'bell' },
+    stormbell: { name: 'Storm Bell', desc: 'Each strike rings out: every other foe within 40 of the bell takes a quarter of the strike.', variant: 'bronzebell', kind: 'bell', dmg: 19.1, rate: 0.3, chain: 70, br: 12, loss: 0.15, haul: 1, knock: 50, ring: { r: 40, mul: 0.25 }, look: 'bell' },
+    wreckbell: { name: 'Wrecking Bell', desc: 'A spiked bell on a very long chain that keeps its speed off walls.', variant: 'greatbell', kind: 'bell', dmg: 37.1, rate: 0.45, chain: 112, br: 16, loss: 0.1, haul: 0.8, knock: 100, wall: 1, look: 'bell' },
+    chimes: { name: 'Chimes', desc: 'Three tiny bells on short chains.', variant: 'handbells', kind: 'bell', dmg: 5.68, rate: 0.25, chain: 52, br: 8, loss: 0.17, haul: 1.25, knock: 30, n: 3, look: 'bell' },
   };
   // Combo step intervals as factors of the weapon's mean interval (iv, averaging 1).
   for (const id in ED.WEAPONS) {
@@ -273,7 +273,7 @@
     peal: { name: 'Peal', slot: 1, cd: 10, icon: 'bell', aim: 'self',
       desc: 'Stop the bell dead and ring it: a wave around the bell strikes and stuns every foe nearby (not bosses). It rings harder the faster the bell was flying (×0.43 at rest).',
       parts: [
-        { id: 'wave', label: 'Peal', base: 42, pow: 4.2, per: 'hit', r: 110, stun: 0.5, knock: 160, el: 'class', proc: true },
+        { id: 'wave', label: 'Peal', base: 42, pow: 4.2, per: 'hit', r: 85, stun: 0.5, knock: 160, el: 'class', proc: true },
         { id: 'clap', label: 'Thunderclap', if: 'clap', of: 'wave', mulFix: 0.5, mul1: 'clap', per: 'hit', el: 'class', proc: false },
         { id: 'echo', label: 'Reverberation', if: 'pealEcho', of: 'wave', mul: 'pealEcho', per: 'hit', delay: 0.5, rOf: 'wave', rMul: 1, el: 'class', proc: true },
         { id: 'bolt', label: 'Thunder Toll', if: 'tollBolt', of: 'wave', mul: 'tollBolt', per: 'hit', r: 50, el: 'class', proc: true },
@@ -322,7 +322,7 @@
     'heave.strike': { note: 'every foe on the flight path, once' },
     'heave.reel': { note: 'every foe on the way back, once' },
     'heave.smash': { note: 'where the flight ends' },
-    'heave.spin': { note: 'every foe on its wide circle, about once', oneFoe: 1 },
+    'heave.spin': { note: 'every foe on its circle, about twice', oneFoe: 2 },
     'peal.wave': { note: 'around the bell at full swing (×0.43 at rest); stuns 0.5 s (not bosses)' },
     'peal.clap': { note: 'the Charge the Peal leaves (half its hit) discharges at once', noCrit: true },
     'peal.echo': { note: '0.5 s later on the same spot' },

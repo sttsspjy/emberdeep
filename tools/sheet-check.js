@@ -186,7 +186,7 @@ const CASES = [
   ['shade', { eclipse: 0.6, eclipseDur: 4 }, 1, 28, false, { drive: true }], ['shade', { umbral: 2, cloneMul: 0.5 }, 1, 28, false, { drive: true, skip: ['clone'] }], ['shade', { shroud: 1, shroudDmg: 0.3, s2Dur: 2 }, 1, 28],
   ['cleric', {}, 0], ['cleric', {}, 1], ['cleric', { twinHammer: 0.75 }, 1],
   ['cleric', { wrath: 1, wrathNova: 1.5, wrathPillar: 1.2 }, 0], ['cleric', { aura: 1, dawn: 1, aegisR: 40, aegisDR: 0.1, aegisStun: 0.3, aegisMul: 1 }, 0], ['cleric', { storm: 5, stormMul: 0.45, thirdLeg: 1, twinHammer: 0.55, secondFlight: 0.25 }, 1], ['cleric', { verdict: 1, fjEcho: 0.2, fjR: 40, fjStun: 0.6 }, 1],
-  ['bell', {}, 0], ['bell', { wrecker: 0.6, smashStun: 0.6 }, 0, 150], ['bell', { wrecker: 0.6, wreckSpin: 0.5, spinDur: 1.5 }, 0, 180, false, { skip: ['reel'] }],
+  ['bell', {}, 0], ['bell', { wrecker: 0.6, smashStun: 0.6 }, 0, 150], ['bell', { wrecker: 0.6, wreckSpin: 0.5, spinDur: 1 }, 0, 60, false, { skip: ['reel'] }],
   ['bell', {}, 1, undefined, false, { setup: BELL_FAST }], ['bell', { clap: 0.5 }, 1, undefined, false, { setup: BELL_FAST, skip: ['clap'] }], ['bell', { pealEcho: 0.5 }, 1, undefined, false, { setup: BELL_FAST }], ['bell', { tollN: 3, tollBolt: 0.6, lightningInfuse: 0.3 }, 1, undefined, false, { setup: BELL_FAST }],
   ['necro', {}, 0], ['necro', { boneSpikes: 1 }, 0], ['necro', { boneSpikes: 1, bloom: 1, bloomField: 0.5, bloomBomb: 1.2 }, 0], ['necro', { knights: 1, maxMinions: 2, s1N: -2 }, 0], ['necro', { knights: 1, maxMinions: 2, s1N: -2, dk: 1, dkMul: 4.5, dkArc: 2.4, dkTaunt: 120 }, 0],
 ];
@@ -351,7 +351,7 @@ for (const [boons, wi, tag] of [[{ b_atk: 1, b_atk_h: 1 }, 0, 'Tolling Bell'], [
     const x0 = p.x, y0 = p.y;
     for (let t = 0; t < (SECS + 2) * 60; t++) { if (t === 120) on = true; p.hp = p.maxHp; p.x = x0; p.y = y0; w.update(1 / 60); }
     W.hitEnemy = h0;
-    return { got: dmg / SECS, want: nf > 1 ? MDc.packWeapon({ weapon: m.weapon }, nf) : m.weapon.dps };
+    return { got: dmg / SECS, want: nf > 1 ? MDc.packWeapon({ weapon: m.weapon }, nf) / m.weapon._up : m.weapon.dps }; // no casts here: the weapon strikes all the time (packWeapon takes _up)
   };
   for (const wid of ['bronzebell', 'stormbell', 'greatbell', 'wreckbell', 'handbells', 'chimes']) for (const [tag, boons] of [['', {}], [' Heavy', { b_atk: 1, b_atk_h: 1 }], [' Swift', { b_atk: 1, b_atk_s: 1 }]]) for (const nf of [1, 4]) {
     let got = 0, want = 0;

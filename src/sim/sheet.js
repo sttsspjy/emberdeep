@@ -245,8 +245,8 @@
   function bellExtras(st, w, bm, Wd, M, avg, aps, ctx, add) {
     const area = 1 + 0.5 * st.area, el = st.element, k = el ? (M + st.classElMul) * ED.affC(ctx.stratum || 1, el) : M;
     if (w.ring) { const v = Wd * w.ring.mul * M; add('Ring', v, { packOnly: true, r: Math.round(w.ring.r * area), _pack: (n, b) => v * b.k * Math.min(n - 1, 3), note: 'each strike rings the other foes near the bell, no crit' }); }
-    if (st.wreck > 0) { const sh = (b) => w.dmg * (st.wreck + st.demolish) * M * (b.mul + b.heavy * b.hmul); add('Wrecking shock', sh(bm), { _pack: (n, b) => sh(b) * Math.min(n, 3), r: Math.round((st.demolish > 0 ? 100 : 60) * area), stun: st.wreckStun, note: `each strike, twice from a Heavy Strike (about ${Math.round(bm.heavy * 100)}% of strikes), no crit` }); }
-    if (st.chainArc > 0) { const v = Wd * st.chainArc * M, j = 1 + (st.arcN | 0); add('Chain Toll', v, { packOnly: true, proc: true, el: 'lightning', _pack: (n, b) => v * b.k * Math.min(n - 1, j), note: `arcs to ${j} more foe${j > 1 ? 's' : ''} within 90, no crit` }); }
+    if (st.wreck > 0) { const sh = (b) => w.dmg * (st.wreck + st.demolish) * M * (b.mul + b.heavy * b.hmul); add('Wrecking shock', sh(bm), { _pack: (n, b) => sh(b) * Math.min(n, 3), r: Math.round((st.demolish > 0 ? 80 : 50) * area), stun: st.wreckStun, note: `each strike, twice from a Heavy Strike (about ${Math.round(bm.heavy * 100)}% of strikes), no crit` }); }
+    if (st.chainArc > 0) { const v = Wd * st.chainArc * M, j = 1 + (st.arcN | 0), lone = ED.CONST.ARC_LONE; add('Chain Toll', v * lone, { proc: true, el: 'lightning', _pack: (n, b) => v * b.k * (n > 1 ? Math.min(n - 1, j) : lone), note: `arcs to ${j} more foe${j > 1 ? 's' : ''} within 90 (a lone foe: back into it at ${Math.round(lone * 100)}%), no crit` }); }
     if (st.rod > 0) add('Lightning Rod', st.rod * ROD_UP * avg, { proc: true, crit: true, note: `+${Math.round(st.rod * 100)}% on a charged foe (about ${Math.round(ROD_UP * 100)}% of strikes); every 4th strike on one discharges it at once` });
     if (st.stormBolt > 0) add('Storm Bell', Wd * st.stormBolt * k / 3, { proc: true, pack: 3, el: el || null, r: Math.round(50 * area), note: 'every 3rd strike: a thunderbolt on the struck foe, no crit' });
   }
@@ -369,6 +369,9 @@
     if (bell) {
       out.chain = Math.round(w.chain); out.orbit = Math.round(ED.Bell.orbit(w)); out.bells = w.n || 1; out.lockout = R.x(St.attackInterval(p)); out.speed = Math.round(bm.v); out.top = Math.round(bm.top); out.heavy = R.f(bm.heavy);
       out._bell = (k) => { const b = ED.Bell.model(st, k, St.attackInterval(p), ED.Bell.rateGain(p)); return { sps: b.sps * (k > 1 ? BELL_EFF.pack : BELL_EFF.one), k: bm.mul > 0 ? b.mul / bm.mul : 1, mul: b.mul, heavy: b.heavy, hmul: b.hmul }; }; // tools/model.js packWeapon: k foes (strikes a second on each at BELL_EFF, damage factor over one foe's, Heavy Strike share and factor)
+      const bz = ED.Bell.busy(st), up = Math.max(0, 1 - bz.heave / St.skillNums('heave', st).cdEff - bz.peal / St.skillNums('peal', st).cdEff);
+      out.uptime = R.f(up); out._up = up; // share of the time the bell strikes as a weapon, casting Heave and Peal on cooldown (tools/model.js scales the weapon by it)
+      notes.push(`Casting on cooldown, the bell strikes ${Math.round(up * 100)}% of the time (Heave ${n1(bz.heave)} s in the air, Peal ${n1(bz.peal)} s to spin up again)`);
       notes.push(`Hauled, the bell orbits at ${out.orbit} px at about ${out.speed} px/s (top ${out.top}); a strike deals x${n1(bm.mul)} by its speed on average, each foe at most once per ${n1(St.attackInterval(p))} s per bell`);
     } else if (melee) { const arc = Math.min(6.3, w.arc * (1 + 0.4 * st.area)); out.reach = Math.round(w.range * (1 + 0.5 * st.area + st.meleeReach)); out.arcDeg = Math.round(arc * 57.2958); out.allAround = arc >= 6.2; }
     else { out.range = Math.round(w.speed * w.life); out.pierce = w.beam || w.ret ? 99 : (w.pierce || 0) + st.pierce; out.homing = (w.homing || 0) + (st.homing || 0) > 0; out.blast = blast ? { r: Math.round(blast.r), mul: blast.mul } : null; }
