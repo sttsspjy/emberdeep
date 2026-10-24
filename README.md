@@ -50,6 +50,7 @@ Playing alone, the world waits while the sheet is open; in a party the descent g
 - **Hordes.** Beside the foes that matter, every fight pours in packs of weak fodder from the room's edges: about 40 kills a fight in stratum I, up to 120 in stratum VI, more in elite and dark rooms. Fodder dies in a hit or two, nips for at most 3% of your health and slows you while it clings to you (down to half speed), so keep moving and dash out. It drops only experience motes, and every fight pays a fixed amount of experience however it goes (summoned and split foes pay nothing). Kill effects that spread, chain or explode trigger on fodder; cooldown refunds, shields, healing, stacks and raised minions come only from the foes that matter. A foe still standing 45 seconds after it appeared weakens and starts to wither.
 - **Deeper strata fight smarter.** From stratum III ranged foes aim where you are heading (more so the deeper you go), shots fly faster, rooms mix in foes from the stratum above, and from stratum IV elites can carry two affixes. Every boss fires aimed volleys at each hero (a warning line shows the path; change direction after it locks), adds one on top of everything else in its last phase, and fodder keeps trickling in during the fight. From stratum IV a boss that lives too long flies into a **fury**: the track under its health bar fills toward a notch, and past it the boss hits harder and attacks faster every second.
 - You level up from experience and gain a boon at every second level (2, 4, 6, ...) and your class route card at level 3. Offers open only when the room is safe. Playing alone, the world waits while the boon cards are open (and while paused).
+- A boon card shows what it is at a glance: its frame and icon wear its path (flame crown for Fire, ice shards, a lightning zigzag, dripping Poison, a Holy cathedral, torn Shadow, riveted steel for General), class route cards fly your hero's banner, duos split two frames, Ascended cards are gilded with wings, and the frame metal and the gem at the bottom show the rarity (iron common, silver rare, violet epic, gold legendary). Keystones, evolutions and path gates get a gold trim and a bigger gem. Taking a card plays its own animation and sound.
 - A winning descent takes about 30 to 40 minutes.
 
 ### Dark rooms
@@ -79,6 +80,7 @@ Boons belong to **paths**: six element paths and General. A hero follows at most
 - **Forge:** picking a forge card ranks an owned boon up by one (never a route or fork card: bosses rank those).
 - **Ascended boons:** from stratum IV, a boon you have taken to its top rank can offer its **Ascended** upgrade (Honed Edge, Blur, Arrow Storm, Impaler, Hawk Eye, Savage, Vast, Titan, Bastion; Hemorrhage, Headsman and Bloodletting for Generalists). It sits first on a boon offer, takes no path, and multiplies the bonus you already hold instead of adding to it. At most two per stratum.
 - A room that rewards "a boon" offers one new element gate (while you have a free slot) and boons of the paths you follow. Level-ups offer open boons, boons of your paths, keystones and duos.
+- **Health is a small whole number.** A Knight starts at 45, a Necromancer at 23; every hit costs at least 1, so each one counts. A Vigor blessing is +2, a Heartstone +4, a Hearth Vitality rank +1.
 - **No life steal.** Hits and kills never heal you. Healing comes from hearts, campfires, healing draughts, the fountain, Vigor, the Hearth's Provisions and the Elixir Flask, Sanctuary and Bone Harvest, and revives. **Shields** take the place of sustain: class shields give at most 3% of your max health per 10 seconds, all shield sources together at most 6% (the Battle Ward an elite room grants is exempt), and shields fade between fights.
 
 ### Class routes
@@ -91,7 +93,7 @@ Every hero also chooses a **route**: how their kit grows.
 
 ### Elemental weaknesses
 
-Every stratum is **weak** to one element (your damage and status build-up with it are x1.5) and **resists** another (x0.5). General and physical hits ignore this. The Chronicle tab in the Hearth lists it too.
+Every stratum is **weak** to one element (your damage and status build-up with it are x1.5) and **resists** another (÷1.5, about x0.67). General and physical hits ignore this. The Chronicle tab in the Hearth lists it too.
 
 | Stratum | Weak to | Resists |
 | --- | --- | --- |
@@ -118,7 +120,7 @@ Your weapon is renamed after the path (Cinder Longsword, Glacial Greatbow, and s
 
 ## Heroes
 
-You start with the **Knight**, **Ranger** and **Pyromancer**. Each hero has three weapons (unlocked by mastery) and two skills. Skill cooldown reductions apply to both (full up to 40%, half beyond, 65% at most), and each hero's route cards shape the skills further.
+You start with the **Knight**, **Ranger** and **Pyromancer**. Each hero has three weapons (unlocked by mastery, each with an Armory variant to buy) and two skills. Skill cooldown reductions apply to both (full up to 40%, half beyond, 65% at most), and each hero's route cards shape the skills further.
 
 | Hero | Skill 1 (Q) | Skill 2 (E) | Unlock |
 | --- | --- | --- | --- |
@@ -137,7 +139,7 @@ The main menu has five entries. **Descend** picks your hero, weapon and pact, th
 
 - **Embers** are earned on every descent that clears at least one room, win or lose. Spend them on 16 permanent upgrades. They are deliberately small (a point of health, half a percent of damage, a point of armor, a boon reroll, a few gold): what you know about the paths wins runs, not what you grind. **Deep Wick** adds 10% gold and experience in dark rooms per rank, **Head Start** begins the descent with a little experience, the **Stash** with a little gold, and **Second Wind** revives you once at a sliver of health if you fall outside a boss fight. Deeper strata reveal new upgrades.
 - **Refunds are free:** every upgrade rank has a **Refund** button that returns its full cost, and **Reset all** (press it twice to confirm) returns every rank at once, so you can rebuild the Hearth for a new path.
-- **Armory:** each hero can have sidegrade unlocks listed under the upgrades (refundable like the ranks). The lists are empty for now.
+- **Armory:** each hero's weapon variants, listed under the upgrades: an alternative version of a weapon with the same power and a different shape (the Arming Sword's slash-slash-lunge combo, the Earthbreaker's slam ahead, the Hooked Glaive's pull, the Radiant Mace's ring of light, the Sunlance's instant beam, the Mortar Tome's lobbed shell, the Shade's Boomerang Blades, the Votive Lamp's shielding pools of light, the Miasma Staff's trail of plague clouds, and more). A variant costs 40, 60 or 80 embers (for the first, second or third weapon), can be bought once its base weapon is unlocked, and refunds in full. An owned variant shows under its base weapon in the weapon picker of Descend and the party lobby.
 - **Heroes:** every descent trains the hero you took, up to mastery 10. Mastery unlocks weapons and tiny permanent bonuses.
 - **Deeds:** 26 achievements with ember rewards, including Evolved, **Into the Dark** (clear 6 dark rooms in one descent) and **Cartographer** (clear every room of a stratum, both dark rooms included).
 - **Pacts:** ten optional difficulty tiers unlocked by winning, each paying more embers.
@@ -149,7 +151,7 @@ Progress autosaves to the browser. **Settings > Profile** shows a portable save 
 
 Wickdeep starts fresh profiles: saves and codes from Emberdeep (`ED1-…`) do not carry over, and the game says so if you paste one.
 
-If you played an earlier version of Wickdeep, the first launch shows a one-time **"The Deep has changed"** notice. It lists what is different (the relic Codex is gone and every relic drops from the start, the element relics became path boons, free Hearth refunds and smaller upgrades, smaller generic health boons, a per-hero Armory list, kill effects on fodder, mouse aim, the new paths, shields instead of life steal, the Knight's Shield Throw, optional dark rooms in place of the lantern, bigger rooms with hordes, dash charges, rank 2 and rank 3 transforms at the bosses, Ascended boons, boss fury, music per stratum) and how many embers the Codex refunded.
+If you played an earlier version of Wickdeep, the first launch shows a one-time **"The Deep has changed"** notice. It lists what is different (the relic Codex is gone and every relic drops from the start, the element relics became path boons, free Hearth refunds and smaller upgrades, smaller generic health boons, a per-hero Armory list, kill effects on fodder, mouse aim, the new paths, shields instead of life steal, the Knight's Shield Throw, optional dark rooms in place of the lantern, bigger rooms with hordes, dash charges, rank 2 and rank 3 transforms at the bosses, Ascended boons, boss fury, music per stratum) and how many embers the Codex refunded. A profile from v4 sees only the newest part: health numbers a quarter of their size, the Armory weapon variants and the new melee swing.
 
 Two tabs open on the same profile stay in step: each adopts the other's saved progress instead of overwriting it.
 
@@ -228,21 +230,25 @@ node tools/simpool.js 1 384 0.75 none,mid,max --pick=smart   # same bots in para
 node tools/sheet.js --cls=all --routes --weapons             # analytic hero numbers, no bot runs
 node tools/bal.js                                            # quick balance suite against the difficulty targets, about 2 minutes
 node tools/browse.js                                         # headless browser smoke test
+node tools/browse.js --scen=swing --cls=knight               # contact sheet PNG per melee weapon swing (two attacks, hold, idle)
+node tools/browse.js --scen=cards --viewport=1920x1080       # every boon card kind, mid-pick frames, the fork reveal
 ```
 
 `simpool.js` runs its workers at normal priority; add `--nice` for idle priority (Windows throttles idle priority while the machine is unattended).
 
 `bal.js` prints a time estimate first, then one PASS/FAIL line per profile. It uses the veteran bot (a human proxy; `--vet=0` turns it off); `--from=N` starts the bots at stratum N and `--full` runs the sign-off sizes (under 15 minutes). `browse.js` is headless only, never a visible window: `--scen=smoke` (a short solo run), `crowd70` (frame cost with 70 live foes at Low and High quality) and `shots` (screenshots of the menus, a run and the Tab sheet). It needs Playwright.
 
-Headless checks (each prints failures and exits 1 on any): `node tools/check-sim.js`, `check-build.js` (fork ranks, offer rules, Ascended boons), `check-classes.js`, `check-knight.js`, `check-ranger.js`, `check-pyro.js`, `check-shade.js`, `check-cleric.js`, `check-necro.js`, `check-fodder.js` (fodder kill hooks), `check-perf.js` (sim cost per tick with 70 to 200 foes), `check-save.js`, `check-ux.js`, `check-render.js` (hit flash rules and art anchors) and `sheet-check.js` (the Tab sheet's numbers against the sim); `node tools/art.js --check` verifies that `src/art/` matches a rebuild of `art-src/`. Targets for the bots live in docs/GAME-DESIGN.md §10.
+Headless checks (each prints failures and exits 1 on any): `node tools/check-sim.js`, `check-build.js` (fork ranks, offer rules, Ascended boons), `check-classes.js`, `check-knight.js`, `check-ranger.js`, `check-pyro.js`, `check-shade.js`, `check-cleric.js`, `check-necro.js`, `check-fodder.js` (fodder kill hooks), `check-perf.js` (sim cost per tick with 70 to 200 foes), `check-save.js`, `check-armory.js` (Armory weapon variants: lists, forks, choice fallbacks, host validation, shape mechanics), `check-armory-b.js` (the projectile variants: beam, lob, return, pool and trail with their route cards), `check-ux.js`, `check-render.js` (hit flash rules and art anchors) and `sheet-check.js` (the Tab sheet's numbers against the sim); `node tools/art.js --check` verifies that `src/art/` matches a rebuild of `art-src/`. Targets for the bots live in docs/GAME-DESIGN.md §10.
 
 ## Credits
 
-The art in Wickdeep is built from third-party pixel-art packs.
+The art in Wickdeep is built from third-party pixel-art packs and pixel fonts.
 
 DawnLike tileset by DragonDePlatino (CC-BY 4.0, https://creativecommons.org/licenses/by/4.0/ ; https://opengameart.org/content/dawnlike-16x16-universal-rogue-like-tileset-v181), using the DawnBringer DB16 palette by DawnBringer. Cropped and recoloured for Wickdeep.
 
 Free Pixel Effects Pack by CodeManu (Davit Masia), CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/ ; https://codemanu.itch.io/pixelart-effect-pack). Frames subsampled and recoloured for Wickdeep.
+
+Pixel Operator font by Jayvee Enaguas (HarvettFox96), CC0.
 
 16x16 DungeonTileset II by 0x72 (Robert); Dungeon Tileset II Extended by nijikokun; 16x16 Dark Dungeon by kosinaz; Ninja Adventure by Pixel-boy and AAA; Puny Characters by Shade; LuizMelo; Kenney; o_lobster; Aim studios; ansimuz.
 

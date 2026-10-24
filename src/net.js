@@ -7,7 +7,7 @@
   const N = ED.Net = {};
   const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const PREFIX = 'wickdeep-v1-';
-  N.VERSION = 8; // bump whenever snapshots or floor generation change: mixed versions would desync
+  N.VERSION = 9; // bump whenever snapshots or floor generation change: mixed versions would desync
   // Heartbeat: PeerJS 'close' does not fire when a tab crashes or a network drops, so both ends ping and
   // treat a few seconds of silence as a disconnect (longer in the lobby, where little else is sent).
   const PING_MS = 2000, TIMEOUT_RUN = 6000, TIMEOUT_LOBBY = 10000;
@@ -114,12 +114,14 @@
   // A guest's hero choice, made safe for the host's simulation: a malformed message must never break everyone's run.
   const cleanPick = (d) => {
     const cls = ED.CLASS_IDS.indexOf(d.cls) >= 0 ? d.cls : ED.CLASS_IDS[0];
-    const list = ED.CLASSES[cls].weapons, weapon = list.indexOf(d.weapon) >= 0 ? d.weapon : list[0];
     const m = d.meta && typeof d.meta === 'object' ? d.meta : {};
     const up = ED.UPGRADES.map((u, i) => U.clamp((Array.isArray(m.up) ? m.up[i] : 0) | 0, 0, u.costs.length));
     const known = (ED.ARMORY[cls] || []).map(e => e.id), armory = Array.isArray(m.armory) ? m.armory.filter(id => known.indexOf(id) >= 0) : [];
+    const list = ED.CLASSES[cls].weapons, wi = typeof d.weapon === 'string' ? ED.weaponIndex(cls, d.weapon) : -1; // a variant needs its id in the member's Armory, else its base is wielded
+    const weapon = wi < 0 ? list[0] : d.weapon === list[wi] || armory.indexOf(d.weapon) >= 0 ? d.weapon : list[wi];
     return { cls, weapon, meta: { up, mastery: U.clamp(m.mastery | 0, 1, 10), armory } };
   };
+  N.cleanPick = cleanPick;
 
   // ---------------- host session ----------------
   N.Host = function (me, handlers) {
@@ -265,7 +267,7 @@
   // ---------------- snapshots ----------------
   const ST = ['move', 'windup', 'lunge', 'aim', 'spin', 'charge', 'fuse', 'cast', 'idle', 'atk', 'dash', 'wind', 'slam', 'air', 'roar', 'fade', 'burrow', 'erupt', 'bash', 'leap', 'dive']; // append only: indices are the wire format
   const ST_IDX = U.indexer(ST);
-  const ZK = ['spawn', 'tele', 'teleLine', 'teleCone', 'laser', 'poison', 'fire', 'pfire', 'plague', 'sanct', 'pull', 'bomb', 'decoy', 'mire', 'rain', 'meteor', 'smoke', 'skyfall', 'shards', 'crack', 'vortex', 'starfall', 'bramble']; // append only: indices are the wire format
+  const ZK = ['spawn', 'tele', 'teleLine', 'teleCone', 'laser', 'poison', 'fire', 'pfire', 'plague', 'sanct', 'pull', 'bomb', 'decoy', 'mire', 'rain', 'meteor', 'smoke', 'skyfall', 'shards', 'crack', 'vortex', 'starfall', 'bramble', 'holypool']; // append only: indices are the wire format
   const ZK_IDX = U.indexer(ZK);
   const PK = ['gold', 'xp', 'heart', 'orb'];
   const PK_IDX = U.indexer(PK);
@@ -307,6 +309,7 @@
   Object.assign(N.CAPS, { dark: 2 }); Object.assign(N.CAPS_LOCAL, { dark: 1 }); // entering a dark room
   Object.assign(N.CAPS, { fhit: 12, fdie: 30 }); Object.assign(N.CAPS_LOCAL, { fhit: 4, fdie: 12 }); // non-crit fodder hits and fodder deaths (capKey)
   Object.assign(N.CAPS, { shoot: 10 }); Object.assign(N.CAPS_LOCAL, { shoot: 3 }); // foe shot sounds (boss volleys fire one per hero)
+  Object.assign(N.CAPS, { beam: 8 }); Object.assign(N.CAPS_LOCAL, { beam: 4 }); // Sunlance beams ({ pid, x0, y0, x1, y1, w })
   Object.assign(N.CAPS, { smash: 8 }); Object.assign(N.CAPS_LOCAL, { smash: 4 }); // breakable props smashed ({ i, x, y, k, r }: room breakables index, spot, decor kind, room id)
   Object.assign(N.CAPS, { pillar: 4, aegispulse: 4, jecho: 10, lich: 2, dkraise: 2, dkswing: 6 }); Object.assign(N.CAPS_LOCAL, { pillar: 2, aegispulse: 2, jecho: 4, lich: 1, dkraise: 1, dkswing: 2 }); // Cleric and Necromancer skill forms: Wrath pillars, Aegis pulses, Final Judgment echoes, Lich Form, Death Knight raise and swings
   // Venom bar level of a foe: 0-4 pips (one per 25 Venom), 5 = Corroded. Radiance fill 0-3 of the Smite gauge.
@@ -322,7 +325,7 @@
     for (const p of w.players.values()) {
       const sw = ED.Sheet.shieldWindow(p, w.time);
       const fl = (p.moving ? 1 : 0) | (p.dashing ? 2 : 0) | (p.downed ? 4 : 0) | (p.dead ? 8 : 0) | (p.invuln > 0 ? 16 : 0) | (p.hurtT > 0 ? 32 : 0) | (p.shieldOut ? 64 : 0) | (p.stealthT > 0 ? 128 : 0) | (p.ambush ? 256 : 0) | (p.cometT > 0 ? 512 : 0) | (p.glT > 0 ? 1024 : 0) | (p.auraT > 0 ? 2048 : 0) | (p.tranceT > 0 ? 4096 : 0) | (p.braceT > 0 ? 1 << 20 : 0);
-      P.push([p.pid, r(p.x), r(p.y), r2(p.face), Math.ceil(p.hp), p.maxHp, fl, r2(p.revive), p.critStacks | 0, p.aegisT > 0 ? 1 : 0, p.guardT > 0 ? 1 : 0, p.secondWind | 0, p.phoenixUsed ? 1 : 0, p.picks | 0, p.rerolls | 0, Math.ceil(p.shield || 0), ED.Sheet.readyBits(p), p.momN | 0, r2(sw.c), r2(sw.a), p.chaliceHp | 0, p.knellT > 0 ? p.knellN | 0 : 0, p.glT > 0 ? Math.round(p.glV * 1000) / 1000 : 0, p.auraT > 0 ? Math.round(p.auraV * 1000) / 1000 : 0]); // P[16] ready-state bits of the sheet's defensive items (ED.Sheet.READY); P[17] Momentum stacks; P[18] P[19] shield received in the window: class sources, all sources (health); P[20] Grail of Ages growth; P[21] Death Knell stacks; P[22] P[23] Guardian Light and Embolden damage bonus (0 = off)
+      P.push([p.pid, r(p.x), r(p.y), r2(p.face), Math.ceil(p.hp), p.maxHp, fl, r2(p.revive), p.critStacks | 0, p.aegisT > 0 ? 1 : 0, p.guardT > 0 ? 1 : 0, p.secondWind | 0, p.phoenixUsed ? 1 : 0, p.picks | 0, p.rerolls | 0, Math.ceil((p.shield || 0) * 10 - 1e-9) / 10, ED.Sheet.readyBits(p), p.momN | 0, r2(sw.c), r2(sw.a), p.chaliceHp | 0, p.knellT > 0 ? p.knellN | 0 : 0, p.glT > 0 ? Math.round(p.glV * 1000) / 1000 : 0, p.auraT > 0 ? Math.round(p.auraV * 1000) / 1000 : 0]); // P[15] shield rounded up to tenths (a shield is a few health points); P[16] ready-state bits of the sheet's defensive items (ED.Sheet.READY); P[17] Momentum stacks; P[18] P[19] shield received in the window: class sources, all sources (health); P[20] Grail of Ages growth; P[21] Death Knell stacks; P[22] P[23] Guardian Light and Embolden damage bonus (0 = off)
     }
     for (const e of w.enemies) {
       if (e.hp <= 0) continue;

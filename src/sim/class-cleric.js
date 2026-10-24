@@ -279,7 +279,7 @@
       if (st.waveHome) { pr.homing = st.waveHome; pr.homeA0 = a; pr.homeCone = C.WAVE_CONE; }
       const ha = holyAdd(st);
       if (ha) pr.infAdd = ha.infAdd;
-      if (st.litany && p.atkCount % st.litany === 0) {
+      if (st.litany && !pr.fanSide && p.atkCount % st.litany === 0) { // the side waves of a fan (Judge's Gavel) send no Litany waves
         for (const d of [-FAN, FAN]) this.spawnProj({ team: 0, kind: 'wave', x: pr.x, y: pr.y, a: a + d, speed: Math.hypot(pr.vx, pr.vy), r: pr.r, dmg: pr.dmg, life: pr.life, pierce: pr.pierce, owner: pr.owner, knock: pr.knock, wpn: true, part: 'wave', stun: pr.stun, infAdd: pr.infAdd, homing: pr.homing, homeA0: a + d, homeCone: pr.homeCone });
       }
       if (st.wake > 0) wake(this, p, pr, a);

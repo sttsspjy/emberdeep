@@ -814,6 +814,18 @@
           }
           break;
         }
+        case 'holypool': { // Votive Lamp: a pool of light (gold fill, dashed rim, rising motes)
+          const fade = Math.min(1, (z.dur - z.t) * 2, z.t * 5);
+          if (pass === 0) {
+            discPut(c, z.x, z.y, z.r, '#ffe9a0', 0.22 * fade);
+            ringPut(c, z.x, z.y, z.r, 1, gb('#ffd36b'), 0.85 * fade, 3, (t * 5) & 7);
+            R.light(z.x, z.y, z.r * 1.7, '#ffe9a0', 0.4 * fade);
+          } else if (pass === 1) {
+            R.glow(c, z.x, z.y, z.r, '#ffe9a0', 0.22 * fade);
+            if (R.quality !== 'low') { c.fillStyle = '#fff6d0'; for (let i = 0; i < 3; i++) { const kk = (t * 0.6 + i / 3 + z.id * 0.1) % 1, a = i * 2.1 + z.id; c.globalAlpha = Math.max(0.25, Math.ceil(Math.sin(kk * Math.PI) * fade * 4) / 4); c.fillRect(sx2(z.x + Math.cos(a) * z.r * 0.5), sx2(z.y + Math.sin(a) * z.r * 0.3 - kk * 14), 2, 2); } c.globalAlpha = 1; }
+          }
+          break;
+        }
         case 'mire': {
           const fade = Math.min(1, (z.dur - z.t) * 1.5, z.t * 3);
           if (pass === 0) {
@@ -1718,11 +1730,11 @@
   // foe bullets are pixel orbs sized to their hitbox (disc of r/2 art px, 1 px dark rim, three element tones). Trails are 2 px squares on the art grid; only the halos are soft.
   const SHOT = { // atlas shots: anim, spin (rad/s; 0 = along the heading), q = quarter turns only
     arrow: { id: 'proj.arrow' }, bolt: { id: 'proj.bolt' }, knife: { id: 'proj.knife' }, trident: { id: 'proj.trident' }, thorn: { id: 'proj.thorn' }, fireball: { id: 'proj.fireball' },
-    bone: { id: 'proj.bone', spin: 14 }, hammer: { id: 'proj.hammer', spin: 16 }, shield: { id: 'proj.shield', spin: 14 }, skull: { id: 'proj.skull', spin: 8, q: 1 }, web: { id: 'proj.web', spin: 3 },
+    bone: { id: 'proj.bone', spin: 14 }, boomerang: { id: 'proj.knife', spin: 22 }, hammer: { id: 'proj.hammer', spin: 16 }, shield: { id: 'proj.shield', spin: 14 }, skull: { id: 'proj.skull', spin: 8, q: 1 }, web: { id: 'proj.web', spin: 3 },
   };
   const DIAMOND = { shard: 1, iceshard: 1 }, CRESCENT = { wave: 1, crescent: 1, bloodscythe: 1 };
-  const SOLID = { arrow: 1, bolt: 1, knife: 1, trident: 1, thorn: 1, bone: 1, hammer: 1, shield: 1, skull: 1, web: 1 }; // sprite shots: a small halo only
-  const TRAIL = { arrow: '#e8d8b0', bolt: '#cfd6de', knife: '#d9dfe8', trident: '#e8c66b', thorn: '#9cff6a', shield: '#ffe9a0', hammer: '#ffe9a0' }; // plain sprite trails; the others trail their element colour
+  const SOLID = { arrow: 1, bolt: 1, knife: 1, boomerang: 1, trident: 1, thorn: 1, bone: 1, hammer: 1, shield: 1, skull: 1, web: 1 }; // sprite shots: a small halo only
+  const TRAIL = { arrow: '#e8d8b0', bolt: '#cfd6de', knife: '#d9dfe8', boomerang: '#b78cff', trident: '#e8c66b', thorn: '#9cff6a', shield: '#ffe9a0', hammer: '#ffe9a0' }; // plain sprite trails; the others trail their element colour
   const NOTRAIL = { bone: 1, skull: 1, web: 1 }, HALO = { skull: '#a070ff' }; // HALO: shots whose glow is not their team / element colour (the violet skull)
   const FLAME = { fire: 1, firebolt: 1, fireball: 1, droneshot: 1, crescent: 1 }; // ember trails flicker through the fire ramp
   const dirOf = {};
@@ -1900,14 +1912,14 @@
   const fontK = (size) => ((size || LBL) >= 26 ? 4 : 2);
   const PF = (str) => ED.Atlas.covers(str);
   const PX = (str) => (/[\u2212\u2013\u2014]/.test(str) ? str.replace(/[\u2212\u2013\u2014]/g, '-') : str); // typographic minus / dashes -> the font's hyphen
-  const fbPx = (size) => (ED.Atlas.font ? ED.Atlas.font.h * 2 : size || LBL) * 0.9; // canvas-font px of the fallback for a nominal label height
+  const fbPx = (size) => 16 * Math.max(1, Math.round((ED.Atlas.font ? ED.Atlas.font.h * 2 : size || LBL) / 16)); // canvas-font px of the fallback for a nominal label height: Pixel Operator at 16n (whole font px)
   // Outlined text baked once per (string, colour, size in px); sprite origin = text centre.
   function textSprite(str, color, fs) {
     const key = color + '|' + fs + '|' + str;
     let s = txtCache.get(key);
     if (s) return s;
     if (!mctx) mctx = document.createElement('canvas').getContext('2d');
-    const font = '800 ' + fs.toFixed(2) + 'px "Alegreya Sans", sans-serif';
+    const font = '700 ' + fs + 'px "Pixel Operator", system-ui, sans-serif';
     mctx.font = font;
     const hw = mctx.measureText(str).width / 2 + fs * 0.45, hh = fs * 0.85;
     s = bake(-hw, -hh, hw, hh, false, (g) => { g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.lineWidth = Math.max(2, fs * 0.3); g.strokeStyle = 'rgba(0,0,0,0.85)'; g.strokeText(str, 0, 0); g.fillStyle = color; g.fillText(str, 0, 0); });
@@ -1919,7 +1931,7 @@
   R.labelW = (str, size) => {
     if (PF(PX(str))) return ED.Atlas.textW(PX(str), fontK(size));
     if (!mctx) mctx = document.createElement('canvas').getContext('2d');
-    mctx.font = '800 ' + fbPx(size).toFixed(2) + 'px "Alegreya Sans", sans-serif';
+    mctx.font = '700 ' + fbPx(size) + 'px "Pixel Operator", system-ui, sans-serif';
     return Math.ceil(mctx.measureText(str).width + fbPx(size) * 0.9);
   };
   // Label centred at world (x, y) in the current (integer-translated) transform; size = nominal height in world px.
@@ -1935,7 +1947,7 @@
     let s = numC.get(key);
     if (s) return s;
     if (!mctx) mctx = document.createElement('canvas').getContext('2d');
-    const font = '800 ' + bs + 'px "Alegreya Sans", system-ui, sans-serif'; mctx.font = font;
+    const font = '700 ' + bs + 'px "Pixel Operator", system-ui, sans-serif'; mctx.font = font;
     const hw = mctx.measureText(str).width / 2 + bs * 0.4, hh = bs * 0.75;
     s = bake(-hw, -hh, hw, hh, false, (g) => {
       g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';

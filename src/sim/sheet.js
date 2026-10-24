@@ -47,6 +47,8 @@
   // Seconds without the unit: two decimals below 1 s (0.25), one below 10, whole from 10; trailing zeros dropped.
   Sh.secs = (v) => { const a = Math.abs(v); return trim(a >= 10 ? String(Math.round(v)) : a >= 1 ? v.toFixed(1) : v.toFixed(2)); };
   Sh.n1 = n1;
+  // Shield as the HUD shows it: one decimal under 10, whole above (0 when none).
+  const shownShield = (v) => { const s = v > 0 ? v : 0; return s < 10 ? Math.round(s * 10) / 10 : Math.round(s); };
 
   // ---------------- text at rank ----------------
   // Boon text at `rank`: {stat} renders |mods[stat]| x rank in the stat's format (":pct|flat|sec|x" overrides it), {stat*K} that number times K (K = P: the hero's Power; ck / ck3: see below), {pw} the proc damage of the boon at the hero's Power.
@@ -217,6 +219,8 @@
   // Assumptions of the Cleric attack forms (waves, class-cleric.js). FLARE_HIT: share of waves whose end burst (radius 50, written for the wave's far end) catches a given foe. WAKE_ON: seconds a foe stands on the strip of one wave
   // (the strip burns about 2.9 s and a foe in front of the Cleric is covered by about half of that). RET_HIT: share of returning waves that strike a foe the outward wave struck (foes chase the hero, the return leg ends on the hero).
   const FLARE_HIT = 0.3, WAKE_ON = 1.5, RET_HIT = 0.75;
+  // TRAIL_PACK: share of the other pack foes the trail clouds of a shot that strikes the first foe reach (those beside it, not those behind the strike point; the tight pack of 4 of tools/sheet-check.js puts two of three there).
+  const TRAIL_PACK = 2 / 3;
   // Pyromancer assumptions (class-pyro.js). CHAN_MOVE: share of the weapon's attacks made while moving (Channel 0 unless Fire Dancer holds it); CHAN_SEG: seconds of one standing stretch; CHAN_PAUSE: seconds of attacking between the pauses that end Channel even under Fire Dancer (it builds only while standing).
   // LAVA_UP: share of the time a foe in the line of fire stands in a Lava Pool; LAVA_PACK: pack foes one pool covers (Caldera widens it by one). CALDERA_IN: share of aftershocks that land in a live pool. DANCE_EVERY: seconds between dashes made at full Channel (one flame ring each).
   // OVERHEAT_LINE: share of shots that find a second foe in line; OVERHEAT_BLASTS: pack foes the second blast of a piercing shot reaches. HE_USE: share of a cut or refund that counts (a skill is recast about half a second after it comes up, and a cut on a ready skill is lost; fitted to a time-stepped cast simulation). BURN_HIT: share of foes a cast finds burning.
@@ -233,12 +237,14 @@
   // Damage numbers are per landed hit before the stratum affinity and any status; dps counts every attack landing on one foe (a fan: the shots that reach it at REF).
   // extras: damage each attack adds besides the main hits (blasts, shocks, waves, clouds, evolution strikes, relics): { label, perAttack, perSec, proc (feeds statuses), el?, note? }.
   function weaponModel(p, st, ctx, R) {
-    const w = st.weapon, melee = w.kind === 'melee', M = Math.max(0.1, st.dmg), c = st.crit, cm = st.critMult, EC = 1 + c * (cm - 1), Wd = w.dmg, evo = st.evo, area = 1 + 0.5 * st.area;
+    const w = st.weapon, melee = w.kind === 'melee', M = Math.max(0.1, st.dmg), c = st.crit, cm = st.critMult, EC = 1 + c * (cm - 1), evo = st.evo, area = 1 + 0.5 * st.area;
+    const Wd = w.dmg * (w.combo ? w.combo.steps.reduce((a, q) => a + (q.mul || 1), 0) / w.combo.steps.length : 1); // a combo weapon: the mean of its steps' damage factors (the attacks cycle through them)
     const aps = 1 / St.attackInterval(p), apsBase = 1 / st.atkInterval;
     const n = melee ? 1 : (w.n || 1) + st.projN, sp = n > 1 ? Math.max(w.spread || 0, 0.13) : 0, offs = [];
     for (let i = 0; i < n; i++) offs.push((i - (n - 1) / 2) * sp);
     const chan = st.channel > 0 ? channelAvg(st, 1 / aps) : null, Mw = M + (chan ? chan.avg : 0); // Mw: the multiplier of a weapon hit (Pyromancer Channel at its assumed average)
-    const one = melee ? 1 : fanHits(offs, w.r), hit = Wd * Mw, avg = hit * EC;
+    // Flight shapes (combat.js): a boomerang strikes a foe at REF on both legs; a lobbed shell never strikes directly (its blast is the hit, it crits); a beam or a boomerang leg strikes every foe on its line.
+    const legs = !melee && w.ret && w.speed * w.life > Sh.REF.d ? 2 : 1, fan1 = melee ? 1 : fanHits(offs, w.r), one = fan1 * legs, direct = w.lob ? 0 : one, hit = Wd * Mw, avg = hit * EC;
     const extras = [], add = (label, perAttack, o) => { if (perAttack > 0) extras.push(Object.assign({ label, perAttack, proc: false }, o)); };
     const cleaveEvery = melee && st.cleave > 0 ? 3 + st.cleaveN : 0, cleaveK = cleaveEvery ? st.cleave / cleaveEvery : 0;
     if (cleaveEvery) add('Cleave', avg * cleaveK, { proc: true, crit: true, note: `every ${ordinal(cleaveEvery)} swing: +${Math.round(st.cleave * 100)}% damage, 40% more reach and arc` });
@@ -249,18 +255,28 @@
     // the blast of a shot (its own, or the Cinder Arms blast of a plain shot), its aftershock, its cloud
     const pyre = evo === 'fire';
     const blast = !melee ? (w.explode ? { r: w.explode.r * area * (pyre ? 1.3 : 1), mul: w.explode.mul } : pyre ? { r: 40 * area, mul: 0.5 } : null) : null;
-    if (blast) add('Blast', Wd * blast.mul * Mw * one, { proc: true, r: Math.round(blast.r), note: 'each shot that lands, no crit' });
+    if (blast) add('Blast', Wd * blast.mul * Mw * one * (w.lob ? EC : 1), { proc: true, crit: !!w.lob, r: Math.round(blast.r), note: w.lob ? 'the shell lands on the cursor, every foe in it, may crit' : 'each shot that lands, no crit' });
     if (blast && st.aftershock) add('Aftershock', Wd * blast.mul * Mw * st.aftershock * one, { r: Math.round(blast.r), note: '0.4 s after each blast' });
     // Pyromancer Attack forks (class-pyro.js). Lava Pools: untagged burning ground, one pool per spot, so a foe takes lavaPool x the shot a second whatever the shot count. Caldera: the share CALDERA_IN of aftershocks becomes a geyser (caldera x the shot, 1.5 x the radius) instead.
     // Overheat: at full Channel a shot pierces overheat more foes (its direct hit and a second blast that reaches OVERHEAT_BLASTS pack foes): no gain on one foe. Fire Dancer: a ring of dancerBurst x the weapon at full Channel on every dash made at full Channel (one per DANCE_EVERY s).
     if (blast && st.lavaPool) add('Lava Pools', Wd * st.lavaPool * M / aps * LAVA_UP, { pack: LAVA_PACK + (st.caldera > 0 ? 1 : 0), r: Math.round(blast.r * 0.6), note: `burning ground under a foe in the line of fire about ${Math.round(LAVA_UP * 100)}% of the time; a pool covers about ${LAVA_PACK + (st.caldera > 0 ? 1 : 0)} foes of a pack` });
     if (blast && st.caldera) add('Geyser', CALDERA_IN * Wd * Mw * (st.caldera - blast.mul * st.aftershock) * one, { r: Math.round(blast.r * 1.5), note: `${Math.round(CALDERA_IN * 100)}% of aftershocks land in a pool and erupt as a geyser instead` });
-    if (!melee && chan && st.overheat) add('Overheat', chan.full * st.overheat * OVERHEAT_LINE * (Wd * (M + st.chanCap) * EC + OVERHEAT_BLASTS * (blast ? Wd * blast.mul * (M + st.chanCap) : 0)), { packOnly: true, pack: 1, proc: false, note: 'at full Channel a shot pierces one more foe: its direct hit and a second blast, in a pack' });
+    if (!melee && !w.lob && !w.beam && chan && st.overheat) add('Overheat', chan.full * st.overheat * OVERHEAT_LINE * (Wd * (M + st.chanCap) * EC + OVERHEAT_BLASTS * (blast ? Wd * blast.mul * (M + st.chanCap) : 0)), { packOnly: true, pack: 1, proc: false, note: 'at full Channel a shot pierces one more foe: its direct hit and a second blast, in a pack' });
     if (chan && st.fireDance && st.dancerBurst) add('Flame ring', chan.full * Wd * st.dancerBurst * (M + st.chanCap) / aps / DANCE_EVERY, { r: Math.round(80 * area), note: `a dash at full Channel (about every ${DANCE_EVERY} s) leaves a ring of flame where it started` });
     if (!melee && w.cloud) { const ticks = w.cloud.dur / 0.5; add('Plague cloud', ticks * w.cloud.dps * 0.5 * M * one, { r: Math.round(w.cloud.r * area), note: `about ${n1(ticks)} ticks over ${n1(w.cloud.dur)}s per shot (clouds that merge tick on one 0.5 s grid), no crit` }); }
+    if (!melee && w.pool) add('Pool of light', w.pool.dur * Wd * w.pool.mul * M * one, { r: Math.round(w.pool.r * area), note: `where each orb ends: ${n1(w.pool.dur)} s, ticks every 0.5 s, no crit${w.pool.ally ? '; shields allies inside' : ''}` });
+    if (!melee && w.trail) { // trail clouds: one every `every` px from the shot's launch 10 px out, the last where it strikes the foe at REF; those within reach of that foe tick on it, and on the foes beside it in a pack (TRAIL_PACK of the others)
+      const T = w.trail, hd = Sh.REF.d - Sh.REF.r - w.r, reach = T.r * area + Sh.REF.r, at = [];
+      for (let k = 1; k < T.n && 10 + k * T.every < hd; k++) at.push(10 + k * T.every);
+      at.push(hd);
+      const on = at.filter(x => Math.abs(Sh.REF.d - x) < reach).length * fan1, per = T.dur * Wd * T.mul * M * on;
+      add('Plague trail', per, { r: Math.round(T.r * area), _pack: (n) => per * (1 + (n - 1) * TRAIL_PACK), note: `${T.n} clouds along each bolt's flight, ${on} of them on a foe at ${Sh.REF.d}, no crit` });
+    }
     if (w.wave) {
-      const every = Math.max(1, w.wave.every + st.waveEvery), waveRaw = Wd * w.wave.mul * (1 + st.waveMul), waveHit = waveRaw * M, ev = every === 1 ? 'every attack' : `every ${ordinal(every)} attack`;
-      add('Wave of light', waveHit * EC / every, { proc: true, crit: true, note: ev + ', pierces every foe in line' });
+      const wn = w.wave.n || 1, wo = []; // a fan of wn waves: those that reach a foe at REF
+      for (let i = 0; i < wn; i++) wo.push((i - (wn - 1) / 2) * (w.wave.fan || 0));
+      const every = Math.max(1, w.wave.every + st.waveEvery), waveRaw = Wd * w.wave.mul * (1 + st.waveMul) * fanHits(wo, 16 * area), waveHit = waveRaw * M, ev = every === 1 ? 'every attack' : `every ${ordinal(every)} attack`;
+      add('Wave of light', waveHit * EC / every, { proc: true, crit: true, note: ev + (wn > 1 ? `: ${wn} waves in a fan, each pierces every foe in line` : ', pierces every foe in line') });
       // Cleric attack forks (class-cleric.js): Solar Flare's end burst, Dawn's Wake's strip (class-element damage, a quarter of each tick stored as Radiance), Litany's two side waves (and their return legs), Returning Light's second pass
       if (st.waveBurst > 0) add('Solar Flare', waveHit * st.waveBurst * FLARE_HIT / every, { proc: true, r: Math.round(50 * area), note: `${ev}: the wave ends in a burst (radius 50) for ${Math.round(st.waveBurst * 100)}% of it, catching a foe about ${Math.round(FLARE_HIT * 100)}% of the time, no crit` });
       if (st.wake > 0) {
@@ -271,16 +287,21 @@
       if (st.litany > 0) add('Litany', waveHit * EC * 2 * ret / st.litany, { proc: true, crit: true, note: `every ${ordinal(st.litany)} attack: 2 more waves in a fan, both reach a foe at ${Sh.REF.d}` });
       if (st.waveReturn > 0) add('Returning Light', waveHit * EC * st.waveReturn * RET_HIT / every, { proc: true, crit: true, note: `${ev}: the wave flies home and strikes again for ${Math.round(st.waveReturn * 100)}% (about ${Math.round(RET_HIT * 100)}% of foes are on its way)` });
     }
+    if (melee && w.ring) { // a ring of light around the hero every Nth attack (combat.js heroRing): a class-element weapon hit on every foe within its radius
+      const every = Math.max(1, w.ring.every + st.waveEvery), el = st.element, k = el ? (M + st.classElMul) * ED.affC(ctx.stratum || 1, el) : M;
+      const lit = st.litany > 0 ? 2 * every / st.litany : 0, ret = 1 + (st.waveReturn || 0); // Litany: its attack's ring at x3; Returning Light: every ring rings again at waveReturn
+      add('Ring of light', Wd * w.ring.mul * (1 + st.waveMul) * k * EC * (1 + lit) * ret / every, { proc: true, crit: true, r: Math.round(w.ring.r * area * (st.waveBig ? 1.5 : 1)), note: `every ${ordinal(every)} attack: every foe around you${st.litany > 0 ? `; every ${ordinal(st.litany)} attack rings x3` : ''}${st.waveReturn > 0 ? `; rings again 0.35 s later for ${Math.round(st.waveReturn * 100)}%` : ''}` });
+    }
     if (st.gauntlet) add('Thunder Gauntlet', Wd * 2.2 * M / 6, { proc: true, el: 'lightning', note: 'every 6th attack, no crit' });
     // evolution strikes (data on the evolution boon)
-    const evoBoon = evo && ED.BOONS['evo_' + evo], attackTotal = avg * one + (blast ? Wd * blast.mul * M * one : 0);
+    const evoBoon = evo && ED.BOONS['evo_' + evo], attackTotal = avg * direct + (blast ? Wd * blast.mul * M * one * (w.lob ? EC : 1) : 0);
     for (const s of (evoBoon && evoBoon.strikes) || []) {
       if ((s.on === 'melee' && !melee) || (s.on === 'proj' && melee) || (s.ifNoBlast && (w.explode || melee)) || (s.ifBlast && !w.explode)) continue;
       let per;
       if (s.perSec) per = s.perSec * s.dur * Wd * M * one;
       else if (s.fan) { const o = []; for (let i = 0; i < s.fan.n; i++) o.push((i - (s.fan.n - 1) / 2) * s.fan.step); per = s.mul * Wd * M * (s.crit ? EC : 1) * fanHits(o, s.fan.r) / s.every; }
       else if (s.of === 'attack') per = s.mul * attackTotal;
-      else if (s.onCrit) per = s.mul * c * avg * one;
+      else if (s.onCrit) per = s.mul * c * avg * direct;
       else per = s.mul * Wd * M * (s.crit ? EC : 1) * (s.n || 1) / s.every;
       add(s.label, per, { proc: !!s.proc, crit: !!s.crit, el: s.el || null, note: s.every > 1 ? `every ${ordinal(s.every)} attack` : s.onCrit ? 'when you crit' : '' });
     }
@@ -312,21 +333,24 @@
     }
     let sum = 0;
     for (const e of extras) if (!e.packOnly) sum += e.perAttack; // a pack-only extra needs a second foe: it is left out of the damage on one foe
-    const dps = (avg * one + sum) * aps, dpsAll = (avg * n + sum) * aps;
+    const dps = (avg * direct + sum) * aps, dpsAll = (avg * (w.lob ? 0 : n * legs) + sum) * aps;
     const notes = [];
     if (st.atkOver > 1.0001) notes.push(`Attack speed cap ${n1(1 / st.atkFloor)}/s: the excess adds +${Math.round((st.atkOver - 1) * 100)}% damage`);
     if (chan) notes.push(`Channel averages +${Math.round(chan.avg * 100)}% damage on the weapon's hits, taking ${Math.round(CHAN_MOVE * 100)}% of the attacks as made on the move${st.fireDance ? ' (Fire Dancer holds it through moving)' : ''}`);
+    if (w.combo) notes.push(`Combo of ${w.combo.steps.length} attacks (the interval and hit are their means); it restarts after ${n1(w.combo.reset)} s without attacking`);
+    if (w.ahead) notes.push(`Slams the ground ${Math.round(w.range * (1 + 0.5 * st.area + st.meleeReach))} px ahead: every foe within ${Math.round(w.ahead.r * area)} of that point`);
+    if (w.pull) notes.push(`Hits pull foes ${w.pull} px toward you (elites half, bosses never)`);
     if (st.heavy) notes.push(`Heavy: a hit Staggers a foe for ${C.STAGGER} s (elites half)`);
     if (st.swift) notes.push(`Swift: +${Math.round(C.FLOW_SPD * 100)}% move speed for ${C.FLOW_T} s after each attack`);
     const out = {
       id: st.weaponId, base: p.weapon, name: (evo && ED.PATHS[evo] ? ED.PATHS[evo].evo + ' ' : '') + (w.name || ED.WEAPONS[p.weapon].name), kind: w.kind, fork: st.heavy ? 'heavy' : st.swift ? 'swift' : null, evo: evo || null,
-      look: w.look, hit: R.n(hit), crit: R.n(hit * cm), avg: R.n(avg), n, oneFoe: one, aps: R.x(aps), apsBase: R.x(apsBase), interval: R.x(1 / aps), floorBinds: st.atkOver > 1.0001,
+      look: w.look, hit: R.n(hit), crit: R.n(hit * cm), avg: R.n(avg), n, oneFoe: direct, fanOne: fan1, legs, lob: !!w.lob, line: !!(w.beam || w.ret), shape: w.beam ? 'beam' : w.lob ? 'lob' : w.ret ? 'boomerang' : w.pool ? 'pool' : w.trail ? 'trail' : null, aps: R.x(aps), apsBase: R.x(apsBase), interval: R.x(1 / aps), floorBinds: st.atkOver > 1.0001,
       critChance: R.f(c), critMult: R.x(cm), dps: R.n(dps), dpsAll: R.n(dpsAll), fan: !melee && n > 1, notes,
       extras: extras.map(e => Object.assign({}, e, { perAttack: R.n(e.perAttack), perSec: R.n(e.perAttack * aps) })),
       _hit: hit, _avg: avg, _aps: aps, _extras: extras, _ms: ms,
     };
     if (melee) { const arc = Math.min(6.3, w.arc * (1 + 0.4 * st.area)); out.reach = Math.round(w.range * (1 + 0.5 * st.area + st.meleeReach)); out.arcDeg = Math.round(arc * 57.2958); out.allAround = arc >= 6.2; }
-    else { out.range = Math.round(w.speed * w.life); out.pierce = (w.pierce || 0) + st.pierce; out.homing = (w.homing || 0) + (st.homing || 0) > 0; out.blast = blast ? { r: Math.round(blast.r), mul: blast.mul } : null; }
+    else { out.range = Math.round(w.speed * w.life); out.pierce = w.beam || w.ret ? 99 : (w.pierce || 0) + st.pierce; out.homing = (w.homing || 0) + (st.homing || 0) > 0; out.blast = blast ? { r: Math.round(blast.r), mul: blast.mul } : null; }
     return out;
   }
 
@@ -522,12 +546,12 @@
       dodge: R.f(st.dodge), dodgeRows: rowsOf(build, 'dodge'), ehp: R.n(maxHp / taken / (1 - st.dodge)),
       foeHere: R.x(foeHere), foeParts: { depth: R.x(W.dmgScale(s)), threat: R.x(thr.dmg), pact: R.x(pactMul), dark: ctx.dark ? R.x(darkMul) : null },
       healMul: R.x(st.healMul), healRows: rowsOf(build, 'heal'), pactHeal: R.x(St.pactHeal(ctx.pact | 0)),
-      shield: Math.ceil(p.shield || 0), ready: [], situational: [], shields: [], heals: [], window: shieldWin(p, ctx, maxHp, R),
+      shield: shownShield(p.shield), ready: [], situational: [], shields: [], heals: [], window: shieldWin(p, ctx, maxHp, R),
     };
     for (let i = 0; i < Sh.READY.length; i++) { const r = Sh.READY[i]; if (r.owned(st)) def.ready.push({ id: r.id, name: r.name, ready: readyOf(p, i), once: r.id === 'angel' || r.id === 'phoenix' }); }
     defenceExtras(p, st, def, skills);
 
-    const hero = { pid: p.pid, name: p.name, cls: p.cls, clsName: cls.name, title: cls.title, level: ctx.level, xp: ctx.xp, xpNext: ctx.xpNext, hp: Math.ceil(p.hp), maxHp, shield: Math.ceil(p.shield || 0), gold: ctx.gold, picks: p.picks | 0, power: st.power, element: st.element, weaponName: wpn.name, slot: p.slot | 0 };
+    const hero = { pid: p.pid, name: p.name, cls: p.cls, clsName: cls.name, title: cls.title, level: ctx.level, xp: ctx.xp, xpNext: ctx.xpNext, hp: Math.ceil(p.hp), maxHp, shield: shownShield(p.shield), gold: ctx.gold, picks: p.picks | 0, power: st.power, element: st.element, weaponName: wpn.name, slot: p.slot | 0 };
     const model = {
       hero, ctx: { stratum: s, pact: ctx.pact | 0, dark: !!ctx.dark, party: ctx.party }, weapon: wpn, skills, dash, proc: procOut(proc, R), mult, def, aff: affModel(p, st, ctx), build: lite ? null : buildModel(p, st, ctx, R), dark: darkModel(ctx),
       ref: { hp: R.n(ref.hp), statusHp: R.n(ref.statusHp), r: ref.r }, procs: procList(st, M, R), boost: { pack: wpn._boostPack || 0 },
@@ -586,6 +610,7 @@
     if (st.boneArmor) sh.push({ label: 'Bone Armor', text: `${pc(st.boneArmor)} per minion harvested, up to ${pc(st.boneCap)} (once per 12 s)` });
     if (st.roomWard) sh.push({ label: 'Battle Ward', text: `${pc(st.roomWard)} when an elite room locks` });
     if (p.cls === 'cleric') sh.push({ label: 'Judgment kill', text: '3% for allies within 160, once per cast' });
+    if (p.weapon === 'votive') sh.push({ label: 'Votive Lamp', text: `${pc(0.015)} of an ally's health while they stand in a pool of light, at most once per ${C.LANTERN_CD} s per ally, up to ${pc(C.CLASS_SHIELD_CAP)}; counts toward the class-shield limit of ${pc(C.SHIELD_WIN_CLASS)} per ${C.SHIELD_WIN_T} s` });
     if (p.weapon === 'lantern') sh.push({ label: 'Sacred Lantern', text: `${pc(0.015)} of an ally's health per orb, at most once per ${C.LANTERN_CD} s per ally, up to ${pc(C.CLASS_SHIELD_CAP)}; counts toward the class-shield limit of ${pc(C.SHIELD_WIN_CLASS)} per ${C.SHIELD_WIN_T} s` });
     for (const k of skills) for (const h of k.heals) def.heals.push({ label: k.name, text: h.perMinion ? `${pc(h.perMinion)} of max health per minion, up to ${pc(h.cap)}` : `${pc(h.frac)} of max health for you and allies within 180` });
     def.limits = `Class shields give at most ${pc(C.SHIELD_WIN_CLASS)} of max health per ${C.SHIELD_WIN_T} s and all sources ${pc(C.SHIELD_WIN_ALL)}; Battle Ward is exempt.`;
@@ -1015,8 +1040,8 @@
     const n = (p.relics || []).length;
     if (id === 'idol') return `Now +${Math.round(Math.min(0.2, Math.floor((ctx.gold || 0) / 15) * 0.01) * 100)}% damage`;
     if (id === 'banner') return `Now +${Math.round(st.banner * (1 + (ctx.allyNear | 0)) * 100)}% damage`;
-    if (id === 'chalice') return `Now +${p.chaliceHp | 0} of 30 health` + ((p.chaliceHp | 0) >= 30 ? ', +10% damage' : '');
-    if (id === 'stone') return `Now +${2 * n}% damage, +${2 * n} health`;
+    if (id === 'chalice') { const cap = ED.RELICS.chalice.full.hp; return `Now +${p.chaliceHp | 0} of ${cap} health` + ((p.chaliceHp | 0) >= cap ? ', +10% damage' : ''); }
+    if (id === 'stone') return `Now +${2 * n}% damage, +${Math.round(ED.RELICS.stone.perRelic.hp * n)} health`;
     if (id === 'wardrum') return p.toughRoom ? 'Now +20% (elite or boss room)' : null;
     return null;
   }

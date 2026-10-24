@@ -6,9 +6,7 @@
 <title>Wickdeep</title>
 <meta name="description" content="Wickdeep — a cooperative roguelite descent where you choose your build. Six paths, elemental weaknesses and dark rooms you dare to enter. Play solo or with up to 3 friends in your browser.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Cpath d=%22M16 2c6 7 10 11 10 18a10 10 0 0 1-20 0c0-5 3-8 5-11 0 4 2 6 4 6-2-5 0-9 1-13z%22 fill=%22%23ff8a3d%22/%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Alegreya+Sans:ital,wght@0,400;0,500;0,700;0,800;1,400&display=swap">
+<link rel="stylesheet" href="src/art/fonts.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -161,7 +159,7 @@
   <!-- ============ RESULTS ============ -->
   <section id="scr-results" class="screen" hidden>
     <div class="stage results-wrap">
-      <div class="res-banner" id="res-banner">Fallen</div>
+      <div class="res-flag"><div class="res-banner" id="res-banner">Fallen</div></div>
       <div class="res-sub" id="res-sub"></div>
       <div class="res-evo" id="res-evo" hidden></div>
       <div class="res-grid">
@@ -205,11 +203,11 @@
         <h2 class="sec-title" id="ph-title">The Hearth</h2>
         <div class="purse"><span class="ember-ico" aria-hidden="true"></span><b id="ph-embers">0</b><small>embers</small></div>
       </header>
+      <p class="sub">Purchases count from the next descent; friends who buy something press Ready again.</p>
       <nav class="tabs" id="ph-tabs" role="tablist">
         <button role="tab" data-tab="upgrades" class="tab on">Upgrades<span class="dot" id="ph-dot-upgrades" hidden></span></button>
         <button role="tab" data-tab="heroes" class="tab">Heroes</button>
       </nav>
-      <p class="sub">Purchases count from the next descent; friends who buy something press Ready again.</p>
       <div class="ph-body">
         <div class="up-grid" id="ph-upgrades"></div>
         <div class="heroes-view" id="ph-heroes" hidden></div>
@@ -224,27 +222,27 @@
         <div class="sh-port" id="sh-port"></div>
         <div class="sh-id"><div class="sh-hero"><span id="sh-name">Hero</span><span id="sh-class"></span></div><div class="sh-subl" id="sh-sub"></div></div>
         <div class="sh-vit">
-          <div><span class="sh-lvl" id="sh-lv">Lv 1</span><div class="bar"><i id="sh-xpbar"></i></div><span class="mut" id="sh-xp"></span></div>
-          <div><span class="lbl">HP</span><b id="sh-hp"></b><div class="bar hp"><i id="sh-hpbar"></i></div><span class="sh-shield" id="sh-shield" hidden></span></div>
-          <div title="Gold"><img class="sh-coin" id="sh-coin" alt="" width="20" height="20"><b id="sh-gold">0</b></div>
+          <div class="sh-v1"><span class="sh-lvl" id="sh-lv">Lv 1</span><span class="sh-meter xp" id="sh-xpm"><i></i></span><span class="mut" id="sh-xp"></span></div>
+          <div class="sh-v1"><span class="lbl">HP</span><b id="sh-hp"></b><span class="sh-shield" id="sh-shield" hidden></span><span class="sh-meter hp" id="sh-hpm"><i></i><i class="sh"></i></span></div>
+          <div class="sh-v1" title="Gold"><img class="sh-coin" id="sh-coin" alt=""><b id="sh-gold">0</b></div>
         </div>
         <div class="sh-world"><span class="sh-strat" id="sh-strat"></span><span class="sh-aff" id="sh-aff"></span></div>
       </header>
-      <nav class="tabs sh-tabs" id="sh-tabs" role="tablist" aria-label="Sheet tabs">
+      <nav class="sh-tabs" id="sh-tabs" role="tablist" aria-label="Sheet tabs">
         <button type="button" role="tab" class="tab on" id="shtab-build" aria-controls="shp-build" aria-selected="true">Build</button>
         <button type="button" role="tab" class="tab" id="shtab-combat" aria-controls="shp-combat" aria-selected="false">Combat</button>
         <button type="button" role="tab" class="tab" id="shtab-map" aria-controls="shp-map" aria-selected="false">Map</button>
-        <div class="sh-tr"><span class="sh-keys" id="sh-keys"></span><span class="sh-pill" id="sh-pill" hidden></span><button type="button" class="btn btn-small" id="sh-view" hidden></button></div>
+        <div class="sh-tr"><span class="sh-keys" id="sh-keys"></span><span class="px-chip sh-pill" id="sh-pill" hidden></span><button type="button" class="btn btn-small" id="sh-view" hidden></button></div>
       </nav>
       <div class="sh-body">
         <div class="sh-panel" id="shp-build" role="tabpanel" aria-labelledby="shtab-build" data-t="build"></div>
         <div class="sh-panel" id="shp-combat" role="tabpanel" aria-labelledby="shtab-combat" data-t="combat" hidden></div>
         <div class="sh-panel" id="shp-map" role="tabpanel" aria-labelledby="shtab-map" data-t="map" hidden>
-          <section class="plate sh-col"><div class="sh-in"><h3 class="plate-h">Map</h3><div class="sh-mapbox" id="sh-mapbox"><canvas id="map-canvas" width="360" height="300"></canvas></div></div></section>
-          <section class="plate sh-col"><div class="sh-in"><h3 class="plate-h">Stratum and dark rooms</h3><div class="sh-list" id="shp-map-side"></div></div></section>
+          <section class="plate sh-col" data-col="map"><div class="sh-in"><h3 class="sh-h">Map</h3><div class="sh-mapbox" id="sh-mapbox"><canvas id="map-canvas" width="360" height="300"></canvas></div><div class="sh-legend" id="sh-legend"></div></div></section>
+          <section class="plate sh-col" data-col="side"><div class="sh-in"><h3 class="sh-h">Stratum and dark rooms</h3><div class="sh-list" id="shp-map-side"></div></div></section>
         </div>
       </div>
-      <footer class="sh-foot" id="sh-foot"></footer>
+      <footer class="sh-foot" id="sh-foot" data-px-snap></footer>
     </div>
   </div>
 
@@ -320,6 +318,7 @@
       <div class="credits-body">
         <p>DawnLike tileset by DragonDePlatino (CC-BY 4.0, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">https://creativecommons.org/licenses/by/4.0/</a> ; <a href="https://opengameart.org/content/dawnlike-16x16-universal-rogue-like-tileset-v181" target="_blank" rel="noopener">https://opengameart.org/content/dawnlike-16x16-universal-rogue-like-tileset-v181</a>), using the DawnBringer DB16 palette by DawnBringer. Cropped and recoloured for Wickdeep.</p>
         <p>Free Pixel Effects Pack by CodeManu (Davit Masia), CC-BY 4.0 (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">https://creativecommons.org/licenses/by/4.0/</a> ; <a href="https://codemanu.itch.io/pixelart-effect-pack" target="_blank" rel="noopener">https://codemanu.itch.io/pixelart-effect-pack</a>). Frames subsampled and recoloured for Wickdeep.</p>
+        <p class="mut">Pixel Operator font by Jayvee Enaguas (HarvettFox96), CC0.</p>
         <p class="mut">16x16 DungeonTileset II by 0x72 (Robert); Dungeon Tileset II Extended by nijikokun; 16x16 Dark Dungeon by kosinaz; Ninja Adventure by Pixel-boy and AAA; Puny Characters by Shade; LuizMelo; Kenney; o_lobster; Aim studios; ansimuz.</p>
       </div>
       <div class="row end"><button class="btn btn-primary btn-lg" id="btn-credits-close" type="button" data-focus>Done</button></div>
@@ -386,11 +385,16 @@
 <script src="src/art/fxbig.js" defer onerror="this.remove()"></script>
 <script src="src/client/atlas.js" defer></script>
 <script src="src/client/icons.js" defer></script>
+<script src="src/client/pixui.js" defer></script>
+<script src="src/client/uiart.js" defer></script>
+<script src="src/client/screenart.js" defer></script>
+<script src="src/client/cardart.js" defer></script>
 <script src="src/client/sprites.js" defer></script>
 <script src="src/client/actors.js" defer></script>
 <script src="src/client/tiles.js" defer></script>
 <script src="src/client/pixfx.js" defer></script>
 <script src="src/client/fx.js" defer></script>
+<script src="src/client/pickfx.js" defer></script>
 <script src="src/client/render.js" defer></script>
 <script src="src/client/aim.js" defer></script>
 <script src="src/client/cls-knight.js" defer></script>

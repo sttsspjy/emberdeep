@@ -54,31 +54,44 @@
 
   // ---------- primitives ----------
   const env = (g, t, a, peak, d) => { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + d); };
-  const tone = (type, f0, f1, dur, vol, bus, at) => {
-    const ctx = A.ctx, t = at || now();
-    if (!reserve(t + dur + 0.05)) return;
+  // att (optional): attack in seconds, for swells; the voice then lasts att + dur and its sweep spans both.
+  const tone = (type, f0, f1, dur, vol, bus, at, att) => {
+    const ctx = A.ctx, t = at || now(), d = dur + (att || 0);
+    if (!reserve(t + d + 0.05)) return;
     const o = ctx.createOscillator(), g = ctx.createGain();
     o.type = type; o.frequency.setValueAtTime(f0, t);
-    if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
-    env(g, t, 0.005, vol, dur);
+    if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + d);
+    env(g, t, att || 0.005, vol, dur);
     o.connect(g); g.connect(bus || sfxBus);
-    o.start(t); o.stop(t + dur + 0.05);
+    o.start(t); o.stop(t + d + 0.05);
   };
-  const noise = (ftype, f0, f1, dur, vol, q, bus, at) => {
-    const ctx = A.ctx, t = at || now();
-    if (!reserve(t + dur + 0.05)) return;
+  const noise = (ftype, f0, f1, dur, vol, q, bus, at, att) => {
+    const ctx = A.ctx, t = at || now(), d = dur + (att || 0);
+    if (!reserve(t + d + 0.05)) return;
     const s = ctx.createBufferSource(); s.buffer = noiseBuf; s.playbackRate.value = 0.7 + Math.random() * 0.6;
     const f = ctx.createBiquadFilter(); f.type = ftype; f.Q.value = q || 1;
-    f.frequency.setValueAtTime(f0, t); if (f1) f.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
-    const g = ctx.createGain(); env(g, t, 0.004, vol, dur);
+    f.frequency.setValueAtTime(f0, t); if (f1) f.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + d);
+    const g = ctx.createGain(); env(g, t, att || 0.004, vol, dur);
     s.connect(f); f.connect(g); g.connect(bus || sfxBus);
-    s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.05);
+    s.start(t, Math.random() * 0.5); s.stop(t + d + 0.05);
   };
+  // Brass voice: a sawtooth through a lowpass that opens on the attack (the blat) and settles; one voice.
+  const brass = (f, dur, vol, at) => {
+    const ctx = A.ctx, t = at || now();
+    if (!reserve(t + dur + 0.05)) return;
+    const o = ctx.createOscillator(), lp = ctx.createBiquadFilter(), g = ctx.createGain();
+    o.type = 'sawtooth'; o.frequency.setValueAtTime(f * 0.97, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.04);
+    lp.type = 'lowpass'; lp.Q.value = 1.5; lp.frequency.setValueAtTime(350, t); lp.frequency.exponentialRampToValueAtTime(f * 7, t + 0.05); lp.frequency.exponentialRampToValueAtTime(f * 3, t + dur);
+    env(g, t, 0.03, vol, dur);
+    o.connect(lp); lp.connect(g); g.connect(sfxBus);
+    o.start(t); o.stop(t + dur + 0.05);
+  };
+  const lite = () => !!(ED.Render && ED.Render.quality === 'low');
   const rnd = (a, b) => a + Math.random() * (b - a);
 
-  const GAP = { hit: 0.035, ohit: 0.035, crit: 0.05, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1, freeze: 0.05, shatter: 0.06, combust: 0.06, guardhit: 0.06, block: 0.05, clang: 0.03, throw: 0.08, catch: 0.08, parry: 0.1, bell: 0.06, charge: 0.2, chargehit: 0.2, volley: 0.15, raincast: 0.15, smash: 0.05, dark: 0.5, fury: 1, dcharge: 0.08, blossom: 0.05, implode: 0.2 };
-  const PRIO = { hurt: 3, down: 3, revive: 3, dark: 3, lock: 3, roar: 3, fury: 3, victory: 3, defeat: 3, crit: 2, level: 2, boon: 2, relic: 2, ohit: 0, spark: 0, eshoot: 0, xp: 0, gold: 0, spawn: 0 };
-  // arg: cue-specific parameter (hit and crit: { w damage share, el element, n hits this frame }; clang: { n, g }; victory: 'boss' for the short one)
+  const GAP = { hit: 0.035, ohit: 0.035, crit: 0.05, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1, freeze: 0.05, shatter: 0.06, combust: 0.06, guardhit: 0.06, block: 0.05, clang: 0.03, throw: 0.08, catch: 0.08, parry: 0.1, bell: 0.06, charge: 0.2, chargehit: 0.2, volley: 0.15, raincast: 0.15, smash: 0.05, dark: 0.5, fury: 1, dcharge: 0.08, blossom: 0.05, implode: 0.2, pick: 0.08 };
+  const PRIO = { hurt: 3, down: 3, revive: 3, dark: 3, lock: 3, roar: 3, fury: 3, victory: 3, defeat: 3, crit: 2, level: 2, boon: 2, relic: 2, pick: 2, shop: 2, ohit: 0, spark: 0, eshoot: 0, xp: 0, gold: 0, spawn: 0 };
+  // arg: cue-specific parameter (hit and crit: { w damage share, el element, n hits this frame }; clang: { n, g }; victory: 'boss' for the short one; pick: a card kind or { k kind, big, els: a duo's two elements })
   A.play = (name, vol, arg, pr) => {
     if (!A.ready || !live()) return;
     const t = now();
@@ -136,7 +149,17 @@
       case 'down': [440, 330, 220].forEach((f, i) => tone('triangle', f, f * 0.95, 0.25, 0.1 * v, null, t + i * 0.12)); break;
       case 'revive': [330, 440, 554, 660].forEach((f, i) => tone('triangle', f, f, 0.2, 0.09 * v, null, t + i * 0.08)); break;
       case 'portal': tone('sine', 200, 900, 1.2, 0.12 * v); tone('sine', 300, 1350, 1.2, 0.08 * v); noise('bandpass', 400, 3000, 1.2, 0.08 * v, 3); break;
-      case 'buy': tone('sine', 988, 988, 0.06, 0.08 * v); tone('sine', 1318, 1318, 0.12, 0.08 * v, null, t + 0.07); break;
+      case 'shop': // in-run shop purchase (0.45 s): three coins drop and bounce on a counter, then a two-note register clink
+        [0, 0.06, 0.11].forEach((d, i) => { const f = 2400 + i * 260; tone('sine', f, f * 0.98, 0.06, 0.07 * v, null, t + d); tone('square', f * 1.5, f * 1.45, 0.02, 0.025 * v, null, t + d); noise('highpass', 5200, 3000, 0.02, 0.05 * v, 1, null, t + d); });
+        tone('sine', 260, 120, 0.06, 0.12 * v, null, t + 0.02);
+        tone('triangle', 1568, 1568, 0.22, 0.07 * v, null, t + 0.2); tone('triangle', 2093, 2093, 0.22, 0.06 * v, null, t + 0.26); noise('bandpass', 3800, 2600, 0.03, 0.07 * v, 4, null, t + 0.2);
+        break;
+      case 'buy': // Hearth purchase: an anvil strike, then an ember whoosh with a few crackles
+        tone('square', 880, 870, 0.1, 0.07 * v); tone('sine', 1760, 1750, 0.5, 0.07 * v); tone('sine', 2640, 2630, 0.3, 0.035 * v); noise('bandpass', 2600, 1400, 0.05, 0.2 * v, 2.5); tone('sine', 130, 60, 0.14, 0.22 * v);
+        noise('bandpass', 300, 2400, 0.25, 0.14 * v, 1.2, null, t + 0.05, 0.15);
+        for (let i = 0; i < 3; i++) noise('highpass', rnd(3500, 6000), 2500, 0.012, 0.06 * v, 0.8, null, t + 0.2 + Math.random() * 0.3);
+        break;
+      case 'pick': pickCue(arg, v, t); break;
       case 'deny': tone('square', 200, 150, 0.12, 0.05 * v); break;
       case 'thud': tone('sine', 80, 35, 0.25, 0.3 * v); noise('lowpass', 400, 80, 0.2, 0.2 * v); break;
       case 'spark': noise('highpass', 4000, 2000, 0.04, 0.04 * v); break;
@@ -214,6 +237,66 @@
       case 'dcharge': tone('sine', 1760, 1760, 0.06, 0.05 * v); tone('sine', 2637, 2637, 0.05, 0.025 * v, null, t + 0.035); break;
       default: break;
     }
+  }
+
+  // ---------- pick cues ----------
+  // One cue per card kind (src/client/pickfx.js), each under 0.9 s; Low quality drops repeated layers.
+  const PICK = {
+    fire(v, t, lo) { // crackle over a whoomp
+      noise('lowpass', 2400, 200, 0.4, 0.3 * v, 1, null, t, 0.05); tone('sine', 90, 45, 0.35, 0.28 * v, null, t, 0.03); tone('sawtooth', 160, 60, 0.25, 0.06 * v, null, t);
+      for (let i = 0, n = lo ? 4 : 8; i < n; i++) noise('highpass', rnd(3000, 6000), 2500, 0.012, rnd(0.05, 0.12) * v, 0.8, null, t + 0.03 + Math.random() * 0.5);
+    },
+    ice(v, t, lo) { // glassy chime: three bell strikes climbing, an inharmonic partial each, a frost sparkle
+      [1568, 2093, 2637].forEach((f, i) => { tone('sine', f, f * 0.998, 0.7 - i * 0.12, 0.12 * v, null, t + i * 0.07); if (!lo) tone('sine', f * 2.76, f * 2.75, 0.25, 0.04 * v, null, t + i * 0.07); });
+      noise('highpass', 8000, 5000, 0.2, 0.03 * v, 1, null, t);
+    },
+    lightning(v, t, lo) { // zap crack, a falling sawtooth, chatter and a short rumble
+      noise('highpass', 2500, 900, 0.09, 0.35 * v, 0.6, null, t); tone('sawtooth', 2200, 140, 0.16, 0.08 * v, null, t); tone('square', 1800, 1700, 0.03, 0.05 * v, null, t);
+      for (let i = 0, n = lo ? 1 : 3; i < n; i++) tone('sawtooth', rnd(900, 1400), 300, 0.04, 0.05 * v, null, t + 0.05 + i * 0.04);
+      noise('lowpass', 500, 70, 0.6, 0.14 * v, 1, null, t + 0.08);
+    },
+    poison(v, t, lo) { // bubbling gurgle: rising bloops over a resonant slosh
+      for (let i = 0, n = lo ? 4 : 7; i < n; i++) { const f = rnd(180, 320); tone('sine', f, f * 2.6, 0.05, 0.11 * v, null, t + i * 0.065 + Math.random() * 0.03); }
+      noise('lowpass', 500, 160, 0.55, 0.12 * v, 4, null, t); tone('sine', 70, 55, 0.4, 0.12 * v, null, t);
+    },
+    holy(v, t, lo) { // struck bell over a swelling choir pad
+      tone('sine', 1046, 1044, 0.8, 0.14 * v, null, t); tone('sine', 2887, 2870, 0.35, 0.03 * v, null, t); tone('triangle', 1569, 1569, 0.5, 0.02 * v, null, t);
+      [523, 659, 784].forEach((f) => { tone('triangle', f, f, 0.45, 0.06 * v, null, t, 0.3); if (!lo) tone('sawtooth', f * 1.003, f * 1.003, 0.45, 0.008 * v, null, t, 0.3); });
+    },
+    shadow(v, t) { // reverse whoosh: a swell that cuts off into a low implosion
+      noise('bandpass', 300, 2600, 0.04, 0.26 * v, 1.4, null, t, 0.42); tone('sine', 110, 330, 0.04, 0.08 * v, null, t, 0.4);
+      tone('sine', 140, 45, 0.2, 0.25 * v, null, t + 0.44); noise('lowpass', 800, 120, 0.15, 0.12 * v, 1, null, t + 0.44); tone('triangle', 233, 220, 0.3, 0.03 * v, null, t + 0.46);
+    },
+    general(v, t) { // anvil clang
+      tone('square', 1250, 1230, 0.12, 0.07 * v, null, t); tone('sine', 2490, 2480, 0.55, 0.07 * v, null, t); tone('sine', 3720, 3700, 0.35, 0.04 * v, null, t); tone('triangle', 1870, 1860, 0.4, 0.04 * v, null, t);
+      noise('bandpass', 3200, 1800, 0.05, 0.22 * v, 2.5, null, t); tone('sine', 160, 70, 0.12, 0.22 * v, null, t);
+    },
+    route(v, t) { // horn call: a fourth below, then the held fifth
+      noise('bandpass', 800, 1200, 0.1, 0.04 * v, 2, null, t); brass(262, 0.16, 0.2 * v, t); brass(392, 0.42, 0.22 * v, t + 0.17); tone('sine', 196, 196, 0.5, 0.06 * v, null, t + 0.17);
+    },
+    asc(v, t, lo) { // rising chord, each note a detuned pair that shimmers
+      [523, 659, 784, 1046, 1318].forEach((f, i) => { const at = t + i * 0.06, d = 0.55 - i * 0.04; tone('sine', f, f, d, 0.08 * v, null, at); if (!lo) tone('sine', f * 1.006, f * 1.006, d, 0.05 * v, null, at); });
+      noise('highpass', 6000, 9000, 0.45, 0.035 * v, 0.7, null, t + 0.1, 0.15); tone('triangle', 262, 262, 0.7, 0.06 * v, null, t);
+    },
+    relic(v, t, lo) { // chain rattle, then a stone thunk
+      for (let i = 0, n = lo ? 4 : 7; i < n; i++) { const at = t + i * 0.035 + Math.random() * 0.015; noise('bandpass', rnd(3000, 5000), 2000, 0.03, 0.08 * v, 4, null, at); if (!(i & 1)) tone('square', rnd(2600, 4200), rnd(1800, 2600), 0.025, 0.035 * v, null, at); }
+      tone('sine', 120, 45, 0.22, 0.3 * v, null, t + 0.3); noise('lowpass', 700, 120, 0.15, 0.2 * v, 1, null, t + 0.3); tone('square', 300, 160, 0.05, 0.04 * v, null, t + 0.3);
+    },
+    purse(v, t, lo) { // coin jingle cascade: tings at shrinking gaps, a last chink
+      const F = [2637, 2960, 3136, 3520, 3951];
+      let at = t;
+      for (let i = 0, n = lo ? 5 : 8; i < n; i++) { const f = F[(Math.random() * F.length) | 0]; tone('sine', f, f, 0.12, 0.1 * v, null, at); if (!lo) tone('sine', f * 1.5, f * 1.5, 0.06, 0.04 * v, null, at); at += 0.08 * Math.pow(0.82, i); }
+      tone('triangle', 1760, 1700, 0.25, 0.08 * v, null, at);
+    },
+    duo(v, t) { tone('sine', 880, 880, 0.4, 0.1 * v, null, t); tone('sine', 1320, 1320, 0.4, 0.1 * v, null, t + 0.05); }, // no element pair given: a two-note chime
+  };
+  const ROOT = { fire: 110, ice: 784, lightning: 147, poison: 98, holy: 523, shadow: 82, general: 262, route: 196, asc: 262, duo: 220, relic: 131, purse: 1318 };
+  // arg: kind string or { k, big, els }. duo with els: both element cues layered 50 ms apart; big: 15% louder plus a held root and fifth over a low rumble.
+  function pickCue(arg, v, t) {
+    const o = typeof arg === 'string' ? { k: arg } : arg || {}, k = PICK[o.k] ? o.k : 'general', lo = lite(), vv = v * (o.big ? 1.15 : 1);
+    if (k === 'duo' && o.els && PICK[o.els[0]] && PICK[o.els[1]]) { PICK[o.els[0]](vv * 0.75, t, lo); PICK[o.els[1]](vv * 0.75, t + 0.05, lo); }
+    else PICK[k](vv, t, lo);
+    if (o.big) { const r = ROOT[k]; tone('sine', r, r, 0.75, 0.1 * v, null, t + 0.04, 0.05); tone('triangle', r * 1.5, r * 1.5, 0.7, 0.04 * v, null, t + 0.06); noise('lowpass', 400, 60, 0.7, 0.1 * v, 1, null, t); }
   }
 
   // ---------- aggregated hits, impacts and deaths ----------

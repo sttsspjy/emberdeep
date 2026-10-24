@@ -25,8 +25,42 @@
   ];
   ED.UPGRADE_IDX = ED.U.indexer(ED.UPGRADES.map(u => u.id));
 
-  // Armory: per-hero sidegrade unlocks in the Upgrades page, { id, name, desc, cost }. The save code stores one bit per entry by position (a 6-bit count per hero): append only.
-  ED.ARMORY = { knight: [], ranger: [], pyro: [], shade: [], cleric: [], necro: [] };
+  // Armory: per-hero weapon variants bought in the Upgrades page, { id (= the variant's ED.WEAPONS key), weapon (its base weapon), name, desc, cost }; an owned variant is a weapon choice of its own. The save code stores one bit per entry by position (a 6-bit count per hero): append only.
+  // Each hero's list is ordered by its base weapon's index; the cost is 40 / 60 / 80 embers for a variant of weapon 0 / 1 / 2.
+  const V = (cls, id) => { const w = ED.WEAPONS[id]; return { id, weapon: w.variant, name: w.name, desc: w.desc, cost: 40 + 20 * ED.weaponIndex(cls, id) }; };
+  ED.ARMORY = {
+    knight: [
+      V('knight', 'armingsword'), V('knight', 'earthbreaker'), V('knight', 'hookglaive'),
+    ],
+    ranger: [
+      V('ranger', 'seekerbow'), V('ranger', 'boltthrower'), V('ranger', 'burstbows'),
+    ],
+    pyro: [
+      V('pyro', 'sunlance'), V('pyro', 'cinderscatter'), V('pyro', 'mortar'),
+    ],
+    shade: [
+      V('shade', 'katars'), V('shade', 'boomerang'), V('shade', 'chainsickle'),
+    ],
+    cleric: [
+      V('cleric', 'radiantmace'), V('cleric', 'gavel'), V('cleric', 'votive'),
+    ],
+    necro: [
+      V('necro', 'splinter'), V('necro', 'gravewhirl'), V('necro', 'miasma'),
+    ],
+  };
+  // The weapon a hero wields for a stored choice `id`: a base weapon unlocked at mastery level ml, or a variant whose id is in `owned` (the meta bundle's armory ids) and whose base is unlocked;
+  // anything else falls back to the base weapon when that is unlocked, else to weapon 0.
+  ED.weaponPick = (cls, id, ml, owned) => {
+    const list = ED.CLASSES[cls].weapons, i = ED.weaponIndex(cls, id);
+    if (i < 0 || !ED.weaponUnlocked(cls, i, ml)) return list[0];
+    return id === list[i] || (owned && owned.indexOf(id) >= 0) ? id : list[i];
+  };
+  // The weapon choices of a hero: each base weapon followed by its Armory variants.
+  ED.weaponChoices = (cls) => {
+    const out = [];
+    for (const b of ED.CLASSES[cls].weapons) { out.push(b); for (const e of ED.ARMORY[cls] || []) if (e.weapon === b) out.push(e.id); }
+    return out;
+  };
 
   ED.PACTS = [
     { name: 'No Pact', desc: 'The Deep as it is.' },
@@ -47,13 +81,13 @@
   // Mastery XP thresholds for levels 1..10.
   ED.MASTERY_XP = [0, 120, 300, 550, 850, 1200, 1650, 2200, 2850, 3600];
   // Stat mods a mastery level adds (every level up to the hero's own applies); ED.MASTERY_REWARDS is the text. Level 8 gives one boon reroll (sim/build.js).
-  ED.MASTERY_MODS = { 2: { dmg: 0.01 }, 4: { hp: 2 }, 5: { cdr: 0.01 }, 7: { crit: 0.01 }, 9: { dmg: 0.01 } };
+  ED.MASTERY_MODS = { 2: { dmg: 0.01 }, 4: { hp: 1 }, 5: { cdr: 0.01 }, 7: { crit: 0.01 }, 9: { dmg: 0.01 } };
   ED.MASTERY_REWARDS = [
     null,
     'Hero unlocked',
     '+1% damage',
     'Second weapon',
-    '+2 max health',
+    '+1 max health',
     'Skills recharge 1% faster',
     'Third weapon',
     '+1% critical chance',

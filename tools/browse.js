@@ -1,17 +1,28 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it.
-// Usage: node tools/browse.js [--scen=smoke,crowd70,shots] [--cls=knight] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
-//   [--quality=low,high] [--ops] [--json] [--seed=1] [--strat=1] [--embers=N] [--mortal] [--software] [--forcepost] [--sync] [--no-fonts] [--warm=2.5] [--timeout=300]
+// Usage: node tools/browse.js [--scen=smoke,crowd70,shots,sheet,screens,swing,picks,cards] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
+//   [--quality=low,high] [--ops] [--json] [--seed=1] [--strat=1] [--embers=N] [--mortal] [--software] [--forcepost] [--sync] [--warm=2.5] [--timeout=300]
 // Mechanism: headless only (no headed option, no window calls); one browser per invocation, one fresh context per scenario page, all closed at exit, on error and on SIGINT.
 //   A read-only node http server on 127.0.0.1 (random port) serves --root (default: this repo). Playwright resolves via require('playwright'), else %LOCALAPPDATA%\npm-cache\_npx\*\node_modules (best match for the installed browsers).
 //   The game runs under window.__ED with a seeded Math.random (--seed) and frameCap off; scripted input goes through ED.Input (keys, pressed, mouse) like a player.
-//   smoke: profile -> menu shot -> solo run of --cls -> key-event check -> --seconds (20) of circling, attacking the nearest foe, both skills, dash, boon picks, room hops -> run shot; fails on any pageerror or console error.
+//   smoke: profile -> menu shot -> solo run of --cls (wielding the first --weapon, an Armory variant included) -> key-event check -> --seconds (20) of circling, attacking the nearest foe, both skills, dash, boon picks, room hops -> run shot; fails on any pageerror or console error.
 //   crowdN: N live foes staged in the largest combat room through World.spawnEnemy / enterRoom (room cleared, held locked, topped up to N), hero kept alive; after --warm (2.5) s
 //     measures --seconds (6) of main-thread ms per frame (Game.update, Game.render, Render.frame, HUD.draw, Post.render, whole rAF callback; busy% = rAF callback time over wall time, sys% = whole-machine CPU use during the window) at each --quality (low,high);
 //     --ops adds a 3 s pass counting canvas/WebGL calls per frame by target (buf = world buffer, screen = visible canvas, other = offscreen bakes).
-//   shots: 15 screenshots: boot name screen, menu, Descend, Hearth tabs, Heroes, Settings, Credits, boon offer, a run in combat, the Tab sheet tabs, the pause menu (profile gets 400 embers unless --embers).
+//   screens: 19 screenshots of every menu screen without a run (name, menu, Descend, Hearth with a buy mid-burst, Armory, Chronicle, Heroes, a staged party lobby and its Hearth,
+//     results victory and fallen, the news notice, settings tabs, a confirm dialog, credits, pause); fails when ArrowDown / ArrowRight do not move focus on the menu / Hearth tabs.
+//   shots: 16 screenshots: boot name screen, menu, Descend, Hearth tabs (the Armory scrolled into view), Heroes, Settings, Credits, boon offer, a run in combat, the Tab sheet tabs, the pause menu (profile gets 400 embers unless --embers).
+//   sheet: a late build staged through the sim (BR.sheetStage: stratum --strat or V, two element paths, one evolved, their duo, open and Ascended boons, a fork at rank 3, six relics, a shield, an ally hero):
+//     the Tab sheet Build, Build scrolled to the end, Combat, Map, and Build viewing the ally; fails on a page error or when a sheet column overflows its panel sideways.
+//   swing: one contact-sheet PNG per melee weapon of --cls, its Armory variants included (or per --weapon id, forks as id@fork) (aimed --aim degrees, 0 = right, 90 = down, drawn at --zoom canvas px per world px, 2): frames at fixed times over two consecutive attacks (a combo weapon: one per step), the hold and the ease back to idle, hero and smear drawn by the game's own renderer.
+//   picks: every boon id resolves to a PickFx card kind; one PNG per pick burst (each kind, fire-big, holy-ally) on the solo hero about 0.25 s after FX.handle gets the 'boon' / 'relic' event;
+//     each pick cue (and the Hearth 'buy') rendered in an OfflineAudioContext: voices, peak, rms, audible length; fails on a throw, a silent cue or one longer than 0.9 s.
+//   cards: a frame sheet PNG (every card frame mask at 6 x) and one PNG per boon hand staged through the sim (the hero's boons set so the cards are eligible): path gates,
+//     every element, open and General, purse, Ascended, keystones, duos, an evolution, the --cls route and fork offers, a 6-card dense hand; mid-pick frames (110 and 230 ms,
+//     the hide timer held, animations paused) for poison, holy, ice, lightning, shadow, general, fire-big, route and duo; the fork reveal at rank 2 and 3; a Low quality hand and pick.
+//     Fails on a missing card, a card whose kind differs from ED.PickFx.kind, a frame that did not resolve, equal path gate icons, a pick without an effect layer, or Low quality leftovers.
 // Output: compact table (or --json on stdout, logs on stderr); result-<browser>.json and the PNGs in --outdir (default <tmp>/wickdeep-browse). Exit 0 pass, 1 scenario failure, 2 harness error.
 // Notes: Chromium runs headless on the real GPU (ANGLE D3D11, no window); --software forces SwiftShader, where the game reports Post.soft and skips post at 'high' unless --forcepost. Firefox uses its own headless GL.
-//   --sync forces each frame's raster/GPU work to finish before the timer stops. Google Fonts load from the network (the only external hosts allowed); --no-fonts serves them empty.
+//   --sync forces each frame's raster/GPU work to finish before the timer stops. Every external host is blocked (fonts and art are embedded data URIs).
 //   Firefox runs with layout.frame_rate 60 (headless rAF is otherwise uncapped). Timings share the machine: read sys% before trusting a number.
 'use strict';
 const fs = require('fs'), os = require('os'), path = require('path'), http = require('http');
@@ -19,20 +30,20 @@ const fs = require('fs'), os = require('os'), path = require('path'), http = req
 // ---------------- arguments ----------------
 const FLAGS = {
   scen: 's', cls: 's', browser: 's', viewport: 's', outdir: 's', root: 's', quality: 's',
-  seconds: 'n', seed: 'n', strat: 'n', embers: 'n', warm: 'n', timeout: 'n',
-  json: 'b', ops: 'b', mortal: 'b', forcepost: 'b', software: 'b', sync: 'b', 'no-fonts': 'b', help: 'b',
+  seconds: 'n', seed: 'n', strat: 'n', embers: 'n', warm: 'n', timeout: 'n', aim: 'n', zoom: 'n', weapon: 's',
+  json: 'b', ops: 'b', mortal: 'b', forcepost: 'b', software: 'b', sync: 'b', help: 'b',
 };
 class Fail extends Error { constructor(msg, code) { super(msg); this.code = code || 2; } }
 function parseArgs(argv) {
   const o = {
-    scen: 'smoke', cls: 'knight', browser: 'chromium', viewport: '1920x1080', outdir: path.join(os.tmpdir(), 'wickdeep-browse'), root: path.resolve(__dirname, '..'),
-    quality: '', seconds: 0, seed: 1, strat: 1, embers: -1, warm: 2.5, timeout: 300,
+    scen: 'smoke', cls: 'knight', weapon: '', browser: 'chromium', viewport: '1920x1080', outdir: path.join(os.tmpdir(), 'wickdeep-browse'), root: path.resolve(__dirname, '..'),
+    quality: '', seconds: 0, seed: 1, strat: 1, embers: -1, warm: 2.5, timeout: 300, aim: 0, zoom: 2,
   };
   for (const a of argv) {
     const m = /^--([\w-]+)(?:=(.*))?$/.exec(a);
     if (!m || !FLAGS[m[1]]) throw new Fail('unknown argument: ' + a + '\n(see the usage header of tools/browse.js)');
     const k = m[1], t = FLAGS[k];
-    if (t === 'b') o[k === 'no-fonts' ? 'noFonts' : k] = true;
+    if (t === 'b') o[k] = true;
     else if (m[2] === undefined || m[2] === '') throw new Fail('--' + k + ' needs a value');
     else if (t === 'n') { const v = Number(m[2]); if (!isFinite(v)) throw new Fail('--' + k + ' needs a number'); o[k] = v; }
     else o[k] = m[2];
@@ -42,7 +53,7 @@ function parseArgs(argv) {
   if (!vp) throw new Fail('--viewport is WxH, e.g. 1920x1080');
   o.vw = +vp[1]; o.vh = +vp[2];
   o.scens = o.scen.split(',').map(s => s.trim()).filter(Boolean);
-  for (const s of o.scens) if (!/^(smoke|shots|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, crowdN)');
+  for (const s of o.scens) if (!/^(smoke|shots|sheet|screens|swing|picks|cards|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, sheet, screens, swing, picks, cards, crowdN)');
   if (!o.scens.length) throw new Fail('--scen is empty');
   o.qualities = o.quality ? o.quality.split(',').map(s => s.trim()) : null;
   if (o.qualities && o.qualities.some(q => q !== 'low' && q !== 'high')) throw new Fail('--quality is low, high or low,high');
@@ -141,15 +152,22 @@ function pageBoot(cfg) {
     };
   };
 
-  // profile with a name, the tutorial off, the hero chosen; embers >= 0 sets the purse
-  BR.profile = (cls, embers) => {
+  // profile with a name, the tutorial off, the hero chosen; embers >= 0 sets the purse; weapon (a weapon id of the hero, an Armory variant included): mastery 6, the variant owned, the weapon chosen
+  BR.profile = (cls, embers, weapon) => {
     const ED = window.__ED, A = ED.App;
     if (!ED.CLASSES[cls]) throw new Error('unknown hero ' + cls + ' (have ' + ED.CLASS_IDS.join(', ') + ')');
     if (!A.hasProfile) A.createProfile('Tester');
     A.profile.stats.runs = Math.max(A.profile.stats.runs | 0, 5);
     if (embers >= 0) A.profile.embers = embers;
+    if (weapon) {
+      if (ED.weaponIndex(cls, weapon) < 0) throw new Error('unknown weapon ' + weapon + ' of ' + cls + ' (have ' + ED.weaponChoices(cls).join(', ') + ')');
+      const ci = ED.CLASS_IDS.indexOf(cls), ai = ED.ARMORY[cls].findIndex(e => e.id === weapon);
+      A.profile.mastery[ci] = Math.max(A.profile.mastery[ci] | 0, ED.MASTERY_XP[5]);
+      if (ai >= 0) A.profile.armory[cls][ai] = 1;
+    }
     A.persist();
     A.selectClass(cls);
+    if (weapon) { A.sel.weapon = weapon; A.saveSel(); if (A.weaponFor(cls) !== weapon) throw new Error('the weapon choice ' + weapon + ' did not hold'); }
     return A.state;
   };
   BR.settings = (quality) => {
@@ -297,6 +315,50 @@ function pageBoot(cfg) {
     if (t >= D.td) { I.pressed.add('Space'); D.td = t + 2.4; }
   }, 33);
 
+  // contact sheet of the melee swings of `cls` aimed `aimDeg` degrees (0 = right, 90 = down): one PNG per weapon (its Armory variants included), frames at fixed times (idle, then per attack wind, strike, end, settled,
+  // then hold and ease to idle): two attacks, or one per step of a combo weapon (each drawn with its step's form); the hero drawn by Sprites.hero from a fake player and the smear (a slam: FX.slam) by FX.drawGlow; needs a run (FX.playerAttackAnim reads the world view)
+  BR.swingStrip = (cls, aimDeg, zoom, weapons) => {
+    const ED = window.__ED, F = ED.FX, view = ED.Game.s.view, out = [], pid = 'sw-fake', face = aimDeg * Math.PI / 180, K2 = zoom, CW = 120 * zoom, CH = 140 * zoom, COLS = zoom > 2 ? 5 : 7;
+    F.reset();
+    for (const wid of weapons.length ? weapons : ED.weaponChoices(cls)) {
+      const w = ED.Sprites.weaponArt({ cls, weapon: wid }).w; if (w.kind !== 'melee') continue;
+      const p = { pid, cls, slot: 0, weapon: wid, face, moving: false, hp: 1, x: 0, y: 0 }, fst = { weapon: w }, nA = w.combo ? w.combo.steps.length : 2;
+      const sw = (k) => (w.combo ? ED.Stats.stepWeapon(fst, k) : null);
+      view.players.set(pid, p);
+      const mk = (k) => { if (F.anim[pid]) F.anim[pid].atkT = 9; F.playerAttackAnim(pid, face, sw(k)); return Object.assign({}, F.anim[pid]); };
+      const S = []; for (let k = 0; k < nA; k++) S.push(mk(k));
+      const an = F.anim[pid], t0 = S[0].t0, t1 = S[0].t1, D = S[0].D, st = (f) => t0 + (t1 - t0) * f, fr = [[-1, 9, 'idle']];
+      for (let k = 0; k < nA; k++) { const a = 'a' + (k + 1); fr.push([k, t0 * 0.9, a + ' wind'], [k, st(0.3), a + ' strike'], [k, st(0.6), a + ' strike'], [k, t1, a + ' end'], [k, D, a + ' settled']); }
+      fr.push([nA - 1, D + 0.5, 'hold'], [nA - 1, D + 0.9, 'ease'], [nA - 1, D + 1.3, 'idle']);
+      const cv = document.createElement('canvas'); cv.width = COLS * CW; cv.height = Math.ceil(fr.length / COLS) * CH;
+      const c = cv.getContext('2d'); c.imageSmoothingEnabled = false;
+      for (let pass = 0; pass < 2; pass++) { // the first pass queues every weapon rotation, Atlas.tick bakes them all, the second pass is the one kept
+      fr.forEach((f, i) => {
+        const x0 = (i % COLS) * CW, y0 = Math.floor(i / COLS) * CH;
+        c.save(); c.beginPath(); c.rect(x0, y0, CW, CH); c.clip();
+        c.fillStyle = '#2b2733'; c.fillRect(x0, y0, CW, CH);
+        c.setTransform(K2, 0, 0, K2, x0 + CW / 2, y0 + CH * 0.62);
+        if (f[0] >= 0) { Object.assign(an, S[f[0]]); an.atkT = f[1]; } else { Object.assign(an, S[0]); an.atkT = 9; }
+        F.lastAnim = an;
+        ED.Sprites.hero(c, p, 0, an);
+        if (f[0] >= 0 && f[1] >= an.t0 && f[1] < an.D + 0.1) {
+          const ws = sw(f[0]) || w;
+          if (ws.ahead) { F.slam(0, -10, face, ws.range, ws.ahead.r, ED.PLAYER_COLORS[0], true); F.rings.length = 0; F.pops.length = 0; } else F.slash(0, -10, face, ws.range, Math.min(6.3, ws.arc), ED.PLAYER_COLORS[0]);
+          const sl = F.slashes[F.slashes.length - 1]; sl.life = sl.max - f[1];
+          c.globalCompositeOperation = 'lighter'; F.drawGlow(c, 0); c.globalCompositeOperation = 'source-over';
+          F.slashes.length = 0;
+        }
+        c.setTransform(1, 0, 0, 1, 0, 0); c.fillStyle = '#d8d4e0'; c.font = '12px monospace'; c.fillText(f[2] + ' ' + (f[1] < 9 ? f[1].toFixed(2) : ''), x0 + 6, y0 + 15);
+        c.restore();
+      });
+      if (!pass) ED.Atlas.tick(10000);
+      }
+      out.push({ weapon: wid, url: cv.toDataURL('image/png'), side: S.map(q => q.side), times: [t0, t1, D] });
+      view.players.delete(pid);
+    }
+    return out;
+  };
+
   BR.runState = () => {
     const ED = window.__ED, A = ED.App, s = ED.Game.s, w = s && s.world, me = s && s.me;
     return {
@@ -309,6 +371,130 @@ function pageBoot(cfg) {
   // opens a boon offer when one is queued; true when the overlay is up
   BR.offerOpen = () => { const s = window.__ED.Game.s; return !!(s && s.offerOpen); };
   BR.take = () => { const ED = window.__ED; if (ED.Game.s && ED.Game.s.offerOpen) ED.UI.boonConfirm(); return BR.offerOpen(); };
+
+  // late build on the solo hero at stratum `strat`: two element paths (the first evolved, the second at its keystone), their duo, open boons, two Ascended, the first route with its first fork at rank 3,
+  // six relics, level 14, a shield, half the floor explored, and an ally hero (second class) beside the hero; returns a summary
+  BR.sheetStage = (strat) => {
+    const ED = window.__ED, s = ED.Game.s, w = s && s.world;
+    if (!w) throw new Error('no run to stage the sheet in');
+    if (strat && strat !== w.stratum) w.enterStratum(strat);
+    const p = s.me, B = ED.BOONS, cls = p.cls, els = ED.ELEMENT_IDS.filter(e => e !== ED.CLASSES[cls].element).slice(0, 2), boons = {};
+    const pathIds = (path) => Object.keys(B).filter(id => B[id].path === path && !B[id].open && !B[id].cls);
+    for (const [i, el] of els.entries()) {
+      const ids = pathIds(el), gate = ids.find(id => B[id].gate), key = ids.find(id => B[id].key), evo = ids.find(id => B[id].evo);
+      boons[gate] = 1;
+      const want = i === 0 ? ED.EVO_AFFINITY : ED.KEY_AFFINITY;
+      for (const id of ids) { if (B[id].gate || B[id].key || B[id].evo || B[id].need === (ED.CLASSES[cls].kind === 'melee' ? 'proj' : 'melee')) continue; if (ED.pathAffinity(boons, el) + 1 >= want) break; boons[id] = Math.min(B[id].max || 5, Math.max(1, want - 1 - ED.pathAffinity(boons, el))); }
+      if (key) boons[key] = 1;
+      if (i === 0 && evo) boons[evo] = 1;
+    }
+    const duo = ED.duoOf(els[0], els[1]); if (duo) boons[duo] = 1;
+    Object.keys(B).filter(id => B[id].open && !B[id].purse && !B[id].asc && !B[id].cls).slice(0, 4).forEach((id, i) => { boons[id] = Math.min(B[id].max || 5, i + 1); });
+    Object.keys(B).filter(id => B[id].asc).slice(0, 2).forEach(id => { boons[id] = 1; });
+    const route = ED.CLASS_CARDS[cls][ED.ROUTES[0]]; boons[route.t1] = 1; boons[route.forks[0]] = Math.min(3, B[route.forks[0]].max || 3);
+    p.boons = boons; p.relics = Object.keys(ED.RELICS).slice(0, 6);
+    w.recalc(p, true); w.sendBuild(p);
+    p.shield = Math.round(p.maxHp * 0.18 * 10) / 10 + 0.4;
+    w.level = Math.max(w.level | 0, 14); if (ED.World.xpFor) { w.xpNext = ED.World.xpFor(w.level); w.xp = Math.floor(w.xpNext * 0.62); } w.gold = 347;
+    p.hp = Math.max(1, Math.ceil(p.maxHp * 0.7) - 0.3);
+    const rooms = w.floor.rooms; rooms.forEach((r, i) => { if (i % 2 === 0) { w.roomState[r.id].visited = true; w.roomState[r.id].known = true; w.roomState[r.id].cleared = true; } else w.roomState[r.id].known = i % 4 === 1; });
+    let ally = null;
+    if (!w.players.has('ally')) {
+      const ac = ED.CLASS_IDS.find(c => c !== cls);
+      ally = w.addPlayer({ pid: 'ally', name: 'Wren', slot: 1, cls: ac, weapon: ED.weaponChoices(ac)[0] });
+      ally.x = p.x + 30; ally.y = p.y; ally.hp = Math.ceil(ally.maxHp * 0.6);
+    }
+    return { cls, els, boons: Object.keys(boons).length, relics: p.relics.length, stratum: w.stratum, ally: ally && ally.cls };
+  };
+
+  // cards: a boon offer staged through the sim (the hero's boons set so the cards are eligible, the hand sent as the sim's own offer message); returns each card's kind
+  BR.cardHand = (boons, ids, spec) => {
+    const ED = window.__ED, s = ED.Game.s, w = s && s.world, p = s && s.me;
+    if (!w || !p) throw new Error('no run to stage cards in');
+    for (const id of ids) if (!ED.BOONS[id]) throw new Error('unknown boon ' + id);
+    ED.UI.hideBoons();
+    p.boons = Object.assign({}, boons); w.recalc(p, false); w.sendBuild(p);
+    p.offers = [Object.assign({ src: 'level', path: null }, spec || {})]; p.picks = 1; p.offer = ids.slice(); p.offerT = 0;
+    w.sendOffer(p);
+    return ids.map(id => ED.PickFx.kind(id) + (ED.PickFx.big(id) ? '+big' : ''));
+  };
+  // the shown hand: per card its kind, whether its frame resolved, its icon URL, its box; plus the overlay's low flag
+  BR.cardDom = () => {
+    const cards = [...document.querySelectorAll('#boon-cards .boon-card')];
+    return { open: !document.getElementById('ov-boon').hidden, low: document.getElementById('ov-boon').classList.contains('low'), cards: cards.map(c => { const r = c.getBoundingClientRect(); return { kind: c.dataset.kind, frame: getComputedStyle(c, '::after').borderImageSource !== 'none', icon: (c.querySelector('.bc-icon') || {}).src || '', w: r.width, h: r.height }; }) };
+  };
+  // the pick of card i through UI.pickBoon with its hide timer held; every animation paused at t ms (cardSeek moves them, cardRelease resumes and runs the held hide)
+  BR.cardPick = (i, t) => {
+    const ED = window.__ED, st = window.setTimeout;
+    let cb = null;
+    window.setTimeout = (f) => { cb = f; return 1e9; };
+    try { ED.UI.pickBoon(i); } finally { window.setTimeout = st; }
+    BR._held = cb;
+    for (const a of document.getAnimations()) { a.pause(); a.currentTime = t; }
+    return { held: !!cb, fx: document.querySelectorAll('#ov-boon .pick-fx').length };
+  };
+  BR.cardSeek = (t) => { for (const a of document.getAnimations()) a.currentTime = t; return true; };
+  BR.cardRelease = () => { for (const a of document.getAnimations()) a.play(); const cb = BR._held; BR._held = null; if (cb) cb(); return !document.getElementById('ov-boon').hidden; };
+  // the fork rank reveal of fork `id` at `rank`, its unfurl finished; returns its box
+  BR.forkShow = (id, rank) => {
+    const ED = window.__ED, el = document.getElementById('ov-fork');
+    ED.UI.forkReveal({ id, rank });
+    for (const a of el.getAnimations({ subtree: true })) { if (a.animationName === 'fork-out') a.pause(); else a.finish(); }
+    const r = el.getBoundingClientRect();
+    return { shown: !el.hidden, x: r.left, y: r.top, w: r.width, h: r.height };
+  };
+  // every card frame mask (kinds x metals, the big trims, three duo splits, a route frame per hero) drawn at 6 x on one sheet: PNG data URL
+  BR.cardSheet = (cls) => {
+    const ED = window.__ED, CA = ED.CardArt, PU = ED.PixUI, Z = 5, M = ['iron', 'silver', 'violet', 'gold'], rows = [];
+    for (const k of ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'asc', 'purse']) rows.push([k, M.map(m => CA.frame(k, m, {})).concat(k === 'asc' || k === 'purse' ? [] : [CA.frame(k, 'gold', { big: true })])]);
+    rows.push(['route', M.map(m => CA.frame('route', m, { cls }))]);
+    rows.push(['duo', [['fire', 'ice'], ['holy', 'shadow'], ['lightning', 'poison'], ['ice', 'fire']].map(([a, b]) => CA.frame('duo', 'violet', { a, b }))]);
+    const cw = CA.N * Z + 12, cv = document.createElement('canvas'); cv.width = 90 + cw * 5; cv.height = rows.length * cw + 12;
+    const g = cv.getContext('2d'); g.imageSmoothingEnabled = false; g.fillStyle = '#15100d'; g.fillRect(0, 0, cv.width, cv.height);
+    g.font = '16px "Pixel Operator", monospace'; g.fillStyle = '#f6ecda';
+    rows.forEach(([label, vars], j) => {
+      g.fillText(label, 8, j * cw + 30);
+      vars.forEach((v, i) => { const name = /--fr-([\w-]+)/.exec(v)[1], rec = PU.frames[name]; if (rec) g.drawImage(rec.img.base, 90 + i * cw, j * cw + 6, CA.N * Z, CA.N * Z); });
+    });
+    return cv.toDataURL();
+  };
+
+  // picks: every boon id resolves to a PickFx kind; a pick burst (name: kind, kind-big or kind-ally) fired through FX.handle on a cleared effect layer; the pick cues rendered offline
+  BR.pickKinds = () => {
+    const ED = window.__ED, P = ED.PickFx, bad = [], by = {};
+    for (const id in ED.BOONS) { const k = P.kind(id); if (!P.KINDS.includes(k)) bad.push(id + ':' + k); by[k] = (by[k] || 0) + 1; }
+    return { bad, by, n: Object.keys(ED.BOONS).length };
+  };
+  BR.pickBurst = (name) => {
+    const ED = window.__ED, P = ED.PickFx, s = ED.Game.s, me = s.me, [kind, v] = name.split('-'), big = v === 'big';
+    let id = kind === 'relic' ? Object.keys(ED.RELICS)[0] : null;
+    if (!id) for (const k in ED.BOONS) if (P.kind(k) === kind && P.big(k) === big && (kind !== 'route' || ED.BOONS[k].cls === me.cls)) { id = k; break; }
+    if (!id) throw new Error('no card of kind ' + name);
+    ED.FX.reset();
+    ED.FX.handle({ t: kind === 'relic' ? 'relic' : 'boon', pid: v === 'ally' ? 'ally-fake' : me.pid, id, x: me.x, y: me.y }, s.fxCtx);
+    const R = ED.Render, d = R.dpr || 1, sp = R.toScreen(me.x, me.y);
+    return { id, x: sp.x / d, y: sp.y / d, k: R.scale / d };
+  };
+  // list: [{ label, cue, arg }], one cue every 1.5 s of an OfflineAudioContext; per cue: voices spawned, peak, rms, audible length (last sample above 1e-3)
+  BR.pickAudio = async (list) => {
+    const ED = window.__ED, A = ED.Audio, sr = 22050, step = 1.5, oc = new OfflineAudioContext(1, Math.ceil(sr * step * list.length), sr), rows = [];
+    A.attach(oc, { offline: true });
+    list.forEach((c, i) => {
+      A.clock = i * step + 0.05;
+      let err = null;
+      try { A.play(c.cue, 1, c.arg); } catch (e) { err = String((e && e.message) || e); }
+      rows.push({ label: c.label, voices: A.voices(), err });
+    });
+    A.ready = false; A.clock = null; // the game schedules nothing more into the offline graph
+    const d = (await oc.startRendering()).getChannelData(0);
+    rows.forEach((r, i) => {
+      const a = Math.floor((i * step + 0.05) * sr), b = Math.min(d.length, Math.floor((i + 1) * step * sr));
+      let pk = 0, last = a, ss = 0;
+      for (let j = a; j < b; j++) { const x = Math.abs(d[j]); if (x > pk) pk = x; if (x > 1e-3) last = j; ss += x * x; }
+      r.peak = r3(pk); r.rms = Math.round(1e4 * Math.sqrt(ss / Math.max(1, b - a))) / 1e4; r.len = r3((last - a) / sr);
+    });
+    return rows;
+  };
 
   BR.measure = async (n) => {
     for (const k in M) if (Array.isArray(M[k])) M[k] = [];
@@ -389,10 +575,7 @@ async function openPage() {
   const ctx = await S.browser.newContext({ viewport: { width: o.vw, height: o.vh }, deviceScaleFactor: 1, serviceWorkers: 'block', locale: 'en-US' });
   await ctx.addInitScript({ content: '(' + pageBoot.toString() + ')(' + JSON.stringify({ seed: o.seed, mortal: !!o.mortal, forcepost: !!o.forcepost, sync: !!o.sync }) + ')' });
   const local = S.server.base;
-  await ctx.route((u) => u.protocol.startsWith('http') && u.origin !== local, (route) => {
-    const h = new URL(route.request().url()).hostname;
-    if (/^fonts\.(googleapis|gstatic)\.com$/.test(h)) { if (o.noFonts) route.fulfill({ status: 200, contentType: h.includes('apis') ? 'text/css' : 'font/woff2', body: '' }); else route.continue(); } else route.abort('blockedbyclient');
-  });
+  await ctx.route((u) => u.protocol.startsWith('http') && u.origin !== local, (route) => route.abort('blockedbyclient'));
   const page = await ctx.newPage();
   const errors = [];
   const add = (kind, text, url) => { if (errors.length < 40) errors.push({ kind, text: String(text).replace(/\s+/g, ' ').slice(0, 400), url: url || '' }); };
@@ -401,7 +584,7 @@ async function openPage() {
   page.on('console', (m) => {
     if (m.type() !== 'error') return;
     const url = (m.location() && m.location().url) || '';
-    if (url && !url.startsWith(local) && !url.startsWith('data:') && !url.startsWith('blob:')) return; // external fetch (fonts, blocked hosts): not a game bug
+    if (url && !url.startsWith(local) && !url.startsWith('data:') && !url.startsWith('blob:')) return; // external fetch (blocked hosts): not a game bug
     add('console', m.text(), url);
   });
   await page.goto(local + '/index.html', { waitUntil: 'load' });
@@ -432,7 +615,7 @@ async function scenSmoke() {
   const o = S.opt, res = newResult('smoke'), secs = o.seconds || 20, q = qualitiesOr(['high'])[0];
   const { ctx, page, errors } = await openPage();
   try {
-    await call(page, 'profile', o.cls, o.embers);
+    await call(page, 'profile', o.cls, o.embers, o.weapon ? o.weapon.split(',')[0] : ''); // --weapon: the smoke run wields it
     await wait(900);
     const menu = await page.evaluate(() => ({ state: window.__ED.App.state, title: !document.getElementById('scr-title').hidden, menu: !document.getElementById('title-menu').hidden }));
     if (menu.state !== 'title' || !menu.title || !menu.menu) fail(res, 'menu not shown: ' + JSON.stringify(menu));
@@ -497,6 +680,148 @@ async function scenCrowd(name) {
   return res;
 }
 
+async function scenSwing() {
+  const o = S.opt, res = newResult('swing'), q = qualitiesOr(['high'])[0];
+  const { ctx, page, errors } = await openPage();
+  try {
+    await call(page, 'profile', o.cls, o.embers);
+    await call(page, 'settings', q);
+    await call(page, 'install');
+    if ((await call(page, 'start')) !== 'run') fail(res, 'run did not start');
+    await wait(400);
+    const strips = await call(page, 'swingStrip', o.cls, o.aim, o.zoom, o.weapon ? o.weapon.split(',') : []);
+    if (!strips.length) notes(res, o.cls + ' has no melee weapon');
+    for (const s of strips) {
+      const file = path.join(o.outdir, ['swing', tag(), o.cls, s.weapon.replace('@', '-'), 'aim' + o.aim].join('-') + '.png');
+      fs.writeFileSync(file, Buffer.from(s.url.split(',')[1], 'base64'));
+      res.shots.push(file);
+      notes(res, `${s.weapon}: sides ${s.side.join('/')}, strike ${s.times.map(v => v.toFixed(3)).join('/')} s`);
+    }
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
+const PICK_SHOTS = ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'route', 'duo', 'asc', 'relic', 'purse', 'fire-big', 'holy-ally'];
+const PICK_CUES = ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'route', 'asc', 'relic', 'purse'].map(k => ({ label: k, cue: 'pick', arg: k }))
+  .concat([{ label: 'duo fire+ice', cue: 'pick', arg: { k: 'duo', els: ['fire', 'ice'] } }, { label: 'duo (no pair)', cue: 'pick', arg: 'duo' }, { label: 'fire big', cue: 'pick', arg: { k: 'fire', big: true } },
+    { label: 'holy big', cue: 'pick', arg: { k: 'holy', big: true } }, { label: 'buy (hearth)', cue: 'buy' }]);
+async function scenPicks() {
+  const o = S.opt, res = newResult('picks'), q = qualitiesOr(['high'])[0];
+  const { ctx, page, errors } = await openPage();
+  try {
+    await call(page, 'profile', o.cls, o.embers);
+    await call(page, 'settings', q);
+    await call(page, 'install');
+    if ((await call(page, 'start')) !== 'run') fail(res, 'run did not start');
+    await wait(1200);
+    for (let i = 0; i < 6 && await call(page, 'offerOpen'); i++) { await call(page, 'take'); await wait(400); }
+    await wait(1400);
+    const kk = await call(page, 'pickKinds');
+    if (kk.bad.length) fail(res, 'boon ids without a pick kind: ' + kk.bad.slice(0, 8).join(', '));
+    notes(res, `${kk.n} boon ids: ` + Object.entries(kk.by).map(([k, n]) => k + ' ' + n).join(', '));
+    for (const name of PICK_SHOTS) {
+      const r = await call(page, 'pickBurst', name);
+      await wait(220); // the shot lands about 0.25 s after the burst
+      const w = Math.round(220 * r.k), h = Math.round(280 * r.k), x = Math.max(0, Math.min(o.vw - w, Math.round(r.x - w / 2))), y = Math.max(0, Math.min(o.vh - h, Math.round(r.y - 220 * r.k)));
+      const file = path.join(o.outdir, ['picks', tag(), o.cls, q, name].join('-') + '.png');
+      await page.screenshot({ path: file, clip: { x, y, width: Math.min(w, o.vw), height: Math.min(h, o.vh) } });
+      res.shots.push(file);
+      notes(res, `burst ${name}: ${r.id}`);
+      await wait(1000);
+    }
+    const rows = await call(page, 'pickAudio', PICK_CUES);
+    for (const r of rows) {
+      notes(res, `cue ${r.label}: ${r.voices} voices, peak ${r.peak}, rms ${r.rms}, ${r.len} s${r.err ? ', error ' + r.err : ''}`);
+      if (r.err) fail(res, 'cue ' + r.label + ' threw: ' + r.err);
+      else if (!(r.peak > 0.003)) fail(res, 'cue ' + r.label + ' rendered silent');
+      else if (r.len > 0.9) fail(res, 'cue ' + r.label + ' lasts ' + r.len + ' s (over 0.9 s)');
+    }
+    res.rows = rows;
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
+// cards: hands staged through the sim that show every card kind; boons = the hero's build for the hand (so the cards are eligible), pick = [card index, kind] for mid-pick frames
+const R = (ids, n) => Object.fromEntries(ids.map((id, i) => [id, Array.isArray(n) ? n[i] : n || 1]));
+const CARD_HANDS = (cls) => [
+  { name: 'gates', spec: { src: 'start' }, boons: {}, ids: ['kindle', 'frostbite', 'staticcharge', 'envenom'], distinctIcons: true, pick: [3, 'poison'] },
+  { name: 'gates2', spec: { src: 'start' }, boons: {}, ids: ['consecrate', 'doommark', 'generalist'], distinctIcons: true, pick: [0, 'holy'] },
+  { name: 'fire-ice', spec: { src: 'room' }, boons: R(['kindle', 'fuel', 'stoke', 'searing', 'frostbite', 'deepcold', 'brittle', 'coldsnap'], [1, 2, 2, 1, 1, 1, 1, 1]), ids: ['wildfire', 'shatter', 'conflag', 'thermalshock'], pick: [1, 'ice'] },
+  { name: 'storm', spec: { src: 'room' }, boons: R(['staticcharge', 'conductor', 'highvoltage', 'shortcircuit', 'envenom', 'potency', 'caustic', 'fester'], [1, 2, 1, 1, 1, 2, 1, 1]), ids: ['overload', 'sporeburst', 'thunderhead', 'galvanic'], pick: [0, 'lightning'] },
+  { name: 'light', spec: { src: 'room' }, boons: R(['consecrate', 'fervor', 'zealotry', 'sanctity', 'doommark', 'malignance', 'malice'], [1, 2, 2, 1, 1, 2, 1]), ids: ['beacon', 'deathknell', 'radiantaegis', 'wrathofheaven'], pick: [1, 'shadow'] },
+  { name: 'open', spec: { src: 'epic' }, boons: { generalist: 1, keen: 1 }, ids: ['asc_edge', 'edge', 'brutal', 'purse'], pick: [1, 'general'] },
+  { name: 'evo', spec: { src: 'room' }, boons: R(['kindle', 'fuel', 'stoke', 'searing', 'wildfire', 'conflag'], [1, 2, 3, 2, 2, 1]), ids: ['evo_fire', 'cindertrail', 'vigor'], pick: [0, 'fire-big'] },
+  { name: 'route', spec: { src: 'class', ctier: 1 }, boons: {}, ids: ['atk', 's1', 's2', 'el'].map(k => cls[0] + '_' + k), pick: [0, 'route'] },
+  { name: 'fork', spec: { src: 'class', ctier: 2 }, boons: { [cls[0] + '_atk']: 1 }, ids: [cls[0] + '_atk_h', cls[0] + '_atk_s'] },
+  { name: 'dense6', spec: { src: 'epic' }, boons: R(['kindle', 'fuel', 'stoke', 'frostbite', 'deepcold', 'brittle'], [1, 2, 2, 1, 2, 1]), ids: ['searing', 'permafrost', 'thermalshock', 'asc_quick', 'plating', 'purse'], pick: [2, 'duo'] },
+];
+async function scenCards() {
+  const o = S.opt, res = newResult('cards'), q = qualitiesOr(['high'])[0], cls = o.cls;
+  const { ctx, page, errors } = await openPage();
+  try {
+    await call(page, 'profile', cls, o.embers);
+    await call(page, 'settings', q);
+    await call(page, 'install');
+    if ((await call(page, 'start')) !== 'run') fail(res, 'run did not start');
+    await wait(1200);
+    const sheet = path.join(o.outdir, ['cards', tag(), cls, 'frames'].join('-') + '.png');
+    fs.writeFileSync(sheet, Buffer.from((await call(page, 'cardSheet', cls)).split(',')[1], 'base64'));
+    res.shots.push(sheet);
+    const seen = new Set();
+    for (const h of CARD_HANDS(cls)) {
+      const kinds = await call(page, 'cardHand', h.boons, h.ids, h.spec);
+      await wait(900);
+      const d = await call(page, 'cardDom');
+      if (!d.open || d.cards.length !== h.ids.length) { fail(res, `hand ${h.name}: overlay ${d.open ? 'open' : 'closed'} with ${d.cards.length} of ${h.ids.length} cards`); continue; }
+      d.cards.forEach((c, i) => { if (c.kind !== kinds[i].split('+')[0]) fail(res, `hand ${h.name}: card ${h.ids[i]} shows kind ${c.kind}, PickFx says ${kinds[i]}`); if (!c.frame) fail(res, `hand ${h.name}: card ${h.ids[i]} has no frame`); seen.add(kinds[i]); });
+      if (h.distinctIcons && new Set(d.cards.map(c => c.icon)).size !== d.cards.length) fail(res, `hand ${h.name}: path gate icons are not distinct (path colours)`);
+      notes(res, `hand ${h.name}: ${h.ids.map((id, i) => id + ' ' + kinds[i]).join(', ')}; card ${Math.round(d.cards[0].w)}x${Math.round(d.cards[0].h)} px`);
+      await shoot(page, res, h.name);
+      if (h.pick) {
+        const [i, label] = h.pick, ph = await call(page, 'cardPick', i, 110);
+        if (!ph.held) fail(res, `hand ${h.name}: the pick set no hide timer`);
+        if (!ph.fx) fail(res, `hand ${h.name}: the pick made no effect layer`);
+        await shoot(page, res, 'pick-' + label + '-110ms');
+        await call(page, 'cardSeek', 230);
+        await shoot(page, res, 'pick-' + label + '-230ms');
+        if (await call(page, 'cardRelease')) fail(res, `hand ${h.name}: the overlay stayed up after the pick animation`);
+        await wait(300);
+      }
+    }
+    for (const k of ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'route', 'duo', 'asc', 'purse', 'fire+big']) if (![...seen].some(s => s === k || (k === 'fire+big' && /\+big$/.test(s)))) fail(res, 'no hand showed a ' + k + ' card');
+    // fork reveal: rank 2 (small, silver) and rank 3 (big, gold)
+    await page.evaluate(() => window.__ED.UI.hideBoons());
+    for (const rank of [2, 3]) {
+      const f = await call(page, 'forkShow', cls[0] + '_atk_h', rank);
+      if (!f.shown) { fail(res, 'fork reveal rank ' + rank + ' not shown'); continue; }
+      await wait(150);
+      const file = path.join(o.outdir, ['cards', tag(), cls, 'fork-rank' + rank].join('-') + '.png');
+      const pad = 80, x = Math.max(0, Math.floor(f.x - pad)), y = Math.max(0, Math.floor(f.y - pad));
+      await page.screenshot({ path: file, clip: { x, y, width: Math.min(o.vw - x, Math.ceil(f.w + 2 * pad)), height: Math.min(o.vh - y, Math.ceil(f.h + 2 * pad)) } });
+      res.shots.push(file);
+    }
+    await page.evaluate(() => { document.getElementById('ov-fork').hidden = true; });
+    // Low quality: idle sprites hidden, no effect layer, the overlay gone within 0.3 s of a pick
+    await call(page, 'settings', 'low');
+    await call(page, 'cardHand', R(['kindle', 'fuel'], [1, 1]), ['stoke', 'searing', 'vigor'], { src: 'room' });
+    await wait(900);
+    const low = await page.evaluate(() => { const s = document.querySelector('#boon-cards .ca-spark'); return { low: document.getElementById('ov-boon').classList.contains('low'), spark: s ? getComputedStyle(s).display : 'none' }; });
+    if (!low.low || low.spark !== 'none') fail(res, 'Low quality: overlay low ' + low.low + ', idle spark display ' + low.spark);
+    await shoot(page, res, 'low');
+    await page.evaluate(() => window.__ED.UI.pickBoon(0));
+    await wait(40);
+    const fxN = await page.evaluate(() => document.querySelectorAll('#ov-boon .pick-fx').length);
+    await wait(260);
+    const up = await page.evaluate(() => !document.getElementById('ov-boon').hidden);
+    if (fxN) fail(res, 'Low quality made a pick effect layer');
+    if (up) fail(res, 'Low quality: the overlay was still up 0.3 s after a pick');
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
 async function scenShots() {
   const o = S.opt, res = newResult('shots'), q = qualitiesOr(['high'])[0];
   const { ctx, page, errors } = await openPage();
@@ -505,7 +830,7 @@ async function scenShots() {
   try {
     await ev((quality) => { const A = window.__ED.App; A.settings.frameCap = 'off'; A.settings.quality = quality; A.applySettings(); }, q);
     await tryShot('01-boot-name');
-    await call(page, 'profile', o.cls, o.embers >= 0 ? o.embers : 400);
+    await call(page, 'profile', o.cls, o.embers >= 0 ? o.embers : 400, o.weapon ? o.weapon.split(',')[0] : ''); // --weapon: owned and chosen (the Descend and Hearth shots show it)
     await tryShot('02-menu', () => wait(500));
     for (const [n, tab] of [['03-descend', 'descend'], ['04-hearth-upgrades', 'upgrades']]) await tryShot(n, () => ev((t) => window.__ED.App.enterHearth(t), tab));
     // 05: three ranks bought (Refund buttons) and Reset all armed by one click
@@ -515,6 +840,8 @@ async function scenShots() {
       E.App.afterMetaChange(); E.App.enterHearth('upgrades');
       const b = document.querySelector('.btn-reset'); if (b) b.click();
     }));
+    // 05b: the Armory sections of the Upgrades page scrolled into view (an owned variant, buyable and locked entries)
+    await tryShot('05b-hearth-armory', () => ev(() => { const E = window.__ED; E.App.enterHearth('upgrades'); const h = [...document.querySelectorAll('.tier-head')].find(x => /Armory/.test(x.textContent)); if (h) h.scrollIntoView({ block: 'start' }); }));
     for (const [n, tab] of [['06-hearth-chronicle', 'chronicle'], ['07-heroes', 'heroes']]) await tryShot(n, () => ev((t) => window.__ED.App.enterHearth(t), tab));
     await tryShot('08-settings', () => ev(() => { window.__ED.App.goHome(); window.__ED.UI.openSettings(); }));
     await tryShot('09-credits', () => ev(() => { window.__ED.UI.closeSettings(); document.getElementById('mm-credits').click(); }));
@@ -540,6 +867,120 @@ async function scenShots() {
   return res;
 }
 
+async function scenSheet() {
+  const o = S.opt, res = newResult('sheet'), q = qualitiesOr(['high'])[0];
+  const { ctx, page, errors } = await openPage();
+  const ev = (fn, arg) => page.evaluate(fn, arg);
+  try {
+    await call(page, 'profile', o.cls, o.embers);
+    await call(page, 'settings', q);
+    if ((await call(page, 'start')) !== 'run') fail(res, 'run did not start');
+    await wait(1100);
+    for (let i = 0; i < 6 && await call(page, 'offerOpen'); i++) { await call(page, 'take'); await wait(300); }
+    const st = await call(page, 'sheetStage', o.strat > 1 ? o.strat : 5);
+    notes(res, `staged ${st.cls}: paths ${st.els.join('+')}, ${st.boons} boons, ${st.relics} relics, stratum ${st.stratum}, ally ${st.ally}`);
+    await wait(300);
+    // sideways overflow: a sheet element wider than its column, or text spilling past its box
+    const audit = () => ev(() => {
+      const bad = [], cols = [...document.querySelectorAll('#ov-sheet .sh-col')].filter(c => c.offsetParent);
+      for (const c of cols) {
+        const cr = c.getBoundingClientRect(), inn = c.querySelector('.sh-in');
+        if (inn && inn.scrollWidth > inn.clientWidth + 1) bad.push(c.dataset.col + ': scrollWidth ' + inn.scrollWidth + ' > ' + inn.clientWidth);
+        for (const n of c.querySelectorAll('*')) { const r = n.getBoundingClientRect(); if (r.width && (r.right > cr.right + 1 || r.left < cr.left - 1)) { bad.push((c.dataset.col || '?') + ': ' + n.className + ' ' + Math.round(r.left) + '..' + Math.round(r.right) + ' outside ' + Math.round(cr.left) + '..' + Math.round(cr.right)); break; } }
+      }
+      const head = document.querySelector('#ov-sheet .sh-head'), hr = head.getBoundingClientRect();
+      for (const n of head.querySelectorAll('*')) { const r = n.getBoundingClientRect(); if (r.width && (r.right > hr.right + 1 || r.bottom > hr.bottom + 1)) { bad.push('header: ' + (n.id || n.className) + ' spills'); break; } }
+      return bad;
+    });
+    const shot = async (name, fn) => { await ev(fn); await wait(700); const bad = await audit(); for (const b of bad) fail(res, name + ' overflow: ' + b); await shoot(page, res, name); };
+    await shot('build', () => { const UI = window.__ED.UI; UI.toggleSheet(true); UI.sheetTab('build'); });
+    await shot('build-end', () => { for (const c of document.querySelectorAll('#shp-build .sh-in')) c.scrollTop = c.scrollHeight; });
+    await shot('combat', () => window.__ED.UI.sheetTab('combat'));
+    await shot('combat-end', () => { for (const c of document.querySelectorAll('#shp-combat .sh-in')) c.scrollTop = c.scrollHeight; });
+    await shot('map', () => window.__ED.UI.sheetTab('map'));
+    await shot('ally', () => { const r = document.querySelector('#ov-sheet .sh-party:not(.me)'); if (r) r.click(); window.__ED.UI.sheetTab('build'); });
+    // real key events: E / Q switch tabs, S moves the focus down, Tab closes
+    const navState = () => ev(() => { const S = window.__ED.UI.sheetState; return { tab: S.tab, focus: S.focusKey, open: !document.getElementById('ov-sheet').hidden }; });
+    const n0 = await navState();
+    await page.keyboard.press('KeyE'); await wait(250);
+    const n1 = await navState();
+    await page.keyboard.press('KeyQ'); await wait(250);
+    await page.keyboard.press('KeyS'); await wait(250);
+    const n2 = await navState();
+    await page.keyboard.press('Tab'); await wait(250);
+    const n3 = await navState();
+    notes(res, `keys: ${n0.tab} -E-> ${n1.tab} -Q-> ${n2.tab}; focus ${n0.focus} -S-> ${n2.focus}; Tab closes: ${!n3.open}`);
+    if (n1.tab !== 'combat' || n2.tab !== 'build') fail(res, 'E / Q did not switch the sheet tabs');
+    if (!n2.focus || n2.focus === n0.focus) fail(res, 'S did not move the sheet focus');
+    if (n3.open) fail(res, 'Tab did not close the sheet');
+    await ev(() => window.__ED.UI.toggleSheet(false));
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
+// Every menu screen without a run: name screen, menu, Descend, Hearth (a buy mid-burst, refunds, Armory, Chronicle), Heroes, a staged party lobby and its Hearth,
+// results (victory with an evolution, fallen), the news notice, settings tabs, a confirm dialog, pause, credits; checks keyboard focus on the menu and the Hearth tabs.
+async function scenScreens() {
+  const o = S.opt, res = newResult('screens');
+  const { ctx, page, errors } = await openPage();
+  const tryShot = async (name, fn, settle) => { try { if (fn) await fn(); await wait(settle == null ? 450 : settle); await shoot(page, res, name); } catch (e) { notes(res, 'shot ' + name + ' skipped: ' + String(e.message).split('\n')[0]); } };
+  const ev = (fn, arg) => page.evaluate(fn, arg);
+  const focused = () => ev(() => { const a = document.activeElement; return a ? (a.id || a.dataset.tab || a.dataset.stab || a.className) : ''; });
+  try {
+    await ev(() => { const A = window.__ED.App; A.settings.frameCap = 'off'; A.applySettings(); });
+    await tryShot('01-name');
+    await call(page, 'profile', o.cls, o.embers >= 0 ? o.embers : 400, o.weapon ? o.weapon.split(',')[0] : '');
+    await tryShot('02-menu', () => ev(() => { window.__ED.App.goHome(); document.getElementById('mm-descend').focus(); }), 600);
+    await page.keyboard.press('ArrowDown');
+    if ((await focused()) !== 'mm-hearth') fail(res, 'ArrowDown on the menu did not focus Hearth (focus: ' + (await focused()) + ')');
+    await tryShot('03-descend', () => ev(() => window.__ED.App.enterHearth('descend')));
+    // 04: one rank bought by a click, shot inside the 0.45 s burst
+    await tryShot('04-hearth-buy', () => ev(() => { window.__ED.App.enterHearth('upgrades'); const b = document.querySelector('#up-grid .buy:not(:disabled)'); if (!b) throw new Error('nothing affordable'); b.click(); }), 120);
+    const burst = await ev(() => !!document.querySelector('#up-grid .up-card.burst .up-ember'));
+    if (!burst) fail(res, 'the bought plaque has no .burst after the click');
+    await tryShot('05-hearth-upgrades', () => ev(() => { const E = window.__ED, p = E.App.profile; let n = 0; for (const u of E.UPGRADES) if (n < 2 && E.Save.buyUpgrade(p, u.id)) n++; E.App.afterMetaChange(); document.querySelector('#hearth-tabs .tab.on').focus(); }));
+    await page.keyboard.press('ArrowRight');
+    if ((await focused()) !== 'chronicle') fail(res, 'ArrowRight on the Hearth tabs did not focus Chronicle (focus: ' + (await focused()) + ')');
+    await tryShot('06-hearth-armory', () => ev(() => { const h = [...document.querySelectorAll('#up-grid .tier-head')].find(x => /Armory/.test(x.textContent)); if (h) h.scrollIntoView({ block: 'start' }); }));
+    await tryShot('07-hearth-chronicle', () => ev(() => window.__ED.App.enterHearth('chronicle')));
+    await tryShot('08-heroes', () => ev(() => window.__ED.App.enterHearth('heroes')));
+    // 09: a staged lobby (no network): this profile hosts, a second hero waits
+    await tryShot('09-lobby', () => ev(() => {
+      const E = window.__ED, A = E.App, UI = E.UI;
+      A.state = 'lobby'; UI.show('lobby');
+      A.lobbyState = { code: 'K7QX2', pact: 0, members: [
+        { slot: 0, pid: 'host', name: A.profile.name, cls: A.sel.cls, weapon: A.sel.weapon, isHost: true, ready: true },
+        { slot: 1, pid: 'p2', name: 'Brann', cls: 'ranger', weapon: E.CLASSES.ranger.weapons[0], ready: false },
+        { slot: 2, pid: 'p3', name: 'Ysolde', cls: 'cleric', weapon: E.CLASSES.cleric.weapons[0], ready: true }] };
+      UI.renderLobby(A.lobbyState, 'host', true); UI.lobbyStatus('Party open. Share the code or the invite link.');
+    }));
+    await tryShot('10-party-hearth', () => ev(() => window.__ED.UI.openPartyHearth()));
+    // 11, 12: results from Save.applyRun on synthetic summaries
+    const results = (win) => ev((w) => {
+      const E = window.__ED, A = E.App, UI = E.UI;
+      document.getElementById('ov-hearth').hidden = true; A.lobbyState = null;
+      const run = w ? { victory: true, stratum: 6, time: 1534, level: 22, roomsCleared: 40, roomsTotal: 52, roomsVisited: 47, kills: 1800, bossCount: 6, party: 1, pact: 0, cls: A.sel.cls, myEvo: { path: 'fire', weapon: 'Longsword' }, evolved: true, embers: { rooms: 80, elites: 30, bosses: 60, victory: 40 } }
+        : { victory: false, stratum: 2, time: 512, level: 7, roomsCleared: 9, roomsTotal: 26, roomsVisited: 14, kills: 300, bossCount: 1, party: 1, pact: 0, cls: A.sel.cls, embers: { rooms: 18, elites: 5, bosses: 10, victory: 0 } };
+      const r = E.Save.applyRun(A.profile, run);
+      A.state = 'results'; UI.renderResults(run, r); UI.show('results');
+    }, win);
+    await tryShot('11-results-victory', () => results(true));
+    await tryShot('12-results-fallen', () => results(false));
+    await tryShot('13-news', () => ev(() => { const E = window.__ED, A = E.App; A.profile.news = 1; A.profile.refunded = 120; A.goHome(); }));
+    await ev(() => document.getElementById('btn-news-close').click());
+    for (const [n, tab] of [['14-settings-sound', 'sound'], ['15-settings-controls', 'controls'], ['16-settings-profile', 'profile']]) await tryShot(n, () => ev((t) => window.__ED.UI.openSettings(t), tab));
+    await tryShot('17-modal', () => ev(() => document.getElementById('btn-reset').click()));
+    await ev(() => { document.getElementById('modal').hidden = true; window.__ED.UI.closeSettings(); });
+    await tryShot('18-credits', () => ev(() => document.getElementById('mm-credits').click()));
+    await ev(() => document.getElementById('btn-credits-close').click());
+    await tryShot('19-pause', () => ev(() => { document.getElementById('pause-note').textContent = 'The Deep waits for you.'; document.getElementById('ov-pause').hidden = false; document.getElementById('btn-resume').focus(); }));
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  if (res.shots.length < 15) fail(res, 'only ' + res.shots.length + ' screenshots were taken');
+  return res;
+}
+
 // ---------------- output ----------------
 const f1 = (v) => (typeof v === 'number' ? v.toFixed(1) : '-');
 const tri = (s) => (s ? [s.p50, s.p95, s.max].map(f1).join('/') : '-');
@@ -547,7 +988,7 @@ const pad = (s, n) => String(s).padEnd(n);
 function table(results) {
   const out = [];
   for (const r of results) {
-    out.push(`${r.name} [${r.browser}${r.name === 'shots' ? '' : ', ' + r.cls}] ${r.ok ? 'PASS' : 'FAIL'}  ${(r.wallMs / 1000).toFixed(1)} s`);
+    out.push(`${r.name} [${r.browser}${r.name === 'shots' || r.name === 'screens' ? '' : ', ' + r.cls}] ${r.ok ? 'PASS' : 'FAIL'}  ${(r.wallMs / 1000).toFixed(1)} s`);
     for (const n of r.notes) out.push('  ' + n);
     for (const e of r.errors) out.push(`  ${e.kind}${e.quality ? ' (' + e.quality + ')' : ''}: ${e.text}`);
     if (r.name.startsWith('crowd')) {
@@ -590,7 +1031,7 @@ async function main() {
       const t0 = Date.now();
       log('scenario ' + sc + ' ...');
       let r;
-      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
+      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'sheet' ? await scenSheet() : sc === 'screens' ? await scenScreens() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : sc === 'cards' ? await scenCards() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
       r.wallMs = Date.now() - t0;
       r.browserVersion = bv;
       if (S.server.missing.size) r.missing = [...S.server.missing];

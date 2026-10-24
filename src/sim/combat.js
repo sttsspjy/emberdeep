@@ -19,7 +19,8 @@
   // Class-route rules. DR_FLOOR: Brace x best Sanctuary never cut damage taken below this factor. A hero stun on a non-boss foe lasts ELITE_STUN x on elites, a second one while stunCd > 0 lasts half,
   // and each sets stunCd = duration + STUN_DR (repeating sources skip while stunCd > 0). Heavy weapon hits Stagger for STAGGER s (elites half) once per STAGGER_CD per foe.
   // Parry (Sworn Blade): stun PARRY_STUN on a foe in the last PARRY_WIN of a wind-up, once per PARRY_CD per hero and PARRY_FOE_CD per foe. SPREAD_CAP: a status move gives a foe at most this share of its own HP per pool.
-  Object.assign(ED.CONST, { DR_FLOOR: 0.5, ELITE_STUN: 0.5, STUN_DR: 2, STAGGER: 0.2, STAGGER_CD: 2, PARRY_STUN: 0.6, PARRY_CD: 2.5, PARRY_FOE_CD: 4, PARRY_WIN: 0.3, SPREAD_CAP: 0.25, WAVE_CONE: 25 * Math.PI / 180 });
+  // HP_K: foe-HP units per hero health point (hero health is on a 4x smaller scale than foe health): damage a hero takes or absorbs converts to foe-HP units by it (vampiric heal, Radiant Aegis strike).
+  Object.assign(ED.CONST, { HP_K: 4, DR_FLOOR: 0.5, ELITE_STUN: 0.5, STUN_DR: 2, STAGGER: 0.2, STAGGER_CD: 2, PARRY_STUN: 0.6, PARRY_CD: 2.5, PARRY_FOE_CD: 4, PARRY_WIN: 0.3, SPREAD_CAP: 0.25, WAVE_CONE: 25 * Math.PI / 180 });
   const EL_IDX = { fire: 1, ice: 2, lightning: 3, poison: 5, holy: 6, shadow: 7 }; // hit-event element index (4 = bleed)
   const NO_GUARD = { dot: 1, chain: 1, explode: 1 }; // hit kinds that ignore a foe's frontal guard
   const FULL_CONTACT = new Set(['lunge', 'charge', 'leap', 'bash', 'dive']); // attack states whose body contact deals full damage
@@ -102,12 +103,12 @@
     if (ED.hasAffix(e, 'warded')) { e.ward = e.maxHp * 0.45; e.wardMax = e.ward; }
   };
 
-  // Stratum affinity: weak x1.5, resist x0.5, else x1 (el = one of ED.ELEMENT_IDS; General and physical hits pass nothing).
+  // Stratum affinity: weak x1.5, resist ÷1.5 (fight length mirrors weak), else x1 (el = one of ED.ELEMENT_IDS; General and physical hits pass nothing).
   W.elemAff = function (el) {
     const b = ED.biomeFor(this.stratum);
-    return b.weak === el ? 1.5 : b.resist === el ? 0.5 : 1;
+    return b.weak === el ? 1.5 : b.resist === el ? 1 / 1.5 : 1;
   };
-  // Class-skill hits take half the affinity: x1.25 weak, x0.75 resisted. Their statuses use the full elemAff.
+  // Class-skill hits take half the affinity: x1.25 weak, x0.833 resisted. Their statuses use the full elemAff.
   W.affC = function (el) { return 1 + (this.elemAff(el) - 1) / 2; };
 
   // Slows a foe by amount (0..1) for dur seconds; the strongest slow and the longest duration win.
@@ -119,7 +120,7 @@
 
   // ---------------- damage to foes (order: hero mul, crit, vulnerability, affinity, exposed, guard, dmgTakenMul, ward) ----------------
   // src: { p, kind, crit, mul, el, clsEl, affDone, raw, noProc, noGuard, noShatter, comp, infAdd, infK, bleedMin, ambush, knock, kx, ky, x, y, part, wpn, dist, pass }. Writes back src.critOut / src.guarded / src.affMul.
-  // el tags a hit with an element (affinity x1.5 / x0.5 unless affDone); clsEl tags a class-skill hit (half affinity, +classElMul); infAdd { el: rate } adds a per-hit infusion rate that needs no gate; infK scales every infusion of the hit.
+  // el tags a hit with an element (affinity x1.5 / ÷1.5 unless affDone); clsEl tags a class-skill hit (half affinity, +classElMul); infAdd { el: rate } adds a per-hit infusion rate that needs no gate; infK scales every infusion of the hit.
   // part names the skill part ('charge.impact'); wpn marks a weapon hit (swing, shot, its blast, warhammer shock, plague cloud tick, wave); Stagger and the heavy hit-stop need kind 'weapon' (a direct swing or shot). The attacker's class hook table (ED.CLS[cls]) may add to the hero multiplier (hitMul), force or boost crits (hitCrit, critMul) and react (hitDone).
   W.hitEnemy = function (e, base, src) {
     if (!e || e.hp <= 0) return 0;
@@ -797,9 +798,9 @@
     if (def.deathCloud) this.addZone({ kind: 'poison', x: e.x, y: e.y, r: def.deathCloud.r, dur: def.deathCloud.dur, dps: def.deathCloud.dps * (1 + 0.2 * (s - 1)), team: 1 });
     if (p && src.kind !== 'minionBurst') {
       const st = p.stats;
-      if (st.chalice && p.chaliceHp < 30) { // Grail of Ages: +1 max health per 3 kills (growth does not heal)
+      if (st.chalice && p.chaliceHp < ED.RELICS.chalice.full.hp) { // Grail of Ages: +1 max health per RELICS.chalice.kills kills (growth does not heal)
         p.chaliceKills++;
-        if (p.chaliceKills % 3 === 0) { p.chaliceHp++; const hp = p.hp; this.recalc(p, false); p.hp = hp; if (p.chaliceHp % 5 === 0) this.sendBuild(p); }
+        if (p.chaliceKills % ED.RELICS.chalice.kills === 0) { p.chaliceHp++; const hp = p.hp; this.recalc(p, false); p.hp = hp; if (p.chaliceHp % 5 === 0) this.sendBuild(p); }
       }
     }
   };
@@ -850,7 +851,7 @@
     if (own) this.curChain = null;
   };
 
-  // Called every tick from updatePlayerBuild for a living, standing hero: spectral twin queue and dash effects.
+  // Called every tick from updatePlayerBuild for a living, standing hero: spectral twin queue, ring echoes and dash effects.
   // Dash riders deal Class Power (not weapon damage): foes passed through take power x dashDmg once per dash (Dawn Stride also blinds, Noxious Step and Umbral Step add Venom and Doom), Cold Snap rings the hero for power x dashFrost.
   W.updatePlayerCombat = function (p, dt) {
     const st = p.stats, q = p.twinQ;
@@ -860,6 +861,8 @@
         if (q[i].t <= 0) { const a = q[i].a; q.splice(i, 1); this.playerAttack(p, a, 0.4); } else i++;
       }
     }
+    const rq = p.ringQ; // Returning Light echoes of a ring weapon
+    if (rq && rq.length) for (let i = 0; i < rq.length;) { const o = rq[i]; o.t -= dt; if (o.t <= 0) { rq.splice(i, 1); this.heroRing(p, o.w, o.co, st.waveReturn); } else i++; }
     // dash effects (host sees remote dashes through their state reports)
     if (p.dashing) {
       if (this.room.breakables.length) { this.smashSeg(p, p.dashFx < 0 ? p.x : p.dashFx, p.dashFx < 0 ? p.y : p.dashFy, p.x, p.y, p.r); p.dashFx = p.x; p.dashFy = p.y; } // the path since the last tick
@@ -920,9 +923,9 @@
       const ab = Math.min(p.shield, dmg); p.shield -= ab; dmg -= ab;
       const hc = CLS[p.cls];
       if (hc && hc.absorb) hc.absorb.call(this, p, ab, src);
-      if (st.radiantAegis && e && e.hp > 0 && p.retT <= 0) { // Radiant Aegis: the shield strikes the attacker for 200% of what it absorbed (0.25 s apart)
+      if (st.radiantAegis && e && e.hp > 0 && p.retT <= 0) { // Radiant Aegis: the shield strikes the attacker for 2 x HP_K x what it absorbed (0.25 s apart)
         p.retT = 0.25;
-        this.hitEnemy(e, ab * 2, { p, kind: 'retribution', raw: true, noProc: true, crit: false, noGuard: true, el: 'holy' });
+        this.hitEnemy(e, ab * 2 * ED.CONST.HP_K, { p, kind: 'retribution', raw: true, noProc: true, crit: false, noGuard: true, el: 'holy' });
       }
     }
     p.hp -= dmg; p.invuln = src.hazard ? 0.3 : 0.6; p.hurtT = 0.3;
@@ -931,7 +934,7 @@
     else this.emit({ t: 'block', x: p.x, y: p.y, k: 'aegis' });
     if (e && e.hp > 0) {
       if (st.thorns) this.hitEnemy(e, st.thorns, { p, kind: 'thorns', noProc: true, crit: false });
-      if (ED.hasAffix(e, 'vampiric')) e.hp = Math.min(e.maxHp, e.hp + dmg * 3);
+      if (ED.hasAffix(e, 'vampiric')) e.hp = Math.min(e.maxHp, e.hp + dmg * 3 * ED.CONST.HP_K);
       if (e.def.chillHit) p.chilled = 1.5;
     }
     if (st.guardian && p.hp > 0 && p.hp < p.maxHp * 0.3 && p.guardCd <= 0) { p.guardT = 3; p.guardCd = 20; this.emit({ t: 'guard', pid: p.pid }); }
@@ -979,9 +982,12 @@
   // ---------------- hero attacks ----------------
   // twinMul > 0: a spectral-twin repeat (weapon part only, scaled by twinMul).
   // A Knight with Oath of Steel swings a Cleave every (3 + cleaveN)th attack and on the first swing after a Charge with Follow-Through (o.cleave = its damage bonus); the class hook attackOpts adds per-hit options to every weapon hit, attack runs after the attack.
-  W.playerAttack = function (p, a, twinMul) {
+  // k: the combo step of a combo weapon as the attacker's own control decided it (ED.Stats.comboNext; anything else is decided here); a repeat (twinMul) uses the step of the last attack.
+  W.playerAttack = function (p, a, twinMul, k) {
     if (!p || p.downed || p.dead) return;
-    const st = p.stats, w = st.weapon, evo = evoOf(p), ch = CLS[p.cls], C = ED.CONST;
+    const st = p.stats, wb = st.weapon, evo = evoOf(p), ch = CLS[p.cls], C = ED.CONST;
+    if (wb.combo && !(twinMul > 0)) { p.comboK = k === (k | 0) && k >= 0 && k < wb.combo.steps.length ? k : ED.Stats.comboNext(p, this.time); p.comboAt = this.time; }
+    const w = wb.combo ? ED.Stats.stepWeapon(st, p.comboK | 0) : wb;
     if (twinMul > 0) {
       const o = { mul: twinMul, twin: true };
       if (evo === 'shadow') o.infAdd = { shadow: st.shadowInfuse }; // Umbral Arms: twin hits mark double Doom
@@ -1016,12 +1022,14 @@
       else this.fireWeapon(p, a + rep * 0.06, w, crit, o);
     }
     if (w.wave) {
-      const every = Math.max(1, w.wave.every + st.waveEvery);
-      if (p.atkCount % every === 0) {
-        const wv = this.spawnProj({ team: 0, kind: 'wave', x: p.x, y: p.y, a, speed: 320, r: 16 * (1 + st.area * 0.5), dmg: w.dmg * w.wave.mul * (1 + st.waveMul), life: 0.55, pierce: 99, owner: p.pid, knock: 120, wpn: true });
-        if (ch && ch.waveShot) ch.waveShot.call(this, p, wv, a, st); // class hook: edit the wave shot (width, range, stun, homing)
+      const every = Math.max(1, w.wave.every + st.waveEvery), n = w.wave.n || 1;
+      if (p.atkCount % every === 0) for (let i = 0; i < n; i++) { // a fan of n waves, fan rad apart; the side waves carry fanSide
+        const wa = a + (i - (n - 1) / 2) * (w.wave.fan || 0), wv = this.spawnProj({ team: 0, kind: 'wave', x: p.x, y: p.y, a: wa, speed: 320, r: 16 * (1 + st.area * 0.5), dmg: w.dmg * w.wave.mul * (1 + st.waveMul), life: 0.55, pierce: 99, owner: p.pid, knock: 120, wpn: true });
+        if (i !== (n - 1) / 2) wv.fanSide = true;
+        if (ch && ch.waveShot) ch.waveShot.call(this, p, wv, wa, st); // class hook: edit the wave shot (width, range, stun, homing)
       }
     }
+    if (w.ring && p.atkCount % Math.max(1, w.ring.every + st.waveEvery) === 0) this.heroRing(p, w, co);
     if (st.gauntlet && p.atkCount % 6 === 0) {
       const tgt = this.nearestEnemy(p.x + Math.cos(a) * 80, p.y + Math.sin(a) * 80, 220);
       if (tgt) { this.emit({ t: 'bolt', x: Math.round(tgt.x), y: Math.round(tgt.y) }); this.explode(tgt.x, tgt.y, 40, w.dmg * 2.2, 0, p, 'bolt', false, { el: 'lightning' }); }
@@ -1083,34 +1091,61 @@
 
   // o: { mul (extra damage multiplier), ambush, spectral, twin, infAdd, bleedMin, cleave (Cleave damage bonus) }
   // A Cleave reaches and sweeps 40% further, knocks back twice as hard, parries a foe in the last moments of its wind-up (Sworn Blade) and cracks the ground with Oathbreaker's shock.
+  // w.ahead: the swing is a slam circle (radius ahead.r, a Cleave's 40% larger) centred `reach` px along the aim; w.pull: a hit drags the foe toward the hero instead of knocking it back (elites half, bosses never).
   W.meleeSwing = function (p, a, w, crit, rep, o) {
     o = o || {};
     const st = p.stats, cl = o.cleave > 0, wpn = !o.twin && !o.spectral;
     const reach = w.range * (1 + st.area * 0.5 + st.meleeReach) * (cl ? 1.4 : 1);
     const arc = Math.min(6.3, w.arc * (1 + st.area * 0.4) * (cl ? 1.4 : 1));
     const mul = (o.mul || 1) * (cl ? 1 + o.cleave : 1);
-    let anyCrit = false;
-    const q = this.foeScan(p.x, p.y, reach);
+    const ah = !!w.ahead, sr = ah ? w.ahead.r * (1 + st.area * 0.5) * (cl ? 1.4 : 1) : 0, cx = ah ? p.x + Math.cos(a) * reach : p.x, cy = ah ? p.y + Math.sin(a) * reach : p.y;
+    let anyCrit = false, pulled = null;
+    const q = this.foeScan(cx, cy, ah ? sr : reach);
     for (let k = 0; k < q.length || this.foeTail(q); k++) {
       const e = q[k];
       if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed) continue;
       const d = Math.hypot(e.x - p.x, e.y - p.y);
-      if (d - e.r > reach) continue;
+      if (ah ? Math.hypot(e.x - cx, e.y - cy) - e.r > sr : d - e.r > reach) continue;
       const ang = Math.atan2(e.y - p.y, e.x - p.x);
-      if (arc < 6.2 && Math.abs(U.angDiff(a, ang)) > arc / 2 + Math.atan2(e.r, Math.max(d, 1))) continue;
+      if (!ah && arc < 6.2 && Math.abs(U.angDiff(a, ang)) > arc / 2 + Math.atan2(e.r, Math.max(d, 1))) continue;
       if (cl && st.parry && this.parry(e, p) && st.riposte) this.grantCrits(p, st.riposte, 5, 'add');
-      const hs = { p, kind: 'weapon', wpn, part: cl ? 'cleave' : undefined, crit, mul: mul === 1 ? undefined : mul, ambush: o.ambush, infAdd: o.infAdd, bleedMin: o.bleedMin, knock: cl ? w.knock * 2 : w.knock, kx: Math.cos(ang), ky: Math.sin(ang) };
+      const hs = { p, kind: 'weapon', wpn, part: cl ? 'cleave' : undefined, crit, mul: mul === 1 ? undefined : mul, ambush: o.ambush, infAdd: o.infAdd, bleedMin: o.bleedMin, knock: w.pull ? 0 : cl ? w.knock * 2 : w.knock, kx: Math.cos(ang), ky: Math.sin(ang) };
       this.hitEnemy(e, w.dmg, hs);
       if (hs.critOut) anyCrit = true;
+      if (w.pull && e.hp > 0 && !e.boss) { // knockback speed v decays at 9 per second: it travels v / 9 px
+        const v = 9 * Math.min(w.pull, Math.max(0, d - e.r - p.r - 4)) * (e.elite ? 0.5 : 1);
+        if (v > 0) { e.kbx -= Math.cos(ang) * v; e.kby -= Math.sin(ang) * v; if (wpn && (pulled || (pulled = [])).length < 6) pulled.push([Math.round(e.x), Math.round(e.y)]); }
+      }
     }
     this.foeEnd();
-    this.smashArc(p, a, reach, arc);
-    if (w.shock && rep === 0) this.explode(p.x + Math.cos(a) * reach * 0.55, p.y + Math.sin(a) * reach * 0.55, w.shock.r * (1 + st.area * 0.5), w.dmg * w.shock.mul * mul, 0, p, 'shock', true, { wpn });
+    if (ah) this.smashCircle(p, cx, cy, sr); else this.smashArc(p, a, reach, arc);
+    if (w.shock && rep === 0) { const sd = ah ? reach : reach * 0.55; this.explode(p.x + Math.cos(a) * sd, p.y + Math.sin(a) * sd, w.shock.r * (1 + st.area * 0.5), w.dmg * w.shock.mul * mul, 0, p, 'shock', true, { wpn }); }
     if (cl && st.cShock) this.explode(p.x + Math.cos(a) * reach * 0.9, p.y + Math.sin(a) * reach * 0.9, 72 * (1 + st.area * 0.5), w.dmg * st.cShock, 0, p, 'shock', true, { wpn: true, stun: st.cStun });
     const ev = { t: 'swing', pid: p.pid, a: Math.round(a * 100) / 100, r: Math.round(reach), arc: Math.round(arc * 100) / 100 };
     if (cl) ev.k = 'cleave';
+    if (ah) ev.sr = Math.round(sr); // a slam: a circle of radius sr, r px along a
+    if (w.step !== undefined) ev.c = w.step; // the combo step (the viewer's pose)
     this.emit(ev);
+    if (pulled) this.emit({ t: 'pull', pid: p.pid, pts: pulled });
     if (anyCrit && evoOf(p) === 'general' && !o.spectral && !o.twin) this.meleeSwing(p, a, w, undefined, 1, { mul: 0.6, spectral: true });
+  };
+
+  // A ring of light around the hero (weapon.ring): every foe within ring.r takes ring.mul x the attack's damage as a class-element weapon hit; co: the class attack options (infAdd).
+  // Dawnbringer's wave rules: waveMul, waveStun and waveBig (radius x1.5) apply; Litany's attack rings three times as hard; Returning Light rings again at waveReturn 0.35 s later (echo: that factor, no Litany, no further echo).
+  W.heroRing = function (p, w, co, echo) {
+    const st = p.stats, lit = !echo && st.litany && p.atkCount % st.litany === 0 ? 3 : 1, r = w.ring.r * (1 + st.area * 0.5) * (st.waveBig ? 1.5 : 1), dmg = w.dmg * w.ring.mul * (1 + st.waveMul) * (echo || lit), q = this.foeScan(p.x, p.y, r);
+    for (let k = 0; k < q.length || this.foeTail(q); k++) {
+      const e = q[k];
+      if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed) continue;
+      const d = Math.hypot(e.x - p.x, e.y - p.y);
+      if (d - e.r > r) continue;
+      this.hitEnemy(e, dmg, { p, kind: 'weapon', wpn: true, part: 'ring', clsEl: st.element || undefined, infAdd: co && co.infAdd, knock: 120, kx: (e.x - p.x) / (d || 1), ky: (e.y - p.y) / (d || 1), noGuard: true, x: p.x, y: p.y });
+      if (st.waveStun && e.hp > 0) this.stunFoe(e, st.waveStun, true);
+    }
+    this.foeEnd();
+    this.smashCircle(p, p.x, p.y, r);
+    this.emit({ t: 'hring', pid: p.pid, x: Math.round(p.x), y: Math.round(p.y), r: Math.round(r), k: echo ? 1 : lit > 1 ? 3 : 0 });
+    if (!echo && st.waveReturn > 0) (p.ringQ || (p.ringQ = [])).push({ t: 0.35, w, co });
   };
 
   W.fireWeapon = function (p, a, w, crit, o) {
@@ -1123,14 +1158,81 @@
     const spec = evo === 'general' && !o.spectral && !o.twin, wpn = !o.twin && !o.spectral;
     for (let i = 0; i < n; i++) {
       const ang = a + (i - (n - 1) / 2) * sp + (w.jitter ? this.rng.range(-w.jitter, w.jitter) : 0);
-      this.spawnProj({
+      if (w.beam) { this.fireBeam(p, ang, w, crit, o, ex, spec && i === 0, wpn, !!o.acid && i === 0); continue; }
+      if (w.lob) { this.lobShot(p, ang, w, crit, o, ex, wpn, !!o.acid && i === 0); continue; }
+      this.spawnProj(Object.assign({
         team: 0, kind: w.proj, x: p.x + Math.cos(ang) * 10, y: p.y - 4 + Math.sin(ang) * 10, a: ang, speed: w.speed, r: w.r,
         dmg: w.dmg, life: w.life, pierce: w.pierce + st.pierce + (o.pierce || 0), owner: p.pid, crit, knock: w.knock || 40, mul: o.mul, ambush: o.ambush, spec, wpn,
         explode: ex, infAdd: o.infAdd, bleedMin: o.bleedMin, acid: !!o.acid && i === 0, blastPierce: o.blastPierce,
         cloud: w.cloud ? { r: w.cloud.r * area, dps: w.cloud.dps, dur: w.cloud.dur } : null,
         homing: (w.homing || 0) + (st.homing || 0), shieldAlly: w.shieldAlly || 0, burn: w.burn || 0,
-      });
+      }, this.shotShape(p, w)));
     }
+  };
+
+  // Flight-shape fields of a weapon shot (merged over the spawnProj options): ret (boomerang: out to w.speed x w.life px, back to the owner, every foe once per leg; life caps both legs), trail and pool (zones a shot leaves, dps a share of the shot's damage, radius x the area bonus); null for a plain shot.
+  W.shotShape = function (p, w) {
+    if (!w.ret && !w.trail && !w.pool) return null;
+    const area = 1 + p.stats.area * 0.5, o = {};
+    if (w.ret) { o.ret = 1; o.out = w.speed * w.life; o.life = w.life * 2 + 0.5; o.pierce = 999; }
+    if (w.trail) o.trail = { n: w.trail.n, every: w.trail.every, r: w.trail.r * area, dps: w.dmg * w.trail.mul, dur: w.trail.dur, next: w.trail.every, left: w.trail.n };
+    if (w.pool) o.pool = { r: w.pool.r * area, dps: w.dmg * w.pool.mul, dur: w.pool.dur, zk: w.pool.zk, ally: w.pool.ally || 0 };
+    return o;
+  };
+
+  // A beam shot (w.beam): an instant line of w.speed x w.life px along ang from the hero, cut at the first wall, w.r px half-width (each pierce of Overheat's o.pierce widens it 50%). Every foe on it takes a weapon hit, nearest first, until a guard stops the beam there.
+  // A hit's source carries dist (the foe's distance along the beam) and pass (foes struck before it). The beam's blast (ex), acid and a crit's spectral strike (60% on the same foe) land at the last foe struck, else at the beam's end.
+  W.fireBeam = function (p, ang, w, crit, o, ex, spec, wpn, acid) {
+    const st = p.stats, ca = Math.cos(ang), sa = Math.sin(ang), x0 = p.x, y0 = p.y - 4;
+    const end = Sim.castMove(this.room, p.x, p.y, ang, w.speed * w.life, 2, this.locked), x1 = end.x, y1 = end.y - 4, len = Math.hypot(x1 - x0, y1 - y0);
+    const hw = w.r * (1 + 0.5 * (o.pierce || 0)), on = [];
+    const q = this.foeScan((x0 + x1) / 2, (y0 + y1) / 2, len / 2 + hw);
+    for (let k = 0; k < q.length; k++) {
+      const e = q[k];
+      if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed) continue;
+      const t = (e.x - x0) * ca + (e.y - y0) * sa;
+      if (t > -e.r && t < len + e.r && U.segDist2(e.x, e.y, x0, y0, x1, y1) < (e.r + hw) ** 2) on.push({ e, t });
+    }
+    this.foeEnd();
+    on.sort((u, v) => u.t - v.t);
+    let bx = x1, by = y1, cut = len;
+    const owner = p;
+    for (let i = 0; i < on.length; i++) {
+      const e = on[i].e;
+      if (e.hp <= 0) continue;
+      const hs = { p: owner, kind: 'weapon', crit, mul: o.mul, ambush: o.ambush, knock: w.knock || 40, kx: ca, ky: sa, burn: w.burn || 0, infAdd: o.infAdd, bleedMin: o.bleedMin, x: x0, y: y0, wpn, dist: Math.max(0, on[i].t), pass: i };
+      this.hitEnemy(e, w.dmg, hs);
+      if (spec && hs.critOut && e.hp > 0) this.hitEnemy(e, w.dmg, { p: owner, kind: 'evo', mul: 0.6 * (o.mul || 1), knock: 0, x: x0, y: y0 });
+      bx = e.x; by = e.y;
+      if (hs.guarded) { cut = Math.max(0, on[i].t); break; }
+    }
+    this.smashSeg(p, x0, y0, x0 + ca * cut, y0 + sa * cut, hw);
+    if (ex || acid) {
+      const pr = { owner: p.pid, x: bx, y: by, kind: w.proj, dmg: w.dmg, mul: o.mul || 0, explode: ex, wpn, infAdd: o.infAdd || null, acid };
+      if (ex) this.projBurst(pr);
+      this.projAcid(pr);
+    }
+    this.emit({ t: 'beam', pid: p.pid, x0: Math.round(x0), y0: Math.round(y0), x1: Math.round(x0 + ca * cut), y1: Math.round(y0 + sa * cut), w: Math.round(hw) });
+  };
+
+  // A lobbed shot (w.lob): a shell arcs over foes and walls to the hero's aim point (p.atkD: the attack's cursor distance, else the cursor point aimX / aimY, else the nearest foe on the aim line, else full range) along ang, clamped to LOB_MIN..w.speed x w.life and cut at the first wall,
+  // landing w.lob.t s later as its blast (ex): every foe in it takes a weapon hit (it may crit, Staggers on Heavy; dist = the flight distance). The landing spot shows as a friendly 'tele' zone with the lob arc (z.lob = the launch point).
+  ED.CONST.LOB_MIN = 30;
+  W.lobShot = function (p, ang, w, crit, o, ex, wpn, acid) {
+    const max = w.speed * w.life, fin = (v) => typeof v === 'number' && isFinite(v);
+    let d = fin(p.atkD) ? p.atkD : fin(p.aimX) && fin(p.aimY) ? Math.hypot(p.aimX - p.x, p.aimY - p.y) : -1;
+    if (d < 0) { // no cursor distance: the nearest foe whose centre lies within half the blast radius of the aim line, else full range
+      const cx = Math.cos(ang), cy = Math.sin(ang), half = (ex ? ex.r : 40) * 0.5, es = this.foeScan(p.x, p.y, max);
+      d = max;
+      for (const e of es) { if (e.hp <= 0) continue; const dx = e.x - p.x, dy = e.y - p.y, t = dx * cx + dy * cy; if (t > 0 && t < d && Math.abs(dx * cy - dy * cx) <= half + e.r) d = t; }
+      this.foeEnd();
+    }
+    d = U.clamp(d, ED.CONST.LOB_MIN, max);
+    const g = Sim.groundPoint(this.room, this.locked, p.x, p.y, p.x + Math.cos(ang) * d, p.y + Math.sin(ang) * d, max, false);
+    const r = ex ? ex.r : 40, flown = Math.hypot(g.x - p.x, g.y - p.y);
+    const shot = { owner: p.pid, kind: w.proj, dmg: w.dmg, mul: o.mul || 0, explode: ex || { r, mul: 1 }, wpn, infAdd: o.infAdd || null, acid, crit, knock: w.knock || 40, lob: true, dist: flown };
+    this.addZone({ kind: 'tele', x: g.x, y: g.y, r, dur: w.lob.t, team: 0, owner: p.pid, custom: true, lob: [Math.round(p.x), Math.round(p.y - 10)],
+      onEnd: (world, z) => { if (z.room !== world.room) return; shot.x = z.x; shot.y = z.y; world.projBurst(shot); world.projAcid(shot); }, room: this.room });
   };
 
   W.playerDash = function (p, dx, dy) {
@@ -1145,6 +1247,7 @@
   // o.infAdd / o.bleedMin: per-hit infusion rates and Bleed share; o.acid: bursts into Venomous acid on its first hit or at the end of its flight.
   // o.wpn: a weapon shot (its hits are weapon hits); o.part: the skill part its hits belong to; o.ghost: moved and removed by its owner's code (thrown shield: pr.dead removes it); o.infK: infusion scale of its hits;
   // o.stun: seconds of repeating stun on a hit (waves); pr.dist = distance flown (every hero shot) and pr.pass = foes passed; o.homeCone (radians, with o.homing): the shot steers only toward foes within homeCone of o.homeA0 and never turns past it; o.noSplit: reserved for class routes.
+  // o.ret / o.out / o.trail / o.pool: the flight shape of W.shotShape (pr.ret 1 = out leg, 2 = flying back).
   W.spawnProj = function (o) {
     const pr = {
       id: U.uid(), team: o.team, kind: o.kind, x: o.x, y: o.y, vx: Math.cos(o.a) * o.speed, vy: Math.sin(o.a) * o.speed,
@@ -1153,6 +1256,7 @@
       shieldAlly: o.shieldAlly || 0, burn: o.burn || 0, hit: null, healed: null, accel: o.accel || 0, turn: o.turn || 0, boom: o.boom || null,
       hk: o.hk || null, mul: o.mul || 0, ambush: !!o.ambush, spec: !!o.spec, infAdd: o.infAdd || null, bleedMin: o.bleedMin || 0, acid: !!o.acid,
       wpn: !!o.wpn, blastPierce: !!o.blastPierce, part: o.part || null, ghost: !!o.ghost, dead: false, infK: o.infK || 0, stun: o.stun || 0, dist: 0, pass: 0, homeA0: o.homeA0, homeCone: o.homeCone || 0, noSplit: !!o.noSplit,
+      ret: o.ret || 0, out: o.out || 0, trail: o.trail || null, pool: o.pool || null,
     };
     this.projs.push(pr);
     return pr;
@@ -1177,8 +1281,15 @@
       if (pr.dead) continue;
       if (pr.ghost) { keep.push(pr); continue; }
       pr.life -= dt;
-      if (pr.life <= 0) { if (pr.team === 0) { if (pr.explode) this.projBurst(pr); this.projEnd(pr, 'life'); } this.projAcid(pr); continue; }
-      if (pr.homing) {
+      if (pr.life <= 0) { if (pr.team === 0) { if (pr.explode) this.projBurst(pr); this.projEnd(pr, 'life'); this.projDrop(pr, pr.x, pr.y); } this.projAcid(pr); continue; }
+      if (pr.ret === 1 && pr.dist >= pr.out) this.projTurn(pr);
+      if (pr.ret === 2) { // flying back: straight at the owner at its speed, gone when caught (within RET_CATCH px) or when the owner is down or gone
+        const o = this.players.get(pr.owner);
+        if (!o || o.downed || o.dead) continue;
+        const dx = o.x - pr.x, dy = o.y - 4 - pr.y, d = Math.hypot(dx, dy), sp = Math.hypot(pr.vx, pr.vy) || 1;
+        if (d < ED.CONST.RET_CATCH + sp * dt) continue;
+        pr.vx = dx / d * sp; pr.vy = dy / d * sp;
+      } else if (pr.homing) {
         let tgt = null;
         if (pr.team === 0) tgt = pr.homeCone ? this.nearestEnemy(pr.x, pr.y, 240, pr.hit, pr.homeA0, pr.homeCone) : this.nearestEnemy(pr.x, pr.y, 240, pr.hit);
         else tgt = this.nearestPlayer(pr.x, pr.y);
@@ -1196,9 +1307,10 @@
       if (pr.team === 0) pr.dist += Math.hypot(pr.vx, pr.vy) * dt;
       const t = D.tileAt(room, pr.x, pr.y);
       if (D.blocksShots(t, locked)) {
+        if (pr.ret === 1) { pr.x -= pr.vx * dt; pr.y -= pr.vy * dt; this.projTurn(pr); keep.push(pr); continue; } // a wall turns a boomerang back
         if (pr.team === 0 && pr.explode) this.projBurst(pr);
         else if (pr.team === 0 && pr.cloud) this.spawnCloud(pr.owner, pr.x - pr.vx * dt, pr.y - pr.vy * dt, pr.cloud);
-        if (pr.team === 0) this.projEnd(pr, 'wall');
+        if (pr.team === 0) { this.projDrop(pr, pr.x - pr.vx * dt, pr.y - pr.vy * dt); this.projEnd(pr, 'wall'); }
         this.projAcid(pr);
         this.emit({ t: 'spark', x: Math.round(pr.x), y: Math.round(pr.y), k: ED.PROJ_IDX[pr.kind] || 0 });
         continue;
@@ -1224,12 +1336,15 @@
           if (pr.stun && e.hp > 0) this.stunFoe(e, pr.stun, true);
           this.projAcid(pr);
           if (pr.spec && hs.critOut) this.spectralShot(pr, e);
-          if (pr.explode) { this.projBurst(pr); if (!(pr.blastPierce && pr.pierce-- > 0)) { dead = true; break; } pr.pass++; continue; } // blastPierce (a class option): the shot bursts on each foe it pierces
+          if (pr.explode) { this.projBurst(pr); if (!pr.ret && !(pr.blastPierce && pr.pierce-- > 0)) { dead = true; break; } pr.pass++; continue; } // blastPierce (a class option): the shot bursts on each foe it pierces; a boomerang bursts on each foe it strikes
           if (pr.cloud) { this.spawnCloud(pr.owner, pr.x, pr.y, pr.cloud); dead = true; break; }
+          if (pr.ret) { if (hs.guarded && pr.ret === 1) { this.projTurn(pr); break; } pr.pass++; continue; } // a guard turns a boomerang back
           if (hs.guarded || pr.pierce-- <= 0) { dead = true; break; }
           pr.pass++;
         }
         this.foeEnd();
+        if (dead) this.projDrop(pr, pr.x, pr.y);
+        else if (pr.trail && pr.trail.left > 1 && pr.dist >= pr.trail.next) { const tr = pr.trail; tr.left--; tr.next += tr.every; this.spawnCloud(pr.owner, pr.x, pr.y, tr); } // a trail cloud every `every` px flown, the last one kept for the end of the flight
         if (!dead && pr.shieldAlly && owner) { // Sacred Lantern: an orb shields an ally it touches once (up to CLASS_SHIELD_CAP of max HP, once per LANTERN_CD per ally)
           for (const q of this.players.values()) {
             if (q === owner || q.downed || q.dead || q.lanternT > 0) continue;
@@ -1262,6 +1377,16 @@
     if (h && h.projEnd) h.projEnd.call(this, pr, owner, why);
   };
 
+  // A boomerang starts its return leg: every foe may be struck once more.
+  ED.CONST.RET_CATCH = 14;
+  W.projTurn = function (pr) { pr.ret = 2; pr.hit = null; };
+
+  // A hero shot ended at (x, y): its trail lays the clouds it has left (one), its pool forms there.
+  W.projDrop = function (pr, x, y) {
+    if (pr.trail && pr.trail.left > 0) { pr.trail.left = 0; this.spawnCloud(pr.owner, x, y, pr.trail); }
+    if (pr.pool) { const c = pr.pool; pr.pool = null; this.spawnCloud(pr.owner, x, y, c); }
+  };
+
   // A projectile carrying acid (Venomous Arms) bursts once where it ends.
   W.projAcid = function (pr) {
     if (!pr.acid) return;
@@ -1273,7 +1398,9 @@
   W.projBurst = function (pr) {
     const owner = this.players.get(pr.owner);
     if (!owner) return;
-    this.explode(pr.x, pr.y, pr.explode.r, pr.dmg * (pr.mul || 1) * pr.explode.mul, 0, owner, pr.kind === 'fireball' ? 'bigfire' : 'fire', false, { wpn: pr.wpn, infAdd: pr.wpn ? pr.infAdd : undefined });
+    this.explode(pr.x, pr.y, pr.explode.r, pr.dmg * (pr.mul || 1) * pr.explode.mul, 0, owner, pr.kind === 'fireball' ? 'bigfire' : 'fire', false, pr.lob
+      ? { wpn: pr.wpn, infAdd: pr.infAdd || undefined, kind: 'weapon', crit: pr.crit, knock: pr.knock, dist: pr.dist } // a lobbed shell's landing is the shot's own hit
+      : { wpn: pr.wpn, infAdd: pr.wpn ? pr.infAdd : undefined });
     if (pr.explode.patch) this.addZone({ kind: 'pfire', x: pr.x, y: pr.y, r: pr.explode.r * 0.6, dur: 2, dps: pr.dmg * 0.4, owner: pr.owner, team: 0 }); // one burning patch per shot
     const bh = CLS[owner.cls];
     if (bh && bh.projBurst) bh.projBurst.call(this, pr, owner); // class hook: a hero shot blasted at (pr.x, pr.y)
@@ -1287,16 +1414,28 @@
   };
 
   // A weapon cloud: a new cloud within r of the hero's own live cloud joins it as a part { dps, until } (the zone ticks the sum of its live parts and lives until the last one ends), so a hero keeps a few clouds, not one per shot.
+  // c.zk: the zone kind (default 'plague'; a Votive pool is 'holypool'); c.ally: shield fraction an ally inside gets (allyPool).
   W.spawnCloud = function (owner, x, y, c) {
+    const zk = c.zk || 'plague';
     for (const z of this.zones) {
-      if (z.kind === 'plague' && z.parts && z.owner === owner && U.dist2(z.x, z.y, x, y) < z.r * z.r) {
+      if (z.kind === zk && z.parts && z.owner === owner && U.dist2(z.x, z.y, x, y) < z.r * z.r) {
         z.parts.push({ dps: c.dps, until: z.t + c.dur });
         z.dur = Math.max(z.dur, z.t + c.dur);
         return z;
       }
     }
-    return this.addZone({ kind: 'plague', x, y, r: c.r, dur: c.dur, dps: c.dps, owner, team: 0, wpn: true, parts: [{ dps: c.dps, until: c.dur }] });
+    return this.addZone({ kind: zk, x, y, r: c.r, dur: c.dur, dps: c.dps, owner, team: 0, wpn: true, parts: [{ dps: c.dps, until: c.dur }], ally: c.ally || 0, update: c.ally ? allyPool : undefined });
   };
+  // A pool that shields allies (Votive Lamp): every ally inside but its owner gets z.ally of max HP as the lantern's class shield (once per LANTERN_CD per ally, up to CLASS_SHIELD_CAP), the Sacred Lantern's orb rule.
+  function allyPool(w, z) {
+    const owner = w.players.get(z.owner);
+    if (!owner) return;
+    for (const q of w.players.values()) {
+      if (q === owner || q.downed || q.dead || q.lanternT > 0 || U.dist2(z.x, z.y, q.x, q.y) > (z.r + q.r) ** 2) continue;
+      w.addShield(q, q.maxHp * z.ally, q.maxHp * ED.CONST.CLASS_SHIELD_CAP, 'lantern');
+      q.lanternT = ED.CONST.LANTERN_CD;
+    }
+  }
 
   W.updateZones = function (dt) {
     const keep = [];

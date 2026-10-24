@@ -90,13 +90,13 @@
     } },
   };
   for (const id in PS) Object.assign(ED.PATHS[id], { infuse: id === 'general' ? 'bleed' : ED.ELEMENTS[id].inf, status: { fire: 'burn', ice: 'chill', lightning: 'charge', poison: 'venom', holy: 'radiance', shadow: 'doom', general: 'bleed' }[id], sheet: PS[id] });
-  // Elemental affinity of the hero's stratum: x1.5 weak, x0.5 resisted, else x1 (General and physical hits ignore it). Class-skill hits take half of it (ED.affC).
-  ED.elemMul = (stratum, el) => { const b = ED.biomeFor(stratum); return !el || el === 'general' ? 1 : b.weak === el ? 1.5 : b.resist === el ? 0.5 : 1; };
+  // Elemental affinity of the hero's stratum: x1.5 weak, ÷1.5 resisted (x0.667), else x1 (General and physical hits ignore it). Class-skill hits take half of it (ED.affC).
+  ED.elemMul = (stratum, el) => { const b = ED.biomeFor(stratum); return !el || el === 'general' ? 1 : b.weak === el ? 1.5 : b.resist === el ? 1 / 1.5 : 1; };
   ED.affC = (stratum, el) => 1 + (ED.elemMul(stratum, el) - 1) / 2;
 
   const B = ED.BOONS = {
     // ---- open General: offered to every hero ----
-    vigor: { name: 'Vigor', rar: 'c', icon: 'heart', open: true, desc: '+{hp} max health and heal 8.', mods: { hp: 8 }, heal: 8, max: 3 },
+    vigor: { name: 'Vigor', rar: 'c', icon: 'heart', open: true, desc: '+{hp} max health and heal 2.', mods: { hp: 2 }, heal: 2, max: 3 },
     purse: { name: 'Purse', rar: 'c', icon: 'coin', open: true, purse: true, desc: '+{gold} gold for the party.', mods: {}, max: 1 },
     plating: { name: 'Plating', rar: 'c', icon: 'shield', open: true, desc: '+{armor} armor.', mods: { armor: 3 }, max: 2 },
     fleet: { name: 'Fleet Foot', rar: 'c', icon: 'boot', open: true, desc: '+{spd} move speed.', mods: { spd: 0.07 }, max: 2 },
@@ -172,7 +172,7 @@
     sanctity: { name: 'Sanctity', rar: 'r', icon: 'shieldgold', path: 'holy', desc: 'Smites shield {smiteShield} more; your Holy shield holds up to {holyCap} more.', mods: { smiteShield: 0.0025, holyCap: 0.03 }, max: 2 },
     beacon: { name: 'Beacon', rar: 'r', icon: 'lantern', path: 'holy', desc: 'Smites also strike foes within 70 for {beacon} of their damage.', mods: { beacon: 0.3 }, max: 2 },
     dawnstride: { name: 'Dawn Stride', rar: 'r', icon: 'wingblade', path: 'holy', desc: 'Foes you dash through take {dashDmg} Power ({dashDmg*P} damage) and are blinded for 1s (elites 0.5s; bosses are never blinded). A foe is blinded this way at most once per 4s.', mods: { dashDmg: 0.8, dashBlind: 1 }, max: 1 },
-    radiantaegis: { name: 'Radiant Aegis', rar: 'e', icon: 'shieldgold', path: 'holy', key: true, desc: 'While you are shielded, your hits store twice the Radiance. Damage your shield absorbs strikes the attacker for 200% as Holy damage.', mods: { radiantAegis: 1 }, max: 1 },
+    radiantaegis: { name: 'Radiant Aegis', rar: 'e', icon: 'shieldgold', path: 'holy', key: true, desc: 'While you are shielded, your hits store twice the Radiance. Damage your shield absorbs strikes the attacker for 8 times that as Holy damage.', mods: { radiantAegis: 1 }, max: 1 },
     evo_holy: { name: 'Hallowed Arms', rar: 'l', icon: 'sun', path: 'holy', evo: 'holy', desc: 'Every 3rd attack releases a lance of light along your aim (melee 150 long, projectiles 260, 20 wide): 80% weapon damage as Holy to every foe on it. Smites shield 0.25% more.', mods: { smiteShield: 0.0025 }, strikes: [{ label: 'Lance of light', on: 'any', mul: 0.8, every: 3, n: 1, crit: false, proc: true, el: 'holy' }], max: 1 },
 
     // ---- Shadow ----

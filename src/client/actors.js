@@ -577,26 +577,51 @@
     if (p.downed && !s.wasDown) s.downT = t; s.wasDown = !!p.downed;
     return s;
   }
-  // Swing pose of the one default attack: weapon angle wa (screen), body push -1..1 along the aim, thrust 0..1, ranged recoil kick 0..1.
-  // Anticipation (0 - t0, pull back and crouch), strike (t0 - t1, accelerating sweep and lunge), follow-through (t1 - D, overshoot and settle). Timing comes from Sprites.atkTimes, so attack speed needs no re-timing.
-  const SW = { wa: 0, push: 0, thr: 0, kick: 0 };
-  function swing(w, an, face, u, side) {
-    let wa = face, push = 0, thr = 0, kick = 0;
+  // Pose of the default attack, held until the next one: weapon angle wa (screen), body push -1..1 along the aim, thrust 0..1, ranged recoil kick 0..1. u = seconds since the attack began, ri = idle carry angle relative to the aim.
+  // Arc melee is a two-ended swing: wind-up (0 - t0, a small pull behind the end the last swing left it at), strike (t0 - t1, eased sweep and lunge to the opposite end, side flips per attack), settle (t1 - D, overshoot back to the end),
+  // hold at that end for HOLD s, then ease to the idle carry over RELAX s. Thrusts retract and spins end where they began. The aim eases from the aim at the click (an.a) to the live aim over the settle. Timing comes from Sprites.atkTimes.
+  const HOLD = 0.7, RELAX = 0.35, IDLE_LOW = 0.75; // IDLE_LOW: rad the idle blade is lowered from the aim
+  AC.HOLD = HOLD;
+  const SW = { wa: 0, push: 0, thr: 0, kick: 0, thrust: false }; // thr is 0 unless the attack is a thrust
+  // A combo step (an.w, its arc and pose) picks the form of this attack.
+  function swing(w, an, face, u, side, ri) {
+    const base = an.a !== undefined ? an.a : face;
+    let wa = base, push = 0, thr = 0, kick = 0, thrusting = false;
+    if (an.w && an.w.kind === w.kind) w = an.w;
     if (w.kind === 'melee') {
-      const t0 = an.t0, t1 = an.t1, D = an.D, spin = w.arc > 6, thrust = w.arc < 1, half = spin ? 0 : thrust ? 0.1 : w.arc * 0.6, pull = thrust ? 0.1 : 0.32;
+      const t0 = an.t0, t1 = an.t1, D = an.D, spin = w.pose === 'spin' || w.arc > 6, thrust = !spin && (w.pose === 'thrust' || w.arc < 1), half = spin ? 0 : thrust ? 0.1 : w.arc * 0.6, pull = thrust ? 0.1 : spin ? 0.4 : 0.14;
       const k0 = u < t0 ? u / t0 : 1, k1 = U.clamp((u - t0) / (t1 - t0), 0, 1), k2 = U.clamp((u - t1) / (D - t1), 0, 1), e1 = 1 - Math.pow(1 - k1, 3), e2 = U.easeInOut(k2);
-      let off = 0;
-      if (u < t0) { off = -side * (half + pull) * U.easeOut(k0); push = -0.55 * k0; if (spin) wa = face - 0.4 * U.easeOut(k0); } // the weapon travels from the aim to the pulled-back pose
-      else if (u < t1) { off = -side * (half + pull) * (1 - e1) + side * half * e1; push = -0.55 + 1.55 * e1; thr = e1; if (spin) wa = face - 0.4 + (TAU + 0.4) * e1; }
-      else { // overshoot 0.18 rad in the first fifth, then settle back to the aim
-        const os = k2 < 0.2 ? 0.18 * U.easeOut(k2 / 0.2) : 0.18, back = k2 < 0.2 ? 0 : U.easeInOut((k2 - 0.2) / 0.8);
-        off = side * ((half + os) * (1 - back)); push = 1 - e2; thr = 1 - e2;
-      }
-      if (!spin) wa = face + off; else if (u >= t1) wa = face;
+      const st = -side * half, wt = -side * (half + pull), en = spin ? wt + side * TAU : side * half; // start end, wind-up pose, end of the strike (relative to the aim; a spin ends where it began)
+      let aim = base, off = ri;
+      if (u > t1) { const d = face - base; aim = base + (d - TAU * Math.round(d / TAU)) * e2; }
+      if (u < t0) { const from = an.cold || thrust || spin ? ri : st; off = from + (wt - from) * U.easeOut(k0); push = -0.55 * k0; } // from where the last swing ended (idle carry when it was long ago)
+      else if (u < t1) { off = wt + (en - wt) * e1; push = -0.55 + 1.55 * e1; thr = e1; }
+      else if (u < D) {
+        push = 1 - e2; thr = 1 - e2;
+        if (spin) off = wt + (ri - wt) * e2;
+        else if (thrust) { const os = k2 < 0.2 ? 0.18 * U.easeOut(k2 / 0.2) : 0.18, back = k2 < 0.2 ? 0 : U.easeInOut((k2 - 0.2) / 0.8); off = side * ((half + os) * (1 - back)); }
+        else off = en + side * 0.12 * (k2 < 0.25 ? U.easeOut(k2 / 0.25) : 1 - U.easeInOut((k2 - 0.25) / 0.75)); // overshoot 0.12 rad, back to the end
+      } else if (!spin && !thrust) off = en + (ri - en) * U.easeInOut(U.clamp((u - D - HOLD) / RELAX, 0, 1));
+      else if (thrust) off = ri * U.easeInOut(U.clamp((u - D) / RELAX, 0, 1)); // a thrust step of an arc weapon eases from the aim back to its lowered carry
+      wa = aim + off; thrusting = thrust;
     } else { kick = Math.exp(-u * 26); push = -0.8 * kick; }
-    SW.wa = wa; SW.push = push; SW.thr = thr; SW.kick = kick;
+    SW.wa = wa; SW.push = push; SW.thr = thrusting ? thr : 0; SW.kick = kick; SW.thrust = thrusting;
     return SW;
   }
+  // Melee arm: the shoulder sits SHOULDER art px from the body's hand anchor (front, upper torso), the grip ARM art px from it along the blade (y squashed for the 3/4 view), on whole art px. The off-hand shoulder is OFF_SH art px behind.
+  const SHOULDER = [0, -1], ARM = 5, OFF_SH = 5, SQ = 0.6, GR = { x: 0, y: 0 };
+  let BL = 0, BR = 0;
+  function gripOf(sx, sy, wa) { GR.x = sx + q2(Math.cos(wa) * ARM * K); GR.y = sy + q2(Math.sin(wa) * ARM * K * SQ); return GR; }
+  // Pixel arm from the shoulder (sx, sy) to the grip (gx, gy), world px on the art grid: a 1 art px core in the sleeve colour, with a 1 art px dark rim where it clears the body (x range BL..BR of the body being drawn).
+  function armAt(c, sx, sy, gx, gy, col) {
+    const n = Math.max(Math.abs(gx - sx), Math.abs(gy - sy)) / K;
+    for (let pass = 0; pass < 2; pass++) {
+      c.fillStyle = pass ? col : OUTLINE;
+      for (let i = 0; i <= n; i++) { const x = q2(sx + (n ? (gx - sx) * i / n : 0)), y = q2(sy + (n ? (gy - sy) * i / n : 0)); if (pass) c.fillRect(x, y, K, K); else if (x < BL || x >= BR) c.fillRect(x - K, y - K, 3 * K, 3 * K); }
+    }
+  }
+  // True when a melee blade at angle wa draws behind the body: pointing up or away from the facing (sg = 1 right, -1 left).
+  const behindBody = (wa, sg) => Math.sin(wa) < -0.2 || Math.cos(wa) * sg < -0.35;
   const HELD_OUT = { bow: 4, crossbow: 2, staff: 8, wand: 1 }; // art px the grip sits ahead of the hand along the aim
   // Anim-relative drawn direction of a weapon sprite (radians, screen angle: 0 right, clockwise); 'dir' in the art data is degrees clockwise from up.
   const dirOf = (r) => ((r.anchors.dir || 0) - 90) * PI / 180;
@@ -662,15 +687,16 @@
     s.rtT = t;
     const body = A.anim(id);
     // ---- attack pose ----
-    const wd = Sp.weaponArt(p), w = wd.w;
-    const swinging = !!anim && anim.atkT < anim.D;
-    let wa = face, bx = 0, by = 0, thr = 0, kick = 0, push = 0;
+    const wd = Sp.weaponArt(p), w = wd.w, melee = w.kind === 'melee';
+    const swinging = !!anim && anim.atkT < anim.D, posed = swinging || (melee && !!anim && anim.atkT < anim.D + HOLD + RELAX); // posed: the swing, then its hold and ease back (melee)
+    const ri = melee && w.arc >= 1 ? IDLE_LOW * sg : 0; // idle carry: arc melee blades rest lowered toward the ground, thrusts level with the aim
+    let wa = face + ri, bx = 0, by = 0, thr = 0, kick = 0, push = 0;
     anim_D = anim ? anim.D : 0.3;
-    if (swinging) {
+    if (posed) {
       const base = anim.a !== undefined ? anim.a : face;
-      swing(w, anim, base, anim.atkT, anim.side || 1);
+      swing(w, anim, face, anim.atkT, anim.side || 1, ri);
       wa = SW.wa; push = SW.push; thr = SW.thr; kick = SW.kick;
-      const L = w.kind === 'melee' ? (w.arc < 1 ? 6 : 4) : 2;
+      const L = melee ? (SW.thrust ? 6 : 4) : 2;
       bx = q2(Math.cos(base) * push * L); by = q2(Math.sin(base) * push * L * 0.5); // lunge and pull-back in whole art px
     }
     if (hit) { bx -= sg * 2; }
@@ -679,17 +705,19 @@
     // ---- weapon pivot (the hand) ----
     const hand = body.anchors.hand || [body.ax + 3, body.ay - 6];
     const f0 = body.f[fi], ib = A.anim(idleId), bobA = Math.round(U.clamp((f0.oy - ib.f[0].oy) * 0.5, -2, 2)); // the hand follows the body's stretch and crouch
-    const hx = bx + (hand[0] - body.ax) * K * sg, hy = by + (hand[1] - body.ay + bobA) * K;
+    let hx = bx + (hand[0] - body.ax) * K * sg, hy = by + (hand[1] - body.ay + bobA) * K;
+    const sx = hx + SHOULDER[0] * K * sg, sy = hy + SHOULDER[1] * K; // melee arm pivot
+    BL = bx + (flip ? -(f0.ox + f0.w - body.ax) : f0.ox - body.ax) * K; BR = bx + (flip ? -(f0.ox - body.ax) : f0.ox + f0.w - body.ax) * K;
+    if (melee) { gripOf(sx, sy, wa); hx = GR.x; hy = GR.y; }
     // ---- draw order: pieces behind the body, the body, pieces in front ----
-    const wBehind = Math.sin(wa) < -0.25;
-    if (swinging && wd.fork === 'swift' && w.kind === 'melee' && !(R() && R().quality === 'low')) swiftGhosts(c, wd, w, anim, hx, hy, flip);
-    if (wd.twin) twinDraw(c, p, wd, anim, swinging, face, flip, hx, hy, t, true);
-    if (wBehind) heroWeapon(c, p, wd, hx, hy, wa, flip, thr, kick, t, swinging ? anim.atkT : 9);
+    const wBehind = melee ? behindBody(wa, sg) : Math.sin(wa) < -0.25;
+    if (swinging && wd.fork === 'swift' && melee && !(R() && R().quality === 'low')) swiftGhosts(c, wd, w, anim, sx, sy, flip);
+    if (wd.twin) twinDraw(c, p, wd, anim, face, flip, melee ? sx - OFF_SH * K * sg : hx, melee ? sy : hy, t);
+    if (wBehind) heroWeapon(c, p, wd, hx, hy, wa, flip, thr, kick, t, swinging ? anim.atkT : 9, melee ? sx : undefined, sy);
     if (p.cls === 'knight' && !p.shieldOut) put(c, 'shield.kite', 0, bx - 5 * K * sg, by - 8 * K + bobA * K, flip, '', 1);
     if (p.stealthT > 0 && local) { const ov = outlineVar(id, '#b78cff'); if (ov) put(c, id, fi, bx, by, flip, ov, 1); }
     put(c, id, fi, bx, by, flip, variant, 1);
-    if (!wBehind) heroWeapon(c, p, wd, hx, hy, wa, flip, thr, kick, t, swinging ? anim.atkT : 9);
-    if (wd.twin) twinDraw(c, p, wd, anim, swinging, face, flip, hx, hy, t, false);
+    if (!wBehind) heroWeapon(c, p, wd, hx, hy, wa, flip, thr, kick, t, swinging ? anim.atkT : 9, melee ? sx : undefined, sy);
     if (p.cls === 'cleric') halo(c, bx, by + (f0.oy - body.ay) * K, t);
     if (p.mastery10) { c.strokeStyle = U.rgba('#ffd36b', 0.55 + Math.sin(t * 4) * 0.25); c.lineWidth = 1; c.beginPath(); c.ellipse(0, -2, 13, 4, 0, 0, TAU); c.stroke(); }
     c.globalAlpha = ga;
@@ -707,7 +735,7 @@
 
   const wpPre = new Set(); // hero weapon (anim | variant | flip) whose rotation steps are queued
   // The weapon of a hero. thr: thrust 0..1 (glaive), kick: ranged recoil, u: seconds into the attack animation (9 = idle).
-  function heroWeapon(c, p, wd, hx, hy, wa, flip, thr, kick, t, u) {
+  function heroWeapon(c, p, wd, hx, hy, wa, flip, thr, kick, t, u, sx, sy) {
     const w = wd.w, r = A.anim(wd.anim); if (!r) return;
     const ec = p.stats && p.stats.evo && ED.PATHS[p.stats.evo] ? ED.PATHS[p.stats.evo].color : null;
     const variant = ec ? outlineVar(wd.anim, ec) : '';
@@ -716,8 +744,14 @@
     let x = hx, y = hy, ang = wa, extra = 0;
     const look = w.look, out = HELD_OUT[look] || 0; // ranged weapons are held out along the aim
     if (out) { x += Math.cos(wa) * out * K; y += Math.sin(wa) * out * K * 0.6; }
-    if (thr > 0 && w.arc < 1) { const d = thr * 6 * K; x += Math.cos(wa) * d; y += Math.sin(wa) * d * 0.5; }
+    if (thr > 0) { const d = thr * 6 * K; x += Math.cos(wa) * d; y += Math.sin(wa) * d * 0.5; }
     if (kick > 0.02) { const d = kick * 2 * K; x -= Math.cos(wa) * d; y -= Math.sin(wa) * d * 0.5; }
+    if (sx !== undefined) armAt(c, sx, sy, x, y, ED.CLASSES[p.cls].col.a); // a melee weapon is held at arm's length from the shoulder
+    if (thr > 0 && w.pull && w.range > 80) { // a chained weapon is thrown out along the aim on its chain (1 art px links, alternating light and dark) and hauled back
+      const ext = thr * (w.range - 30), n = Math.max(1, Math.floor(ext / (2 * K))), cx = Math.cos(wa), cy = Math.sin(wa) * 0.5;
+      for (let i = 0; i < n; i++) { c.fillStyle = i & 1 ? '#6b7480' : '#c8d0d8'; c.fillRect(q2(x + cx * i * 2 * K), q2(y + cy * i * 2 * K), K, K); }
+      x += cx * ext; y += cy * ext;
+    }
     if (look === 'lantern') { // held up at the side, hanging from the hand: swings, and is thrown forward on release
       const fl = flip ? -1 : 1, rot = Math.sin(t * 2.6 + (p.slot | 0)) * 0.14 - fl * 0.9 * Math.exp(-u * 10);
       put(c, wd.anim, 0, hx, hy - 16, flip, variant, 1, nrm(rot));
@@ -754,32 +788,32 @@
     Sp.glow(c, px, py, 7, col, 0.3 * k);
   }
   // Swift melee weapons leave two fading copies of the blade behind it along the arc through the strike (22 ms and 44 ms back).
-  function swiftGhosts(c, wd, w, anim, hx, hy, flip) {
+  function swiftGhosts(c, wd, w, anim, sx, sy, flip) {
     const u = anim.atkT, base = anim.a !== undefined ? anim.a : 0, ga = c.globalAlpha;
     if (u < anim.t0 || u > anim.t1 + 0.08) return;
     for (let k = 2; k >= 1; k--) {
       const uu = u - k * 0.022; if (uu < anim.t0 * 0.5) continue;
-      swing(w, anim, base, uu, anim.side || 1);
+      swing(w, anim, base, uu, anim.side || 1, 0);
       c.globalAlpha = ga * (k === 1 ? 0.4 : 0.2);
-      weaponAt(c, wd.anim, hx, hy, SW.wa, flip, '', 0);
+      gripOf(sx, sy, SW.wa);
+      weaponAt(c, wd.anim, GR.x, GR.y, SW.wa, flip, '', 0);
     }
     c.globalAlpha = ga;
   }
   // Warm glow of a held lantern.
   function lightGlow(c, x, y, a) { Sp.glow(c, x, y, 16, '#ffe9a0', a); }
 
-  // Off-hand copy of a twin weapon (daggers, crescent scythes, twin bows): on the far shoulder, mirrored swing half a phase behind.
-  function twinDraw(c, p, wd, anim, swinging, face, flip, hx, hy, t, behind) {
-    const w = wd.w, sg = flip ? -1 : 1;
-    let wa = face, thr = 0, kick = 0;
-    if (swinging) {
-      const base = anim.a !== undefined ? anim.a : face, u = anim.atkT - anim.D * 0.5;
-      if (u > 0) { swing(w, anim, base, u, -(anim.side || 1)); wa = SW.wa; thr = SW.thr; kick = SW.kick; }
-      else { swing(w, anim, base, 0, -(anim.side || 1)); wa = SW.wa; }
-    } else if (w.kind === 'melee') wa = face - 0.5 * sg * (flip ? -1 : 1);
-    else wa = face + 0.14 * sg;
-    if (!behind) return; // the off-hand copy rides behind the body
-    heroWeapon(c, p, wd, hx - 6 * K * sg, hy + 2, wa, flip, thr, kick, t, swinging ? anim.atkT : 9);
+  // Off-hand copy of a twin weapon (daggers, crescent scythes, twin bows), drawn behind the body: mirrored swing half a phase behind. (x, y) = the far shoulder of a melee twin, the main hand of a ranged one.
+  function twinDraw(c, p, wd, anim, face, flip, x, y, t) {
+    const w = wd.w, sg = flip ? -1 : 1, melee = w.kind === 'melee', ri = melee ? -0.5 : 0.14 * sg, u = anim ? anim.atkT - anim.D * 0.5 : 9;
+    let wa = face + ri, thr = 0, kick = 0;
+    if (anim && (melee ? u < anim.D + HOLD + RELAX : u < anim.D * 0.5)) {
+      swing(w, anim, face, Math.max(0, u), -(anim.side || 1), ri); wa = SW.wa;
+      if (u > 0) { thr = SW.thr; kick = SW.kick; }
+    }
+    const au = anim && anim.atkT < anim.D ? anim.atkT : 9;
+    if (melee) { gripOf(x, y, wa); heroWeapon(c, p, wd, GR.x, GR.y, wa, flip, thr, kick, t, au, x, y); }
+    else heroWeapon(c, p, wd, x - 6 * K * sg, y + 2, wa, flip, thr, kick, t, au);
   }
 
   // Lying hero (downed, dead): the hit pose turned 90 degrees away from facing, 2 art px lower, in grey.

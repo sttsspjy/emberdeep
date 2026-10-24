@@ -2,6 +2,7 @@
 'use strict';
 // Offline art packer: vendored source sheets (art-src/) + tools/art-manifest.js -> src/art/*.js (data-URI atlas pages + metadata).
 // Usage: node tools/art.js [--check]   (--check rebuilds in memory and fails if src/art/ differs; run before commit)
+// Also writes src/art/fonts.css (art-src/fonts/ -> @font-face data URIs, see the fonts section).
 // Zero dependencies; own PNG codec on zlib. Output is deterministic (stable ordering, fixed zlib settings).
 // Contract written to ED.ART: { pages, frames, anims, pal, font, swaps }; units are ART pixels (1 art px = 2 world px at draw time).
 //   frames[id] = { p: page, x, y, w, h, ox, oy }  trimmed rect in the page; ox/oy = trimmed rect offset inside the logical frame
@@ -373,6 +374,73 @@ function build() {
   return { meta, pages, fontOut, swaps: M.swaps || {}, M };
 }
 
+// ---------------------------------------------------------------- fonts
+// art-src/fonts/*.ttf -> src/art/fonts.css (@font-face, WOFF 1.0 data URIs). px = font units per font pixel (the outline grid).
+// Each font is re-gridded to 1 em = 16 font px (unitsPerEm = 16 * px; outlines untouched), so every family is crisp at font-size = 16n device px.
+// Vertical metrics: hhea = OS/2 typo = win, rounded to whole font px, line gap 0, USE_TYPO_METRICS set (same line box on every platform).
+const FONTS = [
+  { family: 'Pixel Operator', file: 'pixel-operator/PixelOperator.ttf', px: 100, weight: '100 549' },
+  { family: 'Pixel Operator', file: 'pixel-operator/PixelOperator-Bold.ttf', px: 100, weight: '550 1000' },
+  { family: 'Pixel Operator 8', file: 'pixel-operator/PixelOperator8.ttf', px: 100, weight: '100 549' },
+  { family: 'Pixel Operator 8', file: 'pixel-operator/PixelOperator8-Bold.ttf', px: 100, weight: '550 1000' },
+  { family: 'Pixel Operator Mono', file: 'pixel-operator/PixelOperatorMono.ttf', px: 100, weight: '100 1000' },
+];
+const FONT_NOTICE = [
+  'Pixel Operator, Pixel Operator 8, Pixel Operator Mono: Jayvee Enaguas (HarvettFox96), CC0 1.0 (art-src/fonts/pixel-operator/LICENSE.txt).',
+];
+const pad4 = (n) => (n + 3) & ~3;
+function sfntSum(buf) { let s = 0; const b = buf.length & 3 ? Buffer.concat([buf, Buffer.alloc(4 - (buf.length & 3))]) : buf; for (let i = 0; i < b.length; i += 4) s = (s + b.readUInt32BE(i)) >>> 0; return s; }
+function sfntRead(buf) {
+  const n = buf.readUInt16BE(4), tabs = [];
+  for (let i = 0; i < n; i++) { const o = 12 + i * 16; tabs.push({ tag: buf.toString('latin1', o, o + 4), data: Buffer.from(buf.subarray(buf.readUInt32BE(o + 8), buf.readUInt32BE(o + 8) + buf.readUInt32BE(o + 12))) }); }
+  return { flavor: buf.readUInt32BE(0), tabs: tabs.sort((a, b) => (a.tag < b.tag ? -1 : 1)) };
+}
+function sfntWrite(flavor, tabs) { // tabs sorted by tag; returns the TTF bytes (head.checksumAdjustment must be 0 on entry)
+  const n = tabs.length, es = Math.floor(Math.log2(n)), sr = 16 << es, hdr = Buffer.alloc(12 + 16 * n);
+  hdr.writeUInt32BE(flavor, 0); hdr.writeUInt16BE(n, 4); hdr.writeUInt16BE(sr, 6); hdr.writeUInt16BE(es, 8); hdr.writeUInt16BE(n * 16 - sr, 10);
+  let off = hdr.length; const body = [];
+  tabs.forEach((t, i) => { const o = 12 + i * 16; t.sum = sfntSum(t.data); hdr.write(t.tag, o, 'latin1'); hdr.writeUInt32BE(t.sum, o + 4); hdr.writeUInt32BE(off, o + 8); hdr.writeUInt32BE(t.data.length, o + 12); body.push(t.data, Buffer.alloc(pad4(t.data.length) - t.data.length)); off += pad4(t.data.length); });
+  return Buffer.concat([hdr, ...body]);
+}
+function woffWrite(flavor, tabs, sfntSize) { // WOFF 1.0: per-table zlib streams (stored raw when not smaller); t.sum from sfntWrite
+  const n = tabs.length, hdr = Buffer.alloc(44 + 20 * n), body = [];
+  let off = hdr.length;
+  tabs.forEach((t, i) => {
+    const z = zlib.deflateSync(t.data, { level: 9 }), d = z.length < t.data.length ? z : t.data, o = 44 + i * 20;
+    hdr.write(t.tag, o, 'latin1'); hdr.writeUInt32BE(off, o + 4); hdr.writeUInt32BE(d.length, o + 8); hdr.writeUInt32BE(t.data.length, o + 12); hdr.writeUInt32BE(t.sum, o + 16);
+    body.push(d, Buffer.alloc(pad4(d.length) - d.length)); off += pad4(d.length);
+  });
+  hdr.write('wOFF', 0, 'latin1'); hdr.writeUInt32BE(flavor, 4); hdr.writeUInt32BE(off, 8); hdr.writeUInt16BE(n, 12); hdr.writeUInt32BE(sfntSize, 16); hdr.writeUInt16BE(1, 20);
+  return Buffer.concat([hdr, ...body]);
+}
+// regridFont(ttf, px) -> WOFF bytes: unitsPerEm = 16 * px, unified whole-pixel vertical metrics, fresh checksums.
+function regridFont(ttf, px) {
+  const { flavor, tabs } = sfntRead(ttf), T = {}; for (const t of tabs) T[t.tag] = t.data;
+  const head = T.head, hhea = T.hhea, os2 = T['OS/2'], r = (v) => Math.round(v / px) * px;
+  head.writeUInt32BE(0, 8); head.writeUInt16BE(16 * px, 18);
+  const asc = r(hhea.readInt16BE(4)), desc = r(hhea.readInt16BE(6));
+  hhea.writeInt16BE(asc, 4); hhea.writeInt16BE(desc, 6); hhea.writeInt16BE(0, 8);
+  if (os2) {
+    os2.writeInt16BE(asc, 68); os2.writeInt16BE(desc, 70); os2.writeInt16BE(0, 72); os2.writeUInt16BE(asc, 74); os2.writeUInt16BE(-desc, 76);
+    if (os2.readUInt16BE(0) >= 4) os2.writeUInt16BE(os2.readUInt16BE(62) | 0x80, 62);
+  }
+  const sfnt = sfntWrite(flavor, tabs);
+  head.writeUInt32BE((0xb1b0afba - sfntSum(sfnt)) >>> 0, 8);
+  return { woff: woffWrite(flavor, tabs, sfnt.length), asc: asc / px, desc: -desc / px };
+}
+function buildFonts() {
+  const nl = '\n', rows = [];
+  let css = '/* Generated by tools/art.js from art-src/fonts/ - do not edit. 1 em = 16 font px for every family: crisp at font-size = 16n device px.' + nl;
+  for (const l of FONT_NOTICE) css += '   ' + l + nl;
+  css += '*/' + nl;
+  for (const f of FONTS) {
+    const ttf = fs.readFileSync(path.join(SRC, 'fonts', f.file)), out = regridFont(ttf, f.px);
+    css += '@font-face { font-family: "' + f.family + '"; src: url(data:font/woff;base64,' + out.woff.toString('base64') + ') format("woff"); font-weight: ' + f.weight + (f.range ? '; unicode-range: ' + f.range : '') + '; font-style: normal; font-display: block; }' + nl;
+    rows.push({ file: f.file, ttf: ttf.length, woff: out.woff.length, asc: out.asc, desc: out.desc });
+  }
+  return { css, rows };
+}
+
 // ---------------------------------------------------------------- emit
 const jstr = (o) => JSON.stringify(o);
 function emitFiles(res) {
@@ -396,7 +464,8 @@ function normNl(s) { return s.replace(/\r\n/g, '\n'); }
 
 function main() {
   const check = process.argv.includes('--check');
-  const t0 = Date.now(), res = build(), files = emitFiles(res);
+  const t0 = Date.now(), res = build(), files = emitFiles(res), fonts = buildFonts();
+  files['fonts.css'] = fonts.css;
   if (check) {
     let bad = 0;
     for (const [name, text] of Object.entries(files)) {
@@ -419,6 +488,8 @@ function main() {
   }
   const metaKB = Buffer.byteLength(files['meta.js']) / 1024; total += Buffer.byteLength(files['meta.js']);
   console.log('meta.js'.padEnd(11), ''.padEnd(12), ''.padStart(6), ''.padStart(8), metaKB.toFixed(1).padStart(7));
+  for (const f of fonts.rows) console.log('font ' + f.file.padEnd(52) + ' ttf ' + (f.ttf / 1024).toFixed(1).padStart(6) + ' KB  woff ' + (f.woff / 1024).toFixed(1).padStart(6) + ' KB  asc ' + f.asc + ' desc ' + f.desc + ' font px');
+  console.log('fonts.css ' + (Buffer.byteLength(fonts.css) / 1024).toFixed(1) + ' KB');
   console.log('total data URIs + meta: ' + (total / 1024).toFixed(1) + ' KB; anims ' + Object.keys(res.meta.anims).length + ', frames ' + Object.keys(res.meta.frames).length + ' (' + (Date.now() - t0) + ' ms)');
 }
 

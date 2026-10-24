@@ -284,7 +284,7 @@
     w.hitEnemy(tg, st.weapon.dmg, { p, kind: 'weapon', wpn: true, part: 'cull.chain', crit: true, mul: src.mul, knock: st.weapon.knock, kx: Math.cos(a), ky: Math.sin(a), x: e.x, y: e.y });
   }
 
-  // A full-circle spin of the weapon at damage factor mul: a melee weapon swings all around the hero, a ranged one fires a ring of 6 shots. Its swing event is dropped for a whirl event (c: a Cyclone spin, drawn lighter).
+  // A full-circle spin of the weapon at damage factor mul: a melee weapon swings all around the hero, a ranged one fires a ring of 6 shots of its flight shape. Its swing event is dropped for a whirl event (c: a Cyclone spin, drawn lighter).
   function spin(w, p, a, mul, cyc) {
     const st = p.stats, wp = st.weapon, n0 = w.fx.length;
     let r;
@@ -295,7 +295,7 @@
     } else {
       for (let i = 0; i < 6; i++) {
         const an = a + i * U.TAU / 6;
-        w.spawnProj({ team: 0, kind: wp.proj, x: p.x + Math.cos(an) * 10, y: p.y - 4 + Math.sin(an) * 10, a: an, speed: wp.speed, r: wp.r, dmg: wp.dmg, mul, life: wp.life, pierce: wp.pierce + st.pierce, owner: p.pid, knock: wp.knock || 40 });
+        w.spawnProj(Object.assign({ team: 0, kind: wp.proj, x: p.x + Math.cos(an) * 10, y: p.y - 4 + Math.sin(an) * 10, a: an, speed: wp.speed, r: wp.r, dmg: wp.dmg, mul, life: wp.life, pierce: wp.pierce + st.pierce, owner: p.pid, knock: wp.knock || 40 }, w.shotShape(p, wp))); // Boomerang Blades: a ring of boomerangs
       }
       r = wp.speed * wp.life * 0.5;
     }

@@ -19,11 +19,9 @@
     A.sel.weapon = A.weaponFor(cls);
     A.sel.pact = Math.min((p.sel && p.sel.pact) | 0, p.pactMax);
   };
-  A.weaponFor = (cls) => {
-    const p = A.profile, ml = S.masteryLevel(p, cls), list = ED.CLASSES[cls].weapons;
-    const saved = p.sel && p.sel.weapon && p.sel.weapon[cls];
-    const idx = list.indexOf(saved);
-    return idx >= 0 && ED.weaponUnlocked(cls, idx, ml) ? saved : list[0];
+  A.weaponFor = (cls) => { // the stored choice when still wieldable (a refunded variant falls back to its base)
+    const p = A.profile, saved = p.sel && p.sel.weapon && p.sel.weapon[cls];
+    return ED.weaponPick(cls, saved, S.masteryLevel(p, cls), S.metaBundle(p, cls).armory);
   };
   A.saveSel = () => {
     const p = A.profile;
@@ -48,6 +46,7 @@
   A.afterMetaChange = () => {
     const deeds = S.checkDeeds(A.profile, null);
     for (const d of deeds) ED.UI.toast(`Deed earned: <b>${d.name}</b> (+${d.reward} embers)`, ED.Icons.url(d.icon, '#e6c27a'));
+    A.sel.weapon = A.weaponFor(A.sel.cls); // a refund may take away the chosen variant
     A.persist();
     if (A.state === 'lobby') { ED.UI.renderPartyHearth(); A.lobbyPick(); } // the host gets the new meta bundle
     else ED.UI.renderHearth();

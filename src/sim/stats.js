@@ -63,7 +63,7 @@
   function applyExtra(w, ex) {
     if (ex.mul) for (const k in ex.mul) if (typeof w[k] === 'number') w[k] *= ex.mul[k];
     if (ex.add) for (const k in ex.add) w[k] = (w[k] || 0) + ex.add[k];
-    if (ex.ifNone) for (const k in ex.ifNone) if (!w[k]) w[k] = Object.assign({}, ex.ifNone[k]);
+    if (ex.ifNone) for (const k in ex.ifNone) if (!w[k] && !(k === 'wave' && w.ring)) w[k] = Object.assign({}, ex.ifNone[k]); // a ring weapon's ring stands in for the wave
   }
 
   // Every source of a stat block, in the order the stat block adds them: [{ kind, id, label, mods, n, rank?, card?, x? }]; a source adds mods[key] x n to its key.
@@ -141,7 +141,7 @@
 
     const out = s;
     out.power = cls.power; out.element = cls.element || null; // Class Power scales every non-attack proc (ED.procDmg)
-    out.maxHp = Math.max(20, Math.round(s.hp * Math.max(0.3, s.hpMul)));
+    out.maxHp = Math.max(5, Math.round(s.hp * Math.max(0.3, s.hpMul)));
     out.moveSpeed = cls.spd * U.clamp(s.spd, 0.5, 2.2);
     // weapon: the fork transform of an owned attack fork, card extras, wDmg, and the attack-interval floor (speed beyond the floor becomes damage)
     const fw = fork ? ED.forkWeapon(build.weapon, fork) : base, kind = fork ? ED.BOONS[fork].weapon.kind : null;
@@ -184,6 +184,26 @@
     return 1 + (p.tranceT > 0 ? s.trance : 0) + s.wardrum * (p.toughRoom ? 2 : 1);
   };
   St.attackInterval = (p) => Math.max(p.stats.atkFloor, p.stats.atkInterval / St.attackRate(p));
+  // Combo weapons (weapon.combo): the weapon of step k (dmg, range and arc times the step's factors; cached on the stat block), the step hero p attacks with next at time `now`
+  // (0 after an idle longer than the combo's reset, at least 1.25 x the longest step interval) and the interval after its last attack (the step's share of the mean interval).
+  St.stepWeapon = (st, k) => {
+    const w = st.weapon, c = w.combo;
+    if (!c) return w;
+    const cw = st.cw || (st.cw = []);
+    if (cw[k]) return cw[k];
+    const q = c.steps[k] || {}, o = Object.assign({}, w, { step: k, pose: q.pose || null });
+    if (q.mul) o.dmg = w.dmg * q.mul;
+    if (q.range && o.range) o.range = w.range * q.range;
+    if (q.arc && o.arc) o.arc = Math.min(6.3, w.arc * q.arc);
+    return (cw[k] = o);
+  };
+  St.comboNext = (p, now) => {
+    const c = p.stats.weapon.combo;
+    if (!c) return 0;
+    const idle = Math.max(c.reset, 1.25 * St.attackInterval(p) * Math.max.apply(null, c.iv));
+    return p.comboAt === undefined || now - p.comboAt > idle ? 0 : ((p.comboK | 0) + 1) % c.steps.length;
+  };
+  St.stepInterval = (p) => { const c = p.stats.weapon.combo; return St.attackInterval(p) * (c ? c.iv[p.comboK | 0] || 1 : 1); };
   // Move rate: Flow (Swift forks, p.flowT) and the unseen speed of Nightfall (stealthSpd while p.stealthT).
   St.moveRate = (p) => {
     const s = p.stats;

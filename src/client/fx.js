@@ -77,6 +77,14 @@
     if (F.slashes.length < 24) F.slashes.push({ x, y, a, r, arc, color, hot: U.mix(color, '#ffffff', 0.6), life: L, max: L, side: an ? an.side : (F.slashes.length & 1 ? 1 : -1), t0: an ? an.t0 : 0.02, t1: an ? an.t1 : 0.1, sm: null, hr: -1, tk: tk * (cl ? 1.25 : 1) });
     if (cl && !lowFx()) { const ta = a, tx = x + Math.cos(ta) * r * 0.9, ty = y + Math.sin(ta) * r * 0.9; F.ring(tx, ty + 6, 22 * tk, CLEAVE_COL, 0.3, 3); } // Cleave shock ring at the tip of the blow
   };
+  // A slam ahead (weapon.ahead): a narrow overhead smear to the slam point d px along a from (x, y), then an impact ring of radius sr there (y + 10: the ground), dust and a shake for your own hero. remote: no shake.
+  F.slam = (x, y, a, d, sr, color, remote) => {
+    F.slash(x, y, a, d, 0.5, color, remote ? 0.22 : undefined);
+    const gx = x + Math.cos(a) * d, gy = y + 10 + Math.sin(a) * d;
+    F.ring(gx, gy, sr, color === CLEAVE_COL ? CLEAVE_COL : '#d8c8a0', 0.3, 4, false, sr * 0.3); F.pop(gx, gy - 4, sr * 0.45, '#fff2d0', 0.12);
+    if (!lowFx()) { dust(gx, gy, 'dust', 4); F.burst(gx, gy - 2, 8, { kind: 'shard', color: '#8a7a60', sp: sr * 2.2, life: 0.45, size: 2.2, vz: 90, z: 2 }); }
+    if (!remote) F.addShake(2.5);
+  };
   const CLEAVE_COL = '#ffd36b';
   // Bright impact flash that also lights the scene. star: flare lines (crits).
   // al: alpha factor (default 1); core: colour of the centre square and flare lines (default white).
@@ -151,10 +159,13 @@
   };
 
   // Starts a hero's attack animation (weapon sweep timing from Sprites.atkTimes); ranged weapons also get a muzzle flash.
-  F.playerAttackAnim = (pid, a) => {
+  // sw: the weapon of this attack's combo step (ED.Stats.stepWeapon; an.w, read by the swing pose), else the hero's weapon.
+  F.playerAttackAnim = (pid, a, sw) => {
     const an = F.anim[pid] || (F.anim[pid] = { atkT: 9, side: 1, t0: 0.05, t1: 0.12, D: 0.3 });
     if (an.atkT < 0.03) return; // swing + atk events of one attack arrive together
-    const s = ED.Game && ED.Game.s, p = s && s.view.players.get(pid), wd = p && ED.Sprites.weaponArt(p), w = wd && wd.w;
+    const s = ED.Game && ED.Game.s, p = s && s.view.players.get(pid), wd = p && ED.Sprites.weaponArt(p), w = sw && sw.step !== undefined ? sw : wd && wd.w;
+    an.w = sw && sw.step !== undefined ? sw : null;
+    an.cold = an.atkT > an.D + (ED.Actors ? ED.Actors.HOLD : 0); // the last swing's hold has ended: the weapon starts this one from its idle carry
     an.atkT = 0; an.side = -an.side; an.a = a; an.fork = wd ? wd.fork : ''; F.lastAnim = an;
     const mp = p && p.boons ? ED.mainPath(p.boons) : null; an.col = mp && mp !== 'general' && PATH_COL[mp] ? PATH_COL[mp] : '#9fb0c0'; // smear outer band: the hero's path colour, steel without one
     if (w) {
@@ -221,7 +232,8 @@
         u[j * SM + i] = f > 0.72 ? cC : f > 0.38 ? cM : cO;
       }
     } else {
-      const Ro = sl.r * 0.94, base = sl.a - sd * arc / 2, Tm = Math.min(Ro * 0.9, U.clamp(sl.r * 0.4, 8, 24) * sl.tk), tail = Math.min(arc, 1.9), hdA = head * arc, inner = (Ro - Tm) * (Ro - Tm), outer = Ro * Ro;
+      // a full circle starts at the blade's wind-up pose (0.4 rad behind the aim), other arcs are centred on the aim
+      const Ro = sl.r * 0.94, base = sl.a - sd * (arc > 6 ? 0.4 : arc / 2), Tm = Math.min(Ro * 0.9, U.clamp(sl.r * 0.4, 8, 24) * sl.tk), tail = Math.min(arc, 1.9), hdA = head * arc, inner = (Ro - Tm) * (Ro - Tm), outer = Ro * Ro;
       const T0 = tail, T1 = tail * 0.5, T2 = tail * 0.2;
       for (let j = 0; j < W; j++) for (let i = 0; i < W; i++) {
         const dx = (i + 0.5 - half) * K2 + ex, dy = (j + 0.5 - half) * K2 + ey, r2 = dx * dx + dy * dy;
@@ -318,7 +330,7 @@
   const EL_COL = ['', '#ff9a3a', '#9fefff', '#ffe66b', '#ff4a5a', '#9be33c', '#fff0c2', '#a070ff']; // hit-event el: 0 physical, 1 fire, 2 ice, 3 lightning, 4 bleed, 5 poison, 6 holy, 7 shadow
   const EL_OL = [null, null, null, '#bfe6ff', '#b8c0cc', null, '#ffcf5a', null]; // 1 px rim of a hit number where the fill alone is hard to tell apart (Lightning, Bleed, Holy); the others keep the dark outline
   const PATH_COL = { fire: '#ff7a2a', ice: '#7fe3ff', lightning: '#ffe66b', poison: '#9be33c', holy: '#fff0c2', shadow: '#a070ff', general: '#d9dfe8' };
-  const PROJ_COLOR = { bone: '#e6dfc9', spore: '#9cff6a', ice: '#9fefff', fire: '#ff8a2a', water: '#6fe6ff', void: '#d48cff', arrow: '#e8d8b0', bolt: '#cfd6de', firebolt: '#ff9a3a', spark: '#ffcf4a', fireball: '#ff6a1a', knife: '#d9dfe8', holy: '#ffe9a0', soul: '#7dffd9', plague: '#9cff6a', wave: '#ffe9a0', wisp: '#bff0ff', shard: '#b78cff', blade: '#cfd6de', orb: '#ff7ad9', trident: '#e8c66b', skull: '#e6dfc9',
+  const PROJ_COLOR = { bone: '#e6dfc9', spore: '#9cff6a', ice: '#9fefff', fire: '#ff8a2a', water: '#6fe6ff', void: '#d48cff', arrow: '#e8d8b0', bolt: '#cfd6de', firebolt: '#ff9a3a', spark: '#ffcf4a', fireball: '#ff6a1a', knife: '#d9dfe8', boomerang: '#d9c8ff', holy: '#ffe9a0', soul: '#7dffd9', plague: '#9cff6a', wave: '#ffe9a0', wisp: '#bff0ff', shard: '#b78cff', blade: '#cfd6de', orb: '#ff7ad9', trident: '#e8c66b', skull: '#e6dfc9',
     hammer: '#ffe9a0', shield: '#ffe9a0', crescent: '#ff9a3a', iceshard: '#9fefff', bloodscythe: '#d43a5a', spectral: '#bcd0ff', web: '#e8e6f0', droneshot: '#ff9a3a', thorn: '#9cff6a' };
   F.projColor = (k) => PROJ_COLOR[k] || '#ffffff';
   const BOOM = { fire: ['#ff9a3a', '#ffcf4a'], bigfire: ['#ff6a1a', '#ffd36b'], shock: ['#e8e2c8', '#ffffff'], slam: ['#c9b98f', '#ffffff'], spore: ['#9cff6a', '#e8ffd0'], ice: ['#9fefff', '#ffffff'], bolt: ['#bfe9ff', '#ffffff'], bone: ['#7dffd9', '#e6dfc9'], burst: ['#ff6a4a', '#ffd36b'], shadow: ['#b78cff', '#2a1f44'], acid: ['#9be33c', '#e8ffd0'], firedamp: ['#ff8a2a', '#ffe9a0'] };
@@ -623,7 +635,7 @@
         F.pop(ev.x, ev.y - 10, 16, '#ff5a4a', 0.18);
         break;
       }
-      case 'heal': if (ev.v >= 2) { F.text(ev.x, ev.y - 28, '+' + ev.v, '#86d38f', 10, { pop: true }); F.burst(ev.x, ev.y - 10, 6, { color: '#86ffa0', sp: 30, vy: -40, life: 0.7, size: 2, add: true, drag: 1, lt: '#86ffa0', ltr: 24 }); if (ev.pid === local) A.play('heal', 0.6); } break;
+      case 'heal': if (ev.v >= 1) { F.text(ev.x, ev.y - 28, '+' + ev.v, '#86d38f', 10, { pop: true }); F.burst(ev.x, ev.y - 10, 6, { color: '#86ffa0', sp: 30, vy: -40, life: 0.7, size: 2, add: true, drag: 1, lt: '#86ffa0', ltr: 24 }); if (ev.pid === local) A.play('heal', 0.6); } break;
       case 'boom': {
         const cols = BOOM[ev.k] || BOOM.fire, fire = ev.k === 'fire' || ev.k === 'bigfire' || ev.k === 'burst', bk = ev.k === 'acid' ? lk : (n) => n;
         if (!ev.kfx) { F.ring(ev.x, ev.y, ev.r, cols[0], 0.35, 4); F.ring(ev.x, ev.y, ev.r * 0.7, cols[1], 0.22, 2); } // a hook that sets ev.kfx draws its own rings
@@ -651,9 +663,28 @@
         break;
       }
       case 'swing': {
-        if (ev.pid !== local) { const p = ctx.player(ev.pid); if (p) { F.playerAttackAnim(ev.pid, ev.a); F.slash(p.x, p.y - 10, ev.a, ev.r, ev.arc, ev.k === 'cleave' ? '#ffd36b' : ED.PLAYER_COLORS[p.slot]); } A.play(ev.k === 'cleave' ? 'heavy' : 'swing', ev.k === 'cleave' ? 0.5 : 0.35); }
+        if (ev.pid !== local) {
+          const p = ctx.player(ev.pid);
+          if (p) {
+            F.playerAttackAnim(ev.pid, ev.a, ev.c !== undefined && p.stats ? ED.Stats.stepWeapon(p.stats, ev.c) : null); // ev.c: the combo step, ev.sr: a slam ahead
+            const col = ev.k === 'cleave' ? '#ffd36b' : ED.PLAYER_COLORS[p.slot];
+            if (ev.sr) F.slam(p.x, p.y - 10, ev.a, ev.r, ev.sr, col, true); else F.slash(p.x, p.y - 10, ev.a, ev.r, ev.arc, col);
+          }
+          A.play(ev.k === 'cleave' || ev.sr ? 'heavy' : 'swing', ev.k === 'cleave' ? 0.5 : 0.35);
+        }
         break;
       }
+      case 'pull': { // a hooked weapon dragged foes toward the hero: a taut chain from the hero to each, a spark at the hook
+        const p = ctx.player(ev.pid); if (!p) break;
+        for (const [x, y] of ev.pts) { F.zap(p.x, p.y - 10, x, y - 8, '#c8d0da', 0.14); F.pop(x, y - 8, 7, '#e8e8e8', 0.1); }
+        A.play('clang', ev.pid === local ? 0.35 : 0.15);
+        break;
+      }
+      case 'hring': // a ring of light around the hero (Radiant Mace)
+        F.ring(ev.x, ev.y, ev.r, '#ffe9a0', 0.38, 4, false, 10); F.ring(ev.x, ev.y, ev.r * 0.7, '#fff6d0', 0.26, 2, false, 6); F.pop(ev.x, ev.y - 10, 22, '#ffe9a0', 0.2);
+        if (!lowFx()) F.burst(ev.x, ev.y - 8, 12, { kind: 'streak', color: '#fff3c4', sp: ev.r * 3, spread: 3.2, life: 0.25, size: 1.6 });
+        A.play('bell', ev.pid === local ? 0.45 : 0.2);
+        break;
       case 'atk': if (ev.pid !== local) { F.playerAttackAnim(ev.pid, ev.a); const p = ctx.player(ev.pid); if (p && p.stats && !p.stats.melee) A.play('shoot', 0.3); } break;
       case 'spark': { const c = F.projColor(ED.PROJ_KINDS[ev.k]); F.burst(ev.x, ev.y, 4, { color: c, sp: 80, life: 0.25, size: 1.8, add: true }); F.burst(ev.x, ev.y, 3, { kind: 'streak', color: c, sp: 130, life: 0.2, size: 1.3 }); F.pop(ev.x, ev.y, 7, c, 0.1); A.play('spark', 0.4); break; }
       case 'chain': { // star (hub, t1, hub, t2, ...): one forked arm per target; otherwise a plain polyline. k: h Wrath of Heaven bolt, t Twilight beam, s Superconductor discharge, b Prism beam
@@ -675,8 +706,8 @@
         const p = ctx.player(ev.pid), gold = ev.t === 'gold';
         if (p && F.time - pickT > 0.05) { pickT = F.time; const c = gold ? '#ffd36b' : '#7dffd9'; F.burst(p.x, p.y - 16, 2, { color: c, sp: 40, vy: -45, life: 0.4, size: 1.6, add: true, drag: 2.2 }); }
         if (ev.pid === local) A.play(ev.t, gold ? 0.6 : 0.5); break; }
-      case 'boon': { const p = ctx.player(ev.pid), b = ED.BOONS[ev.id]; if (p && b) { const col = b.path ? PATH_COL[b.path] : ED.RARITY[b.rar].color; F.burst(p.x, p.y - 12, b.gate ? 32 : 22, { color: col, sp: 70, vy: -50, life: 0.8, size: 2.4, add: true, drag: 1.2 }); F.ring(p.x, p.y, b.gate ? 42 : 30, col, 0.45, 3); SP('fx.circle.spark', p.x, p.y - 4, { ramp: col, add: true }); F.pop(p.x, p.y - 14, 22, col, 0.25); if (b.path) F.burst(p.x, p.y - 12, 8, { kind: 'ember', color: col, sp: 40, a: -1.57, spread: 2.4, life: 1.0, size: 1.8, drag: 1.4, lt: col, ltr: 22 }); } if (ev.pid === local) A.play('boon'); break; }
-      case 'relic': { const p = ctx.player(ev.pid); const r = ED.RELICS[ev.id]; if (p) { F.text(p.x, p.y - 40, r.name, ED.RARITY[r.rar].color, 11, { life: 1.8, max: 1.8 }); F.burst(p.x, p.y - 12, 24, { color: ED.RARITY[r.rar].color, sp: 80, vy: -40, life: 0.9, size: 2.4, add: true }); F.ring(p.x, p.y, 34, ED.RARITY[r.rar].color, 0.5, 3); } if (ev.pid === local) { A.play('relic'); ED.UI && ED.UI.toast(`<b>${r.name}</b> — ${r.desc}`, ED.Icons.relicUrl(ev.id)); } else if (p) F.msg(`${p.name} found ${r.name}`); break; }
+      case 'boon': { const PF = ED.PickFx; if (PF) { const k = PF.kind(ev.id); PF.burst(F, ctx, ev, k); if (ev.pid === local) PF.heard(k, PF.big(ev.id), ev.id); } break; } // themed hero burst for everyone; the local hero's pick cue unless the card click already played it
+      case 'relic': { const p = ctx.player(ev.pid), r = ED.RELICS[ev.id], PF = ED.PickFx; if (p) F.text(p.x, p.y - 40, r.name, ED.RARITY[r.rar].color, 11, { life: 1.8, max: 1.8 }); if (PF) PF.burst(F, ctx, ev, 'relic'); if (ev.pid === local) { if (PF) PF.heard('relic'); ED.UI && ED.UI.toast(`<b>${r.name}</b> — ${r.desc}`, ED.Icons.relicUrl(ev.id)); } else if (p) F.msg(`${p.name} found ${r.name}`); break; }
       case 'lock': A.play('lock'); F.addShake(4); break;
       case 'clear': A.play('unlock'); F.showBanner(ev.trial ? 'Trial complete' : 'Room cleared', '', 'small', 1.4); break;
       case 'bossIntro': F.showBanner(ev.name, ev.title, 'boss', 3.4); F.bossQuote = { text: ev.quote, t: 0 }; A.play('roar'); A.music({ s: ctx.stratum(), boss: true }); F.addShake(8); F.punch(0.9, 0); break;
@@ -715,7 +746,7 @@
         if (sc[2]) F.pop(ev.x, ev.y - 8, 18, sc[1], 0.14);
         break;
       }
-      case 'buy': A.play('buy'); break;
+      case 'buy': A.play('shop'); break; // in-run shop purchase
       case 'fountain': A.play('heal'); F.burst(ev.x, ev.y - 10, 40, { color: '#6fe6ff', sp: 100, vy: -80, life: 1.0, size: 2.6, add: true }); F.ring(ev.x, ev.y, 50, '#6fe6ff', 0.6, 3); break;
       case 'altar': A.play('hurt', 0.6); F.burst(ev.x, ev.y - 10, 30, { color: '#d43a5a', sp: 90, vy: -60, life: 0.8, size: 2.6, add: true }); F.pop(ev.x, ev.y - 16, 36, '#d43a5a', 0.3); break;
       case 'gamble': A.play('chest'); break;
@@ -747,6 +778,12 @@
         F.ring(ev.x, ev.y - 10, 90 * m, '#5a2fb0', 0.5, 6, true); F.ring(ev.x, ev.y - 10, 50 * m, '#c9b3ff', 0.4, 3, true);
         for (let i = 0, n = lowFx() ? 1 : 3; i < n; i++) SP('fx.smoke', ev.x + (i - 1) * 14, ev.y - 12, { ramp: 'shadow', delay: i * 0.06, a: mine ? 1 : 0.6 });
         F.pop(ev.x, ev.y - 12, 50 * m, '#a070ff', 0.3, true); F.addShake(3 * m); A.play('boom', 0.4 * m); break; }
+      case 'beam': { // Sunlance: a straight flame line along the beam (wider with Overheat), a flash at each end
+        const m = ev.pid === local ? 1 : 0.7;
+        F.bolts.push({ pts: [[ev.x0, ev.y0 + 4], [ev.x1, ev.y1 + 4]], life: 0.16, max: 0.16, color: ev.w > 7 ? '#ffd36b' : '#ff9a3a', st: true }); if (F.bolts.length > 24) F.bolts.shift();
+        F.pop(ev.x0, ev.y0 - 6, 14 * m, '#ffcf5a', 0.12); F.pop(ev.x1, ev.y1 - 6, 18 * m, '#ff8a2a', 0.16);
+        if (!lowFx()) F.burst(ev.x1, ev.y1 - 6, 5, { kind: 'ember', color: '#ffb347', sp: 70, life: 0.4, size: 1.6, add: true });
+        break; }
       case 'lance': { // a straight gold line (2 art px) from the shielded hero to the foe
         const m = ev.pid === local ? 1 : 0.7;
         F.bolts.push({ pts: [[ev.x0, ev.y0], [ev.x1, ev.y1]], life: 0.3, max: 0.3, color: '#ffcf5a', st: true }); if (F.bolts.length > 24) F.bolts.shift();
