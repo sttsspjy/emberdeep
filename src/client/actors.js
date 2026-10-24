@@ -265,7 +265,7 @@
     } else if (strike) { P.dx = q2(fc * 4); P.dy = q2(fsn * 2); }
     if (ha >= 0 && ha < 0.12 && fh) { const m = fh.m, g = fh.crit ? 3 : m >= 0.45 ? 2 : m >= 0.2 ? 1 : 0; P.dx += q2(fh.ax * g); P.dy += q2(fh.ay * g * 0.5); } // recoil: an art px away from the blow
     let lift = 0;
-    if (fly) lift = 12 + Math.round(e.r * 0.25) + q2(Math.sin(t * 4 + (e.id | 0)) * 2);
+    if (fly) lift = 2 + q2(Math.sin(t * 4 + (e.id | 0)) * 2); // flyers hover 0-4 px over their shadow: the body stays on the hitbox shots test against
     if (st === 'leap') lift += q2(Math.sin((1 - U.clamp(e.t / 0.35, 0, 1)) * PI) * 26); // the leaper's arc over its 0.35 s flight
     else if (!fly && moving && A.anim(id).n === 2 && Math.floor((t + ph) * 4) % 2) lift += 2; // two-frame walkers hop one art px at 2 Hz
     s.lift = lift;
@@ -915,7 +915,7 @@
     if (s && s.an) return { id: s.an, i: s.fi, flip, lift, type };
     if (!info.k) return null;
     const id = info.k === 2 ? info.idle : info.k === 4 ? info.walk.d : info.walk[0];
-    return A.has(id) ? { id, i: 0, flip: false, lift: info.fly ? 14 : 0, type } : null;
+    return A.has(id) ? { id, i: 0, flip: false, lift: info.fly ? 2 : 0, type } : null;
   };
   // Draws a death snapshot: white silhouette while white, else its recoloured sheet.
   AC.drawSnap = (c, sn, white, a, u) => {

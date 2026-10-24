@@ -379,19 +379,18 @@
     SHOTK.set(pr.id, k);
     return k;
   };
-  // Atlas anim of a shot sprite (every frame) scaled by k (nearest, outline rebuilt at 1 px, one shared crop box); the original id when it cannot be baked.
-  Sp.shotAnim = (id, k) => {
-    const sl = k > 1 ? 0 : 1; let m = SHOTA.get(id); if (!m) SHOTA.set(id, m = [null, null]);
-    let a = m[sl];
+  // Atlas anim of a shot sprite (every frame) scaled by k (nearest, one shared crop box; the outline rebuilt at 1 px, plain: the pixels as they are), cached per (id, k, plain); the original id when it cannot be baked.
+  Sp.shotAnim = (id, k, plain) => {
+    const key = id + '@' + k + (plain ? 'p' : '');
+    let a = SHOTA.get(key);
     if (a) return a;
-    const key = id + (sl ? '@s' : '@h');
     a = id;
     const A = ED.Atlas, r = A && A.ok ? A.anim(id) : null;
     if (r && ED.Pix && ED.Pix.define) {
       try {
         const fr = []; let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1;
         for (let i = 0; i < r.n; i++) {
-          const q = fread(id, i); fstrip(q); const s = foutline(fscale(q, k)); fr.push(s);
+          const q = fread(id, i); if (!plain) fstrip(q); const s = plain ? fscale(q, k) : foutline(fscale(q, k)); fr.push(s);
           for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) if (s.d[y * s.w + x]) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
         }
         const w = x1 - x0 + 1, h = y1 - y0 + 1, gx = fr[0].gx - x0, gy = fr[0].gy - y0, cvs = [];
@@ -404,7 +403,7 @@
         if (ED.Pix.define('wk.' + key, cvs, gx, gy, { dir: fr[0].dir, centre: [gx, gy] }, r.fps, r.loop)) a = 'wk.' + key;
       } catch (e) { console.error('shot look ' + key, e); }
     }
-    if (A && A.ok) m[sl] = a;
+    if (A && A.ok) SHOTA.set(key, a);
     return a;
   };
 

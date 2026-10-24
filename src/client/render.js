@@ -1570,7 +1570,7 @@
     for (let i = 0; i < xm.length; i++) { const g = xm[i](e); if (g) xg[xn++] = g; }
     if (!(vl > 0 || skull || stun || chg || xn)) return;
     const G = foeGeom(e), r = G.r, id = e.id | 0, af = e.elite ? ED.AFFIXES[e.elite] : null, top = G.top - gRise;
-    let b = e.boss ? s2(top) - 4 : s2(Math.min(top - 6, -(r * 2.6 + (e.def.fly ? 14 : 4)))) - 2; // bottom of the free space
+    let b = e.boss ? s2(top) - 4 : s2(Math.min(top - 6, -(r * 2.6 + (e.def.fly && !AC.on() ? 14 : 4)))) - 2; // bottom of the free space (procedural flyers float higher than r * 2.6)
     if (!e.boss) { if (e.ward > 0) b -= (R.scale >= 2 ? 2 : 3) + 1; if (af) b -= Math.ceil(R.labelH()) + 4; }
     const ox = Math.round(e.x), oy = Math.round(e.y) + b; // marks are laid out in the foe's feet frame with the baseline b, drawn at (ox, oy + ...)
     b = 0;
@@ -1728,8 +1728,9 @@
   // ---------------- projectiles ----------------
   // Three passes per frame: 0 registers scene lights, 1 (additive) draws halos, 2 (unlit, after the lighting) draws trails and bodies. Hero shots are atlas sprites rotated through the atlas's 32 baked steps or pixel orbs;
   // foe bullets are pixel orbs sized to their hitbox (disc of r/2 art px, 1 px dark rim, three element tones). Trails are 2 px squares on the art grid; only the halos are soft.
-  const SHOT = { // atlas shots: anim, spin (rad/s; 0 = along the heading), q = quarter turns only
-    arrow: { id: 'proj.arrow' }, bolt: { id: 'proj.bolt' }, knife: { id: 'proj.knife' }, trident: { id: 'proj.trident' }, thorn: { id: 'proj.thorn' }, fireball: { id: 'proj.fireball' },
+  // Round hero shot bodies (orbs, fit sprites), their micro flames and the bright core of their halos stay within the hitbox radius pr.r.
+  const SHOT = { // atlas shots: anim, spin (rad/s; 0 = along the heading), q = quarter turns only, fit = scaled so its trimmed radius is pr.r
+    arrow: { id: 'proj.arrow' }, bolt: { id: 'proj.bolt' }, knife: { id: 'proj.knife' }, trident: { id: 'proj.trident' }, thorn: { id: 'proj.thorn' }, fireball: { id: 'proj.fireball', fit: 1 },
     bone: { id: 'proj.bone', spin: 14 }, boomerang: { id: 'proj.knife', spin: 22 }, hammer: { id: 'proj.hammer', spin: 16 }, shield: { id: 'proj.shield', spin: 14 }, skull: { id: 'proj.skull', spin: 8, q: 1 }, web: { id: 'proj.web', spin: 3 },
   };
   const DIAMOND = { shard: 1, iceshard: 1 }, CRESCENT = { wave: 1, crescent: 1, bloodscythe: 1 };
@@ -1780,14 +1781,23 @@
     if (kind === 'void') Pix.sq(col, 0.5, pr.x - ux * 14 + uy * (Math.floor(t * 20 + pr.id) & 1 ? 3 : -3), y - uy * 14 - ux * (Math.floor(t * 20 + pr.id) & 1 ? 3 : -3), 2); // dithered tail
     if (kind === 'plague') Pix.sq('#d6ff8a', 0.6, pr.x - ux * 12 + uy * Math.sin(t * 9 + pr.id) * 4, y - uy * 12 - ux * Math.sin(t * 9 + pr.id) * 4, 4); // bubble
   }
-  const prebaked = {};
+  const prebaked = {}, sideOf = {};
+  // Scale (0.05 steps) that brings anim id's trimmed radius (half its largest frame side, world px) to r world px.
+  function fitK(id, r) {
+    let sd = sideOf[id];
+    if (sd === undefined) { const a = ED.Atlas.anim(id); sd = 0; if (a) for (const f of a.f) sd = Math.max(sd, f.w, f.h); if (a || ED.Atlas.ok) sideOf[id] = sd; }
+    return sd ? Math.max(0.25, Math.round(r / sd * 20) / 20) : 1;
+  }
   function shotBody(c, pr, t, kind, foe, col) {
     const sh = SHOT[kind], x = Math.round(pr.x), y = Math.round(pr.y - 6), At = ED.Atlas;
     const xb = ED.ClassFx.shotBody; if (xb && xb[kind] && xb[kind](c, pr, t, x, y, foe, col)) return; // ED.ClassFx.shotBody[kind](c, pr, t, x, y, foe, col) replaces the body of a shot kind and returns true (cls-cleric.js: waves); a falsy return keeps the default body
-    if (FLAME[kind] && kind !== 'crescent') { const sp = Math.hypot(pr.vx, pr.vy) || 1; Pix.draw(c, 'fx.ember', '', (t * 12 + pr.id) | 0, x - pr.vx / sp * 9, y - pr.vy / sp * 9, 0.9); } // a micro flame licks behind fire shots
+    if (FLAME[kind] && kind !== 'crescent') { // a micro flame licks behind fire shots: a hero shot's is the fx.ember loop scaled to the hitbox diameter, centred one radius behind
+      const sp = Math.hypot(pr.vx, pr.vy) || 1, ek = foe ? 1 : fitK('fx.ember', pr.r), eid = ek !== 1 ? Sp.shotAnim('fx.ember', ek, true) : 'fx.ember', d = foe ? 9 : pr.r;
+      Pix.draw(c, eid, '', (t * 12 + pr.id) | 0, x - pr.vx / sp * d, y - pr.vy / sp * d, 0.9);
+    }
     const k = foe || !curView ? 1 : Sp.shotK(pr, curView); // 1.2 for a Heavy weapon's shot, 0.85 for a Swift one's (visual only)
     if (sh && At.has(sh.id)) {
-      const id = k !== 1 ? Sp.shotAnim(sh.id, k) : sh.id;
+      const sk = sh.fit ? fitK(sh.id, pr.r) : k, id = sk !== 1 ? Sp.shotAnim(sh.id, sk, !!sh.fit) : sh.id; // a fit sprite follows pr.r, which already carries the Heavy x1.2
       if (!prebaked[id]) { prebaked[id] = 1; for (let f = 0, n = At.anim(id).n; f < n; f++) At.prebake(id, f); } // all 32 rotation steps are baked in the background (Atlas.tick) the first time a shot kind shows up
       let rot = sh.spin ? t * sh.spin + (pr.id & 7) : Math.atan2(pr.vy, pr.vx) - shotDir(id);
       if (sh.q) rot = Math.round(rot / (Math.PI / 2)) * Math.PI / 2;
@@ -1808,7 +1818,7 @@
       for (const pr of ps) {
         const foe = pr.team === 1, kind = pr.kind, y = pr.y - 6;
         if (SOLID[kind]) R.glow(c, pr.x, y, foe ? 15 : 10, HALO[kind] || (foe ? '#ff5a3a' : FX.projColor(kind)), foe ? 0.5 : 0.3);
-        else R.glow(c, pr.x, y, (kind === 'wave' ? Math.min(pr.r, 16) : pr.r) * 2.2 + 7, FX.projColor(kind), foe ? 0.7 : 0.5); // a widened wave keeps the halo of a normal one: its sun body stays readable
+        else { const r = kind === 'wave' ? Math.min(pr.r, 16) : pr.r; R.glow(c, pr.x, y, foe ? r * 2.2 + 7 : r * 1.5 + 3, FX.projColor(kind), foe ? 0.7 : 0.6); } // a widened wave keeps the halo of a normal one: its sun body stays readable; a hero halo's bright core (0.35 of its radius) sits inside the body
       }
       return;
     }
@@ -2010,7 +2020,7 @@
     if (cuePips || cueParry) for (const e of view.enemies) { // class route cues of the local hero: ailment pips under the bar (Brand, Open Veins, Contagion, Gangrene), the Parry rim on a foe in the last 0.3 s of a wind-up
       if (e.hp <= 0 || e.boss || e.burrowed || e.fodder) continue;
       if (cuePips && view.ailments) e.ailN = view.ailments(e); // host and solo foes are sim objects: they count their own ailments (mirror foes carry the host's count)
-      if (cuePips && e.ailN) ED.HUD.foePips(c, e, Math.round(e.x - (e.elite ? 15 : 9)), Math.round(e.y - e.r * 2.6 - (e.def.fly ? 14 : 4)) + bh + 2);
+      if (cuePips && e.ailN) { const an = AC.on() ? AC.anchor(e) : null; ED.HUD.foePips(c, e, Math.round(e.x - (e.elite ? 15 : 9)), (an ? Math.round(e.y + an.top) - 6 : Math.round(e.y - e.r * 2.6 - (e.def.fly ? 14 : 4))) + bh + 2); } // one row under the HP bar (the bar loop below: 6 px over the anchor top)
       if (cueParry && (e.st === 'windup' || e.st === 'aim' || e.st === 'cast') && e.t > 0 && e.t <= ED.CONST.PARRY_WIN) parryRim(c, e);
     }
     for (const e of view.enemies) {
