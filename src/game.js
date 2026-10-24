@@ -183,9 +183,9 @@
     }
   }
   // Prediction state of the local client hero: step remainder acc (al = acc / STEP draws between steps), history of predicted bells (t, lp: an Anchor Leap in flight, b: [x, y, vx, vy, state] per bell as net.js packs them),
-  // send time per input seq, st: snapshots each bell has been in another state than the host's. rn / re / rb / rs: corrections made, their summed phase error (rad: absolute, and signed along the turning sense: > 0 the host's
-  // bell leads), snaps to the host (read by tools/browse.js).
-  const bellState = (s) => s.bp || (s.bp = { acc: 0, al: 1, hist: [], sent: new Map(), seq: 0, bad: 0, haul: false, press: 0, near: false, st: [], rn: 0, re: 0, rb: 0, rs: 0 });
+  // send time per input seq, st: snapshots each bell has been in another state than the host's. rn / re / rb / rs / rss: corrections made, their summed phase error (rad: absolute, and signed along the turning sense: > 0 the host's
+  // bell leads), hand-bell snaps to the host, bells that took the host's state (read by tools/browse.js).
+  const bellState = (s) => s.bp || (s.bp = { acc: 0, al: 1, hist: [], sent: new Map(), seq: 0, bad: 0, haul: false, press: 0, near: false, st: [], rn: 0, re: 0, rb: 0, rs: 0, rss: 0 });
   function bellPredict(s, dt, now) {
     const me = s.me, view = s.view;
     if (!me.bells || !me.stats || me.stats.weapon.kind !== 'bell') return;
@@ -267,7 +267,7 @@
         if (B.st[i] >= BELL_STATE && b.s !== hs && (hs === HAND || hs === ANCHOR)) {
           b.s = hs; b.fly = null; b.reel = null; b.reelQ = false;
           b.x = hs === HAND ? me.bellPx + row[j] : row[j]; b.y = hs === HAND ? me.bellPy + row[j + 1] : row[j + 1]; b.vx = row[j + 2]; b.vy = row[j + 3];
-          B.st[i] = 0; B.rs++;
+          B.st[i] = 0; B.rss++;
         }
         continue;
       }

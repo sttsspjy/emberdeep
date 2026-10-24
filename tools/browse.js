@@ -24,7 +24,7 @@
 //     every element, open and General, purse, Ascended, keystones, duos, an evolution, a Mutation pin, a Twist offer, the --cls route and fork offers, a 6-card dense hand; mid-pick frames (110 and 230 ms,
 //     the hide timer held, animations paused) for poison, holy, ice, lightning, shadow, general, fire-big, mut, twist, route and duo; the fork reveal at rank 2 and 3; a Low quality hand and pick.
 //     Fails on a missing card, a card whose kind differs from ED.PickFx.kind, a frame that did not resolve, equal path gate icons, a pick without an effect layer, or Low quality leftovers.
-//   bell: the hero, Heave and Peal icons and 6 screenshots of the Bellwarden (unlocked for the run; --weapon picks the bell): whirling in a staged fight with Momentum, a Heave in flight, a Peal, four Bellwardens in the crowd at High and Low quality,
+//   bell: the hero, Anchor Leap and Peal icons and screenshots of the Bellwarden (unlocked for the run; --weapon picks the bell): winding in a staged fight with Full Swing, a hurl in flight, the bell anchored, a reel, an Anchor Leap, a Peal, four Bellwardens in the crowd at High and Low quality,
 //     and a client's view from a two-peer net check in the same page (host World + client Game, JSON snapshots, 50 ms each way); fails on bad bells, missing bell events or a client that drifts from the host (see scenBell).
 // Output: compact table (or --json on stdout, logs on stderr); result-<browser>.json and the PNGs in --outdir (default <tmp>/wickdeep-browse). Exit 0 pass, 1 scenario failure, 2 harness error.
 // Notes: Chromium runs headless on the real GPU (ANGLE D3D11, no window); --software forces SwiftShader, where the game reports Post.soft and skips post at 'high' unless --forcepost. Firefox uses its own headless GL.
@@ -511,16 +511,23 @@ function pageBoot(cfg) {
     if (!BR._bev) { BR._bev = {}; const h = F.handle; F.handle = function (ev) { if (ev) { const k = ev.t === 'bstrike' && ev.h ? 'bstrike.h' : ev.t === 'skill' ? 'skill.' + ev.k : ev.t; BR._bev[k] = (BR._bev[k] || 0) + 1; } return h.apply(this, arguments); }; }
     return Object.assign({}, BR._bev);
   };
-  // boons on the solo hero (Momentum makes full-swing strikes Heavy Strikes)
+  // boons on the solo hero
   BR.bellBoons = (boons) => { const s = window.__ED.Game.s, w = s.world, p = s.me; p.boons = Object.assign({}, boons); w.recalc(p, true); w.sendBuild(p); return Object.keys(p.boons); };
-  // the local hero's bells: count, haul, whirl, Heave phase, top speed, chain, the farthest bell from the hero, all numbers finite
+  // the local hero's bells: count, states (ED.Bell.STATES), the most-wound hand bell's wind and the hurl threshold, whirl, an Anchor Leap in flight, Resonance, top speed, chain, the farthest hand bell and the farthest bell
+  // from the hero, the leash, all numbers finite
   BR.bellState = () => {
-    const s = window.__ED.Game.s, p = s.me, b = p.bells || [];
-    let sp = 0, far = 0, fin = true;
-    for (const q of b) { sp = Math.max(sp, Math.hypot(q.vx, q.vy)); far = Math.max(far, Math.hypot(q.x - p.x, q.y - p.y)); for (const v of [q.x, q.y, q.vx, q.vy, q.ox, q.oy]) if (v !== undefined && !isFinite(v)) fin = false; }
-    return { n: b.length, haul: r3(p.haul || 0), whirl: !!p.bellWhirl, heave: p.heave ? p.heave.phase : null, sp: Math.round(sp), L: Math.round(p.bellL || 0), far: Math.round(far), fin, charges: s.ctl.charges, cd2: r3(s.ctl.skill2Cd) };
+    const ED = window.__ED, s = ED.Game.s, p = s.me, b = p.bells || [], C = ED.CONST, ref = p.stats && p.stats.weapon.kind === 'bell' ? ED.Bell.windRef(p.stats) : 0;
+    let sp = 0, far = 0, farAll = 0, wind = 0, fin = true;
+    for (const q of b) {
+      const v = Math.hypot(q.vx, q.vy), d = Math.hypot(q.x - p.x, q.y - p.y);
+      sp = Math.max(sp, v); farAll = Math.max(farAll, d);
+      if (q.s === ED.Bell.STATES.HAND) { far = Math.max(far, d); if (ref > 0) wind = Math.max(wind, Math.min(1, v / ref)); }
+      for (const x of [q.x, q.y, q.vx, q.vy, q.ox, q.oy]) if (x !== undefined && !isFinite(x)) fin = false;
+    }
+    return { n: b.length, s: b.map((q) => q.s), wind: r3(wind), go: C.WIND_GO, whirl: !!p.bellWhirl, leap: !!p.bellLeap, res: p.bellRes | 0, sp: Math.round(sp), L: Math.round(p.bellL || 0), far: Math.round(far), farAll: Math.round(farAll),
+      leash: C.LEASH, fin, charges: s.ctl.charges, cd2: r3(s.ctl.skill2Cd) };
   };
-  // input: hold or release the attack (the Haul), tap a skill key, put the cursor at world (x, y)
+  // input: hold or release the attack (wind; a release hurls, a press reels), tap a skill key, put the cursor at world (x, y)
   BR.bellInput = (o) => {
     const ED = window.__ED, I = ED.Input, R = ED.Render, s = ED.Game.s;
     if (o.haul !== undefined) { if (o.haul) I.keys.add('Mouse0'); else I.keys.delete('Mouse0'); }
@@ -529,7 +536,7 @@ function pageBoot(cfg) {
     if (o.at) { const sp = R.toScreen(o.at[0], o.at[1]); I.mouse.x = sp.x / (R.dpr || 1); I.mouse.y = sp.y / (R.dpr || 1); I.mouse.moved = performance.now(); I.mouse.inside = true; }
     return s ? { x: Math.round(s.me.x), y: Math.round(s.me.y) } : null;
   };
-  // three more Bellwardens hauling beside the solo hero (weapons: their weapon ids), for the four-hero crowd shot
+  // three more Bellwardens winding beside the solo hero (weapons: their weapon ids), for the four-hero crowd shot
   BR.bellParty = (weapons) => {
     const ED = window.__ED, s = ED.Game.s, w = s.world, me = s.me, out = [];
     weapons.forEach((wid, i) => {
@@ -540,7 +547,7 @@ function pageBoot(cfg) {
     });
     return out;
   };
-  // Two peers in one page: a host World (hero h0 hauling in place, hero c1 the client's) steps at 60 Hz and sends snapshots at 20 Hz through JSON, each way delayed lat s;
+  // Two peers in one page: a host World (hero h0 winding in place, hero c1 the client's) steps at 60 Hz and sends snapshots at 20 Hz through JSON, each way delayed lat s;
   // this page runs Game as the client of c1 (prediction and reconciliation of its own bells, interpolation of h0's) under scripted input; ring: four still foes around c1 (host strikes slow its bell). Returns the client's reconcile stats and bell checks.
   BR.bellNet = async (secs, lat, ring) => {
     const ED = window.__ED, G = ED.Game, N = ED.Net, I = ED.Input, meta = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
@@ -550,7 +557,7 @@ function pageBoot(cfg) {
     const later = (f) => setTimeout(f, lat * 1000);
     const net = { send: (m) => { const d = JSON.parse(JSON.stringify(m)); later(() => {
       const p = w.players.get('c1'); if (!p) return;
-      if (d.t === 'in') { p.x = +d.x; p.y = +d.y; p.face = +d.f || 0; p.moving = !!d.mv; p.vx = +d.vx || 0; p.vy = +d.vy || 0; if (d.h !== undefined) { p.haulIn = !!d.h; p.inSeq = d.q | 0; p.inT = w.time; } }
+      if (d.t === 'in') { p.x = +d.x; p.y = +d.y; p.face = +d.f || 0; p.moving = !!d.mv; p.vx = +d.vx || 0; p.vy = +d.vy || 0; if (d.h !== undefined) { p.haulIn = !!d.h; p.haulPress = d.hp | 0; p.haulNear = !!d.nh; p.inSeq = d.q | 0; p.inT = w.time; } } // as game.js applies a client's input
       else if (d.t === 'act') G.applyAction(w, 'c1', d.a);
     }); }, sendTo: () => {}, broadcast: () => {} };
     G.start('client', { localPid: 'c1', players, pact: 0, net });
@@ -589,10 +596,10 @@ function pageBoot(cfg) {
     BR._bellHost = host; // stopped by bellNetEnd, after the screenshot
     const s = G.s, B = s && s.bp, p = s && s.me;
     let fin = !!p && !!p.bells && p.bells.length === 1, far = 0;
-    if (p && p.bells) for (const b of p.bells) { for (const v of [b.x, b.y, b.vx, b.vy, b.ox, b.oy]) if (!isFinite(v)) fin = false; far = Math.max(far, Math.hypot(b.x - p.x, b.y - p.y)); }
+    if (p && p.bells) for (const b of p.bells) { for (const v of [b.x, b.y, b.vx, b.vy, b.ox, b.oy]) if (!isFinite(v)) fin = false; if (b.s === ED.Bell.STATES.HAND) far = Math.max(far, Math.hypot(b.x - p.x, b.y - p.y)); }
     const hostC1 = w.players.get('c1');
     const m = B && w0 && B.rn > w0.rn ? B.rn - w0.rn : 0;
-    return { steps, snaps, sent: B ? B.seq : 0, rn: m, err: m ? r3((B.re - w0.re) / m) : null, bias: m ? r3((B.rb - w0.rb) / m) : null, snapsToHost: B ? B.rs : 0, fin, far: Math.round(far), chain: p ? p.stats.weapon.chain : 0,
+    return { steps, snaps, sent: B ? B.seq : 0, rn: m, err: m ? r3((B.re - w0.re) / m) : null, bias: m ? r3((B.rb - w0.rb) / m) : null, snapsToHost: B ? B.rs : 0, stateSnaps: B ? B.rss | 0 : 0, fin, far: Math.round(far), chain: p ? p.stats.weapon.chain : 0,
       remoteN, remoteHauled: hauledSeen, remoteBad, hostStrikes: hostC1 ? hostC1.atkCount | 0 : 0, hostHaul: hostC1 ? !!hostC1.haulIn : null, version: N.VERSION };
   };
   // the Bellwarden's icons (hero, Heave, Peal) side by side at 128 px: PNG data URL
@@ -1173,13 +1180,15 @@ async function scenWardrobe() {
   return res;
 }
 
-// bell: the Bellwarden (unlocked on the profile) wielding --weapon (default its first) in a staged fight of 14 foes with Momentum: whirl, a Heave in flight, a Peal, a four-Bellwarden crowd (High and Low quality),
-// then a two-peer net check in the same page (BR.bellNet: host World + client Game over JSON with 50 ms each way). Fails on a page error, a non-finite or runaway bell, no strike / Heavy Strike / Peal / Heave event,
-// a client whose bells drift from the host's (after 1 s: mean phase error over 0.3 rad, a lead or lag over 0.08 rad on open floor or 0.2 among foes, snaps beyond the first), remote bells that never show the host's Haul, or no strike on the host from the client's input.
+// bell: the Bellwarden (unlocked on the profile) wielding --weapon (default its first) in a staged fight of 14 foes with Full Swing: wind, a full-wind hurl (in flight, anchored), a tap that reels it home, a hurl and an Anchor Leap to it, a Peal,
+// a four-Bellwarden crowd (High and Low quality), then a two-peer net check in the same page (BR.bellNet: host World + client Game over JSON with 50 ms each way). Fails on a page error, a non-finite or runaway bell
+// (a hand bell off its chain, any bell past the leash), a full-wind release that does not hurl, a hurl that never anchors, a tap that does not reel, a bell that never comes home, no strike / hurl / reel / Peal / Anchor Leap event,
+// a client whose bells drift from the host's (after 1 s: mean phase error over 0.3 rad, a lead or lag over 0.08 rad on open floor or 0.2 among foes, phase snaps beyond the first; state snaps are reported), remote bells that never show the host's wind,
+// or no hurl on the host from the client's input.
 async function scenBell() {
   const o = S.opt, cls0 = o.cls, q = qualitiesOr(['high'])[0], wid = o.weapon ? o.weapon.split(',')[0] : '';
   o.cls = 'bell'; // shot names and the result row name the Bellwarden
-  const res = newResult('bell'), { ctx, page, errors } = await openPage();
+  const res = newResult('bell'), { ctx, page, errors } = await openPage(), FLY = 1, ANCHOR = 2, REEL = 3, HAND = 0; // ED.Bell.STATES
   const st = () => call(page, 'bellState');
   const waitFor = async (pred, ms) => { const t0 = Date.now(); let s; do { s = await st(); if (pred(s)) return s; await wait(100); } while (Date.now() - t0 < ms); return s; };
   try {
@@ -1198,28 +1207,59 @@ async function scenBell() {
     for (let i = 0; i < 6 && await call(page, 'offerOpen'); i++) { await call(page, 'take'); await wait(300); }
     const stg = await call(page, 'stage', 14, o.strat);
     notes(res, `staged room ${stg.w}x${stg.h}, stratum ${stg.stratum}; boons ${(await call(page, 'bellBoons', { b_atk: 1 })).join(', ')}`);
+    const bad = (s) => !s.fin || s.far > s.L * 2 + 20 || s.farAll > s.leash + 140; // a hand bell off its chain, any bell past the leash's drag, a non-finite number
     await call(page, 'drive', true, false);
     let whirl = 0, worst = null;
-    for (let i = 0; i < 25; i++) { await wait(120); const s = await st(); if (s.whirl) whirl++; if (!s.fin || s.far > s.L * 2 + 20) worst = s; }
-    await shoot(page, res, 'whirl');
+    for (let i = 0; i < 25; i++) { await wait(120); const s = await st(); if (s.whirl) whirl++; if (bad(s)) worst = s; }
+    await shoot(page, res, 'wind');
     await call(page, 'drive', false, false);
-    if (!whirl) fail(res, 'the hauled bell never reached strike speed in 3 s of driving');
+    if (!whirl) fail(res, 'the wound bell never reached strike speed in 3 s of driving');
+    // a hurl at full wind toward a point 150 px to the right: the bell flies, lies anchored, and a tap reels it home
+    const me = await call(page, 'bellInput', { haul: true });
+    await call(page, 'bellInput', { at: [me.x + 150, me.y] });
+    const hurl = async (tag) => {
+      const wd = await waitFor((s) => s.wind >= 1, 4000);
+      if (!(wd.wind >= wd.go)) { fail(res, `${tag}: the bell wound to ${wd.wind} in 4 s, below the hurl threshold ${wd.go}`); return false; }
+      await call(page, 'bellInput', { haul: false });
+      const fl = await waitFor((s) => s.s.includes(FLY) || s.s.includes(ANCHOR), 500);
+      if (!fl.s.includes(FLY) && !fl.s.includes(ANCHOR)) { fail(res, `${tag}: a release at wind ${wd.wind} did not hurl (states ${fl.s})`); return false; }
+      return true;
+    };
+    if (await hurl('hurl')) {
+      await shoot(page, res, 'hurl');
+      const an = await waitFor((s) => s.s.includes(ANCHOR), 1500);
+      if (bad(an)) worst = an;
+      if (!an.s.includes(ANCHOR)) fail(res, 'the hurled bell never lay anchored (states ' + an.s + ')');
+      else {
+        await shoot(page, res, 'anchor');
+        await call(page, 'bellInput', { haul: true }); await wait(50); await call(page, 'bellInput', { haul: false });
+        const rl = await waitFor((s) => s.s.includes(REEL) || s.s.every((x) => x === HAND), 400);
+        if (!rl.s.includes(REEL) && !rl.s.every((x) => x === HAND)) fail(res, 'a tap did not reel the anchored bell (states ' + rl.s + ')');
+        else if (rl.s.includes(REEL)) await shoot(page, res, 'reel');
+        const hm = await waitFor((s) => s.s.every((x) => x === HAND), 2000);
+        if (!hm.s.every((x) => x === HAND)) fail(res, 'the reeled bell never came home (states ' + hm.s + ')');
+      }
+    }
+    // Anchor Leap to an anchored bell, then a Peal at full wind
+    await waitFor((s) => s.charges > 0, 7000);
+    await call(page, 'bellInput', { haul: true });
+    if (await hurl('leap')) {
+      await waitFor((s) => s.s.includes(ANCHOR), 1500);
+      await call(page, 'bellInput', { key: 'KeyQ' });
+      const lp = await waitFor((s) => s.leap, 500);
+      await shoot(page, res, 'leap');
+      if (!lp.leap) notes(res, 'leap shot: the hero was not in an Anchor Leap (states ' + lp.s + ')');
+    }
+    const fin = await waitFor((s) => s.cd2 <= 0 && !s.leap, 12000);
+    if (bad(fin)) worst = fin;
     if (worst) fail(res, 'a bell left its chain or went non-finite: ' + JSON.stringify(worst));
-    // a Heave in flight, then a Peal at full swing
-    const me = await call(page, 'bellInput', { haul: false });
-    await waitFor((s) => s.charges > 0 && !s.heave, 7000);
-    await call(page, 'bellInput', { at: [me.x + 120, me.y], key: 'KeyQ' });
-    const hv = await waitFor((s) => s.heave === 'fly', 600);
-    await shoot(page, res, 'heave');
-    if (hv.heave !== 'fly') notes(res, 'Heave shot: the bell was ' + (hv.heave || 'not in a Heave'));
-    await waitFor((s) => !s.heave && s.cd2 <= 0, 12000);
     await call(page, 'bellInput', { haul: true });
     await wait(1600);
     await call(page, 'bellInput', { key: 'KeyE' });
     await wait(90);
     await shoot(page, res, 'peal');
     await call(page, 'bellInput', { haul: false });
-    // four Bellwardens hauling in the crowd, High then Low quality
+    // four Bellwardens winding in the crowd, High then Low quality
     notes(res, 'party weapons: ' + (await call(page, 'bellParty', ['greatbell', 'handbells', 'chimes'])).join(', '));
     await call(page, 'bellInput', { haul: true });
     await wait(1500);
@@ -1231,20 +1271,20 @@ async function scenBell() {
     await call(page, 'bellInput', { haul: false });
     await call(page, 'stage', 0);
     const ev = await call(page, 'bellCount');
-    notes(res, 'events: ' + ['bstrike', 'bstrike.h', 'peal', 'skill.heave', 'skill.peal', 'deflect', 'hit'].map(k => k + ' ' + (ev[k] | 0)).join(', '));
-    for (const k of ['bstrike', 'bstrike.h', 'peal', 'skill.heave']) if (!ev[k]) fail(res, 'no ' + k + ' event');
+    notes(res, 'events: ' + ['bstrike', 'hurl', 'reel', 'chain', 'peal', 'skill.heave', 'skill.peal', 'deflect', 'hit'].map(k => k + ' ' + (ev[k] | 0)).join(', '));
+    for (const k of ['bstrike', 'hurl', 'reel', 'peal', 'skill.heave', 'skill.peal']) if (!ev[k]) fail(res, 'no ' + k + ' event');
     // two peers in one page: open floor (prediction alone), then a ring of foes (host strikes slow the bell: reconciliation)
     for (const ring of [false, true]) {
       const nt = await call(page, 'bellNet', ring ? 7 : 5, 0.05, ring), tag = ring ? 'foes' : 'open';
       if (ring) await shoot(page, res, 'net-client');
       await call(page, 'bellNetEnd');
-      notes(res, `net v${nt.version} ${tag}: ${nt.steps} host steps, ${nt.snaps} snapshots, ${nt.sent} inputs; client corrections after 1 s ${nt.rn}, phase error mean ${nt.err} rad (signed ${nt.bias}), snaps ${nt.snapsToHost}; own bell max ${nt.far} px (chain ${nt.chain}); host strikes from the client ${nt.hostStrikes}; remote haul seen ${nt.remoteHauled}/${nt.remoteN}`);
+      notes(res, `net v${nt.version} ${tag}: ${nt.steps} host steps, ${nt.snaps} snapshots, ${nt.sent} inputs; client corrections after 1 s ${nt.rn}, phase error mean ${nt.err} rad (signed ${nt.bias}), phase snaps ${nt.snapsToHost}, state snaps ${nt.stateSnaps}; own hand bell max ${nt.far} px (chain ${nt.chain}); hurls on the host from the client ${nt.hostStrikes}; remote wind seen ${nt.remoteHauled}/${nt.remoteN}`);
       if (!nt.fin || nt.far > nt.chain * 2 + 20) fail(res, tag + ': the client\'s predicted bell is non-finite or off its chain');
       if (!(nt.rn > 0)) fail(res, tag + ': the client never reconciled its bell against a snapshot');
       else if (nt.err > 0.3 || Math.abs(nt.bias) > (ring ? 0.2 : 0.08)) fail(res, `${tag}: client bell phase error ${nt.err} rad on average (signed ${nt.bias})`); // noise: about one 60 Hz step of orbit; bias: the strikes the client learns of a round trip late (foes)
-      if (nt.snapsToHost > 1) fail(res, tag + ': the client snapped its bell to the host ' + nt.snapsToHost + ' times');
-      if (!nt.remoteHauled || nt.remoteBad) fail(res, `${tag}: remote bells: haul seen ${nt.remoteHauled}, ${nt.remoteBad} off their chain`);
-      if (ring && !nt.hostStrikes) fail(res, 'the client\'s Haul never struck on the host');
+      if (nt.snapsToHost > 1) fail(res, tag + ': the client snapped its hand bell to the host ' + nt.snapsToHost + ' times');
+      if (!nt.remoteHauled || nt.remoteBad) fail(res, `${tag}: remote bells: wind seen ${nt.remoteHauled}, ${nt.remoteBad} off their chain`);
+      if (ring && !nt.hostStrikes) fail(res, 'the client\'s release never hurled on the host');
     }
   } finally { res.errors = errors; o.cls = cls0; await ctx.close(); }
   if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
