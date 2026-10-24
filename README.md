@@ -92,7 +92,7 @@ Every hero also chooses a **route**: how their kit grows.
 
 ### Elemental weaknesses
 
-Every stratum is **weak** to one element (your damage and status build-up with it are x1.5) and **resists** another (x0.5). General and physical hits ignore this. The Chronicle tab in the Hearth lists it too.
+Every stratum is **weak** to one element (your damage and status build-up with it are x1.5) and **resists** another (÷1.5, about x0.67). General and physical hits ignore this. The Chronicle tab in the Hearth lists it too.
 
 | Stratum | Weak to | Resists |
 | --- | --- | --- |

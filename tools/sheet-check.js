@@ -60,9 +60,9 @@ function modelOf(cls, boons, wi, o) {
 {
   const aff = (cls, boons, stratum) => modelOf(cls, boons, 0, { ctx: { stratum } }).aff.now.mine;
   let a = aff('cleric', {}, 2).find(x => x.el === 'holy');
-  ok(a && a.why === 'class' && a.mul === 0.5 && a.skillMul === 0.75, 'fresh Cleric, stratum II: Holy statuses x0.5, skills x0.75');
+  ok(a && a.why === 'class' && Math.abs(a.mul - 2 / 3) < 1e-9 && Math.abs(a.skillMul - 5 / 6) < 1e-9, 'fresh Cleric, stratum II: Holy statuses x0.667, skills x0.833');
   a = aff('cleric', { consecrate: 1 }, 2).find(x => x.el === 'holy');
-  ok(a && a.why === 'path' && a.mul === 0.5 && a.skillMul === 0.75, 'Cleric with the Holy gate keeps the class-skill affinity');
+  ok(a && a.why === 'path' && Math.abs(a.mul - 2 / 3) < 1e-9 && Math.abs(a.skillMul - 5 / 6) < 1e-9, 'Cleric with the Holy gate keeps the class-skill affinity');
   a = aff('pyro', { kindle: 1 }, 3).find(x => x.el === 'fire');
   ok(a && a.mul === 1.5 && a.skillMul === 1.25, 'Pyromancer with Kindle, stratum III: statuses x1.5, skills x1.25');
   a = aff('knight', { kindle: 1 }, 3).find(x => x.el === 'fire');

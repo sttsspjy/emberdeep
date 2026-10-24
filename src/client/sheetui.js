@@ -42,7 +42,7 @@
   };
 
   // ---------------- header ----------------
-  // "Weak: Fire → your Fire ×1.50" and "Resists: Ice → your Ice ×0.50" chips of a stratum (the multiplier only for elements the hero uses); the class element lists its skills (half the affinity) before its statuses.
+  // "Weak: Fire → your Fire ×1.50" and "Resists: Ice → your Ice ×0.67" chips of a stratum (the multiplier only for elements the hero uses); the class element lists its skills (half the affinity) before its statuses.
   function affChips(a) {
     const chip = (el, kind) => {
       if (!el || !ED.PATHS[el]) return '';
