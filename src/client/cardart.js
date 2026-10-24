@@ -15,8 +15,9 @@
   const METAL = {
     iron: ['#c9c1b3', '#857d71', '#4b453d'], silver: ['#e8f3ff', '#94b7de', '#48668e'],
     violet: ['#f0dcff', '#b385ec', '#5d3792'], gold: ['#fff2bc', '#e5ad3e', '#875a1b'],
+    copper: ['#ffd9b8', '#d9773a', '#7a3a18'], black: ['#8f8288', '#4d4247', '#211a1e'],
   };
-  const RAR_METAL = { c: 'iron', r: 'silver', e: 'violet', l: 'gold', d: 'violet', a: 'gold' };
+  const RAR_METAL = { c: 'iron', r: 'silver', e: 'violet', l: 'gold', d: 'violet', a: 'gold', m: 'copper', t: 'black' };
   CA.metal = (rar) => RAR_METAL[rar] || 'iron';
   const tones = (c) => [U.mix(c, '#ffffff', 0.55), c, U.shade(c, -0.32), U.shade(c, -0.64)];
   const TONE = {
@@ -172,6 +173,26 @@
     corner(g, 'tl tr bl br', ['.ooooo', 'oMMMmo', 'oMwmdo', 'oMmddo', 'ommddo', '.oooo.'], B - 2, B - 2);
     return finish(g);
   };
+  K.mut = (o) => { // grown: a double helix along the top and bottom bands, cysts swelling out of the corners, nodules on the sides
+    const g = base(Object.assign({ inner: 'q', round: 6 }, o));
+    edge(g, 'tb', (i) => {
+      const v = Math.round(1.6 * Math.sin(i * Math.PI / 4)), a = 2 + v, b = 2 - v, c = Array(5).fill('.');
+      if (a === b) { c[a] = 'Y'; return c; }
+      if (i % 4 === 2) for (let k = Math.min(a, b) + 1; k < Math.max(a, b); k++) c[k] = 'q'; // the rungs
+      c[a] = 'P'; c[b] = 'p';
+      return c;
+    });
+    edge(g, 'lr', (i) => (i === 2 ? ['P', 'Y'] : i === 6 ? ['p'] : null));
+    corner(g, 'tl tr bl br', ['..pPp..', '.pPYPp.', 'pPYwYPp', 'pPYYPPp', '.pPPPp.', '..ppp..'], 1, 1);
+    return finish(g);
+  };
+  K.twist = (o) => { // a pact: barbed wire wound round the band, hooked thorns out of every corner (the wax seal is the crest sprite)
+    const g = base(Object.assign({ inner: 'q' }, o)), WIRE = ['q', 'p', 'P', 'p', 'q', 'p', 'P', 'p'], pts = [];
+    edge(g, 'tblr', (i) => { const c = ['.', WIRE[i], '.', '.']; if (i === 2) { c[0] = 'p'; c[2] = 'P'; c[3] = 'Y'; } if (i === 6) { c[0] = 'q'; c[2] = 'p'; } return c; });
+    line(pts, 7, 7, 2, 2, 'P', 'q'); pts.push([1, 1, 'Y'], [3, 1, 'p'], [1, 3, 'p']);
+    plot(g, 'tl tr bl br', pts);
+    return finish(g);
+  };
   // Duo: the first path's mask on the top and left, the second's on the bottom and right, the top-right and bottom-left corners split on the diagonal.
   const SECOND = { Y: 'y', P: 'X', p: 'x', q: 'z' };
   function duo(a, b, o) {
@@ -199,7 +220,7 @@
       let g, t1, t2;
       if (kind === 'duo') { g = duo(o.a, o.b, big); t1 = TONE[o.a] || TONE.fire; t2 = TONE[o.b] || TONE.ice; }
       else if (kind === 'route') { g = K.route(big); const cl = ED.CLASSES[o.cls]; t1 = tones(cl ? cl.col.c : '#d6aa55'); }
-      else { g = (K[kind] || K.general)(big); t1 = kind === 'purse' ? ['#ffe9a0', '#ffd36b', '#b8892c', '#5e4410'] : kind === 'asc' ? tones(ED.RARITY.a.color) : TONE[kind] || TONE.general; }
+      else { g = (K[kind] || K.general)(big); t1 = kind === 'purse' ? ['#ffe9a0', '#ffd36b', '#b8892c', '#5e4410'] : kind === 'asc' ? tones(ED.RARITY.a.color) : kind === 'mut' ? tones(ED.RARITY.m.color) : kind === 'twist' ? tones(ED.RARITY.t.color) : TONE[kind] || TONE.general; }
       PU.frame(name, { rows: rowsOf(g), pal: pal(metal, t1, t2), slice: SL, border: SL });
       made[name] = 1;
     }
@@ -228,13 +249,25 @@
     for (const [x, yy] of [[2, -1], [3, -1], [1, 0], [4, 0], [1, 1], [4, 1], [2, 2], [3, 2]]) s(x, y + yy, 'P');
     s(2, y, 'Y');
   }), { Y: '#e8ffb8', P: '#9be33c' });
-  // poison: a drip swells under an edge, falls and is gone (4 x 12, 8 frames)
-  sp('drip', strip(8, 4, 12, (f, s) => {
+  // poison: a drip swells under an edge, falls and is gone (4 x 12, 8 frames); twist: the same drop in blood off the barbs
+  const DRIP = strip(8, 4, 12, (f, s) => {
     const L = [1, 2, 3, 4, 2, 1, 1, 0][f];
     for (let y = 0; y < L; y++) { s(1, y, 'P'); s(2, y, y === L - 1 && f < 4 ? 'P' : 'p'); }
     if (f === 3) { s(1, 4, 'P'); s(2, 4, 'p'); }
     if (f >= 4 && f <= 6) { const y = 4 + (f - 4) * 3; s(1, y, 'P'); s(2, y, 'p'); s(1, y + 1, 'p'); }
-  }), { P: '#9be33c', p: '#58a31c' });
+  });
+  sp('drip', DRIP, { P: '#9be33c', p: '#58a31c' });
+  sp('blood', DRIP, { P: '#e8344e', p: '#8a1426' });
+  // mut: a cell swells, pinches in two and the halves drift apart (9 x 7, 8 frames; blobs [cx, cy, rx, ry], outlined)
+  const CELLS = [[[4, 3, 1, 1]], [[4, 3, 1.6, 1.6]], [[4, 3, 2.3, 2.3]], [[4, 3, 3.2, 2.3]], [[2.6, 3, 2, 2], [5.4, 3, 2, 2]], [[2, 3, 1.8, 1.8], [6, 3, 1.8, 1.8]], [[1.5, 3, 1.2, 1.2], [6.5, 3, 1.2, 1.2]], []];
+  sp('cell', strip(8, 9, 7, (f, s) => {
+    const W = 9, H = 7, m = [], at = (x, y) => x >= 0 && y >= 0 && x < W && y < H && m[y * W + x];
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) m.push(CELLS[f].some(([cx, cy, rx, ry]) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1));
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (at(x, y)) { const b = CELLS[f].find(([cx, cy, rx, ry]) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1), d = (x - b[0]) + (y - b[1]); s(x, y, d < -b[2] * 0.6 ? 'Y' : d > b[2] * 0.7 ? 'p' : 'P'); }
+      else if (at(x - 1, y) || at(x + 1, y) || at(x, y - 1) || at(x, y + 1)) s(x, y, 'o');
+    }
+  }), { Y: '#ffe2c8', P: '#ff8a4a', p: '#b4501e' });
   // shadow: a smoke wisp curls up and thins out (6 x 14, 8 frames)
   sp('wisp', strip(8, 6, 14, (f, s) => {
     const n = f < 4 ? f + 2 : 9 - f;
@@ -262,6 +295,10 @@
   sp('eye', [ // shadow: eye sigil (14 x 8)
     '....oooooo....', '..ooPPPPPPoo..', '.oPpqqwwqqpPo.', 'oPpqwXXXXwqpPo', 'oPpqwXkkXwqpPo', '.oPpqqXXqqpPo.', '..ooPPPPPPoo..', '....oooooo....',
   ], { P: '#a070ff', p: '#6a3dc8', q: '#331966', w: '#e4d8ff', X: '#ff5fd2', k: '#0b0806' });
+  sp('seal', [ // twist: the wax seal of the pact with its sigil ring (14 x 14)
+    '.....oooo.....', '...ooPPPPoo...', '..oPPYYPPPPo..', '.oPYYPPPPPPpo.', '.oPYPPkkPPPpo.', 'oPPPPkPPkPPppo', 'oPPPkPPPPkPppo',
+    'oPPPkPPPPkPppo', 'oPPPPkPPkPPppo', '.oPPPPkkPPppo.', '.oPPPPPPPpppo.', '..oPpPPpppqo..', '...oopppqoo...', '.....oooo.....',
+  ], { Y: '#ff8f9e', P: '#e8344e', p: '#a81c32', q: '#5e0c1a', k: '#5e0c1a' });
   sp('knot', [ // purse: drawstring knot and a coin clasp (16 x 10)
     '...oo......oo...', '..oLLo....oLLo..', '..oLlLo..oLlLo..', '...olLLooLLlo...', '....oolYYloo....', '.....oYwYYYo....', '.....oYYYppo....', '.....oYYppqo....', '......opqqo.....', '.......ooo......',
   ], { L: '#a8754a', l: '#7a5232', Y: '#ffd36b', w: '#fff6c8', p: '#b8892c', q: '#5e4410' });

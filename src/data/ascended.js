@@ -1,5 +1,5 @@
 // Ascended boons: the upgrade of a maxed open or General boon, rarity 'a', merged into ED.BOONS as 'asc_<base>' (max 1, no path: never counts toward affinity, carries the base's weapon need).
-// ED.ASCENDED[base] = { name, icon, desc, x: { stat: factor }, mods? }: x multiplies the stat block after every additive source (stats.js: s[stat] *= 1 + factor); mods add like a boon's.
+// ED.ASCENDED[base] = { name, icon, desc, x: { stat: factor }, mods?, off? }: x multiplies the stat block after every additive source (stats.js: s[stat] *= 1 + factor); mods add like a boon's; off: defined but never offered (its base left the level and room pools).
 // Offered from stratum ASC_STRATUM on level, room and epic offers (build.js W.ascCards): at most ASC_PER_STRATUM picks per stratum, one card pinned to slot 1.
 (function (ED) {
   'use strict';
@@ -13,7 +13,7 @@
     brutal: { name: 'Savage', icon: 'skull', desc: 'Your bonus crit damage is multiplied by 1.5.', x: { critDmg: 0.5 } },
     wide: { name: 'Vast', icon: 'arc', desc: 'Your area bonus is multiplied by 1.5.', x: { area: 0.5 } },
     vigor: { name: 'Titan', icon: 'heart', desc: 'Your max health is multiplied by 1.12.', x: { hpMul: 0.12 } },
-    plating: { name: 'Bastion', icon: 'shield', desc: 'Your armor is multiplied by 1.5.', x: { armor: 0.5 } },
+    plating: { name: 'Bastion', icon: 'shield', desc: 'Your armor is multiplied by 1.5.', x: { armor: 0.5 }, off: true },
     lacerate: { name: 'Hemorrhage', icon: 'dagger', desc: 'Your bonus damage to bleeding foes is doubled.', x: { lacerate: 1 } },
     execute: { name: 'Headsman', icon: 'axe', desc: 'Your bonus damage to foes below 30% health is doubled.', x: { execute: 1 } },
     deepcuts: { name: 'Bloodletting', icon: 'blades', desc: 'Your bonus Bleed damage is multiplied by 1.5.', x: { bleedMul: 0.5 } },
@@ -23,6 +23,7 @@
     const a = A[base], id = 'asc_' + base, b = ED.BOONS[base];
     ED.BOONS[id] = { name: a.name, rar: 'a', icon: a.icon, desc: a.desc, mods: a.mods || {}, x: a.x, asc: base, max: 1 };
     if (b.need) ED.BOONS[id].need = b.need;
+    if (a.off) ED.BOONS[id].off = true;
     ED.ASC_IDS.push(id);
   }
   ED.BOON_IDS = Object.keys(ED.BOONS);

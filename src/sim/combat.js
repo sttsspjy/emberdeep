@@ -160,6 +160,7 @@
       }
     }
     dmg *= e.dmgTakenMul ?? 1;
+    if (src.pyre) { src.critOut = crit; src.guarded = guarded; return ED.TWIST.pyreHit.call(this, p, e, dmg, crit, comp, src); } // TWIST hook (src/sim/twist.js): a Pacifist's Pyre weapon hit only builds statuses
     if (e.ward > 0) { const ab = Math.min(e.ward, dmg * 0.75); e.ward -= ab; dmg -= ab; if (e.ward <= 0) this.emit({ t: 'wardbreak', x: e.x, y: e.y }); }
     src.critOut = crit; src.guarded = guarded;
     if (dmg <= 0) return 0;
@@ -998,7 +999,7 @@
       return;
     }
     p.face = a; p.atkCount++; p.stealthT = 0; p.lastAtkT = this.time;
-    if (p.twist) ED.TWIST.onAttack.call(this, p); // TWIST hook (src/sim/twist.js)
+    const twMul = p.twist ? ED.TWIST.onAttack.call(this, p) : 1; // TWIST hook (src/sim/twist.js): the attack's damage factor (Metronome)
     if (st.swift) p.flowT = C.FLOW_T;
     let crit, amb = null;
     if (p.critStacks > 0) { p.critStacks--; crit = true; }
@@ -1017,6 +1018,7 @@
       const follow = this.time < p.cleaveNext;
       if (follow || p.atkCount % (3 + st.cleaveN) === 0) { amb = Object.assign({}, amb, { cleave: st.cleave + (follow ? st.chargeCleave : 0) }); p.cleaveNext = 0; }
     }
+    if (twMul !== 1) amb = Object.assign({}, amb, { mul: ((amb && amb.mul) || 1) * twMul }); // TWIST hook: the factor rides every weapon hit of the attack (swing, shots, their blasts)
     const co = ch && ch.attackOpts ? ch.attackOpts.call(this, p, st) : null;
     const base = co ? Object.assign({}, co, amb, co.mul && amb && amb.mul ? { mul: co.mul * amb.mul } : null) : amb; // a class mul (Grave swing) and an attack mul (Masterstroke, Ambush) multiply
     const reps = st.twinEvery && p.atkCount % st.twinEvery === 0 ? 2 : 1;

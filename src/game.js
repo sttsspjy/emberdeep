@@ -431,10 +431,12 @@
   function control(s, inp, dt) {
     const me = s.me, view = s.view, ctl = s.ctl, st = me.stats;
     ctl.atkCd -= dt; ctl.tranceT -= dt; ctl.skill2Cd -= dt;
+    const cd0 = ED.TWIST.cd(st, 0), cd1 = ED.TWIST.cd(st, 1); // a cast's cooldown per slot (Bloodprice: TWIST_C.GAP; a cooldown running when it is taken is cut to that)
+    if (st.twBlood) { ctl.skillCd = Math.min(ctl.skillCd, cd0); ctl.skill2Cd = Math.min(ctl.skill2Cd, cd1); }
     if (Sim.dashTick(ctl, st, dt) && ED.FX && ED.FX.cue) ED.FX.cue('dcharge'); // a charge refilled
     if (s.mode === 'client') for (const k of MIRROR_TIMERS) if (me[k] > 0) me[k] -= dt; // a mirror hero has no world tick
     if (s.mode === 'client') { me.atkAge = (me.atkAge === undefined ? 9 : me.atkAge) + dt; me.chanT = st.channel > 0 && !me.moving && me.atkAge < ED.chanWindow(me) ? (me.chanT || 0) + dt : 0; } // Channel (a client's chip estimates the host's value)
-    if (ctl.charges < st.maxCharges) { ctl.skillCd -= dt; while (ctl.skillCd <= 0 && ctl.charges < st.maxCharges) { ctl.charges++; ctl.skillCd = ctl.charges < st.maxCharges ? ctl.skillCd + st.skillCd : 0; } } // a refund past the running cooldown carries into the next charge
+    if (ctl.charges < st.maxCharges) { ctl.skillCd -= dt; while (ctl.skillCd <= 0 && ctl.charges < st.maxCharges) { ctl.charges++; ctl.skillCd = ctl.charges < st.maxCharges ? ctl.skillCd + cd0 : 0; } } // a refund past the running cooldown carries into the next charge
     if (me.downed || me.dead || !view.room) {
       s.prompt = null; if (s.mode !== 'client') me.dashing = false;
       if (me.haulIn) me.haulIn = false;
@@ -487,7 +489,7 @@
         } else ED.Audio.play(w.proj === 'firebolt' || w.proj === 'fireball' || w.proj === 'spark' ? 'fire' : w.proj === 'soul' || w.proj === 'holy' || w.proj === 'plague' ? 'magic' : 'shoot', 0.8);
         }
       }
-      if (inp.skill && ctl.charges > 0) {
+      if (inp.skill && ctl.charges > 0 && !(st.twBlood && ctl.skillCd > 0)) { // Bloodprice: one cast per GAP whatever the charges
         const skill = ED.CLASSES[me.cls].skill, N = ED.Stats.skillNums(skill, st), C = ED.CONST;
         let data = null;
         if (skill === 'charge') { // a run toward the cursor: clamp(cursor distance, CHARGE_MIN.., range), cut at walls, at CHARGE_SPEED, untouchable for its whole length; the sim sweeps it for contact
@@ -506,7 +508,7 @@
         G.act({ t: 'skill', a: aim, data });
         bellCast(s, skill, aim, data, N);
         castMove(view, me, N, aim, data);
-        if (ctl.charges === st.maxCharges) ctl.skillCd = st.skillCd;
+        if (ctl.charges === st.maxCharges) ctl.skillCd = cd0;
         ctl.charges--;
         if (st.trance) { ctl.tranceT = 4; if (s.mode === 'client') me.tranceT = 4; }
       }
@@ -520,7 +522,7 @@
         castMove(view, me, N2, aim, data);
         if (sk2 === 'vanish' && s.mode === 'client') me.stealthT = 2.5 + st.stealthDur; // the host's flag takes over with the next snapshot
         if (sk2 === 'meteor' && N2.move && s.mode === 'client') me.cometT = N2.move.t; // Comet: airborne until the landing
-        ctl.skill2Cd = st.skill2Cd;
+        ctl.skill2Cd = cd1;
         if (st.trance) { ctl.tranceT = 4; if (s.mode === 'client') me.tranceT = 4; }
       }
       if (inp.dash && !me.skillMove && Sim.dashTry(ctl, st)) {
