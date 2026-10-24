@@ -248,8 +248,6 @@ DawnLike tileset by DragonDePlatino (CC-BY 4.0, https://creativecommons.org/lice
 
 Free Pixel Effects Pack by CodeManu (Davit Masia), CC-BY 4.0 (https://creativecommons.org/licenses/by/4.0/ ; https://codemanu.itch.io/pixelart-effect-pack). Frames subsampled and recoloured for Wickdeep.
 
-Jacquard 24 and Jacquarda Bastarda 9 fonts by Sarah Cadigan-Fried, Copyright 2023 The Soft Type Project Authors (https://github.com/scfried/soft-type-jacquard), licensed under the SIL Open Font License 1.1 (https://openfontlicense.org). Re-gridded and repacked for Wickdeep; the licence text ships in `art-src/fonts/`.
-
 Pixel Operator font by Jayvee Enaguas (HarvettFox96), CC0.
 
 16x16 DungeonTileset II by 0x72 (Robert); Dungeon Tileset II Extended by nijikokun; 16x16 Dark Dungeon by kosinaz; Ninja Adventure by Pixel-boy and AAA; Puny Characters by Shade; LuizMelo; Kenney; o_lobster; Aim studios; ansimuz.

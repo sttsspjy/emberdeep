@@ -5,16 +5,14 @@
   'use strict';
   const U = ED.U, TAU = U.TAU;
   const H = ED.HUD = {};
-  // Families with their whole-font-px vertical metrics (src/art/fonts.css: 16 font px per em): b body (Pixel Operator), d display (Jacquarda Bastarda 9), j title (Jacquard 24).
+  // Families with their whole-font-px vertical metrics (src/art/fonts.css: 16 font px per em): b Pixel Operator (400 body, 700 labels, titles and banners).
   const FM = {
     b: { f: '"Pixel Operator", "Segoe UI", system-ui, sans-serif', asc: 13, desc: 3, cap: 9 },
-    d: { f: '"Jacquarda Bastarda 9", "Pixel Operator", Georgia, serif', asc: 13, desc: 4, cap: 9 },
-    j: { f: '"Jacquard 24", "Jacquarda Bastarda 9", Georgia, serif', asc: 34, desc: 9, cap: 25 },
   };
   const K = { line: '#4a3626', brass: '#8a6a42', brassHi: '#c9a063', ember: '#ff8a3d', emberHi: '#ffb56b', gold: '#f0cf8a', bone: '#f6ecda', muted: '#c5b49d', faint: '#8f7f6c', danger: '#ef5a46', good: '#8fdc98', warm: '#ffd9a0', ol: '#222222', sh: '#0b0806', trough: '#120c09', panel: '#17110d' };
 
   let cv = null, c = null, W = 0, Hh = 0, hd = 1, u = 13, cssW = 0, cssH = 0, lowQ = false, shown = false, dtc = 0, rk = 1, lastDpr = 0;
-  let k = 2, f = 1, tS = 1, tV = 1, tT = 2, tB = 2, tJ = 1, tJ2 = 1; // grid (art px, fine px) and text multiples (labels, values, panel titles, banner titles, Jacquard banners, centre notes)
+  let k = 2, f = 1, tS = 1, tV = 1, tT = 2, tB = 2, tJ = 1, tJ2 = 1; // grid (art px, fine px) and text multiples (labels, values, panel titles, banner titles, big banners, centre notes)
   let frameN = 0, drawSeq = 0, lastDrawT = 0, dtAcc = 0, fdt = 0, forceDirty = true; // redraw scheduling (see H.draw)
   const L = {}; // layout rects in canvas px, rebuilt with the grid
   const ghost = {}, slotFx = [];
@@ -295,7 +293,7 @@
       game.parentNode.insertBefore(cv, game.nextSibling);
       c = cv.getContext('2d');
       if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', dropArt);
-      if (document.fonts && document.fonts.load) for (const fnt of ['400 16px', '700 16px']) for (const fam of ['b', 'd', 'j']) document.fonts.load(fnt + ' ' + FM[fam].f).catch(() => {}); // canvas text only triggers a load on first use
+      if (document.fonts && document.fonts.load) for (const fnt of ['400 16px', '700 16px']) document.fonts.load(fnt + ' ' + FM.b.f).catch(() => {}); // canvas text only triggers a load on first use
     }
     const w = window.innerWidth, h = window.innerHeight, soft = !!(ED.Post && ED.Post.soft), low = R.quality === 'low' || soft;
     if (!shown) { cv.style.display = 'block'; shown = true; document.body.classList.add('hud-on'); forceDirty = true; }
@@ -310,7 +308,7 @@
       u = U.clamp(Math.min(w / 110, h / 62), 13, 36) * hd;
       k = Math.max(1, Math.floor(Math.min(W / 480, Hh / 270))); f = Math.max(1, Math.round(k / 2));
       tS = Math.max(1, Math.round(1.08 * u / 16)); tV = Math.max(tS, Math.round(1.5 * u / 16)); tT = Math.max(2, Math.round(1.75 * u / 16)); tB = Math.max(2, Math.round(0.19 * u));
-      tJ = Math.max(1, Math.round(2.66 * u / 25)); tJ2 = Math.max(1, Math.round(2.1 * u / 25));
+      tJ = Math.max(1, Math.round(2.4 * u / 9)); tJ2 = Math.max(1, Math.round(2.1 * u / 9)); // big banners and centre notes: cap 9 font px ≈ 2.4u / 2.1u
       c.imageSmoothingEnabled = false;
       dropArt(); layout();
     }
@@ -615,7 +613,7 @@
     L.mh = q(top + mh + u * 0.7);
     fadeStart('map', x, y, w, L.mh);
     frame(c, 'hpanel', 'base', x, y, w, L.mh, k);
-    T(biome.name, x + w / 2, ty, tT, biome.pal.ui, 'd', 'center', 400);
+    T(biome.name, x + w / 2, ty, tT, biome.pal.ui, 'b', 'center', 700);
     T('Stratum ' + U.roman(view.stratum), ix, ry, tS, K.muted, 'b', 'left', 700);
     if (view.pact > 0) T('Pact ' + view.pact, ix + iw, ry, tS, '#ff7a56', 'b', 'right', 700);
     // stratum affinity: foes are weak to one element and resist another
@@ -677,7 +675,7 @@
     fadeStart('boss', x, y, pw, ph);
     frame(c, 'hpanel', fon && pu ? 'fury' : 'base', x, y, pw, ph, k);
     const ny = y + q(u * 1.65);
-    T(boss.def.name, x + pw / 2, ny, tT, K.bone, 'd', 'center', 400);
+    T(boss.def.name, x + pw / 2, ny, tT, K.bone, 'b', 'center', 700);
     const fr = boss.hp / boss.maxHp;
     ghost.boss = ghost.boss === undefined || ghost.bossId !== boss.id ? fr : Math.max(fr, ghost.boss - dtc * 0.2); ghost.bossId = boss.id;
     const marks = boss.type === 'hollowking' ? [0.6, 0.3] : [0.66, 0.33], by = y + q(u * 3.0), bh = Math.max(5 * k, q(u * 1.7)), bx = x + ins;
@@ -725,12 +723,12 @@
 
   // ---------------- centre notes: down / fallen ----------------
   function centerNotes(view, me) {
-    const y = q(Hh * 0.32), sy = y + q(FM.j.cap * tJ2 / 2 + u * 1.6);
+    const y = q(Hh * 0.32), sy = y + q(FM.b.cap * tJ2 / 2 + u * 1.6);
     if (me.downed) {
-      T('You are down', W / 2, y, tJ2, '#ff8a7a', 'j', 'center', 400, 1);
+      T('You are down', W / 2, y, tJ2, '#ff8a7a', 'b', 'center', 700, 1);
       if (view.players.size > 1) T('Stay calm. An ally can revive you by standing close.', W / 2, sy, tS, K.bone, 'b', 'center', 700, 1);
     } else if (me.dead) {
-      T('Fallen', W / 2, y, tJ2, '#cfc6b6', 'j', 'center', 400, 1);
+      T('Fallen', W / 2, y, tJ2, '#cfc6b6', 'b', 'center', 700, 1);
       T('You will rise again when your party reaches the next stratum.', W / 2, sy, tS, K.bone, 'b', 'center', 700, 1);
     }
   }
@@ -762,14 +760,14 @@
       const band2 = q(u * 5.5), bs = q(band2 / 3); // stepped scrim: three flat bands each side of the centre line
       for (let i = 0; i < 3; i++) { c.fillStyle = 'rgba(0,0,0,' + (0.62 - i * 0.2).toFixed(2) + ')'; c.fillRect(0, cy - (i + 1) * bs, W, bs); c.fillRect(0, cy + i * bs, W, bs); }
       const col = b.style === 'boss' ? '#ff6a4a' : b.style === 'victory' ? '#ffd36b' : biome.pal.ui;
-      const tc = cy + q(u * 0.4), half = FM.j.cap * tJ / 2;
+      const tc = cy + q(u * 0.4), half = FM.b.cap * tJ / 2;
       if (b.sub) T(b.sub, W / 2, tc - half - q(u * 1.4), tS, col, 'b', 'center', 700);
-      T(b.title, W / 2, tc, tJ, '#f6ecd8', 'j', 'center', 400, 1);
+      T(b.title, W / 2, tc, tJ, '#f6ecd8', 'b', 'center', 700, 1);
       const rw = q(u * 10 * Math.min(1, b.t * 2)); c.fillStyle = col; c.fillRect(W / 2 - rw, tc + half + q(u * 0.9), rw * 2, k);
       if (b.style === 'boss' && F.bossQuote) T('"' + F.bossQuote.text + '"', W / 2, tc + half + q(u * 2.2), tS, '#d8cbb8', 'b', 'center', 400, 1);
     } else {
-      T(b.title, W / 2, cy, tB, b.style === 'level' ? '#ffd36b' : K.bone, 'd', 'center', 400, 1);
-      if (b.sub) T(b.sub, W / 2, cy + q(FM.d.cap * tB / 2 + u * 1.3), tS, '#d8cbb8', 'b', 'center', 700, 1);
+      T(b.title, W / 2, cy, tB, b.style === 'level' ? '#ffd36b' : K.bone, 'b', 'center', 700, 1);
+      if (b.sub) T(b.sub, W / 2, cy + q(FM.b.cap * tB / 2 + u * 1.3), tS, '#d8cbb8', 'b', 'center', 700, 1);
     }
     c.globalAlpha = 1;
   }

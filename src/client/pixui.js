@@ -18,7 +18,7 @@
     const dpr = window.devicePixelRatio || 1, w = window.innerWidth || 1280, h = window.innerHeight || 720;
     const k = Math.max(1, Math.floor(Math.min(w * dpr / GW, h * dpr / GH)));
     const rem = remPx(w, h), m = (r) => Math.max(1, Math.round(r * rem * dpr / 16)); // nearest whole multiple of 16 device px to r rem
-    const t = m(1.08), xl = Math.max(t, m(1.75)), x2 = Math.max(xl, m(2.4)), title = Math.max(1, Math.round(1.7 * rem * dpr / 25));
+    const t = m(1.08), xl = Math.max(t, m(1.75)), x2 = Math.max(xl, m(2.4)), title = Math.max(1, Math.round(1.7 * rem * dpr / 9)); // title: cap 9 font px ≈ 1.7rem
     const s = [dpr, k, t, xl, x2, title].join();
     if (s === sig) return; sig = s;
     const css = (dev) => (dev / dpr) + 'px', st = root.style;
@@ -27,7 +27,7 @@
     st.setProperty('--p', css(k)); st.setProperty('--pf', css(Math.max(1, Math.round(k / 2)))); st.setProperty('--dp', css(1));
     st.setProperty('--fu', css(16));
     for (const [n, v] of [['xs', t], ['sm', t], ['md', t], ['lg', t], ['xl', xl], ['2xl', x2]]) st.setProperty('--fs-' + n, css(16 * v));
-    st.setProperty('--fs-title', css(16 * title)); st.setProperty('--fs-word', css(16 * k)); st.setProperty('--fs-menu', css(16 * Math.max(2, xl))); // menu items: Bastarda at 2+ device px per font px
+    st.setProperty('--fs-title', css(16 * title)); st.setProperty('--fs-word', css(48 * k)); st.setProperty('--fs-menu', css(16 * Math.max(2, xl))); // wordmark: 1 font px = 3 art px; menu items: 2+ device px per font px
     for (const fn of subs) fn(P);
     queueSnap();
   }

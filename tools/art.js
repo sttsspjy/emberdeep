@@ -384,13 +384,8 @@ const FONTS = [
   { family: 'Pixel Operator 8', file: 'pixel-operator/PixelOperator8.ttf', px: 100, weight: '100 549' },
   { family: 'Pixel Operator 8', file: 'pixel-operator/PixelOperator8-Bold.ttf', px: 100, weight: '550 1000' },
   { family: 'Pixel Operator Mono', file: 'pixel-operator/PixelOperatorMono.ttf', px: 100, weight: '100 1000' },
-  { family: 'Jacquarda Bastarda 9', file: 'jacquardabastarda9/JacquardaBastarda9-Regular.ttf', px: 80, weight: '100 1000', range: 'U+0-2F, U+3A-10FFFF' }, // digits fall through to the next family (old-style figures read poorly at 9 px)
-  { family: 'Jacquard 24', file: 'jacquard24/Jacquard24-Regular.ttf', px: 30, weight: '100 1000' },
 ];
 const FONT_NOTICE = [
-  'Jacquard 24, Jacquarda Bastarda 9: Copyright 2023 The Soft Type Project Authors (https://github.com/scfried/soft-type-jacquard, https://github.com/scfried/soft-type-jacquarda-bastarda),',
-  '  designed by Sarah Cadigan-Fried. Licensed under the SIL Open Font License, Version 1.1 (https://openfontlicense.org; full text in art-src/fonts/<family>/OFL.txt).',
-  '  Modified Versions: re-gridded to 16 font px per em, vertical metrics unified, packed as WOFF.',
   'Pixel Operator, Pixel Operator 8, Pixel Operator Mono: Jayvee Enaguas (HarvettFox96), CC0 1.0 (art-src/fonts/pixel-operator/LICENSE.txt).',
 ];
 const pad4 = (n) => (n + 3) & ~3;

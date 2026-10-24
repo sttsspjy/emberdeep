@@ -10,11 +10,11 @@
    Layout   1rem = clamp(13px, min(100vw / 110, 100vh / 62), 36px) stays the layout unit (17.4px at 1080p); canvas HUD unit u = the same clamp in CSS px.
             HUD anchors: hero block bottom-left, party top-left, map top-right, xp bottom-centre, relics bottom-right, boss bar top-centre, messages above the hero block, DOM toasts top-centre below the boss bar.
    Fonts    src/art/fonts.css (tools/art.js) re-grids every font to 16 font px per em: any family is crisp at font-size = 16n device px, 1 font px = 0.0625em (--fpx).
-            --f-title "Jacquard 24" (wordmark, banners; glyphs 2.7x larger than the em: cap 25 font px)   --f-display "Jacquarda Bastarda 9" (titles, names, menu items; cap 9)
-            --f-body "Pixel Operator" 400/700 (all other text; cap 9, x 7)   --f-small "Pixel Operator 8" (cap 7)   --f-mono "Pixel Operator Mono"   --f-num = body bold (numbers; Bastarda digits are old-style).
-            Only 400 and 700 exist (Bastarda, Jacquard: 400): font-synthesis is off, italics render upright.
+            --f-display "Pixel Operator" at 700 (wordmark, banners, titles, names, menu items, tabs; ascent 13, descent 3, cap 9, x 7, advance 8 font px)
+            --f-body "Pixel Operator" 400/700 (all other text; cap 9, x 7)   --f-small "Pixel Operator 8" (cap 7)   --f-mono "Pixel Operator Mono"   --f-num = body bold (numbers).
+            Only 400 and 700 exist: font-synthesis is off, italics render upright.
    Type     sizes are whole multiples of 16 device px (t = round(1.08rem / 16 device px) = 1 at 720p and 1080p, 2 at 1440p):
-            --fs-xs/sm/md/lg 16t · --fs-xl ≈ 1.75rem · --fs-2xl ≈ 2.4rem · --fs-title (Jacquard heading, cap ≈ 1.7rem) · --fs-menu max(32, xl) device px (menu items, hero buttons) · --fs-word 16k (wordmark: 1 font px = 1 art px) · --fu 16 device px.
+            --fs-xs/sm/md/lg 16t · --fs-xl ≈ 1.75rem · --fs-2xl ≈ 2.4rem · --fs-title (offer heading, cap ≈ 1.7rem) · --fs-menu max(32, xl) device px (menu items, hero buttons) · --fs-word 48k (wordmark: 1 font px = 3 art px) · --fu 16 device px.
             Line heights in font px: 1.25 (20) or 1.375 (22). Sentence case. Labels are bold body text, not tracked caps. Text shadows: hard, 1 font px (--fpx).
             Crisp text: Blink on Windows paints glyphs half a device px right of the origin; PixUI measures that bias (PixUI.bias) and snaps single-line labels (PixUI.SNAP, [data-px-snap]) by text-indent.
    Colour   ink     #0a0706 backdrop         panel   #17110d fill        line #4a3626 / #6f5338   brass #8a6a42 / #c9a063 (frame corners)   outline #222222 (--px-ol, the art pipeline's)
@@ -63,8 +63,7 @@
   --r-epic: #c98bff;
   --r-legend: #ffb02e;
   --px-ol: #222222;
-  --f-title: "Jacquard 24", "Jacquarda Bastarda 9", Georgia, serif;
-  --f-display: "Jacquarda Bastarda 9", "Pixel Operator", Georgia, serif;
+  --f-display: "Pixel Operator", "Segoe UI", system-ui, sans-serif;
   --f-body: "Pixel Operator", "Segoe UI", system-ui, sans-serif;
   --f-small: "Pixel Operator 8", "Pixel Operator", system-ui, sans-serif;
   --f-mono: "Pixel Operator Mono", ui-monospace, Consolas, monospace;
@@ -78,8 +77,8 @@
   --fs-lg: 16px;
   --fs-xl: 32px;
   --fs-2xl: 48px;
-  --fs-title: 16px;
-  --fs-word: 64px;
+  --fs-title: 48px;
+  --fs-word: 192px;
   --fs-menu: 32px;
   /* icon sizes on the grid: icons are 16 x 16 art px (1 icon px = 1 art px, or 1 fine px) */
   --ic: calc(16 * var(--p));
@@ -125,8 +124,8 @@ body.hud-on.pad #game { cursor: none; }
 kbd { display: inline-flex; align-items: center; justify-content: center; min-width: calc(1em + 6 * var(--pf)); height: auto; min-height: calc(1em + 7 * var(--pf)); padding: 0 calc(2 * var(--pf)); margin: 0 var(--pf); border: calc(2 * var(--pf)) solid transparent; border-bottom-width: calc(3 * var(--pf)); border-radius: 0; border-image: var(--fr-kbd) 3 fill / calc(3 * var(--pf)); image-rendering: pixelated; background: none; color: var(--gold); font: 700 var(--fs-sm)/1 var(--f-body); letter-spacing: 0; vertical-align: middle; }
 .lbl { font: 700 var(--fs-sm)/1.25 var(--f-body); color: var(--muted); }
 .sub { color: var(--muted); font-size: var(--fs-md); line-height: 1.375; max-width: 62ch; }
-.card-title { font: 400 var(--fs-xl)/1.25 var(--f-display); letter-spacing: 0; color: var(--gold); text-wrap: balance; text-shadow: 0 var(--fpx) 0 var(--px-ol); }
-.plate-h { font: 400 var(--fs-xl)/1.25 var(--f-display); letter-spacing: 0; color: var(--gold); margin: 0 0 0.7rem; text-shadow: 0 var(--fpx) 0 var(--px-ol); }
+.card-title { font: 700 var(--fs-xl)/1.25 var(--f-display); letter-spacing: 0; color: var(--gold); text-wrap: balance; text-shadow: 0 var(--fpx) 0 var(--px-ol); }
+.plate-h { font: 700 var(--fs-xl)/1.25 var(--f-display); letter-spacing: 0; color: var(--gold); margin: 0 0 0.7rem; text-shadow: 0 var(--fpx) 0 var(--px-ol); }
 .plate-h small { font: 700 var(--fs-md) var(--f-body); color: var(--ember-hi); margin-left: 0.4rem; letter-spacing: 0; text-shadow: none; }
 .num { font-family: var(--f-num); font-weight: 700; }
 .row { display: flex; gap: 0.8rem; align-items: center; flex-wrap: wrap; }
@@ -152,7 +151,7 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .btn:active { transform: translateY(var(--p)); }
 .btn:focus-visible, .tab:focus-visible, .hero-tile:focus-visible, .boon-card:focus-visible, .weapon-chip:focus-visible, .pact-step:focus-visible, .bind-slot:focus-visible, .switch:focus-visible, input[type=range]:focus-visible { outline: var(--pf) solid var(--ember-hi); outline-offset: var(--pf); }
 .btn-lg { min-height: 3.4rem; padding: 0 1.6rem; font-size: var(--fs-lg); }
-.btn-xl { min-height: 4.2rem; padding: 0 2.6rem; font: 400 var(--fs-menu)/1 var(--f-display); }
+.btn-xl { min-height: 4.2rem; padding: 0 2.6rem; font: 700 var(--fs-menu)/1 var(--f-display); }
 .btn-small { min-height: 2.2rem; padding: 0 0.7rem; font-size: var(--fs-sm); }
 .btn-primary { --fr: var(--fr-btn-primary); color: #1b0f08; text-shadow: 0 var(--fpx) 0 rgba(255, 224, 189, 0.6); }
 .btn-primary:hover, .btn-primary:focus-visible { --fr: var(--fr-btn-primary-hot); color: #1b0f08; }
@@ -212,7 +211,7 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 
 /* ---------- main menu (title and pause) ---------- */
 .menu { display: flex; flex-direction: column; gap: calc(3 * var(--p)); width: min(27rem, 100%); }
-.menu-btn { --fr: var(--fr-menu); --car: var(--fr-caret); position: relative; min-height: 3.9rem; padding: 0 calc(12 * var(--p)); font: 400 var(--fs-menu)/1 var(--f-display); letter-spacing: 0; color: var(--bone); text-shadow: 0 var(--fpx) 0 var(--px-ol); background: none; border: calc(2 * var(--p)) solid transparent; border-radius: 0; border-image: var(--fr) 5 fill / calc(5 * var(--p)); image-rendering: pixelated; box-shadow: none; cursor: pointer; transition: none; }
+.menu-btn { --fr: var(--fr-menu); --car: var(--fr-caret); position: relative; min-height: 3.9rem; padding: 0 calc(12 * var(--p)); font: 700 var(--fs-menu)/1 var(--f-display); letter-spacing: 0; color: var(--bone); text-shadow: 0 var(--fpx) 0 var(--px-ol); background: none; border: calc(2 * var(--p)) solid transparent; border-radius: 0; border-image: var(--fr) 5 fill / calc(5 * var(--p)); image-rendering: pixelated; box-shadow: none; cursor: pointer; transition: none; }
 .menu-btn::before, .menu-btn::after { content: ""; position: absolute; top: 0; bottom: 0; margin: auto 0; width: calc(5 * var(--p)); height: calc(7 * var(--p)); background: var(--car) 0 0 / 100% 100% no-repeat; image-rendering: pixelated; visibility: hidden; animation: px-bob 0.9s step-end infinite; }
 .menu-btn::before { left: calc(3 * var(--p)); }
 .menu-btn::after { right: calc(3 * var(--p)); transform: scaleX(-1); --bx: -1; }
@@ -227,14 +226,15 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 /* ---------- title ---------- */
 /* backdrop: --menu-vign (screenart.js) darkens behind the menu column with an ordered-dither falloff, one texel per art px from the top-left, so it has no edge */
 #scr-title { align-items: center; background: var(--menu-vign) 0 0 / calc(var(--menu-vw, 480) * var(--p)) calc(var(--menu-vh, 270) * var(--p)) no-repeat; image-rendering: pixelated; }
-/* menu items at the larger display size (body text is 16 device px at 1080p; the blackletter needs 3 device px per font px there) */
+/* menu items at the larger display size (body text is 16 device px at 1080p) */
 #title-menu .menu-btn, #ov-pause .menu-btn { min-height: calc(var(--fs-2xl) + 8 * var(--p)); font-size: var(--fs-2xl); }
 .menu-btn .dot { margin-left: calc(3 * var(--p)); }
 .title-stage { margin: auto; display: flex; flex-direction: column; align-items: center; gap: calc(8 * var(--p)); text-align: center; width: min(32rem, 100%); padding-bottom: 3vh; }
 .logo { display: flex; flex-direction: column; align-items: center; gap: calc(2 * var(--p)); }
-/* wordmark: Jacquard 24 at 1 font px = 1 art px; line box 43 font px (ascent 34 + descent 9) so the hard bands sit on font rows: pale gold above the caps' shoulder, ember hi, ember, deep ember, ember lo for descenders */
-.logo-word { margin: 0; font: 400 var(--fs-word)/calc(43 * var(--p)) var(--f-title); letter-spacing: 0; color: transparent; -webkit-background-clip: text; background-clip: text;
-  background-image: linear-gradient(180deg, #ffe7b0 0 calc(14 * var(--p)), var(--ember-hi) 0 calc(20 * var(--p)), var(--ember) 0 calc(28 * var(--p)), #e0621e 0 calc(34 * var(--p)), var(--ember-lo) 0);
+/* wordmark: Pixel Operator Bold at 1 font px = 3 art px; line box 16 font px = 48 art px (ascent 13 + descent 3) so the hard bands sit on font rows (3 art px each):
+   pale gold on the caps above the x-height (rows 4-5), ember hi (6-7), ember (8-9), deep ember to the baseline (10-12), ember lo for descenders */
+.logo-word { margin: 0; font: 700 var(--fs-word)/calc(48 * var(--p)) var(--f-display); letter-spacing: 0; color: transparent; -webkit-background-clip: text; background-clip: text;
+  background-image: linear-gradient(180deg, #ffe7b0 0 calc(18 * var(--p)), var(--ember-hi) 0 calc(24 * var(--p)), var(--ember) 0 calc(30 * var(--p)), #e0621e 0 calc(39 * var(--p)), var(--ember-lo) 0);
   filter: drop-shadow(var(--p) 0 0 var(--px-ol)) drop-shadow(calc(-1 * var(--p)) 0 0 var(--px-ol)) drop-shadow(0 var(--p) 0 var(--px-ol)) drop-shadow(0 calc(-1 * var(--p)) 0 var(--px-ol)) drop-shadow(0 calc(2 * var(--p)) 0 #0a0706); }
 .logo-rule { display: flex; align-items: center; gap: calc(3 * var(--p)); justify-content: center; }
 .logo-rule span { height: calc(2 * var(--p)); width: calc(28 * var(--p)); background: linear-gradient(var(--brass-hi) 0 var(--p), var(--px-ol) 0);
@@ -242,14 +242,14 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
   mask: linear-gradient(90deg, transparent 0 calc(2 * var(--p)), #000 0 calc(3 * var(--p)), transparent 0 calc(5 * var(--p)), #000 0 calc(7 * var(--p)), transparent 0 calc(8 * var(--p)), #000 0); }
 .logo-rule span:last-child { transform: scaleX(-1); }
 .logo-rule i { width: calc(5 * var(--p)); height: calc(5 * var(--p)); background: var(--fr-gem) 0 0 / 100% 100% no-repeat; image-rendering: pixelated; animation: px-pulse 2.4s step-end infinite; }
-.logo-kicker { font: 400 var(--fs-menu)/1.25 var(--f-display); color: var(--ember-hi); text-shadow: 0 var(--fpx) 0 #000; }
+.logo-kicker { font: 700 var(--fs-menu)/1.25 var(--f-display); color: var(--ember-hi); text-shadow: 0 var(--fpx) 0 #000; }
 .title-card { display: flex; flex-direction: column; gap: calc(3 * var(--p)); align-items: stretch; width: min(28rem, 100%); padding: calc(8 * var(--p)); text-align: center; }
 .title-card .card-title { font: 700 var(--fs-xl)/1.25 var(--f-body); color: var(--gold); }
 .title-card input { text-align: center; font: 700 var(--fs-xl)/1.25 var(--f-body); min-height: max(3.6rem, calc(var(--fs-xl) + 10 * var(--p))); }
 .title-card .name-msg { min-height: 1.25em; }
 .title-load { display: flex; flex-direction: column; gap: calc(2 * var(--p)); }
 .title-profile { display: flex; align-items: center; gap: calc(5 * var(--p)); padding: var(--p) calc(5 * var(--p)); font-size: var(--fs-md); color: var(--muted); border: calc(2 * var(--p)) solid transparent; border-image: var(--fr-well) 3 / calc(3 * var(--p)); image-rendering: pixelated; background: rgba(10, 7, 5, 0.85) padding-box; text-shadow: 0 var(--fpx) 0 #000; }
-.pp-name { font: 400 var(--fs-menu)/1.25 var(--f-display); color: var(--gold); letter-spacing: 0; }
+.pp-name { font: 700 var(--fs-menu)/1.25 var(--f-display); color: var(--gold); letter-spacing: 0; }
 .pp-embers { display: inline-flex; align-items: center; gap: var(--p); }
 .pp-embers b { color: var(--ember-hi); font: 700 var(--fs-md) var(--f-num); }
 .title-join { color: var(--ember-hi); font-size: var(--fs-md); padding: calc(2 * var(--p)) calc(4 * var(--p)); border: calc(2 * var(--p)) solid transparent; border-image: var(--fr-well) 3 / calc(3 * var(--p)); image-rendering: pixelated; background: rgba(10, 7, 5, 0.85) padding-box; }
@@ -266,7 +266,7 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
   background: var(--fr-gem) 50% 0 / calc(5 * var(--p)) calc(5 * var(--p)) no-repeat, linear-gradient(var(--brass) 0 var(--p), var(--px-ol) 0) 0 calc(2 * var(--p)) / 100% calc(2 * var(--p)) no-repeat; }
 .sec-head > :first-child { justify-self: start; }
 .sec-head > :last-child { justify-self: end; }
-.sec-title { font: 400 var(--fs-2xl)/1.25 var(--f-display); letter-spacing: 0; color: var(--gold); text-align: center; text-shadow: 0 var(--fpx) 0 var(--px-ol), 0 calc(2 * var(--fpx)) 0 #000; }
+.sec-title { font: 700 var(--fs-2xl)/1.25 var(--f-display); letter-spacing: 0; color: var(--gold); text-align: center; text-shadow: 0 var(--fpx) 0 var(--px-ol), 0 calc(2 * var(--fpx)) 0 #000; }
 .sec-back { gap: calc(2 * var(--p)); }
 .sec-back::before { content: ""; flex: none; width: calc(5 * var(--p)); height: calc(7 * var(--p)); background: var(--fr-caret) 0 0 / 100% 100% no-repeat; image-rendering: pixelated; transform: scaleX(-1); }
 /* purse: sunken well, ember sprite, amount in the number face */
@@ -275,7 +275,7 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 .purse b { font: 700 var(--fs-xl)/1 var(--f-num); color: var(--ember-hi); text-shadow: 0 var(--fpx) 0 var(--px-ol); }
 .purse small { font: 700 var(--fs-sm)/1 var(--f-body); color: var(--muted); }
 .sec-body { min-height: 0; }
-/* plate headers on menu screens: blackletter only at the menu size or larger (--fs-xl is 16 device px at 720p) */
+/* plate headers on menu screens at the menu size (--fs-xl is 16 device px at 720p) */
 #scr-hearth .plate-h, #scr-lobby .plate-h, #scr-results .plate-h, #ov-hearth .plate-h, #ov-settings .plate-h { font-size: var(--fs-menu); }
 /* locked or unavailable surfaces: the dither (::before, z-index -1) lies over the frame and under the content */
 .hero-tile.locked, .weapon-chip.locked, .up-card.locked, .stratum.unseen, .member.empty { isolation: isolate; }
@@ -294,7 +294,7 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 #hearth-tabs { --gap-up: 1.2rem; }
 #set-tabs { --gap-up: calc(4 * var(--p)); }
 #ph-tabs { --gap-up: calc(3 * var(--p)); }
-#hearth-tabs .tab, #set-tabs .tab, #ph-tabs .tab { font: 400 var(--fs-menu)/1.25 var(--f-display); padding: var(--p) calc(7 * var(--p)) calc(3 * var(--p)); }
+#hearth-tabs .tab, #set-tabs .tab, #ph-tabs .tab { font: 700 var(--fs-menu)/1.25 var(--f-display); padding: var(--p) calc(7 * var(--p)) calc(3 * var(--p)); }
 #hearth-tabs .tab.on, #set-tabs .tab.on, #ph-tabs .tab.on { z-index: 2; }
 /* the panel a tab row joins: dim plate drawn as the element's own border image (stays put while it scrolls) */
 #hearth-tabs:not([hidden]) + .sec-body, #set-tabs + .set-body, #ph-tabs + .ph-body { position: relative; z-index: 1; border: calc(3 * var(--p)) solid transparent; border-image: var(--fr-panel-dim) 6 fill / calc(6 * var(--p)); image-rendering: pixelated; }
@@ -311,7 +311,7 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 .hero-tile.locked::before { content: ""; position: absolute; z-index: -1; inset: calc(-1 * var(--p)); pointer-events: none; background: var(--fr-lockdither) 0 0 / calc(2 * var(--p)) calc(2 * var(--p)); image-rendering: pixelated; }
 .hero-tile canvas { width: calc(24 * var(--p)); height: calc(24 * var(--p)); }
 .hero-tile.locked canvas { filter: grayscale(1) brightness(0.55); }
-.hero-tile .cn { font: 400 var(--fs-menu)/1.25 var(--f-display); color: var(--gold); letter-spacing: 0; text-shadow: 0 var(--fpx) 0 var(--px-ol); }
+.hero-tile .cn { font: 700 var(--fs-menu)/1.25 var(--f-display); color: var(--gold); letter-spacing: 0; text-shadow: 0 var(--fpx) 0 var(--px-ol); }
 .hero-tile .cm { font: 400 var(--fs-sm)/1.25 var(--f-body); color: var(--muted); }
 .hero-tile.locked .cn { color: var(--faint); }
 .hero-tile.locked .cm { color: var(--ember-hi); position: relative; z-index: 1; }
@@ -331,7 +331,7 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 .loadout { gap: calc(2 * var(--p)); }
 .hd-top { display: grid; grid-template-columns: calc(28 * var(--p)) minmax(0, 1fr); gap: calc(4 * var(--p)); align-items: center; }
 .hd-top canvas { width: calc(28 * var(--p)); height: calc(28 * var(--p)); }
-.hd-name { font: 400 var(--fs-2xl)/1.25 var(--f-display); color: var(--gold); letter-spacing: 0; text-shadow: 0 var(--fpx) 0 var(--px-ol), 0 calc(2 * var(--fpx)) 0 #000; }
+.hd-name { font: 700 var(--fs-2xl)/1.25 var(--f-display); color: var(--gold); letter-spacing: 0; text-shadow: 0 var(--fpx) 0 var(--px-ol), 0 calc(2 * var(--fpx)) 0 #000; }
 .hd-title { color: var(--ember-hi); font: 700 var(--fs-lg)/1.25 var(--f-body); }
 .hd-desc { color: var(--muted); font-size: var(--fs-md); margin-top: var(--p); line-height: 1.375; }
 .hd-skills { display: grid; gap: calc(3 * var(--p)); }
@@ -513,13 +513,14 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 /* ---------- results ---------- */
 #scr-results { background: var(--fr-dither) 0 0 / calc(2 * var(--p)) calc(2 * var(--p)), rgba(6, 3, 2, 0.8); image-rendering: pixelated; }
 .results-wrap { align-items: center; gap: calc(4 * var(--p)); width: min(100%, 84rem); margin: auto; }
-/* banner: cloth band with swallow-tail ends (frame 'banner', exactly 50 art px tall), the word in Jacquard 24 at 1 font px = 1 art px with hard bands and a 1 art px outline */
+/* banner: cloth band with swallow-tail ends (frame 'banner', exactly 50 art px tall, cloth rows 5-44), the word in Pixel Operator Bold at 1 font px = 3 art px (the wordmark's bands)
+   with a 1 art px outline; line box 48 art px raised 1 art px so the caps (art rows 11-37) centre on the cloth */
 .res-flag { display: inline-flex; justify-content: center; height: calc(50 * var(--p)); min-width: calc(110 * var(--p)); max-width: 100%; padding: 0 calc(6 * var(--p)); border: solid transparent; border-width: 0 calc(16 * var(--p)); border-image: var(--fr-banner-fall) 0 16 fill / 0 calc(16 * var(--p)); image-rendering: pixelated; }
 .res-flag.win { border-image-source: var(--fr-banner); }
-.res-banner { padding-top: var(--p); font: 400 var(--fs-word)/calc(43 * var(--p)) var(--f-title); letter-spacing: 0; white-space: nowrap; text-align: center; color: transparent; -webkit-background-clip: text; background-clip: text;
-  background-image: linear-gradient(180deg, #fff7ea 0 calc(17 * var(--p)), #e9dcc8 0 calc(24 * var(--p)), #c7b8a4 0 calc(30 * var(--p)), #a29380 0 calc(36 * var(--p)), #6d5f52 0);
+.res-banner { margin-top: calc(-1 * var(--p)); font: 700 var(--fs-word)/calc(48 * var(--p)) var(--f-display); letter-spacing: 0; white-space: nowrap; text-align: center; color: transparent; -webkit-background-clip: text; background-clip: text;
+  background-image: linear-gradient(180deg, #fff7ea 0 calc(18 * var(--p)), #e9dcc8 0 calc(24 * var(--p)), #c7b8a4 0 calc(30 * var(--p)), #a29380 0 calc(39 * var(--p)), #6d5f52 0);
   filter: drop-shadow(var(--p) 0 0 var(--px-ol)) drop-shadow(calc(-1 * var(--p)) 0 0 var(--px-ol)) drop-shadow(0 var(--p) 0 var(--px-ol)) drop-shadow(0 calc(-1 * var(--p)) 0 var(--px-ol)) drop-shadow(0 var(--p) 0 #0a0706); }
-.res-banner.win { background-image: linear-gradient(180deg, #fff3c4 0 calc(17 * var(--p)), var(--gold) 0 calc(24 * var(--p)), #ffc56b 0 calc(30 * var(--p)), var(--ember) 0 calc(36 * var(--p)), var(--ember-lo) 0); }
+.res-banner.win { background-image: linear-gradient(180deg, #fff3c4 0 calc(18 * var(--p)), var(--gold) 0 calc(24 * var(--p)), #ffc56b 0 calc(30 * var(--p)), var(--ember) 0 calc(39 * var(--p)), var(--ember-lo) 0); }
 .res-sub { color: var(--muted); text-align: center; max-width: 60ch; font-size: var(--fs-lg); line-height: 1.375; text-shadow: 0 var(--fpx) 0 #000; }
 .res-evo { display: flex; align-items: center; justify-content: center; gap: calc(3 * var(--pf)); padding: var(--pf) calc(4 * var(--pf)) var(--pf) var(--pf); text-align: center; font-size: var(--fs-lg); border-radius: 0; border: var(--pf) solid var(--pc, var(--r-legend)); background: color-mix(in srgb, var(--pc, var(--r-legend)) 16%, #120c09); box-shadow: 0 0 0 var(--pf) var(--px-ol); }
 .res-evo img { width: calc(2 * var(--ic-f)); height: calc(2 * var(--ic-f)); flex: none; }
@@ -554,7 +555,7 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 /* boon picker: the hand of cards over a dithered scrim; a pick animates the chosen card (.picked) and drops the rest (.picking) */
 #ov-boon { overflow-y: auto; background: var(--fr-lockdither) 0 0 / calc(2 * var(--p)) calc(2 * var(--p)), rgba(5, 3, 2, 0.93); image-rendering: pixelated; animation: none; }
 .boon-wrap { margin: auto; width: min(100%, 108rem); display: flex; flex-direction: column; align-items: center; gap: calc(var(--fu) / 2); }
-.boon-title { font: 400 var(--fs-title)/1.1 var(--f-title); color: var(--gold); text-align: center; text-shadow: 0 var(--fpx) 0 var(--px-ol); }
+.boon-title { font: 700 var(--fs-title)/1.1 var(--f-display); color: var(--gold); text-align: center; text-shadow: 0 var(--fpx) 0 var(--px-ol); }
 #boon-count { font: 700 var(--fs-lg)/1 var(--f-body); color: var(--ember-hi); vertical-align: middle; }
 .boon-sub { color: var(--muted); font: 400 var(--fs-lg)/1.375 var(--f-body); text-align: center; text-shadow: 0 var(--fpx) 0 var(--px-ol); }
 /* --n cards per row; a card is a whole even number of art px wide so its 9-slice edges, crests and sprites land on the art grid.
@@ -584,7 +585,7 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 .boon-card.k-route:has(.ca-pips) { padding-top: calc(18 * var(--p)); }
 .boon-card.k-holy { padding-top: calc(12 * var(--p)); }
 
-/* card text: bold body labels, the name in bold body at the xl size (blackletter stays for the screen title), hard 1 font px shadows */
+/* card text: bold body labels, the name in bold body at the xl size, hard 1 font px shadows */
 .boon-card .bc-ribbon { font: 700 var(--fs-sm)/1.25 var(--f-body); color: #15100c; background: var(--pc); padding: 0 calc(3 * var(--pf)); box-shadow: 0 0 0 var(--pf) var(--px-ol); white-space: nowrap; text-shadow: none; }
 .boon-card.k-duo .bc-ribbon { background: linear-gradient(90deg, var(--pc) 0 50%, var(--pc2) 0); }
 .boon-card.evo .bc-ribbon, .boon-card.key .bc-ribbon, .boon-card.gate .bc-ribbon { box-shadow: 0 0 0 var(--pf) var(--px-ol), 0 0 0 calc(2 * var(--pf)) #ffe08a, 0 0 0 calc(3 * var(--pf)) var(--px-ol); }
@@ -777,12 +778,12 @@ body:has(#ov-sheet:not([hidden])) #ov-boon { visibility: hidden; }
 .sh-i1 { width: var(--fs-md); height: var(--fs-md); vertical-align: calc(-3 * var(--t1)); }
 .sh-i2 { width: calc(2 * var(--fs-md)); height: calc(2 * var(--fs-md)); }
 
-/* header: portrait well, name (blackletter), weapon line; vitals and the stratum on the right; a brass rule on a dark drop below */
+/* header: portrait well, name (display face), weapon line; vitals and the stratum on the right; a brass rule on a dark drop below */
 .sh-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: calc(4 * var(--p)); row-gap: var(--p); align-items: center; padding-bottom: calc(3 * var(--p)); background: linear-gradient(var(--brass) 0 var(--p), var(--px-ol) 0) left bottom / 100% calc(2 * var(--p)) no-repeat; }
 .sh-port { grid-row: 1 / span 2; width: calc(22 * var(--p)); height: calc(22 * var(--p)); border: calc(2 * var(--p)) solid transparent; border-image: var(--fr-well) 3 fill / calc(3 * var(--p)); image-rendering: pixelated; }
 .sh-pcv { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
 .sh-id { min-width: 0; }
-.sh-hero { font: 400 var(--fs-menu)/1.25 var(--f-display); color: var(--gold); text-shadow: 0 var(--fpx) 0 var(--px-ol); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sh-hero { font: 700 var(--fs-menu)/1.25 var(--f-display); color: var(--gold); text-shadow: 0 var(--fpx) 0 var(--px-ol); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sh-hero #sh-class { color: var(--gold-lo); }
 .sh-subl { font: 400 var(--fs-md)/1.375 var(--f-body); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sh-subl b { color: var(--bone); font-weight: 700; }
@@ -807,9 +808,9 @@ body:has(#ov-sheet:not([hidden])) #ov-boon { visibility: hidden; }
 #ov-sheet .aff-chip img { width: var(--fs-md); height: var(--fs-md); }
 #ov-sheet .aff-chip.resist { color: var(--muted); border-color: var(--line-hi); background: #0e0a08; }
 
-/* tab strip: framed pixel tabs on the left (blackletter at menu size), keys / waiting pill / viewing button on the right */
+/* tab strip: framed pixel tabs on the left (display face at menu size), keys / waiting pill / viewing button on the right */
 .sh-tabs { display: flex; justify-content: flex-start; align-items: center; gap: calc(2 * var(--p)); flex-wrap: nowrap; min-width: 0; }
-.sh-tabs .tab { position: relative; min-height: 0; padding: 0 calc(6 * var(--p)); border: calc(2 * var(--p)) solid transparent; border-radius: 0; border-image: var(--fr-btn-ghost) 4 fill / calc(4 * var(--p)); image-rendering: pixelated; background: none; font: 400 var(--fs-menu)/1.25 var(--f-display); letter-spacing: 0; color: var(--muted); text-shadow: 0 var(--fpx) 0 var(--px-ol); transition: none; }
+.sh-tabs .tab { position: relative; min-height: 0; padding: 0 calc(6 * var(--p)); border: calc(2 * var(--p)) solid transparent; border-radius: 0; border-image: var(--fr-btn-ghost) 4 fill / calc(4 * var(--p)); image-rendering: pixelated; background: none; font: 700 var(--fs-menu)/1.25 var(--f-display); letter-spacing: 0; color: var(--muted); text-shadow: 0 var(--fpx) 0 var(--px-ol); transition: none; }
 .sh-tabs .tab:hover { border-image-source: var(--fr-btn-ghost-hot); color: var(--text); background: none; }
 .sh-tabs .tab.on { border-image-source: var(--fr-btn-hot); color: var(--gold); background: none; }
 .sh-tabs .tab.on::after { content: ""; position: absolute; left: calc(2 * var(--p)); right: calc(2 * var(--p)); bottom: calc(-4 * var(--p)); height: calc(2 * var(--p)); background: linear-gradient(var(--ember-hi) 0 var(--p), var(--ember-lo) 0); box-shadow: 0 0 0 var(--p) var(--px-ol); }
@@ -1051,7 +1052,7 @@ body:has(#ov-sheet:not([hidden])) #ov-boon { visibility: hidden; }
 .fork-reveal .fr-body { min-width: 0; }
 .fork-reveal .fr-kick { font: 700 var(--fs-sm)/1.25 var(--f-body); color: var(--muted); text-shadow: 0 var(--fpx) 0 var(--px-ol); }
 .fork-reveal .fr-name { font: 700 var(--fs-xl)/1.25 var(--f-body); color: var(--bone); text-shadow: 0 var(--fpx) 0 var(--px-ol); }
-.fork-reveal.big .fr-name { font: 400 var(--fs-2xl)/1.1 var(--f-display); color: var(--gold); }
+.fork-reveal.big .fr-name { font: 700 var(--fs-2xl)/1.1 var(--f-display); color: var(--gold); }
 .fork-reveal .fr-text { margin-top: calc(var(--fu) / 4); font: 400 var(--fs-lg)/1.375 var(--f-body); text-shadow: 0 var(--fpx) 0 var(--px-ol); }
 @keyframes fork-in { from { clip-path: inset(-40% -10% 100% -10%); } to { clip-path: inset(-40% -10% -40% -10%); } } /* the banner unfurls downward */
 @keyframes fork-out { to { opacity: 0; translate: -50% calc(-4 * var(--p)); } }
@@ -1064,7 +1065,7 @@ body.hud-on #toasts { top: 8rem; width: max-content; max-width: max(20rem, calc(
 .toast b { color: var(--gold); }
 @keyframes toastIn { from { opacity: 0; transform: translateY(calc(-3 * var(--p))); } }
 @keyframes toastOut { to { opacity: 0; transform: translateY(calc(-2 * var(--p))); } }
-.loading { position: absolute; inset: 0; display: grid; place-items: center; font: 400 var(--fs-menu)/1.25 var(--f-display); letter-spacing: 0; color: var(--ember-hi); text-shadow: 0 var(--fpx) 0 #000; background: var(--ink); pointer-events: auto; }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; font: 700 var(--fs-menu)/1.25 var(--f-display); letter-spacing: 0; color: var(--ember-hi); text-shadow: 0 var(--fpx) 0 #000; background: var(--ink); pointer-events: auto; }
 
 ::selection { background: rgba(255, 138, 61, 0.35); color: #fff; }
 /* scrollbars: square brass thumb on a soot track (Blink/WebKit); Firefox gets the standard colours (scrollbar-color would switch Blink's pseudo-elements off) */

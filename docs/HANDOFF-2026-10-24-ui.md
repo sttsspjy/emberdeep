@@ -4,9 +4,9 @@ The pixel UI overhaul (user request 2026-10-23) is on `feat/ui-pixel` (game-ui a
 
 ## Implemented (mechanism)
 - **Fonts**:
-  - Vendored in `art-src/fonts/`: Pixel Operator (CC0) and Jacquard 24 / Jacquarda Bastarda 9 (OFL 1.1).
+  - Vendored in `art-src/fonts/`: Pixel Operator (CC0) only. Titles, banners, names, tabs and menu items are Pixel Operator Bold (user, 2026-10-24).
   - `tools/art.js` re-grids them to 16 font px per em and packs them as WOFF into `src/art/fonts.css`, linked before `style.css`. Google Fonts are gone, and `browse.js` blocks every external host.
-  - Bastarda's digits fall through to Pixel Operator (`unicode-range`).
+  - Wordmark and results word: 1 font px = 3 art px (`--fs-word` 48k), colour bands on font rows.
 - **Grid** (`src/client/pixui.js`, `ED.PixUI`):
   - k = floor(min(W·dpr/480, H·dpr/270)) device px per art px. CSS vars `--p`, `--pf`, `--dp`, `--ic*`; font tokens are 16n device px.
   - Chromium/Windows DOM text needs a .5 device-px origin: `PixUI.bias` and `PixUI.snap` handle it.
@@ -52,6 +52,6 @@ The pixel UI overhaul (user request 2026-10-23) is on `feat/ui-pixel` (game-ui a
 
 ## Questions for the user (next session start)
 1. How does the pixel UI look and feel: cards per path, pick animation and sounds, menus, HUD health bar, Tab sheet?
-2. Is body text size OK at your resolution (16 px at 1080p, 32 px at 1440p)? Is the blackletter readable where it is used?
+2. Is body text size OK at your resolution (16 px at 1080p, 32 px at 1440p)? Do the Pixel Operator Bold titles read well?
 3. Should the pick sounds be louder or quieter? Is any card type's sound or burst wrong?
 4. OK to merge `feat/ui-pixel` into `feat/v4-1`?
