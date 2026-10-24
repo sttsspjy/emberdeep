@@ -441,7 +441,7 @@
     if (!view.locked) {
       // open exits: a soft biome-coloured pool beckons from each doorway
       for (const d in room.doors) {
-        if (room.doors[d] < 0) continue;
+        if (room.doors[d] < 0 || (room.sealed && room.sealed[d])) continue; // a sealed entry door stays dark
         const r = ED.Dungeon.doorRect(room, d), cx = (r.x0 + r.x1 + 1) / 2 * T, cy = (r.y0 + r.y1 + 1) / 2 * T, k = 0.7 + Math.sin(t * 1.8 + cx * 0.01) * 0.1;
         R.light(cx, cy, 80, P.accent, 0.3 * k); R.emit(cx, cy, 30, P.accent, 0.16 * k);
       }
@@ -1271,72 +1271,93 @@
   R.interactable = (p) => !p.state && p.kind !== 'sign' && p.kind !== 'merchant';
 
   const PATH_COL = { fire: '#ff7a2a', ice: '#7fe3ff', lightning: '#ffe66b', poison: '#9be33c', holy: '#fff0c2', shadow: '#a070ff', general: '#d9dfe8' };
-  // Colour of a reward-type string such as 'boon', 'gold', 'relic' (unknown -> warm white). 'boon' wears the colour of the local hero's deepest path (R.mainPath).
-  function rewardColor(s) {
-    s = String(s || '');
-    if (s === 'boon') return PATH_COL[R.mainPath] || '#ffe9a0';
-    return { gold: '#ffd36b', vigor: '#ff4a5a', forge: '#ff9a3a', epic: '#c98bff', relic: '#ffb02e', campfire: '#ff9a3a', anvil: '#ffb066' }[s] || '#ffe9a0';
-  }
+  // Reward and room glyphs come from one table (ED.Icons.reward / ED.Icons.room); 'boon' wears the colour of the local hero's deepest path (R.mainPath).
+  // Colour of a reward-type string such as 'boon', 'gold', 'relic' (unknown -> warm white).
+  function rewardColor(s) { return ED.Icons.reward(s, R.mainPath)[1]; }
   R.rewardColor = rewardColor;
-  const REWARD_LABEL = { boon: 'Boon', gold: 'Gold', vigor: 'Vigor', forge: 'Forge', relic: 'Relic hoard', epic: 'Epic boon', campfire: 'Rest', anvil: 'Temper' };
-  // Short name of a reward string: 'boon' -> 'Boon'.
-  R.rewardLabel = (s) => REWARD_LABEL[String(s || '')] || 'Reward';
-  // [icon, colour] for a reward string; 'boon' shows the icon of the local hero's deepest path (a Generalist sees General).
-  R.rewardIcon = (s, cls) => {
-    s = String(s || '');
-    if (s === 'boon') { const pa = ED.PATHS[R.mainPath]; return pa ? [pa.icon, pa.color] : ['star', '#ffe9a0']; }
-    return { gold: ['coin', '#ffd36b'], vigor: ['heart', '#ff4a5a'], forge: ['anvil', '#ff9a3a'], epic: ['star', '#c98bff'], relic: ['chest', '#ffb02e'], campfire: ['campfire', '#ff9a3a'], anvil: ['anvil', '#ffb066'] }[s] || ['star', '#ffe9a0'];
-  };
-  // Map/door glyph of a floor room: { icon, color, badge? } (null for plain rooms). Elite rooms add a skull badge.
-  R.roomIcon = (rm, cls) => {
-    if (!rm) return null;
-    const T2 = { boss: ['skull', '#ff5a3a'], shop: ['coin', '#ffd36b'], treasure: ['chest', '#ffd36b'], event: ['star', '#7dffd9'], rest: ['campfire', '#ff9a3a'] }[rm.type];
-    if (T2) return { icon: T2[0], color: T2[1] };
-    if (!rm.reward) return rm.type === 'elite' ? { icon: 'skull', color: '#ff7a3a' } : null;
-    const ri = R.rewardIcon((rm.dark && ED.World.REWARD_UP[rm.reward]) || rm.reward, cls); // a dark room shows the reward it pays after its guaranteed step up
-    return { icon: ri[0], color: ri[1], badge: rm.type === 'elite' ? 'skull' : null };
+  // Name of a reward string: 'boon' -> 'Boon', 'relic' -> 'Relic hoard'.
+  R.rewardLabel = (s) => { const r = ED.Icons.reward(s, R.mainPath); return r[3] || r[2]; };
+  // [glyph, colour, short label] of a reward string.
+  R.rewardIcon = (s) => ED.Icons.reward(s, R.mainPath);
+  // Map/door glyph of a floor room for the local hero: { icon, color, label, badge, reward } or null (ED.Icons.room).
+  R.roomIcon = (rm) => ED.Icons.room(rm, R.mainPath, ED.World.REWARD_UP);
+  const DOOR_IDX = ['n', 's', 'e', 'w']; // P[26] door want: 0 none, else 1 + index here
+  // Door side a hero wants to leave by (null when none): the newest snapshot row on a client, the sim field on the host and solo.
+  R.doorWant = (view, p) => {
+    const sn = view.snaps;
+    if (sn && sn.length) { const a = sn[sn.length - 1].P.get(p.pid); return (a && DOOR_IDX[(a[26] | 0) - 1]) || null; }
+    return DOOR_IDX[(p.doorWant | 0) - 1] || null;
   };
 
-  // Reward previews over the doors of the current room: neighbours not yet cleared, bobbing in front of each doorway; an unvisited dark room carries a purple skull.
-  const DARK_COL = '#a070ff', DARK_TEXT = 'Dark room: harder fights, richer rewards';
+  // Previews over the leavable doors of the current room (neighbours not yet cleared, room.sealed[d] unset), bobbing in front of each doorway:
+  // the room glyph and its badge, its short label, threat pips (room.threat), the dark-room moon; near a hero the dark rule and "The way back closes" (floors with sealed doors) fade in.
+  // In a party, the heroes who want a door are named at it.
+  const DARK_COL = '#a070ff', DARK_TEXT = 'Dark room: harder fights, richer rewards', BACK_TEXT = 'The way back closes', THREAT_COL = '#ff5a3a';
   const dpList = [], dpPool = [];
+  // Preview anchor of door d of room: just inside the doorway (world px).
+  function doorAt(room, d) {
+    const r = ED.Dungeon.doorRect(room, d), h = room.h * T, w = room.w * T;
+    let x = (r.x0 + r.x1 + 1) / 2 * T, y = (r.y0 + r.y1 + 1) / 2 * T;
+    if (d === 'n') y = T - 2; else if (d === 's') y = h - T - 6; else if (d === 'w') x = T * 0.5 + 6; else x = w - T * 0.5 - 6;
+    return [x, y];
+  }
   function doorPreviews(view, room, t) {
     const out = dpList; let n = 0; // pooled: the list is consumed before the next call
     out.length = 0;
     if (view.locked || !view.floor) return out;
-    const me = view.players.get(R.local), cls = me ? me.cls : null, h = room.h * T, w = room.w * T;
     for (const d in room.doors) {
-      const id = room.doors[d]; if (id < 0) continue;
+      const id = room.doors[d]; if (id < 0 || (room.sealed && room.sealed[d])) continue;
       const nb = view.floor.rooms[id], st = view.roomState && view.roomState[id];
       if (!nb || (st && st.cleared)) continue;
-      const ri = R.roomIcon(nb, cls); if (!ri) continue;
-      const r = ED.Dungeon.doorRect(room, d), cx = (r.x0 + r.x1 + 1) / 2 * T, cy = (r.y0 + r.y1 + 1) / 2 * T;
-      let x = cx, y = cy;
-      if (d === 'n') y = T - 2; else if (d === 's') y = h - T - 6; else if (d === 'w') x = T * 0.5 + 6; else x = w - T * 0.5 - 6;
-      let o = dpPool[n]; if (!o) o = dpPool[n] = { x: 0, y: 0, color: '', ri: null, d: '', dark: false };
+      const ri = R.roomIcon(nb); if (!ri) continue;
+      const at = doorAt(room, d), x = at[0], y = at[1];
+      let o = dpPool[n]; if (!o) o = dpPool[n] = { x: 0, y: 0, color: '', ri: null, d: '', dark: false, threat: 0, oneWay: false };
       o.x = x; o.y = y + Math.sin(t * 2.2 + x * 0.03 + y * 0.02) * 1.8; o.color = ri.color; o.ri = ri; o.d = d; o.dark = !!nb.dark && !(st && st.visited);
+      o.threat = U.clamp(nb.threat | 0, 0, 3); o.oneWay = !!room.sealed;
       out[n++] = o;
     }
     return out;
   }
-  // Icon pass of the door previews (screen-space-sized, unlit); fades when a hero walks up to the doorway.
+  // Text line i (0 = the label) stacked into the room from a preview: below the icon, above it at a south door; w / e lines keep inside the room.
+  function dpLine(c, pv, i, str, col, alpha) {
+    const lh = R.labelH(), s = pv.d === 's' ? -1 : 1, qx = Math.round(pv.x), y = Math.round(pv.y) + s * (11 + lh / 2 + i * (lh + 2));
+    const tw = R.labelW(str), tx = pv.d === 'w' ? qx - 8 + tw / 2 : pv.d === 'e' ? qx + 8 - tw / 2 : qx;
+    R.label(c, str, tx, y, col, undefined, alpha);
+    labelAdd(tx, y, tw / 2, lh / 2);
+  }
+  // Icon pass of the door previews (screen-space-sized, unlit); the glyph fades when a hero walks up to the doorway, the label stays readable.
   function drawDoorPreviews(c, view, room, t) {
-    const list = doorPreviews(view, room, t); if (!list.length) return;
+    if (view.locked || !view.floor) return;
+    if (room.sealed) { // sealed entry doors: a lock in the doorway
+      c.globalAlpha = 0.8;
+      for (const d in room.sealed) if (room.sealed[d] && room.doors[d] >= 0) { const at = doorAt(room, d); c.drawImage(ED.Icons.canvas(ED.Icons.SEAL[0], ED.Icons.SEAL[1], 16), Math.round(at[0]) - 8, Math.round(at[1]) - 8); }
+    }
+    const list = doorPreviews(view, room, t); if (!list.length) { c.globalAlpha = 1; return; }
+    let alive = 0; for (const p of view.players.values()) if (!p.dead) alive++;
     for (const pv of list) {
       let near = 1e9; for (const p of view.players.values()) if (!p.dead) near = Math.min(near, Math.hypot(p.x - pv.x, p.y - pv.y));
-      const a = U.clamp((near - 22) / 46, 0.22, 0.95), qx = Math.round(pv.x), qy = Math.round(pv.y);
+      const a = U.clamp((near - 22) / 46, 0.22, 0.95), qx = Math.round(pv.x), qy = Math.round(pv.y), ri = pv.ri;
       c.globalAlpha = a;
-      c.drawImage(ED.Icons.canvas(pv.ri.icon, pv.color, 22), qx - 11, qy - 11); // icons are drawn at their cached size: 1 texel = 1 buffer px
-      if (pv.ri.badge) c.drawImage(ED.Icons.canvas('skull', '#ff7a3a', 12), qx + 3, qy + 2);
-      if (pv.dark) { // dark-room mark on the room side of the icon (stays readable up close); the rule text fades in as a hero nears, kept inside the room
-        c.globalAlpha = Math.max(a, 0.7);
-        const sy = Math.round(pv.d === 's' ? pv.y - 18 : pv.y + 18);
-        c.drawImage(ED.Icons.canvas('skull', DARK_COL, 11), qx - 5, sy - 5);
-        const ta = U.clamp((90 - near) / 40, 0, 1);
-        if (ta > 0) {
-          const tw = R.labelW(DARK_TEXT), tx = pv.d === 'w' ? qx - 8 + tw / 2 : pv.d === 'e' ? qx + 8 - tw / 2 : qx;
-          R.label(c, DARK_TEXT, tx, sy + (pv.d === 's' ? -12 : 12), DARK_COL, undefined, ta);
-        }
+      if (ri.badge) { c.drawImage(ED.Icons.canvas(ri.icon, pv.color, 16), qx - 16, qy - 8); c.drawImage(ED.Icons.canvas(ri.badge[0], ri.badge[1], 16), qx, qy - 8); } // elite / boss: skull and reward side by side
+      else c.drawImage(ED.Icons.canvas(ri.icon, pv.color, 22), qx - 11, qy - 11); // icons are drawn at their cached size: 1 texel = 1 buffer px
+      if (pv.dark) { c.globalAlpha = Math.max(a, 0.7); c.drawImage(ED.Icons.canvas(ED.Icons.DARK[0], DARK_COL, 16), ri.badge ? qx + 16 : qx + 10, qy - 8); }
+      if (pv.threat) { // threat pips on the wall side of the glyph
+        c.globalAlpha = Math.max(a, 0.8);
+        const py = pv.d === 's' ? qy + 12 : qy - 15, px0 = qx - (pv.threat * 6 - 2) / 2;
+        for (let i = 0; i < pv.threat; i++) { c.fillStyle = '#222222'; c.fillRect(px0 + i * 6 - 1, py - 1, 6, 6); c.fillStyle = THREAT_COL; c.fillRect(px0 + i * 6, py, 4, 4); }
+      }
+      c.globalAlpha = 1;
+      const ta = U.clamp((90 - near) / 40, 0, 1);
+      let li = 0;
+      dpLine(c, pv, li++, ri.label, pv.dark ? U.mix(pv.color, DARK_COL, 0.35) : pv.color, Math.max(a, 0.85));
+      if (alive > 1) { // party door rule: who wants this door, out of the living heroes
+        let k = 0, first = null;
+        for (const p of view.players.values()) if (!p.dead && R.doorWant(view, p) === pv.d) { k++; if (!first) first = p; }
+        if (k) dpLine(c, pv, li++, `${first.name}${k > 1 ? ' +' + (k - 1) : ''} ${k > 1 ? 'want' : 'wants'} this door (${k}/${alive})`, ED.PLAYER_COLORS[first.slot] || '#fff3c4', 1);
+      }
+      if (ta > 0) {
+        if (pv.oneWay) dpLine(c, pv, li++, BACK_TEXT, '#d8cbb8', ta);
+        if (pv.dark) dpLine(c, pv, li++, DARK_TEXT, DARK_COL, ta);
       }
     }
     c.globalAlpha = 1;
@@ -1452,7 +1473,7 @@
           const vk = orbKey(hex, view); A_.draw(c, 'prop.shrine.3', 0, 0, 0, vk ? { variant: vk } : undefined);
           G(0, reward ? -30 + bob : -22, 34, hex, reward ? 0.7 : 0.55 + Math.sin(t * 4) * 0.15); L(0, reward ? -28 : -18, reward ? 120 : 100, hex, reward ? 0.95 : 0.8);
           if (reward) {
-            const me = view.players.get(local), ri = R.rewardIcon(p.item, me ? me.cls : null);
+            const ri = R.rewardIcon(p.item);
             c.drawImage(ED.Icons.canvas(ri[0], ri[1], 24), -12, Math.round(-62 + bob));
             for (let i = 0; i < 3; i++) { const a = t * 1.5 + i * 2.1; G(Math.cos(a) * 15, -40 + bob + Math.sin(a) * 6, 5, hex, 0.8); }
           } else for (let i = 0; i < 3; i++) { const k = (t * 0.8 + i / 3) % 1; c.fillStyle = U.rgba(hex, 0.8 * (1 - k)); c.fillRect(Math.round((-4 + i * 4 + Math.sin(t * 3 + i) * 1.5) / 2) * 2, Math.round((-34 - k * 14) / 2) * 2, 2, 2); }
@@ -1658,7 +1679,7 @@
           c.fillStyle = '#3a3330'; c.fillRect(-11, -7, 22, 9); c.strokeRect(-11, -7, 22, 9);
           c.fillStyle = '#524a44'; c.fillRect(-13, -10, 26, 4); c.strokeRect(-13, -10, 26, 4);
           G(0, -26 + bob, 34, col, 0.7); L(0, -24, 120, col, 0.95);
-          const me = view.players.get(local), ri = R.rewardIcon(p.item, me ? me.cls : null);
+          const ri = R.rewardIcon(p.item);
           c.drawImage(ED.Icons.canvas(ri[0], ri[1], 24), -12, Math.round(-38 + bob));
           for (let i = 0; i < 3; i++) { const a = t * 1.5 + i * 2.1; G(Math.cos(a) * 15, -26 + bob + Math.sin(a) * 6, 5, col, 0.8); }
           break;
@@ -2290,10 +2311,10 @@
     Pix.put(c, Pix.ell(rx, ry, e.t < 0.1 && Math.floor(e.t * 40) % 2 ? '#8ad0ff' : '#ffffff', false), s2(e.x), s2(e.y), 1);
   }
   function drawOverheads(c, view, local, t) {
-    if (view.room) drawDoorPreviews(c, view, view.room, t);
+    lblN = 0;
+    if (view.room) drawDoorPreviews(c, view, view.room, t); // door lines register their rects first: names and elite labels step around them
     // enemy bars and elite labels: one blit each on the buffer pixel grid
     const bh = R.scale >= 2 ? 2 : 3, lhh = R.labelH();
-    lblN = 0;
     const lp = view.players.get(local), cuePips = ED.HUD.wantsPips(lp), cueParry = !!(lp && lp.stats && lp.stats.parry);
     if (cuePips || cueParry) for (const e of view.enemies) { // class route cues of the local hero: ailment pips under the bar (Brand, Open Veins, Contagion, Gangrene), the Parry rim on a foe in the last 0.3 s of a wind-up
       if (e.hp <= 0 || e.boss || e.burrowed || e.fodder) continue;
