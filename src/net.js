@@ -326,12 +326,12 @@
   N.venomLevel = (e) => (e.venom >= 100 ? 5 : e.venom > 0 ? Math.min(4, Math.ceil(e.venom / 25)) : 0);
   N.radLevel = (w, e) => (e.rad > 0 ? Math.min(3, Math.floor(4 * e.rad / w.smiteAt(e))) : 0);
   // Hero flags (bit n = 1 << n): 0 moving, 1 dashing, 2 downed, 3 dead, 4 invulnerable, 5 hurt, 6 shield thrown, 7 stealth, 8 ambush, 9 airborne (Comet), 10 Guardian Light buff, 11 Emboldened, 12 Battle Trance, 20 braced.
-  // P[24]: a hero's bells (class-bell.js) or 0: [last input seq of that hero (p.inSeq), ms of world time since it arrived (p.inT), haul x 100, chain length, flags (1 whirling, 2 hauled, 4 Heave, 8 Heave spin, 16 Heave reel, 32 turning sense -1),
-  // then per bell rx, ry (about the carried spot p.bellPx / p.bellPy), vx, vy (about the hero)].
-  N.BELL_HEAD = 5;
+  // P[24]: a hero's bells (class-bell.js) or 0: [last input seq of that hero (p.inSeq), ms of world time since it arrived (p.inT), haul x 100, chain length, flags (1 whirling, 2 hauled, 4 Anchor Leap in flight, 8 winding,
+  // 32 turning sense -1, 64 Wrecking Spin), Resonance; then per bell x, y, vx, vy, state (ED.Bell.STATES): a hand bell's x, y about the carried spot p.bellPx / p.bellPy, any other bell's in the world].
+  N.BELL_HEAD = 6; N.BELL_N = 5;
   N.bellRow = (p, w) => {
-    const hv = p.heave, row = [p.inSeq | 0, p.inT === undefined ? 0 : r((w.time - p.inT) * 1000), r(p.haul * 100), r(p.bellL), (p.bellWhirl ? 1 : 0) | (p.bellHauled ? 2 : 0) | (hv ? 4 : 0) | (hv && hv.phase === 'spin' ? 8 : 0) | (hv && hv.phase === 'reel' ? 16 : 0) | (p.bellSpin < 0 ? 32 : 0)];
-    for (const b of p.bells) row.push(r(b.x - p.bellPx), r(b.y - p.bellPy), r(b.vx), r(b.vy));
+    const row = [p.inSeq | 0, p.inT === undefined ? 0 : r((w.time - p.inT) * 1000), r(p.haul * 100), r(p.bellL), (p.bellWhirl ? 1 : 0) | (p.bellHauled ? 2 : 0) | (p.bellLeap ? 4 : 0) | (p.bellWind ? 8 : 0) | (p.bellSpin < 0 ? 32 : 0) | (p.spinT > 0 ? 64 : 0), p.bellRes | 0];
+    for (const b of p.bells) { const hand = b.s === 0; row.push(r(hand ? b.x - p.bellPx : b.x), r(hand ? b.y - p.bellPy : b.y), r(b.vx), r(b.vy), b.s | 0); }
     return row;
   };
   // Zone rows end with the owner slot + 1 of a zone that follows its owner (Aura of Faith), else 0.

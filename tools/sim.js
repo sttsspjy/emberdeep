@@ -346,8 +346,28 @@ function startMove(w, p, N, a, data) {
   p.skillMove = { dx: (end.x - p.x) / real, dy: (end.y - p.y) / real, speed: real / t, t, iframes: mv.iframes === undefined ? t : mv.iframes, age: 0 };
 }
 
-// BELL_HAUL: px within which a Bellwarden bot hauls its bell. PEAL_PACK: foes in the wave that make a bot ring the Peal. BELL_OUT: px past the bell's orbit a bot keeps its target.
-const BELL_HAUL = 220, PEAL_PACK = 3, BELL_OUT = 10;
+// BELL_HAUL: px within which a Bellwarden bot winds its bells. PEAL_PACK: foes in the wave that make a bot ring the Peal. PEAL_RES: the Resonance a bot rings it at. BELL_OUT: px past the bell's orbit a bot keeps its target.
+// LEAP_PACK: foes at an out-of-hand bell that make a bot yank itself there. LINE_W: px either side of a hurl's line a foe counts as on it.
+const BELL_HAUL = 220, PEAL_PACK = 3, PEAL_RES = 7, BELL_OUT = 10, LEAP_PACK = 2, LINE_W = 8;
+// A Bellwarden bot plays the loop as ED.Bell.cycle models it: attack held while a foe is within BELL_HAUL; a one-tick release when ED.Bell.ready says so, the cursor past the last foe on the line from the hero
+// that crosses the most foes within the hurl's reach (aim error by skill); held again at once (the bell reels home as it lands and winds on). c.bellRel: the release tick has passed.
+function botBell(w, p, c, foes, tgt, inRange, skill, brng) {
+  if (c.bellRel) { c.bellRel = false; p.haulIn = inRange; return; }
+  p.haulIn = inRange;
+  if (!inRange || !ED.Bell.ready(w, p)) return;
+  const st = p.stats, R = ED.CONST.HURL_D, br = st.weapon.br * (1 + 0.5 * st.area);
+  let best = tgt, bn = -1, far = 0;
+  for (const e of foes) {
+    const de = Math.hypot(e.x - p.x, e.y - p.y); if (de > R || de < 1) continue;
+    const ux = (e.x - p.x) / de, uy = (e.y - p.y) / de;
+    let n = 0, f = de;
+    for (const g of foes) { const along = (g.x - p.x) * ux + (g.y - p.y) * uy; if (along < 0 || along > R) continue; const off = Math.abs((g.y - p.y) * ux - (g.x - p.x) * uy); if (off < br + g.r + LINE_W) { n++; f = Math.max(f, along); } }
+    if (n > bn) { bn = n; best = e; far = f; }
+  }
+  const de = Math.hypot(best.x - p.x, best.y - p.y) || 1, a = Math.atan2(best.y - p.y, best.x - p.x) + gauss(brng) * AIM[0] * (1 - skill), k = Math.min(R, Math.max(de, far) + 20);
+  p.face = a; p.aimX = p.x + Math.cos(a) * k; p.aimY = p.y + Math.sin(a) * k;
+  p.haulIn = false; c.bellRel = true;
+}
 // Casts slot 0 or 1 of hero p at foe tgt (distance d, angle a) when the skill's aim allows it; returns whether it was cast. Route stats shape the choice: Scattershot casts Volley at close range, Assassinate steps to a wounded foe.
 // force (Capacitor detonation): a 'dir' or 'self' skill casts at any distance, a 'ground' skill lands at its range toward the foe; 'move' skills keep their range.
 function botCast(w, p, slot, tgt, d, a, foes, brng, skill, force) {
@@ -359,6 +379,17 @@ function botCast(w, p, slot, tgt, d, a, foes, brng, skill, force) {
     let bd = N.range * N.range;
     for (const e of foes) if (e.hp < e.maxHp * 0.5) { const d2 = U.dist2(e.x, e.y, p.x, p.y); if (d2 < bd) { bd = d2; tgt = e; } }
     d = Math.sqrt(U.dist2(tgt.x, tgt.y, p.x, p.y)); a = ang = Math.atan2(tgt.y - p.y, tgt.x - p.x);
+  }
+  if (id === 'heave') { // Anchor Leap: yank to an out-of-hand bell with LEAP_PACK foes (or an elite or boss) at it; else, every bell in hand, leap at a foe 70-180 px off, or away from it below 35% health
+    const r = N.p.slam.r, all = p.bells.every(b => b.s === ED.Bell.STATES.HAND);
+    let go = null;
+    for (const b of p.bells) { if (b.s === ED.Bell.STATES.HAND) continue; let n = 0, big = false; for (const f of foes) if (U.dist2(f.x, f.y, b.x, b.y) < (r + f.r) ** 2) { n++; if (f.boss || f.elite) big = true; } if (n >= LEAP_PACK || big) { go = b; break; } }
+    if (go) { p.aimX = go.x; p.aimY = go.y; ang = Math.atan2(go.y - p.y, go.x - p.x); }
+    else if (all && p.hp < 0.35 * p.maxHp && d < 90) { ang = a + Math.PI; p.aimX = p.x + Math.cos(ang) * 200; p.aimY = p.y + Math.sin(ang) * 200; }
+    else if (all && d > 70 && d < 180) { ang = a + gauss(brng) * sA; p.aimX = tgt.x; p.aimY = tgt.y; }
+    else return false;
+    w.playerSkill(p, ang, null, slot);
+    return true;
   }
   switch (N.aim) {
     case 'dir':
@@ -381,12 +412,12 @@ function botCast(w, p, slot, tgt, d, a, foes, brng, skill, force) {
       if (id === 'harvest') {
         const mine = w.allies.filter(q => q.owner === p.pid);
         if (mine.length ? !mine.some(m => foes.some(f => U.dist2(m.x, m.y, f.x, f.y) < (N.p.burst.r + f.r) ** 2)) : d >= 220) return false;
-      } else if (id === 'peal') { // ring the bell where it is: several foes in its wave, or a lone elite or boss, with the bell flying fast (a crowd: any speed)
-        const r = N.p.wave.r, seen = new Set();
-        let big = false, fast = 0;
-        for (const b of p.bells) { fast = Math.max(fast, Math.hypot(b.vx, b.vy)); for (const f of foes) if (!seen.has(f) && U.dist2(f.x, f.y, b.x, b.y) < (r + f.r) ** 2) { seen.add(f); if (f.boss || f.elite) big = true; } }
+      } else if (id === 'peal') { // ring the bells where they are: a foe in a wave and PEAL_RES Resonance or an elite or boss in it, or 2 x PEAL_PACK foes in it at any Resonance
+        const r = N.p.wave.r * (1 + ED.CONST.RES_R * Math.min(1, (p.bellRes | 0) / ED.CONST.RES_MAX)), seen = new Set();
+        let big = false;
+        for (const b of p.bells) for (const f of foes) if (!seen.has(f) && U.dist2(f.x, f.y, b.x, b.y) < (r + f.r) ** 2) { seen.add(f); if (f.boss || f.elite) big = true; }
         const n = seen.size;
-        if (!((n >= PEAL_PACK || (n >= 1 && (big || foes.length <= 2))) && (fast >= ED.CONST.BELL_REF || n >= 2 * PEAL_PACK))) return false;
+        if (!(n >= 2 * PEAL_PACK || (n >= 1 && ((p.bellRes | 0) >= PEAL_RES || big)))) return false;
       } else {
         const q = N.parts.find(x => x.on && x.r > 0), reach = id === 'vanish' || !q ? 160 : q.r + tgt.r + 6;
         if (d >= reach && !force) return false;
@@ -823,6 +854,7 @@ function runBot(opts) {
       let mx = 0, my = 0;
       const foes = w.enemies.filter(e => e.hp > 0 && e.spawnT <= 0);
       const skill = opts.skill ?? 0.75;
+      if (!foes.length && p.haulIn) p.haulIn = false; // a Bellwarden stops winding with no foe left
       if (foes.length) {
         // target: the nearest threat foe when it is within weapon reach (or when no fodder stands), else the nearest fodder
         let tgt = null, bd = 1e9, nf = null, fd = 1e9;
@@ -852,10 +884,11 @@ function runBot(opts) {
         if (vetD || vetR) T = vetThreats(w, p, spd, c.attn ? VR : VR + VLAPSE);
         if (vetD && T) { plan = vetPlan(w, p, c, mx, my, spd, T); mx = plan.mx; my = plan.my; danger = plan.risk > 0.02; }
         const a = Math.atan2(tgt.y - p.y, tgt.x - p.x), st = p.stats;
-        const inRange = bell ? d < BELL_HAUL : st.melee ? d - tgt.r < st.weapon.range : d < 380; // a bell: haul (attack held) while a foe is near
+        const inRange = bell ? d < BELL_HAUL : st.melee ? d - tgt.r < st.weapon.range : d < 380; // a bell: wind (attack held) while a foe is near
         if (st.channel && (c.holdT = (c.holdT || 0) - dt) <= 0) { c.hold = brng.next() < skill; c.holdT = 0.5; } // Pyroclast: the choice to stand still is renewed every 0.5 s (a roll per tick would break Channel within a few ticks)
         if (st.channel && !danger && inRange && c.hold) { mx = 0; my = 0; } // plant the feet while nothing threatens
-        if (c.atk <= 0 && inRange) {
+        if (bell) botBell(w, p, c, foes, tgt, inRange, skill, brng);
+        else if (c.atk <= 0 && inRange) {
           p.atkD = d; // the cursor on the target (a lobbed weapon lands there)
           w.playerAttack(p, a + gauss(brng) * AIM[0] * (1 - skill));
           c.atk = Math.max(c.atk, -dt) + ED.Stats.stepInterval(p); // carries the overshoot of this tick, as the client does

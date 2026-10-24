@@ -121,7 +121,7 @@ for (const s of [1, 2]) {
       ok(!/[{}\[\]]/.test(ED.cardParts(id, 3, st).text + ED.cardParts(id, 3, st).rider), `${id} on ${wid} has no raw token`);
     }
     const nom = /×([\d.]+) (?:attack time|lockout), ×([\d.]+) damage per (?:hit|strike)/.exec(ED.cardParts(id, 1).text), hv = b.weapon.kind === 'heavy';
-    const want = cls === 'bell' ? (hv ? [1.29, 1.42] : [0.69, 0.76]) : hv ? [1.8, 1.98] : [0.55, 0.605];
+    const want = cls === 'bell' ? (hv ? [1.2, 1.32] : [0.6, 0.66]) : hv ? [1.8, 1.98] : [0.55, 0.605];
     ok(nom && +nom[1] === want[0] && +nom[2] === want[1], `${id} without a hero shows the nominal factors`);
   }
   ok(/×1\.3 attack time, ×1\.43 damage per hit/.test(ED.cardParts('p_atk_h', 1, { weaponId: 'inferno' }).text), 'Tome of Ruin shows the capped heavy factors');

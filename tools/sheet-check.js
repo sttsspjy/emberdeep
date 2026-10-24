@@ -174,7 +174,7 @@ const PENDING = new Set(['sky', 'sky2', 'shower', 'twin', 'rocks', 'echo', 'afte
 let pend = 0;
 const pending = (msg) => { pend++; if (verbose) console.log('pending ' + msg); };
 // [class, stat switches, slot, dummy distance (default REF.d)]
-const BELL_FAST = (w, p) => { run(w, 0.05); for (const b of p.bells) { b.vx = 0; b.vy = C.BELL_REF + 80; } }; // a Peal at full swing: the bells laid out, then flying faster than BELL_REF
+const BELL_RES = (w, p) => { run(w, 0.05); p.bellRes = ED.Bell.pealRes(p.stats); }; // a Peal at the mean Resonance the sheet assumes
 const CASES = [
   ['knight', {}, 0], ['knight', {}, 1], ['knight', { jugShock: 0.4, s1Range: 90 }, 0], ['knight', { avalanche: 0.9, avaCrack: 0.3, avaStun: 0.8, jugShock: 0.4, s1Range: 90 }, 0], ['knight', { phalanx: 1, bannerDur: 5, bannerSlow: 0.4, bannerWeak: 0.25, bannerDmg: 0.1, braceDR: 0.1 }, 0], ['knight', { tempest: 3, twinShield: 0.7, vortexMul: 0.25, vortexDur: 2.5 }, 1], ['knight', { orbit: 3, orbitMul: 0.15 }, 1], ['knight', { twinShield: 0.7 }, 1],
   ['ranger', {}, 0], ['ranger', {}, 1], ['ranger', { deathMark: 0.5, deathWave: 0.6 }, 0], ['ranger', { thornburst: 20, thornMul: 3 }, 0], ['ranger', { caltrops: 0.3, thornR: 0 }, 0, 30, false, { skip: ['arrow'] }], ['ranger', { skyfall: 1, starfall: 0.6 }, 1, 160], ['ranger', { thornstorm: 2 }, 1], ['ranger', { rainHail: 1 }, 1], ['ranger', { skyfall: 1 }, 1], ['ranger', { skyTwin: 0.5, skyfall: 1 }, 1], ['ranger', { shower: 0.4, rainHail: 1 }, 1],
@@ -186,8 +186,8 @@ const CASES = [
   ['shade', { eclipse: 0.6, eclipseDur: 4 }, 1, 28, false, { drive: true }], ['shade', { umbral: 2, cloneMul: 0.5 }, 1, 28, false, { drive: true, skip: ['clone'] }], ['shade', { shroud: 1, shroudDmg: 0.3, s2Dur: 2 }, 1, 28],
   ['cleric', {}, 0], ['cleric', {}, 1], ['cleric', { twinHammer: 0.75 }, 1],
   ['cleric', { wrath: 1, wrathNova: 1.5, wrathPillar: 1.2 }, 0], ['cleric', { aura: 1, dawn: 1, aegisR: 40, aegisDR: 0.1, aegisStun: 0.3, aegisMul: 1 }, 0], ['cleric', { storm: 5, stormMul: 0.45, thirdLeg: 1, twinHammer: 0.55, secondFlight: 0.25 }, 1], ['cleric', { verdict: 1, fjEcho: 0.2, fjR: 40, fjStun: 0.6 }, 1],
-  ['bell', {}, 0], ['bell', { wrecker: 0.6, smashStun: 0.6 }, 0, 150], ['bell', { wrecker: 0.6, wreckSpin: 0.5, spinDur: 1 }, 0, 60, false, { skip: ['reel'] }],
-  ['bell', {}, 1, undefined, false, { setup: BELL_FAST }], ['bell', { clap: 0.5 }, 1, undefined, false, { setup: BELL_FAST, skip: ['clap'] }], ['bell', { pealEcho: 0.5 }, 1, undefined, false, { setup: BELL_FAST }], ['bell', { tollN: 3, tollBolt: 0.6, lightningInfuse: 0.3 }, 1, undefined, false, { setup: BELL_FAST }],
+  ['bell', {}, 0], ['bell', { wrecker: 1, smashStun: 0.6 }, 0, 150], ['bell', { wrecker: 1, wreckSpin: 0.5, spinDur: 1 }, 0, 60, false, { skip: ['spin'] }],
+  ['bell', {}, 1, undefined, false, { setup: BELL_RES }], ['bell', { clap: 0.5 }, 1, undefined, false, { setup: BELL_RES, skip: ['clap'] }], ['bell', { pealEcho: 0.5 }, 1, undefined, false, { setup: BELL_RES }], ['bell', { tollN: 3, tollBolt: 0.6, lightningInfuse: 0.3 }, 1, undefined, false, { setup: BELL_RES }],
   ['necro', {}, 0], ['necro', { boneSpikes: 1 }, 0], ['necro', { boneSpikes: 1, bloom: 1, bloomField: 0.5, bloomBomb: 1.2 }, 0], ['necro', { knights: 1, maxMinions: 2, s1N: -2 }, 0], ['necro', { knights: 1, maxMinions: 2, s1N: -2, dk: 1, dkMul: 4.5, dkArc: 2.4, dkTaunt: 120 }, 0],
 ];
 for (const [cls, stat, slot, dist, skipImpact, opt] of CASES) {
@@ -308,35 +308,44 @@ const partPack = (m, k, q, n) => MDp.directDamage({ weapon: { kind: 'melee', _av
 }
 
 // ---------------- weapons: attacks on one foe, then the clouds and shots in flight finish ----------------
+// The Bellwarden loop as the sheet models it (class-bell.js ED.Bell.cycle): attack held; a one-tick release when ED.Bell.ready says so, the cursor at aim() (on the foe); then held again: the bell reels home as soon as it lands and winds on.
+function bellLoop(w, p, aim) {
+  let n = 0, rel = false;
+  p.haulIn = true;
+  return { tick() { if (rel) { p.haulIn = true; rel = false; return; } if (ED.Bell.ready(w, p)) { const a = aim(); p.face = Math.atan2(a.y - p.y, a.x - p.x); p.aimX = a.x; p.aimY = a.y; p.haulIn = false; rel = true; n++; } }, get n() { return n; } };
+}
 function weaponRun(cls, wi, boons, o) {
   o = o || {};
   const probe = stage(cls, boons, wi, null), wp = probe.p.stats.weapon, reach = wp.kind === 'melee' ? wp.range * (1 + 0.5 * probe.p.stats.area + probe.p.stats.meleeReach) : 0, bell = wp.kind === 'bell';
-  const { w, p } = stage(cls, boons, wi, o.stat, null, bell ? ED.Bell.orbit(wp) : reach ? reach * 0.55 : REF.d, o.crit);
+  const { w, p, e } = stage(cls, boons, wi, o.stat, null, bell ? ED.Bell.orbit(wp) : reach ? reach * 0.55 : REF.d, o.crit);
   if (o.stratum) w.stratum = o.stratum;
   const m = sheetOf(w, p);
   let next = 0, atk = 0;
-  if (bell) { p.haulIn = true; run(w, 3); hits.length = 0; } // a bell: hauled from rest to its running speed, then measured; an attack is a strike
-  run(w, o.secs || 20, () => { if (bell) return; if (w.time >= next) { w.playerAttack(p, 0); next = w.time + ED.Stats.attackInterval(p); atk++; } });
-  run(w, 4);
-  if (bell) atk = hits.filter(h => h.kind === 'weapon').length; // the bell keeps striking while the shots settle: every strike counts
+  const ex = e.x, ey = e.y, loop = bell ? bellLoop(w, p, () => ({ x: ex, y: ey })) : null;
+  if (bell) { run(w, 3, () => { loop.tick(); e.x = ex; e.y = ey; }); hits.length = 0; } // a bell: the loop runs 3 s first, then is measured; an attack is a hurl (the foe holds its spot on the orbit)
+  const n0 = bell ? loop.n : 0;
+  run(w, o.secs || 20, () => { if (bell) { loop.tick(); e.x = ex; e.y = ey; return; } if (w.time >= next) { w.playerAttack(p, 0); next = w.time + ED.Stats.attackInterval(p); atk++; } });
+  if (bell) { atk = loop.n - n0; p.haulIn = false; }
+  run(w, bell ? 0 : 4);
   const total = hits.filter(h => !(h.kind === 'dot' && h.raw)).reduce((s, h) => s + h.dealt, 0), bleed = hits.filter(h => h.kind === 'dot' && h.raw && h.bleed).reduce((s, h) => s + h.dealt, 0);
-  return { m, total, atk, bleed, secs: (o.secs || 20) + (bell ? 4 : 0) };
+  return { m, total, atk, bleed, secs: o.secs || 20 };
 }
 for (const cls of ED.CLASS_IDS) for (let wi = 0; wi < 3; wi++) {
   const r = weaponRun(cls, wi, {}), id = ED.CLASSES[cls].weapons[wi];
-  rel(r.total / r.atk, r.m.weapon.dps / r.m.weapon.aps, 0.04, `${id} damage per attack on one foe`);
-  if (cls === 'bell') rel(r.atk / r.secs, r.m.weapon.aps / ED.Sheet.BELL_EFF.one, 0.06, `${id} strikes per second on one foe on the orbit (the model before BELL_EFF)`);
+  if (cls === 'bell' && ED.WEAPONS[id].n > 1) continue; // juggled bells come home together and wind as a pair: the staged chase below holds them
+  rel(r.total / r.atk, r.m.weapon.dps / r.m.weapon.aps, cls === 'bell' ? 0.1 : 0.04, `${id} damage per attack on one foe`);
+  if (cls === 'bell') rel(r.total / r.secs, r.m.weapon.dps / ED.Sheet.BELL_EFF.one, 0.25, `${id} damage a second on one foe on the orbit (the model before BELL_EFF)`); // 25%: a winding strike just before or after full wind moves a staged loop by a revolution
 }
-// Bellwarden forks and riders: Heavy and Swift bells, Momentum's Heavy Strikes, the Wrecking Ball shock
+// Bellwarden forks: Heavy and Swift bells, Full Swing, the Wrecking Ball shock, Perpetual Motion
 for (const [boons, wi, tag] of [[{ b_atk: 1, b_atk_h: 1 }, 0, 'Tolling Bell'], [{ b_atk: 1, b_atk_s: 1 }, 0, 'Chiming Bell'], [{ b_atk: 1, b_atk_h: 2 }, 1, 'Cathedral Bell rank 2'], [{ b_atk: 1, b_atk_s: 3 }, 2, 'Sleigh Bells rank 3']]) {
   const r = weaponRun('bell', wi, boons, { secs: 24 });
-  rel(r.total / r.atk, r.m.weapon.dps / r.m.weapon.aps, 0.05, `${tag} damage per strike`);
-  rel(r.atk / r.secs, r.m.weapon.aps / ED.Sheet.BELL_EFF.one, 0.08, `${tag} strikes per second`);
+  rel(r.total / r.atk, r.m.weapon.dps / r.m.weapon.aps, 0.1, `${tag} damage per loop`);
+  rel(r.total / r.secs, r.m.weapon.dps / ED.Sheet.BELL_EFF.one, 0.25, `${tag} damage a second`);
 }
-// Bellwarden calibration (sheet.js BELL_EFF): a staged chase, the hero holding its spot and hauling while skeletons (no hit hurts it) walk in from 140 px, 4 seeds x 30 s after 2 s;
-// the weapon damage a second on one foe and on a pack of 4 against the sheet's one-foe dps and tools/model.js packWeapon, within 10% for every bell weapon, Heavy and Swift
+// Bellwarden calibration (sheet.js BELL_EFF, HURL_PACK, REEL_PACK, BELL_MIX): a staged chase, the hero holding its spot and playing the loop at the nearest foe while skeletons (no hit hurts it) walk in from 140 px, 4 seeds x 30 s after 2 s;
+// the weapon damage a second on one foe and on a pack of 4 against the sheet's one-foe dps and tools/model.js packWeapon, within 15% on one foe and 30% on the pack (a moving pack: knockback and drag change its drain weapon by weapon) for every bell weapon, Heavy and Swift
 {
-  const MDc = require('./model.js')(ED, { pack: 4 }), SECS = 30, SEEDS = 4;
+  const MDc = require('./model.js')(ED, { pack: 4 }), SECS = 30, SEEDS = 4, verbs = {};
   const chase = (wid, boons, nf, seed) => {
     const w = new ED.World({ seed, pact: 0, players: [{ pid: 'p0', name: 'T', slot: 0, cls: 'bell', weapon: wid, meta: META() }] });
     w.startRun(); const p = w.players.get('p0');
@@ -346,18 +355,19 @@ for (const [boons, wi, tag] of [[{ b_atk: 1, b_atk_h: 1 }, 0, 'Tolling Bell'], [
     for (let i = 0; i < nf; i++) { const a = i / nf * 2 * Math.PI + seed, e = w.spawnEnemy('skeleton', p.x + Math.cos(a) * 140, p.y + Math.sin(a) * 140); e.spawnT = 0; e.hp = e.maxHp = 1e9; foes.add(e); }
     let dmg = 0, on = false;
     const h0 = W.hitEnemy;
-    W.hitEnemy = function (e, b, s) { const d = h0.call(this, e, b, s); if (on && foes.has(e) && s && s.p === p && s.kind !== 'dot') dmg += d; return d; };
-    p.haulIn = true;
+    W.hitEnemy = function (e, b, s) { const d = h0.call(this, e, b, s); if (on && foes.has(e) && s && s.p === p && s.kind !== 'dot') { dmg += d; const k = s.part || s.kind; verbs[k] = (verbs[k] || 0) + d; } return d; };
     const x0 = p.x, y0 = p.y;
-    for (let t = 0; t < (SECS + 2) * 60; t++) { if (t === 120) on = true; p.hp = p.maxHp; p.x = x0; p.y = y0; w.update(1 / 60); }
+    const loop = bellLoop(w, p, () => { let best = null, bd = 1e9; for (const e of foes) { const d = (e.x - x0) ** 2 + (e.y - y0) ** 2; if (d < bd) { bd = d; best = e; } } return { x: best.x, y: best.y }; }); // the cursor on the nearest foe
+    for (let t = 0; t < (SECS + 2) * 60; t++) { if (t === 120) on = true; p.hp = p.maxHp; p.x = x0; p.y = y0; w.update(1 / 60); loop.tick(); }
     W.hitEnemy = h0;
-    return { got: dmg / SECS, want: nf > 1 ? MDc.packWeapon({ weapon: m.weapon }, nf) / m.weapon._up : m.weapon.dps }; // no casts here: the weapon strikes all the time (packWeapon takes _up)
+    return { got: dmg / SECS, want: nf > 1 ? MDc.packWeapon({ weapon: m.weapon }, nf) / m.weapon._up : m.weapon.dps }; // no casts here: the bell loops all the time (packWeapon takes _up)
   };
   for (const wid of ['bronzebell', 'stormbell', 'greatbell', 'wreckbell', 'handbells', 'chimes']) for (const [tag, boons] of [['', {}], [' Heavy', { b_atk: 1, b_atk_h: 1 }], [' Swift', { b_atk: 1, b_atk_s: 1 }]]) for (const nf of [1, 4]) {
     let got = 0, want = 0;
     for (let s = 1; s <= SEEDS; s++) { const r = chase(wid, boons, nf, s); got += r.got / SEEDS; want = r.want; }
-    rel(got, want, 0.1, `${wid}${tag} weapon damage a second in a chase, ${nf > 1 ? 'a pack of ' + nf : 'one foe'} (sheet at BELL_EFF)`);
+    rel(got, want, nf > 1 ? 0.3 : 0.15, `${wid}${tag} weapon damage a second in a chase, ${nf > 1 ? 'a pack of ' + nf : 'one foe'} (sheet at BELL_EFF)`);
   }
+  if (verbose) console.log('bell chase damage by part: ' + JSON.stringify(Object.fromEntries(Object.entries(verbs).map(([k, v]) => [k, Math.round(v)]))));
 }
 // forks and route weapons: Heavy, Swift and the Knight Cleave
 for (const [cls, boons, tag] of [['knight', { k_atk: 1 }, 'Oath of Steel'], ['knight', { k_atk: 1, k_atk_h: 1 }, 'Oathbreaker'], ['knight', { k_atk: 1, k_atk_s: 1 }, 'Sworn Blade'], ['knight', { k_atk: 1, k_atk_h: 3 }, 'Earthsplitter'], ['knight', { k_atk: 1, k_atk_s: 3 }, 'Thousand Edges'], ['ranger', { r_atk: 1, r_atk_h: 1 }, 'Ballista'], ['cleric', { c_atk: 1, c_atk_s: 1 }, 'Crusader']]) {
