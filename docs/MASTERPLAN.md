@@ -37,3 +37,11 @@ North-star: a co-op browser roguelite where builds are chosen, not rolled. Rules
 - [x] Transforms for the other four heroes, breakable props, smaller hearts
 - [x] Retune and PR to main (v4 live)
 - [ ] Balance gaps left: full Hearth too strong, random picks win 2% (target ≤ 1%), Pact 5 too hard
+
+## Pixel UI
+- [x] Pixel fonts built in (Pixel Operator, bold titles), no Google Fonts
+- [x] Every menu, the Hearth, the HUD and the Tab sheet redrawn as pixel art
+- [x] 13 card looks (6 elements, General, route, duo, Ascended, relic, Purse, Hearth), each with its own pick animation, sound and burst on the hero
+- [x] Pixel icons
+- [ ] Your look-and-feel check (and the vsync fps check)
+- [ ] Merge into v4.1
