@@ -6,7 +6,7 @@
 
 ## north-star (Ultimate goal for all plans/tasks)
 
-A browser **co-op roguelite dungeon descent** (solo or up to 4 friends) where **builds are chosen, not rolled**: paths (Fire, Ice, Lightning, Poison, Holy, Shadow plus General) gate boons, every stratum is weak to one element and resists another, commitment unlocks a keystone and a weapon evolution, and the lantern punishes greedy exploration. Rules: **① Zero install** (static site, no build step, no backend; opens from any static host or `file://`) **② No runtime asset files** (art is embedded as data URIs built by `tools/art.js` from vendored CC0/CC-BY sources in `art-src/`; all audio synthesized with WebAudio) **③ Host-authoritative deterministic sim** (the same `src/sim` code runs headless in Node for balance bots) **④ Every death is earned** (telegraphed attacks, readable builds, no sustain-by-default).
+A browser **co-op roguelite dungeon descent** (solo or up to 4 friends) where **builds are chosen, not rolled**: paths (Fire, Ice, Lightning, Poison, Holy, Shadow plus General) gate boons, every stratum is weak to one element and resists another, commitment unlocks a keystone and a weapon evolution, and the route map makes every room a choice. Rules: **① Zero install** (static site, no build step, no backend; opens from any static host or `file://`) **② No runtime asset files** (art is embedded as data URIs built by `tools/art.js` from vendored CC0/CC-BY sources in `art-src/`; all audio synthesized with WebAudio) **③ Host-authoritative deterministic sim** (the same `src/sim` code runs headless in Node for balance bots) **④ Every death is earned** (telegraphed attacks, readable builds, no sustain-by-default).
 
 **NO COMPROMISES. A ROGUELITE VETERAN MUST FINISH A RUN AND WANT ANOTHER WITH A DIFFERENT PATH.**
 
@@ -22,10 +22,10 @@ Vanilla JS (ES2020, no modules, global `ED` namespace) + Canvas2D with a WebGL p
 ```
 index.html, style.css    page shell, DOM menus/overlays, styling
 src/util.js              constants, math, seeded RNG, colour helpers
-src/data/                biomes (palette, roster, affinity) · enemies · classes (heroes, weapons, skills) · boons (paths, duos) · classboons (class routes) · ascended (Ascended boons) · relics · meta (Hearth upgrades, per-hero Armory, pacts, deeds, secrets, Wardrobe cosmetics)
+src/data/                biomes (palette, roster, affinity) · enemies · classes (heroes, weapons, skills) · boons (paths, duos) · classboons (class routes) · ascended (Ascended boons) · mutations (keystone/evolution Mutations) · twists (Twist cards) · relics · meta (Hearth upgrades, per-hero Armory, pacts, deeds, secrets, Wardrobe cosmetics)
 src/save.js              profile storage + save code
 src/sim/                 dungeon (floor gen) · stats (stat block) · world (run flow, rooms, dark rooms, pickups) · combat (damage, statuses, projectiles, zones)
-                         build (offers, paths, evolutions, class routes) · skills (cast dispatcher, class hooks) · class-<hero>.js (each hero's skills and route hooks) · sheet (Tab sheet model)
+                         build (offers, paths, evolutions, class routes) · skills (cast dispatcher, class hooks) · class-<hero>.js (each hero's skills and route hooks) · twist (`ED.TWIST` Twist hooks) · sheet (Tab sheet model)
                          ai (enemy brains) · bosses · rooms (encounters, rewards, props)
 src/net.js               transports, host/client sessions, snapshot encoding
 src/game.js              run session: local hero control, client mirror, network routing
@@ -34,7 +34,7 @@ src/art/                 generated atlas pages (data URIs) from tools/art.js; ne
 art-src/                 vendored CC0/CC-BY source art + SOURCES.md (packs, licences, hashes)
 src/main.js              app state machine + frame loop
 tools/                   sim.js (headless bot runs) · simpool.js (parallel bot batches across worker processes at normal priority; `--nice` = idle priority) · journey.js (whole-profile simulation) · sheet.js (analytic hero numbers) · model.js (the sheet's shared damage and health model) · pick.js (smart bot card values by marginal gain) · bal.js (fixed quick balance suite, ≤ 3 min; `--full` final confirm) · browse.js (headless browser smoke, crowd perf and screenshots; never a visible window)
-                         art.js + art-manifest.js (art packer; `--check` verifies src/art) · check-*.js and sheet-check.js (headless regression checks, exit 1 on failure) · check-perf.js (sim ms per tick at 70/150/200 foes, foe-grid and separate() audit)
+                         art.js + art-manifest.js (art packer; `--check` verifies src/art) · check-*.js and sheet-check.js (headless regression checks, exit 1 on failure; check-elements.js element paths and Mutations, check-late.js late offers and Twists) · check-perf.js (sim ms per tick at 70/150/200 foes, foe-grid and separate() audit)
 docs/                    GAME-DESIGN.md · MASTERPLAN.md · MASTERPLAN-AGENT.md · HANDOFF-*.md
 ```
 
@@ -43,7 +43,7 @@ docs/                    GAME-DESIGN.md · MASTERPLAN.md · MASTERPLAN-AGENT.md 
 1. **Sim is deterministic per seed** — `Dungeon.generate(stratum, seed)` is pure (host and clients build identical floors). Never `Math.random` inside `src/sim` or `src/data`; use `w.rng` or a seeded `U.RNG`.
 2. **Clients only see what snapshots carry** — any state the renderer/HUD needs must be encoded in `net.js` (or derived from floor gen / build events). Bump `N.VERSION` when snapshots or floor generation change.
 3. **Sim and data run in Node** (`tools/sim.js` vm) — no DOM/window in `src/data`, `src/sim`, `src/util.js`, `src/save.js`.
-4. **Script order lives twice** — a new data/sim file goes into `index.html` AND the `tools/sim.js` file list (`class-*.js` load after `skills.js`, `sheet.js` after `rooms.js`; the check scripts load through `tools/sim.js`).
+4. **Script order lives twice** — a new data/sim file goes into `index.html` AND the `tools/sim.js` file list (`class-*.js` load after `skills.js`, `twist.js` after the class files, `mutations.js` and `twists.js` after `ascended.js`, `sheet.js` after `rooms.js`; the check scripts load through `tools/sim.js`).
 5. **world.js/combat.js/rooms.js ↔ build.js/skills.js/class-*.js talk through hooks** — world.js calls `initBuild`, `initSkills`, `onRunStartBuild`, `onStratumBuild`, `updatePlayerBuild` (which calls `updateSkills`, and that runs `updateCharge`, `updateShieldThrow` and the class `tick` hook, then combat.js `updatePlayerCombat`), `updateOffers`, `updateAllies`, `addXp` and `clearShields` (defined in `class-knight.js`); combat.js calls `onEnemyKilledSkill` and the per-class hook tables `ED.CLS[cls]` (listed at the top of `skills.js`), and class files call combat.js `grantCrits`; minions (`spawnMinion`, `updateAllies`) live in `class-necro.js`; each skill's cast lives in `ED.CAST[skillId]` in its class file, which calls `refundSkill` for cooldown refunds; rooms.js calls `onRoomLockBuild` and `grantOffer`. Per-hero build/skill fields are created in `initBuild`/`initSkills` (and the class `init` hook), not in `addPlayer`. Keep the boundary.
 6. **Statuses build from damage dealt, never hit count** — attack speed must not out-scale damage.
 7. **All hotkeys use `e.code`** — `e.key` breaks on non-Latin layouts.

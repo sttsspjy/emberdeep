@@ -72,3 +72,18 @@ North-star: a co-op browser roguelite where builds are chosen, not rolled. Rules
 - [x] Bot confirm with seven heroes: 10 of 11 cells in band (Pact 2 reads 24%, same as Pact 3)
 - [x] Merged to main
 - [ ] Your playtest: the Bellwarden feel (whirl, Heave, Peal), Wardrobe, secrets
+
+## Playstyle (v6): every room and every pick a choice
+- [x] Route map: forward-only floors, the way back closes, about 6 of 12 rooms per floor, longer fights keep a win at 30–40 min
+- [x] Co-op doors: the party moves when every living hero stands in the same door ("Mira wants this door")
+- [x] Every room has its own icon and label; threat pips on doors; the whole floor on the map
+- [x] Healing trimmed: no hearts from cleared rooms, fewer from kills; Forager boosts every heal
+- [x] Elements play differently: Fire terrain, Ice walls and skill shatters, Lightning skill detonations (Capacitor), Poison cripples elites, Holy rewards being hit and standing still, Shadow kills and dashes
+- [x] New evolutions that change how a weapon plays, not extra hits
+- [x] Late picks: no flat-stat cards from stratum III; 28 Mutations of keystones and evolutions from stratum IV
+- [x] Twists: Bloodprice, Metronome, Pacifist's Pyre, Hunted (opt-in rules with a red price)
+- [x] Bots and smart picks know the new cards
+- [ ] Bellwarden rework: hurl, reel, anchored bell, Anchor Leap, Peal at the bell (in progress)
+- [ ] Balance pass on the route floors (bots read 14% wins at full Hearth before retuning)
+- [ ] Your playtest: route choices, the new elements, Twists
+- [ ] Other heroes' weapon forks (next round)
