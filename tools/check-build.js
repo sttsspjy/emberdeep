@@ -142,7 +142,10 @@ const ranks = (w, pid) => w.msgs.filter(m => m.t === 'forkRank' && m.to === pid)
 { // behind the prepended evolution card: [evo, Ascended, ...]
   const { w, p } = stage('pyro', { kindle: 1, fuel: 2, stoke: 3, searing: 2, wildfire: 2, conflag: 1, edge: 2 }, { stratum: 5 });
   ok(w.evoPaths(p).join() === 'fire', 'fire evolution is available');
-  let good = 0; for (let i = 0; i < 30; i++) { const o = w.rollOffer(p, { src: 'room' }); if (o[0] === 'evo_fire' && o[1] === 'asc_edge' && o.length === 4) good++; }
+  let good = 0; for (let i = 0; i < 30; i++) { const o = w.rollOffer(p, { src: 'room' }); if (o[0] === 'evo_fire' && ED.BOONS[o[1]].mut === 'conflag' && o.length === 4) good++; }
+  ok(good === 30, 'room offer: evolution card first, then the pin (a Conflagration Mutation wins it over the Ascended card), then the draw (3 cards + evolution)');
+  p.boons[ED.mutsOf('conflag')[0]] = 1; w.recalc(p, false); // the parent's Mutation taken: no Mutation left to pin
+  good = 0; for (let i = 0; i < 30; i++) { const o = w.rollOffer(p, { src: 'room' }); if (o[0] === 'evo_fire' && o[1] === 'asc_edge' && o.length === 4) good++; }
   ok(good === 30, 'room offer: evolution card first, then the Ascended card, then the draw (3 cards + evolution)');
 }
 

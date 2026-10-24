@@ -10,6 +10,7 @@
   W.initBuild = function (p) {
     p.offers = []; p.picks = 0; p.forkDue = 0; p.ascN = 0; p.twist = false; p.twistN = 0; p.metroN = 0; p.dashHit = null; p.dashFx = -1; p.dashFy = 0; p.dashTrail = 0; p.boltAt = 0;
     p.knellN = 0; p.knellT = 0; p.holyT = 0; p.lanternT = 0; p.retT = 0; p.castN = 0; p.judgeGot = {}; p.shieldBy = {}; p.toughRoom = false;
+    p.stillT = 0; p.vigilZ = null; p.tetherT = 0; p.walkT = 0; p.msReady = false; p.quarryE = null; p.rebukeAt = -99; // element-path state (combat.js: Vigil, Tempest tethers, Masterstroke, Quarry, Martyr's Rebuke)
     p.sec = { platino: false, contrarian: false, thread: false, heroSecret: false, bellRung: false }; // secret run fields (world.js secretP)
     p.ctrN = 0; p.ctrOff = false; // element-path cards taken of the element the stratum resists / any other element taken (Against the Grain)
     p.bellS = 0; // Drowned Bell: 0 not rung, 1 rung (watching health), 2 broken, 3 kept (rooms.js)
@@ -82,6 +83,7 @@
 
   // Called by playerSkill after any skill resolves (slot 0 = K, 1 = L).
   W.onSkillCast = function (p, slot) {
+    this.elementCast(p, slot); // Storm Anchor, Capacitor, Lattice (combat.js)
     const st = p.stats, area = 1 + st.area * 0.5;
     if (st.overcharge) this.explode(p.x, p.y, 85 * area, ED.procDmg(ED.BOONS.overcharge, st) * st.overcharge, 0, p, 'shock', true);
     if (st.trance) p.tranceT = 4;
@@ -171,13 +173,13 @@
   const LATE = ED.LATE = { FLAT_S: 3, MUT_S: 4, FILL_S: 4, TWIST_N: 2, FLAT: ['plating', 'thorns', 'evade', 'stalwart', 'fleet', 'magnet', 'bounty', 'forager', 'mending'] };
   const FLAT = new Set(LATE.FLAT);
 
-  // Mutations the hero may be offered now: stratum >= MUT_S, the parent keystone or evolution (b.mut) owned, no Mutation of that parent owned (it or its sibling), the weapon kind fitting.
+  // Mutations the hero may be offered now: stratum >= MUT_S, ED.mutFree (the parent keystone or evolution b.mut owned, no Mutation of that parent owned), the weapon kind fitting.
   W.mutCards = function (p) {
     const out = [], kind = p.stats.kind;
     if (this.stratum < LATE.MUT_S || !ED.MUT_IDS) return out;
     for (const id of ED.MUT_IDS) {
       const b = ED.BOONS[id];
-      if (p.boons[b.mut] > 0 && !(b.need && b.need !== kind) && !ED.MUT_IDS.some(m => p.boons[m] > 0 && ED.BOONS[m].mut === b.mut)) out.push(id);
+      if (ED.mutFree(p.boons, id) && !(b.need && b.need !== kind)) out.push(id);
     }
     return out;
   };
@@ -209,7 +211,7 @@
   // Everyone sees 3 cards (epic 4, Crown +1): the start offer is 3 element gates plus the guaranteed card (Generalist for Knight, Ranger and Shade; the class element's gate for the others);
   // a class spec returns exactly the cards of the hero's next route step (no draw padding, no evolution or duo prepended): the 4 route cards or the 2 forks of the chosen route (a hero that holds a fork gets a level offer);
   // room, level and epic offers draw from the hero's own paths (element heroes) or the General path (Generalists) plus open boons; slot 1 of the drawn cards is the pin: an eligible Mutation (uniform), else an eligible Ascended card (uniform).
-  // The forge offers owned boons below their max rank, never route or fork cards. A card at its max rank is never offered; a draw that finds no card (pool exhausted) offers the Purse, which no pool draws (late fill: LATE).
+  // The forge offers owned boons below their max rank, never route or fork cards. A card at its max rank or retired is never offered; a draw that finds no card (pool exhausted) offers the Purse, which no pool draws (late fill: LATE).
   // A twist spec shows TWIST_N eligible Twists and nothing else (prev: the hand a reroll replaces; its cards come last); with fewer eligible it becomes an epic spec.
   W.rollOffer = function (p, spec, prev) {
     spec = spec || { src: 'level' };
@@ -235,7 +237,7 @@
     const daze = () => this.canDaze(p);
     const eligible = (id) => {
       const b = ED.BOONS[id];
-      if (b.evo || b.duo || b.cls || b.asc || b.mut || b.twist || b.purse || (b.need && b.need !== kind)) return false;
+      if (b.evo || b.duo || b.cls || b.asc || b.mut || b.twist || b.purse || b.retired || (b.need && b.need !== kind)) return false;
       if (flat && FLAT.has(id)) return false;
       if ((p.boons[id] || 0) >= ED.maxRank(b, st)) return false;
       if (id === 'opportunist' && !daze()) return false; // nothing to stun, freeze or blind: the card would do nothing
@@ -269,12 +271,12 @@
     // Late fill (stratum >= FILL_S, level and room draws short of n cards): eligible Mutations, then owned path boons below their max rank (no gates, evolutions or class cards), each tier shuffled.
     const lateFill = () => {
       if (s < LATE.FILL_S || out.length >= n) return;
-      const ranks = Object.keys(p.boons).filter(id => { const b = ED.BOONS[id]; return b && b.path && !b.gate && !b.evo && !b.cls && !(b.need && b.need !== kind) && p.boons[id] < ED.maxRank(b, st); });
+      const ranks = Object.keys(p.boons).filter(id => { const b = ED.BOONS[id]; return b && b.path && !b.gate && !b.evo && !b.cls && !b.retired && !(b.need && b.need !== kind) && p.boons[id] < ED.maxRank(b, st); });
       for (const tier of [this.mutCards(p), ranks]) for (const id of rng.shuffle(tier.filter(x => !out.includes(x)))) { if (out.length >= n) return; out.push(id); }
     };
     switch (spec.src) {
       case 'forge': {
-        const have = Object.keys(p.boons).filter(id => ED.BOONS[id] && !ED.BOONS[id].evo && !ED.BOONS[id].route && p.boons[id] < ED.maxRank(ED.BOONS[id], st));
+        const have = Object.keys(p.boons).filter(id => ED.BOONS[id] && !ED.BOONS[id].evo && !ED.BOONS[id].route && !ED.BOONS[id].retired && p.boons[id] < ED.maxRank(ED.BOONS[id], st));
         rng.shuffle(have);
         if (have.length) return have.slice(0, n);
         spec.src = 'level';

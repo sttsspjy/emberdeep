@@ -56,6 +56,7 @@ ok(ED.BOONS.asc_plating && ED.BOONS.asc_plating.off && ED.ASC_IDS.includes('asc_
   }
   const f = stage('knight', { kindle: 1, plating: 1, thorns: 1, evade: 1 }, { stratum: 5 });
   ok(any(rolls(f.w, f.p, 'forge', 40), id => id === 'plating') && any(rolls(f.w, f.p, 'forge', 40), id => id === 'thorns'), 'forge offers still rank them up');
+  { const r = stage('pyro', { kindle: 1, frostbite: 1, searing: 1 }, { stratum: 2 }); r.p.stats.choices = 20; ok(!['level', 'room', 'epic', 'forge'].some(src => any(rolls(r.w, r.p, src, 30), id => ED.BOONS[id].retired)), 'retired cards are never offered (forge included, even when owned)'); }
   const g = stage('knight', { plating: 2, edge: 2 }, { stratum: 4 });
   ok(g.w.ascCards(g.p).join() === 'asc_edge', 'Bastion is never eligible (Plating at max, stratum IV)');
 }
@@ -87,11 +88,11 @@ fakeMuts(true);
 
 // ---------------- late fill: Mutations, then rank-ups of owned path boons, then the Purse ----------------
 {
-  // a Generalist Knight whose level pool is exhausted at stratum IV (every card it is shown taken to its max rank)
+  // a Generalist Knight whose level pool is exhausted at stratum IV (every card it is shown taken to its max rank, real Mutations included, so none is left eligible)
   fakeMuts(false);
   const { w, p } = stage('knight', { generalist: 1 }, { stratum: 4 });
   let i = 0;
-  for (; i < 400; i++) { const o = w.rollOffer(p, { src: 'level' }); if (o.includes('purse')) break; for (const id of o) p.boons[id] = ED.maxRank(ED.BOONS[id], p.stats); w.recalc(p, true); }
+  for (; i < 400; i++) { const o = w.rollOffer(p, { src: 'level' }); if (o.join() === 'purse') break; for (const id of o) if (id !== 'purse') p.boons[id] = ED.maxRank(ED.BOONS[id], p.stats); w.recalc(p, true); } // pinned real Mutations are taken too (one per parent)
   ok(i < 400 && w.rollOffer(p, { src: 'level' }).join() === 'purse', `exhausted after ${i} offers: the Purse alone`);
   fakeMuts(true);
   p.boons.zz_key = 1; p.boons.fuel = 1; w.recalc(p, true); // fuel: a Fire path boon below its max that a Generalist's pool never draws

@@ -62,6 +62,7 @@
       if ((a[20] | 0) !== (p.chaliceHp | 0)) { p.chaliceHp = a[20] | 0; this.recalc(p); }
       p.glBuff = !!(fl & 1024); p.embolden = !!(fl & 2048); // Cleric buffs: Guardian Light, Embolden
       p.glT = p.glBuff ? 1 : 0; p.glV = a[22] || 0; p.auraT = p.embolden ? 1 : 0; p.auraV = a[23] || 0; p.knellN = a[21] | 0; p.knellT = p.knellN ? 1 : 0; // timed damage bonuses the Tab sheet and Stats read
+      p.metroN = a[25] | 0; p.doorWant = a[26] | 0; // Metronome beat, the door the hero waits in
       if (p.pid !== this.localPid) { p.moving = !!(fl & 1); p.dashing = !!(fl & 2); p.face = a[3]; p.braceT = fl & 1048576 ? 1 : 0; p.tranceT = fl & 4096 ? 1 : 0; } // the local hero predicts its own Trance
       else if (this.firstInRoom) { p.x = a[1]; p.y = a[2]; }
     }
@@ -104,6 +105,7 @@
       e.charge = fl & 64 ? 1 : 0; e.bleedPool = fl & 128 ? 1 : 0; e.judged = fl & 256 ? 1 : 0; e.blind = fl & 512 ? 1 : 0; e.vulnT = fl & 1024 ? 1 : 0;
       e.venomLvl = (fl >> 13) & 7; e.radLvl = (fl >> 16) & 3; e.doomLine = rb[17] || 0; // Venom pips (5 = Corroded), Radiance fill, Reap line (bosses: the Toll gauge)
       e.hexed = !!(fl & (1 << 18)); e.marked = !!(fl & (1 << 19)); e.sealed = !!(fl & (1 << 20)); e.ailN = (fl >> 21) & 7; // route states: Hexed, Marked, Sealed, ailment count
+      e.quarryT = fl & (1 << 24) ? 1 : 0; e.dosed = !!(fl & (1 << 25)); e.affixOff = !!(fl & (1 << 26)); e.hunted = !!(fl & (1 << 27)); // Quarry, a Venom dose planted, affixes off (Hex the Strong), Hunted champion
       e.boss = !!e.def.boss;
       const st = N.ST[rb[8]] || 'move';
       if (e.boss) { e.pose = st; e.st = 'atk'; } else e.st = st;
@@ -158,7 +160,7 @@
   const wrapA = (d) => d - U.TAU * Math.round(d / U.TAU);
   const NOOP = () => undefined, NONE = [];
   const BELL_W = { room: null, locked: false, time: 0, projs: NONE, enemies: NONE, emit: NOOP, foeScan: () => NONE, foeEnd: NOOP, smashCircle: NOOP, hitEnemy: NOOP, explode: NOOP, skillBlast: NOOP, partSrc: NOOP, addShield: () => 0,
-    stunFoe: NOOP, slowEnemy: NOOP, addZone: NOOP, nearestEnemy: () => null, discharge: NOOP, evoAttack: NOOP, acidBurst: NOOP, holyLance: NOOP };
+    stunFoe: NOOP, slowEnemy: NOOP, addZone: NOOP, nearestEnemy: () => null, discharge: NOOP, evoHit: NOOP, evoLine: NOOP, elementCast: NOOP };
   function bellInterp(p, ra, rb, k) {
     const bs = p.bells || (p.bells = []), H = N.BELL_HEAD;
     if (!rb) { bs.length = 0; p.heave = null; p.bellWhirl = false; return; }
@@ -395,6 +397,7 @@
       s.me.skillMove = ED.leapMove(s.view.room, s.view.locked, s.me, m.x, m.y, { t: m.d, iframes: m.i });
       if (s.me.skillMove) s.me.cometT = m.d;
     }
+    else if (m.t === 'dashRefund' && s.me) { const c = s.ctl, st = s.me.stats; c.dashN = Math.min(st.dashCharges | 0, c.dashN + ((m.n | 0) || 1)); } // dash charges back { n } (Umbral Arms)
     else if (m.t === 'refund') { // cooldown refund { slot, s }: s seconds off (a charge returns when the cooldown reaches 0), no s = in full
       const c = s.ctl;
       if (m.slot === 1) c.skill2Cd = m.s ? Math.max(0, c.skill2Cd - m.s) : 0;
@@ -423,7 +426,7 @@
       bellReconcile(s, d);
       for (const ev of fx) G.localEvent(ev);
     } else if (d.t === 'end') G.localEvent({ t: 'end', summary: d.summary });
-    else if (d.t === 'offer' || d.t === 'offerDone' || d.t === 'claimed' || d.t === 'toast' || d.t === 'refund' || d.t === 'forkRank' || d.t === 'blink' || d.t === 'leap') G.message(d);
+    else if (d.t === 'offer' || d.t === 'offerDone' || d.t === 'claimed' || d.t === 'toast' || d.t === 'refund' || d.t === 'dashRefund' || d.t === 'forkRank' || d.t === 'blink' || d.t === 'leap') G.message(d);
   };
   G.onPeerLeft = (pid) => { const s = G.s; if (s && s.mode === 'host') { s.world.removePlayer(pid); } };
 
