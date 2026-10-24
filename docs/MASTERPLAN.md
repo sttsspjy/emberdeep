@@ -66,12 +66,12 @@ North-star: a co-op browser roguelite where builds are chosen, not rolled. Rules
 - [ ] Your playtest
 
 ## Secrets and the seventh hero
-- [x] Bellwarden: a hidden seventh hero who swings a bell on a chain (hold attack to whirl it); unlocked by a secret in the drowned Sanctum
+- [x] Bellwarden: a hidden seventh hero with a bell on a chain; unlocked by a secret in the drowned Sanctum
 - [x] 15 secret achievements nobody is told about; each gives a cosmetic
 - [x] Wardrobe: skins per hero (mastery plus embers), weapon sheens, aura, crown, Platino pet, footprints, death effect, titles, blue Hearth; co-op players see each other's looks
 - [x] Bot confirm with seven heroes: 10 of 11 cells in band (Pact 2 reads 24%, same as Pact 3)
 - [x] Merged to main
-- [ ] Your playtest: the Bellwarden feel (whirl, Heave, Peal), Wardrobe, secrets
+- [ ] Your playtest: Wardrobe, secrets
 
 ## Playstyle (v6): every room and every pick a choice
 - [x] Route map: forward-only floors, the way back closes, about 6 of 12 rooms per floor, longer fights keep a win at 30–40 min
@@ -83,7 +83,7 @@ North-star: a co-op browser roguelite where builds are chosen, not rolled. Rules
 - [x] Late picks: no flat-stat cards from stratum III; 28 Mutations of keystones and evolutions from stratum IV
 - [x] Twists: Bloodprice, Metronome, Pacifist's Pyre, Hunted (opt-in rules with a red price)
 - [x] Bots and smart picks know the new cards
-- [ ] Bellwarden rework: hurl, reel, anchored bell, Anchor Leap, Peal at the bell (in progress)
+- [x] Bellwarden rework: wind the bell, hurl it, reel it home through foes, leap to where it lies, Peal it with built-up Resonance
 - [ ] Balance pass on the route floors (bots read 14% wins at full Hearth before retuning)
-- [ ] Your playtest: route choices, the new elements, Twists
+- [ ] Your playtest: route choices, the new elements, Twists, the Bellwarden's hurl and reel
 - [ ] Other heroes' weapon forks (next round)

@@ -134,6 +134,7 @@ You start with the **Knight**, **Ranger** and **Pyromancer**. Each hero has thre
 | Shade (35% base dodge) | Shadowstep, 4.5 s | Vanish, 11 s: smoke, stealth and a guaranteed-crit ambush | Defeat the Bone Warden |
 | Cleric | Sanctuary, 11 s: heals you and allies near you, then holy ground that burns foes and cuts the damage allies take | Judgment, 9 s: a returning hammer that judges foes | Complete 4 descents |
 | Necromancer | Raise Legion, 12 s | Bone Harvest, 10 s: minions explode, then rise again | Defeat the Sporemother |
+| Bellwarden (hold attack to wind the bell; let go to hurl it, it glows at full wind; press again to reel it home through foes) | Anchor Leap, 5 s: to your anchored bell, or a short leap; slams where you land | Peal, 10 s: every bell rings and stuns, stronger with Resonance from hurls and reels | A secret |
 
 ## The menus
 

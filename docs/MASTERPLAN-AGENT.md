@@ -15,7 +15,7 @@
 
 ## Playstyle contracts (v6, `feat/playstyle`)
 - **Files**: `src/data/mutations.js` (`ED.MUTATIONS`, ids `mut_<id>`, rar `m`, `mut` = parent) · `src/data/twists.js` (`ED.TWISTS`, rar `t`, `twist: true`, `cost`, `ED.TWIST_MAX` 2) · `src/sim/twist.js` (`ED.TWIST` hooks `hitMul`, `onAttack`, `onCast`, `pyreHit`, `cd`). Lines marked `// TWIST hook` are the Twist owner's.
-- **Evolutions**: geometry or timing only, never an extra input or an Nth-hit extra; `W.evoHit(p, e, a, src)` per landed hit or bell strike, `W.evoLine(p, x0, y0, x1, y1, src)` along an attack's path.
+- **Evolutions**: geometry or timing only, never an extra input or an Nth-hit extra; `W.evoHit(p, e, a, src)` per landed hit or bell hurl / reel strike, `W.evoLine(p, x0, y0, x1, y1, src)` along an attack's path.
 - **One trigger per element**: Fire ground, Ice blocking + skill cash-in, Lightning skill casts, Poison cripple, Holy hit/stand still, Shadow kills + dash.
 - **Solids**: frozen foes (Glacier), pillars, Firebreak ground, Storm Anchors block foes and enemy shots only.
 - **Wire**: `N.ZK` + `cinder firebreak pillar anchor vigil`; `N.CAPS` + `detonate 16, tether 8, rebuke 6, reapchain 8, shatter 8, hurl 8, reel 8`; E flag bits 24 Quarry, 25 dose, 26 `affixOff`, 27 `hunted`; `P[25]` `metroN`, `P[26]` door want (1 + `Dungeon.DOOR_DIRS` index); `dashRefund {to, n}` msg (dash charges are client-side).
@@ -28,11 +28,11 @@
 - Carried over: dead `minionBurst` guard (`class-necro.js`, `combat.js`) · two Necromancers with Soul Command show no command stream · deeds are a 31-bit mask (a 32nd deed needs new profile storage; secrets have their own mask) · aim banner for party clients · orphaned `simpool.js --worker` processes after a killed parent · Cleric Sacred Lantern ally shield gets its own allowance · optional key that opens the sheet on Map · DawnLike "Platino" sprite hidden somewhere.
 
 ## In-progress
-- Bellwarden rework (W3, `feat/ps-bell`): merges into `feat/playstyle` after W6; it fixes `bellEvo` (calls the removed `evoAttack` / `acidBurst` / `holyLance`: bell runs crash at evolution) and sends its GAME-DESIGN §1 Bell / §5 Bellwarden deltas.
-- Playstyle balance phase (after the Bell merge): `tools/bal.js` quick suite, retune rounds ≤ 3 min, one `--full`. Known: max-meta bot 14% wins on route floors (was 42%); Hunted pays ~20 extra room offers a run (52 offers in a necro smoke); Pacifist's Pyre + Capacitor folds to about +70% damage; Capacitor ×3 on bosses; evolutions lost their Nth extra hits; Bloodprice drains health the trimmed healing does not return.
-- Playtest of v5 + Bellwarden, Wardrobe, secrets (user).
+- Playstyle balance phase: `tools/bal.js` quick suite, retune rounds ≤ 3 min, one `--full`. Known: max-meta bot 14% wins on route floors (was 42%); Hunted pays ~20 extra room offers a run (52 offers in a necro smoke); Pacifist's Pyre + Capacitor folds to about +70% damage; Capacitor ×3 on bosses; evolutions lost their Nth extra hits; Bloodprice drains health the trimmed healing does not return.
+- Playtest of v5 + the reworked Bellwarden (wind, hurl, reel, Anchor Leap), Wardrobe, secrets (user).
 
 ## Done
+- Bellwarden rework (W3 `feat/ps-bell`, merged into `feat/playstyle` at `e0df402`; W6 integration): bell states Hand / Fly / Anchor / Reel, wind (hold, ×0.7 move, winding strikes ≤ ×0.6, no attack), hurl (release at wind ≥ 0.5, an attack), reel (tap, drags foes), juggle, snap home (room, boss phase, downed via the class `down` hook from world.js), Resonance → Peal; Anchor Leap (id `heave`); 12 route cards rewritten; `ED.Bell.cycle` loop model, `BELL_EFF` 0.95 / 1.15; client prediction with state snaps (`bp.rss`); browse `--scen=bell` (wind, hurl, anchor, reel, leap, Peal, net); pick.js bell folds.
 - Playstyle v6 on `feat/playstyle` (2026-10-25, 7 workers; merged W4 elements → W5 late → W7 FX → W1 floors → W2 map, W6 integration): route lattice floors (layer = gx + gy, sealed back doors, ≥ 3 routes, threat pips), co-op door consent, healing trim (`HEART_KILL` 2%, no clear hearts, Forager = +8% per heal source), `ROOM_XP` / `FODDER_Q` / `WAVES` 3 rebudget · one `ED.Icons.room` glyph table, labelled map, door previews · element paths at 12 ranks with Attunement commons, 12 cards retired, Thunderhead → Capacitor, new evolutions, 15 duos audited, 28 Mutations · late pool filter, Mutation pin and late fill, 4 Twists · FX for zones, foe markers, events, Charged / Beat chips · pick.js priors and folds for every new card, bot Twist / Capacitor / dashRefund policy, Purse share line · `N.VERSION` 13.
 - Bellwarden, secrets, Wardrobe on `feat/bellwarden` (2026-10-25): hero `bell` (chained-bell physics `class-bell.js`, Haul, Heave, Peal, 6 bell weapons, 12 route cards, bot play, sheet uptime + `BELL_EFF`), client `cls-bell.js` with own-bell prediction on the shared tick · `ED.SECRETS` 15 (sim triggers `p.sec`, `run.gold777`, `run.oneFace`; Drowned Bell prop stratum V unlock; Platino critter) · `ED.COSMETICS` + `cosmetics.js` (runtime skin swaps, co-op `N.cleanWear`) · save `CODE_VERSION` 8, `N.VERSION` 12 · confirm `2b5263a` 10/11 (P2 24%).
 - v5 difficulty on `feat/punish` (2026-10-25): hero HP Knight 40 · Ranger 21 · Pyro 21 · Shade 37 · Cleric 40 · Necro 14, armor carries class survival (Knight 58, Shade 28, Cleric 25) · `W.FOE_DMG` 1.5 · Hearth/mastery steps larger (Vitality +2, Might +3%, Bulwark +3, mastery 9 +8% dmg, 10 +4 HP) · Pacts as data (`ED.pactMul`) · party foe HP `1+0.45n+0.1n(n−1)` · bot parties rotate partners (`sim.partyOf`) · bal.js v5 cells · era 5 / code 7 news for v4.1 players.
@@ -72,6 +72,7 @@
 - **Bloodprice** gap (0.25 s) is client-side like every cooldown; the host does not enforce it.
 - **Hunted** spawns its champion by swapping `World.AFFIX2` around `makeElite` (one affix).
 - **pick.js** values the playstyle cards with guessed coefficients (marked in the file); re-read them against bot runs before trusting a pick change.
+- **Bells**: hand bells live in the hero frame (wire x, y about `p.bellPx` / `p.bellPy`), Fly / Anchor / Reel bells in the world frame (never carried). `P[24]` = `N.BELL_HEAD` 6 head fields + `N.BELL_N` 5 per bell (x, y, vx, vy, state). The client stub world `BELL_W` has `pred`: a predicted hurl spends no attack count, crit stack or Twist.
 - **Metronome** does not count twin-every-2nd hits, waves, rings or evolution strikes; Pacifist's Pyre zeroes twin, spectral and ring hits.
 
 ## Logs
@@ -85,3 +86,4 @@
 - 2026-10-25: v5 difficulty contract on `feat/punish` (one worker, 4 fix rounds); handoff HANDOFF-2026-10-25.md.
 - 2026-10-25: Bellwarden, secrets, Wardrobe on `feat/bellwarden` (6 workers, 2 phases + fix rounds); handoff HANDOFF-2026-10-25b.md.
 - 2026-10-25: playstyle v6 on `feat/playstyle`: plan v3 (A–E), W1–W5, W7 merged, W6 integration (pick.js, bots, docs, `N.VERSION` 13); Bellwarden rework (W3) and the balance phase pending.
+- 2026-10-25: Bellwarden rework (W3) merged into `feat/playstyle`; W6 Bell integration (docs, browse bell scenario, `down` hook, pick.js).
