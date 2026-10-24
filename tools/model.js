@@ -146,7 +146,7 @@ module.exports = (ED, opts) => {
   }
 
   // ---- conditional damage: the ED.COND_DMG rows a build owns count at an assumed uptime (the bonus is additive with the Damage stat) ----
-  const COND_NOTE = 'conditional damage at assumed uptimes: execute 30% of the time; burning, bleeding, chilled, envenomed, doomed 60-90% when the build applies it; stunned = the stun uptime; Brand = the ailments the build keeps up (at most 4); unknown rows 50%';
+  const COND_NOTE = 'conditional damage at assumed uptimes: execute 30% of the time; burning, bleeding, chilled, envenomed, doomed, charged (80% with Capacitor), holding Radiance 50-90% when the build applies it; stunned = the stun uptime; Brand = the ailments the build keeps up (at most 4); unknown rows 50%';
   function ailmentsKept(st, d) {
     let n = 0;
     for (const id of ED.ELEMENT_IDS) if (st[ED.ELEMENTS[id].inf] > 0) n += 0.7; else if (st.element === id) n += 0.5;
@@ -162,6 +162,8 @@ module.exports = (ED, opts) => {
       case 'malice': return has('shadowInfuse') || st.element === 'shadow' ? 0.6 : 0;
       case 'brittle': return has('iceInfuse') ? 0.6 : 0;
       case 'fester': return has('poisonInfuse') ? 0.6 : 0;
+      case 'ionize': return has('lightningInfuse') || st.element === 'lightning' ? (st.capacitor > 0 ? 0.8 : 0.5) : 0; // Capacitor charge waits for a cast: foes stay charged longer
+      case 'hallow': return has('holyInfuse') || st.element === 'holy' ? 0.7 : 0;
       case 'opportunist': return Math.min(1, d.hard + (has('iceInfuse') ? 0.3 : 0));
       case 'knell': return 0.5 * Math.min(st.knell, 3);
       case 'brand': return ailmentsKept(st, d);
