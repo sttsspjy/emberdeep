@@ -25,7 +25,7 @@ const vm = require('vm');
 const path = require('path');
 const ROOT = path.join(__dirname, '..', 'src') + '/';
 const files = ['util.js', 'data/biomes.js', 'data/enemies.js', 'data/classes.js', 'data/boons.js', 'data/classboons.js', 'data/ascended.js', 'data/relics.js', 'data/meta.js', 'save.js',
-  'sim/dungeon.js', 'sim/stats.js', 'sim/world.js', 'sim/combat.js', 'sim/build.js', 'sim/skills.js', 'sim/class-knight.js', 'sim/class-ranger.js', 'sim/class-pyro.js', 'sim/class-shade.js', 'sim/class-cleric.js', 'sim/class-necro.js',
+  'sim/dungeon.js', 'sim/stats.js', 'sim/world.js', 'sim/combat.js', 'sim/build.js', 'sim/skills.js', 'sim/class-knight.js', 'sim/class-ranger.js', 'sim/class-pyro.js', 'sim/class-shade.js', 'sim/class-cleric.js', 'sim/class-necro.js', 'sim/class-bell.js',
   'sim/ai.js', 'sim/bosses.js', 'sim/rooms.js', 'sim/sheet.js'];
 // Main context, not vm.createContext: inside a vm context every global read (Math, Object, ...) goes through the context interceptor and the sim runs ~3x slower.
 for (const f of files) vm.runInThisContext(fs.readFileSync(ROOT + f, 'utf8'), { filename: f });
@@ -336,6 +336,8 @@ function startMove(w, p, N, a, data) {
   p.skillMove = { dx: (end.x - p.x) / real, dy: (end.y - p.y) / real, speed: real / t, t, iframes: mv.iframes === undefined ? t : mv.iframes, age: 0 };
 }
 
+// BELL_HAUL: px within which a Bellwarden bot hauls its bell. PEAL_PACK: foes in the wave that make a bot ring the Peal. BELL_OUT: px past the bell's orbit a bot keeps its target.
+const BELL_HAUL = 220, PEAL_PACK = 3, BELL_OUT = 10;
 // Casts slot 0 or 1 of hero p at foe tgt (distance d, angle a) when the skill's aim allows it; returns whether it was cast. Route stats shape the choice: Scattershot casts Volley at close range, Assassinate steps to a wounded foe.
 function botCast(w, p, slot, tgt, d, a, foes, brng, skill) {
   const st = p.stats, id = slot ? ED.CLASSES[p.cls].skill2 : ED.CLASSES[p.cls].skill;
@@ -366,6 +368,12 @@ function botCast(w, p, slot, tgt, d, a, foes, brng, skill) {
       if (id === 'harvest') {
         const mine = w.allies.filter(q => q.owner === p.pid);
         if (mine.length ? !mine.some(m => foes.some(f => U.dist2(m.x, m.y, f.x, f.y) < (N.p.burst.r + f.r) ** 2)) : d >= 220) return false;
+      } else if (id === 'peal') { // ring the bell where it is: several foes in its wave, or a lone elite or boss, with the bell flying fast (a crowd: any speed)
+        const r = N.p.wave.r, seen = new Set();
+        let big = false, fast = 0;
+        for (const b of p.bells) { fast = Math.max(fast, Math.hypot(b.vx, b.vy)); for (const f of foes) if (!seen.has(f) && U.dist2(f.x, f.y, b.x, b.y) < (r + f.r) ** 2) { seen.add(f); if (f.boss || f.elite) big = true; } }
+        const n = seen.size;
+        if (!((n >= PEAL_PACK || (n >= 1 && (big || foes.length <= 2))) && (fast >= ED.CONST.BELL_REF || n >= 2 * PEAL_PACK))) return false;
       } else {
         const q = N.parts.find(x => x.on && x.r > 0), reach = id === 'vanish' || !q ? 160 : q.r + tgt.r + 6;
         if (d >= reach) return false;
@@ -786,9 +794,10 @@ function runBot(opts) {
         // target: the nearest threat foe when it is within weapon reach (or when no fodder stands), else the nearest fodder
         let tgt = null, bd = 1e9, nf = null, fd = 1e9;
         for (const e of foes) { const d2 = U.dist2(e.x, e.y, p.x, p.y); if (e.fodder) { if (d2 < fd) { fd = d2; nf = e; } } else if (d2 < bd) { bd = d2; tgt = e; } }
-        if (nf && (!tgt || Math.sqrt(bd) - (p.stats.melee ? tgt.r : 0) >= (p.stats.melee ? p.stats.weapon.range : 380))) { tgt = nf; bd = fd; }
+        const close = p.stats.melee || p.stats.kind === 'bell', reachW = p.stats.kind === 'bell' ? ED.Bell.orbit(p.stats.weapon) + p.stats.weapon.br + 20 : p.stats.weapon.range; // a bell fights at its orbit, like a melee weapon
+        if (nf && (!tgt || Math.sqrt(bd) - (close ? tgt.r : 0) >= (close ? reachW : 380))) { tgt = nf; bd = fd; }
         const d = Math.sqrt(bd);
-        const ideal = p.stats.melee ? (p.stats.weapon.range * 0.6 + tgt.r) : (p.stats.deadeye ? 230 : 170); // Deadeye keeps its distance
+        const bell = p.stats.kind === 'bell', ideal = bell ? ED.Bell.orbit(p.stats.weapon) + BELL_OUT : p.stats.melee ? (p.stats.weapon.range * 0.6 + tgt.r) : (p.stats.deadeye ? 230 : 170); // Deadeye keeps its distance; a Bellwarden circles with the foe on its bell's orbit
         if (vetH) c.appT = d > ideal + 30 ? c.appT + dt : 0; // seconds spent closing in without arriving
         let dir;
         if (d > ideal + 10) dir = bfsDir(w.room, w.locked, p.x, p.y, tgt.x, tgt.y);
@@ -810,7 +819,7 @@ function runBot(opts) {
         if (vetD || vetR) T = vetThreats(w, p, spd, c.attn ? VR : VR + VLAPSE);
         if (vetD && T) { plan = vetPlan(w, p, c, mx, my, spd, T); mx = plan.mx; my = plan.my; danger = plan.risk > 0.02; }
         const a = Math.atan2(tgt.y - p.y, tgt.x - p.x), st = p.stats;
-        const inRange = st.melee ? d - tgt.r < st.weapon.range : d < 380;
+        const inRange = bell ? d < BELL_HAUL : st.melee ? d - tgt.r < st.weapon.range : d < 380; // a bell: haul (attack held) while a foe is near
         if (st.channel && (c.holdT = (c.holdT || 0) - dt) <= 0) { c.hold = brng.next() < skill; c.holdT = 0.5; } // Pyroclast: the choice to stand still is renewed every 0.5 s (a roll per tick would break Channel within a few ticks)
         if (st.channel && !danger && inRange && c.hold) { mx = 0; my = 0; } // plant the feet while nothing threatens
         if (c.atk <= 0 && inRange) {
@@ -1103,14 +1112,14 @@ const partyOf = (cls, i, n) => {
   const rest = cls.filter((c, k) => k !== i % L), k = Math.floor(i / L) % rest.length;
   return [lead].concat(rest.slice(k), rest.slice(0, k));
 };
-// Expands the rotating flags for run i of a batch over nc classes: route = floor(i / nc) mod 4, fork = floor(i / (nc x 4)) mod 2, weapon = floor(i / (nc x 8)) mod 3, start = the six gates then generalist.
+// Expands the rotating flags for run i of a batch over nc classes: route = floor(i / nc) mod 4, fork = floor(i / (nc x 4)) mod 2, weapon = floor(i / (nc x 8)) mod 3, start = floor(i / nc) mod 7 (the six gates then generalist; by run block, so it never locks to a hero).
 const ROT_START = ['kindle', 'frostbite', 'staticcharge', 'envenom', 'consecrate', 'doommark', 'generalist'];
 function jobOpts(o, i, nc) {
   const r = Object.assign({}, o);
   if (o.route === 'rotate') r.route = ED.ROUTES[Math.floor(i / nc) % 4];
   if (o.fork === 'rotate') r.fork = Math.floor(i / (nc * 4)) % 2;
   if (o.weapon === 'rotate') r.weapon = Math.floor(i / (nc * 8)) % 3;
-  if (o.start === 'rotate') r.start = ROT_START[i % 7];
+  if (o.start === 'rotate') r.start = ROT_START[Math.floor(i / nc) % ROT_START.length];
   return r;
 }
 
@@ -1131,7 +1140,7 @@ if (require.main === module) {
   const flags = {}, args = [];
   for (const a of process.argv.slice(2)) { const m = /^--([a-z0-9]+)(?:=(.*))?$/i.exec(a); if (m) flags[m[1]] = m[2] === undefined ? '1' : m[2]; else args.push(a); }
   const n = +(args[0] || 1), runs = +(args[1] || 5), skill = +(args[2] || 0.75), meta = args[3] || 'none';
-  const cls = (args[4] && args[4] !== '-' ? args[4] : 'knight,ranger,pyro,shade,cleric,necro').split(','); // '-' = every hero
+  const cls = (args[4] && args[4] !== '-' ? args[4] : ED.CLASS_IDS.join(',')).split(','); // '-' = every hero
   const { up, mastery } = metaProfile(meta);
   const o = optsFromFlags(flags), pick = o.pick, force = o.force, seed0 = +(flags.seed0 || 1000);
   const results = [];

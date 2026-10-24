@@ -1,4 +1,4 @@
-// Class routes: every hero has four routes (Attack, Skill 1, Skill 2, Element), each a tier-1 card (the route) with two tier-2 forks. 72 cards, merged into ED.BOONS.
+// Class routes: every hero has four routes (Attack, Skill 1, Skill 2, Element), each a tier-1 card (the route) with two tier-2 forks. 84 cards, merged into ED.BOONS.
 // The route card is offered to every hero at team level 3, the fork at the first boss; fork ranks 2 and 3 are granted at the second and fourth boss (build.js W.grantForkRank).
 // Card total at rank r = mods + up x (r - 1) + (r >= 2 ? r2 : 0) + (r >= 3 ? r3 : 0) for every stat key (Stats.compute); slot damage (s1Dmg, s2Dmg) compounds across cards. Route and fork cards have no path: they never count toward affinity.
 // Fields: tag (Heavy | Swift | Burst | Guard | Focus | Spread), plays (a T1 card's style line), forks ([idA, idB]), rider2 ('Name: sentence', appended from rank 2),
@@ -260,12 +260,54 @@
     rider2: 'Risen Tide: minions risen this way deal +{tideMul} and last 4 s longer.', mods: { reapRaise: 1 }, up: { minionDmg: 0.13 }, r2: { tideMul: 0.5 }, r3: { tideFree: 1, tideCap: 2, tideDoom: 2 },
     form: { name: 'Tide of the Dead', desc: 'Rise Again raises without its 1.5 s limit (at most 2 per second). The minions it raises do not count against your minion cap (up to {tideCap:n} extra), and each bursts when it falls (radius 60), marking Doom worth {tideDoom} of its strike on every foe inside. Horde foes never rise.' } });
 
+  // ---------------- Bellwarden (Heave · Peal) ----------------
+  card('bell', 'attack', 1, 'b_atk', { name: 'Momentum', icon: 'bell', forks: ['b_atk_h', 'b_atk_s'], plays: 'keep it swinging; strikes at full swing ring heaviest.',
+    desc: 'Strikes at full swing (the bell glows: 90% of its top speed or more) are Heavy Strikes: +{heavyHit} damage and half again the knockback.', mods: { heavyHit: 0.25 } });
+  card('bell', 'attack', 2, 'b_atk_h', { name: 'Wrecking Ball', icon: 'hammer', tag: 'Heavy', weapon: { kind: 'heavy' },
+    desc: 'Your bell becomes heavy (×{fkRate:x} lockout, ×{fkDmg:x} damage per strike; strikes Stagger). Every strike cracks the ground: a shock (radius 50) for {wreck} of the strike, twice that from a Heavy Strike, which also stuns {wreckStun:s} (not bosses).[ Heavy Strikes deal +{heavyHit} more.]',
+    rider2: 'Unstoppable: Heavy Strikes knock foes twice as far.', mods: { wreck: 0.04, wreckStun: 0.2 }, up: { heavyHit: 0.1, wreck: 0.015 }, r2: { heavyKnock: 1 }, r3: { demolish: 0.1 },
+    form: { name: 'Demolisher', desc: 'The shock grows to radius 80 and deals {demolish} more of the strike, and the bell striking a wall at full swing erupts a Heavy shock.' } });
+  card('bell', 'attack', 2, 'b_atk_s', { name: 'Pendulum', icon: 'bolt', tag: 'Swift', weapon: { kind: 'swift' },
+    desc: 'Your bell becomes swift (×{fkRate:x} lockout, ×{fkDmg:x} damage per strike; hauling gives Flow). Hauling spins the bell up {haulAcc} faster.[ Heavy Strikes deal +{heavyHit} more.]',
+    rider2: 'Counterweight: strikes cost the bell {strikeKeep} less speed.', mods: { haulAcc: 0.2 }, up: { haulAcc: 0.04, heavyHit: 0.1 }, r2: { strikeKeep: 0.2 }, r3: { perpetual: 0.16, strikeKeep: 0.2 },
+    form: { name: 'Perpetual Motion', desc: "The bell's top speed rises {perpetual}, and strikes cost it {strikeKeep} less speed in all." } });
+  card('bell', 'skill1', 1, 'b_s1', { name: 'Long Chain', icon: 'bell', forks: ['b_s1_a', 'b_s1_b'], plays: 'heave into the pack, reel it back through.',
+    desc: 'Heave flings the bell {heaveR} farther and recharges {s1Cdr} faster.', mods: { heaveR: 0.4, s1Cdr: 0.2 } });
+  card('bell', 'skill1', 2, 'b_s1_a', { name: 'Wrecker', icon: 'bomb', tag: 'Burst',
+    desc: 'Heave deals +{s1Dmg}, and its flight stops at the first foe it strikes, where the bell smashes the ground (radius 80) for {wrecker} of a Heave strike, knocking foes back.',
+    rider2: 'Ground Breaker: the smash stuns foes {smashStun:s} (not bosses).', mods: { s1Dmg: 0.2, wrecker: 0.3 }, up: { s1Dmg: 0.12, wrecker: 0.1 }, r2: { smashStun: 0.6 }, r3: { wreckSpin: 0.33, spinDur: 1 },
+    form: { name: 'Wrecking Spin', desc: 'After the smash the bell swings round you on its chain for {spinDur:s}: every foe it passes takes {wreckSpin} of a Heave strike (each foe at most once per 0.4 s).' } });
+  card('bell', 'skill1', 2, 'b_s1_b', { name: 'Tether Hook', icon: 'hand', tag: 'Guard',
+    desc: 'Heave deals +{s1Dmg} and hooks the first foe it strikes (not elites or bosses), reeling it to your feet and stunning it {hookStun:s}. A hook shields you for {hookShield} max health (at most once per 8 s).',
+    rider2: 'Reel In: the hook catches up to {hookN:n} more foes the flight strikes.', mods: { hook: 1, hookStun: 0.8, hookShield: 0.02, s1Dmg: 0.8 }, up: { s1Dmg: 0.3, hookStun: 0.1 }, r2: { hookN: 2 }, r3: { shackle: 4, shackleWeak: 0.3, s1Dmg: 0.3 },
+    form: { name: 'Anchor Chain', desc: 'Hooked foes are Shackled for {shackle:s}: slowed 50% and dealing {shackleWeak} less damage.' } });
+  card('bell', 'skill2', 1, 'b_s2', { name: 'Great Peal', icon: 'bell', forks: ['b_s2_a', 'b_s2_b'], plays: 'swing to full speed, then ring it.',
+    desc: 'Peal: +{s2Area} radius and +{s2Dmg} damage.', mods: { s2Area: 0.3, s2Dmg: 0.25 } });
+  card('bell', 'skill2', 2, 'b_s2_a', { name: 'Thunderclap', icon: 'bolt', tag: 'Burst',
+    desc: 'The Peal charges the foes it strikes for half of its damage and discharges them at once at +{clap}. Peal deals +{s2Dmg}.',
+    rider2: 'Reverberation: the Peal rings again 0.5 s later on the same spot at {pealEcho}.', mods: { clap: 1, s2Dmg: 0.3 }, up: { clap: 0.25, s2Dmg: 0.3 }, r2: { pealEcho: 0.5 }, r3: { tollN: 3, tollBolt: 0.85 },
+    form: { name: 'Thunder Toll', desc: 'Every Peal also calls a thunderbolt on each of the {tollN:n} most charged foes within 220 of the bell (radius 50) for {tollBolt} of the Peal.' } });
+  card('bell', 'skill2', 2, 'b_s2_b', { name: 'Warding Toll', icon: 'shieldgold', tag: 'Guard', coop: true,
+    desc: 'Peal deals +{s2Dmg}, destroys enemy shots within half again its radius and shields you for {pealShield} max health per foe it strikes (up to {pealCap}, at most once per 10 s).',
+    rider2: 'Sanctus: the Peal stuns {pealStun:s} longer.', mods: { pealSwat: 1, pealShield: 0.005, pealCap: 0.02, s2Dmg: 1.45 }, up: { s2Dmg: 0.45, pealCap: 0.0025 }, r2: { pealStun: 0.3 }, r3: { wardDur: 6, wardWeak: 0.4, s2Dmg: 1.5 },
+    form: { name: 'Ward Bell', desc: 'The Peal leaves a ringing ward where it rang (its radius) for {wardDur:s}: foes inside deal {wardWeak} less damage (not bosses).' } });
+  card('bell', 'element', 1, 'b_el', { name: 'Storm Bronze', icon: 'bolt', forks: ['b_el_a', 'b_el_b'], plays: 'every strike charges; the storm pays it out.',
+    desc: "Your skills deal +{classElMul} Lightning damage, and your bell charges foes for {wInfLightning} of each strike (Static Charge's rate counts instead when it is higher).", mods: { classElMul: 0.25, wInfLightning: 0.15 } });
+  card('bell', 'element', 2, 'b_el_a', { name: 'Lightning Rod', icon: 'bolt', tag: 'Focus',
+    desc: 'Strikes on a charged foe deal +{rod}, and every 4th strike on a charged foe discharges it at once.',
+    rider2: 'Grounded: a strike discharge stuns the foe {rodStun:s} (not bosses; at most once a second).', mods: { rod: 0.9 }, up: { rod: 0.15 }, r2: { rodStun: 0.2 }, r3: { stormBolt: 0.6 },
+    form: { name: 'Storm Bell', desc: 'Every 3rd strike calls a thunderbolt on the struck foe (radius 50) for {stormBolt} of the strike, charging the foes it hits for half of its damage.' } });
+  card('bell', 'element', 2, 'b_el_b', { name: 'Chain Toll', icon: 'arc', tag: 'Spread',
+    desc: 'Each strike arcs to the nearest other foe within 90 for {chainArc} of the strike, as Lightning that charges it like a strike; your strikes charge foes for {wInfLightning} more of their damage.',
+    rider2: 'Forked Toll: the arc jumps on to {arcN:n} more foe.', mods: { chainArc: 0.36, wInfLightning: 0.1 }, up: { chainArc: 0.11 }, r2: { arcN: 1 }, r3: { arcN: 1, tollStorm: 0.5 },
+    form: { name: 'Toll of the Storm', desc: 'The arc jumps on to one more foe, and a foe your bell kills rings out: a burst (radius 90) for {tollStorm} of the killing strike as Lightning, charging the foes it hits for half.' } });
+
   Object.assign(ED.BOONS, CB);
   ED.BOON_IDS = Object.keys(ED.BOONS);
 
   // ---------------- route tables and helpers ----------------
   ED.ROUTES = ['attack', 'skill1', 'skill2', 'element'];
-  ED.ELEMENT_ROUTE = { knight: 'Bleed', ranger: 'Bleed', pyro: 'Fire', shade: 'Bleed', cleric: 'Holy', necro: 'Shadow' };
+  ED.ELEMENT_ROUTE = { knight: 'Bleed', ranger: 'Bleed', pyro: 'Fire', shade: 'Bleed', cleric: 'Holy', necro: 'Shadow', bell: 'Lightning' };
   // ED.CLASS_CARDS[cls][route] = { t1: id, forks: [idA, idB] } (fork 0 = Heavy / Burst / Focus, fork 1 = Swift / Guard / Spread)
   ED.CLASS_CARDS = {};
   for (const id in CB) {
@@ -325,8 +367,8 @@
   };
   // Rate and damage factors of an attack fork card on the hero's base weapon (st.weaponId; the Heavy cap and Swift floor bend them); the nominal ones without a weapon.
   const FORK_NOMINAL = { heavy: { rate: 1.8, dmg: 1.98 }, swift: { rate: 0.55, dmg: 0.605 } };
-  const forkRatios = (b, st) => {
-    const base = st && st.weaponId ? String(st.weaponId).split('@')[0] : null, bw = base && ED.WEAPONS[base], fw = bw && ED.forkWeapon(base, b);
+  const forkRatios = (b, st) => { // without a hero: the nominal factors (a bell card: those of the class's first bell, as every bell forks by the same factors)
+    const base = st && st.weaponId ? String(st.weaponId).split('@')[0] : b.cls === 'bell' ? ED.CLASSES.bell.weapons[0] : null, bw = base && ED.WEAPONS[base], fw = bw && ED.forkWeapon(base, b);
     return fw && fw !== bw ? { rate: fw.rate / bw.rate, dmg: fw.dmg / bw.dmg } : FORK_NOMINAL[b.weapon.kind] || { rate: 1, dmg: 1 };
   };
   // Player-facing text of a boon: a class card at `rank` (default 1) with its numbers filled in (critK from the hero's stats `st`), else the boon's own desc.

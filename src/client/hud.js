@@ -153,7 +153,7 @@
 
   // Hero medallion: pixel disc with a stepped class-colour glow, the portrait (alpha binarized), a 2 art px ring in the player colour with a lit upper-left arc. Returns { cv, w, h }.
   function medallion(me) {
-    const wid = (me.stats && me.stats.weaponId) || me.weapon, D = Math.max(12, Math.round(4.9 * u / k / 2) * 2), key = me.cls + '|' + me.slot + '|' + wid + '|' + k + '|' + D; // the held fork shows in the portrait
+    const wid = (me.stats && me.stats.weaponId) || me.weapon, skin = ED.Cos ? ED.Cos.skin(me) : '', D = Math.max(12, Math.round(4.9 * u / k / 2) * 2), key = me.cls + '|' + me.slot + '|' + wid + '|' + skin + '|' + k + '|' + D; // the held fork and the worn skin show in the portrait
     if (medalKey === key && medal) return medal;
     if (medal) { medal.dead = true; Bmp.free(medal.cv); }
     const R = D / 2, col = ED.PLAYER_COLORS[me.slot] || K.gold, cc = ED.CLASSES[me.cls].col.c, hi = U.mix(col, '#ffffff', 0.4);
@@ -166,7 +166,7 @@
       if (d < R - 3) { mx.fillRect(x, y, 1, 1); const gd = Math.hypot(dx, dy - R * 0.2); bx.fillStyle = gd < R * 0.42 ? g1 : gd < R * 0.68 ? g2 : K.panel; bx.fillRect(x, y, 1, 1); }
     }
     const S = D * k, out = mk(S, S), og = out.getContext('2d'), pc = mk(S, S), pg = pc.getContext('2d');
-    ED.Sprites.portrait(pc, me.cls, me.slot, wid); binarize(pc);
+    ED.Sprites.portrait(pc, me.cls, me.slot, wid, skin); binarize(pc);
     pg.imageSmoothingEnabled = false; pg.globalCompositeOperation = 'destination-in'; pg.drawImage(mask, 0, 0, S, S); pg.globalCompositeOperation = 'source-over';
     og.imageSmoothingEnabled = false; og.drawImage(bg, 0, 0, S, S); og.drawImage(pc, 0, 0); og.drawImage(rgc, 0, 0, S, S);
     medal = hold({ cv: out, w: S, h: S }); medalKey = key; return medal;
@@ -504,11 +504,12 @@
     frame(c, 'hpanel', blink ? 'danger' : 'base', x, y, w, h, k);
     const med = medallion(me); c.drawImage(med.cv, x + q(u * 0.8), y + q((h - med.h) / 2));
     const bx = x + q(u * 6.4), bw = x + w - q(u * 1.0) - bx, ny = y + q(u * 1.55);
-    T(me.name, bx, ny, tV, K.gold, 'b', 'left', 700);
     const evoP = st && st.evo && ED.PATHS[st.evo];
     const wname = evoP || (st && st.weaponId && (st.weaponId.indexOf('@') > 0 || ED.weaponBase(st.weaponId) !== st.weaponId)) ? H.weaponName(me) : cls.name; // an evolved, forked or Armory variant weapon shows its name
-    T(wname, bx + bw, ny, tS, evoP ? evoP.color : K.muted, 'b', 'right', 700);
     const sig = routeIcon(me), js = Math.max(1, Math.round(1.6 * u / 16));
+    const full = ED.Cos ? ED.Cos.nameOf(me) : me.name; // the Wardrobe title rides the name when it fits beside the weapon line
+    T(full !== me.name && adv(full, tV) + adv(wname, tS) + 16 * js + 6 * f > bw ? me.name : full, bx, ny, tV, K.gold, 'b', 'left', 700);
+    T(wname, bx + bw, ny, tS, evoP ? evoP.color : K.muted, 'b', 'right', 700);
     if (sig) icon(c, sig, cls.col.c, bx + bw - adv(wname, tS) - 16 * js - f * 2, ny - 8 * js, js);
     const gk = 'p' + me.pid; ghost[gk] = ghost[gk] === undefined ? frac : Math.max(frac, ghost[gk] - dtc * 0.35);
     const by = y + q(u * 2.8), bh = q(u * 2.4), shield = me.shield || 0;
@@ -588,9 +589,10 @@
       frame(c, 'hpanel', 'dim', x, ty, w, h, k);
       c.fillStyle = col; c.fillRect(x + 3 * k, ty + 3 * k, k, h - 6 * k);
       const ny = ty + q(u * 1.0);
-      T(p.name, x + q(u * 1.1), ny, tS, col, 'b', 'left', 700);
       const label = p.dead ? 'Fallen' : p.downed ? 'DOWN' : ED.CLASSES[p.cls].name, psg = routeIcon(p), js = Math.max(1, Math.round(1.6 * u / 16));
       const rx = x + w - Math.max(7 * k, q(u * 1.1)); // clear of the frame's corner bracket
+      const full = ED.Cos ? ED.Cos.nameOf(p) : p.name, room = rx - adv(label, tS) - (psg && !out ? 16 * js + 2 * f : 0) - 4 * f - (x + q(u * 1.1)); // the Wardrobe title rides the name when it fits
+      T(full !== p.name && adv(full, tS) > room ? p.name : full, x + q(u * 1.1), ny, tS, col, 'b', 'left', 700);
       T(label, rx, ny, tS, out ? '#ff8a7a' : K.muted, 'b', 'right', 700);
       if (psg && !out) icon(c, psg, ED.CLASSES[p.cls].col.c, rx - adv(label, tS) - 16 * js - 2 * f, ny - 8 * js, js);
       const bx = x + q(u * 1.1), bw = rx - bx, by = ty + q(u * 1.85), bh = Math.max(4 * k, q(u * 0.95));

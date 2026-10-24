@@ -242,8 +242,14 @@
     if (en.jumps > 0 && n) w.queuePayoff(o, { kind: 'beam', e: near[0].f, x: near[0].f.x, y: near[0].f.y, amt: en.amt * 0.5, jumps: en.jumps - 1, hit, jump: true });
   }
 
+  const SMITER_N = 25;
   ED.CLS.cleric = {
-    init(p) { p.hammers = []; p.echoQ = new Map(); },
+    init(p) { p.hammers = []; p.echoQ = new Map(); p.smB = 0; p.smN = 0; }, // smB / smN: the boss this Cleric last Smote and its Smite count (Smiter)
+    // Smiter (secret): SMITER_N Smites by this Cleric on one boss (combat.js smite calls it for a boss; a boss id lives one fight).
+    smote(e, o) {
+      if (o.smB !== e.id) { o.smB = e.id; o.smN = 0; }
+      if (++o.smN >= SMITER_N) this.secretP(o, 'heroSecret');
+    },
     tick(p, dt) {
       if (p.hammers.length) this.updateHammers(p, dt);
       if (p.echoQ.size) flushEcho(this, p);

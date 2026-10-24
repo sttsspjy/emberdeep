@@ -139,7 +139,7 @@ module.exports = (ED, model) => {
   // ---------------- what the sheet leaves out ----------------
   // a: model.assess result at the stratum of ctx. Returns { one, pack, ehp, bonus }: damage per second on one foe and on a pack, effective health, additive value of the meta stats.
   function fold(p, a, ctx) {
-    const st = p.stats, m = a.m, k = a.k, ref = m.ref, t = ctx.stratum, melee = !!st.melee, wk = m.weapon, aps = wk._aps;
+    const st = p.stats, m = a.m, k = a.k, ref = m.ref, t = ctx.stratum, melee = !!st.melee || st.kind === 'bell', wk = m.weapon, aps = wk._aps;
     const sdTot = model.statusDamage(m), dOne = a.one - sdTot, dPack = a.pack - sdTot;
     const spk = 1 + (clamp(dPack / Math.max(1e-9, dOne), 1, PACK) - 1) * POOL_EFF; // a status builds on every foe the hits reach
     const sd = { fire: 0, lightning: 0, holy: 0, general: 0 };

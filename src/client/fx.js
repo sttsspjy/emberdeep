@@ -734,6 +734,12 @@
       // Knight events (ric, catch, parry, deflect, ward, the boom of a shockwave) are drawn by src/client/cls-knight.js through ED.ClassFx.
       case 'spawned': F.burst(ev.x, ev.y, ev.el ? 18 : 8, { color: ev.el ? '#ffb13a' : '#b8a0ff', sp: 70, life: 0.4, size: 2.4, add: true }); F.pop(ev.x, ev.y - 8, ev.el ? 30 : 20, ev.el ? '#ffb13a' : '#b8a0ff', 0.25); A.play('spawn', 0.5); break;
       case 'raise': F.burst(ev.x, ev.y, 14, { color: '#7dffd9', sp: 60, vy: -40, life: 0.6, size: 2.4, add: true }); F.ring(ev.x, ev.y, 26, '#7dffd9', 0.4, 2); SP('fx.circle.spark', ev.x, ev.y - 2, { ramp: 'teal', add: true }); SP('fx.puff', ev.x, ev.y - 4, { ramp: 'dust' }); break;
+      case 'bellrung': // the Drowned Bell rings to a hero's hit: rings of sound, its swing (render.js drawBell reads F.bellRing) and a deep cracked toll
+        F.bellRing = 1.6; F.ring(ev.x, ev.y - 16, 90, '#7fe8c8', 0.9, 4); F.ring(ev.x, ev.y - 16, 50, '#e8c66b', 0.6, 2); F.burst(ev.x, ev.y - 18, 12, { color: '#bff8e8', sp: 70, vy: -30, life: 0.8, size: 2.2, add: true }); F.pop(ev.x, ev.y - 16, 30, '#bff8e8', 0.3); F.addShake(3); A.play('drownbell'); break;
+      case 'secret': // a secret's run field turned true (pid: its hero, null: the whole party): a nameless toast and a chime for that hero (names show at the run's end)
+        if ((ev.pid === null || ev.pid === undefined || ev.pid === local) && ED.UI) { ED.UI.toast('A secret is uncovered', ED.Icons ? ED.Icons.url('eye', '#b8a6ff') : '', 4); A.play('secret'); }
+        break;
+      case 'platino': F.burst(ev.x, ev.y - 8, 18, { color: '#f4f8ff', sp: 90, vy: -50, life: 0.8, size: 2, add: true }); F.ring(ev.x, ev.y, 28, '#e8f0ff', 0.5, 2); F.pop(ev.x, ev.y - 8, 22, '#ffffff', 0.3); SP('fx.circle.spark', ev.x, ev.y - 4, { ramp: 'holy', add: true }); A.play('platino'); break; // the Platino caught: a platinum sparkle
       case 'puff': F.burst(ev.x, ev.y - 8, 10, { color: ev.c || '#cccccc', sp: 50, life: 0.5, size: 3, kind: 'smoke' }); SP('fx.puff', ev.x, ev.y - 6, { ramp: ev.c || 'smoke' }); break;
       case 'thud': F.addShake(ev.big ? 9 : 3); A.play('thud', ev.big ? 1 : 0.5); dust(ev.x, ev.y, 'dust', ev.big ? 4 : 2); F.burst(ev.x, ev.y, 10, { color: '#bba98a', sp: 80, life: 0.4, size: 3, kind: 'smoke' }); if (ev.big) { F.ring(ev.x, ev.y, 60, '#c9b98f', 0.4, 4); F.punch(0.5, 0); } break;
       case 'shoot': A.play('eshoot', 0.6); break;

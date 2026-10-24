@@ -358,8 +358,18 @@
   };
 
   // ---------------- Pyromancer hook table ----------------
+  // Bonfire (secret): BONFIRE_N foes alive at once carry this Pyromancer's Burn, counted every BONFIRE_EVERY s.
+  const BONFIRE_N = 30, BONFIRE_EVERY = 0.25;
+  function bonfire(w, p) {
+    const es = w.enemies;
+    if (es.length < BONFIRE_N) return;
+    let n = 0;
+    for (let i = 0; i < es.length; i++) { const e = es[i]; if (e.hp > 0 && e.burnPool > 0 && e.burnOwner === p) n++; }
+    if (n >= BONFIRE_N) w.secretP(p, 'heroSecret');
+  }
+
   ED.CLS.pyro = {
-    init(p) { p.pyroQ = []; p.waves = []; p.phoenixT = 0; p.diveAt = 0; p.diveRoom = null; p.trailAt = null; p.fdOn = false; p.fdX = 0; p.fdY = 0; p.whiteAcc = 0; p.heat = 0; p.heatPing = 0; },
+    init(p) { p.bonT = 0; p.pyroQ = []; p.waves = []; p.phoenixT = 0; p.diveAt = 0; p.diveRoom = null; p.trailAt = null; p.fdOn = false; p.fdX = 0; p.fdY = 0; p.whiteAcc = 0; p.heat = 0; p.heatPing = 0; },
 
     // Channel builds while the hero stands still and keeps attacking; moving or a pause longer than ED.chanWindow ends it (Fire Dancer: moving only holds it). Rebirth Flare watches mantleAmt; a decaying shield lowers it without a flare.
     // Fire Dancer strikes at a dash, White Flame times the burning foes, Inferno Engine refreshes the Heat count for the viewers every HEAT_PING s.
@@ -371,6 +381,7 @@
       if (st.whiteHot > 0 && (p.whiteAcc += dt) >= C.WHITE_EVERY) { whiteScan(this, p, p.whiteAcc); p.whiteAcc = 0; }
       if (p.heat > 0 && (p.heatPing -= dt) <= 0) { p.heatPing = C.HEAT_PING; this.emit({ t: 'pyEng', pid: p.pid, n: p.heat, mx: st.heatMax }); }
       if (p.mantleAmt > p.shield) p.mantleAmt = Math.max(0, p.shield);
+      if (!p.sec.heroSecret && (p.bonT -= dt) <= 0) { p.bonT = BONFIRE_EVERY; bonfire(this, p); }
       if (p.pyroQ.length) runQueue(this, p);
       if (p.waves.length) stepWaves(this, p);
       if (p.phoenixT > 0) p.phoenixT -= dt;

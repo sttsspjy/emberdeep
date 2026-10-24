@@ -22,7 +22,7 @@ function parseArgs(argv) {
 // The batch the positional args and flags describe: { n, runs, skill, metas, cls, pact, o, seed0, jobs } (jobs: one runBot job per meta x run).
 function makeJobs(args, flags) {
   const n = +(args[0] || 1), runs = +(args[1] || 48), skill = +(args[2] || 0.75), metas = (args[3] || 'none').split(',');
-  const cls = (args[4] && args[4] !== '-' ? args[4] : 'knight,ranger,pyro,shade,cleric,necro').split(','), pact = +(args[5] || 0);
+  const cls = (args[4] && args[4] !== '-' ? args[4] : sim.ED.CLASS_IDS.join(',')).split(','), pact = +(args[5] || 0);
   const o = sim.optsFromFlags(flags), seed0 = +(flags.seed0 || 1000);
   const jobs = [];
   for (const meta of metas) {

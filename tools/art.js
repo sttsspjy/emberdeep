@@ -352,6 +352,7 @@ function build() {
       anchors.centre = [Math.floor((ux0 + ux1 + 1) / 2), Math.floor((at + uy1 + 1) / 2)]; anchors.top = at;
       if (e.anchors) for (const k of Object.keys(e.anchors)) anchors[k] = e.anchors[k];
       if (e.handRel) anchors.hand = [feetX + e.handRel[0], feetY + e.handRel[1]];
+      if (e.head) anchors.head = a.fr.map((b) => headAt(b, e.head === true ? [] : e.head));
       if (e.eye === 'auto') anchors.eye = [[anchors.centre[0], at + Math.round((uy1 - at + 1) * 0.3)]];
       else if (Array.isArray(e.eye)) anchors.eye = e.eye;
       if (anchors.grip) { // tip = opaque pixel of frame 0 farthest from the grip (ties: top, then left)
@@ -371,7 +372,37 @@ function build() {
     }
   }
   const fontOut = { h: fontDef.h, gap: fontDef.gap, space: fontDef.space, glyphs: glyphIds };
-  return { meta, pages, fontOut, swaps: M.swaps || {}, M };
+  return { meta, pages, fontOut, swaps: resolveSwaps(M.swaps || {}, meta.pal), M };
+}
+// Hat seat of a body frame: [x, y] = centre of the first row (from the top) holding >= 7 pixels (a hat's width) that are neither outline nor a skip colour, y one row
+// below it (a hat drawn with its bottom edge there overlaps that row); null for an empty frame.
+function headAt(b, skip) {
+  const no = new Set([OUTLINE].concat(skip.map((c) => c.toLowerCase())));
+  for (let y = 0; y < b.h; y++) {
+    let x0 = -1, x1 = -1, n = 0;
+    for (let x = 0; x < b.w; x++) { const d = (y * b.w + x) * 4; if (!b.data[d + 3] || no.has(hex(b.data[d], b.data[d + 1], b.data[d + 2]))) continue; n++; if (x0 < 0) x0 = x; x1 = x; }
+    if (n >= 7) return [Math.floor((x0 + x1 + 1) / 2), y + 1];
+  }
+  return null;
+}
+// Swap entries with `ash` (ramp stops dark to light) become { base, key }: every colour of the hero.<cls>.* anims except the outline and the key
+// colours, ranked by luminance onto the ramp (cls = the swap id before the first dot).
+function resolveSwaps(swaps, pal) {
+  const out = {};
+  for (const id of Object.keys(swaps)) {
+    const sw = swaps[id];
+    if (!sw.ash) { out[id] = sw; continue; }
+    const pre = 'hero.' + id.split('.')[0] + '.', key = sw.key.map((c) => c.toLowerCase()), set = new Set();
+    for (const aid of Object.keys(pal)) if (aid.startsWith(pre)) for (const h of pal[aid]) if (h !== OUTLINE && !key.includes(h)) set.add(h);
+    if (!set.size) throw new Error('swap ' + id + ': no hero colours');
+    const list = [...set].sort((p, q) => lumOf(...unhex(p)) - lumOf(...unhex(q)) || (p < q ? -1 : 1)), st = sw.ash.map(unhex), base = {};
+    list.forEach((h, i) => {
+      const t = (i + 0.5) / list.length * (st.length - 1), k = Math.min(st.length - 2, Math.floor(t)), f = t - k;
+      base[h] = hex(...st[k].map((v, j) => Math.round(v + (st[k + 1][j] - v) * f)));
+    });
+    out[id] = { base, key: sw.key };
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------- fonts

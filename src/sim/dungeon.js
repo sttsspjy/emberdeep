@@ -81,7 +81,8 @@
     const isLeaf = (c) => neighborCount(cells, c) === 1;
     // dark rooms are normal combat rooms on dead ends other than the boss and the start (off the start->boss path, skipping one cuts off nothing), farther first, ties by their own RNG stream
     const darkRng = U.RNG((seed ^ 0x2545f491) + stratum * 7907);
-    for (const c of darkRng.shuffle(list.slice(1).filter(c => c !== boss && isLeaf(c))).sort((a, b) => b.dist - a.dist).slice(0, DARK_COUNT)) { c.type = 'combat'; c.dark = true; }
+    const darks = darkRng.shuffle(list.slice(1).filter(c => c !== boss && isLeaf(c))).sort((a, b) => b.dist - a.dist).slice(0, DARK_COUNT);
+    for (const c of darks) { c.type = 'combat'; c.dark = true; }
     const others = list.slice(1).filter(c => c !== boss && !c.dark);
     // utility rooms prefer the remaining dead ends, elite rooms prefer distance >= 3
     const pool = rng.shuffle(others.filter(isLeaf)).concat(rng.shuffle(others.filter(c => !isLeaf(c))));
@@ -100,9 +101,25 @@
     }
     assignRewards(rooms, stratum, seed);
     for (const r of rooms) carveDoors(r);
-    for (const r of rooms) { finalizeInterior(r, stratum); decorate(r, stratum); }
-    return { stratum, seed, rooms, start: 0, boss: boss.id };
+    const bellId = stratum === BELL_STRATUM && darks.length ? darks[0].id : -1;
+    for (const r of rooms) { finalizeInterior(r, stratum); if (r.id === bellId) placeBell(r); decorate(r, stratum); }
+    return { stratum, seed, rooms, start: 0, boss: boss.id, platino: platinoRoom(rooms, stratum, seed) };
   };
+
+  // The Drowned Bell: room.bell { x, y } (world px) in the first dark room of stratum BELL_STRATUM, BELL_UP above the centre on a clear spot (the clear reward keeps the centre); placed before decoration, which keeps breakables BELL_GAP tiles from it.
+  const BELL_STRATUM = 5, BELL_UP = 48, BELL_GAP = 2;
+  function placeBell(room) {
+    const c = D.center(room), m = D.clearSpot(room, c.x, c.y - BELL_UP);
+    room.bell = { x: m.x, y: m.y };
+  }
+  // Platino room: one floor in PLATINO_ODDS (own RNG stream) names a combat or elite room whose clear lets the Platino out (rooms.js); -1 otherwise.
+  const PLATINO_ODDS = 1 / 8;
+  function platinoRoom(rooms, stratum, seed) {
+    const rng = U.RNG((seed ^ 0x6c8e9cf5) + stratum * 7841);
+    if (!rng.chance(PLATINO_ODDS)) return -1;
+    const pool = rooms.filter(r => r.type === 'combat' || r.type === 'elite');
+    return pool.length ? rng.pick(pool).id : -1;
+  }
 
   // Rewards are fixed per floor and shown before entry. Normal combat: boon (drawn from the claiming hero's own paths), gold, vigor, forge,
   // each kind getting its REWARD_ODDS share of the floor's combat rooms (rounded by weighted draw on the remainders). Elite: relic, or epic at 25%.
@@ -317,13 +334,14 @@
   const BREAK_MIN = 4, BREAK_MAX = 8, BREAK_SPARE = 3, BREAK_GAP = 1.1; // BREAK_GAP: least distance in tiles between two
   const FIGHT = { combat: 1, elite: 1, boss: 1 };
 
-  // A breakable stands on plain floor, off every door lane, clear of the prop spot (1.5 tiles around the centre; in a room without a fight the whole band its props and signs span) and BREAK_GAP from the others in `list`.
+  // A breakable stands on plain floor, off every door lane, clear of the prop spot (1.5 tiles around the centre; in a room without a fight the whole band its props and signs span), BREAK_GAP from the others in `list` and BELL_GAP from the Drowned Bell.
   function breakFree(room, x, y, list) {
     const tx = Math.floor(x), ty = Math.floor(y);
     if (room.tiles[ty * room.w + tx] !== 0 || inDoorLane(room, tx, ty)) return false;
     const cx = room.w / 2, cy = room.h / 2 + 0.5;
     if (FIGHT[room.type] ? Math.hypot(x - cx, y - cy) < 1.5 : Math.abs(x - cx) < 5.8 && Math.abs(y - cy) < 2.9) return false;
     for (const b of list) if (Math.hypot(b.x - x, b.y - y) < BREAK_GAP) return false;
+    if (room.bell && Math.hypot(x - room.bell.x / T, y - room.bell.y / T) < BELL_GAP) return false;
     return true;
   }
 

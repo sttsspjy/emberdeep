@@ -111,18 +111,19 @@ for (const s of [1, 2]) {
 // ---- card text follows the hero's weapon ----
 {
   const forks = ED.BOON_IDS.filter(id => ED.BOONS[id].weapon && ED.BOONS[id].weapon.kind);
-  ok(forks.length === 12, `12 fork cards (${forks.length})`);
+  ok(forks.length === 2 * ED.CLASS_IDS.length, `2 fork cards per hero (${forks.length})`);
   for (const id of forks) {
     const b = ED.BOONS[id], cls = b.cls;
     for (const wid of ED.CLASSES[cls].weapons) {
       const bw = ED.WEAPONS[wid], fw = ED.forkWeapon(wid, id), st = { weaponId: wid, critK: 1 };
-      const m = /×([\d.]+) attack time, ×([\d.]+) damage per hit/.exec(ED.cardParts(id, 1, st).text);
+      const m = /×([\d.]+) (?:attack time|lockout), ×([\d.]+) damage per (?:hit|strike)/.exec(ED.cardParts(id, 1, st).text); // a bell: lockout, damage per strike
       ok(!!m, `${id} on ${wid} shows both factors`);
       if (m) { near(+m[1], fw.rate / bw.rate, 0.0006, `${id} on ${wid} rate factor`); near(+m[2], fw.dmg / bw.dmg, 0.0006, `${id} on ${wid} damage factor`); }
       ok(!/[{}\[\]]/.test(ED.cardParts(id, 3, st).text + ED.cardParts(id, 3, st).rider), `${id} on ${wid} has no raw token`);
     }
-    const nom = /×([\d.]+) attack time, ×([\d.]+) damage per hit/.exec(ED.cardParts(id, 1).text);
-    ok(nom && +nom[1] === (b.weapon.kind === 'heavy' ? 1.8 : 0.55) && +nom[2] === (b.weapon.kind === 'heavy' ? 1.98 : 0.605), `${id} without a hero shows the nominal factors`);
+    const nom = /×([\d.]+) (?:attack time|lockout), ×([\d.]+) damage per (?:hit|strike)/.exec(ED.cardParts(id, 1).text), hv = b.weapon.kind === 'heavy';
+    const want = cls === 'bell' ? (hv ? [1.29, 1.42] : [0.69, 0.76]) : hv ? [1.8, 1.98] : [0.55, 0.605];
+    ok(nom && +nom[1] === want[0] && +nom[2] === want[1], `${id} without a hero shows the nominal factors`);
   }
   ok(/×1\.3 attack time, ×1\.43 damage per hit/.test(ED.cardParts('p_atk_h', 1, { weaponId: 'inferno' }).text), 'Tome of Ruin shows the capped heavy factors');
   ok(/×0\.8 attack time, ×0\.88 damage per hit/.test(ED.cardParts('p_atk_s', 1, { weaponId: 'emberwand' }).text), 'Flicker Wand shows the floored swift factors');

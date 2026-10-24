@@ -62,5 +62,13 @@ North-star: a co-op browser roguelite where builds are chosen, not rolled. Rules
 - [x] Pacts: 1–3 gentle, 4–5 steep, Pact 5 wins 10% solo, 20% for bot parties of 2–4
 - [x] v4.1 players see a "what changed" notice
 - [ ] Pact 3 adds no difficulty yet
-- [ ] PR to main
+- [x] PR to main
 - [ ] Your playtest
+
+## Secrets and the seventh hero
+- [x] Bellwarden: a hidden seventh hero who swings a bell on a chain (hold attack to whirl it); unlocked by a secret in the drowned Sanctum
+- [x] 15 secret achievements nobody is told about; each gives a cosmetic
+- [x] Wardrobe: skins per hero (mastery plus embers), weapon sheens, aura, crown, Platino pet, footprints, death effect, titles, blue Hearth; co-op players see each other's looks
+- [x] Bot confirm with seven heroes: 10 of 11 cells in band (Pact 2 reads 24%, same as Pact 3)
+- [x] Merged to main
+- [ ] Your playtest: the Bellwarden feel (whirl, Heave, Peal), Wardrobe, secrets

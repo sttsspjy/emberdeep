@@ -308,6 +308,7 @@
       if (st.guardLight) { q.glV = q.glT > 0 ? Math.max(q.glV, st.guardLight) : st.guardLight; q.glT = C.GL_T; } // Guardian Light: the heroes this Smite shields deal more for GL_T
     }
     this.emit({ t: 'smite', x: Math.round(x), y: Math.round(y), pid: o.pid, n });
+    if (e.boss && CLS[o.cls] && CLS[o.cls].smote) CLS[o.cls].smote.call(this, e, o);
     if (st.beacon || st.sunfire || st.hoarlight) {
       const q = this.foeScan(x, y, 70);
       for (let k = 0; k < q.length || this.foeTail(q); k++) {
@@ -779,7 +780,7 @@
     if (p) p.kills++;
     this.emit(def.fodder ? { t: 'die', x: Math.round(e.x), y: Math.round(e.y), type: e.type, el: 0, r: e.r, fd: 1 } : { t: 'die', x: Math.round(e.x), y: Math.round(e.y), type: e.type, el: e.elite ? 1 : 0, r: e.r });
     this.onEnemyKilledSkill(e, p, src);
-    if (def.boss) { this.onBossKilled(e); return; }
+    if (def.boss) { this.onBossKilled(e, p, src); return; }
     this.deathPayoffs(e, p, src);
     if (def.fodder) { this.fodderMote(e.x, e.y); return; } // fodder drop no gold, heart or Grail growth, split or leave a cloud: only the room's xp mote
     this.dropFoeXp(e);
@@ -863,7 +864,7 @@
     if (rq && rq.length) for (let i = 0; i < rq.length;) { const o = rq[i]; o.t -= dt; if (o.t <= 0) { rq.splice(i, 1); this.heroRing(p, o.w, o.co, st.waveReturn); } else i++; }
     // dash effects (host sees remote dashes through their state reports)
     if (p.dashing) {
-      if (this.room.breakables.length) { this.smashSeg(p, p.dashFx < 0 ? p.x : p.dashFx, p.dashFx < 0 ? p.y : p.dashFy, p.x, p.y, p.r); p.dashFx = p.x; p.dashFy = p.y; } // the path since the last tick
+      if (this.room.breakables.length) { this.smashSeg(p, p.dashFx < 0 ? p.x : p.dashFx, p.dashFx < 0 ? p.y : p.dashFy, p.x, p.y, p.r, true); p.dashFx = p.x; p.dashFy = p.y; } // the path since the last tick (a dash is no hit: it never rings the Drowned Bell)
       if (st.dashDmg) {
         if (!p.dashHit) p.dashHit = new Set();
         const dmg = st.power * st.dashDmg, add = st.dashVenom || st.dashDoom ? { poison: st.dashVenom, shadow: st.dashDoom } : undefined;
@@ -910,7 +911,8 @@
     if (p.braceT > 0) braceF = 1 - Math.min(0.4, st.braceDR);
     for (const q of this.players.values()) if (q !== p && q.braceT > 0 && q.stats.braceAura && !q.downed && !q.dead && U.dist2(q.x, q.y, p.x, p.y) < 100 * 100) braceF = Math.min(braceF, 1 - Math.min(0.4, q.stats.braceDR));
     for (const z of this.zones) if (z.kind === 'sanct' && U.dist2(z.x, z.y, p.x, p.y) < z.r * z.r) sanctF = Math.min(sanctF, 1 - Math.min(z.drCap || 0.4, z.dr === undefined ? 0.15 : z.dr));
-    dmg *= Math.max(ED.CONST.DR_FLOOR, braceF * sanctF);
+    const hcm = CLS[p.cls], clsF = hcm && hcm.hurtMul ? hcm.hurtMul.call(this, p, src) : 1; // a class's own damage-taken factor (class-bell.js: the whirling bell)
+    dmg *= Math.max(ED.CONST.DR_FLOOR, braceF * sanctF * clsF);
     if (p.guardT > 0) dmg *= 0.4;
     const e = src.e;
     if (e && e.weakT > 0) dmg *= 1 - e.weakV;
@@ -927,6 +929,7 @@
       }
     }
     p.hp -= dmg; p.invuln = src.hazard ? 0.3 : 0.6; p.hurtT = 0.3;
+    if (p.bellS === 1 && p.hp < p.maxHp * ED.CONST.BELL_HP) p.bellS = 2; // the Drowned Bell's watch is broken (rooms.js)
     if (this.boss) p.hitThisBoss = true;
     if (dmg > 0) this.emit({ t: 'hurt', pid: p.pid, v: dmg, x: Math.round(p.x), y: Math.round(p.y) });
     else this.emit({ t: 'block', x: p.x, y: p.y, k: 'aegis' });
@@ -984,6 +987,7 @@
   W.playerAttack = function (p, a, twinMul, k) {
     if (!p || p.downed || p.dead) return;
     const st = p.stats, wb = st.weapon, evo = evoOf(p), ch = CLS[p.cls], C = ED.CONST;
+    if (wb.kind === 'bell') { if (ch && ch.weaponAttack && !(twinMul > 0)) ch.weaponAttack.call(this, p, a); return; } // a chained bell is not swung: the class file hauls it (class-bell.js)
     if (wb.combo && !(twinMul > 0)) { p.comboK = k === (k | 0) && k >= 0 && k < wb.combo.steps.length ? k : ED.Stats.comboNext(p, this.time); p.comboAt = this.time; }
     const w = wb.combo ? ED.Stats.stepWeapon(st, p.comboK | 0) : wb;
     if (twinMul > 0) {
@@ -1316,7 +1320,7 @@
       let dead = false;
       if (pr.team === 0) {
         const owner = this.players.get(pr.owner);
-        if (room.breakables.length) this.smashSeg(owner, pr.x - pr.vx * dt, pr.y - pr.vy * dt, pr.x, pr.y, pr.r); // the step just flown; a breakable never stops the shot
+        if (room.breakables.length || room.bell) this.smashSeg(owner, pr.x - pr.vx * dt, pr.y - pr.vy * dt, pr.x, pr.y, pr.r); // the step just flown; a breakable never stops the shot
         const q = this.foeScan(pr.x, pr.y, pr.r);
         for (let k = 0; k < q.length || this.foeTail(q); k++) {
           const e = q[k];

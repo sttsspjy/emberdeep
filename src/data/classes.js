@@ -49,6 +49,13 @@
       weapons: ['bonewand', 'soulscythe', 'plaguestaff'], skill: 'legion', skill2: 'harvest',
       col: { a: '#2f4a42', b: '#17261f', c: '#7dffd9', d: '#0c1411' }, unlock: { boss: 2, text: 'Defeat The Sporemother' },
     },
+    bell: {
+      name: 'Bellwarden', title: 'Keeper of the Drowned Bell', icon: 'bell',
+      desc: 'Swings a temple bell on a chain. Hold attack to haul it into a whirling orbit; the faster it flies, the harder it rings.',
+      hp: 44, armor: 30, spd: 132, crit: 0.05, power: 18, element: 'lightning',
+      weapons: ['bronzebell', 'greatbell', 'handbells'], skill: 'heave', skill2: 'peal',
+      col: { a: '#b08d57', b: '#6b5233', c: '#ffe66b', d: '#2a2116' }, unlock: { bell: true, text: '???', hint: 'In the drowned Sanctum, a bell waits for a hand that will not let go.' },
+    },
   };
   ED.CLASS_IDS = Object.keys(ED.CLASSES);
 
@@ -62,6 +69,9 @@
   // beam: an instant line w.speed x w.life long, w.r half-width, cut at walls, every foe on it hit once (W.fireBeam); lob { t }: a shell arcs to the cursor (up to w.speed x w.life, over foes) and lands after t s as its explode blast (W.lobShot);
   // ret: a boomerang out to w.speed x w.life and back to the hero, every foe struck once per leg; pool { r, dur, mul, zk, ally }: the shot ends in a zone of kind zk (ally: shield share an ally inside gets, the lantern rule);
   // trail { n, every, r, dur, mul }: n plague clouds, one every `every` px flown and the last where the shot ends.
+  // kind 'bell' (src/sim/class-bell.js): a bell on a chain; the attack input hauls it (no swing). dmg per strike at BELL_REF px/s (x clamp(speed / BELL_REF, 0.4, 1.8)), rate = per-foe strike lockout s (attack speed shortens it and drives the haul harder),
+  //   chain px (rest length; a haul shortens it to HAUL_K of it, at most BELL_ORBIT), br bell radius px, loss share of speed a strike costs (bosses x BOSS_LOSS), haul spin-up factor (drive and shortening speed), knock at BELL_REF, n bells (default 1),
+  //   ring { r, mul } a ring around the bell with each strike, wall the speed a wall bounce keeps (default BELL_WALL).
   // An Armory variant (ED.ARMORY) carries variant: '<base weapon id>'; it is wielded where its base is unlocked and counts as its base for unlocks and the route cards.
   ED.WEAPONS = {
     // Knight
@@ -111,6 +121,14 @@
     radiantmace: { name: 'Radiant Mace', desc: 'Every 3rd swing a ring of light bursts around you.', variant: 'mace', kind: 'melee', dmg: 23, rate: 0.42, range: 46, arc: 1.7, knock: 140, look: 'mace', ring: { every: 3, r: 74, mul: 0.85 } },
     gavel: { name: "Judge's Gavel", desc: 'Slams the ground ahead; every 3rd slam sends three waves in a fan.', variant: 'dawnhammer', kind: 'melee', dmg: 43.2, rate: 0.72, range: 58, arc: 2.2, knock: 220, look: 'hammer', ahead: { r: 48 }, wave: { every: 3, mul: 0.36, n: 3, fan: 0.35 } },
     gravewhirl: { name: 'Grave Whirl', desc: 'Reaping whirls all around you; reaped foes rise more often.', variant: 'soulscythe', kind: 'melee', dmg: 25, rate: 0.56, range: 46, arc: 6.3, knock: 110, look: 'scythe', raise: 0.12 },
+    // Bellwarden (kind 'bell')
+    bronzebell: { name: 'Bronze Bell', desc: 'A temple bell on a chain. Hold attack to haul it into a whirling orbit; it strikes harder the faster it flies.', kind: 'bell', dmg: 26.1, rate: 0.3, chain: 70, br: 12, loss: 0.15, haul: 1, knock: 60, look: 'bell' },
+    greatbell: { name: 'Great Bell', desc: 'A huge bell on a long chain: slow to spin up, crushing at speed, barely slowed by what it strikes.', kind: 'bell', dmg: 43.5, rate: 0.45, chain: 84, br: 16, loss: 0.09, haul: 0.72, knock: 100, look: 'bell' },
+    handbells: { name: 'Handbells', desc: 'Two small bells on short chains: quick to spin up, lighter strikes.', kind: 'bell', dmg: 8.94, rate: 0.25, chain: 58, br: 9, loss: 0.17, haul: 1.25, knock: 40, n: 2, look: 'bell' },
+    // Armory variants: bells
+    stormbell: { name: 'Storm Bell', desc: 'Each strike rings out: every other foe within 40 of the bell takes a quarter of the strike.', variant: 'bronzebell', kind: 'bell', dmg: 19.1, rate: 0.3, chain: 70, br: 12, loss: 0.15, haul: 1, knock: 50, ring: { r: 40, mul: 0.25 }, look: 'bell' },
+    wreckbell: { name: 'Wrecking Bell', desc: 'A spiked bell on a very long chain that keeps its speed off walls.', variant: 'greatbell', kind: 'bell', dmg: 37.1, rate: 0.45, chain: 112, br: 16, loss: 0.1, haul: 0.8, knock: 100, wall: 1, look: 'bell' },
+    chimes: { name: 'Chimes', desc: 'Three tiny bells on short chains.', variant: 'handbells', kind: 'bell', dmg: 5.68, rate: 0.25, chain: 52, br: 8, loss: 0.17, haul: 1.25, knock: 30, n: 3, look: 'bell' },
   };
   // Combo step intervals as factors of the weapon's mean interval (iv, averaging 1).
   for (const id in ED.WEAPONS) {
@@ -242,6 +260,25 @@
         { id: 'lance', label: 'Bone lance', if: 'boneLance', of: 'burst', mul1: 'boneLance', per: 'hit', rOf: 'burst', rMul: 1, el: 'class', proc: true },
         { id: 'shard', label: 'Bone shards', if: 'carrionN', of: 'burst', mul: 'carrionShard', per: 'hit', knock: 60, proc: true },
       ] },
+    // Bellwarden (src/sim/class-bell.js): range = the chain's length for a Heave flight (+ heaveR as a share).
+    heave: { name: 'Heave', slot: 0, cd: 5, icon: 'bell', aim: 'dir', range: 180,
+      desc: 'Fling the bell toward the cursor on a long chain. It strikes every foe on its path, then reels back through them.',
+      parts: [
+        { id: 'strike', label: 'Heave strike', base: 45, pow: 3.3, per: 'hit', knock: 220, proc: true },
+        { id: 'reel', label: 'Reel', of: 'strike', mulFix: 0.5, per: 'hit', knock: 80, proc: true },
+        { id: 'smash', label: 'Wrecking smash', if: 'wrecker', of: 'strike', mul: 'wrecker', per: 'hit', r: 80, knock: 200, proc: true },
+        { id: 'spin', label: 'Wrecking spin', if: 'wreckSpin', of: 'strike', mul: 'wreckSpin', per: 'hit', durKey: 'spinDur', every: 0.4, knock: 120, proc: true },
+        { id: 'hook', label: 'Tether Hook', if: 'hook', per: 'zone' },
+      ] },
+    peal: { name: 'Peal', slot: 1, cd: 10, icon: 'bell', aim: 'self',
+      desc: 'Stop the bell dead and ring it: a wave around the bell strikes and stuns every foe nearby (not bosses). It rings harder the faster the bell was flying (×0.43 at rest).',
+      parts: [
+        { id: 'wave', label: 'Peal', base: 42, pow: 4.2, per: 'hit', r: 85, stun: 0.5, knock: 160, el: 'class', proc: true },
+        { id: 'clap', label: 'Thunderclap', if: 'clap', of: 'wave', mulFix: 0.5, mul1: 'clap', per: 'hit', el: 'class', proc: false },
+        { id: 'echo', label: 'Reverberation', if: 'pealEcho', of: 'wave', mul: 'pealEcho', per: 'hit', delay: 0.5, rOf: 'wave', rMul: 1, el: 'class', proc: true },
+        { id: 'bolt', label: 'Thunder Toll', if: 'tollBolt', of: 'wave', mul: 'tollBolt', per: 'hit', r: 50, el: 'class', proc: true },
+        { id: 'ward', label: 'Ward Bell', if: 'wardDur', per: 'zone', rOf: 'wave', rMul: 1, durKey: 'wardDur' },
+      ] },
   };
 
   // Sheet data of skill parts, merged into the parts above: ED.Stats.skillNums turns it into q.oneFoe (hits on one foe per cast), q.selfVuln (the vulnerability the part sets before its own hit), q.raw and q.noCrit.
@@ -282,6 +319,14 @@
     'legion.bomb': { oneFoe: 2, infAdd: { shadow: 0.5 }, note: 'two bombs run at the nearest foe' },
     'harvest.shard': { oneFoe: 0, infAdd: { shadow: 0.5 }, note: '3 shards per corpse that explodes, at the nearest foes' },
     'vanish.ambush': { note: 'your next attack', selfVuln: { v: 0.2, if: 'eclipse' } },
+    'heave.strike': { note: 'every foe on the flight path, once' },
+    'heave.reel': { note: 'every foe on the way back, once' },
+    'heave.smash': { note: 'where the flight ends' },
+    'heave.spin': { note: 'every foe on its circle, about twice', oneFoe: 2 },
+    'peal.wave': { note: 'around the bell at full swing (×0.43 at rest); stuns 0.5 s (not bosses)' },
+    'peal.clap': { note: 'the Charge the Peal leaves (half its hit) discharges at once', noCrit: true },
+    'peal.echo': { note: '0.5 s later on the same spot' },
+    'peal.bolt': { note: 'on each of the most charged foes within 220 of the bell' },
   };
   for (const key in ED.SKILL_SHEET) {
     const [sid, pid] = key.split('.'), sk = ED.SKILLS[sid], part = sk && sk.parts.find(x => x.id === pid);
@@ -305,6 +350,8 @@
     'seekerbow@heavy': 'Raptor Bow', 'seekerbow@swift': 'Swallow Bow', 'boltthrower@heavy': 'Bolt Cannon', 'boltthrower@swift': 'Bolt Spitter', 'sunlance@heavy': 'Solar Pike', 'sunlance@swift': 'Sunneedle',
     'cinderscatter@heavy': 'Cinder Fan', 'cinderscatter@swift': 'Spark Spray', 'mortar@heavy': 'Siege Tome', 'mortar@swift': 'Hand Mortar', 'boomerang@heavy': 'Moonblade', 'boomerang@swift': 'Swallowtails',
     'votive@heavy': 'Altar Lamp', 'votive@swift': 'Prayer Candle', 'splinter@heavy': 'Femur Rod', 'splinter@swift': 'Shard Wand', 'miasma@heavy': 'Blight Staff', 'miasma@swift': 'Fume Rod',
+    'bronzebell@heavy': 'Tolling Bell', 'bronzebell@swift': 'Chiming Bell', 'greatbell@heavy': 'Cathedral Bell', 'greatbell@swift': 'Tower Bell', 'handbells@heavy': 'War Bells', 'handbells@swift': 'Sleigh Bells',
+    'stormbell@heavy': 'Thunder Bell', 'stormbell@swift': 'Spark Bell', 'wreckbell@heavy': 'Siege Bell', 'wreckbell@swift': 'Flail Bell', 'chimes@heavy': 'Gongs', 'chimes@swift': 'Wind Chimes',
   };
   // Look of each fork for the sprite baker: art = ED.ART anim id (a pack sprite, or the base weapon's art for an overlay look), op = silhouette overlay H (head x1.4, studs, brass band; thicker shafts) or S (head x0.6, wrapped grip, thinner shafts), tint, len = sprite length factor, dup = drawn twice.
   const LOOK = (art, op, len, extra) => Object.assign({ art, op, len }, extra);
@@ -335,6 +382,10 @@
     seekerbow: LOOK('weapon.longbow', null, 1, { tint: '#7fcf6a', all: true }), boltthrower: LOOK('weapon.crossbow', null, 1, { tint: '#b0703a', all: true }), sunlance: LOOK('weapon.firestaff', null, 1, { tint: '#ffd36b', all: true }),
     cinderscatter: LOOK('weapon.emberwand', null, 1, { tint: '#ff5a2a', all: true }), mortar: LOOK('weapon.inferno', null, 1, { tint: '#7a4ab0', all: true }), boomerang: LOOK('weapon.knives', null, 1, { tint: '#b78cff', all: true }),
     votive: LOOK('weapon.lantern', null, 1, { tint: '#ffe9a0', all: true }), splinter: LOOK('weapon.bonewand', null, 1, { tint: '#e6dfc9', all: true }), miasma: LOOK('weapon.plaguestaff', null, 1, { tint: '#5a9a2a', all: true }),
+    // Bellwarden bells (the chained bell is drawn by the client from these looks)
+    'bronzebell@heavy': LOOK('weapon.bronzebell', 'H', 1.15), 'bronzebell@swift': LOOK('weapon.bronzebell', 'S', 0.9), 'greatbell@heavy': LOOK('weapon.greatbell', 'H', 1.15), 'greatbell@swift': LOOK('weapon.greatbell', 'S', 0.9),
+    'handbells@heavy': LOOK('weapon.handbells', 'H', 1.15, { dup: 2 }), 'handbells@swift': LOOK('weapon.handbells', 'S', 0.9, { dup: 2 }),
+    stormbell: LOOK('weapon.bronzebell', null, 1, { tint: '#8fd0ff', all: true }), wreckbell: LOOK('weapon.greatbell', null, 1.1, { tint: '#7a6a5a', all: true }), chimes: LOOK('weapon.handbells', null, 0.9, { tint: '#e0e6f0', all: true, dup: 3 }),
   };
   for (const id in ED.WEAPONS) {
     const v = ED.WEAPONS[id].variant, L = ED.FORK_LOOKS[id];
@@ -342,6 +393,19 @@
   }
 
   const forkMemo = new Map();
+  // Bell forks: dmg / rate (the per-foe lockout) stays 1.1x the base like every fork, but a bell's damage comes from its speed, so the other factors put the modelled damage (ED.Bell.model) near 1.1x the base:
+  // Heavy: harder strikes, a bigger bell on a longer chain that loses less speed per strike, a slower haul and a longer per-foe lockout; Swift: lighter strikes, a smaller bell, a quicker haul and a shorter lockout.
+  const BELL_FORK = {
+    heavy: { dmg: 1.42, rate: 1.42 / 1.1, br: 1.2, loss: 0.75, chain: 1.1, haul: 0.85, knock: 1.3 },
+    swift: { dmg: 0.76, rate: 0.76 / 1.1, br: 0.85, loss: 1.1, chain: 1, haul: 1.25, knock: 0.5 },
+  };
+  function bellFork(b, baseId, kind) {
+    const f = BELL_FORK[kind], w = Object.assign({}, b), r3 = (v) => Math.round(v * 1000) / 1000;
+    for (const k in f) if (typeof b[k] === 'number') w[k] = r3(b[k] * f[k]);
+    w.rate = r3(Math.max(ED.CONST.ATK_FLOOR, w.rate)); w.knock = Math.min(320, w.knock);
+    w.fork = kind; w.base = baseId; w.name = ED.FORK_NAMES[baseId + '@' + kind] || b.name;
+    return w;
+  }
   // The Heavy / Swift version of weapon baseId for a fork card (id or card object), derived from the base so it follows any re-tune of the base; pure and memoized.
   // Nominal damage per second is 1.1x the base: dmg scales with the interval change; Heavy is bigger and harder-hitting, Swift is quicker with less reach and knockback.
   ED.forkWeapon = (baseId, card) => {
@@ -350,6 +414,7 @@
     if (out) return out;
     const b = ED.WEAPONS[baseId], cd = typeof card === 'string' ? ED.BOONS[card] : card, kind = cd && cd.weapon && cd.weapon.kind;
     if (!b || (kind !== 'heavy' && kind !== 'swift')) return b;
+    if (b.kind === 'bell') { out = bellFork(b, baseId, kind); forkMemo.set(key, out); return out; }
     const C = ED.CONST, heavy = kind === 'heavy', shots = b.kind === 'proj' ? b.n : 1, floor = Math.max(C.ATK_FLOOR, C.ATK_FLOOR_SHOT * shots);
     const rate = heavy ? Math.min(1.3, b.rate * 1.8) : Math.max(floor, b.rate * 0.55), k = rate / b.rate;
     const w = Object.assign({}, b), r2 = (v) => Math.round(v * 1000) / 1000;

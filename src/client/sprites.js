@@ -62,6 +62,7 @@
     dagger(c, C) { rrect(c, 3, -1.5, 5, 3, 1, '#2b2233'); poly(c, [8, -2.2, 22, 0, 8, 2.2], '#d9dfe8'); },
     scythe(c, C) { rrect(c, -4, -1.4, 30, 2.8, 1, '#3a2a30'); c.beginPath(); c.moveTo(26, -1); c.quadraticCurveTo(30, -18, 14, -22); c.quadraticCurveTo(24, -12, 22, -1); c.closePath(); c.fillStyle = '#cdd4dc'; c.fill(); c.stroke(); },
     mace(c, C) { rrect(c, 2, -1.6, 18, 3.2, 1, '#6b4a2e'); circ(c, 22, 0, 6, '#c9b16a'); for (let i = 0; i < 6; i++) { const a = i * 1.047; poly(c, [22 + Math.cos(a) * 5, Math.sin(a) * 5 - 1.4, 22 + Math.cos(a) * 9, Math.sin(a) * 9, 22 + Math.cos(a) * 5, Math.sin(a) * 5 + 1.4], '#e6d08a'); } },
+    bell(c) { c.lineWidth = 2; c.strokeStyle = '#5d6670'; c.beginPath(); c.moveTo(4, 0); c.lineTo(10, 0); c.stroke(); c.strokeStyle = OUT; c.lineWidth = 1.6; }, // the chain's end in the hand (cls-bell.js draws the chained bell)
     lantern(c, C) { c.beginPath(); c.moveTo(6, 0); c.lineTo(12, -6); c.stroke(); rrect(c, 9, -6, 9, 12, 2, '#c9a640'); glow(c, 13.5, 0, 16, '#ffe9a0', 0.55); rrect(c, 11, -4, 5, 8, 1, '#fff6c8', false); },
   };
 
@@ -548,7 +549,7 @@
       rrect(c, -5.5, -12, 11, 2, 1, C.c, false);
     }
     (HEADS[p.cls] || HEADS.knight)(c, C, pc);
-    if (p.mastery10) { c.strokeStyle = U.rgba('#ffd36b', 0.55 + Math.sin(t * 4) * 0.25); c.lineWidth = 1.2; c.beginPath(); c.ellipse(0, -2, 13, 4, 0, 0, U.TAU); c.stroke(); c.strokeStyle = OUT; c.lineWidth = 1.6; }
+    if (ED.Cos && ED.Cos.gilded(p)) { c.strokeStyle = U.rgba('#ffd36b', 0.55 + Math.sin(t * 4) * 0.25); c.lineWidth = 1.2; c.beginPath(); c.ellipse(0, -2, 13, 4, 0, 0, U.TAU); c.stroke(); c.strokeStyle = OUT; c.lineWidth = 1.6; }
     c.restore();
     if (swinging && push) c.restore();
   }
@@ -556,8 +557,8 @@
   // [anticipation end, strike end, total] seconds of a weapon's attack animation: heavy weapons wind up longer, light ones snap.
   Sp.atkTimes = (w) => { const k = U.clamp(w.rate / 0.42, 0.55, 1.5); return [0.05 * k, 0.12 * k, U.clamp(w.rate * 0.7, 0.2, 0.5)]; };
 
-  Sp.portrait = (canvas, cls, slot, weapon) => {
-    if (ED.Actors && ED.Actors.on() && ED.Actors.portrait(canvas, cls, slot, weapon)) return;
+  Sp.portrait = (canvas, cls, slot, weapon, skin) => {
+    if (ED.Actors && ED.Actors.on() && ED.Actors.portrait(canvas, cls, slot, weapon, skin)) return;
     const c = canvas.getContext('2d');
     const s = canvas.width / 56;
     c.clearRect(0, 0, canvas.width, canvas.height);

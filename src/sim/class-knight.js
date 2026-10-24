@@ -488,7 +488,9 @@
       if (p.stats.bloodquake > 0 && src.part && BQUAKE_PARTS.has(src.part) && !(e.bquakeT > this.time) && this.ailments(e) >= BQUAKE_AT) bloodquake(this, p, e);
     },
     // Ruin Spreads: a foe killed by a shield strike hands its statuses on (queued, one hop at a time; see runPayoff 'spread')
+    // Return to Sender (secret): a boss felled by the returning leg of a thrown shield.
     kill(e, p, src) {
+      if (e.boss && p && p.cls === 'knight' && src && src.part === 'shieldthrow.return') this.secretP(p, 'heroSecret');
       if (!p || p.cls !== 'knight' || !p.stats.ruinSpread || !src || !src.part || src.part.indexOf('shieldthrow.') !== 0) return;
       this.queuePayoff(p, { kind: 'spread', e, x: e.x, y: e.y, f: p.stats.ruinSpread, n: 2, r: 80 });
     },
