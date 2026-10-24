@@ -31,12 +31,12 @@ North-star: a co-op browser roguelite where builds are chosen, not rolled. Rules
 - [x] Dash charges; bosses and later strata get faster, smarter attacks; boss fury on strata IV–VI
 - [x] Late power: Ascended boons, fork and skill transforms at bosses II and IV
 - [x] Relics page removed; Hearth refunds and Reset all
-- [ ] Armory content: per-hero sidegrade unlocks in Upgrades (the page exists, lists are empty)
+- [x] Armory content: moved to v4.1
 - [x] Music per stratum; hit and kill sounds for skills
 - [ ] Your mid playtest (Ranger and Knight complete)
 - [x] Transforms for the other four heroes, breakable props, smaller hearts
 - [x] Retune and PR to main (v4 live)
-- [ ] Balance gaps left: full Hearth too strong, random picks win 2% (target ≤ 1%), Pact 5 too hard
+- [ ] Balance gaps left: moved to v4.1
 
 ## Pixel UI
 - [x] Pixel fonts built in (Pixel Operator, bold titles), no Google Fonts
@@ -44,4 +44,14 @@ North-star: a co-op browser roguelite where builds are chosen, not rolled. Rules
 - [x] 13 card looks (6 elements, General, route, duo, Ascended, relic, Purse, Hearth), each with its own pick animation, sound and burst on the hero
 - [x] Pixel icons
 - [ ] Your look-and-feel check (and the vsync fps check)
-- [ ] Merge into v4.1
+- [x] Merge into v4.1
+
+## v4.1: playtest 4 fixes
+- [x] Health numbers a quarter of their size (Knight 45), a foe hit costs about 2; strata I–III and their bosses hit harder
+- [x] Armory: three weapon variants per hero (same power, another shape), bought with embers
+- [x] Melee swings from the hand, end to end, blade resting low
+- [x] Pixel UI merged
+- [x] Bot confirm: smart picks 17%, Pact 5 and parties in band
+- [ ] Balance gaps left (accepted for v4.1): full Hearth far too strong (38% wins), random picks win 3.4% (target ≤ 1%)
+- [ ] PR to main
+- [ ] Your playtest of v4.1
