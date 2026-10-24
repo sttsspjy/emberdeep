@@ -64,11 +64,11 @@
 
   ED.PACTS = [
     { name: 'No Pact', desc: 'The Deep as it is.' },
-    { name: 'Thicker Hides', desc: 'Foes have +20% health.', foeHp: 1.2 },
-    { name: 'Sharper Fangs', desc: 'Foes deal +10% damage.', foeDmg: 1.1 },
+    { name: 'Thicker Hides', desc: 'Foes have +10% health.', foeHp: 1.1 },
+    { name: 'Sharper Fangs', desc: 'Foes deal +15% damage.', foeDmg: 1.15 },
     { name: 'Champions', desc: 'Elite foes appear far more often.', eliteCh: 0.4, eliteExtra: 0.3 },
-    { name: 'Scarcity', desc: 'Healing is 50% less effective and heroes have 10% less max health.', heroMul: { heal: 0.5 }, mods: { hpMul: -0.1 } },
-    { name: 'Tyrants', desc: 'Bosses have +10% health and attack faster.', bossHp: 1.1, bossPause: 0.8 },
+    { name: 'Scarcity', desc: 'Healing is 50% less effective and heroes have 8% less max health.', heroMul: { heal: 0.5 }, mods: { hpMul: -0.08 } },
+    { name: 'Tyrants', desc: 'Bosses have +15% health and attack faster.', bossHp: 1.15, bossPause: 0.8 },
     { name: 'Frenzy', desc: 'Foes move 15% faster.' },
     { name: 'Greed', desc: 'Shop prices are 40% higher.' },
     { name: 'Storm of Shot', desc: 'Enemy shots fly 20% faster and foes hit 20% harder.', foeDmg: 1.2 },
