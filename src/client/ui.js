@@ -77,7 +77,8 @@
   // One-time notice for a profile made before the current rules (profile.news): the newest changes, then (news 1 only) relic and Hearth changes, the v3 rules and the embers the Codex refunded. Closing it clears the flag.
   const MOVED_RELICS = ['stormcall', 'thundergauntlet', 'frostheart', 'souljar']; // the element relics that became path boons
   const NEWEST = [
-    '<b>Health:</b> every health number is a quarter of its old size. A Knight has 45 health and a hit from a foe costs about 2; healing, shields and health from the Hearth, boons and relics are scaled to match. Strata I–III hit harder than before.',
+    '<b>Health:</b> health numbers are small and hits are hard. A Knight has 40 health and a hit from a foe costs 2 to 4; healing, shields and health from boons and relics are scaled to match.',
+    '<b>Hearth:</b> upgrades and hero mastery give more (Vitality +2 health a rank, Might +3% damage a rank, mastery up to +8% damage and +4 health). Pacts 1–3 are gentle; Pacts 4 and 5 are the steep climb.',
     '<b>Armory:</b> each hero has three weapon variants in the Hearth: the same power in another shape, bought with embers once the base weapon is unlocked. An owned variant is its own choice in the weapon picker.',
     '<b>Melee:</b> blades swing from the hero\'s hand, from one side to the other, and rest lowered between strikes.',
   ];

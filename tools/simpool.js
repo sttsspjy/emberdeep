@@ -27,7 +27,7 @@ function makeJobs(args, flags) {
   const jobs = [];
   for (const meta of metas) {
     const { up, mastery } = sim.metaProfile(meta);
-    for (let i = 0; i < runs; i++) jobs.push(Object.assign({ label: meta, seed: seed0 + i * 7, n, cls: [cls[i % cls.length]].concat(cls), skill, up, pact, mastery }, sim.jobOpts(o, i, cls.length)));
+    for (let i = 0; i < runs; i++) jobs.push(Object.assign({ label: meta, seed: seed0 + i * 7, n, cls: sim.partyOf(cls, i, n), skill, up, pact, mastery }, sim.jobOpts(o, i, cls.length)));
   }
   return { n, runs, skill, metas, cls, pact, o, seed0, jobs };
 }

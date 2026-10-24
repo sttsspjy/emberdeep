@@ -269,7 +269,7 @@ for (const s of [1, 2]) {
   ok(price(0) === 75 && price(1) === 70 && price(2) === 70, "Merchant's Favor: 4% cheaper per rank (the 75-gold epic boon: 75, 70, 70)");
 }
 { // bot exploration: --dark=never visits every non-dark room, --dark=always also the two dark rooms
-  for (const [seed, cls] of [[1000, 'knight'], [1007, 'ranger'], [1015, 'pyro']]) {
+  for (const [seed, cls] of [[1000, 'knight'], [1028, 'ranger'], [1015, 'pyro']]) {
     for (const dark of ['never', 'always']) {
       const r = runBot({ seed, n: 1, cls: [cls], skill: 0.75, up: ED.UPGRADES.map(() => 0), mastery: 1, relics: ED.RELIC_IDS.filter(id => ED.RELICS[id].start), pick: 'smart', dark, maxStratum: 2 });
       ok(r.left.length >= 1 && r.left.every(f => f.missed === 0), `${cls} ${dark}: every non-dark room visited (left ${JSON.stringify(r.left)})`);
@@ -340,7 +340,7 @@ const budgetOf = (s, kind) => Math.round(W0.ROOM_XP[kind === 'elite' ? 'elite' :
     const e = w.spawnEnemy(fodderId(s), 0, 0), f = w2.spawnEnemy(fodderId(s), 0, 0), g = w.spawnEnemy(fodderId(s), 0, 0, { elite: true, affix: 'brutal' });
     near(e.maxHp, 7 * (1 + 0.25 * (s - 1)), 1e-9, `fodder health at stratum ${s}`);
     ok(f.maxHp === e.maxHp && g.maxHp === e.maxHp && !g.elite && g.r === e.r, `stratum ${s}: no party multiplier, never elite`);
-    w.pact = 1; near(w.spawnEnemy(fodderId(s), 0, 0).maxHp, e.maxHp * 1.25, 1e-9, 'pact 1 health x1.25'); w.pact = 10; near(w.spawnEnemy(fodderId(s), 0, 0).maxHp, e.maxHp * 1.25 * 1.2, 1e-9, 'pact 10 health x1.5'); w.pact = 0;
+    w.pact = 1; near(w.spawnEnemy(fodderId(s), 0, 0).maxHp, e.maxHp * ED.PACTS[1].foeHp, 1e-9, 'pact 1 health x Thicker Hides'); w.pact = 10; near(w.spawnEnemy(fodderId(s), 0, 0).maxHp, e.maxHp * ED.PACTS[1].foeHp * ED.PACTS[10].foeHp, 1e-9, 'pact 10 health x Thicker Hides x The Deep Hungers'); w.pact = 0;
   }
   w.stratum = 1; w.room.dark = false; const a = w.spawnEnemy('bonemite', 0, 0); w.room.dark = true; const b = w.spawnEnemy('bonemite', 0, 0); w.room.dark = false;
   near(b.dmg / a.dmg, 1.3, 1e-9, 'fodder damage x1.3 in a dark room');

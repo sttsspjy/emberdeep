@@ -164,7 +164,7 @@
   // A typical foe of the context's stratum: hp (real), statusHp (before the stratum lever: the unit chill and Venom measure against), r.
   Sh.refFoe = (ctx) => {
     const s = ctx.stratum || 1, pact = ctx.pact | 0, thr = W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, s - 1))].hp;
-    const hp = rosterMedian() * W.hpScale(s) * W.partyHpMul(ctx.party || 1) * (pact >= 1 ? 1.25 : 1) * (pact >= 10 ? 1.2 : 1);
+    const hp = rosterMedian() * W.hpScale(s) * W.partyHpMul(ctx.party || 1) * ED.pactMul(pact, 'foeHp');
     return { hp, statusHp: hp / thr, r: Sh.REF.r };
   };
   // The numbers about the run the sheet needs from a World or a Mirror (duck-typed: players, allies, floor, roomState, room, gold, level, xp).
@@ -539,7 +539,7 @@
 
     // defence
     const armorMul = St.armorMul(st.armor), taken = armorMul * (1 + st.vuln), maxHp = p.maxHp || st.maxHp;
-    const pactMul = (ctx.pact >= 2 ? 1.25 : 1) * (ctx.pact >= 8 ? 1.2 : 1), darkMul = ctx.dark ? W.DARK_DMG : 1, foeHere = W.dmgScale(s) * thr.dmg * pactMul * darkMul;
+    const pactMul = ED.pactMul(ctx.pact | 0, 'foeDmg'), darkMul = ctx.dark ? W.DARK_DMG : 1, foeHere = W.dmgScale(s) * thr.dmg * pactMul * darkMul;
     const def = {
       maxHp, hpBase: R.n(st.hp), hpMul: R.x(st.hpMul), hpRows: rowsOf(build, 'hp'), hpMulRows: rowsOf(build, 'hpMul'),
       armor: R.n(st.armor), armorMul: R.f(armorMul), reduction: R.f(1 - armorMul), armorRows: rowsOf(build, 'armor'), vuln: R.f(st.vuln), vulnRows: rowsOf(build, 'vuln'), taken: R.x(taken),

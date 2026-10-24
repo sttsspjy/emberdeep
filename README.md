@@ -80,7 +80,7 @@ Boons belong to **paths**: six element paths and General. A hero follows at most
 - **Forge:** picking a forge card ranks an owned boon up by one (never a route or fork card: bosses rank those).
 - **Ascended boons:** from stratum IV, a boon you have taken to its top rank can offer its **Ascended** upgrade (Honed Edge, Blur, Arrow Storm, Impaler, Hawk Eye, Savage, Vast, Titan, Bastion; Hemorrhage, Headsman and Bloodletting for Generalists). It sits first on a boon offer, takes no path, and multiplies the bonus you already hold instead of adding to it. At most two per stratum.
 - A room that rewards "a boon" offers one new element gate (while you have a free slot) and boons of the paths you follow. Level-ups offer open boons, boons of your paths, keystones and duos.
-- **Health is a small whole number.** A Knight starts at 45, a Necromancer at 23; every hit costs at least 1, so each one counts. A Vigor blessing is +2, a Heartstone +4, a Hearth Vitality rank +1.
+- **Health is a small whole number.** A Knight starts at 40, a Necromancer at 14, and a foe's hit costs 2 to 4 from the first stratum: every hit counts. A Vigor blessing is +2, a Heartstone +4, a Hearth Vitality rank +2.
 - **No life steal.** Hits and kills never heal you. Healing comes from hearts, campfires, healing draughts, the fountain, Vigor, the Hearth's Provisions and the Elixir Flask, Sanctuary and Bone Harvest, and revives. **Shields** take the place of sustain: class shields give at most 3% of your max health per 10 seconds, all shield sources together at most 6% (the Battle Ward an elite room grants is exempt), and shields fade between fights.
 
 ### Class routes
@@ -137,12 +137,12 @@ The main menu has five entries. **Descend** picks your hero, weapon and pact, th
 
 ## Between descents (the Hearth)
 
-- **Embers** are earned on every descent that clears at least one room, win or lose. Spend them on 16 permanent upgrades. They are deliberately small (a point of health, half a percent of damage, a point of armor, a boon reroll, a few gold): what you know about the paths wins runs, not what you grind. **Deep Wick** adds 10% gold and experience in dark rooms per rank, **Head Start** begins the descent with a little experience, the **Stash** with a little gold, and **Second Wind** revives you once at a sliver of health if you fall outside a boss fight. Deeper strata reveal new upgrades.
+- **Embers** are earned on every descent that clears at least one room, win or lose. Spend them on 16 permanent upgrades. They matter (two points of health, 3% damage, three points of armor, a boon reroll, a few gold per rank), and hero mastery adds more up to level 10: a fully upgraded Hearth roughly doubles your odds over a half-upgraded one, but the build still decides a descent. **Deep Wick** adds 10% gold and experience in dark rooms per rank, **Head Start** begins the descent with a little experience, the **Stash** with a little gold, and **Second Wind** revives you once at a sliver of health if you fall outside a boss fight. Deeper strata reveal new upgrades.
 - **Refunds are free:** every upgrade rank has a **Refund** button that returns its full cost, and **Reset all** (press it twice to confirm) returns every rank at once, so you can rebuild the Hearth for a new path.
 - **Armory:** each hero's weapon variants, listed under the upgrades: an alternative version of a weapon with the same power and a different shape (the Arming Sword's slash-slash-lunge combo, the Earthbreaker's slam ahead, the Hooked Glaive's pull, the Radiant Mace's ring of light, the Sunlance's instant beam, the Mortar Tome's lobbed shell, the Shade's Boomerang Blades, the Votive Lamp's shielding pools of light, the Miasma Staff's trail of plague clouds, and more). A variant costs 40, 60 or 80 embers (for the first, second or third weapon), can be bought once its base weapon is unlocked, and refunds in full. An owned variant shows under its base weapon in the weapon picker of Descend and the party lobby.
 - **Heroes:** every descent trains the hero you took, up to mastery 10. Mastery unlocks weapons and tiny permanent bonuses.
 - **Deeds:** 26 achievements with ember rewards, including Evolved, **Into the Dark** (clear 6 dark rooms in one descent) and **Cartographer** (clear every room of a stratum, both dark rooms included).
-- **Pacts:** ten optional difficulty tiers unlocked by winning, each paying more embers.
+- **Pacts:** ten optional difficulty tiers unlocked by winning, each paying more embers. They stack: the first three (tougher foes, harder hits, more elites) are gentle, the next two (scarce healing and less health, stronger bosses) are steep, then speed, prices, shots, frailty and an extra wave.
 - The Hearth camp changes as you progress: more tents and lanterns, a banner per slain boss, a gate that glows with the colour of the deepest stratum you have reached, and a blood moon under a pact.
 
 ### Saving
@@ -151,7 +151,7 @@ Progress autosaves to the browser. **Settings > Profile** shows a portable save 
 
 Wickdeep starts fresh profiles: saves and codes from Emberdeep (`ED1-…`) do not carry over, and the game says so if you paste one.
 
-If you played an earlier version of Wickdeep, the first launch shows a one-time **"The Deep has changed"** notice. It lists what is different (the relic Codex is gone and every relic drops from the start, the element relics became path boons, free Hearth refunds and smaller upgrades, smaller generic health boons, a per-hero Armory list, kill effects on fodder, mouse aim, the new paths, shields instead of life steal, the Knight's Shield Throw, optional dark rooms in place of the lantern, bigger rooms with hordes, dash charges, rank 2 and rank 3 transforms at the bosses, Ascended boons, boss fury, music per stratum) and how many embers the Codex refunded. A profile from v4 sees only the newest part: health numbers a quarter of their size, the Armory weapon variants and the new melee swing.
+If you played an earlier version of Wickdeep, the first launch shows a one-time **"The Deep has changed"** notice. It lists what is different (the relic Codex is gone and every relic drops from the start, the element relics became path boons, free Hearth refunds and smaller upgrades, smaller generic health boons, a per-hero Armory list, kill effects on fodder, mouse aim, the new paths, shields instead of life steal, the Knight's Shield Throw, optional dark rooms in place of the lantern, bigger rooms with hordes, dash charges, rank 2 and rank 3 transforms at the bosses, Ascended boons, boss fury, music per stratum) and how many embers the Codex refunded. A profile from v4 or v4.1 sees only the newest part: small health numbers and harder hits, a stronger Hearth, the Armory weapon variants and the new melee swing.
 
 Two tabs open on the same profile stay in step: each adopts the other's saved progress instead of overwriting it.
 
@@ -228,7 +228,7 @@ node tools/sim.js 1 12 0.75 max - 5   # fully upgraded, every hero ("-"), Pact 5
 node tools/journey.js 0.7 1           # a whole player journey from a fresh save
 node tools/simpool.js 1 384 0.75 none,mid,max --pick=smart   # same bots in parallel, one line per profile
 node tools/sheet.js --cls=all --routes --weapons             # analytic hero numbers, no bot runs
-node tools/bal.js                                            # quick balance suite against the difficulty targets, about 2 minutes
+node tools/bal.js                                            # quick balance suite against the difficulty targets, about 3 minutes
 node tools/browse.js                                         # headless browser smoke test
 node tools/browse.js --scen=swing --cls=knight               # contact sheet PNG per melee weapon swing (two attacks, hold, idle)
 node tools/browse.js --scen=cards --viewport=1920x1080       # every boon card kind, mid-pick frames, the fork reveal
@@ -236,7 +236,7 @@ node tools/browse.js --scen=cards --viewport=1920x1080       # every boon card k
 
 `simpool.js` runs its workers at normal priority; add `--nice` for idle priority (Windows throttles idle priority while the machine is unattended).
 
-`bal.js` prints a time estimate first, then one PASS/FAIL line per profile. It uses the veteran bot (a human proxy; `--vet=0` turns it off); `--from=N` starts the bots at stratum N and `--full` runs the sign-off sizes (under 15 minutes). `browse.js` is headless only, never a visible window: `--scen=smoke` (a short solo run), `crowd70` (frame cost with 70 live foes at Low and High quality) and `shots` (screenshots of the menus, a run and the Tab sheet). It needs Playwright.
+`bal.js` prints a time estimate first, then one PASS/FAIL line per profile. It uses the veteran bot (a human proxy; `--vet=0` turns it off); `--from=N` starts the bots at stratum N and `--full` runs the sign-off sizes (about 25 minutes). `browse.js` is headless only, never a visible window: `--scen=smoke` (a short solo run), `crowd70` (frame cost with 70 live foes at Low and High quality) and `shots` (screenshots of the menus, a run and the Tab sheet). It needs Playwright.
 
 Headless checks (each prints failures and exits 1 on any): `node tools/check-sim.js`, `check-build.js` (fork ranks, offer rules, Ascended boons), `check-classes.js`, `check-knight.js`, `check-ranger.js`, `check-pyro.js`, `check-shade.js`, `check-cleric.js`, `check-necro.js`, `check-fodder.js` (fodder kill hooks), `check-perf.js` (sim cost per tick with 70 to 200 foes), `check-save.js`, `check-armory.js` (Armory weapon variants: lists, forks, choice fallbacks, host validation, shape mechanics), `check-armory-b.js` (the projectile variants: beam, lob, return, pool and trail with their route cards), `check-ux.js`, `check-render.js` (hit flash rules and art anchors) and `sheet-check.js` (the Tab sheet's numbers against the sim); `node tools/art.js --check` verifies that `src/art/` matches a rebuild of `art-src/`. Targets for the bots live in docs/GAME-DESIGN.md §10.
 

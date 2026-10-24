@@ -52,6 +52,15 @@ North-star: a co-op browser roguelite where builds are chosen, not rolled. Rules
 - [x] Melee swings from the hand, end to end, blade resting low
 - [x] Pixel UI merged
 - [x] Bot confirm: smart picks 17%, Pact 5 and parties in band
-- [ ] Balance gaps left (accepted for v4.1): full Hearth far too strong (38% wins), random picks win 3.4% (target ≤ 1%)
-- [ ] PR to main
+- [x] Balance gaps left: replaced by the v5 difficulty
+- [x] PR to main
 - [ ] Your playtest of v4.1
+
+## v5: harder hits
+- [x] Lower health for every hero (Knight 40), foe hits ×1.5; armor keeps the heroes apart
+- [x] Hearth and mastery matter: bots win 20% at half Hearth, 40% at full
+- [x] Pacts: 1–3 gentle, 4–5 steep, Pact 5 wins 10% solo, 20% for bot parties of 2–4
+- [x] v4.1 players see a "what changed" notice
+- [ ] Pact 3 adds no difficulty yet
+- [ ] PR to main
+- [ ] Your playtest

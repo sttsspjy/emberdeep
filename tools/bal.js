@@ -1,38 +1,46 @@
 // Usage: node tools/bal.js [--cells=a,b] [--full] [--runs=N] [--power] [--save=file.json] [--pair=file.json] [--jobs=N] [--speed=X] [--nice] [--list] [--flag[=value] ...]
-// Fixed quick balance suite: the GAME-DESIGN section 10 cells (fresh random, fresh smart, half-upgraded, fully upgraded, Pact 5, two and three heroes; six heroes in rotation, skill 0.75, --pick=smart unless noted) plus the fresh legacy-pick cell
-// run in one worker pool (tools/simpool.js), one line per cell: wins % +-se, depth +-se, mean win time, target bands, PASS/FAIL (a band is met when the estimate lies inside it; a cell with no band for a figure ignores it). Exit code is always 0 (a report).
-// Every cell moves with the veteran bot (--vet, the human proxy; --vet=0 turns it off). Bands are the v4 difficulty contract: fresh random <= 1%, fresh smart 10-20%, a small Hearth (max at most half the knowledge gap above fresh smart),
-// party rows solo-first (bot check only). The Hearth rule is checked on the fresh and max cells: (max - fresh smart) <= 1/2 x (fresh smart - fresh random), in win points.
-// The default sizes keep the suite near 2 minutes; --full runs the section 10 sign-off sizes (384 runs per solo cell, 192 for parties) in under 15 minutes. The estimate is printed first: sum(runs x cost) / speed, where cost is the measured
-// seconds of one run in one process and speed is the pool throughput (8 workers on the 8-core, 16-thread dev machine finish about 5 runs per single-process run time; --speed=X overrides it).
-// --cells=a,b runs only those cells (--list shows them). --save=file.json writes one row per run (label = cell id). --pair=file.json prints, per cell, the mean win and depth difference to such a saved baseline over the same seeds (plus sim.js pairReport).
+// Fixed quick balance suite: the GAME-DESIGN section 10 cells (fresh random, fresh smart, half-upgraded, fully upgraded, fully upgraded at Pacts 1-5, two and three heroes fully upgraded at Pact 5; six heroes in rotation,
+// skill 0.75, --pick=smart unless noted) run in one worker pool (tools/simpool.js), one line per cell: wins % +-se, depth +-se, mean win time, target bands, PASS/FAIL (a band is met when the estimate lies inside it;
+// a cell with no band for a figure ignores it). Exit code is always 0 (a report). Every cell moves with the veteran bot (--vet, the human proxy; --vet=0 turns it off).
+// Bands are the v5 difficulty contract: fresh random <= 1%, half-upgraded 20%, fully upgraded 40%, gentle Pacts 1-3 (35, 31, 27%) and steep Pacts 4-5 (18, 10%); two to four heroes at Pact 5 20% (bots; a human party does better).
+// Fresh smart has no band; the order check wants fresh random <= fresh smart <= half-upgraded, and the Pact ladder line prints max and Pacts 1-5 with their monotonic read.
+// Optional cells (opt: legacy picks, the v4 half-upgraded duo and trio, four heroes at Pact 5) run only when --cells names them. The default sizes keep the suite near 3 minutes; --full runs the section 10 sign-off sizes
+// (384 runs per fresh, mid, max and Pact 5 cell, 192 for Pacts 1-4 and parties). The estimate is printed first: sum(runs x cost) / speed, where cost is the measured seconds of one run in one process and speed is the pool
+// throughput (8 workers on the 8-core, 16-thread dev machine finish about 4 runs per single-process run time; --speed=X overrides it).
+// --cells=a,b runs only those cells (--list shows every cell, optional ones included). --save=file.json writes one row per run (label = cell id). --pair=file.json prints, per cell, the mean win and depth difference to such a saved baseline over the same seeds (plus sim.js pairReport).
 // Every other --flag is forwarded to every cell (e.g. --from=4, --explore=0.4, --seed0=7000, --pick=random, --patch=file.js) and overrides the cell's own flag of that name. With --from=N bands describe whole runs, so verdicts print "-".
 // Cell lines for the half-upgraded and fully upgraded cells add the win rate per hero (small samples: about 20 runs per hero at the default size).
 // --runs=N sets every cell to N runs. --power adds, under each cell line, the boss-arrival read of every stratum (tools/sim.js: power = model damage x effective health, geometric mean +-se; team level; picks at the last boss reached),
-// and after the cells the power ratios smart/rand (knowledge gap) and max/smart (Hearth gap) per stratum: the mean of the per-seed ln ratios over the seeds both cells ran (the same seed is the same hero and floors), +-se.
+// and after the cells the power ratios smart/rand (knowledge gap), max/smart (Hearth gap) and max/mid (upper Hearth) per stratum: the mean of the per-seed ln ratios over the seeds both cells ran (the same seed is the same hero and floors), +-se.
 const os = require('os');
 const fs = require('fs');
 const sim = require('./sim.js');
 const pool = require('./simpool.js');
 
-// id; title; heroes; meta; pact; flags; runs (default / --full); cost (seconds of one run in one process); win and depth bands as [lo, hi] (win in 0..1); byHero adds the per-hero line.
+// id; title; heroes; meta; pact; flags; runs (default / --full); cost (seconds of one run in one process); win and depth bands as [lo, hi] (win in 0..1); byHero adds the per-hero line; opt: only when --cells names it.
+const SMART = { pick: 'smart', vet: '1' };
+const pactCell = (k, mid) => ({ id: 'pact' + k, title: 'fully upgraded, Pact ' + k, n: 1, meta: 'max', pact: k, flags: SMART, runs: [24, 192], cost: 1.7, win: [mid - 0.04, mid + 0.04] });
 const CELLS = [
-  { id: 'rand', title: 'fresh, random picks', n: 1, meta: 'none', pact: 0, flags: { pick: 'random', vet: '1' }, runs: [120, 384], cost: 0.5, win: [0, 0.01] },
-  { id: 'smart', title: 'fresh, smart picks', n: 1, meta: 'none', pact: 0, flags: { pick: 'smart', vet: '1' }, runs: [120, 384], cost: 0.5, win: [0.10, 0.20] },
-  { id: 'legacy', title: 'fresh, v3 smart picks', n: 1, meta: 'none', pact: 0, flags: { pick: 'legacy' }, runs: [60, 192], cost: 0.45 },
-  { id: 'mid', title: 'half-upgraded', n: 1, meta: 'mid', pact: 0, flags: { pick: 'smart', vet: '1' }, runs: [120, 384], cost: 0.6, win: [0.12, 0.24], byHero: true },
-  { id: 'max', title: 'fully upgraded', n: 1, meta: 'max', pact: 0, flags: { pick: 'smart', vet: '1' }, runs: [120, 384], cost: 0.55, win: [0.15, 0.27], byHero: true },
-  { id: 'pact5', title: 'fully upgraded, Pact 5', n: 1, meta: 'max', pact: 5, flags: { pick: 'smart', vet: '1' }, runs: [120, 384], cost: 0.6, win: [0.05, 0.15] },
-  { id: 'duo', title: 'two heroes, half-upgraded', n: 2, meta: 'mid', pact: 0, flags: { pick: 'smart', vet: '1' }, runs: [60, 192], cost: 0.9, win: [0.10, 0.35] },
-  { id: 'trio', title: 'three heroes, half-upgraded', n: 3, meta: 'mid', pact: 0, flags: { pick: 'smart', vet: '1' }, runs: [60, 192], cost: 1.65, win: [0.10, 0.35] },
+  { id: 'rand', title: 'fresh, random picks', n: 1, meta: 'none', pact: 0, flags: { pick: 'random', vet: '1' }, runs: [48, 384], cost: 1.3, win: [0, 0.01] },
+  { id: 'smart', title: 'fresh, smart picks', n: 1, meta: 'none', pact: 0, flags: SMART, runs: [36, 384], cost: 1.6 },
+  { id: 'mid', title: 'half-upgraded', n: 1, meta: 'mid', pact: 0, flags: SMART, runs: [60, 384], cost: 1.8, win: [0.17, 0.23], byHero: true },
+  { id: 'max', title: 'fully upgraded', n: 1, meta: 'max', pact: 0, flags: SMART, runs: [60, 384], cost: 1.9, win: [0.36, 0.44], byHero: true },
+  pactCell(1, 0.35), pactCell(2, 0.31), pactCell(3, 0.27), pactCell(4, 0.18),
+  { id: 'pact5', title: 'fully upgraded, Pact 5', n: 1, meta: 'max', pact: 5, flags: SMART, runs: [48, 384], cost: 1.7, win: [0.07, 0.13] },
+  { id: 'duo5', title: 'two heroes, fully upgraded, Pact 5', n: 2, meta: 'max', pact: 5, flags: SMART, runs: [24, 192], cost: 3.2, win: [0.15, 0.25] },
+  { id: 'trio5', title: 'three heroes, fully upgraded, Pact 5', n: 3, meta: 'max', pact: 5, flags: SMART, runs: [18, 192], cost: 5.4, win: [0.15, 0.25] },
+  { id: 'quad5', title: 'four heroes, fully upgraded, Pact 5', n: 4, meta: 'max', pact: 5, flags: SMART, runs: [48, 96], cost: 7.5, win: [0.15, 0.25], opt: true },
+  { id: 'legacy', title: 'fresh, v3 smart picks', n: 1, meta: 'none', pact: 0, flags: { pick: 'legacy' }, runs: [60, 192], cost: 1.4, opt: true },
+  { id: 'duo', title: 'two heroes, half-upgraded', n: 2, meta: 'mid', pact: 0, flags: SMART, runs: [60, 192], cost: 3, opt: true },
+  { id: 'trio', title: 'three heroes, half-upgraded', n: 3, meta: 'mid', pact: 0, flags: SMART, runs: [60, 192], cost: 5, opt: true },
 ];
-const SPEED = 5, OWN = new Set(['cells', 'full', 'runs', 'power', 'save', 'pair', 'jobs', 'speed', 'nice', 'list']);
+const SPEED = 4, OWN = new Set(['cells', 'full', 'runs', 'power', 'save', 'pair', 'jobs', 'speed', 'nice', 'list']);
 const U = sim.ED.U;
 
 const { flags, args } = pool.parseArgs(process.argv.slice(2));
 const extra = {};
 for (const k in flags) if (!OWN.has(k)) extra[k] = flags[k];
-const want = flags.cells ? flags.cells.split(',') : CELLS.map(c => c.id);
+const want = flags.cells ? flags.cells.split(',') : CELLS.filter(c => !c.opt || flags.list).map(c => c.id);
 const bad = want.filter(id => !CELLS.some(c => c.id === id));
 if (bad.length) { console.log('unknown cell ' + bad.join(', ') + '; cells: ' + CELLS.map(c => c.id).join(', ')); process.exit(0); }
 const cells = CELLS.filter(c => want.includes(c.id)), full = !!flags.full;
@@ -43,12 +51,12 @@ const estimate = Math.round(cells.reduce((s, c) => s + runsOf(c) * c.cost, 0) / 
 const forwarded = Object.keys(extra).map(k => '--' + k + (extra[k] === '1' ? '' : '=' + extra[k])).join(' ');
 
 if (flags.list) {
-  for (const c of cells) console.log(`${c.id.padEnd(6)} ${c.title.padEnd(30)} heroes ${c.n} meta ${c.meta} pact ${c.pact} runs ${c.runs[0]} / ${c.runs[1]} (${c.cost}s each) win ${c.win ? band(c.win, 100, '%') : '-'} depth ${c.depth ? band(c.depth, 1, '') : '-'}`);
-  console.log(`estimate ${estimate} s (${full ? 'full' : 'default'} sizes, ${workers} workers, speed ${speed})`);
+  for (const c of cells) console.log(`${c.id.padEnd(6)} ${(c.title + (c.opt ? ' (opt)' : '')).padEnd(42)} heroes ${c.n} meta ${c.meta} pact ${c.pact} runs ${c.runs[0]} / ${c.runs[1]} (${c.cost}s each) win ${c.win ? band(c.win, 100, '%') : '-'} depth ${c.depth ? band(c.depth, 1, '') : '-'}`);
+  console.log(`estimate ${Math.round(cells.filter(c => !c.opt || flags.cells).reduce((s, c) => s + runsOf(c) * c.cost, 0) / speed + 2)} s for the ${flags.cells ? 'named' : 'default'} cells (${full ? 'full' : 'default'} sizes, ${workers} workers, speed ${speed})`);
   process.exit(0);
 }
 
-function band(b, k, unit) { return b[0] === 0 ? `<=${b[1] * k}${unit}` : `${b[0] * k}-${b[1] * k}${unit}`; }
+function band(b, k, unit) { const r = (v) => Math.round(v * k * 100) / 100; return b[0] === 0 ? `<=${r(b[1])}${unit}` : `${r(b[0])}-${r(b[1])}${unit}`; }
 const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN);
 const se = (a) => { if (a.length < 2) return NaN; const m = avg(a); return Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / (a.length - 1) / a.length); };
 const f = (v, d) => (Number.isFinite(v) ? v.toFixed(d) : '-');
@@ -107,14 +115,20 @@ pool.runPool(plan.map(p => p.job), { jobs: workers, patch: flags.patch }).then((
     const r = Math.exp(avg(d));
     return { n: d.length, r, se: r * se(d) };
   };
-  if (from <= 1 && by.rand && by.smart && by.max) { // difficulty contract: the Hearth gap (max - fresh, smart picks) is at most half the knowledge gap (smart - random, fresh)
-    const sdiff = (a, b) => 100 * Math.sqrt(a.p * (1 - a.p) / a.n + b.p * (1 - b.p) / b.n), P = (id) => ({ p: winRate(id), n: by[id].length });
-    const know = 100 * (winRate('smart') - winRate('rand')), hearth = 100 * (winRate('max') - winRate('smart')), ok = hearth <= know / 2;
+  const sdiff = (a, b) => 100 * Math.sqrt(a.p * (1 - a.p) / a.n + b.p * (1 - b.p) / b.n), P = (id) => ({ p: winRate(id), n: by[id].length });
+  const gap = (a, b) => { const d = 100 * (winRate(b) - winRate(a)); return `${d >= 0 ? '+' : ''}${f(d, 1)} +-${f(sdiff(P(b), P(a)), 1)}`; };
+  if (from <= 1 && by.rand && by.smart && by.mid) { // difficulty contract: fresh random <= fresh smart <= half-upgraded (smart has no band of its own)
+    const ok = winRate('rand') <= winRate('smart') && winRate('smart') <= winRate('mid');
     judged++; if (ok) pass++;
-    console.log(`gaps (win points): knowledge (smart - random, fresh) ${know >= 0 ? '+' : ''}${f(know, 1)} +-${f(sdiff(P('smart'), P('rand')), 1)} | Hearth (max - fresh, smart) ${hearth >= 0 ? '+' : ''}${f(hearth, 1)} +-${f(sdiff(P('max'), P('smart')), 1)} | Hearth <= 1/2 knowledge: ${ok ? 'PASS' : 'FAIL'}`);
+    console.log(`gaps (win points): knowledge (smart - random, fresh) ${gap('rand', 'smart')} | lower Hearth (mid - fresh, smart) ${gap('smart', 'mid')}${by.max ? ' | upper Hearth (max - mid) ' + gap('mid', 'max') : ''} | random <= smart <= mid: ${ok ? 'PASS' : 'FAIL'}`);
+  }
+  const ladder = ['max', 'pact1', 'pact2', 'pact3', 'pact4', 'pact5'].filter(id => by[id]);
+  if (ladder.length > 2) { // Pact ladder: each Pact level should cost win rate (report only; a quick-size step is within noise)
+    const mono = ladder.every((id, i) => i === 0 || winRate(id) <= winRate(ladder[i - 1]));
+    console.log(`Pact ladder (win %): ${ladder.map(id => id + ' ' + f(100 * winRate(id), 1)).join(' > ')} | monotonic: ${mono ? 'yes' : 'no'}`);
   }
   if (flags.power) {
-    for (const [a, b, name] of [['rand', 'smart', 'smart/rand (knowledge gap, fresh)'], ['smart', 'max', 'max/smart (Hearth gap, smart picks)']]) {
+    for (const [a, b, name] of [['rand', 'smart', 'smart/rand (knowledge gap, fresh)'], ['smart', 'max', 'max/smart (Hearth gap, smart picks)'], ['mid', 'max', 'max/mid (upper Hearth, smart picks)']]) {
       if (!by[a] || !by[b]) continue;
       const rs = sim.ROMAN.map((_, i) => ratioOf(a, b, i + 1));
       console.log(`power ratio ${name}, paired by seed: ${rs.map((x, i) => sim.ROMAN[i] + ' ' + (x.n ? 'x' + f(x.r, 2) + (x.n > 1 ? ' +-' + f(x.se, 2) : '') : '-')).join(' | ')} (pairs ${rs[0].n}..${rs[5].n})`);

@@ -70,14 +70,14 @@
       else first.push({ type: biome.elite, elite: true });
       return waves;
     }
-    let eliteCh = 0.28 + (this.pact >= 3 ? 0.4 : 0) + (s >= 4 ? 0.1 : 0);
+    let eliteCh = 0.28 + (this.pact >= 3 ? ED.PACTS[3].eliteCh : 0) + (s >= 4 ? 0.1 : 0);
     if (this.tutorial && s === 1) eliteCh = 0.1;
     if (this.rng.chance(eliteCh)) {
       const wv = waves[this.rng.int(Math.min(1, nW - 1), nW - 1)];
       if (this.rng.chance(0.5)) wv.push({ type: biome.elite, elite: true });
       else if (wv.length) wv[this.rng.int(0, wv.length - 1)].elite = true;
     }
-    if (s >= 3 && this.rng.chance(0.2 + (this.pact >= 3 ? 0.3 : 0))) waves[nW - 1].push({ type: biome.elite, elite: true });
+    if (s >= 3 && this.rng.chance(0.2 + (this.pact >= 3 ? ED.PACTS[3].eliteExtra : 0))) waves[nW - 1].push({ type: biome.elite, elite: true });
     if (room.dark) waves[nW - 1].push({ type: biome.elite, elite: true, affix: this.rng.pick(ED.World.DARK_AFFIXES) });
     return waves;
   };
