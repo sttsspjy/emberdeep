@@ -11,118 +11,167 @@
 
   const COMBAT_SIZES = [[33, 17], [35, 17], [31, 19], [37, 17], [29, 19], [39, 15], [33, 19]];
   const SIZE = { start: [15, 11], treasure: [13, 11], shop: [17, 13], event: [15, 11], rest: [15, 11], boss: [31, 19] };
-  const COMBAT_COUNT = [4, 4, 4, 4, 4, 4]; // normal combat rooms per stratum
   const ELITE_COUNT = [1, 1, 1, 1, 2, 2]; // elite combat rooms per stratum
-  const DARK_COUNT = 2; // normal combat rooms per floor flagged `dark` (part of COMBAT_COUNT)
+  const DARK_COUNT = 2; // normal combat rooms per floor flagged `dark`
   const PATTERN_AREA = 294; // tile area the base pool and scatter counts are written for: both scale by room area / PATTERN_AREA
   const EVENTS = ['fountain', 'altar', 'gamble', 'trial'];
-  const REWARD_ODDS = [['boon', 38], ['gold', 42], ['vigor', 12], ['forge', 8]]; // normal combat reward weights
-  const BOUND = 4; // grid cells span -BOUND..BOUND on both axes
-  const MIN_BOSS_DIST = 4;
-  const ATTEMPTS = 120;
+  const REWARD_ODDS = [['boon', 55], ['gold', 15], ['vigor', 10], ['forge', 20]]; // normal combat reward weights
+  const TWIST_ODDS = 0.15, TWIST_FROM = 3; // elite rooms from stratum TWIST_FROM: share whose reward is a Twist offer (epic keeps its 25%)
+  // Route lattice: layer = gx + gy; the start alone on layer 0, LANES rooms on each of layers 1..LAYERS-1, the boss alone on layer LAYERS.
+  // Doors only lead forward (east: gx + 1, south: gy + 1); a room's north and west doors are the sealed ways in. A route visits one room per layer.
+  const LAYERS = 6, LANES = 2;
+  const CROSS_DROP = 0.35; // chance a layer step drops its crossing door, splitting the step into two lanes
+  const MIN_FIGHTS = 3; // combat or elite rooms on every start -> boss route
+  const MIN_ROUTES = 3; // start -> boss routes per floor
+  const MIN_LAYER = { combat: 1, treasure: 1, event: 1, shop: 2, elite: 2, dark: 2, rest: 3 }; // earliest layer of each room kind
+  const ATTEMPTS = 3000;
+  D.LAYERS = LAYERS;
+  D.DOOR_DIRS = ['n', 's', 'e', 'w']; // door index order (net.js P[26]: 1 + index)
 
   D.isSolid = (t, locked) => t === 1 || t === 2 || (t === 5 && locked);
   D.blocksShots = (t, locked) => t === 1 || t === 2 || (t === 5 && locked);
   D.walkable = (t) => t === 0 || t === 4 || t === 5;
 
-  const key = (x, y) => x + ',' + y;
-  const neighborCount = (cells, c) => Object.keys(DIRS).filter(d => cells[key(c.gx + DIRS[d][0], c.gy + DIRS[d][1])]).length;
+  const FIGHTS = { combat: 1, elite: 1 };
+  const UTILITY = { treasure: 1, event: 1, shop: 1, rest: 1 };
 
-  // Floor layout: a tree of `total` cells from (0,0) whose boss is a dead end at BFS distance >= MIN_BOSS_DIST.
-  // Late attempts force a spine of that depth first, which always satisfies it (the deepest node of a tree is a dead end).
-  function layout(rng, total) {
-    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-      const cells = grow(rng, total, attempt >= ATTEMPTS / 2 ? MIN_BOSS_DIST : 0);
-      const lay = cells && analyse(rng, cells);
-      if (lay) return lay;
+  // Every start -> boss route over the forward doors of `rooms` from room `from`, as arrays of room ids (from first, boss last). A floor holds at most LANES^(LAYERS-1) of them.
+  D.routes = (rooms, from, boss) => {
+    const out = [], path = [];
+    const walk = (id) => {
+      path.push(id);
+      if (id === boss) out.push(path.slice());
+      else for (const d of D.DOOR_DIRS) { const n = rooms[id].doors[d]; if (n >= 0) walk(n); }
+      path.pop();
+    };
+    walk(from);
+    return out;
+  };
+  // Ids of the rooms reachable from room `from` through forward doors (from included).
+  D.reach = (rooms, from) => {
+    const seen = new Set([from]), q = [from];
+    while (q.length) { const id = q.pop(); for (const d of D.DOOR_DIRS) { const n = rooms[id].doors[d]; if (n >= 0 && !seen.has(n)) { seen.add(n); q.push(n); } } }
+    return seen;
+  };
+
+  // Lattice cells { gx, gy, layer, out: [cell], type, dark } in layer order: the start, LANES per middle layer, the boss. Lane pairs sit at d = gx - gy in { a, a + 2 }; a starts and ends at -1 (both rooms touch
+  // the start and the boss) and steps +-1 per layer. Every lattice neighbour pair is joined by a door, except that a step may drop its crossing door; every room keeps a way in and a way out.
+  function lattice(rng) {
+    const steps = rng.shuffle([1, 1, -1, -1]); // LAYERS - 2 steps summing to 0
+    const at = (layer, d) => ({ gx: (layer + d) / 2, gy: (layer - d) / 2, layer, out: [], type: 'combat', dark: false });
+    const start = at(0, 0), layers = [[start]];
+    start.type = 'start';
+    let a = -1;
+    for (let k = 1; k < LAYERS; k++) {
+      if (k > 1) a += steps[k - 2];
+      layers.push([at(k, a), at(k, a + 2)]);
     }
-    return analyse(null, combCells(total));
-  }
-
-  // BFS distance from the start for every cell; boss = farthest qualifying dead end (ties broken by rng).
-  // A tree needs DARK_COUNT dead ends besides the boss and the start (the dark rooms), else it is rejected.
-  function analyse(rng, cells) {
-    const list = Object.values(cells);
-    const dist = {};
-    const q = [list[0]]; dist[key(0, 0)] = 0;
-    while (q.length) {
-      const c = q.shift();
-      for (const d in DIRS) {
-        const nk = key(c.gx + DIRS[d][0], c.gy + DIRS[d][1]);
-        if (cells[nk] && dist[nk] === undefined) { dist[nk] = dist[key(c.gx, c.gy)] + 1; q.push(cells[nk]); }
+    const boss = at(LAYERS, 0); layers.push([boss]);
+    boss.type = 'boss';
+    for (let k = 0; k < LAYERS; k++) {
+      const A = layers[k], B = layers[k + 1], links = [];
+      for (const x of A) for (const y of B) if (Math.abs((x.gx - x.gy) - (y.gx - y.gy)) === 1) links.push([x, y]);
+      if (A.length === LANES && B.length === LANES && links.length === 3 && rng.chance(CROSS_DROP)) {
+        const cross = links.find(([x, y]) => links.filter(l => l[0] === x).length === 2 && links.filter(l => l[1] === y).length === 2); // the door whose loss leaves two lanes
+        links.splice(links.indexOf(cross), 1);
       }
+      for (const [x, y] of links) x.out.push(y);
     }
-    for (const c of list) c.dist = dist[key(c.gx, c.gy)];
-    let ends = list.slice(1).filter(c => neighborCount(cells, c) === 1 && c.dist >= MIN_BOSS_DIST);
-    if (!ends.length || list.slice(1).filter(c => neighborCount(cells, c) === 1).length < DARK_COUNT + 1) return null;
-    if (rng) ends = rng.shuffle(ends);
-    ends.sort((a, b) => b.dist - a.dist);
-    return { cells, list, boss: ends[0] };
+    return { layers, start, boss, cells: [].concat(...layers) };
   }
 
-  // Deterministic last resort: a spine along +x with teeth above and below (still a tree, inside the bounds).
-  function combCells(total) {
-    const cells = {};
-    const add = (x, y) => { if (Object.keys(cells).length < total) cells[key(x, y)] = { gx: x, gy: y }; };
-    for (let x = 0; x <= BOUND; x++) add(x, 0);
-    for (const y of [1, -1, 2, -2]) for (const x of [1, 3]) add(x, y);
-    add(-1, 0);
-    return cells;
+  // Routes of a lattice as cell arrays from the start to the boss.
+  function cellRoutes(c, path, out) {
+    path.push(c);
+    if (!c.out.length) out.push(path.slice()); else for (const n of c.out) cellRoutes(n, path, out);
+    path.pop();
+    return out;
+  }
+
+  // Floor rules on typed cells: at least MIN_ROUTES routes; every route holds MIN_FIGHTS fights; some route skips every dark room; some route takes every dark and elite room (Cartographer);
+  // some room forks between a utility room and a fight. Dark and elite rooms stand on two-room layers, so each one is skippable.
+  function floorOk(L) {
+    const routes = cellRoutes(L.start, [], []);
+    const risky = L.cells.filter(c => c.dark || c.type === 'elite');
+    if (routes.length < MIN_ROUTES) return false;
+    if (!routes.every(r => r.filter(c => FIGHTS[c.type]).length >= MIN_FIGHTS)) return false;
+    if (!routes.some(r => !r.some(c => c.dark))) return false;
+    if (!routes.some(r => risky.every(c => r.includes(c)))) return false;
+    return L.cells.some(c => c.out.length === 2 && c.out.some(n => UTILITY[n.type]) && c.out.some(n => FIGHTS[n.type]));
+  }
+
+  // Room kinds of the middle layers in layer order: a shuffled bag, each slot taking the first kind allowed on its layer (MIN_LAYER). False when a slot finds none.
+  function assignKinds(L, rng, bag) {
+    const pool = rng.shuffle(bag.slice());
+    for (let k = 1; k < LAYERS; k++) for (const c of L.layers[k]) {
+      const i = pool.findIndex(t => MIN_LAYER[t] <= k);
+      if (i < 0) return false;
+      const t = pool.splice(i, 1)[0];
+      c.type = t === 'dark' ? 'combat' : t; c.dark = t === 'dark';
+    }
+    return true;
+  }
+
+  // A typed lattice that passes floorOk within ATTEMPTS draws (deterministic per seed); past them the last draw whose kinds fit their layers.
+  function layout(rng, stratum, specials) {
+    const nElite = ELITE_COUNT[stratum - 1] || 1, slots = LANES * (LAYERS - 1);
+    const bag = specials.concat(Array(nElite).fill('elite'), Array(DARK_COUNT).fill('dark'));
+    while (bag.length < slots) bag.push('combat');
+    let last = null;
+    for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+      const L = lattice(rng);
+      if (!assignKinds(L, rng, bag)) continue;
+      if (floorOk(L)) return L;
+      last = L;
+    }
+    return last;
   }
 
   D.generate = (stratum, seed) => {
     const rng = U.RNG(seed ^ (stratum * 7919));
-    const nCombat = COMBAT_COUNT[stratum - 1] || 5, nElite = ELITE_COUNT[stratum - 1] || 1;
     const specials = [stratum % 2 ? 'treasure' : 'event', 'shop', 'rest']; // treasure on odd strata, event on even ones
-    const total = 2 + specials.length + nCombat + nElite;
-    const { cells, list, boss } = layout(rng, total);
-    boss.type = 'boss';
-    list[0].type = 'start';
-    const isLeaf = (c) => neighborCount(cells, c) === 1;
-    // dark rooms are normal combat rooms on dead ends other than the boss and the start (off the start->boss path, skipping one cuts off nothing), farther first, ties by their own RNG stream
-    const darkRng = U.RNG((seed ^ 0x2545f491) + stratum * 7907);
-    const darks = darkRng.shuffle(list.slice(1).filter(c => c !== boss && isLeaf(c))).sort((a, b) => b.dist - a.dist).slice(0, DARK_COUNT);
-    for (const c of darks) { c.type = 'combat'; c.dark = true; }
-    const others = list.slice(1).filter(c => c !== boss && !c.dark);
-    // utility rooms prefer the remaining dead ends, elite rooms prefer distance >= 3
-    const pool = rng.shuffle(others.filter(isLeaf)).concat(rng.shuffle(others.filter(c => !isLeaf(c))));
-    for (const sp of specials) pool.shift().type = sp;
-    const near = pool.filter(c => c.dist < 3).sort((a, b) => b.dist - a.dist);
-    pool.filter(c => c.dist >= 3).concat(near).forEach((c, i) => { c.type = i < nElite ? 'elite' : 'combat'; });
-    const rooms = [];
+    const L = layout(rng, stratum, specials), list = L.cells;
     list.forEach((c, i) => { c.id = i; });
+    const rooms = [];
     for (const c of list) {
       const room = buildRoom(c, stratum, rng.seed(), rng);
-      for (const d in DIRS) {
-        const n = cells[key(c.gx + DIRS[d][0], c.gy + DIRS[d][1])];
-        room.doors[d] = n ? n.id : -1;
+      for (const n of c.out) {
+        const d = n.gx > c.gx ? 'e' : 's';
+        room.doors[d] = n.id;
       }
       rooms.push(room);
     }
+    for (const c of list) for (const n of c.out) rooms[n.id].sealed[n.gx > c.gx ? 'w' : 'n'] = true; // the way in: room.doors[d] stays -1 and its doorway stays wall (the client draws the sealed door)
+    for (const r of rooms) r.threat = threatOf(r);
     assignRewards(rooms, stratum, seed);
     for (const r of rooms) carveDoors(r);
-    const bellId = stratum === BELL_STRATUM && darks.length ? darks[0].id : -1;
-    for (const r of rooms) { finalizeInterior(r, stratum); if (r.id === bellId) placeBell(r); decorate(r, stratum); }
-    return { stratum, seed, rooms, start: 0, boss: boss.id, platino: platinoRoom(rooms, stratum, seed) };
+    for (const r of rooms) { finalizeInterior(r, stratum); if (stratum === BELL_STRATUM && r.dark) placeBell(r); decorate(r, stratum); }
+    return { stratum, seed, rooms, start: L.start.id, boss: L.boss.id, platino: platinoAt(stratum, seed) };
   };
 
-  // The Drowned Bell: room.bell { x, y } (world px) in the first dark room of stratum BELL_STRATUM, BELL_UP above the centre on a clear spot (the clear reward keeps the centre); placed before decoration, which keeps breakables BELL_GAP tiles from it.
+  // Threat pips (0-3) of a room: a fight 1, +1 elite, +1 dark, +1 on layer 4 and deeper (danger >= 1.2); the boss 3; other rooms 0.
+  function threatOf(r) {
+    if (r.type === 'boss') return 3;
+    if (!FIGHTS[r.type]) return 0;
+    return Math.min(3, 1 + (r.type === 'elite' ? 1 : 0) + (r.dark ? 1 : 0) + (r.layer >= 4 ? 1 : 0));
+  }
+
+  // The Drowned Bell: room.bell { x, y } (world px) in both dark rooms of stratum BELL_STRATUM, BELL_UP above the centre on a clear spot (the clear reward keeps the centre); placed before decoration, which keeps breakables BELL_GAP tiles from it.
   const BELL_STRATUM = 5, BELL_UP = 48, BELL_GAP = 2;
   function placeBell(room) {
     const c = D.center(room), m = D.clearSpot(room, c.x, c.y - BELL_UP);
     room.bell = { x: m.x, y: m.y };
   }
-  // Platino room: one floor in PLATINO_ODDS (own RNG stream) names a combat or elite room whose clear lets the Platino out (rooms.js); -1 otherwise.
+  // Platino: one floor in PLATINO_ODDS (own RNG stream) lets it out at the clear of its n-th fight on the floor (n = 1..MIN_FIGHTS, so every route meets it; rooms.js counts the clears); -1 otherwise.
   const PLATINO_ODDS = 1 / 8;
-  function platinoRoom(rooms, stratum, seed) {
+  function platinoAt(stratum, seed) {
     const rng = U.RNG((seed ^ 0x6c8e9cf5) + stratum * 7841);
     if (!rng.chance(PLATINO_ODDS)) return -1;
-    const pool = rooms.filter(r => r.type === 'combat' || r.type === 'elite');
-    return pool.length ? rng.pick(pool).id : -1;
+    return rng.int(1, MIN_FIGHTS);
   }
 
   // Rewards are fixed per floor and shown before entry. Normal combat: boon (drawn from the claiming hero's own paths), gold, vigor, forge,
-  // each kind getting its REWARD_ODDS share of the floor's combat rooms (rounded by weighted draw on the remainders). Elite: relic, or epic at 25%.
+  // each kind getting its REWARD_ODDS share of the floor's combat rooms (rounded by weighted draw on the remainders). Elite: epic at 25%, from stratum TWIST_FROM a Twist at TWIST_ODDS, else relic.
   function assignRewards(rooms, stratum, seed) {
     const rng = U.RNG((seed ^ 0x5bd1e995) + stratum * 15485863);
     const combat = rooms.filter(r => r.type === 'combat'), elites = rooms.filter(r => r.type === 'elite');
@@ -136,36 +185,8 @@
     counts.forEach((c, i) => { for (let k = 0; k < c; k++) bag.push(REWARD_ODDS[i][0]); });
     rng.shuffle(bag);
     combat.forEach((r, i) => { r.reward = bag[i]; });
-    elites.forEach((r) => { r.reward = rng.chance(0.25) ? 'epic' : 'relic'; });
-  }
-
-  // Grid growth: each new cell touches exactly one existing cell. `spine` > 0 first lays a straight corridor of that length.
-  function grow(rng, total, spine) {
-    const cells = {};
-    cells[key(0, 0)] = { gx: 0, gy: 0 };
-    const list = [cells[key(0, 0)]];
-    if (spine) {
-      const d = rng.pick(Object.keys(DIRS));
-      for (let i = 1; i <= spine; i++) {
-        const c = { gx: DIRS[d][0] * i, gy: DIRS[d][1] * i };
-        cells[key(c.gx, c.gy)] = c; list.push(c);
-      }
-    }
-    let guard = 0;
-    while (list.length < total && guard++ < 2000) {
-      const base = rng.pick(list);
-      const d = rng.pick(Object.keys(DIRS));
-      const nx = base.gx + DIRS[d][0], ny = base.gy + DIRS[d][1];
-      if (Math.abs(nx) > BOUND || Math.abs(ny) > BOUND || cells[key(nx, ny)]) continue;
-      let occ = 0;
-      for (const dd in DIRS) if (cells[key(nx + DIRS[dd][0], ny + DIRS[dd][1])]) occ++;
-      if (occ !== 1) continue;
-      // keep the start room from becoming a hub with four branches
-      if (base === list[0] && list.length > 1 && rng.chance(0.5)) continue;
-      const c = { gx: nx, gy: ny };
-      cells[key(nx, ny)] = c; list.push(c);
-    }
-    return list.length >= total ? cells : null;
+    const tw = stratum >= TWIST_FROM ? TWIST_ODDS : 0;
+    elites.forEach((r) => { const x = rng.next(); r.reward = x < tw ? 'twist' : x < tw + 0.25 ? 'epic' : 'relic'; });
   }
 
   function buildRoom(c, stratum, seed, rng) {
@@ -177,8 +198,8 @@
     }
     return {
       id: c.id, gx: c.gx, gy: c.gy, type: c.type, w, h, tiles, seed, stratum,
-      dist: c.dist, danger: 1 + 0.05 * c.dist, reward: null,
-      doors: { n: -1, s: -1, e: -1, w: -1 },
+      layer: c.layer, dist: c.layer, danger: 1 + 0.05 * c.layer, reward: null, threat: 0,
+      doors: { n: -1, s: -1, e: -1, w: -1 }, sealed: {},
       decor: [], breakables: [], torches: [], dark: !!c.dark,
       event: c.type === 'event' ? EVENTS[seed % EVENTS.length] : null,
       pattern: 'open',

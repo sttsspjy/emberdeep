@@ -79,7 +79,7 @@ for (const key in ED.SKILL_SHEET) { const [sid, pid] = key.split('.'); ok(ED.SKI
   ok(bad === 0, 'boon texts resolve at every rank');
   ok(ED.Sheet.text('edge', 1, st) === '+10% damage.' && ED.Sheet.text('edge', 2, st) === '+20% damage.', 'Sharpened Edge text follows the rank');
   ok(ED.Sheet.text('overcharge', 1, st).indexOf('45 damage') >= 0, 'Overcharge shows its damage at the Knight Power (10 + 1.5 x 23.4)');
-  ok(ED.Sheet.text('forager', 2, st).indexOf('20% more often') >= 0 && ED.Sheet.text('forager', 2, st).indexOf('6% more max') >= 0, 'Forager numbers scale with the rank');
+  ok(ED.Sheet.text('forager', 2, st).indexOf('16% more of your max') >= 0 && ED.World.FORAGER === 0.08, 'Forager numbers scale with the rank and match World.FORAGER');
   ok(ED.Sheet.text('sanctity', 2, st).indexOf('0.5% more') >= 0 && ED.Sheet.text('sanctity', 2, st).indexOf('6% more') >= 0, 'small percentages keep their decimals');
   ok(ED.Sheet.text('k_atk_h', 3, st).indexOf('Follow-Through') >= 0, 'class cards render through boonText');
   // every number a token prints equals the stat the boon adds
