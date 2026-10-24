@@ -346,9 +346,9 @@ function startMove(w, p, N, a, data) {
   p.skillMove = { dx: (end.x - p.x) / real, dy: (end.y - p.y) / real, speed: real / t, t, iframes: mv.iframes === undefined ? t : mv.iframes, age: 0 };
 }
 
-// BELL_HAUL: px within which a Bellwarden bot winds its bells. PEAL_PACK: foes in the wave that make a bot ring the Peal. PEAL_RES: the Resonance a bot rings it at. BELL_OUT: px past the bell's orbit a bot keeps its target.
+// BELL_HAUL: px within which a Bellwarden bot winds its bells. PEAL_PACK: foes in the wave that make a bot ring the Peal. PEAL_RES: the Resonance a bot rings it at. BELL_STAND: px from its target's edge a bot keeps (hurl range, past a boss's melee reach).
 // LEAP_PACK: foes at an out-of-hand bell that make a bot yank itself there. LINE_W: px either side of a hurl's line a foe counts as on it.
-const BELL_HAUL = 220, PEAL_PACK = 3, PEAL_RES = 7, BELL_OUT = 10, LEAP_PACK = 2, LINE_W = 8;
+const BELL_HAUL = 220, PEAL_PACK = 3, PEAL_RES = 7, BELL_STAND = 105, LEAP_PACK = 2, LINE_W = 8;
 // A Bellwarden bot plays the loop as ED.Bell.cycle models it: attack held while a foe is within BELL_HAUL; a one-tick release when ED.Bell.ready says so, the cursor past the last foe on the line from the hero
 // that crosses the most foes within the hurl's reach (aim error by skill); held again at once (the bell reels home as it lands and winds on). c.bellRel: the release tick has passed.
 function botBell(w, p, c, foes, tgt, inRange, skill, brng) {
@@ -862,7 +862,7 @@ function runBot(opts) {
         const close = p.stats.melee || p.stats.kind === 'bell', reachW = p.stats.kind === 'bell' ? ED.Bell.orbit(p.stats.weapon) + p.stats.weapon.br + 20 : p.stats.weapon.range; // a bell fights at its orbit, like a melee weapon
         if (nf && (!tgt || Math.sqrt(bd) - (close ? tgt.r : 0) >= (close ? reachW : 380))) { tgt = nf; bd = fd; }
         const d = Math.sqrt(bd);
-        const bell = p.stats.kind === 'bell', ideal = bell ? ED.Bell.orbit(p.stats.weapon) + BELL_OUT : p.stats.melee ? (p.stats.weapon.range * 0.6 + tgt.r) : (p.stats.deadeye ? 230 : 170); // Deadeye keeps its distance; a Bellwarden circles with the foe on its bell's orbit
+        const bell = p.stats.kind === 'bell', ideal = bell ? BELL_STAND + tgt.r : p.stats.melee ? (p.stats.weapon.range * 0.6 + tgt.r) : (p.stats.deadeye ? 230 : 170); // Deadeye keeps its distance; a Bellwarden circles at hurl range
         if (vetH) c.appT = d > ideal + 30 ? c.appT + dt : 0; // seconds spent closing in without arriving
         let dir;
         if (d > ideal + 10) dir = bfsDir(w.room, w.locked, p.x, p.y, tgt.x, tgt.y);
