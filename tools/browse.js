@@ -15,14 +15,14 @@
 //   cosmetics: Hearthsitter counts only on the Hearth section; every Wardrobe item owned; 9 preview shots (one hovered item per slot; fails on a blank preview, a wrong title caption or a loop that keeps running once hidden);
 //     the camp and Hearth with the Blue Hearth and its ghost; a 4-hero party in different sets in a staged fight at High and Low (pets, coin trails, titles, crowns, sheens, auras, skins), Last Embers, the in-run secret toast; Game.render ms with and without the sets.
 //   shots: 16 screenshots: boot name screen, menu, Descend, Hearth tabs (the Armory scrolled into view), Heroes, Settings, Credits, boon offer, a run in combat, the Tab sheet tabs, the pause menu (profile gets 400 embers unless --embers).
-//   sheet: a late build staged through the sim (BR.sheetStage: stratum --strat or V, two element paths, one evolved, their duo, open and Ascended boons, a fork at rank 3, six relics, a shield, an ally hero):
+//   sheet: a late build staged through the sim (BR.sheetStage: stratum --strat or V, two element paths, one evolved with a Mutation, their duo, a Twist, open and Ascended boons, a fork at rank 3, six relics, a shield, an ally hero):
 //     the Tab sheet Build, Build scrolled to the end, Combat, Map, and Build viewing the ally; fails on a page error or when a sheet column overflows its panel sideways.
 //   swing: one contact-sheet PNG per melee weapon of --cls, its Armory variants included (or per --weapon id, forks as id@fork, ranged ones too) (aimed --aim degrees, 0 = right, 90 = down, drawn at --zoom canvas px per world px, 2): frames at fixed times over two consecutive attacks (a combo weapon: one per step), the hold and the ease back to idle, hero and smear drawn by the game's own renderer.
 //   picks: every boon id resolves to a PickFx card kind; one PNG per pick burst (each kind, fire-big, holy-ally) on the solo hero about 0.25 s after FX.handle gets the 'boon' / 'relic' event;
 //     each pick cue (and the Hearth 'buy') rendered in an OfflineAudioContext: voices, peak, rms, audible length; fails on a throw, a silent cue or one longer than 0.9 s.
 //   cards: a frame sheet PNG (every card frame mask at 6 x) and one PNG per boon hand staged through the sim (the hero's boons set so the cards are eligible): path gates,
-//     every element, open and General, purse, Ascended, keystones, duos, an evolution, the --cls route and fork offers, a 6-card dense hand; mid-pick frames (110 and 230 ms,
-//     the hide timer held, animations paused) for poison, holy, ice, lightning, shadow, general, fire-big, route and duo; the fork reveal at rank 2 and 3; a Low quality hand and pick.
+//     every element, open and General, purse, Ascended, keystones, duos, an evolution, a Mutation pin, a Twist offer, the --cls route and fork offers, a 6-card dense hand; mid-pick frames (110 and 230 ms,
+//     the hide timer held, animations paused) for poison, holy, ice, lightning, shadow, general, fire-big, mut, twist, route and duo; the fork reveal at rank 2 and 3; a Low quality hand and pick.
 //     Fails on a missing card, a card whose kind differs from ED.PickFx.kind, a frame that did not resolve, equal path gate icons, a pick without an effect layer, or Low quality leftovers.
 //   bell: the hero, Heave and Peal icons and 6 screenshots of the Bellwarden (unlocked for the run; --weapon picks the bell): whirling in a staged fight with Momentum, a Heave in flight, a Peal, four Bellwardens in the crowd at High and Low quality,
 //     and a client's view from a two-peer net check in the same page (host World + client Game, JSON snapshots, 50 ms each way); fails on bad bells, missing bell events or a client that drifts from the host (see scenBell).
@@ -385,20 +385,21 @@ function pageBoot(cfg) {
     if (!w) throw new Error('no run to stage the sheet in');
     if (strat && strat !== w.stratum) w.enterStratum(strat);
     const p = s.me, B = ED.BOONS, cls = p.cls, els = ED.ELEMENT_IDS.filter(e => e !== ED.CLASSES[cls].element).slice(0, 2), boons = {};
-    const pathIds = (path) => Object.keys(B).filter(id => B[id].path === path && !B[id].open && !B[id].cls);
+    const pathIds = (path) => Object.keys(B).filter(id => B[id].path === path && !B[id].open && !B[id].cls && !B[id].retired);
     for (const [i, el] of els.entries()) {
       const ids = pathIds(el), gate = ids.find(id => B[id].gate), key = ids.find(id => B[id].key), evo = ids.find(id => B[id].evo);
       boons[gate] = 1;
       const want = i === 0 ? ED.EVO_AFFINITY : ED.KEY_AFFINITY;
       for (const id of ids) { if (B[id].gate || B[id].key || B[id].evo || B[id].need === (ED.CLASSES[cls].kind === 'melee' ? 'proj' : 'melee')) continue; if (ED.pathAffinity(boons, el) + 1 >= want) break; boons[id] = Math.min(B[id].max || 5, Math.max(1, want - 1 - ED.pathAffinity(boons, el))); }
       if (key) boons[key] = 1;
-      if (i === 0 && evo) boons[evo] = 1;
+      if (i === 0 && evo) { boons[evo] = 1; if (ED.mutsOf) { const mu = ED.mutsOf(evo)[0]; if (mu) boons[mu] = 1; } } // the evolution with its first Mutation
     }
+    if (ED.TWIST_IDS) boons[ED.TWIST_IDS.find(id => !B[id].gates) || ED.TWIST_IDS[0]] = 1; // a Twist (the sheet's Twists group)
     const duo = ED.duoOf(els[0], els[1]); if (duo) boons[duo] = 1;
     Object.keys(B).filter(id => B[id].open && !B[id].purse && !B[id].asc && !B[id].cls).slice(0, 4).forEach((id, i) => { boons[id] = Math.min(B[id].max || 5, i + 1); });
     Object.keys(B).filter(id => B[id].asc).slice(0, 2).forEach(id => { boons[id] = 1; });
     const route = ED.CLASS_CARDS[cls][ED.ROUTES[0]]; boons[route.t1] = 1; boons[route.forks[0]] = Math.min(3, B[route.forks[0]].max || 3);
-    p.boons = boons; p.relics = Object.keys(ED.RELICS).slice(0, 6);
+    p.boons = boons; p.relics = Object.keys(ED.RELICS).slice(0, 6); p.twist = ED.twistCount ? ED.twistCount(boons) > 0 : false; p.twistN = ED.twistCount ? ED.twistCount(boons) : 0;
     w.recalc(p, true); w.sendBuild(p);
     p.shield = Math.round(p.maxHp * 0.18 * 10) / 10 + 0.4;
     w.level = Math.max(w.level | 0, 14); if (ED.World.xpFor) { w.xpNext = ED.World.xpFor(w.level); w.xp = Math.floor(w.xpNext * 0.62); } w.gold = 347;
@@ -868,14 +869,16 @@ const R = (ids, n) => Object.fromEntries(ids.map((id, i) => [id, Array.isArray(n
 const CARD_HANDS = (cls) => [
   { name: 'gates', spec: { src: 'start' }, boons: {}, ids: ['kindle', 'frostbite', 'staticcharge', 'envenom'], distinctIcons: true, pick: [3, 'poison'] },
   { name: 'gates2', spec: { src: 'start' }, boons: {}, ids: ['consecrate', 'doommark', 'generalist'], distinctIcons: true, pick: [0, 'holy'] },
-  { name: 'fire-ice', spec: { src: 'room' }, boons: R(['kindle', 'fuel', 'stoke', 'searing', 'frostbite', 'deepcold', 'brittle', 'coldsnap'], [1, 2, 2, 1, 1, 1, 1, 1]), ids: ['wildfire', 'shatter', 'conflag', 'thermalshock'], pick: [1, 'ice'] },
-  { name: 'storm', spec: { src: 'room' }, boons: R(['staticcharge', 'conductor', 'highvoltage', 'shortcircuit', 'envenom', 'potency', 'caustic', 'fester'], [1, 2, 1, 1, 1, 2, 1, 1]), ids: ['overload', 'sporeburst', 'thunderhead', 'galvanic'], pick: [0, 'lightning'] },
-  { name: 'light', spec: { src: 'room' }, boons: R(['consecrate', 'fervor', 'zealotry', 'sanctity', 'doommark', 'malignance', 'malice'], [1, 2, 2, 1, 1, 2, 1]), ids: ['beacon', 'deathknell', 'radiantaegis', 'wrathofheaven'], pick: [1, 'shadow'] },
+  { name: 'fire-ice', spec: { src: 'room' }, boons: R(['kindle', 'fuel', 'stoke', 'brushfire', 'frostbite', 'deepcold', 'glacier', 'rime'], [1, 2, 2, 1, 1, 1, 1, 1]), ids: ['firebreak', 'shatter', 'conflag', 'thermalshock'], pick: [1, 'ice'] },
+  { name: 'storm', spec: { src: 'room' }, boons: R(['staticcharge', 'conductor', 'highvoltage', 'shortcircuit', 'envenom', 'potency', 'caustic', 'neurotoxin'], [1, 2, 1, 1, 1, 2, 1, 1]), ids: ['conduction', 'hexstrong', 'capacitor', 'galvanic'], pick: [0, 'lightning'] },
+  { name: 'light', spec: { src: 'room' }, boons: R(['consecrate', 'fervor', 'zealotry', 'sanctity', 'doommark', 'malignance', 'quarry'], [1, 2, 2, 1, 1, 2, 1]), ids: ['vigil', 'reaperschain', 'radiantaegis', 'wrathofheaven'], pick: [1, 'shadow'] },
   { name: 'open', spec: { src: 'epic' }, boons: { generalist: 1, keen: 1 }, ids: ['asc_edge', 'edge', 'brutal', 'purse'], pick: [1, 'general'] },
-  { name: 'evo', spec: { src: 'room' }, boons: R(['kindle', 'fuel', 'stoke', 'searing', 'wildfire', 'conflag'], [1, 2, 3, 2, 2, 1]), ids: ['evo_fire', 'cindertrail', 'vigor'], pick: [0, 'fire-big'] },
+  { name: 'evo', spec: { src: 'room' }, boons: R(['kindle', 'fuel', 'stoke', 'brushfire', 'wildfire', 'conflag'], [1, 2, 3, 1, 2, 1]), ids: ['evo_fire', 'cindertrail', 'vigor'], pick: [0, 'fire-big'] },
+  { name: 'mut', spec: { src: 'level' }, boons: R(['kindle', 'fuel', 'stoke', 'wildfire', 'conflag'], [1, 2, 2, 1, 1]), ids: ['mut_firestorm', 'mut_scorchedearth', 'stoke'], pick: [0, 'mut'] },
+  { name: 'twist', spec: { src: 'twist' }, boons: R(['kindle', 'frostbite'], [1, 1]), ids: ['bloodprice', 'metronome'], pick: [1, 'twist'] },
   { name: 'route', spec: { src: 'class', ctier: 1 }, boons: {}, ids: ['atk', 's1', 's2', 'el'].map(k => cls[0] + '_' + k), pick: [0, 'route'] },
   { name: 'fork', spec: { src: 'class', ctier: 2 }, boons: { [cls[0] + '_atk']: 1 }, ids: [cls[0] + '_atk_h', cls[0] + '_atk_s'] },
-  { name: 'dense6', spec: { src: 'epic' }, boons: R(['kindle', 'fuel', 'stoke', 'frostbite', 'deepcold', 'brittle'], [1, 2, 2, 1, 2, 1]), ids: ['searing', 'permafrost', 'thermalshock', 'asc_quick', 'plating', 'purse'], pick: [2, 'duo'] },
+  { name: 'dense6', spec: { src: 'epic' }, boons: R(['kindle', 'fuel', 'stoke', 'frostbite', 'deepcold', 'rime'], [1, 2, 2, 1, 2, 1]), ids: ['brushfire', 'permafrost', 'thermalshock', 'asc_quick', 'plating', 'purse'], pick: [2, 'duo'] },
 ];
 async function scenCards() {
   const o = S.opt, res = newResult('cards'), q = qualitiesOr(['high'])[0], cls = o.cls;
@@ -910,7 +913,7 @@ async function scenCards() {
         await wait(300);
       }
     }
-    for (const k of ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'route', 'duo', 'asc', 'purse', 'fire+big']) if (![...seen].some(s => s === k || (k === 'fire+big' && /\+big$/.test(s)))) fail(res, 'no hand showed a ' + k + ' card');
+    for (const k of ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'route', 'duo', 'asc', 'mut', 'twist', 'purse', 'fire+big']) if (![...seen].some(s => s === k || (k === 'fire+big' && /\+big$/.test(s)))) fail(res, 'no hand showed a ' + k + ' card');
     // fork reveal: rank 2 (small, silver) and rank 3 (big, gold)
     await page.evaluate(() => window.__ED.UI.hideBoons());
     for (const rank of [2, 3]) {
@@ -925,7 +928,7 @@ async function scenCards() {
     await page.evaluate(() => { document.getElementById('ov-fork').hidden = true; });
     // Low quality: idle sprites hidden, no effect layer, the overlay gone within 0.3 s of a pick
     await call(page, 'settings', 'low');
-    await call(page, 'cardHand', R(['kindle', 'fuel'], [1, 1]), ['stoke', 'searing', 'vigor'], { src: 'room' });
+    await call(page, 'cardHand', R(['kindle', 'fuel'], [1, 1]), ['stoke', 'brushfire', 'vigor'], { src: 'room' });
     await wait(900);
     const low = await page.evaluate(() => { const s = document.querySelector('#boon-cards .ca-spark'); return { low: document.getElementById('ov-boon').classList.contains('low'), spark: s ? getComputedStyle(s).display : 'none' }; });
     if (!low.low || low.spark !== 'none') fail(res, 'Low quality: overlay low ' + low.low + ', idle spark display ' + low.spark);
