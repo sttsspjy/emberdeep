@@ -113,7 +113,7 @@
 
   // ---------------- sections ----------------
   UI.tab = 'descend';
-  const SECTION = { descend: 'Play', upgrades: 'Hearth', wardrobe: 'Hearth', chronicle: 'Hearth', heroes: 'Heroes' };
+  const SECTION = { descend: 'Play', upgrades: 'Hearth', wardrobe: 'Hearth', chronicle: 'Hearth', codex: 'Hearth', heroes: 'Heroes' };
   UI.setTab = (t) => {
     UI.tab = t;
     $('sec-title').textContent = SECTION[t] || 'Play';
@@ -142,6 +142,7 @@
     else if (UI.tab === 'heroes') renderHeroes($('heroes-view'));
     else if (UI.tab === 'wardrobe') renderWardrobe($('wardrobe-view'));
     else if (UI.tab === 'chronicle') renderChronicle();
+    else if (UI.tab === 'codex') renderCodex();
   };
 
   // A locked hero whose unlock is a riddle (unlock.hint) shows as a silhouette named "???" with the hint, never its condition.
@@ -517,6 +518,13 @@
     restoreFocus(detail, fk);
   }
 
+  // Codex: every lore page the profile found (S.loreHas), unfound ones as "???".
+  function renderCodex() {
+    const p = ED.App.profile, L = ED.LORE || [], n = L.filter((pg, i) => S.loreHas(p, i)).length;
+    $('codex-count').textContent = `${n} / ${L.length} pages found`;
+    $('codex-list').innerHTML = L.map((pg, i) => (S.loreHas(p, i) ? `<details class="codex-page"><summary>${esc(pg.title)}</summary><p>${esc(pg.text)}</p></details>` : '<div class="codex-page none">???</div>')).join('');
+  }
+
   function renderChronicle() {
     const p = ED.App.profile;
     const dl = $('deed-list'); dl.innerHTML = '';
@@ -842,6 +850,103 @@
     el.hidden = true; void el.offsetWidth; el.hidden = false; // restarts the animation of a card that is still up
     clearTimeout(forkTimer);
     forkTimer = setTimeout(() => { el.hidden = true; }, FORK_REVEAL_MS);
+  };
+
+  // ---------------- event dialog (events.js) ----------------
+  // Host messages: evOpen { k, title, text, ch: [[label, note, disabled]], v (vote seconds, 0: a personal choice), n (voters), lock }, evTally { k, n: votes per choice }, evResult { k, title, text, out, lp, o }, evClose.
+  // The choices ignore input for `lock` s after opening (a bar fills across them); digits 1-4 (e.code), arrows / d-pad, the confirm key and clicks pick. A result with o (an offer opens) or in a locked room closes into a toast.
+  let evD = null, evFocus = 0, evLockT = 0, evVoteT = 0;
+  const evParas = (t) => String(t || '').split('\n').filter(Boolean).map(l => `<p>${esc(l)}</p>`).join('');
+  const evLore = (i) => { const pg = ED.LORE && ED.LORE[i]; return pg ? `<blockquote class="ev-lore"><b>${esc(pg.title)}</b><span>${esc(pg.text)}</span></blockquote>` : ''; };
+  UI.evOpen = () => !!evD;
+  UI.evMsg = (m) => {
+    if (m.t === 'evOpen') evShow(m);
+    else if (m.t === 'evTally') { if (evD && evD.k === m.k) { evD.tally = m.n; evPaint(); } }
+    else if (m.t === 'evResult') evResult(m);
+    else if (m.t === 'evClose') { if (evD && !evD.res) UI.evClose(false); }
+  };
+  function evShow(m) {
+    evD = { k: m.k, ch: m.ch, safe: m.s | 0, vote: m.v > 0, n: m.n | 0, voted: -1, wait: false, res: null, tally: null };
+    evFocus = Math.max(0, m.ch.findIndex(c => !c[2]));
+    const lock = (m.lock || 0.6) * 1000;
+    evLockT = performance.now() + lock; evVoteT = m.v > 0 ? performance.now() + m.v * 1000 : 0;
+    $('ev-title').textContent = m.title;
+    $('ev-text').innerHTML = evParas(m.text);
+    const box = $('ev-choices'); box.innerHTML = '';
+    box.style.setProperty('--lock', lock + 'ms');
+    m.ch.forEach((c, i) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'ev-ch'; b.disabled = !!c[2];
+      b.innerHTML = `<kbd>${i + 1}</kbd><span class="ev-l">${esc(c[0])}</span>${c[1] ? `<small>${esc(c[1])}</small>` : ''}<b class="ev-n"></b>`;
+      b.onclick = () => evPick(i);
+      box.appendChild(b);
+    });
+    box.classList.remove('locking'); void box.offsetWidth; box.classList.add('locking'); // restarts the fill
+    const pad = ED.Input.device === 'pad';
+    $('ev-hint').innerHTML = pad ? '<kbd>D-pad</kbd> select · <kbd>X</kbd> choose' : `<kbd>1</kbd>-<kbd>${m.ch.length}</kbd> or <kbd>${esc(ED.Input.label('up'))}</kbd><kbd>${esc(ED.Input.label('down'))}</kbd> and <kbd>${esc(ED.Input.label('attack'))}</kbd> / <kbd>Enter</kbd> choose`;
+    $('ov-event').hidden = false;
+    evPaint();
+    ED.Audio.play('hover');
+  }
+  function evPaint() {
+    if (!evD) return;
+    const sub = $('ev-sub');
+    if (evD.res) sub.textContent = '';
+    else if (evD.vote && evD.n > 1) sub.textContent = `Party vote · ${Math.max(0, Math.ceil((evVoteT - performance.now()) / 1000))} s` + (evD.voted >= 0 ? ' · waiting for the others' : '') + ` · no vote counts as ${(evD.ch[evD.safe] || evD.ch[0])[0]}`;
+    else sub.textContent = evD.wait ? '…' : '';
+    [...$('ev-choices').children].forEach((b, i) => {
+      b.classList.toggle('focus', i === evFocus);
+      b.classList.toggle('picked', evD.voted === i);
+      const n = b.querySelector('.ev-n'); if (n) n.textContent = evD.tally && evD.tally[i] ? '×' + evD.tally[i] : '';
+    });
+  }
+  function evPick(i) {
+    if (!evD) return;
+    if (evD.res) { if (performance.now() >= evLockT) UI.evClose(false); return; }
+    if (performance.now() < evLockT || evD.wait || (evD.vote && evD.voted >= 0)) return;
+    const c = evD.ch[i]; if (!c || c[2]) return;
+    ED.Input.mask(['attack', 'skill1', 'skill2', 'skill3', 'dash']);
+    ED.Audio.play('click');
+    ED.Game.act({ t: 'evChoice', i, k: evD.k });
+    if (evD.vote) evD.voted = i; else evD.wait = true;
+    evFocus = i; evPaint();
+  }
+  function evResult(m) {
+    const s = ED.Game.s, body = evParas(m.text) + (m.out && m.out.length ? `<ul class="ev-out">${m.out.map(l => `<li>${esc(l)}</li>`).join('')}</ul>` : '') + evLore(m.lp);
+    if (m.o || (s && s.view && s.view.locked)) { // an offer or a fight follows: the result goes to a toast
+      if (evD) UI.evClose(false);
+      UI.toast(`<b>${esc(m.title)}</b> ${esc((m.out || []).join(' · '))}`, null, 5);
+      return;
+    }
+    evD = { k: m.k, ch: [], vote: false, voted: -1, res: m, tally: null };
+    evFocus = 0; evLockT = performance.now() + 300;
+    $('ev-title').textContent = m.title;
+    $('ev-text').innerHTML = body;
+    const box = $('ev-choices'); box.innerHTML = ''; box.classList.remove('locking');
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'ev-ch'; b.innerHTML = '<span class="ev-l">Continue</span>';
+    b.onclick = () => UI.evClose(false);
+    box.appendChild(b);
+    $('ev-hint').innerHTML = '';
+    $('ov-event').hidden = false;
+    evPaint();
+  }
+  // Closes the dialog; toast: a shown result's outcome lines go to a toast (a fight started under it).
+  UI.evClose = (toast) => {
+    if (toast && evD && evD.res && evD.res.out && evD.res.out.length) UI.toast(`<b>${esc(evD.res.title)}</b> ${esc(evD.res.out.join(' · '))}`, null, 5);
+    evD = null;
+    $('ov-event').hidden = true;
+    ED.Input.mask(['attack', 'skill1', 'skill2', 'skill3', 'dash']);
+  };
+  // Menu input while the dialog is open (game.js): focus moves, digit picks, confirm; returns the frame's input with the hero held still.
+  UI.evInput = (inp) => {
+    if (evD) {
+      const n = evD.res ? 1 : evD.ch.length, I = ED.Input;
+      if (inp.left || inp.up || inp.navX < 0 || inp.navY < 0) { evFocus = (evFocus + n - 1) % n; evPaint(); }
+      if (inp.right || inp.down || inp.navX > 0 || inp.navY > 0) { evFocus = (evFocus + 1) % n; evPaint(); }
+      for (let d = 1; d <= 4; d++) if (evD && (I.pressed.has('Digit' + d) || I.pressed.has('Numpad' + d))) evPick(evD.res ? 0 : d - 1);
+      if (evD && inp.confirm) evPick(evD.res ? 0 : evFocus);
+      if (evD && evD.vote && !evD.res) evPaint(); // the vote countdown
+    }
+    return Object.assign({}, inp, { mx: 0, my: 0, atk: false, atkPressed: false, skill: false, skill2: false, skill3: false, dash: false });
   };
 
   // ---------------- results ----------------

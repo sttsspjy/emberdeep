@@ -228,11 +228,8 @@
         enc.wave++; this.spawnWave(enc.waves[enc.wave]); enc.t = 1.2;
       } else if (enc.wave >= enc.waves.length - 1 && alive === 0 && !pending && enc.t <= 0) {
         this.enc = null; this.locked = false;
-        this.run.embers.elites += 4 + this.stratum;
-        const c = D.center(this.room);
-        this.spawnRelicChoices(c.x, c.y + 10, 'r');
-        this.dropGold(c.x, c.y, 10 + 6 * this.stratum);
         this.emit({ t: 'clear', trial: 1 });
+        ED.Events.fightDone(this, enc); // an event fight: its embers and pay (events.js)
       }
     }
   };
@@ -361,12 +358,7 @@
       items.forEach((it, i) => {
         props.push({ id: id(), kind: 'shop', x: c.x + (i - (items.length - 1) / 2) * 62, y: c.y + 24, item: it.item || it.type, stype: it.type, price: this.priceOf(it), state: 0 });
       });
-    } else if (room.type === 'event') {
-      const ev = room.event;
-      const prop = { id: id(), kind: ev, x: c.x, y: c.y, state: 0 };
-      if (ev === 'gamble') prop.price = Math.round(35 + 18 * s);
-      props.push(prop);
-    }
+    } // an event room's props come from its event (events.js startEvent)
     return props;
   };
 
@@ -395,6 +387,7 @@
     if (pr.owner && pr.owner !== pid) return; // a per-hero prop (owner: pid) answers only its owner
     if (Math.hypot(p.x - pr.x, p.y - pr.y) > 56) return;
     if (this.locked && pr.kind !== 'trial') return;
+    if (pr.ev) { this.evInteract(p, pr); return; } // an event prop (events.js)
     const s = this.stratum;
     switch (pr.kind) {
       case 'chest': {
@@ -455,41 +448,6 @@
         else if (pr.stype === 'potion') this.healPlayer(p, p.maxHp * 0.4);
         else if (pr.stype === 'boon') this.grantOffer(p, { src: 'epic' });
         else if (pr.stype === 'forge') this.grantOffer(p, { src: 'forge' });
-        break;
-      }
-      case 'fountain': {
-        pr.state = 1;
-        for (const q of this.players.values()) { if (q.downed) { q.downed = false; q.hp = 1; } this.healPlayer(q, q.maxHp * 0.5); }
-        this.emit({ t: 'fountain', x: pr.x, y: pr.y });
-        break;
-      }
-      case 'altar': {
-        pr.state = 1;
-        const cost = Math.round(p.maxHp * 0.2);
-        p.hp = Math.max(1, p.hp - cost);
-        this.grantOffer(p, { src: 'epic' });
-        this.emit({ t: 'altar', pid, x: pr.x, y: pr.y, v: cost });
-        break;
-      }
-      case 'gamble': {
-        if (this.gold < pr.price) { this.msgs.push({ to: pid, t: 'toast', text: 'Not enough gold.' }); return; }
-        this.gold -= pr.price; pr.state = 1;
-        const roll = this.rng.next();
-        const rar = roll < 0.12 ? 'e' : roll < 0.5 ? 'r' : 'c';
-        this.giveRelic(p, this.rollRelic(rar));
-        this.emit({ t: 'gamble', x: pr.x, y: pr.y });
-        break;
-      }
-      case 'trial': {
-        pr.state = 1;
-        this.locked = true;
-        const biome = ED.biomeFor(s), roster = rosterOf(biome);
-        const n = this.partySize();
-        const w1 = [{ type: biome.elite, elite: true }], w2 = [{ type: biome.elite, elite: true }];
-        for (let i = 0; i < 2 + n; i++) w1.push({ type: roster[i % roster.length][0] });
-        for (let i = 0; i < 3 + n; i++) w2.push({ type: roster[(i + 1) % roster.length][0], elite: i === 0 });
-        this.enc = { kind: 'trial', waves: [w1, w2], wave: -1, t: 0.6 };
-        this.emit({ t: 'lock' });
         break;
       }
       case 'portal': {

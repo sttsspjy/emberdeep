@@ -576,6 +576,7 @@
     this.floorSeed = this.rng.seed();
     this.floor = D.generate(s, this.floorSeed);
     this.roomState = {}; this.floorFights = 0; // fights cleared on this floor (the Platino's cue, rooms.js)
+    this.patches = {}; // room id -> merged room patch of this floor (events.js patchRoom, net.js RP)
     for (const r of this.floor.rooms) this.roomState[r.id] = { visited: false, known: true, cleared: false, props: null, broken: 0 }; // the whole map shows from the start
     this.run.roomsTotal += this.floor.rows + 2; // one path: the start camp, a room per row and the boss
     this.mapRun = { dark: 0, elite: 0 }; // dark and elite rooms cleared on this stratum (Cartographer)
@@ -592,6 +593,7 @@
   // Puts the party in room id: at its south entry when it came through a door (via = the door key it left by), else around the centre (the start camp).
   W.prototype.enterRoom = function (id, via) {
     this.collectAll();
+    if (this.ev) this.endEvent(); // the event of the room left (events.js)
     this.enemies.length = 0; this.projs.length = 0; this.zones.length = 0; this.chainQ.length = 0; this.curChain = null; this.corpses.length = 0;
     if (this.fg) this.fg.ok = false;
     this.boss = null; this.enc = null; this.critter = null;
@@ -614,6 +616,7 @@
     for (const a of this.allies) { const o = this.players.get(a.owner); if (o) { a.x = o.x + this.rng.range(-20, 20); a.y = o.y + this.rng.range(-20, 20); } }
     if (!rs.props) rs.props = this.makeProps(room);
     this.props = rs.props;
+    if (room.type === 'event' && !rs.evOn) this.startEvent(room, rs); // first entry: the event's identity and props (events.js)
     this.roomTime = 0;
     this.locked = false;
     if (!rs.cleared) this.beginEncounter(room, rs);
@@ -650,6 +653,7 @@
       revives: this.run.revives, flawlessBoss: this.run.flawlessBoss, maxGold: this.run.maxGold, maxRelics: this.run.maxRelics, players,
       evolved: [...this.players.values()].some(p => !!p.stats.evo), fullClear: this.run.fullClear,
       roomsVisited: this.run.roomsVisited, roomsTotal: this.run.roomsTotal, darkCleared: this.run.darkCleared, champs: this.run.champs | 0, gold777: !!this.run.gold777, oneFace: !!this.run.oneFace,
+      lore: (this.run.lore || []).slice(), // ED.LORE pages the party found this run (events.js)
     };
   };
 
@@ -676,6 +680,7 @@
     this.flowT -= dt;
     if (this.flowT <= 0) { this.computeFlow(); this.flowT = 0.25; }
     this.updateEncounter(dt);
+    if (this.ev) this.updateEvent(dt); // event votes and minigame ticks (events.js)
     for (let i = 0; i < this.enemies.length; i++) { this.updateEnemy(this.enemies[i], dt); if (!fg.direct) this.foeDrift(i); }
     this.separate();
     this.foeGrid();
