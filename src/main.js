@@ -124,7 +124,7 @@
     const me = cfg.players.find(x => x.pid === cfg.localPid);
     A.runCls = me ? me.cls : A.sel.cls;
     ED.UI.hideScreens();
-    for (const id of ['ov-boon', 'ov-sheet', 'ov-pause', 'ov-settings', 'ov-hearth', 'modal']) $(id).hidden = true;
+    for (const id of ['ov-boon', 'ov-sheet', 'ov-map', 'ov-pause', 'ov-settings', 'ov-hearth', 'modal']) $(id).hidden = true;
     ED.Game.start(mode, cfg);
     ED.Audio.music({ s: 1 });
   };
@@ -145,7 +145,7 @@
     A.persist();
     ED.Game.stop();
     A.state = 'results';
-    for (const id of ['ov-boon', 'ov-sheet', 'ov-pause', 'ov-settings']) $(id).hidden = true;
+    for (const id of ['ov-boon', 'ov-sheet', 'ov-map', 'ov-pause', 'ov-settings']) $(id).hidden = true;
     ED.UI.renderResults(run, res, note);
     $('btn-res-back').textContent = (A.host || (A.client && A.client.conn)) ? 'Back to the party' : 'Return to camp';
     $('btn-res-back').onclick = () => A.resultsBack();
@@ -180,7 +180,7 @@
     const on = v === undefined ? $('ov-pause').hidden : v;
     $('ov-pause').hidden = !on;
     $('pause-note').textContent = ED.Game.alone() ? 'The game is paused.' : 'The game does not pause in a party: your party is still playing.';
-    s.paused = on || !$('ov-sheet').hidden;
+    s.paused = on || !$('ov-sheet').hidden || !$('ov-map').hidden;
   };
 
   // ---------------- multiplayer ----------------
@@ -322,7 +322,7 @@
   }
 
   let last = performance.now(), hiddenTick = null, sheetFrames = 0, drawnW = 0, drawnH = 0;
-  const anyOverlay = () => ['ov-pause', 'ov-settings', 'modal', 'ov-sheet'].some(id => !$(id).hidden); // the boon cards are no blocker: a hero keeps moving under them (UI.pickBoon masks the attack keys itself)
+  const anyOverlay = () => ['ov-pause', 'ov-settings', 'modal', 'ov-sheet', 'ov-map'].some(id => !$(id).hidden); // the boon cards are no blocker: a hero keeps moving under them (UI.pickBoon masks the attack keys itself)
   const EMPTY = { mx: 0, my: 0, atk: false, skill: false, dash: false, atkPressed: false };
   // Hearthsitter: 180 s on the camp's Hearth screen (the Hearth section: Upgrades, Wardrobe, Chronicle) with no key, pointer or pad input grants the secret; leaving it or any input resets A.stillT (A.boot).
   const STILL_S = 180, HEARTH_TABS = { upgrades: 1, wardrobe: 1, chronicle: 1 };
@@ -349,22 +349,25 @@
     const w0 = performance.now();
     const inp = ED.Input.read();
     if (A.state === 'run' && ED.Game.s) {
-      const s = ED.Game.s, sheet = $('ov-sheet'), sheetWas = !sheet.hidden, openBefore = anyOverlay();
+      const s = ED.Game.s, sheet = $('ov-sheet'), mapv = $('ov-map'), sheetWas = !sheet.hidden || !mapv.hidden, openBefore = anyOverlay(); // the sheet and the map overlay: input blocked, solo paused
       if (inp.esc) {
         if (!$('ov-settings').hidden) $('ov-settings').hidden = true;
         else if (!$('modal').hidden) $('modal').hidden = true;
         else if (!sheet.hidden) ED.UI.toggleSheet(false);
+        else if (!mapv.hidden) ED.MapView.toggle(false);
         else A.togglePause();
       }
-      if (inp.tab) ED.UI.toggleSheet(); // also during a boon offer: the sheet stacks above the cards
+      if (inp.tab) { if (!mapv.hidden) ED.MapView.toggle(false); ED.UI.toggleSheet(); } // also during a boon offer: the sheet stacks above the cards; from the map it swaps to the sheet
+      else if (inp.mapview) { if (!sheet.hidden) ED.UI.toggleSheet(false); ED.MapView.toggle(); } // M: the floor map overlay (from the sheet: swaps to it)
       if (!sheet.hidden) { ED.UI.sheetNav(inp, dt); ED.UI.sheetTick(dt); }
-      s.paused = !$('ov-pause').hidden || !sheet.hidden;
-      const blocked = sheetWas || !$('ov-pause').hidden || !$('ov-settings').hidden || !$('modal').hidden || !sheet.hidden;
+      if (!mapv.hidden) { ED.MapView.nav(inp, dt); ED.MapView.tick(dt); }
+      s.paused = !$('ov-pause').hidden || !sheet.hidden || !mapv.hidden;
+      const blocked = sheetWas || !$('ov-pause').hidden || !$('ov-settings').hidden || !$('modal').hidden || !sheet.hidden || !mapv.hidden;
       ED.Game.update(dt, blocked ? EMPTY : inp);
       if (ED.Game.s) {
         // under the sheet the world is paused (solo: no redraw, the canvases keep the last frame) or drawn every 3rd frame (party); a resize clears the canvases and redraws once
         const R = ED.Render, shot = R.W !== drawnW || R.H !== drawnH;
-        if (sheet.hidden || shot || (!ED.Game.alone() && ++sheetFrames % 3 === 0)) { ED.Game.render(t, dt); drawnW = R.W; drawnH = R.H; }
+        if ((sheet.hidden && mapv.hidden) || shot || (!ED.Game.alone() && ++sheetFrames % 3 === 0)) { ED.Game.render(t, dt); drawnW = R.W; drawnH = R.H; }
       }
       if (openBefore && !anyOverlay()) ED.Input.mask(); // a closing overlay must not pass the press that closed it (or a held attack) to the game
     } else {

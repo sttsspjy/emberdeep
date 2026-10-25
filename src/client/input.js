@@ -1,5 +1,5 @@
 // Keyboard, mouse and gamepad. One binding table maps every action to two slots, each a KeyboardEvent.code or Mouse0..Mouse4.
-// Defaults: WASD move (arrows alternate), attack LMB / J, skill 1 Q, skill 2 E, skill 3 RMB / R (a hero without a skill 3 casts skill 1 with it), dash Space, map Tab, pause Esc.
+// Defaults: WASD move (arrows alternate), attack LMB / J, skill 1 Q, skill 2 E, skill 3 RMB / R (a hero without a skill 3 casts skill 1 with it), dash Space, map Tab (the character sheet), mapview M (the floor map), pause Esc.
 // Aim is the mouse cursor (I.mouse, CSS px; moved = time of the last pointer event, 0 before the first). Gamepad (fixed): left stick move,
 // right stick aim (latched 0.35 s after release), X / RT attack, RB skill 1, Y / LT skill 2, B skill 3, A / LB dash, Start pause, Back map.
 // I.device ('mouse' | 'pad') says which of the two currently aims. Menus read tabPrev / tabNext (Q / E, LB / RB), tabN (1-3), up / down / left / right (keys, d-pad), navX / navY (left stick, repeating), scrollY (right stick), back (B), reroll (Q, Y), cycle (Y).
@@ -21,12 +21,12 @@
     { id: 'left', label: 'Move left', group: 'Movement' }, { id: 'right', label: 'Move right', group: 'Movement' },
     { id: 'attack', label: 'Attack', group: 'Combat' }, { id: 'skill1', label: 'Skill 1', group: 'Combat' },
     { id: 'skill2', label: 'Skill 2', group: 'Combat' }, { id: 'skill3', label: 'Skill 3', group: 'Combat' }, { id: 'dash', label: 'Dash', group: 'Combat' },
-    { id: 'map', label: 'Character sheet', group: 'Interface' }, { id: 'pause', label: 'Pause', group: 'Interface' },
+    { id: 'map', label: 'Character sheet', group: 'Interface' }, { id: 'mapview', label: 'Map', group: 'Interface' }, { id: 'pause', label: 'Pause', group: 'Interface' },
   ];
   I.DEFAULTS = {
     up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'],
     attack: ['Mouse0', 'KeyJ'], skill1: ['KeyQ', null], skill2: ['KeyE', null], skill3: ['Mouse2', 'KeyR'], dash: ['Space', null],
-    map: ['Tab', null], pause: ['Escape', null],
+    map: ['Tab', null], mapview: ['KeyM', null], pause: ['Escape', null],
   };
   const ACTION = {}; for (const a of I.ACTIONS) ACTION[a.id] = a;
   const CODE_RE = /^(Mouse[0-4]|[A-Za-z][A-Za-z0-9]{1,24})$/;
@@ -44,6 +44,7 @@
 
   // Load saved bindings: unknown actions, malformed or duplicate codes and actions left without a key fall back to defaults.
   // A table saved before skill 3 existed (no skill3 entry) moves RMB from skill 1 to skill 3; skill 3's defaults yield to any code the table already uses.
+  // A table saved before the map key existed (no mapview entry) keeps its codes: M yields, and mapview stays unbound when M is taken.
   I.setBinds = (saved) => {
     const b = clone(I.DEFAULTS), used = new Set();
     let order = I.ACTIONS;
@@ -52,6 +53,7 @@
       if (Array.isArray(saved.skill1) && saved.skill1.indexOf('Mouse2') >= 0) { saved.skill1 = saved.skill1.map(c => (c === 'Mouse2' ? null : c)); if (!saved.skill1.some(Boolean)) saved.skill1 = I.DEFAULTS.skill1.slice(); }
       order = I.ACTIONS.filter(a => a.id !== 'skill3').concat(ACTION.skill3);
     }
+    if (saved && typeof saved === 'object' && !Array.isArray(saved.mapview)) order = order.filter(a => a.id !== 'mapview').concat(ACTION.mapview);
     if (saved && typeof saved === 'object') {
       for (const a of I.ACTIONS) {
         const s = saved[a.id];
@@ -63,7 +65,7 @@
       }
     }
     for (const a of order) for (let i = 0; i < 2; i++) { const c = b[a.id][i]; if (c && used.has(c)) b[a.id][i] = null; else if (c) used.add(c); }
-    for (const a of I.ACTIONS) if (!b[a.id][0] && !b[a.id][1]) b[a.id] = I.DEFAULTS[a.id].slice();
+    for (const a of I.ACTIONS) if (!b[a.id][0] && !b[a.id][1]) b[a.id] = a.id === 'mapview' ? I.DEFAULTS.mapview.map(c => (c && used.has(c) ? null : c)) : I.DEFAULTS[a.id].slice();
     I.binds = b; rebuild();
   };
   I.exportBinds = () => clone(I.binds);
@@ -216,6 +218,7 @@
     out.skill3 = hit('skill3');
     out.dash = hit('dash');
     out.tab = hit('map');
+    out.mapview = hit('mapview');
     out.esc = hit('pause') || hitCode('Escape'); // Esc always backs out of a menu, whatever pause is bound to
     out.confirm = codes.attack.some(c => !isMouse(c) && c !== 'Space' && I.pressed.has(c)) || hitCode('Enter', 'NumpadEnter'); // never Space: a dash mashed in combat must not pick a boon
     out.left = hit('left');

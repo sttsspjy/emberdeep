@@ -8,7 +8,7 @@
   const esc = UI.esc, n1 = Sh.n1;
   const TABS = ['build', 'combat', 'map'];
   const SHAPE = { beam: ' · a beam through every foe on its line', lob: ' · lobbed onto the cursor', boomerang: ' · flies out and back, every foe once each way', pool: ' · ends in a pool of light', trail: ' · leaves a trail of clouds' }; // weapon flight shapes (sheet weapon.shape)
-  const SH = { tab: 'build', viewPid: null, model: null, dirty: true, t: 99, sig: {}, live: {}, focusEl: null, focusKey: null, held: {}, mapKey: '', opened: false };
+  const SH = { tab: 'build', viewPid: null, model: null, dirty: true, t: 99, sig: {}, live: {}, focusEl: null, focusKey: null, held: {}, mv: null, opened: false }; // mv: the Map tab's ED.MapView
   UI.sheetState = SH;
 
   // ---------------- pixel frames ----------------
@@ -40,7 +40,7 @@
   // Text origins inside the sheet sit on PixUI.bias: .sheet-wrap is offset by --tb.
   const bias = () => { const el = $('ov-sheet'); if (el && PX) el.style.setProperty('--tb', (PX.bias / PX.dpr) + 'px'); };
   bias();
-  if (PX) PX.on(() => { bias(); SH.mapKey = ''; SH.dirty = true; });
+  if (PX) PX.on(() => { bias(); SH.dirty = true; });
 
   // ---------------- formatting helpers ----------------
   const X = (v) => '×' + v.toFixed(2);
@@ -328,7 +328,7 @@
     for (const t of TABS) { $('shp-' + t).hidden = t !== SH.tab; $('shtab-' + t).classList.toggle('on', t === SH.tab); $('shtab-' + t).setAttribute('aria-selected', t === SH.tab ? 'true' : 'false'); }
     if (SH.tab === 'build') paint('shp-build', renderBuild(m, p), force);
     else if (SH.tab === 'combat') paint('shp-combat', renderCombat(m), force);
-    else { paint('shp-map-side', renderMapSide(m), force); mapLegend(); mapDraw(force); }
+    else { paint('shp-map-side', renderMapSide(m), force); mapView(force); }
     const w = s.me.picks | 0;
     $('sh-pill').textContent = w > 0 ? `${w} ${w === 1 ? 'boon' : 'boons'} waiting` : ''; $('sh-pill').hidden = !(w > 0);
     $('sh-view').hidden = !SH.viewPid; if (SH.viewPid) $('sh-view').textContent = `Viewing ${p.name}: back to you`;
@@ -348,6 +348,7 @@
   UI.sheetTab = (t) => {
     if (TABS.indexOf(t) < 0 || t === SH.tab) return;
     SH.tab = t; SH.focusEl = null; SH.focusKey = null;
+    if (SH.mv) SH.mv.revealFor = null; // the Map tab opens on the current room
     const a = ED.App;
     if (a && a.settings) { a.settings.sheetTab = t; S.storeSettings(a.settings); }
     if (!$('ov-sheet').hidden) { render(true); focusFirst(); if (ED.Audio) ED.Audio.play('hover'); }
@@ -360,6 +361,7 @@
     if (!open) { SH.focusEl = null; SH.viewPid = null; return; }
     if (!SH.opened) { const saved = ED.App && ED.App.settings && ED.App.settings.sheetTab; if (TABS.indexOf(saved) >= 0) SH.tab = saved; SH.opened = true; }
     SH.sig = {}; SH.live = {};
+    if (SH.mv) SH.mv.revealFor = null;
     render(true);
     focusFirst();
   };
@@ -416,7 +418,7 @@
     }
     if (inp.navY) move(inp.navY > 0 ? 'down' : 'up');
     if (inp.navX) move(inp.navX > 0 ? 'right' : 'left');
-    if (inp.scrollY) { const c = (SH.focusEl && SH.focusEl.closest('.sh-in')) || $('shp-' + SH.tab).querySelector('.sh-in'); if (c) c.scrollTop += inp.scrollY * 45 * rem() * dt; }
+    if (inp.scrollY) { const c = SH.tab === 'map' && SH.mv ? SH.mv.vp : (SH.focusEl && SH.focusEl.closest('.sh-in')) || $('shp-' + SH.tab).querySelector('.sh-in'); if (c) c.scrollTop += inp.scrollY * 45 * rem() * dt; } // the Map tab: the right stick scrolls the map
     if (inp.cycle) cycleHero();
   };
   function cycleHero(to) {
@@ -428,77 +430,15 @@
     SH.focusEl = null; SH.focusKey = null; SH.sig = {}; render(true); focusFirst();
   }
 
-  // ---------------- map canvas ----------------
-  // The stratum map as a vertical node graph (start at the bottom, the boss at the top, LANES columns), in whole UI art px (PixUI.k device px each): paths as 2 art px stepped lines
-  // (visited brass, the current room's exits ember, the rest dim), rooms as outlined squares with a 1 art px bevel and their icon at whole multiples of 16 device px.
-  // Rooms off every path from the current room dim. Redrawn when the box, the room, the lock or the room-state hash change.
-  const MAP_C = { here: '#e6c27a', visited: '#5a4a3c', next: '#ff8a3d', ahead: '#2c231c', gone: '#17110d', dark: '#a070ff', elite: '#ff7a3a', threat: '#ff5a3a' };
-  function mapLegend() {
-    const el = $('sh-legend'); if (!el || el.firstChild) return;
-    el.innerHTML = [['here', 'you are here'], ['visited', 'visited'], ['next', 'next doors'], ['ahead', 'ahead'], ['gone', 'out of reach'], ['dark', 'dark room'], ['elite', 'elite or champion'], ['threat', 'threat']].map(([k, t]) => `<span><i style="--c:${MAP_C[k]}"></i>${t}</span>`).join('');
-  }
-  // Room ids reachable from room id through exits (id included).
-  function reachFrom(fl, id) {
-    const seen = new Set([id]), q = [id];
-    while (q.length) for (const n of fl.rooms[q.pop()].exits || []) if (!seen.has(n)) { seen.add(n); q.push(n); }
-    return seen;
-  }
-  let lblCtx = null;
-  // Advance of s in font px (Pixel Operator 700 at 16 px = 1 px per font px).
-  const lblW = (s) => { if (!lblCtx) lblCtx = document.createElement('canvas').getContext('2d'); lblCtx.font = '700 16px "Pixel Operator", "Segoe UI", system-ui, sans-serif'; return Math.ceil(lblCtx.measureText(s).width); };
-  function mapDraw(force) {
-    const v = ED.Game.s.view, fl = v.floor, box = $('sh-mapbox'), cv = $('map-canvas');
-    if (!fl || !fl.rows) return;
-    const dpr = window.devicePixelRatio || 1, W = Math.floor(box.clientWidth * dpr), H = Math.floor(box.clientHeight * dpr);
-    if (W < 16 || H < 16) return; // a hidden tab measures 0 and draws nothing
-    let rs = ''; for (const id in v.roomState) { const q = v.roomState[id]; rs += (q.visited ? 1 : 0) + (q.cleared ? 4 : 0); }
-    const k = PX ? PX.k : Math.max(1, Math.round(2 * dpr)), key = [W, H, k, v.roomId, v.locked ? 1 : 0, rs, v.floorSeed].join('|');
-    if (!force && key === SH.mapKey) return;
-    SH.mapKey = key;
-    cv.style.width = (W / dpr) + 'px'; cv.style.height = (H / dpr) + 'px';
-    if (cv.width !== W) cv.width = W;
-    if (cv.height !== H) cv.height = H;
-    const c = cv.getContext('2d'), st = v.roomState || {}, R = fl.rows, lanes = ED.Dungeon.LANES;
-    c.clearRect(0, 0, W, H); c.imageSmoothingEnabled = false;
-    const px = Math.max(8, Math.min(Math.floor(W / k / lanes), 40)), py = Math.max(8, Math.min(Math.floor(H / k / (R + 2)), 40)); // art px per lane and per row
-    const side = Math.max(6, Math.min(px, py) - Math.max(3, Math.round(Math.min(px, py) * 0.25))), S = side * k;
-    const ox = Math.floor((W - lanes * px * k) / 2 / k) * k, oy = Math.floor((H - (R + 2) * py * k) / 2 / k) * k; // whole art px
-    const at = (r) => [ox + Math.floor((r.lane + 0.5) * px - side / 2) * k, oy + Math.floor((R + 1 - r.row + 0.5) * py - side / 2) * k]; // top-left of a room's square
-    const rect = (col, x, y, w, h) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
-    const cur = fl.rooms[v.roomId], reach = cur ? reachFrom(fl, cur.id) : new Set(), half = Math.floor(side / 2) * k;
-    // a path: a 2 art px stepped line between the centres of two squares, in art px steps (Bresenham), drawn under the rooms
-    const line = (a, b, col) => {
-      const [ax, ay] = at(a), [bx, by] = at(b), x0 = (ax + half) / k | 0, y0 = (ay + half) / k | 0, x1 = (bx + half) / k | 0, y1 = (by + half) / k | 0;
-      let x = x0, y = y0; const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1; let e = dx + dy;
-      c.fillStyle = col;
-      for (let g = 0; g < 4096; g++) {
-        c.fillRect((x - 1) * k, (y - 1) * k, 2 * k, 2 * k);
-        if (x === x1 && y === y1) break;
-        const e2 = 2 * e; if (e2 >= dy) { e += dy; x += sx; } if (e2 <= dx) { e += dx; y += sy; }
-      }
-    };
-    const walked = (a, b) => st[a.id] && st[a.id].visited && st[b.id] && st[b.id].visited;
-    for (const pass of [0, 1, 2]) for (const r of fl.rooms) for (const n of r.exits || []) { // dim, then walked, then the current room's exits on top
-      const b = fl.rooms[n], kind = walked(r, b) ? 1 : r === cur ? 2 : 0;
-      if (kind !== pass) continue;
-      line(r, b, kind === 1 ? '#c9a063' : kind === 2 ? (v.locked ? '#8a5a32' : MAP_C.next) : reach.has(r.id) ? '#4a3626' : '#2a1f17');
-    }
-    const ico = Math.floor((S - 2 * k) / 16) * 16; // icons at whole 16 device px
-    const next = new Set(cur && cur.exits ? cur.exits : []);
-    for (const r of fl.rooms) {
-      const q = st[r.id] || {}, [x, y] = at(r), here = r === cur, gone = !q.visited && !reach.has(r.id);
-      const fill = here ? MAP_C.here : q.visited ? MAP_C.visited : gone ? MAP_C.gone : MAP_C.ahead;
-      rect(here ? '#fff3c4' : next.has(r.id) && !v.locked ? MAP_C.next : '#222222', x, y, S, S);
-      rect(fill, x + k, y + k, S - 2 * k, S - 2 * k);
-      rect(U.shade(fill, 0.22), x + k, y + k, S - 2 * k, k);
-      rect(U.shade(fill, -0.35), x + k, y + S - 2 * k, S - 2 * k, k);
-      const ri = r.type === 'start' ? { icon: 'campfire', color: '#c9a063' } : ED.Render.roomIcon ? ED.Render.roomIcon(r) : null; // glyphs of ED.Icons.room
-      if (ri && ico >= 16) { c.globalAlpha = gone ? 0.35 : 1; c.drawImage(ED.Icons.canvas(ri.icon, ri.color, ico), x + Math.floor((S - ico) / 2), y + Math.floor((S - ico) / 2), ico, ico); c.globalAlpha = 1; }
-      const th = U.clamp(r.threat | 0, 0, 3);
-      for (let i = 0; i < th && !q.cleared && S >= 16 * k; i++) { rect('#222222', x + (2 + 5 * i) * k, y + 2 * k, 4 * k, 4 * k); rect(MAP_C.threat, x + (3 + 5 * i) * k, y + 3 * k, 2 * k, 2 * k); } // threat pips, top-left
-      const mark = r.dark ? MAP_C.dark : r.type === 'elite' || r.type === 'champion' ? MAP_C.elite : null; // a 1 art px bar under the square: dark (violet), elite or champion (red)
-      if (mark) { rect('#222222', x, y + S, S, 2 * k); rect(gone ? U.shade(mark, -0.5) : mark, x + k, y + S, S - 2 * k, k); }
-    }
+  // ---------------- map ----------------
+  // The Map tab: the floor map (ED.MapView, the same renderer as the M overlay) and its legend; the heading button opens the M overlay.
+  const reachFrom = (fl, id) => ED.MapView.reach(fl, id);
+  function mapView(force) {
+    const fl = ED.Game.s.view.floor;
+    ED.MapView.legend($('sh-legend'), fl);
+    const b = $('sh-mapbtn'), t = 'Full map ' + ED.Input.label('mapview');
+    if (b.textContent !== t) b.textContent = t;
+    if (SH.mv) SH.mv.draw(force);
   }
 
   // ---------------- DOM events ----------------
@@ -513,6 +453,7 @@
     $('sh-view').addEventListener('click', () => cycleHero(ED.Game.s && ED.Game.s.me.pid));
     window.addEventListener('keydown', (e) => {
       if ($('ov-sheet').hidden) return;
+      if (SH.tab === 'map' && SH.mv) { if (SH.mv.scrollKey(e.code)) e.preventDefault(); return; } // the Map tab: the keys scroll the map
       const c = (SH.focusEl && SH.focusEl.closest('.sh-in')) || $('shp-' + SH.tab).querySelector('.sh-in');
       if (!c) return;
       if (e.code === 'PageDown') c.scrollTop += c.clientHeight - 2 * rem();
@@ -522,7 +463,8 @@
       else return;
       e.preventDefault();
     });
-    window.addEventListener('resize', () => { if (!root.hidden) { SH.mapKey = ''; SH.dirty = true; } });
-    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => { SH.mapKey = ''; if (!root.hidden && SH.tab === 'map' && ED.Game.s) mapDraw(true); }).observe($('sh-mapbox'));
+    window.addEventListener('resize', () => { if (!root.hidden) SH.dirty = true; });
+    SH.mv = ED.MapView.create($('sh-mapvp'), $('map-canvas'), $('sh-maptip'));
+    $('sh-mapbtn').addEventListener('click', () => { UI.toggleSheet(false); ED.MapView.toggle(true); });
   };
 })(globalThis.ED || (globalThis.ED = {}));

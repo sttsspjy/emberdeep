@@ -247,9 +247,8 @@
     return w ? (ep ? ep.evo + ' ' : '') + w.name : ED.CLASSES[p.cls].name;
   };
 
-  // Hero status chips as a flat [label, colour, ...] list shared by the redraw signature and the drawing: item states, Brace, Momentum, Kindling Sparks, Hexed foes, the next Cleave.
+  // Hero status chips as a flat [label, colour, ...] list shared by the redraw signature and the drawing: item states, Brace, Momentum, Kindling Sparks, Hexed foes (an empowered next attack shows on the hero and the cursor: render.js, aim.js).
   const CHIPS = [];
-  const cleaveNext = (me, st, view) => st.cleave > 0 && st.weapon.kind === 'melee' && ((view.time || 0) < (me.cleaveNext || 0) || ((me.atkCount | 0) + 1) % (3 + st.cleaveN) === 0);
   function chipList(view, me) {
     const st = me.stats, o = CHIPS; o.length = 0;
     if (!st) return o;
@@ -262,7 +261,6 @@
       const t = view.time || 0, wait = (me.braceAt || -99) + ED.CONST.BRACE_CD - t;
       if ((me.braceT || 0) > 0) o.push('Braced ' + me.braceT.toFixed(1) + ' s', '#ffd36b'); else if (wait > 0) o.push('Brace ' + Math.ceil(wait) + ' s', '#8f7f6c');
     }
-    if (st.cleave > 0 && cleaveNext(me, st, view)) o.push('Cleave next', '#ffd36b');
     if ((me.momN | 0) > 0) o.push('Momentum ×' + me.momN, '#b78cff');
     if (st.spark > 0 && (me.sparks | 0) > 0) o.push('Sparks ' + (me.sparks | 0) + '/' + st.sparkMax, '#ff9a3a'); // Kindling: Sparks the next spell spends
     if (st.hex > 0) { let n = 0; for (const e of view.enemies) if (e.hexed || e.hexT > 0) n++; if (n) o.push('Hexed ' + n, '#7dffd9'); }

@@ -208,8 +208,8 @@
   on('twinrise', (ev) => { F.ring(ev.x, ev.y, 50, '#ffb13a', 0.6, 3, true); A().play('revive', 0.9); F.addShake(3); });
   on('mimic', (ev) => { F.ring(ev.x, ev.y - 12, 24, '#e8e0ff', 0.35, 2); A().play('veil', 0.5); });
   on('msplit', (ev) => { F.ring(ev.x, ev.y, 40, '#e8e0ff', 0.5, 3); A().play('shatter', 0.8); F.addShake(3); });
-  const TELL = { beam: 'charge', stalk: 'ambush', combo: 'clang', crown: 'throw', blink: 'veil', orbs: 'magic', nova: 'magic', laser: 'charge', starfall: 'raincast', reel: 'howl', bind: 'clang', meteor: 'fire' };
-  on('tell', (ev) => { const s = TELL[ev.k]; if (s) A().play(s, ev.k === 'stalk' ? 1 : 0.6); if (ev.k === 'stalk') F.ring(ev.x, ev.y, 36, '#ffffff', 0.5, 3, true); });
+  const TELL = { beam: 'charge', stalk: 'ambush', combo: 'clang', crown: 'throw', blink: 'veil', orbs: 'magic', nova: 'magic', laser: 'charge', starfall: 'raincast', reel: 'howl', bind: 'clang', meteor: 'fire', shatter: 'veil', mpair: 'clang' };
+  on('tell', (ev) => { const s = TELL[ev.k]; if (s) A().play(s, ev.k === 'stalk' ? 1 : 0.6); if (ev.k === 'stalk') F.ring(ev.x, ev.y, 36, '#ffffff', 0.5, 3, true); if (ev.k === 'mpair') F.ring(ev.x, ev.y, 44, '#e8e0ff', 0.6, 3, true); });
 })(globalThis.ED || (globalThis.ED = {}));
 
 // Field kind (room.arena k 'field'): the Sporemother's spore carpet (one cached art-grid canvas per room, rebuilt when room.carpet changes), the Bone Warden's bone wall blocks

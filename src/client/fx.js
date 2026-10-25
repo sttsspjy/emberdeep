@@ -15,7 +15,7 @@
   let MAXP = 500, lastHs = 0, pickT = 0;
   const calm = () => !!(ED.App && ED.App.settings && !ED.App.settings.shake); // "screen shake off" also mutes flashes and hit-stop
 
-  F.reset = () => { F.parts.length = 0; F.texts.length = 0; for (const s of F.slashes) if (s.sm) smearPool.push(s.sm); F.slashes.length = 0; F.rings.length = 0; F.bolts.length = 0; F.pops.length = 0; releaseGhosts(); F.stains.length = 0; F.sheets.length = 0; F.beams.length = 0; F.holyT = {}; F.chargeT = {}; F.msgs.length = 0; F.hurtAt = {}; F.banner = null; F.shake = 0; F.flash = null; F.anim = {}; F.aberr = 0; F.kick = 0; hsUntil = 0; backT = -1; ent.clear(); hitN = 0; ED.Sprites.shotReset(); };
+  F.reset = () => { F.parts.length = 0; F.texts.length = 0; for (const s of F.slashes) if (s.sm) smearPool.push(s.sm); F.slashes.length = 0; F.rings.length = 0; F.bolts.length = 0; F.pops.length = 0; releaseGhosts(); F.stains.length = 0; F.sheets.length = 0; F.beams.length = 0; F.holyT = {}; F.chargeT = {}; F.msgs.length = 0; F.hurtAt = {}; F.banner = null; F.shake = 0; F.flash = null; F.anim = {}; F.aberr = 0; F.kick = 0; hsUntil = 0; backT = -1; ent.clear(); hitN = 0; F.trans = null; ED.Sprites.shotReset(); };
   F.setQuality = (q) => { MAXP = q === 'low' ? 180 : 500; };
   const lowFx = () => MAXP < 300;
   const cnt = (n) => Math.ceil(n * (MAXP < 300 ? 0.5 : 1) * F.crowd);
@@ -114,7 +114,7 @@
   F.cue = (name, vol, arg) => { if (ED.Audio) ED.Audio.play(name, vol, arg); };
   const SKILL_CUE = { charge: 'charge', volley: 'volley', rain: 'raincast', fireball: 'fire' }; // skill events with their own cast cue
   F.update = (dt) => {
-    if (ED.Audio) ED.Audio.flush(); // the frame's hits, impacts and deaths become layered cues
+    if (ED.Audio) { ED.Audio.flush(); statusSweep(); } // the frame's hits, impacts, DoT ticks and deaths become layered cues
     F.time += dt; snapBudget = 4;
     F.shake = Math.max(0, F.shake - dt * (10 + F.shake * 3));
     F.aberr = Math.max(0, F.aberr - dt * 2.4);
@@ -160,8 +160,24 @@
     ms.length = n;
     if (F.banner) { F.banner.t += dt; if (F.banner.t > F.banner.dur) F.banner = null; }
     for (const k in F.anim) F.anim[k].atkT += dt;
-    if (F.fade > 0) F.fade = Math.max(0, F.fade - dt * 2.2);
+    if (F.trans) transStep(F.trans, dt); else if (F.fade > 0) F.fade = Math.max(0, F.fade - dt * 2.2);
   };
+
+  // Portal descent (F.trans, set by 'descend'): ph 0 fades to black over TR_OUT; ph 1 holds black until the viewed world is on stratum tr.s and TR_HOLD more frames
+  // have drawn it, or TR_MAX s after the descent; ph 2 fades in over TR_IN (step capped at 1/30 s so a hitch never skips it) and restarts the stratum banner.
+  const TR_OUT = 0.2, TR_IN = 0.4, TR_MAX = 4, TR_HOLD = 2;
+  F.trans = null;
+  function transStep(tr, dt) {
+    tr.t += dt;
+    if (!tr.ready) { const g = ED.Game && ED.Game.s, v = g && g.view; if (v && v.floor && v.room && (v.stratum | 0) >= tr.s) tr.ready = true; }
+    if (tr.ph === 0) { F.fade = Math.max(F.fade, Math.min(1, tr.t / TR_OUT)); if (F.fade >= 1 || tr.t > TR_MAX) tr.ph = 1; }
+    if (tr.ph === 1) {
+      F.fade = 1;
+      if ((tr.ready && ++tr.n > TR_HOLD) || tr.t > TR_MAX) { tr.ph = 2; if (F.banner && F.banner.style === 'stratum') F.banner.t = 0; }
+      return;
+    }
+    if (tr.ph === 2) { F.fade = Math.max(0, F.fade - Math.min(dt, 1 / 30) / TR_IN); if (F.fade <= 0) F.trans = null; } // a door's fade bump during it decays at this rate
+  }
 
   // Starts a hero's attack animation (weapon sweep timing from Sprites.atkTimes); ranged weapons also get a muzzle flash.
   // sw: the weapon of this attack's combo step (ED.Stats.stepWeapon; an.w, read by the swing pose), else the hero's weapon.
@@ -215,6 +231,33 @@
     if (!t) return;
     if (dotSum.size > 96) for (const [k, s] of dotSum) if (F.time - s.at >= 0.5) dotSum.delete(k);
     dotSum.set(key, { t, v: ev.v, at: F.time });
+  }
+  // Status sound, keyed foe id x 8 + el: elSeen the last hit or tick of an element (an application cue when the foe had none for 1.5 s), dotSeen the last DoT tick (dotN[el]: foes of el ticking within 0.6 s, the DoT cue's loudness).
+  const elSeen = new Map(), dotSeen = new Map(), dotN = [0, 0, 0, 0, 0, 0, 0, 0];
+  function applyCue(e, el, mine) {
+    if (!e || el < 1 || el > 3) return;
+    const key = e.id * 8 + el, prev = elSeen.get(key);
+    elSeen.set(key, F.time);
+    if (prev === undefined || F.time - prev > 1.5) ED.Audio.applied(el, mine);
+  }
+  function dotCount(e, el) {
+    if (!e) return Math.max(1, dotN[el]);
+    const key = e.id * 8 + el, prev = dotSeen.get(key);
+    if (prev === undefined || F.time - prev > 0.6) dotN[el]++;
+    dotSeen.set(key, F.time);
+    return dotN[el];
+  }
+  // Every 0.25 s: drops stale entries, recounts dotN and hands the number of burning foes in view (fodder included: fodder sends no ticks) to the Burn bed.
+  let sweepT = -9;
+  function statusSweep() {
+    if (F.time - sweepT < 0.25 && F.time >= sweepT) return;
+    sweepT = F.time; dotN.fill(0);
+    for (const [k, t] of dotSeen) { if (F.time - t > 0.6 || t > F.time) dotSeen.delete(k); else dotN[k % 8]++; }
+    for (const [k, t] of elSeen) if (F.time - t > 1.5 || t > F.time) elSeen.delete(k);
+    const s = ED.Game && ED.Game.s, es = s && s.view && s.view.enemies;
+    let nb = 0;
+    if (es) for (let i = 0; i < es.length; i++) { const e = es[i]; if ((e.burnLvl !== undefined ? e.burnLvl : ED.Net.burnLevel(e)) > 0) nb++; }
+    ED.Audio.bed(1, nb);
   }
 
   // ---------- pixel smear of weapon swings ----------
@@ -345,6 +388,10 @@
   const R = () => ED.Render;
   const ENEMY_COLOR = (type) => { const d = ED.ENEMIES[type]; return d ? d.col.a : '#ffffff'; };
   const EL_COL = ['', '#ff9a3a', '#9fefff', '#ffe66b', '#ff4a5a', '#9be33c', '#fff0c2', '#a070ff']; // hit-event el: 0 physical, 1 fire, 2 ice, 3 lightning, 4 bleed, 5 poison, 6 holy, 7 shadow
+  const EL_IMP = ['', 'e1', 'e2', 'e3', 'e4']; // skill-hit impact cue by el (Flame burst, Frost shatter, Storm chain, Bleed burst); el 0 and the class flavours ring with the class timbre
+  // Hit cue material of hero p's weapon: blade (swords, spears, daggers, scythes, thrown knives), blunt (hammers, maces, bells; also no hero), arrow (arrows, bolts, bone shards), magic (every other bolt)
+  const BLADE = { sword: 1, spear: 1, dagger: 1, scythe: 1 }, SHAFT = { arrow: 1, bolt: 1, bone: 1 }, THROWN = { knife: 1, boomerang: 1 };
+  const matOf = (p) => { const w = p && p.stats && p.stats.weapon; return !w ? 'blunt' : w.kind === 'proj' ? (SHAFT[w.proj] ? 'arrow' : THROWN[w.proj] ? 'blade' : 'magic') : BLADE[w.look] ? 'blade' : 'blunt'; };
   const EL_OL = [null, null, null, '#bfe6ff', '#b8c0cc', null, '#ffcf5a', null]; // 1 px rim of a hit number where the fill alone is hard to tell apart (Lightning, Bleed, Holy); the others keep the dark outline
   const PATH_COL = { fire: '#ff7a2a', ice: '#7fe3ff', lightning: '#ffe66b', poison: '#9be33c', holy: '#fff0c2', shadow: '#a070ff', general: '#d9dfe8' };
   const PROJ_COLOR = { bone: '#e6dfc9', spore: '#9cff6a', ice: '#9fefff', fire: '#ff8a2a', water: '#6fe6ff', void: '#d48cff', arrow: '#e8d8b0', bolt: '#cfd6de', firebolt: '#ff9a3a', spark: '#ffcf4a', fireball: '#ff6a1a', knife: '#d9dfe8', boomerang: '#d9c8ff', holy: '#ffe9a0', soul: '#7dffd9', plague: '#9cff6a', wave: '#ffe9a0', wisp: '#bff0ff', shard: '#b78cff', blade: '#cfd6de', orb: '#ff7ad9', trident: '#e8c66b', skull: '#e6dfc9',
@@ -608,11 +655,11 @@
     switch (ev.t) {
       case 'hit': {
         const mine = ev.pid === local, el = ev.el | 0, ec = EL_COL[el] || '', p = ev.pid ? ctx.player(ev.pid) : null;
-        if (ev.k) { // a damage-over-time tick (fodder sends none): a summed number in the status colour (own ticks only), a tint flash on the foe, a soft tick; a skill-zone tick (k 2) also rings
+        if (ev.k) { // a damage-over-time tick (fodder sends none): a summed number in the status colour (own ticks only), a tint flash on the foe, the element's aggregated tick cue; a skill-zone tick (k 2) also rings
           const e = foeAt(ev.x, ev.y);
           if (set.dmg && mine) dotNumber(ev, e, el);
           if (e) { const s = entOf(e.id); s.dt = F.time; s.dc = ec || '#ffab70'; }
-          A.dotTick(ev.pid, mine, el);
+          A.dot(el, mine ? 1 : 0.5, dotCount(e, el)); applyCue(e, el, mine);
           if (ev.k === 2) A.impact(p ? p.cls : '', mine, el);
           if (el === 1) elemHit(ev.x, ev.y + 4, 1, 0, false);
           break;
@@ -631,7 +678,8 @@
           hitSplash(ev, e, r, gy, a, w, el, p);
           contactFx(ev, a, mine, p);
           if (ev.b && F.time - backT > 0.06) { backT = F.time; F.slash(ev.x - Math.cos(a) * 6, gy - r * 0.6 - Math.sin(a) * 6, a, 16, 0.5, '#b78cff', 0.12); } // a Backstab: a small violet slash
-          if (ev.s) { A.impact(p ? p.cls : '', mine, el); if (ev.c) A.hit(true, mine, w, el); } else A.hit(!!ev.c, mine, w, el); // aggregated per frame by A.flush
+          if (ev.s) { A.impact(EL_IMP[el] || (p ? p.cls : ''), mine, el); if (ev.c) A.hit(true, mine, w, el, matOf(p), 0); } else A.hit(!!ev.c, mine, w, el, matOf(p), ev.h | 0); // aggregated per frame by A.flush; an element skill hit (burst, chain, shatter) rings by element
+          applyCue(e, el, mine);
           if (mine && (ev.c || ev.v >= 60)) F.hitStop(ev.c ? 0.06 : 0.04);
           if (mine && ev.h) F.hitStop(0.07); // heavy weapon hit
           if (mine && w > 0.75 && !ev.c) F.addShake(1);
@@ -751,7 +799,7 @@
       case 'relic': { const p = ctx.player(ev.pid), r = ED.RELICS[ev.id], PF = ED.PickFx; if (p) F.text(p.x, p.y - 40, r.name, ED.RARITY[r.rar].color, 11, { life: 1.8, max: 1.8 }); if (PF) PF.burst(F, ctx, ev, 'relic'); if (ev.pid === local) { if (PF) PF.heard('relic'); ED.UI && ED.UI.toast(`<b>${r.name}</b> — ${r.desc}`, ED.Icons.relicUrl(ev.id)); } else if (p) F.msg(`${p.name} found ${r.name}`); break; }
       case 'lock': A.play('lock'); F.addShake(4); break;
       case 'reinf': F.ring(ev.x, ev.y, 46, '#ff5a3a', 0.6, 3); F.text(ev.x, ev.y - 40, 'Reinforcement', '#ff8a6a', 10, { life: 1.4, max: 1.4, vy: -12 }); A.play('spawn', 4); break; // the last wave's strong foe forms
-      case 'clear': A.play('unlock'); F.showBanner(ev.trial ? 'Trial complete' : 'Room cleared', '', 'small', 1.4); break;
+      case 'clear': A.play('unlock'); A.play('clear'); F.showBanner(ev.trial ? 'Trial complete' : 'Room cleared', '', 'small', 1.4); break;
       case 'bossIntro': F.showBanner(ev.name, ev.title, 'boss', 3.4); F.bossQuote = ev.quote ? { text: ev.quote, t: 0 } : null; A.play('roar'); A.music({ s: ctx.stratum(), boss: true }); F.addShake(8); F.punch(0.9, 0); break;
       case 'bossSpawn': F.addShake(6); F.punch(0.6, 0); break;
       case 'bossDown': F.showBanner('Boss defeated', ED.ENEMIES[ev.type].name, 'victory', 3); F.flash = { color: '#ffffff', t: 0.5, a: 0.5 }; F.addShake(12); F.punch(2, 1); F.hitStop(0.3); A.play('roar', 0.6); if (ev.type !== 'hollowking') A.play('victory', 0.7, 'boss'); A.music({ s: ctx.stratum() }); F.burst(ev.x, ev.y - 20, 60, { color: ED.ENEMIES[ev.type].col.c, sp: 220, life: 1.2, size: 3.5, add: true }); F.burst(ev.x, ev.y - 20, 18, { kind: 'streak', color: '#ffffff', sp: 380, life: 0.5, size: 2.4 }); F.ring(ev.x, ev.y, 160, ED.ENEMIES[ev.type].col.c, 0.8, 6); F.ring(ev.x, ev.y, 90, '#ffffff', 0.5, 3); F.pop(ev.x, ev.y - 20, 90, '#ffffff', 0.5); break;
@@ -774,7 +822,7 @@
       case 'regrow': F.burst(ev.x, ev.y - 6, 10, { color: '#9cff6a', sp: 50, vy: -40, life: 0.6, size: 2.2, add: true }); F.ring(ev.x, ev.y, 22, '#9cff6a', 0.4, 2); A.play('spawn', 0.5); break;
       case 'uproot': F.addShake(9); F.punch(1, 0.4); dust(ev.x, ev.y, 'dust', 5); F.burst(ev.x, ev.y, 20, { kind: 'shard', color: '#6b5238', sp: 130, life: 0.7, size: 2.6, vz: 120, z: 4 }); A.play('thud', 1); break;
       case 'fury': { const en = ED.ENEMIES[ev.type]; F.addShake(5); F.punch(1.2, 0.5); A.play('fury', 0.8); F.ring(ev.x, ev.y, 130, '#ff5a1a', 0.55, 5); F.ring(ev.x, ev.y, 70, '#ffb56b', 0.4, 3); F.burst(ev.x, ev.y - 20, 36, { color: '#ff8a3d', sp: 150, vy: -40, life: 0.9, size: 2.8, add: true, drag: 1.6 }); F.pop(ev.x, ev.y - 20, 70, '#ff8a3d', 0.4); if (en) F.msg(en.name + ' is furious: faster and harder hits', '#ff8a3d'); break; }
-      case 'stratum': { const b = ED.biomeFor(ev.s); F.showBanner(b.name, 'Stratum ' + U.roman(ev.s), 'stratum', 3.6); F.fade = 1; A.music({ s: ev.s }); break; }
+      case 'stratum': { const b = ED.biomeFor(ev.s); F.showBanner(b.name, 'Stratum ' + U.roman(ev.s), 'stratum', 3.6); if (F.trans) F.trans.ready = true; else F.fade = 1; A.music({ s: ev.s }); break; }
       case 'room': for (const p of ctx.players()) F.sheet('fx.circle.spark', p.x, p.y + 2, { add: true, a: 0.7, speed: 1.6 }); F.fade = Math.max(F.fade, 0.6); break;
       case 'down': { const p = ctx.player(ev.pid); A.play('down'); if (p) F.msg(ev.pid === local ? 'You are down. An ally can revive you.' : `${p.name} is down. Stand next to them to revive.`, '#ff8a7a'); break; }
       case 'revived': { const p = ctx.player(ev.pid); A.play('revive'); if (p) { F.msg(`${p.name} is revived`, '#86d38f'); F.burst(p.x, p.y - 10, 24, { color: '#ffe9a0', sp: 70, vy: -60, life: 0.9, size: 2.4, add: true }); F.ring(p.x, p.y, 40, '#ffe9a0', 0.5, 3); SP('fx.circle.spark', p.x, p.y - 4, { ramp: 'holy', add: true }); F.pop(p.x, p.y - 12, 30, '#ffe9a0', 0.3); } break; }
@@ -818,8 +866,8 @@
       case 'fountain': A.play('heal'); F.burst(ev.x, ev.y - 10, 40, { color: '#6fe6ff', sp: 100, vy: -80, life: 1.0, size: 2.6, add: true }); F.ring(ev.x, ev.y, 50, '#6fe6ff', 0.6, 3); break;
       case 'altar': A.play('hurt', 0.6); F.burst(ev.x, ev.y - 10, 30, { color: '#d43a5a', sp: 90, vy: -60, life: 0.8, size: 2.6, add: true }); F.pop(ev.x, ev.y - 16, 36, '#d43a5a', 0.3); break;
       case 'gamble': A.play('chest'); break;
-      case 'descend': A.play('portal'); F.fade = 1.4; break;
-      case 'victory': A.play('victory'); F.showBanner('Victory', 'Hollow King defeated', 'victory', 4.5); break;
+      case 'descend': A.play('portal'); F.trans = { ph: 0, t: 0, n: 0, s: ev.s | 0, ready: false }; break; // black until the next stratum draws (transStep)
+      case 'victory': A.play('victory'); A.music('none'); F.showBanner('Victory', 'Hollow King defeated', 'victory', 4.5); break;
       case 'defeat': A.play('defeat'); A.music('none'); break;
       case 'expose': F.text(ev.x, ev.y - 30, ev.boss ? 'WEAKENED' : 'EXPOSED', '#ff6a5a', ev.boss ? 13 : 9, { pop: true }); break;
       case 'wardbreak': F.ring(ev.x, ev.y - 10, 26, '#7fc8ff', 0.3, 3); F.burst(ev.x, ev.y - 10, 10, { kind: 'streak', color: '#bfe3ff', sp: 160, life: 0.3, size: 1.4 }); F.pop(ev.x, ev.y - 10, 20, '#7fc8ff', 0.18); A.play('deflect'); break;

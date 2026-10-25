@@ -494,7 +494,7 @@
       case 'portal': {
         pr.state = 1;
         this.collectAll();
-        this.pendingStratum = { s: s + 1, t: 1.4 };
+        this.pendingStratum = { s: s + 1, t: 0.3 }; // covers the client's 0.2 s fade to black (fx.js transStep)
         this.emit({ t: 'descend', s: s + 1 });
         break;
       }

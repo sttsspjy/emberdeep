@@ -149,6 +149,24 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   const wire = (s) => JSON.parse(JSON.stringify(s));
   const mirrorOf = (w) => new G.Mirror({ pact: w.pact, players: [{ pid: 'p0', name: 'T', slot: 0, cls: 'knight', weapon: ED.CLASSES.knight.weapons[0], meta: META() }] }, 'p0');
 
+  // empowered next attack: P[28] reaches the mirror (p.emp); R.empower reads the sim on a World view, the snapshot for an ally on a client, the client's own prediction for its hero
+  {
+    const pl = [0, 1].map((i) => ({ pid: 'p' + i, name: 'T' + i, slot: i, cls: 'knight', weapon: ED.CLASSES.knight.weapons[0], meta: META() }));
+    const w = new ED.World({ seed: 7, pact: 0, players: pl }); w.startRun(); w.enemies.length = 0; w.enc = null; w.locked = false;
+    const h0 = w.players.get('p0'), h1 = w.players.get('p1'), CL = ED.EMPOWER.findIndex((e) => e.id === 'cleave') + 1;
+    Object.assign(h0.stats, { cleave: 0.5, cleaveN: 0 }); h0.atkCount = 2; h1.atkCount = 2;
+    const m = new G.Mirror({ pact: 0, players: pl }, 'p1'), snap = wire(N.encodeSnap(w, [], false)); snap.T = 5; m.apply(snap, 0);
+    const m0 = m.players.get('p0'), m1 = m.players.get('p1');
+    ok(snap.P.find((r) => r[0] === 'p0')[28] === CL && m0.emp === CL && m1.emp === 0, `P[28] reaches the mirror (${m0.emp}, ${m1.emp})`);
+    const loc0 = R.local; R.local = 'p1';
+    R.foeArt.view(m); ok(R.empower(m0) && R.empower(m0).id === 'cleave', 'a client draws an ally empowered from the snapshot');
+    ok(!R.empower(m1), 'a client hero without Cleave: not empowered');
+    Object.assign(m1.stats, { cleave: 0.5, cleaveN: 0 }); m1.atkCount = 2; ok(R.empower(m1) && R.empower(m1).id === 'cleave', 'a client predicts its own hero (attack count ahead of the snapshot)');
+    m0.downed = true; ok(!R.empower(m0), 'a downed hero shows no empower'); m0.downed = false;
+    R.foeArt.view(w); ok(R.empower(h0) && R.empower(h0).id === 'cleave' && !R.empower(h1), 'host and solo read the sim');
+    R.local = loc0; R.foeArt.view(null);
+  }
+
   // wire size: 150 foes, 100 of them fodder
   {
     const w = room1(0), foes = [];
@@ -353,7 +371,7 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
       // events
       const fctx = { localPid: 'p0', player: () => ({ x: 0, y: 0, pid: 'p0', cls: 'bell' }), players: () => [], stratum: () => 1 };
       const plays = [], A0 = ED.Audio;
-      ED.Audio = { play: (name, v, arg, pr) => plays.push({ name, v, arg, pr }), flush() {}, hit() {}, impact() {}, kill() {} };
+      ED.Audio = { play: (name, v, arg, pr) => plays.push({ name, v, arg, pr }), flush() {}, hit() {}, impact() {}, kill() {}, dot() {}, bed() {}, applied() {} };
       const good = {
         pdodge: { pid: 'p0', x: 100, y: 100 }, blink: { pid: 'p0', x0: 100, y0: 100, x1: 180, y1: 120, k: 'storm' }, shatter: { x: 100, y: 100, r: 70 }, hurl: { pid: 'p0', x: 100, y: 100, k: 2.5 }, reel: { pid: 'p0', x0: 100, y0: 100, x1: 200, y1: 120 },
       };
@@ -435,6 +453,7 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
       const cv0 = { stratum: 1, enemies: [{ charge: 1, hp: 5 }, { charge: 1, hp: 5 }, { charge: 0, hp: 5 }, { charge: 1, hp: 0 }], players: new Map() };
       const chips = (me) => H.cues.chips(cv0, me).filter((x, i) => !(i & 1));
       ok(chips({ stats: { lightningInfuse: 0.5 }, boons: {} }).includes('Charged 2') && !chips({ stats: {}, boons: {} }).some((x) => /^Charged/.test(x)), 'Lightning: a chip counts the live charged foes a dash discharges');
+      ok(!chips({ stats: { cleave: 0.5, cleaveN: 0, weapon: { kind: 'melee' } }, atkCount: 2, boons: {} }).some((x) => /Cleave/.test(x)), 'no Cleave chip: the empowered next attack shows on the hero and the cursor');
       const mk = (type, furyT, extra) => Object.assign({ id: 9, type, def: ED.ENEMIES[type], boss: true, hp: 800, maxHp: 1000, exposed: false, furyT, furyM: ED.World.furyMul(ED.ENEMIES[type].stratum || 4, furyT) }, extra);
       H.draw(null, viewOf(4, mk(B4, 0)), null, {}, 0, 0.016, {}); // sets up the canvas and layout
       const bar = (s, type, furyT, extra) => {

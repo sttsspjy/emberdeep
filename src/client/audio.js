@@ -1,5 +1,5 @@
 // Synthesized sound: every effect and the adaptive score (score.js) are built from oscillators and noise, so the game ships no audio files.
-// Effects pass a voice budget (priority: hero hurt > own crits > own hits and kills > others); hits, impacts and deaths of one frame are aggregated into one layered cue (A.hit, A.impact, A.kill, A.flush).
+// Effects pass a voice budget (priority: hero hurt > own crits > own hits and kills > others); hits, impacts, DoT ticks (per element) and deaths of one frame are aggregated into one layered cue each (A.hit, A.impact, A.dot, A.kill, A.flush).
 (function (ED) {
   'use strict';
   const A = ED.Audio = { ctx: null, ready: false, last: {}, vol: { master: 0.7, music: 0.55, sfx: 0.8 }, track: null, clock: null, offline: false, score: null };
@@ -102,7 +102,7 @@
   const lite = () => !!(ED.Render && ED.Render.quality === 'low');
   const rnd = (a, b) => a + Math.random() * (b - a);
 
-  const GAP = { hit: 0.035, ohit: 0.035, crit: 0.05, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1, freeze: 0.05, shatter: 0.06, combust: 0.06, guardhit: 0.06, block: 0.05, clang: 0.03, throw: 0.08, catch: 0.08, parry: 0.1, bell: 0.06, charge: 0.2, chargehit: 0.2, volley: 0.15, raincast: 0.15, smash: 0.05, dark: 0.5, fury: 1, dcharge: 0.08, blossom: 0.05, implode: 0.2, pick: 0.08, bstrike: 0.07, rattle: 0.06, peal: 0.08, heave: 0.15, reel: 0.2, bsmash: 0.08, bhurl: 0.06, bdrag: 0.15, blood: 0.15 };
+  const GAP = { hit: 0.035, ohit: 0.035, crit: 0.05, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1, freeze: 0.05, shatter: 0.06, combust: 0.06, guardhit: 0.06, block: 0.05, clang: 0.03, throw: 0.08, catch: 0.08, parry: 0.1, bell: 0.06, charge: 0.2, chargehit: 0.2, volley: 0.15, raincast: 0.15, smash: 0.05, dark: 0.5, fury: 1, dcharge: 0.08, blossom: 0.05, implode: 0.2, pick: 0.08, bstrike: 0.07, rattle: 0.06, peal: 0.08, heave: 0.15, reel: 0.2, bsmash: 0.08, bhurl: 0.06, bdrag: 0.15, blood: 0.15, ignite: 0.08, icecrack: 0.08, zap: 0.08 };
   const PRIO = { secret: 2, drownbell: 3, hurt: 3, down: 3, revive: 3, dark: 3, lock: 3, roar: 3, fury: 3, victory: 3, defeat: 3, crit: 2, level: 2, boon: 2, relic: 2, pick: 2, shop: 2, ohit: 0, spark: 0, eshoot: 0, xp: 0, gold: 0, spawn: 0 };
   // arg: cue-specific parameter (hit and crit: { w damage share, el element, n hits this frame }; clang: { n, g }; victory: 'boss' for the short one; pick: a card kind or { k kind, big })
   A.play = (name, vol, arg, pr) => {
@@ -116,7 +116,8 @@
 
   function sting(kind, t) {
     if (!A.score) { [523, 659, 784, 1046].forEach((f, i) => tone('triangle', f, f, 0.6, 0.1, null, t + i * 0.12)); return; }
-    prio = 3; A.duck(kind === 'defeat' ? 0.2 : 0.3, A.score.sting(kind, t + 0.02) * 0.75);
+    prio = 3; const clear = kind === 'clear', d = A.score.sting(kind, t + 0.02);
+    A.duck(kind === 'defeat' ? 0.2 : clear ? 0.45 : 0.3, d * (clear ? 0.6 : 0.75));
   }
 
   function cue(name, v, arg, t) {
@@ -126,19 +127,7 @@
       case 'shoot': tone('triangle', rnd(800, 950), 300, 0.08, 0.12 * v); noise('highpass', 3000, 1500, 0.05, 0.05 * v); break;
       case 'fire': noise('lowpass', 1200, 300, 0.2, 0.18 * v); tone('sine', 220, 80, 0.18, 0.1 * v); break;
       case 'magic': tone('sine', rnd(600, 700), rnd(1200, 1400), 0.12, 0.08 * v); tone('triangle', 300, 600, 0.12, 0.05 * v); break;
-      case 'hit': case 'ohit': case 'crit': { // layers: body thump (lower and longer with damage share w), click, element tail; crits add a ringing partial; n hits of one frame grow body and loudness by log2(1 + n) and add a mass thump
-        const w = arg && arg.w !== undefined ? Math.min(1.4, arg.w) : 0.5, el = arg && arg.el | 0, crit = name === 'crit' || !!(arg && arg.c), n = (arg && arg.n) || 1, lg = Math.log2(1 + n), sc = Math.min(1.9, 1 + 0.3 * (lg - 1));
-        noise('bandpass', crit ? 3200 : rnd(1600, 2400), 700, 0.05 + 0.02 * w, (crit ? 0.2 : 0.14 + 0.07 * w) * v * sc, crit ? 3 : 2);
-        tone('sine', (crit ? 230 : 190) - 70 * w, 52, 0.07 + 0.07 * w + 0.02 * lg, (0.12 + 0.12 * w) * v * sc);
-        if (crit) { tone('square', 520, 140, 0.09, 0.07 * v); tone('sine', 1320, 1180, 0.2, 0.05 * v); }
-        if (n >= 3) { tone('sine', 115, 44, 0.16 + 0.03 * lg, Math.min(0.26, 0.05 + 0.04 * lg) * v); noise('lowpass', 1100, 150, 0.1 + 0.03 * lg, Math.min(0.16, 0.03 + 0.03 * lg) * v); }
-        if (el === 1) noise('lowpass', 2600, 500, 0.16, 0.1 * v, 1);
-        else if (el === 2) tone('sine', rnd(2600, 3200), 3800, 0.09, 0.06 * v);
-        else if (el === 3) { tone('sawtooth', 1600, 300, 0.07, 0.05 * v); noise('highpass', 4500, 2500, 0.05, 0.05 * v); }
-        else if (el === 4) noise('bandpass', 420, 180, 0.1, 0.12 * v, 1.5);
-        else tone('square', rnd(1700, 2100), 1200, 0.035, 0.03 * v);
-        break;
-      }
+      case 'hit': case 'ohit': case 'crit': hitCue(name === 'crit' || !!(arg && arg.c), arg || {}, v, t); break;
       case 'die': dieVoice(arg, v, t); break;
       case 'hurt': tone('sawtooth', 190, 70, 0.22, 0.26 * v); noise('lowpass', 1400, 200, 0.18, 0.3 * v); tone('sine', 110, 48, 0.16, 0.22 * v); break;
       case 'gold': tone('sine', 1320, 1320, 0.05, 0.08 * v); tone('sine', 1760, 1760, 0.07, 0.07 * v, null, t + 0.05); break;
@@ -179,6 +168,7 @@
       case 'bolt': noise('highpass', 2500, 600, 0.25, 0.25 * v, 0.5); tone('sawtooth', 1200, 200, 0.2, 0.06 * v); break;
       case 'victory': sting(arg === 'boss' ? 'boss' : 'victory', t); break;
       case 'defeat': sting('defeat', t); break;
+      case 'clear': sting('clear', t); break; // room cleared: the short victory stinger
       case 'spawn': noise('bandpass', 300, 1200, 0.3, 0.05 * v, 2); break;
       case 'freeze': tone('sine', 1900, 2900, 0.1, 0.08 * v); tone('triangle', 3100, 2400, 0.16, 0.05 * v, null, t + 0.04); noise('highpass', 6500, 3500, 0.12, 0.07 * v); break;
       case 'shatter': noise('highpass', 3800, 1400, 0.3, 0.26 * v, 0.7); tone('square', 3200, 800, 0.1, 0.06 * v); [2600, 3400, 4100].forEach((f, i) => tone('sine', f, f * 0.7, 0.12, 0.04 * v, null, t + 0.03 + i * 0.045)); break;
@@ -286,6 +276,10 @@
         tone('sine', 55, 48, 1.6, 0.2 * v); tone('sine', 58.3, 50, 1.6, 0.15 * v); tone('sine', 233, 228, 1.4, 0.05 * v); noise('lowpass', 200, 700, 1.3, 0.12 * v); tone('sine', 311, 305, 1.5, 0.05 * v, null, t + 0.2);
         break;
       case 'dcharge': tone('sine', 1760, 1760, 0.06, 0.05 * v); tone('sine', 2637, 2637, 0.05, 0.025 * v, null, t + 0.035); break;
+      // status applied to a fresh foe (A.applied): Burn ignites with a whoosh and a whoomp, Frost cracks like ice with a glassy ring, Storm zaps down with a chatter
+      case 'ignite': noise('bandpass', 280, 2400, 0.16, 0.22 * v, 1.1, null, t, 0.04); tone('sine', 120, 55, 0.14, 0.16 * v, null, t + 0.02); for (let i = 0; i < 2; i++) noise('highpass', rnd(3500, 6000), 2500, 0.01, 0.12 * v, 0.8, null, t + 0.05 + Math.random() * 0.12); break;
+      case 'icecrack': noise('highpass', 2800, 1500, 0.03, 0.24 * v, 0.8); tone('square', 2600, 1900, 0.025, 0.04 * v); noise('bandpass', 1200, 600, 0.05, 0.1 * v, 3, null, t + 0.005); tone('sine', 3300, 2950, 0.14, 0.06 * v, null, t + 0.01); tone('sine', 4450, 4300, 0.09, 0.035 * v, null, t + 0.03); break;
+      case 'zap': tone('sawtooth', 2600, 180, 0.09, 0.08 * v); noise('highpass', 3000, 1500, 0.06, 0.22 * v, 0.6); tone('square', 1700, 1650, 0.02, 0.04 * v, null, t + 0.04); tone('sawtooth', rnd(1100, 1500), 300, 0.04, 0.05 * v, null, t + 0.06); break;
       default: break;
     }
   }
@@ -346,30 +340,92 @@
 
   // ---------- aggregated hits, impacts and deaths ----------
   // A.hit / A.impact / A.kill collect the frame's events; A.flush (once per frame) turns each group into one layered cue. Reset after every flush.
-  const acc = { hit: 0, hitW: 0, hitEl: 0, crit: 0, critW: 0, critEl: 0, oth: 0, othC: 0, othW: 0, die: 0, dieMine: 0, imp: {}, types: {} };
+  const acc = { hit: 0, hitW: 0, hitEl: 0, hitM: '', hitH: 0, crit: 0, critW: 0, critEl: 0, critM: '', critH: 0, oth: 0, othC: 0, othW: 0, othM: '', die: 0, dieMine: 0, imp: {}, types: {} };
   const win = {}; // per foe type: start of the 100 ms window and voices played in it
   let streakN = 0, streakT = -9, crunchT = -9;
-  A.hit = (crit, mine, w, el) => {
-    if (!mine) { acc.oth++; if (crit) acc.othC++; if (w > acc.othW) acc.othW = w; return; }
-    if (crit) { acc.crit++; if (w > acc.critW) acc.critW = w; acc.critEl = el; } else { acc.hit++; if (w > acc.hitW) acc.hitW = w; acc.hitEl = el; }
+  // m: material of the hero's weapon (fx.js matOf: blade, blunt, arrow, magic), h: a heavy weapon hit; the frame's heaviest hit (largest w) sets element and material
+  A.hit = (crit, mine, w, el, m, h) => {
+    if (!mine) { acc.oth++; if (crit) acc.othC++; if (w > acc.othW) { acc.othW = w; acc.othM = m; } return; }
+    if (crit) { acc.crit++; if (w >= acc.critW) { acc.critW = w; acc.critEl = el; acc.critM = m; } if (h) acc.critH = 1; } else { acc.hit++; if (w >= acc.hitW) { acc.hitW = w; acc.hitEl = el; acc.hitM = m; } if (h) acc.hitH = 1; }
   };
   A.impact = (cls, mine, el) => { const k = acc.imp[cls] || (acc.imp[cls] = { n: 0, m: 0, el: 0 }); k.n++; if (mine) k.m++; k.el = el; };
   A.kill = (type, r, mine) => { acc.die++; if (mine) acc.dieMine++; const k = acc.types[type] || (acc.types[type] = { n: 0, r: 10 }); k.n++; k.r = r; };
-  // Soft damage-over-time tick: at most one per hero per 0.2 s (another hero's: 0.4 s, half volume, lowest priority); el picks the colour (1 fire crackle, 4 bleed drip, 5 poison bubble, else a tap).
-  const dotLast = {};
-  A.dotTick = (pid, mine, el) => {
-    if (!A.ready || !live()) return;
-    const t = now();
-    if (t - (dotLast[pid] || -9) < (mine ? 0.2 : 0.4)) return;
-    dotLast[pid] = t; prune(t); prio = mine ? 1 : 0;
-    const v = mine ? 1 : 0.5;
-    switch (el) {
-      case 1: noise('bandpass', rnd(2400, 3200), 1400, 0.04, 0.05 * v, 2); break;
-      case 4: tone('sine', rnd(520, 600), 260, 0.05, 0.05 * v); break;
-      case 5: tone('sine', rnd(380, 460), rnd(620, 700), 0.05, 0.05 * v); break;
-      default: tone('triangle', rnd(900, 1100), 700, 0.03, 0.04 * v);
-    }
+
+  // ---------- weapon hits ----------
+  // Material layer by weapon (g loudness, w damage share, lo Low quality: one voice): blade an FM clang and a shing, blunt a dull body and gritty grains, arrow a woody knock and the shaft's quiver, magic a hiss, sparks and a zing.
+  const MAT = {
+    blade(w, g, t, lo) { noise('bandpass', 5200, 2600, 0.06 + 0.03 * w, 0.1 * g, 2, null, t); if (!lo) fmBell(rnd(1250, 1550) * (1.15 - 0.2 * w), 1.47, 1.1, 0.12 + 0.08 * w, 0.06 * g, t); },
+    blunt(w, g, t, lo) {
+      noise('lowpass', 1500, 220, 0.08 + 0.05 * w, 0.2 * g, 0.9, null, t);
+      if (!lo) { for (let i = 0; i < 3; i++) noise('bandpass', rnd(900, 1700), 600, 0.014, rnd(0.07, 0.11) * g, 2, null, t + 0.004 + i * rnd(0.008, 0.014)); tone('square', 150 - 30 * w, 80, 0.04, 0.04 * g, null, t); }
+    },
+    arrow(w, g, t, lo) { tone('triangle', 360 - 80 * w, 130, 0.05 + 0.02 * w, 0.16 * g, null, t); if (!lo) { noise('bandpass', 1200, 500, 0.04, 0.12 * g, 3, null, t); tone('sine', rnd(190, 230), rnd(170, 200), 0.09, 0.04 * g, null, t + 0.01); } },
+    magic(w, g, t, lo) {
+      noise('highpass', 3200, 6500, 0.09 + 0.04 * w, 0.08 * g, 0.7, null, t);
+      if (!lo) { for (let i = 0; i < 3; i++) noise('highpass', rnd(4000, 7000), 3000, 0.008, rnd(0.06, 0.1) * g, 0.8, null, t + Math.random() * 0.07); tone('sine', rnd(650, 800), rnd(1400, 1700), 0.07, 0.05 * g, null, t); }
+    },
   };
+  // One aggregated hit cue (o: { w damage share, el element, n hits this frame, m material, h heavy }): a transient click, a pitched body (lower and longer with w), a sub thump, the material layer, a crit ring, an element tail;
+  // a heavy or crit hit adds a boom (a low sine drop over a noise body); n hits grow the layers by log2(1 + n) and add a mass thump from 3. Low quality keeps transient, body, sub, boom and one material voice.
+  function hitCue(crit, o, v, t) {
+    const w = o.w !== undefined ? Math.min(1.4, o.w) : 0.5, el = o.el | 0, n = o.n || 1, lg = Math.log2(1 + n), g = v * Math.min(1.9, 1 + 0.3 * (lg - 1)), lo = lite();
+    noise('bandpass', crit ? 4200 : rnd(2600, 3400), 1400, 0.02, (crit ? 0.24 : 0.14 + 0.06 * w) * g, 1.4, null, t);
+    tone('triangle', (crit ? 240 : 205) - 75 * w, 58, 0.07 + 0.08 * w + 0.02 * lg, (0.15 + 0.13 * w) * g, null, t);
+    tone('sine', 100 - 20 * w, 36, 0.08 + 0.07 * w, (0.12 + 0.16 * w) * g, null, t);
+    (MAT[o.m] || MAT.blunt)(w, g, t, lo);
+    if (crit || o.h) { const k = o.h ? 1 : 0.75; tone('sine', 150, 34, 0.22 + 0.08 * k, 0.32 * k * v, null, t); noise('lowpass', 1100, 70, 0.18 + 0.05 * k, 0.24 * k * v, 0.8, null, t); }
+    if (n >= 3) { tone('sine', 115, 44, 0.16 + 0.03 * lg, Math.min(0.26, 0.05 + 0.04 * lg) * v, null, t); noise('lowpass', 1100, 150, 0.1 + 0.03 * lg, Math.min(0.16, 0.03 + 0.03 * lg) * v, 1, null, t); }
+    if (lo) return;
+    if (crit) tone('sine', 1320, 1180, 0.2, 0.05 * v, null, t);
+    if (el === 1) noise('lowpass', 2600, 500, 0.16, 0.1 * v, 1, null, t);
+    else if (el === 2) tone('sine', rnd(2600, 3200), 3800, 0.09, 0.06 * v, null, t);
+    else if (el === 3) { tone('sawtooth', 1600, 300, 0.07, 0.05 * v, null, t); noise('highpass', 4500, 2500, 0.05, 0.05 * v, 1, null, t); }
+    else if (el === 4) noise('bandpass', 420, 180, 0.1, 0.12 * v, 1.5, null, t);
+  }
+
+  // ---------- damage over time ----------
+  // A.dot(el, v, a): a DoT tick of element el this frame (v 1 own, 0.5 an ally's; a: foes of el that ticked within the last 0.6 s, fx.js). A.bed(el, a): a foes in view carry el's status (fx.js feeds Burn, fodder included, which sends no ticks).
+  // A.flush plays one cue per element, at most one per 0.12 s: loudness 1 + 0.45 log2(a) up to 2.6, grains 1 + 1.6 log2(1 + a) up to 7 (Low quality 2) spread over 0.14 s; no tick for 0.3 s while foes still carry it: its bed at v 0.6.
+  const dacc = {}, bedN = {}, dotT = {};
+  A.dot = (el, v, a) => { const k = dacc[el] || (dacc[el] = { n: 0, v: 0, a: 0 }); k.n++; if (v > k.v) k.v = v; if (a > k.a) k.a = a; };
+  A.bed = (el, a) => { bedN[el] = a; };
+  // Status application on a foe without that status for 1.5 s (fx.js): Burn ignite, Frost ice crack, Storm zap; one per element per 80 ms (GAP).
+  const APPLY = { 1: 'ignite', 2: 'icecrack', 3: 'zap' };
+  A.applied = (el, mine) => { const c = APPLY[el]; if (c) A.play(c, mine ? 1 : 0.5, null, mine ? 1 : 0); };
+  // Tick timbre by element (L loudness, G grains): Burn a breathy roar (a low rumble once loud), crackle pops and a sizzle; Frost a crack and glassy tinks; Storm zaps over a mains buzz; Bleed wet squelches;
+  // the class flavours soft: poison bubbles, a holy chime, a shadow hiss; physical a tap.
+  const at = (t) => t + Math.random() * 0.14;
+  const DOT = [
+    (L, G, t) => tone('triangle', rnd(900, 1100), 700, 0.03, 0.05 * L, null, t),
+    (L, G, t, lo) => {
+      noise('bandpass', rnd(500, 700), 320, 0.2, 0.06 * L, 0.8, null, t, 0.04);
+      if (L >= 1.3) noise('lowpass', 260, 120, 0.24, 0.08 * L, 1, null, t, 0.05);
+      for (let i = 0; i < G; i++) noise('highpass', rnd(2500, 6000), 2000, rnd(0.005, 0.012), rnd(0.08, 0.16) * L, 0.8, null, at(t));
+      if (!lo) noise('highpass', 6500, 5000, 0.12, 0.03 * L, 0.7, null, t);
+    },
+    (L, G, t, lo) => {
+      noise('bandpass', 3400, 2200, 0.02, 0.12 * L, 4, null, t);
+      for (let i = 0; i < Math.ceil(G / 2); i++) { const f = rnd(2600, 4400); tone('sine', f, f * 0.97, 0.05, 0.06 * L, null, at(t)); }
+      if (!lo) tone('triangle', rnd(5200, 6000), 4800, 0.03, 0.025 * L, null, t + 0.02);
+    },
+    (L, G, t, lo) => {
+      for (let i = 0; i < Math.ceil(G / 2); i++) { const a = at(t); tone('sawtooth', rnd(1800, 2600), 260, 0.03, 0.05 * L, null, a); noise('highpass', 3500, 2000, 0.02, 0.08 * L, 0.7, null, a); }
+      if (!lo) tone('square', 110, 100, 0.09, 0.025 * L, null, t);
+    },
+    (L, G, t) => {
+      noise('bandpass', 1300, 280, 0.07, 0.2 * L, 6, null, t); tone('sine', rnd(200, 240), 100, 0.06, 0.08 * L, null, t);
+      for (let i = 1; i < Math.ceil(G / 2); i++) noise('bandpass', rnd(900, 1400), 260, 0.05, 0.12 * L, 6, null, at(t));
+    },
+    (L, G, t) => { for (let i = 0; i < Math.ceil(G / 2); i++) { const f = rnd(260, 380); tone('sine', f, f * 2.2, 0.04, 0.06 * L, null, at(t)); } },
+    (L, G, t) => tone('sine', [1568, 1760, 2093][(Math.random() * 3) | 0], 0, 0.14, 0.035 * L, null, t),
+    (L, G, t) => { noise('bandpass', 500, 200, 0.12, 0.08 * L, 1.5, null, t); tone('sine', 120, 80, 0.1, 0.05 * L, null, t); },
+  ];
+  function dotCue(el, a, v, t) {
+    if (t - (dotT[el] || -9) < 0.12) return;
+    dotT[el] = t; prio = v >= 1 ? 1 : 0;
+    const lo = lite(), L = Math.min(2.6, 1 + 0.45 * Math.log2(Math.max(1, a))) * v, G = Math.min(lo ? 2 : 7, 1 + Math.round(1.6 * Math.log2(1 + a)));
+    (DOT[el] || DOT[0])(L, G, t, lo);
+  }
 
   // One foe's death: bigger foes (radius r) fall lower and longer; pitch jitters per voice.
   function dieVoice(r, v, t) {
@@ -381,7 +437,7 @@
     noise('bandpass', 1300 * k, 500 * k, 0.07, 0.13 * v, 2.5, null, t); tone('square', 300 * k, 120 * k, 0.06, 0.05 * v, null, t); tone('sine', 150 * k, 60, 0.07, 0.1 * v, null, t);
   }
   const MILESTONES = [10, 25, 50, 100];
-  // Skill impact of one class, aggregated over the frame: n foes struck (m by the local hero); loudness and layers grow with log2(1 + n).
+  // Skill impact of one class (or of an element, key e1-e4: a Flame burst, a Frost shatter, a Storm chain, a Bleed burst), aggregated over the frame: n foes struck (m by the local hero); loudness and layers grow with log2(1 + n).
   function impact(cls, k, t) {
     const key = 'i' + cls;
     if (t - (A.last[key] || -9) < 0.06) return;
@@ -398,6 +454,19 @@
       case 'cleric': tone('sine', [784, 988, 1175, 1568][(Math.random() * 4) | 0], 0, 0.4, 0.07 * v * s); tone('sine', 2160, 2100, 0.2, 0.025 * v); tone('sine', 100, 60, 0.12, 0.15 * v * s); if (lg >= 2) tone('sine', 1568, 0, 0.5, 0.04 * v, null, t + 0.04); break;
       case 'shade': noise('bandpass', 3400, 700, 0.07, 0.2 * v * s, 2.5); tone('sawtooth', 240, 70, 0.09, 0.08 * v); tone('sine', 90, 45, 0.1, 0.18 * v * s); break;
       case 'necro': for (let i = 0; i < L + 1; i++) tone('triangle', rnd(1400, 2600), 900, 0.03, 0.06 * v, null, t + Math.random() * 0.06); noise('lowpass', 600, 150, 0.1, 0.12 * v * s); tone('sine', 110, 60, 0.12, 0.14 * v * s); break;
+      case 'e1': // Flame burst: a whoomp, a rising whoosh, crackles
+        noise('lowpass', 2400, 160, 0.3, 0.24 * v * s); tone('sine', 95, 38, 0.26, 0.26 * v * s); noise('bandpass', 300, 2000, 0.18, 0.1 * v * s, 1.1, null, t, 0.03);
+        for (let i = 0; i < L + 1; i++) noise('highpass', rnd(3000, 6000), 2500, 0.01, 0.1 * v, 0.8, null, t + 0.03 + Math.random() * 0.15);
+        break;
+      case 'e2': // Frost shatter: a glass burst, falling glassy partials, a thump
+        noise('highpass', 3600, 1400, 0.22, 0.2 * v * s, 0.7); tone('sine', 140, 60, 0.1, 0.16 * v * s);
+        for (let i = 0; i < L + 1; i++) { const f = rnd(2400, 4200); tone('sine', f, f * 0.7, 0.12, 0.05 * v, null, t + 0.02 + i * 0.035); }
+        break;
+      case 'e3': // Storm chain: a crack and a falling zap per arm, a rumble from 3 foes
+        for (let i = 0; i < L; i++) { const at = t + i * 0.018; noise('highpass', 2600, 900, 0.05, 0.16 * v * s, 0.6, null, at); tone('sawtooth', rnd(1800, 2600), 200, 0.07, 0.06 * v, null, at); }
+        if (lg >= 2) noise('lowpass', 500, 70, 0.4, Math.min(0.2, 0.06 * lg) * v, 1, null, t + 0.02);
+        break;
+      case 'e4': noise('bandpass', 1400, 260, 0.1, 0.26 * v * s, 5); tone('sine', 150, 55, 0.14, 0.24 * v * s); noise('lowpass', 800, 150, 0.12, 0.12 * v * s, 4, null, t + 0.02); break; // Bleed burst: a wet slap and a thump
       default: tone('sine', 120, 50, 0.18, 0.22 * v * s); noise('lowpass', 1400, 200, 0.12, 0.16 * v * s);
     }
   }
@@ -406,10 +475,12 @@
     const quiet = !A.ready || !live();
     const t = quiet ? 0 : now();
     if (!quiet) prune(t);
-    if (!quiet && acc.crit) A.play('crit', 1, { w: acc.critW, el: acc.critEl, n: acc.crit }, 2);
-    if (!quiet && acc.hit) A.play('hit', 1, { w: acc.hitW, el: acc.hitEl, n: acc.hit }, 1);
-    if (!quiet && acc.oth) A.play('ohit', 0.5, { w: acc.othW, el: 0, n: acc.oth, c: acc.othC > 0 }, 0);
+    if (!quiet && acc.crit) A.play('crit', 1, { w: acc.critW, el: acc.critEl, n: acc.crit, m: acc.critM, h: acc.critH }, 2);
+    if (!quiet && acc.hit) A.play('hit', 1, { w: acc.hitW, el: acc.hitEl, n: acc.hit, m: acc.hitM, h: acc.hitH }, 1);
+    if (!quiet && acc.oth) A.play('ohit', 0.5, { w: acc.othW, el: 0, n: acc.oth, c: acc.othC > 0, m: acc.othM }, 0);
     for (const cls in acc.imp) { const k = acc.imp[cls]; if (k.n && !quiet) impact(cls, k, t); k.n = 0; k.m = 0; }
+    for (const el in dacc) { const k = dacc[el]; if (k.n && !quiet) dotCue(+el, Math.max(k.a, bedN[el] || 0), k.v, t); k.n = k.v = k.a = 0; }
+    if (!quiet) for (const el in bedN) if (bedN[el] > 0 && t - (dotT[el] || -9) > 0.3) dotCue(+el, bedN[el], 0.6, t);
     if (acc.die && !quiet) {
       const n = acc.die, lg = Math.log2(1 + n), v = acc.dieMine ? 1 : 0.7;
       prio = acc.dieMine ? 1 : 0;
@@ -429,23 +500,23 @@
       if (streakN >= 4 && t - crunchT > 0.09) { crunchT = t; crunch(Math.pow(2, Math.min(12, (streakN - 3) * 0.5) / 12), v, t); }
       for (const m of MILESTONES) if (prev < m && streakN >= m) { const k = 1 + MILESTONES.indexOf(m) * 0.12; tone('sine', 784 * k, 0, 0.5, 0.08 * v, null, t); tone('sine', 1176 * k, 0, 0.45, 0.06 * v, null, t + 0.06); tone('sine', 1568 * k, 0, 0.4, 0.05 * v, null, t + 0.12); }
     }
-    acc.hit = acc.crit = acc.oth = acc.othC = acc.die = acc.dieMine = 0; acc.hitW = acc.critW = acc.othW = 0;
+    acc.hit = acc.crit = acc.oth = acc.othC = acc.die = acc.dieMine = acc.hitH = acc.critH = 0; acc.hitW = acc.critW = acc.othW = 0;
     for (const type in acc.types) acc.types[type].n = 0;
   };
 
   // ---------- adaptive score ----------
-  // Tracks are 'camp', 'none' or { s: stratum, boss }. Compared by value: asking for the playing track again is a no-op.
-  const trackSig = (key) => (typeof key === 'string' ? key : 's' + ((key && key.s) || 1) + (key && key.boss ? 'b' : ''));
+  // Tracks are 'camp', 'none' or { s: stratum, c: context } (ED.Score.sig). Compared by value: asking for the playing track again is a no-op; lv: the new track's starting level.
+  const trackSig = (key) => (ED.Score ? ED.Score.sig(key) : typeof key === 'string' ? key : 's' + ((key && key.s) || 1) + ((key && key.c) || ''));
   const L = { cur: 0, low: 0 }, HOLD = [0, 2.5, 3.5]; // intensity actually played, and when the requested level first fell below it
-  A.music = (key) => {
+  A.music = (key, lv) => {
     if (!A.ready) { A.track = key; return; }
     const sig = trackSig(key);
     if (A.track !== null && trackSig(A.track) === sig && (A.score && A.score.cur || 'none') === sig) return;
-    A.track = key; L.cur = 0; L.low = 0;
+    A.track = key; L.cur = Math.max(0, Math.min(2, lv | 0)); L.low = 0;
     if (!A.score) return;
-    if (sig === 'none') A.score.stop(now()); else A.score.play(key, now(), 0);
+    if (sig === 'none') A.score.stop(now()); else A.score.play(key, now(), L.cur);
   };
-  // Requested music level 0 explore, 1 combat, 2 heavy (a boss piece: its phase): rises at once, falls one step after it has stayed lower for HOLD seconds.
+  // Requested level of the playing track: 0 calm, 1 fight, 2 heavy (a boss track: its phase): rises at once, falls one step after it has stayed lower for HOLD seconds.
   A.setIntensity = (raw) => {
     if (!A.ready || !A.score || !A.score.cur) return;
     const t = A.ctx.currentTime;

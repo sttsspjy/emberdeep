@@ -35,7 +35,7 @@
     shroomhulk: { name: 'Shroom Hulk', ai: 'tank', look: 'hulk', col: { a: '#a356d6', b: '#52286e', c: '#9cff6a' }, hp: 90, spd: 40, dmg: 4, r: 16, xp: 10, cost: 5,
       slam: { range: 52, radius: 66, windup: 0.85, cd: 2.6, cloud: true } },
     mireworm: { name: 'Mire Worm', ai: 'burrower', look: 'worm', col: { a: '#6aa67f', b: '#2c4f3f', c: '#e8ff9a' }, hp: 46, spd: 90, dmg: 3.75, r: 12, xp: 6, cost: 4,
-      burrow: { near: 80, dig: 1.2, tele: 0.8, radius: 46, expose: 2.2, ring: 8 } },
+      burrow: { near: 80, dig: 1.2, tele: 1.2, radius: 46, expose: 3.5, ring: 6, arc: 4.2, speed: 95, lane: 170 } }, // ring: shots spread over arc rad, the rest of the circle is the safe gap
 
     // ---------------- Kept from cut strata (ids are art keys): reskins in the rosters (I icewolf, II frostwisp, III drone, IV sentinel), the rest for bosses and checks only ----------------
     icewolf: { name: 'Grave Hound', ai: 'charger', look: 'wolf', col: { a: '#9a917b', b: '#4f4a3e', c: '#ff5a3a' }, hp: 26, spd: 80, dmg: 2.75, r: 11, xp: 3, cost: 2,
@@ -120,7 +120,7 @@
     // HP x the elite factor of the stratum (World.ELITE); no affix, no drops of their own: the room pays an elite room's reward.
     twinlance: { name: 'Lancer', ai: 'champion', look: 'knight', art: 'voidknight', col: { a: '#d8c27a', b: '#4a3c1c', c: '#ffe08a' }, hp: 380, spd: 64, dmg: 8, r: 15, xp: 0, cost: 0, champ: 'twins' },
     twinhammer: { name: 'Hammer', ai: 'champion', look: 'knight', art: 'forgeknight', col: { a: '#9a6a44', b: '#2a1810', c: '#ff8a3a' }, hp: 380, spd: 54, dmg: 8.8, r: 17, xp: 0, cost: 0, champ: 'twins' },
-    mimic: { name: 'Mimic', ai: 'champion', look: 'shade', art: 'shade', col: { a: '#2c2440', b: '#100c1c', c: '#e8e0ff' }, hp: 700, spd: 70, dmg: 7, r: 13, xp: 0, cost: 0, champ: 'mimic' },
+    mimic: { name: 'Mimic', ai: 'champion', look: 'shade', art: 'shade', col: { a: '#2c2440', b: '#100c1c', c: '#e8e0ff' }, hp: 900, spd: 70, dmg: 7, r: 13, xp: 0, cost: 0, champ: 'mimic' },
   };
 
   ED.ENEMY_IDS = Object.keys(E);
