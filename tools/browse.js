@@ -21,18 +21,18 @@
 //     the Tab sheet Build, Build scrolled to the end, Combat, Map, and Build viewing the ally, then the cleared room of the floor with the most exit doors (BR.doorStage);
 //     fails on a page error, when a sheet column overflows its panel sideways, or when no room has 3 exit doors.
 //   swing: one contact-sheet PNG per melee weapon of --cls, its Armory variants included (or per --weapon id, forks as id@fork, ranged ones too) (aimed --aim degrees, 0 = right, 90 = down, drawn at --zoom canvas px per world px, 2): frames at fixed times over two consecutive attacks (a combo weapon: one per step), the hold and the ease back to idle, hero and smear drawn by the game's own renderer.
-//   picks: every boon id resolves to a PickFx card kind; one PNG per pick burst (each kind, fire-big, holy-ally) on the solo hero about 0.25 s after FX.handle gets the 'boon' / 'relic' event;
+//   picks: every boon id resolves to a PickFx card kind; one PNG per pick burst (each kind, fire-big, fire-ally) on the solo hero about 0.25 s after FX.handle gets the 'boon' / 'relic' event;
 //     each pick cue (and the Hearth 'buy') rendered in an OfflineAudioContext: voices, peak, rms, audible length; fails on a throw, a silent cue or one longer than 0.9 s.
 //   cards: a frame sheet PNG (every card frame mask at 6 x) and one PNG per boon hand staged through the sim (the hero's boons set so the cards are eligible): path gates,
 //     every element, open and General, purse, keystones, an evolution, the --cls route and fork offers, a 6-card dense hand; mid-pick frames (110 and 230 ms,
-//     the hide timer held, animations paused) for poison, holy, ice, lightning, shadow, general, fire-big and route; the fork reveal at rank 2 and 3; a Low quality hand and pick.
+//     the hide timer held, animations paused) for lightning, ice, general, fire-big and route; the fork reveal at rank 2 and 3; a Low quality hand and pick.
 //     The first hand also checks the offer lock (a confirm and a click 150 ms in pick nothing, the fill sweeps; a shot lock-150ms; released by 750 ms).
 //     Fails on a missing card, a card whose kind differs from ED.PickFx.kind, a frame that did not resolve, equal path gate icons, a pick without an effect layer, Low quality leftovers or an offer lock that does not hold or release.
 //   props: per-hero and party props staged around the hero and used like a player (see scenProps): another hero's prop and a claimed co-op hoard prompt nothing, taken props vanish with a puff; one shot.
 //   bell: the hero, Anchor Leap and Peal icons and screenshots of the Bellwarden (unlocked for the run; --weapon picks the bell): winding in a staged fight with Full Swing, a hurl in flight, the bell anchored, a reel, an Anchor Leap, a Peal, four Bellwardens in the crowd at High and Low quality,
 //     and a client's view from a two-peer net check in the same page (host World + client Game, JSON snapshots, 50 ms each way); fails on bad bells, missing bell events or a client that drifts from the host (see scenBell).
-//   verbs: one screenshot per element verb staged in the largest combat room (still foes in front of the hero, input through ED.Input like a player): the flame cone, burning ground, Burn stacks, the ice wall,
-//     the ice lance charging and flying, a dash discharge, Storm Step, a toxic cloud, the flask, a perfect dodge, the guard, the Phantom decoy, a Backstab, Umbral Arms, the finisher charging and striking;
+//   verbs: one screenshot per path verb staged in the largest combat room (still foes in front of the hero, input through ED.Input like a player): the flame cone, Burn stacks, a death burst on Scorched Earth,
+//     the ice lance charging and flying, a Shatter, a threshold discharge, the storm call, the finisher charging and striking;
 //     fails on a page error or a verb whose zone, event or state did not appear.
 //   arenas: 18 screenshots staged through the sim (BR.arena, heroes unhurt): the Drowned King (phase 1, tide warning, tide, beam warm-up and sweep, phases 2 and 3), the Hollow King (phase 1, duel, dark phase 2, a lit lantern,
 //     phase 3, a ring warning, fallen rings) and the champion rooms (twins, a twin combo, mimic, mimic split); fails on a page error or a step without its fight.
@@ -596,10 +596,9 @@ function pageBoot(cfg) {
     return { shown: !el.hidden, x: r.left, y: r.top, w: r.width, h: r.height };
   };
   // verbs: step 'room' enters the largest combat room (cleared, hero centred); any other step sets the step's boons, lines up still foes to the hero's right and starts the verb
-  // (keys: Mouse0 held for holds, Space for dashes; 'release' lets go of Mouse0); returns { ok, what } read back from the sim
-  const VB = { cone: { kindle: 1, evo_fire: 1 }, ground: { kindle: 1, firebreak: 1 }, stacks: { kindle: 1 }, icewall: { frostbite: 1, glacierstep: 1 }, lance: { frostbite: 1, evo_ice: 1 }, discharge: { staticcharge: 1, conductor: 1 },
-    storm: { staticcharge: 1, stormstep: 1 }, cloud: { envenom: 1, miasma: 1 }, flask: { envenom: 1, evo_poison: 1 }, pdodge: { consecrate: 1 }, guard: { consecrate: 1, evo_holy: 1 }, decoy: { doommark: 1, phantom: 1 },
-    backstab: { doommark: 1 }, behind: { doommark: 1, evo_shadow: 1 }, finisher: { generalist: 1, masterstroke: 1 } };
+  // (keys: Mouse0 held for holds; 'release' lets go of Mouse0); returns { ok, what } read back from the sim
+  const VB = { cone: { kindle: 1, evo_fire: 1 }, stacks: { kindle: 1 }, burst: { kindle: 1, scorched: 1 }, lance: { frostbite: 1, evo_ice: 1 }, shatter: { frostbite: 1 }, discharge: { staticcharge: 1, conductor: 1 },
+    storm: { staticcharge: 1, evo_lightning: 1 }, finisher: { generalist: 1, masterstroke: 1 } };
   BR.verb = (step) => {
     const ED = window.__ED, s = ED.Game.s, w = s && s.world, I = ED.Input, R = ED.Render, T = ED.CONST.TILE;
     if (!w) throw new Error('no run');
@@ -622,21 +621,16 @@ function pageBoot(cfg) {
     me.x = cx - 90; me.y = cy; me.vx = me.vy = 0;
     const foes = [70, 120, 170].map((dx, i) => { const e = w.spawnEnemy(ED.biomeFor(w.stratum).enemies[0][0], me.x + dx, me.y + (i - 1) * 28); e.spawnT = 0; e.spd = 0; e.cd = 9999; e.hp = e.maxHp = 1e6; e.target = me; return e; });
     const e0 = foes[0];
-    if (step === 'discharge') me.y = cy - 30;
-    if (step === 'storm') e0.x = me.x + 160;
     const charge = () => { for (const e of foes) { e.charge = 60; e.chargeOwner = me; e.chargeT = 3; } };
     BR._go = () => { // after the camera has followed the hero: aim (screen coordinates) and act
       aimAt(e0.x + 40, e0.y);
       s.ctl.dashN = me.stats.dashCharges; s.ctl.dashT = 0; s.ctl.atkCd = 0;
       switch (step) {
-        case 'cone': case 'lance': case 'flask': case 'guard': case 'finisher': I.keys.add('Mouse0'); break;
-        case 'ground': case 'icewall': case 'cloud': case 'decoy': I.pressed.add('Space'); break;
+        case 'cone': case 'lance': case 'storm': case 'finisher': I.keys.add('Mouse0'); break;
         case 'stacks': for (const e of foes) for (let i = 0; i < 3 + foes.indexOf(e) * 3; i++) w.burnStack(e, me, 0); break;
-        case 'discharge': charge(); aimAt(e0.x + 200, me.y); I.pressed.add('Space'); break;
-        case 'storm': charge(); aimAt(e0.x, e0.y); I.pressed.add('Space'); break;
-        case 'pdodge': w.perfectDodge(me, { e: e0 }); break;
-        case 'backstab': e0.faceA = 0; e0.target = null; w.hitEnemy(e0, 20, { p: me, kind: 'weapon' }); break;
-        case 'behind': aimAt(e0.x, e0.y); I.pressed.add('Space'); break;
+        case 'burst': for (let i = 0; i < 6; i++) w.burnStack(e0, me, 0); w.killEnemy(e0, me, {}); break;
+        case 'shatter': w.freezeEnemy(e0, me); e0.frozenAt = w.time - 1; w.hitEnemy(e0, 20, { p: me, kind: 'weapon' }); break;
+        case 'discharge': charge(); w.addCharge(e0, e0.maxHp, me); break;
       }
       return true;
     };
@@ -647,15 +641,11 @@ function pageBoot(cfg) {
   BR.verbSeen = (step) => {
     const ED = window.__ED, s = ED.Game.s, w = s.world, me = s.me, z = (k) => w.zones.some(q => q.kind === k && !q.dead), f = (t) => (BR._fx || []).some(v => v.t === t);
     switch (step) {
-      case 'cone': case 'guard': case 'finisher': case 'lance': case 'flask': return !!me.holdOn;
-      case 'ground': return z('pfire');
+      case 'cone': case 'storm': case 'finisher': case 'lance': return !!me.holdOn;
       case 'stacks': return w.enemies.some(e => e.burnN >= 6);
-      case 'icewall': return z('icewall');
-      case 'cloud': return z('plague');
-      case 'decoy': return z('decoy');
-      case 'discharge': case 'storm': case 'pdodge': case 'backstab': case 'behind': return f({ discharge: 'chain', storm: 'blink', pdodge: 'pdodge', backstab: 'hit', behind: 'blink' }[step]);
+      case 'burst': return f('boom') && z('pfire');
+      case 'shatter': case 'discharge': return f({ shatter: 'shatter', discharge: 'chain' }[step]);
       case 'lance-shot': return w.projs.some(q => q.kind === 'iceshard' && q.team === 0) || f('lance');
-      case 'flask-shot': return z('tele') || z('plague');
       case 'finisher-hit': return f('finisher');
     }
     return false;
@@ -663,7 +653,7 @@ function pageBoot(cfg) {
   // every card frame mask (kinds x metals, the big trims, a route frame per hero) drawn at 6 x on one sheet: PNG data URL
   BR.cardSheet = (cls) => {
     const ED = window.__ED, CA = ED.CardArt, PU = ED.PixUI, Z = 5, M = ['iron', 'silver', 'violet', 'gold'], rows = [];
-    for (const k of ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'purse']) rows.push([k, M.map(m => CA.frame(k, m, {})).concat(k === 'purse' ? [] : [CA.frame(k, 'gold', { big: true })])]);
+    for (const k of ['fire', 'ice', 'lightning', 'general', 'purse']) rows.push([k, M.map(m => CA.frame(k, m, {})).concat(k === 'purse' ? [] : [CA.frame(k, 'gold', { big: true })])]);
     rows.push(['route', M.map(m => CA.frame('route', m, { cls }))]);
     const cw = CA.N * Z + 12, cv = document.createElement('canvas'); cv.width = 90 + cw * 5; cv.height = rows.length * cw + 12;
     const g = cv.getContext('2d'); g.imageSmoothingEnabled = false; g.fillStyle = '#15100d'; g.fillRect(0, 0, cv.width, cv.height);
@@ -1207,9 +1197,8 @@ async function scenCrowd(name) {
 async function scenVerbs() {
   const o = S.opt, res = newResult('verbs'), q = qualitiesOr(['high'])[0];
   // [step, ms before the shot, shot name, state to check (default the step)]
-  const PLAN = [['cone', 900, 'flame-cone'], ['release', 300, ''], ['ground', 260, 'burning-ground'], ['stacks', 500, 'burn-stacks'], ['icewall', 300, 'ice-wall'], ['lance', 800, 'lance-charge'], ['release', 90, 'lance-flight', 'lance-shot'],
-    ['discharge', 160, 'discharge'], ['storm', 140, 'storm-step'], ['cloud', 450, 'toxic-cloud'], ['flask', 800, 'flask-ready'], ['release', 700, 'flask-landed', 'flask-shot'], ['pdodge', 120, 'perfect-dodge'],
-    ['guard', 800, 'guard'], ['release', 300, ''], ['decoy', 350, 'phantom-decoy'], ['backstab', 80, 'backstab'], ['behind', 160, 'umbral-arms'], ['finisher', 1200, 'finisher-charge'], ['release', 90, 'finisher-strike', 'finisher-hit']];
+  const PLAN = [['cone', 900, 'flame-cone'], ['release', 300, ''], ['stacks', 500, 'burn-stacks'], ['burst', 260, 'death-burst'], ['lance', 800, 'lance-charge'], ['release', 90, 'lance-flight', 'lance-shot'],
+    ['shatter', 120, 'shatter'], ['discharge', 200, 'discharge'], ['storm', 800, 'storm-call'], ['release', 300, ''], ['finisher', 1200, 'finisher-charge'], ['release', 90, 'finisher-strike', 'finisher-hit']];
   const { ctx, page, errors } = await openPage();
   try {
     await call(page, 'profile', o.cls, o.embers);
@@ -1308,10 +1297,10 @@ async function scenSwing() {
   return res;
 }
 
-const PICK_SHOTS = ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'route', 'relic', 'purse', 'fire-big', 'holy-ally'];
-const PICK_CUES = ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'route', 'relic', 'purse'].map(k => ({ label: k, cue: 'pick', arg: k }))
+const PICK_SHOTS = ['fire', 'ice', 'lightning', 'general', 'route', 'relic', 'purse', 'fire-big', 'fire-ally'];
+const PICK_CUES = ['fire', 'ice', 'lightning', 'general', 'route', 'relic', 'purse'].map(k => ({ label: k, cue: 'pick', arg: k }))
   .concat([{ label: 'fire big', cue: 'pick', arg: { k: 'fire', big: true } },
-    { label: 'holy big', cue: 'pick', arg: { k: 'holy', big: true } }, { label: 'buy (hearth)', cue: 'buy' }]);
+    { label: 'ice big', cue: 'pick', arg: { k: 'ice', big: true } }, { label: 'buy (hearth)', cue: 'buy' }]);
 async function scenPicks() {
   const o = S.opt, res = newResult('picks'), q = qualitiesOr(['high'])[0];
   const { ctx, page, errors } = await openPage();
@@ -1385,13 +1374,12 @@ async function scenHits() {
 // cards: hands staged through the sim that show every card kind; boons = the hero's build for the hand (so the cards are eligible), pick = [card index, kind] for mid-pick frames
 const R = (ids, n) => Object.fromEntries(ids.map((id, i) => [id, Array.isArray(n) ? n[i] : n || 1]));
 const CARD_HANDS = (cls) => [
-  { name: 'gates', spec: { src: 'start' }, boons: {}, ids: ['kindle', 'frostbite', 'staticcharge', 'envenom'], distinctIcons: true, pick: [3, 'poison'] },
-  { name: 'gates2', spec: { src: 'start' }, boons: {}, ids: ['consecrate', 'doommark', 'generalist'], distinctIcons: true, pick: [0, 'holy'] },
-  { name: 'fire-ice', spec: { src: 'room' }, boons: R(['kindle', 'stoke', 'kindling', 'frostbite', 'deepcold', 'glacier'], [1, 2, 1, 1, 1, 1]), ids: ['firebreak', 'shatterpoint', 'wildfire', 'permafrost'], pick: [1, 'ice'] },
-  { name: 'storm', spec: { src: 'room' }, boons: R(['staticcharge', 'conductor', 'highvoltage', 'envenom', 'potency', 'caustic'], [1, 1, 1, 1, 2, 1]), ids: ['overload', 'longfuse', 'miasma', 'neurotoxin'], pick: [0, 'lightning'] },
-  { name: 'light', spec: { src: 'room' }, boons: R(['consecrate', 'zealotry', 'sanctity', 'doommark', 'cutthroat'], [1, 2, 1, 1, 2]), ids: ['grace', 'beacon', 'souljar', 'inevitable'], pick: [2, 'shadow'] },
+  { name: 'gates', spec: { src: 'start' }, boons: {}, ids: ['generalist', 'kindle', 'frostbite', 'staticcharge'], distinctIcons: true, pick: [3, 'lightning'] },
+  { name: 'fire-ice', spec: { src: 'room' }, boons: R(['kindle', 'stoke', 'kindling', 'frostbite', 'deepcold', 'glacier'], [1, 2, 1, 1, 1, 1]), ids: ['fanflames', 'shatterpoint', 'wildfire', 'thermal'], pick: [1, 'ice'] },
+  { name: 'storm', spec: { src: 'room' }, boons: R(['staticcharge', 'conductor', 'highvoltage', 'kindle', 'stoke'], [1, 1, 1, 1, 1]), ids: ['overload', 'longfuse', 'plasma', 'smother'] },
+  { name: 'cross', spec: { src: 'room' }, boons: R(['generalist', 'keen', 'frostbite', 'deepcold'], [1, 1, 1, 1]), ids: ['icebreaker', 'brutal', 'permafrost', 'glacier'] },
   { name: 'open', spec: { src: 'epic' }, boons: { generalist: 1, keen: 1 }, ids: ['brutal', 'focus', 'wide', 'purse'], pick: [0, 'general'] },
-  { name: 'evo', spec: { src: 'room' }, boons: R(['kindle', 'stoke', 'kindling', 'wildfire', 'smother'], [1, 3, 2, 1, 1]), ids: ['evo_fire', 'firewalk', 'vigor'], pick: [0, 'fire-big'] },
+  { name: 'evo', spec: { src: 'room' }, boons: R(['kindle', 'stoke', 'kindling', 'wildfire', 'smother'], [1, 3, 2, 1, 1]), ids: ['evo_fire', 'fanflames', 'vigor'], pick: [0, 'fire-big'] },
   { name: 'route', spec: { src: 'class', ctier: 1 }, boons: {}, ids: ['atk', 's1', 's2', 'el'].map(k => cls[0] + '_' + k), pick: [0, 'route'] },
   { name: 'fork', spec: { src: 'class', ctier: 2 }, boons: { [cls[0] + '_atk']: 1 }, ids: [cls[0] + '_atk_h', cls[0] + '_atk_s'] },
   { name: 'dense6', spec: { src: 'epic' }, boons: R(['kindle', 'stoke', 'frostbite', 'deepcold'], [1, 2, 1, 2]), ids: ['wildfire', 'permafrost', 'coldcycle', 'focus', 'plating', 'purse'], pick: [2, 'ice'] },
@@ -1533,7 +1521,7 @@ async function scenCards() {
         await wait(300);
       }
     }
-    for (const k of ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'route', 'purse', 'fire+big']) if (![...seen].some(s => s === k || (k === 'fire+big' && /\+big$/.test(s)))) fail(res, 'no hand showed a ' + k + ' card');
+    for (const k of ['fire', 'ice', 'lightning', 'general', 'route', 'purse', 'fire+big']) if (![...seen].some(s => s === k || (k === 'fire+big' && /\+big$/.test(s)))) fail(res, 'no hand showed a ' + k + ' card');
     // fork reveal: rank 2 (small, silver) and rank 3 (big, gold)
     await page.evaluate(() => window.__ED.UI.hideBoons());
     for (const rank of [2, 3]) {

@@ -616,7 +616,7 @@
     const pos = [];
     for (const p of this.players.values()) {
       const pt = via && room.entry ? D.entryPoint(room, 's', k) : { x: D.center(room).x + (k - 1.5) * 22, y: D.center(room).y + 20 };
-      p.x = pt.x; p.y = pt.y; p.vx = 0; p.vy = 0; p.dashT = 0; p.skillMove = null; p.skillIfr = false; p.charge = null; this.clearShields(p); // a thrown shield and a charge in flight end with the room
+      p.x = pt.x; p.y = pt.y; p.vx = 0; p.vy = 0; p.dashT = 0; p.skillMove = null; p.skillIfr = false; p.charge = null; this.clearShields(p); // a raised Bulwark and a charge in flight end with the room
       p.toughRoom = room.type === 'elite' || room.type === 'champion' || room.type === 'boss'; // War Drum doubles in these rooms
       pos.push([p.pid, Math.round(p.x), Math.round(p.y)]);
       k++;
@@ -683,8 +683,7 @@
     }
     const fg = this.foeGrid(); fg.live = true; fg.qd = 0;
     this.updateShields(dt);
-    this.faceOn = false; // foes keep a facing only while a hero can Backstab (elements.js turnFoe)
-    for (const p of this.players.values()) { this.updatePlayer(p, dt); if (p.stats.shadowInfuse > 0 || p.stats.backstab > 0) this.faceOn = true; }
+    for (const p of this.players.values()) this.updatePlayer(p, dt);
     if (!fg.direct) for (let i = 0; i < fg.n; i++) this.foeDrift(i); // hero effects that carry or pull foes (Sim.moveCircle) move them outside updateEnemy
     this.flowT -= dt;
     if (this.flowT <= 0) { this.computeFlow(); this.flowT = 0.25; }
@@ -717,7 +716,7 @@
     p.invuln = Math.max(0, p.invuln - dt);
     p.hurtT -= dt;
     if (!p.remote) p.dashing = p.dashT > 0;
-    if (p.downed || p.dead) { if (p.shields.length) this.clearShields(p); const ch = ED.CLS[p.cls]; if (ch && ch.down) ch.down.call(this, p); }
+    if (p.downed || p.dead) { if (p.bulwarkOn) this.clearShields(p); const ch = ED.CLS[p.cls]; if (ch && ch.down) ch.down.call(this, p); }
     if (p.dead) return;
     if (p.downed) {
       let helpers = 0;

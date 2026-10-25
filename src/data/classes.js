@@ -9,9 +9,9 @@
   ED.CLASSES = {
     knight: {
       name: 'Knight', title: 'Melee tank', icon: 'shield',
-      desc: 'Sturdy melee hero. Wide swings hit crowds; the thrown shield stuns packs and blocks foe shots.',
+      desc: 'Sturdy melee hero. Wide swings hit crowds; the raised shield blocks attacks from the front, then bashes.',
       hp: 32, armor: 58, spd: 116, crit: 0.05, power: 23.4, element: null,
-      weapons: ['longsword', 'warhammer', 'glaive'], skill: 'charge', skill2: 'shieldthrow',
+      weapons: ['longsword', 'warhammer', 'glaive'], skill: 'charge', skill2: 'bulwark',
       col: { a: '#a7b0ba', b: '#5d6670', c: '#d6aa55', d: '#2b3038' }, unlock: null,
     },
     ranger: {
@@ -149,23 +149,22 @@
 // bossMul (the part's hits on a boss take this factor: partSrc copies it to the hit, hitEnemy applies it; an `of` part does not inherit it).
   ED.SKILLS = {
     charge: { name: 'Shield Charge', slot: 0, cd: 6, icon: 'shield', aim: 'move', range: 150, rangeMin: 60, rangeAdd: 's1Range', move: { k: 'charge', speed: 600 },
-      desc: 'Charge toward the cursor, untouchable, smashing and stunning every foe you run into. A thrown shield flies back to you; foes stunned by your shield take +40% (Crush). Bosses take ×3 but are never stunned.',
+      desc: 'Charge toward the cursor, untouchable, smashing and stunning every foe you run into. Foes stunned by your Bulwark bash take +40% (Crush). Bosses take ×3 but are never stunned.',
       parts: [
-        { id: 'impact', label: 'Impact', base: 26, pow: 1.6, per: 'hit', proc: true, stun: 1.0, knock: 260, crush: 0.4, reach: 26, bossMul: 3, note: '+40% vs foes your shield stunned (Crush); bosses ×3, never stunned' },
+        { id: 'impact', label: 'Impact', base: 26, pow: 1.6, per: 'hit', proc: true, stun: 1.0, knock: 260, crush: 0.4, reach: 26, bossMul: 3, note: '+40% vs foes your bash stunned (Crush); bosses ×3, never stunned' },
         { id: 'shock', label: 'Shockwave', if: 'jugShock', ifNot: 'avalanche', of: 'impact', mul: 'jugShock', per: 'hit', r: 90, knock: 220, proc: false },
         { id: 'bash', label: 'Shield Bash', if: 'bash', per: 'hit', mulKey: 'bash', proc: true },
         { id: 'quake', label: 'Avalanche slam', if: 'avalanche', of: 'impact', mul: 'avalanche', per: 'hit', r: 160, knock: 300, stunKey: 'avaStun', bossMul: 1.5, proc: true },
         { id: 'crack', label: 'Ground cracks', if: 'avalanche', of: 'impact', mul: 'avaCrack', per: 'hit', n: 3, nFix: true, len: 220, w: 44, delay: 0.3, knock: 120, proc: true },
         { id: 'banner', label: 'War Banner', if: 'phalanx', of: 'impact', mul: 'bannerDmg', per: 'sec', r: 120, durKey: 'bannerDur', stun: 0.4, noCrit: true, note: 'per second to every foe inside; the planting pulse stuns' },
       ] },
-    shieldthrow: { name: 'Shield Throw', slot: 1, cd: 9, icon: 'bulwark', aim: 'dir', range: 280, rangeMin: 120,
-      desc: 'Hurl your shield at the cursor. It strikes and stuns up to 4 foes as it ricochets between them, then flies back to your hand, striking again. Catching it shields you for 0.5% max health per foe struck (at most once per 6 s). In flight it blocks foe shots. Bosses take ×2 but are never stunned.',
+    // Bulwark (class-knight.js) is held, not cast: hold = longest hold in s (holdKey: the stat that sets it instead), blockMax = blocked attacks that store power (+ the slot count s2N), blockMul = power each one stores (+ gather).
+    bulwark: { name: 'Bulwark', slot: 1, cd: 9, icon: 'bulwark', aim: 'dir', hold: 2, holdKey: 'bastion', blockMax: 4, blockMul: 0.25,
+      desc: 'Hold to raise your shield: it blocks every hit and shot from the front while you walk slowly. Release to bash the foes ahead and stun them; every blocked attack makes the bash stronger. Bosses take ×2 but are never stunned.',
       parts: [
-        { id: 'strike', label: 'Strike', base: 26, pow: 1.3, per: 'hit', n: 4, proc: true, stun: 0.9, knock: 140, r: 14, pRad: true, bossMul: 2, note: 'bosses ×2, never stunned' },
-        { id: 'return', label: 'Return', base: 13, pow: 0.65, per: 'hit', proc: true, knock: 80, r: 14, pRad: true },
-        { id: 'orbit', label: 'Orbit', if: 'orbit', of: 'strike', mul: 'orbitMul', per: 'hit', durKey: 'orbit', durCd: 'bastion', oneMul: { bastion: 2 }, every: 0.75, r: 44, proc: true },
-        { id: 'reflect', label: 'Returned shard', if: 'orbitReflect', of: 'strike', mul: 'orbitReflect', per: 'hit', range: 300, proc: true },
-        { id: 'vortex', label: 'Vortex', if: 'tempest', of: 'strike', mul: 'vortexMul', per: 'hit', every: 0.25, durKey: 'vortexDur', r: 100, pull: 60, proc: true },
+        { id: 'bash', label: 'Bash', base: 30, pow: 2.0, per: 'hit', r: 90, arc: 2.1, stun: 1.0, knock: 220, bossMul: 2, proc: true, note: '+25% per blocked attack (up to 4); bosses ×2, never stunned' },
+        { id: 'reflect', label: 'Returned shot', if: 'sendBack', of: 'bash', mul: 'sendBack', per: 'hit', proc: true },
+        { id: 'vortex', label: 'Vortex', if: 'tempest', of: 'bash', mul: 'vortexMul', per: 'hit', every: 0.25, durKey: 'vortexDur', r: 100, pull: 60, proc: true },
       ] },
     volley: { name: 'Volley', slot: 0, cd: 5, icon: 'arrows', aim: 'dir', moveIf: { volleyHop: { k: 'hop', dist: 70, dir: -1, t: 0.25, iframes: 0.25 } },
       desc: 'Shoot a wide fan of piercing arrows toward the cursor.',
@@ -185,27 +184,27 @@
         { id: 'wave', label: 'Supernova wave', if: 'supernova', of: 'blast', mul: 'novaEcho', per: 'hit', delay: 0.6, dur: 0.5, durFix: true, rOf: 'blast', rMul: 220 / 105, el: 'class', proc: true },
         { id: 'flare', label: 'Rebirth flare', if: 'mantleBurst', of: 'blast', mul: 'mantleBurst', per: 'hit', r: 90, knock: 220, el: 'class', proc: true },
         { id: 'phoenix', label: 'Phoenix ring', if: 'phoenixMul', of: 'ring', mul: 'phoenixMul', per: 'sec', rOf: 'blast', rMul: 70 / 105, durKey: 'phoenixDur', el: 'class' },
-        { id: 'trail', label: 'Dash trail', if: 'phoenixMul', of: 'phoenix', mul: 'dashTrail', per: 'sec', rOf: 'blast', rMul: 24 / 105, dur: 2, durFix: true, el: 'class' },
+        { id: 'trail', label: 'Fire trail', if: 'phoenixMul', of: 'phoenix', mul: 'dashTrail', per: 'sec', rOf: 'blast', rMul: 24 / 105, dur: 2, durFix: true, el: 'class' },
       ] },
     step: { name: 'Shadowstep', slot: 0, cd: 4.5, icon: 'cloak', aim: 'move', range: 140, rangeMin: 40,
-      desc: 'Blink toward the cursor, cutting through foes; you are untouchable for 0.35 s as you land. Your next attacks are critical hits.',
+      desc: 'Blink toward the cursor, cutting every foe on the way with a guaranteed critical hit; you land untouchable for 0.35 s.',
       parts: [
-        { id: 'slash', label: 'Slash', base: 12, pow: 2.2, per: 'hit', crit: true, proc: true, reach: 20, knock: 60 },
+        { id: 'slash', label: 'Slash', base: 16, pow: 3.0, per: 'hit', crit: true, proc: true, reach: 20, knock: 60 },
         { id: 'after', label: 'Afterimage', if: 'afterimage', ifNot: 'mirrorHall', base: 5, pow: 3, per: 'hit', r: 80, delay: 1.2, blind: 1, proc: false },
         { id: 'twin', label: 'Twin cut', if: 'stepTwin', of: 'slash', mul: 'stepTwin', per: 'hit', delay: 0.15, crit: true, proc: true },
         { id: 'blossom', label: 'Death Blossom cut', if: 'blossom', of: 'slash', mul: 'blossom', per: 'hit', nKey: 'blossomN', crit: true, proc: true, knock: 60 },
         { id: 'mirror', label: 'Mirror burst', if: 'mirrorHall', of: 'slash', mul: 'mirrorHall', per: 'hit', n: 3, nFix: true, r: 80, delay: 1.5, blind: 1.5, proc: false },
       ] },
     sanctuary: { name: 'Sanctuary', slot: 0, cd: 11, icon: 'sun', aim: 'ground', range: 200, aimIf: { aura: 'self' },
-      desc: 'Make holy ground at the cursor: foes inside take Holy damage each second and allies inside take less damage. Heals the allies around you when cast.',
+      desc: 'Make holy ground at the cursor: foes inside take Holy damage each second and allies inside take less damage.',
       parts: [
-        { id: 'zone', label: 'Holy ground', base: 13.5, pow: 1.2, per: 'sec', r: 100, rAddKey: 'aegisR', dur: 3.5, capCd: 0.6, el: 'class' },
+        { id: 'zone', label: 'Holy ground', base: 15, pow: 1.4, per: 'sec', r: 100, rAddKey: 'aegisR', dur: 3.5, capCd: 0.6, el: 'class' },
         { id: 'nova', label: 'Wrath nova', if: 'wrath', of: 'zone', mul: 'wrathNova', per: 'hit', rOf: 'zone', rMul: 1, knock: 120, el: 'class', proc: true },
         { id: 'pillar', label: 'Pillars of light', if: 'wrath', of: 'zone', mul: 'wrathPillar', mulFix: 0.5, per: 'tick', every: 0.5, dur: 3.5, capCd: 0.6, knock: 60, el: 'class', proc: true },
         { id: 'pulse', label: 'Aegis pulse', if: 'dawn', of: 'zone', mul: 'aegisMul', per: 'hit', rOf: 'zone', rMul: 1, dur: 3.5, capCd: 0.6, every: 2, oneEvery: true, stunKey: 'aegisStun', el: 'class', proc: false },
       ] },
     legion: { name: 'Raise Legion', slot: 0, cd: 12, icon: 'skull', aim: 'ground', range: 160, walk: true, prevR: 35,
-      desc: 'Raise 3 skeleton minions at the cursor for 12 s. Kills may also raise minions.',
+      desc: 'Raise 3 skeleton minions at the cursor for 12 s.',
       parts: [
         { id: 'minion', label: 'Minion strike', base: 9, pow: 0.6, per: 'minion', n: 3, dur: 12, every: 0.7 },
         { id: 'spikes', label: 'Bone spikes', if: 'boneSpikes', base: 7.5, pow: 0.8, per: 'hit', r: 60, el: 'class', proc: true },
@@ -241,10 +240,10 @@
         { id: 'burst', label: 'Burst', base: 12, pow: 1.0, per: 'hit', r: 36, knock: 140, el: 'class', statusAdd: { burn: 0.3 }, proc: true },
       ] },
     vanish: { name: 'Vanish', slot: 1, cd: 11, icon: 'vanish', aim: 'self',
-      desc: 'Drop smoke that slows and blinds foes. Foes lose sight of you; your next attack is an Ambush, a guaranteed critical hit.',
+      desc: 'Vanish in smoke that blinds the foes inside: they lose sight of you, and your next attack is an Ambush, a guaranteed critical hit.',
       parts: [
-        { id: 'ambush', label: 'Ambush', pow: 2.5, powKey: 'ambushMul', on: 'B', per: 'hit', crit: true, proc: true },
-        { id: 'smoke', label: 'Smoke', ifNot: 'eclipse', per: 'zone', r: 75, dur: 3, slow: 0.4 },
+        { id: 'ambush', label: 'Ambush', pow: 4, powKey: 'ambushMul', on: 'B', per: 'hit', crit: true, proc: true },
+        { id: 'smoke', label: 'Smoke', ifNot: 'eclipse', per: 'zone', r: 75, dur: 3 },
         { id: 'choke', label: 'Choking smoke', if: 'shroudDmg', ifNot: 'eclipse', of: 'ambush', mul: 'shroudDmg', per: 'sec', rOf: 'smoke', rMul: 1, dur: 3, noCrit: true, note: 'per second to every foe in the smoke' },
         { id: 'blind', label: 'Smoke blind', per: 'zone', dur: 2, durKey: 'veilBlind', durMulKey: 'umbral', capCd: 0.5 },
         { id: 'dome', label: 'Eclipse dome', if: 'eclipse', per: 'zone', r: 100, durKey: 'eclipseDur', slow: 0.4 },
@@ -252,16 +251,16 @@
         { id: 'clone', label: 'Clone attacks', if: 'umbral', pow: 0, powKey: 'cloneMul', on: 'W', per: 'hit', proc: true, dur: 4, durFix: true, perAtk: true },
       ] },
     judgment: { name: 'Judgment', slot: 1, cd: 9, icon: 'hammer', aim: 'dir',
-      desc: 'Throw a hammer toward the cursor that flies out and returns, piercing. Each leg hits a foe once and Judges it (+20% damage taken). Bosses take ×2 from the hammer.',
+      desc: 'Throw a hammer toward the cursor that flies out and back, piercing; every foe it hits is Judged (+20% damage taken). Bosses take ×2 from the hammer.',
       parts: [
-        { id: 'leg', label: 'Hammer', base: 24.3, pow: 1.4, per: 'hit', r: 18, el: 'class', mulFirst: ['stormMul', 'twinHammer'], bossMul: 2, proc: true },
+        { id: 'leg', label: 'Hammer', base: 26, pow: 1.5, per: 'hit', r: 18, el: 'class', mulFirst: ['stormMul', 'twinHammer'], bossMul: 2, proc: true },
         { id: 'verdict', label: 'Verdict', if: 'verdict', mulStat: 'verdict', base: 27, pow: 3, per: 'hit', r: 70, rAddKey: 'fjR', el: 'class', stun: 0.4, stunKey: 'fjStun', proc: true },
         { id: 'echo', label: 'Echo', if: 'fjEcho', per: 'zone' },
       ] },
     harvest: { name: 'Bone Harvest', slot: 1, cd: 10, icon: 'harvest', aim: 'self',
-      desc: 'Each of your minions explodes and heals you; then raise new minions.',
+      desc: 'Every minion you have explodes; then new minions rise.',
       parts: [
-        { id: 'burst', label: 'Burst', base: 36, pow: 1.8, per: 'hit', r: 60, el: 'class', proc: true },
+        { id: 'burst', label: 'Burst', base: 40, pow: 2.0, per: 'hit', r: 60, el: 'class', proc: true },
         { id: 'corpse', label: 'Corpse burst', if: 'corpse', of: 'burst', mul: 'corpseMul', per: 'hit', rOf: 'burst', rMul: 1, el: 'class', proc: true },
         { id: 'lance', label: 'Bone lance', if: 'boneLance', of: 'burst', mul1: 'boneLance', per: 'hit', rOf: 'burst', rMul: 1, el: 'class', proc: true },
         { id: 'shard', label: 'Bone shards', if: 'carrionN', of: 'burst', mul: 'carrionShard', per: 'hit', knock: 60, proc: true },
@@ -285,20 +284,19 @@
   };
 
   // Sheet data of skill parts, merged into the parts above: ED.Stats.skillNums turns it into q.oneFoe (hits on one foe per cast), q.selfVuln (the vulnerability the part sets before its own hit), q.raw and q.noCrit.
-  // perMinion ('live': one hit per minion you have, 'cast': one per minion the cast raises; the sheet counts them), infAdd { element: rate } (a status the part builds without the path's gate), radiance (share of a zone tick stored as Radiance), oneFoe n (times oneMul[stat] when set), oneEvery (floor(dur / every): a hit per interval), selfVuln n | { v, if: stat }, noCrit (its hits never crit), note (what the sheet adds to the part), heal { key (ED.CONST) | perMinion, cap, note } (heals the caster on cast).
+  // perMinion ('live': one hit per minion you have, 'cast': one per minion the cast raises; the sheet counts them), infAdd { element: rate } (a status the part builds without the path's gate), radiance (share of a zone tick stored as Radiance), oneFoe n (times oneMul[stat] when set), oneEvery (floor(dur / every): a hit per interval), selfVuln n | { v, if: stat }, noCrit (its hits never crit), note (what the sheet adds to the part), heal { key (ED.CONST) | perMinion, cap, if (the stat that grants it), note } (heals the caster on cast).
   ED.SKILL_SHEET = {
     'charge.shock': { noCrit: true, note: 'at the end of the run' },
-    'charge.bash': { note: 'a free Shield Throw along the run' },
+    'charge.bash': { note: 'a free bash where the run ends: no stored power, no stun' },
     'charge.quake': { noCrit: true, note: 'bosses ×1.5, never stunned; at the end of the run' },
     'charge.crack': { noCrit: true, note: '3 cracks run outward from the slam; a foe is struck by one' },
-    'shieldthrow.orbit': { oneEvery: true },
-    'shieldthrow.reflect': { oneFoe: 0, note: 'per foe shot the orbit destroys' },
-    'shieldthrow.vortex': { oneEvery: true, note: 'pulls foes in; every foe inside is struck 4 times a second' },
+    'bulwark.reflect': { oneFoe: 0, note: 'per foe shot the shield blocks: it flies back at its shooter' },
+    'bulwark.vortex': { oneEvery: true, note: 'at the tip of the bash; pulls foes in and strikes every foe inside 4 times a second for 3% of the bash per stored block (at least one)' },
     'volley.burst': { oneFoe: 0, note: 'when a marked foe dies: 4 piercing arrows' },
     'rain.star': { note: '5 impacts walk from you to the cursor' },
     'legion.spikes': { perMinion: 'cast', infAdd: { shadow: 0.5 }, note: 'one burst per minion when it expires' },
-    'sanctuary.zone': { heal: { key: 'SANCT_HEAL', note: 'you and allies within 180 heal on cast' }, radiance: 0.25 },
-    'harvest.burst': { perMinion: 'live', infAdd: { shadow: 0.5 }, note: 'one burst per minion you have', heal: { perMinion: 0.03, cap: 0.06, note: 'you heal on cast' } },
+    'sanctuary.zone': { heal: { key: 'SANCT_HEAL', if: 'sanctHeal', note: 'you and allies within 180 heal on cast' }, radiance: 0.25 },
+    'harvest.burst': { perMinion: 'live', infAdd: { shadow: 0.5 }, note: 'one burst per minion you have', heal: { perMinion: 0.03, cap: 0.06, if: 'harvestHeal', note: 'you heal on cast' } },
     'harvest.lance': { perMinion: 'live', infAdd: { shadow: 0.5 }, note: 'each minion bursts on the foe nearest it instead of its own burst' },
     'harvest.corpse': { oneFoe: 0, note: 'per corpse that explodes on the foe' },
     'meteor.rocks': { oneFoe: 0, note: 'each meteorite lands at random within 80' },
@@ -423,7 +421,7 @@
     w.name = ED.FORK_NAMES[baseId + '@' + kind] || b.name;
     if (b.kind === 'melee') {
       if (heavy) { w.range = b.range * 1.1; w.arc = Math.min(6.3, b.arc * 1.1); w.knock = Math.min(320, b.knock * 1.3); } else w.knock = b.knock * 0.5;
-      if (b.shock) w.shock = { r: b.shock.r * (heavy ? 1.15 : 1), mul: b.shock.mul };
+      if (b.shock) w.shock = { r: b.shock.r * (heavy ? 1.15 : 1), mul: heavy ? r2(b.shock.mul / (1.1 * k)) : b.shock.mul }; // a Heavy shock deals the base weapon's share, not the forked hit's
     } else {
       if (heavy) { w.r = b.r * 1.2; w.speed = b.speed * 0.9; w.life = b.life * 1.1; w.knock = Math.max(80, (b.knock || 40) * 2); }
       else { w.speed = b.speed * 1.2; w.life = b.life * 0.85; w.knock = (b.knock || 40) * 0.5; if (b.spread) w.spread = b.spread * 0.85; }

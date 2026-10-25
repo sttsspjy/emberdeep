@@ -696,9 +696,12 @@
     if (swinging && wd.fork === 'swift' && melee && !(R() && R().quality === 'low')) swiftGhosts(c, wd, w, anim, sx, sy, flip);
     if (wd.twin) twinDraw(c, p, wd, anim, face, flip, melee ? sx - OFF_SH * K * sg : hx, melee ? sy : hy, t);
     heroWeapon(c, p, wd, hx, hy, wa, flip, thr, kick, t, swinging ? anim.atkT : 9, melee ? sx : undefined, sy);
-    if (p.cls === 'knight' && !p.shieldOut) put(c, 'shield.kite', 0, bx - 5 * K * sg, by - 8 * K + bobA * K, flip, '', 1);
+    const bwA = p.face || 0, bwX = bx + Math.round(Math.cos(bwA) * 9) * K, bwY = by - 7 * K + Math.round(Math.sin(bwA) * 4) * K, bwUp = p.cls === 'knight' && !!p.bulwarkOn, bwBack = Math.sin(bwA) < -0.35; // a raised Bulwark stands out along the facing (behind the body when it faces away)
+    if (p.cls === 'knight' && !bwUp) put(c, 'shield.kite', 0, bx - 5 * K * sg, by - 8 * K + bobA * K, flip, '', 1);
+    else if (bwUp && bwBack) put(c, 'shield.kite', 0, bwX, bwY, flip, '', 1);
     if (p.stealthT > 0 && local) { const ov = outlineVar(id, '#b78cff'); if (ov) put(c, id, fi, bx, by, flip, ov, 1); }
     put(c, id, fi, bx, by, flip, variant, 1);
+    if (bwUp && !bwBack) put(c, 'shield.kite', 0, bwX, bwY, flip, '', 1);
     if (p.cls === 'cleric') halo(c, bx, by + (f0.oy - body.ay) * K, t);
     if (Cos()) {
       if (Cos().crowned(p)) { const hd = body.anchors.head; if (hd) { const q = hd[Math.min(fi, hd.length - 1)]; put(c, 'cos.crown', 0, bx + (q[0] - body.ax) * K * sg, by + (q[1] - body.ay) * K, flip, '', 1); } } // the Hollow Crown on this frame's hat seat

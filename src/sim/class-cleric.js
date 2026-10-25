@@ -73,11 +73,11 @@
     }
   }
 
-  // Sanctuary: holy ground at the cursor (or following the Cleric with Aura of Faith). Cast: the caster and the allies within 180 of the caster heal. The zone burns foes (Radiance builds from a quarter of each tick) and cuts the damage allies inside take.
+  // Sanctuary: holy ground at the cursor (or following the Cleric with Aura of Faith). Sanctum: the cast heals the caster and the allies within 180 of the caster. The zone burns foes (Radiance builds from a quarter of each tick) and cuts the damage allies inside take.
   // Holy Fury stuns the foes inside for sanctStun (not bosses); the event carries hf (stun) and au (aura) for the viewers.
   ED.CAST.sanctuary = function (p, a, data, st, N) {
     const q = N.p.zone, aura = N.aim === 'self', g = aura ? { x: p.x, y: p.y } : this.groundTarget(p, a, data, 'sanctuary');
-    for (const o of this.players.values()) if (!o.downed && !o.dead && (o === p || U.dist2(o.x, o.y, p.x, p.y) < 180 * 180)) this.healPlayer(o, o.maxHp * C.SANCT_HEAL);
+    if (st.sanctHeal) for (const o of this.players.values()) if (!o.downed && !o.dead && (o === p || U.dist2(o.x, o.y, p.x, p.y) < 180 * 180)) this.healPlayer(o, o.maxHp * C.SANCT_HEAL);
     const z = this.addZone({ kind: 'sanct', x: g.x, y: g.y, r: q.r, dur: q.dur, dps: q.dmg, owner: p.pid, team: 0, clsEl: st.element, rad: 0.25, dr: 0.15 + st.sanctDR + st.aegisDR, part: 'sanctuary.zone' });
     if (aura) z.follow = p.pid;
     if (st.dawn) { z.drCap = C.DR_FLOOR; z.w = 9; } // drCap: the cut this zone may reach (other Sanctuaries clamp at 40%); w 9 marks Aegis of Dawn for the renderer
@@ -275,7 +275,7 @@
         if (o) { o.a += lost * st.fjEcho; o.x = e.x; o.y = e.y; } else p.echoQ.set(f, { a: lost * st.fjEcho, x: e.x, y: e.y });
       }
     },
-    // Radiant Faith: every weapon hit stores Radiance for wInfHoly (Consecrate's rate counts instead when it is higher)
+    // Radiant Faith: every weapon hit stores Radiance for wInfHoly
     attackOpts(p, st) { return holyAdd(st); },
     // The regular wave of an attack: Sunhammer (twice as wide, 60% farther, stuns), Crusader (steers inside the cone; Litany sends the 6th attack's wave as a fan of three), Radiant Faith (Radiance)
     waveShot(p, pr, a, st) {
@@ -305,14 +305,14 @@
       }
       this.emit({ t: 'solar', x: rnd(pr.x), y: rnd(pr.y), r: rnd(r), pid: owner.pid });
     },
-    // A Judged foe that dies: Verdict bursts it (queued, the Verdict owner deals it), and the allies within 160 of a death inside the hammer's own Judged window get a shield once per cast (3% of max HP, class window)
+    // A Judged foe that dies: Verdict bursts it (queued, the Verdict owner deals it), and with Verdict the allies within 160 of a death inside the hammer's own Judged window get a shield once per cast (3% of max HP, class window)
     kill(e) {
       if (!(e.judged > 0)) return;
       const vo = verdictOwner(this, e);
       if (vo) this.queuePayoff(vo, { kind: 'verdict', e, x: e.x, y: e.y });
       if (!(e.judgeUntil > this.time) || e.fodder) return; // shields ignore fodder
       const o = this.players.get(e.judgeOwner);
-      if (!o || o.cls !== 'cleric') return;
+      if (!o || o.cls !== 'cleric' || !(o.stats.verdict > 0)) return;
       for (const q of this.players.values()) {
         if (q.downed || q.dead || U.dist2(q.x, q.y, e.x, e.y) > 160 * 160 || q.judgeGot[o.pid] === e.judgeCast) continue;
         q.judgeGot[o.pid] = e.judgeCast;
@@ -349,7 +349,7 @@
 
   // Hit options of Radiant Faith, cached on the stat block: { infAdd: { holy: rate } } or null
   function holyAdd(st) {
-    if (st.holyAdd === undefined) { const r = Math.max(0, st.wInfHoly - st.holyInfuse); st.holyAdd = r > 0 ? { infAdd: { holy: r } } : null; }
+    if (st.holyAdd === undefined) st.holyAdd = st.wInfHoly > 0 ? { infAdd: { holy: st.wInfHoly } } : null;
     return st.holyAdd;
   }
 })(globalThis.ED || (globalThis.ED = {}));

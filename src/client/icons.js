@@ -1459,9 +1459,11 @@
   };
   // Map glyph of a floor room: { icon, color, label, badge: [glyph, colour] | null, reward } (null for the start room and rooms without a glyph).
   // A dark room shows the reward it pays after its step up (up: reward kind -> stepped-up kind); elite and boss rooms wear their skull and badge their reward.
+  // A path boon (rm.rewardPath, floor gen) wears its path's colour and reads 'Flame boon'.
   Ic.room = (rm, path, up) => {
     if (!rm) return null;
-    const rw = rm.reward ? (rm.dark && up && up[rm.reward]) || rm.reward : null, ri = rw ? Ic.reward(rw, path) : null;
+    const rw = rm.reward ? (rm.dark && up && up[rm.reward]) || rm.reward : null, pa = rw === 'boon' && rm.rewardPath && ED.PATHS && ED.PATHS[rm.rewardPath];
+    const ri = rw ? (pa ? [RW.boon[0], pa.color, pa.name + ' boon', pa.name + ' boon'] : Ic.reward(rw, path)) : null;
     const t = rm.type === 'event' ? evGlyph(rm) : RT[rm.type];
     if (t) return { icon: t[0], color: t[1], label: ri && rm.type === 'elite' ? t[2] + ' ' + ri[2] : t[2], badge: ri ? [ri[0], ri[1]] : null, reward: rw };
     if (!ri) return null;

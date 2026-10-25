@@ -22,8 +22,7 @@
   const tones = (c) => [U.mix(c, '#ffffff', 0.55), c, U.shade(c, -0.32), U.shade(c, -0.64)];
   const TONE = {
     fire: ['#fff2a8', '#ff7a2a', '#cf461a', '#6e200e'], ice: ['#f2fdff', '#7fe3ff', '#38a2cf', '#1a527a'],
-    lightning: ['#fffbe2', '#ffe66b', '#d6a428', '#715210'], poison: ['#dcffa0', '#9be33c', '#58a31c', '#2a5a0f'],
-    holy: ['#ffffff', '#fff0c2', '#f2c454', '#8e6a22'], shadow: ['#e4d8ff', '#a070ff', '#6a3dc8', '#331966'],
+    lightning: ['#fffbe2', '#ffe66b', '#d6a428', '#715210'],
     general: ['#ffffff', '#d9dfe8', '#8f99a8', '#48505e'],
   };
   const pal = (metal, t1, t2) => {
@@ -119,32 +118,6 @@
     plot(g, 'tl tr bl br', pts);
     return finish(g);
   };
-  K.poison = (o) => { // organic rounded frame, swollen bulbs on the corners, slime on top, drips hanging from the bottom edge
-    const g = base(Object.assign({ inner: 'q', round: 12 }, o));
-    corner(g, 'tl tr bl br', ['..PPPP..', '.PYYPPp.', 'PYwPPppq', 'PYPPppq.', 'PPPppqq.', 'PppqqPp.', '.pqq.pq.', '..q.....'], 1, 1);
-    edge(g, 't', (i) => [['P', 'P', 'p', '.', '.', 'p', '.', '.'][i], ['Y', 'P', '.', '.', '.', '.', '.', '.'][i]]);
-    const DR = [0, 6, 5, 0, 0, 3, 3, 0];
-    edge(g, 'b', (i) => [['p', 'P', 'p', 'p', 'p', 'P', 'p', 'p'][i]].concat(Array.from({ length: DR[i] }, (_, k) => (k === DR[i] - 1 ? (i % 2 ? 'Y' : 'P') : i % 2 ? 'P' : 'p'))));
-    edge(g, 'lr', (i) => [['.', 'p', 'P', 'p', '.', '.', '.', '.'][i], i === 2 ? 'Y' : '.']);
-    return finish(g);
-  };
-  K.holy = (o) => { // cathedral frame: tall pinnacles with crosses on the top corners, small spires along the top edge (the gable and halo are the crest sprite)
-    const g = base(Object.assign({ inner: 'q' }, o));
-    corner(g, 'tl tr', ['....Y...', '...YwY..', '....Y...', '....P...', '...PYp..', '...PYp..', '..PPYpp.', '..PYYpp.', '.PPYYppq'], 4, -1);
-    edge(g, 't', (i) => [['.', '.', 'P', 'P', 'p', '.', '.', '.'][i], ['.', '.', 'P', 'Y', 'p', '.', '.', '.'][i], i === 3 ? 'P' : '.', i === 3 ? 'Y' : '.']);
-    corner(g, 'bl br', ['...p...', '..pPp..', '...P...'], 5, 5);
-    edge(g, 'b', (i) => [i === 3 ? 'P' : '.']);
-    return finish(g);
-  };
-  K.shadow = (o) => { // torn ragged edge: shreds round every side, bites out of the band, long tatters below
-    const g = base(Object.assign({ inner: 'q' }, o));
-    const TOP = [2, 0, 1, 3, 0, 0, 2, 1], BOT = [5, 1, 0, 3, 7, 0, 2, 4], SIDE = [1, 0, 2, 0, 0, 3, 0, 1];
-    const shred = (h, i) => Array.from({ length: h }, (_, k) => (k === h - 1 ? 'P' : i % 2 ? 'q' : 'p'));
-    edge(g, 't', (i) => shred(TOP[i], i)); edge(g, 'b', (i) => shred(BOT[i], i)); edge(g, 'lr', (i) => shred(SIDE[i], i));
-    for (let a = B + 2; a < N - B - 2; a++) { const i = ((a - SL) % 8 + 8) % 8; if (i === 5) { g[B][a] = '.'; g[B + 1][a] = 'o'; } if (i === 1) { g[N - 1 - B][a] = '.'; g[N - 2 - B][a] = 'o'; } }
-    corner(g, 'tl tr bl br', ['.P......', '..p.....', '..qp....', '...qp...', '....q...'], 2, 2);
-    return finish(g);
-  };
   K.general = (o) => { // plain riveted steel: raised corner plates with rivets, a rivet every 8 art px on the band
     const g = base(Object.assign({ inner: 'k' }, o));
     corner(g, 'tl tr bl br', ['oooooooooooo', 'oMMMMMMMMMMo', 'oMwmmmmmwmdo', 'oMmmmmmmmmdo', 'oMmmoooooooo', 'oMmmo.......', 'oMmmo.......', 'oMmmo.......', 'oMwmo.......', 'oMmmo.......', 'oddddo......', 'oooooo......'], 4, 4);
@@ -198,41 +171,9 @@
   }), { I: '#f2fdff', P: '#9be9ff', p: '#38a2cf' });
   // lightning: a spark that runs around the card edge (5 x 5, 2 frames: plus, cross)
   sp('zap', strip(2, 5, 5, (f, s) => { if (f === 0) { for (let i = 0; i < 5; i++) { s(2, i, i === 2 ? 'w' : 'Y'); s(i, 2, i === 2 ? 'w' : 'Y'); } } else { for (let i = 0; i < 5; i++) { s(i, i, i === 2 ? 'w' : 'P'); s(4 - i, i, i === 2 ? 'w' : 'P'); } } }), { w: '#ffffff', Y: '#ffe66b', P: '#fff6b0' });
-  // poison: a bubble rises, swells and pops (6 x 12, 8 frames)
-  sp('bubble', strip(8, 6, 12, (f, s) => {
-    if (f === 7) return;
-    const y = 10 - f * 1.4 | 0;
-    if (f === 6) { s(1, y, 'P'); s(4, y, 'P'); s(2, y - 1, 'Y'); s(3, y + 1, 'P'); return; }
-    if (f < 2) { s(2, y, 'P'); s(3, y, 'P'); s(2, y - 1, 'Y'); return; }
-    for (const [x, yy] of [[2, -1], [3, -1], [1, 0], [4, 0], [1, 1], [4, 1], [2, 2], [3, 2]]) s(x, y + yy, 'P');
-    s(2, y, 'Y');
-  }), { Y: '#e8ffb8', P: '#9be33c' });
-  // poison: a drip swells under an edge, falls and is gone (4 x 12, 8 frames)
-  const DRIP = strip(8, 4, 12, (f, s) => {
-    const L = [1, 2, 3, 4, 2, 1, 1, 0][f];
-    for (let y = 0; y < L; y++) { s(1, y, 'P'); s(2, y, y === L - 1 && f < 4 ? 'P' : 'p'); }
-    if (f === 3) { s(1, 4, 'P'); s(2, 4, 'p'); }
-    if (f >= 4 && f <= 6) { const y = 4 + (f - 4) * 3; s(1, y, 'P'); s(2, y, 'p'); s(1, y + 1, 'p'); }
-  });
-  sp('drip', DRIP, { P: '#9be33c', p: '#58a31c' });
-  // shadow: a smoke wisp curls up and thins out (6 x 14, 8 frames)
-  sp('wisp', strip(8, 6, 14, (f, s) => {
-    const n = f < 4 ? f + 2 : 9 - f;
-    for (let i = 0; i < n; i++) { const y = 12 - f - i * 2, x = 2 + Math.round(Math.sin((f + i) * 1.1) * 1.4); s(x, y, i ? 'p' : 'q'); if (i % 2) s(x + 1, y, 'q'); }
-  }), { p: '#a070ff', q: '#5a2fb0' });
   // purse: a glint on the clasp coin (5 x 5, 8 frames, mostly dark)
   sp('glint', strip(8, 5, 5, (f, s) => { if (f === 5 || f === 7) { s(2, 2, 'w'); s(1, 2, 'Y'); s(3, 2, 'Y'); s(2, 1, 'Y'); s(2, 3, 'Y'); } else if (f === 6) { for (let i = 0; i < 5; i++) { s(2, i, i === 2 ? 'w' : 'Y'); s(i, 2, i === 2 ? 'w' : 'Y'); } } }), { w: '#ffffff', Y: '#fff0a0' });
-  // holy: the light sweep, a stepped diagonal band (8 x 8 tile, repeated down the card)
-  sp('sweep', ['....AB..', '...ABA..', '..ABA...', '.ABA....', 'ABA.....', 'BA.....A', 'A.....AB', '.....ABA'], { A: 'rgba(255, 244, 205, 0.06)', B: 'rgba(255, 250, 230, 0.12)' });
   // crests (static sprites centred on the top edge)
-  sp('arch', [ // holy: pointed gothic gable with a halo of rays behind (24 x 14)
-    '..........YooY..........', '......Y...oYYo...Y......', '...Y.....oYwwYo.....Y...', '........oYwPPwYo........', '.......oYwPppPwYo.......', 'Y.....oYPppqqppPYo.....Y',
-    '.....oYPpqo..oqpPYo.....', '....oYPpqo....oqpPYo....', '...oYPpqo......oqpPYo...', '..oYPpqo........oqpPYo..', '.oYPpqo..........oqpPYo.', 'oYPpqo............oqpPYo',
-    'oPpqo..............oqpPo', 'oooo................oooo',
-  ], { Y: '#fff7dc', w: '#ffffff', P: '#fff0c2', p: '#f2c454', q: '#8e6a22' });
-  sp('eye', [ // shadow: eye sigil (14 x 8)
-    '....oooooo....', '..ooPPPPPPoo..', '.oPpqqwwqqpPo.', 'oPpqwXXXXwqpPo', 'oPpqwXkkXwqpPo', '.oPpqqXXqqpPo.', '..ooPPPPPPoo..', '....oooooo....',
-  ], { P: '#a070ff', p: '#6a3dc8', q: '#331966', w: '#e4d8ff', X: '#ff5fd2', k: '#0b0806' });
   sp('knot', [ // purse: drawstring knot and a coin clasp (16 x 10)
     '...oo......oo...', '..oLLo....oLLo..', '..oLlLo..oLlLo..', '...olLLooLLlo...', '....oolYYloo....', '.....oYwYYYo....', '.....oYYYppo....', '.....oYYppqo....', '......opqqo.....', '.......ooo......',
   ], { L: '#a8754a', l: '#7a5232', Y: '#ffd36b', w: '#fff6c8', p: '#b8892c', q: '#5e4410' });
@@ -285,12 +226,8 @@
 
   // pick sprites
   sp('burn', ['.o...o..', 'oYo.oYo.', 'YPYoYPYo', 'PpPYPpPY', 'pqpPpqpP', 'qkqpqkqp'], { Y: '#fff2a8', P: '#ff7a2a', p: '#cf461a', q: '#6e200e', k: '#1a0a05' }); // fire: burning edge (8 x 6, repeat-x)
-  sp('melt', ['qpPpqpPp', 'pPYPpPYP', 'oPpPoPpo', '.oPo.oPo', '.oPo..o.', '..o.....'], { Y: '#dcffa0', P: '#9be33c', p: '#58a31c', q: '#2a5a0f' }); // poison: melting edge (8 x 6, repeat-x)
   sp('shard', [['..o...', '.oIo..', 'oIPpo.', '.oPpo.', '..opo.', '...o..'], ['...oo.', '..oIPo', '.oIPpo', 'oIPpo.', 'opo...', '.o....'], ['oo....', 'oIoo..', '.oIPo.', '.oPPpo', '..oppo', '...oo.']], { I: '#f2fdff', P: '#9be9ff', p: '#38a2cf' }); // ice: 3 shard looks (6 x 6)
   sp('bolt', ['....oo..', '...oYo..', '...oYo..', '..oYPo..', '..oYo...', '.oYPo...', '.oYPPoo.', 'oYYYYPPo', '.ooPYYPo', '...oPYo.', '...oYo..', '..oYPo..', '..oYo...', '.oYPo...', '.oYo....', 'oYo.....'], { Y: '#ffffff', P: '#ffe66b' }); // lightning: bolt (8 x 16)
-  sp('vortex', strip(4, 16, 16, (f, s) => { // shadow: a spiral turning (16 x 16, 4 frames)
-    for (let i = 0; i < 46; i++) { const a = i * 0.36 + f * Math.PI / 2, r = 0.5 + i * 0.16, x = Math.round(7.5 + Math.cos(a) * r), y = Math.round(7.5 + Math.sin(a) * r); s(x, y, i < 12 ? 'w' : i < 28 ? 'P' : 'p'); }
-  }), { w: '#e4d8ff', P: '#a070ff', p: '#5a2fb0' });
   sp('anvil', [ // general: anvil (20 x 12)
     'oooooooooooooooooo..', 'oMMMMMMMMMMMMMMMMMoo', 'oMwwmmmmmmmmmmmmmdmo', '.oommmmmmmmmmmmmddo.', '...oooommmmmmddoo...', '......ommmmmddo.....',
     '......ommmmmddo.....', '.....ommmmmmmddo....', '....oMmmmmmmmmddo...', '...oMmmmmmmmmmmddo..', '...oooooooooooooooo.', '....................',

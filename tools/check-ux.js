@@ -1,6 +1,6 @@
 // Usage: node tools/check-ux.js
 // Headless checks of player-facing text and layout data: the tutorial signs near the spawn, no developer units or stale fixed multipliers in card texts, the Doom/Toll wording,
-// Shield Storm and Comet in the sheet model, the Sundered status, the floor-map glyph table and route bits (src/client/icons.js), the map key (src/client/input.js), the offer lock gates (src/client/ui.js). Prints failures and exits 1 when any check fails.
+// Shield Slam and Comet in the sheet model, the Sundered status, the floor-map glyph table and route bits (src/client/icons.js), the map key (src/client/input.js), the offer lock gates (src/client/ui.js). Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
 let n = 0, fails = 0;
 const ok = (c, msg) => { n++; if (!c) { fails++; console.log('FAIL ' + msg); } };
@@ -36,11 +36,12 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     ok(!/Skill recharges/.test(t), `${src}: "Skills recharge": ${t.slice(0, 80)}`);
     ok(!/\{|\}|\[|\]/.test(t), `${src}: no left-over token: ${t.slice(0, 80)}`);
   }
-  ok(/never Reaped/.test(ED.BOONS.doommark.desc) && /Tolls/.test(ED.BOONS.doommark.desc) && /never Reaped/.test(ED.STATUS.doom.rule), 'Doom: a boss is never Reaped, it Tolls');
-  ok(/Open boons can rank 1 higher/.test(ED.BOONS.generalist.desc) && /Your Backstabs mark 20% more Doom/.test(ED.Sheet.text('souljar', 1, st)) && /Your Backstabs mark 40% more Doom/.test(ED.Sheet.text('souljar', 2, st)), 'Generalist and Soul Jar wording');
+  ok(/never Reaped/.test(ED.STATUS.doom.rule) && /Tolls/.test(ED.STATUS.doom.rule), 'Doom: a boss is never Reaped, it Tolls');
+  ok(!/rank 1 higher/.test(ED.BOONS.generalist.desc) && /Bleed/.test(ED.Sheet.text('generalist', 1, st)), 'Tempered Steel wording: no extra open rank');
   ok(/foes inside take Holy damage/.test(ED.SKILLS.sanctuary.desc) && !/burn/i.test(ED.SKILLS.sanctuary.desc), 'Sanctuary does not burn');
   ok(/does not stack with other \+20% vulnerabilities/.test(ED.boonText('r_s2_b', 1, null)) && !/Judged/.test(ED.boonText('r_s2_b', 1, null)), 'Hail of Thorns does not lean on the Cleric term');
-  ok(/Crush/.test(ED.SKILLS.charge.desc) && /never stunned/.test(ED.SKILLS.shieldthrow.desc), 'Shield Charge and Shield Throw name Crush and the boss rule');
+  ok(/Crush/.test(ED.SKILLS.charge.desc) && /never stunned/.test(ED.SKILLS.bulwark.desc), 'Shield Charge and Bulwark name Crush and the boss rule');
+  for (const id in ED.SKILLS) ok(ED.SKILLS[id].desc.length <= 230, `skill ${id}: a short description (${ED.SKILLS[id].desc.length} chars)`);
   ok(/class shields are limited to 3% of max health per 10 s/.test(ED.WEAPONS.lantern.desc) && !/once per 1\.5s each/.test(ED.WEAPONS.lantern.desc), 'Sacred Lantern names the class-shield window');
   ok(ED.boonText('r_el_b', 2, null).indexOf('within 120') >= 0 && ED.boonText('r_el_b', 1, null).indexOf('within 100') >= 0, 'Contagion shows its total radius per rank');
 }
@@ -57,13 +58,13 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   const sunder = model('shade', { sunder: 1 }).mult.debuffs.find(d => /Sunder|critical hit/.test(d.text));
   ok(sunder && sunder.id === 'sundered' && sunder.name === 'Sundered', 'Sunder files under Sundered, not Marked: ' + (sunder && sunder.id));
   const part = (m, s, id) => m.skills[s].parts.find(q => q.id === id);
-  const k0 = model('knight', { k_s2: 1 }), k1 = model('knight', { k_s2: 1, k_s2_a: 1 });
-  ok(Math.abs(part(k1, 1, 'strike').raw - 0.7 * part(k0, 1, 'strike').raw) < 1e-6 && part(k1, 1, 'strike').oneFoe === 2, 'Shield Storm: two shields at 70% each in the strike part');
-  ok(k1.skills[1].perCast > k0.skills[1].perCast * 1.2, 'Shield Storm raises the Shield Throw per cast: ' + k0.skills[1].perCast.toFixed(1) + ' -> ' + k1.skills[1].perCast.toFixed(1));
+  const k0 = model('knight', { k_s2: 1 }), k1 = model('knight', { k_s2: 1, k_s2_a: 1 }), k3 = model('knight', { k_s2: 1, k_s2_a: 3 });
+  ok(Math.abs(part(k1, 1, 'bash').raw / part(k0, 1, 'bash').raw - 1.35) < 1e-6, 'Shield Slam: the bash part x1.35: ' + (part(k1, 1, 'bash').raw / part(k0, 1, 'bash').raw).toFixed(3));
+  ok(!part(k1, 1, 'vortex') && part(k3, 1, 'vortex') && k3.skills[1].perCast > k1.skills[1].perCast, 'Aegis Tempest adds the vortex part at rank 3: ' + k1.skills[1].perCast.toFixed(1) + ' -> ' + k3.skills[1].perCast.toFixed(1));
   const m0 = model('pyro', { p_s2: 1 }), m3 = model('pyro', { p_s2: 1, p_s2_b: 3 });
   ok(Math.abs(part(m3, 1, 'impact').raw / part(m0, 1, 'impact').raw - 1.2 * 1.4 * 0.8) < 1e-6, 'Sun Dive (Comet rank 3): the impact part is the mean of the two landings (+20% each, the second at 60%) and the card Meteor damage +40%: x1.344: ' + (part(m3, 1, 'impact').raw / part(m0, 1, 'impact').raw).toFixed(3));
   ok(part(m3, 1, 'impact').oneFoe === 2 && part(m0, 1, 'impact').oneFoe === 1, 'Sun Dive lands twice: the impact part counts two hits on one foe');
-  ok(part(model('knight', {}), 1, 'strike').r === 0 && part(model('knight', {}), 1, 'return').r === 0, 'projectile hit radii stay out of the sheet parts');
+  ok(part(model('knight', { k_s2: 1, k_s2_b: 2 }), 1, 'reflect').r === 0, 'projectile hit radii stay out of the sheet parts');
 }
 
 // ---------------- dash charges: the shared constant, the stat block, the sheet row and the charge model of Sim.dashTick / Sim.dashTry ----------------
@@ -73,14 +74,14 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   const base = { cls: 'knight', weapon: 'longsword', boons: {}, relics: [], meta: META(), pact: 0 };
   const st0 = ED.Stats.compute(base);
   ok(st0.dashCd === 1.5 && st0.dashCharges === 1, 'a fresh hero has 1 dash charge, 1.5 s each: ' + st0.dashCd + ' / ' + st0.dashCharges);
-  { // Light Step: +1 charge per rank; Shadow Cloak leaves the dash alone; the recharge floors at 1.0 s and the charges cap at 3
+  { // Light Step: +1 charge (one rank); the recharge is a fixed 1.5 s and the charges cap at 2
     const dash = (boons, relics) => { const s = ED.Stats.compute(Object.assign({}, base, { boons, relics: relics || [] })); return s.dashCharges + ' / ' + s.dashCd; };
-    ok(dash({ lightstep: 1 }) === '2 / 1.5' && dash({ lightstep: 2 }) === '3 / 1.5', 'Light Step: ranks 1 and 2 give 2 and 3 charges, recharge unchanged: ' + dash({ lightstep: 1 }) + ', ' + dash({ lightstep: 2 }));
-    ok(dash({}, ['cloak']) === '1 / 1.5' && dash({ lightstep: 2 }, ['cloak']) === '3 / 1.5', 'Shadow Cloak grants no dash charge or recharge: ' + dash({}, ['cloak']) + ', ' + dash({ lightstep: 2 }, ['cloak']));
-    ED.RELICS.zzdash = { name: 'T', rar: 'c', icon: 'coin', desc: '', mods: { dashcdr: 0.9 } };
-    ok(dash({ lightstep: 5 }, ['zzdash']) === '3 / 1', 'the recharge floors at 1.0 s and the charges cap at 3: ' + dash({ lightstep: 5 }, ['zzdash']));
+    ok(ED.BOONS.lightstep.max === 1 && dash({ lightstep: 1 }) === '2 / 1.5', 'Light Step: one rank, 2 charges, recharge unchanged: ' + dash({ lightstep: 1 }));
+    ok(dash({}, ['cloak']) === '1 / 1.5' && dash({ lightstep: 1 }, ['cloak']) === '2 / 1.5', 'Shadow Cloak no longer shortens the recharge: ' + dash({}, ['cloak']));
+    ED.RELICS.zzdash = { name: 'T', rar: 'c', icon: 'coin', desc: '', mods: { dashN: 5 } };
+    ok(dash({ lightstep: 1 }, ['zzdash']) === '2 / 1.5', 'the charges cap at 2: ' + dash({ lightstep: 1 }, ['zzdash']));
     delete ED.RELICS.zzdash;
-    ok(ED.Sheet.text('lightstep', 1) === 'Dash: +1 charge.' && ED.Sheet.text('lightstep', 2) === 'Dash: +2 charges.' && ED.Sheet.nextText('lightstep', 1) === '+2 charges' && ED.Sheet.STAT_INFO.dashN.label === 'Dash charges' && ED.Sheet.STAT_INFO.dashcdr.label === 'Dash recharge', 'Light Step card text and the sheet labels: ' + ED.Sheet.text('lightstep', 2));
+    ok(ED.Sheet.text('lightstep', 1) === 'Dash: +1 charge.' && ED.Sheet.STAT_INFO.dashN.label === 'Dash charges' && !ED.Sheet.STAT_INFO.dashcdr, 'Light Step card text and the sheet label: ' + ED.Sheet.text('lightstep', 1));
   }
   const stats = ED.Stats.compute(base); stats.sn = {};
   const p = { pid: 'p', name: 'T', cls: 'knight', weapon: base.weapon, boons: {}, relics: [], meta: base.meta, stats, hp: stats.maxHp, maxHp: stats.maxHp, shield: 0, picks: 0, slot: 0 };

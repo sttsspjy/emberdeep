@@ -332,10 +332,6 @@ const STORED_V2 = {"v":2,"news":0,"name":"Stored","embers":100,"lifetime":900,"u
   const byRar = {}; for (const id of ED.RELIC_IDS) byRar[ED.RELICS[id].rar] = (byRar[ED.RELICS[id].rar] || 0) + 1;
   same(['c', 'r', 'e', 'boss', 'curse'].map(k => byRar[k]), [28, 23, 12, 10, 10], 'relics per rarity (common, rare, epic, boss, curse)');
   ok(ED.relicFits === undefined && S.relicUnlocked === undefined && S.unlockRelic === undefined && S.relicReqMet === undefined, 'the Codex API is gone');
-  // Soul Jar lives on as a Shadow path boon and reads the same stat
-  const stats = (boons) => ED.Stats.compute({ cls: 'knight', weapon: 'longsword', boons, relics: [], meta: META(), pact: 0 });
-  ok(stats({ souljar: 2 }).doomMul === 0.4 && ED.BOONS.souljar.path === 'shadow' && ED.BOONS.souljar.max === 2, 'Soul Jar sets its stat and sits in the Shadow path');
-  ok(ED.pathAffinity({ doommark: 1, souljar: 1, cutthroat: 1 }, 'shadow') === 3, 'and counts toward its path');
   // the pool in a world
   const w = new ED.World({ seed: 5, pact: 0, players: [{ pid: 'a', name: 'A', slot: 0, cls: 'knight', weapon: 'longsword', meta: META() }] });
   w.startRun();

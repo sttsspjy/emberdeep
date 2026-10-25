@@ -270,7 +270,7 @@
       let item = room.reward;
       const up = room.dark ? ED.World.REWARD_UP[item] : null;
       if (up) { item = up; this.emit({ t: 'upgrade', to: up, x: Math.round(m.x), y: Math.round(m.y) }); }
-      this.props.push({ id: U.uid(), kind: 'reward', x: m.x, y: m.y, item, group: U.uid(), state: 0 });
+      this.props.push({ id: U.uid(), kind: 'reward', x: m.x, y: m.y, item, path: item === 'boon' ? room.rewardPath || null : null, group: U.uid(), state: 0 }); // path: a path boon (host only: claims draw from it)
     }
     this.checkFullClear(room);
     this.relicAll('clear', room); // a fight is won (relics.js)
@@ -425,7 +425,7 @@
           // every hero claims once; the prop stays until all have
           if (p.claimed[pr.group]) { this.msgs.push({ to: pid, t: 'toast', text: 'You already claimed this reward.' }); return; }
           p.claimed[pr.group] = true;
-          if (item === 'boon') this.grantOffer(p, { src: 'room' });
+          if (item === 'boon') this.grantOffer(p, { src: 'room', path: pr.path || null });
           else if (item === 'vigor') { p.bonusHp += 2; this.recalc(p, false); this.healPlayer(p, p.maxHp * 0.2); this.sendBuild(p); }
           else this.grantOffer(p, { src: item }); // forge, epic
           this.msgs.push({ to: pid, t: 'claimed', group: pr.group });

@@ -1,5 +1,6 @@
 // Usage: node tools/check-build.js
-// Headless checks of the build engine: auto-granted fork ranks (bosses II and III), the class and forge offer rules and the offer-pool hygiene (Opportunist gate, the Purse, max ranks, path reach).
+// Headless checks of the build engine: auto-granted fork ranks (bosses II and III), the class and forge offer rules and the offer-pool hygiene (Opportunist gate, the Purse, max ranks, path reach),
+// the path offers (start offer of the four gates, room path boons, cross-path cards, deep cards, filler last once two paths are owned) and the dash cap.
 // Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
 let n = 0, fails = 0;
@@ -94,11 +95,11 @@ const ranks = (w, pid) => w.msgs.filter(m => m.t === 'forkRank' && m.to === pid)
   ok(!dz('ranger') && !dz('pyro') && !dz('cleric') && !dz('necro'), 'Ranger, Pyromancer, Cleric and Necromancer have no stun, freeze or blind in the base kit');
   ok(dz('ranger', { r_atk: 1, r_atk_h: 1 }) && !dz('ranger', { r_atk: 1, r_atk_s: 1 }), 'a Heavy fork Staggers; a Swift fork does not');
   ok(dz('ranger', { r_s2: 1, r_s2_a: 1 }), 'Skyfall stuns (skill part)');
-  for (const k of ['iceInfuse', 'arcStun', 'waveStun', 'sanctStun', 'cStun', 'chargeStun', 'orbitStun', 'knightStun', 'cometStun', 'parry']) ok(dz('ranger', {}, { [k]: 1 }), `stat ${k} counts`);
+  for (const k of ['iceInfuse', 'arcStun', 'waveStun', 'sanctStun', 'cStun', 'chargeStun', 'wallStun', 'knightStun', 'cometStun', 'parry']) ok(dz('ranger', {}, { [k]: 1 }), `stat ${k} counts`);
   ok(dz('cleric', {}, { verdict: 1 }) && !dz('cleric', {}, { verdict: 0 }), 'Verdict stuns (skill part, needs its stat)');
   ok(dz('cleric', { c_atk: 1, c_atk_h: 1 }) && dz('cleric', {}, { waveStun: 0.4 }) && dz('cleric', {}, { sanctStun: 0.5 }), 'Cleric: Heavy, Wave of light and Sanctuary stuns');
   ok(dz('necro', {}, { knightStun: 0.5 }) && dz('pyro', {}, { cometStun: 0.5 }), 'Necromancer Ironbone and Pyromancer Impact Crater stun');
-  // the card follows the gate: a Generalist Ranger never sees it, a Generalist Knight can
+  // the card follows the gate: a Steel Ranger never sees it, a Steel Knight can
   const seen = (cls, boons) => { const { w, p } = stage(cls, Object.assign({ generalist: 1 }, boons)); for (let i = 0; i < 400; i++) if (w.rollOffer(p, { src: 'level' }).includes('opportunist')) return true; return false; };
   ok(!seen('ranger') && seen('knight') && seen('shade') && seen('ranger', { r_atk: 1, r_atk_h: 1 }), 'Opportunist is offered only to heroes that can daze a foe');
   const { w, p } = stage('ranger', { generalist: 1 }); ok(!w.rollOffer(p, { src: 'room' }).includes('opportunist') && !w.rollOffer(p, { src: 'epic' }).includes('opportunist'), 'also absent from room and epic offers');
@@ -122,7 +123,7 @@ const ranks = (w, pid) => w.msgs.filter(m => m.t === 'forkRank' && m.to === pid)
 
   // (a) a hero with an exhausted pool is offered the Purse, never Vigor
   const ex = exhaust('knight', { generalist: 1 });
-  ok(ex.i > 3 && ex.i < 400, `a Generalist Knight exhausts the pool after ${ex.i} offers`);
+  ok(ex.i > 3 && ex.i < 400, `a Steel Knight exhausts the pool after ${ex.i} offers`);
   for (const src of ['level', 'room', 'epic']) {
     const o = ex.w.rollOffer(ex.p, { src });
     ok(bare(o).join() === 'purse', `exhausted pool, ${src} offer: the Purse alone (${o})`);
@@ -156,17 +157,16 @@ const ranks = (w, pid) => w.msgs.filter(m => m.t === 'forkRank' && m.to === pid)
     ok(p.boons.r_atk_h === 3 && !w.msgs.some(m => m.t === 'forkRank'), 'a fork at rank 3 stays at rank 3');
     pick(w, p, ['focus', 'plating'], 1); ok(p.boons.plating === 1, 'a card below its max rank is still granted');
     pick(w, p, ['kindle']); ok(p.boons.kindle === 1, 'a max-1 card already owned stays at 1');
-    const g = stage('knight', { generalist: 1, focus: 4 }); pick(g.w, g.p, ['focus']); ok(g.p.boons.focus === 4, 'a Generalist caps open cards at max + 1');
-    const g2 = stage('knight', { generalist: 1, focus: 3 }); pick(g2.w, g2.p, ['focus']); ok(g2.p.boons.focus === 4, 'a Generalist takes the extra rank');
+    const g = stage('knight', { generalist: 1, focus: 3 }); pick(g.w, g.p, ['focus']); ok(g.p.boons.focus === 3, 'a Steel hero gains no extra rank on open cards');
   }
-  // (d) Vigor never exceeds rank 3 (4 for a Generalist), by picks and by the pool run dry
+  // (d) Vigor never exceeds rank 3, by picks and by the pool run dry
   {
     const { w, p } = stage('ranger', { kindle: 1 });
     for (let i = 0; i < 6; i++) pick(w, p, ['vigor']);
     ok(p.boons.vigor === 3, `Vigor stays at rank 3 after six picks (got ${p.boons.vigor})`);
     ok(ex2.p.boons.vigor === 3, 'Vigor is 3 after the pool ran dry (never raised by the fallback)');
     const hp = p.stats.maxHp; pick(w, p, ['vigor']); ok(p.stats.maxHp === hp, 'a seventh Vigor adds no health');
-    ok(ex.p.boons.vigor === 4, 'a Generalist holds Vigor to 4 (open cards gain a rank)');
+    ok(ex.p.boons.vigor === 3, 'a Steel hero holds Vigor to 3');
   }
 }
 
@@ -178,19 +178,76 @@ const ranks = (w, pid) => w.msgs.filter(m => m.t === 'forkRank' && m.to === pid)
   ok(!q.downed && q.secondWind === 0, 'Second Wind fires outside a boss fight'); near(q.hp, Math.round(q.maxHp * 0.1), 1e-9, 'rises at 10% health');
 }
 
-// ---------------- element paths: live cards reach the keystone and evolution ----------------
+// ---------------- paths: live cards reach the keystone and evolution; pool depth, deep and cross-path cards ----------------
 {
-  for (const el of ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow']) {
+  const PCT = ['dmg', 'crit', 'critDmg', 'atk', 'burnMul', 'chillMul', 'shockMul', 'area', 'cdr']; // plain percent stats
+  ok(ED.PATH_IDS.join() === 'general,fire,ice,lightning' && ED.MAX_PATHS === 2, `four paths, two at most (${ED.PATH_IDS})`);
+  for (const el of ED.PATH_IDS) {
     let r = 0;
-    for (const id in ED.BOONS) { const b = ED.BOONS[id]; if (b.path === el && !b.retired && !b.key && !b.evo && !b.cls) r += b.max || 1; }
-    ok(r >= ED.KEY_AFFINITY && r + 1 >= ED.EVO_AFFINITY && r + 1 <= 13, `${el}: ${r} path ranks + keystone reach the evolution (${ED.EVO_AFFINITY}) without retired cards`);
-  }
-  for (const el of ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general']) {
+    for (const id in ED.BOONS) { const b = ED.BOONS[id]; if (b.path === el && !b.retired && !b.key && !b.evo && !b.cls && !b.deep) r += b.max || 1; }
+    ok(r >= ED.KEY_AFFINITY && r + 1 >= ED.EVO_AFFINITY, `${el}: ${r} stratum I path ranks + keystone reach the evolution (${ED.EVO_AFFINITY})`);
     const ids = ED.BOON_IDS.filter(id => ED.BOONS[id].path === el && !ED.BOONS[id].cls);
     ok(ids.filter(id => ED.BOONS[id].gate).length === 1 && ids.filter(id => ED.BOONS[id].key).length === 1 && ids.filter(id => ED.BOONS[id].evo).length === 1, `${el}: one gate, one keystone, one evolution`);
-    const pool = ids.filter(id => !ED.BOONS[id].gate && !ED.BOONS[id].key && !ED.BOONS[id].evo);
-    ok(pool.length >= 5 && pool.length <= 7, `${el}: ${pool.length} path boons (${pool.join(' ')})`);
+    const pool = ids.filter(id => !ED.BOONS[id].gate && !ED.BOONS[id].key && !ED.BOONS[id].evo), deep = pool.filter(id => ED.BOONS[id].deep);
+    ok(pool.length >= 7 && pool.length <= 9, `${el}: ${pool.length} path boons (${pool.join(' ')})`);
+    ok(deep.length >= 2 && deep.length <= 3 && deep.every(id => ED.BOONS[id].deep >= 2 && ED.BOONS[id].deep <= 3), `${el}: 2-3 deep cards (${deep.join(' ')})`);
+    const ev = ED.BOONS['evo_' + el];
+    ok(!Object.keys(ev.mods || {}).some(k => PCT.includes(k)) && !ev.strikes, `${el}: the evolution changes behaviour only (no percent stat, no added shots)`);
+    ok(!Object.keys(ED.BOONS[ids.find(id => ED.BOONS[id].key)].mods).some(k => PCT.includes(k)), `${el}: the keystone is no plain percent`);
   }
+  const cross = ED.BOON_IDS.filter(id => ED.BOONS[id].cross);
+  for (let i = 0; i < ED.PATH_IDS.length; i++) for (let j = i + 1; j < ED.PATH_IDS.length; j++) {
+    const a = ED.PATH_IDS[i], b = ED.PATH_IDS[j], c = cross.filter(id => ED.BOONS[id].cross.includes(a) && ED.BOONS[id].cross.includes(b));
+    ok(c.length === 1, `${a} + ${b}: one cross-path card (${c})`);
+    const one = stage('ranger', { [ED.PATH_GATE[a]]: 1 }), both = stage('ranger', { [ED.PATH_GATE[a]]: 1, [ED.PATH_GATE[b]]: 1 });
+    let s1 = 0, s2 = 0;
+    for (let k = 0; k < 200; k++) { if (one.w.rollOffer(one.p, { src: 'level' }).includes(c[0])) s1++; if (both.w.rollOffer(both.p, { src: 'level' }).includes(c[0])) s2++; }
+    ok(!s1 && s2 > 0, `${c[0]}: offered only with both paths (one path ${s1}, both ${s2} of 200)`);
+  }
+  { // deep cards wait for their stratum
+    const s1 = stage('knight', { generalist: 1 }), s3 = stage('knight', { generalist: 1 }, { stratum: 3 });
+    let a = 0, b = 0;
+    for (let k = 0; k < 300; k++) { if (s1.w.rollOffer(s1.p, { src: 'level' }).some(id => ED.BOONS[id].deep)) a++; if (s3.w.rollOffer(s3.p, { src: 'level' }).some(id => ED.BOONS[id].deep)) b++; }
+    ok(!a && b > 0, `deep cards: none on stratum I (${a}), offered on stratum III (${b} of 300)`);
+  }
+  { // start offer: the four gates for every hero
+    for (const cls of ED.CLASS_IDS) { const { w, p } = stage(cls); const o = w.rollOffer(p, { src: 'start' }); ok(o.join() === ED.PATH_IDS.map(k => ED.PATH_GATE[k]).join(), `${cls}: start offer is the four gates (${o})`); }
+  }
+  { // filler (vigor, plating, evasion, light step) only fills a short offer once two paths are owned
+    const { w, p } = stage('ranger', { kindle: 1, frostbite: 1 });
+    let f = 0;
+    for (let k = 0; k < 300; k++) if (w.rollOffer(p, { src: 'level' }).some(id => ED.BOONS[id].filler)) f++;
+    const one = stage('ranger', { kindle: 1 }); let f1 = 0;
+    for (let k = 0; k < 300; k++) if (one.w.rollOffer(one.p, { src: 'level' }).some(id => ED.BOONS[id].filler)) f1++;
+    ok(!f && f1 > 0, `filler: never with two paths and cards left (${f}), offered with one path (${f1} of 300)`);
+  }
+  { // room path boons: the gate first while a slot is free, then that path's cards; a hero with two other paths gets a plain room offer
+    const a = stage('knight'); const o1 = a.w.rollOffer(a.p, { src: 'room', path: 'fire' });
+    ok(o1[0] === 'kindle' && o1.slice(1).every(id => ED.BOONS[id].path === 'fire' || (ED.BOONS[id].cross && ED.BOONS[id].cross.includes('fire')) || ED.BOONS[id].open), `room Flame boon, no path: the Flame gate first (${o1})`);
+    const b = stage('knight', { kindle: 1 }); let okB = true;
+    for (let k = 0; k < 100; k++) { const o = b.w.rollOffer(b.p, { src: 'room', path: 'fire' }).filter(id => !ED.BOONS[id].evo); if (!o.every(id => (ED.BOONS[id].path === 'fire' && !ED.BOONS[id].gate) || (ED.BOONS[id].cross && ED.BOONS[id].cross.includes('fire')))) { okB = false; break; } }
+    ok(okB, 'room Flame boon, Flame owned: Flame cards only');
+    const c = stage('knight', { generalist: 1, frostbite: 1 }); let gate = 0, fire = 0;
+    for (let k = 0; k < 100; k++) { const o = c.w.rollOffer(c.p, { src: 'room', path: 'fire' }); if (o.some(id => ED.BOONS[id].gate)) gate++; if (o.some(id => ED.BOONS[id].path === 'fire')) fire++; }
+    ok(!gate && !fire, `room Flame boon, two other paths: a plain room offer (gates ${gate}, Flame cards ${fire})`);
+    const d = stage('knight', { generalist: 1 }); const pr = d.w.rollOffer(d.p, { src: 'room', path: 'lightning' });
+    ok(pr[0] === 'staticcharge', `room Storm boon with one path and a free slot: the Storm gate first (${pr})`);
+  }
+  { // floor gen: about 70% of boon rooms name a path, deterministic per seed
+    let n = 0, pth = 0, same = true;
+    for (let seed = 1; seed <= 40; seed++) for (let s = 1; s <= 3; s++) {
+      const f = ED.Dungeon.generate(s, seed), g = ED.Dungeon.generate(s, seed);
+      for (let i = 0; i < f.rooms.length; i++) { const r = f.rooms[i]; if (r.rewardPath !== g.rooms[i].rewardPath) same = false; if (r.reward === 'boon') { n++; if (r.rewardPath) pth++; } else if (r.rewardPath) same = false; }
+    }
+    ok(same && n > 50 && pth / n > 0.6 && pth / n < 0.8, `room path boons: ${pth} of ${n} boon rooms name a path, deterministic`);
+  }
+}
+
+// ---------------- dash: at most 2 charges ----------------
+{
+  ok(ED.BOONS.lightstep.max === 1, 'Light Step has one rank');
+  const st = ED.Stats.compute({ cls: 'shade', weapon: ED.CLASSES.shade.weapons[0], boons: { lightstep: 1 }, relics: ['cloak'], meta: { up: ED.UPGRADES.map(() => 9), mastery: 9, relics: [] }, pact: 0 });
+  ok(st.dashCharges <= 2 && !('dashcdr' in st), `dash charges capped at 2 (${st.dashCharges}), no dash cooldown stat`);
 }
 
 console.log(`${n} checks, ${fails} failed`);

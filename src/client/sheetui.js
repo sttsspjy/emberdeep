@@ -19,7 +19,7 @@
   const tint = (c) => ({ P: c, H: U.shade(c, 0.45), L: U.mix(c, FILL, 0.62), f: U.mix(FILL, c, 0.07), D: U.mix(c, '#000000', 0.72) });
   if (PX) {
     const cardV = { gold: { P: '--gold', H: '#fff3c4', L: '--gold-lo', f: '#1a1209', D: '#3a2a12' }, route: { P: '--brass-hi', H: '--gold', L: '--brass', f: '#17110b', D: '#2c2014' }, dim: { P: '--line', H: '--line', L: '#2c2119', f: '#0e0a08', D: '#0b0806' } };
-    for (const id of PX.PATHS) cardV[id] = tint(ED.PATHS[id].color);
+    for (const id of PX.PATHS) cardV[id] = tint(ED.pathInfo(id).color);
     ED.PLAYER_COLORS.forEach((c, i) => { cardV['p' + i] = tint(c); });
     PX.frame('shcard', {
       rows: ['.ooooooo.', 'oHHLLLLLo', 'oPPffffLo', 'oPPffffLo', 'oPPffffLo', 'oPPffffLo', 'oPPffffLo', 'oPPDDDDDo', '.ooooooo.'],
@@ -30,7 +30,7 @@
       pal: { L: '--line-hi' }, slice: 3,
     });
     const mkV = { off: { H: '#6f5338', P: '#3a2c22' }, bone: { H: '#ffffff', P: '--bone' } };
-    for (const id of PX.PATHS) mkV[id] = { H: U.shade(ED.PATHS[id].color, 0.6), P: ED.PATHS[id].color };
+    for (const id of PX.PATHS) mkV[id] = { H: U.shade(ED.pathInfo(id).color, 0.6), P: ED.pathInfo(id).color };
     PX.frame('shmk', { rows: ['...o...', '..oHo..', '.oHHPo.', 'oHHPPPo', '.oPPPo.', '..oPo..', '...o...'], pal: { o: '#222222', H: '#6f5338', P: '#3a2c22' }, variants: mkV });
     PX.frame('shstar', {
       rows: ['...o...', '..oHo..', 'oooHSoo', 'oHHSSSo', '.oSSSo.', 'oSSoSSo', 'ooo.ooo'], pal: { o: '#222222', H: '#6f5338', S: '#3a2c22' },
@@ -48,7 +48,7 @@
   const sgn = (v, s) => (v < 0 ? '−' : '+') + s;
   const cap1 = (s) => s.charAt(0).toUpperCase() + s.slice(1);
   const pl = (n, w) => (n === 1 ? w : w + 's');
-  const colorOf = (el) => (ED.PATHS[el] ? ED.PATHS[el].color : '#d9dfe8');
+  const colorOf = (el) => (ED.pathInfo(el) ? ED.pathInfo(el).color : '#d9dfe8');
   const ico = (name, color) => ED.Icons.url(name, color);
   const pathIco = (k) => ico(ED.PATHS[k].icon, ED.PATHS[k].color);
   const img = (src, big) => `<img class="${big ? 'sh-i2' : 'sh-i1'}" alt="" src="${src}">`;
@@ -143,10 +143,9 @@
     const B = m.build;
     let paths = '';
     for (const P of B.paths) paths += pathRow(P);
-    if (B.generalist) paths += `<div class="shc off sh-path slot">Element paths closed (Generalist)</div>`;
-    for (let i = 0; i < B.slotsFree; i++) paths += `<div class="shc dash sh-path slot sh-f" data-k="slot:${i}">Open element slot (${B.slots - B.slotsFree + i + 1} of ${B.slots})</div>`;
-    if (B.classElementRow) { const c = B.classElementRow, el = Object.keys(ED.PATHS).find(k => ED.PATHS[k].color === c.color); paths += `<div class="shc sh-path elem sh-f" data-k="elem" style="${el ? frc('shcard-' + el) : ''}">${img(ico(c.icon, c.color), true)}<span>${esc(c.name)} is your class element: your skills deal ${esc(c.name)} damage. Take the ${esc(c.name)} gate to infuse every hit.</span></div>`; }
-    let left = head('Paths', B.generalist ? 'Generalist' : `${B.paths.filter(q => q.element).length}/${B.slots}`) + `<div class="sh-list">${paths}</div>`;
+    for (let i = 0; i < B.slotsFree; i++) paths += `<div class="shc dash sh-path slot sh-f" data-k="slot:${i}">Open path slot (${B.slots - B.slotsFree + i + 1} of ${B.slots})</div>`;
+    if (B.classElementRow) { const c = B.classElementRow, el = c.el; paths += `<div class="shc sh-path elem sh-f" data-k="elem" style="${el ? frc('shcard-' + el) : ''}">${img(ico(c.icon, c.color), true)}<span>${esc(c.name)} is your class element: your skills deal ${esc(c.name)} damage.${ED.PATHS[el] ? ` Take the ${esc(ED.PATHS[el].name)} gate to infuse every hit.` : ''}</span></div>`; }
+    let left = head('Paths', `${B.paths.length}/${B.slots}`) + `<div class="sh-list">${paths}</div>`;
     left += head('Class route', B.route.route ? esc(ED.routeLabel(m.hero.cls, B.route.route)) : 'at level 3') + routeBlock(B.route, ED.CLASSES[m.hero.cls].col.c);
     let boons = B.groups.length ? '' : '<div class="sh-empty">No boons yet. The first pick comes from the start offer.</div>';
     for (const g of B.groups) {

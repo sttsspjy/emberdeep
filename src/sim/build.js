@@ -6,29 +6,26 @@
   const W = ED.World.prototype;
 
   // ---------------- hooks called by world.js ----------------
-  // Called from addPlayer before the first recalc: add build-only fields to the hero (offer queue, fork ranks due, dash-boon state, Holy/Lantern timers, Judgment grants, shield accounting) and the element verb state (elements.js initVerbs).
+  // Called from addPlayer before the first recalc: add build-only fields to the hero (offer queue, fork ranks due, dash breakable sweep, Holy/Lantern timers, Judgment grants, shield accounting) and the hold verb state (elements.js initVerbs).
   W.initBuild = function (p) {
-    p.offers = []; p.picks = 0; p.forkDue = 0; p.dashHit = null; p.dashFx = -1; p.dashFy = 0; p.dashTrail = 0; p.boltAt = 0;
+    p.offers = []; p.picks = 0; p.forkDue = 0; p.dashFx = -1; p.dashFy = 0;
     p.holyT = 0; p.lanternT = 0; p.castN = 0; p.judgeGot = {}; p.shieldBy = {}; p.toughRoom = false;
     this.initVerbs(p);
     p.sec = { platino: false, contrarian: false, thread: false, heroSecret: false, bellRung: false }; // secret run fields (world.js secretP)
-    p.ctrN = 0; p.ctrOff = false; p.ctrEl = {}; // Against the Grain: counted element-path cards, broken for the run, stratum -> its one element
+    p.ctrEl = {}; // Against the Grain: path -> the stratum its gate was picked on
     p.bellS = 0; // Drowned Bell: 0 not rung, 1 rung (watching health), 2 broken, 3 kept (rooms.js)
   };
 
-  // Against the Grain: each stratum takes one element (the first element-path card of the stratum sets it to its element, not used on an earlier stratum); a card without that element,
-  // or a first card whose elements were all used before, breaks it for the run. p.sec.contrarian holds at CONTRARIAN_N counted cards.
-  const CONTRARIAN_N = 8;
+  // Against the Grain: the hero opens its two paths on two different strata, the second after stratum I (p.ctrEl: path -> stratum of its gate pick). p.sec.contrarian holds once both are open.
   W.contrarianPick = function (p, b) {
-    const els = b.path && ED.PATHS[b.path] && ED.PATHS[b.path].element ? [b.path] : null;
-    if (!els) return;
-    const s = this.stratum, ce = p.ctrEl || (p.ctrEl = {});
-    if (!ce[s]) { const used = Object.keys(ce).filter(k => +k !== s).map(k => ce[k]); ce[s] = els.find(el => used.indexOf(el) < 0) || null; if (!ce[s]) { p.ctrOff = true; ce[s] = '-'; } }
-    if (els.indexOf(ce[s]) >= 0) p.ctrN++; else p.ctrOff = true;
-    p.sec.contrarian = !p.ctrOff && p.ctrN >= CONTRARIAN_N;
+    if (!b.gate || !b.path) return;
+    const ce = p.ctrEl || (p.ctrEl = {});
+    if (ce[b.path] === undefined) ce[b.path] = this.stratum;
+    const s = Object.keys(ce).map(k => ce[k]);
+    p.sec.contrarian = s.length >= ED.MAX_PATHS && s[0] !== s[1] && Math.max(s[0], s[1]) >= 2;
   };
 
-  // Queue an offer spec {src:'level'|'room'|'class'|'start'|'forge'|'epic', path?}; p.picks mirrors the queue length.
+  // Queue an offer spec {src:'level'|'room'|'class'|'start'|'forge'|'epic', path? (a room's path boon)}; p.picks mirrors the queue length.
   W.grantOffer = function (p, spec) {
     if (!p || !spec) return;
     p.offers.push({ src: spec.src || 'level', path: spec.path || null });
@@ -107,8 +104,7 @@
       p.picks = p.offers.length;
       if (p.offer) {
         p.offerT += dt;
-        // AFK guard so a party is never stuck behind one player (a solo hero may take as long as they like); never auto-evolves and never makes a hero a Generalist (the Generalist card is last in the start offer);
-        // a route or fork pick is seeded random
+        // AFK guard so a party is never stuck behind one player (a solo hero may take as long as they like): the first card that is no evolution; a route or fork pick is seeded random
         if (p.offerT > 45 && this.players.size > 1) {
           const sp = p.offers[0], cl = sp && sp.src === 'class';
           this.pickBoon(p.pid, cl ? this.rng.int(0, p.offer.length - 1) : Math.max(0, p.offer.findIndex(id => !ED.BOONS[id].evo)));
@@ -138,11 +134,11 @@
     return out;
   };
 
-  // Weight of an unowned element gate on a room offer: the class element x2 (no stratum favours an element).
+  // Weight of an unowned path gate on a room offer: the class element x2 (no stratum favours a path).
   const coverage = (p, g) => (p.stats.element === g ? 2 : 1);
 
   // Stat keys that stun, freeze or blind foes (Frostbite, Overload and the route stats); the Opportunist gate also reads Heavy Stagger and the hero's skill parts.
-  const DAZE_KEYS = ['iceInfuse', 'arcStun', 'waveStun', 'sanctStun', 'cStun', 'chargeStun', 'orbitStun', 'knightStun', 'cometStun', 'parry'];
+  const DAZE_KEYS = ['iceInfuse', 'arcStun', 'waveStun', 'sanctStun', 'cStun', 'chargeStun', 'wallStun', 'knightStun', 'cometStun', 'parry'];
   // True when the hero can stun, freeze or blind a foe: a Heavy weapon fork, a DAZE_KEYS stat above 0, or a stun / blind part of its two skills (a gated part needs its stat: skyfall, verdict, afterimage).
   W.canDaze = function (p) {
     const st = p.stats, cl = ED.CLASSES[p.cls];
@@ -155,32 +151,34 @@
   };
 
   // Boon ids for one offer spec (the evolution card prepended on top of the cards). A forge spec with nothing to rank up turns into a level spec.
-  // Everyone sees 3 cards (epic 4, Crown +1): the start offer is 3 element gates plus the guaranteed card (Generalist for Knight, Ranger and Shade; the class element's gate for the others);
-  // a class spec returns exactly the cards of the hero's next route step (no draw padding, no evolution prepended): the 4 route cards or the 2 forks of the chosen route (a hero that holds a fork gets a level offer);
-  // room, level and epic offers draw from the hero's own paths (element heroes) or the General path (Generalists) plus open boons.
+  // Everyone sees 3 cards (epic 4, Crown +1): the start offer is the 4 path gates; a class spec returns exactly the cards of the hero's next route step (no draw padding, no evolution prepended):
+  // the 4 route cards or the 2 forks of the chosen route (a hero that holds a fork gets a level offer). Room, level and epic offers draw from the hero's own paths, the cross-path cards of its two paths,
+  // path gates while a path slot is free, and open boons; once the hero owns MAX_PATHS paths the open filler (vigor, plating, evasion, light step) only fills a short offer. Deep cards wait for their stratum.
+  // A room spec with a path (the room's path boon) draws from that path when the hero owns it (its gate first when a slot is free); a hero holding two other paths gets a plain room offer.
   // The forge offers owned boons below their max rank, never route or fork cards. A card at its max rank is never offered; a draw that finds no card (pool exhausted) offers the Purse, which no pool draws.
   W.rollOffer = function (p, spec) {
     spec = spec || { src: 'level' };
     const rng = this.rng, st = p.stats, s = Math.max(1, this.stratum), luck = st.luck || 0, kind = st.kind;
-    const gen = ED.isGeneralist(p.boons), els = ED.elementGates(p.boons), aff = {};
+    const gates = ED.gatePaths(p.boons), aff = {};
     for (const k of ED.PATH_IDS) aff[k] = ED.pathAffinity(p.boons, k);
     const epic = spec.src === 'epic';
     const n = (epic ? 4 : 3) + (st.choices | 0);
     const out = [];
     const rank = (id) => ED.BOONS[id].rar;
-    const free = !gen && els.length < ED.MAX_ELEMENTS;
+    const free = gates.length < ED.MAX_PATHS;
     const daze = () => this.canDaze(p);
     const eligible = (id) => {
       const b = ED.BOONS[id];
       if (b.evo || b.cls || b.purse || (b.need && b.need !== kind)) return false;
       if ((p.boons[id] || 0) >= ED.maxRank(b, st)) return false;
+      if (b.deep && s < b.deep) return false;
       if (id === 'opportunist' && !daze()) return false; // nothing to stun, freeze or blind: the card would do nothing
-      if (b.gate) return free && b.path !== 'general' && !els.includes(b.path); // the Generalist gate is only on the start offer
-      if (b.path === 'general') return b.key ? gen && aff.general >= ED.KEY_AFFINITY_GENERAL : gen || !!b.openMax; // gated General: Generalists; Keen Eye and Brutality are open at rank 1
-      if (b.path) return !gen && els.includes(b.path) && (!b.key || aff[b.path] >= ED.KEY_AFFINITY);
+      if (b.gate) return free && !gates.includes(b.path);
+      if (b.cross) return b.cross.every(k => gates.includes(k));
+      if (b.path) return gates.includes(b.path) && (!b.key || aff[b.path] >= ED.KEY_AFFINITY);
       return true;
     };
-    const own = (b) => !!b.path && !b.gate && (b.path === 'general' ? gen : true); // a boon of the hero's own paths
+    const own = (b) => (!!b.path && !b.gate) || !!b.cross; // a card of the hero's own paths
     const weight = (id) => {
       const b = ED.BOONS[id], r = rank(id);
       let w = r === 'c' ? 60 : r === 'r' ? 30 + 2.5 * s + 60 * luck : r === 'e' ? 10 + 2 * s + 40 * luck : 10;
@@ -189,9 +187,9 @@
       if (epic && b.key) w *= 2;
       return w;
     };
-    // weighted draw without replacement until the offer holds n cards; at most one element gate per offer
+    // weighted draw without replacement until the offer holds n cards; at most one gate per offer
     const draw = (pool) => {
-      pool = pool.filter(id => !out.includes(id));
+      pool = pool.filter(id => !out.includes(id) && !(ED.BOONS[id].gate && out.some(x => ED.BOONS[x].gate)));
       while (out.length < n && pool.length) {
         const id = rng.weighted(pool, weight);
         out.push(id);
@@ -200,7 +198,9 @@
     };
     const level = ED.BOON_IDS.filter(eligible);
     const rare = (id) => rank(id) !== 'c';
-    const openPool = () => ED.BOON_IDS.filter(id => { const b = ED.BOONS[id]; return (b.open || b.openMax) && !b.gate && eligible(id); });
+    const filler = (id) => !!ED.BOONS[id].filler;
+    // a level-style draw: with a free slot every eligible card; with MAX_PATHS paths the cards that are no filler first, the filler only for what is left
+    const drawLevel = (pool) => { if (free) draw(pool); else { draw(pool.filter(id => !filler(id))); draw(pool.filter(filler)); } };
     switch (spec.src) {
       case 'forge': {
         const have = Object.keys(p.boons).filter(id => ED.BOONS[id] && !ED.BOONS[id].evo && !ED.BOONS[id].route && p.boons[id] < ED.maxRank(ED.BOONS[id], st));
@@ -209,15 +209,7 @@
         spec.src = 'level';
         break;
       }
-      case 'start': {
-        const gates = ED.ELEMENT_IDS.map(k => ED.PATH_GATE[k]);
-        const mine = st.element ? ED.PATH_GATE[st.element] : null; // Pyromancer, Cleric, Necromancer, Bellwarden: their own gate is always on the offer
-        if (mine) out.push(mine);
-        const others = rng.shuffle(gates.filter(id => id !== mine));
-        for (let i = 0; i < others.length && out.length < n + (mine ? 1 : 0); i++) out.push(others[i]);
-        if (!mine) out.push(ED.PATH_GATE.general); // Knight, Ranger, Shade: the Generalist card comes last
-        return out;
-      }
+      case 'start': return ED.PATH_IDS.map(k => ED.PATH_GATE[k]); // every path gate, chosen not rolled
       case 'class': {
         const tbl = ED.CLASS_CARDS[p.cls], rt = ED.classRoute(p.boons, p.cls);
         if (!tbl) { spec.src = 'level'; break; }
@@ -226,21 +218,24 @@
         spec.route = rt.route; spec.ctier = 2;
         return tbl[rt.route].forks.slice();
       }
-      case 'epic': draw(level.filter(rare)); break;
+      case 'epic': drawLevel(level.filter(rare)); break;
       case 'room': {
-        if (gen) { draw(level); break; } // gated General (x2.5) plus open General
-        if (free) { // card 1: one unowned element gate (the class element weighs double)
-          const gates = level.filter(id => ED.BOONS[id].gate);
-          if (gates.length) out.push(rng.weighted(gates, id => coverage(p, ED.BOONS[id].path)));
+        const pk = spec.path && ED.PATHS[spec.path] ? spec.path : null;
+        if (pk && (gates.includes(pk) || free)) { // the room's path boon: its gate first while unowned, then that path's cards and its cross cards
+          if (!gates.includes(pk)) out.push(ED.PATH_GATE[pk]);
+          draw(level.filter(id => { const b = ED.BOONS[id]; return !b.gate && (b.path === pk || (b.cross && b.cross.includes(pk))); }));
+        } else if (free) { // card 1: one unowned path gate (the class element weighs double)
+          const gs = level.filter(id => ED.BOONS[id].gate);
+          if (gs.length) out.push(rng.weighted(gs, id => coverage(p, ED.BOONS[id].path)));
         }
         draw(level.filter(id => own(ED.BOONS[id])));
-        if (out.length < n) draw(openPool().filter(rare)); // the own pool ran dry: open boons at rare and up
+        if (out.length < n) draw(level.filter(id => ED.BOONS[id].open && rare(id) && !filler(id))); // the own pool ran dry: open boons at rare and up
+        if (out.length < n) draw(level.filter(id => ED.BOONS[id].open && filler(id)));
         if (!out.length) out.push('purse');
         return this.prependCards(p, out);
       }
     }
-    draw(level);
-    if (!out.length) draw(openPool());
+    drawLevel(level);
     if (!out.length) out.push('purse');
     if (spec.src === 'forge') return out;
     return this.prependCards(p, out);

@@ -379,7 +379,7 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     globalThis.document = { createElement: () => ({ width: 1, height: 1, getContext: () => rc() }) };
     const throws = (f) => { try { f(); return false; } catch (err) { console.log('  ' + err.stack.split('\n').slice(0, 3).join(' | ')); return true; } };
     try {
-      const KINDS = ['icewall', 'pfire', 'plague', 'decoy'], src = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'render.js'), 'utf8');
+      const KINDS = ['pfire', 'plague', 'decoy'], src = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'render.js'), 'utf8');
       const dz = src.slice(src.indexOf('function drawZones('), src.indexOf('default: {', src.indexOf('function drawZones(')));
       for (const kd of KINDS) ok(N.ZK.includes(kd) && dz.includes(`case '${kd}'`), `zone kind ${kd} is on the wire and has its own draw case`);
       const zrow = (kind, o) => Object.assign({ id: 3, kind, x: 200, y: 200, r: 40, t: 0.5, dur: 4, a: 0.3, len: 0, w: 0, arc: 0, team: 0, elite: false, lob: null, warm: 0, str: 0, fol: 0 }, o);
@@ -389,15 +389,13 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
         const z = zrow(kd, sh); view.zones.length = 0; view.zones.push(z);
         ok(!throws(() => { for (const pass of [0, 2, 1]) R.zoneArt.draw(ctx, view, 1.7, pass); for (let i = 0; i < 4; i++) R.zoneArt.stand(ctx, z, i, 1.7); }), `zone ${kd} ${JSON.stringify(sh)} draws all passes and its standing pieces`);
       }
-      for (const kd of KINDS) { ops.n = 0; view.zones.length = 0; view.zones.push(zrow(kd, kd === 'icewall' ? { len: 120, w: 10 } : {})); R.zoneArt.draw(ctx, view, 1, 0); R.zoneArt.draw(ctx, view, 1, 1); ok(ops.n > 0, `zone ${kd} draws (${ops.n} canvas ops)`); }
-      ok(R.zoneArt.wallN(zrow('icewall', { len: 120 })) === 10 && R.zoneArt.wallN(zrow('icewall', { len: 0 })) === 2 && R.zoneArt.wallN(zrow('icewall', { len: 9999 })) === 12, 'an ice wall stands one pillar every 14 px (2 to 12)');
-      ok(!throws(() => { R.zoneArt.pillar(4, false); R.zoneArt.pillar(5, true); }), 'the ice wall pillar sprites bake (both looks)');
+      for (const kd of KINDS) { ops.n = 0; view.zones.length = 0; view.zones.push(zrow(kd, {})); R.zoneArt.draw(ctx, view, 1, 0); R.zoneArt.draw(ctx, view, 1, 1); ok(ops.n > 0, `zone ${kd} draws (${ops.n} canvas ops)`); }
       // events
       const fctx = { localPid: 'p0', player: () => ({ x: 0, y: 0, pid: 'p0', cls: 'bell' }), players: () => [], stratum: () => 1 };
       const plays = [], A0 = ED.Audio;
       ED.Audio = { play: (name, v, arg, pr) => plays.push({ name, v, arg, pr }), flush() {}, hit() {}, impact() {}, kill() {}, dot() {}, bed() {}, applied() {} };
       const good = {
-        pdodge: { pid: 'p0', x: 100, y: 100 }, blink: { pid: 'p0', x0: 100, y0: 100, x1: 180, y1: 120, k: 'storm' }, shatter: { x: 100, y: 100, r: 70 }, hurl: { pid: 'p0', x: 100, y: 100, k: 2.5 }, reel: { pid: 'p0', x0: 100, y0: 100, x1: 200, y1: 120 },
+        blink: { pid: 'p0', x0: 100, y0: 100, x1: 180, y1: 120 }, shatter: { x: 100, y: 100, r: 70 }, hurl: { pid: 'p0', x: 100, y: 100, k: 2.5 }, reel: { pid: 'p0', x0: 100, y0: 100, x1: 200, y1: 120 },
       };
       const live = () => F.parts.length + F.rings.length + F.bolts.length + F.pops.length + F.sheets.length + F.beams.length;
       for (const t of Object.keys(good)) {
@@ -407,8 +405,7 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
         const bad = [{ x: 'a', y: null }, { x: NaN, y: 5, r: 'x', k: Infinity }, { pts: 'x' }, { pts: [1, 2, 3] }, { pts: [1, 2, null, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18] }, { x0: 1, y0: 2 }, { x: 5, y: 5, r: -10, k: -3 }];
         ok(!throws(() => { for (const b of bad) F.handle(Object.assign({ t }, b), fctx); F.update(0.016); }), `${t} survives missing and malformed fields`);
       }
-      F.reset(); F.handle({ t: 'blink', pid: 'p0', x0: 0, y0: 0, x1: 90, y1: 0, k: 'behind' }, fctx); ok(F.bolts.length === 0 && live() > 0, 'an Umbral Arms blink puffs smoke, no bolt');
-      F.reset(); F.handle({ t: 'chain', k: 'd', pts: [[100, 76], [100, 100]] }, fctx); ok(F.bolts.length + F.pops.length > 0, 'a dash discharge drops a bolt on the foe');
+      F.reset(); F.handle({ t: 'chain', k: 'd', pts: [[100, 76], [100, 100]] }, fctx); ok(F.bolts.length + F.pops.length > 0, 'a discharge drops a bolt on the foe');
       F.reset(); F.handle({ t: 'chain', k: 'f', pts: [[100, 94], [130, 94]] }, fctx); ok(F.bolts.length === 1, 'Burn passed on draws one ember line');
       F.reset(); F.handle({ t: 'chain', k: 'f', pts: 'x' }, fctx); F.handle({ t: 'chain' }, fctx); ok(live() === 0, 'a malformed chain draws nothing');
       F.reset(); F.handle({ t: 'lance', pid: 'p0', x0: 0, y0: 0, x1: 300, y1: 0, k: 1 }, fctx); ok(F.bolts.length === 1, 'the ice lance leaves a frost streak');
@@ -507,6 +504,18 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
       globalThis.document = doc0; globalThis.window = win0; ED.HUD = hud0; ED.Sprites = sp0;
       if (doc0 === undefined) delete globalThis.document; if (win0 === undefined) delete globalThis.window;
     }
+  }
+
+  // Bulwark through the client path: G.applyAction routes the skill press (slot 1) to the raise and the hold release (s 1) to the bash; the wire carries the raised flag (1 << 6) and the stored blocks (bits 21-23); a remote Knight in the mirror shows both
+  {
+    const w = room1(0), p = w.players.get('p0'), e = w.spawnEnemy('skeleton', p.x + 40, p.y, {}); e.spd = 0; e.cd = 9999; e.maxHp = e.hp = 5000;
+    G.applyAction(w, 'p0', { t: 'skill', slot: 1, a: 0 }); ok(p.bulwarkOn, 'a slot 1 skill action raises the Bulwark');
+    for (let i = 0; i < 3; i++) { w.time += 0.61; w.hurtPlayer(p, 20, { e }); }
+    const fl = N.encodeSnap(w, [], false).P.find(r => r[0] === 'p0')[6]; ok((fl & 64) && ((fl >> 21) & 7) === 3, `the wire carries the raised shield and 3 stored blocks (${(fl >> 21) & 7})`);
+    const m = new G.Mirror({ pact: 0, players: [{ pid: 'p0', name: 'T', slot: 0, cls: 'knight', weapon: ED.CLASSES.knight.weapons[0], meta: META() }] }, 'zz'), snap = wire(N.encodeSnap(w, [], false)); snap.T = 5; m.apply(snap, 0);
+    const mp = m.players.get('p0'); ok(mp && mp.bulwarkOn === true && mp.blocks === 3, 'a remote Knight in the mirror shows the raised shield and its blocks');
+    G.applyAction(w, 'p0', { t: 'hold', on: 0, s: 1, a: 0 }); ok(!p.bulwarkOn && e.hp < e.maxHp && e.stun > 0.9, 'a hold release with s 1 bashes');
+    const f2 = N.encodeSnap(w, [], false).P.find(r => r[0] === 'p0')[6]; ok(!(f2 & 64) && ((f2 >> 21) & 7) === 0, 'the wire clears both after the bash');
   }
 }
 

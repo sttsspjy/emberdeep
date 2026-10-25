@@ -15,14 +15,13 @@
   let MAXP = 500, lastHs = 0, pickT = 0;
   const calm = () => !!(ED.App && ED.App.settings && !ED.App.settings.shake); // "screen shake off" also mutes flashes and hit-stop
 
-  F.reset = () => { F.parts.length = 0; F.texts.length = 0; for (const s of F.slashes) if (s.sm) smearPool.push(s.sm); F.slashes.length = 0; F.rings.length = 0; F.bolts.length = 0; F.pops.length = 0; releaseGhosts(); F.stains.length = 0; F.sheets.length = 0; F.beams.length = 0; F.holyT = {}; F.chargeT = {}; F.msgs.length = 0; F.hurtAt = {}; F.banner = null; F.shake = 0; F.flash = null; F.anim = {}; F.aberr = 0; F.kick = 0; hsUntil = 0; backT = -1; ent.clear(); hitN = 0; F.trans = null; ED.Sprites.shotReset(); };
+  F.reset = () => { F.parts.length = 0; F.texts.length = 0; for (const s of F.slashes) if (s.sm) smearPool.push(s.sm); F.slashes.length = 0; F.rings.length = 0; F.bolts.length = 0; F.pops.length = 0; releaseGhosts(); F.stains.length = 0; F.sheets.length = 0; F.beams.length = 0; F.holyT = {}; F.chargeT = {}; F.msgs.length = 0; F.hurtAt = {}; F.banner = null; F.shake = 0; F.flash = null; F.anim = {}; F.aberr = 0; F.kick = 0; hsUntil = 0; ent.clear(); hitN = 0; F.trans = null; ED.Sprites.shotReset(); };
   F.setQuality = (q) => { MAXP = q === 'low' ? 180 : 500; };
   const lowFx = () => MAXP < 300;
   const cnt = (n) => Math.ceil(n * (MAXP < 300 ? 0.5 : 1) * F.crowd);
   const lk = (n) => (MAXP < 300 ? Math.max(1, Math.round(n * 0.7)) : n); // path payoff bursts (Smite, Reap, acid): with cnt's 0.5 on Low they come out at 0.35 of nominal
   const fin = (v) => typeof v === 'number' && isFinite(v); // event fields from the wire are checked before use
-  let backT = -1; // last Backstab slash (one every 0.06 s)
-  if (ED.Net) Object.assign(ED.Net.CAPS_LOCAL, { shatter: 3, hurl: 3, reel: 3, pdodge: 2, blink: 2 }); // per rendered frame on the host or solo machine (net.js N.CAPS: per snapshot)
+  if (ED.Net) Object.assign(ED.Net.CAPS_LOCAL, { shatter: 3, hurl: 3, reel: 3, blink: 2 }); // per rendered frame on the host or solo machine (net.js N.CAPS: per snapshot)
 
   // opts: a (angle), spread (random +- around a), sp, life, size, color, kind (dot|shard|smoke|streak|ember|drop|ash|spark), add, lt (light colour), ltr (light radius)
   // spOv/lifeOv replace o.sp/o.life (burst jitter). Dead particles are recycled through ppool; when full, a rotating slot is overwritten.
@@ -598,7 +597,7 @@
   function skill2Fx(ev, mine, A) {
     const x = ev.x, y = ev.y, a = ev.a || 0, ca = Math.cos(a), sa = Math.sin(a);
     switch (ev.k) {
-      case 'shieldthrow': F.ring(x, y - 6, 24, '#ffe9a0', 0.2, 2); F.burst(x + ca * 14, y - 10 + sa * 14, 6, { kind: 'streak', color: '#fff3c4', a, spread: 0.5, sp: 240, life: 0.2, size: 1.6 }); F.pop(x + ca * 14, y - 10 + sa * 14, 14, '#ffe9a0', 0.14); A.play('throw', mine ? 0.9 : 0.45); break;
+      case 'bulwark': F.pop(x + ca * 12, y - 10 + sa * 8, 14, '#ffe9a0', 0.14); F.burst(x + ca * 12, y - 10 + sa * 8, 4, { kind: 'spark', color: '#fff3c4', sp: 90, life: 0.2, size: 1.4, drag: 5 }); A.play('bwblock', mine ? 0.5 : 0.25, { n: 0 }); break; // the shield comes up
       case 'rain': F.burst(x, y - 12, 10, { kind: 'streak', color: '#e8d8b0', a: -1.57, spread: 0.9, sp: 300, life: 0.4, size: 1.8 }); if (ev.tx !== undefined) { F.ring(ev.tx, ev.ty, 30, '#e8d8b0', 0.4, 2); F.pop(ev.tx, ev.ty - 4, 16, '#e8d8b0', 0.3); } A.play('shoot', mine ? 0.8 : 0.4); break;
       case 'meteor': { const ta = ev.tx !== undefined ? Math.atan2(ev.ty - y, ev.tx - x) : a;
         F.burst(x, y - 12, 12, { kind: 'streak', color: '#ffb347', a: ta, spread: 0.4, sp: 340, life: 0.35, size: 2.2 }); F.burst(x, y - 12, 7, { kind: 'ember', color: '#ff8a2a', a: -1.57, spread: 3, sp: 60, life: 0.9, size: 2, drag: 1.5, lt: '#ff8a2a', ltr: 24 });
@@ -677,7 +676,6 @@
           const hm = hitMem[hitN++ & 7]; hm.x = ev.x; hm.y = gy; hm.a = a; hm.w = w; hm.t = F.time; hm.mine = mine;
           hitSplash(ev, e, r, gy, a, w, el, p);
           contactFx(ev, a, mine, p);
-          if (ev.b && F.time - backT > 0.06) { backT = F.time; F.slash(ev.x - Math.cos(a) * 6, gy - r * 0.6 - Math.sin(a) * 6, a, 16, 0.5, '#b78cff', 0.12); } // a Backstab: a small violet slash
           if (ev.s) { A.impact(EL_IMP[el] || (p ? p.cls : ''), mine, el); if (ev.c) A.hit(true, mine, w, el, matOf(p), 0); } else A.hit(!!ev.c, mine, w, el, matOf(p), ev.h | 0); // aggregated per frame by A.flush; an element skill hit (burst, chain, shatter) rings by element
           applyCue(e, el, mine);
           if (mine && (ev.c || ev.v >= 60)) F.hitStop(ev.c ? 0.06 : 0.04);
@@ -773,7 +771,7 @@
         break;
       case 'atk': if (ev.pid !== local) { F.playerAttackAnim(ev.pid, ev.a); const p = ctx.player(ev.pid); if (p && p.stats && !p.stats.melee) A.play('shoot', 0.3); } break;
       case 'spark': { const c = F.projColor(ED.PROJ_KINDS[ev.k]); F.burst(ev.x, ev.y, 4, { color: c, sp: 80, life: 0.25, size: 1.8, add: true }); F.burst(ev.x, ev.y, 3, { kind: 'streak', color: c, sp: 130, life: 0.2, size: 1.3 }); F.pop(ev.x, ev.y, 7, c, 0.1); A.play('spark', 0.4); break; }
-      case 'chain': { // star (hub, t1, hub, t2, ...): one forked arm per target; otherwise a plain polyline. k: h Wrath of Heaven bolt, t Twilight beam, s Superconductor discharge, b Prism beam, d a dash discharge (a bolt from above), f Burn passed on (Wildfire, Firewalk)
+      case 'chain': { // star (hub, t1, hub, t2, ...): one forked arm per target; otherwise a plain polyline. k: h Wrath of Heaven bolt, t Twilight beam, s Superconductor discharge, b Prism beam, d a Storm discharge (a bolt from above), f Burn passed on (Wildfire)
         if (!Array.isArray(ev.pts) || ev.pts.length < 2) break;
         if (ev.k === 'f') { const q = ev.pts; F.bolts.push({ pts: q, life: 0.16, max: 0.16, color: '#ff9a3a', st: true }); if (F.bolts.length > 24) F.bolts.shift(); F.pop(q[q.length - 1][0], q[q.length - 1][1], 7, '#ffb347', 0.12); break; }
         if (ev.k === 'd') { const q = ev.pts[1]; F.zap(q[0] + 6, q[1] - 40, q[0], q[1], '#fff6b0', 0.12); F.pop(q[0], q[1] - 8, 14, '#ffe66b', 0.14, true); SP('fx.hit.spark', q[0], q[1] - 8, { add: true, ramp: 'lightning' }); A.play('bolt', 0.4); break; }
@@ -830,18 +828,16 @@
       case 'rise': { const p = ctx.player(ev.pid); const name = { phoenix: 'Phoenix Feather', angel: 'Guardian Angel', wind: 'Second Wind' }[ev.k]; F.showBanner(name, p ? p.name + ' revived' : '', 'small', 2); F.burst(ev.x, ev.y - 10, 40, { color: '#ffd36b', sp: 150, life: 0.9, size: 3, add: true }); F.ring(ev.x, ev.y, 70, '#ffd36b', 0.6, 4); F.pop(ev.x, ev.y - 12, 50, '#ffd36b', 0.4); F.punch(0.8, 0.4); A.play('revive'); break; }
       case 'dash': A.play('dash', ev.pid === local ? 0.8 : 0.3); dust(ev.x, ev.y + 2, 'dust'); break;
       case 'skill': { A.play(SKILL_CUE[ev.k] || 'skill', ev.pid === local ? 1 : 0.5); const p = ctx.player(ev.pid); if (ev.k === 'charge') { dust(ev.x, ev.y + 2, 'dust', 2); F.chargeT[ev.pid] = F.time; } if (p && ev.k === 'volley') { F.ring(p.x, p.y, 30, '#e8d8b0', 0.25); SP('fx.spark.magic', p.x + Math.cos(ev.a || 0) * 20, p.y - 12 + Math.sin(ev.a || 0) * 20, { add: true, ramp: 'general' }); } if (ev.k === 'legion' || ev.k === 'sanctuary') F.ring(ev.x, ev.y, ev.k === 'sanctuary' ? 100 : 40, ev.k === 'sanctuary' ? '#ffe9a0' : '#7dffd9', 0.5, 4); if (ev.slot === 1) skill2Fx(ev, ev.pid === local, A); break; }
-      case 'blink': // violet smoke rings at both ends, four fading silhouettes along the path, a few motes; k storm: a yellow bolt along the Storm Step; k behind: smoke at both ends (Umbral Arms)
+      case 'blink': // violet smoke rings at both ends, four fading silhouettes along the path, a few motes
         if (!fin(ev.x0) || !fin(ev.y0) || !fin(ev.x1) || !fin(ev.y1)) break;
-        if (ev.k === 'storm') { F.zap(ev.x0, ev.y0 - 10, ev.x1, ev.y1 - 10, '#fff3a0', 0.16); F.pop(ev.x1, ev.y1 - 10, 14, '#ffe66b', 0.16, true); A.play('bolt', ev.pid === local ? 0.5 : 0.2); break; }
         SP('fx.smoke.ring', ev.x0, ev.y0 + 2, { ramp: 'shadow' }); SP('fx.smoke.ring', ev.x1, ev.y1 + 2, { ramp: 'shadow' });
-        if (ev.k === 'behind') { F.pop(ev.x1, ev.y1 - 10, 12, '#b78cff', 0.16, true); break; }
         for (let i = 0; i <= 3; i++) { const k = i / 3; SP('hero.shade.idle', U.lerp(ev.x0, ev.x1, k), U.lerp(ev.y0, ev.y1, k), { ramp: 'shadow', frame: i, life: 0.3 + 0.05 * i, fade: true, a: 0.6 }); }
         for (let i = 0; i <= 4; i++) { const k = i / 4; F.part(U.lerp(ev.x0, ev.x1, k), U.lerp(ev.y0, ev.y1, k) - 10, { color: '#b78cff', sp: 20, life: 0.5, size: 3, add: true }); }
         break;
       case 'blinkfx': F.burst(ev.x0, ev.y0 - 12, 14, { color: '#b78cff', sp: 60, life: 0.5, size: 3, add: true }); F.burst(ev.x1, ev.y1 - 12, 14, { color: '#b78cff', sp: 60, life: 0.5, size: 3, add: true }); F.pop(ev.x0, ev.y0 - 12, 20, '#b78cff', 0.2); F.pop(ev.x1, ev.y1 - 12, 20, '#b78cff', 0.2); break;
       case 'deflect': F.burst(ev.x, ev.y, 8, { color: '#ffffff', sp: 120, life: 0.25, size: 2, add: true }); F.burst(ev.x, ev.y, 4, { kind: 'streak', color: '#ffffff', sp: 200, life: 0.2, size: 1.4 }); F.pop(ev.x, ev.y, 10, '#ffffff', 0.12, true); A.play('deflect', 0.6); break;
-      case 'block': F.text(ev.x, ev.y - 30, { dodge: 'Dodge', mirror: 'Blocked', aegis: 'Blocked', guard: 'Guarded' }[ev.k] || 'Blocked', '#bfe9ff', 9, { pop: true }); A.play('deflect', 0.5); break;
-      // Knight events (ric, catch, parry, deflect, ward, the boom of a shockwave) are drawn by src/client/cls-knight.js through ED.ClassFx.
+      case 'block': if (ev.k === 'bulwark') break; F.text(ev.x, ev.y - 30, { dodge: 'Dodge', mirror: 'Blocked', aegis: 'Blocked', guard: 'Guarded' }[ev.k] || 'Blocked', '#bfe9ff', 9, { pop: true }); A.play('deflect', 0.5); break; // a Bulwark block: cls-knight.js
+      // Knight events (block k 'bulwark', bash, parry, deflect, ward, the boom of a shockwave) are drawn by src/client/cls-knight.js through ED.ClassFx.
       case 'spawned': F.burst(ev.x, ev.y, ev.el ? 18 : 8, { color: ev.el ? '#ffb13a' : '#b8a0ff', sp: 70, life: 0.4, size: 2.4, add: true }); F.pop(ev.x, ev.y - 8, ev.el ? 30 : 20, ev.el ? '#ffb13a' : '#b8a0ff', 0.25); A.play('spawn', 0.5); break;
       case 'raise': F.burst(ev.x, ev.y, 14, { color: '#7dffd9', sp: 60, vy: -40, life: 0.6, size: 2.4, add: true }); F.ring(ev.x, ev.y, 26, '#7dffd9', 0.4, 2); SP('fx.circle.spark', ev.x, ev.y - 2, { ramp: 'teal', add: true }); SP('fx.puff', ev.x, ev.y - 4, { ramp: 'dust' }); break;
       case 'bellrung': // the Drowned Bell rings to a hero's hit: rings of sound, its swing (render.js drawBell reads F.bellRing) and a deep cracked toll
@@ -952,16 +948,12 @@
       case 'dark': F.msg('Dark room: harder foes, better rewards', '#a070ff'); F.addShake(1); if (!calm()) F.flash = { color: '#0a0418', t: 0.5, a: 0.4 }; A.play('dark', 0.8); break;
       case 'upgrade': { const col = R().rewardColor(ev.to); F.ring(ev.x, ev.y - 8, 44, col, 0.6, 4); F.burst(ev.x, ev.y - 14, 18, { color: col, sp: 80, vy: -50, life: 0.9, size: 2.4, add: true, drag: 1.3 }); F.msg('Reward upgraded: ' + R().rewardLabel(ev.to), '#ffd36b'); break; }
       case 'ward': F.ring(ev.x, ev.y - 10, 24, '#7fc8ff', 0.4, 3); F.burst(ev.x, ev.y - 10, 8, { color: '#bfe3ff', sp: 50, vy: -30, life: 0.6, size: 2, add: true, drag: 1.5 }); F.pop(ev.x, ev.y - 12, 22, '#7fc8ff', 0.25); break;
-      case 'pdodge': { // a perfect dodge { pid, x, y }: a gold-white flash ring on the hero, 'Perfect' over the local hero
+      case 'rend': // Masterwork Arms tears a foe's Bleed out { x, y }: a red spray and pop
         if (!fin(ev.x) || !fin(ev.y)) break;
-        const mine = ev.pid === local;
-        F.ring(ev.x, ev.y - 8, 26, '#fff3c4', 0.25, 2); F.pop(ev.x, ev.y - 12, mine ? 18 : 12, '#ffe9a0', 0.15, true);
-        if (mine) { F.text(ev.x, ev.y - 34, 'Perfect', '#ffe9a0', 9, { pop: true, life: 0.7, max: 0.7 }); F.hitStop(0.04); }
-        A.play('deflect', mine ? 0.7 : 0.3); break;
-      }
+        F.burst(ev.x, ev.y - 10, lowFx() ? 6 : 12, { color: '#d43a3a', sp: 120, life: 0.4, size: 2.4 }); F.pop(ev.x, ev.y - 10, 16, '#ff6a6a', 0.16, true); break;
       case 'hold': { // a held verb starts (on 1) or ends { pid, k, on }: a small pop in its colour at the start (the verb itself draws while held: render.js drawHold)
         const p = ctx.player(ev.pid); if (!p || !ev.on) break;
-        const col = { cone: '#ff9a3a', lance: '#bfeaff', flask: '#9be33c', guard: '#ffd36b', finisher: '#ffffff' }[ev.k] || '#ffffff';
+        const col = { cone: '#ff9a3a', lance: '#bfeaff', storm: '#ffe66b', finisher: '#ffffff' }[ev.k] || '#ffffff';
         F.pop(p.x + Math.cos(p.face || 0) * 8, p.y - 10, 10, col, 0.14, true);
         if (ev.pid === local) A.play(ev.k === 'cone' ? 'combust' : 'hover', 0.3); break;
       }

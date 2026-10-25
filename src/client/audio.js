@@ -195,7 +195,9 @@
       case 'block': tone('sine', 150, 70, 0.14, 0.26 * v); noise('bandpass', 900, 300, 0.1, 0.16 * v, 1.5); tone('square', 1250, 900, 0.05, 0.05 * v); break;
       case 'howl': tone('sawtooth', 300, 185, 0.9, 0.09 * v); tone('sawtooth', 312, 192, 0.9, 0.07 * v); tone('sine', 150, 90, 0.9, 0.12 * v); noise('lowpass', 600, 150, 0.8, 0.08 * v); break;
       case 'rift': tone('sine', 950, 110, 0.55, 0.1 * v); tone('triangle', 60, 40, 0.6, 0.18 * v); noise('bandpass', 200, 3200, 0.45, 0.1 * v, 4); break;
-      // Knight: the shield leaves the hand, rings off each foe (two semitones higher per ricochet; guarded strike: a dull clank), comes home with a leather thump (and a chime when it shields), a parry rings sharp
+      // Knight: a blocked attack clanks off the raised shield (two semitones higher per stored block, arg n); the bash lands with a body thump and a ring (higher with the power stored, arg n); clang: a metal strike (arg { n, g: guarded, a dull clank })
+      case 'bwblock': { const k = Math.pow(2, 2 * Math.min(6, (arg && arg.n) || 1) / 12); tone('square', 420 * k, 300 * k, 0.08, 0.08 * v); noise('bandpass', 1600 * k, 700, 0.07, 0.14 * v, 2); tone('sine', 110, 60, 0.12, 0.18 * v); break; }
+      case 'bwbash': { const k = Math.pow(2, 2 * Math.min(6, (arg && arg.n) || 0) / 12); tone('sine', 95, 38, 0.24, 0.32 * v); noise('lowpass', 800, 120, 0.18, 0.26 * v, 1); tone('square', 660 * k, 560 * k, 0.12, 0.06 * v); tone('square', 990 * k, 880 * k, 0.1, 0.04 * v); break; }
       case 'throw': noise('highpass', 1200, 4200, 0.18, 0.2 * v, 0.7); tone('sine', 260, 520, 0.12, 0.05 * v); break;
       case 'clang': {
         const n = arg && arg.n ? Math.min(6, arg.n) : 1;
@@ -300,18 +302,6 @@
       for (let i = 0, n = lo ? 1 : 3; i < n; i++) tone('sawtooth', rnd(900, 1400), 300, 0.04, 0.05 * v, null, t + 0.05 + i * 0.04);
       noise('lowpass', 500, 70, 0.6, 0.14 * v, 1, null, t + 0.08);
     },
-    poison(v, t, lo) { // bubbling gurgle: rising bloops over a resonant slosh
-      for (let i = 0, n = lo ? 4 : 7; i < n; i++) { const f = rnd(180, 320); tone('sine', f, f * 2.6, 0.05, 0.11 * v, null, t + i * 0.065 + Math.random() * 0.03); }
-      noise('lowpass', 500, 160, 0.55, 0.12 * v, 4, null, t); tone('sine', 70, 55, 0.4, 0.12 * v, null, t);
-    },
-    holy(v, t, lo) { // struck bell over a swelling choir pad
-      tone('sine', 1046, 1044, 0.8, 0.14 * v, null, t); tone('sine', 2887, 2870, 0.35, 0.03 * v, null, t); tone('triangle', 1569, 1569, 0.5, 0.02 * v, null, t);
-      [523, 659, 784].forEach((f) => { tone('triangle', f, f, 0.45, 0.06 * v, null, t, 0.3); if (!lo) tone('sawtooth', f * 1.003, f * 1.003, 0.45, 0.008 * v, null, t, 0.3); });
-    },
-    shadow(v, t) { // reverse whoosh: a swell that cuts off into a low implosion
-      noise('bandpass', 300, 2600, 0.04, 0.26 * v, 1.4, null, t, 0.42); tone('sine', 110, 330, 0.04, 0.08 * v, null, t, 0.4);
-      tone('sine', 140, 45, 0.2, 0.25 * v, null, t + 0.44); noise('lowpass', 800, 120, 0.15, 0.12 * v, 1, null, t + 0.44); tone('triangle', 233, 220, 0.3, 0.03 * v, null, t + 0.46);
-    },
     general(v, t) { // anvil clang
       tone('square', 1250, 1230, 0.12, 0.07 * v, null, t); tone('sine', 2490, 2480, 0.55, 0.07 * v, null, t); tone('sine', 3720, 3700, 0.35, 0.04 * v, null, t); tone('triangle', 1870, 1860, 0.4, 0.04 * v, null, t);
       noise('bandpass', 3200, 1800, 0.05, 0.22 * v, 2.5, null, t); tone('sine', 160, 70, 0.12, 0.22 * v, null, t);
@@ -330,7 +320,7 @@
       tone('triangle', 1760, 1700, 0.25, 0.08 * v, null, at);
     },
   };
-  const ROOT = { fire: 110, ice: 784, lightning: 147, poison: 98, holy: 523, shadow: 82, general: 262, route: 196, relic: 131, purse: 1318 };
+  const ROOT = { fire: 110, ice: 784, lightning: 147, general: 262, route: 196, relic: 131, purse: 1318 };
   // arg: kind string or { k, big }. big: 15% louder plus a held root and fifth over a low rumble.
   function pickCue(arg, v, t) {
     const o = typeof arg === 'string' ? { k: arg } : arg || {}, k = PICK[o.k] ? o.k : 'general', lo = lite(), vv = v * (o.big ? 1.15 : 1);

@@ -15,6 +15,7 @@
   const PATTERN_AREA = 294; // tile area the base pool and scatter counts are written for: both scale by room area / PATTERN_AREA
   const REWARD_ODDS = [['boon', 55], ['gold', 15], ['vigor', 10], ['forge', 20]]; // normal combat reward weights
   const ELITE_EPIC = 0.4; // share of elite rooms whose reward is an epic offer (the rest: a relic pick)
+  const PATH_BOON = 0.7; // share of boon rewards that name a path (the rest offer any boon)
   const MIN_FIGHTS = 3; // the Platino's cue is one of the first MIN_FIGHTS fight clears of a floor
 
   // ---------------- map (Slay-the-Spire layered graph) ----------------
@@ -138,8 +139,8 @@
     return rng.int(1, MIN_FIGHTS);
   }
 
-  // Rewards are fixed per floor and shown before entry. Combat (dark included): boon (drawn from the claiming hero's own paths), gold, vigor, forge,
-  // each kind getting its REWARD_ODDS share of the floor's combat rooms (rounded by weighted draw on the remainders). Elite: epic at ELITE_EPIC, else relic. Champion: relic.
+  // Rewards are fixed per floor and shown before entry. Combat (dark included): boon, gold, vigor, forge, each kind getting its REWARD_ODDS share of the floor's combat rooms (rounded by weighted draw on the remainders).
+  // A boon reward names a path (room.rewardPath, PATH_BOON of them, a path drawn evenly; own RNG stream) or none (any boon). Elite: epic at ELITE_EPIC, else relic. Champion: relic.
   function assignRewards(rooms, stratum, seed) {
     const rng = U.RNG((seed ^ 0x5bd1e995) + stratum * 15485863);
     const combat = rooms.filter(r => r.type === 'combat');
@@ -154,6 +155,8 @@
     rng.shuffle(bag);
     combat.forEach((r, i) => { r.reward = bag[i]; });
     for (const r of rooms) if (r.type === 'elite') r.reward = rng.next() < ELITE_EPIC ? 'epic' : 'relic'; else if (r.type === 'champion') r.reward = 'relic';
+    const pr = U.RNG((seed ^ 0x2f6a3b1d) + stratum * 7919);
+    for (const r of combat) if (r.reward === 'boon') r.rewardPath = pr.next() < PATH_BOON ? pr.pick(ED.PATH_IDS) : null;
   }
 
   // A room is wide enough for its north doors: n doors need 6n + 5 tiles (odd widths keep the centre door on the middle tile).
@@ -171,7 +174,7 @@
     if (c.row > 0) doorX.s = Math.floor(w / 2);
     return {
       id: c.id, row: c.row, lane: c.lane, type: c.type, w, h, tiles, seed, stratum,
-      dist: c.row / 2, danger: 1 + 0.025 * c.row, reward: null, threat: 0, // dist: depth for the encounter budget (half the map row)
+      dist: c.row / 2, danger: 1 + 0.025 * c.row, reward: null, rewardPath: null, threat: 0, // dist: depth for the encounter budget (half the map row)
       exits: c.children.map(o => o.id), doors, doorX, entry: c.row > 0, // entry: the sealed south door the party came through
       decor: [], breakables: [], torches: [], dark: !!c.dark, champ: c.champ || null,
       event: null, // an event room's identity: drawn by the host on first entry or a reveal (events.js), carried to clients as a room patch

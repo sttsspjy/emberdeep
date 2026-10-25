@@ -14,23 +14,21 @@
   Sh.STAT_INFO = {
     dmg: SI('Damage', 'pct', 'offense'), atk: SI('Attack speed', 'pct', 'offense'), crit: SI('Critical chance', 'pct', 'offense'), critDmg: SI('Critical damage', 'pct', 'offense'), area: SI('Area', 'pct', 'offense'),
     cdr: SI('Skill cooldown', 'pct', 'offense'), projN: SI('Projectiles', 'flat', 'offense'), pierce: SI('Pierce', 'flat', 'offense'), execute: SI('Execute', 'pct', 'offense'), wDmg: SI('Weapon damage', 'pct', 'offense'),
-    dashDmg: SI('Dash damage', 'pct', 'offense'), dashFrost: SI('Dash frost ring', 'pct', 'offense'), dashcdr: SI('Dash recharge', 'pct', 'utility'), dashN: SI('Dash charges', 'flat', 'utility'), idol: SI('Golden Idol', 'flat', 'offense'), banner: SI('Banner of Unity', 'pct', 'offense'),
+    dashN: SI('Dash charges', 'flat', 'utility'), idol: SI('Golden Idol', 'flat', 'offense'), banner: SI('Banner of Unity', 'pct', 'offense'),
     hp: SI('Max health', 'flat', 'defense'), hpMul: SI('Max health', 'pct', 'defense'), armor: SI('Armor', 'flat', 'defense'), dodge: SI('Dodge', 'pct', 'defense'), vuln: SI('Damage taken', 'pct', 'defense'), heal: SI('Healing received', 'pct', 'defense'),
     thorns: SI('Thorns', 'flat', 'defense'), mirror: SI('Mirror Shard', 'pct', 'defense'), spd: SI('Move speed', 'pct', 'utility'), pickup: SI('Pickup range', 'pct', 'utility'), xp: SI('Experience', 'pct', 'utility'),
     gold: SI('Gold', 'pct', 'utility'), luck: SI('Luck', 'pct', 'utility'), light: SI('Lantern light', 'pct', 'utility'), minions: SI('Max minions', 'flat', 'utility'), minionDmg: SI('Minion damage', 'pct', 'offense'), charges: SI('Skill charges', 'flat', 'utility'),
-    trance: SI('Battle Trance', 'pct', 'offense'), wardrum: SI('War Drum', 'pct', 'offense'), deathsEdge: SI("Death's Edge crits", 'flat', 'shadow'),
+    trance: SI('Battle Trance', 'pct', 'offense'), wardrum: SI('War Drum', 'pct', 'offense'),
     fireInfuse: SI('Burn from hits', 'pct', 'fire'), burnMul: SI('Burn damage', 'pct', 'fire'), burnCap: SI('Burn stack cap', 'flat', 'fire'), wildfire: SI('Wildfire stacks per second', 'flat', 'fire'), smother: SI('Smother', 'pct', 'fire'),
-    firebreak: SI('Firewall', 'flat', 'fire'), firewalk: SI('Firewalk stacks', 'flat', 'fire'), dashFire: SI('Burning ground', 'flat', 'fire'),
+    pyre: SI('Death burst', 'flat', 'fire'), pyrePass: SI('Death burst stacks passed', 'pct', 'fire'), pyreMul: SI('Death burst damage', 'pct', 'fire'), pyreR: SI('Death burst reach', 'pct', 'fire'), pyreWeak: SI('Ember Heart', 'pct', 'fire'), scorch: SI('Scorched Earth', 'flat', 'fire'),
     iceInfuse: SI('Chill from hits', 'pct', 'ice'), chillMul: SI('Chill build-up', 'pct', 'ice'), freezeDur: SI('Freeze length', 'pct', 'ice'), shatter: SI('Shatter', 'pct', 'ice'), shatterSplash: SI('Shatter burst', 'pct', 'ice'),
-    chillWeaken: SI('Chilled foes deal', 'pct', 'ice'), glacier: SI('Glacier', 'flat', 'ice'), coldCycle: SI('Cold Cycle', 'sec', 'ice'), iceWall: SI('Glacier Step', 'flat', 'ice'),
-    lightningInfuse: SI('Charge from hits', 'pct', 'lightning'), shockMul: SI('Discharge damage', 'pct', 'lightning'), arcs: SI('Arc targets', 'flat', 'lightning'), arcStun: SI('Discharge stun', 'sec', 'lightning'),
-    chargeHold: SI('Charge hold', 'sec', 'lightning'), dashCharge: SI('Thunderstep charge', 'pct', 'lightning'), stormStep: SI('Storm Step', 'flat', 'lightning'),
-    poisonInfuse: SI('Venom from hits', 'pct', 'poison'), venomBuild: SI('Venom build-up', 'pct', 'poison'), venomHold: SI('Venom hold', 'sec', 'poison'), venomWeak: SI('Enfeeble', 'pct', 'poison'), corrode: SI('Caustic', 'pct', 'poison'),
-    cloudR: SI('Cloud size', 'pct', 'poison'), cloudT: SI('Cloud length', 'sec', 'poison'), dashCloud: SI('Dash cloud', 'flat', 'poison'), neuro: SI('Neurotoxin', 'flat', 'poison'), toxicWake: SI('Toxic Wake', 'flat', 'poison'),
-    holyInfuse: SI('Radiance from hits', 'pct', 'holy'), smiteMul: SI('Smite damage', 'pct', 'holy'), smiteShield: SI('Smite shield', 'pct', 'holy'), holyCap: SI('Holy shield cap', 'pct', 'holy'), beacon: SI('Beacon', 'pct', 'holy'),
-    perfectDodge: SI('Perfect dodge', 'flat', 'holy'), pdWin: SI('Perfect dodge window', 'sec', 'holy'), pdPow: SI('Perfect dodge Smite (Power)', 'pct', 'holy'), pdRefund: SI('Swift Grace', 'flat', 'holy'), pdStrike: SI('Divine Riposte', 'flat', 'holy'),
-    shadowInfuse: SI('Doom from Backstabs', 'pct', 'shadow'), backstab: SI('Backstab damage', 'pct', 'shadow'), doomMul: SI('Doom strength', 'pct', 'shadow'), doomTough: SI('Doom on elites', 'pct', 'shadow'),
-    dashBack: SI('Umbral Step Backstabs', 'flat', 'shadow'), decoy: SI('Phantom Step', 'flat', 'shadow'), stepBehind: SI('Umbral Arms', 'flat', 'shadow'),
+    chillWeaken: SI('Chilled foes deal', 'pct', 'ice'), glacier: SI('Glacier', 'flat', 'ice'), coldCycle: SI('Cold Cycle', 'sec', 'ice'), zeroFreeze: SI('Absolute Zero', 'flat', 'ice'), rime: SI('Damage to chilled', 'pct', 'ice'), frozenVuln: SI('Frozen foes take', 'pct', 'ice'),
+    lightningInfuse: SI('Charge from hits', 'pct', 'lightning'), shockMul: SI('Discharge damage', 'pct', 'lightning'), jumps: SI('Discharge jumps', 'flat', 'lightning'), jumpR: SI('Jump reach', 'pct', 'lightning'), arcStun: SI('Discharge stun', 'sec', 'lightning'),
+    chargeHold: SI('Charge hold', 'sec', 'lightning'), ground: SI('Charged foes deal', 'pct', 'lightning'), arcFlash: SI('Arc Flash', 'flat', 'lightning'), galv: SI('Damage to charged', 'pct', 'lightning'), capacitor: SI('Capacitor', 'pct', 'lightning'), capKeep: SI('Charge kept', 'pct', 'lightning'),
+    holyInfuse: SI('Radiance from hits', 'pct', 'holy'), smiteMul: SI('Smite damage', 'pct', 'holy'), smiteShield: SI('Smite shield', 'pct', 'holy'), holyCap: SI('Holy shield cap', 'pct', 'holy'),
+    shadowInfuse: SI('Doom from hits', 'pct', 'shadow'),
+    critBig: SI('Crit damage on elites', 'pct', 'general'), killEdge: SI('Killing Edge crits', 'flat', 'general'),
+    thermal: SI('Thermal Shock', 'flat', 'offense'), plasma: SI('Plasma Burn', 'pct', 'offense'), supercon: SI('Superconductor', 'pct', 'offense'), critBurn: SI('Burn on crits', 'pct', 'offense'), icebreak: SI('Icebreaker', 'flat', 'offense'), critDis: SI('Stormblade', 'flat', 'offense'),
     bleed: SI('Bleed on crits', 'pct', 'general'), bleedAll: SI('Bleed on hits', 'pct', 'general'), bleedMul: SI('Bleed damage', 'pct', 'general'), lacerate: SI('Damage to bleeding', 'pct', 'general'), sunder: SI('Sunder', 'flat', 'general'), opportunist: SI('Opportunist', 'pct', 'general'), masterstroke: SI('Finisher', 'flat', 'general'),
     s1Dmg: SI('Skill 1 damage', 'pct', 'offense'), s1Area: SI('Skill 1 area', 'pct', 'offense'), s1Dur: SI('Skill 1 duration', 'sec', 'offense'), s1N: SI('Skill 1 count', 'flat', 'offense'), s1Cdr: SI('Skill 1 cooldown', 'pct', 'offense'),
     s2Dmg: SI('Skill 2 damage', 'pct', 'offense'), s2Area: SI('Skill 2 area', 'pct', 'offense'), s2Dur: SI('Skill 2 duration', 'sec', 'offense'), s2N: SI('Skill 2 count', 'flat', 'offense'), s2Cdr: SI('Skill 2 cooldown', 'pct', 'offense'),
@@ -58,7 +56,7 @@
 
   // ---------------- text at rank ----------------
   // Boon text at `rank`: {stat} renders |mods[stat]| x rank in the stat's format (":pct|flat|sec|x" overrides it), {stat*K} that number times K (K = P: the hero's Power; ck / ck3: see below), {pw} the proc damage of the boon at the hero's Power,
-  // {burn} the hero's Burn value (ED.burnValue: damage per second of one stack), {vdot} the Venom damage per second at full Venom (VENOM_DOT x Power).
+  // {burn} the hero's Burn value (ED.burnValue: damage per second of one stack).
   // Class cards render through ED.boonText. st (the hero's stat block) is optional: without it {pw} reads as its formula and {stat*P} as a Power share. {gold} of the Purse reads the room gold reward of `stratum`.
   const TOKEN = /\{(\w+)(?:\*(\w+(?:\.\d+)?))?(?::(\w+))?\}/g;
   const PLURAL = /(\d+(?:\.\d+)?)((?:\s+[\w-]+){1,2})\(s\)/g; // "+2 foe(s)" reads "+2 foes", "+1 foe(s)" reads "+1 foe"
@@ -70,7 +68,6 @@
     return b.desc.replace(TOKEN, (m, key, mulBy, f) => {
       if (key === 'gold' && b.purse) return String(ED.World.rewardGold(stratum || 1)); // the Purse pays a gold room's reward at `stratum` (default 1)
       if (key === 'burn' && !(b.mods && b.mods.burn)) return st ? n1(ED.burnValue(st)) : `${Math.round(C.BURN_K * 100)}% Power`;
-      if (key === 'vdot') return st ? n1(C.VENOM_DOT * st.power) : `${Math.round(C.VENOM_DOT * 100)}% Power`;
       if (key === 'pw') return b.pw ? (st ? String(Math.round(ED.procDmg(b, st))) : `${Math.round(b.pw.k * 100)}% Power${b.pw.base ? ' + ' + b.pw.base : ''}`) : m;
       const v = Math.abs((b.mods && b.mods[key]) || 0) * rank;
       if (mulBy === 'ck' || mulBy === 'ck3') return String(Math.max(1, Math.round(v * (mulBy === 'ck3' ? 3 : 1) * ((st && st.critK) || 1)))); // *ck / *ck3: the number and three times it, x the hero's critK (as W.grantCrits scales a grant and its cap)
@@ -174,11 +171,11 @@
     hs.sort((a, b) => a - b);
     return (medianHp = hs[hs.length >> 1] || 30);
   };
-  // A typical foe of the context's stratum: hp (real), statusHp (before the stratum lever: the unit chill and Venom measure against), r.
+  // A typical foe of the context's stratum: hp (real), statusHp (before the stratum lever: the unit chill measures against), r, boss (false).
   Sh.refFoe = (ctx) => {
     const s = ctx.stratum || 1, pact = ctx.pact | 0, thr = W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, s - 1))].hp;
     const hp = rosterMedian() * W.hpScale(s) * W.partyHpMul(ctx.party || 1) * ED.pactMul(pact, 'foeHp');
-    return { hp, statusHp: hp / thr, r: Sh.REF.r };
+    return { hp, statusHp: hp / thr, r: Sh.REF.r, boss: false };
   };
   // The numbers about the run the sheet needs from a World or a Mirror (duck-typed: players, allies, floor, roomState, room, gold, level, xp).
   Sh.ctx = (view, p) => {
@@ -225,18 +222,17 @@
 
   // ---------------- weapon ----------------
   // The hold verb of the build (stats.hold, elements.js): { id, label, cycle (s from the press to the release), dps (one foe; the attacks of the press, St.HOLD.at, included), pack (it strikes every foe in its reach), note }, or null (a bell: the verb rides a full-wind hurl).
-  // o: the weapon model's numbers { hit, avg, cm, M, EC, Wd, one, n, aps }. The cone channels St.HOLD.cone.max s; the lance, flask and finisher release at full (St.holdFull).
+  // o: the weapon model's numbers { hit, avg, cm, M, EC, Wd, one, n, aps }. The cone and the storm call channel St.HOLD[k].max s; the lance and the finisher release at full (St.holdFull).
   function holdModel(p, st, o) {
     const k = st.hold, H = k && St.HOLD[k];
     if (!H || st.weapon.kind === 'bell') return null;
     const at = H.at, press = o.avg * o.one * o.aps * at;
     if (k === 'cone') { const dps = o.Wd * o.n / St.attackInterval(p) * C.CONE_MUL * o.M; return { id: k, label: 'Flame cone', cycle: at + H.max, dps: (press + dps * H.max) / (at + H.max), pack: true, note: `held up to ${H.max} s: ${Math.round(C.CONE_MUL * 100)}% of your attack damage per second to every foe in the cone, Burn x${C.CONE_BURN}; you move ${Math.round(H.slow * 100)}% slower` }; }
-    if (k === 'guard') return { id: k, label: 'Hallowed guard', cycle: at + H.max, dps: 0, pack: false, note: `held up to ${H.max} s (you move ${Math.round(H.slow * 100)}% slower): attacks from the front are perfect dodges; foe shots from the front fly back for ${Math.round(C.GUARD_MUL * 100)}% weapon damage` };
+    if (k === 'storm') { const dps = o.Wd * o.n / St.attackInterval(p) * C.STORM_MUL * o.M; return { id: k, label: 'Storm call', cycle: at + H.max, dps: (press + dps * H.max) / (at + H.max), pack: false, note: `held up to ${H.max} s: every ${C.STORM_TICK} s a bolt strikes the foe nearest your aim for ${Math.round(C.STORM_MUL * 100)}% of your attack damage per second, charging x${C.STORM_CHARGE}; you move ${Math.round(H.slow * 100)}% slower` }; }
     const full = St.holdFull(st), cyc = at + full;
     if (k === 'lance') return { id: k, label: 'Ice lance', cycle: cyc, dps: (press + C.LANCE_MUL * o.Wd * o.M * o.EC) / cyc, pack: true, note: `${Math.round(C.LANCE_MUL * 100)}% weapon damage to every foe on a ${C.LANCE_LEN} px line; freezes foes that are not bosses` };
-    if (k === 'flask') return { id: k, label: 'Flask', cycle: cyc, dps: (press + C.FLASK_MUL * o.Wd * o.M) / cyc, pack: true, note: `${Math.round(C.FLASK_MUL * 100)}% weapon damage within ${C.FLASK_R} and a toxic cloud for ${C.FLASK_T} s that builds Venom x${C.FLASK_V}` };
-    const fin = o.hit * o.cm * C.FIN_MUL * o.one, bleed = fin * 0.5 * (1 + st.statusPow) * (1 + st.bleedMul); // the finisher and the Bleed it adds
-    return { id: k, label: 'Finisher', cycle: cyc, dps: (press + fin + bleed) / cyc, pack: false, note: `every ${Sh.secs(cyc)} s: a guaranteed crit at x${C.FIN_MUL} that Bleeds for 50% of the hit, melee reach +${Math.round(C.FIN_REACH * 100)}%` };
+    const rend = st.evo === 'general' ? C.REND_K : 1, fin = o.hit * o.cm * C.FIN_MUL * o.one, bleed = fin * 0.5 * (1 + st.statusPow) * (1 + st.bleedMul) * rend; // the finisher and the Bleed it adds (Masterwork Arms: torn out at once at REND_K)
+    return { id: k, label: 'Finisher', cycle: cyc, dps: (press + fin + bleed) / cyc, pack: false, note: `every ${Sh.secs(cyc)} s: a guaranteed crit at x${C.FIN_MUL} that Bleeds for 50% of the hit, melee reach +${Math.round(C.FIN_REACH * 100)}%; it never Cleaves` };
   }
   // Pack assumptions of the Ranger forms. PACK_REF: the pack size a pack-only extra is written for (tools/sheet.js counts every extra once per foe of its pack). SIEGE_BLAST_HIT: share of siege bolts whose end blast catches a pack foe.
   // RIC_HIT: share of shots whose ricochet finds a second foe. PLAGUE_KEEP / PLAGUE_PACK: share of its pool inputs a dying foe (2+ ailments) still holds, and the pool input of a pack against one foe (skills hit every foe);
@@ -282,7 +278,7 @@
     const extras = [], add = (label, perAttack, o) => { if (perAttack > 0) extras.push(Object.assign({ label, perAttack, proc: false }, o)); };
     const cleaveEvery = melee && st.cleave > 0 ? 3 + st.cleaveN : 0, cleaveK = cleaveEvery ? st.cleave / cleaveEvery : 0;
     if (cleaveEvery) add('Cleave', avg * cleaveK, { proc: true, crit: true, note: `every ${ordinal(cleaveEvery)} swing: +${Math.round(st.cleave * 100)}% damage, 40% more reach and arc` });
-    if (melee && w.shock) add('Shockwave', Wd * w.shock.mul * M * (1 + cleaveK), { r: Math.round(w.shock.r * area), note: 'each swing, no crit' });
+    if (melee && w.shock) add('Shockwave', Wd * w.shock.mul * M, { r: Math.round(w.shock.r * Math.min(C.REACH_CAP, area)), note: 'each swing, no crit; a Cleave or a finisher does not raise it' });
     if (cleaveEvery && st.cShock) add('Cleave shock', Wd * st.cShock * M / cleaveEvery, { r: Math.round(72 * area), stun: st.cStun, note: 'each Cleave, no crit' });
     if (cleaveEvery && st.fissure) add('Fissure', Wd * st.fissure * M / cleaveEvery, { stun: st.cStun, note: 'each Cleave: a fissure 180 long strikes every foe on it once, no crit' }); // Earthsplitter (class-knight.js fissure)
     if (cleaveEvery && st.bladeWave) add('Blade wave', Wd * st.bladeWave * M * EC / cleaveEvery, { proc: true, crit: true, note: 'each Cleave: a wave 180 long pierces every foe on it (a Parry fans three)' }); // Thousand Edges (class-knight.js bladeWaves)
@@ -356,7 +352,7 @@
     const notes = [], hold = holdModel(p, st, { hit, avg, cm, M, EC, Wd, one, n, aps });
     if (st.atkOver > 1.0001) notes.push(`Attack speed cap ${n1(1 / st.atkFloor)}/s: the excess adds +${Math.round((st.atkOver - 1) * 100)}% damage`);
     if (w.combo) notes.push(`Combo of ${w.combo.steps.length} attacks (the interval and hit are their means); it restarts after ${n1(w.combo.reset)} s without attacking`);
-    if (w.ahead) notes.push(`Slams the ground ${Math.round(w.range * (1 + 0.5 * st.area + st.meleeReach))} px ahead: every foe within ${Math.round(w.ahead.r * area)} of that point`);
+    if (w.ahead) notes.push(`Slams the ground ${Math.round(w.range * Math.min(C.REACH_CAP, 1 + 0.5 * st.area + st.meleeReach))} px ahead: every foe within ${Math.round(w.ahead.r * Math.min(C.REACH_CAP, area))} of that point`);
     if (w.pull) notes.push(`Hits pull foes ${w.pull} px toward you (elites half, bosses never)`);
     if (st.heavy) notes.push(`Heavy: a hit Staggers a foe for ${C.STAGGER} s (elites half)`);
     if (st.swift) notes.push(`Swift: +${Math.round(C.FLOW_SPD * 100)}% move speed for ${C.FLOW_T} s after each attack`);
@@ -379,7 +375,7 @@
       out.uptime = R.f(up); out._up = up; // share of the time the bell plays its loop, casting Anchor Leap on cooldown (tools/model.js scales the weapon by it)
       notes.push(`One loop: wind ${n1(cy.tw)} s from the reel's ${Math.round(ED.CONST.REEL_KEEP * 100)}% wind to ${cy.full ? 'full wind' : Math.round(cy.wind * 100) + '% wind'}, hurl ${Math.round(cy.d)} px at x${n1(cy.k)}, reel home at x${n1(cy.kReel)}: ${n1(cy.T)} s`);
       notes.push(`Wound, the bell orbits at ${out.orbit} px (top ${out.top} px/s); a hurl flies up to ${ED.CONST.HURL_D} px at full wind and strikes every foe on its path and within ${Math.round(ED.CONST.IMPACT_R * area)} of where it lands`);
-    } else if (melee) { const arc = Math.min(6.3, w.arc * (1 + 0.4 * st.area)); out.reach = Math.round(w.range * (1 + 0.5 * st.area + st.meleeReach)); out.arcDeg = Math.round(arc * 57.2958); out.allAround = arc >= 6.2; }
+    } else if (melee) { const arc = w.arc >= 6.2 ? Math.min(6.3, w.arc) : Math.min(Math.max(w.arc, C.ARC_CAP), w.arc * (1 + 0.4 * st.area)); out.reach = Math.round(w.range * Math.min(C.REACH_CAP, 1 + 0.5 * st.area + st.meleeReach)); out.arcDeg = Math.round(arc * 57.2958); out.allAround = arc >= 6.2; }
     else { out.range = Math.round(w.speed * w.life); out.pierce = w.beam || w.ret ? 99 : (w.pierce || 0) + st.pierce; out.homing = (w.homing || 0) + (st.homing || 0) > 0; out.blast = blast ? { r: Math.round(blast.r), mul: blast.mul } : null; }
     return out;
   }
@@ -408,8 +404,9 @@
     if (q.per === 'zone') return finish(Object.assign(o, { kind: 'zone', raw: 0, hit: 0, avg: 0, pre: 0, here: 0, total: 0, oneFoe: 0, kc: 0 }), R);
     const sec = q.per === 'sec', always = q.crit === true, kc = always ? 1 : q.noCrit || sec ? 0 : c;
     let raw = q.dmg || 0, oneFoe = q.oneFoe;
-    // Cast-time factors skillNums leaves out (the casts apply them): Shield Storm throws two shields (Aegis Tempest three) at twinShield each, all reach a foe at REF; Comet's impact lands at 1 + comet.
-    if (skillId === 'shieldthrow' && (st.twinShield > 0 || st.tempest > 0) && (q.id === 'strike' || q.id === 'return')) { raw *= st.twinShield > 0 ? st.twinShield : 1; oneFoe = st.tempest > 0 ? Math.round(st.tempest) : 2; }
+    // Cast-time factors skillNums leaves out (the casts apply them): Comet's impact lands at 1 + comet. A Bulwark bash and its vortex are read at BW_STORED blocked attacks.
+    if (skillId === 'bulwark' && q.id === 'bash') raw *= 1 + St.skillNums('bulwark', st).blockMul * BW_STORED;
+    else if (skillId === 'bulwark' && q.id === 'vortex') raw *= Math.max(1, BW_STORED);
     else if (skillId === 'meteor' && q.id === 'impact' && st.comet > 0) raw *= (1 + st.comet) * (st.sunDive > 0 ? (1 + st.sunDive) / 2 : 1); // Sun Dive's second landing deals sunDive of the first: the mean of the two landings (oneFoe counts both)
     else if (skillId === 'volley' && q.id === 'arrow' && q.ring && st.thornMul > 0) raw *= st.thornMul; // a Thornburst ring arrow deals thornMul x
     else if (skillId === 'peal' && ED.Bell) raw *= 1 + C.RES_K * ED.Bell.pealRes(st); // a Peal rings at its Resonance: the mean a Peal cast on cooldown holds (class-bell.js)
@@ -443,7 +440,7 @@
     Object.assign(o, { kind: sec ? 'sec' : q.per === 'tick' ? 'tick' : 'hit', raw, hit, avg, pre, here, oneFoe: oneFoe === undefined ? 1 : oneFoe, critHit: hit * cm, kc, _hit: hit });
     if (sec) o.tick = hit;
     if (skillId === 'vanish' && q.id === 'ambush') o.sweepR = st.ambushCleave; // Ambush Sweep: the radius around the struck foe that the pack rule of tools/model.js reads
-    if (skillId === 'shieldthrow' && q.id === 'strike') o.gather = st.gather; // Gathering Force: the pack rule of tools/model.js reads it
+    if (skillId === 'bulwark' && q.id === 'bash') { const N = St.skillNums('bulwark', st); o.note = `+${Math.round(N.blockMul * 100)}% per blocked attack (up to ${N.blockMax}); bosses ×2, never stunned`; } // the stored power at the hero's cards
     if (skillId === 'harvest' && (q.id === 'corpse' || q.id === 'shard')) { o.cap = st.corpse; o.shardN = st.carrionN; } // the corpse rules of tools/model.js read the corpse cap and the shards per corpse
     if (q.statusAdd) { // a status add riding on the hit (Meteor): a share of the damage, built with the status' strength
       for (const k in q.statusAdd) {
@@ -465,14 +462,14 @@
     delete o._hit;
     return o;
   }
-  // Shield Bash (Juggernaut rank 3): a free Shield Throw along the charge at `bash` x its damage, striking and returning; no stun.
+  // Shield Bash (Juggernaut rank 2): a free Bulwark bash where the charge ends at `bash` x its damage (the cone's radius); no stored power, no stun.
   function bashPart(q, st, R) {
-    const N = St.skillNums('shieldthrow', st), a = N.p.strike, b = N.p.return, M = Math.max(0.1, st.dmg), EC = 1 + st.crit * (st.critMult - 1), k = st.bash;
-    const hit = (a.dmg + b.dmg) / 2 * k * M;
-    return finish({ id: q.id, label: q.label, per: 'hit', kind: 'hit', el: null, r: 0, proc: true, note: 'a free Shield Throw along the run, no stun', raw: (a.dmg + b.dmg) * k, hit, avg: hit * EC, pre: hit * EC, here: hit * EC, total: hit * EC * 2, oneFoe: 2, kc: st.crit, alwaysCrit: false, noCrit: false, selfVuln: 0, bashStrike: a.dmg * k * M * EC, bashReturn: b.dmg * k * M * EC, bashN: a.n }, R); // bash*: the strike and return hits and the ricochet count, for the pack rule of tools/model.js
+    const b = St.skillNums('bulwark', st).p.bash, M = Math.max(0.1, st.dmg), EC = 1 + st.crit * (st.critMult - 1), raw = b.dmg * st.bash, hit = raw * M;
+    return finish({ id: q.id, label: q.label, per: 'hit', kind: 'hit', el: null, r: Math.round(b.r), proc: true, note: q.note || '', raw, hit, avg: hit * EC, pre: hit * EC, here: hit * EC, total: hit * EC, oneFoe: 1, kc: st.crit, alwaysCrit: false, noCrit: false, selfVuln: 0 }, R);
   }
 
   const ROCK_SCATTER = 80; // px a Meteor Shower meteorite may land from its impact (class-pyro.js)
+  const BW_STORED = 1, BW_RAISE = 1; // a Bulwark raise (assumed): blocked attacks it stores before its bash, seconds it is held
   const AIM_TEXT = { dir: 'toward the cursor', ground: 'lands on the cursor', move: 'toward the cursor', self: 'around you' }, SLOT_KEYS = ['skill1', 'skill2', 'skill3'];
   function skillModel(id, slot, p, st, ctx, wpn, R) {
     const sk = ED.SKILLS[id], N = St.skillNums(id, st), parts = [];
@@ -483,15 +480,15 @@
       parts.push(m);
       if (m.kind !== 'zone') { perCast += m._r.total; perCastAll += m.fanN ? m._r.avg * (1 + m.selfVuln) * m.fanN * m.waves : m._r.total; }
     }
-    const cd = N.cdEff, heals = [];
-    for (const q of N.parts) if (q.on && q.heal) {
+    const cd = N.cdEff, cyc = cd + (id === 'bulwark' ? BW_RAISE : 0), heals = []; // cyc: seconds between casts (the Bulwark cooldown runs from the release)
+    for (const q of N.parts) if (q.on && q.heal && (!q.heal.if || st[q.heal.if])) {
       const h = q.heal;
       if (h.key) heals.push({ label: h.note || 'heals on cast', frac: C[h.key] });
       else if (h.perMinion) heals.push({ label: h.note || 'heals on cast', perMinion: h.perMinion, cap: h.cap });
     }
     return {
       id, slot, name: sk.name, icon: sk.icon, key: SLOT_KEYS[slot] || 'skill1', cd: R.x(cd), cdBase: sk.cd, charges: slot === 0 ? st.maxCharges : slot === 2 ? st.skill3Charges : 1, aim: N.aim, aimText: AIM_TEXT[N.aim] || '', range: N.range, rangeMin: N.rangeMin,
-      parts, perCast: R.n(perCast), perCastAll: R.n(perCastAll), dpsCd: R.n(perCast / cd), heals, _cd: cd,
+      parts, perCast: R.n(perCast), perCastAll: R.n(perCastAll), dpsCd: R.n(perCast / cyc), heals, _cd: cyc,
     };
   }
 
@@ -520,19 +517,8 @@
     }
     const M = Math.max(0.1, st.dmg), cm = st.critMult, c = st.crit, EC = 1 + c * (cm - 1);
 
-    // dash: recharge per charge, charges, i-frames and the dash boons' hits
+    // dash: recharge per charge, charges, i-frames and the relic riding it
     const dash = { cd: R.x(st.dashCd), charges: st.dashCharges, ifr: ED.CONST.DASH.t, parts: [] };
-    if (st.dashDmg) dash.parts.push({ label: 'Dash hit', dmg: R.n(st.power * st.dashDmg * M * EC), per: 'foe passed', note: `${Math.round(st.dashDmg * 100)}% of Power, once per dash` });
-    if (st.dashFire) dash.parts.push({ label: 'Burning ground', dmg: R.n(ED.burnValue(st)), per: 'stack per second', r: C.GROUND_R, dur: C.GROUND_T + (st.firebreak ? 1 : 0), note: `foes on it gain a Burn stack every 0.5 s${st.firebreak ? '; foes walk around it' : ''}` });
-    if (st.firewalk) dash.parts.push({ label: 'Firewalk', note: `dashing through a burning foe copies up to ${st.firewalk} of its stacks to every foe within ${C.FIREWALK_R} of it` });
-    if (st.lightningInfuse > 0) dash.parts.push({ label: 'Discharge', note: `your charged foes within ${C.DIS_R} of the path take ${Math.round(C.DIS_K * (1 + st.shockMul) * 100)}% of their charge; it jumps to your charged foes within ${C.DIS_JUMP} (${C.DIS_JUMPS + (st.evo === 'lightning' ? C.TEMPEST_JUMPS : 0)} hops)` });
-    if (st.stormStep) dash.parts.push({ label: 'Storm Step', note: `aimed at a charged foe within ${C.STORM_R}: you blink next to it first` });
-    if (st.iceWall) dash.parts.push({ label: 'Ice wall', dur: C.WALL_T, note: 'along the dash: foes cannot cross it, foe shots break on it' });
-    if (st.dashCloud) dash.parts.push({ label: 'Toxic cloud', r: Math.round(C.CLOUD_R * (1 + st.cloudR)), dur: C.CLOUD_T + st.cloudT, note: 'where the dash starts: builds Venom' });
-    if (st.perfectDodge) dash.parts.push({ label: 'Perfect dodge', dur: st.pdWin, note: `an attack your dash meets (or one landing within ${Sh.secs(st.pdWin)} s after) Smites its foe for its Radiance + ${n1(st.pdPow * st.power)} and shields you` });
-    if (st.dashBack) dash.parts.push({ label: 'Umbral Step', note: `your next ${st.dashBack} hits within ${C.BACK_T} s are Backstabs` });
-    if (st.decoy) dash.parts.push({ label: 'Decoy', dur: C.DECOY_T, note: `where the dash starts: foes that are not bosses within ${C.DECOY_R} go for it` });
-    if (st.stepBehind) dash.parts.push({ label: 'Umbral Arms', note: `aimed at a foe within ${C.BEHIND_R}: you step behind it; your next hit within ${C.BEHIND_T} s crits` });
     if (st.dashBomb) dash.parts.push({ label: 'Bomb', dmg: R.n(ED.procDmg(ED.RELICS.satchel, st) * M), r: 60, note: 'where you dashed from' });
 
     const proc = procModel(p, st, wpn, skills);
@@ -565,7 +551,7 @@
     mult.status = [];
     const statusEls = ED.ELEMENT_IDS.filter(el => st[ED.ELEMENTS[el].inf] > 0 || st.element === el).concat(st.bleed > 0 || st.bleedAll > 0 || st.masterstroke ? ['general'] : []);
     for (const el of statusEls) {
-      const P = ED.PATHS[el], est = P.sheet.est(proc, st, ref);
+      const P = ED.pathInfo(el), est = P.sheet.est(proc, st, ref);
       mult.status.push({
         el, name: P.name, color: P.color, icon: P.icon, status: P.status, infuse: R.f(st[P.infuse] || 0), builtin: el === st.element && !(st[P.infuse] > 0),
         est: Object.assign({}, est, { dps: est.dps === undefined ? undefined : R.n(est.dps), secs: est.secs === undefined ? undefined : R.n(est.secs), pct: est.pct === undefined ? undefined : R.f(est.pct) }),
@@ -573,6 +559,7 @@
       });
     }
     mult.debuffs = debuffs(p, st);
+    pathPack(st, wpn, mult.status, proc, ref, R);
 
     // defence
     const armorMul = St.armorMul(st.armor), taken = armorMul * (1 + st.vuln), maxHp = p.maxHp || st.maxHp;
@@ -608,14 +595,13 @@
   // Foe vulnerabilities and debuffs the build applies, with their rules.
   function debuffs(p, st) {
     const out = [], add = (id, text, v, short) => out.push({ id, name: ED.STATUS[id].name, color: ED.STATUS[id].color, text, v: v || 0, short: short || '' });
-    if (st.iceInfuse > 0) add('frozen', ED.STATUS.frozen.rule, 0.25, 'while frozen');
+    if (st.iceInfuse > 0) add('frozen', ED.STATUS.frozen.rule, C.FROZEN_VULN + st.frozenVuln, 'while frozen');
     if (ED.CLASSES[p.cls].skill2 === 'judgment') add('judged', 'Judgment Judges every foe it hits: it takes +20% damage for ' + n1(4 + st.judgeDur) + ' s.' + (st.smiteJudge > 0 ? ` Your Smites Judge their foe for ${n1(st.smiteJudge)} s as well.` : '') + ' Does not stack with other +20% vulnerability.', 0.2, `for ${n1(4 + st.judgeDur)} s (does not stack with other +20%)`);
     if (st.rainHail) add('judged', 'Foes in your Rain take +20% damage (the same +20% as Judged).', 0.2, 'inside your Rain');
     if (st.smokeVuln) add('judged', 'Foes in your smoke take +20% damage (the same +20% as Judged).', 0.2, 'inside your smoke');
     if (st.markV) add('marked', `Marked foes take +${Math.round(st.markV * 100)}% damage from every hero` + (st.volleyMark ? ` for ${n1(st.volleyMark)} s.` : '.'), st.markV, 'from every hero');
     if (st.doombrand) add('marked', `Doombrand: a foe holding 4 or more ailments is Marked for 4 s and takes +${Math.round(st.brandMark * 100)}% damage from every hero.`, st.brandMark, 'from every hero, at 4 ailments');
     if (st.sunder) add('sundered', 'Each critical hit makes the foe take +4% more damage from you per stack (up to 10).', 0.04, 'per Sunder stack, up to 10');
-    if (st.corrode > 0) add('venom', `Corroded foes (full Venom) take +${Math.round(st.corrode * 100)}% damage from every hero.`, st.corrode, 'at full Venom, from every hero');
     return out;
   }
 
@@ -635,18 +621,18 @@
     if (p.cls === 'cleric') S.push({ label: 'Sanctuary', text: `allies inside take ${Math.round(Math.min(st.dawn > 0 ? C.DR_FLOOR : 0.4, 0.15 + st.sanctDR + st.aegisDR) * 100)}% less damage` });
     if (st.judgeWeak) S.push({ label: 'Verdict', text: `Judged foes deal ${Math.round(st.judgeWeak * 100)}% less damage (bosses half)` });
     if (st.chillWeaken) S.push({ label: 'Permafrost', text: `chilled foes deal ${Math.round(st.chillWeaken * 100)}% less damage` });
-    if (st.poisonInfuse > 0) S.push({ label: 'Venom', text: `envenomed foes deal up to ${Math.round(C.VENOM_WEAK * 100)}% less damage${st.venomWeak ? ` (${Math.round((C.VENOM_WEAK + st.venomWeak) * 100)}% at full Venom)` : ''}` });
-    if (st.smother) S.push({ label: 'Smother', text: `foes holding ${C.BURN_AT} or more of your Burn stacks deal ${Math.round(st.smother * 100)}% less damage` });
-    if (st.perfectDodge) S.push({ label: 'Perfect dodge', text: `an attack your dash meets, or one landing within ${Sh.secs(st.pdWin)} s after it, misses you, Smites its foe and shields you ${pc(C.PD_SHIELD)}` });
-    if (st.hold === 'guard') S.push({ label: 'Hallowed guard', text: 'while you hold attack, attacks from the front are perfect dodges' });
+    if (st.smother) S.push({ label: 'Smother', text: `foes holding ${C.SMOTHER_AT} or more of your Burn stacks deal ${Math.round(st.smother * 100)}% less damage` });
+    if (st.pyreWeak) S.push({ label: 'Ember Heart', text: `foes a death burst hits deal ${Math.round(st.pyreWeak * 100)}% less damage for ${C.PYRE_WEAK_T} s (bosses half)` });
+    if (st.ground) S.push({ label: 'Grounding', text: `your charged foes deal ${Math.round(st.ground * 100)}% less damage` });
     if (st.thorns) S.push({ label: 'Thorns', text: `attackers take ${n1(st.thorns)} damage` });
     if (st.holyInfuse > 0 || st.element === 'holy') sh.push({ label: 'Holy Smite', text: `${pc(Math.min(C.HOLY_GRANT_MAX, st.smiteShield))} per Smite (twice from elites and bosses${st.sunstrike > 0 ? ' and from a Sunstrike' : ''}), once per ${C.HOLY_CD} s per hero, up to ${pc(st.holyCap)}` });
-    if (p.cls === 'knight') sh.push({ label: 'Shield Throw catch', text: `${pc(C.CATCH_PER)} per foe struck, up to ${pc(C.CATCH_MAX)}, once per ${C.KWARD_CD} s` });
+    if (p.cls === 'knight') S.push({ label: 'Bulwark', text: `while raised, blocks every hit and shot from the front (${st.shieldWall > 0 ? 180 : 120} degrees) for up to ${n1(St.skillNums('bulwark', st).hold)} s` });
+    if (st.bastionWard) sh.push({ label: 'Bastion', text: `${pc(st.bastionWard)} per blocked attack, up to 2% per raise (once per ${C.KWARD_CD} s)` });
     if (st.rally) sh.push({ label: 'Rallying Charge', text: `${pc(st.rally)} for you and allies within 100` });
     if (st.mantle) sh.push({ label: 'Phoenix Mantle', text: `${pc(st.mantle)} after a Nova that hits a foe (once per 10 s)` });
     if (st.veil) sh.push({ label: 'Veil of Night', text: `${pc(st.veil)} when you vanish (once per 12 s)` });
     if (st.boneArmor) sh.push({ label: 'Bone Armor', text: `${pc(st.boneArmor)} per minion harvested, up to ${pc(st.boneCap)} (once per 12 s)` });
-    if (p.cls === 'cleric') sh.push({ label: 'Judgment kill', text: '3% for allies within 160, once per cast' });
+    if (p.cls === 'cleric' && st.verdict > 0) sh.push({ label: 'Judgment kill', text: '3% for allies within 160, once per cast' });
     if (p.weapon === 'votive') sh.push({ label: 'Votive Lamp', text: `${pc(0.015)} of an ally's health while they stand in a pool of light, at most once per ${C.LANTERN_CD} s per ally, up to ${pc(C.CLASS_SHIELD_CAP)}; counts toward the class-shield limit of ${pc(C.SHIELD_WIN_CLASS)} per ${C.SHIELD_WIN_T} s` });
     if (p.weapon === 'lantern') sh.push({ label: 'Sacred Lantern', text: `${pc(0.015)} of an ally's health per orb, at most once per ${C.LANTERN_CD} s per ally, up to ${pc(C.CLASS_SHIELD_CAP)}; counts toward the class-shield limit of ${pc(C.SHIELD_WIN_CLASS)} per ${C.SHIELD_WIN_T} s` });
     for (const k of skills) for (const h of k.heals) def.heals.push({ label: k.name, text: h.perMinion ? `${pc(h.perMinion)} of max health per minion, up to ${pc(h.cap)}` : `${pc(h.frac)} of max health for you and allies within 180` });
@@ -704,7 +690,43 @@
         split.skills += dps; all += dps; critDps += r.hit * cm * m.kc * (1 + m.selfVuln) * m.oneFoe / sk._cd;
       }
     }
-    return { dps: all, critDps, rate, pool, bleed: critDps * st.bleed * pow + all * st.bleedAll * pow, split };
+    return { dps: all, critDps, rate, pool, bleed: critDps * st.bleed * pow + all * st.bleedAll * pow, split, hit: wpn._avg * one, aps };
+  }
+
+  // ---------------- path engines in a pack ----------------
+  // Pack-only extras of the path engines (written per attack as _pack(n), the total in a pack of n): the status stream of an owned path (Steel Bleed, Flame Burn, Storm Charge, Frost Shatters) on the other foes the hits reach
+  // (OTHER_HIT of them: every one for a melee or bell hero, PROJ_AREA for shots with a blast, a beam, a boomerang or 2+ pierce, PROJ_ONE for plain shots); the Flame death burst on the foes left round each corpse
+  // (the pack dies one foe at a time, BURST_NEIGH at most round it; the Burn a dying foe holds is BURN_LEFT of its stacks' life, and the stacks it passes burn that long again); Frost's Shatter splash and Storm's Arc Flash.
+  const PROJ_AREA = 0.6, PROJ_ONE = 0.35, BURST_NEIGH = 3, BURN_LEFT = 0.5;
+  function pathPack(st, wpn, status, proc, ref, R) {
+    const w = st.weapon, aps = wpn._aps;
+    if (!(aps > 0)) return;
+    const reach = w.kind !== 'proj' ? 1 : w.explode || w.beam || w.ret || (w.pierce || 0) + st.pierce >= 2 ? PROJ_AREA : PROJ_ONE;
+    const est = (el) => { const s = status.find(x => x.el === el); return s && s.est ? s.est : null; };
+    const push = (label, perSec, note) => { if (!(perSec(PACK_REF) > 0)) return null; const e = { label, perAttack: perSec(PACK_REF) / PACK_REF, proc: false, packOnly: true, _pack: perSec, note }; wpn._extras.push(e); return e; };
+    let any = false;
+    const stream = (el, label, ok) => { const e = ok && est(el); if (e && e.dps > 0 && push(label, (n) => (n < 2 ? 0 : e.dps * reach * (n - 1) / aps), `your ${label.toLowerCase()} on the other foes your hits reach (about ${Math.round(reach * 100)}%)`)) any = true; };
+    stream('general', 'Bleed streams', st.bleed > 0);
+    stream('fire', 'Burn streams', st.pyre > 0);
+    stream('lightning', 'Charge streams', st.lightningInfuse > 0);
+    stream('ice', 'Shatter streams', st.iceInfuse > 0);
+    const fire = st.pyre > 0 && est('fire');
+    if (fire && fire.stacks > 0) { // a death burst per pack foe that dies (n of them per the pack's life): the Burn it held to each of up to BURST_NEIGH foes left, plus the stacks it passes
+      const v = ED.burnValue(st), held = fire.stacks * v / (1 + st.burnMul) * C.BURN_LIFE * BURN_LEFT, burst = held * C.PYRE_K * (1 + st.burnMul) * (1 + st.pyreMul), pass = (C.PYRE_PASS + st.pyrePass) * fire.stacks * v * C.BURN_LIFE * BURN_LEFT;
+      const pairs = (n) => { let s = 0; for (let j = 1; j <= n; j++) s += Math.min(BURST_NEIGH, n - j); return s; };
+      const life = (n) => ref.hp * n / Math.max(1e-6, proc.dps * (1 + reach * (n - 1))); // seconds the pack lasts under the hero's damage
+      if (push('Death bursts', (n) => (n < 2 ? 0 : pairs(n) * (burst + pass) / life(n) / aps), `a burning foe that dies bursts on the foes left round it (radius ${Math.round((C.PYRE_R + C.PYRE_RS * fire.stacks) * (1 + st.pyreR))}): the Burn it held and ${Math.round((C.PYRE_PASS + st.pyrePass) * 100)}% of its stacks`)) any = true;
+    }
+    const ice = st.shatter > 0 && est('ice');
+    if (ice && ice.secs > 0 && st.shatterSplash > 0) { // Shatterpoint: each Shatter bursts on the foes within SHATTER_R (BURST_NEIGH at most)
+      const per = (proc.hit || 0) * (1 + st.shatter) * st.shatterSplash / (ice.secs + C.FREEZE_SET);
+      if (push('Shatter splash', (n) => (n < 2 ? 0 : per * Math.min(BURST_NEIGH, n - 1) * reach / aps), `each Shatter bursts for ${Math.round(st.shatterSplash * 100)}% of its hit on the foes within ${C.SHATTER_R}`)) any = true;
+    }
+    const sto = st.arcFlash > 0 && est('lightning');
+    if (sto && sto.dps > 0) { // Arc Flash: each discharge arcs ARC_MUL to the uncharged foes round it (those the hits do not reach)
+      if (push('Arc Flash', (n) => (n < 2 ? 0 : sto.dps * C.ARC_MUL * (n - 1) * (1 - reach * 0.5) / aps), `each discharge arcs ${Math.round(C.ARC_MUL * 100)}% to the uncharged foes within ${C.DIS_JUMP}`)) any = true;
+    }
+    if (any) refit(wpn, R);
   }
   function procOut(pr, R) {
     const rate = {}, pool = {};
@@ -727,7 +749,7 @@
   const atLeast = (d, k) => d.reduce((s, v, i) => s + (i >= k ? v : 0), 0), meanMin = (d, cap) => d.reduce((s, v, i) => s + v * Math.min(i, cap), 0);
   const DOOM_AT = 4, BQUAKE_AT = 3, BQUAKE_R = 80, POOL_K = 2.5, PACK = 4; // POOL_K: a Bleed pool drains 40% a second, so it holds 2.5 s of income. PACK: the foes of the pack tools/sheet.js reads (the other 3 catch a burst)
   // Doombrand adds one weapon extra, the damage that the Mark (foes holding DOOM_AT ailments take +brandMark from every hero) and the two extra Brand ailments add to the weapon and the skills of the hero's own hits (co-op allies gain more, not counted).
-  // Bloodquake adds the extra damage of its payout (pool x bloodquakeMul, one strike per cast on a foe) to the Shield Throw's damage on one foe, and a part for packs: each of the PACK - 1 others within BQUAKE_R catches bloodquakeSplash of the amount paid (a pool holds POOL_K x the Bleed income), at most SPREAD_CAP of a foe's health.
+  // Bloodquake adds the extra damage of its payout (pool x bloodquakeMul, one strike per cast on a foe) to the Bulwark's damage on one foe, and a part for packs: each of the PACK - 1 others within BQUAKE_R catches bloodquakeSplash of the amount paid (a pool holds POOL_K x the Bleed income), at most SPREAD_CAP of a foe's health.
   // A strike detonates a foe holding BQUAKE_AT ailments at most once a second.
   function elementForms(st, wpn, skills, proc, ref, R) {
     if (st.doombrand > 0) {
@@ -740,11 +762,11 @@
       refit(wpn, R);
     }
     if (st.bloodquake > 0 && skills.length > 1) {
-      const k2 = skills[1], k1 = skills[0], strike = k2.parts.find(q => q.id === 'strike'), p3 = atLeast(ailmentDist(st), BQUAKE_AT);
+      const k2 = skills[1], k1 = skills[0], strike = k2.parts.find(q => q.id === 'bash'), p3 = atLeast(ailmentDist(st), BQUAKE_AT);
       if (strike) {
         const bm = 1 + st.bleedMul, pool = POOL_K * proc.bleed, paid = pool * bm * (1 + st.bloodquakeMul), own = pool * bm * st.bloodquakeMul, give = Math.min(st.bloodquakeSplash * paid, C.SPREAD_CAP * ref.hp) * bm;
-        const one = p3 * (k2._cd / k2._cd + k2._cd / k1._cd) * own, det = p3 * (Math.min(PACK, strike.n || 1) + PACK * k2._cd / k1._cd), gain = det * (own + (PACK - 1) * give);
-        const q = { id: 'bloodquake', label: 'Bloodquake', per: 'hit', kind: 'hit', el: null, r: BQUAKE_R, proc: false, note: `a Charge or Throw strike on a foe with ${BQUAKE_AT} ailments pays out its Bleed pool at +${Math.round(st.bloodquakeMul * 100)}% and bursts ${Math.round(st.bloodquakeSplash * 100)}% of that to each foe near it (a pack only)`, raw: paid, hit: paid, avg: paid, pre: paid, here: paid, total: gain / PACK, oneFoe: 0, kc: 0, alwaysCrit: false, noCrit: true, selfVuln: 0 };
+        const one = p3 * (k2._cd / k2._cd + k2._cd / k1._cd) * own, det = p3 * (PACK + PACK * k2._cd / k1._cd), gain = det * (own + (PACK - 1) * give);
+        const q = { id: 'bloodquake', label: 'Bloodquake', per: 'hit', kind: 'hit', el: null, r: BQUAKE_R, proc: false, note: `a Charge impact or a bash on a foe with ${BQUAKE_AT} ailments pays out its Bleed pool at +${Math.round(st.bloodquakeMul * 100)}% and bursts ${Math.round(st.bloodquakeSplash * 100)}% of that to each foe near it (a pack only)`, raw: paid, hit: paid, avg: paid, pre: paid, here: paid, total: gain / PACK, oneFoe: 0, kc: 0, alwaysCrit: false, noCrit: true, selfVuln: 0 };
         k2.parts.push(finish(q, R));
         k2.perCast = R.n(k2.perCast + one); k2.perCastAll = R.n(k2.perCastAll + one); k2.dpsCd = R.n(k2.perCast / k2._cd);
       }
@@ -883,7 +905,7 @@
   // The crit chance per attack and the Momentum it builds: { q, ra (Arterial readyings per attack), avg (stacks a hit sees), pFull }.
   function momentumState(st, wpn, ref) {
     const aps = wpn._aps, c = st.crit, N = St.skillNums('step', st), P3 = atLeast(ailmentDist(st), 3);
-    const ready = Math.min(Math.round((3 + st.stackMax) * st.critK), Math.round((3 + st.stepStack) * st.critK)), rs = Math.min(0.9, ready / (N.cdEff * aps));
+    const ready = st.stepCrit > 0 ? Math.min(Math.round((3 + st.stackMax) * st.critK), Math.round((st.stepCrit + st.stepStack) * st.critK)) : 0, rs = Math.min(0.9, ready / (N.cdEff * aps));
     let q0 = 1 - (1 - c) * (1 - st.execCrit) * (1 - rs);
     if (st.execMom > 0) q0 = Math.min(0.95, q0 + st.execMom * MOM_THREAT * (wpn.dps / ref.hp) / aps);
     let q = q0, ra = 0;
@@ -967,7 +989,7 @@
   // The Hex, Grave Bolt, Soul Storm, Abyssal and Tide effects of class-necro.js as weapon extras (damage per attack on one foe; _pack(n): the total per attack in a pack of n). Per-second values are divided by the attack rate.
   function necroForms(st, wpn, skills, proc, ref, s, R) {
     const aps = wpn._aps, avg = wpn._avg, melee = wpn.kind === 'melee', M = Math.max(0.1, st.dmg), one = wpn.oneFoe, hasHex = st.hex > 0, mine = [];
-    const pow = 1 + st.statusPow, kM = C.MINION_INFUSE + st.minionInfuse, aff = 1 + st.doomMul, toughK = C.DOOM_TOUGH + st.doomTough;
+    const pow = 1 + st.statusPow, kM = C.MINION_INFUSE + st.minionInfuse, aff = 1, toughK = C.DOOM_TOUGH;
     const hb = (n) => (melee ? n : Math.min(n, (wpn.n || 1) * (1 + (wpn.pierce || 0)))); // foes one attack's normal hits reach (tools/model.js packWeapon)
     let minionDps = 0, minionDoom = 0, minions = 0, strike = 0, dpsOne = avg * one * aps;
     const spells = [];
@@ -1050,13 +1072,13 @@
   const ROUTE_WHEN = { t1: 'Offered at team level 3', fork: 'Offered when the stratum I boss falls', r2: 'Rank 2 when the stratum II boss falls', r3: 'Rank 3 when the stratum III boss falls' };
   const KIND_ORDER = { gate: 0, path: 1, open: 1, route: 0, fork: 1, keystone: 2, evolution: 3 };
   function buildModel(p, st, ctx, R) {
-    const boons = p.boons || {}, gen = ED.isGeneralist(boons), gates = ED.gatePaths(boons), evoPath = ED.evoOf(boons), paths = [];
+    const boons = p.boons || {}, gates = ED.gatePaths(boons), evoPath = ED.evoOf(boons), paths = [];
     for (const k of gates) {
       const P = ED.PATHS[k], aff = ED.pathAffinity(boons, k), keyId = ED.BOON_IDS.find(id => ED.BOONS[id].key && ED.BOONS[id].path === k), evoId = 'evo_' + k, keyAt = ED.keyAffinity(k), evoAt = ED.evoAffinity(k), hasKey = !!(keyId && boons[keyId]);
       const key = { id: keyId, name: keyId ? ED.BOONS[keyId].name : '', owned: hasKey, at: keyAt, state: hasKey ? 'owned' : aff >= keyAt ? 'offers' : 'needs', need: Math.max(0, keyAt - aff) };
       let evoState, takenBy = null;
       if (evoPath === k) evoState = 'evolved'; else if (evoPath) { evoState = 'taken'; takenBy = ED.PATHS[evoPath].name; } else if (hasKey && aff >= evoAt) evoState = 'ready'; else evoState = 'needs';
-      paths.push({ id: k, name: P.name, color: P.color, icon: P.icon, element: P.element, aff, key, evo: { id: evoId, name: ED.BOONS[evoId] ? ED.BOONS[evoId].name : '', at: evoAt, state: evoState, takenBy, need: Math.max(0, evoAt - aff), needKey: !hasKey } });
+      paths.push({ id: k, name: P.name, color: P.color, icon: P.icon, aff, key, evo: { id: evoId, name: ED.BOONS[evoId] ? ED.BOONS[evoId].name : '', at: evoAt, state: evoState, takenBy, need: Math.max(0, evoAt - aff), needKey: !hasKey } });
     }
     // class route tree
     const rt = ED.classRoute(boons, p.cls), tbl = ED.CLASS_CARDS[p.cls], route = { cls: p.cls, route: rt.route, fork: rt.fork, rank: rt.rank, nodes: [] };
@@ -1072,9 +1094,10 @@
     for (const id in boons) {
       const b = ED.BOONS[id], rank = boons[id];
       if (!b || !(rank > 0) || (b.cls && b.cls !== p.cls)) continue;
-      const max = ED.maxRank(b, st), kind = b.evo ? 'evolution' : b.key ? 'keystone' : b.gate ? 'gate' : b.route ? (b.tier === 1 ? 'route' : 'fork') : b.path && !b.open ? 'path' : 'open';
-      const group = b.cls ? 'route' : b.path && !b.open && gates.includes(b.path) ? 'path:' + b.path : 'open';
-      const row = { id, name: ED.cardName(id, rank), icon: b.icon, rar: b.rar, rank, max, kind, group, path: b.path || null, tag: b.tag || '', coop: !!b.coop, text: Sh.text(id, rank, st), next: rank < max ? Sh.nextText(id, rank, st) : null };
+      const pk = b.path || (b.cross ? b.cross[0] : null); // a cross-path card sits with its first path
+      const max = ED.maxRank(b, st), kind = b.evo ? 'evolution' : b.key ? 'keystone' : b.gate ? 'gate' : b.route ? (b.tier === 1 ? 'route' : 'fork') : pk && !b.open ? 'path' : 'open';
+      const group = b.cls ? 'route' : pk && !b.open && gates.includes(pk) ? 'path:' + pk : 'open';
+      const row = { id, name: ED.cardName(id, rank), icon: b.icon, rar: b.rar, rank, max, kind, group, path: pk, tag: b.tag || '', coop: !!b.coop, text: Sh.text(id, rank, st), next: rank < max ? Sh.nextText(id, rank, st) : null };
       rows.push(row);
     }
     const groups = gates.map(k => 'path:' + k).concat(['route', 'open']).map(g => ({ group: g, path: g.indexOf('path:') === 0 ? g.slice(5) : null, items: rows.filter(r => r.group === g).sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind]) })).filter(g => g.items.length);
@@ -1083,12 +1106,12 @@
       return { id, name: r.name, icon: r.icon, rar: r.rar, curse: r.rar === 'curse', text: r.desc, live: relicLive(id, p, st, ctx), state: i >= 0 ? (readyOf(p, i) ? 'ready' : Sh.READY[i].once ? 'used' : 'recharging') : null };
     });
     const statuses = [];
-    for (const m of ED.ELEMENT_IDS) if (st[ED.ELEMENTS[m].inf] > 0 || st.element === m) { const S = ED.STATUS[ED.PATHS[m].status]; statuses.push({ id: ED.PATHS[m].status, name: S.name, color: S.color, rule: S.rule, el: m }); }
+    for (const m of ED.ELEMENT_IDS) if (st[ED.ELEMENTS[m].inf] > 0 || st.element === m) { const S = ED.STATUS[ED.ELEMENTS[m].status]; statuses.push({ id: ED.ELEMENTS[m].status, name: S.name, color: S.color, rule: S.rule, el: m }); }
     if (st.bleed > 0 || st.bleedAll > 0 || st.masterstroke) statuses.push({ id: 'bleed', name: ED.STATUS.bleed.name, color: ED.STATUS.bleed.color, rule: ED.STATUS.bleed.rule, el: null });
     if (AILMENT_STATS.some(k => st[k] > 0)) statuses.push({ id: 'ailment', name: ED.STATUS.ailment.name, color: ED.STATUS.ailment.color, rule: ED.STATUS.ailment.rule, el: null });
     return {
-      generalist: gen, paths, slotsFree: gen ? 0 : Math.max(0, ED.MAX_ELEMENTS - gates.length), slots: ED.MAX_ELEMENTS, evolved: evoPath, picks: p.picks | 0,
-      classElementRow: !gen && st.element && !gates.includes(st.element) ? { el: st.element, name: ED.PATHS[st.element].name, color: ED.PATHS[st.element].color, icon: ED.PATHS[st.element].icon } : null,
+      paths, slotsFree: Math.max(0, ED.MAX_PATHS - gates.length), slots: ED.MAX_PATHS, evolved: evoPath, picks: p.picks | 0,
+      classElementRow: st.element && !gates.includes(st.element) ? { el: st.element, name: ED.pathInfo(st.element).name, color: ED.pathInfo(st.element).color, icon: ED.pathInfo(st.element).icon } : null,
       route, groups, relics, statuses,
     };
   }

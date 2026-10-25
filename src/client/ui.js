@@ -42,7 +42,7 @@
   const portrait = (cls, size, slot, weapon, skin) => { const cv = document.createElement('canvas'); cv.width = cv.height = size * 2; ED.Sprites.portrait(cv, cls, slot || 0, weapon, skin); if (ED.Actors && ED.Actors.on()) ED.Actors.fit(cv, () => ED.Sprites.portrait(cv, cls, slot || 0, weapon, skin)); return cv; }; // skin: a Wardrobe skin suffix (ED.Cos.skinKey)
   UI.portrait = portrait;
 
-  // Path helpers: elements share ids with their paths (fire, ice, lightning, poison, holy, shadow).
+  // Path helpers: the elemental paths share ids with their elements (fire, ice, lightning).
   const pathIcon = (k) => ED.Icons.url(ED.PATHS[k].icon, ED.PATHS[k].color);
   const pathName = (k, wrap) => (ED.PATHS[k] ? (wrap ? `<i style="color:${ED.PATHS[k].color}">${ED.PATHS[k].name}</i>` : ED.PATHS[k].name) : '');
   // Evolved weapon name from a weapon name (the fork's name after an Attack fork: 'Cinder Greatsword').
@@ -76,7 +76,8 @@
   const NEWEST = [
     '<b>Map:</b> each stratum is a map of rooms in rows from the start to the boss. Paths split and merge, every door shows the room behind it and its reward, and there is no way back. Tab shows the whole map.',
     '<b>Strata:</b> there are four: Ossuary, Glowmire, Drowned Sanctum and the Starless Abyss, the last. Rimefrost Halls and the Cinderforge are gone, and no stratum is weak to or resists an element.',
-    '<b>Elements:</b> each element is one way to play. Fire stacks Burn and lays burning ground, Ice freezes foes for a skill to Shatter, Lightning charges foes for your dash to set off, Poison weakens foes with Venom and clouds, Holy Smites a foe whose attack you dash through at the last moment, Shadow pays for hits from behind. Keystones and evolutions change how you attack, dash or move.',
+    '<b>Paths:</b> four paths, follow up to two. Steel sharpens your weapon, Flame spreads Burn when a burning foe dies, Frost freezes foes for any hit to Shatter, Storm charges foes until they discharge into each other. Poison, Holy and Shadow are no longer paths (the Cleric and the Necromancer keep Radiance and Doom). Rooms may promise a path boon on their door.',
+    '<b>Dash:</b> the dash is only a dash: at most 2 charges, and no path rides it.',
     '<b>Removed:</b> Ascended boons, duo boons, Mutations, Twists, the Attunement boons and twelve plain stat boons (Fleet Foot, Lodestar, Sharpened Edge, Quickened Hands, Bounty, Stalwart, Mending, Forager, Thornmail, Battle Ward, Glass Heart, Overcharge).',
     '<b>Pyromancer:</b> a caster now. Ember Bolt hits make your spells recharge sooner, and Fireball (2 charges) is a third skill on right mouse or R (B on a pad). Skill 1 is Q alone (RB on a pad); heroes without a third skill cast skill 1 on its key.',
     '<b>Bosses:</b> new fights. The Bone Warden duels and raises bone walls, the Sporemother spreads spores from her pods, the Drowned King floods the room, and stratum IV ends with two champion fights (the twins, the mimic) before the Hollow King.',
@@ -97,9 +98,10 @@
       '<b>Hearth:</b> every upgrade rank can be refunded for its full cost, and Reset all returns everything at once. Upgrades are small now, so your build choices decide a run. The Reliquary became the Stash (starting gold), Head Start starts the run with some experience and Deep Wick boosts the gold and experience of dark rooms.',
       '<b>Builds:</b> generic health and armor boons are smaller; a path (its boons, keystone and weapon evolution) is what makes a build strong.',
       '<b>Aim:</b> attacks and ground skills go toward the mouse cursor (right stick on a pad). The Auto-aim setting is gone.',
-      `<b>Paths:</b> follow up to ${ED.MAX_ELEMENTS} of ${ED.ELEMENT_IDS.map(k => pathName(k, true)).join(', ')}, or take the ${pathName('general', true)} path alone as a Generalist. Blood and Spirit are gone.`,
+      `<b>Paths:</b> follow up to ${ED.MAX_PATHS} of ${ED.PATH_IDS.map(k => pathName(k, true)).join(', ')}. Blood and Spirit are gone.`,
       '<b>No life steal:</b> hits do not heal you any more. Shields take their place.',
-      '<b>Knight:</b> Shield Throw replaces Bulwark.',
+      '<b>Knight:</b> Bulwark replaces Shield Throw: hold to raise the shield and block every hit and shot from the front, release to bash the foes ahead and stun them. Each block makes the bash stronger.',
+      '<b>Skills:</b> every hero skill does one clear thing and hits harder; heals and extra effects moved to the route cards (Ghost Walk, Sanctum, Verdict, Bone Armor).',
       '<b>Dark rooms:</b> optional rooms marked with a violet moon: harder foes, better rewards. They replace the lantern.',
       '<b>Hordes:</b> fight rooms are about twice as big and scroll with you, and packs of weak fodder pour in beside the foes that matter.',
       '<b>Dash:</b> dashing uses charges that refill one at a time; Light Step adds charges.',
@@ -265,9 +267,8 @@
     const tierNext = ED.UPGRADES.find(u => u.tier > p.stats.deepest);
     const lines = [];
     if (p.stats.runs < 2) {
-      const gen = ED.CLASS_IDS.filter(c => !ED.CLASSES[c].element).map(c => ED.CLASSES[c].name); // heroes without a class element can go Generalist
       lines.push('<b>Aim:</b> aim with the mouse; skills go to the cursor. At level 3 you choose a class route.');
-      lines.push(`<b>Paths:</b> follow up to ${ED.MAX_ELEMENTS} of ${ED.ELEMENT_IDS.map(k => pathName(k, true)).join(', ')}, or, as ${gen.slice(0, -1).join(', ')} or ${gen[gen.length - 1]}, take the ${pathName('general', true)} path alone as a Generalist.`);
+      lines.push(`<b>Paths:</b> follow up to ${ED.MAX_PATHS} of ${ED.PATH_IDS.map(k => pathName(k, true)).join(', ')}. A path's boons, keystone and weapon evolution make the build; a door may promise a path boon.`);
       lines.push('<b>Dark rooms:</b> a door marked with a violet moon leads to a dark room: foes hit harder and an extra elite joins, but the reward is one step better and foes drop more gold and experience.');
     }
     if (p.stats.runs === 0) lines.push('<b>First goal:</b> reach the Bone Warden at the end of the Ossuary. Every run pays embers, win or lose.');
@@ -617,23 +618,21 @@
   UI.offerLocked = () => !!boonOffer && performance.now() < boonLock;
   const OFFER_HEAD = { start: 'Choose your first path', level: 'Choose a boon', epic: 'Choose an epic boon', forge: 'Forge: rank up a boon' };
 
-  // [header, subtitle, path colour key] for an offer message { src, forge }.
+  // [header, subtitle, path colour key] for an offer message { src, forge, path (a room's path boon) }.
   function offerHead(offer, me) {
     const src = offer.forge ? 'forge' : (offer.src || 'level');
     const boons = me && me.boons ? me.boons : {}, main = ED.mainPath(boons);
     if (src === 'room') {
-      const els = ED.elementGates(boons).length;
-      return [OFFER_HEAD.level, ED.isGeneralist(boons) ? 'Boons of your General path' : els < ED.MAX_ELEMENTS ? `A new path may be offered (${els}/${ED.MAX_ELEMENTS} used)` : 'Boons of your paths', main];
+      const n = ED.gatePaths(boons).length, pk = offer.path && ED.PATHS[offer.path] ? offer.path : null;
+      if (pk && (n < ED.MAX_PATHS || ED.gatePaths(boons).includes(pk))) return [`${ED.PATHS[pk].name} boon`, `Boons of the ${ED.PATHS[pk].name} path`, pk];
+      return [OFFER_HEAD.level, n < ED.MAX_PATHS ? `A new path may be offered (${n}/${ED.MAX_PATHS} used)` : 'Boons of your paths', main];
     }
     if (src === 'class') {
       const cn = me && ED.CLASSES[me.cls] ? ED.CLASSES[me.cls].name : 'Class', rt = me && me.boons ? ED.classRoute(me.boons, me.cls) : null;
       if (offer.ctier === 1) return ['Choose your route', `It shapes how ${cn} fights`, null];
       return [`${rt && rt.route ? ED.routeLabel(me.cls, rt.route) : 'Route'}: choose your fork`, 'A fork changes how the route plays; the second and third bosses rank it up', null];
     }
-    if (src === 'start') { // only heroes without a class element are offered the General gate
-      const cl = me && ED.CLASSES[me.cls];
-      return [OFFER_HEAD.start, cl && cl.element ? `Your paths decide your boons: pick up to ${ED.MAX_ELEMENTS} element paths` : `Your paths decide your boons: up to ${ED.MAX_ELEMENTS} element paths, or Generalist`, null];
-    }
+    if (src === 'start') return [OFFER_HEAD.start, `Your paths decide your boons: up to ${ED.MAX_PATHS} of ${ED.PATH_IDS.length}`, null];
     if (src === 'forge') return [OFFER_HEAD.forge, 'The boon you pick gains one rank.', null];
     return [OFFER_HEAD[src] || OFFER_HEAD.level, '', null];
   }
@@ -641,10 +640,11 @@
   // Path or owner line in the card header, ribbon for the card's role (gate, keystone, evolution, route).
   function boonPathLine(b) {
     if (b.path) return [`<span class="bc-path">${ED.PATHS[b.path].name}</span>`, false];
+    if (b.cross) return [`<span class="bc-path">${b.cross.map(k => ED.PATHS[k].name).join(' + ')}</span>`, false];
     if (b.cls) return [`<span class="bc-path">${esc(b.route ? ED.routeLabel(b.cls, b.route) : ED.CLASSES[b.cls].name)}</span>`, false];
     return ['<span class="bc-path">Open</span>', false];
   }
-  const boonRibbon = (b, id) => (b.evo ? 'Evolution' : b.key ? 'Keystone' : id === 'generalist' ? 'Forsake the elements' : b.gate ? 'Path gate' : b.route ? (b.tag ? b.tag + (b.coop ? ' · co-op' : '') : 'Route') : '');
+  const boonRibbon = (b, id) => (b.evo ? 'Evolution' : b.key ? 'Keystone' : b.gate ? 'Path gate' : b.cross ? 'Cross-path' : b.route ? (b.tag ? b.tag + (b.coop ? ' · co-op' : '') : 'Route') : '');
   // The fork weapon of a class card as a small canvas drawn from the pixel atlas (null without art): tilted up-right about its grip.
   function weaponThumb(wid) {
     const A = ED.Atlas, id = ED.Sprites.forkAnim(wid); // the baked fork look: the same sprite the hero holds
@@ -686,7 +686,7 @@
   // Card identity of boon `id`: kind (ED.PickFx), big (keystone, evolution, path gate), frame metal (rarity), the frame CSS value, identity colours and icon colour.
   // Identity hue of boon `id` (card kind per ED.PickFx): pc = the card's path colour (route: class colour, purse gold), icol = its icon colour (the same).
   function boonHue(id, b) {
-    const kind = ED.PickFx ? ED.PickFx.kind(id) : 'general', path = b.path || null, cl = b.cls ? ED.CLASSES[b.cls] : null;
+    const kind = ED.PickFx ? ED.PickFx.kind(id) : 'general', path = b.path || (b.cross ? b.cross[1] : null), cl = b.cls ? ED.CLASSES[b.cls] : null;
     const pc = kind === 'route' && cl ? cl.col.c : kind === 'purse' ? '#ffd36b' : path && ED.PATHS[path] ? ED.PATHS[path].color : ED.PATHS.general.color;
     return { kind, path, pc, icol: pc }; // the icon wears the card's identity hue; rarity lives in the frame metal and the socket gem
   }
@@ -701,9 +701,6 @@
     fire: '<i class="ca-spark s1"></i><i class="ca-spark s2"></i><i class="ca-spark s3"></i>',
     ice: '<i class="ca-frost f1"></i><i class="ca-frost f2"></i>',
     lightning: '<i class="ca-zap"></i>',
-    poison: '<i class="ca-bubble b1"></i><i class="ca-bubble b2"></i><i class="ca-drip d1"></i><i class="ca-drip d2"></i>',
-    holy: '<i class="ca-arch"></i><i class="ca-sweep"></i>',
-    shadow: '<i class="ca-eye"></i><i class="ca-wisp w1"></i><i class="ca-wisp w2"></i><i class="ca-wisp w3"></i>',
     general: '', purse: '<i class="ca-knot"></i><i class="ca-glint"></i>',
   };
   function cardArt(L, b, have, max) {
@@ -808,7 +805,7 @@
   // Effect layer of the picked card (fixed over its box, so the card itself may clip, scale or fade): sprites per kind, CSS-animated.
   const FX = {
     fire: '<i class="pf-burn"></i>', ice: '<i class="pf-flash"></i>' + [0, 1, 2, 3, 4, 5, 6, 7].map(k => { const a = (k * 45 + 20) * Math.PI / 180; return `<i class="pf-shard" style="--dx:${Math.round(Math.cos(a) * 40)};--dy:${Math.round(Math.sin(a) * 48)};--sv:${k % 3}"></i>`; }).join(''),
-    lightning: '<i class="pf-flash"></i><i class="pf-bolt"></i>', poison: '<i class="pf-melt"></i>', holy: '<i class="pf-pillar"></i>', shadow: '<i class="pf-vortex"></i>',
+    lightning: '<i class="pf-flash"></i><i class="pf-bolt"></i>',
     general: '<i class="pf-anvil"></i><i class="pf-flash"></i>', route: '<i class="pf-banner"></i>',
     purse: [0, 1, 2, 3, 4, 5].map(k => `<i class="pf-coin" style="--cx:${12 + k * 15}%;--cd:${(k % 3) * 0.04}s"></i>`).join(''),
   };

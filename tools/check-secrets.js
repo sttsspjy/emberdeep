@@ -62,21 +62,18 @@ for (const [frac, downed, want] of [[0.02, false, true], [0.04, false, false], [
   ok(!p.sec.thread, 'Thread of Life: a stratum III boss does not count');
 }
 
-// ---- Against the Grain: 8 element-path cards, one element per stratum, a new element on every stratum ----
+// ---- Against the Grain: two paths opened on different strata, the second after stratum I ----
 {
-  const shadow = Object.keys(ED.BOONS).filter(id => ED.BOONS[id].path === 'shadow'), fire = Object.keys(ED.BOONS).filter(id => ED.BOONS[id].path === 'fire');
-  const general = Object.keys(ED.BOONS).filter(id => ED.BOONS[id].path === 'general');
-  const run = (picks, s2) => { const { w, p } = stage(['knight']); picks.forEach((id, i) => { if (s2 !== undefined && i === s2) w.stratum = 2; w.contrarianPick(p, ED.BOONS[id]); }); return p; };
-  ok(run(shadow.slice(0, 8)).sec.contrarian, '8 shadow cards on stratum I: Against the Grain');
-  ok(!run(shadow.slice(0, 7)).sec.contrarian, '7 shadow cards: not yet');
-  ok(run(shadow.slice(0, 4).concat(general.slice(0, 3), shadow.slice(4, 8))).sec.contrarian, 'General cards are ignored');
-  ok(!run(shadow.slice(0, 8).concat(fire.slice(0, 1))).sec.contrarian, 'a second element on stratum I breaks it');
-  ok(run(shadow.slice(0, 4).concat(fire.slice(0, 4)), 4).sec.contrarian, 'shadow on stratum I, fire on stratum II: Against the Grain');
-  ok(!run(shadow.slice(0, 4).concat(shadow.slice(4, 8)), 4).sec.contrarian, 'the same element again on stratum II breaks it');
+  const run = (gates) => { const { w, p } = stage(['knight']); for (const [id, s] of gates) { w.stratum = s; w.contrarianPick(p, ED.BOONS[id]); } return p; };
+  ok(run([['kindle', 1], ['frostbite', 2]]).sec.contrarian, 'Flame on stratum I, Frost on stratum II: Against the Grain');
+  ok(run([['generalist', 2], ['staticcharge', 3]]).sec.contrarian, 'Steel on stratum II, Storm on stratum III: Against the Grain');
+  ok(!run([['kindle', 1], ['frostbite', 1]]).sec.contrarian, 'both paths on stratum I: not earned');
+  ok(!run([['kindle', 2]]).sec.contrarian, 'one path: not earned');
+  ok(!run([['kindle', 1], ['stoke', 2], ['smother', 3]]).sec.contrarian, 'path cards that are no gate do not count');
   const { w, p } = stage(['knight']);
-  p.offer = [shadow[0]]; p.offers.push({ src: 'level' }); p.picks = 1;
+  w.stratum = 2; p.offer = ['kindle']; p.offers.push({ src: 'level' }); p.picks = 1;
   w.pickBoon('p0', 0);
-  ok(p.ctrN === 1 && !p.ctrOff, 'pickBoon counts the card');
+  ok(p.ctrEl.fire === 2 && !p.sec.contrarian, 'pickBoon records the stratum a gate was picked on');
   // the announcement waits for the Hollow King
   const v = stage(['knight'], ED.CONST.STRATA);
   v.p.sec.contrarian = true;
@@ -84,12 +81,13 @@ for (const [frac, downed, want] of [[0.02, false, true], [0.04, false, false], [
   ok(secrets(v.w, 'p0') === 1, 'Against the Grain announces at the Hollow King');
 }
 
-// ---- Return to Sender (Knight): a boss felled by the returning shield ----
-for (const [part, boss, cls, want] of [['shieldthrow.return', true, 'knight', true], ['shieldthrow.strike', true, 'knight', false], ['shieldthrow.return', false, 'knight', false], ['shieldthrow.return', true, 'ranger', false]]) {
+// ---- Unbroken (Knight): a boss felled by a Bulwark bash at full stored power ----
+for (const [part, full, boss, cls, want] of [['bulwark.bash', true, true, 'knight', true], ['bulwark.bash', false, true, 'knight', false], ['charge.bash', true, true, 'knight', false], ['bulwark.bash', true, false, 'knight', false], ['bulwark.bash', true, true, 'ranger', false]]) {
   const { w, p } = stage([cls]);
-  w.killEnemy(mk(w, p, boss ? bossOf(1) : 'skeleton'), p, { p, kind: 'skill', part });
-  ok(p.sec.heroSecret === want, `Return to Sender ${cls} ${part} on ${boss ? 'a boss' : 'a foe'}: ${p.sec.heroSecret}`);
+  w.killEnemy(mk(w, p, boss ? bossOf(1) : 'skeleton'), p, { p, kind: 'skill', part, full });
+  ok(p.sec.heroSecret === want, `Unbroken ${cls} ${part}${full ? ' full' : ''} on ${boss ? 'a boss' : 'a foe'}: ${p.sec.heroSecret}`);
 }
+ok(ED.SECRETS.find(s => s.id === 'knight' || s.reward === 'skin.knight.secret').name === 'Unbroken', 'the Knight secret is named Unbroken');
 
 // ---- Long Shot (Ranger): one weapon shot kills three foes ----
 for (const [nFoes, want] of [[3, true], [2, false]]) {

@@ -9,6 +9,8 @@ let n = 0, fails = 0;
 const ok = (c, msg) => { n++; if (!c) { fails++; console.log('FAIL ' + msg); } };
 const near = (a, b, tol, msg) => ok(Math.abs(a - b) <= tol, `${msg}: got ${a}, want ${b}`);
 const CT = (id, r) => ED.cardTotals(ED.BOONS[id], r); // card totals at a rank: the numbers of the Shade forks are read from the cards
+const AM = (r) => 4 + (r ? CT('s_s2_a', r).ambushMul : 0); // Ambush factor of the base weapon: 4, Night's Edge adds its ambushMul (the a4 token)
+const pc = (v) => Math.round(v * 100) + '%';
 const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
 const build = (boons, wi) => ED.Stats.compute({ cls: 'shade', weapon: ED.CLASSES.shade.weapons[wi || 0], boons: boons || {}, relics: [], meta: META(), pact: 0 });
 
@@ -35,25 +37,25 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
 {
   const b = build({ s_atk: 1 });
   near(b.crit, 0.12 + 0.08, 1e-9, 'Bladedancer crit'); near(b.momentum, 0.04, 1e-9, 'Bladedancer momentum'); near(b.momMax, 5, 1e-9, 'Bladedancer stacks');
-  near(build({ s_atk: 1, s_atk_s: 1 }).momMax, 6, 1e-9, 'Thousand Cuts rank 1 stacks'); near(build({ s_atk: 1, s_atk_s: 3 }).momMax, 8, 1e-9, 'Thousand Cuts rank 3 stacks');
+  near(build({ s_atk: 1, s_atk_s: 1 }).momMax, CT('s_atk', 1).momMax + CT('s_atk_s', 1).momMax, 1e-9, 'Thousand Cuts rank 1 stacks'); near(build({ s_atk: 1, s_atk_s: 3 }).momMax, CT('s_atk', 1).momMax + CT('s_atk_s', 3).momMax, 1e-9, 'Thousand Cuts rank 3 stacks');
   near(build({ s_atk: 1, s_atk_h: 1 }).critMult, 1.75, 1e-9, 'Culling Blades rank 1 crit damage'); near(build({ s_atk: 1, s_atk_h: 2 }).critMult, 1.78, 1e-9, 'Culling Blades rank 2 crit damage'); near(build({ s_atk: 1, s_atk_h: 3 }).critMult, 1.81, 1e-9, 'Culling Blades rank 3 crit damage');
   near(build({ s_atk: 1, s_atk_h: 1 }).execMom, 0, 1e-9, 'Killing Rhythm is a rank 2 rider'); near(build({ s_atk: 1, s_atk_h: 2 }).execMom, 3, 1e-9, 'Killing Rhythm rank 2'); near(build({ s_atk: 1, s_atk_h: 3 }).execMom, 3, 1e-9, 'Killing Rhythm stays at rank 3');
   near(build({ s_atk: 1, s_atk_h: 1 }).execCrit, 0.1, 1e-9, 'execution threshold'); near(build({ s_atk: 1, s_atk_h: 2 }).execCrit, 0.1, 1e-9, 'execution threshold at rank 2'); near(build({ s_atk: 1, s_atk_h: 3 }).execCrit, 0.5, 1e-9, 'Guillotine raises the line'); ok(build({ s_atk: 1, s_atk_h: 3 }).execCrit > build({ s_atk: 1, s_atk_h: 2 }).execCrit, 'Guillotine line above the rank 2 line');
   near(build({ s_atk: 1, s_atk_h: 2 }).guillotine, 0, 1e-9, 'Guillotine is a rank 3 transform'); ok(build({ s_atk: 1, s_atk_h: 3 }).guillotine >= 1, 'Guillotine carries strikes per attack');
   near(build({ s_atk: 1, s_atk_s: 1 }).bladeStorm, 0, 1e-9, 'Whirlwind is a rank 2 rider'); ok(build({ s_atk: 1, s_atk_s: 2 }).bladeStorm > 0, 'Whirlwind rank 2'); near(build({ s_atk: 1, s_atk_s: 3 }).bladeStorm, build({ s_atk: 1, s_atk_s: 2 }).bladeStorm, 1e-9, 'Whirlwind stays the same at rank 3');
   near(build({ s_atk: 1, s_atk_s: 2 }).cyclone, 0, 1e-9, 'Cyclone is a rank 3 transform'); ok(build({ s_atk: 1, s_atk_s: 3 }).cyclone > 0, 'Cyclone spins');
-  const g = build({ s_s1: 1 }); near(g.skillCd, 4.5 * 0.8, 1e-9, 'Ghost Walk cooldown 3.6 s'); near(ED.Stats.skillNums('step', g).p.slash.dmg, 40.6 * 1.2, 1e-6, 'Ghost Walk +20% Shadowstep');
-  near(build({ s_s1: 1, s_s1_a: 3 }).stepTwin, 0.48, 1e-9, 'Twin Cut 48%'); near(ED.Stats.skillNums('step', build({ s_s1: 1, s_s1_b: 1 })).p.after.dmg, 44 * 1.2, 1e-6, 'Afterimage 44 base, +20% Ghost Walk');
+  const g = build({ s_s1: 1 }); near(g.skillCd, 4.5 * 0.8, 1e-9, 'Ghost Walk cooldown 3.6 s'); near(ED.Stats.skillNums('step', g).p.slash.dmg, 55 * 1.2, 1e-6, 'Ghost Walk +20% Shadowstep (16 + 3P)');
+  near(build({ s_s1: 1, s_s1_a: 3 }).stepTwin, CT('s_s1_a', 3).stepTwin, 1e-9, 'Twin Cut from the card'); near(ED.Stats.skillNums('step', build({ s_s1: 1, s_s1_b: 1 })).p.after.dmg, 44 * 1.2, 1e-6, 'Afterimage 44 base, +20% Ghost Walk');
   const nf = build({ s_s2: 1 }), sm = ED.Stats.skillNums('vanish', nf);
   near(nf.skill2Cd, 11 * 0.73, 1e-9, 'Nightfall cooldown 8 s'); near(sm.p.smoke.r, 105, 1e-9, 'Nightfall smoke radius +40%'); near(sm.p.smoke.dur, 5, 1e-9, 'Nightfall smoke +2 s'); near(nf.stealthSpd, 0.3, 1e-9, 'Nightfall stealth speed');
   near(ED.Stats.moveRate({ stats: nf, flowT: 0, stealthT: 1 }) / ED.Stats.moveRate({ stats: nf, flowT: 0, stealthT: 0 }), 1.3, 1e-9, 'moveRate adds stealthSpd while unseen');
-  near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_a: 1 })).p.ambush.dmg, 60.5, 1e-9, "Night's Edge Ambush x5.5 of 11"); near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_a: 3 })).p.ambush.dmg, 104.5, 1e-9, "Night's Edge rank 3 x9.5");
-  near(ED.Stats.skillNums('vanish', build({})).p.ambush.dmg, 27.5, 1e-9, 'plain Ambush x2.5'); near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_b: 1 })).p.ambush.dmg, 49.5, 1e-9, 'Veil of Night Ambush x4.5'); near(build({ s_s2: 1, s_s2_a: 3 }).ambushCleave, 70, 1e-9, 'Ambush Sweep radius');
+  near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_a: 1 })).p.ambush.dmg, 11 * AM(1), 1e-9, "Night's Edge Ambush x(4 + ambushMul) of 11"); near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_a: 3 })).p.ambush.dmg, 11 * AM(3), 1e-9, "Night's Edge rank 3");
+  near(ED.Stats.skillNums('vanish', build({})).p.ambush.dmg, 44, 1e-9, 'plain Ambush x4'); near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_b: 1 })).p.ambush.dmg, 66, 1e-9, 'Veil of Night Ambush x6'); near(build({ s_s2: 1, s_s2_a: 3 }).ambushCleave, 70, 1e-9, 'Ambush Sweep radius');
   near(build({ s_s2: 1, s_s2_b: 1 }).veil, 0.03, 1e-9, 'Veil 3%'); near(build({ s_s2: 1, s_s2_b: 3 }).veil, 0.03, 1e-9, 'Veil stays 3% at rank 3 (the class shield window)');
   near(build({ s_s2: 1, s_s2_b: 1 }).stealthDur, 1, 1e-9, 'Veil stealth +1 s'); near(build({ s_s2: 1, s_s2_b: 3 }).stealthDur, 2, 1e-9, 'Veil rank 3 stealth +2 s (+0.5 s per rank)');
   near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_b: 3 })).p.smoke.dur, 7, 1e-9, 'Shroud: the sheet smoke lasts 3 + 2 (Nightfall) + 2 (Shroud) s');
   ok(ED.boonText('s_s2_b', 1).indexOf('3%') >= 0 && ED.boonText('s_s2_b', 3).indexOf('lasts 2 s longer') >= 0, 'Veil card text shows 3% and the Shroud rider shows 2 s'); near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_b: 1 })).p.blind.dur, 3, 1e-9, 'Veil blind budget 3 s');
-  near(build({ s_el: 1, s_el_a: 1 }).veins, 0.15, 1e-9, 'Open Veins 15%'); near(build({ s_el: 1, s_el_a: 3 }).veins, 0.17, 1e-9, 'Open Veins rank 3');
+  near(build({ s_el: 1, s_el_a: 1 }).veins, CT('s_el_a', 1).veins, 1e-9, 'Open Veins rank 1'); near(build({ s_el: 1, s_el_a: 3 }).veins, CT('s_el_a', 3).veins, 1e-9, 'Open Veins rank 3');
   near(build({ s_el: 1, s_el_a: 1 }).exsang, 0, 1e-9, 'Exsanguinate is a rank 2 rider'); ok(build({ s_el: 1, s_el_a: 2 }).exsang > 0, 'Exsanguinate rank 2'); near(build({ s_el: 1, s_el_a: 3 }).exsang, build({ s_el: 1, s_el_a: 2 }).exsang, 1e-9, 'Exsanguinate stays the same at rank 3');
   near(build({ s_el: 1, s_el_a: 2 }).arterial, 0, 1e-9, 'Arterial Strike is a rank 3 transform'); ok(build({ s_el: 1, s_el_a: 3 }).arterial > 0, 'Arterial bonus'); near(build({ s_el: 1, s_el_a: 3 }).arterialN, 1, 1e-9, 'Arterial readies 1 crit');
   near(build({ s_el: 1, s_el_b: 1 }).rupture, 0.5, 1e-9, 'Rupture rank 1 50%'); near(build({ s_el: 1, s_el_b: 2 }).rupture, 0.6, 1e-9, 'Rupture rank 2 60% (+10% per rank)'); near(build({ s_el: 1, s_el_b: 3 }).rupture, 0.7, 1e-9, 'Rupture rank 3 70%'); near(build({ s_el: 1, s_el_b: 1 }).bloodbloom, 0, 1e-9, 'Bloodbloom is a rank 2 rider'); near(build({ s_el: 1, s_el_b: 2 }).bloodbloom, 1, 1e-9, 'Bloodbloom rank 2'); near(build({ s_el: 1, s_el_b: 3 }).bloodbloom, 1, 1e-9, 'Bloodbloom stays at rank 3');
@@ -126,9 +128,9 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
 // ---------------- Ghost Walk: crit stacks ----------------
 {
   const cut = (boons, nfoes, wi) => { const { w, p } = stage(boons, wi); for (let i = 0; i < nfoes; i++) foe(w, p.x + 40 + i * 5, p.y + (i - 1) * 6); w.playerSkill(p, 0, { x0: p.x, y0: p.y, x1: p.x + 100, y1: p.y }, 0); return p.critStacks; };
-  near(cut({}, 0), 3, 0, 'Shadowstep readies 3 crits'); near(cut({}, 3), 3, 0, 'without Ghost Walk the cut foes add nothing');
+  near(cut({}, 0), 0, 0, 'Shadowstep alone readies no crits'); near(cut({}, 3), 0, 0, 'without Ghost Walk the cut foes add nothing'); near(cut({ s_s1: 1 }, 0), 3, 0, 'Ghost Walk readies 3 crits');
   near(cut({ s_s1: 1 }, 1), 4, 0, 'Ghost Walk: +1 per foe cut'); near(cut({ s_s1: 1 }, 5), 5, 0, 'Ghost Walk caps at 5');
-  near(cut({ s_atk: 1, s_atk_h: 1 }, 0), 2, 0, 'Heavy daggers: 3 x 0.556 = 2'); near(cut({ s_atk: 1, s_atk_s: 1 }, 0), 5, 0, 'Swift daggers: 3 x 1.82 = 5');
+  near(cut({ s_s1: 1, s_atk: 1, s_atk_h: 1 }, 0), 2, 0, 'Heavy daggers: 3 x 0.556 = 2'); near(cut({ s_s1: 1, s_atk: 1, s_atk_s: 1 }, 0), 5, 0, 'Swift daggers: 3 x 1.82 = 5');
   near(cut({ s_s1: 1, s_atk: 1, s_atk_s: 1 }, 5), 9, 0, 'Swift + Ghost Walk caps at round(5 x 1.82) = 9');
 }
 
@@ -147,12 +149,12 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   ok(evs(w, 'sref').length === 2, 'a refund event per refund');
   const plain = stage({ s_s1: 1 }); const e = foe(plain.w, plain.p.x + 40, plain.p.y); e.hp = 3; plain.w.playerSkill(plain.p, 0, { x0: plain.p.x, y0: plain.p.y, x1: plain.p.x + 100, y1: plain.p.y }, 0); ok(e.hp <= 0 && refunds(plain.w).length === 0, 'Ghost Walk alone refunds nothing');
 }
-{ // Twin Cut: a second slash on the same path 0.15 s later at 50%
+{ // Twin Cut: a second slash on the same path 0.15 s later at stepTwin
   const { w, p } = stage({ s_s1: 1, s_s1_a: 3 }); const e = foe(w, p.x + 50, p.y);
   const q = ED.Stats.skillNums('step', p.stats).p, st = p.stats;
   w.playerSkill(p, 0, { x0: p.x, y0: p.y, x1: p.x + 100, y1: p.y }, 0); near(lost(e), q.slash.dmg * st.critMult, 0.01, 'slash lands at the cast');
   run(w, 0.12); near(lost(e), q.slash.dmg * st.critMult, 0.01, 'the twin has not struck at 0.12 s');
-  run(w, 0.06); near(lost(e), q.slash.dmg * st.critMult * 1.48, 0.05, 'the twin strikes at 48% after 0.15 s'); ok(evs(w, 'twincut').length === 1, 'a twincut event');
+  run(w, 0.06); near(lost(e), q.slash.dmg * st.critMult * (1 + CT('s_s1_a', 3).stepTwin), 0.05, 'the twin strikes at stepTwin after 0.15 s'); ok(evs(w, 'twincut').length === 1, 'a twincut event');
   ok(p.critStacks === 4, 'the twin readies no extra crits (3 + 1 for the foe the slash cut)');
 }
 
@@ -176,7 +178,7 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
 {
   const { w, p } = stage({ s_s2: 1 }); const inE = foe(w, p.x + 50, p.y), outE = foe(w, p.x + 200, p.y), boss = foe(w, p.x - 50, p.y); boss.boss = true;
   w.playerSkill(p, 0, {}, 1); const z = w.zones.find(q => q.kind === 'smoke'); near(z.r, 105, 1e-9, 'smoke radius'); near(z.dur, 5, 1e-9, 'smoke lasts 5 s'); near(p.stealthT, 2.5, 1e-9, 'stealth 2.5 s'); ok(p.ambush, 'the next attack is an Ambush');
-  run(w, 0.2); near(inE.slowAmt, 0.4, 1e-9, 'smoke slows 40%'); ok(inE.blind > 0 && outE.blind <= 0 && boss.blind <= 0 && boss.slowAmt > 0, 'smoke blinds foes inside, only slows bosses');
+  run(w, 0.2); ok(!(inE.slowAmt > 0) && !(boss.slowAmt > 0), 'the smoke does not slow (Shroud does)'); ok(inE.blind > 0 && outE.blind <= 0 && boss.blind <= 0, 'smoke blinds foes inside, never bosses');
   ok(inE.vulnT > 0 && !(outE.vulnT > 0), 'foes in the smoke are vulnerable'); const hi = inE.hp; w.hitEnemy(inE, 100, { p, kind: 'skill', crit: false }); const ho = outE.hp; w.hitEnemy(outE, 100, { p, kind: 'skill', crit: false });
   near((hi - inE.hp) / (ho - outE.hp), 1.2, 1e-6, 'foes in the smoke take +20%');
   const sp = ED.Stats.moveRate(p); near(sp, 1.3, 1e-9, 'the hero moves 30% faster while unseen');
@@ -193,9 +195,9 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   const ambush = (boons, wi, setup) => { const { w, p } = stage(boons, wi); const e = foe(w, p.x + 30, p.y); if (setup) setup(w, p, e); w.playerSkill(p, 0, {}, 1); w.msgs.length = 0; w.fx.length = 0; w.playerAttack(p, 0); run(w, 0.6); return { w, p, e }; };
   const plain = ambush({}), edge = ambush({ s_s2: 1, s_s2_a: 1 }), r3 = ambush({ s_s2: 1, s_s2_a: 3 });
   const crit = plain.p.stats.critMult;
-  near(lost(plain.e), 11 * 2.5 * crit, 0.05, 'plain Ambush: x2.5 of the base weapon, crit'); near(lost(edge.e), 11 * 5.5 * crit, 0.05, "Night's Edge: x5.5"); near(lost(r3.e), 11 * 9.5 * crit, 0.05, "Night's Edge rank 3: x9.5");
-  const sw = ambush({ s_s2: 1, s_s2_a: 1, s_atk: 1, s_atk_s: 1 }); near(lost(sw.e), 11 * 5.5 * crit, 0.05, 'Ambush is fork neutral (Swift daggers deal the base weapon x5.5)');
-  const hv = ambush({ s_s2: 1, s_s2_a: 1, s_atk: 1, s_atk_h: 1 }); near(lost(hv.e), 11 * 5.5 * crit, 0.05, 'Ambush is fork neutral (Heavy kukris deal the base weapon x5.5)');
+  near(lost(plain.e), 11 * 4 * crit, 0.05, 'plain Ambush: x4 of the base weapon, crit'); near(lost(edge.e), 11 * AM(1) * crit, 0.05, "Night's Edge: x(4 + ambushMul)"); near(lost(r3.e), 11 * AM(3) * crit, 0.05, "Night's Edge rank 3");
+  const sw = ambush({ s_s2: 1, s_s2_a: 1, s_atk: 1, s_atk_s: 1 }); near(lost(sw.e), 11 * AM(1) * crit, 0.05, 'Ambush is fork neutral (Swift daggers deal the base weapon factor)');
+  const hv = ambush({ s_s2: 1, s_s2_a: 1, s_atk: 1, s_atk_h: 1 }); near(lost(hv.e), 11 * AM(1) * crit, 0.05, 'Ambush is fork neutral (Heavy kukris deal the base weapon factor)');
   ok(refunds(edge.w).length === 1 && refunds(edge.w)[0].slot === 0 && !refunds(edge.w)[0].s, "Night's Edge: the Ambush refunds Shadowstep"); ok(refunds(plain.w).length === 0, 'a plain Ambush refunds nothing');
   const kn = ambush({ s_s2: 1, s_s2_a: 1 }, 1); ok(refunds(kn.w).filter(m => m.slot === 0).length === 1, "Night's Edge with 3 knives: one Shadowstep refund per Ambush");
   ok(plain.p.ambush === false, 'the Ambush is spent');
@@ -206,7 +208,7 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   // Ambush Sweep: strikes every foe within 70 of its target, once each
   const sp = stage({ s_s2: 1, s_s2_a: 2 }); const A = foe(sp.w, sp.p.x + 30, sp.p.y), B = foe(sp.w, sp.p.x + 85, sp.p.y + 10), Cf = foe(sp.w, sp.p.x + 250, sp.p.y), D = foe(sp.w, sp.p.x + 28, sp.p.y + 20), Bk = foe(sp.w, sp.p.x - 40, sp.p.y);
   sp.w.playerSkill(sp.p, 0, {}, 1); sp.w.playerAttack(sp.p, 0); run(sp.w, 0.1);
-  const ac = sp.p.stats.critMult, want = 11 * 7.5 * ac;
+  const ac = sp.p.stats.critMult, want = 11 * AM(2) * ac;
   near(lost(A), want, 0.1, 'the Ambush hits its target'); near(lost(B), want, 0.1, 'the sweep hits a foe 55 px from the target once'); ok(Cf.hp === Cf.maxHp, 'a foe 220 px away is untouched'); near(lost(D), want, 0.1, 'a foe in the swing and near the target is hit once, not twice'); ok(Bk.hp === Bk.maxHp || Math.hypot(Bk.x - A.x, Bk.y - A.y) > 70, 'a foe behind the hero out of the sweep is untouched');
   const nos = stage({ s_s2: 1, s_s2_a: 1 }); const A2 = foe(nos.w, nos.p.x + 30, nos.p.y), B2 = foe(nos.w, nos.p.x + 85, nos.p.y + 10); nos.w.playerSkill(nos.p, 0, {}, 1); nos.w.playerAttack(nos.p, 0); run(nos.w, 0.1); ok(A2.hp < A2.maxHp && B2.hp === B2.maxHp, 'no sweep before the rank 2 rider');
 }
@@ -221,7 +223,7 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   const v3 = stage({ s_s2: 1, s_s2_b: 3 }); v3.w.playerSkill(v3.p, 0, {}, 1); near(v3.p.stealthT, 4.5, 0.01, 'rank 3 stealth 2 s longer'); near(v3.p.shield, 0.03 * v3.p.maxHp, 0.01, 'rank 3 shields no more than rank 1');
   const sh = stage({ s_s2: 1, s_s2_b: 3 }); const e = foe(sh.w, sh.p.x + 30, sh.p.y); sh.w.playerSkill(sh.p, 0, {}, 1);
   const z = sh.w.zones.find(q => q.kind === 'smoke'); near(z.dur, 3 + 2 + 2, 1e-9, 'Shroud: smoke 2 s longer'); run(sh.w, 0.2); near(e.slowAmt, 0.6, 1e-9, 'Shroud slows 60%');
-  const ns = stage({ s_s2: 1, s_s2_b: 1 }); const e2 = foe(ns.w, ns.p.x + 30, ns.p.y); ns.w.playerSkill(ns.p, 0, {}, 1); run(ns.w, 0.2); near(e2.slowAmt, 0.4, 1e-9, 'slow stays 40% before rank 2');
+  const ns = stage({ s_s2: 1, s_s2_b: 1 }); const e2 = foe(ns.w, ns.p.x + 30, ns.p.y); ns.w.playerSkill(ns.p, 0, {}, 1); run(ns.w, 0.2); ok(!(e2.slowAmt > 0), 'no slow before rank 2');
 }
 
 // ---------------- Open Veins, Exsanguinate ----------------
@@ -234,8 +236,8 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
     const h = e.hp; w.hitEnemy(e, 100, { p, kind: 'skill', crit: true, noProc: true }); return h - e.hp;
   };
   const base = dmgAt({ s_el: 1 }, 0), ov = (n, r) => dmgAt({ s_el: 1, s_el_a: r }, n) / dmgAt({ s_el: 1 }, n);
-  near(dmgAt({ s_el: 1, s_el_a: 1 }, 0) / base, 1, 1e-9, 'no ailments, no bonus'); near(ov(2, 1), 1.3, 1e-9, 'Open Veins: +15% per ailment'); near(ov(4, 1), 1.6, 1e-9, 'four ailments +60%'); near(ov(5, 1), 1.6, 1e-9, 'capped at 4 ailments');
-  near(ov(2, 3), 1 + 0.17 * 2, 1e-9, 'rank 3 +17% per ailment'); near(ov(3, 3), (1 + 0.17 * 3) * (1 + CT('s_el_a', 3).arterial), 1e-9, 'rank 3: Arterial bonus from 3 ailments'); near(ov(4, 3), (1 + 0.17 * 4) * (1 + CT('s_el_a', 3).arterial), 1e-9, 'and at 4'); near(ov(3, 2), 1 + 0.16 * 3, 1e-9, 'no Arterial at rank 2');
+  near(dmgAt({ s_el: 1, s_el_a: 1 }, 0) / base, 1, 1e-9, 'no ailments, no bonus'); const V = (r) => CT('s_el_a', r).veins; near(ov(2, 1), 1 + 2 * V(1), 1e-9, 'Open Veins: +veins per ailment'); near(ov(4, 1), 1 + 4 * V(1), 1e-9, 'four ailments'); near(ov(5, 1), 1 + 4 * V(1), 1e-9, 'capped at 4 ailments');
+  near(ov(2, 3), 1 + V(3) * 2, 1e-9, 'rank 3 veins per ailment'); near(ov(3, 3), (1 + V(3) * 3) * (1 + CT('s_el_a', 3).arterial), 1e-9, 'rank 3: Arterial bonus from 3 ailments'); near(ov(4, 3), (1 + V(3) * 4) * (1 + CT('s_el_a', 3).arterial), 1e-9, 'and at 4'); near(ov(3, 2), 1 + V(2) * 3, 1e-9, 'no Arterial at rank 2');
   const nc = dmgAt({ s_el: 1, s_el_a: 1 }, 3); const { w, p } = stage({ s_el: 1, s_el_a: 1 }); const e = foe(w, p.x + 30, p.y); const h = e.hp; w.hitEnemy(e, 100, { p, kind: 'skill', crit: false, noProc: true }); ok(h - e.hp < nc, 'Open Veins applies to crits only');
   // Exsanguinate: a crit on a foe with 4 ailments adds Bleed = exsang of the hit
   const bleedGain = (r) => {
@@ -324,11 +326,11 @@ const step = (w, p, x0, y0, x1, y1) => { place(p, x1, y1); w.playerSkill(p, 0, {
     for (const k in b.r3) ok(t3[k] > 0 && (k in b.mods || k in (b.up || {}) ? t3[k] > t2[k] : !t2[k] && !t1[k]), id + ' stat ' + k + ' (rank 3 transform)');
   }
   const tt = (id, r) => ED.cardTotals(ED.BOONS[id], r), tx = (id) => ED.cardParts(id, 3, null).form.desc;
-  near(tt('s_s1_a', 3).blossom, 1.4, 1e-9, 'Death Blossom cut 140%'); near(tt('s_s1_a', 3).blossomN, 3, 1e-9, 'three blinks'); near(tt('s_s1_a', 3).blossomMax, 6, 1e-9, 'at most six'); near(tt('s_s1_a', 3).stepTwin, 0.48, 1e-9, 'Twin Cut stays at rank 3');
+  near(tt('s_s1_a', 3).blossom, 1, 1e-9, 'Death Blossom cut 100%'); near(tt('s_s1_a', 3).blossomN, 3, 1e-9, 'three blinks'); near(tt('s_s1_a', 3).blossomMax, 6, 1e-9, 'at most six'); near(tt('s_s1_a', 3).stepTwin, tt('s_s1_a', 2).stepTwin, 1e-9, 'Twin Cut stays at rank 3');
   near(tt('s_s1_b', 3).mirrorHall, 0.7, 1e-9, 'Hall of Mirrors 70% of a slash'); near(tt('s_s1_b', 3).afterPull, 120, 1e-9, 'Lure stays at rank 3');
-  near(tt('s_s2_a', 3).eclipse, 0.08, 1e-9, 'Eclipse repeats at 8%'); near(tt('s_s2_a', 3).eclipseDur, 4, 1e-9, 'dome 4 s'); near(tt('s_s2_a', 3).ambushCleave, 70, 1e-9, 'Ambush Sweep stays at rank 3');
+  near(tt('s_s2_a', 3).eclipse, ED.BOONS.s_s2_a.r3.eclipse, 1e-9, 'Eclipse repeat share from the card'); near(tt('s_s2_a', 3).eclipseDur, 4, 1e-9, 'dome 4 s'); near(tt('s_s2_a', 3).ambushCleave, 70, 1e-9, 'Ambush Sweep stays at rank 3');
   near(tt('s_s2_b', 3).umbral, 2, 1e-9, 'Umbral Veil blind x2'); near(tt('s_s2_b', 3).cloneMul, 0.5, 1e-9, 'clone repeats at 50%'); near(tt('s_s2_b', 3).veil, 0.03, 1e-9, 'Umbral Veil adds no shield (3% stays)'); near(tt('s_s2_b', 3).shroud, 1, 1e-9, 'Shroud stays at rank 3');
-  ok(tx('s_s1_a').indexOf('140%') >= 0 && tx('s_s1_a').indexOf('up to 6') >= 0 && tx('s_s1_b').indexOf('70%') >= 0 && tx('s_s2_a').indexOf('4 s') >= 0 && tx('s_s2_a').indexOf('8%') >= 0 && tx('s_s2_b').indexOf('50%') >= 0 && tx('s_s2_b').indexOf('2 times') >= 0, 'form texts carry their numbers');
+  ok(tx('s_s1_a').indexOf('100%') >= 0 && tx('s_s1_a').indexOf('up to 6') >= 0 && tx('s_s1_b').indexOf('70%') >= 0 && tx('s_s2_a').indexOf('4 s') >= 0 && tx('s_s2_a').indexOf(pc(tt('s_s2_a', 3).eclipse)) >= 0 && tx('s_s2_b').indexOf('50%') >= 0 && tx('s_s2_b').indexOf('2 times') >= 0, 'form texts carry their numbers');
 }
 
 { // Death Blossom (s_s1_a rank 3): after the blink the hero blinks on to the nearest foe not yet cut within 120 of where it stands, 3 times, 0.1 s apart, a crit for 140% of a slash each; a kill adds a blink (at most 6)
@@ -341,13 +343,13 @@ const step = (w, p, x0, y0, x1, y1) => { place(p, x1, y1); w.playerSkill(p, 0, {
     return { w, p, path, chain, g, log, N };
   };
   const t3 = mk({ s_s1: 1, s_s1_a: 3 }); void t3;
-  const q = ED.Stats.skillNums('step', t3.p.stats); near(q.p.blossom.dmg, 1.4 * q.p.slash.dmg, 1e-9, 'blossom part = 140% of a slash'); ok(q.p.blossom.n === 3 && q.p.blossom.on && q.p.blossom.crit === true, 'three blinks, a guaranteed crit');
+  const q = ED.Stats.skillNums('step', t3.p.stats); near(q.p.blossom.dmg, 1 * q.p.slash.dmg, 1e-9, 'blossom part = 100% of a slash'); ok(q.p.blossom.n === 3 && q.p.blossom.on && q.p.blossom.crit === true, 'three blinks, a guaranteed crit');
   ok(partHits(t3.log, 'step.slash').length === 1 && t3.log[0].e === t3.path && !partHits(t3.log, 'step.blossom').length, 'the Shadowstep cuts the foe on its path first; the chain waits 0.1 s');
   const sl = q.p.slash.dmg * t3.p.stats.critMult;
   run(t3.w, 0.7); const bl = partHits(t3.log, 'step.blossom');
   ok(bl.length === 3 && bl.map(h => h.e).join() === t3.chain.slice(0, 3).join(), `the chain visits the nearest foe each time (${bl.length} cuts)`);
   ok(bl.every((h, i) => Math.abs(h.t - (0.1 * (i + 1) + 0.017)) < 0.04), `0.1 s apart (${bl.map(h => h.t.toFixed(2)).join(' ')})`);
-  ok(bl.every(h => h.crit === true && Math.abs(h.d - 1.4 * sl) < 0.01), `each cut is a guaranteed crit for 140% of a slash (${bl.map(h => h.d.toFixed(1)).join(' ')} of ${(1.4 * sl).toFixed(1)})`);
+  ok(bl.every(h => h.crit === true && Math.abs(h.d - sl) < 0.01), `each cut is a guaranteed crit for 100% of a slash (${bl.map(h => h.d.toFixed(1)).join(' ')} of ${sl.toFixed(1)})`);
   ok(t3.chain[3].hp === 5000 && t3.g.hp === 5000 && !t3.log.some(h => h.e === t3.g), 'the fourth foe in the line and the foes off the chain are untouched');
   ok(Math.abs(t3.p.x - (350 - 10 - 10 - 2)) < 6 && t3.p.y === 176, `the hero ends beside the last foe (x ${t3.p.x.toFixed(0)})`);
   const bev = evs(t3.w, 'blossom'); ok(bev.length === 3 && bev[0].x0 === 150 && bev[2].tx === 350 && bev.map(b => b.n).join() === '1,2,3', 'a blossom event per blink');
@@ -403,7 +405,7 @@ const step = (w, p, x0, y0, x1, y1) => { place(p, x1, y1); w.playerSkill(p, 0, {
 function w_decoys(w) { return w.zones.filter(z => z.kind === 'decoy'); }
 function U_ang(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
 
-{ // Eclipse (s_s2_a rank 3): Vanish's smoke is a dome (r140, 4 s); inside it the hero stays unseen and every attack is an Ambush at 8% of the first; foes inside take +20%; the extra Ambushes refund nothing
+{ // Eclipse (s_s2_a rank 3): Vanish's smoke is a dome (r140, 4 s); inside it the hero stays unseen and every attack is an Ambush at eclipse of the first; foes inside take +20%; the extra Ambushes refund nothing
   const mk = (boons, wi, mod) => {
     const { w, p } = stage(boons, wi); place(p, 200, 176);
     const e = foe(w, 230, 176); if (mod) mod(w, p, e);
@@ -416,9 +418,9 @@ function U_ang(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
   near(ED.Stats.skillNums('vanish', build({ s_s2_a: 3 })).p.dome.r, 100, 1e-9, 'dome part radius without Nightfall'); near(ED.Stats.skillNums('vanish', build({ s_s2: 1 })).p.smoke.r, 105, 1e-9, 'plain smoke radius with Nightfall');
   near(build({ s_s2: 1 }).s2Area, 0.4, 1e-9, 'Nightfall makes areas 40% wider (the dome: 100 x 1.4 = 140)'); ok(!N.p.smoke.on && N.p.dome.on && N.p.edge.on, 'the dome replaces the smoke part');
   near(t.p.stealthT, 4, 1e-9, 'unseen for the dome\'s 4 s'); ok(t.p.ambush && t.p.dome && t.p.dome.z === z, 'the first attack is the Ambush; the hero knows its dome');
-  const d1 = swing(t); near(d1, 11 * 9.5 * cm, 0.05, 'the first attack is the full Ambush (x9.5 of the base weapon, crit)');
+  const d1 = swing(t); near(d1, 11 * AM(3) * cm, 0.05, 'the first attack is the full Ambush (rank 3 factor of the base weapon, crit)');
   ok(t.p.ambush === true && t.p.stealthT > 0.2 && t.p.eclipseRe === true, 'attacking inside the dome keeps the hero unseen and arms the next Ambush');
-  const d2 = swing(t), d3 = swing(t); near(d2 / d1, 0.08, 1e-6, 'the second attack is an Ambush at 8%'); near(d3 / d1, 0.08, 1e-6, 'and so is every one after it');
+  const d2 = swing(t), d3 = swing(t); const ecl = CT('s_s2_a', 3).eclipse; near(d2 / d1, ecl, 1e-6, 'the second attack is an Ambush at the eclipse share'); near(d3 / d1, ecl, 1e-6, 'and so is every one after it');
   ok(t.w.nearestPlayer(0, 0) === null, 'foes cannot see the hero inside the dome');
   ok(refunds(t.w).filter(m => m.slot === 0).length === 1 && refunds(t.w).filter(m => m.slot === 1).length === 0, "Night's Edge refunds Shadowstep once, for the true Ambush only");
   run(t.w, 0.3); ok(t.e.slowAmt >= 0.4 && t.e.vulnT > 0, 'foes in the dome are slowed and take +20%'); const hv = t.e.hp; t.w.hitEnemy(t.e, 100, { p: t.p, kind: 'skill', crit: false }); const out = foe(t.w, 20, 300); const ho = out.hp; t.w.hitEnemy(out, 100, { p: t.p, kind: 'skill', crit: false });
@@ -426,7 +428,7 @@ function U_ang(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
   // leaving the dome ends it: the next attack is a plain one; the dome ends at 4 s
   { const l = mk({ s_s2: 1, s_s2_a: 3 }); swing(l); ok(l.p.eclipseRe, 'armed inside'); place(l.p, 20, 300); run(l.w, 0.05); ok(!l.p.eclipseRe && !l.p.ambush, 'leaving the dome drops the extra Ambush'); }
   { const l = mk({ s_s2: 1, s_s2_a: 3 }); swing(l); run(l.w, 4.5); ok(l.p.dome === null && !l.p.eclipseRe && !l.p.ambush && l.p.stealthT <= 0, 'the dome ends: no Ambush, no stealth'); }
-  { const l = mk({ s_s2: 1, s_s2_a: 3 }); run(l.w, 0.05); const x = swing(l); run(l.w, 1.0); ok(l.p.ambush && l.p.eclipseRe && l.p.stealthT > 0, 'standing idle inside keeps the Ambush ready and the hero unseen'); const d = swing(l); near(d / x, 0.08, 1e-6, 'the Ambush after a pause is an Eclipse repeat'); }
+  { const l = mk({ s_s2: 1, s_s2_a: 3 }); run(l.w, 0.05); const x = swing(l); run(l.w, 1.0); ok(l.p.ambush && l.p.eclipseRe && l.p.stealthT > 0, 'standing idle inside keeps the Ambush ready and the hero unseen'); const d = swing(l); near(d / x, CT('s_s2_a', 3).eclipse, 1e-6, 'the Ambush after a pause is an Eclipse repeat'); }
   // rank 2: the plain Ambush
   { const r2 = mk({ s_s2: 1, s_s2_a: 2 }); const zz = r2.w.zones.find(q => q.kind === 'smoke'); ok(zz.w === 0 && !r2.p.dome, 'rank 2 casts the plain smoke'); swing(r2); ok(!r2.p.ambush && r2.p.stealthT === 0, 'and the Ambush is spent by one attack'); }
   // a kill by the true Ambush refunds Vanish; a kill by a repeat refunds nothing; a horde kill refunds nothing
@@ -443,7 +445,7 @@ function U_ang(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
   { const b = (elite) => { const k = mk({ s_s2: 1, s_s2_a: 3 }, 0, (w, p, e) => { if (elite) e.elite = 'swift'; }); let tt = 0; run(k.w, 9, () => { if (k.e.blind > 0) tt += 1 / 60; }); return tt; }; near(b(false), 2, 0.4, 'the dome blinds a foe about 2 s per cast'); near(b(true), 1, 0.4, 'elites half that'); near(ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_a: 3 })).p.blind.dur, Math.min(2, 0.5 * ED.Stats.skillNums('vanish', build({ s_s2: 1, s_s2_a: 3 })).cdEff), 1e-9, 'the budget is capped at half the cooldown'); }
   { const bs = mk({ s_s2: 1, s_s2_a: 3 }, 0, (w, p, e) => { e.boss = true; }); run(bs.w, 0.3); ok(bs.e.blind <= 0 && bs.e.slowAmt > 0, 'bosses are slowed, never blinded'); }
   // the sheet numbers: the repeats are floor(4 s / interval) - 1 attacks of 8%
-  { const st = build({ s_s2: 1, s_s2_a: 3 }), q = ED.Stats.skillNums('vanish', st).p; near(q.edge.dmg, 0.08 * q.ambush.dmg, 1e-9, 'edge part = 8% of the Ambush'); ok(q.edge.attacks === Math.floor(4 / st.atkInterval + 1e-9) && q.edge.oneFoe === q.edge.attacks && q.edge.crit === true, `edge part: ${q.edge.attacks} attacks, forced crits`); }
+  { const st = build({ s_s2: 1, s_s2_a: 3 }), q = ED.Stats.skillNums('vanish', st).p; near(q.edge.dmg, CT('s_s2_a', 3).eclipse * q.ambush.dmg, 1e-9, 'edge part = the eclipse share of the Ambush'); ok(q.edge.attacks === Math.floor(4 / st.atkInterval + 1e-9) && q.edge.oneFoe === q.edge.attacks && q.edge.crit === true, `edge part: ${q.edge.attacks} attacks, forced crits`); }
 }
 
 { // Umbral Veil (s_s2_b rank 3): a shadow clone where Vanish was cast for 4 s repeats the weapon at 50% from its spot, foes (not bosses) go for it, the smoke blinds twice as long (capped)
@@ -576,7 +578,7 @@ function U_ang(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
   const crit = (t, e) => { const h = e.hp; t.w.hitEnemy(e, 100, { p: t.p, kind: 'weapon', wpn: true, crit: true }); return h - e.hp; };
   const r3 = mk({ s_el: 1, s_el_a: 3 }, 3), r2 = mk({ s_el: 1, s_el_a: 2 }, 3), few = mk({ s_el: 1, s_el_a: 3 }, 2);
   const d3 = crit(r3, r3.e), d2 = crit(r2, r2.e), df = crit(few, few.e);
-  near(d3 / d2, (1 + 0.17 * 3) * (1 + CT('s_el_a', 3).arterial) / (1 + 0.16 * 3), 1e-6, 'an Arterial crit deals +arterial (on top of Open Veins)'); near(df / d2, (1 + 0.17 * 2) / (1 + 0.16 * 3), 1e-6, 'two ailments: no Arterial');
+  const V3 = CT('s_el_a', 3).veins, V2 = CT('s_el_a', 2).veins; near(d3 / d2, (1 + V3 * 3) * (1 + CT('s_el_a', 3).arterial) / (1 + V2 * 3), 1e-6, 'an Arterial crit deals +arterial (on top of Open Veins)'); near(df / d2, (1 + V3 * 2) / (1 + V2 * 3), 1e-6, 'two ailments: no Arterial');
   ok(r3.p.critStacks === 1 && evs(r3.w, 'arter').length === 1 && evs(r3.w, 'arter')[0].k === 1, 'the Arterial crit readies 1 crit attack and sprays'); ok(r2.p.critStacks === 0 && !evs(r2.w, 'arter').length && few.p.critStacks === 0, 'rank 2 and two ailments ready nothing');
   { const t = mk({ s_el: 1, s_el_a: 3 }, 3); crit(t, t.e); const c1 = t.p.critStacks; t.e.hp = t.e.maxHp; ail(t.e, t.p, 3); crit(t, t.e); ok(c1 === 1 && t.p.critStacks === 1, 'a second Arterial crit inside 1 s readies nothing more'); ok(evs(t.w, 'arter').length === 2 && evs(t.w, 'arter')[1].k === 0, 'but it still sprays (k 0)');
     run(t.w, 1.05); t.e.hp = t.e.maxHp; ail(t.e, t.p, 3); crit(t, t.e); ok(t.p.critStacks === 2, 'after 1 s it readies again (stack ' + t.p.critStacks + ')'); }
@@ -601,7 +603,7 @@ function U_ang(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
   { const s = row({ s_el: 1, s_el_b: 3 }, 3, 100, { setup: (t2) => { t2.f[1].bleedPool = 0; for (let i = 0; i < 4; i++) t2.w.burnStack(t2.f[1], t2.p, 0); } }); s.w.rupture(s.f[0], s.p, 0.7, 'x', false); ok(s.f[1].hp <= 0, 'a burning foe is a target too'); }
   { const s = row({ s_el: 1, s_el_b: 3 }, 3, 100, { setup: (t2) => { for (const e of t2.f) e.fodder = true; } }); s.w.rupture(s.f[0], s.p, 0.7, 'x', false); ok(s.f.every(e => e.hp <= 0), 'horde foes cascade too (a chain, not a refund)'); }
   { const s = row({ s_el: 1, s_el_b: 2 }, 3, 100); s.w.rupture(s.f[0], s.p, 0.6, 'x', false); ok(s.f[0].hp <= 0 && s.f[1].hp === 5 && !evs(s.w, 'casc').length, 'rank 2 does not leap'); }
-  { const s = row({ s_el: 1, s_el_b: 3 }, CN + 6, 100, { setup: (t2) => { t2.f[0].x = 140; t2.f[1].x = 160; t2.f[0].hp = t2.f[1].hp = 100; for (let i = 2; i < CN + 6; i++) t2.f[i].x = 160 + (i - 1) * 100; } });
+  { const s = row({ s_el: 1, s_el_b: 3 }, CN + 6, 100, { setup: (t2) => { t2.f[0].x = 140; t2.f[1].x = 160; t2.f[0].hp = t2.f[1].hp = 160; for (let i = 2; i < CN + 6; i++) t2.f[i].x = 160 + (i - 1) * 100; } });
     place(s.p, 100, 176); s.w.playerSkill(s.p, 0, { x0: 100, y0: 176, x1: 200, y1: 176 }, 0);
     ok(evs(s.w, 'casc').length === CN, 'a Shadowstep through two bleeding foes: cascadeN leaps in all, not per foe (' + evs(s.w, 'casc').length + ')'); }
 }
