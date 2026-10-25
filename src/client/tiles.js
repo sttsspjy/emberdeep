@@ -37,7 +37,7 @@
   // Low-res light contribution of large glowing surfaces (lava, slime, void); added to the light buffer so entities standing on them are lit, not overpainted.
   Tl.glowmap = (room, scale) => entry(room, scale).glowmap;
 
-  const tileAt = (room, x, y) => (x < 0 || y < 0 || x >= room.w || y >= room.h) ? 1 : room.tiles[y * room.w + x];
+  const tileAt = (room, x, y) => (x < 0 || y < 0 || x >= room.w || y >= room.h) ? 1 : (room.baseTiles || room.tiles)[y * room.w + x]; // the floor's own tiles: boss walls (room.baseTiles kept by bosses.js) are drawn by arena.js
   const isWall = (t) => t === 1;
   // Deterministic per-tile hash so patterns stay continuous across neighbours regardless of paint order.
   const hash = (a, b, n) => { let h = (Math.imul(a, 374761393) + Math.imul(b, 668265263) + Math.imul(n, 1274126177)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
@@ -798,7 +798,7 @@
 
   // ---------- the room ----------
   function paintArt(room, scale) {
-    const biome = ED.biomeFor(room.stratum), P = biome.pal, bid = biome.id, W = room.w, H = room.h, s = room.seed | 0, rp = rampsFor(biome), sh = sheetFor(biome), tiles = room.tiles;
+    const biome = ED.biomeFor(room.stratum), P = biome.pal, bid = biome.id, W = room.w, H = room.h, s = room.seed | 0, rp = rampsFor(biome), sh = sheetFor(biome), tiles = room.baseTiles || room.tiles;
     const mk = (px) => { const cv = document.createElement('canvas'); cv.width = Math.ceil(W * T * px); cv.height = Math.ceil(H * T * px); cv.px = px; return cv; };
     const cv = mk(scale), g = cv.getContext('2d'); g.scale(scale, scale); g.imageSmoothingEnabled = false;
     const ev = mk(scale), e = ev.getContext('2d'); e.scale(scale, scale); e.globalCompositeOperation = 'lighter'; e.imageSmoothingEnabled = false;

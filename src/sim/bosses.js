@@ -38,10 +38,10 @@
     else { const a = aim(e) + Math.PI / 2 * e.strafe; if (mv(w, e, Math.cos(a), Math.sin(a), e.spd * 0.4 * e.slow, dt)) e.strafe = -e.strafe; e.face = e.target.x > e.x ? 1 : -1; }
   };
 
-  // ---------- aimed volley (every boss) ----------
+  // ---------- aimed volley (bosses whose runner keeps it) ----------
   // e.vol runs beside the main state: per living, unhidden hero (else the boss's target) a warn line follows the led aim and locks for the last BOSS_VOL.lock s, then BOSS_VOL.n[phase] shots come BOSS_VOL.gap apart,
   // each angled by World.leadAngle at its release; the heroes' sequences start BOSS_VOL.seq s apart. Flight speed speed + step per stratum (x1.2 under Pact 8+): enemyShoot gets it divided by the factors it re-applies (boss shot factor, Pact 8).
-  const VOL_KIND = { bonewarden: 'bone', sporemother: 'spore', rimeheart: 'ice', forgelord: 'fire', drownedking: 'trident', hollowking: 'void' };
+  const VOL_KIND = { bonewarden: 'bone', sporemother: 'spore', drownedking: 'trident', hollowking: 'void' };
   const volSpeed = (w) => (Wd.BOSS_VOL.speed + Wd.BOSS_VOL.step * (w.stratum - 1)) * (w.pact >= 8 ? 1.2 : 1);
   const volAim = (w, e, tg) => Wd.leadAngle(e.x, e.y - 4, tg, volSpeed(w), Wd.LEAD[U.clamp(w.stratum - 1, 0, Wd.LEAD.length - 1)]);
   const volShot = (w, e, kind, tg) => {
@@ -79,9 +79,10 @@
     update(w, e) { const v = e.vol; if (v) e.pose = v.t < v.tele ? 'wind' : 'cast'; return !v; },
   };
 
-  // Every boss: its attack table plus the volley (weight 2, all phases); the volley also self-starts every BOSS_OV_GAP s in phase 3 whatever the main state does, never while one runs. The returned function carries the table as .attacks.
+  // Every boss: its attack table plus the volley (weight 2, all phases; opts.volley false leaves it out); the volley also self-starts every BOSS_OV_GAP s in phase 3 whatever the main state does, never while one runs. The returned function carries the table as .attacks.
+  // opts: phases (HP fractions), idle(w, e, dt), tick(w, e, dt) (every tick before the attack state), onPhase(w, e, phase), volley.
   const runner = (attacks, opts) => Object.assign((w, e, dt) => {
-    const phases = opts.phases || [0.66, 0.33]; // three phases: the last third attacks at the fastest tempo
+    const phases = opts.phases || [0.66, 0.33], vol = opts.volley !== false; // three phases: the last third attacks at the fastest tempo
     while (e.phase - 1 < phases.length && e.hp / e.maxHp < phases[e.phase - 1]) {
       e.phase++; e.invulnT = 1.0; e.st = 'idle'; e.t = 1.3; e.pose = 'roar'; cancelVolley(e); e.ovT = Wd.BOSS_OV_GAP;
       w.emit({ t: 'phase', p: e.phase, x: Math.round(e.x), y: Math.round(e.y), type: e.type });
@@ -89,9 +90,11 @@
       return;
     }
     if (opts.tick) opts.tick(w, e, dt);
-    if (e.phase >= 3) e.ovT = (e.ovT === undefined ? Wd.BOSS_OV_GAP : e.ovT) - dt;
-    if (e.vol) { if (e.blind > 0) cancelVolley(e); else tickVolley(w, e, dt); } // a blinded boss drops its volley
-    else if (e.phase >= 3 && e.ovT <= 0 && !(e.blind > 0) && w.alivePlayers().length) startVolley(w, e);
+    if (vol) {
+      if (e.phase >= 3) e.ovT = (e.ovT === undefined ? Wd.BOSS_OV_GAP : e.ovT) - dt;
+      if (e.vol) { if (e.blind > 0) cancelVolley(e); else tickVolley(w, e, dt); } // a blinded boss drops its volley
+      else if (e.phase >= 3 && e.ovT <= 0 && !(e.blind > 0) && w.alivePlayers().length) startVolley(w, e);
+    }
     if (e.st === 'atk') {
       e.t += dt;
       if (attacks[e.atk].update(w, e, dt, e.t)) {
@@ -104,295 +107,90 @@
     (opts.idle || approach(120))(w, e, dt);
     if (e.t <= 0 && !(e.blind > 0) && w.alivePlayers().length) { // blinded bosses keep moving but start nothing; no attack starts once every hero is down
       const keys = Object.keys(attacks).filter(k => (attacks[k].phase || 1) <= e.phase && k !== e.last && (!attacks[k].ok || attacks[k].ok(w, e)));
-      const k = w.rng.weighted(keys.length ? keys : Object.keys(attacks), x => attacks[x].w || 1);
+      const k = w.rng.weighted(keys.length ? keys : Object.keys(attacks).filter(x => (attacks[x].phase || 1) <= e.phase), x => attacks[x].w || 1);
       e.atk = k; e.last = k; e.st = 'atk'; e.t = 0; e.vars = { wm: e.windMul || 1 };
       if (attacks[k].start) attacks[k].start(w, e);
     }
-  }, { attacks: Object.assign(attacks, { volley: VOLLEY }) });
+  }, { attacks: opts.volley === false ? attacks : Object.assign(attacks, { volley: VOLLEY }) });
 
-  // ---------- I. The Bone Warden ----------
-  B.bonewarden = runner({
-    charge: {
-      w: 3,
-      start(w, e) { e.vars.n = e.phase >= 2 ? 2 : 1; e.vars.i = 0; e.vars.sub = 'aim'; e.vars.st = 0; e.vars.aimT = 0.75 * e.vars.wm; e.aimA = aim(e); e.pose = 'wind'; line(w, e, e.x, e.y, e.aimA, 420, e.r * 2, e.vars.aimT, 0, true); },
-      update(w, e, dt, t) {
-        if (e.vars.sub === 'aim') { if (t >= e.vars.st + e.vars.aimT) { e.vars.sub = 'go'; e.vars.st = t; e.pose = 'dash'; e.st2 = 'charge'; } return false; }
-        const hit = mv(w, e, Math.cos(e.aimA), Math.sin(e.aimA), 440, dt);
-        if (hit || t - e.vars.st > 0.95) {
-          if (hit) { w.emit({ t: 'thud', x: Math.round(e.x), y: Math.round(e.y), big: 1 }); ring(w, e, 10, 150, 'bone', w.rng.range(0, 1), 0.7, 6); }
-          e.vars.i++;
-          if (e.vars.i < e.vars.n) { e.vars.sub = 'aim'; e.vars.st = t + 0.25; e.aimA = aim(e); e.pose = 'wind'; line(w, e, e.x, e.y, e.aimA, 420, e.r * 2, 0.25 + e.vars.aimT, 0, true); }
-          else { e.pose = 'idle'; return t - e.vars.st > 0.5 || hit; }
-        }
-        return false;
-      },
-    },
-    ring: {
-      w: 3,
-      start(w, e) { e.pose = 'cast'; },
-      update(w, e, dt, t) {
-        const n = e.phase >= 2 ? 16 : 12, k = e.vars.k || 0;
-        if (k < 3 && t > 0.5 * e.vars.wm + k * 0.55) { ring(w, e, n, 135, 'bone', (k % 2) * TAU / n / 2, 0.8, 6); e.vars.k = k + 1; }
-        return t > 2.2 + 0.5 * (e.vars.wm - 1);
-      },
-    },
-    summon: {
-      w: 2, ok: (w) => w.hostiles(true) < 6,
-      start(w, e) { e.pose = 'cast'; e.vars.end = summon(w, e, e.phase >= 2 ? ['skeleton', 'skeleton', 'bat', 'bat', 'bat'] : ['skeleton', 'skeleton', 'skeleton']); },
-      update(w, e, dt, t) { return t > e.vars.end; },
-    },
-    spiral: {
-      w: 2, phase: 2,
-      start(w, e) { e.pose = 'cast'; e.vars.a = w.rng.range(0, TAU); e.vars.f = 0; },
-      update(w, e, dt, t) {
-        e.vars.a += 2.1 * dt; e.vars.f -= dt;
-        if (e.vars.f <= 0 && t > 0.4 * e.vars.wm) { e.vars.f = 0.11; for (let k = 0; k < 2; k++) w.enemyShoot(e, e.vars.a + k * Math.PI, 150, 'bone', 0.7, 6); }
-        return t > 2.9;
-      },
-    },
-    // Bone spikes erupt outward in lines fanned around the hero; the gap between lines is the safe lane.
-    spikes: {
-      w: 3,
-      start(w, e) {
-        e.pose = 'cast';
-        const lines = e.phase >= 2 ? 3 : 2, a0 = aim(e), k = e.vars.wm;
-        for (let li = 0; li < lines; li++) {
-          const a = a0 + (li - (lines - 1) / 2) * 0.52;
-          for (let i = 1; i <= 9; i++) {
-            const x = e.x + Math.cos(a) * (e.r + i * 40), y = e.y + Math.sin(a) * (e.r + i * 40);
-            if (D.blocksShots(D.tileAt(w.room, x, y), true)) break;
-            drop(w, e, x, y, 24, (0.85 + i * 0.07) * k, 0.9, 'bone');
-          }
-        }
-      },
-      update(w, e, dt, t) { return t > 1.9 * e.vars.wm; },
-    },
-  }, { idle: approach(110) });
+  // ---------- arena state (boss-raised walls, floor carpet) ----------
+  // w.arena (host; a mirror rebuilds it from the snapshot's AR): { walls: [{ x, y, n, hp, cd }] (tiles x..x+n-1 of row y stand as blocks while hp > 0), carpet: Uint8Array(room.w x room.h) of 0/1, or null }.
+  // B.applyArena writes the standing walls into room.tiles as tile 2 (only over floor and hazard tiles) and keeps the floor's own tiles in room.baseTiles (the renderer draws those);
+  // room.carpet is the carpet (Sim.movePlayer slows on it), room.tver counts wall changes (path caches key on it). Host and mirror run the same code, so a client hero collides with the same walls.
+  B.CARPET_SLOW = 0.7; // walking speed factor on a carpet tile
+  B.applyArena = (room, ar) => {
+    if (!room) return;
+    let key = '';
+    if (ar && ar.walls) for (const s of ar.walls) if (s.hp > 0) key += s.x + ',' + s.y + ',' + s.n + ';';
+    if (key !== (room.awKey || '')) {
+      if (!room.baseTiles) room.baseTiles = room.tiles.slice();
+      const base = room.baseTiles, tl = room.tiles;
+      if (room.awSet) for (const i of room.awSet) tl[i] = base[i];
+      const set = [];
+      if (ar && ar.walls) for (const s of ar.walls) {
+        if (!(s.hp > 0) || s.y < 0 || s.y >= room.h) continue;
+        for (let x = s.x; x < s.x + s.n; x++) { const i = s.y * room.w + x; if (x >= 0 && x < room.w && (base[i] === 0 || base[i] === 4)) { tl[i] = 2; set.push(i); } }
+      }
+      room.awSet = set; room.awKey = key; room.tver = (room.tver | 0) + 1;
+    }
+    room.carpet = ar && ar.carpet ? ar.carpet : null;
+  };
+  // Wire form { W: [[x, y, n, hp]], C: carpet bits, 30 per number (tile index order) } and back (prev: the last decoded arena, whose carpet array is reused).
+  B.encodeArena = (ar) => {
+    const o = {};
+    if (ar.walls) o.W = ar.walls.map(s => [s.x, s.y, s.n, s.hp]);
+    if (ar.carpet) { const c = ar.carpet, out = []; for (let i = 0; i < c.length; i += 30) { let v = 0; for (let k = 0; k < 30 && i + k < c.length; k++) if (c[i + k]) v |= 1 << k; out.push(v); } o.C = out; }
+    return o;
+  };
+  B.decodeArena = (d, room, prev) => {
+    const ar = { walls: d.W ? d.W.map(a => ({ x: a[0], y: a[1], n: a[2], hp: a[3] })) : null, carpet: null };
+    if (d.C && room) {
+      const n = room.w * room.h, c = prev && prev.carpet && prev.carpet.length === n ? prev.carpet : new Uint8Array(n);
+      for (let i = 0; i < n; i++) c[i] = (d.C[(i / 30) | 0] >> (i % 30)) & 1;
+      ar.carpet = c;
+    }
+    return ar;
+  };
+  // Clears the arena (boss down, room change): walls fall, the carpet goes.
+  B.clearArena = (w) => { if (!w.arena) return; w.arena = null; B.applyArena(w.room, null); };
 
-  // ---------- II. The Sporemother ----------
-  B.sporemother = runner({
-    burst: {
-      w: 3, start(w, e) { e.pose = 'cast'; },
-      update(w, e, dt, t) {
-        const n = e.phase >= 2 ? 14 : 10, k = e.vars.k || 0;
-        if (k < 4 && t > 0.45 * e.vars.wm + k * 0.45) { ring(w, e, n, 118, 'spore', k * 0.27, 0.8, 7); e.vars.k = k + 1; }
-        return t > 2.4;
-      },
-    },
-    fields: {
-      w: 3,
-      start(w, e) {
-        e.pose = 'cast';
-        const pts = [];
-        for (const p of w.alivePlayers()) pts.push({ x: p.x, y: p.y });
-        const n = e.phase >= 2 ? 7 : 5;
-        while (pts.length < n) pts.push(D.randomFloor(w.room, w.rng, null, 0));
-        for (const pt of pts) drop(w, e, pt.x, pt.y, 54, 1.25 * e.vars.wm, 0.8, 'spore', (ww, z) => ww.addZone({ kind: 'poison', x: z.x, y: z.y, r: 54, dur: 6, dps: e.dmg * 0.5, team: 1 }));
-      },
-      update(w, e, dt, t) { return t > 1.6 * e.vars.wm; },
-    },
-    brood: {
-      w: 2, ok: (w) => w.hostiles(true) < 7,
-      start(w, e) { e.pose = 'cast'; e.vars.end = summon(w, e, e.phase >= 2 ? ['sporepuff', 'sporepuff', 'sporepuff', 'sporepuff', 'myconid'] : ['sporepuff', 'sporepuff', 'sporepuff', 'myconid']); },
-      update(w, e, dt, t) { return t > e.vars.end; },
-    },
-    spiral: {
-      w: 3, phase: 2,
-      start(w, e) { e.pose = 'cast'; e.vars.a = 0; e.vars.f = 0; },
-      update(w, e, dt, t) {
-        e.vars.a += 1.6 * dt; e.vars.f -= dt;
-        if (e.vars.f <= 0 && t > 0.3 * e.vars.wm) { e.vars.f = 0.13; for (let k = 0; k < 3; k++) w.enemyShoot(e, e.vars.a + k * TAU / 3, 130, 'spore', 0.7, 7); }
-        return t > 3.2;
-      },
-    },
-    // Mire pools: telegraphed bursts that leave a slowing mire (45% slower) for 7 s.
-    mire: {
-      w: 3,
-      start(w, e) {
-        e.pose = 'cast';
-        const pts = [];
-        for (const p of w.alivePlayers()) pts.push({ x: p.x, y: p.y });
-        const n = e.phase >= 2 ? 4 : 3;
-        while (pts.length < n) pts.push(D.randomFloor(w.room, w.rng, null, 0));
-        for (const pt of pts) drop(w, e, pt.x, pt.y, 58, 1.2 * e.vars.wm, 0.7, 'spore', (ww, z) => ww.addZone({ kind: 'mire', x: z.x, y: z.y, r: 58, dur: 7, team: 1 }));
-      },
-      update(w, e, dt, t) { return t > 1.5 * e.vars.wm; },
-    },
-  }, {
-    idle: (w, e, dt) => {
-      e.pose = 'idle';
-      const c = D.center(w.room);
-      const tx = (c.x * 2 + e.target.x) / 3, ty = (c.y * 2 + e.target.y) / 3;
-      const d = Math.hypot(tx - e.x, ty - e.y);
-      if (d > 20) mv(w, e, (tx - e.x) / d, (ty - e.y) / d, e.spd, dt);
-    },
-  });
+  // Hero hits on standing wall blocks (rooms.js smash hooks, combat.js shots that strike a wall): each block loses 1 hp per hit, at most one hit per WALL_CD s; at 0 it breaks ({t:'wallbreak', x, y, n}).
+  const WALL_CD = 0.2;
+  const wallHit = (w, s, p) => {
+    if (s.cd > w.time) return;
+    s.cd = w.time + WALL_CD; s.hp--;
+    const T = ED.CONST.TILE;
+    w.emit({ t: 'wallhit', x: Math.round((s.x + s.n / 2) * T), y: Math.round((s.y + 0.5) * T), hp: s.hp });
+    if (s.hp <= 0) { w.emit({ t: 'wallbreak', x: Math.round((s.x + s.n / 2) * T), y: Math.round((s.y + 0.5) * T), n: s.n }); B.applyArena(w.room, w.arena); }
+  };
+  // Squared distance from (x, y) to wall block s (px rect).
+  const wallD2 = (s, x, y) => { const T = ED.CONST.TILE, cx = U.clamp(x, s.x * T, (s.x + s.n) * T), cy = U.clamp(y, s.y * T, (s.y + 1) * T); return (x - cx) ** 2 + (y - cy) ** 2; };
+  Wd.prototype.wallCircle = function (p, x, y, r) {
+    const ar = this.arena; if (!ar || !ar.walls) return;
+    for (const s of ar.walls) if (s.hp > 0 && wallD2(s, x, y) <= r * r) wallHit(this, s, p);
+  };
+  Wd.prototype.wallSeg = function (p, x0, y0, x1, y1, r) {
+    const ar = this.arena; if (!ar || !ar.walls) return;
+    const n = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 8));
+    for (const s of ar.walls) {
+      if (!(s.hp > 0)) continue;
+      for (let i = 0; i <= n; i++) if (wallD2(s, x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n) <= r * r) { wallHit(this, s, p); break; }
+    }
+  };
+  Wd.prototype.wallArc = function (p, a, reach, arc) {
+    const ar = this.arena; if (!ar || !ar.walls) return;
+    const T = ED.CONST.TILE;
+    for (const s of ar.walls) {
+      if (!(s.hp > 0) || wallD2(s, p.x, p.y) > reach * reach) continue;
+      const cx = U.clamp(p.x, s.x * T, (s.x + s.n) * T), cy = U.clamp(p.y, s.y * T, (s.y + 1) * T), d = Math.hypot(cx - p.x, cy - p.y);
+      if (arc >= 6.2 || d < 4 || Math.abs(U.angDiff(a, Math.atan2(cy - p.y, cx - p.x))) <= arc / 2 + Math.atan2(T / 2, Math.max(d, 1))) wallHit(this, s, p);
+    }
+  };
 
-  // ---------- III. Rimeheart Colossus ----------
-  B.rimeheart = runner({
-    slam: {
-      w: 3,
-      start(w, e) {
-        e.pose = 'wind';
-        tele(w, e, e.x, e.y, 120, 1.0 * e.vars.wm, 1.3, 'ice', (ww) => {
-          e.pose = 'slam';
-          ring(ww, e, 16, 150, 'ice', w.rng.range(0, 1), 0.75, 6);
-          if (e.phase >= 2) e.vars.second = ww.time + 0.4;
-        });
-      },
-      update(w, e, dt, t) {
-        if (e.vars.second && w.time >= e.vars.second) { ring(w, e, 16, 120, 'ice', TAU / 32, 0.75, 6); e.vars.second = 0; }
-        return t > 0.9 + 1.0 * e.vars.wm;
-      },
-    },
-    spikes: {
-      w: 3,
-      start(w, e) {
-        e.pose = 'cast';
-        for (const p of w.alivePlayers()) {
-          const a = Math.atan2(p.y - e.y, p.x - e.x);
-          for (let i = 1; i <= 8; i++) {
-            const x = e.x + Math.cos(a) * (e.r + i * 38), y = e.y + Math.sin(a) * (e.r + i * 38);
-            if (D.blocksShots(D.tileAt(w.room, x, y), true)) break;
-            drop(w, e, x, y, 26, (0.6 + i * 0.09) * e.vars.wm, 0.9, 'ice');
-          }
-        }
-      },
-      update(w, e, dt, t) { return t > 1.7 * e.vars.wm; },
-    },
-    breath: {
-      w: 3,
-      start(w, e) { e.vars.n = e.phase >= 2 ? 2 : 1; e.vars.i = 0; e.vars.next = 0; },
-      update(w, e, dt, t) {
-        if (e.vars.i < e.vars.n && t >= e.vars.next) {
-          const a = aim(e), k = e.vars.wm; e.pose = 'wind';
-          cone(w, e, a, 240, 1.15, 0.9 * k, 1.0, (ww) => {
-            e.pose = 'cast';
-            for (let j = 0; j < 14; j++) ww.enemyShoot(e, a + ww.rng.range(-0.55, 0.55), ww.rng.range(160, 270), 'ice', 0.6, 5);
-          });
-          e.vars.i++; e.vars.next = t + 0.25 + 0.9 * k;
-        }
-        return e.vars.i >= e.vars.n && t > e.vars.next;
-      },
-    },
-    leap: {
-      w: 2, phase: 2,
-      start(w, e) {
-        e.pose = 'air';
-        const tx = e.target.x, ty = e.target.y, fl = 1.2 * e.vars.wm;
-        e.vars.from = [e.x, e.y]; e.vars.to = [tx, ty]; e.vars.fl = fl;
-        tele(w, e, tx, ty, 92, fl, 1.4, 'ice', (ww) => { e.pose = 'slam'; ring(ww, e, 12, 160, 'ice', 0, 0.7, 6); });
-      },
-      update(w, e, dt, t) {
-        const k = Math.min(1, t / e.vars.fl);
-        e.x = U.lerp(e.vars.from[0], e.vars.to[0], U.easeInOut(k)); e.y = U.lerp(e.vars.from[1], e.vars.to[1], U.easeInOut(k));
-        if (k >= 1) Sim.resolve(e, w.room, w.locked, false);
-        return t > e.vars.fl + 0.4;
-      },
-    },
-    // Ice wall: a line of ice shards sweeps from the Colossus toward the hero with a 3-tile gap; phase 2 sends a second wall with the gap moved.
-    wall: {
-      w: 2,
-      start(w, e) {
-        e.pose = 'cast';
-        const T = ED.CONST.TILE, room = w.room, tg = e.target, k = e.vars.wm;
-        const vert = Math.abs(tg.x - e.x) >= Math.abs(tg.y - e.y); // vertical wall when the hero stands to the side
-        const lo = 1.3 * T, hi = (vert ? room.h : room.w) * T - 1.3 * T;
-        const base = U.clamp(vert ? e.x : e.y, 1.5 * T, (vert ? room.w : room.h) * T - 1.5 * T);
-        const dir = vert ? (tg.x > e.x ? 0 : Math.PI) : (tg.y > e.y ? Math.PI / 2 : -Math.PI / 2);
-        const n = e.phase >= 2 ? 2 : 1;
-        let gap = U.clamp((vert ? tg.y : tg.x) + w.rng.range(-60, 60), lo + 70, hi - 70);
-        e.vars.walls = [];
-        for (let i = 0; i < n; i++) {
-          if (i) gap = U.clamp(gap + w.rng.sign() * w.rng.range(120, 170), lo + 70, hi - 70);
-          const at = (0.95 + i * 1.0) * k;
-          e.vars.walls.push({ at, gap, base, vert, dir, done: false });
-          const a = vert ? Math.PI / 2 : 0, x0 = vert ? base : lo, y0 = vert ? lo : base;
-          const g0 = gap - 48, g1 = gap + 48;
-          line(w, e, x0, y0, a, g0 - lo, 20, at, 0, true);
-          line(w, e, vert ? base : g1, vert ? g1 : base, a, hi - g1, 20, at, 0, true);
-        }
-      },
-      update(w, e, dt, t) {
-        const T = ED.CONST.TILE, room = w.room;
-        for (const wl of e.vars.walls) {
-          if (wl.done || t < wl.at) continue;
-          wl.done = true;
-          const lo = 1.3 * T, hi = (wl.vert ? room.h : room.w) * T - 1.3 * T;
-          for (let c = lo; c <= hi; c += 22) {
-            if (Math.abs(c - wl.gap) < 48) continue;
-            w.spawnProj({ team: 1, kind: 'ice', x: wl.vert ? wl.base : c, y: wl.vert ? c : wl.base, a: wl.dir, speed: 105, r: 7, dmg: e.dmg * 0.8, life: 9, src: e });
-          }
-          w.emit({ t: 'shoot', x: Math.round(e.x), y: Math.round(e.y), k: 'ice' });
-        }
-        return t > e.vars.walls[e.vars.walls.length - 1].at + 0.5;
-      },
-    },
-  }, { idle: approach(120) });
+  // Shared pieces for the boss files (boss-*.js).
+  B.lib = { tele, drop, line, cone, ring, aim, mv, grow, summon, approach, runner, startVolley, cancelVolley };
 
-  // ---------- IV. The Forgelord ----------
-  B.forgelord = runner({
-    leap: {
-      w: 3,
-      start(w, e) {
-        e.pose = 'air';
-        const fl = 1.1 * e.vars.wm;
-        e.vars.from = [e.x, e.y]; e.vars.to = [e.target.x, e.target.y]; e.vars.fl = fl;
-        tele(w, e, e.target.x, e.target.y, 88, fl, 1.4, 'bigfire', (ww, z) => {
-          e.pose = 'slam';
-          ring(ww, e, 12, 160, 'fire', ww.rng.range(0, 1), 0.7, 6);
-          if (e.phase >= 2) ww.addZone({ kind: 'fire', x: z.x, y: z.y, r: 70, dur: 4, dps: e.dmg * 0.5, team: 1 });
-        });
-      },
-      update(w, e, dt, t) {
-        const k = Math.min(1, t / e.vars.fl);
-        e.x = U.lerp(e.vars.from[0], e.vars.to[0], U.easeInOut(k)); e.y = U.lerp(e.vars.from[1], e.vars.to[1], U.easeInOut(k));
-        if (k >= 1) Sim.resolve(e, w.room, w.locked, false);
-        return t > e.vars.fl + 0.4;
-      },
-    },
-    spiral: {
-      w: 3,
-      start(w, e) { e.pose = 'cast'; e.vars.a = w.rng.range(0, TAU); e.vars.f = 0; },
-      update(w, e, dt, t) {
-        const arms = e.phase >= 2 ? 3 : 2;
-        e.vars.a += 2.0 * dt; e.vars.f -= dt;
-        if (e.vars.f <= 0 && t > 0.35 * e.vars.wm) { e.vars.f = 0.1; for (let k = 0; k < arms; k++) w.enemyShoot(e, e.vars.a + k * TAU / arms, 155, 'fire', 0.7, 6); }
-        return t > 3.0;
-      },
-    },
-    rain: {
-      w: 3,
-      start(w, e) {
-        e.pose = 'cast';
-        const n = e.phase >= 2 ? 12 : 8;
-        const ps = w.alivePlayers();
-        for (let i = 0; i < n; i++) {
-          const p = ps[i % ps.length];
-          const x = p.x + w.rng.range(-110, 110), y = p.y + w.rng.range(-90, 90);
-          if (D.tileAt(w.room, x, y) === 1) continue;
-          drop(w, e, x, y, 40, w.rng.range(1.0, 1.7) * e.vars.wm, 0.9, 'fire', (ww, z) => ww.addZone({ kind: 'fire', x: z.x, y: z.y, r: 34, dur: 4, dps: e.dmg * 0.45, team: 1 }));
-        }
-      },
-      update(w, e, dt, t) { return t > 1.9 * e.vars.wm; },
-    },
-    hammer: {
-      w: 2,
-      start(w, e) { e.pose = 'wind'; cone(w, e, aim(e), 135, 1.7, 0.7 * e.vars.wm, 1.45, () => { e.pose = 'slam'; }); },
-      update(w, e, dt, t) { return t > 0.35 + 0.7 * e.vars.wm; },
-    },
-    totems: {
-      w: 2, phase: 2, ok: (w) => w.enemies.filter(x => x.type === 'flameturret' && x.hp > 0).length < 2,
-      start(w, e) { e.pose = 'cast'; e.vars.end = summon(w, e, ['flameturret', 'flameturret']); },
-      update(w, e, dt, t) { return t > e.vars.end; },
-    },
-    // Releases Ember Drones (they orbit the hero and fire aimed bursts).
-    drones: {
-      w: 2, ok: (w) => w.enemies.filter(x => x.type === 'drone' && x.hp > 0).length < 3,
-      start(w, e) { e.pose = 'cast'; e.vars.end = summon(w, e, e.phase >= 2 ? ['drone', 'drone', 'drone'] : ['drone', 'drone']); },
-      update(w, e, dt, t) { return t > e.vars.end; },
-    },
-  }, { idle: approach(90) });
+  // Bosses I and II live in boss-warden.js and boss-spore.js.
 
   // ---------- V. The Drowned King ----------
   B.drownedking = runner({

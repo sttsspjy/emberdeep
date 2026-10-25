@@ -782,6 +782,7 @@
     if (def.boss) { this.onBossKilled(e); return; }
     this.deathPayoffs(e, p, src);
     if (def.fodder) { this.fodderMote(e.x, e.y); return; } // fodder drop no gold, heart or Grail growth, split or leave a cloud: only the room's xp mote
+    if (def.noLoot) return; // boss arena pieces (spore pods and buds) drop nothing
     this.dropFoeXp(e);
     if (this.rng.chance(e.elite ? 1 : 0.12)) this.dropGold(e.x, e.y, (1 + Math.floor((s - 1) / 2)) * (e.elite ? 3 : this.rng.int(1, 2)));
     if (this.rng.chance(e.elite ? 0.4 : 0.04)) this.spawnPickup('heart', e.x, e.y, 1);
@@ -1308,7 +1309,7 @@
         if (pr.ret === 1) { pr.x -= pr.vx * dt; pr.y -= pr.vy * dt; this.projTurn(pr); keep.push(pr); continue; } // a wall turns a boomerang back
         if (pr.team === 0 && pr.explode) this.projBurst(pr);
         else if (pr.team === 0 && pr.cloud) this.spawnCloud(pr.owner, pr.x - pr.vx * dt, pr.y - pr.vy * dt, pr.cloud);
-        if (pr.team === 0) { this.projDrop(pr, pr.x - pr.vx * dt, pr.y - pr.vy * dt); this.projEnd(pr, 'wall'); }
+        if (pr.team === 0) { this.projDrop(pr, pr.x - pr.vx * dt, pr.y - pr.vy * dt); this.projEnd(pr, 'wall'); if (this.arena) this.wallCircle(this.players.get(pr.owner), pr.x, pr.y, pr.r + 4); } // a boss wall block takes the shot (bosses.js)
         this.projAcid(pr);
         this.emit({ t: 'spark', x: Math.round(pr.x), y: Math.round(pr.y), k: ED.PROJ_IDX[pr.kind] || 0 });
         continue;
@@ -1550,7 +1551,7 @@
     }
     e.age += dt;
     if (e.boss) this.tickFury(e, dt);
-    if (!e.exposed && !e.def.invuln && !e.fodder && this.enc && e.age > (e.boss ? 78 : 45) && !(e.boss && ED.World.furyAt(this.stratum) > 0)) { e.exposed = true; this.emit({ t: 'expose', x: e.x, y: e.y, boss: e.boss ? 1 : 0 }); } // a boss of a fury stratum is never exposed (fury ends its stalls)
+    if (!e.exposed && !e.def.invuln && !e.fodder && !e.def.noLoot && this.enc && e.age > (e.boss ? 78 : 45) && !(e.boss && ED.World.furyAt(this.stratum) > 0)) { e.exposed = true; this.emit({ t: 'expose', x: e.x, y: e.y, boss: e.boss ? 1 : 0 }); } // a boss of a fury stratum is never exposed (fury ends its stalls)
     if (e.exposed && !e.def.invuln) e.hp -= e.maxHp * (e.boss ? 0.012 : 0.04) * dt;
     if (e.hp <= 0) { this.killEnemy(e, null, {}); return; }
     if (e.frozen > 0 || e.stun > 0) return;

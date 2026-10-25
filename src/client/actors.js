@@ -447,20 +447,17 @@
   const BOSS = {
     bonewarden: { idle: 'idle', walk: 'walk', hit: 'hit', skip: 1, eyeF: 0.1, pose: {
       wind: { a: 'attack', f: [0, 3], m: 'hold' }, dash: { a: 'walk', f: [0, 3], m: 'loop', fps: 18 }, cast: { a: 'attack', f: [2, 3], m: 'loop', fps: 5 },
-      slam: { a: 'attack', f: [4, 7], m: 'once', fps: 12 }, air: { a: 'attack', f: [5, 5], m: 'hold' }, roar: { a: 'shield', f: [0, 3], m: 'loop', fps: 8 }, fade: { a: 'death', f: [0, 3], m: 'once', fps: 8 } } },
+      slam: { a: 'attack', f: [4, 7], m: 'once', fps: 12 }, stuck: { a: 'attack', f: [7, 7], m: 'hold' }, air: { a: 'attack', f: [5, 5], m: 'hold' }, roar: { a: 'shield', f: [0, 3], m: 'loop', fps: 8 }, fade: { a: 'death', f: [0, 3], m: 'once', fps: 8 } } },
     sporemother: { idle: 'idle', walk: 'walk', hit: 'hit', skip: 1, front: true, eyeF: 0.42, pose: {
       wind: { a: 'charge', f: [0, 2], m: 'hold' }, cast: { a: 'attack', f: [0, 4], m: 'loop', fps: 8 }, slam: { a: 'attack', f: [3, 4], m: 'once', fps: 10 }, roar: { a: 'attack', f: [0, 4], m: 'loop', fps: 14 }, dash: { a: 'charge', f: [2, 2], m: 'hold' }, air: { a: 'charge', f: [2, 2], m: 'hold' } } },
-    rimeheart: { idle: 'idle', walk: 'walk', hit: 'hit', skip: 1, front: true, eyeF: 0.3, pose: {
-      wind: { a: 'charge.', f: [0, 2], m: 'hold' }, cast: { a: 'charge.', f: [1, 2], m: 'loop', fps: 4 }, slam: { a: 'attack.', f: [0, 3], m: 'once', fps: 10 }, air: { a: 'attack.', f: [1, 1], m: 'hold' }, dash: { a: 'attack.', f: [1, 2], m: 'loop', fps: 10 }, roar: { a: 'charge.', f: [2, 2], m: 'hold' } } },
-    forgelord: { idle: 'idle', walk: 'walk', hit: 'hit', skip: 0, front: true, hammer: true, eyeF: 0.38, pose: {} },
     drownedking: { idle: 'idle', walk: 'walk', hit: 'hit', skip: -1, eyeF: 0.09, pose: {
       wind: { a: 'attack1', f: [0, 1], m: 'hold' }, cast: { a: 'attack3', f: [1, 3], m: 'loop', fps: 6 }, slam: { a: 'attack2', f: [0, 3], m: 'once', fps: 12 }, air: { a: 'attack1', f: [2, 2], m: 'hold' }, dash: { a: 'walk', f: [0, 7], m: 'loop', fps: 16 }, roar: { a: 'attack1', f: [3, 3], m: 'hold' }, fade: { a: 'death', f: [0, 2], m: 'once', fps: 8 } } },
     hollowking: { idle: 'idle', walk: 'walk', hit: 'hit', skip: 1, crown: true, eyeF: 0.1, pose: {
       wind: { a: 'attack', f: [0, 3], m: 'hold' }, cast: { a: 'attack', f: [0, 7], m: 'loop', fps: 10 }, slam: { a: 'attack', f: [4, 7], m: 'once', fps: 12 }, roar: { a: 'attack', f: [0, 1], m: 'loop', fps: 6 }, fade: { a: 'death', f: [0, 3], m: 'once', fps: 8, rev: 1 }, air: { a: 'attack', f: [3, 3], m: 'hold' } } },
   };
   // Hop height (world px) and duration (s) of a boss 'air' pose.
-  const AIR = { rimeheart: [30, 1.2], forgelord: [40, 1.1], drownedking: [38, 1.0] };
-  const BOSS_KEEP = { bonewarden: 0.35, sporemother: 0.3, rimeheart: 0.3, forgelord: 0.08, drownedking: 0.35, hollowking: 0.1 }; // share of the source colour kept by the boss gradient map (saturated colours keep more)
+  const AIR = { drownedking: [38, 1.0] };
+  const BOSS_KEEP = { bonewarden: 0.35, sporemother: 0.3, drownedking: 0.35, hollowking: 0.1 }; // share of the source colour kept by the boss gradient map (saturated colours keep more)
   const bossMk = {};
   // Gradient map of a boss: the source colours ranked by luminance onto the boss ramp, mixed back toward the source so gold, skin and flames keep their identity.
   function bossMap(type) {
@@ -518,14 +515,10 @@
     if (e.exposed) Sp.glow(c, 0, -e.r, e.r * 2.2, '#ff3a3a', 0.25 + Math.sin(t * 9) * 0.1);
     Sp.furyGlow(c, e, t);
     const ox = shake - (pose === 'wind' ? Math.round(Math.cos(e.aimA || 0) * 2) : 0), oy = -air;
-    // hammer under the body when it points up, over it otherwise
-    const hm = B.hammer ? forgeHammer(e, s, t, pose, el) : null;
-    if (hm && Math.sin(hm.ang) < -0.25) drawHammer(c, hm, ox, oy, flip);
     const variant = frozen ? stateVar(id, 'frozen') : bossVar(e.type, id);
     if (pose === 'wind' && !frozen) { const ov = outlineVar(id, RED); if (ov) put(c, id, fi, ox, oy, flip, ov, 0.45 + 0.55 * U.clamp(el / WD, 0, 1)); } // the wind-up outline and the normal body stay under the hit flash
     put(c, id, fi, ox, oy, flip, variant, 1);
     if (flash) { const wv = stateVar(id, 'white'), rc = REC; REC = null; if (wv) put(c, id, fi, ox, oy, flip, wv, 0.5); REC = rc; } // hit flash: a half-strength white overlay, the sprite is not replaced
-    if (hm && !(Math.sin(hm.ang) < -0.25)) drawHammer(c, hm, ox, oy, flip);
     if (B.crown && A.has('boss.hollowking.crown')) { // per-frame crown point (anchors.crown); anims without one use the head line
       const r = A.anim(id), cr = r.anchors.crown, q = cr ? cr[Math.min(fi, cr.length - 1)] : null, cn = r.anchors.centre || [r.ax, r.ay - 30], tp = r.anchors.top === undefined ? r.ay - 60 : r.anchors.top;
       put(c, 'boss.hollowking.crown', 0, ox + ((q ? q[0] : cn[0]) - r.ax) * K * (flip ? -1 : 1), oy + ((q ? q[1] : tp + 4) - r.ay) * K, flip, crownVar(), 1);
@@ -536,21 +529,6 @@
     s.an = id; s.fi = fi; s.flip = flip; s.lift = air; s.wpv = pose === 'wind' ? U.clamp(el / WD, 0, 1) : 0;
     return true;
   }
-  // Forgelord hammer angle (screen, right-facing) by pose: raised for the wind-up, slammed down, rest at the side.
-  const HM = { ang: 0, x: 0, y: 0 };
-  function forgeHammer(e, s, t, pose, el) {
-    let a = -0.55;
-    if (pose === 'wind') a = -0.55 + (-2.5 + 0.55) * EASE(U.clamp(el / WD, 0, 1));
-    else if (pose === 'slam') a = el < 0.12 ? -2.5 + 3.4 * EASE(el / 0.12) : 0.9 - 0.4 * EASE(U.clamp((el - 0.12) / 0.4, 0, 1));
-    else if (pose === 'cast' || pose === 'roar') a = -1.5 + Math.sin(t * 5) * 0.35;
-    else if (pose === 'air') a = -2.2;
-    HM.ang = a; return HM;
-  }
-  function drawHammer(c, hm, ox, oy, flip) {
-    const sg = flip ? -1 : 1, hx = ox + 13 * K * sg, hy = oy - 12 * K, a = flip ? PI - hm.ang : hm.ang, rr = A.anim('weapon.alt.big_hammer'); if (!rr) return;
-    put(c, 'weapon.alt.big_hammer', 0, hx, hy, flip, '', 1, nrm(a - (flip ? PI - dirOf(rr) : dirOf(rr))));
-  }
-
   // ---------------- anchors ----------------
   // {cx, cy, top, eye: [[x, y]...]} of an actor in world px relative to its feet, from its last drawn atlas anim; null when it has none (the renderer then uses the procedural sizes).
   AC.anchor = (o) => {

@@ -243,6 +243,7 @@
     const art = ED.Tiles.get(room, BQ);
     c.drawImage(art, 0, 0, art.width / BQ, art.height / BQ);
     drawRoomDynamics(c, view, room, biome, t, 0);
+    ED.Arena.carpet(c, room, t); // boss spore carpet (arena.js)
     drawDoors(c, view, room, P, t);
     drawZones(c, view, t, 0);
     drawPickups(c, view, t, 0);
@@ -257,6 +258,7 @@
       if (s.gc) { R.light(s.x, s.y - 6, 40, s.gc, 0.45); R.emit(s.x, s.y - s.gy, s.gr, s.gc, s.ga); } // a glowing breakable (mushroom, crystal, shard) lights and glows until it is smashed
     }
     if (artProps) for (const p of view.props) qDraw(dn++, p.y, 4, p); // pixel-art props sort with the entities
+    ED.Arena.blocks(view, room, (y, b) => qDraw(dn++, y, 6, b)); // boss wall blocks (arena.js): kind 6
     crowdLod(view, local, nFoe, dn);
     for (const z of view.zones) if ((z.kind === 'fire' || z.kind === 'pfire') && z.w !== 10 && fireFade(z) > 0.01) { // (the Phoenix ring draws its own tongues) fire flames: kind 5 entries (3 and 4 are the room's statics and props), d = flame index
       const nf = fireCount(z), vis = Math.max(1, Math.ceil(nf * fireFade(z)));
@@ -267,6 +269,7 @@
       if (it.k === 3) { ED.Tiles.drawStatic(c, room, biome, it.o, view, t); continue; }
       if (it.k === 4) { shDX = shDY = 0; drawProp(c, it.o, view, local, t); continue; }
       if (it.k === 5) { drawFlame(c, it.o, it.d, t); continue; }
+      if (it.k === 6) { ED.Arena.drawBlock(c, it.o, t); continue; }
       const o = it.o, rim = low || o.fodder ? null : rimLight(o.x, o.y, it.k === 0 ? 16 : 0), still = atlasOn && it.k < 2 && AC.still(o), px = still ? Math.round(o.x / 2) * 2 : Math.round(o.x), py = still ? Math.round(o.y / 2) * 2 : Math.round(o.y); // feet on the buffer pixel grid (the 2 px art grid while standing still)
       if (rim) { shDX = -rim.dx * 0.28; shDY = -rim.dy * 0.12; } else { shDX = 0; shDY = 0; }
       if (it.k === 1) { // foe: atlas art (pose offsets are art-px steps), else the procedural look with pose offset, lean and squash (F.xform) in one matrix with the mirror
@@ -293,6 +296,7 @@
       if (it.k === 0 && !o.dead && !low) F.dashTrail && F.dashTrail(o, t);
     }
     shDX = shDY = 0;
+    ED.Arena.swords(c, view, t);
     drawProjectiles(c, view, t, 0);
     F.drawWorld(c);
     if (!low) drawMotes(c, view, room, biome, t, dt, 0);

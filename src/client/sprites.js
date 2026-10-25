@@ -1068,39 +1068,6 @@
     c.restore();
   };
 
-  LOOK.b_rime = (c, e, C, t, s) => {
-    const wind = e.pose === 'wind', slam = e.pose === 'slam', air = e.pose === 'air';
-    c.save(); c.lineWidth = 2;
-    if (air) c.translate(0, -18 - Math.sin(Math.min(1, (e.t || 0) / 1.2) * Math.PI) * 30);
-    rrect(c, -14, -12, 10, 13, 3, C.b); rrect(c, 4, -12, 10, 13, 3, C.b);
-    poly(c, [-20, -50, 20, -50, 24, -10, -24, -10], C.a);
-    poly(c, [-16, -50, -2, -50, -6, -30, -20, -34], '#ffffff', false);
-    glow(c, 0, -30, 22, C.c, 0.55); poly(c, [0, -40, 6, -30, 0, -20, -6, -30], C.c);
-    poly(c, [-10, -50, -14, -66, -4, -58, 0, -70, 4, -58, 14, -66, 10, -50], C.a);
-    c.fillStyle = C.c; c.fillRect(-7, -58, 4, 3); c.fillRect(3, -58, 4, 3);
-    const armY = wind ? -62 : slam ? -20 : -40;
-    poly(c, [-22, -48, -34, armY, -28, armY + 18, -20, -30], C.b);
-    poly(c, [22, -48, 34, armY, 28, armY + 18, 20, -30], C.b);
-    c.restore();
-  };
-
-  LOOK.b_forge = (c, e, C, t, s) => {
-    const wind = e.pose === 'wind', slam = e.pose === 'slam', air = e.pose === 'air', cast = e.pose === 'cast';
-    c.save(); c.lineWidth = 2;
-    if (air) c.translate(0, -Math.sin(Math.min(1, (e.t || 0) / 1.1) * Math.PI) * 40);
-    rrect(c, -11, -12, 9, 13, 3, C.b); rrect(c, 2, -12, 9, 13, 3, C.b);
-    poly(c, [-15, -44, 15, -44, 18, -10, -18, -10], C.a);
-    c.strokeStyle = '#ff8a2a'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(-8, -36); c.lineTo(-2, -26); c.lineTo(-6, -16); c.moveTo(8, -38); c.lineTo(4, -24); c.stroke(); c.strokeStyle = OUT; c.lineWidth = 2;
-    circ(c, -15, -40, 7, C.b); circ(c, 15, -40, 7, C.b);
-    rrect(c, -9, -60, 18, 17, 4, C.a);
-    rrect(c, -7, -53, 14, 3, 1, '#0b0806', false); c.fillStyle = C.c; c.fillRect(-5, -52.6, 4, 2); c.fillRect(1, -52.6, 4, 2);
-    glow(c, 0, -64, 16, '#ff9a3a', 0.5);
-    c.fillStyle = '#ffcf6a'; c.beginPath(); c.moveTo(-6, -60); c.quadraticCurveTo(0, -78 + Math.sin(t * 14) * 3, 6, -60); c.fill();
-    const ha = wind ? -2.4 : slam ? 0.9 : cast ? -1.2 + t * 12 : -0.4;
-    c.save(); c.translate(16, -34); c.rotate(ha); rrect(c, -2, -2, 34, 4, 1, '#3a2a20'); rrect(c, 28, -10, 14, 20, 3, '#5a4a40'); glow(c, 35, 0, 14, '#ff7a2a', 0.5); c.restore();
-    c.restore();
-  };
-
   LOOK.b_king = (c, e, C, t, s) => {
     const wind = e.pose === 'wind' || e.pose === 'slam', cast = e.pose === 'cast', air = e.pose === 'air';
     c.save(); c.lineWidth = 2;
