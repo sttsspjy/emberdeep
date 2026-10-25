@@ -128,6 +128,7 @@
     const extra = fn.call(this, p, a, data || {}, st, ED.Stats.skillNums(skill, st));
     if (extra === false) return;
     if (slot !== 2) this.onSkillCast(p, slot); // skill 3 fires no on-cast procs
+    if (p.rh && p.rh.cast) this.relicFire(p, 'cast', slot);
     this.emit(Object.assign({ t: 'skill', pid: p.pid, k: skill, a: Math.round(a * 100) / 100, x: Math.round(p.x), y: Math.round(p.y), slot }, extra));
   };
 })(globalThis.ED || (globalThis.ED = {}));

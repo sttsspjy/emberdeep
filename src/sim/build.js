@@ -65,6 +65,7 @@
     if (s > 1 && heal > 0) this.healPlayer(p, p.maxHp * heal);
     p.angelUsed = false;
     if (p.stats.cloverRerolls && s > 1) p.rerolls += p.stats.cloverRerolls;
+    if (p.rh && p.rh.stratum) this.relicFire(p, 'stratum', s);
   };
 
   // Called every tick from updatePlayer for a living, standing hero (after hazards).
@@ -73,6 +74,7 @@
     if (st.aegis) p.aegisT = Math.max(0, p.aegisT - dt);
     p.guardCd -= dt; p.guardT -= dt; p.frozenCd -= dt; p.tranceT -= dt;
     p.holyT -= dt; p.lanternT -= dt;
+    if (p.rh && p.rh.tick) this.relicFire(p, 'tick', dt);
     this.updateSkills(p, dt);
     this.updatePlayerCombat(p, dt);
   };
@@ -92,6 +94,7 @@
       if (boon) for (const p of this.players.values()) this.grantOffer(p, { src: 'level' });
       if (route) for (const p of this.players.values()) this.grantOffer(p, { src: 'class' });
       this.emit({ t: 'levelup', level: this.level, boon, cls: route ? 1 : 0 });
+      this.relicAll('level', this.level);
     }
   };
 
@@ -271,6 +274,7 @@
     p.offers.shift(); p.picks = p.offers.length; p.offer = null;
     if (gain) {
       this.emit({ t: 'boon', pid, id, x: p.x, y: p.y });
+      if (p.rh && p.rh.boon) this.relicFire(p, 'boon', id);
       if (b.evo) this.emit({ t: 'evolve', pid, path: b.evo, x: p.x, y: p.y });
       this.sendBuild(p);
     }

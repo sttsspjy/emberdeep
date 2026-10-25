@@ -148,7 +148,7 @@ const msgs = (w, t, pid) => w.msgs.filter(m => m.t === t && (!pid || m.to === pi
   let guard = 0;
   while (w.locked && guard++ < 60 * 60) { for (const e of w.enemies) if (e.hp > 0 && !(e.spawnT > 0)) w.killEnemy(e, a, { kind: 'weapon' }); w.update(1 / 60); }
   ok(!w.locked && w.run.embers.elites === emb + 4 + w.stratum + 3 * (2 + Math.floor(w.stratum / 2)) && a.offers.some(o => o.src === 'forge') && b.offers.some(o => o.src === 'forge'), `the won fight pays embers and its pay (${w.run.embers.elites - emb} embers: 4 + s, plus 3 elite kills)`);
-  ok(msgs(w, 'toast').length === 2, 'each hero is told what the fight paid');
+  ok(msgs(w, 'toast').filter(m => /gold/.test(m.text)).length === 2, 'each hero is told what the fight paid');
 }
 
 // ---------------- personal dialog ----------------

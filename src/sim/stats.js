@@ -39,7 +39,7 @@
       charges: 0,
       minions: 0, minionDmg: 0, boneSpikes: 0, phoenix: 0, strataHeal: 0, wardrum: 0,
       homing: 0, meleeReach: 0, mirror: 0, choices: 0, idol: 0, vuln: 0, banner: 0, angel: 0,
-      chalice: 0, emberBonus: 0, discount: 0, stone: 0, cloverRerolls: 0, aegis: 0, light: 0,
+      chalice: 0, emberBonus: 0, discount: 0, stone: 0, cloverRerolls: 0, aegis: 0, light: 0, markup: 0, reviveK: 0, noRest: 0,
       // status route hooks (+X% to every status amount the hero applies; +X% to class-element skill hits)
       statusPow: 0, classElMul: 0,
       // element verbs (src/sim/elements.js): Fire, Ice, Lightning, Poison, Holy, Shadow, General (Bleed and the finisher)
@@ -66,6 +66,7 @@
     if (ex.ifNone) for (const k in ex.ifNone) if (!w[k] && !(k === 'wave' && w.ring)) w[k] = Object.assign({}, ex.ifNone[k]); // a ring weapon's ring stands in for the wave
   }
 
+  const NO_MODS = Object.freeze({}); // the mods of a source with no stat side
   // Every source of a stat block, in the order the stat block adds them: [{ kind, id, label, mods, n, rank?, card?, x? }]; a source adds mods[key] x n to its key.
   // Order: class, Hearth upgrades, mastery levels, pacts, boons (insertion order), relics, Philosopher's Stone per relic held, reward health, a full Grail. A class card (card: true) carries its totals at `rank`
   // (n is 1) and compounds slot damage. build: { cls, weapon, boons: {id: n}, relics: [id], meta: { up: [], mastery }, pact, chaliceHp, bonusHp }.
@@ -89,8 +90,8 @@
       out.push({ kind: 'card', id, label: ED.cardName(id, n) + (n > 1 ? ' ×' + n : ''), mods: ED.cardTotals(b, n), n: 1, rank: n, card: true }); // card total per rank: mods + up x (rank - 1) + r2 + r3
     }
     const relics = build.relics || [];
-    for (const id of relics) if (ED.RELICS[id]) out.push({ kind: 'relic', id, label: ED.RELICS[id].name, mods: ED.RELICS[id].mods, n: 1 });
-    if (relics.indexOf('stone') >= 0) out.push({ kind: 'relic', id: 'stone', label: ED.RELICS.stone.name + ' (per relic)', mods: ED.RELICS.stone.perRelic, n: relics.length });
+    for (const id of relics) if (ED.RELICS[id]) out.push({ kind: 'relic', id, label: ED.RELICS[id].name, mods: ED.RELICS[id].mods || NO_MODS, n: 1 }); // a relic with no stat side has no mods
+    if (relics.indexOf('stone') >= 0) out.push({ kind: 'relic', id: 'stone', label: ED.RELICS.stone.name + ' (per relic)', mods: ED.RELICS.stone.perRelic, n: ED.heldRelics(relics) }); // curses do not count
     if (build.chaliceHp) out.push({ kind: 'reward', id: 'chalice', label: 'Grail of Ages kills', mods: { hp: build.chaliceHp }, n: 1 });
     if (build.bonusHp) out.push({ kind: 'reward', id: 'vigor', label: 'Vigor rewards', mods: { hp: build.bonusHp }, n: 1 });
     if (relics.indexOf('chalice') >= 0 && (build.chaliceHp || 0) >= ED.RELICS.chalice.full.hp) out.push({ kind: 'relic', id: 'chalice', label: ED.RELICS.chalice.name + ' (full)', mods: ED.RELICS.chalice.full.mods, n: 1 });

@@ -323,13 +323,14 @@ const STORED_V2 = {"v":2,"news":0,"name":"Stored","embers":100,"lifetime":900,"u
     `full Hearth + mastery 10: +24% damage, +15 health, +9% crit, +10% recharge, +9 armor, +3% speed, +6% xp, +6% gold (got ${['dmg', 'hp', 'crit', 'cdr', 'armor', 'spd', 'xp', 'gold'].map(k => d(k).toFixed(3))})`);
 }
 
-// ---- relics: the whole list is in the pool, no element tag, 14 removed ----
+// ---- relics: the v7 table (c / r / e drop, boss picks, curses), no element tag, the 14 element relics gone ----
 {
   const gone = ['fang', 'embercharm', 'frostshard', 'stormidol', 'halo', 'gravecandle', 'wispjar', 'crest', 'gauntlet', 'frozenheart', 'brazier', 'glaciercore', 'lightningrod', 'venomgland'];
   ok(gone.every(id => !ED.RELICS[id]), 'the 14 element relics are gone');
-  ok(ED.RELIC_IDS.length === 31 && ED.RELIC_IDS.every(id => { const r = ED.RELICS[id]; return !('start' in r) && !('cost' in r) && !('req' in r) && !('el' in r) && ED.RELIC_PRICE[r.rar]; }), 'every remaining relic is a plain pool entry with a shop price');
+  const sold = { c: 1, r: 1, e: 1 };
+  ok(ED.RELIC_IDS.every(id => { const r = ED.RELICS[id]; return !('start' in r) && !('cost' in r) && !('req' in r) && !('el' in r) && (sold[r.rar] ? ED.RELIC_PRICE[r.rar] > 0 : ED.RELIC_PRICE[r.rar] === undefined); }), 'every relic is a plain pool entry; c / r / e have a shop price, boss relics and curses none');
   const byRar = {}; for (const id of ED.RELIC_IDS) byRar[ED.RELICS[id].rar] = (byRar[ED.RELICS[id].rar] || 0) + 1;
-  same(['c', 'r', 'e', 'l'].map(k => byRar[k]), [8, 12, 6, 5], 'relics per rarity (common, rare, epic, legendary)');
+  same(['c', 'r', 'e', 'boss', 'curse'].map(k => byRar[k]), [28, 23, 12, 10, 10], 'relics per rarity (common, rare, epic, boss, curse)');
   ok(ED.relicFits === undefined && S.relicUnlocked === undefined && S.unlockRelic === undefined && S.relicReqMet === undefined, 'the Codex API is gone');
   // Soul Jar lives on as a Shadow path boon and reads the same stat
   const stats = (boons) => ED.Stats.compute({ cls: 'knight', weapon: 'longsword', boons, relics: [], meta: META(), pact: 0 });
@@ -338,19 +339,23 @@ const STORED_V2 = {"v":2,"news":0,"name":"Stored","embers":100,"lifetime":900,"u
   // the pool in a world
   const w = new ED.World({ seed: 5, pact: 0, players: [{ pid: 'a', name: 'A', slot: 0, cls: 'knight', weapon: 'longsword', meta: META() }] });
   w.startRun();
-  const seen = new Set(), RAR = { c: 0, r: 1, e: 2, l: 3 };
-  for (let i = 0; i < 6000; i++) seen.add(w.rollRelic('c'));
-  ok(seen.size === ED.RELIC_IDS.length, `a roll reaches every relic (${seen.size} of ${ED.RELIC_IDS.length})`);
+  const drop = ED.RELIC_IDS.filter(id => sold[ED.RELICS[id].rar]), seen = new Set(), RAR = { c: 0, r: 1, e: 2 };
+  for (let i = 0; i < 8000; i++) seen.add(w.rollRelic('c'));
+  ok(seen.size === drop.length && [...seen].every(id => sold[ED.RELICS[id].rar]), `a roll reaches every c / r / e relic and never a boss relic or a curse (${seen.size} of ${drop.length})`);
   let low = 0; for (let i = 0; i < 400; i++) if (RAR[ED.RELICS[w.rollRelic('e')].rar] < 2) low++;
   ok(low === 0, 'a minimum rarity is respected');
-  const rest = new Set(ED.RELIC_IDS); rest.delete('mask');
+  let boss = 0, curse = 0; for (let i = 0; i < 200; i++) { if (ED.RELICS[w.rollRelic('boss')].rar === 'boss') boss++; if (ED.RELICS[w.rollRelic('curse')].rar === 'curse') curse++; }
+  ok(boss === 200 && curse === 200, 'boss relics and curses roll only when asked for exactly');
+  const rest = new Set(drop); rest.delete('mask');
   ok(w.rollRelic('c', rest) === 'mask', 'an exclude set is respected');
-  const hero = w.players.get('a'); for (const id of ED.RELIC_IDS) hero.relics.push(id);
-  ok(ED.RELIC_IDS.includes(w.rollRelic('c')), 'with every relic held a roll still returns one');
+  const hero = w.players.get('a'); for (const id of drop) hero.relics.push(id);
+  ok(drop.includes(w.rollRelic('c')), 'with every relic held a roll still returns one');
   hero.relics.length = 0;
   hero.relics.push('mask');
   let mask = 0; for (let i = 0; i < 400; i++) if (w.rollRelic('c') === 'mask') mask++;
   ok(mask === 0, 'a relic a hero holds does not drop again');
+  const W1 = ED.World.RELIC_W(1), W4 = ED.World.RELIC_W(4);
+  ok(W1.c > W4.c && W1.r < W4.r && W1.e < W4.e, 'deeper strata weigh rare and epic relics up, commons down');
 }
 
 // ---- per-hero deed counters in the run summary ----

@@ -23,7 +23,7 @@ function stage(cls, boons, o) {
   w.stratum = o.stratum || 1;
   return { w, p };
 }
-const bossDown = (w, s) => { w.stratum = s; w.boss = null; w.onBossKilled(w.spawnEnemy(ED.biomeFor(s).boss, 100, 100)); };
+const bossDown = (w, s) => { w.stratum = s; w.boss = null; w.onBossKilled(w.spawnEnemy(ED.biomeFor(s).boss, 100, 100)); if (w.bossBeat) w.updateBossBeat(ED.World.BOSS_BEAT); }; // the boss kill, then its 2 s reward beat
 const ranks = (w, pid) => w.msgs.filter(m => m.t === 'forkRank' && m.to === pid).map(m => m.rank);
 
 // ---------------- fork ranks ----------------
