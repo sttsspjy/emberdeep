@@ -279,6 +279,7 @@
     for (const q of this.projs) if (q.team !== 0) q.dead = true; // flagged, not refiltered: the kill may land inside the projectile/zone loops, which end by reassigning their own keep list
     for (const z of this.zones) if (z.team !== 0) z.dead = true;
     this.boss = null; this.enc = null; this.locked = false;
+    ED.Bosses.clearArena(this); // boss walls fall, the carpet goes
     this.roomState[this.roomId].cleared = true;
     this.emit({ t: 'bossDown', type: e.type, x: Math.round(e.x), y: Math.round(e.y) });
     this.dropXp(e.x, e.y, e.def.xp * (1 + 0.3 * (s - 1)));
@@ -497,6 +498,7 @@
   };
   // Hero hits on the room's unbroken breakables (at most 8, a plain loop): a circle (x, y, r), the segment (x0, y0)-(x1, y1) swept by a body of radius r, or the sector of reach and arc around the hero's facing a.
   W.smashCircle = function (p, x, y, r) {
+    if (this.arena) this.wallCircle(p, x, y, r + 4); // boss walls (bosses.js)
     const bs = this.room.breakables; if (!bs.length) return;
     const rs = this.roomState[this.roomId], rr = (SMASH_R + r) * (SMASH_R + r);
     for (let i = 0; i < bs.length; i++) {
@@ -506,6 +508,7 @@
     }
   };
   W.smashSeg = function (p, x0, y0, x1, y1, r) {
+    if (this.arena) this.wallSeg(p, x0, y0, x1, y1, r + 4);
     const bs = this.room.breakables; if (!bs.length) return;
     const rs = this.roomState[this.roomId], rr = (SMASH_R + r) * (SMASH_R + r);
     for (let i = 0; i < bs.length; i++) {
@@ -514,6 +517,7 @@
     }
   };
   W.smashArc = function (p, a, reach, arc) {
+    if (this.arena) this.wallArc(p, a, reach, arc);
     const bs = this.room.breakables; if (!bs.length) return;
     const rs = this.roomState[this.roomId];
     for (let i = 0; i < bs.length; i++) {

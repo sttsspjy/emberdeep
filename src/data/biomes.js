@@ -54,7 +54,7 @@
       hazard: 'ice',
       enemies: [['icewolf', 3], ['frostwisp', 3], ['rimemage', 2], ['frozenskel', 3], ['icegolem', 1], ['sentinel', 1]],
       elite: 'frostknight',
-      boss: 'rimeheart',
+      boss: 'drownedking', // stand-in: Rimeheart is cut (v6 strata, W1)
       fodder: 'rimemote',
     },
     {
@@ -72,7 +72,7 @@
       hazard: 'lava',
       enemies: [['imp', 3], ['lavahound', 3], ['automaton', 1], ['flameturret', 2], ['cinderbat', 3], ['drone', 2]],
       elite: 'forgeknight',
-      boss: 'forgelord',
+      boss: 'hollowking', // stand-in: the Forgelord is cut (v6 strata, W1)
       fodder: 'ashimp',
     },
     {

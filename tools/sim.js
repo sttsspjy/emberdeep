@@ -1,5 +1,5 @@
 // Usage: node tools/sim.js <heroes> <runs> <botSkill 0-1> <meta none|mid|max> [classes|-] [pact] [--pick=random|smart|legacy] [--start=random|class|generalist|rotate|<gateId>] [--gates=1|2] [--force=id[@slot],...]
-//   [--route=attack|skill1|skill2|element|random|rotate] [--fork=0|1|random|rotate] [--weapon=0|1|2|rotate] [--aimnoise=<angle rad>,<point px>|0] [--seed0=N] [--dark=smart|always|never] [--strata=N] [--from=N] [--vet[=charges,rider,dodge,hazard]] [--vetreact=<s>] [--lambda=<x>|auto[:<x0>]] [--out=rows.json] [--pair=rows.json] [--quiet] [--explain]   (parallel batches: tools/simpool.js, fixed quick suite: tools/bal.js)
+//   [--route=attack|skill1|skill2|element|random|rotate] [--fork=0|1|random|rotate] [--weapon=0|1|2|rotate] [--aimnoise=<angle rad>,<point px>|0] [--seed0=N] [--dark=smart|always|never] [--strata=N] [--from=N] [--boss] [--vet[=charges,rider,dodge,hazard]] [--vetreact=<s>] [--lambda=<x>|auto[:<x0>]] [--out=rows.json] [--pair=rows.json] [--quiet] [--explain]   (parallel batches: tools/simpool.js, fixed quick suite: tools/bal.js)
 // Headless simulation harness: loads the game's sim files into this Node context and drives bot heroes through full runs (deterministic per seed: the bot has its own seeded RNG).
 // Bot policy: fight, claim room rewards, use rest sites and shops, explore every unvisited room nearest-first, then head for the boss.
 // Dark rooms follow --dark: smart (default) enters one while every living hero has at least DARK_HP of max HP, always enters, never skips them.
@@ -19,6 +19,7 @@
 // --out=file.json writes one row per run (seed, class, depth, win, boss time to kill and HP lost per stratum, evolution stratum, main path, gates); --pair=file.json prints the mean difference to such a baseline for the same seeds.
 // --lambda: the weight of effective health against damage in --pick=smart (tools/pick.js): a number (default 2), or auto[:x0] = x0 times the foe damage lever of each stratum the pick looks ahead to (live tables).
 // --from=N: the bots start at stratum N with the build strata 1..N-1 give (skipStrata plays them without fighting); stats, wins and depth then cover strata >= N (depth counts the skipped bosses as beaten, time counts from stratum N, `entry` holds the hero state at each stratum start).
+// --boss: one boss fight per run: the walk of --from (default stratum 1) also plays stratum N's rooms without fighting up to its boss door; the run ends at the kill or the wipe; a `boss-only` line prints kills, hero deaths, time to kill and HP lost.
 // meta: none = fresh profile; mid = half the upgrade ranks, mastery 5; max = every rank, mastery 10. Every relic is always in the pool.
 const fs = require('fs');
 const vm = require('vm');
@@ -26,7 +27,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..', 'src') + '/';
 const files = ['util.js', 'data/biomes.js', 'data/enemies.js', 'data/classes.js', 'data/boons.js', 'data/classboons.js', 'data/ascended.js', 'data/relics.js', 'data/meta.js', 'save.js',
   'sim/dungeon.js', 'sim/stats.js', 'sim/world.js', 'sim/combat.js', 'sim/build.js', 'sim/skills.js', 'sim/class-knight.js', 'sim/class-ranger.js', 'sim/class-pyro.js', 'sim/class-shade.js', 'sim/class-cleric.js', 'sim/class-necro.js',
-  'sim/ai.js', 'sim/bosses.js', 'sim/rooms.js', 'sim/sheet.js'];
+  'sim/ai.js', 'sim/bosses.js', 'sim/boss-warden.js', 'sim/boss-spore.js', 'sim/rooms.js', 'sim/sheet.js'];
 // Main context, not vm.createContext: inside a vm context every global read (Math, Object, ...) goes through the context interceptor and the sim runs ~3x slower.
 for (const f of files) vm.runInThisContext(fs.readFileSync(ROOT + f, 'utf8'), { filename: f });
 const ED = globalThis.ED;
@@ -53,10 +54,10 @@ const NEUTRAL_PREF = ['edge', 'quick', 'keen', 'brutal', 'vigor', 'stalwart', 'p
 
 // First step toward (tx, ty): the shortest path that stays off floor hazards, else the shortest path (a hero walks around hazards when it can).
 function bfsDir(room, locked, sx, sy, tx, ty) { return bfsStep(room, locked, sx, sy, tx, ty, true) || bfsStep(room, locked, sx, sy, tx, ty, false); }
-// Walking distance to goal tile g (-1: unreachable) over the tiles a hero may enter (safe: hazards excluded); cached per room, lock state and goal (room tiles never change after floor generation).
-const fields = new Map(); let fieldRoom = null;
+// Walking distance to goal tile g (-1: unreachable) over the tiles a hero may enter (safe: hazards excluded); cached per room, lock state and goal (room.tver counts boss wall changes, which clear the cache).
+const fields = new Map(); let fieldRoom = null, fieldVer = 0;
 function goalField(room, locked, g, safe) {
-  if (room !== fieldRoom) { fields.clear(); fieldRoom = room; }
+  if (room !== fieldRoom || (room.tver | 0) !== fieldVer) { fields.clear(); fieldRoom = room; fieldVer = room.tver | 0; }
   const key = g * 4 + (locked ? 2 : 0) + (safe ? 1 : 0);
   let f = fields.get(key);
   if (f) return f;
@@ -94,10 +95,12 @@ function bfsStep(room, locked, sx, sy, tx, ty, safe) {
   return [nx - sx, ny - sy];
 }
 
-// Steers (mx, my) off hazard tiles: standing on one or about to step onto one, the first turn of 35-145 degrees (either side) or the reverse that lands on safe floor.
-function avoidHazard(room, p, mx, my) {
-  const look = p.r + 12, bad = (dx, dy) => D.tileAt(room, p.x + dx * look, p.y + dy * look) === 4 || D.tileAt(room, p.x + dx * look * 0.5, p.y + dy * look * 0.5) === 4;
-  if (D.tileAt(room, p.x, p.y) !== 4 && !bad(mx, my)) return [mx, my];
+// Steers (mx, my) off hazard tiles (and a boss's spore carpet unless carpetOk): standing on one or about to step onto one, the first turn of 35-145 degrees (either side) or the reverse that lands on safe floor.
+const carpetAt = (room, x, y) => !!room.carpet && x >= 0 && y >= 0 && !!room.carpet[Math.floor(y / T) * room.w + Math.floor(x / T)];
+const badAny = (room, x, y) => D.tileAt(room, x, y) === 4 || carpetAt(room, x, y);
+function avoidHazard(room, p, mx, my, carpetOk) {
+  const badAt = carpetOk ? (rm, x, y) => D.tileAt(rm, x, y) === 4 : badAny, look = p.r + 12, bad = (dx, dy) => badAt(room, p.x + dx * look, p.y + dy * look) || badAt(room, p.x + dx * look * 0.5, p.y + dy * look * 0.5);
+  if (!badAt(room, p.x, p.y) && !bad(mx, my)) return [mx, my];
   const l = Math.hypot(mx, my) || 1, a0 = Math.atan2(my, mx);
   for (const off of [0.6, -0.6, 1.1, -1.1, 1.6, -1.6, 2.1, -2.1, 2.5, -2.5, Math.PI]) {
     const dx = Math.cos(a0 + off), dy = Math.sin(a0 + off);
@@ -121,6 +124,68 @@ function crowdEscape(w, p, near) {
     if (s < bs) { bs = s; best = [Math.cos(a), Math.sin(a)]; }
   }
   return best;
+}
+
+// ---------------- boss arena habits (Bone Warden lanes, Sporemother carpet and pods) ----------------
+// First step (unit vector) of the walk from (x, y) to the nearest walkable tile that `goal(tileIndex)` accepts, or null when none is reachable.
+function bfsTo(room, locked, x, y, goal) {
+  const w = room.w, n = w * room.h, s = Math.floor(y / T) * w + Math.floor(x / T);
+  if (s < 0 || s >= n) return null;
+  const tiles = room.tiles, prev = new Int32Array(n).fill(-1), q = new Int32Array(n), ok = (t) => t === 0 || t === 4 || (t === 5 && !locked);
+  let qh = 0, qt = 0, hit = -1; prev[s] = s; q[qt++] = s;
+  while (qh < qt) {
+    const i = q[qh++];
+    if (i !== s && goal(i)) { hit = i; break; }
+    const cx = i % w;
+    for (const j of [cx > 0 ? i - 1 : -1, cx < w - 1 ? i + 1 : -1, i - w, i + w]) if (j >= 0 && j < n && prev[j] < 0 && ok(tiles[j])) { prev[j] = i; q[qt++] = j; }
+  }
+  if (hit < 0) return null;
+  let c = hit; while (prev[c] !== s) c = prev[c];
+  const dx = (c % w + 0.5) * T - x, dy = (Math.floor(c / w) + 0.5) * T - y, l = Math.hypot(dx, dy) || 1;
+  return [dx / l, dy / l];
+}
+// Arena pieces first: the nearest spore bud within BUD_NEAR px (it would regrow a pod), else the nearest spore pod within POD_NEAR px (breaking one clears the carpet around it). null when none qualifies.
+const POD_NEAR = 260, BUD_NEAR = 320;
+function arenaTarget(w, foes, p) {
+  let best = null, bd = Infinity, pri = 9;
+  for (const e of foes) {
+    const k = e.type === 'sporebud' ? 0 : e.type === 'sporepod' ? 1 : 9;
+    if (k > pri || k === 9) continue;
+    const d2 = U.dist2(e.x, e.y, p.x, p.y);
+    if (d2 > (k === 1 ? POD_NEAR : BUD_NEAR) ** 2) continue;
+    if (k < pri || d2 < bd) { pri = k; bd = d2; best = e; }
+  }
+  return best;
+}
+// Lane charge warning (Bone Warden, zone.lane = the band in px) that holds hero p and has been seen for `react` s: the way out of the band, else null.
+function laneEscape(w, p, react) {
+  for (const z of w.zones) {
+    if (!z.lane || z.team !== 1 || z.t < react || p.y < z.lane.y0 - p.r || p.y > z.lane.y1 + p.r) continue;
+    const d = bfsTo(w.room, w.locked, p.x, p.y, (i) => { const ty = Math.floor(i / w.room.w) * T; return ty + T <= z.lane.y0 - 2 || ty >= z.lane.y1 + 2; });
+    return d ? { d, tl: z.dur - z.t } : null;
+  }
+  return null;
+}
+// Plain bot (no --vet) in a boss fight: the way out of a hostile swing cone or strike line that holds hero p and has been seen for `react` s (out of the cone's reach, sideways off the line), else null.
+function bossDodge(w, p, react) {
+  let ox = 0, oy = 0;
+  for (const z of w.zones) {
+    if (z.team !== 1 || z.t < react || z.lane) continue;
+    if (z.kind === 'teleCone') {
+      const dx = p.x - z.x, dy = p.y - z.y, d = Math.hypot(dx, dy) || 1;
+      if (d < z.r + p.r + 10 && Math.abs(U.angDiff(z.a, Math.atan2(dy, dx))) < z.arc / 2 + 0.25) { ox += dx / d; oy += dy / d; }
+    } else if (z.kind === 'teleLine') {
+      const ca = Math.cos(z.a), sa = Math.sin(z.a), rx = p.x - z.x, ry = p.y - z.y, along = rx * ca + ry * sa, side = -rx * sa + ry * ca;
+      if (along > -p.r && along < z.len + p.r && Math.abs(side) < z.w / 2 + p.r + 8) { const sg = side >= 0 ? 1 : -1; ox += -sa * sg; oy += ca * sg; }
+    }
+  }
+  return ox || oy ? [ox, oy] : null;
+}
+// Standing on spore carpet: the way to the nearest bare floor tile, else null.
+function carpetEscape(w, p) {
+  const room = w.room;
+  if (!carpetAt(room, p.x, p.y)) return null;
+  return bfsTo(room, w.locked, p.x, p.y, (i) => !room.carpet[i] && (room.tiles[i] === 0 || room.tiles[i] === 5));
 }
 
 // ---------------- veteran preset (--vet) ----------------
@@ -569,7 +634,7 @@ const entryOf = (w, p) => ({ level: w.level, boons: Object.values(p.boons).reduc
 // Each floor is its real Dungeon.generate floor. The rooms are the bot's exploration route (nextRoom with the --dark policy), entered with World.enterRoom;
 // every foe dies the tick it exists, so the room's own wave timers, kill drops (xp, gold, hearts), clear reward and boss reward run as in play. Between rooms the bot claims every prop wantedProp names and picks every offer with its
 // pick policy; the portal starts the next floor. Heroes are untouchable, hero 0 collects every pickup. Returns { t0 (game time at the end), from, keyAt, duoAt, evoAt (hero 0, first stratum), bad (reason the walk stopped early, or null) }.
-function skipStrata(w, from, ctx, policy, brng, darkPolicy) {
+function skipStrata(w, from, ctx, policy, brng, darkPolicy, toBoss) {
   const dt = 1 / 60, heroes = [...w.players.values()], lead = heroes[0], out = { t0: 0, from, keyAt: null, duoAt: null, evoAt: null, bad: null };
   const tick = () => {
     for (const p of heroes) { if (p.offer) takeOffer(w, p, policy, brng, ctx); p.invuln = 1; }
@@ -612,6 +677,16 @@ function skipStrata(w, from, ctx, policy, brng, darkPolicy) {
     lead.x = portal.x; lead.y = portal.y; w.interact(lead.pid, portal.id);
     for (let i = 0; i < 600 && w.stratum === s && w.state === 'play'; i++) tick();
     if (w.stratum === s) out.bad = `stuck on stratum ${s}`;
+  }
+  if (toBoss && !out.bad && w.state === 'play') { // --boss: stratum N's rooms too, up to the door of its boss room
+    settle(); claim();
+    for (let rooms = 0; rooms < 40 && w.state === 'play'; rooms++) {
+      const h = hop();
+      if (!h || w.floor.rooms[h[0]].type === 'boss') break;
+      w.enterRoom(h[0], h[1]);
+      for (let i = 0; i < 60 * 150 && w.locked && w.state === 'play'; i++) tick();
+      claim();
+    }
   }
   for (const p of heroes) p.invuln = 0;
   settle();
@@ -668,7 +743,7 @@ function runBot(opts) {
       }
     }
   }
-  const skip = opts.from > 1 ? skipStrata(w, Math.min(opts.from | 0, ED.CONST.STRATA), ctx, policy, brng, opts.dark) : null; // --from: strata 1..N-1 are played before the recorders below are installed
+  const skip = opts.from > 1 || opts.bossOnly ? skipStrata(w, Math.min(Math.max(1, opts.from | 0), ED.CONST.STRATA), ctx, policy, brng, opts.dark, opts.bossOnly) : null; // --from: strata 1..N-1 are played before the recorders below are installed
   const rec = { dark: [0, 0, 0, 0, 0, 0], left: [], clears: [], bossTimes: [], dmgBy: {}, downedBy: [], dealtStrata: [], heal: {}, dmgByS: {}, spawns: {}, offers: {}, relicsBy: {}, goldIn: 0, roomDmg: 0, dmgStrata: [], hpFrac: [], healSrc: 'other' };
   rec.evoAt = null; // { s: stratum, lvl: team level } when hero 0 takes its evolution
   rec.arrive = []; // per stratum (index = stratum - 1): arrivalOf at the first entry of the boss room
@@ -787,6 +862,8 @@ function runBot(opts) {
         let tgt = null, bd = 1e9, nf = null, fd = 1e9;
         for (const e of foes) { const d2 = U.dist2(e.x, e.y, p.x, p.y); if (e.fodder) { if (d2 < fd) { fd = d2; nf = e; } } else if (d2 < bd) { bd = d2; tgt = e; } }
         if (nf && (!tgt || Math.sqrt(bd) - (p.stats.melee ? tgt.r : 0) >= (p.stats.melee ? p.stats.weapon.range : 380))) { tgt = nf; bd = fd; }
+        const piece = w.boss ? arenaTarget(w, foes, p) : null; // boss fights: spore buds and pods before the boss
+        if (piece) { tgt = piece; bd = U.dist2(piece.x, piece.y, p.x, p.y); }
         const d = Math.sqrt(bd);
         const ideal = p.stats.melee ? (p.stats.weapon.range * 0.6 + tgt.r) : (p.stats.deadeye ? 230 : 170); // Deadeye keeps its distance
         if (vetH) c.appT = d > ideal + 30 ? c.appT + dt : 0; // seconds spent closing in without arriving
@@ -799,16 +876,24 @@ function runBot(opts) {
         if (!vetD) { // --vet dodge: the look-ahead plan below replaces these
           for (const pr of w.projs) if (pr.team === 1 && U.dist2(pr.x, pr.y, p.x, p.y) < 55 * 55) { danger = true; dir = [dir[0] + (p.x - pr.x) * 2, dir[1] + (p.y - pr.y) * 2]; }
           for (const z of w.zones) if ((z.kind === 'tele' || z.kind === 'poison' || z.kind === 'fire') && z.team === 1 && U.dist2(z.x, z.y, p.x, p.y) < (z.r + 12) ** 2) { danger = true; dir = [p.x - z.x + dir[0] * 0.2, p.y - z.y + dir[1] * 0.2]; }
+          if (w.boss && c.attn) { const bd = bossDodge(w, p, VR); if (bd) { danger = true; dir = [bd[0] + dir[0] * 0.1, bd[1] + dir[1] * 0.1]; } } // boss fights: out of swing cones and strike lines it has seen
         }
         let l = Math.hypot(dir[0], dir[1]) || 1;
         const esc = crowdEscape(w, p, w.foesNear(p.x, p.y, CROWD_R + 60, crowd));
         if (esc) { dir = [esc[0] + dir[0] / l * 0.35, esc[1] + dir[1] / l * 0.35]; l = Math.hypot(dir[0], dir[1]) || 1; } // out of a crowd (the walking slow), keeping a little of the chase
         mx = dir[0] / l; my = dir[1] / l;
         if (brng.next() > skill) { mx += (brng.next() - 0.5) * 1.5; my += (brng.next() - 0.5) * 1.5; }
+        c.tgt = tgt; c.carpetOk = !!w.boss && p.stats.melee && (tgt === w.boss || tgt === piece); // a melee hero walks through spore carpet to reach the boss or a pod
+        let forced = null; // boss arena: an attentive bot walks out of a lane charge's band (dashing in its last 0.3 s) and off spore carpet unless it is hitting the boss in melee
+        if (w.boss && c.attn) {
+          const le = laneEscape(w, p, VR);
+          if (le) { mx = le.d[0]; my = le.d[1]; danger = true; forced = le; }
+          else if (!(c.carpetOk && d - tgt.r < p.stats.weapon.range + 10)) { const ce = carpetEscape(w, p); if (ce) { mx = ce[0]; my = ce[1]; } }
+        }
         let plan = null, T = null;
         const spd = vetD || vetR ? p.stats.moveSpeed * ED.Stats.moveRate(p) : 0;
         if (vetD || vetR) T = vetThreats(w, p, spd, c.attn ? VR : VR + VLAPSE);
-        if (vetD && T) { plan = vetPlan(w, p, c, mx, my, spd, T); mx = plan.mx; my = plan.my; danger = plan.risk > 0.02; }
+        if (vetD && T && !forced) { plan = vetPlan(w, p, c, mx, my, spd, T); mx = plan.mx; my = plan.my; danger = plan.risk > 0.02; }
         const a = Math.atan2(tgt.y - p.y, tgt.x - p.x), st = p.stats;
         const inRange = st.melee ? d - tgt.r < st.weapon.range : d < 380;
         if (st.channel && (c.holdT = (c.holdT || 0) - dt) <= 0) { c.hold = brng.next() < skill; c.holdT = 0.5; } // Pyroclast: the choice to stand still is renewed every 0.5 s (a roll per tick would break Channel within a few ticks)
@@ -822,7 +907,8 @@ function runBot(opts) {
         else if (c.skill <= 0 && botCast(w, p, 0, tgt, d, a, foes, brng, skill)) c.skill = st.skillCd;
         if (c.skill2 <= 0 && st.skill2Cd && botCast(w, p, 1, tgt, d, a, foes, brng, skill)) c.skill2 = st.skill2Cd;
         let dd = null; // --vet: the dash heading of the dodge plan, else of a rider dash through a pack
-        if (vetD && plan && plan.dash) dd = plan.dash; else if (vetR && !danger) dd = vetRider(w, p, c, foes, T, spd);
+        if (forced && forced.tl < 0.3 && c.dashN >= 1 && !(p.dashT > 0) && !p.skillMove) dd = forced.d;
+        else if (vetD && plan && plan.dash) dd = plan.dash; else if (vetR && !danger) dd = vetRider(w, p, c, foes, T, spd);
         if (dd) { p.dashT = ED.CONST.DASH.t; p.dashDx = dd[0]; p.dashDy = dd[1]; w.playerDash(p, dd[0], dd[1]); ED.Sim.dashTry(c, p.stats); }
         else if (!vetD && danger && c.dashN >= 1 && brng.next() < skill * 0.5) { p.dashT = ED.CONST.DASH.t; p.dashDx = mx; p.dashDy = my; w.playerDash(p, mx, my); ED.Sim.dashTry(c, p.stats); }
         else if (!vetR && !danger && c.dashN >= 1 && d <= 90 && (p.stats.dashDmg || p.stats.dashFire || p.stats.dashFrost || p.stats.dashBomb) && brng.next() < skill * 0.5) { // dash rider: dash through the target
@@ -843,7 +929,7 @@ function runBot(opts) {
       }
       // floor hazards: the bot watches the ground on a share `skill` of its ticks (redrawn every 0.25 s) and steers off or around hazard tiles
       if ((c.attnT -= dt) <= 0) { c.attn = brng.next() < (vetD ? 1 - (1 - skill) / 2 : skill); c.attnT = 0.25; } // --vet dodge: half the lapses
-      if ((c.attn || (vetH && foes.length && c.appT < 3)) && (mx || my)) { const v = avoidHazard(w.room, p, mx, my); mx = v[0]; my = v[1]; } // --vet hazard: always watches the ground in a fight, unless 3 s of closing in on a foe have not arrived (it stands across hazard floor)
+      if ((c.attn || (vetH && foes.length && c.appT < 3)) && (mx || my)) { const v = avoidHazard(w.room, p, mx, my, c.carpetOk); mx = v[0]; my = v[1]; } // --vet hazard: always watches the ground in a fight, unless 3 s of closing in on a foe have not arrived (it stands across hazard floor)
       if (opts.trace) opts.trace(w, p, mx, my, foes, c);
       ED.Sim.movePlayer(p, { mx, my }, dt, w.room, w.locked, w.zones, w.foesNear(p.x, p.y, 40, touch));
     }
@@ -896,6 +982,7 @@ function runBot(opts) {
     w.fx.length = 0; w.msgs.length = 0;
     if (w.roomTime > 150 && w.locked && !w.boss) { log.push('  STUCK in room ' + w.roomId + ' type ' + w.room.type + ' hostiles ' + w.hostiles()); break; }
     if (w.roomTime > 420 && !w.locked && w.state === 'play') { log.push('  IDLE in room ' + w.roomId + ' type ' + w.room.type); break; }
+    if (opts.bossOnly && rec.bossTry.length && rec.bossTry[rec.bossTry.length - 1].kill) break; // --boss: the run ends with its one boss fight
     if (opts.maxStratum && w.stratum > opts.maxStratum) break; // --strata=N: stop on entering stratum N+1 (strata 1..N play out exactly as in a full run)
   }
   strata.push(Math.round(w.time - stratumStart));
@@ -1092,7 +1179,7 @@ const optsFromFlags = (flags) => ({
   weapon: flags.weapon === undefined || isNaN(+flags.weapon) ? flags.weapon : +flags.weapon, explain: !!flags.explain,
   aimNoise: flags.aimnoise === undefined ? undefined : flags.aimnoise.split(',').map(Number).concat([0]).slice(0, 2).map(v => (Number.isFinite(v) ? v : 0)),
   force: flags.force ? flags.force.split(',') : [], dark: flags.dark, maxStratum: flags.strata === undefined ? undefined : +flags.strata, vet: flags.vet, vetReact: flags.vetreact === undefined ? undefined : +flags.vetreact,
-  from: flags.from === undefined ? undefined : +flags.from, lambda: flags.lambda,
+  from: flags.from === undefined ? undefined : +flags.from, lambda: flags.lambda, bossOnly: !!flags.boss,
 });
 
 // Heroes of run i over the class list cls (n heroes): the lead is cls[i mod L]; partners are the other heroes in list order rotated by floor(i / L) mod (L - 1), so over L x (L - 1) runs every lead meets every partner in each slot.
@@ -1145,6 +1232,11 @@ if (require.main === module) {
     }
   }
   console.log(`\npick=${pick}${o.vet && o.vet !== '0' ? ' vet=' + o.vet + (o.vetReact >= 0 ? ' react=' + o.vetReact : '') : ''}${o.start ? ' start=' + o.start : ''}${o.gates ? ' gates=' + o.gates : ''}${force.length ? ' force=' + force.join(',') : ''}${flags.strata ? ' strata<=' + flags.strata + ' (capped runs: win, depth and death lines do not apply)' : ''}${o.from > 1 ? ' from=' + o.from : ''}\n` + summarize(results));
+  if (o.bossOnly) { // --boss: one fight per run
+    const fights = results.map(r => ({ r, b: r.bossTry[r.bossTry.length - 1] })).filter(x => x.b), kills = fights.filter(x => x.b.kill), s = Math.max(1, o.from | 0);
+    const ttk = kills.map(x => x.r.bossTimes[s]), lost = fights.map(x => x.r.hpFrac[s - 1] || 0);
+    console.log(`boss-only ${ROMAN[s - 1]}: ${fights.length} fights, ${kills.length} kills, hero deaths ${fights.length - kills.length} (${pctOf(fights.length - kills.length, fights.length)}%) | time to kill ${ms(ttk, 0)} s | HP lost per hero 0 (max HP) ${ms(lost, 2)}`);
+  }
   const rows = results.map((r, i) => rowOf(r, meta, seed0 + i * 7));
   if (flags.out) fs.writeFileSync(flags.out, JSON.stringify(rows));
   if (flags.pair) console.log(pairReport(rows, JSON.parse(fs.readFileSync(flags.pair, 'utf8'))));

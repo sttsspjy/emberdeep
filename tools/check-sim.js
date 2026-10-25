@@ -385,7 +385,7 @@ const budgetOf = (s, kind) => Math.round(W0.ROOM_XP[kind === 'elite' ? 'elite' :
   a.age = 45.01; w.updateEnemy(a, TICK); ok(a.exposed, 'exposed past 45 s of age');
   bo.age = 77.9; w.updateEnemy(bo, TICK); ok(!bo.exposed, 'a boss is not exposed at 77.9 s'); bo.age = 78.01; w.updateEnemy(bo, TICK); ok(bo.exposed, 'a boss is exposed past 78 s');
   f.age = 500; w.updateEnemy(f, TICK); ok(!f.exposed, 'fodder are never exposed');
-  w.stratum = 4; const b4 = w.spawnEnemy('forgelord', p.x + 300, p.y + 120); b4.spd = 0; b4.cd = 9999; b4.age = 200; w.updateEnemy(b4, TICK); ok(!b4.exposed, 'a boss of a fury stratum (IV) is never exposed'); w.stratum = 1;
+  w.stratum = 4; const b4 = w.spawnEnemy(ED.biomeFor(4).boss, p.x + 300, p.y + 120); b4.spd = 0; b4.cd = 9999; b4.age = 200; w.updateEnemy(b4, TICK); ok(!b4.exposed, 'a boss of a fury stratum (IV) is never exposed'); w.stratum = 1;
   const sp = foe(w, p.x + 300, p.y + 100); sp.spawnT = 1; w.updateEnemy(sp, TICK); ok(sp.age === 0 && sp.spawnT < 1, 'a spawning foe does not age');
 }
 { // crowd slow: 8% per overlapping non-boss foe, at most 50%; spawning, dead and boss foes do not count; dashes and skill moves ignore it
@@ -661,7 +661,7 @@ for (let s = 1; s <= 6; s++) {
   }
 }
 { // boss fights: aimed volley (count per phase, flight speed, lead at release, projectile kind), the phase-3 overlap, one sequence per living hero, grown summon lists, the fodder trickle
-  const BV = W0.BOSS_VOL, B = ED.Bosses, Dn = ED.Dungeon, angD = ED.U.angDiff, KIND = { bonewarden: 'bone', sporemother: 'spore', rimeheart: 'ice', forgelord: 'fire', drownedking: 'trident', hollowking: 'void' };
+  const BV = W0.BOSS_VOL, B = ED.Bosses, Dn = ED.Dungeon, angD = ED.U.angDiff, KIND = { drownedking: 'trident', hollowking: 'void' }, VB = (s) => (B[ED.biomeFor(s).boss].attacks.volley ? undefined : 'drownedking'); // VB: a volley boss for stratum s (bosses I and II have none)
   // A boss of stratum s's biome (or `type`) standing still left of the heroes in the start room, hp out of reach; its volley shots (damage x0.6) are logged in w.vs with the heroes' state at the release.
   function bossWorld(s, classes, type) {
     const w = hordeWorld(s, classes), ps = [...w.players.values()], c = Dn.center(w.room);
@@ -683,6 +683,7 @@ for (let s = 1; s <= 6; s++) {
   const lead = (v, h, s) => W0.leadAngle(v.x, v.y - 4, h, finalSp(s), Lof(s)); // the angle a shot released at v should have toward hero state h
   ok(BV.speed === 320 && BV.step === 20 && BV.n.join() === '3,4,5' && W0.BOSS_OV_GAP === 5, 'volley constants');
   for (const type of Object.keys(KIND)) ok(B[type].attacks.volley && B[type].attacks.volley.w === 2 && !B[type].attacks.volley.phase, `${type} has the volley entry (weight 2, every phase)`);
+  for (const type of ['bonewarden', 'sporemother']) ok(!B[type].attacks.volley, `${type} has no volley`);
   for (let ph = 1; ph <= 3; ph++) { // shots by phase, the first 0.5 s after the start, 0.12 s apart, then the main state moves on
     const { w, b } = bossWorld(4, ['knight']);
     startVol(w, b, ph); ok(b.vol && b.vol.n === BV.n[ph - 1], `phase ${ph}: volley of ${BV.n[ph - 1]}`);
@@ -693,7 +694,7 @@ for (let s = 1; s <= 6; s++) {
     ok(w.zones.every(z => !(z.kind === 'teleLine' && z.src === b)), `phase ${ph}: the warn line is gone`);
   }
   for (let s = 1; s <= 6; s++) { // flight speed 320 + 20 per stratum, the biome's kind, damage x0.6, the angle led by the stratum's share of a walking hero's velocity at the release
-    const { w, b, ps } = bossWorld(s, ['knight']), p = ps[0];
+    const { w, b, ps } = bossWorld(s, ['knight'], VB(s)), p = ps[0];
     p.y -= 60; startVol(w, b, 1);
     go(w, 1.1, () => { p.y += 90 * TICK; });
     ok(w.vs.length === 3, `stratum ${s}: 3 shots (${w.vs.length})`);
@@ -705,7 +706,7 @@ for (let s = 1; s <= 6; s++) {
   }
   { const { w, b } = bossWorld(6, ['knight']); w.pact = 8; startVol(w, b, 1); go(w, 1.1); ok(w.vs.length === 3 && w.vs.every(v => Math.abs(Math.hypot(v.q.vx, v.q.vy) - finalSp(6) * 1.2) < 1e-6), 'Pact 8: volley shots fly x1.2 like every foe shot'); }
   { // the phase-3 overlap: a volley every 5 s on top of whatever the main state runs, never two at once; phase 2 has none
-    B.forgelord.attacks.hold = { update: () => false };
+    const HB = B[ED.biomeFor(4).boss]; HB.attacks.hold = { update: () => false };
     for (const ph of [2, 3]) {
       const { w, b } = bossWorld(4, ['knight']);
       b.phase = ph; b.st = 'atk'; b.atk = 'hold'; b.t = 0; b.vars = { wm: 1 };
@@ -721,10 +722,10 @@ for (let s = 1; s <= 6; s++) {
       ok(mainKept && b.st === 'atk' && b.atk === 'hold', 'phase 3: the volley overlaps a running main attack and leaves it alone');
       ok(w.vs.length === 3 * BV.n[2], `phase 3: ${w.vs.length} shots (want ${3 * BV.n[2]})`);
       ok(lines[0] === 1, `phase 3: never two volleys at once (${lines[0]} warn lines at most, one hero)`);
-      const vol = B.forgelord.attacks.volley; vol.start(w, b); const run = b.vol; vol.start(w, b);
+      const vol = HB.attacks.volley; vol.start(w, b); const run = b.vol; vol.start(w, b);
       ok(run && b.vol === run && !vol.ok(w, b), 'a running volley is neither restarted nor chosen again');
     }
-    delete B.forgelord.attacks.hold;
+    delete HB.attacks.hold;
   }
   { // frozen: the sub-machine and its warn line stall; blindness and a phase change drop it
     const { w, b } = bossWorld(4, ['knight']);
@@ -745,23 +746,23 @@ for (let s = 1; s <= 6; s++) {
   }
   { // grown summon lists: +1 per living hero beyond the first, at most +3, drawn from the list
     const c4 = ['knight', 'ranger', 'pyro', 'shade'];
-    const count = (cls, down, type, atk, ph) => {
-      const { w, b, ps } = bossWorld(1, cls, type); for (let i = 0; i < down; i++) ps[ps.length - 1 - i].downed = true;
-      b.phase = ph || 1; b.vars = { wm: 1 }; B[type].attacks[atk].start(w, b);
+    const count = (cls, down, list) => { // B.lib.summon queues one spawn zone per entry of the grown list
+      const { w, b, ps } = bossWorld(1, cls, 'drownedking'); for (let i = 0; i < down; i++) ps[ps.length - 1 - i].downed = true;
+      b.vars = { wm: 1 }; w.zones.length = 0; B.lib.summon(w, b, list);
       return w.zones.filter(z => z.kind === 'spawn' && !z.n).map(z => z.type);
     };
-    ok(count(c4.slice(0, 1), 0, 'bonewarden', 'summon').length === 3, 'solo: the 3-entry list stays');
-    ok(count(c4.slice(0, 2), 0, 'bonewarden', 'summon').length === 4, '2 heroes: 4 entries');
-    ok(count(c4, 0, 'bonewarden', 'summon').length === 6, '4 heroes: 6 entries (+3)');
-    ok(count(c4, 2, 'bonewarden', 'summon').length === 4, '4 heroes, 2 downed: 4 entries (living heroes count)');
-    const l5 = count(c4, 0, 'bonewarden', 'summon', 2);
-    ok(l5.length === 8 && l5.every(t => t === 'skeleton' || t === 'bat'), `phase 2, 4 heroes: 8 entries from the list (${l5})`);
-    ok(count(c4.slice(0, 2), 0, 'forgelord', 'drones').length === 3 && count(c4, 0, 'forgelord', 'totems', 2).join() === Array(5).fill('flameturret').join(), 'drones and totems grow from their own lists');
-    const { w, b } = bossWorld(1, ['knight'], 'bonewarden');
-    for (let i = 0; i < 12; i++) w.spawnEnemy('bonemite', b.x + 50, b.y + 50);
-    ok(B.bonewarden.attacks.summon.ok(w, b), 'fodder does not block a boss summon');
-    for (let i = 0; i < 6; i++) w.spawnEnemy('skeleton', b.x + 50, b.y + 50);
-    ok(!B.bonewarden.attacks.summon.ok(w, b), 'six regular foes do');
+    const L3 = ['skeleton', 'skeleton', 'skeleton'], L5 = ['skeleton', 'skeleton', 'bat', 'bat', 'bat'];
+    ok(count(c4.slice(0, 1), 0, L3).length === 3, 'solo: the 3-entry list stays');
+    ok(count(c4.slice(0, 2), 0, L3).length === 4, '2 heroes: 4 entries');
+    ok(count(c4, 0, L3).length === 6, '4 heroes: 6 entries (+3)');
+    ok(count(c4, 2, L3).length === 4, '4 heroes, 2 downed: 4 entries (living heroes count)');
+    const l5 = count(c4, 0, L5);
+    ok(l5.length === 8 && l5.every(t => t === 'skeleton' || t === 'bat'), `a 5-entry list, 4 heroes: 8 entries from the list (${l5})`);
+    const { w } = bossWorld(1, ['knight'], 'drownedking'), n0 = w.hostiles(true);
+    for (let i = 0; i < 12; i++) w.spawnEnemy('bonemite', 50, 50);
+    ok(w.hostiles(true) === n0, 'fodder does not count toward a boss summon guard (threat foes only)');
+    for (let i = 0; i < 6; i++) w.spawnEnemy('skeleton', 50, 50);
+    ok(w.hostiles(true) === n0 + 6, 'six regular foes do');
   }
   for (const heroes of [['knight'], ['knight', 'ranger']]) { // the fodder trickle: packs of 4-6 every 7 s from the boss's spawn, edges 220 px from the heroes, held at the cap, none after the boss dies
     const s = 4, w = hordeWorld(s, heroes), room = w.floor.rooms.find(r => r.type === 'boss'), ps = [...w.players.values()], cap = W0.BOSS_FODDER_CAP[heroes.length > 1 ? 1 : 0];
@@ -958,10 +959,10 @@ for (let s = 1; s <= 6; s++) {
     for (let i = 0, k = Math.round((FB.t[3] - 0.1) * 60); i < k; i++) { w.updateEnemy(b, TICK); if (b.furyM !== 1 || b.dmg !== b.dmgBase) bad++; }
     ok(bad === 0, `stratum IV: x1 and base damage on every tick before ${FB.t[3]} s (${bad} off)`);
   }
-  { // new zones and shots carry the scaled damage: a Bone Warden spike field (x0.9 per pool, stratum IV), a shot (x0.6)
-    const { w, b } = fw(4, 'bonewarden');
+  { // new zones and shots carry the scaled damage: a telegraphed pool (x0.9, stratum IV), a shot (x0.6)
+    const { w, b } = fw(4);
     b.furyT = FB.t[3] + 10 - TICK; run(w, b, TICK); near(b.furyM, M10, 1e-9, 'jumped ten seconds past the start: x(1 + 10 ramp)');
-    b.st = 'atk'; b.atk = 'spikes'; b.vars = { wm: 1 }; w.zones.length = 0; Bs.bonewarden.attacks.spikes.start(w, b);
+    b.vars = { wm: 1 }; w.zones.length = 0; for (let i = 0; i < 4; i++) Bs.lib.drop(w, b, b.x + 40 * i, b.y, 24, 1, 0.9, 'bone');
     const zs = w.zones.filter(z => z.src === b && z.kind === 'tele');
     ok(zs.length > 3 && zs.every(z => Math.abs(z.dmg - b.dmgBase * M10 * 0.9) < 1e-9), `${zs.length} spike pools hit for base x(1 + 10 ramp) x0.9 (${zs[0] && zs[0].dmg.toFixed(3)} vs ${(b.dmgBase * M10 * 0.9).toFixed(3)})`);
     const q = w.enemyShoot(b, 0, 100, 'bone', 0.6, 6);
@@ -970,7 +971,7 @@ for (let s = 1; s <= 6; s++) {
     ok(sk.dmgBase === undefined && sk.furyM === undefined && sk.furyT === undefined, 'a summon during fury carries no fury state');
   }
   { // the pause after an attack divides by the multiplier (windups and attack lengths are untouched)
-    Bs.forgelord.attacks.hold = { update: () => true };
+    const HB = Bs[ED.biomeFor(4).boss]; HB.attacks.hold = { update: () => true };
     const { w, b } = fw(4), after = () => { b.st = 'atk'; b.atk = 'hold'; b.t = 0; b.vars = { wm: 1 }; run(w, b, TICK); return b.t; };
     b.furyT = 10; const t1 = after();
     near(t1, 1.05 * w.threat().pause, 1e-9, 'before the start the phase-1 pause is 1.05 x the stratum pause');
@@ -978,7 +979,7 @@ for (let s = 1; s <= 6; s++) {
     near(t2 * M10, t1, 0.003, `ten seconds into fury the pause is divided by 1 + 10 ramp (${t2.toFixed(4)} vs ${t1.toFixed(4)})`);
     b.furyT = 1e4; const t3 = after();
     near(t3, t1 / FB.max, 1e-9, 'at the cap the pause is divided by max');
-    delete Bs.forgelord.attacks.hold;
+    delete HB.attacks.hold;
   }
   { // the multiplier caps at max and damage with it
     const { w, b } = fw(6);
@@ -988,11 +989,11 @@ for (let s = 1; s <= 6; s++) {
   { // the clock runs through phase changes, freezes, stuns and blinds
     const { w, b } = fw(4);
     const ev = run(w, b, 24, (i) => {
-      if (i === 5 * 60) b.hp = b.maxHp * 0.6;
+      if (i === 5 * 60) b.hp = b.maxHp * 0.55;
       if (i === 8 * 60) b.frozen = 2;
       if (i === 11 * 60) b.stun = 2;
       if (i === 14 * 60) b.blind = 2;
-      if (i === 17 * 60) b.hp = b.maxHp * 0.3;
+      if (i === 17 * 60) b.hp = b.maxHp * 0.25;
     });
     ok(b.phase === 3, `both phase changes ran (phase ${b.phase})`);
     near(b.furyT, 24, 2 * TICK, 'the clock read 24 s after 24 s of phases, a freeze, a stun and a blind');

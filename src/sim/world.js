@@ -147,6 +147,7 @@
     if (hz === 'poison') sp *= 0.85;
     if (foes) sp *= Sim.crowdMul(p, foes);
     if (zones) for (const z of zones) if (z.kind === 'mire' && z.team === 1 && U.dist2(z.x, z.y, p.x, p.y) < z.r * z.r) { sp *= 0.55; break; }
+    if (room.carpet && room.carpet[Math.floor(p.y / T) * room.w + Math.floor(p.x / T)]) sp *= ED.Bosses.CARPET_SLOW; // boss spore carpet (bosses.js arena)
     const accel = hz === 'ice' ? 3.2 : 22;
     p.vx = (p.vx || 0) + (mx * sp - (p.vx || 0)) * Math.min(1, accel * dt);
     p.vy = (p.vy || 0) + (my * sp - (p.vy || 0)) * Math.min(1, accel * dt);
@@ -545,6 +546,7 @@
 
   W.prototype.enterRoom = function (id, fromDir) {
     this.collectAll();
+    if (this.arena) ED.Bosses.clearArena(this); // boss walls and carpet end with the room
     this.enemies.length = 0; this.projs.length = 0; this.zones.length = 0; this.chainQ.length = 0; this.curChain = null; this.corpses.length = 0;
     if (this.fg) this.fg.ok = false;
     this.boss = null; this.enc = null;
