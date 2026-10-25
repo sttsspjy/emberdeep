@@ -1,5 +1,5 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it.
-// Usage: node tools/browse.js [--scen=smoke,crowd70,boss,shots,sheet,screens,wardrobe,cosmetics,swing,picks,cards,bell,arenas,verbs] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
+// Usage: node tools/browse.js [--scen=smoke,crowd70,boss,shots,sheet,screens,wardrobe,cosmetics,swing,picks,cards,bell,arenas,verbs,games] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
 //   [--quality=low,high] [--ops] [--json] [--seed=1] [--strat=1] [--embers=N] [--mortal] [--software] [--forcepost] [--sync] [--warm=2.5] [--timeout=300]
 // Mechanism: headless only (no headed option, no window calls); one browser per invocation, one fresh context per scenario page, all closed at exit, on error and on SIGINT.
 //   A read-only node http server on 127.0.0.1 (random port) serves --root (default: this repo). Playwright resolves via require('playwright'), else %LOCALAPPDATA%\npm-cache\_npx\*\node_modules (best match for the installed browsers).
@@ -33,6 +33,8 @@
 //     fails on a page error or a verb whose zone, event or state did not appear.
 //   arenas: 18 screenshots staged through the sim (BR.arena, heroes unhurt): the Drowned King (phase 1, tide warning, tide, beam warm-up and sweep, phases 2 and 3), the Hollow King (phase 1, duel, dark phase 2, a lit lantern,
 //     phase 3, a ring warning, fallen rings) and the champion rooms (twins, a twin combo, mimic, mimic split); fails on a page error or a step without its fight.
+//   games: 13 screenshots of the minigames staged through the sim (BR.game, the hero unhurt): the trap gauntlet idle and running, the shell game idle, showing, shuffling, open to a pick and found,
+//     the wager duel idle and fighting, the lantern chase idle and running, the echo bells idle, ringing and answering; fails on a page error or a game that misses its phase.
 // Output: compact table (or --json on stdout, logs on stderr); result-<browser>.json and the PNGs in --outdir (default <tmp>/wickdeep-browse). Exit 0 pass, 1 scenario failure, 2 harness error.
 // Notes: Chromium runs headless on the real GPU (ANGLE D3D11, no window); --software forces SwiftShader, where the game reports Post.soft and skips post at 'high' unless --forcepost. Firefox uses its own headless GL.
 //   --sync forces each frame's raster/GPU work to finish before the timer stops. Every external host is blocked (fonts and art are embedded data URIs).
@@ -66,7 +68,7 @@ function parseArgs(argv) {
   if (!vp) throw new Fail('--viewport is WxH, e.g. 1920x1080');
   o.vw = +vp[1]; o.vh = +vp[2];
   o.scens = o.scen.split(',').map(s => s.trim()).filter(Boolean);
-  for (const s of o.scens) if (!/^(smoke|boss|shots|sheet|screens|wardrobe|cosmetics|swing|picks|cards|bell|arenas|verbs|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, boss, shots, sheet, screens, wardrobe, cosmetics, swing, picks, cards, bell, arenas, verbs, crowdN)');
+  for (const s of o.scens) if (!/^(smoke|boss|shots|sheet|screens|wardrobe|cosmetics|swing|picks|cards|bell|arenas|verbs|games|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, boss, shots, sheet, screens, wardrobe, cosmetics, swing, picks, cards, bell, arenas, verbs, games, crowdN)');
   if (!o.scens.length) throw new Fail('--scen is empty');
   o.qualities = o.quality ? o.quality.split(',').map(s => s.trim()) : null;
   if (o.qualities && o.qualities.some(q => q !== 'low' && q !== 'high')) throw new Fail('--quality is low, high or low,high');
@@ -437,6 +439,31 @@ function pageBoot(cfg) {
     if (step === 'split') { const m = w.enemies.find(e => e.type === 'mimic'); if (m) m.hp = m.maxHp * 0.45; return !!m; }
     if (step === 'off') { god = 0; return 0; }
     throw new Error('unknown arena step ' + step);
+  };
+
+  // games scenario: 'stage:<id>' puts the solo hero in an event room (of the first stratum that has one) with minigame <id> set up as the event resolver will (the room's shrine prop removed, def.update run after each
+  // world tick), the hero beside its first prop; 'go' interacts with that prop; 'pick' moves to and picks the pearl's cup; 'chase' puts the hero near a wisp; 'off' ends god mode. Returns the game's phase.
+  BR.game = (step) => {
+    const ED = window.__ED, s = ED.Game.s, w = s && s.world, me = s && s.me;
+    if (!w) throw new Error('no run');
+    god = 1;
+    if (!w._mg) { const u = w.update; w.update = function (dt) { u.call(this, dt); const g = ED.Minigames.game(this); if (g) ED.MINIGAMES[g.id].update(this, dt); }; w._mg = 1; }
+    const g = () => ED.Minigames.game(w), first = () => w.props.find(x => x.ev);
+    if (step.indexOf('stage:') === 0) {
+      const id = step.slice(6);
+      let room = null;
+      for (let st = w.stratum; st <= 3 && !room; st++) { if (st !== w.stratum) w.enterStratum(st); room = w.floor.rooms.find(r => r.type === 'event'); }
+      if (!room) return 'no event room';
+      w.enterRoom(room.id, 's');
+      w.props.length = 0; w.ev = { id }; ED.MINIGAMES[id].start(w, w.room); w.gold = 400;
+      const pr = first(); me.x = pr.x; me.y = pr.y + 26;
+      return g().ph;
+    }
+    if (step === 'go') { const pr = first(); me.x = pr.x; me.y = pr.y + 26; w.interact(me.pid, pr.id); return g().ph; }
+    if (step === 'pick') { const c = w.props.find(x => x.kind === 'mg_cup' && x.g.c === g().pearl); me.x = c.x; me.y = c.y + 22; w.interact(me.pid, c.id); return g().ph; }
+    if (step === 'chase') { const z = w.zones.find(q => q.kind === 'wisp' && !q.dead); if (z) { me.x = z.x + 40; me.y = z.y; } return g().ph; }
+    if (step === 'off') { god = 0; return 0; }
+    throw new Error('unknown game step ' + step);
   };
 
   // late build on the solo hero at stratum `strat`: two element paths (the first evolved, the second at its keystone), open boons, the first route with its first fork at rank 3,
@@ -980,6 +1007,32 @@ async function scenVerbs() {
       }
     }
     await call(page, 'verb', 'off');
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
+// games: screenshots of the five minigames staged through BR.game (an event room, the game set up and started, the hero unhurt); fails on a page error or a game that does not reach its phase.
+async function scenGames() {
+  const o = S.opt, res = newResult('games'), q = qualitiesOr(['high'])[0];
+  // [step, expected phase (null: any), ms before the shot, shot name ('' = none)]
+  const PLAN = [['stage:gauntlet', 0, 400, 'gauntlet-idle'], ['go', 1, 1400, 'gauntlet-traps'], ['stage:shells', 0, 400, 'shells-idle'], ['go', 1, 500, 'shells-show'], ['', 2, 900, 'shells-shuffle'], ['', 3, 3200, 'shells-pick'], ['pick', 4, 300, 'shells-found'],
+    ['stage:duel', 0, 400, 'duel-idle'], ['go', 2, 2600, 'duel-fight'], ['stage:wisps', 0, 400, 'wisps-idle'], ['go', 1, 600, ''], ['chase', 1, 400, 'wisps-chase'], ['stage:echo', 0, 400, 'echo-idle'], ['go', 1, 900, 'echo-listen'], ['', 2, 2600, 'echo-answer']];
+  const { ctx, page, errors } = await openPage();
+  try {
+    await call(page, 'profile', o.cls, o.embers);
+    await call(page, 'settings', q);
+    await call(page, 'install');
+    if ((await call(page, 'start')) !== 'run') fail(res, 'run did not start');
+    await wait(600);
+    for (let i = 0; i < 6 && await call(page, 'offerOpen'); i++) { await call(page, 'take'); await wait(500); } // the start offer holds the world
+    for (const [step, ph, ms, name] of PLAN) {
+      if (step) { const r = await call(page, 'game', step); notes(res, step + ' -> ' + r); if (typeof r === 'string') fail(res, step + ': ' + r); }
+      await wait(ms);
+      if (ph !== null) { const now = await page.evaluate(() => { const ED = window.__ED, g = ED.Minigames.game(ED.Game.s.world); return g ? g.ph : -1; }); if (now !== ph) fail(res, `${name || step}: phase ${now}, wanted ${ph}`); }
+      if (name) await shoot(page, res, name);
+    }
+    await call(page, 'game', 'off');
   } finally { res.errors = errors; await ctx.close(); }
   if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
   return res;
@@ -1690,7 +1743,7 @@ async function main() {
       const t0 = Date.now();
       log('scenario ' + sc + ' ...');
       let r;
-      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'boss' ? await scenBoss() : sc === 'shots' ? await scenShots() : sc === 'sheet' ? await scenSheet() : sc === 'screens' ? await scenScreens() : sc === 'wardrobe' ? await scenWardrobe() : sc === 'cosmetics' ? await scenCosmetics() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : sc === 'cards' ? await scenCards() : sc === 'bell' ? await scenBell() : sc === 'arenas' ? await scenArenas() : sc === 'verbs' ? await scenVerbs() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
+      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'boss' ? await scenBoss() : sc === 'shots' ? await scenShots() : sc === 'sheet' ? await scenSheet() : sc === 'screens' ? await scenScreens() : sc === 'wardrobe' ? await scenWardrobe() : sc === 'cosmetics' ? await scenCosmetics() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : sc === 'cards' ? await scenCards() : sc === 'bell' ? await scenBell() : sc === 'arenas' ? await scenArenas() : sc === 'verbs' ? await scenVerbs() : sc === 'games' ? await scenGames() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
       r.wallMs = Date.now() - t0;
       r.browserVersion = bv;
       if (S.server.missing.size) r.missing = [...S.server.missing];

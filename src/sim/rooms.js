@@ -498,7 +498,7 @@
         this.emit({ t: 'descend', s: s + 1 });
         break;
       }
-      default: return;
+      default: { const mg = pr.ev && ED.MINIGAMES && ED.MINIGAMES[pr.ev]; if (mg) mg.interact(this, p, pr); return; } // minigame props (minigames.js)
     }
   };
 
@@ -571,6 +571,7 @@
   W.smashCircle = function (p, x, y, r) {
     if (this.room.arena) this.wallCircle(p, x, y, r + 4); // boss walls (arena.js)
     const bl = this.room.bell; if (bl && p && !p.bellS && U.dist2(bl.x, bl.y, x, y) <= (BELL_R + r) * (BELL_R + r)) this.ringBell(p);
+    if (this.mgTargets) this.mgCircle(p, x, y, r); // minigame targets (minigames.js)
     const bs = this.room.breakables; if (!bs.length) return;
     const rs = this.roomState[this.roomId], rr = (SMASH_R + r) * (SMASH_R + r);
     for (let i = 0; i < bs.length; i++) {
@@ -582,6 +583,7 @@
   W.smashSeg = function (p, x0, y0, x1, y1, r, noRing) {
     if (this.room.arena) this.wallSeg(p, x0, y0, x1, y1, r + 4);
     const bl = this.room.bell; if (bl && p && !p.bellS && !noRing && U.segDist2(bl.x, bl.y, x0, y0, x1, y1) <= (BELL_R + r) * (BELL_R + r)) this.ringBell(p);
+    if (this.mgTargets && !noRing) this.mgSeg(p, x0, y0, x1, y1, r);
     const bs = this.room.breakables; if (!bs.length) return;
     const rs = this.roomState[this.roomId], rr = (SMASH_R + r) * (SMASH_R + r);
     for (let i = 0; i < bs.length; i++) {
@@ -593,6 +595,7 @@
     if (this.room.arena) this.wallArc(p, a, reach, arc);
     const bl = this.room.bell;
     if (bl && p && !p.bellS) { const d = Math.hypot(bl.x - p.x, bl.y - p.y); if (d - BELL_R <= reach && (arc >= 6.2 || Math.abs(U.angDiff(a, Math.atan2(bl.y - p.y, bl.x - p.x))) <= arc / 2 + Math.atan2(BELL_R, Math.max(d, 1)))) this.ringBell(p); }
+    if (this.mgTargets) this.mgArc(p, a, reach, arc);
     const bs = this.room.breakables; if (!bs.length) return;
     const rs = this.roomState[this.roomId];
     for (let i = 0; i < bs.length; i++) {

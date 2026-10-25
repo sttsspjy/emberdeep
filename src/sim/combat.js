@@ -1015,7 +1015,7 @@
       let dead = false;
       if (pr.team === 0) {
         const owner = this.players.get(pr.owner);
-        if (room.breakables.length || room.bell) this.smashSeg(owner, pr.x - pr.vx * dt, pr.y - pr.vy * dt, pr.x, pr.y, pr.r); // the step just flown; a breakable never stops the shot
+        if (room.breakables.length || room.bell || this.mgTargets) this.smashSeg(owner, pr.x - pr.vx * dt, pr.y - pr.vy * dt, pr.x, pr.y, pr.r); // the step just flown; a breakable never stops the shot
         const q = this.foeScan(pr.x, pr.y, pr.r);
         for (let k = 0; k < q.length || this.foeTail(q); k++) {
           const e = q[k];

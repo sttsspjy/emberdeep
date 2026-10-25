@@ -1145,21 +1145,23 @@
     }
     if (p.kind === 'campfire') return 'Rest';
     if (p.kind === 'anvil') return 'Forge';
+    if (p.g && ED.MinigameFx) return ED.MinigameFx.prompt(p, view);
     return PROP_LABEL[p.kind] ? PROP_LABEL[p.kind](p) : null;
   };
   const REWARD_DESC = { gold: 'Gold for the whole party.', vigor: '+2 max health for the rest of the run, and heals 20%.', forge: 'Rank up one of your boons.', boon: 'A boon from your paths (a new path while you have a free slot).', epic: 'Choose from epic boons.', relic: 'Relics: each hero takes one.' };
   const SHOP_DESC = { boon: 'An extra boon pick with no common boons.', forge: 'Rank up one of your boons.', potion: 'Heals 40% of your max health.' };
   // Longer explanation shown above the prompt (null when there is none).
-  R.propDesc = (p) => {
+  R.propDesc = (p, view) => {
     if (p.kind === 'reward') {
       return REWARD_DESC[String(p.item)] || null;
     }
     if (p.kind === 'campfire') return 'Heals 35% of your max health. Each hero uses the campfire or the anvil.';
     if (p.kind === 'anvil') return 'Rank up one of your boons. Each hero uses the campfire or the anvil.';
     if (p.kind === 'shop') return SHOP_DESC[p.stype] || null;
+    if (p.g && ED.MinigameFx) return ED.MinigameFx.desc(p, view);
     return null;
   };
-  R.interactable = (p) => !p.state && p.kind !== 'sign' && p.kind !== 'merchant';
+  R.interactable = (p) => !p.state && p.kind !== 'sign' && p.kind !== 'merchant' && !(p.g && p.g.ni);
 
   const PATH_COL = { fire: '#ff7a2a', ice: '#7fe3ff', lightning: '#ffe66b', poison: '#9be33c', holy: '#fff0c2', shadow: '#a070ff', general: '#d9dfe8' };
   // Reward and room glyphs come from one table (ED.Icons.reward / ED.Icons.room); 'boon' wears the colour of the local hero's deepest path (R.mainPath).
@@ -1463,6 +1465,7 @@
       c.save(); c.translate(art ? Math.round(p.x / 2) * 2 : Math.round(p.x), art ? Math.round(p.y / 2) * 2 : Math.round(p.y));
       if (done) c.globalAlpha = 0.4;
       c.lineWidth = 1.5; c.strokeStyle = '#0b0806';
+      if (ED.MinigameFx && ED.MinigameFx.draw(c, p, R, view, t, G, L, art)) { c.restore(); return; } // minigame props (client/minigames.js)
       if (art && propArt(c, p, view, local, t, G, L)) { c.restore(); return; }
       switch (p.kind) {
         case 'chest': {

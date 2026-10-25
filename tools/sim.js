@@ -29,7 +29,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..', 'src') + '/';
 const files = ['util.js', 'data/biomes.js', 'data/enemies.js', 'data/classes.js', 'data/boons.js', 'data/classboons.js', 'data/relics.js', 'data/meta.js', 'save.js',
   'sim/dungeon.js', 'sim/stats.js', 'sim/world.js', 'sim/combat.js', 'sim/elements.js', 'sim/build.js', 'sim/skills.js', 'sim/class-knight.js', 'sim/class-ranger.js', 'sim/class-pyro.js', 'sim/class-shade.js', 'sim/class-cleric.js', 'sim/class-necro.js', 'sim/class-bell.js',
-  'sim/ai.js', 'sim/bosses.js', 'sim/boss-warden.js', 'sim/boss-spore.js', 'sim/rooms.js', 'sim/arena.js', 'sim/boss-king.js', 'sim/boss-hollow.js', 'sim/champions.js', 'sim/sheet.js'];
+  'sim/ai.js', 'sim/bosses.js', 'sim/boss-warden.js', 'sim/boss-spore.js', 'sim/rooms.js', 'sim/arena.js', 'sim/boss-king.js', 'sim/boss-hollow.js', 'sim/champions.js', 'sim/minigames.js', 'sim/sheet.js'];
 // Main context, not vm.createContext: inside a vm context every global read (Math, Object, ...) goes through the context interceptor and the sim runs ~3x slower.
 for (const f of files) vm.runInThisContext(fs.readFileSync(ROOT + f, 'utf8'), { filename: f });
 const ED = globalThis.ED;
@@ -701,6 +701,21 @@ function wantedProp(w, p) {
   return best;
 }
 
+// A minigame action (ED.Minigames.bot) for hero p: interacts with `use` within 40 px, attacks toward `atk` within reach (melee weapon range + 10, else 300; a Bellwarden winds and hurls at it as botBell does), then walks along `dir`,
+// to `go` (BFS) or stands (`stop`, or within 8 px of go). Returns the move [mx, my].
+const GAME_RNG = U.RNG(7); // botBell's aim draw (skill 1: no aim error)
+function botGame(w, p, c, a) {
+  if (a.use) { const pr = w.props.find(x => x.id === a.use); if (pr && U.dist(pr.x, pr.y, p.x, p.y) < 40) w.interact(p.pid, pr.id); }
+  if (p.stats.kind === 'bell') { if (a.atk) botBell(w, p, c, [], { x: a.atk.x, y: a.atk.y, r: a.atk.r || 8 }, true, 1, GAME_RNG); else p.haulIn = false; }
+  else if (a.atk && c.atk <= 0) {
+    const d = Math.hypot(a.atk.x - p.x, a.atk.y - p.y);
+    if (d < (p.stats.melee ? p.stats.weapon.range + 10 : 300)) { p.atkD = d; w.playerAttack(p, Math.atan2(a.atk.y - p.y, a.atk.x - p.x)); c.atk = Math.max(c.atk, -TICK) + ED.Stats.stepInterval(p); }
+  }
+  const dir = a.dir || (a.go && !a.stop && Math.hypot(a.go.x - p.x, a.go.y - p.y) > 8 ? bfsDir(w.room, w.locked, p.x, p.y, a.go.x, a.go.y) : null);
+  const l = dir ? Math.hypot(dir[0], dir[1]) : 0;
+  return l > 0 ? [dir[0] / l, dir[1] / l] : [0, 0];
+}
+
 // Value of a map room for the bot party: healthy (every living hero at DARK_HP of max HP or more) it prefers boon rewards, elites and dark rooms; hurt (any below HURT_HP) it prefers rest sites. Dark rooms follow the policy (smart: when healthy).
 const HURT_HP = 0.5;
 function roomValue(w, r, policy, healthy, hurt) {
@@ -1113,7 +1128,9 @@ function runBot(opts) {
       const foes = w.enemies.filter(e => e.hp > 0 && e.spawnT <= 0);
       const skill = opts.skill ?? 0.75;
       if (!foes.length && p.haulIn) p.haulIn = false; // a Bellwarden stops winding with no foe left
-      if (foes.length) {
+      const gm = ED.Minigames && ED.Minigames.bot(w, p); // a minigame in the room steers the bot (src/sim/minigames.js), null while it leaves the bot to its own play
+      if (gm) { const v = botGame(w, p, c, gm); mx = v[0]; my = v[1]; }
+      else if (foes.length) {
         // target: the nearest threat foe when it is within weapon reach (or when no fodder stands), else the nearest fodder
         let tgt = null, bd = 1e9, nf = null, fd = 1e9;
         for (const e of foes) { const d2 = U.dist2(e.x, e.y, p.x, p.y); if (e.fodder) { if (d2 < fd) { fd = d2; nf = e; } } else if (d2 < bd) { bd = d2; tgt = e; } }
@@ -1502,7 +1519,7 @@ function pairReport(rows, base) {
   }).join('\n');
 }
 
-module.exports = { fightLine, arenaBot, partyOf, runBot, summarize, classLines, metaProfile, rowOf, optsFromFlags, jobOpts, pairReport, ED, parseVet, vetThreats, vetRisk, vetPlan, vetRider, arrivalStats, fmtPow, ROMAN, PICK_SRC };
+module.exports = { botGame, fightLine, arenaBot, partyOf, runBot, summarize, classLines, metaProfile, rowOf, optsFromFlags, jobOpts, pairReport, ED, parseVet, vetThreats, vetRisk, vetPlan, vetRider, arrivalStats, fmtPow, ROMAN, PICK_SRC };
 if (require.main === module) {
   const flags = {}, args = [];
   for (const a of process.argv.slice(2)) { const m = /^--([a-z0-9]+)(?:=(.*))?$/i.exec(a); if (m) flags[m[1]] = m[2] === undefined ? '1' : m[2]; else args.push(a); }
