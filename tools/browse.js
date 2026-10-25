@@ -1,5 +1,5 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it.
-// Usage: node tools/browse.js [--scen=smoke,crowd70,shots,sheet,screens,swing,picks,cards] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
+// Usage: node tools/browse.js [--scen=smoke,crowd70,boss,shots,sheet,screens,swing,picks,cards] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
 //   [--quality=low,high] [--ops] [--json] [--seed=1] [--strat=1] [--embers=N] [--mortal] [--software] [--forcepost] [--sync] [--warm=2.5] [--timeout=300]
 // Mechanism: headless only (no headed option, no window calls); one browser per invocation, one fresh context per scenario page, all closed at exit, on error and on SIGINT.
 //   A read-only node http server on 127.0.0.1 (random port) serves --root (default: this repo). Playwright resolves via require('playwright'), else %LOCALAPPDATA%\npm-cache\_npx\*\node_modules (best match for the installed browsers).
@@ -10,6 +10,7 @@
 //     --ops adds a 3 s pass counting canvas/WebGL calls per frame by target (buf = world buffer, screen = visible canvas, other = offscreen bakes).
 //   screens: 19 screenshots of every menu screen without a run (name, menu, Descend, Hearth with a buy mid-burst, Armory, Chronicle, Heroes, a staged party lobby and its Hearth,
 //     results victory and fallen, the news notice, settings tabs, a confirm dialog, credits, pause); fails when ArrowDown / ArrowRight do not move focus on the menu / Hearth tabs.
+//   boss: the boss room of stratum --strat (the hero driven, kept alive unless --mortal): a shot per phase (HP set to 0.6 then 0.3 of max), each after the phase's arena has formed; the hero stands still through phase 1, then fights.
 //   shots: 16 screenshots: boot name screen, menu, Descend, Hearth tabs (the Armory scrolled into view), Heroes, Settings, Credits, boon offer, a run in combat, the Tab sheet tabs, the pause menu (profile gets 400 embers unless --embers).
 //   sheet: a late build staged through the sim (BR.sheetStage: stratum --strat or V, two element paths, one evolved, their duo, open and Ascended boons, a fork at rank 3, six relics, a shield, an ally hero):
 //     the Tab sheet Build, Build scrolled to the end, Combat, Map, and Build viewing the ally; fails on a page error or when a sheet column overflows its panel sideways.
@@ -53,7 +54,7 @@ function parseArgs(argv) {
   if (!vp) throw new Fail('--viewport is WxH, e.g. 1920x1080');
   o.vw = +vp[1]; o.vh = +vp[2];
   o.scens = o.scen.split(',').map(s => s.trim()).filter(Boolean);
-  for (const s of o.scens) if (!/^(smoke|shots|sheet|screens|swing|picks|cards|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, sheet, screens, swing, picks, cards, crowdN)');
+  for (const s of o.scens) if (!/^(smoke|boss|shots|sheet|screens|swing|picks|cards|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, boss, shots, sheet, screens, swing, picks, cards, crowdN)');
   if (!o.scens.length) throw new Fail('--scen is empty');
   o.qualities = o.quality ? o.quality.split(',').map(s => s.trim()) : null;
   if (o.qualities && o.qualities.some(q => q !== 'low' && q !== 'high')) throw new Fail('--quality is low, high or low,high');
@@ -264,6 +265,18 @@ function pageBoot(cfg) {
     ST.roster = ED.biomeFor(w.stratum).enemies.map(r => r[0]).filter(id => { const d = ED.ENEMIES[id]; return d && !d.boss && !d.gloom && !d.ally && !d.minion; });
     ST.rng = ED.U.RNG(cfg.seed * 7919 + 13); ST.k = 0; ST.spawned = 0; ST.burst = true; ST.t = 0; ST.n = n;
     return { room: best.id, w: best.w, h: best.h, stratum: w.stratum, roster: ST.roster.length };
+  };
+
+  // enters the boss room of stratum strat (the boss spawns on its own); hp: set the boss to that fraction of max HP (its phase change follows); returns the boss state
+  BR.bossStage = (strat, hp) => {
+    const ED = window.__ED, w = ED.Game.s.world;
+    if (hp === undefined) {
+      if (strat !== w.stratum) w.enterStratum(strat);
+      const r = w.floor.rooms.find(q => q.type === 'boss'); if (!r) throw new Error('no boss room');
+      w.enterRoom(r.id, null);
+    } else if (w.boss) w.boss.hp = Math.min(w.boss.hp, w.boss.maxHp * hp);
+    const b = w.boss;
+    return b ? { type: b.type, phase: b.phase, hp: Math.round(b.hp), walls: w.arena && w.arena.walls ? w.arena.walls.filter(q => q.hp > 0).length : 0, carpet: w.arena && w.arena.carpet ? w.arena.carpet.reduce((a, v) => a + v, 0) : 0 } : null;
   };
 
   // scripted hero: orbits the nearest foe (the room centre when none), attacks it, casts both skills, dashes, takes boon offers, hops combat rooms when `flow`
@@ -822,6 +835,32 @@ async function scenCards() {
   return res;
 }
 
+async function scenBoss() {
+  const o = S.opt, res = newResult('boss'), q = qualitiesOr(['high'])[0], st = Math.max(1, o.strat | 0);
+  const { ctx, page, errors } = await openPage();
+  try {
+    await call(page, 'profile', o.cls, o.embers);
+    res.info = await call(page, 'settings', q);
+    await call(page, 'install');
+    if ((await call(page, 'start')) !== 'run') throw new Error('run did not start');
+    await wait(600);
+    await call(page, 'bossStage', st);
+    for (const [ph, hp, ms] of [[1, undefined, 9000], [2, 0.6, 6000], [3, 0.3, 5000]]) {
+      if (hp !== undefined) await call(page, 'bossStage', st, hp);
+      await wait(ms);
+      const b = await call(page, 'bossStage', st, 1);
+      if (!b) { fail(res, 'no boss in phase ' + ph); break; }
+      res.rows.push(Object.assign({ shot: 'phase' + ph }, b));
+      if (b.phase !== ph) fail(res, 'boss in phase ' + b.phase + ', expected ' + ph);
+      await shoot(page, res, 's' + st + '-' + b.type + '-phase' + ph);
+      if (ph === 1) await call(page, 'drive', true, false);
+    }
+    await call(page, 'drive', false, false);
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
 async function scenShots() {
   const o = S.opt, res = newResult('shots'), q = qualitiesOr(['high'])[0];
   const { ctx, page, errors } = await openPage();
@@ -1031,7 +1070,7 @@ async function main() {
       const t0 = Date.now();
       log('scenario ' + sc + ' ...');
       let r;
-      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'sheet' ? await scenSheet() : sc === 'screens' ? await scenScreens() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : sc === 'cards' ? await scenCards() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
+      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'boss' ? await scenBoss() : sc === 'shots' ? await scenShots() : sc === 'sheet' ? await scenSheet() : sc === 'screens' ? await scenScreens() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : sc === 'cards' ? await scenCards() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
       r.wallMs = Date.now() - t0;
       r.browserVersion = bv;
       if (S.server.missing.size) r.missing = [...S.server.missing];

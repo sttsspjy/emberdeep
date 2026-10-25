@@ -182,7 +182,7 @@
       const plan = e.wallPlan; e.wallAt = 0; e.wallPlan = null;
       w.arena = { walls: plan.walls, lanes: plan.lanes, carpet: null };
       B.applyArena(w.room, w.arena);
-      w.emit({ t: 'wallrise', rows: plan.rows });
+      w.emit({ t: 'wallrise', rows: plan.rows, n: w.room.w });
     }
     if (e.phase >= 3 && w.alivePlayers().length) { e.swT -= dt; if (e.swT <= 0) { e.swT = WD.swords.gap; swords(w, e); } }
   }

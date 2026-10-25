@@ -579,6 +579,11 @@
   const CFX = ED.ClassFx = { ev: {}, zone: {}, hero: [], mark: [], shot: {}, on(t, f) { (this.ev[t] || (this.ev[t] = [])).push(f); } };
   // Shard colours of a smashed breakable by decor kind: [body, light, glows (a pop of the light colour)]; a mushroom's body is the stratum accent.
   const SMASH_COL = { urn: ['#8a6a50', '#c4a07c', 0], mushroom: [null, '#e8f0d0', 1], crystal: ['#8fd8f0', '#e8fbff', 1], coral: ['#e0705a', '#ffb0a0', 0], shard: ['#9a6aff', '#e0c8ff', 1], crate: ['#7a5436', '#c8501a', 0] };
+  // Plain line per boss phase change (boss type -> phase -> text): what the new phase does.
+  const PHASE_MSG = {
+    bonewarden: { 2: 'Bone walls split the room. Use the gaps, or break a block (3 hits).', 3: 'The walls fall. Swords strike the marked lines.' },
+    sporemother: { 2: 'Buds fly to broken pods and regrow them. Kill the buds.', 3: 'She walks now. The carpet stops spreading.' },
+  };
   // Translate one world event into effects. local: the viewing player's pid.
   F.handle = (ev, ctx) => {
     const local = ctx.localPid, A = ED.Audio, set = ED.App ? ED.App.settings : { dmg: true };
@@ -710,10 +715,27 @@
       case 'relic': { const p = ctx.player(ev.pid), r = ED.RELICS[ev.id], PF = ED.PickFx; if (p) F.text(p.x, p.y - 40, r.name, ED.RARITY[r.rar].color, 11, { life: 1.8, max: 1.8 }); if (PF) PF.burst(F, ctx, ev, 'relic'); if (ev.pid === local) { if (PF) PF.heard('relic'); ED.UI && ED.UI.toast(`<b>${r.name}</b> — ${r.desc}`, ED.Icons.relicUrl(ev.id)); } else if (p) F.msg(`${p.name} found ${r.name}`); break; }
       case 'lock': A.play('lock'); F.addShake(4); break;
       case 'clear': A.play('unlock'); F.showBanner(ev.trial ? 'Trial complete' : 'Room cleared', '', 'small', 1.4); break;
-      case 'bossIntro': F.showBanner(ev.name, ev.title, 'boss', 3.4); F.bossQuote = { text: ev.quote, t: 0 }; A.play('roar'); A.music({ s: ctx.stratum(), boss: true }); F.addShake(8); F.punch(0.9, 0); break;
+      case 'bossIntro': F.showBanner(ev.name, ev.title, 'boss', 3.4); F.bossQuote = ev.quote ? { text: ev.quote, t: 0 } : null; A.play('roar'); A.music({ s: ctx.stratum(), boss: true }); F.addShake(8); F.punch(0.9, 0); break;
       case 'bossSpawn': F.addShake(6); F.punch(0.6, 0); break;
       case 'bossDown': F.showBanner('Vanquished', ED.ENEMIES[ev.type].name, 'victory', 3); F.flash = { color: '#ffffff', t: 0.5, a: 0.5 }; F.addShake(12); F.punch(2, 1); F.hitStop(0.3); A.play('roar', 0.6); if (ev.type !== 'hollowking') A.play('victory', 0.7, 'boss'); A.music({ s: ctx.stratum() }); F.burst(ev.x, ev.y - 20, 60, { color: ED.ENEMIES[ev.type].col.c, sp: 220, life: 1.2, size: 3.5, add: true }); F.burst(ev.x, ev.y - 20, 18, { kind: 'streak', color: '#ffffff', sp: 380, life: 0.5, size: 2.4 }); F.ring(ev.x, ev.y, 160, ED.ENEMIES[ev.type].col.c, 0.8, 6); F.ring(ev.x, ev.y, 90, '#ffffff', 0.5, 3); F.pop(ev.x, ev.y - 20, 90, '#ffffff', 0.5); break;
-      case 'phase': F.addShake(8); F.punch(1.6, 0.8); A.play('roar', 0.8); F.ring(ev.x, ev.y, 120, '#ffffff', 0.5, 5); F.ring(ev.x, ev.y, 70, '#ff8a5a', 0.4, 3); F.pop(ev.x, ev.y - 20, 60, '#ffffff', 0.35); break;
+      case 'phase': F.addShake(8); F.punch(1.6, 0.8); A.play('roar', 0.8); F.ring(ev.x, ev.y, 120, '#ffffff', 0.5, 5); F.ring(ev.x, ev.y, 70, '#ff8a5a', 0.4, 3); F.pop(ev.x, ev.y - 20, 60, '#ffffff', 0.35); if (PHASE_MSG[ev.type] && PHASE_MSG[ev.type][ev.p]) F.msg(PHASE_MSG[ev.type][ev.p], '#ffd9a0'); break;
+      // ---- boss arenas: Bone Warden (punish window, bone walls, lane charge, spectral swords), Sporemother (pods, carpet, buds) ----
+      case 'punish': { // the slam's sword is stuck: gold +50% over him, a ring under him for the window
+        F.text(ev.x, ev.y - 58, '+50%', '#ffd36b', 12, { pop: true, life: ev.d, max: ev.d });
+        F.ring(ev.x, ev.y, 46, '#ffd36b', ev.d, 3); F.burst(ev.x, ev.y - 6, 10, { kind: 'shard', color: '#d8cfb4', sp: 90, life: 0.5, size: 2.2, vz: 80, z: 4 });
+        dust(ev.x, ev.y, 'dust', 3); A.play('thud', 0.7); F.addShake(5); break; }
+      case 'wallrise': { const T = ED.CONST.TILE; for (const y of ev.rows) for (let x = 1; x < ev.n - 1; x += 2) dust((x + 0.5) * T, (y + 0.8) * T, 'dust', 1); F.addShake(7); A.play('thud', 1); break; }
+      case 'wallhit': F.burst(ev.x, ev.y - 10, 4, { kind: 'shard', color: '#d8cfb4', sp: 70, life: 0.35, size: 1.8, vz: 60, z: 8 }); A.play('smash', 0.4); break;
+      case 'wallbreak': F.burst(ev.x, ev.y - 10, 12, { kind: 'shard', color: '#e6dfc9', sp: 120, life: 0.6, size: 2.6, vz: 110, z: 10 }); F.burst(ev.x, ev.y - 4, 6, { kind: 'smoke', color: '#9a917b', sp: 40, life: 0.7, size: 6 }); A.play('smash', 0.8); break;
+      case 'lanecharge': F.addShake(4); dust(ev.x, ev.y, 'dust', 3); A.play('charge', 0.8); break;
+      case 'swordfall': { // a spectral blade strikes along its warning line
+        const n = 6;
+        for (let i = 0; i <= n; i++) { const k = i / n, x = ev.x0 + (ev.x1 - ev.x0) * k, y = ev.y0 + (ev.y1 - ev.y0) * k; F.burst(x, y - 4, 2, { kind: 'streak', color: '#cfe8ff', a: -1.57, spread: 0.6, sp: 120, life: 0.25, size: 1.4 }); }
+        F.beam((ev.x0 + ev.x1) / 2, (ev.y0 + ev.y1) / 2, 60, 6, '#bfe3ff', 0.18, 0.6, '#ffffff'); A.play('clang', 0.5); F.addShake(2); break; }
+      case 'podburst': F.ring(ev.x, ev.y, ev.r, '#9cff6a', 0.45, 3); F.burst(ev.x, ev.y - 8, 18, { kind: 'smoke', color: '#7a4a9a', sp: 90, life: 0.8, size: 5 }); F.burst(ev.x, ev.y - 8, 10, { color: '#9cff6a', sp: 120, life: 0.5, size: 2.2, add: true }); A.play('smash', 0.7); break;
+      case 'carpetclear': F.ring(ev.x, ev.y, ev.r, '#d89cff', 0.4, 4); F.burst(ev.x, ev.y, 16, { kind: 'smoke', color: '#5b2a7a', sp: ev.r * 1.4, life: 0.6, size: 5 }); break;
+      case 'regrow': F.burst(ev.x, ev.y - 6, 10, { color: '#9cff6a', sp: 50, vy: -40, life: 0.6, size: 2.2, add: true }); F.ring(ev.x, ev.y, 22, '#9cff6a', 0.4, 2); A.play('spawn', 0.5); break;
+      case 'uproot': F.addShake(9); F.punch(1, 0.4); dust(ev.x, ev.y, 'dust', 5); F.burst(ev.x, ev.y, 20, { kind: 'shard', color: '#6b5238', sp: 130, life: 0.7, size: 2.6, vz: 120, z: 4 }); A.play('thud', 1); break;
       case 'fury': { const en = ED.ENEMIES[ev.type]; F.addShake(5); F.punch(1.2, 0.5); A.play('fury', 0.8); F.ring(ev.x, ev.y, 130, '#ff5a1a', 0.55, 5); F.ring(ev.x, ev.y, 70, '#ffb56b', 0.4, 3); F.burst(ev.x, ev.y - 20, 36, { color: '#ff8a3d', sp: 150, vy: -40, life: 0.9, size: 2.8, add: true, drag: 1.6 }); F.pop(ev.x, ev.y - 20, 70, '#ff8a3d', 0.4); if (en) F.msg(en.name + ' is enraged!', '#ff8a3d'); break; }
       case 'stratum': { const b = ED.biomeFor(ev.s); F.showBanner(b.name, 'Stratum ' + U.roman(ev.s), 'stratum', 3.6); F.fade = 1; A.music({ s: ev.s }); break; }
       case 'room': for (const p of ctx.players()) F.sheet('fx.circle.spark', p.x, p.y + 2, { add: true, a: 0.7, speed: 1.6 }); F.fade = Math.max(F.fade, 0.6); break;

@@ -284,8 +284,8 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     ok(m2.enemies.find((e) => e.boss).furyM === 1, 'a stratum II boss in the mirror is x1');
     // fury event: shake, burst, message with the boss name
     const fxCtx = { localPid: 'p0', player: () => ({ x: 0, y: 0, pid: 'p0', cls: 'knight', name: 'T' }), players: () => [], stratum: () => 4 };
-    F.reset(); F.handle({ t: 'fury', type: 'forgelord', x: 200, y: 200 }, fxCtx);
-    ok(F.parts.length > 0 && F.rings.length > 0 && F.shake > 0 && F.msgs.some((q) => q.text === 'The Forgelord is enraged!'), `the fury event bursts, rings, shakes and posts the message (${F.parts.length} particles, ${F.rings.length} rings, shake ${F.shake})`);
+    F.reset(); const B4 = ED.biomeFor(4).boss; F.handle({ t: 'fury', type: B4, x: 200, y: 200 }, fxCtx);
+    ok(F.parts.length > 0 && F.rings.length > 0 && F.shake > 0 && F.msgs.some((q) => q.text === ED.ENEMIES[B4].name + ' is enraged!'), `the fury event bursts, rings, shakes and posts the message (${F.parts.length} particles, ${F.rings.length} rings, shake ${F.shake})`);
     F.reset();
 
     // boss bar through the real hud.js over a recording canvas
@@ -307,7 +307,7 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
       load('client/hud.js');
       const H = ED.HUD, viewOf = (s, boss) => ({ stratum: s, pact: 0, enemies: [boss], players: new Map(), pickups: [] });
       const mk = (type, furyT, extra) => Object.assign({ id: 9, type, def: ED.ENEMIES[type], boss: true, hp: 800, maxHp: 1000, exposed: false, furyT, furyM: ED.World.furyMul(ED.ENEMIES[type].stratum || 4, furyT) }, extra);
-      H.draw(null, viewOf(4, mk('forgelord', 0)), null, {}, 0, 0.016, {}); // sets up the canvas and layout
+      H.draw(null, viewOf(4, mk(B4, 0)), null, {}, 0, 0.016, {}); // sets up the canvas and layout
       const bar = (s, type, furyT, extra) => {
         rec.fills.length = 0; rec.imgs.length = 0;
         const b = mk(type, furyT, Object.assign({ furyM: ED.World.furyMul(s, furyT) }, extra));
@@ -315,14 +315,14 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
         const labels = rec.imgs.filter((i) => i.im && i.im.texts && i.im.texts.length).map((i) => ({ text: i.im.texts[0], x: i.x, w: i.im.width }));
         return { track: rec.fills.filter((f) => f.style === '#26120b').length, labels, fills: rec.fills.map((f) => f.style) };
       };
-      const II = bar(2, 'sporemother', 30), IV = bar(4, 'forgelord', 10), IVw = bar(4, 'forgelord', tIV - 5), IVf = bar(4, 'forgelord', tIV + 10);
+      const II = bar(2, 'sporemother', 30), IV = bar(4, B4, 10), IVw = bar(4, B4, tIV - 5), IVf = bar(4, B4, tIV + 10);
       ok(II.track === 0 && IV.track === 1, `the bar draws the fury track for a IV boss (${IV.track}) and not for a II boss (${II.track})`);
       ok(!IV.labels.some((l) => /Fury/.test(l.text)) && !IVw.labels.some((l) => /Fury/.test(l.text)), 'no fury label before the start');
       ok(IV.fills.includes('#b88a4a') && IVw.fills.some((f) => /^rgba\(255, ?181, ?107/.test(f)) && IVf.fills.some((f) => /^rgba\(255, ?90, ?26/.test(f)), 'the track fill is amber, pulses light from the warning on, burns ember past the start');
       const lab = IVf.labels.find((l) => /^Fury/.test(l.text));
       ok(lab && lab.text === 'Fury ×' + (1 + 10 * ED.World.BOSS_FURY.ramp).toFixed(1), `the fury label reads the multiplier ten seconds in (${lab && lab.text})`);
       ok(!II.labels.some((l) => /Fury/.test(l.text)), 'no label on a II boss');
-      const both = bar(4, 'forgelord', tIV + 10, { exposed: true }), ex = both.labels.find((l) => l.text === 'Exposed'), fu = both.labels.find((l) => /^Fury/.test(l.text));
+      const both = bar(4, B4, tIV + 10, { exposed: true }), ex = both.labels.find((l) => l.text === 'Exposed'), fu = both.labels.find((l) => /^Fury/.test(l.text));
       ok(ex && fu && ex.x + ex.w <= fu.x, `Exposed and Fury sit side by side without overlap (Exposed ${ex && ex.x}+${ex && ex.w}, Fury ${fu && fu.x})`);
       const onlyEx = bar(2, 'sporemother', 5, { exposed: true });
       ok(onlyEx.labels.some((l) => l.text === 'Exposed') && !onlyEx.labels.some((l) => /Fury/.test(l.text)), 'a II boss keeps its Exposed label alone');
