@@ -338,7 +338,7 @@ A fork replaces the weapon with a derived version (`ED.forkWeapon`, pure), so a 
 
 | | Attack time | Damage per hit | Other |
 |---|---|---|---|
-| Heavy | ×1.8 (never over 1.3 s) | × 1.1 × the time factor (nominal ×1.98) | Melee reach ×1.1, arc ×1.1, knockback ×1.3; shots r ×1.2, speed ×0.9, life ×1.1, knockback ×2; blasts ×1.15. Hits Stagger. |
+| Heavy | ×1.8 (never over 1.3 s) | × 1.1 × the time factor (nominal ×1.98) | Melee reach ×1.1, arc ×1.1, knockback ×1.3; shots r ×1.2, speed ×0.9, life ×1.1, knockback ×2; blasts ×1.15 (a melee shock keeps the base weapon's damage: its mul ÷ the hit factor). Hits Stagger. |
 | Swift | ×0.55 (never under the floor) | × 1.1 × the time factor (nominal ×0.605) | Knockback ×0.5; shots speed ×1.2, life ×0.85, spread ×0.85. Flow: +15% move speed for 0.5 s after each attack. |
 
 Crit-stack grants (Shadowstep, Riposte, Killing Edge) are multiplied by `critK = base interval / fork interval`. Bellwarden forks use the bell factors (§1, Bell).

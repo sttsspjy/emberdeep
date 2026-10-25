@@ -421,7 +421,7 @@
     w.name = ED.FORK_NAMES[baseId + '@' + kind] || b.name;
     if (b.kind === 'melee') {
       if (heavy) { w.range = b.range * 1.1; w.arc = Math.min(6.3, b.arc * 1.1); w.knock = Math.min(320, b.knock * 1.3); } else w.knock = b.knock * 0.5;
-      if (b.shock) w.shock = { r: b.shock.r * (heavy ? 1.15 : 1), mul: b.shock.mul };
+      if (b.shock) w.shock = { r: b.shock.r * (heavy ? 1.15 : 1), mul: heavy ? r2(b.shock.mul / (1.1 * k)) : b.shock.mul }; // a Heavy shock deals the base weapon's share, not the forked hit's
     } else {
       if (heavy) { w.r = b.r * 1.2; w.speed = b.speed * 0.9; w.life = b.life * 1.1; w.knock = Math.max(80, (b.knock || 40) * 2); }
       else { w.speed = b.speed * 1.2; w.life = b.life * 0.85; w.knock = (b.knock || 40) * 0.5; if (b.spread) w.spread = b.spread * 0.85; }
