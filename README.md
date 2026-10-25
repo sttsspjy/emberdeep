@@ -79,7 +79,7 @@ Boons belong to **paths**: Steel, Flame, Frost and Storm. A hero follows at most
 | Path | How it plays | Keystone | Evolution |
 | --- | --- | --- | --- |
 | **Steel** | Your weapon, all in: damage, crits, Bleed on crits, executes. | Finisher: hold attack to charge a guaranteed double-damage crit that Bleeds (it never Cleaves). | Masterwork: the finisher charges faster and tears a bleeding foe's whole Bleed out at once. |
-| **Flame** | Hits add Burn stacks. A burning foe that dies bursts: foes around it take part of its Burn and catch its stacks. Burning foes can also hit softer (Smother). | Scorched Earth: a death burst leaves burning ground that stacks Burn and that foes walk around. | Cinder: hold attack for a flame cone. |
+| **Flame** | Hits add Burn stacks; your Burn deals double to elites, bosses and champions. A burning foe that dies bursts: foes around it take part of its Burn and catch its stacks. Burning foes can also hit softer (Smother). | Scorched Earth: a death burst leaves burning ground that stacks Burn and that foes walk around. | Cinder: hold attack for a flame cone. |
 | **Frost** | Hits chill and then freeze foes (each freeze makes the next one take longer). Any hit from any hero on a frozen foe Shatters it for big damage and chills the foes around it. | Absolute Zero: a Shatter freezes the foes around it. | Glacial: hold attack to charge an ice lance that freezes what it pierces. |
 | **Storm** | Hits charge foes. A foe whose charge reaches its threshold discharges, and the discharge jumps to your other charged foes. | Arc Flash: every discharge also arcs to the uncharged foes around it and charges them. | Tempest: hold attack to call bolts down on the foe nearest your aim; discharges jump further. |
 

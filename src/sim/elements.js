@@ -6,7 +6,7 @@
   const W = ED.World.prototype;
   const R = Math.round;
 
-  // Burn: a stack deals BURN_K x Power x the damage stat per second (x 1 + burnMul) for BURN_LIFE s; a foe holds BURN_CAP + burnCap stacks; Wildfire reads BURN_AT stacks of one hero, Smother SMOTHER_AT; WILD_R: Wildfire reach beyond touching.
+  // Burn: a stack deals BURN_K x Power x the damage stat per second (x 1 + burnMul; a Kindle hero's x BURN_BIG on an elite, boss or champion) for BURN_LIFE s; a foe holds BURN_CAP + burnCap stacks; Wildfire reads BURN_AT stacks of one hero, Smother SMOTHER_AT; WILD_R: Wildfire reach beyond touching.
   // Death burst (Flame): radius PYRE_R + PYRE_RS per stack (x 1 + pyreR); every foe in it takes PYRE_K of the Burn the dead foe still held x (1 + burnMul) x (1 + pyreMul) and catches PYRE_PASS (+ pyrePass) of its stacks; Ember Heart weakens for PYRE_WEAK_T s;
   // Scorched Earth burns the ground SCORCH_T s over SCORCH_K of the burst radius. Charge: held CHARGE_HOLD (+ chargeHold) s, then CHARGE_FADE of it fades per second; at CHARGE_AT x the foe's max HP it discharges DIS_K x the charge;
   // a discharge jumps DIS_JUMP (x 1 + jumpR), DIS_JUMPS (+ jumps) hops; Arc Flash arcs ARC_MUL to uncharged foes and charges them ARC_CHARGE of that. Frost: FREEZE_SET s after a freeze a hit Shatters; SHATTER_R splash of SHATTER_CHILL chill;
@@ -14,7 +14,7 @@
   // Holds: CONE_TICK / CONE_ARC / CONE_RANGE (ranged) / CONE_REACH (melee reach factor) / CONE_MUL (attack dps share) / CONE_BURN (Burn factor); LANCE_* (damage at full, least charge, flight px, speed); FIN_MUL, FIN_REACH;
   // STORM_TICK / STORM_RANGE / STORM_MUL / STORM_CHARGE: the Tempest call (a bolt per tick on the foe nearest the aim, attack dps share, charge factor).
   Object.assign(C, {
-    BURN_K: 0.15, BURN_LIFE: 4, BURN_CAP: 10, BURN_AT: 5, SMOTHER_AT: 3, WILD_R: 12,
+    BURN_K: 0.15, BURN_LIFE: 4, BURN_CAP: 10, BURN_BIG: 2, BURN_AT: 5, SMOTHER_AT: 3, WILD_R: 12,
     PYRE_R: 40, PYRE_RS: 4, PYRE_K: 0.5, PYRE_PASS: 0.5, PYRE_WEAK_T: 3, SCORCH_T: 3, SCORCH_K: 0.6,
     CHARGE_HOLD: 3, CHARGE_FADE: 0.4, CHARGE_AT: { trash: 0.1, elite: 0.05, boss: 0.02 }, DIS_K: 2, DIS_JUMP: 120, DIS_JUMPS: 3, ARC_MUL: 0.75, ARC_CHARGE: 0.25,
     FREEZE_SET: 0.2, SHATTER_R: 60, SHATTER_CHILL: 40, FROZEN_VULN: 0.25, BRITTLE_T: 2, BRITTLE_K: 0.5, COLD_CD: 1.5, THERMAL_K: 1.5,
@@ -30,6 +30,8 @@
 
   // ---------------- Burn stacks ----------------
   const burnV = (o) => C.BURN_K * o.stats.power * Math.max(0.1, o.stats.dmg); // a stack's damage per second before burnMul
+  const isBig = (e) => !!(e.boss || e.elite || (e.def && e.def.champ)); // elites, bosses, champions and their parts
+  const bigK = (big, o) => (big && o.stats.pyre > 0 ? C.BURN_BIG : 1); // Kindle (the only pyre source): its owner's stacks on a big foe deal x BURN_BIG
   const ok = (e) => e.hp > 0 && !e.killed && !e.def.invuln && !e.burrowed;
   // Derived fields of e's stacks (e.bsT end times, e.bsO owners): burnN (count), burnPool (damage still to come before burnMul), burn (flag), smother (strongest Smother of a hero holding SMOTHER_AT stacks), wildO (a Wildfire hero holding BURN_AT stacks).
   function burnSync(e, now) {
@@ -75,13 +77,14 @@
     if (!noSync) burnSync(e, this.time);
   };
 
-  // Removes a share (0..1, at least one stack while any) of e's stacks, newest first; returns the damage they still held before burnMul (Rupture, Plaguebearer, Thermal Shock pay it at once).
+  // Removes a share (0..1, at least one stack while any) of e's stacks, newest first; returns the damage they still held on e before burnMul (bigK on a big foe; Rupture, Plaguebearer, Thermal Shock pay it at once).
   W.takeBurn = function (e, share) {
     const T = e.bsT, O = e.bsO;
     if (!T || !T.length || !(share > 0)) return 0;
     const now = this.time, n = Math.min(T.length, Math.max(1, Math.round(share * T.length)));
+    const big = isBig(e);
     let got = 0;
-    for (let i = 0; i < n; i++) { const k = T.length - 1; got += burnV(O[k]) * Math.max(0, T[k] - now); T.pop(); O.pop(); }
+    for (let i = 0; i < n; i++) { const k = T.length - 1; got += burnV(O[k]) * bigK(big, O[k]) * Math.max(0, T[k] - now); T.pop(); O.pop(); }
     if (e.bsS) e.bsS.length = T.length;
     burnSync(e, now);
     return got;
@@ -98,7 +101,7 @@
     return n;
   };
 
-  // Per-tick Burn (tickStatuses): every 0.5 s each owner's stacks deal its Burn value x the time each stack burned in the last 0.5 s, as one hit (burnLast: the last tick; a stack deals its value x its life); Wildfire passes stacks once a second.
+  // Per-tick Burn (tickStatuses): every 0.5 s each owner's stacks deal its Burn value (x bigK on a big foe) x the time each stack burned in the last 0.5 s, as one hit (burnLast: the last tick; a stack deals its value x its life); Wildfire passes stacks once a second.
   W.tickBurn = function (e, dt) {
     const T = e.bsT;
     if (!T || !T.length) { if (e.burnN) { e.burn = 0; e.burnN = 0; e.burnPool = 0; e.smother = 0; e.wildO = null; } return; }
@@ -107,11 +110,12 @@
     e.burnTick += 0.5;
     const now = this.time, O = e.bsO, S = e.bsS || (e.bsS = []), t0 = e.burnLast !== undefined && e.burnLast !== null ? e.burnLast : now - 0.5, n0 = T.length;
     e.burnLast = now;
+    const big = isBig(e);
     for (let i = 0; i < n0 && e.hp > 0; i++) {
       const o = O[i];
       let secs = 0, dup = false;
       for (let j = 0; j < n0; j++) if (O[j] === o) { if (j < i) { dup = true; break; } secs += Math.max(0, Math.min(now, T[j]) - Math.max(t0, S[j] !== undefined ? S[j] : -1e9)); }
-      if (!dup && secs > 0) this.hitEnemy(e, secs * burnV(o) * (1 + o.stats.burnMul), { p: o, kind: 'dot', raw: true, noProc: true, crit: false, el: 'fire' });
+      if (!dup && secs > 0) this.hitEnemy(e, secs * burnV(o) * (1 + o.stats.burnMul) * bigK(big, o), { p: o, kind: 'dot', raw: true, noProc: true, crit: false, el: 'fire' });
     }
     if (e.hp <= 0) return;
     let k = 0;

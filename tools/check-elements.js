@@ -96,6 +96,21 @@ const owned = (w, p, id) => { p.boons[id] = (p.boons[id] || 0) + 1; w.recalc(p, 
   near(by(q)[0], 2 * burnV(q) * 0.5 * (1 + q.stats.burnMul), 1e-6, 'each at its own Burn value'); near(by(two.p)[0], burnV(two.p) * 0.5, 1e-6, 'the other hero\'s too');
   ok(e2.burnN === 3 && e2.burnPool > 0, 'the foe shows one stack count for all heroes');
 }
+{ // Kindle: a hero's stacks on an elite, boss or champion (part) deal x BURN_BIG, ticks and takeBurn payouts; stacks of a hero without Kindle do not
+  const tick = (cls, boons, mk) => { const s = stage(cls, boons), e = mk(s.w); for (let i = 0; i < 3; i++) s.w.burnStack(e, s.p, 0); run(s, 0.52); return dealt(s, e, h => h.src.kind === 'dot'); };
+  const plain = (w) => foe(w, 300, 300), elite = (w) => { const e = foe(w, 300, 300); e.elite = 'swift'; return e; }, boss = (w) => { const e = foe(w, 300, 300); e.boss = true; return e; };
+  const champ = (w) => foe(w, 300, 300, { type: 'twinlance' }), part = (w) => foe(w, 300, 300, { type: 'colsaw' });
+  const t0 = tick('ranger', { kindle: 1 }, plain);
+  ok(C.BURN_BIG === 2 && t0 > 0, 'BURN_BIG 2');
+  near(tick('ranger', { kindle: 1 }, elite), t0 * C.BURN_BIG, 1e-6, 'Kindle: Burn on an elite x BURN_BIG');
+  near(tick('ranger', { kindle: 1 }, boss), t0 * C.BURN_BIG, 1e-6, 'on a boss');
+  near(tick('ranger', { kindle: 1 }, champ), t0 * C.BURN_BIG, 1e-6, 'on a champion');
+  near(tick('ranger', { kindle: 1 }, part), t0 * C.BURN_BIG, 1e-6, 'on a Colossus part');
+  const p0 = tick('pyro', {}, plain); ok(p0 > 0, 'a Pyromancer without Kindle burns');
+  near(tick('pyro', {}, elite), p0, 1e-6, 'without Kindle: no factor on an elite');
+  const pay = (mk) => { const s = stage('ranger', { kindle: 1 }), e = mk(s.w); for (let i = 0; i < 4; i++) s.w.burnStack(e, s.p, 0); return s.w.takeBurn(e, 1); };
+  near(pay(boss), pay(plain) * C.BURN_BIG, 1e-6, 'takeBurn pays a boss\'s held Burn x BURN_BIG');
+}
 { // the death burst: a burning foe that dies bursts on the foes within 40 + 4 per stack: PYRE_K of the Burn it held, and half its stacks; fodder never bursts
   const s = stage('ranger', { kindle: 1 }), { w, p } = s, e = foe(w, 300, 300), nb = foe(w, 345, 300), far = foe(w, 420, 300);
   for (let i = 0; i < 4; i++) w.burnStack(e, p, 0);

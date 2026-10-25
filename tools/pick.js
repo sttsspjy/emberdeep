@@ -123,7 +123,8 @@ module.exports = (ED, model) => {
     const sd = { fire: 0, ice: 0, lightning: 0, holy: 0, general: 0 };
     const streamed = { general: st.bleed > 0, fire: st.pyre > 0, ice: st.iceInfuse > 0, lightning: st.lightningInfuse > 0 }; // a path engine whose pack streams the sheet already holds (sheet.js pathPack)
     const pk = (el) => (streamed[el] ? 1 : spk);
-    for (const s of m.mult.status) if (sd[s.el] !== undefined) sd[s.el] = (s.est && s.est.dps) || 0;
+    let fireT = 0; // Burn on a pack foe (sd.fire: on the single target, an elite or boss: est.one)
+    for (const s of m.mult.status) if (sd[s.el] !== undefined) { sd[s.el] = (s.est && (s.est.one !== undefined ? s.est.one : s.est.dps)) || 0; if (s.el === 'fire') fireT = (s.est && s.est.dps) || 0; }
     const feed = m.proc.dps / Math.max(1e-9, model.directDamage(m, 1)); // share of the hero's damage that builds statuses
     const pf = clamp(a.pack / PACK / Math.max(1e-9, a.one), 0.1, 1); // damage each foe of a pack gets, against the same hero's single target
     const tFoe = clamp(ref.hp / Math.max(1e-9, a.pack / PACK), T_FOE_MIN, T_FOE_MAX); // life of a pack foe
@@ -142,10 +143,10 @@ module.exports = (ED, model) => {
     if (light1 > 0 && st.ground) eMul /= 1 - Math.min(E_MAX_RED, REACH * st.ground * CHARGED_UP);
     const holyN = holy1 * spk;
     // Flame: Wildfire passes stacks to touching foes; Smother weakens foes at SMOTHER_AT stacks; Ember Heart weakens foes a death burst hits; the flame cone burns at x CONE_BURN
-    if (st.hold === 'cone') fire1 *= CONE_UP;
-    let fireN = fire1 * pk('fire');
+    if (st.hold === 'cone') { fire1 *= CONE_UP; fireT *= CONE_UP; }
+    let fireN = fireT * pk('fire');
     if (st.wildfire) fireN *= 1 + st.wildfire * WILD_K;
-    if (st.smother) eMul /= 1 - Math.min(E_MAX_RED, REACH * st.smother * clamp(fire1 / Math.max(1e-9, ED.burnValue(st) * C.SMOTHER_AT), 0, 1));
+    if (st.smother) eMul /= 1 - Math.min(E_MAX_RED, REACH * st.smother * clamp(fireT / Math.max(1e-9, ED.burnValue(st) * C.SMOTHER_AT), 0, 1));
     if (st.pyreWeak && st.pyre) eMul /= 1 - Math.min(E_MAX_RED, REACH * st.pyreWeak * PYRE_UP);
     // Steel: Heartseeker's crit damage on elites and bosses (the single target)
     if (st.critBig) mul1 *= 1 + st.crit * st.critBig / (1 + st.crit * Math.max(0, st.critMult - 1));

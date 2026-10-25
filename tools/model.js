@@ -52,8 +52,9 @@ module.exports = (ED, opts) => {
     }
     return sum * (1 + (m.boost ? m.boost.pack : 0)); // boost.pack: a damage multiplier on the whole pack's damage (White Flame)
   }
-  const statusDamage = (m) => m.mult.status.reduce((s, x) => s + (x.est && x.est.dps || 0), 0);
-  const heroDamage = (m, n, k, e) => directDamage(m, n) * (k || 1) * (e || 1) + statusDamage(m); // k: the conditional-damage factor of the build (condFactor); e: echoK; statuses are raw damage
+  // Status damage per second on one foe; big: the foe is an elite or boss (est.one where the status differs there: Kindle's Burn x BURN_BIG).
+  const statusDamage = (m, big) => m.mult.status.reduce((s, x) => s + (x.est && (big && x.est.one !== undefined ? x.est.one : x.est.dps) || 0), 0);
+  const heroDamage = (m, n, k, e, big) => directDamage(m, n) * (k || 1) * (e || 1) + statusDamage(m, big && n === 1); // k: the conditional-damage factor of the build (condFactor); e: echoK; big: the lone foe is an elite or boss; statuses are raw damage
   // Final Judgment: every hit on a Judged foe echoes fjEcho to each other Judged foe of the pack (judged for 4 s + judgeDur of every Judgment cooldown), so a pack of n takes 1 + fjEcho x (n - 1) x the Judged share.
   const echoK = (p, m, n) => (p.stats.fjEcho > 0 && n > 1 ? 1 + p.stats.fjEcho * (n - 1) * Math.min(1, (4 + p.stats.judgeDur) / St.skillNums('judgment', p.stats).cdEff) : 1);
 

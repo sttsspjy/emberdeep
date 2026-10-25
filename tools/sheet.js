@@ -5,7 +5,7 @@
 //               effective health with the uptime of the route's defence, shield income and stun uptime (stuns plus slows, blinds and taunts at their strength)
 //   --parity    the power-budget bands on the mid build (ignores --stratum and --rank): stratum III with every fork at rank 2 (boss II grants it), stratum IV at rank 3 (boss III). Per class one line per fork: value (mean of the 1 foe and pack columns, %), the change against the class median, EHP and stun.
 //               III rank 2: a non-Guard fork 31.5-38.5, a Guard fork >= 28. IV rank 3: non-Guard 54-66, Guard >= 48 and EHP >= +25% or stun >= 30%. Marks the forks outside; --strict exits 1 when any fork fails
-//   --paths     per class x path: a pure single-path build of PATH_PICKS picks (gate, pool cards, keystone; no evolution) at --stratum: hero damage on one foe, a pack of 4 and a horde of 8 with the change against Steel,
+//   --paths     per class x path: a pure single-path build of PATH_PICKS picks (gate, pool cards, keystone; no evolution) at --stratum: hero damage on one foe (an elite or boss: Kindle's Burn x BURN_BIG), a pack of 4 and a horde of 8 with the change against Steel,
 //               effective health; for each melee weapon the Steel build's finisher hit (a guaranteed crit at FIN_MUL) and its plain swing against the stratum's foe health
 //   --weapons   per weapon (each base weapon, then its Armory variants indented with their change against the base): damage per second on one foe and in a pack of 4 at the class Power, and the damage factor that puts it on the median of the base weapons
 // Hero damage = (weapon dps + skill damage per cooldown) x the conditional-damage factor (ED.COND_DMG rows the build owns at assumed uptimes, see COND_NOTE) + status estimates; a pack of 4: melee arcs, blasts, sweeps, waves and ricochets hit all four foes, a fan hits as many as it has arrows; a piercing shot hits the first foe and half of the other foes it could pierce (tools/model.js PIERCE_LINE).
@@ -127,7 +127,7 @@ if (args.paths) {
     out(`\n== ${ED.CLASSES[cls].name}`);
     let ref = null;
     for (const k of ED.PATH_IDS) {
-      const p = hero(cls, 0, PATH_PICKS[k]), m = model(p), d = defence(p, m), kf = condFactor(p, m, d), v = [1, 4, 8].map(n => heroDamage(m, n, kf, echoK(p, m, n)));
+      const p = hero(cls, 0, PATH_PICKS[k]), m = model(p), d = defence(p, m), kf = condFactor(p, m, d), v = [1, 4, 8].map(n => heroDamage(m, n, kf, echoK(p, m, n), true));
       if (!ref) ref = v;
       out(`  ${pad(ED.PATHS[k].name, 7)} ${v.map((x, i) => `${rpad(f1(x), 6)} ${rpad(k === 'general' ? '' : sign(x / ref[i] - 1), 5)}`).join(' | ')}   EHP ${f1(d.ehp)}${m.weapon.hold ? `   hold ${m.weapon.hold.label} ${f1(m.weapon.hold.dps)}/s` : ''}`);
     }

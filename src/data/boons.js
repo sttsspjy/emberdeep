@@ -37,7 +37,7 @@
 
   // Statuses and foe debuffs for the sheet: name, colour, el (the element that tags it), mulKey (the stat that scales its damage), rule (one sentence of what it does; numbers as ED.CONST in src/sim/elements.js).
   ED.STATUS = {
-    burn: { name: 'Burn', color: '#ff7a2a', el: 'fire', mulKey: 'burnMul', rule: 'Stacks on the foe (10 at most). Every stack deals its hero\'s Burn value per second for 4 s, whatever added it. A burning foe that dies bursts (Flame): its foes nearby take the Burn it still held and catch half its stacks.' },
+    burn: { name: 'Burn', color: '#ff7a2a', el: 'fire', mulKey: 'burnMul', rule: 'Stacks on the foe (10 at most). Every stack deals its hero\'s Burn value per second for 4 s, whatever added it; a Kindle hero\'s stacks deal double to elites, bosses and champions. A burning foe that dies bursts (Flame): its foes nearby take the Burn it still held and catch half its stacks.' },
     chill: { name: 'Chill', color: '#7fe3ff', el: 'ice', mulKey: 'chillMul', rule: 'Slows the foe (up to 45%) and its wind-ups; a full gauge freezes it (elites 0.75 as long). Bosses never freeze: a full gauge slows them 40% for 2 s and leaves them Brittle.' },
     frozen: { name: 'Frozen', color: '#7fe3ff', el: 'ice', rule: 'A frozen foe cannot act and takes +25% damage. Any hero hit on it Shatters it (Frost): extra damage, chill to the foes around it, and the freeze ends. A Brittle boss Shatters for half.' },
     charge: { name: 'Charge', color: '#ffe66b', el: 'lightning', mulKey: 'shockMul', rule: 'Stored on the foe for 3 s, then fades. At 10% of the foe\'s health (elites 5%, bosses 2%) it discharges for 200% of the charge and jumps to your charged foes within 120.' },
@@ -54,14 +54,14 @@
   const n1 = (v) => (v >= 10 ? String(Math.round(v)) : String(Math.round(v * 10) / 10));
   const per = (pr, el) => (pr.rate && pr.rate[el]) || 0;
   // Sheet readouts per status element. infuse: the stat that sets the status build-up; status: its ED.STATUS id; sheet.rows: stats listed under the status row;
-  // sheet.est(proc, st, ref) -> { label, dps? (damage per second the status adds to one foe), secs? (seconds of your damage to its payoff) }.
+  // sheet.est(proc, st, ref) -> { label, dps? (damage per second the status adds to one foe), one? (the same on an elite or boss, where it differs), secs? (seconds of your damage to its payoff) }.
   // proc.rate[el] = damage per second the hero's hits build into that element (infusion rates and statusPow included), proc.pool[el] = the built-in Burn per second (Nova and Meteor),
   // proc.bleed = Bleed built per second; ref = { hp, statusHp (HP before the stratum lever), r, boss } of a typical foe here.
   const PS = {
     fire: { rows: ['fireInfuse', 'burnMul', 'burnCap', 'wildfire', 'smother', 'pyreMul', 'pyrePass'], est: (pr, st) => { // below the stack cap Burn pays back its build-up x (1 + burnMul); the cap holds BURN_CAP + burnCap stacks of the hero's Burn value
       const C = ED.CONST, input = per(pr, 'fire') + (pr.pool && pr.pool.fire || 0), v = ED.burnValue(st), cap = C.BURN_CAP + st.burnCap, raw = v / (1 + st.burnMul);
-      const stacks = raw > 0 ? Math.min(cap, input / raw) : 0, dps = stacks * v;
-      return { label: `Burn adds about ${n1(dps)} damage per second to a foe (${n1(stacks)} of ${cap} stacks; a stack deals ${n1(v)} per second for ${C.BURN_LIFE} s)`, dps, stacks };
+      const stacks = raw > 0 ? Math.min(cap, input / raw) : 0, dps = stacks * v, one = dps * (st.pyre > 0 ? C.BURN_BIG : 1); // one: on an elite, boss or champion (Kindle, the only pyre source, doubles it)
+      return { label: `Burn adds about ${n1(dps)} damage per second to a foe, ${n1(one)} to an elite or boss (${n1(stacks)} of ${cap} stacks; a stack deals ${n1(v)} per second for ${C.BURN_LIFE} s)`, dps, one, stacks };
     } },
     ice: { rows: ['iceInfuse', 'chillMul', 'freezeDur', 'shatter', 'shatterSplash', 'rime'], est: (pr, st, ref) => { // a Shatter every freeze cycle: one hit at x (1 + shatter), the hits of FREEZE_SET before it at the frozen +25%
       // each freeze raises the foe's next threshold by half (one step decays every RES_T s): the cycle is RES_T over the freezes the chill of RES_T seconds buys
@@ -131,7 +131,7 @@
     evo_general: { name: 'Masterwork Arms', rar: 'l', icon: 'sword', path: 'general', evo: 'general', desc: 'The finisher charges in 0.7s. A finisher on a bleeding foe tears its whole Bleed out at once (its own Bleed too) at x1.5.', mods: {}, max: 1 },
 
     // ---- Flame: Burn stacks; a burning foe's death bursts and spreads ----
-    kindle: { name: 'Kindle', rar: 'r', icon: 'flame', path: 'fire', gate: true, desc: 'Hits add Burn stacks from {fireInfuse} of their damage; each stack deals {burn} per second for 4s (a foe holds 10). A burning foe that dies bursts: foes within 40 (+4 per stack) take half the Burn it still held and catch half its stacks.', mods: { fireInfuse: 0.5, pyre: 1 }, max: 1 },
+    kindle: { name: 'Kindle', rar: 'r', icon: 'flame', path: 'fire', gate: true, desc: 'Hits add Burn stacks from {fireInfuse} of their damage; each stack deals {burn} per second for 4s (a foe holds 10; elites, bosses and champions take double). A burning foe that dies bursts: foes within 40 (+4 per stack) take half the Burn it still held and catch half its stacks.', mods: { fireInfuse: 0.5, pyre: 1 }, max: 1 },
     stoke: { name: 'Stoke the Flames', rar: 'r', icon: 'flame', path: 'fire', desc: 'Burn deals +{burnMul} damage.', mods: { burnMul: 0.25 }, max: 3 },
     kindling: { name: 'Kindling', rar: 'c', icon: 'ember', path: 'fire', desc: 'Foes hold +{burnCap:flat} of your Burn stacks.', mods: { burnCap: 3 }, max: 2 },
     wildfire: { name: 'Wildfire', rar: 'r', icon: 'flame', path: 'fire', desc: 'A foe holding 5 or more of your Burn stacks passes {wildfire:flat} stack(s) per second to a foe touching it.', mods: { wildfire: 1 }, max: 2 },
