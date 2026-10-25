@@ -1,6 +1,6 @@
 // Usage: node tools/check-ux.js
 // Headless checks of player-facing text and layout data: the tutorial signs near the spawn, no developer units or stale fixed multipliers in card texts, the Doom/Toll wording,
-// Shield Storm and Comet in the sheet model, the Sundered status, the floor-map glyph table and route bits (src/client/icons.js). Prints failures and exits 1 when any check fails.
+// Shield Storm and Comet in the sheet model, the Sundered status, the floor-map glyph table and route bits (src/client/icons.js), the offer lock gates (src/client/ui.js). Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
 let n = 0, fails = 0;
 const ok = (c, msg) => { n++; if (!c) { fails++; console.log('FAIL ' + msg); } };
@@ -136,10 +136,10 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   const G = {};
   for (const rw of ['gold', 'boon', 'epic', 'relic', 'forge', 'vigor']) { const r = Ic.reward(rw, null); G[rw] = [r[0], r[1], r[2]]; }
   for (const t of ['shop', 'treasure', 'rest', 'elite', 'boss']) { const r = room(t); G[t] = [r.icon, r.color, r.label]; }
-  for (const ev of ['fountain', 'altar', 'trial', 'gamble']) { const r = room('event', { event: ev }); G['event:' + ev] = [r.icon, r.color, r.label]; }
+  for (const ev of [null, 'fountain', 'altar', 'trial', 'gamble']) { const r = room('event', { event: ev }); G[ev ? 'event:' + ev : 'event'] = [r.icon, r.color, r.label]; } // null: not yet drawn (events.js)
   G.dark = Ic.DARK.slice();
   const want = { shop: ['stall', 'Shop'], gold: ['coins', 'Gold'], treasure: ['chest', 'Treasure'], relic: ['amulet', 'Relic'], epic: ['cardepic', 'Epic'], boon: ['card', 'Boon'], forge: ['anvil', 'Forge'], vigor: ['heart', 'Health'],
-    rest: ['campfire', 'Rest'], 'event:fountain': ['fountain', 'Fountain'], 'event:altar': ['altar', 'Altar'], 'event:trial': ['swords', 'Trial'], 'event:gamble': ['question', 'Gamble'], elite: ['skullhorn', 'Elite'], boss: ['skullcrown', 'Boss'], dark: ['moon', 'Dark'] };
+    rest: ['campfire', 'Rest'], event: ['question', 'Event'], 'event:fountain': ['fountain', 'Still Fountain'], 'event:altar': ['altar', 'Blood Altar'], 'event:trial': ['swords', "Champion's Trial"], 'event:gamble': ['coin', "Gambler's Shrine"], elite: ['skullhorn', 'Elite'], boss: ['skullcrown', 'Boss'], dark: ['moon', 'Dark'] };
   for (const id in want) ok(G[id] && G[id][0] === want[id][0] && G[id][2] === want[id][1] && valid(G[id][0]), `map glyph ${id}: ${want[id][0]} "${want[id][1]}" (16x16 mask): ${G[id] && G[id].join(' ')}`);
   const ids = Object.keys(want), sil = (g) => mask(g).map(r => r.replace(/[^.]/g, '#')).join('');
   const diff = (a, b) => { const x = sil(a), y = sil(b); let d = 0; for (let i = 0; i < 256; i++) if (x[i] !== y[i]) d++; return d; };
@@ -178,6 +178,16 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   ok(rt2[3] === 0 && rt2[2] === 7, 'the branch not taken closes once its sibling is entered: ' + Array.from(rt2).join());
   const sheetSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'sheetui.js'), 'utf8');
   ok(!/dead end/.test(sheetSrc), 'the sheet never calls dark rooms dead ends');
+}
+
+// ---------------- offer lock (ui.js; the live timing runs in tools/browse.js --scen=cards) ----------------
+{
+  const ui = require('fs').readFileSync(require('path').join(__dirname, '..', 'src', 'client', 'ui.js'), 'utf8').replace(/\r\n/g, '\n');
+  ok(/const BOON_LOCK_MS = UI\.OFFER_LOCK_MS = 600;/.test(ui), 'the offer lock is 600 ms');
+  ok(/el\.onclick = \(\) => \{ if \(performance\.now\(\) >= boonLock\)/.test(ui), 'a card click waits for the lock');
+  ok(/UI\.boonConfirm = \(\) => \{ if \(!boonOffer \|\| performance\.now\(\) < boonLock\) return;/.test(ui), 'the confirm key and pad wait for the lock');
+  ok(/UI\.boonReroll = [^\n]*\n[^\n]*performance\.now\(\) < boonLock\) return;/.test(ui), 'the reroll waits for the lock');
+  ok(/boonLock = performance\.now\(\) \+ BOON_LOCK_MS;[^\n]*\n[^\n]*\n\s*wrap\.style\.setProperty\('--lock'[^\n]*classList\.add\('locking'\)/.test(ui), 'each hand restarts the lock and its fill sweep');
 }
 
 console.log(`${n} checks, ${fails} failed`);

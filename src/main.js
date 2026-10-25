@@ -324,8 +324,8 @@
   let last = performance.now(), hiddenTick = null, sheetFrames = 0, drawnW = 0, drawnH = 0;
   const anyOverlay = () => ['ov-pause', 'ov-settings', 'modal', 'ov-sheet'].some(id => !$(id).hidden); // the boon cards are no blocker: a hero keeps moving under them (UI.pickBoon masks the attack keys itself)
   const EMPTY = { mx: 0, my: 0, atk: false, skill: false, dash: false, atkPressed: false };
-  // Hearthsitter: 180 s on the camp's Hearth screen (the Hearth section: Upgrades, Wardrobe, Chronicle) with no key, pointer or pad input grants the secret; leaving it or any input resets A.stillT (A.boot).
-  const STILL_S = 180, HEARTH_TABS = { upgrades: 1, wardrobe: 1, chronicle: 1 };
+  // Hearthsitter: 180 s on the camp's Hearth screen (the Hearth section: Upgrades, Wardrobe, Chronicle, Codex) with no key, pointer or pad input grants the secret; leaving it or any input resets A.stillT (A.boot).
+  const STILL_S = 180, HEARTH_TABS = { upgrades: 1, wardrobe: 1, chronicle: 1, codex: 1 };
   A.stillT = 0;
   function hearthStill(dt, inp) {
     const camp = A.hasProfile && A.state === 'hearth' && !!HEARTH_TABS[ED.UI.tab];

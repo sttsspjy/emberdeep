@@ -61,6 +61,7 @@
         <button role="tab" data-tab="upgrades" class="tab on">Upgrades<span class="dot" id="dot-upgrades" hidden></span></button>
         <button role="tab" data-tab="wardrobe" class="tab">Wardrobe<span class="dot" id="dot-wardrobe" hidden></span></button>
         <button role="tab" data-tab="chronicle" class="tab">Records</button>
+        <button role="tab" data-tab="codex" class="tab">Codex</button>
       </nav>
 
       <div class="sec-body">
@@ -121,6 +122,12 @@
               <div class="strata-list" id="strata-list"></div>
             </div>
           </div>
+        </div>
+        <!-- CODEX -->
+        <div class="pane" data-pane="codex" hidden>
+          <p class="sub">Pages found in event rooms. Every descent can turn up more; the rarest come from rare events.</p>
+          <h3 class="plate-h" id="codex-count"></h3>
+          <div class="codex-list" id="codex-list"></div>
         </div>
       </div>
     </div>
@@ -192,6 +199,15 @@
   </section>
 
   <!-- ============ IN-RUN OVERLAYS ============ -->
+  <div id="ov-event" class="overlay" hidden>
+    <div class="plate ev-wrap" role="dialog" aria-labelledby="ev-title">
+      <h2 class="card-title" id="ev-title"></h2>
+      <div class="ev-sub" id="ev-sub"></div>
+      <div class="ev-text" id="ev-text"></div>
+      <div class="ev-choices" id="ev-choices"></div>
+      <div class="ev-hint hint" id="ev-hint"></div>
+    </div>
+  </div>
   <div id="ov-boon" class="overlay" hidden>
     <div class="boon-wrap">
       <div class="boon-title"><span id="boon-head">Choose a boon</span> <span id="boon-count"></span></div>
@@ -365,6 +381,8 @@
 <script src="src/data/classboons.js" defer></script>
 <script src="src/data/relics.js" defer></script>
 <script src="src/data/meta.js" defer></script>
+<script src="src/data/lore.js" defer></script>
+<script src="src/data/events.js" defer></script>
 <script src="src/save.js" defer></script>
 <script src="src/sim/dungeon.js" defer></script>
 <script src="src/sim/stats.js" defer></script>
@@ -385,6 +403,7 @@
 <script src="src/sim/boss-warden.js" defer></script>
 <script src="src/sim/boss-spore.js" defer></script>
 <script src="src/sim/rooms.js" defer></script>
+<script src="src/sim/events.js" defer></script>
 <script src="src/sim/arena.js" defer></script>
 <script src="src/sim/boss-king.js" defer></script>
 <script src="src/sim/boss-hollow.js" defer></script>

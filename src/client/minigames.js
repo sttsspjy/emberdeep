@@ -7,6 +7,7 @@
   const secs = (end) => Math.max(0, Math.ceil(end - ED.Render.simT)) + 's';
   const BELL_COL = ['#ff6a5a', '#ffd36b', '#6fd8ff', '#9be36a'], BELL_ST = [0, 4, 7, 12]; // echo bells by index: colour and the 'bell' cue's semitones
   const GOLD = '#ffd36b', RED = '#ff6a5a', DIM = '#b8a890';
+  for (const k of ['mg_gauntlet', 'mg_chest', 'mg_dealer', 'mg_herald', 'mg_lantern', 'mg_echo']) ED.Render.KEEP_USED.add(k); // these keep drawing their used look once state turns 1
   const flash = new Map(); // 'bell' + index -> sim time of its last hit flash; 'bad' + index -> a wrong hit
   const find = (view, kind) => { for (const q of view.props) if (q.kind === kind) return q; return null; };
   const has = (art, id) => art && ED.Atlas && ED.Atlas.has(id);
