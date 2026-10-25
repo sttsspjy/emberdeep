@@ -65,12 +65,11 @@ for (const mode of ['proj', 'zone', 'tick']) {
 
 // ---- Smite duo statuses are built from the Smite before the holy affinity ----
 for (const s of [1, 2]) {
-  const { w, p } = stage('cleric', { sunfire: 1, hoarlight: 1, twilight: 1 });
-  w.stratum = s; p.stats.sunfire = 1; p.stats.hoarlight = 1; p.stats.twilight = 1;
-  const e = foe(w, p.x + 200, p.y), holy = w.elemAff('holy'), fire = w.elemAff('fire'), shadow = w.elemAff('shadow');
+  const { w, p } = stage('cleric', { sunfire: 1 });
+  w.stratum = s; p.stats.sunfire = 1;
+  const e = foe(w, p.x + 200, p.y), holy = w.elemAff('holy'), fire = w.elemAff('fire');
   w.smite(e, p, 100); // stored Radiance 100 already carries the holy affinity
   near(e.burnPool, 100 / holy * 0.6 * fire, 1e-6, `stratum ${s} Sunfire Burn`);
-  near(e.doom, 100 / holy * (1 + p.stats.doomMul) * shadow, 1e-6, `stratum ${s} Twilight Doom`);
 }
 {
   const { w, p } = stage('pyro', { thermalshock: 1 });
@@ -122,7 +121,7 @@ for (const s of [1, 2]) {
       ok(!/[{}\[\]]/.test(ED.cardParts(id, 3, st).text + ED.cardParts(id, 3, st).rider), `${id} on ${wid} has no raw token`);
     }
     const nom = /×([\d.]+) (?:attack time|lockout), ×([\d.]+) damage per (?:hit|strike)/.exec(ED.cardParts(id, 1).text), hv = b.weapon.kind === 'heavy';
-    const want = cls === 'bell' ? (hv ? [1.29, 1.42] : [0.69, 0.76]) : hv ? [1.8, 1.98] : [0.55, 0.605];
+    const want = cls === 'bell' ? (hv ? [1.2, 1.32] : [0.6, 0.66]) : hv ? [1.8, 1.98] : [0.55, 0.605];
     ok(nom && +nom[1] === want[0] && +nom[2] === want[1], `${id} without a hero shows the nominal factors`);
   }
   ok(/×1\.3 attack time, ×1\.43 damage per hit/.test(ED.cardParts('p_atk_h', 1, { weaponId: 'inferno' }).text), 'Tome of Ruin shows the capped heavy factors');
@@ -269,13 +268,87 @@ for (const s of [1, 2]) {
   const price = (r) => mk([{ favor: r }]).priceOf({ type: 'boon' });
   ok(price(0) === 75 && price(1) === 70 && price(2) === 70, "Merchant's Favor: 4% cheaper per rank (the 75-gold epic boon: 75, 70, 70)");
 }
-{ // bot exploration: --dark=never visits every non-dark room, --dark=always also the two dark rooms
-  for (const [seed, cls] of [[1000, 'knight'], [1028, 'ranger'], [1015, 'pyro']]) {
-    for (const dark of ['never', 'always']) {
-      const r = runBot({ seed, n: 1, cls: [cls], skill: 0.75, up: ED.UPGRADES.map(() => 0), mastery: 1, relics: ED.RELIC_IDS.filter(id => ED.RELICS[id].start), pick: 'smart', dark, maxStratum: 2 });
-      ok(r.left.length >= 1 && r.left.every(f => f.missed === 0), `${cls} ${dark}: every non-dark room visited (left ${JSON.stringify(r.left)})`);
-      ok(r.left.length >= 1 && r.dark.slice(0, r.left.length).every(v => (dark === 'never' ? v === 0 : v === 2)), `${cls} ${dark}: dark rooms entered ${r.dark.join(',')}`);
+// ---- route floors: forward-only lattice, sealed ways in, skippable risk, deterministic per seed ----
+{
+  const D = ED.Dungeon, T = ED.CONST.TILE, FIGHT = { combat: 1, elite: 1 }, UTIL = { treasure: 1, event: 1, shop: 1, rest: 1 };
+  const bad = {}, flag = (k) => { bad[k] = (bad[k] || 0) + 1; };
+  let elitesIII = 0, twists = 0, twistEarly = 0, floors = 0;
+  const sig = (f) => JSON.stringify(f.rooms.map(r => [r.type, r.gx, r.gy, r.layer, r.dark, r.reward, r.threat, r.doors, r.sealed, r.event, r.w, r.h, Array.from(r.tiles).join(''), r.decor.length, !!r.bell])) + f.platino;
+  for (let seed = 1; seed <= 300; seed++) for (let s = 1; s <= 6; s++) {
+    const f = D.generate(s, seed * 7919 + 13), rm = f.rooms; floors++;
+    if (seed <= 60 && sig(f) !== sig(D.generate(s, seed * 7919 + 13))) flag('determinism');
+    const byL = {}; for (const r of rm) (byL[r.layer] = byL[r.layer] || []).push(r);
+    if (rm.length !== 2 + 2 * (D.LAYERS - 1) || rm[f.start].layer !== 0 || rm[f.boss].layer !== D.LAYERS || byL[D.LAYERS].length !== 1 || byL[0].length !== 1) flag('layers');
+    for (let k = 1; k < D.LAYERS; k++) if (!byL[k] || byL[k].length !== 2) flag('two rooms per middle layer');
+    if (rm.filter(r => r.dark).length !== 2 || rm.filter(r => r.dark && r.type !== 'combat').length || rm.filter(r => r.type === 'elite').length !== [1, 1, 1, 1, 2, 2][s - 1] || rm.filter(r => UTIL[r.type]).length !== 3) flag('room mix');
+    const ins = rm.map(() => new Set());
+    for (const r of rm) {
+      if (r.layer !== r.gx + r.gy) flag('layer = gx + gy');
+      if (r.doors.n >= 0 || r.doors.w >= 0) flag('north and west doors are never exits');
+      for (const d of ['e', 's']) {
+        const n = r.doors[d]; if (n < 0) continue;
+        const o = D.OPP[d];
+        if (rm[n].layer !== r.layer + 1) flag('doors lead one layer forward');
+        if (!rm[n].sealed[o]) flag('the way in is sealed');
+        ins[n].add(o);
+        const dr = D.doorRect(rm[n], o);
+        for (let y = dr.y0; y <= dr.y1; y++) for (let x = dr.x0; x <= dr.x1; x++) if (rm[n].tiles[y * rm[n].w + x] !== 1) flag('a sealed doorway stays wall');
+        const er = D.doorRect(r, d);
+        for (let y = er.y0; y <= er.y1; y++) for (let x = er.x0; x <= er.x1; x++) if (r.tiles[y * r.w + x] !== 5) flag('an exit is carved as a door');
+      }
     }
+    rm.forEach((r, i) => { if (Object.keys(r.sealed).length !== ins[i].size || Object.keys(r.sealed).some(d => !ins[i].has(d))) flag('sealed marks exactly the ways in'); });
+    if (D.reach(rm, f.start).size !== rm.length) flag('every room reachable from the start');
+    if (rm.some(r => !D.reach(rm, r.id).has(f.boss))) flag('every room reaches the boss');
+    const R = D.routes(rm, f.start, f.boss), fights = (r) => r.filter(id => FIGHT[rm[id].type]).length;
+    if (R.length < 3) flag('at least 3 routes');
+    if (R.some(r => r.length !== D.LAYERS + 1)) flag('a route visits one room per layer');
+    if (R.some(r => fights(r) < 3)) flag('every route holds 3 fights');
+    for (const x of rm) if ((x.dark || x.type === 'elite') && !R.some(r => !r.includes(x.id))) flag('each dark and elite room is skippable');
+    if (!R.some(r => !r.some(id => rm[id].dark))) flag('a route skips both dark rooms');
+    if (!R.some(r => rm.every(x => !(x.dark || x.type === 'elite') || r.includes(x.id)))) flag('a route takes every dark and elite room');
+    if (!rm.some(r => { const o = [r.doors.e, r.doors.s].filter(n => n >= 0); return o.length === 2 && o.some(n => UTIL[rm[n].type]) && o.some(n => FIGHT[rm[n].type]); })) flag('a fork between a utility room and a fight');
+    for (const r of rm) {
+      const want = r.type === 'boss' ? 3 : FIGHT[r.type] ? Math.min(3, 1 + (r.type === 'elite') + r.dark + (r.layer >= 4)) : 0;
+      if (r.threat !== want) flag('threat pips');
+      if ((r.type === 'shop' || r.dark || r.type === 'elite') && r.layer < 2) flag('shop, dark and elite rooms from layer 2');
+      if (r.type === 'rest' && r.layer < 3) flag('rest site from layer 3');
+      if (r.type === 'elite') { if (r.reward === 'twist') { if (s < 3) twistEarly++; else twists++; } if (s >= 3) elitesIII++; }
+    }
+    if (f.platino !== -1 && !(f.platino >= 1 && f.platino <= 3)) flag('the Platino cue is a fight ordinal 1-3');
+  }
+  ok(!Object.keys(bad).length, `route floors (${floors}): ${JSON.stringify(bad)}`);
+  ok(twistEarly === 0 && Math.abs(twists / elitesIII - 0.15) < 0.04, `elite Twist rewards from stratum III only, ${twists}/${elitesIII} of them`);
+}
+{ // co-op doors: the party leaves once every living hero stands in the same exit door; P[26] carries the door a hero waits in
+  const D = ED.Dungeon, T = ED.CONST.TILE;
+  const spot = (room, d) => { const r = D.doorRect(room, d), cx = (r.x0 + r.x1 + 1) / 2 * T, cy = (r.y0 + r.y1 + 1) / 2 * T; return d === 'e' ? { x: (room.w - 1) * T + 8, y: cy } : { x: cx, y: (room.h - 1) * T + 10 }; };
+  const mk = (n) => { const w = new ED.World({ seed: 9, pact: 0, players: [...Array(n)].map((_, i) => ({ pid: 'p' + i, name: 'H' + i, slot: i, cls: 'knight', weapon: ED.CLASSES.knight.weapons[0], meta: META() })) }); w.startRun(); for (const p of w.players.values()) { p.offers.length = 0; p.picks = 0; p.offer = null; } return w; };
+  const put = (p, pt) => { p.x = pt.x; p.y = pt.y; };
+  const w = mk(2), room = w.room, [a, b] = [...w.players.values()], d = room.doors.e >= 0 ? 'e' : 's', d2 = d === 'e' ? 's' : 'e';
+  ok(room.type === 'start' && !w.locked && room.doors[d] >= 0, 'the start room has an open exit');
+  put(a, spot(room, d)); w.checkDoors();
+  const want = 1 + D.DOOR_DIRS.indexOf(d);
+  ok(w.room === room && a.doorWant === want && b.doorWant === 0 && /H1/.test(w.waitMsg), `one hero in the door: the party waits (${w.waitMsg})`);
+  const row = ED.Net.encodeSnap(w, [], true).P.find(q => q[0] === 'p0');
+  ok(row[26] === want, `P[26] carries the wanted door (${row[26]})`);
+  if (room.doors[d2] >= 0) { put(b, spot(room, d2)); w.checkDoors(); ok(w.room === room && b.doorWant === 1 + D.DOOR_DIRS.indexOf(d2), 'two heroes in different doors: nobody moves'); }
+  put(b, spot(room, d)); w.checkDoors();
+  ok(w.room.id === room.doors[d], 'both heroes in the same door: the party moves');
+  const w2 = mk(2), r2 = w2.room, [c, e] = [...w2.players.values()];
+  e.downed = true; e.bleed = 10; put(c, spot(r2, d)); w2.checkDoors();
+  ok(w2.room.id === r2.doors[d] && e.downed, 'a downed hero moves with the party');
+  const w3 = mk(1), r3 = w3.room, s0 = [...w3.players.values()][0];
+  put(s0, spot(r3, d)); w3.checkDoors();
+  ok(w3.room.id === r3.doors[d] && s0.doorWant === 0, 'solo: the door takes the hero at once');
+}
+{ // bot routes: deterministic forward routes to the boss; --dark=never never enters a dark room
+  for (const [seed, cls] of [[1000, 'knight'], [1028, 'ranger'], [1015, 'pyro']]) {
+    const go = (dark) => runBot({ seed, n: 1, cls: [cls], skill: 0.75, up: ED.UPGRADES.map(() => 0), mastery: 1, relics: ED.RELIC_IDS.filter(id => ED.RELICS[id].start), pick: 'smart', dark, maxStratum: 2 });
+    const nv = go('never'), al = go('always');
+    ok(nv.dark.every(v => v === 0), `${cls} never: dark rooms entered ${nv.dark.join(',')}`);
+    for (const r of [nv, al]) ok(r.rooms.visited <= (r.left.length + 1) * (ED.Dungeon.LAYERS + 1) && r.rooms.visited >= r.left.length * (ED.Dungeon.LAYERS + 1), `${cls}: at most one room per layer (${r.rooms.visited} rooms over ${r.left.length} floors)`);
+    ok(JSON.stringify(go('never').dark) === JSON.stringify(nv.dark) && go('never').rooms.visited === nv.rooms.visited, `${cls}: the route repeats per seed`);
   }
 }
 // ---- fodder hordes: quota, drops, health, damage cap, xp budget, crowd slow, per-foe exposure, pack spots, live cap ----
@@ -420,8 +493,8 @@ const budgetOf = (s, kind) => Math.round(W0.ROOM_XP[kind === 'elite' ? 'elite' :
     ok(Q(w2, { type: 'combat', dark: false }) === Math.round(base * 1.5) && Q(w4, { type: 'combat', dark: false }) === Math.round(base * 2.5), `stratum ${s} party quota`);
   }
   const wt = hordeWorld(1, ['knight'], true);
-  ok(Q(wt, { type: 'combat', dark: false }) === 24, `tutorial stratum I quota ${Q(wt, { type: 'combat', dark: false })}`);
-  ok(W0.LIVE_CAP[0] === 120 && W0.LIVE_CAP[1] === 180 && W0.FODDER_XP_SHARE === 0.5 && W0.ROOM_XP.combat.join() === '24,38,60,84,107,122' && W0.ROOM_XP.elite.join() === '44,64,86,116,159,180', 'horde and xp constants');
+  ok(Q(wt, { type: 'combat', dark: false }) === Math.round(W0.FODDER_Q[0] * 0.6), `tutorial stratum I quota ${Q(wt, { type: 'combat', dark: false })}`);
+  ok(W0.LIVE_CAP[0] === 120 && W0.LIVE_CAP[1] === 180 && W0.FODDER_XP_SHARE === 0.5 && W0.FODDER_Q.join() === '70,96,123,149,175,210' && W0.WAVES === 3 && W0.ROOM_XP.combat.join() === '30,47,74,103,131,150' && W0.ROOM_XP.elite.join() === '54,79,106,143,195,221', 'horde and xp constants');
 }
 // Every room kind of every stratum, played out by killing everything: the quota spawns, the room clears, fodder drop no gold or hearts, and the xp dropped is the budget
 for (let s = 1; s <= 6; s++) {
@@ -442,10 +515,10 @@ for (let s = 1; s <= 6; s++) {
 { // the xp mote ledger: a fodder kill drops its share as whole units, exact in total; threat drops are scaled so the planned waves fill their cap (xpK), never past it; the pile pays the rest
   const w = hordeWorld(1, ['knight']), room = roomOf(w, 'combat');
   const r = playRoom(w, room, 'none', 1);
-  const enc = w.enc; ok(enc && enc.xpBudget === W0.ROOM_XP.combat[0] && enc.xpFod === W0.ROOM_XP.combat[0] * W0.FODDER_XP_SHARE && enc.xpThrCap === W0.ROOM_XP.combat[0] * (1 - W0.FODDER_XP_SHARE) && enc.q === 40, `ledger ${JSON.stringify({ b: enc.xpBudget, f: enc.xpFod, t: enc.xpThrCap, q: enc.q })}`);
+  const enc = w.enc; ok(enc && enc.xpBudget === W0.ROOM_XP.combat[0] && enc.xpFod === W0.ROOM_XP.combat[0] * W0.FODDER_XP_SHARE && enc.xpThrCap === W0.ROOM_XP.combat[0] * (1 - W0.FODDER_XP_SHARE) && enc.q === W0.FODDER_Q[0], `ledger ${JSON.stringify({ b: enc.xpBudget, f: enc.xpFod, t: enc.xpThrCap, q: enc.q })}`);
   const p = w.players.get('p0'); let got = 0;
   for (let i = 0; i < enc.q; i++) { const e = w.spawnEnemy('bonemite', p.x, p.y); const before = w.log.xp; w.killEnemy(e, p, {}); got += w.log.xp - before; }
-  ok(got >= enc.xpFod - 1 && got <= enc.xpFod && enc.xpOut === got, `40 fodder kills drop ${got} of ${enc.xpFod}`);
+  ok(got >= enc.xpFod - 1 && got <= enc.xpFod && enc.xpOut === got, `${enc.q} fodder kills drop ${got} of ${enc.xpFod}`);
   let plan = 0; for (const wv of enc.waves) for (const f of wv) plan += W0.threatXp(ED.ENEMIES[f.type], 1, f.elite);
   near(enc.xpK * plan, enc.xpThrCap, 1e-9, `xpK scales the planned threat xp (${plan.toFixed(1)}) to the threat cap ${enc.xpThrCap}`);
   const un = w.spawnEnemy('skeleton', p.x, p.y), u0 = w.log.xp; w.killEnemy(un, p, {});
@@ -456,11 +529,11 @@ for (let s = 1; s <= 6; s++) {
   ok(enc.xpClip === Math.max(0, want - room0), `the cut is logged (${enc.xpClip})`);
 }
 { // the horde never holds the threat waves back: with the fodder left standing, the waves still advance as the threat foes die; the room clears only after the last fodder
-  const w = hordeWorld(3, ['knight']), room = roomOf(w, 'combat');
+  const w = hordeWorld(1, ['knight']), room = roomOf(w, 'combat');
   const r = playRoom(w, room, 'threat', 3.5), enc = r.enc, standing = w.hostiles();
   ok(!r.cleared && enc.wave === enc.waves.length - 1 && standing >= 6 && w.hostiles(true) === 0, `waves advance past standing fodder well before the ${W0.PACE.maxAge} s timer (wave ${enc.wave + 1}/${enc.waves.length} after ${r.t.toFixed(1)} s with ${standing} fodder standing)`);
   ok(enc.spawned < enc.q, `the quota is not out yet (${enc.spawned}/${enc.q}): the room stays locked`);
-  const r2 = stepRoom(w, enc, 'threat', 30);
+  const r2 = stepRoom(w, enc, 'threat', 60);
   ok(!r2.cleared && enc.spawned === enc.q && w.hostiles() > 0, `with the quota out and fodder standing the room does not clear (${w.hostiles()} standing)`);
   const r3 = stepRoom(w, enc, 'all', 5);
   ok(r3.cleared && w.run.fodderKills === enc.q, `it clears once the last fodder falls (${w.run.fodderKills}/${enc.q})`);
@@ -999,6 +1072,70 @@ for (let s = 1; s <= 6; s++) {
     near(b.furyT, 24, 2 * TICK, 'the clock read 24 s after 24 s of phases, a freeze, a stun and a blind');
     ok(ev.length === 0, 'no fury inside the first 24 s');
   }
+}
+{ // healing trim: no heart at a room clear, kill hearts 2%; Forager adds World.FORAGER of max HP per rank to hearts, campfires, fountains, draughts and Vigor rewards
+  ok(ED.World.HEART_KILL === 0.02 && ED.World.FORAGER === 0.08, 'heart and Forager constants');
+  const { w, p } = stage('knight', {});
+  let hearts = 0;
+  for (let i = 0; i < 60; i++) { w.pickups.length = 0; w.enc = { kind: 'waves' }; w.locked = true; w.roomState[w.roomId].cleared = false; w.room.reward = null; w.roomCleared(); hearts += w.pickups.filter(k => k.kind === 'heart').length; }
+  ok(hearts === 0, `room clears drop no heart (${hearts} in 60)`);
+  const heal = (rank, fn) => { p.stats.forager = rank; p.hp = 1; const h0 = p.hp; fn(); return p.hp - h0; };
+  near(heal(2, () => w.collect(p, { kind: 'heart', val: 1 })) - heal(0, () => w.collect(p, { kind: 'heart', val: 1 })), 0.16 * p.maxHp, 1e-6, 'Forager 2: a heart heals 16% of max HP more');
+  const fire = () => { const g = 9100 + Math.random(); w.props.push({ id: g, kind: 'campfire', x: p.x, y: p.y, group: g, state: 0 }); w.locked = false; w.interact(p.pid, g); };
+  near(heal(1, fire) - heal(0, fire), 0.08 * p.maxHp, 1e-6, 'Forager 1: a campfire heals 8% of max HP more');
+  p.stats.forager = 0;
+}
+{ // Hunted: a one-affix champion joins a combat room's second wave, never holds the room, pays a room offer to Hunted holders when killed, leaves with a puff at the clear
+  const play = (hunted, killChamp) => {
+    const w = hordeWorld(2, ['knight']), p = w.players.get('p0'), room = roomOf(w, 'combat');
+    const dir = Object.keys(room.doors).find(k => room.doors[k] >= 0); w.enterRoom(room.id, ED.Dungeon.OPP[dir]);
+    p.stats.twHunted = hunted ? 1 : 0;
+    const enc = w.enc; let champ = null, seen = 0, t = 0;
+    while (w.enc === enc && t < 200) {
+      p.invuln = 1e9; w.update(TICK); t += TICK;
+      for (const e of w.enemies) if (e.hunted && e.hp > 0) { champ = e; seen = Math.max(seen, w.enemies.filter(q => q.hunted && q.hp > 0).length); }
+      for (const e of w.enemies.slice()) if (e.hp > 0 && e.spawnT <= 0 && (!e.hunted || killChamp)) w.killEnemy(e, p, {});
+    }
+    return { w, p, champ, seen, cleared: w.enc !== enc, enc };
+  };
+  const a = play(true, false);
+  ok(a.cleared && a.champ && a.seen === 1 && a.champ.elite && !a.champ.elite2 && ED.World.DARK_AFFIXES.includes(a.champ.elite), `Hunted: one champion with one affix (${a.champ && a.champ.elite}/${a.champ && a.champ.elite2}) and the room still clears`);
+  ok(a.champ && a.champ.hp <= 0 && !a.w.enemies.some(e => e.hunted && e.hp > 0) && a.w.fx.some(ev => ev.t === 'puff') && !a.p.offers.some(o => o.src === 'room'), 'left alive, it leaves with a puff at the clear and pays nothing');
+  const b = play(true, true);
+  ok(b.cleared && b.champ && b.champ.killed && b.p.offers.filter(o => o.src === 'room').length === 1, 'killed, it pays its holder one room offer');
+  const c = play(false, true);
+  ok(c.cleared && !c.champ, 'without Hunted no champion comes');
+  const bit = ED.Net.encodeSnap(a.w, [], true);
+  ok(Array.isArray(bit.E), 'snapshot encodes');
+}
+{ // Twist offers: bosses II and IV grant one per hero beside their rewards (stratum III none); elite Twist rewards are per-hero claims
+  for (const s of [2, 3, 4]) {
+    const w = hordeWorld(s, ['knight', 'ranger']), boss = w.floor.rooms[w.floor.boss];
+    w.enterRoom(boss.id, null);
+    const e = w.spawnEnemy(ED.biomeFor(s).boss, 100, 100), p = w.players.get('p0');
+    w.killEnemy(e, p, {});
+    const tw = [...w.players.values()].map(q => q.offers.filter(o => o.src === 'twist').length);
+    ok(tw.every(v => v === (s === 3 ? 0 : 1)), `boss ${s}: Twist offers per hero ${tw}`);
+  }
+  const w = hordeWorld(3, ['knight', 'ranger']), [p, q] = [...w.players.values()];
+  const pr = { id: 9301, kind: 'reward', x: p.x, y: p.y, item: 'twist', group: 9302, state: 0 }; w.props.push(pr); q.x = p.x; q.y = p.y;
+  w.interact(p.pid, pr.id); w.interact(p.pid, pr.id); ok(p.offers.filter(o => o.src === 'twist').length === 1 && !pr.state, 'a Twist reward: one claim per hero, the prop stays');
+  w.interact(q.pid, pr.id); ok(q.offers.some(o => o.src === 'twist') && pr.state === 1, 'every hero claimed: it is spent');
+}
+{ // Cartographer (run.fullClear): both dark rooms and every elite room of one stratum cleared
+  const { w } = stage('knight', {});
+  const risky = w.floor.rooms.filter(r => r.dark || r.type === 'elite');
+  for (const r of risky.slice(1)) w.roomState[r.id].cleared = true;
+  w.checkFullClear(); ok(!w.run.fullClear, 'one risky room left: no Cartographer');
+  w.roomState[risky[0].id].cleared = true; w.checkFullClear(); ok(w.run.fullClear && risky.length === 3, 'every dark and elite room cleared: Cartographer');
+}
+{ // the Drowned Bell stands in both dark rooms of stratum V; the Platino comes out at the n-th fight clear of its floor
+  const f = ED.Dungeon.generate(5, 4242), bells = f.rooms.filter(r => r.bell);
+  ok(bells.length === 2 && bells.every(r => r.dark), 'two Drowned Bells, one per dark room of stratum V');
+  const { w } = stage('knight', {});
+  w.floor.platino = 2; w.floorFights = 0;
+  const clear = () => { w.enc = { kind: 'waves' }; w.locked = true; w.roomState[w.roomId].cleared = false; w.room.reward = null; w.roomCleared(); };
+  clear(); ok(!w.critter, 'first fight clear: no Platino'); clear(); ok(!!w.critter, 'second fight clear: the Platino is out');
 }
 console.log(`${n} checks, ${fails} failed`);
 process.exit(fails ? 1 : 0);

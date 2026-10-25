@@ -1,13 +1,15 @@
 // Pick feedback (client only): the card kind of a boon or relic, its synthesized pick cue (audio.js 'pick') and its themed burst on the picking hero in the world (fx.js 'boon' and 'relic' events).
-// Kinds: the six elements, general, route, duo, asc, relic, purse. Bursts last at most 1.2 s, never flash the screen, run lighter on Low quality and dimmer for an ally's pick.
+// Kinds: the six elements, general, route, duo, asc, mut (Mutation), twist, relic, purse. Bursts last at most 1.2 s, never flash the screen, run lighter on Low quality and dimmer for an ally's pick.
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = U.TAU;
   const P = ED.PickFx = {};
-  P.KINDS = ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'route', 'duo', 'asc', 'relic', 'purse'];
+  P.KINDS = ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'route', 'duo', 'asc', 'mut', 'twist', 'relic', 'purse'];
   const ELEM = { fire: 1, ice: 1, lightning: 1, poison: 1, holy: 1, shadow: 1, general: 1 };
-  // Kind of boon id (total): purse > asc > duo > route (any cls card) > its path > 'general' (open boons, unknown ids).
-  P.kind = (id) => { const b = ED.BOONS[id]; return !b ? 'general' : b.purse ? 'purse' : b.asc ? 'asc' : b.duo ? 'duo' : b.cls ? 'route' : ELEM[b.path] ? b.path : 'general'; };
+  // Kind of boon id (total): purse > twist > mut > asc > duo > route (any cls card) > its path > 'general' (open boons, unknown ids).
+  P.kind = (id) => { const b = ED.BOONS[id]; return !b ? 'general' : b.purse ? 'purse' : b.twist ? 'twist' : b.mut ? 'mut' : b.asc ? 'asc' : b.duo ? 'duo' : b.cls ? 'route' : ELEM[b.path] ? b.path : 'general'; };
+  // Path colour of a Mutation's parent keystone (path) or evolution (evo), else the Mutation colour.
+  P.mutColor = (b) => { const par = b && b.mut && ED.BOONS[b.mut], k = par && (par.path || par.evo); return k && ED.PATHS[k] ? ED.PATHS[k].color : ED.RARITY.m.color; };
   P.kindRelic = () => 'relic';
   // Keystones, evolutions and path gates take the bigger, longer version of their path's feedback.
   P.big = (id) => { const b = ED.BOONS[id]; return !!(b && (b.key || b.evo || b.gate)); };
@@ -122,6 +124,22 @@
       F.ring(x, y, 70, rc(o, c), 0.6 * o.L, 4, false, 12); F.ring(x, y, 40, rc(o, '#ffffff'), 0.35, 2);
       SP(o, 'fx.circle.spark', x, y - 4, { ramp: c, add: true, a: o.al, keep: true }); SP(o, 'fx.ring.shock', x, y - 6, { ramp: '#c9b3ff', add: true });
       F.pop(x, y - 14, 30, '#ff9ae6', 0.3, true, o.al);
+    },
+    mut(o, b) { // cells bud off the hero and drift out, a ring in the Mutation colour and a wider one in the parent path's colour
+      const F = o.F, x = o.x, y = o.y, c = ED.RARITY.m.color, pc = P.mutColor(b);
+      F.burst(x, y - 10, nn(o, 12), { kind: 'dot', color: c, sp: 90, life: 0.8 * o.L, size: 4, add: false, drag: 2 });
+      F.burst(x, y - 10, nn(o, 8), { kind: 'dot', color: '#ffe2c8', sp: 120, life: 0.5, size: 2, add: true, drag: 2.5 });
+      for (let i = 0; i < 4; i++) { const q = i * TAU / 4 + 0.4; SP(o, 'fx.puff', x + Math.cos(q) * 16, y - 8 + Math.sin(q) * 10, { ramp: c, vx: Math.cos(q) * 40, vy: Math.sin(q) * 30, delay: i * 0.05, a: 0.8 * o.al, keep: i === 0 }); }
+      F.ring(x, y, 34, rc(o, c), 0.5 * o.L, 3); F.ring(x, y, 52, rc(o, pc), 0.6 * o.L, 2, false, 14);
+      F.pop(x, y - 12, 20, c, 0.25, true, o.al, '#ffe2c8');
+    },
+    twist(o) { // the pact closes: two red rings shrink onto the hero, blood drops thrown up and falling, dark smoke, a spark at the seal
+      const F = o.F, x = o.x, y = o.y, c = ED.RARITY.t.color;
+      F.ring(x, y - 4, 60, rc(o, c), 0.45 * o.L, 3, true); F.ring(x, y - 4, 84, rc(o, '#5e0c1a'), 0.5 * o.L, 2, true);
+      F.burst(x, y - 14, nn(o, 12), { kind: 'shard', color: c, a: -1.57, spread: 2, sp: 60, life: 0.75 * o.L, size: 2.6, vz: 120, z: 12, drag: 1 });
+      F.burst(x, y - 8, nn(o, 6), { kind: 'smoke', color: '#3a0a14', sp: 40, life: 0.8, size: 5, drag: 3 });
+      SP(o, 'fx.circle.spark', x, y - 6, { ramp: c, add: true, a: o.al, delay: 0.3, keep: true });
+      F.pop(x, y - 12, 18, '#5e0c1a', 0.4, false, o.al * 0.7, c);
     },
     relic(o, b, ev) { // stone-grey dust ring and a glint in the relic's rarity colour over the head
       const F = o.F, x = o.x, y = o.y, r = ED.RELICS[ev.id], c = r ? ED.RARITY[r.rar].color : '#ffb02e';

@@ -1,9 +1,10 @@
 // Bellwarden visuals, client only: registers ED.ClassFx hooks (contract in fx.js) plus ED.ClassFx.bell(c, p, i, t, low, view), which render.js calls for bell i of hero p in the sorted draw list (world frame).
-// A bell is drawn lifted LIFT px over its ground spot (hero feet + b.ox / b.oy, set by game.js), its shadow and, at strike speed, a ring in the owner's colour on the ground; the chain (atlas fx.chain links, else 1 art px links)
-// runs from the hero's hand (Actors.hand) to the bell's crown: straight while taut (hauled, in a Heave or at full length), sagging toward the ground while slack. The bell turns its crown to the hand when the chain pulls,
-// and hangs mouth down when it rests. At strike speed a hauled bell leaves an arc smear about the hero (a straight streak in a Heave), skipped on Low quality; a Heavy Strike flashes the bell white.
-// Events: bstrike (sparks by speed, the Heavy Strike flash, a bronze strike cue; c: the chain lashed a foe, iron sparks and a clank), peal (rings of sound, the toll), bsmash (Wrecker), bhook (Tether Hook landing), deflect (a bronze spark when a bell swatted the shot);
-// zone 'bward' (Ward Bell). Cues: the chain rattles while a bell whirls (rate by speed), the Heave throws with a whoosh and reels in with a ratchet.
+// A bell's ground spot is its hero's feet + b.ox / b.oy (set by game.js) and b.s its state (ED.Bell.STATES): in hand it is drawn lifted LIFT px, its chain (atlas fx.chain links, else 1 art px links) from the hero's hand (Actors.hand)
+// to its crown, straight while taut, sagging while slack, and at strike speed a ring in the owner's colour and an arc smear about the hero; at full wind it glows. A flying bell is lifted LIFT px on a paying-out chain with a hurl streak;
+// an anchored one sits on the ground mouth down, its chain lying slack to the hand; a reeled one drags along the ground on a taut chain, raising dust. Resonance (p.bellRes) shows as pips round the hero's feet and a patina glow on its bells.
+// Bells are drawn BIG x their art (their strike radius grew as much). Smears and dust are skipped on Low quality; a hurl or reel strike flashes the bell white.
+// Events: bstrike (sparks by speed; c: the chain lashed a foe, iron sparks and a clank), peal (rings of sound, the toll pitched by Resonance), bsmash (Anchor Leap slam), bhook (Reel In), deflect (a bronze spark when a bell swatted the shot);
+// zone 'bward' (Ward Bell). Cues: the chain rattles while a bell winds (rate by speed), a whoosh as a bell leaves the hand. The hurl's weight (shake, hit-stop, clang) and the reel's rattle are fx.js's 'hurl' / 'reel' handlers.
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = U.TAU, F = ED.FX, A = ED.Audio, CF = ED.ClassFx, Pix = ED.Pix, Sp = ED.Sprites, C = ED.CONST;
@@ -14,24 +15,36 @@
   const bellMin = () => C.BELL_MIN || 140, bellRef = () => C.BELL_REF || 320;
 
   // ---------------- per hero / bell draw state ----------------
-  // HS[pid]: { t (last frame drawn), ph (Heave phase seen), hauled, rattleT, flashT (Heavy Strike), rot: [eased angle per bell] }
+  // HS[pid]: { t (last frame drawn), wound (winding last frame), rattleT, flashT (white flash), rot: [eased angle per bell], st: [state per bell last frame], dustT }
   const HS = new Map();
-  const hsOf = (p) => { let s = HS.get(p.pid); if (!s) { s = { t: -1, ph: '', hauled: false, rattleT: 0, flashT: -9, rot: [] }; HS.set(p.pid, s); } return s; };
+  const hsOf = (p) => { let s = HS.get(p.pid); if (!s) { s = { t: -1, wound: false, rattleT: 0, flashT: -9, rot: [], st: [], dustT: 0 }; HS.set(p.pid, s); } return s; };
   const mine = (pid) => !!(ED.Render && pid === ED.Render.local);
+  const HAND = 0, FLY = 1, ANCHOR = 2, REEL = 3, BIG = 1.3, RES_PIPS = 10;
 
-  // Frame bookkeeping of hero p, once per frame (bell 0): the Haul's first pull, the Heave's reel, the chain rattle while a bell whirls.
+  // Frame bookkeeping of hero p, once per frame (bell 0): a whoosh for each bell that left the hand, the chain rattle while a bell winds.
   function heroCues(p, s, t) {
-    const own = mine(p.pid), v = own ? 1 : 0.3, hauled = !!p.bellHauled && !p.heave, ph = p.heave ? p.heave.phase || 'fly' : '';
-    if (ph === 'reel' && s.ph !== 'reel') A.play('reel', v);
-    s.ph = ph;
-    if (hauled && !s.hauled) A.play('rattle', 0.8 * v, 1);
-    s.hauled = hauled;
-    if (!hauled) return;
-    let sp = 0; for (const b of p.bells) sp = Math.max(sp, Math.hypot(b.vx, b.vy));
+    const own = mine(p.pid), v = own ? 1 : 0.3, wound = !!p.bellWind;
+    for (let i = 0; i < p.bells.length; i++) { const b = p.bells[i]; if (s.st[i] === HAND && b.s === FLY) A.play('heave', 0.8 * v); s.st[i] = b.s; }
+    s.st.length = p.bells.length;
+    if (wound && !s.wound) A.play('rattle', 0.8 * v, 1);
+    s.wound = wound;
+    if (!wound) return;
+    let sp = 0; for (const b of p.bells) if (b.s === HAND) sp = Math.max(sp, Math.hypot(b.vx, b.vy));
     if (sp < bellMin() * 0.7 || t < s.rattleT) return;
     const k = Math.min(1, sp / 700);
     s.rattleT = t + 0.34 - 0.18 * k;
     A.play('rattle', (0.35 + 0.4 * k) * v, k, own ? 1 : 0);
+  }
+  // Resonance pips: RES_PIPS dots in a flat ring round the hero's feet, the lit ones (p.bellRes) in patina bronze (all lit: bright), brighter for the own hero.
+  function resPips(c, p) {
+    const n = p.bellRes | 0; if (n <= 0) return;
+    const own = mine(p.pid), ga = c.globalAlpha;
+    for (let k = 0; k < RES_PIPS; k++) {
+      const a = -Math.PI / 2 + k * TAU / RES_PIPS, x = s2(p.x + Math.cos(a) * 15), y = s2(p.y + 2 + Math.sin(a) * 6), on = k < n;
+      c.globalAlpha = ga * (on ? (own ? 0.95 : 0.55) : own ? 0.25 : 0);
+      c.fillStyle = OUT; c.fillRect(x - K, y - K, 2 * K, 2 * K); c.fillStyle = on ? (n >= RES_PIPS ? BRIGHT : PATINA) : IRON_D; c.fillRect(x - K / 2, y - K / 2, K, K);
+    }
+    c.globalAlpha = ga;
   }
 
   // The chain from (x0, y0) to (x1, y1) of rest length L: straight when taut, else a quadratic sag of depth min(30, sqrt(L^2 - d^2) / 2) downward. fx.chain links every LINK px along it (1 art px links without the atlas).
@@ -63,40 +76,46 @@
   CF.bell = (c, p, i, t, lo) => {
     const b = p.bells[i], st = p.stats, wp = st && st.weapon;
     if (!b || !wp || wp.kind !== 'bell') return;
-    const s = hsOf(p);
-    if (i === 0 && s.t !== t) { s.t = t; heroCues(p, s, t); }
+    const s = hsOf(p), bs = b.s | 0;
+    if (i === 0 && s.t !== t) { s.t = t; heroCues(p, s, t); resPips(c, p); }
     const hand = ED.Actors && ED.Actors.hand ? ED.Actors.hand(p) : null;
     const hx = p.x + (hand ? hand.hx : Math.cos(p.face || 0) * 8), hy = p.y + (hand ? hand.hy : -11);
-    const gx = p.x + (b.ox || 0), gy = p.y + (b.oy || 0), bx = gx, by = gy - LIFT;
-    const sp = Math.hypot(b.vx, b.vy), fast = sp >= bellMin(), vk = Math.min(1.8, sp / bellRef());
-    const L = Math.max(12, p.bellL || wp.chain), dist = Math.hypot(b.ox || 0, b.oy || 0), taut = !!p.heave || !!p.bellHauled || dist >= L * 0.92;
-    const br = (wp.br || 12) * (1 + 0.5 * (st.area || 0)), slot = p.slot | 0, own = mine(p.pid);
-    // ground: shadow, the owner's ring at strike speed
-    Pix.put(c, Pix.ell(Math.max(2, Math.round(br * 0.55)), Math.max(2, Math.round(br * 0.25)), '#000000', true), s2(gx), s2(gy), 0.3);
-    if (fast) Pix.put(c, Pix.ell(Math.max(3, Math.round(br * 0.7)), Math.max(2, Math.round(br * 0.32)), ED.PLAYER_COLORS[slot] || '#ffffff'), s2(gx), s2(gy), own ? 0.75 : 0.5);
-    // smear behind a fast bell: an arc about the hero while it orbits, a streak in a straight flight
-    if (fast && !lo) smear(c, p, b, bx, by, sp, vk);
+    const ground = bs === ANCHOR || bs === REEL, gx = p.x + (b.ox || 0), gy = p.y + (b.oy || 0), bx = gx, by = gy - (ground ? 2 : LIFT);
+    const sp = Math.hypot(b.vx, b.vy), fast = bs === HAND ? sp >= bellMin() : bs === FLY, vk = Math.min(1.8, sp / bellRef());
+    const dist = Math.hypot(bx - hx, by - hy), L = bs === HAND ? Math.max(12, p.bellL || wp.chain) : bs === ANCHOR ? dist * 1.12 : dist;
+    const taut = bs === FLY || bs === REEL || !!p.bellLeap || (bs === HAND && (!!p.bellHauled || Math.hypot(b.ox || 0, b.oy || 0) >= L * 0.92));
+    const br = (wp.br || 12) * (1 + 0.5 * (st.area || 0)), slot = p.slot | 0, own = mine(p.pid), res = Math.min(1, (p.bellRes | 0) / RES_PIPS);
+    const full = bs === HAND && !!p.bellWind && ED.Bell && ED.Bell.windOf && ED.Bell.windOf(st, b) >= 1;
+    // ground: shadow, the owner's ring at strike speed, dust behind a reeled bell
+    Pix.put(c, Pix.ell(Math.max(2, Math.round(br * 0.55)), Math.max(2, Math.round(br * 0.25)), '#000000', true), s2(gx), s2(gy), ground ? 0.4 : 0.3);
+    if (fast && bs === HAND) Pix.put(c, Pix.ell(Math.max(3, Math.round(br * 0.7)), Math.max(2, Math.round(br * 0.32)), ED.PLAYER_COLORS[slot] || '#ffffff'), s2(gx), s2(gy), own ? 0.75 : 0.5);
+    if (bs === REEL && !lo && t >= s.dustT) { s.dustT = t + 0.06; F.dust(gx, gy, 'dust', 1); }
+    // smear behind a fast bell: an arc about the hero while it orbits, a streak in a hurl
+    if (fast && !lo) smear(c, p, b, bx, by, Math.max(sp, 1), bs === FLY ? 1.8 : vk);
     chain(c, hx, hy, bx, by, L, taut, 1);
-    // the bell: crown to the hand while the chain pulls, mouth down at rest; eased so it never snaps
-    const want = taut || fast ? Math.atan2(by - hy, bx - hx) - Math.PI / 2 : 0, cur = s.rot[i] === undefined ? want : s.rot[i];
+    // the bell: crown to the hand while the chain pulls, mouth down at rest or on the ground; eased so it never snaps
+    const want = (taut || fast) && bs !== ANCHOR ? Math.atan2(by - hy, bx - hx) - Math.PI / 2 : 0, cur = s.rot[i] === undefined ? want : s.rot[i];
     const r = s.rot[i] = cur + U.angDiff(cur, want) * 0.35;
     const wd = Sp.weaponArt(p), ec = st.evo && ED.PATHS[st.evo] ? ED.PATHS[st.evo].color : null, flash = F.time - s.flashT < 0.09;
     if (!drawLook(c, p, wd, ec, flash, bx, by, r)) procBell(c, bx, by, br, r, flash);
     if (!lo && ED.Render) {
-      if (fast) ED.Render.emit(bx, by + br * 0.6, 8 + br * 0.4, BRONZE, 0.1 * vk);
+      if (fast) ED.Render.emit(bx, by + br * 0.6, 8 + br * 0.4, BRONZE, bs === FLY ? 0.2 : 0.1 * vk);
+      if (full) ED.Render.emit(bx, by + br * 0.6, br * 1.6, BRIGHT, 0.3);
+      if (res > 0) ED.Render.emit(bx, by + br * 0.6, br * (1 + res), PATINA, 0.08 + 0.2 * res);
       if (ec) ED.Render.emit(bx, by + br * 0.6, br * 1.2, ec, 0.18);
     }
   };
-  // Bell art of weapon look wd at (x, y), turned by r about its grip: white during a Heavy Strike flash, else the worn sheen (ED.Cos.tintOf) over the evolution outline (path colour ec). False without the atlas.
+  // Bell art of weapon look wd at (x, y), turned by r about its grip: white during a strike flash, else the worn sheen (ED.Cos.tintOf) over the evolution outline (path colour ec). False without the atlas.
   const PRE = new Set();
-  function drawLook(c, p, wd, ec, flash, x, y, r) {
+  function drawLook(c, p, wd, ec, flash, x, y, r, small) {
     const At = ED.Atlas; if (!(At && At.ok && At.has(wd.anim))) return false;
-    const tc = !flash && ED.Cos ? ED.Cos.tintOf(p, wd.id) : '', tv = tc ? Pix.variant(wd.anim, tc) : '';
-    const ok = (k) => (k && At.variant(wd.anim, k) ? k : ''), ov = ok(flash ? 'white' : ec ? 'outline:' + ec : ''), variant = tv || ov, under = tv && ov ? ov : '';
-    const pk = wd.anim + '|' + variant + '|' + under;
-    if (!PRE.has(pk)) { PRE.add(pk); At.prebake(wd.anim, 0, false, 'grip', variant); if (under) At.prebake(wd.anim, 0, false, 'grip', under); } // a turning bell bakes all 32 angles in the background (Atlas.tick)
-    if (under) At.draw(c, wd.anim, 0, s2(x), s2(y), { rot: r, anchor: 'grip', variant: under });
-    return !!At.draw(c, wd.anim, 0, s2(x), s2(y), { rot: r, anchor: 'grip', variant });
+    const big = small || !Sp.shotAnim ? wd.anim : Sp.shotAnim(wd.anim, BIG), id = At.has(big) ? big : wd.anim, an = id === wd.anim ? 'grip' : 'centre'; // small: the art as drawn; else BIG x it, pivoting on its grip (the scaled look's 'centre')
+    const tc = !flash && ED.Cos ? ED.Cos.tintOf(p, wd.id) : '', tv = tc ? Pix.variant(id, tc) : '';
+    const ok = (k) => (k && At.variant(id, k) ? k : ''), ov = ok(flash ? 'white' : ec ? 'outline:' + ec : ''), variant = tv || ov, under = tv && ov ? ov : '';
+    const pk = id + '|' + variant + '|' + under;
+    if (!PRE.has(pk)) { PRE.add(pk); At.prebake(id, 0, false, an, variant); if (under) At.prebake(id, 0, false, an, under); } // a turning bell bakes all 32 angles in the background (Atlas.tick)
+    if (under) At.draw(c, id, 0, s2(x), s2(y), { rot: r, anchor: an, variant: under });
+    return !!At.draw(c, id, 0, s2(x), s2(y), { rot: r, anchor: an, variant });
   }
   // A standing hero outside a run (camp, Wardrobe preview, lobby: no p.bells), called by actors.js with the hand at (x, y) in the hero's frame (feet at 0, 0) and its facing (flip: left):
   // one bell rests mouth down on the ground beside the hero on the facing side, its chain sagging from the hand and swaying slowly; small bells (2 or more) hang two from the fist.
@@ -107,13 +126,13 @@
       for (let i = 0; i < 2; i++) {
         const bx = x + (i ? 3 : -3) * K + sw * 0.5, by = y + 2 * K;
         for (let k = 0; k < 2; k++) { const px = s2(x + (bx - x) * (k + 1) / 3), py = s2(y + (by - y) * (k + 1) / 3); c.fillStyle = OUT; c.fillRect(px - K / 2, py - K / 2, 2 * K, 2 * K); c.fillStyle = k ? IRON_D : IRON_L; c.fillRect(px, py, K, K); }
-        if (!drawLook(c, p, wd, null, false, bx, by, 0)) procBell(c, bx, by, br, 0, false);
+        if (!drawLook(c, p, wd, null, false, bx, by, 0, true)) procBell(c, bx, by, br, 0, false);
       }
       return;
     }
     const bx = x + dir * (4 * K + br * 0.4), d = Math.hypot(bx - x, gy - y);
     chain(c, x, y, bx + sw * 0.3, gy, d * 1.25 + Math.abs(sw), false, 1);
-    if (!drawLook(c, p, wd, null, false, bx, gy, 0)) procBell(c, bx, gy, br, 0, false);
+    if (!drawLook(c, p, wd, null, false, bx, gy, 0, true)) procBell(c, bx, gy, br, 0, false);
   };
   // Without the atlas: a bronze bell of radius br hanging from (x, y), turned by r.
   function procBell(c, x, y, br, r, flash) {
@@ -140,7 +159,7 @@
   }
 
   // ---------------- events ----------------
-  // A strike: sparks along the swing that grow with speed, a bronze ring; a Heavy Strike adds a white flash, streaks, the bell's white frame and (own) a hit-stop and a shake.
+  // A strike: sparks along the swing that grow with speed, a bronze ring; a hurl or reel strike (v at 1.5 x BELL_REF or more) flashes the bell white; h adds streaks, a hit-stop and a shake (no loop strike sets it).
   CF.on('bstrike', (ev, ctx, local) => {
     const own = ev.pid === local, vk = Math.min(1.8, (ev.v || 0) / bellRef()), y = ev.y - LIFT, lo = low();
     if (ev.c) { // the hauled chain lashed a foe closer in: iron sparks on the foe, a chain clank
@@ -150,6 +169,7 @@
     }
     F.burst(ev.x, y, lo ? 3 : 4 + Math.round(vk * 3), { kind: 'spark', color: BRIGHT, sp: 110 + 70 * vk, life: 0.2, size: 1.6, drag: 5 });
     F.pop(ev.x, y, 8 + 6 * vk, BRONZE, 0.12);
+    if (vk >= 1.5) hsOf({ pid: ev.pid }).flashT = F.time;
     if (ev.h) {
       hsOf({ pid: ev.pid }).flashT = F.time;
       F.pop(ev.x, y, 24, '#ffffff', 0.16, true);
@@ -159,7 +179,7 @@
     }
     A.play('bstrike', own ? 1 : 0.35, { v: ev.v || 0, h: !!ev.h }, own ? 1 : 0);
   });
-  // A Peal: rings of sound from the bell (the Reverberation echo smaller and fainter), a flash, dust; the toll.
+  // A Peal: rings of sound from the bell (the Reverberation echo smaller and fainter), a flash, dust; the toll, higher with the Resonance it spent (ev.v).
   CF.on('peal', (ev, ctx, local) => {
     const own = ev.pid === local, e = !!ev.e, r = ev.r || 110, m = e ? 0.6 : 1, lo = low();
     F.ring(ev.x, ev.y, r, BRIGHT, 0.5 * m + 0.1, e ? 3 : 5, false, 10);
@@ -168,9 +188,9 @@
     F.pop(ev.x, ev.y - LIFT, 30 * m, BRIGHT, 0.22, true);
     if (!e && !lo) { F.dust(ev.x, ev.y, 'dust', 4); F.burst(ev.x, ev.y - LIFT, 10, { kind: 'streak', color: BRIGHT, sp: r * 3, spread: 3.2, life: 0.25, size: 1.6 }); }
     if (own) { F.addShake(e ? 1.5 : 4); F.punch(e ? 0.2 : 0.6, e ? 0 : 0.3); } else F.addShake(e ? 0.5 : 1.5);
-    A.play('peal', (own ? 1 : 0.45) * m, { v: ev.v || 0, e }, own ? 2 : 1);
+    A.play('peal', (own ? 1 : 0.45) * m, { v: 160 + 16 * (ev.v || 0), e }, own ? 2 : 1);
   });
-  // Wrecker: the bell smashes down at the end of its flight.
+  // Anchor Leap: the slam where the hero lands.
   CF.on('bsmash', (ev, ctx, local) => {
     const own = ev.pid === local, r = ev.r || 60;
     F.ring(ev.x, ev.y, r, BRONZE, 0.4, 4); F.ring(ev.x, ev.y, r * 0.6, BRIGHT, 0.25, 2);
@@ -180,7 +200,7 @@
     F.addShake(own ? 4 : 1.5); if (own) F.punch(0.4, 0.2);
     A.play('bsmash', own ? 1 : 0.4);
   });
-  // Tether Hook: the hooked foes land at the hero.
+  // Reel In: the dragged foes land at the slam.
   CF.on('bhook', (ev, ctx, local) => {
     F.burst(ev.x, ev.y - 10, 6, { kind: 'spark', color: IRON_L, sp: 140, life: 0.22, size: 1.5, drag: 5 });
     F.ring(ev.x, ev.y, 34, IRON_L, 0.3, 2);
@@ -193,7 +213,7 @@
       for (const b of p.bells) if (Math.abs(p.x + (b.ox || 0) - ev.x) < 40 && Math.abs(p.y + (b.oy || 0) - ev.y) < 40) { F.burst(ev.x, ev.y, 4, { kind: 'spark', color: BRONZE, sp: 160, life: 0.2, size: 1.5, drag: 5 }); return; }
     }
   });
-  // The casts: a Heave throws with a whoosh and a puff of dust at the feet; a Peal sounds with its own event. Both replace the generic skill cue.
+  // The casts: Anchor Leap leaps with a whoosh and a puff of dust at the feet; a Peal sounds with its own event. Both replace the generic skill cue.
   CF.on('skill', (ev, ctx, local) => {
     if (ev.k === 'heave') { F.dust(ev.x, ev.y + 2, 'dust', 1); A.play('heave', ev.pid === local ? 1 : 0.4); return true; }
     if (ev.k === 'peal') return true;

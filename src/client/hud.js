@@ -266,10 +266,14 @@
     if ((me.momN | 0) > 0) o.push('Momentum ×' + me.momN, '#b78cff');
     if (st.channel > 0 && (me.chanT || 0) > 0) o.push('Channel +' + Math.round(100 * Math.min(st.chanCap, st.channel * Math.floor(me.chanT / Math.max(0.05, st.chanStep)))) + '%', '#ff9a3a');
     if (st.hex > 0) { let n = 0; for (const e of view.enemies) if (e.hexed || e.hexT > 0) n++; if (n) o.push('Hexed ' + n, '#7dffd9'); }
+    if (me.boons && me.boons.capacitor > 0) { let n = 0; for (const e of view.enemies) if (e.charge > 0 && e.hp > 0) n++; if (n) o.push('Charged ' + n, '#ffe66b'); } // Capacitor: foes your next cast detonates
     if (me.glBuff || (me.glT || 0) > 0) o.push('Guardian Light', '#ffcf5a'); // Cleric buffs on any hero: Guardian Light, Embolden
     if (me.embolden || (me.auraT || 0) > 0) o.push('Emboldened', '#ffcf5a');
     return o;
   }
+  // Metronome beat shown for a hero holding the Twist: 0 = none, else 1 + attacks since the last x3 beat (0-3; net.js P[25]).
+  const metroBeat = (me) => (me.stats && me.stats.twMetro > 0 ? 1 + U.clamp(me.metroN | 0, 0, 3) : 0);
+  H.cues = { beat: metroBeat, chips: (view, me) => chipList(view, me).slice() }; // headless checks
   const shieldOut = (p) => !!(p.shieldOut || (p.shields && p.shields.length));
   // Route sigil: the icon of the hero's route card in the class colour (nothing before the level-3 pick); returns its id for the redraw signature.
   const routeIcon = (p) => { const rt = p.boons ? ED.classRoute(p.boons, p.cls) : null; return rt && rt.t1 ? ED.BOONS[rt.t1].icon : ''; };
@@ -411,6 +415,7 @@
     for (const fx of slotFx) if (fx && fx.t > 0) anim = true; // ready flash
     const pl = pips(me); sp(pl.length); for (let i = 0; i < pl.length; i += 2) { sp(sid(pl[i])); sp(pl[i + 1]); } sp(sid(st && st.evo || ''));
     const ch = chipList(view, me); sp(ch.length); for (let i = 0; i < ch.length; i += 2) sp(sid(ch[i]));
+    const mb = metroBeat(me); sp(mb); if (mb === 4) sp(step(t, 4)); // Metronome beat and the x3 pulse
     sp(sid(routeIcon(me)));
     // party
     for (const p of view.players.values()) {
@@ -555,6 +560,19 @@
     const chip = (label, col) => { const cw = adv(label, tS) + 10 * f; chipBox(sx, L.cy, cw, L.ch, col); T(label, sx + cw / 2, L.cy + L.ch / 2, tS, col, 'b', 'center', 700, 2); sx += cw + q(u * 0.4); any = true; };
     const cl = chipList(view, me);
     for (let kk = 0; kk < cl.length; kk += 2) chip(cl[kk], cl[kk + 1]);
+    const mb = metroBeat(me);
+    if (mb) { // Metronome: 'Beat' and four pips, one lit per attack since the last x3 beat; the 4th is the x3 beat, ringed gold, filled and pulsing when the next attack is it
+      const lab = 'Beat', d = Math.max(4 * f, qf(L.ch * 0.42)), gp = 2 * f, n = mb - 1, hot = n === 3, col = hot ? '#ffd36b' : K.muted;
+      const cw = adv(lab, tS) + 4 * d + 3 * gp + 16 * f, px0 = sx + adv(lab, tS) + 10 * f, py = L.cy + qf((L.ch - d) / 2);
+      chipBox(sx, L.cy, cw, L.ch, col, hot ? 0.3 : 0.12); T(lab, sx + 5 * f + adv(lab, tS) / 2, L.cy + L.ch / 2, tS, col, 'b', 'center', 700, 2);
+      for (let i = 0; i < 4; i++) {
+        const x = px0 + i * (d + gp), last = i === 3;
+        c.fillStyle = last ? '#ffd36b' : K.ol; c.fillRect(x, py, d, d);
+        c.fillStyle = last ? (hot ? (step(t, 4) ? '#fff4d6' : '#ffd36b') : '#3a2a10') : i < n ? K.bone : '#2a1d15'; c.fillRect(x + f, py + f, d - 2 * f, d - 2 * f);
+      }
+      if (hot && step(t, 4)) ring(c, px0 + 3 * (d + gp) - f, py - f, d + 2 * f, d + 2 * f, f, '#fff4d6', false);
+      sx += cw + q(u * 0.4); any = true;
+    }
     endFade();
     return any;
   }
@@ -793,27 +811,27 @@
     const rx0 = (r) => ox + (r.gx - minX) * cell + so, ry0 = (r) => oy + (r.gy - minY) * cell + so, th = Math.max(px, Math.round(cell * 0.1 / px) * px);
     const sm = g.imageSmoothingEnabled; g.imageSmoothingEnabled = false;
     const ic2 = (name, col, ix, iy, z) => { const j = Math.min(Math.floor((z + 2 * px) / 16), Math.round(z / 16)); if (j >= 1) icon(g, name, col, ix + (z - 16 * j) / 2, iy + (z - 16 * j) / 2, j); else g.drawImage(ED.Icons.canvas(name, col, 64), Math.round(ix), Math.round(iy), Math.round(z), Math.round(z)); };
-    g.fillStyle = '#6b5a48';
+    // the whole floor from the start: route bits (ED.Icons.route) split rooms and corridors into here, walked, reachable and closed
+    const ga0 = g.globalAlpha, rt = ED.Icons.route(fl, view.roomId, rs), walk = (id) => rt[id] & 6, reach = (id) => rt[id] & 5;
     for (const r of fl.rooms) {
-      const st = rs[r.id]; if (!st || !st.known) continue;
-      const n1 = r.doors.e, n2 = r.doors.s, c0x = rx0(r) + (s - th) / 2, c0y = ry0(r) + (s - th) / 2;
-      if (n1 >= 0 && rs[n1] && rs[n1].known) g.fillRect(Math.round(c0x), Math.round(c0y), rx0(fl.rooms[n1]) - rx0(r), th);
-      if (n2 >= 0 && rs[n2] && rs[n2].known) g.fillRect(Math.round(c0x), Math.round(c0y), th, ry0(fl.rooms[n2]) - ry0(r));
-    }
-    const ICON = { boss: ['skull', '#ff5a3a'], shop: ['coin', '#ffd36b'], treasure: ['chest', '#ffd36b'], event: ['star', '#7dffd9'], elite: ['skull', '#ff7a3a'], rest: ['campfire', '#ff9a3a'] };
-    const meP = ED.Game.s && ED.Game.s.me, cls = meP ? meP.cls : null;
-    for (const r of fl.rooms) {
-      const st = rs[r.id]; if (!st || !st.known) continue;
-      const rx = rx0(r), ry = ry0(r), cur = r.id === view.roomId;
-      g.fillStyle = cur ? '#fff3c4' : K.ol; g.fillRect(rx, ry, s, s);
-      g.fillStyle = cur ? '#e6c27a' : st.visited ? (st.cleared ? '#5a4a3c' : '#8a3a2a') : '#3c3028'; g.fillRect(rx + px, ry + px, s - 2 * px, s - 2 * px);
-      const icn = ICON[r.type], open = !st.cleared, z = s - 2 * px; // utility rooms keep their glyph; a cleared elite room loses it
-      if (icn && (open || r.type !== 'elite')) ic2(icn[0], icn[1], rx + px, ry + px, z);
-      if (open && r.reward && (r.type === 'combat' || r.type === 'elite')) { // reward preview: whole icon in plain combat rooms, a corner badge in elite rooms
-        const ri = ED.Render.rewardIcon((r.dark && ED.World.REWARD_UP[r.reward]) || r.reward, cls), big = r.type === 'combat', zb = big ? z : Math.max(16, Math.floor(s * 0.5)); // a dark room previews its stepped-up reward
-        ic2(ri[0], ri[1], big ? rx + px : rx + s - zb, big ? ry + px : ry + s - zb, zb);
+      const c0x = Math.round(rx0(r) + (s - th) / 2), c0y = Math.round(ry0(r) + (s - th) / 2);
+      for (const d of ['e', 's']) {
+        const nb = r.doors[d]; if (!(nb >= 0)) continue;
+        g.fillStyle = walk(r.id) && walk(nb) ? '#e6c27a' : reach(r.id) && reach(nb) ? '#6b5a48' : '#2e2620';
+        if (d === 'e') g.fillRect(c0x, c0y, rx0(fl.rooms[nb]) - rx0(r), th); else g.fillRect(c0x, c0y, th, ry0(fl.rooms[nb]) - ry0(r));
       }
-      if (r.dark && !st.visited) { const zd = Math.max(16, Math.floor(s * 0.5)); ic2('skull', '#a070ff', rx + s - zd, ry + s - zd, zd); } // dark-room mark, bottom-right of its cell
+    }
+    for (const r of fl.rooms) {
+      const st = rs[r.id] || {}, b = rt[r.id], rx = rx0(r), ry = ry0(r), cur = b & 4, closed = !b;
+      g.fillStyle = cur ? '#fff3c4' : K.ol; g.fillRect(rx, ry, s, s);
+      g.fillStyle = cur ? '#e6c27a' : b & 2 ? (st.cleared ? '#5a4a3c' : '#8a3a2a') : closed ? '#1e1814' : '#3c3028'; g.fillRect(rx + px, ry + px, s - 2 * px, s - 2 * px);
+      const ri = ED.Render.roomIcon(r), z = s - 2 * px, zb = Math.max(16, Math.floor(s * 0.5));
+      if (!ri || (st.cleared && (r.type === 'combat' || r.type === 'elite'))) continue; // utility rooms keep their glyph; a cleared fight loses it
+      if (closed) g.globalAlpha = ga0 * 0.35;
+      ic2(ri.icon, ri.color, rx + px, ry + px, z);
+      if (ri.badge) ic2(ri.badge[0], ri.badge[1], rx + s - zb, ry + s - zb, zb); // elite / boss reward, bottom-right
+      if (r.dark && !st.visited) ic2(ED.Icons.DARK[0], ED.Icons.DARK[1], rx, ry + s - zb, zb); // dark-room moon, bottom-left
+      g.globalAlpha = ga0;
     }
     g.imageSmoothingEnabled = sm;
   };

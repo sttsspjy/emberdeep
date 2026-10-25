@@ -1048,7 +1048,247 @@
       '.......nn.......',
       '................',
       '................'],
+    // floor-map glyphs (Ic.room): shop stall, coin stacks, amulet, three cards, event shrines, elite and boss skulls, dark-room moon, sealed-door lock
+    stall: [
+      '................',
+      '................',
+      '..############..',
+      '.##ww##ww##ww##.',
+      '.##ww##ww##ww##.',
+      '.dd.dd.dd.dd.dd.',
+      '..n..........n..',
+      '..n..........n..',
+      '..n...y..y...n..',
+      '..n..yyyyyy..n..',
+      '.nnnnnnnnnnnnnn.',
+      '.NnnnnnnnnnnnnN.',
+      '.N............N.',
+      '.N............N.',
+      '................',
+      '................'],
+    coins: [
+      '................',
+      '................',
+      '................',
+      '......hhhh......',
+      '......llll......',
+      '......dddd......',
+      '......llll.hhhh.',
+      '......dddd.llll.',
+      '.hhhh.llll.dddd.',
+      '.llll.dddd.llll.',
+      '.dddd.llll.dddd.',
+      '.llll.dddd.llll.',
+      '.dddd.llll.dddd.',
+      '.llll.dddd.llll.',
+      '................',
+      '................'],
+    amulet: [
+      '................',
+      '...#........#...',
+      '...#........#...',
+      '....#......#....',
+      '.....#....#.....',
+      '......#..#......',
+      '......####......',
+      '.....######.....',
+      '....##rrrr##....',
+      '....#rrwrrr#....',
+      '....#rrrrrr#....',
+      '....##rrrr##....',
+      '.....######.....',
+      '......####......',
+      '.......##.......',
+      '................'],
+    card: [
+      '................',
+      '...##########...',
+      '...#dddddddd#...',
+      '...#d######d#...',
+      '...#d##ll##d#...',
+      '...#d#llll#d#...',
+      '...#dllhhlld#...',
+      '...#d#llll#d#...',
+      '...#d##ll##d#...',
+      '...#d######d#...',
+      '...#d######d#...',
+      '...#d######d#...',
+      '...#dddddddd#...',
+      '...##########...',
+      '................',
+      '................'],
+    cardepic: [
+      '................',
+      '...##########...',
+      '...#dddddddd#...',
+      '...#d##hh##d#...',
+      '...#d##hh##d#...',
+      '...#dhhhhhhd#...',
+      '...#d#hhhh#d#...',
+      '...#d#h##h#d#...',
+      '...#d######d#...',
+      '...#d##ww##d#...',
+      '...#d######d#...',
+      '...#d######d#...',
+      '...#dddddddd#...',
+      '...##########...',
+      '................',
+      '................'],
+    cardtwist: [
+      '................',
+      '...##########...',
+      '...#dddddddd#...',
+      '...#d####o#d#...',
+      '...#d###o##d#...',
+      '...#d##o###d#...',
+      '...#d###o##d#...',
+      '...#d##o###d#...',
+      '...#d#o####d#...',
+      '...#d##o###d#...',
+      '...#d#o####d#...',
+      '...#d######d#...',
+      '...#dddddddd#...',
+      '...##########...',
+      '................',
+      '................'],
+    fountain: [
+      '................',
+      '.......hh.......',
+      '......h##h......',
+      '.....h.##.h.....',
+      '....h..##..h....',
+      '...h...##...h...',
+      '..############..',
+      '...##########...',
+      '......####......',
+      '......####......',
+      '.##############.',
+      '.#llllllllllll#.',
+      '..############..',
+      '...##########...',
+      '................',
+      '................'],
+    altar: [
+      '................',
+      '.......yy.......',
+      '......ywwy......',
+      '......ywwy......',
+      '.......yy.......',
+      '.......ww.......',
+      '.......ww.......',
+      '.##############.',
+      '.#hhhhhhhhhhhh#.',
+      '..############..',
+      '...###....###...',
+      '...###....###...',
+      '..#####..#####..',
+      '................',
+      '................',
+      '................'],
+    swords: [
+      '................',
+      '.h............h.',
+      '.#h..........h#.',
+      '..#h........h#..',
+      '...#h......h#...',
+      '....#h....h#....',
+      '.....#h..h#.....',
+      '......#hh#......',
+      '......#hh#......',
+      '.....#h..h#.....',
+      '..g.#h....h#.g..',
+      '...gg......gg...',
+      '..ngg......ggn..',
+      '.nn..........nn.',
+      '................',
+      '................'],
+    question: [
+      '................',
+      '................',
+      '.....######.....',
+      '....########....',
+      '....###..###....',
+      '.........###....',
+      '........###.....',
+      '.......###......',
+      '.......##.......',
+      '.......##.......',
+      '................',
+      '.......##.......',
+      '.......##.......',
+      '................',
+      '................',
+      '................'],
+    skullhorn: [
+      '................',
+      '.#............#.',
+      '.##..........##.',
+      '..##.######.##..',
+      '...###h######...',
+      '..############..',
+      '..##ooo##ooo##..',
+      '..##ooo##ooo##..',
+      '..############..',
+      '...####oo####...',
+      '....########....',
+      '....#o#oo#o#....',
+      '.....######.....',
+      '................',
+      '................',
+      '................'],
+    skullcrown: [
+      '................',
+      '...w...ww...w...',
+      '...y..yyyy..y...',
+      '...yy.yyyy.yy...',
+      '...yyyyyyyyyy...',
+      '...yyyyyyyyyy...',
+      '..############..',
+      '..##ooo##ooo##..',
+      '..##ooo##ooo##..',
+      '..############..',
+      '...####oo####...',
+      '....########....',
+      '....#o#oo#o#....',
+      '.....######.....',
+      '................',
+      '................'],
+    moon: [
+      '................',
+      '................',
+      '......####......',
+      '....######......',
+      '...#####........',
+      '..#####.....h...',
+      '..####.....hhh..',
+      '..####......h...',
+      '..####..........',
+      '..####..........',
+      '..#####.........',
+      '...#####........',
+      '....######......',
+      '......####......',
+      '................',
+      '................'],
+    seal: [
+      '................',
+      '................',
+      '.....######.....',
+      '....##....##....',
+      '....#......#....',
+      '....#......#....',
+      '...##########...',
+      '...##########...',
+      '...####oo####...',
+      '...####oo####...',
+      '...#####o####...',
+      '...##########...',
+      '...##########...',
+      '................',
+      '................',
+      '................'],
   };
+  Ic.MASKS = M; // read by the headless checks
 
   const OUT = '#222222';
   const FIX = { o: OUT, w: '#fffbea', y: '#fff3c4', n: '#8a5a30', N: '#5a3a20', g: '#a8a8b4', r: '#b3123a' };
@@ -1145,4 +1385,49 @@
   Ic.boonUrl = (id) => { const b = ED.BOONS[id]; return Ic.url(b.icon, ED.RARITY[b.rar].color); };
   Ic.relicUrl = (id) => { const r = ED.RELICS[id]; return Ic.url(r.icon, ED.RARITY[r.rar].color); };
   Ic.relicCanvas = (id, size) => { const r = ED.RELICS[id]; return Ic.canvas(r.icon, ED.RARITY[r.rar].color, size); };
+
+  // ---------------- floor-map glyphs (minimap, Tab map, door previews, reward props) ----------------
+  // Reward kind -> [glyph, colour, short label, long name]. 'boon' wears the colour of the viewing hero's deepest path.
+  const RW = {
+    gold: ['coins', '#ffd36b', 'Gold'], boon: ['card', '#ffe9a0', 'Boon'], epic: ['cardepic', '#c98bff', 'Epic', 'Epic boon'], relic: ['amulet', '#ffb02e', 'Relic', 'Relic hoard'],
+    forge: ['anvil', '#aab4c8', 'Forge'], vigor: ['heart', '#ff4a5a', 'Vigor'], twist: ['cardtwist', '#e8344e', 'Twist'], campfire: ['campfire', '#ff9a3a', 'Rest'], anvil: ['anvil', '#ffb066', 'Temper'],
+  };
+  const RW_NONE = ['star', '#ffe9a0', 'Reward'];
+  // Room type -> [glyph, colour, label]; event rooms by their event kind.
+  const RT = { boss: ['skullcrown', '#ff5a3a', 'Boss'], elite: ['skullhorn', '#ff7a3a', 'Elite'], shop: ['stall', '#4fb6ff', 'Shop'], treasure: ['chest', '#e0a050', 'Treasure'], rest: ['campfire', '#ff9a3a', 'Rest'] };
+  const EV = { fountain: ['fountain', '#7dffd9', 'Fountain'], altar: ['altar', '#7dffd9', 'Altar'], trial: ['swords', '#7dffd9', 'Trial'], gamble: ['question', '#7dffd9', 'Gamble'] };
+  Ic.DARK = ['moon', '#a070ff', 'Dark'];
+  Ic.SEAL = ['seal', '#8f7f6c', 'Sealed'];
+  // [glyph, colour, short label, long name] of a reward kind; path: the viewing hero's deepest path id (boon colour).
+  Ic.reward = (s, path) => {
+    const r = RW[String(s || '')] || RW_NONE;
+    if (s !== 'boon') return r;
+    const pa = path && ED.PATHS && ED.PATHS[path];
+    return pa ? [r[0], pa.color, r[2]] : r;
+  };
+  // Map glyph of a floor room: { icon, color, label, badge: [glyph, colour] | null, reward } (null for the start room and rooms without a glyph).
+  // A dark room shows the reward it pays after its step up (up: reward kind -> stepped-up kind); elite and boss rooms wear their skull and badge their reward.
+  Ic.room = (rm, path, up) => {
+    if (!rm) return null;
+    const rw = rm.reward ? (rm.dark && up && up[rm.reward]) || rm.reward : null, ri = rw ? Ic.reward(rw, path) : null;
+    const t = rm.type === 'event' ? EV[rm.event] || ['star', '#7dffd9', 'Event'] : RT[rm.type];
+    if (t) return { icon: t[0], color: t[1], label: ri && rm.type === 'elite' ? t[2] + ' ' + ri[2] : t[2], badge: ri ? [ri[0], ri[1]] : null, reward: rw };
+    if (!ri) return null;
+    return { icon: ri[0], color: ri[1], label: ri[2], badge: null, reward: rw };
+  };
+  // Route bits of every room of floor fl seen from room `cur` (Uint8Array by room id): 1 reachable through doors that can be left (room.sealed[d] unset; cur included), 2 visited, 4 current; 0 = closed.
+  // rs: room id -> { visited }. A floor without sealed doors reaches every connected room.
+  Ic.route = (fl, cur, rs) => {
+    const n = fl.rooms.length, out = new Uint8Array(n), q = [];
+    if (cur >= 0 && cur < n) { out[cur] = 5; q.push(cur); }
+    while (q.length) {
+      const r = fl.rooms[q.pop()];
+      for (const d in r.doors) {
+        const id = r.doors[d]; if (id < 0 || out[id] & 1 || (r.sealed && r.sealed[d])) continue;
+        out[id] |= 1; q.push(id);
+      }
+    }
+    if (rs) for (let i = 0; i < n; i++) if (rs[i] && rs[i].visited) out[i] |= 2;
+    return out;
+  };
 })(globalThis.ED || (globalThis.ED = {}));

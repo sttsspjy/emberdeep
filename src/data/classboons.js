@@ -260,47 +260,47 @@
     rider2: 'Risen Tide: minions risen this way deal +{tideMul} and last 4 s longer.', mods: { reapRaise: 1 }, up: { minionDmg: 0.13 }, r2: { tideMul: 0.5 }, r3: { tideFree: 1, tideCap: 2, tideDoom: 2 },
     form: { name: 'Tide of the Dead', desc: 'Rise Again raises without its 1.5 s limit (at most 2 per second). The minions it raises do not count against your minion cap (up to {tideCap:n} extra), and each bursts when it falls (radius 60), marking Doom worth {tideDoom} of its strike on every foe inside. Horde foes never rise.' } });
 
-  // ---------------- Bellwarden (Heave · Peal) ----------------
-  card('bell', 'attack', 1, 'b_atk', { name: 'Momentum', icon: 'bell', forks: ['b_atk_h', 'b_atk_s'], plays: 'keep it swinging; strikes at full swing ring heaviest.',
-    desc: 'Strikes at full swing (the bell glows: 90% of its top speed or more) are Heavy Strikes: +{heavyHit} damage and half again the knockback.', mods: { heavyHit: 0.25 } });
+  // ---------------- Bellwarden (Anchor Leap · Peal) ----------------
+  card('bell', 'attack', 1, 'b_atk', { name: 'Full Swing', icon: 'bell', forks: ['b_atk_h', 'b_atk_s'], plays: 'wind to the glow, then let it fly.',
+    desc: 'A hurl at full wind (the bell glows) is a Full Swing: +{fullSwing} damage and an impact {fullR} wider.', mods: { fullSwing: 0.25, fullR: 0.3 } });
   card('bell', 'attack', 2, 'b_atk_h', { name: 'Wrecking Ball', icon: 'hammer', tag: 'Heavy', weapon: { kind: 'heavy' },
-    desc: 'Your bell becomes heavy (×{fkRate:x} lockout, ×{fkDmg:x} damage per strike; strikes Stagger). Every strike cracks the ground: a shock (radius 50) for {wreck} of the strike, twice that from a Heavy Strike, which also stuns {wreckStun:s} (not bosses).[ Heavy Strikes deal +{heavyHit} more.]',
-    rider2: 'Unstoppable: Heavy Strikes knock foes twice as far.', mods: { wreck: 0.04, wreckStun: 0.2 }, up: { heavyHit: 0.1, wreck: 0.015 }, r2: { heavyKnock: 1 }, r3: { demolish: 0.1 },
-    form: { name: 'Demolisher', desc: 'The shock grows to radius 80 and deals {demolish} more of the strike, and the bell striking a wall at full swing erupts a Heavy shock.' } });
+    desc: 'Your bell becomes heavy (×{fkRate:x} lockout, ×{fkDmg:x} damage per strike; a full-wind hurl Staggers and its impact is 20% wider). Where a hurl lands it cracks the ground: a shock (radius 70) for {wreck} of the hurl that stuns {wreckStun:s} (not bosses).[ Full Swings deal +{fullSwing} more.]',
+    rider2: 'Unstoppable: a hurl carries the foes it strikes along its flight, up to {hurlCarry:n} px (not bosses).', mods: { wreck: 0.1, wreckStun: 0.3 }, up: { fullSwing: 0.05, wreck: 0.05 }, r2: { hurlCarry: 40 }, r3: { demolish: 0.35 },
+    form: { name: 'Demolisher', desc: 'A Full Swing lands as a quake: its shock is twice as wide (radius 140), deals {demolish} more of the hurl and throws foes away from the impact.' } });
   card('bell', 'attack', 2, 'b_atk_s', { name: 'Pendulum', icon: 'bolt', tag: 'Swift', weapon: { kind: 'swift' },
-    desc: 'Your bell becomes swift (×{fkRate:x} lockout, ×{fkDmg:x} damage per strike; hauling gives Flow). Hauling spins the bell up {haulAcc} faster.[ Heavy Strikes deal +{heavyHit} more.]',
-    rider2: 'Counterweight: strikes cost the bell {strikeKeep} less speed.', mods: { haulAcc: 0.2 }, up: { haulAcc: 0.04, heavyHit: 0.1 }, r2: { strikeKeep: 0.2 }, r3: { perpetual: 0.16, strikeKeep: 0.2 },
-    form: { name: 'Perpetual Motion', desc: "The bell's top speed rises {perpetual}, and strikes cost it {strikeKeep} less speed in all." } });
-  card('bell', 'skill1', 1, 'b_s1', { name: 'Long Chain', icon: 'bell', forks: ['b_s1_a', 'b_s1_b'], plays: 'heave into the pack, reel it back through.',
-    desc: 'Heave flings the bell {heaveR} farther and recharges {s1Cdr} faster.', mods: { heaveR: 0.4, s1Cdr: 0.2 } });
+    desc: 'Your bell becomes swift (×{fkRate:x} lockout, ×{fkDmg:x} damage per strike; winding gives Flow and reels are 30% faster). Winding spins the bell up {haulAcc} faster.[ Full Swings deal +{fullSwing} more.]',
+    rider2: 'Slipstream: you move at full speed while winding.', mods: { haulAcc: 0.34 }, up: { haulAcc: 0.05, fullSwing: 0.12 }, r2: { slipstream: 1 }, r3: { perpetual: 1, windCap: 0.9 },
+    form: { name: 'Perpetual Motion', desc: 'Winding strikes no longer cost the bell any wind, and they deal up to ×{windCap:x} instead of ×0.6.' } });
+  card('bell', 'skill1', 1, 'b_s1', { name: 'Long Chain', icon: 'bell', forks: ['b_s1_a', 'b_s1_b'], plays: 'hurl the bell, then leap after it.',
+    desc: 'Anchor Leap recharges {s1Cdr} faster and its slam deals +{s1Dmg}; a leap from the hand carries you {leapR} farther.', mods: { s1Cdr: 0.2, s1Dmg: 0.25, leapR: 0.4 } });
   card('bell', 'skill1', 2, 'b_s1_a', { name: 'Wrecker', icon: 'bomb', tag: 'Burst',
-    desc: 'Heave deals +{s1Dmg}, and its flight stops at the first foe it strikes, where the bell smashes the ground (radius 80) for {wrecker} of a Heave strike, knocking foes back.',
-    rider2: 'Ground Breaker: the smash stuns foes {smashStun:s} (not bosses).', mods: { s1Dmg: 0.2, wrecker: 0.3 }, up: { s1Dmg: 0.12, wrecker: 0.1 }, r2: { smashStun: 0.6 }, r3: { wreckSpin: 0.33, spinDur: 1 },
-    form: { name: 'Wrecking Spin', desc: 'After the smash the bell swings round you on its chain for {spinDur:s}: every foe it passes takes {wreckSpin} of a Heave strike (each foe at most once per 0.4 s).' } });
+    desc: 'The slam deals +{s1Dmg} and is {s1Area} wider, and you land with every bell in hand at full wind, ready to hurl.',
+    rider2: 'Ground Breaker: the slam stuns foes {smashStun:s} (not bosses).', mods: { s1Dmg: 0.4, s1Area: 0.25, wrecker: 1 }, up: { s1Dmg: 0.15 }, r2: { smashStun: 0.6 }, r3: { wreckSpin: 0.12, spinDur: 1.5 },
+    form: { name: 'Wrecking Spin', desc: 'After the slam your bells whirl round you by themselves for {spinDur:s}: every foe on their orbit takes {wreckSpin} of the slam (each foe at most once per 0.4 s).' } });
   card('bell', 'skill1', 2, 'b_s1_b', { name: 'Tether Hook', icon: 'hand', tag: 'Guard',
-    desc: 'Heave deals +{s1Dmg} and hooks the first foe it strikes (not elites or bosses), reeling it to your feet and stunning it {hookStun:s}. A hook shields you for {hookShield} max health (at most once per 8 s).',
-    rider2: 'Reel In: the hook catches up to {hookN:n} more foes the flight strikes.', mods: { hook: 1, hookStun: 0.8, hookShield: 0.02, s1Dmg: 0.8 }, up: { s1Dmg: 0.3, hookStun: 0.1 }, r2: { hookN: 2 }, r3: { shackle: 4, shackleWeak: 0.3, s1Dmg: 0.3 },
-    form: { name: 'Anchor Chain', desc: 'Hooked foes are Shackled for {shackle:s}: slowed 50% and dealing {shackleWeak} less damage.' } });
-  card('bell', 'skill2', 1, 'b_s2', { name: 'Great Peal', icon: 'bell', forks: ['b_s2_a', 'b_s2_b'], plays: 'swing to full speed, then ring it.',
+    desc: 'A slam that strikes a foe shields you for {hookShield} max health (at most once per 8 s), and the leap keeps you untouchable {leapIfr:s} longer. The slam deals +{s1Dmg}.',
+    rider2: 'Reel In: the slam first drags every foe within {hookPull:n} of it to its centre (not bosses).', mods: { hookShield: 0.02, leapIfr: 0.3, s1Dmg: 0.6 }, up: { s1Dmg: 0.3 }, r2: { hookPull: 140 }, r3: { shackle: 4, shackleWeak: 0.3 },
+    form: { name: 'Anchor Chain', desc: 'Foes the slam strikes are Shackled for {shackle:s}: slowed 50% and dealing {shackleWeak} less damage.' } });
+  card('bell', 'skill2', 1, 'b_s2', { name: 'Great Peal', icon: 'bell', forks: ['b_s2_a', 'b_s2_b'], plays: 'build Resonance with hurls and reels, then ring it.',
     desc: 'Peal: +{s2Area} radius and +{s2Dmg} damage.', mods: { s2Area: 0.3, s2Dmg: 0.25 } });
   card('bell', 'skill2', 2, 'b_s2_a', { name: 'Thunderclap', icon: 'bolt', tag: 'Burst',
     desc: 'The Peal charges the foes it strikes for half of its damage and discharges them at once at +{clap}. Peal deals +{s2Dmg}.',
-    rider2: 'Reverberation: the Peal rings again 0.5 s later on the same spot at {pealEcho}.', mods: { clap: 1, s2Dmg: 0.3 }, up: { clap: 0.25, s2Dmg: 0.3 }, r2: { pealEcho: 0.5 }, r3: { tollN: 3, tollBolt: 0.85 },
-    form: { name: 'Thunder Toll', desc: 'Every Peal also calls a thunderbolt on each of the {tollN:n} most charged foes within 220 of the bell (radius 50) for {tollBolt} of the Peal.' } });
+    rider2: 'Reverberation: the Peal rings again 0.5 s later on the same spot at {pealEcho}.', mods: { clap: 0.5, s2Dmg: 0.2 }, up: { clap: 0.15, s2Dmg: 0.1 }, r2: { pealEcho: 0.5 }, r3: { tollN: 3, tollBolt: 0.85 },
+    form: { name: 'Thunder Toll', desc: 'Every Peal also calls a thunderbolt on each of the {tollN:n} most charged foes within 220 of each bell (radius 50) for {tollBolt} of the Peal.' } });
   card('bell', 'skill2', 2, 'b_s2_b', { name: 'Warding Toll', icon: 'shieldgold', tag: 'Guard', coop: true,
     desc: 'Peal deals +{s2Dmg}, destroys enemy shots within half again its radius and shields you for {pealShield} max health per foe it strikes (up to {pealCap}, at most once per 10 s).',
-    rider2: 'Sanctus: the Peal stuns {pealStun:s} longer.', mods: { pealSwat: 1, pealShield: 0.005, pealCap: 0.02, s2Dmg: 1.45 }, up: { s2Dmg: 0.45, pealCap: 0.0025 }, r2: { pealStun: 0.3 }, r3: { wardDur: 6, wardWeak: 0.4, s2Dmg: 1.5 },
+    rider2: 'Sanctus: the Peal stuns {pealStun:s} longer.', mods: { pealSwat: 1, pealShield: 0.005, pealCap: 0.02, s2Dmg: 1.45 }, up: { s2Dmg: 0.45, pealCap: 0.0025 }, r2: { pealStun: 0.3 }, r3: { wardDur: 8, wardWeak: 0.5, s2Dmg: 1.5 },
     form: { name: 'Ward Bell', desc: 'The Peal leaves a ringing ward where it rang (its radius) for {wardDur:s}: foes inside deal {wardWeak} less damage (not bosses).' } });
   card('bell', 'element', 1, 'b_el', { name: 'Storm Bronze', icon: 'bolt', forks: ['b_el_a', 'b_el_b'], plays: 'every strike charges; the storm pays it out.',
     desc: "Your skills deal +{classElMul} Lightning damage, and your bell charges foes for {wInfLightning} of each strike (Static Charge's rate counts instead when it is higher).", mods: { classElMul: 0.25, wInfLightning: 0.15 } });
   card('bell', 'element', 2, 'b_el_a', { name: 'Lightning Rod', icon: 'bolt', tag: 'Focus',
-    desc: 'Strikes on a charged foe deal +{rod}, and every 4th strike on a charged foe discharges it at once.',
-    rider2: 'Grounded: a strike discharge stuns the foe {rodStun:s} (not bosses; at most once a second).', mods: { rod: 0.9 }, up: { rod: 0.15 }, r2: { rodStun: 0.2 }, r3: { stormBolt: 0.6 },
-    form: { name: 'Storm Bell', desc: 'Every 3rd strike calls a thunderbolt on the struck foe (radius 50) for {stormBolt} of the strike, charging the foes it hits for half of its damage.' } });
+    desc: 'A hurl strike on a charged foe deals +{rod} and discharges it at once.',
+    rider2: "Grounded: a hurl's discharge stuns the foe {rodStun:s} (not bosses; at most once a second).", mods: { rod: 1.7 }, up: { rod: 0.3 }, r2: { rodStun: 0.3 }, r3: { stormBolt: 2 },
+    form: { name: 'Skybreaker', desc: 'The anchored bell draws the storm: a thunderbolt (radius 50) strikes where it lands and again every second while it lies there, for {stormBolt} of your weapon damage, charging the foes it hits for half.' } });
   card('bell', 'element', 2, 'b_el_b', { name: 'Chain Toll', icon: 'arc', tag: 'Spread',
-    desc: 'Each strike arcs to the nearest other foe within 90 for {chainArc} of the strike, as Lightning that charges it like a strike; your strikes charge foes for {wInfLightning} more of their damage.',
-    rider2: 'Forked Toll: the arc jumps on to {arcN:n} more foe.', mods: { chainArc: 0.36, wInfLightning: 0.1 }, up: { chainArc: 0.11 }, r2: { arcN: 1 }, r3: { arcN: 1, tollStorm: 0.5 },
-    form: { name: 'Toll of the Storm', desc: 'The arc jumps on to one more foe, and a foe your bell kills rings out: a burst (radius 90) for {tollStorm} of the killing strike as Lightning, charging the foes it hits for half.' } });
+    desc: 'Each reel strike arcs to the nearest other foe within 90 for {chainArc} of the strike, as Lightning that charges it like a strike (no other foe near: back into the struck foe); your strikes charge foes for {wInfLightning} more of their damage.',
+    rider2: 'Forked Toll: the arc jumps on to {arcN:n} more foe.', mods: { chainArc: 1.2, wInfLightning: 0.1 }, up: { chainArc: 0.3 }, r2: { arcN: 1 }, r3: { arcN: 1, tollStorm: 0.5 },
+    form: { name: 'Toll of the Storm', desc: 'The arc jumps on to one more foe, and each reel makes the chain a live wire: every foe within 20 of it, between you and the bell, takes {tollStorm} of the reel strike as Lightning.' } });
 
   Object.assign(ED.BOONS, CB);
   ED.BOON_IDS = Object.keys(ED.BOONS);

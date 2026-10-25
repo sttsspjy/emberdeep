@@ -7,7 +7,7 @@
 //   projHit(pr, e, hs) after a hero shot hit e, projBurst(pr, owner) after a shot's blast, projEnd(pr, owner, 'life' | 'wall') when a hero shot ends its flight (combat.js); absorb(p, absorbed, src) when p's shield absorbed damage (combat.js hurtPlayer)
 //   toll(p, boss, dmg) after a Doom Toll landed (combat.js checkToll; a Reap arrives through kill with src.kind 'reap'); smote(boss, o) after o Smote a boss (combat.js smite; the Smiter's table)
 //   hurtMul(p, src) -> factor on the damage p takes, inside the DR_FLOOR clamp with Brace and Sanctuary (combat.js hurtPlayer, p's class)
-//   weaponAttack(p, a) replaces the weapon attack of a weapon combat.js does not swing (kind 'bell': class-bell.js hauls the bell)
+//   weaponAttack(p, a) replaces the weapon attack of a weapon combat.js does not swing (kind 'bell': class-bell.js winds the bell); down(p) every tick while p is downed or dead (world.js updatePlayer)
 (function (ED) {
   'use strict';
   const U = ED.U;
@@ -126,6 +126,7 @@
     const extra = fn.call(this, p, a, data || {}, st, ED.Stats.skillNums(skill, st));
     if (extra === false) return;
     this.onSkillCast(p, slot);
+    if (p.twist) ED.TWIST.onCast.call(this, p, slot); // TWIST hook (src/sim/twist.js)
     this.emit(Object.assign({ t: 'skill', pid: p.pid, k: skill, a: Math.round(a * 100) / 100, x: Math.round(p.x), y: Math.round(p.y), slot }, extra));
   };
 })(globalThis.ED || (globalThis.ED = {}));

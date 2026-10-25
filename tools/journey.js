@@ -29,7 +29,7 @@ function journey(seed0, quiet) {
     if (sum.bosses & 4) mark('first Rimeheart kill');
     if (sum.victory) mark('first victory');
     if (p.deeds & (1 << ED.DEED_IDX.evolved)) mark('first evolution');
-    if (p.deeds & (1 << ED.DEED_IDX.cartographer)) mark('first full clear');
+    if (p.deeds & (1 << ED.DEED_IDX.cartographer)) mark('first Cartographer');
     if (p.pactWin >= 3) mark('won pact 3');
     if (p.pactWin >= 6) mark('won pact 6');
     // spend: cheapest available upgrade first
