@@ -26,10 +26,10 @@ src/data/                biomes (palette, roster) · enemies · classes (heroes,
 src/save.js              profile storage + save code
 src/sim/                 dungeon (floor gen) · stats (stat block) · world (run flow, rooms, dark rooms, pickups) · combat (damage, statuses, projectiles, zones)
                          build (offers, paths, evolutions, class routes) · skills (cast dispatcher, class hooks) · class-<hero>.js (each hero's skills and route hooks) · twist (`ED.TWIST` Twist hooks) · sheet (Tab sheet model)
-                         ai (enemy brains) · bosses (boss loop, phases, arena state) · boss-<name>.js (each boss's own fight) · rooms (encounters, rewards, props)
+                         ai (enemy brains) · bosses (boss loop, phases, `B.lib`) · boss-<name>.js (each boss's own fight) · arena (boss and champion arena state, `AR` row) · champions (champion rooms) · rooms (encounters, rewards, props)
 src/net.js               transports, host/client sessions, snapshot encoding
 src/game.js              run session: local hero control, client mirror, network routing
-src/client/              input · aim · audio (SFX, voice budget) · score (adaptive per-stratum music) · icons · atlas (ImageBitmap + art atlas runtime) · actors · sprites · tiles · pixfx · fx · cls-<hero>.js (ED.ClassFx hooks) · cosmetics (Wardrobe drawing, pets, trails, preview) · arena (boss arena drawing) · render · post (WebGL) · hud · camp · ui · sheetui
+src/client/              input · aim · audio (SFX, voice budget) · score (adaptive per-stratum music) · icons · atlas (ImageBitmap + art atlas runtime) · actors · sprites · tiles · pixfx · fx · cls-<hero>.js (ED.ClassFx hooks) · cosmetics (Wardrobe drawing, pets, trails, preview) · arena (boss and champion arena drawing) · render · post (WebGL) · hud · camp · ui · sheetui
 src/art/                 generated atlas pages (data URIs) from tools/art.js; never hand-edited
 art-src/                 vendored CC0/CC-BY source art + SOURCES.md (packs, licences, hashes)
 src/main.js              app state machine + frame loop

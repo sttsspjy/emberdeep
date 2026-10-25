@@ -243,7 +243,8 @@
     const art = ED.Tiles.get(room, BQ);
     c.drawImage(art, 0, 0, art.width / BQ, art.height / BQ);
     drawRoomDynamics(c, view, room, biome, t, 0);
-    ED.Arena.carpet(c, room, t); // boss spore carpet (arena.js)
+    ED.ArenaFx.carpet(c, room, t); // boss spore carpet (arena.js)
+    ED.ArenaFx.ground(c, view, room, t); // boss / champion arena ground (arena.js)
     drawDoors(c, view, room, P, t);
     drawZones(c, view, t, 0);
     drawPickups(c, view, t, 0);
@@ -262,7 +263,7 @@
       if (s.gc) { R.light(s.x, s.y - 6, 40, s.gc, 0.45); R.emit(s.x, s.y - s.gy, s.gr, s.gc, s.ga); } // a glowing breakable (mushroom, crystal, shard) lights and glows until it is smashed
     }
     if (artProps) for (const p of view.props) qDraw(dn++, p.y, 4, p); // pixel-art props sort with the entities
-    ED.Arena.blocks(view, room, (y, b) => qDraw(dn++, y, 9, b)); // boss wall blocks (arena.js): kind 9
+    ED.ArenaFx.blocks(view, room, (y, b) => qDraw(dn++, y, 9, b)); // boss wall blocks (arena.js): kind 9
     if (room.bell) qDraw(dn++, room.bell.y, 6, room.bell); // the Drowned Bell (floor gen) and the Platino: kind 6
     if (view.critter) qDraw(dn++, view.critter.y, 6, view.critter);
     if (Cos) { const pets = Cos.pets(view, t, dt); for (let i = 0; i < pets.length; i++) qDraw(dn++, pets[i].y, 8, pets[i]); } // Wardrobe pets (client only): kind 8
@@ -283,7 +284,7 @@
       if (it.k === 6) { if (it.o === room.bell) drawBell(c, it.o, F.bellRing || 0, t); else drawPlatino(c, it.o, t); continue; }
       if (it.k === 7) { shDX = shDY = 0; xbell(c, it.o, it.d, t, low, view); continue; }
       if (it.k === 8) { Cos.drawPet(c, it.o, t); continue; }
-      if (it.k === 9) { ED.Arena.drawBlock(c, it.o, t); continue; }
+      if (it.k === 9) { ED.ArenaFx.drawBlock(c, it.o, t); continue; }
       const o = it.o, rim = low || o.fodder ? null : rimLight(o.x, o.y, it.k === 0 ? 16 : 0), still = atlasOn && it.k < 2 && AC.still(o), px = still ? Math.round(o.x / 2) * 2 : Math.round(o.x), py = still ? Math.round(o.y / 2) * 2 : Math.round(o.y); // feet on the buffer pixel grid (the 2 px art grid while standing still)
       if (rim) { shDX = -rim.dx * 0.28; shDY = -rim.dy * 0.12; } else { shDX = 0; shDY = 0; }
       if (it.k === 1) { // foe: atlas art (pose offsets are art-px steps), else the procedural look with pose offset, lean and squash (F.xform) in one matrix with the mirror
@@ -310,7 +311,7 @@
       if (it.k === 0 && !o.dead && !low) F.dashTrail && F.dashTrail(o, t);
     }
     shDX = shDY = 0;
-    ED.Arena.swords(c, view, t);
+    ED.ArenaFx.swords(c, view, t);
     drawProjectiles(c, view, t, 0);
     F.drawWorld(c);
     if (!low) drawMotes(c, view, room, biome, t, dt, 0);
@@ -336,7 +337,7 @@
     for (let i = 0; i < dn; i++) {
       const it = drawList[i], e = it.o; if (it.k !== 1 || e.burrowed) continue;
       const an = atlasOn ? AC.anchor(e) : null;
-      if (it.full) { if (an) { for (const ey of an.eye) R.glow(c, e.x + ey[0], e.y + ey[1], 5 + e.r * 0.5, e.def.col.c, eyeA); } else R.glow(c, e.x, e.y - e.r * (e.def.fly ? 2.2 : 1.7), 5 + e.r * 0.5, e.def.col.c, eyeA); }
+      if (it.full && !(ED.ArenaFx && ED.ArenaFx.hideFoe(view, e))) { if (an) { for (const ey of an.eye) R.glow(c, e.x + ey[0], e.y + ey[1], 5 + e.r * 0.5, e.def.col.c, eyeA); } else R.glow(c, e.x, e.y - e.r * (e.def.fly ? 2.2 : 1.7), 5 + e.r * 0.5, e.def.col.c, eyeA); }
       const wp = atlasOn ? AC.windupP(e) : F.windupP(e); if (wp > 0.05) R.glow(c, e.x, e.y + (an ? an.cy : -e.r * 1.2), e.r * (1.5 + wp), wp > 0.8 ? '#ffd0a0' : '#ff5a3a', 0.12 + 0.5 * wp * wp);
     }
     for (let i = 0; i < ng; i++) { const g = glowQ[i]; R.glow(c, g.x, g.y, g.r, g.c, g.a); }
@@ -344,6 +345,7 @@
     F.drawGlow(c, t);
     c.globalCompositeOperation = 'source-over';
     // ---- overlays above lighting ----
+    if (ED.ArenaFx) ED.ArenaFx.over(c, view, room, t);
     drawOverheads(c, view, local, t);
     if (ED.AimFx) ED.AimFx.draw(c, view);
     F.drawTexts(c);
@@ -798,6 +800,9 @@
     c.fill(); c.globalAlpha = 1;
   }
   R.zoneArt = { draw: drawZones, stand: drawStand, pillar: pillarSprite, anchor: anchorSprite, len: zoneLen }; // headless checks
+  // Laser colours [light, outer band, middle band, core rgba prefix, glow, warm-up dots]: void beams and the Tidal Beam.
+  const LASER_C = [['#ff5ae0', 'rgba(255,60,210,0.22)', 'rgba(255,100,225,0.55)', 'rgba(255,225,252,', '#ff7ae8', 'rgba(255,120,230,0.7)'],
+    ['#5ae0ff', 'rgba(60,200,255,0.22)', 'rgba(110,225,255,0.55)', 'rgba(225,250,255,', '#7ae8ff', 'rgba(140,230,255,0.75)']];
   function drawZones(c, view, t, pass) {
     if (pass === 0) bakeLeft = BAKE_PER_FRAME;
     if (!view.zones.length) return;
@@ -889,16 +894,16 @@
           break;
         }
         case 'laser': {
-          const active = z.t > (z.warm || 0), co = Math.cos(z.a), si = Math.sin(z.a), x1 = z.x + co * z.len, y1 = z.y + si * z.len;
-          if (pass === 0) { if (active) for (let i = 0; i < 4; i++) R.light(z.x + co * z.len * (i + 0.5) / 4, z.y + si * z.len * (i + 0.5) / 4, 90, '#ff5ae0', 0.75); break; }
+          const active = z.t > (z.warm || 0), co = Math.cos(z.a), si = Math.sin(z.a), x1 = z.x + co * z.len, y1 = z.y + si * z.len, LC = z.arc ? LASER_C[1] : LASER_C[0]; // a sweeping beam (arc) is the Drowned King's Tidal Beam
+          if (pass === 0) { if (active) for (let i = 0; i < 4; i++) R.light(z.x + co * z.len * (i + 0.5) / 4, z.y + si * z.len * (i + 0.5) / 4, 90, LC[0], 0.75); break; }
           if (pass !== 1) break;
           if (active) { // three pixel bands along the beam, the core flickering
             const fl = 0.85 + Math.sin(t * 60) * 0.15, w1 = Pix.s2(z.w * 3.2), w2 = Pix.s2(z.w * 2), w3 = Math.max(2, Pix.s2(z.w * 0.66));
-            c.fillStyle = 'rgba(255,60,210,0.22)'; c.beginPath(); Pix.line(c, z.x, z.y, x1, y1, Math.max(4, w1)); c.fill();
-            c.fillStyle = 'rgba(255,100,225,0.55)'; c.beginPath(); Pix.line(c, z.x, z.y, x1, y1, Math.max(4, w2)); c.fill();
-            c.fillStyle = 'rgba(255,225,252,' + 0.95 * fl + ')'; c.beginPath(); Pix.line(c, z.x, z.y, x1, y1, w3); c.fill();
-            R.glow(c, z.x, z.y, z.w * 3, '#ff7ae8', 0.9); R.glow(c, x1, y1, z.w * 2.5, '#ff7ae8', 0.6);
-          } else { c.fillStyle = 'rgba(255,120,230,0.7)'; c.beginPath(); for (let u = 0, i = 0; u < z.len; u += 2, i++) if ((i + ((t * 10) | 0)) % 6 < 3) c.rect(sx2(z.x + co * u), sx2(z.y + si * u), 2, 2); c.fill(); }
+            c.fillStyle = LC[1]; c.beginPath(); Pix.line(c, z.x, z.y, x1, y1, Math.max(4, w1)); c.fill();
+            c.fillStyle = LC[2]; c.beginPath(); Pix.line(c, z.x, z.y, x1, y1, Math.max(4, w2)); c.fill();
+            c.fillStyle = LC[3] + 0.95 * fl + ')'; c.beginPath(); Pix.line(c, z.x, z.y, x1, y1, w3); c.fill();
+            R.glow(c, z.x, z.y, z.w * 3, LC[4], 0.9); R.glow(c, x1, y1, z.w * 2.5, LC[4], 0.6);
+          } else { c.fillStyle = LC[5]; c.beginPath(); for (let u = 0, i = 0; u < z.len; u += 2, i++) if ((i + ((t * 10) | 0)) % 6 < 3) c.rect(sx2(z.x + co * u), sx2(z.y + si * u), 2, 2); c.fill(); }
           break;
         }
         case 'poison': case 'plague': {
@@ -2187,6 +2192,8 @@
   function drawLighting(c, view, room, biome, local, t, ix, iy) { // lights are added in buffer px: world position minus the buffer origin
     const P = biome.pal, dv = R.lightDiv;
     const amb = R.ambient(biome, R.darkLevel * DARK_AMBIENT, view.pact > 0 ? Math.min(0.5, view.pact * 0.05) : 0);
+    const AF = ED.ArenaFx, ad = AF ? AF.dark(view, t) : 0; // Hollow King darkness: ambient near black, hero lights shrink to the vision radius
+    if (ad > 0) for (let i = 0; i < 3; i++) amb[i] *= 1 - 0.82 * ad;
     R.lightBegin(amb);
     const gm = ED.Tiles.glowmap(room, BQ);
     if (gm) { lctx.globalAlpha = 0.5; lctx.drawImage(gm, -ix / dv, -iy / dv, gm.width / gm.px / dv, gm.height / gm.px / dv); lctx.globalAlpha = 1; }
@@ -2195,7 +2202,8 @@
     // hero lanterns: warm core plus a wider tinted fill
     for (const p of view.players.values()) {
       if (p.dead) continue;
-      const base = (p.stats ? p.stats.lightR : 175) * (p.downed ? 0.6 : 1);
+      let base = (p.stats ? p.stats.lightR : 175) * (p.downed ? 0.6 : 1);
+      if (ad > 0) base = AF.heroLight(base);
       const fl = 1 + Math.sin(t * 7 + (p.slot || 0)) * 0.03 + Math.sin(t * 19 + (p.slot || 0) * 2) * 0.02;
       const col = U.mix('#ffc27a', ED.PLAYER_COLORS[p.slot] || '#ffc27a', 0.12);
       R.lightAdd(p.x - ix, p.y - 10 - iy, base * 1.15 * fl, U.mix(col, P.light, 0.2), 0.9);
@@ -2214,7 +2222,7 @@
       if (d.k === 'torch') src(d.x, d.y, r, d.color, k);
     }
     for (const e of view.enemies) {
-      if (e.hp <= 0 || !(e.boss || e.elite)) continue;
+      if (e.hp <= 0 || !(e.boss || e.elite) || (ad > 0 && AF.hideFoe(view, e))) continue;
       R.light(e.x, e.y - e.r, e.r * (e.boss ? 5 : 4), e.boss ? e.def.col.c : ED.AFFIXES[e.elite].color, e.boss ? 0.6 : 0.5);
     }
     for (let i = 0; i < nl; i++) {

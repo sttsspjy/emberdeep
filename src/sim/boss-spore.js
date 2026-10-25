@@ -85,7 +85,7 @@
       e.pose = 'wind';
       tele(w, e, e.x, e.y, q.r, q.wind * e.vars.wm, q.mul, 'slam', (ww, z) => {
         e.pose = 'slam';
-        if (ww.arena && ww.arena.carpet) { clearAt(ww.room, ww.arena.carpet, z.x, z.y, z.r); e.spT = Math.max(e.spT, SM.slam.calm); ww.emit({ t: 'carpetclear', x: Math.round(z.x), y: Math.round(z.y), r: z.r }); }
+        const car = ED.Arena.field(ww.room); if (car && car.carpet) { clearAt(ww.room, car.carpet, z.x, z.y, z.r); e.spT = Math.max(e.spT, SM.slam.calm); ww.emit({ t: 'carpetclear', x: Math.round(z.x), y: Math.round(z.y), r: z.r }); }
       });
     },
     update(w, e, dt, t) { return t > SM.slam.wind * e.vars.wm + 0.45; },
@@ -97,10 +97,9 @@
     if (!e.slots) {
       e.slots = podSlots(w); e.spT = SM.spread.t; e.cpT = SM.tick; e.podT = SM.pods.first; e.budT = SM.buds.gap; e.buds = [];
       const c = new Uint8Array(room.w * room.h); c[idx(room, e.x, e.y)] = 1;
-      w.arena = { walls: null, carpet: c };
-      B.applyArena(room, w.arena);
+      ED.Arena.setField(room, { walls: null, carpet: c });
     }
-    const ar = w.arena; if (!ar || !ar.carpet) return;
+    const ar = ED.Arena.field(w.room); if (!ar || !ar.carpet) return;
     const c = ar.carpet;
     for (const sl of e.slots) if (sl.pod && sl.pod.hp <= 0) { // a destroyed pod clears the carpet around itself
       sl.pod = null; sl.dead = true;

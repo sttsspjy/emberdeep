@@ -153,7 +153,8 @@
     if (hz === 'poison') sp *= 0.85;
     if (foes) sp *= Sim.crowdMul(p, foes);
     if (zones) for (const z of zones) if (z.kind === 'mire' && z.team === 1 && U.dist2(z.x, z.y, p.x, p.y) < z.r * z.r) { sp *= 0.55; break; }
-    if (room.carpet && room.carpet[Math.floor(p.y / T) * room.w + Math.floor(p.x / T)]) sp *= ED.Bosses.CARPET_SLOW; // boss spore carpet (bosses.js arena)
+    if (zones) for (const z of zones) if (z.kind === 'bind' && U.dist2(z.x, z.y, p.x, p.y) < z.r * z.r) { sp *= 0.12; break; } // a champion's bind (champions.js)
+    if (room.arena && ED.Arena) sp *= ED.Arena.slow(room, p.x, p.y); // boss arena floor (flooded water)
     const accel = hz === 'ice' ? 3.2 : 22;
     p.vx = (p.vx || 0) + (mx * sp - (p.vx || 0)) * Math.min(1, accel * dt);
     p.vy = (p.vy || 0) + (my * sp - (p.vy || 0)) * Math.min(1, accel * dt);
@@ -582,10 +583,10 @@
   // Puts the party in room id: at its south entry when it came through a door (via = the door key it left by), else around the centre (the start camp).
   W.prototype.enterRoom = function (id, via) {
     this.collectAll();
-    if (this.arena) ED.Bosses.clearArena(this); // boss walls and carpet end with the room
     this.enemies.length = 0; this.projs.length = 0; this.zones.length = 0; this.chainQ.length = 0; this.curChain = null; this.corpses.length = 0;
     if (this.fg) this.fg.ok = false;
     this.boss = null; this.enc = null; this.critter = null;
+    if (this.room && ED.Arena) ED.Arena.clear(this.room); // a boss or champion arena ends with its room
     this.roomId = id;
     this.roomEpoch = (this.roomEpoch || 0) + 1;
     const room = this.room = this.floor.rooms[id];

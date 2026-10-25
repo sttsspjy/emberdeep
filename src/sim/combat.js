@@ -1683,7 +1683,7 @@
         if (pr.ret === 1) { pr.x -= pr.vx * dt; pr.y -= pr.vy * dt; this.projTurn(pr); keep.push(pr); continue; } // a wall turns a boomerang back
         if (pr.team === 0 && pr.explode) this.projBurst(pr);
         else if (pr.team === 0 && pr.cloud) this.spawnCloud(pr.owner, pr.x - pr.vx * dt, pr.y - pr.vy * dt, pr.cloud);
-        if (pr.team === 0) { this.projDrop(pr, pr.x - pr.vx * dt, pr.y - pr.vy * dt); this.projEnd(pr, 'wall'); if (this.arena) this.wallCircle(this.players.get(pr.owner), pr.x, pr.y, pr.r + 4); } // a boss wall block takes the shot (bosses.js)
+        if (pr.team === 0) { this.projDrop(pr, pr.x - pr.vx * dt, pr.y - pr.vy * dt); this.projEnd(pr, 'wall'); if (this.room.arena) this.wallCircle(this.players.get(pr.owner), pr.x, pr.y, pr.r + 4); } // a boss wall block takes the shot (arena.js)
         this.emit({ t: 'spark', x: Math.round(pr.x), y: Math.round(pr.y), k: ED.PROJ_IDX[pr.kind] || 0 });
         continue;
       }

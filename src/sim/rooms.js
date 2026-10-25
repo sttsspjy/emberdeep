@@ -22,15 +22,13 @@
   const pendingFoes = (w) => { let n = 0; for (const z of w.zones) if (z.kind === 'spawn' && !z.dead && !z.hunt) n += z.n || 1; return n; };
 
   // ---------------- encounters ----------------
-  // A champion room (stratum IV, room.champ 'twins' | 'mimic') runs W.startChampion (bosses.js); without it the room plays as an elite fight.
+  // A champion room (stratum IV, room.champ 'twins' | 'mimic') runs W.startChampion (champions.js); its xp budget roomXp(room, 'champion') is paid as the clear pile.
   W.beginEncounter = function (room, rs) {
-    if (room.type === 'champion' && this.startChampion) {
-      this.locked = true;
-      this.emit({ t: 'lock' });
+    if (room.type === 'champion') {
       for (const p of this.players.values()) if (!p.downed && !p.dead) this.onRoomLockBuild(p, room);
       this.startChampion(room);
-    } else if (room.type === 'combat' || room.type === 'elite' || room.type === 'champion') {
-      if (room.type === 'champion') room = Object.assign({}, room, { type: 'elite' }); // TODO(W5b): startChampion replaces this stand-in
+      Object.assign(this.enc, { xpBudget: this.roomXp(room, 'champion'), xpOut: 0, xpThr: 0, xpClip: 0, xpThrCap: 0, xpThrAcc: 0, xpK: 0 });
+    } else if (room.type === 'combat' || room.type === 'elite') {
       this.locked = true;
       this.enc = { kind: 'waves', waves: this.planWaves(room), wave: -1, t: ED.World.PACE.first };
       this.planHorde(room, this.enc);
@@ -226,6 +224,8 @@
         for (const p of this.players.values()) p.hitThisBoss = false;
         this.emit({ t: 'bossSpawn', type });
       }
+    } else if (enc.kind === 'champ') {
+      this.updateChampion(enc, dt); // champions.js
     } else if (enc.kind === 'trial') {
       const alive = this.hostiles(), pending = pendingSpawns(this);
       if (enc.wave < enc.waves.length - 1 && enc.t <= 0 && !pending && alive === 0) {
@@ -305,7 +305,7 @@
     for (const q of this.projs) if (q.team !== 0) q.dead = true; // flagged, not refiltered: the kill may land inside the projectile/zone loops, which end by reassigning their own keep list
     for (const z of this.zones) if (z.team !== 0) z.dead = true;
     this.boss = null; this.enc = null; this.locked = false;
-    ED.Bosses.clearArena(this); // boss walls fall, the carpet goes
+    if (ED.Arena) ED.Arena.clear(this.room); // the arena (flood, darkness, collapsed floor) ends with the boss
     this.roomState[this.roomId].cleared = true;
     this.emit({ t: 'bossDown', type: e.type, x: Math.round(e.x), y: Math.round(e.y) });
     this.dropXp(e.x, e.y, e.def.xp * (1 + 0.3 * (s - 1)));
@@ -604,7 +604,7 @@
   };
   // Hero hits on the room's unbroken breakables (at most 8, a plain loop) and on the Drowned Bell: a circle (x, y, r), the segment (x0, y0)-(x1, y1) swept by a body of radius r, or the sector of reach and arc around the hero's facing a.
   W.smashCircle = function (p, x, y, r) {
-    if (this.arena) this.wallCircle(p, x, y, r + 4); // boss walls (bosses.js)
+    if (this.room.arena) this.wallCircle(p, x, y, r + 4); // boss walls (arena.js)
     const bl = this.room.bell; if (bl && p && !p.bellS && U.dist2(bl.x, bl.y, x, y) <= (BELL_R + r) * (BELL_R + r)) this.ringBell(p);
     const bs = this.room.breakables; if (!bs.length) return;
     const rs = this.roomState[this.roomId], rr = (SMASH_R + r) * (SMASH_R + r);
@@ -615,7 +615,7 @@
     }
   };
   W.smashSeg = function (p, x0, y0, x1, y1, r, noRing) {
-    if (this.arena) this.wallSeg(p, x0, y0, x1, y1, r + 4);
+    if (this.room.arena) this.wallSeg(p, x0, y0, x1, y1, r + 4);
     const bl = this.room.bell; if (bl && p && !p.bellS && !noRing && U.segDist2(bl.x, bl.y, x0, y0, x1, y1) <= (BELL_R + r) * (BELL_R + r)) this.ringBell(p);
     const bs = this.room.breakables; if (!bs.length) return;
     const rs = this.roomState[this.roomId], rr = (SMASH_R + r) * (SMASH_R + r);
@@ -625,7 +625,7 @@
     }
   };
   W.smashArc = function (p, a, reach, arc) {
-    if (this.arena) this.wallArc(p, a, reach, arc);
+    if (this.room.arena) this.wallArc(p, a, reach, arc);
     const bl = this.room.bell;
     if (bl && p && !p.bellS) { const d = Math.hypot(bl.x - p.x, bl.y - p.y); if (d - BELL_R <= reach && (arc >= 6.2 || Math.abs(U.angDiff(a, Math.atan2(bl.y - p.y, bl.x - p.x))) <= arc / 2 + Math.atan2(BELL_R, Math.max(d, 1)))) this.ringBell(p); }
     const bs = this.room.breakables; if (!bs.length) return;

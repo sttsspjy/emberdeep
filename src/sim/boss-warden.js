@@ -114,9 +114,9 @@
   const laneOf = (ar, y) => { const ty = Math.floor(y / T); let best = ar.lanes[0], bd = 1e9; for (const ln of ar.lanes) { const d = ty < ln.y0 ? ln.y0 - ty : ty > ln.y1 ? ty - ln.y1 : 0; if (d < bd) { bd = d; best = ln; } } return best; };
   // Lane charge: a telegraphed leap to the far end of the target's lane, a lane-wide warning, then a charge down the whole lane (every hero in the lane band he passes takes the hit).
   const laneCharge = {
-    w: 3, phase: 2, ok: (w, e) => !!(w.arena && w.arena.lanes && w.arena.walls.some(s => s.hp > 0)),
+    w: 3, phase: 2, ok: (w, e) => { const ar = ED.Arena.field(w.room); return !!(ar && ar.lanes && ar.walls && ar.walls.some(s => s.hp > 0)); },
     start(w, e) {
-      const ar = w.arena;
+      const ar = ED.Arena.field(w.room);
       if (!ar || !ar.lanes) { e.vars.sub = 'end'; e.vars.at = 0; return; } // no lanes (yet): nothing to charge down
       const ln = laneOf(ar, e.target.y), room = w.room, q = WD.lane, k = e.vars.wm;
       const cy = (ln.y0 + ln.y1 + 1) / 2 * T, left = e.target.x > room.w * T / 2; // start at the end farther from the target
@@ -160,7 +160,7 @@
       e.wallPlan = plan; e.wallAt = w.time + q.warn;
     } else if (ph === 3) {
       e.wallPlan = null; e.wallAt = 0;
-      if (w.arena && w.arena.walls) { for (const s of w.arena.walls) if (s.hp > 0) w.emit({ t: 'wallbreak', x: Math.round((s.x + s.n / 2) * T), y: Math.round((s.y + 0.5) * T), n: s.n }); B.clearArena(w); }
+      const far = ED.Arena.field(w.room); if (far && far.walls) { for (const s of far.walls) if (s.hp > 0) w.emit({ t: 'wallbreak', x: Math.round((s.x + s.n / 2) * T), y: Math.round((s.y + 0.5) * T), n: s.n }); ED.Arena.clear(w.room); }
       e.swT = WD.swords.first;
     }
   }
@@ -180,8 +180,7 @@
   function tick(w, e, dt) {
     if (e.wallAt && w.time >= e.wallAt) {
       const plan = e.wallPlan; e.wallAt = 0; e.wallPlan = null;
-      w.arena = { walls: plan.walls, lanes: plan.lanes, carpet: null };
-      B.applyArena(w.room, w.arena);
+      ED.Arena.setField(w.room, { walls: plan.walls, lanes: plan.lanes, carpet: null });
       w.emit({ t: 'wallrise', rows: plan.rows, n: w.room.w });
     }
     if (e.phase >= 3 && w.alivePlayers().length) { e.swT -= dt; if (e.swT <= 0) { e.swT = WD.swords.gap; swords(w, e); } }

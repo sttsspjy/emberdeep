@@ -1,5 +1,5 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it.
-// Usage: node tools/browse.js [--scen=smoke,crowd70,boss,shots,sheet,screens,wardrobe,cosmetics,swing,picks,cards,bell] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
+// Usage: node tools/browse.js [--scen=smoke,crowd70,boss,shots,sheet,screens,wardrobe,cosmetics,swing,picks,cards,bell,arenas] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
 //   [--quality=low,high] [--ops] [--json] [--seed=1] [--strat=1] [--embers=N] [--mortal] [--software] [--forcepost] [--sync] [--warm=2.5] [--timeout=300]
 // Mechanism: headless only (no headed option, no window calls); one browser per invocation, one fresh context per scenario page, all closed at exit, on error and on SIGINT.
 //   A read-only node http server on 127.0.0.1 (random port) serves --root (default: this repo). Playwright resolves via require('playwright'), else %LOCALAPPDATA%\npm-cache\_npx\*\node_modules (best match for the installed browsers).
@@ -28,6 +28,8 @@
 //     Fails on a missing card, a card whose kind differs from ED.PickFx.kind, a frame that did not resolve, equal path gate icons, a pick without an effect layer, or Low quality leftovers.
 //   bell: the hero, Anchor Leap and Peal icons and screenshots of the Bellwarden (unlocked for the run; --weapon picks the bell): winding in a staged fight with Full Swing, a hurl in flight, the bell anchored, a reel, an Anchor Leap, a Peal, four Bellwardens in the crowd at High and Low quality,
 //     and a client's view from a two-peer net check in the same page (host World + client Game, JSON snapshots, 50 ms each way); fails on bad bells, missing bell events or a client that drifts from the host (see scenBell).
+//   arenas: 18 screenshots staged through the sim (BR.arena, heroes unhurt): the Drowned King (phase 1, tide warning, tide, beam warm-up and sweep, phases 2 and 3), the Hollow King (phase 1, duel, dark phase 2, a lit lantern,
+//     phase 3, a ring warning, fallen rings) and the champion rooms (twins, a twin combo, mimic, mimic split); fails on a page error or a step without its fight.
 // Output: compact table (or --json on stdout, logs on stderr); result-<browser>.json and the PNGs in --outdir (default <tmp>/wickdeep-browse). Exit 0 pass, 1 scenario failure, 2 harness error.
 // Notes: Chromium runs headless on the real GPU (ANGLE D3D11, no window); --software forces SwiftShader, where the game reports Post.soft and skips post at 'high' unless --forcepost. Firefox uses its own headless GL.
 //   --sync forces each frame's raster/GPU work to finish before the timer stops. Every external host is blocked (fonts and art are embedded data URIs).
@@ -61,7 +63,7 @@ function parseArgs(argv) {
   if (!vp) throw new Fail('--viewport is WxH, e.g. 1920x1080');
   o.vw = +vp[1]; o.vh = +vp[2];
   o.scens = o.scen.split(',').map(s => s.trim()).filter(Boolean);
-  for (const s of o.scens) if (!/^(smoke|boss|shots|sheet|screens|wardrobe|cosmetics|swing|picks|cards|bell|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, boss, shots, sheet, screens, wardrobe, cosmetics, swing, picks, cards, bell, crowdN)');
+  for (const s of o.scens) if (!/^(smoke|boss|shots|sheet|screens|wardrobe|cosmetics|swing|picks|cards|bell|arenas|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, boss, shots, sheet, screens, wardrobe, cosmetics, swing, picks, cards, bell, arenas, crowdN)');
   if (!o.scens.length) throw new Fail('--scen is empty');
   o.qualities = o.quality ? o.quality.split(',').map(s => s.trim()) : null;
   if (o.qualities && o.qualities.some(q => q !== 'low' && q !== 'high')) throw new Fail('--quality is low, high or low,high');
@@ -282,8 +284,8 @@ function pageBoot(cfg) {
       const r = w.floor.rooms.find(q => q.type === 'boss'); if (!r) throw new Error('no boss room');
       w.enterRoom(r.id, null);
     } else if (w.boss) w.boss.hp = Math.min(w.boss.hp, w.boss.maxHp * hp);
-    const b = w.boss;
-    return b ? { type: b.type, phase: b.phase, hp: Math.round(b.hp), walls: w.arena && w.arena.walls ? w.arena.walls.filter(q => q.hp > 0).length : 0, carpet: w.arena && w.arena.carpet ? w.arena.carpet.reduce((a, v) => a + v, 0) : 0 } : null;
+    const b = w.boss, ar = window.__ED.Arena.field(w.room);
+    return b ? { type: b.type, phase: b.phase, hp: Math.round(b.hp), walls: (ar && ar.walls ? ar.walls.filter(q => q.hp > 0).length : 0), carpet: (ar && ar.carpet ? ar.carpet.reduce((a, v) => a + v, 0) : 0) } : null;
   };
 
   // scripted hero: orbits the nearest foe (the room centre when none), attacks it, casts both skills, dashes, takes boon offers, hops combat rooms when `flow`
@@ -391,6 +393,47 @@ function pageBoot(cfg) {
   // opens a boon offer when one is queued; true when the overlay is up
   BR.offerOpen = () => { const s = window.__ED.Game.s; return !!(s && s.offerOpen); };
   BR.take = () => { const ED = window.__ED; if (ED.Game.s && ED.Game.s.offerOpen) ED.UI.boonConfirm(); return BR.offerOpen(); };
+
+  // arenas scenario: one staging step per screenshot. 'king' / 'hollow' enter that boss's room (its stratum) and wait for the boss; 'twins' / 'mimic' start that champion fight in a combat room;
+  // the other steps force a mechanic on the running fight (tide warning, beam, phases, a lit lantern, a ring warning, a mimic split). Heroes stay unhurt, the boss unkillable.
+  let god = 0;
+  setInterval(() => { const s = god && window.__ED.Game.s; if (s && s.world) for (const p of s.world.players.values()) { p.hp = p.maxHp; p.invuln = 1; p.downed = false; } }, 50);
+  BR.arena = (step) => {
+    const ED = window.__ED, s = ED.Game.s, w = s && s.world;
+    if (!w) throw new Error('no run');
+    god = 1;
+    const T = ED.CONST.TILE, me = s.me, b = w.boss, ar = w.room && w.room.arena;
+    const enter = (id) => {
+      const st = ED.BIOMES.findIndex(x => x.boss === id) + 1;
+      if (st !== w.stratum) w.enterStratum(st);
+      const room = w.floor.rooms.find(r => r.type === 'boss');
+      const d = Object.keys(room.doors).find(k => room.doors[k] >= 0);
+      w.enterRoom(room.id, ED.Dungeon.OPP[d]);
+      return room.id;
+    };
+    const force = (k) => { b.st = 'atk'; b.atk = k; b.t = 0; b.vars = { wm: 1 }; b.pose = 'idle'; ED.Bosses[b.type].attacks[k].start(w, b); };
+    const toPhase = (f) => { b.hp = b.maxHp * f; };
+    if (step === 'king' || step === 'hollow') return enter(step === 'king' ? 'drownedking' : 'hollowking');
+    if (step === 'twins' || step === 'mimic') {
+      if (w.stratum !== 4) w.enterStratum(4);
+      const room = w.floor.rooms.find(r => r.type === 'combat' && !r.dark);
+      w.roomState[room.id].cleared = true; room.champ = step; w.enterRoom(room.id, null); w.startChampion(room);
+      return room.id;
+    }
+    if (!b && step !== 'split') return 'no boss';
+    if (b && !b.staged) { b.staged = true; b.hp = b.maxHp = 1e7; }
+    if (step === 'fight') { me.x = b.x + 160; me.y = b.y + 40; return b.type; }
+    if (step === 'tide') { ar.next = 0; return 'tide'; }
+    if (step === 'beam') { force('beam'); return 'beam'; }
+    if (step === 'p2') { toPhase(0.5); return 2; }
+    if (step === 'p3') { toPhase(0.2); return 3; }
+    if (step === 'lantern') { const L = w.room.lanterns[1]; me.x = L.x - 30; me.y = L.y + 20; w.smashCircle(me, L.x, L.y, 8); return ar.lit.join(); }
+    if (step === 'ring') { ar.p3 = ED.Arena.crown.CRUMBLE.at[0] - ED.Arena.crown.CRUMBLE.warn + 0.1; return 'ring'; }
+    if (step === 'fall') { ar.p3 = ED.Arena.crown.CRUMBLE.at[1] - 0.05; return 'fall'; }
+    if (step === 'split') { const m = w.enemies.find(e => e.type === 'mimic'); if (m) m.hp = m.maxHp * 0.45; return !!m; }
+    if (step === 'off') { god = 0; return 0; }
+    throw new Error('unknown arena step ' + step);
+  };
 
   // late build on the solo hero at stratum `strat`: two element paths (the first evolved, the second at its keystone), their duo, open boons, two Ascended, the first route with its first fork at rank 3,
   // six relics, level 14, a shield, the first-exit path walked up to half the rows (the hero in its last room), and an ally hero (second class) beside the hero; returns a summary
@@ -832,6 +875,30 @@ async function scenCrowd(name) {
       if (rs.app !== 'run') notes(res, q + ': run ended during the measure (app ' + rs.app + ')');
     } finally { for (const e of errors) res.errors.push(Object.assign({ quality: q }, e)); await ctx.close(); }
   }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
+// arenas: screenshots of each Drowned King and Hollow King phase and both champion fights, staged through BR.arena (waits in ms after each step); fails on a page error or a step without its fight.
+async function scenArenas() {
+  const o = S.opt, res = newResult('arenas'), q = qualitiesOr(['high'])[0];
+  const PLAN = [['king', 6500, 'king-p1'], ['tide', 900, 'king-tide-warn'], ['', 3000, 'king-tide'], ['beam', 900, 'king-beam-warm'], ['', 1100, 'king-beam'], ['p2', 1500, 'king-p2'], ['p3', 2500, 'king-p3'],
+    ['hollow', 6500, 'hollow-p1'], ['fight', 700, 'hollow-duel'], ['p2', 2500, 'hollow-p2-dark'], ['lantern', 700, 'hollow-p2-lantern'], ['p3', 1500, 'hollow-p3'], ['ring', 1200, 'hollow-p3-ring'], ['fall', 900, 'hollow-p3-fallen'],
+    ['twins', 3500, 'twins'], ['', 2500, 'twins-combo'], ['mimic', 3500, 'mimic'], ['split', 900, 'mimic-split']];
+  const { ctx, page, errors } = await openPage();
+  try {
+    await call(page, 'profile', o.cls, o.embers);
+    await call(page, 'settings', q);
+    await call(page, 'install');
+    if ((await call(page, 'start')) !== 'run') fail(res, 'run did not start');
+    await wait(600);
+    for (const [step, ms, name] of PLAN) {
+      if (step) { const r = await call(page, 'arena', step); if (r === 'no boss' || r === false) fail(res, step + ': ' + r); notes(res, step + ' ' + r); }
+      await wait(ms);
+      await shoot(page, res, name);
+    }
+    await call(page, 'arena', 'off');
+  } finally { res.errors = errors; await ctx.close(); }
   if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
   return res;
 }
@@ -1520,7 +1587,7 @@ async function main() {
       const t0 = Date.now();
       log('scenario ' + sc + ' ...');
       let r;
-      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'boss' ? await scenBoss() : sc === 'shots' ? await scenShots() : sc === 'sheet' ? await scenSheet() : sc === 'screens' ? await scenScreens() : sc === 'wardrobe' ? await scenWardrobe() : sc === 'cosmetics' ? await scenCosmetics() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : sc === 'cards' ? await scenCards() : sc === 'bell' ? await scenBell() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
+      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'boss' ? await scenBoss() : sc === 'shots' ? await scenShots() : sc === 'sheet' ? await scenSheet() : sc === 'screens' ? await scenScreens() : sc === 'wardrobe' ? await scenWardrobe() : sc === 'cosmetics' ? await scenCosmetics() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : sc === 'cards' ? await scenCards() : sc === 'bell' ? await scenBell() : sc === 'arenas' ? await scenArenas() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
       r.wallMs = Date.now() - t0;
       r.browserVersion = bv;
       if (S.server.missing.size) r.missing = [...S.server.missing];

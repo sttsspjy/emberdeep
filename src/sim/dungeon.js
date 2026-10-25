@@ -236,6 +236,8 @@
     else if (room.type === 'elite' || room.type === 'champion') room.pattern = rng.pick(ELITE_PATTERNS);
     else if (room.type === 'boss') room.pattern = rng.pick(['bossPillars', 'open', 'bossPools']);
     else room.pattern = 'open';
+    const arena = room.type === 'boss' && (ED.ENEMIES[ED.biomeFor(stratum).boss] || {}).arena; // a boss with a fixed arena (arena.js D.layArena) replaces the drawn pattern
+    if (arena) { room.pattern = 'arena'; D.layArena(room, arena); return; }
     const backup = room.tiles.slice();
     applyPattern(room, room.pattern, rng);
     if (!connected(room)) { room.tiles = backup; room.pattern = 'open'; }

@@ -91,14 +91,18 @@
     minion: { name: 'Risen Bones', ai: 'ally', look: 'skeleton', col: { a: '#b6ffe0', b: '#4c8f78', c: '#7dffd9' }, hp: 40, spd: 95, dmg: 10, r: 9, xp: 0, cost: 0, ally: true },
 
     // ---------------- Bosses (absolute HP, scaled by party and pact; refHp = design HP that chill, Conflagration and Wildfire measure against) ----------------
-    bonewarden: { name: 'The Bone Warden', title: 'After his slam he is stuck: +50% damage', ai: 'boss', look: 'b_warden', col: { a: '#ece4cc', b: '#7d745f', c: '#ff5a3a' },
-      hp: 4350, refHp: 800, spd: 80, dmg: 2.4, r: 24, xp: 40, boss: true },
-    sporemother: { name: 'The Sporemother', title: 'Break the pods to clear the spore carpet', ai: 'boss', look: 'b_spore', col: { a: '#c86bff', b: '#5b2a7a', c: '#7dffd9' },
-      hp: 3700, refHp: 1500, spd: 34, dmg: 2.4, r: 32, xp: 60, boss: true },
-    drownedking: { name: 'The Drowned King', title: 'Tyrant Beneath the Tide', ai: 'boss', look: 'b_king', col: { a: '#3f8f88', b: '#173d3b', c: '#e8c66b' },
-      hp: 85700, refHp: 5600, spd: 62, dmg: 4.425, r: 26, xp: 120, boss: true, quote: 'Kneel. The sea has already taken your breath.' },
-    hollowking: { name: 'The Hollow King', title: 'Crown of the Starless Abyss', ai: 'boss', look: 'b_hollow', col: { a: '#2a1f44', b: '#0e0820', c: '#ff7ad9' },
-      hp: 90300, refHp: 7800, spd: 70, dmg: 3.925, r: 24, xp: 160, boss: true, quote: 'You came so far down... only to fill my empty crown.' },
+    bonewarden: { name: 'The Bone Warden', title: 'After his slam he is stuck: +50% damage', ai: 'boss', look: 'b_warden', col: { a: '#ece4cc', b: '#7d745f', c: '#ff5a3a' },
+      hp: 4350, refHp: 800, spd: 80, dmg: 2.4, r: 24, xp: 40, boss: true },
+    sporemother: { name: 'The Sporemother', title: 'Break the pods to clear the spore carpet', ai: 'boss', look: 'b_spore', col: { a: '#c86bff', b: '#5b2a7a', c: '#7dffd9' },
+      hp: 3700, refHp: 1500, spd: 34, dmg: 2.4, r: 32, xp: 60, boss: true },
+    // arena: the boss room's fixed layout (boss-king.js, boss-hollow.js; src/sim/arena.js lays it). Offsets in tiles from the room centre (floor(w / 2), floor(h / 2) + 1): pillars and dais [dx, dy, w, h], lanterns [dx, dy].
+    drownedking: { name: 'The Drowned King', title: 'Stand on raised stone when the tide comes. Hide behind pillars from the beam.', ai: 'boss', look: 'b_king', col: { a: '#3f8f88', b: '#173d3b', c: '#e8c66b' },
+      hp: 17000, refHp: 4200, spd: 62, dmg: 3.6, r: 26, xp: 120, boss: true, quote: '',
+      arena: { kind: 'tide', pillars: [[-9, -4, 2, 2], [7, -4, 2, 2], [-9, 3, 2, 2], [7, 3, 2, 2], [-4, -1, 2, 2], [2, -1, 2, 2], [-1, -5, 2, 2], [-1, 2, 2, 2]],
+        dais: [[-13, -7, 3, 3], [10, -7, 3, 3], [-13, 5, 3, 3], [10, 5, 3, 3], [-1, -7, 3, 2], [-1, 5, 3, 3]] } },
+    hollowking: { name: 'The Hollow King', title: 'Light the lanterns in the dark. Leave the floor before it falls.', ai: 'boss', look: 'b_hollow', col: { a: '#2a1f44', b: '#0e0820', c: '#ff7ad9' },
+      hp: 84000, refHp: 7000, spd: 70, dmg: 3.3, r: 24, xp: 160, boss: true, quote: '',
+      arena: { kind: 'crown', lanterns: [[-11, -5], [11, -5], [-11, 4], [11, 4], [-5, 0], [5, 0]] } },
 
     // ---------------- Boss arena pieces (minion: never in a roster; noLoot: no xp, gold or hearts) ----------------
     sporepod: { name: 'Spore Pod', ai: 'pod', look: 'spitter', art: 'spitter', col: { a: '#b45cf0', b: '#4e2370', c: '#9cff6a' }, hp: 14, spd: 0, dmg: 0, r: 13, xp: 0, cost: 0, minion: true, noLoot: true },
@@ -106,11 +110,17 @@
 
     // ---------------- Fodder (one per biome, appended last: the wire index follows the order; never in a roster) ----------------
     // Horde filler: untelegraphed touch damage capped at FODDER_CAP of the victim's max health, no drops of their own (the room's xp budget pays through motes), never elite or exposed.
-    // art names the foe type whose animations the renderer reuses, tinted with col; hp (World.fodderHp: + 30% per depth step of the stratum) takes 3+ hits of every hero's stratum I weapon (2 of a heavy one); their deaths fire no on-death effect (World.onDeathFx).
-    bonemite: { name: 'Bone Mite', ai: 'swarm', look: 'bat', art: 'bat', col: { a: '#4a4150', b: '#2a2430', c: '#b8503f' }, hp: 50, spd: 84, dmg: 1.5, r: 6, xp: 0, cost: 0, fodder: true, fly: true },
-    sporeling: { name: 'Sporeling', ai: 'swarm', look: 'slime', art: 'glowlet', col: { a: '#5c8f86', b: '#2c4f49', c: '#0a1f1b' }, hp: 50, spd: 66, dmg: 1.5, r: 7, xp: 0, cost: 0, fodder: true },
-    brinepolyp: { name: 'Brine Polyp', ai: 'swarm', look: 'jelly', art: 'jellet', col: { a: '#8f6f88', b: '#5a3a55', c: '#d8c4d4' }, hp: 50, spd: 70, dmg: 1.5, r: 7, xp: 0, cost: 0, fodder: true, fly: true },
-    voidmote: { name: 'Void Mote', ai: 'swarm', look: 'star', art: 'starspawn', col: { a: '#6f6585', b: '#352c4d', c: '#b8a8d8' }, hp: 50, spd: 90, dmg: 1.5, r: 6, xp: 0, cost: 0, fodder: true, fly: true },
+    // art names the foe type whose animations the renderer reuses, tinted with col; hp (World.fodderHp: + 30% per depth step of the stratum) takes 3+ hits of every hero's stratum I weapon (2 of a heavy one); their deaths fire no on-death effect (World.onDeathFx).
+    bonemite: { name: 'Bone Mite', ai: 'swarm', look: 'bat', art: 'bat', col: { a: '#4a4150', b: '#2a2430', c: '#b8503f' }, hp: 50, spd: 84, dmg: 1.5, r: 6, xp: 0, cost: 0, fodder: true, fly: true },
+    sporeling: { name: 'Sporeling', ai: 'swarm', look: 'slime', art: 'glowlet', col: { a: '#5c8f86', b: '#2c4f49', c: '#0a1f1b' }, hp: 50, spd: 66, dmg: 1.5, r: 7, xp: 0, cost: 0, fodder: true },
+    brinepolyp: { name: 'Brine Polyp', ai: 'swarm', look: 'jelly', art: 'jellet', col: { a: '#8f6f88', b: '#5a3a55', c: '#d8c4d4' }, hp: 50, spd: 70, dmg: 1.5, r: 7, xp: 0, cost: 0, fodder: true, fly: true },
+    voidmote: { name: 'Void Mote', ai: 'swarm', look: 'star', art: 'starspawn', col: { a: '#6f6585', b: '#352c4d', c: '#b8a8d8' }, hp: 50, spd: 90, dmg: 1.5, r: 6, xp: 0, cost: 0, fodder: true, fly: true },
+
+    // ---------------- Champions (stratum IV champion rooms, champions.js; appended after the fodder: the wire index follows the order; never in a roster) ----------------
+    // HP x the elite factor of the stratum (World.ELITE); no affix, no drops of their own: the room pays an elite room's reward.
+    twinlance: { name: 'Lancer', ai: 'champion', look: 'knight', art: 'voidknight', col: { a: '#d8c27a', b: '#4a3c1c', c: '#ffe08a' }, hp: 230, spd: 64, dmg: 8, r: 15, xp: 0, cost: 0, champ: 'twins' },
+    twinhammer: { name: 'Hammer', ai: 'champion', look: 'knight', art: 'forgeknight', col: { a: '#9a6a44', b: '#2a1810', c: '#ff8a3a' }, hp: 230, spd: 54, dmg: 8.8, r: 17, xp: 0, cost: 0, champ: 'twins' },
+    mimic: { name: 'Mimic', ai: 'champion', look: 'shade', art: 'shade', col: { a: '#2c2440', b: '#100c1c', c: '#e8e0ff' }, hp: 420, spd: 70, dmg: 7, r: 13, xp: 0, cost: 0, champ: 'mimic' },
   };
 
   ED.ENEMY_IDS = Object.keys(E);
