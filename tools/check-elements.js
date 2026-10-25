@@ -20,7 +20,7 @@ function stage(cls, boons, o) {
   for (const id in (boons || {})) p.boons[id] = boons[id];
   for (const q of w.players.values()) { w.recalc(q, true); q.offers.length = 0; q.picks = 0; q.offer = null; q.stats.crit = 0; q.stats.dodge = 0; }
   w.enemies.length = 0; w.enc = null; w.locked = false; w.msgs.length = 0; w.fx.length = 0; w.zones.length = 0; w.projs.length = 0;
-  w.elemAff = () => 1; w.affC = () => 1; w.state = 'play';
+  w.state = 'play';
   const log = [], evs = [], hit0 = w.hitEnemy;
   w.hitEnemy = function (e, base, src) { const d = hit0.call(this, e, base, src); log.push({ e, d, src: src || {} }); return d; };
   return { w, p, log, evs };

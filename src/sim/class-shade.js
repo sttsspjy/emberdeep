@@ -371,7 +371,7 @@
       if (src.ambush && st.eclipse > 0 && isRepeat(p, src)) { src.ambRe = true; f *= st.eclipse; }
       return f;
     },
-    // A crit builds Momentum; an Arterial crit readies arterialN crit attacks (once per ARTER_CD, never from a horde foe); Exsanguinate: a crit on a foe with 4 ailments adds Bleed equal to exsang of the hit (damage before the affinity, status power applied).
+    // A crit builds Momentum; an Arterial crit readies arterialN crit attacks (once per ARTER_CD, never from a horde foe); Exsanguinate: a crit on a foe with 4 ailments adds Bleed equal to exsang of the hit (status power applied).
     procs(e, p, dmg, crit, src) {
       if (!crit) return;
       const st = p.stats;
@@ -381,7 +381,7 @@
         if (k) { p.arterT = C.ARTER_CD; this.grantCrits(p, st.arterialN, C.ARTER_CAP, 'add'); }
         this.emit({ t: 'arter', pid: p.pid, x: R(e.x), y: R(e.y), a: R(Math.atan2(e.y - p.y, e.x - p.x) * 100) / 100, k });
       }
-      if (st.exsang > 0 && e.hp > 0 && this.ailments(e) >= 4) this.addBleed(e, dmg / (src.affMul || 1) * st.exsang * (1 + st.statusPow), p);
+      if (st.exsang > 0 && e.hp > 0 && this.ailments(e) >= 4) this.addBleed(e, dmg * st.exsang * (1 + st.statusPow), p);
     },
     // After a hit: the execution slash; an Ambush hit (Night's Edge: the first one on a foe that is not a horde foe refunds Shadowstep, never an Eclipse repeat; Rupture: each foe once; Ambush Sweep: remember the target).
     hitDone(p, e, dmg, crit, src) {

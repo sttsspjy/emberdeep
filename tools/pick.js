@@ -1,9 +1,9 @@
 // Bot card choice by marginal value (tools/sim.js --pick=smart). Factory: require('./pick.js')(ED, model) with model = require('./model.js')(ED).
-// Value of a hero build: V = sum over the strata t = s, s+1, s+2 (weights 0.5 / 0.3 / 0.2, capped at VI) of w_t (ln D_t + lambda_t ln E_t) + bonus, where D_t = sqrt(damage on one foe x damage on a pack) at stratum t
-// (ED.Sheet.compute through the model, the stratum affinity included), E = effective health and bonus = the meta stats (gold, experience, offers).
+// Value of a hero build: V = sum over the strata t = s, s+1, s+2 (weights 0.5 / 0.3 / 0.2, capped at IV) of w_t (ln D_t + lambda_t ln E_t) + bonus, where D_t = sqrt(damage on one foe x damage on a pack) at stratum t
+// (ED.Sheet.compute through the model), E = effective health and bonus = the meta stats (gold, experience, offers).
 // lambda_t (setLambda, --lambda=<x>|auto[:<x0>]): a fixed x for every stratum, or auto = x0 times the foe damage lever of stratum t over LEVER_REF, read from the live World.THREAT, World.dmgScale, biome rosters and boss damage (a harder table raises the weight of effective health).
 // The sheet leaves many mechanics out; fold() adds them from the stat block (formulas below, assumptions in the constants) so a card's value follows the build it joins.
-// Gain(card) = V(after) - V(before) + F(after) - F(before) + X(card); F = discounted value of the milestones a card brings closer (keystone, evolution), X = a flat prior for effects with no stat.
+// Gain(card) = V(after) - V(before) + F(after) - F(before) + X(card); F = discounted value of the milestones a card brings closer (keystone, evolution), X = a flat prior for effects with no stat plus the path calibration PATH_CAL.
 // Deterministic: no Math.random; ties break on the bot rng passed in.
 module.exports = (ED, model) => {
   const C = ED.CONST, St = ED.Stats, PACK = model.pack;
@@ -28,6 +28,7 @@ module.exports = (ED, model) => {
   const SLOW_RED = 0.12;
   const STUN_RED = 0.7; // damage a stunned foe does not deal while stunned (it recovers, some attacks already thrown)
   const E_MAX_RED = 0.35; // largest share of incoming damage the controlled foes can remove
+  const REACH = 0.5; // guess: share of the damage a hero takes from foes its statuses have reached (fresh spawns, shots in flight and boss adds are not yet controlled)
 
   // Cards and relics the sheet leaves at zero, one line each. Fold = a formula in fold() from the stat block (D damage, E effective health, bonus = meta value); Prior = a flat value in PRIOR; Sheet = the sheet models it
   // (a hold verb: the weapon's hold model, tools/model.js takes it where it beats the attacks). "guess" marks a coefficient no bot run has measured. Relics follow the boons.
@@ -40,7 +41,7 @@ module.exports = (ED, model) => {
   //   trance       Fold  attack speed for 4 s after a cast on the weapon share, capped by the attack floor
   //   kindle stoke kindling  Sheet Burn estimate (stacks up to the cap x the Burn value); Fold burning ground: GROUND_STACKS stacks per pack foe a dash (guess)
   //   wildfire     Fold  pack Burn x (1 + wildfire x WILD_K; guess)
-  //   smother      Fold  E: smother x the share of a foe's time at BURN_AT stacks
+  //   smother      Fold  E: REACH x smother x the share of a foe's time at BURN_AT stacks
   //   firebreak    Prior fire 0.04: longer ground that foes path around (guess)
   //   firewalk     Fold  pack Burn x (1 + FIREWALK_K x dashes through foes; guess)
   //   evo_fire     Sheet hold (flame cone); Fold Burn x CONE_UP while channeling (guess)
@@ -85,6 +86,8 @@ module.exports = (ED, model) => {
     deathsedge: ['shadow', 0.05], // a Reap readies guaranteed crits
     stormstep: ['lightning', 0.05], // guess: a dash aimed at a charged foe blinks into the pack first
   };
+  // Path calibration (ln-V units) on every card of a path (gate, pool, keystone, evolution; open General cards only for a Generalist): the fold's error per path, fitted on bot batches so smart bots take each of the 7 paths as main path in a fair share of runs.
+  const PATH_CAL = { fire: 0.02, ice: -0.05, lightning: -0.02, poison: 0.01, holy: 0.01, shadow: -0.01, general: 0.11 };
   const PURSE_X = 0.01; // guess: the Purse's gold, a gold room's reward
   // Element terms the sheet leaves out (guesses): GLACIER_E E per pack freeze share; SHATTER_NEAR neighbours a Shatterpoint burst reaches; NEURO_RED foe damage removed at full Venom; HEAL_E: E per max HP healed a stratum.
   // WILD_K pack Burn per Wildfire stack; FIREWALK_K pack Burn per dash share; GROUND_STACKS stacks a dash's burning ground leaves on a pack foe; CONE_UP Burn factor of a channel; TEMPEST_K lightning factor of Tempest Arms;
@@ -155,7 +158,7 @@ module.exports = (ED, model) => {
     if (st.wildfire) fireN *= 1 + st.wildfire * WILD_K;
     if (st.firewalk) fireN *= 1 + FIREWALK_K * Math.min(1, dashUse * 2);
     if (st.dashFire) { const g = ED.burnValue(st) * C.BURN_LIFE * GROUND_STACKS * dashUse; add1 += g * 0.5; addN += g * Math.min(PACK, 3); }
-    if (st.smother) eMul /= 1 - Math.min(E_MAX_RED, st.smother * clamp(fire1 / Math.max(1e-9, ED.burnValue(st) * C.BURN_AT), 0, 1));
+    if (st.smother) eMul /= 1 - Math.min(E_MAX_RED, REACH * st.smother * clamp(fire1 / Math.max(1e-9, ED.burnValue(st) * C.BURN_AT), 0, 1));
     const stOne = fire1 + light1 + holy1 + sd.general, stN = fireN + lightN + holyN + sd.general * spk;
 
     // Battle Trance: attack speed during the 4 s after a skill cast, on the weapon's damage and the statuses it feeds
@@ -187,9 +190,9 @@ module.exports = (ED, model) => {
       const r = m.proc.rate.poison / ref.statusHp * C.VENOM_K * (1 + st.venomBuild), cloud = (st.dashCloud ? 1 + 0.3 * (1 + st.cloudR) : 1) * (st.toxicWake ? 1.3 : 1) * (st.hold === 'flask' ? 1.3 : 1), rN = r * pf * cloud;
       const full = (g, T) => (g > 0 ? clamp(1 - 100 / (g * T), 0, 1) : 0), v1 = meanRamp(r * RES_ONE, T_ONE, 100) / 100, vN = meanRamp(rN, tFoe, 100) / 100, f1 = full(r * RES_ONE, T_ONE), fN = full(rN, tFoe);
       const weak = 0.6 * (C.VENOM_WEAK * vN + st.venomWeak * fN + C.VENOM_SLOW * vN * SLOW_RED * 2) + 0.4 * (C.VENOM_WEAK * v1 + st.venomWeak * f1);
-      eMul /= 1 - Math.min(E_MAX_RED, weak);
+      eMul /= 1 - Math.min(E_MAX_RED, REACH * weak);
       if (st.corrode) { mul1 *= 1 + st.corrode * f1; mulN *= 1 + st.corrode * fN; }
-      if (st.neuro) eMul /= 1 - Math.min(E_MAX_RED, NEURO_RED * (0.6 * fN + 0.4 * 0.5 * f1));
+      if (st.neuro) eMul /= 1 - Math.min(E_MAX_RED, REACH * NEURO_RED * (0.6 * fN + 0.4 * 0.5 * f1));
     }
     // Backstabs: a share of the hits lands from behind (BACK_UP; Umbral Step, Phantom Step and Umbral Arms raise it) for +backstab, and only those mark Doom; a foe is Reaped once its health falls to its Doom, a boss Tolls it back
     const back = st.backstab > 0 || st.shadowInfuse > 0 ? clamp((melee ? BACK_UP.melee : BACK_UP.ranged) + (st.dashBack ? Math.min(0.3, st.dashBack * dashUse / Math.max(1, aps)) : 0) + (st.decoy ? DECOY_UP : 0) + (st.stepBehind ? BEHIND_UP : 0), 0, 0.9) : 0;
@@ -211,7 +214,7 @@ module.exports = (ED, model) => {
       if (st.shatter) { add1 += skOne * fE * st.shatter; addN += skN * fT * (st.shatter + st.shatterSplash * SHATTER_NEAR); }
       if (st.coldCycle && st.shatter) { const cut = Math.min(0.5, Math.min(1 / C.COLD_CD, casts * fT * PACK) * st.coldCycle * 0.5); add1 += skOne * cut * fE; addN += skN * cut; }
       if (st.glacier) eMul *= 1 + GLACIER_E * Math.min(fT, 1 - fT);
-      const red = clamp(0.6 * (fT * FROZEN_FOE + chT * (SLOW_RED + st.chillWeaken)) + 0.4 * (chB * (SLOW_RED * (1 + C.BOSS_CHILL) + st.chillWeaken)), 0, E_MAX_RED);
+      const red = REACH * clamp(0.6 * (fT * FROZEN_FOE + chT * (SLOW_RED + st.chillWeaken)) + 0.4 * (chB * (SLOW_RED * (1 + C.BOSS_CHILL) + st.chillWeaken)), 0, E_MAX_RED);
       eMul /= 1 - red;
     }
     if (st.iceWall) eMul *= 1 + WALL_E;
@@ -219,7 +222,7 @@ module.exports = (ED, model) => {
     // Overload and the other stuns beyond the class's own: Opportunist pays +25% on stunned foes; stunned foes do no damage
     if (st.arcStun > 0 && light1 > 0) {
       const up = Math.min(1, st.arcStun / Math.max(1, st.arcStun + 0.75)) * 0.7;
-      eMul /= 1 - Math.min(E_MAX_RED, up * STUN_RED);
+      eMul /= 1 - Math.min(E_MAX_RED, REACH * up * STUN_RED);
       if (st.opportunist) { mul1 *= 1 + st.opportunist * up * 0.5; mulN *= 1 + st.opportunist * up; }
     }
     // Holy shield: the Smite shield refills to its cap; Sanctity raises the cap and the grant
@@ -246,7 +249,6 @@ module.exports = (ED, model) => {
     if (st.mirror) eMul *= 1 + 0.35 * st.mirror;
     if (st.angel) eMul *= 1.25;
     if (st.phoenix) eMul *= 1.15;
-    if (st.roomWard) eMul *= 1 + 0.5 * st.roomWard;
     if (st.strataHeal) eMul *= 1 + 0.4 * st.strataHeal;
     if (st.chalice) { eMul *= 1.15; mul1 *= 1.04; mulN *= 1.04; }
     eMul *= 1 + 0.002 * st.thorns + 0.35 * (st.spd - 1) + 0.08 * st.dashN + 0.2 * st.dashcdr + 0.1 * st.heal;
@@ -323,12 +325,12 @@ module.exports = (ED, model) => {
   }
 
   // ---------------- priors and milestones ----------------
-  // Flat prior of card id for hero h (after the card) in decision context dc: zero when the card's path is not active; the Purse has its own.
+  // Flat prior of card id for hero h (after the card) in decision context dc: PATH_CAL plus the PRIOR entry while its path is active; the Purse has its own.
   function prior(id, h, dc) {
     const b = ED.BOONS[id], st = h.stats;
     if (b.purse) return PURSE_X;
-    const pr = PRIOR[id];
-    return pr && PRESENT_EL(st, pr[0]) ? pr[1] : 0;
+    const pr = PRIOR[id], cal = b.path && (b.path !== 'general' || b.gate || ED.isGeneralist(h.boons)) ? PATH_CAL[b.path] || 0 : 0;
+    return cal + (pr && PRESENT_EL(st, pr[0]) ? pr[1] : 0);
   }
   function cardGain0(h, id, dc, v0) {
     const key = heroKey(h, dc.pact) + '>' + id;
@@ -380,6 +382,7 @@ module.exports = (ED, model) => {
   }
 
   const RANDOM_UNIT = 1e-7;
+  const START_T = 0.04; // the start offer is a draw weighted exp(gain / START_T): a veteran varies the first path among near-equal ones (ln-V units)
   // Index of the card to take from offer p.offer (spec = the offer's head spec), or -1: reroll. ctx.gatesCap limits element gates; noReroll forbids returning -1.
   function chooseIndex(w, p, spec, rng, ctx, noReroll) {
     const offer = p.offer, dc = decision(w, p), before = valueOf(p, dc), fb = future(p, dc, null), gen = ED.isGeneralist(p.boons), els = ED.elementGates(p.boons);
@@ -393,6 +396,10 @@ module.exports = (ED, model) => {
       rows.push(r);
       const g = r.gain + rng.next() * RANDOM_UNIT;
       if (g > bg) { bg = g; best = i; }
+    }
+    if (src === 'start' && rows.length > 1) { // weighted draw over the start cards
+      const top = rows[best].gain, wt = rows.map(r => Math.exp((r.gain - top) / START_T)), sum = wt.reduce((a, b) => a + b, 0);
+      let u = rng.next() * sum; best = 0; while (best < wt.length - 1 && u >= wt[best]) u -= wt[best++];
     }
     const rerollable = src !== 'forge' && src !== 'class';
     const reroll = !noReroll && rerollable && p.rerolls > 0 && rows[best].gain < REROLL_MIN;

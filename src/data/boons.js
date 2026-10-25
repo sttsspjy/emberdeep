@@ -56,16 +56,16 @@
   const n1 = (v) => (v >= 10 ? String(Math.round(v)) : String(Math.round(v * 10) / 10));
   const per = (pr, el) => (pr.rate && pr.rate[el]) || 0;
   // Sheet readouts per path. infuse: the stat that sets the status build-up; status: its ED.STATUS id; sheet.rows: stats listed under the path's status row;
-  // sheet.est(proc, st, aff, ref) -> { label, dps? (damage per second the status adds to one foe), secs? (seconds of your damage to its payoff) }.
+  // sheet.est(proc, st, ref) -> { label, dps? (damage per second the status adds to one foe), secs? (seconds of your damage to its payoff) }.
   // proc.rate[el] = damage per second the hero's hits build into that element (infusion rates and statusPow included), proc.pool[el] = the built-in Burn per second (Nova and Meteor),
-  // proc.bleed = Bleed built per second; aff = the stratum multiplier of the element (1: no stratum favours an element); ref = { hp, statusHp (HP before the stratum lever), r } of a typical foe here.
+  // proc.bleed = Bleed built per second; ref = { hp, statusHp (HP before the stratum lever), r } of a typical foe here.
   const PS = {
     fire: { rows: ['fireInfuse', 'burnMul', 'burnCap', 'wildfire', 'smother'], est: (pr, st) => { // below the stack cap Burn pays back its build-up x (1 + burnMul); the cap holds BURN_CAP + burnCap stacks of the hero's Burn value
       const C = ED.CONST, input = per(pr, 'fire') + (pr.pool && pr.pool.fire || 0), v = ED.burnValue(st), cap = C.BURN_CAP + st.burnCap, raw = v / (1 + st.burnMul);
       const stacks = raw > 0 ? Math.min(cap, input / raw) : 0, dps = stacks * v;
       return { label: `Burn adds about ${n1(dps)} damage per second to a foe (${n1(stacks)} of ${cap} stacks; a stack deals ${n1(v)} per second for ${C.BURN_LIFE} s)`, dps, stacks };
     } },
-    ice: { rows: ['iceInfuse', 'chillMul', 'freezeDur', 'shatter', 'shatterSplash'], est: (pr, st, aff, ref) => {
+    ice: { rows: ['iceInfuse', 'chillMul', 'freezeDur', 'shatter', 'shatterSplash'], est: (pr, st, ref) => {
       const rate = per(pr, 'ice') / ref.statusHp * ED.CONST.CHILL_K * (1 + st.chillMul), secs = rate > 0 ? 100 / rate : 0;
       return { label: (rate > 0 ? `Freezes a ${n1(ref.hp)} HP foe in about ${n1(secs)} s of your damage` : 'Builds no chill yet') + `; frozen ${n1(1.6 * (1 + st.freezeDur))} s; a skill hit Shatters for +${Math.round(st.shatter * 100)}%`, secs };
     } },
@@ -73,11 +73,11 @@
       const C = ED.CONST, cd = st.dashCd || 1.5, held = per(pr, 'lightning') * Math.min(cd, C.CHARGE_HOLD + st.chargeHold), dis = held * C.DIS_K * (1 + st.shockMul), dps = dis / cd;
       return { label: `A dash every ${n1(cd)} s discharges about ${n1(dis)} damage from a foe you keep hitting (${n1(dps)} per second); it jumps to your charged foes within ${C.DIS_JUMP}`, dps };
     } },
-    poison: { rows: ['poisonInfuse', 'venomBuild', 'venomHold', 'venomWeak', 'cloudR'], est: (pr, st, aff, ref) => {
+    poison: { rows: ['poisonInfuse', 'venomBuild', 'venomHold', 'venomWeak', 'cloudR'], est: (pr, st, ref) => {
       const C = ED.CONST, rate = per(pr, 'poison') / ref.statusHp * C.VENOM_K * (1 + st.venomBuild), secs = rate > 0 ? 100 / rate : 0;
       return { label: (rate > 0 ? `Full Venom on a ${n1(ref.hp)} HP foe in about ${n1(secs)} s` : 'Builds no Venom yet') + `: it deals ${Math.round((C.VENOM_WEAK + st.venomWeak) * 100)}% less, moves ${Math.round(C.VENOM_SLOW * 100)}% slower and takes ${n1(C.VENOM_DOT * st.power)} per second; fades after ${n1(C.VENOM_HOLD + st.venomHold)} s`, secs, dps: rate > 0 ? C.VENOM_DOT * st.power * C.VENOM_UP : 0 };
     } },
-    holy: { rows: ['holyInfuse', 'smiteMul', 'smiteShield', 'holyCap', 'pdWin'], est: (pr, st, aff, ref) => {
+    holy: { rows: ['holyInfuse', 'smiteMul', 'smiteShield', 'holyCap', 'pdWin'], est: (pr, st, ref) => {
       const C = ED.CONST, rate = per(pr, 'holy'), at = ref.hp * C.SMITE_AT.trash, secs = rate > 0 ? at / rate : 0, dps = rate * (1 + st.smiteMul);
       return { label: (rate > 0 ? `A Smite every ${n1(secs)} s on a ${n1(ref.hp)} HP foe, about ${n1(dps)} damage per second` : 'Stores no Radiance yet') + `; a perfect dodge Smites for its Radiance + ${n1(st.pdPow * st.power * (1 + st.smiteMul))}; shield ${n1(Math.min(C.HOLY_GRANT_MAX, st.smiteShield) * 100)}% per Smite, once per ${C.HOLY_CD} s, up to ${n1(st.holyCap * 100)}%`, dps, secs };
     } },
@@ -85,7 +85,7 @@
       const i = per(pr, 'shadow') > 0 ? st.shadowInfuse * (1 + st.doomMul) : 0, share = 1 / (1 + i), big = 1 / (1 + i * (ED.CONST.DOOM_TOUGH + st.doomTough));
       return { label: (i > 0 ? `Backstabbing only, Reaps a foe once you deal ${Math.round(share * 100)}% of its health (elites ${Math.round(big * 100)}%); Backstabs deal +${Math.round(st.backstab * 100)}%` : 'Marks no Doom yet') + `; bosses Toll at ${Math.round(ED.CONST.TOLL_AT * 100)}% Doom`, pct: share };
     } },
-    general: { rows: ['crit', 'critDmg', 'bleed', 'bleedAll', 'bleedMul', 'lacerate', 'execute'], est: (pr, st, aff, ref) => {
+    general: { rows: ['crit', 'critDmg', 'bleed', 'bleedAll', 'bleedMul', 'lacerate', 'execute'], est: (pr, st, ref) => {
       let dps = (pr.bleed || 0) * (1 + st.bleedMul), pops = 0;
       if (st.hemo > 0 && pr.bleed > 0 && pr.dps > 0) { // Hemorrhage: the pool fills at the Bleed input and drains 40% a second; it pops once it holds hemoAt of the foe's health (a cycle is at least the 1 s cooldown), within the time to kill the reference foe; each pop pays hemoMul x the pool instead of the 1 x the drain would
         const fill = 0.4, at = st.hemoAt * ref.hp, ttk = ref.hp / pr.dps;
@@ -98,9 +98,6 @@
     } },
   };
   for (const id in PS) Object.assign(ED.PATHS[id], { infuse: id === 'general' ? 'bleed' : ED.ELEMENTS[id].inf, status: { fire: 'burn', ice: 'chill', lightning: 'charge', poison: 'venom', holy: 'radiance', shadow: 'doom', general: 'bleed' }[id], sheet: PS[id] });
-  // Elemental affinity of the hero's stratum: x1.5 weak, ÷1.5 resisted (x0.667), else x1 (no stratum is weak or resistant now, so it is 1). Class-skill hits take half of it (ED.affC).
-  ED.elemMul = (stratum, el) => { const b = ED.biomeFor(stratum); return !el || el === 'general' ? 1 : b.weak === el ? 1.5 : b.resist === el ? 1 / 1.5 : 1; };
-  ED.affC = (stratum, el) => 1 + (ED.elemMul(stratum, el) - 1) / 2;
   // The Burn value of a hero: damage per second of one of its Burn stacks (BURN_K x Power x the damage stat x (1 + burnMul)); every stack the hero adds deals this, whatever added it.
   ED.burnValue = (st) => ED.CONST.BURN_K * st.power * Math.max(0.1, st.dmg) * (1 + st.burnMul);
 
@@ -161,7 +158,7 @@
     evo_poison: { name: 'Venomous Arms', rar: 'l', icon: 'drop', path: 'poison', evo: 'poison', desc: 'Hold attack to ready a flask (ready 0.6s after the hold starts at 0.35s); release to lob it at the cursor (up to 240): 150% weapon damage as Poison within 70 and a toxic cloud there for 4s that builds Venom twice as fast.', mods: {}, hold: 'flask', max: 1 },
 
     // ---- Holy: perfect dodges ----
-    consecrate: { name: 'Consecrate', rar: 'r', icon: 'sun', path: 'holy', gate: true, desc: "Hits store 30% of their damage as Radiance; at 12% of a foe's health (elites 6%, bosses 2%) it Smites and shields heroes near it. Perfect dodge: dashing through a foe's attack or shot, or a hit landing within {pdWin:sec} after your dash, Smites the attacker for its Radiance + {pdPow*P} and shields you.", mods: { holyInfuse: 0.3, perfectDodge: 1, pdWin: 0.15, pdPow: 1.5 }, max: 1 },
+    consecrate: { name: 'Consecrate', rar: 'r', icon: 'sun', path: 'holy', gate: true, desc: "Hits store 24% of their damage as Radiance; at 12% of a foe's health (elites 6%, bosses 2%) it Smites and shields heroes near it. Perfect dodge: dashing through a foe's attack or shot, or a hit landing within {pdWin:sec} after your dash, Smites the attacker for its Radiance + {pdPow*P} and shields you.", mods: { holyInfuse: 0.24, perfectDodge: 1, pdWin: 0.15, pdPow: 1.5 }, max: 1 },
     zealotry: { name: 'Zealotry', rar: 'r', icon: 'star', path: 'holy', desc: 'Smites deal +{smiteMul}.', mods: { smiteMul: 0.25 }, max: 3 },
     sanctity: { name: 'Sanctity', rar: 'r', icon: 'shieldgold', path: 'holy', desc: 'Smites shield {smiteShield} more; your Holy shield holds up to {holyCap} more.', mods: { smiteShield: 0.0025, holyCap: 0.03 }, max: 2 },
     grace: { name: 'Grace', rar: 'c', icon: 'feather', path: 'holy', desc: 'The perfect dodge window lasts {pdWin:sec} longer after your dash.', mods: { pdWin: 0.1 }, max: 2 },

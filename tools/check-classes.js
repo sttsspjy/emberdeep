@@ -97,7 +97,7 @@ const run = (w, secs, f) => { for (let i = 0; i < Math.round(secs * 60); i++) { 
   const { w, p } = stage('cleric'); const M = p.maxHp;
   const g1 = w.addShield(p, M, M, 'class'), g2 = w.addShield(p, M, M, 'class'), g3 = w.addShield(p, M, M, 'holy'), g4 = w.addShield(p, M, M, 'holy');
   near(g1, 0.03 * M, 1e-9, 'class window 3%'); near(g2, 0, 1e-9, 'class window spent'); near(g3, 0.03 * M, 1e-9, 'holy fills to 6%'); near(g4, 0, 1e-9, 'all-source window spent');
-  near(w.addShield(p, M, M, 'ward'), M - 0.06 * M, 1e-6, 'Battle Ward is outside the window'); p.shield = 0;
+  p.shield = 0;
   w.time += 11; near(w.addShield(p, M, M, 'class'), 0.03 * M, 1e-9, 'window slides');
 }
 // stun rules: first stun dur + 2 s cooldown, a second one while it runs lasts half, repeating sources skip, elites half, bosses never

@@ -67,12 +67,6 @@
     if (p.stats.cloverRerolls && s > 1) p.rerolls += p.stats.cloverRerolls;
   };
 
-  // Called from beginEncounter when an elite room locks: Battle Ward shields the hero (once per room, cap = the ward itself).
-  W.onRoomLockBuild = function (p, room) {
-    const ward = p.stats.roomWard;
-    if (ward > 0 && room.type === 'elite') this.addShield(p, p.maxHp * ward, p.maxHp * ward, 'ward');
-  };
-
   // Called every tick from updatePlayer for a living, standing hero (after hazards).
   W.updatePlayerBuild = function (p, dt) {
     const st = p.stats;

@@ -154,7 +154,7 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   ok(Ic.reward('boon', 'fire')[1] === ED.PATHS.fire.color && Ic.reward('relic', null)[3] === 'Relics' && Ic.reward('nope', null)[2] === 'Reward', 'boon card wears the path colour; long names; unknown rewards read "Reward"');
   // every generated room has a glyph and a label (start excepted); a dark room previews its stepped-up reward; elite labels name the reward
   let rooms = 0; const bad = [];
-  for (let s = 1; s <= 6; s++) for (let seed = 1; seed <= 6; seed++) {
+  for (let s = 1; s <= ED.CONST.STRATA; s++) for (let seed = 1; seed <= 6; seed++) {
     const fl = ED.Dungeon.generate(s, seed * 7919 + s);
     for (const r of fl.rooms) {
       if (r.type === 'start') continue;

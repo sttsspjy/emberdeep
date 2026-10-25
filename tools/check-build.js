@@ -144,7 +144,7 @@ const ranks = (w, pid) => w.msgs.filter(m => m.t === 'forkRank' && m.to === pid)
     ok(p.offer === null && p.offers.length === 0 && p.picks === 0 && w.msgs.some(m => m.t === 'offerDone' && m.to === 'p0'), 'the Purse pick ends the offer');
     ok(!w.fx.some(e => e.t === 'build') && w.fx.some(e => e.t === 'boon' && e.id === 'purse') && w.fx.some(e => e.t === 'gold' && e.v === ED.World.rewardGold(3)), 'no build event; a gold event and a purse boon event (the pick burst)');
     ok(ED.Sheet.text('purse', 1, p.stats, 3) === `+${ED.World.rewardGold(3)} gold for the party.` && !/[{}]/.test(ED.Sheet.text('purse', 1, p.stats)), 'the card text names the real amount');
-    for (let s = 1; s <= 6; s++) ok(ED.World.rewardGold(s) > 0, `the Purse pays gold at stratum ${s}`);
+    for (let s = 1; s <= ED.CONST.STRATA; s++) ok(ED.World.rewardGold(s) > 0, `the Purse pays gold at stratum ${s}`);
   }
   // (c) a pick of a card at its max rank grants nothing but still consumes the offer
   {

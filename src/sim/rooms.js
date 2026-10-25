@@ -25,7 +25,6 @@
   // A champion room (stratum IV, room.champ 'twins' | 'mimic') runs W.startChampion (champions.js); its xp budget roomXp(room, 'champion') is paid as the clear pile.
   W.beginEncounter = function (room, rs) {
     if (room.type === 'champion') {
-      for (const p of this.players.values()) if (!p.downed && !p.dead) this.onRoomLockBuild(p, room);
       this.startChampion(room);
       Object.assign(this.enc, { xpBudget: this.roomXp(room, 'champion'), xpOut: 0, xpThr: 0, xpClip: 0, xpThrCap: 0, xpThrAcc: 0, xpK: 0 });
     } else if (room.type === 'combat' || room.type === 'elite') {
@@ -33,7 +32,6 @@
       this.enc = { kind: 'waves', waves: this.planWaves(room), wave: -1, t: ED.World.PACE.first };
       this.planHorde(room, this.enc);
       this.emit({ t: 'lock' });
-      for (const p of this.players.values()) if (!p.downed && !p.dead) this.onRoomLockBuild(p, room);
     } else if (room.type === 'boss') {
       this.locked = true;
       this.enc = { kind: 'boss', t: 2.4, spawned: false };

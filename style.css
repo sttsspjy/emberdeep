@@ -510,9 +510,6 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 .stratum.unseen::before { content: ""; position: absolute; z-index: -1; inset: 0; pointer-events: none; background: var(--fr-lockdither) 0 0 / calc(2 * var(--p)) calc(2 * var(--p)); image-rendering: pixelated; }
 .stratum.unseen b, .stratum.unseen small { color: var(--faint); }
 
-/* elemental affinity chips: flat tint of the path colour, 1 fine px line, hard outline; resist = dark chip */
-.aff-list { display: flex; flex-wrap: wrap; gap: calc(2 * var(--pf)); margin-top: var(--p); }
-
 /* ---------- lobby ---------- */
 .lobby-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: calc(4 * var(--p)); align-items: stretch; }
 .lobby-party, .lobby-pick { padding: calc(7 * var(--p)) calc(8 * var(--p)); display: flex; flex-direction: column; gap: calc(2 * var(--p)); }

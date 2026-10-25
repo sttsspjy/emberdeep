@@ -174,7 +174,7 @@
     this.emit({ t: 'boom', x: rnd(a.x), y: rnd(a.y), r: C.TIDE_R, k: 'shadow', d: 1 });
   };
 
-  // Abyssal Maw: a custom zone (wire: shards, w 11, arc 1) of radius MAW_R for MAW_T s that pays maw x amount per second every MAW_TICK s as Shadow (the Doom behind amount already carries the affinity).
+  // Abyssal Maw: a custom zone (wire: shards, w 11, arc 1) of radius MAW_R for MAW_T s that pays maw x amount per second every MAW_TICK s as Shadow.
   // A Tolled boss (follow) keeps the maw under itself, takes the damage alone and ends it by falling; a Reaped elite leaves it where it stood and every foe inside pays. The owner's minions near a live maw strike faster (inMaw).
   function openMaw(w, p, e, amount, follow) {
     p.maws = p.maws.filter(q => q.t < q.dur);
@@ -183,7 +183,7 @@
         if (follow) { if (follow.hp > 0) { zz.x = follow.x; zz.y = follow.y; } else { zz.dur = zz.t; return; } }
         while (zz.t + 1e-9 >= zz.nx && zz.nx <= zz.dur + 1e-9) {
           zz.nx += C.MAW_TICK;
-          const dmg = amount * p.stats.maw * C.MAW_TICK, src = { p, kind: 'dot', raw: true, noProc: true, crit: false, noGuard: true, el: 'shadow', affDone: true, part: 'abyss.maw' };
+          const dmg = amount * p.stats.maw * C.MAW_TICK, src = { p, kind: 'dot', raw: true, noProc: true, crit: false, noGuard: true, el: 'shadow', part: 'abyss.maw' };
           if (follow) { wd.hitEnemy(follow, dmg, src); continue; }
           const q = wd.foeScan(zz.x, zz.y, zz.r);
           for (let k = 0; k < q.length || wd.foeTail(q); k++) {

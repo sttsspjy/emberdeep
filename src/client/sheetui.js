@@ -183,7 +183,7 @@
   function partRow(q, stratum) {
     if (q.kind === 'zone') return `<div class="sh-part"><span class="sh-plab">${esc(q.label)}</span><span class="sh-pv"></span><span class="sh-pn">${[q.r ? `radius ${q.r}` : '', q.dur ? `${Sh.secs(q.dur)}s` : '', q.note ? esc(q.note) : ''].filter(Boolean).join(' · ')}</span></div>`;
     let n = '';
-    if (q.kind === 'status') n = `${esc(q.statusName)} pool added${q.aff !== 1 ? ` · ${X(q.aff)} here` : ''}`;
+    if (q.kind === 'status') n = `${esc(q.statusName)} pool added`;
     else if (q.kind === 'minion') n = `per strike · ${q.hitsEach} ${pl(q.hitsEach, 'strike')} each in ${Sh.secs(q.dur)}s · ${q.minions} ${pl(q.minions, 'minion')}`;
     else if (q.kind === 'sec') n = `per 0.5 s · ${q.oneFoe} ${pl(q.oneFoe, 'tick')} over ${Sh.secs(q.dur)}s · radius ${q.r}`;
     else {
@@ -200,8 +200,8 @@
       if (q.note && q.oneFoe !== 0) bits.push(esc(q.note));
       n = bits.join(' · ');
     }
-    const elc = q.el ? chip(cap1(q.el) + (q.aff !== 1 ? ` ${X(q.aff)} here` : ''), colorOf(q.el), 'sh-el') : '';
-    const add = q.statusAdd ? `<div class="sh-part sub"><span class="sh-plab">+ ${esc(ED.STATUS[q.statusAdd.status].name)}</span><span class="sh-pv">${n1(q.statusAdd.here)}</span><span class="sh-pn">pool of half the hit${ED.elemMul(stratum, q.statusAdd.el) !== 1 ? ` · ${X(ED.elemMul(stratum, q.statusAdd.el))} here` : ''}</span></div>` : '';
+    const elc = q.el ? chip(cap1(q.el), colorOf(q.el), 'sh-el') : '';
+    const add = q.statusAdd ? `<div class="sh-part sub"><span class="sh-plab">+ ${esc(ED.STATUS[q.statusAdd.status].name)}</span><span class="sh-pv">${n1(q.statusAdd.here)}</span><span class="sh-pn">pool of half the hit</span></div>` : '';
     return `<div class="sh-part"><span class="sh-plab">${esc(q.label)}</span><span class="sh-pv">${n1(q.here)}</span><span class="sh-pn">${n}${elc}</span></div>${add}`;
   }
   function skillCard(m, k, color, stratum) {
@@ -237,7 +237,7 @@
     }
     for (const s of M.status) {
       const rows = s.rows.map(r => `<span>${esc(r.label)} <b>${Sh.fmt(r.key, r.v)}</b></span>`).join('');
-      h += `<div class="sh-stat sh-f st" data-k="o:st:${s.el}" style="--pc:${s.color}"><div class="sh-sl"><span class="sh-l">${img(pathIco(s.el))}${esc(ED.STATUS[s.status].name)}${s.builtin ? ' <span class="mut">from your class skills</span>' : ''}</span><span class="sh-v">${s.el === 'general' ? '' : X(s.aff) + ' here'}</span></div><div class="sh-sub">${esc(s.est.label)}</div>${rows ? `<div class="sh-src">${rows}</div>` : ''}</div>`;
+      h += `<div class="sh-stat sh-f st" data-k="o:st:${s.el}" style="--pc:${s.color}"><div class="sh-sl"><span class="sh-l">${img(pathIco(s.el))}${esc(ED.STATUS[s.status].name)}${s.builtin ? ' <span class="mut">from your class skills</span>' : ''}</span></div><div class="sh-sub">${esc(s.est.label)}</div>${rows ? `<div class="sh-src">${rows}</div>` : ''}</div>`;
     }
     if (M.debuffs.length) h += `<div class="sh-stat sh-f" data-k="o:deb"><div class="sh-sl"><span class="sh-l">Foe vulnerabilities you apply</span></div>${M.debuffs.map(d => `<div class="sh-cond"><b style="color:${d.color}">${esc(d.name)}</b>${d.v ? ` <b>+${pc(d.v)}</b>` : ''} ${esc(d.short || d.text)}</div>`).join('')}</div>`;
     if (M.cond.length) h += `<div class="sh-stat sh-f" data-k="o:cond"><div class="sh-sl"><span class="sh-l">Conditional damage</span></div>${M.cond.map(c => `<div class="sh-cond">${c.live !== null ? live('c:' + c.id, '+' + pc(c.live)) : '<b>+' + pc(c.v) + '</b>'} ${esc(c.label)}${c.live !== null ? ` <span class="mut">(+${pc(c.v)} ${c.id === 'idol' ? 'at most' : 'each'})</span>` : ''}</div>`).join('')}</div>`;

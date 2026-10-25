@@ -38,7 +38,7 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
     [{ c_atk: 1, c_atk_h: 1 }, { waveBig: 1, waveStun: 0.4, waveMul: 0.3, waveBurst: 0, wake: 0 }], [{ c_atk: 1, c_atk_h: 2 }, { waveMul: 0.4, waveBurst: 0.8, wake: 0 }], [{ c_atk: 1, c_atk_h: 3 }, { waveMul: 0.5, waveBurst: 0.8, wake: 0.6 }],
     [{ c_atk: 1, c_atk_s: 1 }, { waveHome: 2, waveMul: 0.35, litany: 0, waveReturn: 0 }], [{ c_atk: 1, c_atk_s: 2 }, { waveMul: 0.4, litany: 16, waveReturn: 0 }], [{ c_atk: 1, c_atk_s: 3 }, { waveMul: 0.45, litany: 16, waveReturn: 0.55 }],
     [{ c_s1: 1 }, { s1Area: 0.3, s1Dur: 2, sanctDR: 0.1, s1Dmg: 0.5 }],
-    [{ c_s1: 1, c_s1_a: 1 }, { sanctStun: 0.5, s1Dmg: 1.5 * 1.2 - 1, sanctJudge: 0, wrath: 0 }], [{ c_s1: 1, c_s1_a: 2 }, { s1Dmg: 1.5 * 1.4 - 1, sanctJudge: 1, wrath: 0 }], [{ c_s1: 1, c_s1_a: 3 }, { s1Dmg: 1.5 * 1.6 - 1, sanctJudge: 1, wrath: 1, wrathNova: 1.4, wrathPillar: 0.15 }],
+    [{ c_s1: 1, c_s1_a: 1 }, { sanctStun: 0.5, s1Dmg: 1.5 * 1.2 - 1, sanctJudge: 0, wrath: 0 }], [{ c_s1: 1, c_s1_a: 2 }, { s1Dmg: 1.5 * 1.4 - 1, sanctJudge: 1, wrath: 0 }], [{ c_s1: 1, c_s1_a: 3 }, { s1Dmg: 1.5 * 1.6 - 1, sanctJudge: 1, wrath: 1, wrathNova: 0.9, wrathPillar: 0.15 }],
     [{ c_s1: 1, c_s1_b: 1 }, { aura: 1, s1Dmg: 1.5 * 1.3 - 1, sanctDR: 0.2, auraDmg: 0, dawn: 0 }], [{ c_s1: 1, c_s1_b: 2 }, { s1Dmg: 1.5 * 1.6 - 1, sanctDR: 0.22, auraDmg: 0.1, dawn: 0 }], [{ c_s1: 1, c_s1_b: 3 }, { s1Dmg: 1.5 * 1.9 - 1, sanctDR: 0.24, auraDmg: 0.1, dawn: 1, aegisR: 40, aegisDR: 0.1, aegisStun: 0.3, aegisMul: 1 }],
     [{ c_s2: 1 }, { s2Dmg: 0.25, s2Range: 0.4, judgeDur: 1, s2Cdr: 0.167 }],
     [{ c_s2: 1, c_s2_a: 1 }, { twinHammer: 0.55, thirdLeg: 0, storm: 0 }], [{ c_s2: 1, c_s2_a: 2 }, { s2Dmg: 1.25 * 1.1 - 1, thirdLeg: 1, secondFlight: 0.55, storm: 0 }], [{ c_s2: 1, c_s2_a: 3 }, { thirdLeg: 1, secondFlight: 0.55, s2Dmg: 1.25 * 1.2 - 1, storm: 5, stormMul: 0.4 }],
@@ -161,7 +161,7 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
   const jb = stage({}); const eb = foe(jb.w, jb.p.x + 60, jb.p.y); jb.w.playerSkill(jb.p, 0, {}, 1); let t4 = 0; run(jb.w, 0.4, () => { if (eb.judged > 0 && !t4) t4 = eb.judged; }); near(t4, 4, 0.1, 'Judged lasts 4 s without the card');
   // the hit that Judges lands on a Judged foe: +20% in the leg itself
   const first = stage({}); const fe = foe(first.w, first.p.x + 60, first.p.y); first.w.playerSkill(first.p, 0, {}, 1); let got = 0; run(first.w, 0.3, () => { if (!got && fe.hp < 5000) got = lost(fe); });
-  near(got, ED.Stats.skillNums('judgment', first.p.stats).p.leg.dmg * first.p.stats.dmg * 1.2 * first.w.affC('holy'), 0.05, 'the leg that Judges is itself boosted by 20% (Judged is set first; Holy affinity of the stratum)');
+  near(got, ED.Stats.skillNums('judgment', first.p.stats).p.leg.dmg * first.p.stats.dmg * 1.2, 0.05, 'the leg that Judges is itself boosted by 20% (Judged is set first; Holy affinity of the stratum)');
 }
 
 // ---------------- Twin Hammers, Second Flight ----------------
@@ -196,7 +196,7 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
   let stunN = 0, stunE = 0, stunB = 0; for (let i = 0; i < 40 && !evs(w, 'verdict').length; i++) { w.update(DT); if (evs(w, 'verdict').length) { stunN = near1.stun; stunE = el.stun; stunB = bs.stun; } }
   const v = ED.Stats.skillNums('judgment', p.stats).p.verdict, vev = evs(w, 'verdict')[0];
   near(v.dmg, (27 + 3 * 23) * 1.25 * 2.5, 1e-9, 'Verdict burst 96 x s2Dmg x the card 2.5'); near(v.r, 70, 1e-9, 'Verdict radius 70'); ok(vev && vev.r === 70 && Math.abs(vev.x - dead.x) < 1, 'verdict event at the dead foe');
-  near(lost(near1), v.dmg * p.stats.dmg * w.affC(p.stats.element), 0.2, 'burst damage to a foe within 70 (Holy, class affinity)'); ok(lost(far) === 0 && lost(plainDead) === 0, 'foes beyond 70 are untouched');
+  near(lost(near1), v.dmg * p.stats.dmg, 0.2, 'burst damage to a foe within 70 (Holy, class affinity)'); ok(lost(far) === 0 && lost(plainDead) === 0, 'foes beyond 70 are untouched');
   near(stunN, 0.4, 0.01, 'burst stun 0.4 s'); ok(Math.hypot(el.x - dead.x, el.y - dead.y) < 70 + el.r && stunE > 0.19 && stunE < 0.21, `elite burst stun is half (${stunE})`); ok(stunB === 0 && lost(bs) > 0, 'bosses take the burst but are not stunned');
   const q2 = stage({ c_s2: 1, c_s2_b: 1 }); const d2 = foe(q2.w, q2.p.x - 120, q2.p.y), n2 = foe(q2.w, q2.p.x - 80, q2.p.y); d2.hp = 5; q2.w.hitEnemy(d2, 99, { p: q2.p, kind: 'weapon', crit: false }); run(q2.w, 0.3); ok(lost(n2) === 0, 'a foe that was not Judged bursts nothing');
   const q3 = stage({ c_s2: 1, c_s2_b: 1 }); const d3 = foe(q3.w, q3.p.x - 120, q3.p.y), n3 = foe(q3.w, q3.p.x - 80, q3.p.y); d3.judged = 5; d3.hp = 5; let nv = 0; q3.w.hitEnemy(d3, 99, { p: q3.p, kind: 'weapon', crit: false }); run(q3.w, 0.3, () => { nv += evs(q3.w, 'verdict').length; q3.w.fx.length = 0; });
@@ -209,7 +209,7 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
   let nv = 0; w.hitEnemy(d, 99, { p, kind: 'weapon', crit: false }); run(w, 0.3, () => { nv += evs(w, 'verdict').length; w.fx.length = 0; });
   const v = ED.Stats.skillNums('judgment', p.stats).p.verdict;
   ok(nv === 1 && b.judged > 4 && b.weakT > 4 && !(c.judged > 0) && lost(c) === 0 && lost(z) === 0, `Sentence: the burst Judges (and weakens) the foe it hit, not those beyond r70 (${nv} burst)`);
-  near(lost(b), v.dmg * p.stats.dmg * w.affC(p.stats.element), 0.2, 'the burst hits before it Judges: no +20% on that blow');
+  near(lost(b), v.dmg * p.stats.dmg, 0.2, 'the burst hits before it Judges: no +20% on that blow');
   b.hp = 5; w.hitEnemy(b, 99, { p, kind: 'weapon', crit: false }); nv = 0; run(w, 0.3, () => { nv += evs(w, 'verdict').length; w.fx.length = 0; });
   ok(b.hp <= 0 && nv === 1 && c.judged > 4 && lost(c) > 0 && lost(z) === 0, `Sentence: the Judged neighbour bursts in turn and Judges the next foe (${nv} burst)`);
   const no = stage({ c_s2: 1, c_s2_b: 1 }); const d3 = foe(no.w, no.p.x - 150, no.p.y), b3 = foe(no.w, no.p.x - 110, no.p.y); d3.judged = 5; d3.hp = 5; no.w.hitEnemy(d3, 99, { p: no.p, kind: 'weapon', crit: false }); run(no.w, 0.3); ok(lost(b3) > 0 && !(b3.judged > 0), 'no Sentence at rank 1');
@@ -228,9 +228,9 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
 {
   const rad = (boons, relic) => { const S = stage(boons); if (relic) { S.p.stats.holyInfuse = relic; S.p.stats.holyAdd = undefined; } const e = foe(S.w, S.p.x + 30, S.p.y); e.maxHp = e.hp = 1e9; const h = e.hp; S.w.playerAttack(S.p, 0); return { rad: e.rad, dealt: h - e.hp, S, e }; };
   const none = rad({}), rf = rad({ c_el: 1 }); ok(none.rad === 0, 'no Radiance without a gate or Radiant Faith');
-  near(rf.rad, rf.dealt * 0.12 * rf.S.w.elemAff('holy'), 0.01 * rf.rad + 1e-6, 'weapon hit stores 12% of its damage as Radiance (x Holy affinity)');
+  near(rf.rad, rf.dealt * 0.12, 0.01 * rf.rad + 1e-6, 'weapon hit stores 12% of its damage as Radiance (x Holy affinity)');
   const cons = rad({ c_el: 1 }, 0.3), only = rad({}, 0.3); near(cons.rad / cons.dealt, only.rad / only.dealt, 1e-9, 'Consecrate (30%) counts instead when higher');
-  const lowc = rad({ c_el: 1 }, 0.08); near(lowc.rad / lowc.dealt, 0.12 * rf.S.w.elemAff('holy'), 1e-9, 'Radiant Faith counts instead of a lower Consecrate');
+  const lowc = rad({ c_el: 1 }, 0.08); near(lowc.rad / lowc.dealt, 0.12, 1e-9, 'Radiant Faith counts instead of a lower Consecrate');
   const L = stage({ c_el: 1 }, 2); const el = foe(L.w, L.p.x + 30, L.p.y); L.w.playerAttack(L.p, 0); run(L.w, 0.3); ok(el.rad > 0, 'Sacred Lantern orbs store Radiance too');
   const wv = stage({ c_atk: 1, c_el: 1 }); wv.w.playerAttack(wv.p, 0); wv.w.projs.length = 0; wv.w.playerAttack(wv.p, 0); near(waves(wv.w)[0].infAdd.holy, 0.12, 1e-9, 'waves carry the Radiance too');
   const leg = (boons) => { const S = stage(boons); const e = foe(S.w, S.p.x + 60, S.p.y); const h = e.hp; S.w.hitEnemy(e, 100, S.w.partSrc(S.p, ED.Stats.skillNums('judgment', S.p.stats), 'leg', {})); return h - e.hp; };
@@ -265,7 +265,7 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
   const big = 1000 * 1.5; near(lost(b2), big * 0.5, 0.01, 'Sunburst: the first beam'); near(lost(c2), big * 0.25, 0.01, 'Sunburst: the jump deals half again'); ok(lost(d2) === 0 && lost(e2) === 0 && n2 === 2, `the beam jumps once (${n2} beams) and stops`);
   const U2 = stage({ c_el: 1, c_el_b: 2 }); const a3 = foe(U2.w, U2.p.x + 100, U2.p.y); a3.maxHp = a3.hp = 1e9; smiteIt(U2.w, U2.p, a3, 1000); near(1e9 - a3.hp, 1500, 1e-6, 'Prism rank 2: Smites +50%');
   const lone = stage({ c_el: 1, c_el_b: 1 }); const solo = foe(lone.w, lone.p.x + 100, lone.p.y); solo.maxHp = solo.hp = 1e9; smiteIt(lone.w, lone.p, solo, 1000); run(lone.w, 0.3); ok(!lone.w.chainQ.length && lone.w.fx.filter(e => e.t === 'chain').length === 0, 'a lone Smite fires no beam');
-  const nat = stage({ c_el: 1, c_el_b: 1 }); const x1 = foe(nat.w, nat.p.x + 100, nat.p.y), x2 = foe(nat.w, nat.p.x + 150, nat.p.y); nat.w.addRadiance(x1, nat.w.smiteAt(x1) / nat.w.elemAff('holy'), nat.p); run(nat.w, 0.3); ok(lost(x1) > 0 && lost(x2) > 0, 'a natural Smite (Radiance gauge) also fires the beam');
+  const nat = stage({ c_el: 1, c_el_b: 1 }); const x1 = foe(nat.w, nat.p.x + 100, nat.p.y), x2 = foe(nat.w, nat.p.x + 150, nat.p.y); nat.w.addRadiance(x1, nat.w.smiteAt(x1), nat.p); run(nat.w, 0.3); ok(lost(x1) > 0 && lost(x2) > 0, 'a natural Smite (Radiance gauge) also fires the beam');
   const dead = stage({ c_el: 1, c_el_b: 1 }); const k1 = foe(dead.w, dead.p.x + 100, dead.p.y), k2 = foe(dead.w, dead.p.x + 150, dead.p.y); k1.maxHp = k1.hp = 100; smiteIt(dead.w, dead.p, k1, 1000); run(dead.w, 0.3); ok(k1.hp <= 0 && lost(k2) > 0, 'the beam still fires when the Smite kills its foe');
 }
 
@@ -288,15 +288,15 @@ const castSanct = (w, p, dx) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x +
     for (const k in b.r3) ok(t3[k] > 0 && (k in b.mods || k in (b.up || {}) ? t3[k] > t2[k] : !t2[k] && !t1[k]), id + ' stat ' + k + ' (rank 3 transform)');
   }
 }
-{ // Wrath of Heaven (c_s1_a rank 3): a nova over the whole circle at 140% of a second of Sanctuary damage, then a pillar every 0.5 s on a random foe inside at 15% of a tick, preferring foes not struck in the last second
+{ // Wrath of Heaven (c_s1_a rank 3): a nova over the whole circle at 90% of a second of Sanctuary damage, then a pillar every 0.5 s on a random foe inside at 15% of a tick, preferring foes not struck in the last second
   const setup = (rank, seed, crit) => {
     const S = stage({ c_s1: 1, c_s1_a: rank }, 0, seed); S.p.stats.crit = crit || 0; S.N = ED.Stats.skillNums('sanctuary', S.p.stats); S.log = spy(S.w); S.ev = tap(S.w);
     const cx = S.p.x + 60;
     S.a = foe(S.w, cx, S.p.y); S.b = foe(S.w, cx + 20, S.p.y + 24); S.bs = foe(S.w, cx + 30, S.p.y - 24); S.bs.boss = true; S.out = foe(S.w, S.p.x - 90, S.p.y); S.foes = [S.a, S.b, S.bs];
     return S;
   };
-  const S = setup(3, 7), N = S.N, m = S.p.stats.dmg * S.w.affC('holy');
-  near(N.p.nova.dmg, N.p.zone.dmg * 1.4, 1e-9, 'Wrath: the nova is 140% of one second of Sanctuary damage'); near(N.p.pillar.dmg, N.p.zone.dmg * 0.075, 1e-9, 'a pillar is 15% of a half-second tick'); near(N.p.nova.r, N.p.zone.r, 1e-9, 'the nova covers the whole circle');
+  const S = setup(3, 7), N = S.N, m = S.p.stats.dmg;
+  near(N.p.nova.dmg, N.p.zone.dmg * 0.9, 1e-9, 'Wrath: the nova is 90% of one second of Sanctuary damage'); near(N.p.pillar.dmg, N.p.zone.dmg * 0.075, 1e-9, 'a pillar is 15% of a half-second tick'); near(N.p.nova.r, N.p.zone.r, 1e-9, 'the nova covers the whole circle');
   ok(N.p.pillar.count === 11 && N.p.pillar.every === 0.5, `a pillar every 0.5 s of the 5.5 s Sanctuary (${N.p.pillar.count})`);
   S.a.fodder = true; castSanct(S.w, S.p);
   const sk = S.w.fx.find(v => v.t === 'skill'); ok(sk && sk.wr === 1 && sk.hf === 1, 'the skill event carries wr (Wrath) and hf (Holy Fury)');
@@ -332,7 +332,7 @@ const castSanct = (w, p, dx) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x +
   ok(S.ev.all.filter(v => v.t === 'aegispulse').length === 1 && S.ev.all.find(v => v.t === 'aegispulse').r === 170, 'an aegis event with the circle');
   S.a.stun = 0; S.el.stun = 0; run(S.w, 1.9, S.ev.step); ok(S.a.stun <= 0, 'no pulse before 2 s'); run(S.w, 0.2, S.ev.step); ok(S.a.stun > 0.15 && S.ev.all.filter(v => v.t === 'aegispulse').length === 2, 'the second pulse stuns again at 2 s');
   run(S.w, 2.1, S.ev.step); ok(S.ev.all.filter(v => v.t === 'aegispulse').length === 3, 'a third pulse at 4 s'); run(S.w, 3, S.ev.step); ok(S.ev.all.filter(v => v.t === 'aegispulse').length === 3 && !S.w.zones.some(q => q.kind === 'sanct'), 'the aura (5.5 s) ends with three pulses');
-  { const ph = partHits(S.log, 'sanctuary.pulse'), mul = S.p.stats.dmg * S.w.affC('holy');
+  { const ph = partHits(S.log, 'sanctuary.pulse'), mul = S.p.stats.dmg;
     near(N.p.pulse.dmg, N.p.zone.dmg * 1, 1e-9, 'the pulse part is 100% of a second of Sanctuary damage');
     ok(ph.length === 6 && [S.a, S.el, S.bs].every(f => ph.filter(h => h.e === f).length === 2) && !ph.some(h => h.e === S.out), `every pulse after the cast strikes each foe inside (a boss and an elite too): 2 x 3 hits (${ph.length})`);
     ok(ph.every(h => Math.abs(h.d - N.p.pulse.dmg * mul) < 0.05 && (Math.abs(h.t - 2) < 0.1 || Math.abs(h.t - 4) < 0.1) && h.crit === false), 'at 2 s and 4 s, never a crit, the part damage'); }
@@ -357,7 +357,7 @@ const castSanct = (w, p, dx) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x +
   const pin = [e, bs, fo, far].map(f => [f, f.x, f.y]); T.w.playerSkill(T.p, 0, {}, 1); run(T.w, 12, () => { ev.step(); for (const [f, x, y] of pin) { f.x = x; f.y = y; f.kbx = f.kby = 0; } }); // foes stay where they are: a hit knocks them off the paths
   const legs = partHits(log, 'judgment.leg'), per = (f) => legs.filter(h => h.e === f);
   ok(per(e).length === 20 && per(bs).length === 20 && per(fo).length === 20, `a foe next to the hero is hit once by every leg of all five hammers: 20 times (${per(e).length}, boss ${per(bs).length}, fodder ${per(fo).length})`);
-  ok(per(e).every(h => h.mul === undefined || h.mul === 1) && per(e).slice(1).every(h => Math.abs(h.d - N.p.leg.dmg * T.p.stats.dmg * T.w.affC('holy') * 1.2) < 0.02 * N.p.leg.dmg * T.p.stats.dmg), 'every leg, the second flight too, deals 40% of a hit (+20% Judged)');
+  ok(per(e).every(h => h.mul === undefined || h.mul === 1) && per(e).slice(1).every(h => Math.abs(h.d - N.p.leg.dmg * T.p.stats.dmg * 1.2) < 0.02 * N.p.leg.dmg * T.p.stats.dmg), 'every leg, the second flight too, deals 40% of a hit (+20% Judged)');
   ok(T.p.hammers.length === 0 && !T.w.projs.some(q => q.kind === 'hammer'), 'all five hammers come home and are caught'); ok(ev.all.filter(v => v.t === 'hturn' && v.n === 4).length >= 1 && per(far).length < 20, 'hammers turn at the far ends; a foe off to the side is struck less');
   const two = stage({ c_s2: 1, c_s2_a: 2 }); two.w.playerSkill(two.p, 0, {}, 1); ok(two.p.hammers.length === 2 && !two.w.fx.find(v => v.t === 'skill').st, 'rank 2 still throws two');
   const lg = stage({ c_s2: 1, c_s2_a: 3 }); const lf = foe(lg.w, lg.p.x + 40, lg.p.y); lg.w.playerSkill(lg.p, 0, {}, 1); run(lg.w, 1.2); ok(lf.judged > 0 && lf.judgeOwner === 'p0', 'the legs Judge and stamp the Judge');
@@ -421,7 +421,7 @@ const castSanct = (w, p, dx) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x +
     S.log = spy(S.w); S.ev = tap(S.w); S.w.playerAttack(S.p, 0); S.w.projs.length = 0; S.w.playerAttack(S.p, 0); S.wave = waves(S.w)[0];
     S.strips = () => S.w.zones.filter(q => q.kind === 'crack' && q.arc === 2); return S;
   };
-  const S = setup(3), base = S.wave.dmg, tick = base * WAKE * 0.25, mul = S.p.stats.dmg * S.w.affC('holy'), z = S.strips()[0];
+  const S = setup(3), base = S.wave.dmg, tick = base * WAKE * 0.25, mul = S.p.stats.dmg, z = S.strips()[0];
   ok(S.strips().length === 1 && z.len === 0 && z.owner === 'p0' && Math.abs(z.w - 44) < 1e-9 && Math.abs(z.a) < 1e-9 && z.x === S.p.x && z.y === S.p.y, 'one strip per wave, 44 wide, at the hand along the aim, length 0 at the start');
   run(S.w, 0.4); near(z.len, 0.4 * 320, 12, 'the strip grows with the wave (320 px/s)');
   let endAt = -1, endLen = 0; run(S.w, 0.6, () => { if (endAt < 0 && !waves(S.w).length) { endAt = S.w.time; endLen = z.len; } });
@@ -431,7 +431,7 @@ const castSanct = (w, p, dx) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x +
   ok(onH.length >= 9 && onH.length <= 11, `a foe on the strip is ticked every 0.25 s while it burns (${onH.length} ticks)`); ok(onH.every(h => Math.abs(h.d - tick * mul) < 0.02 * tick * mul), `each tick deals ${(tick * mul).toFixed(2)} (60% of the wave per second x 0.25 s, Holy class affinity; ${onH.length ? onH[0].d.toFixed(2) : '-'})`);
   ok(onH.every(h => !h.crit) && onH.slice(1).every((h, i) => Math.abs(h.t - onH[i].t - 0.25) < 0.02), 'ticks never crit and fall 0.25 s apart');
   ok(partHits(S.log, 'wake').every(h => h.e !== S.off && h.e !== S.far), 'foes beside the strip and beyond its end are not ticked'); ok(fodH.length >= 5, `a horde foe is ticked as well (${fodH.length})`);
-  near(S.on.rad, onH.length * tick * 0.25 * S.w.elemAff('holy'), 0.05 * S.on.rad, 'every tick stores a quarter of its raw damage as Radiance (x Holy affinity)'); ok(S.fod.rad > 0 && S.off.rad === 0, 'Radiance only on the foes struck');
+  near(S.on.rad, onH.length * tick * 0.25, 0.05 * S.on.rad, 'every tick stores a quarter of its raw damage as Radiance (x Holy affinity)'); ok(S.fod.rad > 0 && S.off.rad === 0, 'Radiance only on the foes struck');
   const T = setup(3); T.w.projs.length = 0; T.w.playerAttack(T.p, 0); T.w.projs.length = 0; T.w.playerAttack(T.p, 0); ok(T.strips().length === 2, 'two waves leave two strips');
   { const W2 = setup(3), sn = ED.Net.encodeSnap(W2.w, [], false), row = sn.Z.find(r => r[1] === ED.Net.ZK.indexOf('crack')); ok(row && row[10] === 2 && row[9] === 44, 'the wire row carries kind crack, arc 2 and width 44 (angle and length with it)'); }
   const R2 = setup(2); run(R2.w, 1); ok(!R2.strips().length && !partHits(R2.log, 'wake').length, 'rank 2 leaves no strip'); const ow = setup(3); ow.w.players.delete('p0'); run(ow.w, 0.2); ok(!ow.strips().length, 'a strip whose owner left ends at once');
@@ -468,7 +468,7 @@ const castSanct = (w, p, dx) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x +
   { const F = setup(3), fd = foe(F.w, F.p.x + 60, F.p.y + 40); fd.fodder = true; fd.maxHp = fd.hp = 1e9; const q = [1, 2, 3, 4, 5, 6].map(() => F.smite(fd)); ok(q.every(x => x.dmg === 1000 && Math.abs(x.shield - 0.01) < 1e-9) && !F.ev.all.some(v => v.t === 'sunstrike') && !(fd.sunN > 0), 'a horde foe never counts toward a Sunstrike: plain Smites, plain shield, no event'); }
   { const R2 = setup(2); const q = [1, 2, 3].map(() => R2.smite()); ok(q.every(x => x.dmg === 1000 && Math.abs(x.shield - 0.01) < 1e-9) && !R2.ev.all.some(v => v.t === 'sunstrike'), 'rank 2 has no Sunstrike'); }
   { const N = stage({ c_el: 1 }); const e = foe(N.w, N.p.x + 60, N.p.y); e.maxHp = e.hp = 1e9; N.w.smite(e, N.p, 1000); ok(!(e.sunN > 0), 'a hero without the card keeps no count'); }
-  { const T = stage({ c_el: 1, c_el_a: 3 }), e = foe(T.w, T.p.x + 60, T.p.y); e.maxHp = e.hp = 1e9; const dmgs = []; for (let i = 0; i < 3; i++) { T.p.holyT = 0; const h = e.hp; T.w.addRadiance(e, T.w.smiteAt(e) / T.w.elemAff('holy'), T.p); dmgs.push(h - e.hp); } ok(dmgs[0] > 0 && dmgs[2] > 3.9 * dmgs[1] && dmgs[2] < 4.1 * dmgs[1], `a natural Smite (the Radiance gauge) counts too (${dmgs.map(d => d.toFixed(0))})`); }
+  { const T = stage({ c_el: 1, c_el_a: 3 }), e = foe(T.w, T.p.x + 60, T.p.y); e.maxHp = e.hp = 1e9; const dmgs = []; for (let i = 0; i < 3; i++) { T.p.holyT = 0; const h = e.hp; T.w.addRadiance(e, T.w.smiteAt(e), T.p); dmgs.push(h - e.hp); } ok(dmgs[0] > 0 && dmgs[2] > 3.9 * dmgs[1] && dmgs[2] < 4.1 * dmgs[1], `a natural Smite (the Radiance gauge) counts too (${dmgs.map(d => d.toFixed(0))})`); }
 }
 { // Spectrum (c_el_b rank 3): the beam of a Smite strikes the nearest 4 other foes within 160 at 50% each (a horde foe too), the Sunburst jump follows the nearest at half again; each non-horde foe struck stores 1% of the Smite as Radiance, kept just under its gauge
   const setup = (rank) => {
@@ -487,7 +487,7 @@ const castSanct = (w, p, dx) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x +
   { const lone = stage({ c_el: 1, c_el_b: 3 }), a = foe(lone.w, lone.p.x + 100, lone.p.y); a.maxHp = a.hp = 1e9; lone.w.smite(a, lone.p, 1000); run(lone.w, 0.3); ok(!lone.w.chainQ.length && !lone.w.fx.some(v => v.t === 'chain'), 'a lone Smite fires no beam'); }
   { const two = stage({ c_el: 1, c_el_b: 3 }), a = foe(two.w, two.p.x + 100, two.p.y), b = foe(two.w, two.p.x + 150, two.p.y); a.maxHp = a.hp = 1e9; two.w.smite(a, two.p, 1000); run(two.w, 0.5); ok(Math.abs(lost(b) - smite * 0.5) < 0.01 && !two.w.chainQ.length, 'with one other foe there is one beam and nothing to jump to'); }
   { const R2 = setup(2); R2.w.smite(R2.A, R2.p, 1000); run(R2.w, 0.5, R2.ev.step); ok(lost(R2.near[0]) > 0 && R2.near.slice(1).every(f => lost(f) === 0 || f === R2.near[1]) && R2.ev.all.filter(v => v.t === 'chain' && v.k === 'p').length === 0, 'rank 2 keeps the single beam to the nearest foe (and its jump)'); }
-  { const N = setup(3); N.w.addRadiance(N.A, N.w.smiteAt(N.A) / N.w.elemAff('holy'), N.p); run(N.w, 0.5); ok(N.near.filter(f => lost(f) > 0).length === 4, 'a natural Smite splits as well'); }
+  { const N = setup(3); N.w.addRadiance(N.A, N.w.smiteAt(N.A), N.p); run(N.w, 0.5); ok(N.near.filter(f => lost(f) > 0).length === 4, 'a natural Smite splits as well'); }
 }
 
 { // Judging Light (c_el_a rank 2): a Smite Judges its foe for 3 s (+20% damage taken); none at rank 1; the shield buff and elite Smites carry the rank 2 additions
@@ -556,7 +556,7 @@ const castSanct = (w, p, dx) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x +
   }
   { // a common foe takes the plain leg (the hammer Judges it first: +20%)
     const a = legs({ c_s2: 1 }, false), N = ED.Stats.skillNums('judgment', a.S.p.stats);
-    near(a.hits[0].d / (N.p.leg.dmg * a.S.p.stats.dmg * 1.2 * a.S.w.affC(a.S.p.stats.element)), 1, 0.01, 'a common foe takes the plain hammer leg');
+    near(a.hits[0].d / (N.p.leg.dmg * a.S.p.stats.dmg * 1.2), 1, 0.01, 'a common foe takes the plain hammer leg');
     ok(!(a.e.stun > 0), 'the hammer stuns nobody');
   }
 }

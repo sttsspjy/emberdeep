@@ -99,14 +99,6 @@
     if (ED.hasAffix(e, 'warded')) { e.ward = e.maxHp * 0.45; e.wardMax = e.ward; }
   };
 
-  // Stratum affinity: weak x1.5, resist ÷1.5 (fight length mirrors weak), else x1 (el = one of ED.ELEMENT_IDS; General and physical hits pass nothing).
-  W.elemAff = function (el) {
-    const b = ED.biomeFor(this.stratum);
-    return b.weak === el ? 1.5 : b.resist === el ? 1 / 1.5 : 1;
-  };
-  // Class-skill hits take half the affinity: x1.25 weak, x0.833 resisted. Their statuses use the full elemAff.
-  W.affC = function (el) { return 1 + (this.elemAff(el) - 1) / 2; };
-
   // Slows a foe by amount (0..1) for dur seconds; the strongest slow and the longest duration win.
   W.slowEnemy = function (e, amount, dur) {
     if (!e || e.hp <= 0) return;
@@ -114,10 +106,10 @@
     e.slowT = Math.max(e.slowT, dur);
   };
 
-  // ---------------- damage to foes (order: hero mul, crit, vulnerability, affinity, exposed, guard, dmgTakenMul, ward) ----------------
-  // src: { p, kind, crit, mul, el, clsEl, affDone, raw, noProc, noGuard, noShatter, comp, infAdd, infK, bleedMin, ambush, knock, kx, ky, x, y, part, wpn, dist, pass, back, smite }. Writes back src.critOut / src.guarded / src.affMul / src.back.
+  // ---------------- damage to foes (order: hero mul, crit, vulnerability, exposed, guard, dmgTakenMul, ward) ----------------
+  // src: { p, kind, crit, mul, el, clsEl, raw, noProc, noGuard, noShatter, comp, infAdd, infK, bleedMin, ambush, knock, kx, ky, x, y, part, wpn, dist, pass, back, smite }. Writes back src.critOut / src.guarded / src.back.
   // back: a Backstab (elements.js isBackstab), decided here for a hero with Shadow; smite (Divine Riposte): the hit also Smites the foe for its Radiance + the damage dealt. A hero SKILL hit on a frozen foe Shatters it.
-  // el tags a hit with an element (affinity x1.5 / ÷1.5 unless affDone); clsEl tags a class-skill hit (half affinity, +classElMul); infAdd { el: rate } adds a per-hit infusion rate that needs no gate; infK scales every infusion of the hit.
+  // el tags a hit with an element; clsEl tags a class-skill hit (+classElMul); infAdd { el: rate } adds a per-hit infusion rate that needs no gate; infK scales every infusion of the hit.
   // part names the skill part ('charge.impact'); wpn marks a weapon hit (swing, shot, its blast, warhammer shock, plague cloud tick, wave); Stagger and the heavy hit-stop need kind 'weapon' (a direct swing or shot). The attacker's class hook table (ED.CLS[cls]) may add to the hero multiplier (hitMul), force or boost crits (hitCrit, critMul) and react (hitDone).
   W.hitEnemy = function (e, base, src) {
     if (!e || e.hp <= 0) return 0;
@@ -148,8 +140,6 @@
     if (e.sunder && p && e.sunderOwner === p.pid) vuln += 0.04 * e.sunder;
     if (e.venom >= 100) vuln += e.corrode; // Caustic: a Corroded foe takes more from every hero
     dmg *= vuln;
-    const aff = src.clsEl ? this.affC(src.clsEl) : src.el && !src.affDone ? this.elemAff(src.el) : 1;
-    dmg *= aff; src.affMul = aff;
     if (e.exposed) dmg *= 1.5;
     if (def.guard && !NO_GUARD[kind] && !src.noGuard && !(e.venom >= 100)) { // a Corroded foe has lost its guard
       const ox = src.x !== undefined ? src.x : p ? p.x : undefined, oy = src.y !== undefined ? src.y : p ? p.y : undefined;
@@ -191,13 +181,13 @@
     return dmg;
   };
 
-  // On-hit effects of a direct hero hit: infusions (minions: infusions only, at half strength) and crit effects; every adder builds from the damage before the hit's affinity (the adder applies its own once).
+  // On-hit effects of a direct hero hit: infusions (minions: infusions only, at half strength) and crit effects; every adder builds from the damage dealt.
   W.heroProcs = function (e, p, dmg, crit, comp, src) {
     const st = p.stats;
     if (comp) { this.applyInfusions(e, dmg, p, src, src.infK || ED.CONST.MINION_INFUSE); return; }
     const k = src.infK || 1;
     this.applyInfusions(e, dmg, p, src, k);
-    const pow = 1 + st.statusPow, pre = dmg / (src.affMul || 1);
+    const pow = 1 + st.statusPow, pre = dmg;
     if (src.burn) this.addBurn(e, pre * src.burn * pow, p);
     if (st.bleedAll && e.hp > 0) this.addBleed(e, pre * st.bleedAll * pow * k, p); // the Knight, Ranger and Shade Element route: everything the hero hits bleeds
     const ch = CLS[p.cls];
@@ -211,7 +201,7 @@
 
   // Element infusions: each owned element (plus src.infAdd rates) builds status from the hit's damage. Shadow's gate rate builds only on a Backstab (src.back; minion hits always are); infAdd shadow always builds. k scales the rate (minions 0.5).
   W.applyInfusions = function (e, dmg, p, src, k) {
-    const st = p.stats, add = src && src.infAdd, pre = dmg / ((src && src.affMul) || 1), pow = k * (1 + st.statusPow), back = !!(src && (src.back || src.kind === 'minion'));
+    const st = p.stats, add = src && src.infAdd, pre = dmg, pow =k * (1 + st.statusPow), back = !!(src && (src.back || src.kind === 'minion'));
     for (let i = 0; i < ED.ELEMENT_IDS.length; i++) {
       const id = ED.ELEMENT_IDS[i], el = ED.ELEMENTS[id];
       let rate = ((id === 'shadow' && !back ? 0 : st[el.inf] || 0) + ((add && add[id]) || 0)) * pow;
@@ -678,7 +668,7 @@
     if (e && e.smother > 0) dmg *= 1 - e.smother; // Smother: a foe holding 5 of a hero's Burn stacks
     if (e && e.chill > 0 && e.chillOwner) dmg *= 1 - e.chillOwner.stats.chillWeaken;
     dmg = Math.max(1, Math.round(dmg));
-    if (e && e.fodder) dmg = Math.max(1, Math.min(dmg, Math.round(ED.CONST.FODDER_CAP * p.maxHp))); // fodder touches never exceed FODDER_CAP of max health (before the shield)
+    if (e && e.fodder) dmg = Math.min(dmg, ED.CONST.FODDER_CAP * p.maxHp); // fodder touches never exceed FODDER_CAP of max health (before the shield; a fraction of a point on a low-health hero)
     if (p.shield > 0) {
       const ab = Math.min(p.shield, dmg); p.shield -= ab; dmg -= ab;
       const hc = CLS[p.cls];
@@ -687,7 +677,7 @@
     p.hp -= dmg; p.invuln = src.hazard ? 0.3 : 0.6; p.hurtT = 0.3;
     if (p.bellS === 1 && p.hp < p.maxHp * ED.CONST.BELL_HP) p.bellS = 2; // the Drowned Bell's watch is broken (rooms.js)
     if (this.boss) p.hitThisBoss = true;
-    if (dmg > 0) this.emit({ t: 'hurt', pid: p.pid, v: dmg, x: Math.round(p.x), y: Math.round(p.y) });
+    if (dmg > 0) this.emit({ t: 'hurt', pid: p.pid, v: Math.round(dmg * 10) / 10, x: Math.round(p.x), y: Math.round(p.y) });
     else this.emit({ t: 'block', x: p.x, y: p.y, k: 'aegis' });
     if (e && e.hp > 0) {
       if (st.thorns) this.hitEnemy(e, st.thorns, { p, kind: 'thorns', noProc: true, crit: false });
@@ -1294,8 +1284,8 @@
     const ai = ED.AI[e.def.ai];
     if (ai) ai(this, e, dt);
     if (this.faceOn) this.turnFoe(e, dt);
-    // contact damage: full only during body-hit attack states, otherwise 0.4x; a hero takes at most one fodder touch per World.FODDER_TOUCH_CD (p.fodderAt: world time of the next allowed one)
-    if (e.contactCd <= 0 && e.def.ai !== 'bomber' && !e.burrowed) {
+    // contact damage: full only during body-hit attack states, otherwise 0.4x; a hero takes at most one fodder touch per World.FODDER_TOUCH_CD (p.fodderAt: world time of the next allowed one); e.noTouch: no contact damage
+    if (e.contactCd <= 0 && e.def.ai !== 'bomber' && !e.burrowed && !e.noTouch) {
       for (const p of this.players.values()) {
         if (p.downed || p.dead) continue;
         const rr = e.r + p.r - 3;

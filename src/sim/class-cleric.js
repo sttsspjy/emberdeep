@@ -171,7 +171,7 @@
     p.echoQ = new Map();
     for (const [f, o] of q) {
       if (f.hp <= 0) continue;
-      w.hitEnemy(f, o.a, { p, kind: 'echo', raw: true, noProc: true, crit: false, noGuard: true, el: 'holy', affDone: true, echo: true, x: o.x, y: o.y });
+      w.hitEnemy(f, o.a, { p, kind: 'echo', raw: true, noProc: true, crit: false, noGuard: true, el: 'holy', echo: true, x: o.x, y: o.y });
       w.emit({ t: 'jecho', x0: rnd(o.x), y0: rnd(o.y), x1: rnd(f.x), y1: rnd(f.y), pid: p.pid });
     }
   }
@@ -235,7 +235,7 @@
       const f = near[i].f;
       hit.add(f.id);
       w.emit({ t: 'chain', k: 'p', i, pts: [[rnd(en.x), rnd(en.y)], [rnd(f.x), rnd(f.y)]] });
-      w.hitEnemy(f, en.amt, { p: o, kind: 'beam', raw: true, noProc: true, crit: false, noGuard: true, el: 'holy', affDone: true, x: en.x, y: en.y });
+      w.hitEnemy(f, en.amt, { p: o, kind: 'beam', raw: true, noProc: true, crit: false, noGuard: true, el: 'holy', x: en.x, y: en.y });
       const cap = w.smiteAt(f) * 0.99;
       if (f.hp > 0 && !f.fodder && f.rad < cap) { f.rad = Math.min(cap, f.rad + store); f.radOwner = o; }
     }
@@ -342,7 +342,7 @@
       const ev = { t: 'chain', k: 'b', pts: [[rnd(en.x), rnd(en.y)], [rnd(best.x), rnd(best.y)]] };
       if (en.jump) ev.j = 1; // a Sunburst jump
       this.emit(ev);
-      this.hitEnemy(best, en.amt, { p: o, kind: 'beam', raw: true, noProc: true, crit: false, noGuard: true, el: 'holy', affDone: true, x: en.x, y: en.y });
+      this.hitEnemy(best, en.amt, { p: o, kind: 'beam', raw: true, noProc: true, crit: false, noGuard: true, el: 'holy', x: en.x, y: en.y });
       if (en.jumps > 0) this.queuePayoff(o, { kind: 'beam', e: best, x: best.x, y: best.y, amt: en.amt * 0.5, jumps: en.jumps - 1, hit, jump: true });
     },
   };

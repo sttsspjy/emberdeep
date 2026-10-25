@@ -16,7 +16,7 @@
     cdr: SI('Skill cooldown', 'pct', 'offense'), projN: SI('Projectiles', 'flat', 'offense'), pierce: SI('Pierce', 'flat', 'offense'), execute: SI('Execute', 'pct', 'offense'), wDmg: SI('Weapon damage', 'pct', 'offense'),
     dashDmg: SI('Dash damage', 'pct', 'offense'), dashFrost: SI('Dash frost ring', 'pct', 'offense'), dashcdr: SI('Dash recharge', 'pct', 'utility'), dashN: SI('Dash charges', 'flat', 'utility'), idol: SI('Golden Idol', 'flat', 'offense'), banner: SI('Banner of Unity', 'pct', 'offense'),
     hp: SI('Max health', 'flat', 'defense'), hpMul: SI('Max health', 'pct', 'defense'), armor: SI('Armor', 'flat', 'defense'), dodge: SI('Dodge', 'pct', 'defense'), vuln: SI('Damage taken', 'pct', 'defense'), heal: SI('Healing received', 'pct', 'defense'),
-    thorns: SI('Thorns', 'flat', 'defense'), roomWard: SI('Battle Ward', 'pct', 'defense'), mirror: SI('Mirror Shard', 'pct', 'defense'), spd: SI('Move speed', 'pct', 'utility'), pickup: SI('Pickup range', 'pct', 'utility'), xp: SI('Experience', 'pct', 'utility'),
+    thorns: SI('Thorns', 'flat', 'defense'), mirror: SI('Mirror Shard', 'pct', 'defense'), spd: SI('Move speed', 'pct', 'utility'), pickup: SI('Pickup range', 'pct', 'utility'), xp: SI('Experience', 'pct', 'utility'),
     gold: SI('Gold', 'pct', 'utility'), luck: SI('Luck', 'pct', 'utility'), light: SI('Lantern light', 'pct', 'utility'), minions: SI('Max minions', 'flat', 'utility'), minionDmg: SI('Minion damage', 'pct', 'offense'), charges: SI('Skill charges', 'flat', 'utility'),
     trance: SI('Battle Trance', 'pct', 'offense'), wardrum: SI('War Drum', 'pct', 'offense'), deathsEdge: SI("Death's Edge crits", 'flat', 'shadow'),
     fireInfuse: SI('Burn from hits', 'pct', 'fire'), burnMul: SI('Burn damage', 'pct', 'fire'), burnCap: SI('Burn stack cap', 'flat', 'fire'), wildfire: SI('Wildfire stacks per second', 'flat', 'fire'), smother: SI('Smother', 'pct', 'fire'),
@@ -245,7 +245,7 @@
   const TRAIL_PACK = 2 / 3;
   // Pyromancer assumptions (class-pyro.js). HE_USE: share of a cut or refund that counts (a skill is recast about half a second after it comes up, and a cut on a ready skill is lost; fitted to a time-stepped cast simulation). BURN_HIT: share of foes a cast finds burning.
   const HE_USE = 0.6, BURN_HIT = 0.8;
-  // Damage numbers are per landed hit before the stratum affinity and any status; dps counts every attack landing on one foe (a fan: the shots that reach it at REF).
+  // Damage numbers are per landed hit before any status; dps counts every attack landing on one foe (a fan: the shots that reach it at REF).
   // extras: damage each attack adds besides the main hits (blasts, shocks, waves, clouds, evolution strikes, relics): { label, perAttack, perSec, proc (feeds statuses), el?, note? }.
   // A bell (class-bell.js): an attack is one wind -> hurl -> reel loop (ED.Bell.cycle); the hit is its hurl strike, the reel strike and the winding strikes of the loop are extras, as are the route riders (Wrecking shock, Chain Toll, Lightning Rod, Skybreaker, live wire, the ring).
   // _pack(n, b): the extra's total per loop over a pack of n foes, b = wpn._bell(n) (tools/model.js packWeapon). ROD_UP: share of hurl strikes that land on a charged foe. HURL_PACK / REEL_PACK: share of the other pack foes a hurl / a reel strikes (a pack bunches at the hero's feet). BELL_MIX: weight of the pack's own drain in a pack loop.
@@ -253,7 +253,7 @@
   const ROD_UP = 0.5, HURL_PACK = 0.9, REEL_PACK = 0.9, BELL_MIX = 0.9, BELL_EFF = { one: 0.95, pack: 1.15 };
   Sh.BELL_EFF = BELL_EFF;
   function bellExtras(st, w, cy, M, EC, ctx, add) {
-    const area = 1 + 0.5 * st.area, el = st.element, kEl = el ? (M + st.classElMul) * ED.affC(ctx.stratum || 1, el) : M, Cn = ED.CONST, hurl = w.dmg * cy.k, reel = w.dmg * cy.kReel;
+    const area = 1 + 0.5 * st.area, el = st.element, kEl = el ? M + st.classElMul : M, Cn = ED.CONST, hurl = w.dmg * cy.k, reel = w.dmg * cy.kReel;
     const hN = (n) => 1 + HURL_PACK * (n - 1), rN = (n) => 1 + REEL_PACK * (n - 1);
     add('Reel', reel * M * EC, { proc: true, crit: true, _pack: (n, b) => w.dmg * b.kReel * M * EC * rN(n), note: `the reel home strikes each foe on its line at ${Math.round(Cn.REEL_K * 100)}% of the hurl and drags it ${Cn.REEL_DRAG} px toward you` });
     add('Winding strikes', w.dmg * cy.windMul * cy.windN * M * EC, { proc: true, crit: true, _pack: (n, b) => w.dmg * b.windMul * b.windN * n * M * EC, note: `about ${n1(cy.windN)} a loop on a foe on the orbit at x${n1(cy.windMul)} (never more than x${n1(st.windCap > 0 ? st.windCap : Cn.WIND_CAP)}); they are no attacks` });
@@ -302,7 +302,7 @@
       // Cleric attack forks (class-cleric.js): Solar Flare's end burst, Dawn's Wake's strip (class-element damage, a quarter of each tick stored as Radiance), Litany's two side waves (and their return legs), Returning Light's second pass
       if (st.waveBurst > 0) add('Solar Flare', waveHit * st.waveBurst * FLARE_HIT / every, { proc: true, r: Math.round(50 * area), note: `${ev}: the wave ends in a burst (radius 50) for ${Math.round(st.waveBurst * 100)}% of it, catching a foe about ${Math.round(FLARE_HIT * 100)}% of the time, no crit` });
       if (st.wake > 0) {
-        const cls = (M + st.classElMul) * ED.affC(ctx.stratum || 1, 'holy'), secs = WAKE_ON * st.wake;
+        const cls = M + st.classElMul, secs = WAKE_ON * st.wake;
         add("Dawn's Wake", waveRaw * secs * cls / every, { radiance: waveRaw * secs * 0.25 / every, note: `${ev}: a strip burns 2 s after its wave, ${Math.round(st.wake * 100)}% of the wave per second; a foe stands on it about ${n1(WAKE_ON)} s, no crit` });
       }
       const ret = st.waveReturn > 0 ? 1 + st.waveReturn * RET_HIT : 1;
@@ -310,7 +310,7 @@
       if (st.waveReturn > 0) add('Returning Light', waveHit * EC * st.waveReturn * RET_HIT / every, { proc: true, crit: true, note: `${ev}: the wave flies home and strikes again for ${Math.round(st.waveReturn * 100)}% (about ${Math.round(RET_HIT * 100)}% of foes are on its way)` });
     }
     if (melee && w.ring) { // a ring of light around the hero every Nth attack (combat.js heroRing): a class-element weapon hit on every foe within its radius
-      const every = Math.max(1, w.ring.every + st.waveEvery), el = st.element, k = el ? (M + st.classElMul) * ED.affC(ctx.stratum || 1, el) : M;
+      const every = Math.max(1, w.ring.every + st.waveEvery), el = st.element, k = el ? M + st.classElMul : M;
       const lit = st.litany > 0 ? 2 * every / st.litany : 0, ret = 1 + (st.waveReturn || 0); // Litany: its attack's ring at x3; Returning Light: every ring rings again at waveReturn
       add('Ring of light', Wd * w.ring.mul * (1 + st.waveMul) * k * EC * (1 + lit) * ret / every, { proc: true, crit: true, r: Math.round(w.ring.r * area * (st.waveBig ? 1.5 : 1)), note: `every ${ordinal(every)} attack: every foe around you${st.litany > 0 ? `; every ${ordinal(st.litany)} attack rings x3` : ''}${st.waveReturn > 0 ? `; rings again 0.35 s later for ${Math.round(st.waveReturn * 100)}%` : ''}` });
     }
@@ -383,23 +383,22 @@
   // ---------------- skills ----------------
   const procDefault = (q) => (q.proc !== undefined ? !!q.proc : q.per === 'hit' || q.per === 'tick');
   const FESTER_PARTS = new Set(['volley.arrow', 'rain.tick', 'rain.sky', 'rain.sky2', 'rain.shower']); // the parts Gangrene boosts (class-ranger.js SKILL_PARTS)
-  // One part of a skill at the hero's stats: hit (per landed hit with the hero multiplier), avg (with the crit chance), pre (with the vulnerability the part sets), here (with the stratum affinity), total (here x hits on one foe).
-  // A class-element part takes half the stratum affinity (ED.affC) and the class-element multiplier; statuses take the full affinity.
+  // One part of a skill at the hero's stats: hit (per landed hit with the hero multiplier), avg (with the crit chance), pre (with the vulnerability the part sets), here (= pre), total (here x hits on one foe).
+  // A class-element part takes the class-element multiplier.
   function partModel(q, skillId, st, ctx, wpn, R) {
-    const stratum = ctx.stratum, clsEl = q.el === 'class' && st.element ? st.element : null, tag = clsEl || (q.el && q.el !== 'class' ? q.el : null);
-    const aff = clsEl ? ED.affC(stratum, clsEl) : tag ? ED.elemMul(stratum, tag) : 1;
+    const clsEl = q.el === 'class' && st.element ? st.element : null, tag = clsEl || (q.el && q.el !== 'class' ? q.el : null);
     const M = Math.max(0.1, st.dmg + (clsEl ? st.classElMul : 0)), cm = st.critMult, c = st.crit, EC = 1 + c * (cm - 1);
-    const o = { id: q.id, label: q.label, per: q.per, el: tag, aff: R.x(aff), r: q.r && !q.pRad ? Math.round(q.r) : 0, dur: q.dur, every: q.every, delay: q.delay, count: q.count, n: q.n, attacks: q.attacks, stun: q.stun, knock: q.knock, note: q.note || '', proc: procDefault(q), radiance: q.radiance || 0, noCrit: !!q.noCrit, alwaysCrit: q.crit === true, selfVuln: q.selfVuln || 0, infAdd: q.infAdd || null };
+    const o = { id: q.id, label: q.label, per: q.per, el: tag, r: q.r && !q.pRad ? Math.round(q.r) : 0, dur: q.dur, every: q.every, delay: q.delay, count: q.count, n: q.n, attacks: q.attacks, stun: q.stun, knock: q.knock, note: q.note || '', proc: procDefault(q), radiance: q.radiance || 0, noCrit: !!q.noCrit, alwaysCrit: q.crit === true, selfVuln: q.selfVuln || 0, infAdd: q.infAdd || null };
     if (q.per === 'minion') { // a Bone Knight strikes every 0.5 s for x KNIGHT_MUL; the Death Knight (one unit) for x dkMul
       const per = q.dmg * (1 + st.minionDmg) * (C.COMP_MUL || 0.85) * (st.dk > 0 ? st.dkMul : st.knights > 0 ? C.KNIGHT_MUL : 1), live = st.dk > 0 ? 1 : Math.min(ctx.minions > 0 ? ctx.minions : q.n, st.maxMinions || 3), hits = Math.floor((q.dur || 0) / (st.knights > 0 ? 0.5 : q.every) + 1e-9);
       Object.assign(o, { kind: 'minion', raw: q.dmg, hit: per, avg: per, pre: per, here: per, hitsEach: hits, minions: live, oneFoe: live * hits, total: per * live * hits, kc: 0, dkCleave: st.dk > 0 });
       return finish(o, R);
     }
     if (q.per === 'status') {
-      const S = ED.STATUS[q.status], mul = S && S.mulKey ? 1 + (st[S.mulKey] || 0) : 1, aff2 = S && S.el ? ED.elemMul(stratum, S.el) : 1;
+      const S = ED.STATUS[q.status], mul = S && S.mulKey ? 1 + (st[S.mulKey] || 0) : 1;
       let pool = q.dmg * (q.status === 'burn' ? 1 + st.classElMul : 1);
       if (skillId === 'nova' && q.status === 'burn' && st.novaEcho > 0) pool *= 1 + st.novaEcho; // the second eruption (or the Supernova wave) adds the Burn again at novaEcho
-      Object.assign(o, { kind: 'status', raw: q.dmg, status: q.status, statusName: S ? S.name : q.status, statusEl: S ? S.el : null, aff: R.x(aff2), pool, hit: 0, avg: pool, pre: pool, here: pool * aff2 * mul, total: pool * aff2 * mul, oneFoe: 1, kc: 0 });
+      Object.assign(o, { kind: 'status', raw: q.dmg, status: q.status, statusName: S ? S.name : q.status, statusEl: S ? S.el : null, pool, hit: 0, avg: pool, pre: pool, here: pool * mul, total: pool * mul, oneFoe: 1, kc: 0 });
       return finish(o, R);
     }
     if (q.per === 'zone') return finish(Object.assign(o, { kind: 'zone', raw: 0, hit: 0, avg: 0, pre: 0, here: 0, total: 0, oneFoe: 0, kc: 0 }), R);
@@ -436,16 +435,16 @@
       if (skillId === 'harvest' && q.id === 'burst' && st.boneLance > 0) oneFoe = 0; // Bone Lances: the lance replaces the burst of every minion that has a foe within 200
       o.perMinion = true;
     }
-    const avg = hit * (1 + kc * (cm - 1)), pre = avg * (1 + o.selfVuln), here = pre * aff;
+    const avg = hit * (1 + kc * (cm - 1)), pre = avg * (1 + o.selfVuln), here = pre;
     Object.assign(o, { kind: sec ? 'sec' : q.per === 'tick' ? 'tick' : 'hit', raw, hit, avg, pre, here, oneFoe: oneFoe === undefined ? 1 : oneFoe, critHit: hit * cm, kc, _hit: hit });
     if (sec) o.tick = hit;
     if (skillId === 'vanish' && q.id === 'ambush') o.sweepR = st.ambushCleave; // Ambush Sweep: the radius around the struck foe that the pack rule of tools/model.js reads
     if (skillId === 'shieldthrow' && q.id === 'strike') o.gather = st.gather; // Gathering Force: the pack rule of tools/model.js reads it
     if (skillId === 'harvest' && (q.id === 'corpse' || q.id === 'shard')) { o.cap = st.corpse; o.shardN = st.carrionN; } // the corpse rules of tools/model.js read the corpse cap and the shards per corpse
-    if (q.statusAdd) { // a status add riding on the hit (Meteor): a share of the damage before affinity, built with the status' own affinity and strength
+    if (q.statusAdd) { // a status add riding on the hit (Meteor): a share of the damage, built with the status' strength
       for (const k in q.statusAdd) {
-        const S = ED.STATUS[k], a2 = S && S.el ? ED.elemMul(stratum, S.el) : 1, mul = S && S.mulKey ? 1 + (st[S.mulKey] || 0) : 1;
-        o.statusAdd = { status: k, pool: pre * q.statusAdd[k], here: pre * q.statusAdd[k] * a2 * mul, el: S ? S.el : null };
+        const S = ED.STATUS[k], mul = S && S.mulKey ? 1 + (st[S.mulKey] || 0) : 1;
+        o.statusAdd = { status: k, pool: pre * q.statusAdd[k], here: pre * q.statusAdd[k] * mul, el: S ? S.el : null };
       }
     }
     o.total = (here + (o.statusAdd ? o.statusAdd.here : 0)) * o.oneFoe;
@@ -466,7 +465,7 @@
   function bashPart(q, st, R) {
     const N = St.skillNums('shieldthrow', st), a = N.p.strike, b = N.p.return, M = Math.max(0.1, st.dmg), EC = 1 + st.crit * (st.critMult - 1), k = st.bash;
     const hit = (a.dmg + b.dmg) / 2 * k * M;
-    return finish({ id: q.id, label: q.label, per: 'hit', kind: 'hit', el: null, aff: 1, r: 0, proc: true, note: 'a free Shield Throw along the run, no stun', raw: (a.dmg + b.dmg) * k, hit, avg: hit * EC, pre: hit * EC, here: hit * EC, total: hit * EC * 2, oneFoe: 2, kc: st.crit, alwaysCrit: false, noCrit: false, selfVuln: 0, bashStrike: a.dmg * k * M * EC, bashReturn: b.dmg * k * M * EC, bashN: a.n }, R); // bash*: the strike and return hits and the ricochet count, for the pack rule of tools/model.js
+    return finish({ id: q.id, label: q.label, per: 'hit', kind: 'hit', el: null, r: 0, proc: true, note: 'a free Shield Throw along the run, no stun', raw: (a.dmg + b.dmg) * k, hit, avg: hit * EC, pre: hit * EC, here: hit * EC, total: hit * EC * 2, oneFoe: 2, kc: st.crit, alwaysCrit: false, noCrit: false, selfVuln: 0, bashStrike: a.dmg * k * M * EC, bashReturn: b.dmg * k * M * EC, bashN: a.n }, R); // bash*: the strike and return hits and the ricochet count, for the pack rule of tools/model.js
   }
 
   const ROCK_SCATTER = 80; // px a Meteor Shower meteorite may land from its impact (class-pyro.js)
@@ -478,7 +477,7 @@
       if (!q.on) continue;
       const m = id === 'charge' && q.id === 'bash' ? bashPart(q, st, R) : partModel(q, id, st, ctx, wpn, R);
       parts.push(m);
-      if (m.kind !== 'zone') { perCast += m._r.total; perCastAll += m.fanN ? m._r.avg * (1 + m.selfVuln) * m.aff * m.fanN * m.waves : m._r.total; }
+      if (m.kind !== 'zone') { perCast += m._r.total; perCastAll += m.fanN ? m._r.avg * (1 + m.selfVuln) * m.fanN * m.waves : m._r.total; }
     }
     const cd = N.cdEff, heals = [];
     for (const q of N.parts) if (q.on && q.heal) {
@@ -562,9 +561,9 @@
     mult.status = [];
     const statusEls = ED.ELEMENT_IDS.filter(el => st[ED.ELEMENTS[el].inf] > 0 || st.element === el).concat(st.bleed > 0 || st.bleedAll > 0 || st.masterstroke ? ['general'] : []);
     for (const el of statusEls) {
-      const P = ED.PATHS[el], aff = el === 'general' ? 1 : ED.elemMul(s, el), est = P.sheet.est(proc, st, aff, ref);
+      const P = ED.PATHS[el], est = P.sheet.est(proc, st, ref);
       mult.status.push({
-        el, name: P.name, color: P.color, icon: P.icon, status: P.status, infuse: R.f(st[P.infuse] || 0), aff: R.x(aff), builtin: el === st.element && !(st[P.infuse] > 0),
+        el, name: P.name, color: P.color, icon: P.icon, status: P.status, infuse: R.f(st[P.infuse] || 0), builtin: el === st.element && !(st[P.infuse] > 0),
         est: Object.assign({}, est, { dps: est.dps === undefined ? undefined : R.n(est.dps), secs: est.secs === undefined ? undefined : R.n(est.secs), pct: est.pct === undefined ? undefined : R.f(est.pct) }),
         rows: P.sheet.rows.filter(k => st[k]).map(k => ({ key: k, label: SIF(k).label, v: R.f(st[k]), fmt: SIF(k).fmt })),
       });
@@ -587,7 +586,7 @@
 
     const hero = { pid: p.pid, name: p.name, cls: p.cls, clsName: cls.name, title: cls.title, level: ctx.level, xp: ctx.xp, xpNext: ctx.xpNext, hp: Math.ceil(p.hp), maxHp, shield: shownShield(p.shield), gold: ctx.gold, picks: p.picks | 0, power: st.power, element: st.element, weaponName: wpn.name, slot: p.slot | 0 };
     const model = {
-      hero, ctx: { stratum: s, pact: ctx.pact | 0, dark: !!ctx.dark, party: ctx.party }, weapon: wpn, skills, dash, proc: procOut(proc, R), mult, def, aff: affModel(p, st, ctx), build: lite ? null : buildModel(p, st, ctx, R), dark: darkModel(ctx),
+      hero, ctx: { stratum: s, pact: ctx.pact | 0, dark: !!ctx.dark, party: ctx.party }, weapon: wpn, skills, dash, proc: procOut(proc, R), mult, def, build: lite ? null : buildModel(p, st, ctx, R), dark: darkModel(ctx),
       ref: { hp: R.n(ref.hp), statusHp: R.n(ref.statusHp), r: ref.r }, procs: procList(st, M, R), boost: { pack: wpn._boostPack || 0 },
     };
     return opts && opts.raw ? model : strip(model);
@@ -643,19 +642,18 @@
     if (st.mantle) sh.push({ label: 'Phoenix Mantle', text: `${pc(st.mantle)} after a Nova that hits a foe (once per 10 s)` });
     if (st.veil) sh.push({ label: 'Veil of Night', text: `${pc(st.veil)} when you vanish (once per 12 s)` });
     if (st.boneArmor) sh.push({ label: 'Bone Armor', text: `${pc(st.boneArmor)} per minion harvested, up to ${pc(st.boneCap)} (once per 12 s)` });
-    if (st.roomWard) sh.push({ label: 'Battle Ward', text: `${pc(st.roomWard)} when an elite room locks` });
     if (p.cls === 'cleric') sh.push({ label: 'Judgment kill', text: '3% for allies within 160, once per cast' });
     if (p.weapon === 'votive') sh.push({ label: 'Votive Lamp', text: `${pc(0.015)} of an ally's health while they stand in a pool of light, at most once per ${C.LANTERN_CD} s per ally, up to ${pc(C.CLASS_SHIELD_CAP)}; counts toward the class-shield limit of ${pc(C.SHIELD_WIN_CLASS)} per ${C.SHIELD_WIN_T} s` });
     if (p.weapon === 'lantern') sh.push({ label: 'Sacred Lantern', text: `${pc(0.015)} of an ally's health per orb, at most once per ${C.LANTERN_CD} s per ally, up to ${pc(C.CLASS_SHIELD_CAP)}; counts toward the class-shield limit of ${pc(C.SHIELD_WIN_CLASS)} per ${C.SHIELD_WIN_T} s` });
     for (const k of skills) for (const h of k.heals) def.heals.push({ label: k.name, text: h.perMinion ? `${pc(h.perMinion)} of max health per minion, up to ${pc(h.cap)}` : `${pc(h.frac)} of max health for you and allies within 180` });
-    def.limits = `Class shields give at most ${pc(C.SHIELD_WIN_CLASS)} of max health per ${C.SHIELD_WIN_T} s and all sources ${pc(C.SHIELD_WIN_ALL)}; Battle Ward is exempt.`;
+    def.limits = `Class shields give at most ${pc(C.SHIELD_WIN_CLASS)} of max health per ${C.SHIELD_WIN_T} s and all sources ${pc(C.SHIELD_WIN_ALL)}.`;
   }
 
   // Contagion and Plaguebearer (need the status model): pack-only extras on the pools of a dying foe. Every foe that dies with 2+ ailments leaves PLAGUE_KEEP of the pool inputs of the hero's damage
-  // (Bleed, Burn at the stratum affinity; a pack takes PLAGUE_PACK x the single-target input) on it. Plaguebearer hands PACK_REF - 1 neighbours plagueBurst of it at once; Contagion and Outbreak move shares of it
+  // (Bleed, Burn; a pack takes PLAGUE_PACK x the single-target input) on it. Plaguebearer hands PACK_REF - 1 neighbours plagueBurst of it at once; Contagion and Outbreak move shares of it
   // (recipients x share) to the nearest foes as pools that drain over seconds, SPREAD_PAY of what a burst would pay.
   function poolExtras(wpn, st, proc, s, R) {
-    const burn = ((proc.rate.fire || 0) * ED.elemMul(s, 'fire') + (proc.pool.fire || 0)) * (1 + st.burnMul), bleed = (proc.bleed || 0) * (1 + st.bleedMul);
+    const burn = ((proc.rate.fire || 0) + (proc.pool.fire || 0)) * (1 + st.burnMul), bleed = (proc.bleed || 0) * (1 + st.bleedMul);
     const unit = PLAGUE_KEEP * PLAGUE_PACK * (burn + bleed) / wpn._aps / PACK_REF, out = st.contagionN > 0;
     const push = (label, perAttack, note, r) => {
       const e = { label, perAttack, proc: false, packOnly: true, r, note };
@@ -742,7 +740,7 @@
       if (strike) {
         const bm = 1 + st.bleedMul, pool = POOL_K * proc.bleed, paid = pool * bm * (1 + st.bloodquakeMul), own = pool * bm * st.bloodquakeMul, give = Math.min(st.bloodquakeSplash * paid, C.SPREAD_CAP * ref.hp) * bm;
         const one = p3 * (k2._cd / k2._cd + k2._cd / k1._cd) * own, det = p3 * (Math.min(PACK, strike.n || 1) + PACK * k2._cd / k1._cd), gain = det * (own + (PACK - 1) * give);
-        const q = { id: 'bloodquake', label: 'Bloodquake', per: 'hit', kind: 'hit', el: null, aff: 1, r: BQUAKE_R, proc: false, note: `a Charge or Throw strike on a foe with ${BQUAKE_AT} ailments pays out its Bleed pool at +${Math.round(st.bloodquakeMul * 100)}% and bursts ${Math.round(st.bloodquakeSplash * 100)}% of that to each foe near it (a pack only)`, raw: paid, hit: paid, avg: paid, pre: paid, here: paid, total: gain / PACK, oneFoe: 0, kc: 0, alwaysCrit: false, noCrit: true, selfVuln: 0 };
+        const q = { id: 'bloodquake', label: 'Bloodquake', per: 'hit', kind: 'hit', el: null, r: BQUAKE_R, proc: false, note: `a Charge or Throw strike on a foe with ${BQUAKE_AT} ailments pays out its Bleed pool at +${Math.round(st.bloodquakeMul * 100)}% and bursts ${Math.round(st.bloodquakeSplash * 100)}% of that to each foe near it (a pack only)`, raw: paid, hit: paid, avg: paid, pre: paid, here: paid, total: gain / PACK, oneFoe: 0, kc: 0, alwaysCrit: false, noCrit: true, selfVuln: 0 };
         k2.parts.push(finish(q, R));
         k2.perCast = R.n(k2.perCast + one); k2.perCastAll = R.n(k2.perCastAll + one); k2.dpsCd = R.n(k2.perCast / k2._cd);
       }
@@ -755,7 +753,7 @@
   // Spectrum's Radiance puts prismRad of a Smite into the stream of each foe struck, which pays back (1 + smiteMul) times as Smite damage, once per beam a foe receives (first order: the loop it forms is ignored).
   const BIG_SHARE = 0.6, TOUGH_SHARE = 0.7;
   function smiteForms(st, wpn, proc, stratum, R) {
-    const S = (proc.rate.holy || 0) * ED.elemMul(stratum, 'holy') * (1 + st.smiteMul), aps = wpn._aps;
+    const S = (proc.rate.holy || 0) * (1 + st.smiteMul), aps = wpn._aps;
     if (!(S > 0)) return;
     let any = false;
     const push = (label, dps, o) => { if (!(dps > 0)) return; any = true; wpn._extras.push(Object.assign({ label, perAttack: dps / aps, proc: false }, o)); };
@@ -854,7 +852,7 @@
     if (st.flashT > 0) { // Flashpoint
       const u1 = burnedFor(st.flashT, FIGHT_ONE), uP = burnedFor(st.flashT, FIGHT_PACK);
       let g = 0;
-      for (const k of skills) for (const q of k.parts) if (q.kind === 'hit' && !q.noCrit && !q.alwaysCrit) g += q._r.hit * (1 + q.selfVuln) * q.aff * q.oneFoe * (1 - c) * (cm - 1) / k._cd;
+      for (const k of skills) for (const q of k.parts) if (q.kind === 'hit' && !q.noCrit && !q.alwaysCrit) g += q._r.hit * (1 + q.selfVuln) * q.oneFoe * (1 - c) * (cm - 1) / k._cd;
       push('Flashpoint', u1 * g / aps, uP * g / aps, `your spells crit for sure on a foe that has burned ${n1(st.flashT)} s in a row (about ${Math.round(u1 * 100)}% of a fight on one foe, ${Math.round(uP * 100)}% in a pack)`);
     }
     if (st.heatEngine > 0) {
@@ -929,9 +927,9 @@
     if (st.exsang > 0) proc.bleed += critAtk * aps * P4 * st.exsang * (1 + st.statusPow);
     // Rupture: a share of the Bleed and Burn pools (POOL_K x the income) bursts at RUPT_MUL; Shadowstep ruptures every foe it cuts, an Ambush its target
     if (st.rupture > 0 && skills.length > 1) {
-      const bm = 1 + st.bleedMul, bleedInc = proc.bleed * bm, burnInc = ((proc.rate.fire || 0) * ED.elemMul(s, 'fire') + (proc.pool.fire || 0)) * (1 + st.burnMul), pool = POOL_K * (bleedInc + burnInc);
+      const bm = 1 + st.bleedMul, bleedInc = proc.bleed * bm, burnInc = ((proc.rate.fire || 0) + (proc.pool.fire || 0)) * (1 + st.burnMul), pool = POOL_K * (bleedInc + burnInc);
       const share = Math.min(1, st.rupture), net = share * RUPT_NET * pool, k1 = skills[0], k2 = skills[1], slash = k1.parts.find(p => p.id === 'slash');
-      const part = (id, label, note, total, r) => finish({ id, label, per: 'hit', kind: 'hit', el: null, aff: 1, r, proc: false, note, raw: total, hit: total, avg: total, pre: total, here: total, total, oneFoe: 0, kc: 0, alwaysCrit: false, noCrit: true, selfVuln: 0 }, R);
+      const part = (id, label, note, total, r) => finish({ id, label, per: 'hit', kind: 'hit', el: null, r, proc: false, note, raw: total, hit: total, avg: total, pre: total, here: total, total, oneFoe: 0, kc: 0, alwaysCrit: false, noCrit: true, selfVuln: 0 }, R);
       const bump = (k, v) => { k.perCast = R.n(k.perCast + v); k.perCastAll = R.n(k.perCastAll + v); k.dpsCd = R.n(k.perCast / k._cd); };
       k1.parts.push(part('rupture', 'Rupture', `${Math.round(share * 100)}% of the Bleed and Burn pools of every foe the blink cuts burst at ×${C.RUPT_MUL} (the pools lose it)`, net, C.RUPT_R)); bump(k1, net);
       k2.parts.push(part('rupture', 'Rupture', `the Ambush ruptures ${Math.round(share * 100)}% of its target's pools`, net, 0)); bump(k2, net);
@@ -965,7 +963,7 @@
   // The Hex, Grave Bolt, Soul Storm, Abyssal and Tide effects of class-necro.js as weapon extras (damage per attack on one foe; _pack(n): the total per attack in a pack of n). Per-second values are divided by the attack rate.
   function necroForms(st, wpn, skills, proc, ref, s, R) {
     const aps = wpn._aps, avg = wpn._avg, melee = wpn.kind === 'melee', M = Math.max(0.1, st.dmg), one = wpn.oneFoe, hasHex = st.hex > 0, mine = [];
-    const pow = 1 + st.statusPow, kM = C.MINION_INFUSE + st.minionInfuse, aff = ED.elemMul(s, 'shadow') * (1 + st.doomMul), toughK = C.DOOM_TOUGH + st.doomTough;
+    const pow = 1 + st.statusPow, kM = C.MINION_INFUSE + st.minionInfuse, aff = 1 + st.doomMul, toughK = C.DOOM_TOUGH + st.doomTough;
     const hb = (n) => (melee ? n : Math.min(n, (wpn.n || 1) * (1 + (wpn.pierce || 0)))); // foes one attack's normal hits reach (tools/model.js packWeapon)
     let minionDps = 0, minionDoom = 0, minions = 0, strike = 0, dpsOne = avg * one * aps;
     const spells = [];
@@ -1037,19 +1035,7 @@
     wpn.extras = wpn._extras.map(e => Object.assign({}, e, { perAttack: R.n(e.perAttack), perSec: R.n(e.perAttack * wpn._aps) }));
   }
 
-  // ---------------- affinity and dark rooms ----------------
-  function affModel(p, st, ctx) {
-    const mine = [], seen = {};
-    const push = (el, why) => { if (!el || seen[el] || !ED.PATHS[el] || !ED.PATHS[el].element) return; seen[el] = 1; mine.push({ el, name: ED.PATHS[el].name, color: ED.PATHS[el].color, why }); };
-    for (const k of ED.elementGates(p.boons || {})) push(k, 'path');
-    if (st.element) push(st.element, 'class');
-    const at = (stratum) => {
-      const b = ED.BIOMES[stratum - 1];
-      return { stratum, name: b.name, short: b.short, weak: b.weak, resist: b.resist, mine: mine.map(m => ({ el: m.el, name: m.name, color: m.color, why: m.why, mul: ED.elemMul(stratum, m.el), skillMul: m.el === st.element ? ED.affC(stratum, m.el) : null })) }; // mul: statuses and tagged hits; skillMul: the class element's skills (half the affinity), whichever source listed the element
-    };
-    const s = clampI(ctx.stratum || 1, 1, ED.BIOMES.length);
-    return { now: at(s), next: s < ED.BIOMES.length ? at(s + 1) : null };
-  }
+  // ---------------- dark rooms ----------------
   // Dark rooms of the floor: unvisited / total, whether the hero stands in one, and the rule constants (foe damage, gold and xp multiplier including the party's Deep Wick).
   function darkModel(ctx) {
     return { left: ctx.rooms.darkLeft, total: ctx.rooms.darkTotal, here: !!ctx.dark, dmg: W.DARK_DMG, loot: ctx.darkLoot || W.DARK_LOOT, rooms: ctx.rooms };
