@@ -273,7 +273,7 @@
       if ((z.kind === 'fire' || z.kind === 'pfire') && z.w !== 10 && fireFade(z) > 0.01) { // fire flames (the Phoenix ring draws its own tongues)
         const nf = fireCount(z), vis = Math.max(1, Math.ceil(nf * fireFade(z)));
         for (let i = 0; i < vis; i++) { flamePos(z, i); qDraw(dn, flY, 5, z); drawPool[dn++].d = i; }
-      } else if (z.kind === 'icewall') { const nw = wallN(z); for (let i = 0; i < nw; i++) { wallPos(z, i); qDraw(dn, wlY, 5, z); drawPool[dn++].d = i; } } // ice wall pillars
+      }
     }
     drawList.length = dn; drawList.sort(byY);
     for (const it of drawList) {
@@ -718,39 +718,9 @@
     const pf = z.kind === 'pfire', fade = fireFade(z), f = (t * 12 + z.id + i * 3) | 0, x = sx2(flX), y = sx2(flY) + 4; // the sprite's pivot is its feet
     if (!Pix.draw(c, 'fx.flame', pf ? '#ffb347' : '', f, x, y, fade)) flameStub(c, x, y, f, pf ? '#ffb347' : 'fire', fade, 3);
   }
-  // Fade of a zone: in over 1 / inK s, out over the last 1 / outK s (no duration: in only); 0 for a malformed clock.
-  const zFade = (z, outK, inK) => { const zt = +z.t || 0, v = z.dur ? Math.min(1, (z.dur - zt) * outK, zt * inK) : Math.min(1, zt * inK); return v > 0 ? v : 0; };
-  // Ice pillar body (an ice wall piece): a pointed column of half-width rA art px in three ice tones with a dark rim and a glint stripe, pivot at its feet; crack: the expiring look with a crack down the front.
-  function pillarSprite(rA, crack) {
-    const H = Math.min(44, Math.round(rA * 2.8) + 4), tip = Math.max(3, Math.round(H * 0.28)), W = rA * 2 + 2, base = Math.max(2, Math.round(rA * 0.45));
-    return Pix.bake('icep|' + rA + '|' + (crack ? 1 : 0), W, H + base, rA + 1, H + Math.round(base / 2), (b, w) => {
-      const ol = Pix.px32('#24506a'), dk = Pix.px32('#5fa8c8'), md = Pix.px32('#9fe0f4'), lt = Pix.px32('#d4f6ff'), wh = Pix.px32('#ffffff'), cr = Pix.px32('#1e4a64');
-      for (let y = 0; y < H + base; y++) {
-        const hw = y < tip ? Math.max(1, Math.round(rA * (y + 1) / tip)) : y < H ? rA : Math.max(1, Math.round(rA * Math.sqrt(Math.max(0, 1 - ((y - H + 0.5) / base) ** 2))));
-        for (let x = -hw; x < hw; x++) {
-          const edge = x === -hw || x === hw - 1 || y === 0 || y === H + base - 1;
-          let col = edge ? ol : x < -hw * 0.35 ? dk : x > hw * 0.4 ? lt : md;
-          if (!edge && x === Math.round(-hw * 0.2) && y > tip && y < H - 2 && (y & 3)) col = wh;
-          b[y * w + x + rA + 1] = col;
-        }
-      }
-      if (crack) { let x = Math.round(rA * 0.15); for (let y = tip + 1; y < H; y++) { if (Pix.hash(y * 3.7 + rA) > 0.6) x += Pix.hash(y + rA * 1.3) > 0.5 ? 1 : -1; x = U.clamp(x, -rA + 2, rA - 3); b[y * w + x + rA + 1] = cr; if (y & 1) b[y * w + x + rA + 2] = wh; } }
-    });
-  }
-  // Ice wall (Glacier Step): pillars of half-width WALL_RA art px every WALL_GAP world px along its segment (x, y, a, len); they fade in over 0.12 s, crack in the last second and tremble in the last half second.
-  const WALL_RA = 4, WALL_GAP = 14, wallN = (z) => U.clamp(Math.round((z.len || 0) / WALL_GAP) + 1, 2, 12);
-  let wlX = 0, wlY = 0;
-  function wallPos(z, i) { const d = (z.len || 0) * (i + 0.5) / wallN(z); wlX = z.x + Math.cos(z.a || 0) * d; wlY = z.y + Math.sin(z.a || 0) * d; }
-  function drawWallIce(c, z, i, t) {
-    wallPos(z, i);
-    const left = z.dur ? z.dur - (+z.t || 0) : 9, a = Math.min(1, (+z.t || 0) * 8), sh = left < 0.5 ? (((t * 30 + i) | 0) & 1) * 2 - 1 : 0;
-    if (a > 0) Pix.put(c, pillarSprite(WALL_RA + (i & 1), left < 1), sx2(wlX) + sh, sx2(wlY), Math.max(0.25, Math.ceil(a * 4) / 4));
-  }
-  // A standing zone piece of the y-sorted list (kind 5, d = piece index): fire flame, ice wall pillar.
-  function drawStand(c, z, i, t) {
-    if (z.kind === 'icewall') drawWallIce(c, z, i, t); else drawFlame(c, z, i, t);
-  }
-  R.zoneArt = { draw: drawZones, stand: drawStand, pillar: pillarSprite, wallN }; // headless checks
+  // A standing zone piece of the y-sorted list (kind 5, d = piece index): a fire flame.
+  function drawStand(c, z, i, t) { drawFlame(c, z, i, t); }
+  R.zoneArt = { draw: drawZones, stand: drawStand }; // headless checks
   // Laser colours [light, outer band, middle band, core rgba prefix, glow, warm-up dots]: void beams and the Tidal Beam.
   const LASER_C = [['#ff5ae0', 'rgba(255,60,210,0.22)', 'rgba(255,100,225,0.55)', 'rgba(255,225,252,', '#ff7ae8', 'rgba(255,120,230,0.7)'],
     ['#5ae0ff', 'rgba(60,200,255,0.22)', 'rgba(110,225,255,0.55)', 'rgba(225,250,255,', '#7ae8ff', 'rgba(140,230,255,0.75)']];
@@ -1013,16 +983,6 @@
           c.fillStyle = '#6fe6ff';
           for (let i = 0; i < 4; i++) { const rr = ((t * 60 + i * 70) % 280), rad = z.r * (1 - rr / 280); c.globalAlpha = Math.max(0.25, Math.ceil((rr / 280) * 4) / 4) * 0.6; c.beginPath(); for (let a = 0; a < 3.5; a += 2 / Math.max(8, rad)) c.rect(sx2(z.x + Math.cos(t * 2 + i + a) * rad), sx2(z.y + Math.sin(t * 2 + i + a) * rad), 2, 2); c.fill(); }
           c.globalAlpha = 1;
-          break;
-        }
-        case 'icewall': { // Glacier Step: a frost lane on the ground under its pillars (drawStand), a cold light
-          const fade = zFade(z, 3, 8);
-          if (fade <= 0.01) break;
-          const cx = z.x + Math.cos(z.a || 0) * (z.len || 0) / 2, cy = z.y + Math.sin(z.a || 0) * (z.len || 0) / 2;
-          if (pass === 0) {
-            c.globalAlpha = 0.35 * fade; c.fillStyle = '#bfeaff'; c.beginPath(); Pix.fillConvex(c, poly, lanePoly(z.x, z.y, z.a || 0, 0, z.len || 0, (z.w || 10) + 6)); c.fill(); c.globalAlpha = 1;
-            R.light(cx, cy - 10, Math.min(200, (z.len || 0) * 0.7 + 30), '#9fefff', 0.5 * fade);
-          } else if (pass === 1 && R.quality !== 'low') R.glow(c, cx, cy - 14, Math.min(120, (z.len || 0) * 0.5 + 16), '#9fefff', 0.2 * fade);
           break;
         }
         default: {

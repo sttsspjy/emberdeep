@@ -337,7 +337,7 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     globalThis.document = { createElement: () => ({ width: 1, height: 1, getContext: () => rc() }) };
     const throws = (f) => { try { f(); return false; } catch (err) { console.log('  ' + err.stack.split('\n').slice(0, 3).join(' | ')); return true; } };
     try {
-      const KINDS = ['icewall', 'pfire', 'plague', 'decoy'], src = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'render.js'), 'utf8');
+      const KINDS = ['pfire', 'plague', 'decoy'], src = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'render.js'), 'utf8');
       const dz = src.slice(src.indexOf('function drawZones('), src.indexOf('default: {', src.indexOf('function drawZones(')));
       for (const kd of KINDS) ok(N.ZK.includes(kd) && dz.includes(`case '${kd}'`), `zone kind ${kd} is on the wire and has its own draw case`);
       const zrow = (kind, o) => Object.assign({ id: 3, kind, x: 200, y: 200, r: 40, t: 0.5, dur: 4, a: 0.3, len: 0, w: 0, arc: 0, team: 0, elite: false, lob: null, warm: 0, str: 0, fol: 0 }, o);
@@ -347,9 +347,7 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
         const z = zrow(kd, sh); view.zones.length = 0; view.zones.push(z);
         ok(!throws(() => { for (const pass of [0, 2, 1]) R.zoneArt.draw(ctx, view, 1.7, pass); for (let i = 0; i < 4; i++) R.zoneArt.stand(ctx, z, i, 1.7); }), `zone ${kd} ${JSON.stringify(sh)} draws all passes and its standing pieces`);
       }
-      for (const kd of KINDS) { ops.n = 0; view.zones.length = 0; view.zones.push(zrow(kd, kd === 'icewall' ? { len: 120, w: 10 } : {})); R.zoneArt.draw(ctx, view, 1, 0); R.zoneArt.draw(ctx, view, 1, 1); ok(ops.n > 0, `zone ${kd} draws (${ops.n} canvas ops)`); }
-      ok(R.zoneArt.wallN(zrow('icewall', { len: 120 })) === 10 && R.zoneArt.wallN(zrow('icewall', { len: 0 })) === 2 && R.zoneArt.wallN(zrow('icewall', { len: 9999 })) === 12, 'an ice wall stands one pillar every 14 px (2 to 12)');
-      ok(!throws(() => { R.zoneArt.pillar(4, false); R.zoneArt.pillar(5, true); }), 'the ice wall pillar sprites bake (both looks)');
+      for (const kd of KINDS) { ops.n = 0; view.zones.length = 0; view.zones.push(zrow(kd, {})); R.zoneArt.draw(ctx, view, 1, 0); R.zoneArt.draw(ctx, view, 1, 1); ok(ops.n > 0, `zone ${kd} draws (${ops.n} canvas ops)`); }
       // events
       const fctx = { localPid: 'p0', player: () => ({ x: 0, y: 0, pid: 'p0', cls: 'bell' }), players: () => [], stratum: () => 1 };
       const plays = [], A0 = ED.Audio;
