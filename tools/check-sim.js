@@ -7,6 +7,7 @@ let n = 0, fails = 0;
 const ok = (c, msg) => { n++; if (!c) { fails++; console.log('FAIL ' + msg); } };
 const near = (a, b, tol, msg) => ok(Math.abs(a - b) <= tol, `${msg}: got ${a}, want ${b}`);
 const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
+const NS = ED.BIOMES.length; // strata
 function stage(cls, boons, seed, wi) {
   const w = new ED.World({ seed: seed || 7, pact: 0, players: [{ pid: 'p0', name: 'T', slot: 0, cls, weapon: ED.CLASSES[cls].weapons[wi || 0], meta: META() }] });
   w.startRun();
@@ -161,7 +162,7 @@ for (const s of [1, 2]) {
 { // the extra elite of the last wave, with an affix from DARK_AFFIXES
   const { w } = stage('knight', {});
   let darkSeen = 0, plainSeen = 0, darkRooms = 0;
-  for (let s = 1; s <= ED.CONST.STRATA; s++) {
+  for (let s = 1; s <= NS; s++) {
     w.enterStratum(s);
     for (const room of w.floor.rooms) {
       if (room.type !== 'combat') continue;
@@ -391,23 +392,22 @@ const roomOf = (w, kind) => {
   if (kind === 'dark') c.dark = true; else c.type = 'elite';
   return c;
 };
-const budgetOf = (s, kind) => Math.round(W0.ROOM_XP[kind === 'elite' ? 'elite' : 'combat'][s - 1] * (kind === 'dark' ? W0.DARK_LOOT : 1));
+const budgetOf = (s, kind) => Math.round(W0.perStratum(W0.ROOM_XP[kind === 'elite' ? 'elite' : 'combat'], s) * (kind === 'dark' ? W0.DARK_LOOT : 1));
 { // fodder data: one per biome, in no roster, appended after every other entry
-  const ids = ED.BIOMES.map(b => b.fodder), idx = ids.map(id => ED.ENEMY_IDX[id]);
-  const NB = ED.BIOMES.length;
-  ok(ids.length === NB && new Set(ids).size === NB && ids.every(id => ED.ENEMIES[id] && ED.ENEMIES[id].fodder && ED.ENEMIES[id].ai === 'swarm' && ED.ENEMIES[id].cost === 0 && ED.ENEMIES[id].xp === 0 && ED.ENEMIES[id].hp === 7 && ED.ENEMIES[id].dmg === 1.5), 'one fodder def per biome, hp 7 dmg 1.5 xp 0');
-  ok(idx.join() === [...Array(NB)].map((_, i) => ED.ENEMY_IDS.length - NB + i).join(), `fodder are the last wire indices (${idx})`);
+  const ids = ED.BIOMES.map(b => b.fodder), all = ED.ENEMY_IDS.filter(id => ED.ENEMIES[id].fodder), idx = all.map(id => ED.ENEMY_IDX[id]);
+  ok(new Set(ids).size === NS && all.every(id => ED.ENEMIES[id].ai === 'swarm' && ED.ENEMIES[id].cost === 0 && ED.ENEMIES[id].xp === 0 && ED.ENEMIES[id].hp === 50 && ED.ENEMIES[id].dmg === 1.5) && ids.every(id => all.includes(id)), `${NS} biome fodder defs, hp 50 dmg 1.5 xp 0`);
+  ok(idx.join() === all.map((_, i) => ED.ENEMY_IDS.length - all.length + i).join(), `fodder are the last wire indices (${idx})`);
   ok(ED.BIOMES.every(b => !b.enemies.some(r => ED.ENEMIES[r[0]].fodder)), 'fodder are in no roster');
   ok(ids.every(id => { const d = ED.ENEMIES[id], a = ED.ENEMIES[d.art]; return d.r >= 6 && d.r <= 8 && d.spd >= 62 && d.spd <= 90 && !!a && !a.fodder && !!d.fly === !!a.fly && d.look === a.look; }), 'fodder: radius 6-8, speed 62-90, art names an existing non-fodder type with the same flight and look');
 }
-{ // health curve 7 x (1 + 0.25 (s - 1)); pact multipliers apply, the stratum lever, the party multiplier and elites do not
+{ // health curve 50 x (1 + 0.3 (depth - 1)), depth 1 + 5/3 (s - 1): 50 / 75 / 100 / 125; pact multipliers apply, the stratum lever, the row, the party multiplier and elites do not
   const { w } = stage('knight', {});
   const w2 = new ED.World({ seed: 7, pact: 0, players: [0, 1].map(i => ({ pid: 'p' + i, name: 'T', slot: i, cls: 'knight', weapon: ED.CLASSES.knight.weapons[0], meta: META() })) });
   w2.startRun();
-  for (let s = 1; s <= ED.CONST.STRATA; s++) {
+  for (let s = 1; s <= NS; s++) {
     w.stratum = s; w2.stratum = s;
     const e = w.spawnEnemy(fodderId(s), 0, 0), f = w2.spawnEnemy(fodderId(s), 0, 0), g = w.spawnEnemy(fodderId(s), 0, 0, { elite: true, affix: 'brutal' });
-    near(e.maxHp, 7 * (1 + 0.25 * (s - 1)), 1e-9, `fodder health at stratum ${s}`);
+    near(e.maxHp, 50 * (1 + 0.3 * (5 / 3) * (s - 1)), 1e-9, `fodder health at stratum ${s}`);
     ok(f.maxHp === e.maxHp && g.maxHp === e.maxHp && !g.elite && g.r === e.r, `stratum ${s}: no party multiplier, never elite`);
     w.pact = 1; near(w.spawnEnemy(fodderId(s), 0, 0).maxHp, e.maxHp * ED.PACTS[1].foeHp, 1e-9, 'pact 1 health x Thicker Hides'); w.pact = 10; near(w.spawnEnemy(fodderId(s), 0, 0).maxHp, e.maxHp * ED.PACTS[1].foeHp * ED.PACTS[10].foeHp, 1e-9, 'pact 10 health x Thicker Hides x The Deep Hungers'); w.pact = 0;
   }
@@ -480,30 +480,32 @@ const budgetOf = (s, kind) => Math.round(W0.ROOM_XP[kind === 'elite' ? 'elite' :
   near(slow / free, 0.5, 0.02, `walking with 7 foes touching covers half the distance (${slow.toFixed(1)} vs ${free.toFixed(1)})`);
   near(walk(mk(7), true), walk([], true), 1e-9, 'a dash ignores the crowd');
 }
-{ // quotas: FODDER_Q by stratum, x0.6 elite, x1.5 dark, x(1 + 0.5 (n - 1)) party, x0.6 tutorial stratum I
-  const Q = (w, room) => { const enc = { waves: [] }; w.planHorde(room, enc); return enc.q; };
-  for (let s = 1; s <= ED.CONST.STRATA; s++) {
-    const w = hordeWorld(s, ['knight']), w2 = hordeWorld(s, ['knight', 'ranger']), w4 = hordeWorld(s, ['knight', 'ranger', 'pyro', 'shade']), base = W0.FODDER_Q[s - 1];
-    ok(Q(w, { type: 'combat', dark: false }) === base && Q(w, { type: 'combat', dark: true }) === Math.round(base * 1.5) && Q(w, { type: 'elite', dark: false }) === Math.round(base * 0.6), `stratum ${s} quota ${base} / dark / elite`);
-    ok(Q(w2, { type: 'combat', dark: false }) === Math.round(base * 1.5) && Q(w4, { type: 'combat', dark: false }) === Math.round(base * 2.5), `stratum ${s} party quota`);
+{ // quotas: FODDER_Q by stratum, x0.6 elite, x1.5 dark, x(1 + 0.5 (n - 1)) party, x0.6 tutorial stratum I; each wave's share sums to the quota
+  const Q = (w, room, nW) => { const enc = { waves: [...Array(nW || 0)].map(() => []) }; w.planHorde(room, enc); return enc; };
+  for (let s = 1; s <= NS; s++) {
+    const w = hordeWorld(s, ['knight']), w2 = hordeWorld(s, ['knight', 'ranger']), w4 = hordeWorld(s, ['knight', 'ranger', 'pyro', 'shade']), base = W0.perStratum(W0.FODDER_Q, s);
+    ok(Q(w, { type: 'combat', dark: false }).q === base && Q(w, { type: 'combat', dark: true }).q === Math.round(base * 1.5) && Q(w, { type: 'elite', dark: false }).q === Math.round(base * 0.6), `stratum ${s} quota ${base} / dark / elite`);
+    ok(Q(w2, { type: 'combat', dark: false }).q === Math.round(base * 1.5) && Q(w4, { type: 'combat', dark: false }).q === Math.round(base * 2.5), `stratum ${s} party quota`);
+    const e = Q(w, { type: 'combat', dark: true }, 4);
+    ok(e.fod.length === 4 && e.fod.reduce((a, v) => a + v, 0) === e.q && Math.max(...e.fod) - Math.min(...e.fod) <= 1, `stratum ${s}: the waves share the quota evenly (${e.fod})`);
   }
   const wt = hordeWorld(1, ['knight'], true);
-  ok(Q(wt, { type: 'combat', dark: false }) === Math.round(W0.FODDER_Q[0] * 0.6), `tutorial stratum I quota ${Q(wt, { type: 'combat', dark: false })}`);
-  ok(W0.LIVE_CAP[0] === 120 && W0.LIVE_CAP[1] === 180 && W0.FODDER_XP_SHARE === 0.5 && W0.FODDER_Q.join() === '70,96,123,149,175,210' && W0.WAVES === 3 && W0.ROOM_XP.combat.join() === '30,47,74,103,131,150' && W0.ROOM_XP.elite.join() === '54,79,106,143,195,221', 'horde and xp constants');
+  ok(Q(wt, { type: 'combat', dark: false }).q === Math.round(W0.FODDER_Q[0] * 0.6), `tutorial stratum I quota ${Q(wt, { type: 'combat', dark: false }).q}`);
+  ok(W0.LIVE_CAP.join() === '60,90' && W0.FODDER_XP_SHARE === 0.5 && W0.FODDER_Q.length === 4 && W0.ROOM_XP.combat.length === 4 && W0.ROOM_XP.elite.length === 4 && W0.ROOM_XP.champion.length === 4 && W0.WAVES === 4 && W0.PACK_MAX === 8, 'horde and xp constants: 4 strata, 4 waves, packs of 8 at most');
 }
-// Every room kind of every stratum, played out by killing everything: the quota spawns, the room clears, fodder drop no gold or hearts, and the xp dropped is the budget
-for (let s = 1; s <= ED.CONST.STRATA; s++) {
+// Every room kind of every stratum, played out by killing everything: each wave brings its fodder, the room clears, fodder drop no gold or hearts, and the xp dropped is the budget
+for (let s = 1; s <= NS; s++) {
   for (const kind of ['combat', 'elite', 'dark']) {
     const w = hordeWorld(s, ['knight']), room = roomOf(w, kind);
     if (!room) { ok(false, `stratum ${s} has a ${kind} room`); continue; }
-    const q = Math.round(W0.FODDER_Q[s - 1] * (kind === 'elite' ? 0.6 : kind === 'dark' ? 1.5 : 1));
+    const q = Math.round(W0.perStratum(W0.FODDER_Q, s) * (kind === 'elite' ? 0.6 : kind === 'dark' ? 1.5 : 1));
     const r = playRoom(w, room, 'all', 400), enc = r.enc, tag = `stratum ${s} ${kind}`;
     if (process.argv.includes('-v')) console.log(`${s} ${kind}: ${r.t.toFixed(1)} s, ${w.log.packs.length} packs, fodder ${w.run.fodderKills}, threat ${w.run.kills - w.run.fodderKills}, xp ${w.log.xp}/${enc.xpBudget} (threat ${enc.xpThr}/${enc.xpThrCap}, cut ${enc.xpClip}), nearest hero ${Math.round(w.log.packDist)} px, sides ${[...w.log.sides].join('')}`);
     ok(r.cleared && enc.q === q && enc.spawned === q && w.run.fodderKills === q, `${tag}: the quota ${q} spawned (${enc.spawned}), was killed (${w.run.fodderKills}) and the room cleared in ${r.t.toFixed(0)} s`);
     ok(w.log.xp === budgetOf(s, kind) && enc.xpOut === budgetOf(s, kind), `${tag}: xp dropped ${w.log.xp} (ledger ${enc.xpOut}) = budget ${budgetOf(s, kind)}`);
     ok(enc.xpClip <= 1, `${tag}: planned threat drops fill the threat cap without a cut (cut ${enc.xpClip} of a ${enc.xpThrCap} cap)`);
-    ok(enc.xpThr <= enc.xpThrCap && w.log.packs.length >= Math.ceil(q / 12) && w.log.packs.every(z => z.type === fodderId(s) && z.n >= 1 && z.n <= 12 && z.r === 40 && z.dur === W0.PACE.spawn), `${tag}: ${w.log.packs.length} packs of the biome's fodder, 1-12 each`);
-    ok(w.log.capBad === 0 && w.log.packDist >= W0.PACK_AVOID, `${tag}: packs land ${Math.round(w.log.packDist)} px from the hero, the live cap holds`);
+    ok(enc.xpThr <= enc.xpThrCap && w.log.packs.length >= Math.ceil(q / W0.PACK_MAX) && w.log.packs.every(z => z.type === fodderId(s) && z.n >= 1 && z.n <= W0.PACK_MAX && z.r === 40 && z.dur === W0.PACE.spawn), `${tag}: ${w.log.packs.length} packs of the biome's fodder, 1-${W0.PACK_MAX} each`);
+    ok(w.log.capBad === 0 && w.log.packDist >= W0.PACE.avoid, `${tag}: packs land ${Math.round(w.log.packDist)} px from the hero, the live cap holds`);
     ok(w.log.fodGold === 0 && w.log.fodHearts === 0 && w.log.gold > 0, `${tag}: ${w.run.fodderKills} fodder kills dropped no gold or heart (the room dropped ${w.log.gold} gold, ${w.log.hearts} hearts)`);
   }
 }
@@ -523,56 +525,73 @@ for (let s = 1; s <= ED.CONST.STRATA; s++) {
   ok(w.log.xp - b0 === Math.min(want, room0), `an elite's drop is scaled by xpK (whole units, the fraction carried) and cut to what is left of the threat cap (${w.log.xp - b0} of ${want}, ${room0} left)`);
   ok(enc.xpClip === Math.max(0, want - room0), `the cut is logged (${enc.xpClip})`);
 }
-{ // the horde never holds the threat waves back: with the fodder left standing, the waves still advance as the threat foes die; the room clears only after the last fodder
-  const w = hordeWorld(1, ['knight']), room = roomOf(w, 'combat');
-  const r = playRoom(w, room, 'threat', 3.5), enc = r.enc, standing = w.hostiles();
-  ok(!r.cleared && enc.wave === enc.waves.length - 1 && standing >= 6 && w.hostiles(true) === 0, `waves advance past standing fodder well before the ${W0.PACE.maxAge} s timer (wave ${enc.wave + 1}/${enc.waves.length} after ${r.t.toFixed(1)} s with ${standing} fodder standing)`);
-  ok(enc.spawned < enc.q, `the quota is not out yet (${enc.spawned}/${enc.q}): the room stays locked`);
-  const r2 = stepRoom(w, enc, 'threat', 60);
-  ok(!r2.cleared && enc.spawned === enc.q && w.hostiles() > 0, `with the quota out and fodder standing the room does not clear (${w.hostiles()} standing)`);
-  const r3 = stepRoom(w, enc, 'all', 5);
-  ok(r3.cleared && w.run.fodderKills === enc.q, `it clears once the last fodder falls (${w.run.fodderKills}/${enc.q})`);
+{ // the horde never holds the threat waves back: with the fodder left standing, the waves advance as the threat foes die; the last threat foe's death clears the room at once, the fodder crumble and the pile pays the budget
+  const w = hordeWorld(3, ['knight']), room = roomOf(w, 'combat');
+  const r = playRoom(w, room, 'threat', 20), enc = r.enc, standing = w.hostiles();
+  ok(r.cleared && standing === 0, `the room cleared with the last threat foe in ${r.t.toFixed(1)} s, well before the ${W0.PACE.maxAge} s wave timer`);
+  const crumbled = w.fx.filter(v => v.t === 'die' && v.cr === 1 && v.fd === 1).length;
+  ok(crumbled > 0 && w.run.fodderKills === 0 && enc.spawned > 0, `the standing fodder crumbled (${crumbled} of ${enc.spawned} out), none of it counted as a kill`);
+  ok(w.log.xp === enc.xpBudget && enc.xpOut === enc.xpBudget, `the clear pile paid the whole budget (${w.log.xp}/${enc.xpBudget})`);
+  ok(!w.zones.some(z => z.kind === 'spawn' && !z.dead), 'no spawn zone outlives the clear');
 }
-{ // packs: spots at least 220 px from every hero, from several sides over rooms; the live cap holds and delays the quota; a pack is one spawn zone and resolves into n fodder on floor tiles
+{ // a reinforcement: the last wave of every room kind carries one (a longer, bigger telegraph and a 'reinf' event): the roster's costliest foe, the dark room's affixed elite, the elite room's last elite
+  const costliest = (s) => ED.biomeFor(s).enemies.filter(r => ED.ENEMIES[r[0]] && !ED.ENEMIES[r[0]].minion).reduce((a, r) => ((ED.ENEMIES[r[0]].cost || 2) > (ED.ENEMIES[a[0]].cost || 2) ? r : a))[0];
+  for (const kind of ['combat', 'elite', 'dark']) {
+    const w = hordeWorld(2, ['knight']), room = roomOf(w, kind), waves = w.planWaves(room), last = waves[waves.length - 1];
+    const re = last.filter(f => f.reinf), earlier = waves.slice(0, -1).some(wv => wv.some(f => f.reinf));
+    ok(waves.length === W0.WAVES && re.length === 1 && !earlier, `${kind}: ${waves.length} waves, one reinforcement, in the last wave only`);
+    ok(kind === 'combat' ? re[0].type === costliest(2) && !re[0].elite : kind === 'dark' ? re[0].elite && W0.DARK_AFFIXES.includes(re[0].affix) : re[0].elite && re[0].type === ED.biomeFor(2).elite, `${kind}: the reinforcement is ${re[0].type}${re[0].elite ? ' (elite ' + (re[0].affix || '') + ')' : ''}`);
+  }
+  const w = hordeWorld(2, ['knight']); w.fx.length = 0; w.zones.length = 0;
+  w.spawnWave([{ type: 'skeleton' }, { type: 'shroomhulk', reinf: 1 }]);
+  const zr = w.zones.find(z => z.big), zn = w.zones.find(z => !z.big), ev = w.fx.find(v => v.t === 'reinf');
+  ok(zr && zr.dur === W0.PACE.reinf && zr.r > zn.r && zn.dur < W0.PACE.reinf && ev && ev.type === 'shroomhulk', 'the reinforcement spawns under a longer, bigger telegraph with its event');
+  ok([...w.players.values()].every(p => Math.hypot(p.x - zr.x, p.y - zr.y) >= W0.REINF_AVOID), 'and lands REINF_AVOID from every hero');
+}
+{ // packs: spots at least PACE.avoid (mostly PACK_AVOID) from every hero, from several sides over rooms; the live cap cuts a pack; a pack is one spawn zone and resolves into n fodder on floor tiles
   const sides = new Set();
-  for (const [s, cls] of [[1, ['knight', 'ranger']], [4, ['knight']], [6, ['knight']], [6, ['knight', 'ranger']]]) {
+  for (const [s, cls] of [[1, ['knight', 'ranger']], [3, ['knight']], [NS, ['knight']], [NS, ['knight', 'ranger']]]) {
     const w = hordeWorld(s, cls);
     for (const kind of ['combat', 'elite', 'dark']) {
       const room = roomOf(w, kind), r = playRoom(w, room, 'none', 40), enc = r.enc;
       for (const d of w.log.sides) sides.add(d);
-      ok(w.log.packs.length >= 1 && w.log.packDist >= 220 && w.log.capBad === 0, `stratum ${s} ${cls.length} hero(es) ${kind}: ${w.log.packs.length} packs, nearest hero ${Math.round(w.log.packDist)} px, cap respected`);
+      ok(w.log.packs.length >= 1 && w.log.packDist >= W0.PACE.avoid && w.log.capBad === 0, `stratum ${s} ${cls.length} hero(es) ${kind}: ${w.log.packs.length} packs, nearest hero ${Math.round(w.log.packDist)} px, cap respected`);
       const cap = W0.LIVE_CAP[cls.length > 1 ? 1 : 0], pend = w.zones.reduce((a, q) => a + (q.kind === 'spawn' ? q.n || 1 : 0), 0);
-      ok(r.peak + pend <= cap, `stratum ${s} ${kind}: peak ${r.peak} standing (+ ${pend} pending) against the cap ${cap}`);
       if (process.argv.includes('-v')) console.log(`cap run: stratum ${s}, ${cls.length} hero(es), ${kind}: ${enc.spawned}/${enc.q} fodder out in 40 s, peak ${r.peak} standing, ${w.hostiles()} + ${pend} pending, cap ${cap}`);
-      if (s === 6 && cls.length === 1 && kind !== 'elite') ok(enc.spawned < enc.q && r.peak >= cap - 40, `stratum VI ${kind}: the cap holds the quota back (${enc.spawned}/${enc.q} out, peak ${r.peak})`);
     }
   }
   ok(sides.size >= 3, `packs come from several sides (${[...sides].join('')})`);
+  { // the cap cuts a pack: with 55 foes standing solo, a wave's share of 12 shrinks to fit 60
+    const w = hordeWorld(1, ['knight']), room = roomOf(w, 'combat'); playRoom(w, room, 'none', 0.01); const enc = w.enc, p = w.players.get('p0');
+    for (let i = 0; i < 55; i++) w.spawnEnemy('skeleton', p.x + 300, p.y);
+    w.zones.length = 0; enc.fod = [12]; enc.spawned = 0; w.spawnPacks(enc, 0);
+    ok(enc.spawned === 5 && w.zones.reduce((a, z) => a + (z.n || 0), 0) === 5, `the live cap cuts the pack to ${enc.spawned}`);
+  }
   const w = hordeWorld(1, ['knight']), room = roomOf(w, 'combat'), r = playRoom(w, room, 'none', 3), pk = w.log.packs[0];
-  ok(!!pk && pk.kind === 'spawn' && pk.n >= 6 && pk.n <= 12 && pk.type === 'bonemite', 'the first pack is one spawn zone with n and the biome fodder');
-  const before = w.enemies.length; for (let i = 0; i < 80; i++) { w.players.get('p0').invuln = 1e9; w.update(TICK); }
+  ok(!!pk && pk.kind === 'spawn' && pk.n >= 1 && pk.n <= W0.PACK_MAX && pk.type === 'bonemite', 'the first pack is one spawn zone with n and the biome fodder');
+  for (let i = 0; i < 80; i++) { w.players.get('p0').invuln = 1e9; w.update(TICK); }
   const fod = w.enemies.filter(e => e.fodder && e.hp > 0);
   ok(fod.length >= pk.n && fod.every(e => ED.Dungeon.tileAt(w.room, e.x, e.y) !== 1), `the pack resolved into fodder (${fod.length})`);
 }
 { // a hero standing 6.5 tiles from the only pack edge of its room (closer than PACK_AVOID along a stretch of that edge): the packs skip that stretch, or go to another edge, and never land within 220 px
   const T = ED.CONST.TILE;
-  for (const [s, near] of [[1, 'w'], [2, 'e'], [3, 'n'], [4, 's']]) {
+  for (const [s, near] of [[1, 'w'], [2, 'e'], [3, 'n'], [NS, 's']]) {
     const w = hordeWorld(s, ['knight']), room = roomOf(w, 'combat'), p = w.players.get('p0');
     w.enterRoom(room.id, 's');
     w.enc.edges = [near]; w.log.packs.length = 0; w.log.sides.clear(); w.log.packDist = Infinity;
     p.x = near === 'w' ? 7.5 * T : near === 'e' ? (room.w - 7.5) * T : room.w * T / 2; p.y = near === 'n' ? 8.5 * T : near === 's' ? (room.h - 7.5) * T : room.h * T / 2 + T;
     stepRoom(w, w.enc, 'none', 25);
-    ok(w.log.packs.length >= 4 && w.log.packDist >= 220, `stratum ${s}: hero near the ${near} edge, ${w.log.packs.length} packs from ${[...w.log.sides].join('')}, nearest ${Math.round(w.log.packDist)} px`);
+    ok(w.log.packs.length >= 2 && w.log.packDist >= 220, `stratum ${s}: hero near the ${near} edge, ${w.log.packs.length} packs from ${[...w.log.sides].join('')}, nearest ${Math.round(w.log.packDist)} px`);
   }
 }
-{ // one run through the start-of-room rules: the first pack comes with the first threat wave, the next 2-3 s later
+{ // one run through the room rules: packs come only on the tick a threat wave starts (no pack between waves or after the last), the next wave PACE.maxAge after the last when nothing dies
   const w = hordeWorld(2, ['knight']), room = roomOf(w, 'combat');
   w.enterRoom(room.id, 's');
-  const times = [], p = w.players.get('p0');
-  for (let i = 0; i < 60 * 14; i++) { p.invuln = 1e9; const n0 = w.log.packs.length, wv = w.enc.wave; w.update(TICK); if (w.log.packs.length > n0) times.push([w.time, w.enc.wave]); }
-  ok(times.length >= 4 && times[0][1] === 0, `the first pack comes with wave 1 (${JSON.stringify(times[0])})`);
-  const gaps = times.slice(1).map((t, i) => t[0] - times[i][0]);
-  ok(gaps.every(g => g >= 2.0 - 1e-9 && g <= 3.0 + 0.05), `packs 2-3 s apart (${gaps.map(g => g.toFixed(2)).join(' ')})`);
+  const packs = [], waves = [], p = w.players.get('p0'), enc = w.enc;
+  for (let i = 0; i < 60 * 70 && w.enc === enc; i++) { p.invuln = 1e9; const n0 = w.log.packs.length, wv = enc.wave; w.update(TICK); if (w.log.packs.length > n0) packs.push([w.time, enc.wave]); if (enc.wave !== wv) waves.push(w.time); }
+  ok(waves.length === enc.waves.length && packs.length >= enc.waves.length && packs.every(([t]) => waves.some(u => Math.abs(u - t) < 1e-9)), `packs only with a wave (waves at ${waves.map(t => t.toFixed(1))}, packs at ${packs.map(q => q[0].toFixed(1))})`);
+  const gaps = waves.slice(1).map((t, i) => t - waves[i]);
+  ok(gaps.every(g => g >= W0.PACE.maxAge - 1e-9 && g <= W0.PACE.maxAge + 0.05), `untouched waves ${W0.PACE.maxAge} s apart (${gaps.map(g => g.toFixed(2)).join(' ')})`);
 }
 { // measured hero velocity and lead aim: a hero walking at a constant velocity is led toward the intercept point; L 0 aims straight at it; a jump resets the velocity; shot speed follows the stratum
   const { w, p } = stage('knight', {});
@@ -583,13 +602,13 @@ for (let s = 1; s <= ED.CONST.STRATA; s++) {
   near(W0.leadAngle(p.x, p.y + 300, p, 300, 1), Math.atan2(-300, 300 * Math.sqrt(1 / 8)), 0.005, 'L 1 aims at the intercept point (shot 300 px/s, hero 100 px/s across, 300 px away)');
   near(W0.leadAngle(p.x, p.y + 300, { x: p.x, y: p.y }, 300, 1), -Math.PI / 2, 1e-9, 'a target without a measured velocity is aimed at straight');
   p.x += 100; w.updatePlayer(p, TICK); ok(p.lvx === 0 && p.lvy === 0, 'a jump over 24 px resets the measured velocity');
-  ok(W0.LEAD[0] === 0 && W0.LEAD[1] === 0 && W0.LEAD[5] === 0.85, 'no lead on strata I-II, 0.85 at VI');
+  ok(W0.LEAD.join() === '0,0.25,0.6,0.85' && W0.leadAt(1) === 0 && W0.leadAt(NS) === 0.85, 'lead 0 / 0.25 / 0.6 / 0.85 by stratum');
   const e = w.spawnEnemy('bonearcher', p.x + 100, p.y), b = w.spawnEnemy('bonewarden', p.x + 100, p.y);
-  w.stratum = 6; const q = w.enemyShoot(e, 0, 200, 'arrow', 1, 6), qb = w.enemyShoot(b, 0, 200, 'bone', 1, 6);
-  near(Math.hypot(q.vx, q.vy), 200 * W0.shotSpd(6), 1e-6, 'a foe shot at stratum VI flies x1.4'); near(Math.hypot(qb.vx, qb.vy), 200 * W0.bossShotSpd(6), 1e-6, 'a boss shot at stratum VI flies x1.5');
+  w.stratum = 4; const q = w.enemyShoot(e, 0, 200, 'arrow', 1, 6), qb = w.enemyShoot(b, 0, 200, 'bone', 1, 6);
+  near(Math.hypot(q.vx, q.vy), 200 * W0.shotSpd(4), 1e-6, 'a foe shot at stratum IV flies x1.4'); near(Math.hypot(qb.vx, qb.vy), 200 * W0.bossShotSpd(4), 1e-6, 'a boss shot at stratum IV flies x1.5');
 }
 { // stratum behaviour: lead aim of every aimed foe shot, ground speed, mixed rosters, two-affix elites
-  const LD = W0.LEAD, U0 = ED.U, shots = (w) => w.projs.filter(q => q.team === 1);
+  const LD = (s) => W0.leadAt(s), U0 = ED.U, shots = (w) => w.projs.filter(q => q.team === 1);
   const until = (w, e, f, max) => { for (let i = 0; i < (max || 600); i++) { w.updateEnemy(e, TICK); if (f()) return true; } return false; };
   const dev = (ps, a) => ps.reduce((s, q) => s + U0.angDiff(Math.atan2(q.vy, q.vx), a), 0) / ps.length; // mean angular deviation of the shots from angle a
   // Forces the second affix: makeElite on a normal foe with the rng stubbed so the roll succeeds and picks `second`.
@@ -605,23 +624,23 @@ for (let s = 1; s <= ED.CONST.STRATA; s++) {
     if (aff) withAffixes(w, e, aff[0], aff[1]);
     return { w, p, e };
   };
-  const want = (e, p, spd, s) => W0.leadAngle(e.x, e.y - 4, p, spd * W0.shotSpd(s), LD[s - 1]);
+  const want = (e, p, spd, s) => W0.leadAngle(e.x, e.y - 4, p, spd * W0.shotSpd(s), LD(s));
   const straight = (e, p) => Math.atan2(p.y - (e.y - 4), p.x - e.x);
-  // shooter: strata I-II aim straight, III+ lead
-  for (const s of [1, 2, 3, 6]) {
+  // shooter: L 0 aims straight, L > 0 leads
+  for (const s of [1, 2, 3, 4]) {
     const { w, p, e } = duel(s, 'bonearcher', 90, 60), S = e.def.shot;
     ok(until(w, e, () => shots(w).length > 0), `stratum ${s}: the archer shoots`);
     const d = dev(shots(w), want(e, p, S.speed, s));
-    ok(Math.abs(d) < 1e-9, `stratum ${s}: the archer's shots are centred on leadAngle with L ${LD[s - 1]} (off by ${d})`);
-    if (s < 3) ok(Math.abs(dev(shots(w), straight(e, p))) < 1e-9, `stratum ${s}: no lead, aimed straight`);
+    ok(Math.abs(d) < 1e-9, `stratum ${s}: the archer's shots are centred on leadAngle with L ${LD(s)} (off by ${d})`);
+    if (LD(s) === 0) ok(Math.abs(dev(shots(w), straight(e, p))) < 1e-9, `stratum ${s}: no lead, aimed straight`);
     else ok(Math.abs(dev(shots(w), straight(e, p))) > 0.03, `stratum ${s}: the shot is led away from the straight line`);
   }
   { // the aim is recomputed every wind-up frame; a swift second affix shortens the wind-up
-    const { w, p, e } = duel(6, 'bonearcher', 90, 0), S = e.def.shot;
+    const { w, p, e } = duel(4, 'bonearcher', 90, 0), S = e.def.shot;
     ok(until(w, e, () => e.st === 'aim'), 'the archer winds up'); near(e.t, S.windup, 1e-9, 'plain wind-up');
     const a1 = e.aimA; p.lvy = -90; w.updateEnemy(e, TICK);
-    near(e.aimA, want(e, p, S.speed, 6), 1e-9, 'the aim is recomputed every wind-up frame'); ok(Math.abs(e.aimA - a1) > 0.01, 'and follows the hero turning');
-    const t = duel(6, 'bonearcher', 0, 0, ['brutal', 'swift']);
+    near(e.aimA, want(e, p, S.speed, 4), 1e-9, 'the aim is recomputed every wind-up frame'); ok(Math.abs(e.aimA - a1) > 0.01, 'and follows the hero turning');
+    const t = duel(4, 'bonearcher', 0, 0, ['brutal', 'swift']);
     ok(until(t.w, t.e, () => t.e.st === 'aim'), 'the swift elite winds up'); near(t.e.t, S.windup * 0.7, 1e-9, 'swift in the second slot shortens the wind-up (x0.7)');
   }
   { // orbiter burst: leads during the aim phase, locks for the last 0.15 s
@@ -633,21 +652,21 @@ for (let s = 1; s <= ED.CONST.STRATA; s++) {
     near(Math.atan2(shots(w)[0].vy, shots(w)[0].vx), lock, 1e-9, 'the burst keeps the angle locked in the last 0.15 s');
   }
   // turret spread, then the lobbed glob (the spitter alternates); the glob lands lvx x flight x L ahead
-  for (const s of [2, 5]) {
+  for (const s of [2, 4]) {
     const { w, p, e } = duel(s, 'spitter', 100, 0), P = e.def.pattern;
     ok(until(w, e, () => shots(w).length > 0), `stratum ${s}: the spitter spreads`);
     ok(Math.abs(dev(shots(w), want(e, p, P.speed, s))) < 1e-9, `stratum ${s}: the turret spread is centred on leadAngle`);
     e.cd = 0; w.projs.length = 0;
     ok(until(w, e, () => w.zones.some(z => z.lob)), `stratum ${s}: the spitter lobs a glob`);
     const z = w.zones.find(q => q.lob);
-    near(z.x, p.x + 100 * z.dur * LD[s - 1], 1e-6, `stratum ${s}: the glob lands ${LD[s - 1]} x lvx x flight ahead (flight ${z.dur})`); near(z.y, p.y, 1e-6, 'and on the hero row');
+    near(z.x, p.x + 100 * z.dur * LD(s), 1e-6, `stratum ${s}: the glob lands ${LD(s)} x lvx x flight ahead (flight ${z.dur})`); near(z.y, p.y, 1e-6, 'and on the hero row');
   }
-  { const { w, p, e } = duel(5, 'imp', 0, -120);
+  { const { w, p, e } = duel(4, 'imp', 0, -120);
     ok(until(w, e, () => w.zones.some(z => z.lob)), 'the imp lobs a fireball');
-    const z = w.zones.find(q => q.lob); near(z.y, p.y - 120 * z.dur * LD[4], 1e-6, 'the lobber leads by lvy x flight x L'); near(z.x, p.x, 1e-6, 'and not sideways');
+    const z = w.zones.find(q => q.lob); near(z.y, p.y - 120 * z.dur * LD(4), 1e-6, 'the lobber leads by lvy x flight x L'); near(z.x, p.x, 1e-6, 'and not sideways');
   }
   { // a lob whose lead point lies inside a wall lands on floor, short of it
-    const { w, p, e } = duel(6, 'spitter', 400, 0), D0 = ED.Dungeon;
+    const { w, p, e } = duel(4, 'spitter', 400, 0), D0 = ED.Dungeon;
     let x = p.x; while (!D0.blocksShots(D0.tileAt(w.room, x, p.y), false) && x < p.x + 2000) x += 4;
     p.x = x - 30; e.x = p.x - 160; e.vars.n = 1;
     ok(until(w, e, () => w.zones.some(z => z.lob)), 'the glob is lobbed at a hero by a wall');
@@ -655,40 +674,40 @@ for (let s = 1; s <= ED.CONST.STRATA; s++) {
     ok(!D0.blocksShots(D0.tileAt(w.room, z.x, z.y), false) && z.x < x && z.x > p.x, `a glob led into a wall lands on floor in front of it (x ${Math.round(z.x)}, wall at ${x}, hero ${Math.round(p.x)})`);
   }
   { // web shot: led, and its flight time matches the telegraphed landing circle at the final speed
-    const { w, p, e } = duel(5, 'cavespider', 100, 0), Wb = e.def.web;
+    const { w, p, e } = duel(4, 'cavespider', 100, 0), Wb = e.def.web;
     ok(until(w, e, () => shots(w).some(q => q.kind === 'web')), 'the spider webs');
     const q = shots(w).find(r => r.kind === 'web'), z = w.zones.find(r => r.detached);
-    ok(Math.abs(dev([q], want(e, p, Wb.speed, 5))) < 1e-9, 'the web is aimed at the lead point');
+    ok(Math.abs(dev([q], want(e, p, Wb.speed, 4))) < 1e-9, 'the web is aimed at the lead point');
     near(q.life * Math.hypot(q.vx, q.vy), Math.hypot(z.x - e.x, z.y - e.y), 1e-6, 'the web flies exactly to its landing circle at the stratum shot speed');
   }
   { // caster wave
-    const { w, p, e } = duel(5, 'siren', 100, 30), C = e.def.cast;
+    const { w, p, e } = duel(4, 'siren', 100, 30), C = e.def.cast;
     ok(until(w, e, () => shots(w).length === C.n), 'the siren casts its wave');
-    ok(Math.abs(dev(shots(w), want(e, p, C.speed, 5))) < 1e-9, 'the wave is centred on the lead angle');
+    ok(Math.abs(dev(shots(w), want(e, p, C.speed, 4))) < 1e-9, 'the wave is centred on the lead angle');
   }
   { // caster wind-up telegraphs: a wave shows a cone that follows the led aim, a ring or homing cast a warn circle on the caster; both belong to the caster
-    const { w, p, e } = duel(5, 'siren', 100, 30);
+    const { w, p, e } = duel(4, 'siren', 100, 30);
     ok(until(w, e, () => e.st === 'cast'), 'the siren winds up');
     const zc = w.zones.find(z => z.kind === 'teleCone' && z.src === e && z.warnOnly);
     ok(zc && Math.abs(zc.dur - e.t) < 1e-9 && zc.a === e.aimA, 'a wave wind-up shows a warn cone on the led aim for the whole wind-up');
-    const r = duel(5, 'tidecaller', 100, 30);
+    const r = duel(4, 'tidecaller', 100, 30);
     ok(until(r.w, r.e, () => r.e.st === 'cast'), 'the tidecaller winds up');
     ok(r.w.zones.some(z => z.kind === 'tele' && z.src === r.e && z.warnOnly && Math.abs(z.dur - r.e.t) < 1e-9), 'a ring wind-up shows a warn circle on the caster');
   }
   { // a spiral pattern starts straight at the hero (ring, laser and dive patterns are not led either)
-    const { w, p, e } = duel(6, 'flameturret', 150, 0);
+    const { w, p, e } = duel(4, 'flameturret', 150, 0);
     ok(until(w, e, () => e.st === 'aim'), 'the totem winds up');
     near(e.aimA, Math.atan2(p.y - e.y, p.x - e.x), 1e-9, 'a spiral starts straight at the hero (no lead)');
   }
   { // ground speed: normal foes x foeSpd; bosses and fodder keep theirs
     const { w } = stage('knight', {});
-    for (const s of [1, 4, 6]) {
+    for (const s of [1, 3, 4]) {
       w.stratum = s;
       const sk = w.spawnEnemy('skeleton', 0, 0), bs = w.spawnEnemy('bonewarden', 0, 0), fd = w.spawnEnemy(fodderId(s), 0, 0);
       near(sk.spd, ED.ENEMIES.skeleton.spd * W0.foeSpd(s), 1e-9, `stratum ${s}: a normal foe moves x${W0.foeSpd(s)}`);
       ok(bs.spd === ED.ENEMIES.bonewarden.spd && fd.spd === ED.ENEMIES[fodderId(s)].spd, `stratum ${s}: a boss and a fodder foe keep their speed`);
     }
-    near(W0.foeSpd(6), 1.2, 1e-9, 'x1.2 at stratum VI');
+    near(W0.foeSpd(4), 1.2, 1e-9, 'x1.2 at stratum IV');
   }
   { // mixed rosters: the previous biome's foes join a room at MIX_PREV
     ok(W0.MIX_PREV === 0.6, 'MIX_PREV is 0.6');
@@ -703,24 +722,24 @@ for (let s = 1; s <= ED.CONST.STRATA; s++) {
   }
   { // two-affix elites
     const { w } = stage('knight', {});
-    ok(W0.AFFIX2.join() === '0,0,0,0.35,0.6,0.85', 'AFFIX2 by stratum');
+    ok(W0.AFFIX2.join() === '0,0,0.45,0.85', 'AFFIX2 by stratum');
     const roll = (s, n, first) => {
       w.stratum = s; let two = 0, bad = 0;
       for (let i = 0; i < n; i++) {
         const e = { hp: 100, maxHp: 100, dmg: 10, spd: 50, r: 10, ward: 0, wardMax: 0 }; w.makeElite(e, first);
         if (e.elite2) two++;
         if (e.elite2 && (e.elite2 === e.elite || !ED.AFFIXES[e.elite2])) bad++;
-        if (Math.abs(e.maxHp - 100 * (2.4 + 0.4 * (s - 1))) > 1e-9 || Math.abs(e.dmg - 9 * (ED.hasAffix(e, 'brutal') ? 1.4 : 1)) > 1e-9 || Math.abs(e.spd - 50 * (ED.hasAffix(e, 'swift') ? 1.4 : 1)) > 1e-9 || Math.abs(e.ward - (ED.hasAffix(e, 'warded') ? 0.45 * e.maxHp : 0)) > 1e-9) bad++;
+        if (Math.abs(e.maxHp - 100 * (2.4 + 0.4 * (W0.depth(s) - 1))) > 1e-9 || Math.abs(e.dmg - 9 * (ED.hasAffix(e, 'brutal') ? 1.4 : 1)) > 1e-9 || Math.abs(e.spd - 50 * (ED.hasAffix(e, 'swift') ? 1.4 : 1)) > 1e-9 || Math.abs(e.ward - (ED.hasAffix(e, 'warded') ? 0.45 * e.maxHp : 0)) > 1e-9) bad++;
       }
       return { p: two / n, bad };
     };
-    for (const s of [1, 2, 3]) { const r = roll(s, 500); ok(r.p === 0 && r.bad === 0, `stratum ${s}: no second affix (${r.p})`); }
-    for (const s of [4, 5, 6]) { const r = roll(s, 1500); near(r.p, W0.AFFIX2[s - 1], 0.06, `stratum ${s}: second affix chance`); ok(r.bad === 0, `stratum ${s}: elite2 differs from elite, HP and damage multipliers apply once, each affix effect once`); }
-    ok(roll(6, 400, 'brutal').bad === 0, 'a given first affix (dark-room elite) is never repeated in slot 2');
+    for (const s of [1, 2]) { const r = roll(s, 500); ok(r.p === 0 && r.bad === 0, `stratum ${s}: no second affix (${r.p})`); }
+    for (const s of [3, 4]) { const r = roll(s, 1500); near(r.p, W0.perStratum(W0.AFFIX2, s), 0.06, `stratum ${s}: second affix chance`); ok(r.bad === 0, `stratum ${s}: elite2 differs from elite, HP and damage multipliers apply once, each affix effect once`); }
+    ok(roll(4, 400, 'brutal').bad === 0, 'a given first affix (dark-room elite) is never repeated in slot 2');
     ok(ED.hasAffix({ elite: 'swift', elite2: 'brutal' }, 'brutal') && ED.hasAffix({ elite: 'swift' }, 'swift') && !ED.hasAffix({ elite: 'swift' }, 'brutal') && !ED.hasAffix({ elite: null }, 'swift'), 'hasAffix reads both slots');
     w.stratum = 4; const base = w.spawnEnemy('skeleton', 100, 100), mk = (first, second) => withAffixes(w, w.spawnEnemy('skeleton', 100, 100), first, second);
     const sw = mk('brutal', 'swift');
-    near(sw.spd, base.spd * 1.4, 1e-9, 'swift in slot 2: speed x1.4'); near(sw.dmg, base.dmg * 0.9 * 1.4, 1e-9, 'brutal in slot 1: damage x1.4 once'); near(sw.maxHp, base.maxHp * (2.4 + 0.4 * 3), 1e-9, 'elite HP multiplier once');
+    near(sw.spd, base.spd * 1.4, 1e-9, 'swift in slot 2: speed x1.4'); near(sw.dmg, base.dmg * 0.9 * 1.4, 1e-9, 'brutal in slot 1: damage x1.4 once'); near(sw.maxHp, base.maxHp * (2.4 + 0.4 * (W0.depth(4) - 1)), 1e-9, 'elite HP multiplier once');
     near(mk('swift', 'brutal').dmg, base.dmg * 0.9 * 1.4, 1e-9, 'brutal in slot 2: damage x1.4');
     const wd = mk('swift', 'warded'); near(wd.ward, wd.maxHp * 0.45, 1e-9, 'warded in slot 2: ward 45% of max HP');
     const vo = mk('swift', 'volatile'); w.zones.length = 0; w.killEnemy(vo, null, {});
@@ -748,7 +767,7 @@ for (let s = 1; s <= ED.CONST.STRATA; s++) {
   }
   const go = (w, secs, each) => { for (let i = 0, n = Math.round(secs * 60); i < n; i++) { for (const p of w.players.values()) p.invuln = 1e9; if (each) each(i); w.update(TICK); } };
   const startVol = (w, b, phase) => { b.phase = phase || 1; b.st = 'atk'; b.atk = 'volley'; b.t = 0; b.vars = { wm: 1 }; B[b.type].attacks.volley.start(w, b); };
-  const finalSp = (s) => BV.speed + BV.step * (s - 1), Lof = (s) => W0.LEAD[s - 1];
+  const finalSp = (s) => BV.speed + BV.step * (s - 1), Lof = (s) => W0.leadAt(s);
   const lead = (v, h, s) => W0.leadAngle(v.x, v.y - 4, h, finalSp(s), Lof(s)); // the angle a shot released at v should have toward hero state h
   ok(BV.speed === 320 && BV.step === 20 && BV.n.join() === '3,4,5' && W0.BOSS_OV_GAP === 5, 'volley constants');
   for (const type of Object.keys(KIND)) ok(B[type].attacks.volley && B[type].attacks.volley.w === 2 && !B[type].attacks.volley.phase, `${type} has the volley entry (weight 2, every phase)`);
@@ -834,27 +853,17 @@ for (let s = 1; s <= ED.CONST.STRATA; s++) {
     for (let i = 0; i < 6; i++) w.spawnEnemy('skeleton', 50, 50);
     ok(w.hostiles(true) === n0 + 6, 'six regular foes do');
   }
-  for (const heroes of [['knight'], ['knight', 'ranger']]) { // the fodder trickle: packs of 4-6 every 7 s from the boss's spawn, edges 220 px from the heroes, held at the cap, none after the boss dies
-    const s = 4, w = hordeWorld(s, heroes), room = w.floor.rooms.find(r => r.type === 'boss'), ps = [...w.players.values()], cap = W0.BOSS_FODDER_CAP[heroes.length > 1 ? 1 : 0];
-    const live = () => w.enemies.filter(e => e.fodder && e.hp > 0).length, az = w.addZone, trick = [];
-    w.addZone = function (z) { if (z.kind === 'spawn' && z.n) trick.push({ t: this.time, n: z.n, type: z.type, live: live() }); return az.call(this, z); };
-    const t0 = w.time;
-    playRoom(w, room, 'none', 70);
+  for (const heroes of [['knight'], ['knight', 'ranger']]) { // no fodder in a boss fight: no pack zone and no fodder foe for 40 s from the intro, and none after the boss dies
+    const s = 4, w = hordeWorld(s, heroes), room = w.floor.rooms.find(r => r.type === 'boss'), ps = [...w.players.values()];
+    const packs = [], az = w.addZone; let fod = 0;
+    w.addZone = function (z) { if (z.kind === 'spawn' && z.n) packs.push(z); return az.call(this, z); };
+    playRoom(w, room, 'none', 40);
+    for (const e of w.enemies) if (e.fodder) fod++;
     ok(w.boss && w.boss.type === ED.biomeFor(s).boss && w.enc.kind === 'boss', `${heroes.length} hero(es): the boss fight runs`);
-    ok(trick.length >= 3 && Math.abs(trick[0].t - t0 - 9.4) <= 3 * TICK, `first pack at ${(trick[0].t - t0).toFixed(2)} s (the boss spawns at 2.4 s, +7 s)`);
-    ok(trick[1].t - trick[0].t >= 7 - 1e-9 && trick[1].t - trick[0].t <= 7 + 3 * TICK, `the next pack ${(trick[1].t - trick[0].t).toFixed(2)} s later`);
-    ok(trick.slice(1).every((k, i) => k.t - trick[i].t >= 7 - 1e-9), 'packs at least 7 s apart');
-    ok(trick.every(k => k.n >= 4 && k.n <= 6 && k.type === ED.biomeFor(s).fodder), `packs of 4-6 ${ED.biomeFor(s).fodder} (${trick.map(k => k.n)})`);
-    ok(trick.every(k => k.live + k.n <= cap), `a pack lands only while it keeps live fodder within the cap of ${cap} (live before: ${trick.map(k => k.live)})`);
-    ok(w.log.packDist >= W0.PACK_AVOID, `packs land ${Math.round(w.log.packDist)} px from the heroes (>= ${W0.PACK_AVOID})`);
-    const idle = w.time - t0 - trick[trick.length - 1].t;
-    ok(live() > cap - 6 && live() <= cap && idle > 7, `held at the cap: ${live()} fodder live, last pack ${idle.toFixed(1)} s ago`);
-    const n0 = trick.length; for (const e of w.enemies.slice()) if (e.fodder && e.hp > 0) w.killEnemy(e, ps[0], {});
-    go(w, 0.5); ok(trick.length === n0 + 1, 'a pack follows as soon as the fodder falls below the cap');
-    ok(w.log.xp === 0, `fodder of a boss fight drop no xp (${w.log.xp})`);
-    w.killEnemy(w.boss, ps[0], {}); const n1 = trick.length;
+    ok(packs.length === 0 && fod === 0, `${heroes.length} hero(es): no fodder pack in 40 s of the fight (${packs.length} packs, ${fod} fodder)`);
+    w.killEnemy(w.boss, ps[0], {});
     ok(!w.enc && w.hostiles() === 0, 'the boss dies: the fight ends and every foe goes');
-    go(w, 20); ok(trick.length === n1 && w.hostiles() === 0 && !w.zones.some(z => z.kind === 'spawn'), 'no pack after the boss dies');
+    go(w, 10); ok(packs.length === 0 && w.hostiles() === 0 && !w.zones.some(z => z.kind === 'spawn'), 'nothing spawns after the boss dies');
   }
 }
 { // veteran preset (sim.js --vet): flag parsing, the dodge plan against a shot and a telegraph (reaction time, walk, dash), the rider heading, skill charges, determinism, and an unchanged bot without the flag
@@ -890,7 +899,7 @@ for (let s = 1; s <= ED.CONST.STRATA; s++) {
   const nr = stage('ranger', {}); ok(vetRider(nr.w, nr.p, { dashN: 1 }, [30, 55, 80].map(d => foe(nr.w, nr.p.x + d, nr.p.y)), null, SPD) === null, 'no rider dash without a dash rider');
   const run = (o) => runBot(Object.assign({ seed: 1000, n: 1, cls: ['ranger'], skill: 0.75, up: ED.UPGRADES.map(() => 0), mastery: 1, pick: 'smart', force: ['echo'], maxStratum: 1 }, o));
   const a = run({}), b = run({ vet: 'charges' }), id = ED.CLASSES.ranger.skill;
-  ok(b.cnt.casts[id] > a.cnt.casts[id], `the second Echo charge is used (${a.cnt.casts[id]} -> ${b.cnt.casts[id]} casts of ${id})`);
+  ok(b.cnt.casts[id] / b.time > a.cnt.casts[id] / a.time, `the second Echo charge is used (${a.cnt.casts[id]} casts in ${Math.round(a.time)} s -> ${b.cnt.casts[id]} in ${Math.round(b.time)} s of ${id})`);
   const v1 = run({ vet: '1' }), v2 = run({ vet: '1' }), off = run({ vet: '0' });
   ok(v1.time === v2.time && v1.kills === v2.kills && v1.hp === v2.hp, 'a --vet run is deterministic per seed');
   ok(a.time === off.time && a.kills === off.kills && a.hp === off.hp, 'without --vet (or --vet=0) the bot is unchanged');

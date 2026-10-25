@@ -71,13 +71,14 @@
     const def = ED.ENEMIES[type];
     const s = this.stratum, pact = this.pact;
     let hp = def.hp, dmg = def.dmg;
+    const f = def.boss ? 0 : this.rowFrac(); // the room's row deepens its foes (bosses keep the stratum's depth)
     if (def.fodder) hp = ED.World.fodderHp(def, s, pact);
     else {
-      if (!def.boss) hp *= ED.World.hpScale(s);
+      if (!def.boss) hp *= ED.World.hpScale(s, f);
       hp *= this.partyHpMul();
       hp *= ED.pactMul(pact, 'foeHp') * (def.boss ? ED.pactMul(pact, 'bossHp') : 1);
     }
-    dmg *= ED.World.dmgScale(s) * ED.pactMul(pact, 'foeDmg') * this.threat().dmg;
+    dmg *= ED.World.dmgScale(s, f) * ED.pactMul(pact, 'foeDmg') * this.threat().dmg;
     if (this.room && this.room.dark && !def.minion && !def.ally && !opts.ally) dmg *= ED.World.DARK_DMG; // every foe of a dark room
     const e = {
       id: U.uid(), type, def, x, y, r: def.r, hp, maxHp: hp, dmg, spd: def.spd * (pact >= 6 ? 1.15 : 1) * (def.boss || def.fodder ? 1 : ED.World.foeSpd(s)),
@@ -103,12 +104,13 @@
     return e;
   };
 
-  // Elite: HP and damage multipliers apply once; a second affix (e.elite2, never equal to the first) rolls at World.AFFIX2[stratum - 1]; each affix effect applies once, whichever slot holds it.
+  // Elite: HP and damage multipliers apply once; a second affix (e.elite2, never equal to the first) rolls at World.AFFIX2 of the stratum; each affix effect applies once, whichever slot holds it.
   W.makeElite = function (e, affix) {
+    const Wc = ED.World;
     e.elite = affix || this.rng.pick(ED.AFFIX_IDS);
-    const p2 = ED.World.AFFIX2[this.stratum - 1];
+    const p2 = Wc.perStratum(Wc.AFFIX2, this.stratum);
     if (p2 > 0 && this.rng.chance(p2)) e.elite2 = this.rng.pick(ED.AFFIX_IDS.filter(id => id !== e.elite));
-    e.hp *= ED.World.ELITE.hp + ED.World.ELITE.hpStep * (this.stratum - 1); e.maxHp = e.hp; e.dmg *= ED.World.ELITE.dmg; e.r = Math.round(e.r * 1.22); // elite HP x2.4 at stratum I up to x4.4 at VI
+    e.hp *= Wc.ELITE.hp + Wc.ELITE.hpStep * (Wc.depth(this.stratum) - 1); e.maxHp = e.hp; e.dmg *= Wc.ELITE.dmg; e.r = Math.round(e.r * 1.22); // elite HP x2.4 at stratum I up to x4.4 at IV
     if (ED.hasAffix(e, 'swift')) e.spd *= 1.4;
     if (ED.hasAffix(e, 'brutal')) e.dmg *= 1.4;
     if (ED.hasAffix(e, 'warded')) { e.ward = e.maxHp * 0.45; e.wardMax = e.ward; }
@@ -183,12 +185,12 @@
       const kb = src.knock * (e.elite ? 0.45 : 1) * (e.def.ai === 'tank' ? 0.35 : 1);
       e.kbx += (src.kx || 0) * kb; e.kby += (src.ky || 0) * kb;
     }
-    if (kind !== 'dot' || dmg >= 3) {
-      const ev = { t: 'hit', x: Math.round(e.x), y: Math.round(e.y - e.r), v: Math.round(dmg), c: crit ? 1 : 0, k: kind === 'dot' ? (src.zone ? 2 : 1) : 0, pid: p ? p.pid : '', el: src.bleed ? 4 : EL_IDX[src.el || src.clsEl] || 0 };
+    if (kind !== 'dot' || !e.fodder) { // every damage-over-time tick on a foe that is not fodder is announced (v to 0.1, summed by the viewer); fodder ticks are not
+      const ev = { t: 'hit', x: Math.round(e.x), y: Math.round(e.y - e.r), v: kind === 'dot' ? Math.round(dmg * 10) / 10 : Math.round(dmg), c: crit ? 1 : 0, k: kind === 'dot' ? (src.zone ? 2 : 1) : 0, pid: p ? p.pid : '', el: src.bleed ? 4 : EL_IDX[src.el || src.clsEl] || 0 };
       if (kind === 'skill') ev.s = 1; // a class-skill hit: the viewer's aggregated skill impact cue (k: 0 hit, 1 status DoT, 2 skill-zone tick)
       if (src.wpn && kind === 'weapon' && st && st.heavy) ev.h = 1; // heavy weapon hit: the viewer's hit-stop
       if (src.far) ev.f = 1; // a far shot (Deadeye): the viewer's bright spark
-      if (e.fodder) ev.fd = 1; // the target is fodder (f is taken by the far shot)
+      if (e.fodder) { ev.fd = 1; if (e.hp <= 0) ev.kl = 1; } // the target is fodder (f is taken by the far shot); kl: the blow took its last health (the viewer prints fodder numbers only then)
       if (src.slow) ev.sl = 1; // a hit that slows (Quickdraw): the viewer's frost streak
       this.emit(ev);
     }
@@ -566,7 +568,7 @@
       if (onHit && got > 0 && o.hp > 0) onHit(o, got);
     }
     this.foeEnd();
-    this.emit({ t: 'boom', x: Math.round(x), y: Math.round(y), r, k: boom });
+    this.emit({ t: 'boom', x: Math.round(x), y: Math.round(y), r, k: boom, q: 1 }); // q: a proc blast, drawn small by the viewer
   };
 
   W.runPayoff = function (en) {
@@ -971,6 +973,9 @@
     this.payBlast(p, e.x, e.y, C.DOSE_R, amt, 'poison', 'acid', null, false, null, 'explode');
   };
 
+  // Fodder deaths fire no on-death effect (class kill hooks, chains, explosions, spreads, implosions, burning ground, raises): every such effect runs only where this returns true.
+  W.onDeathFx = function (e) { return !e.fodder; };
+
   W.killEnemy = function (e, p, src) {
     if (e.killed) return;
     e.killed = true; e.hp = 0;
@@ -980,9 +985,10 @@
     if (def.fodder) this.run.fodderKills++;
     if (p) p.kills++;
     this.emit(def.fodder ? { t: 'die', x: Math.round(e.x), y: Math.round(e.y), type: e.type, el: 0, r: e.r, fd: 1 } : { t: 'die', x: Math.round(e.x), y: Math.round(e.y), type: e.type, el: e.elite ? 1 : 0, r: e.r });
-    this.onEnemyKilledSkill(e, p, src);
+    const deathFx = this.onDeathFx(e);
+    if (deathFx) this.onEnemyKilledSkill(e, p, src);
     if (def.boss) { this.onBossKilled(e, p, src); return; }
-    this.deathPayoffs(e, p, src);
+    if (deathFx) this.deathPayoffs(e, p, src);
     if (def.fodder) { this.fodderMote(e.x, e.y); return; } // fodder drop no gold, heart or Grail growth, split or leave a cloud: only the room's xp mote
     if (def.noLoot) return; // boss arena pieces (spore pods and buds) drop nothing
     this.dropFoeXp(e);
@@ -1028,7 +1034,7 @@
           if (o !== e && o.hp > 0 && o.spawnT <= 0 && U.dist2(o.x, o.y, x, y) < (80 + o.r) ** 2) this.addBurn(o, e.maxHp / e.hpLever * bs.wildfire, bo);
         }
         this.foeEnd();
-        this.emit({ t: 'boom', x: Math.round(x), y: Math.round(y), r: 80, k: 'fire' });
+        this.emit({ t: 'boom', x: Math.round(x), y: Math.round(y), r: 80, k: 'fire', q: 1 });
       }
       if (bs.firedamp && e.venom > 0) this.queuePayoff(bo, { kind: 'firedamp', e, x, y, amt: e.maxHp * 0.2 * half });
       if (bs.firebreak) this.fireGround(bo, x, y, C.FIREBREAK_R, C.FIREBREAK_T, ED.procDmg(ED.BOONS.firebreak, bs));
@@ -1042,7 +1048,7 @@
         if (o !== e && o.hp > 0 && o.spawnT <= 0 && U.dist2(o.x, o.y, x, y) < (80 + o.r) ** 2) this.addVenom(o, e.venom * vo.stats.sporeBurst, vo, true);
       }
       this.foeEnd();
-      this.emit({ t: 'boom', x: Math.round(x), y: Math.round(y), r: 80, k: 'acid' });
+      this.emit({ t: 'boom', x: Math.round(x), y: Math.round(y), r: 80, k: 'acid', q: 1 });
     }
     const co = e.chargeOwner;
     if (co && e.charge > 0 && co.stats.shortCircuit) {
@@ -1308,7 +1314,9 @@
     } else {
       for (const p of this.players.values()) if (Math.hypot(p.x - x, p.y - y) < r + p.r) this.hurtPlayer(p, dmg, { e: owner && owner.hp !== undefined && owner.def ? owner : null, x, y });
     }
-    this.emit({ t: 'boom', x: Math.round(x), y: Math.round(y), r: Math.round(r), k: look || 'fire' });
+    const ev = { t: 'boom', x: Math.round(x), y: Math.round(y), r: Math.round(r), k: look || 'fire' };
+    if (team === 0 && !(opts && opts.part)) ev.q = opts && opts.wpn ? 2 : 1; // a hero blast that is not a class-skill part, drawn quieter by the viewer: q 1 a proc (boon, relic, evolution), q 2 a weapon blast
+    this.emit(ev);
   };
 
   // ---------------- hero attacks ----------------
@@ -1946,14 +1954,15 @@
     if (!e.target) return;
     const ai = ED.AI[e.def.ai];
     if (ai) ai(this, e, dt);
-    // contact damage: full only during body-hit attack states, otherwise 0.4x
+    // contact damage: full only during body-hit attack states, otherwise 0.4x; a hero takes at most one fodder touch per World.FODDER_TOUCH_CD (p.fodderAt: world time of the next allowed one)
     if (e.contactCd <= 0 && e.def.ai !== 'bomber' && !e.burrowed) {
       for (const p of this.players.values()) {
         if (p.downed || p.dead) continue;
         const rr = e.r + p.r - 3;
         if (U.dist2(e.x, e.y, p.x, p.y) < rr * rr) {
+          if (e.fodder && p.fodderAt > this.time) break;
           const full = FULL_CONTACT.has(e.st);
-          if (this.hurtPlayer(p, e.dmg * (full ? 1 : 0.4) * (e.boss ? 0.8 : 1), { e, x: e.x, y: e.y })) { e.contactCd = 1.0; e.recoil = 0.35; }
+          if (this.hurtPlayer(p, e.dmg * (full ? 1 : 0.4) * (e.boss ? 0.8 : 1), { e, x: e.x, y: e.y })) { e.contactCd = 1.0; e.recoil = 0.35; if (e.fodder) p.fodderAt = this.time + ED.World.FODDER_TOUCH_CD; }
           break;
         }
       }

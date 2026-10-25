@@ -624,7 +624,7 @@ const rerank = (s, boons) => { for (const id in boons) s.p.boons[id] = boons[id]
   ok(evOf(k, 'rebuke').length === 1, 'Martyr\'s Rebuke answers a fodder touch (a nova, not a stack)');
   const q = stage('shade', { evo_shadow: 1, reaperschain: 1 }), f1 = foe(q.w, 300, 300, { type: ft, hp: 5 }), big = foe(q.w, 340, 300, { hp: 1000 });
   f1.doom = 100; f1.doomOwner = q.p; q.w.checkReap(f1); chains(q.w);
-  ok(big.doom > 0 && big.doom <= C.SPREAD_CAP * 1000 && !q.w.msgs.some(m => m.t === 'dashRefund'), 'a fodder Reap still chains its Doom (spread capped) but refunds nothing');
+  ok(!(big.doom > 0) && !q.w.msgs.some(m => m.t === 'dashRefund'), 'a fodder Reap chains nothing and refunds nothing (fodder deaths fire no on-death effect)');
 }
 
 // ---------------- cost of fire pathing and solids at 200 foes ----------------

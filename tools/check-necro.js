@@ -363,12 +363,12 @@ const cast0 = (w, p) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x + 60, y: 
 { // Carrion Storm (n_s2_a rank 3): Harvest detonates up to 10 recent corpses at 70%; each detonation launches 3 bone shards (50% of a burst) at the nearest foes, once per detonation
   const setup = (rank, nCorpses, foes) => {
     const S = stage({ n_s2: 1, n_s2_a: rank }); S.log = spy(S.w); S.ev = tap(S.w);
-    for (let i = 0; i < nCorpses; i++) { const an = i * 0.5236; S.w.time += 0.1; const c = foe(S.w, S.p.x + Math.cos(an) * 120, S.p.y + Math.sin(an) * 60); if (i % 3 === 0) c.fodder = true; weaponHit(S.w, S.p, c, 1e6); }
+    for (let i = 0; i < nCorpses; i++) { const an = i * 0.5236; S.w.time += 0.1; const c = foe(S.w, S.p.x + Math.cos(an) * 120, S.p.y + Math.sin(an) * 60); weaponHit(S.w, S.p, c, 1e6); }
     S.live = (foes || []).map(([dx, dy]) => foe(S.w, S.p.x + dx, S.p.y + dy)); S.N = ED.Stats.skillNums('harvest', S.p.stats); S.log.length = 0; return S;
   };
   const S = setup(3, 12, [[30, 0], [-40, 20], [10, -50]]), hp = S.N.p;
   ok(S.p.stats.corpse === 10 && Math.abs(S.p.stats.corpseMul - 0.7) < 1e-9 && S.p.stats.carrionN === 3 && Math.abs(S.p.stats.carrionShard - 0.5) < 1e-9 && Math.abs(S.p.stats.boneLance - 0.37) < 1e-9, 'Carrion Storm stats: 10 corpses, 70%, 3 shards at 50% (Bone Lances keeps its +37%)');
-  near(hp.corpse.dmg, hp.burst.dmg * 0.7, 1e-9, 'a corpse part is 70% of a burst'); near(hp.shard.dmg, hp.burst.dmg * 0.5, 1e-9, 'a shard is 50% of a burst'); ok(S.w.corpses.length === 12, 'twelve corpses (fodder too) are on record');
+  near(hp.corpse.dmg, hp.burst.dmg * 0.7, 1e-9, 'a corpse part is 70% of a burst'); near(hp.shard.dmg, hp.burst.dmg * 0.5, 1e-9, 'a shard is 50% of a burst'); ok(S.w.corpses.length === 12, 'twelve corpses are on record');
   S.w.playerSkill(S.p, 0, {}, 1); S.ev.step();
   const booms = S.ev.all.filter(v => v.t === 'boom' && v.c === 1), shards = S.w.projs.filter(q => q.part === 'harvest.shard');
   ok(booms.length === 10 && booms.every(v => v.cs === 1) && S.w.corpses.length === 2, `ten corpses detonate (the most recent), two stay (${booms.length}, ${S.w.corpses.length})`);
@@ -538,7 +538,7 @@ const cast0 = (w, p) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x + 60, y: 
 
 { // fodder never rises: not by Gravecaller, not by the luck roll; its corpse still counts for Corpse Explosion
   const { w, p } = stage({ n_atk: 1, n_atk_h: 1 }); const e = foe(w, p.x + 50, p.y); e.fodder = true; e.hp = 1; weaponHit(w, p, e); ok(mine(w, p).length === 0 && p.raiseT <= 0, 'a fodder kill raises nothing (Gravecaller)');
-  const c = stage({ n_s2: 1, n_s2_a: 1 }); const f = foe(c.w, c.p.x + 50, c.p.y); f.fodder = true; weaponHit(c.w, c.p, f, 1e6); ok(c.w.corpses.length === 1, 'a fodder death leaves a corpse');
+  const c = stage({ n_s2: 1, n_s2_a: 1 }); const f = foe(c.w, c.p.x + 50, c.p.y); f.fodder = true; weaponHit(c.w, c.p, f, 1e6); ok(c.w.corpses.length === 0, 'a fodder death leaves no corpse (fodder deaths fire no on-death effect)');
   let rose = 0; for (let i = 0; i < 200; i++) { const s2 = stage({}, 7 + (i % 5)); const g = foe(s2.w, s2.p.x + 50, s2.p.y); g.fodder = true; g.hp = 1; weaponHit(s2.w, s2.p, g); rose += mine(s2.w, s2.p).length; } ok(rose === 0, 'the luck roll never raises fodder (' + rose + ' of 200)');
 }
 

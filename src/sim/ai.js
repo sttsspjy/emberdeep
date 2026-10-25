@@ -18,7 +18,7 @@
   const hasLos = (w, e) => Sim.los(w.room, e.x, e.y, e.target.x, e.target.y, w.locked);
   const aimAt = (e) => Math.atan2(e.target.y - e.y, e.target.x - e.x);
   // Aimed shots lead the target by World.LEAD of its measured velocity; flightSpd = the final flight speed of a shot of base speed `speed` (Pact 8+ x1.2, x the stratum shot factor, as enemyShoot applies).
-  const leadK = (w) => ED.World.LEAD[w.stratum - 1] || 0;
+  const leadK = (w) => ED.World.leadAt(w.stratum);
   const flightSpd = (w, e, speed) => speed * (w.pact >= 8 ? 1.2 : 1) * (e.boss ? ED.World.bossShotSpd(w.stratum) : ED.World.shotSpd(w.stratum));
   const lead = (w, e, speed) => ED.World.leadAngle(e.x, e.y - 4, e.target, flightSpd(w, e, speed), leadK(w));
   // Landing point of a lob with flight time fl: the target led by its measured velocity over fl; a point inside a wall is cut back along the lead.

@@ -282,6 +282,8 @@
     if (!frozen) { // the wind-up outline stays under the white flash body
       if (P.wp >= 0) { const ov = outlineVar(id, RED); if (ov) put(c, id, fi, ox, oy, flip, ov, 0.45 + 0.55 * P.wp); }
       else if (e.elite) { const ov = outlineVar(id, ED.AFFIXES[e.elite].color); if (ov) put(c, id, fi, ox, oy, flip, ov, 0.65 + 0.35 * Math.sin(t * 5 + (e.id | 0))); }
+      const dc = P.wp < 0 && F().dotTint(e.id); // a damage-over-time tick: a brief outline in the status colour (never over a wind-up)
+      if (dc) { const ov = outlineVar(id, dc); if (ov) put(c, id, fi, ox, oy, flip, ov, 0.9); }
     }
     put(c, id, fi, ox, oy, flip, variant, 1);
     if (rig) rigDraw(c, e, s, info, rig, ox, oy, fa, flip, t, false);
@@ -408,7 +410,7 @@
   // Spawn-in ring of a spawn zone (z.t of z.dur): the Circle Spark sprite in the arrival colour, frames spread over the telegraph, with a dust ring under it.
   AC.spawnRing = (c, z, k, t) => {
     const id = 'fx.circle.spark', r = A.anim(id); if (!r) return false;
-    const col = z.elite ? '#ffb13a' : '#b8a0ff', x = Math.round(z.x), y = Math.round(z.y);
+    const col = z.big ? '#ff4a3a' : z.elite ? '#ffb13a' : '#b8a0ff', x = Math.round(z.x), y = Math.round(z.y);
     put(c, id, Math.min(r.n - 1, Math.floor(k * r.n)), x, y - 2, false, AC.tint(id, col), 1);
     const ring = A.anim('fx.smoke.ring');
     if (ring) put(c, 'fx.smoke.ring', A.frameAt('fx.smoke.ring', t * 0.7), x, y + 2, false, AC.tint('fx.smoke.ring', col), 0.6);
@@ -520,6 +522,8 @@
     const ox = shake - (pose === 'wind' ? Math.round(Math.cos(e.aimA || 0) * 2) : 0), oy = -air;
     const variant = frozen ? stateVar(id, 'frozen') : bossVar(e.type, id);
     if (pose === 'wind' && !frozen) { const ov = outlineVar(id, RED); if (ov) put(c, id, fi, ox, oy, flip, ov, 0.45 + 0.55 * U.clamp(el / WD, 0, 1)); } // the wind-up outline and the normal body stay under the hit flash
+    const dc = !frozen && pose !== 'wind' && F().dotTint(e.id); // a damage-over-time tick: a brief outline in the status colour
+    if (dc) { const ov = outlineVar(id, dc); if (ov) put(c, id, fi, ox, oy, flip, ov, 0.9); }
     put(c, id, fi, ox, oy, flip, variant, 1);
     if (flash) { const wv = stateVar(id, 'white'), rc = REC; REC = null; if (wv) put(c, id, fi, ox, oy, flip, wv, 0.5); REC = rc; } // hit flash: a half-strength white overlay, the sprite is not replaced
     if (B.crown && A.has('boss.hollowking.crown')) { // per-frame crown point (anchors.crown); anims without one use the head line

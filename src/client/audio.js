@@ -382,6 +382,21 @@
   };
   A.impact = (cls, mine, el) => { const k = acc.imp[cls] || (acc.imp[cls] = { n: 0, m: 0, el: 0 }); k.n++; if (mine) k.m++; k.el = el; };
   A.kill = (type, r, mine) => { acc.die++; if (mine) acc.dieMine++; const k = acc.types[type] || (acc.types[type] = { n: 0, r: 10 }); k.n++; k.r = r; };
+  // Soft damage-over-time tick: at most one per hero per 0.2 s (another hero's: 0.4 s, half volume, lowest priority); el picks the colour (1 fire crackle, 4 bleed drip, 5 poison bubble, else a tap).
+  const dotLast = {};
+  A.dotTick = (pid, mine, el) => {
+    if (!A.ready || !live()) return;
+    const t = now();
+    if (t - (dotLast[pid] || -9) < (mine ? 0.2 : 0.4)) return;
+    dotLast[pid] = t; prune(t); prio = mine ? 1 : 0;
+    const v = mine ? 1 : 0.5;
+    switch (el) {
+      case 1: noise('bandpass', rnd(2400, 3200), 1400, 0.04, 0.05 * v, 2); break;
+      case 4: tone('sine', rnd(520, 600), 260, 0.05, 0.05 * v); break;
+      case 5: tone('sine', rnd(380, 460), rnd(620, 700), 0.05, 0.05 * v); break;
+      default: tone('triangle', rnd(900, 1100), 700, 0.03, 0.04 * v);
+    }
+  };
 
   // One foe's death: bigger foes (radius r) fall lower and longer; pitch jitters per voice.
   function dieVoice(r, v, t) {

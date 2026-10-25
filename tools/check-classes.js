@@ -296,7 +296,7 @@ const charge = (w, p, len) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x1: p.x + 
 { // Avalanche (k_s1_a rank 3): the Charge carries foes, slams for 90% (r160, stun 0.8, bosses x1.5 never stunned), 3 cracks erupt after 0.3 s at 30% (a foe struck by one); ranks 1 and 2 do none of it
   const go = (rank) => {
     const { w, p } = stage('knight', { k_s1: 1, k_s1_a: rank }); p.x = 60; p.y = 192; const log = spy(w), x1 = p.x + 144; // castMove stops on 8 px steps
-    const path = [40, 60, 80, 100, 120].map((d, i) => foe(w, p.x + d, p.y + (i % 2 ? 12 : -12))), elite = foe(w, p.x + 70, p.y + 18), side = foe(w, x1, p.y + 90), boss = foe(w, x1 - 10, p.y - 30), lone = foe(w, x1 + 190, p.y), gap = foe(w, x1 + 190 * Math.cos(1.05), p.y + 190 * Math.sin(1.05));
+    const path = [40, 60, 80, 100, 120].map((d, i) => foe(w, p.x + d, p.y + (i % 2 ? 12 : -12))), elite = foe(w, p.x + 70, p.y + 18), side = foe(w, x1, p.y + 90), boss = foe(w, x1 - 10, p.y - 30), lone = foe(w, x1 + 190, p.y), gap = foe(w, x1 + 190 * Math.cos(0.6), p.y + 190 * Math.sin(0.6)); // gap stays inside the room (wall resolution would pull a foe in from outside)
     elite.elite = 'swift'; boss.boss = true;
     const ev = [], kinds = []; let stunSide = 0, stunBoss = 0, front = null;
     charge(w, p, 150);

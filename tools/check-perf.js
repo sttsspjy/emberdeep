@@ -1,5 +1,5 @@
 // Usage: node tools/check-perf.js [--audit-only] [--limit=<ms per tick at 150 foes>] [--reps=N]
-// Headless sim cost per tick against the live foe count (hordes: up to 120 foes solo, 180 in a party). One hero stands in the largest combat room (37x17 tiles) and fires volleys at the nearest foe while N mixed foes
+// Headless sim cost per tick against the live foe count (the horde's live cap is 60 foes solo, 90 in a party; these counts stress well past it). One hero stands in the largest combat room (37x17 tiles) and fires volleys at the nearest foe while N mixed foes
 // (every non-boss roster type) pile up around it; foes carry 25x HP so the count holds. A horde scenario times 150 foes of which 100 are fodder (radius 6-7) and audits the same with 40-200. Per count: 200 warm-up ticks, then 600 ticks at dt 1/60; the best of N runs, mean of its fastest 95% of ticks.
 // Reps interleave the counts of a scenario so load hits all alike. Fails when 150 foes cost more than limit x load (load = a fixed pure-JS calibration workload over its idle time, at least 1), when the 200 / 70 cost ratio exceeds RATIO_MAX (4.5) (x2.86 is linear in the foe count, x8.2 quadratic), or when the audit finds a difference;
 // a scenario that misses a gate is re-measured once (calibration included) before it fails.
