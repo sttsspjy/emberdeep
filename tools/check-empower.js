@@ -92,7 +92,7 @@ series('Whirlwind (knives)', 'whirl', 'knives', { bladeStorm: 0.05, momMax: 5 },
   try {
     vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'net.js'), 'utf8'), { filename: 'net.js' });
     const N = ED.Net;
-    ok(N.VERSION === 16, `N.VERSION 16 (${N.VERSION})`);
+    ok(N.VERSION === 17, `N.VERSION 17 (${N.VERSION})`);
     p.atkCount = 2; const s1 = JSON.parse(JSON.stringify(N.encodeSnap(w, [], false)));
     p.atkCount = 0; const s0 = JSON.parse(JSON.stringify(N.encodeSnap(w, [], false)));
     ok(s1.P[0][28] === idx('cleave') + 1 && s0.P[0][28] === 0, `P[28] carries W.empowerOf (${s1.P[0][28]}, ${s0.P[0][28]})`);

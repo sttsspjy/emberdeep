@@ -14,7 +14,7 @@
   const FIGHT_ROOM = { combat: 1, elite: 1, champion: 1 }; // node types that draw a combat room size
   const PATTERN_AREA = 294; // tile area the base pool and scatter counts are written for: both scale by room area / PATTERN_AREA
   const REWARD_ODDS = [['boon', 55], ['gold', 15], ['vigor', 10], ['forge', 20]]; // normal combat reward weights
-  const ELITE_EPIC = 0.4; // share of elite rooms whose reward is an epic offer (the rest: a relic pick)
+  const ELITE_EPIC = 0.25; // share of elite rooms whose reward is an epic offer (the rest: a relic pick)
   const PATH_BOON = 0.7; // share of boon rewards that name a path (the rest offer any boon)
   const MIN_FIGHTS = 3; // the Platino's cue is one of the first MIN_FIGHTS fight clears of a floor
 
