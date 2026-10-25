@@ -363,17 +363,19 @@
     if (w.room && w.room.arena && ED.Arena) s.AR = ED.Arena.encode(w.room); // boss / champion arena state (src/sim/arena.js), every snapshot while one runs
     if (w.critter) s.C = [r(w.critter.x), r(w.critter.y), w.critter.face]; // the Platino while it is out: x, y, facing (1 / -1)
     if (full) {
-      s.O = w.props.map(p => [p.id, p.kind, r(p.x), r(p.y), p.state | 0, p.item || '', p.price || 0, p.group || 0, p.stype || '', p.text || '']);
+      s.O = w.props.map(p => [p.id, p.kind, r(p.x), r(p.y), p.state | 0, p.item || '', p.price || 0, p.group || 0, p.stype || '', p.text || '', p.ev || '']); // O[10]: the event def id of an event prop (events.js)
       s.RS = w.floor.rooms.map(rm => { const st = w.roomState[rm.id]; return (st.visited ? 1 : 0) | (st.known ? 2 : 0) | (st.cleared ? 4 : 0); });
       s.BR = w.floor.rooms.map(rm => w.roomState[rm.id].broken | 0); // broken-breakable bit mask of every room (bit i = room.breakables[i])
       s.RUN = { kills: w.run.kills, roomsCleared: w.run.roomsCleared, elitesKilled: w.run.elitesKilled, bosses: w.run.bosses, bossCount: w.run.bossCount, embers: w.run.embers, revives: w.run.revives, maxGold: w.run.maxGold, maxRelics: w.run.maxRelics, pact: w.pact,
         flawlessBoss: !!w.run.flawlessBoss, roomsVisited: w.run.roomsVisited, roomsTotal: w.run.roomsTotal, fullClear: !!w.run.fullClear, darkCleared: w.run.darkCleared, champs: w.run.champs | 0, evolved: [...w.players.values()].some(p => !!p.stats.evo),
         gold777: !!w.run.gold777, oneFace: !!w.run.oneFace, pl: {} }; // pl: pid -> that hero's secret run fields (world.js summary carries the same in players[pid])
       for (const p of w.players.values()) s.RUN.pl[p.pid] = Object.assign({}, p.sec);
+      s.RUN.lore = (w.run.lore || []).slice(); // ED.LORE pages found this run
+      s.RP = Object.keys(w.patches || {}).map(id => [+id, w.patches[id]]); // [room id, merged room patch] of this floor (Dungeon.applyPatches)
     }
     return s;
   };
 
   // Signature used by the host to decide when props / room state must be resent.
-  N.propSig = (w) => w.roomId + '|' + w.props.map(p => p.id + ':' + (p.state | 0)).join(',') + '|' + w.floor.rooms.map(rm => { const st = w.roomState[rm.id]; return (st.visited ? 1 : 0) + (st.known ? 2 : 0) + (st.cleared ? 4 : 0); }).join('') + '|' + (w.roomState[w.roomId].broken | 0);
+  N.propSig = (w) => w.roomId + '|' + w.props.map(p => p.id + ':' + (p.state | 0)).join(',') + '|' + w.floor.rooms.map(rm => { const st = w.roomState[rm.id]; return (st.visited ? 1 : 0) + (st.known ? 2 : 0) + (st.cleared ? 4 : 0); }).join('') + '|' + (w.roomState[w.roomId].broken | 0) + '|' + (w.patchN | 0);
 })(globalThis.ED || (globalThis.ED = {}));

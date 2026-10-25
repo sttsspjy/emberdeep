@@ -1133,10 +1133,10 @@
   }
 
   const PROP_LABEL = {
-    chest: () => 'Open', fountain: () => 'Drink (heal party 50%)', altar: (p, me) => `Pay 20% health for an epic boon`,
-    gamble: (p) => `Pay ${p.price} gold for a random relic`, trial: () => 'Start the trial (elite fight, rare relic)', portal: () => 'Next stratum',
+    chest: () => 'Open', portal: () => 'Next stratum',
   };
   R.propPrompt = (p, view) => {
+    if (p.ev) return p.text || 'Examine'; // an event prop (events.js)
     if (p.kind === 'relic') return 'Take ' + ED.RELICS[p.item].name;
     if (p.kind === 'shop') { const name = p.stype === 'relic' ? ED.RELICS[p.item].name : p.stype === 'boon' ? 'Epic boon' : p.stype === 'forge' ? 'Forge' : 'Healing potion'; return `Buy ${name} — ${p.price}g`; }
     if (p.kind === 'reward') {
@@ -1159,7 +1159,7 @@
     if (p.kind === 'shop') return SHOP_DESC[p.stype] || null;
     return null;
   };
-  R.interactable = (p) => !p.state && p.kind !== 'sign' && p.kind !== 'merchant';
+  R.interactable = (p) => !p.state && (!!p.ev || (p.kind !== 'sign' && p.kind !== 'merchant')); // an event prop may wear any look
 
   const PATH_COL = { fire: '#ff7a2a', ice: '#7fe3ff', lightning: '#ffe66b', poison: '#9be33c', holy: '#fff0c2', shadow: '#a070ff', general: '#d9dfe8' };
   // Reward and room glyphs come from one table (ED.Icons.reward / ED.Icons.room); 'boon' wears the colour of the local hero's deepest path (R.mainPath).
@@ -1172,10 +1172,11 @@
   R.rewardIcon = (s) => ED.Icons.reward(s, R.mainPath);
   // Map/door glyph of a floor room for the local hero: { icon, color, label, badge, reward } or null (ED.Icons.room).
   R.roomIcon = (rm) => ED.Icons.room(rm, R.mainPath, ED.World.REWARD_UP);
-  const ROOM_NAME = { start: 'Start', combat: 'Fight', elite: 'Elite fight', champion: 'Champion fight', shop: 'Shop', rest: 'Rest', treasure: 'Treasure', event: 'Shrine', boss: 'Boss' };
+  const ROOM_NAME = { start: 'Start', combat: 'Fight', elite: 'Elite fight', champion: 'Champion fight', shop: 'Shop', rest: 'Rest', treasure: 'Treasure', event: 'Unknown event', boss: 'Boss' };
   // Plain name of a map room with its reward: 'Elite fight: Relics', 'Dark room: Epic boon', 'Rest'.
   R.roomName = (rm) => {
     if (!rm) return '';
+    if (rm.type === 'event' && rm.event) return 'Event: ' + R.roomIcon(rm).label; // drawn on entry or revealed (events.js)
     const n = rm.dark ? 'Dark room' : ROOM_NAME[rm.type] || 'Room', rw = rm.reward ? (rm.dark && ED.World.REWARD_UP[rm.reward]) || rm.reward : null;
     return rw ? n + ': ' + R.rewardLabel(rw) : n;
   };

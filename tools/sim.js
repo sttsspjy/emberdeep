@@ -27,9 +27,9 @@ const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
 const ROOT = path.join(__dirname, '..', 'src') + '/';
-const files = ['util.js', 'data/biomes.js', 'data/enemies.js', 'data/classes.js', 'data/boons.js', 'data/classboons.js', 'data/relics.js', 'data/meta.js', 'save.js',
+const files = ['util.js', 'data/biomes.js', 'data/enemies.js', 'data/classes.js', 'data/boons.js', 'data/classboons.js', 'data/relics.js', 'data/meta.js', 'data/lore.js', 'data/events.js', 'save.js',
   'sim/dungeon.js', 'sim/stats.js', 'sim/world.js', 'sim/combat.js', 'sim/elements.js', 'sim/build.js', 'sim/skills.js', 'sim/class-knight.js', 'sim/class-ranger.js', 'sim/class-pyro.js', 'sim/class-shade.js', 'sim/class-cleric.js', 'sim/class-necro.js', 'sim/class-bell.js',
-  'sim/ai.js', 'sim/bosses.js', 'sim/boss-warden.js', 'sim/boss-spore.js', 'sim/rooms.js', 'sim/arena.js', 'sim/boss-king.js', 'sim/boss-hollow.js', 'sim/champions.js', 'sim/sheet.js'];
+  'sim/ai.js', 'sim/bosses.js', 'sim/boss-warden.js', 'sim/boss-spore.js', 'sim/rooms.js', 'sim/events.js', 'sim/arena.js', 'sim/boss-king.js', 'sim/boss-hollow.js', 'sim/champions.js', 'sim/sheet.js'];
 // Main context, not vm.createContext: inside a vm context every global read (Math, Object, ...) goes through the context interceptor and the sim runs ~3x slower.
 for (const f of files) vm.runInThisContext(fs.readFileSync(ROOT + f, 'utf8'), { filename: f });
 const ED = globalThis.ED;
@@ -681,14 +681,13 @@ function wantedProp(w, p) {
   for (const x of w.props) {
     if (x.state) continue;
     let s = 0;
+    if (x.ev) { s = ED.Events.botWant(w, p, x); if (s > bs) { bs = s; best = x; } continue; } // an event prop: while the hero has a choice to make there (events.js)
     switch (x.kind) {
       case 'reward': s = PER_HERO_REWARDS.includes(x.item) && p.claimed[x.group] ? 0 : 9; break;
       case 'chest': s = 8; break;
       case 'relic': s = p.claimed[x.group] ? 0 : 7 + (w.botSmart ? relicScore(w, p, x) : 0); break;
       case 'campfire': s = !p.claimed[x.group] && hurt ? 8 : 0; break;
       case 'anvil': s = !p.claimed[x.group] && !hurt ? 8 : 0; break;
-      case 'fountain': s = 5; break;
-      case 'altar': s = p.hp > p.maxHp * 0.6 ? 5 : 0; break;
       case 'shop':
         if (w.gold < x.price) break;
         if (x.stype === 'potion') s = p.hp < p.maxHp * 0.7 ? 6 : 0;
@@ -718,10 +717,13 @@ function roomValue(w, r, policy, healthy, hurt) {
 // The exit to take, as { step: room id, dd: door key }, or null: the exit with the best path value V(n) = value(n) + LOOK x max V(child) (the whole graph ahead, each row further counting LOOK less),
 // plus seeded jitter per floor and room. The pick holds for the room (w.botExit).
 const LOOK = 0.6;
-// The fewest dark rooms on any start-to-boss path of a floor.
-function minDark(fl) {
+// The fewest dark rooms on any start-to-boss path of a floor; with ids: a Map of that count from each of those rooms on (and .min, their least).
+function minDark(fl, ids) {
   const M = new Map(), f = (id) => { if (M.has(id)) return M.get(id); const r = fl.rooms[id], k = r.exits || [], v = (r.dark ? 1 : 0) + (k.length ? Math.min(...k.map(f)) : 0); M.set(id, v); return v; };
-  return f(fl.start);
+  if (!ids) return f(fl.start);
+  const out = new Map(ids.map(id => [id, f(id)]));
+  out.min = Math.min(...out.values());
+  return out;
 }
 function nextRoom(w, policy) {
   const room = w.room, fl = w.floor;
@@ -734,9 +736,10 @@ function nextRoom(w, policy) {
     const r = fl.rooms[id], kids = r.exits || [], v = roomValue(w, r, policy, healthy, hurt) + (kids.length ? LOOK * Math.max(...kids.map(pathV)) : 0);
     V.set(id, v); return v;
   };
+  const dm = policy === 'never' ? minDark(fl, room.exits) : null; // never: only exits on a path with the fewest dark rooms
   let best = null, bs = -1e9;
   for (const id of room.exits) {
-    const s = pathV(id) + jit.next() * 2;
+    const s = pathV(id) + jit.next() * 2 - (dm && dm.get(id) > dm.min ? 1e6 : 0);
     if (s > bs) { bs = s; best = id; }
   }
   const nx = { step: best, dd: Object.keys(room.doors).find(k => room.doors[k] === best) };
@@ -876,7 +879,7 @@ const entryOf = (w, p) => ({ level: w.level, boons: Object.values(p.boons).reduc
 function skipStrata(w, from, ctx, policy, brng, darkPolicy, fight) {
   const dt = 1 / 60, heroes = [...w.players.values()], lead = heroes[0], out = { t0: 0, from, keyAt: null, duoAt: null, evoAt: null, bad: null };
   const tick = () => {
-    for (const p of heroes) { if (p.offer) takeOffer(w, p, policy, brng, ctx); p.invuln = 1; }
+    for (const p of heroes) { if (p.offer) takeOffer(w, p, policy, brng, ctx); ED.Events.botAnswer(w, p); p.invuln = 1; }
     for (const e of w.enemies.slice()) if (e.hp > 0) w.killEnemy(e, lead, { kind: 'weapon' });
     w.update(dt);
     for (const pk of w.pickups) w.collect(lead, pk);
@@ -1108,6 +1111,7 @@ function runBot(opts) {
       } else c.skill -= dt;
       { const m3 = p.stats.skill3Charges; c.chg3 = Math.min(c.chg3, m3); if (c.chg3 < m3) { c.skill3 -= dt; while (c.skill3 <= 0 && c.chg3 < m3) { c.chg3++; c.skill3 = c.chg3 < m3 ? c.skill3 + p.stats.skill3Cd : 0; } } } // skill 3 charges as the client keeps them
       if (p.offer) takeOffer(w, p, policy, brng, ctx);
+      ED.Events.botAnswer(w, p); // an open event dialog or vote (events.js)
       if (p.downed || p.dead) continue;
       let mx = 0, my = 0;
       const foes = w.enemies.filter(e => e.hp > 0 && e.spawnT <= 0);

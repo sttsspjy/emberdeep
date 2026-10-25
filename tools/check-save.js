@@ -1,5 +1,5 @@
 // Usage: node tools/check-save.js
-// Headless checks of the profile and save code: golden v2 (main era), v3 and v4 codes still load with their Codex embers refunded, v9 round trips (also with Armory entries and Wardrobe fields) and survives appended upgrades/heroes/Armory entries/deeds/secrets/Wardrobe items in both directions,
+// Headless checks of the profile and save code: golden v2 (main era), v3 and v4 codes still load with their Codex embers refunded, v10 round trips (also with Armory entries, Wardrobe fields and Codex pages; v9 codes decode with none) and survives appended upgrades/heroes/Armory entries/deeds/secrets/Wardrobe items in both directions,
 // a code from a newer build and an Armory overflow report clearly, the one-time news flag and the stored-profile Codex migration, upgrade refunds, Reset all and Armory buy/refund, the repurposed deed, the relic pool and the moved element relics,
 // the per-hero deed counters (maxRelics, revivesGiven) in the run summary, and secrets and the Wardrobe (v5/v7 codes decode empty with Gilded on mastery 10 heroes, junk sanitised, grants once, purchase gates, wearing, run-end secrets, evolutions, the Bellwarden flag). Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
@@ -75,7 +75,7 @@ checkGolden(GOLD2, 'v2 code from main');
 checkGolden(GOLD3, 'v3 code');
 checkGolden(GOLD4, 'v4 code');
 
-// ---- v9 round trips ----
+// ---- v10 round trips ----
 const rnd = U.RNG(4242);
 const ri = (a, b) => a + Math.floor(rnd.next() * (b - a + 1));
 function randomProfile() {
@@ -95,6 +95,7 @@ function randomProfile() {
     const h = p.wear[c] = { tints: ED.CLASSES[c].weapons.filter(w => ED.cosOwned(p, 'tint.' + w, c) && rnd.next() < 0.6) };
     for (const k of ED.WEAR_SLOTS) h[k] = pickOwned(c, k);
   }
+  p.lore = ri(0, 2 ** ED.LORE.length - 1); // Codex pages (v10)
   return S.normalize(p);
 }
 const tripDiffs = (count) => {
@@ -107,9 +108,9 @@ const tripDiffs = (count) => {
 };
 {
   const rt = tripDiffs(300);
-  ok(rt === 0, `v9 round trip: ${rt} of 300 profiles differ`);
+  ok(rt === 0, `v10 round trip: ${rt} of 300 profiles differ`);
   const ra = withArmory(() => tripDiffs(300));
-  ok(ra === 0, `v9 round trip with Armory entries: ${ra} of 300 profiles differ`);
+  ok(ra === 0, `v10 round trip with Armory entries: ${ra} of 300 profiles differ`);
   ok(withArmory(() => { const p = randomProfile(); p.armory.knight = [1, 0, 1]; p.armory.pyro = [0, 1]; p.armory.necro = [1]; return JSON.stringify(S.decode(S.encode(p)).armory) === JSON.stringify(p.armory); }), 'Armory bits land on the right hero and entry');
 }
 
@@ -140,7 +141,7 @@ function withAppended(f) {
 }
 
 // ---- clear errors ----
-throws(() => S.decode(pack(bitsOf(10, 8).concat(bitsOf(0, 120)))), /newer Wickdeep.*Reload/, 'code from a newer version');
+throws(() => S.decode(pack(bitsOf(11, 8).concat(bitsOf(0, 120)))), /newer Wickdeep.*Reload/, 'code from a newer version');
 throws(() => S.decode(pack(bitsOf(1, 8).concat(bitsOf(0, 120)))), /unknown version or is damaged/, 'version 1 code');
 throws(() => S.decode(pack(bitsOf(4, 8).concat(bitsOf(0, 4), bitsOf(0xffffffff, 32), bitsOf(0xffffffff, 32), bitsOf(0xffffffff, 32)))), /unknown version or is damaged/, 'v4 code with a damaged body');
 throws(() => S.decode(pack(bitsOf(5, 8).concat(bitsOf(0, 4), bitsOf(0xffffffff, 32), bitsOf(0xffffffff, 32), bitsOf(0xffffffff, 32)))), /unknown version or is damaged/, 'v5 code with a damaged body');
@@ -398,6 +399,9 @@ const STORED_V2 = {"v":2,"news":0,"name":"Stored","embers":100,"lifetime":900,"u
   const p8 = S.decode(pack(v8));
   ok(p8.name === 'Seven' && p8.stats.runs === 9 && p8.news === 3, `hand-built v8 code with runs (made before v6): the v6 notice pending, got news ${p8.news}`);
   ok(S.decode(pack([...bitsOf(9, 8)].concat(v8.slice(8)))).news === 0, 'the same body as a v9 code: no news');
+  ok(S.decode(pack([...bitsOf(9, 8)].concat(v8.slice(8)))).lore === 0, 'a v9 code: no Codex pages');
+  const l10 = S.decode(pack([...bitsOf(10, 8)].concat(v8.slice(8), bitsOf(ED.LORE.length + 2, 6), bitsOf(0, ED.LORE.length - 3), [1, 0, 1, 1, 1])));
+  ok(l10.lore === 2 ** (ED.LORE.length - 3) + 2 ** (ED.LORE.length - 1) && l10.name === 'Seven', `a v10 code with 2 pages more than this build: its known pages read, the rest skipped (${l10.lore})`);
   ok(p.secrets === 0 && p.heroWins === 0 && p.bellUnlocked === false && JSON.stringify(p.evo) === '{}' && p.cos.length === 0, 'hand-built v7 code: no secrets, wins, Bellwarden, evolutions or purchases');
   ok(p.wear.knight.aura === 'aura.gilded' && p.wear.pyro.aura === null && p.wear.camp === null, 'hand-built v7 code: the mastery 10 Knight wears Gilded, the others nothing');
   const g5 = S.decode(GOLD5);

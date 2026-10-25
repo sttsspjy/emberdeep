@@ -43,6 +43,8 @@
     }
     this.locked = !!d.L; this.gold = d.g; this.xp = d.x; this.xpNext = d.n; this.level = d.l; this.waitMsg = d.wm; this.time = d.T;
     if (d.O) this.props = d.O.map(a => ({ id: a[0], kind: a[1], x: a[2], y: a[3], state: a[4], item: a[5], price: a[6], group: a[7], stype: a[8], text: a[9] }));
+    if (d.O) d.O.forEach((a, i) => { if (a[10]) this.props[i].ev = a[10]; }); // an event prop's def id (net.js O[10])
+    if (d.RP) ED.Dungeon.applyPatches(this.floor, d.RP); // room patches of this floor (events.js)
     if (d.RS) d.RS.forEach((b, i) => { this.roomState[i] = { visited: !!(b & 1), known: !!(b & 2), cleared: !!(b & 4), broken: d.BR ? d.BR[i] | 0 : 0 }; });
     if (d.RUN) this.run = d.RUN;
     if (ED.Arena) ED.Arena.decode(this.room, d.AR || null); // boss / champion arena (flood, darkness, lanterns, collapsed floor, mimic classes)
@@ -343,7 +345,7 @@
     return s;
   };
 
-  G.stop = () => { G.s = null; if (ED.AimFx) ED.AimFx.hover(false, false); };
+  G.stop = () => { G.s = null; if (ED.AimFx) ED.AimFx.hover(false, false); if (ED.UI.evOpen()) ED.UI.evClose(false); }; // an open event dialog closes with the run
   // No one else is in this world (solo, or a hosted party whose friends have all left): it may wait for us.
   G.alone = () => { const s = G.s; return !!s && (s.mode === 'solo' || (s.mode === 'host' && s.world.players.size <= 1)); };
 
@@ -361,6 +363,7 @@
       case 'interact': w.interact(pid, a.id); break;
       case 'pick': w.pickBoon(pid, a.i | 0); break;
       case 'reroll': w.reroll(pid); break;
+      case 'evChoice': w.evChoice(pid, a.i | 0, a.k | 0); break; // an event dialog choice (events.js)
       default: break;
     }
   };
@@ -388,6 +391,7 @@
   G.localEvent = (ev) => {
     const s = G.s; if (!s) return;
     if (SHEET_EVENTS[ev.t]) ED.UI.sheetDirty();
+    if (ev.t === 'lock' && ED.UI.evOpen()) ED.UI.evClose(true); // a fight starts: an open event dialog closes (its result as a toast)
     if (ev.t === 'room') {
       s.epoch = ev.ep;
       if (s.mode === 'client') {
@@ -429,6 +433,7 @@
     }
     else if (m.t === 'offerDone') { s.offer = null; s.offerOpen = false; ED.UI.hideBoons(); }
     else if (m.t === 'claimed') s.claimed[m.group] = true;
+    else if (m.t === 'evOpen' || m.t === 'evResult' || m.t === 'evTally' || m.t === 'evClose') ED.UI.evMsg(m); // event dialog (ui.js)
     else if (m.t === 'toast') { ED.UI.toast(m.text); if (!m.info) ED.Audio.play('deny'); } // info toasts are not refusals
     else if (m.t === 'forkRank') ED.UI.forkReveal(m); // a fork rank granted at a boss { id, rank }: the reveal card
     else if (m.t === 'blink' && s.me) { s.me.x = m.x; s.me.y = m.y; s.me.vx = 0; s.me.vy = 0; } // a Death Blossom blink of a hero the host does not move (a joined client): its place
@@ -466,6 +471,7 @@
       for (const ev of fx) G.localEvent(ev);
     } else if (d.t === 'end') G.localEvent({ t: 'end', summary: d.summary });
     else if (d.t === 'offer' || d.t === 'offerDone' || d.t === 'claimed' || d.t === 'toast' || d.t === 'refund' || d.t === 'dashRefund' || d.t === 'forkRank' || d.t === 'blink' || d.t === 'leap') G.message(d);
+    else if (d.t === 'evOpen' || d.t === 'evResult' || d.t === 'evTally' || d.t === 'evClose') G.message(d);
   };
   G.onPeerLeft = (pid) => { const s = G.s; if (s && s.mode === 'host') { s.world.removePlayer(pid); } };
 
@@ -729,7 +735,7 @@
         if (inp.right || inp.down) ED.UI.boonMove(1);
         if (inp.confirm) ED.UI.boonConfirm();
         if (inp.reroll) ED.UI.boonReroll(true);
-      }
+      } else if (ED.UI.evOpen()) inp = ED.UI.evInput(inp); // the event dialog takes the menu keys and holds the hero still (ui.js)
       control(s, inp, sdt);
       if (s.mode !== 'client') {
         const w = s.world;
