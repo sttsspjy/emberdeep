@@ -11,6 +11,8 @@
   const DARK = { vis: 72, lanR: 130, litT: 14, shroud: 0.4, hitR: 14 };
   // Collapse: ring k falls where q = max(|dx| / half width, |dy| / half height) of the interior exceeds fall[k], at[k] s into phase 3 after warn s of warning; a hero on a falling tile drops for dmg of max health
   // and climbs out at the nearest standing tile. late: past the last ring the pause between attacks x (1 - step) every `every` s, down to min.
+  // Phase 3 orbit: n shards circle the King at r px, spd rad/s; a touch hurts for dmg x the King's damage.
+  const SHARDS = { n: 3, r: 74, spd: 2.2, dmg: 0.45 };
   const CRUMBLE = { fall: [0.78, 0.6, 0.44], at: [6, 19, 32], warn: 3, dmg: 0.2, late: { every: 8, step: 0.12, min: 0.5 } };
 
   // Interior ring coordinate of tile (tx, ty): 0 at the centre, near 1 at the walls.
@@ -40,7 +42,7 @@
     for (let i = 0; i < ls.length; i++) if (ar.lit[i] > 0 && U.dist2(ls[i].x, ls[i].y, x, y) < (DARK.lanR + (pad || 0)) ** 2) return true;
     return false;
   };
-  A.crown = { DARK, CRUMBLE, qOf, lit };
+  A.crown = { DARK, CRUMBLE, SHARDS, qOf, lit };
 
   // ---------- lanterns: a hero hit lights one (the breakable-smash hooks every hero hit already calls) ----------
   const light = (w, i) => {
@@ -97,18 +99,19 @@
       rs.broken |= 1 << i; w.emit({ t: 'smash', i, x: Math.round(b.x * T), y: Math.round(b.y * T), k: b.k, r: w.roomId });
     });
   };
-  // Phase 3 orbit: three shards circle the King at 74 px and hurt heroes they touch.
+  // Phase 3 orbit: the SHARDS circle the King and hurt heroes they touch.
   const shards = (w, e) => {
-    for (let i = 0; i < 3; i++) {
-      const a = w.time * 2.2 + i * TAU / 3, x = e.x + Math.cos(a) * 74, y = e.y + Math.sin(a) * 74;
-      for (const p of w.players.values()) if (U.dist2(x, y, p.x, p.y) < (p.r + 10) ** 2) w.hurtPlayer(p, e.dmg * 0.8, { e });
+    const S = SHARDS;
+    for (let i = 0; i < S.n; i++) {
+      const a = w.time * S.spd + i * TAU / S.n, x = e.x + Math.cos(a) * S.r, y = e.y + Math.sin(a) * S.r;
+      for (const p of w.players.values()) if (U.dist2(x, y, p.x, p.y) < (p.r + 10) ** 2) w.hurtPlayer(p, e.dmg * S.dmg, { e });
     }
   };
   const tick = (w, e, dt) => {
     const room = w.room;
     let ar = room.arena;
     if (!ar || ar.k !== 'crown') ar = room.arena = { k: 'crown', dark: false, lit: (room.lanterns || []).map(() => 0), fallen: 0, warn: -1, wt: 0, p3: 0, orig: null };
-    e.noFodder = true;
+    e.noFodder = true; e.noTouch = !!ar.dark; // in the dark only his telegraphed attacks hurt
     if (ar.dark) {
       for (let i = 0; i < ar.lit.length; i++) if (ar.lit[i] > 0) ar.lit[i] = Math.max(0, ar.lit[i] - dt);
       let seen = lit(room, ar, e.x, e.y, e.r);

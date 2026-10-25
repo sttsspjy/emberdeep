@@ -92,16 +92,16 @@
 
     // ---------------- Bosses (absolute HP, scaled by party and pact; refHp = design HP that chill, Conflagration and Wildfire measure against) ----------------
     bonewarden: { name: 'Bone Warden', title: 'After a slam his sword is stuck: he takes +50% damage', ai: 'boss', look: 'b_warden', col: { a: '#ece4cc', b: '#7d745f', c: '#ff5a3a' },
-      hp: 4350, refHp: 800, spd: 80, dmg: 2.4, r: 24, xp: 40, boss: true },
+      hp: 7800, refHp: 800, spd: 80, dmg: 2.4, r: 24, xp: 40, boss: true },
     sporemother: { name: 'Sporemother', title: 'Break the pods to clear the spore carpet', ai: 'boss', look: 'b_spore', col: { a: '#c86bff', b: '#5b2a7a', c: '#7dffd9' },
-      hp: 3700, refHp: 1500, spd: 34, dmg: 2.4, r: 32, xp: 60, boss: true },
+      hp: 9500, refHp: 1500, spd: 34, dmg: 2.4, r: 32, xp: 60, boss: true },
     // arena: the boss room's fixed layout (boss-king.js, boss-hollow.js; src/sim/arena.js lays it). Offsets in tiles from the room centre (floor(w / 2), floor(h / 2) + 1): pillars and dais [dx, dy, w, h], lanterns [dx, dy].
     drownedking: { name: 'Drowned King', title: 'Stand on raised stone when the tide comes. Hide behind pillars from the beam.', ai: 'boss', look: 'b_king', col: { a: '#3f8f88', b: '#173d3b', c: '#e8c66b' },
       hp: 17000, refHp: 4200, spd: 62, dmg: 3.6, r: 26, xp: 120, boss: true, quote: '',
       arena: { kind: 'tide', pillars: [[-9, -4, 2, 2], [7, -4, 2, 2], [-9, 3, 2, 2], [7, 3, 2, 2], [-4, -1, 2, 2], [2, -1, 2, 2], [-1, -5, 2, 2], [-1, 2, 2, 2]],
         dais: [[-13, -7, 3, 3], [10, -7, 3, 3], [-13, 5, 3, 3], [10, 5, 3, 3], [-1, -7, 3, 2], [-1, 5, 3, 3]] } },
     hollowking: { name: 'Hollow King', title: 'Light the lanterns in the dark. Move to the middle when the edge cracks.', ai: 'boss', look: 'b_hollow', col: { a: '#2a1f44', b: '#0e0820', c: '#ff7ad9' },
-      hp: 84000, refHp: 7000, spd: 70, dmg: 3.3, r: 24, xp: 160, boss: true, quote: '',
+      hp: 66000, refHp: 7000, spd: 70, dmg: 2.9, r: 24, xp: 160, boss: true, quote: '',
       arena: { kind: 'crown', lanterns: [[-11, -5], [11, -5], [-11, 4], [11, 4], [-5, 0], [5, 0]] } },
 
     // ---------------- Boss arena pieces (minion: never in a roster; noLoot: no xp, gold or hearts) ----------------
@@ -118,9 +118,9 @@
 
     // ---------------- Champions (stratum IV champion rooms, champions.js; appended after the fodder: the wire index follows the order; never in a roster) ----------------
     // HP x the elite factor of the stratum (World.ELITE); no affix, no drops of their own: the room pays an elite room's reward.
-    twinlance: { name: 'Lancer', ai: 'champion', look: 'knight', art: 'voidknight', col: { a: '#d8c27a', b: '#4a3c1c', c: '#ffe08a' }, hp: 230, spd: 64, dmg: 8, r: 15, xp: 0, cost: 0, champ: 'twins' },
-    twinhammer: { name: 'Hammer', ai: 'champion', look: 'knight', art: 'forgeknight', col: { a: '#9a6a44', b: '#2a1810', c: '#ff8a3a' }, hp: 230, spd: 54, dmg: 8.8, r: 17, xp: 0, cost: 0, champ: 'twins' },
-    mimic: { name: 'Mimic', ai: 'champion', look: 'shade', art: 'shade', col: { a: '#2c2440', b: '#100c1c', c: '#e8e0ff' }, hp: 420, spd: 70, dmg: 7, r: 13, xp: 0, cost: 0, champ: 'mimic' },
+    twinlance: { name: 'Lancer', ai: 'champion', look: 'knight', art: 'voidknight', col: { a: '#d8c27a', b: '#4a3c1c', c: '#ffe08a' }, hp: 380, spd: 64, dmg: 8, r: 15, xp: 0, cost: 0, champ: 'twins' },
+    twinhammer: { name: 'Hammer', ai: 'champion', look: 'knight', art: 'forgeknight', col: { a: '#9a6a44', b: '#2a1810', c: '#ff8a3a' }, hp: 380, spd: 54, dmg: 8.8, r: 17, xp: 0, cost: 0, champ: 'twins' },
+    mimic: { name: 'Mimic', ai: 'champion', look: 'shade', art: 'shade', col: { a: '#2c2440', b: '#100c1c', c: '#e8e0ff' }, hp: 700, spd: 70, dmg: 7, r: 13, xp: 0, cost: 0, champ: 'mimic' },
   };
 
   ED.ENEMY_IDS = Object.keys(E);

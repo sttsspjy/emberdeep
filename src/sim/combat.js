@@ -668,7 +668,7 @@
     if (e && e.smother > 0) dmg *= 1 - e.smother; // Smother: a foe holding 5 of a hero's Burn stacks
     if (e && e.chill > 0 && e.chillOwner) dmg *= 1 - e.chillOwner.stats.chillWeaken;
     dmg = Math.max(1, Math.round(dmg));
-    if (e && e.fodder) dmg = Math.max(1, Math.min(dmg, Math.round(ED.CONST.FODDER_CAP * p.maxHp))); // fodder touches never exceed FODDER_CAP of max health (before the shield)
+    if (e && e.fodder) dmg = Math.min(dmg, ED.CONST.FODDER_CAP * p.maxHp); // fodder touches never exceed FODDER_CAP of max health (before the shield; a fraction of a point on a low-health hero)
     if (p.shield > 0) {
       const ab = Math.min(p.shield, dmg); p.shield -= ab; dmg -= ab;
       const hc = CLS[p.cls];
@@ -677,7 +677,7 @@
     p.hp -= dmg; p.invuln = src.hazard ? 0.3 : 0.6; p.hurtT = 0.3;
     if (p.bellS === 1 && p.hp < p.maxHp * ED.CONST.BELL_HP) p.bellS = 2; // the Drowned Bell's watch is broken (rooms.js)
     if (this.boss) p.hitThisBoss = true;
-    if (dmg > 0) this.emit({ t: 'hurt', pid: p.pid, v: dmg, x: Math.round(p.x), y: Math.round(p.y) });
+    if (dmg > 0) this.emit({ t: 'hurt', pid: p.pid, v: Math.round(dmg * 10) / 10, x: Math.round(p.x), y: Math.round(p.y) });
     else this.emit({ t: 'block', x: p.x, y: p.y, k: 'aegis' });
     if (e && e.hp > 0) {
       if (st.thorns) this.hitEnemy(e, st.thorns, { p, kind: 'thorns', noProc: true, crit: false });
@@ -1284,8 +1284,8 @@
     const ai = ED.AI[e.def.ai];
     if (ai) ai(this, e, dt);
     if (this.faceOn) this.turnFoe(e, dt);
-    // contact damage: full only during body-hit attack states, otherwise 0.4x; a hero takes at most one fodder touch per World.FODDER_TOUCH_CD (p.fodderAt: world time of the next allowed one)
-    if (e.contactCd <= 0 && e.def.ai !== 'bomber' && !e.burrowed) {
+    // contact damage: full only during body-hit attack states, otherwise 0.4x; a hero takes at most one fodder touch per World.FODDER_TOUCH_CD (p.fodderAt: world time of the next allowed one); e.noTouch: no contact damage
+    if (e.contactCd <= 0 && e.def.ai !== 'bomber' && !e.burrowed && !e.noTouch) {
       for (const p of this.players.values()) {
         if (p.downed || p.dead) continue;
         const rr = e.r + p.r - 3;

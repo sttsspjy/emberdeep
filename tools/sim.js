@@ -555,6 +555,11 @@ function crownBot(w, p, c, skill, brng, room, ar) {
       if (g) return { goal: g };
     }
   }
+  const b = w.boss, SH = Cm.SHARDS; // phase 3: off the shard orbit (melee inside it, ranged outside)
+  if (b && b.phase >= 3 && !ar.dark && mechSeen(w, c, 'shards', skill, brng)) {
+    const dx = p.x - b.x, dy = p.y - b.y, d = Math.hypot(dx, dy) || 1, pad = p.r + 16;
+    if (Math.abs(d - SH.r) < pad) { const r = p.stats.melee ? SH.r - pad - 4 : SH.r + pad + 8; return { goal: { x: b.x + dx / d * r, y: b.y + dy / d * r } }; }
+  }
   return null;
 }
 

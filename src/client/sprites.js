@@ -1154,9 +1154,10 @@
       const a = t * 0.8 + i * U.TAU / 7, x = Math.cos(a) * 16, y = -78 + Math.sin(a) * 4;
       poly(c, [x - 2.5, y + 4, x, y - 7, x + 2.5, y + 4], Math.sin(a) > 0 ? '#ffd8f4' : '#c98bff');
     }
-    if (e.phase >= 3) for (let i = 0; i < 3; i++) {
-      const a = (ED.Render.simT ?? t) * 2.2 + i * U.TAU / 3; // sim-time phase: matches hkShards damage in bosses.js
-      const x = Math.cos(a) * 74, y = Math.sin(a) * 74 + 6;
+    const SH = ED.Arena.crown.SHARDS;
+    if (e.phase >= 3) for (let i = 0; i < SH.n; i++) {
+      const a = (ED.Render.simT ?? t) * SH.spd + i * U.TAU / SH.n; // sim-time phase: matches the shard damage in boss-hollow.js
+      const x = Math.cos(a) * SH.r, y = Math.sin(a) * SH.r + 6;
       glow(c, x, y, 18, C.c, 0.5); poly(c, [x - 6, y + 6, x, y - 10, x + 6, y + 6], '#ffb8ec');
     }
     c.restore();

@@ -30,7 +30,16 @@
         if (open(tx + 1, ty) && rr < m) { m = rr; k = 1; }
         if (open(tx, ty - 1) && u < m) { m = u; k = 2; }
         if (open(tx, ty + 1) && dd < m) { m = dd; k = 3; }
-        if (k < 0) { m = Math.min(l, rr, u, dd); k = m === l ? 0 : m === rr ? 1 : m === u ? 2 : 3; }
+        if (k < 0) { // no open neighbour (a body inside a field of chasms): to the centre of the nearest open tile, never on through the block
+          let bd = Infinity, bx = -1, by = -1;
+          for (let y = 0; y < room.h; y++) for (let x = 0; x < room.w; x++) {
+            if (solidFor(room.tiles[y * room.w + x], locked, fly)) continue;
+            const q = (x - tx) * (x - tx) + (y - ty) * (y - ty);
+            if (q < bd) { bd = q; bx = x; by = y; }
+          }
+          if (bx >= 0) { e.x = (bx + 0.5) * T; e.y = (by + 0.5) * T; return true; }
+          m = Math.min(l, rr, u, dd); k = m === l ? 0 : m === rr ? 1 : m === u ? 2 : 3;
+        }
         if (k === 0) e.x = tx * T - r; else if (k === 1) e.x = tx * T + T + r; else if (k === 2) e.y = ty * T - r; else e.y = ty * T + T + r;
       }
     }
@@ -220,7 +229,7 @@
     return Math.atan2(ay - y, ax - x);
   };
   // Per-stratum threat on top of the base scales: foe HP, wave budget, `cdRate` = extra cooldown recovery (0.2 = attack timers tick 20% faster, -0.2 = 20% slower) and the boss pause between attacks (x).
-  W.THREAT = [{ hp: 2.2, dmg: 1, wave: 0.8, cdRate: -0.4, pause: 2 }, { hp: 1.41, dmg: 1, wave: 0.72, cdRate: -0.18, pause: 1.5 }, { hp: 1.02, dmg: 1.05, wave: 0.64, cdRate: 0.05, pause: 0.7 }, { hp: 1.02, dmg: 1.39, wave: 0.6, cdRate: 0.3, pause: 0.6 }];
+  W.THREAT = [{ hp: 2.2, dmg: 1, wave: 0.8, cdRate: -0.4, pause: 2 }, { hp: 1.41, dmg: 1, wave: 0.72, cdRate: -0.18, pause: 1.5 }, { hp: 1.02, dmg: 1.2, wave: 0.64, cdRate: 0.05, pause: 0.7 }, { hp: 1.02, dmg: 1.6, wave: 0.6, cdRate: 0.3, pause: 0.6 }];
   // Foe HP multiplier of stratum s at row fraction f: the depth curve at W.depth(s, f) times the stratum's threat HP.
   W.hpScale = (s, f) => { const d = W.depth(s, f) - 1; return (1 + 0.65 * d + 0.08 * d * d) * W.perStratum(W.THREAT, s).hp; };
   // Wave pacing of combat rooms: seconds before the first wave, spawn telegraph (+ random extra), the reinforcement's telegraph, minimum gap before the next wave, the share of a wave that may still stand when the next one is called,
@@ -241,7 +250,7 @@
   W.furyMul = (s, ft) => { const t = W.furyAt(s); return t > 0 && ft > t ? Math.min(W.BOSS_FURY.max, 1 + W.BOSS_FURY.ramp * (ft - t)) : 1; };
   // Fodder max HP: + FODDER_STEP per depth step of the stratum (no row factor) and pact only, no threat lever, party multiplier or elite (pure; the client mirror rebuilds it from the wire fraction).
   // A hero takes at most one fodder touch per FODDER_TOUCH_CD s.
-  W.FODDER_STEP = 0.3; W.FODDER_TOUCH_CD = 1.5;
+  W.FODDER_STEP = 0.3; W.FODDER_TOUCH_CD = 2;
   W.fodderHp = (def, s, pact) => def.hp * (1 + W.FODDER_STEP * (W.depth(s) - 1)) * ED.pactMul(pact, 'foeHp');
   // Xp a threat foe is worth before the dark-room multiplier and the room's budget scale (enc.xpK).
   W.threatXp = (def, s, elite) => (def.xp || 0) * (1 + 0.35 * (W.depth(s) - 1)) * (elite ? 3 : 1);
@@ -270,7 +279,7 @@
   W.prototype.secretW = function (k) { if (this.run[k]) return; this.run[k] = true; this.emit({ t: 'secret', pid: null }); };
   W.prototype.partySize = function () { return Math.max(1, this.players.size); };
   W.partyHpMul = (size) => { const n = size - 1; return 1 + 0.45 * n + 0.1 * n * (n - 1); }; // foe HP factor of a party of `size` (pure; the sheet reads it too)
-  W.FOE_DMG = 1.5; // every foe's damage (hits, shots, zones, bosses) x this
+  W.FOE_DMG = 1.95; // every foe's damage (hits, shots, zones, bosses) x this
   W.dmgScale = (s, f) => { const d = W.depth(s, f) - 1; return W.FOE_DMG * (1 + 0.22 * d + 0.03 * d * d); }; // foe damage factor of stratum s at row fraction f
   W.prototype.partyHpMul = function () { return W.partyHpMul(this.partySize()); };
   W.prototype.alive = function (p) { return p && !p.downed && !p.dead; };

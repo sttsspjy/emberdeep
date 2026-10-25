@@ -50,7 +50,7 @@ Status ticks, Smites, Tolls and discharges are `raw` hits: no hero multiplier, n
 2. Mirror Shard (25% chance to shrug off a projectile), then dodge (cap 60%, not against hazards; 0.25 s untouchable after), then Aegis Charm (blocks one hit per 10 s).
 3. `amount × 60/(60 + armor) × (1 + vuln)`.
 4. **Brace** (Knight, Vanguard) × the best **Sanctuary** here; their product never goes below ×0.5 (`DR_FLOOR`). Then Last Stand ×0.4, then a Judged foe's weakening (Verdict), then the attacker's weakening: Chill (`chillWeaken`), Venom (`venom/100 × VENOM_WEAK` + Enfeeble at full) and Smother.
-5. Rounded, at least 1. A fodder hit is then capped at `FODDER_CAP` (3%) of max HP (at least 1).
+5. Rounded, at least 1. A fodder hit is then capped at `FODDER_CAP` (3%) of max HP (a fraction of a point on a low-health hero).
 6. The **shield** absorbs first, then health. Thorns strike the attacker; a vampiric elite heals 12× the damage dealt (3 × `HP_K`).
 
 ### Shields

@@ -28,6 +28,7 @@ module.exports = (ED, model) => {
   const SLOW_RED = 0.12;
   const STUN_RED = 0.7; // damage a stunned foe does not deal while stunned (it recovers, some attacks already thrown)
   const E_MAX_RED = 0.35; // largest share of incoming damage the controlled foes can remove
+  const REACH = 0.5; // guess: share of the damage a hero takes from foes its statuses have reached (fresh spawns, shots in flight and boss adds are not yet controlled)
 
   // Cards and relics the sheet leaves at zero, one line each. Fold = a formula in fold() from the stat block (D damage, E effective health, bonus = meta value); Prior = a flat value in PRIOR; Sheet = the sheet models it
   // (a hold verb: the weapon's hold model, tools/model.js takes it where it beats the attacks). "guess" marks a coefficient no bot run has measured. Relics follow the boons.
@@ -187,9 +188,9 @@ module.exports = (ED, model) => {
       const r = m.proc.rate.poison / ref.statusHp * C.VENOM_K * (1 + st.venomBuild), cloud = (st.dashCloud ? 1 + 0.3 * (1 + st.cloudR) : 1) * (st.toxicWake ? 1.3 : 1) * (st.hold === 'flask' ? 1.3 : 1), rN = r * pf * cloud;
       const full = (g, T) => (g > 0 ? clamp(1 - 100 / (g * T), 0, 1) : 0), v1 = meanRamp(r * RES_ONE, T_ONE, 100) / 100, vN = meanRamp(rN, tFoe, 100) / 100, f1 = full(r * RES_ONE, T_ONE), fN = full(rN, tFoe);
       const weak = 0.6 * (C.VENOM_WEAK * vN + st.venomWeak * fN + C.VENOM_SLOW * vN * SLOW_RED * 2) + 0.4 * (C.VENOM_WEAK * v1 + st.venomWeak * f1);
-      eMul /= 1 - Math.min(E_MAX_RED, weak);
+      eMul /= 1 - Math.min(E_MAX_RED, REACH * weak);
       if (st.corrode) { mul1 *= 1 + st.corrode * f1; mulN *= 1 + st.corrode * fN; }
-      if (st.neuro) eMul /= 1 - Math.min(E_MAX_RED, NEURO_RED * (0.6 * fN + 0.4 * 0.5 * f1));
+      if (st.neuro) eMul /= 1 - Math.min(E_MAX_RED, REACH * NEURO_RED * (0.6 * fN + 0.4 * 0.5 * f1));
     }
     // Backstabs: a share of the hits lands from behind (BACK_UP; Umbral Step, Phantom Step and Umbral Arms raise it) for +backstab, and only those mark Doom; a foe is Reaped once its health falls to its Doom, a boss Tolls it back
     const back = st.backstab > 0 || st.shadowInfuse > 0 ? clamp((melee ? BACK_UP.melee : BACK_UP.ranged) + (st.dashBack ? Math.min(0.3, st.dashBack * dashUse / Math.max(1, aps)) : 0) + (st.decoy ? DECOY_UP : 0) + (st.stepBehind ? BEHIND_UP : 0), 0, 0.9) : 0;
@@ -211,7 +212,7 @@ module.exports = (ED, model) => {
       if (st.shatter) { add1 += skOne * fE * st.shatter; addN += skN * fT * (st.shatter + st.shatterSplash * SHATTER_NEAR); }
       if (st.coldCycle && st.shatter) { const cut = Math.min(0.5, Math.min(1 / C.COLD_CD, casts * fT * PACK) * st.coldCycle * 0.5); add1 += skOne * cut * fE; addN += skN * cut; }
       if (st.glacier) eMul *= 1 + GLACIER_E * Math.min(fT, 1 - fT);
-      const red = clamp(0.6 * (fT * FROZEN_FOE + chT * (SLOW_RED + st.chillWeaken)) + 0.4 * (chB * (SLOW_RED * (1 + C.BOSS_CHILL) + st.chillWeaken)), 0, E_MAX_RED);
+      const red = REACH * clamp(0.6 * (fT * FROZEN_FOE + chT * (SLOW_RED + st.chillWeaken)) + 0.4 * (chB * (SLOW_RED * (1 + C.BOSS_CHILL) + st.chillWeaken)), 0, E_MAX_RED);
       eMul /= 1 - red;
     }
     if (st.iceWall) eMul *= 1 + WALL_E;
@@ -219,7 +220,7 @@ module.exports = (ED, model) => {
     // Overload and the other stuns beyond the class's own: Opportunist pays +25% on stunned foes; stunned foes do no damage
     if (st.arcStun > 0 && light1 > 0) {
       const up = Math.min(1, st.arcStun / Math.max(1, st.arcStun + 0.75)) * 0.7;
-      eMul /= 1 - Math.min(E_MAX_RED, up * STUN_RED);
+      eMul /= 1 - Math.min(E_MAX_RED, REACH * up * STUN_RED);
       if (st.opportunist) { mul1 *= 1 + st.opportunist * up * 0.5; mulN *= 1 + st.opportunist * up; }
     }
     // Holy shield: the Smite shield refills to its cap; Sanctity raises the cap and the grant
