@@ -709,6 +709,12 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 @media (max-width: 560px) { .boon-cards.dense { --n: 1; } .boon-cards.dense .boon-card { width: round(down, min(30rem, 100%), calc(2 * var(--p))); } }
 .boon-foot { display: flex; gap: calc(var(--fu) * 1.5); align-items: center; justify-content: center; flex-wrap: wrap; color: var(--muted); font: 400 var(--fs-md)/1.375 var(--f-body); text-shadow: 0 var(--fpx) 0 var(--px-ol); }
 .boon-foot kbd { margin: 0 var(--pf); }
+/* offer lock (UI.OFFER_LOCK_MS, #boon-cards.locking): a fill of the card's path hue with a bright leading edge sweeps left to right over the body; picks wait for it; the reroll button dims meanwhile */
+.bc-lock { display: none; position: absolute; inset: calc(2 * var(--p)); z-index: 3; pointer-events: none; }
+.boon-cards.locking .bc-lock { display: block; }
+.bc-lock::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 0; background: color-mix(in srgb, var(--pc) 24%, transparent); box-shadow: inset calc(-2 * var(--p)) 0 0 color-mix(in srgb, var(--pc) 70%, #fff); animation: bc-lock var(--lock, 600ms) steps(15) forwards; }
+@keyframes bc-lock { to { width: 100%; } }
+#ov-boon:has(.boon-cards.locking) #btn-reroll { opacity: 0.5; }
 
 /* pick: the chosen card plays its kind's animation (0.36 s, stepped), the others drop and fade; .pick-fx is a layer fixed over the chosen card's box */
 .boon-cards.picking .boon-card { pointer-events: none; }

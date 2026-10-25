@@ -1,6 +1,6 @@
 // Usage: node tools/check-secrets.js
 // Headless checks of the secret run fields (world.js secretP / secretW): each trigger fires in a constructed scenario and stays off in a near miss; the Drowned Bell (floor gen room.bell, rooms.js ringBell / bellClear)
-// sits only on stratum III, deterministic per seed; the Platino (floor.platino: the fight clear that lets it out, rooms.js) is deterministic, harmless and leaves the world's RNG, foes and loot untouched; net.js carries every field.
+// sits only on stratum III, deterministic per seed; the Platino (floor.platino: the fight clear that lets it out, rooms.js) is deterministic, harmless, out at most once per run and leaves the world's RNG, foes and loot untouched; net.js carries every field.
 // Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
 const fs = require('fs'), path = require('path'), vm = require('vm');
@@ -255,6 +255,20 @@ function platRun(plat, ticks, moveHero) {
   const d0 = Math.hypot(cr.x - F.p.x, cr.y - F.p.y);
   for (let i = 0; i < 30; i++) F.w.update(DT);
   ok(F.w.critter && Math.hypot(F.w.critter.x - F.p.x, F.w.critter.y - F.p.y) > d0 + 20, 'it flees a near hero');
+  // once per run: the next stratum's cue (its first fight clear) lets nothing out once it came out this run, caught or fled
+  const later = (r) => {
+    const w = r.w; w.enterStratum(2);
+    for (const q of w.players.values()) { q.offers.length = 0; q.picks = 0; q.offer = null; }
+    w.enterRoom(w.floor.rooms.find(rm => rm.type === 'combat' && !rm.dark).id, null);
+    w.floor.platino = 1; w.floorFights = 0;
+    w.enemies.length = 0; w.zones.length = 0; w.enc.q = 0; w.enc.spawned = 0; w.enc.wave = w.enc.waves.length - 1; w.enc.t = 0;
+    w.update(DT);
+    return w;
+  };
+  const caught = later(C), fled = later(platRun(true, 760)), never = later(platRun(false, 1));
+  ok(caught.roomState[caught.roomId].cleared && !caught.critter, 'caught this run: no Platino on a later floor');
+  ok(fled.roomState[fled.roomId].cleared && !fled.critter, 'out once this run (fled): no Platino on a later floor');
+  ok(never.roomState[never.roomId].cleared && !!never.critter, 'not out yet this run: a later floor\'s cue lets it out');
 }
 
 // ---- net and summary ----

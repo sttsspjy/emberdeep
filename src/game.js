@@ -4,7 +4,6 @@
   'use strict';
   const U = ED.U, Sim = ED.Sim, N = ED.Net;
   const G = ED.Game = { s: null };
-  const HERO_REWARD = /^(boon$|forge$|epic$|vigor$)/; // reward items every hero claims separately
 
   // ---------------- client-side mirror of the host's world ----------------
   function Mirror(cfg, localPid) {
@@ -42,7 +41,7 @@
       for (const p of this.players.values()) p.toughRoom = tough; // War Drum doubles in these rooms
     }
     this.locked = !!d.L; this.gold = d.g; this.xp = d.x; this.xpNext = d.n; this.level = d.l; this.waitMsg = d.wm; this.time = d.T;
-    if (d.O) this.props = d.O.map(a => ({ id: a[0], kind: a[1], x: a[2], y: a[3], state: a[4], item: a[5], price: a[6], group: a[7], stype: a[8], text: a[9] }));
+    if (d.O) this.props = d.O.map(a => ({ id: a[0], kind: a[1], x: a[2], y: a[3], state: a[4], item: a[5], price: a[6], group: a[7], stype: a[8], text: a[9], owner: a[10] || '' }));
     if (d.RS) d.RS.forEach((b, i) => { this.roomState[i] = { visited: !!(b & 1), known: !!(b & 2), cleared: !!(b & 4), broken: d.BR ? d.BR[i] | 0 : 0 }; });
     if (d.RUN) this.run = d.RUN;
     if (ED.Arena) ED.Arena.decode(this.room, d.AR || null); // boss / champion arena (flood, darkness, lanterns, collapsed floor, mimic classes)
@@ -496,7 +495,7 @@
     for (const p of view.props) {
       if (!ED.Render.interactable(p)) continue;
       if (view.locked && p.kind !== 'trial') continue;
-      if (s.claimed[p.group] && (p.kind === 'relic' || p.kind === 'campfire' || p.kind === 'anvil' || (p.kind === 'reward' && HERO_REWARD.test(p.item)))) continue;
+      if (!ED.Render.mine(p, s.localPid, s.claimed)) continue; // another hero's prop, or one this hero already claimed
       const d = U.dist2(p.x, p.y, me.x, me.y);
       if (d < nd) { nd = d; near = p; }
     }

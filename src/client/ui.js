@@ -603,9 +603,10 @@
   };
 
   // ---------------- boon picker ----------------
-  // Cards ignore input for a moment after they appear, so a key or click meant for combat never picks one.
-  let boonFocus = 0, boonOffer = null, boonLock = 0;
-  const BOON_LOCK_MS = 700;
+  // Cards ignore every pick input (click, confirm key, pad, reroll) for OFFER_LOCK_MS after a hand opens, so a press meant for combat never picks one; #boon-cards.locking sweeps a fill across each card (.bc-lock) meanwhile.
+  let boonFocus = 0, boonOffer = null, boonLock = 0, lockT = 0;
+  const BOON_LOCK_MS = UI.OFFER_LOCK_MS = 600;
+  UI.offerLocked = () => !!boonOffer && performance.now() < boonLock;
   const OFFER_HEAD = { start: 'Choose your first path', level: 'Choose a boon', epic: 'Choose an epic boon', forge: 'Forge: rank up a boon' };
 
   // [header, subtitle, path colour key] for an offer message { src, forge }.
@@ -720,7 +721,7 @@
     const rank = have ? (have < max ? `Rank ${have} → ${have + 1} (max ${max})` : `Rank ${have} (max)`) : max > 1 ? `Max rank ${max}` : '';
     const ribbon = boonRibbon(b, id), [line] = boonPathLine(b);
     const icon = ED.CardArt ? ED.CardArt.icon(b.icon, L.icol) : ED.Icons.boonUrl(id);
-    el.innerHTML = `${cardArt(L, b, have, max)}${ribbon ? `<span class="bc-ribbon">${ribbon}</span>` : ''}<div class="bc-top">${line}<span class="bc-rar">${ED.RARITY[b.rar].name}</span></div><img class="bc-icon" alt="" src="${icon}"><div class="bn">${esc(b.name)}</div>${b.evo ? `<div class="bsub">${esc(UI.evoName(b.evo, heroWeaponName(me)))}</div>` : ''}${b.route ? classBody(b, id, have, me) : `<div class="bd">${esc(ED.Sheet.text(id, Math.min(max, have + 1), me && me.stats, ED.Game.s && ED.Game.s.view && ED.Game.s.view.stratum))}</div>`}${deltaHtml(deltas)}${rank ? `<div class="bk${have ? ' own' : ''}">${rank}</div>` : ''}`;
+    el.innerHTML = `<i class="bc-lock" aria-hidden="true"></i>${cardArt(L, b, have, max)}${ribbon ? `<span class="bc-ribbon">${ribbon}</span>` : ''}<div class="bc-top">${line}<span class="bc-rar">${ED.RARITY[b.rar].name}</span></div><img class="bc-icon" alt="" src="${icon}"><div class="bn">${esc(b.name)}</div>${b.evo ? `<div class="bsub">${esc(UI.evoName(b.evo, heroWeaponName(me)))}</div>` : ''}${b.route ? classBody(b, id, have, me) : `<div class="bd">${esc(ED.Sheet.text(id, Math.min(max, have + 1), me && me.stats, ED.Game.s && ED.Game.s.view && ED.Game.s.view.stratum))}</div>`}${deltaHtml(deltas)}${rank ? `<div class="bk${have ? ' own' : ''}">${rank}</div>` : ''}`;
     const wb = el.querySelector('.bweap');
     if (wb) { const th = weaponThumb(wb.dataset.w); if (th) wb.insertBefore(th, wb.firstChild); }
     el.onclick = () => { if (performance.now() >= boonLock) UI.pickBoon(i); };
@@ -740,6 +741,8 @@
     if (pickT) { pickNext = offer; return; } // the pick animation of the last hand finishes first
     boonOffer = offer; boonFocus = 0; boonLock = performance.now() + BOON_LOCK_MS;
     const wrap = $('boon-cards'); wrap.innerHTML = ''; wrap.classList.remove('picking');
+    wrap.style.setProperty('--lock', BOON_LOCK_MS + 'ms'); wrap.classList.add('locking'); // the fresh cards start their sweep
+    clearTimeout(lockT); lockT = setTimeout(() => wrap.classList.remove('locking'), BOON_LOCK_MS);
     $('ov-boon').classList.toggle('low', lowFx());
     const me = ED.Game.s && ED.Game.s.me;
     const dl = offerDeltas(offer, me);

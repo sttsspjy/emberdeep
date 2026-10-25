@@ -1,6 +1,6 @@
 // Usage: node tools/check-ux.js
 // Headless checks of player-facing text and layout data: the tutorial signs near the spawn, no developer units or stale fixed multipliers in card texts, the Doom/Toll wording,
-// Shield Storm and Comet in the sheet model, the Sundered status, the floor-map glyph table and route bits (src/client/icons.js). Prints failures and exits 1 when any check fails.
+// Shield Storm and Comet in the sheet model, the Sundered status, the floor-map glyph table and route bits (src/client/icons.js), the offer lock gates (src/client/ui.js). Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
 let n = 0, fails = 0;
 const ok = (c, msg) => { n++; if (!c) { fails++; console.log('FAIL ' + msg); } };
@@ -178,6 +178,16 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   ok(rt2[3] === 0 && rt2[2] === 7, 'the branch not taken closes once its sibling is entered: ' + Array.from(rt2).join());
   const sheetSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'sheetui.js'), 'utf8');
   ok(!/dead end/.test(sheetSrc), 'the sheet never calls dark rooms dead ends');
+}
+
+// ---------------- offer lock (ui.js; the live timing runs in tools/browse.js --scen=cards) ----------------
+{
+  const ui = require('fs').readFileSync(require('path').join(__dirname, '..', 'src', 'client', 'ui.js'), 'utf8').replace(/\r\n/g, '\n');
+  ok(/const BOON_LOCK_MS = UI\.OFFER_LOCK_MS = 600;/.test(ui), 'the offer lock is 600 ms');
+  ok(/el\.onclick = \(\) => \{ if \(performance\.now\(\) >= boonLock\)/.test(ui), 'a card click waits for the lock');
+  ok(/UI\.boonConfirm = \(\) => \{ if \(!boonOffer \|\| performance\.now\(\) < boonLock\) return;/.test(ui), 'the confirm key and pad wait for the lock');
+  ok(/UI\.boonReroll = [^\n]*\n[^\n]*performance\.now\(\) < boonLock\) return;/.test(ui), 'the reroll waits for the lock');
+  ok(/boonLock = performance\.now\(\) \+ BOON_LOCK_MS;[^\n]*\n[^\n]*\n\s*wrap\.style\.setProperty\('--lock'[^\n]*classList\.add\('locking'\)/.test(ui), 'each hand restarts the lock and its fill sweep');
 }
 
 console.log(`${n} checks, ${fails} failed`);

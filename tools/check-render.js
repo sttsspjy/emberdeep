@@ -1,6 +1,6 @@
 // Usage: node tools/check-render.js
 // Headless checks of render review fixes: the hit-flash rules of the sim (DoT ticks never flash, a flash is 66 ms, flashes are 120 ms apart, a new foe flashes on its first hit) and the art anchors the client reads
-// (a per-frame Hollow King crown point on his head, foe and boss head lines within 3 art px of their own frames, eye points inside the anim's frames). Prints failures and exits 1 when any check fails.
+// (a per-frame Hollow King crown point on his head, foe and boss head lines within 3 art px of their own frames, eye points inside the anim's frames), per-hero props (owner, claimed groups, vanishing kinds). Prints failures and exits 1 when any check fails.
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -148,6 +148,30 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   };
   const wire = (s) => JSON.parse(JSON.stringify(s));
   const mirrorOf = (w) => new G.Mirror({ pact: w.pact, players: [{ pid: 'p0', name: 'T', slot: 0, cls: 'knight', weapon: ED.CLASSES.knight.weapons[0], meta: META() }] }, 'p0');
+
+  // per-hero props: owner (only its owner sees and uses it, O[10] on the wire), claimed groups (R.mine), taken props vanish unless their kind is in KEEP_USED
+  {
+    const w = new ED.World({ seed: 7, pact: 0, players: ['p0', 'p1'].map((pid, i) => ({ pid, name: 'T' + i, slot: i, cls: 'knight', weapon: ED.CLASSES.knight.weapons[0], meta: META() })) });
+    w.startRun();
+    const [a, b] = [w.players.get('p0'), w.players.get('p1')];
+    for (const q of [a, b]) { q.offers.length = 0; q.picks = 0; q.offer = null; }
+    w.enemies.length = 0; w.enc = null; w.locked = false; w.props.length = 0;
+    const pr = { id: 9101, kind: 'reward', x: a.x, y: a.y, item: 'vigor', group: 77, owner: 'p1', state: 0 };
+    w.props.push(pr); b.x = a.x; b.y = a.y;
+    const hp0 = a.bonusHp | 0;
+    w.interact('p0', pr.id);
+    ok(!a.claimed[77] && (a.bonusHp | 0) === hp0, 'a hero cannot use another hero\'s prop (owner)');
+    w.interact('p1', pr.id);
+    ok(b.claimed[77] === true, 'its owner can');
+    const full = wire(N.encodeSnap(w, [], true)), row = full.O.find((o) => o[0] === pr.id);
+    ok(row && row[10] === 'p1', `the props row carries the owner at O[10] (${row && row[10]})`);
+    const m = mirrorOf(w); full.T = 5; m.apply(full, 0);
+    const mp = m.props.find((o) => o.id === pr.id);
+    ok(mp && mp.owner === 'p1', 'the client mirror reads the owner');
+    ok(R.mine(mp, 'p1', {}) && !R.mine(mp, 'p0', {}), 'R.mine: an owned prop is only its owner\'s');
+    ok(R.mine({ group: 5 }, 'p0', {}) && !R.mine({ group: 5 }, 'p0', { 5: true }) && R.mine({ group: 0 }, 'p0', { 0: true }), 'R.mine: a claimed group is no longer the claimer\'s');
+    ok(['chest', 'fountain', 'altar', 'campfire', 'anvil'].every((k) => R.KEEP_USED.has(k)) && !['reward', 'relic', 'shop'].some((k) => R.KEEP_USED.has(k)), 'rewards, relics and shop items vanish when taken; fixtures keep their used look');
+  }
 
   // wire size: 150 foes, 100 of them fodder
   {

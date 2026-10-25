@@ -276,7 +276,7 @@
     this.computeFlow();
     this.emit({ t: 'clear' });
     this.floorFights = (this.floorFights || 0) + 1;
-    if (this.floor.platino === this.floorFights) this.spawnPlatino();
+    if (this.floor.platino === this.floorFights && !this.run.platino) this.spawnPlatino(); // run.platino: once per run
   };
 
   // p, src: the killing hero and the hit's source (killEnemy). Secrets: One Face (a party of four of one hero downs a stratum boss); at the Hollow King, Thread of Life (a standing hero below THREAD_HP of max health),
@@ -392,6 +392,7 @@
     const p = this.players.get(pid);
     const pr = this.props.find(x => x.id === propId);
     if (!p || !pr || p.downed || p.dead || pr.state) return;
+    if (pr.owner && pr.owner !== pid) return; // a per-hero prop (owner: pid) answers only its owner
     if (Math.hypot(p.x - pr.x, p.y - pr.y) > 56) return;
     if (this.locked && pr.kind !== 'trial') return;
     const s = this.stratum;
@@ -523,9 +524,11 @@
   // ---------------- the Platino (floor.platino: the fight clear on the floor that lets it out) ----------------
   // Out on a floor spot (PLATINO.avoid from every hero) at the floor.platino-th fight clear of its floor: wanders at wander px/s, flees heroes within flee at speed px/s (steering at turn rad/s, probing probe px ahead for open floor), gone after life s with a puff.
   // A hero touching it (within touch of the body) catches it: { t: 'platino', pid, x, y } and p.sec.platino. Own RNG stream; never in this.enemies (no hits, no aim, no bot target), drops nothing.
+  // It comes out at most once per run (run.platino, set at its spawn): a later floor's cue is skipped, caught or not.
   const PLATINO = { speed: 130, wander: 60, flee: 190, turn: 7, probe: 24, life: 12, r: 7, touch: 6, avoid: 140 };
   ED.World.PLATINO = PLATINO;
   W.spawnPlatino = function () {
+    this.run.platino = true;
     const rng = U.RNG(((this.floorSeed ^ 0x51a7c0de) >>> 0) + this.roomId * 977);
     const pt = D.randomFloor(this.room, rng, this.alivePlayers(), PLATINO.avoid);
     this.critter = { x: pt.x, y: pt.y, r: PLATINO.r, a: rng.range(0, U.TAU), wa: 0, wt: 0, t: PLATINO.life, face: 1, rng };

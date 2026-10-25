@@ -679,7 +679,7 @@ function wantedProp(w, p) {
   const hurt = p.hp < p.maxHp * 0.6;
   let best = null, bs = 0;
   for (const x of w.props) {
-    if (x.state) continue;
+    if (x.state || (x.owner && x.owner !== p.pid)) continue; // another hero's per-hero prop (owner)
     let s = 0;
     switch (x.kind) {
       case 'reward': s = PER_HERO_REWARDS.includes(x.item) && p.claimed[x.group] ? 0 : 9; break;
@@ -1074,7 +1074,7 @@ function runBot(opts) {
   const grant0 = w.grantOffer, give0 = w.giveRelic, drop0 = w.dropGold;
   w.grantOffer = function (p, spec) { const k = spec && spec.src === 'room' ? 'room' : spec && spec.src || 'level'; rec.offers[k] = (rec.offers[k] || 0) + 1; return grant0.call(this, p, spec); };
   w.giveRelic = function (p, id) { const k = this.room ? this.room.type : '?'; rec.relicsBy[k] = (rec.relicsBy[k] || 0) + 1; return give0.call(this, p, id); };
-  w.dropGold = function (x, y, total, exact) { rec.goldIn += Math.round(exact ? total : total * ED.World.GOLD_MUL); return drop0.call(this, x, y, total, exact); };
+  w.dropGold = function (x, y, total, exact) { rec.goldIn += Math.round(exact ? total : total * ED.World.goldMul(this.stratum)); return drop0.call(this, x, y, total, exact); };
   // per-room tally: kills (threat / fodder) and the xp dropped, counted from the pickups a drop appends
   rec.room = { th: 0, fo: 0, xp: 0, clip: 0 };
   const kill1 = w.killEnemy, xp1 = w.dropXp;
