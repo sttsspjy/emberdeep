@@ -1,14 +1,14 @@
 // Usage: node tools/sim.js <heroes> <runs> <botSkill 0-1> <meta none|mid|max> [classes|-] [pact] [--pick=random|smart|legacy] [--start=random|class|generalist|rotate|<gateId>] [--gates=1|2] [--force=id[@slot],...]
 //   [--route=attack|skill1|skill2|element|random|rotate] [--fork=0|1|random|rotate] [--weapon=0|1|2|rotate] [--aimnoise=<angle rad>,<point px>|0] [--seed0=N] [--dark=smart|always|never] [--strata=N] [--from=N] [--vet[=charges,rider,dodge,hazard]] [--vetreact=<s>] [--lambda=<x>|auto[:<x0>]] [--out=rows.json] [--pair=rows.json] [--quiet] [--explain]   (parallel batches: tools/simpool.js, fixed quick suite: tools/bal.js)
 // Headless simulation harness: loads the game's sim files into this Node context and drives bot heroes through full runs (deterministic per seed: the bot has its own seeded RNG).
-// Bot policy: fight, claim room rewards, use rest sites and shops, explore every unvisited room nearest-first, then head for the boss.
+// Bot policy: fight, claim room rewards, use rest sites and shops, then take the exit door nextRoom picks (a seeded map heuristic) until the boss.
 // Dark rooms follow --dark: smart (default) enters one while every living hero has at least DARK_HP of max HP, always enters, never skips them.
 // Pick policies: 'random' takes a random card; 'smart' takes the card of best marginal value (tools/pick.js: damage and effective health over the next three strata from the sheet model, folded mechanics, milestone value of keystone / evolution / duo; start card, forge, rerolls and relics by the same value);
 // 'legacy' is the v3 smart order in smartScore (evolution > keystone > duo > own-path boon > element gate while a slot is free > open General > anything), kept for paired comparison. --explain prints every pick of a single run with its value parts.
 // Skill (0-1) is the share of ticks the bot pays attention to floor hazards; the rest of the time it moves on instinct.
 // --vet: the veteran preset, a bot that plays like a skilled player (see "veteran preset" below); --vetreact=<s> sets its reaction time (default 0.18); without --vet every number is unchanged.
 // The summary reports win rate, pacing, hits and time to kill, hero DPS, damage share by source, cooldown reduction, the dark-room lines and the path lines (see summarize); every mean prints its standard error.
-// Its last lines, `boss arrival I..VI` (also each row's `arrive`), read every run at the first entry of each boss room: team level, hero 0's picks by source, and per hero the model's damage on one foe and in a pack and its effective health (tools/model.js assess, hero at rest); power = mean damage x effective health, geometric mean over the runs.
+// Its last lines, `boss arrival I..IV` (also each row's `arrive`), read every run at the first entry of each boss room: team level, hero 0's picks by source, and per hero the model's damage on one foe and in a pack and its effective health (tools/model.js assess, hero at rest); power = mean damage x effective health, geometric mean over the runs.
 // Per cleared combat / elite / dark room it also reports kills (threat/fodder), peak live foes and the xp dropped against the room budget. Bot fights: nearest threat foe within weapon reach, else the nearest fodder; with 4+ foes within 80 px it steps toward the emptier side (crowd slow).
 // --start: how the start offer is picked (default: the best gain under --pick=smart, else uniform over its cards; random: always uniform; class: the class element's gate; a gate id or generalist forces that card; rotate: run i takes fire, ice, lightning, poison, holy, shadow, generalist in turn).
 // --gates=1: a hero never takes a second element gate (mono-element arm).
@@ -46,6 +46,8 @@ function arrivalOf(w, picks) {
 }
 
 const DARK_HP = 0.6; // --dark=smart: the bot enters a dark room while every living hero has at least this share of max HP
+const SL = Array.from({ length: ED.CONST.STRATA }, (_, i) => i + 1); // stratum numbers 1..STRATA
+const zeros = () => SL.map(() => 0), lists = () => SL.map(() => []);
 const PER_HERO_REWARDS = ['boon', 'forge', 'epic', 'vigor'];
 const MAX_SECONDS = 60 * 60; // a run that is still going after an hour of game time counts as a loss
 // Open General boons in the order a sensible player takes them (damage and defence first).
@@ -414,45 +416,61 @@ function wantedProp(w, p) {
   return best;
 }
 
-// Next room on the way to the room to visit, as { step: room id, dd: door key }, or null: the nearest unvisited non-boss room (a dark room only when the policy lets the party in), else the boss.
-// policy: smart = every living hero has DARK_HP of max HP or more, always, never. Dark rooms are dead ends, so skipping one never blocks the way.
+// Value of a map room for the bot party: healthy (every living hero at DARK_HP of max HP or more) it prefers boon rewards, elites and dark rooms; hurt (any below HURT_HP) it prefers rest sites. Dark rooms follow the policy (smart: when healthy).
+const HURT_HP = 0.5;
+function roomValue(w, r, policy, healthy, hurt) {
+  if (r.dark) return policy === 'never' ? -100 : policy === 'always' ? 100 : healthy ? 8 : -4;
+  switch (r.type) {
+    case 'rest': return hurt ? 12 : 2;
+    case 'elite': return healthy ? 7 : hurt ? -2 : 3;
+    case 'shop': return w.gold >= 100 ? 6 : 2;
+    case 'treasure': return 8;
+    case 'event': return 4;
+    case 'combat': return r.reward === 'boon' ? 6 : r.reward === 'vigor' || r.reward === 'forge' ? 5 : 4;
+    default: return 5; // champion, boss: the only way on
+  }
+}
+// The exit to take, as { step: room id, dd: door key }, or null: the exit with the best path value V(n) = value(n) + LOOK x max V(child) (the whole graph ahead, each row further counting LOOK less),
+// plus seeded jitter per floor and room. The pick holds for the room (w.botExit).
+const LOOK = 0.6;
+// The fewest dark rooms on any start-to-boss path of a floor.
+function minDark(fl) {
+  const M = new Map(), f = (id) => { if (M.has(id)) return M.get(id); const r = fl.rooms[id], k = r.exits || [], v = (r.dark ? 1 : 0) + (k.length ? Math.min(...k.map(f)) : 0); M.set(id, v); return v; };
+  return f(fl.start);
+}
 function nextRoom(w, policy) {
   const room = w.room, fl = w.floor;
-  const darkOk = policy === 'always' || (policy !== 'never' && [...w.players.values()].every(q => q.dead || q.downed || q.hp >= q.maxHp * DARK_HP));
-  const search = (target) => { // BFS from the current room: nearest enterable unvisited non-boss room (target null) or the target room
-    const prev = {}; prev[room.id] = -1; const q = [room.id];
-    while (q.length) {
-      const id = q.shift(); const r = fl.rooms[id];
-      if (id !== room.id && ((target === null && !w.roomState[id].visited && r.type !== 'boss' && (!r.dark || darkOk)) || id === target)) return { found: id, prev };
-      for (const dd in r.doors) { const n = r.doors[dd]; if (n >= 0 && prev[n] === undefined) { if (fl.rooms[n].type === 'boss' && target === null) continue; prev[n] = id; q.push(n); } }
-    }
-    return { found: null, prev };
+  if (!room.exits || !room.exits.length) return null;
+  if (w.botExit && w.botExit.ep === w.roomEpoch) return w.botExit.nx;
+  const live = [...w.players.values()].filter(q => !q.dead && !q.downed), frac = (q) => q.hp / Math.max(1, q.maxHp);
+  const healthy = live.every(q => frac(q) >= DARK_HP), hurt = live.some(q => frac(q) < HURT_HP), jit = U.RNG((w.floorSeed ^ (room.id * 2654435761)) >>> 0);
+  const V = new Map(), pathV = (id) => {
+    if (V.has(id)) return V.get(id);
+    const r = fl.rooms[id], kids = r.exits || [], v = roomValue(w, r, policy, healthy, hurt) + (kids.length ? LOOK * Math.max(...kids.map(pathV)) : 0);
+    V.set(id, v); return v;
   };
-  let hit = search(null);
-  if (hit.found === null) hit = search(fl.boss);
-  const { found, prev } = hit;
-  if (found === null) return null;
-  let step = found; while (prev[step] !== room.id) step = prev[step];
-  return { step, dd: Object.keys(room.doors).find(k => room.doors[k] === step) };
+  let best = null, bs = -1e9;
+  for (const id of room.exits) {
+    const s = pathV(id) + jit.next() * 2;
+    if (s > bs) { bs = s; best = id; }
+  }
+  const nx = { step: best, dd: Object.keys(room.doors).find(k => room.doors[k] === best) };
+  w.botExit = { ep: w.roomEpoch, nx };
+  return nx;
 }
 
 // Direction toward the door of nextRoom, or null.
 function exploreDir(w, p, policy) {
   const room = w.room, nx = nextRoom(w, policy);
   if (!nx) return null;
-  const dd = nx.dd, r = D.doorRect(room, dd);
-  const gx = (r.x0 + r.x1 + 1) / 2 * T + (dd === 'e' ? 30 : dd === 'w' ? -30 : 0), gy = (r.y0 + r.y1 + 1) / 2 * T + (dd === 's' ? 30 : dd === 'n' ? -30 : 0);
+  const dd = nx.dd, sd = D.side(dd), r = D.doorRect(room, dd);
+  const gx = (r.x0 + r.x1 + 1) / 2 * T + (sd === 'e' ? 30 : sd === 'w' ? -30 : 0), gy = (r.y0 + r.y1 + 1) / 2 * T + (sd === 's' ? 30 : sd === 'n' ? -30 : 0);
   return bfsDir(room, w.locked, p.x, p.y, U.clamp(gx, 4, room.w * T - 4), U.clamp(gy, 4, room.h * T - 4));
 }
 
-// Stratum (1-6) where an element is weak / resisted.
-const weakStratum = (el) => ED.BIOMES.findIndex(b => b.weak === el) + 1, resistStratum = (el) => ED.BIOMES.findIndex(b => b.resist === el) + 1;
-
-// Score of an element gate card: 500, +20 when the stratum that is weak to it is not behind us, -20 when the stratum that resists it is not, +30 when it is weak where an owned gate is resisted, plus seeded jitter 0-15.
+// Score of an element gate card: 500 plus seeded jitter 0-15 (no stratum favours an element).
 function gateScore(p, el, stratum, rng) {
-  let s = 500 + (weakStratum(el) >= stratum ? 20 : 0) - (resistStratum(el) >= stratum ? 20 : 0);
-  if (ED.elementGates(p.boons).some(h => resistStratum(h) === weakStratum(el))) s += 30;
-  return s + rng.next() * 15;
+  return 500 + rng.next() * 15;
 }
 
 // Card score for the legacy policy: evolution > keystone > duo > boon of an own path (deepest path first) > element gate while a slot is free (not for a Generalist) > open General > class > anything.
@@ -533,12 +551,12 @@ const median = (a) => { if (!a.length) return NaN; a = a.slice().sort((x, y) => 
 
 // One paired-measurement row of a finished run (--out/--pair): depth = bosses beaten + the share of the death stratum's combat and elite rooms cleared, boss time to kill and HP lost per stratum (fraction of max HP).
 function rowOf(r, label, seed) {
-  const kills = r.bossTry.filter(b => b.kill).length, ROOMS = [6, 6, 7, 8, 8, 8];
+  const kills = r.bossTry.filter(b => b.kill).length, ROOMS = SL.map(s => Math.round(D.rowsOf(s) * 0.7)); // combat-type rooms on a path (about 70% of the rows)
   const inS = r.clears.filter(c => c.s === r.stratum).length;
-  const depth = r.victory ? 6 : (r.from > 1 ? r.from - 1 : 0) + kills + Math.min(1, inS / ROOMS[Math.max(0, r.stratum - 1)]);
-  return Object.assign({ label, seed, cls: r.cls, route: r.route.route, fork: r.route.fork, rank: r.route.rank, wi: r.wi, win: r.victory ? 1 : 0, depth: Math.round(depth * 1000) / 1000, bossTtk: [1, 2, 3, 4, 5, 6].map(s => r.bossTimes[s] === undefined ? null : r.bossTimes[s]),
-    hpLost: [1, 2, 3, 4, 5, 6].map(s => r.dmgStrata[s - 1] === undefined ? null : Math.round(1000 * r.dmgStrata[s - 1] / Math.max(1, r.maxHp)) / 1000), evoS: r.evoAt ? r.evoAt.s : null, main: r.main, gates: r.gates.length, gen: r.gen ? 1 : 0,
-    arrive: [1, 2, 3, 4, 5, 6].map(s => { const a = r.arrive && r.arrive[s - 1]; if (!a) return null; const q = arrivalRun(a); return { lvl: q.lvl, pk: q.pk, dmg: Math.round(q.dmg * 10) / 10, ehp: Math.round(q.ehp), pow: Math.round(q.pow) }; }) }, r.from > 1 ? { from: r.from } : null);
+  const depth = r.victory ? SL.length : (r.from > 1 ? r.from - 1 : 0) + kills + Math.min(1, inS / ROOMS[Math.max(0, r.stratum - 1)]);
+  return Object.assign({ label, seed, cls: r.cls, route: r.route.route, fork: r.route.fork, rank: r.route.rank, wi: r.wi, win: r.victory ? 1 : 0, depth: Math.round(depth * 1000) / 1000, bossTtk: SL.map(s => r.bossTimes[s] === undefined ? null : r.bossTimes[s]),
+    hpLost: SL.map(s => r.dmgStrata[s - 1] === undefined ? null : Math.round(1000 * r.dmgStrata[s - 1] / Math.max(1, r.maxHp)) / 1000), evoS: r.evoAt ? r.evoAt.s : null, main: r.main, gates: r.gates.length, gen: r.gen ? 1 : 0,
+    arrive: SL.map(s => { const a = r.arrive && r.arrive[s - 1]; if (!a) return null; const q = arrivalRun(a); return { lvl: q.lvl, pk: q.pk, dmg: Math.round(q.dmg * 10) / 10, ehp: Math.round(q.ehp), pow: Math.round(q.pow) }; }) }, r.from > 1 ? { from: r.from } : null);
 }
 
 // Weapon hits to kill a regular foe of stratum s: median over the roster (weighted) of ceil(foe HP / expected hit), expected hit = weapon damage x damage stat x crit factor (party and pact excluded).
@@ -616,7 +634,7 @@ function skipStrata(w, from, ctx, policy, brng, darkPolicy) {
   for (const p of heroes) p.invuln = 0;
   settle();
   w.fx.length = 0; w.msgs.length = 0;
-  w.run.kills = 0; w.run.fodderKills = 0; w.run.roomsVisited = 1; w.run.roomsTotal = w.floor.rooms.length; // the run's stats start at stratum N
+  w.run.kills = 0; w.run.fodderKills = 0; w.run.roomsVisited = 1; w.run.roomsTotal = w.floor.rows + 2; // the run's stats start at stratum N
   out.t0 = w.time;
   return out;
 }
@@ -669,7 +687,7 @@ function runBot(opts) {
     }
   }
   const skip = opts.from > 1 ? skipStrata(w, Math.min(opts.from | 0, ED.CONST.STRATA), ctx, policy, brng, opts.dark) : null; // --from: strata 1..N-1 are played before the recorders below are installed
-  const rec = { dark: [0, 0, 0, 0, 0, 0], left: [], clears: [], bossTimes: [], dmgBy: {}, downedBy: [], dealtStrata: [], heal: {}, dmgByS: {}, spawns: {}, offers: {}, relicsBy: {}, goldIn: 0, roomDmg: 0, dmgStrata: [], hpFrac: [], healSrc: 'other' };
+  const rec = { dark: zeros(), left: [], clears: [], bossTimes: [], dmgBy: {}, downedBy: [], dealtStrata: [], heal: {}, dmgByS: {}, spawns: {}, offers: {}, relicsBy: {}, goldIn: 0, roomDmg: 0, dmgStrata: [], hpFrac: [], healSrc: 'other' };
   rec.evoAt = null; // { s: stratum, lvl: team level } when hero 0 takes its evolution
   rec.arrive = []; // per stratum (index = stratum - 1): arrivalOf at the first entry of the boss room
   rec.keyAt = null; rec.duoAt = null; // stratum when hero 0 takes its keystone / duo
@@ -683,7 +701,7 @@ function runBot(opts) {
   rec.entry = {}; // hero state at the start of each stratum (stratum -> entryOf)
   if (skip) { rec.evoAt = skip.evoAt; rec.keyAt = skip.keyAt; rec.duoAt = skip.duoAt; rec.entry[w.stratum] = entryOf(w, w.players.get(p0id)); }
   // damage metrics: hero damage by source per stratum, combat seconds, observed hits/time to kill, analytic hits to kill, cooldown reduction
-  Object.assign(rec, { src: [], combatS: [0, 0, 0, 0, 0, 0], hits: [[], [], [], [], [], []], ttk: [[], [], [], [], [], []], ttkElite: [[], [], [], [], [], []], htk: [[], [], [], [], [], []], htkBare, bossTry: [] });
+  Object.assign(rec, { src: [], combatS: zeros(), hits: lists(), ttk: lists(), ttkElite: lists(), htk: lists(), htkBare, bossTry: [] });
   const hit0 = w.hitEnemy, VAMP = ED.CONST.VENOM_AMP, VALLY = ED.CONST.VENOM_ALLY;
   w.hitEnemy = function (e, base, src) {
     // Venom term of the vulnerability sum, read before the hit (the hit may clear it): its share of the damage dealt is the bonus Venom added
@@ -881,7 +899,7 @@ function runBot(opts) {
       if (ev.t === 'clear' && !ev.trial && w.room && w.room.type === 'combat') rec.htk[w.stratum - 1].push(hitsToKill(w, w.players.values().next().value, w.stratum));
       if (ev.t === 'evolve' && ev.pid === p0id && !rec.evoAt) rec.evoAt = { s: w.stratum, lvl: w.level };
       if (ev.t === 'dark') rec.dark[w.stratum - 1]++;
-      if (ev.t === 'descend') rec.left.push({ s: w.stratum, missed: w.floor.rooms.filter(r => !w.roomState[r.id].visited && !r.dark).length, dark: w.floor.rooms.filter(r => r.dark).length }); // rooms left unvisited (dark rooms apart) when the party takes the portal
+      if (ev.t === 'descend') rec.left.push({ s: w.stratum, rows: w.floor.rows, visited: w.floor.rooms.filter(r => w.roomState[r.id].visited).length, dark: w.floor.rooms.filter(r => r.dark && w.roomState[r.id].visited).length, minDark: minDark(w.floor) }); // the path walked when the party takes the portal: rooms visited (start and boss included), dark rooms among them, and the fewest dark rooms any path holds
       if (ev.t === 'bossSpawn') { bossStart = w.time; rec.bossTry.push({ s: w.stratum, kill: false, fury: false, m: 1 }); }
       if (ev.t === 'fury') rec.bossTry[rec.bossTry.length - 1].fury = true;
       if (ev.t === 'bossDown') { rec.bossTry[rec.bossTry.length - 1].kill = true; rec.bossTimes[w.stratum] = Math.round(w.time - bossStart); log.push(`  boss ${ev.type} down in ${(w.time - bossStart).toFixed(0)}s (t=${U.fmtTime(w.time)}, lvl ${w.level})`); }
@@ -928,7 +946,7 @@ function arrivalStats(results, s) {
   const ln = runs.map(q => Math.log(Math.max(1e-9, q.pow))), gm = runs.length ? Math.exp(avg(ln)) : NaN;
   return { n: runs.length, idx, runs, ln, gm, gmSe: gm * se(ln) };
 }
-const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI'];
+const ROMAN = SL.map(U.roman);
 // Compact power figure (k = thousand, M = million).
 const fmtPow = (v) => (!Number.isFinite(v) ? '-' : v >= 1e6 ? (v / 1e6).toFixed(2) + 'M' : v >= 1e3 ? (v / 1e3).toFixed(1) + 'k' : v.toFixed(0));
 // The summary line of one stratum's boss arrival: team level, picks (total and by source), damage, effective health, power (geometric mean), each with its standard error.
@@ -940,7 +958,7 @@ function arrivalLine(s, a) {
 
 // One-block summary of a batch of runBot results: win rate, depth, pacing per stratum, dark rooms, damage sources.
 function summarize(results) {
-  const n = results.length, wins = results.filter(r => r.victory), S = [1, 2, 3, 4, 5, 6];
+  const n = results.length, wins = results.filter(r => r.victory), S = SL;
   const clear = (type, s) => avg(results.flatMap(r => r.clears.filter(c => c.type === type && (s === 0 || c.s === s)).map(c => c.t)));
   const bossT = (s) => avg(results.map(r => r.bossTimes[s]).filter(v => v !== undefined));
   const strataSum = [], strataN = [];
@@ -965,7 +983,7 @@ function summarize(results) {
   const darkS = S.map(s => avg(results.map(r => r.dark[s - 1] || 0)));
   lines.push(`rooms visited ${(100 * vis / Math.max(1, tot)).toFixed(0)}% (${(vis / n).toFixed(1)}/run) dark rooms entered ${f2(darkS.reduce((a, b) => a + b, 0))}/run, per stratum [${darkS.map(f2).join(' ')}] avg stratum time [${strataSum.map((t, k) => U.fmtTime(t / strataN[k])).join(' ')}]`);
   lines.push(`clear s  combat [${S.map(s => f1(clear('combat', s))).join(' ')}] all ${f1(clear('combat', 0))}  elite [${S.map(s => f1(clear('elite', s))).join(' ')}] all ${f1(clear('elite', 0))}  boss [${S.map(s => f1(bossT(s))).join(' ')}]`);
-  const fur = [4, 5, 6].map(s => { const fs = results.flatMap(r => r.bossTry.filter(b => b.s === s)); return `${U.roman(s)} ${pctOf(fs.filter(b => b.fury).length, fs.length)}% x${f2(avg(fs.map(b => b.m)))} (${fs.length} fights)`; });
+  const fur = SL.filter(s => ED.World.furyAt(s) > 0).map(s => { const fs = results.flatMap(r => r.bossTry.filter(b => b.s === s)); return `${U.roman(s)} ${pctOf(fs.filter(b => b.fury).length, fs.length)}% x${f2(avg(fs.map(b => b.m)))} (${fs.length} fights)`; });
   lines.push('boss fury, fights that reached it and mean multiplier at the kill or death: ' + fur.join(' | '));
   const flat = (key, s) => results.flatMap(r => r[key][s - 1]);
   const medClear = (type, s) => median(results.flatMap(r => r.clears.filter(c => c.type === type && c.s === s).map(c => c.t)));
@@ -976,11 +994,11 @@ function summarize(results) {
   lines.push(`hero dps x bare weapon (median, combat seconds only, overkill included) by stratum [${S.map(s => f1(dpsOf(results, s))).join(' ')}] | ${[...new Set(results.map(r => r.cls))].map(c => c + ' [' + S.map(s => f1(dpsOf(results.filter(r => r.cls === c), s))).join(' ') + ']').join(' ')}`);
   const share = (rs, from) => {
     const t = {}; let tot = 0;
-    for (const r of rs) for (let i = from; i < 6; i++) if (r.src[i]) for (const k in r.src[i]) { t[k] = (t[k] || 0) + r.src[i][k]; tot += r.src[i][k]; }
+    for (const r of rs) for (let i = from; i < SL.length; i++) if (r.src[i]) for (const k in r.src[i]) { t[k] = (t[k] || 0) + r.src[i][k]; tot += r.src[i][k]; }
     return BUCKETS.map(k => k + ' ' + Math.round(100 * (t[k] || 0) / (tot || 1)) + '%').join(' ');
   };
-  lines.push(`damage share (all strata | strata IV-VI): all ${share(results, 0)} | ${share(results, 3)}`);
-  lines.push('  by main path (strata IV-VI): ' + ED.PATH_IDS.map(k => { const rs = results.filter(r => r.main === k); return `${k} (${rs.length}) ${share(rs, 3)}`; }).join(' | '));
+  lines.push(`damage share (all strata | strata III-IV): all ${share(results, 0)} | ${share(results, 2)}`);
+  lines.push('  by main path (strata III-IV): ' + ED.PATH_IDS.map(k => { const rs = results.filter(r => r.main === k); return `${k} (${rs.length}) ${share(rs, 2)}`; }).join(' | '));
   lines.push('  weapon share by main path (all strata; each path should keep at least 20%): ' + ED.PATH_IDS.map(k => { const rs = results.filter(r => r.main === k); const sh = (b) => { let t = 0, a = 0; for (const r of rs) for (const o of r.src) if (o) for (const x in o) { a += o[x]; if (x === b) t += o[x]; } return a ? Math.round(100 * t / a) : NaN; }; return `${k} ${Number.isFinite(sh('weapon')) ? sh('weapon') + '%' : '-'}`; }).join(' | '));
   const cd = results.map(r => r.cdr);
   lines.push(`cooldown reduction at run end (raw stat): mean ${f2(avg(cd))} max ${f2(Math.max(...cd))} above 0.4 in ${Math.round(100 * cd.filter(v => v > 0.4).length / n)}% above 0.65 in ${Math.round(100 * cd.filter(v => v > 0.65).length / n)}% | effective after the soft cap mean ${f2(avg(results.map(r => r.cdrAfter)))}`);
@@ -1033,7 +1051,7 @@ function summarize(results) {
   lines.push(classLines(results));
   const darkC = results.flatMap(r => r.clears.filter(c => c.dark)), normC = results.flatMap(r => r.clears.filter(c => c.type === 'combat' && !c.dark));
   lines.push(`dark rooms: ${darkC.length} cleared in ${n} runs | clear s ${f1(avg(darkC.map(c => c.t)))} vs normal combat ${f1(avg(normC.map(c => c.t)))} | room hp lost ${f2(avg(darkC.map(c => c.d)))} vs ${f2(avg(normC.map(c => c.d)))} (fraction of max HP)`);
-  for (const s of [1, 2, 3, 4, 5, 6]) { const a = arrivalStats(results, s); if (a.n) lines.push(arrivalLine(s, a)); }
+  for (const s of SL) { const a = arrivalStats(results, s); if (a.n) lines.push(arrivalLine(s, a)); }
   return lines.join('\n');
 }
 
@@ -1066,7 +1084,7 @@ function classLines(results) {
   const pt = {}; let ptt = 0;
   for (const r of results) for (const k in r.parts) { pt[k] = (pt[k] || 0) + r.parts[k]; ptt += r.parts[k]; }
   out.push('damage share by part: ' + Object.entries(pt).sort((a, b) => b[1] - a[1]).slice(0, 14).map(([k, v]) => k + ' ' + Math.round(1000 * v / (ptt || 1)) / 10 + '%').join(', '));
-  out.push(`room hp lost (% max HP) combat ${roomD(results, 'combat')} elite ${roomD(results, 'elite')} | shots hp lost per stratum (% max HP) [${[1, 2, 3, 4, 5, 6].map(s => ms(results.map(r => r.projDmgS[s - 1]).filter(v => v !== undefined).map(v => 100 * v), 1)).join(' | ')}]`);
+  out.push(`room hp lost (% max HP) combat ${roomD(results, 'combat')} elite ${roomD(results, 'elite')} | shots hp lost per stratum (% max HP) [${SL.map(s => ms(results.map(r => r.projDmgS[s - 1]).filter(v => v !== undefined).map(v => 100 * v), 1)).join(' | ')}]`);
   const sh = (key) => { const o = {}; for (const r of results) for (const k in r.shield[key]) o[k] = (o[k] || 0) + r.shield[key][k] / n; return o; };
   const clip = {}; for (const r of results) for (const k in r.clip) clip[k] = (clip[k] || 0) + r.clip[k] / n;
   const fo = (o) => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => k + ' ' + v.toFixed(1)).join(', ') || '-';

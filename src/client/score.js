@@ -40,25 +40,7 @@
       drums: [['tom', 'x.....x...x...'], ['shk', '.o.o.o.o.o.o.o']],
       lead: { v: 'pluck', p: 'x.x.x.x.x.x.x.', seq: [0, 2, 1, 3], oct: 24 },
       g: { pad: 0.56, mot: 1.29, bass: 0.31, perc: 1.6, drums: 1.38, lead: 0.74 }, bg: { pad: 0.46, mot: 1.2, bass: 0.33, perc: 0.78, drums: 0.69, lead: 0.7 } },
-    3: { id: 'rimefrost', bpm: 76, S: 16, root: 52, scale: [0, 2, 3, 5, 7, 8, 10], lp: 9500, rev: 0.5, dly: 0.75, dsend: 0.34, bossBpm: 112, amb: 'glint',
-      prog: [[0, 'm9'], [0, 'm9'], [8, 'add9'], [8, 'add9'], [3, 'add9'], [10, 'sus2'], [8, 'add9'], [11, 'sus4']],
-      pad: { v: 'glass', oct: 12, open: 0 },
-      mot: { v: 'celesta', oct: 12, m: [[0, 4, 2], [2, 7, 2], [4, 6, 2], [6, 4, 2], [8, 2, 4], [12, 4, 2], [14, 5, 2], [16, 4, 2], [18, 2, 2], [20, 0, 12]] },
-      bass: { v: 'sub', oct: -12, p: ['1...............', '1.......5.......'] },
-      perc: [['tick', '....x.......x...']],
-      drums: [['kick', 'x.......x.......'], ['tick', 'x.x.x.x.x.x.x.x.'], ['frame', ['', '', '', '', '', '', '', '............x.x.']]],
-      lead: { v: 'fmbell', p: 'x..x..x...x..x..', seq: [0, 2, 4, 2, 1, 3], oct: 24 },
-      g: { pad: 1.13, mot: 1.36, bass: 0.29, perc: 1.2, drums: 1.3, lead: 0.87 }, bg: { pad: 1.07, mot: 1.01, bass: 0.26, perc: 0.76, drums: 0.69, lead: 0.58 } },
-    4: { id: 'cinderforge', bpm: 108, S: 16, root: 43, scale: [0, 1, 4, 5, 7, 8, 10], lp: 7000, rev: 0.18, dly: 0.75, dsend: 0.16, bossBpm: 132, amb: 'rumble',
-      prog: [[0, 'M'], [1, 'M'], [0, 'M'], [1, 'M'], [10, 'M'], [8, 'M'], [1, 'M'], [0, 'M']],
-      pad: { v: 'strings', oct: 12, open: 1 },
-      mot: { v: 'brass', oct: 12, m: [[0, 0, 2], [2, 1, 2], [4, 2, 2], [6, 1, 2], [8, 0, 4], [12, 4, 2], [14, 2, 2], [16, 2, 2], [18, 1, 2], [20, 0, 2], [22, -1, 2], [24, 0, 8]] },
-      bass: { v: 'sawb', oct: -12, p: ['1.1.1.1.1.1.1.1.', '1.11.1.11.11.1.b'] },
-      perc: [['taiko', 'X...o...X...o...'], ['anvil', '....x.......x...']],
-      drums: [['tom', '..x...x...x...x.'], ['shk', 'o.o.o.o.o.o.o.o.'], ['taiko', ['', '', '', '', '', '', '', '........x.xxxxxx']]],
-      lead: { v: 'lead', p: 'x.x.x.x.x.x.x.x.', seq: [0, 1, 2, 1], oct: 24 },
-      g: { pad: 1.53, mot: 0.82, bass: 0.33, perc: 0.62, drums: 1.11, lead: 1.62 }, bg: { pad: 1.43, mot: 0.83, bass: 0.34, perc: 0.74, drums: 0.79, lead: 1.8 } },
-    5: { id: 'sanctum', bpm: 68, S: 12, root: 48, scale: [0, 2, 3, 5, 7, 8, 10], lp: 1500, rev: 0.7, dly: 1.5, dsend: 0.36, bossBpm: 108, amb: 'wave',
+    3: { id: 'sanctum', bpm: 68, S: 12, root: 48, scale: [0, 2, 3, 5, 7, 8, 10], lp: 1500, rev: 0.7, dly: 1.5, dsend: 0.36, bossBpm: 108, amb: 'wave',
       prog: [[0, 'm'], [0, 'm'], [8, 'M7'], [3, 'M'], [5, 'm7'], [0, 'm'], [7, 'sus4'], [0, 'm']],
       pad: { v: 'strings', oct: 12, open: 1 },
       mot: { v: 'fmbell', oct: 12, m: [[0, 0, 6], [6, 4, 3], [9, 3, 3], [12, 2, 6], [18, 0, 6]] },
@@ -67,7 +49,7 @@
       drums: [['tom', 'x.....x.o.o.'], ['shk', 'o.o.o.o.o.o.'], ['tom', ['', '', '', '', '', '', '', 'x.x.x.xxxxxx']]],
       lead: { v: 'celesta', p: 'x...x...x...', seq: [2, 1, 0], oct: 24 },
       g: { pad: 1.22, mot: 1.32, bass: 0.25, perc: 1.3, drums: 1.08, lead: 0.76 }, bg: { pad: 1.15, mot: 0.99, bass: 0.24, perc: 0.79, drums: 0.85, lead: 0.45 } },
-    6: { id: 'abyss', bpm: 60, S: 20, root: 41, scale: [0, 1, 3, 6, 7, 10], lp: 2600, rev: 0.7, dly: 1.5, dsend: 0.3, bossBpm: 100, amb: 'drone',
+    4: { id: 'abyss', bpm: 60, S: 20, root: 41, scale: [0, 1, 3, 6, 7, 10], lp: 2600, rev: 0.7, dly: 1.5, dsend: 0.3, bossBpm: 100, amb: 'drone',
       prog: [[0, 'tt'], [0, 'cl'], [1, 'm'], [6, 'tt'], [0, 'tt'], [10, 'cl'], [6, 'cl'], [0, 'tt']],
       pad: { v: 'choir', oct: 12, open: 1 },
       mot: { v: 'whistle', oct: 12, m: [[0, 0, 8], [8, 3, 6], [14, 2, 4], [18, 1, 2], [20, 0, 14], [34, 3, 6]] },
@@ -98,7 +80,7 @@
   S.piece = (key) => {
     if (!key || key === 'none') return null;
     if (key === 'camp') return PIECES.camp;
-    const s = Math.max(1, Math.min(6, (key.s | 0) || 1));
+    const s = Math.max(1, Math.min(ED.CONST.STRATA, (key.s | 0) || 1));
     return key.boss ? (BOSSES[s] || (BOSSES[s] = bossOf(PIECES[s]))) : PIECES[s];
   };
 

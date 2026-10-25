@@ -14,7 +14,7 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   ok(signs.length === 5, 'five tutorial signs: ' + signs.length);
   ok(/^Aim with \{aim\}/.test(signs[0].text) && signs[0].d <= 90, 'the sign within reach of the spawn is the mouse-aim sign: ' + signs[0].text.slice(0, 30) + ' at ' + Math.round(signs[0].d) + ' px');
   ok(signs.slice(1).every(s => s.d > 0), 'the other signs stand apart');
-  const last = signs.find(s => /skull/.test(s.text));
+  const last = signs.find(s => /\{map\}/.test(s.text));
   ok(last && /\{map\} opens your build/.test(last.text) && !/shows the map/.test(last.text), 'the map sign names the sheet: ' + (last && last.text));
 }
 

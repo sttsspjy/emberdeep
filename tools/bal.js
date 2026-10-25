@@ -131,7 +131,7 @@ pool.runPool(plan.map(p => p.job), { jobs: workers, patch: flags.patch }).then((
     for (const [a, b, name] of [['rand', 'smart', 'smart/rand (knowledge gap, fresh)'], ['smart', 'max', 'max/smart (Hearth gap, smart picks)'], ['mid', 'max', 'max/mid (upper Hearth, smart picks)']]) {
       if (!by[a] || !by[b]) continue;
       const rs = sim.ROMAN.map((_, i) => ratioOf(a, b, i + 1));
-      console.log(`power ratio ${name}, paired by seed: ${rs.map((x, i) => sim.ROMAN[i] + ' ' + (x.n ? 'x' + f(x.r, 2) + (x.n > 1 ? ' +-' + f(x.se, 2) : '') : '-')).join(' | ')} (pairs ${rs[0].n}..${rs[5].n})`);
+      console.log(`power ratio ${name}, paired by seed: ${rs.map((x, i) => sim.ROMAN[i] + ' ' + (x.n ? 'x' + f(x.r, 2) + (x.n > 1 ? ' +-' + f(x.se, 2) : '') : '-')).join(' | ')} (pairs ${rs[0].n}..${rs[rs.length - 1].n})`);
     }
   }
   console.log(`${judged ? pass + '/' + judged + ' PASS' : 'no verdicts'} in ${((Date.now() - t0) / 1000).toFixed(0)} s (estimated ${estimate} s)`);

@@ -105,17 +105,19 @@
       c.fillStyle = 'rgba(0,0,0,0.55)'; c.beginPath(); c.moveTo(tx - ts * 0.2, ty); c.lineTo(tx, ty - ts * 0.62); c.lineTo(tx + ts * 0.2, ty); c.fill();
       c.strokeStyle = 'rgba(0,0,0,0.4)'; c.lineWidth = 1; c.beginPath(); c.moveTo(tx - ts, ty); c.lineTo(tx, ty - ts * 1.1); c.lineTo(tx + ts, ty); c.stroke();
     }
-    for (let i = 0; i < 6; i++) { const bx = W * (0.68 - i * 0.045) + (i > 2 ? -W * 0.33 : 0), by = H * 0.72; c.fillStyle = '#2a1e16'; c.fillRect(bx - 1.5, by - fs * 2.2, 3, fs * 2.2); }
+    for (let i = 0; i < ED.BIOMES.length; i++) { const bx = bannerX(W, i), by = H * 0.72; c.fillStyle = '#2a1e16'; c.fillRect(bx - 1.5, by - fs * 2.2, 3, fs * 2.2); }
     c.strokeStyle = '#2a1e16'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(W * 0.3, H * 0.6); c.quadraticCurveTo(W * 0.5, H * 0.66, W * 0.7, H * 0.6); c.stroke();
     for (let i = 0; i < o.lanterns; i++) { const k = (i + 0.5) / o.lanterns, lx = W * (0.3 + 0.4 * k), ly = H * (0.6 + Math.sin(k * Math.PI) * 0.045) + 6; c.fillStyle = '#ffcf7a'; c.fillRect(lx - 3, ly - 4, 6, 8); c.fillStyle = '#5a4630'; c.fillRect(lx - 3.5, ly - 5, 7, 1.5); c.fillRect(lx - 3.5, ly + 3.5, 7, 1.5); }
     return { bg, sky };
   }
 
+  // x of boss banner pole i (one per stratum): the first half right of the fire, the rest left.
+  const bannerX = (W, i) => { const half = Math.ceil(ED.BIOMES.length / 2), j = i % half; return W * (0.68 - j * 0.045) + (i >= half ? -W * 0.33 : 0); };
   Camp.draw = (c0, profile, t, dt, heroCls) => {
     const R = ED.Render, W = R.bw, H = R.bh; // the scene is laid out in world-buffer pixels (the buffer is upscaled to the screen)
     const c = R.beginWorld();
     c.setTransform(1, 0, 0, 1, 0, 0); c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
-    const deepest = Math.max(1, Math.min(6, profile ? profile.stats.deepest || 1 : 1));
+    const deepest = Math.max(1, Math.min(ED.BIOMES.length, profile ? profile.stats.deepest || 1 : 1));
     const biome = ED.biomeFor(deepest);
     const pact = profile ? profile.pactMax : 0;
     const ups = profile ? profile.up.reduce((a, b) => a + b, 0) : 0;
@@ -139,8 +141,8 @@
     for (const s of Camp.smoke) { const k = s.life / s.max; c.globalAlpha = Math.min(0.11, k * 0.14) * Math.min(1, (1 - k) * 8); c.drawImage(R.glowSprite('#b8b0c8'), s.x - s.r, s.y - s.r, s.r * 2, s.r * 2); }
     c.globalAlpha = 1;
     // boss banners (flags wave)
-    for (let i = 0; i < 6; i++) {
-      const bx = W * (0.68 - i * 0.045) + (i > 2 ? -W * 0.33 : 0), by = H * 0.72;
+    for (let i = 0; i < ED.BIOMES.length; i++) {
+      const bx = bannerX(W, i), by = H * 0.72;
       if (profile && (profile.bosses & (1 << i))) {
         const col = ED.BIOMES[i].pal.accent, wave = Math.sin(t * 2 + i) * 3, w2 = Math.sin(t * 2.6 + i + 1) * 2;
         c.fillStyle = col; c.beginPath(); c.moveTo(bx, by - fs * 2.15); c.quadraticCurveTo(bx + fs * 0.4 + wave, by - fs * 2.2 + w2, bx + fs * 0.7 + wave, by - fs * 2.05); c.lineTo(bx + fs * 0.65 + wave, by - fs * 1.35); c.lineTo(bx + fs * 0.35, by - fs * 1.5); c.lineTo(bx, by - fs * 1.35); c.fill();

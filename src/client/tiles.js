@@ -104,7 +104,7 @@
       else if (t === 2) blockTile(c, e, biome, P, room, x, y, rng);
     }
     // door frames
-    for (const d in room.doors) if (room.doors[d] >= 0) doorFrame(c, e, biome, P, room, d);
+    for (const d of ED.Dungeon.doorList(room)) doorFrame(c, e, biome, P, room, d);
     // torch sconces
     for (const tc of room.torches) sconce(c, e, P, tc.x * T, tc.y * T);
     // dark frame on the outer edge of the room
@@ -225,10 +225,9 @@
       c.strokeStyle = '#1a1a17'; c.lineWidth = 1.2; c.strokeRect(x + 1.5, y + 1.5, T - 3, T - 3);
       c.fillStyle = 'rgba(150,40,20,0.12)'; c.beginPath(); c.arc(x + 6 + v * 20, y + 6 + v2 * 20, 4, 0, 7); c.fill();
     } else if (hz === 'poison') {
-      c.fillStyle = '#1e3a18'; c.fillRect(x, y, T, T);
-      const g = c.createRadialGradient(x + 16, y + 16, 2, x + 16, y + 16, 20); g.addColorStop(0, 'rgba(120,230,70,0.3)'); g.addColorStop(1, 'rgba(60,140,40,0)'); c.fillStyle = g; c.fillRect(x, y, T, T);
-      for (let i = 0; i < 3; i++) { const px = x + 4 + hash(tx, ty, 70 + i) * 24, py = y + 4 + hash(tx, ty, 80 + i) * 24, r = 1.5 + hash(tx, ty, 90 + i) * 2.5; c.fillStyle = 'rgba(190,255,130,0.35)'; c.beginPath(); c.arc(px, py, r, 0, 7); c.fill(); c.fillStyle = 'rgba(255,255,255,0.4)'; c.fillRect(px - r * 0.4, py - r * 0.5, 1, 1); glow(e, px, py, r * 3, '#9cff6a', 0.45); }
-      glow(gm, x + 16, y + 16, 22, '#7ad44a', 0.26);
+      c.fillStyle = '#3a3020'; c.fillRect(x, y, T, T);
+      const g = c.createRadialGradient(x + 16, y + 16, 2, x + 16, y + 16, 20); g.addColorStop(0, 'rgba(125,111,79,0.3)'); g.addColorStop(1, 'rgba(74,63,42,0)'); c.fillStyle = g; c.fillRect(x, y, T, T);
+      for (let i = 0; i < 3; i++) { const px = x + 4 + hash(tx, ty, 70 + i) * 24, py = y + 4 + hash(tx, ty, 80 + i) * 24, r = 1.5 + hash(tx, ty, 90 + i) * 2.5; c.fillStyle = 'rgba(176,160,122,0.3)'; c.beginPath(); c.arc(px, py, r, 0, 7); c.fill(); c.fillStyle = 'rgba(255,255,255,0.25)'; c.fillRect(px - r * 0.4, py - r * 0.5, 1, 1); }
     } else if (hz === 'ice') {
       const g = c.createLinearGradient(x, y, x + T, y + T); g.addColorStop(0, '#f2fbff'); g.addColorStop(0.5, '#cdeaf8'); g.addColorStop(1, '#a8d4ea');
       c.fillStyle = g; c.fillRect(x, y, T, T);
@@ -410,20 +409,20 @@
   }
 
   function doorFrame(c, e, biome, P, room, d) {
-    const r = ED.Dungeon.doorRect(room, d);
+    const r = ED.Dungeon.doorRect(room, d), sd = ED.Dungeon.side(d);
     const x0 = r.x0 * T, y0 = r.y0 * T, x1 = (r.x1 + 1) * T, y1 = (r.y1 + 1) * T;
-    if (d === 'n') {
+    if (sd === 'n') {
       const g = c.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, '#000'); g.addColorStop(1, 'rgba(0,0,0,0.3)');
       c.fillStyle = g; c.fillRect(x0, y0, x1 - x0, y1 - y0);
       for (const px of [x0 - 6, x1]) { const pg = c.createLinearGradient(px, 0, px + 6, 0); pg.addColorStop(0, U.shade(P.wallTop, 0.1)); pg.addColorStop(1, P.wallFace); c.fillStyle = pg; c.fillRect(px, y0, 6, y1 - y0); c.fillStyle = 'rgba(255,255,255,0.15)'; c.fillRect(px, y0, 1, y1 - y0); }
       c.fillStyle = U.shade(P.wallTop, 0.18); c.fillRect(x0 - 6, y0, x1 - x0 + 12, 5); c.fillStyle = 'rgba(0,0,0,0.4)'; c.fillRect(x0 - 6, y0 + 5, x1 - x0 + 12, 1.5);
       glow(e, (x0 + x1) / 2, y0 + 12, 24, P.accent, 0.08);
-    } else if (d === 's') {
+    } else if (sd === 's') {
       const g = c.createLinearGradient(0, y0, 0, y1); g.addColorStop(0, 'rgba(0,0,0,0.3)'); g.addColorStop(1, '#000');
       c.fillStyle = g; c.fillRect(x0, y0, x1 - x0, y1 - y0);
       c.fillStyle = 'rgba(255,255,255,0.1)'; c.fillRect(x0 - 3, y0, 2, y1 - y0); c.fillRect(x1 + 1, y0, 2, y1 - y0);
     } else {
-      const g = c.createLinearGradient(d === 'w' ? x1 : x0, 0, d === 'w' ? x0 : x1, 0); g.addColorStop(0, 'rgba(0,0,0,0.3)'); g.addColorStop(1, '#000');
+      const g = c.createLinearGradient(sd === 'w' ? x1 : x0, 0, sd === 'w' ? x0 : x1, 0); g.addColorStop(0, 'rgba(0,0,0,0.3)'); g.addColorStop(1, '#000');
       c.fillStyle = g; c.fillRect(x0, y0, x1 - x0, y1 - y0);
       c.fillStyle = U.shade(P.wallTop, 0.14); c.fillRect(x0, y0 - 5, x1 - x0, 5); c.fillStyle = 'rgba(0,0,0,0.4)'; c.fillRect(x0, y0, x1 - x0, 1.5);
       c.fillStyle = U.shade(P.wallFace, 0.05); c.fillRect(x0, y1, x1 - x0, 3);
@@ -735,7 +734,7 @@
     return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
   }
   const HZ_RAMP = {
-    lava: ['#9c2c08', '#d8480c', '#f58a22', '#ffcf5a'], poison: ['#1a361a', '#24502a', '#356f33', '#79cf48'], water: ['#0a2f42', '#0f4a60', '#16607a', '#2b88a4'],
+    lava: ['#9c2c08', '#d8480c', '#f58a22', '#ffcf5a'], poison: ['#2a2318', '#3a3020', '#4a3f2a', '#7d6f4f'], water: ['#0a2f42', '#0f4a60', '#16607a', '#2b88a4'],
     ice: ['#bfe0f1', '#cdeaf8', '#e4f5fd', '#f2fbff'], void: ['#05010a', '#0a0222', '#12062e', '#1c0a44'],
   };
   const pk = (hex) => packA(rgbOf(hex));
@@ -744,7 +743,7 @@
     const kind = biome.hazard, n = cells.length;
     const cv = document.createElement('canvas'); cv.width = HZ_NF * AT; cv.height = Math.max(1, n * AT);
     const g = cv.getContext('2d'), img = g.createImageData(cv.width, cv.height), out = new Uint32Array(img.data.buffer), W = cv.width;
-    const ramp = (HZ_RAMP[kind] || HZ_RAMP.lava).map(pk), dkEdge = { lava: '#1a0a05', poison: '#0c1c0e', water: '#052330', ice: '#6fa6c6', void: '#03000a' }[kind], rim1 = { lava: '#46200e', poison: '#10230f', water: '#0c3c52', ice: '#f4fcff', void: '#14083a' }[kind];
+    const ramp = (HZ_RAMP[kind] || HZ_RAMP.lava).map(pk), dkEdge = { lava: '#1a0a05', poison: '#15110a', water: '#052330', ice: '#6fa6c6', void: '#03000a' }[kind], rim1 = { lava: '#46200e', poison: '#221c12', water: '#0c3c52', ice: '#f4fcff', void: '#14083a' }[kind];
     const edgeC = pk(dkEdge), rimC = pk(rim1), crust = [pk('#2a0f08'), pk('#3a160b'), pk('#7a3410')];
     const sd = 91 + (s & 15), S1 = kind === 'water' ? 0.17 : 0.075, bub = [];
     const tab1 = noiseTab(Math.ceil(room.w * AT * S1) + 3, Math.ceil(room.h * AT * S1) + 3, sd), tab2 = noiseTab(Math.ceil(room.w * AT * 0.18 + 17) + 3, Math.ceil(room.h * AT * 0.18 + 5) + 3, 92);
@@ -765,11 +764,11 @@
             const thr = thr0 + 0.022 * Math.sin(f * 1.5708 + n2 * 6.28), v = thr - n1;
             if (v < 0) c = up <= thr ? crust[2] : (hs > 0.8 ? crust[1] : crust[0]);
             else { c = v < 0.05 ? pk('#f59a2a') : v < 0.15 ? pk('#dd5f14') : pk('#b0360b'); if (hs > 0.992 && (f + (hs * 400 | 0)) % HZ_NF === 0) c = pk('#ffe0a0'); }
-          } else if (kind === 'poison') { // murky pool with algae and rising bubbles
+          } else if (kind === 'poison') { // bog: murky mud with scum and rising bubbles
             if (d === 1) c = rimC;
             else {
-              c = n1 < 0.45 ? ramp[0] : n1 < 0.65 ? ramp[1] : ramp[2]; if (n2 > 0.8 && n1 > 0.5) c = pk('#5da446');
-              for (const [bx, by, ph] of bub) { const dx = px - bx, dy = py - by, q = (f + ph) % 4; if (q === 1 && !dx && !dy) c = pk('#9ad85a'); else if (q === 2 && ((Math.abs(dx) + Math.abs(dy)) === 1)) c = pk('#7fc24a'); else if (q === 2 && !dx && !dy) c = pk('#d8ffa8'); else if (q === 3 && !dx && !dy) c = pk('#ffffff'); }
+              c = n1 < 0.45 ? ramp[0] : n1 < 0.65 ? ramp[1] : ramp[2]; if (n2 > 0.8 && n1 > 0.5) c = pk('#5a5038');
+              for (const [bx, by, ph] of bub) { const dx = px - bx, dy = py - by, q = (f + ph) % 4; if (q === 1 && !dx && !dy) c = pk('#8a7a58'); else if (q === 2 && ((Math.abs(dx) + Math.abs(dy)) === 1)) c = pk('#7a6c4e'); else if (q === 2 && !dx && !dy) c = pk('#b0a07a'); else if (q === 3 && !dx && !dy) c = pk('#d8ccb0'); }
             }
           } else if (kind === 'water') {
             if (d === 1) c = rimC;
@@ -854,7 +853,6 @@
       if (out.hzCells.length) out.hz = buildHazard(room, biome, out.hzCells, s);
       for (const [x, y] of out.hzCells) { // glowing pools light the buffer under entities standing on them
         if (biome.hazard === 'lava') { gm.fillStyle = 'rgba(255,110,25,0.55)'; gm.fillRect(x * T, y * T, T, T); }
-        else if (biome.hazard === 'poison') glowAt(gm, (x + 0.5) * T, (y + 0.5) * T, 22, '#7ad44a', 0.26);
         else if (biome.hazard === 'void') glowAt(gm, (x + 0.5) * T, (y + 0.5) * T, 20, '#a85aff', 0.4);
       }
     }
@@ -939,7 +937,7 @@
     // ---- wall mass: dark tops, side strips, brick faces, cap strips ----
     const blocked = new Set(); // face columns kept clear of wall decor (torches, doors, fountains)
     for (const tc of room.torches) blocked.add(Math.floor(tc.x));
-    if (room.doors.n >= 0) { const r = ED.Dungeon.doorRect(room, 'n'); for (let x = r.x0 - 2; x <= r.x1 + 2; x++) blocked.add(x); }
+    for (const d in room.doors) { const r = ED.Dungeon.doorRect(room, d); for (let x = r.x0 - 2; x <= r.x1 + 2; x++) blocked.add(x); }
     const fxs = [];
     if (bid === 'cinderforge' || bid === 'sanctum') { // wall fountains on the top wall, clear of torches and the door
       const cand = []; for (let x = 3; x <= W - 4; x++) if (!blocked.has(x) && !room.torches.some((tc) => Math.abs(tc.x - 0.5 - x) < 2)) cand.push(x);
@@ -1004,11 +1002,10 @@
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (isCol(x, y)) out.statics.push({ k: 'col', id: 'prop.column', vk: '', x: (x + 0.5) * T, y: (y + 1) * T - 2, key: (y + 1) * T - 2, h: 70 });
 
     // ---- doors ----
-    for (const dd in room.doors) {
-      if (room.doors[dd] < 0) continue;
+    for (const dd of ED.Dungeon.doorList(room)) {
       const r = ED.Dungeon.doorRect(room, dd), ax0 = r.x0 * AT, ay0 = r.y0 * AT, aw = (r.x1 - r.x0 + 1) * AT, ah = (r.y1 - r.y0 + 1) * AT, dk = hexA(mixA(rgbOf(P.void), rgbOf(P.wallShadow), 0.35));
       fill(g, ax0, ay0, aw, ah, dk);
-      if (dd === 'n') {
+      if (ED.Dungeon.side(dd) === 'n') {
         sblit(g, sh, 'tile.door.frame.left', 0, ax0 - AT, 0); sblit(g, sh, 'tile.door.frame.right', 0, ax0 + aw, 0);
         sblit(g, sh, 'tile.door.leaf.open', 0, ax0, 0, 0, 16); sblit(g, sh, 'tile.door.leaf.open', 0, ax0 + 16, 0, 8, 24); sblit(g, sh, 'tile.door.leaf.open', 0, ax0 + 32, 0, 16, 32);
         out.statics.push({ k: 'arch', key: 2 * T, x: ax0 * K, y: 0, w: aw * K, h: 6 * K }); // arch stone above the opening: redrawn with the entities so heroes pass behind it
@@ -1051,7 +1048,7 @@
         R_.glow(c, x, TORCH_Y * K + 8, 22 + fl * 2, P.light, 0.5);
       }
       if (e.hz && !low) {
-        const k = biome.hazard, a = k === 'lava' ? 0.2 : k === 'poison' ? 0.14 : k === 'void' ? 0.1 : 0;
+        const k = biome.hazard, a = k === 'lava' ? 0.2 : k === 'void' ? 0.1 : 0;
         if (a) { const f = Math.floor(t * 5) % HZ_NF; c.globalAlpha = a; for (let i = 0; i < e.hzCells.length; i++) { const q = e.hzCells[i]; c.drawImage(e.hz, f * AT, i * AT, AT, AT, q[0] * T, q[1] * T, T, T); } c.globalAlpha = 1; }
       }
       for (const ft of e.ftorches) {
@@ -1068,15 +1065,15 @@
     c.imageSmoothingEnabled = true;
     return true;
   };
-  // Closed door of a locked room: wooden leaf on the north wall, iron bars on the others.
+  // Closed door of a locked room (and the sealed entry): wooden leaf on the north wall, iron bars on the others.
   Tl.drawGate = (c, room, biome, d) => {
     const e = entry(room, bqOf()); if (!e.art) return false;
-    const sh = sheetFor(biome), r = ED.Dungeon.doorRect(room, d), ax = r.x0 * AT, ay = r.y0 * AT;
+    const sh = sheetFor(biome), r = ED.Dungeon.doorRect(room, d), ax = r.x0 * AT, ay = r.y0 * AT, sd = ED.Dungeon.side(d);
     c.imageSmoothingEnabled = false;
-    if (d === 'n') { sblit(c, sh, 'tile.door.leaf.closed', 0, ax, ay, 0, 16); sblit(c, sh, 'tile.door.leaf.closed', 0, ax + 16, ay, 8, 24); sblit(c, sh, 'tile.door.leaf.closed', 0, ax + 32, ay, 16, 32); }
+    if (sd === 'n') { sblit(c, sh, 'tile.door.leaf.closed', 0, ax, ay, 0, 16); sblit(c, sh, 'tile.door.leaf.closed', 0, ax + 16, ay, 8, 24); sblit(c, sh, 'tile.door.leaf.closed', 0, ax + 32, ay, 16, 32); }
     else {
       c.fillStyle = 'rgba(8,4,10,0.94)'; c.fillRect(ax * K, ay * K, (r.x1 - r.x0 + 1) * T, (r.y1 - r.y0 + 1) * T);
-      if (d === 's') for (let i = 0; i < 3; i++) sblit(c, sh, 'tile.gate.bars', 0, ax + i * AT, ay);
+      if (sd === 's') for (let i = 0; i < 3; i++) sblit(c, sh, 'tile.gate.bars', 0, ax + i * AT, ay);
       else for (let i = 0; i < 3; i++) for (const dx of [-5, 0, 5]) sblit(c, sh, 'tile.gate.bars.side', 0, ax + dx, ay + i * AT);
     }
     c.imageSmoothingEnabled = true;
@@ -1147,7 +1144,7 @@
     }
     const glowK = { glowcap: P.accent2, mushroom: P.accent, crystal: P.accent, lavacrack: '#ff6a2a', rune: P.accent, voidcrack: P.accent, candle: '#ffb35c', grate: '#ff7a2a', cinders: '#ff8a3a', goldtile: '#ffd36b', shard: P.accent };
     for (const d of room.decor) if (glowK[d.k]) out.push({ k: 'glow', x: d.x * T, y: d.y * T - 4, r: d.k === 'candle' ? 52 : 46, color: glowK[d.k] });
-    if (biome.hazard === 'lava' || biome.hazard === 'poison' || biome.hazard === 'void' || biome.hazard === 'water') {
+    if (biome.hazard === 'lava' || biome.hazard === 'void' || biome.hazard === 'water') {
       let n = 0;
       for (let y = 0; y < room.h; y++) for (let x = 0; x < room.w; x++) if (room.tiles[y * room.w + x] === 4 && (x + y) % 2 === 0 && n++ < 24) out.push({ k: 'hz', x: (x + 0.5) * T, y: (y + 0.5) * T, r: 60, color: P.hazardGlow });
     }

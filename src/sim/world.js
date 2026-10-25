@@ -173,9 +173,9 @@
     this.time = 0; this.roomTime = 0; this.state = 'play'; this.stratum = 0; this.floorSeed = 0;
     this.locked = false; this.enc = null; this.boss = null; this.pendingStratum = null;
     this.run = { kills: 0, fodderKills: 0, roomsCleared: 0, elitesKilled: 0, bosses: 0, bossCount: 0, revives: 0, maxGold: 0, maxRelics: 0, flawlessBoss: false,
-      fullClear: false, roomsVisited: 0, roomsTotal: 0, darkCleared: 0,
+      fullClear: false, roomsVisited: 0, roomsTotal: 0, darkCleared: 0, champs: 0,
       embers: { rooms: 0, elites: 0, bosses: 0, victory: 0 } };
-    this.fullClearDone = 0;
+    this.mapRun = { dark: 0, elite: 0 };
     this.roomState = {};
     this.endTimer = -1; this.result = null; this.victory = false;
     this.flowT = 0; this.flow = null; this.tick = 0; this.waitMsg = '';
@@ -186,7 +186,7 @@
   W.xpFor = (L) => Math.round(30 + 3 * (L - 1) + 6 * (L - 1) * (L - 1)); // xp from level L to L+1
   W.ELITE = { hp: 2.4, hpStep: 0.4, dmg: 0.9 }; // elite HP multiplier at stratum I (+ hpStep per stratum) and damage multiplier
   W.HAZARD_MUL = 0.5; // floor hazard damage multiplier
-  // Dark rooms (room.dark, set by floor gen: 2 opt-in combat dead ends per floor): foe damage multiplier, gold and xp multiplier of everything dropped there, multiplier of the fodder quota.
+  // Dark rooms (room.dark: the map's dark nodes, combat rooms): foe damage multiplier, gold and xp multiplier of everything dropped there, multiplier of the fodder quota.
   W.DARK_DMG = 1.3; W.DARK_LOOT = 1.5; W.DARK_FODDER = 1.5;
   W.DARK_AFFIXES = ['brutal', 'vampiric', 'warded', 'swift']; // affix pool of the extra elite of a dark room's last wave (the volatile affix is left out)
   W.REWARD_UP = { gold: 'vigor', vigor: 'forge', forge: 'epic', boon: 'epic' }; // a dark room's reward goes up one step
@@ -531,8 +531,9 @@
     this.floorSeed = this.rng.seed();
     this.floor = D.generate(s, this.floorSeed);
     this.roomState = {};
-    for (const r of this.floor.rooms) this.roomState[r.id] = { visited: false, known: false, cleared: false, props: null, broken: 0 };
-    this.run.roomsTotal += this.floor.rooms.length;
+    for (const r of this.floor.rooms) this.roomState[r.id] = { visited: false, known: true, cleared: false, props: null, broken: 0 }; // the whole map shows from the start
+    this.run.roomsTotal += this.floor.rows + 2; // one path: the start camp, a room per row and the boss
+    this.mapRun = { dark: 0, elite: 0 }; // dark and elite rooms cleared on this stratum (Cartographer)
     this.allies.length = 0;
     for (const p of this.players.values()) {
       if (p.dead) { p.dead = false; p.downed = false; p.hp = Math.round(p.maxHp * 0.3); p.invuln = 2; }
@@ -543,7 +544,8 @@
     this.enterRoom(this.floor.start, null);
   };
 
-  W.prototype.enterRoom = function (id, fromDir) {
+  // Puts the party in room id: at its south entry when it came through a door (via = the door key it left by), else around the centre (the start camp).
+  W.prototype.enterRoom = function (id, via) {
     this.collectAll();
     this.enemies.length = 0; this.projs.length = 0; this.zones.length = 0; this.chainQ.length = 0; this.curChain = null; this.corpses.length = 0;
     if (this.fg) this.fg.ok = false;
@@ -554,13 +556,12 @@
     const rs = this.roomState[id];
     if (!rs.visited) this.run.roomsVisited++;
     rs.visited = true; rs.known = true;
-    for (const d in room.doors) if (room.doors[d] >= 0) this.roomState[room.doors[d]].known = true;
     let k = 0;
     const pos = [];
     for (const p of this.players.values()) {
-      const pt = fromDir ? D.entryPoint(room, D.OPP[fromDir], k) : { x: D.center(room).x + (k - 1.5) * 22, y: D.center(room).y + 20 };
+      const pt = via && room.entry ? D.entryPoint(room, 's', k) : { x: D.center(room).x + (k - 1.5) * 22, y: D.center(room).y + 20 };
       p.x = pt.x; p.y = pt.y; p.vx = 0; p.vy = 0; p.dashT = 0; p.skillMove = null; p.skillIfr = false; p.charge = null; this.clearShields(p); // a thrown shield and a charge in flight end with the room
-      p.toughRoom = room.type === 'elite' || room.type === 'boss'; // War Drum doubles in these rooms
+      p.toughRoom = room.type === 'elite' || room.type === 'champion' || room.type === 'boss'; // War Drum doubles in these rooms
       pos.push([p.pid, Math.round(p.x), Math.round(p.y)]);
       k++;
     }
@@ -570,9 +571,8 @@
     this.roomTime = 0;
     this.locked = false;
     if (!rs.cleared) this.beginEncounter(room, rs);
-    this.checkFullClear();
     this.computeFlow();
-    this.emit({ t: 'room', id, from: fromDir || '', pos, locked: this.locked, ep: this.roomEpoch });
+    this.emit({ t: 'room', id, from: via || '', pos, locked: this.locked, ep: this.roomEpoch });
     if (room.dark && !rs.cleared) this.emit({ t: 'dark' });
   };
 
@@ -603,7 +603,7 @@
       embers: Object.assign({}, this.run.embers), pact: this.pact, party: this.partySize(), level: this.level,
       revives: this.run.revives, flawlessBoss: this.run.flawlessBoss, maxGold: this.run.maxGold, maxRelics: this.run.maxRelics, players,
       evolved: [...this.players.values()].some(p => !!p.stats.evo), fullClear: this.run.fullClear,
-      roomsVisited: this.run.roomsVisited, roomsTotal: this.run.roomsTotal, darkCleared: this.run.darkCleared,
+      roomsVisited: this.run.roomsVisited, roomsTotal: this.run.roomsTotal, darkCleared: this.run.darkCleared, champs: this.run.champs | 0,
     };
   };
 
@@ -842,6 +842,7 @@
   W.prototype.isSafe = function () { return !this.locked && this.hostiles() === 0 && !this.pendingStratum; };
 
   // ---------------- doors ----------------
+  // Exit doors (room.doors: key -> room id) open once the room is cleared; any living hero walking deep into one takes the whole party through (after every pending boon choice). The entry never opens.
   W.prototype.checkDoors = function () {
     this.waitMsg = '';
     if (this.locked || this.state !== 'play' || this.pendingStratum) return;
@@ -850,9 +851,9 @@
       if (p.downed || p.dead) continue;
       for (const d in room.doors) {
         if (room.doors[d] < 0) continue;
-        const r = D.doorRect(room, d);
+        const r = D.doorRect(room, d), sd = D.side(d);
         const inside = p.x > r.x0 * T - 2 && p.x < (r.x1 + 1) * T + 2 && p.y > r.y0 * T - 2 && p.y < (r.y1 + 1) * T + 2;
-        const deep = d === 'n' ? p.y < 1.6 * T : d === 's' ? p.y > (room.h - 1) * T + 4 : d === 'w' ? p.x < T - 2 : p.x > (room.w - 1) * T + 2;
+        const deep = sd === 'n' ? p.y < 1.6 * T : sd === 's' ? p.y > (room.h - 1) * T + 4 : sd === 'w' ? p.x < T - 2 : p.x > (room.w - 1) * T + 2;
         if (!inside || !deep) continue;
         const choosing = [...this.players.values()].filter(q => q.offer);
         if (choosing.length) { this.waitMsg = 'Waiting for ' + choosing.map(q => q.name).join(', ') + ' to choose a boon'; return; }
@@ -935,11 +936,13 @@
     else if (pk.kind === 'heart') { this.healPlayer(p, p.maxHp * (0.22 + 0.03 * p.stats.forager) + 1.5); }
   };
 
-  // Marks the stratum fully explored once every non-boss room has been cleared (non-combat rooms clear on entry).
-  W.prototype.checkFullClear = function () {
-    if (this.fullClearDone === this.stratum) return;
-    for (const r of this.floor.rooms) if (r.type !== 'boss' && !this.roomState[r.id].cleared) return;
-    this.fullClearDone = this.stratum; this.run.fullClear = true;
+  // Cartographer (run.fullClear): two dark rooms and an elite room cleared on one stratum. Called with each cleared combat room.
+  W.prototype.checkFullClear = function (room) {
+    const m = this.mapRun;
+    if (!m || !room) return;
+    if (room.dark) m.dark++;
+    if (room.type === 'elite') m.elite++;
+    if (m.dark >= 2 && m.elite >= 1) this.run.fullClear = true;
   };
 
 })(globalThis.ED || (globalThis.ED = {}));

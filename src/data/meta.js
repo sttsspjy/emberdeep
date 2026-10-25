@@ -106,10 +106,10 @@
     { id: 'firstblood', name: 'First Blood', desc: 'Slay 50 foes', icon: 'sword', reward: 15, check: p => p.stats.kills >= 50 },
     bossDeed('gravedigger', 'Gravedigger', 0, 20),
     bossDeed('weedkiller', 'Weedkiller', 1, 30),
-    bossDeed('thaw', 'The Thaw', 2, 40),
-    bossDeed('quenched', 'Quenched', 3, 50),
-    bossDeed('lowtide', 'Low Tide', 4, 60),
-    { id: 'uncrowned', name: 'Uncrowned', desc: 'Defeat the Hollow King and complete a descent', icon: 'crown', reward: 100, check: p => p.stats.wins >= 1 },
+    bossDeed('thaw', 'Low Tide', 2, 40), // ids thaw / quenched / lowtide keep their DEEDS positions (save code) with new checks
+    { id: 'quenched', name: 'Twinbreaker', desc: 'Clear the twin champions room', icon: 'skull', reward: 50, check: (p, run) => run && !!(run.champs & 1) },
+    { id: 'lowtide', name: 'Mimic Hunter', desc: 'Clear the mimic champion room', icon: 'skull', reward: 60, check: (p, run) => run && !!(run.champs & 2) },
+    { id: 'uncrowned', name: 'Uncrowned', desc: 'Defeat the last boss and complete a descent', icon: 'crown', reward: 100, check: p => p.stats.wins >= 1 },
     { id: 'slayer', name: 'Slayer', desc: 'Slay 1,000 foes', icon: 'axe', reward: 50, check: p => p.stats.kills >= 1000 },
     { id: 'legend', name: 'Legend of the Deep', desc: 'Slay 5,000 foes', icon: 'axe', reward: 120, check: p => p.stats.kills >= 5000 },
     { id: 'fellowship', name: 'Fellowship', desc: 'Clear a stratum with a party', icon: 'banner', reward: 30, check: (p, run) => run && run.party > 1 && run.stratum >= 2 },
@@ -128,16 +128,8 @@
     { id: 'hearthkeeper', name: 'Hearthkeeper', desc: 'Buy 25 Hearth upgrade ranks', icon: 'ember', reward: 80, check: p => p.up.reduce((a, b) => a + b, 0) >= 25 },
     { id: 'evolved', name: 'Evolved', desc: 'Evolve a weapon', icon: 'wing', reward: 40, check: (p, run) => run && run.evolved },
     { id: 'intothedark', name: 'Into the Dark', desc: 'Clear 6 dark rooms in one descent', icon: 'eye', reward: 50, check: (p, run) => run && run.darkCleared >= 6 },
-    { id: 'cartographer', name: 'Cartographer', desc: 'Clear every room of a stratum, both its dark rooms included', icon: 'scroll', reward: 40, check: (p, run) => run && run.fullClear },
+    { id: 'cartographer', name: 'Cartographer', desc: 'Clear two dark rooms and an elite room on one stratum', icon: 'scroll', reward: 40, check: (p, run) => run && run.fullClear },
   ];
   ED.DEED_IDX = ED.U.indexer(ED.DEEDS.map(d => d.id));
 
-  ED.LORE = [
-    'The first delvers dug for embers: shards of a fallen star that burn without fuel. They dug too deep.',
-    'The fungus of the Glowmire grew on the delvers who stayed. It learned their voices.',
-    'The dwarf-king of Rimefrost froze his own hall rather than let the Deep climb through it.',
-    'The Cinderforge smelted embers into weapons for an empire that no longer exists.',
-    'The Sanctum priests prayed to the sea to drown the Deep. The sea listened, then kept going.',
-    'At the bottom, the fallen star still beats. The Hollow King wears its husk as a crown.',
-  ];
 })(globalThis.ED || (globalThis.ED = {}));

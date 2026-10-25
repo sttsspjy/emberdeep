@@ -11,8 +11,9 @@
 //   screens: 19 screenshots of every menu screen without a run (name, menu, Descend, Hearth with a buy mid-burst, Armory, Chronicle, Heroes, a staged party lobby and its Hearth,
 //     results victory and fallen, the news notice, settings tabs, a confirm dialog, credits, pause); fails when ArrowDown / ArrowRight do not move focus on the menu / Hearth tabs.
 //   shots: 16 screenshots: boot name screen, menu, Descend, Hearth tabs (the Armory scrolled into view), Heroes, Settings, Credits, boon offer, a run in combat, the Tab sheet tabs, the pause menu (profile gets 400 embers unless --embers).
-//   sheet: a late build staged through the sim (BR.sheetStage: stratum --strat or V, two element paths, one evolved, their duo, open and Ascended boons, a fork at rank 3, six relics, a shield, an ally hero):
-//     the Tab sheet Build, Build scrolled to the end, Combat, Map, and Build viewing the ally; fails on a page error or when a sheet column overflows its panel sideways.
+//   sheet: a late build staged through the sim (BR.sheetStage: stratum --strat or III, two element paths, one evolved, their duo, open and Ascended boons, a fork at rank 3, six relics, a shield, an ally hero, half the map walked):
+//     the Tab sheet Build, Build scrolled to the end, Combat, Map, and Build viewing the ally, then the cleared room of the floor with the most exit doors (BR.doorStage);
+//     fails on a page error, when a sheet column overflows its panel sideways, or when no room has 3 exit doors.
 //   swing: one contact-sheet PNG per melee weapon of --cls, its Armory variants included (or per --weapon id, forks as id@fork) (aimed --aim degrees, 0 = right, 90 = down, drawn at --zoom canvas px per world px, 2): frames at fixed times over two consecutive attacks (a combo weapon: one per step), the hold and the ease back to idle, hero and smear drawn by the game's own renderer.
 //   picks: every boon id resolves to a PickFx card kind; one PNG per pick burst (each kind, fire-big, holy-ally) on the solo hero about 0.25 s after FX.handle gets the 'boon' / 'relic' event;
 //     each pick cue (and the Hearth 'buy') rendered in an OfflineAudioContext: voices, peak, rms, audible length; fails on a throw, a silent cue or one longer than 0.9 s.
@@ -373,7 +374,7 @@ function pageBoot(cfg) {
   BR.take = () => { const ED = window.__ED; if (ED.Game.s && ED.Game.s.offerOpen) ED.UI.boonConfirm(); return BR.offerOpen(); };
 
   // late build on the solo hero at stratum `strat`: two element paths (the first evolved, the second at its keystone), their duo, open boons, two Ascended, the first route with its first fork at rank 3,
-  // six relics, level 14, a shield, half the floor explored, and an ally hero (second class) beside the hero; returns a summary
+  // six relics, level 14, a shield, the first-exit path walked up to half the rows (the hero in its last room), and an ally hero (second class) beside the hero; returns a summary
   BR.sheetStage = (strat) => {
     const ED = window.__ED, s = ED.Game.s, w = s && s.world;
     if (!w) throw new Error('no run to stage the sheet in');
@@ -397,7 +398,9 @@ function pageBoot(cfg) {
     p.shield = Math.round(p.maxHp * 0.18 * 10) / 10 + 0.4;
     w.level = Math.max(w.level | 0, 14); if (ED.World.xpFor) { w.xpNext = ED.World.xpFor(w.level); w.xp = Math.floor(w.xpNext * 0.62); } w.gold = 347;
     p.hp = Math.max(1, Math.ceil(p.maxHp * 0.7) - 0.3);
-    const rooms = w.floor.rooms; rooms.forEach((r, i) => { if (i % 2 === 0) { w.roomState[r.id].visited = true; w.roomState[r.id].known = true; w.roomState[r.id].cleared = true; } else w.roomState[r.id].known = i % 4 === 1; });
+    const rooms = w.floor.rooms; let at = rooms[w.floor.start];
+    while (at.row < (w.floor.rows / 2 | 0) && at.exits.length) { w.roomState[at.id].visited = w.roomState[at.id].cleared = true; at = rooms[at.exits[0]]; }
+    w.roomState[at.id].cleared = true; w.enterRoom(at.id, 's');
     let ally = null;
     if (!w.players.has('ally')) {
       const ac = ED.CLASS_IDS.find(c => c !== cls);
@@ -405,6 +408,18 @@ function pageBoot(cfg) {
       ally.x = p.x + 30; ally.y = p.y; ally.hp = Math.ceil(ally.maxHp * 0.6);
     }
     return { cls, els, boons: Object.keys(boons).length, relics: p.relics.length, stratum: w.stratum, ally: ally && ally.cls };
+  };
+
+  // the room of the current floor with the most exit doors (a map room before the start camp on a tie), cleared so its doors stand open; the hero 5.5 tiles below its north wall; returns a summary
+  BR.doorStage = () => {
+    const ED = window.__ED, s = ED.Game.s, w = s && s.world;
+    if (!w) throw new Error('no run to stage the doors in');
+    let best = null;
+    for (const r of w.floor.rooms) if (r.type !== 'boss' && (!best || r.exits.length > best.exits.length || (r.exits.length === best.exits.length && best.row === 0 && r.row > 0))) best = r;
+    w.roomState[best.id].cleared = true; w.enterRoom(best.id, 's');
+    const p = s.me, T = ED.CONST.TILE; p.x = best.w * T / 2; p.y = 5.5 * T;
+    for (const q of w.players.values()) if (q !== p) { q.x = p.x + 40; q.y = p.y; }
+    return { room: best.id, type: best.type, row: best.row, exits: best.exits.length, names: best.exits.map(id => ED.Render.roomName ? ED.Render.roomName(w.floor.rooms[id]) : w.floor.rooms[id].type) };
   };
 
   // cards: a boon offer staged through the sim (the hero's boons set so the cards are eligible, the hand sent as the sim's own offer message); returns each card's kind
@@ -877,7 +892,7 @@ async function scenSheet() {
     if ((await call(page, 'start')) !== 'run') fail(res, 'run did not start');
     await wait(1100);
     for (let i = 0; i < 6 && await call(page, 'offerOpen'); i++) { await call(page, 'take'); await wait(300); }
-    const st = await call(page, 'sheetStage', o.strat > 1 ? o.strat : 5);
+    const st = await call(page, 'sheetStage', o.strat > 1 ? o.strat : 3);
     notes(res, `staged ${st.cls}: paths ${st.els.join('+')}, ${st.boons} boons, ${st.relics} relics, stratum ${st.stratum}, ally ${st.ally}`);
     await wait(300);
     // sideways overflow: a sheet element wider than its column, or text spilling past its box
@@ -914,6 +929,10 @@ async function scenSheet() {
     if (!n2.focus || n2.focus === n0.focus) fail(res, 'S did not move the sheet focus');
     if (n3.open) fail(res, 'Tab did not close the sheet');
     await ev(() => window.__ED.UI.toggleSheet(false));
+    const ds = await call(page, 'doorStage');
+    notes(res, `doors: room ${ds.room} (${ds.type}, row ${ds.row}), ${ds.exits} exits: ${ds.names.join(' | ')}`);
+    if (ds.exits < 3) fail(res, 'no room of the floor has 3 exit doors');
+    await wait(900); await shoot(page, res, 'doors');
   } finally { res.errors = errors; await ctx.close(); }
   if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
   return res;

@@ -48,23 +48,22 @@ function modelOf(cls, boons, wi, o) {
   near(leg.pre, 67.8, 0.05, 'Judgment leg with its own vulnerability'); near(cl.skills[1].perCast, 135.6, 0.1, 'Judgment per cast (two legs)'); near(by(cl, 0, 'zone').here * 7, 143.85, 0.1, 'Sanctuary 7 ticks');
   const nc = modelOf('necro', {}, 0, { stat: { crit: 0 } }), mn = by(nc, 0, 'minion');
   near(mn.here, 14.535, 0.01, 'Minion hit'); ok(mn.oneFoe === 51, `Minions: 3 x 17 hits (got ${mn.oneFoe})`); near(by(nc, 1, 'burst').raw, 60.3, 0.05, 'Harvest burst');
-  // Set 2: Sharpened Edge x2, Stoke x1, weak to Fire (stratum III), crit 5%. DEVIATION from DESIGN-ux A4: a class-element skill takes half the affinity (combat.js affC: x1.25, not x1.5), so Nova blast and crater use 1.25; statuses (Nova burn, Meteor burn add) take the full x1.5.
+  // Set 2: Sharpened Edge x2, Stoke x1, Kindle, stratum III (no stratum is weak or resists: affinity x1), crit 5%.
   const e2 = modelOf('pyro', { edge: 2, stoke: 1, kindle: 1 }, 0, { ctx: { stratum: 3 }, stat: { crit: 0.05 } });
-  near(e2.mult.dmg.total, 1.2, 1e-9, 'Set 2 damage'); near(by(e2, 0, 'blast').here, 64.5 * 1.2 * (1 + 0.05 * 0.75) * 1.25, 0.05, 'Set 2 Nova blast (class skill: half affinity)');
-  near(by(e2, 0, 'burn').here, 52.8 * 1.5 * 1.25, 0.05, 'Set 2 Nova burn (full affinity, Burn strength)');
-  near(by(e2, 1, 'impact').statusAdd.here, 0.5 * by(e2, 1, 'impact').pre * 1.5 * 1.25, 0.05, 'Set 2 Meteor burn add (affinity once)');
-  near(by(e2, 1, 'crater').here * by(e2, 1, 'crater').oneFoe, 6 * 10.8 * 1.2 * 1.25, 0.1, 'Set 2 crater, 6 ticks');
+  near(e2.mult.dmg.total, 1.2, 1e-9, 'Set 2 damage'); near(by(e2, 0, 'blast').here, 64.5 * 1.2 * (1 + 0.05 * 0.75), 0.05, 'Set 2 Nova blast');
+  near(by(e2, 0, 'burn').here, 52.8 * 1.25, 0.05, 'Set 2 Nova burn (Burn strength)');
+  near(by(e2, 1, 'impact').statusAdd.here, 0.5 * by(e2, 1, 'impact').pre * 1.25, 0.05, 'Set 2 Meteor burn add');
+  near(by(e2, 1, 'crater').here * by(e2, 1, 'crater').oneFoe, 6 * 10.8 * 1.2, 0.1, 'Set 2 crater, 6 ticks');
 }
 
-// ---------------- affinity chips: the class element's skills take half the affinity whichever source lists the element ----------------
+// ---------------- affinity chips: no stratum is weak or resists, so every listed element reads x1 ----------------
 {
   const aff = (cls, boons, stratum) => modelOf(cls, boons, 0, { ctx: { stratum } }).aff.now.mine;
   let a = aff('cleric', {}, 2).find(x => x.el === 'holy');
-  ok(a && a.why === 'class' && Math.abs(a.mul - 2 / 3) < 1e-9 && Math.abs(a.skillMul - 5 / 6) < 1e-9, 'fresh Cleric, stratum II: Holy statuses x0.667, skills x0.833');
+  ok(a && a.why === 'class' && a.mul === 1 && a.skillMul === 1, 'fresh Cleric, stratum II: Holy x1');
   a = aff('cleric', { consecrate: 1 }, 2).find(x => x.el === 'holy');
-  ok(a && a.why === 'path' && Math.abs(a.mul - 2 / 3) < 1e-9 && Math.abs(a.skillMul - 5 / 6) < 1e-9, 'Cleric with the Holy gate keeps the class-skill affinity');
-  a = aff('pyro', { kindle: 1 }, 3).find(x => x.el === 'fire');
-  ok(a && a.mul === 1.5 && a.skillMul === 1.25, 'Pyromancer with Kindle, stratum III: statuses x1.5, skills x1.25');
+  ok(a && a.why === 'path' && a.mul === 1 && a.skillMul === 1, 'Cleric with the Holy gate: Holy x1');
+  for (let st = 1; st <= ED.CONST.STRATA; st++) { a = aff('pyro', { kindle: 1 }, st).find(x => x.el === 'fire'); ok(a && a.mul === 1 && a.skillMul === 1, `Pyromancer with Kindle, stratum ${st}: Fire x1`); }
   a = aff('knight', { kindle: 1 }, 3).find(x => x.el === 'fire');
   ok(a && a.skillMul === null, 'a Knight has no class element');
 }
