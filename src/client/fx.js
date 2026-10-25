@@ -386,7 +386,7 @@
 
   const R = () => ED.Render;
   const ENEMY_COLOR = (type) => { const d = ED.ENEMIES[type]; return d ? d.col.a : '#ffffff'; };
-  const EL_COL = ['', '#ff9a3a', '#9fefff', '#ffe66b', '#ff4a5a', '#9be33c', '#fff0c2', '#a070ff']; // hit-event el: 0 physical, 1 fire, 2 ice, 3 lightning, 4 bleed, 5 poison, 6 holy, 7 shadow
+  const EL_COL = ['', '#ff9a3a', '#9fefff', '#ffe66b', '#ff4a5a', '', '#fff0c2', '#a070ff']; // hit-event el (combat.js EL_IDX): 0 physical, 1 fire, 2 ice, 3 lightning, 4 bleed, 5 unused, 6 holy, 7 shadow
   const EL_IMP = ['', 'e1', 'e2', 'e3', 'e4']; // skill-hit impact cue by el (Flame burst, Frost shatter, Storm chain, Bleed burst); el 0 and the class flavours ring with the class timbre
   // Hit cue material of hero p's weapon: blade (swords, spears, daggers, scythes, thrown knives), blunt (hammers, maces, bells; also no hero), arrow (arrows, bolts, bone shards), magic (every other bolt)
   const BLADE = { sword: 1, spear: 1, dagger: 1, scythe: 1 }, SHAFT = { arrow: 1, bolt: 1, bone: 1 }, THROWN = { knife: 1, boomerang: 1 };
@@ -435,9 +435,6 @@
     } else if (el === 4) {
       F.burst(x, gy, cnt(5 + Math.round(5 * w * k)), { kind: 'drop', color: '#a8142c', a, spread: 1.8, sp: sp * 0.9, life: 0.9, size: 1.8 + 0.6 * w, vz: 60, z: z0, drag: 1.2 });
       addStain(x, gy, 2 + 3 * w, '#6a0a1a', 0.5, 4);
-    } else if (el === 5) { // poison: rising bubbles and green drips
-      F.burst(x, gy, cnt(3 + Math.round(3 * w * k)), { kind: 'drop', color: '#9be33c', a, spread: 2, sp: sp * 0.7, life: 0.8, size: 1.8 + 0.6 * w, vz: 70, z: z0, drag: 1.4 });
-      F.burst(x, gy, cnt(2), { color: '#d6ff8a', sp: 25, vy: -40, life: 0.7, size: 1.8, add: true, drag: 1.5, z: z0 });
     } else if (el === 6) { // holy: gold motes and a short ray
       F.burst(x, gy, cnt(3 + Math.round(2 * w * k)), { color: '#ffe9a0', sp: 35, vy: -48, life: 0.8, size: 2, add: true, drag: 1.5, z: z0 });
       F.burst(x, gy, cnt(2), { kind: 'spark', color: '#fff6d8', a, spread: 1.4, sp: sp * 1.4, life: 0.2, size: 1.5, drag: 5, z: z0 });

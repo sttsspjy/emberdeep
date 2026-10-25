@@ -383,7 +383,7 @@
   const APPLY = { 1: 'ignite', 2: 'icecrack', 3: 'zap' };
   A.applied = (el, mine) => { const c = APPLY[el]; if (c) A.play(c, mine ? 1 : 0.5, null, mine ? 1 : 0); };
   // Tick timbre by element (L loudness, G grains): Burn a breathy roar (a low rumble once loud), crackle pops and a sizzle; Frost a crack and glassy tinks; Storm zaps over a mains buzz; Bleed wet squelches;
-  // the class flavours soft: poison bubbles, a holy chime, a shadow hiss; physical a tap.
+  // the class flavours soft: a holy chime, a shadow hiss; physical a tap (index = hit-event el, combat.js EL_IDX; 5 unused).
   const at = (t) => t + Math.random() * 0.14;
   const DOT = [
     (L, G, t) => tone('triangle', rnd(900, 1100), 700, 0.03, 0.05 * L, null, t),
@@ -406,7 +406,7 @@
       noise('bandpass', 1300, 280, 0.07, 0.2 * L, 6, null, t); tone('sine', rnd(200, 240), 100, 0.06, 0.08 * L, null, t);
       for (let i = 1; i < Math.ceil(G / 2); i++) noise('bandpass', rnd(900, 1400), 260, 0.05, 0.12 * L, 6, null, at(t));
     },
-    (L, G, t) => { for (let i = 0; i < Math.ceil(G / 2); i++) { const f = rnd(260, 380); tone('sine', f, f * 2.2, 0.04, 0.06 * L, null, at(t)); } },
+    null,
     (L, G, t) => tone('sine', [1568, 1760, 2093][(Math.random() * 3) | 0], 0, 0.14, 0.035 * L, null, t),
     (L, G, t) => { noise('bandpass', 500, 200, 0.12, 0.08 * L, 1.5, null, t); tone('sine', 120, 80, 0.1, 0.05 * L, null, t); },
   ];
