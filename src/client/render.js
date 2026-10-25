@@ -1260,28 +1260,28 @@
 
   const PROP_LABEL = {
     chest: () => 'Open', fountain: () => 'Drink (heal party 50%)', altar: (p, me) => `Pay 20% health for an epic boon`,
-    gamble: (p) => `Offer ${p.price} gold for a random relic`, trial: () => 'Begin the trial (elite fight, rare relic)', portal: () => 'Descend',
+    gamble: (p) => `Pay ${p.price} gold for a random relic`, trial: () => 'Start the trial (elite fight, rare relic)', portal: () => 'Next stratum',
   };
   R.propPrompt = (p, view) => {
     if (p.kind === 'relic') return 'Take ' + ED.RELICS[p.item].name;
-    if (p.kind === 'shop') { const name = p.stype === 'relic' ? ED.RELICS[p.item].name : p.stype === 'boon' ? 'Epic boon' : p.stype === 'forge' ? 'Forge' : 'Healing draught'; return `Buy ${name} — ${p.price}g`; }
+    if (p.kind === 'shop') { const name = p.stype === 'relic' ? ED.RELICS[p.item].name : p.stype === 'boon' ? 'Epic boon' : p.stype === 'forge' ? 'Forge' : 'Healing potion'; return `Buy ${name} — ${p.price}g`; }
     if (p.kind === 'reward') {
       if (p.item === 'gold') { const amt = ED.World.rewardGold ? ED.World.rewardGold(view.stratum) : 0; return amt ? `Claim: ${amt} gold` : 'Claim: Gold'; }
       return 'Claim: ' + R.rewardLabel(p.item);
     }
-    if (p.kind === 'campfire') return 'Rest at the campfire';
-    if (p.kind === 'anvil') return 'Temper at the anvil';
+    if (p.kind === 'campfire') return 'Rest';
+    if (p.kind === 'anvil') return 'Forge';
     return PROP_LABEL[p.kind] ? PROP_LABEL[p.kind](p) : null;
   };
-  const REWARD_DESC = { gold: 'Gold for the whole party.', vigor: 'Permanently raises your maximum health and heals you.', forge: 'Rank up one of your boons.', boon: 'A boon from your paths (a new path while you have a free slot).', epic: 'Choose from epic boons.', relic: 'A hoard of relics: each hero takes one.' };
-  const SHOP_DESC = { boon: 'Grants an extra boon pick with no common options.', forge: 'Forge: rank up one of your boons.', potion: 'Heals a good chunk of your health.' };
+  const REWARD_DESC = { gold: 'Gold for the whole party.', vigor: '+2 max health for the rest of the run, and heals 20%.', forge: 'Rank up one of your boons.', boon: 'A boon from your paths (a new path while you have a free slot).', epic: 'Choose from epic boons.', relic: 'Relics: each hero takes one.' };
+  const SHOP_DESC = { boon: 'An extra boon pick with no common boons.', forge: 'Rank up one of your boons.', potion: 'Heals 40% of your max health.' };
   // Longer explanation shown above the prompt (null when there is none).
   R.propDesc = (p) => {
     if (p.kind === 'reward') {
       return REWARD_DESC[String(p.item)] || null;
     }
-    if (p.kind === 'campfire') return 'Rest: recover a chunk of your health. One use per hero.';
-    if (p.kind === 'anvil') return 'Temper: rank up one of your boons. One use per hero.';
+    if (p.kind === 'campfire') return 'Heals 35% of your max health. Each hero uses the campfire or the anvil.';
+    if (p.kind === 'anvil') return 'Rank up one of your boons. Each hero uses the campfire or the anvil.';
     if (p.kind === 'shop') return SHOP_DESC[p.stype] || null;
     return null;
   };
@@ -1292,17 +1292,17 @@
   // Colour of a reward-type string such as 'boon', 'gold', 'relic' (unknown -> warm white).
   function rewardColor(s) { return ED.Icons.reward(s, R.mainPath)[1]; }
   R.rewardColor = rewardColor;
-  // Name of a reward string: 'boon' -> 'Boon', 'relic' -> 'Relic hoard'.
+  // Name of a reward string: 'boon' -> 'Boon', 'relic' -> 'Relics'.
   R.rewardLabel = (s) => { const r = ED.Icons.reward(s, R.mainPath); return r[3] || r[2]; };
   // [glyph, colour, short label] of a reward string.
   R.rewardIcon = (s) => ED.Icons.reward(s, R.mainPath);
   // Map/door glyph of a floor room for the local hero: { icon, color, label, badge, reward } or null (ED.Icons.room).
   R.roomIcon = (rm) => ED.Icons.room(rm, R.mainPath, ED.World.REWARD_UP);
-  const ROOM_NAME = { start: 'Camp', combat: 'Fight', elite: 'Elite fight', champion: 'Champion fight', shop: 'Shop', rest: 'Rest site', treasure: 'Treasure', event: 'Shrine', boss: 'Boss' };
-  // Plain name of a map room with its reward: 'Elite fight: Relic hoard', 'Dark fight: Epic boon', 'Rest site'.
+  const ROOM_NAME = { start: 'Start', combat: 'Fight', elite: 'Elite fight', champion: 'Champion fight', shop: 'Shop', rest: 'Rest', treasure: 'Treasure', event: 'Shrine', boss: 'Boss' };
+  // Plain name of a map room with its reward: 'Elite fight: Relics', 'Dark room: Epic boon', 'Rest'.
   R.roomName = (rm) => {
     if (!rm) return '';
-    const n = rm.dark ? 'Dark fight' : ROOM_NAME[rm.type] || 'Room', rw = rm.reward ? (rm.dark && ED.World.REWARD_UP[rm.reward]) || rm.reward : null;
+    const n = rm.dark ? 'Dark room' : ROOM_NAME[rm.type] || 'Room', rw = rm.reward ? (rm.dark && ED.World.REWARD_UP[rm.reward]) || rm.reward : null;
     return rw ? n + ': ' + R.rewardLabel(rw) : n;
   };
   // Exit key a hero wants to leave by (null when none; Dungeon.wantDoor of P[26]): the newest snapshot row on a client, the sim field on the host and solo.
@@ -1313,9 +1313,9 @@
   };
 
   // Previews over the exit doors of the current room (neighbours not yet cleared), bobbing in front of each doorway:
-  // the room glyph and its badge, its name and reward, threat pips (room.threat), the dark-room moon; near a hero the dark rule and "The way back closes" fade in.
+  // the room glyph and its badge, its name and reward, threat pips (room.threat), the dark-room moon; near a hero the dark rule and "No way back" fade in.
   // In a party, the heroes who want a door are named at it.
-  const DARK_COL = '#a070ff', DARK_TEXT = 'Dark room: harder fights, richer rewards', BACK_TEXT = 'The way back closes', THREAT_COL = '#ff5a3a';
+  const DARK_COL = '#a070ff', DARK_TEXT = 'Dark room: harder foes, better rewards', BACK_TEXT = 'No way back', THREAT_COL = '#ff5a3a';
   const dpList = [], dpPool = [];
   // Preview anchor of door d of room: just inside the doorway (world px).
   function doorAt(room, d) {

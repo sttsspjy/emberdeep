@@ -599,8 +599,8 @@
   const SMASH_COL = { urn: ['#8a6a50', '#c4a07c', 0], mushroom: [null, '#e8f0d0', 1], crystal: ['#8fd8f0', '#e8fbff', 1], coral: ['#e0705a', '#ffb0a0', 0], shard: ['#9a6aff', '#e0c8ff', 1], crate: ['#7a5436', '#c8501a', 0] };
   // Plain line per boss phase change (boss type -> phase -> text): what the new phase does.
   const PHASE_MSG = {
-    bonewarden: { 2: 'Bone walls split the room. Use the gaps, or break a block (3 hits).', 3: 'The walls fall. Swords strike the marked lines.' },
-    sporemother: { 2: 'Buds fly to broken pods and regrow them. Kill the buds.', 3: 'She walks now. The carpet stops spreading.' },
+    bonewarden: { 2: 'Bone walls split the room. Use the gaps, or break a block (3 hits).', 3: 'The walls are gone. Swords strike the marked lines.' },
+    sporemother: { 2: 'Buds fly to broken pods and regrow them. Kill the buds.', 3: 'She moves now. The carpet stops spreading.' },
   };
   // Translate one world event into effects. local: the viewing player's pid.
   F.handle = (ev, ctx) => {
@@ -739,7 +739,7 @@
         { const nc = ev.c && ev.c !== '#ff7a2a' ? ev.c : ''; // flames (or ice glints) scattered along the expanding ring
           for (let i = 0, n = lowFx() ? 6 : 14; i < n; i++) { const a = Math.random() * TAU, d = ev.r * (0.55 + Math.random() * 0.4); SP(nc ? 'fx.glint' : 'fx.ember', ev.x + Math.cos(a) * d, ev.y + Math.sin(a) * d * 0.7 - 4, { ramp: nc, delay: d / ev.r * 0.25, vy: -16, add: !!nc, lt: nc ? null : '#ff8a2a', ltr: 26 }); } }
         F.punch(0.4, 0); A.play('boom', 0.6); F.addShake(4); break;
-      case 'levelup': F.showBanner('Level ' + ev.level, ev.cls ? 'Choose your route when the room is clear' : ev.boon ? 'A boon awaits when the room is clear' : '', 'level', 2.2); A.play('level'); for (const p of ctx.players()) { F.burst(p.x, p.y - 10, 18, { color: '#ffd36b', sp: 80, vy: -60, life: 0.9, size: 2.2, add: true, drag: 1.5 }); F.ring(p.x, p.y, 36, '#ffd36b', 0.5, 3); SP('fx.circle.spark', p.x, p.y - 4, { ramp: 'holy', add: true }); F.pop(p.x, p.y - 12, 26, '#ffd36b', 0.3); } break;
+      case 'levelup': F.showBanner('Level ' + ev.level, ev.cls ? 'Choose your route when the room is clear' : ev.boon ? 'Choose a boon when the room is clear' : '', 'level', 2.2); A.play('level'); for (const p of ctx.players()) { F.burst(p.x, p.y - 10, 18, { color: '#ffd36b', sp: 80, vy: -60, life: 0.9, size: 2.2, add: true, drag: 1.5 }); F.ring(p.x, p.y, 36, '#ffd36b', 0.5, 3); SP('fx.circle.spark', p.x, p.y - 4, { ramp: 'holy', add: true }); F.pop(p.x, p.y - 12, 26, '#ffd36b', 0.3); } break;
       case 'gold': case 'xp': { // pickup sparkle on the collector, rate-limited
         const p = ctx.player(ev.pid), gold = ev.t === 'gold';
         if (p && F.time - pickT > 0.05) { pickT = F.time; const c = gold ? '#ffd36b' : '#7dffd9'; F.burst(p.x, p.y - 16, 2, { color: c, sp: 40, vy: -45, life: 0.4, size: 1.6, add: true, drag: 2.2 }); }
@@ -751,7 +751,7 @@
       case 'clear': A.play('unlock'); F.showBanner(ev.trial ? 'Trial complete' : 'Room cleared', '', 'small', 1.4); break;
       case 'bossIntro': F.showBanner(ev.name, ev.title, 'boss', 3.4); F.bossQuote = ev.quote ? { text: ev.quote, t: 0 } : null; A.play('roar'); A.music({ s: ctx.stratum(), boss: true }); F.addShake(8); F.punch(0.9, 0); break;
       case 'bossSpawn': F.addShake(6); F.punch(0.6, 0); break;
-      case 'bossDown': F.showBanner('Vanquished', ED.ENEMIES[ev.type].name, 'victory', 3); F.flash = { color: '#ffffff', t: 0.5, a: 0.5 }; F.addShake(12); F.punch(2, 1); F.hitStop(0.3); A.play('roar', 0.6); if (ev.type !== 'hollowking') A.play('victory', 0.7, 'boss'); A.music({ s: ctx.stratum() }); F.burst(ev.x, ev.y - 20, 60, { color: ED.ENEMIES[ev.type].col.c, sp: 220, life: 1.2, size: 3.5, add: true }); F.burst(ev.x, ev.y - 20, 18, { kind: 'streak', color: '#ffffff', sp: 380, life: 0.5, size: 2.4 }); F.ring(ev.x, ev.y, 160, ED.ENEMIES[ev.type].col.c, 0.8, 6); F.ring(ev.x, ev.y, 90, '#ffffff', 0.5, 3); F.pop(ev.x, ev.y - 20, 90, '#ffffff', 0.5); break;
+      case 'bossDown': F.showBanner('Boss defeated', ED.ENEMIES[ev.type].name, 'victory', 3); F.flash = { color: '#ffffff', t: 0.5, a: 0.5 }; F.addShake(12); F.punch(2, 1); F.hitStop(0.3); A.play('roar', 0.6); if (ev.type !== 'hollowking') A.play('victory', 0.7, 'boss'); A.music({ s: ctx.stratum() }); F.burst(ev.x, ev.y - 20, 60, { color: ED.ENEMIES[ev.type].col.c, sp: 220, life: 1.2, size: 3.5, add: true }); F.burst(ev.x, ev.y - 20, 18, { kind: 'streak', color: '#ffffff', sp: 380, life: 0.5, size: 2.4 }); F.ring(ev.x, ev.y, 160, ED.ENEMIES[ev.type].col.c, 0.8, 6); F.ring(ev.x, ev.y, 90, '#ffffff', 0.5, 3); F.pop(ev.x, ev.y - 20, 90, '#ffffff', 0.5); break;
       case 'phase': F.addShake(8); F.punch(1.6, 0.8); A.play('roar', 0.8); F.ring(ev.x, ev.y, 120, '#ffffff', 0.5, 5); F.ring(ev.x, ev.y, 70, '#ff8a5a', 0.4, 3); F.pop(ev.x, ev.y - 20, 60, '#ffffff', 0.35); if (PHASE_MSG[ev.type] && PHASE_MSG[ev.type][ev.p]) F.msg(PHASE_MSG[ev.type][ev.p], '#ffd9a0'); break;
       // ---- boss arenas: Bone Warden (punish window, bone walls, lane charge, spectral swords), Sporemother (pods, carpet, buds) ----
       case 'punish': { // the slam's sword is stuck: gold +50% over him, a ring under him for the window
@@ -770,13 +770,13 @@
       case 'carpetclear': F.ring(ev.x, ev.y, ev.r, '#d89cff', 0.4, 4); F.burst(ev.x, ev.y, 16, { kind: 'smoke', color: '#5b2a7a', sp: ev.r * 1.4, life: 0.6, size: 5 }); break;
       case 'regrow': F.burst(ev.x, ev.y - 6, 10, { color: '#9cff6a', sp: 50, vy: -40, life: 0.6, size: 2.2, add: true }); F.ring(ev.x, ev.y, 22, '#9cff6a', 0.4, 2); A.play('spawn', 0.5); break;
       case 'uproot': F.addShake(9); F.punch(1, 0.4); dust(ev.x, ev.y, 'dust', 5); F.burst(ev.x, ev.y, 20, { kind: 'shard', color: '#6b5238', sp: 130, life: 0.7, size: 2.6, vz: 120, z: 4 }); A.play('thud', 1); break;
-      case 'fury': { const en = ED.ENEMIES[ev.type]; F.addShake(5); F.punch(1.2, 0.5); A.play('fury', 0.8); F.ring(ev.x, ev.y, 130, '#ff5a1a', 0.55, 5); F.ring(ev.x, ev.y, 70, '#ffb56b', 0.4, 3); F.burst(ev.x, ev.y - 20, 36, { color: '#ff8a3d', sp: 150, vy: -40, life: 0.9, size: 2.8, add: true, drag: 1.6 }); F.pop(ev.x, ev.y - 20, 70, '#ff8a3d', 0.4); if (en) F.msg(en.name + ' is enraged!', '#ff8a3d'); break; }
+      case 'fury': { const en = ED.ENEMIES[ev.type]; F.addShake(5); F.punch(1.2, 0.5); A.play('fury', 0.8); F.ring(ev.x, ev.y, 130, '#ff5a1a', 0.55, 5); F.ring(ev.x, ev.y, 70, '#ffb56b', 0.4, 3); F.burst(ev.x, ev.y - 20, 36, { color: '#ff8a3d', sp: 150, vy: -40, life: 0.9, size: 2.8, add: true, drag: 1.6 }); F.pop(ev.x, ev.y - 20, 70, '#ff8a3d', 0.4); if (en) F.msg(en.name + ' is furious: faster and harder hits', '#ff8a3d'); break; }
       case 'stratum': { const b = ED.biomeFor(ev.s); F.showBanner(b.name, 'Stratum ' + U.roman(ev.s), 'stratum', 3.6); F.fade = 1; A.music({ s: ev.s }); break; }
       case 'room': for (const p of ctx.players()) F.sheet('fx.circle.spark', p.x, p.y + 2, { add: true, a: 0.7, speed: 1.6 }); F.fade = Math.max(F.fade, 0.6); break;
-      case 'down': { const p = ctx.player(ev.pid); A.play('down'); if (p) F.msg(ev.pid === local ? 'You are down! An ally can revive you.' : `${p.name} is down! Stand near them to revive.`, '#ff8a7a'); break; }
-      case 'revived': { const p = ctx.player(ev.pid); A.play('revive'); if (p) { F.msg(`${p.name} is back on their feet`, '#86d38f'); F.burst(p.x, p.y - 10, 24, { color: '#ffe9a0', sp: 70, vy: -60, life: 0.9, size: 2.4, add: true }); F.ring(p.x, p.y, 40, '#ffe9a0', 0.5, 3); SP('fx.circle.spark', p.x, p.y - 4, { ramp: 'holy', add: true }); F.pop(p.x, p.y - 12, 30, '#ffe9a0', 0.3); } break; }
-      case 'dead': { const p = ctx.player(ev.pid); if (p) F.msg(`${p.name} has fallen. They return at the next stratum.`, '#ff8a7a'); break; }
-      case 'rise': { const p = ctx.player(ev.pid); const name = { phoenix: 'Phoenix Feather', angel: 'Guardian Angel', wind: 'Second Wind' }[ev.k]; F.showBanner(name, p ? p.name + ' refuses to fall' : '', 'small', 2); F.burst(ev.x, ev.y - 10, 40, { color: '#ffd36b', sp: 150, life: 0.9, size: 3, add: true }); F.ring(ev.x, ev.y, 70, '#ffd36b', 0.6, 4); F.pop(ev.x, ev.y - 12, 50, '#ffd36b', 0.4); F.punch(0.8, 0.4); A.play('revive'); break; }
+      case 'down': { const p = ctx.player(ev.pid); A.play('down'); if (p) F.msg(ev.pid === local ? 'You are down. An ally can revive you.' : `${p.name} is down. Stand next to them to revive.`, '#ff8a7a'); break; }
+      case 'revived': { const p = ctx.player(ev.pid); A.play('revive'); if (p) { F.msg(`${p.name} is revived`, '#86d38f'); F.burst(p.x, p.y - 10, 24, { color: '#ffe9a0', sp: 70, vy: -60, life: 0.9, size: 2.4, add: true }); F.ring(p.x, p.y, 40, '#ffe9a0', 0.5, 3); SP('fx.circle.spark', p.x, p.y - 4, { ramp: 'holy', add: true }); F.pop(p.x, p.y - 12, 30, '#ffe9a0', 0.3); } break; }
+      case 'dead': { const p = ctx.player(ev.pid); if (p) F.msg(`${p.name} is dead. They return at the next stratum.`, '#ff8a7a'); break; }
+      case 'rise': { const p = ctx.player(ev.pid); const name = { phoenix: 'Phoenix Feather', angel: 'Guardian Angel', wind: 'Second Wind' }[ev.k]; F.showBanner(name, p ? p.name + ' revived' : '', 'small', 2); F.burst(ev.x, ev.y - 10, 40, { color: '#ffd36b', sp: 150, life: 0.9, size: 3, add: true }); F.ring(ev.x, ev.y, 70, '#ffd36b', 0.6, 4); F.pop(ev.x, ev.y - 12, 50, '#ffd36b', 0.4); F.punch(0.8, 0.4); A.play('revive'); break; }
       case 'dash': A.play('dash', ev.pid === local ? 0.8 : 0.3); dust(ev.x, ev.y + 2, 'dust'); break;
       case 'skill': { A.play(SKILL_CUE[ev.k] || 'skill', ev.pid === local ? 1 : 0.5); const p = ctx.player(ev.pid); if (ev.pid === local && p && p.stats && p.stats.twBlood > 0) A.play('blood', 0.8); /* Bloodprice: each own cast pays health */ if (ev.k === 'charge') { dust(ev.x, ev.y + 2, 'dust', 2); F.chargeT[ev.pid] = F.time; } if (p && ev.k === 'volley') { F.ring(p.x, p.y, 30, '#e8d8b0', 0.25); SP('fx.spark.magic', p.x + Math.cos(ev.a || 0) * 20, p.y - 12 + Math.sin(ev.a || 0) * 20, { add: true, ramp: 'general' }); } if (ev.k === 'legion' || ev.k === 'sanctuary') F.ring(ev.x, ev.y, ev.k === 'sanctuary' ? 100 : 40, ev.k === 'sanctuary' ? '#ffe9a0' : '#7dffd9', 0.5, 4); if (ev.slot === 1) skill2Fx(ev, ev.pid === local, A); break; }
       case 'blink': // violet smoke rings at both ends, four fading silhouettes along the path, a few motes
@@ -786,14 +786,14 @@
         break;
       case 'blinkfx': F.burst(ev.x0, ev.y0 - 12, 14, { color: '#b78cff', sp: 60, life: 0.5, size: 3, add: true }); F.burst(ev.x1, ev.y1 - 12, 14, { color: '#b78cff', sp: 60, life: 0.5, size: 3, add: true }); F.pop(ev.x0, ev.y0 - 12, 20, '#b78cff', 0.2); F.pop(ev.x1, ev.y1 - 12, 20, '#b78cff', 0.2); break;
       case 'deflect': F.burst(ev.x, ev.y, 8, { color: '#ffffff', sp: 120, life: 0.25, size: 2, add: true }); F.burst(ev.x, ev.y, 4, { kind: 'streak', color: '#ffffff', sp: 200, life: 0.2, size: 1.4 }); F.pop(ev.x, ev.y, 10, '#ffffff', 0.12, true); A.play('deflect', 0.6); break;
-      case 'block': F.text(ev.x, ev.y - 30, { dodge: 'Dodge', mirror: 'Shrugged off', aegis: 'Blocked' }[ev.k] || 'Blocked', '#bfe9ff', 9, { pop: true }); A.play('deflect', 0.5); break;
+      case 'block': F.text(ev.x, ev.y - 30, { dodge: 'Dodge', mirror: 'Blocked', aegis: 'Blocked' }[ev.k] || 'Blocked', '#bfe9ff', 9, { pop: true }); A.play('deflect', 0.5); break;
       // Knight events (ric, catch, parry, deflect, ward, the boom of a shockwave) are drawn by src/client/cls-knight.js through ED.ClassFx.
       case 'spawned': F.burst(ev.x, ev.y, ev.el ? 18 : 8, { color: ev.el ? '#ffb13a' : '#b8a0ff', sp: 70, life: 0.4, size: 2.4, add: true }); F.pop(ev.x, ev.y - 8, ev.el ? 30 : 20, ev.el ? '#ffb13a' : '#b8a0ff', 0.25); A.play('spawn', 0.5); break;
       case 'raise': F.burst(ev.x, ev.y, 14, { color: '#7dffd9', sp: 60, vy: -40, life: 0.6, size: 2.4, add: true }); F.ring(ev.x, ev.y, 26, '#7dffd9', 0.4, 2); SP('fx.circle.spark', ev.x, ev.y - 2, { ramp: 'teal', add: true }); SP('fx.puff', ev.x, ev.y - 4, { ramp: 'dust' }); break;
       case 'bellrung': // the Drowned Bell rings to a hero's hit: rings of sound, its swing (render.js drawBell reads F.bellRing) and a deep cracked toll
         F.bellRing = 1.6; F.ring(ev.x, ev.y - 16, 90, '#7fe8c8', 0.9, 4); F.ring(ev.x, ev.y - 16, 50, '#e8c66b', 0.6, 2); F.burst(ev.x, ev.y - 18, 12, { color: '#bff8e8', sp: 70, vy: -30, life: 0.8, size: 2.2, add: true }); F.pop(ev.x, ev.y - 16, 30, '#bff8e8', 0.3); F.addShake(3); A.play('drownbell'); break;
       case 'secret': // a secret's run field turned true (pid: its hero, null: the whole party): a nameless toast and a chime for that hero (names show at the run's end)
-        if ((ev.pid === null || ev.pid === undefined || ev.pid === local) && ED.UI) { ED.UI.toast('A secret is uncovered', ED.Icons ? ED.Icons.url('eye', '#b8a6ff') : '', 4); A.play('secret'); }
+        if ((ev.pid === null || ev.pid === undefined || ev.pid === local) && ED.UI) { ED.UI.toast('Secret found', ED.Icons ? ED.Icons.url('eye', '#b8a6ff') : '', 4); A.play('secret'); }
         break;
       case 'platino': F.burst(ev.x, ev.y - 8, 18, { color: '#f4f8ff', sp: 90, vy: -50, life: 0.8, size: 2, add: true }); F.ring(ev.x, ev.y, 28, '#e8f0ff', 0.5, 2); F.pop(ev.x, ev.y - 8, 22, '#ffffff', 0.3); SP('fx.circle.spark', ev.x, ev.y - 4, { ramp: 'holy', add: true }); A.play('platino'); break; // the Platino caught: a platinum sparkle
       case 'puff': F.burst(ev.x, ev.y - 8, 10, { color: ev.c || '#cccccc', sp: 50, life: 0.5, size: 3, kind: 'smoke' }); SP('fx.puff', ev.x, ev.y - 6, { ramp: ev.c || 'smoke' }); break;
@@ -813,7 +813,7 @@
       case 'altar': A.play('hurt', 0.6); F.burst(ev.x, ev.y - 10, 30, { color: '#d43a5a', sp: 90, vy: -60, life: 0.8, size: 2.6, add: true }); F.pop(ev.x, ev.y - 16, 36, '#d43a5a', 0.3); break;
       case 'gamble': A.play('chest'); break;
       case 'descend': A.play('portal'); F.fade = 1.4; break;
-      case 'victory': A.play('victory'); F.showBanner('The Hollow King falls', 'The Deep is quiet, for now', 'victory', 4.5); break;
+      case 'victory': A.play('victory'); F.showBanner('Victory', 'Hollow King defeated', 'victory', 4.5); break;
       case 'defeat': A.play('defeat'); A.music('none'); break;
       case 'expose': F.text(ev.x, ev.y - 30, ev.boss ? 'WEAKENED' : 'EXPOSED', '#ff6a5a', ev.boss ? 13 : 9, { pop: true }); break;
       case 'wardbreak': F.ring(ev.x, ev.y - 10, 26, '#7fc8ff', 0.3, 3); F.burst(ev.x, ev.y - 10, 10, { kind: 'streak', color: '#bfe3ff', sp: 160, life: 0.3, size: 1.4 }); F.pop(ev.x, ev.y - 10, 20, '#7fc8ff', 0.18); A.play('deflect'); break;
@@ -894,8 +894,8 @@
         if (ev.item === 'campfire') F.burst(ev.x, y, 8, { kind: 'ember', color: '#ffb347', a: -1.57, spread: 2.4, sp: 50, life: 1.1, size: 2, drag: 1.4, lt: '#ff8a2a', ltr: 24 });
         if (mine) F.text(ev.x, y - 14, R().rewardLabel(ev.item), col, 10, { life: 1.3, max: 1.3 });
         A.play('claim', mine ? 0.9 : 0.4); break; }
-      case 'dark': F.msg('Dark room: harder fights, richer rewards', '#a070ff'); F.addShake(1); if (!calm()) F.flash = { color: '#0a0418', t: 0.5, a: 0.4 }; A.play('dark', 0.8); break;
-      case 'upgrade': { const col = R().rewardColor(ev.to); F.ring(ev.x, ev.y - 8, 44, col, 0.6, 4); F.burst(ev.x, ev.y - 14, 18, { color: col, sp: 80, vy: -50, life: 0.9, size: 2.4, add: true, drag: 1.3 }); F.msg('The dark pays more: ' + R().rewardLabel(ev.to), '#ffd36b'); break; }
+      case 'dark': F.msg('Dark room: harder foes, better rewards', '#a070ff'); F.addShake(1); if (!calm()) F.flash = { color: '#0a0418', t: 0.5, a: 0.4 }; A.play('dark', 0.8); break;
+      case 'upgrade': { const col = R().rewardColor(ev.to); F.ring(ev.x, ev.y - 8, 44, col, 0.6, 4); F.burst(ev.x, ev.y - 14, 18, { color: col, sp: 80, vy: -50, life: 0.9, size: 2.4, add: true, drag: 1.3 }); F.msg('Reward upgraded: ' + R().rewardLabel(ev.to), '#ffd36b'); break; }
       case 'ward': F.ring(ev.x, ev.y - 10, 24, '#7fc8ff', 0.4, 3); F.burst(ev.x, ev.y - 10, 8, { color: '#bfe3ff', sp: 50, vy: -30, life: 0.6, size: 2, add: true, drag: 1.5 }); F.pop(ev.x, ev.y - 12, 22, '#7fc8ff', 0.25); break;
       case 'detonate': { // a Capacitor-detonated foe { pid, x, y } (feet): a star pop, sparks and a bolt from above; the frame's detonations share one cue (F.update)
         if (!fin(ev.x) || !fin(ev.y)) break;

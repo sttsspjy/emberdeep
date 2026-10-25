@@ -547,7 +547,7 @@ const castSanct = (w, p, dx) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x +
     return { S, e, hits: partHits(log, 'judgment.leg') };
   };
   const leg = ED.SKILLS.judgment.parts.find(q => q.id === 'leg');
-  ok(leg.bossMul === BOSS && /bosses ×2/.test(leg.note) && /bosses take ×2 from the hammer/.test(ED.SKILLS.judgment.desc), 'skill data and text name the boss factor (Judgment x2)');
+  ok(leg.bossMul === BOSS && /bosses ×2/.test(leg.note) && /Bosses take ×2 from the hammer/.test(ED.SKILLS.judgment.desc), 'skill data and text name the boss factor (Judgment x2)');
   ok(!ED.SKILLS.judgment.parts.some(q => q.id !== 'leg' && q.bossMul) && !ED.SKILLS.sanctuary.parts.some(q => q.bossMul), 'Verdict, the echo and Sanctuary carry no boss factor');
   for (const [name, boons, want] of [['one hammer', { c_s2: 1 }, 2], ['Second Flight', { c_s2: 1, c_s2_a: 2 }, 8], ['Hammerstorm', { c_s2: 1, c_s2_a: 3 }, 10]]) {
     const a = legs(boons, false), b = legs(boons, true);

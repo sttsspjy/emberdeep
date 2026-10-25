@@ -30,7 +30,7 @@
   const baseWeapons = () => [].concat(...ED.CLASS_IDS.map(c => ED.CLASSES[c].weapons));
 
   S.defaultProfile = () => ({
-    v: 5, // profile era: below 3 a profile has a positional relics array; its Codex embers are refunded and news = 1 (the full "Deep has changed" notice, cleared once shown) when it has runs or a refund; era 3 (before the health rescale) and era 4 (before the v5 difficulty) with runs get news = 3 (only the newest changes)
+    v: 5, // profile era: below 3 a profile has a positional relics array; its Codex embers are refunded and news = 1 (the full "What changed" notice, cleared once shown) when it has runs or a refund; era 3 (before the health rescale) and era 4 (before the v5 difficulty) with runs get news = 3 (only the newest changes)
     news: 0,
     refunded: 0, // Codex embers refunded by that migration, printed by the notice
     name: 'Wanderer',
@@ -298,9 +298,9 @@
     const lines = [];
     const base = run.embers || { rooms: 0, elites: 0, bosses: 0, victory: 0 };
     if (base.rooms) lines.push(['Rooms cleared', base.rooms]);
-    if (base.elites) lines.push(['Elites slain', base.elites]);
+    if (base.elites) lines.push(['Elites killed', base.elites]);
     if (base.bosses) lines.push(['Bosses defeated', base.bosses]);
-    if (base.victory) lines.push(['Descent complete', base.victory]);
+    if (base.victory) lines.push(['Run won', base.victory]);
     const sub = base.rooms + base.elites + base.bosses + base.victory;
     let mult = 1;
     const att = S.rank(p, 'attunement');
@@ -311,7 +311,7 @@
     // A small floor so a bad run still pays, but only for a descent that actually fought (no abandon farming).
     const total = Math.max(S.runCounts(run) ? 5 : 0, Math.round(sub * mult));
     if (mult > 1.001) lines.push([`Bonus ×${mult.toFixed(2)}${run.party > 1 ? ' (party)' : ''}`, total - sub]);
-    if (total > sub && mult <= 1.001) lines.push(['Pity embers', total - sub]);
+    if (total > sub && mult <= 1.001) lines.push(['Minimum payout', total - sub]);
     const masteryXp = Math.round((run.roomsCleared || 0) * 8 + (run.elitesKilled || 0) * 5 + (run.bossCount || 0) * 40 + (run.stratum || 0) * 15 + (run.victory ? 150 : 0) + (run.level || 0) * 2);
     return { lines, total, masteryXp };
   };
@@ -360,7 +360,7 @@
       const fresh = ED.UPGRADES.filter(u => u.tier > Math.max(1, before.tiers) && u.tier <= p.stats.deepest);
       if (fresh.length) unlocks.push('New Hearth upgrades: ' + fresh.map(u => u.name).join(', '));
     }
-    if (p.pactMax > before.pactMax) unlocks.push(`Pact ${p.pactMax} can now be sworn`);
+    if (p.pactMax > before.pactMax) unlocks.push(`Pact ${p.pactMax} unlocked`);
     if (before.mastery < 10 && ml >= 10 && ci >= 0) wearRow(p, run.cls).aura = 'aura.gilded'; // Gilded is worn when first earned
     const secrets = S.checkSecrets(p, run, pl); // before this victory joins heroWins (Hollow Crown reads the hero's earlier wins)
     if (run.victory && ci >= 0) p.heroWins = (p.heroWins | 0) | (1 << ci);

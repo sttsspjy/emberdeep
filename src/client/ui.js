@@ -77,23 +77,23 @@
   const NEWEST = [
     '<b>Health:</b> health numbers are small and hits are hard. A Knight has 40 health and a hit from a foe costs 2 to 4; healing, shields and health from boons and relics are scaled to match.',
     '<b>Hearth:</b> upgrades and hero mastery give more (Vitality +2 health a rank, Might +3% damage a rank, mastery up to +8% damage and +4 health). Pacts 1–3 are gentle; Pacts 4 and 5 are the steep climb.',
-    '<b>Armory:</b> each hero has three weapon variants in the Hearth: the same power in another shape, bought with embers once the base weapon is unlocked. An owned variant is its own choice in the weapon picker.',
+    '<b>Armory:</b> each hero has three weapon variants in the Hearth: the same strength with a different attack, bought with embers once the base weapon is unlocked. An owned variant is its own choice in the weapon picker.',
     '<b>Melee:</b> blades swing from the hero\'s hand, from one side to the other, and rest lowered between strikes.',
   ];
   UI.maybeNews = () => {
     const A = ED.App, p = A.profile;
     if (!A.hasProfile || !p.news) return;
     $('news-body').innerHTML = (p.news === 3 ? NEWEST : NEWEST.concat([
-      '<b>Relics:</b> the Codex is gone. Every relic can drop from your first descent, and relics no longer belong to an element.',
+      '<b>Relics:</b> the Codex is gone. Every relic can drop from your first run, and relics no longer belong to an element.',
       `<b>Element relics are path boons now:</b> ${MOVED_RELICS.map(id => `${esc(ED.BOONS[id].name)} (${pathName(ED.BOONS[id].path, true)})`).join(', ')}. The other element relics are gone: their paths already hold the same effects as boons.`,
       p.refunded > 0 ? `<b>Refunded:</b> the ${p.refunded} embers you spent on the Codex are back in your purse.` : '',
-      '<b>Hearth:</b> every upgrade rank can be refunded for its full cost, and Reset all returns everything at once. Upgrades are small now, so your build choices decide a descent. The Reliquary became the Stash (starting gold), Head Start begins the descent with some experience and Deep Wick boosts the gold and experience of dark rooms.',
+      '<b>Hearth:</b> every upgrade rank can be refunded for its full cost, and Reset all returns everything at once. Upgrades are small now, so your build choices decide a run. The Reliquary became the Stash (starting gold), Head Start starts the run with some experience and Deep Wick boosts the gold and experience of dark rooms.',
       '<b>Builds:</b> generic health and armor boons are smaller; a path (its boons, keystone and weapon evolution) is what makes a build strong. Kill effects that spread, chain or explode work on fodder; refunds, shields, healing and stacks need the foes that matter.',
       '<b>Aim:</b> attacks and ground skills go toward the mouse cursor (right stick on a pad). The Auto-aim setting is gone.',
       `<b>Paths:</b> follow up to ${ED.MAX_ELEMENTS} of ${ED.ELEMENT_IDS.map(k => pathName(k, true)).join(', ')}, or take the ${pathName('general', true)} path alone as a Generalist. Blood and Spirit are gone.`,
       '<b>No life steal:</b> hits do not heal you any more. Shields take their place.',
       '<b>Knight:</b> Shield Throw replaces Bulwark.',
-      '<b>Map:</b> each stratum is a map of branching paths to the boss. Every door shows the next room and its reward; doors close behind you. Dark rooms on the map: harder fights, richer rewards.',
+      '<b>Map:</b> each stratum is a map of branching paths to the boss. Every door shows the next room and its reward; doors close behind you. Dark rooms: harder foes, better rewards.',
       '<b>Hordes:</b> fight rooms are about twice as big and scroll with you, and packs of weak fodder pour in beside the foes that matter.',
       '<b>Dash:</b> dashing uses charges that refill one at a time; Light Step adds charges.',
       '<b>Late power:</b> your route fork gains rank 2 at the stratum II boss and transforms at rank 3 at the stratum III boss, skill forks included.',
@@ -106,10 +106,10 @@
 
   // ---------------- sections ----------------
   UI.tab = 'descend';
-  const SECTION = { descend: 'Descend', upgrades: 'Hearth', wardrobe: 'Hearth', chronicle: 'Hearth', heroes: 'Heroes' };
+  const SECTION = { descend: 'Play', upgrades: 'Hearth', wardrobe: 'Hearth', chronicle: 'Hearth', heroes: 'Heroes' };
   UI.setTab = (t) => {
     UI.tab = t;
-    $('sec-title').textContent = SECTION[t] || 'Descend';
+    $('sec-title').textContent = SECTION[t] || 'Play';
     $('hearth-tabs').hidden = SECTION[t] !== 'Hearth';
     for (const b of document.querySelectorAll('#hearth-tabs .tab')) b.classList.toggle('on', b.dataset.tab === t);
     for (const p of document.querySelectorAll('.pane')) p.hidden = p.dataset.pane !== t;
@@ -248,7 +248,7 @@
   function pactText(v) {
     const lines = [];
     for (let i = 1; i <= v; i++) lines.push(ED.PACTS[i].desc);
-    return v ? lines.join(' ') + ` Embers +${Math.round(ED.PACT_EMBER_BONUS * v * 100)}%.` : 'No pact sworn. The Deep as it is.';
+    return v ? lines.join(' ') + ` Embers +${Math.round(ED.PACT_EMBER_BONUS * v * 100)}%.` : 'No pact: normal difficulty.';
   }
 
   // The single most useful next goal; the first two descents also get the two rules that shape a run.
@@ -260,15 +260,15 @@
       const gen = ED.CLASS_IDS.filter(c => !ED.CLASSES[c].element).map(c => ED.CLASSES[c].name); // heroes without a class element can go Generalist
       lines.push('<b>Aim:</b> aim with the mouse; skills go to the cursor. At level 3 you choose a class route.');
       lines.push(`<b>Paths:</b> follow up to ${ED.MAX_ELEMENTS} of ${ED.ELEMENT_IDS.map(k => pathName(k, true)).join(', ')}, or, as ${gen.slice(0, -1).join(', ')} or ${gen[gen.length - 1]}, take the ${pathName('general', true)} path alone as a Generalist.`);
-      lines.push('<b>Dark rooms:</b> a door marked with a violet moon leads to a dark room: foes hit harder and an extra elite joins, but the reward is a step richer and gold and experience drop in larger piles.');
+      lines.push('<b>Dark rooms:</b> a door marked with a violet moon leads to a dark room: foes hit harder and an extra elite joins, but the reward is one step better and foes drop more gold and experience.');
     }
-    if (p.stats.runs === 0) lines.push('<b>First goal:</b> reach the Bone Warden at the end of the Ossuary. Every descent pays embers, win or lose.');
+    if (p.stats.runs === 0) lines.push('<b>First goal:</b> reach the Bone Warden at the end of the Ossuary. Every run pays embers, win or lose.');
     else if (next) lines.push(`<b>Next hero:</b> ${ED.CLASSES[next].name} (${esc(ED.CLASSES[next].unlock.text)}).`);
     else if (tierNext) lines.push(`<b>Reach stratum ${U.roman(tierNext.tier)}</b> to reveal new Hearth upgrades.`);
-    else if (!p.stats.wins) lines.push('<b>Next goal:</b> defeat the Hollow King to complete a descent and unlock Pacts.');
-    else if (p.pactMax < 10) lines.push(`<b>Pacts:</b> complete a descent under Pact ${p.pactMax} to unlock Pact ${p.pactMax + 1}.`);
-    else if (ED.CLASS_IDS.some(c => mystery(p, c))) lines.push('<b>Every pact is yours.</b> The Deep still keeps a secret or two.');
-    else lines.push('<b>Every hero and pact is yours.</b> The Deep still has deeds to earn.');
+    else if (!p.stats.wins) lines.push('<b>Next goal:</b> defeat the Hollow King to win a run and unlock Pacts.');
+    else if (p.pactMax < 10) lines.push(`<b>Pacts:</b> win a run at Pact ${p.pactMax} to unlock Pact ${p.pactMax + 1}.`);
+    else if (ED.CLASS_IDS.some(c => mystery(p, c))) lines.push('<b>All pacts unlocked.</b> A hero is still hidden.');
+    else lines.push('<b>All heroes and pacts unlocked.</b> See the Records tab for deeds left to earn.');
     for (const c of ED.CLASS_IDS) if (mystery(p, c) && p.stats.runs >= 2) lines.push(`<b>???:</b> ${esc(ED.CLASSES[c].unlock.hint)}`); // the riddle hero's hint (its roster tile only says Locked), once the first two descents' rules are gone
     return lines.map(l => '<p>' + l + '</p>').join('');
   }
@@ -336,14 +336,14 @@
       const list = ED.UPGRADES.filter(u => u.tier === tier);
       const open = tier <= 1 || p.stats.deepest >= tier;
       const h = document.createElement('div'); h.className = 'tier-head';
-      h.textContent = open ? (tier === 1 ? 'Foundations' : `Revealed at stratum ${U.roman(tier)}`) : `Reach stratum ${U.roman(tier)} to reveal`;
+      h.textContent = open ? (tier === 1 ? 'Basic upgrades' : `Stratum ${U.roman(tier)} upgrades`) : `Reach stratum ${U.roman(tier)} to reveal`;
       grid.appendChild(h);
       for (const u of list) {
         const i = ED.UPGRADE_IDX[u.id], r = p.up[i], max = u.costs.length, key = 'u:' + u.id, hot = fresh(key);
         const card = document.createElement('div');
         card.className = 'up-card' + (open ? '' : ' locked') + (r >= max ? ' maxed' : '') + (hot ? ' burst' : '');
         const pips = Array.from({ length: max }, (_, k) => `<span class="pip${k < r ? ' on' : ''}${hot && k === r - 1 ? ' new' : ''}"></span>`).join('');
-        card.innerHTML = `${open ? '<span class="up-ember" aria-hidden="true"></span>' : ''}<img alt="" src="${ED.Icons.url(u.icon, '#ff9a4a')}"><div><div class="un">${u.name}${r >= max ? ' <span class="badge-max">Max</span>' : ''}</div><div class="ud">${open ? (r ? esc(u.desc(r)) : 'Not learned yet') : '???'}</div>${open && r < max ? `<div class="un2">Next: ${esc(u.step)}</div>` : ''}<div class="pips">${pips}</div></div>`;
+        card.innerHTML = `${open ? '<span class="up-ember" aria-hidden="true"></span>' : ''}<img alt="" src="${ED.Icons.url(u.icon, '#ff9a4a')}"><div><div class="un">${u.name}${r >= max ? ' <span class="badge-max">Max</span>' : ''}</div><div class="ud">${open ? (r ? esc(u.desc(r)) : 'Not bought yet') : '???'}</div>${open && r < max ? `<div class="un2">Next: ${esc(u.step)}</div>` : ''}<div class="pips">${pips}</div></div>`;
         if (r > 0 || (open && r < max)) {
           const back = r > 0 ? refundButton(u.costs[r - 1], `Refund ${u.name} rank ${r}: +${u.costs[r - 1]} embers`, () => { if (S.refundUpgrade(p, u.id)) ED.App.afterMetaChange(); }) : null;
           const cost = u.costs[r];
@@ -419,7 +419,7 @@
     detail.querySelector('#hv-port').appendChild(portrait(cls, 96, 0, un ? A.weaponFor(cls) : undefined));
     if (un) {
       const b = document.createElement('button'); b.type = 'button'; b.className = 'btn btn-lg hv-pick' + (A.sel.cls === cls ? '' : ' btn-primary');
-      b.textContent = A.sel.cls === cls ? 'Your hero for the next descent' : `Take ${c.name}`; b.disabled = A.sel.cls === cls;
+      b.textContent = A.sel.cls === cls ? 'Selected for the next run' : `Select ${c.name}`; b.disabled = A.sel.cls === cls;
       b.onclick = () => { A.selectClass(cls); if (A.state === 'lobby') A.lobbyPick(); renderHeroes(container); };
       detail.appendChild(b);
     }
@@ -429,13 +429,13 @@
   // Optional preview hook (the cosmetic renderer sets it): UI.wardrobePreview(host, cls, wear, camp) draws hero `cls` wearing `wear` ({ skin, aura, hat, pet, trail, death, title, tints })
   // into the element `host` (emptied first); `camp` is the worn Hearth item. Called on every render and with the hovered or focused item swapped in. Without it the host shows the plain portrait.
   UI.wardrobePreview = null;
-  const SLOT_INFO = { skin: ['Skin', 'cloak'], tint: ['Weapon tint', 'gem'], aura: ['Aura', 'sun'], hat: ['Hat', 'crown'], pet: ['Companion', 'feather'], trail: ['Trail', 'boot'], death: ['Last breath', 'skull'], title: ['Title', 'scroll'], camp: ['The Hearth', 'campfire'] };
+  const SLOT_INFO = { skin: ['Skin', 'cloak'], tint: ['Weapon tint', 'gem'], aura: ['Aura', 'sun'], hat: ['Hat', 'crown'], pet: ['Pet', 'feather'], trail: ['Trail', 'boot'], death: ['Death effect', 'skull'], title: ['Title', 'scroll'], camp: ['Hearth', 'campfire'] };
   const cosName = (c, p, cls) => (c.gate.secret && !ED.cosOwned(p, c.id, cls) ? '???' : c.name); // a secret's reward stays unnamed until earned
   // The reward text of a secret: "<item name>" (a reward whose item does not exist yet reads "a new look").
   UI.secretReward = (s) => (ED.COSMETIC[s.reward] ? ED.COSMETIC[s.reward].name : 'a new look');
-  // Out of a run: "Secret uncovered" toast; the open Hearth section refreshes.
+  // Out of a run: "Secret found" toast; the open Hearth section refreshes.
   UI.secretToast = (s) => {
-    UI.toast(`Secret uncovered: <b>${esc(s.name)}</b> (${esc(UI.secretReward(s))})`, ED.Icons.url(s.icon, '#b8a6ff'), 5);
+    UI.toast(`Secret found: <b>${esc(s.name)}</b> (${esc(UI.secretReward(s))})`, ED.Icons.url(s.icon, '#b8a6ff'), 5);
     if (ED.App.state === 'hearth') UI.renderHearth(); else if (ED.App.state === 'lobby') UI.renderPartyHearth();
   };
 
@@ -523,13 +523,13 @@
       + (left ? `<div class="deed secret"><img alt="" src="${ED.Icons.url('eye', '#8a7a6a')}"><div><div class="dn">???</div><div class="dd">${left} secret${left === 1 ? '' : 's'} remain${left === 1 ? 's' : ''}</div></div><div class="dr"></div></div>` : '');
     const st = p.stats;
     $('records').innerHTML = [
-      ['Descents', st.runs], ['Victories', st.wins], ['Deepest stratum', st.deepest ? U.roman(st.deepest) : '—'], ['Foes slain', st.kills],
-      ['Bosses slain', st.bossKills], ['Fastest victory', st.bestTime ? U.fmtTime(st.bestTime) : '—'], ['Highest pact won', p.pactWin >= 0 ? p.pactWin : '—'], ['Lifetime embers', p.lifetime],
+      ['Runs', st.runs], ['Wins', st.wins], ['Deepest stratum', st.deepest ? U.roman(st.deepest) : '—'], ['Foes killed', st.kills],
+      ['Bosses killed', st.bossKills], ['Fastest win', st.bestTime ? U.fmtTime(st.bestTime) : '—'], ['Highest pact won', p.pactWin >= 0 ? p.pactWin : '—'], ['Lifetime embers', p.lifetime],
     ].map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
     const sl = $('strata-list'); sl.innerHTML = '';
     ED.BIOMES.forEach((b, i) => {
       const seen = st.deepest > i, slain = !!(p.bosses & (1 << i));
-      sl.insertAdjacentHTML('beforeend', `<div class="stratum${seen ? '' : ' unseen'}"><i style="--sa:${b.pal.accent};--sb:${b.pal.floorA}"></i><div><b>${U.roman(i + 1)}. ${seen ? b.name : '???'}</b><small>${seen ? esc(b.blurb) + (slain ? ` Boss defeated: ${esc(ED.ENEMIES[b.boss] ? ED.ENEMIES[b.boss].name : '')}.` : '') : 'Undiscovered'}</small></div></div>`);
+      sl.insertAdjacentHTML('beforeend', `<div class="stratum${seen ? '' : ' unseen'}"><i style="--sa:${b.pal.accent};--sb:${b.pal.floorA}"></i><div><b>${U.roman(i + 1)}. ${seen ? b.name : '???'}</b><small>${seen ? esc(b.blurb) + (slain ? ` Boss defeated: ${esc(ED.ENEMIES[b.boss] ? ED.ENEMIES[b.boss].name : '')}.` : '') : 'Not reached yet'}</small></div></div>`);
     });
   }
 
@@ -562,7 +562,7 @@
     // pact: the host sets it; friends see what they are agreeing to
     const la = $('lobby-asc');
     la.hidden = isHost ? A.profile.pactMax <= 0 : !(state.pact > 0);
-    $('lobby-asc-lbl').textContent = isHost ? 'Pact of the Deep' : 'Pact of the Deep (set by the host)';
+    $('lobby-asc-lbl').textContent = isHost ? 'Pact' : 'Pact (set by the host)';
     $('lobby-asc-val').textContent = state.pact;
     pactSteps($('lobby-asc-steps'), state.pact | 0, isHost ? A.profile.pactMax : (state.pact | 0), isHost ? (i) => A.setLobbyPact(i) : null);
     $('lobby-asc-desc').textContent = pactText(state.pact | 0);
@@ -571,7 +571,7 @@
     const go = $('btn-lobby-go');
     if (isHost) {
       const allReady = state.members.every(m => m.ready || m.isHost);
-      go.textContent = state.members.length < 2 ? 'Begin (solo party)' : allReady ? 'Begin the descent' : 'Waiting for ready…';
+      go.textContent = state.members.length < 2 ? 'Start (solo)' : allReady ? 'Start run' : 'Waiting for players…';
       go.disabled = !allReady;
     } else {
       go.textContent = me && me.ready ? 'Not ready' : 'Ready';
@@ -599,7 +599,7 @@
   // Cards ignore input for a moment after they appear, so a key or click meant for combat never picks one.
   let boonFocus = 0, boonOffer = null, boonLock = 0;
   const BOON_LOCK_MS = 700;
-  const OFFER_HEAD = { start: 'Choose your first path', level: 'Choose a boon', epic: 'An epic boon', forge: 'Temper — rank up a boon', twist: 'Choose a Twist' };
+  const OFFER_HEAD = { start: 'Choose your first path', level: 'Choose a boon', epic: 'Choose an epic boon', forge: 'Forge: rank up a boon', twist: 'Choose a Twist' };
 
   // [header, subtitle, path colour key] for an offer message { src, forge }.
   function offerHead(offer, me) {
@@ -616,10 +616,10 @@
     }
     if (src === 'start') { // only heroes without a class element are offered the General gate
       const cl = me && ED.CLASSES[me.cls];
-      return [OFFER_HEAD.start, cl && cl.element ? `Paths gate your boons: pick up to ${ED.MAX_ELEMENTS} element paths` : `Paths gate your boons: ${ED.MAX_ELEMENTS} element paths, or Generalist`, null];
+      return [OFFER_HEAD.start, cl && cl.element ? `Your paths decide your boons: pick up to ${ED.MAX_ELEMENTS} element paths` : `Your paths decide your boons: up to ${ED.MAX_ELEMENTS} element paths, or Generalist`, null];
     }
     if (src === 'forge') return [OFFER_HEAD.forge, 'The boon you pick gains one rank.', null];
-    if (src === 'twist') return [OFFER_HEAD.twist, `A new rule for the rest of the run, and its price (at most ${ED.TWIST_MAX} per run)`, null];
+    if (src === 'twist') return [OFFER_HEAD.twist, `A new rule for the rest of the run, with a cost (at most ${ED.TWIST_MAX} per run)`, null];
     return [OFFER_HEAD[src] || OFFER_HEAD.level, '', null];
   }
 
@@ -853,18 +853,18 @@
     const A = ED.App, p = A.profile;
     const win = sum.victory;
     const banner = $('res-banner');
-    banner.textContent = win ? 'Victory' : sum.abandoned ? 'Retreat' : note ? 'Disconnected' : 'Fallen';
+    banner.textContent = win ? 'Victory' : sum.abandoned ? 'Abandoned' : note ? 'Disconnected' : 'Defeat';
     banner.classList.toggle('win', !!win); banner.parentNode.classList.toggle('win', !!win); // the flag frame around the word
     const biome = ED.biomeFor(sum.stratum || 1);
-    const tail = res.rewards.total > 0 ? 'The embers you carried still count.' : 'Clear at least one room for a descent to pay out.';
-    $('res-sub').textContent = note || (win ? 'The Hollow King is broken. The Deep remembers your name.'
-      : sum.abandoned ? `${sum.party > 1 ? 'Your party' : 'You'} turned back in ${biome.name}. ${tail}` : `You fell in ${biome.name}. ${tail}`);
+    const tail = res.rewards.total > 0 ? 'You keep the embers you earned.' : 'A run pays embers only after you clear a room.';
+    $('res-sub').textContent = note || (win ? 'You defeated the Hollow King and won the run.'
+      : sum.abandoned ? `${sum.party > 1 ? 'Your party' : 'You'} left the run in ${biome.name}. ${tail}` : `You died in ${biome.name}. ${tail}`);
     // world-summary fields below may be missing from a client's partial summary
     const total = sum.roomsTotal | 0, seen = Math.min(total, sum.roomsVisited | 0);
     $('res-stats').innerHTML = [
       ['Deepest stratum', `${U.roman(sum.stratum || 1)} · ${biome.short}`], ['Time', U.fmtTime(sum.time || 0)], ['Level reached', sum.level || 1],
       ['Rooms cleared', sum.roomsCleared || 0], total > 0 ? ['Rooms explored', `${seen} / ${total} (${Math.round(seen / total * 100)}%)`] : null,
-      ['Foes slain', sum.kills || 0], ['Bosses slain', sum.bossCount || 0], ['Party', (sum.party || 1) + (sum.party > 1 ? ' heroes' : ' hero')],
+      ['Foes killed', sum.kills || 0], ['Bosses killed', sum.bossCount || 0], ['Party', (sum.party || 1) + (sum.party > 1 ? ' heroes' : ' hero')],
       sum.pact ? ['Pact', sum.pact] : null,
     ].filter(Boolean).map(([a, b]) => `<dt>${a}</dt><dd>${b}</dd>`).join('');
     const evo = sum.myEvo && ED.PATHS[sum.myEvo.path] ? sum.myEvo : null, evoEl = $('res-evo');
@@ -881,7 +881,7 @@
       <div class="prog-line">${ED.CLASSES[sum.cls].name} mastery ${ml} <small>(+${res.rewards.masteryXp} xp)</small><div class="bar"><i style="width:${Math.round(frac * 100)}%"></i></div></div>
       <div class="prog-line">Embers now: <b>${p.embers}</b></div>
       ${res.deeds.map(d => `<div class="prog-line">Deed: <b>${esc(d.name)}</b> +${d.reward} embers</div>`).join('')}
-      ${(res.secrets || []).map(s => `<div class="prog-line secret">Secret uncovered: <b>${esc(s.name)}</b> — ${esc(UI.secretReward(s))}</div>`).join('')}`;
+      ${(res.secrets || []).map(s => `<div class="prog-line secret">Secret found: <b>${esc(s.name)}</b> — ${esc(UI.secretReward(s))}</div>`).join('')}`;
     const ul = $('res-unlocks'); ul.innerHTML = '';
     for (const u of res.unlocks) ul.insertAdjacentHTML('beforeend', `<span class="unlock-pill">${esc(u)}</span>`);
     $('res-code').textContent = S.encode(p);
@@ -1015,7 +1015,7 @@
       const msg = $('load-msg');
       try {
         const prof = S.decode($('inp-code').value);
-        UI.confirm('Load this save?', `This replaces the profile in this browser with "${prof.name}" (${prof.embers} embers, ${prof.stats.runs} descents).`, 'Load save', () => {
+        UI.confirm('Load this save?', `This replaces the profile in this browser with "${prof.name}" (${prof.embers} embers, ${prof.stats.runs} runs).`, 'Load save', () => {
           A.replaceProfile(prof); msg.textContent = 'Save loaded. Welcome back, ' + prof.name + '.'; msg.className = 'msg ok'; $('inp-code').value = ''; renderProfile();
         });
       } catch (e) { msg.textContent = e.message; msg.className = 'msg err'; }
@@ -1036,7 +1036,7 @@
     // pause & settings
     $('btn-resume').onclick = () => A.togglePause(false);
     $('btn-pause-settings').onclick = () => UI.openSettings();
-    $('btn-abandon').onclick = () => UI.confirm('Abandon this descent?', 'You keep the embers earned so far.', 'Abandon', () => A.abandonRun());
+    $('btn-abandon').onclick = () => UI.confirm('Abandon this run?', 'You keep the embers earned so far.', 'Abandon', () => A.abandonRun());
     for (const b of document.querySelectorAll('#set-tabs .tab')) b.onclick = () => { ED.Audio.play('click'); UI.setSettingsTab(b.dataset.stab); };
     const setChange = (e) => {
       const s = A.settings;

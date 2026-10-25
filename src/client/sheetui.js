@@ -175,7 +175,7 @@
     let boons = B.groups.length ? '' : '<div class="sh-empty">No boons yet. The first pick comes from the start offer.</div>';
     for (const g of B.groups) {
       const P = g.path ? ED.PATHS[g.path] : null, gc = g.group === 'asc' || g.group === 'route' ? 'var(--gold)' : g.group === 'twist' ? ED.RARITY.t.color : P ? P.color : '';
-      const title = g.group === 'duo' ? 'Duo' : g.group === 'route' ? 'Class route' : g.group === 'twist' ? `Twists <small>rules with a price (${g.items.length}/${ED.TWIST_MAX})</small>` : g.group === 'asc' ? 'Ascended <small>multiplies the bonuses you hold</small>' : P ? `${P.name} <small>affinity <b>${ED.pathAffinity(p.boons || {}, g.path)}</b></small>` : 'Open <small>any hero, no path</small>';
+      const title = g.group === 'duo' ? 'Duo' : g.group === 'route' ? 'Class route' : g.group === 'twist' ? `Twists <small>rules with a cost (${g.items.length}/${ED.TWIST_MAX})</small>` : g.group === 'asc' ? 'Ascended <small>multiplies the bonuses you hold</small>' : P ? `${P.name} <small>affinity <b>${ED.pathAffinity(p.boons || {}, g.path)}</b></small>` : 'Open <small>any hero, no path</small>';
       boons += `<div class="sh-bg"><div class="sh-gh"${gc ? ` style="--pc:${gc}"` : ''}>${P ? img(pathIco(g.path)) : ''}${title}</div>${g.items.map(boonRow).join('')}</div>`;
     }
     let status = '';
@@ -301,7 +301,7 @@
   // Stratum card (map row, the rooms behind the exit doors), dark-room rules (with the dark rooms still reachable), party.
   function renderMapSide(m) {
     const K = m.dark, biome = ED.biomeFor(m.ctx.stratum), v = ED.Game.s.view, fl = v.floor, cur = fl && fl.rooms[v.roomId];
-    const rows = fl ? fl.rows | 0 : 0, row = cur ? cur.row | 0 : 0, where = !cur ? '' : cur.type === 'boss' ? 'Boss room' : cur.type === 'start' ? 'Camp' : `Room ${row} of ${rows}`;
+    const rows = fl ? fl.rows | 0 : 0, row = cur ? cur.row | 0 : 0, where = !cur ? '' : cur.type === 'boss' ? 'Boss room' : cur.type === 'start' ? 'Start' : `Room ${row} of ${rows}`;
     let h = `<div class="sh-stat sh-f" data-k="m:strat"><div class="sh-sl"><span class="sh-l">${U.roman(m.ctx.stratum)} ${esc(biome.name)}</span><span class="sh-v">${live('row', where)}</span></div><div class="sh-sub">${esc(biome.blurb || '')}</div>`;
     const exits = cur && cur.exits ? cur.exits : [];
     if (exits.length) h += `<div class="sh-sub">${v.locked ? 'Doors open when the room is clear. ' : ''}Doors, left to right:</div>` + exits.map(id => `<div class="sh-cond">${esc(ED.Render.roomName(fl.rooms[id]))}</div>`).join('');
@@ -320,7 +320,7 @@
     m.partyRows = ctx.heroes.map(q => {
       const f = U.clamp(q.hp / Math.max(1, q.maxHp), 0, 1);
       return `<div class="sh-party${q.pid === p.pid ? ' me' : ''}${q.dead ? ' dead' : ''}" data-pid="${esc(q.pid)}"><span class="sh-pnm" style="color:${ED.PLAYER_COLORS[q.slot] || '#fff'}">${esc(q.name)} <span class="mut">${esc(ED.CLASSES[q.cls].name)}</span></span>`
-        + `<b>${q.dead ? 'fallen' : q.downed ? 'down' : q.hp + ' / ' + q.maxHp}</b><span class="sh-meter hp${f < 0.3 ? ' low' : ''}" style="--f:${q.dead ? 0 : f.toFixed(3)}"><i></i></span></div>`;
+        + `<b>${q.dead ? 'dead' : q.downed ? 'down' : q.hp + ' / ' + q.maxHp}</b><span class="sh-meter hp${f < 0.3 ? ' low' : ''}" style="--f:${q.dead ? 0 : f.toFixed(3)}"><i></i></span></div>`;
     }).join('');
     return m;
   }

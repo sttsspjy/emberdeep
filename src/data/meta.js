@@ -10,17 +10,17 @@
     { id: 'might', name: 'Might', icon: 'sword', tier: 1, desc: r => `+${3 * r}% damage`, mods: { dmg: 0.03 }, step: '+3% damage', costs: [12, 25, 45, 70, 100] },
     { id: 'fortune', name: 'Fortune', icon: 'coin', tier: 1, desc: r => `+${2 * r}% gold`, mods: { gold: 0.02 }, step: '+2% gold', costs: [15, 30, 50] },
     { id: 'fleet', name: 'Fleetness', icon: 'boot', tier: 1, desc: r => `+${r}% move speed`, mods: { spd: 0.01 }, step: '+1% move speed', costs: [10, 25, 45] },
-    { id: 'provisions', name: 'Provisions', icon: 'potion', tier: 1, desc: r => `Heal ${2 * r}% at each stratum`, heal: 0.02, step: 'Heal 2% at each stratum', costs: [25, 55] },
+    { id: 'provisions', name: 'Provisions', icon: 'potion', tier: 1, desc: r => `Heal ${2 * r}% at the start of each stratum`, heal: 0.02, step: 'Heal 2% more at the start of each stratum', costs: [25, 55] },
     { id: 'bulwark', name: 'Bulwark', icon: 'shield', tier: 2, desc: r => `+${3 * r} armor`, mods: { armor: 3 }, step: '+3 armor', costs: [15, 30, 55] },
     { id: 'precision', name: 'Precision', icon: 'eye', tier: 2, desc: r => `+${2 * r}% critical chance`, mods: { crit: 0.02 }, step: '+2% critical chance', costs: [15, 30, 55] },
     { id: 'wisdom', name: 'Wisdom', icon: 'scroll', tier: 2, desc: r => `+${2 * r}% experience`, mods: { xp: 0.02 }, step: '+2% experience', costs: [15, 30, 55] },
-    { id: 'insight', name: 'Insight', icon: 'clover', tier: 2, rerolls: [1, 2, 3], desc: r => `${r} boon reroll${r === 1 ? '' : 's'} per descent`, step: '+1 boon reroll per descent', costs: [25, 50, 90] },
-    { id: 'headstart', name: 'Head Start', icon: 'star', tier: 2, xp: 15, desc: r => `Begin the descent with ${15 * r} experience`, step: 'Begin with 15 more experience', costs: [15, 35] },
+    { id: 'insight', name: 'Insight', icon: 'clover', tier: 2, rerolls: [1, 2, 3], desc: r => `${r} boon reroll${r === 1 ? '' : 's'} per run`, step: '+1 boon reroll per run', costs: [25, 50, 90] },
+    { id: 'headstart', name: 'Head Start', icon: 'star', tier: 2, xp: 15, desc: r => `Start each run with ${15 * r} experience`, step: 'Start with 15 more experience', costs: [15, 35] },
     { id: 'alacrity', name: 'Alacrity', icon: 'hourglass', tier: 3, desc: r => `Skills recharge ${3 * r}% faster`, mods: { cdr: 0.03 }, step: 'Skills recharge 3% faster', costs: [20, 40, 65] },
-    { id: 'stash', name: 'Stash', icon: 'chest', tier: 3, gold: 5, desc: r => `Begin with ${5 * r} gold`, step: 'Begin with 5 more gold', costs: [20, 45] },
+    { id: 'stash', name: 'Stash', icon: 'chest', tier: 3, gold: 5, desc: r => `Start each run with ${5 * r} gold`, step: 'Start with 5 more gold', costs: [20, 45] },
     { id: 'attunement', name: 'Ember Attunement', icon: 'ember', tier: 3, desc: r => `+${10 * r}% embers earned`, step: '+10% embers earned', costs: [80, 160, 255, 385] },
     { id: 'favor', name: "Merchant's Favor", icon: 'scroll', tier: 3, desc: r => `Shops are ${4 * r}% cheaper`, discount: 0.04, step: 'Shops are 4% cheaper', costs: [30, 65] },
-    { id: 'secondwind', name: 'Second Wind', icon: 'feather', tier: 4, pct: [0.05, 0.1], desc: r => (r ? `Once per descent, outside boss fights, revive at ${r >= 2 ? 10 : 5}% health` : 'Once per descent, outside boss fights, revive'), step: 'Revive once per descent outside boss fights (rank 2: 10% health)', costs: [90, 200] },
+    { id: 'secondwind', name: 'Second Wind', icon: 'feather', tier: 4, pct: [0.05, 0.1], desc: r => (r ? `Once per run, outside boss fights, revive at ${r >= 2 ? 10 : 5}% health` : 'Once per run, outside boss fights, revive'), step: 'Revive once per run outside boss fights (rank 2: 10% health)', costs: [90, 200] },
     { id: 'deepwick', name: 'Deep Wick', icon: 'skull', tier: 1, loot: 0.1, desc: r => `+${10 * r}% gold and experience from dark rooms`, step: '+10% gold and experience from dark rooms', costs: [40, 90, 160] },
   ];
   ED.UPGRADE_IDX = ED.U.indexer(ED.UPGRADES.map(u => u.id));
@@ -66,7 +66,7 @@
   };
 
   ED.PACTS = [
-    { name: 'No Pact', desc: 'The Deep as it is.' },
+    { name: 'No Pact', desc: 'Normal difficulty.' },
     { name: 'Thicker Hides', desc: 'Foes have +10% health.', foeHp: 1.1 },
     { name: 'Sharper Fangs', desc: 'Foes deal +15% damage.', foeDmg: 1.15 },
     { name: 'Champions', desc: 'Elite foes appear far more often.', eliteCh: 0.4, eliteExtra: 0.3 },
@@ -74,9 +74,9 @@
     { name: 'Tyrants', desc: 'Bosses have +20% health and attack faster.', bossHp: 1.2, bossPause: 0.8 },
     { name: 'Frenzy', desc: 'Foes move 15% faster.' },
     { name: 'Greed', desc: 'Shop prices are 40% higher.' },
-    { name: 'Storm of Shot', desc: 'Enemy shots fly 20% faster and foes hit 20% harder.', foeDmg: 1.2 },
+    { name: 'Fast Shots', desc: 'Foe shots fly 20% faster and foes deal +20% damage.', foeDmg: 1.2 },
     { name: 'Frailty', desc: 'Heroes have 25% less max health.', mods: { hpMul: -0.25 } },
-    { name: 'The Deep Hungers', desc: 'Every combat room has an extra wave and foes have +20% health.', foeHp: 1.2 },
+    { name: 'Extra Waves', desc: 'Every combat room has an extra wave and foes have +20% health.', foeHp: 1.2 },
   ];
   ED.PACT_EMBER_BONUS = 0.08; // per pact level
   // Pact stat effects (pacts stack): mods are added to the stat block, heroMul factors multiply a derived stat (ED.Stats.compute / sources); foeHp, foeDmg, bossHp, bossPause multiply foe numbers (ED.pactMul);
@@ -97,40 +97,40 @@
     'Skills recharge 1% faster',
     'Third weapon',
     '+3% critical chance',
-    '+1 boon reroll per descent',
+    '+1 boon reroll per run',
     '+8% damage',
-    '+4 max health; Gilded: a golden aura',
+    '+4 max health and the Gilded aura (golden glow)',
   ];
   ED.masteryLevel = (xp) => { let l = 1; for (let i = 0; i < ED.MASTERY_XP.length; i++) if (xp >= ED.MASTERY_XP[i]) l = i + 1; return l; };
 
   // Deeds: one-time achievements with ember rewards. check(profile, run?) runs at run end and after purchases.
-  const bossDeed = (id, name, i, reward) => ({ id, name, desc: `Defeat ${ED.ENEMIES[ED.BIOMES[i].boss].name}`, icon: 'skull', reward, check: p => !!(p.bosses & (1 << i)) });
+  const bossDeed = (id, name, i, reward) => ({ id, name, desc: `Defeat the ${ED.ENEMIES[ED.BIOMES[i].boss].name}`, icon: 'skull', reward, check: p => !!(p.bosses & (1 << i)) });
   ED.DEEDS = [
-    { id: 'firstblood', name: 'First Blood', desc: 'Slay 50 foes', icon: 'sword', reward: 15, check: p => p.stats.kills >= 50 },
+    { id: 'firstblood', name: 'First Blood', desc: 'Kill 50 foes', icon: 'sword', reward: 15, check: p => p.stats.kills >= 50 },
     bossDeed('gravedigger', 'Gravedigger', 0, 20),
     bossDeed('weedkiller', 'Weedkiller', 1, 30),
     bossDeed('thaw', 'Low Tide', 2, 40), // ids thaw / quenched / lowtide keep their DEEDS positions (save code) with new checks
     { id: 'quenched', name: 'Twinbreaker', desc: 'Clear the twin champions room', icon: 'skull', reward: 50, check: (p, run) => run && !!(run.champs & 1) },
     { id: 'lowtide', name: 'Mimic Hunter', desc: 'Clear the mimic champion room', icon: 'skull', reward: 60, check: (p, run) => run && !!(run.champs & 2) },
-    { id: 'uncrowned', name: 'Uncrowned', desc: 'Defeat the last boss and complete a descent', icon: 'crown', reward: 100, check: p => p.stats.wins >= 1 },
-    { id: 'slayer', name: 'Slayer', desc: 'Slay 1,000 foes', icon: 'axe', reward: 50, check: p => p.stats.kills >= 1000 },
-    { id: 'legend', name: 'Legend of the Deep', desc: 'Slay 5,000 foes', icon: 'axe', reward: 120, check: p => p.stats.kills >= 5000 },
-    { id: 'fellowship', name: 'Fellowship', desc: 'Clear a stratum with a party', icon: 'banner', reward: 30, check: (p, run) => run && run.party > 1 && run.stratum >= 2 },
-    { id: 'rescue', name: 'No One Left Behind', desc: 'Revive a fallen ally', icon: 'heart', reward: 25, check: (p, run) => run && run.revives > 0 },
+    { id: 'uncrowned', name: 'First Win', desc: 'Defeat the Hollow King and win a run', icon: 'crown', reward: 100, check: p => p.stats.wins >= 1 },
+    { id: 'slayer', name: 'Slayer', desc: 'Kill 1,000 foes', icon: 'axe', reward: 50, check: p => p.stats.kills >= 1000 },
+    { id: 'legend', name: 'Legend', desc: 'Kill 5,000 foes', icon: 'axe', reward: 120, check: p => p.stats.kills >= 5000 },
+    { id: 'fellowship', name: 'Fellowship', desc: 'Clear a stratum in a party', icon: 'banner', reward: 30, check: (p, run) => run && run.party > 1 && run.stratum >= 2 },
+    { id: 'rescue', name: 'No One Left Behind', desc: 'Revive a downed ally', icon: 'heart', reward: 25, check: (p, run) => run && run.revives > 0 },
     { id: 'untouched', name: 'Untouched', desc: 'Defeat a boss without being hit', icon: 'shieldgold', reward: 40, check: (p, run) => run && run.flawlessBoss },
     { id: 'hoard', name: "Dragon's Hoard", desc: 'Hold 400 gold at once', icon: 'coin', reward: 30, check: (p, run) => run && run.maxGold >= 400 },
-    { id: 'collector', name: 'Collector', desc: 'Hold 8 relics in one descent', icon: 'chest', reward: 40, check: (p, run) => run && run.maxRelics >= 8 },
-    { id: 'ascendant', name: 'Ascendant Soul', desc: 'Reach level 20 in one descent', icon: 'star', reward: 50, check: (p, run) => run && run.level >= 20 },
-    { id: 'swift', name: 'Swift Descent', desc: 'Complete a descent in under 15 minutes', icon: 'hourglass', reward: 50, check: (p, run) => run && run.victory && run.time < 900 },
-    { id: 'pact1', name: 'Pact Sworn', desc: 'Complete a descent under Pact 1+', icon: 'ember', reward: 60, check: p => p.pactWin >= 1 },
-    { id: 'pact5', name: 'Pact Bound', desc: 'Complete a descent under Pact 5+', icon: 'ember', reward: 120, check: p => p.pactWin >= 5 },
-    { id: 'pact10', name: 'Abyss-Touched', desc: 'Complete a descent under Pact 10', icon: 'ember', reward: 250, check: p => p.pactWin >= 10 },
+    { id: 'collector', name: 'Collector', desc: 'Hold 8 relics in one run', icon: 'chest', reward: 40, check: (p, run) => run && run.maxRelics >= 8 },
+    { id: 'ascendant', name: 'Level 20', desc: 'Reach level 20 in one run', icon: 'star', reward: 50, check: (p, run) => run && run.level >= 20 },
+    { id: 'swift', name: 'Speedrun', desc: 'Win a run in under 15 minutes', icon: 'hourglass', reward: 50, check: (p, run) => run && run.victory && run.time < 900 },
+    { id: 'pact1', name: 'Pact 1', desc: 'Win a run at Pact 1 or higher', icon: 'ember', reward: 60, check: p => p.pactWin >= 1 },
+    { id: 'pact5', name: 'Pact 5', desc: 'Win a run at Pact 5 or higher', icon: 'ember', reward: 120, check: p => p.pactWin >= 5 },
+    { id: 'pact10', name: 'Pact 10', desc: 'Win a run at Pact 10', icon: 'ember', reward: 250, check: p => p.pactWin >= 10 },
     { id: 'master', name: 'Master', desc: 'Reach mastery 10 with any hero', icon: 'star', reward: 100, check: p => p.mastery.some(x => ED.masteryLevel(x) >= 10) },
     { id: 'manyfaces', name: 'Many Faces', desc: 'Unlock six heroes', icon: 'mask', reward: 60, check: p => ED.CLASS_IDS.filter(c => ED.Save.classUnlocked(p, c)).length >= 6 },
-    { id: 'archivist', name: 'Relic Keeper', desc: 'Hold 10 relics in one descent', icon: 'scroll', reward: 60, check: (p, run) => run && run.maxRelics >= 10 },
+    { id: 'archivist', name: 'Relic Keeper', desc: 'Hold 10 relics in one run', icon: 'scroll', reward: 60, check: (p, run) => run && run.maxRelics >= 10 },
     { id: 'hearthkeeper', name: 'Hearthkeeper', desc: 'Buy 25 Hearth upgrade ranks', icon: 'ember', reward: 80, check: p => p.up.reduce((a, b) => a + b, 0) >= 25 },
     { id: 'evolved', name: 'Evolved', desc: 'Evolve a weapon', icon: 'wing', reward: 40, check: (p, run) => run && run.evolved },
-    { id: 'intothedark', name: 'Into the Dark', desc: 'Clear 6 dark rooms in one descent', icon: 'eye', reward: 50, check: (p, run) => run && run.darkCleared >= 6 },
+    { id: 'intothedark', name: 'Into the Dark', desc: 'Clear 6 dark rooms in one run', icon: 'eye', reward: 50, check: (p, run) => run && run.darkCleared >= 6 },
     { id: 'cartographer', name: 'Cartographer', desc: 'Clear two dark rooms and an elite room on one stratum', icon: 'scroll', reward: 40, check: (p, run) => run && run.fullClear },
   ];
   ED.DEED_IDX = ED.U.indexer(ED.DEEDS.map(d => d.id));
@@ -139,23 +139,23 @@
   // The profile stores one bit per entry by position (ED.SECRETS index; the save code carries a 6-bit count): append only. A hero secret's id is its hero's id (pl.heroSecret names the hero's own).
   const heroSecret = (id, name, desc, icon) => ({ id, name, desc, icon, reward: `skin.${id}.secret`, check: (p, run, pl) => !!(run && pl && pl.heroSecret && run.cls === id) });
   ED.SECRETS = [
-    { id: 'hearthsitter', name: 'Hearthsitter', desc: 'Sat by the Hearth, still, for three minutes', icon: 'campfire', reward: 'camp.bluehearth', check: () => false },
+    { id: 'hearthsitter', name: 'Hearthsitter', desc: 'Stood still by the Hearth for 3 minutes', icon: 'campfire', reward: 'camp.bluehearth', check: () => false },
     { id: 'platino', name: 'The Platino', desc: 'Caught the Platino', icon: 'gem', reward: 'pet.platino', check: (p, run, pl) => !!(pl && pl.platino) },
     { id: 'change', name: 'Exact Change', desc: 'Held exactly 777 gold', icon: 'coin', reward: 'trail.coins', check: (p, run) => !!(run && run.gold777) },
-    { id: 'unkindled', name: 'Unkindled', desc: 'Completed a descent with no Hearth upgrades', icon: 'ember', reward: 'skin.unkindled', check: (p, run) => !!(run && run.victory) && p.up.every(r => !r) },
-    { id: 'contrarian', name: 'Against the Grain', desc: 'Completed a descent taking element boons of one element per stratum, a new element on every stratum', icon: 'thorn', reward: 'title.contrarian', check: (p, run, pl) => !!(run && run.victory && pl && pl.contrarian) },
-    { id: 'thread', name: 'Thread of Life', desc: 'Slew the Hollow King below 3% health', icon: 'heartbroken', reward: 'death.embers', check: (p, run, pl) => !!(pl && pl.thread) },
+    { id: 'unkindled', name: 'Unkindled', desc: 'Won a run with no Hearth upgrades', icon: 'ember', reward: 'skin.unkindled', check: (p, run) => !!(run && run.victory) && p.up.every(r => !r) },
+    { id: 'contrarian', name: 'Against the Grain', desc: 'Won a run taking element boons of one element per stratum, a new element on every stratum', icon: 'thorn', reward: 'title.contrarian', check: (p, run, pl) => !!(run && run.victory && pl && pl.contrarian) },
+    { id: 'thread', name: 'Thread of Life', desc: 'Killed the Hollow King while below 3% health', icon: 'heartbroken', reward: 'death.embers', check: (p, run, pl) => !!(pl && pl.thread) },
     // p.heroWins is read before this run's victory is added (S.applyRun)
-    { id: 'crown', name: 'Hollow Crown', desc: 'Completed a descent at Pact 10 with a hero who had never won', icon: 'crown', reward: 'hat.crown',
+    { id: 'crown', name: 'Hollow Crown', desc: 'Won a run at Pact 10 with a hero who had never won', icon: 'crown', reward: 'hat.crown',
       check: (p, run) => !!(run && run.victory && (run.pact | 0) >= 10 && ED.CLASS_IDS.indexOf(run.cls) >= 0 && !((p.heroWins | 0) & (1 << ED.CLASS_IDS.indexOf(run.cls)))) },
     { id: 'oneface', name: 'One Face', desc: 'Four heroes of one kind cleared a stratum', icon: 'mask', reward: 'title.many', check: (p, run) => !!(run && run.oneFace) },
-    heroSecret('knight', 'Return to Sender', 'Felled a boss with the returning shield', 'shield'),
-    heroSecret('ranger', 'Long Shot', 'One arrow, three kills', 'arrow'),
-    heroSecret('pyro', 'Bonfire', 'Thirty foes burning at once', 'flame'),
-    heroSecret('shade', 'Unseen', 'Five kills in one unseen moment', 'vanish'),
-    heroSecret('cleric', 'Smiter', 'Smote a boss 25 times in one fight', 'hammer'),
-    heroSecret('necro', 'Risen Champion', 'An elite you slew rose to serve', 'skull'),
-    heroSecret('bell', 'Toll for Thee', 'Slew the Hollow King with a Peal', 'drum'),
+    heroSecret('knight', 'Return to Sender', 'Killed a boss with the returning shield', 'shield'),
+    heroSecret('ranger', 'Long Shot', 'Killed 3 foes with one shot', 'arrow'),
+    heroSecret('pyro', 'Bonfire', 'Had 30 foes burning at once', 'flame'),
+    heroSecret('shade', 'Unseen', 'Killed 5 foes during one Vanish', 'vanish'),
+    heroSecret('cleric', 'Smiter', 'Hit one boss with 25 Smites', 'hammer'),
+    heroSecret('necro', 'Risen Champion', 'An elite you killed rose as your minion', 'skull'),
+    heroSecret('bell', 'Last Peal', 'Killed the Hollow King with a Peal', 'drum'),
   ];
   ED.SECRET_IDX = ED.U.indexer(ED.SECRETS.map(s => s.id));
   ED.secretHas = (p, id) => { const i = ED.SECRET_IDX[id]; return i !== undefined && !!((p.secrets | 0) & (1 << i)); };
@@ -210,7 +210,7 @@
   ED.cosGateText = (c, p) => {
     const g = c.gate;
     if (g.secret) return 'A secret';
-    if (g.evolve) { const k = p && p.evo ? p.evo[g.evolve] | 0 : 0; return `Evolve the ${weaponName(g.evolve)} in ${g.n} descents` + (p ? ` (${Math.min(k, g.n)}/${g.n})` : ''); }
+    if (g.evolve) { const k = p && p.evo ? p.evo[g.evolve] | 0 : 0; return `Evolve the ${weaponName(g.evolve)} in ${g.n} runs` + (p ? ` (${Math.min(k, g.n)}/${g.n})` : ''); }
     if (g.cost) return `Mastery ${g.mastery} · ${g.cost} embers`;
     return `Mastery ${g.mastery}`;
   };
