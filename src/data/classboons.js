@@ -20,13 +20,13 @@
     form: { name: 'Earthsplitter', desc: 'Each Cleave splits the ground ahead: a fissure runs 180 forward along your aim, erupts 0.25 s later and strikes every foe on it once for {fissure} weapon damage, stunning them {cStun:s}.' } });
   card('knight', 'attack', 2, 'k_atk_s', { name: 'Sworn Blade', icon: 'blades', tag: 'Swift', weapon: { kind: 'swift' },
     desc: "Your weapon becomes swift (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit; attacks give Flow). Cleaves deal +{cleave} more.[ +{atk} attack speed.] Parry: a Cleave that starts in the last 0.3 s of a foe's wind-up (its rim flashes white) cancels that attack and stuns it 0.6 s (elites: 0.3 s stun, no cancel; never bosses), at most once per 2.5 s.",
-    rider2: 'Riposte: each Parry readies {riposte:ck} guaranteed crits.', mods: { cleave: 0.2, parry: 1 }, up: { cleave: 0.1, atk: 0.03 }, r2: { riposte: 2 }, r3: { bladeWave: 1 },
+    rider2: 'Riposte: each Parry readies {riposte:ck} guaranteed crits.', mods: { cleave: 0.2, parry: 1 }, up: { cleave: 0.1, atk: 0.03 }, r2: { riposte: 2 }, r3: { bladeWave: 0.85 },
     form: { name: 'Thousand Edges', desc: 'Every Cleave launches a blade wave along your aim, 180 long and 24 wide, that pierces every foe on it for {bladeWave} weapon damage. A Parry launches 3 waves in a fan instead.' } });
   card('knight', 'skill1', 1, 'k_s1', { name: 'Vanguard', icon: 'shield', forks: ['k_s1_a', 'k_s1_b'], plays: 'charge in just before the big hit lands.',
     desc: 'Shield Charge recharges {s1Cdr} faster and deals +{s1Dmg}. After a Charge you are Braced for {brace:s}: {braceDR} less damage taken (at most once per 4 s).', mods: { s1Cdr: 0.3, s1Dmg: 0.25, brace: 1.5, braceDR: 0.25 } });
   card('knight', 'skill1', 2, 'k_s1_a', { name: 'Juggernaut', icon: 'star', tag: 'Burst',
     desc: 'Shield Charge goes 60% farther, deals +{s1Dmg}, and ends in a shockwave (radius 90) for {jugShock} of its impact.',
-    rider2: 'Shield Bash: each Charge ends in a free Bulwark bash along it at {bash} (no cooldown, no stored power, no stun).', mods: { s1Range: 90, s1Dmg: 0.1, jugShock: 0.4 }, up: { s1Dmg: 0.1, jugShock: 0.1 }, r2: { bash: 0.3 }, r3: { avalanche: 0.9, avaCrack: 0.3, avaStun: 0.8 },
+    rider2: 'Shield Bash: each Charge ends in a free Bulwark bash along it at {bash} (no cooldown, no stored power, no stun).', mods: { s1Range: 90, s1Dmg: 0.08, jugShock: 0.33 }, up: { s1Dmg: 0.08, jugShock: 0.08 }, r2: { bash: 0.3 }, r3: { avalanche: 0.9, avaCrack: 0.3, avaStun: 0.8 },
     form: { name: 'Avalanche', desc: "Foes in the Charge's path are carried along with you (elites are knocked aside, bosses stand). The shockwave becomes a giant slam (radius 160) for {avalanche} of the impact that stuns foes {avaStun:s}, and 3 cracks run 220 outward from it and erupt 0.3 s later for {avaCrack} of the impact. Bosses take ×1.5 from the slam and are never stunned." } });
   card('knight', 'skill1', 2, 'k_s1_b', { name: 'Rallying Charge', icon: 'banner', tag: 'Guard', coop: true,
     desc: 'Where Shield Charge ends, you and allies within 100 gain a shield of {rally} max health (allies at most once per 8 s each). Its stun lasts {chargeStun:s} longer; Brace is {braceDR} stronger; Shield Charge deals +{s1Dmg}.',
@@ -45,11 +45,11 @@
   card('knight', 'element', 1, 'k_el', { name: 'Oath of Ruin', icon: 'fang', forks: ['k_el_a', 'k_el_b'], plays: 'everything you hit bleeds; stack ailments, then cash them in.', desc: BLEED, mods: { bleedAll: 0.16, statusPow: 0.15 } });
   card('knight', 'element', 2, 'k_el_a', { name: 'Brand of Ruin', icon: 'eye', tag: 'Focus', coop: true,
     desc: '+{brand} damage to a foe for each of its first {brandCap:n} ailments, from any hero.',
-    rider2: 'Ruin Seal: Shield Charge and Bulwark bash strikes seal foes for {seal:s}; Sealed counts as one more ailment for every hero (bosses too).', mods: { brand: 0.08, brandCap: 4 }, up: { brand: 0.01 }, r2: { seal: 4 }, r3: { doombrand: 1, brandMark: 0.2, brandCap: 2, brand: 0.02 },
+    rider2: 'Ruin Seal: Shield Charge and Bulwark bash strikes seal foes for {seal:s}; Sealed counts as one more ailment for every hero (bosses too).', mods: { brand: 0.095, brandCap: 4 }, up: { brand: 0.012 }, r2: { seal: 4 }, r3: { doombrand: 1, brandMark: 0.16, brandCap: 2, brand: 0.05 },
     form: { name: 'Doombrand', desc: 'Brand now counts up to {brandCap:n} ailments. A foe holding 4 or more ailments is Doombranded for 4 s: Marked, it takes +{brandMark} damage from every hero (the strongest Mark on a foe applies).' } });
   card('knight', 'element', 2, 'k_el_b', { name: 'Ruinous Blows', icon: 'axe', tag: 'Spread',
     desc: "Shield Charge and Bulwark deal +{s1Dmg} and build your statuses at double strength, and the bash spreads wounds: it moves {carry} of each struck foe's statuses to the 2 nearest foes within 60 it did not strike.",
-    rider2: 'Ruin Spreads: a foe killed by a bash hands {ruinSpread} of its statuses to each of the 2 nearest foes within 80.', mods: { ruinInf: 1, carry: 0.25, s1Dmg: 0.15, s2Dmg: 0.15 }, up: { carry: 0.1, s1Dmg: 0.15, s2Dmg: 0.15 }, r2: { ruinSpread: 0.5, s1Dmg: 0.55, s2Dmg: 0.55 }, r3: { bloodquake: 1, bloodquakeMul: 1, bloodquakeSplash: 0.8 },
+    rider2: 'Ruin Spreads: a foe killed by a bash hands {ruinSpread} of its statuses to each of the 2 nearest foes within 80.', mods: { ruinInf: 1, carry: 0.25, s1Dmg: 0.15, s2Dmg: 0.15 }, up: { carry: 0.1, s1Dmg: 0.15, s2Dmg: 0.15 }, r2: { ruinSpread: 0.5, s1Dmg: 0.9, s2Dmg: 0.9 }, r3: { bloodquake: 1, bloodquakeMul: 2.8, bloodquakeSplash: 0.8 },
     form: { name: 'Bloodquake', desc: 'A Shield Charge or Bulwark bash strike on a foe with 3 or more ailments detonates its wounds: its Bleed pool hits it at once for {bloodquakeMul} more than it would have dealt, and {bloodquakeSplash} of the amount paid bursts to foes within 80, who start Bleeding for it (at most once per second per foe).' } });
 
   // ---------------- Ranger (Volley · Rain of Arrows) ----------------
@@ -57,17 +57,17 @@
     desc: 'Your shots deal more the farther they fly: +0% at 80, rising to +{deadeye} at 260.', mods: { deadeye: 0.4 } });
   card('ranger', 'attack', 2, 'r_atk_h', { name: 'Ballista', icon: 'arrow', tag: 'Heavy', weapon: { kind: 'heavy', extra: { mul: { speed: 1.28 }, add: { pierce: 2 } } },
     desc: 'Heavy shots (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit, Stagger) fly 28% faster than heavy shots usually do and pierce 2 more foes; each foe a shot passes through adds +{pierceRamp} to it. Shots deal +{wDmg}.[ Deadeye is +{deadeye} stronger.]',
-    rider2: 'Splitting Bolt: a shot that passes through its last foe splits into 2 arrows in a V at {splitBolt}.', mods: { pierceRamp: 0.15, wDmg: 0.2 }, up: { pierceRamp: 0.1, deadeye: 0.05 }, r2: { splitBolt: 0.5 }, r3: { siege: 5, siegeMul: 1.8, siegeBlast: 0.3 },
+    rider2: 'Splitting Bolt: a shot that passes through its last foe splits into 2 arrows in a V at {splitBolt}.', mods: { pierceRamp: 0.1, wDmg: 0.14 }, up: { pierceRamp: 0.07, deadeye: 0.05 }, r2: { splitBolt: 0.5 }, r3: { siege: 5, siegeMul: 1.8, siegeBlast: 0.3 },
     form: { name: 'Siege Ballista', desc: 'One shot in {siege:n} is a siege bolt: it pierces every foe, is twice as wide, deals ×{siegeMul:x} damage and ends in a blast (radius 60) for {siegeBlast} of the shot when it hits a wall, a guard or the end of its range.' } });
   card('ranger', 'attack', 2, 'r_atk_s', { name: 'Quickdraw', icon: 'arrows', tag: 'Swift', weapon: { kind: 'swift' },
     desc: 'Swift shots (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit, Flow) deal +{wDmg} and slow foes {hitSlow} for 1 s (not bosses).[ Deadeye is +{deadeye} stronger.]',
-    rider2: 'Flurry: every {flurry:n}th shot fires 2 extra arrows in a narrow fan, each at {flurryMul} of a shot.', mods: { wDmg: 0.07, hitSlow: 0.15 }, up: { deadeye: 0.05, wDmg: 0.05 }, r2: { flurry: 4, flurryMul: 0.45 }, r3: { ricochet: 0.4, flurryN: 1 },
+    rider2: 'Flurry: every {flurry:n}th shot fires 2 extra arrows in a narrow fan, each at {flurryMul} of a shot.', mods: { wDmg: 0.07, hitSlow: 0.15 }, up: { deadeye: 0.05, wDmg: 0.05 }, r2: { flurry: 4, flurryMul: 0.38 }, r3: { ricochet: 0.4, flurryN: 1 },
     form: { name: 'Storm Bow', desc: "Each shot ricochets once to the nearest other foe within 140 for {ricochet} of its damage, and Flurry's extra arrows rise by {flurryN:n}." } });
   card('ranger', 'skill1', 1, 'r_s1', { name: 'Fletcher', icon: 'arrows', forks: ['r_s1_a', 'r_s1_b'], plays: 'Volley is your main damage; cast it on cooldown.',
     desc: 'Volley fires {s1N:n} more arrows and recharges {s1Cdr} faster.', mods: { s1N: 3, s1Cdr: 0.2 } });
   card('ranger', 'skill1', 2, 'r_s1_a', { name: "Hunter's Mark", icon: 'eye', tag: 'Burst', coop: true,
     desc: 'Volley marks every foe it hits for {volleyMark:s}: marked foes take +{markV} damage from everyone. Volley deals +{s1Dmg}.',
-    rider2: 'Relentless Hunt: when a marked foe dies, the mark leaps to the nearest unmarked foe within 120.', mods: { volleyMark: 4, markV: 0.12, s1Dmg: 0.15 }, up: { markV: 0.04, s1Dmg: 0.3 }, r2: { markLeap: 1 }, r3: { deathMark: 0.2, deathWave: 0.1 },
+    rider2: 'Relentless Hunt: when a marked foe dies, the mark leaps to the nearest unmarked foe within 120.', mods: { volleyMark: 4, markV: 0.1, s1Dmg: 0.15 }, up: { markV: 0.03, s1Dmg: 0.3 }, r2: { markLeap: 1 }, r3: { deathMark: 0.075, deathWave: 0.035 },
     form: { name: 'Death Mark', desc: 'Volley looses 3 waves 0.12 s apart (the 2nd and 3rd at {deathWave}), and its arrows steer gently toward marked foes. A marked foe that dies bursts into 4 piercing arrows, each {deathMark} of a Volley arrow.' } });
   card('ranger', 'skill1', 2, 'r_s1_b', { name: 'Scattershot', icon: 'boot', tag: 'Guard',
     desc: 'Volley arrows deal +{volleyClose} to foes within 110 and knock them back 3× as hard, every arrow slows its foe {volleySlow} for 1.2 s (bosses half as much), and Volley hops you 70 back from the cursor.',
@@ -77,7 +77,7 @@
     desc: 'Rain of Arrows: +{s2Area} radius, lasts {s2Dur:s} longer, +{s2Dmg} damage.', mods: { s2Area: 0.3, s2Dur: 1, s2Dmg: 0.1 } });
   card('ranger', 'skill2', 2, 'r_s2_a', { name: 'Skyfall', icon: 'star', tag: 'Burst',
     desc: "The whole Rain lands at once 0.5 s after the cast: every volley's damage in one hit over a 30% wider area, stunning foes 0.5 s (not bosses).[ Rain deals +{s2Dmg} and is +{s2Area} wider.]",
-    rider2: 'Twin Sky: a second Skyfall lands 0.8 s later on the same spot at {skyTwin}.', mods: { skyfall: 1 }, up: { s2Dmg: 0.1, s2Area: 0.05 }, r2: { skyTwin: 0.4 }, r3: { starfall: 0.45 },
+    rider2: 'Twin Sky: a second Skyfall lands 0.8 s later on the same spot at {skyTwin}.', mods: { skyfall: 1 }, up: { s2Dmg: 0.1, s2Area: 0.05 }, r2: { skyTwin: 0.28 }, r3: { starfall: 0.41 },
     form: { name: 'Starfall Barrage', desc: 'Skyfall becomes 5 impacts that walk from you to the cursor, 0.12 s apart (replacing the single landing and Twin Sky): each lands in radius 70 for {starfall} of a Skyfall and stuns foes 0.4 s (not bosses).' } });
   card('ranger', 'skill2', 2, 'r_s2_b', { name: 'Hail of Thorns', icon: 'thorn', tag: 'Guard', coop: true,
     desc: 'Foes in the Rain are slowed 50% and take +20% damage (does not stack with other +20% vulnerabilities).',
@@ -86,11 +86,11 @@
   card('ranger', 'element', 1, 'r_el', { name: "Trapper's Craft", icon: 'leaf', forks: ['r_el_a', 'r_el_b'], plays: 'wound everything, and let the wounds work.', desc: BLEED, mods: { bleedAll: 0.1, statusPow: 0.15 } });
   card('ranger', 'element', 2, 'r_el_a', { name: 'Infected Wounds', icon: 'drop', tag: 'Focus',
     desc: 'Volley and Rain build your statuses {skillInfK} faster; your Bleed and Burn tick {bleedMul} harder.',
-    rider2: 'Gangrene: Volley and Rain deal +{festerHit} to foes with 3 or more ailments.', mods: { skillInfK: 0.5, bleedMul: 0.2, burnMul: 0.2 }, up: { bleedMul: 0.1, burnMul: 0.1 }, r2: { festerHit: 0.9 }, r3: { hemo: 1, hemoAt: 0.04, hemoMul: 3, hemoBoss: 0.003 },
+    rider2: 'Gangrene: Volley and Rain deal +{festerHit} to foes with 3 or more ailments.', mods: { skillInfK: 0.5, bleedMul: 0.2, burnMul: 0.2 }, up: { bleedMul: 0.1, burnMul: 0.1 }, r2: { festerHit: 0.9 }, r3: { hemo: 1, hemoAt: 0.04, hemoMul: 4, hemoBoss: 0.003 },
     form: { name: 'Hemorrhage', desc: 'Your hit on a foe whose Bleed has reached {hemoAt} of its max health (bosses: {hemoBoss}) makes the whole pool hit at once for ×{hemoMul:x} and empties it. At most once per second per foe (bosses: every 4 s).' } });
   card('ranger', 'element', 2, 'r_el_b', { name: 'Contagion', icon: 'orb', tag: 'Spread',
     desc: 'When a foe with 2 or more ailments dies to your damage, {contagion} of each of its statuses passes to each of the 2 nearest foes within {contagionR:r100}.',
-    rider2: 'Outbreak: it passes to the 3 nearest foes ({outbreak} each).', mods: { contagion: 0.5 }, up: { contagionR: 20 }, r2: { contagionN: 1, outbreak: 0.9 }, r3: { plague: 1, plagueBurst: 0.85 },
+    rider2: 'Outbreak: it passes to the 3 nearest foes ({outbreak} each).', mods: { contagion: 0.5 }, up: { contagionR: 20 }, r2: { contagionN: 1, outbreak: 1.33 }, r3: { plague: 1, plagueBurst: 1.1 },
     form: { name: 'Plaguebearer', desc: 'A foe with 2 or more ailments that dies to your damage bursts (radius 90): every foe inside takes {plagueBurst} of its remaining Bleed and Burn at once and catches its other statuses.' } });
 
   // ---------------- Pyromancer (Flame Nova · Meteor · Fireball) ----------------
@@ -128,11 +128,11 @@
     desc: "Your spells deal +{classElMul} Fire damage, and your bolts add Burn for {wInfFire} of each hit (the Flame path's rate counts instead when it is higher).", mods: { classElMul: 0.25, wInfFire: 0.15 } });
   card('pyro', 'element', 2, 'p_el_a', { name: 'White Heat', icon: 'flame', tag: 'Focus',
     desc: 'Your Burn deals +{burnMul}, and burning foes take +{searSkill} from your spells.',
-    rider2: 'Flashpoint: your spells always crit a foe that has burned for {flashT:s} without a break.', mods: { burnMul: 0.25, searSkill: 0.1 }, up: { burnMul: 0.05 }, r2: { flashT: 6 }, r3: { whiteHot: 0.4, whiteT: 3 },
+    rider2: 'Flashpoint: your spells always crit a foe that has burned for {flashT:s} without a break.', mods: { burnMul: 0.145, searSkill: 0.06 }, up: { burnMul: 0.03 }, r2: { flashT: 6 }, r3: { whiteHot: 0.4, whiteT: 3 },
     form: { name: 'White Flame', desc: 'A foe that has burned for {whiteT:s} without a break turns white-hot: it takes +{whiteHot} damage from all your hits.' } });
   card('pyro', 'element', 2, 'p_el_b', { name: 'Heat Engine', icon: 'hourglass', tag: 'Spread',
     desc: "Each burning foe your Nova or Meteor hits cuts {heatEngine:s} from the other skill's cooldown (up to 1.5 s per cast).[ Nova and Meteor deal +{s1Dmg}.]",
-    rider2: 'Chain Reaction: hitting {heatChain:n} or more burning foes with one cast refunds the other skill fully (at most once per 6 s).', mods: { heatEngine: 0.15 }, up: { heatEngine: 0.05 }, r2: { heatChain: 2, s1Dmg: 0.15, s2Dmg: 0.15 }, r3: { heatMax: 4, infernoMul: 2 },
+    rider2: 'Chain Reaction: hitting {heatChain:n} or more burning foes with one cast refunds the other skill fully (at most once per 6 s).', mods: { heatEngine: 0.09 }, up: { heatEngine: 0.03 }, r2: { heatChain: 2, s1Dmg: 0.15, s2Dmg: 0.15 }, r3: { heatMax: 4, infernoMul: 2 },
     form: { name: 'Inferno Engine', desc: 'Each burning foe your Nova or Meteor hits stores 1 Heat (a boss 3), up to {heatMax:n}. At full Heat your next Nova or Meteor is an Inferno: radius ×1.4, ×{infernoMul:x} damage and Burn, and the Heat empties.' } });
 
   // ---------------- Shade (Shadowstep · Vanish) ----------------
@@ -144,13 +144,13 @@
     form: { name: 'Guillotine', desc: 'The execution line rises to {execCrit} health. An execution crit that kills carries to the nearest foe within 100 below that line: a free execution strike at the same damage, up to {guillotine:n} times per attack.' } });
   card('shade', 'attack', 2, 's_atk_s', { name: 'Thousand Cuts', icon: 'blades', tag: 'Swift', weapon: { kind: 'swift' },
     desc: 'Swift blades (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit, Flow). Momentum holds {momMax:n} more stacks.',
-    rider2: 'Whirlwind: at full Momentum, every 4th attack also spins all around you at {bladeStorm} (knives: a ring of 6 at {bladeStorm}).', mods: { momMax: 1 }, up: { momMax: 1 }, r2: { bladeStorm: 0.05 }, r3: { cyclone: 0.25 },
+    rider2: 'Whirlwind: at full Momentum, every 4th attack also spins all around you at {bladeStorm} (knives: a ring of 6 at {bladeStorm}).', mods: { momMax: 1 }, r2: { bladeStorm: 0.05 }, r3: { cyclone: 0.28 },
     form: { name: 'Cyclone', desc: "At full Momentum every attack also spins all around you at {cyclone} (knives: a ring of 6), and a dash ends in a spin; the 4th spin keeps Whirlwind's {bladeStorm} if that is higher." } });
   card('shade', 'skill1', 1, 's_s1', { name: 'Ghost Walk', icon: 'cloak', forks: ['s_s1_a', 's_s1_b'], plays: 'blink through lines of foes, then unload.',
     desc: 'Shadowstep: +{s1Dmg} damage, recharges {s1Cdr} faster, and readies {stepCrit:ck} crit attacks, {stepStack:ck} more per foe it cuts (up to {stackMax:ck3}).', mods: { s1Cdr: 0.2, s1Dmg: 0.2, stepCrit: 3, stepStack: 1, stackMax: 2 } });
   card('shade', 'skill1', 2, 's_s1_a', { name: 'Assassinate', icon: 'dagger', tag: 'Burst',
     desc: 'Shadowstep deals +{assassinate} to foes below 50% health, and a Shadowstep kill refunds it (at most once per 1.5 s).[ Shadowstep deals +{s1Dmg}.]',
-    rider2: 'Twin Cut: a second slash runs the Shadowstep path 0.15 s later at {stepTwin}.', mods: { assassinate: 0.4 }, up: { s1Dmg: 0.1 }, r2: { stepTwin: 0.3 }, r3: { blossom: 1.0, blossomN: 3, blossomMax: 6 },
+    rider2: 'Twin Cut: a second slash runs the Shadowstep path 0.15 s later at {stepTwin}.', mods: { assassinate: 0.4 }, up: { s1Dmg: 0.1 }, r2: { stepTwin: 0.25 }, r3: { blossom: 1.0, blossomN: 3, blossomMax: 6 },
     form: { name: 'Death Blossom', desc: 'After the blink you blink on to the nearest foe not yet cut within 120 of where you stand, {blossomN:n} more times, 0.1 s apart and untouchable meanwhile. Each blink cuts for a guaranteed critical hit of {blossom} of a Shadowstep slash. Killing a foe (not a horde foe) adds one more blink, up to {blossomMax:n}.' } });
   card('shade', 'skill1', 2, 's_s1_b', { name: 'Afterimage', icon: 'mirror', tag: 'Guard',
     desc: 'Shadowstep leaves an afterimage where you stood; 1.2 s later it bursts (radius 80), hurting foes and blinding them 1 s (elites 0.5 s, not bosses).[ Shadowstep deals +{s1Dmg}.]',
@@ -160,7 +160,7 @@
     desc: 'Vanish recharges {s2Cdr} faster; its smoke is {s2Area} wider, lasts {s2Dur:s} longer and foes inside take +20% damage; you move {stealthSpd} faster while unseen.', mods: { s2Cdr: 0.27, s2Area: 0.4, s2Dur: 2, smokeVuln: 1, stealthSpd: 0.3 } });
   card('shade', 'skill2', 2, 's_s2_a', { name: "Night's Edge", icon: 'mask', tag: 'Burst',
     desc: "Vanish recharges {s2Cdr} faster. Ambush deals ×{ambushMul:a4} of your weapon's base damage. An Ambush refunds Shadowstep; an Ambush kill refunds Vanish (at most once per 3 s).",
-    rider2: 'Ambush Sweep: Ambush also strikes every foe within {ambushCleave:n} of its target.', mods: { ambushMul: 3, nightsEdge: 1, s2Cdr: 0.13 }, up: { ambushMul: 2 }, r2: { ambushCleave: 70 }, r3: { eclipse: 0.07, eclipseDur: 4 },
+    rider2: 'Ambush Sweep: Ambush also strikes every foe within {ambushCleave:n} of its target.', mods: { ambushMul: 2, nightsEdge: 1, s2Cdr: 0.13 }, up: { ambushMul: 1.5 }, r2: { ambushCleave: 70 }, r3: { eclipse: 0.08, eclipseDur: 4 },
     form: { name: 'Eclipse', desc: "Vanish's smoke becomes a dark dome (radius 140) that lasts {eclipseDur:s}. While you stand inside you stay unseen and every attack is an Ambush for {eclipse} of the full one, not only the next (the extra Ambushes refund nothing). Foes inside take +20% damage." } });
   card('shade', 'skill2', 2, 's_s2_b', { name: 'Veil of Night', icon: 'cloak', tag: 'Guard',
     desc: 'Vanish shields you for {veil} max health (at most once per 12 s) and recharges {s2Cdr} faster; your smoke blinds each foe {veilBlind:s} longer (elites half); stealth lasts {stealthDur:s} longer; Ambush deals ×{ambushMul:a4} of your weapon\'s base damage.',
@@ -169,11 +169,11 @@
   card('shade', 'element', 1, 's_el', { name: 'Cruel Arts', icon: 'fang', forks: ['s_el_a', 's_el_b'], plays: 'open wounds, then rip them open.', desc: BLEED, mods: { bleedAll: 0.1, statusPow: 0.15 } });
   card('shade', 'element', 2, 's_el_a', { name: 'Open Veins', icon: 'drop', tag: 'Focus', coop: true,
     desc: 'Your crits deal +{veins} for each ailment on the foe (up to 4).',
-    rider2: 'Exsanguinate: crits on a foe with 4 ailments add Bleed equal to {exsang} of the hit.', mods: { veins: 0.2 }, up: { veins: 0.01 }, r2: { exsang: 1.6 }, r3: { arterial: 0.25, arterialN: 1 },
+    rider2: 'Exsanguinate: crits on a foe with 4 ailments add Bleed equal to {exsang} of the hit.', mods: { veins: 0.28 }, up: { veins: 0.015 }, r2: { exsang: 1.6 }, r3: { arterial: 0.22, arterialN: 1 },
     form: { name: 'Arterial Strike', desc: 'A crit on a foe with 3 or more ailments is Arterial: +{arterial} damage, and it readies {arterialN:ck} crit attack (at most once per second; horde foes do not).' } });
   card('shade', 'element', 2, 's_el_b', { name: 'Rupture', icon: 'heartbroken', tag: 'Spread',
     desc: "Shadowstep ruptures every foe it cuts and Ambush ruptures its target: {rupture} of the foe's Bleed and Burn hit at once at 150% (the pools lose that share), and half of the burst splashes foes within 60. Shadowstep deals +{s1Dmg}.",
-    rider2: 'Bloodbloom: a foe a rupture kills hands its remaining Bleed to the 2 nearest foes within 80.', mods: { rupture: 0.5, s1Dmg: 0.3 }, up: { rupture: 0.1 }, r2: { bloodbloom: 1 }, r3: { cascade: 1, cascadeN: 4 },
+    rider2: 'Bloodbloom: a foe a rupture kills hands its remaining Bleed to the 2 nearest foes within 80.', mods: { rupture: 0.5, s1Dmg: 0.3 }, up: { rupture: 0.1 }, r2: { bloodbloom: 1 }, r3: { cascade: 1, cascadeN: 6 },
     form: { name: 'Crimson Cascade', desc: 'A rupture that kills a foe (horde foes too) leaps to the nearest bleeding or burning foe within 120 and ruptures {cascade} of its Bleed and Burn, up to {cascadeN:n} leaps per cast.' } });
 
   // ---------------- Cleric (Sanctuary · Judgment) ----------------
@@ -181,17 +181,17 @@
     desc: 'Your waves of light come every 2nd attack and deal +{waveMul}; the Sacred Lantern gains waves too (60% of its damage).', mods: { waveEvery: -1, waveMul: 0.3 } });
   card('cleric', 'attack', 2, 'c_atk_h', { name: 'Sunhammer', icon: 'hammer', tag: 'Heavy', weapon: { kind: 'heavy' },
     desc: 'Heavy weapon (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit, Stagger). Your waves are twice as wide, travel 60% farther and stun foes {waveStun:s} (not bosses).[ Waves deal +{waveMul} more.]',
-    rider2: 'Solar Flare: each wave ends in a burst of light (radius 50) for {waveBurst} of the wave.', mods: { waveBig: 1, waveStun: 0.4 }, up: { waveMul: 0.14 }, r2: { waveBurst: 0.8 }, r3: { wake: 0.6 },
+    rider2: 'Solar Flare: each wave ends in a burst of light (radius 50) for {waveBurst} of the wave.', mods: { waveBig: 1, waveStun: 0.4 }, up: { waveMul: 0.14 }, r2: { waveBurst: 1.1 }, r3: { wake: 0.52 },
     form: { name: "Dawn's Wake", desc: "Each wave leaves a strip of holy fire along its whole path for 2 s: foes on it take {wake} of the wave's damage per second as Holy damage, and the fire stores Radiance." } });
   card('cleric', 'attack', 2, 'c_atk_s', { name: 'Crusader', icon: 'wing', tag: 'Swift', weapon: { kind: 'swift' },
     desc: 'Swift weapon (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit, Flow). Your waves steer toward foes within 25 degrees of where you aimed them and deal +{waveMul}.',
-    rider2: 'Litany: every {litany:n}th attack sends 3 waves in a fan.', mods: { waveHome: 2, waveMul: 0.05 }, up: { waveMul: 0.07 }, r2: { litany: 16 }, r3: { waveReturn: 0.55 },
+    rider2: 'Litany: every {litany:n}th attack sends 3 waves in a fan.', mods: { waveHome: 2, waveMul: 0.05 }, up: { waveMul: 0.07 }, r2: { litany: 16 }, r3: { waveReturn: 0.63 },
     form: { name: 'Returning Light', desc: 'Every wave turns back at the end of its flight and flies home to you, striking each foe on the way for {waveReturn} of its damage and steering like the outward wave. Litany fans return too.' } });
   card('cleric', 'skill1', 1, 'c_s1', { name: 'Sanctum', icon: 'sun', forks: ['c_s1_a', 'c_s1_b'], plays: 'fight from holy ground.',
     desc: 'Sanctuary: +{s1Area} radius, lasts {s1Dur:s} longer (at most 60% of its cooldown), +{s1Dmg} damage; allies inside take {sanctDR:dr} less damage. Casting it heals you and allies within 180 for 7% max health.', mods: { s1Area: 0.3, s1Dur: 2, s1Dmg: 0.5, sanctDR: 0.1, sanctHeal: 1 } });
   card('cleric', 'skill1', 2, 'c_s1_a', { name: 'Holy Fury', icon: 'star', tag: 'Burst',
     desc: 'Sanctuary deals +{s1Dmg} and stuns foes inside for {sanctStun:s} when cast (not bosses).',
-    rider2: 'Hallowed Ground: foes inside Sanctuary are Judged (+20% damage taken).', mods: { s1Dmg: 0.15, sanctStun: 0.5 }, up: { s1Dmg: 0.2 }, r2: { sanctJudge: 1 }, r3: { wrath: 1, wrathNova: 0.9, wrathPillar: 0.15 },
+    rider2: 'Hallowed Ground: foes inside Sanctuary are Judged (+20% damage taken).', mods: { s1Dmg: 0.1, sanctStun: 0.5 }, up: { s1Dmg: 0.13 }, r2: { sanctJudge: 1 }, r3: { wrath: 1, wrathNova: 0.9, wrathPillar: 0.15 },
     form: { name: 'Wrath of Heaven', desc: 'Sanctuary opens with a nova over its whole circle for {wrathNova} of a second of its damage. Then every half second a pillar of light falls on a random foe inside for {wrathPillar} of one of its half-second damage ticks (it prefers foes not struck in the last second).' } });
   card('cleric', 'skill1', 2, 'c_s1_b', { name: 'Aura of Faith', icon: 'lantern', tag: 'Guard', coop: true,
     desc: 'Sanctuary centres on you and moves with you, and deals +{s1Dmg}. Damage taken inside is cut by a further {sanctDR}.',
@@ -211,11 +211,11 @@
     desc: "Your skills deal +{classElMul} Holy damage, and your weapon stores Radiance for {wInfHoly} of each hit (your Radiance from other sources adds to it).", mods: { classElMul: 0.25, wInfHoly: 0.12 } });
   card('cleric', 'element', 2, 'c_el_a', { name: 'Guardian Light', icon: 'shieldgold', tag: 'Focus', coop: true,
     desc: 'Your Smites on elites and bosses deal +{smiteBig}, and heroes your Smites shield deal +{guardLight} damage for 6 s.',
-    rider2: 'Judging Light: your Smites Judge the foe for {smiteJudge:s}.', mods: { smiteBig: 0.5, guardLight: 0.08 }, up: { guardLight: 0.02 }, r2: { smiteJudge: 3, smiteBig: 0.4, guardLight: 0.02 }, r3: { sunstrike: 4, smiteBig: 0.4, guardLight: 0.04 },
+    rider2: 'Judging Light: your Smites Judge the foe for {smiteJudge:s}.', mods: { smiteBig: 0.5, guardLight: 0.05 }, up: { guardLight: 0.01 }, r2: { smiteJudge: 3, smiteBig: 0.4, guardLight: 0.01 }, r3: { sunstrike: 4, smiteBig: 0.4, guardLight: 0.04 },
     form: { name: 'Sunstrike', desc: 'Every 3rd Smite on the same foe (never a horde foe) is a Sunstrike: ×{sunstrike:x} damage, and the shield it grants is doubled (at most 3% of max health).' } });
   card('cleric', 'element', 2, 'c_el_b', { name: 'Prism', icon: 'arc', tag: 'Spread',
     desc: 'Your Smites deal +{smiteMul}, and a beam strikes the nearest other foe within 120 for {smiteBeam} of the Smite.',
-    rider2: 'Sunburst: the beam jumps once more, to another foe within 120, at half again.', mods: { smiteMul: 0.5, smiteBeam: 0.5 }, r2: { beamJumps: 1 }, r3: { prismN: 4, prismRad: 0.01 },
+    rider2: 'Sunburst: the beam jumps once more, to another foe within 120, at half again.', mods: { smiteMul: 0.5, smiteBeam: 0.65 }, r2: { beamJumps: 1 }, r3: { prismN: 4, prismRad: 0.01 },
     form: { name: 'Spectrum', desc: 'The beam splits into up to {prismN:n} beams, one to each of the nearest other foes within 160, each for {smiteBeam} of the Smite (Sunburst still jumps from the nearest). Each foe a beam strikes, a horde foe excepted, stores Radiance toward its next Smite ({prismRad} of this one). Beams never Smite.' } });
 
   // ---------------- Necromancer (Raise Legion · Bone Harvest) ----------------
@@ -253,7 +253,7 @@
     desc: "Your skills deal +{classElMul} Shadow damage; your minions apply your statuses at 75% strength (from 50%) and mark Doom for {mInfShadow} of their damage.", mods: { classElMul: 0.25, minionInfuse: 0.25, mInfShadow: 0.2 } });
   card('necro', 'element', 2, 'n_el_a', { name: 'Abyssal Toll', icon: 'mask', tag: 'Focus',
     desc: 'Your Tolls deal +{tollMul}, and each Toll or Reaped elite empowers your minions +{abyssMin} for 6 s.',
-    rider2: "Abyssal Hunger: your minions' Doom counts double on elites and bosses.", mods: { tollMul: 0.4, abyssMin: 0.25 }, up: { tollMul: 0.1 }, r2: { abyssDoom: 1, tollMul: 0.35 }, r3: { maw: 0.2, mawHaste: 0.3 },
+    rider2: "Abyssal Hunger: your minions' Doom counts double on elites and bosses.", mods: { tollMul: 1.1, abyssMin: 0.25 }, up: { tollMul: 0.3 }, r2: { abyssDoom: 1, tollMul: 1 }, r3: { maw: 0.46, mawHaste: 0.3 },
     form: { name: 'Abyssal Maw', desc: 'Each Toll on a boss, and each Reaped elite, opens a maw (radius 60) beneath it for 3 s: foes in it take {maw} of the Toll per second (a Reaped elite counts its Doom as the Toll), and your minions within 120 of it attack {mawHaste} faster.' } });
   card('necro', 'element', 2, 'n_el_b', { name: 'Rise Again', icon: 'hand', tag: 'Spread',
     desc: 'Every foe your Doom Reaps rises as a minion (at most once per 1.5 s); every boss Toll raises one.[ Minions deal +{minionDmg} more.]',
@@ -265,7 +265,7 @@
     desc: 'A hurl at full wind (the bell glows) is a Full Swing: +{fullSwing} damage and an impact {fullR} wider.', mods: { fullSwing: 0.25, fullR: 0.3 } });
   card('bell', 'attack', 2, 'b_atk_h', { name: 'Wrecking Ball', icon: 'hammer', tag: 'Heavy', weapon: { kind: 'heavy' },
     desc: 'Your bell becomes heavy (×{fkRate:x} lockout, ×{fkDmg:x} damage per strike; a full-wind hurl Staggers and its impact is 20% wider). Where a hurl lands it cracks the ground: a shock (radius 70) for {wreck} of the hurl that stuns {wreckStun:s} (not bosses).[ Full Swings deal +{fullSwing} more.]',
-    rider2: 'Unstoppable: a hurl carries the foes it strikes along its flight, up to {hurlCarry:n} px (not bosses).', mods: { wreck: 0.4, wreckStun: 0.3 }, up: { fullSwing: 0.15, wreck: 0.05 }, r2: { hurlCarry: 40 }, r3: { demolish: 1 },
+    rider2: 'Unstoppable: a hurl carries the foes it strikes along its flight, up to {hurlCarry:n} px (not bosses).', mods: { wreck: 0.4, wreckStun: 0.3 }, up: { fullSwing: 0.15, wreck: 0.05 }, r2: { hurlCarry: 40 }, r3: { demolish: 0.75 },
     form: { name: 'Demolisher', desc: 'A Full Swing lands as a quake: its shock is twice as wide (radius 140), deals {demolish} more of the hurl and throws foes away from the impact.' } });
   card('bell', 'attack', 2, 'b_atk_s', { name: 'Pendulum', icon: 'bolt', tag: 'Swift', weapon: { kind: 'swift' },
     desc: 'Your bell becomes swift (×{fkRate:x} lockout, ×{fkDmg:x} damage per strike; winding gives Flow and reels are 30% faster). Winding spins the bell up {haulAcc} faster.[ Full Swings deal +{fullSwing} more.]',
@@ -285,7 +285,7 @@
     desc: 'Peal: +{s2Area} radius and +{s2Dmg} damage.', mods: { s2Area: 0.3, s2Dmg: 0.25 } });
   card('bell', 'skill2', 2, 'b_s2_a', { name: 'Thunderclap', icon: 'bolt', tag: 'Burst',
     desc: 'The Peal charges the foes it strikes for half of its damage and discharges them at once at +{clap}. Peal deals +{s2Dmg}.',
-    rider2: 'Reverberation: the Peal rings again 0.5 s later on the same spot at {pealEcho}.', mods: { clap: 0.5, s2Dmg: 0.2 }, up: { clap: 0.15, s2Dmg: 0.1 }, r2: { pealEcho: 0.5 }, r3: { tollN: 3, tollBolt: 0.5 },
+    rider2: 'Reverberation: the Peal rings again 0.5 s later on the same spot at {pealEcho}.', mods: { clap: 0.35, s2Dmg: 0.14 }, up: { clap: 0.1, s2Dmg: 0.07 }, r2: { pealEcho: 0.5 }, r3: { tollN: 3, tollBolt: 0.5 },
     form: { name: 'Thunder Toll', desc: 'Every Peal also calls a thunderbolt on each of the {tollN:n} most charged foes within 220 of each bell (radius 50) for {tollBolt} of the Peal.' } });
   card('bell', 'skill2', 2, 'b_s2_b', { name: 'Warding Toll', icon: 'shieldgold', tag: 'Guard', coop: true,
     desc: 'Peal deals +{s2Dmg}, destroys foe shots within half again its radius and shields you for {pealShield} max health per foe it strikes (up to {pealCap}, at most once per 10 s).',
@@ -295,11 +295,11 @@
     desc: "Your skills deal +{classElMul} Lightning damage, and your bell charges foes for {wInfLightning} of each strike (the Storm path's rate counts instead when it is higher).", mods: { classElMul: 0.25, wInfLightning: 0.15 } });
   card('bell', 'element', 2, 'b_el_a', { name: 'Lightning Rod', icon: 'bolt', tag: 'Focus',
     desc: 'A hurl strike on a charged foe deals +{rod} and discharges it at once.',
-    rider2: "Grounded: a hurl's discharge stuns the foe {rodStun:s} (not bosses; at most once a second).", mods: { rod: 1.7 }, up: { rod: 0.3 }, r2: { rodStun: 0.3 }, r3: { stormBolt: 2 },
+    rider2: "Grounded: a hurl's discharge stuns the foe {rodStun:s} (not bosses; at most once a second).", mods: { rod: 1.05 }, up: { rod: 0.2 }, r2: { rodStun: 0.3 }, r3: { stormBolt: 2 },
     form: { name: 'Skybreaker', desc: 'The anchored bell draws the storm: a thunderbolt (radius 50) strikes where it lands and again every second while it lies there, for {stormBolt} of your weapon damage, charging the foes it hits for half.' } });
   card('bell', 'element', 2, 'b_el_b', { name: 'Chain Toll', icon: 'arc', tag: 'Spread',
     desc: 'Each reel strike arcs to the nearest other foe within 90 for {chainArc} of the strike, as Lightning that charges it like a strike (no other foe near: back into the struck foe); your strikes charge foes for {wInfLightning} more of their damage.',
-    rider2: 'Forked Toll: the arc jumps on to {arcN:n} more foe.', mods: { chainArc: 1.5, wInfLightning: 0.1 }, up: { chainArc: 0.3 }, r2: { arcN: 1 }, r3: { arcN: 1, tollStorm: 0.6 },
+    rider2: 'Forked Toll: the arc jumps on to {arcN:n} more foe.', mods: { chainArc: 0.6, wInfLightning: 0.1 }, up: { chainArc: 0.12 }, r2: { arcN: 1 }, r3: { arcN: 1, tollStorm: 1.3 },
     form: { name: 'Toll of the Storm', desc: 'The arc jumps on to one more foe, and each reel makes the chain a live wire: every foe within 20 of it, between you and the bell, takes {tollStorm} of the reel strike as Lightning.' } });
 
   Object.assign(ED.BOONS, CB);

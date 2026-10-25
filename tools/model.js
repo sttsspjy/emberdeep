@@ -217,5 +217,9 @@ module.exports = (ED, opts) => {
     return q;
   }
 
-  return { pack, packWeapon, directDamage, statusDamage, heroDamage, echoK, defence, ailmentsKept, uptime, condFactor, assess, withRelic, COND_NOTE };
+  // Boons of the fork budget baseline (tools/sheet.js --routes --mid / --parity, tools/sheet-check.js): path-neutral, Focus only, so a fork reads as class power.
+  // The element forks of a Bleed class (ED.ELEMENT_ROUTE) cash in the ailments path gates supply; they read against Kindle + Frostbite + Focus.
+  function forkBase(cls, route) { return route === 'element' && ED.ELEMENT_ROUTE[cls] === 'Bleed' ? { kindle: 1, frostbite: 1, focus: 1 } : { focus: 1 }; }
+
+  return { pack, packWeapon, directDamage, statusDamage, heroDamage, echoK, defence, ailmentsKept, uptime, condFactor, assess, withRelic, forkBase, COND_NOTE };
 };

@@ -56,10 +56,10 @@ for (const [cls, sk, part, dmg] of SK) near(ED.Stats.skillNums(sk, build(cls)).p
 const sky = ED.Stats.skillNums('rain', build('ranger', 0, { r_s2: 1, r_s2_a: 1 }));
 near(sky.p.sky.dmg, 124.08, 0.1, 'Rainmaker + Skyfall sky');
 ok(!ED.Stats.skillNums('rain', build('ranger')).p.sky.on && sky.p.sky.on, 'Skyfall part gated by its stat');
-near(build('knight', 0, { k_s1: 1, k_s1_a: 1 }).s1Dmg, 0.375, 1e-9, 'slot damage compounds (Vanguard x1.25, Juggernaut x1.1)');
+near(build('knight', 0, { k_s1: 1, k_s1_a: 1 }).s1Dmg, (1 + ED.BOONS.k_s1.mods.s1Dmg) * (1 + ED.BOONS.k_s1_a.mods.s1Dmg) - 1, 1e-9, 'slot damage compounds (Vanguard x Juggernaut)');
 near(build('cleric', 0, { c_s1: 1, c_s1_b: 1 }).s1Dmg, 1.5 * 1.3 - 1, 1e-9, 'slot damage compounds (Sanctum x1.5, Aura x1.3)');
 const jug3 = build('knight', 0, { k_s1: 1, k_s1_a: 3 });
-near(jug3.jugShock, 0.6, 1e-9, 'Juggernaut rank 3 shock (0.4 + 2 x 0.1)'); near(jug3.bash, 0.3, 1e-9, 'Juggernaut rank 3 Shield Bash (30%)');
+near(jug3.jugShock, ED.BOONS.k_s1_a.mods.jugShock + 2 * ED.BOONS.k_s1_a.up.jugShock, 1e-9, 'Juggernaut rank 3 shock (mods + 2 x up)'); near(jug3.bash, 0.3, 1e-9, 'Juggernaut rank 3 Shield Bash (30%)');
 near(build('knight', 0, { k_s2: 1 }).skill2Cd, 9 * (1 - 0.167), 0.001, 'Bulwark cooldown with Shieldmaster'); near(ED.Stats.skillNums('charge', build('knight', 0, { k_s1: 1, k_s1_a: 1 })).range, 240, 1e-9, 'Juggernaut Charge range');
 const prs = ED.classRoute({ k_el: 1, k_el_b: 2 }, 'knight');
 ok(prs.route === 'element' && prs.fork === 'k_el_b' && prs.rank === 2, 'classRoute');
@@ -228,7 +228,7 @@ const run = (w, secs, f) => { for (let i = 0; i < Math.round(secs * 60); i++) { 
 {
   const dmg = (st) => { const { w, p } = stage('necro', st); const b = foe(w, p.x + 100, p.y); b.boss = true; b.maxHp = b.hp = 1000; b.doomOwner = p; b.doom = ED.CONST.TOLL_AT * 1000; let calls = 0; ED.CLS.necro.toll = () => { calls++; }; w.checkToll(b); delete ED.CLS.necro.toll; return { d: 1000 - b.hp, calls }; };
   const base = dmg({}), buff = dmg({ n_el: 1, n_el_a: 1 });
-  near(buff.d / base.d, 1.4, 0.01, 'Abyssal Toll: Tolls deal +40%'); ok(base.calls === 1 && buff.calls === 1, 'toll hook called once per Toll');
+  near(buff.d / base.d, 1 + ED.BOONS.n_el_a.mods.tollMul, 0.01, 'Abyssal Toll: Tolls deal +tollMul'); ok(base.calls === 1 && buff.calls === 1, 'toll hook called once per Toll');
   const doom = (st, elite) => { const { w, p } = stage('necro', st); p.stats.shadowInfuse = 0.5; const e = foe(w, p.x + 100, p.y); if (elite) e.elite = 'swift'; w.applyInfusions(e, 100, p, { kind: 'minion' }, 1); return e.doom; };
   near(doom({ n_el: 1, n_el_a: 3 }, true) / doom({ n_el: 1, n_el_a: 1 }, true), 2, 1e-6, 'Abyssal Hunger doubles minion Doom on elites'); near(doom({ n_el: 1, n_el_a: 3 }, false) / doom({ n_el: 1, n_el_a: 1 }, false), 1, 1e-6, 'Abyssal Hunger leaves common foes alone');
 }

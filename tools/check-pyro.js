@@ -49,9 +49,9 @@ const refunds = (w) => w.msgs.filter(m => m.t === 'refund');
   near(st({ p_s1: 1, p_s1_b: 2 }).s1Dmg, 1.2 * 1.05 - 1, 1e-9, 'Phoenix Mantle rank 2 Nova +5% (compounds)');
   near(st({ p_s2: 1, p_s2_a: 3 }).twinMeteor, 0.5, 1e-9, 'Twin Meteor 0.3 + 2 x 0.1'); near(st({ p_s2: 1, p_s2_b: 2 }).comet, 0.15, 1e-9, 'Comet 0.1 + 0.05'); near(st({ p_s2: 1, p_s2_b: 3 }).comet, 0.2, 1e-9, 'Sun Dive: every landing +20% (0.1 + 2 x 0.05)');
   near(st({ p_s2: 1, p_s2_b: 2 }).cometStun, 0.5, 1e-9, 'Impact Crater at rank 2'); near(st({ p_s2: 1, p_s2_b: 1 }).cometStun, 0, 1e-9, 'no Impact Crater at rank 1');
-  near(st({ p_el: 1, p_el_a: 3 }).burnMul, 0.35, 1e-9, 'White Heat burn 0.25 + 2 x 0.05'); near(st({ p_el: 1, p_el_a: 2 }).flashT, 6, 1e-9, 'Flashpoint at 6 s of burning from rank 2'); near(st({ p_el: 1, p_el_a: 1 }).flashT, 0, 1e-9, 'no Flashpoint at rank 1');
+  { const b = ED.BOONS.p_el_a; near(st({ p_el: 1, p_el_a: 3 }).burnMul, b.mods.burnMul + 2 * b.up.burnMul, 1e-9, 'White Heat burn: base + 2 ranks'); } near(st({ p_el: 1, p_el_a: 2 }).flashT, 6, 1e-9, 'Flashpoint at 6 s of burning from rank 2'); near(st({ p_el: 1, p_el_a: 1 }).flashT, 0, 1e-9, 'no Flashpoint at rank 1');
   near(st({ p_el: 1, p_el_a: 3 }).whiteHot, 0.4, 1e-9, 'White Flame +40%'); near(st({ p_el: 1, p_el_a: 3 }).whiteT, 3, 1e-9, 'White Flame after 3 s');
-  near(st({ p_el: 1, p_el_b: 3 }).heatEngine, 0.25, 1e-9, 'Heat Engine 0.15 + 2 x 0.05'); near(st({ p_el: 1, p_el_b: 2 }).heatChain, 2, 1e-9, 'Chain Reaction needs 2 from rank 2'); near(st({ p_el: 1, p_el_b: 1 }).heatChain, 0, 1e-9, 'no Chain Reaction at rank 1');
+  { const b = ED.BOONS.p_el_b; near(st({ p_el: 1, p_el_b: 3 }).heatEngine, b.mods.heatEngine + 2 * b.up.heatEngine, 1e-9, 'Heat Engine: base + 2 ranks'); } near(st({ p_el: 1, p_el_b: 2 }).heatChain, 2, 1e-9, 'Chain Reaction needs 2 from rank 2'); near(st({ p_el: 1, p_el_b: 1 }).heatChain, 0, 1e-9, 'no Chain Reaction at rank 1');
   near(st({ p_el: 1, p_el_b: 2 }).s1Dmg, 0.15, 1e-9, 'Heat Engine rank 2: Nova +15%'); near(st({ p_el: 1, p_el_b: 2 }).s2Dmg, 0.15, 1e-9, 'Heat Engine rank 2: Meteor +15%'); near(st({ p_el: 1, p_el_b: 1 }).s1Dmg, 0, 1e-9, 'no skill damage at rank 1'); near(st({ p_el: 1, p_el_b: 3 }).s2Dmg, 0.15, 1e-9, 'rank 3 keeps it');
   const tn = ED.Stats.skillNums('nova', st({ p_s1: 1, p_s1_a: 1 }));
   near(tn.p.echo.dmg / tn.p.blast.dmg, 0.5, 1e-9, 'echo part = blast x 0.5'); near(tn.p.echo.r, tn.p.blast.r, 1e-9, 'echo radius = blast radius');
@@ -303,22 +303,22 @@ const refunds = (w) => w.msgs.filter(m => m.t === 'refund');
   const t = stage({ p_el: 1 }, 1); foe(t.w, t.p.x + 80, t.p.y); t.w.playerAttack(t.p, 0); run(t, 0.5); ok(t.adds.length >= 1, 'the Ember Wand builds Burn from the route as well');
 }
 
-// ---- Heat Engine: each burning foe a cast hits cuts 0.15 s from the other skill (at most 1.5 s per cast); Chain Reaction (rank 2) at 2 burning foes refunds it in full once per 6 s ----
+// ---- Heat Engine: each burning foe a cast hits cuts heatEngine s from the other skill (at most HEAT_MAX per cast); Chain Reaction (rank 2) at 2 burning foes refunds it in full once per 6 s ----
 {
-  const refunds = (w) => w.msgs.filter(m => m.t === 'refund');
+  const refunds = (w) => w.msgs.filter(m => m.t === 'refund'), he = (r) => ED.cardTotals(ED.BOONS.p_el_b, r).heatEngine, HM = ED.CONST.HEAT_MAX;
   const mk = (boons, nBurn, nCold) => {
     const s = stage(boons), { w, p } = s;
-    for (let i = 0; i < nBurn; i++) { const e = foe(w, p.x + 30 + i * 5, p.y + 10 * (i % 3) - 10); e.burnPool = 60; e.burnOwner = p; e.burnTick = 99; e.burn = 1; }
+    for (let i = 0; i < nBurn; i++) { const e = foe(w, p.x + 30 + i * 3, p.y + 10 * (i % 3) - 10); e.burnPool = 60; e.burnOwner = p; e.burnTick = 99; e.burn = 1; }
     for (let i = 0; i < nCold; i++) foe(w, p.x + 30 + i * 5, p.y + 40);
     w.msgs.length = 0;
     return s;
   };
   let s = mk({ p_el: 1, p_el_b: 1 }, 3, 2); cast(s, 0, 0, 0);
-  let r = refunds(s.w); ok(r.length === 1 && r[0].slot === 1, 'one refund message for Meteor'); near(r[0].s, 0.45, 1e-9, '3 burning foes = 0.45 s'); ok(s.w.fx.some(ev => ev.t === 'pyHeat' && ev.n === 3), 'Heat event');
+  let r = refunds(s.w); ok(r.length === 1 && r[0].slot === 1, 'one refund message for Meteor'); near(r[0].s, 3 * he(1), 1e-9, '3 burning foes = 3 x heatEngine'); ok(s.w.fx.some(ev => ev.t === 'pyHeat' && ev.n === 3), 'Heat event');
   s = mk({ p_el: 1, p_el_b: 1 }, 0, 3); cast(s, 0, 0, 0); ok(refunds(s.w).length === 0, 'foes that were not burning before the cast do not count');
-  s.w.msgs.length = 0; cast(s, 0, 0, 0); r = refunds(s.w); ok(r.length === 1 && Math.abs(r[0].s - 0.45) < 1e-9, 'a second cast counts the foes the first one lit');
-  s = mk({ p_el: 1, p_el_b: 1 }, 12, 0); cast(s, 0, 0, 0); r = refunds(s.w); near(r[0].s, 1.5, 1e-9, 'capped at 1.5 s per cast'); ok(r.length === 1, 'one message per cast');
-  s = mk({ p_el: 1, p_el_b: 2 }, 1, 0); cast(s, 0, 0, 0); near(refunds(s.w)[0].s, 0.2, 1e-9, 'rank 2: 0.2 s per foe');
+  s.w.msgs.length = 0; cast(s, 0, 0, 0); r = refunds(s.w); ok(r.length === 1 && Math.abs(r[0].s - 3 * he(1)) < 1e-9, 'a second cast counts the foes the first one lit');
+  s = mk({ p_el: 1, p_el_b: 1 }, Math.ceil(HM / he(1)) + 1, 0); cast(s, 0, 0, 0); r = refunds(s.w); near(r[0].s, HM, 1e-9, 'capped at HEAT_MAX per cast'); ok(r.length === 1, 'one message per cast');
+  s = mk({ p_el: 1, p_el_b: 2 }, 1, 0); cast(s, 0, 0, 0); near(refunds(s.w)[0].s, he(2), 1e-9, 'rank 2: heatEngine of rank 2 per foe');
   s = mk({ p_el: 1, p_el_b: 2 }, 2, 0); cast(s, 0, 0, 0); r = refunds(s.w); ok(r.length === 1 && r[0].s === undefined && r[0].slot === 1, 'Chain Reaction: 2 burning foes refund Meteor in full'); near(s.p.heatT, 6, 1e-9, 'Chain Reaction cooldown 6 s');
   s.w.msgs.length = 0; cast(s, 0, 0, 0); r = refunds(s.w); ok(r.length === 1 && r[0].s !== undefined, 'a second chain inside 6 s only cuts the cooldown');
   s.p.heatT = 0; s.w.msgs.length = 0; cast(s, 0, 0, 0); r = refunds(s.w); ok(r.length === 1 && r[0].s === undefined, 'Chain Reaction is ready again after 6 s');
@@ -332,7 +332,7 @@ const refunds = (w) => w.msgs.filter(m => m.t === 'refund');
 {
   const s = stage({ p_s1: 1, p_s1_b: 1 }), e = foe(s.w, s.p.x + 70, s.p.y); e.fodder = true; cast(s, 0, 0, 0); near(s.p.shield, 0, 1e-9, 'Mantle: a Nova that only hit horde foes shields nobody'); near(s.p.mantleT, 0, 1e-9, 'and starts no Mantle cooldown'); ok(parts(s, 'nova.blast').length === 1, 'the horde foe was still struck');
   const h = stage({ p_el: 1, p_el_b: 1 }); for (let i = 0; i < 4; i++) { const f = foe(h.w, h.p.x + 30 + i * 5, h.p.y - 10 + i * 6); f.burnPool = 60; f.burnOwner = h.p; f.burnTick = 99; f.burn = 1; f.fodder = i < 3; } h.w.msgs.length = 0; cast(h, 0, 0, 0);
-  const rf = h.w.msgs.filter(m => m.t === 'refund'); ok(rf.length === 1 && Math.abs(rf[0].s - 0.15) < 1e-9, 'Heat Engine counts the one burning foe that is not a horde foe (0.15 s of 4 burning foes)');
+  const rf = h.w.msgs.filter(m => m.t === 'refund'); ok(rf.length === 1 && Math.abs(rf[0].s - ED.BOONS.p_el_b.mods.heatEngine) < 1e-9, 'Heat Engine counts the one burning foe that is not a horde foe (one foe of 4 burning foes)');
 }
 
 // ================= skill forms: rank 2 keeps the old rider, rank 3 is the transform =================
@@ -538,17 +538,17 @@ const evAll = (s, t) => s.evs.concat(s.w.fx).filter(e => e.t === t);
   ok(tx('p_el', 1).indexOf('+25% Fire damage') >= 0 && tx('p_el', 1).indexOf('15% of each hit') >= 0, 'Living Flame prints its numbers');
 }
 
-// ---- White Heat: Burn +25% (+5% per rank), burning foes take +10% from spells; Flashpoint (rank 2): a spell always crits a foe that has burned 6 s in a row ----
+// ---- White Heat: Burn +burnMul (more per rank), burning foes take +searSkill from spells; Flashpoint (rank 2): a spell always crits a foe that has burned 6 s in a row ----
 {
   const burn = (p, e) => { e.burnPool = 5; e.burnOwner = p; e.burnTick = 99; e.burn = 1; };
   const s = stage({ p_el: 1, p_el_a: 1 }), { w, p } = s, e = foe(w, p.x + 60, p.y);
   w.burnStack(e, p, 0); run(s, 0.52); // the first tick: 0.5 s of the stack
-  const dot = s.log.find(h => h.kind === 'dot'), bv = ED.CONST.BURN_K * p.stats.power * Math.max(0.1, p.stats.dmg); near(dot.d, bv * 0.5 * 1.25, 1e-6, 'Burn tick x1.25 (a stack: half its Burn value per 0.5 s, +25%)');
+  const dot = s.log.find(h => h.kind === 'dot'), bv = ED.CONST.BURN_K * p.stats.power * Math.max(0.1, p.stats.dmg); near(dot.d, bv * 0.5 * (1 + ED.BOONS.p_el_a.mods.burnMul), 1e-6, 'Burn tick x(1 + burnMul) (a stack: half its Burn value per 0.5 s)');
   const hot = stage({ p_el: 1, p_el_a: 1 }), cold = stage({ p_el: 1, p_el_a: 1 });
   const eh = foe(hot.w, hot.p.x + 60, hot.p.y), ec = foe(cold.w, cold.p.x + 60, cold.p.y); eh.burnPool = 50; eh.burnOwner = hot.p;
   const dh = hot.w.hitEnemy(eh, 100, { p: hot.p, kind: 'skill', part: 'nova.blast', clsEl: 'fire' }), dc = cold.w.hitEnemy(ec, 100, { p: cold.p, kind: 'skill', part: 'nova.blast', clsEl: 'fire' });
-  const sd = hot.p.stats.dmg + 0.25; near(dh / dc, (sd + 0.1) / sd, 1e-6, 'burning foes take +10% from spells');
-  const wk = hot.w.hitEnemy(eh, 100, { p: hot.p, kind: 'weapon', wpn: true, crit: false }), wc = cold.w.hitEnemy(ec, 100, { p: cold.p, kind: 'weapon', wpn: true, crit: false }); near(wk / wc, 1, 1e-6, 'the +10% is for spells only');
+  const sd = hot.p.stats.dmg + 0.25; near(dh / dc, (sd + ED.BOONS.p_el_a.mods.searSkill) / sd, 1e-6, 'burning foes take +searSkill from spells');
+  const wk = hot.w.hitEnemy(eh, 100, { p: hot.p, kind: 'weapon', wpn: true, crit: false }), wc = cold.w.hitEnemy(ec, 100, { p: cold.p, kind: 'weapon', wpn: true, crit: false }); near(wk / wc, 1, 1e-6, 'the spell bonus is for spells only');
   const f = stage({ p_el: 1, p_el_a: 2 }), fe = foe(f.w, f.p.x + 60, f.p.y), sk = () => ({ p: f.p, kind: 'skill', part: 'nova.blast', clsEl: 'fire' });
   burn(f.p, fe); run(f, 5.8, () => burn(f.p, fe)); const a1 = sk(); f.w.hitEnemy(fe, 10, a1); ok(!a1.critOut, 'no Flashpoint after 5.8 s of burning');
   run(f, 0.4, () => burn(f.p, fe)); const a2 = sk(); f.w.hitEnemy(fe, 10, a2); ok(a2.critOut, 'Flashpoint: a spell crits a foe that has burned 6 s in a row');

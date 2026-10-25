@@ -9,7 +9,7 @@
 //               effective health; for each melee weapon the Steel build's finisher hit (a guaranteed crit at FIN_MUL) and its plain swing against the stratum's foe health
 //   --weapons   per weapon (each base weapon, then its Armory variants indented with their change against the base): damage per second on one foe and in a pack of 4 at the class Power, and the damage factor that puts it on the median of the base weapons
 // Hero damage = (weapon dps + skill damage per cooldown) x the conditional-damage factor (ED.COND_DMG rows the build owns at assumed uptimes, see COND_NOTE) + status estimates; a pack of 4: melee arcs, blasts, sweeps, waves and ricochets hit all four foes, a fan hits as many as it has arrows; a piercing shot hits the first foe and half of the other foes it could pierce (tools/model.js PIERCE_LINE).
-// The mid build: two path gates (the class element's first where it has a path) and Focus.
+// The mid build (route and parity baseline): tools/model.js forkBase (path-neutral Focus; a Bleed class's element forks add Kindle and Frostbite).
 const { ED } = require('./sim.js');
 const args = {};
 for (const a of process.argv.slice(2)) { const m = /^--([a-z0-9]+)(?:=(.*))?$/i.exec(a); if (m) args[m[1]] = m[2] === undefined ? '1' : m[2]; }
@@ -18,10 +18,9 @@ const RANKS = (args.rank || '1,2,3').split(',').map(Number);
 let STRATUM = +(args.stratum || 3); // --parity sets it per pass
 const St = ED.Stats;
 const M = require('./model.js')(ED, { pack: +(args.pack || 4), surround: !!args.surround }); // hero damage, defence and conditional factor live in the shared model (tools/pick.js reads the same one)
-const { packWeapon, directDamage, heroDamage, echoK, defence, condFactor, COND_NOTE } = M, PACK = M.pack;
+const { packWeapon, directDamage, heroDamage, echoK, defence, condFactor, forkBase, COND_NOTE } = M, PACK = M.pack;
 const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
-const GATE2 = { knight: ['kindle', 'frostbite'], ranger: ['kindle', 'frostbite'], pyro: ['kindle', 'staticcharge'], shade: ['kindle', 'frostbite'], cleric: ['staticcharge', 'frostbite'], necro: ['kindle', 'frostbite'], bell: ['staticcharge', 'frostbite'] };
-const MID = (cls) => Object.assign({}, ...GATE2[cls].map(id => ({ [id]: 1 })), { focus: 1 });
+const MID = (cls) => (route) => forkBase(cls, route);
 // --paths: a committed single-path build per path, 10 picks each (gate, pool cards incl. its defensive ones, keystone; stratum II deep cards, no evolution).
 const PATH_PICKS = {
   general: { generalist: 1, keen: 2, brutal: 2, lacerate: 1, execute: 1, deepcuts: 1, heartseeker: 1, masterstroke: 1 },
@@ -61,19 +60,21 @@ if (!args.routes && !args.weapons && !args.parity && !args.paths || args.fresh) 
 }
 
 // ---- routes ----
-// One class under the `base` boons: the base numbers, then per route the route card alone (fork null) and each fork at each of `ranks`; every change is against the class without the route card.
+// One class under the `base` boons (an object, or a function of the route: null for the header): the base numbers, then per route the route card alone (fork null) and each fork at each of `ranks`; every change is against the class without the route card.
 function routeRows(cls, base, ranks) {
-  const pb = hero(cls, 0, base), mb = model(pb), db = defence(pb, mb), kb = condFactor(pb, mb, db), b1 = heroDamage(mb, 1, kb), b4 = heroDamage(mb, PACK, kb, echoK(pb, mb, PACK)), rows = [];
+  const baseOf = typeof base === 'function' ? base : () => base;
+  const ref = (boons) => { const p = hero(cls, 0, boons), m = model(p), d = defence(p, m), k = condFactor(p, m, d); return { b1: heroDamage(m, 1, k), b4: heroDamage(m, PACK, k, echoK(p, m, PACK)), ehp: d.ehp }; };
+  const top = ref(baseOf(null)), rows = [];
   for (const r of ED.ROUTES) {
-    const e = ED.CLASS_CARDS[cls][r];
+    const e = ED.CLASS_CARDS[cls][r], bs = baseOf(r), { b1, b4, ehp: bEhp } = ref(bs);
     const add = (name, fork, rank, boons) => {
       const p = hero(cls, 0, boons), m = model(p), d = defence(p, m), k = condFactor(p, m, d), h1 = heroDamage(m, 1, k), h4 = heroDamage(m, PACK, k, echoK(p, m, PACK));
-      rows.push({ route: r, name, fork, rank, d1: h1 / b1 - 1, d4: h4 / b4 - 1, ehp: d.ehp / db.ehp - 1, shield: d.shield, stun: d.stun, wdps: m.weapon.dps, s1: m.skills[0].dpsCd, s2: m.skills[1] ? m.skills[1].dpsCd : 0, note: d.note.join('; ') });
+      rows.push({ route: r, name, fork, rank, d1: h1 / b1 - 1, d4: h4 / b4 - 1, ehp: d.ehp / bEhp - 1, shield: d.shield, stun: d.stun, wdps: m.weapon.dps, s1: m.skills[0].dpsCd, s2: m.skills[1] ? m.skills[1].dpsCd : 0, note: d.note.join('; ') });
     };
-    add(`${ED.routeLabel(cls, r)} (${ED.BOONS[e.t1].name})`, null, 0, Object.assign({}, base, { [e.t1]: 1 }));
-    for (const fid of e.forks) for (const rank of ranks) add(`   ${ED.BOONS[fid].name} r${rank}`, fid, rank, Object.assign({}, base, { [e.t1]: 1, [fid]: rank }));
+    add(`${ED.routeLabel(cls, r)} (${ED.BOONS[e.t1].name})`, null, 0, Object.assign({}, bs, { [e.t1]: 1 }));
+    for (const fid of e.forks) for (const rank of ranks) add(`   ${ED.BOONS[fid].name} r${rank}`, fid, rank, Object.assign({}, bs, { [e.t1]: 1, [fid]: rank }));
   }
-  return { b1, b4, ehp: db.ehp, rows };
+  return { b1: top.b1, b4: top.b4, ehp: top.ehp, rows };
 }
 function routeTable(label, boonsFor) {
   out(`\n###### ${label}`);
@@ -87,7 +88,7 @@ function routeTable(label, boonsFor) {
 }
 if (args.routes) {
   if (!args.mid) routeTable('fresh build', () => ({}));
-  routeTable('mid build (2 gates, Sharpened Edge x2, Quickened Hands x2, Focus, Stalwart)', MID);
+  routeTable('mid build (Focus, no path cards; a Bleed class element route adds Kindle and Frostbite)', MID);
 }
 
 // ---- parity ----
