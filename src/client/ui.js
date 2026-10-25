@@ -663,12 +663,6 @@
     }
     return h;
   }
-  // "Weak: <stratum>" chip of an element gate card: the stratum whose foes are weak to the path's element.
-  const weakChip = (b) => {
-    if (!b.gate || !ED.PATHS[b.path].element) return '';
-    const bi = ED.BIOMES.find(x => x.weak === b.path);
-    return bi ? `<span class="bc-weak" style="--pc:${ED.PATHS[b.path].color}">Weak: ${esc(bi.short)}</span>` : '';
-  };
 
   // The (at most 2) numbers each offered card changes most: [[{ label, from, to, unit, better }]] from the hero's sheet models now and with each card (computed once per offer).
   function offerDeltas(offer, me) {
@@ -726,7 +720,7 @@
     const rank = have ? (have < max ? `Rank ${have} → ${have + 1} (max ${max})` : `Rank ${have} (max)`) : max > 1 ? `Max rank ${max}` : '';
     const ribbon = boonRibbon(b, id), [line] = boonPathLine(b);
     const icon = ED.CardArt ? ED.CardArt.icon(b.icon, L.icol) : ED.Icons.boonUrl(id);
-    el.innerHTML = `${cardArt(L, b, have, max)}${ribbon ? `<span class="bc-ribbon">${ribbon}</span>` : ''}<div class="bc-top">${line}<span class="bc-rar">${ED.RARITY[b.rar].name}</span></div><img class="bc-icon" alt="" src="${icon}"><div class="bn">${esc(b.name)}</div>${b.evo ? `<div class="bsub">${esc(UI.evoName(b.evo, heroWeaponName(me)))}</div>` : ''}${weakChip(b)}${b.route ? classBody(b, id, have, me) : `<div class="bd">${esc(ED.Sheet.text(id, Math.min(max, have + 1), me && me.stats, ED.Game.s && ED.Game.s.view && ED.Game.s.view.stratum))}</div>`}${deltaHtml(deltas)}${rank ? `<div class="bk${have ? ' own' : ''}">${rank}</div>` : ''}`;
+    el.innerHTML = `${cardArt(L, b, have, max)}${ribbon ? `<span class="bc-ribbon">${ribbon}</span>` : ''}<div class="bc-top">${line}<span class="bc-rar">${ED.RARITY[b.rar].name}</span></div><img class="bc-icon" alt="" src="${icon}"><div class="bn">${esc(b.name)}</div>${b.evo ? `<div class="bsub">${esc(UI.evoName(b.evo, heroWeaponName(me)))}</div>` : ''}${b.route ? classBody(b, id, have, me) : `<div class="bd">${esc(ED.Sheet.text(id, Math.min(max, have + 1), me && me.stats, ED.Game.s && ED.Game.s.view && ED.Game.s.view.stratum))}</div>`}${deltaHtml(deltas)}${rank ? `<div class="bk${have ? ' own' : ''}">${rank}</div>` : ''}`;
     const wb = el.querySelector('.bweap');
     if (wb) { const th = weaponThumb(wb.dataset.w); if (th) wb.insertBefore(th, wb.firstChild); }
     el.onclick = () => { if (performance.now() >= boonLock) UI.pickBoon(i); };

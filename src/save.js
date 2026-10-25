@@ -10,7 +10,7 @@
   const LS_SETTINGS = 'wickdeep.settings.v1';
   const NAME_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -';
   const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-  const CODE_VERSION = 9; // 9: the layout of 8 (marks a code made after the v6 rules); 8: count-prefixed sections after the stats (secrets, hero wins, the Bellwarden flag, evolutions, Wardrobe purchases and worn items); 7: the layout of 5 (marks a code made after the v5 difficulty); 6: the layout of 5 (marks a code made after the health rescale); 5: no relic bits, an Armory section (per hero: 6-bit count, 1 bit per entry) after mastery; 4: upgrades and heroes carry count prefixes too; 3: only the non-start relic bits do; 2 stored exactly V2_RELIC_BITS relic bits, V2_UPGRADES ranks and V2_HEROES mastery values. A count prefix keeps appended entries from shifting what follows.
+  const CODE_VERSION = 9; // 9: the layout of 8 (marks a code made after the v6 rules; older codes hold six-stratum boss bits and deepest); 8: count-prefixed sections after the stats (secrets, hero wins, the Bellwarden flag, evolutions, Wardrobe purchases and worn items); 7: the layout of 5 (marks a code made after the v5 difficulty); 6: the layout of 5 (marks a code made after the health rescale); 5: no relic bits, an Armory section (per hero: 6-bit count, 1 bit per entry) after mastery; 4: upgrades and heroes carry count prefixes too; 3: only the non-start relic bits do; 2 stored exactly V2_RELIC_BITS relic bits, V2_UPGRADES ranks and V2_HEROES mastery values. A count prefix keeps appended entries from shifting what follows.
   const ERA = 6; // profile era (S.defaultProfile v)
   const V2_RELIC_BITS = 26, V2_UPGRADES = 16, V2_HEROES = 6;
   // The relic list of save code v4 as [id, start, cost], in v4 RELIC_IDS order: old profiles (positional flags) and v2-v4 codes (non-start bits) decode against it, and the Codex embers they paid are refunded. Frozen.
@@ -81,6 +81,10 @@
   const codexRefund = (flags) => V4_CODEX.reduce((n, i) => n + (flags[i] ? V4_RELICS[i][2] : 0), 0);
 
   // Whatever was stored (old versions, hand edits, damage), return a well-formed profile.
+  // Six-stratum profiles (era below 6, codes below 9) keep each stratum by name: Ossuary I, Glowmire II, Drowned Sanctum V -> III, Starless Abyss VI -> IV; the cut Rimefrost (III) and Cinderforge (IV) fall back to Glowmire.
+  const SIX_DEEP = [0, 1, 2, 2, 2, 3, 4, 4]; // old deepest -> deepest (7 only from a damaged code)
+  const sixDeep = (n) => SIX_DEEP[n] || 0;
+  const sixBosses = (b) => (b & 3) | (((b >> 4) & 1) << 2) | (((b >> 5) & 1) << 3); // old boss bits 0, 1, 4, 5 -> 0, 1, 2, 3
   const int = (v, lo, hi) => { const n = Math.floor(Number(v)); return Number.isFinite(n) ? U.clamp(n, lo, hi) : lo; };
   const obj = (v) => (v && typeof v === 'object' ? v : {});
   const BIG = 1e12;
@@ -97,12 +101,13 @@
     const arm = obj(p.armory);
     for (const c of ED.CLASS_IDS) { const a = arr(arm[c]); d.armory[c] = armoryList(c).map((e, i) => (a[i] ? 1 : 0)); }
     d.mastery = ED.CLASS_IDS.map((c, i) => int(mastery[i], 0, BIG));
-    d.bosses = int(p.bosses, 0, 63);
+    const six = (p.v | 0) < ERA; // a six-stratum profile: boss bits and deepest are remapped
+    d.bosses = six ? sixBosses(int(p.bosses, 0, 63)) : int(p.bosses, 0, 63);
     d.deeds = int(p.deeds, 0, 2 ** 31 - 1);
     d.pactMax = int(p.pactMax, 0, 10);
     d.pactWin = p.pactWin === undefined ? -1 : int(p.pactWin, -1, 10);
     const st = obj(p.stats);
-    for (const k in d.stats) d.stats[k] = int(st[k], 0, k === 'deepest' ? ED.CONST.STRATA : BIG); // an older six-stratum profile caps at the last stratum
+    for (const k in d.stats) d.stats[k] = k === 'deepest' ? (six ? sixDeep(int(st[k], 0, 7)) : int(st[k], 0, ED.CONST.STRATA)) : int(st[k], 0, BIG);
     d.secrets = int(p.secrets, 0, 2 ** 31 - 1);
     d.heroWins = int(p.heroWins, 0, 2 ** 31 - 1);
     d.bellUnlocked = p.bellUnlocked === true;
@@ -554,12 +559,12 @@
           for (let i = 0; i < ne; i++) { const bit = r.get(1); if (bit && i < list.length) p.armory[cls][i] = 1; }
         }
       }
-      p.bosses = r.get(6);
+      p.bosses = ver < 9 ? sixBosses(r.get(6)) : r.get(6);
       const nd = r.get(6); let deeds = 0;
       for (let i = 0; i < nd; i++) if (r.get(1)) deeds |= (1 << i);
       p.deeds = deeds;
       p.pactMax = Math.min(10, r.get(4)); p.pactWin = Math.min(10, r.get(4) - 1);
-      p.stats.runs = r.varint(); p.stats.wins = r.varint(); p.stats.deepest = Math.min(ED.CONST.STRATA, r.get(3));
+      p.stats.runs = r.varint(); p.stats.wins = r.varint(); p.stats.deepest = ver < 9 ? sixDeep(r.get(3)) : Math.min(ED.CONST.STRATA, r.get(3));
       p.stats.kills = r.varint(); p.stats.bestTime = r.varint(); p.stats.bossKills = r.varint();
       if (ver >= 8) { // entries beyond this build are skipped, missing ones stay empty
         const ns = r.get(6); let sec = 0;
