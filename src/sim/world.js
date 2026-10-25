@@ -278,8 +278,8 @@
   W.prototype.secretP = function (p, k) { if (!p || p.sec[k]) return; p.sec[k] = true; this.emit({ t: 'secret', pid: p.pid }); };
   W.prototype.secretW = function (k) { if (this.run[k]) return; this.run[k] = true; this.emit({ t: 'secret', pid: null }); };
   W.prototype.partySize = function () { return Math.max(1, this.players.size); };
-  W.partyHpMul = (size) => { const n = size - 1; return 1 + 0.45 * n + 0.1 * n * (n - 1); }; // foe HP factor of a party of `size` (pure; the sheet reads it too)
-  W.FOE_DMG = 1.95; // every foe's damage (hits, shots, zones, bosses) x this
+  W.partyHpMul = (size) => { const n = size - 1; return 1 + 0.55 * n + 0.1 * n * (n - 1); }; // foe HP factor of a party of `size` (pure; the sheet reads it too)
+  W.FOE_DMG = 2.15; // every foe's damage (hits, shots, zones, bosses) x this
   W.dmgScale = (s, f) => { const d = W.depth(s, f) - 1; return W.FOE_DMG * (1 + 0.22 * d + 0.03 * d * d); }; // foe damage factor of stratum s at row fraction f
   W.prototype.partyHpMul = function () { return W.partyHpMul(this.partySize()); };
   W.prototype.alive = function (p) { return p && !p.downed && !p.dead; };

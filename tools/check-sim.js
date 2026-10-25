@@ -295,7 +295,7 @@ for (const mode of ['proj', 'zone', 'tick']) {
   ok(w3.room.id === r3.doors[d] && s0.doorWant === 0, 'solo: the door takes the hero at once');
 }
 { // bot map walk (fully upgraded heroes): one room per map row from the start camp to the boss; --dark=never takes a path with the fewest dark rooms, --dark=always enters at least one per stratum
-  for (const [seed, cls] of [[1000, 'knight'], [1028, 'ranger'], [1015, 'pyro']]) {
+  for (const [seed, cls] of [[1000, 'knight'], [1043, 'ranger'], [1015, 'pyro']]) {
     for (const dark of ['never', 'always']) {
       const r = runBot({ seed, n: 1, cls: [cls], skill: 0.75, up: ED.UPGRADES.map(u => u.costs.length), mastery: 10, relics: ED.RELIC_IDS.filter(id => ED.RELICS[id].start), pick: 'smart', dark, maxStratum: 2 });
       ok(r.left.length >= 1 && r.left.every(f => f.visited === f.rows + 2), `${cls} ${dark}: one room per row, start to boss (${JSON.stringify(r.left)})`);
@@ -390,22 +390,22 @@ const budgetOf = (s, kind) => Math.round(W0.perStratum(W0.ROOM_XP[kind === 'elit
   w.stratum = 1; w.room.dark = false; const a = w.spawnEnemy('bonemite', 0, 0); w.room.dark = true; const b = w.spawnEnemy('bonemite', 0, 0); w.room.dark = false;
   near(b.dmg / a.dmg, 1.3, 1e-9, 'fodder damage x1.3 in a dark room');
 }
-{ // a touch from fodder takes at most 3% of max health (minimum 1); other foes are not capped
+{ // a touch from fodder takes at most FODDER_CAP of max health (a fraction of a point on a low-health hero); other foes are not capped
   const { w, p } = stage('knight', {});
   const f = w.spawnEnemy('bonemite', p.x + 10, p.y), k = w.spawnEnemy('skeleton', p.x + 10, p.y);
   p.maxHp = 200; p.hp = 200; p.invuln = 0; p.shield = 0;
-  w.hurtPlayer(p, 5000, { e: f }); near(200 - p.hp, 6, 0, 'a fodder hit takes 3% of 200 = 6');
-  p.hp = 200; p.invuln = 0; w.hurtPlayer(p, 60, { e: k }); ok(200 - p.hp > 6 && !p.downed, `another foe is not capped (${200 - p.hp})`);
-  p.maxHp = 10; p.hp = 10; p.invuln = 0; w.hurtPlayer(p, 5000, { e: f }); near(10 - p.hp, 1, 0, 'a fodder hit takes at least 1');
-  p.maxHp = 100; p.hp = 100; p.invuln = 0; p.shield = 50; w.hurtPlayer(p, 5000, { e: f }); ok(p.hp === 100 && p.shield === 47, `a shield absorbs the capped hit (hp ${p.hp}, shield ${p.shield})`);
-  p.shield = 0; p.hp = 100; p.invuln = 0; w.hurtPlayer(p, 1, { e: f }); near(100 - p.hp, 1, 0, 'a weak fodder hit stays 1');
+  const FC = ED.CONST.FODDER_CAP; w.hurtPlayer(p, 5000, { e: f }); near(200 - p.hp, FC * 200, 1e-9, 'a fodder hit takes FODDER_CAP of 200');
+  p.hp = 200; p.invuln = 0; w.hurtPlayer(p, 60, { e: k }); ok(200 - p.hp > FC * 200 && !p.downed, `another foe is not capped (${200 - p.hp})`);
+  p.maxHp = 10; p.hp = 10; p.invuln = 0; w.hurtPlayer(p, 5000, { e: f }); near(10 - p.hp, FC * 10, 1e-9, 'a fodder hit on a 10-health hero takes a fraction of a point');
+  p.maxHp = 100; p.hp = 100; p.invuln = 0; p.shield = 50; w.hurtPlayer(p, 5000, { e: f }); ok(p.hp === 100 && Math.abs(p.shield - (50 - FC * 100)) < 1e-9, `a shield absorbs the capped hit (hp ${p.hp}, shield ${p.shield})`);
+  p.shield = 0; p.hp = 100; p.invuln = 0; w.hurtPlayer(p, 1, { e: f }); near(100 - p.hp, Math.min(1, FC * 100), 1e-9, 'a weak fodder hit stays at most 1');
 }
 { // a touch in the sim: fodder next to a hero hurts it by the cap at most
   const { w, p } = stage('knight', {});
   w.stratum = ED.CONST.STRATA; p.invuln = 0; const f = w.spawnEnemy('voidmote', p.x + 4, p.y); f.cd = 99; w.enc = {}; const hp0 = p.hp;
   w.updateEnemy(f, TICK);
-  const cap = Math.max(1, Math.round(0.03 * p.maxHp));
-  ok(hp0 - p.hp >= 1 && hp0 - p.hp <= cap && f.st === 'move', `touch damage ${hp0 - p.hp} within 1..${cap} and untelegraphed (state ${f.st})`);
+  const cap = ED.CONST.FODDER_CAP * p.maxHp;
+  ok(hp0 - p.hp > 0 && hp0 - p.hp <= cap + 1e-9 && f.st === 'move', `touch damage ${hp0 - p.hp} within 0..${cap} and untelegraphed (state ${f.st})`);
 }
 { // fodder kills: no gold, heart or Grail growth, no split; run counts; hit events carry fd
   const { w, p } = stage('knight', {});

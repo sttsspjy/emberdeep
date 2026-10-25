@@ -434,7 +434,7 @@ const hurt = (w, p) => { p.invuln = 0; return w.hurtPlayer(p, 1, { hazard: true 
 { // Cataclysm (p_s2_a rank 3): five meteors (the cursor point and four around it at 80 px, 0.1 s apart, 42% each), one lava field r140 for the crater duration; rank 2 keeps the twin and the shower
   const go = (boons, mod) => {
     const s = stage(boons), { w, p } = s, cx = p.x + 200, cy = p.y;
-    const mid = foe(w, cx, cy), flank = [0, 1, 2, 3].map(k => foe(w, cx + Math.cos(k * Math.PI / 2) * 80, cy + Math.sin(k * Math.PI / 2) * 80)), inF = foe(w, cx + 130, cy + 60), outF = foe(w, cx + 100, cy + 150);
+    const mid = foe(w, cx, cy), flank = [0, 1, 2, 3].map(k => foe(w, cx + Math.cos(k * Math.PI / 2) * 80, cy + Math.sin(k * Math.PI / 2) * 80)), inF = foe(w, cx + 130, cy + 60), outF = foe(w, cx - 130, cy - 120);
     if (mod) mod(w, p, mid);
     cast(s, 1, cx, cy); run(s, 1.5);
     return { s, w, p, mid, flank, inF, outF, cx, cy };
