@@ -84,6 +84,10 @@ series('Whirlwind (knives)', 'whirl', 'knives', { bladeStorm: 0.05, momMax: 5 },
   p.atkCount = 2; ok(w.empowerOf(p) === idx('cleave') + 1, 'Cleave outranks the wave on the same attack');
   p.atkCount = 0; ok(w.empowerOf(p) === 0, 'a plain next attack: 0');
   p.atkCount = 2; p.downed = true; ok(w.empowerOf(p) === 0, 'a downed hero: 0'); p.downed = false;
+  const fs0 = stage('longsword', { cleave: 0.5, cleaveN: 0, hold: 'finisher' }), fp = fs0.p; // a held Finisher: its release is attack 3 and never Cleaves
+  fp.atkCount = 2; fp.holdOn = true; const fk = fs0.w.empowerOf(fp); rec.swings.length = 0; fs0.w.playerAttack(fp, 0, 0, undefined, true);
+  ok(fk !== idx('cleave') + 1 && rec.swings.length > 0 && !rec.swings.some(s => s.o.cleave > 0), `a held Finisher shows no Cleave and its release does not Cleave (${fk})`);
+  fp.holdOn = false; fp.atkCount = 5; ok(fs0.w.empowerOf(fp) === idx('cleave') + 1, 'the Cleave shows again once the hold ends');
   ok(ED.EMPOWER.every(e => /^#[0-9a-f]{6}$/i.test(e.col) && e.id && e.name) && new Set(ED.EMPOWER.map(e => e.col)).size === ED.EMPOWER.length && new Set(ED.EMPOWER.map(e => e.id)).size === ED.EMPOWER.length, 'every entry has its own id and colour');
   try {
     vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'net.js'), 'utf8'), { filename: 'net.js' });

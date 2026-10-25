@@ -16,8 +16,8 @@
     { id: 'grave', name: 'Grave Bolt', col: '#9dff6b', test: (p, n) => p.cls === 'necro' && p.stats.graveBolt > 0 && p.stats.graveN > 0 && swung(p.stats.weapon) && n % p.stats.graveN === 0 },
     // Siege (class-ranger.js attack): every siege-th shot is a bolt
     { id: 'siege', name: 'Siege bolt', col: '#ff8a3d', test: (p, n) => p.cls === 'ranger' && p.stats.weapon.kind === 'proj' && p.stats.siege > 0 && n % p.stats.siege === 0 },
-    // Cleave (combat.js playerAttack): every (3 + cleaveN)th melee swing, or the first inside the Follow-Through window (p.cleaveNext)
-    { id: 'cleave', name: 'Cleave', col: '#ffd36b', test: (p, n, now) => p.stats.cleave > 0 && melee(p.stats.weapon) && (now < p.cleaveNext || n % (3 + p.stats.cleaveN) === 0) },
+    // Cleave (combat.js playerAttack): every (3 + cleaveN)th melee swing, or the first inside the Follow-Through window (p.cleaveNext); a held Finisher's release never Cleaves
+    { id: 'cleave', name: 'Cleave', col: '#ffd36b', test: (p, n, now) => p.stats.cleave > 0 && melee(p.stats.weapon) && !(p.holdOn && p.stats.hold === 'finisher') && (now < p.cleaveNext || n % (3 + p.stats.cleaveN) === 0) },
     // Twin Fang (combat.js playerAttack, class-bell.js hurl): every twinEvery-th attack strikes twice
     { id: 'twin', name: 'Twin strike', col: '#ff5f7a', test: (p, n) => p.stats.twinEvery > 0 && n % p.stats.twinEvery === 0 },
     // Flurry (class-ranger.js attack): every flurry-th shot adds arrows
