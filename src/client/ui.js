@@ -72,12 +72,21 @@
     if (jc) $('title-join-code').textContent = jc;
   };
 
-  // One-time notice for a profile made before the current rules (profile.news = the oldest part not yet seen): 3 the v6 changes, 2 also the v5 changes, 1 also relic and Hearth changes, the v3 rules and the embers the Codex refunded. Closing it clears the flag.
-  const NEWEST = [
+  // One-time notice for a profile made before the current rules (profile.news = the oldest part not yet seen): 4 the v7 changes, 3 also the v6 changes, 2 also the v5 changes, 1 also relic and Hearth changes, the v3 rules and the embers the Codex refunded. Closing it clears the flag.
+  const V7 = [
+    '<b>Paths:</b> four paths, follow up to two. Steel sharpens your weapon, Flame spreads Burn when a burning foe dies, Frost freezes foes for any hit to Shatter, Storm charges foes until they discharge into each other. A run starts with a pick of the four. Poison, Holy and Shadow are no longer paths (the Cleric and the Necromancer keep Radiance and Doom). Most boon rooms name a path on their door ("Flame boon").',
+    '<b>Dash:</b> the dash is only a dash: at most 2 charges, and no path rides it.',
+    '<b>Knight:</b> Bulwark replaces Shield Throw: hold to raise the shield and block every hit and shot from the front, release to bash the foes ahead and stun them. Each block makes the bash stronger.',
+    '<b>Skills:</b> every hero skill does one clear thing and hits harder; heals and extra effects moved to the route cards (Ghost Walk, Sanctum, Verdict, Bone Armor).',
+    '<b>Relics:</b> 63 relics that each change a rule or make a trade, 10 boss relics with a big upside and a real cost, and curses that lift after a while. Elite and champion fights give each hero a pick of three relics, the first two bosses a pick of three boss relics, and shops sell three relics. Stratum I pays double gold.',
+    '<b>Events:</b> 36 event rooms with a story and 2 to 4 choices (a party votes), 5 minigames, and 26 lore pages to find for the Hearth\'s Codex.',
+    '<b>Map key:</b> M opens the whole stratum\'s map, from the start at the bottom to the boss at the top.',
+    '<b>Clockwork Colossus:</b> the second champion of stratum IV is a huge neon machine: break two of its arms or its eye to open its core.',
+    '<b>Sound:</b> new music for every stratum and room (exploring, fights, elites, dark rooms, bosses, shop and rest), and hits that sound like your weapon.',
+  ];
+  const V6 = [
     '<b>Map:</b> each stratum is a map of rooms in rows from the start to the boss. Paths split and merge, every door shows the room behind it and its reward, and there is no way back. Tab shows the whole map.',
     '<b>Strata:</b> there are four: Ossuary, Glowmire, Drowned Sanctum and the Starless Abyss, the last. Rimefrost Halls and the Cinderforge are gone, and no stratum is weak to or resists an element.',
-    '<b>Paths:</b> four paths, follow up to two. Steel sharpens your weapon, Flame spreads Burn when a burning foe dies, Frost freezes foes for any hit to Shatter, Storm charges foes until they discharge into each other. Poison, Holy and Shadow are no longer paths (the Cleric and the Necromancer keep Radiance and Doom). Rooms may promise a path boon on their door.',
-    '<b>Dash:</b> the dash is only a dash: at most 2 charges, and no path rides it.',
     '<b>Removed:</b> Ascended boons, duo boons, Mutations, Twists, the Attunement boons and twelve plain stat boons (Fleet Foot, Lodestar, Sharpened Edge, Quickened Hands, Bounty, Stalwart, Mending, Forager, Thornmail, Battle Ward, Glass Heart, Overcharge).',
     '<b>Pyromancer:</b> a caster now. Ember Bolt hits make your spells recharge sooner, and Fireball (2 charges) is a third skill on right mouse or R (B on a pad). Skill 1 is Q alone (RB on a pad); heroes without a third skill cast skill 1 on its key.',
     '<b>Bosses:</b> new fights. The Bone Warden duels and raises bone walls, the Sporemother spreads spores from her pods, the Drowned King floods the room, and stratum IV ends with two champion fights (the twins, the Clockwork Colossus) before the Hollow King.',
@@ -92,7 +101,7 @@
   UI.maybeNews = () => {
     const A = ED.App, p = A.profile;
     if (!A.hasProfile || !p.news) return;
-    $('news-body').innerHTML = (p.news === 3 ? NEWEST : p.news === 2 ? NEWEST.concat(V5) : NEWEST.concat(V5, [
+    $('news-body').innerHTML = (p.news === 4 ? V7 : p.news === 3 ? V7.concat(V6) : p.news === 2 ? V7.concat(V6, V5) : V7.concat(V6, V5, [
       '<b>Relics:</b> the Codex is gone. Every relic can drop from your first run, and relics no longer belong to an element.',
       p.refunded > 0 ? `<b>Refunded:</b> the ${p.refunded} embers you spent on the Codex are back in your purse.` : '',
       '<b>Hearth:</b> every upgrade rank can be refunded for its full cost, and Reset all returns everything at once. Upgrades are small now, so your build choices decide a run. The Reliquary became the Stash (starting gold), Head Start starts the run with some experience and Deep Wick boosts the gold and experience of dark rooms.',
@@ -100,14 +109,11 @@
       '<b>Aim:</b> attacks and ground skills go toward the mouse cursor (right stick on a pad). The Auto-aim setting is gone.',
       `<b>Paths:</b> follow up to ${ED.MAX_PATHS} of ${ED.PATH_IDS.map(k => pathName(k, true)).join(', ')}. Blood and Spirit are gone.`,
       '<b>No life steal:</b> hits do not heal you any more. Shields take their place.',
-      '<b>Knight:</b> Bulwark replaces Shield Throw: hold to raise the shield and block every hit and shot from the front, release to bash the foes ahead and stun them. Each block makes the bash stronger.',
-      '<b>Skills:</b> every hero skill does one clear thing and hits harder; heals and extra effects moved to the route cards (Ghost Walk, Sanctum, Verdict, Bone Armor).',
       '<b>Dark rooms:</b> optional rooms marked with a violet moon: harder foes, better rewards. They replace the lantern.',
       '<b>Hordes:</b> fight rooms are about twice as big and scroll with you, and packs of weak fodder pour in beside the foes that matter.',
       '<b>Dash:</b> dashing uses charges that refill one at a time; Light Step adds charges.',
       '<b>Late power:</b> your route fork gains rank 2 at the stratum II boss and transforms at rank 3 at the stratum III boss, skill forks included.',
       '<b>Fury:</b> the stratum IV boss grows furious when it lives too long and hits harder and faster; its bar shows when.',
-      '<b>Sound:</b> every stratum has its own music, and it swells as a fight grows.',
     ])).filter(Boolean).map(t => `<p>${t}</p>`).join('');
     $('ov-news').hidden = false;
     requestAnimationFrame(() => $('btn-news-close').focus({ preventScroll: true })); // after the screen's own focus

@@ -11,7 +11,7 @@
   const NAME_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -';
   const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
   const CODE_VERSION = 10; // 10: a lore section (6-bit count, a bit per ED.LORE page) after the worn items; 9: the layout of 8 (marks a code made after the v6 rules; older codes hold six-stratum boss bits and deepest); 8: count-prefixed sections after the stats (secrets, hero wins, the Bellwarden flag, evolutions, Wardrobe purchases and worn items); 7: the layout of 5 (marks a code made after the v5 difficulty); 6: the layout of 5 (marks a code made after the health rescale); 5: no relic bits, an Armory section (per hero: 6-bit count, 1 bit per entry) after mastery; 4: upgrades and heroes carry count prefixes too; 3: only the non-start relic bits do; 2 stored exactly V2_RELIC_BITS relic bits, V2_UPGRADES ranks and V2_HEROES mastery values. A count prefix keeps appended entries from shifting what follows.
-  const ERA = 6; // profile era (S.defaultProfile v)
+  const ERA = 7; // profile era (S.defaultProfile v)
   const V2_RELIC_BITS = 26, V2_UPGRADES = 16, V2_HEROES = 6;
   // The relic list of save code v4 as [id, start, cost], in v4 RELIC_IDS order: old profiles (positional flags) and v2-v4 codes (non-start bits) decode against it, and the Codex embers they paid are refunded. Frozen.
   const V4_RELICS = [['whetstone', 1, 0], ['boots', 1, 0], ['buckler', 1, 0], ['heartstone', 1, 0], ['coin', 1, 0], ['hourglass', 1, 0], ['fang', 1, 0], ['embercharm', 1, 0], ['frostshard', 1, 0], ['lodestone', 1, 0], ['pauldron', 1, 0], ['wardrum', 1, 0], ['phoenix', 1, 0], ['stormidol', 1, 0], ['glasseye', 1, 0], ['elixir', 1, 0],
@@ -31,7 +31,7 @@
   const baseWeapons = () => [].concat(...ED.CLASS_IDS.map(c => ED.CLASSES[c].weapons));
 
   S.defaultProfile = () => ({
-    v: ERA, // profile era: below 3 a profile has a positional relics array; its Codex embers are refunded. news (the "What changed" notice, cleared once shown) = the oldest part not yet seen: 1 everything (era below 3), 2 the v5 and v6 changes (eras 3-4), 3 the v6 changes (era 5); set only with runs or a refund
+    v: ERA, // profile era: below 3 a profile has a positional relics array; its Codex embers are refunded. news (the "What changed" notice, cleared once shown) = the oldest part not yet seen: 1 everything (era below 3), 2 the v5, v6 and v7 changes (eras 3-4), 3 the v6 and v7 changes (era 5), 4 the v7 changes (era 6); set only with runs or a refund
     news: 0,
     refunded: 0, // Codex embers refunded by that migration, printed by the notice
     name: 'Wanderer',
@@ -102,7 +102,7 @@
     const arm = obj(p.armory);
     for (const c of ED.CLASS_IDS) { const a = arr(arm[c]); d.armory[c] = armoryList(c).map((e, i) => (a[i] ? 1 : 0)); }
     d.mastery = ED.CLASS_IDS.map((c, i) => int(mastery[i], 0, BIG));
-    const six = (p.v | 0) < ERA; // a six-stratum profile: boss bits and deepest are remapped
+    const six = (p.v | 0) < 6; // a six-stratum profile: boss bits and deepest are remapped
     d.bosses = six ? sixBosses(int(p.bosses, 0, 63)) : int(p.bosses, 0, 63);
     d.deeds = int(p.deeds, 0, 2 ** 31 - 1);
     d.pactMax = int(p.pactMax, 0, 10);
@@ -119,8 +119,8 @@
     d.cos = ED.COSMETICS.filter(c => c.gate.cost && cos.indexOf(c.id) >= 0).map(c => c.id);
     normalizeWear(d, p.wear);
     const played = d.stats.runs > 0 || d.refunded > 0, v = p.v | 0;
-    const pend = old ? 0 : v < ERA && (p.news | 0) === 3 ? 2 : int(p.news, 0, 3); // a notice still pending from an older era (its 3 was the v5 part, 2 here)
-    const gap = !played ? 0 : v < 3 ? 1 : v < 5 ? 2 : v < ERA ? 3 : 0;
+    const pend = old ? 0 : v < 6 && (p.news | 0) === 3 ? 2 : int(p.news, 0, 4); // a notice still pending from an older era (before era 6 its 3 was the v5 part, 2 here)
+    const gap = !played ? 0 : v < 3 ? 1 : v < 5 ? 2 : v < 6 ? 3 : v < ERA ? 4 : 0;
     d.news = pend && gap ? Math.min(pend, gap) : pend || gap;
     const sel = obj(p.sel);
     d.sel = { cls: ED.CLASS_IDS.indexOf(sel.cls) >= 0 ? sel.cls : 'knight', weapon: {}, pact: int(sel.pact, 0, 10) };
@@ -612,7 +612,7 @@
       } else p.wear = undefined; // a code from before the Wardrobe: Gilded is worn where mastery 10 is reached (S.normalize)
       p.embers += refund; p.refunded = refund;
       const played = p.stats.runs > 0 || refund > 0;
-      p.news = !played ? 0 : ver < 5 ? 1 : ver < 7 ? 2 : ver < 9 ? 3 : 0; // the oldest notice part the code's build had not shown: before the v4 rules all, before the v5 difficulty from v5, before v6 the v6 part
+      p.news = !played ? 0 : ver < 5 ? 1 : ver < 7 ? 2 : ver < 9 ? 3 : ver < 10 ? 4 : 0; // the oldest notice part the code's build had not shown: before the v4 rules all, before the v5 difficulty from v5, before v6 from v6, before v7 the v7 part
     } catch (e) {
       if (e && e.keep) throw e;
       throw new Error('That code is from an unknown version or is damaged.');
