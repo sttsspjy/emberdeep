@@ -1,6 +1,6 @@
 // The Tab sheet: header, three tabs (Build, Combat, Map) rendered from ED.Sheet.compute, live refresh, spatial keyboard / mouse / gamepad focus, the pixel room map.
 // A tab is rebuilt (innerHTML) only when its markup changes apart from its live cells (data-live text), which are patched in place; only the visible tab renders, at most twice a second.
-// Pixel look: card frames baked here through ED.PixUI.frame (--fr-shcard[-variant], --fr-shduo-<a>-<b>, --fr-shdash, --fr-shmk-*, --fr-shstar-*); --tb on #ov-sheet = PixUI.bias in CSS px.
+// Pixel look: card frames baked here through ED.PixUI.frame (--fr-shcard[-variant], --fr-shdash, --fr-shmk-*, --fr-shstar-*); --tb on #ov-sheet = PixUI.bias in CSS px.
 (function (ED) {
   'use strict';
   const U = ED.U, UI = ED.UI, Sh = ED.Sheet, S = ED.Save, PX = ED.PixUI;
@@ -12,8 +12,8 @@
   UI.sheetState = SH;
 
   // ---------------- pixel frames ----------------
-  // shcard: 9 x 9, slice 3: outline o, left stripe P (H = its top pixel), top line L, right line L, bottom line D, fill f. Variants: every path (tinted fill), gold (Ascended,
-  // evolved), route (class route nodes), dim (closed), p0-p3 (hero colours). shduo: the same with a right stripe Q (one variant per ordered element pair). shdash: open nodes,
+  // shcard: 9 x 9, slice 3: outline o, left stripe P (H = its top pixel), top line L, right line L, bottom line D, fill f. Variants: every path (tinted fill), gold
+  // (evolved), route (class route nodes), dim (closed), p0-p3 (hero colours). shdash: open nodes,
   // 2-on 2-off dashes (border-image-repeat: repeat). shmk: 7 x 7 keystone diamond (off, bone, every path). shstar: 7 x 7 evolution star (off, ready, got).
   const FILL = '#120d0a';
   const tint = (c) => ({ P: c, H: U.shade(c, 0.45), L: U.mix(c, FILL, 0.62), f: U.mix(FILL, c, 0.07), D: U.mix(c, '#000000', 0.72) });
@@ -24,12 +24,6 @@
     PX.frame('shcard', {
       rows: ['.ooooooo.', 'oHHLLLLLo', 'oPPffffLo', 'oPPffffLo', 'oPPffffLo', 'oPPffffLo', 'oPPffffLo', 'oPPDDDDDo', '.ooooooo.'],
       pal: { o: '#222222', P: '--line-hi', H: '--line-hi', L: '--line', f: FILL, D: '#0b0806' }, slice: 3, variants: cardV,
-    });
-    const duoV = {};
-    for (const a of ED.ELEMENT_IDS) for (const b of ED.ELEMENT_IDS) if (a !== b) { const A = tint(ED.PATHS[a].color), B = tint(ED.PATHS[b].color); duoV[a + '-' + b] = { P: A.P, H: A.H, Q: B.P, R: B.H, L: U.mix(A.L, B.L, 0.5), f: U.mix(A.f, B.f, 0.5), D: U.mix(A.D, B.D, 0.5) }; }
-    PX.frame('shduo', {
-      rows: ['.ooooooo.', 'oHHLLLRRo', 'oPPfffQQo', 'oPPfffQQo', 'oPPfffQQo', 'oPPfffQQo', 'oPPfffQQo', 'oPPDDDQQo', '.ooooooo.'],
-      pal: { o: '#222222', P: '--line-hi', H: '--line-hi', Q: '--line-hi', R: '--line-hi', L: '--line', f: FILL, D: '#0b0806' }, slice: 3, variants: duoV,
     });
     PX.frame('shdash', {
       rows: ['..........', '.LLLL..LL.', '.L......L.', '.L......L.', '.L......L.', '..........', '..........', '.L......L.', '.LLLL..LL.', '..........'],
@@ -67,7 +61,7 @@
   const pips = (rank, max, col) => { let s = ''; for (let i = 1; i <= max; i++) s += `<i${i <= rank ? ' class="on"' : ''}></i>`; return `<span class="sh-pips"${col ? ` style="--pc:${col}"` : ''}>${s}</span>`; };
   const col = (name, body) => `<section class="plate sh-col" data-col="${name}"><div class="sh-in">${body}</div></section>`;
   const head = (title, small) => `<h3 class="sh-h">${title}${small ? `<small>${small}</small>` : ''}</h3>`;
-  // Source chips of one stat: [{ label, kind, v, mul? }] -> "Base 100%", "Might 3 +12%", "Honed Edge ×1.15" (an Ascended multiplier); a negative contribution is the only red on the sheet.
+  // Source chips of one stat: [{ label, kind, v, mul? }] -> "Base 100%", "Might 3 +12%", "Honed Edge ×1.15" (a multiplier); a negative contribution is the only red on the sheet.
   const chips = (rows, key) => rows.map(r => (r.kind === 'base' ? `<span>${esc(r.label)} <b>100%</b></span>`
     : r.mul ? `<span class="asc">${esc(r.label)} <b>${Sh.fmt(key, 1 + r.v, 'x')}</b></span>`
     : `<span class="${r.v < 0 ? 'neg' : ''}${r.kind === 'temp' ? ' tmp' : ''}">${esc(r.label)} <b>${sgn(r.v, Sh.fmt(key, Math.abs(r.v)))}</b></span>`)).join('');
@@ -149,10 +143,10 @@
   }
   // A boon row's icon wears its card's identity hue (UI.boonIconColor), not its rarity.
   const boonIco = (id) => (UI.boonIconColor ? ico(ED.BOONS[id].icon, UI.boonIconColor(id)) : ED.Icons.boonUrl(id));
-  const KIND_LABEL = { gate: 'gate', keystone: 'keystone', evolution: 'evolution', mutation: 'mutation', duo: 'duo', route: 'route', fork: 'fork', ascended: 'ascended', twist: 'twist' };
+  const KIND_LABEL = { gate: 'gate', keystone: 'keystone', evolution: 'evolution', route: 'route', fork: 'fork' };
   function boonRow(b) {
-    const P = b.path && ED.PATHS[b.path] ? ED.PATHS[b.path] : null, color = b.kind === 'ascended' ? 'var(--gold)' : b.kind === 'route' || b.kind === 'fork' ? 'var(--gold)' : b.kind === 'twist' ? ED.RARITY.t.color : b.kind === 'mutation' ? ED.RARITY.m.color : P ? P.color : '#b9ad9b', lab = KIND_LABEL[b.kind] || '';
-    return `<div class="sh-boon sh-f${b.kind === 'ascended' ? ' asc' : ''}" data-k="b:${b.id}" style="--pc:${color};--rc:${RAR(b.rar).color}"><img class="sh-i2" alt="" src="${boonIco(b.id)}"><div class="sh-bm">`
+    const P = b.path && ED.PATHS[b.path] ? ED.PATHS[b.path] : null, color = b.kind === 'route' || b.kind === 'fork' ? 'var(--gold)' : P ? P.color : '#b9ad9b', lab = KIND_LABEL[b.kind] || '';
+    return `<div class="sh-boon sh-f" data-k="b:${b.id}" style="--pc:${color};--rc:${RAR(b.rar).color}"><img class="sh-i2" alt="" src="${boonIco(b.id)}"><div class="sh-bm">`
       + `<div class="sh-bt"><b class="sh-bn">${esc(b.name)}</b>${lab ? chip(lab + (b.kind === 'fork' && b.tag ? ' · ' + esc(b.tag) : '')) : ''}<span class="sh-rar">${RAR(b.rar).name}</span>${b.max > 1 ? pips(b.rank, b.max) : ''}</div>`
       + `<div class="sh-btx">${esc(b.text)}</div>${b.cost ? `<div class="sh-btx sh-cost">${esc(b.cost)}</div>` : ''}${b.next ? `<div class="sh-next"><b>Next rank</b>${esc(b.next)}</div>` : ''}</div></div>`;
   }
@@ -163,19 +157,12 @@
     if (B.generalist) paths += `<div class="shc off sh-path slot">Element paths closed (Generalist)</div>`;
     for (let i = 0; i < B.slotsFree; i++) paths += `<div class="shc dash sh-path slot sh-f" data-k="slot:${i}">Open element slot (${B.slots - B.slotsFree + i + 1} of ${B.slots})</div>`;
     if (B.classElementRow) { const c = B.classElementRow, el = Object.keys(ED.PATHS).find(k => ED.PATHS[k].color === c.color); paths += `<div class="shc sh-path elem sh-f" data-k="elem" style="${el ? frc('shcard-' + el) : ''}">${img(ico(c.icon, c.color), true)}<span>${esc(c.name)} is your class element: your skills deal ${esc(c.name)} damage. Take the ${esc(c.name)} gate to infuse every hit.</span></div>`; }
-    let duos = '';
-    for (const d of B.duos) {
-      const st = d.state === 'owned' ? chip('owned', colorOf(d.duo[0])) : d.state === 'offers' ? chip('in your offers', '', 'on') : chip(`needs ${d.need} more`, 'var(--muted)');
-      duos += `<div class="shc sh-duo sh-f" data-k="d:${d.id}" style="${frc('shduo-' + d.duo[0] + '-' + d.duo[1])}"><div class="sh-rh">${img(pathIco(d.duo[0]), true)}${img(pathIco(d.duo[1]), true)}<b>${esc(d.name)}</b>${st}</div><div class="sh-btx">${esc(d.text)}</div></div>`;
-    }
-    if (B.duoWith) for (const d of B.duoWith) duos += `<div class="shc sh-duo sh-f" data-k="d:${d.id}" style="${frc('shcard-' + d.with)}"><div class="sh-rh"><span class="mut">with</span>${img(pathIco(d.with))}<b style="color:${d.withColor}">${esc(d.withName)}</b><b>${esc(d.name)}</b></div><div class="sh-btx">${esc(d.text)}</div></div>`;
     let left = head('Paths', B.generalist ? 'Generalist' : `${B.paths.filter(q => q.element).length}/${B.slots}`) + `<div class="sh-list">${paths}</div>`;
-    if (duos) left += head('Duos') + `<div class="sh-list">${duos}</div>`;
     left += head('Class route', B.route.route ? esc(ED.routeLabel(m.hero.cls, B.route.route)) : 'at level 3') + routeBlock(B.route, ED.CLASSES[m.hero.cls].col.c);
     let boons = B.groups.length ? '' : '<div class="sh-empty">No boons yet. The first pick comes from the start offer.</div>';
     for (const g of B.groups) {
-      const P = g.path ? ED.PATHS[g.path] : null, gc = g.group === 'asc' || g.group === 'route' ? 'var(--gold)' : g.group === 'twist' ? ED.RARITY.t.color : P ? P.color : '';
-      const title = g.group === 'duo' ? 'Duo' : g.group === 'route' ? 'Class route' : g.group === 'twist' ? `Twists <small>rules with a cost (${g.items.length}/${ED.TWIST_MAX})</small>` : g.group === 'asc' ? 'Ascended <small>multiplies the bonuses you hold</small>' : P ? `${P.name} <small>affinity <b>${ED.pathAffinity(p.boons || {}, g.path)}</b></small>` : 'Open <small>any hero, no path</small>';
+      const P = g.path ? ED.PATHS[g.path] : null, gc = g.group === 'route' ? 'var(--gold)' : P ? P.color : '';
+      const title = g.group === 'route' ? 'Class route' : P ? `${P.name} <small>affinity <b>${ED.pathAffinity(p.boons || {}, g.path)}</b></small>` : 'Open <small>any hero, no path</small>';
       boons += `<div class="sh-bg"><div class="sh-gh"${gc ? ` style="--pc:${gc}"` : ''}>${P ? img(pathIco(g.path)) : ''}${title}</div>${g.items.map(boonRow).join('')}</div>`;
     }
     let status = '';

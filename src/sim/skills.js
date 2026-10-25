@@ -118,7 +118,7 @@
   };
 
   // data: { x0, y0, x1, y1 } for movement skills (performed by the hero's own client); { x0, y0, x, y } for ground skills (cast origin and aimed point, see groundTarget); { d } for Shield Throw (cursor distance).
-  // Slot 2 (skill 3) fires no on-cast boon procs (onSkillCast: Overcharge, Battle Trance): it is the hero's rapid spell, cast every second or two.
+  // Slot 2 (skill 3) fires no on-cast boon procs (onSkillCast: Battle Trance): it is the hero's rapid spell, cast every second or two.
   W.playerSkill = function (p, a, data, slot) {
     if (!p || p.downed || p.dead) return;
     slot = slot === 1 || slot === 2 ? slot : 0;
@@ -127,10 +127,7 @@
     const st = p.stats;
     const extra = fn.call(this, p, a, data || {}, st, ED.Stats.skillNums(skill, st));
     if (extra === false) return;
-    if (slot !== 2) { // skill 3 fires no on-cast procs and pays no Twist cast cost
-      this.onSkillCast(p, slot);
-      if (p.twist) ED.TWIST.onCast.call(this, p, slot); // TWIST hook (src/sim/twist.js)
-    }
+    if (slot !== 2) this.onSkillCast(p, slot); // skill 3 fires no on-cast procs
     this.emit(Object.assign({ t: 'skill', pid: p.pid, k: skill, a: Math.round(a * 100) / 100, x: Math.round(p.x), y: Math.round(p.y), slot }, extra));
   };
 })(globalThis.ED || (globalThis.ED = {}));

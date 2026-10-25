@@ -228,7 +228,7 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
 {
   const dmgAt = (boons, n, p0) => {
     const { w, p } = stage(boons); const e = foe(w, p.x + 30, p.y);
-    const ids = [() => { e.burnPool = 0.02 * e.maxHp; e.burnOwner = p; }, () => { e.bleedPool = 0.02 * e.maxHp; e.bleedOwner = p; }, () => { e.chill = 30; }, () => { e.stun = 1; }, () => { e.sealT = 5; }];
+    const ids = [() => { e.bsT = [1e9]; e.bsO = [p]; e.burnN = 1; e.burn = 1; e.burnTick = 99; }, () => { e.bleedPool = 0.02 * e.maxHp; e.bleedOwner = p; }, () => { e.chill = 30; }, () => { e.stun = 1; }, () => { e.sealT = 5; }];
     for (let i = 0; i < n; i++) ids[i]();
     ok(w.ailments(e) === n, 'staged ' + n + ' ailments'); void p0;
     const h = e.hp; w.hitEnemy(e, 100, { p, kind: 'skill', crit: true, noProc: true }); return h - e.hp;
@@ -240,28 +240,28 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   // Exsanguinate: a crit on a foe with 4 ailments adds Bleed = 25% of the hit
   const bleedGain = (r) => {
     const { w, p } = stage({ s_el: 1, s_el_a: r }); const e = foe(w, p.x + 30, p.y);
-    e.burnPool = 0.02 * e.maxHp; e.burnOwner = p; e.chill = 30; e.stun = 1; e.sealT = 5; e.bleedPool = 0; ok(w.ailments(e) === 4, 'four ailments staged');
+    e.bsT = [1e9]; e.bsO = [p]; e.burnN = 1; e.burn = 1; e.burnTick = 99; e.chill = 30; e.stun = 1; e.sealT = 5; e.bleedPool = 0; ok(w.ailments(e) === 4, 'four ailments staged');
     const s = { p, kind: 'skill', crit: true }; const h = e.hp; w.hitEnemy(e, 100, s); return { bleed: e.bleedPool, dealt: h - e.hp, aff: s.affMul || 1 };
   };
   const g1 = bleedGain(1), g3 = bleedGain(2), g33 = bleedGain(3), pow = 1 + 0.15, pre = g3.dealt / g3.aff;
   near(g1.bleed, g1.dealt / g1.aff * 0.1 * pow, 0.01, 'rank 1: Cruel Arts Bleed only (10% of the hit)'); const xs = CT('s_el_a', 2).exsang; near(g3.bleed - g3.dealt / g3.aff * 0.1 * pow, pre * xs * pow, 0.02, 'Exsanguinate adds exsang of the hit as Bleed (rank 2)'); near(g33.bleed - g33.dealt / g33.aff * 0.1 * pow, g33.dealt / g33.aff * xs * pow, 0.02, 'and at rank 3');
   void pow;
-  const e3 = (() => { const { w, p } = stage({ s_el: 1, s_el_a: 2 }); const e = foe(w, p.x + 30, p.y); e.burnPool = 0.02 * e.maxHp; e.burnOwner = p; e.chill = 30; e.bleedPool = 0; w.hitEnemy(e, 100, { p, kind: 'skill', crit: true }); return e.bleedPool; })();
-  const e3b = (() => { const { w, p } = stage({ s_el: 1, s_el_a: 1 }); const e = foe(w, p.x + 30, p.y); e.burnPool = 0.02 * e.maxHp; e.burnOwner = p; e.chill = 30; e.bleedPool = 0; w.hitEnemy(e, 100, { p, kind: 'skill', crit: true }); return e.bleedPool; })();
+  const e3 = (() => { const { w, p } = stage({ s_el: 1, s_el_a: 2 }); const e = foe(w, p.x + 30, p.y); w.burnStack(e, p, 0); e.chill = 30; e.bleedPool = 0; w.hitEnemy(e, 100, { p, kind: 'skill', crit: true }); return e.bleedPool; })();
+  const e3b = (() => { const { w, p } = stage({ s_el: 1, s_el_a: 1 }); const e = foe(w, p.x + 30, p.y); w.burnStack(e, p, 0); e.chill = 30; e.bleedPool = 0; w.hitEnemy(e, 100, { p, kind: 'skill', crit: true }); return e.bleedPool; })();
   ok(e3 > 0 && e3b > 0 && Math.abs(e3 / e3b - 1.4) < 0.4, 'below 4 ailments Exsanguinate stays off (only the rank 2 vein bonus differs)');
 }
 
 // ---------------- Rupture and Bloodbloom ----------------
 {
   const { w, p } = stage({ s_el: 1, s_el_b: 1 }); const e = foe(w, p.x + 100, p.y), nb = foe(w, p.x + 140, p.y), far = foe(w, p.x + 180, p.y + 80);
-  e.bleedPool = 400; e.bleedOwner = p; e.burnPool = 200; e.burnOwner = p; e.burn = 1;
+  e.bleedPool = 400; e.bleedOwner = p; for (let i = 0; i < 4; i++) w.burnStack(e, p, 0); const B = e.burnPool;
   const dealt = w.rupture(e, p, 0.5, 'test.rupture', false);
-  near(dealt, 400 * 0.5 * 1.5 + 200 * 0.5 * 1.5, 0.01, 'Rupture: half the pools at 150%'); near(e.bleedPool, 200, 1e-9, 'the Bleed pool loses its half'); near(e.burnPool, 100, 1e-9, 'the Burn pool loses its half');
+  near(dealt, 400 * 0.5 * 1.5 + B * 0.5 * 1.5, 0.01, 'Rupture: half the Bleed pool and half the Burn stacks at 150%'); near(e.bleedPool, 200, 1e-9, 'the Bleed pool loses its half'); near(e.burnN, 2, 0, 'the foe loses half its Burn stacks');
   near(lost(nb), dealt * 0.5, 0.01, 'half of the burst splashes foes within 60'); ok(far.hp === far.maxHp, 'a foe 90 px away takes none');
   ok(evs(w, 'rupt').length === 1 && evs(w, 'rupt')[0].k === 2, 'a rupt event (both pools)');
   const hits = w.fx.filter(x => x.t === 'hit' && x.pid === 'p0'); ok(hits.some(h => h.el === 4) && hits.some(h => h.el === 1), 'Bleed and Burn hit events carry their elements');
-  // Burn keeps the affinity the pool already carries: no second multiplier
-  const f = stage({ s_el: 1, s_el_b: 1 }); const b2 = foe(f.w, f.p.x + 100, f.p.y); b2.burnPool = 200; b2.burnOwner = f.p; const s0 = b2.hp; f.w.stratum = 3; f.w.rupture(b2, f.p, 0.5, 't', false); near(s0 - b2.hp, 150, 0.01, 'Burn rupture has no second affinity multiplier'); f.w.stratum = 1;
+  // Burn ruptures at the worth its stacks still hold: no second affinity multiplier
+  const f = stage({ s_el: 1, s_el_b: 1 }); const b2 = foe(f.w, f.p.x + 100, f.p.y); for (let i = 0; i < 4; i++) f.w.burnStack(b2, f.p, 0); const B2 = b2.burnPool, s0 = b2.hp; f.w.stratum = 3; f.w.rupture(b2, f.p, 0.5, 't', false); near(s0 - b2.hp, B2 * 0.5 * 1.5, 0.01, 'Burn rupture has no second affinity multiplier'); f.w.stratum = 1;
   // no pools, no rupture
   const e0 = foe(w, p.x + 100, p.y - 60); near(w.rupture(e0, p, 0.5, 't', false), 0, 0, 'nothing to rupture');
   // rank 2: 60%
@@ -571,7 +571,7 @@ function U_ang(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
 }
 
 { // Arterial Strike (s_el_a rank 3): a crit on a foe with 3 or more ailments deals +arterial and readies 1 crit attack, at most once per second and never from a horde foe; rank 2 has neither
-  const ail = (e, p, n) => { const f = [() => { e.burnPool = 0.02 * e.maxHp; e.burnOwner = p; }, () => { e.bleedPool = 0.02 * e.maxHp; e.bleedOwner = p; }, () => { e.chill = 30; }, () => { e.stun = 1; }]; for (let i = 0; i < n; i++) f[i](); return e; };
+  const ail = (e, p, n) => { const f = [() => { e.bsT = [1e9]; e.bsO = [p]; e.burnN = 1; e.burn = 1; e.burnTick = 99; }, () => { e.bleedPool = 0.02 * e.maxHp; e.bleedOwner = p; }, () => { e.chill = 30; }, () => { e.stun = 1; }]; for (let i = 0; i < n; i++) f[i](); return e; };
   const mk = (boons, n, o) => { const t = stage(boons); t.e = ail(foe(t.w, t.p.x + 30, t.p.y), t.p, n); if (o && o.fodder) t.e.fodder = true; return t; };
   const crit = (t, e) => { const h = e.hp; t.w.hitEnemy(e, 100, { p: t.p, kind: 'weapon', wpn: true, crit: true }); return h - e.hp; };
   const r3 = mk({ s_el: 1, s_el_a: 3 }, 3), r2 = mk({ s_el: 1, s_el_a: 2 }, 3), few = mk({ s_el: 1, s_el_a: 3 }, 2);
@@ -598,7 +598,7 @@ function U_ang(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
   { const s = row({ s_el: 1, s_el_b: 3 }, 3, 100, { setup: (t2) => { t2.f[1].hp = 5000; } }); s.w.rupture(s.f[0], s.p, 0.7, 'x', false); near(lost(s.f[1]), 400 * 1.5, 0.01, 'a leap ruptures 100% of the pool at 150%'); near(s.f[1].bleedPool, 0, 1e-9, 'and empties it'); ok(s.f[2].bleedPool === 400, 'a leap that does not kill goes no further'); }
   { const s = row({ s_el: 1, s_el_b: 3 }, 3, 100, { setup: (t2) => { t2.f[1].x = 200 + 130; t2.f[1].hp = 5000; t2.f[2].x = 300; t2.f[2].hp = 5000; } }); s.w.rupture(s.f[0], s.p, 0.7, 'x', false); ok(s.f[1].bleedPool === 400 && s.f[2].bleedPool === 0 && s.f[2].hp < 5000 && evs(s.w, 'casc').length === 1 && evs(s.w, 'casc')[0].x1 === 300, 'a foe 130 px away is out of reach, one at 100 is the target'); }
   { const s = row({ s_el: 1, s_el_b: 3 }, 3, 100, { setup: (t2) => { t2.f[1].bleedPool = 0; t2.f[1].hp = 5000; t2.f[2].x = 200 + 115; } }); s.w.rupture(s.f[0], s.p, 0.7, 'x', false); ok(s.f[2].hp <= 0 && evs(s.w, 'casc')[0].x1 === 315, 'a foe without a pool is passed over for the nearest one with a pool'); }
-  { const s = row({ s_el: 1, s_el_b: 3 }, 3, 100, { setup: (t2) => { t2.f[1].bleedPool = 0; t2.f[1].burnPool = 200; t2.f[1].burn = 1; t2.f[1].burnOwner = t2.p; } }); s.w.rupture(s.f[0], s.p, 0.7, 'x', false); ok(s.f[1].hp <= 0, 'a burning foe is a target too'); }
+  { const s = row({ s_el: 1, s_el_b: 3 }, 3, 100, { setup: (t2) => { t2.f[1].bleedPool = 0; for (let i = 0; i < 4; i++) t2.w.burnStack(t2.f[1], t2.p, 0); } }); s.w.rupture(s.f[0], s.p, 0.7, 'x', false); ok(s.f[1].hp <= 0, 'a burning foe is a target too'); }
   { const s = row({ s_el: 1, s_el_b: 3 }, 3, 100, { setup: (t2) => { for (const e of t2.f) e.fodder = true; } }); s.w.rupture(s.f[0], s.p, 0.7, 'x', false); ok(s.f.every(e => e.hp <= 0), 'horde foes cascade too (a chain, not a refund)'); }
   { const s = row({ s_el: 1, s_el_b: 2 }, 3, 100); s.w.rupture(s.f[0], s.p, 0.6, 'x', false); ok(s.f[0].hp <= 0 && s.f[1].hp === 5 && !evs(s.w, 'casc').length, 'rank 2 does not leap'); }
   { const s = row({ s_el: 1, s_el_b: 3 }, CN + 6, 100, { setup: (t2) => { t2.f[0].x = 140; t2.f[1].x = 160; t2.f[0].hp = t2.f[1].hp = 100; for (let i = 2; i < CN + 6; i++) t2.f[i].x = 160 + (i - 1) * 100; } });

@@ -158,7 +158,7 @@
     miasma: { name: 'Miasma', rar: 'c', icon: 'orb', path: 'poison', desc: 'Your toxic clouds are {cloudR} wider and last {cloudT:sec} longer.', mods: { cloudR: 0.25, cloudT: 1 }, max: 2 },
     neurotoxin: { name: 'Neurotoxin', rar: 'r', icon: 'potion', path: 'poison', desc: 'Foes at full Venom wind up 40% slower (bosses 20%).', mods: { neuro: 1 }, max: 1 },
     toxicwake: { name: 'Toxic Wake', rar: 'e', icon: 'leaf', path: 'poison', key: true, desc: 'Walking leaves a small toxic cloud every 40 px (radius 30, 2s) that builds Venom.', mods: { toxicWake: 1 }, max: 1 },
-    evo_poison: { name: 'Venomous Arms', rar: 'l', icon: 'drop', path: 'poison', evo: 'poison', desc: 'Hold attack, then release to lob a flask at the cursor (up to 240): 150% weapon damage as Poison within 70 and a toxic cloud there for 4s that builds Venom twice as fast.', mods: {}, hold: 'flask', max: 1 },
+    evo_poison: { name: 'Venomous Arms', rar: 'l', icon: 'drop', path: 'poison', evo: 'poison', desc: 'Hold attack to ready a flask (ready 0.6s after the hold starts at 0.35s); release to lob it at the cursor (up to 240): 150% weapon damage as Poison within 70 and a toxic cloud there for 4s that builds Venom twice as fast.', mods: {}, hold: 'flask', max: 1 },
 
     // ---- Holy: perfect dodges ----
     consecrate: { name: 'Consecrate', rar: 'r', icon: 'sun', path: 'holy', gate: true, desc: "Hits store 30% of their damage as Radiance; at 12% of a foe's health (elites 6%, bosses 2%) it Smites and shields heroes near it. Perfect dodge: dashing through a foe's attack or shot, or a hit landing within {pdWin:sec} after your dash, Smites the attacker for its Radiance + {pdPow*P} and shields you.", mods: { holyInfuse: 0.3, perfectDodge: 1, pdWin: 0.15, pdPow: 1.5 }, max: 1 },
@@ -189,8 +189,8 @@
     deepcuts: { name: 'Deep Cuts', rar: 'r', icon: 'blades', path: 'general', desc: 'Bleed deals +{bleedMul}.', mods: { bleedMul: 0.3 }, max: 2 },
     opportunist: { name: 'Opportunist', rar: 'r', icon: 'hand', path: 'general', desc: '+25% damage to stunned, frozen or blinded foes.', mods: { opportunist: 0.25 }, max: 1 },
     sunder: { name: 'Sunder', rar: 'r', icon: 'blades', path: 'general', desc: 'Each crit makes that foe take +4% damage from you per stack (max 10).', mods: { sunder: 1 }, max: 1 },
-    masterstroke: { name: 'Finisher', rar: 'e', icon: 'sword', path: 'general', key: true, desc: 'Hold attack to charge a finisher (full 0.6s after the hold starts at 0.35s); release it: a guaranteed crit at x3 damage that Bleeds for 50% of the hit (melee reach +30%).', mods: { masterstroke: 1 }, hold: 'finisher', max: 1 },
-    evo_general: { name: 'Masterwork Arms', rar: 'l', icon: 'sword', path: 'general', evo: 'general', desc: 'Crits release a spectral strike (a repeat swing or a spectral shot) at 60%. The finisher charges in 0.3s. +{crit} crit chance.', mods: { crit: 0.1 }, strikes: [{ label: 'Spectral strike', on: 'any', mul: 0.6, every: 1, n: 1, crit: true, proc: true, onCrit: true }], max: 1 },
+    masterstroke: { name: 'Finisher', rar: 'e', icon: 'sword', path: 'general', key: true, desc: 'Hold attack to charge a finisher (full 1s after the hold starts at 0.35s); release it: a guaranteed crit at x2 damage that Bleeds for 50% of the hit (melee reach +30%).', mods: { masterstroke: 1 }, hold: 'finisher', max: 1 },
+    evo_general: { name: 'Masterwork Arms', rar: 'l', icon: 'sword', path: 'general', evo: 'general', desc: 'Crits release a spectral strike (a repeat swing or a spectral shot) at 60%. The finisher charges in 0.7s. +{crit} crit chance.', mods: { crit: 0.1 }, strikes: [{ label: 'Spectral strike', on: 'any', mul: 0.6, every: 1, n: 1, crit: true, proc: true, onCrit: true }], max: 1 },
   };
   ED.BOON_IDS = Object.keys(B);
   ED.RARITY = {

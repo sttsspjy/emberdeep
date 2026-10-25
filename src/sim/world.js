@@ -251,7 +251,6 @@
   // Gold dropped by a 'gold' room reward (shared with the UI): 15 + 8 per stratum, times the global gold multiplier.
   W.rewardGold = (stratum) => Math.round((15 + 8 * stratum) * W.GOLD_MUL);
   W.HEART_KILL = 0.02; // heart chance of a non-elite, non-fodder kill
-  W.FORAGER = 0.08; // per Forager rank: share of max HP added to every heart, campfire, fountain, healing draught and Vigor reward heal
   W.GOLD_MUL = 0.65; // every gold drop (kills, rooms, chests, rewards) is scaled by this; shops sell at full price
   W.prototype.threat = function () { return W.perStratum(W.THREAT, this.stratum); };
   // Row fraction of a room (default the current one) on its floor: room.row (else room.dist) over the floor's largest; 0 for the start and boss rooms (bosses keep the stratum's depth).
@@ -661,7 +660,8 @@
     }
     const fg = this.foeGrid(); fg.live = true; fg.qd = 0;
     this.updateShields(dt);
-    for (const p of this.players.values()) this.updatePlayer(p, dt);
+    this.faceOn = false; // foes keep a facing only while a hero can Backstab (elements.js turnFoe)
+    for (const p of this.players.values()) { this.updatePlayer(p, dt); if (p.stats.shadowInfuse > 0 || p.stats.backstab > 0) this.faceOn = true; }
     if (!fg.direct) for (let i = 0; i < fg.n; i++) this.foeDrift(i); // hero effects that carry or pull foes (Sim.moveCircle) move them outside updateEnemy
     this.flowT -= dt;
     if (this.flowT <= 0) { this.computeFlow(); this.flowT = 0.25; }
@@ -937,20 +937,22 @@
     for (const e of es) if (e.hp > 0 && e.spd > 0) Sim.resolve(e, this.room, this.locked, e.fly);
   };
 
-  // Solid zones (ice pillars, Storm Anchors: z.solid, solid radius z.sr or z.r) push every non-boss foe out of them. Returns whether any solid stands (one of those zones or a frozen Glacier foe): foe shots then test them (combat.js solidStops).
+  // Solid zones (z.solid: a disc of radius z.sr or z.r, or a segment of z.len along z.a, z.w wide: Glacier Step's ice wall) push every non-boss foe out of them. Returns whether any solid stands (one of those zones or a frozen Glacier foe): foe shots then test them (combat.js solidStops).
   W.prototype.pushSolids = function () {
     let any = false;
     for (const z of this.zones) {
       if (!z.solid || z.dead) continue;
       any = true;
-      const R = z.sr || z.r, q = this.foeScan(z.x, z.y, R);
+      const seg = z.len > 0, ux0 = seg ? Math.cos(z.a) : 0, uy0 = seg ? Math.sin(z.a) : 0, R = seg ? z.w / 2 : z.sr || z.r;
+      const q = seg ? this.foeScan(z.x + ux0 * z.len / 2, z.y + uy0 * z.len / 2, z.len / 2 + R + 30) : this.foeScan(z.x, z.y, R);
       for (let k = 0; k < q.length; k++) {
         const e = q[k];
         if (e.hp <= 0 || e.boss || !(e.spd > 0)) continue;
-        const dx = e.x - z.x, dy = e.y - z.y, d = Math.hypot(dx, dy), m = R + e.r * 0.9;
+        const t = seg ? U.clamp((e.x - z.x) * ux0 + (e.y - z.y) * uy0, 0, z.len) : 0, cx = z.x + ux0 * t, cy = z.y + uy0 * t; // the nearest point of the solid's spine
+        const dx = e.x - cx, dy = e.y - cy, d = Math.hypot(dx, dy), m = R + e.r * 0.9;
         if (d >= m) continue;
-        const ux = d > 1e-3 ? dx / d : 1, uy = d > 1e-3 ? dy / d : 0;
-        e.x = z.x + ux * m; e.y = z.y + uy * m;
+        const ux = d > 1e-3 ? dx / d : seg ? -uy0 : 1, uy = d > 1e-3 ? dy / d : seg ? ux0 : 0;
+        e.x = cx + ux * m; e.y = cy + uy * m;
       }
       this.foeEnd();
     }
@@ -1065,7 +1067,7 @@
   W.prototype.collect = function (p, pk) {
     if (pk.kind === 'gold') { const v = Math.max(1, Math.round(pk.val * (1 + p.stats.gold))); this.gold += v; this.emit({ t: 'gold', v, pid: p.pid }); }
     else if (pk.kind === 'xp') { this.addXp(pk.val * (1 + p.stats.xp)); this.emit({ t: 'xp', pid: p.pid }); }
-    else if (pk.kind === 'heart') { this.healPlayer(p, p.maxHp * (0.22 + W.FORAGER * p.stats.forager) + 1.5); }
+    else if (pk.kind === 'heart') { this.healPlayer(p, p.maxHp * 0.22 + 1.5); }
   };
 
   // Cartographer (run.fullClear): two dark rooms and an elite room cleared on one stratum. Called with each cleared combat room.

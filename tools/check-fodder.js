@@ -1,6 +1,6 @@
 // Usage: node tools/check-fodder.js
-// Headless checks of the fodder contract in combat.js: a fodder death fires no on-death effect (World.onDeathFx: no class kill hook, Reaper, Spore Burst, Wildfire, Short Circuit, Death Knell or Death's Edge stack) and no Grail growth,
-// while the same deaths of a foe that is not fodder still pay out; every kill still counts for the run (run.kills, p.kills, summary.kills), and the lifetime kill stat behind the First Blood, Slayer and Legend deeds counts foes that are not fodder;
+// Headless checks of the fodder contract in combat.js: a fodder death fires no on-death effect (World.onDeathFx: no class kill hook, no Death's Edge crit) and no Grail growth,
+// while the same deaths of a foe that is not fodder still pay out; no element status spreads or bursts on any death; every kill still counts for the run (run.kills, p.kills, summary.kills), and the lifetime kill stat behind the First Blood, Slayer and Legend deeds counts foes that are not fodder;
 // a stratum I fodder foe takes at least 3 attacks of every hero's first weapon at base stats (no crits; 2 for a heavy weapon). Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
 const S = ED.Save;
@@ -23,28 +23,24 @@ const mk = (w, p, type, dx) => { const e = w.spawnEnemy(type, p.x + (dx || 60), 
 
 ok(ED.World.prototype.onDeathFx.call(null, { fodder: true }) === false && ED.World.prototype.onDeathFx.call(null, { fodder: false }) === true, 'onDeathFx: false for fodder, true otherwise');
 
-// ---- a Reap: a fodder death grants no Death Knell or Death's Edge stack and queues no Reaper implosion; a threat foe's does ----
+// ---- a Reap: a fodder death readies no Death's Edge crit; a threat foe's does ----
 for (const type of [FODDER, THREAT]) {
-  const { w, p } = stage('shade', { deathknell: 1, deathsedge: 1, reaper: 1 });
+  const { w, p } = stage('shade', { doommark: 1, deathsedge: 1 });
   const e = mk(w, p, type); e.hp = 5; e.doom = 10; e.doomOwner = p;
   w.checkReap(e);
   const fod = type === FODDER;
   ok(e.killed && w.run.fodderKills === (fod ? 1 : 0), `${type}: the Reap killed it`);
-  ok(fod ? p.knellN === 0 && p.knellT === 0 : p.knellN === 1 && p.knellT > 0, `${type}: Death Knell stacks ${p.knellN}`);
   ok(fod ? !(p.critStacks | 0) : p.critStacks > 0, `${type}: Death's Edge crits ${p.critStacks | 0}`);
-  ok(w.chainQ.some(q => q.kind === 'reaper') === !fod, `${type}: the Reaper implosion is ${fod ? 'not ' : ''}queued`);
 }
 
-// ---- explosions, spreads and chains: none on a fodder death, all on a threat foe's ----
+// ---- no element status spreads or bursts on death (fodder or not): the verbs act on living foes ----
 for (const type of [FODDER, THREAT]) {
-  const { w, p } = stage('ranger', { sporeburst: 1, wildfire: 1, shortcircuit: 1 });
-  const e = mk(w, p, type), nb = mk(w, p, THREAT, 40), fod = type === FODDER;
-  e.venom = 60; e.venomOwner = p; e.venomBy = 1; e.burnPool = 30; e.burnOwner = p; e.charge = 20; e.chargeOwner = p;
-  w.fx.length = 0; w.killEnemy(e, p, {});
-  ok((nb.venom > 0) === !fod, `${type}: Spore Burst ${fod ? 'stays out' : 'gives the neighbour Venom'}`);
-  ok((nb.burnPool > 0) === !fod, `${type}: Wildfire ${fod ? 'stays out' : 'sets the neighbour alight'}`);
-  ok(w.chainQ.some(q => q.kind === 'sc') === !fod, `${type}: Short Circuit ${fod ? 'queues nothing' : 'queues its discharge'}`);
-  ok(fod ? !w.fx.some(v => v.t === 'boom') : w.fx.some(v => v.t === 'boom'), `${type}: ${fod ? 'no' : 'a'} death burst`);
+  const { w, p } = stage('ranger', { kindle: 1, wildfire: 2, staticcharge: 1, conductor: 2, envenom: 1, miasma: 2 });
+  const e = mk(w, p, type), nb = mk(w, p, THREAT, 40);
+  e.venom = 60; e.venomOwner = p; e.venomBy = 1; for (let i = 0; i < 6; i++) w.burnStack(e, p, 0); e.charge = 20; e.chargeOwner = p;
+  w.fx.length = 0; w.chainQ.length = 0; w.killEnemy(e, p, {}); w.updateChains();
+  ok(!(nb.venom > 0) && !(nb.burnN > 0) && !(nb.charge > 0), `${type}: a death passes no Venom, Burn or charge to the neighbour`);
+  ok(!w.fx.some(v => v.t === 'boom') && !w.chainQ.length, `${type}: no death burst, nothing queued`);
 }
 
 // ---- class kill hooks never run for fodder: Death Mark (Ranger), Corpse Explosion corpses (Necromancer) ----

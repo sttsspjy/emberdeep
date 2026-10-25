@@ -521,8 +521,8 @@ const evAll = (s, t) => s.evs.concat(s.w.fx).filter(e => e.t === t);
 {
   const burn = (p, e) => { e.burnPool = 5; e.burnOwner = p; e.burnTick = 99; e.burn = 1; };
   const s = stage({ p_el: 1, p_el_a: 1 }), { w, p } = s, e = foe(w, p.x + 60, p.y);
-  e.burnPool = 100; e.burnOwner = p; e.burnTick = 0.01; e.burn = 1; run(s, 0.05);
-  const dot = s.log.find(h => h.kind === 'dot'); near(dot.d, 20 * 1.25, 1e-6, 'Burn tick x1.25 (20% of the pool, +25%)');
+  w.burnStack(e, p, 0); run(s, 0.52); // the first tick: 0.5 s of the stack
+  const dot = s.log.find(h => h.kind === 'dot'), bv = ED.CONST.BURN_K * p.stats.power * Math.max(0.1, p.stats.dmg); near(dot.d, bv * 0.5 * 1.25, 1e-6, 'Burn tick x1.25 (a stack: half its Burn value per 0.5 s, +25%)');
   const hot = stage({ p_el: 1, p_el_a: 1 }), cold = stage({ p_el: 1, p_el_a: 1 });
   const eh = foe(hot.w, hot.p.x + 60, hot.p.y), ec = foe(cold.w, cold.p.x + 60, cold.p.y); eh.burnPool = 50; eh.burnOwner = hot.p;
   const dh = hot.w.hitEnemy(eh, 100, { p: hot.p, kind: 'skill', part: 'nova.blast', clsEl: 'fire' }), dc = cold.w.hitEnemy(ec, 100, { p: cold.p, kind: 'skill', part: 'nova.blast', clsEl: 'fire' });

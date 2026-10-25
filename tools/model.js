@@ -30,9 +30,11 @@ module.exports = (ED, opts) => {
   }
   // Extras that do not grow with the pack: the two Lich bolts seek one foe each (the same total), Guardian Light's Smites ride the one Smite stream the status estimate counts; a Solar Flare burst (radius 50) and a Dawn's Wake strip (44 wide) catch about two foes of a pack.
   const ONE_STREAM = new Set(['Lich bolts', 'Heavy Smites', 'Sunstrike']), FEW = { 'Solar Flare': 2, "Dawn's Wake": 2 };
+  // The hold verb (weapon._hold) stands in for the attacks when its cycle deals more: one foe, or min(n, 3) when it strikes every foe in its reach.
   function directDamage(m, n) {
-    if (n === 1) return m.weapon.dps * (m.weapon._up === undefined ? 1 : m.weapon._up) + m.skills.reduce((s, k) => s + k.dpsCd, 0);
-    let sum = packWeapon(m, n);
+    const h = m.weapon._hold;
+    if (n === 1) return Math.max(m.weapon.dps * (m.weapon._up === undefined ? 1 : m.weapon._up), h ? h.dps : 0) + m.skills.reduce((s, k) => s + k.dpsCd, 0);
+    let sum = Math.max(packWeapon(m, n), h ? h.dps * (h.pack ? Math.min(n, 3) : 1) : 0);
     for (const k of m.skills) for (const q of k.parts) {
       if (q.kind === 'zone') continue;
       const key = k.id + '.' + q.id;
@@ -154,15 +156,9 @@ module.exports = (ED, opts) => {
     const has = (k) => st[k] > 0;
     switch (id) {
       case 'execute': return 0.3;
-      case 'searing': return has('fireInfuse') || st.element === 'fire' ? 0.8 : 0;
       case 'lacerate': return has('bleedAll') ? 0.9 : has('bleed') || st.masterstroke ? Math.min(0.9, 1 - Math.pow(1 - st.crit, m.weapon.aps * 2)) : 0;
-      case 'malice': return has('shadowInfuse') || st.element === 'shadow' ? 0.6 : 0;
-      case 'brittle': return has('iceInfuse') ? 0.6 : 0;
-      case 'fester': return has('poisonInfuse') ? 0.6 : 0;
-      case 'ionize': return has('lightningInfuse') || st.element === 'lightning' ? (st.capacitor > 0 ? 0.8 : 0.5) : 0; // Capacitor charge waits for a cast: foes stay charged longer
-      case 'hallow': return has('holyInfuse') || st.element === 'holy' ? 0.7 : 0;
+      case 'backstab': return Math.min(0.9, (st.melee || st.kind === 'bell' ? 0.35 : 0.15) + (st.decoy ? 0.15 : 0) + (st.stepBehind ? 0.1 : 0)); // share of hits from behind (tools/pick.js BACK_UP)
       case 'opportunist': return Math.min(1, d.hard + (has('iceInfuse') ? 0.3 : 0));
-      case 'knell': return 0.5 * Math.min(st.knell, 3);
       case 'brand': return ailmentsKept(st, d);
       case 'idol': return 1;
       case 'banner': return 1;
@@ -189,7 +185,7 @@ module.exports = (ED, opts) => {
     if (st.sanctJudge > 0) { const N = St.skillNums('sanctuary', st), hammer = Math.min(1, (4 + st.judgeDur) / St.skillNums('judgment', st).cdEff) * SANCT_HIT; v += 0.2 * SANCT_HIT * Math.min(1, N.p.zone.dur / N.cdEff) * (1 - hammer); }
     return 1 + v;
   }
-  // The factor on hero hit damage: (Damage + sum of the owned conditional bonuses x uptime x dmgX) / Damage, times Judging Light's Judged window and the vulnerability the cards set.
+  // The factor on hero hit damage: (Damage + sum of the owned conditional bonuses x uptime) / Damage, times Judging Light's Judged window and the vulnerability the cards set.
   function condFactor(p, m, d) {
     const st = p.stats; let sum = 0;
     for (const r of ED.COND_DMG) {
@@ -201,7 +197,7 @@ module.exports = (ED, opts) => {
     if (m.weapon._mom) sum += st.momentum * m.weapon._mom.avg; // Momentum: the stacks a hit sees on average (ED.Sheet shadeForms)
     const holy = m.mult.status.find(s => s.el === 'holy'), smites = !!(holy && holy.est.dps > 0);
     if (st.guardLight > 0 && smites) sum += st.guardLight * GL_UP;
-    return (Math.max(0.1, st.dmg) + sum * st.dmgX) / Math.max(0.1, st.dmg) * judgeLight(p, m, smites) * vulnK(p); // the bonuses carry the Ascended damage factor (combat.js hitEnemy)
+    return (Math.max(0.1, st.dmg) + sum) / Math.max(0.1, st.dmg) * judgeLight(p, m, smites) * vulnK(p);
   }
 
   // ---- one hero in one context: the sheet model, its defence, the conditional factor, hero damage on one foe and in a pack of `pack` ----

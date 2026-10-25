@@ -195,8 +195,8 @@ const run = (w, secs, f) => { for (let i = 0; i < Math.round(secs * 60); i++) { 
 // ailments, status moves and crit grants
 {
   const { w, p } = stage('knight'); const a = foe(w, p.x + 60, p.y), b2 = foe(w, p.x + 90, p.y);
-  a.burnPool = 600; a.burnOwner = p; a.chill = 50; a.bleedPool = 400; a.bleedOwner = p; a.stun = 1; ok(w.ailments(a) === 4, 'ailments: Burn, Chill, Bleed, Dazed');
-  w.moveStatuses(a, b2, 0.5); near(b2.burnPool, 300, 1e-6, 'moved Burn pool'); near(a.burnPool, 300, 1e-6, 'source loses the moved Burn'); ok(b2.chill > 0 && b2.burnOwner === p, 'chill moved, owner kept');
+  for (let i = 0; i < 6; i++) w.burnStack(a, p, 0); a.chill = 50; a.bleedPool = 400; a.bleedOwner = p; a.stun = 1; ok(w.ailments(a) === 4, 'ailments: Burn, Chill, Bleed, Dazed');
+  w.moveStatuses(a, b2, 0.5); near(b2.burnN, 3, 0, 'moved Burn stacks'); near(a.burnN, 3, 0, 'source loses the moved stacks'); ok(b2.chill > 0 && b2.bsO.every(o => o === p), 'chill moved, stack owner kept');
   const big = 0.25 * b2.maxHp; a.burnPool = 1e9; w.moveStatuses(a, b2, 1); ok(b2.burnPool <= 300 + big + 1e-6, 'a spread gives at most 25% of the receiver HP per pool');
   const hk = stage('knight', { k_atk: 1, k_atk_h: 1 }).p; hk.critStacks = 0; ED.World.prototype.grantCrits.call(null, hk, 3, 3, 'set'); ok(hk.critStacks === 2, 'Heavy fork grants fewer crit stacks (3 x 0.56 -> 2)');
   const sk = stage('knight', { k_atk: 1, k_atk_s: 1 }).p; ED.World.prototype.grantCrits.call(null, sk, 3, 5, 'set'); ok(sk.critStacks === 5, 'Swift fork grants more (3 x 1.82 -> 5)');

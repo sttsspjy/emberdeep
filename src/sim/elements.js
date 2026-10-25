@@ -22,7 +22,7 @@
     WALL_T: 2.5, WALL_W: 10, SHATTER_R: 60, COLD_CD: 0.5,
     CONE_TICK: 0.15, CONE_ARC: 0.9, CONE_RANGE: 130, CONE_REACH: 1.5, CONE_MUL: 0.6, CONE_BURN: 3,
     LANCE_MUL: 2.5, LANCE_MIN: 0.3, LANCE_LEN: 320, LANCE_SPEED: 560, FLASK_MUL: 1.5, FLASK_R: 70, FLASK_T: 4, FLASK_MAX: 240, FLASK_V: 2,
-    GUARD_ARC: 120 * Math.PI / 180, GUARD_MUL: 2, FIN_MUL: 3, FIN_REACH: 0.3, STORM_R: 220, STORM_CONE: 0.5,
+    GUARD_ARC: 120 * Math.PI / 180, GUARD_MUL: 2, FIN_MUL: 2, FIN_REACH: 0.3, STORM_R: 220, STORM_CONE: 0.5,
   });
 
   // Called from initBuild: per-hero verb state. holdOn / holdT / holdTick: the hold-attack verb; pdT: perfect dodge window after a dash (pdSet: attackers already dodged this dash); pdRefT / pdStrikeT: Swift Grace and Divine Riposte clocks;
@@ -67,14 +67,14 @@
     burnSync(e, this.time);
   };
 
-  // One Burn stack of hero p on e for life s (default BURN_LIFE); at the cap the stack that ends first is replaced. noSync: the caller syncs.
+  // One Burn stack of hero p on e for life s (default BURN_LIFE); at the cap the stack that ends first is replaced. noSync: the caller syncs. e.bsS: start times (a missing entry counts as long started).
   W.burnStack = function (e, p, life, noSync) {
     if (!p || !ok(e)) return;
     if (!e.bsT) { e.bsT = []; e.bsO = []; }
-    const T = e.bsT, O = e.bsO, cap = C.BURN_CAP + p.stats.burnCap;
-    if (!T.length) e.burnTick = 0.5;
-    while (T.length >= cap) { let k = 0; for (let i = 1; i < T.length; i++) if (T[i] < T[k]) k = i; T.splice(k, 1); O.splice(k, 1); }
-    T.push(this.time + (life > 0 ? life : C.BURN_LIFE)); O.push(p);
+    const T = e.bsT, O = e.bsO, S = e.bsS || (e.bsS = []), cap = C.BURN_CAP + p.stats.burnCap;
+    if (!T.length) { e.burnTick = 0.5; e.burnLast = this.time; }
+    while (T.length >= cap) { let k = 0; for (let i = 1; i < T.length; i++) if (T[i] < T[k]) k = i; T.splice(k, 1); O.splice(k, 1); S.splice(k, 1); }
+    S.length = T.length; T.push(this.time + (life > 0 ? life : C.BURN_LIFE)); O.push(p); S.push(this.time);
     e.burnOwner = p;
     if (!noSync) burnSync(e, this.time);
   };
@@ -86,6 +86,7 @@
     const now = this.time, n = Math.min(T.length, Math.max(1, Math.round(share * T.length)));
     let got = 0;
     for (let i = 0; i < n; i++) { const k = T.length - 1; got += burnV(O[k]) * Math.max(0, T[k] - now); T.pop(); O.pop(); }
+    if (e.bsS) e.bsS.length = T.length;
     burnSync(e, now);
     return got;
   };
@@ -96,29 +97,31 @@
     if (!T || !T.length || !ok(dst) || !(f > 0)) return 0;
     const now = this.time, n = Math.min(T.length, max || 99, Math.max(1, Math.round(f * T.length)));
     for (let i = 0; i < n; i++) { const k = T.length - 1 - i; if (T[k] > now) this.burnStack(dst, O[k], T[k] - now, true); }
-    if (move && src.hp > 0) { T.length -= n; O.length -= n; burnSync(src, now); }
+    if (move && src.hp > 0) { T.length -= n; O.length -= n; if (src.bsS) src.bsS.length = T.length; burnSync(src, now); }
     burnSync(dst, now);
     return n;
   };
 
-  // Per-tick Burn (tickStatuses): every 0.5 s each owner's live stacks deal n x half its Burn value as one hit; Wildfire passes stacks once a second.
+  // Per-tick Burn (tickStatuses): every 0.5 s each owner's stacks deal its Burn value x the time each stack burned in the last 0.5 s, as one hit (burnLast: the last tick; a stack deals its value x its life); Wildfire passes stacks once a second.
   W.tickBurn = function (e, dt) {
     const T = e.bsT;
     if (!T || !T.length) { if (e.burnN) { e.burn = 0; e.burnN = 0; e.burnPool = 0; e.smother = 0; e.wildO = null; } return; }
     if (e.wildO && (e.wildT = (e.wildT || 0) + dt) >= 1) { e.wildT -= 1; this.wildfire(e, e.wildO); }
-    if ((e.burnTick -= dt) > 0) return;
+    if ((e.burnTick -= dt) > 1e-9) return; // float residue would add a frame to a 0.5 s tick
     e.burnTick += 0.5;
-    const now = this.time, O = e.bsO;
-    let k = 0;
-    for (let i = 0; i < T.length; i++) if (T[i] > now) { T[k] = T[i]; O[k] = O[i]; k++; }
-    T.length = k; O.length = k;
-    for (let i = 0; i < k && e.hp > 0; i++) {
+    const now = this.time, O = e.bsO, S = e.bsS || (e.bsS = []), t0 = e.burnLast !== undefined && e.burnLast !== null ? e.burnLast : now - 0.5, n0 = T.length;
+    e.burnLast = now;
+    for (let i = 0; i < n0 && e.hp > 0; i++) {
       const o = O[i];
-      let n = 0, dup = false;
-      for (let j = 0; j < k; j++) if (O[j] === o) { if (j < i) { dup = true; break; } n++; }
-      if (!dup) this.hitEnemy(e, n * burnV(o) * 0.5 * (1 + o.stats.burnMul), { p: o, kind: 'dot', raw: true, noProc: true, crit: false, el: 'fire' });
+      let secs = 0, dup = false;
+      for (let j = 0; j < n0; j++) if (O[j] === o) { if (j < i) { dup = true; break; } secs += Math.max(0, Math.min(now, T[j]) - Math.max(t0, S[j] !== undefined ? S[j] : -1e9)); }
+      if (!dup && secs > 0) this.hitEnemy(e, secs * burnV(o) * (1 + o.stats.burnMul), { p: o, kind: 'dot', raw: true, noProc: true, crit: false, el: 'fire' });
     }
-    if (e.hp > 0) burnSync(e, now);
+    if (e.hp <= 0) return;
+    let k = 0;
+    for (let i = 0; i < T.length; i++) if (T[i] > now + 1e-9) { T[k] = T[i]; O[k] = O[i]; S[k] = S[i]; k++; }
+    T.length = k; O.length = k; S.length = k;
+    burnSync(e, now);
   };
 
   // Wildfire: e (holding BURN_AT stacks of o) passes o.stats.wildfire stacks to the nearest foe touching it that holds fewer of o's stacks.
@@ -223,15 +226,16 @@
   W.dashSweep = function (p) {
     const st = p.stats, x0 = p.disX, y0 = p.disY, x1 = p.x, y1 = p.y;
     p.disX = x1; p.disY = y1;
-    const fire = st.firewalk > 0, R0 = Math.max(C.DIS_R, p.r + 30), q = this.foeScan((x0 + x1) / 2, (y0 + y1) / 2, Math.hypot(x1 - x0, y1 - y0) / 2 + R0), dis = [];
+    const fire = st.firewalk > 0, R0 = Math.max(C.DIS_R, p.r + 30), q = this.foeScan((x0 + x1) / 2, (y0 + y1) / 2, Math.hypot(x1 - x0, y1 - y0) / 2 + R0), dis = [], walk = [];
     for (let k = 0; k < q.length; k++) {
       const e = q[k];
       if (!ok(e) || e.spawnT > 0) continue;
       const d2 = U.segDist2(e.x, e.y, x0, y0, x1, y1);
       if (e.charge > 0 && e.chargeOwner === p && d2 < (C.DIS_R + e.r) ** 2 && !(p.dashHit && p.dashHit.has(e.id))) dis.push(e);
-      if (fire && e.burnN > 0 && d2 < (p.r + e.r + 8) ** 2 && !(p.touchSet && p.touchSet.has(e.id))) { (p.touchSet || (p.touchSet = new Set())).add(e.id); this.firewalk(p, e); }
+      if (fire && e.burnN > 0 && d2 < (p.r + e.r + 8) ** 2 && !(p.touchSet && p.touchSet.has(e.id))) { (p.touchSet || (p.touchSet = new Set())).add(e.id); walk.push(e); }
     }
     this.foeEnd();
+    for (const e of walk) this.firewalk(p, e); // after the scan: a foe lit by this sweep's copy does not copy back
     const jumps = C.DIS_JUMPS + (st.evo === 'lightning' ? C.TEMPEST_JUMPS : 0);
     for (const e of dis) if (e.hp > 0 && this.discharge(e, p, C.DIS_K, jumps) > 0 && st.evo === 'lightning' && this.time >= p.dashRefT) { p.dashRefT = this.time + C.TEMPEST_CD; this.msgs.push({ to: p.pid, t: 'dashRefund' }); }
   };
@@ -274,9 +278,9 @@
     if (st.pdStrike) p.pdStrikeT = this.time + C.PD_STRIKE_T;
     return true;
   };
-  // True when hero p guards (Hallowed Arms hold) and (x, y) lies within GUARD_ARC of its facing.
+  // True when hero p guards (Hallowed Arms hold; a Bellwarden: p.bellGuard) and (x, y) lies within GUARD_ARC of its facing.
   W.guardFront = function (p, x, y) {
-    return !!(p.holdOn && p.stats.hold === 'guard') && Math.abs(U.angDiff(p.face || 0, Math.atan2(y - p.y, x - p.x))) <= C.GUARD_ARC / 2;
+    return !!((p.holdOn && p.stats.hold === 'guard') || p.bellGuard) && Math.abs(U.angDiff(p.face || 0, Math.atan2(y - p.y, x - p.x))) <= C.GUARD_ARC / 2;
   };
   // A foe shot reflected by the guard: it flies back toward its shooter as a Holy hero shot at GUARD_MUL x weapon damage.
   W.reflectShot = function (p, pr) {
@@ -336,7 +340,7 @@
     const full = St.holdFull(st), f = full > 0 ? Math.min(1, p.holdT / full) : 1;
     this.emit({ t: 'hold', pid: p.pid, k, on: 0 });
     if (k === 'lance') this.iceLance(p, p.face, Math.max(C.LANCE_MIN, f));
-    else if (k === 'flask') this.flask(p, p.face, d);
+    else if (k === 'flask' && f >= 1) this.flask(p, p.face, d);
     else if (k === 'finisher' && f >= 1) this.playerAttack(p, p.face, 0, undefined, true);
   };
 
@@ -418,7 +422,11 @@
       }
       return best;
     };
-    const reach = (x, y) => { const d = Math.hypot(x - p.x, y - p.y), end = Sim.castMove(room, p.x, p.y, Math.atan2(y - p.y, x - p.x), d, p.r, locked); return Math.hypot(end.x - p.x, end.y - p.y) >= d - 2 ? end : null; };
+    const reach = (x, y) => { // castMove walks 8 px steps: an end within 10 px of the spot is a free path; the spot itself is resolved out of solids
+      const d = Math.hypot(x - p.x, y - p.y), end = Sim.castMove(room, p.x, p.y, Math.atan2(y - p.y, x - p.x), d, p.r, locked);
+      if (Math.hypot(end.x - p.x, end.y - p.y) < d - 10) return null;
+      const q = { x, y, r: p.r }; Sim.resolve(q, room, locked, false); return q;
+    };
     if (st.stepBehind) {
       const e = pick(C.BEHIND_CONE, C.BEHIND_R, () => true);
       if (e) {

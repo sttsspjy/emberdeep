@@ -68,10 +68,10 @@
       kbx: 0, kby: 0, st: 'move', t: 0, cd: this.rng.range(0.6, 1.6), face: 1, flash: -1, stun: 0, frozen: 0, elite: null, elite2: null, ward: 0, wardMax: 0,
       boss: !!def.boss, fodder: !!def.fodder, plan: !!opts.plan, age: 0, fly: !!def.fly, target: null, tgtT: 0, aimA: 0, guardA: 0, contactCd: 0, spawnT: opts.spawnT || 0,
       phase: 1, vars: {}, strafe: this.rng.sign(), wob: this.rng.range(0, 6.28), exposed: false, recoil: 0,
-      // statuses: Burn stacks (bsT end times, bsO owners; burnN / burnPool / burn / smother / wildO derived and bacc = build-up toward the next stack: elements.js), Bleed pool, chill, charge (chargeT = hold left),
+      // statuses: Burn stacks (bsT end times, bsO owners, bsS start times; burnN / burnPool / burn / smother / wildO derived and bacc = build-up toward the next stack: elements.js), Bleed pool, chill, charge (chargeT = hold left),
       // Venom (0-100; corrode / vweak = strongest Caustic / Enfeeble of its heroes), Radiance, Doom (HP units); faceA = facing (Backstabs); cid = last chain id this foe paid out in; stunCd / blindCd = per-foe cooldowns of repeating stuns and blinds;
       // glacier = frozen by a Glacier hero (solid); affixOff = affixes off (ED.hasAffix); hero debuffs (judged = Cleric Judgment, vulnT = Rain/Smoke vulnerability); slow/windMul/dmgTakenMul are read by ai.js and hitEnemy
-      burn: 0, burnPool: 0, burnN: 0, burnTick: 0, burnOwner: null, bsT: null, bsO: null, bacc: 0, smother: 0, wildO: null, wildT: 0, bleedPool: 0, bleedTick: 0, bleedOwner: null,
+      burn: 0, burnPool: 0, burnN: 0, burnTick: 0, burnOwner: null, bsT: null, bsO: null, bsS: null, burnLast: null, bacc: 0, smother: 0, wildO: null, wildT: 0, bleedPool: 0, bleedTick: 0, bleedOwner: null,
       chill: 0, chillT: 0, chillOwner: null, freezeRes: 0, freezeResT: 0, charge: 0, chargeOwner: null, chargeT: 0,
       venom: 0, venomT: 0, venomTick: 0.5, venomOwner: null, corrode: 0, vweak: 0, rad: 0, radOwner: null, doom: 0, doomOwner: null, cid: 0, cidMask: 0, stunCd: 0, blindCd: 0, faceA: 0,
       glacier: false, affixOff: false,
@@ -362,7 +362,7 @@
   W.ailments = function (e) {
     let n = 0;
     const mh = e.maxHp;
-    if (e.burnPool >= 0.01 * mh) n++;
+    if (e.burnN > 0) n++; // any Burn stack
     if (e.chill >= 25 || e.frozen > 0) n++;
     if (e.charge >= 0.01 * mh) n++;
     if (e.venom > 25) n++;
@@ -1293,7 +1293,7 @@
     if (!e.target) return;
     const ai = ED.AI[e.def.ai];
     if (ai) ai(this, e, dt);
-    this.turnFoe(e, dt);
+    if (this.faceOn) this.turnFoe(e, dt);
     // contact damage: full only during body-hit attack states, otherwise 0.4x; a hero takes at most one fodder touch per World.FODDER_TOUCH_CD (p.fodderAt: world time of the next allowed one)
     if (e.contactCd <= 0 && e.def.ai !== 'bomber' && !e.burrowed) {
       for (const p of this.players.values()) {

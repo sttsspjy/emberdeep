@@ -1,6 +1,6 @@
 // Usage: node tools/check-sim.js
-// Headless regression checks of sim review fixes: crit-stack grants never lower the count, a boss kill purges hostile shots and pools whichever loop lands it, Smite duo statuses use the pre-affinity Smite,
-// Frozen Heart goes through freezeEnemy, a departed hero leaves no thrown shield, fork and crit card text follows the hero's weapon, the fodder horde (quota, drops, health, damage cap, xp budget, crowd slow, exposure, pack spots, live cap) and the stratum behaviour (lead aim, ground speed, mixed rosters, two-affix elites).
+// Headless regression checks of sim review fixes: crit-stack grants never lower the count, a boss kill purges hostile shots and pools whichever loop lands it,
+// freezeEnemy (elite factor), a departed hero leaves no thrown shield, fork and crit card text follows the hero's weapon, the fodder horde (quota, drops, health, damage cap, xp budget, crowd slow, exposure, pack spots, live cap) and the stratum behaviour (lead aim, ground speed, mixed rosters, two-affix elites).
 // Prints failures and exits 1 when any check fails; -v prints one line per played room.
 const { ED, runBot } = require('./sim.js');
 let n = 0, fails = 0;
@@ -64,37 +64,14 @@ for (const mode of ['proj', 'zone', 'tick']) {
   ok(w.projs.filter(q => q.team === 0).length === 1, `a hero shot after the killing one survives (${w.projs.length})`);
 }
 
-// ---- Smite duo statuses are built from the Smite before the holy affinity ----
-for (const s of [1, 2]) {
-  const { w, p } = stage('cleric', { sunfire: 1 });
-  w.stratum = s; p.stats.sunfire = 1;
-  const e = foe(w, p.x + 200, p.y), holy = w.elemAff('holy'), fire = w.elemAff('fire');
-  w.smite(e, p, 100); // stored Radiance 100 already carries the holy affinity
-  near(e.burnPool, 100 / holy * 0.6 * fire, 1e-6, `stratum ${s} Sunfire Burn`);
-}
-{
-  const { w, p } = stage('pyro', { thermalshock: 1 });
-  w.stratum = 3; // fire weak
-  const a = foe(w, p.x + 100, p.y), b = foe(w, p.x + 130, p.y);
-  a.burnPool = 100; a.burn = 50; a.burnOwner = p;
-  w.freezeEnemy(a, p);
-  for (let i = 0; i < 12; i++) w.update(1 / 60);
-  const fireAff = w.elemAff('fire'), got = (1e6 - b.hp);
-  ok(got > 0 && b.chill > 0, `Thermal splash hit and chilled the neighbour (dealt ${got}, chill ${b.chill})`);
-  near(b.chill, got / fireAff / (b.maxHp / b.hpLever) * ED.CONST.CHILL_K * w.elemAff('ice'), 1e-6, 'Thermal splash chill ignores the fire affinity of the splash');
-}
-
-// ---- Frozen Heart freezes through freezeEnemy: elite factor, freeze event, no spawning or burrowed foes, bosses stay out ----
+// ---- freezeEnemy: elite factor, freeze resistance, freeze event ----
 {
   const { w, p } = stage('knight', {});
-  p.stats.frozenHeart = 1; p.frozenCd = 0; p.invuln = 0; p.shield = 0;
   const a = foe(w, p.x + 50, p.y), el = foe(w, p.x - 50, p.y); el.elite = 'swift';
-  const sp = foe(w, p.x, p.y + 50); sp.spawnT = 1; const bu = foe(w, p.x, p.y - 50); bu.burrowed = true; const bo = foe(w, p.x + 60, p.y + 60); bo.boss = true;
   w.fx.length = 0;
-  w.hurtPlayer(p, 1, { x: a.x, y: a.y });
-  near(a.frozen, 1.6, 1e-9, 'Frozen Heart freezes a normal foe 1.6 s'); near(el.frozen, 1.2, 1e-9, 'Frozen Heart freezes an elite 0.9x0.75 of 1.6 s');
-  ok(sp.frozen <= 0 && bu.frozen <= 0 && bo.frozen <= 0, 'Frozen Heart skips spawning, burrowed foes and bosses');
-  ok(a.freezeRes === 1 && w.fx.some(ev => ev.t === 'freeze'), 'Frozen Heart counts freeze resistance and emits the freeze event');
+  for (const e of [a, el]) w.freezeEnemy(e, p);
+  near(a.frozen, 1.6, 1e-9, 'a freeze holds a normal foe 1.6 s'); near(el.frozen, 1.2, 1e-9, 'an elite 0.9x0.75 of 1.6 s');
+  ok(a.freezeRes === 1 && w.fx.some(ev => ev.t === 'freeze'), 'a freeze counts freeze resistance and emits the freeze event');
 }
 
 // ---- a departed Knight leaves no thrown shield ----
@@ -273,7 +250,7 @@ for (const s of [1, 2]) {
 {
   const D = ED.Dungeon, FIGHT = { combat: 1, elite: 1, champion: 1 };
   const bad = {}, flag = (k) => { bad[k] = (bad[k] || 0) + 1; };
-  let elitesIII = 0, twists = 0, twistEarly = 0, floors = 0;
+  let floors = 0;
   const sig = (f) => JSON.stringify(f.rooms.map(r => [r.type, r.row, r.lane, r.dark, r.reward, r.threat, r.doors, r.entry, r.event, r.w, r.h, Array.from(r.tiles).join(''), r.decor.length, !!r.bell])) + f.platino;
   for (let seed = 1; seed <= 200; seed++) for (let s = 1; s <= ED.CONST.STRATA; s++) {
     const f = D.generate(s, seed * 7919 + 13), rm = f.rooms, R = f.rows; floors++;
@@ -290,12 +267,10 @@ for (const s of [1, 2]) {
       const want = r.type === 'boss' ? 3 : FIGHT[r.type] ? Math.min(3, 1 + (r.type === 'elite' || r.type === 'champion') + r.dark + (2 * r.row > R)) : 0;
       if (r.threat !== want) flag('threat pips');
       if (!!r.bell !== (s === 3 && r.dark)) flag('the Drowned Bell stands in the dark rooms of stratum III only');
-      if (r.type === 'elite') { if (r.reward === 'twist') { if (s < 3) twistEarly++; else twists++; } if (s >= 3) elitesIII++; }
     }
     if (f.platino !== -1 && !(f.platino >= 1 && f.platino <= 3)) flag('the Platino cue is a fight ordinal 1-3');
   }
   ok(!Object.keys(bad).length, `stratum maps (${floors}): ${JSON.stringify(bad)}`);
-  ok(twistEarly === 0 && Math.abs(twists / elitesIII - 0.15) < 0.04, `elite Twist rewards from stratum III only, ${twists}/${elitesIII} of them`);
 }
 { // co-op doors: the party leaves once every living hero stands in the same exit door; P[26] carries the door a hero waits in
   const D = ED.Dungeon, T = ED.CONST.TILE;
@@ -1081,54 +1056,12 @@ for (let s = 1; s <= NS; s++) {
     ok(ev.length === 0, 'no fury inside the first 24 s');
   }
 }
-{ // healing trim: no heart at a room clear, kill hearts 2%; Forager adds World.FORAGER of max HP per rank to hearts, campfires, fountains, draughts and Vigor rewards
-  ok(ED.World.HEART_KILL === 0.02 && ED.World.FORAGER === 0.08, 'heart and Forager constants');
+{ // healing trim: no heart at a room clear, kill hearts 2%
+  ok(ED.World.HEART_KILL === 0.02, 'heart constant');
   const { w, p } = stage('knight', {});
   let hearts = 0;
   for (let i = 0; i < 60; i++) { w.pickups.length = 0; w.enc = { kind: 'waves' }; w.locked = true; w.roomState[w.roomId].cleared = false; w.room.reward = null; w.roomCleared(); hearts += w.pickups.filter(k => k.kind === 'heart').length; }
   ok(hearts === 0, `room clears drop no heart (${hearts} in 60)`);
-  const heal = (rank, fn) => { p.stats.forager = rank; p.hp = 1; const h0 = p.hp; fn(); return p.hp - h0; };
-  near(heal(2, () => w.collect(p, { kind: 'heart', val: 1 })) - heal(0, () => w.collect(p, { kind: 'heart', val: 1 })), 0.16 * p.maxHp, 1e-6, 'Forager 2: a heart heals 16% of max HP more');
-  const fire = () => { const g = 9100 + Math.random(); w.props.push({ id: g, kind: 'campfire', x: p.x, y: p.y, group: g, state: 0 }); w.locked = false; w.interact(p.pid, g); };
-  near(heal(1, fire) - heal(0, fire), 0.08 * p.maxHp, 1e-6, 'Forager 1: a campfire heals 8% of max HP more');
-  p.stats.forager = 0;
-}
-{ // Hunted: a one-affix champion joins a combat room's second wave, never holds the room, pays a room offer to Hunted holders when killed, leaves with a puff at the clear
-  const play = (hunted, killChamp) => {
-    const w = hordeWorld(2, ['knight']), p = w.players.get('p0'), room = roomOf(w, 'combat');
-    const dir = Object.keys(room.doors).find(k => room.doors[k] >= 0); w.enterRoom(room.id, ED.Dungeon.OPP[dir]);
-    p.stats.twHunted = hunted ? 1 : 0;
-    const enc = w.enc; let champ = null, seen = 0, t = 0;
-    while (w.enc === enc && t < 200) {
-      p.invuln = 1e9; w.update(TICK); t += TICK;
-      for (const e of w.enemies) if (e.hunted && e.hp > 0) { champ = e; seen = Math.max(seen, w.enemies.filter(q => q.hunted && q.hp > 0).length); }
-      for (const e of w.enemies.slice()) if (e.hp > 0 && e.spawnT <= 0 && (!e.hunted || killChamp)) w.killEnemy(e, p, {});
-    }
-    return { w, p, champ, seen, cleared: w.enc !== enc, enc };
-  };
-  const a = play(true, false);
-  ok(a.cleared && a.champ && a.seen === 1 && a.champ.elite && !a.champ.elite2 && ED.World.DARK_AFFIXES.includes(a.champ.elite), `Hunted: one champion with one affix (${a.champ && a.champ.elite}/${a.champ && a.champ.elite2}) and the room still clears`);
-  ok(a.champ && a.champ.hp <= 0 && !a.w.enemies.some(e => e.hunted && e.hp > 0) && a.w.fx.some(ev => ev.t === 'puff') && !a.p.offers.some(o => o.src === 'room'), 'left alive, it leaves with a puff at the clear and pays nothing');
-  const b = play(true, true);
-  ok(b.cleared && b.champ && b.champ.killed && b.p.offers.filter(o => o.src === 'room').length === 1, 'killed, it pays its holder one room offer');
-  const c = play(false, true);
-  ok(c.cleared && !c.champ, 'without Hunted no champion comes');
-  const bit = ED.Net.encodeSnap(a.w, [], true);
-  ok(Array.isArray(bit.E), 'snapshot encodes');
-}
-{ // Twist offers: bosses II and III grant one per hero beside their rewards (stratum I none); elite Twist rewards are per-hero claims
-  for (const s of [1, 2, 3]) {
-    const w = hordeWorld(s, ['knight', 'ranger']), boss = w.floor.rooms[w.floor.boss];
-    w.enterRoom(boss.id, null);
-    const e = w.spawnEnemy(ED.biomeFor(s).boss, 100, 100), p = w.players.get('p0');
-    w.killEnemy(e, p, {});
-    const tw = [...w.players.values()].map(q => q.offers.filter(o => o.src === 'twist').length);
-    ok(tw.every(v => v === (s === 1 ? 0 : 1)), `boss ${s}: Twist offers per hero ${tw}`);
-  }
-  const w = hordeWorld(3, ['knight', 'ranger']), [p, q] = [...w.players.values()];
-  const pr = { id: 9301, kind: 'reward', x: p.x, y: p.y, item: 'twist', group: 9302, state: 0 }; w.props.push(pr); q.x = p.x; q.y = p.y;
-  w.interact(p.pid, pr.id); w.interact(p.pid, pr.id); ok(p.offers.filter(o => o.src === 'twist').length === 1 && !pr.state, 'a Twist reward: one claim per hero, the prop stays');
-  w.interact(q.pid, pr.id); ok(q.offers.some(o => o.src === 'twist') && pr.state === 1, 'every hero claimed: it is spent');
 }
 { // the Drowned Bell stands in every dark room of stratum III; the Platino comes out at the n-th fight clear of its floor
   const f = ED.Dungeon.generate(3, 4242), bells = f.rooms.filter(r => r.bell);

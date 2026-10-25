@@ -49,12 +49,12 @@ function modelOf(cls, boons, wi, o) {
   near(leg.pre, 67.8, 0.05, 'Judgment leg with its own vulnerability'); near(cl.skills[1].perCast, 135.6, 0.1, 'Judgment per cast (two legs)'); near(by(cl, 0, 'zone').here * 7, 143.85, 0.1, 'Sanctuary 7 ticks');
   const nc = modelOf('necro', {}, 0, { stat: { crit: 0 } }), mn = by(nc, 0, 'minion');
   near(mn.here, 14.535, 0.01, 'Minion hit'); ok(mn.oneFoe === 51, `Minions: 3 x 17 hits (got ${mn.oneFoe})`); near(by(nc, 1, 'burst').raw, 60.3, 0.05, 'Harvest burst');
-  // Set 2: Sharpened Edge x2, Stoke x1, Kindle, stratum III (no stratum is weak or resists: affinity x1), crit 5%.
-  const e2 = modelOf('pyro', { edge: 2, stoke: 1, kindle: 1 }, 0, { ctx: { stratum: 3 }, stat: { crit: 0.05 } });
-  near(e2.mult.dmg.total, 1.2, 1e-9, 'Set 2 damage'); near(by(e2, 0, 'blast').here, 48.6 * 1.2 * (1 + 0.05 * 0.75), 0.05, 'Set 2 Nova blast');
-  near(by(e2, 0, 'burn').here, 28.4 * 1.25, 0.05, 'Set 2 Nova burn (Burn strength)');
-  near(by(e2, 1, 'impact').statusAdd.here, 0.5 * by(e2, 1, 'impact').pre * 1.25, 0.05, 'Set 2 Meteor burn add');
-  near(by(e2, 1, 'crater').here * by(e2, 1, 'crater').oneFoe, 6 * 8.1 * 1.2, 0.1, 'Set 2 crater, 6 ticks');
+  // Set 2: Stoke x1 (+20% Burn), Kindle, stratum III (no stratum is weak or resists: affinity x1), crit 5%.
+  const e2 = modelOf('pyro', { stoke: 1, kindle: 1 }, 0, { ctx: { stratum: 3 }, stat: { crit: 0.05 } });
+  near(e2.mult.dmg.total, 1, 1e-9, 'Set 2 damage'); near(by(e2, 0, 'blast').here, 48.6 * (1 + 0.05 * 0.75), 0.05, 'Set 2 Nova blast');
+  near(by(e2, 0, 'burn').here, 28.4 * 1.2, 0.05, 'Set 2 Nova burn (Burn strength)');
+  near(by(e2, 1, 'impact').statusAdd.here, 0.5 * by(e2, 1, 'impact').pre * 1.2, 0.05, 'Set 2 Meteor burn add');
+  near(by(e2, 1, 'crater').here * by(e2, 1, 'crater').oneFoe, 6 * 8.1, 0.1, 'Set 2 crater, 6 ticks');
 }
 
 // ---------------- affinity chips: no stratum is weak or resists, so every listed element reads x1 ----------------
@@ -77,9 +77,8 @@ for (const key in ED.SKILL_SHEET) { const [sid, pid] = key.split('.'); ok(ED.SKI
   let bad = 0;
   for (const id of ED.BOON_IDS) { const b = ED.BOONS[id]; for (let r = 1; r <= (b.max || 5) + 1; r++) { const t = ED.Sheet.text(id, r, st); if (!t || /[{}\[\]]/.test(t)) { bad++; console.log('FAIL boon text ' + id + ' rank ' + r + ': ' + t); } } }
   ok(bad === 0, 'boon texts resolve at every rank');
-  ok(ED.Sheet.text('edge', 1, st) === '+10% damage.' && ED.Sheet.text('edge', 2, st) === '+20% damage.', 'Sharpened Edge text follows the rank');
-  ok(ED.Sheet.text('overcharge', 1, st).indexOf('45 damage') >= 0, 'Overcharge shows its damage at the Knight Power (10 + 1.5 x 23.4)');
-  ok(ED.Sheet.text('forager', 2, st).indexOf('16% more of your max') >= 0 && ED.World.FORAGER === 0.08, 'Forager numbers scale with the rank and match World.FORAGER');
+  ok(ED.Sheet.text('focus', 1, st) === 'Skills recharge 10% faster.' && ED.Sheet.text('focus', 2, st) === 'Skills recharge 20% faster.', 'Focus text follows the rank');
+  ok(ED.Sheet.text('bladedash', 1, st).indexOf('(28 damage)') >= 0, 'Blade Dash shows its damage at the Knight Power (1.2 x 23.4)');
   ok(ED.Sheet.text('sanctity', 2, st).indexOf('0.5% more') >= 0 && ED.Sheet.text('sanctity', 2, st).indexOf('6% more') >= 0, 'small percentages keep their decimals');
   ok(ED.Sheet.text('k_atk_h', 3, st).indexOf('Follow-Through') >= 0, 'class cards render through boonText');
   // every number a token prints equals the stat the boon adds
@@ -89,8 +88,8 @@ for (const key in ED.SKILL_SHEET) { const [sid, pid] = key.split('.'); ok(ED.SKI
 // ---------------- next rank, seconds, plurals, statuses and forks in the model ----------------
 {
   const st = ED.Stats.compute({ cls: 'knight', weapon: 'longsword', boons: {}, relics: [], meta: META(), pact: 0 }), S = ED.Sheet;
-  ok(S.nextText('edge', 1, st) === '+20% damage', 'Next rank lists only the changed number: ' + S.nextText('edge', 1, st));
-  { const rows = [].concat(...modelOf('knight', { edge: 2, quick: 1 }, 0).build.groups.map(g => g.items)); ok(rows.find(x => x.id === 'edge').next === null && rows.find(x => x.id === 'quick').next === '+20% attack speed', 'only a card below its last rank has a Next rank line'); }
+  ok(S.nextText('focus', 1, st) === '20% faster', 'Next rank lists only the changed number: ' + S.nextText('focus', 1, st));
+  { const rows = [].concat(...modelOf('knight', { plating: 2, focus: 1 }, 0).build.groups.map(g => g.items)); ok(rows.find(x => x.id === 'plating').next === null && rows.find(x => x.id === 'focus').next === '20% faster', 'only a card below its last rank has a Next rank line'); }
   { // no Next-rank piece is a bare number: it names what changes
     let bare = 0;
     for (const id of ED.BOON_IDS) { const b = ED.BOONS[id]; for (let r = 1; r < (b.max || 1); r++) for (const piece of S.nextText(id, r, st).split(' · ')) if (!/[A-Za-z]{3,}/.test(piece.replace(/\d+(?:\.\d+)?\s?s\b/g, ''))) { bare++; console.log(`FAIL bare next-rank piece ${id} rank ${r}: "${piece}"`); } }
@@ -194,7 +193,8 @@ for (const [cls, stat, slot, dist, skipImpact, opt] of CASES) {
   const { w, p, e } = stage(cls, {}, 0, stat, null, dist);
   const id = slot ? ED.CLASSES[cls].skill2 : ED.CLASSES[cls].skill, tag = `${cls}.${id}${Object.keys(stat).length ? '+' + Object.keys(stat).join(',') : ''}`;
   if (opt && opt.setup) opt.setup(w, p, e);
-  const m = sheetOf(w, p), sk = m.skills[slot];
+  const m = sheetOf(w, p), sk = m.skills[slot], stack = ED.burnValue(p.stats) * C.BURN_LIFE; // Burn lands in whole stacks: one cast leaves under a stack of build-up unspent
+  const near3 = (el, got, want) => el === 'fire' ? got <= want * 1.03 + 0.2 && got > want - stack - 0.2 : Math.abs(got - want) <= want * 0.03 + 0.2;
   cast(w, p, e, slot);
   if (opt && opt.drive) { // Vanish forms: attack through the form's window (the first attack is the Ambush; a tick passes first so the dome's vulnerability is on)
     let next = 0.02; run(w, 0.02);
@@ -204,7 +204,7 @@ for (const [cls, stat, slot, dist, skipImpact, opt] of CASES) {
   for (const q of sk.parts) {
     if (q.kind === 'zone' || (opt && opt.skip && opt.skip.indexOf(q.id) >= 0)) continue;
     const key = q.kind === 'sec' && !by[id + '.' + q.id] ? 'zone' : id + '.' + q.id, got = by[key]; // zone ticks: by part when the zone carries one
-    if (q.kind === 'status') { const s = by['status:' + q.statusEl]; ok(s && Math.abs(s.sum - q.here) <= q.here * 0.03 + 0.2, `${tag} ${q.id}: status damage ${s ? s.sum.toFixed(1) : 0} vs ${q.here.toFixed(1)}`); continue; }
+    if (q.kind === 'status') { const s = by['status:' + q.statusEl]; ok(s && near3(q.statusEl, s.sum, q.here), `${tag} ${q.id}: status damage ${s ? s.sum.toFixed(1) : 0} vs ${q.here.toFixed(1)}`); continue; }
     if (q.oneFoe === 0 && !q.fanN) continue; // conditional parts (per minion, per corpse, per kill)
     if (!got && GEO.has(id + '.' + q.id)) continue;
     if (!got) { if (PENDING.has(q.id)) pending(`${tag} ${q.id}: no hit measured`); else ok(false, `${tag} ${q.id}: no hit measured`); continue; }
@@ -214,7 +214,7 @@ for (const [cls, stat, slot, dist, skipImpact, opt] of CASES) {
     if (q.kind === 'minion') continue; // minions walk to the foe: the count is reported, not compared
     if (stat.tempest && q.id === 'return') continue; // which of the vortex shields cross the foe on the way home depends on where each spun: the damage per hit is compared, not the count
     ok(q.attacks !== undefined ? Math.abs(got.n - q.oneFoe) <= 1 : got.n === q.oneFoe, `${tag} ${q.id}: ${got.n} ${q.fanN ? 'arrows reached' : 'hits on'} the foe, modelled ${q.oneFoe}${q.attacks !== undefined ? ' (one attack more or less is the timing of the first)' : ''}`);
-    if (q.statusAdd) { const s = by['status:' + q.statusAdd.el], want = q.statusAdd.here * q.oneFoe + (skipImpact && q.id === 'twin' ? sk.parts.find(x => x.id === 'impact').statusAdd.here : 0); ok(s && Math.abs(s.sum - want) <= want * 0.03 + 0.2, `${tag} ${q.id}: status add ${s ? s.sum.toFixed(1) : 0} vs ${want.toFixed(1)}`); } // the twin case measures the impact's Burn add with the twin's
+    if (q.statusAdd) { const s = by['status:' + q.statusAdd.el], want = q.statusAdd.here * q.oneFoe + (skipImpact && q.id === 'twin' ? sk.parts.find(x => x.id === 'impact').statusAdd.here : 0); ok(s && near3(q.statusAdd.el, s.sum, want), `${tag} ${q.id}: status add ${s ? s.sum.toFixed(1) : 0} vs ${want.toFixed(1)}`); } // the twin case measures the impact's Burn add with the twin's
   }
 }
 
@@ -374,12 +374,21 @@ for (const [cls, boons, tag] of [['knight', { k_atk: 1 }, 'Oath of Steel'], ['kn
   const r = weaponRun(cls, 0, boons, { secs: 24 });
   rel(r.total / r.atk, r.m.weapon.dps / r.m.weapon.aps, 0.05, `${tag} damage per attack`);
 }
-// Masterstroke: every 4th attack crits for sure at x1.3 (the chance of a normal crit stays on the other three) and Bleeds for at least half the hit
-for (const [cls, crit] of [['knight', 0], ['knight', 0.3], ['ranger', 0], ['pyro', 0.3], ['shade', 0]]) {
-  const r = weaponRun(cls, 0, { masterstroke: 1 }, { secs: 60, crit }), plain = weaponRun(cls, 0, {}, { secs: 20, crit: 0 });
-  rel(r.total / r.atk, r.m.weapon.dps / r.m.weapon.aps, 0.04, `Masterstroke ${cls} damage per attack at crit ${crit}`);
-  ok(r.m.weapon.extras.some(e => e.label === 'Masterstroke') && r.m.weapon.dps > plain.m.weapon.dps, `Masterstroke ${cls}: the weapon card lists it and dps rises`);
-  rel(r.bleed / r.secs, r.m.proc.bleed, 0.08, `Masterstroke ${cls} Bleed damage per second at crit ${crit}`);
+// Masterstroke: attacks for St.HOLD.at s, then holds to full and releases the finisher (a guaranteed crit at FIN_MUL that Bleeds 50%); the cycle deals the model's hold dps
+for (const cls of ['knight', 'ranger', 'pyro', 'shade']) {
+  const wp = ED.WEAPONS[ED.CLASSES[cls].weapons[0]], probe = stage(cls, { masterstroke: 1 }, 0, null), reach = wp.kind === 'melee' ? wp.range * (1 + 0.5 * probe.p.stats.area + probe.p.stats.meleeReach) * 0.55 : REF.d;
+  const { w, p } = stage(cls, { masterstroke: 1 }, 0, null, null, reach, 0), m = sheetOf(w, p), h = m.weapon._hold, H = ED.Stats.HOLD.finisher, full = ED.Stats.holdFull(p.stats);
+  let next = 0, c0 = 0, held = false; const SECS = 30;
+  run(w, SECS, () => {
+    const t = w.time - c0;
+    if (t < H.at) { if (w.time >= next) { w.playerAttack(p, 0); next = w.time + ED.Stats.attackInterval(p); } }
+    else if (!held) { w.playerHold(p, true, 0); held = true; }
+    else if (t >= H.at + full + 1 / 120) { w.playerHold(p, false, 0); held = false; c0 = w.time; next = w.time; }
+  });
+  run(w, 4);
+  const got = hits.reduce((s, x) => s + x.dealt, 0) / SECS;
+  ok(h && h.label === 'Finisher' && h.dps > m.weapon.dps, `Masterstroke ${cls}: the weapon card lists the finisher and its cycle out-damages the plain attacks`);
+  rel(got, h.dps, 0.12, `Masterstroke ${cls}: damage a second of the attack, hold and finisher cycle`);
 }
 // evolutions: the strikes of each path (poison builds Venom, which raises later hits: not compared)
 for (const [cls, evo, stratum] of [['knight', 'fire', 1], ['pyro', 'fire', 1], ['ranger', 'ice', 1], ['ranger', 'lightning', 1], ['cleric', 'holy', 3], ['shade', 'shadow', 1], ['ranger', 'general', 1], ['knight', 'general', 1], ['necro', 'ice', 1]]) {
@@ -417,7 +426,7 @@ for (const [cls, boons, tag] of [['ranger', { r_atk: 1, r_atk_s: 2 }, 'Flurry (Q
 
 // Necromancer riders and forms: Grave Bolt and the Hexed-foe bonus on the weapon (a staged run), the pack and lone-foe values of the extras, and the power band of the four forks
 {
-  const ex = (wpn, l) => wpn.extras.find(e => e.label === l), MD = require('./model.js')(ED, { pack: 4 }), GATES = { doommark: 1, envenom: 1 }, MIDN = Object.assign({ edge: 2, quick: 2, focus: 1, stalwart: 1 }, GATES);
+  const ex = (wpn, l) => wpn.extras.find(e => e.label === l), MD = require('./model.js')(ED, { pack: 4 }), GATES = { doommark: 1, envenom: 1 }, MIDN = Object.assign({ focus: 1 }, GATES);
   { const r = weaponRun('necro', 0, { n_atk: 1, n_atk_h: 3 }, { secs: 30 }), g = ex(r.m.weapon, 'Grave Bolt'); ok(g && g.perAttack > 0, 'Grave Bolt lists a weapon extra'); if (g) rel(r.total / r.atk, r.m.weapon.avg * r.m.weapon.oneFoe + g.perAttack, 0.04, 'Grave Bolt damage per attack on one foe'); }
   { const r = weaponRun('necro', 0, { n_atk: 1, n_atk_s: 1 }, { secs: 30 }), h = ex(r.m.weapon, 'Hexed foes'); ok(h && h.perAttack > 0, 'Soul Barrage lists a Hexed foes extra'); if (h) rel(r.total / r.atk, r.m.weapon.avg * r.m.weapon.oneFoe + h.perAttack, 0.06, 'Soul Barrage damage per attack on a Hexed foe'); }
   { const r = weaponRun('necro', 1, { n_atk: 1, n_atk_h: 3 }, { secs: 30 }), g = ex(r.m.weapon, 'Grave Bolt'); ok(g && g.perAttack > 0 && r.m.weapon.kind === 'melee', 'the Soul Scythe lists the Grave Bolt too'); if (g) rel(r.total / r.atk, r.m.weapon.avg * r.m.weapon.oneFoe + g.perAttack, 0.04, 'Grave swing damage per attack on one foe'); }
@@ -507,7 +516,7 @@ for (const [cls, boons, tag] of [['ranger', { r_atk: 1, r_atk_s: 2 }, 'Flurry (Q
 }
 
 // ---------------- defence and the foes that spawn now ----------------
-for (const [stratum, pact, dark, party, boons] of [[1, 0, false, 1, {}], [3, 2, true, 1, { plating: 2, evade: 0 }], [4, 8, true, 1, { mending: 2 }], [6, 10, false, 2, { edge: 1 }], [2, 4, true, 1, { glass: 1, stalwart: 2 }]]) {
+for (const [stratum, pact, dark, party, boons] of [[1, 0, false, 1, {}], [3, 2, true, 1, { plating: 2, evade: 0 }], [4, 8, true, 1, {}], [6, 10, false, 2, {}], [2, 4, true, 1, {}]]) {
   const { w, p } = stage('knight', boons, 0, {});
   w.pact = pact; w.recalc(p, true); w.enterStratum(stratum); w.room.dark = dark;
   if (party > 1) w.addPlayer({ pid: 'p1', name: 'B', slot: 1, cls: 'ranger', weapon: 'longbow', meta: META() });
@@ -523,7 +532,7 @@ for (const [stratum, pact, dark, party, boons] of [[1, 0, false, 1, {}], [3, 2, 
 }
 
 // ---------------- statuses on a foe of the reference health: the payoffs the estimates promise (weapon damage only, no crit) ----------------
-function statusRun(boons, stratum, secs, until) {
+function statusRun(boons, stratum, secs, until, each) {
   const { w, p, e } = stage('ranger', boons, 0, {});
   w.stratum = stratum;
   const m0 = ED.Sheet.compute(p, ED.Sheet.ctx(w, p), { raw: true }), ref = m0.ref;
@@ -532,6 +541,7 @@ function statusRun(boons, stratum, secs, until) {
   for (let i = 0; i < secs * 60; i++) {
     if (w.time >= next) { w.playerAttack(p, 0); next = w.time + ED.Stats.attackInterval(p); }
     w.update(1 / 60);
+    if (each) each(w, p, e);
     if (until === 'freeze' && e.frozen > 0) { t = w.time; break; }
     if (until === 'venom' && e.venom >= 100) { t = w.time; break; }
     if (until === 'reap' && e.hp <= 0) { t = w.time; break; }
@@ -551,9 +561,10 @@ function statusRun(boons, stratum, secs, until) {
   ok(r.t !== null && Math.abs(r.t - 100 / rate) <= 100 / rate * 0.15 + 0.35, `time to full Venom ${r.t && r.t.toFixed(2)} s vs ${(100 / rate).toFixed(2)} s from the weapon`);
 }
 {
-  const r = statusRun({ staticcharge: 1, highvoltage: 2 }, 1, 20, null); // the discharge damage per second on one foe
-  const st = r.p.stats, dps = hits.filter(h => h.kind === 'chain' && h.t > 6).reduce((s, h) => s + h.dealt, 0) / (r.w.time - 6), want = r.m0.proc.split.weapon * st.lightningInfuse * (1 + st.shockMul);
-  rel(dps, want, 0.08, 'Charge: discharge damage per second on one foe');
+  let nextDash = 0; // a dash past the foe every dashCd: the sweep from the foe to the hero discharges it
+  const r = statusRun({ staticcharge: 1, highvoltage: 2 }, 1, 20, null, (w, p, e) => { if (w.time >= nextDash) { nextDash = w.time + p.stats.dashCd; p.dashHit = null; p.disX = e.x; p.disY = e.y; w.dashSweep(p); } });
+  const dps = hits.filter(h => h.kind === 'chain' && h.t > 6).reduce((s, h) => s + h.dealt, 0) / (r.w.time - 6), st = r.p.stats, cd = st.dashCd, want = r.m0.proc.split.weapon * st.lightningInfuse * (1 + st.statusPow) * Math.min(cd, C.CHARGE_HOLD + st.chargeHold) * C.DIS_K * (1 + st.shockMul) / cd; // the Lightning estimate on the weapon alone (it counts the skills too)
+  rel(dps, want, 0.1, 'Charge: discharge damage per second on one foe, a dash every dashCd');
 }
 {
   const r = statusRun({ consecrate: 1, zealotry: 2 }, 3, 20, null); // Smite damage per second (Holy is neutral in stratum III)
@@ -581,7 +592,7 @@ function statusRun(boons, stratum, secs, until) {
 
 // ---------------- Knight Attack and Element forms in the model ----------------
 {
-  const K = (boons, stratum) => modelOf('knight', Object.assign({ edge: 2, quick: 2, focus: 1, stalwart: 1, kindle: 1, frostbite: 1 }, boons), 0, { ctx: { stratum: stratum || 3 } });
+  const K = (boons, stratum) => modelOf('knight', Object.assign({ focus: 1, kindle: 1, frostbite: 1 }, boons), 0, { ctx: { stratum: stratum || 3 } });
   const ex = (m, label) => m.weapon.extras.find(e => e.label === label);
   { // Earthsplitter: a fissure per Cleave (every 3rd swing), Thousand Edges: a blade wave per Cleave
     const h2 = K({ k_atk: 1, k_atk_h: 2 }), h3 = K({ k_atk: 1, k_atk_h: 3 }), fis = ED.BOONS.k_atk_h.r3.fissure;
@@ -596,14 +607,14 @@ function statusRun(boons, stratum, secs, until) {
     ok(!ex(b2, 'Doombrand') && d && d.perAttack > 0 && b3.weapon.dps > b2.weapon.dps, 'Doombrand adds a weapon extra and raises the damage per second; none at rank 2');
     ok(b3.mult.debuffs.some(x => x.id === 'marked' && x.name === 'Marked' && x.text.indexOf('Doombrand') >= 0) && !b2.mult.debuffs.some(x => x.id === 'marked'), 'the Mark is listed with the debuffs at rank 3');
     ok(b3.mult.cond.find(x => x.id === 'brand').label.indexOf('up to 6') >= 0 && b2.mult.cond.find(x => x.id === 'brand').label.indexOf('up to 4') >= 0, "Brand's condition row names its cap per rank");
-    const lo = K({ k_el: 1, k_el_a: 3 }), hi = modelOf('knight', { edge: 2, quick: 2, focus: 1, stalwart: 1, kindle: 1, frostbite: 1, k_el: 1, k_el_a: 3 }, 0, { ctx: { stratum: 3 }, stat: { brandMark: ED.BOONS.k_el_a.r3.brandMark * 2 } });
+    const lo = K({ k_el: 1, k_el_a: 3 }), hi = modelOf('knight', { focus: 1, kindle: 1, frostbite: 1, k_el: 1, k_el_a: 3 }, 0, { ctx: { stratum: 3 }, stat: { brandMark: ED.BOONS.k_el_a.r3.brandMark * 2 } });
     ok(hi.weapon.dps > lo.weapon.dps, 'a stronger Mark raises the Doombrand extra');
   }
   { // Bloodquake: the payout multiplier raises the Shield Throw's damage on one foe, a part for packs on top; the pack burst follows bloodquakeSplash
     const r2 = K({ k_el: 1, k_el_b: 2 }), r3 = K({ k_el: 1, k_el_b: 3 }), q = r3.skills[1].parts.find(x => x.id === 'bloodquake');
     ok(!r2.skills[1].parts.some(x => x.id === 'bloodquake') && q && q.oneFoe === 0 && q.r === 80, 'Bloodquake adds a part with no hit of its own on one foe, none at rank 2');
     rel(q.here, 2.5 * r3.proc.bleed * (1 + ED.BOONS.k_el_b.r3.bloodquakeMul), 1e-6, 'the Bloodquake payout is the Bleed pool (2.5 s of income) x (1 + bloodquakeMul)');
-    const mid = { edge: 2, quick: 2, focus: 1, stalwart: 1, kindle: 1, frostbite: 1, k_el: 1, k_el_b: 3 }, part = (stat) => modelOf('knight', mid, 0, { ctx: { stratum: 3 }, stat }).skills[1].parts.find(x => x.id === 'bloodquake'), lo = part({ bloodquakeSplash: 0.1 }), hi = part({ bloodquakeSplash: 0.3 }), one = (stat) => modelOf('knight', mid, 0, { ctx: { stratum: 3 }, stat }).skills[1].perCast;
+    const mid = { focus: 1, kindle: 1, frostbite: 1, k_el: 1, k_el_b: 3 }, part = (stat) => modelOf('knight', mid, 0, { ctx: { stratum: 3 }, stat }).skills[1].parts.find(x => x.id === 'bloodquake'), lo = part({ bloodquakeSplash: 0.1 }), hi = part({ bloodquakeSplash: 0.3 }), one = (stat) => modelOf('knight', mid, 0, { ctx: { stratum: 3 }, stat }).skills[1].perCast;
     ok(hi._r.total > lo._r.total && lo._r.total > 0, 'the pack burst follows bloodquakeSplash');
     ok(one({ bloodquakeMul: 2 }) > one({ bloodquakeMul: 1 }) && one({ bloodquakeMul: 1 }) > one({ bloodquake: 0 }) && one({ bloodquakeSplash: 0.1 }) === one({ bloodquakeSplash: 0.9 }), 'on one foe only bloodquakeMul counts: the Throw deals more with it, the splash adds nothing');
     ok(modelOf('knight', { k_el: 1, k_el_b: 3 }, 0).skills[1].parts.find(x => x.id === 'bloodquake')._r.total === 0, 'a build with fewer than 3 ailment sources never detonates');
@@ -612,7 +623,7 @@ function statusRun(boons, stratum, secs, until) {
 
 // ---------------- Cleric Attack and Element forms in the model ----------------
 {
-  const MIDC = { consecrate: 1, frostbite: 1, edge: 2, quick: 2, focus: 1, stalwart: 1 };
+  const MIDC = { consecrate: 1, frostbite: 1, focus: 1 };
   const Cm = (boons, o) => modelOf('cleric', Object.assign({}, MIDC, boons), 0, { ctx: { stratum: (o && o.stratum) || 4 }, stat: Object.assign({ crit: 0 }, o && o.stat) });
   const ex = (m, label) => m.weapon.extras.find(e => e.label === label), sec = (m, label) => ex(m, label).perAttack * m.weapon.aps;
   const heroOf = (boons, stat) => { const b = { cls: 'cleric', weapon: ED.CLASSES.cleric.weapons[0], boons: Object.assign({}, MIDC, boons), relics: [], meta: META(), pact: 0 }, stats = ED.Stats.compute(b); Object.assign(stats, { crit: 0 }, stat); stats.sn = {}; return { pid: 'p', name: 'T', cls: 'cleric', weapon: b.weapon, boons: b.boons, relics: [], meta: b.meta, stats, hp: stats.maxHp, maxHp: stats.maxHp, shield: 0, picks: 0, slot: 0 }; };
@@ -671,7 +682,7 @@ function statusRun(boons, stratum, secs, until) {
 
 // ---------------- Pyromancer Attack and Element forks in the model ----------------
 {
-  const MID = { kindle: 1, staticcharge: 1, edge: 2, quick: 2, focus: 1, stalwart: 1 };
+  const MID = { kindle: 1, staticcharge: 1, focus: 1 };
   const P = (boons, stat, stratum) => modelOf('pyro', Object.assign({}, MID, boons), 0, { stat: Object.assign({ crit: 0 }, stat), ctx: { stratum: stratum || 4 } });
   const ex = (m, label) => m.weapon.extras.find(e => e.label === label);
   const stOf = (boons) => ED.Stats.compute({ cls: 'pyro', weapon: 'firestaff', boons: Object.assign({}, MID, boons), relics: [], meta: META(), pact: 0 });
@@ -747,7 +758,7 @@ function statusRun(boons, stratum, secs, until) {
     return MD.assess({ pid: 'p', name: 'T', cls, weapon: b.weapon, boons, relics: [], meta: b.meta, stats, hp: stats.maxHp, maxHp: stats.maxHp, shield: 0, picks: 0, slot: 0 }, CTX({ stratum, level: 8 }));
   };
   for (const cls of ED.CLASS_IDS) {
-    const mid = Object.assign({}, ...GATE2[cls].map(id => ({ [id]: 1 })), { edge: 2, quick: 2, focus: 1, stalwart: 1 });
+    const mid = Object.assign({}, ...GATE2[cls].map(id => ({ [id]: 1 })), { focus: 1 });
     for (const [stratum, rank, lo, hi, gmin] of [[4, 2, 31.5, 38.5, 28], [6, 3, 54, 66, 48]]) {
       const base = assess(cls, mid, stratum);
       for (const route of ED.ROUTES) {

@@ -318,12 +318,10 @@ const STORED_V2 = {"v":2,"news":0,"name":"Stored","embers":100,"lifetime":900,"u
   const byRar = {}; for (const id of ED.RELIC_IDS) byRar[ED.RELICS[id].rar] = (byRar[ED.RELICS[id].rar] || 0) + 1;
   same(['c', 'r', 'e', 'l'].map(k => byRar[k]), [8, 12, 6, 5], 'relics per rarity (common, rare, epic, legendary)');
   ok(ED.relicFits === undefined && S.relicUnlocked === undefined && S.unlockRelic === undefined && S.relicReqMet === undefined, 'the Codex API is gone');
-  // the four unique effects live on as path boons and read the same stats
+  // Soul Jar lives on as a Shadow path boon and reads the same stat
   const stats = (boons) => ED.Stats.compute({ cls: 'knight', weapon: 'longsword', boons, relics: [], meta: META(), pact: 0 });
-  ok(stats({ stormcall: 1 }).critCharge === 0.6 && stats({ thundergauntlet: 1 }).gauntlet === 1 && stats({ frostheart: 1 }).frozenHeart === 1 && stats({ souljar: 2 }).doomMul === 0.4, 'Storm Call, Thunder Gauntlet, Frozen Heart and Soul Jar set their stats');
-  const B = ED.BOONS;
-  ok(B.stormcall.path === 'lightning' && B.thundergauntlet.path === 'lightning' && B.frostheart.path === 'ice' && B.souljar.path === 'shadow' && B.souljar.max === 2 && B.frostheart.name === 'Frozen Heart', 'the moved boons sit in their paths');
-  ok(ED.pathAffinity({ staticcharge: 1, stormcall: 1, thundergauntlet: 1 }, 'lightning') === 3, 'and count toward their path');
+  ok(stats({ souljar: 2 }).doomMul === 0.4 && ED.BOONS.souljar.path === 'shadow' && ED.BOONS.souljar.max === 2, 'Soul Jar sets its stat and sits in the Shadow path');
+  ok(ED.pathAffinity({ doommark: 1, souljar: 1, cutthroat: 1 }, 'shadow') === 3, 'and counts toward its path');
   // the pool in a world
   const w = new ED.World({ seed: 5, pact: 0, players: [{ pid: 'a', name: 'A', slot: 0, cls: 'knight', weapon: 'longsword', meta: META() }] });
   w.startRun();

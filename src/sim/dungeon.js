@@ -15,7 +15,6 @@
   const PATTERN_AREA = 294; // tile area the base pool and scatter counts are written for: both scale by room area / PATTERN_AREA
   const EVENTS = ['fountain', 'altar', 'gamble', 'trial'];
   const REWARD_ODDS = [['boon', 55], ['gold', 15], ['vigor', 10], ['forge', 20]]; // normal combat reward weights
-  const TWIST_ODDS = 0.15, TWIST_FROM = 3; // elite rooms from stratum TWIST_FROM: share whose reward is a Twist offer (epic keeps its 25%)
   const MIN_FIGHTS = 3; // the Platino's cue is one of the first MIN_FIGHTS fight clears of a floor
 
   // ---------------- map (Slay-the-Spire layered graph) ----------------
@@ -140,7 +139,7 @@
   }
 
   // Rewards are fixed per floor and shown before entry. Combat (dark included): boon (drawn from the claiming hero's own paths), gold, vigor, forge,
-  // each kind getting its REWARD_ODDS share of the floor's combat rooms (rounded by weighted draw on the remainders). Elite: epic at 25%, from stratum TWIST_FROM a Twist at TWIST_ODDS, else relic. Champion: relic.
+  // each kind getting its REWARD_ODDS share of the floor's combat rooms (rounded by weighted draw on the remainders). Elite: epic at 25%, else relic. Champion: relic.
   function assignRewards(rooms, stratum, seed) {
     const rng = U.RNG((seed ^ 0x5bd1e995) + stratum * 15485863);
     const combat = rooms.filter(r => r.type === 'combat');
@@ -154,8 +153,7 @@
     counts.forEach((c, i) => { for (let k = 0; k < c; k++) bag.push(REWARD_ODDS[i][0]); });
     rng.shuffle(bag);
     combat.forEach((r, i) => { r.reward = bag[i]; });
-    const tw = stratum >= TWIST_FROM ? TWIST_ODDS : 0;
-    for (const r of rooms) if (r.type === 'elite') { const x = rng.next(); r.reward = x < tw ? 'twist' : x < tw + 0.25 ? 'epic' : 'relic'; } else if (r.type === 'champion') r.reward = 'relic';
+    for (const r of rooms) if (r.type === 'elite') r.reward = rng.next() < 0.25 ? 'epic' : 'relic'; else if (r.type === 'champion') r.reward = 'relic';
   }
 
   // A room is wide enough for its north doors: n doors need 6n + 5 tiles (odd widths keep the centre door on the middle tile).

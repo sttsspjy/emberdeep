@@ -35,7 +35,7 @@
       hp: 0, hpMul: 1, armor: 0, spd: 1, dmg: 1, atk: 1, crit: 0, critDmg: 0, cdr: 0,
       pickup: 0, xp: 0, gold: 0, luck: 0, heal: 0, projN: 0, pierce: 0, area: 0, dodge: 0, thorns: 0,
       dashcdr: 0, dashN: 0, dashDmg: 0, dashFire: 0, dashBomb: 0, execute: 0,
-      guardian: 0, trance: 0, forager: 0, roomWard: 0, openRank: 0,
+      guardian: 0, trance: 0, roomWard: 0, openRank: 0,
       charges: 0,
       minions: 0, minionDmg: 0, boneSpikes: 0, phoenix: 0, strataHeal: 0, wardrum: 0,
       homing: 0, meleeReach: 0, mirror: 0, choices: 0, idol: 0, vuln: 0, banner: 0, angel: 0,
@@ -211,8 +211,8 @@
   };
   // Hold-attack verbs (stats.hold, set by a card's hold field): the client starts one once attack is held `at` s (normal attacks stop) and ends it on release. max: the verb ends itself after max s (0: until release);
   // full: seconds of holding (from the start) to a full charge (lance, flask, finisher; the finisher's full is FULL_EVO with Masterwork Arms); slow: share of move speed lost while it runs. Bell weapons fire them on a full-wind hurl (class-bell.js).
-  St.HOLD = { cone: { at: 0.35, max: 2, slow: 0.4 }, lance: { at: 0.35, full: 0.6 }, flask: { at: 0.35, full: 0.25 }, guard: { at: 0.35, max: 2.5, slow: 0.5 }, finisher: { at: 0.35, full: 0.6 } };
-  St.FULL_EVO = 0.3;
+  St.HOLD = { cone: { at: 0.35, max: 2, slow: 0.4 }, lance: { at: 0.35, full: 0.6 }, flask: { at: 0.35, full: 0.6 }, guard: { at: 0.35, max: 2.5, slow: 0.5 }, finisher: { at: 0.35, full: 1 } };
+  St.FULL_EVO = 0.7;
   St.holdFull = (st) => (st.hold === 'finisher' && st.evo === 'general' ? St.FULL_EVO : (St.HOLD[st.hold] && St.HOLD[st.hold].full) || 0);
 
   // Numbers of a skill for a stat block, the one source for the sim, the sheet and the bots. Returns

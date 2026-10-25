@@ -144,7 +144,7 @@ for (const id of VARIANTS) {
   run(w, 0.55);
   ok(Math.abs(p.emberAcc - ED.CONST.EMBER_PS * p.stats.atkInterval) < 0.02, `Ember Bolt: the Mortar landing cuts the spell cooldowns (${p.emberAcc.toFixed(3)} s)`);
   run(w, 0.6);
-  ok(e.burnPool > 0 || hits.some(h => h.kind === 'dot'), 'Living Flame: the Mortar blast sets the foe alight');
+  ok(e.burnN > 0 || e.bacc > 0 || hits.some(h => h.kind === 'dot'), 'Living Flame: the Mortar blast builds Burn on the foe');
 }
 
 // ---------------- boomerang ----------------

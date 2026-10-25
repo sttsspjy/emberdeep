@@ -119,11 +119,12 @@ const ATK = { k_atk: 1 }, HEAVY = (r) => Object.assign({ k_atk_h: r }, ATK), SWI
   }
 }
 
+const burn1 = (e, p) => { e.bsT = [1e9]; e.bsO = [p]; e.burnN = 1; e.burn = 1; e.burnTick = 99; }; // one Burn stack of p that never ticks: an ailment that stays
 // ---------------- Doombrand: Mark at 4 ailments, Brand counts 6 ----------------
 {
   // n ailments on a foe (5000 health): Burn, Charge, Bleed, Doom, Radiance, Dazed, Sealed, Chill, Venom (Venom last: it makes the foe take more damage); each sits above its threshold and below its payoff
-  const SET = [(e) => { e.burnPool = 80; }, (e) => { e.charge = 100; e.dischargeT = 99; }, (e) => { e.bleedPool = 80; }, (e) => { e.doom = 300; }, (e) => { e.rad = 200; }, (e) => { e.stun = 99; }, (e) => { e.sealT = 99; }, (e) => { e.chill = 90; e.chillT = 99; }, (e) => { e.venom = 90; e.venomT = 99; }];
-  const BM = ED.BOONS.k_el_a.r3.brandMark, ail = (w, e, k) => { for (let i = 0; i < k; i++) SET[i](e); return w.ailments(e); }, keep = (w, es, k) => () => { for (const e of es) ail(w, e, k); };
+  const SET = [(e, w) => { if (!(e.burnN > 0)) burn1(e, w.players.get('p0')); }, (e) => { e.charge = 100; e.dischargeT = 99; }, (e) => { e.bleedPool = 80; }, (e) => { e.doom = 300; }, (e) => { e.rad = 200; }, (e) => { e.stun = 99; }, (e) => { e.sealT = 99; }, (e) => { e.chill = 90; e.chillT = 99; }, (e) => { e.venom = 90; e.venomT = 99; }];
+  const BM = ED.BOONS.k_el_a.r3.brandMark, ail = (w, e, k) => { for (let i = 0; i < k; i++) SET[i](e, w); return w.ailments(e); }, keep = (w, es, k) => () => { for (const e of es) ail(w, e, k); };
   const dealt = (w, p, e, from) => { const hp = e.hp; w.hitEnemy(e, 100, { p: from || p, kind: 'weapon', crit: false, noProc: true }); return hp - e.hp; };
   { // the cap: 4 ailments at rank 2, 6 with Doombrand (no Mark here: the scan has not run); an ally's hit has no Brand
     const t3 = stage('knight', BRAND(3)), t2 = stage('knight', BRAND(2)), b3 = t3.p.stats.brand, b2 = t2.p.stats.brand;
@@ -142,7 +143,7 @@ const ATK = { k_atk: 1 }, HEAVY = (r) => Object.assign({ k_atk_h: r }, ATK), SWI
     ok(a.mark > 3.5 && Math.abs(a.markV - BM) < 1e-9 && !(b.mark > 0), 'a foe with 4 ailments is Marked for 4 s at brandMark, one with 3 is not (' + a.mark.toFixed(2) + ', ' + b.mark.toFixed(2) + ')');
     run(w, 0.3, upkeepC); near(dealt(w, p, c, ally) / base, 1 + BM, 0.005, "an ally's hit on a Doombranded foe deals +brandMark");
     near(dealt(w, p, c, p) / (100 * p.stats.dmg), (1 + p.stats.brand * 4 / p.stats.dmg) * (1 + BM), 0.01, "and the Knight's own hit adds Brand on top of the Mark");
-    a.burnPool = a.charge = a.bleedPool = a.doom = 0; run(w, 3); ok(a.mark > 0, 'the Mark outlasts the ailments'); run(w, 1.5); ok(!(a.mark > 0), 'the Mark ends 4 s after the last scan');
+    a.bsT = []; a.bsO = []; a.burnN = 0; a.charge = a.bleedPool = a.doom = 0; run(w, 3); ok(a.mark > 0, 'the Mark outlasts the ailments'); run(w, 1.5); ok(!(a.mark > 0), 'the Mark ends 4 s after the last scan');
     { const t = stage('knight', BRAND(2)), e = foe(t.w, 300, 200); run(t.w, 0.3, keep(t.w, [e], 6)); ok(!(e.mark > 0), 'rank 2 Brand never Marks'); }
     { const t = stage('knight', BRAND(3)), m = foe(t.w, 340, 200); m.spawnT = 1; ail(t.w, m, 6); t.w.update(1 / 60); ok(!(m.mark > 0), 'a foe still spawning is not Marked'); }
   }
@@ -168,7 +169,7 @@ const ATK = { k_atk: 1 }, HEAVY = (r) => Object.assign({ k_atk_h: r }, ATK), SWI
   const bq = (rank, ails) => { // x: 1000 Bleed, Burn and Chill (3 ailments); near 60 away, far 105 away, small (100 health) 70 away
     const t = stage('knight', RUIN(rank)), { w, p } = t; t.log = spy(w);
     t.x = foe(w, 300, 200); t.near = foe(w, 360, 200); t.near.maxHp = t.near.hp = 50000; t.far = foe(w, 405, 200); t.small = foe(w, 300, 270); t.small.maxHp = t.small.hp = 100;
-    t.x.bleedPool = 1000; t.x.bleedOwner = p; t.x.bleedTick = 99; if (ails !== 2) t.x.burnPool = 600; t.x.burnTick = 99; t.x.chill = 90; t.x.chillT = 99;
+    t.x.bleedPool = 1000; t.x.bleedOwner = p; t.x.bleedTick = 99; if (ails !== 2) burn1(t.x, p); t.x.chill = 90; t.x.chillT = 99;
     return t;
   };
   { // the detonation
@@ -189,7 +190,7 @@ const ATK = { k_atk: 1 }, HEAVY = (r) => Object.assign({ k_atk_h: r }, ATK), SWI
     const r = bq(2); strike(r.w, r.p, r.x); ok(nBquake(r) === 0 && r.x.bleedPool === 1000, 'rank 2 has no Bloodquake');
     const o = bq(3); strike(o.w, o.p, o.x, 'shieldthrow.return'); ok(nBquake(o) === 0, 'only strikes detonate, not the return pass');
     const c = bq(3); strike(c.w, c.p, c.x, 'charge.impact'); ok(nBquake(c) === 1, 'a Shield Charge impact detonates');
-    const b = bq(3); b.x.bleedPool = 0; b.x.burnPool = 600; strike(b.w, b.p, b.x); ok(nBquake(b) === 0 && !(b.x.bquakeT > b.w.time), 'with no Bleed pool there is nothing to detonate and no cooldown is spent');
+    const b = bq(3); b.x.bleedPool = 0; strike(b.w, b.p, b.x); ok(nBquake(b) === 0 && !(b.x.bquakeT > b.w.time), 'with no Bleed pool there is nothing to detonate and no cooldown is spent');
   }
   { // a foe the strike kills still bursts; fodder takes part and nothing of the refund / shield / stack kind comes of it
     const t = bq(3), { w, p } = t; t.x.fodder = true; t.near.fodder = true; t.x.hp = 5;
@@ -199,7 +200,7 @@ const ATK = { k_atk: 1 }, HEAVY = (r) => Object.assign({ k_atk_h: r }, ATK), SWI
   }
   { // in play: a Shield Throw down a line of fodder holding 3 ailments detonates each of them once
     const t = stage('knight', Object.assign({ k_s2: 1 }, RUIN(3))), { w, p } = t, log = spy(w), es = [1, 2, 3, 4].map(k => foe(w, p.x + 45 * k, p.y));
-    const ready = () => { for (const e of es) { e.fodder = true; e.maxHp = e.hp = 50000; if (!(e.bleedPool > 0)) { e.bleedPool = 600; e.bleedOwner = p; } e.burnPool = Math.max(e.burnPool, 600); e.chill = 90; e.chillT = 99; } };
+    const ready = () => { for (const e of es) { e.fodder = true; e.maxHp = e.hp = 50000; if (!(e.bleedPool > 0)) { e.bleedPool = 600; e.bleedOwner = p; } if (!(e.burnN > 0)) burn1(e, p); e.chill = 90; e.chillT = 99; } };
     ready(); w.playerSkill(p, 0, { d: 280 }, 1); run(w, 3, ready);
     const ch = hitsOf(log, 'bloodquake');
     ok(ch.length >= 3 && es.filter(e => ch.some(h => h.e === e)).length >= 3, 'a Shield Throw detonates the foes it strikes (' + ch.length + ' detonations on fodder)');
