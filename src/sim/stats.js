@@ -35,7 +35,7 @@
       hp: 0, hpMul: 1, armor: 0, spd: 1, dmg: 1, atk: 1, crit: 0, critDmg: 0, cdr: 0,
       pickup: 0, xp: 0, gold: 0, luck: 0, heal: 0, projN: 0, pierce: 0, area: 0, dodge: 0, thorns: 0,
       dashcdr: 0, dashN: 0, dashDmg: 0, dashFire: 0, dashBomb: 0, execute: 0,
-      guardian: 0, trance: 0, roomWard: 0, openRank: 0,
+      guardian: 0, trance: 0, openRank: 0,
       charges: 0,
       minions: 0, minionDmg: 0, boneSpikes: 0, phoenix: 0, strataHeal: 0, wardrum: 0,
       homing: 0, meleeReach: 0, mirror: 0, choices: 0, idol: 0, vuln: 0, banner: 0, angel: 0,

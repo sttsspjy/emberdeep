@@ -10,7 +10,7 @@
     knight: {
       name: 'Knight', title: 'Melee tank', icon: 'shield',
       desc: 'Sturdy melee hero. Wide swings hit crowds; the thrown shield stuns packs and blocks foe shots.',
-      hp: 35, armor: 58, spd: 116, crit: 0.05, power: 23.4, element: null,
+      hp: 32, armor: 58, spd: 116, crit: 0.05, power: 23.4, element: null,
       weapons: ['longsword', 'warhammer', 'glaive'], skill: 'charge', skill2: 'shieldthrow',
       col: { a: '#a7b0ba', b: '#5d6670', c: '#d6aa55', d: '#2b3038' }, unlock: null,
     },
@@ -24,7 +24,7 @@
     pyro: {
       name: 'Pyromancer', title: 'Fire caster', icon: 'flame',
       desc: 'Caster with low health. Casts Flame Nova, Meteor and Fireball; weapon hits make the spells recharge sooner.',
-      hp: 25, armor: 4, spd: 120, crit: 0.05, power: 17, element: 'fire',
+      hp: 31, armor: 4, spd: 120, crit: 0.05, power: 17, element: 'fire',
       weapons: ['firestaff', 'emberwand', 'inferno'], skill: 'nova', skill2: 'meteor', skill3: 'fireball',
       col: { a: '#9a2f2a', b: '#5a1714', c: '#ffb347', d: '#2a0c0a' }, unlock: null,
     },
@@ -38,7 +38,7 @@
     cleric: {
       name: 'Cleric', title: 'Holy support', icon: 'sun',
       desc: 'Sturdy holy melee hero. Sanctuary hurts foes and protects allies inside; shields the whole party. Strong in co-op.',
-      hp: 29, armor: 20, spd: 114, crit: 0.05, power: 23, element: 'holy',
+      hp: 27, armor: 20, spd: 114, crit: 0.05, power: 23, element: 'holy',
       weapons: ['mace', 'dawnhammer', 'lantern'], skill: 'sanctuary', skill2: 'judgment',
       col: { a: '#e8e0c8', b: '#a69a78', c: '#ffd36b', d: '#4a4232' }, unlock: { runs: 4, text: 'Play 4 runs (clear a room in each)' },
     },

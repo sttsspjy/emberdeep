@@ -35,7 +35,7 @@ function modelOf(cls, boons, wi, o) {
     near(m.def.taken, v[4], 0.0005, cls + ' damage taken');
   }
   const by = (m, s, p) => m.skills[s].parts.find(q => q.id === p);
-  near(by(modelOf('knight', {}, 0, { stat: { crit: 0 } }), 0, 'impact').raw, 63.44, 0.05, 'Charge impact'); near(modelOf('knight', {}, 0).def.ehp, 68.8, 0.5, 'Knight effective health');
+  near(by(modelOf('knight', {}, 0, { stat: { crit: 0 } }), 0, 'impact').raw, 63.44, 0.05, 'Charge impact'); near(modelOf('knight', {}, 0).def.ehp, 62.93, 0.5, 'Knight effective health');
   const rg = modelOf('ranger', {}, 0, { stat: { crit: 0 } }), arrow = by(rg, 0, 'arrow');
   near(arrow.raw, 18.4, 0.05, 'Volley arrow'); ok(arrow.oneFoe === 3 && arrow.fanN === 7, `Volley: 3 of 7 arrows reach a foe at REF (got ${arrow.oneFoe} of ${arrow.fanN})`);
   near(rg.skills[0].perCast, 55.2, 0.1, 'Volley per cast on one foe'); near(rg.skills[0].perCastAll, 128.8, 0.1, 'Volley per cast, all 7'); near(rg.skills[1].perCast, 75.2, 0.1, 'Rain per cast (9.4 x 8)');

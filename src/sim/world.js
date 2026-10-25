@@ -501,25 +501,23 @@
     return v;
   };
 
-  // Every shield a hero receives except Battle Ward ('ward') passes one sliding window of SHIELD_WIN_T seconds (10 one-second slots in p.shWin): class sources (any k but 'holy' and 'bone') give at most
+  // Every shield a hero receives passes one sliding window of SHIELD_WIN_T seconds (10 one-second slots in p.shWin): class sources (any k but 'holy' and 'bone') give at most
   // SHIELD_WIN_CLASS of max HP per window, all sources together SHIELD_WIN_ALL; what the window refuses is logged in p.shieldClip[k].
   Object.assign(ED.CONST, { SHIELD_WIN_T: 10, SHIELD_WIN_CLASS: 0.03, SHIELD_WIN_ALL: 0.06 });
   // Adds amt to p's absorb shield up to cap (a shield above the cap is never lowered); k labels the source in p.shieldBy. Returns the shield gained.
   W.prototype.addShield = function (p, amt, cap, k) {
     if (!p || p.downed || p.dead || !(amt > 0) || !(p.shield < cap)) return 0;
     let gain = Math.min(cap, p.shield + amt) - p.shield;
-    if (k !== 'ward') {
-      const C = ED.CONST, win = p.shWin, now = Math.floor(this.time);
-      let c = 0, a = 0;
-      for (let i = 0; i < win.length; i++) { const s = win[i]; if (now - s.sec < C.SHIELD_WIN_T) { c += s.c; a += s.a; } }
-      const room = Math.max(0, k === 'holy' || k === 'bone' ? C.SHIELD_WIN_ALL * p.maxHp - a : Math.min(C.SHIELD_WIN_CLASS * p.maxHp - c, C.SHIELD_WIN_ALL * p.maxHp - a));
-      if (gain > room) { p.shieldClip[k] = (p.shieldClip[k] || 0) + gain - room; gain = room; }
-      if (!(gain > 0)) return 0;
-      const sl = win[now % C.SHIELD_WIN_T];
-      if (sl.sec !== now) { sl.sec = now; sl.c = 0; sl.a = 0; }
-      if (k !== 'holy' && k !== 'bone') sl.c += gain;
-      sl.a += gain;
-    }
+    const C = ED.CONST, win = p.shWin, now = Math.floor(this.time);
+    let c = 0, a = 0;
+    for (let i = 0; i < win.length; i++) { const s = win[i]; if (now - s.sec < C.SHIELD_WIN_T) { c += s.c; a += s.a; } }
+    const room = Math.max(0, k === 'holy' || k === 'bone' ? C.SHIELD_WIN_ALL * p.maxHp - a : Math.min(C.SHIELD_WIN_CLASS * p.maxHp - c, C.SHIELD_WIN_ALL * p.maxHp - a));
+    if (gain > room) { p.shieldClip[k] = (p.shieldClip[k] || 0) + gain - room; gain = room; }
+    if (!(gain > 0)) return 0;
+    const sl = win[now % C.SHIELD_WIN_T];
+    if (sl.sec !== now) { sl.sec = now; sl.c = 0; sl.a = 0; }
+    if (k !== 'holy' && k !== 'bone') sl.c += gain;
+    sl.a += gain;
     p.shield += gain;
     p.shieldBy[k] = (p.shieldBy[k] || 0) + gain;
     this.emit({ t: 'shielded', pid: p.pid, v: Math.round(gain * 10) / 10, k });

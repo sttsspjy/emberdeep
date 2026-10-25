@@ -41,7 +41,7 @@ module.exports = (ED, model) => {
   //   trance       Fold  attack speed for 4 s after a cast on the weapon share, capped by the attack floor
   //   kindle stoke kindling  Sheet Burn estimate (stacks up to the cap x the Burn value); Fold burning ground: GROUND_STACKS stacks per pack foe a dash (guess)
   //   wildfire     Fold  pack Burn x (1 + wildfire x WILD_K; guess)
-  //   smother      Fold  E: smother x the share of a foe's time at BURN_AT stacks
+  //   smother      Fold  E: REACH x smother x the share of a foe's time at BURN_AT stacks
   //   firebreak    Prior fire 0.04: longer ground that foes path around (guess)
   //   firewalk     Fold  pack Burn x (1 + FIREWALK_K x dashes through foes; guess)
   //   evo_fire     Sheet hold (flame cone); Fold Burn x CONE_UP while channeling (guess)
@@ -158,7 +158,7 @@ module.exports = (ED, model) => {
     if (st.wildfire) fireN *= 1 + st.wildfire * WILD_K;
     if (st.firewalk) fireN *= 1 + FIREWALK_K * Math.min(1, dashUse * 2);
     if (st.dashFire) { const g = ED.burnValue(st) * C.BURN_LIFE * GROUND_STACKS * dashUse; add1 += g * 0.5; addN += g * Math.min(PACK, 3); }
-    if (st.smother) eMul /= 1 - Math.min(E_MAX_RED, st.smother * clamp(fire1 / Math.max(1e-9, ED.burnValue(st) * C.BURN_AT), 0, 1));
+    if (st.smother) eMul /= 1 - Math.min(E_MAX_RED, REACH * st.smother * clamp(fire1 / Math.max(1e-9, ED.burnValue(st) * C.BURN_AT), 0, 1));
     const stOne = fire1 + light1 + holy1 + sd.general, stN = fireN + lightN + holyN + sd.general * spk;
 
     // Battle Trance: attack speed during the 4 s after a skill cast, on the weapon's damage and the statuses it feeds
@@ -249,7 +249,6 @@ module.exports = (ED, model) => {
     if (st.mirror) eMul *= 1 + 0.35 * st.mirror;
     if (st.angel) eMul *= 1.25;
     if (st.phoenix) eMul *= 1.15;
-    if (st.roomWard) eMul *= 1 + 0.5 * st.roomWard;
     if (st.strataHeal) eMul *= 1 + 0.4 * st.strataHeal;
     if (st.chalice) { eMul *= 1.15; mul1 *= 1.04; mulN *= 1.04; }
     eMul *= 1 + 0.002 * st.thorns + 0.35 * (st.spd - 1) + 0.08 * st.dashN + 0.2 * st.dashcdr + 0.1 * st.heal;
