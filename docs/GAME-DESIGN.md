@@ -469,7 +469,7 @@ Four strata (`CONST.STRATA` 4), all neutral (no weak or resisted element): I **O
 | c | `clover` | Four-Leaf Clover | +1 boon reroll now and at the start of each stratum. |
 | c | `ledger` | Merchant's Ledger | Shops stock one more relic. |
 | c | `haggle` | Haggler's Charm | The first item you buy in each shop costs half: the other half comes back as gold. |
-| c | `compass` | Explorer's Compass | Event rooms on the map show what they hold. Entering an event room gives the party 10 gold. |
+| c | `compass` | Explorer's Compass | Event rooms up to 3 rows ahead show what they hold on the map. Entering an event room gives the party 10 gold. |
 | c | `tooth` | Shark Tooth | Killing an elite readies 3 crits; any other kill readies 1 (at most 3 ready). |
 | c | `piggy` | Piggy Bank | Entering a shop, the party gains 15% of its gold (at most 30). |
 | c | `lifeline` | Lifeline Rope | You revive allies twice as fast, and an ally you revive rises with 60% health. Once per stratum, falling below 25% health knocks back and stuns foes within 140 of you for 1 s. |

@@ -150,6 +150,71 @@ const WPN = (p) => ({ p, kind: 'weapon', wpn: true, crit: false, noProc: true })
   ok(!!ev, 'the staged floor has an event room');
   if (ev) { const g = w.gold; w.enterRoom(ev.id, null); ok(w.gold - g === V('compass').gold, 'enter: the Compass pays ' + V('compass').gold + ' gold in an event room: ' + (w.gold - g)); }
 }
+// ---------------- map relics (room patches): host floor vs a client floor rebuilt from the seed and a full snapshot's RP ----------------
+{
+  if (!ED.Net) vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'net.js'), 'utf8'), { filename: 'net.js' });
+  const D = ED.Dungeon, N = ED.Net;
+  const base = (w) => D.generate(w.stratum, w.floorSeed); // the floor as generated, before any patch
+  // Rooms whose type, reward, event, w or h differ between the host floor and Dungeon.generate + applyPatches(full snapshot RP).
+  const clientDiff = (w) => {
+    const fl = base(w);
+    D.applyPatches(fl, JSON.parse(JSON.stringify(N.encodeSnap(w, [], true))).RP);
+    return w.floor.rooms.filter(r => { const q = fl.rooms[r.id]; return r.type !== q.type || r.reward !== q.reward || (r.event || null) !== (q.event || null) || r.w !== q.w || r.h !== q.h; }).length;
+  };
+  const stageWith = (relic, fit) => { for (let s = 7; s < 307; s += 3) { const st = stage([relic], { seed: s }); if (!fit || fit(st.w)) return st; } return null; };
+  { // ink: v.n unvisited combat rooms ahead become event rooms, now and at each stratum start
+    const w = stageWith('ink').w;
+    for (const s of [1, 2]) {
+      if (s > 1) w.enterStratum(s);
+      const b = base(w), row = w.room.row;
+      const turned = w.floor.rooms.filter(r => b.rooms[r.id].type === 'combat' && r.type === 'event');
+      const other = w.floor.rooms.filter(r => b.rooms[r.id].type !== r.type).length - turned.length;
+      ok(turned.length === V('ink').n && turned.every(r => r.row > row && !w.roomState[r.id].visited && !b.rooms[r.id].dark) && other === 0, `ink s${s}: ${turned.length} combat rooms ahead became event rooms (${other} other changes)`);
+      const d = clientDiff(w);
+      ok(d === 0, `ink s${s}: the client floor equals the host floor (${d} rooms differ)`);
+    }
+  }
+  { // dice: every unvisited gold reward becomes boon, forge or vigor, now and at each stratum start
+    const st = stageWith('dice', (w) => base(w).rooms.some(r => r.reward === 'gold'));
+    ok(!!st, 'dice: a staged floor with gold rewards');
+    if (st) for (const s of [1, 2]) {
+      const w = st.w;
+      if (s > 1) w.enterStratum(s);
+      const b = base(w), gold = b.rooms.filter(r => r.reward === 'gold' && !w.roomState[r.id].visited);
+      ok(gold.every(r => ['boon', 'forge', 'vigor'].indexOf(w.floor.rooms[r.id].reward) >= 0) && !w.floor.rooms.some(r => r.reward === 'gold' && !w.roomState[r.id].visited), `dice s${s}: ${gold.length} gold rewards became ${gold.map(r => w.floor.rooms[r.id].reward).join('/')}`);
+      const d = clientDiff(w);
+      ok(d === 0, `dice s${s}: the client floor equals the host floor (${d} rooms differ)`);
+    }
+  }
+  { // compass: only unknown event rooms reachable within v.rows rows above the party's room get their identity, again on each room entry
+    const R3 = V('compass').rows, E = ED.Events;
+    const st = stageWith('compass', (w) => { const ev = w.floor.rooms.filter(r => r.type === 'event'); return ev.some(r => r.row <= R3) && ev.some(r => r.row > R3 + 1); });
+    ok(!!st, 'compass: a staged floor with event rooms near and far');
+    if (st) {
+      const w = st.w;
+      const known = () => w.floor.rooms.filter(r => r.type === 'event' && r.event && !w.roomState[r.id].visited);
+      const check = (tag) => {
+        const top = w.room.row + R3, near = E.ahead(w).filter(r => r.type === 'event' && r.row <= top), k = known();
+        const far = w.floor.rooms.filter(r => r.type === 'event' && r.row > top);
+        ok(near.length > 0 && near.every(r => !!r.event) && k.every(r => r.row <= top) && far.length > 0 && far.every(r => !r.event), `compass ${tag}: ${k.length} event rooms known, all within ${R3} rows of row ${w.room.row}; ${far.length} far ones unknown`);
+        const seen = Object.keys(E.run(w).evSeen).length;
+        ok(seen === k.length, `compass ${tag}: the run pool spends one event per known room (${seen} seen)`);
+        const d = clientDiff(w);
+        ok(d === 0, `compass ${tag}: the client floor equals the host floor (${d} rooms differ)`);
+      };
+      check('at get');
+      const k0 = known().length;
+      // climb one row through a room that is not an event room: its entry reveals one more row
+      const next = w.room.exits.map(id => w.floor.rooms[id]).find(r => r.type !== 'event' && r.type !== 'boss');
+      ok(!!next, 'compass: a room to climb into');
+      if (next) {
+        w.enterRoom(next.id, null); w.enemies.length = 0; w.enc = null; w.locked = false;
+        if (w.floor.rooms.some(r => r.type === 'event' && r.row > w.room.row + R3)) check('after a room entry');
+        ok(known().length >= k0, `compass: the entry keeps or adds known rooms (${k0} -> ${known().length})`);
+      }
+    }
+  }
+}
 { // cast (Focusing Lens): a skill cast empowers the next weapon hits for a while
   const { w, p } = stage(['lens'], { cls: 'pyro' });
   w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x + 40, y: p.y }, 0);

@@ -100,7 +100,8 @@
 
   // ---------------- behaviour ----------------
   const atkEvery = (id, o) => function (p) { return p.atkCount % v(id).every === 0 ? o : null; };
-  const reveal = (w) => { if (!w.patchRoom || !w.floor) return; for (const r of w.floor.rooms) if (r.type === 'event' && !w.roomState[r.id].visited) w.patchRoom(r.id, { reveal: true }); };
+  // Explorer's Compass: unknown event rooms reachable within v.rows rows above the party's room get their identity (each reveal draws one event from the run's pool).
+  const reveal = (w) => { if (!w.patchRoom || !w.room || !ED.Events) return; const top = w.room.row + v('compass').rows; for (const r of ED.Events.ahead(w)) if (r.row <= top && r.type === 'event' && !r.event) w.patchRoom(r.id, { reveal: true }); };
   const KNOCK = (w, p, list, k) => { for (const e of list) { if (e.boss) continue; const d = Math.hypot(e.x - p.x, e.y - p.y) || 1; e.kbx += (e.x - p.x) / d * k; e.kby += (e.y - p.y) / d * k; } };
   Object.assign(FX, {
     // common
@@ -150,8 +151,8 @@
       shop(p, pr) { if (p.rt.haggle !== this.roomEpoch) return; p.rt.haggle = 0; addGold(this, p, pr.price * v('haggle').back); },
     },
     compass: {
-      get() { reveal(this); }, stratum() { reveal(this); },
-      enter(p, room) { if (room.type === 'event') addGold(this, p, v('compass').gold); },
+      get() { reveal(this); },
+      enter(p, room) { reveal(this); if (room.type === 'event') addGold(this, p, v('compass').gold); },
     },
     tooth: { kill(p, e) { const c = v('tooth'); this.grantCrits(p, e.elite ? c.elite : c.kill, c.cap, 'add'); } },
     piggy: { enter(p, room) { if (room.type === 'shop') { const c = v('piggy'); addGold(this, p, Math.min(c.max, this.gold * c.pct)); } } },
@@ -315,7 +316,8 @@
   // Cartographer's Ink: v.n combat rooms (not dark) on rows past the party's room turn into event rooms (CB-3 patchRoom; nothing without it).
   function inkRooms(w) {
     if (!w.patchRoom || !w.floor) return;
-    const row = w.room ? w.room.row | 0 : 0, pool = w.floor.rooms.filter(r => r.type === 'combat' && !r.dark && r.row > row && !w.roomState[r.id].visited);
+    const row = w.room && w.floor.rooms[w.roomId] === w.room ? w.room.row | 0 : 0; // row 0 in the stratum hook (it runs before the new floor's start room is entered)
+    const pool = w.floor.rooms.filter(r => r.type === 'combat' && !r.dark && r.row > row && !w.roomState[r.id].visited);
     for (let i = 0; i < v('ink').n && pool.length; i++) { const r = pool.splice(w.rng.int(0, pool.length - 1), 1)[0]; w.patchRoom(r.id, { type: 'event' }); }
   }
   // Curses with a lift: one counter step per matching moment (kill: foes p kills; elite: elites p kills; clear: fights won; boon: picks; stratum: stratum starts).

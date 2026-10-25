@@ -28,7 +28,7 @@
     clover: { name: 'Four-Leaf Clover', rar: 'c', icon: 'clover', desc: '+1 boon reroll now and at the start of each stratum.', mods: { cloverRerolls: 1 } },
     ledger: { name: "Merchant's Ledger", rar: 'c', icon: 'scroll', desc: 'Shops stock one more relic.' },
     haggle: { name: "Haggler's Charm", rar: 'c', icon: 'coins', desc: 'The first item you buy in each shop costs half: the other half comes back as gold.', v: { back: 0.5 } },
-    compass: { name: "Explorer's Compass", rar: 'c', icon: 'question', desc: 'Event rooms on the map show what they hold. Entering an event room gives the party 10 gold.', v: { gold: 10 } },
+    compass: { name: "Explorer's Compass", rar: 'c', icon: 'question', desc: 'Event rooms up to 3 rows ahead show what they hold on the map. Entering an event room gives the party 10 gold.', v: { gold: 10, rows: 3 } },
     tooth: { name: 'Shark Tooth', rar: 'c', icon: 'fang', desc: 'Killing an elite readies 3 crits; any other kill readies 1 (at most 3 ready).', v: { elite: 3, kill: 1, cap: 3 } },
     piggy: { name: 'Piggy Bank', rar: 'c', icon: 'pig', desc: 'Entering a shop, the party gains 15% of its gold (at most 30).', v: { pct: 0.15, max: 30 } },
     lifeline: { name: 'Lifeline Rope', rar: 'c', icon: 'rope', desc: 'You revive allies twice as fast, and an ally you revive rises with 60% health. Once per stratum, falling below 25% health knocks back and stuns foes within 140 of you for 1 s.', mods: { reviveK: 1 }, v: { hp: 0.6, at: 0.25, r: 140, stun: 1 } },
