@@ -332,11 +332,10 @@
     };
   }
 
-  // Attack counters of relics shown by the empower registry (stream C), when it exists: test(p) is true when p's next attack is the empowered one.
+  // Attack counters of relics shown by the empower registry (src/data/empower.js, when loaded): test(p) is true when p's next attack is the empowered one. Twin Fang is its own 'twin' entry there.
   if (ED.EMPOWER) {
     const next = (p, n) => ((p.atkCount | 0) + 1) % n === 0;
-    ED.EMPOWER.push({ id: 'whetstone', col: ED.RARITY.c.color, test: (p) => (p.relics || []).indexOf('whetstone') >= 0 && next(p, R.whetstone.v.every) });
-    ED.EMPOWER.push({ id: 'twinfang', col: ED.RARITY.e.color, test: (p) => !!(p.stats && p.stats.twinEvery) && next(p, p.stats.twinEvery) });
-    ED.EMPOWER.push({ id: 'metronome', col: ED.RARITY.e.color, test: (p) => (p.relics || []).indexOf('metronome') >= 0 && next(p, R.metronome.v.every) });
+    ED.EMPOWER.push({ id: 'whetstone', name: 'Whetstone', col: ED.RARITY.c.color, test: (p) => (p.relics || []).indexOf('whetstone') >= 0 && next(p, R.whetstone.v.every) });
+    ED.EMPOWER.push({ id: 'metronome', name: 'Metronome', col: ED.RARITY.e.color, test: (p) => (p.relics || []).indexOf('metronome') >= 0 && next(p, R.metronome.v.every) });
   }
 })(globalThis.ED || (globalThis.ED = {}));
