@@ -6,7 +6,7 @@
 
 ## north-star (Ultimate goal for all plans/tasks)
 
-A browser **co-op roguelite dungeon descent** (solo or up to 4 friends) where **builds are chosen, not rolled**: paths (Fire, Ice, Lightning, Poison, Holy, Shadow plus General) gate boons, every stratum is weak to one element and resists another, commitment unlocks a keystone and a weapon evolution, and the lantern punishes greedy exploration. Rules: **① Zero install** (static site, no build step, no backend; opens from any static host or `file://`) **② No runtime asset files** (art is embedded as data URIs built by `tools/art.js` from vendored CC0/CC-BY sources in `art-src/`; all audio synthesized with WebAudio) **③ Host-authoritative deterministic sim** (the same `src/sim` code runs headless in Node for balance bots) **④ Every death is earned** (telegraphed attacks, readable builds, no sustain-by-default).
+A browser **co-op roguelite dungeon descent** (solo or up to 4 friends) where **builds are chosen, not rolled**: paths (Fire, Ice, Lightning, Poison, Holy, Shadow plus General) gate boons and each element changes how you play (its own verb, not more damage), commitment unlocks a keystone and a weapon evolution that change a control, a branching map lets you choose your route through four neutral strata, and every boss is its own fight. Rules: **① Zero install** (static site, no build step, no backend; opens from any static host or `file://`) **② No runtime asset files** (art is embedded as data URIs built by `tools/art.js` from vendored CC0/CC-BY sources in `art-src/`; all audio synthesized with WebAudio) **③ Host-authoritative deterministic sim** (the same `src/sim` code runs headless in Node for balance bots) **④ Every death is earned** (telegraphed attacks, readable builds, no sustain-by-default).
 
 **NO COMPROMISES. A ROGUELITE VETERAN MUST FINISH A RUN AND WANT ANOTHER WITH A DIFFERENT PATH.**
 
@@ -101,7 +101,7 @@ You are Advisor. Focus on decision, delegate implementation task to Worker. The 
 ### Tasks delegated to Worker:
 
 - All implementation related tasks in the plans, including writing test
-- Delegate using Agent tool, select "sonnet-5-5" as model, effort level "xhigh"
+- Delegate using Agent tool, select "opus" as model, effort level "high"
 - Delegate tasks in parallel, up to as many Worker as possible as long as they are non-conflicting
 
 ### 'Task brief' for Worker:

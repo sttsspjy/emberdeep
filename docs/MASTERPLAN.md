@@ -64,3 +64,16 @@ North-star: a co-op browser roguelite where builds are chosen, not rolled. Rules
 - [ ] Pact 3 adds no difficulty yet
 - [ ] PR to main
 - [ ] Your playtest
+
+## v6: choices that change play (playtest 5)
+- [ ] Every element plays differently (its own verb); keystones and evolutions change a control
+- [ ] Ascended and duo boons removed; fewer open boons
+- [ ] One Burn: same damage from every source, stack count on the foe
+- [ ] Pyromancer is a caster: Ember Bolt, Fireball (right mouse), Nova, Meteor
+- [ ] Slay the Spire map: several starts, splits and merges, no backtracking
+- [ ] 4 neutral strata (Ossuary, Glowmire, Sanctum, Abyss), 15 rooms each on I–III, a short finale on IV
+- [ ] New boss fights: duelist, spore carpet, tide, finale; two champion fights on IV
+- [ ] Tankier, fewer trash; no late trickle spawns; small proc effects; damage-over-time ticks you can hear
+- [ ] Plain wording everywhere
+- [ ] Balance re-check with bots
+- [ ] Your playtest

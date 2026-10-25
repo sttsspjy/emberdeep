@@ -1,5 +1,16 @@
 # Wickdeep — Agent Kanban
 
+## v6 contracts (user 2026-10-25, playtest 5; supersede v4 contracts where they clash)
+- **Branches**: integration `feat/v6` (from `feat/punish` 8b36a1b), worktree `../game-v6`; workers on `feat/v6-<area>` (map, elements, pyro, encounters, bosses-a, bosses-b), merged by the Advisor.
+- **Strata** 4, neutral: I Ossuary, II Glowmire, III Drowned Sanctum, IV Starless Abyss (finale). No weak/resist, no `elemAff`. Per-stratum arrays have 4 entries.
+- **Map**: STS layered DAG; I–III 15 rows, IV 6 rows (combat, combat|event, champion twins, rest|shop, champion mimic, rest); one entry door, one exit per edge, no backtracking. Node types start/combat/dark/elite/champion/shop/rest/treasure/event/boss. `W.startChampion(room)`.
+- **Elements**: one verb each (Fire Burn + hold flame cone · Ice freeze, skills Shatter · Lightning dash discharges · Poison weaken + clouds · Holy perfect dodge · Shadow backstab/decoy · General finisher). Keystone and evolution change a control. Ascended and duos cut. Fork rank 2 boss II, rank 3 boss III.
+- **Burn**: one unified Burn, stacks, same per-hero value from every source; API `W.addBurn(e, amount, p)` (damage-based).
+- **Pyro**: Ember Bolt (cuts spell cooldowns), Fireball slot 2 (`skill3`, RMB/R; heroes without slot 2 cast skill 1), Nova Q, Meteor E; ~70% damage from spells.
+- **Trash**: fodder ≥ 3 hits at I; fodder deaths fire no on-death effects; fodder only with threat waves; late spawns are dangerous; room clears when the last threat dies. DoT ticks: sound, tint, summed numbers.
+- **Text**: plain wording, no flavour lines or titles.
+- **Versions**: `N.VERSION` 11.
+
 ## v4 contracts (all advisors; change only by agreement)
 - **Branches**: integration `feat/v4` (game-f1 merges). Each advisor works in its own worktree `../game-<area>` on `feat/v4-<area>` cut from `feat/v4`, merges into it (merge only). Branches that touch `combat.js` are cut after the spatial grid is merged.
 - **Gate E1** (game-88: grid, bigger rooms, fodder, lantern → Dark doors, dash charges, crowd slow) lands before anyone tunes numbers; until then 6a and f1 build mechanics only.
@@ -19,6 +30,7 @@
 - Carried over: dead `minionBurst` guard (`class-necro.js`, `combat.js`) · two Necromancers with Soul Command show no command stream · deeds are a 31-bit mask (a 32nd deed needs new profile storage) · aim banner for party clients · orphaned `simpool.js --worker` processes after a killed parent · Cleric Sacred Lantern ally shield gets its own allowance · optional key that opens the sheet on Map · DawnLike "Platino" sprite hidden somewhere.
 
 ## In-progress
+- v6 on `feat/v6` (2026-10-25): W1 map+strata, W2 elements, W3 Pyro, W4 encounters, W5a bosses I–II, W5b bosses III–IV + champions; then text pass, balance, handoff.
 - `feat/punish` (v5 difficulty) → `main` PR; playtest (user).
 
 ## Done
