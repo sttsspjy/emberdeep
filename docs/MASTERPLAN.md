@@ -85,18 +85,18 @@ North-star: a co-op browser roguelite where builds are chosen, not rolled. Rules
 - [x] Bots and smart picks know the new cards
 - [x] Bellwarden rework: wind the bell, hurl it, reel it home through foes, leap to where it lies, Peal it with built-up Resonance
 - [x] Balance pass on the route floors: half Hearth 19%, full Hearth 40%, Pact 5 12%, every hero in band
-- [ ] Pact 1 and Pact 4 steps, two- and three-hero parties back in their bands
-- [ ] Your playtest: route choices, the new elements, Twists, the Bellwarden's hurl and reel
 - [ ] Other heroes' weapon forks (next round)
 ## v6: choices that change play (playtest 5)
-- [ ] Every element plays differently (its own verb); keystones and evolutions change a control
-- [ ] Ascended and duo boons removed; fewer open boons
-- [ ] One Burn: same damage from every source, stack count on the foe
-- [ ] Pyromancer is a caster: Ember Bolt, Fireball (right mouse), Nova, Meteor
-- [ ] Slay the Spire map: several starts, splits and merges, no backtracking
-- [ ] 4 neutral strata (Ossuary, Glowmire, Sanctum, Abyss), 15 rooms each on I–III, a short finale on IV
-- [ ] New boss fights: duelist, spore carpet, tide, finale; two champion fights on IV
-- [ ] Tankier, fewer trash; no late trickle spawns; small proc effects; damage-over-time ticks you can hear
-- [ ] Plain wording everywhere
-- [ ] Balance re-check with bots
-- [ ] Your playtest
+- [x] Every element plays differently (its own verb); keystones and evolutions change a control
+- [x] Ascended, duos, Mutations and Twists removed; fewer open boons
+- [x] One Burn: same damage from every source, stack count on the foe
+- [x] Pyromancer is a caster: Ember Bolt, Fireball (right mouse), Nova, Meteor
+- [x] Slay the Spire map: several starts, splits and merges, no backtracking
+- [x] 4 neutral strata (Ossuary, Glowmire, Sanctum, Abyss), 15 rooms each on I–III, a short finale on IV
+- [x] New boss fights: duelist, spore carpet, tide, finale; two champion fights on IV
+- [x] Tankier, fewer trash; no late trickle spawns; small proc effects; damage-over-time ticks you can hear
+- [x] Plain wording everywhere; README and "What changed" notice for v6; old six-strata profiles remapped
+- [x] Balance pass: half Hearth 20.5%, full Hearth 38.7%, Pact 5 11.4%, bosses 45–76 s
+- [ ] Fire and Shadow paths win too rarely, General too often
+- [ ] Pact 3 and three-hero party out of band; Shade below band
+- [ ] Your playtest, then the PR to main
