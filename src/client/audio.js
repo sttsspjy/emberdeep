@@ -102,8 +102,8 @@
   const lite = () => !!(ED.Render && ED.Render.quality === 'low');
   const rnd = (a, b) => a + Math.random() * (b - a);
 
-  const GAP = { hit: 0.035, ohit: 0.035, crit: 0.05, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1, freeze: 0.05, shatter: 0.06, combust: 0.06, guardhit: 0.06, block: 0.05, clang: 0.03, throw: 0.08, catch: 0.08, parry: 0.1, bell: 0.06, charge: 0.2, chargehit: 0.2, volley: 0.15, raincast: 0.15, smash: 0.05, dark: 0.5, fury: 1, dcharge: 0.08, blossom: 0.05, implode: 0.2, pick: 0.08, bstrike: 0.07, rattle: 0.06, peal: 0.08, heave: 0.15, reel: 0.2, bsmash: 0.08, bhurl: 0.06, bdrag: 0.15, blood: 0.15, ignite: 0.08, icecrack: 0.08, zap: 0.08 };
-  const PRIO = { secret: 2, drownbell: 3, hurt: 3, down: 3, revive: 3, dark: 3, lock: 3, roar: 3, fury: 3, victory: 3, defeat: 3, crit: 2, level: 2, boon: 2, relic: 2, pick: 2, shop: 2, ohit: 0, spark: 0, eshoot: 0, xp: 0, gold: 0, spawn: 0 };
+  const GAP = { hit: 0.035, ohit: 0.035, crit: 0.05, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1, freeze: 0.05, shatter: 0.06, combust: 0.06, guardhit: 0.06, block: 0.05, clang: 0.03, throw: 0.08, catch: 0.08, parry: 0.1, bell: 0.06, charge: 0.2, chargehit: 0.2, volley: 0.15, raincast: 0.15, smash: 0.05, dark: 0.5, fury: 1, dcharge: 0.08, blossom: 0.05, implode: 0.2, pick: 0.08, bstrike: 0.07, rattle: 0.06, peal: 0.08, heave: 0.15, reel: 0.2, bsmash: 0.08, bhurl: 0.06, bdrag: 0.15, blood: 0.15, ignite: 0.08, icecrack: 0.08, zap: 0.08, servo: 0.12, lhum: 0.25, gearsaw: 0.2, stomp: 0.2, colbreak: 0.2, alarm: 1 };
+  const PRIO = { secret: 2, drownbell: 3, alarm: 3, colbreak: 3, hurt: 3, down: 3, revive: 3, dark: 3, lock: 3, roar: 3, fury: 3, victory: 3, defeat: 3, crit: 2, level: 2, boon: 2, relic: 2, pick: 2, shop: 2, ohit: 0, spark: 0, eshoot: 0, xp: 0, gold: 0, spawn: 0 };
   // arg: cue-specific parameter (hit and crit: { w damage share, el element, n hits this frame }; clang: { n, g }; victory: 'boss' for the short one; pick: a card kind or { k kind, big })
   A.play = (name, vol, arg, pr) => {
     if (!A.ready || !live()) return;
@@ -280,6 +280,17 @@
       case 'ignite': noise('bandpass', 280, 2400, 0.16, 0.22 * v, 1.1, null, t, 0.04); tone('sine', 120, 55, 0.14, 0.16 * v, null, t + 0.02); for (let i = 0; i < 2; i++) noise('highpass', rnd(3500, 6000), 2500, 0.01, 0.12 * v, 0.8, null, t + 0.05 + Math.random() * 0.12); break;
       case 'icecrack': noise('highpass', 2800, 1500, 0.03, 0.24 * v, 0.8); tone('square', 2600, 1900, 0.025, 0.04 * v); noise('bandpass', 1200, 600, 0.05, 0.1 * v, 3, null, t + 0.005); tone('sine', 3300, 2950, 0.14, 0.06 * v, null, t + 0.01); tone('sine', 4450, 4300, 0.09, 0.035 * v, null, t + 0.03); break;
       case 'zap': tone('sawtooth', 2600, 180, 0.09, 0.08 * v); noise('highpass', 3000, 1500, 0.06, 0.22 * v, 0.6); tone('square', 1700, 1650, 0.02, 0.04 * v, null, t + 0.04); tone('sawtooth', rnd(1100, 1500), 300, 0.04, 0.05 * v, null, t + 0.06); break;
+      // Clockwork Colossus: a servo whine with a latch click as a move starts; a laser charge hum swelling up; a saw whir; a stomp (thud and struck plate); a part breaking (blast, metal crash, clatter); the core-open alarm
+      case 'servo': tone('sawtooth', 220, 430, 0.22, 0.05 * v); tone('square', 440, 860, 0.22, 0.022 * v); noise('bandpass', 1200, 2600, 0.2, 0.05 * v, 4); noise('highpass', 4200, 2600, 0.02, 0.12 * v, 0.7, null, t + 0.22); break;
+      case 'lhum': tone('sawtooth', 62, 150, 0.2, 0.09 * v, null, t, 0.7); tone('sine', 520, 1560, 0.16, 0.05 * v, null, t, 0.75); tone('square', 124, 300, 0.12, 0.02 * v, null, t, 0.7); break;
+      case 'gearsaw': noise('bandpass', 2600, 900, 0.5, 0.2 * v, 6); tone('sawtooth', 190, 120, 0.5, 0.06 * v); tone('square', 95, 70, 0.45, 0.035 * v); break;
+      case 'stomp': tone('sine', 72, 28, 0.5, 0.45 * v); noise('lowpass', 600, 60, 0.4, 0.35 * v); fmBell(180, 2.76, 3, 0.5, 0.06 * v, t + 0.01); noise('highpass', 3000, 1500, 0.08, 0.12 * v, 0.8); break;
+      case 'colbreak':
+        noise('lowpass', 1600, 50, 0.9, 0.45 * v); tone('sine', 92, 25, 0.8, 0.4 * v); tone('square', 1300, 200, 0.25, 0.04 * v);
+        fmBell(320, 1.41, 6, 0.9, 0.08 * v, t); fmBell(510, 2.31, 5, 0.7, 0.06 * v, t + 0.03);
+        for (let i = 0; i < 4; i++) noise('bandpass', rnd(2000, 5000), 1200, 0.08, 0.12 * v, 3, null, t + 0.06 + i * 0.07 + Math.random() * 0.03);
+        break;
+      case 'alarm': for (let i = 0; i < 4; i++) tone('square', i % 2 ? 660 : 880, null, 0.16, 0.055 * v, null, t + i * 0.2); tone('sawtooth', 110, 55, 0.8, 0.08 * v); break;
       default: break;
     }
   }

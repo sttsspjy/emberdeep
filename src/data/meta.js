@@ -111,7 +111,7 @@
     bossDeed('weedkiller', 'Weedkiller', 1, 30),
     bossDeed('thaw', 'Low Tide', 2, 40), // ids thaw / quenched / lowtide keep their DEEDS positions (save code) with new checks
     { id: 'quenched', name: 'Twinbreaker', desc: 'Clear the twin champions room', icon: 'skull', reward: 50, check: (p, run) => run && !!(run.champs & 1) },
-    { id: 'lowtide', name: 'Mimic Hunter', desc: 'Clear the mimic champion room', icon: 'skull', reward: 60, check: (p, run) => run && !!(run.champs & 2) },
+    { id: 'lowtide', name: 'Colossus Breaker', desc: 'Clear the Clockwork Colossus room', icon: 'skull', reward: 60, check: (p, run) => run && !!(run.champs & 2) },
     { id: 'uncrowned', name: 'First Win', desc: 'Defeat the Hollow King and win a run', icon: 'crown', reward: 100, check: p => p.stats.wins >= 1 },
     { id: 'slayer', name: 'Slayer', desc: 'Kill 1,000 foes', icon: 'axe', reward: 50, check: p => p.stats.kills >= 1000 },
     { id: 'legend', name: 'Legend', desc: 'Kill 5,000 foes', icon: 'axe', reward: 120, check: p => p.stats.kills >= 5000 },

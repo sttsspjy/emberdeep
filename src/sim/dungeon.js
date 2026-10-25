@@ -25,7 +25,7 @@
   const NODE_FROM = { combat: 1, dark: 3, elite: 5, event: 2, shop: 5, rest: 6 };
   const NO_REPEAT = { dark: 1, elite: 1, shop: 1, rest: 1 }; // never on two rows in a row of one path
   // Stratum IV (finale) rows: each node draws from its row's list (both kinds appear in a row of two or more nodes); champion rows name the champion.
-  const FINALE = [['combat'], ['combat', 'event'], ['champion:twins'], ['rest', 'shop'], ['champion:mimic'], ['rest']];
+  const FINALE = [['combat'], ['combat', 'event'], ['champion:twins'], ['rest', 'shop'], ['champion:colossus'], ['rest']];
   D.ROWS = ROWS; D.LANES = LANES;
   D.rowsOf = (stratum) => ROWS[Math.max(0, Math.min(ROWS.length - 1, stratum - 1))];
 

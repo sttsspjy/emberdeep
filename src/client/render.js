@@ -256,7 +256,8 @@
     for (const p of view.players.values()) qDraw(dn++, p.y, 0, p);
     const xbell = ED.ClassFx.bell;
     if (xbell) for (const p of view.players.values()) if (p.bells && p.bells.length && !p.dead) for (let i = 0; i < p.bells.length; i++) { qDraw(dn, p.y + (p.bells[i].oy || 0) + 0.01, 7, p); drawPool[dn++].d = i; } // a hero's bells on their chains (cls-bell.js): kind 7, d = bell index
-    for (const e of view.enemies) if (e.hp > 0) { qFoe(dn++, e); nFoe++; }
+    for (const e of view.enemies) if (e.hp > 0 && !(e.def && e.def.colo)) { qFoe(dn++, e); nFoe++; } // the Clockwork Colossus's foes draw as one machine: kind 10
+    ED.ArenaFx.colossus(view, (y, m) => qDraw(dn++, y, 10, m));
     for (const a of view.allies) qDraw(dn++, a.y, 2, a);
     for (const s of R.liveStatics(view, room)) { // tall pieces of the room art (columns, standing decor, door arch, unbroken breakables)
       qDraw(dn++, s.key, 3, s);
@@ -284,6 +285,7 @@
       if (it.k === 7) { shDX = shDY = 0; xbell(c, it.o, it.d, t, low, view); continue; }
       if (it.k === 8) { Cos.drawPet(c, it.o, t); continue; }
       if (it.k === 9) { ED.ArenaFx.drawBlock(c, it.o, t); continue; }
+      if (it.k === 10) { ED.ArenaFx.drawColossus(c, it.o, t); continue; }
       const o = it.o, rim = low || o.fodder ? null : rimLight(o.x, o.y, it.k === 0 ? 16 : 0), still = atlasOn && it.k < 2 && AC.still(o), px = still ? Math.round(o.x / 2) * 2 : Math.round(o.x), py = still ? Math.round(o.y / 2) * 2 : Math.round(o.y); // feet on the buffer pixel grid (the 2 px art grid while standing still)
       if (rim) { shDX = -rim.dx * 0.28; shDY = -rim.dy * 0.12; } else { shDX = 0; shDY = 0; }
       if (it.k === 1) { // foe: atlas art (pose offsets are art-px steps), else the procedural look with pose offset, lean and squash (F.xform) in one matrix with the mirror
@@ -330,6 +332,7 @@
     drawRoomDynamics(c, view, room, biome, t, 1);
     drawPickups(c, view, t, 1);
     drawZones(c, view, t, 1);
+    ED.ArenaFx.neon(c, view, t); // the Colossus's neon lines (arena.js)
     drawProjectiles(c, view, t, 1);
     if (!low) drawMotes(c, view, room, biome, t, dt, 1);
     const eyeA = 0.2 + P.darkness * 0.5;
@@ -760,6 +763,7 @@
     const At = ED.Atlas;
     for (const z of view.zones) {
       const k = z.dur ? U.clamp(z.t / z.dur, 0, 1) : 0, x = Math.round(z.x), y = Math.round(z.y);
+      if (z.neon && ED.ArenaFx.neonZone(c, z, pass, t, k)) continue; // a Clockwork Colossus telegraph, beam or saw (arena.js)
       switch (z.kind) {
         case 'spawn': {
           const col = z.big ? '#ff4a3a' : z.elite ? '#ffb13a' : '#b8a0ff', rr = z.r || 14; // big: the last wave's reinforcement forms (red, wider)
@@ -2180,7 +2184,7 @@
   // Elite label: the affix names (second slot after the first) then the foe name, e.g. "Swift Brutal Skeleton Knight"; `affixes` drops the foe name. Bar and label colour stay the first affix's.
   R.eliteLabel = (e, affixes) => ED.AFFIXES[e.elite].name + (e.elite2 ? ' ' + ED.AFFIXES[e.elite2].name : '') + (affixes ? '' : ' ' + e.def.name);
   // Fill height in px of a foe's health bar (bh for a normal foe; 0 = no bar): shown once damaged, always for an elite; fodder gets a 1 px bar.
-  R.foeBarH = (e, bh) => (e.hp / e.maxHp >= 0.999 && !e.elite ? 0 : e.fodder ? 1 : bh);
+  R.foeBarH = (e, bh) => ((e.def && e.def.colo) || (e.hp / e.maxHp >= 0.999 && !e.elite) ? 0 : e.fodder ? 1 : bh); // the Colossus draws its own bars (arena.js colBars)
   // HP bar (frame, dark base, fill, sheen) baked per colour / width / fill px / height; sprite origin = bar left-top.
   function barSprite(bc, w, fw, h) {
     return sprite('hb' + bc + '|' + w + '|' + fw + '|' + h, -1, -1, w + 1, h + 1, false, (g) => {

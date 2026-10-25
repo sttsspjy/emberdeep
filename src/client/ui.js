@@ -79,7 +79,7 @@
     '<b>Elements:</b> each element is one way to play. Fire stacks Burn and lays burning ground, Ice freezes foes for a skill to Shatter, Lightning charges foes for your dash to set off, Poison weakens foes with Venom and clouds, Holy Smites a foe whose attack you dash through at the last moment, Shadow pays for hits from behind. Keystones and evolutions change how you attack, dash or move.',
     '<b>Removed:</b> Ascended boons, duo boons, Mutations, Twists, the Attunement boons and twelve plain stat boons (Fleet Foot, Lodestar, Sharpened Edge, Quickened Hands, Bounty, Stalwart, Mending, Forager, Thornmail, Battle Ward, Glass Heart, Overcharge).',
     '<b>Pyromancer:</b> a caster now. Ember Bolt hits make your spells recharge sooner, and Fireball (2 charges) is a third skill on right mouse or R (B on a pad). Skill 1 is Q alone (RB on a pad); heroes without a third skill cast skill 1 on its key.',
-    '<b>Bosses:</b> new fights. The Bone Warden duels and raises bone walls, the Sporemother spreads spores from her pods, the Drowned King floods the room, and stratum IV ends with two champion fights (the twins, the mimic) before the Hollow King.',
+    '<b>Bosses:</b> new fights. The Bone Warden duels and raises bone walls, the Sporemother spreads spores from her pods, the Drowned King floods the room, and stratum IV ends with two champion fights (the twins, the Clockwork Colossus) before the Hollow King.',
     '<b>Fights:</b> fodder takes a few hits and sets off no kill effects. Every wave is marked before it arrives, the room clears when the last wave falls, and damage over time shows its numbers and makes a sound.',
   ];
   const V5 = [
