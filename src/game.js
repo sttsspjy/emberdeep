@@ -14,14 +14,15 @@
         x: 0, y: 0, r: 10, face: 0, vx: 0, vy: 0, mvx: 1, mvy: 0, hp: 1, maxHp: 1, dashT: 0, invuln: 0, moving: false, downed: false, dead: false, revive: 0 };
       p.stats = ED.Stats.compute({ cls: p.cls, weapon: p.weapon, boons: {}, relics: [], meta: p.meta, pact: cfg.pact });
       p.hp = p.maxHp = p.stats.maxHp;
-      p.mastery10 = (pd.meta && pd.meta.mastery >= 10);
+      p.wear = N.cleanWear(pd.wear, p.cls); // Wardrobe set of the hero pick (cosmetics.js; never read by the sim)
+      if (ED.CLS && ED.CLS.bell) ED.CLS.bell.init(p); // bell state (class-bell.js): the own hero predicts it, the others mirror P[24]
       this.players.set(p.pid, p);
     }
     this.localPid = localPid; this.pact = cfg.pact;
     this.enemies = []; this.projs = []; this.pickups = []; this.zones = []; this.allies = []; this.props = [];
     this.floor = null; this.room = null; this.roomId = -1; this.roomState = {}; this.stratum = 0; this.floorSeed = 0;
     this.gold = 0; this.level = 1; this.xp = 0; this.xpNext = 20; this.time = 0; this.locked = false; this.waitMsg = '';
-    this.snaps = []; this.renderT = 0; this.run = null; this.eMap = new Map();
+    this.snaps = []; this.renderT = 0; this.run = null; this.eMap = new Map(); this.critter = null;
   }
   Mirror.prototype.recalc = function (p) {
     p.stats = ED.Stats.compute({ cls: p.cls, weapon: p.weapon, boons: p.boons, relics: p.relics, meta: p.meta, pact: this.pact, chaliceHp: p.chaliceHp, bonusHp: p.bonusHp });
@@ -50,7 +51,7 @@
     if (d.H) for (const a of d.H) H.set(a[0], a);
     for (const a of d.K) K.set(a[0], a);
     for (const a of d.A) A.set(a[0], a);
-    this.snaps.push({ T: d.T, recv: now, P, E, H, K, A });
+    this.snaps.push({ T: d.T, recv: now, P, E, H, K, A, C: d.C || null });
     if (this.snaps.length > 6) this.snaps.shift();
     // per-player vitals are taken straight from the newest snapshot
     for (const a of d.P) {
@@ -62,6 +63,7 @@
       if ((a[20] | 0) !== (p.chaliceHp | 0)) { p.chaliceHp = a[20] | 0; this.recalc(p); }
       p.glBuff = !!(fl & 1024); p.embolden = !!(fl & 2048); // Cleric buffs: Guardian Light, Embolden
       p.glT = p.glBuff ? 1 : 0; p.glV = a[22] || 0; p.auraT = p.embolden ? 1 : 0; p.auraV = a[23] || 0; p.knellN = a[21] | 0; p.knellT = p.knellN ? 1 : 0; // timed damage bonuses the Tab sheet and Stats read
+      p.metroN = a[25] | 0; p.doorWant = a[26] | 0; // Metronome beat, the door the hero waits in
       if (p.pid !== this.localPid) { p.moving = !!(fl & 1); p.dashing = !!(fl & 2); p.face = a[3]; p.braceT = fl & 1048576 ? 1 : 0; p.tranceT = fl & 4096 ? 1 : 0; } // the local hero predicts its own Trance
       else if (this.firstInRoom) { p.x = a[1]; p.y = a[2]; }
     }
@@ -88,6 +90,7 @@
       const p = this.players.get(pid); if (!p) continue;
       const ra = a.P.get(pid);
       p.x = ra ? U.lerp(ra[1], rb[1], k) : rb[1]; p.y = ra ? U.lerp(ra[2], rb[2], k) : rb[2];
+      bellInterp(p, ra && ra[24], rb[24], k);
     }
     // enemies
     const out = [];
@@ -103,6 +106,7 @@
       e.charge = fl & 64 ? 1 : 0; e.bleedPool = fl & 128 ? 1 : 0; e.judged = fl & 256 ? 1 : 0; e.blind = fl & 512 ? 1 : 0; e.vulnT = fl & 1024 ? 1 : 0;
       e.venomLvl = (fl >> 13) & 7; e.radLvl = (fl >> 16) & 3; e.doomLine = rb[17] || 0; // Venom pips (5 = Corroded), Radiance fill, Reap line (bosses: the Toll gauge)
       e.hexed = !!(fl & (1 << 18)); e.marked = !!(fl & (1 << 19)); e.sealed = !!(fl & (1 << 20)); e.ailN = (fl >> 21) & 7; // route states: Hexed, Marked, Sealed, ailment count
+      e.quarryT = fl & (1 << 24) ? 1 : 0; e.dosed = !!(fl & (1 << 25)); e.affixOff = !!(fl & (1 << 26)); e.hunted = !!(fl & (1 << 27)); // Quarry, a Venom dose planted, affixes off (Hex the Strong), Hunted champion
       e.boss = !!e.def.boss;
       const st = N.ST[rb[8]] || 'move';
       if (e.boss) { e.pose = st; e.st = 'atk'; } else e.st = st;
@@ -132,6 +136,8 @@
     // pickups & allies
     this.pickups = []; for (const [id, rb] of b.K) { const ra = a.K.get(id); const xy = lerpXY(ra, rb); this.pickups.push({ id, kind: N.PK[rb[1]], x: xy[0], y: xy[1] }); }
     this.allies = []; for (const [id, rb] of b.A) { const ra = a.A.get(id); const xy = lerpXY(ra, rb); this.allies.push({ id, owner: rb[1], x: xy[0], y: xy[1], face: rb[4], k: rb[5] | 0 }); }
+    const cb = b.C, ca = a.C; // the Platino (net.js C)
+    this.critter = cb ? { x: ca ? U.lerp(ca[0], cb[0], k) : cb[0], y: ca ? U.lerp(ca[1], cb[1], k) : cb[1], face: cb[2] } : null;
     // projectiles: extrapolated to "now" so dodging reads true
     const pb = this.projBase;
     if (pb) {
@@ -146,6 +152,160 @@
     }
   };
 
+  // ---------------- Bellwarden bells on the client ----------------
+  // Every drawn bell carries ox / oy (its draw offset from its hero's drawn feet) and s (its state, ED.Bell.STATES). Remote heroes of a client: P[24] interpolated, a hand bell by angle about the hero (an orbit stays round
+  // between snapshots), any other in the world. The local hero of a client predicts its own bells with class-bell.js itself (ED.CLS.bell.tick, ED.CAST heave / peal) on BELL_W, a world without foes, shots or effects
+  // (pred: a hurl spends no attack count, crit stack or Twist beat), in fixed 1/60 s steps; each snapshot then corrects the prediction against the host's bells at the matching local moment (the send time of the input seq
+  // the host echoes plus the time the host ran on it): a hand bell by BELL_ROT of the phase and BELL_SPD of the speed difference (a snap after BELL_BAD snapshots off by a wide margin), an anchored bell to the host's spot,
+  // and a bell whose state is not the host's for BELL_STATE snapshots takes the host's when that is in hand or anchored (a flight or a reel runs on its own clock). Resonance is the host's (strikes build it).
+  const BELL_ROT = 0.2, BELL_SPD = 0.2, BELL_BAD = 3, BELL_STATE = 2, BELL_HIST = 90, HAND = 0, ANCHOR = 2;
+  const wrapA = (d) => d - U.TAU * Math.round(d / U.TAU);
+  const NOOP = () => undefined, NONE = [];
+  const BELL_W = { pred: true, room: null, locked: false, time: 0, projs: NONE, enemies: NONE, emit: NOOP, foeScan: () => NONE, foeEnd: NOOP, smashCircle: NOOP, hitEnemy: NOOP, explode: NOOP, skillBlast: NOOP, partSrc: NOOP, addShield: () => 0,
+    stunFoe: NOOP, slowEnemy: NOOP, addZone: NOOP, nearestEnemy: () => null, discharge: NOOP, evoHit: NOOP, evoLine: NOOP, elementCast: NOOP };
+  function bellInterp(p, ra, rb, k) {
+    const bs = p.bells || (p.bells = []), H = N.BELL_HEAD, M = N.BELL_N;
+    if (!rb) { bs.length = 0; p.bellLeap = null; p.bellWhirl = false; p.bellWind = false; p.bellRes = 0; return; }
+    const n = (rb.length - H) / M | 0, same = !!ra && ra.length === rb.length, f = rb[H - 2];
+    while (bs.length < n) bs.push({ x: 0, y: 0, vx: 0, vy: 0, ox: 0, oy: 0, s: HAND });
+    bs.length = n;
+    p.haul = (same ? U.lerp(ra[2], rb[2], k) : rb[2]) / 100; p.bellL = same ? U.lerp(ra[3], rb[3], k) : rb[3];
+    p.bellWhirl = !!(f & 1); p.bellHauled = !!(f & 2); p.bellLeap = f & 4 ? p.bellLeap || {} : null; p.bellWind = !!(f & 8); p.bellSpin = f & 32 ? -1 : 1; p.spinT = f & 64 ? 1 : 0; p.bellRes = rb[H - 1] | 0;
+    for (let i = 0; i < n; i++) {
+      const j = H + M * i, b = bs[i], bx = rb[j], by = rb[j + 1], st = rb[j + 4], both = same && ra[j + 4] === st;
+      if (both && st === HAND) {
+        const ax = ra[j], ay = ra[j + 1], r0 = Math.hypot(ax, ay), r1 = Math.hypot(bx, by);
+        if (r0 > 4 && r1 > 4) { const a0 = Math.atan2(ay, ax), th = a0 + wrapA(Math.atan2(by, bx) - a0) * k, rr = U.lerp(r0, r1, k); b.ox = Math.cos(th) * rr; b.oy = Math.sin(th) * rr; }
+        else { b.ox = U.lerp(ax, bx, k); b.oy = U.lerp(ay, by, k); }
+      } else if (both) { b.ox = U.lerp(ra[j], bx, k) - p.x; b.oy = U.lerp(ra[j + 1], by, k) - p.y; }
+      else if (st === HAND) { b.ox = bx; b.oy = by; } else { b.ox = bx - p.x; b.oy = by - p.y; }
+      b.vx = both ? U.lerp(ra[j + 2], rb[j + 2], k) : rb[j + 2]; b.vy = both ? U.lerp(ra[j + 3], rb[j + 3], k) : rb[j + 3];
+      b.s = st; b.x = p.x + b.ox; b.y = p.y + b.oy;
+    }
+  }
+  // Prediction state of the local client hero: step remainder acc (al = acc / STEP draws between steps), history of predicted bells (t, lp: an Anchor Leap in flight, b: [x, y, vx, vy, state] per bell as net.js packs them),
+  // send time per input seq, st: snapshots each bell has been in another state than the host's. rn / re / rb / rs / rss: corrections made, their summed phase error (rad: absolute, and signed along the turning sense: > 0 the host's
+  // bell leads), hand-bell snaps to the host, bells that took the host's state (read by tools/browse.js).
+  const bellState = (s) => s.bp || (s.bp = { acc: 0, al: 1, hist: [], sent: new Map(), seq: 0, bad: 0, haul: false, press: 0, near: false, st: [], rn: 0, re: 0, rb: 0, rs: 0, rss: 0 });
+  function bellPredict(s, dt, now) {
+    const me = s.me, view = s.view;
+    if (!me.bells || !me.stats || me.stats.weapon.kind !== 'bell') return;
+    const B = bellState(s), w = BELL_W;
+    w.room = view.room; w.locked = view.locked;
+    if (!w.room || me.downed || me.dead) { B.acc = 0; B.al = 1; if (me.bells.length && ED.CLS.bell.down) ED.CLS.bell.down.call(w, me); return; } // a downed hero's bells come home, as on the host
+    B.acc += dt;
+    let n = 0;
+    while (B.acc >= STEP - 1e-9 && n < MAX_STEPS) {
+      const jx = me.lpx === undefined ? 0 : me.x - me.lpx, jy = me.lpy === undefined ? 0 : me.y - me.lpy; // world.js updatePlayer: the hero's measured velocity (the unwound bell trails it)
+      if (jx * jx + jy * jy > 576) { me.lvx = 0; me.lvy = 0; } else { const q = Math.min(1, STEP * 10); me.lvx = (me.lvx || 0) + (jx / STEP - (me.lvx || 0)) * q; me.lvy = (me.lvy || 0) + (jy / STEP - (me.lvy || 0)) * q; }
+      me.lpx = me.x; me.lpy = me.y;
+      w.time += STEP; ED.CLS.bell.tick.call(w, me, STEP);
+      B.acc -= STEP; n++;
+      const h = B.hist.length >= BELL_HIST ? B.hist.shift() : { t: 0, lp: false, b: [] };
+      h.t = now - B.acc; h.lp = !!me.bellLeap; h.b.length = 0;
+      for (const b of me.bells) { const hand = b.s === HAND; h.b.push(hand ? b.x - me.bellPx : b.x, hand ? b.y - me.bellPy : b.y, b.vx, b.vy, b.s); }
+      B.hist.push(h);
+    }
+    if (B.acc >= STEP) B.acc = 0;
+    B.al = B.acc / STEP;
+  }
+  // An Anchor Leap or Peal of the local client hero, cast on its predicted bells at once (the host casts the same on its own).
+  function bellCast(s, id, aim, data, N) {
+    const me = s.me, st = me.stats;
+    if (s.mode !== 'client' || !me.bells || st.weapon.kind !== 'bell' || !ED.CAST[id]) return;
+    bellState(s); BELL_W.room = s.view.room; BELL_W.locked = s.view.locked;
+    if (BELL_W.room) ED.CAST[id].call(BELL_W, me, aim, data || {}, st, N);
+  }
+  // Anchor Leap's target (class-bell.js ED.Bell.leapTarget on the bells as this machine has them), sent so the host leaps where the hero was shown it would.
+  function bellLeapData(s, me, aim) {
+    if (!me.bells || !ED.Bell || !ED.Bell.leapTarget) return null;
+    const w = s.mode === 'client' ? BELL_W : s.world;
+    if (w === BELL_W) { BELL_W.room = s.view.room; BELL_W.locked = s.view.locked; if (!BELL_W.room) return null; }
+    const g = ED.Bell.leapTarget(w, me, aim);
+    return { x: Math.round(g.x), y: Math.round(g.y) };
+  }
+  // The predicted bells at local time t, interpolated between the two history steps around it (a hand bell by angle about the carried spot, any other in the world; a bell changing state takes the later step); null outside the
+  // history or across an Anchor Leap.
+  const PAST = { b: [] };
+  function bellPast(B, t) {
+    const H = B.hist, M = N.BELL_N;
+    for (let i = H.length - 1; i > 0; i--) {
+      const h1 = H[i], h0 = H[i - 1];
+      if (h0.t > t) continue;
+      if (h1.t < t || h0.lp || h1.lp || h0.b.length !== h1.b.length) return null;
+      const u = h1.t > h0.t ? (t - h0.t) / (h1.t - h0.t) : 1;
+      PAST.b.length = 0;
+      for (let j = 0; j < h1.b.length; j += M) {
+        const s0 = h0.b[j + 4], s1 = h1.b[j + 4];
+        if (s0 !== s1) { for (let q = 0; q < M; q++) PAST.b.push(h1.b[j + q]); continue; }
+        if (s1 === HAND) {
+          const a0 = Math.atan2(h0.b[j + 1], h0.b[j]), a = a0 + wrapA(Math.atan2(h1.b[j + 1], h1.b[j]) - a0) * u, rr = U.lerp(Math.hypot(h0.b[j], h0.b[j + 1]), Math.hypot(h1.b[j], h1.b[j + 1]), u);
+          PAST.b.push(Math.cos(a) * rr, Math.sin(a) * rr);
+        } else PAST.b.push(U.lerp(h0.b[j], h1.b[j], u), U.lerp(h0.b[j + 1], h1.b[j + 1], u));
+        PAST.b.push(U.lerp(h0.b[j + 2], h1.b[j + 2], u), U.lerp(h0.b[j + 3], h1.b[j + 3], u), s1);
+      }
+      return PAST;
+    }
+    return null;
+  }
+  function bellReconcile(s, d) {
+    const me = s.me, B = s.bp, H = N.BELL_HEAD, M = N.BELL_N;
+    if (!B || !me.bells || !me.bells.length || me.downed || me.dead) return;
+    const a = d.P.find((q) => q[0] === s.localPid), row = a && a[24];
+    if (!row) return;
+    me.bellRes = row[H - 1] | 0;
+    const tS = B.sent.get(row[0]);
+    if (tS === undefined) return;
+    for (const q of B.sent.keys()) if (q < row[0] - 60) B.sent.delete(q);
+    const n = (row.length - H) / M | 0, past = !(row[H - 2] & 4) && !me.bellLeap ? bellPast(B, tS + row[1] / 1000) : null; // the host ran row[1] ms on the echoed input: the local state as long after it was sent
+    if (!past || n !== me.bells.length || past.b.length !== n * M) { B.bad = 0; return; } // an Anchor Leap runs on its own clock
+    const L = Math.max(10, me.bellL || me.stats.weapon.chain);
+    let off = false;
+    for (let i = 0; i < n; i++) {
+      const j = H + M * i, q = M * i, b = me.bells[i], hs = row[j + 4];
+      if (hs !== past.b[q + 4]) { // the host's bell was in another state at that moment
+        B.st[i] = (B.st[i] | 0) + 1;
+        if (B.st[i] >= BELL_STATE && b.s !== hs && (hs === HAND || hs === ANCHOR)) {
+          b.s = hs; b.fly = null; b.reel = null; b.reelQ = false;
+          b.x = hs === HAND ? me.bellPx + row[j] : row[j]; b.y = hs === HAND ? me.bellPy + row[j + 1] : row[j + 1]; b.vx = row[j + 2]; b.vy = row[j + 3];
+          B.st[i] = 0; B.rss++;
+        }
+        continue;
+      }
+      B.st[i] = 0;
+      if (hs === ANCHOR) { if (b.s === ANCHOR && U.dist2(b.x, b.y, row[j], row[j + 1]) > 4) { b.x = row[j]; b.y = row[j + 1]; } continue; }
+      if (hs !== HAND || b.s !== HAND) continue;
+      const hx = row[j], hy = row[j + 1], lx = past.b[q], ly = past.b[q + 1], rh = Math.hypot(hx, hy), rl = Math.hypot(lx, ly);
+      const sh = Math.hypot(row[j + 2], row[j + 3]), sl = Math.hypot(past.b[q + 2], past.b[q + 3]);
+      if (sl > 40) { const kf = 1 + (U.clamp(sh / sl, 0.5, 1.5) - 1) * BELL_SPD; b.vx *= kf; b.vy *= kf; }
+      if (rh < 8 || rl < 8) continue;
+      const dA = wrapA(Math.atan2(hy, hx) - Math.atan2(ly, lx));
+      if (Math.abs(dA) > 1.6 || Math.abs(rh - rl) > 0.6 * L) off = true;
+      B.rn++; B.re += Math.abs(dA); B.rb += dA * (me.bellSpin || 1);
+      const r = dA * BELL_ROT, c = Math.cos(r), sn = Math.sin(r), rx = b.x - me.bellPx, ry = b.y - me.bellPy, vx = b.vx, vy = b.vy;
+      b.x = me.bellPx + rx * c - ry * sn; b.y = me.bellPy + rx * sn + ry * c; b.vx = vx * c - vy * sn; b.vy = vx * sn + vy * c;
+    }
+    B.st.length = n;
+    B.bad = off ? B.bad + 1 : 0;
+    if (B.bad >= BELL_BAD) { // still wrong after a few corrections: take the host's hand bells
+      for (let i = 0; i < n; i++) { const j = H + M * i, b = me.bells[i]; if (row[j + 4] !== HAND || b.s !== HAND) continue; b.x = me.bellPx + row[j]; b.y = me.bellPy + row[j + 1]; b.vx = row[j + 2]; b.vy = row[j + 3]; }
+      B.bad = 0; B.rs++;
+    }
+  }
+  // Draw offsets of the bells simulated on this machine (solo / host world, the predicted client hero): between the last step's start (b.px, b.py) and end by the step remainder, a hand bell about the carried spot, any other
+  // about the hero.
+  function bellView(s) {
+    const cl = s.mode === 'client';
+    for (const p of s.view.players.values()) {
+      if (!p.bells || !p.bells.length || (cl && p !== s.me)) continue;
+      const al = cl ? (s.bp ? s.bp.al : 1) : s.alpha;
+      for (const b of p.bells) {
+        const px = b.px === undefined ? b.x : b.px, py = b.py === undefined ? b.y : b.py, x = px + (b.x - px) * al, y = py + (b.y - py) * al;
+        if (b.s === HAND) { b.ox = x - p.bellPx; b.oy = y - p.bellPy; } else { b.ox = x - p.x; b.oy = y - p.y; }
+      }
+    }
+  }
+
   G.Mirror = Mirror; // the client mirror constructor (headless checks)
   // ---------------- session lifecycle ----------------
   G.start = (mode, cfg) => {
@@ -153,6 +313,7 @@
     ED.Render.darkLevel = 0;
     U.resetUid(1);
     if (ED.Actors) ED.Actors.reset();
+    if (ED.Cos) ED.Cos.reset();
     const s = G.s = { mode, cfg, localPid: cfg.localPid, net: cfg.net || null, fxBuf: [], snapT: 0, snapN: 0, inT: 0, acc: 0, alpha: 1, epoch: 0, offer: null, offerOpen: false, ended: false, paused: false, prompt: null, sig: '', claimed: {} };
     if (mode === 'client') {
       s.mirror = new Mirror(cfg, cfg.localPid);
@@ -163,7 +324,7 @@
       s.world.startRun();
       s.view = s.world;
       s.me = s.world.players.get(cfg.localPid);
-      for (const p of s.world.players.values()) p.mastery10 = p.meta && p.meta.mastery >= 10;
+      for (const pd of cfg.players) { const p = s.world.players.get(pd.pid); if (p) p.wear = N.cleanWear(pd.wear, p.cls); } // Wardrobe sets (client only: the sim never reads them)
     }
     s.view.pact = cfg.pact;
     s.ctl = { atkCd: 0, skillCd: 0, skill2Cd: 0, charges: s.me.stats.maxCharges, dashN: s.me.stats.dashCharges, dashT: 0, tranceT: 0, latch: false, aimA: 0 };
@@ -271,6 +432,7 @@
       s.me.skillMove = ED.leapMove(s.view.room, s.view.locked, s.me, m.x, m.y, { t: m.d, iframes: m.i });
       if (s.me.skillMove) s.me.cometT = m.d;
     }
+    else if (m.t === 'dashRefund' && s.me) { const c = s.ctl, st = s.me.stats; c.dashN = Math.min(st.dashCharges | 0, c.dashN + ((m.n | 0) || 1)); } // dash charges back { n } (Umbral Arms)
     else if (m.t === 'refund') { // cooldown refund { slot, s }: s seconds off (a charge returns when the cooldown reaches 0), no s = in full
       const c = s.ctl;
       if (m.slot === 1) c.skill2Cd = m.s ? Math.max(0, c.skill2Cd - m.s) : 0;
@@ -287,6 +449,7 @@
       const p = w.players.get(pid);
       if (p && d.e === w.roomEpoch && !p.downed && !p.dead) {
         p.x = +d.x || p.x; p.y = +d.y || p.y; p.face = +d.f || 0; if (isFinite(d.ax) && isFinite(d.ay)) { p.aimX = +d.ax; p.aimY = +d.ay; } p.moving = !!d.mv; p.dashing = !!d.d; p.skillIfr = !!d.m; p.vx = +d.vx || 0; p.vy = +d.vy || 0;
+        if (d.h !== undefined) { p.haulIn = !!d.h; p.haulPress = d.hp | 0; p.haulNear = !!d.nh; p.inSeq = d.q | 0; p.inT = w.time; } // a Bellwarden's held attack, its press count, an interactable in range, the input seq its bells echo and when it arrived (net.js P[24])
         Sim.resolve(p, w.room, w.locked, false);
       }
     } else if (d.t === 'act') G.applyAction(w, pid, d.a);
@@ -295,9 +458,10 @@
     const s = G.s; if (!s || s.mode !== 'client') return;
     if (d.t === 's') {
       const fx = s.mirror.apply(d, performance.now() / 1000);
+      bellReconcile(s, d);
       for (const ev of fx) G.localEvent(ev);
     } else if (d.t === 'end') G.localEvent({ t: 'end', summary: d.summary });
-    else if (d.t === 'offer' || d.t === 'offerDone' || d.t === 'claimed' || d.t === 'toast' || d.t === 'refund' || d.t === 'forkRank' || d.t === 'blink' || d.t === 'leap') G.message(d);
+    else if (d.t === 'offer' || d.t === 'offerDone' || d.t === 'claimed' || d.t === 'toast' || d.t === 'refund' || d.t === 'dashRefund' || d.t === 'forkRank' || d.t === 'blink' || d.t === 'leap') G.message(d);
   };
   G.onPeerLeft = (pid) => { const s = G.s; if (s && s.mode === 'host') { s.world.removePlayer(pid); } };
 
@@ -305,12 +469,15 @@
   function control(s, inp, dt) {
     const me = s.me, view = s.view, ctl = s.ctl, st = me.stats;
     ctl.atkCd -= dt; ctl.tranceT -= dt; ctl.skill2Cd -= dt;
+    const cd0 = ED.TWIST.cd(st, 0), cd1 = ED.TWIST.cd(st, 1); // a cast's cooldown per slot (Bloodprice: TWIST_C.GAP; a cooldown running when it is taken is cut to that)
+    if (st.twBlood) { ctl.skillCd = Math.min(ctl.skillCd, cd0); ctl.skill2Cd = Math.min(ctl.skill2Cd, cd1); }
     if (Sim.dashTick(ctl, st, dt) && ED.FX && ED.FX.cue) ED.FX.cue('dcharge'); // a charge refilled
     if (s.mode === 'client') for (const k of MIRROR_TIMERS) if (me[k] > 0) me[k] -= dt; // a mirror hero has no world tick
     if (s.mode === 'client') { me.atkAge = (me.atkAge === undefined ? 9 : me.atkAge) + dt; me.chanT = st.channel > 0 && !me.moving && me.atkAge < ED.chanWindow(me) ? (me.chanT || 0) + dt : 0; } // Channel (a client's chip estimates the host's value)
-    if (ctl.charges < st.maxCharges) { ctl.skillCd -= dt; while (ctl.skillCd <= 0 && ctl.charges < st.maxCharges) { ctl.charges++; ctl.skillCd = ctl.charges < st.maxCharges ? ctl.skillCd + st.skillCd : 0; } } // a refund past the running cooldown carries into the next charge
+    if (ctl.charges < st.maxCharges) { ctl.skillCd -= dt; while (ctl.skillCd <= 0 && ctl.charges < st.maxCharges) { ctl.charges++; ctl.skillCd = ctl.charges < st.maxCharges ? ctl.skillCd + cd0 : 0; } } // a refund past the running cooldown carries into the next charge
     if (me.downed || me.dead || !view.room) {
       s.prompt = null; if (s.mode !== 'client') me.dashing = false;
+      if (me.haulIn) me.haulIn = false;
       s.aim.show = false; s.aim.ground.length = 0; ED.AimFx.hover(ED.Input.device === 'pad', false);
       return;
     }
@@ -337,15 +504,21 @@
       else { desc = ED.Render.propDesc(near, view); if (near.kind === 'reward') color = ED.Render.rewardColor(near.item); }
       s.prompt = { x: near.x, y: near.y, text, desc, color, can: near.kind === 'shop' || near.kind === 'gamble' ? view.gold >= near.price : true };
     }
+    if (s.offerOpen && me.haulIn) me.haulIn = false;
     if (!s.offerOpen) {
       if (inp.atkPressed && near) { G.act({ t: 'interact', id: near.id }); ctl.latch = true; ctl.atkCd = Math.max(ctl.atkCd, 0.25); }
       if (!inp.atk) ctl.latch = false;
+      if (st.weapon.kind === 'bell') { // the held attack winds the bells, a press reels anchored ones, a release hurls; near an interactable the attack interacts and a release never hurls (class-bell.js reads them)
+        me.haulIn = !!inp.atk && !ctl.latch; me.haulNear = !!near;
+        if (inp.atkPressed && !ctl.latch) me.haulPress = (me.haulPress | 0) + 1;
+      }
       if (inp.atk && !ctl.latch && ctl.atkCd <= 0 && !near) {
         const k = ED.Stats.comboNext(me, view.time), w = ED.Stats.stepWeapon(st, k), cl = isCleave(me, st, w, view.time); // decided before the act: the sim spends the Follow-Through; k: the combo step this attack plays (the host takes it)
         G.act({ t: 'atk', a: aim, k, d: Math.round(Math.hypot(me.aimX - me.x, me.aimY - me.y)) });
         if (s.mode === 'client') { me.atkCount = (me.atkCount | 0) + 1; if (st.swift) me.flowT = ED.CONST.FLOW_T; if (cl) me.cleaveNext = 0; if (st.weapon.combo) { me.comboK = k; me.comboAt = view.time; } } // the host spends Follow-Through on the Cleave it grants
         if (s.mode === 'client') me.atkAge = 0;
         ctl.atkCd = Math.max(ctl.atkCd, -dt) + ED.Stats.stepInterval(me); // carries the overshoot of this frame so the real rate equals the shown one
+        if (w.kind === 'bell') { /* a hauled bell is not swung: no attack pose or cue (cls-bell.js sounds the swing) */ } else {
         s.aim.pulseT = performance.now();
         ED.FX.playerAttackAnim(s.localPid, aim, w);
         if (w.kind === 'melee') {
@@ -355,8 +528,9 @@
           ED.Audio.play(cl || w.look === 'hammer' ? 'heavy' : 'swing');
           if (cl) ED.FX.hitStop(0.06);
         } else ED.Audio.play(w.proj === 'firebolt' || w.proj === 'fireball' || w.proj === 'spark' ? 'fire' : w.proj === 'soul' || w.proj === 'holy' || w.proj === 'plague' ? 'magic' : 'shoot', 0.8);
+        }
       }
-      if (inp.skill && ctl.charges > 0) {
+      if (inp.skill && ctl.charges > 0 && !(st.twBlood && ctl.skillCd > 0)) { // Bloodprice: one cast per GAP whatever the charges
         const skill = ED.CLASSES[me.cls].skill, N = ED.Stats.skillNums(skill, st), C = ED.CONST;
         let data = null;
         if (skill === 'charge') { // a run toward the cursor: clamp(cursor distance, CHARGE_MIN.., range), cut at walls, at CHARGE_SPEED, untouchable for its whole length; the sim sweeps it for contact
@@ -371,10 +545,11 @@
           const end = ED.AimFx.stepLand(view, me, s.aim);
           data = { x0: Math.round(me.x), y0: Math.round(me.y), x1: Math.round(end.x), y1: Math.round(end.y) };
           me.x = end.x; me.y = end.y;
-        } else data = groundData(view, me, s.aim, skill, st);
+        } else data = skill === 'heave' ? bellLeapData(s, me, aim) : groundData(view, me, s.aim, skill, st);
         G.act({ t: 'skill', a: aim, data });
+        bellCast(s, skill, aim, data, N);
         castMove(view, me, N, aim, data);
-        if (ctl.charges === st.maxCharges) ctl.skillCd = st.skillCd;
+        if (ctl.charges === st.maxCharges) ctl.skillCd = cd0;
         ctl.charges--;
         if (st.trance) { ctl.tranceT = 4; if (s.mode === 'client') me.tranceT = 4; }
       }
@@ -384,10 +559,11 @@
         let data = groundData(view, me, s.aim, sk2, st);
         if (sk2 === 'shieldthrow') { const ww = ED.AimFx.want(me, s.aim, N2.range); data = { d: Math.round(Math.hypot(ww.x - me.x, ww.y - (me.y - 4))) }; } // cursor distance: how far the shield flies
         G.act({ t: 'skill', a: aim, data, slot: 1 });
+        bellCast(s, sk2, aim, data, N2);
         castMove(view, me, N2, aim, data);
         if (sk2 === 'vanish' && s.mode === 'client') me.stealthT = 2.5 + st.stealthDur; // the host's flag takes over with the next snapshot
         if (sk2 === 'meteor' && N2.move && s.mode === 'client') me.cometT = N2.move.t; // Comet: airborne until the landing
-        ctl.skill2Cd = st.skill2Cd;
+        ctl.skill2Cd = cd1;
         if (st.trance) { ctl.tranceT = 4; if (s.mode === 'client') me.tranceT = 4; }
       }
       if (inp.dash && !me.skillMove && Sim.dashTry(ctl, st)) {
@@ -479,7 +655,7 @@
     a.ground.length = n;
     for (let i = 0; i < n; i++) { const g = a.ground[i]; g.r = g.move ? 0 : ED.skillRadius(g.id, st); }
     const iv = ED.Stats.attackInterval(me);
-    a.cd = iv >= 0.45 ? U.clamp(ctl.atkCd / iv, 0, 1) : 0;
+    a.cd = iv >= 0.45 && st.weapon.kind !== 'bell' ? U.clamp(ctl.atkCd / iv, 0, 1) : 0; // a bell has no attack cooldown to show
   }
 
   // ---------------- per-frame ----------------
@@ -556,11 +732,15 @@
         }
       } else {
         s.mirror.update(dt, now);
+        bellPredict(s, sdt, now);
         s.inT -= dt;
+        const bell = s.me.bells && s.me.stats.weapon.kind === 'bell', B = bell ? bellState(s) : null;
+        if (B && (B.haul !== !!s.me.haulIn || B.press !== (s.me.haulPress | 0) || B.near !== !!s.me.haulNear)) { B.haul = !!s.me.haulIn; B.press = s.me.haulPress | 0; B.near = !!s.me.haulNear; s.inT = 0; } // a hold, press or release, or the interactable flag changing: sent at once
         if (s.inT <= 0) {
           s.inT = 1 / ED.CONST.INPUT_HZ;
-          const me = s.me;
-          s.net.send({ t: 'in', x: Math.round(me.x * 10) / 10, y: Math.round(me.y * 10) / 10, f: Math.round(me.face * 100) / 100, ax: Math.round(me.aimX || 0), ay: Math.round(me.aimY || 0), mv: me.moving ? 1 : 0, d: me.dashT > 0 ? 1 : 0, m: me.skillIfr ? 1 : 0, vx: Math.round(me.vx || 0), vy: Math.round(me.vy || 0), e: s.epoch });
+          const me = s.me, msg = { t: 'in', x: Math.round(me.x * 10) / 10, y: Math.round(me.y * 10) / 10, f: Math.round(me.face * 100) / 100, ax: Math.round(me.aimX || 0), ay: Math.round(me.aimY || 0), mv: me.moving ? 1 : 0, d: me.dashT > 0 ? 1 : 0, m: me.skillIfr ? 1 : 0, vx: Math.round(me.vx || 0), vy: Math.round(me.vy || 0), e: s.epoch };
+          if (B) { msg.h = me.haulIn ? 1 : 0; msg.hp = me.haulPress | 0; msg.nh = me.haulNear ? 1 : 0; msg.q = ++B.seq; B.sent.set(B.seq, now); } // h: the held attack, hp: presses so far, nh: an interactable in range, q: the seq the host echoes in P[24]
+          s.net.send(msg);
         }
         s.me.dashing = s.me.dashT > 0;
       }
@@ -583,6 +763,7 @@
     const v = s.view, R = ED.Render;
     R.darkLevel += ((v.room && v.room.dark ? 1 : 0) - R.darkLevel) * Math.min(1, dt * 2.5); // eased so crossing a door never pops
     R.claimed = s.claimed;
+    bellView(s);
     R.frame(s.view, s.localPid, t, dt);
     const ob = document.getElementById('ov-boon'), cover = s.offerOpen || !!(ob && !ob.hidden); // the boon overlay owns the screen: no banners or prompts under it
     ED.HUD.draw(c, s.view, s.me, Object.assign({}, s.ctl, { picks: s.me.picks || 0, offerOpen: s.offerOpen }), t, dt, { prompt: cover ? null : s.prompt, offerOpen: cover });

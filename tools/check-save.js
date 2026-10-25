@@ -1,7 +1,7 @@
 // Usage: node tools/check-save.js
-// Headless checks of the profile and save code: golden v2 (main era), v3 and v4 codes still load with their Codex embers refunded, v7 round trips (also with Armory entries) and survives appended upgrades/heroes/Armory entries/deeds in both directions,
+// Headless checks of the profile and save code: golden v2 (main era), v3 and v4 codes still load with their Codex embers refunded, v8 round trips (also with Armory entries and Wardrobe fields) and survives appended upgrades/heroes/Armory entries/deeds/secrets/Wardrobe items in both directions,
 // a code from a newer build and an Armory overflow report clearly, the one-time news flag and the stored-profile Codex migration, upgrade refunds, Reset all and Armory buy/refund, the repurposed deed, the relic pool and the moved element relics,
-// and the per-hero deed counters (maxRelics, revivesGiven) in the run summary. Prints failures and exits 1 when any check fails.
+// the per-hero deed counters (maxRelics, revivesGiven) in the run summary, and secrets and the Wardrobe (v5/v7 codes decode empty with Gilded on mastery 10 heroes, junk sanitised, grants once, purchase gates, wearing, run-end secrets, evolutions, the Bellwarden flag). Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
 const S = ED.Save, U = ED.U;
 let n = 0, fails = 0;
@@ -64,18 +64,18 @@ function checkGolden(g, label) {
   ok(p.embers === g.embers + refund && p.refunded === refund, `${label}: embers ${p.embers} = ${g.embers} + Codex refund ${refund}, refunded ${p.refunded}`);
   same(p.up, g.up.concat(ED.UPGRADES.slice(g.up.length).map(() => 0)), `${label}: upgrade ranks`);
   ok(p.relics === undefined, `${label}: the profile has no relics array`);
-  same(p.mastery, g.mastery, `${label}: mastery`);
+  same(p.mastery, g.mastery.concat(ED.CLASS_IDS.slice(g.mastery.length).map(() => 0)), `${label}: mastery (heroes after the code's start at 0)`);
   ok(p.bosses === g.bosses && p.deeds === g.deeds && p.pactMax === g.pactMax && p.pactWin === g.pactWin, `${label}: bosses, deeds, pacts`);
   same(p.stats, g.stats, `${label}: stats`);
   ok(p.news === 1, `${label}: a code from before v5 gets the notice, got ${p.news}`);
   const q = S.decode(S.encode(p));
-  ok(q.embers === p.embers && q.refunded === 0 && q.news === 0, `${label}: re-encoded as v7 keeps the refunded embers and refunds nothing twice`);
+  ok(q.embers === p.embers && q.refunded === 0 && q.news === 0, `${label}: re-encoded as v8 keeps the refunded embers and refunds nothing twice`);
 }
 checkGolden(GOLD2, 'v2 code from main');
 checkGolden(GOLD3, 'v3 code');
 checkGolden(GOLD4, 'v4 code');
 
-// ---- v7 round trips ----
+// ---- v8 round trips ----
 const rnd = U.RNG(4242);
 const ri = (a, b) => a + Math.floor(rnd.next() * (b - a + 1));
 function randomProfile() {
@@ -85,6 +85,16 @@ function randomProfile() {
   p.mastery = ED.CLASS_IDS.map(() => (rnd.next() < 0.3 ? 0 : ri(0, 200000))); p.bosses = ri(0, 63); p.deeds = ri(0, 2 ** 26 - 1);
   p.pactMax = ri(0, 10); p.pactWin = ri(-1, p.pactMax);
   p.stats = { runs: ri(0, 5000), wins: ri(0, 900), deepest: ri(0, 6), kills: ri(0, 1e7), bestTime: ri(0, 9000), bossKills: ri(0, 3000) };
+  // Wardrobe fields: random secrets, wins, evolutions and purchases, then a random owned item (or none) in every slot
+  p.secrets = ri(0, 2 ** ED.SECRETS.length - 1); p.heroWins = ri(0, 2 ** ED.CLASS_IDS.length - 1); p.bellUnlocked = rnd.next() < 0.5;
+  for (const c of ED.CLASS_IDS) for (const w of ED.CLASSES[c].weapons) if (rnd.next() < 0.4) p.evo[w] = ri(1, 300);
+  p.cos = ED.COSMETICS.filter(c => c.gate.cost && rnd.next() < 0.4).map(c => c.id);
+  const pickOwned = (cls, slot) => { const own = ED.cosFor(cls, slot).filter(c => ED.cosOwned(p, c.id, cls)); return own.length && rnd.next() < 0.7 ? own[ri(0, own.length - 1)].id : null; };
+  p.wear = { camp: pickOwned(null, 'camp') };
+  for (const c of ED.CLASS_IDS) {
+    const h = p.wear[c] = { tints: ED.CLASSES[c].weapons.filter(w => ED.cosOwned(p, 'tint.' + w, c) && rnd.next() < 0.6) };
+    for (const k of ED.WEAR_SLOTS) h[k] = pickOwned(c, k);
+  }
   return S.normalize(p);
 }
 const tripDiffs = (count) => {
@@ -97,9 +107,9 @@ const tripDiffs = (count) => {
 };
 {
   const rt = tripDiffs(300);
-  ok(rt === 0, `v7 round trip: ${rt} of 300 profiles differ`);
+  ok(rt === 0, `v8 round trip: ${rt} of 300 profiles differ`);
   const ra = withArmory(() => tripDiffs(300));
-  ok(ra === 0, `v7 round trip with Armory entries: ${ra} of 300 profiles differ`);
+  ok(ra === 0, `v8 round trip with Armory entries: ${ra} of 300 profiles differ`);
   ok(withArmory(() => { const p = randomProfile(); p.armory.knight = [1, 0, 1]; p.armory.pyro = [0, 1]; p.armory.necro = [1]; return JSON.stringify(S.decode(S.encode(p)).armory) === JSON.stringify(p.armory); }), 'Armory bits land on the right hero and entry');
 }
 
@@ -184,7 +194,7 @@ const GOLD5 = 'WD1-EAS1G-HKDDH-N6AHN-1JB2A-9A3RT-T7RH2-975RT-4KPS8-46JHN-HR4MV-3
   ok(S.normalize(JSON.parse(JSON.stringify(S.normalize({ v: 1, stats: { runs: 3 } })))).news === 1, 'stored news round-trips through JSON');
   const seen = S.normalize({ v: 1, stats: { runs: 3 } }); seen.news = 0;
   ok(S.normalize(JSON.parse(JSON.stringify(seen))).news === 0, 'once cleared and stored the notice does not return');
-  ok(S.decode(S.encode(Object.assign(randomProfile(), { news: 1 }))).news === 0, 'a v7 code carries no news');
+  ok(S.decode(S.encode(Object.assign(randomProfile(), { news: 1 }))).news === 0, 'a v8 code carries no news');
   const g5 = S.decode(GOLD5);
   ok(g5.news === 3 && g5.name === 'Five' && g5.stats.runs === 12 && g5.armory.knight[0] === 1, `a v5 code with runs gets the newest changes, got news ${g5.news}`);
 }
@@ -355,6 +365,128 @@ const STORED_V2 = {"v":2,"news":0,"name":"Stored","embers":100,"lifetime":900,"u
   ok(!b.downed && !b.dead, 'the fallen hero was revived');
   const s1 = w.summary();
   ok(s1.revives === 1 && s1.players.a.revivesGiven === 1 && s1.players.b.revivesGiven === 0 && s1.players.c.revivesGiven === 0, `revive credit goes to the helper in reach: ${JSON.stringify([s1.revives, s1.players.a.revivesGiven, s1.players.b.revivesGiven, s1.players.c.revivesGiven])}`);
+}
+
+// ---- secrets, the Wardrobe and the Bellwarden flag ----
+{ // a hand-built v7 code (written without save.js) decodes with empty Wardrobe fields; mastery 10 heroes wear Gilded
+  const varint = (v) => { const o = []; do { const chunk = v % 128; v = Math.floor(v / 128); o.push(...bitsOf(v > 0 ? 1 : 0, 1), ...bitsOf(chunk, 7)); } while (v > 0); return o; };
+  const bits = [...bitsOf(7, 8), ...bitsOf(5, 4)];
+  for (const ch of 'Seven') bits.push(...bitsOf(S.NAME_CHARS.indexOf(ch), 6));
+  bits.push(...varint(42), ...varint(4200), ...bitsOf(16, 6));
+  for (let i = 0; i < 16; i++) bits.push(...bitsOf(0, 3));
+  bits.push(...bitsOf(6, 4)); for (const m of [3600, 0, 900, 0, 0, 0]) bits.push(...varint(m));
+  bits.push(...bitsOf(6, 4)); for (let k = 0; k < 6; k++) bits.push(...bitsOf(3, 6), 0, 0, 0);
+  bits.push(...bitsOf(1, 6), ...bitsOf(26, 6)); for (let i = 0; i < 26; i++) bits.push(0);
+  bits.push(...bitsOf(1, 4), ...bitsOf(0, 4), ...varint(9), ...varint(1), ...bitsOf(5, 3), ...varint(700), ...varint(1200), ...varint(4));
+  const p = S.decode(pack(bits));
+  ok(p.name === 'Seven' && p.embers === 42 && p.stats.runs === 9 && p.stats.bossKills === 4 && p.news === 0, 'hand-built v7 code: the fields before the Wardrobe read as before');
+  ok(p.secrets === 0 && p.heroWins === 0 && p.bellUnlocked === false && JSON.stringify(p.evo) === '{}' && p.cos.length === 0, 'hand-built v7 code: no secrets, wins, Bellwarden, evolutions or purchases');
+  ok(p.wear.knight.aura === 'aura.gilded' && p.wear.pyro.aura === null && p.wear.camp === null, 'hand-built v7 code: the mastery 10 Knight wears Gilded, the others nothing');
+  const g5 = S.decode(GOLD5);
+  ok(g5.secrets === 0 && g5.cos.length === 0 && g5.wear.knight.skin === null, 'a v5 code decodes with an empty Wardrobe');
+  const g3 = S.decode(GOLD3.code);
+  ok(g3.wear.pyro.aura === 'aura.gilded' && g3.wear.knight.aura === null && g3.wear.ranger.aura === null, 'a v3 code: the mastery 10 hero (Pyromancer) wears Gilded');
+  // a stored profile from before the Wardrobe gets Gilded too; a stored wear record is kept as it is
+  const old = S.normalize({ v: 5, mastery: [3600, 0, 0, 0, 0, 0], stats: { runs: 3 } });
+  ok(old.wear.knight.aura === 'aura.gilded', 'stored profile without a wear record: Gilded worn at mastery 10');
+  const off = S.normalize(Object.assign(JSON.parse(JSON.stringify(old)), { wear: { knight: { aura: null } } }));
+  ok(off.wear.knight.aura === null, 'Gilded taken off stays off after a reload');
+}
+{ // sanitising junk
+  const p = S.normalize({ secrets: 'x', heroWins: -5, bellUnlocked: 'yes', cos: ['nope', 'skin.knight.a', 'skin.knight.secret', 'tint.longsword', 5, 'skin.knight.a'],
+    evo: { longsword: -3, shortbow: 'q', nothing: 5, [ED.CLASSES.pyro.weapons[0]]: 2.7 },
+    wear: { camp: 'camp.bluehearth', knight: { skin: 'skin.ranger.a', aura: 'aura.gilded', hat: 'hat.crown', pet: 7, title: 'skin.knight.a', tints: ['longsword', 'x'] }, bogus: { skin: 'skin.knight.a' } } });
+  ok(p.secrets === 0 && p.heroWins === 0 && p.bellUnlocked === false, 'junk secrets, wins and flag become empty');
+  same(p.cos, ['skin.knight.a'], 'only sold items stay in the purchases, once');
+  same(p.evo, { [ED.CLASSES.pyro.weapons[0]]: 2 }, 'evolution counts: whole, positive, known base weapons only');
+  ok(p.wear.camp === null && p.wear.bogus === undefined && Object.values(p.wear.knight).every(v => v === null || (Array.isArray(v) && !v.length)), 'unowned, misplaced and unknown worn items are dropped');
+  const q = S.normalize({ secrets: 1 << ED.SECRET_IDX.crown | 1 << ED.SECRET_IDX.hearthsitter, cos: ['skin.knight.a'], evo: { longsword: 3 }, mastery: [3600],
+    wear: { camp: 'camp.bluehearth', knight: { skin: 'skin.knight.a', aura: 'aura.gilded', hat: 'hat.crown', title: 'skin.knight.a', tints: ['longsword'] }, ranger: { skin: 'skin.knight.a', hat: 'hat.crown', aura: 'aura.gilded' } } });
+  same([q.wear.camp, q.wear.knight.skin, q.wear.knight.aura, q.wear.knight.hat, q.wear.knight.title, q.wear.knight.tints], ['camp.bluehearth', 'skin.knight.a', 'aura.gilded', 'hat.crown', null, ['longsword']], 'owned items stay in their slots');
+  same([q.wear.ranger.skin, q.wear.ranger.hat, q.wear.ranger.aura], [null, 'hat.crown', null], 'another hero cannot wear the Knight skin or Gilded below mastery 10');
+}
+{ // grants, purchases, wearing
+  const p = S.defaultProfile();
+  ok(S.grantSecret(p, 'hearthsitter') === ED.SECRETS[ED.SECRET_IDX.hearthsitter] && S.grantSecret(p, 'hearthsitter') === null && S.grantSecret(p, 'no_such') === null && p.secrets === 1, 'a secret is granted once; unknown ids are refused');
+  ok(ED.cosOwned(p, 'camp.bluehearth', null) && S.wear(p, null, 'camp', 'camp.bluehearth') && p.wear.camp === 'camp.bluehearth', 'Hearthsitter gives the Blue Hearth, worn at the camp');
+  ok(ED.SECRETS.every(s => (ED.COSMETIC[s.reward] && ED.COSMETIC[s.reward].gate.secret === s.id) || (s.reward === `skin.${s.id}.secret` && !ED.CLASSES[s.id])), 'every secret rewards an item gated by that secret (a hero secret once its hero exists)');
+  ok(ED.COSMETICS.length === new Set(ED.COSMETICS.map(c => c.id)).size && ED.COSMETICS.every(c => ED.COS_SLOTS.indexOf(c.slot) >= 0), 'Wardrobe ids are unique and every slot is known');
+  ok(ED.CLASS_IDS.every(c => ED.CLASSES[c].weapons.every(w => ED.COSMETIC['tint.' + w] && ED.COSMETIC['tint.' + w].gate.evolve === w) && ['a', 'b', 'secret'].every(k => ED.COSMETIC[`skin.${c}.${k}`])), 'every hero has three skins and a tint per base weapon');
+  p.embers = 1000; p.lifetime = 50;
+  ok(!S.buyCosmetic(p, 'skin.knight.a') && p.embers === 1000, 'a skin stays closed below its mastery');
+  p.mastery[0] = ED.MASTERY_XP[3]; // mastery 4
+  ok(S.cosOpen(p, 'skin.knight.a') && !S.cosOpen(p, 'skin.knight.b'), 'mastery 4 opens the first skin, not the second');
+  ok(S.buyCosmetic(p, 'skin.knight.a') && p.embers === 850 && p.lifetime === 50 && ED.cosOwned(p, 'skin.knight.a', 'knight'), 'buying takes 150 embers and leaves lifetime');
+  ok(!S.buyCosmetic(p, 'skin.knight.a') && p.embers === 850, 'an owned skin cannot be bought twice');
+  ok(!S.buyCosmetic(p, 'skin.knight.secret') && !S.buyCosmetic(p, 'aura.gilded') && !S.buyCosmetic(p, 'tint.longsword') && !S.buyCosmetic(p, 'hat.crown') && !S.buyCosmetic(p, 'no_such') && p.embers === 850, 'secret, mastery and evolution items are never sold');
+  p.mastery[0] = ED.MASTERY_XP[6]; p.embers = 299;
+  ok(!S.buyCosmetic(p, 'skin.knight.b') && p.embers === 299, 'the second skin needs 300 embers');
+  ok(S.refundTotal(p) === 0 && S.resetUpgrades(p) === 0 && p.embers === 299 && p.cos.indexOf('skin.knight.a') >= 0, 'Reset all neither refunds nor removes Wardrobe purchases');
+  ok(!S.wear(p, 'ranger', 'skin', 'skin.knight.a') && !S.wear(p, 'knight', 'hat', 'skin.knight.a') && !S.wear(p, 'knight', 'skin', 'skin.knight.b') && !S.wear(p, 'knight', 'skin', 'no_such'), 'another hero, a wrong slot, an unowned item or an unknown id is refused');
+  ok(S.wear(p, 'knight', 'skin', 'skin.knight.a') && p.wear.knight.skin === 'skin.knight.a' && S.wear(p, 'knight', 'skin', null) && p.wear.knight.skin === null, 'wear and take off a skin');
+  ok(!S.wear(p, 'knight', 'tint', 'tint.longsword'), 'a tint needs its evolutions');
+  p.evo.longsword = 3;
+  ok(S.wear(p, 'knight', 'tint', 'tint.longsword') && S.wear(p, 'knight', 'tint', 'tint.longsword') && p.wear.knight.tints.join() === 'longsword' && S.wear(p, 'knight', 'tint', 'tint.longsword', false) && p.wear.knight.tints.length === 0, 'a tint is worn once and taken off');
+  ok(!S.wear(p, 'knight', 'aura', 'aura.gilded'), 'Gilded needs the wearing hero at mastery 10');
+  p.mastery[0] = ED.MASTERY_XP[9];
+  ok(S.wear(p, 'knight', 'aura', 'aura.gilded') && !S.wear(p, 'ranger', 'aura', 'aura.gilded'), 'Gilded follows each hero\'s own mastery');
+  same(S.wearBundle(p, 'knight'), { skin: null, aura: 'aura.gilded', hat: null, pet: null, trail: null, death: null, title: null, tints: [] }, 'the wear bundle lists the hero\'s items');
+}
+{ // run end: secrets, heroWins after Hollow Crown, evolutions, Gilded, the Bellwarden flag
+  const runOf = (o) => Object.assign({ cls: 'knight', victory: true, stratum: 6, roomsCleared: 10, pact: 0, party: 1, embers: { rooms: 1, elites: 0, bosses: 0, victory: 0 } }, o);
+  const p = S.defaultProfile();
+  let res = S.applyRun(p, runOf({ pact: 10, gold777: true, me: { platino: true, thread: true, contrarian: true, heroSecret: true } }));
+  same(res.secrets.map(s => s.id).sort(), ['change', 'contrarian', 'crown', 'knight', 'platino', 'thread', 'unkindled'].sort(), 'a run grants its secrets');
+  ok(p.heroWins === 1, 'the victory joins heroWins after the Hollow Crown check');
+  res = S.applyRun(p, runOf({ pact: 10, me: { heroSecret: true } }));
+  ok(res.secrets.length === 0, 'secrets are never granted twice');
+  const q = S.defaultProfile(); q.heroWins = 1;
+  ok(!S.applyRun(q, runOf({ pact: 10 })).secrets.some(s => s.id === 'crown'), 'Hollow Crown needs a hero who never won');
+  ok(!S.applyRun(S.defaultProfile(), runOf({ cls: 'ranger', me: { heroSecret: true } })).secrets.some(s => s.id === 'knight'), 'a hero secret goes to the hero who earned it');
+  const r = S.defaultProfile(); r.up[0] = 1;
+  ok(!S.applyRun(r, runOf({ victory: true })).secrets.some(s => s.id === 'unkindled') && !S.applyRun(S.defaultProfile(), runOf({ victory: false })).secrets.some(s => s.id === 'unkindled'), 'Unkindled needs a victory without Hearth upgrades');
+  ok(S.applyRun(S.defaultProfile(), runOf({ victory: false, oneFace: true })).secrets.some(s => s.id === 'oneface'), 'One Face reads run.oneFace');
+  // evolutions: three descents with the Longsword evolved (an Armory variant counts for its base) earn its tint
+  const e = S.defaultProfile();
+  S.applyRun(e, runOf({ evolved: true, weapon: 'longsword' }));
+  S.applyRun(e, runOf({ evolved: false, weapon: 'longsword' }));
+  S.applyRun(e, runOf({ evolved: true, weapon: 'longsword@heavy' }));
+  const third = S.applyRun(e, runOf({ evolved: true, weapon: ED.ARMORY.knight[0].id }));
+  ok(e.evo.longsword === 3 && third.unlocks.some(u => /Wardrobe: Longsword Sheen/.test(u)), `three evolved descents earn the Longsword tint (evo ${e.evo.longsword}, ${third.unlocks})`);
+  S.applyRun(e, runOf({ evolved: true, weapon: 'longbow' }));
+  ok(Object.keys(e.evo).join() === 'longsword', 'a weapon of another hero does not count');
+  // Gilded is worn the run mastery 10 is reached
+  const m = S.defaultProfile(); m.mastery[0] = ED.MASTERY_XP[9] - 1;
+  const mr = S.applyRun(m, runOf({}));
+  ok(m.wear.knight.aura === 'aura.gilded' && mr.unlocks.some(u => /mastery 10/.test(u)), 'reaching mastery 10 wears Gilded');
+  // the Bellwarden: a victory with the bell rung, never a defeat
+  const b = S.defaultProfile();
+  S.applyRun(b, runOf({ victory: false, me: { bellRung: true } }));
+  ok(!b.bellUnlocked, 'a defeat with the bell rung unlocks nothing');
+  const br = S.applyRun(b, runOf({ me: { bellRung: true } }));
+  ok(b.bellUnlocked === true && (!ED.CLASSES.bell || br.unlocks.indexOf('New hero: Bellwarden') >= 0), 'a victory with the bell rung unlocks the Bellwarden');
+  ED.CLASSES.zz_bell = { unlock: { bell: true, text: '???' } };
+  try { ok(S.classUnlocked(b, 'zz_bell') && !S.classUnlocked(S.defaultProfile(), 'zz_bell'), 'unlock.bell reads profile.bellUnlocked'); } finally { delete ED.CLASSES.zz_bell; }
+  const back = S.decode(S.encode(b));
+  ok(back.bellUnlocked === true && back.heroWins === b.heroWins && back.secrets === b.secrets, 'the flag, wins and secrets survive the code');
+  // Many Faces: six heroes
+  const D = ED.DEEDS[ED.DEED_IDX.manyfaces], f = S.defaultProfile();
+  ok(D.desc === 'Unlock six heroes' && !D.check(f), 'Many Faces reads Unlock six heroes');
+  f.bosses = 3; f.stats.runs = 4;
+  ok(D.check(f), 'six unlocked heroes earn Many Faces');
+}
+{ // a code from a newer build with an extra secret and Wardrobe entries decodes here; ours decodes there
+  const p = randomProfile(), sx = { id: 'zz_sec', name: 'Zz', desc: '', icon: 'x', reward: 'zz_cos', check: () => false }, cx = { id: 'zz_cos', slot: 'hat', cls: null, name: 'Zz', gate: { secret: 'zz_sec' } }, kx = { id: 'zz_kcos', slot: 'hat', cls: 'knight', name: 'Zk', gate: { mastery: 1, cost: 1 } };
+  const withMore = (f) => {
+    ED.SECRETS.push(sx); ED.SECRET_IDX.zz_sec = ED.SECRETS.length - 1; ED.COS_SCOPE[''].push(cx); ED.COS_SCOPE.knight.push(kx); ED.COSMETICS.push(cx, kx); ED.COSMETIC.zz_cos = cx; ED.COSMETIC.zz_kcos = kx;
+    try { return f(); } finally { ED.SECRETS.pop(); delete ED.SECRET_IDX.zz_sec; ED.COS_SCOPE[''].pop(); ED.COS_SCOPE.knight.pop(); ED.COSMETICS.length -= 2; delete ED.COSMETIC.zz_cos; delete ED.COSMETIC.zz_kcos; }
+  };
+  const big = withMore(() => { const b = S.normalize(Object.assign(JSON.parse(JSON.stringify(p)), { secrets: p.secrets | (1 << (ED.SECRETS.length - 1)), cos: p.cos.concat('zz_kcos') })); b.wear.knight.hat = 'zz_kcos'; b.wear.ranger.hat = 'zz_cos'; return S.encode(b); });
+  const r = S.decode(big);
+  ok(r.secrets === p.secrets && r.cos.join() === p.cos.join() && r.bellUnlocked === p.bellUnlocked && JSON.stringify(r.evo) === JSON.stringify(p.evo), 'newer code, older build: extra secret and items skipped, the rest intact');
+  ok(r.wear.knight.hat === null && r.wear.ranger.hat === null && r.wear.knight.skin === p.wear.knight.skin, 'newer code, older build: worn unknown items come off');
+  const o = withMore(() => S.decode(S.encode(p)));
+  ok(o.secrets === p.secrets && o.cos.join() === p.cos.join() && JSON.stringify(o.wear) === JSON.stringify(p.wear), 'old code, newer build: secrets, purchases and worn items intact');
 }
 
 console.log(fails ? `${fails} of ${n} checks FAILED` : `all ${n} checks passed`);

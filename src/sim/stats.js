@@ -26,7 +26,9 @@
     + ' wake waveReturn sunstrike prismN prismRad'
     + ' caldera fireDance dancerBurst whiteHot whiteT heatMax infernoMul'
     + ' graveBolt graveN soulStorm maw mawHaste tideFree tideCap tideDoom'
-    + ' guillotine cyclone arterial arterialN cascade cascadeN').split(' ');
+    + ' guillotine cyclone arterial arterialN cascade cascadeN'
+    + ' fullSwing fullR wreck wreckStun hurlCarry demolish haulAcc slipstream perpetual windCap leapR wrecker smashStun wreckSpin spinDur hookShield leapIfr hookPull shackle shackleWeak'
+    + ' clap pealEcho tollN tollBolt pealSwat pealShield pealCap pealStun wardDur wardWeak wInfLightning rod rodStun stormBolt chainArc arcN tollStorm').split(' ');
 
   const BASE = () => {
     const s = {
@@ -41,13 +43,18 @@
       // status route hooks (+X% to every status amount the hero applies; +X% to class-element skill hits)
       statusPow: 0, classElMul: 0,
       // element infusions and their payoffs: Fire, Ice, Lightning, Poison, Holy, Shadow, General (Bleed)
-      fireInfuse: 0, burnMul: 0, searing: 0, wildfire: 0, conflag: 0,
-      iceInfuse: 0, chillMul: 0, shatter: 0, brittle: 0, dashFrost: 0, freezeDur: 0, chillWeaken: 0, frostNova: 0,
-      lightningInfuse: 0, arcs: 0, arcRange: 0, shockMul: 0, shortCircuit: 0, arcStun: 0, thunderbolt: 0, critCharge: 0,
-      poisonInfuse: 0, venomBuild: 0, venomHold: 0, corrode: 0, fester: 0, sporeBurst: 0, dashVenom: 0, pandemic: 0,
-      holyInfuse: 0, smiteMul: 0, smiteShield: 0.01, holyCap: 0.06, beacon: 0, dashBlind: 0, radiantAegis: 0, // smiteShield and holyCap start at the base every hero smites with
-      shadowInfuse: 0, doomMul: 0, doomTough: 0, malice: 0, knell: 0, deathsEdge: 0, dashDoom: 0, reaper: 0,
+      fireInfuse: 0, burnMul: 0, searing: 0, wildfire: 0, conflag: 0, brushfire: 0, firebreak: 0,
+      iceInfuse: 0, chillMul: 0, shatter: 0, brittle: 0, dashFrost: 0, freezeDur: 0, chillWeaken: 0, frostNova: 0, glacier: 0, refreeze: 0,
+      lightningInfuse: 0, arcs: 0, arcRange: 0, shockMul: 0, shortCircuit: 0, arcStun: 0, critCharge: 0, ionize: 0, conduct: 0, anchor: 0, capacitor: 0,
+      poisonInfuse: 0, venomBuild: 0, venomHold: 0, venomSlow: 0, corrode: 0, fester: 0, sporeBurst: 0, dashVenom: 0, pandemic: 0, neuro: 0, hexStrong: 0,
+      holyInfuse: 0, smiteMul: 0, smiteShield: 0.01, holyCap: 0.06, beacon: 0, dashBlind: 0, radiantAegis: 0, hallow: 0, rebuke: 0, vigil: 0, // smiteShield and holyCap start at the base every hero smites with
+      shadowInfuse: 0, doomMul: 0, doomTough: 0, malice: 0, knell: 0, deathsEdge: 0, dashDoom: 0, reaper: 0, reapChain: 0, quarry: 0, dashReap: 0,
       bleed: 0, bleedMul: 0, lacerate: 0, sunder: 0, opportunist: 0, masterstroke: 0, twinEvery: 0,
+      // Mutations (src/data/mutations.js): 1 while held (chargeSlow: the share of charge build-up lost)
+      conflagSpread: 0, scorchEarth: 0, iceLattice: 0, flashFreeze: 0, capMul: 0, chargeSlow: 0, capArc: 0, miasma: 0, virulence: 0, aegisNova: 0, penitent: 0, singularity: 0, grimHarvest: 0, msOpen: 0, msKill: 0,
+      cinderBlock: 0, cinderWalk: 0, pillarWall: 0, pillarMine: 0, liveWire: 0, snareLine: 0, doseLong: 0, doseCat: 0, twinLance: 0, haloRing: 0, deathSpiral: 0, shadowRelay: 0, echoEdge: 0, mirrorEdge: 0,
+      // Twists (src/data/twists.js, src/sim/twist.js): 1 while held
+      twBlood: 0, twMetro: 0, twPacifist: 0, twHunted: 0,
       // duos
       thermal: 0, plasma: 0, supercond: 0, firedamp: 0, sunfire: 0, blackflame: 0, cryotoxin: 0, hoarlight: 0, blackice: 0, galvanic: 0, heavenwrath: 0, blackLight: 0, purge: 0, necrosis: 0, twilight: 0,
     };

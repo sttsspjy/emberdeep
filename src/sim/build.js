@@ -6,13 +6,29 @@
   const W = ED.World.prototype;
 
   // ---------------- hooks called by world.js ----------------
-  // Called from addPlayer before the first recalc: add build-only fields to the hero (offer queue, fork ranks due, Ascended picks this stratum, dash-boon state, Holy/Lantern/Aegis timers, Death Knell stacks, Judgment grants, shield accounting).
+  // Called from addPlayer before the first recalc: add build-only fields to the hero (offer queue, fork ranks due, Ascended picks this stratum, Twists held and the Metronome beat, dash-boon state, Holy/Lantern/Aegis timers, Death Knell stacks, Judgment grants, shield accounting).
   W.initBuild = function (p) {
-    p.offers = []; p.picks = 0; p.forkDue = 0; p.ascN = 0; p.dashHit = null; p.dashFx = -1; p.dashFy = 0; p.dashTrail = 0; p.boltAt = 0;
+    p.offers = []; p.picks = 0; p.forkDue = 0; p.ascN = 0; p.twist = false; p.twistN = 0; p.metroN = 0; p.dashHit = null; p.dashFx = -1; p.dashFy = 0; p.dashTrail = 0; p.boltAt = 0;
     p.knellN = 0; p.knellT = 0; p.holyT = 0; p.lanternT = 0; p.retT = 0; p.castN = 0; p.judgeGot = {}; p.shieldBy = {}; p.toughRoom = false;
+    p.stillT = 0; p.vigilZ = null; p.tetherT = 0; p.walkT = 0; p.msReady = false; p.quarryE = null; p.rebukeAt = -99; // element-path state (combat.js: Vigil, Tempest tethers, Masterstroke, Quarry, Martyr's Rebuke)
+    p.sec = { platino: false, contrarian: false, thread: false, heroSecret: false, bellRung: false }; // secret run fields (world.js secretP)
+    p.ctrN = 0; p.ctrOff = false; p.ctrEl = {}; // Against the Grain: counted element-path cards, broken for the run, stratum -> its one element
+    p.bellS = 0; // Drowned Bell: 0 not rung, 1 rung (watching health), 2 broken, 3 kept (rooms.js)
   };
 
-  // Queue an offer spec {src:'level'|'room'|'class'|'start'|'forge'|'epic', path?}; p.picks mirrors the queue length.
+  // Against the Grain: each stratum takes one element (the first element-path card of the stratum sets it to one of its elements, a duo's two included, not used on an earlier stratum); a card without that element,
+  // or a first card whose elements were all used before, breaks it for the run. p.sec.contrarian holds at CONTRARIAN_N counted cards.
+  const CONTRARIAN_N = 8;
+  W.contrarianPick = function (p, b) {
+    const els = b.duo || (b.path && ED.PATHS[b.path] && ED.PATHS[b.path].element ? [b.path] : null);
+    if (!els) return;
+    const s = this.stratum, ce = p.ctrEl || (p.ctrEl = {});
+    if (!ce[s]) { const used = Object.keys(ce).filter(k => +k !== s).map(k => ce[k]); ce[s] = els.find(el => used.indexOf(el) < 0) || null; if (!ce[s]) { p.ctrOff = true; ce[s] = '-'; } }
+    if (els.indexOf(ce[s]) >= 0) p.ctrN++; else p.ctrOff = true;
+    p.sec.contrarian = !p.ctrOff && p.ctrN >= CONTRARIAN_N;
+  };
+
+  // Queue an offer spec {src:'level'|'room'|'class'|'start'|'forge'|'epic'|'twist', path?}; p.picks mirrors the queue length.
   W.grantOffer = function (p, spec) {
     if (!p || !spec) return;
     p.offers.push({ src: spec.src || 'level', path: spec.path || null });
@@ -70,6 +86,7 @@
 
   // Called by playerSkill after any skill resolves (slot 0 = K, 1 = L).
   W.onSkillCast = function (p, slot) {
+    this.elementCast(p, slot); // Storm Anchor, Capacitor, Lattice (combat.js)
     const st = p.stats, area = 1 + st.area * 0.5;
     if (st.overcharge) this.explode(p.x, p.y, 85 * area, ED.procDmg(ED.BOONS.overcharge, st) * st.overcharge, 0, p, 'shock', true);
     if (st.trance) p.tranceT = 4;
@@ -110,10 +127,11 @@
     }
   };
 
-  // Offer message for the hero's head spec: { to, t:'offer', boons, rerolls, picks, src, path, forge, ctier (class offers: 1 route, 2 fork), route }.
+  // Offer message for the hero's head spec: { to, t:'offer', boons, rerolls, picks, src, path, forge, ctier (class offers: 1 route, 2 fork), route, noRe (1: a reroll cannot change this hand) }.
   W.sendOffer = function (p) {
-    const sp = p.offers[0];
-    this.msgs.push({ to: p.pid, t: 'offer', boons: p.offer, rerolls: p.rerolls, picks: p.picks, src: sp.src, path: sp.path || null, forge: sp.src === 'forge', ctier: sp.src === 'class' ? sp.ctier | 0 : 0, route: sp.route || null });
+    const sp = p.offers[0], m = { to: p.pid, t: 'offer', boons: p.offer, rerolls: p.rerolls, picks: p.picks, src: sp.src, path: sp.path || null, forge: sp.src === 'forge', ctier: sp.src === 'class' ? sp.ctier | 0 : 0, route: sp.route || null };
+    if (sp.src === 'twist' && this.twistCards(p).length <= LATE.TWIST_N) m.noRe = 1;
+    this.msgs.push(m);
   };
 
   // Evolution paths the hero may take now: affinity >= the path's evolution affinity, keystone owned, no evolution yet.
@@ -142,15 +160,38 @@
     return w;
   }
 
-  // Ascended cards the hero may be offered now: stratum >= ASC_STRATUM, fewer than ASC_PER_STRATUM taken this stratum, the base boon at its max rank, the card not owned, the weapon kind fitting.
+  // Ascended cards the hero may be offered now: stratum >= ASC_STRATUM, fewer than ASC_PER_STRATUM taken this stratum, the base boon at its max rank, the card not owned and not off the pool, the weapon kind fitting.
   W.ascCards = function (p) {
     const out = [], st = p.stats;
     if (this.stratum < ED.ASC_STRATUM || p.ascN >= ED.ASC_PER_STRATUM) return out;
     for (const id of ED.ASC_IDS) {
       const a = ED.BOONS[id];
-      if (!p.boons[id] && !(a.need && a.need !== st.kind) && (p.boons[a.asc] || 0) >= ED.maxRank(ED.BOONS[a.asc], st)) out.push(id);
+      if (!p.boons[id] && !a.off && !(a.need && a.need !== st.kind) && (p.boons[a.asc] || 0) >= ED.maxRank(ED.BOONS[a.asc], st)) out.push(id);
     }
     return out;
+  };
+
+  // Late-game offer rules. FLAT_S: from this stratum the FLAT commons leave level and room draws (forge, shop and epic offers keep them); MUT_S: Mutations are offered from this stratum;
+  // FILL_S: from this stratum a level or room draw short of its cards fills from Mutations, then rank-ups of owned path boons, before the Purse; TWIST_N: Twists a Twist offer shows.
+  const LATE = ED.LATE = { FLAT_S: 3, MUT_S: 4, FILL_S: 4, TWIST_N: 2, FLAT: ['plating', 'thorns', 'evade', 'stalwart', 'fleet', 'magnet', 'bounty', 'forager', 'mending'] };
+  const FLAT = new Set(LATE.FLAT);
+
+  // Mutations the hero may be offered now: stratum >= MUT_S, ED.mutFree (the parent keystone or evolution b.mut owned, no Mutation of that parent owned), the weapon kind fitting.
+  W.mutCards = function (p) {
+    const out = [], kind = p.stats.kind;
+    if (this.stratum < LATE.MUT_S || !ED.MUT_IDS) return out;
+    for (const id of ED.MUT_IDS) {
+      const b = ED.BOONS[id];
+      if (ED.mutFree(p.boons, id) && !(b.need && b.need !== kind)) out.push(id);
+    }
+    return out;
+  };
+
+  // Twists the hero may be offered now: none at TWIST_MAX held; otherwise each unowned Twist whose element-gate need (b.gates) the hero meets.
+  W.twistCards = function (p) {
+    if (ED.twistCount(p.boons) >= ED.TWIST_MAX) return [];
+    const els = ED.elementGates(p.boons).length;
+    return ED.TWIST_IDS.filter(id => !p.boons[id] && !(ED.BOONS[id].gates > els));
   };
 
   // Stat keys that stun, freeze or blind foes (Frostbite, Frozen Heart, Overload, Dawn Stride and the route stats); the Opportunist gate also reads Heavy Stagger and the hero's skill parts.
@@ -166,30 +207,41 @@
     return false;
   };
 
-  const UTILITY = new Set(['bounty', 'magnet', 'forager', 'fleet', 'mending']); // commons that weigh x0.25 from stratum IV
-  const ASC_SRC = new Set(['level', 'room', 'epic']); // offers that pin an Ascended card
+  const UTILITY = new Set(['bounty', 'magnet', 'forager', 'fleet', 'mending']); // commons that weigh x0.25 from stratum IV (epic offers; level and room draws drop them at LATE.FLAT_S)
+  const PIN_SRC = new Set(['level', 'room', 'epic']); // offers that pin a Mutation or an Ascended card
 
   // Boon ids for one offer spec (evolution card first, then the duo, both prepended on top of the cards). A forge spec with nothing to rank up turns into a level spec.
   // Everyone sees 3 cards (epic 4, Crown +1): the start offer is 3 element gates plus the guaranteed card (Generalist for Knight, Ranger and Shade; the class element's gate for the others);
   // a class spec returns exactly the cards of the hero's next route step (no draw padding, no evolution or duo prepended): the 4 route cards or the 2 forks of the chosen route (a hero that holds a fork gets a level offer);
-  // room, level and epic offers draw from the hero's own paths (element heroes) or the General path (Generalists) plus open boons, and when an Ascended card is eligible one of them (uniform) takes slot 1 of the drawn cards.
-  // The forge offers owned boons below their max rank, never route or fork cards. A card at its max rank is never offered; a draw that finds no card (pool exhausted) offers the Purse, which no pool draws.
-  W.rollOffer = function (p, spec) {
+  // room, level and epic offers draw from the hero's own paths (element heroes) or the General path (Generalists) plus open boons; slot 1 of the drawn cards is the pin: an eligible Mutation (uniform), else an eligible Ascended card (uniform).
+  // The forge offers owned boons below their max rank, never route or fork cards. A card at its max rank or retired is never offered; a draw that finds no card (pool exhausted) offers the Purse, which no pool draws (late fill: LATE).
+  // A twist spec shows TWIST_N eligible Twists and nothing else (prev: the hand a reroll replaces; its cards come last); with fewer eligible it becomes an epic spec.
+  W.rollOffer = function (p, spec, prev) {
     spec = spec || { src: 'level' };
     const rng = this.rng, st = p.stats, s = Math.max(1, this.stratum), luck = st.luck || 0, kind = st.kind;
+    if (spec.src === 'twist') {
+      const tw = this.twistCards(p);
+      if (tw.length >= LATE.TWIST_N) {
+        const old = (id) => (prev && prev.includes(id) ? 1 : 0);
+        return rng.shuffle(tw).sort((a, b) => old(a) - old(b)).slice(0, LATE.TWIST_N);
+      }
+      spec.src = 'epic';
+    }
     const gen = ED.isGeneralist(p.boons), els = ED.elementGates(p.boons), aff = {};
     for (const k of ED.PATH_IDS) aff[k] = ED.pathAffinity(p.boons, k);
     const epic = spec.src === 'epic';
     const n = (epic ? 4 : 3) + (st.choices | 0);
-    const out = [], asc = ASC_SRC.has(spec.src) ? this.ascCards(p) : [];
-    if (asc.length) out.push(rng.weighted(asc, () => 1));
-    const pinned = out.length; // cards the draws must not count (an Ascended card in slot 1)
+    const out = [];
+    if (PIN_SRC.has(spec.src)) { const muts = this.mutCards(p), pin = muts.length ? muts : this.ascCards(p); if (pin.length) out.push(rng.weighted(pin, () => 1)); }
+    const pinned = out.length; // cards the draws must not count (the pin in slot 1)
+    const flat = s >= LATE.FLAT_S && spec.src !== 'epic'; // level and room draws (a forge or class spec that turns into a level spec too) leave out the FLAT commons
     const rank = (id) => ED.BOONS[id].rar;
     const free = !gen && els.length < ED.MAX_ELEMENTS;
     const daze = () => this.canDaze(p);
     const eligible = (id) => {
       const b = ED.BOONS[id];
-      if (b.evo || b.duo || b.cls || b.asc || b.purse || (b.need && b.need !== kind)) return false;
+      if (b.evo || b.duo || b.cls || b.asc || b.mut || b.twist || b.purse || b.retired || (b.need && b.need !== kind)) return false;
+      if (flat && FLAT.has(id)) return false;
       if ((p.boons[id] || 0) >= ED.maxRank(b, st)) return false;
       if (id === 'opportunist' && !daze()) return false; // nothing to stun, freeze or blind: the card would do nothing
       if (b.gate) return free && b.path !== 'general' && !els.includes(b.path); // the Generalist gate is only on the start offer
@@ -219,9 +271,15 @@
     const level = ED.BOON_IDS.filter(eligible);
     const rare = (id) => rank(id) !== 'c';
     const openPool = () => ED.BOON_IDS.filter(id => { const b = ED.BOONS[id]; return (b.open || b.openMax) && !b.gate && eligible(id); });
+    // Late fill (stratum >= FILL_S, level and room draws short of n cards): eligible Mutations, then owned path boons below their max rank (no gates, evolutions or class cards), each tier shuffled.
+    const lateFill = () => {
+      if (s < LATE.FILL_S || out.length >= n) return;
+      const ranks = Object.keys(p.boons).filter(id => { const b = ED.BOONS[id]; return b && b.path && !b.gate && !b.evo && !b.cls && !b.retired && !(b.need && b.need !== kind) && p.boons[id] < ED.maxRank(b, st); });
+      for (const tier of [this.mutCards(p), ranks]) for (const id of rng.shuffle(tier.filter(x => !out.includes(x)))) { if (out.length >= n) return; out.push(id); }
+    };
     switch (spec.src) {
       case 'forge': {
-        const have = Object.keys(p.boons).filter(id => ED.BOONS[id] && !ED.BOONS[id].evo && !ED.BOONS[id].route && p.boons[id] < ED.maxRank(ED.BOONS[id], st));
+        const have = Object.keys(p.boons).filter(id => ED.BOONS[id] && !ED.BOONS[id].evo && !ED.BOONS[id].route && !ED.BOONS[id].retired && p.boons[id] < ED.maxRank(ED.BOONS[id], st));
         rng.shuffle(have);
         if (have.length) return have.slice(0, n);
         spec.src = 'level';
@@ -253,12 +311,14 @@
         }
         draw(level.filter(id => own(ED.BOONS[id])));
         if (out.length < n) draw(openPool().filter(rare)); // the own pool ran dry: open General at rare and up
+        lateFill();
         if (out.length <= pinned) out.push('purse');
         return this.prependCards(p, out);
       }
     }
     draw(level);
     if (out.length <= pinned) draw(openPool());
+    if (spec.src === 'level' || spec.src === 'room') lateFill(); // room: a Generalist's room draw breaks out of the switch
     if (out.length <= pinned) out.push('purse');
     if (spec.src === 'forge') return out;
     return this.prependCards(p, out);
@@ -294,6 +354,8 @@
       if (b.heal) this.healPlayer(p, b.heal);
       if (b.mods.charges) p.chargeBonus = true;
       if (b.asc) p.ascN++;
+      if (b.twist) { p.twist = true; p.twistN = ED.twistCount(p.boons); }
+      this.contrarianPick(p, b);
     }
     p.offers.shift(); p.picks = p.offers.length; p.offer = null;
     if (gain) {
@@ -322,12 +384,14 @@
     this.emit({ t: 'forkRank', pid: p.pid, id, rank, x: p.x, y: p.y });
   };
 
+  // A reroll redraws the head offer (a Twist offer redraws among the Twists, the cards not in the old hand first); a route or fork pick, or a Twist offer with no other Twist to show, refuses at no cost.
   W.reroll = function (pid) {
     const p = this.players.get(pid);
     if (!p || !p.offer || p.rerolls <= 0 || !p.offers.length || p.offers[0].src === 'forge') return;
-    if (p.offers[0].src === 'class') return; // a route or fork pick is a fixed choice: no reroll, no cost
+    if (p.offers[0].src === 'class') return;
+    if (p.offers[0].src === 'twist' && this.twistCards(p).length <= LATE.TWIST_N) return;
     p.rerolls--;
-    p.offer = this.rollOffer(p, p.offers[0]);
+    p.offer = this.rollOffer(p, p.offers[0], p.offer);
     this.sendOffer(p);
   };
 })(globalThis.ED || (globalThis.ED = {}));

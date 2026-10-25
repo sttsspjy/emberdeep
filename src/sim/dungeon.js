@@ -14,7 +14,9 @@
   const FIGHT_ROOM = { combat: 1, elite: 1, champion: 1 }; // node types that draw a combat room size
   const PATTERN_AREA = 294; // tile area the base pool and scatter counts are written for: both scale by room area / PATTERN_AREA
   const EVENTS = ['fountain', 'altar', 'gamble', 'trial'];
-  const REWARD_ODDS = [['boon', 38], ['gold', 42], ['vigor', 12], ['forge', 8]]; // normal combat reward weights
+  const REWARD_ODDS = [['boon', 55], ['gold', 15], ['vigor', 10], ['forge', 20]]; // normal combat reward weights
+  const TWIST_ODDS = 0.15, TWIST_FROM = 3; // elite rooms from stratum TWIST_FROM: share whose reward is a Twist offer (epic keeps its 25%)
+  const MIN_FIGHTS = 3; // the Platino's cue is one of the first MIN_FIGHTS fight clears of a floor
 
   // ---------------- map (Slay-the-Spire layered graph) ----------------
   // Rows of rooms between the start camp (row 0) and the boss (row ROWS + 1), by stratum; LANES columns; MAP_PATHS paths drawn bottom to top; a row holds ROW_N nodes; the start camp leads to START_N row-1 rooms.
@@ -32,6 +34,8 @@
   D.blocksShots = (t, locked) => t === 1 || t === 2 || (t === 5 && locked);
   D.walkable = (t) => t === 0 || t === 4 || t === 5;
   D.side = (d) => d.charAt(0); // wall side of a door key: exits are 'n0', 'n1', ... (left to right), the entry is 's'
+  D.doorWant = (d) => (d && d.charAt(0) === 'n' ? 1 + Number(d.slice(1)) : 0); // co-op door want of exit d (net.js P[26]): 1 + its index, 0 none
+  D.wantDoor = (v) => (v > 0 ? 'n' + (v - 1) : null); // the exit key of a door want
 
   // Paths of the graph: { nodes: [row][lane] = true, edges: Set 'row,lane,nextLane' }. Each path starts on one of START_N lanes and steps to lane - 1, lane or lane + 1 of the next row, never crossing an edge already drawn.
   // Redrawn until every row holds ROW_N nodes; the last try is kept as it is.
@@ -106,14 +110,37 @@
     typeNodes(rng, cells, R, stratum);
     cells.forEach((c, i) => { c.id = i; });
     const rooms = cells.map(c => buildRoom(c, stratum, rng.seed(), rng));
+    for (const r of rooms) r.threat = threatOf(r, R);
     assignRewards(rooms, stratum, seed);
     for (const r of rooms) carveDoors(r);
-    for (const r of rooms) { finalizeInterior(r, stratum); decorate(r, stratum); }
-    return { stratum, seed, rooms, start: 0, boss: boss.id, rows: R };
+    for (const r of rooms) { finalizeInterior(r, stratum); if (stratum === BELL_STRATUM && r.dark) placeBell(r); decorate(r, stratum); }
+    return { stratum, seed, rooms, start: 0, boss: boss.id, rows: R, platino: platinoAt(stratum, seed) };
   };
 
+  // Threat pips (0-3) of a room of a floor with R rows: a fight 1, +1 elite or champion, +1 dark, +1 past the middle row; the boss 3; other rooms 0.
+  const FIGHTS = { combat: 1, elite: 1, champion: 1 };
+  function threatOf(r, R) {
+    if (r.type === 'boss') return 3;
+    if (!FIGHTS[r.type]) return 0;
+    return Math.min(3, 1 + (r.type === 'elite' || r.type === 'champion' ? 1 : 0) + (r.dark ? 1 : 0) + (2 * r.row > R ? 1 : 0));
+  }
+
+  // The Drowned Bell: room.bell { x, y } (world px) in every dark room of stratum BELL_STRATUM (it rings once per hero per run), BELL_UP above the centre on a clear spot (the clear reward keeps the centre); placed before decoration, which keeps breakables BELL_GAP tiles from it.
+  const BELL_STRATUM = 3, BELL_UP = 48, BELL_GAP = 2;
+  function placeBell(room) {
+    const c = D.center(room), m = D.clearSpot(room, c.x, c.y - BELL_UP);
+    room.bell = { x: m.x, y: m.y };
+  }
+  // Platino: one floor in PLATINO_ODDS (own RNG stream) lets it out at the clear of its n-th fight on the floor (n = 1..MIN_FIGHTS; rooms.js counts the clears); -1 otherwise.
+  const PLATINO_ODDS = 1 / 8;
+  function platinoAt(stratum, seed) {
+    const rng = U.RNG((seed ^ 0x6c8e9cf5) + stratum * 7841);
+    if (!rng.chance(PLATINO_ODDS)) return -1;
+    return rng.int(1, MIN_FIGHTS);
+  }
+
   // Rewards are fixed per floor and shown before entry. Combat (dark included): boon (drawn from the claiming hero's own paths), gold, vigor, forge,
-  // each kind getting its REWARD_ODDS share of the floor's combat rooms (rounded by weighted draw on the remainders). Elite: relic, or epic at 25%. Champion: relic.
+  // each kind getting its REWARD_ODDS share of the floor's combat rooms (rounded by weighted draw on the remainders). Elite: epic at 25%, from stratum TWIST_FROM a Twist at TWIST_ODDS, else relic. Champion: relic.
   function assignRewards(rooms, stratum, seed) {
     const rng = U.RNG((seed ^ 0x5bd1e995) + stratum * 15485863);
     const combat = rooms.filter(r => r.type === 'combat');
@@ -127,7 +154,8 @@
     counts.forEach((c, i) => { for (let k = 0; k < c; k++) bag.push(REWARD_ODDS[i][0]); });
     rng.shuffle(bag);
     combat.forEach((r, i) => { r.reward = bag[i]; });
-    for (const r of rooms) if (r.type === 'elite') r.reward = rng.chance(0.25) ? 'epic' : 'relic'; else if (r.type === 'champion') r.reward = 'relic';
+    const tw = stratum >= TWIST_FROM ? TWIST_ODDS : 0;
+    for (const r of rooms) if (r.type === 'elite') { const x = rng.next(); r.reward = x < tw ? 'twist' : x < tw + 0.25 ? 'epic' : 'relic'; } else if (r.type === 'champion') r.reward = 'relic';
   }
 
   // A room is wide enough for its north doors: n doors need 6n + 5 tiles (odd widths keep the centre door on the middle tile).
@@ -145,7 +173,7 @@
     if (c.row > 0) doorX.s = Math.floor(w / 2);
     return {
       id: c.id, row: c.row, lane: c.lane, type: c.type, w, h, tiles, seed, stratum,
-      dist: c.row / 2, danger: 1 + 0.025 * c.row, reward: null, // dist: depth for the encounter budget (half the map row)
+      dist: c.row / 2, danger: 1 + 0.025 * c.row, reward: null, threat: 0, // dist: depth for the encounter budget (half the map row)
       exits: c.children.map(o => o.id), doors, doorX, entry: c.row > 0, // entry: the sealed south door the party came through
       decor: [], breakables: [], torches: [], dark: !!c.dark, champ: c.champ || null,
       event: c.type === 'event' ? EVENTS[seed % EVENTS.length] : null,
@@ -308,13 +336,14 @@
   const BREAK_MIN = 4, BREAK_MAX = 8, BREAK_SPARE = 3, BREAK_GAP = 1.1; // BREAK_GAP: least distance in tiles between two
   const FIGHT = { combat: 1, elite: 1, champion: 1, boss: 1 };
 
-  // A breakable stands on plain floor, off every door lane, clear of the prop spot (1.5 tiles around the centre; in a room without a fight the whole band its props and signs span) and BREAK_GAP from the others in `list`.
+  // A breakable stands on plain floor, off every door lane, clear of the prop spot (1.5 tiles around the centre; in a room without a fight the whole band its props and signs span), BREAK_GAP from the others in `list` and BELL_GAP from the Drowned Bell.
   function breakFree(room, x, y, list) {
     const tx = Math.floor(x), ty = Math.floor(y);
     if (room.tiles[ty * room.w + tx] !== 0 || inDoorLane(room, tx, ty)) return false;
     const cx = room.w / 2, cy = room.h / 2 + 0.5;
     if (FIGHT[room.type] ? Math.hypot(x - cx, y - cy) < 1.5 : Math.abs(x - cx) < 5.8 && Math.abs(y - cy) < 2.9) return false;
     for (const b of list) if (Math.hypot(b.x - x, b.y - y) < BREAK_GAP) return false;
+    if (room.bell && Math.hypot(x - room.bell.x / T, y - room.bell.y / T) < BELL_GAP) return false;
     return true;
   }
 

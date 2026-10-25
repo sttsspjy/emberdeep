@@ -1,6 +1,6 @@
 // Usage: node tools/check-ux.js
 // Headless checks of player-facing text and layout data: the tutorial signs near the spawn, no developer units or stale fixed multipliers in card texts, the Doom/Toll wording,
-// Shield Storm and Comet in the sheet model, the Sundered status. Prints failures and exits 1 when any check fails.
+// Shield Storm and Comet in the sheet model, the Sundered status, the floor-map glyph table and route bits (src/client/icons.js). Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
 let n = 0, fails = 0;
 const ok = (c, msg) => { n++; if (!c) { fails++; console.log('FAIL ' + msg); } };
@@ -122,6 +122,62 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     c.dashN = 0; c.dashT = 1.5;
     ok(S.dashTick(c, st, 2.0) === 1 && c.dashN === 1 && Math.abs(c.dashT - 1.0) < 1e-9, 'a 2.0 s frame refills 1 charge and keeps 0.5 s of overshoot: ' + c.dashT);
   }
+}
+
+// ---------------- floor-map glyphs (src/client/icons.js): one table, distinct silhouette and colour, labels, route bits ----------------
+{
+  const fs = require('fs'), path = require('path'), vm = require('vm');
+  vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'icons.js'), 'utf8'), { filename: 'icons.js' });
+  const Ic = ED.Icons, M = Ic.MASKS;
+  const mask = (g) => { const m = M[g]; return typeof m === 'string' ? M[m] : m; };
+  const valid = (g) => { const m = mask(g); return !!m && m.length === 16 && m.every(r => r.length === 16); };
+  // glyph identity -> [glyph, colour, label] as the map draws it
+  const room = (type, extra) => Ic.room(Object.assign({ type, reward: null, dark: false, event: null }, extra || {}), null, ED.World.REWARD_UP);
+  const G = {};
+  for (const rw of ['gold', 'boon', 'epic', 'relic', 'forge', 'vigor', 'twist']) { const r = Ic.reward(rw, null); G[rw] = [r[0], r[1], r[2]]; }
+  for (const t of ['shop', 'treasure', 'rest', 'elite', 'boss']) { const r = room(t); G[t] = [r.icon, r.color, r.label]; }
+  for (const ev of ['fountain', 'altar', 'trial', 'gamble']) { const r = room('event', { event: ev }); G['event:' + ev] = [r.icon, r.color, r.label]; }
+  G.dark = Ic.DARK.slice();
+  const want = { shop: ['stall', 'Shop'], gold: ['coins', 'Gold'], treasure: ['chest', 'Treasure'], relic: ['amulet', 'Relic'], epic: ['cardepic', 'Epic'], boon: ['card', 'Boon'], forge: ['anvil', 'Forge'], vigor: ['heart', 'Vigor'],
+    rest: ['campfire', 'Rest'], 'event:fountain': ['fountain', 'Fountain'], 'event:altar': ['altar', 'Altar'], 'event:trial': ['swords', 'Trial'], 'event:gamble': ['question', 'Gamble'], elite: ['skullhorn', 'Elite'], boss: ['skullcrown', 'Boss'], dark: ['moon', 'Dark'], twist: ['cardtwist', 'Twist'] };
+  for (const id in want) ok(G[id] && G[id][0] === want[id][0] && G[id][2] === want[id][1] && valid(G[id][0]), `map glyph ${id}: ${want[id][0]} "${want[id][1]}" (16x16 mask): ${G[id] && G[id].join(' ')}`);
+  const ids = Object.keys(want), sil = (g) => mask(g).map(r => r.replace(/[^.]/g, '#')).join('');
+  const diff = (a, b) => { const x = sil(a), y = sil(b); let d = 0; for (let i = 0; i < 256; i++) if (x[i] !== y[i]) d++; return d; };
+  const rgb = (h) => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)), dist = (a, b) => { const p = rgb(a), q = rgb(b); return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]); };
+  for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+    const a = G[ids[i]], b = G[ids[j]];
+    ok(a[0] !== b[0] || dist(a[1], b[1]) >= 60, `${ids[i]} and ${ids[j]} differ in glyph or colour: ${a[0]} ${a[1]} / ${b[0]} ${b[1]}`);
+  }
+  ok(diff('stall', 'coins') >= 40 && dist(G.shop[1], G.gold[1]) >= 120, 'shop and gold never read alike: silhouettes differ in ' + diff('stall', 'coins') + ' cells, colours ' + Math.round(dist(G.shop[1], G.gold[1])) + ' apart');
+  for (const [a, b] of [['skullhorn', 'skullcrown'], ['skullhorn', 'skull'], ['skullcrown', 'skull'], ['chest', 'stall'], ['coins', 'coin'], ['amulet', 'chest']]) ok(diff(a, b) >= 12, `${a} and ${b} silhouettes differ: ${diff(a, b)} cells`);
+  ok(dist(G.epic[1], G.boon[1]) >= 60 && dist(G.twist[1], G.boon[1]) >= 60 && dist(G.twist[1], G.epic[1]) >= 60, 'boon, epic and Twist cards differ in colour');
+  ok(Ic.reward('boon', 'fire')[1] === ED.PATHS.fire.color && Ic.reward('relic', null)[3] === 'Relic hoard' && Ic.reward('nope', null)[2] === 'Reward', 'boon card wears the path colour; long names; unknown rewards read "Reward"');
+  // every generated room has a glyph and a label (start excepted); a dark room previews its stepped-up reward; elite labels name the reward
+  let rooms = 0; const bad = [];
+  for (let s = 1; s <= 6; s++) for (let seed = 1; seed <= 6; seed++) {
+    const fl = ED.Dungeon.generate(s, seed * 7919 + s);
+    for (const r of fl.rooms) {
+      if (r.type === 'start') continue;
+      rooms++;
+      const g = Ic.room(r, null, ED.World.REWARD_UP);
+      if (!g || !valid(g.icon) || !g.label) { bad.push(r.type + ':' + r.reward); continue; }
+      if (r.dark && r.reward && ED.World.REWARD_UP[r.reward] && g.reward !== ED.World.REWARD_UP[r.reward]) bad.push('dark ' + r.reward + ' -> ' + g.reward);
+      if (r.type === 'elite' && r.reward && !/^Elite \S/.test(g.label)) bad.push('elite label ' + g.label);
+      if (g.badge && !valid(g.badge[0])) bad.push('badge ' + g.badge[0]);
+    }
+  }
+  ok(rooms > 100 && !bad.length, `every generated room (${rooms}) maps to a glyph and a label: ${bad.slice(0, 4).join(', ')}`);
+  // route bits: every room is reachable from the start; exits only lead forward, so the way back closes
+  const fl0 = ED.Dungeon.generate(3, 4242), rt0 = Ic.route(fl0, fl0.start, {});
+  ok(rt0[fl0.start] === 5 && fl0.rooms.every(r => rt0[r.id] & 1), 'every room is reachable from the start room');
+  const mk = (id, row, doors) => ({ id, row, lane: 0, type: 'combat', doors });
+  const line = { rooms: [mk(0, 0, { n0: 1 }), mk(1, 1, { n0: 2, n1: 3 }), mk(2, 2, {}), mk(3, 2, {})] }; // 0 -> 1 -> 2 or 3
+  const rt1 = Ic.route(line, 1, { 0: { visited: true }, 1: { visited: true } });
+  ok(rt1[0] === 2 && rt1[1] === 7 && rt1[2] === 1 && rt1[3] === 1, 'route bits from room 1: the walked room behind is closed (2), both forward rooms reachable (1): ' + Array.from(rt1).join());
+  const rt2 = Ic.route(line, 2, { 0: { visited: true }, 1: { visited: true }, 2: { visited: true } });
+  ok(rt2[3] === 0 && rt2[2] === 7, 'the branch not taken closes once its sibling is entered: ' + Array.from(rt2).join());
+  const sheetSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'sheetui.js'), 'utf8');
+  ok(!/dead end/.test(sheetSrc), 'the sheet never calls dark rooms dead ends');
 }
 
 console.log(`${n} checks, ${fails} failed`);

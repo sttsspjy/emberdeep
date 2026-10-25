@@ -16,10 +16,10 @@
   // Regular foes of a biome that exist in the enemy table (rosters may name foes whose definitions land later).
   const rosterOf = (biome) => biome.enemies.filter(r => { const d = ED.ENEMIES[r[0]]; return d && !d.boss && !d.ally && !d.minion; });
 
-  // Spawn zones still counting down: any (the room clears when none is left), threat only (a fodder pack carries n and never holds the next threat wave back), and the foes they will add.
-  const pendingSpawns = (w) => w.zones.some(z => z.kind === 'spawn');
-  const pendingThreat = (w) => w.zones.some(z => z.kind === 'spawn' && !z.n);
-  const pendingFoes = (w) => { let n = 0; for (const z of w.zones) if (z.kind === 'spawn') n += z.n || 1; return n; };
+  // Spawn zones still counting down: any (the room clears when none is left), threat only (a fodder pack carries n and never holds the next threat wave back), and the foes they will add; a Hunted champion's zone (z.hunt) counts in none.
+  const pendingSpawns = (w) => w.zones.some(z => z.kind === 'spawn' && !z.hunt);
+  const pendingThreat = (w) => w.zones.some(z => z.kind === 'spawn' && !z.n && !z.hunt);
+  const pendingFoes = (w) => { let n = 0; for (const z of w.zones) if (z.kind === 'spawn' && !z.hunt) n += z.n || 1; return n; };
 
   // ---------------- encounters ----------------
   // A champion room (stratum IV, room.champ 'twins' | 'mimic') runs W.startChampion (bosses.js); without it the room plays as an elite fight.
@@ -47,11 +47,11 @@
     }
   };
 
-  // Budget = base x party x room danger (1 + 0.05 x distance). Elite rooms: 2 guaranteed elites (3 waves at Pact 10). A dark room's last wave gets one more elite with an affix from DARK_AFFIXES.
+  // World.WAVES waves (+1 at Pact 10), each of budget = base x party x room danger (1 + 0.05 x layer). Elite rooms: 2 guaranteed elites. A dark room's last wave gets one more elite with an affix from DARK_AFFIXES.
   W.planWaves = function (room) {
     const s = this.stratum, n = this.partySize();
     const biome = ED.biomeFor(s), isElite = room.type === 'elite';
-    const nW = 2 + (this.pact >= 10 ? 1 : 0);
+    const nW = ED.World.WAVES + (this.pact >= 10 ? 1 : 0);
     const budget = (7 + 2 * s) * this.threat().wave * (1 + 0.6 * (n - 1) + 0.2 * (n - 1) * (n - 2)) * (this.tutorial && s === 1 ? 0.75 : 1) * (room.danger || 1);
     let roster = rosterOf(biome);
     if (s >= 2 && this.rng.chance(ED.World.MIX_PREV)) {
@@ -199,11 +199,13 @@
     if (!enc) return;
     enc.t -= dt; enc.age = (enc.age || 0) + dt;
     if (enc.kind === 'waves') {
+      if (enc.hunt && enc.hunt.killed && !enc.huntPaid) this.huntedPaid(enc);
       const threat = this.hostiles(true), alive = this.hostiles();
       const last = enc.wave >= enc.waves.length - 1;
       if (!last && enc.t <= 0 && !pendingThreat(this) && (enc.wave < 0 || enc.age >= ED.World.PACE.maxAge || threat <= Math.max(1, Math.floor(enc.waves[enc.wave].length * ED.World.PACE.nextAt)))) {
         enc.wave++; enc.age = 0;
         this.spawnWave(enc.waves[enc.wave]);
+        if (enc.wave === 1 && huntedParty(this)) this.spawnHunted(enc);
         enc.t = ED.World.PACE.gap;
       } else if (last && alive === 0 && enc.spawned >= enc.q && !pendingSpawns(this) && enc.t <= 0) {
         this.roomCleared();
@@ -256,15 +258,14 @@
     this.run.roomsCleared++;
     if (room.dark) this.run.darkCleared++;
     if (room.type === 'champion') this.run.champs = (this.run.champs | 0) | (room.champ === 'mimic' ? 2 : 1); // bit 0 twins, bit 1 mimic (deeds)
+    if (room.bell) this.bellClear();
+    this.huntedLeave();
     this.run.embers.rooms += 1 + Math.round(s / 2);
     const c = this.alivePlayers()[0] || D.center(room);
     const enc = this.enc;
     if (enc && enc.xpBudget !== undefined && enc.xpBudget > enc.xpOut) this.dropXp(c.x, c.y, enc.xpBudget - enc.xpOut, true); // the clear pile: what the room's xp budget still owes
     this.enc = null;
     this.dropGold(c.x, c.y, 3 + Math.round(1.5 * s));
-    let heartCh = 0.36; // +10% per Forager rank in the party, at most 80%
-    for (const q of this.players.values()) heartCh += 0.1 * q.stats.forager;
-    if (this.rng.chance(Math.min(0.8, heartCh))) this.spawnPickup('heart', c.x, c.y, 1);
     if (room.reward) {
       const m = D.clearSpot(room, D.center(room).x, D.center(room).y);
       let item = room.reward;
@@ -275,10 +276,23 @@
     this.checkFullClear(room);
     this.computeFlow();
     this.emit({ t: 'clear' });
+    this.floorFights = (this.floorFights || 0) + 1;
+    if (this.floor.platino === this.floorFights) this.spawnPlatino();
   };
 
-  W.onBossKilled = function (e) {
+  // p, src: the killing hero and the hit's source (killEnemy). Secrets: One Face (a party of four of one hero downs a stratum boss); at the Hollow King, Thread of Life (a standing hero below THREAD_HP of max health),
+  // Toll for Thee (the Bellwarden's killing hit is a Peal hit: part 'peal.*') and the Against the Grain announcement (its field already holds; victory decides it in meta.js).
+  const THREAD_HP = 0.03;
+  W.onBossKilled = function (e, p, src) {
     const s = this.stratum;
+    if (this.players.size === ED.CONST.MAX_PLAYERS) { let one = null, same = true; for (const q of this.players.values()) { if (one === null) one = q.cls; else if (q.cls !== one) same = false; } if (same) this.secretW('oneFace'); }
+    if (s >= ED.CONST.STRATA) {
+      for (const q of this.players.values()) {
+        if (!q.downed && !q.dead && q.hp < q.maxHp * THREAD_HP) this.secretP(q, 'thread');
+        if (q.sec.contrarian) this.emit({ t: 'secret', pid: q.pid });
+      }
+      if (p && p.cls === 'bell' && src && src.part && src.part.indexOf('peal.') === 0) this.secretP(p, 'heroSecret');
+    }
     this.run.bosses |= 1 << (s - 1);
     this.run.bossCount++;
     this.run.embers.bosses += 8 * s;
@@ -295,7 +309,7 @@
     this.spawnPickup('heart', e.x, e.y, 1); this.spawnPickup('heart', e.x, e.y, 1);
     for (const q of this.players.values()) q.mantleAmt = 0;
     if (s === 1) for (const q of this.players.values()) this.grantOffer(q, { src: 'class' }); // the fork offer at the first boss (downed heroes get it when they are back up)
-    else if (s === 2 || s === 3) for (const q of this.players.values()) this.grantForkRank(q); // fork rank 2 and 3 at once, downed and dead heroes too
+    else if (s === 2 || s === 3) for (const q of this.players.values()) { this.grantForkRank(q); this.grantOffer(q, { src: 'twist' }); } // fork rank 2 and 3 at once and a Twist offer, downed and dead heroes too
     if (s >= ED.CONST.STRATA) {
       this.run.embers.victory = 60;
       this.endRun(true);
@@ -372,7 +386,8 @@
     return Math.max(5, Math.round(base / 5) * 5);
   };
 
-  const PER_HERO_REWARDS = new Set(['boon', 'forge', 'epic', 'vigor']);
+  const PER_HERO_REWARDS = new Set(['boon', 'forge', 'epic', 'vigor', 'twist']);
+  const forage = (p, share) => share + ED.World.FORAGER * (p.stats.forager || 0); // a heal share of max HP plus Forager's
   const allClaimed = (w, group) => [...w.players.values()].every(q => q.dead || q.claimed[group]);
 
   W.interact = function (pid, propId) {
@@ -397,8 +412,8 @@
           if (p.claimed[pr.group]) { this.msgs.push({ to: pid, t: 'toast', text: 'You already claimed this reward.' }); return; }
           p.claimed[pr.group] = true;
           if (item === 'boon') this.grantOffer(p, { src: 'room' });
-          else if (item === 'vigor') { p.bonusHp += 2; this.recalc(p, false); this.healPlayer(p, p.maxHp * 0.2); this.sendBuild(p); }
-          else this.grantOffer(p, { src: item });
+          else if (item === 'vigor') { p.bonusHp += 2; this.recalc(p, false); this.healPlayer(p, p.maxHp * forage(p, 0.2)); this.sendBuild(p); }
+          else this.grantOffer(p, { src: item }); // forge, epic, twist
           this.msgs.push({ to: pid, t: 'claimed', group: pr.group });
           if (allClaimed(this, pr.group)) pr.state = 1;
         } else {
@@ -414,7 +429,7 @@
         // one use per hero across both props of the rest site
         if (p.claimed[pr.group]) { this.msgs.push({ to: pid, t: 'toast', text: 'You already used this rest site.' }); return; }
         p.claimed[pr.group] = true;
-        if (pr.kind === 'campfire') this.healPlayer(p, p.maxHp * 0.35);
+        if (pr.kind === 'campfire') this.healPlayer(p, p.maxHp * forage(p, 0.35));
         else this.grantOffer(p, { src: 'forge' });
         this.msgs.push({ to: pid, t: 'claimed', group: pr.group });
         this.emit({ t: 'claim', pid, item: pr.kind, x: pr.x, y: pr.y });
@@ -438,14 +453,14 @@
         this.gold -= pr.price; pr.state = 1;
         this.emit({ t: 'buy', pid, x: pr.x, y: pr.y });
         if (pr.stype === 'relic') this.giveRelic(p, pr.item);
-        else if (pr.stype === 'potion') this.healPlayer(p, p.maxHp * 0.4);
+        else if (pr.stype === 'potion') this.healPlayer(p, p.maxHp * forage(p, 0.4));
         else if (pr.stype === 'boon') this.grantOffer(p, { src: 'epic' });
         else if (pr.stype === 'forge') this.grantOffer(p, { src: 'forge' });
         break;
       }
       case 'fountain': {
         pr.state = 1;
-        for (const q of this.players.values()) { if (q.downed) { q.downed = false; q.hp = 1; } this.healPlayer(q, q.maxHp * 0.5); }
+        for (const q of this.players.values()) { if (q.downed) { q.downed = false; q.hp = 1; } this.healPlayer(q, q.maxHp * forage(q, 0.5)); }
         this.emit({ t: 'fountain', x: pr.x, y: pr.y });
         break;
       }
@@ -489,6 +504,87 @@
     }
   };
 
+  // ---------------- the Drowned Bell (floor gen room.bell) ----------------
+  // A hero's damaging hit within BELL_R of the bell rings it once per hero per run while the room's fight is on ({ t: 'bellrung', pid, x, y }). From then until the room clears the hero stays at or above BELL_HP of max health
+  // (combat.js hurtPlayer breaks the watch) → p.sec.bellRung at the clear.
+  const BELL_R = 14;
+  ED.CONST.BELL_HP = 0.5;
+  W.ringBell = function (p) {
+    const b = this.room.bell;
+    if (!p || p.bellS || p.downed || p.dead || !this.locked || this.roomState[this.roomId].cleared) return;
+    p.bellS = p.hp < p.maxHp * ED.CONST.BELL_HP ? 2 : 1;
+    this.emit({ t: 'bellrung', pid: p.pid, x: Math.round(b.x), y: Math.round(b.y) });
+  };
+  W.bellClear = function () {
+    for (const p of this.players.values()) {
+      if (p.bellS !== 1) continue;
+      if (!p.downed && !p.dead && p.hp >= p.maxHp * ED.CONST.BELL_HP) { p.bellS = 3; this.secretP(p, 'bellRung'); } else p.bellS = 2;
+    }
+  };
+
+  // ---------------- Hunted (Twist: stats.twHunted) ----------------
+  // While any hero holds Hunted, a combat or elite room's second wave brings one champion: the biome elite with one affix from DARK_AFFIXES, e.hunted (snapshot flag bit 27), no xp (unplanned).
+  // It never holds the room (hostiles and the pending-spawn counts skip it). Its kill grants every Hunted holder a room offer (opens once the room is safe); at the clear it leaves with a puff, its shots and telegraphs with it.
+  const NO_AFFIX2 = ED.World.AFFIX2.map(() => 0);
+  const huntedParty = (w) => { for (const p of w.players.values()) if (p.stats.twHunted > 0) return true; return false; };
+  W.spawnHunted = function (enc) {
+    const type = ED.biomeFor(this.stratum).elite, def = ED.ENEMIES[type], affix = this.rng.pick(ED.World.DARK_AFFIXES);
+    const pt = D.randomFloor(this.room, this.rng, this.alivePlayers(), ED.World.PACE.avoid);
+    this.addZone({ kind: 'spawn', x: pt.x, y: pt.y, r: def.r + 4, dur: ED.World.PACE.spawn, type, hunt: 1, after: (e) => {
+      const a2 = ED.World.AFFIX2; ED.World.AFFIX2 = NO_AFFIX2; // one affix only
+      try { this.makeElite(e, affix); } finally { ED.World.AFFIX2 = a2; }
+      e.hunted = true; enc.hunt = e;
+    } });
+  };
+  W.huntedPaid = function (enc) {
+    enc.huntPaid = true;
+    for (const p of this.players.values()) if (p.stats.twHunted > 0) this.grantOffer(p, { src: 'room' });
+  };
+  W.huntedLeave = function () {
+    for (const z of this.zones) if (z.hunt) z.dead = true;
+    for (const e of this.enemies) {
+      if (!e.hunted || e.hp <= 0) continue;
+      e.hp = 0;
+      for (const z of this.zones) if (z.src === e) z.dead = true;
+      for (const q of this.projs) if (q.src === e) q.dead = true;
+      this.emit({ t: 'puff', x: Math.round(e.x), y: Math.round(e.y), c: '#e8344e' });
+    }
+  };
+
+  // ---------------- the Platino (floor.platino: the fight clear on the floor that lets it out) ----------------
+  // Out on a floor spot (PLATINO.avoid from every hero) at the floor.platino-th fight clear of its floor: wanders at wander px/s, flees heroes within flee at speed px/s (steering at turn rad/s, probing probe px ahead for open floor), gone after life s with a puff.
+  // A hero touching it (within touch of the body) catches it: { t: 'platino', pid, x, y } and p.sec.platino. Own RNG stream; never in this.enemies (no hits, no aim, no bot target), drops nothing.
+  const PLATINO = { speed: 130, wander: 60, flee: 190, turn: 7, probe: 24, life: 12, r: 7, touch: 6, avoid: 140 };
+  ED.World.PLATINO = PLATINO;
+  W.spawnPlatino = function () {
+    const rng = U.RNG(((this.floorSeed ^ 0x51a7c0de) >>> 0) + this.roomId * 977);
+    const pt = D.randomFloor(this.room, rng, this.alivePlayers(), PLATINO.avoid);
+    this.critter = { x: pt.x, y: pt.y, r: PLATINO.r, a: rng.range(0, U.TAU), wa: 0, wt: 0, t: PLATINO.life, face: 1, rng };
+    this.emit({ t: 'puff', x: Math.round(pt.x), y: Math.round(pt.y), c: '#e8f0ff' });
+  };
+  const OPEN = (t) => t === 0 || t === 4;
+  W.updatePlatino = function (dt) {
+    const c = this.critter, room = this.room, P = PLATINO;
+    if ((c.t -= dt) <= 0) { this.critter = null; this.emit({ t: 'puff', x: Math.round(c.x), y: Math.round(c.y), c: '#e8f0ff' }); return; }
+    let fx = 0, fy = 0;
+    for (const p of this.players.values()) {
+      if (p.downed || p.dead) continue;
+      const dx = c.x - p.x, dy = c.y - p.y, d2 = dx * dx + dy * dy, rr = p.r + c.r + P.touch;
+      if (d2 < rr * rr) { this.critter = null; this.emit({ t: 'platino', pid: p.pid, x: Math.round(c.x), y: Math.round(c.y) }); this.secretP(p, 'platino'); return; }
+      if (d2 < P.flee * P.flee) { const d = Math.sqrt(d2) || 1, k = 1 - d / P.flee; fx += dx / d * k; fy += dy / d * k; }
+    }
+    const fleeing = fx !== 0 || fy !== 0;
+    if (fleeing) c.a += U.clamp(U.angDiff(c.a, Math.atan2(fy, fx)), -P.turn * dt, P.turn * dt);
+    else { if ((c.wt -= dt) <= 0) { c.wt = c.rng.range(0.5, 1.3); c.wa = c.rng.range(-2.5, 2.5); } c.a += c.wa * dt; }
+    for (let i = 0; i < 9; i++) { // the first heading of a, a ± 0.5, ± 1, ± 1.6, ± 2.4 with open floor probe px ahead
+      const a = c.a + (i === 0 ? 0 : (i & 1 ? 1 : -1) * [0.5, 1, 1.6, 2.4][(i - 1) >> 1]);
+      if (OPEN(D.tileAt(room, c.x + Math.cos(a) * P.probe, c.y + Math.sin(a) * P.probe))) { c.a = a; break; }
+    }
+    const sp = fleeing ? P.speed : P.wander;
+    ED.Sim.moveCircle(c, Math.cos(c.a) * sp * dt, Math.sin(c.a) * sp * dt, room, true, false);
+    if (Math.abs(Math.cos(c.a)) > 0.2) c.face = Math.cos(c.a) < 0 ? -1 : 1;
+  };
+
   // ---------------- breakable props ----------------
   // room.breakables (floor gen) break to a hero hit: roomState.broken is a bit mask over them. A smash drops gold (SMASH_GOLD of the time, 1-3, exact: the gold multiplier does not apply twice) and, separately, a heart (SMASH_HEART); no xp.
   const SMASH_R = 9, SMASH_GOLD = 0.25, SMASH_HEART = 0.01; // SMASH_R: px around a breakable's feet a hero hit must reach
@@ -502,9 +598,10 @@
     if (this.rng.chance(SMASH_HEART)) this.spawnPickup('heart', x, y, 1);
     return true;
   };
-  // Hero hits on the room's unbroken breakables (at most 8, a plain loop): a circle (x, y, r), the segment (x0, y0)-(x1, y1) swept by a body of radius r, or the sector of reach and arc around the hero's facing a.
+  // Hero hits on the room's unbroken breakables (at most 8, a plain loop) and on the Drowned Bell: a circle (x, y, r), the segment (x0, y0)-(x1, y1) swept by a body of radius r, or the sector of reach and arc around the hero's facing a.
   W.smashCircle = function (p, x, y, r) {
     if (this.arena) this.wallCircle(p, x, y, r + 4); // boss walls (bosses.js)
+    const bl = this.room.bell; if (bl && p && !p.bellS && U.dist2(bl.x, bl.y, x, y) <= (BELL_R + r) * (BELL_R + r)) this.ringBell(p);
     const bs = this.room.breakables; if (!bs.length) return;
     const rs = this.roomState[this.roomId], rr = (SMASH_R + r) * (SMASH_R + r);
     for (let i = 0; i < bs.length; i++) {
@@ -513,8 +610,9 @@
       if (dx * dx + dy * dy <= rr) this.smashBreakable(i, p);
     }
   };
-  W.smashSeg = function (p, x0, y0, x1, y1, r) {
+  W.smashSeg = function (p, x0, y0, x1, y1, r, noRing) {
     if (this.arena) this.wallSeg(p, x0, y0, x1, y1, r + 4);
+    const bl = this.room.bell; if (bl && p && !p.bellS && !noRing && U.segDist2(bl.x, bl.y, x0, y0, x1, y1) <= (BELL_R + r) * (BELL_R + r)) this.ringBell(p);
     const bs = this.room.breakables; if (!bs.length) return;
     const rs = this.roomState[this.roomId], rr = (SMASH_R + r) * (SMASH_R + r);
     for (let i = 0; i < bs.length; i++) {
@@ -524,6 +622,8 @@
   };
   W.smashArc = function (p, a, reach, arc) {
     if (this.arena) this.wallArc(p, a, reach, arc);
+    const bl = this.room.bell;
+    if (bl && p && !p.bellS) { const d = Math.hypot(bl.x - p.x, bl.y - p.y); if (d - BELL_R <= reach && (arc >= 6.2 || Math.abs(U.angDiff(a, Math.atan2(bl.y - p.y, bl.x - p.x))) <= arc / 2 + Math.atan2(BELL_R, Math.max(d, 1)))) this.ringBell(p); }
     const bs = this.room.breakables; if (!bs.length) return;
     const rs = this.roomState[this.roomId];
     for (let i = 0; i < bs.length; i++) {

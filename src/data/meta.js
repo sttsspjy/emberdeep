@@ -47,6 +47,9 @@
     necro: [
       V('necro', 'splinter'), V('necro', 'gravewhirl'), V('necro', 'miasma'),
     ],
+    bell: [
+      V('bell', 'stormbell'), V('bell', 'wreckbell'), V('bell', 'chimes'),
+    ],
   };
   // The weapon a hero wields for a stored choice `id`: a base weapon unlocked at mastery level ml, or a variant whose id is in `owned` (the meta bundle's armory ids) and whose base is unlocked;
   // anything else falls back to the base weapon when that is unlocked, else to weapon 0.
@@ -123,7 +126,7 @@
     { id: 'pact5', name: 'Pact Bound', desc: 'Complete a descent under Pact 5+', icon: 'ember', reward: 120, check: p => p.pactWin >= 5 },
     { id: 'pact10', name: 'Abyss-Touched', desc: 'Complete a descent under Pact 10', icon: 'ember', reward: 250, check: p => p.pactWin >= 10 },
     { id: 'master', name: 'Master', desc: 'Reach mastery 10 with any hero', icon: 'star', reward: 100, check: p => p.mastery.some(x => ED.masteryLevel(x) >= 10) },
-    { id: 'manyfaces', name: 'Many Faces', desc: 'Unlock all six heroes', icon: 'mask', reward: 60, check: p => ED.CLASS_IDS.every(c => ED.Save.classUnlocked(p, c)) },
+    { id: 'manyfaces', name: 'Many Faces', desc: 'Unlock six heroes', icon: 'mask', reward: 60, check: p => ED.CLASS_IDS.filter(c => ED.Save.classUnlocked(p, c)).length >= 6 },
     { id: 'archivist', name: 'Relic Keeper', desc: 'Hold 10 relics in one descent', icon: 'scroll', reward: 60, check: (p, run) => run && run.maxRelics >= 10 },
     { id: 'hearthkeeper', name: 'Hearthkeeper', desc: 'Buy 25 Hearth upgrade ranks', icon: 'ember', reward: 80, check: p => p.up.reduce((a, b) => a + b, 0) >= 25 },
     { id: 'evolved', name: 'Evolved', desc: 'Evolve a weapon', icon: 'wing', reward: 40, check: (p, run) => run && run.evolved },
@@ -131,5 +134,86 @@
     { id: 'cartographer', name: 'Cartographer', desc: 'Clear two dark rooms and an elite room on one stratum', icon: 'scroll', reward: 40, check: (p, run) => run && run.fullClear },
   ];
   ED.DEED_IDX = ED.U.indexer(ED.DEEDS.map(d => d.id));
+  // Secrets: hidden achievements (no embers), each rewarding a Wardrobe item. check(profile, run, pl) runs at run end (save.js S.checkSecrets) with `pl` the local hero's entry of run.players;
+  // world fields (run.gold777, run.oneFace) and per-hero fields (pl.platino, pl.contrarian, pl.thread, pl.heroSecret, pl.bellRung) come from the sim summary. Hearthsitter is granted by the camp (S.grantSecret).
+  // The profile stores one bit per entry by position (ED.SECRETS index; the save code carries a 6-bit count): append only. A hero secret's id is its hero's id (pl.heroSecret names the hero's own).
+  const heroSecret = (id, name, desc, icon) => ({ id, name, desc, icon, reward: `skin.${id}.secret`, check: (p, run, pl) => !!(run && pl && pl.heroSecret && run.cls === id) });
+  ED.SECRETS = [
+    { id: 'hearthsitter', name: 'Hearthsitter', desc: 'Sat by the Hearth, still, for three minutes', icon: 'campfire', reward: 'camp.bluehearth', check: () => false },
+    { id: 'platino', name: 'The Platino', desc: 'Caught the Platino', icon: 'gem', reward: 'pet.platino', check: (p, run, pl) => !!(pl && pl.platino) },
+    { id: 'change', name: 'Exact Change', desc: 'Held exactly 777 gold', icon: 'coin', reward: 'trail.coins', check: (p, run) => !!(run && run.gold777) },
+    { id: 'unkindled', name: 'Unkindled', desc: 'Completed a descent with no Hearth upgrades', icon: 'ember', reward: 'skin.unkindled', check: (p, run) => !!(run && run.victory) && p.up.every(r => !r) },
+    { id: 'contrarian', name: 'Against the Grain', desc: 'Completed a descent taking element boons of one element per stratum, a new element on every stratum', icon: 'thorn', reward: 'title.contrarian', check: (p, run, pl) => !!(run && run.victory && pl && pl.contrarian) },
+    { id: 'thread', name: 'Thread of Life', desc: 'Slew the Hollow King below 3% health', icon: 'heartbroken', reward: 'death.embers', check: (p, run, pl) => !!(pl && pl.thread) },
+    // p.heroWins is read before this run's victory is added (S.applyRun)
+    { id: 'crown', name: 'Hollow Crown', desc: 'Completed a descent at Pact 10 with a hero who had never won', icon: 'crown', reward: 'hat.crown',
+      check: (p, run) => !!(run && run.victory && (run.pact | 0) >= 10 && ED.CLASS_IDS.indexOf(run.cls) >= 0 && !((p.heroWins | 0) & (1 << ED.CLASS_IDS.indexOf(run.cls)))) },
+    { id: 'oneface', name: 'One Face', desc: 'Four heroes of one kind cleared a stratum', icon: 'mask', reward: 'title.many', check: (p, run) => !!(run && run.oneFace) },
+    heroSecret('knight', 'Return to Sender', 'Felled a boss with the returning shield', 'shield'),
+    heroSecret('ranger', 'Long Shot', 'One arrow, three kills', 'arrow'),
+    heroSecret('pyro', 'Bonfire', 'Thirty foes burning at once', 'flame'),
+    heroSecret('shade', 'Unseen', 'Five kills in one unseen moment', 'vanish'),
+    heroSecret('cleric', 'Smiter', 'Smote a boss 25 times in one fight', 'hammer'),
+    heroSecret('necro', 'Risen Champion', 'An elite you slew rose to serve', 'skull'),
+    heroSecret('bell', 'Toll for Thee', 'Slew the Hollow King with a Peal', 'drum'),
+  ];
+  ED.SECRET_IDX = ED.U.indexer(ED.SECRETS.map(s => s.id));
+  ED.secretHas = (p, id) => { const i = ED.SECRET_IDX[id]; return i !== undefined && !!((p.secrets | 0) & (1 << i)); };
+
+  // Wardrobe: cosmetics { id, slot, cls (null = any hero), name, gate }; client-only, never read by the sim. Slots: skin, tint (one per base weapon, several worn), aura, hat, pet, trail, death, title (text after the name), camp (the Hearth, not per hero).
+  // gate: { mastery, cost } bought with embers once the hero's mastery is reached (never refunded) · { secret } owned with that secret · { evolve, n } owned once that base weapon evolved in n descents (p.evo) · { mastery } alone: the wearing hero's mastery.
+  // Positions: the save code stores purchases and worn items by index inside a scope (ED.COS_SCOPE: '' the global items, then each hero in CLASS_IDS order): append inside a scope only. A new hero gets its rows from its CLASS_IDS entry and its weapons (CLASSES order).
+  ED.COS_SLOTS = ['skin', 'tint', 'aura', 'hat', 'pet', 'trail', 'death', 'title', 'camp'];
+  ED.WEAR_SLOTS = ['skin', 'aura', 'hat', 'pet', 'trail', 'death', 'title']; // per hero, one item each; tints and camp are stored apart
+  const G = (id, slot, name, gate) => ({ id, slot, cls: null, name, gate });
+  ED.COS_SCOPE = { '': [
+    G('aura.gilded', 'aura', 'Gilded', { mastery: 10 }),
+    G('skin.unkindled', 'skin', 'Unkindled', { secret: 'unkindled' }),
+    G('hat.crown', 'hat', 'Hollow Crown', { secret: 'crown' }),
+    G('pet.platino', 'pet', 'Platino', { secret: 'platino' }),
+    G('trail.coins', 'trail', 'Trail of Coins', { secret: 'change' }),
+    G('death.embers', 'death', 'Last Embers', { secret: 'thread' }),
+    G('title.contrarian', 'title', 'the Contrarian', { secret: 'contrarian' }),
+    G('title.many', 'title', 'One of Many', { secret: 'oneface' }),
+    G('camp.bluehearth', 'camp', 'Blue Hearth', { secret: 'hearthsitter' }),
+  ] };
+  // Skin names per hero [mastery 4, mastery 7, secret]; a hero without a row gets the generic names.
+  const SKIN_NAMES = {
+    knight: ['Ashen Plate', 'Sunsteel', 'Mirror Knight'], ranger: ['Mossweave', 'Winter Stalker', 'Hawkeye'], pyro: ['Soot', 'Blue Flame', 'Bonfire Heart'],
+    shade: ['Dusk', 'Moonless', 'Nobody'], cleric: ['Pilgrim', 'High Vicar', 'Hammer of Dawn'], necro: ['Bone Choir', 'Grave Lord', 'Risen Shroud'], bell: ['Verdigris', 'Tidecaller', 'Last Toll'],
+  };
+  const weaponName = (w) => (ED.WEAPONS[w] ? ED.WEAPONS[w].name : w); // read when shown: a hero's weapon table may load after this file
+  for (const c of ED.CLASS_IDS) {
+    const nm = SKIN_NAMES[c] || ['Ashen', 'Regal', 'Secret'];
+    ED.COS_SCOPE[c] = [
+      { id: `skin.${c}.a`, slot: 'skin', cls: c, name: nm[0], gate: { mastery: 4, cost: 150 } },
+      { id: `skin.${c}.b`, slot: 'skin', cls: c, name: nm[1], gate: { mastery: 7, cost: 300 } },
+      { id: `skin.${c}.secret`, slot: 'skin', cls: c, name: nm[2], gate: { secret: c } },
+    ].concat(ED.CLASSES[c].weapons.map(w => ({ id: `tint.${w}`, slot: 'tint', cls: c, get name() { return `${weaponName(w)} Sheen`; }, weapon: w, gate: { evolve: w, n: 3 } })));
+  }
+  ED.COSMETICS = [].concat(...Object.values(ED.COS_SCOPE));
+  ED.COSMETIC = {}; for (const c of ED.COSMETICS) ED.COSMETIC[c.id] = c;
+  // Items of `slot` that hero `cls` can wear: the global ones, then the hero's own.
+  ED.cosFor = (cls, slot) => ED.COSMETICS.filter(c => c.slot === slot && (c.cls === null || c.cls === cls));
+  // True when profile p owns item `id` worn by hero `cls` (a global item's mastery gate reads that hero).
+  ED.cosOwned = (p, id, cls) => {
+    const c = ED.COSMETIC[id];
+    if (!c || !p || (c.cls && cls && c.cls !== cls)) return false;
+    const g = c.gate, hero = c.cls || cls;
+    if (g.secret) return ED.secretHas(p, g.secret);
+    if (g.evolve) return ((p.evo && p.evo[g.evolve]) | 0) >= g.n;
+    if (g.cost) return Array.isArray(p.cos) && p.cos.indexOf(id) >= 0;
+    if (g.mastery) { const i = ED.CLASS_IDS.indexOf(hero); return i >= 0 && ED.masteryLevel((p.mastery && p.mastery[i]) || 0) >= g.mastery; }
+    return false;
+  };
+  // How item c is earned: "Mastery 4 · 150 embers", "A secret", "Evolve the Longsword in 3 descents" (+ " (1/3)" with a profile), "Mastery 10".
+  ED.cosGateText = (c, p) => {
+    const g = c.gate;
+    if (g.secret) return 'A secret';
+    if (g.evolve) { const k = p && p.evo ? p.evo[g.evolve] | 0 : 0; return `Evolve the ${weaponName(g.evolve)} in ${g.n} descents` + (p ? ` (${Math.min(k, g.n)}/${g.n})` : ''); }
+    if (g.cost) return `Mastery ${g.mastery} · ${g.cost} embers`;
+    return `Mastery ${g.mastery}`;
+  };
+
 
 })(globalThis.ED || (globalThis.ED = {}));

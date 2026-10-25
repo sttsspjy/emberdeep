@@ -1,7 +1,8 @@
 // Usage: node tools/sim.js <heroes> <runs> <botSkill 0-1> <meta none|mid|max> [classes|-] [pact] [--pick=random|smart|legacy] [--start=random|class|generalist|rotate|<gateId>] [--gates=1|2] [--force=id[@slot],...]
 //   [--route=attack|skill1|skill2|element|random|rotate] [--fork=0|1|random|rotate] [--weapon=0|1|2|rotate] [--aimnoise=<angle rad>,<point px>|0] [--seed0=N] [--dark=smart|always|never] [--strata=N] [--from=N] [--boss] [--vet[=charges,rider,dodge,hazard]] [--vetreact=<s>] [--lambda=<x>|auto[:<x0>]] [--out=rows.json] [--pair=rows.json] [--quiet] [--explain]   (parallel batches: tools/simpool.js, fixed quick suite: tools/bal.js)
 // Headless simulation harness: loads the game's sim files into this Node context and drives bot heroes through full runs (deterministic per seed: the bot has its own seeded RNG).
-// Bot policy: fight, claim room rewards, use rest sites and shops, then take the exit door nextRoom picks (a seeded map heuristic) until the boss.
+// Bot policy: fight, claim room rewards (Twist rewards included), use rest sites and shops, then take the exit door nextRoom picks (a seeded map heuristic) until the boss.
+// Skill cooldowns follow ED.TWIST.cd (Bloodprice: the cast gap while above BLOOD_HP of max health, the normal cooldown below); a Capacitor holder also casts when CAP_PACK of its charged foes stand (or a charged elite or boss), the cast's range checks waived.
 // Dark rooms follow --dark: smart (default) enters one while every living hero has at least DARK_HP of max HP, always enters, never skips them.
 // Pick policies: 'random' takes a random card; 'smart' takes the card of best marginal value (tools/pick.js: damage and effective health over the next three strata from the sheet model, folded mechanics, milestone value of keystone / evolution / duo; start card, forge, rerolls and relics by the same value);
 // 'legacy' is the v3 smart order in smartScore (evolution > keystone > duo > own-path boon > element gate while a slot is free > open General > anything), kept for paired comparison. --explain prints every pick of a single run with its value parts.
@@ -25,8 +26,8 @@ const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
 const ROOT = path.join(__dirname, '..', 'src') + '/';
-const files = ['util.js', 'data/biomes.js', 'data/enemies.js', 'data/classes.js', 'data/boons.js', 'data/classboons.js', 'data/ascended.js', 'data/relics.js', 'data/meta.js', 'save.js',
-  'sim/dungeon.js', 'sim/stats.js', 'sim/world.js', 'sim/combat.js', 'sim/build.js', 'sim/skills.js', 'sim/class-knight.js', 'sim/class-ranger.js', 'sim/class-pyro.js', 'sim/class-shade.js', 'sim/class-cleric.js', 'sim/class-necro.js',
+const files = ['util.js', 'data/biomes.js', 'data/enemies.js', 'data/classes.js', 'data/boons.js', 'data/classboons.js', 'data/ascended.js', 'data/mutations.js', 'data/twists.js', 'data/relics.js', 'data/meta.js', 'save.js',
+  'sim/dungeon.js', 'sim/stats.js', 'sim/world.js', 'sim/combat.js', 'sim/build.js', 'sim/skills.js', 'sim/class-knight.js', 'sim/class-ranger.js', 'sim/class-pyro.js', 'sim/class-shade.js', 'sim/class-cleric.js', 'sim/class-necro.js', 'sim/class-bell.js', 'sim/twist.js',
   'sim/ai.js', 'sim/bosses.js', 'sim/boss-warden.js', 'sim/boss-spore.js', 'sim/rooms.js', 'sim/sheet.js'];
 // Main context, not vm.createContext: inside a vm context every global read (Math, Object, ...) goes through the context interceptor and the sim runs ~3x slower.
 for (const f of files) vm.runInThisContext(fs.readFileSync(ROOT + f, 'utf8'), { filename: f });
@@ -49,7 +50,16 @@ function arrivalOf(w, picks) {
 const DARK_HP = 0.6; // --dark=smart: the bot enters a dark room while every living hero has at least this share of max HP
 const SL = Array.from({ length: ED.CONST.STRATA }, (_, i) => i + 1); // stratum numbers 1..STRATA
 const zeros = () => SL.map(() => 0), lists = () => SL.map(() => []);
-const PER_HERO_REWARDS = ['boon', 'forge', 'epic', 'vigor'];
+const BLOOD_HP = 0.5, CAP_PACK = 3, CAP_GAP = 0.5; // Bloodprice: casts at the gap only above this share of max health; Capacitor: charged foes that make the bot cast, seconds between two such casts
+// Seconds a cast of skill slot puts on that slot for hero p: ED.TWIST.cd (Bloodprice gap) while the Bloodprice policy allows it, else the slot's cooldown.
+const botCd = (p, slot) => (p.stats.twBlood && p.hp > p.maxHp * BLOOD_HP ? ED.TWIST.cd(p.stats, slot) : slot ? p.stats.skill2Cd : p.stats.skillCd);
+// Capacitor: true when hero p's charged foes are worth a detonation (CAP_PACK of them, or one charged elite or boss).
+function capReady(p, foes) {
+  let n = 0;
+  for (const e of foes) if (e.charge > 0 && e.chargeOwner === p) { if (e.elite || e.boss || ++n >= CAP_PACK) return true; }
+  return false;
+}
+const PER_HERO_REWARDS = ['boon', 'forge', 'epic', 'vigor', 'twist'];
 const MAX_SECONDS = 60 * 60; // a run that is still going after an hour of game time counts as a loss
 // Open General boons in the order a sensible player takes them (damage and defence first).
 const NEUTRAL_PREF = ['edge', 'quick', 'keen', 'brutal', 'vigor', 'stalwart', 'plating', 'battleward', 'focus', 'evade', 'wide', 'mending', 'forager', 'fleet', 'magnet', 'thorns', 'lightstep', 'bounty'];
@@ -403,8 +413,31 @@ function startMove(w, p, N, a, data) {
   p.skillMove = { dx: (end.x - p.x) / real, dy: (end.y - p.y) / real, speed: real / t, t, iframes: mv.iframes === undefined ? t : mv.iframes, age: 0 };
 }
 
+// BELL_HAUL: px within which a Bellwarden bot winds its bells. PEAL_PACK: foes in the wave that make a bot ring the Peal. PEAL_RES: the Resonance a bot rings it at. BELL_STAND: px from its target's edge a bot keeps (hurl range, past a boss's melee reach).
+// LEAP_PACK: foes at an out-of-hand bell that make a bot yank itself there. LINE_W: px either side of a hurl's line a foe counts as on it.
+const BELL_HAUL = 220, PEAL_PACK = 3, PEAL_RES = 7, BELL_STAND = 105, LEAP_PACK = 2, LINE_W = 8;
+// A Bellwarden bot plays the loop as ED.Bell.cycle models it: attack held while a foe is within BELL_HAUL; a one-tick release when ED.Bell.ready says so, the cursor past the last foe on the line from the hero
+// that crosses the most foes within the hurl's reach (aim error by skill); held again at once (the bell reels home as it lands and winds on). c.bellRel: the release tick has passed.
+function botBell(w, p, c, foes, tgt, inRange, skill, brng) {
+  if (c.bellRel) { c.bellRel = false; p.haulIn = inRange; return; }
+  p.haulIn = inRange;
+  if (!inRange || !ED.Bell.ready(w, p)) return;
+  const st = p.stats, R = ED.CONST.HURL_D, br = st.weapon.br * (1 + 0.5 * st.area);
+  let best = tgt, bn = -1, far = 0;
+  for (const e of foes) {
+    const de = Math.hypot(e.x - p.x, e.y - p.y); if (de > R || de < 1) continue;
+    const ux = (e.x - p.x) / de, uy = (e.y - p.y) / de;
+    let n = 0, f = de;
+    for (const g of foes) { const along = (g.x - p.x) * ux + (g.y - p.y) * uy; if (along < 0 || along > R) continue; const off = Math.abs((g.y - p.y) * ux - (g.x - p.x) * uy); if (off < br + g.r + LINE_W) { n++; f = Math.max(f, along); } }
+    if (n > bn) { bn = n; best = e; far = f; }
+  }
+  const de = Math.hypot(best.x - p.x, best.y - p.y) || 1, a = Math.atan2(best.y - p.y, best.x - p.x) + gauss(brng) * AIM[0] * (1 - skill), k = Math.min(R, Math.max(de, far) + 20);
+  p.face = a; p.aimX = p.x + Math.cos(a) * k; p.aimY = p.y + Math.sin(a) * k;
+  p.haulIn = false; c.bellRel = true;
+}
 // Casts slot 0 or 1 of hero p at foe tgt (distance d, angle a) when the skill's aim allows it; returns whether it was cast. Route stats shape the choice: Scattershot casts Volley at close range, Assassinate steps to a wounded foe.
-function botCast(w, p, slot, tgt, d, a, foes, brng, skill) {
+// force (Capacitor detonation): a 'dir' or 'self' skill casts at any distance, a 'ground' skill lands at its range toward the foe; 'move' skills keep their range.
+function botCast(w, p, slot, tgt, d, a, foes, brng, skill, force) {
   const st = p.stats, id = slot ? ED.CLASSES[p.cls].skill2 : ED.CLASSES[p.cls].skill;
   if (!id || !ED.CAST[id]) return false;
   const N = ED.Stats.skillNums(id, st), sA = AIM[0] * (1 - skill), sP = AIM[1] * (1 - skill);
@@ -414,15 +447,28 @@ function botCast(w, p, slot, tgt, d, a, foes, brng, skill) {
     for (const e of foes) if (e.hp < e.maxHp * 0.5) { const d2 = U.dist2(e.x, e.y, p.x, p.y); if (d2 < bd) { bd = d2; tgt = e; } }
     d = Math.sqrt(U.dist2(tgt.x, tgt.y, p.x, p.y)); a = ang = Math.atan2(tgt.y - p.y, tgt.x - p.x);
   }
+  if (id === 'heave') { // Anchor Leap: yank to an out-of-hand bell with LEAP_PACK foes (or an elite or boss) at it; else, every bell in hand, leap at a foe 70-180 px off, or away from it below 35% health
+    const r = N.p.slam.r, all = p.bells.every(b => b.s === ED.Bell.STATES.HAND);
+    let go = null;
+    for (const b of p.bells) { if (b.s === ED.Bell.STATES.HAND) continue; let n = 0, big = false; for (const f of foes) if (U.dist2(f.x, f.y, b.x, b.y) < (r + f.r) ** 2) { n++; if (f.boss || f.elite) big = true; } if (n >= LEAP_PACK || big) { go = b; break; } }
+    if (go) { p.aimX = go.x; p.aimY = go.y; ang = Math.atan2(go.y - p.y, go.x - p.x); }
+    else if (all && p.hp < 0.35 * p.maxHp && d < 90) { ang = a + Math.PI; p.aimX = p.x + Math.cos(ang) * 200; p.aimY = p.y + Math.sin(ang) * 200; }
+    else if (all && d > 70 && d < 180) { ang = a + gauss(brng) * sA; p.aimX = tgt.x; p.aimY = tgt.y; }
+    else return false;
+    w.playerSkill(p, ang, null, slot);
+    return true;
+  }
   switch (N.aim) {
     case 'dir':
-      if (id === 'shieldthrow') { if (d >= 240) return false; data = { d: Math.hypot(tgt.x - p.x, tgt.y - (p.y - 4)) }; } else if (d >= (id === 'volley' ? (st.volleyClose ? 110 : 160) : 220)) return false;
+      if (id === 'shieldthrow') { if (d >= 240 && !force) return false; data = { d: Math.hypot(tgt.x - p.x, tgt.y - (p.y - 4)) }; } else if (!force && d >= (id === 'volley' ? (st.volleyClose ? 110 : 160) : 220)) return false;
       ang = a + gauss(brng) * sA;
       break;
-    case 'ground':
-      if (d >= N.range) return false;
-      data = { x0: p.x, y0: p.y, x: tgt.x + gauss(brng) * sP, y: tgt.y + gauss(brng) * sP };
+    case 'ground': {
+      if (d >= N.range && !force) return false;
+      const f = d >= N.range ? (N.range - 1) / d : 1; // a forced cast lands at its range on the line to the foe
+      data = { x0: p.x, y0: p.y, x: p.x + (tgt.x - p.x) * f + gauss(brng) * sP, y: p.y + (tgt.y - p.y) * f + gauss(brng) * sP };
       break;
+    }
     case 'move': {
       if (d >= N.range + 10) return false;
       const e2 = ED.Sim.castMove(w.room, p.x, p.y, a, U.clamp(d + 40, N.rangeMin, N.range), p.r, w.locked);
@@ -433,9 +479,15 @@ function botCast(w, p, slot, tgt, d, a, foes, brng, skill) {
       if (id === 'harvest') {
         const mine = w.allies.filter(q => q.owner === p.pid);
         if (mine.length ? !mine.some(m => foes.some(f => U.dist2(m.x, m.y, f.x, f.y) < (N.p.burst.r + f.r) ** 2)) : d >= 220) return false;
+      } else if (id === 'peal') { // ring the bells where they are: a foe in a wave and PEAL_RES Resonance or an elite or boss in it, or 2 x PEAL_PACK foes in it at any Resonance
+        const r = N.p.wave.r * (1 + ED.CONST.RES_R * Math.min(1, (p.bellRes | 0) / ED.CONST.RES_MAX)), seen = new Set();
+        let big = false;
+        for (const b of p.bells) for (const f of foes) if (!seen.has(f) && U.dist2(f.x, f.y, b.x, b.y) < (r + f.r) ** 2) { seen.add(f); if (f.boss || f.elite) big = true; }
+        const n = seen.size;
+        if (!(n >= 2 * PEAL_PACK || (n >= 1 && ((p.bellRes | 0) >= PEAL_RES || big)))) return false;
       } else {
         const q = N.parts.find(x => x.on && x.r > 0), reach = id === 'vanish' || !q ? 160 : q.r + tgt.r + 6;
-        if (d >= reach) return false;
+        if (d >= reach && !force) return false;
       }
     }
   }
@@ -740,9 +792,13 @@ function runBot(opts) {
   }
   const htkBare = hitsToKill(w, w.players.values().next().value, 1);
   const pickN = PICK_SRC.map(() => 0), pickLead = w.players.keys().next().value, pick0 = w.pickBoon; // hero 0's picks by offer source, counted from the start pick on (the --from walk included)
+  const purse = SL.map(() => [0, 0, 0]); // hero 0's offers per stratum: [offers, offers showing the Purse, Purse picks] (pool exhaustion)
   w.pickBoon = function (pid, idx) {
     const p = this.players.get(pid);
-    if (pid === pickLead && p && p.offer) { const k = PICK_SRC.indexOf(p.offers[0] && p.offers[0].src); pickN[k < 0 ? PICK_SRC.length - 1 : k]++; }
+    if (pid === pickLead && p && p.offer) {
+      const k = PICK_SRC.indexOf(p.offers[0] && p.offers[0].src); pickN[k < 0 ? PICK_SRC.length - 1 : k]++;
+      const ps = purse[Math.min(ED.CONST.STRATA, Math.max(1, this.stratum)) - 1]; ps[0]++; if (p.offer.includes('purse')) { ps[1]++; if (p.offer[idx] === 'purse') ps[2]++; }
+    }
     return pick0.call(this, pid, idx);
   };
   // the requested start card (first forced gate, else --start=<gate|generalist>) replaces the start pick; a Generalist card exists only for heroes without a class element
@@ -864,26 +920,29 @@ function runBot(opts) {
     for (const p of w.players.values()) {
       const c = ctl[p.pid];
       c.atk -= dt; c.skill2 -= dt; ED.Sim.dashTick(c, p.stats, dt); c.goal = null;
+      if (p.stats.twBlood && p.hp > p.maxHp * BLOOD_HP) { c.skill = Math.min(c.skill, botCd(p, 0)); c.skill2 = Math.min(c.skill2, botCd(p, 1)); } // Bloodprice: a running cooldown is cut to the gap (as the client does)
       if (vetC) { // skill charges as the client keeps them: a charge refills each skillCd while below the maximum, a new maximum (Echo) grants its charge at once
         const mc = p.stats.maxCharges;
         if (mc > c.mchg) c.chg += mc - c.mchg;
         c.mchg = mc; c.chg = Math.min(c.chg, mc); c.vgap -= dt;
-        if (c.chg < mc) { c.skill -= dt; while (c.skill <= 0 && c.chg < mc) { c.chg++; c.skill = c.chg < mc ? c.skill + p.stats.skillCd : 0; } }
+        if (c.chg < mc) { c.skill -= dt; while (c.skill <= 0 && c.chg < mc) { c.chg++; c.skill = c.chg < mc ? c.skill + botCd(p, 0) : 0; } }
       } else c.skill -= dt;
       if (p.offer) takeOffer(w, p, policy, brng, ctx);
       if (p.downed || p.dead) continue;
       let mx = 0, my = 0;
       const foes = w.enemies.filter(e => e.hp > 0 && e.spawnT <= 0);
       const skill = opts.skill ?? 0.75;
+      if (!foes.length && p.haulIn) p.haulIn = false; // a Bellwarden stops winding with no foe left
       if (foes.length) {
         // target: the nearest threat foe when it is within weapon reach (or when no fodder stands), else the nearest fodder
         let tgt = null, bd = 1e9, nf = null, fd = 1e9;
         for (const e of foes) { const d2 = U.dist2(e.x, e.y, p.x, p.y); if (e.fodder) { if (d2 < fd) { fd = d2; nf = e; } } else if (d2 < bd) { bd = d2; tgt = e; } }
-        if (nf && (!tgt || Math.sqrt(bd) - (p.stats.melee ? tgt.r : 0) >= (p.stats.melee ? p.stats.weapon.range : 380))) { tgt = nf; bd = fd; }
+        const close = p.stats.melee || p.stats.kind === 'bell', reachW = p.stats.kind === 'bell' ? ED.Bell.orbit(p.stats.weapon) + p.stats.weapon.br + 20 : p.stats.weapon.range; // a bell fights at its orbit, like a melee weapon
+        if (nf && (!tgt || Math.sqrt(bd) - (close ? tgt.r : 0) >= (close ? reachW : 380))) { tgt = nf; bd = fd; }
         const piece = w.boss ? arenaTarget(w, foes, p) : null; // boss fights: spore buds and pods before the boss
         if (piece) { tgt = piece; bd = U.dist2(piece.x, piece.y, p.x, p.y); }
         const d = Math.sqrt(bd);
-        const ideal = p.stats.melee ? (p.stats.weapon.range * 0.6 + tgt.r) : (p.stats.deadeye ? 230 : 170); // Deadeye keeps its distance
+        const bell = p.stats.kind === 'bell', ideal = bell ? BELL_STAND + tgt.r : p.stats.melee ? (p.stats.weapon.range * 0.6 + tgt.r) : (p.stats.deadeye ? 230 : 170); // Deadeye keeps its distance; a Bellwarden circles at hurl range
         if (vetH) c.appT = d > ideal + 30 ? c.appT + dt : 0; // seconds spent closing in without arriving
         let dir;
         if (d > ideal + 10) dir = bfsDir(w.room, w.locked, p.x, p.y, tgt.x, tgt.y);
@@ -913,23 +972,27 @@ function runBot(opts) {
         if (vetD || vetR) T = vetThreats(w, p, spd, c.attn ? VR : VR + VLAPSE);
         if (vetD && T && !forced) { plan = vetPlan(w, p, c, mx, my, spd, T); mx = plan.mx; my = plan.my; danger = plan.risk > 0.02; }
         const a = Math.atan2(tgt.y - p.y, tgt.x - p.x), st = p.stats;
-        const inRange = st.melee ? d - tgt.r < st.weapon.range : d < 380;
+        const inRange = bell ? d < BELL_HAUL : st.melee ? d - tgt.r < st.weapon.range : d < 380; // a bell: wind (attack held) while a foe is near
         if (st.channel && (c.holdT = (c.holdT || 0) - dt) <= 0) { c.hold = brng.next() < skill; c.holdT = 0.5; } // Pyroclast: the choice to stand still is renewed every 0.5 s (a roll per tick would break Channel within a few ticks)
         if (st.channel && !danger && inRange && c.hold) { mx = 0; my = 0; } // plant the feet while nothing threatens
-        if (c.atk <= 0 && inRange) {
+        if (bell) botBell(w, p, c, foes, tgt, inRange, skill, brng);
+        else if (c.atk <= 0 && inRange) {
           p.atkD = d; // the cursor on the target (a lobbed weapon lands there)
           w.playerAttack(p, a + gauss(brng) * AIM[0] * (1 - skill));
           c.atk = Math.max(c.atk, -dt) + ED.Stats.stepInterval(p); // carries the overshoot of this tick, as the client does
         }
-        if (vetC) { if (c.chg > 0 && c.vgap <= 0 && !p.skillMove && botCast(w, p, 0, tgt, d, a, foes, brng, skill)) { if (c.chg === st.maxCharges) c.skill = st.skillCd; c.chg--; c.vgap = 0.35; } }
-        else if (c.skill <= 0 && botCast(w, p, 0, tgt, d, a, foes, brng, skill)) c.skill = st.skillCd;
-        if (c.skill2 <= 0 && st.skill2Cd && botCast(w, p, 1, tgt, d, a, foes, brng, skill)) c.skill2 = st.skill2Cd;
+        const det = st.capacitor > 0 && (c.capT = (c.capT || 0) - dt) <= 0 && capReady(p, foes); // Capacitor: detonate the charged foes with whichever skill is ready (once per CAP_GAP: the chain queue clears the charges over a few ticks)
+        let cast = false;
+        if (vetC) { if (c.chg > 0 && c.vgap <= 0 && !p.skillMove && botCast(w, p, 0, tgt, d, a, foes, brng, skill, det)) { if (c.chg === st.maxCharges) c.skill = botCd(p, 0); c.chg--; c.vgap = 0.35; cast = true; } }
+        else if (c.skill <= 0 && botCast(w, p, 0, tgt, d, a, foes, brng, skill, det)) { c.skill = botCd(p, 0); cast = true; }
+        if (c.skill2 <= 0 && st.skill2Cd && botCast(w, p, 1, tgt, d, a, foes, brng, skill, det && !cast)) { c.skill2 = botCd(p, 1); cast = true; }
+        if (det && cast) c.capT = CAP_GAP;
         let dd = null; // --vet: the dash heading of the dodge plan, else of a rider dash through a pack
         if (forced && forced.tl < 0.3 && c.dashN >= 1 && !(p.dashT > 0) && !p.skillMove) dd = forced.d;
         else if (vetD && plan && plan.dash) dd = plan.dash; else if (vetR && !danger) dd = vetRider(w, p, c, foes, T, spd);
         if (dd) { p.dashT = ED.CONST.DASH.t; p.dashDx = dd[0]; p.dashDy = dd[1]; w.playerDash(p, dd[0], dd[1]); ED.Sim.dashTry(c, p.stats); }
         else if (!vetD && danger && c.dashN >= 1 && brng.next() < skill * 0.5) { p.dashT = ED.CONST.DASH.t; p.dashDx = mx; p.dashDy = my; w.playerDash(p, mx, my); ED.Sim.dashTry(c, p.stats); }
-        else if (!vetR && !danger && c.dashN >= 1 && d <= 90 && (p.stats.dashDmg || p.stats.dashFire || p.stats.dashFrost || p.stats.dashBomb) && brng.next() < skill * 0.5) { // dash rider: dash through the target
+        else if (!vetR && !danger && c.dashN >= 1 && d <= 90 && (p.stats.dashDmg || p.stats.dashFire || p.stats.dashFrost || p.stats.dashBomb || p.stats.dashReap) && brng.next() < skill * 0.5) { // dash rider: dash through the target (Umbral Step Reaps it)
           const l2 = Math.hypot(tgt.x - p.x, tgt.y - p.y) || 1, ddx = (tgt.x - p.x) / l2, ddy = (tgt.y - p.y) / l2;
           p.dashT = ED.CONST.DASH.t; p.dashDx = ddx; p.dashDy = ddy; w.playerDash(p, ddx, ddy); ED.Sim.dashTry(c, p.stats);
         }
@@ -974,6 +1037,7 @@ function runBot(opts) {
       for (const z of w.zones) if (z.owner === p0id && z.team === 0) nz++;
       if (np > rec.peak.projs) rec.peak.projs = np; if (nz > rec.peak.zones) rec.peak.zones = nz;
     }
+    for (const m of w.msgs) if (m.t === 'dashRefund' && ctl[m.to]) { const k = ctl[m.to]; k.dashN = Math.min(w.players.get(m.to).stats.dashCharges | 0, k.dashN + ((m.n | 0) || 1)); } // dash charges back { n } (Umbral Arms), as game.js
     for (const m of w.msgs) if (m.t === 'refund' && ctl[m.to]) { const k = ctl[m.to]; rec.cnt.refunds++; if (m.slot === 1) k.skill2 = m.s ? k.skill2 - m.s : 0; else if (vetC && !m.s) k.chg = Math.min(k.mchg, k.chg + 1); else k.skill = m.s ? k.skill - m.s : 0; } // cooldown refunds { slot, s }
     for (const ev of w.fx) {
       if (ev.t === 'smite') rec.cnt.smite++; else if (ev.t === 'reap') rec.cnt.reap++; else if (ev.t === 'toll') rec.cnt.toll++; else if (ev.t === 'lance') rec.cnt.lance++;
@@ -1015,7 +1079,7 @@ function runBot(opts) {
     endRoom: w.room ? w.room.type : '', evo: p0.stats.evo || null, gates: ED.gatePaths(p0.boons), boonCount: Object.values(p0.boons).reduce((a, b) => a + b, 0), keystones: Object.keys(p0.boons).filter(id => ED.BOONS[id].key).length,
     gen: ED.isGeneralist(p0.boons), elGates: ED.elementGates(p0.boons), startPath: ED.gatePaths(p0.boons)[0] || null, keyAt: rec.keyAt, duoAt: rec.duoAt, duo: Object.keys(p0.boons).some(id => ED.BOONS[id].duo), duoIds: Object.keys(p0.boons).filter(id => ED.BOONS[id].duo), boonIds: Object.keys(p0.boons), relicIds: p0.relics.slice(),
     cnt: rec.cnt, kills0: p0.kills, venom: rec.venom, shield: rec.shield, bossSecs: rec.bossSecs, hpFrac: rec.hpFrac, chainPeak: w.chainPeak, chainHops: w.chainHops, rerolls: p0.rerolls,
-    route: ED.classRoute(p0.boons, p0.cls), wi: ED.weaponIndex(p0.cls, p0.weapon), parts: rec.parts, projDmgS: rec.projDmgS, upt: rec.upt, peak: rec.peak, clip: Object.assign({}, p0.shieldClip), braceOn: p0.stats.brace > 0, hexOn: p0.stats.hex > 0 };
+    purse, twists: ED.TWIST_IDS.filter(id => p0.boons[id] > 0), route: ED.classRoute(p0.boons, p0.cls), wi: ED.weaponIndex(p0.cls, p0.weapon), parts: rec.parts, projDmgS: rec.projDmgS, upt: rec.upt, peak: rec.peak, clip: Object.assign({}, p0.shieldClip), braceOn: p0.stats.brace > 0, hexOn: p0.stats.hex > 0 };
 }
 
 const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
@@ -1104,6 +1168,9 @@ function summarize(results) {
   const deep = (r, t) => r.aff.filter(v => v >= t).length, spread = (f) => [0, 1, 2].map(k => pct(results.filter(r => f(r) === k).length, n)).join('/');
   const offersPer = results.map(r => Object.values(r.offers).reduce((a, b) => a + b, 0) / Math.max(1, r.stratum));
   lines.push(`pacing: offers/run ${f1(avgOffers)} (per stratum ${ms(offersPer, 2)}) | evolved ${pct(evolved.length, n)}% (${ED.PATH_IDS.map(k => k + " " + results.filter(r => r.evo === k).length).join(", ")}) at stratum [${qs(evolved.map(r => r.evoAt.s))}] team lvl [${qs(evolved.map(r => r.evoAt.lvl))}] | of ${reachIV.length} runs reaching IV: evolved ${pct(reachIV.filter(r => r.evo).length, reachIV.length)}% (by IV entry ${pct(reachIV.filter(r => r.evoAt && r.evoAt.s < 4).length, reachIV.length)}%) | affinity median top3 [${[0, 1, 2].map(i => qs(results.map(r => r.aff[i])).split(' ')[1]).join(' ')}] main-path lead (top - 2nd) quartiles [${qs(results.map(r => r.aff[0] - r.aff[1]))}] | runs with 0/1/2 paths at aff>=4: ${spread(r => deep(r, 4))}% at aff>=5: ${spread(r => deep(r, 5))}% | element gates 0/1/2: ${spread(r => r.elGates.length)}% (Generalist runs ${pct(results.filter(r => r.gen).length, n)}%)`);
+  const pShare = S.map(s => { let o = 0, h = 0, t = 0; for (const r of results) if (r.purse) { o += r.purse[s - 1][0]; h += r.purse[s - 1][1]; t += r.purse[s - 1][2]; } return o ? `${ROMAN[s - 1]} ${pct(h, o)}%/${pct(t, o)}%` : `${ROMAN[s - 1]} -`; });
+  const twN = {}; for (const r of results) for (const id of r.twists || []) twN[id] = (twN[id] || 0) + 1;
+  lines.push(`pool exhaustion (hero 0, offers showing the Purse / Purse picks) by stratum: ${pShare.join(' ')} | Twists held: ${Object.keys(twN).length ? Object.entries(twN).map(([k, v]) => k + ' ' + pct(v, n) + '%').join(', ') : 'none'}`);
   // path lines: evolution / keystone / duo pacing, wins by main path and start, status payoffs, shields
   const elemRuns = results.filter(r => !r.gen && r.elGates.length), genRuns = results.filter(r => r.gen);
   const medS = (a) => (a.length ? median(a) : NaN), withS = (rs, key) => rs.filter(r => r[key]).map(r => (key === 'evoAt' ? r.evoAt.s : r[key]));
@@ -1208,14 +1275,14 @@ const partyOf = (cls, i, n) => {
   const rest = cls.filter((c, k) => k !== i % L), k = Math.floor(i / L) % rest.length;
   return [lead].concat(rest.slice(k), rest.slice(0, k));
 };
-// Expands the rotating flags for run i of a batch over nc classes: route = floor(i / nc) mod 4, fork = floor(i / (nc x 4)) mod 2, weapon = floor(i / (nc x 8)) mod 3, start = the six gates then generalist.
+// Expands the rotating flags for run i of a batch over nc classes: route = floor(i / nc) mod 4, fork = floor(i / (nc x 4)) mod 2, weapon = floor(i / (nc x 8)) mod 3, start = floor(i / nc) mod 7 (the six gates then generalist; by run block, so it never locks to a hero).
 const ROT_START = ['kindle', 'frostbite', 'staticcharge', 'envenom', 'consecrate', 'doommark', 'generalist'];
 function jobOpts(o, i, nc) {
   const r = Object.assign({}, o);
   if (o.route === 'rotate') r.route = ED.ROUTES[Math.floor(i / nc) % 4];
   if (o.fork === 'rotate') r.fork = Math.floor(i / (nc * 4)) % 2;
   if (o.weapon === 'rotate') r.weapon = Math.floor(i / (nc * 8)) % 3;
-  if (o.start === 'rotate') r.start = ROT_START[i % 7];
+  if (o.start === 'rotate') r.start = ROT_START[Math.floor(i / nc) % ROT_START.length];
   return r;
 }
 
@@ -1236,7 +1303,7 @@ if (require.main === module) {
   const flags = {}, args = [];
   for (const a of process.argv.slice(2)) { const m = /^--([a-z0-9]+)(?:=(.*))?$/i.exec(a); if (m) flags[m[1]] = m[2] === undefined ? '1' : m[2]; else args.push(a); }
   const n = +(args[0] || 1), runs = +(args[1] || 5), skill = +(args[2] || 0.75), meta = args[3] || 'none';
-  const cls = (args[4] && args[4] !== '-' ? args[4] : 'knight,ranger,pyro,shade,cleric,necro').split(','); // '-' = every hero
+  const cls = (args[4] && args[4] !== '-' ? args[4] : ED.CLASS_IDS.join(',')).split(','); // '-' = every hero
   const { up, mastery } = metaProfile(meta);
   const o = optsFromFlags(flags), pick = o.pick, force = o.force, seed0 = +(flags.seed0 || 1000);
   const results = [];

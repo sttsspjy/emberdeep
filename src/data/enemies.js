@@ -125,7 +125,7 @@
     vampiric: { name: 'Vampiric', color: '#d43a5a', desc: 'heals when it hurts you' },
   };
   ED.AFFIX_IDS = Object.keys(ED.AFFIXES);
-  ED.hasAffix = (e, id) => e.elite === id || e.elite2 === id; // either affix slot
+  ED.hasAffix = (e, id) => !e.affixOff && (e.elite === id || e.elite2 === id); // either affix slot; none while Hex the Strong suppresses them (e.affixOff)
 
   // Projectile kinds share one table for both teams so the renderer knows how to draw them.
   ED.PROJ_KINDS = ['bone', 'spore', 'ice', 'fire', 'water', 'void', 'arrow', 'bolt', 'firebolt', 'spark', 'fireball', 'knife', 'holy', 'soul', 'plague', 'wave', 'wisp', 'shard', 'blade', 'orb', 'trident', 'skull',

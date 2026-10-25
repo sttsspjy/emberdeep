@@ -247,10 +247,14 @@
     drawDoors(c, view, room, P, t);
     drawZones(c, view, t, 0);
     drawPickups(c, view, t, 0);
+    const Cos = ED.Cos;
+    if (Cos) Cos.trails(c, view, t, low); // Trail of Coins footprints on the floor
     const artProps = R.propArt();
     if (!artProps) drawProps(c, view, local, t);
     let dn = 0, nFoe = 0;
     for (const p of view.players.values()) qDraw(dn++, p.y, 0, p);
+    const xbell = ED.ClassFx.bell;
+    if (xbell) for (const p of view.players.values()) if (p.bells && p.bells.length && !p.dead) for (let i = 0; i < p.bells.length; i++) { qDraw(dn, p.y + (p.bells[i].oy || 0) + 0.01, 7, p); drawPool[dn++].d = i; } // a hero's bells on their chains (cls-bell.js): kind 7, d = bell index
     for (const e of view.enemies) if (e.hp > 0) { qFoe(dn++, e); nFoe++; }
     for (const a of view.allies) qDraw(dn++, a.y, 2, a);
     for (const s of R.liveStatics(view, room)) { // tall pieces of the room art (columns, standing decor, door arch, unbroken breakables)
@@ -258,18 +262,28 @@
       if (s.gc) { R.light(s.x, s.y - 6, 40, s.gc, 0.45); R.emit(s.x, s.y - s.gy, s.gr, s.gc, s.ga); } // a glowing breakable (mushroom, crystal, shard) lights and glows until it is smashed
     }
     if (artProps) for (const p of view.props) qDraw(dn++, p.y, 4, p); // pixel-art props sort with the entities
-    ED.Arena.blocks(view, room, (y, b) => qDraw(dn++, y, 6, b)); // boss wall blocks (arena.js): kind 6
+    ED.Arena.blocks(view, room, (y, b) => qDraw(dn++, y, 9, b)); // boss wall blocks (arena.js): kind 9
+    if (room.bell) qDraw(dn++, room.bell.y, 6, room.bell); // the Drowned Bell (floor gen) and the Platino: kind 6
+    if (view.critter) qDraw(dn++, view.critter.y, 6, view.critter);
+    if (Cos) { const pets = Cos.pets(view, t, dt); for (let i = 0; i < pets.length; i++) qDraw(dn++, pets[i].y, 8, pets[i]); } // Wardrobe pets (client only): kind 8
+    if (F.bellRing > 0) F.bellRing = Math.max(0, F.bellRing - dt);
     crowdLod(view, local, nFoe, dn);
-    for (const z of view.zones) if ((z.kind === 'fire' || z.kind === 'pfire') && z.w !== 10 && fireFade(z) > 0.01) { // (the Phoenix ring draws its own tongues) fire flames: kind 5 entries (3 and 4 are the room's statics and props), d = flame index
-      const nf = fireCount(z), vis = Math.max(1, Math.ceil(nf * fireFade(z)));
-      for (let i = 0; i < vis; i++) { flamePos(z, i); qDraw(dn, flY, 5, z); drawPool[dn++].d = i; }
+    for (const z of view.zones) { // standing zone pieces: kind 5 entries (3 and 4 are the room's statics and props), d = piece index (drawStand)
+      if ((z.kind === 'fire' || z.kind === 'pfire') && z.w !== 10 && fireFade(z) > 0.01) { // fire flames (the Phoenix ring draws its own tongues)
+        const nf = fireCount(z), vis = Math.max(1, Math.ceil(nf * fireFade(z)));
+        for (let i = 0; i < vis; i++) { flamePos(z, i); qDraw(dn, flY, 5, z); drawPool[dn++].d = i; }
+      } else if (z.kind === 'firebreak' && zFade(z, 2, 5) > 0.01) { const nf = breakN(z, low); for (let i = 0; i < nf; i++) { breakPos(z, i, nf); qDraw(dn, flY, 5, z); drawPool[dn++].d = i; } } // Firebreak wall flames
+      else if (z.kind === 'pillar' || z.kind === 'anchor') { qDraw(dn, z.y, 5, z); drawPool[dn++].d = 0; } // an ice pillar, a Storm Anchor rod
     }
     drawList.length = dn; drawList.sort(byY);
     for (const it of drawList) {
       if (it.k === 3) { ED.Tiles.drawStatic(c, room, biome, it.o, view, t); continue; }
       if (it.k === 4) { shDX = shDY = 0; drawProp(c, it.o, view, local, t); continue; }
-      if (it.k === 5) { drawFlame(c, it.o, it.d, t); continue; }
-      if (it.k === 6) { ED.Arena.drawBlock(c, it.o, t); continue; }
+      if (it.k === 5) { drawStand(c, it.o, it.d, t); continue; }
+      if (it.k === 6) { if (it.o === room.bell) drawBell(c, it.o, F.bellRing || 0, t); else drawPlatino(c, it.o, t); continue; }
+      if (it.k === 7) { shDX = shDY = 0; xbell(c, it.o, it.d, t, low, view); continue; }
+      if (it.k === 8) { Cos.drawPet(c, it.o, t); continue; }
+      if (it.k === 9) { ED.Arena.drawBlock(c, it.o, t); continue; }
       const o = it.o, rim = low || o.fodder ? null : rimLight(o.x, o.y, it.k === 0 ? 16 : 0), still = atlasOn && it.k < 2 && AC.still(o), px = still ? Math.round(o.x / 2) * 2 : Math.round(o.x), py = still ? Math.round(o.y / 2) * 2 : Math.round(o.y); // feet on the buffer pixel grid (the 2 px art grid while standing still)
       if (rim) { shDX = -rim.dx * 0.28; shDY = -rim.dy * 0.12; } else { shDX = 0; shDY = 0; }
       if (it.k === 1) { // foe: atlas art (pose offsets are art-px steps), else the procedural look with pose offset, lean and squash (F.xform) in one matrix with the mirror
@@ -702,6 +716,86 @@
     const pf = z.kind === 'pfire', fade = fireFade(z), f = (t * 12 + z.id + i * 3) | 0, x = sx2(flX), y = sx2(flY) + 4; // the sprite's pivot is its feet
     if (!Pix.draw(c, 'fx.flame', pf ? '#ffb347' : '', f, x, y, fade)) flameStub(c, x, y, f, pf ? '#ffb347' : 'fire', fade, 3);
   }
+  // Fade of a zone: in over 1 / inK s, out over the last 1 / outK s (no duration: in only); 0 for a malformed clock.
+  const zFade = (z, outK, inK) => { const zt = +z.t || 0, v = z.dur ? Math.min(1, (z.dur - zt) * outK, zt * inK) : Math.min(1, zt * inK); return v > 0 ? v : 0; };
+  // Ground zone shapes (cinder, firebreak): a line when len > 0 (from x, y along a, width w), an arc band when arc > 0 (radius r about x, y, centred on a), else a disc of radius r.
+  const zoneLen = (z) => (z.len > 0 ? z.len : z.arc > 0 ? z.arc * (z.r || 30) : (z.r || 0) * 2);
+  const cinderN = (z) => U.clamp(Math.round(zoneLen(z) / 12), 1, 16);
+  const breakN = (z, low) => { const n = U.clamp(Math.round((z.len > 0 || z.arc > 0 ? zoneLen(z) : (z.r || 0) * 5.8) / 14), 4, 22); return low ? Math.ceil(n / 2) : n; }; // wall flames: about one per 14 px of the line or rim
+  let spX = 0, spY = 0, spR = 3;
+  // Spot i of n of a scorch: on the line, on the arc band or scattered inside the disc; writes spX, spY and spR (patch radius, art px).
+  function zoneSpot(z, i, n) {
+    const k = (i + 0.5) / n, id = z.id | 0, w = z.w > 0 ? z.w : 14;
+    if (z.len > 0) { const d = z.len * k, co = Math.cos(z.a || 0), si = Math.sin(z.a || 0), o = (hash1(id + i * 1.37) - 0.5) * w * 0.5; spX = z.x + co * d - si * o; spY = z.y + si * d + co * o; spR = Math.max(3, Math.round(w / 4)); }
+    else if (z.arc > 0) { const q = (z.a || 0) - z.arc / 2 + z.arc * k, rr = (z.r || 30) * (0.82 + (hash1(id + i) - 0.5) * 0.12); spX = z.x + Math.cos(q) * rr; spY = z.y + Math.sin(q) * rr; spR = Math.max(3, Math.round(w / 4)); }
+    else { const q = i * 2.39996 + id, rr = Math.sqrt(k) * (z.r || 20) * 0.75; spX = z.x + Math.cos(q) * rr; spY = z.y + Math.sin(q) * rr * 0.7; spR = Math.max(3, Math.round((z.r || 20) / 8)); }
+  }
+  // Wall flame i of n of a Firebreak: along its line or arc, else on its rim; writes flX, flY.
+  function breakPos(z, i, n) {
+    const k = (i + 0.5) / n;
+    if (z.len > 0) { const d = z.len * k, o = (i & 1 ? 1 : -1) * (z.w > 0 ? z.w : 16) * 0.2; flX = z.x + Math.cos(z.a || 0) * d - Math.sin(z.a || 0) * o; flY = z.y + Math.sin(z.a || 0) * d + Math.cos(z.a || 0) * o; }
+    else if (z.arc > 0) { const q = (z.a || 0) - z.arc / 2 + z.arc * k; flX = z.x + Math.cos(q) * (z.r || 30); flY = z.y + Math.sin(q) * (z.r || 30); }
+    else { const q = k * U.TAU + (z.id | 0), rr = (z.r || 20) * 0.92; flX = z.x + Math.cos(q) * rr; flY = z.y + Math.sin(q) * rr; }
+  }
+  // A Firebreak wall flame: a fire flame with a second, yellower tongue on top (twice a fire flame's height).
+  function drawWallFlame(c, z, i, t) {
+    breakPos(z, i, breakN(z, R.quality === 'low'));
+    const fade = zFade(z, 2, 5), f = (t * 12 + (z.id | 0) + i * 5) | 0, x = sx2(flX), y = sx2(flY) + 4, odd = i & 1;
+    if (!Pix.draw(c, 'fx.flame', '', f, x, y, fade)) { flameStub(c, x, y, f, 'fire', fade, odd ? 7 : 6); return; }
+    Pix.draw(c, 'fx.flame', '#ffd36b', f + 3, x + (odd ? 2 : -2), y - (odd ? 14 : 10), fade * 0.9);
+  }
+  // Ice pillar body (Glacial Arms): a pointed column of half-width rA art px in three ice tones with a dark rim and a glint stripe, pivot at its feet; crack: the expiring look with a crack down the front.
+  function pillarSprite(rA, crack) {
+    const H = Math.min(44, Math.round(rA * 2.8) + 4), tip = Math.max(3, Math.round(H * 0.28)), W = rA * 2 + 2, base = Math.max(2, Math.round(rA * 0.45));
+    return Pix.bake('icep|' + rA + '|' + (crack ? 1 : 0), W, H + base, rA + 1, H + Math.round(base / 2), (b, w) => {
+      const ol = Pix.px32('#24506a'), dk = Pix.px32('#5fa8c8'), md = Pix.px32('#9fe0f4'), lt = Pix.px32('#d4f6ff'), wh = Pix.px32('#ffffff'), cr = Pix.px32('#1e4a64');
+      for (let y = 0; y < H + base; y++) {
+        const hw = y < tip ? Math.max(1, Math.round(rA * (y + 1) / tip)) : y < H ? rA : Math.max(1, Math.round(rA * Math.sqrt(Math.max(0, 1 - ((y - H + 0.5) / base) ** 2))));
+        for (let x = -hw; x < hw; x++) {
+          const edge = x === -hw || x === hw - 1 || y === 0 || y === H + base - 1;
+          let col = edge ? ol : x < -hw * 0.35 ? dk : x > hw * 0.4 ? lt : md;
+          if (!edge && x === Math.round(-hw * 0.2) && y > tip && y < H - 2 && (y & 3)) col = wh;
+          b[y * w + x + rA + 1] = col;
+        }
+      }
+      if (crack) { let x = Math.round(rA * 0.15); for (let y = tip + 1; y < H; y++) { if (Pix.hash(y * 3.7 + rA) > 0.6) x += Pix.hash(y + rA * 1.3) > 0.5 ? 1 : -1; x = U.clamp(x, -rA + 2, rA - 3); b[y * w + x + rA + 1] = cr; if (y & 1) b[y * w + x + rA + 2] = wh; } }
+    });
+  }
+  const pillarR = (z) => U.clamp(Math.round((z.r || 14) / 2), 5, 16);
+  // The column: fades in over 0.12 s, cracks in its last second and trembles in its last half second.
+  function drawPillar(c, z, t) {
+    const left = z.dur ? z.dur - (+z.t || 0) : 9, a = Math.min(1, (+z.t || 0) * 8), sh = left < 0.5 ? (((t * 30) | 0) & 1) * 4 - 2 : 0;
+    if (a > 0) Pix.put(c, pillarSprite(pillarR(z), left < 1), sx2(z.x) + sh, sx2(z.y), Math.max(0.25, Math.ceil(a * 4) / 4));
+  }
+  // Storm Anchor rod: a stone foot, an iron rod with a hooked crossbar, a brass tip (art px; pivot at the feet). The tip sits 44 world px above the feet.
+  const ANCHOR_TIP = 44;
+  function anchorSprite() {
+    return Pix.bake('anchor', 11, 26, 5, 24, (b, w) => {
+      const st = Pix.px32('#4a4a58'), sl = Pix.px32('#6a6a7a'), ir = Pix.px32('#2a2a34'), ih = Pix.px32('#5a6070'), br = Pix.px32('#c9a063'), bh = Pix.px32('#ffe66b');
+      const put = (x, y, p) => { b[y * w + x] = p; };
+      for (let y = 21; y < 26; y++) for (let x = 1; x < 10; x++) put(x, y, y === 21 || x === 1 || x === 9 ? sl : st);
+      for (let y = 4; y < 21; y++) { put(4, y, ir); put(5, y, ir); put(6, y, ih); }
+      for (let x = 1; x < 10; x++) put(x, 8, ir);
+      put(1, 9, ir); put(9, 9, ir);
+      for (let y = 0; y < 4; y++) for (let x = 4; x < 7; x++) put(x, y, y === 0 || x === 4 ? br : bh);
+    });
+  }
+  function drawAnchorRod(c, z) { const a = zFade(z, 3, 6); if (a > 0) Pix.put(c, anchorSprite(), sx2(z.x), sx2(z.y), Math.max(0.25, Math.ceil(a * 4) / 4)); }
+  // A standing zone piece of the y-sorted list (kind 5, d = piece index): fire flame, Firebreak wall flame, ice pillar, Storm Anchor rod.
+  function drawStand(c, z, i, t) {
+    if (z.kind === 'firebreak') drawWallFlame(c, z, i, t); else if (z.kind === 'pillar') drawPillar(c, z, t); else if (z.kind === 'anchor') drawAnchorRod(c, z); else drawFlame(c, z, i, t);
+  }
+  // Vigil runes: 3 x 5 art px glyphs, eight on the rim turning slowly, added to one path.
+  const RUNE = [['.1.', '111', '.1.', '.1.', '1.1'], ['11.', '1.1', '11.', '1.1', '11.'], ['1.1', '.1.', '1.1', '.1.', '1.1'], ['111', '..1', '.1.', '1..', '111']];
+  function runes(c, z, r, t, col, a) {
+    c.fillStyle = col; c.globalAlpha = a; c.beginPath();
+    for (let i = 0; i < 8; i++) {
+      const q = t * 0.3 + i * U.TAU / 8, x0 = sx2(z.x + Math.cos(q) * r * 0.85) - 2, y0 = sx2(z.y + Math.sin(q) * r * 0.85) - 4, g = RUNE[(i + (z.id | 0)) & 3];
+      for (let j = 0; j < 5; j++) for (let k = 0; k < 3; k++) if (g[j][k] === '1') c.rect(x0 + k * 2, y0 + j * 2, 2, 2);
+    }
+    c.fill(); c.globalAlpha = 1;
+  }
+  R.zoneArt = { draw: drawZones, stand: drawStand, pillar: pillarSprite, anchor: anchorSprite, len: zoneLen }; // headless checks
   function drawZones(c, view, t, pass) {
     if (pass === 0) bakeLeft = BAKE_PER_FRAME;
     if (!view.zones.length) return;
@@ -959,6 +1053,93 @@
           c.globalAlpha = 1;
           break;
         }
+        case 'cinder': { // Cinder Arms scorch (line, arc band or disc): charred blobs on the ground, ember flecks blinking over them
+          const fade = zFade(z, 3, 6), n = cinderN(z);
+          if (fade <= 0.01) break;
+          if (pass === 0) {
+            for (let i = 0; i < n; i++) { zoneSpot(z, i, n); Pix.put(c, patchSprite('#140a04', spR), sx2(spX), sx2(spY), 0.85 * fade); }
+            zoneSpot(z, n >> 1, n); R.light(spX, spY, Math.min(120, 30 + n * 8), '#ff6a1a', 0.45 * fade);
+          } else if (pass === 1) {
+            const per = R.quality === 'low' ? 1 : 2, id = z.id | 0;
+            c.fillStyle = '#ffb347'; c.globalAlpha = fade; c.beginPath();
+            for (let i = 0; i < n; i++) { zoneSpot(z, i, n); for (let j = 0; j < per; j++) { const h = hash1(id * 7.1 + i * 3.3 + j * 1.7); if (((t * 6 + h * 8) | 0) % 3 === 0) continue; c.rect(sx2(spX + (h - 0.5) * spR * 3), sx2(spY - 2 - ((t * 9 + h * 20) % 8)), 2, 2); } }
+            c.fill(); c.globalAlpha = 1;
+            if (R.quality !== 'low') { zoneSpot(z, n >> 1, n); R.glow(c, spX, spY, Math.min(90, 20 + n * 6), '#ff5a1a', 0.25 * fade); }
+          }
+          break;
+        }
+        case 'firebreak': { // Firebreak: burning ground foes route around: charred ground, a solid hot rim (a barrier, never dashed) and a wall of tall flames on its edge (y-sorted, drawStand)
+          const fade = zFade(z, 2, 5);
+          if (fade <= 0.01) break;
+          const line = z.len > 0, bw = Math.max(8, z.w || 16), cx = line ? z.x + Math.cos(z.a || 0) * z.len / 2 : z.x, cy = line ? z.y + Math.sin(z.a || 0) * z.len / 2 : z.y, L = zoneLen(z);
+          if (pass === 0) {
+            if (line) {
+              c.globalAlpha = 0.6 * fade; c.fillStyle = '#140804'; c.beginPath(); Pix.fillConvex(c, poly, lanePoly(z.x, z.y, z.a || 0, 0, z.len, bw)); c.fill();
+              c.globalAlpha = 0.9 * fade; c.fillStyle = '#ff6a1a'; c.beginPath(); Pix.edge(c, poly, lanePoly(z.x, z.y, z.a || 0, 0, z.len, bw), true); c.fill(); c.globalAlpha = 1;
+            } else if (z.arc > 0) { const n = cinderN(z); for (let i = 0; i < n; i++) { zoneSpot(z, i, n); Pix.put(c, patchSprite('#140804', spR + 1), sx2(spX), sx2(spY), 0.9 * fade); } }
+            else if (z.r > 0) {
+              Pix.put(c, patchSprite('#140804', Math.max(3, Math.round(z.r * 0.95 / 2))), sx2(z.x), sx2(z.y), 0.9 * fade);
+              ringPut(c, z.x, z.y, z.r, 2, ['#8a2a10', '#ff6a1a', '#ffd36b'], 0.95 * fade); ringPut(c, z.x, z.y, z.r * 0.8, 1, ['#5a1a08', '#c8401a', '#ff8a3a'], 0.55 * fade);
+            }
+            R.light(cx, cy - 8, Math.min(260, L * 0.8 + 40), '#ff6a1a', 0.9 * fade);
+          } else if (pass === 1) {
+            R.glow(c, cx, cy - 8, Math.min(160, L * 0.55 + 20), '#ff5a1a', 0.5 * fade);
+            if (R.quality !== 'low') { // sparks rising off the wall
+              const n = breakN(z, false); c.fillStyle = '#ffd36b'; c.globalAlpha = fade; c.beginPath();
+              for (let i = 0; i < n; i++) { const kk = (t * 1.2 + i * 0.37 + (z.id | 0) * 0.17) % 1; breakPos(z, i, n); c.rect(sx2(flX + Math.sin(i * 3 + t * 2) * 4), sx2(flY - 18 - kk * 30), 2, 2); }
+              c.fill(); c.globalAlpha = 1;
+            }
+          }
+          break;
+        }
+        case 'pillar': { // Glacial Arms ice pillar (solid): a shadow and a frost rim on the ground; the column stands in the y-sorted list (drawStand)
+          const rA = pillarR(z), H = Math.min(44, Math.round(rA * 2.8) + 4) * 2, fade = zFade(z, 3, 8);
+          if (pass === 0) {
+            Pix.put(c, Pix.ell(rA + 2, Math.max(2, Math.round(rA * 0.5)), '#000814', true), sx2(z.x), sx2(z.y), 0.4 * fade);
+            ringPut(c, z.x, z.y, rA * 2 + 8, 1, gb('#bfeaff'), 0.45 * fade, 2, 0);
+            R.light(z.x, z.y - H * 0.5, rA * 6, '#9fefff', 0.5 * fade);
+          } else if (pass === 1 && R.quality !== 'low') R.glow(c, z.x, z.y - H * 0.6, rA * 3, '#9fefff', 0.22 * fade);
+          break;
+        }
+        case 'anchor': { // Storm Anchor: a dashed ring at its zap radius r, the rod (drawStand), a pulsing tip and crackle arcs re-rolled at 12 Hz; it blinks in its last 0.6 s
+          const fade = zFade(z, 3, 6), left = z.dur ? z.dur - (+z.t || 0) : 9, bl = left < 0.6 && ((t * 16) | 0) & 1 ? 0.4 : 1, ty = z.y - ANCHOR_TIP;
+          if (fade <= 0.01) break;
+          if (pass === 0) {
+            Pix.put(c, Pix.ell(6, 3, '#000000', true), sx2(z.x), sx2(z.y), 0.35 * fade);
+            if (z.r >= 24) { discPut(c, z.x, z.y, z.r, '#ffe66b', 0.05 * fade); ringPut(c, z.x, z.y, z.r, 1, gb('#ffe66b'), 0.55 * fade * bl, 4, (t * 4) & 7); }
+            R.light(z.x, ty, 80, '#ffe66b', 0.7 * fade * bl);
+          } else if (pass === 1) {
+            R.glow(c, z.x, ty, 12 + Math.sin(t * 9 + (z.id | 0)) * 3, '#ffe66b', 0.8 * fade * bl);
+            const q = Math.floor(t * 12) + (z.id | 0) * 13, m = R.quality === 'low' ? 1 : 3, rr = Math.max(24, (z.r || 60) * 0.55);
+            c.fillStyle = '#fff6b0'; c.globalAlpha = fade * bl; c.beginPath();
+            for (let i = 0; i < m; i++) {
+              const a = hash1(q * 1.7 + i * 4.1) * U.TAU, d = rr * (0.5 + 0.5 * hash1(q * 2.3 + i)), ex = z.x + Math.cos(a) * d, ey = z.y + Math.sin(a) * d - 4;
+              const mx = (z.x + ex) / 2 + (hash1(q + i * 9.1) - 0.5) * 16, my = (ty + ey) / 2 + (hash1(q * 0.7 + i) - 0.5) * 12;
+              Pix.line(c, z.x, ty, mx, my, 2); Pix.line(c, mx, my, ex, ey, 2);
+            }
+            c.fill(); c.globalAlpha = 1;
+          }
+          break;
+        }
+        case 'vigil': { // Vigil: consecrated ground under a still hero: a gold disc, a solid rim, an inner dashed ring, eight runes turning on the edge, motes rising
+          const fade = zFade(z, 3, 4), r = z.r > 0 ? z.r : 70;
+          if (fade <= 0.01) break;
+          if (pass === 0) {
+            discPut(c, z.x, z.y, r, '#ffe9a0', 0.16 * fade);
+            ringPut(c, z.x, z.y, r, 2, gb('#ffd36b'), 0.85 * fade); ringPut(c, z.x, z.y, r * 0.7, 1, gb('#ffe9a0'), 0.45 * fade, 3, (t * 3) & 7);
+            runes(c, z, r, t, '#c8962e', 0.9 * fade);
+            R.light(z.x, z.y, r * 1.6, '#ffe9a0', 0.45 * fade);
+          } else if (pass === 1) {
+            R.glow(c, z.x, z.y, r * 0.95, '#ffe9a0', 0.18 * fade);
+            runes(c, z, r, t, '#fff3c4', Math.max(0.25, Math.ceil((0.5 + 0.5 * Math.sin(t * 3 + (z.id | 0))) * 4) / 4) * fade); // the runes breathe
+            if (R.quality !== 'low') {
+              c.fillStyle = '#fff6d0'; c.globalAlpha = fade; c.beginPath();
+              for (let i = 0; i < 5; i++) { const kk = (t * 0.5 + i * 0.2 + (z.id | 0) * 0.1) % 1, a = i * 2.39996 + (z.id | 0), rr = Math.sqrt((i + 0.5) / 5) * r * 0.75; c.rect(sx2(z.x + Math.cos(a) * rr), sx2(z.y + Math.sin(a) * rr - kk * 20), 2, 2); }
+              c.fill(); c.globalAlpha = 1;
+            }
+          }
+          break;
+        }
         default: {
           const zf = ED.ClassFx.zone[z.kind]; if (zf) { zf(c, z, pass, t, k, view); break; }
           // unknown kinds: friendly (team 0) areas get a gold sigil disc; hostile ones a faint red mark
@@ -1096,32 +1277,16 @@
   R.interactable = (p) => !p.state && p.kind !== 'sign' && p.kind !== 'merchant';
 
   const PATH_COL = { fire: '#ff7a2a', ice: '#7fe3ff', lightning: '#ffe66b', poison: '#9be33c', holy: '#fff0c2', shadow: '#a070ff', general: '#d9dfe8' };
-  // Colour of a reward-type string such as 'boon', 'gold', 'relic' (unknown -> warm white). 'boon' wears the colour of the local hero's deepest path (R.mainPath).
-  function rewardColor(s) {
-    s = String(s || '');
-    if (s === 'boon') return PATH_COL[R.mainPath] || '#ffe9a0';
-    return { gold: '#ffd36b', vigor: '#ff4a5a', forge: '#ff9a3a', epic: '#c98bff', relic: '#ffb02e', campfire: '#ff9a3a', anvil: '#ffb066' }[s] || '#ffe9a0';
-  }
+  // Reward and room glyphs come from one table (ED.Icons.reward / ED.Icons.room); 'boon' wears the colour of the local hero's deepest path (R.mainPath).
+  // Colour of a reward-type string such as 'boon', 'gold', 'relic' (unknown -> warm white).
+  function rewardColor(s) { return ED.Icons.reward(s, R.mainPath)[1]; }
   R.rewardColor = rewardColor;
-  const REWARD_LABEL = { boon: 'Boon', gold: 'Gold', vigor: 'Vigor', forge: 'Forge', relic: 'Relic hoard', epic: 'Epic boon', campfire: 'Rest', anvil: 'Temper' };
-  // Short name of a reward string: 'boon' -> 'Boon'.
-  R.rewardLabel = (s) => REWARD_LABEL[String(s || '')] || 'Reward';
-  // [icon, colour] for a reward string; 'boon' shows the icon of the local hero's deepest path (a Generalist sees General).
-  R.rewardIcon = (s, cls) => {
-    s = String(s || '');
-    if (s === 'boon') { const pa = ED.PATHS[R.mainPath]; return pa ? [pa.icon, pa.color] : ['star', '#ffe9a0']; }
-    return { gold: ['coin', '#ffd36b'], vigor: ['heart', '#ff4a5a'], forge: ['anvil', '#ff9a3a'], epic: ['star', '#c98bff'], relic: ['chest', '#ffb02e'], campfire: ['campfire', '#ff9a3a'], anvil: ['anvil', '#ffb066'] }[s] || ['star', '#ffe9a0'];
-  };
-  // Map/door glyph of a floor room: { icon, color, badge? } (null for plain rooms). Elite rooms add a skull badge.
-  R.roomIcon = (rm, cls) => {
-    if (!rm) return null;
-    const T2 = { boss: ['skull', '#ff5a3a'], shop: ['coin', '#ffd36b'], treasure: ['chest', '#ffd36b'], event: ['star', '#7dffd9'], rest: ['campfire', '#ff9a3a'] }[rm.type];
-    if (T2) return { icon: T2[0], color: T2[1] };
-    const tough = rm.type === 'elite' || rm.type === 'champion';
-    if (!rm.reward) return tough ? { icon: 'skull', color: '#ff7a3a' } : null;
-    const ri = R.rewardIcon((rm.dark && ED.World.REWARD_UP[rm.reward]) || rm.reward, cls); // a dark room shows the reward it pays after its guaranteed step up
-    return { icon: ri[0], color: ri[1], badge: tough ? 'skull' : null };
-  };
+  // Name of a reward string: 'boon' -> 'Boon', 'relic' -> 'Relic hoard'.
+  R.rewardLabel = (s) => { const r = ED.Icons.reward(s, R.mainPath); return r[3] || r[2]; };
+  // [glyph, colour, short label] of a reward string.
+  R.rewardIcon = (s) => ED.Icons.reward(s, R.mainPath);
+  // Map/door glyph of a floor room for the local hero: { icon, color, label, badge, reward } or null (ED.Icons.room).
+  R.roomIcon = (rm) => ED.Icons.room(rm, R.mainPath, ED.World.REWARD_UP);
   const ROOM_NAME = { start: 'Camp', combat: 'Fight', elite: 'Elite fight', champion: 'Champion fight', shop: 'Shop', rest: 'Rest site', treasure: 'Treasure', event: 'Shrine', boss: 'Boss' };
   // Plain name of a map room with its reward: 'Elite fight: Relic hoard', 'Dark fight: Epic boon', 'Rest site'.
   R.roomName = (rm) => {
@@ -1129,49 +1294,79 @@
     const n = rm.dark ? 'Dark fight' : ROOM_NAME[rm.type] || 'Room', rw = rm.reward ? (rm.dark && ED.World.REWARD_UP[rm.reward]) || rm.reward : null;
     return rw ? n + ': ' + R.rewardLabel(rw) : n;
   };
+  // Exit key a hero wants to leave by (null when none; Dungeon.wantDoor of P[26]): the newest snapshot row on a client, the sim field on the host and solo.
+  R.doorWant = (view, p) => {
+    const sn = view.snaps;
+    if (sn && sn.length) { const a = sn[sn.length - 1].P.get(p.pid); return (a && ED.Dungeon.wantDoor(a[26] | 0)) || null; }
+    return ED.Dungeon.wantDoor(p.doorWant | 0);
+  };
 
-  // Reward previews over the doors of the current room: neighbours not yet cleared, bobbing in front of each doorway; an unvisited dark room carries a purple skull.
-  const DARK_COL = '#a070ff', DARK_TEXT = 'Dark room: harder fights, richer rewards';
+  // Previews over the exit doors of the current room (neighbours not yet cleared), bobbing in front of each doorway:
+  // the room glyph and its badge, its name and reward, threat pips (room.threat), the dark-room moon; near a hero the dark rule and "The way back closes" fade in.
+  // In a party, the heroes who want a door are named at it.
+  const DARK_COL = '#a070ff', DARK_TEXT = 'Dark room: harder fights, richer rewards', BACK_TEXT = 'The way back closes', THREAT_COL = '#ff5a3a';
   const dpList = [], dpPool = [];
+  // Preview anchor of door d of room: just inside the doorway (world px).
+  function doorAt(room, d) {
+    const r = ED.Dungeon.doorRect(room, d), h = room.h * T, w = room.w * T;
+    let x = (r.x0 + r.x1 + 1) / 2 * T, y = (r.y0 + r.y1 + 1) / 2 * T;
+    const sd = ED.Dungeon.side(d);
+    if (sd === 'n') y = T - 2; else if (sd === 's') y = h - T - 6; else if (sd === 'w') x = T * 0.5 + 6; else x = w - T * 0.5 - 6;
+    return [x, y];
+  }
   function doorPreviews(view, room, t) {
     const out = dpList; let n = 0; // pooled: the list is consumed before the next call
     out.length = 0;
     if (view.locked || !view.floor) return out;
-    const me = view.players.get(R.local), cls = me ? me.cls : null, h = room.h * T, w = room.w * T;
     for (const d in room.doors) {
       const id = room.doors[d]; if (id < 0) continue;
       const nb = view.floor.rooms[id], st = view.roomState && view.roomState[id];
       if (!nb || (st && st.cleared)) continue;
-      const ri = R.roomIcon(nb, cls); if (!ri) continue;
-      const r = ED.Dungeon.doorRect(room, d), cx = (r.x0 + r.x1 + 1) / 2 * T, cy = (r.y0 + r.y1 + 1) / 2 * T;
-      let x = cx, y = cy;
-      const sd = ED.Dungeon.side(d);
-      if (sd === 'n') y = T - 2; else if (sd === 's') y = h - T - 6; else if (sd === 'w') x = T * 0.5 + 6; else x = w - T * 0.5 - 6;
-      let o = dpPool[n]; if (!o) o = dpPool[n] = { x: 0, y: 0, color: '', ri: null, d: '', dark: false, name: '' };
-      o.x = x; o.y = y + Math.sin(t * 2.2 + x * 0.03 + y * 0.02) * 1.8; o.color = ri.color; o.ri = ri; o.d = sd; o.dark = !!nb.dark && !(st && st.visited); o.name = R.roomName(nb);
+      const ri = R.roomIcon(nb); if (!ri) continue;
+      const at = doorAt(room, d), x = at[0], y = at[1];
+      let o = dpPool[n]; if (!o) o = dpPool[n] = { x: 0, y: 0, color: '', ri: null, d: '', sd: '', dark: false, threat: 0, oneWay: false, name: '' };
+      o.x = x; o.y = y + Math.sin(t * 2.2 + x * 0.03 + y * 0.02) * 1.8; o.color = ri.color; o.ri = ri; o.d = d; o.sd = ED.Dungeon.side(d); o.dark = !!nb.dark && !(st && st.visited);
+      o.threat = U.clamp(nb.threat | 0, 0, 3); o.oneWay = true; o.name = R.roomName(nb);
       out[n++] = o;
     }
     return out;
   }
-  // Icon pass of the door previews (screen-space-sized, unlit); fades when a hero walks up to the doorway.
+  // Text line i (0 = the label) stacked into the room from a preview: below the icon, above it at a south door; w / e lines keep inside the room.
+  function dpLine(c, pv, i, str, col, alpha) {
+    const lh = R.labelH(), s = pv.sd === 's' ? -1 : 1, qx = Math.round(pv.x), y = Math.round(pv.y) + s * (11 + lh / 2 + i * (lh + 2));
+    const tw = R.labelW(str), tx = pv.sd === 'w' ? qx - 8 + tw / 2 : pv.sd === 'e' ? qx + 8 - tw / 2 : qx;
+    R.label(c, str, tx, y, col, undefined, alpha);
+    labelAdd(tx, y, tw / 2, lh / 2);
+  }
+  // Icon pass of the door previews (screen-space-sized, unlit); the glyph fades when a hero walks up to the doorway, the label stays readable.
   function drawDoorPreviews(c, view, room, t) {
-    const list = doorPreviews(view, room, t); if (!list.length) return;
+    if (view.locked || !view.floor) return;
+    const list = doorPreviews(view, room, t); if (!list.length) { c.globalAlpha = 1; return; }
+    let alive = 0; for (const p of view.players.values()) if (!p.dead && !p.downed) alive++; // living heroes as World.checkDoors counts them
     for (const pv of list) {
       let near = 1e9; for (const p of view.players.values()) if (!p.dead) near = Math.min(near, Math.hypot(p.x - pv.x, p.y - pv.y));
-      const a = U.clamp((near - 22) / 46, 0.22, 0.95), qx = Math.round(pv.x), qy = Math.round(pv.y);
+      const a = U.clamp((near - 22) / 46, 0.22, 0.95), qx = Math.round(pv.x), qy = Math.round(pv.y), ri = pv.ri;
       c.globalAlpha = a;
-      c.drawImage(ED.Icons.canvas(pv.ri.icon, pv.color, 22), qx - 11, qy - 11); // icons are drawn at their cached size: 1 texel = 1 buffer px
-      if (pv.ri.badge) c.drawImage(ED.Icons.canvas('skull', '#ff7a3a', 12), qx + 3, qy + 2);
+      if (ri.badge) { c.drawImage(ED.Icons.canvas(ri.icon, pv.color, 16), qx - 16, qy - 8); c.drawImage(ED.Icons.canvas(ri.badge[0], ri.badge[1], 16), qx, qy - 8); } // elite / boss: skull and reward side by side
+      else c.drawImage(ED.Icons.canvas(ri.icon, pv.color, 22), qx - 11, qy - 11); // icons are drawn at their cached size: 1 texel = 1 buffer px
+      if (pv.dark) { c.globalAlpha = Math.max(a, 0.7); c.drawImage(ED.Icons.canvas(ED.Icons.DARK[0], DARK_COL, 16), ri.badge ? qx + 16 : qx + 10, qy - 8); }
+      if (pv.threat) { // threat pips on the wall side of the glyph
+        c.globalAlpha = Math.max(a, 0.8);
+        const py = pv.sd === 's' ? qy + 12 : qy - 15, px0 = qx - (pv.threat * 6 - 2) / 2;
+        for (let i = 0; i < pv.threat; i++) { c.fillStyle = '#222222'; c.fillRect(px0 + i * 6 - 1, py - 1, 6, 6); c.fillStyle = THREAT_COL; c.fillRect(px0 + i * 6, py, 4, 4); }
+      }
+      c.globalAlpha = 1;
       const ta = U.clamp((90 - near) / 40, 0, 1);
-      if (!pv.dark && ta > 0 && pv.d === 'n') R.label(c, pv.name, qx, qy + 20, pv.color, undefined, ta); // the room's name and reward, inside the room under the icon
-      if (pv.dark) { // dark-room mark on the room side of the icon (stays readable up close); the rule text fades in as a hero nears, kept inside the room
-        c.globalAlpha = Math.max(a, 0.7);
-        const sy = Math.round(pv.d === 's' ? pv.y - 18 : pv.y + 18);
-        c.drawImage(ED.Icons.canvas('skull', DARK_COL, 11), qx - 5, sy - 5);
-        if (ta > 0) {
-          const tw = R.labelW(DARK_TEXT), tx = pv.d === 'w' ? qx - 8 + tw / 2 : pv.d === 'e' ? qx + 8 - tw / 2 : qx;
-          R.label(c, DARK_TEXT, tx, sy + (pv.d === 's' ? -12 : 12), DARK_COL, undefined, ta);
-        }
+      let li = 0;
+      dpLine(c, pv, li++, pv.name, pv.dark ? U.mix(pv.color, DARK_COL, 0.35) : pv.color, Math.max(a, 0.85));
+      if (alive > 1) { // party door rule: who wants this door, out of the living heroes
+        let k = 0, first = null;
+        for (const p of view.players.values()) if (!p.dead && !p.downed && R.doorWant(view, p) === pv.d) { k++; if (!first) first = p; }
+        if (k) dpLine(c, pv, li++, `${first.name}${k > 1 ? ' +' + (k - 1) : ''} ${k > 1 ? 'want' : 'wants'} this door (${k}/${alive})`, ED.PLAYER_COLORS[first.slot] || '#fff3c4', 1);
+      }
+      if (ta > 0) {
+        if (pv.oneWay) dpLine(c, pv, li++, BACK_TEXT, '#d8cbb8', ta);
+        if (pv.dark) dpLine(c, pv, li++, DARK_TEXT, DARK_COL, ta);
       }
     }
     c.globalAlpha = 1;
@@ -1287,7 +1482,7 @@
           const vk = orbKey(hex, view); A_.draw(c, 'prop.shrine.3', 0, 0, 0, vk ? { variant: vk } : undefined);
           G(0, reward ? -30 + bob : -22, 34, hex, reward ? 0.7 : 0.55 + Math.sin(t * 4) * 0.15); L(0, reward ? -28 : -18, reward ? 120 : 100, hex, reward ? 0.95 : 0.8);
           if (reward) {
-            const me = view.players.get(local), ri = R.rewardIcon(p.item, me ? me.cls : null);
+            const ri = R.rewardIcon(p.item);
             c.drawImage(ED.Icons.canvas(ri[0], ri[1], 24), -12, Math.round(-62 + bob));
             for (let i = 0; i < 3; i++) { const a = t * 1.5 + i * 2.1; G(Math.cos(a) * 15, -40 + bob + Math.sin(a) * 6, 5, hex, 0.8); }
           } else for (let i = 0; i < 3; i++) { const k = (t * 0.8 + i / 3) % 1; c.fillStyle = U.rgba(hex, 0.8 * (1 - k)); c.fillRect(Math.round((-4 + i * 4 + Math.sin(t * 3 + i) * 1.5) / 2) * 2, Math.round((-34 - k * 14) / 2) * 2, 2, 2); }
@@ -1326,6 +1521,52 @@
       }
       default: return false;
     }
+  }
+  // The Drowned Bell (room.bell): the Great Bell's art at 1.5x in sunken verdigris (BELL_DROWNED recolours its bronze) resting on its lip, a crack down its flank, else a cracked green-bronze bell drawn by hand;
+  // ring = seconds of swing left after a 'bellrung' (fx.js sets ED.FX.bellRing): it rocks on its lip.
+  const BELL_DROWNED = { '#5a3418': '#1a3a33', '#7a4620': '#245448', '#b0702e': '#357a66', '#e0a858': '#5fae94', '#fff0c8': '#bff8e8', '#2f7a68': '#7a6a3a', '#1f5048': '#4a4024' };
+  const BELL_CRACK = [[3, 6], [4, 8], [4, 10], [3, 12], [4, 14], [5, 16], [5, 18], [4, 20], [5, 22], [6, 24], [6, 26], [5, 28], [6, 30]]; // world px from the crown, right of centre
+  function drawBell(c, b, ring, t) {
+    const sw = ring > 0 ? Math.sin(ring * 14) * 0.35 * Math.min(1, ring / 1.6) : 0, x = Math.round(b.x), y = Math.round(b.y);
+    R.light(x, y - 14, 70 + ring * 40, '#6fe6c8', 0.5 + ring * 0.4);
+    if (ring > 0) R.emit(x, y - 16, 34 + ring * 20, '#bff8e8', 0.25 * ring);
+    c.save(); c.translate(x, y);
+    Sp.shadow(c, 15, 0.4);
+    const A = ED.Atlas, id = A && A.ok && A.has('weapon.greatbell') ? Sp.shotAnim('weapon.greatbell', 1.5) : null, r = id && A.anim(id);
+    if (r) {
+      const H = (r.f[0].oy + r.f[0].h - r.ay) * 2 - 2, rock = sw * 0.5, v = A.variant(id, 'pal:drowned', () => BELL_DROWNED) ? 'pal:drowned' : '';
+      if (A.draw(c, id, 0, Math.round(Math.sin(rock) * H), Math.round(-Math.cos(rock) * H), { rot: rock, variant: v })) {
+        c.rotate(rock); c.fillStyle = '#0d1a17';
+        for (const [dx, dy] of BELL_CRACK) c.fillRect(dx, dy - H, 2, 2);
+        c.fillStyle = '#7fc9a8'; c.fillRect(-8, 10 - H, 2, 8); // a glint of wet patina
+        c.restore(); return;
+      }
+    }
+    c.rotate(sw); c.lineWidth = 1.5; c.strokeStyle = '#0b0806';
+    c.fillStyle = '#2b5f52'; c.beginPath(); c.moveTo(-8, -30); c.quadraticCurveTo(-10, -12, -16, -2); c.lineTo(16, -2); c.quadraticCurveTo(10, -12, 8, -30); c.quadraticCurveTo(0, -35, -8, -30); c.closePath(); c.fill(); c.stroke();
+    c.fillStyle = '#3f8a74'; c.beginPath(); c.moveTo(-6, -29); c.quadraticCurveTo(-8, -13, -12, -4); c.lineTo(-4, -4); c.quadraticCurveTo(-3, -16, -2, -31); c.closePath(); c.fill();
+    c.fillStyle = '#8a6a3a'; c.fillRect(-15, -5, 30, 3); c.fillStyle = '#b58f4c'; c.fillRect(-13, -5, 9, 1.5); // bronze lip
+    c.fillStyle = '#7fc9a8'; c.fillRect(-5, -27, 2, 10); // verdigris shine
+    c.strokeStyle = '#0d1a17'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(3, -31); c.lineTo(5, -24); c.lineTo(2, -18); c.lineTo(6, -11); c.lineTo(4, -4); c.stroke(); // the crack
+    c.strokeStyle = '#0b0806'; c.lineWidth = 1.5; c.fillStyle = '#5c4a2a'; c.beginPath(); c.arc(0, -34, 3.5, Math.PI, 0); c.stroke(); // crown loop
+    c.restore();
+  }
+  // The Platino (view.critter): atlas cos.platino when loaded, else a small platinum critter with a twinkle.
+  function drawPlatino(c, o, t) {
+    const x = Math.round(o.x), y = Math.round(o.y), hop = Math.abs(Math.sin(t * 16)) * 2;
+    R.light(x, y - 6, 40, '#e8f0ff', 0.6);
+    R.emit(x + 4, y - 12 - hop, 6 + Math.sin(t * 9) * 2, '#ffffff', 0.5);
+    c.save(); c.translate(x, y);
+    Sp.shadow(c, 6, 0.35);
+    const A = ED.Atlas;
+    if (A && A.ok && A.has('cos.platino') && A.draw(c, 'cos.platino', Math.floor(t * 8), 0, 0, { flip: o.face < 0 })) { c.restore(); return; }
+    c.scale(o.face < 0 ? -1 : 1, 1); c.translate(0, -hop);
+    c.lineWidth = 1.2; c.strokeStyle = '#1a1c22';
+    c.fillStyle = '#cfd6e2'; c.beginPath(); c.ellipse(0, -6, 7, 5, 0, 0, U.TAU); c.fill(); c.stroke();
+    c.beginPath(); c.ellipse(-3, -12, 1.8, 3.2, -0.3, 0, U.TAU); c.fill(); c.stroke(); c.beginPath(); c.ellipse(1, -12.5, 1.8, 3.2, 0.2, 0, U.TAU); c.fill(); c.stroke(); // ears
+    c.fillStyle = '#f4f8ff'; c.fillRect(-4, -9, 5, 2); // sheen
+    c.fillStyle = '#1a1c22'; c.fillRect(4, -8, 1.6, 1.6); // eye
+    c.restore();
   }
   function drawProps(c, view, local, t) { for (const p of view.props) drawProp(c, p, view, local, t); }
   // One prop at its feet point: pixel art when the atlas is loaded (drawn in the y-sorted entity list), else the procedural drawing.
@@ -1447,7 +1688,7 @@
           c.fillStyle = '#3a3330'; c.fillRect(-11, -7, 22, 9); c.strokeRect(-11, -7, 22, 9);
           c.fillStyle = '#524a44'; c.fillRect(-13, -10, 26, 4); c.strokeRect(-13, -10, 26, 4);
           G(0, -26 + bob, 34, col, 0.7); L(0, -24, 120, col, 0.95);
-          const me = view.players.get(local), ri = R.rewardIcon(p.item, me ? me.cls : null);
+          const ri = R.rewardIcon(p.item);
           c.drawImage(ED.Icons.canvas(ri[0], ri[1], 24), -12, Math.round(-38 + bob));
           for (let i = 0; i < 3; i++) { const a = t * 1.5 + i * 2.1; G(Math.cos(a) * 15, -26 + bob + Math.sin(a) * 6, 5, col, 0.8); }
           break;
@@ -1577,16 +1818,44 @@
     const rows = g.rows, x0 = cx - rows[0].length, y0 = bottom - rows.length * 2;
     for (let j = 0; j < rows.length; j++) for (let i = 0; i < rows[j].length; i++) { const ch = rows[j][i]; if (ch === '.') continue; c.fillStyle = g.c[ch]; c.fillRect(x0 + i * 2, y0 + j * 2, 2, 2); }
   }
+  // Overhead glyphs baked at runtime as 'fx.glyph.<key>' (Pix.define, 1 art px per char, one canvas per frame); the same rows draw as stubs until the atlas is ready.
+  const RTG = {
+    quarry: { f: [{ rows: ['.11.11.', '1.....1', '1..2..1', '..222..', '1..2..1', '1.....1', '.11.11.'], c: { 1: '#b78cff', 2: '#f0e0ff' } }] },
+    dose: { fps: 4, f: [{ rows: ['..3..', '..2..', '.111.', '11411', '11111', '.111.'], c: { 1: '#4a9a20', 2: '#8a6a3a', 3: '#ffe66b', 4: '#d8ff9a' } }, { rows: ['.3...', '..2..', '.111.', '11411', '11111', '.111.'], c: { 1: '#9be33c', 2: '#8a6a3a', 3: '#ff8a3a', 4: '#ffffff' } }] },
+    bounty: { f: [{ rows: ['...1...', '..121..', '.12321.', '1233321', '.12321.', '..121..', '...1...'], c: { 1: '#4a0810', 2: '#e8344e', 3: '#ffd36b' } }] },
+  };
+  const rtOk = {};
+  function rtGlyph(k) {
+    if (rtOk[k]) return true;
+    if (!ED.Atlas || !ED.Atlas.ok || typeof document === 'undefined') return false;
+    const cvs = RTG[k].f.map((fr) => {
+      const cv = document.createElement('canvas'), w = fr.rows[0].length, h = fr.rows.length; cv.width = w; cv.height = h;
+      const g = cv.getContext('2d');
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const ch = fr.rows[j][i]; if (ch === '.') continue; g.fillStyle = fr.c[ch]; g.fillRect(i, j, 1, 1); }
+      return cv;
+    });
+    return (rtOk[k] = !!Pix.define('fx.glyph.' + k, cvs.length > 1 ? cvs : cvs[0], cvs[0].width >> 1, cvs[0].height >> 1, null, RTG[k].fps || 1, cvs.length > 1));
+  }
+  // Runtime glyph k, frame fi, centred at (sx, sy).
+  function rtDraw(c, k, fi, sx, sy) {
+    if (rtGlyph(k) && Pix.draw(c, 'fx.glyph.' + k, '', fi, sx, sy)) return;
+    const fs = RTG[k].f, fr = fs[fi % fs.length]; glyphStub(c, fr, sx, sy + fr.rows.length);
+  }
+  // True while the local hero holds Capacitor (its charged foes show the stronger stored-charge marks); read once per frame.
+  let capStamp = -1, capHas = false;
+  const capOn = () => { const ft = ED.FX ? ED.FX.time : 0; if (ft !== capStamp) { capStamp = ft; const me = curView && curView.players && curView.players.get(R.local); capHas = !!(me && me.boons && me.boons.capacitor > 0); } return capHas; };
+  R.capOn = capOn; R.foeArt = { marks: drawMarks, status: drawStatus, view: (v) => { curView = v; capStamp = -1; } }; // headless checks
   // Overhead status marks of a foe, drawn with the HP bars above the lighting. Layout bottom-up from the bar line (bosses have no bar): ward bar and an elite's name, then the Venom pips on their own line,
   // then one row of glyphs left to right: stun stars, Doom skull (the Reap is near), Corroded cracked guard, Charge bolt. Nothing shares a point, whatever the combination.
   const xg = []; // class glyphs of the foe being drawn (ED.ClassFx.mark)
   function drawMarks(c, e, t) {
     const vl = venomOf(e), dl = doomOf(e), skull = dl > 0 && !e.boss && e.hp < 1.5 * dl, stun = e.stun > 0, chg = e.charge > 0, cor = vl >= 5;
+    const qy = e.quarryT > 0, dose = !!(e.dosed || (e.doses && e.doses.length)), hunt = !!e.hunted, cap = chg && capOn(); // Quarry, a planted Venom dose, a Hunted champion; cap: a charge the local hero's Capacitor will pop
     const xm = ED.ClassFx.mark; let xn = 0;
     for (let i = 0; i < xm.length; i++) { const g = xm[i](e); if (g) xg[xn++] = g; }
-    if (!(vl > 0 || skull || stun || chg || xn)) return;
+    if (!(vl > 0 || skull || stun || chg || qy || dose || hunt || xn)) return;
     const G = foeGeom(e), r = G.r, id = e.id | 0, af = e.elite ? ED.AFFIXES[e.elite] : null, top = G.top - gRise;
-    let b = e.boss ? s2(top) - 4 : s2(Math.min(top - 6, -(r * 2.6 + (e.def.fly ? 14 : 4)))) - 2; // bottom of the free space
+    let b = e.boss ? s2(top) - 4 : s2(Math.min(top - 6, -(r * 2.6 + (e.def.fly && !AC.on() ? 14 : 4)))) - 2; // bottom of the free space (procedural flyers float higher than r * 2.6)
     if (!e.boss) { if (e.ward > 0) b -= (R.scale >= 2 ? 2 : 3) + 1; if (af) b -= Math.ceil(R.labelH()) + 4; }
     const ox = Math.round(e.x), oy = Math.round(e.y) + b; // marks are laid out in the foe's feet frame with the baseline b, drawn at (ox, oy + ...)
     b = 0;
@@ -1596,9 +1865,9 @@
       for (let i = 0; i < 4; i++) { c.fillStyle = cor ? '#c8ff5a' : i < vl ? '#9be33c' : '#26340f'; c.fillRect(x0 + i * 6, oy - 2, 4, 2); }
       b = -6;
     } else b = -2;
-    const n = (stun ? 1 : 0) + (skull ? 1 : 0) + (cor ? 1 : 0) + (chg ? 1 : 0) + xn;
+    const n = (stun ? 1 : 0) + (skull ? 1 : 0) + (cor ? 1 : 0) + (chg ? 1 : 0) + (qy ? 1 : 0) + (dose ? 1 : 0) + (hunt ? 1 : 0) + xn;
     if (n) {
-      const w = (stun ? 26 : 0) + (skull ? 14 : 0) + (cor ? 14 : 0) + (chg ? 6 : 0) + xn * 14 + (n - 1) * 2;
+      const w = (stun ? 26 : 0) + (skull ? 14 : 0) + (cor ? 14 : 0) + (chg ? (cap ? 8 : 6) : 0) + (qy ? 14 : 0) + (dose ? 10 : 0) + (hunt ? 14 : 0) + xn * 14 + (n - 1) * 2;
       let x = s2(ox - w / 2);
       const by = oy + b; // bottom of the glyph row
       if (stun) { // three stars orbiting on a flat ellipse
@@ -1607,8 +1876,19 @@
       }
       if (skull) { const up = Math.sin(t * 4 + id) > 0 ? 2 : 0, sx = x + 6, sy = by - 7 - up; if (!Pix.draw(c, 'fx.sigil.skull', 'shadow', 0, sx, sy)) glyphStub(c, GLYPH.skull, sx, sy + 5); x += 16; }
       if (cor) { const up = Math.sin(t * 5 + id) > 0 ? 2 : 0, sx = x + 6, sy = by - 7 - up; if (!Pix.draw(c, 'fx.glyph.corroded', '', 0, sx, sy)) glyphStub(c, GLYPH.guard, sx, sy + 5); x += 16; }
-      if (chg && ((t * 3 + id) | 0) % 2 === 0) { c.fillStyle = '#ffe66b'; c.fillRect(x + 2, by - 8, 4, 2); c.fillRect(x, by - 6, 4, 2); c.fillRect(x + 2, by - 4, 2, 2); c.fillRect(x, by - 2, 4, 2); }
-      if (chg) x += 8;
+      if (cap) { // Capacitor: a steady bolt twice the plain one's height, its core flickering white, a glow behind it
+        const hot = ((t * 8 + id) | 0) & 1, y0 = by - 14;
+        if (R.quality !== 'low') { c.globalCompositeOperation = 'lighter'; R.glow(c, x + 4, y0 + 7, 12, '#ffe66b', 0.3 + 0.15 * hot); c.globalCompositeOperation = 'source-over'; } // the overheads draw after the queued glows: a direct one
+        c.fillStyle = '#ffe66b'; c.fillRect(x + 4, y0, 4, 2); c.fillRect(x + 2, y0 + 2, 4, 2); c.fillRect(x, y0 + 4, 4, 2); c.fillRect(x, y0 + 6, 8, 2); c.fillRect(x + 4, y0 + 8, 4, 2); c.fillRect(x + 2, y0 + 10, 4, 2); c.fillRect(x + 2, y0 + 12, 2, 2);
+        c.fillStyle = hot ? '#ffffff' : '#fff6b0'; c.fillRect(x + 2, y0 + 6, 4, 2); c.fillRect(x + 4, y0 + 8, 2, 2);
+        x += 10;
+      } else if (chg) {
+        if (((t * 3 + id) | 0) % 2 === 0) { c.fillStyle = '#ffe66b'; c.fillRect(x + 2, by - 8, 4, 2); c.fillRect(x, by - 6, 4, 2); c.fillRect(x + 2, by - 4, 2, 2); c.fillRect(x, by - 2, 4, 2); }
+        x += 8;
+      }
+      if (qy) { const sx = x + 6, sy = by - 7; rtDraw(c, 'quarry', 0, sx, sy); x += 16; } // Quarry: a violet target sigil, steady (it marks the foe your Reap is doubled on)
+      if (dose) { const sx = x + 4, sy = by - 6; rtDraw(c, 'dose', ((t * 4 + id) | 0) & 1, sx, sy); x += 12; } // Venom dose: a green bead with a burning fuse, pulsing
+      if (hunt) { const up = Math.sin(t * 3 + id) > 0 ? 2 : 0, sx = x + 6, sy = by - 7 - up; rtDraw(c, 'bounty', 0, sx, sy); x += 16; } // Hunted champion: a red-gold bounty diamond
       for (let i = 0; i < xn; i++) { const g = xg[i], up = Math.sin(t * 4 + id + i) > 0 ? 2 : 0, sx = x + 6, sy = by - 7 - up; if (!Pix.draw(c, g.id, g.ramp || '', 0, sx, sy) && GLYPH[g.stub]) glyphStub(c, GLYPH[g.stub], sx, sy + 5); x += 16; }
     }
   }
@@ -1651,6 +1931,17 @@
       for (let i = 0; i < ns; i++) { const a = hash1(q * 3.1 + i * 5.7) * U.TAU; c.rect(s2(Math.cos(a) * r * 0.85), s2(cy + Math.sin(a) * hh * 0.85), 2, 2); }
       c.fill();
       stLight(e.x, e.y + cy, r * 2.6, '#ffe66b', 0.45);
+      if (capOn()) { // Capacitor: a crackling dashed halo turning around the body, a brighter light
+        const rx = Math.max(4, Math.round(r * 1.3 / 2)), ry = Math.max(3, Math.round(hh * 1.15 / 2));
+        Pix.put(c, Pix.ell(rx, ry, '#ffe66b', false, 2, (t * 12) & 7), 0, s2(cy), 0.85);
+        stLight(e.x, e.y + cy, r * 3.4, '#fff3a0', 0.35);
+      }
+    }
+    if (e.hunted) { // Hunted champion: a crimson dashed ring at the feet turning the other way, a pulsing glow (a bounty diamond is its overhead mark)
+      const rx = Math.max(5, Math.round(r * 1.7 / 2));
+      Pix.put(c, Pix.ell(rx, Math.max(2, Math.round(rx * 0.5)), '#e8344e', false, 3, 7 - ((t * 6) & 7)), 0, -2, 0.9);
+      R.emit(e.x, e.y + cy, r * 2.4, '#e8344e', 0.18 + 0.08 * Math.sin(t * 4 + id));
+      stLight(e.x, e.y + cy, r * 3, '#ff4a5a', 0.45);
     }
     if (e.bleedPool > 0) { // red drips (1x2 art px) falling from the body
       c.fillStyle = '#c4182e'; c.beginPath();
@@ -1744,8 +2035,9 @@
   // ---------------- projectiles ----------------
   // Three passes per frame: 0 registers scene lights, 1 (additive) draws halos, 2 (unlit, after the lighting) draws trails and bodies. Hero shots are atlas sprites rotated through the atlas's 32 baked steps or pixel orbs;
   // foe bullets are pixel orbs sized to their hitbox (disc of r/2 art px, 1 px dark rim, three element tones). Trails are 2 px squares on the art grid; only the halos are soft.
-  const SHOT = { // atlas shots: anim, spin (rad/s; 0 = along the heading), q = quarter turns only
-    arrow: { id: 'proj.arrow' }, bolt: { id: 'proj.bolt' }, knife: { id: 'proj.knife' }, trident: { id: 'proj.trident' }, thorn: { id: 'proj.thorn' }, fireball: { id: 'proj.fireball' },
+  // Round hero shot bodies (orbs, fit sprites), their micro flames and the bright core of their halos stay within the hitbox radius pr.r.
+  const SHOT = { // atlas shots: anim, spin (rad/s; 0 = along the heading), q = quarter turns only, fit = scaled so its trimmed radius is pr.r
+    arrow: { id: 'proj.arrow' }, bolt: { id: 'proj.bolt' }, knife: { id: 'proj.knife' }, trident: { id: 'proj.trident' }, thorn: { id: 'proj.thorn' }, fireball: { id: 'proj.fireball', fit: 1 },
     bone: { id: 'proj.bone', spin: 14 }, boomerang: { id: 'proj.knife', spin: 22 }, hammer: { id: 'proj.hammer', spin: 16 }, shield: { id: 'proj.shield', spin: 14 }, skull: { id: 'proj.skull', spin: 8, q: 1 }, web: { id: 'proj.web', spin: 3 },
   };
   const DIAMOND = { shard: 1, iceshard: 1 }, CRESCENT = { wave: 1, crescent: 1, bloodscythe: 1 };
@@ -1796,14 +2088,23 @@
     if (kind === 'void') Pix.sq(col, 0.5, pr.x - ux * 14 + uy * (Math.floor(t * 20 + pr.id) & 1 ? 3 : -3), y - uy * 14 - ux * (Math.floor(t * 20 + pr.id) & 1 ? 3 : -3), 2); // dithered tail
     if (kind === 'plague') Pix.sq('#d6ff8a', 0.6, pr.x - ux * 12 + uy * Math.sin(t * 9 + pr.id) * 4, y - uy * 12 - ux * Math.sin(t * 9 + pr.id) * 4, 4); // bubble
   }
-  const prebaked = {};
+  const prebaked = {}, sideOf = {};
+  // Scale (0.05 steps) that brings anim id's trimmed radius (half its largest frame side, world px) to r world px.
+  function fitK(id, r) {
+    let sd = sideOf[id];
+    if (sd === undefined) { const a = ED.Atlas.anim(id); sd = 0; if (a) for (const f of a.f) sd = Math.max(sd, f.w, f.h); if (a || ED.Atlas.ok) sideOf[id] = sd; }
+    return sd ? Math.max(0.25, Math.round(r / sd * 20) / 20) : 1;
+  }
   function shotBody(c, pr, t, kind, foe, col) {
     const sh = SHOT[kind], x = Math.round(pr.x), y = Math.round(pr.y - 6), At = ED.Atlas;
     const xb = ED.ClassFx.shotBody; if (xb && xb[kind] && xb[kind](c, pr, t, x, y, foe, col)) return; // ED.ClassFx.shotBody[kind](c, pr, t, x, y, foe, col) replaces the body of a shot kind and returns true (cls-cleric.js: waves); a falsy return keeps the default body
-    if (FLAME[kind] && kind !== 'crescent') { const sp = Math.hypot(pr.vx, pr.vy) || 1; Pix.draw(c, 'fx.ember', '', (t * 12 + pr.id) | 0, x - pr.vx / sp * 9, y - pr.vy / sp * 9, 0.9); } // a micro flame licks behind fire shots
+    if (FLAME[kind] && kind !== 'crescent') { // a micro flame licks behind fire shots: a hero shot's is the fx.ember loop scaled to the hitbox diameter, centred one radius behind
+      const sp = Math.hypot(pr.vx, pr.vy) || 1, ek = foe ? 1 : fitK('fx.ember', pr.r), eid = ek !== 1 ? Sp.shotAnim('fx.ember', ek, true) : 'fx.ember', d = foe ? 9 : pr.r;
+      Pix.draw(c, eid, '', (t * 12 + pr.id) | 0, x - pr.vx / sp * d, y - pr.vy / sp * d, 0.9);
+    }
     const k = foe || !curView ? 1 : Sp.shotK(pr, curView); // 1.2 for a Heavy weapon's shot, 0.85 for a Swift one's (visual only)
     if (sh && At.has(sh.id)) {
-      const id = k !== 1 ? Sp.shotAnim(sh.id, k) : sh.id;
+      const sk = sh.fit ? fitK(sh.id, pr.r) : k, id = sk !== 1 ? Sp.shotAnim(sh.id, sk, !!sh.fit) : sh.id; // a fit sprite follows pr.r, which already carries the Heavy x1.2
       if (!prebaked[id]) { prebaked[id] = 1; for (let f = 0, n = At.anim(id).n; f < n; f++) At.prebake(id, f); } // all 32 rotation steps are baked in the background (Atlas.tick) the first time a shot kind shows up
       let rot = sh.spin ? t * sh.spin + (pr.id & 7) : Math.atan2(pr.vy, pr.vx) - shotDir(id);
       if (sh.q) rot = Math.round(rot / (Math.PI / 2)) * Math.PI / 2;
@@ -1824,7 +2125,7 @@
       for (const pr of ps) {
         const foe = pr.team === 1, kind = pr.kind, y = pr.y - 6;
         if (SOLID[kind]) R.glow(c, pr.x, y, foe ? 15 : 10, HALO[kind] || (foe ? '#ff5a3a' : FX.projColor(kind)), foe ? 0.5 : 0.3);
-        else R.glow(c, pr.x, y, (kind === 'wave' ? Math.min(pr.r, 16) : pr.r) * 2.2 + 7, FX.projColor(kind), foe ? 0.7 : 0.5); // a widened wave keeps the halo of a normal one: its sun body stays readable
+        else { const r = kind === 'wave' ? Math.min(pr.r, 16) : pr.r; R.glow(c, pr.x, y, foe ? r * 2.2 + 7 : r * 1.5 + 3, FX.projColor(kind), foe ? 0.7 : 0.6); } // a widened wave keeps the halo of a normal one: its sun body stays readable; a hero halo's bright core (0.35 of its radius) sits inside the body
       }
       return;
     }
@@ -1984,6 +2285,7 @@
     c.globalAlpha = a; c.drawImage(sp.cv, Math.round(t.x + sp.x * q), Math.round(t.y + sp.y * q), sp.w * q, sp.h * q);
   };
   // Elite label: the affix names (second slot after the first) then the foe name, e.g. "Swift Brutal Skeleton Knight"; `affixes` drops the foe name. Bar and label colour stay the first affix's.
+  const AFFIX_OFF = '#8a8478'; // bar and label of an elite whose affixes are suppressed
   R.eliteLabel = (e, affixes) => ED.AFFIXES[e.elite].name + (e.elite2 ? ' ' + ED.AFFIXES[e.elite2].name : '') + (affixes ? '' : ' ' + e.def.name);
   // Fill height in px of a foe's health bar (bh for a normal foe; 0 = no bar): shown once damaged, always for an elite; fodder gets a 1 px bar.
   R.foeBarH = (e, bh) => (e.hp / e.maxHp >= 0.999 && !e.elite ? 0 : e.fodder ? 1 : bh);
@@ -2018,15 +2320,15 @@
     Pix.put(c, Pix.ell(rx, ry, e.t < 0.1 && Math.floor(e.t * 40) % 2 ? '#8ad0ff' : '#ffffff', false), s2(e.x), s2(e.y), 1);
   }
   function drawOverheads(c, view, local, t) {
-    if (view.room) drawDoorPreviews(c, view, view.room, t);
+    lblN = 0;
+    if (view.room) drawDoorPreviews(c, view, view.room, t); // door lines register their rects first: names and elite labels step around them
     // enemy bars and elite labels: one blit each on the buffer pixel grid
     const bh = R.scale >= 2 ? 2 : 3, lhh = R.labelH();
-    lblN = 0;
     const lp = view.players.get(local), cuePips = ED.HUD.wantsPips(lp), cueParry = !!(lp && lp.stats && lp.stats.parry);
     if (cuePips || cueParry) for (const e of view.enemies) { // class route cues of the local hero: ailment pips under the bar (Brand, Open Veins, Contagion, Gangrene), the Parry rim on a foe in the last 0.3 s of a wind-up
       if (e.hp <= 0 || e.boss || e.burrowed || e.fodder) continue;
       if (cuePips && view.ailments) e.ailN = view.ailments(e); // host and solo foes are sim objects: they count their own ailments (mirror foes carry the host's count)
-      if (cuePips && e.ailN) ED.HUD.foePips(c, e, Math.round(e.x - (e.elite ? 15 : 9)), Math.round(e.y - e.r * 2.6 - (e.def.fly ? 14 : 4)) + bh + 2);
+      if (cuePips && e.ailN) { const an = AC.on() ? AC.anchor(e) : null; ED.HUD.foePips(c, e, Math.round(e.x - (e.elite ? 15 : 9)), (an ? Math.round(e.y + an.top) - 6 : Math.round(e.y - e.r * 2.6 - (e.def.fly ? 14 : 4))) + bh + 2); } // one row under the HP bar (the bar loop below: 6 px over the anchor top)
       if (cueParry && (e.st === 'windup' || e.st === 'aim' || e.st === 'cast') && e.t > 0 && e.t <= ED.CONST.PARRY_WIN) parryRim(c, e);
     }
     for (const e of view.enemies) {
@@ -2036,7 +2338,7 @@
       const frac = e.hp / e.maxHp;
       const an = AC.on() ? AC.anchor(e) : null; // bar 6 px over the top of the sprite
       const w = e.elite ? 30 : e.fodder ? 12 : 18, y = an ? Math.round(e.y + an.top) - 6 : Math.round(e.y - e.r * 2.6 - (e.def.fly ? 14 : 4)), af = e.elite ? ED.AFFIXES[e.elite] : null, bx = Math.round(e.x - w / 2);
-      blit(c, barSprite(af ? af.color : '#e2513f', w, Math.round(U.clamp(frac, 0, 1) * w), h), bx, y);
+      blit(c, barSprite(af ? (e.affixOff ? AFFIX_OFF : af.color) : '#e2513f', w, Math.round(U.clamp(frac, 0, 1) * w), h), bx, y);
       if (e.ward > 0) { c.fillStyle = '#7fc8ff'; c.fillRect(bx, y - 1 - bh, Math.max(1, Math.round(w * (e.ward / (e.wardMax || 1)))), Math.max(1, bh - 1)); }
       if (af) { eliteQ.push(e, y); labelAdd(e.x, y + bh / 2, w / 2, bh / 2); } // the bar blocks the labels of the elites beside it
     }
@@ -2044,7 +2346,12 @@
       const e = eliteQ[i], af = ED.AFFIXES[e.elite], ly = eliteQ[i + 1] - 2 - lhh / 2 - (e.ward > 0 ? bh : 0), full = R.eliteLabel(e), names = R.eliteLabel(e, true), lh2 = lhh * 1.1;
       let str = full;
       if (labelHit(e.x, ly, R.labelW(full), lh2) && !labelHit(e.x, ly, R.labelW(names), lh2)) str = names;
-      R.label(c, str, e.x, placeLabel(e.x, ly, R.labelW(str), lh2), af.color);
+      const py = placeLabel(e.x, ly, R.labelW(str), lh2);
+      if (e.affixOff) { // Hex the Strong: the affixes are off, so the label greys out and a line strikes through the affix names
+        const W = R.labelW(str), aw = str === names ? W : Math.min(W, R.labelW(names));
+        R.label(c, str, e.x, py, AFFIX_OFF, undefined, 0.85);
+        c.fillStyle = '#e8e2d6'; c.fillRect(Math.round(e.x - W / 2), Math.round(py) - 1, Math.round(aw), 2);
+      } else R.label(c, str, e.x, py, af.color);
     }
     eliteQ.length = 0;
     for (const e of view.enemies) if (e.hp > 0 && !e.burrowed && marksOn(e)) drawMarks(c, e, t);

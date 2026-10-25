@@ -28,8 +28,11 @@ const FORKS = [ // base, kind, dmg, rate, {field: value}
   ['bonewand', 'heavy', 26.73, 0.72, { r: 6, speed: 315, homing: 4 }], ['bonewand', 'swift', 8.168, 0.22, { speed: 420 }],
   ['soulscythe', 'heavy', 50.49, 1.008, { range: 57.2, arc: 2.64, knock: 143, raise: 0.12 }], ['soulscythe', 'swift', 15.43, 0.308, { range: 52, knock: 55 }],
   ['plaguestaff', 'heavy', 17.82, 1.08, {}], ['plaguestaff', 'swift', 5.445, 0.33, {}],
+  ['bronzebell', 'heavy', 16.764, 0.36, { chain: 77, br: 19.2, loss: 0.112, haul: 0.85, knock: 78 }], ['bronzebell', 'swift', 8.382, 0.18, { br: 13.6, loss: 0.165, haul: 1.1, knock: 30 }],
+  ['greatbell', 'heavy', 23.496, 0.54, { chain: 92.4, br: 25.2, loss: 0.068, haul: 0.612, knock: 130 }], ['greatbell', 'swift', 11.748, 0.27, { br: 17.85, haul: 0.792 }],
+  ['handbells', 'heavy', 6.257, 0.3, { chain: 63.8, br: 14.4, n: 2 }], ['handbells', 'swift', 3.128, 0.15, { br: 10.2, haul: 1.375, n: 2 }],
 ];
-const CARD = { knight: ['k_atk_h', 'k_atk_s'], ranger: ['r_atk_h', 'r_atk_s'], pyro: ['p_atk_h', 'p_atk_s'], shade: ['s_atk_h', 's_atk_s'], cleric: ['c_atk_h', 'c_atk_s'], necro: ['n_atk_h', 'n_atk_s'] };
+const CARD = { knight: ['k_atk_h', 'k_atk_s'], ranger: ['r_atk_h', 'r_atk_s'], pyro: ['p_atk_h', 'p_atk_s'], shade: ['s_atk_h', 's_atk_s'], cleric: ['c_atk_h', 'c_atk_s'], necro: ['n_atk_h', 'n_atk_s'], bell: ['b_atk_h', 'b_atk_s'] };
 for (const [base, kind, dmg, rate, f] of FORKS) {
   const cls = ED.CLASS_IDS.find(c => ED.CLASSES[c].weapons.includes(base)), w = ED.forkWeapon(base, CARD[cls][kind === 'heavy' ? 0 : 1]);
   near(w.dmg, dmg, 0.06 + dmg * 0.002, base + '@' + kind + ' dmg'); near(w.rate, rate, 0.0011, base + '@' + kind + ' rate');
@@ -60,7 +63,7 @@ near(jug3.jugShock, 0.6, 1e-9, 'Juggernaut rank 3 shock (0.4 + 2 x 0.1)'); near(
 near(build('knight', 0, { k_s2: 1 }).skill2Cd, 9 * (1 - 0.167), 0.001, 'Shield Throw cooldown with Shieldmaster'); near(ED.Stats.skillNums('charge', build('knight', 0, { k_s1: 1, k_s1_a: 1 })).range, 240, 1e-9, 'Juggernaut Charge range');
 const prs = ED.classRoute({ k_el: 1, k_el_b: 2 }, 'knight');
 ok(prs.route === 'element' && prs.fork === 'k_el_b' && prs.rank === 2, 'classRoute');
-ok(ED.CLASS_IDS.every(c => ED.ROUTES.every(r => ED.CLASS_CARDS[c][r] && ED.CLASS_CARDS[c][r].forks.length === 2)) && ED.BOON_IDS.filter(id => ED.BOONS[id].route).length === 72, '72 cards, 4 routes x 2 forks per class');
+ok(ED.CLASS_IDS.every(c => ED.ROUTES.every(r => ED.CLASS_CARDS[c][r] && ED.CLASS_CARDS[c][r].forks.length === 2)) && ED.BOON_IDS.filter(id => ED.BOONS[id].route).length === 12 * ED.CLASS_IDS.length, `${12 * ED.CLASS_IDS.length} cards, 4 routes x 2 forks per class`);
 ok(ED.boonText('k_atk', 1).indexOf('+60%') >= 0 && ED.boonText('k_atk_h', 3).indexOf('Follow-Through') >= 0 && ED.boonText('k_atk_h', 1).indexOf('Follow-Through') < 0 && !/[{}\[\]]/.test(ED.boonText('s_s1', 1, { critK: 1 })), 'card text tokens');
 // every stat key a card sets must exist in the stat block
 const base0 = build('knight');
@@ -269,7 +272,8 @@ const partHits = (log, part) => log.filter(h => h.part === part);
 const charge = (w, p, len) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x1: p.x + len, y1: p.y }, 0);
 { // card text and totals of the eight skill forks: the rider joins at rank 2, the transform and its name at rank 3
   const FORKS = { k_s1_a: ['Juggernaut', 'Shield Bash', 'Avalanche'], k_s1_b: ['Rallying Charge', 'Hold the Line', 'Iron Phalanx'], k_s2_a: ['Shield Storm', 'Gathering Force', 'Aegis Tempest'], k_s2_b: ['Shield Orbit', 'Return to Sender', 'Bastion'],
-    r_s1_a: ["Hunter's Mark", 'Relentless Hunt', 'Death Mark'], r_s1_b: ['Scattershot', 'Caltrops', 'Thornburst'], r_s2_a: ['Skyfall', 'Twin Sky', 'Starfall Barrage'], r_s2_b: ['Hail of Thorns', 'Second Shower', 'Storm of Thorns'] };
+    r_s1_a: ["Hunter's Mark", 'Relentless Hunt', 'Death Mark'], r_s1_b: ['Scattershot', 'Caltrops', 'Thornburst'], r_s2_a: ['Skyfall', 'Twin Sky', 'Starfall Barrage'], r_s2_b: ['Hail of Thorns', 'Second Shower', 'Storm of Thorns'],
+    b_s1_a: ['Wrecker', 'Ground Breaker', 'Wrecking Spin'], b_s1_b: ['Tether Hook', 'Reel In', 'Anchor Chain'], b_s2_a: ['Thunderclap', 'Reverberation', 'Thunder Toll'], b_s2_b: ['Warding Toll', 'Sanctus', 'Ward Bell'] };
   for (const id in FORKS) {
     const [name, rider, form] = FORKS[id], b = ED.BOONS[id], P = [1, 2, 3].map(r => ED.cardParts(id, r, null));
     ok(!b.rider && b.rider2 && b.r2 && b.form && b.r3 && b.form.name === form, id + ' keeps its rider in rider2/r2 and its transform in form/r3');

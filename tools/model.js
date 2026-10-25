@@ -6,7 +6,7 @@ module.exports = (ED, opts) => {
   const pack = Math.max(1, Math.round(opts && opts.pack || 4)), surround = !!(opts && opts.surround);
 
   // ---- hero damage on one foe and in a pack ----
-  const SWEEP = new Set(['charge.impact', 'charge.shock', 'charge.crack', 'step.slash', 'step.twin', 'judgment.leg', 'shieldthrow.return', 'vanish.ambush']);
+  const SWEEP = new Set(['charge.impact', 'charge.shock', 'charge.crack', 'step.slash', 'step.twin', 'judgment.leg', 'shieldthrow.return', 'vanish.ambush', 'heave.spin']);
   const SCATTER_R = 80; // px a Meteor Shower meteorite may land from the impact (class-pyro.js)
   // Death bursts: a pack stands within PACK_R of its centre; a burst of radius r covers (r / PACK_R)^2 of it (at most all) and no more than NEIGH foes stand round one corpse.
   const PACK_R = 90, NEIGH = 3;
@@ -16,6 +16,12 @@ module.exports = (ED, opts) => {
   const deathPairs = (n) => { let s = 0; for (let j = 1; j <= n; j++) s += Math.min(NEIGH, n - j); return s; }; // the pack dies one foe at a time: each death bursts on the foes still alive
   function packWeapon(m, n) {
     const w = m.weapon, st = null; void st;
+    if (w._bell) { // a bell's loop on n foes on its orbit (b = w._bell(n)): the hurl strikes b.hurlN of them at b.kH of the one-foe factor; an extra counts its _pack(n, b) (the loop's total over the pack), its pack (foes it reaches) or the hurl's foe alone; b.cps loops a second
+      const b = w._bell(n);
+      let per = w._avg * b.kH * b.hurlN;
+      for (const e of w._extras) per += e._pack ? e._pack(n, b) : e.packOnly ? 0 : e.perAttack * b.kH * (e.pack ? Math.min(n, e.pack) : 1);
+      return per * b.cps * (w._up === undefined ? 1 : w._up); // _up: the share of the time the bell plays its loop (Anchor Leap on cooldown takes it away)
+    }
     const shots = w.n || 1, first = Math.min(shots, (w.fanOne === undefined ? 1 : w.fanOne) + n - 1); // the shots of a fan that miss the first foe find one other foe each
     const hitsBase = w.kind === 'melee' ? n : w.lob ? 0 : (first + (w.line ? LINE_ALL : PIERCE_LINE) * (Math.min(n, shots * (1 + (w.pierce || 0))) - Math.min(n, shots))) * (w.legs || 1);
     let sum = w._avg * hitsBase;
@@ -25,7 +31,7 @@ module.exports = (ED, opts) => {
   // Extras that do not grow with the pack: the two Lich bolts seek one foe each (the same total), Guardian Light's Smites ride the one Smite stream the status estimate counts; a Solar Flare burst (radius 50) and a Dawn's Wake strip (44 wide) catch about two foes of a pack.
   const ONE_STREAM = new Set(['Lich bolts', 'Heavy Smites', 'Sunstrike']), FEW = { 'Solar Flare': 2, "Dawn's Wake": 2 };
   function directDamage(m, n) {
-    if (n === 1) return m.weapon.dps + m.skills.reduce((s, k) => s + k.dpsCd, 0);
+    if (n === 1) return m.weapon.dps * (m.weapon._up === undefined ? 1 : m.weapon._up) + m.skills.reduce((s, k) => s + k.dpsCd, 0);
     let sum = packWeapon(m, n);
     for (const k of m.skills) for (const q of k.parts) {
       if (q.kind === 'zone') continue;
@@ -54,6 +60,8 @@ module.exports = (ED, opts) => {
   // ---- defence: effective health with the uptime of a guard ----
   // WEAK_HIT: share of the time a foe carries Judged. SMOKE_HIT: share of the time a foe stands in the Vanish smoke. DK_UP: share of the time a Death Knight stands and holds the foes round it.
   const WEAK_HIT = 0.7, SMOKE_HIT = 0.75, DK_UP = 0.5;
+  // WARD_HIT: share of the foes striking the Bellwarden that stand in its Ward Bell (it rings where the bell is, often beside the hero). HOOK_HIT: share of them an Anchor Chain slam strikes and Shackles.
+  const WARD_HIT = 0.6, HOOK_HIT = 0.5;
   function defence(p, m) {
     const st = p.stats, out = { ehp: m.def.ehp, note: [] };
     let keep = 1;
@@ -81,6 +89,14 @@ module.exports = (ED, opts) => {
       const up = WEAK_HIT * Math.min(1, (4 + st.judgeDur) / St.skillNums('judgment', st).cdEff);
       keep *= 1 - st.judgeWeak * up; out.note.push(`Judged foes -${Math.round(st.judgeWeak * 100)}% x ${Math.round(up * 100)}% uptime`);
     }
+    if (st.wardDur > 0) { // Ward Bell: foes inside the ward deal wardWeak less, for wardDur of every Peal cooldown
+      const up = WARD_HIT * Math.min(1, st.wardDur / St.skillNums('peal', st).cdEff);
+      keep *= 1 - st.wardWeak * up; out.note.push(`Ward Bell foes -${Math.round(st.wardWeak * 100)}% x ${Math.round(up * 100)}% uptime`);
+    }
+    if (st.shackle > 0) { // Anchor Chain: foes the slam strikes deal shackleWeak less for shackle s of every Anchor Leap cooldown
+      const up = HOOK_HIT * Math.min(1, st.shackle / St.skillNums('heave', st).cdEff);
+      keep *= 1 - st.shackleWeak * up; out.note.push(`Shackled foes -${Math.round(st.shackleWeak * 100)}% x ${Math.round(up * 100)}% uptime`);
+    }
     out.ehp = m.def.ehp / keep;
     // shield income (percent of max health per second, before the window caps)
     let inc = 0;
@@ -90,6 +106,8 @@ module.exports = (ED, opts) => {
     if (st.mantle) inc += st.mantle / Math.max(10, cd1);
     if (st.veil) inc += st.veil / Math.max(12, cd2);
     if (st.boneArmor) inc += Math.min(st.boneCap, st.boneArmor * 3) / Math.max(12, cd2);
+    if (st.hookShield) inc += st.hookShield / Math.max(C.HOOK_CD, cd1); // Tether Hook: one slam shield per HOOK_CD
+    if (st.pealShield) inc += Math.min(st.pealCap, st.pealShield * pack) / Math.max(C.PEAL_SH_CD, cd2); // Warding Toll: a Peal on a pack, once per PEAL_SH_CD
     out.shield = Math.min(inc, C.SHIELD_WIN_CLASS / C.SHIELD_WIN_T);
     // trash stun uptime: each source stuns the foe for dur, then its stun cooldown (dur + STUN_DR) must pass
     let stun = 0;
@@ -101,6 +119,13 @@ module.exports = (ED, opts) => {
     if (st.waveStun && m.weapon.fork) src.push([st.waveStun, 3 * m.weapon.interval]);
     if (st.thornRoot > 0) src.push([st.thornRoot, cd1]); // Thornburst: a foe entering the caltrops is rooted
     if (st.knights > 0) src.push([st.knightStun, 1]); // Bone Knights stun a foe at most once per second
+    if (p.cls === 'bell') { // Peal and Ground Breaker's slam (each cast), Wrecking Ball shocks (each hurl), Grounded discharges (a hurl on a charged foe, at most once a second)
+      const N = St.skillNums('peal', st), w = m.weapon;
+      src.push([N.p.wave.stun + st.pealStun, cd2]);
+      if (st.smashStun > 0) src.push([st.smashStun, cd1]);
+      if (st.wreckStun > 0) src.push([st.wreckStun, 1 / w.aps]);
+      if (st.rodStun > 0) src.push([st.rodStun, Math.max(1, 1 / w.aps)]);
+    }
     for (const [d, cd] of src) stun += Math.min(1, d / Math.max(cd, d + C.STUN_DR));
     out.hard = Math.min(1, stun); // hard stuns only: the conditional damage rows read this
     // control that is not a stun counts at its strength: a slow of s over a share of the time, a blind (the foe never starts an attack) or a taunt as a full stun, each for the share of the time it holds
@@ -112,12 +137,13 @@ module.exports = (ED, opts) => {
     if (st.afterimage > 0) { const N = St.skillNums('step', st), b = (N.p.mirror.on ? N.p.mirror : N.p.after).blind; stun += ctl(1, b, Math.max(C.BLIND_CD, cd1)); } // the burst blinds a foe b seconds, at most once per BLIND_CD
     if (st.veilBlind > 0) { const N = St.skillNums('vanish', st), b = N.p.blind.dur; stun += SMOKE_HIT * (ctl(1, b, N.cdEff) + (st.shroud ? ctl(0.6, N.p.smoke.dur, N.cdEff) : 0)); } // Veil of Night: the smoke blinds (and with Shroud slows) the foes inside
     if (st.dkTaunt > 0) stun += DK_UP; // Death Knight: foes within its reach go for it while it stands
+    if (st.shackle > 0) stun += HOOK_HIT * ctl(0.5, st.shackle, cd1); // Anchor Chain: hooked foes slowed 50%
     out.stun = Math.min(1, stun);
     return out;
   }
 
   // ---- conditional damage: the ED.COND_DMG rows a build owns count at an assumed uptime (the bonus is additive with the Damage stat) ----
-  const COND_NOTE = 'conditional damage at assumed uptimes: execute 30% of the time; burning, bleeding, chilled, envenomed, doomed 60-90% when the build applies it; stunned = the stun uptime; Brand = the ailments the build keeps up (at most 4); unknown rows 50%';
+  const COND_NOTE = 'conditional damage at assumed uptimes: execute 30% of the time; burning, bleeding, chilled, envenomed, doomed, charged (80% with Capacitor), holding Radiance 50-90% when the build applies it; stunned = the stun uptime; Brand = the ailments the build keeps up (at most 4); unknown rows 50%';
   function ailmentsKept(st, d) {
     let n = 0;
     for (const id of ED.ELEMENT_IDS) if (st[ED.ELEMENTS[id].inf] > 0) n += 0.7; else if (st.element === id) n += 0.5;
@@ -133,6 +159,8 @@ module.exports = (ED, opts) => {
       case 'malice': return has('shadowInfuse') || st.element === 'shadow' ? 0.6 : 0;
       case 'brittle': return has('iceInfuse') ? 0.6 : 0;
       case 'fester': return has('poisonInfuse') ? 0.6 : 0;
+      case 'ionize': return has('lightningInfuse') || st.element === 'lightning' ? (st.capacitor > 0 ? 0.8 : 0.5) : 0; // Capacitor charge waits for a cast: foes stay charged longer
+      case 'hallow': return has('holyInfuse') || st.element === 'holy' ? 0.7 : 0;
       case 'opportunist': return Math.min(1, d.hard + (has('iceInfuse') ? 0.3 : 0));
       case 'knell': return 0.5 * Math.min(st.knell, 3);
       case 'brand': return ailmentsKept(st, d);

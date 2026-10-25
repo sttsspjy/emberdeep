@@ -32,13 +32,15 @@ module.exports = (ED, model) => {
   const E_MAX_RED = 0.35; // largest share of incoming damage the controlled foes can remove
 
   // Cards and relics the sheet leaves at zero (found at a fresh Ranger, a Knight with two gates, a late Generalist Ranger and with each element gate owned), one line each.
-  // Fold = a formula in fold() from the stat block (D damage, E effective health, bonus = meta value); Prior = a flat value in PRIOR; Sheet = the sheet models it once its path is active. Relics follow the boons.
+  // Fold = a formula in fold() from the stat block (D damage, E effective health, bonus = meta value); Prior = a flat value in PRIOR / MUT_X / prior(); Sheet = the sheet models it once its path is active.
+  // "guess" marks a coefficient no bot run has measured. Retired cards (b.retired) are never offered and have no line. Relics follow the boons.
   //   fleet        Fold  spd -> E
   //   lightstep    Fold  dashN (a charge: 0.08 each) and dashcdr (0.2 per unit; Shadow Cloak) -> E
   //   magnet       Fold  xp -> bonus (pickup range: none)
   //   bounty       Fold  gold -> bonus
+  //   purse        Prior PURSE_X (a gold room's gold; guess)
   //   mending      Fold  heal -> E
-  //   forager      Fold  forager -> E
+  //   forager      Fold  +World.FORAGER max HP per heal source x FORAGER_HEALS sources a stratum that land below full health (guess) -> E at HEAL_E per max HP healed
   //   wide         Fold  area -> pack damage (melee more)
   //   bladedash    Fold  dash hit per dash cooldown (share of dashes through foes)
   //   battleward   Fold  roomWard -> E
@@ -46,42 +48,61 @@ module.exports = (ED, model) => {
   //   laststand    Fold  guardian -> E
   //   trance       Fold  attack speed for 4 s after a cast on the weapon share, capped by the attack floor
   //   overcharge   Fold  shockwave per skill cast, pack hits
+  //   fuel deepcold stormattune potency fervor malignance  Sheet infusion, Fold build-up; the +damage half is an ED.COND_DMG row at the model's uptime (tools/model.js)
   //   wildfire     Fold  burn passed on by a dying foe -> pack burn damage
+  //   brushfire    Fold  pack burn x (1 + brushfire x BRUSH_K): contact spread evens the pools of foes the hits miss (ranged more; guess)
+  //   firebreak    Prior fire 0.04: funnel control and the ground a burning death leaves (guess)
   //   cindertrail  Fold  dash trail damage
   //   conflag      Prior fire: the burn pool dumps at 30% of remaining health, 60% splashes
   //   frostbite    Fold  chill gauge -> freeze share of foe time -> E and +25% damage taken
-  //   deepcold     Fold  chillMul -> gauge rate
-  //   shatter      Fold  a hit ends the freeze: bonus hit, less control
-  //   coldsnap     Fold  dash frost ring
+  //   shatter      Fold  skill hits on frozen foes (the freeze share): +shatter on the hit, a burst on SHATTER_NEAR neighbours in a pack
+  //   glacier      Fold  E x (1 + GLACIER_E x min(freeze share, 1 - freeze share)): frozen foes wall the moving ones and eat shots (guess)
+  //   rime         Fold  a thawed foe keeps refreeze of the gauge: the refreeze part of the freeze cycle x (1 - refreeze)
   //   permafrost   Fold  freezeDur and chillWeaken -> E
   //   abszero      Fold  frostNova -> chill spreads through a pack
   //   conductor    Fold  arcs and arcRange -> pack lightning
   //   highvoltage  Sheet shockMul in the lightning estimate
+  //   conduction   Fold  pack lightning x (1 + conduct x CONDUCT_N foes within 60; guess)
+  //   stormanchor  Fold  zaps: procDmg / ANCHOR_ZAP x anchors up (ANCHOR_T x casts, at most ANCHOR_MAX) x ANCHOR_HIT (foe in reach; guess); discharge arcs: pack lightning x (1 + ANCHOR_ARC_K; guess)
   //   shortcircuit Fold  dying charged foe discharges -> pack lightning
-  //   thunderstep  Fold  dash hit
   //   overload     Fold  arcStun -> stun share -> E, Opportunist
-  //   thunderhead  Fold  thunderbolt per discharge
+  //   capacitor    Sheet x3 detonation in the lightning estimate; Fold pack lightning x the share of pack foes a cast reaches before they die (casts x foe life, at least CAP_MIN)
   //   envenom      Fold  venom gauge -> damage taken from the hero
-  //   potency      Fold  venomBuild -> gauge rate
   //   caustic      Fold  corrode -> damage taken
-  //   fester       Sheet conditional damage to envenomed foes
   //   sporeburst   Fold  faster venom in a pack; Prior poison 0.05 per rank
-  //   noxiousstep  Fold  dash hit; Prior poison 0.01 (venom rider)
+  //   neurotoxin   Fold  E: NEURO_RED x the share of foe time at full Venom (bosses half; guess)
+  //   hexstrong    Prior poison 0.03: elites lose their affixes at full Venom (guess)
+  //   linger       Prior poison 0.015 per rank: Venom stays up between hits (guess)
   //   pandemic     Prior poison: venom spreads from corroded foes
   //   zealotry     Sheet smiteMul in the holy estimate
   //   sanctity     Fold  holyCap and smiteShield -> E
   //   beacon       Fold  smite splash -> pack holy damage
-  //   dawnstride   Fold  dash hit; Prior holy 0.02 (blind)
+  //   martyr       Fold  nova procDmg x shield size (half the cap against REBUKE_REF, x0.5 to x2) x MARTYR_RATE breaks a second (guess), pack hits
+  //   vigil        Fold  holy x (1 + VIGIL_UP): share of hits landed standing still (ranged more; guess)
   //   radiantaegis Prior holy: double radiance while shielded, absorbed damage strikes back
   //   doommark     Fold  doom per damage -> reap line (trash) and tolls (boss)
-  //   malignance   Fold  shadowInfuse, same formula as doommark
-  //   malice       Sheet conditional damage to doomed foes
   //   inevitable   Fold  doomTough -> boss and elite doom
   //   deathsedge   Prior shadow: a reap readies a guaranteed crit
-  //   umbralstep   Fold  dash hit; Prior shadow 0.01 (doom rider)
+  //   reaperschain Fold  a pack foe that receives chained Doom (CHAIN_REACH of them; guess) needs (1 - the moved Doom share) of the damage
+  //   quarry       Fold  one-foe Doom x (1 + QUARRY_BIG x the Quarry share: casts x QUARRY_T; guess)
+  //   umbralstep   Fold  dashes through foes x a foe's health below twice the Reap line x UMBRAL_HIT (guess)
   //   reaper       Prior shadow: a reaped foe implodes around it
   //   sunder       Fold  crit chance x hits per second -> stacks of +4% damage taken (10 stacks)
+  //   evo_fire evo_general  Sheet strikes (Scorched ground, Spectral strike)
+  //   evo_ice evo_lightning evo_poison evo_holy evo_shadow  Prior 0.06-0.08 (pillars, tethers, doses, lance, dash refund: no stat; guess)
   //   thermalshock plasma firedamp sunfire blackflame superconductor cryotoxin hoarlight blackice galvanic wrathofheaven blacklightning purge necrosis twilight Prior DUO_X each, when both paths are active
+  //   mut_*        Prior MUT_X per Mutation (MUT_DEF otherwise; guesses); supercapacitor: Sheet (capMul, chargeSlow); lattice: the anchor Fold plus its prior
+  //   metronome    Fold  weapon damage and the statuses it feeds x (METRO_HI + (METRO_N - 1) x METRO_LO) / METRO_N = x1.35
+  //   pacifist     Fold  weapon direct damage removed; the weapon share of every status build-up x PYRE
+  //   bloodprice   Fold  skill damage x (1 + BLOOD_CASTS: the bot casts at the gap while above BLOOD_HP; guess), E x BLOOD_EHP (health spent; guess)
+  //   hunted       Prior HUNT.card x HUNT.kill x HUNT.fights x strata left (extra boon cards; guess); Fold E x HUNT.ehp (one more affixed elite a room; guess)
+  //   b_atk        Sheet fullSwing (ED.Bell.cycle); Fold fullR: full-wind loops x pack weapon damage x FULLR_K (guess)
+  //   b_atk_h      Sheet wreck, demolish; model.js wreckStun; Fold hurlCarry: pack weapon damage x CARRY_K per 40 px (guess)
+  //   b_atk_s      Sheet haulAcc, perpetual, windCap (ED.Bell.cycle); Fold slipstream: the WIND_MOVE slow lifted for SLIP_WIND of a fight -> E like speed (guess)
+  //   b_s1         Sheet s1Cdr, s1Dmg; Fold leapR -> E (LEAP_E; guess)
+  //   b_s1_a       Sheet s1Dmg, s1Area, wreckSpin (skill part); model.js smashStun; Fold wrecker: WRECK_SAVE of a wind-up saved per Anchor Leap (guess)
+  //   b_s1_b       model.js hookShield, shackle; Fold leapIfr: untouchable share of the cooldown x IFR_HIT -> E, hookPull: PULL_N more pack foes per slam (guesses)
+  //   b_s2 b_s2_a b_s2_b b_el b_el_a b_el_b  Sheet (Peal parts, rod, stormBolt, chainArc, arcN, tollStorm); model.js Peal and rod stuns, Ward Bell
   //   boots        Fold  spd -> E (relic)
   //   coin         Fold  gold, luck -> bonus
   //   fang         Fold  poisonInfuse -> venom
@@ -115,10 +136,36 @@ module.exports = (ED, model) => {
     reaper: ['shadow', 0.1], // a reaped foe implodes for 20% of its health around it
     sporeburst: ['poison', 0.05], // per rank: a dying envenomed foe hands venom to its neighbours
     deathsedge: ['shadow', 0.05], // a reap readies a guaranteed crit
-    dawnstride: ['holy', 0.02], // the blind of the dash (the hit is in fold)
-    noxiousstep: ['poison', 0.01], // the venom of the dash hit
-    umbralstep: ['shadow', 0.01], // the doom of the dash hit
+    firebreak: ['fire', 0.04], // guess: foes walk round your burning ground (funnel) and a burning death leaves some
+    hexstrong: ['poison', 0.03], // guess: an elite at full Venom loses its affixes
+    linger: ['poison', 0.015], // guess, per rank: Venom outlasts the gaps between hits
+    evo_ice: ['ice', 0.08], // guess: frozen deaths leave solid pillars, a skill hit bursts them for 15% of the dead foe's health
+    evo_lightning: ['lightning', 0.08], // guess: tethers between charged foes strike crossers at 50% weapon
+    evo_poison: ['poison', 0.08], // guess: a dose bursts for 10% of the foe's health x its Venom share
+    evo_holy: ['holy', 0.06], // guess: while shielded the attack is a lance through every foe on the line
+    evo_shadow: ['shadow', 0.07], // guess: a Reap marks the next Quarry and refunds a dash charge
   };
+  // Mutation priors (ln-V units; every value a guess): the payoff of the parent rule the Mutation reshapes; MUT_DEF for the ones not listed.
+  const MUT_DEF = 0.05;
+  const MUT_X = {
+    mut_supercapacitor: 0, // the sheet reads capMul and chargeSlow
+    mut_lattice: 0.03, // the anchor itself is folded (anchor stat)
+    mut_rimelattice: 0.03, mut_penitence: 0.03, mut_openingstroke: 0.02, mut_emberwake: 0.03, mut_deathspiral: 0.03, mut_mirroredge: 0.03, // narrower or situational
+    mut_flashfreeze: 0.06, mut_miasma: 0.06, mut_halo: 0.06, mut_echoedge: 0.07, // Echo Edge: the spectral strike at 100% instead of 60%
+  };
+  const PURSE_X = 0.01; // guess: the Purse's gold, a gold room's reward
+  // Twist terms (ED.TWIST_C has the card numbers). BLOOD_CASTS: extra skill casts per normal cast under Bloodprice (the bot casts at the gap while above sim.js BLOOD_HP of max health); BLOOD_EHP: effective health left (health spent on casts).
+  // HUNT: card = value of one extra boon card, kill = share of champions killed before the clear, fights = combat rooms a floor, ehp = effective health with one more affixed elite a room. All guesses.
+  const TC = ED.TWIST_C, BLOOD_CASTS = 1, BLOOD_EHP = 0.75, HUNT = { card: 0.025, kill: 0.6, fights: 4.2, ehp: 0.93 };
+  // Element terms the sheet leaves out (guesses unless a constant is named): BRUSH_K pack burn per Brushfire share; GLACIER_E E per pack freeze share; SHATTER_NEAR neighbours a shatter burst reaches; CONDUCT_N other foes within 60;
+  // ANCHOR_HIT share of zaps that find a foe; ANCHOR_ARC_K pack lightning added by discharges arcing to an anchor; CAP_MIN least share of a pack a Capacitor cast reaches; NEURO_RED foe damage removed at full Venom;
+  // MARTYR_RATE shield breaks a second in a fight; VIGIL_UP share of hits landed standing still; CHAIN_REACH share of pack foes that receive a chained Doom; QUARRY_BIG Reap-line weight on a big foe; UMBRAL_HIT share of dashes through a foe below twice its Reap line.
+  // HEAL_E: E per max HP healed a stratum (Mending's 0.1 per unit of heal); FORAGER_HEALS: heal sources a stratum that land below full health.
+  const BRUSH_K = { melee: 0.5, ranged: 1.2 }, GLACIER_E = 0.3, SHATTER_NEAR = 1, CONDUCT_N = 2, ANCHOR_HIT = { melee: 0.6, ranged: 0.3 }, ANCHOR_ARC_K = 0.3, CAP_MIN = 0.2, NEURO_RED = 0.2;
+  const MARTYR_RATE = 1 / 8, VIGIL_UP = { melee: 0.2, ranged: 0.4 }, CHAIN_REACH = 0.7, QUARRY_BIG = 0.5, UMBRAL_HIT = 0.5, HEAL_E = 0.08, FORAGER_HEALS = 2.5;
+  // Bellwarden terms (guesses): FULLR_K pack weapon damage per unit of Full Swing impact width; CARRY_K per 40 px of Unstoppable carry (struck foes bunch into the impact); SLIP_WIND share of a fight spent winding;
+  // LEAP_E E per unit of hand-leap reach; WRECK_SAVE share of a loop's wind-up a Wrecker landing saves; IFR_HIT share of untouchable seconds that dodge a hit; PULL_N extra pack foes a Reel In slam strikes.
+  const FULLR_K = 0.3, CARRY_K = 0.05, SLIP_WIND = 0.6, LEAP_E = 0.04, WRECK_SAVE = 0.5, IFR_HIT = 0.4, PULL_N = 1;
   const PRESENT_EL = (st, el) => st[ED.ELEMENTS[el].inf] > 0 || st.element === el; // an element is active: an infusion above 0 or the class element
 
   // ---------------- index of the path cards ----------------
@@ -127,7 +174,7 @@ module.exports = (ED, model) => {
   for (const id of ED.BOON_IDS) {
     const b = ED.BOONS[id];
     if (b.key) KEY_OF[b.path] = id;
-    else if (b.path && !b.gate && !b.evo && !b.open) POOL_OF[b.path].push(id);
+    else if (b.path && !b.gate && !b.evo && !b.open && !b.retired) POOL_OF[b.path].push(id); // retired cards are never offered
   }
 
   // ---------------- helpers ----------------
@@ -139,7 +186,7 @@ module.exports = (ED, model) => {
   // ---------------- what the sheet leaves out ----------------
   // a: model.assess result at the stratum of ctx. Returns { one, pack, ehp, bonus }: damage per second on one foe and on a pack, effective health, additive value of the meta stats.
   function fold(p, a, ctx) {
-    const st = p.stats, m = a.m, k = a.k, ref = m.ref, t = ctx.stratum, melee = !!st.melee, wk = m.weapon, aps = wk._aps;
+    const st = p.stats, m = a.m, k = a.k, ref = m.ref, t = ctx.stratum, bell = st.kind === 'bell', melee = !!st.melee || bell, wk = m.weapon, aps = wk._aps;
     const sdTot = model.statusDamage(m), dOne = a.one - sdTot, dPack = a.pack - sdTot;
     const spk = 1 + (clamp(dPack / Math.max(1e-9, dOne), 1, PACK) - 1) * POOL_EFF; // a status builds on every foe the hits reach
     const sd = { fire: 0, lightning: 0, holy: 0, general: 0 };
@@ -150,46 +197,64 @@ module.exports = (ED, model) => {
     const pow = 1 + st.statusPow;
     let add1 = 0, addN = 0, mul1 = 1, mulN = 1, eMul = 1, bonus = 0;
     let light1 = sd.lightning, fire1 = sd.fire, holy1 = sd.holy;
+    const casts = m.skills.reduce((s, q) => s + 1 / q._cd, 0); // skill casts a second
+    const wShare = m.proc.dps > 0 ? m.proc.split.weapon / m.proc.dps : 1; // share of the status build-up the weapon feeds
+    const wOne = wk.dps * (wk._up === undefined ? 1 : wk._up) * k, wN = model.packWeapon(m, PACK) * k; // weapon damage on one foe and on a pack
+    const skOne = m.skills.reduce((s, q) => s + q.dpsCd, 0) * k, skN = Math.max(0, model.directDamage(m, PACK) - model.packWeapon(m, PACK) * (1 + (m.boost ? m.boost.pack : 0))) * k; // skill damage on one foe and on a pack
+    const dashUse = (melee ? DASH_USE.melee : DASH_USE.ranged) / Math.max(0.5, m.dash.cd); // dashes through foes a second
+    const pyreK = st.twPacifist ? 1 + (TC.PYRE - 1) * wShare : 1; // Pacifist's Pyre: the weapon share of the build-up x PYRE
 
     // Stormidol: critical hits charge foes
     if (st.critCharge) light1 += m.proc.critDps * st.critCharge * pow * ED.elemMul(t, 'lightning') * (1 + st.shockMul);
-    // Lightning: a discharge arcs to 3 + arcs foes at ARC_MUL; Short Circuit, Overload and Thunderhead
+    // Lightning: a discharge arcs to 3 + arcs foes at ARC_MUL; Short Circuit, Conduction; Capacitor detonates only the pack foes a cast reaches alive
     let lightN = light1 * spk;
     if (light1 > 0 || st.lightningInfuse > 0) {
       lightN *= 1 + POOL_EFF * C.ARC_MUL * Math.min(ARC_FOES - 1, (3 + st.arcs) * (1 + 0.5 * st.arcRange));
       if (st.shortCircuit) lightN *= 1 + 0.6 * st.shortCircuit;
-      if (st.thunderbolt) {
-        const bolt = ED.procDmg(ED.BOONS.thunderhead, st) * Math.max(0.1, st.dmg) * ED.elemMul(t, 'lightning');
-        add1 += Math.min(1 / C.BOLT_CD, 1) * st.thunderbolt * bolt;
-        addN += Math.min(1 / C.BOLT_CD, Math.min(PACK, 3)) * st.thunderbolt * bolt * Math.min(PACK, 2);
-      }
+      if (st.conduct) lightN *= 1 + st.conduct * CONDUCT_N;
+      if (st.capacitor) lightN *= clamp(casts * tFoe, CAP_MIN, 1);
     }
-    // Holy: Beacon splashes a Smite to the foes next to it
+    // Storm Anchor: an anchor per cast zaps a foe in reach every ANCHOR_ZAP; discharges arc to it and burst
+    if (st.anchor) {
+      const up = Math.min(C.ANCHOR_MAX, C.ANCHOR_T * casts), zap = ED.procDmg(ED.BOONS.stormanchor, st) * Math.max(0.1, st.dmg) * ED.elemMul(t, 'lightning') / C.ANCHOR_ZAP, hit = melee ? ANCHOR_HIT.melee : ANCHOR_HIT.ranged;
+      add1 += zap * up * hit; addN += zap * up * Math.min(1, 1.5 * hit);
+      lightN *= 1 + ANCHOR_ARC_K * Math.min(1, up);
+    }
+    // Holy: Vigil doubles the Radiance of hits landed standing still; Beacon splashes a Smite to the foes next to it
+    if (st.vigil) holy1 *= 1 + (melee ? VIGIL_UP.melee : VIGIL_UP.ranged);
     let holyN = holy1 * spk;
     if (st.beacon) holyN *= 1 + st.beacon * Math.min(PACK - 1, 2);
-    // Fire: Wildfire passes a dying foe's burn on
+    // Fire: Wildfire passes a dying foe's burn on; Brushfire spreads it by contact
     let fireN = fire1 * spk;
     if (st.wildfire) fireN *= 1 + st.wildfire * 1.2;
+    if (st.brushfire) fireN *= 1 + st.brushfire * (melee ? BRUSH_K.melee : BRUSH_K.ranged);
     const stOne = fire1 + light1 + holy1 + sd.general, stN = fireN + lightN + holyN + sd.general * spk;
 
+    // Twists: Metronome bar on the weapon and the statuses it feeds; Pacifist's Pyre trades the weapon's direct damage for x PYRE build-up; Bloodprice extra casts for health
+    if (st.twMetro) { const g = (TC.METRO_HI + (TC.METRO_N - 1) * TC.METRO_LO) / TC.METRO_N - 1; add1 += (wOne + stOne * wShare) * g; addN += (wN + stN * wShare) * g; }
+    if (st.twPacifist) { add1 += stOne * (pyreK - 1) - wOne; addN += stN * (pyreK - 1) - wN; }
+    if (st.twBlood) { add1 += skOne * BLOOD_CASTS; addN += skN * BLOOD_CASTS; eMul *= BLOOD_EHP; }
+    if (st.twHunted) eMul *= HUNT.ehp;
     // Battle Trance: attack speed during the 4 s after a skill cast, on the weapon's damage and the statuses it feeds
-    const casts = m.skills.reduce((s, q) => s + 1 / q._cd, 0);
-    const wShare = m.proc.dps > 0 ? m.proc.split.weapon / m.proc.dps : 1;
     if (st.trance) {
       const rate0 = St.attackRate(p), up = Math.min(1, TRANCE_T * casts), apsOn = Math.min(1 / st.atkFloor, aps * (rate0 + st.trance) / rate0), f = up * (apsOn / aps - 1);
       add1 += (wk.dps * k + stOne * wShare) * f;
-      addN += (model.packWeapon(m, PACK) * k + stN * wShare) * f;
+      addN += (wN + stN * wShare) * f;
     }
     // Overcharge: a shockwave with every skill cast
     if (st.overcharge) {
       const shock = ED.procDmg(ED.BOONS.overcharge, st) * st.overcharge * Math.max(0.1, st.dmg);
       add1 += shock * casts; addN += shock * casts * Math.min(PACK, 3);
     }
+    // Martyr's Rebuke: a holy nova per shield break, sized by the broken shield
+    if (st.rebuke) {
+      const nova = ED.procDmg(ED.BOONS.martyr, st) * Math.max(0.1, st.dmg) * ED.elemMul(t, 'holy') * clamp(st.holyCap / 2 / C.REBUKE_REF, 0.5, 2) * MARTYR_RATE;
+      add1 += nova; addN += nova * Math.min(PACK, 3);
+    }
     // Echo: a second charge of skill 1 is extra casts
     if (st.charges > 0 && m.skills[0]) { const e1 = m.skills[0].dpsCd * k * ECHO_EXTRA; add1 += e1; addN += e1 * spk; }
     // dash riders: damage per dash, a share of the cooldowns
     if (m.dash.parts.length) {
-      const use = (melee ? DASH_USE.melee : DASH_USE.ranged) / Math.max(0.5, m.dash.cd);
       let d1 = 0, dN = 0;
       for (const q of m.dash.parts) {
         if (!(q.dmg > 0)) continue;
@@ -197,7 +262,7 @@ module.exports = (ED, model) => {
         else if (q.label === 'Burning trail') { d1 += q.dmg * 2.2; dN += q.dmg * 2.2 * Math.min(PACK, 3); }
         else { d1 += q.dmg; dN += q.dmg * Math.min(PACK, 3); }
       }
-      add1 += d1 * use; addN += dN * use;
+      add1 += d1 * dashUse; addN += dN * dashUse;
     }
     // Sunder: crits stack +4% damage taken (up to 10 stacks); a crit adds min(2, 60 x its share of the foe's health) stacks
     if (st.sunder) {
@@ -205,32 +270,32 @@ module.exports = (ED, model) => {
       mul1 *= 1 + 0.04 * meanRamp(g, T_ONE, 10);
       mulN *= 1 + 0.04 * meanRamp(g * pf, tFoe, 10);
     }
-    // Venom: damage taken from the hero rises with the gauge; the gauge fills at rate x VENOM_K per second of damage fed in
+    // Venom: damage taken from the hero rises with the gauge; the gauge fills at rate x VENOM_K per second of damage fed in. Neurotoxin: foes at full Venom deal less.
     if (st.poisonInfuse > 0 && m.proc.rate.poison > 0) {
-      const aff = ED.elemMul(t, 'poison'), r = m.proc.rate.poison / ref.statusHp * C.VENOM_K * (1 + st.venomBuild) * aff, amp = C.VENOM_AMP + st.corrode;
+      const aff = ED.elemMul(t, 'poison'), r = m.proc.rate.poison * pyreK / ref.statusHp * C.VENOM_K * (1 + st.venomBuild) * aff, amp = C.VENOM_AMP + st.corrode, rN = r * pf * (1 + 0.5 * st.sporeBurst);
       mul1 *= 1 + amp * meanRamp(r * RES_ONE, T_ONE, 100) / 100;
-      mulN *= 1 + amp * meanRamp(r * pf * (1 + 0.5 * st.sporeBurst), tFoe, 100) / 100;
+      mulN *= 1 + amp * meanRamp(rN, tFoe, 100) / 100;
+      if (st.neuro) { const full = (g, T) => (g > 0 ? clamp(1 - 100 / (g * T), 0, 1) : 0); eMul /= 1 - Math.min(E_MAX_RED, NEURO_RED * (0.6 * full(rN, tFoe) + 0.4 * 0.5 * full(r * RES_ONE, T_ONE))); }
     }
-    // Doom: a foe is Reaped once its health falls to the Doom the hero's hits stored (trash dies after 1/(1+i) of its health); a boss pays the Doom back as Tolls
+    // Doom: a foe is Reaped once its health falls to the Doom the hero's hits stored (trash dies after 1/(1+i) of its health); a boss pays the Doom back as Tolls.
+    // Quarry doubles the Reap line of the foe the skills hit; Reaper's Chain hands part of a Reaped foe's Doom on; Umbral Step Reaps a dashed foe below twice its line.
     if (st.shadowInfuse > 0 && m.proc.rate.shadow > 0) {
-      const i = st.shadowInfuse * (1 + st.doomMul) * ED.elemMul(t, 'shadow') * feed;
-      mul1 *= 1 + i * (C.DOOM_TOUGH + st.doomTough);
-      mulN *= 1 + i;
+      const i = st.shadowInfuse * (1 + st.doomMul) * ED.elemMul(t, 'shadow') * feed * pyreK;
+      mul1 *= 1 + i * (C.DOOM_TOUGH + st.doomTough) * (st.quarry ? 1 + QUARRY_BIG * Math.min(1, casts * C.QUARRY_T) : 1);
+      const moved = st.reapChain ? Math.min(C.SPREAD_CAP, st.reapChain * i / (1 + i)) * CHAIN_REACH : 0;
+      mulN *= (1 + i) / (1 - moved);
+      if (st.dashReap) addN += dashUse * ref.hp * Math.min(1, 2 * i / (1 + i)) * UMBRAL_HIT;
     }
-    // Chill and freeze: a frozen foe takes +25% and does nothing; chilled foes are slow. Shatter ends a freeze for extra damage.
+    // Chill and freeze: a frozen foe takes +25% and does nothing; chilled foes are slow. Lingering Rime shortens the refreeze; Shatter cashes a skill hit on a frozen foe; Glacier walls the pack.
     if (st.iceInfuse > 0 && m.proc.rate.ice > 0) {
-      const aff = ED.elemMul(t, 'ice'), cr = m.proc.rate.ice / ref.statusHp * C.CHILL_K * (1 + st.chillMul) * aff;
-      const T = tFoe, spread = st.frostNova ? 1 + 0.6 * Math.min(PACK - 1, 2) : 1;
-      let df = 1.6 * (1 + st.freezeDur);
-      if (st.shatter) df = Math.min(df, 0.5 / aps);
-      const frz = (c, tm, dfr) => { const tf = 100 / Math.max(1e-9, c); return clamp(tm - tf, 0, tm) / tm * dfr / (dfr + 1.5 * tf); }; // share of a foe's time spent frozen
-      const fT = frz(cr * pf * spread, T, df), fB = frz(cr * RES_BOSS, T_ONE, st.shatter ? df : 0.6 * (1 + 0.5 * st.freezeDur));
+      const aff = ED.elemMul(t, 'ice'), cr = m.proc.rate.ice * pyreK / ref.statusHp * C.CHILL_K * (1 + st.chillMul) * aff;
+      const T = tFoe, spread = st.frostNova ? 1 + 0.6 * Math.min(PACK - 1, 2) : 1, rime = 1 - Math.min(0.9, st.refreeze || 0), df = 1.6 * (1 + st.freezeDur);
+      const frz = (c, tm, dfr) => { const tf = 100 / Math.max(1e-9, c); return clamp(tm - tf, 0, tm) / tm * dfr / (dfr + 1.5 * tf * rime); }; // share of a foe's time spent frozen
+      const fT = frz(cr * pf * spread, T, df), fB = frz(cr * RES_BOSS, T_ONE, 0.6 * (1 + 0.5 * st.freezeDur));
       const chT = clamp(cr * pf * spread * T / 100, 0, 1) * (1 - fT), chB = clamp(cr * RES_BOSS * T_ONE / 100, 0, 1) * (1 - fB);
       mul1 *= 1 + 0.25 * fB; mulN *= 1 + 0.25 * fT;
-      if (st.shatter) {
-        const hit = wk._avg, tfT = 100 / Math.max(1e-9, cr * pf * spread), tfB = 100 / Math.max(1e-9, cr * RES_BOSS);
-        add1 += st.shatter * hit / (1.5 * tfB + df); addN += 0.5 * PACK * st.shatter * hit * (1 + 0.5 * Math.min(PACK - 1, 2)) / (1.5 * tfT + df); // half of the foes live to be shattered
-      }
+      if (st.shatter) { add1 += skOne * fB * st.shatter; addN += skN * fT * (st.shatter + SHATTER_NEAR); }
+      if (st.glacier) eMul *= 1 + GLACIER_E * Math.min(fT, 1 - fT); // a frozen foe walls the moving ones: most while about half the pack is frozen
       const red = clamp(0.6 * (fT * FROZEN_FOE + chT * (SLOW_RED + st.chillWeaken)) + 0.4 * (fB * FROZEN_FOE + chB * (SLOW_RED + st.chillWeaken)), 0, E_MAX_RED);
       eMul /= 1 - red;
     }
@@ -242,11 +307,22 @@ module.exports = (ED, model) => {
     }
     // Holy shield: the Smite shield refills to its cap; Sanctity raises the cap and the grant
     if (st.holyInfuse > 0 || st.element === 'holy') eMul *= 1 + (st.holyCap - 0.06) * 0.6 + (st.smiteShield - 0.01) * 6;
+    // Bellwarden: Full Swing's wider impact, Unstoppable's carry, Wrecker's wound landing, Reel In's pull; Slipstream, the farther hand leap and Tether Hook's untouchable time -> E
+    if (bell) {
+      const cy = ED.Bell.cycle(st, 1, St.attackInterval(p), ED.Bell.rateGain(p)), lp = m.skills.find(q => q.id === 'heave'), cd1 = lp ? lp._cd : 5;
+      if (st.fullR) addN += wN * FULLR_K * st.fullR * cy.full;
+      if (st.hurlCarry) addN += wN * CARRY_K * st.hurlCarry / 40;
+      if (st.wrecker) { const g = Math.min(0.25, WRECK_SAVE * cy.tw / cd1); add1 += wOne * g; addN += wN * g; }
+      if (st.hookPull && lp) addN += lp.dpsCd * k * PULL_N;
+      if (st.slipstream) eMul *= 1 + 0.35 * (1 - C.WIND_MOVE) * SLIP_WIND;
+      if (st.leapR) eMul *= 1 + LEAP_E * st.leapR;
+      if (st.leapIfr) eMul /= 1 - Math.min(E_MAX_RED, IFR_HIT * st.leapIfr / cd1);
+    }
     // area: melee arcs and blasts catch more of a pack
     if (st.area) { mulN *= 1 + (melee ? 0.3 : 0.12) * st.area; }
     // Seeker Gem: homing shots miss less, melee reach hits first and catches more of a pack
     if (st.homing > 0 && !melee) { mul1 *= 1.08; mulN *= 1.08; }
-    if (st.meleeReach > 0 && melee) { mul1 *= 1 + 0.1 * st.meleeReach; mulN *= 1 + 0.3 * st.meleeReach; }
+    if (st.meleeReach > 0 && melee && !bell) { mul1 *= 1 + 0.1 * st.meleeReach; mulN *= 1 + 0.3 * st.meleeReach; }
     // guards and sustain the effective health leaves out
     if (st.guardian) eMul *= 1.12;
     if (st.aegis) eMul *= 1.15;
@@ -257,7 +333,7 @@ module.exports = (ED, model) => {
     if (st.roomWard) eMul *= 1 + 0.5 * st.roomWard;
     if (st.strataHeal) eMul *= 1 + 0.4 * st.strataHeal;
     if (st.chalice) { eMul *= 1.15; mul1 *= 1.04; mulN *= 1.04; }
-    eMul *= 1 + 0.002 * st.thorns + 0.35 * (st.spd - 1) + 0.08 * st.dashN + 0.2 * st.dashcdr + 0.1 * st.heal + 0.015 * st.forager;
+    eMul *= 1 + 0.002 * st.thorns + 0.35 * (st.spd - 1) + 0.08 * st.dashN + 0.2 * st.dashcdr + 0.1 * st.heal + HEAL_E * FORAGER_HEALS * ED.World.FORAGER * st.forager;
     // meta stats: gold buys relics and boons, experience and choices add picks
     bonus += 0.12 * st.gold + 0.25 * st.xp + 0.15 * st.choices + 0.16 * st.discount + 0.04 * st.cloverRerolls + 0.12 * st.luck + 0.03 * st.light;
     return { one: (dOne + stOne + add1) * mul1, pack: (dPack + stN + addN) * mulN, ehp: a.ehp * eMul, bonus };
@@ -331,10 +407,13 @@ module.exports = (ED, model) => {
   }
 
   // ---------------- priors and milestones ----------------
-  // Flat prior of card id for hero h (after the card): zero when the card's path is not active.
-  function prior(id, h) {
+  // Flat prior of card id for hero h (after the card) in decision context dc: zero when the card's path is not active; Mutations, the Purse and Hunted have their own.
+  function prior(id, h, dc) {
     const b = ED.BOONS[id], st = h.stats;
     if (b.duo) return PRESENT_EL(st, b.duo[0]) && PRESENT_EL(st, b.duo[1]) ? DUO_X : 0;
+    if (b.mut) return MUT_X[id] !== undefined ? MUT_X[id] : MUT_DEF;
+    if (b.purse) return PURSE_X;
+    if (id === 'hunted') return HUNT.card * HUNT.kill * HUNT.fights * Math.max(0, C.STRATA - dc.s + 0.5); // boon cards from the champions of the fights left in the run
     const pr = PRIOR[id];
     return pr && PRESENT_EL(st, pr[0]) ? pr[1] : 0;
   }
@@ -343,7 +422,7 @@ module.exports = (ED, model) => {
     let g = dc.gains.get(key);
     if (g === undefined) {
       const q = ED.Sheet.withBoon(h, id, dc.base);
-      g = valueOf(q, dc).v - (v0 === undefined ? valueOf(h, dc).v : v0) + prior(id, q);
+      g = valueOf(q, dc).v - (v0 === undefined ? valueOf(h, dc).v : v0) + prior(id, q, dc);
       dc.gains.set(key, g);
     }
     return g;
@@ -393,7 +472,7 @@ module.exports = (ED, model) => {
     if (b.gate || b.key || b.evo || b.duo || (b.path && !b.open)) fa = future(q, dc, b.gate ? null : p);
     let realised = 0;
     if (b.key) realised = fb.key[b.path] || 0; else if (b.evo) realised = fb.evo; else if (b.duo) realised = fb.duo;
-    const x = prior(id, q), dv = va.v - before.v, df = fa.total - fb.total + realised;
+    const x = prior(id, q, dc), dv = va.v - before.v, df = fa.total - fb.total + realised;
     return { gain: dv + df + x, dv, df, x, dd: va.d - before.d, de: va.e - before.e };
   }
 

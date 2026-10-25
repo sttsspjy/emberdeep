@@ -5,7 +5,14 @@
 (function (ED) {
   'use strict';
   const U = ED.U;
-  const Camp = ED.Camp = { sparks: [], smoke: [], flies: null, bg: null, bgKey: '', smokeT: 0 };
+  const Camp = ED.Camp = { sparks: [], smoke: [], flies: null, bg: null, bgKey: '', smokeT: 0, wear: null, wearK: '', wearT: 0 };
+  // Fire colours: [pool, inner pool, glow, core glow, tongue glow, spark glow, spark rgb, flame layers]; the Blue Hearth (Wardrobe) burns cold blue.
+  const FIRE = {
+    warm: { pool: '#ff9a4a', pool2: '#ffc27a', glow: '#ff8a3d', core: '#ffb347', tongue: '#ffb35c', spark: '#ff9a3a', sparkRgb: [255, 150, 60, 80],
+      flames: ['rgba(255,70,16,0.85)', 'rgba(255,125,30,0.85)', 'rgba(255,175,70,0.9)', 'rgba(255,225,140,0.95)', 'rgba(255,250,220,0.95)'] },
+    blue: { pool: '#4a8aff', pool2: '#8ac4ff', glow: '#3d7aff', core: '#6ab0ff', tongue: '#7ac0ff', spark: '#5aa0ff', sparkRgb: [90, 170, 255, 60],
+      flames: ['rgba(30,70,200,0.85)', 'rgba(46,120,240,0.85)', 'rgba(90,168,255,0.9)', 'rgba(168,216,255,0.95)', 'rgba(232,246,255,0.95)'] },
+  };
 
   function ridge(W, H, y0, amp, seed, n) {
     const r = U.RNG(seed), p = [r.next() * 6, r.next() * 6, r.next() * 6], pts = [];
@@ -130,7 +137,7 @@
       if (ED.PixUI && ED.PixUI.menuVignette) ED.PixUI.menuVignette();
     }
     const fx = W * 0.58, fy = H * 0.8, fs = Math.min(W, H) * 0.06, gx = W * 0.82, gy = H * 0.64, gw = Math.min(W, H) * 0.2;
-    const fl = 1 + Math.sin(t * 8) * 0.04 + Math.sin(t * 13.7) * 0.04 + Math.sin(t * 3.1) * 0.03;
+    const fl = 1 + Math.sin(t * 8) * 0.04 + Math.sin(t * 13.7) * 0.04 + Math.sin(t * 3.1) * 0.03, blue = !!(ED.Cos && ED.Cos.blueHearth(profile)), FC = blue ? FIRE.blue : FIRE.warm;
     // ---- lit pass ----
     c.drawImage(Camp.bg.bg, 0, 0);
     // drifting smoke
@@ -155,7 +162,19 @@
     // the chosen hero by the fire
     if (heroCls && ED.CLASSES[heroCls]) {
       c.save(); c.translate(Math.round(fx + fs * 1.9), Math.round(fy + fs * 0.15)); const hs = Math.max(1, Math.round(fs / 26)); c.scale(hs, hs); c.imageSmoothingEnabled = false; // whole-number scale: equal art pixels
-      ED.Sprites.hero(c, { cls: heroCls, slot: 0, weapon: ED.CLASSES[heroCls].weapons[0], face: Math.PI * 0.85, moving: false, hp: 1, mastery10: false }, t, null);
+      Camp.wearT -= dt; // the hero's Wardrobe set and chosen weapon, re-read twice a second (S.wearBundle checks ownership)
+      if (Camp.wearT <= 0 || Camp.wearK !== heroCls) {
+        Camp.wearT = 0.5; Camp.wearK = heroCls; Camp.wear = profile && ED.Save.wearBundle ? ED.Save.wearBundle(profile, heroCls) : null;
+        Camp.weapon = ED.App && ED.App.weaponFor && profile ? ED.App.weaponFor(heroCls) : ED.CLASSES[heroCls].weapons[0];
+      }
+      const hero = { cls: heroCls, slot: 0, weapon: Camp.weapon || ED.CLASSES[heroCls].weapons[0], face: Math.PI * 0.85, moving: false, hp: 1, wear: Camp.wear };
+      if (ED.Cos && Camp.wear && Camp.wear.pet === 'pet.platino') ED.Cos.drawPetAt(c, 20, 6, -1, t, 0, 1, 0); // the pet waits behind its hero
+      ED.Sprites.hero(c, hero, t, null);
+      c.restore();
+    }
+    if (blue && ED.Cos) { // the Blue Hearth's ghost delver sits across the fire, facing it
+      c.save(); c.translate(Math.round(fx - fs * 1.9), Math.round(fy + fs * 0.15)); const hs = Math.max(1, Math.round(fs / 26)); c.scale(hs, hs); c.imageSmoothingEnabled = false;
+      ED.Cos.drawGhost(c, 0, 0, t, false, 0.55);
       c.restore();
     }
     if (profile && profile.stats.wins > 0) { // the hollow crown, taken
@@ -163,8 +182,8 @@
     }
     // ---- lighting: cold night ambient, warm pools ----
     R.lightBegin([44, 50, 82]);
-    R.lightAdd(fx, fy - fs * 0.4, fs * 11 * fl, '#ff9a4a', 1.15);
-    R.lightAdd(fx, fy - fs * 0.5, fs * 4 * fl, '#ffc27a', 0.85);
+    R.lightAdd(fx, fy - fs * 0.4, fs * 11 * fl, FC.pool, 1.15);
+    R.lightAdd(fx, fy - fs * 0.5, fs * 4 * fl, FC.pool2, 0.85);
     R.lightAdd(gx, gy - gw * 0.3, gw * 2.4, biome.pal.accent, 0.8 + Math.sin(t * 1.3) * 0.06);
     R.lightAdd(W * 0.2, H * 0.17, Math.min(W, H) * 0.8, '#8aa0d8', 0.3);
     for (let i = 0; i < lanterns; i++) { const k = (i + 0.5) / lanterns, lx = W * (0.3 + 0.4 * k), ly = H * (0.6 + Math.sin(k * Math.PI) * 0.045) + 6; R.lightAdd(lx, ly, fs * 2.8, '#ffb35c', 0.7 + Math.sin(t * 3 + i) * 0.1); }
@@ -184,19 +203,21 @@
     c.fillStyle = inner; c.beginPath(); c.moveTo(gx - gw * 0.46, gy + gw * 0.08); c.lineTo(gx - gw * 0.46, gy - gw * 0.55); c.quadraticCurveTo(gx, gy - gw * 1.18, gx + gw * 0.46, gy - gw * 0.55); c.lineTo(gx + gw * 0.46, gy + gw * 0.08); c.fill();
     for (let i = 0; i < lanterns; i++) { const k = (i + 0.5) / lanterns, lx = W * (0.3 + 0.4 * k), ly = H * (0.6 + Math.sin(k * Math.PI) * 0.045) + 6; R.glow(c, lx, ly, fs * 1.1, '#ffb35c', 0.55 + Math.sin(t * 3 + i) * 0.12); c.fillStyle = 'rgba(255,230,170,0.85)'; c.fillRect(lx - 2, ly - 3, 4, 6); }
     // campfire: glow, ember bed, layered flames
-    R.glow(c, fx, fy - fs * 0.4, fs * 5 * fl, '#ff8a3d', 0.4);
-    R.glow(c, fx, fy - fs * 0.2, fs * 1.8, '#ffb347', 0.5 * fl);
+    R.glow(c, fx, fy - fs * 0.4, fs * 5 * fl, FC.glow, 0.4);
+    R.glow(c, fx, fy - fs * 0.2, fs * 1.8, FC.core, 0.5 * fl);
+    if (blue) R.glow(c, fx - fs * 1.9, fy - fs * 0.6, fs * 1.4, '#9dc3ee', 0.12 + Math.sin(t * 1.6) * 0.03); // the ghost's faint glow
     for (let i = 0; i < 5; i++) {
       const f1 = Math.sin(t * 9 + i * 1.7), f2 = Math.sin(t * 14 + i * 2.9), h = fs * (1.5 - i * 0.22) * (1 + f1 * 0.09), sw = fs * (0.55 - i * 0.1);
-      c.fillStyle = ['rgba(255,70,16,0.85)', 'rgba(255,125,30,0.85)', 'rgba(255,175,70,0.9)', 'rgba(255,225,140,0.95)', 'rgba(255,250,220,0.95)'][i];
+      c.fillStyle = FC.flames[i];
       c.beginPath(); c.moveTo(fx - sw, fy); c.quadraticCurveTo(fx - sw * 0.7 + f1 * 3, fy - h * 0.55, fx + f2 * 3, fy - h); c.quadraticCurveTo(fx + sw * 0.7 + f1 * 3, fy - h * 0.55, fx + sw, fy); c.fill();
     }
-    for (let i = 0; i < 3; i++) { const a = t * 2.1 + i * 2.1, x = fx + Math.sin(a) * fs * 0.35, y = fy - fs * (0.6 + Math.abs(Math.sin(a * 1.3)) * 0.7); R.glow(c, x, y, fs * 0.5, '#ffb35c', 0.4); }
+    for (let i = 0; i < 3; i++) { const a = t * 2.1 + i * 2.1, x = fx + Math.sin(a) * fs * 0.35, y = fy - fs * (0.6 + Math.abs(Math.sin(a * 1.3)) * 0.7); R.glow(c, x, y, fs * 0.5, FC.tongue, 0.4); }
     // sparks
     if (Math.random() < dt * 30) Camp.sparks.push({ x: fx + (Math.random() - 0.5) * fs, y: fy - fs * 0.6, vx: (Math.random() - 0.5) * 20, vy: -40 - Math.random() * 60, life: 1.5 + Math.random() * 2, max: 3.5 });
     for (const s of Camp.sparks) { s.life -= dt; s.x += s.vx * dt + Math.sin(t * 3 + s.y * 0.05) * 0.4; s.y += s.vy * dt; }
     Camp.sparks = Camp.sparks.filter(s => s.life > 0);
-    for (const s of Camp.sparks) { const a = Math.min(1, s.life); c.fillStyle = `rgba(255,${150 + Math.random() * 80 | 0},60,${a})`; c.fillRect(Math.round(s.x), Math.round(s.y), 1, 1); if (R.quality !== 'low') R.glow(c, s.x, s.y, 4, '#ff9a3a', a * 0.5); }
+    const sr = FC.sparkRgb;
+    for (const s of Camp.sparks) { const a = Math.min(1, s.life); c.fillStyle = `rgba(${sr[0]},${sr[1] + Math.random() * sr[3] | 0},${sr[2]},${a})`; c.fillRect(Math.round(s.x), Math.round(s.y), 1, 1); if (R.quality !== 'low') R.glow(c, s.x, s.y, 4, FC.spark, a * 0.5); }
     // fireflies
     if (!Camp.flies) { const r = U.RNG(99); Camp.flies = []; for (let i = 0; i < 14; i++) Camp.flies.push({ x: r.next(), y: 0.66 + r.next() * 0.3, ph: r.next() * 6, sp: 0.2 + r.next() * 0.4 }); }
     if (R.quality !== 'low') for (const f of Camp.flies) { const x = (f.x + Math.sin(t * f.sp + f.ph) * 0.03) * W, y = (f.y + Math.cos(t * f.sp * 1.3 + f.ph) * 0.02) * H, b = Math.max(0, Math.sin(t * 1.7 + f.ph * 3)); R.glow(c, x, y, 4, '#d8ff8a', 0.15 + b * 0.7); }

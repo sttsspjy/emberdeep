@@ -1,5 +1,5 @@
 // Usage: node tools/bal.js [--cells=a,b] [--full] [--runs=N] [--power] [--save=file.json] [--pair=file.json] [--jobs=N] [--speed=X] [--nice] [--list] [--flag[=value] ...]
-// Fixed quick balance suite: the GAME-DESIGN section 10 cells (fresh random, fresh smart, half-upgraded, fully upgraded, fully upgraded at Pacts 1-5, two and three heroes fully upgraded at Pact 5; six heroes in rotation,
+// Fixed quick balance suite: the GAME-DESIGN section 10 cells (fresh random, fresh smart, half-upgraded, fully upgraded, fully upgraded at Pacts 1-5, two and three heroes fully upgraded at Pact 5; every hero in rotation,
 // skill 0.75, --pick=smart unless noted) run in one worker pool (tools/simpool.js), one line per cell: wins % +-se, depth +-se, mean win time, target bands, PASS/FAIL (a band is met when the estimate lies inside it;
 // a cell with no band for a figure ignores it). Exit code is always 0 (a report). Every cell moves with the veteran bot (--vet, the human proxy; --vet=0 turns it off).
 // Bands are the v5 difficulty contract: fresh random <= 1%, half-upgraded 20%, fully upgraded 40%, gentle Pacts 1-3 (35, 31, 27%) and steep Pacts 4-5 (18, 10%); two to four heroes at Pact 5 20% (bots; a human party does better).
@@ -17,22 +17,22 @@ const fs = require('fs');
 const sim = require('./sim.js');
 const pool = require('./simpool.js');
 
-// id; title; heroes; meta; pact; flags; runs (default / --full); cost (seconds of one run in one process); win and depth bands as [lo, hi] (win in 0..1); byHero adds the per-hero line; opt: only when --cells names it.
+// id; title; heroes; meta; pact; flags; runs (default / --full; multiples of the 7 heroes, so each leads as often); cost (seconds of one run in one process); win and depth bands as [lo, hi] (win in 0..1); byHero adds the per-hero line; opt: only when --cells names it.
 const SMART = { pick: 'smart', vet: '1' };
-const pactCell = (k, mid) => ({ id: 'pact' + k, title: 'fully upgraded, Pact ' + k, n: 1, meta: 'max', pact: k, flags: SMART, runs: [24, 192], cost: 1.7, win: [mid - 0.04, mid + 0.04] });
+const pactCell = (k, mid) => ({ id: 'pact' + k, title: 'fully upgraded, Pact ' + k, n: 1, meta: 'max', pact: k, flags: SMART, runs: [28, 196], cost: 1.7, win: [mid - 0.04, mid + 0.04] });
 const CELLS = [
-  { id: 'rand', title: 'fresh, random picks', n: 1, meta: 'none', pact: 0, flags: { pick: 'random', vet: '1' }, runs: [48, 384], cost: 1.3, win: [0, 0.01] },
-  { id: 'smart', title: 'fresh, smart picks', n: 1, meta: 'none', pact: 0, flags: SMART, runs: [36, 384], cost: 1.6 },
-  { id: 'mid', title: 'half-upgraded', n: 1, meta: 'mid', pact: 0, flags: SMART, runs: [60, 384], cost: 1.8, win: [0.17, 0.23], byHero: true },
-  { id: 'max', title: 'fully upgraded', n: 1, meta: 'max', pact: 0, flags: SMART, runs: [60, 384], cost: 1.9, win: [0.36, 0.44], byHero: true },
+  { id: 'rand', title: 'fresh, random picks', n: 1, meta: 'none', pact: 0, flags: { pick: 'random', vet: '1' }, runs: [49, 385], cost: 1.3, win: [0, 0.01] },
+  { id: 'smart', title: 'fresh, smart picks', n: 1, meta: 'none', pact: 0, flags: SMART, runs: [35, 385], cost: 1.6 },
+  { id: 'mid', title: 'half-upgraded', n: 1, meta: 'mid', pact: 0, flags: SMART, runs: [63, 385], cost: 1.8, win: [0.17, 0.23], byHero: true },
+  { id: 'max', title: 'fully upgraded', n: 1, meta: 'max', pact: 0, flags: SMART, runs: [63, 385], cost: 1.9, win: [0.36, 0.44], byHero: true },
   pactCell(1, 0.35), pactCell(2, 0.31), pactCell(3, 0.27), pactCell(4, 0.18),
-  { id: 'pact5', title: 'fully upgraded, Pact 5', n: 1, meta: 'max', pact: 5, flags: SMART, runs: [48, 384], cost: 1.7, win: [0.07, 0.13] },
-  { id: 'duo5', title: 'two heroes, fully upgraded, Pact 5', n: 2, meta: 'max', pact: 5, flags: SMART, runs: [24, 192], cost: 3.2, win: [0.15, 0.25] },
-  { id: 'trio5', title: 'three heroes, fully upgraded, Pact 5', n: 3, meta: 'max', pact: 5, flags: SMART, runs: [18, 192], cost: 5.4, win: [0.15, 0.25] },
-  { id: 'quad5', title: 'four heroes, fully upgraded, Pact 5', n: 4, meta: 'max', pact: 5, flags: SMART, runs: [48, 96], cost: 7.5, win: [0.15, 0.25], opt: true },
-  { id: 'legacy', title: 'fresh, v3 smart picks', n: 1, meta: 'none', pact: 0, flags: { pick: 'legacy' }, runs: [60, 192], cost: 1.4, opt: true },
-  { id: 'duo', title: 'two heroes, half-upgraded', n: 2, meta: 'mid', pact: 0, flags: SMART, runs: [60, 192], cost: 3, opt: true },
-  { id: 'trio', title: 'three heroes, half-upgraded', n: 3, meta: 'mid', pact: 0, flags: SMART, runs: [60, 192], cost: 5, opt: true },
+  { id: 'pact5', title: 'fully upgraded, Pact 5', n: 1, meta: 'max', pact: 5, flags: SMART, runs: [49, 385], cost: 1.7, win: [0.07, 0.13] },
+  { id: 'duo5', title: 'two heroes, fully upgraded, Pact 5', n: 2, meta: 'max', pact: 5, flags: SMART, runs: [28, 196], cost: 3.2, win: [0.15, 0.25] },
+  { id: 'trio5', title: 'three heroes, fully upgraded, Pact 5', n: 3, meta: 'max', pact: 5, flags: SMART, runs: [21, 196], cost: 5.4, win: [0.15, 0.25] },
+  { id: 'quad5', title: 'four heroes, fully upgraded, Pact 5', n: 4, meta: 'max', pact: 5, flags: SMART, runs: [49, 98], cost: 7.5, win: [0.15, 0.25], opt: true },
+  { id: 'legacy', title: 'fresh, v3 smart picks', n: 1, meta: 'none', pact: 0, flags: { pick: 'legacy' }, runs: [63, 196], cost: 1.4, opt: true },
+  { id: 'duo', title: 'two heroes, half-upgraded', n: 2, meta: 'mid', pact: 0, flags: SMART, runs: [63, 196], cost: 3, opt: true },
+  { id: 'trio', title: 'three heroes, half-upgraded', n: 3, meta: 'mid', pact: 0, flags: SMART, runs: [63, 196], cost: 5, opt: true },
 ];
 const SPEED = 4, OWN = new Set(['cells', 'full', 'runs', 'power', 'save', 'pair', 'jobs', 'speed', 'nice', 'list']);
 const U = sim.ED.U;

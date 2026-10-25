@@ -15,11 +15,14 @@
   let MAXP = 500, lastHs = 0, pickT = 0;
   const calm = () => !!(ED.App && ED.App.settings && !ED.App.settings.shake); // "screen shake off" also mutes flashes and hit-stop
 
-  F.reset = () => { F.parts.length = 0; F.texts.length = 0; for (const s of F.slashes) if (s.sm) smearPool.push(s.sm); F.slashes.length = 0; F.rings.length = 0; F.bolts.length = 0; F.pops.length = 0; releaseGhosts(); F.stains.length = 0; F.sheets.length = 0; F.beams.length = 0; F.holyT = {}; F.chargeT = {}; F.msgs.length = 0; F.hurtAt = {}; F.banner = null; F.shake = 0; F.flash = null; F.anim = {}; F.aberr = 0; F.kick = 0; hsUntil = 0; ent.clear(); hitN = 0; ED.Sprites.shotReset(); };
+  F.reset = () => { F.parts.length = 0; F.texts.length = 0; for (const s of F.slashes) if (s.sm) smearPool.push(s.sm); F.slashes.length = 0; F.rings.length = 0; F.bolts.length = 0; F.pops.length = 0; releaseGhosts(); F.stains.length = 0; F.sheets.length = 0; F.beams.length = 0; F.holyT = {}; F.chargeT = {}; F.msgs.length = 0; F.hurtAt = {}; F.banner = null; F.shake = 0; F.flash = null; F.anim = {}; F.aberr = 0; F.kick = 0; hsUntil = 0; detN = 0; detMine = false; ent.clear(); hitN = 0; ED.Sprites.shotReset(); };
   F.setQuality = (q) => { MAXP = q === 'low' ? 180 : 500; };
   const lowFx = () => MAXP < 300;
   const cnt = (n) => Math.ceil(n * (MAXP < 300 ? 0.5 : 1) * F.crowd);
   const lk = (n) => (MAXP < 300 ? Math.max(1, Math.round(n * 0.7)) : n); // path payoff bursts (Smite, Reap, acid): with cnt's 0.5 on Low they come out at 0.35 of nominal
+  const fin = (v) => typeof v === 'number' && isFinite(v); // event fields from the wire are checked before use
+  let detN = 0, detMine = false; // Capacitor detonations of this frame: one shared cue in F.update
+  if (ED.Net) Object.assign(ED.Net.CAPS_LOCAL, { detonate: 8, tether: 4, rebuke: 2, reapchain: 3, shatter: 3, hurl: 3, reel: 3 }); // per rendered frame on the host or solo machine (net.js N.CAPS: per snapshot)
 
   // opts: a (angle), spread (random +- around a), sp, life, size, color, kind (dot|shard|smoke|streak|ember|drop|ash|spark), add, lt (light colour), ltr (light radius)
   // spOv/lifeOv replace o.sp/o.life (burst jitter). Dead particles are recycled through ppool; when full, a rotating slot is overwritten.
@@ -110,6 +113,7 @@
   const SKILL_CUE = { charge: 'charge', volley: 'volley', rain: 'raincast' }; // skill events with their own cast cue
   F.update = (dt) => {
     if (ED.Audio) ED.Audio.flush(); // the frame's hits, impacts and deaths become layered cues
+    if (detN) { if (ED.Audio) ED.Audio.play('detonate', detMine ? 1 : 0.5, detN, detMine ? 1 : 0); if (detMine && detN >= 3) F.addShake(Math.min(4, 1 + detN * 0.25)); detN = 0; detMine = false; }
     F.time += dt; snapBudget = 4;
     F.shake = Math.max(0, F.shake - dt * (10 + F.shake * 3));
     F.aberr = Math.max(0, F.aberr - dt * 2.4);
@@ -744,7 +748,7 @@
       case 'dead': { const p = ctx.player(ev.pid); if (p) F.msg(`${p.name} has fallen. They return at the next stratum.`, '#ff8a7a'); break; }
       case 'rise': { const p = ctx.player(ev.pid); const name = { phoenix: 'Phoenix Feather', angel: 'Guardian Angel', wind: 'Second Wind' }[ev.k]; F.showBanner(name, p ? p.name + ' refuses to fall' : '', 'small', 2); F.burst(ev.x, ev.y - 10, 40, { color: '#ffd36b', sp: 150, life: 0.9, size: 3, add: true }); F.ring(ev.x, ev.y, 70, '#ffd36b', 0.6, 4); F.pop(ev.x, ev.y - 12, 50, '#ffd36b', 0.4); F.punch(0.8, 0.4); A.play('revive'); break; }
       case 'dash': A.play('dash', ev.pid === local ? 0.8 : 0.3); dust(ev.x, ev.y + 2, 'dust'); break;
-      case 'skill': { A.play(SKILL_CUE[ev.k] || 'skill', ev.pid === local ? 1 : 0.5); const p = ctx.player(ev.pid); if (ev.k === 'charge') { dust(ev.x, ev.y + 2, 'dust', 2); F.chargeT[ev.pid] = F.time; } if (p && ev.k === 'volley') { F.ring(p.x, p.y, 30, '#e8d8b0', 0.25); SP('fx.spark.magic', p.x + Math.cos(ev.a || 0) * 20, p.y - 12 + Math.sin(ev.a || 0) * 20, { add: true, ramp: 'general' }); } if (ev.k === 'legion' || ev.k === 'sanctuary') F.ring(ev.x, ev.y, ev.k === 'sanctuary' ? 100 : 40, ev.k === 'sanctuary' ? '#ffe9a0' : '#7dffd9', 0.5, 4); if (ev.slot === 1) skill2Fx(ev, ev.pid === local, A); break; }
+      case 'skill': { A.play(SKILL_CUE[ev.k] || 'skill', ev.pid === local ? 1 : 0.5); const p = ctx.player(ev.pid); if (ev.pid === local && p && p.stats && p.stats.twBlood > 0) A.play('blood', 0.8); /* Bloodprice: each own cast pays health */ if (ev.k === 'charge') { dust(ev.x, ev.y + 2, 'dust', 2); F.chargeT[ev.pid] = F.time; } if (p && ev.k === 'volley') { F.ring(p.x, p.y, 30, '#e8d8b0', 0.25); SP('fx.spark.magic', p.x + Math.cos(ev.a || 0) * 20, p.y - 12 + Math.sin(ev.a || 0) * 20, { add: true, ramp: 'general' }); } if (ev.k === 'legion' || ev.k === 'sanctuary') F.ring(ev.x, ev.y, ev.k === 'sanctuary' ? 100 : 40, ev.k === 'sanctuary' ? '#ffe9a0' : '#7dffd9', 0.5, 4); if (ev.slot === 1) skill2Fx(ev, ev.pid === local, A); break; }
       case 'blink': // violet smoke rings at both ends, four fading silhouettes along the path, a few motes
         SP('fx.smoke.ring', ev.x0, ev.y0 + 2, { ramp: 'shadow' }); SP('fx.smoke.ring', ev.x1, ev.y1 + 2, { ramp: 'shadow' });
         for (let i = 0; i <= 3; i++) { const k = i / 3; SP('hero.shade.idle', U.lerp(ev.x0, ev.x1, k), U.lerp(ev.y0, ev.y1, k), { ramp: 'shadow', frame: i, life: 0.3 + 0.05 * i, fade: true, a: 0.6 }); }
@@ -756,6 +760,12 @@
       // Knight events (ric, catch, parry, deflect, ward, the boom of a shockwave) are drawn by src/client/cls-knight.js through ED.ClassFx.
       case 'spawned': F.burst(ev.x, ev.y, ev.el ? 18 : 8, { color: ev.el ? '#ffb13a' : '#b8a0ff', sp: 70, life: 0.4, size: 2.4, add: true }); F.pop(ev.x, ev.y - 8, ev.el ? 30 : 20, ev.el ? '#ffb13a' : '#b8a0ff', 0.25); A.play('spawn', 0.5); break;
       case 'raise': F.burst(ev.x, ev.y, 14, { color: '#7dffd9', sp: 60, vy: -40, life: 0.6, size: 2.4, add: true }); F.ring(ev.x, ev.y, 26, '#7dffd9', 0.4, 2); SP('fx.circle.spark', ev.x, ev.y - 2, { ramp: 'teal', add: true }); SP('fx.puff', ev.x, ev.y - 4, { ramp: 'dust' }); break;
+      case 'bellrung': // the Drowned Bell rings to a hero's hit: rings of sound, its swing (render.js drawBell reads F.bellRing) and a deep cracked toll
+        F.bellRing = 1.6; F.ring(ev.x, ev.y - 16, 90, '#7fe8c8', 0.9, 4); F.ring(ev.x, ev.y - 16, 50, '#e8c66b', 0.6, 2); F.burst(ev.x, ev.y - 18, 12, { color: '#bff8e8', sp: 70, vy: -30, life: 0.8, size: 2.2, add: true }); F.pop(ev.x, ev.y - 16, 30, '#bff8e8', 0.3); F.addShake(3); A.play('drownbell'); break;
+      case 'secret': // a secret's run field turned true (pid: its hero, null: the whole party): a nameless toast and a chime for that hero (names show at the run's end)
+        if ((ev.pid === null || ev.pid === undefined || ev.pid === local) && ED.UI) { ED.UI.toast('A secret is uncovered', ED.Icons ? ED.Icons.url('eye', '#b8a6ff') : '', 4); A.play('secret'); }
+        break;
+      case 'platino': F.burst(ev.x, ev.y - 8, 18, { color: '#f4f8ff', sp: 90, vy: -50, life: 0.8, size: 2, add: true }); F.ring(ev.x, ev.y, 28, '#e8f0ff', 0.5, 2); F.pop(ev.x, ev.y - 8, 22, '#ffffff', 0.3); SP('fx.circle.spark', ev.x, ev.y - 4, { ramp: 'holy', add: true }); A.play('platino'); break; // the Platino caught: a platinum sparkle
       case 'puff': F.burst(ev.x, ev.y - 8, 10, { color: ev.c || '#cccccc', sp: 50, life: 0.5, size: 3, kind: 'smoke' }); SP('fx.puff', ev.x, ev.y - 6, { ramp: ev.c || 'smoke' }); break;
       case 'thud': F.addShake(ev.big ? 9 : 3); A.play('thud', ev.big ? 1 : 0.5); dust(ev.x, ev.y, 'dust', ev.big ? 4 : 2); F.burst(ev.x, ev.y, 10, { color: '#bba98a', sp: 80, life: 0.4, size: 3, kind: 'smoke' }); if (ev.big) { F.ring(ev.x, ev.y, 60, '#c9b98f', 0.4, 4); F.punch(0.5, 0); } break;
       case 'shoot': A.play('eshoot', 0.6); break;
@@ -822,7 +832,15 @@
         break; }
       // ---- Wickdeep events (visuals only) ----
       case 'freeze': F.burst(ev.x, ev.y - 10, 12, { kind: 'streak', color: '#c8f6ff', sp: 150, life: 0.35, size: 1.6 }); F.burst(ev.x, ev.y - 10, 8, { kind: 'shard', color: '#bfeaff', sp: 70, life: 0.7, size: 2.6, vz: 70, z: 8 }); F.ring(ev.x, ev.y - 6, 28, '#9fefff', 0.35, 3); F.pop(ev.x, ev.y - 10, 22, '#bfeaff', 0.22, true); SP('fx.ice.burst', ev.x, ev.y - 8); A.play('freeze', 0.7); break;
-      case 'shatter': F.burst(ev.x, ev.y - 8, 24, { kind: 'shard', color: '#d8f8ff', sp: (ev.r || 60) * 2.4, life: 0.7, size: 3, vz: 110, z: 8, add: true }); F.burst(ev.x, ev.y - 8, 14, { kind: 'streak', color: '#ffffff', sp: (ev.r || 60) * 3.4, life: 0.3, size: 1.8 }); F.ring(ev.x, ev.y, ev.r || 60, '#9fefff', 0.4, 4); F.pop(ev.x, ev.y - 8, (ev.r || 60) * 0.6, '#d8f8ff', 0.25, true); SP('fx.foam', ev.x, ev.y - 8); if ((ev.r || 60) > 80) { SP('fx.foam', ev.x - ev.r * 0.4, ev.y - 6, { delay: 0.05 }); SP('fx.foam', ev.x + ev.r * 0.4, ev.y - 6, { delay: 0.1 }); } F.punch(0.45, 0); F.addShake(3); A.play('shatter', 0.8); break;
+      case 'shatter': { // { x, y, r }: a frozen foe, a skill shatter or an ice pillar bursts: glass shards, falling ice chunks, a frost stain
+        if (!fin(ev.x) || !fin(ev.y)) break;
+        const r = fin(ev.r) && ev.r > 0 ? U.clamp(ev.r, 16, 240) : 60;
+        F.burst(ev.x, ev.y - 8, 24, { kind: 'shard', color: '#d8f8ff', sp: r * 2.4, life: 0.7, size: 3, vz: 110, z: 8, add: true }); F.burst(ev.x, ev.y - 8, 14, { kind: 'streak', color: '#ffffff', sp: r * 3.4, life: 0.3, size: 1.8 });
+        F.burst(ev.x, ev.y - 14, 6, { kind: 'shard', color: '#7fc8e8', sp: r * 1.2, life: 0.8, size: 4, vz: 150, z: 14 }); // heavy chunks that tumble and land
+        F.ring(ev.x, ev.y, r, '#9fefff', 0.4, 4); F.pop(ev.x, ev.y - 8, r * 0.6, '#d8f8ff', 0.25, true); SP('fx.foam', ev.x, ev.y - 8); addStain(ev.x, ev.y, r * 0.4, '#bfeaff', 0.3, 2.5);
+        if (r > 80) { SP('fx.foam', ev.x - r * 0.4, ev.y - 6, { delay: 0.05 }); SP('fx.foam', ev.x + r * 0.4, ev.y - 6, { delay: 0.1 }); }
+        F.punch(0.45, 0); F.addShake(3); A.play('shatter', 0.8); break;
+      }
       case 'combust': F.burst(ev.x, ev.y - 8, 18, { kind: 'ember', color: '#ffb347', sp: 90, a: -1.57, spread: 5, life: 1.0, size: 2, drag: 1.5, lt: '#ff8a2a', ltr: 26 }); F.burst(ev.x, ev.y, 16, { color: '#ff7a2a', sp: (ev.r || 70) * 2.4, life: 0.4, size: 3, add: true }); F.ring(ev.x, ev.y, ev.r || 70, '#ff8a3a', 0.4, 4); F.pop(ev.x, ev.y - 8, (ev.r || 70) * 0.7, '#ffd36b', 0.25); boomSheets(ev.x, ev.y, ev.r || 70, ''); F.punch(0.4, 0); F.addShake(3); A.play('combust', 0.8); break;
       case 'guardhit': F.burst(ev.x, ev.y - 8, 8, { kind: 'spark', color: '#ffe9b0', sp: 220, life: 0.25, size: 1.6, drag: 5 }); F.pop(ev.x, ev.y - 8, 12, '#ffffff', 0.14, true); F.ring(ev.x, ev.y - 8, 16, '#e8e2c8', 0.18, 2); A.play('guardhit', 0.7); break;
       case 'ambush': { const p = ctx.player(ev.pid); const x = ev.x !== undefined ? ev.x : (p ? p.x : 0), y = ev.y !== undefined ? ev.y : (p ? p.y : 0); F.slash(x, y - 8, 0.8, 34, 0.5, '#d9c8ff', 0.2); F.slash(x, y - 8, -0.8, 34, 0.5, '#d9c8ff', 0.2); F.burst(x, y - 8, 14, { color: '#b78cff', sp: 130, life: 0.4, size: 2.6, add: true }); F.pop(x, y - 8, 30, '#b78cff', 0.25, true); F.punch(0.6, 0.3); A.play('ambush', ev.pid === local ? 0.9 : 0.5); if (ev.pid === local) F.hitStop(0.07); break; }
@@ -849,6 +867,70 @@
       case 'dark': F.msg('Dark room: harder fights, richer rewards', '#a070ff'); F.addShake(1); if (!calm()) F.flash = { color: '#0a0418', t: 0.5, a: 0.4 }; A.play('dark', 0.8); break;
       case 'upgrade': { const col = R().rewardColor(ev.to); F.ring(ev.x, ev.y - 8, 44, col, 0.6, 4); F.burst(ev.x, ev.y - 14, 18, { color: col, sp: 80, vy: -50, life: 0.9, size: 2.4, add: true, drag: 1.3 }); F.msg('The dark pays more: ' + R().rewardLabel(ev.to), '#ffd36b'); break; }
       case 'ward': F.ring(ev.x, ev.y - 10, 24, '#7fc8ff', 0.4, 3); F.burst(ev.x, ev.y - 10, 8, { color: '#bfe3ff', sp: 50, vy: -30, life: 0.6, size: 2, add: true, drag: 1.5 }); F.pop(ev.x, ev.y - 12, 22, '#7fc8ff', 0.25); break;
+      case 'detonate': { // a Capacitor-detonated foe { pid, x, y } (feet): a star pop, sparks and a bolt from above; the frame's detonations share one cue (F.update)
+        if (!fin(ev.x) || !fin(ev.y)) break;
+        const x = ev.x, y = ev.y - 10;
+        F.pop(x, y, 18, '#ffe66b', 0.16, true); F.ring(ev.x, ev.y, 24, '#ffe66b', 0.22, 2, false, 6);
+        F.burst(x, y, 6, { kind: 'spark', color: '#fff3a0', sp: 190, life: 0.2, size: 1.6, drag: 5 });
+        if (!lowFx()) { F.zap(x + 6, ev.y - 46, ev.x, ev.y, '#fff6b0', 0.12); SP('fx.hit.spark', x, y, { add: true, ramp: 'lightning' }); }
+        detN++; if (ev.pid === local) detMine = true;
+        break;
+      }
+      case 'tether': { // a Tempest Arms chain { pid, pts: [x0, y0, x1, y1, ...] } (foe feet), sent every 0.1 s: one flickering arc per link, alive just past the next event
+        const pts = ev.pts; if (!Array.isArray(pts) || pts.length < 4) break;
+        const m = Math.min(pts.length >> 1, 7);
+        for (let i = 1; i < m; i++) {
+          const x0 = pts[2 * i - 2], y0 = pts[2 * i - 1], x1 = pts[2 * i], y1 = pts[2 * i + 1];
+          if (!fin(x0) || !fin(y0) || !fin(x1) || !fin(y1)) continue;
+          F.zap(x0, y0, x1, y1, i & 1 ? '#ffe66b' : '#fff3a0', 0.13);
+          if (!lowFx() && Math.random() < 0.35) F.pop(x1, y1 - 10, 6, '#ffe66b', 0.08);
+        }
+        A.play('tether', ev.pid === local ? 0.7 : 0.25, 0, ev.pid === local ? 1 : 0);
+        break;
+      }
+      case 'rebuke': { // Martyr's Rebuke { pid, x, y, r }: a holy shockwave out to r, a light column, gold streaks
+        if (!fin(ev.x) || !fin(ev.y)) break;
+        const r = fin(ev.r) && ev.r > 0 ? U.clamp(ev.r, 16, 320) : 80, mine = ev.pid === local;
+        F.ring(ev.x, ev.y, r, '#ffc94a', 0.42, 6, false, r * 0.15); F.ring(ev.x, ev.y, r * 0.68, '#fff0c2', 0.3, 2, false, r * 0.1);
+        F.beam(ev.x, ev.y, 110, 14, '#ffd36b', 0.26, 0.7); F.pop(ev.x, ev.y - 10, Math.min(40, r * 0.35), '#ffd36b', 0.22, true);
+        F.burst(ev.x, ev.y - 8, lk(Math.min(22, 8 + r / 10)), { kind: 'streak', color: '#fff3c4', sp: r * 3, life: 0.32, size: 1.8 });
+        if (!lowFx()) { F.burst(ev.x, ev.y - 6, 10, { color: '#ffe9a0', sp: r * 1.4, vy: -30, life: 0.6, size: 2.2, add: true, drag: 2 }); SP('fx.circle.spark', ev.x, ev.y - 4, { ramp: 'holy', add: true }); }
+        if (mine) { F.addShake(3); F.punch(0.4, 0.2); }
+        A.play('rebuke', mine ? 1 : 0.5, 0, mine ? 1 : 0);
+        break;
+      }
+      case 'reapchain': { // Reaper's Chain { x, y, x2, y2 }: a wavering violet wisp from the reaped foe to the next, motes flying along it, smoke where it lands
+        if (!fin(ev.x) || !fin(ev.y) || !fin(ev.x2) || !fin(ev.y2)) break;
+        const dx = ev.x2 - ev.x, dy = ev.y2 - ev.y, d = Math.hypot(dx, dy) || 1, nx = -dy / d, ny = dx / d, n = U.clamp(Math.round(d / 20), 2, 8), ph = Math.random() * TAU, pts = [];
+        for (let i = 0; i <= n; i++) { const k = i / n, o = i && i < n ? Math.sin(k * Math.PI * 2 + ph) * 8 : 0; pts.push([ev.x + dx * k + nx * o, ev.y + dy * k + ny * o]); }
+        if (F.bolts.length < 24) F.bolts.push({ pts, life: 0.32, max: 0.32, color: '#a070ff', st: true });
+        fly(ev.x, ev.y - 10, ev.x2, ev.y2, '#c9b3ff', lk(5));
+        F.pop(ev.x2, ev.y2 - 10, 16, '#a070ff', 0.22); F.ring(ev.x2, ev.y2, 22, '#a070ff', 0.3, 2, true);
+        SP('fx.smoke', ev.x2, ev.y2 - 8, { ramp: 'shadow', delay: 0.2 });
+        A.play('reapchain', 0.7);
+        break;
+      }
+      case 'hurl': { // a Bellwarden hurl lands { pid, x, y, k (speed factor 0.4-2.5) }: dust ring, debris, a crater stain; the owner gets a shake and a hit-stop scaled by k
+        if (!fin(ev.x) || !fin(ev.y)) break;
+        const k = fin(ev.k) ? U.clamp(ev.k, 0.4, 2.5) : 1, mine = ev.pid === local, rr = 40 * (0.85 + 0.15 * k);
+        F.ring(ev.x, ev.y, rr, '#d8c8a0', 0.32, 4, false, 8); F.pop(ev.x, ev.y - 6, 14 + 6 * k, '#fff2d0', 0.14);
+        dust(ev.x, ev.y, 'dust', lowFx() ? 1 : k >= 1.5 ? 4 : 2);
+        F.burst(ev.x, ev.y - 2, 5 + 4 * k, { kind: 'shard', color: '#8a7a60', sp: 110 + 50 * k, life: 0.5, size: 2.4, vz: 90 + 30 * k, z: 2 });
+        F.burst(ev.x, ev.y - 6, 4, { kind: 'spark', color: '#ffd08a', sp: 160, life: 0.18, size: 1.4, drag: 5 });
+        addStain(ev.x, ev.y, 10 + 4 * k, '#1a140c', 0.45, 4);
+        if (mine) { F.addShake(1.5 + 2.4 * k); F.hitStop(0.03 + 0.035 * k); if (k >= 1.5) F.punch(0.25 * k, 0); }
+        A.play('bhurl', mine ? 1 : 0.45, k, mine ? 1 : 0);
+        break;
+      }
+      case 'reel': { // a reel starts { pid, x0, y0, x1, y1 }: the chain snaps taut along the line, dust kicks up along the drag path, a rattle
+        if (!fin(ev.x0) || !fin(ev.y0) || !fin(ev.x1) || !fin(ev.y1)) break;
+        const dx = ev.x1 - ev.x0, dy = ev.y1 - ev.y0, d = Math.hypot(dx, dy), n = U.clamp(Math.round(d / 28), 1, lowFx() ? 4 : 8);
+        if (F.bolts.length < 24 && d > 4) F.bolts.push({ pts: [[ev.x0, ev.y0 + 2], [ev.x1, ev.y1 + 2]], life: 0.14, max: 0.14, color: '#c8d0da', st: true });
+        for (let i = 0; i < n; i++) { const k = (i + 0.5) / n; SP('fx.puff', ev.x0 + dx * k, ev.y0 + dy * k - 2, { ramp: 'dust', delay: k * 0.22, vy: -10 }); }
+        SP('fx.smoke.ring', ev.x0, ev.y0, { ramp: 'dust' });
+        A.play('bdrag', ev.pid === local ? 0.9 : 0.4, 0, ev.pid === local ? 1 : 0);
+        break;
+      }
       default: break;
     }
   };

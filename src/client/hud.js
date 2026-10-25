@@ -153,7 +153,7 @@
 
   // Hero medallion: pixel disc with a stepped class-colour glow, the portrait (alpha binarized), a 2 art px ring in the player colour with a lit upper-left arc. Returns { cv, w, h }.
   function medallion(me) {
-    const wid = (me.stats && me.stats.weaponId) || me.weapon, D = Math.max(12, Math.round(4.9 * u / k / 2) * 2), key = me.cls + '|' + me.slot + '|' + wid + '|' + k + '|' + D; // the held fork shows in the portrait
+    const wid = (me.stats && me.stats.weaponId) || me.weapon, skin = ED.Cos ? ED.Cos.skin(me) : '', D = Math.max(12, Math.round(4.9 * u / k / 2) * 2), key = me.cls + '|' + me.slot + '|' + wid + '|' + skin + '|' + k + '|' + D; // the held fork and the worn skin show in the portrait
     if (medalKey === key && medal) return medal;
     if (medal) { medal.dead = true; Bmp.free(medal.cv); }
     const R = D / 2, col = ED.PLAYER_COLORS[me.slot] || K.gold, cc = ED.CLASSES[me.cls].col.c, hi = U.mix(col, '#ffffff', 0.4);
@@ -166,7 +166,7 @@
       if (d < R - 3) { mx.fillRect(x, y, 1, 1); const gd = Math.hypot(dx, dy - R * 0.2); bx.fillStyle = gd < R * 0.42 ? g1 : gd < R * 0.68 ? g2 : K.panel; bx.fillRect(x, y, 1, 1); }
     }
     const S = D * k, out = mk(S, S), og = out.getContext('2d'), pc = mk(S, S), pg = pc.getContext('2d');
-    ED.Sprites.portrait(pc, me.cls, me.slot, wid); binarize(pc);
+    ED.Sprites.portrait(pc, me.cls, me.slot, wid, skin); binarize(pc);
     pg.imageSmoothingEnabled = false; pg.globalCompositeOperation = 'destination-in'; pg.drawImage(mask, 0, 0, S, S); pg.globalCompositeOperation = 'source-over';
     og.imageSmoothingEnabled = false; og.drawImage(bg, 0, 0, S, S); og.drawImage(pc, 0, 0); og.drawImage(rgc, 0, 0, S, S);
     medal = hold({ cv: out, w: S, h: S }); medalKey = key; return medal;
@@ -266,10 +266,14 @@
     if ((me.momN | 0) > 0) o.push('Momentum ×' + me.momN, '#b78cff');
     if (st.channel > 0 && (me.chanT || 0) > 0) o.push('Channel +' + Math.round(100 * Math.min(st.chanCap, st.channel * Math.floor(me.chanT / Math.max(0.05, st.chanStep)))) + '%', '#ff9a3a');
     if (st.hex > 0) { let n = 0; for (const e of view.enemies) if (e.hexed || e.hexT > 0) n++; if (n) o.push('Hexed ' + n, '#7dffd9'); }
+    if (me.boons && me.boons.capacitor > 0) { let n = 0; for (const e of view.enemies) if (e.charge > 0 && e.hp > 0) n++; if (n) o.push('Charged ' + n, '#ffe66b'); } // Capacitor: foes your next cast detonates
     if (me.glBuff || (me.glT || 0) > 0) o.push('Guardian Light', '#ffcf5a'); // Cleric buffs on any hero: Guardian Light, Embolden
     if (me.embolden || (me.auraT || 0) > 0) o.push('Emboldened', '#ffcf5a');
     return o;
   }
+  // Metronome beat shown for a hero holding the Twist: 0 = none, else 1 + attacks since the last x3 beat (0-3; net.js P[25]).
+  const metroBeat = (me) => (me.stats && me.stats.twMetro > 0 ? 1 + U.clamp(me.metroN | 0, 0, 3) : 0);
+  H.cues = { beat: metroBeat, chips: (view, me) => chipList(view, me).slice() }; // headless checks
   const shieldOut = (p) => !!(p.shieldOut || (p.shields && p.shields.length));
   // Route sigil: the icon of the hero's route card in the class colour (nothing before the level-3 pick); returns its id for the redraw signature.
   const routeIcon = (p) => { const rt = p.boons ? ED.classRoute(p.boons, p.cls) : null; return rt && rt.t1 ? ED.BOONS[rt.t1].icon : ''; };
@@ -411,6 +415,7 @@
     for (const fx of slotFx) if (fx && fx.t > 0) anim = true; // ready flash
     const pl = pips(me); sp(pl.length); for (let i = 0; i < pl.length; i += 2) { sp(sid(pl[i])); sp(pl[i + 1]); } sp(sid(st && st.evo || ''));
     const ch = chipList(view, me); sp(ch.length); for (let i = 0; i < ch.length; i += 2) sp(sid(ch[i]));
+    const mb = metroBeat(me); sp(mb); if (mb === 4) sp(step(t, 4)); // Metronome beat and the x3 pulse
     sp(sid(routeIcon(me)));
     // party
     for (const p of view.players.values()) {
@@ -504,11 +509,12 @@
     frame(c, 'hpanel', blink ? 'danger' : 'base', x, y, w, h, k);
     const med = medallion(me); c.drawImage(med.cv, x + q(u * 0.8), y + q((h - med.h) / 2));
     const bx = x + q(u * 6.4), bw = x + w - q(u * 1.0) - bx, ny = y + q(u * 1.55);
-    T(me.name, bx, ny, tV, K.gold, 'b', 'left', 700);
     const evoP = st && st.evo && ED.PATHS[st.evo];
     const wname = evoP || (st && st.weaponId && (st.weaponId.indexOf('@') > 0 || ED.weaponBase(st.weaponId) !== st.weaponId)) ? H.weaponName(me) : cls.name; // an evolved, forked or Armory variant weapon shows its name
-    T(wname, bx + bw, ny, tS, evoP ? evoP.color : K.muted, 'b', 'right', 700);
     const sig = routeIcon(me), js = Math.max(1, Math.round(1.6 * u / 16));
+    const full = ED.Cos ? ED.Cos.nameOf(me) : me.name; // the Wardrobe title rides the name when it fits beside the weapon line
+    T(full !== me.name && adv(full, tV) + adv(wname, tS) + 16 * js + 6 * f > bw ? me.name : full, bx, ny, tV, K.gold, 'b', 'left', 700);
+    T(wname, bx + bw, ny, tS, evoP ? evoP.color : K.muted, 'b', 'right', 700);
     if (sig) icon(c, sig, cls.col.c, bx + bw - adv(wname, tS) - 16 * js - f * 2, ny - 8 * js, js);
     const gk = 'p' + me.pid; ghost[gk] = ghost[gk] === undefined ? frac : Math.max(frac, ghost[gk] - dtc * 0.35);
     const by = y + q(u * 2.8), bh = q(u * 2.4), shield = me.shield || 0;
@@ -554,6 +560,19 @@
     const chip = (label, col) => { const cw = adv(label, tS) + 10 * f; chipBox(sx, L.cy, cw, L.ch, col); T(label, sx + cw / 2, L.cy + L.ch / 2, tS, col, 'b', 'center', 700, 2); sx += cw + q(u * 0.4); any = true; };
     const cl = chipList(view, me);
     for (let kk = 0; kk < cl.length; kk += 2) chip(cl[kk], cl[kk + 1]);
+    const mb = metroBeat(me);
+    if (mb) { // Metronome: 'Beat' and four pips, one lit per attack since the last x3 beat; the 4th is the x3 beat, ringed gold, filled and pulsing when the next attack is it
+      const lab = 'Beat', d = Math.max(4 * f, qf(L.ch * 0.42)), gp = 2 * f, n = mb - 1, hot = n === 3, col = hot ? '#ffd36b' : K.muted;
+      const cw = adv(lab, tS) + 4 * d + 3 * gp + 16 * f, px0 = sx + adv(lab, tS) + 10 * f, py = L.cy + qf((L.ch - d) / 2);
+      chipBox(sx, L.cy, cw, L.ch, col, hot ? 0.3 : 0.12); T(lab, sx + 5 * f + adv(lab, tS) / 2, L.cy + L.ch / 2, tS, col, 'b', 'center', 700, 2);
+      for (let i = 0; i < 4; i++) {
+        const x = px0 + i * (d + gp), last = i === 3;
+        c.fillStyle = last ? '#ffd36b' : K.ol; c.fillRect(x, py, d, d);
+        c.fillStyle = last ? (hot ? (step(t, 4) ? '#fff4d6' : '#ffd36b') : '#3a2a10') : i < n ? K.bone : '#2a1d15'; c.fillRect(x + f, py + f, d - 2 * f, d - 2 * f);
+      }
+      if (hot && step(t, 4)) ring(c, px0 + 3 * (d + gp) - f, py - f, d + 2 * f, d + 2 * f, f, '#fff4d6', false);
+      sx += cw + q(u * 0.4); any = true;
+    }
     endFade();
     return any;
   }
@@ -588,9 +607,10 @@
       frame(c, 'hpanel', 'dim', x, ty, w, h, k);
       c.fillStyle = col; c.fillRect(x + 3 * k, ty + 3 * k, k, h - 6 * k);
       const ny = ty + q(u * 1.0);
-      T(p.name, x + q(u * 1.1), ny, tS, col, 'b', 'left', 700);
       const label = p.dead ? 'Fallen' : p.downed ? 'DOWN' : ED.CLASSES[p.cls].name, psg = routeIcon(p), js = Math.max(1, Math.round(1.6 * u / 16));
       const rx = x + w - Math.max(7 * k, q(u * 1.1)); // clear of the frame's corner bracket
+      const full = ED.Cos ? ED.Cos.nameOf(p) : p.name, room = rx - adv(label, tS) - (psg && !out ? 16 * js + 2 * f : 0) - 4 * f - (x + q(u * 1.1)); // the Wardrobe title rides the name when it fits
+      T(full !== p.name && adv(full, tS) > room ? p.name : full, x + q(u * 1.1), ny, tS, col, 'b', 'left', 700);
       T(label, rx, ny, tS, out ? '#ff8a7a' : K.muted, 'b', 'right', 700);
       if (psg && !out) icon(c, psg, ED.CLASSES[p.cls].col.c, rx - adv(label, tS) - 16 * js - 2 * f, ny - 8 * js, js);
       const bx = x + q(u * 1.1), bw = rx - bx, by = ty + q(u * 1.85), bh = Math.max(4 * k, q(u * 0.95));
@@ -602,7 +622,7 @@
   }
 
   // ---------------- stratum + next rooms (top-right) ----------------
-  // Stratum name, number, map row ('Room r / rows') and Pact; below, the rooms the exit doors lead to, left to right as the doors stand (dimmed while the room is locked; a violet skull on dark rooms). The full map is on the Tab sheet.
+  // Stratum name, number, map row ('Room r / rows') and Pact; below, the rooms the exit doors lead to, left to right as the doors stand (glyphs of ED.Icons.room, dimmed while the room is locked; a violet bar under dark rooms, red under elite and champion rooms). The full map is on the Tab sheet.
   function mapBlock(view, biome, t) {
     const x = L.mx, y = L.my, w = L.mw, fl = view.floor, room = view.room, ix = x + q(u * 1.1), iw = w - 2 * q(u * 1.1);
     const ty = y + q(u * 1.6), ry = ty + q(u * 1.45), js = Math.max(1, Math.round(1.6 * u / 16)), Z = 16 * js, gap = q(u * 0.6);
@@ -620,9 +640,9 @@
       const me = view.players && view.players.get(ED.Render.local), cls = me ? me.cls : null;
       c.globalAlpha = ga * (view.locked ? 0.45 : 1);
       exits.forEach((id, i) => {
-        const nb = fl.rooms[id], ri = ED.Render.roomIcon(nb, cls), ex = sx + i * (Z + gap);
+        const nb = fl.rooms[id], ri = ED.Render.roomIcon(nb), ex = sx + i * (Z + gap);
         if (ri) icon(c, ri.icon, ri.color, ex, ny, js);
-        const mark = nb.dark ? '#a070ff' : ri && ri.badge ? '#ff7a3a' : null; // a bar under the icon: violet = dark room, red = elite or champion
+        const mark = nb.dark ? '#a070ff' : nb.type === 'elite' || nb.type === 'champion' ? '#ff7a3a' : null; // a bar under the icon: violet = dark room, red = elite or champion
         if (mark) { c.fillStyle = K.ol; c.fillRect(ex, ny + Z + f, Z, 3 * f); c.fillStyle = mark; c.fillRect(ex + f, ny + Z + 2 * f, Z - 2 * f, f); }
       });
       c.globalAlpha = ga;

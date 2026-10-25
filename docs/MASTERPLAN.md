@@ -62,9 +62,32 @@ North-star: a co-op browser roguelite where builds are chosen, not rolled. Rules
 - [x] Pacts: 1–3 gentle, 4–5 steep, Pact 5 wins 10% solo, 20% for bot parties of 2–4
 - [x] v4.1 players see a "what changed" notice
 - [ ] Pact 3 adds no difficulty yet
-- [ ] PR to main
+- [x] PR to main
 - [ ] Your playtest
 
+## Secrets and the seventh hero
+- [x] Bellwarden: a hidden seventh hero with a bell on a chain; unlocked by a secret in the drowned Sanctum
+- [x] 15 secret achievements nobody is told about; each gives a cosmetic
+- [x] Wardrobe: skins per hero (mastery plus embers), weapon sheens, aura, crown, Platino pet, footprints, death effect, titles, blue Hearth; co-op players see each other's looks
+- [x] Bot confirm with seven heroes: 10 of 11 cells in band (Pact 2 reads 24%, same as Pact 3)
+- [x] Merged to main
+- [ ] Your playtest: Wardrobe, secrets
+
+## Playstyle (v6): every room and every pick a choice
+- [x] Route map: forward-only floors, the way back closes, about 6 of 12 rooms per floor, longer fights keep a win at 30–40 min
+- [x] Co-op doors: the party moves when every living hero stands in the same door ("Mira wants this door")
+- [x] Every room has its own icon and label; threat pips on doors; the whole floor on the map
+- [x] Healing trimmed: no hearts from cleared rooms, fewer from kills; Forager boosts every heal
+- [x] Elements play differently: Fire terrain, Ice walls and skill shatters, Lightning skill detonations (Capacitor), Poison cripples elites, Holy rewards being hit and standing still, Shadow kills and dashes
+- [x] New evolutions that change how a weapon plays, not extra hits
+- [x] Late picks: no flat-stat cards from stratum III; 28 Mutations of keystones and evolutions from stratum IV
+- [x] Twists: Bloodprice, Metronome, Pacifist's Pyre, Hunted (opt-in rules with a red price)
+- [x] Bots and smart picks know the new cards
+- [x] Bellwarden rework: wind the bell, hurl it, reel it home through foes, leap to where it lies, Peal it with built-up Resonance
+- [x] Balance pass on the route floors: half Hearth 19%, full Hearth 40%, Pact 5 12%, every hero in band
+- [ ] Pact 1 and Pact 4 steps, two- and three-hero parties back in their bands
+- [ ] Your playtest: route choices, the new elements, Twists, the Bellwarden's hurl and reel
+- [ ] Other heroes' weapon forks (next round)
 ## v6: choices that change play (playtest 5)
 - [ ] Every element plays differently (its own verb); keystones and evolutions change a control
 - [ ] Ascended and duo boons removed; fewer open boons

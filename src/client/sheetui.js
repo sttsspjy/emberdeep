@@ -60,7 +60,7 @@
   const img = (src, big) => `<img class="${big ? 'sh-i2' : 'sh-i1'}" alt="" src="${src}">`;
   const RAR = (r) => ED.RARITY[r];
   const rem = () => parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-  const WEAPON_ICON = { sword: 'sword', hammer: 'hammer', spear: 'arrow', bow: 'bow', crossbow: 'arrows', staff: 'flame', wand: 'star', tome: 'scroll', dagger: 'dagger', scythe: 'blades', mace: 'hammer', lantern: 'lantern' };
+  const WEAPON_ICON = { sword: 'sword', hammer: 'hammer', spear: 'arrow', bow: 'bow', crossbow: 'arrows', staff: 'flame', wand: 'star', tome: 'scroll', dagger: 'dagger', scythe: 'blades', mace: 'hammer', lantern: 'lantern', bell: 'bell' };
   const live = (key, text) => `<b data-live="${key}">${esc(text)}</b>`;
   const frc = (v) => `--frc:var(--fr-${v})`; // card frame variable for an inline style
   const chip = (text, color, cls) => `<span class="px-chip sh-chip${cls ? ' ' + cls : ''}"${color ? ` style="--pc:${color}"` : ''}>${text}</span>`;
@@ -149,12 +149,12 @@
   }
   // A boon row's icon wears its card's identity hue (UI.boonIconColor), not its rarity.
   const boonIco = (id) => (UI.boonIconColor ? ico(ED.BOONS[id].icon, UI.boonIconColor(id)) : ED.Icons.boonUrl(id));
-  const KIND_LABEL = { gate: 'gate', keystone: 'keystone', evolution: 'evolution', duo: 'duo', route: 'route', fork: 'fork', ascended: 'ascended' };
+  const KIND_LABEL = { gate: 'gate', keystone: 'keystone', evolution: 'evolution', mutation: 'mutation', duo: 'duo', route: 'route', fork: 'fork', ascended: 'ascended', twist: 'twist' };
   function boonRow(b) {
-    const P = b.path && ED.PATHS[b.path] ? ED.PATHS[b.path] : null, color = b.kind === 'ascended' ? 'var(--gold)' : b.kind === 'route' || b.kind === 'fork' ? 'var(--gold)' : P ? P.color : '#b9ad9b', lab = KIND_LABEL[b.kind] || '';
+    const P = b.path && ED.PATHS[b.path] ? ED.PATHS[b.path] : null, color = b.kind === 'ascended' ? 'var(--gold)' : b.kind === 'route' || b.kind === 'fork' ? 'var(--gold)' : b.kind === 'twist' ? ED.RARITY.t.color : b.kind === 'mutation' ? ED.RARITY.m.color : P ? P.color : '#b9ad9b', lab = KIND_LABEL[b.kind] || '';
     return `<div class="sh-boon sh-f${b.kind === 'ascended' ? ' asc' : ''}" data-k="b:${b.id}" style="--pc:${color};--rc:${RAR(b.rar).color}"><img class="sh-i2" alt="" src="${boonIco(b.id)}"><div class="sh-bm">`
       + `<div class="sh-bt"><b class="sh-bn">${esc(b.name)}</b>${lab ? chip(lab + (b.kind === 'fork' && b.tag ? ' · ' + esc(b.tag) : '')) : ''}<span class="sh-rar">${RAR(b.rar).name}</span>${b.max > 1 ? pips(b.rank, b.max) : ''}</div>`
-      + `<div class="sh-btx">${esc(b.text)}</div>${b.next ? `<div class="sh-next"><b>Next rank</b>${esc(b.next)}</div>` : ''}</div></div>`;
+      + `<div class="sh-btx">${esc(b.text)}</div>${b.cost ? `<div class="sh-btx sh-cost">${esc(b.cost)}</div>` : ''}${b.next ? `<div class="sh-next"><b>Next rank</b>${esc(b.next)}</div>` : ''}</div></div>`;
   }
   function renderBuild(m, p) {
     const B = m.build;
@@ -174,8 +174,8 @@
     left += head('Class route', B.route.route ? esc(ED.routeLabel(m.hero.cls, B.route.route)) : 'at level 3') + routeBlock(B.route, ED.CLASSES[m.hero.cls].col.c);
     let boons = B.groups.length ? '' : '<div class="sh-empty">No boons yet. The first pick comes from the start offer.</div>';
     for (const g of B.groups) {
-      const P = g.path ? ED.PATHS[g.path] : null, gc = g.group === 'asc' || g.group === 'route' ? 'var(--gold)' : P ? P.color : '';
-      const title = g.group === 'duo' ? 'Duo' : g.group === 'route' ? 'Class route' : g.group === 'asc' ? 'Ascended <small>multiplies the bonuses you hold</small>' : P ? `${P.name} <small>affinity <b>${ED.pathAffinity(p.boons || {}, g.path)}</b></small>` : 'Open <small>any hero, no path</small>';
+      const P = g.path ? ED.PATHS[g.path] : null, gc = g.group === 'asc' || g.group === 'route' ? 'var(--gold)' : g.group === 'twist' ? ED.RARITY.t.color : P ? P.color : '';
+      const title = g.group === 'duo' ? 'Duo' : g.group === 'route' ? 'Class route' : g.group === 'twist' ? `Twists <small>rules with a price (${g.items.length}/${ED.TWIST_MAX})</small>` : g.group === 'asc' ? 'Ascended <small>multiplies the bonuses you hold</small>' : P ? `${P.name} <small>affinity <b>${ED.pathAffinity(p.boons || {}, g.path)}</b></small>` : 'Open <small>any hero, no path</small>';
       boons += `<div class="sh-bg"><div class="sh-gh"${gc ? ` style="--pc:${gc}"` : ''}>${P ? img(pathIco(g.path)) : ''}${title}</div>${g.items.map(boonRow).join('')}</div>`;
     }
     let status = '';
@@ -194,10 +194,10 @@
   const heroFr = (m) => frc('shcard-p' + ((m.hero.slot | 0) % ED.PLAYER_COLORS.length));
   function weaponCard(m, color) {
     const w = m.weapon;
-    let h = `<div class="shc sh-card sh-f" data-k="weapon" style="${heroFr(m)}"><div class="sh-ct">${img(ico(WEAPON_ICON[w.look] || 'sword', color), true)}<b>${esc(w.name)}</b>${chip(w.kind === 'melee' ? 'melee' : 'ranged', 'var(--muted)')}${w.fork ? chip(w.fork, 'var(--gold)') : ''}</div>`;
+    let h = `<div class="shc sh-card sh-f" data-k="weapon" style="${heroFr(m)}"><div class="sh-ct">${img(ico(WEAPON_ICON[w.look] || 'sword', color), true)}<b>${esc(w.name)}</b>${chip(w.kind === 'melee' ? 'melee' : w.kind === 'bell' ? 'chained' : 'ranged', 'var(--muted)')}${w.fork ? chip(w.fork, 'var(--gold)') : ''}</div>`;
     h += `<div class="sh-big">${n1(w.hit)}<small>per hit</small><span class="sh-crit">${n1(w.crit)} crit <small>(${pc(w.critChance)} · ${X(w.critMult)})</small></span></div>`;
-    h += `<div class="sh-row"><b>${w.aps.toFixed(2)}</b> attacks/s <span class="mut">(base ${w.apsBase.toFixed(2)})</span>`;
-    h += w.kind === 'melee' ? ` · reach ${w.reach} · ${w.allAround ? 'all around' : w.arcDeg + '°'}` : ` · ${w.n} ${w.n > 1 ? 'projectiles' : 'projectile'} · range ${w.range}${SHAPE[w.shape] || ''}${w.pierce && !w.line ? ` · pierce ${w.pierce}` : ''}${w.homing ? ' · seeking' : ''}${w.blast ? ` · blast radius ${w.blast.r}` : ''}`;
+    h += `<div class="sh-row"><b>${w.aps.toFixed(2)}</b> ${w.kind === 'bell' ? 'loops/s' : 'attacks/s'} <span class="mut">(base ${w.apsBase.toFixed(2)})</span>`;
+    h += w.kind === 'bell' ? ` · ${w.bells} ${w.bells > 1 ? 'bells' : 'bell'} · chain ${w.chain} · orbit ${w.orbit}` : w.kind === 'melee' ? ` · reach ${w.reach} · ${w.allAround ? 'all around' : w.arcDeg + '°'}` : ` · ${w.n} ${w.n > 1 ? 'projectiles' : 'projectile'} · range ${w.range}${SHAPE[w.shape] || ''}${w.pierce && !w.line ? ` · pierce ${w.pierce}` : ''}${w.homing ? ' · seeking' : ''}${w.blast ? ` · blast radius ${w.blast.r}` : ''}`;
     h += '</div>';
     if (w.fan) h += `<div class="sh-row mut">${w.oneFoe} of ${w.n} shots reach one foe at ${Sh.REF.d} px; all ${w.n} point-blank</div>`;
     for (const e of w.extras) h += `<div class="sh-row sh-ex"><span>${esc(e.label)}</span> <b>${n1(e.perAttack)}</b><span class="mut"> per attack${e.r ? ` (radius ${e.r})` : ''}${e.note ? ' · ' + esc(e.note) : ''}${e.el ? ' · ' + cap1(e.el) : ''}</span></div>`;
@@ -456,10 +456,10 @@
   // The stratum map as a vertical node graph (start at the bottom, the boss at the top, LANES columns), in whole UI art px (PixUI.k device px each): paths as 2 art px stepped lines
   // (visited brass, the current room's exits ember, the rest dim), rooms as outlined squares with a 1 art px bevel and their icon at whole multiples of 16 device px.
   // Rooms off every path from the current room dim. Redrawn when the box, the room, the lock or the room-state hash change.
-  const MAP_C = { here: '#e6c27a', visited: '#5a4a3c', next: '#ff8a3d', ahead: '#2c231c', gone: '#17110d', dark: '#a070ff', elite: '#ff7a3a' };
+  const MAP_C = { here: '#e6c27a', visited: '#5a4a3c', next: '#ff8a3d', ahead: '#2c231c', gone: '#17110d', dark: '#a070ff', elite: '#ff7a3a', threat: '#ff5a3a' };
   function mapLegend() {
     const el = $('sh-legend'); if (!el || el.firstChild) return;
-    el.innerHTML = [['here', 'you are here'], ['visited', 'visited'], ['next', 'next doors'], ['ahead', 'ahead'], ['gone', 'out of reach'], ['dark', 'dark room'], ['elite', 'elite or champion']].map(([k, t]) => `<span><i style="--c:${MAP_C[k]}"></i>${t}</span>`).join('');
+    el.innerHTML = [['here', 'you are here'], ['visited', 'visited'], ['next', 'next doors'], ['ahead', 'ahead'], ['gone', 'out of reach'], ['dark', 'dark room'], ['elite', 'elite or champion'], ['threat', 'threat']].map(([k, t]) => `<span><i style="--c:${MAP_C[k]}"></i>${t}</span>`).join('');
   }
   // Room ids reachable from room id through exits (id included).
   function reachFrom(fl, id) {
@@ -467,6 +467,9 @@
     while (q.length) for (const n of fl.rooms[q.pop()].exits || []) if (!seen.has(n)) { seen.add(n); q.push(n); }
     return seen;
   }
+  let lblCtx = null;
+  // Advance of s in font px (Pixel Operator 700 at 16 px = 1 px per font px).
+  const lblW = (s) => { if (!lblCtx) lblCtx = document.createElement('canvas').getContext('2d'); lblCtx.font = '700 16px "Pixel Operator", "Segoe UI", system-ui, sans-serif'; return Math.ceil(lblCtx.measureText(s).width); };
   function mapDraw(force) {
     const v = ED.Game.s.view, fl = v.floor, box = $('sh-mapbox'), cv = $('map-canvas');
     if (!fl || !fl.rows) return;
@@ -504,7 +507,7 @@
       if (kind !== pass) continue;
       line(r, b, kind === 1 ? '#c9a063' : kind === 2 ? (v.locked ? '#8a5a32' : MAP_C.next) : reach.has(r.id) ? '#4a3626' : '#2a1f17');
     }
-    const meP = ED.Game.s && ED.Game.s.me, cls = meP ? meP.cls : null, ico = Math.floor((S - 2 * k) / 16) * 16; // icons at whole 16 device px
+    const ico = Math.floor((S - 2 * k) / 16) * 16; // icons at whole 16 device px
     const next = new Set(cur && cur.exits ? cur.exits : []);
     for (const r of fl.rooms) {
       const q = st[r.id] || {}, [x, y] = at(r), here = r === cur, gone = !q.visited && !reach.has(r.id);
@@ -513,8 +516,10 @@
       rect(fill, x + k, y + k, S - 2 * k, S - 2 * k);
       rect(U.shade(fill, 0.22), x + k, y + k, S - 2 * k, k);
       rect(U.shade(fill, -0.35), x + k, y + S - 2 * k, S - 2 * k, k);
-      const ri = r.type === 'start' ? { icon: 'campfire', color: '#c9a063' } : ED.Render.roomIcon ? ED.Render.roomIcon(r, cls) : null;
+      const ri = r.type === 'start' ? { icon: 'campfire', color: '#c9a063' } : ED.Render.roomIcon ? ED.Render.roomIcon(r) : null; // glyphs of ED.Icons.room
       if (ri && ico >= 16) { c.globalAlpha = gone ? 0.35 : 1; c.drawImage(ED.Icons.canvas(ri.icon, ri.color, ico), x + Math.floor((S - ico) / 2), y + Math.floor((S - ico) / 2), ico, ico); c.globalAlpha = 1; }
+      const th = U.clamp(r.threat | 0, 0, 3);
+      for (let i = 0; i < th && !q.cleared && S >= 16 * k; i++) { rect('#222222', x + (2 + 5 * i) * k, y + 2 * k, 4 * k, 4 * k); rect(MAP_C.threat, x + (3 + 5 * i) * k, y + 3 * k, 2 * k, 2 * k); } // threat pips, top-left
       const mark = r.dark ? MAP_C.dark : r.type === 'elite' || r.type === 'champion' ? MAP_C.elite : null; // a 1 art px bar under the square: dark (violet), elite or champion (red)
       if (mark) { rect('#222222', x, y + S, S, 2 * k); rect(gone ? U.shade(mark, -0.5) : mark, x + k, y + S, S - 2 * k, k); }
     }

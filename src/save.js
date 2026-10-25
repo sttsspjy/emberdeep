@@ -10,7 +10,7 @@
   const LS_SETTINGS = 'wickdeep.settings.v1';
   const NAME_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -';
   const B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-  const CODE_VERSION = 7; // 7: the layout of 5 (marks a code made after the v5 difficulty); 6: the layout of 5 (marks a code made after the health rescale); 5: no relic bits, an Armory section (per hero: 6-bit count, 1 bit per entry) after mastery; 4: upgrades and heroes carry count prefixes too; 3: only the non-start relic bits do; 2 stored exactly V2_RELIC_BITS relic bits, V2_UPGRADES ranks and V2_HEROES mastery values. A count prefix keeps appended entries from shifting what follows.
+  const CODE_VERSION = 8; // 8: count-prefixed sections after the stats (secrets, hero wins, the Bellwarden flag, evolutions, Wardrobe purchases and worn items); 7: the layout of 5 (marks a code made after the v5 difficulty); 6: the layout of 5 (marks a code made after the health rescale); 5: no relic bits, an Armory section (per hero: 6-bit count, 1 bit per entry) after mastery; 4: upgrades and heroes carry count prefixes too; 3: only the non-start relic bits do; 2 stored exactly V2_RELIC_BITS relic bits, V2_UPGRADES ranks and V2_HEROES mastery values. A count prefix keeps appended entries from shifting what follows.
   const V2_RELIC_BITS = 26, V2_UPGRADES = 16, V2_HEROES = 6;
   // The relic list of save code v4 as [id, start, cost], in v4 RELIC_IDS order: old profiles (positional flags) and v2-v4 codes (non-start bits) decode against it, and the Codex embers they paid are refunded. Frozen.
   const V4_RELICS = [['whetstone', 1, 0], ['boots', 1, 0], ['buckler', 1, 0], ['heartstone', 1, 0], ['coin', 1, 0], ['hourglass', 1, 0], ['fang', 1, 0], ['embercharm', 1, 0], ['frostshard', 1, 0], ['lodestone', 1, 0], ['pauldron', 1, 0], ['wardrum', 1, 0], ['phoenix', 1, 0], ['stormidol', 1, 0], ['glasseye', 1, 0], ['elixir', 1, 0],
@@ -24,6 +24,10 @@
   const armoryList = (cls) => ED.ARMORY[cls] || [];
   // { cls: [0 per entry] } for every hero.
   const blankArmory = () => { const a = {}; for (const c of ED.CLASS_IDS) a[c] = armoryList(c).map(() => 0); return a; };
+  // Wardrobe worn items: { camp, cls: { skin, aura, hat, pet, trail, death, title, tints: [base weapon ids] } }, ids or null.
+  const blankWearHero = () => { const o = {}; for (const k of ED.WEAR_SLOTS) o[k] = null; o.tints = []; return o; };
+  const blankWear = () => { const o = { camp: null }; for (const c of ED.CLASS_IDS) o[c] = blankWearHero(); return o; };
+  const baseWeapons = () => [].concat(...ED.CLASS_IDS.map(c => ED.CLASSES[c].weapons));
 
   S.defaultProfile = () => ({
     v: 5, // profile era: below 3 a profile has a positional relics array; its Codex embers are refunded and news = 1 (the full "Deep has changed" notice, cleared once shown) when it has runs or a refund; era 3 (before the health rescale) and era 4 (before the v5 difficulty) with runs get news = 3 (only the newest changes)
@@ -40,6 +44,12 @@
     pactMax: 0,
     pactWin: -1,
     stats: { runs: 0, wins: 0, deepest: 0, kills: 0, bestTime: 0, bossKills: 0 },
+    secrets: 0, // bit i = ED.SECRETS[i] earned
+    cos: [], // Wardrobe items bought with embers (ids in ED.COSMETICS order)
+    evo: {}, // base weapon id -> descents in which it evolved
+    heroWins: 0, // bit i = hero CLASS_IDS[i] has completed a descent
+    bellUnlocked: false,
+    wear: blankWear(),
     sel: { cls: 'knight', weapon: {} },
   });
 
@@ -92,6 +102,14 @@
     d.pactWin = p.pactWin === undefined ? -1 : int(p.pactWin, -1, 10);
     const st = obj(p.stats);
     for (const k in d.stats) d.stats[k] = int(st[k], 0, k === 'deepest' ? ED.CONST.STRATA : BIG); // an older six-stratum profile caps at the last stratum
+    d.secrets = int(p.secrets, 0, 2 ** 31 - 1);
+    d.heroWins = int(p.heroWins, 0, 2 ** 31 - 1);
+    d.bellUnlocked = p.bellUnlocked === true;
+    const ev = obj(p.evo);
+    for (const w of baseWeapons()) { const k = int(ev[w], 0, 9999); if (k) d.evo[w] = k; }
+    const cos = arr(p.cos);
+    d.cos = ED.COSMETICS.filter(c => c.gate.cost && cos.indexOf(c.id) >= 0).map(c => c.id);
+    normalizeWear(d, p.wear);
     const played = d.stats.runs > 0 || d.refunded > 0;
     d.news = old ? (played ? 1 : 0) : (p.v | 0) < 5 ? (int(p.news, 0, 3) || (played ? 3 : 0)) : int(p.news, 0, 3);
     const sel = obj(p.sel);
@@ -99,6 +117,22 @@
     for (const c of ED.CLASS_IDS) { const wid = obj(sel.weapon)[c]; if (ED.weaponIndex(c, wid) >= 0) d.sel.weapon[c] = wid; } // a base weapon or an Armory variant of the hero
     return d;
   };
+
+  // Keeps only owned items in their own slots (d holds the sanitised ownership fields); a profile without a wear record (made before the Wardrobe) wears Gilded on every hero at mastery 10.
+  function normalizeWear(d, src) {
+    const fresh = !src || typeof src !== 'object';
+    src = obj(src);
+    d.wear = blankWear();
+    const fits = (id, slot, cls) => { const c = ED.COSMETIC[id]; return !!c && c.slot === slot && (c.cls === null || c.cls === cls) && ED.cosOwned(d, id, cls); };
+    if (fits(src.camp, 'camp', null)) d.wear.camp = src.camp;
+    for (const c of ED.CLASS_IDS) {
+      const h = obj(src[c]), o = d.wear[c];
+      for (const k of ED.WEAR_SLOTS) if (fits(h[k], k, c)) o[k] = h[k];
+      const tints = Array.isArray(h.tints) ? h.tints : [];
+      o.tints = ED.CLASSES[c].weapons.filter(w => tints.indexOf(w) >= 0 && fits('tint.' + w, 'tint', c));
+      if (fresh && fits('aura.gilded', 'aura', c)) o.aura = 'aura.gilded';
+    }
+  }
 
   S.loadSettings = () => {
     const d = { master: 70, music: 55, sfx: 80, quality: 'high', shake: true, dmg: true, cursor: 'reticle', reticle: 'm', reticleCol: 'ember', aimPreview: true, frameCap: 'auto' };
@@ -116,6 +150,7 @@
   S.classUnlocked = (p, cls) => {
     const u = ED.CLASSES[cls].unlock;
     if (!u) return true;
+    if (u.bell) return !!p.bellUnlocked;
     if (u.boss) return !!(p.bosses & (1 << (u.boss - 1)));
     if (u.runs) return p.stats.runs >= u.runs;
     return true;
@@ -183,6 +218,73 @@
     return n;
   };
 
+  // ---------------- secrets and the Wardrobe ----------------
+  // Marks secret `id` earned; returns the secret the first time, else null.
+  S.grantSecret = (p, id) => {
+    const i = ED.SECRET_IDX[id];
+    if (i === undefined || ((p.secrets | 0) & (1 << i))) return null;
+    p.secrets = (p.secrets | 0) | (1 << i);
+    return ED.SECRETS[i];
+  };
+  // Grants every secret whose check passes for a finished run (pl: the local hero's summary entry); returns the new ones.
+  S.checkSecrets = (p, run, pl) => {
+    const got = [];
+    ED.SECRETS.forEach((s, i) => {
+      if ((p.secrets | 0) & (1 << i)) return;
+      let ok = false;
+      try { ok = s.check(p, run, pl || null); } catch (e) { ok = false; }
+      if (ok && S.grantSecret(p, s.id)) got.push(s);
+    });
+    return got;
+  };
+  // An item sold for embers whose hero has reached the gate's mastery (owned or not).
+  S.cosOpen = (p, id) => { const c = ED.COSMETIC[id]; return !!c && !!c.gate.cost && !!c.cls && S.masteryLevel(p, c.cls) >= c.gate.mastery; };
+  // Buys item `id` (ember gate only): never refunded and outside Reset all; lifetime embers never change.
+  S.buyCosmetic = (p, id) => {
+    const c = ED.COSMETIC[id];
+    if (!S.cosOpen(p, id) || ED.cosOwned(p, id, c.cls) || p.embers < c.gate.cost) return false;
+    p.embers -= c.gate.cost;
+    const had = Array.isArray(p.cos) ? p.cos : [];
+    p.cos = ED.COSMETICS.filter(x => x.id === id || had.indexOf(x.id) >= 0).map(x => x.id);
+    return true;
+  };
+  const wearRow = (p, cls) => {
+    if (!p.wear || typeof p.wear !== 'object') p.wear = blankWear();
+    if (!p.wear[cls]) p.wear[cls] = blankWearHero();
+    return p.wear[cls];
+  };
+  // Wears item `id` in `slot` of hero `cls` (null empties the slot); slot 'camp' is the Hearth's (cls ignored); slot 'tint' adds that tint, or removes it when `on` is false.
+  // Returns false for an item the hero does not own or that does not fit the slot.
+  S.wear = (p, cls, slot, id, on) => {
+    const c = id ? ED.COSMETIC[id] : null;
+    if (id && (!c || c.slot !== slot)) return false;
+    if (slot === 'camp') {
+      if (c && !ED.cosOwned(p, id, null)) return false;
+      if (!p.wear || typeof p.wear !== 'object') p.wear = blankWear();
+      p.wear.camp = id || null;
+      return true;
+    }
+    if (!ED.CLASSES[cls] || (c && ((c.cls !== null && c.cls !== cls) || !ED.cosOwned(p, id, cls)))) return false;
+    const o = wearRow(p, cls);
+    if (slot === 'tint') {
+      if (!c) return false;
+      const t = (o.tints || []).filter(w => w !== c.weapon);
+      if (on !== false) t.push(c.weapon);
+      o.tints = ED.CLASSES[cls].weapons.filter(w => t.indexOf(w) >= 0);
+      return true;
+    }
+    if (ED.WEAR_SLOTS.indexOf(slot) < 0) return false;
+    o[slot] = id || null;
+    return true;
+  };
+  // The owned items hero `cls` wears, for the hero pick a party shares: { skin, aura, hat, pet, trail, death, title, tints }.
+  S.wearBundle = (p, cls) => {
+    const h = (p.wear && p.wear[cls]) || {}, out = {};
+    for (const k of ED.WEAR_SLOTS) out[k] = h[k] && ED.cosOwned(p, h[k], cls) ? h[k] : null;
+    out.tints = (h.tints || []).filter(w => ED.cosOwned(p, 'tint.' + w, cls));
+    return out;
+  };
+
   // The meta bundle a player brings into a run (sent to the host in multiplayer): upgrade ranks, mastery level and the ids of the hero's owned Armory entries.
   S.metaBundle = (p, cls) => ({
     up: p.up.slice(),
@@ -216,8 +318,10 @@
 
   S.runCounts = (run) => (run.roomsCleared || 0) >= 1 || !!run.victory;
 
-  // Applies a finished run. Returns { rewards, unlocks: [text], deeds: [deed] }.
+  // Applies a finished run; run.me is the local hero's entry of the summary's players (its secret fields), run.weapon the weapon the hero wielded.
+  // Returns { rewards, unlocks: [text], deeds: [deed], secrets: [secret] }.
   S.applyRun = (p, run) => {
+    const pl = run.me || null;
     const before = {
       classes: ED.CLASS_IDS.filter(c => S.classUnlocked(p, c)),
       mastery: S.masteryLevel(p, run.cls),
@@ -239,7 +343,16 @@
       p.pactWin = Math.max(p.pactWin, run.pact | 0);
       p.pactMax = Math.min(10, Math.max(p.pactMax, (run.pact | 0) + 1));
     }
+    if (run.victory && pl && pl.bellRung) p.bellUnlocked = true;
     const unlocks = [];
+    // a descent in which the hero evolved its weapon counts toward that base weapon's tint
+    const base = run.evolved && run.weapon ? ED.weaponBase(String(run.weapon).split('@')[0]) : null;
+    if (base && ED.CLASSES[run.cls] && ED.CLASSES[run.cls].weapons.indexOf(base) >= 0) {
+      if (!p.evo || typeof p.evo !== 'object') p.evo = {};
+      const tint = ED.COSMETIC['tint.' + base], had = ED.cosOwned(p, tint.id, run.cls);
+      p.evo[base] = Math.min(9999, (p.evo[base] | 0) + 1);
+      if (!had && ED.cosOwned(p, tint.id, run.cls)) unlocks.push('Wardrobe: ' + tint.name);
+    }
     for (const c of ED.CLASS_IDS) if (S.classUnlocked(p, c) && before.classes.indexOf(c) < 0) unlocks.push('New hero: ' + ED.CLASSES[c].name);
     const ml = S.masteryLevel(p, run.cls);
     for (let l = before.mastery + 1; l <= ml; l++) unlocks.push(`${ED.CLASSES[run.cls].name} mastery ${l}: ${ED.MASTERY_REWARDS[l]}`);
@@ -248,8 +361,11 @@
       if (fresh.length) unlocks.push('New Hearth upgrades: ' + fresh.map(u => u.name).join(', '));
     }
     if (p.pactMax > before.pactMax) unlocks.push(`Pact ${p.pactMax} can now be sworn`);
+    if (before.mastery < 10 && ml >= 10 && ci >= 0) wearRow(p, run.cls).aura = 'aura.gilded'; // Gilded is worn when first earned
+    const secrets = S.checkSecrets(p, run, pl); // before this victory joins heroWins (Hollow Crown reads the hero's earlier wins)
+    if (run.victory && ci >= 0) p.heroWins = (p.heroWins | 0) | (1 << ci);
     const deeds = S.checkDeeds(p, run);
-    return { rewards, unlocks, deeds };
+    return { rewards, unlocks, deeds, secrets };
   };
 
   S.checkDeeds = (p, run) => {
@@ -324,6 +440,15 @@
     return new Uint8Array(bytes);
   };
 
+  // A worn item in the code: 0 none, else 1 + 2 × its index in its scope + 1 for the hero's scope (0 for the global one); unknown ids write 0.
+  const cosRef = (id, cls) => {
+    const c = id && ED.COSMETIC[id];
+    if (!c) return 0;
+    const i = ED.COS_SCOPE[c.cls === null ? '' : c.cls].indexOf(c);
+    return c.cls === null ? 1 + 2 * i : c.cls === cls ? 2 + 2 * i : 0;
+  };
+  const cosAt = (v, cls) => { if (!v) return null; const list = (v - 1) & 1 ? (cls ? ED.COS_SCOPE[cls] : null) : ED.COS_SCOPE['']; const c = list && list[(v - 1) >> 1]; return c ? c.id : null; };
+
   S.encode = (p) => {
     const w = new BitWriter();
     w.put(CODE_VERSION, 8);
@@ -348,6 +473,29 @@
     w.put(p.pactMax, 4); w.put(p.pactWin + 1, 4);
     const st = p.stats;
     w.varint(st.runs); w.varint(st.wins); w.put(st.deepest & 7, 3); w.varint(st.kills); w.varint(st.bestTime); w.varint(st.bossKills);
+    // v8: secrets, hero wins, the Bellwarden flag, evolutions per base weapon, Wardrobe purchases per scope, worn items
+    w.put(ED.SECRETS.length, 6);
+    ED.SECRETS.forEach((s, i) => w.put(((p.secrets | 0) >>> i) & 1, 1));
+    w.put(ED.CLASS_IDS.length, 4);
+    ED.CLASS_IDS.forEach((c, i) => w.put(((p.heroWins | 0) >>> i) & 1, 1));
+    w.put(p.bellUnlocked ? 1 : 0, 1);
+    w.put(ED.CLASS_IDS.length, 4);
+    for (const c of ED.CLASS_IDS) { const ws = ED.CLASSES[c].weapons; w.put(ws.length, 3); for (const x of ws) w.varint((p.evo && p.evo[x]) | 0); }
+    const cos = Array.isArray(p.cos) ? p.cos : [];
+    const scopeBits = (list) => { if (list.length > 63) throw new Error('Too many Wardrobe entries for the 6-bit count: widen it and bump CODE_VERSION'); w.put(list.length, 6); for (const c of list) w.put(cos.indexOf(c.id) >= 0 ? 1 : 0, 1); };
+    scopeBits(ED.COS_SCOPE['']);
+    w.put(ED.CLASS_IDS.length, 4);
+    for (const c of ED.CLASS_IDS) scopeBits(ED.COS_SCOPE[c] || []);
+    const wear = p.wear || {};
+    w.varint(cosRef(wear.camp, null));
+    w.put(ED.CLASS_IDS.length, 4);
+    for (const c of ED.CLASS_IDS) {
+      const h = wear[c] || {}, ws = ED.CLASSES[c].weapons, t = h.tints || [];
+      w.put(ED.WEAR_SLOTS.length, 4);
+      for (const k of ED.WEAR_SLOTS) w.varint(cosRef(h[k], c));
+      w.put(ws.length, 3);
+      for (const x of ws) w.put(t.indexOf(x) >= 0 ? 1 : 0, 1);
+    }
     const body = w.bytes();
     const crc = crc16(body);
     const all = new Uint8Array(body.length + 2);
@@ -410,6 +558,34 @@
       p.pactMax = Math.min(10, r.get(4)); p.pactWin = Math.min(10, r.get(4) - 1);
       p.stats.runs = r.varint(); p.stats.wins = r.varint(); p.stats.deepest = Math.min(ED.CONST.STRATA, r.get(3));
       p.stats.kills = r.varint(); p.stats.bestTime = r.varint(); p.stats.bossKills = r.varint();
+      if (ver >= 8) { // entries beyond this build are skipped, missing ones stay empty
+        const ns = r.get(6); let sec = 0;
+        for (let i = 0; i < ns; i++) if (r.get(1) && i < ED.SECRETS.length && i < 31) sec |= (1 << i);
+        p.secrets = sec;
+        const nw = r.get(4); let wins = 0;
+        for (let i = 0; i < nw; i++) if (r.get(1) && i < ED.CLASS_IDS.length) wins |= (1 << i);
+        p.heroWins = wins;
+        p.bellUnlocked = r.get(1) === 1;
+        const ne = r.get(4);
+        for (let k = 0; k < ne; k++) {
+          const cls = ED.CLASS_IDS[k], ws = cls ? ED.CLASSES[cls].weapons : [], n = r.get(3);
+          for (let i = 0; i < n; i++) { const v = r.varint(); if (v && i < ws.length) p.evo[ws[i]] = v; }
+        }
+        const scope = (list) => { const n = r.get(6); for (let i = 0; i < n; i++) if (r.get(1) && list && i < list.length) p.cos.push(list[i].id); };
+        scope(ED.COS_SCOPE['']);
+        const nc = r.get(4);
+        for (let k = 0; k < nc; k++) scope(ED.CLASS_IDS[k] ? ED.COS_SCOPE[ED.CLASS_IDS[k]] : null);
+        const wear = { camp: cosAt(r.varint(), null) }, nh = r.get(4);
+        for (let k = 0; k < nh; k++) {
+          const cls = ED.CLASS_IDS[k], h = {}, nsl = r.get(4);
+          for (let i = 0; i < nsl; i++) { const v = r.varint(); if (cls && i < ED.WEAR_SLOTS.length) h[ED.WEAR_SLOTS[i]] = cosAt(v, cls); }
+          const ws = cls ? ED.CLASSES[cls].weapons : [], nt = r.get(3);
+          h.tints = [];
+          for (let i = 0; i < nt; i++) if (r.get(1) && i < ws.length) h.tints.push(ws[i]);
+          if (cls) wear[cls] = h;
+        }
+        p.wear = wear;
+      } else p.wear = undefined; // a code from before the Wardrobe: Gilded is worn where mastery 10 is reached (S.normalize)
       p.embers += refund; p.refunded = refund;
       const played = p.stats.runs > 0 || refund > 0;
       p.news = ver < 5 && played ? 1 : ver < 7 && played ? 3 : 0; // a code from before the v4 rules gets the full notice, one from before the v5 difficulty its newest part
