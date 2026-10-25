@@ -72,9 +72,17 @@
     if (jc) $('title-join-code').textContent = jc;
   };
 
-  // One-time notice for a profile made before the current rules (profile.news): the newest changes, then (news 1 only) relic and Hearth changes, the v3 rules and the embers the Codex refunded. Closing it clears the flag.
-  const MOVED_RELICS = ['stormcall', 'thundergauntlet', 'frostheart', 'souljar']; // the element relics that became path boons
+  // One-time notice for a profile made before the current rules (profile.news = the oldest part not yet seen): 3 the v6 changes, 2 also the v5 changes, 1 also relic and Hearth changes, the v3 rules and the embers the Codex refunded. Closing it clears the flag.
   const NEWEST = [
+    '<b>Map:</b> each stratum is a map of rooms in rows from the start to the boss. Paths split and merge, every door shows the room behind it and its reward, and there is no way back. Tab shows the whole map.',
+    '<b>Strata:</b> there are four: Ossuary, Glowmire, Drowned Sanctum and the Starless Abyss, the last. Rimefrost Halls and the Cinderforge are gone, and no stratum is weak to or resists an element.',
+    '<b>Elements:</b> each element is one way to play. Fire stacks Burn and lays burning ground, Ice freezes foes for a skill to Shatter, Lightning charges foes for your dash to set off, Poison weakens foes with Venom and clouds, Holy Smites a foe whose attack you dash through at the last moment, Shadow pays for hits from behind. Keystones and evolutions change how you attack, dash or move.',
+    '<b>Removed:</b> Ascended boons, duo boons, Mutations, Twists, the Attunement boons and twelve plain stat boons (Fleet Foot, Lodestar, Sharpened Edge, Quickened Hands, Bounty, Stalwart, Mending, Forager, Thornmail, Battle Ward, Glass Heart, Overcharge).',
+    '<b>Pyromancer:</b> a caster now. Ember Bolt hits make your spells recharge sooner, and Fireball (2 charges) is a third skill on right mouse or R (B on a pad). Skill 1 is Q alone (RB on a pad); heroes without a third skill cast skill 1 on its key.',
+    '<b>Bosses:</b> new fights. The Bone Warden duels and raises bone walls, the Sporemother spreads spores from her pods, the Drowned King floods the room, and stratum IV ends with two champion fights (the twins, the mimic) before the Hollow King.',
+    '<b>Fights:</b> fodder takes a few hits and sets off no kill effects. Every wave is marked before it arrives, the room clears when the last wave falls, and damage over time shows its numbers and makes a sound.',
+  ];
+  const V5 = [
     '<b>Health:</b> health numbers are small and hits are hard. A Knight has 40 health and a hit from a foe costs 2 to 4; healing, shields and health from boons and relics are scaled to match.',
     '<b>Hearth:</b> upgrades and hero mastery give more (Vitality +2 health a rank, Might +3% damage a rank, mastery up to +8% damage and +4 health). Pacts 1–3 are gentle; Pacts 4 and 5 are the steep climb.',
     '<b>Armory:</b> each hero has three weapon variants in the Hearth: the same strength with a different attack, bought with embers once the base weapon is unlocked. An owned variant is its own choice in the weapon picker.',
@@ -83,21 +91,20 @@
   UI.maybeNews = () => {
     const A = ED.App, p = A.profile;
     if (!A.hasProfile || !p.news) return;
-    $('news-body').innerHTML = (p.news === 3 ? NEWEST : NEWEST.concat([
+    $('news-body').innerHTML = (p.news === 3 ? NEWEST : p.news === 2 ? NEWEST.concat(V5) : NEWEST.concat(V5, [
       '<b>Relics:</b> the Codex is gone. Every relic can drop from your first run, and relics no longer belong to an element.',
-      `<b>Element relics are path boons now:</b> ${MOVED_RELICS.map(id => `${esc(ED.BOONS[id].name)} (${pathName(ED.BOONS[id].path, true)})`).join(', ')}. The other element relics are gone: their paths already hold the same effects as boons.`,
       p.refunded > 0 ? `<b>Refunded:</b> the ${p.refunded} embers you spent on the Codex are back in your purse.` : '',
       '<b>Hearth:</b> every upgrade rank can be refunded for its full cost, and Reset all returns everything at once. Upgrades are small now, so your build choices decide a run. The Reliquary became the Stash (starting gold), Head Start starts the run with some experience and Deep Wick boosts the gold and experience of dark rooms.',
-      '<b>Builds:</b> generic health and armor boons are smaller; a path (its boons, keystone and weapon evolution) is what makes a build strong. Kill effects that spread, chain or explode work on fodder; refunds, shields, healing and stacks need the foes that matter.',
+      '<b>Builds:</b> generic health and armor boons are smaller; a path (its boons, keystone and weapon evolution) is what makes a build strong.',
       '<b>Aim:</b> attacks and ground skills go toward the mouse cursor (right stick on a pad). The Auto-aim setting is gone.',
       `<b>Paths:</b> follow up to ${ED.MAX_ELEMENTS} of ${ED.ELEMENT_IDS.map(k => pathName(k, true)).join(', ')}, or take the ${pathName('general', true)} path alone as a Generalist. Blood and Spirit are gone.`,
       '<b>No life steal:</b> hits do not heal you any more. Shields take their place.',
       '<b>Knight:</b> Shield Throw replaces Bulwark.',
-      '<b>Map:</b> each stratum is a map of branching paths to the boss. Every door shows the next room and its reward; doors close behind you. Dark rooms: harder foes, better rewards.',
+      '<b>Dark rooms:</b> optional rooms marked with a violet moon: harder foes, better rewards. They replace the lantern.',
       '<b>Hordes:</b> fight rooms are about twice as big and scroll with you, and packs of weak fodder pour in beside the foes that matter.',
       '<b>Dash:</b> dashing uses charges that refill one at a time; Light Step adds charges.',
       '<b>Late power:</b> your route fork gains rank 2 at the stratum II boss and transforms at rank 3 at the stratum III boss, skill forks included.',
-      '<b>Bosses:</b> from stratum IV a boss that lives too long grows furious and hits harder and faster; its bar shows when.',
+      '<b>Fury:</b> the stratum IV boss grows furious when it lives too long and hits harder and faster; its bar shows when.',
       '<b>Sound:</b> every stratum has its own music, and it swells as a fight grows.',
     ])).filter(Boolean).map(t => `<p>${t}</p>`).join('');
     $('ov-news').hidden = false;
