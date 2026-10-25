@@ -152,6 +152,8 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   for (const [a, b] of [['skullhorn', 'skullcrown'], ['skullhorn', 'skull'], ['skullcrown', 'skull'], ['chest', 'stall'], ['coins', 'coin'], ['amulet', 'chest']]) ok(diff(a, b) >= 12, `${a} and ${b} silhouettes differ: ${diff(a, b)} cells`);
   ok(dist(G.epic[1], G.boon[1]) >= 60, 'boon and epic cards differ in colour');
   ok(Ic.reward('boon', 'fire')[1] === ED.PATHS.fire.color && Ic.reward('relic', null)[3] === 'Relics' && Ic.reward('nope', null)[2] === 'Reward', 'boon card wears the path colour; long names; unknown rewards read "Reward"');
+  { const pb = room('combat', { reward: 'boon', rewardPath: 'fire' }), db = room('combat', { reward: 'boon', rewardPath: 'fire', dark: true }), gb = room('combat', { reward: 'gold', rewardPath: 'fire' });
+    ok(pb.label === ED.PATHS.fire.name + ' boon' && pb.color === ED.PATHS.fire.color && db.reward === 'epic' && db.label !== pb.label && gb.label === G.gold[2], `a path boon room reads "<Path> boon" in its colour; a dark or non-boon room ignores the path: ${pb.label}, ${db.label}, ${gb.label}`); }
   // every generated room has a glyph and a label (start excepted); a dark room previews its stepped-up reward; elite labels name the reward
   let rooms = 0; const bad = [];
   for (let s = 1; s <= ED.CONST.STRATA; s++) for (let seed = 1; seed <= 6; seed++) {
