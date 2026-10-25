@@ -483,7 +483,7 @@
         this.emit({ t: 'descend', s: s + 1 });
         break;
       }
-      default: { const mg = pr.ev && ED.MINIGAMES && ED.MINIGAMES[pr.ev]; if (mg) mg.interact(this, p, pr); return; } // minigame props (minigames.js)
+      default: return;
     }
   };
 

@@ -1,6 +1,7 @@
 // In-world minigames (CB-4 kind 'game'): ED.MINIGAMES[id] = { id, name, kind, strata, w, reward, start(w, room), interact(w, p, prop) -> bool, update(w, dt), bot(w, p) -> action | null, hit?(w, p, i) }.
-// The host sets a game up on the party's first entry (start: props + w.ev.game = { id, room, ph, ... }); every number is rolled there from w.rng and shown on the game's props before a hero commits.
-// Props: { kind 'mg_*', ev: def id, g: snapshot payload (net.js props row [10]; g.ni = not interactable), v: resend version (net.js propSig) }. A started game ends by itself within GAME_MAX s; walking out of a door skips any game but the locked duel.
+// The event resolver draws a game like any event; on the party's first entry startEvent (events.js) runs start (props + w.ev.game = { id, room, ph, ... }; w.ev.prop = the prop outcome gold drops at), every number rolled there
+// from w.rng and shown on the game's props before a hero commits; evInteract runs interact, the world tick's updateEvent runs update. Payouts: ED.Events.outcome.
+// Props: { kind 'mg_*', ev: def id, g: snapshot payload (net.js props row O[12]; g.ni = not interactable), v: resend version (net.js propSig) }. A started game ends by itself within GAME_MAX s; walking out of a door skips any game but the locked duel.
 // Bot actions: { go: {x, y} walk there, dir: [dx, dy] walk this way, stop: stand, use: prop id to interact within 40 px, atk: {x, y} attack it within reach } (tools/sim.js botGame).
 (function (ED) {
   'use strict';
@@ -21,20 +22,9 @@
   const heroes = (w) => [...w.players.values()];
   // The living hero of lowest slot plays for the bot party where one hero acts for all.
   const lead = (w) => { let b = null; for (const q of w.players.values()) if (!q.downed && !q.dead && (!b || q.slot < b.slot)) b = q; return b; };
-  const setup = (w, g) => { if (!w.ev) w.ev = { id: g.id }; w.ev.game = g; return g; };
+  const setup = (w, g) => { w.ev.game = g; return g; }; // w.ev: created by startEvent (events.js)
+  const goldAt = (w, pr) => { w.ev.prop = pr.id; return pr; }; // outcome gold drops at this prop
 
-  // Payout through ED.Events.outcome when loaded (CB-4); else directly: gold (exact) drops at the hero or the room centre, maxHp is flat bonus health (healed in), relic a rarity rolled for the hero, offer a boon offer source.
-  // p null: the party (gold only in these games).
-  function pay(w, p, spec) {
-    if (ED.Events && ED.Events.outcome) return ED.Events.outcome(w, p, spec);
-    const at = p || D.center(w.room);
-    if (spec.gold > 0) w.dropGold(at.x, at.y + 14, spec.gold, true);
-    if (!p) return;
-    if (spec.maxHp) { p.bonusHp += spec.maxHp; w.recalc(p, false); w.healPlayer(p, spec.maxHp); w.sendBuild(p); }
-    if (spec.relic) w.giveRelic(p, w.rollRelic(spec.relic));
-    if (spec.offer) w.grantOffer(p, { src: spec.offer });
-  }
-  M.pay = pay;
   // Party stake: false (with a toast) when the party's gold is short.
   function stake(w, p, pr, amt) {
     if (w.gold < amt) { toast(w, p.pid, 'Not enough gold.'); return false; }
@@ -102,7 +92,7 @@
     w.emit({ t: 'mg', k: 'end', x: Math.round(post.x), y: Math.round(post.y) });
   }
   MG.gauntlet = {
-    id: 'gauntlet', name: 'Trap Gauntlet', kind: 'game', strata: null, w: 1, reward: 'hero',
+    id: 'gauntlet', name: 'Trap Gauntlet', kind: 'game', strata: null, w: 6, reward: 'hero',
     start(w, room) {
       const s = w.stratum, rng = w.rng, c = D.center(room);
       const x0 = TRAP_X * T, x1 = (room.w - TRAP_X) * T, y0 = 2 * T, y1 = (room.h - 1) * T;
@@ -115,7 +105,7 @@
       const g = setup(w, { id: 'gauntlet', key: U.uid(), room: w.roomId, ph: 0, t: 0, end: 0, dur: rng.int(30, 36), gold: Math.round((14 + 6 * s) * rng.range(0.9, 1.1)), warn, traps, field: [x0, x1, y0, y1], hits: {}, went: {} });
       const post = addProp(w, this, 'mg_gauntlet', D.clearSpot(room, 2.5 * T, c.y), { ph: 0, gold: g.gold, dur: g.dur, end: 0, h: {} });
       const chest = addProp(w, this, 'mg_chest', D.clearSpot(room, (room.w - 2.5) * T, c.y), { ni: 1, gold: g.gold }, { group: U.uid() });
-      g.post = post.id; g.chest = chest.id;
+      g.post = post.id; g.chest = goldAt(w, chest).id;
     },
     interact(w, p, pr) {
       const g = game(w); if (!g) return false;
@@ -133,7 +123,7 @@
       if (!g.went[p.pid]) { toast(w, p.pid, 'Start from the post side of the traps.', true); return false; }
       p.claimed[pr.group] = true;
       const prize = gauntPrize(g, g.hits[p.pid] | 0);
-      pay(w, p, prize);
+      ED.Events.outcome(w, p, prize);
       w.msgs.push({ to: p.pid, t: 'claimed', group: pr.group });
       w.emit({ t: 'chest', x: pr.x, y: pr.y });
       if (heroes(w).every(q => q.downed || q.dead || q.claimed[pr.group])) gauntEnd(w, g);
@@ -203,16 +193,16 @@
     const at = ci < 0 ? d : byId(w, g.cups[ci]);
     w.emit({ t: 'mg', k: win ? 'win' : 'lose', x: Math.round(at.x), y: Math.round(at.y), pid: p ? p.pid : '' });
     if (!win) return;
-    if (g.round < 3) pay(w, null, { gold: 2 * g.stake });
-    else { pay(w, null, { gold: g.stake }); if (p) pay(w, p, { relic: 'r' }); }
+    if (g.round < 3) ED.Events.outcome(w, null, { gold: 2 * g.stake });
+    else { ED.Events.outcome(w, null, { gold: g.stake }); if (p) ED.Events.outcome(w, p, { relic: 'r' }); }
   }
   MG.shells = {
-    id: 'shells', name: 'Shell Game', kind: 'game', strata: null, w: 1, reward: 'party',
+    id: 'shells', name: 'Shell Game', kind: 'game', strata: null, w: 6, reward: 'party',
     start(w, room) {
       const s = w.stratum, rng = w.rng, c = D.center(room);
       const g = setup(w, { id: 'shells', room: w.roomId, ph: 0, round: 1, stake: round5((14 + 8 * s) * rng.range(0.85, 1.15)), sl: [0, 1, 2], cups: [], end: 0, rng: U.RNG(rng.seed()) });
       const at = D.clearSpot(room, c.x, c.y - 52), sy = Math.round(at.y + 70), sx = [-1, 0, 1].map(i => Math.round(at.x + i * 60));
-      const d = addProp(w, this, 'mg_dealer', at, { ph: 0, r: 1, s: g.stake, sx, sy, sl: [0, 1, 2], t0: 0, d: 0, sw: [], pe: -1, pk: -1, res: -1, end: 0 });
+      const d = goldAt(w, addProp(w, this, 'mg_dealer', at, { ph: 0, r: 1, s: g.stake, sx, sy, sl: [0, 1, 2], t0: 0, d: 0, sw: [], pe: -1, pk: -1, res: -1, end: 0 }));
       g.dealer = d.id;
       for (let i = 0; i < 3; i++) g.cups.push(addProp(w, this, 'mg_cup', { x: sx[i], y: sy }, { c: i, ni: 1 }).id);
     },
@@ -274,16 +264,16 @@
       for (const e of w.enemies) if (e.hp > 0) { e.hp = 0; e.killed = true; w.emit({ t: 'puff', x: Math.round(e.x), y: Math.round(e.y), c: '#d8cbb8' }); }
       for (const q of w.projs) if (q.team !== 0) q.dead = true;
       for (const z of w.zones) if (z.team !== 0) z.dead = true;
-    } else pay(w, null, { gold: Math.round(g.stake * g.mul) });
+    } else ED.Events.outcome(w, null, { gold: Math.round(g.stake * g.mul) });
     w.locked = false; w.enc = null;
     w.emit({ t: 'mg', id: 'duel', k: win ? 'won' : 'lost', x: Math.round(h.x), y: Math.round(h.y), v: win ? Math.round(g.stake * g.mul) : g.stake });
   }
   MG.duel = {
-    id: 'duel', name: 'Wager Duel', kind: 'game', strata: null, w: 1, reward: 'party',
+    id: 'duel', name: 'Wager Duel', kind: 'game', strata: null, w: 6, reward: 'party',
     start(w, room) {
       const s = w.stratum, rng = w.rng, c = D.center(room), aff = rng.shuffle(ED.AFFIX_IDS.slice()).slice(0, 2);
       const g = setup(w, { id: 'duel', room: w.roomId, ph: 0, stake: round5((20 + 12 * s) * rng.range(0.9, 1.1)), mul: rng.pick([2, 2.5, 3]), dur: Math.round(26 + 4 * s + rng.range(-2, 2)), type: ED.biomeFor(s).elite, aff, end: 0, foe: null, down: {} });
-      g.herald = addProp(w, this, 'mg_herald', D.clearSpot(room, c.x, c.y - 40), { ph: 0, s: g.stake, m: g.mul, d: g.dur, ty: g.type, af: aff, end: 0 }).id;
+      g.herald = goldAt(w, addProp(w, this, 'mg_herald', D.clearSpot(room, c.x, c.y - 40), { ph: 0, s: g.stake, m: g.mul, d: g.dur, ty: g.type, af: aff, end: 0 })).id;
     },
     interact(w, p, pr) {
       const g = game(w); if (!g || pr.id !== g.herald || g.ph !== 0) return false;
@@ -353,8 +343,8 @@
     const lan = byId(w, g.lantern);
     lan.g.c = g.caught; touch(lan);
     w.emit({ t: 'mg', k: 'catch', x: Math.round(z.x), y: Math.round(z.y), pid: p.pid });
-    pay(w, p, { gold: g.per });
-    if (g.caught >= g.n) { for (const q of w.alivePlayers()) pay(w, q, { maxHp: WISP.hp }); wispEnd(w, g, true); }
+    ED.Events.outcome(w, p, { gold: g.per });
+    if (g.caught >= g.n) { ED.Events.outcome(w, null, { maxHp: WISP.hp }); wispEnd(w, g, true); }
   }
   function wispEnd(w, g, all) {
     g.ph = 2;
@@ -364,11 +354,11 @@
     w.emit({ t: 'mg', id: 'wisps', k: all ? 'won' : 'end', x: Math.round(lan.x), y: Math.round(lan.y), v: g.caught });
   }
   MG.wisps = {
-    id: 'wisps', name: 'Lantern Chase', kind: 'game', strata: null, w: 1, reward: 'party',
+    id: 'wisps', name: 'Lantern Chase', kind: 'game', strata: null, w: 6, reward: 'party',
     start(w, room) {
       const s = w.stratum, rng = w.rng, c = D.center(room);
       const g = setup(w, { id: 'wisps', key: U.uid(), room: w.roomId, ph: 0, n: rng.int(5, 7) + w.partySize() - 1, caught: 0, per: Math.round((3 + 2 * s) * rng.range(0.9, 1.1)), dur: rng.int(22, 28), end: 0, rng: U.RNG(rng.seed()) });
-      g.lantern = addProp(w, this, 'mg_lantern', D.clearSpot(room, c.x, c.y - 30), { ph: 0, n: g.n, c: 0, per: g.per, d: g.dur, hp: WISP.hp, end: 0 }).id;
+      g.lantern = goldAt(w, addProp(w, this, 'mg_lantern', D.clearSpot(room, c.x, c.y - 30), { ph: 0, n: g.n, c: 0, per: g.per, d: g.dur, hp: WISP.hp, end: 0 })).id;
     },
     interact(w, p, pr) {
       const g = game(w); if (!g || pr.id !== g.lantern || g.ph !== 0) return false;
@@ -422,13 +412,13 @@
     w.emit({ t: 'mg', id: 'echo', k: res ? 'won' : 'lost', x: Math.round(st.x), y: Math.round(st.y), v: g.round - (res ? 0 : 1) });
   }
   MG.echo = {
-    id: 'echo', name: 'Echo Bells', kind: 'game', strata: null, w: 1, reward: 'party',
+    id: 'echo', name: 'Echo Bells', kind: 'game', strata: null, w: 6, reward: 'party',
     start(w, room) {
       const s = w.stratum, rng = w.rng, c = D.center(room), at = D.clearSpot(room, c.x, c.y);
       const seq = [];
       for (let i = 0; i < ECHO.len[2]; i++) { let b = rng.int(0, 3); if (i && b === seq[i - 1]) b = (b + 1 + rng.int(0, 2)) % 4; seq.push(b); }
       const g = setup(w, { id: 'echo', room: w.roomId, ph: 0, round: 1, idx: 0, seq, gold: Math.round((8 + 5 * s) * rng.range(0.9, 1.1)), last: -1, bells: [] });
-      g.stone = addProp(w, this, 'mg_echo', at, { ph: 0, r: 1, gold: g.gold, sq: [], t0: 0, st: 0, ok: 0, end: 0, res: -1 }).id;
+      g.stone = goldAt(w, addProp(w, this, 'mg_echo', at, { ph: 0, r: 1, gold: g.gold, sq: [], t0: 0, st: 0, ok: 0, end: 0, res: -1 })).id;
       ECHO.at.forEach((o, i) => { g.bells.push({ x: at.x + o[0], y: at.y + o[1], r: ECHO.r, i }); addProp(w, this, 'mg_bell', { x: at.x + o[0], y: at.y + o[1] }, { i, ni: 1 }); });
     },
     interact(w, p, pr) {
@@ -455,8 +445,8 @@
       g.idx++;
       const st = byId(w, g.stone); st.g.ok = g.idx; touch(st);
       if (g.idx < ECHO.len[g.round - 1]) return;
-      pay(w, null, { gold: g.gold });
-      if (g.round >= ECHO.len.length) { for (const q of w.alivePlayers()) pay(w, q, { offer: 'room' }); echoEnd(w, g, 1); return; }
+      ED.Events.outcome(w, null, { gold: g.gold });
+      if (g.round >= ECHO.len.length) { ED.Events.outcome(w, null, { offer: 'boon' }); echoEnd(w, g, 1); return; }
       g.ph = 3; g.next = w.time + ECHO.pause; w.mgTargets = null; st.g.ph = 3; touch(st);
     },
     // Any hero strikes the stone; the lead hero listens on the stone and answers (melee: beside the bell, ranged: 110 px off, a Bellwarden 26 px outside it, attacking it), the others wait.

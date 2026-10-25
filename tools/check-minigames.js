@@ -1,5 +1,5 @@
 // Usage: node tools/check-minigames.js
-// Headless checks of the minigames (src/sim/minigames.js), staged in an event room the way the event resolver will run them (def.start on entry, def.update each tick): every game sets up with its numbers on its props,
+// Headless checks of the minigames (src/sim/minigames.js), staged through the event framework (patchRoom names the game, entry runs startEvent -> def.start, interact goes through evInteract, the world tick runs def.update): every game sets up with its numbers on its props,
 // can be won, lost and skipped, ends by itself within GAME_MAX s once started, replays identically for a seed, and the bot (tools/sim.js botGame) finishes or skips it. Also the props snapshot payload and resend.
 // Prints failures and exits 1 when any check fails.
 const { ED, botGame } = require('./sim.js');
@@ -11,7 +11,8 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
 const DT = 1 / 60, IDS = ['gauntlet', 'shells', 'duel', 'wisps', 'echo'], FINAL = { gauntlet: 2, shells: 5, duel: [3, 4], wisps: 2, echo: 4 };
 const done = (g) => [].concat(FINAL[g.id]).indexOf(g.ph) >= 0;
 
-// A world in the first event room of stratum s (seed walked until the floor has one) with game id set up; the room's shrine prop is removed (the resolver replaces it). Party gold 500.
+// A world in the first event room of stratum s (seed walked until the floor has one), patched to game id and entered (startEvent sets it up). Party gold 500.
+// o.draw (a list of ids): no patch; every text event and the listed ids count as seen, so the resolver itself draws one of the other games.
 function stage(id, seed, o) {
   o = o || {};
   const cls = o.cls || ['knight'];
@@ -21,10 +22,9 @@ function stage(id, seed, o) {
     if ((o.s || 1) > 1) w.enterStratum(o.s);
     const room = w.floor.rooms.find(r => r.type === 'event');
     if (!room) continue;
+    if (o.draw) { const seen = ED.Events.run(w).evSeen; for (const d of Object.values(ED.EVENTS)) seen[d.id] = 1; for (const x of o.draw) seen[x] = 1; }
+    else if (!w.patchRoom(room.id, { event: id })) continue;
     w.enterRoom(room.id, 's');
-    w.props.length = 0;
-    w.ev = { id };
-    MG[id].start(w, w.room);
     w.gold = 500; w.fx.length = 0; w.msgs.length = 0;
     return w;
   }
@@ -36,11 +36,10 @@ const hero = (w, i) => w.players.get('p' + (i || 0));
 const at = (p, x, y) => { p.x = x; p.y = y; p.vx = 0; p.vy = 0; };
 const use = (w, p, pr) => { at(p, pr.x, pr.y + 20); w.interact(p.pid, pr.id); };
 let mgEv = [];
-// One tick as the event engine runs it: the world, then the active game; 'mg' events are kept in mgEv. hold: hero invulnerable (timeouts without damage).
+// One world tick (its event update runs the game); 'mg' events are kept in mgEv. hold: hero invulnerable (timeouts without damage).
 function tick(w, hold) {
   if (hold) for (const p of w.players.values()) p.invuln = 1;
   w.update(DT);
-  const g = g0(w); if (g) MG[g.id].update(w, DT);
   for (const ev of w.fx) if (ev.t === 'mg') mgEv.push(ev);
   w.fx.length = 0; w.msgs.length = 0;
 }
@@ -57,7 +56,7 @@ for (const id of IDS) {
   ok(w.props.length >= 1 && w.props.every(x => x.ev === id && x.g && x.kind.indexOf('mg_') === 0), id + ': props carry ev and g');
   ok(w.props.every(x => ED.Dungeon.tileAt(w.room, x.x, x.y) === 0), id + ': props stand on floor');
   const s = N.encodeSnap(w, [], true), row = s.O.find(r => r[1] === w.props[0].kind);
-  ok(row && row[10] && typeof row[10] === 'object', id + ': props row [10] carries the payload');
+  ok(row && row[11] === id && row[12] && typeof row[12] === 'object', id + ': props row carries ev [11] and the payload [12]');
   const sig = N.propSig(w); w.props[0].v = (w.props[0].v | 0) + 1;
   ok(N.propSig(w) !== sig, id + ': a touched prop resends');
 }
@@ -254,8 +253,8 @@ for (const id of IDS) {
 
 // ---------------- bots finish or skip every game; determinism ----------------
 // The bot party plays the room as tools/sim.js does: ED.Minigames.bot -> botGame; with no action it fights the nearest foe (the duel) and takes offer 0. Returns a digest of the outcome.
-function botPlay(id, seed, cls, s) {
-  const w = stage(id, seed, { cls, s }), g = g0(w), ctl = {};
+function botPlay(id, seed, cls, s, draw) {
+  const w = stage(id, seed, { cls, s, draw }), g = g0(w), ctl = {};
   for (const p of w.players.values()) { ctl[p.pid] = { atk: 0 }; p.hp = p.maxHp; }
   let t = 0, acted = false;
   for (; t < 90 && !done(g); t += DT) {
@@ -284,15 +283,26 @@ function botPlay(id, seed, cls, s) {
   for (const id of IDS) {
     for (const [cls, s] of [[['knight'], 1], [['ranger'], 2], [['pyro', 'shade'], 1], [['cleric'], 3]]) {
       for (let k = 0; k < 3; k++) {
-        const r = botPlay(id, 200 + k * 13, cls, s), out = done(r.g) ? 'done' : r.g.ph === 0 ? 'skip' : 'stuck';
-        tally[id] = tally[id] || { done: 0, skip: 0, stuck: 0 }; tally[id][out]++;
+        const r = botPlay(id, 200 + k * 13, cls, s), out = done(r.g) ? 'done' : r.w.state !== 'play' ? 'wipe' : r.g.ph === 0 ? 'skip' : 'stuck'; // wipe: the party fell (the run ends)
+        tally[id] = tally[id] || { done: 0, skip: 0, wipe: 0, stuck: 0 }; tally[id][out]++;
         ok(out !== 'stuck' && r.t <= M.GAME_MAX + 5, `${id}: bot ${cls.join('+')} s${s} seed ${k} ${out} at ph ${r.g.ph} in ${r.t.toFixed(1)} s`);
       }
     }
     const a = botPlay(id, 300, ['knight'], 1), b = botPlay(id, 300, ['knight'], 1);
     ok(a.dig === b.dig, id + ': deterministic for a seed');
   }
-  console.log('bot outcomes: ' + IDS.map(id => `${id} ${tally[id].done} done / ${tally[id].skip} skipped`).join(' · '));
+  console.log('bot outcomes: ' + IDS.map(id => `${id} ${tally[id].done} done / ${tally[id].skip} skipped` + (tally[id].wipe ? ` / ${tally[id].wipe} party fell` : '')).join(' · '));
+}
+
+// ---------------- the resolver draws each game, and the bots play it to its end through interact and the world tick ----------------
+{
+  const drawn = [];
+  for (let k = 0; k < IDS.length; k++) {
+    const r = botPlay(null, 400 + k * 7, ['pyro', 'shade'], 1, drawn), id = r.w.ev && r.w.ev.id;
+    ok(IDS.indexOf(id) >= 0 && drawn.indexOf(id) < 0 && r.w.room.event === id && r.g && r.g.id === id, `resolver: draw ${k + 1} is a new game (${id})`);
+    ok(r.g && done(r.g), `resolver: ${id} played to its end by the bots (ph ${r.g && r.g.ph}, ${r.t.toFixed(1)} s)`);
+    drawn.push(id);
+  }
 }
 
 console.log(`${n - fails}/${n} minigame checks passed`);

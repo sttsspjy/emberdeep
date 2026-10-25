@@ -1136,6 +1136,7 @@
     chest: () => 'Open', portal: () => 'Next stratum',
   };
   R.propPrompt = (p, view) => {
+    if (p.g && ED.MinigameFx) return ED.MinigameFx.prompt(p, view); // a minigame prop (client/minigames.js)
     if (p.ev) return p.text || 'Examine'; // an event prop (events.js)
     if (p.kind === 'relic') return 'Take ' + ED.RELICS[p.item].name;
     if (p.kind === 'shop') { const name = p.stype === 'relic' ? ED.RELICS[p.item].name : p.stype === 'boon' ? 'Epic boon' : p.stype === 'forge' ? 'Forge' : 'Healing potion'; return `Buy ${name} — ${p.price}g`; }
@@ -1145,7 +1146,6 @@
     }
     if (p.kind === 'campfire') return 'Rest';
     if (p.kind === 'anvil') return 'Forge';
-    if (p.g && ED.MinigameFx) return ED.MinigameFx.prompt(p, view);
     return PROP_LABEL[p.kind] ? PROP_LABEL[p.kind](p) : null;
   };
   const REWARD_DESC = { gold: 'Gold for the whole party.', vigor: '+2 max health for the rest of the run, and heals 20%.', forge: 'Rank up one of your boons.', boon: 'A boon from your paths (a new path while you have a free slot).', epic: 'Choose from epic boons.', relic: 'Relics: each hero takes one.' };

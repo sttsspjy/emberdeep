@@ -2,7 +2,7 @@
 // minus the events seen this run; floor gen stays pure. Text events run a host-side dialog (personal: each hero chooses once; party: a vote); minigames run their own def hooks.
 // Def: { id, name, kind: 'text' | 'game' | 'shrine', strata: [s..] | null (shared), w, rare, req(w), icon, look (prop art kind), prompt, party, roll(rng, s, w) -> v, text(v, w, p),
 //   choices: [{ label(v, w, p), note(v, w, p), req(w, p, v) (false: greyed out), go(w, p, v, rng) -> flavour text }], safe (choice index), bot(w, p, v) -> choice index } (text kinds);
-//   minigames: start(w, room), interact(w, p, prop), update(w, dt), end(w), bot(w, p) -> the prop a bot walks to and interacts with, or null.
+//   minigames: start(w, room), interact(w, p, prop), update(w, dt), end(w), bot(w, p) -> a bot action { go, dir, stop, use: prop id, atk } (tools/sim.js botGame) or null.
 // Host-only (World methods and ED.Events); every draw uses w.rng.
 (function (ED) {
   'use strict';
@@ -314,11 +314,11 @@
   };
 
   // ---------------- bots (tools/sim.js) ----------------
-  // Score of walking to event prop pr for bot hero p: 6 while the hero has a choice to make there (minigames: when def.bot names that prop), else 0.
+  // Score of walking to event prop pr for bot hero p: 6 while the hero has a choice to make there (minigames: when def.bot's action uses that prop), else 0.
   E.botWant = (w, p, pr) => {
     const ev = w.ev, def = ev && E.def(pr.ev);
     if (!def || pr.state) return 0;
-    if (def.interact) { const t = def.bot ? def.bot(w, p) : null; return t && (t === pr || t === pr.id) ? 6 : 0; }
+    if (def.interact) { const t = def.bot ? def.bot(w, p) : null; return t && t.use === pr.id ? 6 : 0; }
     if (ev.vote) return 0;
     return ev.done[p.pid] ? 0 : 6;
   };
