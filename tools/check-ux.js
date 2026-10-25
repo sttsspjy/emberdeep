@@ -73,11 +73,10 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   const base = { cls: 'knight', weapon: 'longsword', boons: {}, relics: [], meta: META(), pact: 0 };
   const st0 = ED.Stats.compute(base);
   ok(st0.dashCd === 1.5 && st0.dashCharges === 1, 'a fresh hero has 1 dash charge, 1.5 s each: ' + st0.dashCd + ' / ' + st0.dashCharges);
-  { // Light Step: +1 charge per rank; Shadow Cloak: a 1.0 s recharge; the recharge floors at 1.0 s and the charges cap at 3
+  { // Light Step: +1 charge per rank; Shadow Cloak leaves the dash alone; the recharge floors at 1.0 s and the charges cap at 3
     const dash = (boons, relics) => { const s = ED.Stats.compute(Object.assign({}, base, { boons, relics: relics || [] })); return s.dashCharges + ' / ' + s.dashCd; };
     ok(dash({ lightstep: 1 }) === '2 / 1.5' && dash({ lightstep: 2 }) === '3 / 1.5', 'Light Step: ranks 1 and 2 give 2 and 3 charges, recharge unchanged: ' + dash({ lightstep: 1 }) + ', ' + dash({ lightstep: 2 }));
-    ok(dash({}, ['cloak']) === '1 / 1', 'Shadow Cloak: 1 charge, recharge 1.0 s: ' + dash({}, ['cloak']));
-    ok(dash({ lightstep: 2 }, ['cloak']) === '3 / 1', 'Light Step 2 + Shadow Cloak: 3 charges, 1.0 s each: ' + dash({ lightstep: 2 }, ['cloak']));
+    ok(dash({}, ['cloak']) === '1 / 1.5' && dash({ lightstep: 2 }, ['cloak']) === '3 / 1.5', 'Shadow Cloak grants no dash charge or recharge: ' + dash({}, ['cloak']) + ', ' + dash({ lightstep: 2 }, ['cloak']));
     ED.RELICS.zzdash = { name: 'T', rar: 'c', icon: 'coin', desc: '', mods: { dashcdr: 0.9 } };
     ok(dash({ lightstep: 5 }, ['zzdash']) === '3 / 1', 'the recharge floors at 1.0 s and the charges cap at 3: ' + dash({ lightstep: 5 }, ['zzdash']));
     delete ED.RELICS.zzdash;

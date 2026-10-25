@@ -122,11 +122,13 @@
     let dmg = base, crit = false, shatter = false, guarded = false;
     if (p && !src.raw && kind !== 'dot' && (st.shadowInfuse > 0 || st.backstab > 0) && src.back === undefined) src.back = this.isBackstab(e, p, src); // a Backstab (elements.js)
     if (p && !src.raw) {
-      crit = src.crit === undefined ? !!((ch && ch.hitCrit && ch.hitCrit.call(this, p, e, src)) || this.rng.chance(st.crit)) : !!src.crit;
+      const rh = p.rh;
+      crit = src.crit === undefined ? !!((ch && ch.hitCrit && ch.hitCrit.call(this, p, e, src)) || (rh && rh.crit && this.relicAny(p, 'crit', e, src)) || this.rng.chance(st.crit)) : !!src.crit;
       let add = 0; // conditional and class additions
       for (let i = 0; i < COND_PRE.length; i++) { const r = COND_PRE[i]; if (r.key === null || st[r.key]) add += r.hit(st, e, p, this, src); }
       if (ch && ch.hitMul) add += ch.hitMul.call(this, p, e, src) || 0;
       for (let i = 0; i < COND_POST.length; i++) { const r = COND_POST[i]; if (st[r.key]) add += r.hit(st, e, p, this, src); }
+      if ((rh && rh.hitMul) || this.rAura) add += this.relicHitMul(p, e, src); // relics (relics.js)
       dmg *= Math.max(0.1, st.dmg + add);
       if (crit) { dmg *= st.critMult; if (ch && ch.critMul) dmg *= ch.critMul.call(this, p, e, src) || 1; }
     }
@@ -174,6 +176,7 @@
       if (shatter) this.shatterBurst(e, p, dmg);
       if (!src.noProc) this.heroProcs(e, p, dmg, crit, comp, src);
       if (ch && ch.hitDone) ch.hitDone.call(this, p, e, dmg, crit, src);
+      if (p.rh && p.rh.hit && !src.relic) this.relicFire(p, 'hit', e, dmg, crit, src);
       if (src.smite && e.hp > 0) { const amt = e.rad + dmg, own = this.openChain(); e.rad = 0; this.smite(e, p, amt); if (own) this.curChain = null; } // Divine Riposte
     }
     if (e.hp <= 0) this.killEnemy(e, p, src);
@@ -579,6 +582,7 @@
     this.emit(def.fodder ? { t: 'die', x: Math.round(e.x), y: Math.round(e.y), type: e.type, el: 0, r: e.r, fd: 1 } : { t: 'die', x: Math.round(e.x), y: Math.round(e.y), type: e.type, el: e.elite ? 1 : 0, r: e.r });
     const deathFx = this.onDeathFx(e);
     if (deathFx) this.onEnemyKilledSkill(e, p, src);
+    if (deathFx && p && p.rh && p.rh.kill) this.relicFire(p, 'kill', e, src);
     if (def.boss) { this.onBossKilled(e, p, src); return; }
     if (deathFx) this.deathPayoffs(e, p, src);
     if (def.fodder) { this.fodderMote(e.x, e.y); return; } // fodder drop no gold, heart or Grail growth, split or leave a cloud: only the room's xp mote
@@ -595,13 +599,6 @@
       c.kbx = this.rng.range(-160, 160); c.kby = this.rng.range(-160, 160); c.cd = 0.6;
     }
     if (def.deathCloud) this.addZone({ kind: 'poison', x: e.x, y: e.y, r: def.deathCloud.r, dur: def.deathCloud.dur, dps: def.deathCloud.dps * (1 + 0.2 * (s - 1)), team: 1 });
-    if (p && src.kind !== 'minionBurst') {
-      const st = p.stats;
-      if (st.chalice && p.chaliceHp < ED.RELICS.chalice.full.hp) { // Grail of Ages: +1 max health per RELICS.chalice.kills kills (growth does not heal)
-        p.chaliceKills++;
-        if (p.chaliceKills % ED.RELICS.chalice.kills === 0) { p.chaliceHp++; const hp = p.hp; this.recalc(p, false); p.hp = hp; if (p.chaliceHp % 5 === 0) this.sendBuild(p); }
-      }
-    }
   };
 
   // Payoffs of a non-fodder foe's death: a Reap counts for Death's Edge.
@@ -650,10 +647,11 @@
       if (p.pdT > 0 && this.perfectDodge(p, src)) return false;
       if (this.guardFront(p, src.e.x, src.e.y) && this.perfectDodge(p, src)) { this.emit({ t: 'block', x: Math.round(p.x), y: Math.round(p.y), k: 'guard' }); return false; }
     }
-    if (src.proj && st.mirror && this.rng.chance(st.mirror)) { this.emit({ t: 'block', x: p.x, y: p.y, k: 'mirror' }); return false; }
+    if (p.rh && p.rh.hurtPre && this.relicAny(p, 'hurtPre', src)) return false; // relic blocks (relics.js)
     if (!src.hazard && st.dodge && this.rng.chance(st.dodge)) { this.emit({ t: 'block', x: p.x, y: p.y, k: 'dodge' }); p.invuln = 0.25; return false; }
     if (!src.hazard && st.aegis && p.aegisT <= 0) { p.aegisT = 10; p.invuln = 0.4; this.emit({ t: 'block', x: p.x, y: p.y, k: 'aegis' }); return false; }
     let dmg = amount * ED.Stats.armorMul(st.armor) * (1 + st.vuln);
+    if (p.rh && p.rh.hurtMul) dmg *= this.relicProd(p, 'hurtMul', src);
     // Brace (own, or a Knight with Hold the Line within 100) x the best Sanctuary here, never below DR_FLOOR; Last Stand and Verdict weaken stack separately
     let braceF = 1, sanctF = 1;
     if (p.braceT > 0) braceF = 1 - Math.min(0.4, st.braceDR);
@@ -685,17 +683,17 @@
       if (e.def.chillHit) p.chilled = 1.5;
     }
     if (st.guardian && p.hp > 0 && p.hp < p.maxHp * 0.3 && p.guardCd <= 0) { p.guardT = 3; p.guardCd = 20; this.emit({ t: 'guard', pid: p.pid }); }
+    if (p.rh && p.rh.hurt) this.relicFire(p, 'hurt', dmg, src);
     if (p.hp <= 0) this.playerLethal(p);
     return true;
   };
 
   W.playerLethal = function (p) {
-    const st = p.stats;
-    if (st.phoenix && !p.phoenixUsed) { p.phoenixUsed = true; p.hp = Math.round(p.maxHp * 0.5); p.invuln = 2.2; this.emit({ t: 'rise', pid: p.pid, k: 'phoenix', x: p.x, y: p.y }); this.explode(p.x, p.y, 110, ED.procDmg(ED.RELICS.phoenix, st), 0, p, 'fire'); return; }
-    if (st.angel && !p.angelUsed) { p.angelUsed = true; p.hp = 1; p.invuln = 2.2; this.emit({ t: 'rise', pid: p.pid, k: 'angel', x: p.x, y: p.y }); return; }
+    if (p.rh && p.rh.lethal && this.relicAny(p, 'lethal')) return; // Phoenix Feather, Guardian Angel (relics.js)
     if (p.secondWind > 0 && !this.boss) { p.secondWind--; p.hp = Math.round(p.maxHp * p.swPct); p.invuln = 2.2; this.emit({ t: 'rise', pid: p.pid, k: 'wind', x: p.x, y: p.y }); return; }
     p.hp = 0; p.downed = true; p.bleed = this.partySize() > 1 ? 18 : 0.01; p.revive = 0;
     this.emit({ t: 'down', pid: p.pid, x: p.x, y: p.y });
+    for (const q of this.players.values()) if (q !== p && q.rh && q.rh.down) this.relicFire(q, 'down', p);
   };
 
   // Area damage. team 0 = heroes' blast (hurts foes), team 1 = hostile blast (hurts heroes). opts merges into each hit's src (opts.evoHit: each hit is a landed weapon hit, W.evoHit runs).
@@ -755,6 +753,7 @@
       const follow = this.time < p.cleaveNext;
       if (follow || p.atkCount % (3 + st.cleaveN) === 0) { amb = Object.assign({}, amb, { cleave: st.cleave + (follow ? st.chargeCleave : 0) }); p.cleaveNext = 0; }
     }
+    if (p.rh && p.rh.attack) { const ro = this.relicAttack(p); if (ro.crit) crit = true; if (ro.mul !== 1) amb = Object.assign({}, amb, { mul: ((amb && amb.mul) || 1) * ro.mul }); } // relic attack counters (relics.js)
     const co = ch && ch.attackOpts ? ch.attackOpts.call(this, p, st) : null;
     const base = co ? Object.assign({}, co, amb, co.mul && amb && amb.mul ? { mul: co.mul * amb.mul } : null) : amb; // a class mul (Grave swing) and an attack mul (Masterstroke, Ambush) multiply
     const reps = st.twinEvery && p.atkCount % st.twinEvery === 0 ? 2 : 1;
@@ -937,6 +936,7 @@
     p.dashDx = dx; p.dashDy = dy;
     this.onDashVerbs(p, blink, ox, oy);
     if (p.stats.dashBomb) this.addZone({ kind: 'bomb', x: p.x, y: p.y, r: 60, dur: 0.6, team: 0, owner: p.pid, dmg: ED.procDmg(ED.RELICS.satchel, p.stats) });
+    if (p.rh && p.rh.dash) this.relicFire(p, 'dash');
     this.emit({ t: 'dash', pid: p.pid, x: Math.round(p.x), y: Math.round(p.y) });
   };
 

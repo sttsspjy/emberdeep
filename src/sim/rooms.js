@@ -41,6 +41,7 @@
     } else {
       rs.cleared = true;
     }
+    if (this.locked) this.relicAll('lock', room); // a fight starts (relics.js)
   };
 
   // WAVES threat waves (+1 at Pact 10), each worth (7 + 2 D) x threat wave x party (D = World.depth at the room's row), the last x1.15. Elite rooms: an elite in the first wave and one in the last.
@@ -74,6 +75,7 @@
       const first = waves[0];
       if (first.length) first[this.rng.int(0, first.length - 1)].elite = true;
       else first.push({ type: biome.elite, elite: true });
+      if (this.relicHeld('warpath')) last.push({ type: biome.elite, elite: true }); // Warpath Totem
       return waves;
     }
     let eliteCh = 0.28 + (this.pact >= 3 ? ED.PACTS[3].eliteCh : 0) + (Ds >= 4 ? 0.1 : 0);
@@ -84,6 +86,7 @@
       else if (wv.length) wv[this.rng.int(0, wv.length - 1)].elite = true;
     }
     if (Ds >= 3 && this.rng.chance(0.2 + (this.pact >= 3 ? ED.PACTS[3].eliteExtra : 0))) last.push({ type: biome.elite, elite: true });
+    if (this.relicHeld('warpath')) last.push({ type: biome.elite, elite: true }); // Warpath Totem
     if (room.dark) last.push({ type: biome.elite, elite: true, affix: this.rng.pick(Wc.DARK_AFFIXES), reinf: 1 });
     else if (own.length) last.push({ type: own.reduce((a, r) => ((ED.ENEMIES[r[0]].cost || 2) > (ED.ENEMIES[a[0]].cost || 2) ? r : a))[0], reinf: 1 });
     return waves;
@@ -273,6 +276,7 @@
       this.props.push({ id: U.uid(), kind: 'reward', x: m.x, y: m.y, item, group: U.uid(), state: 0 });
     }
     this.checkFullClear(room);
+    this.relicAll('clear', room); // a fight is won (relics.js)
     this.computeFlow();
     this.emit({ t: 'clear' });
     this.floorFights = (this.floorFights || 0) + 1;
@@ -307,15 +311,30 @@
     this.dropGold(e.x, e.y, 15 + 6 * s);
     this.spawnPickup('heart', e.x, e.y, 1); this.spawnPickup('heart', e.x, e.y, 1);
     for (const q of this.players.values()) q.mantleAmt = 0;
-    if (s === 1) for (const q of this.players.values()) this.grantOffer(q, { src: 'class' }); // the fork offer at the first boss (downed heroes get it when they are back up)
-    else if (s === 2 || s === 3) for (const q of this.players.values()) this.grantForkRank(q); // fork rank 2 and 3, downed and dead heroes too
+    this.relicAll('clear', this.room);
     if (s >= ED.CONST.STRATA) {
       this.run.embers.victory = 60;
       this.endRun(true);
       return;
     }
+    this.bossBeat = { t: ED.World.BOSS_BEAT, s }; // the rewards land after a beat, so a reflex never picks a card unread
+  };
+
+  // Seconds between the death of a boss of strata I-III and its rewards (boss IV ends the run at once). The beat is host world state: this.bossBeat { t, s }.
+  ED.World.BOSS_BEAT = 2;
+  W.updateBossBeat = function (dt) {
+    const b = this.bossBeat;
+    if ((b.t -= dt) > 0) return;
+    this.bossBeat = null;
+    this.bossRewards(b.s);
+  };
+  // Rewards of the boss of stratum s: I the class offer (the fork) and a boss relic pick, II a fork rank and a boss relic pick, III a fork rank and an epic offer; then the portal.
+  // Offers and ranks reach downed and dead heroes too (an offer opens once its hero stands).
+  W.bossRewards = function (s) {
     const c = D.center(this.room);
-    if (s === 2) this.spawnRelicChoices(c.x, c.y + 40, 'r'); // boss II: relic hoard; boss III: epic offer; boss I: the class offer only
+    if (s === 1) for (const q of this.players.values()) this.grantOffer(q, { src: 'class' });
+    else if (s === 2 || s === 3) for (const q of this.players.values()) this.grantForkRank(q);
+    if (s === 1 || s === 2) this.spawnRelicPicks(c.x, c.y + 40, 'boss');
     else if (s === 3) for (const p of this.players.values()) this.grantOffer(p, { src: 'epic' });
     this.props.push({ id: U.uid(), kind: 'portal', x: c.x, y: c.y - 60, state: 0 });
   };
@@ -356,7 +375,8 @@
       props.push({ id: id(), kind: 'merchant', x: c.x, y: c.y - 70, state: 0 });
       const items = [];
       const taken = new Set();
-      for (let i = 0; i < 2; i++) { const r = this.rollRelic('c', taken); taken.add(r); items.push({ type: 'relic', item: r }); }
+      const rars = ['c', 'r', 'e'].concat(this.relicHeld('ledger') ? ['c'] : []); // a relic of each rarity, one more of any rarity with the Ledger
+      for (const rar of rars) { const r = this.rollRelic(rar, taken); taken.add(r); items.push({ type: 'relic', item: r }); }
       items.push({ type: 'boon' }, { type: 'forge' }, { type: 'potion' }); // build items: an epic boon and a forge
       items.forEach((it, i) => {
         props.push({ id: id(), kind: 'shop', x: c.x + (i - (items.length - 1) / 2) * 62, y: c.y + 24, item: it.item || it.type, stype: it.type, price: this.priceOf(it), state: 0 });
@@ -370,22 +390,24 @@
     return props;
   };
 
-  // A forge is 60 + 15s; everything else scales 12% per stratum. Favor (-4% per rank), the discount stat and the Pact 7 markup (x1.4) apply to all; rounded to 5, minimum 5.
+  // A forge is 60 + 15s; everything else scales 12% per stratum. Favor (-4% per rank), the discount stat, the markup stat (the highest in the party) and the Pact 7 markup (x1.4) apply to all; rounded to 5, minimum 5.
   W.priceOf = function (it) {
     const s = this.stratum;
     let base;
     if (it.type === 'forge') base = 60 + 15 * s;
-    else base = (it.type === 'relic' ? ED.RELIC_PRICE[ED.RELICS[it.item].rar] : it.type === 'boon' ? 75 : 30) * (1 + 0.12 * (s - 1));
-    let favor = 0, discount = 0;
+    else base = (it.type === 'relic' ? ED.RELIC_PRICE[ED.RELICS[it.item].rar] : it.type === 'boon' ? 65 : 30) * (1 + 0.12 * (s - 1));
+    let favor = 0, discount = 0, markup = 0;
     for (const p of this.players.values()) {
       favor = Math.max(favor, (p.meta.up && p.meta.up[ED.UPGRADE_IDX.favor]) || 0);
       discount = Math.max(discount, p.stats.discount || 0);
+      markup = Math.max(markup, p.stats.markup || 0);
     }
-    base *= (1 - ED.UPGRADES[ED.UPGRADE_IDX.favor].discount * favor) * (1 - discount) * (this.pact >= 7 ? 1.4 : 1);
+    base *= (1 - ED.UPGRADES[ED.UPGRADE_IDX.favor].discount * favor) * (1 - discount) * (1 + markup) * (this.pact >= 7 ? 1.4 : 1);
     return Math.max(5, Math.round(base / 5) * 5);
   };
 
   const PER_HERO_REWARDS = new Set(['boon', 'forge', 'epic', 'vigor']);
+  const CHEST_RELIC = 0.4; // share of treasure chests that hold a relic hoard
   const allClaimed = (w, group) => [...w.players.values()].every(q => q.dead || q.claimed[group]);
 
   W.interact = function (pid, propId) {
@@ -396,11 +418,11 @@
     if (this.locked && pr.kind !== 'trial') return;
     const s = this.stratum;
     switch (pr.kind) {
-      case 'chest': {
+      case 'chest': { // CHEST_RELIC of the chests hold a relic hoard, the rest a bigger gold pile and a heart
         pr.state = 1;
         this.emit({ t: 'chest', x: pr.x, y: pr.y });
-        this.spawnRelicChoices(pr.x, pr.y + 46, 'c');
-        this.dropGold(pr.x, pr.y, 5 + 3 * s);
+        if (this.rng.chance(CHEST_RELIC)) { this.spawnRelicChoices(pr.x, pr.y + 46, 'c'); this.dropGold(pr.x, pr.y, 5 + 3 * s); }
+        else { this.dropGold(pr.x, pr.y, 20 + 8 * s); this.spawnPickup('heart', pr.x, pr.y, 1); }
         break;
       }
       case 'reward': {
@@ -417,7 +439,7 @@
         } else {
           pr.state = 1;
           if (item === 'gold') this.dropGold(pr.x, pr.y + 18, ED.World.rewardGold(s), true);
-          else if (item === 'relic') this.spawnRelicChoices(pr.x, pr.y + 46, 'r');
+          else if (item === 'relic') this.spawnRelicPicks(pr.x, pr.y + 46, this.room.type === 'champion' ? 'r' : 'c'); // a pick of 3 per hero
         }
         this.emit({ t: 'claim', pid, item, x: pr.x, y: pr.y });
         break;
@@ -426,6 +448,7 @@
       case 'anvil': {
         // one use per hero across both props of the rest site
         if (p.claimed[pr.group]) { this.msgs.push({ to: pid, t: 'toast', text: 'You already used this rest site.' }); return; }
+        if (pr.kind === 'campfire' && p.stats.noRest) { this.msgs.push({ to: pid, t: 'toast', text: 'Crown of Choice: campfires cannot heal you.' }); return; }
         p.claimed[pr.group] = true;
         if (pr.kind === 'campfire') this.healPlayer(p, p.maxHp * 0.35);
         else this.grantOffer(p, { src: 'forge' });
@@ -435,13 +458,15 @@
         break;
       }
       case 'relic': {
+        if (pr.owner && pr.owner !== pid) return; // a hero's own pick (CB-5): only its owner may take it
         if (p.claimed[pr.group]) { this.msgs.push({ to: pid, t: 'toast', text: 'You already took a relic from this hoard.' }); return; }
         p.claimed[pr.group] = true;
         pr.state = 1;
         this.giveRelic(p, pr.item);
         this.msgs.push({ to: pid, t: 'claimed', group: pr.group });
+        if (pr.owner) { for (const o of this.props) if (o.group === pr.group && !o.state) o.state = 1; } // the hero's other picks crumble at once (the client draws the puff)
         // once every hero has chosen, the rest of the hoard crumbles
-        if ([...this.players.values()].every(q => q.claimed[pr.group])) {
+        else if ([...this.players.values()].every(q => q.claimed[pr.group])) {
           for (const o of this.props) if (o.kind === 'relic' && o.group === pr.group && !o.state) { o.state = 1; this.emit({ t: 'puff', x: o.x, y: o.y - 20, c: ED.RARITY[ED.RELICS[o.item].rar].color }); }
         }
         break;
@@ -454,6 +479,7 @@
         else if (pr.stype === 'potion') this.healPlayer(p, p.maxHp * 0.4);
         else if (pr.stype === 'boon') this.grantOffer(p, { src: 'epic' });
         else if (pr.stype === 'forge') this.grantOffer(p, { src: 'forge' });
+        if (p.rh && p.rh.shop) this.relicFire(p, 'shop', pr);
         break;
       }
       case 'fountain': {

@@ -158,12 +158,11 @@
     for (const s of B.statuses) status += `<div class="sh-status sh-f" data-k="s:${s.id}" style="--sc:${s.color}"><b>${esc(s.name)}</b>${esc(s.rule)}</div>`;
     for (const d of m.mult.debuffs) if (!B.statuses.some(s => s.id === d.id)) status += `<div class="sh-status sh-f" data-k="s:${d.id}:${d.text.length}" style="--sc:${d.color}"><b>${esc(d.name)}</b>${esc(d.text)}</div>`;
     const mid = head('Boons', String(B.groups.reduce((n, g) => n + g.items.length, 0))) + (B.groups.length ? `<div class="sh-boons">${boons}</div>` : boons) + (status ? head('Statuses') + `<div class="sh-list">${status}</div>` : '');
-    let rel = B.relics.length ? '' : '<div class="sh-empty">No relics yet.</div>';
-    for (const r of B.relics) {
-      rel += `<div class="sh-relic sh-f" data-k="x:${r.id}" style="--rc:${RAR(r.rar).color}"><img class="sh-i2" alt="" src="${ED.Icons.relicUrl(r.id)}"><div class="sh-bm"><div class="sh-bt"><b class="sh-bn">${esc(r.name)}</b><span class="sh-rar">${RAR(r.rar).name}</span>${r.state ? `<span class="px-chip sh-state ${r.state}" data-live="rs:${r.id}">${r.state}</span>` : ''}</div>`
-        + `<div class="sh-btx">${esc(r.text)}</div>${r.live ? `<div class="sh-live" data-live="rl:${r.id}">${esc(r.live)}</div>` : ''}</div></div>`;
-    }
-    return col('paths', left) + col('boons', mid) + col('relics', head('Relics', String(B.relics.length)) + `<div class="sh-list">${rel}</div>`);
+    const held = B.relics.filter(r => !r.curse), curses = B.relics.filter(r => r.curse); // curses list apart and do not count as relics
+    const relRow = (r) => `<div class="sh-relic sh-f" data-k="x:${r.id}" style="--rc:${RAR(r.rar).color}"><img class="sh-i2" alt="" src="${ED.Icons.relicUrl(r.id)}"><div class="sh-bm"><div class="sh-bt"><b class="sh-bn">${esc(r.name)}</b><span class="sh-rar">${RAR(r.rar).name}</span>${r.state ? `<span class="px-chip sh-state ${r.state}" data-live="rs:${r.id}">${r.state}</span>` : ''}</div>`
+      + `<div class="sh-btx">${esc(r.text)}</div>${r.live ? `<div class="sh-live" data-live="rl:${r.id}">${esc(r.live)}</div>` : ''}</div></div>`;
+    const rel = held.length ? held.map(relRow).join('') : '<div class="sh-empty">No relics yet.</div>';
+    return col('paths', left) + col('boons', mid) + col('relics', head('Relics', String(held.length)) + `<div class="sh-list">${rel}</div>` + (curses.length ? head('Curses', String(curses.length)) + `<div class="sh-list">${curses.map(relRow).join('')}</div>` : ''));
   }
 
   // ---------------- Combat tab ----------------

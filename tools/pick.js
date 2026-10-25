@@ -17,7 +17,6 @@ module.exports = (ED, model) => {
   const PICKS_RUN = 32, FEASIBLE = 0.6; // picks in a run; a milestone is worth nothing when it needs more than this share of the picks left
   const REROLL_MIN = 0.01; // best gain below this: reroll when a reroll is left
   const RELIC_HALF = 0.1; // relic gain that scores 0.5 in relicValue
-  const TRANSMUTE = 0.03; // a Generalist's element relic becomes a random non-element relic of its rarity
   const T_ONE = 30, RES_ONE = 0.5, RES_BOSS = 0.35; // a single big foe: engagement seconds and gauge resistance (elite 0.7, boss 0.35); freezes use the boss value
   const POOL_EFF = 0.6; // share of the ideal status damage on every foe of a pack that lands (overkill, spread-out foes)
   const T_FOE_MIN = 1.5, T_FOE_MAX = 10; // life of a foe in a pack under the hero's pack damage
@@ -77,9 +76,21 @@ module.exports = (ED, model) => {
   //   sunder       Fold  crit chance x hits per second -> stacks of +4% damage taken (10 stacks)
   //   masterstroke evo_general  Sheet hold (finisher); evo_general strikes (Spectral strike)
   //   b_* (Bellwarden routes)  Sheet and the Fold terms below
-  //   boots        Fold  spd -> E          coin      Fold gold, luck -> bonus     lodestone Fold xp -> bonus     pauldron Fold thorns -> E    phoenix Fold revive -> E
-  //   elixir       Fold  strataHeal, heal  satchel   Fold dash bomb               lantern   Fold xp, light       seeker   Fold homing, reach  mirror  Fold shrug -> E
-  //   crown        Fold  choices -> bonus  angel     Fold extra life -> E         chalice   Fold growth -> E     ledger   Fold discount       clover  Fold rerolls, luck   aegis Fold block -> E
+  //   relics       Sheet / Fold the stat side (mods: satchel's bomb, seeker, aegis, phoenix, angel, chalice, Grail, idol, twin strikes, health, damage, vulnerability, choices, gold, luck)
+  //                Prior RELIC_X: the rule a relic adds (relics.js hooks), one hand value per relic, below
+  // ---------------- relics ----------------
+  // RELIC_X: hand value in ln-V units (0.10 = about +10% damage) of the rule each relic adds beyond its stat side (src/sim/relics.js hooks; guesses, no bot run measured them);
+  // negative for a downside the sheet leaves out (no campfire heal, shop markup, lost rerolls, curses). Every relic id has an entry (tools/check-relics.js).
+  const RELIC_X = {
+    whetstone: 0.06, lodestone: 0.01, pauldron: 0.03, coin: 0.02, elixir: 0.04, boots: 0.04, buckler: 0.03, heartstone: 0, hourglass: 0.04, glasseye: 0.03, lantern: 0.02, pristine: 0.04, rage: 0.04,
+    wraps: 0.04, spyglass: 0.03, bandage: 0.03, gust: 0.03, warchest: 0.03, quill: 0.03, clover: 0, ledger: 0.02, haggle: 0.02, compass: 0.01, tooth: 0.05, piggy: 0.02, lifeline: 0.02, contract: 0.02, star: 0.03,
+    satchel: 0, cloak: 0.04, wardrum: 0.05, axe: 0.06, seeker: 0, mirror: 0.04, aegis: 0, mask: 0, idol: 0, banner: 0.08, skull: 0.03, bloodstone: 0.03, nail: 0.07, keg: 0.06, lens: 0.05, rune: 0.05,
+    core: 0.04, stoneskin: 0.05, lastbreath: 0.04, oath: 0.04, dice: 0.03, ink: 0.02, relay: 0.03,
+    phoenix: 0, angel: 0, twinfang: 0, chalice: 0, stone: 0, kingslayer: 0.1, glassheart: 0, soulcage: 0.09, thorncrown: 0.08, timestop: 0.08, metronome: 0.07, ricochet: 0.08,
+    crown: -0.04, midas: -0.04, ironclad: 0, sundial: 0, eyeoffate: -0.03, pandora: 0.15, voidstone: 0.06, bloodpact: 0, warpath: 0.04, ghostlantern: 0.1,
+    c_frailty: 0, c_rust: 0, c_greed: -0.04, c_dread: -0.05, c_clumsy: -0.04, c_decay: -0.03, c_doubt: 0, c_leaden: 0, c_pain: -0.06, c_poverty: -0.04,
+  };
+
   // Flat priors in ln-V units (0.10 = about +10% damage); zero unless the path is active.
   const PRIOR = {
     firebreak: ['fire', 0.04], // guess: longer burning ground that foes walk around
@@ -246,10 +257,8 @@ module.exports = (ED, model) => {
     // guards and sustain the effective health leaves out
     if (st.guardian) eMul *= 1.12;
     if (st.aegis) eMul *= 1.15;
-    if (st.mirror) eMul *= 1 + 0.35 * st.mirror;
     if (st.angel) eMul *= 1.25;
     if (st.phoenix) eMul *= 1.15;
-    if (st.strataHeal) eMul *= 1 + 0.4 * st.strataHeal;
     if (st.chalice) { eMul *= 1.15; mul1 *= 1.04; mulN *= 1.04; }
     eMul *= 1 + 0.002 * st.thorns + 0.35 * (st.spd - 1) + 0.08 * st.dashN + 0.2 * st.dashcdr + 0.1 * st.heal;
     // meta stats: gold buys relics and boons, experience and choices add picks
@@ -407,11 +416,10 @@ module.exports = (ED, model) => {
     return reroll ? -1 : best;
   }
 
-  // Gain of taking relic id now (ln-V units): V(with) - V(without); a Generalist's element relic transmutes into an average one.
+  // Gain of taking relic id now (ln-V units): V(with) - V(without) + RELIC_X[id].
   function relicGain(w, p, id) {
-    if (ED.relicFits && !ED.relicFits(p, id)) return TRANSMUTE;
     const dc = decision(w, p), q = model.withRelic(p, id, dc.base);
-    return valueOf(q, dc).v - valueOf(p, dc).v;
+    return valueOf(q, dc).v - valueOf(p, dc).v + (RELIC_X[id] || 0);
   }
   // The same squashed into [0, 1): 0 for a relic that does not help, gain / (gain + RELIC_HALF) above it.
   function relicValue(w, p, id) { const g = relicGain(w, p, id); return g > 0 ? g / (g + RELIC_HALF) : 0; }
@@ -426,5 +434,5 @@ module.exports = (ED, model) => {
     console.log(lines.join('\n'));
   }
 
-  return { chooseIndex, relicValue, relicGain, gainOf, valueOf, decision, future, fold, setLambda, lambdaAt, lever, AT_REST, REROLL_MIN, LAMBDA, GAMMA };
+  return { chooseIndex, relicValue, relicGain, gainOf, valueOf, decision, future, fold, setLambda, lambdaAt, lever, AT_REST, REROLL_MIN, LAMBDA, GAMMA, RELIC_X };
 };

@@ -173,7 +173,7 @@ const run = (w, secs, f) => { for (let i = 0; i < Math.round(secs * 60); i++) { 
 {
   const { w, p } = stage('ranger'); w.addXp(69); ok(p.offers.filter(o => o.src === 'class').length === 1, 'level 3 route offer');
   const lv = w.level; w.addXp(1e5); ok(w.level > lv && p.offers.filter(o => o.src === 'class').length === 1, 'only level 3 grants a route');
-  for (const s of [1, 2, 3, 4, 5]) { p.offers.length = 0; w.stratum = s; w.boss = null; const b = w.spawnEnemy(ED.biomeFor(s).boss, 100, 100); w.onBossKilled(b); ok(p.offers.some(o => o.src === 'class') === (s === 1), 'boss ' + s + ' class grant'); }
+  for (const s of [1, 2, 3, 4, 5]) { p.offers.length = 0; w.stratum = s; w.boss = null; const b = w.spawnEnemy(ED.biomeFor(s).boss, 100, 100); w.onBossKilled(b); if (w.bossBeat) w.updateBossBeat(ED.World.BOSS_BEAT); ok(p.offers.some(o => o.src === 'class') === (s === 1), 'boss ' + s + ' class grant'); }
 }
 // weapon clouds merge: many shots on one spot keep one cloud zone, the damage per second adds up
 {
