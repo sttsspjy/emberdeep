@@ -38,7 +38,7 @@ Canonical rules and numbers. Code follows this file; a balance pass changes numb
 4. **Foe vulnerability** `1 + Σ`: Marked (Hunter's Mark, `markV`) · Judged or `vulnT` (+0.2, once: Judgment, Hail of Thorns, smoke do not stack) · Frozen +0.25 · Sunder +0.04 per stack (own stacks, max 10). Co-op debuffs are single foe states: the strongest value wins, they never add.
 5. `exposed` ×1.5.
 6. **Guard**: a foe with `guard {arc, mul}` takes ×mul from attacks inside the arc (damage over time, discharges and explosions ignore it; a Corroded foe has none). Emits `guardhit`.
-7. `dmgTakenMul` (default 1). Invulnerable, burrowed or `invulnT` foes take 0; a burrowed foe still takes its own status ticks (Burn, Bleed, Venom), which keep running under ground.
+7. `dmgTakenMul` (default 1). Invulnerable, burrowed or `invulnT` foes take 0; a burrowed foe still takes its own status ticks (Burn, Bleed), which keep running under ground.
 8. **Ward** (warded elites) absorbs 75% of each hit until it breaks.
 
 Status ticks, Smites, Tolls and discharges are `raw` hits: no hero multiplier, no crit, no further infusion.
@@ -533,7 +533,7 @@ Four strata (`CONST.STRATA` 4), all neutral (no weak or resisted element): I **O
 - **No untelegraphed teleports.** When a hero is within 80 and the step is off cooldown (7 s), casters telegraph 0.6 s (marker at origin and destination) and step 150 away.
 - Signature foe per biome:
   - I **Bone Priest** (support): raises a dead skeleton (telegraphed), wards an ally.
-  - II **Mire Worm** (burrower): travels under ground (untargetable, visible trail; Burn, Bleed and Venom on it keep ticking), erupts under the hero after a 1.2 s ground telegraph that also draws its 6 shot lanes: 6 slow spores (speed 95) spread over 240°, leaving a 120° shot-free gap at a rolled angle; then it stays exposed 3.5 s.
+  - II **Mire Worm** (burrower): travels under ground (untargetable, visible trail; Burn and Bleed on it keep ticking), erupts under the hero after a 1.2 s ground telegraph that also draws its 6 shot lanes: 6 slow spores (speed 95) spread over 240°, leaving a 120° shot-free gap at a rolled angle; then it stays exposed 3.5 s.
   - III **Drowned Reaver** (leaper): leaps to the hero's position (landing circle), cleaving cone on landing. Beside it the **Temple Drone** (orbiter): circles the hero at ~160, fires 3-shot bursts.
   - IV **Rift Caller** (summoner): opens a telegraphed rift that spawns 2 starspawn every 6 s. Beside it the **Hollow Sentinel** (guard): frontal shield `guard {arc 2.2, mul 0.2}` blocks from the front, shield-bash charge.
 - Bosses use telegraphed attacks in three phases (HP 66% / 33%; the Hollow King 60% / 30%); the pause between attacks is 1.05 / 0.7 / 0.45 s by phase × 0.8 under Pact 5+ × the stratum's boss pause. After a boss falls, hostile shots and pools are removed.

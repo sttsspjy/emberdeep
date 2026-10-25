@@ -12,7 +12,7 @@ No build step, no backend, no install. It is a static site: open it from any web
 | --- | --- |
 | `W` `A` `S` `D` (or the arrow keys) | Move |
 | Mouse | Aim: attacks and skills go where the cursor is |
-| Left mouse or `J` | Attack (hold). Also interacts with chests, shops and events. Some boons turn a held attack into something else (a flame cone, an ice lance, a flask, a guard, a finisher); the Bellwarden's hold winds the bell |
+| Left mouse or `J` | Attack (hold). Also interacts with chests, shops and events. Some boons turn a held attack into something else (a flame cone, an ice lance, a storm call, a finisher); the Bellwarden's hold winds the bell |
 | `Q` | Skill 1 (rerolls the boon cards while they are open) |
 | `E` | Skill 2 |
 | Right mouse or `R` | Skill 3: the Pyromancer's Fireball. Heroes without a third skill cast skill 1 |

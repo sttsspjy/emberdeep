@@ -77,7 +77,7 @@
       chill: 0, chillT: 0, chillOwner: null, freezeRes: 0, freezeResT: 0, frozenAt: 0, frozenBy: null, brittle: 0, charge: 0, chargeOwner: null, chargeT: 0, disQ: false,
       rad: 0, radOwner: null, doom: 0, doomOwner: null, cid: 0, cidMask: 0, stunCd: 0, blindCd: 0,
       glacier: false, affixOff: false,
-      hpLever: def.boss ? def.hp / def.refHp : def.fodder ? 1 : this.threat().hp, // HP-relative statuses (chill, Venom) ignore this stratum lever (fodder carries none)
+      hpLever: def.boss ? def.hp / def.refHp : def.fodder ? 1 : this.threat().hp, // HP-relative statuses (chill) ignore this stratum lever (fodder carries none)
       mark: 0, judged: 0, vulnT: 0, blind: 0, sunder: 0, sunderOwner: null, slow: 1, slowAmt: 0, slowT: 0, windMul: 1, dmgTakenMul: 1, invulnT: 0, killed: false,
       // class-route foe states: shieldStunT (stunned by a Bulwark bash), staggerT / parryT (per-foe cooldowns), hexT + hexBy (slot mask), markV (mark vulnerability), sealT, weakT + weakV (Verdict weaken)
       shieldStunT: 0, staggerT: 0, parryT: 0, hexT: 0, hexBy: 0, markV: 0, sealT: 0, weakT: 0, weakV: 0,
@@ -117,7 +117,7 @@
     if (!e || e.hp <= 0) return 0;
     src = src || {};
     const def = e.def;
-    if (def.invuln || e.invulnT > 0 || (e.burrowed && !(src.kind === 'dot' && src.raw && !src.part))) return 0; // burrowed: only its own status ticks land (Burn, Bleed, Venom: raw dots without a skill part)
+    if (def.invuln || e.invulnT > 0 || (e.burrowed && !(src.kind === 'dot' && src.raw && !src.part))) return 0; // burrowed: only its own status ticks land (Burn, Bleed: raw dots without a skill part)
     const p = src.p || null, st = p ? p.stats : null, kind = src.kind || 'weapon';
     const comp = !!src.comp || kind === 'minion';
     const ch = p ? CLS[p.cls] : null;
