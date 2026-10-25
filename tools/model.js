@@ -145,7 +145,7 @@ module.exports = (ED, opts) => {
   }
 
   // ---- conditional damage: the ED.COND_DMG rows a build owns count at an assumed uptime (the bonus is additive with the Damage stat) ----
-  const COND_NOTE = 'conditional damage at assumed uptimes: execute 30% of the time; burning, bleeding, chilled, envenomed, doomed, charged (80% with Capacitor), holding Radiance 50-90% when the build applies it; stunned = the stun uptime; Brand = the ailments the build keeps up (at most 4); unknown rows 50%';
+  const COND_NOTE = 'conditional damage at assumed uptimes: execute 30% of the time; burning, bleeding, chilled, doomed, charged, holding Radiance 50-90% when the build applies it; stunned = the stun uptime; Brand = the ailments the build keeps up (at most 4); unknown rows 50%';
   function ailmentsKept(st, d) {
     let n = 0;
     for (const id of ED.ELEMENT_IDS) if (st[ED.ELEMENTS[id].inf] > 0) n += 0.7; else if (st.element === id) n += 0.5;
@@ -157,7 +157,6 @@ module.exports = (ED, opts) => {
     switch (id) {
       case 'execute': return 0.3;
       case 'lacerate': return has('bleedAll') ? 0.9 : has('bleed') || st.masterstroke ? Math.min(0.9, 1 - Math.pow(1 - st.crit, m.weapon.aps * 2)) : 0;
-      case 'backstab': return Math.min(0.9, (st.melee || st.kind === 'bell' ? 0.35 : 0.15) + (st.decoy ? 0.15 : 0) + (st.stepBehind ? 0.1 : 0)); // share of hits from behind (tools/pick.js BACK_UP)
       case 'opportunist': return Math.min(1, d.hard + (has('iceInfuse') ? 0.3 : 0));
       case 'brand': return ailmentsKept(st, d);
       case 'idol': return 1;

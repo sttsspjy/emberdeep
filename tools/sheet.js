@@ -1,13 +1,15 @@
-// Usage: node tools/sheet.js [--cls=all|knight,ranger,...] [--routes] [--parity [--strict]] [--weapons] [--rank=1,2,3] [--stratum=3] [--pack=4] [--surround] [--mid] [--json]
+// Usage: node tools/sheet.js [--cls=all|knight,ranger,...] [--routes] [--parity [--strict]] [--weapons] [--paths] [--rank=1,2,3] [--stratum=3] [--pack=4] [--surround] [--mid] [--json]
 // The analytic sheet (docs/GAME-DESIGN.md section 10): hero numbers from ED.Sheet.compute for synthetic builds, in milliseconds, before any bot hours are spent.
 //   (default)   per class: the fresh hero (weapon, skills with their parts, shares of direct damage, effective health)
 //   --routes    per class x route x fork x rank: change in hero damage (one foe | a pack of 4) against the class without the card, for a fresh and a mid build (--mid prints only the mid build),
 //               effective health with the uptime of the route's defence, shield income and stun uptime (stuns plus slows, blinds and taunts at their strength)
 //   --parity    the power-budget bands on the mid build (ignores --stratum and --rank): stratum III with every fork at rank 2 (boss II grants it), stratum IV at rank 3 (boss III). Per class one line per fork: value (mean of the 1 foe and pack columns, %), the change against the class median, EHP and stun.
 //               III rank 2: a non-Guard fork 31.5-38.5, a Guard fork >= 28. IV rank 3: non-Guard 54-66, Guard >= 48 and EHP >= +25% or stun >= 30%. Marks the forks outside; --strict exits 1 when any fork fails
+//   --paths     per class x path: a pure single-path build of PATH_PICKS picks (gate, pool cards, keystone; no evolution) at --stratum: hero damage on one foe, a pack of 4 and a horde of 8 with the change against Steel,
+//               effective health; for each melee weapon the Steel build's finisher hit (a guaranteed crit at FIN_MUL) and its plain swing against the stratum's foe health
 //   --weapons   per weapon (each base weapon, then its Armory variants indented with their change against the base): damage per second on one foe and in a pack of 4 at the class Power, and the damage factor that puts it on the median of the base weapons
 // Hero damage = (weapon dps + skill damage per cooldown) x the conditional-damage factor (ED.COND_DMG rows the build owns at assumed uptimes, see COND_NOTE) + status estimates; a pack of 4: melee arcs, blasts, sweeps, waves and ricochets hit all four foes, a fan hits as many as it has arrows; a piercing shot hits the first foe and half of the other foes it could pierce (tools/model.js PIERCE_LINE).
-// The mid build: the class element's gate (else Fire) and a second gate, Sharpened Edge x2, Quickened Hands x2, Focus and Stalwart.
+// The mid build: two path gates (the class element's first where it has a path) and Focus.
 const { ED } = require('./sim.js');
 const args = {};
 for (const a of process.argv.slice(2)) { const m = /^--([a-z0-9]+)(?:=(.*))?$/i.exec(a); if (m) args[m[1]] = m[2] === undefined ? '1' : m[2]; }
@@ -18,8 +20,15 @@ const St = ED.Stats;
 const M = require('./model.js')(ED, { pack: +(args.pack || 4), surround: !!args.surround }); // hero damage, defence and conditional factor live in the shared model (tools/pick.js reads the same one)
 const { packWeapon, directDamage, heroDamage, echoK, defence, condFactor, COND_NOTE } = M, PACK = M.pack;
 const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
-const GATE2 = { knight: ['kindle', 'frostbite'], ranger: ['kindle', 'frostbite'], pyro: ['kindle', 'staticcharge'], shade: ['kindle', 'frostbite'], cleric: ['consecrate', 'frostbite'], necro: ['doommark', 'envenom'], bell: ['staticcharge', 'frostbite'] };
-const MID = (cls) => Object.assign({}, ...GATE2[cls].map(id => ({ [id]: 1 })), { edge: 2, quick: 2, focus: 1, stalwart: 1 });
+const GATE2 = { knight: ['kindle', 'frostbite'], ranger: ['kindle', 'frostbite'], pyro: ['kindle', 'staticcharge'], shade: ['kindle', 'frostbite'], cleric: ['staticcharge', 'frostbite'], necro: ['kindle', 'frostbite'], bell: ['staticcharge', 'frostbite'] };
+const MID = (cls) => Object.assign({}, ...GATE2[cls].map(id => ({ [id]: 1 })), { focus: 1 });
+// --paths: a committed single-path build per path, 10 picks each (gate, pool cards incl. its defensive ones, keystone; stratum II deep cards, no evolution).
+const PATH_PICKS = {
+  general: { generalist: 1, keen: 2, brutal: 2, lacerate: 1, execute: 1, deepcuts: 1, heartseeker: 1, masterstroke: 1 },
+  fire: { kindle: 1, stoke: 2, kindling: 2, wildfire: 1, smother: 1, fanflames: 1, backdraft: 1, scorched: 1 },
+  ice: { frostbite: 1, deepcold: 2, shatterpoint: 2, permafrost: 1, glacier: 1, coldcycle: 1, rimebite: 1, absolutezero: 1 },
+  lightning: { staticcharge: 1, highvoltage: 2, conductor: 2, overload: 1, longfuse: 1, grounding: 1, galvanize: 1, arcflash: 1 },
+};
 const ctx = () => ({ stratum: STRATUM, pact: 0, gold: 0, level: 8, xp: 0, xpNext: 100, dark: false, allyNear: 0, minions: 0, room: null, party: 1, rooms: { seen: 1, total: 10, darkTotal: 2, darkLeft: 2 }, heroes: [], time: 0 });
 function hero(cls, wi, boons) {
   const b = { cls, weapon: typeof wi === 'string' ? wi : ED.CLASSES[cls].weapons[wi || 0], boons: boons || {}, relics: [], meta: META(), pact: 0 }; // wi: a weapon index or a weapon id (an Armory variant)
@@ -37,7 +46,7 @@ const rows = [];
 const out = (s) => { if (args.json) rows.push(s); else console.log(s); };
 
 // ---- default: the fresh hero ----
-if (!args.routes && !args.weapons && !args.parity || args.fresh) {
+if (!args.routes && !args.weapons && !args.parity && !args.paths || args.fresh) {
   for (const cls of CLS) {
     const p = hero(cls), m = model(p), tot = directDamage(m, 1);
     out(`\n== ${ED.CLASSES[cls].name} (Power ${p.stats.power}, ${m.weapon.name}) stratum ${STRATUM}`);
@@ -108,6 +117,26 @@ function parityTable() {
   out(`\n${parityFails} fork${parityFails === 1 ? '' : 's'} outside the bands`);
 }
 if (args.parity) parityTable();
+
+// ---- paths ----
+if (args.paths) {
+  out(`\n###### pure single-path builds at stratum ${STRATUM} (hero damage: 1 foe | pack of 4 | horde of 8, change against Steel; EHP)`);
+  for (const k in PATH_PICKS) for (const id in PATH_PICKS[k]) if (!ED.BOONS[id]) throw new Error('--paths: unknown boon ' + id);
+  for (const cls of CLS) {
+    out(`\n== ${ED.CLASSES[cls].name}`);
+    let ref = null;
+    for (const k of ED.PATH_IDS) {
+      const p = hero(cls, 0, PATH_PICKS[k]), m = model(p), d = defence(p, m), kf = condFactor(p, m, d), v = [1, 4, 8].map(n => heroDamage(m, n, kf, echoK(p, m, n)));
+      if (!ref) ref = v;
+      out(`  ${pad(ED.PATHS[k].name, 7)} ${v.map((x, i) => `${rpad(f1(x), 6)} ${rpad(k === 'general' ? '' : sign(x / ref[i] - 1), 5)}`).join(' | ')}   EHP ${f1(d.ehp)}${m.weapon.hold ? `   hold ${m.weapon.hold.label} ${f1(m.weapon.hold.dps)}/s` : ''}`);
+    }
+    for (const wid of ED.CLASSES[cls].weapons) {
+      const p = hero(cls, wid, PATH_PICKS.general), m = model(p);
+      if (m.weapon.kind !== 'melee') continue;
+      out(`  Steel ${pad(m.weapon.name, 12)} finisher ${f1(m.weapon.crit * ED.CONST.FIN_MUL)} (crit ${f1(m.weapon.crit)}, swing ${f1(m.weapon.hit)}) | foe health here ${f1(m.ref.hp)}`);
+    }
+  }
+}
 
 // ---- weapons ----
 if (args.weapons) {

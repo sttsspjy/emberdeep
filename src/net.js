@@ -7,7 +7,7 @@
   const N = ED.Net = {};
   const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const PREFIX = 'wickdeep-v1-';
-  N.VERSION = 15; // bump whenever snapshots or floor generation change: mixed versions would desync
+  N.VERSION = 16; // bump whenever snapshots or floor generation change: mixed versions would desync
   // Heartbeat: PeerJS 'close' does not fire when a tab crashes or a network drops, so both ends ping and
   // treat a few seconds of silence as a disconnect (longer in the lobby, where little else is sent).
   const PING_MS = 2000, TIMEOUT_RUN = 6000, TIMEOUT_LOBBY = 10000;
@@ -290,7 +290,7 @@
     return k < 0.95 ? 1 : k < 1.25 ? 2 : 3;
   };
   // FX events kept per type in one snapshot (host to client), and per rendered frame on the host or solo machine (a third of it). Extras are dropped; sim state never is.
-  N.CAPS = { hit: 24, smite: 12, reap: 12, toll: 12, lance: 12, ric: 12, parry: 6, catch: 4, kblock: 6, blance: 8, shatter: 8, hurl: 8, reel: 8, pdodge: 6, blink: 6 };
+  N.CAPS = { hit: 24, smite: 12, reap: 12, toll: 12, lance: 12, ric: 12, parry: 6, catch: 4, kblock: 6, blance: 8, shatter: 8, hurl: 8, reel: 8, blink: 6 };
   N.CAPS_LOCAL = { hit: 8, smite: 4, reap: 4, toll: 4, lance: 4, ric: 4, parry: 2, catch: 2, kblock: 3, blance: 4 };
   Object.assign(N.CAPS, { exec: 8, rupt: 8, bloom: 6, sweep: 6 }); Object.assign(N.CAPS_LOCAL, { exec: 3, rupt: 3, bloom: 2, sweep: 2 }); // Shade execution cuts, ruptures, Bloodbloom lines and Ambush Sweep rings
   // Cap key of an event: a non-crit fodder hit counts as 'fhit', a fodder death as 'fdie' and a damage-over-time tick (hit with k) as 'dhit', so a horde or a field of burning foes never crowds out crits, direct hits and threat deaths.
@@ -323,8 +323,7 @@
   Object.assign(N.CAPS, { smash: 8 }); Object.assign(N.CAPS_LOCAL, { smash: 4 }); // breakable props smashed ({ i, x, y, k, r }: room breakables index, spot, decor kind, room id)
   Object.assign(N.CAPS, { bstrike: 16, peal: 6, bsmash: 4, bhook: 4 }); Object.assign(N.CAPS_LOCAL, { bstrike: 6, peal: 3, bsmash: 2, bhook: 2 }); // Bellwarden strikes, Peal waves, Wrecker smashes, Tether Hook landings
   Object.assign(N.CAPS, { pillar: 4, aegispulse: 4, jecho: 10, lich: 2, dkraise: 2, dkswing: 6 }); Object.assign(N.CAPS_LOCAL, { pillar: 2, aegispulse: 2, jecho: 4, lich: 1, dkraise: 1, dkswing: 2 }); // Cleric and Necromancer skill forms: Wrath pillars, Aegis pulses, Final Judgment echoes, Lich Form, Death Knight raise and swings
-  // Venom bar level of a foe: 0-4 pips (one per 25 Venom), 5 = Corroded. Radiance fill 0-3 of the Smite gauge.
-  N.venomLevel = (e) => (e.venom >= 100 ? 5 : e.venom > 0 ? Math.min(4, Math.ceil(e.venom / 25)) : 0);
+  // Radiance fill 0-3 of the Smite gauge.
   N.radLevel = (w, e) => (e.rad > 0 ? Math.min(3, Math.floor(4 * e.rad / w.smiteAt(e))) : 0);
   // Hero flags (bit n = 1 << n): 0 moving, 1 dashing, 2 downed, 3 dead, 4 invulnerable, 5 hurt, 6 shield thrown, 7 stealth, 8 ambush, 9 airborne (Comet), 10 Guardian Light buff, 11 Emboldened, 12 Battle Trance, 13 holding a hold verb (p.holdOn), 20 braced.
   // P[24]: a hero's bells (class-bell.js) or 0: [last input seq of that hero (p.inSeq), ms of world time since it arrived (p.inT), haul x 100, chain length, flags (1 whirling, 2 hauled, 4 Anchor Leap in flight, 8 winding,
@@ -337,7 +336,7 @@
   };
   // Zone rows end with the owner slot + 1 of a zone that follows its owner (Aura of Faith), else 0.
   // Fodder foes (e.fodder) skip E and ride in H as [id, ENEMY_IDX, x, y, hpQ, fl]: hpQ = round(255 hp / maxHp) in 1..255; fl bits 0 flash, 1 frozen, 2 stunned, 3 chilled, 4 burning, 5 faces left, 6-9 Burn stacks (0-15), 10 charged.
-  // Foe flags: 0 flash, 1 frozen, 2 stunned, 4 chilled, 5 exposed, 6 charged, 7 bleeding, 8 judged, 9 blind, 10 vulnerable, 11-12 burn level, 13-15 Venom level, 16-17 Radiance fill, 18 Hexed, 19 Marked, 20 Sealed, 21-23 ailment count (0-7), 24-27 Burn stacks (0-15).
+  // Foe flags: 0 flash, 1 frozen, 2 stunned, 4 chilled, 5 exposed, 6 charged, 7 bleeding, 8 judged, 9 blind, 10 vulnerable, 11-12 burn level, 13-15 unused, 16-17 Radiance fill, 18 Hexed, 19 Marked, 20 Sealed, 21-23 ailment count (0-7), 24-27 Burn stacks (0-15).
 
   N.encodeSnap = (w, fx, full) => {
     const P = [], E = [], H = [], B = [], K = [], Z = [], A = [];
@@ -349,7 +348,7 @@
     for (const e of w.enemies) {
       if (e.hp <= 0) continue;
       if (e.fodder) { H.push([e.id, ED.ENEMY_IDX[e.type], r(e.x), r(e.y), Math.max(1, Math.min(255, r(255 * e.hp / e.maxHp))), (e.flash > 0 ? 1 : 0) | (e.frozen > 0 ? 2 : 0) | (e.stun > 0 ? 4 : 0) | (e.chill > 0 ? 8 : 0) | (N.burnLevel(e) > 0 ? 16 : 0) | (e.face < 0 ? 32 : 0) | (Math.min(15, e.burnN | 0) << 6) | (e.charge > 0 ? 1024 : 0)]); continue; }
-      const fl = (e.flash > 0 ? 1 : 0) | (e.frozen > 0 ? 2 : 0) | (e.stun > 0 ? 4 : 0) | (e.chill > 0 ? 16 : 0) | (e.exposed ? 32 : 0) | (e.charge > 0 ? 64 : 0) | (e.bleedPool > 0 ? 128 : 0) | (e.judged > 0 ? 256 : 0) | (e.blind > 0 ? 512 : 0) | (e.vulnT > 0 ? 1024 : 0) | (N.burnLevel(e) << 11) | (N.venomLevel(e) << 13) | (N.radLevel(w, e) << 16) | (e.hexT > 0 ? 1 << 18 : 0) | (e.mark > 0 ? 1 << 19 : 0) | (e.sealT > 0 ? 1 << 20 : 0) | (Math.min(7, w.ailments(e)) << 21) | (Math.min(15, e.burnN | 0) << 24);
+      const fl = (e.flash > 0 ? 1 : 0) | (e.frozen > 0 ? 2 : 0) | (e.stun > 0 ? 4 : 0) | (e.chill > 0 ? 16 : 0) | (e.exposed ? 32 : 0) | (e.charge > 0 ? 64 : 0) | (e.bleedPool > 0 ? 128 : 0) | (e.judged > 0 ? 256 : 0) | (e.blind > 0 ? 512 : 0) | (e.vulnT > 0 ? 1024 : 0) | (N.burnLevel(e) << 11) | (N.radLevel(w, e) << 16) | (e.hexT > 0 ? 1 << 18 : 0) | (e.mark > 0 ? 1 << 19 : 0) | (e.sealT > 0 ? 1 << 20 : 0) | (Math.min(7, w.ailments(e)) << 21) | (Math.min(15, e.burnN | 0) << 24);
       const row = [e.id, ED.ENEMY_IDX[e.type], r(e.x), r(e.y), Math.ceil(e.hp), r(e.maxHp), e.r, fl, ST_IDX[e.boss ? (e.pose || 'idle') : e.st] | 0, r2(e.aimA || 0), e.elite ? ED.AFFIX_IDS.indexOf(e.elite) : -1, r(e.ward || 0), r(e.wardMax || 0), e.phase | 0, e.face < 0 ? -1 : 1, r2(e.t || 0), r(e.chill || 0), e.boss ? r(e.doom || 0) : r(w.doomLine(e)), e.elite2 ? ED.AFFIX_IDS.indexOf(e.elite2) : -1];
       if (e.furyT > 0) row.push(r(e.furyT * 10) / 10); // E[19], bosses of a stratum with fury only: the fight clock in tenths of a second
       E.push(row);

@@ -143,7 +143,7 @@
     { id: 'platino', name: 'The Platino', desc: 'Caught the Platino', icon: 'gem', reward: 'pet.platino', check: (p, run, pl) => !!(pl && pl.platino) },
     { id: 'change', name: 'Exact Change', desc: 'Held exactly 777 gold', icon: 'coin', reward: 'trail.coins', check: (p, run) => !!(run && run.gold777) },
     { id: 'unkindled', name: 'Unkindled', desc: 'Won a run with no Hearth upgrades', icon: 'ember', reward: 'skin.unkindled', check: (p, run) => !!(run && run.victory) && p.up.every(r => !r) },
-    { id: 'contrarian', name: 'Against the Grain', desc: 'Won a run taking element boons of one element per stratum, a new element on every stratum', icon: 'thorn', reward: 'title.contrarian', check: (p, run, pl) => !!(run && run.victory && pl && pl.contrarian) },
+    { id: 'contrarian', name: 'Against the Grain', desc: 'Won a run with two paths opened on different strata, the second after stratum I', icon: 'thorn', reward: 'title.contrarian', check: (p, run, pl) => !!(run && run.victory && pl && pl.contrarian) },
     { id: 'thread', name: 'Thread of Life', desc: 'Killed the Hollow King while below 3% health', icon: 'heartbroken', reward: 'death.embers', check: (p, run, pl) => !!(pl && pl.thread) },
     // p.heroWins is read before this run's victory is added (S.applyRun)
     { id: 'crown', name: 'Hollow Crown', desc: 'Won a run at Pact 10 with a hero who had never won', icon: 'crown', reward: 'hat.crown',

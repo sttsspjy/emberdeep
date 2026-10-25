@@ -113,7 +113,6 @@ const RAD = (a) => a * Math.PI / 180;
   for (const evo of ['fire', 'general']) {
     const sh = shots({ r_atk_s: 2 }, (st) => { st.evo = evo; });
     ok(sh.length === 3 && sh.every(q => rider(q) === rider(sh[0])), `Flurry arrows carry the ${evo} evolution rider of the aimed arrow`);
-    ok(evo !== 'general' || sh.every(q => q.spec), 'Spectral Arms: every Flurry arrow can release a spectral copy');
   }
   for (const pn of [1, 2]) {
     const sh = shots({ r_atk_s: 2 }, (st) => { st.projN = pn; });

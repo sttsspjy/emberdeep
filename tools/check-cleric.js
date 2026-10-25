@@ -226,11 +226,9 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
 
 // ---------------- Radiant Faith: weapon Radiance, class skills +25% ----------------
 {
-  const rad = (boons, relic) => { const S = stage(boons); if (relic) { S.p.stats.holyInfuse = relic; S.p.stats.holyAdd = undefined; } const e = foe(S.w, S.p.x + 30, S.p.y); e.maxHp = e.hp = 1e9; const h = e.hp; S.w.playerAttack(S.p, 0); return { rad: e.rad, dealt: h - e.hp, S, e }; };
-  const none = rad({}), rf = rad({ c_el: 1 }); ok(none.rad === 0, 'no Radiance without a gate or Radiant Faith');
+  const rad = (boons) => { const S = stage(boons); const e = foe(S.w, S.p.x + 30, S.p.y); e.maxHp = e.hp = 1e9; const h = e.hp; S.w.playerAttack(S.p, 0); return { rad: e.rad, dealt: h - e.hp, S, e }; };
+  const none = rad({}), rf = rad({ c_el: 1 }); ok(none.rad === 0, 'no Radiance without Radiant Faith');
   near(rf.rad, rf.dealt * 0.12, 0.01 * rf.rad + 1e-6, 'weapon hit stores 12% of its damage as Radiance (x Holy affinity)');
-  const cons = rad({ c_el: 1 }, 0.3), only = rad({}, 0.3); near(cons.rad / cons.dealt, only.rad / only.dealt, 1e-9, 'Consecrate (30%) counts instead when higher');
-  const lowc = rad({ c_el: 1 }, 0.08); near(lowc.rad / lowc.dealt, 0.12, 1e-9, 'Radiant Faith counts instead of a lower Consecrate');
   const L = stage({ c_el: 1 }, 2); const el = foe(L.w, L.p.x + 30, L.p.y); L.w.playerAttack(L.p, 0); run(L.w, 0.3); ok(el.rad > 0, 'Sacred Lantern orbs store Radiance too');
   const wv = stage({ c_atk: 1, c_el: 1 }); wv.w.playerAttack(wv.p, 0); wv.w.projs.length = 0; wv.w.playerAttack(wv.p, 0); near(waves(wv.w)[0].infAdd.holy, 0.12, 1e-9, 'waves carry the Radiance too');
   const leg = (boons) => { const S = stage(boons); const e = foe(S.w, S.p.x + 60, S.p.y); const h = e.hp; S.w.hitEnemy(e, 100, S.w.partSrc(S.p, ED.Stats.skillNums('judgment', S.p.stats), 'leg', {})); return h - e.hp; };

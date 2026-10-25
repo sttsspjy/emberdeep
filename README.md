@@ -1,6 +1,6 @@
 # Wickdeep
 
-A cooperative roguelite that runs in the browser. Fight down through four strata, alone or with up to three friends. Builds are chosen, not rolled: pick up to two element paths (each one changes how you fight), choose a route for your hero, and choose your way across each stratum's map, where every door shows the room behind it. Carry embers back to the Hearth to grow stronger between runs.
+A cooperative roguelite that runs in the browser. Fight down through four strata, alone or with up to three friends. Builds are chosen, not rolled: pick up to two of four paths (each one changes how you fight), choose a route for your hero, and choose your way across each stratum's map, where every door shows the room behind it. Carry embers back to the Hearth to grow stronger between runs.
 
 No build step, no backend, no install. It is a static site: open it from any web host and play.
 
@@ -16,7 +16,7 @@ No build step, no backend, no install. It is a static site: open it from any web
 | `Q` | Skill 1 (rerolls the boon cards while they are open) |
 | `E` | Skill 2 |
 | Right mouse or `R` | Skill 3: the Pyromancer's Fireball. Heroes without a third skill cast skill 1 |
-| `Space` | Dash: invulnerable while it lasts; a used charge refills in 1.5 seconds (1 with Shadow Cloak); Light Step adds a charge per rank, up to 3 |
+| `Space` | Dash: invulnerable while it lasts; a used charge refills in 1.5 seconds; Light Step adds a second charge (2 at most) |
 | `Tab` | Character sheet: build, combat numbers and the map |
 | `Esc` | Pause (also backs out of any menu) |
 
@@ -46,7 +46,7 @@ Playing alone, the world waits while the sheet is open; in a party the run goes 
 - **The map.** Strata I to III are maps of 15 rows of rooms between the start camp and the boss. The camp opens onto several first rooms, paths split and merge on the way up, and doors only lead forward: there is no way back. The first row is fights, the middle row a treasure room and the last row a rest site; in between lie fights, dark rooms, elite fights, event shrines, shops and rest sites, so each fork asks what you need. Every door shows the next room's icon, name, reward and threat pips (more for elite fights, dark rooms and the upper half of the map); "No way back" reminds you as you near one. Fight rooms are wide and the camera scrolls with you.
 - **The finale.** Stratum IV is short and fixed: a fight, a fight or a shrine, the twin champions, a rest site or a shop, the mimic champion, a rest site, then the Hollow King.
 - **Every room has its own icon:** a stall for the shop, coins for gold, a chest for treasure, an amulet for a relic, a violet card for an epic boon, a card in your path colour for a boon, an anvil for a forge, a heart for max health, a campfire for rest, a fountain, altar, crossed swords or "?" for the shrines, a horned skull for elites, a red horned skull for champions and a crowned skull for the boss.
-- **Room rewards.** A normal fight pays a boon (drawn from your own paths), gold, max health (+2 for the run) or a forge (rank up one boon). Elite fights pay a relic or an epic boon; champion fights pay relics. Rewards appear in the middle of the room once it is clear; boons and forges are claimed by each hero, gold and relics are shared. A hero who has maxed every boon on offer is offered a Purse of gold instead (the same gold as a gold reward), never a boon above its top rank.
+- **Room rewards.** A normal fight pays a boon (most name a path: "Flame boon" on the door and the map; the rest are any boon), gold, max health (+2 for the run) or a forge (rank up one boon). Elite fights pay a relic or an epic boon; champion fights pay relics. Rewards appear in the middle of the room once it is clear; boons and forges are claimed by each hero, gold and relics are shared. A hero who has maxed every boon on offer is offered a Purse of gold instead (the same gold as a gold reward), never a boon above its top rank.
 - **Other rooms.** A rest site has a campfire (heal 35%) and an anvil (forge one boon); each hero uses one of them. A shop sells two relics, a healing potion, an epic boon and a forge. A treasure chest holds a relic for each hero and some gold. Shrines: a fountain heals the party and raises the downed, an altar trades health for an epic boon, a gamble shrine sells a random relic, and a champion's trial is an elite fight for a rare relic.
 - **Breakables.** Urns, glowing mushrooms, coral and void shards break when your attacks, shots, blasts or dashes hit them; now and then one hides a few coins or, rarely, a heart.
 - **Relics** are run-long items from elite and champion fights, chests, shops, shrines and the stratum II boss. All 31 can drop from your first run and none belongs to an element.
@@ -55,7 +55,7 @@ Playing alone, the world waits while the sheet is open; in a party the run goes 
 - **Bosses.** The Bone Warden duels in strings of telegraphed blows and raises bone walls, the Sporemother spreads a spore carpet from her pods, the Drowned King floods the room with the tide, and the Hollow King fights in the dark and then on a collapsing floor. Every boss telegraphs its attacks and changes in three phases; a boss fight has no fodder. The later bosses also fire aimed volleys at each hero (a warning line shows the path; change direction after it locks). The Hollow King grows furious if it lives too long: the track under its health bar fills toward a notch, and past it the boss hits harder and attacks faster every second.
 - **Boss rewards.** The stratum I boss gives the fork of your class route, the stratum II boss a relic for each hero and a fork rank, the stratum III boss an epic boon and the last fork rank. Beating the Hollow King wins the run.
 - You level up from experience and gain a boon at every second level (2, 4, 6, ...) and your class route card at level 3. Offers open only when the room is safe. Playing alone, the world waits while the boon cards are open (and while paused).
-- A boon card shows what it is at a glance: its frame and icon wear its path (flame crown for Fire, ice shards, a lightning zigzag, dripping Poison, a Holy cathedral, torn Shadow, riveted steel for General), class route cards fly your hero's banner, and the frame metal and the gem at the bottom show the rarity (iron common, silver rare, violet epic, gold legendary). Keystones, evolutions and path gates get a gold trim and a bigger gem. Taking a card plays its own animation and sound.
+- A boon card shows what it is at a glance: its frame and icon wear its path (flame crown for Fire, ice shards, a lightning zigzag, riveted steel for Steel; a cross-path card wears its second path), class route cards fly your hero's banner, and the frame metal and the gem at the bottom show the rarity (iron common, silver rare, violet epic, gold legendary). Keystones, evolutions and path gates get a gold trim and a bigger gem. Taking a card plays its own animation and sound.
 - A winning run takes about 30 to 40 minutes.
 
 ### Dark rooms
@@ -66,24 +66,23 @@ Playing alone, the world waits while the sheet is open; in a party the run goes 
 
 ### Paths
 
-Boons belong to **paths**: six element paths and General. A hero follows at most **two element paths** per run, or becomes a **Generalist** and follows General alone. A path opens when you take its **gate** boon. Each element is one way to play, and its keystone and evolution change how you attack, dash or move. Your **affinity** in a path is the total ranks of its boons you own.
+Boons belong to **paths**: Steel, Flame, Frost and Storm. A hero follows at most **two paths** per run. A path opens when you take its **gate** boon. Each path is one way to play, and its keystone and evolution change how you fight; none of them rides the dash. Your **affinity** in a path is the total ranks of its boons you own.
 
 | Path | How it plays | Keystone | Evolution |
 | --- | --- | --- | --- |
-| **Fire** | Hits add Burn stacks; your dash leaves burning ground that stacks Burn on foes standing in it. | Firewalk: dashing through a burning foe copies its stacks to the foes around it. | Cinder: hold attack for a flame cone. |
-| **Ice** | Hits chill and then freeze foes; a skill hit on a frozen foe Shatters it for extra damage. | Glacier Step: your dash raises an ice wall that blocks foes and their shots. | Glacial: hold attack to charge an ice lance that freezes what it pierces. |
-| **Lightning** | Hits charge foes; your dash discharges every charged foe along its path, and each discharge jumps to other charged foes. | Storm Step: a dash aimed at a charged foe blinks you next to it first. | Tempest: a dash that discharges gives the dash charge back; discharges jump further. |
-| **Poison** | Hits build Venom: envenomed foes hit softer, move slower and take damage, and at full Venom lose their guard. Your dash leaves a toxic cloud. | Toxic Wake: walking leaves a trail of clouds. | Venomous: hold attack to ready a flask, let go to lob it at the cursor. |
-| **Holy** | Hits store Radiance that Smites the foe. Dash through a foe's attack at the last moment for a **perfect dodge**: the attack misses, the attacker is Smitten and you gain a shield. | Divine Riposte: after a perfect dodge your next attack Smites everything it hits. | Hallowed: hold attack to raise a guard; attacks from the front are perfect dodges and shots fly back. |
-| **Shadow** | **Backstabs** (hits from behind, or on a stunned, frozen or blinded foe, or one busy with someone else) deal more and mark Doom; a foe whose health falls to its Doom is Reaped, a boss takes its Doom as damage. | Phantom Step: your dash leaves a decoy that foes go for. | Umbral: a dash aimed at a foe steps you behind it, and the next hit crits. |
-| **General** | Generalist only: +15% damage, +5% crit chance, crits Bleed, open boons rank 1 higher. No element boons. | Finisher: hold attack to charge a guaranteed double-damage crit. | Masterwork: crits release a spectral strike; the finisher charges faster. |
+| **Steel** | Your weapon, all in: damage, crits, Bleed on crits, executes. | Finisher: hold attack to charge a guaranteed double-damage crit that Bleeds (it never Cleaves). | Masterwork: the finisher charges faster and tears a bleeding foe's whole Bleed out at once. |
+| **Flame** | Hits add Burn stacks. A burning foe that dies bursts: foes around it take part of its Burn and catch its stacks. Burning foes can also hit softer (Smother). | Scorched Earth: a death burst leaves burning ground that stacks Burn and that foes walk around. | Cinder: hold attack for a flame cone. |
+| **Frost** | Hits chill and then freeze foes (each freeze makes the next one take longer). Any hit from any hero on a frozen foe Shatters it for big damage and chills the foes around it. | Absolute Zero: a Shatter freezes the foes around it. | Glacial: hold attack to charge an ice lance that freezes what it pierces. |
+| **Storm** | Hits charge foes. A foe whose charge reaches its threshold discharges, and the discharge jumps to your other charged foes. | Arc Flash: every discharge also arcs to the uncharged foes around it and charges them. | Tempest: hold attack to call bolts down on the foe nearest your aim; discharges jump further. |
 
-- **Start offer:** a run begins with a choice of four gates. The Pyromancer, Cleric, Necromancer and Bellwarden always find their own element on it. The Knight, Ranger and Shade may instead take the Generalist.
-- **Keystone:** at affinity 5 (General 6) a path can offer its keystone, an epic boon.
-- **Evolution:** at affinity 10 (General 12) with the keystone, your next offers include the path's legendary weapon evolution, which takes nearly every rank of the path. One evolution per run; your weapon is renamed after the path (Cinder Longsword, Glacial Greatbow, and so on).
+- **Start offer:** a run begins with a choice of the four gates, for every hero.
+- **Deep and cross-path cards:** a few boons of each path only appear from stratum II or III. With two paths you also see that pair's cross-path card (Thermal Shock for Flame and Frost, Stormblade for Steel and Storm, and so on).
+- **Filler:** once you follow two paths, Vigor, Plating, Evasion and Light Step only fill an offer that your paths cannot.
+- **Keystone:** at affinity 5 a path can offer its keystone, an epic boon.
+- **Evolution:** at affinity 10 with the keystone, your next offers include the path's legendary weapon evolution, which takes nearly every rank of the path. One evolution per run; your weapon is renamed after the path (Cinder Longsword, Glacial Greatbow, and so on).
 - **Hold attack:** an evolution or the Finisher turns a held attack (about a third of a second) into its move; your normal attacks pause while it runs. The Bellwarden's hold always winds the bell.
 - **Forge:** picking a forge card ranks an owned boon up by one (never a route or fork card: bosses rank those).
-- A room that rewards "a boon" offers one new element gate (while you have a free slot) and boons of the paths you follow. Level-ups offer open boons (every hero can take them), boons of your paths and keystones.
+- A room that rewards "a boon" offers one new gate (while you have a free slot) and boons of the paths you follow. A room that rewards a path's boon ("Flame boon") offers that path: its gate first if you have a free slot, else its boons; a hero who already follows two other paths gets a normal boon offer there. Level-ups offer open boons (every hero can take them), boons of your paths and keystones.
 - **Health is a small whole number.** Heroes have a few dozen points of health at most, and a foe's hit costs a few: every hit counts. A max health reward is +2.
 - **No life steal, little healing.** Hits and kills never heal you, and cleared rooms drop no hearts: hearts come from a few kills (elites more often), bosses and breakables. Healing comes from hearts, campfires, healing potions, the fountain, max health rewards, the Hearth's Provisions and the Elixir Flask, Sanctuary and Bone Harvest, and revives. **Shields** take the place of sustain: class shields give at most 3% of your max health per 10 seconds, all shield sources together at most 6%, and shields fade between fights.
 
@@ -91,7 +90,7 @@ Boons belong to **paths**: six element paths and General. A hero follows at most
 
 Every hero also chooses a **route**: how their kit grows.
 
-- At **team level 3** you pick one of four route cards: **Attack** (how your weapon fights), **Skill 1**, **Skill 2** or **Element** (the status your hero builds: Bleed for the Knight, Ranger and Shade; Fire, Holy, Shadow or Lightning for the others).
+- At **team level 3** you pick one of four route cards: **Attack** (how your weapon fights), **Skill 1**, **Skill 2** or **Element** (the status your hero builds: Bleed for the Knight, Ranger and Shade; Flame for the Pyromancer, Storm for the Bellwarden, and the class-only Holy (Radiance, Smites) and Shadow (Doom, Reaps) for the Cleric and the Necromancer).
 - At the **boss of stratum I** you pick a **fork** of your route: a Heavy or a Swift weapon (Attack), Burst or Guard (a skill), Focus or Spread (Element). A Heavy weapon hits slower and harder and Staggers foes; a Swift weapon hits fast, trades damage per hit for speed, and gives a burst of move speed after each attack.
 - At the bosses of strata II and III your fork gains a **rank** on its own, with no pick, and a message names what it adds: rank 2 a new behaviour, rank 3 a transform that renames the card and changes how the skill or attack plays (skill forks transform too). Each class has 12 route cards.
 
@@ -130,7 +129,7 @@ Progress autosaves to the browser. **Settings > Profile** shows a portable save 
 
 Wickdeep starts fresh profiles: saves and codes from Emberdeep (`ED1-…`) do not carry over, and the game says so if you paste one.
 
-If you played an earlier version of Wickdeep, the first launch shows a one-time **"What changed"** notice with everything since the version you last played. The newest part: the branching map, four strata with no element weakness, one way to play per element, the removed boon layers (Ascended, duos, Mutations, Twists, Attunement and twelve stat boons), the caster Pyromancer with Fireball on its own key, the new boss fights and the reworked waves. Older profiles also see the earlier changes (small health numbers, a stronger Hearth, Armory variants, mouse aim, paths, shields, dark rooms, hordes, dash charges, fork ranks and more) and how many embers the Codex refunded.
+If you played an earlier version of Wickdeep, the first launch shows a one-time **"What changed"** notice with everything since the version you last played. The newest part: four paths (Steel, Flame, Frost, Storm; Poison, Holy and Shadow are gone as paths), a dash with no path riders and at most 2 charges, the branching map, four strata with no element weakness, the removed boon layers (Ascended, duos, Mutations, Twists, Attunement and twelve stat boons), the caster Pyromancer with Fireball on its own key, the new boss fights and the reworked waves. Older profiles also see the earlier changes (small health numbers, a stronger Hearth, Armory variants, mouse aim, paths, shields, dark rooms, hordes, dash charges, fork ranks and more) and how many embers the Codex refunded.
 
 Two tabs open on the same profile stay in step: each adopts the other's saved progress instead of overwriting it.
 

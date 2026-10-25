@@ -105,7 +105,7 @@
       const fl = rb[7];
       e.flash = fl & 1 ? 0.05 : 0; e.frozen = fl & 2 ? 1 : 0; e.stun = fl & 4 ? 1 : 0; e.burnLvl = (fl >> 11) & 3; e.burn = e.burnPool = e.burnLvl > 0 ? 1 : 0; e.chill = rb[16] || 0; e.exposed = !!(fl & 32);
       e.charge = fl & 64 ? 1 : 0; e.bleedPool = fl & 128 ? 1 : 0; e.judged = fl & 256 ? 1 : 0; e.blind = fl & 512 ? 1 : 0; e.vulnT = fl & 1024 ? 1 : 0;
-      e.venomLvl = (fl >> 13) & 7; e.radLvl = (fl >> 16) & 3; e.doomLine = rb[17] || 0; // Venom pips (5 = Corroded), Radiance fill, Reap line (bosses: the Toll gauge)
+      e.radLvl = (fl >> 16) & 3; e.doomLine = rb[17] || 0; // Radiance fill, Reap line (bosses: the Toll gauge)
       e.hexed = !!(fl & (1 << 18)); e.marked = !!(fl & (1 << 19)); e.sealed = !!(fl & (1 << 20)); e.ailN = (fl >> 21) & 7; // route states: Hexed, Marked, Sealed, ailment count
       e.burnN = (fl >> 24) & 15; // Burn stacks (the count drawn on the foe)
       e.boss = !!e.def.boss;
@@ -354,9 +354,7 @@
     switch (a.t) {
       case 'atk': p.atkD = +a.d; w.playerAttack(p, +a.a || 0, 0, a.k); break; // d: the cursor distance of the attack (a lobbed weapon lands there)
       case 'skill': if ((a.slot | 0) >= 0 && (a.slot | 0) <= 2) w.playerSkill(p, +a.a || 0, a.data, a.slot | 0); break;
-      case 'dash': // blink: Umbral Arms put the hero behind a foe; ox, oy: where the dash began; bx, by: where a Storm Step / Umbral Arms blink landed (fx only)
-        if (Number.isFinite(a.bx) && Number.isFinite(a.by) && Number.isFinite(a.ox) && Number.isFinite(a.oy)) w.emit({ t: 'blink', pid, x0: +a.ox, y0: +a.oy, x1: +a.bx, y1: +a.by, k: a.blink ? 'behind' : 'storm' });
-        w.playerDash(p, +a.dx || 0, +a.dy || 0, !!a.blink, +a.ox, +a.oy); break;
+      case 'dash': w.playerDash(p, +a.dx || 0, +a.dy || 0); break;
       case 'hold': w.playerHold(p, !!a.on, +a.a || 0, +a.d || 0); break; // the held-attack verb starts (on) or is released
       case 'interact': w.interact(pid, a.id); break;
       case 'pick': w.pickBoon(pid, a.i | 0); break;
@@ -436,7 +434,6 @@
       s.me.skillMove = ED.leapMove(s.view.room, s.view.locked, s.me, m.x, m.y, { t: m.d, iframes: m.i });
       if (s.me.skillMove) s.me.cometT = m.d;
     }
-    else if (m.t === 'dashRefund' && s.me) { const c = s.ctl, st = s.me.stats; c.dashN = Math.min(st.dashCharges | 0, c.dashN + ((m.n | 0) || 1)); } // dash charges back { n } (Umbral Arms)
     else if (m.t === 'refund') { // cooldown refund { slot, s }: s seconds off (a charge returns when the cooldown reaches 0), no s = in full (slots 0 and 2: one charge); slot -1: s off every slot
       const c = s.ctl, st = s.me.stats;
       if (m.slot === 1 || m.slot === -1) c.skill2Cd = m.s ? Math.max(0, c.skill2Cd - m.s) : 0;
@@ -465,7 +462,7 @@
       bellReconcile(s, d);
       for (const ev of fx) G.localEvent(ev);
     } else if (d.t === 'end') G.localEvent({ t: 'end', summary: d.summary });
-    else if (d.t === 'offer' || d.t === 'offerDone' || d.t === 'claimed' || d.t === 'toast' || d.t === 'refund' || d.t === 'dashRefund' || d.t === 'forkRank' || d.t === 'blink' || d.t === 'leap') G.message(d);
+    else if (d.t === 'offer' || d.t === 'offerDone' || d.t === 'claimed' || d.t === 'toast' || d.t === 'refund' || d.t === 'forkRank' || d.t === 'blink' || d.t === 'leap') G.message(d);
   };
   G.onPeerLeft = (pid) => { const s = G.s; if (s && s.mode === 'host') { s.world.removePlayer(pid); } };
 
@@ -588,10 +585,8 @@
         let dx = mx, dy = my;
         if (Math.hypot(dx, dy) < 0.2) { dx = Math.cos(aim); dy = Math.sin(aim); }
         const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
-        const ox = me.x, oy = me.y, b = Sim.dashBlink(view.room, view.locked, me, st, view.enemies, Math.atan2(dy, dx)); // Storm Step / Umbral Arms: the hero blinks first (behind a foe the dash is spent there)
-        if (b) { me.x = b.x; me.y = b.y; if (b.behind) { dx = 0; dy = 0; me.face = b.face; } else { dx = b.dx; dy = b.dy; } }
         me.dashT = ED.CONST.DASH.t; me.dashDx = dx; me.dashDy = dy;
-        G.act(b ? { t: 'dash', dx, dy, blink: b.behind ? 1 : 0, ox: Math.round(ox), oy: Math.round(oy), bx: Math.round(b.x), by: Math.round(b.y) } : { t: 'dash', dx, dy, ox: Math.round(ox), oy: Math.round(oy) });
+        G.act({ t: 'dash', dx, dy });
       }
     }
     Sim.movePlayer(me, { mx, my }, dt, view.room, view.locked, view.zones, view.enemies); // a crowd of foes touching the hero slows the walk

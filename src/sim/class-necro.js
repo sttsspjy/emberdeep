@@ -229,11 +229,11 @@
 
   // One strike of minion a on foe tgt. Damage: the minion's strike x COMP_MUL x Bone Knight x Hexed (hexMul) x Abyssal empower x Risen Tide; physical, raw, infuses at MINION_INFUSE (+ minionInfuse).
   // Quickened Dead cuts the strike interval against a Hexed foe, Abyssal Maw divides it by 1 + mawHaste near a live maw.
-  // Grave Pact marks Doom for mInfShadow of the damage (Mark of Doom's rate x k counts instead when higher). A Bone Knight's strike stuns its foe (knightStun, a repeating stun); a Bone Knight also cleaves the foes within 30 of its target.
+  // Grave Pact marks Doom for mInfShadow of the damage. A Bone Knight's strike stuns its foe (knightStun, a repeating stun); a Bone Knight also cleaves the foes within 30 of its target.
   // The Death Knight deals dkMul instead of the Bone Knight factor and cleaves every foe within DK_REACH of it inside an arc of dkArc centred on its target.
   function strike(w, a, owner, tgt) {
     const st = owner.stats, k = C.MINION_INFUSE + st.minionInfuse, bit = 1 << owner.slot, base = a.dmg * C.COMP_MUL * (a.dk ? st.dkMul : a.knight ? C.KNIGHT_MUL : 1) * (owner.abyssT > 0 ? 1 + st.abyssMin : 1) * (a.tide ? 1 + st.tideMul : 1);
-    const infAdd = st.mInfShadow ? { shadow: Math.max(0, st.mInfShadow / k - st.shadowInfuse) } : undefined;
+    const infAdd = st.mInfShadow ? { shadow: st.mInfShadow / k } : undefined;
     const isHexed = (e) => e.hexT > 0 && (e.hexBy & bit);
     const hit = (e) => {
       const dd = Math.hypot(e.x - a.x, e.y - a.y) || 1;

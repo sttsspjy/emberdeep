@@ -21,16 +21,17 @@ const foe = (w, x, y, o) => { const e = w.spawnEnemy('skeleton', x, y, o); e.spd
 
 // ---- grantCrits: an 'add' source never lowers a count that a 'set' source raised past its own cap ----
 {
-  const { w, p } = stage('shade', { s_s1: 1, s_atk: 1, s_atk_s: 1, deathsedge: 1, doommark: 1 });
+  const { w, p } = stage('shade', { s_s1: 1, s_atk: 1, s_atk_s: 1 });
   ok(p.stats.critK > 1.5, `Swift Shade critK ${p.stats.critK}`);
   w.grantCrits(p, 3 + p.stats.stepStack * 3, 3 + p.stats.stackMax, 'set');
   const before = p.critStacks;
-  w.onDoomPayoff(p);
-  ok(before > Math.round(3 * p.stats.critK) && p.critStacks === before, `Death's Edge keeps ${before} stacks (got ${p.critStacks})`);
-  p.critStacks = 0; w.onDoomPayoff(p);
-  ok(p.critStacks === Math.round(p.stats.critK), `Death's Edge adds ${Math.round(p.stats.critK)} from empty (got ${p.critStacks})`);
-  p.critStacks = Math.round(3 * p.stats.critK) - 1; w.onDoomPayoff(p);
-  ok(p.critStacks === Math.round(3 * p.stats.critK), `Death's Edge stops at its cap (got ${p.critStacks})`);
+  const add = () => w.grantCrits(p, 1, 3, 'add'); // an 'add' source: 1 crit (x critK) up to 3 (x critK)
+  add();
+  ok(before > Math.round(3 * p.stats.critK) && p.critStacks === before, `an add grant keeps ${before} stacks (got ${p.critStacks})`);
+  p.critStacks = 0; add();
+  ok(p.critStacks === Math.round(p.stats.critK), `an add grant adds ${Math.round(p.stats.critK)} from empty (got ${p.critStacks})`);
+  p.critStacks = Math.round(3 * p.stats.critK) - 1; add();
+  ok(p.critStacks === Math.round(3 * p.stats.critK), `an add grant stops at its cap (got ${p.critStacks})`);
   const k = stage('knight', { k_atk: 1, k_atk_s: 1 });
   k.p.critStacks = 9; k.w.grantCrits(k.p, 2, 5, 'add');
   ok(k.p.critStacks === 9, `Riposte keeps 9 stacks (got ${k.p.critStacks})`);
@@ -105,11 +106,11 @@ for (const mode of ['proj', 'zone', 'tick']) {
   ok(/×1\.733 attack time, ×1\.907 damage per hit/.test(ED.cardParts('p_atk_h', 1, { weaponId: 'inferno' }).text), 'Tome of Ruin shows the capped heavy factors');
   ok(/×0\.8 attack time, ×0\.88 damage per hit/.test(ED.cardParts('p_atk_s', 1, { weaponId: 'emberwand' }).text), 'Flicker Wand shows the floored swift factors');
   ok(/×0\.8 attack time/.test(ED.cardParts('p_atk_s', 1, { weaponId: 'emberwand@swift' }).text), 'a forked weaponId reads its base');
-  const de = (st) => ED.Sheet.text('deathsedge', 1, st);
-  ok(de({ critK: 1 }).indexOf('readies 1 guaranteed crit (up to 3 stored)') >= 0, "Death's Edge text at critK 1: " + de({ critK: 1 }));
-  ok(de(null).indexOf('readies 1 guaranteed crit (up to 3 stored)') >= 0, "Death's Edge text without a hero");
-  ok(de({ critK: 0.556 }).indexOf('1 guaranteed crit (up to 2 stored)') >= 0, "Death's Edge text on a Heavy weapon: " + de({ critK: 0.556 }));
-  ok(de({ critK: 1.8 }).indexOf('2 guaranteed crits (up to 5 stored)') >= 0, "Death's Edge text on a Swift weapon: " + de({ critK: 1.8 }));
+  const de = (st) => ED.Sheet.text('killingedge', 1, st);
+  ok(de({ critK: 1 }).indexOf('readies 1 guaranteed crit (up to 3 stored)') >= 0, "Killing Edge text at critK 1: " + de({ critK: 1 }));
+  ok(de(null).indexOf('readies 1 guaranteed crit (up to 3 stored)') >= 0, "Killing Edge text without a hero");
+  ok(de({ critK: 0.556 }).indexOf('1 guaranteed crit (up to 2 stored)') >= 0, "Killing Edge text on a Heavy weapon: " + de({ critK: 0.556 }));
+  ok(de({ critK: 1.8 }).indexOf('2 guaranteed crits (up to 5 stored)') >= 0, "Killing Edge text on a Swift weapon: " + de({ critK: 1.8 }));
   ok(/elites 0\.5 s, not bosses/.test(ED.cardParts('s_s1_b', 1).text), 'Afterimage text states the elite blind');
 }
 
@@ -868,9 +869,10 @@ for (let s = 1; s <= NS; s++) {
   const Td = vetThreats(w, p, SPD, REACT), pd = vetPlan(w, p, c, 0, 0, SPD, Td), pn = vetPlan(w, p, { dashN: 0 }, 0, 0, SPD, Td);
   ok(pd.dash && vetRisk(Td, p, pd.dash[0], pd.dash[1], 72, SPD, true) < 0.05 && pn.dash === null, 'with 0.1 s left a dash heading clears the cone; without a charge there is none');
   w.zones.length = 0; w.enemies.length = 0;
-  const r = stage('ranger', { bladedash: 1 }), row = [30, 55, 80].map(d => foe(r.w, r.p.x + d, r.p.y));
+  const r = stage('ranger', {}), row = [20, 35, 50].map(d => foe(r.w, r.p.x + d, r.p.y));
+  r.p.stats.dashBomb = 1; // Bomb Satchel: the dash drops a bomb where it starts
   const hd = vetRider(r.w, r.p, { dashN: 1 }, row, null, SPD);
-  ok(hd && hd[0] > 0.9, `a row of 3 foes ahead: the rider dash goes through them (${hd && hd.map(v => v.toFixed(2))})`);
+  ok(hd && hd[0] < -0.5, `a row of 3 foes ahead: the bomb dash leaves them behind (${hd && hd.map(v => v.toFixed(2))})`);
   ok(vetRider(r.w, r.p, { dashN: 0 }, row, null, SPD) === null && vetRider(r.w, r.p, { dashN: 1 }, row.slice(0, 2), null, SPD) === null, 'no rider dash without a charge or with 2 foes');
   const nr = stage('ranger', {}); ok(vetRider(nr.w, nr.p, { dashN: 1 }, [30, 55, 80].map(d => foe(nr.w, nr.p.x + d, nr.p.y)), null, SPD) === null, 'no rider dash without a dash rider');
   const run = (o) => runBot(Object.assign({ seed: 1000, n: 1, cls: ['ranger'], skill: 0.75, up: ED.UPGRADES.map(() => 0), mastery: 1, pick: 'smart', force: ['echo'], maxStratum: 1 }, o));

@@ -62,21 +62,18 @@ for (const [frac, downed, want] of [[0.02, false, true], [0.04, false, false], [
   ok(!p.sec.thread, 'Thread of Life: a stratum III boss does not count');
 }
 
-// ---- Against the Grain: 8 element-path cards, one element per stratum, a new element on every stratum ----
+// ---- Against the Grain: two paths opened on different strata, the second after stratum I ----
 {
-  const shadow = Object.keys(ED.BOONS).filter(id => ED.BOONS[id].path === 'shadow'), fire = Object.keys(ED.BOONS).filter(id => ED.BOONS[id].path === 'fire');
-  const general = Object.keys(ED.BOONS).filter(id => ED.BOONS[id].path === 'general');
-  const run = (picks, s2) => { const { w, p } = stage(['knight']); picks.forEach((id, i) => { if (s2 !== undefined && i === s2) w.stratum = 2; w.contrarianPick(p, ED.BOONS[id]); }); return p; };
-  ok(run(shadow.slice(0, 8)).sec.contrarian, '8 shadow cards on stratum I: Against the Grain');
-  ok(!run(shadow.slice(0, 7)).sec.contrarian, '7 shadow cards: not yet');
-  ok(run(shadow.slice(0, 4).concat(general.slice(0, 3), shadow.slice(4, 8))).sec.contrarian, 'General cards are ignored');
-  ok(!run(shadow.slice(0, 8).concat(fire.slice(0, 1))).sec.contrarian, 'a second element on stratum I breaks it');
-  ok(run(shadow.slice(0, 4).concat(fire.slice(0, 4)), 4).sec.contrarian, 'shadow on stratum I, fire on stratum II: Against the Grain');
-  ok(!run(shadow.slice(0, 4).concat(shadow.slice(4, 8)), 4).sec.contrarian, 'the same element again on stratum II breaks it');
+  const run = (gates) => { const { w, p } = stage(['knight']); for (const [id, s] of gates) { w.stratum = s; w.contrarianPick(p, ED.BOONS[id]); } return p; };
+  ok(run([['kindle', 1], ['frostbite', 2]]).sec.contrarian, 'Flame on stratum I, Frost on stratum II: Against the Grain');
+  ok(run([['generalist', 2], ['staticcharge', 3]]).sec.contrarian, 'Steel on stratum II, Storm on stratum III: Against the Grain');
+  ok(!run([['kindle', 1], ['frostbite', 1]]).sec.contrarian, 'both paths on stratum I: not earned');
+  ok(!run([['kindle', 2]]).sec.contrarian, 'one path: not earned');
+  ok(!run([['kindle', 1], ['stoke', 2], ['smother', 3]]).sec.contrarian, 'path cards that are no gate do not count');
   const { w, p } = stage(['knight']);
-  p.offer = [shadow[0]]; p.offers.push({ src: 'level' }); p.picks = 1;
+  w.stratum = 2; p.offer = ['kindle']; p.offers.push({ src: 'level' }); p.picks = 1;
   w.pickBoon('p0', 0);
-  ok(p.ctrN === 1 && !p.ctrOff, 'pickBoon counts the card');
+  ok(p.ctrEl.fire === 2 && !p.sec.contrarian, 'pickBoon records the stratum a gate was picked on');
   // the announcement waits for the Hollow King
   const v = stage(['knight'], ED.CONST.STRATA);
   v.p.sec.contrarian = true;
@@ -259,7 +256,7 @@ function platRun(plat, ticks, moveHero) {
 
 // ---- net and summary ----
 {
-  ok(ED.Net.VERSION === 15, 'N.VERSION 15');
+  ok(ED.Net.VERSION === 16, 'N.VERSION 16');
   const { w, p } = stage(['knight', 'ranger']);
   p.sec.platino = true; w.run.gold777 = true;
   const s = ED.Net.encodeSnap(w, [], true);

@@ -667,8 +667,7 @@
     }
     const fg = this.foeGrid(); fg.live = true; fg.qd = 0;
     this.updateShields(dt);
-    this.faceOn = false; // foes keep a facing only while a hero can Backstab (elements.js turnFoe)
-    for (const p of this.players.values()) { this.updatePlayer(p, dt); if (p.stats.shadowInfuse > 0 || p.stats.backstab > 0) this.faceOn = true; }
+    for (const p of this.players.values()) this.updatePlayer(p, dt);
     if (!fg.direct) for (let i = 0; i < fg.n; i++) this.foeDrift(i); // hero effects that carry or pull foes (Sim.moveCircle) move them outside updateEnemy
     this.flowT -= dt;
     if (this.flowT <= 0) { this.computeFlow(); this.flowT = 0.25; }

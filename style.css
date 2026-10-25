@@ -54,7 +54,6 @@
   --path-fire: #ff7a2a;
   --path-ice: #7fe3ff;
   --path-lightning: #ffe66b;
-  --path-poison: #9be33c;
   --path-holy: #fff0c2;
   --path-shadow: #a070ff;
   --path-general: #d9dfe8;
@@ -612,7 +611,6 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 .boon-card.big { width: 24rem; width: round(down, min(24rem, (100% - (var(--n) - 1) * var(--gap)) / var(--n)), calc(2 * var(--p))); padding-bottom: calc(14 * var(--p)); }
 .boon-card.k-route { padding-top: calc(13 * var(--p)); }
 .boon-card.k-route:has(.ca-pips) { padding-top: calc(18 * var(--p)); }
-.boon-card.k-holy { padding-top: calc(12 * var(--p)); }
 
 /* card text: bold body labels, the name in bold body at the xl size, hard 1 font px shadows */
 .boon-card .bc-ribbon { font: 700 var(--fs-sm)/1.25 var(--f-body); color: #15100c; background: var(--pc); padding: 0 calc(3 * var(--pf)); box-shadow: 0 0 0 var(--pf) var(--px-ol); white-space: nowrap; text-shadow: none; }
@@ -642,7 +640,7 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 /* card art layer: sprites at 1 art px per sprite px; strips run with steps() at --sd x --spd (focus doubles the pace) */
 .bc-art { position: absolute; inset: 0; pointer-events: none; }
 .bc-art i { position: absolute; display: block; image-rendering: pixelated; }
-.bc-art :is(.ca-spark, .ca-frost, .ca-bubble, .ca-drip, .ca-wisp, .ca-streamer, .ca-wing, .ca-glint) { animation: px-strip calc(var(--sd) * var(--spd)) steps(var(--sn)) infinite; background-size: calc(var(--sw) * var(--sn)) 100%; }
+.bc-art :is(.ca-spark, .ca-frost, .ca-streamer, .ca-wing, .ca-glint) { animation: px-strip calc(var(--sd) * var(--spd)) steps(var(--sn)) infinite; background-size: calc(var(--sw) * var(--sn)) 100%; }
 .ca-gem { left: calc(50% - 4 * var(--p)); bottom: calc(-2 * var(--p)); width: calc(8 * var(--p)); height: calc(8 * var(--p)); background: var(--gm) 0 0 / 100% 100%; }
 .big .ca-gem { left: calc(50% - 6 * var(--p)); bottom: calc(-4 * var(--p)); width: calc(12 * var(--p)); height: calc(12 * var(--p)); }
 .ca-car { top: calc(50% - 3 * var(--p)); width: calc(5 * var(--p)); height: calc(7 * var(--p)); background: var(--fr-caret) 0 0 / 100% 100%; visibility: hidden; animation: px-bob 0.9s step-end infinite; }
@@ -661,20 +659,6 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 .ca-zap { --sw: calc(5 * var(--p)); --sn: 2; --sd: 0.2s; width: calc(5 * var(--p)); height: calc(5 * var(--p)); background-image: var(--fr-cfx-zap); left: calc(-1 * var(--p)); top: calc(-1 * var(--p)); }
 .bc-art .ca-zap { animation: px-strip calc(var(--sd) * var(--spd)) steps(2) infinite, ca-run calc(3.6s * var(--spd)) steps(24) infinite; }
 @keyframes ca-run { 0%, 100% { left: calc(-1 * var(--p)); top: calc(-1 * var(--p)); } 25% { left: calc(100% - 4 * var(--p)); top: calc(-1 * var(--p)); } 50% { left: calc(100% - 4 * var(--p)); top: calc(100% - 4 * var(--p)); } 75% { left: calc(-1 * var(--p)); top: calc(100% - 4 * var(--p)); } }
-/* poison: bubbles rise in the lower corners, drips fall from the bottom edge */
-.ca-bubble { --sw: calc(6 * var(--p)); --sn: 8; --sd: 2s; bottom: calc(5 * var(--p)); width: calc(6 * var(--p)); height: calc(12 * var(--p)); background-image: var(--fr-cfx-bubble); }
-.ca-bubble.b1 { left: calc(6 * var(--p)); } .ca-bubble.b2 { right: calc(6 * var(--p)); animation-delay: -1.1s; }
-.ca-drip { --sw: calc(4 * var(--p)); --sn: 8; --sd: 2.2s; top: calc(100% + 1 * var(--p)); width: calc(4 * var(--p)); height: calc(12 * var(--p)); background-image: var(--fr-cfx-drip); }
-.ca-drip.d1 { left: 30%; } .ca-drip.d2 { left: 68%; animation-delay: -1.2s; }
-/* holy: the gable crest and a slow light sweep across the body */
-.ca-arch { left: calc(50% - 12 * var(--p)); top: calc(-13 * var(--p)); width: calc(24 * var(--p)); height: calc(14 * var(--p)); background: var(--fr-cfx-arch) 0 0 / 100% 100%; }
-.ca-sweep { inset: calc(5 * var(--p)); overflow: hidden; }
-.ca-sweep::before { content: ""; position: absolute; top: 0; bottom: 0; left: calc(-8 * var(--p)); width: calc(8 * var(--p)); background: var(--fr-cfx-sweep) 0 0 / calc(8 * var(--p)) calc(8 * var(--p)) repeat-y; image-rendering: pixelated; animation: ca-sweep calc(4.6s * var(--spd)) steps(32) infinite; }
-@keyframes ca-sweep { 50%, 100% { left: 100%; } }
-/* shadow: the eye sigil on the top band, smoke wisps off the sides */
-.ca-eye { left: calc(50% - 7 * var(--p)); top: calc(-3 * var(--p)); width: calc(14 * var(--p)); height: calc(8 * var(--p)); background: var(--fr-cfx-eye) 0 0 / 100% 100%; }
-.ca-wisp { --sw: calc(6 * var(--p)); --sn: 8; --sd: 2.4s; width: calc(6 * var(--p)); height: calc(14 * var(--p)); background-image: var(--fr-cfx-wisp); }
-.ca-wisp.w1 { left: calc(-6 * var(--p)); bottom: 18%; } .ca-wisp.w2 { right: calc(-6 * var(--p)); bottom: 46%; animation-delay: -0.9s; } .ca-wisp.w3 { left: 44%; bottom: calc(-10 * var(--p)); animation-delay: -1.6s; }
 /* route: the class shield on the top edge, streamers off its sides, rank pips under it (empty, owned, offered) */
 .ca-shield { left: calc(50% - 10 * var(--p)); top: calc(-14 * var(--p)); width: calc(20 * var(--p)); height: calc(24 * var(--p)); background: var(--sh) 0 0 / 100% 100%; }
 .ca-shield img { position: absolute; left: calc(2 * var(--p)); top: calc(2 * var(--p)); width: var(--ic); height: var(--ic); image-rendering: pixelated; }
@@ -687,11 +671,11 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 .ca-knot { left: calc(50% - 8 * var(--p)); top: calc(-7 * var(--p)); width: calc(16 * var(--p)); height: calc(10 * var(--p)); background: var(--fr-cfx-knot) 0 0 / 100% 100%; }
 .ca-glint { --sw: calc(5 * var(--p)); --sn: 8; --sd: 2.8s; left: calc(50% - 2 * var(--p)); top: calc(-4 * var(--p)); width: calc(5 * var(--p)); height: calc(5 * var(--p)); background-image: var(--fr-cfx-glint); }
 /* Low quality and reduced motion: frames and crests stay, idle sprites stop and the moving ones hide */
-#ov-boon.low .bc-art i, #ov-boon.low .ca-sweep::before { animation: none !important; }
-#ov-boon.low :is(.ca-spark, .ca-frost, .ca-zap, .ca-bubble, .ca-drip, .ca-sweep, .ca-wisp, .ca-glint) { display: none; }
+#ov-boon.low .bc-art i { animation: none !important; }
+#ov-boon.low :is(.ca-spark, .ca-frost, .ca-zap, .ca-glint) { display: none; }
 @media (prefers-reduced-motion: reduce) {
-  .bc-art i, .ca-sweep::before { animation: none !important; }
-  :is(.ca-spark, .ca-frost, .ca-zap, .ca-bubble, .ca-drip, .ca-sweep, .ca-wisp, .ca-glint) { display: none; }
+  .bc-art i { animation: none !important; }
+  :is(.ca-spark, .ca-frost, .ca-zap, .ca-glint) { display: none; }
 }
 
 /* five or six cards (or a phone-width screen): a wider card per row segment, icon beside the text */
@@ -722,12 +706,6 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 @keyframes pk-shatter { 30% { opacity: 1; filter: brightness(1.7) saturate(0.4); } 42%, 100% { opacity: 0; filter: brightness(2); } }
 .boon-card.picked.k-lightning { animation: pk-zap var(--pk) steps(3) forwards; }
 @keyframes pk-zap { 12% { filter: none; } 18%, 55% { opacity: 1; filter: brightness(3) saturate(0); } 100% { opacity: 0; filter: brightness(3) saturate(0); } }
-.boon-card.picked.k-poison { animation: pk-melt var(--pk) steps(9) forwards; }
-@keyframes pk-melt { from { clip-path: inset(-40% -20% -30% -20%); } to { clip-path: inset(100% -20% -30% -20%); transform: translateY(calc(8 * var(--p))); } }
-.boon-card.picked.k-holy { animation: pk-rise var(--pk) steps(6) forwards; }
-@keyframes pk-rise { 40% { filter: brightness(1.8); opacity: 1; } 100% { transform: translateY(calc(-12 * var(--p))); filter: brightness(2.4); opacity: 0; } }
-.boon-card.picked.k-shadow { animation: pk-vortex var(--pk) steps(6) forwards; }
-@keyframes pk-vortex { to { transform: scale(0.08); filter: brightness(0.3); opacity: 0.2; } }
 .boon-card.picked.k-general { animation: pk-stamp var(--pk) steps(2) forwards; }
 @keyframes pk-stamp { 32% { transform: none; } 40% { transform: translateY(calc(2 * var(--p))) scaleY(0.95); filter: brightness(1.5); } 55% { transform: none; filter: none; opacity: 1; } 100% { opacity: 0; } }
 .boon-card.picked.k-route { animation: pk-unfurl var(--pk) steps(6) forwards; }
@@ -753,15 +731,6 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 /* lightning: a bolt strikes the card top */
 .pf-bolt { left: calc(50% - 12 * var(--p)); bottom: calc(100% - 18 * var(--p)); width: calc(24 * var(--p)); height: calc(48 * var(--p)); background: var(--fr-cfx-bolt) 0 0 / 100% 100%; opacity: 0; animation: pf-bolt var(--pk) steps(1) forwards; }
 @keyframes pf-bolt { 6% { opacity: 1; } 22% { opacity: 0; } 28% { opacity: 1; } 40%, 100% { opacity: 0; } }
-/* poison: a melting edge runs down the card */
-.pf-melt { left: calc(-4 * var(--p)); right: calc(-4 * var(--p)); top: 0; height: calc(6 * var(--p)); background: var(--fr-cfx-melt) 0 0 / calc(8 * var(--p)) 100% repeat-x; animation: pf-fall var(--pk) steps(9) forwards; }
-@keyframes pf-fall { to { top: calc(100% + 8 * var(--p)); } }
-/* holy: a light pillar beams up from the card */
-.pf-pillar { left: 22%; right: 22%; bottom: 0; height: 100vh; background: linear-gradient(90deg, transparent 0 8%, #f2c454 0 22%, #fff0c2 0 38%, #ffffff 0 62%, #fff0c2 0 78%, #f2c454 0 92%, transparent 0); opacity: 0.85; transform: scaleX(0); animation: pf-pillar var(--pk) steps(6) forwards; }
-@keyframes pf-pillar { 40% { transform: scaleX(1); opacity: 0.85; } 100% { transform: scaleX(0.2); opacity: 0; } }
-/* shadow: a vortex turns where the card collapses */
-.pf-vortex { --sw: calc(64 * var(--p)); --sn: 4; left: calc(50% - 32 * var(--p)); top: calc(50% - 32 * var(--p)); width: calc(64 * var(--p)); height: calc(64 * var(--p)); background: var(--fr-cfx-vortex) 0 0 / calc(256 * var(--p)) 100%; animation: px-strip 0.16s steps(4) infinite, pf-vortex var(--pk) steps(6) forwards; }
-@keyframes pf-vortex { from { opacity: 0; transform: scale(0.5); } 30% { opacity: 1; } 100% { opacity: 0; transform: scale(1); } }
 /* general: an anvil drops onto the card */
 .pf-anvil { left: calc(50% - 30 * var(--p)); bottom: 100%; width: calc(60 * var(--p)); height: calc(36 * var(--p)); background: var(--fr-cfx-anvil) 0 0 / 100% 100%; animation: pf-anvil var(--pk) steps(4) forwards; }
 @keyframes pf-anvil { from { transform: translateY(calc(-40 * var(--p))); opacity: 1; } 32% { transform: translateY(calc(24 * var(--p))); } 70% { transform: translateY(calc(24 * var(--p))); opacity: 1; } 100% { transform: translateY(calc(24 * var(--p))); opacity: 0; } }

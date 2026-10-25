@@ -34,22 +34,22 @@
     const s = {
       hp: 0, hpMul: 1, armor: 0, spd: 1, dmg: 1, atk: 1, crit: 0, critDmg: 0, cdr: 0,
       pickup: 0, xp: 0, gold: 0, luck: 0, heal: 0, projN: 0, pierce: 0, area: 0, dodge: 0, thorns: 0,
-      dashcdr: 0, dashN: 0, dashDmg: 0, dashFire: 0, dashBomb: 0, execute: 0,
-      guardian: 0, trance: 0, openRank: 0,
+      dashN: 0, dashBomb: 0, execute: 0,
+      guardian: 0, trance: 0,
       charges: 0,
       minions: 0, minionDmg: 0, boneSpikes: 0, phoenix: 0, strataHeal: 0, wardrum: 0,
       homing: 0, meleeReach: 0, mirror: 0, choices: 0, idol: 0, vuln: 0, banner: 0, angel: 0,
       chalice: 0, emberBonus: 0, discount: 0, stone: 0, cloverRerolls: 0, aegis: 0, light: 0,
       // status route hooks (+X% to every status amount the hero applies; +X% to class-element skill hits)
       statusPow: 0, classElMul: 0,
-      // element verbs (src/sim/elements.js): Fire, Ice, Lightning, Poison, Holy, Shadow, General (Bleed and the finisher)
-      fireInfuse: 0, burnMul: 0, burnCap: 0, wildfire: 0, smother: 0, firebreak: 0, firewalk: 0,
-      iceInfuse: 0, chillMul: 0, shatter: 0, shatterSplash: 0, freezeDur: 0, chillWeaken: 0, glacier: 0, coldCycle: 0, iceWall: 0,
-      lightningInfuse: 0, shockMul: 0, arcs: 0, arcStun: 0, chargeHold: 0, dashCharge: 0, stormStep: 0,
-      poisonInfuse: 0, venomBuild: 0, venomHold: 0, venomWeak: 0, corrode: 0, cloudR: 0, cloudT: 0, dashCloud: 0, neuro: 0, toxicWake: 0,
-      holyInfuse: 0, smiteMul: 0, smiteShield: 0.01, holyCap: 0.06, beacon: 0, perfectDodge: 0, pdWin: 0, pdPow: 0, pdRefund: 0, pdStrike: 0, // smiteShield and holyCap start at the base every hero smites with
-      shadowInfuse: 0, backstab: 0, doomMul: 0, doomTough: 0, deathsEdge: 0, dashBack: 0, decoy: 0, stepBehind: 0,
-      bleed: 0, bleedMul: 0, lacerate: 0, sunder: 0, opportunist: 0, masterstroke: 0, twinEvery: 0,
+      // path engines (src/sim/elements.js): Flame, Frost, Storm, Steel (Bleed, crits and the finisher), the cross-path cards; holy and shadow are class-only elements
+      fireInfuse: 0, burnMul: 0, burnCap: 0, wildfire: 0, smother: 0, pyre: 0, pyrePass: 0, pyreMul: 0, pyreR: 0, pyreWeak: 0, scorch: 0,
+      iceInfuse: 0, chillMul: 0, shatter: 0, shatterSplash: 0, freezeDur: 0, chillWeaken: 0, glacier: 0, coldCycle: 0, zeroFreeze: 0, rime: 0, frozenVuln: 0,
+      lightningInfuse: 0, shockMul: 0, jumps: 0, jumpR: 0, arcStun: 0, chargeHold: 0, ground: 0, arcFlash: 0, galv: 0, capacitor: 0, capKeep: 0,
+      holyInfuse: 0, smiteMul: 0, smiteShield: 0.01, holyCap: 0.06, // smiteShield and holyCap start at the base every hero smites with
+      shadowInfuse: 0,
+      bleed: 0, bleedMul: 0, lacerate: 0, sunder: 0, opportunist: 0, masterstroke: 0, twinEvery: 0, critBig: 0, killEdge: 0,
+      thermal: 0, plasma: 0, supercon: 0, critBurn: 0, icebreak: 0, critDis: 0,
     };
     for (let i = 0; i < ROUTE_KEYS.length; i++) s[ROUTE_KEYS[i]] = 0;
     return s;
@@ -159,7 +159,7 @@
     out.skill2Cd = cls.skill2 && ED.SKILLS[cls.skill2] ? ED.SKILLS[cls.skill2].cd * (1 - cdr) * rc(2) : 0;
     const k3 = cls.skill3 && ED.SKILLS[cls.skill3]; // skill 3: recharge seconds per charge and its charges (0 for a class without one)
     out.skill3Cd = k3 ? k3.cd * (1 - cdr) * rc(3) : 0; out.skill3Charges = k3 ? (k3.charges || 1) + s.s3Ch : 0;
-    out.dashCd = Math.max(1, 1.5 * (1 - s.dashcdr)); out.dashCharges = Math.min(3, 1 + s.dashN); // recharge seconds per charge (base 1.5, floor 1.0), max charges (base 1, cap 3)
+    out.dashCd = 1.5; out.dashCharges = Math.min(2, 1 + s.dashN); // recharge seconds per charge, max charges (base 1, cap 2)
     out.pickupR = 46 * (1 + s.pickup);
     out.critMult = 1.75 + s.critDmg;
     out.crit = Math.min(0.95, s.crit);
@@ -210,8 +210,8 @@
     return (1 + (p.flowT > 0 ? ED.CONST.FLOW_SPD : 0) + (p.stealthT > 0 ? s.stealthSpd : 0)) * (h && h.slow ? 1 - h.slow : 1);
   };
   // Hold-attack verbs (stats.hold, set by a card's hold field): the client starts one once attack is held `at` s (normal attacks stop) and ends it on release. max: the verb ends itself after max s (0: until release);
-  // full: seconds of holding (from the start) to a full charge (lance, flask, finisher; the finisher's full is FULL_EVO with Masterwork Arms); slow: share of move speed lost while it runs. Bell weapons fire them on a full-wind hurl (class-bell.js).
-  St.HOLD = { cone: { at: 0.35, max: 2, slow: 0.4 }, lance: { at: 0.35, full: 0.6 }, flask: { at: 0.35, full: 0.6 }, guard: { at: 0.35, max: 2.5, slow: 0.5 }, finisher: { at: 0.35, full: 1 } };
+  // full: seconds of holding (from the start) to a full charge (lance, finisher; the finisher's full is FULL_EVO with Masterwork Arms); slow: share of move speed lost while it runs. Bell weapons fire them on a full-wind hurl (class-bell.js).
+  St.HOLD = { cone: { at: 0.35, max: 2, slow: 0.4 }, lance: { at: 0.35, full: 0.6 }, storm: { at: 0.35, max: 2, slow: 0.4 }, finisher: { at: 0.35, full: 1 } };
   St.FULL_EVO = 0.7;
   St.holdFull = (st) => (st.hold === 'finisher' && st.evo === 'general' ? St.FULL_EVO : (St.HOLD[st.hold] && St.HOLD[st.hold].full) || 0);
 

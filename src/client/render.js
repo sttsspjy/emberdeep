@@ -1161,7 +1161,7 @@
   };
   R.interactable = (p) => !p.state && p.kind !== 'sign' && p.kind !== 'merchant';
 
-  const PATH_COL = { fire: '#ff7a2a', ice: '#7fe3ff', lightning: '#ffe66b', poison: '#9be33c', holy: '#fff0c2', shadow: '#a070ff', general: '#d9dfe8' };
+  const PATH_COL = { fire: '#ff7a2a', ice: '#7fe3ff', lightning: '#ffe66b', general: '#d9dfe8' };
   // Reward and room glyphs come from one table (ED.Icons.reward / ED.Icons.room); 'boon' wears the colour of the local hero's deepest path (R.mainPath).
   // Colour of a reward-type string such as 'boon', 'gold', 'relic' (unknown -> warm white).
   function rewardColor(s) { return ED.Icons.reward(s, R.mainPath)[1]; }
@@ -1173,11 +1173,11 @@
   // Map/door glyph of a floor room for the local hero: { icon, color, label, badge, reward } or null (ED.Icons.room).
   R.roomIcon = (rm) => ED.Icons.room(rm, R.mainPath, ED.World.REWARD_UP);
   const ROOM_NAME = { start: 'Start', combat: 'Fight', elite: 'Elite fight', champion: 'Champion fight', shop: 'Shop', rest: 'Rest', treasure: 'Treasure', event: 'Shrine', boss: 'Boss' };
-  // Plain name of a map room with its reward: 'Elite fight: Relics', 'Dark room: Epic boon', 'Rest'.
+  // Plain name of a map room with its reward: 'Elite fight: Relics', 'Dark room: Epic boon', 'Fight: Flame boon', 'Rest'.
   R.roomName = (rm) => {
     if (!rm) return '';
-    const n = rm.dark ? 'Dark room' : ROOM_NAME[rm.type] || 'Room', rw = rm.reward ? (rm.dark && ED.World.REWARD_UP[rm.reward]) || rm.reward : null;
-    return rw ? n + ': ' + R.rewardLabel(rw) : n;
+    const n = rm.dark ? 'Dark room' : ROOM_NAME[rm.type] || 'Room', rw = rm.reward ? (rm.dark && ED.World.REWARD_UP[rm.reward]) || rm.reward : null, pa = rw === 'boon' && rm.rewardPath && ED.PATHS[rm.rewardPath];
+    return rw ? n + ': ' + (pa ? pa.name + ' boon' : R.rewardLabel(rw)) : n;
   };
   // Exit key a hero wants to leave by (null when none; Dungeon.wantDoor of P[26]): the newest snapshot row on a client, the sim field on the host and solo.
   R.doorWant = (view, p) => {
@@ -1684,7 +1684,6 @@
       }
     });
   }
-  const venomOf = (e) => e.venomLvl !== undefined ? e.venomLvl : ED.Net.venomLevel(e);
   const doomOf = (e) => e.doomLine !== undefined ? e.doomLine : (e.boss ? e.doom : curView && curView.doomLine ? curView.doomLine(e) : 0);
   // Pixel stand-ins (2 px per char; 1 = body, 2 = accent) for the overhead glyphs while the atlas lacks them.
   const GLYPH = {
@@ -1704,29 +1703,23 @@
     for (let j = 0; j < rows.length; j++) for (let i = 0; i < rows[j].length; i++) { const ch = rows[j][i]; if (ch === '.') continue; c.fillStyle = g.c[ch]; c.fillRect(x0 + i * 2, y0 + j * 2, 2, 2); }
   }
   R.foeArt = { marks: drawMarks, status: drawStatus, view: (v) => { curView = v; } }; // headless checks
-  // Overhead status marks of a foe, drawn with the HP bars above the lighting. Layout bottom-up from the bar line (bosses have no bar): ward bar and an elite's name, then the Venom pips on their own line,
-  // then one row of glyphs left to right: Burn stacks (a flame and the count), stun stars, Doom skull (the Reap is near), Corroded cracked guard, Charge bolt. Nothing shares a point, whatever the combination.
+  // Overhead status marks of a foe, drawn with the HP bars above the lighting. Layout bottom-up from the bar line (bosses have no bar): ward bar and an elite's name,
+  // then one row of glyphs left to right: Burn stacks (a flame and the count), stun stars, Doom skull (the Reap is near), Charge bolt. Nothing shares a point, whatever the combination.
   const xg = []; // class glyphs of the foe being drawn (ED.ClassFx.mark)
   function drawMarks(c, e, t) {
-    const vl = venomOf(e), dl = doomOf(e), skull = dl > 0 && !e.boss && e.hp < 1.5 * dl, stun = e.stun > 0, chg = e.charge > 0, cor = vl >= 5;
+    const dl = doomOf(e), skull = dl > 0 && !e.boss && e.hp < 1.5 * dl, stun = e.stun > 0, chg = e.charge > 0;
     const bn = Math.min(15, e.burnN | 0); // Burn stacks on the foe (the snapshot carries the count)
     const xm = ED.ClassFx.mark; let xn = 0;
     for (let i = 0; i < xm.length; i++) { const g = xm[i](e); if (g) xg[xn++] = g; }
-    if (!(vl > 0 || skull || stun || chg || bn || xn)) return;
+    if (!(skull || stun || chg || bn || xn)) return;
     const G = foeGeom(e), r = G.r, id = e.id | 0, af = e.elite ? ED.AFFIXES[e.elite] : null, top = G.top - gRise;
     let b = e.boss ? s2(top) - 4 : s2(Math.min(top - 6, -(r * 2.6 + (e.def.fly && !AC.on() ? 14 : 4)))) - 2; // bottom of the free space (procedural flyers float higher than r * 2.6)
     if (!e.boss) { if (e.ward > 0) b -= (R.scale >= 2 ? 2 : 3) + 1; if (af) b -= Math.ceil(R.labelH()) + 4; }
     const ox = Math.round(e.x), oy = Math.round(e.y) + b; // marks are laid out in the foe's feet frame with the baseline b, drawn at (ox, oy + ...)
-    b = 0;
-    if (vl > 0) { // four pips on a dark plate; Corroded lights all four bright
-      const x0 = s2(ox - 11);
-      c.fillStyle = 'rgba(0,0,0,0.55)'; c.fillRect(x0 - 2, oy - 4, 26, 6);
-      for (let i = 0; i < 4; i++) { c.fillStyle = cor ? '#c8ff5a' : i < vl ? '#9be33c' : '#26340f'; c.fillRect(x0 + i * 6, oy - 2, 4, 2); }
-      b = -6;
-    } else b = -2;
-    const n = (bn ? 1 : 0) + (stun ? 1 : 0) + (skull ? 1 : 0) + (cor ? 1 : 0) + (chg ? 1 : 0) + xn;
+    b = -2;
+    const n = (bn ? 1 : 0) + (stun ? 1 : 0) + (skull ? 1 : 0) + (chg ? 1 : 0) + xn;
     if (n) {
-      const w = (bn ? (bn > 9 ? 18 : 14) : 0) + (stun ? 26 : 0) + (skull ? 14 : 0) + (cor ? 14 : 0) + (chg ? 6 : 0) + xn * 14 + (n - 1) * 2;
+      const w = (bn ? (bn > 9 ? 18 : 14) : 0) + (stun ? 26 : 0) + (skull ? 14 : 0) + (chg ? 6 : 0) + xn * 14 + (n - 1) * 2;
       let x = s2(ox - w / 2);
       const by = oy + b; // bottom of the glyph row
       if (bn) { // Burn stacks: a 2 px flame and the count in fire orange
@@ -1739,7 +1732,6 @@
         x += 28;
       }
       if (skull) { const up = Math.sin(t * 4 + id) > 0 ? 2 : 0, sx = x + 6, sy = by - 7 - up; if (!Pix.draw(c, 'fx.sigil.skull', 'shadow', 0, sx, sy)) glyphStub(c, GLYPH.skull, sx, sy + 5); x += 16; }
-      if (cor) { const up = Math.sin(t * 5 + id) > 0 ? 2 : 0, sx = x + 6, sy = by - 7 - up; if (!Pix.draw(c, 'fx.glyph.corroded', '', 0, sx, sy)) glyphStub(c, GLYPH.guard, sx, sy + 5); x += 16; }
       if (chg) {
         if (((t * 3 + id) | 0) % 2 === 0) { c.fillStyle = '#ffe66b'; c.fillRect(x + 2, by - 8, 4, 2); c.fillRect(x, by - 6, 4, 2); c.fillRect(x + 2, by - 4, 2, 2); c.fillRect(x, by - 2, 4, 2); }
         x += 8;
@@ -1747,9 +1739,9 @@
       for (let i = 0; i < xn; i++) { const g = xg[i], up = Math.sin(t * 4 + id + i) > 0 ? 2 : 0, sx = x + 6, sy = by - 7 - up; if (!Pix.draw(c, g.id, g.ramp || '', 0, sx, sy) && GLYPH[g.stub]) glyphStub(c, GLYPH[g.stub], sx, sy + 5); x += 16; }
     }
   }
-  // Drawn at the foe's origin right after its sprite. Element colours: Burn fire, Chill and Freeze ice, Charge lightning, Venom poison, Radiance holy, Doom shadow, Bleed red; pixel art on the 2 px grid.
+  // Drawn at the foe's origin right after its sprite. Element colours: Burn fire, Chill and Freeze ice, Charge lightning, Radiance holy, Doom shadow, Bleed red; pixel art on the 2 px grid.
   // Chill, Freeze and Radiance halos are baked sprites (one blit each); the rest are atlas sprites and 2 px squares batched into one path per kind.
-  function drawStatus(c, e, t, full) { // full = false (crowd LOD): the moving decoration (embers, bubbles, drips, motes, smoke) is skipped, every status keeps its icon, sprite or ring
+  function drawStatus(c, e, t, full) { // full = false (crowd LOD): the moving decoration (embers, drips, motes, smoke) is skipped, every status keeps its icon, sprite or ring
     if (e.burrowed || e.hp <= 0) return;
     const G = foeGeom(e), r = G.r, id = e.id | 0, rise = gRise, cy = G.cy - rise, hh = G.hh;
     let s;
@@ -1791,15 +1783,6 @@
       c.fillStyle = '#c4182e'; c.beginPath();
       for (let i = 0, n = full ? 3 : 1; i < n; i++) { const ph = (t * 1.6 + id * 0.13 + i * 0.37) % 1; c.rect(s2((i - 1) * r * 0.55), s2(cy - hh * 0.2 + ph * hh * 1.1), 2, ph > 0.5 ? 4 : 2); }
       c.fill();
-    }
-    const vl = venomOf(e);
-    if (vl > 0) { // bubbles rise from the body (one per pip; Corroded: acid drips); the pips and the cracked-guard glyph are overhead marks
-      c.fillStyle = '#9be33c'; c.beginPath();
-      const nb = full ? Math.min(vl, 4) : 0;
-      for (let i = 0; i < nb; i++) { const ph = (t * 0.7 + i / nb + id * 0.13) % 1; bubble(c, s2(Math.sin(i * 2.7 + id) * r * 0.7), s2(cy + hh * 0.3 - ph * (hh + 10))); }
-      if (vl >= 5 && full) for (let i = 0; i < 3; i++) { const ph = (t * 1.3 + id * 0.1 + i * 0.33) % 1; c.rect(s2((i - 1) * r * 0.6), s2(cy - hh * 0.3 + ph * hh * 1.2), 2, 4); }
-      c.fill();
-      stLight(e.x, e.y + cy, r * 2.2, '#9be33c', vl >= 5 ? 0.4 : 0.22);
     }
     const rl = e.radLvl !== undefined ? e.radLvl : (curView && curView.smiteAt ? ED.Net.radLevel(curView, e) : 0);
     if (rl > 0) { // gold halo ring under the foe (0..3 segments lit) and rising motes
@@ -1877,14 +1860,14 @@
     c.globalAlpha = 1;
   }
 
-  // The held verb at the hero's feet (p.holdOn, st.hold; p._holdS: when this view saw it start). Cone: a wedge of embers along the aim; guard: a gold arc in front (GUARD_ARC);
-  // lance, flask, finisher: a charge ring closing in to full (ED.Stats.holdFull), then a steady bright pip.
-  const HOLD_COL = { cone: '#ff9a3a', lance: '#bfeaff', flask: '#9be33c', guard: '#ffd36b', finisher: '#ffffff' };
+  // The held verb at the hero's feet (p.holdOn, st.hold; p._holdS: when this view saw it start). Cone: a wedge of embers along the aim;
+  // lance, finisher: a charge ring closing in to full (ED.Stats.holdFull), then a steady bright pip; storm: the steady pip.
+  const HOLD_COL = { cone: '#ff9a3a', lance: '#bfeaff', storm: '#ffe66b', finisher: '#ffffff' };
   function drawHold(c, p, st, t, low) {
     const C = ED.CONST, k = st.hold, col = HOLD_COL[k] || '#ffffff', a = p.face || 0, co = Math.cos(a), si = Math.sin(a);
     if (!(p._holdS >= 0)) p._holdS = t;
     if (k === 'cone') {
-      const ar = 1 + st.area * 0.5, L = st.weapon.kind === 'melee' ? st.weapon.range * (ar + st.meleeReach) * C.CONE_REACH : C.CONE_RANGE * ar, n = low ? 6 : 14; // the sim's reach (elements.js flameCone)
+      const ar = 1 + st.area * 0.5, L = st.weapon.kind === 'melee' ? st.weapon.range * Math.min(C.REACH_CAP, ar + st.meleeReach) * C.CONE_REACH : C.CONE_RANGE * ar, n = low ? 6 : 14; // the sim's reach (elements.js flameCone)
       c.globalAlpha = 0.16 + 0.06 * Math.sin(t * 9); c.fillStyle = '#ff7a2a'; c.beginPath(); c.moveTo(s2(co * 8), s2(-8 + si * 6)); // the cone: a faint wedge, embers streaming along it
       for (let i = 0; i <= 6; i++) { const q = a - C.CONE_ARC / 2 + C.CONE_ARC * i / 6; c.lineTo(s2(Math.cos(q) * L), s2(-8 + Math.sin(q) * L * 0.8)); }
       c.closePath(); c.fill(); c.globalAlpha = 1;
@@ -1892,13 +1875,6 @@
       for (let i = 0; i < n; i++) { const ph = (t * 2.2 + i * 0.37) % 1, q = a + (hash1(i * 3.7 + ((t * 2.2 + i * 0.37) | 0)) - 0.5) * C.CONE_ARC, d = 12 + ph * L; c.rect(s2(Math.cos(q) * d), s2(-8 + Math.sin(q) * d * 0.8), 2, ph < 0.5 ? 4 : 2); }
       c.fill();
       R.light(p.x + co * L * 0.5, p.y - 8 + si * L * 0.4, L * 0.7, '#ff7a2a', 0.45);
-      return;
-    }
-    if (k === 'guard') {
-      c.fillStyle = col; c.beginPath();
-      for (let i = 0; i <= 6; i++) { const q = a - C.GUARD_ARC / 2 + C.GUARD_ARC * i / 6; c.rect(s2(Math.cos(q) * 16) - 1, s2(-10 + Math.sin(q) * 12) - 1, 2, 4); }
-      c.fill();
-      R.emit(p.x + co * 14, p.y - 10 + si * 10, 18, col, 0.25);
       return;
     }
     const full = ED.Stats.holdFull(st), f = full > 0 ? U.clamp((t - p._holdS) / full, 0, 1) : 1;

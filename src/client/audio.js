@@ -306,18 +306,6 @@
       for (let i = 0, n = lo ? 1 : 3; i < n; i++) tone('sawtooth', rnd(900, 1400), 300, 0.04, 0.05 * v, null, t + 0.05 + i * 0.04);
       noise('lowpass', 500, 70, 0.6, 0.14 * v, 1, null, t + 0.08);
     },
-    poison(v, t, lo) { // bubbling gurgle: rising bloops over a resonant slosh
-      for (let i = 0, n = lo ? 4 : 7; i < n; i++) { const f = rnd(180, 320); tone('sine', f, f * 2.6, 0.05, 0.11 * v, null, t + i * 0.065 + Math.random() * 0.03); }
-      noise('lowpass', 500, 160, 0.55, 0.12 * v, 4, null, t); tone('sine', 70, 55, 0.4, 0.12 * v, null, t);
-    },
-    holy(v, t, lo) { // struck bell over a swelling choir pad
-      tone('sine', 1046, 1044, 0.8, 0.14 * v, null, t); tone('sine', 2887, 2870, 0.35, 0.03 * v, null, t); tone('triangle', 1569, 1569, 0.5, 0.02 * v, null, t);
-      [523, 659, 784].forEach((f) => { tone('triangle', f, f, 0.45, 0.06 * v, null, t, 0.3); if (!lo) tone('sawtooth', f * 1.003, f * 1.003, 0.45, 0.008 * v, null, t, 0.3); });
-    },
-    shadow(v, t) { // reverse whoosh: a swell that cuts off into a low implosion
-      noise('bandpass', 300, 2600, 0.04, 0.26 * v, 1.4, null, t, 0.42); tone('sine', 110, 330, 0.04, 0.08 * v, null, t, 0.4);
-      tone('sine', 140, 45, 0.2, 0.25 * v, null, t + 0.44); noise('lowpass', 800, 120, 0.15, 0.12 * v, 1, null, t + 0.44); tone('triangle', 233, 220, 0.3, 0.03 * v, null, t + 0.46);
-    },
     general(v, t) { // anvil clang
       tone('square', 1250, 1230, 0.12, 0.07 * v, null, t); tone('sine', 2490, 2480, 0.55, 0.07 * v, null, t); tone('sine', 3720, 3700, 0.35, 0.04 * v, null, t); tone('triangle', 1870, 1860, 0.4, 0.04 * v, null, t);
       noise('bandpass', 3200, 1800, 0.05, 0.22 * v, 2.5, null, t); tone('sine', 160, 70, 0.12, 0.22 * v, null, t);
@@ -336,7 +324,7 @@
       tone('triangle', 1760, 1700, 0.25, 0.08 * v, null, at);
     },
   };
-  const ROOT = { fire: 110, ice: 784, lightning: 147, poison: 98, holy: 523, shadow: 82, general: 262, route: 196, relic: 131, purse: 1318 };
+  const ROOT = { fire: 110, ice: 784, lightning: 147, general: 262, route: 196, relic: 131, purse: 1318 };
   // arg: kind string or { k, big }. big: 15% louder plus a held root and fifth over a low rumble.
   function pickCue(arg, v, t) {
     const o = typeof arg === 'string' ? { k: arg } : arg || {}, k = PICK[o.k] ? o.k : 'general', lo = lite(), vv = v * (o.big ? 1.15 : 1);

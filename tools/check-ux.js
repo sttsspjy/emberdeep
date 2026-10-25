@@ -36,8 +36,8 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     ok(!/Skill recharges/.test(t), `${src}: "Skills recharge": ${t.slice(0, 80)}`);
     ok(!/\{|\}|\[|\]/.test(t), `${src}: no left-over token: ${t.slice(0, 80)}`);
   }
-  ok(/never Reaped/.test(ED.BOONS.doommark.desc) && /Tolls/.test(ED.BOONS.doommark.desc) && /never Reaped/.test(ED.STATUS.doom.rule), 'Doom: a boss is never Reaped, it Tolls');
-  ok(/Open boons can rank 1 higher/.test(ED.BOONS.generalist.desc) && /Your Backstabs mark 20% more Doom/.test(ED.Sheet.text('souljar', 1, st)) && /Your Backstabs mark 40% more Doom/.test(ED.Sheet.text('souljar', 2, st)), 'Generalist and Soul Jar wording');
+  ok(/never Reaped/.test(ED.STATUS.doom.rule) && /Tolls/.test(ED.STATUS.doom.rule), 'Doom: a boss is never Reaped, it Tolls');
+  ok(!/rank 1 higher/.test(ED.BOONS.generalist.desc) && /Bleed/.test(ED.Sheet.text('generalist', 1, st)), 'Tempered Steel wording: no extra open rank');
   ok(/foes inside take Holy damage/.test(ED.SKILLS.sanctuary.desc) && !/burn/i.test(ED.SKILLS.sanctuary.desc), 'Sanctuary does not burn');
   ok(/does not stack with other \+20% vulnerabilities/.test(ED.boonText('r_s2_b', 1, null)) && !/Judged/.test(ED.boonText('r_s2_b', 1, null)), 'Hail of Thorns does not lean on the Cleric term');
   ok(/Crush/.test(ED.SKILLS.charge.desc) && /never stunned/.test(ED.SKILLS.shieldthrow.desc), 'Shield Charge and Shield Throw name Crush and the boss rule');
@@ -73,15 +73,14 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   const base = { cls: 'knight', weapon: 'longsword', boons: {}, relics: [], meta: META(), pact: 0 };
   const st0 = ED.Stats.compute(base);
   ok(st0.dashCd === 1.5 && st0.dashCharges === 1, 'a fresh hero has 1 dash charge, 1.5 s each: ' + st0.dashCd + ' / ' + st0.dashCharges);
-  { // Light Step: +1 charge per rank; Shadow Cloak: a 1.0 s recharge; the recharge floors at 1.0 s and the charges cap at 3
+  { // Light Step: +1 charge (one rank); the recharge is a fixed 1.5 s and the charges cap at 2
     const dash = (boons, relics) => { const s = ED.Stats.compute(Object.assign({}, base, { boons, relics: relics || [] })); return s.dashCharges + ' / ' + s.dashCd; };
-    ok(dash({ lightstep: 1 }) === '2 / 1.5' && dash({ lightstep: 2 }) === '3 / 1.5', 'Light Step: ranks 1 and 2 give 2 and 3 charges, recharge unchanged: ' + dash({ lightstep: 1 }) + ', ' + dash({ lightstep: 2 }));
-    ok(dash({}, ['cloak']) === '1 / 1', 'Shadow Cloak: 1 charge, recharge 1.0 s: ' + dash({}, ['cloak']));
-    ok(dash({ lightstep: 2 }, ['cloak']) === '3 / 1', 'Light Step 2 + Shadow Cloak: 3 charges, 1.0 s each: ' + dash({ lightstep: 2 }, ['cloak']));
-    ED.RELICS.zzdash = { name: 'T', rar: 'c', icon: 'coin', desc: '', mods: { dashcdr: 0.9 } };
-    ok(dash({ lightstep: 5 }, ['zzdash']) === '3 / 1', 'the recharge floors at 1.0 s and the charges cap at 3: ' + dash({ lightstep: 5 }, ['zzdash']));
+    ok(ED.BOONS.lightstep.max === 1 && dash({ lightstep: 1 }) === '2 / 1.5', 'Light Step: one rank, 2 charges, recharge unchanged: ' + dash({ lightstep: 1 }));
+    ok(dash({}, ['cloak']) === '1 / 1.5' && dash({ lightstep: 1 }, ['cloak']) === '2 / 1.5', 'Shadow Cloak no longer shortens the recharge: ' + dash({}, ['cloak']));
+    ED.RELICS.zzdash = { name: 'T', rar: 'c', icon: 'coin', desc: '', mods: { dashN: 5 } };
+    ok(dash({ lightstep: 1 }, ['zzdash']) === '2 / 1.5', 'the charges cap at 2: ' + dash({ lightstep: 1 }, ['zzdash']));
     delete ED.RELICS.zzdash;
-    ok(ED.Sheet.text('lightstep', 1) === 'Dash: +1 charge.' && ED.Sheet.text('lightstep', 2) === 'Dash: +2 charges.' && ED.Sheet.nextText('lightstep', 1) === '+2 charges' && ED.Sheet.STAT_INFO.dashN.label === 'Dash charges' && ED.Sheet.STAT_INFO.dashcdr.label === 'Dash recharge', 'Light Step card text and the sheet labels: ' + ED.Sheet.text('lightstep', 2));
+    ok(ED.Sheet.text('lightstep', 1) === 'Dash: +1 charge.' && ED.Sheet.STAT_INFO.dashN.label === 'Dash charges' && !ED.Sheet.STAT_INFO.dashcdr, 'Light Step card text and the sheet label: ' + ED.Sheet.text('lightstep', 1));
   }
   const stats = ED.Stats.compute(base); stats.sn = {};
   const p = { pid: 'p', name: 'T', cls: 'knight', weapon: base.weapon, boons: {}, relics: [], meta: base.meta, stats, hp: stats.maxHp, maxHp: stats.maxHp, shield: 0, picks: 0, slot: 0 };

@@ -185,7 +185,7 @@
         { id: 'wave', label: 'Supernova wave', if: 'supernova', of: 'blast', mul: 'novaEcho', per: 'hit', delay: 0.6, dur: 0.5, durFix: true, rOf: 'blast', rMul: 220 / 105, el: 'class', proc: true },
         { id: 'flare', label: 'Rebirth flare', if: 'mantleBurst', of: 'blast', mul: 'mantleBurst', per: 'hit', r: 90, knock: 220, el: 'class', proc: true },
         { id: 'phoenix', label: 'Phoenix ring', if: 'phoenixMul', of: 'ring', mul: 'phoenixMul', per: 'sec', rOf: 'blast', rMul: 70 / 105, durKey: 'phoenixDur', el: 'class' },
-        { id: 'trail', label: 'Dash trail', if: 'phoenixMul', of: 'phoenix', mul: 'dashTrail', per: 'sec', rOf: 'blast', rMul: 24 / 105, dur: 2, durFix: true, el: 'class' },
+        { id: 'trail', label: 'Fire trail', if: 'phoenixMul', of: 'phoenix', mul: 'dashTrail', per: 'sec', rOf: 'blast', rMul: 24 / 105, dur: 2, durFix: true, el: 'class' },
       ] },
     step: { name: 'Shadowstep', slot: 0, cd: 4.5, icon: 'cloak', aim: 'move', range: 140, rangeMin: 40,
       desc: 'Blink toward the cursor, cutting through foes; you are untouchable for 0.35 s as you land. Your next attacks are critical hits.',

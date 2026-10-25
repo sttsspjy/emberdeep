@@ -355,7 +355,7 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
       const plays = [], A0 = ED.Audio;
       ED.Audio = { play: (name, v, arg, pr) => plays.push({ name, v, arg, pr }), flush() {}, hit() {}, impact() {}, kill() {} };
       const good = {
-        pdodge: { pid: 'p0', x: 100, y: 100 }, blink: { pid: 'p0', x0: 100, y0: 100, x1: 180, y1: 120, k: 'storm' }, shatter: { x: 100, y: 100, r: 70 }, hurl: { pid: 'p0', x: 100, y: 100, k: 2.5 }, reel: { pid: 'p0', x0: 100, y0: 100, x1: 200, y1: 120 },
+        blink: { pid: 'p0', x0: 100, y0: 100, x1: 180, y1: 120 }, shatter: { x: 100, y: 100, r: 70 }, hurl: { pid: 'p0', x: 100, y: 100, k: 2.5 }, reel: { pid: 'p0', x0: 100, y0: 100, x1: 200, y1: 120 },
       };
       const live = () => F.parts.length + F.rings.length + F.bolts.length + F.pops.length + F.sheets.length + F.beams.length;
       for (const t of Object.keys(good)) {
@@ -365,8 +365,7 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
         const bad = [{ x: 'a', y: null }, { x: NaN, y: 5, r: 'x', k: Infinity }, { pts: 'x' }, { pts: [1, 2, 3] }, { pts: [1, 2, null, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18] }, { x0: 1, y0: 2 }, { x: 5, y: 5, r: -10, k: -3 }];
         ok(!throws(() => { for (const b of bad) F.handle(Object.assign({ t }, b), fctx); F.update(0.016); }), `${t} survives missing and malformed fields`);
       }
-      F.reset(); F.handle({ t: 'blink', pid: 'p0', x0: 0, y0: 0, x1: 90, y1: 0, k: 'behind' }, fctx); ok(F.bolts.length === 0 && live() > 0, 'an Umbral Arms blink puffs smoke, no bolt');
-      F.reset(); F.handle({ t: 'chain', k: 'd', pts: [[100, 76], [100, 100]] }, fctx); ok(F.bolts.length + F.pops.length > 0, 'a dash discharge drops a bolt on the foe');
+      F.reset(); F.handle({ t: 'chain', k: 'd', pts: [[100, 76], [100, 100]] }, fctx); ok(F.bolts.length + F.pops.length > 0, 'a discharge drops a bolt on the foe');
       F.reset(); F.handle({ t: 'chain', k: 'f', pts: [[100, 94], [130, 94]] }, fctx); ok(F.bolts.length === 1, 'Burn passed on draws one ember line');
       F.reset(); F.handle({ t: 'chain', k: 'f', pts: 'x' }, fctx); F.handle({ t: 'chain' }, fctx); ok(live() === 0, 'a malformed chain draws nothing');
       F.reset(); F.handle({ t: 'lance', pid: 'p0', x0: 0, y0: 0, x1: 300, y1: 0, k: 1 }, fctx); ok(F.bolts.length === 1, 'the ice lance leaves a frost streak');

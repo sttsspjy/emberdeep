@@ -113,7 +113,7 @@
   card('pyro', 'skill1', 2, 'p_s1_b', { name: 'Phoenix Mantle', icon: 'feather', tag: 'Guard',
     desc: 'Nova leaves a ring of fire (3 s), and if it hits a foe it shields you for {mantle} max health (at most once per 10 s).[ Nova deals +{s1Dmg}.]',
     rider2: "Rebirth Flare: when the Mantle shield is used up, it bursts (radius 90) for {mantleBurst} of Nova's blast and knocks foes back.", mods: { novaRing: 1, mantle: 0.03 }, up: { s1Dmg: 0.05 }, r2: { mantleBurst: 0.5 }, r3: { phoenixMul: 1.4, phoenixDur: 4, dashTrail: 0.5, phoenixSlow: 0.4 },
-    form: { name: 'Phoenix Form', desc: "The ring of fire follows you for {phoenixDur:s} (radius 70) and burns {phoenixMul:n} times as hard; foes inside it are slowed {phoenixSlow}. While it burns, every dash leaves a trail of fire patches (radius 24, 2 s) that deal {dashTrail} of the ring's damage per second." } });
+    form: { name: 'Phoenix Form', desc: "The ring of fire follows you for {phoenixDur:s} (radius 70) and burns {phoenixMul:n} times as hard; foes inside it are slowed {phoenixSlow}. While it burns, you leave a trail of fire patches as you move (radius 24, 2 s, one every 40 px) that deal {dashTrail} of the ring's damage per second." } });
   card('pyro', 'skill2', 1, 'p_s2', { name: 'Starfall', icon: 'meteor', forks: ['p_s2_a', 'p_s2_b'], plays: 'call the sky down on every pack.',
     desc: 'Meteor: +{s2Dmg} damage; its crater lasts {s2Dur:s} longer.', mods: { s2Dmg: 0.15, s2Dur: 2 } });
   card('pyro', 'skill2', 2, 'p_s2_a', { name: 'Twin Meteor', icon: 'star', tag: 'Burst',
@@ -125,7 +125,7 @@
     rider2: 'Impact Crater: landing knocks foes back twice as far, stuns them {cometStun:s} (not bosses) and leaves a crater that burns {craterMul:n} times as hard.', mods: { comet: 0.1, s2Dmg: 0.2 }, up: { comet: 0.05, s2Dmg: 0.1 }, r2: { cometStun: 0.5, craterMul: 2 }, r3: { sunDive: 0.6, diveTrail: 0.3 },
     form: { name: 'Sun Dive', desc: "You are untouchable for the whole leap and for 0.6 s after each landing. 0.5 s after you land you leap again toward the cursor (as far as the Meteor reaches) and land as a second impact at {sunDive} of the first. Both flights leave a burning trail that deals {diveTrail} of the crater's damage per second." } });
   card('pyro', 'element', 1, 'p_el', { name: 'Living Flame', icon: 'ember', forks: ['p_el_a', 'p_el_b'], plays: 'everything burns; keep the fire going.',
-    desc: "Your spells deal +{classElMul} Fire damage, and your bolts add Burn for {wInfFire} of each hit (the Fire path's rate counts instead when it is higher).", mods: { classElMul: 0.25, wInfFire: 0.15 } });
+    desc: "Your spells deal +{classElMul} Fire damage, and your bolts add Burn for {wInfFire} of each hit (the Flame path's rate counts instead when it is higher).", mods: { classElMul: 0.25, wInfFire: 0.15 } });
   card('pyro', 'element', 2, 'p_el_a', { name: 'White Heat', icon: 'flame', tag: 'Focus',
     desc: 'Your Burn deals +{burnMul}, and burning foes take +{searSkill} from your spells.',
     rider2: 'Flashpoint: your spells always crit a foe that has burned for {flashT:s} without a break.', mods: { burnMul: 0.25, searSkill: 0.1 }, up: { burnMul: 0.05 }, r2: { flashT: 6 }, r3: { whiteHot: 0.4, whiteT: 3 },
@@ -208,7 +208,7 @@
     rider2: 'Sentence: Verdict bursts Judge the foes they hit.', mods: { verdict: 2.5, judgeWeak: 0.5 }, up: { s2Dmg: 0.15 }, r2: { verdictJudge: 1 }, r3: { fjEcho: 0.08, fjR: 10, fjStun: 0.6 },
     form: { name: 'Final Judgment', desc: 'Judged foes are bound together: damage a Judged foe takes from you echoes {fjEcho} of itself to every other Judged foe within 200 (an echo never echoes again and carries no on-hit effects). The Verdict burst grows {fjR:n} wider and stuns {fjStun:s}.' } });
   card('cleric', 'element', 1, 'c_el', { name: 'Radiant Faith', icon: 'sun', forks: ['c_el_a', 'c_el_b'], plays: 'every swing builds toward a Smite that shields the party.',
-    desc: "Your skills deal +{classElMul} Holy damage, and your weapon stores Radiance for {wInfHoly} of each hit (Consecrate's rate counts instead when it is higher).", mods: { classElMul: 0.25, wInfHoly: 0.12 } });
+    desc: "Your skills deal +{classElMul} Holy damage, and your weapon stores Radiance for {wInfHoly} of each hit (your Radiance from other sources adds to it).", mods: { classElMul: 0.25, wInfHoly: 0.12 } });
   card('cleric', 'element', 2, 'c_el_a', { name: 'Guardian Light', icon: 'shieldgold', tag: 'Focus', coop: true,
     desc: 'Your Smites on elites and bosses deal +{smiteBig}, and heroes your Smites shield deal +{guardLight} damage for 6 s.',
     rider2: 'Judging Light: your Smites Judge the foe for {smiteJudge:s}.', mods: { smiteBig: 0.5, guardLight: 0.08 }, up: { guardLight: 0.02 }, r2: { smiteJudge: 3, smiteBig: 0.4, guardLight: 0.02 }, r3: { sunstrike: 4, smiteBig: 0.5, guardLight: 0.04 },
@@ -250,7 +250,7 @@
     rider2: 'Marrow Field: each harvested minion leaves bone shards (radius 40, 2 s) that slow foes 40%.', mods: { boneArmor: 0.03, boneCap: 0.05 }, up: { boneCap: 0.005, s2Dmg: 0.4 }, r2: { boneField: 1 }, r3: { lich: 1, lichT: 6.5, lichMul: 0.3, lichLife: 2, braceDR: 0.35 },
     form: { name: 'Lich Form', desc: 'For {lichT:s} after Bone Harvest your weapon fires 2 extra soul bolts at {lichMul} of a hit, the minions you raise last {lichLife:n} times as long, and you take {braceDR} less damage.' } });
   card('necro', 'element', 1, 'n_el', { name: 'Grave Pact', icon: 'scroll', forks: ['n_el_a', 'n_el_b'], plays: 'the army Reaps for you.',
-    desc: "Your skills deal +{classElMul} Shadow damage; your minions apply your statuses at 75% strength (from 50%) and mark Doom for {mInfShadow} of their damage (Mark of Doom's rate counts instead when it is higher).", mods: { classElMul: 0.25, minionInfuse: 0.25, mInfShadow: 0.2 } });
+    desc: "Your skills deal +{classElMul} Shadow damage; your minions apply your statuses at 75% strength (from 50%) and mark Doom for {mInfShadow} of their damage.", mods: { classElMul: 0.25, minionInfuse: 0.25, mInfShadow: 0.2 } });
   card('necro', 'element', 2, 'n_el_a', { name: 'Abyssal Toll', icon: 'mask', tag: 'Focus',
     desc: 'Your Tolls deal +{tollMul}, and each Toll or Reaped elite empowers your minions +{abyssMin} for 6 s.',
     rider2: "Abyssal Hunger: your minions' Doom counts double on elites and bosses.", mods: { tollMul: 0.4, abyssMin: 0.25 }, up: { tollMul: 0.1 }, r2: { abyssDoom: 1, tollMul: 0.35 }, r3: { maw: 0.2, mawHaste: 0.3 },
@@ -292,7 +292,7 @@
     rider2: 'Sanctus: the Peal stuns {pealStun:s} longer.', mods: { pealSwat: 1, pealShield: 0.005, pealCap: 0.02, s2Dmg: 1.45 }, up: { s2Dmg: 0.45, pealCap: 0.0025 }, r2: { pealStun: 0.3 }, r3: { wardDur: 8, wardWeak: 0.5, s2Dmg: 1.5 },
     form: { name: 'Ward Bell', desc: 'The Peal leaves a ringing ward where it rang (its radius) for {wardDur:s}: foes inside deal {wardWeak} less damage (not bosses).' } });
   card('bell', 'element', 1, 'b_el', { name: 'Storm Bronze', icon: 'bolt', forks: ['b_el_a', 'b_el_b'], plays: 'every strike charges; the storm pays it out.',
-    desc: "Your skills deal +{classElMul} Lightning damage, and your bell charges foes for {wInfLightning} of each strike (Static Charge's rate counts instead when it is higher).", mods: { classElMul: 0.25, wInfLightning: 0.15 } });
+    desc: "Your skills deal +{classElMul} Lightning damage, and your bell charges foes for {wInfLightning} of each strike (the Storm path's rate counts instead when it is higher).", mods: { classElMul: 0.25, wInfLightning: 0.15 } });
   card('bell', 'element', 2, 'b_el_a', { name: 'Lightning Rod', icon: 'bolt', tag: 'Focus',
     desc: 'A hurl strike on a charged foe deals +{rod} and discharges it at once.',
     rider2: "Grounded: a hurl's discharge stuns the foe {rodStun:s} (not bosses; at most once a second).", mods: { rod: 1.7 }, up: { rod: 0.3 }, r2: { rodStun: 0.3 }, r3: { stormBolt: 2 },

@@ -275,7 +275,7 @@
         if (o) { o.a += lost * st.fjEcho; o.x = e.x; o.y = e.y; } else p.echoQ.set(f, { a: lost * st.fjEcho, x: e.x, y: e.y });
       }
     },
-    // Radiant Faith: every weapon hit stores Radiance for wInfHoly (Consecrate's rate counts instead when it is higher)
+    // Radiant Faith: every weapon hit stores Radiance for wInfHoly
     attackOpts(p, st) { return holyAdd(st); },
     // The regular wave of an attack: Sunhammer (twice as wide, 60% farther, stuns), Crusader (steers inside the cone; Litany sends the 6th attack's wave as a fan of three), Radiant Faith (Radiance)
     waveShot(p, pr, a, st) {
@@ -349,7 +349,7 @@
 
   // Hit options of Radiant Faith, cached on the stat block: { infAdd: { holy: rate } } or null
   function holyAdd(st) {
-    if (st.holyAdd === undefined) { const r = Math.max(0, st.wInfHoly - st.holyInfuse); st.holyAdd = r > 0 ? { infAdd: { holy: r } } : null; }
+    if (st.holyAdd === undefined) st.holyAdd = st.wInfHoly > 0 ? { infAdd: { holy: st.wInfHoly } } : null;
     return st.holyAdd;
   }
 })(globalThis.ED || (globalThis.ED = {}));

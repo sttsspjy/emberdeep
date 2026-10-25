@@ -397,7 +397,7 @@ const hurt = (w, p) => { p.invuln = 0; return w.hurtPlayer(p, 1, { hazard: true 
   { const s = stage({ p_s1_a: 3 }), { w, p } = s, e = foe(w, p.x + 160, p.y); cast(s, 0, 0, 0); run(s, 0.65); ok(p.waves.length === 1, 'a wave is running'); p.waves[0].room = {}; run(s, 0.7); ok(!p.waves.length && !parts(s, 'nova.wave').some(h => h.e === e && h.t > 0.7), 'a wave does not follow the hero into another room'); }
 }
 
-{ // Phoenix Form (p_s1_b rank 3): the ring of fire follows the hero (r70, 4 s, x1.4, slows the foes inside 40%), dashes leave trail patches (r24, 2 s, 50% of the ring dps) while it burns; the shield stays 3%
+{ // Phoenix Form (p_s1_b rank 3): the ring of fire follows the hero (r70, 4 s, x1.4, slows the foes inside 40%), moving leaves trail patches (r24, 2 s, 50% of the ring dps, one per TRAIL_STEP px) while it burns; the shield stays 3%
   const s = stage({ p_s1_b: 3 }), { w, p } = s, N = ED.Stats.skillNums('nova', p.stats), s2 = stage({ p_s1_b: 2 });
   const e = foe(w, p.x + 200, p.y);
   cast(s, 0, 0, 0); cast(s2, 0, 0, 0);
@@ -409,17 +409,17 @@ const hurt = (w, p) => { p.invuln = 0; return w.hurtPlayer(p, 1, { hazard: true 
   near(p.shield, 0, 1e-9, 'no foe in the Nova: no shield'); { const q = stage({ p_s1: 1, p_s1_b: 3 }); foe(q.w, q.p.x + 70, q.p.y); cast(q, 0, 0, 0); near(q.p.shield, 0.03 * q.p.maxHp, 1e-6, 'the Mantle shield stays 3% (the class window)'); }
   p.x += 200; run(s, 0.1); near(z0.x, p.x, 1e-6, 'the ring moves with the hero'); near(z0.y, p.y, 1e-6, 'and keeps its height');
   const d0 = s.log.filter(h => h.kind === 'dot').length; run(s, 0.6); ok(s.log.filter(h => h.kind === 'dot').length > d0 && e.hp < 5000, 'the moved ring burns the foe it now overlaps');
-  // the trail: a dash lays patches every 20 px while the ring burns
-  const dash = (q, secs) => { const hero = q.p; hero.dashT = 0.17; hero.dashDx = 1; hero.dashDy = 0; q.w.playerDash(hero, 1, 0); for (let i = 0; i < Math.round(secs * 60); i++) { ED.Sim.movePlayer(hero, { mx: 0, my: 0 }, 1 / 60, q.w.room, q.w.locked, q.w.zones); q.w.update(1 / 60); q.w.fx.length = 0; } };
+  // the trail: walking lays a patch every TRAIL_STEP px while the ring burns (no dash needed)
+  const dash = (q, secs) => { const hero = q.p; hero.x = 200; for (let i = 0; i < Math.round(secs * 60); i++) { ED.Sim.movePlayer(hero, { mx: 1, my: 0 }, 1 / 60, q.w.room, q.w.locked, q.w.zones); q.w.update(1 / 60); q.w.fx.length = 0; } };
   const patches = (q) => q.w.zones.filter(z => z.kind === 'pfire' && z.w !== C.PHOENIX_TAG && Math.abs(z.r - 24) < 0.01);
-  const t3 = stage({ p_s1_b: 3 }); cast(t3, 0, 0, 0); t3.w.zones.length = 1; dash(t3, 0.3);
-  const pt = patches(t3); ok(pt.length >= 3 && pt.length <= 6, `a dash leaves a trail of r24 patches (${pt.length})`);
+  const t3 = stage({ p_s1_b: 3 }); cast(t3, 0, 0, 0); t3.w.zones.length = 1; dash(t3, 1.2);
+  const pt = patches(t3); ok(pt.length >= 3 && pt.length <= 6, `walking leaves a trail of r24 patches (${pt.length})`);
   ok(pt.every(z => Math.abs(z.dur - 2) < 1e-9 && Math.abs(z.dps - 0.5 * N.p.phoenix.dmg) < 1e-6 && z.clsEl === 'fire' && z.owner === 'p0'), 'patches: 2 s, 50% of the ring dps, class Fire');
-  ok(pt.every((z, i) => i === 0 || Math.hypot(z.x - pt[i - 1].x, z.y - pt[i - 1].y) >= 19), 'patches are 20 px apart');
-  near(Math.abs(pt[pt.length - 1].x - pt[0].x), 20 * (pt.length - 1), 25, 'the patches follow the dash path');
-  const n2 = stage({ p_s1_b: 2 }); cast(n2, 0, 0, 0); n2.w.zones.length = 1; dash(n2, 0.3); ok(!patches(n2).length, 'rank 2: no trail');
-  const n3 = stage({ p_s1_b: 3 }); dash(n3, 0.3); ok(!patches(n3).length, 'no trail before a Nova');
-  const t4 = stage({ p_s1_b: 3 }); cast(t4, 0, 0, 0); run(t4, 4.3); t4.w.zones.length = 0; dash(t4, 0.3); ok(!patches(t4).length, 'no trail once the ring has burned out (4 s)');
+  ok(pt.every((z, i) => i === 0 || Math.hypot(z.x - pt[i - 1].x, z.y - pt[i - 1].y) >= C.TRAIL_STEP - 1), `patches are ${C.TRAIL_STEP} px apart`);
+  near(Math.abs(pt[pt.length - 1].x - pt[0].x), C.TRAIL_STEP * (pt.length - 1), 25, 'the patches follow the hero\'s path');
+  const n2 = stage({ p_s1_b: 2 }); cast(n2, 0, 0, 0); n2.w.zones.length = 1; dash(n2, 1.2); ok(!patches(n2).length, 'rank 2: no trail');
+  const n3 = stage({ p_s1_b: 3 }); dash(n3, 1.2); ok(!patches(n3).length, 'no trail before a Nova');
+  const t4 = stage({ p_s1_b: 3 }); cast(t4, 0, 0, 0); run(t4, 4.3); t4.w.zones.length = 0; dash(t4, 1.2); ok(!patches(t4).length, 'no trail once the ring has burned out (4 s)');
   // a second Nova inside the ring's life renews it instead of adding a second ring
   const t5 = stage({ p_s1_b: 3 }); cast(t5, 0, 0, 0); run(t5, 2); cast(t5, 0, 0, 0); ok(t5.w.zones.filter(z => z.w === C.PHOENIX_TAG).length === 1 && t5.w.zones.find(z => z.w === C.PHOENIX_TAG).t === 0, 'a second Nova renews the ring');
   ok(evOf(t5, 'pyPhoenix').length + t5.w.fx.filter(ev => ev.t === 'pyPhoenix').length === 1, 'renewing the ring announces no second one');

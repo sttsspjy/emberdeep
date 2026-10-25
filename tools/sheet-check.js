@@ -49,11 +49,12 @@ function modelOf(cls, boons, wi, o) {
   near(leg.pre, 67.8, 0.05, 'Judgment leg with its own vulnerability'); near(cl.skills[1].perCast, 135.6, 0.1, 'Judgment per cast (two legs)'); near(by(cl, 0, 'zone').here * 7, 143.85, 0.1, 'Sanctuary 7 ticks');
   const nc = modelOf('necro', {}, 0, { stat: { crit: 0 } }), mn = by(nc, 0, 'minion');
   near(mn.here, 14.535, 0.01, 'Minion hit'); ok(mn.oneFoe === 51, `Minions: 3 x 17 hits (got ${mn.oneFoe})`); near(by(nc, 1, 'burst').raw, 60.3, 0.05, 'Harvest burst');
-  // Set 2: Stoke x1 (+20% Burn), Kindle, stratum III (no stratum is weak or resists: affinity x1), crit 5%.
+  // Set 2: Stoke x1 (+burnMul Burn), Kindle, stratum III (no stratum is weak or resists: affinity x1), crit 5%.
   const e2 = modelOf('pyro', { stoke: 1, kindle: 1 }, 0, { ctx: { stratum: 3 }, stat: { crit: 0.05 } });
   near(e2.mult.dmg.total, 1, 1e-9, 'Set 2 damage'); near(by(e2, 0, 'blast').here, 48.6 * (1 + 0.05 * 0.75), 0.05, 'Set 2 Nova blast');
-  near(by(e2, 0, 'burn').here, 28.4 * 1.2, 0.05, 'Set 2 Nova burn (Burn strength)');
-  near(by(e2, 1, 'impact').statusAdd.here, 0.5 * by(e2, 1, 'impact').pre * 1.2, 0.05, 'Set 2 Meteor burn add');
+  const sk = 1 + ED.BOONS.stoke.mods.burnMul;
+  near(by(e2, 0, 'burn').here, 28.4 * sk, 0.05, 'Set 2 Nova burn (Burn strength)');
+  near(by(e2, 1, 'impact').statusAdd.here, 0.5 * by(e2, 1, 'impact').pre * sk, 0.05, 'Set 2 Meteor burn add');
   near(by(e2, 1, 'crater').here * by(e2, 1, 'crater').oneFoe, 6 * 8.1, 0.1, 'Set 2 crater, 6 ticks');
 }
 
@@ -67,8 +68,7 @@ for (const key in ED.SKILL_SHEET) { const [sid, pid] = key.split('.'); ok(ED.SKI
   for (const id of ED.BOON_IDS) { const b = ED.BOONS[id]; for (let r = 1; r <= (b.max || 5) + 1; r++) { const t = ED.Sheet.text(id, r, st); if (!t || /[{}\[\]]/.test(t)) { bad++; console.log('FAIL boon text ' + id + ' rank ' + r + ': ' + t); } } }
   ok(bad === 0, 'boon texts resolve at every rank');
   ok(ED.Sheet.text('focus', 1, st) === 'Skills recharge 10% faster.' && ED.Sheet.text('focus', 2, st) === 'Skills recharge 20% faster.', 'Focus text follows the rank');
-  ok(ED.Sheet.text('bladedash', 1, st).indexOf('(28 damage)') >= 0, 'Blade Dash shows its damage at the Knight Power (1.2 x 23.4)');
-  ok(ED.Sheet.text('sanctity', 2, st).indexOf('0.5% more') >= 0 && ED.Sheet.text('sanctity', 2, st).indexOf('6% more') >= 0, 'small percentages keep their decimals');
+  ok(ED.Sheet.text('b_s2_b', 1, st).indexOf('0.5% max health') >= 0 && ED.Sheet.text('b_s2_b', 1, st).indexOf('up to 2%') >= 0, 'small percentages keep their decimals');
   ok(ED.Sheet.text('k_atk_h', 3, st).indexOf('Follow-Through') >= 0, 'class cards render through boonText');
   // every number a token prints equals the stat the boon adds
   for (const id of ED.BOON_IDS) { const b = ED.BOONS[id]; if (b.route || !b.mods) continue; for (const k in b.mods) { const m = new RegExp('\\{' + k + '(\\*[^}:]+)?(:\\w+)?\\}').exec(b.desc); if (m && !m[1] && b.mods[k] !== 0) ok(ED.Sheet.text(id, 1, st).indexOf(ED.Sheet.fmt(k, Math.abs(b.mods[k]), m[2] && m[2].slice(1))) >= 0, 'token ' + k + ' of ' + id); } }
@@ -89,7 +89,7 @@ for (const key in ED.SKILL_SHEET) { const [sid, pid] = key.split('.'); ok(ED.SKI
     ok(['p_s1_a:Collapse:Supernova', 'p_s1_b:Rebirth Flare:Phoenix Form', 'p_s2_a:Meteor Shower:Cataclysm', 's_s1_a:Twin Cut:Death Blossom', 's_s1_b:Lure:Hall of Mirrors', 's_s2_a:Ambush Sweep:Eclipse', 's_s2_b:Shroud:Umbral Veil'].every(x => { const [id, r2, r3] = x.split(':'); return S.nextText(id, 1, st).indexOf('unlocks ' + r2) >= 0 && S.nextText(id, 2, st).indexOf('unlocks ' + r3) >= 0; }), 'the Pyromancer and Shade skill forks name their rank 2 rider and rank 3 transform in the Next rank line');
   }
   ok(S.nextText('k_el_a', 1, st).indexOf('unlocks Ruin Seal') >= 0 && S.nextText('k_el_a', 2, st).indexOf('unlocks Doombrand') >= 0 && S.nextText('k_el_a', 2, st).indexOf('6 ailments') >= 0, 'a route card names the rider it unlocks at rank 2 and the transform at rank 3');
-  ok(S.fmt('arcStun', 0.25, 'sec') === '0.25s' && S.fmt('arcStun', 0.5, 'sec') === '0.5s' && S.fmt('venomHold', 2, 'sec') === '2s' && S.fmt('venomHold', 12, 'sec') === '12s', 'seconds keep two decimals below 1 s');
+  ok(S.fmt('arcStun', 0.25, 'sec') === '0.25s' && S.fmt('arcStun', 0.5, 'sec') === '0.5s' && S.fmt('chargeHold', 2, 'sec') === '2s' && S.fmt('chargeHold', 12, 'sec') === '12s', 'seconds keep two decimals below 1 s');
   ok(S.text('overload', 1, st).indexOf('0.25s') >= 0, 'Overload states its real stun time: ' + S.text('overload', 1, st));
   ok(S.text('pierce', 1, st).indexOf('+1 foe.') >= 0 && S.text('pierce', 2, st).indexOf('+2 foes.') >= 0, 'counts pluralise: ' + S.text('pierce', 1, st) + ' / ' + S.text('pierce', 2, st));
   const mb = modelOf('knight', { k_el: 1, k_el_a: 1 }, 0), ids = mb.build.statuses.map(x => x.id);
@@ -379,8 +379,8 @@ for (const cls of ['knight', 'ranger', 'pyro', 'shade']) {
   ok(h && h.label === 'Finisher' && h.dps > m.weapon.dps, `Masterstroke ${cls}: the weapon card lists the finisher and its cycle out-damages the plain attacks`);
   rel(got, h.dps, 0.12, `Masterstroke ${cls}: damage a second of the attack, hold and finisher cycle`);
 }
-// evolutions: the strikes of each path (poison builds Venom, which raises later hits: not compared)
-for (const [cls, evo, stratum] of [['knight', 'fire', 1], ['pyro', 'fire', 1], ['ranger', 'ice', 1], ['ranger', 'lightning', 1], ['cleric', 'holy', 3], ['shade', 'shadow', 1], ['ranger', 'general', 1], ['knight', 'general', 1], ['necro', 'ice', 1]]) {
+// evolutions: the plain attack of an evolved hero against the model (no evolution adds shots)
+for (const [cls, evo, stratum] of [['knight', 'fire', 1], ['pyro', 'fire', 1], ['ranger', 'ice', 1], ['ranger', 'lightning', 1], ['ranger', 'general', 1], ['knight', 'general', 1], ['necro', 'ice', 1]]) {
   const boons = {}; boons['evo_' + evo] = 1;
   const r = weaponRun(cls, 0, boons, { secs: 30, stratum });
   rel(r.total / r.atk, r.m.weapon.dps / r.m.weapon.aps, 0.06, `${cls} evolution ${evo} damage per attack`);
@@ -415,7 +415,7 @@ for (const [cls, boons, tag] of [['ranger', { r_atk: 1, r_atk_s: 2 }, 'Flurry (Q
 
 // Necromancer riders and forms: Grave Bolt and the Hexed-foe bonus on the weapon (a staged run), the pack and lone-foe values of the extras, and the power band of the four forks
 {
-  const ex = (wpn, l) => wpn.extras.find(e => e.label === l), MD = require('./model.js')(ED, { pack: 4 }), GATES = { doommark: 1, envenom: 1 }, MIDN = Object.assign({ focus: 1 }, GATES);
+  const ex = (wpn, l) => wpn.extras.find(e => e.label === l), MD = require('./model.js')(ED, { pack: 4 }), GATES = { kindle: 1, frostbite: 1 }, MIDN = Object.assign({ focus: 1 }, GATES);
   { const r = weaponRun('necro', 0, { n_atk: 1, n_atk_h: 3 }, { secs: 30 }), g = ex(r.m.weapon, 'Grave Bolt'); ok(g && g.perAttack > 0, 'Grave Bolt lists a weapon extra'); if (g) rel(r.total / r.atk, r.m.weapon.avg * r.m.weapon.oneFoe + g.perAttack, 0.04, 'Grave Bolt damage per attack on one foe'); }
   { const r = weaponRun('necro', 0, { n_atk: 1, n_atk_s: 1 }, { secs: 30 }), h = ex(r.m.weapon, 'Hexed foes'); ok(h && h.perAttack > 0, 'Soul Barrage lists a Hexed foes extra'); if (h) rel(r.total / r.atk, r.m.weapon.avg * r.m.weapon.oneFoe + h.perAttack, 0.06, 'Soul Barrage damage per attack on a Hexed foe'); }
   { const r = weaponRun('necro', 1, { n_atk: 1, n_atk_h: 3 }, { secs: 30 }), g = ex(r.m.weapon, 'Grave Bolt'); ok(g && g.perAttack > 0 && r.m.weapon.kind === 'melee', 'the Soul Scythe lists the Grave Bolt too'); if (g) rel(r.total / r.atk, r.m.weapon.avg * r.m.weapon.oneFoe + g.perAttack, 0.04, 'Grave swing damage per attack on one foe'); }
@@ -521,9 +521,9 @@ for (const [stratum, pact, dark, party, boons] of [[1, 0, false, 1, {}], [3, 2, 
 }
 
 // ---------------- statuses on a foe of the reference health: the payoffs the estimates promise (weapon damage only, no crit) ----------------
-function statusRun(boons, stratum, secs, until, each) {
+function statusRun(boons, stratum, secs, until, each, stat) { // stat: stats set on the hero (the class-only Holy and Shadow engines)
   const { w, p, e } = stage('ranger', boons, 0, {});
-  w.stratum = stratum;
+  w.stratum = stratum; if (stat) Object.assign(p.stats, stat);
   const m0 = ED.Sheet.compute(p, ED.Sheet.ctx(w, p), { raw: true }), ref = m0.ref;
   e.maxHp = e.hp = ref.hp; e.hpLever = ref.hp / ref.statusHp; // a foe of the reference health; the pin below keeps it alive unless the payoff is a kill
   let next = 0, t = null;
@@ -532,7 +532,6 @@ function statusRun(boons, stratum, secs, until, each) {
     w.update(1 / 60);
     if (each) each(w, p, e);
     if (until === 'freeze' && e.frozen > 0) { t = w.time; break; }
-    if (until === 'venom' && e.venom >= 100) { t = w.time; break; }
     if (until === 'reap' && e.hp <= 0) { t = w.time; break; }
     if (until !== 'reap') e.hp = e.maxHp;
   }
@@ -542,27 +541,22 @@ function statusRun(boons, stratum, secs, until, each) {
   const r = statusRun({ frostbite: 1 }, 6, 12, 'freeze'), st = r.p.stats, pow = 1 + st.statusPow; // stratum VI: a reference foe of 230 health takes several hits to freeze
   const rate = r.m0.proc.split.weapon * st.iceInfuse * pow / r.ref.statusHp * C.CHILL_K * (1 + st.chillMul);
   ok(r.t !== null && Math.abs(r.t - 100 / rate) <= 100 / rate * 0.15 + 0.35, `time to freeze a reference foe ${r.t && r.t.toFixed(2)} s vs ${(100 / rate).toFixed(2)} s from the weapon`);
-  const est = r.m0.mult.status.find(s => s.el === 'ice').est; ok(est.secs > 0 && est.secs <= 100 / rate + 1e-9, 'Ice estimate counts the skills on top of the weapon');
+  const est = r.m0.mult.status.find(s => s.el === 'ice').est; ok(est.first > 0 && est.first <= 100 / rate + 1e-9 && est.secs >= est.first - 1e-9, 'Ice estimate counts the skills on top of the weapon; later freezes take longer (freeze resistance)');
+}
+{ // Storm: the foe discharges at its threshold; the discharge damage a second is the charge income x DIS_K x (1 + shockMul)
+  const r = statusRun({ staticcharge: 1, highvoltage: 2 }, 1, 20, null);
+  const dps = hits.filter(h => h.kind === 'chain' && h.el === 'lightning' && h.t > 6).reduce((s, h) => s + h.dealt, 0) / (r.w.time - 6), st = r.p.stats;
+  const want = r.m0.proc.split.weapon * st.lightningInfuse * (1 + st.statusPow) * C.DIS_K * (1 + st.shockMul + st.capacitor); // the Lightning estimate on the weapon alone (it counts the skills too)
+  rel(dps, want, 0.15, 'Charge: discharge damage per second on one foe, threshold discharges');
 }
 {
-  const r = statusRun({ envenom: 1 }, 6, 16, 'venom'), st = r.p.stats, pow = 1 + st.statusPow;
-  const rate = r.m0.proc.split.weapon * st.poisonInfuse * pow / r.ref.statusHp * C.VENOM_K * (1 + st.venomBuild);
-  ok(r.t !== null && Math.abs(r.t - 100 / rate) <= 100 / rate * 0.15 + 0.35, `time to full Venom ${r.t && r.t.toFixed(2)} s vs ${(100 / rate).toFixed(2)} s from the weapon`);
-}
-{
-  let nextDash = 0; // a dash past the foe every dashCd: the sweep from the foe to the hero discharges it
-  const r = statusRun({ staticcharge: 1, highvoltage: 2 }, 1, 20, null, (w, p, e) => { if (w.time >= nextDash) { nextDash = w.time + p.stats.dashCd; p.dashHit = null; p.disX = e.x; p.disY = e.y; w.dashSweep(p); } });
-  const dps = hits.filter(h => h.kind === 'chain' && h.t > 6).reduce((s, h) => s + h.dealt, 0) / (r.w.time - 6), st = r.p.stats, cd = st.dashCd, want = r.m0.proc.split.weapon * st.lightningInfuse * (1 + st.statusPow) * Math.min(cd, C.CHARGE_HOLD + st.chargeHold) * C.DIS_K * (1 + st.shockMul) / cd; // the Lightning estimate on the weapon alone (it counts the skills too)
-  rel(dps, want, 0.1, 'Charge: discharge damage per second on one foe, a dash every dashCd');
-}
-{
-  const r = statusRun({ consecrate: 1, zealotry: 2 }, 3, 20, null); // Smite damage per second (Holy is neutral in stratum III)
+  const r = statusRun({}, 3, 20, null, null, { holyInfuse: 0.4, smiteMul: 0.3 }); // Smite damage per second (Holy is neutral in stratum III)
   const st = r.p.stats, dps = hits.filter(h => h.kind === 'smite').reduce((s, h) => s + h.dealt, 0) / r.w.time, want = r.m0.proc.split.weapon * st.holyInfuse * (1 + st.smiteMul);
   rel(dps, want, 0.1, 'Radiance: Smite damage per second on one foe');
 }
 {
-  const r = statusRun({ doommark: 1, malignance: 2 }, 3, 40, 'reap'), st = r.p.stats; // Shadow is neutral in stratum III
-  const dealt = hits.filter(h => h.kind !== 'dot' || !h.raw).reduce((s, h) => s + h.dealt, 0), i = st.shadowInfuse * (1 + st.doomMul);
+  const r = statusRun({}, 3, 40, 'reap', null, { shadowInfuse: 0.4 }), st = r.p.stats; // Shadow is neutral in stratum III
+  const dealt = hits.filter(h => h.kind !== 'dot' || !h.raw).reduce((s, h) => s + h.dealt, 0), i = st.shadowInfuse * (1 + (st.doomMul || 0));
   ok(r.t !== null && Math.abs(dealt / r.ref.hp - 1 / (1 + i)) <= 0.12, `Doom: a foe is Reaped after ${(dealt / r.ref.hp * 100).toFixed(0)}% of its health, modelled ${(100 / (1 + i)).toFixed(0)}%`);
 }
 
@@ -576,7 +570,8 @@ function statusRun(boons, stratum, secs, until, each) {
   const st = m.mult.status.find(s => s.el === 'fire');
   const want = m.proc.split.weapon * p.stats.fireInfuse * (1 + p.stats.burnMul); // the weapon's share of the model's Burn input (this run casts no skills)
   ok(st && Math.abs(burn - want) <= want * 0.08, `Burn damage per second ${burn.toFixed(1)} vs modelled ${want.toFixed(1)}`);
-  ok(st && Math.abs(st.est.dps - (m.proc.split.weapon + m.proc.split.skills) * p.stats.fireInfuse * (1 + p.stats.burnMul)) <= 0.01, 'Burn estimate follows the damage that feeds it');
+  const capDps = (C.BURN_CAP + p.stats.burnCap) * ED.burnValue(p.stats); // a foe holds at most the cap of stacks
+  ok(st && Math.abs(st.est.dps - Math.min(capDps, (m.proc.split.weapon + m.proc.split.skills) * p.stats.fireInfuse * (1 + p.stats.burnMul))) <= 0.01, 'Burn estimate follows the damage that feeds it, up to the stack cap');
 }
 
 // ---------------- Knight Attack and Element forms in the model ----------------
@@ -612,7 +607,7 @@ function statusRun(boons, stratum, secs, until, each) {
 
 // ---------------- Cleric Attack and Element forms in the model ----------------
 {
-  const MIDC = { consecrate: 1, frostbite: 1, focus: 1 };
+  const MIDC = { generalist: 1, focus: 1 }; // Steel: no pack status, so a pack's extra damage is the wave's own
   const Cm = (boons, o) => modelOf('cleric', Object.assign({}, MIDC, boons), 0, { ctx: { stratum: (o && o.stratum) || 4 }, stat: Object.assign({ crit: 0 }, o && o.stat) });
   const ex = (m, label) => m.weapon.extras.find(e => e.label === label), sec = (m, label) => ex(m, label).perAttack * m.weapon.aps;
   const heroOf = (boons, stat) => { const b = { cls: 'cleric', weapon: ED.CLASSES.cleric.weapons[0], boons: Object.assign({}, MIDC, boons), relics: [], meta: META(), pact: 0 }, stats = ED.Stats.compute(b); Object.assign(stats, { crit: 0 }, stat); stats.sn = {}; return { pid: 'p', name: 'T', cls: 'cleric', weapon: b.weapon, boons: b.boons, relics: [], meta: b.meta, stats, hp: stats.maxHp, maxHp: stats.maxHp, shield: 0, picks: 0, slot: 0 }; };
@@ -739,7 +734,7 @@ function statusRun(boons, stratum, secs, until, each) {
 // Stratum III at rank 2 (granted at boss II): a non-Guard fork 31.5-38.5, a Guard fork >= 28. Stratum IV at rank 3 (boss III): non-Guard 54-66, Guard >= 48 and +25% EHP or 30% stun.
 {
   const MD = require('./model.js')(ED, { pack: 4 }), col = (v) => Math.round(v * 100);
-  const GATE2 = { knight: ['kindle', 'frostbite'], ranger: ['kindle', 'frostbite'], pyro: ['kindle', 'staticcharge'], shade: ['kindle', 'frostbite'], cleric: ['consecrate', 'frostbite'], necro: ['doommark', 'envenom'], bell: ['staticcharge', 'frostbite'] };
+  const GATE2 = { knight: ['kindle', 'frostbite'], ranger: ['kindle', 'frostbite'], pyro: ['kindle', 'staticcharge'], shade: ['kindle', 'frostbite'], cleric: ['staticcharge', 'frostbite'], necro: ['kindle', 'frostbite'], bell: ['staticcharge', 'frostbite'] };
   const assess = (cls, boons, stratum) => {
     const b = { cls, weapon: ED.CLASSES[cls].weapons[0], boons, relics: [], meta: META(), pact: 0 }, stats = ED.Stats.compute(b);
     return MD.assess({ pid: 'p', name: 'T', cls, weapon: b.weapon, boons, relics: [], meta: b.meta, stats, hp: stats.maxHp, maxHp: stats.maxHp, shield: 0, picks: 0, slot: 0 }, CTX({ stratum, level: 8 }));
