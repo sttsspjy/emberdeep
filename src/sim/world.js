@@ -257,10 +257,13 @@
   // Room xp budget by stratum (solo, per room; x DARK_LOOT in a dark room, not scaled by the party): threat drops, fodder motes (FODDER_XP_SHARE of it, spread over the quota) and the clear pile together drop exactly this.
   // champion: the stratum IV champion rooms.
   W.ROOM_XP = { combat: [24, 50, 104, 120], elite: [38, 80, 166, 190], champion: [100, 100, 100, 100] }; W.FODDER_XP_SHARE = 0.5;
-  // Gold dropped by a 'gold' room reward (shared with the UI): 15 + 8 per stratum, times the global gold multiplier.
-  W.rewardGold = (stratum) => Math.round((15 + 8 * stratum) * W.GOLD_MUL);
+  // Gold dropped by a 'gold' room reward (shared with the UI): 15 + 8 per stratum, times the stratum's gold multiplier.
+  W.rewardGold = (stratum) => Math.round((15 + 8 * stratum) * W.goldMul(stratum));
   W.HEART_KILL = 0.02; // heart chance of a non-elite, non-fodder kill
-  W.GOLD_MUL = 0.65; // every gold drop (kills, rooms, chests, rewards) is scaled by this; shops sell at full price
+  // Every non-exact gold drop (kills, rooms, chests, bosses) and the gold reward is scaled by goldMul(s) = GOLD_MUL x GOLD_S[s]; shops sell at full price.
+  // GOLD_S 2 at stratum I: a solo path reaches a row 5-7 shop with about one buy's gold.
+  W.GOLD_MUL = 0.65; W.GOLD_S = [2, 1, 1, 1];
+  W.goldMul = (s) => W.GOLD_MUL * W.perStratum(W.GOLD_S, s);
   W.prototype.threat = function () { return W.perStratum(W.THREAT, this.stratum); };
   // Row fraction of a room (default the current one) on its floor: room.row (else room.dist) over the floor's largest; 0 for the start and boss rooms (bosses keep the stratum's depth).
   W.prototype.rowFrac = function (room) {
@@ -487,9 +490,10 @@
     if (fill) p.hp = p.maxHp;
     else if (p.maxHp > prev && !p.downed && !p.dead) p.hp += p.maxHp - prev;
     p.hp = Math.min(p.hp, p.maxHp);
+    this.relicHooks(p); // the hero's relic hook lists (relics.js)
   };
 
-  W.prototype.buildOf = function (p) { return { pid: p.pid, boons: Object.assign({}, p.boons), relics: p.relics.slice(), chaliceHp: p.chaliceHp, bonusHp: p.bonusHp }; };
+  W.prototype.buildOf = function (p) { return { pid: p.pid, boons: Object.assign({}, p.boons), relics: p.relics.slice(), chaliceHp: p.chaliceHp, bonusHp: p.bonusHp, rs: Object.assign({}, p.rs) }; }; // rs: relic run counters (relics.js)
   W.prototype.sendBuild = function (p) { this.emit({ t: 'build', b: this.buildOf(p) }); };
 
   // Heals up to max HP (no heal ever overflows into a shield). Returns the HP actually restored.
@@ -530,31 +534,38 @@
     for (const p of this.players.values()) if (p.shield > 0) p.shield = Math.max(0, p.shield - ED.CONST.SHIELD_DECAY * p.maxHp * dt);
   };
 
-  // Every relic can drop; relics no hero holds come first, else the whole list.
-  W.prototype.relicPool = function () {
-    const held = new Set();
+  // Relic ids of the kind minRar asks for: 'boss' or 'curse' exactly, else c / r / e at that rarity or above (never boss relics or curses).
+  const RAR_ORDER = { c: 0, r: 1, e: 2 };
+  const relicKind = (minRar) => (minRar === 'boss' || minRar === 'curse' ? (id) => ED.RELICS[id].rar === minRar : (id) => RAR_ORDER[ED.RELICS[id].rar] >= RAR_ORDER[minRar || 'c']);
+  // Relics of that kind no hero holds, else every relic of that kind.
+  W.prototype.relicPool = function (minRar) {
+    const held = new Set(), ok = relicKind(minRar);
     for (const p of this.players.values()) for (const id of p.relics) held.add(id);
-    const pool = ED.RELIC_IDS.filter(id => !held.has(id));
-    return pool.length ? pool : ED.RELIC_IDS;
+    const all = ED.RELIC_IDS.filter(ok), pool = all.filter(id => !held.has(id));
+    return pool.length ? pool : all;
   };
-  // A relic roll at least minRar and not in `exclude`, weighted by rarity and stratum.
+  // Drop weights of c / r / e at stratum s: commons give way to rares and epics deeper down.
+  W.RELIC_W = (s) => { const k = Math.max(0, Math.min(3, s - 1)); return { c: 60 - 8 * k, r: 32 + 4 * k, e: 8 + 4 * k }; };
+  // A relic roll at least minRar (or exactly 'boss' / 'curse', drawn evenly) and not in `exclude`, weighted by rarity and stratum (W.RELIC_W).
   W.prototype.rollRelic = function (minRar, exclude) {
-    const order = { c: 0, r: 1, e: 2, l: 3 };
-    const base = this.relicPool();
-    let pool = base.filter(id => order[ED.RELICS[id].rar] >= order[minRar || 'c'] && !(exclude && exclude.has(id)));
+    const base = this.relicPool(minRar);
+    let pool = base.filter(id => !(exclude && exclude.has(id)));
     if (!pool.length) pool = base;
-    const s = this.stratum;
-    const w = { c: 50, r: 34 + s * 3, e: 14 + s * 3, l: 3 + s };
+    if (minRar === 'boss' || minRar === 'curse') return this.rng.pick(pool);
+    const w = W.RELIC_W(this.stratum);
     return this.rng.weighted(pool, id => w[ED.RELICS[id].rar]);
   };
 
-  // Gives p a relic and rebuilds its stats.
+  // Gives p a relic, rebuilds its stats and runs the relic's get hook (relics.js); curses are not counted as held relics.
   W.prototype.giveRelic = function (p, id) {
     p.relics.push(id);
     this.recalc(p, false);
-    this.run.maxRelics = Math.max(this.run.maxRelics, p.relics.length);
-    p.maxRelics = Math.max(p.maxRelics, p.relics.length); // the most this hero held
+    const n = ED.heldRelics(p.relics);
+    this.run.maxRelics = Math.max(this.run.maxRelics, n);
+    p.maxRelics = Math.max(p.maxRelics, n); // the most this hero held
     this.emit({ t: 'relic', pid: p.pid, id, x: p.x, y: p.y });
+    const f = ED.RELIC_FX[id];
+    if (f && f.get) f.get.call(this, p);
     this.sendBuild(p);
   };
 
@@ -573,6 +584,7 @@
     this.floorSeed = this.rng.seed();
     this.floor = D.generate(s, this.floorSeed);
     this.roomState = {}; this.floorFights = 0; // fights cleared on this floor (the Platino's cue, rooms.js)
+    this.patches = {}; // room id -> merged room patch of this floor (events.js patchRoom, net.js RP)
     for (const r of this.floor.rooms) this.roomState[r.id] = { visited: false, known: true, cleared: false, props: null, broken: 0 }; // the whole map shows from the start
     this.run.roomsTotal += this.floor.rows + 2; // one path: the start camp, a room per row and the boss
     this.mapRun = { dark: 0, elite: 0 }; // dark and elite rooms cleared on this stratum (Cartographer)
@@ -589,6 +601,7 @@
   // Puts the party in room id: at its south entry when it came through a door (via = the door key it left by), else around the centre (the start camp).
   W.prototype.enterRoom = function (id, via) {
     this.collectAll();
+    if (this.ev) this.endEvent(); // the event of the room left (events.js)
     this.enemies.length = 0; this.projs.length = 0; this.zones.length = 0; this.chainQ.length = 0; this.curChain = null; this.corpses.length = 0;
     if (this.fg) this.fg.ok = false;
     this.boss = null; this.enc = null; this.critter = null;
@@ -611,8 +624,10 @@
     for (const a of this.allies) { const o = this.players.get(a.owner); if (o) { a.x = o.x + this.rng.range(-20, 20); a.y = o.y + this.rng.range(-20, 20); } }
     if (!rs.props) rs.props = this.makeProps(room);
     this.props = rs.props;
+    if (room.type === 'event' && !rs.evOn) this.startEvent(room, rs); // first entry: the event's identity and props (events.js)
     this.roomTime = 0;
     this.locked = false;
+    this.relicAll('enter', room);
     if (!rs.cleared) this.beginEncounter(room, rs);
     this.computeFlow();
     this.emit({ t: 'room', id, from: via || '', pos, locked: this.locked, ep: this.roomEpoch });
@@ -639,7 +654,7 @@
 
   W.prototype.summary = function () {
     const players = {};
-    for (const p of this.players.values()) players[p.pid] = Object.assign({ cls: p.cls, name: p.name, kills: p.kills, dealt: Math.round(p.dealt), emberBonus: p.stats.emberBonus || 0, relics: p.relics.length, evo: p.stats.evo || null, maxRelics: p.maxRelics, revivesGiven: p.revivesGiven }, p.sec);
+    for (const p of this.players.values()) players[p.pid] = Object.assign({ cls: p.cls, name: p.name, kills: p.kills, dealt: Math.round(p.dealt), emberBonus: p.stats.emberBonus || 0, relics: ED.heldRelics(p.relics), evo: p.stats.evo || null, maxRelics: p.maxRelics, revivesGiven: p.revivesGiven }, p.sec);
     return {
       victory: this.victory, retreat: !!this.retreat, abandoned: !!this.abandoned, stratum: this.stratum, time: Math.round(this.time), kills: this.run.kills, fodderKills: this.run.fodderKills,
       roomsCleared: this.run.roomsCleared, elitesKilled: this.run.elitesKilled, bosses: this.run.bosses, bossCount: this.run.bossCount,
@@ -647,6 +662,7 @@
       revives: this.run.revives, flawlessBoss: this.run.flawlessBoss, maxGold: this.run.maxGold, maxRelics: this.run.maxRelics, players,
       evolved: [...this.players.values()].some(p => !!p.stats.evo), fullClear: this.run.fullClear,
       roomsVisited: this.run.roomsVisited, roomsTotal: this.run.roomsTotal, darkCleared: this.run.darkCleared, champs: this.run.champs | 0, gold777: !!this.run.gold777, oneFace: !!this.run.oneFace,
+      lore: (this.run.lore || []).slice(), // ED.LORE pages the party found this run (events.js)
     };
   };
 
@@ -673,6 +689,7 @@
     this.flowT -= dt;
     if (this.flowT <= 0) { this.computeFlow(); this.flowT = 0.25; }
     this.updateEncounter(dt);
+    if (this.ev) this.updateEvent(dt); // event votes and minigame ticks (events.js)
     for (let i = 0; i < this.enemies.length; i++) { this.updateEnemy(this.enemies[i], dt); if (!fg.direct) this.foeDrift(i); }
     this.separate();
     this.foeGrid();
@@ -686,6 +703,7 @@
     fg.live = false;
     this.checkDoors(dt);
     this.updateOffers(dt);
+    if (this.bossBeat) this.updateBossBeat(dt); // boss rewards land after a beat (rooms.js)
     this.checkDefeat();
     this.run.maxGold = Math.max(this.run.maxGold, this.gold);
     if (this.gold === 777 && !this.run.gold777) this.secretW('gold777'); // party gold at a tick's end
@@ -703,13 +721,13 @@
     if (p.dead) return;
     if (p.downed) {
       let helpers = 0;
-      for (const q of this.players.values()) if (q !== p && !q.downed && !q.dead && U.dist2(q.x, q.y, p.x, p.y) < 48 * 48) helpers++;
+      for (const q of this.players.values()) if (q !== p && !q.downed && !q.dead && U.dist2(q.x, q.y, p.x, p.y) < 48 * 48) helpers += 1 + (q.stats.reviveK || 0); // Lifeline Rope: a helper counts twice
       if (helpers) {
         p.revive += dt * (0.4 + 0.2 * (helpers - 1));
         if (p.revive >= 1) {
           p.downed = false; p.revive = 0; p.hp = Math.round(p.maxHp * 0.35); p.invuln = 1.5;
           this.run.revives++;
-          for (const q of this.players.values()) if (q !== p && !q.downed && !q.dead && U.dist2(q.x, q.y, p.x, p.y) < 48 * 48) q.revivesGiven++;
+          for (const q of this.players.values()) if (q !== p && !q.downed && !q.dead && U.dist2(q.x, q.y, p.x, p.y) < 48 * 48) { q.revivesGiven++; if (q.rh && q.rh.revive) this.relicFire(q, 'revive', p); }
           this.emit({ t: 'revived', pid: p.pid, x: p.x, y: p.y });
         }
       } else p.revive = Math.max(0, p.revive - dt * 0.15);
@@ -1018,7 +1036,7 @@
   };
   W.prototype.lootMul = function () { return this.room && this.room.dark ? this.darkLoot() : 1; };
   W.prototype.dropGold = function (x, y, total, exact) {
-    total = Math.round((exact ? total : total * W.GOLD_MUL) * this.lootMul());
+    total = Math.round((exact ? total : total * W.goldMul(this.stratum)) * this.lootMul());
     while (total > 0) { const v = Math.min(total, total > 30 ? 10 : total > 8 ? 4 : 1); this.spawnPickup('gold', x, y, v); total -= v; }
   };
   // Drops total xp (x lootMul unless exact: fodder motes and the clear pile) and returns the amount dropped. In a room with an xp budget (enc.xpBudget) a threat drop is scaled by enc.xpK (the planned waves fill enc.xpThrCap, the budget less the fodder share),
@@ -1072,9 +1090,9 @@
   };
 
   W.prototype.collect = function (p, pk) {
-    if (pk.kind === 'gold') { const v = Math.max(1, Math.round(pk.val * (1 + p.stats.gold))); this.gold += v; this.emit({ t: 'gold', v, pid: p.pid }); }
+    if (pk.kind === 'gold') { let v = Math.max(1, Math.round(pk.val * (1 + p.stats.gold))); if (p.rh && p.rh.gold) v = this.relicMap(p, 'gold', v); if (v > 0) { this.gold += v; this.emit({ t: 'gold', v, pid: p.pid }); } }
     else if (pk.kind === 'xp') { this.addXp(pk.val * (1 + p.stats.xp)); this.emit({ t: 'xp', pid: p.pid }); }
-    else if (pk.kind === 'heart') { this.healPlayer(p, p.maxHp * 0.22 + 1.5); }
+    else if (pk.kind === 'heart') { const h = p.maxHp * 0.22 + 1.5; this.healPlayer(p, p.rh && p.rh.heart ? this.relicMap(p, 'heart', h) : h); }
   };
 
   // Cartographer (run.fullClear): two dark rooms and an elite room cleared on one stratum. Called with each cleared combat room.

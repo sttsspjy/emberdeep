@@ -190,16 +190,20 @@ for (const mode of ['proj', 'zone', 'tick']) {
     const rs = w.run.embers.rooms; w.enc = { kind: 'waves' }; w.roomState[w.roomId].cleared = false; w.room.reward = null; w.roomCleared(); out.clear = sum(w, 'gold'); out.embers = w.run.embers.rooms - rs;
     return out;
   };
-  const n = run(false), d = run(true), L = ED.World.DARK_LOOT, G = ED.World.GOLD_MUL;
+  const n = run(false), d = run(true), L = ED.World.DARK_LOOT, G = ED.World.goldMul(1);
   ok(n.gold === Math.round(100 * G) && d.gold === Math.round(100 * G * L), `foe gold x1.5 (${n.gold} -> ${d.gold})`);
   ok(n.exact === 20 && d.exact === 30, `exact gold x1.5 (${n.exact} -> ${d.exact})`);
   ok(n.xp === 40 && d.xp === 60, `xp x1.5 (${n.xp} -> ${d.xp})`);
   ok(n.kill > 0 && d.kill === Math.round(n.kill * L), `a kill's xp x1.5 (${n.kill} -> ${d.kill})`);
   ok(n.reward === ED.World.rewardGold(1) && d.reward === Math.round(ED.World.rewardGold(1) * L), `a claimed gold reward x1.5 (${n.reward} -> ${d.reward})`);
   ok(d.clear > n.clear && d.embers === n.embers, `the room-clear gold x1.5 (${n.clear} -> ${d.clear}), embers unchanged`);
+  // stratum I pays GOLD_S[0] (x2) on every scaled drop and the gold reward; strata II-IV x1
+  const WD = ED.World;
+  ok(WD.goldMul(1) === WD.GOLD_MUL * 2 && [2, 3, 4].every(s => WD.goldMul(s) === WD.GOLD_MUL), `gold multiplier by stratum ${[1, 2, 3, 4].map(s => WD.goldMul(s)).join(' / ')}`);
+  ok(n.clear === 7 && WD.rewardGold(1) === 30 && WD.rewardGold(2) === Math.round(31 * WD.GOLD_MUL), `stratum I room clear ${n.clear}, gold reward ${WD.rewardGold(1)}; stratum II gold reward ${WD.rewardGold(2)}`);
 }
 { // Deep Wick: darkLoot() = DARK_LOOT x (1 + 0.1 x the highest rank in the party), used by drops, the xp budget and the Tab sheet; clearing a dark room counts in run.darkCleared (summary and snapshot)
-  const L = ED.World.DARK_LOOT, G = ED.World.GOLD_MUL, up = (r) => ED.UPGRADES.map(u => (u.id === 'deepwick' ? r : 0));
+  const L = ED.World.DARK_LOOT, G = ED.World.goldMul(1), up = (r) => ED.UPGRADES.map(u => (u.id === 'deepwick' ? r : 0));
   const mk = (ranks) => {
     const w = new ED.World({ seed: 7, pact: 0, players: ranks.map((r, i) => ({ pid: 'p' + i, name: 'T' + i, slot: i, cls: 'knight', weapon: 'longsword', meta: { up: up(r), mastery: 1, relics: [] } })) });
     w.startRun(); for (const p of w.players.values()) { p.offers.length = 0; p.picks = 0; p.offer = null; }
@@ -244,7 +248,7 @@ for (const mode of ['proj', 'zone', 'tick']) {
   near(q3.hp, Math.round(q3.maxHp * 0.5) + 0.04 * q3.maxHp, 1, 'Provisions 2 heals 4% of max health at stratum II');
   q3.hp = Math.round(q3.maxHp * 0.5); w3.onStratumBuild(q3, 1); ok(q3.hp === Math.round(q3.maxHp * 0.5), 'and nothing at stratum I');
   const price = (r) => mk([{ favor: r }]).priceOf({ type: 'boon' });
-  ok(price(0) === 75 && price(1) === 70 && price(2) === 70, "Merchant's Favor: 4% cheaper per rank (the 75-gold epic boon: 75, 70, 70)");
+  ok(price(0) === 65 && price(1) === 60 && price(2) === 60, "Merchant's Favor: 4% cheaper per rank (the 65-gold epic boon: 65, 60, 60)");
 }
 // ---- stratum maps: layered graph, forward exits, threat pips, rewards, deterministic per seed ----
 {
@@ -295,7 +299,7 @@ for (const mode of ['proj', 'zone', 'tick']) {
   ok(w3.room.id === r3.doors[d] && s0.doorWant === 0, 'solo: the door takes the hero at once');
 }
 { // bot map walk (fully upgraded heroes): one room per map row from the start camp to the boss; --dark=never takes a path with the fewest dark rooms, --dark=always enters at least one per stratum
-  for (const [seed, cls] of [[1000, 'knight'], [1008, 'ranger'], [1015, 'pyro']]) {
+  for (const [seed, cls] of [[1000, 'knight'], [1009, 'ranger'], [1015, 'pyro']]) {
     for (const dark of ['never', 'always']) {
       const r = runBot({ seed, n: 1, cls: [cls], skill: 0.75, up: ED.UPGRADES.map(u => u.costs.length), mastery: 10, relics: ED.RELIC_IDS.filter(id => ED.RELICS[id].start), pick: 'smart', dark, maxStratum: 2 });
       ok(r.left.length >= 1 && r.left.every(f => f.visited === f.rows + 2), `${cls} ${dark}: one room per row, start to boss (${JSON.stringify(r.left)})`);

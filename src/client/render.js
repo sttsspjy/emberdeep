@@ -1133,10 +1133,11 @@
   }
 
   const PROP_LABEL = {
-    chest: () => 'Open', fountain: () => 'Drink (heal party 50%)', altar: (p, me) => `Pay 20% health for an epic boon`,
-    gamble: (p) => `Pay ${p.price} gold for a random relic`, trial: () => 'Start the trial (elite fight, rare relic)', portal: () => 'Next stratum',
+    chest: () => 'Open', portal: () => 'Next stratum',
   };
   R.propPrompt = (p, view) => {
+    if (p.g && ED.MinigameFx) return ED.MinigameFx.prompt(p, view); // a minigame prop (client/minigames.js)
+    if (p.ev) return p.text || 'Examine'; // an event prop (events.js)
     if (p.kind === 'relic') return 'Take ' + ED.RELICS[p.item].name;
     if (p.kind === 'shop') { const name = p.stype === 'relic' ? ED.RELICS[p.item].name : p.stype === 'boon' ? 'Epic boon' : p.stype === 'forge' ? 'Forge' : 'Healing potion'; return `Buy ${name} — ${p.price}g`; }
     if (p.kind === 'reward') {
@@ -1150,16 +1151,21 @@
   const REWARD_DESC = { gold: 'Gold for the whole party.', vigor: '+2 max health for the rest of the run, and heals 20%.', forge: 'Rank up one of your boons.', boon: 'A boon from your paths (a new path while you have a free slot).', epic: 'Choose from epic boons.', relic: 'Relics: each hero takes one.' };
   const SHOP_DESC = { boon: 'An extra boon pick with no common boons.', forge: 'Rank up one of your boons.', potion: 'Heals 40% of your max health.' };
   // Longer explanation shown above the prompt (null when there is none).
-  R.propDesc = (p) => {
+  R.propDesc = (p, view) => {
     if (p.kind === 'reward') {
       return REWARD_DESC[String(p.item)] || null;
     }
     if (p.kind === 'campfire') return 'Heals 35% of your max health. Each hero uses the campfire or the anvil.';
     if (p.kind === 'anvil') return 'Rank up one of your boons. Each hero uses the campfire or the anvil.';
     if (p.kind === 'shop') return SHOP_DESC[p.stype] || null;
+    if (p.g && ED.MinigameFx) return ED.MinigameFx.desc(p, view);
     return null;
   };
-  R.interactable = (p) => !p.state && p.kind !== 'sign' && p.kind !== 'merchant';
+  R.interactable = (p) => !p.state && (!!p.ev || (p.kind !== 'sign' && p.kind !== 'merchant')) && !(p.g && p.g.ni); // an event prop may wear any look; g.ni: a minigame prop that is only shown
+  // Whether prop p is there for hero pid: not another hero's (p.owner), not a group pid already claimed from (claimed: group -> true, the 'claimed' messages).
+  R.mine = (p, pid, claimed) => (!p.owner || p.owner === pid) && !(p.group && claimed && claimed[p.group]);
+  // Kinds that keep drawing once used (state 1) in their used look; any other prop vanishes with a puff when taken. Event code may add its own kinds.
+  R.KEEP_USED = new Set(['chest', 'gamble', 'fountain', 'altar', 'trial', 'portal', 'campfire', 'anvil', 'sign', 'merchant']);
 
   const PATH_COL = { fire: '#ff7a2a', ice: '#7fe3ff', lightning: '#ffe66b', poison: '#9be33c', holy: '#fff0c2', shadow: '#a070ff', general: '#d9dfe8' };
   // Reward and room glyphs come from one table (ED.Icons.reward / ED.Icons.room); 'boon' wears the colour of the local hero's deepest path (R.mainPath).
@@ -1172,10 +1178,11 @@
   R.rewardIcon = (s) => ED.Icons.reward(s, R.mainPath);
   // Map/door glyph of a floor room for the local hero: { icon, color, label, badge, reward } or null (ED.Icons.room).
   R.roomIcon = (rm) => ED.Icons.room(rm, R.mainPath, ED.World.REWARD_UP);
-  const ROOM_NAME = { start: 'Start', combat: 'Fight', elite: 'Elite fight', champion: 'Champion fight', shop: 'Shop', rest: 'Rest', treasure: 'Treasure', event: 'Shrine', boss: 'Boss' };
+  const ROOM_NAME = { start: 'Start', combat: 'Fight', elite: 'Elite fight', champion: 'Champion fight', shop: 'Shop', rest: 'Rest', treasure: 'Treasure', event: 'Unknown event', boss: 'Boss' };
   // Plain name of a map room with its reward: 'Elite fight: Relics', 'Dark room: Epic boon', 'Rest'.
   R.roomName = (rm) => {
     if (!rm) return '';
+    if (rm.type === 'event' && rm.event) return 'Event: ' + R.roomIcon(rm).label; // drawn on entry or revealed (events.js)
     const n = rm.dark ? 'Dark room' : ROOM_NAME[rm.type] || 'Room', rw = rm.reward ? (rm.dark && ED.World.REWARD_UP[rm.reward]) || rm.reward : null;
     return rw ? n + ': ' + R.rewardLabel(rw) : n;
   };
@@ -1259,7 +1266,7 @@
 
   // ---- pixel-art props (feet at the prop point) ----
   R.propArt = () => { const a = ED.Atlas; return !!(a && a.ok && a.has('prop.chest.closed') && a.has('prop.plinth.stone') && a.has('prop.merchant')); };
-  const propOpen = new Map(); // prop id -> { open, t0 }: when its state turned on (chest and mimic opening animations)
+  const propOpen = new Map(); // prop id -> { open, t0, puffed }: when its state turned on (chest and mimic opening animations, the puff of a vanishing prop)
   // Seconds since the prop's state turned on (0 while off); a prop first seen open counts as long open.
   function openAge(p, t) {
     let r = propOpen.get(p.id);
@@ -1307,8 +1314,8 @@
     });
   }
   const ELEM_HEX = ['#ff7a2a', '#7fe3ff', '#ffe66b', '#9be33c', '#fff0c2', '#a070ff'];
-  // Draws prop p as pixel art and issues its lights; returns false for kinds without art.
-  function propArt(c, p, view, local, t, G, L) {
+  // Draws prop p as pixel art and issues its lights; returns false for kinds without art. done: this hero claimed it (an empty pedestal).
+  function propArt(c, p, view, local, t, G, L, done) {
     const A_ = ED.Atlas;
     switch (p.kind) {
       case 'chest': {
@@ -1327,7 +1334,7 @@
         if (p.state) c.globalAlpha = 0.35;
         Sp.shadow(c, 12, 0.3);
         A_.draw(c, 'prop.plinth.stone', 0, 0, 0, stoneOf('prop.plinth.stone', view));
-        if (!p.state) {
+        if (!p.state && !done) {
           const bob = Math.sin(t * 3 + p.id) * 2;
           let col = '#ffffff', icon = null, flask = null;
           if (p.kind === 'relic' || p.stype === 'relic') { const r = ED.RELICS[p.item]; col = ED.RARITY[r.rar].color; icon = ED.Icons.relicCanvas(p.item, 20); }
@@ -1362,7 +1369,7 @@
         let hex = reward ? rewardColor(p.reward || p.rw || p.item || p.what) : (PATH_COL[R.mainPath] || ELEM_HEX[(view.room ? view.room.seed >>> 0 : 0) % 6]);
         const bob = Math.sin(t * 2.6 + p.id) * 2.5;
         Sp.shadow(c, 14);
-        if (!reward && p.state) A_.draw(c, 'prop.plinth.stone', 0, 0, 0, stoneOf('prop.plinth.stone', view));
+        if ((!reward && p.state) || (reward && done)) A_.draw(c, 'prop.plinth.stone', 0, 0, 0, stoneOf('prop.plinth.stone', view));
         else {
           const vk = orbKey(hex, view); A_.draw(c, 'prop.shrine.3', 0, 0, 0, vk ? { variant: vk } : undefined);
           G(0, reward ? -30 + bob : -22, 34, hex, reward ? 0.7 : 0.55 + Math.sin(t * 4) * 0.15); L(0, reward ? -28 : -18, reward ? 120 : 100, hex, reward ? 0.95 : 0.8);
@@ -1454,16 +1461,35 @@
     c.restore();
   }
   function drawProps(c, view, local, t) { for (const p of view.props) drawProp(c, p, view, local, t); }
+  // Colour of the puff a taken prop leaves: its relic's rarity, its shop item's or reward's colour.
+  function usedCol(p) {
+    const rl = (p.kind === 'relic' || p.stype === 'relic') && ED.RELICS[p.item];
+    if (rl) return ED.RARITY[rl.rar].color;
+    if (p.kind === 'reward') return rewardColor(p.item);
+    return p.stype === 'boon' ? ED.RARITY.e.color : p.stype === 'forge' ? '#ff9a3a' : p.stype === 'potion' ? '#ff4a5a' : '#cccccc';
+  }
+  // A prop not in KEEP_USED: its state is tracked every frame (openAge); once taken, one puff on the frame its state turns on (none when first seen taken), then nothing is drawn. Returns true when taken.
+  function vanished(p, t) {
+    const age = openAge(p, t);
+    if (!p.state) return false;
+    const r = propOpen.get(p.id);
+    if (!r.puffed) { r.puffed = true; if (age < 0.5 && ED.FX) ED.FX.handle({ t: 'puff', x: Math.round(p.x), y: Math.round(p.y) - 12, c: usedCol(p) }, { localPid: R.local }); }
+    return true;
+  }
   // One prop at its feet point: pixel art when the atlas is loaded (drawn in the y-sorted entity list), else the procedural drawing.
+  // Another hero's prop (p.owner) is not drawn; a taken prop vanishes unless its kind is in KEEP_USED; one this hero claimed from (R.claimed) is an empty, dimmed pedestal without lights.
   function drawProp(c, p, view, local, t) {
+    if (p.owner && p.owner !== local) return;
+    if (!R.KEEP_USED.has(p.kind) && vanished(p, t)) return;
     {
-      const done = !!(R.claimed && p.group && R.claimed[p.group] && (p.kind === 'campfire' || p.kind === 'anvil' || (p.kind === 'reward' && /^(boon$|forge$|epic$|vigor$)/.test(p.item)))); // this hero already used it
+      const done = !!(R.claimed && p.group && R.claimed[p.group]) || (!!p.state && (p.kind === 'campfire' || p.kind === 'anvil')); // this hero already used it, or every hero has
       const G = done ? () => {} : (dx, dy, r, col, a) => R.emit(p.x + dx, p.y + dy, r, col, a), L = done ? () => {} : (dx, dy, r, col, k) => R.light(p.x + dx, p.y + dy, r, col, k);
       const art = R.propArt(); // pixel props sit on the 2-px art grid
       c.save(); c.translate(art ? Math.round(p.x / 2) * 2 : Math.round(p.x), art ? Math.round(p.y / 2) * 2 : Math.round(p.y));
       if (done) c.globalAlpha = 0.4;
       c.lineWidth = 1.5; c.strokeStyle = '#0b0806';
-      if (art && propArt(c, p, view, local, t, G, L)) { c.restore(); return; }
+      if (ED.MinigameFx && ED.MinigameFx.draw(c, p, R, view, t, G, L, art)) { c.restore(); return; } // minigame props (client/minigames.js)
+      if (art && propArt(c, p, view, local, t, G, L, done)) { c.restore(); return; }
       switch (p.kind) {
         case 'chest': {
           Sp.shadow(c, 14);
@@ -1481,7 +1507,7 @@
           c.fillStyle = '#3a3330'; c.fillRect(-9, -6, 18, 8); c.strokeRect(-9, -6, 18, 8);
           c.fillStyle = '#4c4440'; c.fillRect(-11, -9, 22, 4); c.strokeRect(-11, -9, 22, 4);
           c.fillStyle = 'rgba(255,255,255,0.1)'; c.fillRect(-11, -9, 22, 1.2);
-          if (!p.state) {
+          if (!p.state && !done) {
             const bob = Math.sin(t * 3 + p.id) * 2;
             let col = '#ffffff', icon = null;
             if (p.kind === 'relic' || p.stype === 'relic') { const r = ED.RELICS[p.item]; col = ED.RARITY[r.rar].color; icon = ED.Icons.relicCanvas(p.item, 20); }
@@ -1572,6 +1598,7 @@
           Sp.shadow(c, 14);
           c.fillStyle = '#3a3330'; c.fillRect(-11, -7, 22, 9); c.strokeRect(-11, -7, 22, 9);
           c.fillStyle = '#524a44'; c.fillRect(-13, -10, 26, 4); c.strokeRect(-13, -10, 26, 4);
+          if (done) break; // claimed: the bare plinth
           G(0, -26 + bob, 34, col, 0.7); L(0, -24, 120, col, 0.95);
           const ri = R.rewardIcon(p.item);
           c.drawImage(ED.Icons.canvas(ri[0], ri[1], 24), -12, Math.round(-38 + bob));

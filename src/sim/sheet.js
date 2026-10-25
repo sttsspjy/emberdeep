@@ -142,13 +142,17 @@
   };
 
   // ---------------- ready states of defensive items (net.js sends them as one bitfield) ----------------
-  // [{ id, name, owned(st), ready(p) }]; append only (a bit per row). A mirror hero carries the bits in p.rdy.
+  // [{ id, name, owned(st, p), ready(p), once (spent until the run or stratum renews it) }]; append only (a bit per row). A mirror hero carries the bits in p.rdy. p.rt: host relic flags (relics.js).
+  const holds = (p, id) => !!(p && p.relics && p.relics.indexOf(id) >= 0);
   Sh.READY = [
     { id: 'aegis', name: 'Aegis Charm', owned: (st) => st.aegis > 0, ready: (p) => !(p.aegisT > 0) },
     { id: 'guardian', name: 'Last Stand', owned: (st) => st.guardian > 0, ready: (p) => !(p.guardCd > 0) },
     { id: 'frozenheart', name: 'Frozen Heart', owned: () => false, ready: () => true }, // retired: never owned (the row keeps the bit order)
-    { id: 'angel', name: 'Guardian Angel', owned: (st) => st.angel > 0, ready: (p) => !p.angelUsed },
-    { id: 'phoenix', name: 'Phoenix Feather', owned: (st) => st.phoenix > 0, ready: (p) => !p.phoenixUsed },
+    { id: 'angel', name: 'Guardian Angel', owned: (st) => st.angel > 0, ready: (p) => !p.angelUsed, once: true },
+    { id: 'phoenix', name: 'Phoenix Feather', owned: (st) => st.phoenix > 0, ready: (p) => !p.phoenixUsed, once: true },
+    { id: 'elixir', name: 'Elixir Flask', owned: (st, p) => holds(p, 'elixir'), ready: (p) => !(p.rt && p.rt.elixir), once: true },
+    { id: 'buckler', name: 'Iron Buckler', owned: (st, p) => holds(p, 'buckler'), ready: (p) => !!(p.rt && p.rt.buckler) },
+    { id: 'lifeline', name: 'Lifeline Rope', owned: (st, p) => holds(p, 'lifeline'), ready: (p) => !(p.rt && p.rt.life), once: true },
   ];
   Sh.readyBits = (p) => { let b = 0; for (let i = 0; i < Sh.READY.length; i++) if (Sh.READY[i].ready(p)) b |= 1 << i; return b; };
   // Shield received in the last SHIELD_WIN_T seconds in health: { c: class sources, a: all sources } (world.js addShield). A mirror hero carries the host's sums in shwC / shwA (net.js).
@@ -581,7 +585,7 @@
       healMul: R.x(st.healMul), healRows: rowsOf(build, 'heal'), pactHeal: R.x(St.pactHeal(ctx.pact | 0)),
       shield: shownShield(p.shield), ready: [], situational: [], shields: [], heals: [], window: shieldWin(p, ctx, maxHp, R),
     };
-    for (let i = 0; i < Sh.READY.length; i++) { const r = Sh.READY[i]; if (r.owned(st)) def.ready.push({ id: r.id, name: r.name, ready: readyOf(p, i), once: r.id === 'angel' || r.id === 'phoenix' }); }
+    for (let i = 0; i < Sh.READY.length; i++) { const r = Sh.READY[i]; if (r.owned(st, p)) def.ready.push({ id: r.id, name: r.name, ready: readyOf(p, i), once: !!r.once }); }
     defenceExtras(p, st, def, skills);
 
     const hero = { pid: p.pid, name: p.name, cls: p.cls, clsName: cls.name, title: cls.title, level: ctx.level, xp: ctx.xp, xpNext: ctx.xpNext, hp: Math.ceil(p.hp), maxHp, shield: shownShield(p.shield), gold: ctx.gold, picks: p.picks | 0, power: st.power, element: st.element, weaponName: wpn.name, slot: p.slot | 0 };
@@ -1076,7 +1080,7 @@
     const groups = gates.map(k => 'path:' + k).concat(['route', 'open']).map(g => ({ group: g, path: g.indexOf('path:') === 0 ? g.slice(5) : null, items: rows.filter(r => r.group === g).sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind]) })).filter(g => g.items.length);
     const relics = (p.relics || []).map(id => {
       const r = ED.RELICS[id], i = Sh.READY.findIndex(x => x.id === id);
-      return { id, name: r.name, icon: r.icon, rar: r.rar, text: r.desc, live: relicLive(id, p, st, ctx), state: i >= 0 ? (readyOf(p, i) ? 'ready' : id === 'angel' || id === 'phoenix' ? 'used' : 'recharging') : null };
+      return { id, name: r.name, icon: r.icon, rar: r.rar, curse: r.rar === 'curse', text: r.desc, live: relicLive(id, p, st, ctx), state: i >= 0 ? (readyOf(p, i) ? 'ready' : Sh.READY[i].once ? 'used' : 'recharging') : null };
     });
     const statuses = [];
     for (const m of ED.ELEMENT_IDS) if (st[ED.ELEMENTS[m].inf] > 0 || st.element === m) { const S = ED.STATUS[ED.PATHS[m].status]; statuses.push({ id: ED.PATHS[m].status, name: S.name, color: S.color, rule: S.rule, el: m }); }
@@ -1088,14 +1092,17 @@
       route, groups, relics, statuses,
     };
   }
-  // The live value of a relic whose effect depends on the run.
+  // The live value of a relic whose effect depends on the run; p.rs holds the relic run counters (relics.js; a mirror hero's come with its build).
+  const LIFT_UNIT = { kill: 'kills', elite: 'elite kills', clear: 'fights', boon: 'picks', stratum: 'strata' };
   function relicLive(id, p, st, ctx) {
-    const n = (p.relics || []).length;
+    const n = ED.heldRelics(p.relics), R = ED.RELICS[id], rs = p.rs || {};
+    if (R.lift) { const left = R.lift.n - (rs[id] | 0); return R.lift.on === 'stratum' ? 'Lifts at the next stratum' : `Lifts after ${left} more ${left === 1 ? LIFT_UNIT[R.lift.on].replace(/s$/, '').replace('strata', 'stratum') : LIFT_UNIT[R.lift.on]}`; }
     if (id === 'idol') return `Now +${Math.round(Math.min(0.2, Math.floor((ctx.gold || 0) / 15) * 0.01) * 100)}% damage`;
-    if (id === 'banner') return `Now +${Math.round(st.banner * (1 + (ctx.allyNear | 0)) * 100)}% damage`;
     if (id === 'chalice') { const cap = ED.RELICS.chalice.full.hp; return `Now +${p.chaliceHp | 0} of ${cap} health` + ((p.chaliceHp | 0) >= cap ? ', +10% damage' : ''); }
     if (id === 'stone') return `Now +${2 * n}% damage, +${Math.round(ED.RELICS.stone.perRelic.hp * n)} health`;
-    if (id === 'wardrum') return p.toughRoom ? 'Now +20% (elite or boss room)' : null;
+    if (id === 'wardrum') return p.toughRoom ? 'Now +25% (elite, champion or boss room)' : null;
+    if (id === 'soulcage') return `A spirit in ${R.v.every - (rs.soulcage | 0)} kills`;
+    if (id === 'rune') return `A refund in ${R.v.every - (rs.rune | 0)} casts`;
     return null;
   }
 

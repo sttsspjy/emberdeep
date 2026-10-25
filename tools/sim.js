@@ -27,9 +27,9 @@ const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
 const ROOT = path.join(__dirname, '..', 'src') + '/';
-const files = ['util.js', 'data/biomes.js', 'data/enemies.js', 'data/classes.js', 'data/boons.js', 'data/classboons.js', 'data/relics.js', 'data/meta.js', 'data/empower.js', 'save.js',
-  'sim/dungeon.js', 'sim/stats.js', 'sim/world.js', 'sim/combat.js', 'sim/elements.js', 'sim/build.js', 'sim/skills.js', 'sim/class-knight.js', 'sim/class-ranger.js', 'sim/class-pyro.js', 'sim/class-shade.js', 'sim/class-cleric.js', 'sim/class-necro.js', 'sim/class-bell.js',
-  'sim/ai.js', 'sim/bosses.js', 'sim/boss-warden.js', 'sim/boss-spore.js', 'sim/rooms.js', 'sim/arena.js', 'sim/boss-king.js', 'sim/boss-hollow.js', 'sim/champions.js', 'sim/sheet.js'];
+const files = ['util.js', 'data/biomes.js', 'data/enemies.js', 'data/classes.js', 'data/boons.js', 'data/classboons.js', 'data/relics.js', 'data/meta.js', 'data/empower.js', 'data/lore.js', 'data/events.js', 'save.js',
+  'sim/dungeon.js', 'sim/stats.js', 'sim/world.js', 'sim/combat.js', 'sim/elements.js', 'sim/build.js', 'sim/relics.js', 'sim/skills.js', 'sim/class-knight.js', 'sim/class-ranger.js', 'sim/class-pyro.js', 'sim/class-shade.js', 'sim/class-cleric.js', 'sim/class-necro.js', 'sim/class-bell.js',
+  'sim/ai.js', 'sim/bosses.js', 'sim/boss-warden.js', 'sim/boss-spore.js', 'sim/rooms.js', 'sim/events.js', 'sim/arena.js', 'sim/boss-king.js', 'sim/boss-hollow.js', 'sim/champions.js', 'sim/minigames.js', 'sim/sheet.js'];
 // Main context, not vm.createContext: inside a vm context every global read (Math, Object, ...) goes through the context interceptor and the sim runs ~3x slower.
 for (const f of files) vm.runInThisContext(fs.readFileSync(ROOT + f, 'utf8'), { filename: f });
 const ED = globalThis.ED;
@@ -679,16 +679,15 @@ function wantedProp(w, p) {
   const hurt = p.hp < p.maxHp * 0.6;
   let best = null, bs = 0;
   for (const x of w.props) {
-    if (x.state) continue;
+    if (x.state || (x.owner && x.owner !== p.pid)) continue; // another hero's per-hero prop (owner)
     let s = 0;
+    if (x.ev) { s = ED.Events.botWant(w, p, x); if (s > bs) { bs = s; best = x; } continue; } // an event prop: while the hero has a choice to make there (events.js)
     switch (x.kind) {
       case 'reward': s = PER_HERO_REWARDS.includes(x.item) && p.claimed[x.group] ? 0 : 9; break;
       case 'chest': s = 8; break;
-      case 'relic': s = p.claimed[x.group] ? 0 : 7 + (w.botSmart ? relicScore(w, p, x) : 0); break;
+      case 'relic': s = p.claimed[x.group] || (x.owner && x.owner !== p.pid) ? 0 : 7 + (w.botSmart ? relicScore(w, p, x) : 0); break; // a per-hero pick: its owner only
       case 'campfire': s = !p.claimed[x.group] && hurt ? 8 : 0; break;
       case 'anvil': s = !p.claimed[x.group] && !hurt ? 8 : 0; break;
-      case 'fountain': s = 5; break;
-      case 'altar': s = p.hp > p.maxHp * 0.6 ? 5 : 0; break;
       case 'shop':
         if (w.gold < x.price) break;
         if (x.stype === 'potion') s = p.hp < p.maxHp * 0.7 ? 6 : 0;
@@ -699,6 +698,21 @@ function wantedProp(w, p) {
     if (s > bs) { bs = s; best = x; }
   }
   return best;
+}
+
+// A minigame action (ED.Minigames.bot) for hero p: interacts with `use` within 40 px, attacks toward `atk` within reach (melee weapon range + 10, else 300; a Bellwarden winds and hurls at it as botBell does), then walks along `dir`,
+// to `go` (BFS) or stands (`stop`, or within 8 px of go). Returns the move [mx, my].
+const GAME_RNG = U.RNG(7); // botBell's aim draw (skill 1: no aim error)
+function botGame(w, p, c, a) {
+  if (a.use) { const pr = w.props.find(x => x.id === a.use); if (pr && U.dist(pr.x, pr.y, p.x, p.y) < 40) w.interact(p.pid, pr.id); }
+  if (p.stats.kind === 'bell') { if (a.atk) botBell(w, p, c, [], { x: a.atk.x, y: a.atk.y, r: a.atk.r || 8 }, true, 1, GAME_RNG); else p.haulIn = false; }
+  else if (a.atk && c.atk <= 0) {
+    const d = Math.hypot(a.atk.x - p.x, a.atk.y - p.y);
+    if (d < (p.stats.melee ? p.stats.weapon.range + 10 : 300)) { p.atkD = d; w.playerAttack(p, Math.atan2(a.atk.y - p.y, a.atk.x - p.x)); c.atk = Math.max(c.atk, -TICK) + ED.Stats.stepInterval(p); }
+  }
+  const dir = a.dir || (a.go && !a.stop && Math.hypot(a.go.x - p.x, a.go.y - p.y) > 8 ? bfsDir(w.room, w.locked, p.x, p.y, a.go.x, a.go.y) : null);
+  const l = dir ? Math.hypot(dir[0], dir[1]) : 0;
+  return l > 0 ? [dir[0] / l, dir[1] / l] : [0, 0];
 }
 
 // Value of a map room for the bot party: healthy (every living hero at DARK_HP of max HP or more) it prefers boon rewards, elites and dark rooms; hurt (any below HURT_HP) it prefers rest sites. Dark rooms follow the policy (smart: when healthy).
@@ -718,10 +732,13 @@ function roomValue(w, r, policy, healthy, hurt) {
 // The exit to take, as { step: room id, dd: door key }, or null: the exit with the best path value V(n) = value(n) + LOOK x max V(child) (the whole graph ahead, each row further counting LOOK less),
 // plus seeded jitter per floor and room. The pick holds for the room (w.botExit).
 const LOOK = 0.6;
-// The fewest dark rooms on any start-to-boss path of a floor.
-function minDark(fl) {
+// The fewest dark rooms on any start-to-boss path of a floor; with ids: a Map of that count from each of those rooms on (and .min, their least).
+function minDark(fl, ids) {
   const M = new Map(), f = (id) => { if (M.has(id)) return M.get(id); const r = fl.rooms[id], k = r.exits || [], v = (r.dark ? 1 : 0) + (k.length ? Math.min(...k.map(f)) : 0); M.set(id, v); return v; };
-  return f(fl.start);
+  if (!ids) return f(fl.start);
+  const out = new Map(ids.map(id => [id, f(id)]));
+  out.min = Math.min(...out.values());
+  return out;
 }
 function nextRoom(w, policy) {
   const room = w.room, fl = w.floor;
@@ -734,9 +751,10 @@ function nextRoom(w, policy) {
     const r = fl.rooms[id], kids = r.exits || [], v = roomValue(w, r, policy, healthy, hurt) + (kids.length ? LOOK * Math.max(...kids.map(pathV)) : 0);
     V.set(id, v); return v;
   };
+  const dm = policy === 'never' ? minDark(fl, room.exits) : null; // never: only exits on a path with the fewest dark rooms
   let best = null, bs = -1e9;
   for (const id of room.exits) {
-    const s = pathV(id) + jit.next() * 2;
+    const s = pathV(id) + jit.next() * 2 - (dm && dm.get(id) > dm.min ? 1e6 : 0);
     if (s > bs) { bs = s; best = id; }
   }
   const nx = { step: best, dd: Object.keys(room.doors).find(k => room.doors[k] === best) };
@@ -876,7 +894,7 @@ const entryOf = (w, p) => ({ level: w.level, boons: Object.values(p.boons).reduc
 function skipStrata(w, from, ctx, policy, brng, darkPolicy, fight) {
   const dt = 1 / 60, heroes = [...w.players.values()], lead = heroes[0], out = { t0: 0, from, keyAt: null, duoAt: null, evoAt: null, bad: null };
   const tick = () => {
-    for (const p of heroes) { if (p.offer) takeOffer(w, p, policy, brng, ctx); p.invuln = 1; }
+    for (const p of heroes) { if (p.offer) takeOffer(w, p, policy, brng, ctx); ED.Events.botAnswer(w, p); p.invuln = 1; }
     for (const e of w.enemies.slice()) if (e.hp > 0) w.killEnemy(e, lead, { kind: 'weapon' });
     w.update(dt);
     for (const pk of w.pickups) w.collect(lead, pk);
@@ -908,7 +926,7 @@ function skipStrata(w, from, ctx, policy, brng, darkPolicy, fight) {
       const h = hop();
       if (!h) break;
       w.enterRoom(h[0], h[1]);
-      for (let i = 0; i < 60 * 150 && w.locked && w.state === 'play'; i++) tick();
+      for (let i = 0; i < 60 * 150 && (w.locked || w.bossBeat) && w.state === 'play'; i++) tick(); // a boss room also waits out the reward beat
       claim();
     }
     const portal = w.props.find(x => x.kind === 'portal' && !x.state);
@@ -1074,7 +1092,7 @@ function runBot(opts) {
   const grant0 = w.grantOffer, give0 = w.giveRelic, drop0 = w.dropGold;
   w.grantOffer = function (p, spec) { const k = spec && spec.src === 'room' ? 'room' : spec && spec.src || 'level'; rec.offers[k] = (rec.offers[k] || 0) + 1; return grant0.call(this, p, spec); };
   w.giveRelic = function (p, id) { const k = this.room ? this.room.type : '?'; rec.relicsBy[k] = (rec.relicsBy[k] || 0) + 1; return give0.call(this, p, id); };
-  w.dropGold = function (x, y, total, exact) { rec.goldIn += Math.round(exact ? total : total * ED.World.GOLD_MUL); return drop0.call(this, x, y, total, exact); };
+  w.dropGold = function (x, y, total, exact) { rec.goldIn += Math.round(exact ? total : total * ED.World.goldMul(this.stratum)); return drop0.call(this, x, y, total, exact); };
   // per-room tally: kills (threat / fodder) and the xp dropped, counted from the pickups a drop appends
   rec.room = { th: 0, fo: 0, xp: 0, clip: 0 };
   const kill1 = w.killEnemy, xp1 = w.dropXp;
@@ -1108,12 +1126,15 @@ function runBot(opts) {
       } else c.skill -= dt;
       { const m3 = p.stats.skill3Charges; c.chg3 = Math.min(c.chg3, m3); if (c.chg3 < m3) { c.skill3 -= dt; while (c.skill3 <= 0 && c.chg3 < m3) { c.chg3++; c.skill3 = c.chg3 < m3 ? c.skill3 + p.stats.skill3Cd : 0; } } } // skill 3 charges as the client keeps them
       if (p.offer) takeOffer(w, p, policy, brng, ctx);
+      ED.Events.botAnswer(w, p); // an open event dialog or vote (events.js)
       if (p.downed || p.dead) continue;
       let mx = 0, my = 0;
       const foes = w.enemies.filter(e => e.hp > 0 && e.spawnT <= 0);
       const skill = opts.skill ?? 0.75;
       if (!foes.length && p.haulIn) p.haulIn = false; // a Bellwarden stops winding with no foe left
-      if (foes.length) {
+      const gm = ED.Minigames && ED.Minigames.bot(w, p); // a minigame in the room steers the bot (src/sim/minigames.js), null while it leaves the bot to its own play
+      if (gm) { const v = botGame(w, p, c, gm); mx = v[0]; my = v[1]; }
+      else if (foes.length) {
         // target: the nearest threat foe when it is within weapon reach (or when no fodder stands), else the nearest fodder
         let tgt = null, bd = 1e9, nf = null, fd = 1e9;
         for (const e of foes) { const d2 = U.dist2(e.x, e.y, p.x, p.y); if (e.fodder) { if (d2 < fd) { fd = d2; nf = e; } } else if (d2 < bd) { bd = d2; tgt = e; } }
@@ -1502,7 +1523,7 @@ function pairReport(rows, base) {
   }).join('\n');
 }
 
-module.exports = { fightLine, arenaBot, partyOf, runBot, summarize, classLines, metaProfile, rowOf, optsFromFlags, jobOpts, pairReport, ED, parseVet, vetThreats, vetRisk, vetPlan, vetRider, arrivalStats, fmtPow, ROMAN, PICK_SRC };
+module.exports = { botGame, fightLine, arenaBot, partyOf, runBot, summarize, classLines, metaProfile, rowOf, optsFromFlags, jobOpts, pairReport, ED, parseVet, vetThreats, vetRisk, vetPlan, vetRider, arrivalStats, fmtPow, ROMAN, PICK_SRC };
 if (require.main === module) {
   const flags = {}, args = [];
   for (const a of process.argv.slice(2)) { const m = /^--([a-z0-9]+)(?:=(.*))?$/i.exec(a); if (m) flags[m[1]] = m[2] === undefined ? '1' : m[2]; else args.push(a); }

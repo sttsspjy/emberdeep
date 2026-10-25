@@ -1270,6 +1270,74 @@
       '................',
       '................',
       '................'],
+    dice: [
+      '................',
+      '................',
+      '..###########...',
+      '..#wwwwwwwww#...',
+      '..#wo#####ow#...',
+      '..#w#######w#...',
+      '..#w###o###w#...',
+      '..#w#######w#...',
+      '..#wo#####ow#...',
+      '..#wwwwwwwww#...',
+      '..###########...',
+      '...#########....',
+      '................',
+      '................',
+      '................',
+      '................'],
+    map: [
+      '................',
+      '................',
+      '.##....##....##.',
+      '.#y###y#y###y##.',
+      '.#yyyyy#yyyyyy#.',
+      '.#yyoyy#yyyyyy#.',
+      '.#yyyoy#yoyyyy#.',
+      '.#yyyyo#oyoyyy#.',
+      '.#yyyyy#yyyoyy#.',
+      '.#yyyyy#yyyyry#.',
+      '.#yyyyy#yyyrrr#.',
+      '.#yyyyy#yyyyry#.',
+      '.##y###y#y###y#.',
+      '.##....##....##.',
+      '................',
+      '................'],
+    rope: [
+      '................',
+      '.....######.....',
+      '...##nnnnnn##...',
+      '..#nn##..##nn#..',
+      '.#n#........#n#.',
+      '.#n#........#n#.',
+      '.#n#........#n#.',
+      '..#nn##..##nn#..',
+      '...##nnnnnn##...',
+      '.....##nn##.....',
+      '.......nn.......',
+      '......#nn#......',
+      '......#nn#......',
+      '.......nn.......',
+      '......#NN#......',
+      '................'],
+    pig: [
+      '................',
+      '................',
+      '...##....##.....',
+      '...#l#..#l#.....',
+      '..###########...',
+      '.##lllllllll##..',
+      '.#llllll##lll#..',
+      '##lolllllllll##.',
+      '#lllllllllldd##.',
+      '#llllllllldwdw#.',
+      '##llllllllldd##.',
+      '.##lllllllll##..',
+      '..###########...',
+      '...##.....##....',
+      '...##.....##....',
+      '................'],
   };
   Ic.MASKS = M; // read by the headless checks
 
@@ -1378,7 +1446,8 @@
   const RW_NONE = ['star', '#ffe9a0', 'Reward'];
   // Room type -> [glyph, colour, label]; event rooms by their event kind.
   const RT = { boss: ['skullcrown', '#ff5a3a', 'Boss'], elite: ['skullhorn', '#ff7a3a', 'Elite'], champion: ['skullhorn', '#ff3a3a', 'Champion'], shop: ['stall', '#4fb6ff', 'Shop'], treasure: ['chest', '#e0a050', 'Treasure'], rest: ['campfire', '#ff9a3a', 'Rest'] };
-  const EV = { fountain: ['fountain', '#7dffd9', 'Fountain'], altar: ['altar', '#7dffd9', 'Altar'], trial: ['swords', '#7dffd9', 'Trial'], gamble: ['question', '#7dffd9', 'Gamble'] };
+  // Event room glyph: its event's icon and name once drawn or revealed (rm.event, ED.Events.def), else the unknown "?".
+  const EV_COL = '#7dffd9', evGlyph = (rm) => { const d = rm.event && ED.Events ? ED.Events.def(rm.event) : null; return d ? [d.icon || 'question', EV_COL, d.name] : ['question', EV_COL, 'Event']; };
   Ic.DARK = ['moon', '#a070ff', 'Dark'];
   Ic.SEAL = ['seal', '#8f7f6c', 'Sealed'];
   // [glyph, colour, short label, long name] of a reward kind; path: the viewing hero's deepest path id (boon colour).
@@ -1393,7 +1462,7 @@
   Ic.room = (rm, path, up) => {
     if (!rm) return null;
     const rw = rm.reward ? (rm.dark && up && up[rm.reward]) || rm.reward : null, ri = rw ? Ic.reward(rw, path) : null;
-    const t = rm.type === 'event' ? EV[rm.event] || ['star', '#7dffd9', 'Event'] : RT[rm.type];
+    const t = rm.type === 'event' ? evGlyph(rm) : RT[rm.type];
     if (t) return { icon: t[0], color: t[1], label: ri && rm.type === 'elite' ? t[2] + ' ' + ri[2] : t[2], badge: ri ? [ri[0], ri[1]] : null, reward: rw };
     if (!ri) return null;
     return { icon: ri[0], color: ri[1], label: ri[2], badge: null, reward: rw };

@@ -1,5 +1,5 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it.
-// Usage: node tools/browse.js [--scen=smoke,crowd70,boss,shots,sheet,map,screens,wardrobe,cosmetics,swing,picks,cards,bell,arenas,verbs,portal,hits,music] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
+// Usage: node tools/browse.js [--scen=smoke,crowd70,boss,shots,sheet,map,screens,wardrobe,cosmetics,swing,picks,cards,bell,arenas,verbs,props,games,portal,hits,music] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
 //   [--quality=low,high] [--ops] [--json] [--seed=1] [--strat=1] [--embers=N] [--mortal] [--software] [--forcepost] [--sync] [--warm=2.5] [--timeout=300]
 // Mechanism: headless only (no headed option, no window calls); one browser per invocation, one fresh context per scenario page, all closed at exit, on error and on SIGINT.
 //   A read-only node http server on 127.0.0.1 (random port) serves --root (default: this repo). Playwright resolves via require('playwright'), else %LOCALAPPDATA%\npm-cache\_npx\*\node_modules (best match for the installed browsers).
@@ -26,7 +26,9 @@
 //   cards: a frame sheet PNG (every card frame mask at 6 x) and one PNG per boon hand staged through the sim (the hero's boons set so the cards are eligible): path gates,
 //     every element, open and General, purse, keystones, an evolution, the --cls route and fork offers, a 6-card dense hand; mid-pick frames (110 and 230 ms,
 //     the hide timer held, animations paused) for poison, holy, ice, lightning, shadow, general, fire-big and route; the fork reveal at rank 2 and 3; a Low quality hand and pick.
-//     Fails on a missing card, a card whose kind differs from ED.PickFx.kind, a frame that did not resolve, equal path gate icons, a pick without an effect layer, or Low quality leftovers.
+//     The first hand also checks the offer lock (a confirm and a click 150 ms in pick nothing, the fill sweeps; a shot lock-150ms; released by 750 ms).
+//     Fails on a missing card, a card whose kind differs from ED.PickFx.kind, a frame that did not resolve, equal path gate icons, a pick without an effect layer, Low quality leftovers or an offer lock that does not hold or release.
+//   props: per-hero and party props staged around the hero and used like a player (see scenProps): another hero's prop and a claimed co-op hoard prompt nothing, taken props vanish with a puff; one shot.
 //   bell: the hero, Anchor Leap and Peal icons and screenshots of the Bellwarden (unlocked for the run; --weapon picks the bell): winding in a staged fight with Full Swing, a hurl in flight, the bell anchored, a reel, an Anchor Leap, a Peal, four Bellwardens in the crowd at High and Low quality,
 //     and a client's view from a two-peer net check in the same page (host World + client Game, JSON snapshots, 50 ms each way); fails on bad bells, missing bell events or a client that drifts from the host (see scenBell).
 //   verbs: one screenshot per element verb staged in the largest combat room (still foes in front of the hero, input through ED.Input like a player): the flame cone, burning ground, Burn stacks, the ice wall,
@@ -41,6 +43,8 @@
 //   music: every score track (24 s: a fight at level 1 then heavy, a boss through its three levels), the four stingers, a Low quality fight and a transition demo bounced in an OfflineAudioContext, a WAV each in --outdir;
 //     the track switching rules (BR.musicSwitch) and 25 s of a solo run's context picker; fails on a throw, a silent mix, peak > 0.99, a silent bass layer, no drums or perc, quiet drums or bass or drums thin above 150 Hz
 //     in a fight or boss, Low quality playing pad, arp or lead, a broken switching rule, or a fight without fight music.
+//   games: 13 screenshots of the minigames staged through the sim (BR.game, the hero unhurt): the trap gauntlet idle and running, the shell game idle, showing, shuffling, open to a pick and found,
+//     the wager duel idle and fighting, the lantern chase idle and running, the echo bells idle, ringing and answering; fails on a page error or a game that misses its phase.
 // Output: compact table (or --json on stdout, logs on stderr); result-<browser>.json and the PNGs in --outdir (default <tmp>/wickdeep-browse). Exit 0 pass, 1 scenario failure, 2 harness error.
 // Notes: Chromium runs headless on the real GPU (ANGLE D3D11, no window); --software forces SwiftShader, where the game reports Post.soft and skips post at 'high' unless --forcepost. Firefox uses its own headless GL.
 //   --sync forces each frame's raster/GPU work to finish before the timer stops. Every external host is blocked (fonts and art are embedded data URIs).
@@ -74,7 +78,7 @@ function parseArgs(argv) {
   if (!vp) throw new Fail('--viewport is WxH, e.g. 1920x1080');
   o.vw = +vp[1]; o.vh = +vp[2];
   o.scens = o.scen.split(',').map(s => s.trim()).filter(Boolean);
-  for (const s of o.scens) if (!/^(smoke|boss|shots|sheet|map|screens|wardrobe|cosmetics|swing|picks|cards|bell|arenas|verbs|portal|hits|music|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, boss, shots, sheet, map, screens, wardrobe, cosmetics, swing, picks, cards, bell, arenas, verbs, portal, hits, music, crowdN)');
+  for (const s of o.scens) if (!/^(smoke|boss|shots|sheet|map|screens|wardrobe|cosmetics|swing|picks|cards|bell|arenas|verbs|props|games|portal|hits|music|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, boss, shots, sheet, map, screens, wardrobe, cosmetics, swing, picks, cards, bell, arenas, verbs, props, games, portal, hits, music, crowdN)');
   if (!o.scens.length) throw new Fail('--scen is empty');
   o.qualities = o.quality ? o.quality.split(',').map(s => s.trim()) : null;
   if (o.qualities && o.qualities.some(q => q !== 'low' && q !== 'high')) throw new Fail('--quality is low, high or low,high');
@@ -447,6 +451,31 @@ function pageBoot(cfg) {
     throw new Error('unknown arena step ' + step);
   };
 
+  // games scenario: 'stage:<id>' puts the solo hero in an event room (of the first stratum that has one) with minigame <id> as its event (patchRoom, then the real startEvent on entry; the world tick runs def.update),
+  // the hero beside its first prop; 'go' interacts with that prop; 'pick' moves to and picks the pearl's cup; 'chase' puts the hero near a wisp; 'off' ends god mode. Returns the game's phase.
+  BR.game = (step) => {
+    const ED = window.__ED, s = ED.Game.s, w = s && s.world, me = s && s.me;
+    if (!w) throw new Error('no run');
+    god = 1;
+    const g = () => ED.Minigames.game(w), first = () => w.props.find(x => x.ev);
+    if (step.indexOf('stage:') === 0) {
+      const id = step.slice(6);
+      let room = null;
+      for (let st = w.stratum; st <= 3 && !room; st++) { if (st !== w.stratum) w.enterStratum(st); room = w.floor.rooms.find(r => r.type === 'event' && !w.roomState[r.id].visited); }
+      if (!room) return 'no event room';
+      if (!w.patchRoom(room.id, { event: id })) return 'no patch';
+      w.enterRoom(room.id, 's'); w.gold = 400;
+      if (!g() || g().id !== id) return 'not started';
+      const pr = first(); me.x = pr.x; me.y = pr.y + 26;
+      return g().ph;
+    }
+    if (step === 'go') { const pr = first(); me.x = pr.x; me.y = pr.y + 26; w.interact(me.pid, pr.id); return g().ph; }
+    if (step === 'pick') { const c = w.props.find(x => x.kind === 'mg_cup' && x.g.c === g().pearl); me.x = c.x; me.y = c.y + 22; w.interact(me.pid, c.id); return g().ph; }
+    if (step === 'chase') { const z = w.zones.find(q => q.kind === 'wisp' && !q.dead); if (z) { me.x = z.x + 40; me.y = z.y; } return g().ph; }
+    if (step === 'off') { god = 0; return 0; }
+    throw new Error('unknown game step ' + step);
+  };
+
   // late build on the solo hero at stratum `strat`: two element paths (the first evolved, the second at its keystone), open boons, the first route with its first fork at rank 3,
   // six relics, level 14, a shield, the first-exit path walked up to half the rows (the hero in its last room), and an ally hero (second class) beside the hero; returns a summary
   BR.sheetStage = (strat) => {
@@ -493,6 +522,42 @@ function pageBoot(cfg) {
     for (const q of w.players.values()) if (q !== p) { q.x = p.x + 40; q.y = p.y; }
     return { room: best.id, type: best.type, row: best.row, exits: best.exits.length, names: best.exits.map(id => ED.Render.roomName ? ED.Render.roomName(w.floor.rooms[id]) : w.floor.rooms[id].type) };
   };
+
+  // props: per-hero and party props staged in the current room around the hero and used through World.interact like a player: a relic hoard (one taken: solo, the rest crumble), a vigor reward (claimed),
+  // an untouched boon reward, another hero's forge reward (owner 'ghost'), a bought shop potion, a chest, and a co-op hoard this hero took from while a partner has not (its group in Game.s.claimed, relics untaken).
+  // Counts the puffs FX.handle sees from then on.
+  BR.propStage = () => {
+    const ED = window.__ED, s = ED.Game.s, w = s.world, p = s.me, U = ED.U;
+    for (const q of w.players.values()) { q.offers.length = 0; q.picks = 0; q.offer = null; }
+    w.enemies.length = 0; w.enc = null; w.locked = false; w.props.length = 0; w.gold = 999;
+    const x = p.x, y = p.y, out = {};
+    const mk = (o) => { const pr = Object.assign({ id: U.uid(), state: 0 }, o); w.props.push(pr); return pr; };
+    const use = (pr) => { const ox = p.x, oy = p.y; p.x = pr.x; p.y = pr.y; w.interact(p.pid, pr.id); p.x = ox; p.y = oy; };
+    const hoard = U.uid(), taken = new Set(), rel = [];
+    for (let i = 0; i < 3; i++) { const id = w.rollRelic('c', taken); taken.add(id); rel.push(mk({ kind: 'relic', x: x - 200 + i * 56, y: y - 110, item: id, group: hoard })); }
+    use(rel[1]);
+    const coop = U.uid(), crel = [];
+    for (let i = 0; i < 2; i++) { const id = w.rollRelic('c', taken); taken.add(id); crel.push(mk({ kind: 'relic', x: x - 200 + i * 56, y: y + 90, item: id, group: coop })); }
+    s.claimed[coop] = true;
+    out.vigor = mk({ kind: 'reward', x: x + 60, y: y - 110, item: 'vigor', group: U.uid() }); use(out.vigor);
+    out.boon = mk({ kind: 'reward', x: x + 140, y: y - 110, item: 'boon', group: U.uid() });
+    out.ghost = mk({ kind: 'reward', x: x - 60, y: y + 90, item: 'forge', group: U.uid(), owner: 'ghost' });
+    out.shop = mk({ kind: 'shop', x: x + 60, y: y + 90, item: 'potion', stype: 'potion', price: 5 });
+    out.chest = mk({ kind: 'chest', x: x + 160, y: y + 90 });
+    const F = ED.FX, h = F.handle; BR._puffs = 0; F.handle = function (ev) { if (ev && ev.t === 'puff') BR._puffs++; return h.apply(this, arguments); };
+    BR._props = { ghost: out.ghost.id, boon: out.boon.id, coop: crel[0].id, hoard: coop };
+    BR._buy = () => { BR._puffs = 0; use(out.shop); return out.shop.state === 1; };
+    return { relics: rel.map(r => r.item), taken: rel[1].state === 1, claimedHoard: !!p.claimed[hoard], vigor: !!p.claimed[out.vigor.group], ghostOpen: out.ghost.state === 0 };
+  };
+  // props: buys the staged potion on a later frame (its vanishing puff comes from the renderer); true when bought
+  BR.propBuy = () => BR._buy();
+  // props: the hero stood on prop `key` of BR._props (ghost, boon, coop); returns whether the client still lists the co-op hoard as claimed and the puffs seen
+  BR.propAt = (key) => {
+    const ED = window.__ED, s = ED.Game.s, p = s.me, w = s.world, P = BR._props, pr = w.props.find(o => o.id === P[key]);
+    p.x = pr.x; p.y = pr.y + 4;
+    return { claimed: !!s.claimed[P.hoard], puffs: BR._puffs };
+  };
+  BR.prompt = () => { const s = window.__ED.Game.s; return s.prompt ? s.prompt.text : null; };
 
   // cards: a boon offer staged through the sim (the hero's boons set so the cards are eligible, the hand sent as the sim's own offer message); returns each card's kind
   BR.cardHand = (boons, ids, spec) => {
@@ -1172,6 +1237,32 @@ async function scenVerbs() {
   return res;
 }
 
+// games: screenshots of the five minigames staged through BR.game (an event room, the game set up and started, the hero unhurt); fails on a page error or a game that does not reach its phase.
+async function scenGames() {
+  const o = S.opt, res = newResult('games'), q = qualitiesOr(['high'])[0];
+  // [step, expected phase (null: any), ms before the shot, shot name ('' = none)]
+  const PLAN = [['stage:gauntlet', 0, 400, 'gauntlet-idle'], ['go', 1, 1400, 'gauntlet-traps'], ['stage:shells', 0, 400, 'shells-idle'], ['go', 1, 500, 'shells-show'], ['', 2, 900, 'shells-shuffle'], ['', 3, 3200, 'shells-pick'], ['pick', 4, 300, 'shells-found'],
+    ['stage:duel', 0, 400, 'duel-idle'], ['go', 2, 2600, 'duel-fight'], ['stage:wisps', 0, 400, 'wisps-idle'], ['go', 1, 600, ''], ['chase', 1, 400, 'wisps-chase'], ['stage:echo', 0, 400, 'echo-idle'], ['go', 1, 900, 'echo-listen'], ['', 2, 2600, 'echo-answer']];
+  const { ctx, page, errors } = await openPage();
+  try {
+    await call(page, 'profile', o.cls, o.embers);
+    await call(page, 'settings', q);
+    await call(page, 'install');
+    if ((await call(page, 'start')) !== 'run') fail(res, 'run did not start');
+    await wait(600);
+    for (let i = 0; i < 6 && await call(page, 'offerOpen'); i++) { await call(page, 'take'); await wait(500); } // the start offer holds the world
+    for (const [step, ph, ms, name] of PLAN) {
+      if (step) { const r = await call(page, 'game', step); notes(res, step + ' -> ' + r); if (typeof r === 'string') fail(res, step + ': ' + r); }
+      await wait(ms);
+      if (ph !== null) { const now = await page.evaluate(() => { const ED = window.__ED, g = ED.Minigames.game(ED.Game.s.world); return g ? g.ph : -1; }); if (now !== ph) fail(res, `${name || step}: phase ${now}, wanted ${ph}`); }
+      if (name) await shoot(page, res, name);
+    }
+    await call(page, 'game', 'off');
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
 async function scenArenas() {
   const o = S.opt, res = newResult('arenas'), q = qualitiesOr(['high'])[0];
   const PLAN = [['king', 6500, 'king-p1'], ['tide', 900, 'king-tide-warn'], ['', 3000, 'king-tide'], ['beam', 900, 'king-beam-warm'], ['', 1100, 'king-beam'], ['p2', 1500, 'king-p2'], ['p3', 2500, 'king-p3'],
@@ -1368,6 +1459,37 @@ async function scenMusic() {
   return res;
 }
 
+// props: BR.propStage, then the hero stands on each staged prop: another hero's prop and an untaken relic of a co-op hoard this hero took from show no prompt, an untouched reward does;
+// the taken relics vanish; a potion bought on a later frame vanishes with one puff; shots of the room before and after the buy. Fails on a page error, a wrong prompt or a puff count other than 1.
+async function scenProps() {
+  const o = S.opt, res = newResult('props'), q = qualitiesOr(['high'])[0];
+  const { ctx, page, errors } = await openPage();
+  try {
+    await call(page, 'profile', o.cls, o.embers);
+    await call(page, 'settings', q);
+    if ((await call(page, 'start')) !== 'run') fail(res, 'run did not start');
+    await wait(1100);
+    for (let i = 0; i < 6 && await call(page, 'offerOpen'); i++) { await call(page, 'take'); await wait(300); }
+    const st = await call(page, 'propStage');
+    if (!st.taken || !st.claimedHoard || !st.vigor || !st.ghostOpen) fail(res, 'staging: ' + JSON.stringify(st));
+    await wait(500);
+    await shoot(page, res, 'room');
+    if (!(await call(page, 'propBuy'))) fail(res, 'the potion was not bought');
+    await wait(60);
+    await shoot(page, res, 'bought');
+    const at = async (key) => { const r = await call(page, 'propAt', key); await wait(250); return Object.assign(r, { prompt: await call(page, 'prompt') }); };
+    const ghost = await at('ghost'), rel = await at('coop'), boon = await at('boon');
+    if (ghost.prompt) fail(res, "another hero's prop prompts: " + ghost.prompt);
+    if (!rel.claimed || rel.prompt) fail(res, `a relic of a co-op hoard this hero took from: claimed ${rel.claimed}, prompt ${rel.prompt}`);
+    if (!boon.prompt) fail(res, 'an untouched reward shows no prompt');
+    const puffs = (await call(page, 'propAt', 'boon')).puffs;
+    if (puffs !== 1) fail(res, 'the bought potion left ' + puffs + ' puffs (want 1)');
+    notes(res, `relics ${st.relics.join(', ')}; prompts: ghost ${ghost.prompt}, claimed hoard ${rel.prompt}, boon ${boon.prompt}; puffs seen ${puffs}`);
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
 async function scenCards() {
   const o = S.opt, res = newResult('cards'), q = qualitiesOr(['high'])[0], cls = o.cls;
   const { ctx, page, errors } = await openPage();
@@ -1383,6 +1505,16 @@ async function scenCards() {
     const seen = new Set();
     for (const h of CARD_HANDS(cls)) {
       const kinds = await call(page, 'cardHand', h.boons, h.ids, h.spec);
+      if (!seen.size) { // the offer lock on the first hand: a confirm and a click 150 ms in pick nothing while the fill sweeps; 750 ms in the lock is over
+        await wait(150);
+        const lk = await page.evaluate(() => { const E = window.__ED, c = document.querySelector('#boon-cards .boon-card'); E.UI.boonConfirm(); if (c) c.click(); const f = document.querySelector('#boon-cards .bc-lock'); return { ms: E.UI.OFFER_LOCK_MS, locked: E.UI.offerLocked(), sweep: document.getElementById('boon-cards').classList.contains('locking') && !!f && getComputedStyle(f).display !== 'none', open: !!(E.Game.s && E.Game.s.offerOpen) }; });
+        if (!lk.locked || !lk.sweep || !lk.open) fail(res, `offer lock 150 ms in: locked ${lk.locked}, fill ${lk.sweep}, still open ${lk.open}`);
+        await shoot(page, res, 'lock-150ms');
+        await wait(600);
+        const un = await page.evaluate(() => ({ locked: window.__ED.UI.offerLocked(), sweep: document.getElementById('boon-cards').classList.contains('locking') }));
+        if (un.locked || un.sweep) fail(res, `offer lock 750 ms in: locked ${un.locked}, fill ${un.sweep}`);
+        notes(res, `offer lock: ${lk.ms} ms, input ignored at 150 ms, released by 750 ms`);
+      }
       await wait(900);
       const d = await call(page, 'cardDom');
       if (!d.open || d.cards.length !== h.ids.length) { fail(res, `hand ${h.name}: overlay ${d.open ? 'open' : 'closed'} with ${d.cards.length} of ${h.ids.length} cards`); continue; }
@@ -2108,7 +2240,7 @@ async function main() {
       const t0 = Date.now();
       log('scenario ' + sc + ' ...');
       let r;
-      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'boss' ? await scenBoss() : sc === 'shots' ? await scenShots() : sc === 'sheet' ? await scenSheet() : sc === 'map' ? await scenMap() : sc === 'screens' ? await scenScreens() : sc === 'wardrobe' ? await scenWardrobe() : sc === 'cosmetics' ? await scenCosmetics() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : sc === 'cards' ? await scenCards() : sc === 'bell' ? await scenBell() : sc === 'arenas' ? await scenArenas() : sc === 'verbs' ? await scenVerbs() : sc === 'portal' ? await scenPortal() : sc === 'hits' ? await scenHits() : sc === 'music' ? await scenMusic() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
+      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'boss' ? await scenBoss() : sc === 'shots' ? await scenShots() : sc === 'sheet' ? await scenSheet() : sc === 'map' ? await scenMap() : sc === 'props' ? await scenProps() : sc === 'games' ? await scenGames() : sc === 'screens' ? await scenScreens() : sc === 'wardrobe' ? await scenWardrobe() : sc === 'cosmetics' ? await scenCosmetics() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : sc === 'cards' ? await scenCards() : sc === 'bell' ? await scenBell() : sc === 'arenas' ? await scenArenas() : sc === 'verbs' ? await scenVerbs() : sc === 'portal' ? await scenPortal() : sc === 'hits' ? await scenHits() : sc === 'music' ? await scenMusic() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
       r.wallMs = Date.now() - t0;
       r.browserVersion = bv;
       if (S.server.missing.size) r.missing = [...S.server.missing];

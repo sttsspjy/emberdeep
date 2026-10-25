@@ -1,6 +1,6 @@
 // Usage: node tools/check-ux.js
 // Headless checks of player-facing text and layout data: the tutorial signs near the spawn, no developer units or stale fixed multipliers in card texts, the Doom/Toll wording,
-// Shield Storm and Comet in the sheet model, the Sundered status, the floor-map glyph table and route bits (src/client/icons.js), the map key (src/client/input.js). Prints failures and exits 1 when any check fails.
+// Shield Storm and Comet in the sheet model, the Sundered status, the floor-map glyph table and route bits (src/client/icons.js), the map key (src/client/input.js), the offer lock gates (src/client/ui.js). Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
 let n = 0, fails = 0;
 const ok = (c, msg) => { n++; if (!c) { fails++; console.log('FAIL ' + msg); } };
@@ -73,11 +73,10 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   const base = { cls: 'knight', weapon: 'longsword', boons: {}, relics: [], meta: META(), pact: 0 };
   const st0 = ED.Stats.compute(base);
   ok(st0.dashCd === 1.5 && st0.dashCharges === 1, 'a fresh hero has 1 dash charge, 1.5 s each: ' + st0.dashCd + ' / ' + st0.dashCharges);
-  { // Light Step: +1 charge per rank; Shadow Cloak: a 1.0 s recharge; the recharge floors at 1.0 s and the charges cap at 3
+  { // Light Step: +1 charge per rank; Shadow Cloak leaves the dash alone; the recharge floors at 1.0 s and the charges cap at 3
     const dash = (boons, relics) => { const s = ED.Stats.compute(Object.assign({}, base, { boons, relics: relics || [] })); return s.dashCharges + ' / ' + s.dashCd; };
     ok(dash({ lightstep: 1 }) === '2 / 1.5' && dash({ lightstep: 2 }) === '3 / 1.5', 'Light Step: ranks 1 and 2 give 2 and 3 charges, recharge unchanged: ' + dash({ lightstep: 1 }) + ', ' + dash({ lightstep: 2 }));
-    ok(dash({}, ['cloak']) === '1 / 1', 'Shadow Cloak: 1 charge, recharge 1.0 s: ' + dash({}, ['cloak']));
-    ok(dash({ lightstep: 2 }, ['cloak']) === '3 / 1', 'Light Step 2 + Shadow Cloak: 3 charges, 1.0 s each: ' + dash({ lightstep: 2 }, ['cloak']));
+    ok(dash({}, ['cloak']) === '1 / 1.5' && dash({ lightstep: 2 }, ['cloak']) === '3 / 1.5', 'Shadow Cloak grants no dash charge or recharge: ' + dash({}, ['cloak']) + ', ' + dash({ lightstep: 2 }, ['cloak']));
     ED.RELICS.zzdash = { name: 'T', rar: 'c', icon: 'coin', desc: '', mods: { dashcdr: 0.9 } };
     ok(dash({ lightstep: 5 }, ['zzdash']) === '3 / 1', 'the recharge floors at 1.0 s and the charges cap at 3: ' + dash({ lightstep: 5 }, ['zzdash']));
     delete ED.RELICS.zzdash;
@@ -136,10 +135,10 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   const G = {};
   for (const rw of ['gold', 'boon', 'epic', 'relic', 'forge', 'vigor']) { const r = Ic.reward(rw, null); G[rw] = [r[0], r[1], r[2]]; }
   for (const t of ['shop', 'treasure', 'rest', 'elite', 'boss']) { const r = room(t); G[t] = [r.icon, r.color, r.label]; }
-  for (const ev of ['fountain', 'altar', 'trial', 'gamble']) { const r = room('event', { event: ev }); G['event:' + ev] = [r.icon, r.color, r.label]; }
+  for (const ev of [null, 'fountain', 'altar', 'trial', 'gamble']) { const r = room('event', { event: ev }); G[ev ? 'event:' + ev : 'event'] = [r.icon, r.color, r.label]; } // null: not yet drawn (events.js)
   G.dark = Ic.DARK.slice();
   const want = { shop: ['stall', 'Shop'], gold: ['coins', 'Gold'], treasure: ['chest', 'Treasure'], relic: ['amulet', 'Relic'], epic: ['cardepic', 'Epic'], boon: ['card', 'Boon'], forge: ['anvil', 'Forge'], vigor: ['heart', 'Health'],
-    rest: ['campfire', 'Rest'], 'event:fountain': ['fountain', 'Fountain'], 'event:altar': ['altar', 'Altar'], 'event:trial': ['swords', 'Trial'], 'event:gamble': ['question', 'Gamble'], elite: ['skullhorn', 'Elite'], boss: ['skullcrown', 'Boss'], dark: ['moon', 'Dark'] };
+    rest: ['campfire', 'Rest'], event: ['question', 'Event'], 'event:fountain': ['fountain', 'Still Fountain'], 'event:altar': ['altar', 'Blood Altar'], 'event:trial': ['swords', "Champion's Trial"], 'event:gamble': ['coin', "Gambler's Shrine"], elite: ['skullhorn', 'Elite'], boss: ['skullcrown', 'Boss'], dark: ['moon', 'Dark'] };
   for (const id in want) ok(G[id] && G[id][0] === want[id][0] && G[id][2] === want[id][1] && valid(G[id][0]), `map glyph ${id}: ${want[id][0]} "${want[id][1]}" (16x16 mask): ${G[id] && G[id].join(' ')}`);
   const ids = Object.keys(want), sil = (g) => mask(g).map(r => r.replace(/[^.]/g, '#')).join('');
   const diff = (a, b) => { const x = sil(a), y = sil(b); let d = 0; for (let i = 0; i < 256; i++) if (x[i] !== y[i]) d++; return d; };
@@ -193,6 +192,16 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   I.setBinds(null); ok(I.isDefault() && !dup(), 'no table: the defaults, no code twice');
   const mv = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'mapview.js'), 'utf8');
   ok(!/['"](fire|ice|lightning|poison|holy|shadow|general)['"]/.test(mv), 'the map view names no path id (it reads ED.PATHS)');
+}
+
+// ---------------- offer lock (ui.js; the live timing runs in tools/browse.js --scen=cards) ----------------
+{
+  const ui = require('fs').readFileSync(require('path').join(__dirname, '..', 'src', 'client', 'ui.js'), 'utf8').replace(/\r\n/g, '\n');
+  ok(/const BOON_LOCK_MS = UI\.OFFER_LOCK_MS = 600;/.test(ui), 'the offer lock is 600 ms');
+  ok(/el\.onclick = \(\) => \{ if \(performance\.now\(\) >= boonLock\)/.test(ui), 'a card click waits for the lock');
+  ok(/UI\.boonConfirm = \(\) => \{ if \(!boonOffer \|\| performance\.now\(\) < boonLock\) return;/.test(ui), 'the confirm key and pad wait for the lock');
+  ok(/UI\.boonReroll = [^\n]*\n[^\n]*performance\.now\(\) < boonLock\) return;/.test(ui), 'the reroll waits for the lock');
+  ok(/boonLock = performance\.now\(\) \+ BOON_LOCK_MS;[^\n]*\n[^\n]*\n\s*wrap\.style\.setProperty\('--lock'[^\n]*classList\.add\('locking'\)/.test(ui), 'each hand restarts the lock and its fill sweep');
 }
 
 console.log(`${n} checks, ${fails} failed`);
