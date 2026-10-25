@@ -11,13 +11,13 @@
 
   // Stat keys of the class routes (docs/GAME-DESIGN.md section 5): slot stats first, then one group per class, all 0 until a card sets them.
   const ROUTE_KEYS = ('s1Dmg s1Area s1Dur s1N s1Cdr s1Range s2Dmg s2Area s2Dur s2N s2Cdr s2Range s3Dmg s3Area s3Dur s3N s3Cdr s3Range s3Ch wDmg bleedAll'
-    + ' cleave cleaveN cShock cStun chargeCleave parry riposte brace braceDR braceAura jugShock bash rally chargeStun twinShield gather orbit orbitMul orbitStun orbitReflect ruinInf carry ruinSpread brand seal'
+    + ' cleave cleaveN cShock cStun chargeCleave parry riposte brace braceDR braceAura jugShock bash rally chargeStun gather shieldWall wallStun sendBack bastionWard ruinInf carry ruinSpread brand seal'
     + ' deadeye pierceRamp splitBolt hitSlow flurry flurryMul volleySlow volleyClose volleyHop caltrops volleyMark markV markLeap skyfall skyTwin rainHail shower skillInfK festerHit contagion contagionR contagionN'
     + ' emberMul spark sparkMax flashfire pyreBolt afterburn afterN chainCast stormT novaEcho novaPull novaRing mantle mantleBurst twinMeteor meteorites comet cometStun wInfFire searSkill flashT heatEngine heatChain'
-    + ' momentum momMax execCrit execMom bladeStorm stepStack stackMax assassinate stepTwin afterimage afterPull smokeVuln stealthSpd stealthDur ambushMul nightsEdge ambushCleave veil veilBlind shroud veins exsang rupture bloodbloom'
+    + ' momentum momMax execCrit execMom bladeStorm stepCrit stepStack stackMax assassinate stepTwin afterimage afterPull smokeVuln stealthSpd stealthDur ambushMul nightsEdge ambushCleave veil veilBlind shroud veins exsang rupture bloodbloom'
     + ' supernova supernovaPull phoenixMul phoenixDur dashTrail cataclysm sunDive diveTrail blossom blossomN blossomMax mirrorHall eclipse eclipseDur umbral cloneMul'
-    + ' waveEvery waveMul waveBig waveStun waveBurst waveHome litany sanctDR sanctStun sanctJudge aura auraDmg judgeDur judgeWeak twinHammer thirdLeg secondFlight verdict verdictJudge wInfHoly smiteBig guardLight smiteJudge smiteBeam beamJumps'
-    + ' hex hexMul wRaise hexSpread hexSelf hexHaste spikeRaise knights knightLife knightStun harvestRaise corpse corpseMul boneLance boneArmor boneCap boneField minionInfuse mInfShadow tollMul abyssMin abyssDoom reapRaise tideMul'
+    + ' waveEvery waveMul waveBig waveStun waveBurst waveHome litany sanctHeal sanctDR sanctStun sanctJudge aura auraDmg judgeDur judgeWeak twinHammer thirdLeg secondFlight verdict verdictJudge wInfHoly smiteBig guardLight smiteJudge smiteBeam beamJumps'
+    + ' hex hexMul wRaise hexSpread hexSelf hexHaste spikeRaise knights knightLife knightStun harvestRaise corpse corpseMul boneLance harvestHeal boneArmor boneCap boneField minionInfuse mInfShadow tollMul abyssMin abyssDoom reapRaise tideMul'
     + ' wrath wrathNova wrathPillar dawn aegisR aegisDR aegisStun storm stormMul fjEcho fjR fjStun bloom bloomField bloomBomb dk dkMul dkArc dkTaunt carrionN carrionShard lich lichT lichMul lichLife'
     + ' avalanche avaCrack avaStun phalanx bannerSlow bannerWeak bannerDur tempest vortexMul vortexDur bastion deathMark deathWave thornburst thornRoot starfall thornstorm'
     + ' bannerDmg thornMul thornR phoenixSlow shroudDmg aegisMul craterMul'
@@ -204,10 +204,11 @@
     return p.comboAt === undefined || now - p.comboAt > idle ? 0 : ((p.comboK | 0) + 1) % c.steps.length;
   };
   St.stepInterval = (p) => { const c = p.stats.weapon.combo; return St.attackInterval(p) * (c ? c.iv[p.comboK | 0] || 1 : 1); };
-  // Move rate: Flow (Swift forks, p.flowT) and the unseen speed of Nightfall (stealthSpd while p.stealthT), times the slow of a held verb (p.holdOn: St.HOLD[st.hold].slow).
+  // Move rate: Flow (Swift forks, p.flowT) and the unseen speed of Nightfall (stealthSpd while p.stealthT), times the slow of a held verb (p.holdOn: St.HOLD[st.hold].slow) and of a raised Bulwark (BULWARK_SLOW).
+  St.BULWARK_SLOW = 0.5;
   St.moveRate = (p) => {
     const s = p.stats, h = p.holdOn && s.hold ? St.HOLD[s.hold] : null;
-    return (1 + (p.flowT > 0 ? ED.CONST.FLOW_SPD : 0) + (p.stealthT > 0 ? s.stealthSpd : 0)) * (h && h.slow ? 1 - h.slow : 1);
+    return (1 + (p.flowT > 0 ? ED.CONST.FLOW_SPD : 0) + (p.stealthT > 0 ? s.stealthSpd : 0)) * (h && h.slow ? 1 - h.slow : 1) * (p.bulwarkOn ? 1 - St.BULWARK_SLOW : 1);
   };
   // Hold-attack verbs (stats.hold, set by a card's hold field): the client starts one once attack is held `at` s (normal attacks stop) and ends it on release. max: the verb ends itself after max s (0: until release);
   // full: seconds of holding (from the start) to a full charge (lance, finisher; the finisher's full is FULL_EVO with Masterwork Arms); slow: share of move speed lost while it runs. Bell weapons fire them on a full-wind hurl (class-bell.js).
@@ -229,6 +230,7 @@
     if (sk.aimIf) for (const k in sk.aimIf) if (st[k]) aim = sk.aimIf[k];
     if (sk.moveIf) for (const k in sk.moveIf) if (st[k]) move = sk.moveIf[k];
     const out = { id, slot: sk.slot, aim, range: sk.range === undefined ? 0 : sk.range + (sk.rangeAdd ? st[sk.rangeAdd] : 0), rangeMin: sk.rangeMin || 0, move, cd: sk.cd, cdEff, walk: !!sk.walk, parts: [], p: {} };
+    if (sk.blockMax) { out.blockMax = sk.blockMax + Math.round(sN || 0); out.blockMul = sk.blockMul + st.gather; out.hold = st[sk.holdKey] > 0 ? st[sk.holdKey] : sk.hold; } // a held skill (Bulwark): blocks that store power, power per block, longest hold
     for (const d of sk.parts) {
       const q = Object.assign({}, d);
       q.on = (!d.if || !!st[d.if]) && !(d.ifNot && st[d.ifNot]); // ifNot: a part another card replaces (Skyfall replaces the Rain ticks)

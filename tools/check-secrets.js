@@ -81,12 +81,13 @@ for (const [frac, downed, want] of [[0.02, false, true], [0.04, false, false], [
   ok(secrets(v.w, 'p0') === 1, 'Against the Grain announces at the Hollow King');
 }
 
-// ---- Return to Sender (Knight): a boss felled by the returning shield ----
-for (const [part, boss, cls, want] of [['shieldthrow.return', true, 'knight', true], ['shieldthrow.strike', true, 'knight', false], ['shieldthrow.return', false, 'knight', false], ['shieldthrow.return', true, 'ranger', false]]) {
+// ---- Unbroken (Knight): a boss felled by a Bulwark bash at full stored power ----
+for (const [part, full, boss, cls, want] of [['bulwark.bash', true, true, 'knight', true], ['bulwark.bash', false, true, 'knight', false], ['charge.bash', true, true, 'knight', false], ['bulwark.bash', true, false, 'knight', false], ['bulwark.bash', true, true, 'ranger', false]]) {
   const { w, p } = stage([cls]);
-  w.killEnemy(mk(w, p, boss ? bossOf(1) : 'skeleton'), p, { p, kind: 'skill', part });
-  ok(p.sec.heroSecret === want, `Return to Sender ${cls} ${part} on ${boss ? 'a boss' : 'a foe'}: ${p.sec.heroSecret}`);
+  w.killEnemy(mk(w, p, boss ? bossOf(1) : 'skeleton'), p, { p, kind: 'skill', part, full });
+  ok(p.sec.heroSecret === want, `Unbroken ${cls} ${part}${full ? ' full' : ''} on ${boss ? 'a boss' : 'a foe'}: ${p.sec.heroSecret}`);
 }
+ok(ED.SECRETS.find(s => s.id === 'knight' || s.reward === 'skin.knight.secret').name === 'Unbroken', 'the Knight secret is named Unbroken');
 
 // ---- Long Shot (Ranger): one weapon shot kills three foes ----
 for (const [nFoes, want] of [[3, true], [2, false]]) {

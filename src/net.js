@@ -276,7 +276,7 @@
   // ---------------- snapshots ----------------
   const ST = ['move', 'windup', 'lunge', 'aim', 'spin', 'charge', 'fuse', 'cast', 'idle', 'atk', 'dash', 'wind', 'slam', 'air', 'roar', 'fade', 'burrow', 'erupt', 'bash', 'leap', 'dive', 'stuck']; // append only: indices are the wire format
   const ST_IDX = U.indexer(ST);
-  const ZK = ['spawn', 'tele', 'teleLine', 'teleCone', 'laser', 'poison', 'fire', 'pfire', 'plague', 'sanct', 'pull', 'bomb', 'decoy', 'mire', 'rain', 'meteor', 'smoke', 'skyfall', 'shards', 'crack', 'vortex', 'starfall', 'bramble', 'holypool', 'bward', 'cinder', 'firebreak', 'pillar', 'anchor', 'vigil', 'bind', 'icewall']; // append only: indices are the wire format
+  const ZK = ['spawn', 'tele', 'teleLine', 'teleCone', 'laser', 'poison', 'fire', 'pfire', 'plague', 'sanct', 'pull', 'bomb', 'decoy', 'mire', 'rain', 'meteor', 'smoke', 'skyfall', 'shards', 'crack', 'vortex', 'starfall', 'bramble', 'holypool', 'bward', 'cinder', 'firebreak', 'pillar', 'anchor', 'vigil', 'bind', 'icewall']; // append only: indices are the wire format
   const ZK_IDX = U.indexer(ZK);
   const PK = ['gold', 'xp', 'heart', 'orb'];
   const PK_IDX = U.indexer(PK);
@@ -290,8 +290,8 @@
     return k < 0.95 ? 1 : k < 1.25 ? 2 : 3;
   };
   // FX events kept per type in one snapshot (host to client), and per rendered frame on the host or solo machine (a third of it). Extras are dropped; sim state never is.
-  N.CAPS = { hit: 24, smite: 12, reap: 12, toll: 12, lance: 12, ric: 12, parry: 6, catch: 4, kblock: 6, blance: 8, shatter: 8, hurl: 8, reel: 8, blink: 6 };
-  N.CAPS_LOCAL = { hit: 8, smite: 4, reap: 4, toll: 4, lance: 4, ric: 4, parry: 2, catch: 2, kblock: 3, blance: 4 };
+  N.CAPS = { hit: 24, smite: 12, reap: 12, toll: 12, lance: 12, block: 12, bash: 6, parry: 6, kblock: 6, blance: 8, shatter: 8, hurl: 8, reel: 8, blink: 6 };
+  N.CAPS_LOCAL = { hit: 8, smite: 4, reap: 4, toll: 4, lance: 4, block: 4, bash: 2, parry: 2, kblock: 3, blance: 4 };
   Object.assign(N.CAPS, { exec: 8, rupt: 8, bloom: 6, sweep: 6 }); Object.assign(N.CAPS_LOCAL, { exec: 3, rupt: 3, bloom: 2, sweep: 2 }); // Shade execution cuts, ruptures, Bloodbloom lines and Ambush Sweep rings
   // Cap key of an event: a non-crit fodder hit counts as 'fhit', a fodder death as 'fdie' and a damage-over-time tick (hit with k) as 'dhit', so a horde or a field of burning foes never crowds out crits, direct hits and threat deaths.
   const capKey = (ev) => (ev.fd ? (ev.t === 'hit' && !ev.c ? 'fhit' : ev.t === 'die' ? 'fdie' : ev.t) : ev.t === 'hit' && ev.k ? 'dhit' : ev.t);
@@ -325,7 +325,7 @@
   Object.assign(N.CAPS, { pillar: 4, aegispulse: 4, jecho: 10, lich: 2, dkraise: 2, dkswing: 6 }); Object.assign(N.CAPS_LOCAL, { pillar: 2, aegispulse: 2, jecho: 4, lich: 1, dkraise: 1, dkswing: 2 }); // Cleric and Necromancer skill forms: Wrath pillars, Aegis pulses, Final Judgment echoes, Lich Form, Death Knight raise and swings
   // Radiance fill 0-3 of the Smite gauge.
   N.radLevel = (w, e) => (e.rad > 0 ? Math.min(3, Math.floor(4 * e.rad / w.smiteAt(e))) : 0);
-  // Hero flags (bit n = 1 << n): 0 moving, 1 dashing, 2 downed, 3 dead, 4 invulnerable, 5 hurt, 6 shield thrown, 7 stealth, 8 ambush, 9 airborne (Comet), 10 Guardian Light buff, 11 Emboldened, 12 Battle Trance, 13 holding a hold verb (p.holdOn), 20 braced.
+  // Hero flags (bit n = 1 << n): 0 moving, 1 dashing, 2 downed, 3 dead, 4 invulnerable, 5 hurt, 6 Bulwark raised, 7 stealth, 8 ambush, 9 airborne (Comet), 10 Guardian Light buff, 11 Emboldened, 12 Battle Trance, 13 holding a hold verb (p.holdOn), 20 braced, 21-23 attacks the Bulwark has stored (0-7).
   // P[24]: a hero's bells (class-bell.js) or 0: [last input seq of that hero (p.inSeq), ms of world time since it arrived (p.inT), haul x 100, chain length, flags (1 whirling, 2 hauled, 4 Anchor Leap in flight, 8 winding,
   // 32 turning sense -1, 64 Wrecking Spin), Resonance; then per bell x, y, vx, vy, state (ED.Bell.STATES): a hand bell's x, y about the carried spot p.bellPx / p.bellPy, any other bell's in the world].
   N.BELL_HEAD = 6; N.BELL_N = 5;
@@ -342,7 +342,7 @@
     const P = [], E = [], H = [], B = [], K = [], Z = [], A = [];
     for (const p of w.players.values()) {
       const sw = ED.Sheet.shieldWindow(p, w.time);
-      const fl = (p.moving ? 1 : 0) | (p.dashing ? 2 : 0) | (p.downed ? 4 : 0) | (p.dead ? 8 : 0) | (p.invuln > 0 ? 16 : 0) | (p.hurtT > 0 ? 32 : 0) | (p.shieldOut ? 64 : 0) | (p.stealthT > 0 ? 128 : 0) | (p.ambush ? 256 : 0) | (p.cometT > 0 ? 512 : 0) | (p.glT > 0 ? 1024 : 0) | (p.auraT > 0 ? 2048 : 0) | (p.tranceT > 0 ? 4096 : 0) | (p.holdOn ? 8192 : 0) | (p.braceT > 0 ? 1 << 20 : 0);
+      const fl = (p.moving ? 1 : 0) | (p.dashing ? 2 : 0) | (p.downed ? 4 : 0) | (p.dead ? 8 : 0) | (p.invuln > 0 ? 16 : 0) | (p.hurtT > 0 ? 32 : 0) | (p.bulwarkOn ? 64 : 0) | (p.stealthT > 0 ? 128 : 0) | (p.ambush ? 256 : 0) | (p.cometT > 0 ? 512 : 0) | (p.glT > 0 ? 1024 : 0) | (p.auraT > 0 ? 2048 : 0) | (p.tranceT > 0 ? 4096 : 0) | (p.holdOn ? 8192 : 0) | (p.braceT > 0 ? 1 << 20 : 0) | (Math.min(7, p.blocks | 0) << 21);
       P.push([p.pid, r(p.x), r(p.y), r2(p.face), Math.ceil(p.hp), p.maxHp, fl, r2(p.revive), p.critStacks | 0, p.aegisT > 0 ? 1 : 0, p.guardT > 0 ? 1 : 0, p.secondWind | 0, p.phoenixUsed ? 1 : 0, p.picks | 0, p.rerolls | 0, Math.ceil((p.shield || 0) * 10 - 1e-9) / 10, ED.Sheet.readyBits(p), p.momN | 0, r2(sw.c), r2(sw.a), p.chaliceHp | 0, 0, p.glT > 0 ? Math.round(p.glV * 1000) / 1000 : 0, p.auraT > 0 ? Math.round(p.auraV * 1000) / 1000 : 0, p.bells && p.bells.length ? N.bellRow(p, w) : 0, 0, p.doorWant | 0, p.sparks | 0]); // P[15] shield rounded up to tenths (a shield is a few health points); P[16] ready-state bits of the sheet's defensive items (ED.Sheet.READY); P[17] Momentum stacks; P[18] P[19] shield received in the window: class sources, all sources (health); P[20] Grail of Ages growth; P[21] unused (0); P[22] P[23] Guardian Light and Embolden damage bonus (0 = off); P[24] bells (N.bellRow); P[25] unused (0); P[26] door the hero waits in (co-op: 0 none, else 1 + its exit index, Dungeon.doorWant); P[27] Kindling Sparks
     }
     for (const e of w.enemies) {

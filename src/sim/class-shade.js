@@ -47,7 +47,7 @@
     return dealt > 0;
   }
 
-  // Shadowstep: the client has already moved the hero from (x0, y0) to (x1, y1); every foe on that path takes a guaranteed crit, the hero stays untouchable STEP_GRACE s after landing and readies crit attacks (3, +stepStack per foe cut, scaled by the weapon's critK).
+  // Shadowstep: the client has already moved the hero from (x0, y0) to (x1, y1); every foe on that path takes a guaranteed crit and the hero stays untouchable STEP_GRACE s after landing; Ghost Walk readies crit attacks (stepCrit, +stepStack per foe cut, scaled by the weapon's critK).
   // Twin Cut queues the same path again; Afterimage leaves a decoy at the start that bursts (and, with Lure, first pulls foes in); Hall of Mirrors leaves three; Death Blossom starts a chain of blinks from the landing point.
   ED.CAST.step = function (p, a, data, st, N) {
     const near = (x, y) => fin(x) && fin(y) && U.dist2(x, y, p.x, p.y) < (N.range + 80) ** 2;
@@ -55,7 +55,7 @@
     const seen = N.p.blossom.on ? new Set() : null;
     const cut = cutPath(this, p, N, 'slash', x0, y0, x1, y1, a, seen);
     p.invuln = Math.max(p.invuln, C.STEP_GRACE);
-    this.grantCrits(p, 3 + st.stepStack * cut, 3 + st.stackMax, 'set');
+    if (st.stepCrit > 0) this.grantCrits(p, st.stepCrit + st.stepStack * cut, 3 + st.stackMax, 'set');
     if (N.p.twin.on) p.stepQ.push({ t: N.p.twin.delay, x0, y0, x1, y1, a, room: this.room });
     if (N.p.mirror.on) for (let k = 0; k < N.p.mirror.n; k++) {
       const an = a + Math.PI + k * U.TAU / N.p.mirror.n, ex = x0 + Math.cos(an) * C.MIRROR_OFF, ey = y0 + Math.sin(an) * C.MIRROR_OFF;
@@ -129,11 +129,11 @@
     w.emit({ t: 'lure', pid: p.pid, x: R(z.x), y: R(z.y), pts });
   }
 
-  // Vanish: smoke that slows foes and blinds each non-boss foe inside for a budget (elites half, then a cooldown); the hero is unseen for a while and the next attack is an Ambush.
-  // Veil of Night shields the hero once per 12 s (the class shield window bounds it); Shroud's longer smoke is the card's s2Dur and the smoke chokes every foe inside (the choke part, half of it every 0.5 s: a zone tick, no crit, no procs).
+  // Vanish: smoke that blinds each non-boss foe inside for a budget (elites half, then a cooldown); the hero is unseen for a while and the next attack is an Ambush.
+  // Veil of Night shields the hero once per 12 s (the class shield window bounds it); Shroud slows foes in the smoke 60%, its longer smoke is the card's s2Dur and the smoke chokes every foe inside (the choke part, half of it every 0.5 s: a zone tick, no crit, no procs).
   // Eclipse: the smoke is a dome (zone tag w 2) the hero stays unseen in and where every attack is an Ambush (see stepDome); Umbral Veil: a shadow clone is left where the hero stood.
   ED.CAST.vanish = function (p, a, data, st, N) {
-    const dome = N.p.dome.on, sm = dome ? N.p.dome : N.p.smoke, bl = N.p.blind, ch = N.p.choke, stealth = dome ? sm.dur : 2.5 + st.stealthDur, bud = {};
+    const dome = N.p.dome.on, sm = dome ? N.p.dome : N.p.smoke, bl = N.p.blind, ch = N.p.choke, stealth = dome ? sm.dur : 2.5 + st.stealthDur, bud = {}, slow = st.shroud ? 0.6 : sm.slow || 0;
     p.stealthT = stealth; p.ambush = true; p.ambushT = stealth + 0.5; p.ambFac = 1; p.eclipseRe = false; p.unseenN = 0;
     const zone = this.addZone({ kind: 'smoke', x: p.x, y: p.y, r: sm.r, dur: sm.dur, team: 0, owner: p.pid, custom: true, w: dome ? 2 : 0, ticks: 0,
       update: (world, z, dt) => {
@@ -141,7 +141,7 @@
         if (choke) z.ticks++;
         for (const e of world.enemies) {
           if (e.hp <= 0 || e.spawnT > 0 || U.dist2(e.x, e.y, z.x, z.y) >= (z.r + e.r) ** 2) continue;
-          world.slowEnemy(e, st.shroud ? 0.6 : sm.slow, 0.3);
+          if (slow) world.slowEnemy(e, slow, 0.3);
           if (choke) world.hitEnemy(e, ch.dmg * 0.5, { p, kind: 'dot', noProc: true, crit: false, part: 'vanish.choke', zone: true });
           if (e.hp <= 0) continue;
           if (st.smokeVuln || dome) e.vulnT = Math.max(e.vulnT || 0, 0.3);

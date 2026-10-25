@@ -75,15 +75,15 @@ for (const mode of ['proj', 'zone', 'tick']) {
   ok(a.freezeRes === 1 && w.fx.some(ev => ev.t === 'freeze'), 'a freeze counts freeze resistance and emits the freeze event');
 }
 
-// ---- a departed Knight leaves no thrown shield ----
+// ---- a departed Knight lowers its raised Bulwark ----
 {
   const w = new ED.World({ seed: 7, pact: 0, players: [{ pid: 'p0', name: 'K', slot: 0, cls: 'knight', weapon: ED.CLASSES.knight.weapons[0], meta: META() }, { pid: 'p1', name: 'R', slot: 1, cls: 'ranger', weapon: ED.CLASSES.ranger.weapons[0], meta: META() }] });
   w.startRun(); w.enemies.length = 0; w.enc = null; w.projs.length = 0; w.zones.length = 0;
-  const k = w.players.get('p0'); w.playerSkill(k, 0, { d: 280 }, 1);
-  ok(k.shields.length === 1 && w.projs.some(q => q.ghost), 'the Knight threw a shield');
+  const k = w.players.get('p0'); w.playerSkill(k, 0, {}, 1);
+  ok(k.bulwarkOn, 'the Knight raised its shield');
   w.removePlayer('p0');
   w.update(1 / 60);
-  ok(!w.projs.some(q => q.ghost), 'the shield of a departed Knight is gone');
+  ok(!k.bulwarkOn && !w.fx.some(f => f.t === 'bash'), 'a departed Knight lowers it with no bash');
 }
 
 // ---- card text follows the hero's weapon ----
@@ -943,13 +943,12 @@ for (let s = 1; s <= NS; s++) {
     d.p.x = d.bx + 90; d.w.updatePlayerCombat(d.p, 1 / 60); ok(d.rs.broken === 1, 'a dash breaks a breakable on the path it covered since the last tick');
     d.p.dashing = false; d.w.updatePlayerCombat(d.p, 1 / 60); ok(d.p.dashFx < 0, 'the dash path restarts with the next dash');
   }
-  { // the movement and throw skills: Shield Charge, Shield Throw, Shadowstep
+  { // the movement and shield skills: Shield Charge, the Bulwark bash, Shadowstep
     const c = arena('knight'); c.p.x = c.bx - 80; c.w.playerSkill(c.p, 0, { x0: c.p.x, y0: c.p.y, x1: c.bx + 60, y1: c.by }, 0);
     for (let i = 0; i < 40; i++) c.w.update(1 / 60);
     ok(c.rs.broken === 1, `Shield Charge breaks a breakable on its run (mask ${c.rs.broken})`);
-    const t = arena('knight'); t.p.x = t.bx - 80; t.w.playerSkill(t.p, 0, { d: 200 }, 1);
-    for (let i = 0; i < 40; i++) t.w.update(1 / 60);
-    ok(t.rs.broken === 1, `a thrown shield breaks a breakable on its flight (mask ${t.rs.broken})`);
+    const t = arena('knight'); t.p.x = t.bx - 60; t.p.y = t.by; t.w.playerSkill(t.p, 0, {}, 1); t.w.skillRelease(t.p, 0);
+    ok(t.rs.broken === 1, `a Bulwark bash breaks a breakable in its cone (mask ${t.rs.broken})`);
     const s = arena('shade'); s.p.x = s.bx - 70; s.w.playerSkill(s.p, 0, { x0: s.p.x, y0: s.p.y, x1: s.bx + 60, y1: s.by }, 0);
     ok(s.rs.broken === 1, `Shadowstep breaks a breakable on its path (mask ${s.rs.broken})`);
   }

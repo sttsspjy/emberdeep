@@ -550,7 +550,7 @@
   function skill2Fx(ev, mine, A) {
     const x = ev.x, y = ev.y, a = ev.a || 0, ca = Math.cos(a), sa = Math.sin(a);
     switch (ev.k) {
-      case 'shieldthrow': F.ring(x, y - 6, 24, '#ffe9a0', 0.2, 2); F.burst(x + ca * 14, y - 10 + sa * 14, 6, { kind: 'streak', color: '#fff3c4', a, spread: 0.5, sp: 240, life: 0.2, size: 1.6 }); F.pop(x + ca * 14, y - 10 + sa * 14, 14, '#ffe9a0', 0.14); A.play('throw', mine ? 0.9 : 0.45); break;
+      case 'bulwark': F.pop(x + ca * 12, y - 10 + sa * 8, 14, '#ffe9a0', 0.14); F.burst(x + ca * 12, y - 10 + sa * 8, 4, { kind: 'spark', color: '#fff3c4', sp: 90, life: 0.2, size: 1.4, drag: 5 }); A.play('bwblock', mine ? 0.5 : 0.25, { n: 0 }); break; // the shield comes up
       case 'rain': F.burst(x, y - 12, 10, { kind: 'streak', color: '#e8d8b0', a: -1.57, spread: 0.9, sp: 300, life: 0.4, size: 1.8 }); if (ev.tx !== undefined) { F.ring(ev.tx, ev.ty, 30, '#e8d8b0', 0.4, 2); F.pop(ev.tx, ev.ty - 4, 16, '#e8d8b0', 0.3); } A.play('shoot', mine ? 0.8 : 0.4); break;
       case 'meteor': { const ta = ev.tx !== undefined ? Math.atan2(ev.ty - y, ev.tx - x) : a;
         F.burst(x, y - 12, 12, { kind: 'streak', color: '#ffb347', a: ta, spread: 0.4, sp: 340, life: 0.35, size: 2.2 }); F.burst(x, y - 12, 7, { kind: 'ember', color: '#ff8a2a', a: -1.57, spread: 3, sp: 60, life: 0.9, size: 2, drag: 1.5, lt: '#ff8a2a', ltr: 24 });
@@ -788,8 +788,8 @@
         break;
       case 'blinkfx': F.burst(ev.x0, ev.y0 - 12, 14, { color: '#b78cff', sp: 60, life: 0.5, size: 3, add: true }); F.burst(ev.x1, ev.y1 - 12, 14, { color: '#b78cff', sp: 60, life: 0.5, size: 3, add: true }); F.pop(ev.x0, ev.y0 - 12, 20, '#b78cff', 0.2); F.pop(ev.x1, ev.y1 - 12, 20, '#b78cff', 0.2); break;
       case 'deflect': F.burst(ev.x, ev.y, 8, { color: '#ffffff', sp: 120, life: 0.25, size: 2, add: true }); F.burst(ev.x, ev.y, 4, { kind: 'streak', color: '#ffffff', sp: 200, life: 0.2, size: 1.4 }); F.pop(ev.x, ev.y, 10, '#ffffff', 0.12, true); A.play('deflect', 0.6); break;
-      case 'block': F.text(ev.x, ev.y - 30, { dodge: 'Dodge', mirror: 'Blocked', aegis: 'Blocked', guard: 'Guarded' }[ev.k] || 'Blocked', '#bfe9ff', 9, { pop: true }); A.play('deflect', 0.5); break;
-      // Knight events (ric, catch, parry, deflect, ward, the boom of a shockwave) are drawn by src/client/cls-knight.js through ED.ClassFx.
+      case 'block': if (ev.k === 'bulwark') break; F.text(ev.x, ev.y - 30, { dodge: 'Dodge', mirror: 'Blocked', aegis: 'Blocked', guard: 'Guarded' }[ev.k] || 'Blocked', '#bfe9ff', 9, { pop: true }); A.play('deflect', 0.5); break; // a Bulwark block: cls-knight.js
+      // Knight events (block k 'bulwark', bash, parry, deflect, ward, the boom of a shockwave) are drawn by src/client/cls-knight.js through ED.ClassFx.
       case 'spawned': F.burst(ev.x, ev.y, ev.el ? 18 : 8, { color: ev.el ? '#ffb13a' : '#b8a0ff', sp: 70, life: 0.4, size: 2.4, add: true }); F.pop(ev.x, ev.y - 8, ev.el ? 30 : 20, ev.el ? '#ffb13a' : '#b8a0ff', 0.25); A.play('spawn', 0.5); break;
       case 'raise': F.burst(ev.x, ev.y, 14, { color: '#7dffd9', sp: 60, vy: -40, life: 0.6, size: 2.4, add: true }); F.ring(ev.x, ev.y, 26, '#7dffd9', 0.4, 2); SP('fx.circle.spark', ev.x, ev.y - 2, { ramp: 'teal', add: true }); SP('fx.puff', ev.x, ev.y - 4, { ramp: 'dust' }); break;
       case 'bellrung': // the Drowned Bell rings to a hero's hit: rings of sound, its swing (render.js drawBell reads F.bellRing) and a deep cracked toll

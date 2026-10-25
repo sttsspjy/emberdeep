@@ -59,6 +59,17 @@ const TICK = 1 / 60;
 const coneReach = (st) => (st.weapon.kind === 'melee' ? st.weapon.range * Math.min(ED.CONST.REACH_CAP, 1 + st.area * 0.5 + st.meleeReach) * ED.CONST.CONE_REACH : ED.CONST.CONE_RANGE * (1 + st.area * 0.5));
 // Foes within 320 and 0.25 rad of the aim a (an ice lance's line).
 const lanePack = (foes, p, a) => { let n = 0; for (const e of foes) { const d = Math.hypot(e.x - p.x, e.y - p.y); if (d < 320 && Math.abs(U.angDiff(a, Math.atan2(e.y - p.y, e.x - p.x))) < 0.25 + Math.atan2(e.r, Math.max(d, 1))) n++; } return n; };
+// A foe attack worth guarding or dodging: a foe shot within 150 flying at the hero, or a foe within 90 in the last lead s (default 0.2) of a wind-up. Returns the attacker (a shot's shooter) or null.
+function threatOf(w, p, lead) {
+  const L = lead || 0.2;
+  for (const pr of w.projs) {
+    if (pr.team !== 1 || pr.dead || U.dist2(pr.x, pr.y, p.x, p.y) > 150 * 150) continue;
+    const sp = Math.hypot(pr.vx, pr.vy) || 1, dx = p.x - pr.x, dy = p.y - pr.y, along = (dx * pr.vx + dy * pr.vy) / sp;
+    if (along > 0 && Math.abs(dx * pr.vy - dy * pr.vx) / sp < p.r + pr.r + 6) return pr.src && pr.src.hp > 0 ? pr.src : { x: pr.x, y: pr.y };
+  }
+  for (const e of w.enemies) if (e.hp > 0 && (e.st === 'windup' || e.st === 'aim') && e.t > 0 && e.t <= L && U.dist2(e.x, e.y, p.x, p.y) < 90 * 90) return e;
+  return null;
+}
 // A hold verb (stats.hold, ED.Stats.HOLD): the press counts c.holdT (attacks go on until the verb starts at its `at`), then the bot holds: the cone while a foe stands in it, the storm call while the target stays within STORM_RANGE
 // (aimed at the target), the lance and finisher to full and released at the target. Returns true while the hold has the attack.
 function botHold(w, p, c, foes, tgt, d, a, inRange, brng, skill) {
@@ -79,6 +90,30 @@ function botHold(w, p, c, foes, tgt, d, a, inRange, brng, skill) {
   if (c.holdT < H.at) return false;
   if (k === 'storm') { p.aimX = tgt.x; p.aimY = tgt.y; }
   w.playerHold(p, true, a);
+  return true;
+}
+// Bulwark (the Knight's held skill 2): ready, the bot raises it (chance skill, rolled once per BW_ROLL s) for an attack coming within BW_FRONT of its aim (threatOf; the veteran reads wind-ups 0.2 s earlier),
+// or taps it (a raise and an instant bash) when BW_PACK foes stand in the bash cone. Raised, it faces the target and lets go after BW_QUIET s without a frontal threat while a foe stands in the cone, at full stored power,
+// 0.1 s before the hold limit, or below 25% health with no frontal threat. Returns true while the shield is up (no swing behind it).
+const BW_FRONT = Math.PI / 3, BW_PACK = 3, BW_QUIET = 0.25, BW_ROLL = 0.3;
+function botBulwark(w, p, c, foes, a, brng, skill, vet) {
+  const N = ED.Stats.skillNums('bulwark', p.stats), q = N.p.bash;
+  const cone = () => { let n = 0; for (const e of foes) { const d = Math.hypot(e.x - p.x, e.y - p.y); if (d < q.r + e.r && (d <= e.r || Math.abs(U.angDiff(a, Math.atan2(e.y - p.y, e.x - p.x))) <= q.arc / 2 + Math.asin(Math.min(1, e.r / d)))) n++; } return n; };
+  const t = threatOf(w, p, vet ? 0.4 : 0.2), front = !!t && Math.abs(U.angDiff(a, Math.atan2(t.y - p.y, t.x - p.x))) <= BW_FRONT;
+  if (p.bulwarkOn) {
+    p.face = a;
+    c.bwQuiet = front ? 0 : (c.bwQuiet || 0) + TICK;
+    if ((c.bwQuiet >= BW_QUIET && cone() > 0) || p.blocks >= N.blockMax || p.bulwarkT >= N.hold - 0.1 || (p.hp < 0.25 * p.maxHp && !front)) { w.skillRelease(p, a); c.skill2 = botCd(p, 1); return false; }
+    return true;
+  }
+  if (c.skill2 > 0 || p.skillMove || (c.bwRoll = (c.bwRoll || 0) - TICK) > 0) return false;
+  const tap = !front && cone() >= BW_PACK;
+  if (!front && !tap) return false;
+  c.bwRoll = BW_ROLL;
+  if (brng.next() >= skill) return false;
+  p.face = a; c.bwQuiet = 0;
+  w.playerSkill(p, a, null, 1);
+  if (tap) { w.skillRelease(p, a); c.skill2 = botCd(p, 1); return false; }
   return true;
 }
 // A dash of hero p along (dx, dy) as game.js makes it.
@@ -588,7 +623,8 @@ function botCast(w, p, slot, tgt, d, a, foes, brng, skill, force) {
   }
   switch (N.aim) {
     case 'dir':
-      if (id === 'shieldthrow') { if (d >= 240 && !force) return false; data = { d: Math.hypot(tgt.x - p.x, tgt.y - (p.y - 4)) }; } else if (!force && d >= (id === 'volley' ? (st.volleyClose ? 110 : 160) : id === 'fireball' ? N.range - 20 : 220)) return false;
+      if (id === 'bulwark') return false; // held: botBulwark
+      if (!force && d >= (id === 'volley' ? (st.volleyClose ? 110 : 160) : id === 'fireball' ? N.range - 20 : 220)) return false;
       ang = a + gauss(brng) * sA;
       break;
     case 'ground': {
@@ -968,7 +1004,7 @@ function runBot(opts) {
   const fightRec = skip && skip.fight ? { k: skip.fight, t0: skip.fight === 'boss' ? null : w.time, t: null, kill: false, ph: 0 } : null; // --fight: { kind, start, seconds to the kill, kill, boss phase reached }
   rec.arrive = []; // per stratum (index = stratum - 1): arrivalOf at the first entry of the boss room
   rec.keyAt = null; rec.duoAt = null; // stratum when hero 0 takes its keystone / duo
-  rec.cnt = { smite: 0, reap: 0, toll: 0, lance: 0, dashHits: 0, shatter: 0, pyre: 0, holds: 0, dis: 0, reapHp: 0, kills0: 0, refunds: 0, parries: 0, staggers: 0, rics: 0, gRics: 0, catches: 0, casts: {} };
+  rec.cnt = { smite: 0, reap: 0, toll: 0, lance: 0, dashHits: 0, shatter: 0, pyre: 0, holds: 0, dis: 0, reapHp: 0, kills0: 0, refunds: 0, parries: 0, staggers: 0, blocks: 0, bashes: 0, bashN: 0, casts: {} };
   rec.parts = {}; rec.projDmgS = []; rec.maxHost = 0; // damage by skill part / source, hero damage taken from shots per stratum (fraction of max HP), most foes standing in the current room
   rec.smokeSeen = new Set(); rec.upt = { brace: [0, 0], sanct: [0, 0], stun: [0, 0], smoke: [0, 0, 0], mom: [0, 0] }; rec.peak = { projs: 0, zones: 0 }; // uptimes as [on, of] tick counts, peak shots and zones of hero 0
   rec.shield = { gained: {}, absorbed: {}, holyBoss: 0 }; rec.bossSecs = 0;
@@ -1123,13 +1159,14 @@ function runBot(opts) {
         if (ag && ag.light) { atkD = Math.hypot(ag.light.x - p.x, ag.light.y - p.y); atkA = Math.atan2(ag.light.y - p.y, ag.light.x - p.x); atkIn = st.melee ? atkD < st.weapon.range + 8 : atkD < 320; } // swings and shots go at the lantern
         const held = !bell && !(ag && ag.light) && botHold(w, p, c, foes, tgt, atkD, atkA, atkIn, brng, skill);
         if (held && p.holdOn) rec.cnt.holds += p.pid === p0id && p.holdT === 0 ? 1 : 0;
+        const shieldUp = p.cls === 'knight' && botBulwark(w, p, c, foes, a, brng, skill, !!vet); // the raised Bulwark: no swing, no Charge
         if (bell) botBell(w, p, c, foes, tgt, inRange, skill, brng);
-        else if (!held && c.atk <= 0 && atkIn) {
+        else if (!held && !shieldUp && c.atk <= 0 && atkIn) {
           p.atkD = atkD; // the cursor on the target (a lobbed weapon lands there)
           w.playerAttack(p, atkA + gauss(brng) * AIM[0] * (1 - skill));
           c.atk = Math.max(c.atk, -dt) + ED.Stats.stepInterval(p); // carries the overshoot of this tick, as the client does
         }
-        if (vetC) { if (c.chg > 0 && c.vgap <= 0 && !p.skillMove && botCast(w, p, 0, tgt, d, a, foes, brng, skill)) { if (c.chg === st.maxCharges) c.skill = botCd(p, 0); c.chg--; c.vgap = 0.35; } }
+        if (shieldUp) { /* the Charge waits for the bash */ } else if (vetC) { if (c.chg > 0 && c.vgap <= 0 && !p.skillMove && botCast(w, p, 0, tgt, d, a, foes, brng, skill)) { if (c.chg === st.maxCharges) c.skill = botCd(p, 0); c.chg--; c.vgap = 0.35; } }
         else if (c.skill <= 0 && botCast(w, p, 0, tgt, d, a, foes, brng, skill)) c.skill = botCd(p, 0);
         if (c.skill2 <= 0 && st.skill2Cd && botCast(w, p, 1, tgt, d, a, foes, brng, skill)) c.skill2 = botCd(p, 1);
         if (c.chg3 > 0 && !p.skillMove && botCast(w, p, 2, tgt, d, a, foes, brng, skill)) { if (c.chg3 === st.skill3Charges) c.skill3 = st.skill3Cd; c.chg3--; } // skill 3 (Fireball): charges like skill 1
@@ -1194,7 +1231,7 @@ function runBot(opts) {
       if (ev.t === 'shatter') rec.cnt.shatter++;
       if (ev.t === 'smite') rec.cnt.smite++; else if (ev.t === 'reap') rec.cnt.reap++; else if (ev.t === 'toll') rec.cnt.toll++; else if (ev.t === 'lance') rec.cnt.lance++;
       else if (ev.t === 'parry') rec.cnt.parries++;
-      else if (ev.t === 'ric' && ev.pid === p0id) { rec.cnt.rics++; if (ev.g) rec.cnt.gRics++; } else if (ev.t === 'catch' && ev.pid === p0id) rec.cnt.catches++;
+      else if (ev.t === 'block' && ev.k === 'bulwark' && ev.pid === p0id) rec.cnt.blocks++; else if (ev.t === 'bash' && !ev.f && ev.pid === p0id) { rec.cnt.bashes++; rec.cnt.bashN += ev.n; }
       else if (ev.t === 'skill' && ev.pid === p0id) rec.cnt.casts[ev.k] = (rec.cnt.casts[ev.k] || 0) + 1;
       if (ev.t === 'boon' && ev.pid === p0id) { const b = ED.BOONS[ev.id]; if (b.key && !rec.keyAt) rec.keyAt = w.stratum; }
       if (ev.t === 'room') { rec.roomDmg = 0; rec.maxHost = 0; rec.room = { th: 0, fo: 0, xp: 0, clip: 0 }; if (w.room && w.room.type === 'boss' && !rec.arrive[w.stratum - 1]) rec.arrive[w.stratum - 1] = arrivalOf(w, pickN); }
@@ -1399,8 +1436,8 @@ function classLines(results) {
   out.push(`shield per run (HP) gained: ${fo(sh('gained'))} | absorbed: ${fo(sh('absorbed'))} | clipped by the window: ${fo(clip)} | heal per second by source: ${Object.entries(healS).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => k + ' ' + (v / Math.max(1, time)).toFixed(2)).join(', ') || '-'} (boss fight time ${Math.round(bossShield)} s)`);
   const up = (key, filt) => { const rs = results.filter(filt || (() => true)); const on = rs.reduce((a, r) => a + r.upt[key][0], 0), of = rs.reduce((a, r) => a + r.upt[key][1], 0); return of ? pc1(on / of) + ' (' + rs.length + ' runs)' : '-'; };
   out.push(`uptimes in fights: Brace ${up('brace', r => r.braceOn)} | Sanctuary DR ${up('sanct', r => r.cls === 'cleric')} | trash stun ${up('stun')} | smoke blind per foe ${(() => { const rs = results.filter(r => r.cls === 'shade'), b = rs.reduce((a, r) => a + r.upt.smoke[0], 0), cd = rs.reduce((a, r) => a + r.upt.smoke[2], 0); return cd ? pc1(b / cd) + ' of the cooldown' : '-'; })()} | Momentum mean stacks ${(() => { const rs = results.filter(r => r.cls === 'shade'), on = rs.reduce((a, r) => a + r.upt.mom[0], 0), of = rs.reduce((a, r) => a + r.upt.mom[1], 0); return of ? (on / of).toFixed(2) : '-'; })()}`);
-  const knights = results.filter(r => r.cnt.casts.shieldthrow), strikes = knights.reduce((a, r) => a + r.cnt.rics, 0), casts = knights.reduce((a, r) => a + r.cnt.casts.shieldthrow, 0);
-  out.push(`counts per run: refunds ${f2(avg(results.map(r => r.cnt.refunds)))} parries ${f2(avg(results.map(r => r.cnt.parries)))} staggers ${f1(avg(results.map(r => r.cnt.staggers)))} catches ${f1(avg(knights.map(r => r.cnt.catches)))} | Shield Throw strikes per cast ${casts ? (strikes / casts).toFixed(2) : '-'} (guarded ${strikes ? Math.round(100 * knights.reduce((a, r) => a + r.cnt.gRics, 0) / strikes) : 0}%) | peak shots per hero ${f1(avg(results.map(r => r.peak.projs)))} (max ${Math.max(...results.map(r => r.peak.projs))}) live zones ${f1(avg(results.map(r => r.peak.zones)))} (max ${Math.max(...results.map(r => r.peak.zones))})`);
+  const knights = results.filter(r => r.cnt.bashes), bashes = knights.reduce((a, r) => a + r.cnt.bashes, 0);
+  out.push(`counts per run: refunds ${f2(avg(results.map(r => r.cnt.refunds)))} parries ${f2(avg(results.map(r => r.cnt.parries)))} staggers ${f1(avg(results.map(r => r.cnt.staggers)))} | Bulwark bashes per run ${f1(avg(knights.map(r => r.cnt.bashes)))}, blocks per bash ${bashes ? (knights.reduce((a, r) => a + r.cnt.blocks, 0) / bashes).toFixed(2) : '-'}, stored per bash ${bashes ? (knights.reduce((a, r) => a + r.cnt.bashN, 0) / bashes).toFixed(2) : '-'} | peak shots per hero ${f1(avg(results.map(r => r.peak.projs)))} (max ${Math.max(...results.map(r => r.peak.projs))}) live zones ${f1(avg(results.map(r => r.peak.zones)))} (max ${Math.max(...results.map(r => r.peak.zones))})`);
   return out.join('\n');
 }
 

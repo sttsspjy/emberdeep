@@ -44,11 +44,11 @@ function modelOf(cls, boons, wi, o) {
   near(by(py, 1, 'crater').here * by(py, 1, 'crater').oneFoe, 48.6, 0.1, 'Meteor crater, 6 ticks'); near(by(py, 2, 'burst').raw, 29, 0.05, 'Fireball burst');
   ok(py.skills[2].key === 'skill3' && py.skills[2].charges === 2, 'Fireball: the skill 3 card with 2 charges');
   const sh = modelOf('shade', {}, 0, { stat: { crit: 0 } });
-  near(by(sh, 0, 'slash').raw, 40.6, 0.05, 'Shadowstep'); near(by(sh, 0, 'slash').avg, 71.05, 0.05, 'Shadowstep always crits'); near(by(sh, 1, 'ambush').avg, 48.125, 0.05, 'Ambush');
+  near(by(sh, 0, 'slash').raw, 55, 0.05, 'Shadowstep'); near(by(sh, 0, 'slash').avg, 96.25, 0.05, 'Shadowstep always crits'); near(by(sh, 1, 'ambush').avg, 77, 0.05, 'Ambush');
   const cl = modelOf('cleric', {}, 0, { stat: { crit: 0 }, ctx: { stratum: 3 } }), leg = by(cl, 1, 'leg');
-  near(leg.pre, 67.8, 0.05, 'Judgment leg with its own vulnerability'); near(cl.skills[1].perCast, 135.6, 0.1, 'Judgment per cast (two legs)'); near(by(cl, 0, 'zone').here * 7, 143.85, 0.1, 'Sanctuary 7 ticks');
+  near(leg.pre, 72.6, 0.05, 'Judgment leg with its own vulnerability'); near(cl.skills[1].perCast, 145.2, 0.1, 'Judgment per cast (two legs)'); near(by(cl, 0, 'zone').here * 7, 165.2, 0.1, 'Sanctuary 7 ticks');
   const nc = modelOf('necro', {}, 0, { stat: { crit: 0 } }), mn = by(nc, 0, 'minion');
-  near(mn.here, 14.535, 0.01, 'Minion hit'); ok(mn.oneFoe === 51, `Minions: 3 x 17 hits (got ${mn.oneFoe})`); near(by(nc, 1, 'burst').raw, 60.3, 0.05, 'Harvest burst');
+  near(mn.here, 14.535, 0.01, 'Minion hit'); ok(mn.oneFoe === 51, `Minions: 3 x 17 hits (got ${mn.oneFoe})`); near(by(nc, 1, 'burst').raw, 67, 0.05, 'Harvest burst');
   // Set 2: Stoke x1 (+burnMul Burn), Kindle, stratum III (no stratum is weak or resists: affinity x1), crit 5%.
   const e2 = modelOf('pyro', { stoke: 1, kindle: 1 }, 0, { ctx: { stratum: 3 }, stat: { crit: 0.05 } });
   near(e2.mult.dmg.total, 1, 1e-9, 'Set 2 damage'); near(by(e2, 0, 'blast').here, 48.6 * (1 + 0.05 * 0.75), 0.05, 'Set 2 Nova blast');
@@ -83,7 +83,7 @@ for (const key in ED.SKILL_SHEET) { const [sid, pid] = key.split('.'); ok(ED.SKI
     let bare = 0;
     for (const id of ED.BOON_IDS) { const b = ED.BOONS[id]; for (let r = 1; r < (b.max || 1); r++) for (const piece of S.nextText(id, r, st).split(' · ')) if (!/[A-Za-z]{3,}/.test(piece.replace(/\d+(?:\.\d+)?\s?s\b/g, ''))) { bare++; console.log(`FAIL bare next-rank piece ${id} rank ${r}: "${piece}"`); } }
     ok(bare === 0, 'Next rank lines are never bare numbers');
-    ok(S.nextText('k_s1_a', 1, st) === 'deals +20% · 50% of its impact · unlocks Shield Bash' && S.nextText('k_s2_b', 1, st) === 'orbits you for 4 s · Shield Throw deals +70% · unlocks Return to Sender' && S.nextText('k_s1_a', 2, st).indexOf('unlocks Avalanche') >= 0 && S.nextText('r_s2_b', 2, st).indexOf('unlocks Storm of Thorns') >= 0, 'Juggernaut and Shield Orbit name their numbers: ' + S.nextText('k_s1_a', 1, st) + ' / ' + S.nextText('k_s2_b', 1, st));
+    ok(S.nextText('k_s1_a', 1, st) === 'deals +20% · 50% of its impact · unlocks Shield Bash' && S.nextText('k_s2_b', 1, st) === 'bash deals +130% · unlocks Return to Sender' && S.nextText('k_s1_a', 2, st).indexOf('unlocks Avalanche') >= 0 && S.nextText('r_s2_b', 2, st).indexOf('unlocks Storm of Thorns') >= 0, 'Juggernaut and Shield Wall name their numbers: ' + S.nextText('k_s1_a', 1, st) + ' / ' + S.nextText('k_s2_b', 1, st));
     ok(S.text('r_el_b', 2, st).indexOf('within 120.') >= 0 && S.text('r_el_b', 3, st).indexOf('within 140') >= 0 && S.nextText('r_el_b', 1, st) === 'foes within 120 · unlocks Outbreak', 'Contagion shows its total radius: ' + S.nextText('r_el_b', 1, st));
     ok(S.nextText('p_s2_b', 1, st) === 'impact (+15%) · Meteor deals +30% · unlocks Impact Crater' && S.nextText('p_s2_b', 2, st) === 'impact (+20%) · Meteor deals +40% · unlocks Sun Dive', 'Comet names what the impact bonus belongs to and what each rank unlocks: ' + S.nextText('p_s2_b', 1, st) + ' / ' + S.nextText('p_s2_b', 2, st));
     ok(['p_s1_a:Collapse:Supernova', 'p_s1_b:Rebirth Flare:Phoenix Form', 'p_s2_a:Meteor Shower:Cataclysm', 's_s1_a:Twin Cut:Death Blossom', 's_s1_b:Lure:Hall of Mirrors', 's_s2_a:Ambush Sweep:Eclipse', 's_s2_b:Shroud:Umbral Veil'].every(x => { const [id, r2, r3] = x.split(':'); return S.nextText(id, 1, st).indexOf('unlocks ' + r2) >= 0 && S.nextText(id, 2, st).indexOf('unlocks ' + r3) >= 0; }), 'the Pyromancer and Shade skill forks name their rank 2 rider and rank 3 transform in the Next rank line');
@@ -152,19 +152,19 @@ function cast(w, p, e, slot) {
   let data = null;
   if (N.aim === 'ground') data = { x0: p.x, y0: p.y, x: e.x, y: e.y };
   else if (N.aim === 'move') data = { x0: p.x, y0: p.y, x1: e.x + 30, y1: e.y };
-  else if (id === 'shieldthrow') data = { d: 160 };
   w.playerSkill(p, a, data || {}, slot);
+  if (id === 'bulwark') { p.blocks = 1; w.skillRelease(p, a); } // a raise that stored one blocked attack (the sheet's BW_STORED), then the bash
 }
 
 // each case: class, boons/stats that switch parts on, the skill slot, the parts to compare, and what to expect of the hit counts
-const GEO = new Set(['shieldthrow.return', 'shieldthrow.orbit', 'shieldthrow.reflect']); // need a second foe on the flight path or an orbiting shield
+const GEO = new Set(['bulwark.reflect']); // needs a blocked shot
 const PENDING = new Set(['sky', 'sky2', 'shower', 'twin', 'rocks', 'echo', 'after', 'corpse', 'lance', 'flare']); // parts of class routes whose sim side belongs to a class stream
 let pend = 0;
 const pending = (msg) => { pend++; if (verbose) console.log('pending ' + msg); };
 // [class, stat switches, slot, dummy distance (default REF.d)]
 const BELL_RES = (w, p) => { run(w, 0.05); p.bellRes = ED.Bell.pealRes(p.stats); }; // a Peal at the mean Resonance the sheet assumes
 const CASES = [
-  ['knight', {}, 0], ['knight', {}, 1], ['knight', { jugShock: 0.4, s1Range: 90 }, 0], ['knight', { avalanche: 0.9, avaCrack: 0.3, avaStun: 0.8, jugShock: 0.4, s1Range: 90 }, 0], ['knight', { phalanx: 1, bannerDur: 5, bannerSlow: 0.4, bannerWeak: 0.25, bannerDmg: 0.1, braceDR: 0.1 }, 0], ['knight', { tempest: 3, twinShield: 0.7, vortexMul: 0.25, vortexDur: 2.5 }, 1], ['knight', { orbit: 3, orbitMul: 0.15 }, 1], ['knight', { twinShield: 0.7 }, 1],
+  ['knight', {}, 0], ['knight', {}, 1], ['knight', { jugShock: 0.4, s1Range: 90 }, 0], ['knight', { avalanche: 0.9, avaCrack: 0.3, avaStun: 0.8, jugShock: 0.4, s1Range: 90 }, 0], ['knight', { phalanx: 1, bannerDur: 5, bannerSlow: 0.4, bannerWeak: 0.25, bannerDmg: 0.1, braceDR: 0.1 }, 0], ['knight', { tempest: 1, vortexMul: 0.09, vortexDur: 2.5 }, 1], ['knight', { gather: 0.3 }, 1], ['knight', { shieldWall: 1, sendBack: 0.5 }, 1],
   ['ranger', {}, 0], ['ranger', {}, 1], ['ranger', { deathMark: 0.5, deathWave: 0.6 }, 0], ['ranger', { thornburst: 20, thornMul: 3 }, 0], ['ranger', { caltrops: 0.3, thornR: 0 }, 0, 30, false, { skip: ['arrow'] }], ['ranger', { skyfall: 1, starfall: 0.6 }, 1, 160], ['ranger', { thornstorm: 2 }, 1], ['ranger', { rainHail: 1 }, 1], ['ranger', { skyfall: 1 }, 1], ['ranger', { skyTwin: 0.5, skyfall: 1 }, 1], ['ranger', { shower: 0.4, rainHail: 1 }, 1],
   ['pyro', {}, 0], ['pyro', {}, 1], ['pyro', { novaRing: 1 }, 0], ['pyro', { twinMeteor: 0.6 }, 1, 0, true], ['pyro', { comet: 0.3 }, 1],
   ['pyro', { novaEcho: 0.5 }, 0], ['pyro', { novaEcho: 1, supernova: 2, supernovaPull: 30 }, 0], ['pyro', { novaRing: 1, phoenixMul: 2, phoenixDur: 4, dashTrail: 0.5 }, 0], ['pyro', { cataclysm: 0.6 }, 1],
@@ -247,12 +247,17 @@ const partPack = (m, k, q, n) => MDp.directDamage({ weapon: { kind: 'melee', _av
   ok(by['charge.crack'] && by['charge.crack'].n === 4, `Avalanche: ${by['charge.crack'] ? by['charge.crack'].n : 0} carried foes struck by a crack`);
   rel(partPack(m, k, cr, 4), by['charge.crack'].sum, 0.02, 'Avalanche cracks in a pack of 4 (pack rule vs measured)');
 }
-{ // Shield Bash: the free shield ricochets over the pack (up to its strike count) and its return pass sweeps it, like a Throw; the measured pass (3 of 4 foes on the way home) is within 25% of the rule
-  const { w, p, e } = stage('knight', {}, 0, { bash: 0.3 }); addPack(w, p);
-  const m = sheetOf(w, p), k = m.skills[0], bs = k.parts.find(x => x.id === 'bash');
-  cast(w, p, e, 0); const by = settle(w, e, 4), got = (by['shieldthrow.strike'] ? by['shieldthrow.strike'].sum : 0) + (by['shieldthrow.return'] ? by['shieldthrow.return'].sum : 0);
-  ok(by['shieldthrow.strike'] && by['shieldthrow.strike'].n === 4, `Shield Bash: ${by['shieldthrow.strike'] ? by['shieldthrow.strike'].n : 0} strikes over the pack`);
-  rel(partPack(m, k, bs, 4), got, 0.25, 'Shield Bash in a pack of 4 (pack rule vs measured)');
+{ // Bulwark bash and Shield Bash: the cone strikes every foe of the pack ahead once; both count n foes
+  const { w, p, e } = stage('knight', {}, 0, {}, null, 50); addPack(w, p, 50);
+  const m = sheetOf(w, p), k = m.skills[1], bq = k.parts.find(x => x.id === 'bash');
+  cast(w, p, e, 1); const by = settle(w, e, 3), got = by['bulwark.bash'];
+  ok(got && got.n === 4, `Bulwark: ${got ? got.n : 0} foes of the pack bashed`);
+  rel(partPack(m, k, bq, 4), got ? got.sum : 0, 0.02, 'Bulwark bash in a pack of 4 (pack rule vs measured)');
+  const s = stage('knight', {}, 0, { bash: 0.3 }, null, 60); addPack(s.w, s.p, 60);
+  const sm = sheetOf(s.w, s.p), sk = sm.skills[0], bs = sk.parts.find(x => x.id === 'bash');
+  s.w.playerSkill(s.p, 0, { x0: s.p.x, y0: s.p.y, x1: s.p.x + 20, y1: s.p.y }, 0); const sb = settle(s.w, s.e, 3)['charge.bash'];
+  ok(sb && sb.n === 4, `Shield Bash: ${sb ? sb.n : 0} foes of the pack bashed where the Charge ends`);
+  rel(partPack(sm, sk, bs, 4), sb ? sb.sum : 0, 0.02, 'Shield Bash in a pack of 4 (pack rule vs measured)');
 }
 { // Meteor Shower: 3 meteorites fall at random within 80 of every impact, the twin's too (2 sets); the model counts the meteorites a lone foe takes (mean of 16 casts) and the burn each leaves
   const { w, p, e } = stage('pyro', {}, 0, { twinMeteor: 0.3, meteorites: 0.18 });
@@ -450,7 +455,7 @@ for (const [cls, boons, tag] of [['ranger', { r_atk: 1, r_atk_s: 2 }, 'Flurry (Q
 
 // Shade attack and element forms (ED.Sheet shadeForms): the execution extra, Whirlwind and Cyclone spins and the Momentum state against the sim; the pack-only and skill-part extras by structure
 {
-  const shadeBoons = (t1, fk, r) => ({ [t1]: 1, [fk]: r });
+  const shadeBoons = (t1, fk, r) => ({ s_s1: 1, [t1]: 1, [fk]: r }); // Ghost Walk readies the crits that build Momentum
   const wm = (boons, o) => modelOf('shade', boons, (o && o.wi) || 0, Object.assign({ stat: { crit: 0 } }, o)).weapon, ex = (m, l) => m.extras.find(e => e.label === l);
   const MD = require('./model.js')(ED, { pack: 4 });
   // execution: against a foe always below the line every hit crits for sure; the weapon's damage per attack is hit x critMult (crit chance 0, no Momentum)
@@ -594,13 +599,13 @@ function statusRun(boons, stratum, secs, until, each, stat) { // stat: stats set
     const lo = K({ k_el: 1, k_el_a: 3 }), hi = modelOf('knight', { focus: 1, kindle: 1, frostbite: 1, k_el: 1, k_el_a: 3 }, 0, { ctx: { stratum: 3 }, stat: { brandMark: ED.BOONS.k_el_a.r3.brandMark * 2 } });
     ok(hi.weapon.dps > lo.weapon.dps, 'a stronger Mark raises the Doombrand extra');
   }
-  { // Bloodquake: the payout multiplier raises the Shield Throw's damage on one foe, a part for packs on top; the pack burst follows bloodquakeSplash
+  { // Bloodquake: the payout multiplier raises the Bulwark bash damage on one foe, a part for packs on top; the pack burst follows bloodquakeSplash
     const r2 = K({ k_el: 1, k_el_b: 2 }), r3 = K({ k_el: 1, k_el_b: 3 }), q = r3.skills[1].parts.find(x => x.id === 'bloodquake');
     ok(!r2.skills[1].parts.some(x => x.id === 'bloodquake') && q && q.oneFoe === 0 && q.r === 80, 'Bloodquake adds a part with no hit of its own on one foe, none at rank 2');
     rel(q.here, 2.5 * r3.proc.bleed * (1 + ED.BOONS.k_el_b.r3.bloodquakeMul), 1e-6, 'the Bloodquake payout is the Bleed pool (2.5 s of income) x (1 + bloodquakeMul)');
     const mid = { focus: 1, kindle: 1, frostbite: 1, k_el: 1, k_el_b: 3 }, part = (stat) => modelOf('knight', mid, 0, { ctx: { stratum: 3 }, stat }).skills[1].parts.find(x => x.id === 'bloodquake'), lo = part({ bloodquakeSplash: 0.1 }), hi = part({ bloodquakeSplash: 0.3 }), one = (stat) => modelOf('knight', mid, 0, { ctx: { stratum: 3 }, stat }).skills[1].perCast;
     ok(hi._r.total > lo._r.total && lo._r.total > 0, 'the pack burst follows bloodquakeSplash');
-    ok(one({ bloodquakeMul: 2 }) > one({ bloodquakeMul: 1 }) && one({ bloodquakeMul: 1 }) > one({ bloodquake: 0 }) && one({ bloodquakeSplash: 0.1 }) === one({ bloodquakeSplash: 0.9 }), 'on one foe only bloodquakeMul counts: the Throw deals more with it, the splash adds nothing');
+    ok(one({ bloodquakeMul: 2 }) > one({ bloodquakeMul: 1 }) && one({ bloodquakeMul: 1 }) > one({ bloodquake: 0 }) && one({ bloodquakeSplash: 0.1 }) === one({ bloodquakeSplash: 0.9 }), 'on one foe only bloodquakeMul counts: the bash deals more with it, the splash adds nothing');
     ok(modelOf('knight', { k_el: 1, k_el_b: 3 }, 0).skills[1].parts.find(x => x.id === 'bloodquake')._r.total === 0, 'a build with fewer than 3 ailment sources never detonates');
   }
 }

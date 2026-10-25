@@ -60,12 +60,12 @@
       p.hp = a[4]; p.maxHp = a[5]; const fl = a[6];
       p.downed = !!(fl & 4); p.dead = !!(fl & 8); p.invuln = fl & 16 ? 0.2 : 0; p.revive = a[7];
       p.critStacks = a[8]; p.aegisT = a[9] ? 1 : 0; p.guardT = a[10] ? 1 : 0; p.secondWind = a[11]; p.phoenixUsed = !!a[12]; p.picks = a[13]; p.rerolls = a[14];
-      p.shield = a[15] || 0; p.rdy = a[16] | 0; p.stealthT = fl & 128 ? 1 : 0; p.ambush = !!(fl & 256); p.shieldOut = !!(fl & 64); p.airborne = !!(fl & 512); p.momN = a[17] | 0; p.shwC = a[18] || 0; p.shwA = a[19] || 0;
+      p.shield = a[15] || 0; p.rdy = a[16] | 0; p.stealthT = fl & 128 ? 1 : 0; p.ambush = !!(fl & 256); p.blocks = (fl >> 21) & 7; p.airborne = !!(fl & 512); p.momN = a[17] | 0; p.shwC = a[18] || 0; p.shwA = a[19] || 0;
       if ((a[20] | 0) !== (p.chaliceHp | 0)) { p.chaliceHp = a[20] | 0; this.recalc(p); }
       p.glBuff = !!(fl & 1024); p.embolden = !!(fl & 2048); // Cleric buffs: Guardian Light, Embolden
       p.glT = p.glBuff ? 1 : 0; p.glV = a[22] || 0; p.auraT = p.embolden ? 1 : 0; p.auraV = a[23] || 0; // timed damage bonuses the Tab sheet and Stats read
       p.doorWant = a[26] | 0; p.sparks = a[27] | 0; // the door the hero waits in, Kindling Sparks (the HUD chip)
-      if (p.pid !== this.localPid) { p.moving = !!(fl & 1); p.dashing = !!(fl & 2); p.face = a[3]; p.braceT = fl & 1048576 ? 1 : 0; p.tranceT = fl & 4096 ? 1 : 0; p.holdOn = !!(fl & 8192); } // the local hero predicts its own Trance and hold
+      if (p.pid !== this.localPid) { p.moving = !!(fl & 1); p.dashing = !!(fl & 2); p.face = a[3]; p.braceT = fl & 1048576 ? 1 : 0; p.tranceT = fl & 4096 ? 1 : 0; p.holdOn = !!(fl & 8192); p.bulwarkOn = !!(fl & 64); } // the local hero predicts its own Trance, hold and raised Bulwark
       else if (this.firstInRoom) { p.x = a[1]; p.y = a[2]; }
     }
     this.firstInRoom = false;
@@ -328,7 +328,7 @@
       for (const pd of cfg.players) { const p = s.world.players.get(pd.pid); if (p) p.wear = N.cleanWear(pd.wear, p.cls); } // Wardrobe sets (client only: the sim never reads them)
     }
     s.view.pact = cfg.pact;
-    s.ctl = { atkCd: 0, skillCd: 0, skill2Cd: 0, skill3Cd: 0, charges: s.me.stats.maxCharges, charges3: s.me.stats.skill3Charges, dashN: s.me.stats.dashCharges, dashT: 0, tranceT: 0, latch: false, aimA: 0, holdT: 0, holding: false };
+    s.ctl = { atkCd: 0, skillCd: 0, skill2Cd: 0, skill3Cd: 0, charges: s.me.stats.maxCharges, charges3: s.me.stats.skill3Charges, dashN: s.me.stats.dashCharges, dashT: 0, tranceT: 0, latch: false, aimA: 0, holdT: 0, holding: false, bwOn: false, bwT: 0 }; // bwOn / bwT: the Bulwark is raised, seconds held
     // Aim state read by ED.AimFx: cursor in CSS px (sx, sy) and world (wx, wy), device, angle, push fraction (frac) for stick or keyboard-only ground skills, ready ground skills, cooldown fraction, pulse/crit timestamps.
     s.aim = { sx: 0, sy: 0, wx: 0, wy: 0, a: 0, device: 'mouse', pointer: false, show: false, dead: false, foe: false, frac: 0.6, cd: 0, ground: [], pulseT: -9, critT: -9 };
     if (ED.AimFx) ED.AimFx.applyCursor();
@@ -355,7 +355,7 @@
       case 'atk': p.atkD = +a.d; w.playerAttack(p, +a.a || 0, 0, a.k); break; // d: the cursor distance of the attack (a lobbed weapon lands there)
       case 'skill': if ((a.slot | 0) >= 0 && (a.slot | 0) <= 2) w.playerSkill(p, +a.a || 0, a.data, a.slot | 0); break;
       case 'dash': w.playerDash(p, +a.dx || 0, +a.dy || 0); break;
-      case 'hold': w.playerHold(p, !!a.on, +a.a || 0, +a.d || 0); break; // the held-attack verb starts (on) or is released
+      case 'hold': if (a.s === 1) w.skillRelease(p, +a.a || 0); else w.playerHold(p, !!a.on, +a.a || 0, +a.d || 0); break; // s 1: the held skill 2 (Bulwark) is let go; else the held-attack verb starts (on) or is released
       case 'interact': w.interact(pid, a.id); break;
       case 'pick': w.pickBoon(pid, a.i | 0); break;
       case 'reroll': w.reroll(pid); break;
@@ -479,6 +479,7 @@
     if (me.downed || me.dead || !view.room) {
       s.prompt = null; if (s.mode !== 'client') me.dashing = false;
       if (me.haulIn) me.haulIn = false;
+      if (ctl.bwOn) bulwarkDown(s, me, cd1); // the host lowers it with the down
       s.aim.show = false; s.aim.ground.length = 0; ED.AimFx.hover(ED.Input.device === 'pad', false);
       return;
     }
@@ -522,7 +523,7 @@
         ctl.holding = false; ctl.holdT = 0;
       }
       if (s.mode === 'client') me.holdOn = ctl.holding && !(H && H.max > 0 && ctl.holdT - H.at >= H.max); // the walk slows while the verb runs (ED.Stats.moveRate)
-      if (inp.atk && !ctl.latch && ctl.atkCd <= 0 && !near && !ctl.holding) {
+      if (inp.atk && !ctl.latch && ctl.atkCd <= 0 && !near && !ctl.holding && !ctl.bwOn) { // no swing behind a raised Bulwark
         const k = ED.Stats.comboNext(me, view.time), w = ED.Stats.stepWeapon(st, k), cl = isCleave(me, st, w, view.time); // decided before the act: the sim spends the Follow-Through; k: the combo step this attack plays (the host takes it)
         G.act({ t: 'atk', a: aim, k, d: Math.round(Math.hypot(me.aimX - me.x, me.aimY - me.y)) });
         if (s.mode === 'client') { me.atkCount = (me.atkCount | 0) + 1; if (st.swift) me.flowT = ED.CONST.FLOW_T; if (cl) me.cleaveNext = 0; if (st.weapon.combo) { me.comboK = k; me.comboAt = view.time; } } // the host spends Follow-Through on the Cleave it grants
@@ -547,6 +548,7 @@
           const ww = ED.AimFx.want(me, s.aim, N.range), end = Sim.castMove(view.room, me.x, me.y, aim, U.clamp(ww.d, N.rangeMin, N.range), me.r, view.locked), len = Math.max(1, Math.hypot(end.x - me.x, end.y - me.y));
           data = { x0: Math.round(me.x), y0: Math.round(me.y), x1: Math.round(end.x), y1: Math.round(end.y) };
           me.skillMove = { dx: Math.cos(aim), dy: Math.sin(aim), speed: C.CHARGE_SPEED, t: len / C.CHARGE_SPEED, iframes: len / C.CHARGE_SPEED, age: 0 };
+          if (ctl.bwOn) bulwarkDown(s, me, cd1); // the Charge lowers a raised Bulwark (no bash)
           if (s.mode === 'client') { // local estimates of what the host decides: Brace for the chip, Follow-Through for the Cleave smear
             if (st.brace && view.time >= (me.braceAt || -99) + C.BRACE_CD) { me.braceT = st.brace; me.braceAt = view.time; }
             if (st.chargeCleave) me.cleaveNext = view.time + len / C.CHARGE_SPEED + 1.5;
@@ -569,10 +571,20 @@
         ctl.charges3--;
       }
       const sk2 = cls.skill2;
-      if (inp.skill2 && sk2 && ctl.skill2Cd <= 0) {
+      if (sk2 === 'bulwark') { // held: the press raises it, the release (or its hold limit) bashes toward the aim; the cooldown starts at the release. A host that lowered or bashed first makes the release a no-op.
+        if (ctl.bwOn) {
+          ctl.bwT += dt;
+          if (s.mode !== 'client' && !me.bulwarkOn) bulwarkDown(s, me, cd1); // the sim's hold limit bashed (or a room change lowered it)
+          else if (!inp.skill2Held || ctl.bwT >= ED.Stats.skillNums(sk2, st).hold) { G.act({ t: 'hold', on: 0, s: 1, a: aim }); bulwarkDown(s, me, cd1); }
+        } else if (inp.skill2 && ctl.skill2Cd <= 0) {
+          G.act({ t: 'skill', a: aim, data: null, slot: 1 });
+          ctl.bwOn = true; ctl.bwT = 0;
+          if (s.mode === 'client') me.bulwarkOn = true;
+          if (st.trance) { ctl.tranceT = 4; if (s.mode === 'client') me.tranceT = 4; }
+        }
+      } else if (inp.skill2 && sk2 && ctl.skill2Cd <= 0) {
         const N2 = ED.Stats.skillNums(sk2, st);
-        let data = groundData(view, me, s.aim, sk2, st);
-        if (sk2 === 'shieldthrow') { const ww = ED.AimFx.want(me, s.aim, N2.range); data = { d: Math.round(Math.hypot(ww.x - me.x, ww.y - (me.y - 4))) }; } // cursor distance: how far the shield flies
+        const data = groundData(view, me, s.aim, sk2, st);
         G.act({ t: 'skill', a: aim, data, slot: 1 });
         bellCast(s, sk2, aim, data, N2);
         castMove(view, me, N2, aim, data);
@@ -595,6 +607,11 @@
   }
 
   const MIRROR_TIMERS = ['braceT', 'flowT', 'tranceT', 'stealthT', 'cometT'];
+  // The local Bulwark ends: its cooldown cd starts; a joined client drops its own raised flag (the host's comes with the snapshot).
+  function bulwarkDown(s, me, cd) {
+    s.ctl.bwOn = false; s.ctl.bwT = 0; s.ctl.skill2Cd = cd;
+    if (s.mode === 'client') me.bulwarkOn = false;
+  }
   // True when the next melee swing is a Cleave (Oath of Steel: every (3 + cleaveN)th attack, or the first after a Charge with Follow-Through): the viewer draws its own smear, the host decides the damage.
   function isCleave(me, st, w, now) {
     return st.cleave > 0 && w.kind === 'melee' && (now < (me.cleaveNext || 0) || ((me.atkCount | 0) + 1) % (3 + st.cleaveN) === 0);

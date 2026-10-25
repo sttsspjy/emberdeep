@@ -43,7 +43,7 @@
     return { x: Math.round(g.x), y: Math.round(g.y) };
   };
 
-  // Bone Harvest: every minion explodes where it stands (Bone Lances: on the foe nearest it within 200) and heals the Necromancer 3% each (at most 6% per cast); the Death Knight and the bone bombs are not harvested;
+  // Bone Harvest: every minion explodes where it stands (Bone Lances: on the foe nearest it within 200); with Bone Armor it heals the Necromancer 3% each (at most 6% per cast); the Death Knight and the bone bombs are not harvested;
   // Corpse Explosion detonates recent corpses within 220 (Carrion Storm: each launches shards at the nearest foes); Ossuary Bloom bursts every harvested minion with Bone Spikes as well;
   // Bone Armor shields per minion harvested (source 'bone': counts in the all-sources shield window only, its own 12 s timer keeps it at 0.5%/s) and Marrow Field leaves slowing shards; Lich Form opens its window;
   // then new minions rise (1, or 2 with none; harvestRaise sets the count).
@@ -67,7 +67,7 @@
     if (mine.length) {
       const gone = new Set(mine);
       this.allies = this.allies.filter(q => !gone.has(q));
-      this.healPlayer(p, p.maxHp * Math.min(0.06, 0.03 * mine.length));
+      if (st.harvestHeal) this.healPlayer(p, p.maxHp * Math.min(0.06, 0.03 * mine.length));
       if (st.boneArmor && p.boneT <= 0 && this.addShield(p, Math.min(st.boneCap, st.boneArmor * mine.length) * p.maxHp, C.CLASS_SHIELD_CAP * p.maxHp, 'bone') > 0) p.boneT = C.BONE_CD;
       if (st.boneField) for (const m of mine) this.boneField(p, m.x, m.y);
     }

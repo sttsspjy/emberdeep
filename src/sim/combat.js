@@ -79,7 +79,7 @@
       glacier: false, affixOff: false,
       hpLever: def.boss ? def.hp / def.refHp : def.fodder ? 1 : this.threat().hp, // HP-relative statuses (chill, Venom) ignore this stratum lever (fodder carries none)
       mark: 0, judged: 0, vulnT: 0, blind: 0, sunder: 0, sunderOwner: null, slow: 1, slowAmt: 0, slowT: 0, windMul: 1, dmgTakenMul: 1, invulnT: 0, killed: false,
-      // class-route foe states: shieldStunT (stunned by a thrown shield), staggerT / parryT (per-foe cooldowns), hexT + hexBy (slot mask), markV (mark vulnerability), sealT, weakT + weakV (Verdict weaken)
+      // class-route foe states: shieldStunT (stunned by a Bulwark bash), staggerT / parryT (per-foe cooldowns), hexT + hexBy (slot mask), markV (mark vulnerability), sealT, weakT + weakV (Verdict weaken)
       shieldStunT: 0, staggerT: 0, parryT: 0, hexT: 0, hexBy: 0, markV: 0, sealT: 0, weakT: 0, weakV: 0,
     };
     if (opts.elite && !def.fodder) this.makeElite(e, opts.affix);
@@ -580,6 +580,8 @@
     if (!p || p.downed || p.dead || this.state !== 'play') return false;
     const st = p.stats;
     if (p.invuln > 0 || p.dashing || p.dashT > 0 || p.skillIfr) return false;
+    const hb = CLS[p.cls];
+    if (hb && hb.block && hb.block.call(this, p, src)) return false; // a held skill stops it (Bulwark)
     if (src.proj && st.mirror && this.rng.chance(st.mirror)) { this.emit({ t: 'block', x: p.x, y: p.y, k: 'mirror' }); return false; }
     if (!src.hazard && st.dodge && this.rng.chance(st.dodge)) { this.emit({ t: 'block', x: p.x, y: p.y, k: 'dodge' }); p.invuln = 0.25; return false; }
     if (!src.hazard && st.aegis && p.aegisT <= 0) { p.aegisT = 10; p.invuln = 0.4; this.emit({ t: 'block', x: p.x, y: p.y, k: 'aegis' }); return false; }
@@ -659,7 +661,7 @@
   // k: the combo step of a combo weapon as the attacker's own control decided it (ED.Stats.comboNext; anything else is decided here); a repeat (twinMul) uses the step of the last attack.
   // fin: the Finisher (the Steel keystone's released hold): a guaranteed crit at FIN_MUL x that Bleeds for 50% of the hit, melee reach + FIN_REACH; a finisher never Cleaves.
   W.playerAttack = function (p, a, twinMul, k, fin) {
-    if (!p || p.downed || p.dead) return;
+    if (!p || p.downed || p.dead || p.bulwarkOn) return; // no swing behind a raised Bulwark
     const st = p.stats, wb = st.weapon, ch = CLS[p.cls], C = ED.CONST;
     if (wb.kind === 'bell') { if (ch && ch.weaponAttack && !(twinMul > 0)) ch.weaponAttack.call(this, p, a); return; } // a chained bell is not swung: the class file hauls it (class-bell.js)
     if (wb.combo && !(twinMul > 0)) { p.comboK = k === (k | 0) && k >= 0 && k < wb.combo.steps.length ? k : ED.Stats.comboNext(p, this.time); p.comboAt = this.time; }
@@ -982,6 +984,8 @@
           if (p.downed || p.dead) continue;
           const rr = p.r + pr.r - 3;
           if (U.dist2(pr.x, pr.y, p.x, p.y) > rr * rr) continue;
+          const hb = CLS[p.cls];
+          if (hb && hb.block && hb.block.call(this, p, { proj: true, e: pr.src, pr, x: pr.x, y: pr.y })) { dead = true; break; } // a held skill stops it, i-frames or not (Bulwark): the shot is destroyed
           if (p.invuln > 0 || p.dashing || p.dashT > 0 || p.skillIfr) continue; // shots pass through i-frames
           this.hurtPlayer(p, pr.dmg, { proj: true, e: pr.src, pr, x: pr.x, y: pr.y });
           if (pr.boom) this.explode(pr.x, pr.y, pr.boom.r, pr.dmg * 0.5, 1, pr.src, pr.boom.k);
