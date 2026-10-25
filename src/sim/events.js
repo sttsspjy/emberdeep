@@ -140,7 +140,6 @@
     if (spec.curse) for (const q of heroes) {
       const pool = curses().filter(id => q.relics.indexOf(id) < 0);
       if (pool.length) { const id = w.rng.pick(pool); w.giveRelic(q, id); out.push(`${heroes.length > 1 ? q.name + ' is cursed' : 'Cursed'}: ${relicName(id)}`); }
-      else { q.bonusHp -= 2; w.recalc(q, false); w.sendBuild(q); out.push(`${heroes.length > 1 ? q.name + ': a' : 'A'} curse settles in: -2 max health`); }
     }
     if (spec.offer) {
       const n = spec.offerN || 1;

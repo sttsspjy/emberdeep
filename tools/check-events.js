@@ -126,8 +126,8 @@ const msgs = (w, t, pid) => w.msgs.filter(m => m.t === t && (!pid || m.to === pi
   const props0 = w.props.length; lines({ relic: 'c' }, null); ok(w.props.filter(x => x.kind === 'relic').length >= w.partySize() && w.props.length > props0, 'a relic hoard for the party (one pick per hero)');
   const r1 = a.relics.length; lines({ removeRelic: true }); ok(a.relics.length === r1 - 1, 'remove a random relic');
   const id = a.relics[0] || 'whetstone'; if (!a.relics.length) w.giveRelic(a, id); const r2 = a.relics.length; lines({ removeRelic: id, relic: 'e' }); ok(a.relics.length === r2 && a.relics.indexOf(id) < 0, 'swap: the named relic out, a new one in');
-  const curses = ED.RELIC_IDS.filter(k => ED.RELICS[k].rar === 'curse'), m2 = a.maxHp, c2 = a.relics.length;
-  lines({ curse: true }); ok(curses.length ? a.relics.length === c2 + 1 && ED.RELICS[a.relics[c2]].rar === 'curse' : a.maxHp === m2 - 2, `a curse (${curses.length ? 'curse relic' : 'no curse relics yet: -2 max health'})`);
+  const curses = ED.RELIC_IDS.filter(k => ED.RELICS[k].rar === 'curse'), c2 = a.relics.length;
+  lines({ curse: true }); ok(curses.length > 0 && a.relics.length === c2 + 1 && ED.RELICS[a.relics[c2]].rar === 'curse', 'a curse is a curse relic');
   const lore0 = E.run(w).lore.length; const ll = lines({ lore: true }); ok(E.run(w).lore.length === lore0 + 1 && /^Lore page: /.test(ll[0]) && !ED.LORE[E.run(w).lore[lore0]].rare, 'a lore page (not rare)');
   lines({ lore: 'rare' }); ok(ED.LORE[E.run(w).lore[lore0 + 1]].rare === true, 'a rare lore page');
   ok(w.summary().lore.length === lore0 + 2, 'the run summary carries the pages found');
