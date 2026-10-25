@@ -115,7 +115,7 @@
     if (!e || e.hp <= 0) return 0;
     src = src || {};
     const def = e.def;
-    if (def.invuln || e.burrowed || e.invulnT > 0) return 0;
+    if (def.invuln || e.invulnT > 0 || (e.burrowed && !(src.kind === 'dot' && src.raw && !src.part))) return 0; // burrowed: only its own status ticks land (Burn, Bleed, Venom: raw dots without a skill part)
     const p = src.p || null, st = p ? p.stats : null, kind = src.kind || 'weapon';
     const comp = !!src.comp || kind === 'minion';
     const ch = p ? CLS[p.cls] : null;
@@ -775,6 +775,8 @@
     if (ch && ch.attack) ch.attack.call(this, p, a, st, w);
     this.emit({ t: 'atk', pid: p.pid, a: Math.round(a * 100) / 100, n: p.atkCount });
   };
+  // Index + 1 of the ED.EMPOWER entry hero p's next attack triggers now, else 0 (the snapshot's P[28]).
+  W.empowerOf = function (p) { return ED.empowerOf(p, this.time); };
 
   // Masterwork Arms on one landed weapon hit or bell strike of p on foe e (src after hitEnemy: critOut set): a crit's spectral strike on e at 60%, unless src.specDone (a swing or shot whose own spectral repeat handles it). Bellwarden strikes call it from class-bell.js.
   W.evoHit = function (p, e, a, src) {

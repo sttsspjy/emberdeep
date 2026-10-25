@@ -1,6 +1,6 @@
 // Usage: node tools/check-ux.js
 // Headless checks of player-facing text and layout data: the tutorial signs near the spawn, no developer units or stale fixed multipliers in card texts, the Doom/Toll wording,
-// Shield Storm and Comet in the sheet model, the Sundered status, the floor-map glyph table and route bits (src/client/icons.js). Prints failures and exits 1 when any check fails.
+// Shield Storm and Comet in the sheet model, the Sundered status, the floor-map glyph table and route bits (src/client/icons.js), the map key (src/client/input.js). Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
 let n = 0, fails = 0;
 const ok = (c, msg) => { n++; if (!c) { fails++; console.log('FAIL ' + msg); } };
@@ -178,6 +178,21 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   ok(rt2[3] === 0 && rt2[2] === 7, 'the branch not taken closes once its sibling is entered: ' + Array.from(rt2).join());
   const sheetSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'sheetui.js'), 'utf8');
   ok(!/dead end/.test(sheetSrc), 'the sheet never calls dark rooms dead ends');
+}
+
+// ---------------- the floor map key (src/client/input.js) and the map view (src/client/mapview.js) ----------------
+{
+  const fs = require('fs'), path = require('path'), vm = require('vm');
+  if (!ED.Input) vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'input.js'), 'utf8'), { filename: 'input.js' }); // the binding table (its listeners attach only in init)
+  const I = ED.Input, dup = () => { const all = [].concat(...I.ACTIONS.map(a => I.binds[a.id].filter(Boolean))); return all.length !== new Set(all).size; };
+  ok(I.ACTIONS.some(a => a.id === 'mapview' && a.label === 'Map') && I.DEFAULTS.mapview[0] === 'KeyM' && I.DEFAULTS.map[0] === 'Tab', 'Map action on M; the character sheet stays on Tab');
+  I.setBinds({ skill1: ['KeyQ', null], skill3: ['Mouse2', 'KeyR'], skill2: ['KeyM', null] });
+  ok(I.binds.skill2[0] === 'KeyM' && !I.binds.mapview[0] && !I.binds.mapview[1] && !dup(), 'a table saved before the map key keeps its M: the map stays unbound, no code twice');
+  I.setBinds({ skill1: ['KeyQ', null], skill3: ['Mouse2', 'KeyR'] }); ok(I.binds.mapview[0] === 'KeyM' && !dup(), 'a table saved before the map key gets M when free');
+  I.setBinds({ skill3: ['Mouse2', 'KeyR'], mapview: ['KeyN', null] }); ok(I.binds.mapview[0] === 'KeyN', 'a saved map key is kept');
+  I.setBinds(null); ok(I.isDefault() && !dup(), 'no table: the defaults, no code twice');
+  const mv = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'mapview.js'), 'utf8');
+  ok(!/['"](fire|ice|lightning|poison|holy|shadow|general)['"]/.test(mv), 'the map view names no path id (it reads ED.PATHS)');
 }
 
 console.log(`${n} checks, ${fails} failed`);

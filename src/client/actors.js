@@ -609,11 +609,11 @@
   // Anim-relative drawn direction of a weapon sprite (radians, screen angle: 0 right, clockwise); 'dir' in the art data is degrees clockwise from up.
   const dirOf = (r) => ((r.anchors.dir || 0) - 90) * PI / 180;
   const nrm = (a) => { a %= TAU; return a < 0 ? a + TAU : a; };
-  // Draws weapon sprite `id` with its grip at (hx, hy), the drawn direction turned to screen angle wa (mirrored sprites mirror the direction).
-  function weaponAt(c, id, hx, hy, wa, flip, variant, extraRot) {
+  // Draws weapon sprite `id` with its grip at (hx, hy), the drawn direction turned to screen angle wa (mirrored sprites mirror the direction), at alpha (default 1).
+  function weaponAt(c, id, hx, hy, wa, flip, variant, extraRot, alpha) {
     const r = A.anim(id); if (!r) return;
     const dirA = dirOf(r), rot = wa - (flip ? PI - dirA : dirA) + (extraRot || 0);
-    put(c, id, 0, hx, hy, flip, variant, 1, nrm(rot));
+    put(c, id, 0, hx, hy, flip, variant, alpha === undefined ? 1 : alpha, nrm(rot));
   }
 
   const HIT_T = 0.14;
@@ -723,8 +723,9 @@
     const w = wd.w, r = A.anim(wd.anim); if (!r) return;
     const ec = p.stats && p.stats.evo && ED.PATHS[p.stats.evo] ? ED.PATHS[p.stats.evo].color : null;
     const tc = Cos() ? Cos().tintOf(p, wd.id) : '', tv = tc && ED.Pix && ED.Pix.variant ? ED.Pix.variant(wd.anim, tc) : ''; // a worn sheen recolours the look (fork and variant shapes included) by luminance
-    const ov = ec ? outlineVar(wd.anim, ec) : '', variant = tv || ov, under = tv && ov ? ov : ''; // sheen and evolution: the outline sheet under the sheen sheet
-    const pk = wd.anim + '|' + variant + '|' + (flip ? 1 : 0);
+    const em = R() && R().empower ? R().empower(p) : null, ua = em ? 0.6 + 0.4 * Math.sin(t * 10) : 1; // an empowered next attack (ED.EMPOWER): its colour's outline pulses under the plain or sheen sheet, over the evolution's
+    const ov = em ? outlineVar(wd.anim, em.col) : ec ? outlineVar(wd.anim, ec) : '', variant = em ? tv : tv || ov, under = em ? ov : tv && ov ? ov : ''; // sheen and evolution: the outline sheet under the sheen sheet
+    const pk = wd.anim + '|' + variant + '|' + under + '|' + (flip ? 1 : 0);
     if (!wpPre.has(pk)) { wpPre.add(pk); A.prebake(wd.anim, 0, flip, '', variant); if (under) A.prebake(wd.anim, 0, flip, '', under); } // the first time a hero weapon shows, all 32 angles bake in the background (Atlas.tick)
     let x = hx, y = hy, ang = wa, extra = 0;
     const look = w.look, wk = wd.k || 1, out = HELD_OUT[look] || 0; // ranged weapons are held out along the aim
@@ -740,7 +741,7 @@
     }
     if (look === 'lantern') { // held up at arm's length (LANTERN_OUT art px ahead of the hand, clear of the body it is drawn under), hanging from its hook: swings, and is thrown forward on release
       const fl = flip ? -1 : 1, rot = Math.sin(t * 2.6 + (p.slot | 0)) * 0.14 - fl * 0.9 * Math.exp(-u * 10), lx = hx + LANTERN_OUT * K * fl, ly = hy - 16 + 10 * wk; // ly: the flame, 5 art px (by the held scale) under the hook
-      if (under) put(c, wd.anim, 0, lx, hy - 16, flip, under, 1, nrm(rot));
+      if (under) put(c, wd.anim, 0, lx, hy - 16, flip, under, ua, nrm(rot));
       put(c, wd.anim, 0, lx, hy - 16, flip, variant, 1, nrm(rot));
       lightGlow(c, lx, ly, 0.5 + 0.1 * Math.sin(t * 7));
       if (R() && p.x !== undefined) { R().light(p.x + lx, p.y + ly, 64, '#ffe9a0', 0.3); R().emit(p.x + lx, p.y + ly, 16, '#ffe9a0', 0.25); } // the lantern lights its surroundings
@@ -749,13 +750,13 @@
     if (look === 'tome') { // floats open in front of the hand, tilting toward the aim
       const sgn = flip ? -1 : 1, bob = q2(Math.sin(t * 3 + (p.slot | 0)) * 1.2);
       x = hx + Math.cos(wa) * 6 * sgn * sgn; y = hy - 4 + bob + Math.sin(wa) * 3;
-      if (under) put(c, wd.anim, 0, x, y, flip, under, 1, nrm(sgn * (0.12 + 0.5 * Math.exp(-u * 12))));
+      if (under) put(c, wd.anim, 0, x, y, flip, under, ua, nrm(sgn * (0.12 + 0.5 * Math.exp(-u * 12))));
       put(c, wd.anim, 0, x, y, flip, variant, 1, nrm(sgn * (0.12 + 0.5 * Math.exp(-u * 12))));
       tipOrb(c, w, x, y - 14, u, 0);
       return;
     }
     if (look === 'staff' || look === 'wand') extra = (Math.cos(wa) < 0 ? 1 : -1) * 0.5 * Math.exp(-u * 16); // the tip flicks up 30 degrees on the cast and settles
-    if (under) weaponAt(c, wd.anim, x, y, ang, flip, under, extra);
+    if (under) weaponAt(c, wd.anim, x, y, ang, flip, under, extra, ua);
     weaponAt(c, wd.anim, x, y, ang, flip, variant, extra);
     if (look === 'staff' || look === 'wand') { const len = (r.ay - r.f[0].oy) * K, ta = wa + extra; tipOrb(c, w, x + Math.cos(ta) * len, y + Math.sin(ta) * len, u, 0); }
     if (look === 'bow' || look === 'crossbow') { // the next arrow is nocked 3 art px back once the string has recovered: hidden for the first 45% of the cycle, drawn back over the rest
@@ -765,13 +766,17 @@
         weaponAt(c, id, x - Math.cos(wa) * back, y - Math.sin(wa) * back * 0.6, wa, flip, '');
       }
     }
-    if (ec && !(R() && R().quality === 'low')) Sp.glow(c, x + Math.cos(wa) * 14, y + Math.sin(wa) * 14, 18, ec, 0.38 + Math.sin(t * 5) * 0.08);
+    const gc = em ? em.col : ec;
+    if (em && p.pid !== undefined) { const hs = HS.get(p.pid); if (hs) { hs.gx = x + Math.cos(wa) * 14; hs.gy = y + Math.sin(wa) * 14; hs.gt = t; } } // the empower glint's spot (AC.glint)
+    if (gc && !(R() && R().quality === 'low')) Sp.glow(c, x + Math.cos(wa) * 14, y + Math.sin(wa) * 14, em ? 20 : 18, gc, em ? 0.42 + 0.16 * ua : 0.38 + Math.sin(t * 5) * 0.08);
   }
   let anim_D = 0.3; // length of the attack animation being drawn (set by drawHero)
   // The chain's end wrapped in the fist: two iron links on the art grid at (x, y).
   function chainGrip(c, x, y) { const px = q2(x), py = q2(y); c.fillStyle = OUTLINE; c.fillRect(px - K, py - K, 3 * K, 4 * K); c.fillStyle = '#9aa6b0'; c.fillRect(px, py, K, K); c.fillStyle = '#5d6670'; c.fillRect(px, py + K, K, K); }
   // Hand of hero p in world px from its feet as last drawn (a bell's chain starts there), else null.
   AC.hand = (p) => { const s = HS.get(p.pid); return s && s.hx !== undefined ? s : null; };
+  // Weapon head of hero p in world px from its feet ({ gx, gy }) when this frame (t) drew its empower glow, else null.
+  AC.glint = (p, t) => { const s = HS.get(p.pid); return s && s.gt === t ? s : null; };
   // Element orb at the tip of a magic weapon: gone right after the cast, regrown over the rest of the cycle to 2 art px (u: seconds into the attack animation, 9 = idle).
   function tipOrb(c, w, x, y, u) {
     const k = u > 5 ? 1 : U.clamp((u - anim_D * 0.35) / (anim_D * 0.65), 0, 1); if (k < 0.3) return;

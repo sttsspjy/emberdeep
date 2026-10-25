@@ -109,9 +109,11 @@ h1, h2, h3, p { margin: 0; }
 #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; background: transparent; image-rendering: pixelated; }
 #hud { position: fixed; inset: 0; width: 100%; height: 100%; display: none; pointer-events: none; }
 #ui { position: fixed; inset: 0; pointer-events: none; }
-/* in-run cursor: ED.AimFx.applyCursor sets --aim-cur / --aim-cur-foe (procedural reticle bitmaps); body.aim-foe, .syscursor and .pad are toggled by it and game.js. Later rules win. */
+/* in-run cursor: ED.AimFx.applyCursor sets --aim-cur / --aim-cur-foe (procedural reticle bitmaps), ED.AimFx.draw --aim-cur-emp / --aim-cur-emp-foe (the empowered reticle); body.aim-foe, .aim-emp, .syscursor and .pad are toggled by it and game.js. Later rules win. */
 body.hud-on #game { cursor: var(--aim-cur, crosshair); }
 body.hud-on.aim-foe #game { cursor: var(--aim-cur-foe, crosshair); }
+body.hud-on.aim-emp #game { cursor: var(--aim-cur-emp, var(--aim-cur, crosshair)); }
+body.hud-on.aim-emp.aim-foe #game { cursor: var(--aim-cur-emp-foe, var(--aim-cur-foe, crosshair)); }
 body.hud-on.syscursor #game { cursor: crosshair; }
 body.hud-on.pad #game { cursor: none; }
 .overlay { cursor: default; }
@@ -958,9 +960,45 @@ body:has(#ov-sheet:not([hidden])) #ov-boon { visibility: hidden; }
 .sh-cond b { color: var(--bone); font-family: var(--f-num); }
 .sh-aff2 { display: flex; flex-wrap: wrap; gap: calc(2 * var(--t1)); margin: calc(2 * var(--t1)) 0; }
 .sh-compact { display: none; }
-/* map: the room grid canvas (sheetui.js draws whole-art-px cells), the party list */
-.sh-mapbox { flex: 1 1 auto; min-height: calc(60 * var(--p)); position: relative; }
-.sh-mapbox canvas { position: absolute; left: 0; top: 0; display: block; image-rendering: pixelated; }
+/* map: the floor map view (mapview.js: a scrolling viewport over a canvas as tall as the floor, whole-art-px cells), its tooltip and legend, the party list; the M overlay (#ov-map) */
+.sh-mapbox { flex: 1 1 auto; min-height: calc(60 * var(--p)); }
+.mv-box { position: relative; min-height: 0; }
+.mv-vp { position: absolute; inset: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; cursor: grab; touch-action: pan-y; }
+.mv-vp.drag { cursor: grabbing; }
+.mv-vp canvas { display: block; image-rendering: pixelated; }
+.mv-vp::-webkit-scrollbar { width: calc(4 * var(--p)); background: linear-gradient(90deg, var(--px-ol) 0 var(--p), var(--well, #0b0806) 0); }
+.mv-vp::-webkit-scrollbar-thumb { border: 0; border-block: var(--p) solid var(--px-ol); border-radius: 0; background: linear-gradient(90deg, var(--px-ol) 0 var(--p), var(--brass-hi) 0 calc(2 * var(--p)), var(--brass) 0 calc(3 * var(--p)), #5a4128 0); }
+.mv-vp::-webkit-scrollbar-button { display: none; }
+@supports not selector(::-webkit-scrollbar) { .mv-vp { scrollbar-color: var(--brass) #0b0806; scrollbar-width: thin; } }
+.mv-tip { position: absolute; z-index: 2; pointer-events: none; display: grid; gap: var(--t1, 1px); max-width: 22em; padding: calc(2 * var(--p)) calc(3 * var(--p)); background: #120d0a; box-shadow: 0 0 0 var(--p) var(--brass), 0 0 0 calc(2 * var(--p)) var(--px-ol); font: 400 var(--fs-sm)/1.375 var(--f-body); color: var(--text); }
+.mv-tip[hidden] { display: none; }
+.mv-tip .mut { color: var(--muted); }
+.mv-tn { font: 700 var(--fs-md)/1.25 var(--f-body); color: var(--gold); }
+.mv-dk { color: #c8a8ff; }
+.mv-pips { display: inline-flex; gap: calc(2 * var(--dp)); margin-left: calc(2 * var(--dp)); vertical-align: middle; }
+.mv-pips i { width: calc(2 * var(--p)); height: calc(2 * var(--p)); background: #2c231c; box-shadow: 0 0 0 var(--dp) var(--px-ol); }
+.mv-pips i.on { background: #ff5a3a; }
+.mv-legend { display: flex; flex-wrap: wrap; gap: calc(var(--p)) calc(4 * var(--p)); font: 400 var(--fs-sm)/1.375 var(--f-body); color: var(--muted); }
+.mv-legend span { display: inline-flex; align-items: center; gap: calc(2 * var(--p)); }
+.mv-legend .mv-li { width: var(--fu, 16px); height: var(--fu, 16px); flex: none; image-rendering: pixelated; }
+.mv-legend .mv-ls { display: inline-block; flex: none; width: max(calc(3 * var(--p)), 0.6em); height: max(calc(3 * var(--p)), 0.6em); margin: 0; background: var(--c); box-shadow: inset 0 0 0 var(--dp) var(--b), 0 0 0 var(--dp) var(--px-ol); }
+.sh-mapbtn { margin-left: auto; padding: 0; border: 0; background: none; cursor: pointer; font: 700 var(--fs-sm)/1.25 var(--f-body); color: var(--ember-hi); }
+.sh-mapbtn:hover, .sh-mapbtn:focus-visible { color: var(--gold); }
+#ov-map { display: flex; align-items: stretch; justify-content: center; overflow: hidden; padding: calc(4 * var(--p)) calc(6 * var(--p)); background: rgba(6, 4, 3, 0.97); }
+body:has(#ov-map:not([hidden])) #ov-boon { visibility: hidden; }
+.mv-wrap { width: min(100%, 84em); height: 100%; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: calc(3 * var(--p)); }
+.mv-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 calc(6 * var(--p)); padding-bottom: calc(3 * var(--p)); background: linear-gradient(var(--brass) 0 var(--p), var(--px-ol) 0) left bottom / 100% calc(2 * var(--p)) no-repeat; }
+.mv-title { font: 700 var(--fs-xl)/1.25 var(--f-display); color: var(--gold); text-shadow: 0 var(--fpx) 0 var(--px-ol); }
+.mv-where { margin-left: auto; font: 400 var(--fs-md)/1.25 var(--f-body); color: var(--bone); }
+.mv-body { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) round(down, max(15em, 22%), var(--dp)); gap: calc(3 * var(--p)); }
+.mv-col { min-height: 0; min-width: 0; display: flex; }
+.mv-col .mv-box { flex: 1 1 auto; margin: calc(3 * var(--p)); }
+.mv-side { min-height: 0; overflow-y: auto; padding: calc(5 * var(--p)); }
+.mv-side .mv-legend { flex-direction: column; flex-wrap: nowrap; gap: calc(2 * var(--p)); }
+.mv-side .mv-legend .mv-li { width: calc(2 * var(--fu, 16px)); height: calc(2 * var(--fu, 16px)); }
+.mv-side .mv-legend .mv-ls { width: calc(6 * var(--p)); height: calc(6 * var(--p)); margin: 0 var(--p); }
+.mv-foot { text-align: center; font: 400 var(--fs-sm)/1.6 var(--f-body); color: var(--muted); }
+@media (max-width: 900px) { .mv-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; } .mv-side { max-height: 28vh; } }
 .sh-legend { display: flex; flex-wrap: wrap; gap: 0 calc(8 * var(--t1)); margin-top: calc(2 * var(--p)); font: 400 var(--fs-sm)/1.375 var(--f-body); color: var(--muted); }
 .sh-legend i { display: inline-block; width: calc(8 * var(--t1)); height: calc(8 * var(--t1)); margin-right: calc(3 * var(--t1)); vertical-align: calc(-1 * var(--t1)); background: var(--c); box-shadow: inset 0 0 0 var(--t1) var(--px-ol); }
 .sh-legend .sh-lgi { display: inline-block; width: calc(16 * var(--t1)); height: calc(16 * var(--t1)); margin-right: calc(3 * var(--t1)); vertical-align: calc(-4 * var(--t1)); image-rendering: pixelated; }
@@ -988,7 +1026,7 @@ body:has(#ov-sheet:not([hidden])) #ov-boon { visibility: hidden; }
   .sh-panel { display: grid; grid-template-columns: minmax(0, 1fr) !important; height: auto; }
   .sh-in { overflow: visible; }
   .sh-col { overflow: visible; }
-  .sh-mapbox { min-height: calc(100 * var(--p)); }
+  .sh-mapbox { min-height: max(calc(100 * var(--p)), 60vh); }
   .sh-vit { grid-column: 1 / -1; grid-row: 2; justify-self: start; flex-wrap: wrap; }
   .sh-head { grid-template-columns: auto minmax(0, 1fr); }
   .sh-world { grid-column: 1 / -1; grid-row: 3; justify-self: start; }

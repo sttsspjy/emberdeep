@@ -1155,6 +1155,56 @@ for (let s = 1; s <= NS; s++) {
     ok(ms.length === 2 && ms.every(e => e.split && e.copies.length === 1) && ms[0].copies[0] !== ms[1].copies[0], 'it splits into two copies, one class each');
     ok(JSON.stringify(A.encode(w.room)) === JSON.stringify([3].concat(...ms.map(e => [e.id, ED.CLASS_IDS.indexOf(e.cls)]))), 'champion arena row carries each mimic and its class');
   }
+  { // mimic kit: copying any class it holds its own moves plus that class's copied moves, and each starts with a telegraph
+    const C = ED.Champions, WARN = { tele: 1, teleLine: 1, teleCone: 1, spawn: 1 };
+    for (const cls of ED.CLASS_IDS) {
+      const { w, enc } = champRoom('mimic', [cls]), m = enc.foes.m0, copied = C.COPY[cls] || [], silent = [];
+      ok(m && copied.length >= 2, `${cls}: the mimic has at least two copied ${cls} moves (${copied})`);
+      if (!m) continue;
+      for (const k of C.OWN.concat(copied)) {
+        for (let g = 0; m.mode === 'atk' && g < 600; g++) go(w, 1 / 60);
+        const z0 = new Set(w.zones);
+        m.force = k; go(w, 2 / 60);
+        if (m.atk !== k || !w.zones.some(z => !z0.has(z) && z.team !== 0 && WARN[z.kind])) silent.push(k);
+      }
+      ok(!silent.length, `${cls}: every own and copied move starts with a ground or lane warning (${silent})`);
+    }
+  }
+  { // mimic escalation and the split pair
+    const C = ED.Champions, { w, enc } = champRoom('mimic', ['knight']), m = enc.foes.m0;
+    m.hp = m.maxHp * 0.7; go(w, 0.05);
+    ok(m.mph === 2 && m.pauseK === C.MPAUSE[1], `below MPH[0] of its health the mimic escalates (mph ${m.mph})`);
+    m.hp = m.maxHp * 0.45; go(w, 0.05);
+    const ms = w.enemies.filter(e => e.type === 'mimic' && e.hp > 0);
+    ok(ms.length === 2 && ms.every(e => e.mph === 3) && ms[0].maxHp === ms[1].maxHp && ms[0].dmgBase === ms[1].dmgBase, 'the split makes two equal halves at mph 3');
+    let joint = null;
+    go(w, 14, () => { if (!joint && ms.every(e => e.mode === 'atk' && e.vars.forced)) joint = ms.map(e => e.atk).sort().join(); });
+    ok(joint === 'cross,cross' || joint === 'glass,shatter', `the split pair attacks together (${joint})`);
+    for (const e of ms) e.hp = e.maxHp * 0.2;
+    go(w, 0.05);
+    ok(ms.every(e => e.mph === 4), 'below MPH[1] of the fight\'s health both copies reach mph 4');
+  }
+}
+{ // Mire Worm: statuses keep ticking while it is burrowed; the eruption: warned lanes, B.ring shots over B.arc (the rest is a shot-free gap) at B.speed, a telegraph of at least 1.1 s, exposed B.expose s after
+  const w = hordeWorld(2, ['knight']), p = [...w.players.values()][0], B = ED.ENEMIES.mireworm.burrow;
+  const e = w.spawnEnemy('mireworm', p.x + 200, p.y); e.spawnT = 0; e.maxHp = e.hp = 1e4;
+  w.burnStack(e, p); w.burnStack(e, p); w.addBleed(e, 400, p);
+  e.vars.init = 1; e.st = 'burrow'; e.burrowed = true; e.vars.dig = 99; e.vars.spot = null;
+  const hp0 = e.hp;
+  ok(w.hitEnemy(e, 50, { p }) === 0, 'a burrowed worm takes no hits');
+  for (let i = 0; i < 90; i++) { p.invuln = 1e9; w.update(TICK); }
+  ok(e.burrowed && hp0 - e.hp > 1, `Burn and Bleed keep ticking on a burrowed worm (${(hp0 - e.hp).toFixed(1)} damage in 1.5 s)`);
+  e.vars.dig = 0; e.x = p.x + 40; e.y = p.y;
+  for (let i = 0; i < 2; i++) { p.invuln = 1e9; w.update(TICK); }
+  const lanes = w.zones.filter(z => z.src === e && z.kind === 'teleLine' && z.warnOnly), circ = w.zones.find(z => z.src === e && z.kind === 'tele');
+  ok(lanes.length === B.ring && circ && circ.dur >= 1.1, `the eruption warns ${lanes.length} shot lanes and a ${circ && circ.dur.toFixed(2)} s circle`);
+  const p0 = new Set(w.projs);
+  for (let i = 0, k = Math.round(((circ ? circ.dur : 1) + 0.05) * 60); i < k; i++) { p.invuln = 1e9; w.update(TICK); }
+  const shots = w.projs.filter(q => !p0.has(q) && q.src === e), as = shots.map(q => Math.atan2(q.vy, q.vx)).sort((a, b) => a - b);
+  const gap = as.length ? Math.max(...as.map((a, i) => (i ? a - as[i - 1] : a + ED.U.TAU - as[as.length - 1]))) : 0, sp = ED.World.shotSpd(w.stratum) * B.speed;
+  ok(shots.length === B.ring && shots.every(q => Math.abs(Math.hypot(q.vx, q.vy) - sp) < 1), `the eruption fires ${shots.length} shots at ${B.speed} x the stratum shot speed`);
+  ok(gap >= ED.U.TAU - B.arc - 0.01, `the ring leaves a shot-free gap of ${gap.toFixed(2)} rad`);
+  ok(!e.burrowed && e.st === 'erupt' && e.t > B.expose - 0.2, `then it stays exposed ${B.expose} s`);
 }
 console.log(`${n} checks, ${fails} failed`);
 process.exit(fails ? 1 : 0);

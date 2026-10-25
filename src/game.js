@@ -64,7 +64,7 @@
       if ((a[20] | 0) !== (p.chaliceHp | 0)) { p.chaliceHp = a[20] | 0; this.recalc(p); }
       p.glBuff = !!(fl & 1024); p.embolden = !!(fl & 2048); // Cleric buffs: Guardian Light, Embolden
       p.glT = p.glBuff ? 1 : 0; p.glV = a[22] || 0; p.auraT = p.embolden ? 1 : 0; p.auraV = a[23] || 0; // timed damage bonuses the Tab sheet and Stats read
-      p.doorWant = a[26] | 0; p.sparks = a[27] | 0; // the door the hero waits in, Kindling Sparks (the HUD chip)
+      p.doorWant = a[26] | 0; p.sparks = a[27] | 0; p.emp = a[28] | 0; // the door the hero waits in, Kindling Sparks (the HUD chip), empowered next attack (ED.EMPOWER index + 1)
       if (p.pid !== this.localPid) { p.moving = !!(fl & 1); p.dashing = !!(fl & 2); p.face = a[3]; p.braceT = fl & 1048576 ? 1 : 0; p.tranceT = fl & 4096 ? 1 : 0; p.holdOn = !!(fl & 8192); } // the local hero predicts its own Trance and hold
       else if (this.firstInRoom) { p.x = a[1]; p.y = a[2]; }
     }
@@ -388,6 +388,7 @@
   G.localEvent = (ev) => {
     const s = G.s; if (!s) return;
     if (SHEET_EVENTS[ev.t]) ED.UI.sheetDirty();
+    if (ev.t === 'victory' || ev.t === 'defeat') s.musEnd = true; // the run's music is over: the stinger plays alone
     if (ev.t === 'room') {
       s.epoch = ev.ep;
       if (s.mode === 'client') {
@@ -701,14 +702,23 @@
   const unterp = (w) => { for (const k of MOVERS) { const a = w[k]; for (let i = 0; i < a.length; i++) { const o = a[i]; if (o.rx !== undefined) { o.x = o.rx; o.y = o.ry; } } } };
   // Mirrors World.isSafe: calm room, no live foe, no descent pending (clients see no pendingStratum).
   const isSafe = (v) => !v.locked && !v.pendingStratum && !v.enemies.some(e => e.hp > 0);
-  // Music level from the viewed foe list (host, solo and client alike): 0 calm, 1 foes alive or the room locked, 2 heavy at 25 live foes (held until fewer than 12);
-  // a boss piece plays its phase (1 -> 0 .. 3 -> 2), lifted to 1 by 8 or more summons.
-  const musicLevel = (v, prev) => {
-    let n = 0, boss = null;
+  // Music track and level from the view (host, solo and client alike; every 0.1 s): a fight (room locked or live foes, spawning ones not counted) plays the room's fight track
+  // (champion, elite, dark, else combat; level 1, 2 at 25 live foes held until fewer than 12) and keeps it MUS_HOLD s after it ends in the same room (the clear stinger plays over it);
+  // the boss room plays its boss track while locked or the boss lives (level = phase 1 -> 0 .. 3 -> 2, lifted to 1 by 8 or more summons), explore at once after it;
+  // otherwise shop, rest, dark explore (a dark room) or explore. Nothing after the run's victory or defeat (s.musEnd).
+  const MUS_HOLD = 2.5;
+  const musicPick = (s, dt) => {
+    const v = s.view, rm = v.room, m = s.mus || (s.mus = { c: '', lv: 0, hold: 0, room: -1 });
+    if (s.musEnd || !rm) return;
+    if (m.room !== v.roomId) { m.room = v.roomId; m.hold = 0; }
+    let n = 0, boss = null, c, lv = 0;
     for (const e of v.enemies) { if (e.hp <= 0 || e.spawnT > 0) continue; if (e.boss) boss = e; else n++; }
-    if (boss) return Math.max(Math.min(2, (boss.phase | 0) - 1), n >= 8 ? 1 : 0);
-    if (n >= 25 || (prev === 2 && n >= 12)) return 2;
-    return v.locked || n > 0 ? 1 : 0;
+    if (rm.type === 'boss') { c = boss || v.locked ? 'boss' : 'explore'; if (boss) lv = Math.max(Math.min(2, (boss.phase | 0) - 1), n >= 8 ? 1 : 0); m.hold = 0; }
+    else if (v.locked || n > 0) { c = rm.type === 'champion' ? 'champ' : rm.type === 'elite' ? 'elite' : rm.dark ? 'dark' : 'combat'; lv = n >= 25 || (m.lv === 2 && n >= 12) ? 2 : 1; m.hold = MUS_HOLD; }
+    else if (m.hold > 0) { m.hold -= dt; c = m.c; lv = 1; }
+    else c = rm.type === 'shop' ? 'shop' : rm.type === 'rest' ? 'rest' : rm.dark ? 'darkx' : 'explore';
+    m.c = c; m.lv = lv;
+    ED.Audio.music({ s: v.stratum || 1, c }, lv); ED.Audio.setIntensity(lv);
   };
   G.update = (dt, inp) => {
     const s = G.s; if (!s) return;
@@ -768,7 +778,7 @@
       }
     }
     ED.FX.update(frozen ? 0 : dt);
-    if ((s.musT = (s.musT || 0) - dt) <= 0) { s.musT = 0.1; s.musLv = musicLevel(s.view, s.musLv); ED.Audio.setIntensity(s.musLv); }
+    if ((s.musT = (s.musT || 0) - dt) <= 0) { s.musT = 0.1; musicPick(s, 0.1); }
     ED.Render.updateCamera(s.view, s.me.dead ? ([...s.view.players.values()].find(p => !p.dead) || s.me) : s.me, dt, false);
   };
 

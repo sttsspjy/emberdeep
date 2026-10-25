@@ -1845,7 +1845,15 @@
     }
   }
 
-  // Drawn at the hero's origin after the sprite: evolution aura, shield, ambush glint.
+  // The ED.EMPOWER entry hero p's next attack triggers, else null: the sim's own on host and solo (the view is the World), the snapshot's P[28] (p.emp) for allies on a client,
+  // and for a client's own hero its prediction (its attack count and Follow-Through run ahead of the snapshots, as game.js isCleave; a bell hero reads the snapshot: only its hurls count).
+  R.empower = (p) => {
+    const v = curView;
+    if (!v || !p || p.dead || p.downed) return null;
+    const k = v.empowerOf ? v.empowerOf(p) : p.pid === R.local && !(p.stats && p.stats.weapon && p.stats.weapon.kind === 'bell') ? ED.empowerOf(p, v.time || 0) : p.emp | 0;
+    return k > 0 ? ED.EMPOWER[k - 1] || null : null;
+  };
+  // Drawn at the hero's origin after the sprite: evolution aura, shield, ambush glint, empower star.
   function drawHeroFx(c, p, t) {
     if (p.dead) return;
     if (p.dashing) p._dsh = 1;
@@ -1873,6 +1881,14 @@
     if (p.ambush && !p.downed) R.emit(p.x, p.y - 12 - lift, 22, '#b78cff', 0.3 + Math.sin(t * 9) * 0.12);
     if (lift) c.translate(0, lift);
     if (p.holdOn && st && st.hold && !p.downed) drawHold(c, p, st, t, low); else p._holdS = -1;
+    const em = !p.downed ? R.empower(p) : null;
+    if (em) { // empowered next attack: a twinkling pixel star at the weapon head (the atlas weapon's spot, else ahead of the hand) over the outline actors.js pulses
+      const gl = AC.on() ? AC.glint(p, t) : null, gx = s2(gl ? gl.gx : Math.cos(p.face || 0) * 12), gy = s2((gl ? gl.gy : -12) - lift), big = ((t * 6) | 0) & 1, ga = c.globalAlpha;
+      c.globalAlpha = ga * (0.75 + 0.25 * Math.sin(t * 10)); c.fillStyle = em.col; c.beginPath();
+      c.rect(gx - 1, gy - (big ? 5 : 3), 2, big ? 10 : 6); c.rect(gx - (big ? 5 : 3), gy - 1, big ? 10 : 6, 2); c.fill();
+      c.fillStyle = '#ffffff'; c.fillRect(gx - 1, gy - 1, 2, 2); c.globalAlpha = ga;
+      if (!low) R.emit(p.x + gx, p.y + gy, 18, em.col, 0.28 + 0.08 * Math.sin(t * 10));
+    }
     const xh = ED.ClassFx.hero; for (let i = 0; i < xh.length; i++) xh[i](c, p, t, low);
     c.globalAlpha = 1;
   }
@@ -2195,6 +2211,25 @@
     const k = U.clamp(e.t / ED.CONST.PARRY_WIN, 0, 1), rx = Math.max(3, Math.round((e.r + 3 + 8 * k) / 2)), ry = Math.max(2, Math.round(rx * 0.5));
     Pix.put(c, Pix.ell(rx, ry, e.t < 0.1 && Math.floor(e.t * 40) % 2 ? '#8ad0ff' : '#ffffff', false), s2(e.x), s2(e.y), 1);
   }
+  // Dash charges of the local hero under its feet (the run's ctl, read as the HUD dash slot: dashN ready, dashT seconds to the next of dashCd): a lit pip per ready charge, the recharging one
+  // filling left to right. With every charge ready and no dash for DASH_IDLE s the row fades out; it shows again the moment a charge is spent.
+  const DASH_IDLE = 2, DASH_FADE = 0.4, PIP_W = 8, PIP_H = 4, PIP_GAP = 4;
+  let dashSeen = -99;
+  function dashPips(c, view, me, t) {
+    const s = ED.Game && ED.Game.s, ctl = s && s.view === view ? s.ctl : null, st = me && me.stats;
+    if (!ctl || !st || me.dead || me.downed) return;
+    const n = Math.min(4, st.dashCharges | 0), ready = U.clamp(ctl.dashN | 0, 0, n);
+    if (n < 1) return;
+    if (ready < n || me.dashing || t < dashSeen) dashSeen = t;
+    const a = U.clamp(1 - (t - dashSeen - DASH_IDLE) / DASH_FADE, 0, 1);
+    if (a <= 0) return;
+    const x0 = s2(me.x - (n * PIP_W + (n - 1) * PIP_GAP) / 2), y = s2(me.y + 8), k = ready < n && ctl.dashT > 0 ? U.clamp(1 - ctl.dashT / Math.max(0.01, st.dashCd), 0, 1) : 0, ga = c.globalAlpha;
+    c.globalAlpha = ga * a;
+    c.fillStyle = 'rgba(10,7,6,0.75)'; for (let i = 0; i < n; i++) c.fillRect(x0 + i * (PIP_W + PIP_GAP) - 1, y - 1, PIP_W + 2, PIP_H + 2);
+    c.fillStyle = '#bfe9ff'; for (let i = 0; i < ready; i++) c.fillRect(x0 + i * (PIP_W + PIP_GAP), y, PIP_W, PIP_H);
+    if (ready < n && k > 0) { c.fillStyle = '#5f8fae'; c.fillRect(x0 + ready * (PIP_W + PIP_GAP), y, Math.max(2, s2(PIP_W * k)), PIP_H); }
+    c.globalAlpha = ga;
+  }
   function drawOverheads(c, view, local, t) {
     lblN = 0;
     if (view.room) drawDoorPreviews(c, view, view.room, t); // door lines register their rects first: names and elite labels step around them
@@ -2246,6 +2281,7 @@
     }
     // nearest sign within reach (one at a time); the HUD draws its text in screen space with the current key bindings
     const me = view.players.get(local);
+    dashPips(c, view, me, t);
     let sign = null, sd = 90 * 90;
     if (me) for (const p of view.props) { if (p.kind === 'sign') { const d = U.dist2(p.x, p.y, me.x, me.y); if (d < sd) { sd = d; sign = p; } } }
     R.sign = sign;

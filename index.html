@@ -248,11 +248,22 @@
         <div class="sh-panel" id="shp-build" role="tabpanel" aria-labelledby="shtab-build" data-t="build"></div>
         <div class="sh-panel" id="shp-combat" role="tabpanel" aria-labelledby="shtab-combat" data-t="combat" hidden></div>
         <div class="sh-panel" id="shp-map" role="tabpanel" aria-labelledby="shtab-map" data-t="map" hidden>
-          <section class="plate sh-col" data-col="map"><div class="sh-in"><h3 class="sh-h">Map</h3><div class="sh-mapbox" id="sh-mapbox"><canvas id="map-canvas" width="360" height="300"></canvas></div><div class="sh-legend" id="sh-legend"></div></div></section>
+          <section class="plate sh-col" data-col="map"><div class="sh-in"><h3 class="sh-h">Map<button type="button" class="sh-mapbtn" id="sh-mapbtn"></button></h3><div class="sh-mapbox mv-box" id="sh-mapbox"><div class="mv-vp" id="sh-mapvp"><canvas id="map-canvas" width="360" height="300"></canvas></div><div class="mv-tip" id="sh-maptip" hidden></div></div><div class="sh-legend mv-legend" id="sh-legend"></div></div></section>
           <section class="plate sh-col" data-col="side"><div class="sh-in"><h3 class="sh-h">Stratum and dark rooms</h3><div class="sh-list" id="shp-map-side"></div></div></section>
         </div>
       </div>
       <footer class="sh-foot" id="sh-foot" data-px-snap></footer>
+    </div>
+  </div>
+
+  <div id="ov-map" class="overlay sheet" hidden>
+    <div class="mv-wrap" role="dialog" aria-label="Floor map">
+      <header class="mv-head"><span class="mv-title" id="mv-title"></span><span class="mv-where" id="mv-where"></span></header>
+      <div class="mv-body">
+        <section class="plate mv-col"><div class="mv-box" id="mv-box"><div class="mv-vp" id="mv-vp"><canvas id="mv-canvas" width="360" height="300"></canvas></div><div class="mv-tip" id="mv-tip" hidden></div></div></section>
+        <aside class="plate mv-side"><h3 class="sh-h">Legend</h3><div class="mv-legend" id="mv-legend"></div></aside>
+      </div>
+      <footer class="mv-foot" id="mv-foot"></footer>
     </div>
   </div>
 
@@ -365,6 +376,7 @@
 <script src="src/data/classboons.js" defer></script>
 <script src="src/data/relics.js" defer></script>
 <script src="src/data/meta.js" defer></script>
+<script src="src/data/empower.js" defer></script>
 <script src="src/save.js" defer></script>
 <script src="src/sim/dungeon.js" defer></script>
 <script src="src/sim/stats.js" defer></script>
@@ -426,6 +438,7 @@
 <script src="src/client/hud.js" defer></script>
 <script src="src/client/camp.js" defer></script>
 <script src="src/client/ui.js" defer></script>
+<script src="src/client/mapview.js" defer></script>
 <script src="src/client/sheetui.js" defer></script>
 <script src="src/client/cosmetics.js" defer></script>
 <script src="src/game.js" defer></script>
