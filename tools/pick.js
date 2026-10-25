@@ -97,7 +97,7 @@ module.exports = (ED, model) => {
   // Bellwarden terms (guesses): FULLR_K pack weapon damage per unit of Full Swing impact width; CARRY_K per 40 px of Unstoppable carry (struck foes bunch into the impact); SLIP_WIND share of a fight spent winding;
   // LEAP_E E per unit of hand-leap reach; WRECK_SAVE share of a loop's wind-up a Wrecker landing saves; IFR_HIT share of untouchable seconds that dodge a hit; PULL_N extra pack foes a Reel In slam strikes.
   const FULLR_K = 0.3, CARRY_K = 0.05, SLIP_WIND = 0.6, LEAP_E = 0.04, WRECK_SAVE = 0.5, IFR_HIT = 0.4, PULL_N = 1;
-  const PRESENT_EL = (st, el) => st[ED.ELEMENTS[el].inf] > 0 || st.element === el; // an element is active: an infusion above 0 or the class element
+  const PRESENT_EL = (st, el, boons) => ED.ELEMENTS[el] ? st[ED.ELEMENTS[el].inf] > 0 || st.element === el : !!(boons && boons[ED.PATH_GATE[el]] > 0); // a path is active: an infusion above 0, the class element, or (Steel, no element) its gate owned
 
   // ---------------- index of the path cards ----------------
   const KEY_OF = {}, POOL_OF = {};
@@ -296,7 +296,7 @@ module.exports = (ED, model) => {
     const b = ED.BOONS[id], st = h.stats;
     if (b.purse) return PURSE_X;
     const pr = PRIOR[id], cal = b.path ? PATH_CAL[b.path] || 0 : 0;
-    return cal + (pr && PRESENT_EL(st, pr[0]) ? pr[1] : 0);
+    return cal + (pr && PRESENT_EL(st, pr[0], h.boons) ? pr[1] : 0);
   }
   function cardGain0(h, id, dc, v0) {
     const key = heroKey(h, dc.pact) + '>' + id;
