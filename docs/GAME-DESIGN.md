@@ -12,7 +12,7 @@ Canonical rules and numbers. Code follows this file; a balance pass changes numb
 ## 1. Damage model
 
 - **Depth** `D = World.depth(s, f) = 1 + 5/3 (s − 1) + 0.5 f` (s the stratum I–IV, f the room's row on the floor graph as a fraction of the floor's last row; 0 for the start and the boss): stratum IV sits where the old stratum VI did. Foe HP = base × `1 + 0.65(D−1) + 0.08(D−1)²` × **threat HP** × party multiplier. Foe damage = base × `World.FOE_DMG` 2.15 × `1 + 0.22(D−1) + 0.03(D−1)²` × **threat damage**. Bosses take f = 0. Boss HP is absolute (below), scaled by party and pact. Per-stratum arrays (`World.perStratum`) hold 4 entries.
-- **Health unit**: hero health is a small whole number (§5: Shade 46, Necromancer 21). Every foe damage value (`dmg`, `dps`, hazard ticks, boss damage) is in the same points; foe HP and hero damage are on their own scale (`HP_K` 4 converts a hero point to foe HP where a hero's damage taken or absorbed becomes foe damage or healing). Each hit rounds to a whole number, at least 1. Flat health: Vigor +2, Heartstone +4, Grail of Ages +1 per 12 kills (max +8), Philosopher's Stone +1 per 2 relics, Hearth Vitality +2 per rank, mastery 4 +1, mastery 10 +4; max health never falls under 5.
+- **Health unit**: hero health is a small whole number (§5: Shade 46, Necromancer 21). Every foe damage value (`dmg`, `dps`, hazard ticks, boss damage) is in the same points; foe HP and hero damage are on their own scale (`HP_K` 4 converts a hero point to foe HP where a hero's damage taken or absorbed becomes foe damage or healing). Each hit rounds to a whole number, at least 1. Flat health: Vigor +2, Heartstone +6, Heartwood −3, Grail of Ages +1 per 12 kills (max +8), Philosopher's Stone +0.5 per relic held (curses do not count), Hearth Vitality +2 per rank, mastery 4 +1, mastery 10 +4; max health never falls under 5.
 - **Threat** per stratum (`World.THREAT`): HP ×, damage ×, wave budget ×, attack-cooldown rate `cdRate` (foe cooldowns tick faster by this fraction, negative = slower, only while the foe can act; wind-ups never change; bosses are exempt), boss pause × (time between boss attacks):
 
 | Stratum | HP × | Damage × | Wave × | `cdRate` | Boss pause × |
@@ -32,7 +32,7 @@ Canonical rules and numbers. Code follows this file; a balance pass changes numb
 
 ### Damage dealt by a hero (order, `hitEnemy`)
 
-1. **Hero multiplier** (`max(0.1, dmg + Σ additions)`): the `dmg` stat (`1 + Σ additive sources`), then the additions: conditional rows (execute: foes below 30% HP; lacerate: bleeding; Backstab (`backstab`, §2); opportunist: stunned, frozen or blinded; Brand per ailment; Guardian Light; Embolden) + the class hook (`hitMul`: Momentum, Searing spells, White Flame, Soul Barrage…) + class-element skill hits (`classElMul`), Golden Idol (+1% per 15 party gold, at most 20%), Banner of Unity.
+1. **Hero multiplier** (`max(0.1, dmg + Σ additions)`): the `dmg` stat (`1 + Σ additive sources`), then the additions: conditional rows (execute: foes below 30% HP; lacerate: bleeding; Backstab (`backstab`, §2); opportunist: stunned, frozen or blinded; Brand per ailment; Guardian Light; Embolden) + the class hook (`hitMul`: Momentum, Searing spells, White Flame, Soul Barrage…) + class-element skill hits (`classElMul`), Golden Idol (+1% per 15 party gold, at most 20%), the relic `hitMul` hooks and auras (§6).
 2. **Crit** × `critMult` (1.75 + crit damage; chance capped at 95%), then the class `critMul`.
 3. The hit's own factor `src.mul` (Cleave, Ambush, Deadeye by distance flown, Ballista's pierce ramp, Gathering Force, Gangrene, …) and, on a boss, a skill part's `bossMul`; with Frostbite, a skill hit on a frozen foe Shatters (×(1 + `shatter`), the freeze ends).
 4. **Foe vulnerability** `1 + Σ`: Marked (Hunter's Mark, `markV`) · Judged or `vulnT` (+0.2, once: Judgment, Hail of Thorns, smoke do not stack) · Frozen +0.25 · Sunder +0.04 per stack (own stacks, max 10) · Venom `venom/100 × (0.25 + corrode)` (full from the hero who added Venom, ×0.5 from allies). Co-op debuffs are single foe states: the strongest value wins, they never add.
@@ -46,8 +46,8 @@ Status ticks, Smites, Tolls and discharges are `raw` hits: no hero multiplier, n
 ### Damage taken by a hero (order, `hurtPlayer`)
 
 1. Untouchable while: hit-invulnerable (0.6 s after a hit, 0.3 s after a hazard), dashing, or inside a skill move's i-frames (`skillIfr`). A foe attack met by the dash, its window or the Hallowed guard is a perfect dodge for a Holy hero (§2).
-2. Mirror Shard (25% chance to shrug off a projectile), then dodge (cap 60%, not against hazards; 0.25 s untouchable after), then Aegis Charm (blocks one hit per 10 s).
-3. `amount × 60/(60 + armor) × (1 + vuln)`.
+2. The relic `hurtPre` blocks (Iron Buckler, Mirror Shard, Last Breath), then dodge (cap 60%, not against hazards; 0.25 s untouchable after), then Aegis Charm (blocks one hit per 10 s).
+3. `amount × 60/(60 + armor) × (1 + vuln)` × the relic `hurtMul` factors (Stoneskin Idol, Void Stone, Dread).
 4. **Brace** (Knight, Vanguard) × the best **Sanctuary** here; their product never goes below ×0.5 (`DR_FLOOR`). Then Last Stand ×0.4, then a Judged foe's weakening (Verdict), then the attacker's weakening: Chill (`chillWeaken`), Venom (`venom/100 × VENOM_WEAK` + Enfeeble at full) and Smother.
 5. Rounded, at least 1. A fodder hit is then capped at `FODDER_CAP` (2%) of max HP (a fraction of a point on a low-health hero).
 6. The **shield** absorbs first, then health. Thorns strike the attacker; a vampiric elite heals 12× the damage dealt (3 × `HP_K`).
@@ -60,17 +60,17 @@ Status ticks, Smites, Tolls and discharges are `raw` hits: no hero multiplier, n
 
 ### Healing
 
-- No life steal: hits, kills, damage over time and shield overflow never heal. Heal sources: hearts 22% max HP + 1.5; campfire 35% (once per hero); healing potion 40% (shop); fountain 50% (also raises the downed); Vigor reward 20%; Vigor boon 2; Provisions (Hearth) 2% per rank and Elixir Flask 20% at each stratum after the first; Sanctuary 7% on cast (you and allies within 180); Bone Harvest 3% per minion harvested, at most 6%; revive 35%; Second Wind and Phoenix Feather (once per descent) and Guardian Angel (once per stratum) are one-off saves.
-- Healing received × `healMul` = (1 + Heartwood and Elixir bonuses) × pact.
+- No life steal: hits, kills, damage over time and shield overflow never heal. Heal sources: hearts 22% max HP + 1.5; campfire 35% (once per hero); healing potion 40% (shop); fountain 50% (also raises the downed); Vigor reward 20%; Vigor boon 2; Provisions (Hearth) 2% per rank and Elixir Flask 30% once per stratum (on falling below 30%); Field Bandage 2 per fight won; Wishing Star 1 per level-up; Sanctuary 7% on cast (you and allies within 180); Bone Harvest 3% per minion harvested, at most 6%; revive 35%; Second Wind and Phoenix Feather (once per descent) and Guardian Angel (once per stratum) are one-off saves.
+- Healing received × `healMul` = (1 + `heal`: Heartstone −25%, Blood Pact −50%) × pact. A heart passes through the relic `heart` hooks first (Lodestone ×0.75, Heartwood ×2, Shared Spoils, Decay ×0.5).
 - Hearts drop from kills (`World.HEART_KILL` 2% of non-fodder kills, elites 40%), bosses (two) and breakable props (1%). Cleared rooms drop none.
 
 ### Stopping shots, stuns and moves
 
-- Enemy projectiles are stopped only by: the Shield Throw in flight, Shield Orbit, Iron Phalanx's Charge sweep, Bone Knights, and Mirror Shard (chance). No weapon deflects.
+- Enemy projectiles are stopped only by: the Shield Throw in flight, Shield Orbit, Iron Phalanx's Charge sweep, Bone Knights, and Mirror Shard (every 3rd). No weapon deflects.
 - **Hero stuns** (`stunFoe`): bosses are never stunned; elites take half; a stun sets `stunCd = dur + 2 s` and one landing while `stunCd > 0` lasts half as long; repeating sources (waves, shocks, Overload, Shield Orbit contacts, Bone Knight strikes) skip while `stunCd > 0` and set it to at least 1 s.
 - **Stagger**: a Heavy weapon's direct hit stuns a non-boss foe 0.2 s (elites 0.1 s), once per 2 s per foe, never while `stunCd > 0`; it does not set `stunCd`. Hit-stop is client render only; the sim never pauses.
 - **Parry** (Sworn Blade): a Cleave that starts in the last 0.3 s of a foe's wind-up cancels it and stuns 0.6 s (elites: stun 0.3 s, no cancel; never bosses), once per 2.5 s per hero and 4 s per foe.
-- **Dash** (`ED.CONST.DASH`): 0.15 s at 480 px/s (72 px), untouchable for the whole dash. A hero holds `dashCharges = min(3, 1 + dashN)` charges; a spent charge refills after `dashCd = max(1.0, 1.5 × (1 − dashcdr))` s, one charge at a time. Sources: Light Step `dashN` +1 per rank (max 2), Shadow Cloak `dashcdr` 1/3 (1.0 s). A cap raised by a pick starts a refill timer; the new charge arrives one `dashCd` later.
+- **Dash** (`ED.CONST.DASH`): 0.15 s at 480 px/s (72 px), untouchable for the whole dash. A hero holds `dashCharges = min(3, 1 + dashN)` charges; a spent charge refills after `dashCd = max(1.0, 1.5 × (1 − dashcdr))` s, one charge at a time. Sources: Light Step `dashN` +1 per rank (max 2). No relic adds a dash charge or recharge. A cap raised by a pick starts a refill timer; the new charge arrives one `dashCd` later.
 - Skill moves (Charge, Shadowstep, Comet, Scattershot hop) never fire dash riders; their i-frames last the `iframes` seconds of the move.
 
 ### Weapons
@@ -298,11 +298,11 @@ vigor (c,3: +2 max HP, heal 2) · plating (c,2: +3 armor) · focus (c,3: skills 
 
 - A hero holds a queue `p.offers` of offer specs; `p.picks === p.offers.length`. Offers open only when the room is safe. API: `W.grantOffer(p, spec)`.
 - Spec `src`: `start` · `level` · `room` · `class` · `forge` · `epic`.
-- Cards: 3 (+1 with Crown of Choice); `epic` 4 (+1). An evolution card is prepended to `level`, `room` and `epic` offers and takes no slot. A draw that finds no card (pool exhausted) shows the Purse.
+- Cards: 3 (+1 with Crown of Choice, −1 with Doubt); `epic` 4 (+1, −1). An evolution card is prepended to `level`, `room` and `epic` offers and takes no slot. A draw that finds no card (pool exhausted) shows the Purse.
 - **start** (once, at run start; Head Start begins the party at a higher level, so its level offers come at once): 4 cards. Pyromancer, Cleric, Necromancer: their class gate plus 3 random other element gates. Knight, Ranger, Shade: 3 random element gates plus the Generalist gate (last).
 - **level**: every even level (2, 4, 6, …). Pool: open boons, non-gate boons of the hero's own paths (a Generalist: gated General boons), element gates while a slot is free (and no Generalist gate), keystones at affinity ≥ 5 (General 6). Weight = rarity weight (`c` 60, `r` 30 + 2.5s + 60·luck, `e` 10 + 2s + 40·luck, other 10) × (own path 2.5) × (gate 0.8); at most one gate per offer. Weapon-kind boons (`pierce`, `split`) need a projectile weapon. **Hygiene**: Opportunist needs a hero that can stun, freeze or blind a foe (`W.canDaze`: a Heavy fork, Knight, Shade, an owned `iceInfuse`, `arcStun`, `waveStun`, `sanctStun`, `cStun`, `chargeStun`, `orbitStun`, `knightStun`, `cometStun` or `parry`, or a stun or blind skill part whose stat is set: Skyfall, Verdict, Afterimage).
 - **room** (reward `boon`): the first drawn card = one unowned element gate while a slot is free (class element ×2); the rest from the hero's own paths, then open boons at rarity ≥ r. A Generalist draws the level pool.
-- **epic**: level pool, rarity ≥ r (commons fill the offer when fewer than 4 qualify), 4 cards, keystones ×2. Sources: elite-room reward (25%), boss of stratum III, shop (odd strata), altar.
+- **epic**: level pool, rarity ≥ r (commons fill the offer when fewer than 4 qualify), 4 cards, keystones ×2. Sources: elite-room reward (40%), boss of stratum III, shop (odd strata), altar.
 - **Max rank and the Purse**: a card at its max rank (`ED.maxRank`) is never offered, and `W.pickBoon` grants nothing for one (it still ends the offer). A draw that finds no card (pool exhausted, e.g. a Generalist with every card maxed) shows a Purse card (`purse`, flagged `purse: true`, in no pool): picking it adds `World.rewardGold(s)` (`round((15 + 8s) × World.goldMul(s))`, the gold a gold room reward pays) to the party gold and records no rank, so it has no sheet entry, affinity or deed count.
 - **forge**: up to 3 owned boons below max (no evolutions, never route or fork cards: fork ranks come from bosses, §5); picking ranks one up. None → level offer. Sources: normal-room reward (8%), rest-site anvil (odd strata), shop (even strata).
 - **class**: the route system (§5): team level 3 (route, `ctier` 1) and boss I (fork, `ctier` 2). Fixed cards, no draw padding, no prepends. A class spec of a hero that already holds a fork becomes a level offer. Fork ranks 2 and 3 are not offers: bosses II and III grant them (§5).
@@ -420,19 +420,111 @@ Four strata (`CONST.STRATA` 4), all neutral (no weak or resisted element): I **O
 - **Room xp** (combat and elite rooms): every room drops exactly `World.ROOM_XP` (combat 24 / 50 / 104 / 120, elite 38 / 80 / 166 / 190 by stratum; champion rooms 100 through `roomXp(room, 'champion')`; × `darkLoot()` (§7) in a dark room; not scaled by the party). A typical path (every combat room of strata I–III, a few in IV) reaches about team level 13 on entering the stratum IV boss room (the boss kills add `def.xp × (1 + 0.3(s − 1))`), about 32 boon picks over the run. `FODDER_XP_SHARE` (0.5) of it comes as motes from fodder kills (its share spread over the quota, whole units with the fraction carried). The planned wave foes share the rest: each kill drops its `World.threatXp` (`def.xp × (1 + 0.35(D − 1))` at the stratum's depth, ×3 for an elite) × `enc.xpK`, the factor that makes the planned waves fill that share exactly (fraction carried). Summons and splits in such a room drop none. A pile at the clear pays what the budget still owes. Outside these rooms (bosses, trials) a kill drops its `threatXp`.
 - **Rewards** are fixed at generation and shown on doors and the map before entering:
   - normal combat: `boon` 55% · `gold` 15% · `vigor` 10% · `forge` 20%. Each kind gets its share of the floor's combat rooms (rounded by a weighted draw on the remainders). A `boon` reward is claimed by each hero as a room offer drawn from that hero's own paths; no room pays a class card.
-  - elite: `epic` 25% · else `relic`. Champion: `relic`.
-- On clear, a `reward` prop appears at the room centre. Per-hero claims: `boon`, `forge`, `epic`, `vigor` (+2 max HP, heal 20%). Party claims (once): `gold` (`round((15 + 8s) × World.goldMul(s))`: 30 at stratum I, 20 / 25 / 31 at II–IV), `relic` (a relic hoard, one pick per hero).
+  - elite: `epic` 40% (`ELITE_EPIC`) · else `relic`. Champion: `relic`.
+- On clear, a `reward` prop appears at the room centre. Per-hero claims: `boon`, `forge`, `epic`, `vigor` (+2 max HP, heal 20%). Party claims (once): `gold` (`round((15 + 8s) × World.goldMul(s))`: 30 at stratum I, 20 / 25 / 31 at II–IV), `relic` (a relic pick: `World.spawnRelicPicks`, `PICKS` 3 relics per hero, at least common, champion rooms at least rare).
 - **Taken props** (client, `render.js` / `game.js`): a prop with `owner` (a pid, snapshot `O[10]`) is drawn, prompted and usable (host `interact`) only for its owner; a prop whose `group` the hero claimed (`'claimed'` messages) shows that hero an empty pedestal (no item, no lights, dimmed) and no prompt; any prop taken for the party (state 1) vanishes with a puff, except fixtures that show their used look (`Render.KEEP_USED`: chest, gamble shrine, fountain, altar, trial, portal, campfire, anvil).
-- **Boss**: 2 hearts and gold. Boss I: the class offer (the fork, §5). Bosses II and III: a fork rank for every hero. Boss II: a relic hoard (rarity ≥ r). Boss III: an `epic` offer per hero. Boss IV ends the run (victory).
+- **Boss**: 2 hearts and gold at the kill; the rest lands after a 2 s beat (`World.BOSS_BEAT`; host state `bossBeat`, `bossRewards(s)`): Boss I the class offer (the fork, §5) and a boss relic pick; Boss II a fork rank and a boss relic pick; Boss III a fork rank and an `epic` offer per hero; then the portal. Boss IV ends the run at once (victory).
 - **Breakable props** (`biome.breakable`: I urn, II mushroom, III coral, IV shard): floor gen puts decor of those kinds in `room.breakables` (never baked into the floor) on plain floor off door lanes, ≥ 1.1 tiles apart, ≥ 1.5 tiles from the centre (rooms without a fight: outside the prop band); combat, elite and boss rooms hold 4–8 (topped up from their own RNG stream), other rooms at most 3. A hero hit within 9 px breaks one (melee arc, hero projectile path, team-0 explosions and skill blasts, dash path, Holy lance, Shield Charge, Shield Throw, Shadowstep; damage-over-time zones, minions and beams do not); it drops 1–3 gold 25% of the time (exact, no gold multiplier) and a heart 1% of the time, never xp. `roomState.broken` is the room's bit mask, carried in full snapshots as `BR`; `{t:'smash', i, x, y, k, r}` announces each break.
 - **Rest site**: a campfire (heal 35%) and an anvil (forge offer); each hero uses one.
-- **Shop**: 2 relics, a healing potion (40%), an epic boon (75 gold) and a forge (`60 + 15s` gold). Relic, epic boon and draught prices scale 12% per stratum; every price is −4% per Merchant's Favor rank, −25% with Merchant's Ledger, ×1.4 under Pact 7, rounded to 5 (minimum 5).
+- **Shop**: 3 relics (a common, a rare and an epic; a fourth common with Merchant's Ledger), a healing potion (40%), an epic boon (65 gold) and a forge (`60 + 15s` gold). Relic, epic boon and draught prices scale 12% per stratum; every price is −4% per Merchant's Favor rank, × (1 − `discount`), × (1 + `markup`, the party's highest: Midas' Touch +50%, Greed's Toll +30%), ×1.4 under Pact 7, rounded to 5 (minimum 5). Boss relics and curses are never sold.
+- **Treasure chest**: 40% (`CHEST_RELIC`) a relic hoard (one relic per hero, +1 solo; each hero takes one) and `5 + 3s` gold; else `20 + 8s` gold and a heart.
 - **Event rooms** (`src/sim/events.js`, `src/data/events.js`): floor gen leaves `room.event` null; the host draws the identity on first entry (or when a map outcome reveals it) from the stratum's events, the shared pool (`strata` null) and `ED.MINIGAMES`, minus `run.evSeen` (never twice in a run; when every one is seen, any common unchained event again), passing `req(w)`, by weight `w`; a rare event (`rare`) with chance `ED.Events.RARE` 5% while one is left; only `w.rng`. Doors, the map and the HUD show an unknown event as a mint '?' ("Event") until drawn or revealed, then the event's icon and name.
-  - **Room patches** (`W.patchRoom(id, patch ⊂ { type, reward, event, reveal })`): unvisited rooms only, never the start or boss. The host keeps the merged patch per room (`w.patches`, cleared per stratum; a new type drops the earlier reward, event and reveal) and applies it with `Dungeon.patchRoom`; a type change rebuilds the room deterministically from its seed (`Dungeon.retype`: seed `seed0 ^ imul(RETYPE index, 0x9e3779b1)`, size, doors, interior, decor, threat; elite reward epic 25% else relic, combat boon). Full snapshots carry the patches (`RP`, applied by `Dungeon.applyPatches` when a room's patch changed), so a late joiner rebuilds the same rooms; `w.patchN` joins the prop signature.
-  - **Text events**: a prop of the event's look (`def.look`) at the room centre carries the def id (`prop.ev`, snapshot `O[10]`). A personal event (`party` false) opens a dialog per hero, each choosing once; a party event opens one vote of the living heroes: majority wins, a tie goes to the host's (slot 0) vote, else the safe choice; after `VOTE_T` 15 s a missing vote counts as the safe choice; dead heroes are not waited for. Dialog: title, flavour, 2–4 choices with costs (a hidden outcome reads "???"; an unaffordable choice is greyed and refused), then the result (flavour and outcome lines; an outcome that opens an offer closes the dialog into a toast). Keys `Digit1`–`Digit4`, W/S and attack or Enter, mouse, pad; the choices ignore input for `LOCK` 0.6 s after opening (a visible fill). Host-authoritative: the client sends `{ t: 'evChoice', i, k }`; every roll is the host's (`def.roll`, per room).
+  - **Room patches** (`W.patchRoom(id, patch ⊂ { type, reward, event, reveal })`): unvisited rooms only, never the start or boss. The host keeps the merged patch per room (`w.patches`, cleared per stratum; a new type drops the earlier reward, event and reveal) and applies it with `Dungeon.patchRoom`; a type change rebuilds the room deterministically from its seed (`Dungeon.retype`: seed `seed0 ^ imul(RETYPE index, 0x9e3779b1)`, size, doors, interior, decor, threat; elite reward epic at `ELITE_EPIC` else relic, combat boon). Full snapshots carry the patches (`RP`, applied by `Dungeon.applyPatches` when a room's patch changed), so a late joiner rebuilds the same rooms; `w.patchN` joins the prop signature.
+  - **Text events**: a prop of the event's look (`def.look`) at the room centre carries the def id (`prop.ev`, snapshot `O[11]`). A personal event (`party` false) opens a dialog per hero, each choosing once; a party event opens one vote of the living heroes: majority wins, a tie goes to the host's (slot 0) vote, else the safe choice; after `VOTE_T` 15 s a missing vote counts as the safe choice; dead heroes are not waited for. Dialog: title, flavour, 2–4 choices with costs (a hidden outcome reads "???"; an unaffordable choice is greyed and refused), then the result (flavour and outcome lines; an outcome that opens an offer closes the dialog into a toast). Keys `Digit1`–`Digit4`, W/S and attack or Enter, mouse, pad; the choices ignore input for `LOCK` 0.6 s after opening (a visible fill). Host-authoritative: the client sends `{ t: 'evChoice', i, k }`; every roll is the host's (`def.roll`, per room).
   - **Outcomes** (`ED.Events.outcome(w, p | null, spec)`; p null = every living hero, party parts once): `gold` ± (party gold, never below 0), `heal` ± fraction of max health (never below 1), `raise`, `maxHp` ±, `offer` boon (a room offer) / epic / forge (`offerN`), `relic` rarity (a hero: one relic; party: a hoard, one pick each), `removeRelic` (random / 'curse' / an id; with `relic`: a swap), `curse` (a curse relic, `rar` 'curse'; −2 max health while none exist), `lore` (a page; 'rare'), `flag` (run chain flags), `map` (reveal / gild / a room type for up to `mapN` plain fights within 3 rows ahead), `fight` ambush / elite with `pay` on the win. An event fight locks the room for two waves (elite: the Champion's Trial waves, embers 4 + s; ambush: weighted roster 2 + n and 3 + n, an elite leads wave 2 from stratum II, embers 1 + s) and pays its spec to the party when the last foe falls.
   - **Pools** (36 events; stratum IV draws from the shared pool and the chains): shared Still Fountain (heal 50%, raise; or 40 gold for ???), Blood Altar (health for an epic boon), Gambler's Shrine (`35 + 18s` gold for a relic, or × 1.8 for a rare or better that may bite), Champion's Trial (elite fight: a rare relic each and gold), The Cartographer (reveal events / a fight becomes a rest), Collapsed Stair, Chained Coffer (a rare relic and a curse), Three Statues (pay one of three for ???), Ember Pilgrim (forge, epic, or a relic for two offers), Lost Delver (I–II: help or rob her; flags `delver` / `robbed`); rare Sealed Library, Hollow Mirror (relic up a rarity, or an epic and a curse), The Hollow Herald (II–IV: a legendary relic and a curse each, or an elite fight); I Gravekeeper's Debt (borrow gold, flag `debt`), Locked Reliquary (flag `key`), Bone Choir, Ossuary Scales, Restless Knight, Rattling Coffin; II Spore Garden (flag `seed`), Mire Hag, Glowing Pool, Sunken Caravan, Fungal Oracle, The Lantern-Bearer; III The Ferryman, Tide Bell, Votive Pool, The Drowned Abbot (lift a curse), Flooded Armory, Giant Clam. Chains (weight 60 once their flag is set): The Delver Returns / Debt of the Road (II–IV), The Collector (II–III, after the debt), Drowned Vault (III, the key), Bloom in the Deep (III, the seed).
-- **Relics**: 31, all in the drop pool from the first descent (common 8, rare 12, epic 6, legendary 5). No relic carries an element: the 14 element relics are gone (their path boons Storm Call, Thunder Gauntlet, Frozen Heart and Soul Jar are now retired, §3). There is no Codex and no Generalist relic rule. `RELIC_PRICE` c 70 · r 110 · e 160 · l 220. A roll draws at or above the requested rarity from the relics no hero holds (the whole list when every relic is held); weights c 50, r 34 + 3s, e 14 + 3s, l 3 + s. No Hearth upgrade grants a relic; the Stash (§9) starts a descent with gold.
+- **Relics**: 83: common 28, rare 23, epic 12, boss 10, curse 10. Each changes a rule or makes a trade; none carries an element or a path. `RELIC_PRICE` c 60 · r 90 · e 130. A roll (`rollRelic(minRar, exclude)`) draws at or above the requested rarity from c / r / e relics no hero holds (the whole list when every one is held), weights `World.RELIC_W(s)` c 60 − 8k, r 32 + 4k, e 8 + 4k (k = min(3, s − 1)); `'boss'` and `'curse'` draw only those, evenly, and only when asked for exactly. No Hearth upgrade grants a relic; the Stash (§9) starts a descent with gold.
+- **Relic sources**: elite rooms (60% of them), champion rooms, bosses I and II (boss relics), chests (40%), shops and events. A **relic pick** gives every hero its own row of 3 relics (4 with Void Stone; `owner` = the hero, one `group` per hero): only the owner sees and takes them, and taking one crumbles the owner's others. A full typical path holds about 8–10 relics (elite picks ~3.3, chests ~1.2, boss picks 2, champions 2, shop buys ~1).
+- **Curses** (`rar` 'curse'): never rolled unless asked for exactly (Pandora's Box, events), never sold, not counted as held relics (deeds, summary, Philosopher's Stone), listed apart on the sheet. A curse with `lift { on, n }` is removed after n counted moments (fights won, kills, elite kills, boon picks, stratum starts); `p.rs[id]` holds the count.
+- **Relic engine** (`src/sim/relics.js`, host only): `mods` is the stat side (`ED.Stats`); `ED.RELIC_FX[id]` holds the rule as hooks. `World.recalc` rebuilds each hero's hook lists `p.rh` (hook → relic ids), so a hook no relic holds costs one property check at its call site. Hooks: hitMul · crit · hit · attack · hurtPre · hurtMul · hurt · lethal · kill (not fodder) · lock · clear · enter · cast · dash (effects only) · gold · heart · boon · stratum · level · down · revive · shop · tick · get; `aura` (Banner of Unity) reaches every hero near its holder. `giveRelic(p, id)` / `removeRelic(p, id)` rebuild and sync the build; `p.rs` (run counters) rides the build, `p.rt` (timers, flags) stays on the host. Map relics change unvisited rooms through `patchRoom` when it exists.
+- **Relic list** (`src/data/relics.js`; the rule text is the card text, numbers in `v`, `pw` and `mods`):
+
+| Rarity | id | Relic | Rule |
+| --- | --- | --- | --- |
+| c | `whetstone` | Whetstone | Every 4th attack deals +60% damage. |
+| c | `lodestone` | Lodestone | Gold and experience fly to you from anywhere in the room. Hearts heal you 25% less. |
+| c | `pauldron` | Spiked Pauldron | A foe that hits you takes 150% Power and is knocked back. |
+| c | `coin` | Lucky Coin | Gold you pick up has a 12% chance to be worth five times as much. |
+| c | `elixir` | Elixir Flask | Once per stratum, dropping below 30% health heals you 30% of your max health. |
+| c | `boots` | Traveler's Boots | Weapon hits in the 0.6 s after a dash deal +40% damage. |
+| c | `buckler` | Iron Buckler | The first hit you take in each fight is blocked. |
+| c | `heartstone` | Heartstone | +6 max health. All healing you receive is 25% weaker. |
+| c | `hourglass` | Sand Hourglass | When a fight starts, your skills are recharged. |
+| c | `glasseye` | Glass Eye | Your hits on foes at full health always crit. |
+| c | `lantern` | Soul Lantern | A brighter light. In dark rooms you deal +20% damage. |
+| c | `pristine` | Pristine Halo | At full health you deal +20% damage. |
+| c | `rage` | Blood Rage | Below 40% health you deal +30% damage. |
+| c | `wraps` | Brawler's Wraps | +25% damage to foes within 70 of you; 15% less to foes beyond 150. |
+| c | `spyglass` | Spyglass | +25% damage to foes beyond 180 of you; 15% less to foes within 70. |
+| c | `bandage` | Field Bandage | Clearing a fight heals you 2 health. |
+| c | `gust` | Gust Charm | Dashing knocks back foes within 70 of you and deals 60% Power to them. |
+| c | `warchest` | War Chest | The party gains 25 gold now and at the start of each stratum. |
+| c | `quill` | Gilded Quill | Each boon you pick gives the party 5 gold. |
+| c | `clover` | Four-Leaf Clover | +1 boon reroll now and at the start of each stratum. |
+| c | `ledger` | Merchant's Ledger | Shops stock one more relic. |
+| c | `haggle` | Haggler's Charm | The first item you buy in each shop costs half: the other half comes back as gold. |
+| c | `compass` | Explorer's Compass | Event rooms on the map show what they hold. Entering an event room gives the party 10 gold. |
+| c | `tooth` | Shark Tooth | Killing an elite readies 3 crits; any other kill readies 1 (at most 3 ready). |
+| c | `piggy` | Piggy Bank | Entering a shop, the party gains 15% of its gold (at most 30). |
+| c | `lifeline` | Lifeline Rope | You revive allies twice as fast, and an ally you revive rises with 60% health. Once per stratum, falling below 25% health knocks back and stuns foes within 140 of you for 1 s. |
+| c | `contract` | Bounty Contract | Elites you kill drop 10 gold; champions 30. |
+| c | `star` | Wishing Star | Each level-up readies 2 crits and heals you 1 health. |
+| r | `satchel` | Bomb Satchel | Dashing drops a bomb that explodes for 200% Power. |
+| r | `cloak` | Shadow Cloak | Dashing hides you from foes for 0.8 s; attacking ends it. |
+| r | `wardrum` | War Drum | +25% damage in elite, champion and boss rooms; 5% less in other fights. |
+| r | `axe` | Headsman's Axe | Your hits kill foes below 12% health (elites below 6%). Not bosses or champions. |
+| r | `seeker` | Seeker Gem | Your shots seek foes. Melee reach +20%. |
+| r | `mirror` | Mirror Shard | Every 3rd projectile that would hit you is shrugged off. |
+| r | `aegis` | Aegis Charm | Every 10 s, the next hit you take is blocked. |
+| r | `mask` | Berserker Mask | +35% damage. You take 20% more damage. |
+| r | `idol` | Golden Idol | +1% damage for every 15 party gold (at most +20%). |
+| r | `banner` | Banner of Unity | You and every ally within 200 of you deal +12% damage. |
+| r | `skull` | Cursed Skull | Take 25% more damage. Earn 50% more embers this run. |
+| r | `bloodstone` | Heartwood | Hearts heal you twice as much. 3 less max health. |
+| r | `nail` | Rusted Nail | Each of your hits on a foe makes it take +3% more from your hits (at most +30%). |
+| r | `keg` | Powder Keg | Foes you kill (not fodder) burst for 100% Power around them. |
+| r | `lens` | Focusing Lens | Weapon hits in the 1.5 s after you cast a skill deal +40% damage. |
+| r | `rune` | Rune of Echoes | Every 4th cast of skill 1 or skill 2 is refunded. |
+| r | `core` | Overcharged Core | Skill hits deal +30% damage; weapon hits 15% less. |
+| r | `stoneskin` | Stoneskin Idol | Take 30% less damage after standing still for 0.5 s. |
+| r | `lastbreath` | Last Breath | Below 30% health, 35% of hits miss you. |
+| r | `oath` | Oathstone | When an ally goes down or you fall below 30% health, you deal +40% damage for 8 s (once per fight). |
+| r | `dice` | Loaded Die | Now and at the start of each stratum, every gold reward on the map becomes a boon, forge or vigor reward. |
+| r | `ink` | Cartographer's Ink | Now and at the start of each stratum, two combat rooms ahead turn into event rooms. |
+| r | `relay` | Shared Spoils | Hearts you pick up also heal allies within 250 of you by half as much. Alone, hearts heal you 30% more. |
+| e | `phoenix` | Phoenix Feather | Once per run, a killing blow raises you at 50% health in a blast of 300% Power. |
+| e | `angel` | Guardian Angel | Once per stratum, a killing blow leaves you at 1 health instead. |
+| e | `twinfang` | Twin Fang | Every 4th attack strikes twice. |
+| e | `chalice` | Grail of Ages | +1 max health per 12 kills this run (at most +8; growth does not heal). At +8: +10% damage. |
+| e | `stone` | Philosopher's Stone | +2% damage and +0.5 max health per relic held (curses do not count). |
+| e | `kingslayer` | Kingslayer | +35% damage to elites, champions and bosses; 10% less to other foes. |
+| e | `glassheart` | Glass Heart | +45% damage. 40% less max health. |
+| e | `soulcage` | Soul Cage | Every 12th foe you kill (not fodder) frees a spirit that strikes the 5 nearest foes for 250% Power. |
+| e | `thorncrown` | Crown of Thorns | When a foe hits you, every foe within 160 of you takes 300% Power and is knocked back. You take 10% more damage. |
+| e | `timestop` | Stopped Clock | For the first 5 s of each fight, every foe that appears is stunned for 2 s (elites 1 s). Not bosses. |
+| e | `metronome` | Metronome | Every 8th attack is a crit that deals +50% damage. |
+| e | `ricochet` | Ricochet Coin | Your crits bounce: the nearest other foe within 150 takes 50% of the hit. |
+| boss | `crown` | Crown of Choice | Every boon offer shows one more card. Campfires no longer heal you. |
+| boss | `midas` | Midas' Touch | Gold you pick up is doubled. Shop prices +50%. |
+| boss | `ironclad` | Ironclad Plate | Take 35% less damage. You move 15% slower. |
+| boss | `sundial` | Sundial | Skills recharge 40% faster. Your weapon deals 20% less damage. |
+| boss | `eyeoffate` | Eye of Fate | Boon offers lean far toward rarer cards. You lose every boon reroll and gain none. |
+| boss | `pandora` | Pandora's Box | Gain 2 random epic relics and 2 random curses. |
+| boss | `voidstone` | Void Stone | Your relic picks show 4 relics instead of 3. Elites and champions deal 25% more damage to you. |
+| boss | `bloodpact` | Blood Pact | +35% damage. All healing you receive is halved. |
+| boss | `warpath` | Warpath Totem | Every fight adds one more elite to its last wave. Elites you kill drop a heart and 15 gold. |
+| boss | `ghostlantern` | Ghost Lantern | Odd levels grant a boon offer as well. Gold you pick up is worth nothing. |
+| curse | `c_frailty` | Frailty | 15% less max health. Lifts after you clear 5 fights. |
+| curse | `c_rust` | Rust | Your weapon deals 15% less damage. Lifts after 40 kills. |
+| curse | `c_greed` | Greed's Toll | Shop prices +30%. |
+| curse | `c_dread` | Dread | Elites and champions deal 25% more damage to you. Lifts after you kill 3 elites. |
+| curse | `c_clumsy` | Clumsiness | Your first hit on each foe deals 50% less. Lifts after you clear 3 fights. |
+| curse | `c_decay` | Decay | Hearts heal you half as much. Lifts at the start of the next stratum. |
+| curse | `c_doubt` | Doubt | Boon offers show one card fewer. Lifts after you pick 3 boons. |
+| curse | `c_leaden` | Leaden Feet | You move 10% slower. Lifts after you clear 4 fights. |
+| curse | `c_pain` | Hex of Pain | Every hit you take costs 1 more health. Lifts after 50 kills. |
+| curse | `c_poverty` | Poverty | Gold you pick up is worth 30% less. |
+
 - XP from level L to L+1: `round(30 + 3(L−1) + 6(L−1)²)`. Even levels grant a `level` offer; level 3 also grants the route card.
 - Every gold drop (kills, room clears, chests, rewards, bosses) is scaled by `World.goldMul(s)` = 0.65 (`World.GOLD_MUL`) × `World.GOLD_S` 2 / 1 / 1 / 1 by stratum (stratum I: room clear 7, a foe drop 1 or 3, an elite 4); shop prices are not scaled. A solo stratum I path holds about 70–90 gold on reaching a row 5–7 shop (a party of two about 80–110; the purse is shared).
 

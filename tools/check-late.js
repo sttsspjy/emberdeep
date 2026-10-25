@@ -24,7 +24,7 @@ const rolls = (w, p, src, k) => { const out = []; for (let i = 0; i < (k || 60);
 // ---------------- the removed layers are gone ----------------
 ok(['TWIST_IDS', 'ASC_IDS', 'MUT_IDS', 'MUTATIONS', 'TWIST', 'TWIST_C', 'LATE', 'DUOS', 'duoOf', 'DUO_AFFINITY'].every(k => ED[k] === undefined), 'no Twist, Ascended, Mutation, late-fill or duo tables');
 ok(ED.BOON_IDS.every(id => { const b = ED.BOONS[id]; return !b.twist && !b.mut && !b.asc && !b.duo && !b.attune; }), 'no card of a removed kind');
-ok(Object.keys(ED.RARITY).join() === 'c,r,e,l', 'four rarities (common, rare, epic, legendary)');
+ok(Object.keys(ED.RARITY).join() === 'c,r,e,l,boss,curse', 'four boon rarities (common, rare, epic, legendary) and the two relic-only ones (boss, curse)');
 {
   const kinds = new Set();
   for (let s = 1; s <= ED.CONST.STRATA; s++) for (let seed = 1; seed <= 12; seed++) for (const r of ED.Dungeon.generate(s, seed).rooms) if (r.reward) kinds.add(r.reward);

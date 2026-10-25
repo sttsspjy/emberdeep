@@ -28,7 +28,7 @@ const vm = require('vm');
 const path = require('path');
 const ROOT = path.join(__dirname, '..', 'src') + '/';
 const files = ['util.js', 'data/biomes.js', 'data/enemies.js', 'data/classes.js', 'data/boons.js', 'data/classboons.js', 'data/relics.js', 'data/meta.js', 'data/lore.js', 'data/events.js', 'save.js',
-  'sim/dungeon.js', 'sim/stats.js', 'sim/world.js', 'sim/combat.js', 'sim/elements.js', 'sim/build.js', 'sim/skills.js', 'sim/class-knight.js', 'sim/class-ranger.js', 'sim/class-pyro.js', 'sim/class-shade.js', 'sim/class-cleric.js', 'sim/class-necro.js', 'sim/class-bell.js',
+  'sim/dungeon.js', 'sim/stats.js', 'sim/world.js', 'sim/combat.js', 'sim/elements.js', 'sim/build.js', 'sim/relics.js', 'sim/skills.js', 'sim/class-knight.js', 'sim/class-ranger.js', 'sim/class-pyro.js', 'sim/class-shade.js', 'sim/class-cleric.js', 'sim/class-necro.js', 'sim/class-bell.js',
   'sim/ai.js', 'sim/bosses.js', 'sim/boss-warden.js', 'sim/boss-spore.js', 'sim/rooms.js', 'sim/events.js', 'sim/arena.js', 'sim/boss-king.js', 'sim/boss-hollow.js', 'sim/champions.js', 'sim/sheet.js'];
 // Main context, not vm.createContext: inside a vm context every global read (Math, Object, ...) goes through the context interceptor and the sim runs ~3x slower.
 for (const f of files) vm.runInThisContext(fs.readFileSync(ROOT + f, 'utf8'), { filename: f });
@@ -685,7 +685,7 @@ function wantedProp(w, p) {
     switch (x.kind) {
       case 'reward': s = PER_HERO_REWARDS.includes(x.item) && p.claimed[x.group] ? 0 : 9; break;
       case 'chest': s = 8; break;
-      case 'relic': s = p.claimed[x.group] ? 0 : 7 + (w.botSmart ? relicScore(w, p, x) : 0); break;
+      case 'relic': s = p.claimed[x.group] || (x.owner && x.owner !== p.pid) ? 0 : 7 + (w.botSmart ? relicScore(w, p, x) : 0); break; // a per-hero pick: its owner only
       case 'campfire': s = !p.claimed[x.group] && hurt ? 8 : 0; break;
       case 'anvil': s = !p.claimed[x.group] && !hurt ? 8 : 0; break;
       case 'shop':
@@ -911,7 +911,7 @@ function skipStrata(w, from, ctx, policy, brng, darkPolicy, fight) {
       const h = hop();
       if (!h) break;
       w.enterRoom(h[0], h[1]);
-      for (let i = 0; i < 60 * 150 && w.locked && w.state === 'play'; i++) tick();
+      for (let i = 0; i < 60 * 150 && (w.locked || w.bossBeat) && w.state === 'play'; i++) tick(); // a boss room also waits out the reward beat
       claim();
     }
     const portal = w.props.find(x => x.kind === 'portal' && !x.state);

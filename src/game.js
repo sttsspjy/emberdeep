@@ -404,7 +404,7 @@
       const p = s.mirror.players.get(ev.b.pid);
       if (p) {
         const hadEcho = p.stats.maxCharges;
-        p.boons = ev.b.boons; p.relics = ev.b.relics; p.chaliceHp = ev.b.chaliceHp; p.bonusHp = ev.b.bonusHp || 0; s.mirror.recalc(p);
+        p.boons = ev.b.boons; p.relics = ev.b.relics; p.chaliceHp = ev.b.chaliceHp; p.bonusHp = ev.b.bonusHp || 0; p.rs = ev.b.rs || {}; s.mirror.recalc(p);
         if (p === s.me && p.stats.maxCharges > hadEcho) s.ctl.charges++;
       }
     } else if (ev.t === 'boon' && s.mode !== 'client' && ev.pid === s.localPid) {

@@ -248,7 +248,7 @@ for (const mode of ['proj', 'zone', 'tick']) {
   near(q3.hp, Math.round(q3.maxHp * 0.5) + 0.04 * q3.maxHp, 1, 'Provisions 2 heals 4% of max health at stratum II');
   q3.hp = Math.round(q3.maxHp * 0.5); w3.onStratumBuild(q3, 1); ok(q3.hp === Math.round(q3.maxHp * 0.5), 'and nothing at stratum I');
   const price = (r) => mk([{ favor: r }]).priceOf({ type: 'boon' });
-  ok(price(0) === 75 && price(1) === 70 && price(2) === 70, "Merchant's Favor: 4% cheaper per rank (the 75-gold epic boon: 75, 70, 70)");
+  ok(price(0) === 65 && price(1) === 60 && price(2) === 60, "Merchant's Favor: 4% cheaper per rank (the 65-gold epic boon: 65, 60, 60)");
 }
 // ---- stratum maps: layered graph, forward exits, threat pips, rewards, deterministic per seed ----
 {
