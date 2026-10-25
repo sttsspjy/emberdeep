@@ -1,7 +1,7 @@
 // Boon card art (client only, ED.CardArt): one 9-slice frame mask per card kind, rarity metals, idle and pick sprites, icon URLs at 1 icon px = 1 art px.
 // Frame masks are 40 x 40 art px, slice 16, edges tiled (border-image repeat, 8 art px period): the card box starts at mask px 8 (the band's outer outline), so
 // 8 art px of ornament sit outside the box. d = distance to the mask edge: band outline 8, metal 9-10 (lit on the top and left), outline 11, path line 12.
-// Mask chars: o outline, M m d metal (rarity), Y P p q path tones (hi to dark), y X x z second path tones (duo), w white, k soot black, s soot,
+// Mask chars: o outline, M m d metal (rarity), Y P p q path tones (hi to dark), w white, k soot black, s soot,
 // G g gold trim, L l n leather, '.' transparent, '_' cleared. Ornaments are drawn as fills; finish() outlines every fill outside the band.
 // Frames bake on first use (ED.PixUI.frame) and publish --fr-card-<kind>[-<extra>]-<metal>[-big]; sprites bake at boot as --fr-cfx-<name>.
 (function (ED) {

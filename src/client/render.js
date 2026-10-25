@@ -340,7 +340,6 @@
       const wp = atlasOn ? AC.windupP(e) : F.windupP(e); if (wp > 0.05) R.glow(c, e.x, e.y + (an ? an.cy : -e.r * 1.2), e.r * (1.5 + wp), wp > 0.8 ? '#ffd0a0' : '#ff5a3a', 0.12 + 0.5 * wp * wp);
     }
     for (let i = 0; i < ng; i++) { const g = glowQ[i]; R.glow(c, g.x, g.y, g.r, g.c, g.a); }
-    F.addK = biome.id === 'rimefrost' ? 0.55 : 1; // strength of pops, pillars and additive sprites: lowered on the pale Rimefrost floor
     F.drawGlow(c, t);
     c.globalCompositeOperation = 'source-over';
     // ---- overlays above lighting ----

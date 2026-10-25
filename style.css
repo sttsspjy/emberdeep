@@ -510,8 +510,6 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 .stratum.unseen::before { content: ""; position: absolute; z-index: -1; inset: 0; pointer-events: none; background: var(--fr-lockdither) 0 0 / calc(2 * var(--p)) calc(2 * var(--p)); image-rendering: pixelated; }
 .stratum.unseen b, .stratum.unseen small { color: var(--faint); }
 
-/* elemental affinity chips: flat tint of the path colour, 1 fine px line, hard outline; resist = dark chip */
-
 /* ---------- lobby ---------- */
 .lobby-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: calc(4 * var(--p)); align-items: stretch; }
 .lobby-party, .lobby-pick { padding: calc(7 * var(--p)) calc(8 * var(--p)); display: flex; flex-direction: column; gap: calc(2 * var(--p)); }
@@ -640,7 +638,6 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 .boon-card .bweap small { font: 400 var(--fs-sm)/1.25 var(--f-body); color: var(--muted); display: block; }
 .boon-card .bweap > div, .boon-card .bweap > span { min-width: 0; }
 .boon-card .bc-wimg { flex: none; width: calc(44 * var(--pf)); height: calc(44 * var(--pf)); image-rendering: pixelated; } /* the 88 px canvas draws 2 canvas px per sprite px: 1 sprite px = 1 fine px */
-.bc-weak { display: inline-flex; align-items: center; padding: 0 calc(3 * var(--pf)); font: 700 var(--fs-sm)/1.25 var(--f-body); color: var(--pc); background: color-mix(in srgb, var(--pc) 16%, #120c09); border: var(--pf) solid var(--pc); box-shadow: 0 0 0 var(--pf) var(--px-ol); white-space: nowrap; }
 
 /* card art layer: sprites at 1 art px per sprite px; strips run with steps() at --sd x --spd (focus doubles the pace) */
 .bc-art { position: absolute; inset: 0; pointer-events: none; }
@@ -705,8 +702,7 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 .boon-cards.dense .bc-ribbon { grid-column: 1 / -1; justify-self: center; }
 .boon-cards.dense .bc-top { grid-column: 1 / -1; }
 .boon-cards.dense .bc-icon { grid-column: 1; grid-row: span 4; }
-.boon-cards.dense :is(.bn, .bsub, .bd, .bk, .bdl, .bplay, .bweap, .bc-weak) { grid-column: 2; }
-.boon-cards.dense .bc-weak { justify-self: start; }
+.boon-cards.dense :is(.bn, .bsub, .bd, .bk, .bdl, .bplay, .bweap) { grid-column: 2; }
 .boon-cards.dense .bn { font-size: var(--fs-xl); }
 .boon-cards.dense .bd { flex: none; }
 @media (max-width: 1100px) { .boon-cards:not(.n1) { --n: 2; } }
