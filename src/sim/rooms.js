@@ -16,10 +16,10 @@
   // Regular foes of a biome that exist in the enemy table (rosters may name foes whose definitions land later).
   const rosterOf = (biome) => biome.enemies.filter(r => { const d = ED.ENEMIES[r[0]]; return d && !d.boss && !d.ally && !d.minion; });
 
-  // Spawn zones still counting down: any, threat only (a fodder pack carries n and never holds a threat wave or the clear back), and the foes they will add; a Hunted champion's zone (z.hunt) counts in none.
-  const pendingSpawns = (w) => w.zones.some(z => z.kind === 'spawn' && !z.dead && !z.hunt);
-  const pendingThreat = (w) => w.zones.some(z => z.kind === 'spawn' && !z.n && !z.dead && !z.hunt);
-  const pendingFoes = (w) => { let n = 0; for (const z of w.zones) if (z.kind === 'spawn' && !z.dead && !z.hunt) n += z.n || 1; return n; };
+  // Spawn zones still counting down: any, threat only (a fodder pack carries n and never holds a threat wave or the clear back), and the foes they will add.
+  const pendingSpawns = (w) => w.zones.some(z => z.kind === 'spawn' && !z.dead);
+  const pendingThreat = (w) => w.zones.some(z => z.kind === 'spawn' && !z.n && !z.dead);
+  const pendingFoes = (w) => { let n = 0; for (const z of w.zones) if (z.kind === 'spawn' && !z.dead) n += z.n || 1; return n; };
 
   // ---------------- encounters ----------------
   // A champion room (stratum IV, room.champ 'twins' | 'mimic') runs W.startChampion (champions.js); its xp budget roomXp(room, 'champion') is paid as the clear pile.
@@ -200,14 +200,12 @@
     if (!enc) return;
     enc.t -= dt; enc.age = (enc.age || 0) + dt;
     if (enc.kind === 'waves') {
-      if (enc.hunt && enc.hunt.killed && !enc.huntPaid) this.huntedPaid(enc);
       const P = ED.World.PACE, threat = this.hostiles(true);
       const last = enc.wave >= enc.waves.length - 1;
       if (!last && enc.t <= 0 && !pendingThreat(this) && (enc.wave < 0 || enc.age >= P.maxAge || threat <= Math.max(1, Math.floor(enc.waves[enc.wave].length * P.nextAt)))) {
         enc.wave++; enc.age = 0;
         this.spawnWave(enc.waves[enc.wave]);
         this.spawnPacks(enc, enc.wave);
-        if (enc.wave === 1 && huntedParty(this)) this.spawnHunted(enc);
         enc.t = P.gap;
       } else if (last && threat === 0 && !pendingThreat(this) && enc.t <= 0) {
         this.crumbleFodder();
@@ -263,7 +261,6 @@
     if (room.dark) this.run.darkCleared++;
     if (room.type === 'champion') this.run.champs = (this.run.champs | 0) | (room.champ === 'mimic' ? 2 : 1); // bit 0 twins, bit 1 mimic (deeds)
     if (room.bell) this.bellClear();
-    this.huntedLeave();
     this.run.embers.rooms += 1 + Math.round(s / 2);
     const c = this.alivePlayers()[0] || D.center(room);
     const enc = this.enc;
@@ -313,7 +310,7 @@
     this.spawnPickup('heart', e.x, e.y, 1); this.spawnPickup('heart', e.x, e.y, 1);
     for (const q of this.players.values()) q.mantleAmt = 0;
     if (s === 1) for (const q of this.players.values()) this.grantOffer(q, { src: 'class' }); // the fork offer at the first boss (downed heroes get it when they are back up)
-    else if (s === 2 || s === 3) for (const q of this.players.values()) { this.grantForkRank(q); this.grantOffer(q, { src: 'twist' }); } // fork rank 2 and 3 at once and a Twist offer, downed and dead heroes too
+    else if (s === 2 || s === 3) for (const q of this.players.values()) this.grantForkRank(q); // fork rank 2 and 3, downed and dead heroes too
     if (s >= ED.CONST.STRATA) {
       this.run.embers.victory = 60;
       this.endRun(true);
@@ -390,8 +387,7 @@
     return Math.max(5, Math.round(base / 5) * 5);
   };
 
-  const PER_HERO_REWARDS = new Set(['boon', 'forge', 'epic', 'vigor', 'twist']);
-  const forage = (p, share) => share + ED.World.FORAGER * (p.stats.forager || 0); // a heal share of max HP plus Forager's
+  const PER_HERO_REWARDS = new Set(['boon', 'forge', 'epic', 'vigor']);
   const allClaimed = (w, group) => [...w.players.values()].every(q => q.dead || q.claimed[group]);
 
   W.interact = function (pid, propId) {
@@ -416,8 +412,8 @@
           if (p.claimed[pr.group]) { this.msgs.push({ to: pid, t: 'toast', text: 'You already claimed this reward.' }); return; }
           p.claimed[pr.group] = true;
           if (item === 'boon') this.grantOffer(p, { src: 'room' });
-          else if (item === 'vigor') { p.bonusHp += 2; this.recalc(p, false); this.healPlayer(p, p.maxHp * forage(p, 0.2)); this.sendBuild(p); }
-          else this.grantOffer(p, { src: item }); // forge, epic, twist
+          else if (item === 'vigor') { p.bonusHp += 2; this.recalc(p, false); this.healPlayer(p, p.maxHp * 0.2); this.sendBuild(p); }
+          else this.grantOffer(p, { src: item }); // forge, epic
           this.msgs.push({ to: pid, t: 'claimed', group: pr.group });
           if (allClaimed(this, pr.group)) pr.state = 1;
         } else {
@@ -433,7 +429,7 @@
         // one use per hero across both props of the rest site
         if (p.claimed[pr.group]) { this.msgs.push({ to: pid, t: 'toast', text: 'You already used this rest site.' }); return; }
         p.claimed[pr.group] = true;
-        if (pr.kind === 'campfire') this.healPlayer(p, p.maxHp * forage(p, 0.35));
+        if (pr.kind === 'campfire') this.healPlayer(p, p.maxHp * 0.35);
         else this.grantOffer(p, { src: 'forge' });
         this.msgs.push({ to: pid, t: 'claimed', group: pr.group });
         this.emit({ t: 'claim', pid, item: pr.kind, x: pr.x, y: pr.y });
@@ -457,14 +453,14 @@
         this.gold -= pr.price; pr.state = 1;
         this.emit({ t: 'buy', pid, x: pr.x, y: pr.y });
         if (pr.stype === 'relic') this.giveRelic(p, pr.item);
-        else if (pr.stype === 'potion') this.healPlayer(p, p.maxHp * forage(p, 0.4));
+        else if (pr.stype === 'potion') this.healPlayer(p, p.maxHp * 0.4);
         else if (pr.stype === 'boon') this.grantOffer(p, { src: 'epic' });
         else if (pr.stype === 'forge') this.grantOffer(p, { src: 'forge' });
         break;
       }
       case 'fountain': {
         pr.state = 1;
-        for (const q of this.players.values()) { if (q.downed) { q.downed = false; q.hp = 1; } this.healPlayer(q, q.maxHp * forage(q, 0.5)); }
+        for (const q of this.players.values()) { if (q.downed) { q.downed = false; q.hp = 1; } this.healPlayer(q, q.maxHp * 0.5); }
         this.emit({ t: 'fountain', x: pr.x, y: pr.y });
         break;
       }
@@ -523,35 +519,6 @@
     for (const p of this.players.values()) {
       if (p.bellS !== 1) continue;
       if (!p.downed && !p.dead && p.hp >= p.maxHp * ED.CONST.BELL_HP) { p.bellS = 3; this.secretP(p, 'bellRung'); } else p.bellS = 2;
-    }
-  };
-
-  // ---------------- Hunted (Twist: stats.twHunted) ----------------
-  // While any hero holds Hunted, a combat or elite room's second wave brings one champion: the biome elite with one affix from DARK_AFFIXES, e.hunted (snapshot flag bit 27), no xp (unplanned).
-  // It never holds the room (hostiles and the pending-spawn counts skip it). Its kill grants every Hunted holder a room offer (opens once the room is safe); at the clear it leaves with a puff, its shots and telegraphs with it.
-  const NO_AFFIX2 = ED.World.AFFIX2.map(() => 0);
-  const huntedParty = (w) => { for (const p of w.players.values()) if (p.stats.twHunted > 0) return true; return false; };
-  W.spawnHunted = function (enc) {
-    const type = ED.biomeFor(this.stratum).elite, def = ED.ENEMIES[type], affix = this.rng.pick(ED.World.DARK_AFFIXES);
-    const pt = D.randomFloor(this.room, this.rng, this.alivePlayers(), ED.World.PACE.avoid);
-    this.addZone({ kind: 'spawn', x: pt.x, y: pt.y, r: def.r + 4, dur: ED.World.PACE.spawn, type, hunt: 1, after: (e) => {
-      const a2 = ED.World.AFFIX2; ED.World.AFFIX2 = NO_AFFIX2; // one affix only
-      try { this.makeElite(e, affix); } finally { ED.World.AFFIX2 = a2; }
-      e.hunted = true; enc.hunt = e;
-    } });
-  };
-  W.huntedPaid = function (enc) {
-    enc.huntPaid = true;
-    for (const p of this.players.values()) if (p.stats.twHunted > 0) this.grantOffer(p, { src: 'room' });
-  };
-  W.huntedLeave = function () {
-    for (const z of this.zones) if (z.hunt) z.dead = true;
-    for (const e of this.enemies) {
-      if (!e.hunted || e.hp <= 0) continue;
-      e.hp = 0;
-      for (const z of this.zones) if (z.src === e) z.dead = true;
-      for (const q of this.projs) if (q.src === e) q.dead = true;
-      this.emit({ t: 'puff', x: Math.round(e.x), y: Math.round(e.y), c: '#e8344e' });
     }
   };
 

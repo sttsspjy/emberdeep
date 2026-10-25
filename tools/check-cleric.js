@@ -530,7 +530,7 @@ const castSanct = (w, p, dx) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x +
   ok((row(q.pid)[6] & 2048) && !(row(q.pid)[6] & 1024) && !(row(p.pid)[6] & 2048), 'hero flag 1 << 11: Emboldened');
   q.glT = 3; s = ED.Net.encodeSnap(w, [], false); ok((row(q.pid)[6] & 1024) !== 0 && !(row(p.pid)[6] & 1024), 'hero flag 1 << 10: Guardian Light buff');
   q.glV = 0.0834; q.auraV = 0.1; q.knellN = 3; q.knellT = 6; q.tranceT = 2; s = ED.Net.encodeSnap(w, [], false);
-  ok(row(q.pid)[21] === 3 && row(p.pid)[21] === 0 && row(q.pid)[22] === 0.083 && row(p.pid)[22] === 0 && row(q.pid)[23] === 0.1 && row(p.pid)[23] === 0, 'P[21..23]: Death Knell stacks, Guardian Light and Embolden bonus; 0 on a hero without them');
+  ok(row(q.pid)[21] === 0 && row(p.pid)[21] === 0 && row(q.pid)[22] === 0.083 && row(p.pid)[22] === 0 && row(q.pid)[23] === 0.1 && row(p.pid)[23] === 0, 'P[21] unused (0); P[22..23]: Guardian Light and Embolden bonus; 0 on a hero without them');
   ok((row(q.pid)[6] & 4096) !== 0 && !(row(p.pid)[6] & 4096), 'hero flag 1 << 12: Battle Trance'); q.knellT = 0; q.glT = 0; q.auraT = 0; q.tranceT = 0; s = ED.Net.encodeSnap(w, [], false);
   ok(row(q.pid)[21] === 0 && row(q.pid)[22] === 0 && row(q.pid)[23] === 0 && !(row(q.pid)[6] & 4096), 'expired Knell, Guardian Light, Embolden and Trance are off the wire');
   const z = s.Z.find(r => r[1] === ED.Net.ZK.indexOf('sanct')); ok(z && z[17] === 1 + p.slot, 'a following zone carries its owner slot + 1');

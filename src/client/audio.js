@@ -102,9 +102,9 @@
   const lite = () => !!(ED.Render && ED.Render.quality === 'low');
   const rnd = (a, b) => a + Math.random() * (b - a);
 
-  const GAP = { hit: 0.035, ohit: 0.035, crit: 0.05, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1, freeze: 0.05, shatter: 0.06, combust: 0.06, guardhit: 0.06, block: 0.05, clang: 0.03, throw: 0.08, catch: 0.08, parry: 0.1, bell: 0.06, charge: 0.2, chargehit: 0.2, volley: 0.15, raincast: 0.15, smash: 0.05, dark: 0.5, fury: 1, dcharge: 0.08, blossom: 0.05, implode: 0.2, pick: 0.08, bstrike: 0.07, rattle: 0.06, peal: 0.08, heave: 0.15, reel: 0.2, bsmash: 0.08, bhurl: 0.06, bdrag: 0.15, blood: 0.15, detonate: 0.05, tether: 0.3, rebuke: 0.1, reapchain: 0.06 };
+  const GAP = { hit: 0.035, ohit: 0.035, crit: 0.05, xp: 0.03, gold: 0.04, eshoot: 0.05, shoot: 0.03, die: 0.03, spark: 0.05, boom: 0.06, swing: 0.03, step: 0.1, freeze: 0.05, shatter: 0.06, combust: 0.06, guardhit: 0.06, block: 0.05, clang: 0.03, throw: 0.08, catch: 0.08, parry: 0.1, bell: 0.06, charge: 0.2, chargehit: 0.2, volley: 0.15, raincast: 0.15, smash: 0.05, dark: 0.5, fury: 1, dcharge: 0.08, blossom: 0.05, implode: 0.2, pick: 0.08, bstrike: 0.07, rattle: 0.06, peal: 0.08, heave: 0.15, reel: 0.2, bsmash: 0.08, bhurl: 0.06, bdrag: 0.15, blood: 0.15 };
   const PRIO = { secret: 2, drownbell: 3, hurt: 3, down: 3, revive: 3, dark: 3, lock: 3, roar: 3, fury: 3, victory: 3, defeat: 3, crit: 2, level: 2, boon: 2, relic: 2, pick: 2, shop: 2, ohit: 0, spark: 0, eshoot: 0, xp: 0, gold: 0, spawn: 0 };
-  // arg: cue-specific parameter (hit and crit: { w damage share, el element, n hits this frame }; clang: { n, g }; victory: 'boss' for the short one; pick: a card kind or { k kind, big, els: a duo's two elements })
+  // arg: cue-specific parameter (hit and crit: { w damage share, el element, n hits this frame }; clang: { n, g }; victory: 'boss' for the short one; pick: a card kind or { k kind, big })
   A.play = (name, vol, arg, pr) => {
     if (!A.ready || !live()) return;
     const t = now();
@@ -249,18 +249,7 @@
         for (let i = 0, n = lite() ? 4 : 7; i < n; i++) { const at = t + i * 0.045 + Math.random() * 0.012; noise('bandpass', rnd(2800, 5000), 2000, 0.02, 0.06 * v, 4, null, at); if (!(i & 1)) tone('square', rnd(2200, 3200), 1800, 0.015, 0.02 * v, null, at); }
         noise('lowpass', 700, 220, 0.32, 0.12 * v, 1.2); tone('sine', 90, 70, 0.3, 0.06 * v);
         break;
-      // Element payoffs: a Capacitor burst (arg: foes detonated this frame, one cue for all) cracks and grows with log2(1 + n); a Tempest tether hums; Martyr's Rebuke strikes a bright bell over a rush; Reaper's Chain whooshes low
-      case 'detonate': {
-        const n = Math.max(1, arg | 0), lg = Math.log2(1 + n), s = Math.min(1.8, 0.8 + 0.3 * lg);
-        noise('highpass', 5200, 1800, 0.05, 0.24 * v * s, 0.7); tone('square', 2400, 600, 0.05, 0.05 * v); tone('sawtooth', 1400, 180, 0.09, 0.07 * v * s);
-        if (n >= 3) { tone('sine', 110, 45, 0.18, Math.min(0.3, 0.1 + 0.05 * lg) * v); noise('lowpass', 1600, 200, 0.14, 0.12 * v); }
-        for (let i = 1, m = Math.min(lite() ? 1 : 3, n - 1); i <= m; i++) noise('highpass', rnd(3500, 6000), 2200, 0.025, 0.08 * v, 0.8, null, t + i * 0.03 + Math.random() * 0.015);
-        break;
-      }
-      case 'tether': tone('sawtooth', rnd(110, 130), 100, 0.12, 0.025 * v); noise('highpass', 4800, 3000, 0.08, 0.03 * v, 0.7); break;
-      case 'rebuke': tone('sine', 1046, 1040, 0.6, 0.1 * v); tone('sine', 1568, 1560, 0.45, 0.06 * v); if (!lite()) tone('sine', 1046 * 2.76, 1046 * 2.7, 0.25, 0.03 * v); noise('highpass', 2500, 7000, 0.3, 0.1 * v, 0.7); tone('sine', 130, 60, 0.2, 0.22 * v); break;
       case 'blood': tone('sine', 70, 48, 0.14, 0.3 * v); noise('lowpass', 500, 120, 0.1, 0.16 * v, 1); tone('sine', 66, 44, 0.16, 0.24 * v, null, t + 0.17); noise('bandpass', 1200, 400, 0.08, 0.06 * v, 2, null, t + 0.02); break; // Bloodprice cast: a heartbeat (two low thumps) with a wet edge
-      case 'reapchain': noise('bandpass', 400, 1800, 0.26, 0.14 * v, 1.6); tone('sine', 220, 90, 0.28, 0.08 * v); tone('triangle', 466, 440, 0.3, 0.025 * v, null, t + 0.05); break;
       case 'secret': [988, 1319, 1976].forEach((f, i) => tone('sine', f, f * 1.003, 0.5 - i * 0.1, 0.07 * v, null, t + i * 0.09)); tone('triangle', 494, 492, 0.6, 0.04 * v); break; // a secret uncovered: a soft rising three-note chime over a low hum
       case 'platino': [1568, 2093, 2637, 3136].forEach((f, i) => tone('sine', f, f * 1.01, 0.18, 0.06 * v, null, t + i * 0.05)); noise('highpass', 6000, 4000, 0.25, 0.03 * v); break; // the Platino caught
       case 'catch': tone('sine', 140, 70, 0.14, 0.3 * v); noise('lowpass', 500, 150, 0.1, 0.16 * v, 1); if (arg) [1318, 1760].forEach((f, i) => tone('sine', f, f, 0.22, 0.06 * v, null, t + 0.03 + i * 0.06)); break;
@@ -336,10 +325,6 @@
     route(v, t) { // horn call: a fourth below, then the held fifth
       noise('bandpass', 800, 1200, 0.1, 0.04 * v, 2, null, t); brass(262, 0.16, 0.2 * v, t); brass(392, 0.42, 0.22 * v, t + 0.17); tone('sine', 196, 196, 0.5, 0.06 * v, null, t + 0.17);
     },
-    asc(v, t, lo) { // rising chord, each note a detuned pair that shimmers
-      [523, 659, 784, 1046, 1318].forEach((f, i) => { const at = t + i * 0.06, d = 0.55 - i * 0.04; tone('sine', f, f, d, 0.08 * v, null, at); if (!lo) tone('sine', f * 1.006, f * 1.006, d, 0.05 * v, null, at); });
-      noise('highpass', 6000, 9000, 0.45, 0.035 * v, 0.7, null, t + 0.1, 0.15); tone('triangle', 262, 262, 0.7, 0.06 * v, null, t);
-    },
     relic(v, t, lo) { // chain rattle, then a stone thunk
       for (let i = 0, n = lo ? 4 : 7; i < n; i++) { const at = t + i * 0.035 + Math.random() * 0.015; noise('bandpass', rnd(3000, 5000), 2000, 0.03, 0.08 * v, 4, null, at); if (!(i & 1)) tone('square', rnd(2600, 4200), rnd(1800, 2600), 0.025, 0.035 * v, null, at); }
       tone('sine', 120, 45, 0.22, 0.3 * v, null, t + 0.3); noise('lowpass', 700, 120, 0.15, 0.2 * v, 1, null, t + 0.3); tone('square', 300, 160, 0.05, 0.04 * v, null, t + 0.3);
@@ -350,24 +335,12 @@
       for (let i = 0, n = lo ? 5 : 8; i < n; i++) { const f = F[(Math.random() * F.length) | 0]; tone('sine', f, f, 0.12, 0.1 * v, null, at); if (!lo) tone('sine', f * 1.5, f * 1.5, 0.06, 0.04 * v, null, at); at += 0.08 * Math.pow(0.82, i); }
       tone('triangle', 1760, 1700, 0.25, 0.08 * v, null, at);
     },
-    duo(v, t) { tone('sine', 880, 880, 0.4, 0.1 * v, null, t); tone('sine', 1320, 1320, 0.4, 0.1 * v, null, t + 0.05); }, // no element pair given: a two-note chime
-    mut(v, t, lo) { // Mutation (copper, organic): a wet copper twang that bends down, a pulsing growth swell, a few squelches
-      tone('triangle', 660, 520, 0.35, 0.09 * v, null, t); tone('sine', 990, 760, 0.3, 0.05 * v, null, t); noise('bandpass', 900, 2600, 0.04, 0.12 * v, 2, null, t, 0.25);
-      for (let i = 0, n = lo ? 2 : 4; i < n; i++) { const f = rnd(140, 220); tone('sine', f, f * 1.8, 0.07, 0.1 * v, null, t + 0.1 + i * 0.11); }
-      tone('sine', 98, 104, 0.6, 0.08 * v, null, t + 0.05, 0.2);
-    },
-    twist(v, t, lo) { // Twist (dark, branded): a hiss of hot iron, a low dissonant tritone, a hard brand thud
-      noise('highpass', 2400, 6000, 0.35, 0.12 * v, 0.7, null, t);
-      tone('sawtooth', 110, 104, 0.6, 0.07 * v, null, t + 0.04); tone('sawtooth', 155.6, 150, 0.6, 0.05 * v, null, t + 0.04); if (!lo) tone('sine', 55, 52, 0.7, 0.12 * v, null, t + 0.04);
-      tone('sine', 120, 40, 0.18, 0.3 * v, null, t + 0.3); noise('lowpass', 900, 120, 0.15, 0.18 * v, 1, null, t + 0.3);
-    },
   };
-  const ROOT = { fire: 110, ice: 784, lightning: 147, poison: 98, holy: 523, shadow: 82, general: 262, route: 196, asc: 262, duo: 220, relic: 131, purse: 1318, mut: 131, twist: 55 };
-  // arg: kind string or { k, big, els }. duo with els: both element cues layered 50 ms apart; big: 15% louder plus a held root and fifth over a low rumble.
+  const ROOT = { fire: 110, ice: 784, lightning: 147, poison: 98, holy: 523, shadow: 82, general: 262, route: 196, relic: 131, purse: 1318 };
+  // arg: kind string or { k, big }. big: 15% louder plus a held root and fifth over a low rumble.
   function pickCue(arg, v, t) {
     const o = typeof arg === 'string' ? { k: arg } : arg || {}, k = PICK[o.k] ? o.k : 'general', lo = lite(), vv = v * (o.big ? 1.15 : 1);
-    if (k === 'duo' && o.els && PICK[o.els[0]] && PICK[o.els[1]]) { PICK[o.els[0]](vv * 0.75, t, lo); PICK[o.els[1]](vv * 0.75, t + 0.05, lo); }
-    else PICK[k](vv, t, lo);
+    PICK[k](vv, t, lo);
     if (o.big) { const r = ROOT[k]; tone('sine', r, r, 0.75, 0.1 * v, null, t + 0.04, 0.05); tone('triangle', r * 1.5, r * 1.5, 0.7, 0.04 * v, null, t + 0.06); noise('lowpass', 400, 60, 0.7, 0.1 * v, 1, null, t); }
   }
 

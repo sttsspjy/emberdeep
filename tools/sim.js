@@ -1,11 +1,11 @@
 // Usage: node tools/sim.js <heroes> <runs> <botSkill 0-1> <meta none|mid|max> [classes|-] [pact] [--pick=random|smart|legacy] [--start=random|class|generalist|rotate|<gateId>] [--gates=1|2] [--force=id[@slot],...]
 //   [--route=attack|skill1|skill2|element|random|rotate] [--fork=0|1|random|rotate] [--weapon=0|1|2|rotate] [--aimnoise=<angle rad>,<point px>|0] [--seed0=N] [--dark=smart|always|never] [--strata=N] [--from=N] [--boss] [--vet[=charges,rider,dodge,hazard]] [--vetreact=<s>] [--lambda=<x>|auto[:<x0>]] [--out=rows.json] [--pair=rows.json] [--quiet] [--explain]   (parallel batches: tools/simpool.js, fixed quick suite: tools/bal.js)
 // Headless simulation harness: loads the game's sim files into this Node context and drives bot heroes through full runs (deterministic per seed: the bot has its own seeded RNG).
-// Bot policy: fight, claim room rewards (Twist rewards included), use rest sites and shops, then take the exit door nextRoom picks (a seeded map heuristic) until the boss.
-// Skill cooldowns follow ED.TWIST.cd (Bloodprice: the cast gap while above BLOOD_HP of max health, the normal cooldown below); a Capacitor holder also casts when CAP_PACK of its charged foes stand (or a charged elite or boss), the cast's range checks waived.
+// Bot policy: fight, claim room rewards, use rest sites and shops, then take the exit door nextRoom picks (a seeded map heuristic) until the boss.
+// Element verbs (botHold, botPerfect, botDischarge, botDash, the Backstab flank): holds, perfect dodges, discharge dashes through charged packs, blinks and flanking at the bot's skill.
 // Dark rooms follow --dark: smart (default) enters one while every living hero has at least DARK_HP of max HP, always enters, never skips them.
 // Pick policies: 'random' takes a random card; 'smart' takes the card of best marginal value (tools/pick.js: damage and effective health over the next three strata from the sheet model, folded mechanics, milestone value of keystone / evolution / duo; start card, forge, rerolls and relics by the same value);
-// 'legacy' is the v3 smart order in smartScore (evolution > keystone > duo > own-path boon > element gate while a slot is free > open General > anything), kept for paired comparison. --explain prints every pick of a single run with its value parts.
+// 'legacy' is the v3 smart order in smartScore (evolution > keystone > own-path boon > element gate while a slot is free > open General > anything), kept for paired comparison. --explain prints every pick of a single run with its value parts.
 // Skill (0-1) is the share of ticks the bot pays attention to floor hazards; the rest of the time it moves on instinct.
 // --vet: the veteran preset, a bot that plays like a skilled player (see "veteran preset" below); --vetreact=<s> sets its reaction time (default 0.18); without --vet every number is unchanged.
 // The summary reports win rate, pacing, hits and time to kill, hero DPS, damage share by source, cooldown reduction, the dark-room lines and the path lines (see summarize); every mean prints its standard error.
@@ -27,8 +27,8 @@ const fs = require('fs');
 const vm = require('vm');
 const path = require('path');
 const ROOT = path.join(__dirname, '..', 'src') + '/';
-const files = ['util.js', 'data/biomes.js', 'data/enemies.js', 'data/classes.js', 'data/boons.js', 'data/classboons.js', 'data/ascended.js', 'data/mutations.js', 'data/twists.js', 'data/relics.js', 'data/meta.js', 'save.js',
-  'sim/dungeon.js', 'sim/stats.js', 'sim/world.js', 'sim/combat.js', 'sim/build.js', 'sim/skills.js', 'sim/class-knight.js', 'sim/class-ranger.js', 'sim/class-pyro.js', 'sim/class-shade.js', 'sim/class-cleric.js', 'sim/class-necro.js', 'sim/class-bell.js', 'sim/twist.js',
+const files = ['util.js', 'data/biomes.js', 'data/enemies.js', 'data/classes.js', 'data/boons.js', 'data/classboons.js', 'data/relics.js', 'data/meta.js', 'save.js',
+  'sim/dungeon.js', 'sim/stats.js', 'sim/world.js', 'sim/combat.js', 'sim/elements.js', 'sim/build.js', 'sim/skills.js', 'sim/class-knight.js', 'sim/class-ranger.js', 'sim/class-pyro.js', 'sim/class-shade.js', 'sim/class-cleric.js', 'sim/class-necro.js', 'sim/class-bell.js',
   'sim/ai.js', 'sim/bosses.js', 'sim/boss-warden.js', 'sim/boss-spore.js', 'sim/rooms.js', 'sim/arena.js', 'sim/boss-king.js', 'sim/boss-hollow.js', 'sim/champions.js', 'sim/sheet.js'];
 // Main context, not vm.createContext: inside a vm context every global read (Math, Object, ...) goes through the context interceptor and the sim runs ~3x slower.
 for (const f of files) vm.runInThisContext(fs.readFileSync(ROOT + f, 'utf8'), { filename: f });
@@ -51,19 +51,77 @@ function arrivalOf(w, picks) {
 const DARK_HP = 0.6; // --dark=smart: the bot enters a dark room while every living hero has at least this share of max HP
 const SL = Array.from({ length: ED.CONST.STRATA }, (_, i) => i + 1); // stratum numbers 1..STRATA
 const zeros = () => SL.map(() => 0), lists = () => SL.map(() => []);
-const BLOOD_HP = 0.5, CAP_PACK = 3, CAP_GAP = 0.5; // Bloodprice: casts at the gap only above this share of max health; Capacitor: charged foes that make the bot cast, seconds between two such casts
-// Seconds a cast of skill slot puts on that slot for hero p: ED.TWIST.cd (Bloodprice gap) while the Bloodprice policy allows it, else the slot's cooldown.
-const botCd = (p, slot) => (p.stats.twBlood && p.hp > p.maxHp * BLOOD_HP ? ED.TWIST.cd(p.stats, slot) : slot ? p.stats.skill2Cd : p.stats.skillCd);
-// Capacitor: true when hero p's charged foes are worth a detonation (CAP_PACK of them, or one charged elite or boss).
-function capReady(p, foes) {
-  let n = 0;
-  for (const e of foes) if (e.charge > 0 && e.chargeOwner === p) { if (e.elite || e.boss || ++n >= CAP_PACK) return true; }
-  return false;
+// Seconds a cast of skill slot puts on that slot for hero p.
+const botCd = (p, slot) => (slot ? p.stats.skill2Cd : p.stats.skillCd);
+// ---------------- element verbs at skill level (the human-proxy policy for each one) ----------------
+const TICK = 1 / 60;
+// Reach of the Cinder Arms flame cone (elements.js flameCone).
+const coneReach = (st) => (st.weapon.kind === 'melee' ? st.weapon.range * (1 + st.area * 0.5 + st.meleeReach) * ED.CONST.CONE_REACH : ED.CONST.CONE_RANGE * (1 + st.area * 0.5));
+// Foes within 320 and 0.25 rad of the aim a (an ice lance's line).
+const lanePack = (foes, p, a) => { let n = 0; for (const e of foes) { const d = Math.hypot(e.x - p.x, e.y - p.y); if (d < 320 && Math.abs(U.angDiff(a, Math.atan2(e.y - p.y, e.x - p.x))) < 0.25 + Math.atan2(e.r, Math.max(d, 1))) n++; } return n; };
+// A foe attack worth guarding or dodging: a foe shot within 150 flying at the hero, or a foe within 90 in the last 0.2 s of a wind-up. Returns the attacker (a shot's shooter) or null.
+function threatOf(w, p) {
+  for (const pr of w.projs) {
+    if (pr.team !== 1 || pr.dead || U.dist2(pr.x, pr.y, p.x, p.y) > 150 * 150) continue;
+    const sp = Math.hypot(pr.vx, pr.vy) || 1, dx = p.x - pr.x, dy = p.y - pr.y, along = (dx * pr.vx + dy * pr.vy) / sp;
+    if (along > 0 && Math.abs(dx * pr.vy - dy * pr.vx) / sp < p.r + pr.r + 6) return pr.src && pr.src.hp > 0 ? pr.src : { x: pr.x, y: pr.y };
+  }
+  for (const e of w.enemies) if (e.hp > 0 && (e.st === 'windup' || e.st === 'aim') && e.t > 0 && e.t <= 0.2 && U.dist2(e.x, e.y, p.x, p.y) < 90 * 90) return e;
+  return null;
 }
-const PER_HERO_REWARDS = ['boon', 'forge', 'epic', 'vigor', 'twist'];
+// A hold verb (stats.hold, ED.Stats.HOLD): the press counts c.holdT (attacks go on until the verb starts at its `at`), then the bot holds: the cone while a foe stands in it, the lance, flask and finisher to full and released at the target,
+// the guard (no press: a veteran raises it ahead) while an attack comes. Returns true while the hold has the attack.
+function botHold(w, p, c, foes, tgt, d, a, inRange, brng, skill) {
+  const st = p.stats, k = st.hold, H = k && ED.Stats.HOLD[k];
+  if (!H || st.kind === 'bell') return false;
+  if (p.holdOn) {
+    p.face = a;
+    const full = ED.Stats.holdFull(st), ready = !(full > 0) || p.holdT >= full;
+    const end = k === 'guard' ? !threatOf(w, p) : k === 'cone' ? d - tgt.r > coneReach(st) : !inRange || ready;
+    if (end) { p.aimX = tgt.x; p.aimY = tgt.y; w.playerHold(p, false, a, d); c.holdT = 0; c.holdCd = 0.3 + brng.next() * 0.4 * (1 - skill); }
+    return true;
+  }
+  c.holdCd = (c.holdCd || 0) - TICK;
+  if (k === 'guard') { if (threatOf(w, p) && brng.next() < skill) { w.playerHold(p, true, a); return true; } return false; }
+  const want = inRange && c.holdCd <= 0 && (k !== 'cone' || d - tgt.r <= coneReach(st)) && (k !== 'lance' || lanePack(foes, p, a) >= 2 || tgt.elite || tgt.boss) && (k !== 'flask' || d <= ED.CONST.FLASK_MAX);
+  if (!want) { c.holdT = 0; return false; }
+  c.holdT = (c.holdT || 0) + TICK;
+  if (c.holdT < H.at) return false;
+  w.playerHold(p, true, a);
+  return true;
+}
+// A perfect dodge (Holy): the dash heading through an attack that is about to land (chance skill), or null.
+function botPerfect(w, p, c, skill, brng) {
+  if (!p.stats.perfectDodge || c.dashN < 1 || p.dashT > 0 || p.skillMove) return null;
+  const t = threatOf(w, p);
+  if (!t || brng.next() > skill * 0.6) return null;
+  const dx = t.x - p.x, dy = t.y - p.y, l = Math.hypot(dx, dy) || 1;
+  return [dx / l, dy / l];
+}
+// A discharge dash (Lightning): through the hero's charged foes within 150 once 3 of them stand (or a charged elite or boss holds 3% of its health), toward their middle; at most one per 0.6 s.
+function botDischarge(p, c, foes) {
+  if ((c.disT = (c.disT || 0) - TICK) > 0 || c.dashN < 1 || p.dashT > 0 || p.skillMove) return null;
+  let n = 0, sx = 0, sy = 0, big = false;
+  for (const e of foes) if (e.charge > 0 && e.chargeOwner === p && U.dist2(e.x, e.y, p.x, p.y) < 150 * 150) { n++; sx += e.x; sy += e.y; if ((e.elite || e.boss) && e.charge >= 0.03 * e.maxHp) big = true; }
+  if (!(n >= 3 || big)) return null;
+  c.disT = 0.6;
+  const dx = sx / n - p.x, dy = sy / n - p.y, l = Math.hypot(dx, dy) || 1;
+  return [dx / l, dy / l];
+}
+// A dash of hero p along (dx, dy) as game.js makes it: Storm Step and Umbral Arms blink first (ED.Sim.dashBlink; behind a foe the dash stays there).
+function botDash(w, p, c, dx, dy, foes) {
+  const st = p.stats, ox = p.x, oy = p.y;
+  let blink = false;
+  if (st.stormStep || st.stepBehind) {
+    const b = ED.Sim.dashBlink(w.room, w.locked, p, st, foes, Math.atan2(dy, dx));
+    if (b) { p.x = b.x; p.y = b.y; if (b.behind) { dx = 0; dy = 0; p.face = b.face; blink = true; } else { dx = b.dx; dy = b.dy; } }
+  }
+  p.dashT = ED.CONST.DASH.t; p.dashDx = dx; p.dashDy = dy; w.playerDash(p, dx, dy, blink, ox, oy); ED.Sim.dashTry(c, st);
+}
+const PER_HERO_REWARDS = ['boon', 'forge', 'epic', 'vigor'];
 const MAX_SECONDS = 60 * 60; // a run that is still going after an hour of game time counts as a loss
 // Open General boons in the order a sensible player takes them (damage and defence first).
-const NEUTRAL_PREF = ['edge', 'quick', 'keen', 'brutal', 'vigor', 'stalwart', 'plating', 'battleward', 'focus', 'evade', 'wide', 'mending', 'forager', 'fleet', 'magnet', 'thorns', 'lightstep', 'bounty'];
+const NEUTRAL_PREF = ['keen', 'brutal', 'vigor', 'plating', 'focus', 'trance', 'evade', 'wide', 'laststand', 'echo', 'bladedash', 'lightstep'];
 
 // First step toward (tx, ty): the shortest path that stays off floor hazards, else the shortest path (a hero walks around hazards when it can).
 function bfsDir(room, locked, sx, sy, tx, ty) { return bfsStep(room, locked, sx, sy, tx, ty, true) || bfsStep(room, locked, sx, sy, tx, ty, false); }
@@ -369,14 +427,14 @@ function vetPlan(w, p, c, wx, wy, speed, T) {
   return { mx: best.mx, my: best.my, risk: risk0, dash };
 }
 
-// A dash heading for the owned dash riders, or null: dashDmg needs 3 foes struck by the 72 px path, dashFire 3 foes within 24 px of it, dashFrost / dashBomb the foes within 80 / 60 px of the start (counts add up, 3 are needed).
+// A dash heading for the owned dash riders, or null: dashDmg needs 3 foes struck by the 72 px path, dashFire 3 foes within 24 px of it, dashCloud / dashBomb the foes within 40 / 60 px of the start (counts add up, 3 are needed).
 // The heading must be safe (no hazard landing, no hit waiting) and among equals lands farthest from the foes; one charge stays for dodging when the hero holds several.
 function vetRider(w, p, c, foes, T, speed) {
-  const st = p.stats, dmg = st.dashDmg > 0, fire = st.dashFire > 0, frost = st.dashFrost > 0, bomb = st.dashBomb > 0;
+  const st = p.stats, dmg = st.dashDmg > 0, fire = st.dashFire > 0, frost = st.dashCloud > 0, bomb = st.dashBomb > 0;
   if (!(dmg || fire || frost || bomb) || c.dashN < ((st.dashCharges | 0) > 1 ? 2 : 1) || p.skillMove || p.dashT > 0) return null;
   const near = foes.filter(e => U.dist2(e.x, e.y, p.x, p.y) < 160 * 160);
   if (near.length < 3) return null;
-  const start = (frost ? near.filter(e => U.dist2(e.x, e.y, p.x, p.y) < (80 + e.r) ** 2).length : 0) + (bomb ? near.filter(e => U.dist2(e.x, e.y, p.x, p.y) < (60 + e.r) ** 2).length : 0);
+  const start = (frost ? near.filter(e => U.dist2(e.x, e.y, p.x, p.y) < (40 + e.r) ** 2).length : 0) + (bomb ? near.filter(e => U.dist2(e.x, e.y, p.x, p.y) < (60 + e.r) ** 2).length : 0);
   const len = ED.CONST.DASH.speed * ED.CONST.DASH.t;
   let best = null, bs = 2.5;
   for (const [ux, uy] of VDIRS) {
@@ -702,7 +760,6 @@ function smartScore(p, id, ctx, rng) {
   const gen = ED.isGeneralist(p.boons), els = ED.elementGates(p.boons), aff = (k) => ED.pathAffinity(p.boons, k);
   const rar = b.rar === 'r' ? 3 : b.rar === 'e' ? 4 : 1;
   if (b.key) return 900 + aff(b.path);
-  if (b.duo) return 850;
   if (b.path && !b.gate && (b.path === 'general' ? gen : els.includes(b.path))) return 600 + 10 * aff(b.path) + rar;
   if (b.gate) return !gen && b.path !== 'general' && els.length < ctx.gatesCap ? gateScore(p, b.path, ctx.w.stratum, rng) : 50; // over the --gates cap a gate is the last choice
   const n = NEUTRAL_PREF.indexOf(id);
@@ -820,7 +877,7 @@ function skipStrata(w, from, ctx, policy, brng, darkPolicy, fight) {
     for (const pk of w.pickups) w.collect(lead, pk);
     for (const ev of w.fx) {
       if (ev.pid !== lead.pid) continue;
-      if (ev.t === 'boon') { const b = ED.BOONS[ev.id]; if (b.key && !out.keyAt) out.keyAt = w.stratum; if (b.duo && !out.duoAt) out.duoAt = w.stratum; } else if (ev.t === 'evolve' && !out.evoAt) out.evoAt = { s: w.stratum, lvl: w.level };
+      if (ev.t === 'boon') { const b = ED.BOONS[ev.id]; if (b.key && !out.keyAt) out.keyAt = w.stratum; } else if (ev.t === 'evolve' && !out.evoAt) out.evoAt = { s: w.stratum, lvl: w.level };
     }
     w.pickups.length = 0; w.fx.length = 0; w.msgs.length = 0;
   };
@@ -945,10 +1002,9 @@ function runBot(opts) {
   const fightRec = skip && skip.fight ? { k: skip.fight, t0: skip.fight === 'boss' ? null : w.time, t: null, kill: false, ph: 0 } : null; // --fight: { kind, start, seconds to the kill, kill, boss phase reached }
   rec.arrive = []; // per stratum (index = stratum - 1): arrivalOf at the first entry of the boss room
   rec.keyAt = null; rec.duoAt = null; // stratum when hero 0 takes its keystone / duo
-  rec.cnt = { smite: 0, reap: 0, toll: 0, lance: 0, dashHits: 0, reapHp: 0, kills0: 0, refunds: 0, parries: 0, staggers: 0, rics: 0, gRics: 0, catches: 0, casts: {} };
+  rec.cnt = { smite: 0, reap: 0, toll: 0, lance: 0, dashHits: 0, pdodge: 0, shatter: 0, back: 0, direct: 0, holds: 0, dis: 0, reapHp: 0, kills0: 0, refunds: 0, parries: 0, staggers: 0, rics: 0, gRics: 0, catches: 0, casts: {} };
   rec.parts = {}; rec.projDmgS = []; rec.maxHost = 0; // damage by skill part / source, hero damage taken from shots per stratum (fraction of max HP), most foes standing in the current room
   rec.smokeSeen = new Set(); rec.upt = { brace: [0, 0], sanct: [0, 0], stun: [0, 0], smoke: [0, 0, 0], mom: [0, 0] }; rec.peak = { projs: 0, zones: 0 }; // uptimes as [on, of] tick counts, peak shots and zones of hero 0
-  rec.venom = { own: 0, ally: 0, corrode: 0, base: 0 }; // damage added by the Venom vulnerability, split by who dealt it, and the corrode part of it
   rec.shield = { gained: {}, absorbed: {}, holyBoss: 0 }; rec.bossSecs = 0;
   const shMix = new Map(); for (const p of w.players.values()) shMix.set(p.pid, {}); // shield composition per hero by source (absorption is attributed pro rata)
   const p0id = w.players.keys().next().value;
@@ -956,12 +1012,8 @@ function runBot(opts) {
   if (skip) { rec.evoAt = skip.evoAt; rec.keyAt = skip.keyAt; rec.duoAt = skip.duoAt; rec.entry[w.stratum] = entryOf(w, w.players.get(p0id)); }
   // damage metrics: hero damage by source per stratum, combat seconds, observed hits/time to kill, analytic hits to kill, cooldown reduction
   Object.assign(rec, { src: [], combatS: zeros(), hits: lists(), ttk: lists(), ttkElite: lists(), htk: lists(), htkBare, bossTry: [] });
-  const hit0 = w.hitEnemy, VAMP = ED.CONST.VENOM_AMP, VALLY = ED.CONST.VENOM_ALLY;
+  const hit0 = w.hitEnemy;
   w.hitEnemy = function (e, base, src) {
-    // Venom term of the vulnerability sum, read before the hit (the hit may clear it): its share of the damage dealt is the bonus Venom added
-    const sp = src && src.p, vTerm = sp && e.venom > 0 ? e.venom / 100 * (VAMP + e.corrode) * ((e.venomBy & (1 << sp.slot)) ? 1 : VALLY) * (sp.stats.cryotoxin && e.frozen > 0 ? 2 : 1) : 0;
-    const mine = vTerm > 0 && (e.venomBy & (1 << sp.slot)) ? 1 : 0, cor = vTerm > 0 ? e.corrode / (VAMP + e.corrode) : 0;
-    const vTot = vTerm > 0 ? 1 + vTerm + (e.mark > 0 ? e.markV : 0) + (e.judged > 0 || e.vulnT > 0 ? 0.2 : 0) + (e.frozen > 0 ? 0.25 : 0) + (e.sunder && e.sunderOwner === sp.pid ? 0.04 * e.sunder : 0) : 1;
     const sg0 = e.staggerT, d = hit0.call(this, e, base, src);
     if (!(d > 0)) return d;
     if (e.staggerT > sg0 + 0.5) rec.cnt.staggers++;
@@ -969,7 +1021,7 @@ function runBot(opts) {
     const direct = k !== 'dot' && !PAYOFF_KINDS.has(k) && !(src && src.raw && k === 'explode');
     if (src && src.p) { bucket[dmgSource(src, k)] += d; const pn = src.part || (src.wpn ? 'weapon' : k); rec.parts[pn] = (rec.parts[pn] || 0) + d; }
     if (k === 'dash') rec.cnt.dashHits++;
-    if (src && src.p) { rec.venom.base += d; if (vTerm > 0) { const bonus = d * vTerm / vTot; if (mine) rec.venom.own += bonus; else rec.venom.ally += bonus; rec.venom.corrode += bonus * cor; } }
+    if (src && src.p && src.p.pid === p0id && direct) { rec.cnt.direct++; if (src.back) rec.cnt.back++; } // hero 0's direct hits and the Backstabs among them
     if (!e.boss && !e.def.minion) {
       if (e._t0 === undefined) { e._t0 = this.time; e._n = 0; }
       if (direct) e._n++;
@@ -1043,7 +1095,6 @@ function runBot(opts) {
     for (const p of w.players.values()) {
       const c = ctl[p.pid];
       c.atk -= dt; c.skill2 -= dt; ED.Sim.dashTick(c, p.stats, dt); c.goal = null;
-      if (p.stats.twBlood && p.hp > p.maxHp * BLOOD_HP) { c.skill = Math.min(c.skill, botCd(p, 0)); c.skill2 = Math.min(c.skill2, botCd(p, 1)); } // Bloodprice: a running cooldown is cut to the gap (as the client does)
       if (vetC) { // skill charges as the client keeps them: a charge refills each skillCd while below the maximum, a new maximum (Echo) grants its charge at once
         const mc = p.stats.maxCharges;
         if (mc > c.mchg) c.chg += mc - c.mchg;
@@ -1072,6 +1123,7 @@ function runBot(opts) {
         if (d > ideal + 10) dir = bfsDir(w.room, w.locked, p.x, p.y, tgt.x, tgt.y);
         else if (d < ideal - 20) dir = [p.x - tgt.x, p.y - tgt.y];
         else dir = [-(tgt.y - p.y), tgt.x - p.x];
+        if (p.stats.backstab > 0 && !bell && !tgt.boss && d < ideal + 120 && brng.next() < skill) { const fa = tgt.faceA || 0, bx = tgt.x - Math.cos(fa) * ideal, by = tgt.y - Math.sin(fa) * ideal; dir = Math.hypot(bx - p.x, by - p.y) > 6 ? [bx - p.x, by - p.y] : [0, 0]; } // Backstab: stand behind the foe's facing
         const ag = arenaBot(w, p, c, skill, brng); // boss arena mechanics: where to stand, a lantern to hit
         if (ag && ag.goal) { const gd = Math.hypot(ag.goal.x - p.x, ag.goal.y - p.y); dir = gd > 8 ? bfsDir(w.room, w.locked, p.x, p.y, ag.goal.x, ag.goal.y) : [0, 0]; }
         // dodge projectiles
@@ -1101,27 +1153,28 @@ function runBot(opts) {
         const inRange = bell ? d < BELL_HAUL : st.melee ? d - tgt.r < st.weapon.range : d < 380; // a bell: wind (attack held) while a foe is near
         let atkA = a, atkIn = inRange, atkD = d;
         if (ag && ag.light) { atkD = Math.hypot(ag.light.x - p.x, ag.light.y - p.y); atkA = Math.atan2(ag.light.y - p.y, ag.light.x - p.x); atkIn = st.melee ? atkD < st.weapon.range + 8 : atkD < 320; } // swings and shots go at the lantern
+        const held = !bell && !(ag && ag.light) && botHold(w, p, c, foes, tgt, atkD, atkA, atkIn, brng, skill);
+        if (held && p.holdOn) rec.cnt.holds += p.pid === p0id && p.holdT === 0 ? 1 : 0;
         if (bell) botBell(w, p, c, foes, tgt, inRange, skill, brng);
-        else if (c.atk <= 0 && atkIn) {
+        else if (!held && c.atk <= 0 && atkIn) {
           p.atkD = atkD; // the cursor on the target (a lobbed weapon lands there)
           w.playerAttack(p, atkA + gauss(brng) * AIM[0] * (1 - skill));
           c.atk = Math.max(c.atk, -dt) + ED.Stats.stepInterval(p); // carries the overshoot of this tick, as the client does
         }
-        const det = st.capacitor > 0 && (c.capT = (c.capT || 0) - dt) <= 0 && capReady(p, foes); // Capacitor: detonate the charged foes with whichever skill is ready (once per CAP_GAP: the chain queue clears the charges over a few ticks)
-        let cast = false;
-        if (vetC) { if (c.chg > 0 && c.vgap <= 0 && !p.skillMove && botCast(w, p, 0, tgt, d, a, foes, brng, skill, det)) { if (c.chg === st.maxCharges) c.skill = botCd(p, 0); c.chg--; c.vgap = 0.35; cast = true; } }
-        else if (c.skill <= 0 && botCast(w, p, 0, tgt, d, a, foes, brng, skill, det)) { c.skill = botCd(p, 0); cast = true; }
-        if (c.skill2 <= 0 && st.skill2Cd && botCast(w, p, 1, tgt, d, a, foes, brng, skill, det && !cast)) { c.skill2 = botCd(p, 1); cast = true; }
+        if (vetC) { if (c.chg > 0 && c.vgap <= 0 && !p.skillMove && botCast(w, p, 0, tgt, d, a, foes, brng, skill)) { if (c.chg === st.maxCharges) c.skill = botCd(p, 0); c.chg--; c.vgap = 0.35; } }
+        else if (c.skill <= 0 && botCast(w, p, 0, tgt, d, a, foes, brng, skill)) c.skill = botCd(p, 0);
+        if (c.skill2 <= 0 && st.skill2Cd && botCast(w, p, 1, tgt, d, a, foes, brng, skill)) c.skill2 = botCd(p, 1);
         if (c.chg3 > 0 && !p.skillMove && botCast(w, p, 2, tgt, d, a, foes, brng, skill)) { if (c.chg3 === st.skill3Charges) c.skill3 = st.skill3Cd; c.chg3--; } // skill 3 (Fireball): charges like skill 1
-        if (det && cast) c.capT = CAP_GAP;
         let dd = null; // --vet: the dash heading of the dodge plan, else of a rider dash through a pack
         if (forced && forced.tl < 0.3 && c.dashN >= 1 && !(p.dashT > 0) && !p.skillMove) dd = forced.d;
+        else if ((dd = botPerfect(w, p, c, skill, brng))) rec.cnt.pdodge += p.pid === p0id ? 1 : 0; // Holy: dash through the attack
+        else if ((dd = botDischarge(p, c, foes))) rec.cnt.dis += p.pid === p0id ? 1 : 0; // Lightning: dash through the charged pack
         else if (vetD && plan && plan.dash) dd = plan.dash; else if (vetR && !danger) dd = vetRider(w, p, c, foes, T, spd);
-        if (dd) { p.dashT = ED.CONST.DASH.t; p.dashDx = dd[0]; p.dashDy = dd[1]; w.playerDash(p, dd[0], dd[1]); ED.Sim.dashTry(c, p.stats); }
-        else if (!vetD && danger && c.dashN >= 1 && brng.next() < skill * 0.5) { p.dashT = ED.CONST.DASH.t; p.dashDx = mx; p.dashDy = my; w.playerDash(p, mx, my); ED.Sim.dashTry(c, p.stats); }
-        else if (!vetR && !danger && c.dashN >= 1 && d <= 90 && (p.stats.dashDmg || p.stats.dashFire || p.stats.dashFrost || p.stats.dashBomb || p.stats.dashReap) && brng.next() < skill * 0.5) { // dash rider: dash through the target (Umbral Step Reaps it)
-          const l2 = Math.hypot(tgt.x - p.x, tgt.y - p.y) || 1, ddx = (tgt.x - p.x) / l2, ddy = (tgt.y - p.y) / l2;
-          p.dashT = ED.CONST.DASH.t; p.dashDx = ddx; p.dashDy = ddy; w.playerDash(p, ddx, ddy); ED.Sim.dashTry(c, p.stats);
+        if (dd) botDash(w, p, c, dd[0], dd[1], foes);
+        else if (!vetD && danger && c.dashN >= 1 && brng.next() < skill * 0.5) botDash(w, p, c, mx, my, foes);
+        else if (!vetR && !danger && c.dashN >= 1 && d <= 90 && (p.stats.dashDmg || p.stats.dashFire || p.stats.dashBomb || p.stats.dashCloud || p.stats.decoy || p.stats.stepBehind) && brng.next() < skill * 0.5) { // dash rider: dash through the target
+          const l2 = Math.hypot(tgt.x - p.x, tgt.y - p.y) || 1;
+          botDash(w, p, c, (tgt.x - p.x) / l2, (tgt.y - p.y) / l2, foes);
         }
       } else if (!w.locked) {
         // loot first, then the portal, then the next room to visit
@@ -1173,11 +1226,12 @@ function runBot(opts) {
       if ((sl === 2 || sl === -1) && hp) { if (!m.s) k.chg3 = Math.min(hp.stats.skill3Charges, k.chg3 + 1); else if (k.chg3 < hp.stats.skill3Charges) k.skill3 -= m.s; }
     }
     for (const ev of w.fx) {
+      if (ev.t === 'shatter') rec.cnt.shatter++;
       if (ev.t === 'smite') rec.cnt.smite++; else if (ev.t === 'reap') rec.cnt.reap++; else if (ev.t === 'toll') rec.cnt.toll++; else if (ev.t === 'lance') rec.cnt.lance++;
       else if (ev.t === 'parry') rec.cnt.parries++;
       else if (ev.t === 'ric' && ev.pid === p0id) { rec.cnt.rics++; if (ev.g) rec.cnt.gRics++; } else if (ev.t === 'catch' && ev.pid === p0id) rec.cnt.catches++;
       else if (ev.t === 'skill' && ev.pid === p0id) rec.cnt.casts[ev.k] = (rec.cnt.casts[ev.k] || 0) + 1;
-      if (ev.t === 'boon' && ev.pid === p0id) { const b = ED.BOONS[ev.id]; if (b.key && !rec.keyAt) rec.keyAt = w.stratum; if (b.duo && !rec.duoAt) rec.duoAt = w.stratum; }
+      if (ev.t === 'boon' && ev.pid === p0id) { const b = ED.BOONS[ev.id]; if (b.key && !rec.keyAt) rec.keyAt = w.stratum; }
       if (ev.t === 'room') { rec.roomDmg = 0; rec.maxHost = 0; rec.room = { th: 0, fo: 0, xp: 0, clip: 0 }; if (w.room && w.room.type === 'boss' && !rec.arrive[w.stratum - 1]) rec.arrive[w.stratum - 1] = arrivalOf(w, pickN); }
       if (ev.t === 'clear' && !ev.trial && w.room && w.room.type === 'combat') rec.htk[w.stratum - 1].push(hitsToKill(w, w.players.values().next().value, w.stratum));
       if (ev.t === 'evolve' && ev.pid === p0id && !rec.evoAt) rec.evoAt = { s: w.stratum, lvl: w.level };
@@ -1217,9 +1271,9 @@ function runBot(opts) {
     evoAt: rec.evoAt, aff: ED.PATH_IDS.map(k => ED.pathAffinity(p0.boons, k)).sort((a, b) => b - a),
     bossTry: rec.bossTry, cls: p0.cls, main: ED.PATH_IDS.map(k => [k, ED.pathAffinity(p0.boons, k)]).sort((a, b) => b[1] - a[1])[0][0], heroes: players.length, bare: avg(players.map(p => bareDps(p.cls, p.weapon))), src: rec.src, combatS: rec.combatS, hits: rec.hits, ttk: rec.ttk, ttkElite: rec.ttkElite, htk: rec.htk, htkBare: rec.htkBare, cdr: p0.stats.cdr, cdrAfter: ED.Stats.cdrEff ? ED.Stats.cdrEff(p0.stats.cdr) : p0.stats.cdr,
     endRoom: w.room ? w.room.type : '', evo: p0.stats.evo || null, gates: ED.gatePaths(p0.boons), boonCount: Object.values(p0.boons).reduce((a, b) => a + b, 0), keystones: Object.keys(p0.boons).filter(id => ED.BOONS[id].key).length,
-    gen: ED.isGeneralist(p0.boons), elGates: ED.elementGates(p0.boons), startPath: ED.gatePaths(p0.boons)[0] || null, keyAt: rec.keyAt, duoAt: rec.duoAt, duo: Object.keys(p0.boons).some(id => ED.BOONS[id].duo), duoIds: Object.keys(p0.boons).filter(id => ED.BOONS[id].duo), boonIds: Object.keys(p0.boons), relicIds: p0.relics.slice(),
-    cnt: rec.cnt, kills0: p0.kills, venom: rec.venom, shield: rec.shield, bossSecs: rec.bossSecs, hpFrac: rec.hpFrac, chainPeak: w.chainPeak, chainHops: w.chainHops, rerolls: p0.rerolls,
-    purse, twists: ED.TWIST_IDS.filter(id => p0.boons[id] > 0), route: ED.classRoute(p0.boons, p0.cls), wi: ED.weaponIndex(p0.cls, p0.weapon), parts: rec.parts, projDmgS: rec.projDmgS, upt: rec.upt, peak: rec.peak, clip: Object.assign({}, p0.shieldClip), braceOn: p0.stats.brace > 0, hexOn: p0.stats.hex > 0 };
+    gen: ED.isGeneralist(p0.boons), elGates: ED.elementGates(p0.boons), startPath: ED.gatePaths(p0.boons)[0] || null, keyAt: rec.keyAt, boonIds: Object.keys(p0.boons), relicIds: p0.relics.slice(),
+    cnt: rec.cnt, kills0: p0.kills, shield: rec.shield, bossSecs: rec.bossSecs, hpFrac: rec.hpFrac, chainPeak: w.chainPeak, chainHops: w.chainHops, rerolls: p0.rerolls,
+    purse, route: ED.classRoute(p0.boons, p0.cls), wi: ED.weaponIndex(p0.cls, p0.weapon), parts: rec.parts, projDmgS: rec.projDmgS, upt: rec.upt, peak: rec.peak, clip: Object.assign({}, p0.shieldClip), braceOn: p0.stats.brace > 0, hexOn: p0.stats.hex > 0 };
 }
 
 const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
@@ -1309,24 +1363,19 @@ function summarize(results) {
   const offersPer = results.map(r => Object.values(r.offers).reduce((a, b) => a + b, 0) / Math.max(1, r.stratum));
   lines.push(`pacing: offers/run ${f1(avgOffers)} (per stratum ${ms(offersPer, 2)}) | evolved ${pct(evolved.length, n)}% (${ED.PATH_IDS.map(k => k + " " + results.filter(r => r.evo === k).length).join(", ")}) at stratum [${qs(evolved.map(r => r.evoAt.s))}] team lvl [${qs(evolved.map(r => r.evoAt.lvl))}] | of ${reachIV.length} runs reaching IV: evolved ${pct(reachIV.filter(r => r.evo).length, reachIV.length)}% (by IV entry ${pct(reachIV.filter(r => r.evoAt && r.evoAt.s < 4).length, reachIV.length)}%) | affinity median top3 [${[0, 1, 2].map(i => qs(results.map(r => r.aff[i])).split(' ')[1]).join(' ')}] main-path lead (top - 2nd) quartiles [${qs(results.map(r => r.aff[0] - r.aff[1]))}] | runs with 0/1/2 paths at aff>=4: ${spread(r => deep(r, 4))}% at aff>=5: ${spread(r => deep(r, 5))}% | element gates 0/1/2: ${spread(r => r.elGates.length)}% (Generalist runs ${pct(results.filter(r => r.gen).length, n)}%)`);
   const pShare = S.map(s => { let o = 0, h = 0, t = 0; for (const r of results) if (r.purse) { o += r.purse[s - 1][0]; h += r.purse[s - 1][1]; t += r.purse[s - 1][2]; } return o ? `${ROMAN[s - 1]} ${pct(h, o)}%/${pct(t, o)}%` : `${ROMAN[s - 1]} -`; });
-  const twN = {}; for (const r of results) for (const id of r.twists || []) twN[id] = (twN[id] || 0) + 1;
-  lines.push(`pool exhaustion (hero 0, offers showing the Purse / Purse picks) by stratum: ${pShare.join(' ')} | Twists held: ${Object.keys(twN).length ? Object.entries(twN).map(([k, v]) => k + ' ' + pct(v, n) + '%').join(', ') : 'none'}`);
-  // path lines: evolution / keystone / duo pacing, wins by main path and start, status payoffs, shields
+  lines.push(`pool exhaustion (hero 0, offers showing the Purse / Purse picks) by stratum: ${pShare.join(' ')}`);
+  // path lines: evolution / keystone pacing, wins by main path and start, status payoffs, shields
   const elemRuns = results.filter(r => !r.gen && r.elGates.length), genRuns = results.filter(r => r.gen);
   const medS = (a) => (a.length ? median(a) : NaN), withS = (rs, key) => rs.filter(r => r[key]).map(r => (key === 'evoAt' ? r.evoAt.s : r[key]));
   lines.push(`evolution stratum quartiles: element mains [${qs(withS(elemRuns, 'evoAt'))}] (${withS(elemRuns, 'evoAt').length}/${elemRuns.length} evolved; by IV entry ${pct(elemRuns.filter(r => r.stratum >= 4 && r.evoAt && r.evoAt.s < 4).length, elemRuns.filter(r => r.stratum >= 4).length)}% of those reaching IV) | Generalist [${qs(withS(genRuns, 'evoAt'))}] (${withS(genRuns, 'evoAt').length}/${genRuns.length}) | per path ${ED.PATH_IDS.map(k => { const a = results.filter(r => r.evoAt && r.evo === k).map(r => r.evoAt.s); return `${k} [${qs(a)}] n=${a.length}`; }).join(' ')}`);
-  const two = elemRuns.filter(r => r.elGates.length === 2), duoRuns = two.filter(r => r.duo);
-  lines.push(`keystone stratum quartiles [${qs(withS(results, 'keyAt'))}] (${withS(results, 'keyAt').length}/${n} took one) | duo (2-gate runs ${two.length}): taken ${pct(duoRuns.length, two.length)}%, by the end of IV ${pct(two.filter(r => r.duoAt && r.duoAt <= 4).length, two.length)}%, stratum quartiles [${qs(duoRuns.map(r => r.duoAt))}]`);
-  const duoCnt = {}; for (const r of results) for (const id of r.duoIds) duoCnt[id] = (duoCnt[id] || 0) + 1;
-  lines.push('duo picks: ' + (Object.entries(duoCnt).sort((a, b) => b[1] - a[1]).map(([k, v]) => k + ' ' + v).join(', ') || '-') + ' | former element relics, now boons (share of runs that took one): ' + ['stormcall', 'thundergauntlet', 'frostheart', 'souljar'].map(id => `${id} ${pct(results.filter(r => r.boonIds.includes(id)).length, n)}%`).join(' '));
+  lines.push(`keystone stratum quartiles [${qs(withS(results, 'keyAt'))}] (${withS(results, 'keyAt').length}/${n} took one)`);
   const grp = (rs) => (rs.length ? `${rs.length} runs wins ${pct(rs.filter(r => r.victory).length, rs.length)}% depth ${ms(rs.map(r => r.stratum), 2)}` : '0 runs');
   lines.push('by main path: ' + ED.PATH_IDS.map(k => `${k} (${grp(results.filter(r => r.main === k))})`).join(' | '));
   const sel = results.filter(r => ['knight', 'ranger', 'shade'].includes(r.cls));
   lines.push(`Knight/Ranger/Shade: Generalist (${grp(sel.filter(r => r.gen))}) vs element (${grp(sel.filter(r => !r.gen))}) | by start path: ${ED.PATH_IDS.map(k => `${k} ${results.filter(r => r.startPath === k).length}`).join(' ')}`);
   const per = (f) => ms(results.map(f), 1);
   lines.push(`per run: smites ${per(r => r.cnt.smite)} reaps ${per(r => r.cnt.reap)} (${pct(results.reduce((a, r) => a + r.cnt.reap, 0), results.reduce((a, r) => a + r.kills, 0))}% of kills; reap health ${f1(avg(results.map(r => r.cnt.reapHp)))}) tolls ${per(r => r.cnt.toll)} lances ${per(r => r.cnt.lance)} dash-rider hits ${per(r => r.cnt.dashHits)} downs ${per(r => r.downedBy.length)} | chain queue peak ${f1(avg(results.map(r => r.chainPeak)))} (max ${Math.max(...results.map(r => r.chainPeak))}) hops ${f1(avg(results.map(r => r.chainHops)))} (max ${Math.max(...results.map(r => r.chainHops))})`);
-  const pois = results.filter(r => r.elGates.includes('poison'));
-  lines.push(`Venom bonus (${pois.length} Poison runs): ${f1(100 * pois.reduce((a, r) => a + r.venom.own + r.venom.ally, 0) / Math.max(1, pois.reduce((a, r) => a + r.venom.base, 0)))}% of damage dealt (per run: own ${Math.round(pois.reduce((a, r) => a + r.venom.own, 0) / Math.max(1, pois.length))} vs ally ${Math.round(pois.reduce((a, r) => a + r.venom.ally, 0) / Math.max(1, pois.length))}), corrode part ${pct(pois.reduce((a, r) => a + r.venom.corrode, 0), pois.reduce((a, r) => a + r.venom.own + r.venom.ally, 0))}% of the bonus`);
+  lines.push(`verbs per run (hero 0): perfect dodges ${per(r => r.cnt.pdodge)} discharge dashes ${per(r => r.cnt.dis)} shatters (every hero) ${per(r => r.cnt.shatter)} holds ${per(r => r.cnt.holds)} | Backstab share of direct hits (Shadow runs) ${pct(results.filter(r => r.elGates.includes('shadow')).reduce((a, r) => a + r.cnt.back, 0), results.filter(r => r.elGates.includes('shadow')).reduce((a, r) => a + r.cnt.direct, 0))}%`);
   const shSum = (key) => { const o = {}; for (const r of results) for (const k in r.shield[key]) o[k] = (o[k] || 0) + r.shield[key][k] / n; return Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => k + ' ' + Math.round(v)).join(', ') || '-'; };
   const holyMains = results.filter(r => r.main === 'holy' && r.bossSecs > 0);
   lines.push(`shield per run (HP) gained: ${shSum('gained')} | absorbed: ${shSum('absorbed')} | Holy absorbed per boss-fight second (${holyMains.length} Holy mains): ${ms(holyMains.map(r => 100 * r.shield.holyBoss / r.bossSecs), 2)}% max HP/s (limit 0.5, design ceiling 1)`);

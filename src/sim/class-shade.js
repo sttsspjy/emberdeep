@@ -206,16 +206,16 @@
     for (let i = w.fx.length - 1; i >= n0; i--) { const ev = w.fx[i]; if (ev.t === 'swing' && ev.pid === p.pid) w.fx[i] = { t: 'cloneswing', pid: p.pid, x: R(c.z.x), y: R(c.z.y), a: ev.a, r: ev.r, arc: ev.arc }; }
   }
 
-  // Rupture of foe e by hero p: a share f of its Bleed and Burn pools hits at once at RUPT_MUL (the pools lose it), and half of that burst splashes foes within RUPT_R. part names the source (for the damage report);
+  // Rupture of foe e by hero p: a share f of its Bleed pool and of its Burn stacks (elements.js takeBurn: the damage they still held) hits at once at RUPT_MUL (the foe loses them), and half of that burst splashes foes within RUPT_R. part names the source (for the damage report);
   // ambush marks the hits as the Ambush's (its kill refund). A foe the rupture kills hands its remaining Bleed to the 2 nearest foes within BLOOM_R with Bloodbloom and passes the rupture on with Crimson Cascade. Returns the damage dealt to e.
   W.rupture = function (e, p, f, part, ambush) {
     if (!e || e.hp <= 0 || !(f > 0)) return 0;
-    const st = p.stats, share = Math.min(1, f), bl = share * e.bleedPool, bn = share * e.burnPool;
+    const st = p.stats, share = Math.min(1, f), bl = share * e.bleedPool, bn = e.burnN > 0 ? this.takeBurn(e, share) : 0;
     if (!(bl > 0 || bn > 0)) return 0;
-    e.bleedPool -= bl; e.burnPool -= bn;
+    e.bleedPool -= bl;
     const dB = bl * C.RUPT_MUL * (1 + st.bleedMul), dF = bn * C.RUPT_MUL * (1 + st.burnMul); // the pool's worth at the rate its ticks pay
     const fire = (o, dmg, bleed) => o.hp > 0 && dmg > 0 ? this.hitEnemy(o, dmg, bleed ? { p, kind: 'rupture', part, raw: true, noProc: true, crit: false, noGuard: true, rupt: true, ambush, bleed: true }
-      : { p, kind: 'rupture', part, raw: true, noProc: true, crit: false, noGuard: true, rupt: true, ambush, el: 'fire', affDone: true }) : 0; // burn pools already carry the stratum affinity
+      : { p, kind: 'rupture', part, raw: true, noProc: true, crit: false, noGuard: true, rupt: true, ambush, el: 'fire' }) : 0;
     const x = e.x, y = e.y, dead = [];
     const got = fire(e, dB, true) + fire(e, dF, false);
     if (e.hp <= 0) dead.push(e);

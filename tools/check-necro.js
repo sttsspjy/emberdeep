@@ -234,7 +234,7 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
   near(lost(e), burstOf(p) * 1.25 * aff(w), 0.05, 'Grave Pact: Harvest bursts +25% Shadow'); void e;
   const f = foe(w, p.x + 100, p.y + 300), a = minionAt(w, p, f); w.updateAllies(0); const dmg = lost(f);
   near(dmg, 17.1 * C.COMP_MUL, 0.01, 'minion hits stay physical (no class bonus)'); near(f.doom, dmg * 0.2 * w.elemAff('shadow'), 0.01, 'minions mark Doom for 20% of their damage'); void a;
-  const { w: w2, p: p2 } = stage({ n_el: 1, doommark: 1 }); near(p2.stats.shadowInfuse, 0.3, 1e-9, 'Mark of Doom 0.3'); const g = foe(w2, p2.x + 100, p2.y); const b2 = minionAt(w2, p2, g); w2.updateAllies(0); near(g.doom, lost(g) * 0.225 * w2.elemAff('shadow'), 0.01, 'Mark of Doom x k (22.5%) counts instead when higher');
+  const { w: w2, p: p2 } = stage({ n_el: 1, doommark: 1 }); near(p2.stats.shadowInfuse, 0.4, 1e-9, 'Mark of Doom 0.4'); const g = foe(w2, p2.x + 100, p2.y); const b2 = minionAt(w2, p2, g); w2.updateAllies(0); near(g.doom, lost(g) * 0.3 * w2.elemAff('shadow'), 0.01, 'Mark of Doom x k (30%) counts instead when higher');
   const { w: w3, p: p3 } = stage({}); const h = foe(w3, p3.x + 100, p3.y); minionAt(w3, p3, h); w3.updateAllies(0); near(h.doom, 0, 1e-9, 'no Doom without a gate or Grave Pact');
   void b2;
 }

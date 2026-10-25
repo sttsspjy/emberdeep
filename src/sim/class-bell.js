@@ -221,12 +221,12 @@
     w.hitEnemy(e, N.p.spin.dmg, w.partSrc(p, N, 'spin', { kx: b.vx / d, ky: b.vy / d, x: b.x, y: b.y }));
     w.emit({ t: 'bstrike', pid: p.pid, x: Math.round(b.x), y: Math.round(b.y), v: Math.round(sp), h: 0, c: 0 });
   }
-  // A hurl or reel strike on foe e (fl: the hurl's record, or the reel's: { k, crit, ms, twin, full, part }): the weapon hit at k (Masterstroke x1.3 and its Bleed floor, Lightning Rod on a charged foe), Twin Fang's second hit,
+  // A hurl or reel strike on foe e (fl: the hurl's record, or the reel's: { k, crit, ms, twin, full, part }): the weapon hit at k (the Finisher x FIN_MUL and its Bleed floor, Lightning Rod on a charged foe), Twin Fang's second hit,
   // the ring of a ring weapon, the evolution (W.evoHit), Resonance from a non-horde foe, the route riders. kn: share of the knockback (a path strike PATH_KNOCK, the impact 1, a reel strike 0). Returns the hit's source.
   function heavyStrike(w, p, b, e, fl, kx, ky, kn) {
     const st = p.stats, wp = st.weapon, hurl = fl.part === 'bell.hurl', charged = e.charge > 0;
-    const mul = fl.k * (fl.tw || 1) * (hurl && st.rod > 0 && charged ? 1 + st.rod : 1), infAdd = bellInf(st), knock = wp.knock * Math.min(1.5, fl.k) * kn;
-    const src = { p, kind: 'weapon', wpn: !!fl.full, mul: fl.ms ? mul * 1.3 : mul, crit: fl.crit || fl.ms || undefined, bleedMin: fl.ms ? 0.5 : undefined, ms: fl.ms || undefined, infAdd, knock, kx, ky, x: b.x, y: b.y, part: fl.part }; // ms: a Masterstroke (Killing Stroke reads it); wpn: a full-wind hurl (a Heavy bell's Stagger)
+    const mul = fl.k * (hurl && st.rod > 0 && charged ? 1 + st.rod : 1), infAdd = bellInf(st), knock = wp.knock * Math.min(1.5, fl.k) * kn;
+    const src = { p, kind: 'weapon', wpn: !!fl.full, mul: fl.ms ? mul * C.FIN_MUL : mul, crit: fl.crit || fl.ms || undefined, bleedMin: fl.ms ? 0.5 : undefined, infAdd, knock, kx, ky, x: b.x, y: b.y, part: fl.part }; // ms: the Finisher; wpn: a full-wind hurl (a Heavy bell's Stagger)
     w.hitEnemy(e, wp.dmg, src);
     if (fl.twin && e.hp > 0) w.hitEnemy(e, wp.dmg, { p, kind: 'weapon', mul, crit: fl.crit || undefined, infAdd, knock, kx, ky, x: b.x, y: b.y, part: fl.part });
     w.emit({ t: 'bstrike', pid: p.pid, x: Math.round(b.x), y: Math.round(b.y), v: Math.round(fl.k * C.BELL_REF), h: 0, c: 0 }); // the hurl's own weight (hit-stop, shake) rides the 'hurl' event
@@ -264,22 +264,21 @@
 
   // ---------------- hurl ----------------
   // Hurls hand bell b from the hero's hand toward the aim (p.face; the cursor p.aimX / p.aimY sets the length, HURL_MIN .. HURL_D x wind): the record b.fly { tx, ty, x0, y0 (leg start), left (px to fly), k, full, crit, ms, twin, bolt, hit (struck this leg), carry, legs }.
-  // The hurl is an attack: the attack count (Masterstroke every 4th, Twin Fang, Thunder Gauntlet every 6th), the crit stack it spends, Swift's Flow, the Twist hook.
+  // The hurl is an attack: the attack count (Twin Fang), the crit stack it spends, Swift's Flow; a full-wind hurl carries the hold verb (the Finisher: fl.ms, x FIN_MUL; the others land with it: W.bellHold).
   function hurl(w, p, b) {
     const st = p.stats, wind = windOf(st, b), full = wind >= 1, a = p.face || 0, fin = Number.isFinite(p.aimX) && Number.isFinite(p.aimY);
     const want = fin ? Math.hypot(p.aimX - p.x, p.aimY - p.y) : C.HURL_D, dist = U.clamp(want, C.HURL_MIN, Math.max(C.HURL_MIN, C.HURL_D * wind));
     const tx = p.x + Math.cos(a) * dist, ty = p.y + Math.sin(a) * dist, left = dist;
     b.x = p.x; b.y = p.y;
-    let crit = false, tw = 1, ms = false;
+    let crit = false, ms = false;
     if (!w.pred) { // a client's prediction (game.js BELL_W) spends nothing the host decides
       p.atkCount++; p.lastAtkT = w.time; p.stealthT = 0;
-      tw = p.twist && ED.TWIST ? ED.TWIST.onAttack.call(w, p) || 1 : 1; // TWIST hook (src/sim/twist.js): a hurl is a weapon attack; its factor applies to this hurl's strikes, never to the reel
       if (p.critStacks > 0) { p.critStacks--; crit = true; }
-      if (st.masterstroke && (st.msOpen ? p.msReady : p.atkCount % 4 === 0)) { ms = true; p.msReady = false; } // Masterstroke: every 4th attack (Opening Stroke: the first after a dash)
+      if (full && st.hold === 'finisher') ms = true; // the Finisher rides a full-wind hurl
     }
     b.s = FLY; b.vx = (tx - b.x) / left * C.HURL_SPEED; b.vy = (ty - b.y) / left * C.HURL_SPEED;
     b.fly = { tx, ty, x0: b.x, y0: b.y, left, k: hurlK(wind) * (full ? 1 + st.fullSwing : 1), full, crit, ms, twin: !!st.twinEvery && p.atkCount % st.twinEvery === 0,
-      bolt: !!st.gauntlet && p.atkCount % 6 === 0, hit: new Set(), carry: [], legs: 0, res: false, part: 'bell.hurl', tw };
+      hit: new Set(), carry: [], legs: 0, res: false, part: 'bell.hurl' };
   }
 
   // One substep h of a flying bell: it moves toward its target, striking every foe its swept path touches (once a leg), carrying Unstoppable's foes; a wall ends the flight there, or (weapon.wall >= 1) turns it with the distance left, BOUNCES times.
@@ -290,7 +289,6 @@
       if (st.weapon.wall >= 1 && fl.legs < C.BOUNCES) { // ricochet: mirror the blocked axis, fly the distance left from here
         if (blocked(w, nx, b.y)) b.vx = -b.vx;
         if (blocked(w, b.x, ny) || !blocked(w, nx, b.y)) b.vy = -b.vy;
-        if (w.evoLine) w.evoLine(p, fl.x0, fl.y0, b.x, b.y, { mul: fl.k * (fl.tw || 1), crit: fl.crit, hit: fl.hit });
         fl.legs++; fl.x0 = b.x; fl.y0 = b.y; fl.hit = new Set();
         return;
       }
@@ -322,10 +320,9 @@
       const quake = fl.full && st.demolish > 0;
       w.explode(x, y, (quake ? 140 : 70) * area, sd * (st.wreck + (quake ? st.demolish : 0)), 0, p, 'shock', true, { wpn: false, stun: st.wreckStun, knock: quake ? 220 : 0, part: 'bell.wreck' });
     }
-    if (fl.bolt) { const tg = w.nearestEnemy(x, y, 220); if (tg) { w.emit({ t: 'bolt', x: Math.round(tg.x), y: Math.round(tg.y) }); w.explode(tg.x, tg.y, 40, sd * 2.2, 0, p, 'bolt', false, { el: 'lightning' }); } }
     if (st.stormBolt > 0) skyBolt(w, p, x, y);
     w.emit({ t: 'hurl', pid: p.pid, x: Math.round(x), y: Math.round(y), k: Math.round(fl.k * 100) / 100 });
-    if (w.evoLine) w.evoLine(p, fl.x0, fl.y0, x, y, { mul: fl.k * (fl.tw || 1), crit: fl.crit, hit: fl.hit });
+    if (fl.full && st.hold) w.bellHold(p, x, y, r);
     b.s = ANCHOR; b.vx = 0; b.vy = 0; b.k = fl.k; b.fly = null; b.tickT = w.time + C.BOLT_EVERY;
     w.smashCircle(p, x, y, r);
     if (b.reelQ) { b.reelQ = false; startReel(w, p, b); }
@@ -345,7 +342,6 @@
     const st = p.stats;
     b.s = REEL; b.reel = { k: C.REEL_K * (b.k || hurlK(C.WIND_GO)), hit: new Set(), drag: [], part: 'bell.reel' };
     w.emit({ t: 'reel', pid: p.pid, x0: Math.round(b.x), y0: Math.round(b.y), x1: Math.round(p.x), y1: Math.round(p.y) });
-    if (w.evoLine) w.evoLine(p, b.x, b.y, p.x, p.y, { mul: b.reel.k, crit: false, hit: b.reel.hit });
     if (st.tollStorm > 0) {
       const d = Math.hypot(b.x - p.x, b.y - p.y), q = w.foeScan((p.x + b.x) / 2, (p.y + b.y) / 2, d / 2 + C.WIRE_W), list = [];
       for (let k = 0; k < q.length; k++) { const e = q[k]; if (live(e) && U.segDist2(e.x, e.y, p.x, p.y, b.x, b.y) < (C.WIRE_W + e.r) ** 2) list.push(e); }
@@ -592,6 +588,7 @@
       p.bellPressN = pressN;
       if (haul && !p.bellHauled) p.bellSpin = spinOf(p);
       p.bellHauled = haul;
+      p.bellGuard = haul && st.hold === 'guard' && p.bells.some(b => b.s === HAND && windOf(st, b) >= 1); // Hallowed Arms: a guard while a hand bell winds at full wind (elements.js guardFront)
       if (press) for (const b of p.bells) { if (b.s === ANCHOR) startReel(this, p, b); else if (b.s === FLY) b.reelQ = true; }
       if (release && !p.bellLeap && !p.haulNear) { // the most-wound hand bell flies at WIND_GO wind or more; the other wound bells keep winding JUGGLE_T (never with an interactable in range: the attack interacts)
         let best = null, bw = -1;

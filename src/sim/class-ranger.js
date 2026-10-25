@@ -259,12 +259,12 @@
     w.hitEnemy(e, dmg, { p, kind: 'rupture', part: 'ranger.hemo', raw: true, noProc: true, crit: false, noGuard: true, bleed: true });
   }
 
-  // Plaguebearer: the dying foe's Bleed and Burn pools (as they are at its death) are queued as a burst PLAGUE_HOP s later (p.plagueQ), so a chain of deaths plays out over ticks.
+  // Plaguebearer: the dying foe's Bleed pool and the damage its Burn stacks still held (as they are at its death) are queued as a burst PLAGUE_HOP s later (p.plagueQ), so a chain of deaths plays out over ticks.
   function plagueQueue(p, e) {
     p.plagueQ.push({ t: PLAGUE_HOP, e, x: e.x, y: e.y, bleed: e.bleedPool, burn: e.burnPool });
   }
 
-  // The due bursts (at most CHAIN_TICK per tick): the corpse loses both pools (before its status spread runs, one chain hop later), every foe within PLAGUE_R takes plagueBurst of them at the rate their ticks pay, one hit (Burn pools already carry the stratum affinity).
+  // The due bursts (at most CHAIN_TICK per tick): the corpse loses its Bleed and Burn (before its status spread runs, one chain hop later), every foe within PLAGUE_R takes plagueBurst of them at the rate their ticks pay, one hit.
   function plagueBursts(w, p, dt) {
     const q = p.plagueQ, st = p.stats;
     let ran = 0;
@@ -272,12 +272,12 @@
       const b = q[i];
       if ((b.t -= dt) > 0) { i++; continue; }
       q.splice(i, 1); ran++;
-      b.e.bleedPool = 0; b.e.burnPool = 0;
+      b.e.bleedPool = 0; w.takeBurn(b.e, 1);
       const dB = b.bleed * st.plagueBurst * (1 + st.bleedMul), dF = b.burn * st.plagueBurst * (1 + st.burnMul);
       if (!(dB + dF > 0)) continue;
       for (const o of w.enemies) {
         if (o.hp <= 0 || o.spawnT > 0 || o.def.invuln || o.burrowed || U.dist2(o.x, o.y, b.x, b.y) >= (PLAGUE_R + o.r) ** 2) continue;
-        w.hitEnemy(o, dB + dF, Object.assign({ p, kind: 'rupture', part: 'ranger.plague', raw: true, noProc: true, crit: false, noGuard: true }, dF > dB ? { el: 'fire', affDone: true } : { bleed: true }));
+        w.hitEnemy(o, dB + dF, Object.assign({ p, kind: 'rupture', part: 'ranger.plague', raw: true, noProc: true, crit: false, noGuard: true }, dF > dB ? { el: 'fire' } : { bleed: true }));
       }
       w.emit({ t: 'chain', k: 'g', pts: [[Math.round(b.x), Math.round(b.y)], [Math.round(b.x) + PLAGUE_R, Math.round(b.y)]] });
     }

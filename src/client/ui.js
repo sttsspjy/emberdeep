@@ -599,7 +599,7 @@
   // Cards ignore input for a moment after they appear, so a key or click meant for combat never picks one.
   let boonFocus = 0, boonOffer = null, boonLock = 0;
   const BOON_LOCK_MS = 700;
-  const OFFER_HEAD = { start: 'Choose your first path', level: 'Choose a boon', epic: 'Choose an epic boon', forge: 'Forge: rank up a boon', twist: 'Choose a Twist' };
+  const OFFER_HEAD = { start: 'Choose your first path', level: 'Choose a boon', epic: 'Choose an epic boon', forge: 'Forge: rank up a boon' };
 
   // [header, subtitle, path colour key] for an offer message { src, forge }.
   function offerHead(offer, me) {
@@ -619,20 +619,16 @@
       return [OFFER_HEAD.start, cl && cl.element ? `Your paths decide your boons: pick up to ${ED.MAX_ELEMENTS} element paths` : `Your paths decide your boons: up to ${ED.MAX_ELEMENTS} element paths, or Generalist`, null];
     }
     if (src === 'forge') return [OFFER_HEAD.forge, 'The boon you pick gains one rank.', null];
-    if (src === 'twist') return [OFFER_HEAD.twist, `A new rule for the rest of the run, with a cost (at most ${ED.TWIST_MAX} per run)`, null];
     return [OFFER_HEAD[src] || OFFER_HEAD.level, '', null];
   }
 
-  // Path or owner line in the card header, ribbon for the card's role (gate, keystone, duo, evolution).
+  // Path or owner line in the card header, ribbon for the card's role (gate, keystone, evolution, route).
   function boonPathLine(b) {
-    if (b.duo) return [`<span class="bc-path two">${pathName(b.duo[0], true)} + ${pathName(b.duo[1], true)}</span>`, true];
     if (b.path) return [`<span class="bc-path">${ED.PATHS[b.path].name}</span>`, false];
     if (b.cls) return [`<span class="bc-path">${esc(b.route ? ED.routeLabel(b.cls, b.route) : ED.CLASSES[b.cls].name)}</span>`, false];
-    if (b.mut) { const par = ED.BOONS[b.mut], k = par && (par.path || par.evo); return [`<span class="bc-path">${k && ED.PATHS[k] ? ED.PATHS[k].name : 'Open'}</span>`, false]; } // a Mutation: its parent's path
-    if (b.twist) return ['<span class="bc-path">Playstyle</span>', false];
     return ['<span class="bc-path">Open</span>', false];
   }
-  const boonRibbon = (b, id) => (b.twist ? 'Twist' : b.mut ? 'Mutation' : b.evo ? 'Evolution' : b.asc ? 'Ascended' : b.duo ? 'Duo' : b.key ? 'Keystone' : id === 'generalist' ? 'Forsake the elements' : b.gate ? 'Path gate' : b.route ? (b.tag ? b.tag + (b.coop ? ' · co-op' : '') : 'Route') : '');
+  const boonRibbon = (b, id) => (b.evo ? 'Evolution' : b.key ? 'Keystone' : id === 'generalist' ? 'Forsake the elements' : b.gate ? 'Path gate' : b.route ? (b.tag ? b.tag + (b.coop ? ' · co-op' : '') : 'Route') : '');
   // The fork weapon of a class card as a small canvas drawn from the pixel atlas (null without art): tilted up-right about its grip.
   function weaponThumb(wid) {
     const A = ED.Atlas, id = ED.Sprites.forkAnim(wid); // the baked fork look: the same sprite the hero holds
@@ -678,18 +674,17 @@
   }
   const deltaHtml = (list) => (list && list.length ? `<div class="bdl">${list.map(d => `<span class="${d.better ? 'up' : 'down'}">${esc(d.label)} ${ED.Sheet.n1(d.from)} → ${ED.Sheet.n1(d.to)}${d.unit ? ' ' + d.unit : ''}</span>`).join('')}</div>` : '');
   // Card identity of boon `id`: kind (ED.PickFx), big (keystone, evolution, path gate), frame metal (rarity), the frame CSS value, identity colours and icon colour.
-  // Identity hue of boon `id` (card kind per ED.PickFx): pc = the card's path colour (route: class colour, Ascended and Twist: their rarity colour, Mutation: its parent's path colour, purse gold), icol = its icon colour (duo: the duo colour, Mutation: its rarity colour).
+  // Identity hue of boon `id` (card kind per ED.PickFx): pc = the card's path colour (route: class colour, purse gold), icol = its icon colour (the same).
   function boonHue(id, b) {
-    const kind = ED.PickFx ? ED.PickFx.kind(id) : 'general', path = b.path || (b.duo && b.duo[0]) || null, cl = b.cls ? ED.CLASSES[b.cls] : null;
-    const pc = kind === 'route' && cl ? cl.col.c : kind === 'asc' ? ED.RARITY.a.color : kind === 'twist' ? ED.RARITY.t.color : kind === 'mut' ? ED.PickFx.mutColor(b) : kind === 'purse' ? '#ffd36b' : path && ED.PATHS[path] ? ED.PATHS[path].color : ED.PATHS.general.color;
-    return { kind, path, pc, icol: kind === 'duo' ? ED.RARITY.d.color : kind === 'mut' ? ED.RARITY.m.color : pc }; // the icon wears the card's identity hue; rarity lives in the frame metal and the socket gem
+    const kind = ED.PickFx ? ED.PickFx.kind(id) : 'general', path = b.path || null, cl = b.cls ? ED.CLASSES[b.cls] : null;
+    const pc = kind === 'route' && cl ? cl.col.c : kind === 'purse' ? '#ffd36b' : path && ED.PATHS[path] ? ED.PATHS[path].color : ED.PATHS.general.color;
+    return { kind, path, pc, icol: pc }; // the icon wears the card's identity hue; rarity lives in the frame metal and the socket gem
   }
   UI.boonIconColor = (id) => boonHue(id, ED.BOONS[id]).icol;
   function cardLook(id, b) {
-    const PF = ED.PickFx, CA = ED.CardArt, { kind, path, pc, icol } = boonHue(id, b), big = !!(PF && PF.big(id)), metal = b.asc ? 'gold' : CA ? CA.metal(b.rar) : 'iron';
-    const path2 = b.duo ? b.duo[1] : null;
-    const frame = !CA ? '' : kind === 'duo' ? CA.frame('duo', metal, { a: path, b: path2 }) : kind === 'route' ? CA.frame('route', metal, { cls: b.cls }) : CA.frame(kind, metal, { big });
-    return { kind, big, metal, path, path2, pc, pc2: path2 && ED.PATHS[path2] ? ED.PATHS[path2].color : '', frame, icol };
+    const PF = ED.PickFx, CA = ED.CardArt, { kind, path, pc, icol } = boonHue(id, b), big = !!(PF && PF.big(id)), metal = CA ? CA.metal(b.rar) : 'iron';
+    const frame = !CA ? '' : kind === 'route' ? CA.frame('route', metal, { cls: b.cls }) : CA.frame(kind, metal, { big });
+    return { kind, big, metal, path, pc, frame, icol };
   }
   // Decoration layer of a card (aria-hidden): crest, idle sprites, focus carets and the rarity socket gem; kinds per ED.PickFx.
   const IDLE = {
@@ -699,12 +694,11 @@
     poison: '<i class="ca-bubble b1"></i><i class="ca-bubble b2"></i><i class="ca-drip d1"></i><i class="ca-drip d2"></i>',
     holy: '<i class="ca-arch"></i><i class="ca-sweep"></i>',
     shadow: '<i class="ca-eye"></i><i class="ca-wisp w1"></i><i class="ca-wisp w2"></i><i class="ca-wisp w3"></i>',
-    general: '', asc: '<i class="ca-wing l"></i><i class="ca-wing r"></i>', purse: '<i class="ca-knot"></i><i class="ca-glint"></i>',
-    mut: '<i class="ca-cell c1"></i><i class="ca-cell c2"></i>', twist: '<i class="ca-seal"></i><i class="ca-blood d1"></i><i class="ca-blood d2"></i>',
+    general: '', purse: '<i class="ca-knot"></i><i class="ca-glint"></i>',
   };
   function cardArt(L, b, have, max) {
     const CA = ED.CardArt; if (!CA) return '';
-    let h = L.kind === 'duo' ? (IDLE[L.path] || '') + (IDLE[L.path2] || '').replace(/ca-(arch|eye)/, 'ca-off') : L.kind === 'route' ? '' : IDLE[L.kind] || '';
+    let h = L.kind === 'route' ? '' : IDLE[L.kind] || '';
     if (L.kind === 'route') {
       const c = CA.crest(b.cls), cl = ED.CLASSES[b.cls], n = b.max || 1;
       h += `<i class="ca-streamer l" style="--st:${c.streamer}"></i><i class="ca-streamer r" style="--st:${c.streamer}"></i><i class="ca-shield" style="--sh:${c.shield}"><img alt="" src="${CA.icon(cl.icon, cl.col.c)}"></i>`;
@@ -721,12 +715,11 @@
     el.dataset.kind = L.kind;
     el.style.setProperty('--rc', ED.RARITY[b.rar].color);
     el.style.setProperty('--pc', L.pc);
-    if (L.pc2) el.style.setProperty('--pc2', L.pc2);
     if (L.frame) el.style.setProperty('--cf', L.frame);
     const rank = have ? (have < max ? `Rank ${have} → ${have + 1} (max ${max})` : `Rank ${have} (max)`) : max > 1 ? `Max rank ${max}` : '';
     const ribbon = boonRibbon(b, id), [line] = boonPathLine(b);
     const icon = ED.CardArt ? ED.CardArt.icon(b.icon, L.icol) : ED.Icons.boonUrl(id);
-    el.innerHTML = `${cardArt(L, b, have, max)}${ribbon ? `<span class="bc-ribbon">${ribbon}</span>` : ''}<div class="bc-top">${line}<span class="bc-rar">${ED.RARITY[b.rar].name}</span></div><img class="bc-icon" alt="" src="${icon}"><div class="bn">${esc(b.name)}</div>${b.evo ? `<div class="bsub">${esc(UI.evoName(b.evo, heroWeaponName(me)))}</div>` : ''}${b.mut && ED.BOONS[b.mut] ? `<div class="bsub">Mutates ${esc(ED.BOONS[b.mut].name)}</div>` : ''}${weakChip(b)}${b.route ? classBody(b, id, have, me) : `<div class="bd">${esc(ED.Sheet.text(id, Math.min(max, have + 1), me && me.stats, ED.Game.s && ED.Game.s.view && ED.Game.s.view.stratum))}</div>`}${b.cost ? `<div class="bc-cost">${esc(b.cost)}</div>` : ''}${deltaHtml(deltas)}${rank ? `<div class="bk${have ? ' own' : ''}">${rank}</div>` : ''}`;
+    el.innerHTML = `${cardArt(L, b, have, max)}${ribbon ? `<span class="bc-ribbon">${ribbon}</span>` : ''}<div class="bc-top">${line}<span class="bc-rar">${ED.RARITY[b.rar].name}</span></div><img class="bc-icon" alt="" src="${icon}"><div class="bn">${esc(b.name)}</div>${b.evo ? `<div class="bsub">${esc(UI.evoName(b.evo, heroWeaponName(me)))}</div>` : ''}${weakChip(b)}${b.route ? classBody(b, id, have, me) : `<div class="bd">${esc(ED.Sheet.text(id, Math.min(max, have + 1), me && me.stats, ED.Game.s && ED.Game.s.view && ED.Game.s.view.stratum))}</div>`}${deltaHtml(deltas)}${rank ? `<div class="bk${have ? ' own' : ''}">${rank}</div>` : ''}`;
     const wb = el.querySelector('.bweap');
     if (wb) { const th = weaponThumb(wb.dataset.w); if (th) wb.insertBefore(th, wb.firstChild); }
     el.onclick = () => { if (performance.now() >= boonLock) UI.pickBoon(i); };
@@ -757,7 +750,7 @@
     $('boon-sub').textContent = sub; $('boon-sub').hidden = !sub;
     $('boon-count').textContent = offer.picks > 1 ? `(${offer.picks} waiting)` : '';
     const fixed = offer.src === 'class'; // a route or fork pick is a fixed choice: no reroll
-    const rr = $('btn-reroll'), canRe = offer.rerolls > 0 && !offer.forge && !fixed && !offer.noRe; // noRe: a Twist offer with no other Twist to show
+    const rr = $('btn-reroll'), canRe = offer.rerolls > 0 && !offer.forge && !fixed;
     const pad = ED.Input.device === 'pad';
     rr.hidden = !canRe; rr.innerHTML = `<kbd>${pad ? 'Y' : esc(ED.Input.label('skill1'))}</kbd> Reroll (${offer.rerolls})`;
     $('boon-hint').innerHTML = (pad ? '<kbd>D-pad</kbd> select · <kbd>X</kbd> take · <kbd>Back</kbd> sheet' : `${keyPair('left', 'right')} select · <kbd>${esc(ED.Input.label('attack'))}</kbd> or <kbd>Enter</kbd> take · <kbd>${esc(ED.Input.label('map'))}</kbd> character sheet`) + (fixed ? ' · Routes are fixed choices' : '');
@@ -771,7 +764,7 @@
   UI.boonMove = (d) => { if (!boonOffer) return; boonFocus = (boonFocus + d + boonOffer.boons.length) % boonOffer.boons.length; paintFocus(); ED.Audio.play('hover'); };
   UI.boonConfirm = () => { if (!boonOffer || performance.now() < boonLock) return; UI.pickBoon(boonFocus); };
   UI.boonReroll = (byKey) => {
-    if (!boonOffer || !(boonOffer.rerolls > 0) || boonOffer.forge || boonOffer.src === 'class' || boonOffer.noRe || performance.now() < boonLock) return;
+    if (!boonOffer || !(boonOffer.rerolls > 0) || boonOffer.forge || boonOffer.src === 'class' || performance.now() < boonLock) return;
     boonLock = performance.now() + BOON_LOCK_MS; // the fresh hand arrives in a moment; don't send twice
     if (byKey) ED.Audio.play('click');
     ED.Game.act({ t: 'reroll' });
@@ -804,14 +797,13 @@
   const FX = {
     fire: '<i class="pf-burn"></i>', ice: '<i class="pf-flash"></i>' + [0, 1, 2, 3, 4, 5, 6, 7].map(k => { const a = (k * 45 + 20) * Math.PI / 180; return `<i class="pf-shard" style="--dx:${Math.round(Math.cos(a) * 40)};--dy:${Math.round(Math.sin(a) * 48)};--sv:${k % 3}"></i>`; }).join(''),
     lightning: '<i class="pf-flash"></i><i class="pf-bolt"></i>', poison: '<i class="pf-melt"></i>', holy: '<i class="pf-pillar"></i>', shadow: '<i class="pf-vortex"></i>',
-    general: '<i class="pf-anvil"></i><i class="pf-flash"></i>', route: '<i class="pf-banner"></i>', duo: '<i class="pf-l"></i><i class="pf-r"></i><i class="pf-flash"></i>',
-    asc: '<i class="pf-flash prism"></i>', mut: [0, 1, 2, 3, 4, 5].map(k => { const a = (k * 60 + 30) * Math.PI / 180; return `<i class="pf-cell" style="--dx:${Math.round(Math.cos(a) * 36)};--dy:${Math.round(Math.sin(a) * 44)}"></i>`; }).join(''),
-    twist: '<i class="pf-flash"></i><i class="pf-seal"></i>', purse: [0, 1, 2, 3, 4, 5].map(k => `<i class="pf-coin" style="--cx:${12 + k * 15}%;--cd:${(k % 3) * 0.04}s"></i>`).join(''),
+    general: '<i class="pf-anvil"></i><i class="pf-flash"></i>', route: '<i class="pf-banner"></i>',
+    purse: [0, 1, 2, 3, 4, 5].map(k => `<i class="pf-coin" style="--cx:${12 + k * 15}%;--cd:${(k % 3) * 0.04}s"></i>`).join(''),
   };
   function pickFx(card) {
     const r = card.getBoundingClientRect(), kind = card.dataset.kind, fx = document.createElement('div');
     fx.className = 'pick-fx k-' + kind; fx.setAttribute('aria-hidden', 'true');
-    fx.style.cssText = `left:${Math.round(r.left)}px;top:${Math.round(r.top)}px;width:${Math.round(r.width)}px;height:${Math.round(r.height)}px;--pc:${card.style.getPropertyValue('--pc')};--pc2:${card.style.getPropertyValue('--pc2') || card.style.getPropertyValue('--pc')}`;
+    fx.style.cssText = `left:${Math.round(r.left)}px;top:${Math.round(r.top)}px;width:${Math.round(r.width)}px;height:${Math.round(r.height)}px;--pc:${card.style.getPropertyValue('--pc')}`;
     fx.innerHTML = FX[kind] || '';
     $('ov-boon').appendChild(fx);
   }
