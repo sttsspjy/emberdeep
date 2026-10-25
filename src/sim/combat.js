@@ -581,7 +581,7 @@
     if (hb && hb.block && hb.block.call(this, p, src)) return false; // a held skill stops it (Bulwark)
     if (p.rh && p.rh.hurtPre && this.relicAny(p, 'hurtPre', src)) return false; // relic blocks (relics.js)
     if (!src.hazard && st.dodge && this.rng.chance(st.dodge)) { this.emit({ t: 'block', x: p.x, y: p.y, k: 'dodge' }); p.invuln = 0.25; return false; }
-    if (!src.hazard && st.aegis && p.aegisT <= 0) { p.aegisT = 10; p.invuln = 0.4; this.emit({ t: 'block', x: p.x, y: p.y, k: 'aegis' }); return false; }
+    if (!src.hazard && st.aegis && p.aegisT <= 0) { p.aegisT = 10; p.invuln = 0.4; this.emit({ t: 'block', pid: p.pid, x: p.x, y: p.y, k: 'aegis' }); return false; }
     let dmg = amount * ED.Stats.armorMul(st.armor) * (1 + st.vuln);
     if (p.rh && p.rh.hurtMul) dmg *= this.relicProd(p, 'hurtMul', src);
     // Brace (own, or a Knight with Hold the Line within 100) x the best Sanctuary here, never below DR_FLOOR; Last Stand and Verdict weaken stack separately
@@ -608,7 +608,7 @@
     if (p.bellS === 1 && p.hp < p.maxHp * ED.CONST.BELL_HP) p.bellS = 2; // the Drowned Bell's watch is broken (rooms.js)
     if (this.boss) p.hitThisBoss = true;
     if (dmg > 0) this.emit({ t: 'hurt', pid: p.pid, v: Math.round(dmg * 10) / 10, x: Math.round(p.x), y: Math.round(p.y) });
-    else this.emit({ t: 'block', x: p.x, y: p.y, k: 'aegis' });
+    else this.emit({ t: 'block', x: p.x, y: p.y, k: 'shield' }); // a shield took the whole hit
     if (e && e.hp > 0) {
       if (st.thorns) this.hitEnemy(e, st.thorns, { p, kind: 'thorns', noProc: true, crit: false });
       if (ED.hasAffix(e, 'vampiric')) e.hp = Math.min(e.maxHp, e.hp + dmg * 3 * ED.CONST.HP_K);

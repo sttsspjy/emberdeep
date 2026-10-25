@@ -114,6 +114,10 @@
     cue(name, vol === undefined ? 1 : vol, arg, t);
   };
 
+  // Run-content cues (events, votes, relics, minigames): minimum gaps and priorities.
+  Object.assign(GAP, { lore: 0.5, vtick: 0.08, vtally: 0.5, rproc: 0.08, lifted: 0.5, bossrelic: 1, crumble: 0.2, shellswap: 0.12, trapsnap: 0.06 });
+  Object.assign(PRIO, { lore: 2, vtick: 2, vtally: 2, rproc: 2, lifted: 2, bossrelic: 2, crumble: 1, shellswap: 1, trapsnap: 1 });
+
   function sting(kind, t) {
     if (!A.score) { [523, 659, 784, 1046].forEach((f, i) => tone('triangle', f, f, 0.6, 0.1, null, t + i * 0.12)); return; }
     prio = 3; const clear = kind === 'clear', d = A.score.sting(kind, t + 0.02);
@@ -192,6 +196,37 @@
       case 'umbral': noise('highpass', 2400, 900, 0.3, 0.07 * v, 0.7); tone('sine', 220, 330, 0.3, 0.07 * v); tone('triangle', 440, 330, 0.3, 0.05 * v); break;
       case 'evolve': [262, 330, 392, 523, 659].forEach((f, i) => { tone('triangle', f, f * 1.005, 0.9, 0.08 * v, null, t + i * 0.07); tone('sine', f * 2, f * 2, 0.7, 0.03 * v, null, t + i * 0.07); }); tone('sine', 131, 131, 1.0, 0.12 * v); noise('highpass', 7000, 4000, 0.6, 0.03 * v, 1, null, t + 0.3); break;
       case 'claim': [784, 1175, 1568].forEach((f, i) => tone('sine', f, f, 0.3, 0.06 * v, null, t + i * 0.05)); noise('highpass', 6000, 4000, 0.25, 0.025 * v); break;
+      // Run content. lore: a page rustles, then a soft rising chime over a hum. vtick (arg: 'vote' a vote cast; n the countdown's last seconds, higher as they run out): a wood-block tick.
+      // vtally: a gavel knock, then a fifth falling to the root. rproc (arg 'hit' Whetstone, 'crit' Metronome, 'block' a relic block): a whetstone shing, a tick-tock and a bell, a glassy ward chime.
+      // lifted: a chain snaps, then a rising airy chord. bossrelic: a low swell opens onto a bronze bell chord and a sparkle. crumble: stone falls apart with grit. shellswap (arg: round 1-3, higher and quicker): a cup's whoosh and scrape. trapsnap: a metal snap with a spring ring
+      case 'lore':
+        noise('bandpass', 2400, 4200, 0.12, 0.18 * v, 1.2); noise('bandpass', 3200, 1800, 0.1, 0.15 * v, 1.2, null, t + 0.1);
+        [659, 784, 1175].forEach((f, i) => tone('sine', f, f * 1.002, 0.55 - i * 0.1, 0.11 * v, null, t + 0.12 + i * 0.09)); tone('triangle', 330, 329, 0.7, 0.06 * v, null, t + 0.1);
+        break;
+      case 'vtick': { const c = typeof arg === 'number', f = c ? 880 * Math.pow(2, (5 - arg) * 2 / 12) : 1320; tone('triangle', f, f * 0.9, 0.05, 0.13 * v); noise('bandpass', f * 2, f * 1.5, 0.02, 0.13 * v, 3); if (!c) tone('sine', f * 1.5, f * 1.5, 0.08, 0.06 * v, null, t + 0.05); break; }
+      case 'vtally':
+        tone('sine', 180, 80, 0.12, 0.25 * v); noise('bandpass', 1200, 500, 0.05, 0.16 * v, 2); tone('triangle', 900, 700, 0.04, 0.06 * v);
+        tone('triangle', 784, 784, 0.25, 0.07 * v, null, t + 0.14); tone('triangle', 523, 523, 0.4, 0.08 * v, null, t + 0.26); tone('sine', 1046, 1046, 0.35, 0.03 * v, null, t + 0.26);
+        break;
+      case 'rproc':
+        if (arg === 'block') { tone('sine', 1568, 1560, 0.3, 0.1 * v); tone('sine', 2349, 2340, 0.22, 0.06 * v, null, t + 0.03); noise('highpass', 5000, 3000, 0.12, 0.06 * v, 0.8); }
+        else if (arg === 'crit') { tone('square', 2000, 1900, 0.015, 0.07 * v); tone('square', 1500, 1450, 0.015, 0.07 * v, null, t + 0.06); fmBell(1047, 2, 1.2, 0.35, 0.1 * v, t + 0.06); }
+        else { noise('bandpass', 2500, 6000, 0.08, 0.24 * v, 3); tone('sine', 1760, 1750, 0.16, 0.1 * v, null, t + 0.03); }
+        break;
+      case 'lifted':
+        noise('highpass', 3500, 1500, 0.06, 0.18 * v, 0.8); tone('square', 1900, 900, 0.04, 0.05 * v); tone('square', 2600, 1300, 0.03, 0.035 * v, null, t + 0.03);
+        [523, 659, 784, 1046].forEach((f, i) => tone('sine', f, f * 1.01, 0.5, 0.05 * v, null, t + 0.1 + i * 0.06)); noise('bandpass', 600, 3000, 0.4, 0.05 * v, 1.5, null, t + 0.08, 0.1);
+        break;
+      case 'bossrelic':
+        tone('sine', 65, 98, 0.5, 0.24 * v, null, t, 0.25); noise('bandpass', 300, 2400, 0.3, 0.1 * v, 1.2, null, t, 0.25);
+        fmBell(392, 1.41, 1.2, 1, 0.1 * v, t + 0.3); [784, 988, 1175, 1568].forEach((f, i) => tone('sine', f, f, 0.6 - i * 0.08, 0.065 * v, null, t + 0.3 + i * 0.05)); noise('highpass', 7000, 4000, 0.5, 0.04 * v, 1, null, t + 0.32);
+        break;
+      case 'crumble':
+        noise('bandpass', 1800, 300, 0.35, 0.16 * v, 1); tone('sine', 110, 55, 0.18, 0.16 * v); noise('highpass', 1500, 4000, 0.25, 0.05 * v, 0.7, null, t + 0.05);
+        for (let i = 0, n = lite() ? 3 : 6; i < n; i++) noise('bandpass', rnd(900, 2200), 500, 0.02, rnd(0.05, 0.09) * v, 2, null, t + 0.03 + Math.random() * 0.25);
+        break;
+      case 'shellswap': { const k = 1 + 0.12 * Math.max(0, (arg | 0) - 1); noise('bandpass', 700 * k, 2200 * k, 0.12 / k, 0.32 * v, 1.4); tone('triangle', 260 * k, 200 * k, 0.05, 0.08 * v, null, t + 0.08 / k); break; }
+      case 'trapsnap': tone('square', 2400, 1200, 0.03, 0.06 * v); noise('highpass', 3000, 1600, 0.05, 0.22 * v, 0.8); tone('sine', 1180, 1100, 0.18, 0.045 * v, null, t + 0.01); tone('sine', 130, 60, 0.1, 0.2 * v); break;
       case 'block': tone('sine', 150, 70, 0.14, 0.26 * v); noise('bandpass', 900, 300, 0.1, 0.16 * v, 1.5); tone('square', 1250, 900, 0.05, 0.05 * v); break;
       case 'howl': tone('sawtooth', 300, 185, 0.9, 0.09 * v); tone('sawtooth', 312, 192, 0.9, 0.07 * v); tone('sine', 150, 90, 0.9, 0.12 * v); noise('lowpass', 600, 150, 0.8, 0.08 * v); break;
       case 'rift': tone('sine', 950, 110, 0.55, 0.1 * v); tone('triangle', 60, 40, 0.6, 0.18 * v); noise('bandpass', 200, 3200, 0.45, 0.1 * v, 4); break;

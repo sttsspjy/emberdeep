@@ -44,6 +44,7 @@
 
   // ---------------- props ----------------
   let hoodOk = false;
+  const swapAt = { t0: -1, k: -1 }; // the shell game's last swap that played its whoosh (shuffle start, swap index)
   X.draw = (c, p, R, view, t, G, L, art) => {
     const g = p.g;
     if (!g || p.kind.indexOf('mg_') !== 0) return false;
@@ -77,6 +78,11 @@
         } else {
           c.fillStyle = '#3a2a4a'; c.beginPath(); c.moveTo(-9, 0); c.lineTo(-7, -18); c.quadraticCurveTo(0, -30, 7, -18); c.lineTo(9, 0); c.closePath(); c.fill();
           rect(c, '#140c1a', -4, -22, 8, 6); rect(c, GOLD, -3, -20, 2, 2); rect(c, GOLD, 1, -20, 2, 2);
+        }
+        if (g.ph === 1 && g.d > 0 && g.sw) { // each swap of the shuffle starts with a whoosh (the swaps run on the dealer payload's clock, MG.cupAt)
+          const k = Math.floor((tl - g.t0) / g.d);
+          if (swapAt.t0 !== g.t0) { swapAt.t0 = g.t0; swapAt.k = -1; }
+          if (k >= 0 && k < g.sw.length / 2 && k > swapAt.k) { swapAt.k = k; ED.Audio.play('shellswap', 0.8, g.r | 0); }
         }
         const lab = g.ph === 1 ? ['Watch the pearl', GOLD] : g.ph === 2 ? ['...', DIM] : g.ph === 3 ? ['Pick a cup ' + secs(g.end), GOLD] : g.ph === 4 ? [g.res === 1 ? 'Found it!' : 'Empty!', g.res === 1 ? GOLD : RED] : g.ph === 0 && g.r > 1 ? ['Round ' + g.r + '?', GOLD] : null;
         if (lab) R.label(c, lab[0], 0, -40, lab[1]);
@@ -174,7 +180,7 @@
       case 'trap':
         if (ev.r) { F.ring(ev.x, ev.y, ev.r, '#d8cbb8', 0.3, 2); F.burst(ev.x, ev.y, 8, { color: '#d8cbb8', sp: 80, life: 0.35, size: 2 }); }
         else for (let i = 0; i <= 4; i++) F.burst(U.lerp(ev.x, ev.x1, i / 4), U.lerp(ev.y, ev.y1, i / 4), 3, { color: '#e8e0d0', sp: 70, life: 0.3, size: 2 });
-        A.play('thud', 0.45);
+        A.play('trapsnap', 0.8);
         break;
       case 'start': F.ring(ev.x, ev.y - 10, 34, GOLD, 0.45, 2); A.play('click'); break;
       case 'end': F.ring(ev.x, ev.y - 10, 26, DIM, 0.4, 2); A.play('unlock', 0.6); break;

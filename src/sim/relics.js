@@ -79,7 +79,7 @@
   // A curse's lift counter for p: one step; at lift.n the curse is gone (a toast tells its hero), else the build carries the count to the sheet.
   W.liftStep = function (p, id) {
     const n = (p.rs[id] | 0) + 1;
-    if (n >= R[id].lift.n) { this.removeRelic(p, id); this.msgs.push({ to: p.pid, t: 'toast', text: R[id].name + ' is lifted.', info: true }); return; }
+    if (n >= R[id].lift.n) { this.removeRelic(p, id); this.msgs.push({ to: p.pid, t: 'toast', text: R[id].name + ' is lifted.', info: true }); this.emit({ t: 'lifted', pid: p.pid, id, x: Math.round(p.x), y: Math.round(p.y) }); return; }
     p.rs[id] = n;
     this.sendBuild(p);
   };
@@ -99,7 +99,8 @@
   };
 
   // ---------------- behaviour ----------------
-  const atkEvery = (id, o) => function (p) { return p.atkCount % v(id).every === 0 ? o : null; };
+  // An every-Nth attack relic: o on the empowered attack, which emits 'rproc' (the client's relic chime).
+  const atkEvery = (id, o) => function (p) { if (p.atkCount % v(id).every) return null; this.emit({ t: 'rproc', pid: p.pid, k: id, x: Math.round(p.x), y: Math.round(p.y) }); return o; };
   // Explorer's Compass: unknown event rooms reachable within v.rows rows above the party's room get their identity (each reveal draws one event from the run's pool).
   const reveal = (w) => { if (!w.patchRoom || !w.room || !ED.Events) return; const top = w.room.row + v('compass').rows; for (const r of ED.Events.ahead(w)) if (r.row <= top && r.type === 'event' && !r.event) w.patchRoom(r.id, { reveal: true }); };
   const KNOCK = (w, p, list, k) => { for (const e of list) { if (e.boss) continue; const d = Math.hypot(e.x - p.x, e.y - p.y) || 1; e.kbx += (e.x - p.x) / d * k; e.kby += (e.y - p.y) / d * k; } };
@@ -129,7 +130,7 @@
       hurtPre(p, src) {
         if (!p.rt.buckler || src.hazard) return false;
         p.rt.buckler = false; p.invuln = 0.4;
-        this.emit({ t: 'block', x: Math.round(p.x), y: Math.round(p.y), k: 'aegis' });
+        this.emit({ t: 'block', pid: p.pid, x: Math.round(p.x), y: Math.round(p.y), k: 'buckler' });
         return true;
       },
     },
@@ -185,7 +186,7 @@
         if (!src.proj) return false;
         p.rt.mirror = (p.rt.mirror | 0) + 1;
         if (p.rt.mirror % v('mirror').every) return false;
-        this.emit({ t: 'block', x: Math.round(p.x), y: Math.round(p.y), k: 'mirror' });
+        this.emit({ t: 'block', pid: p.pid, x: Math.round(p.x), y: Math.round(p.y), k: 'mirror' });
         return true;
       },
     },
@@ -208,7 +209,7 @@
         const c = v('lastbreath');
         if (src.hazard || !(p.hp < p.maxHp * c.at) || !this.rng.chance(c.ch)) return false;
         p.invuln = 0.25;
-        this.emit({ t: 'block', x: Math.round(p.x), y: Math.round(p.y), k: 'dodge' });
+        this.emit({ t: 'block', pid: p.pid, x: Math.round(p.x), y: Math.round(p.y), k: 'lastbreath' });
         return true;
       },
     },

@@ -1,5 +1,5 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it.
-// Usage: node tools/browse.js [--scen=smoke,crowd70,boss,shots,sheet,map,screens,wardrobe,cosmetics,swing,picks,cards,bell,arenas,verbs,props,games,portal,hits,music] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
+// Usage: node tools/browse.js [--scen=smoke,crowd70,boss,shots,sheet,map,screens,wardrobe,cosmetics,swing,picks,cards,bell,arenas,verbs,props,doors,games,portal,hits,music] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
 //   [--quality=low,high] [--ops] [--json] [--seed=1] [--strat=1] [--embers=N] [--mortal] [--software] [--forcepost] [--sync] [--warm=2.5] [--timeout=300]
 // Mechanism: headless only (no headed option, no window calls); one browser per invocation, one fresh context per scenario page, all closed at exit, on error and on SIGINT.
 //   A read-only node http server on 127.0.0.1 (random port) serves --root (default: this repo). Playwright resolves via require('playwright'), else %LOCALAPPDATA%\npm-cache\_npx\*\node_modules (best match for the installed browsers).
@@ -29,6 +29,8 @@
 //     The first hand also checks the offer lock (a confirm and a click 150 ms in pick nothing, the fill sweeps; a shot lock-150ms; released by 750 ms).
 //     Fails on a missing card, a card whose kind differs from ED.PickFx.kind, a frame that did not resolve, equal path gate icons, a pick without an effect layer, Low quality leftovers or an offer lock that does not hold or release.
 //   props: per-hero and party props staged around the hero and used like a player (see scenProps): another hero's prop and a claimed co-op hoard prompt nothing, taken props vanish with a puff; one shot.
+//   doors: a 2- and a 3-exit room at the narrowest width (6n + 5 tiles: retyped to rest rooms), every exit a dark fight, a hero at each door (one in a doorway: a party door line); one shot each;
+//     fails when two door preview lines overlap or the dark-room rule line is missing.
 //   bell: the hero, Anchor Leap and Peal icons and screenshots of the Bellwarden (unlocked for the run; --weapon picks the bell): winding in a staged fight with Full Swing, a hurl in flight, the bell anchored, a reel, an Anchor Leap, a Peal, four Bellwardens in the crowd at High and Low quality,
 //     and a client's view from a two-peer net check in the same page (host World + client Game, JSON snapshots, 50 ms each way); fails on bad bells, missing bell events or a client that drifts from the host (see scenBell).
 //   verbs: one screenshot per path verb staged in the largest combat room (still foes in front of the hero, input through ED.Input like a player): the flame cone, Burn stacks, a death burst on Scorched Earth,
@@ -39,7 +41,7 @@
 //   portal: portal descents sampled every HUD frame (FX.fade, #hud alpha, viewed stratum): solo at each --quality (high,low), a solo pass with the sim delay held 1.5 s (a shot mid-hold), and a client of an in-page host World;
 //     fails unless the screen is black within 0.25 s of 'descend' and stays black until the new stratum has drawn, then fades in monotonically over 0.25-0.9 s.
 //   hits: combat cues rendered in an OfflineAudioContext through the per-frame aggregation (each weapon material, x6, crit, heavy, element tail, Low quality; every element's DoT at 1 and 20 foes, the Burn bed,
-//     a 2 s bonfire of 20 and of 1 burning foes; each application cue; element and class skill impacts), a WAV per cue in --outdir; fails on a throw, a silent cue, peak > 0.99, a cue filling its voice budget or a DoT not louder at 20 foes.
+//     a 2 s bonfire of 20 and of 1 burning foes; each application cue; element and class skill impacts; the run-content cues 'new-*': lore, vote tick and tally, relic procs, curse lifted, boss relic, crumble, shell swap, trap snap), a WAV per cue in --outdir; fails on a throw, a silent cue, peak > 0.99, a cue filling its voice budget or a DoT not louder at 20 foes.
 //   music: every score track (24 s: a fight at level 1 then heavy, a boss through its three levels), the four stingers, a Low quality fight and a transition demo bounced in an OfflineAudioContext, a WAV each in --outdir;
 //     the track switching rules (BR.musicSwitch) and 25 s of a solo run's context picker; fails on a throw, a silent mix, peak > 0.99, a silent bass layer, no drums or perc, quiet drums or bass or drums thin above 150 Hz
 //     in a fight or boss, Low quality playing pad, arp or lead, a broken switching rule, or a fight without fight music.
@@ -78,7 +80,7 @@ function parseArgs(argv) {
   if (!vp) throw new Fail('--viewport is WxH, e.g. 1920x1080');
   o.vw = +vp[1]; o.vh = +vp[2];
   o.scens = o.scen.split(',').map(s => s.trim()).filter(Boolean);
-  for (const s of o.scens) if (!/^(smoke|boss|shots|sheet|map|screens|wardrobe|cosmetics|swing|picks|cards|bell|arenas|verbs|props|games|portal|hits|music|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, boss, shots, sheet, map, screens, wardrobe, cosmetics, swing, picks, cards, bell, arenas, verbs, props, games, portal, hits, music, crowdN)');
+  for (const s of o.scens) if (!/^(smoke|boss|shots|sheet|map|screens|wardrobe|cosmetics|swing|picks|cards|bell|arenas|verbs|props|doors|games|portal|hits|music|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, boss, shots, sheet, map, screens, wardrobe, cosmetics, swing, picks, cards, bell, arenas, verbs, props, doors, games, portal, hits, music, crowdN)');
   if (!o.scens.length) throw new Fail('--scen is empty');
   o.qualities = o.quality ? o.quality.split(',').map(s => s.trim()) : null;
   if (o.qualities && o.qualities.some(q => q !== 'low' && q !== 'high')) throw new Fail('--quality is low, high or low,high');
@@ -523,6 +525,39 @@ function pageBoot(cfg) {
     return { room: best.id, type: best.type, row: best.row, exits: best.exits.length, names: best.exits.map(id => ED.Render.roomName ? ED.Render.roomName(w.floor.rooms[id]) : w.floor.rooms[id].type) };
   };
 
+  // doors: a room of the current floor with n exits (none of them the boss) retyped to a rest room (the narrowest width for n exits, 6n + 5 tiles), every exit a dark room not yet visited, the room cleared and entered;
+  // a hero under each door (ally heroes added; the first door's hero stands in its doorway, a party door line). Wraps ED.Render.label once so BR.doorLabels can record a frame. Returns { room, w, exits } or null.
+  BR.doorRoom = (n) => {
+    const ED = window.__ED, s = ED.Game.s, w = s && s.world, D = ED.Dungeon, T = ED.CONST.TILE, R = ED.Render;
+    if (!w) throw new Error('no run to stage the doors in');
+    const r0 = w.floor.rooms.find(r => r.exits.length === n && r.type !== 'boss' && r.exits.every(id => w.floor.rooms[id].type !== 'boss'));
+    if (!r0) return null;
+    D.patchRoom(w.floor, r0.id, { type: 'rest' });
+    for (const id of r0.exits) { const nb = w.floor.rooms[id]; nb.dark = true; if (!nb.reward) nb.reward = 'boon'; w.roomState[id].cleared = w.roomState[id].visited = false; }
+    w.roomState[r0.id].cleared = true; w.enterRoom(r0.id, 's');
+    const heroes = [s.me], keys = Object.keys(w.room.doors);
+    for (let i = 1; i < n; i++) { const pid = 'door' + i, c = ED.CLASS_IDS[i % ED.CLASS_IDS.length]; heroes.push(w.players.get(pid) || w.addPlayer({ pid, name: ['Wren', 'Ash', 'Moss'][i - 1], slot: i, cls: c, weapon: ED.weaponChoices(c)[0] })); }
+    keys.forEach((d, i) => { const r = D.doorRect(w.room, d), q = heroes[(i + 1) % n]; q.x = (r.x0 + r.x1 + 1) / 2 * T; q.y = i === 0 ? 1.2 * T : 2.6 * T; });
+    if (!R.label0) { R.label0 = R.label; R.label = function (c, str, x, y) { if (BR.labs) BR.labs.push([String(str), x, y]); return R.label0.apply(this, arguments); }; }
+    return { room: r0.id, w: w.room.w, exits: n };
+  };
+  // The door preview lines of the next drawn frame (labels that are a piece of an exit's name, 'No way back', the dark-room rule or a party door line, one per text and x) and every overlapping pair.
+  BR.doorLabels = () => new Promise((done) => {
+    const ED = window.__ED, R = ED.Render, w = ED.Game.s.world;
+    requestAnimationFrame(() => { BR.labs = []; requestAnimationFrame(() => requestAnimationFrame(() => {
+      const L = BR.labs; BR.labs = null;
+      const texts = w.room.exits.map(id => R.roomName(w.floor.rooms[id])).concat(['No way back', 'Dark room: harder foes, better rewards']), seen = new Set(), lh = R.labelH(), rows = [];
+      for (const [str, x, y] of L) {
+        const key = str + '|' + Math.round(x);
+        if (seen.has(key) || !(texts.some(t => t.indexOf(str) >= 0) || / this door/.test(str) || /^\(\d+\/\d+\)$/.test(str))) continue;
+        seen.add(key); rows.push({ str, x, y, hw: R.labelW(str) / 2 });
+      }
+      const over = [];
+      for (let i = 0; i < rows.length; i++) for (let j = i + 1; j < rows.length; j++) { const a = rows[i], b = rows[j]; if (Math.abs(a.x - b.x) < a.hw + b.hw && Math.abs(a.y - b.y) < lh * 0.95) over.push(a.str + ' / ' + b.str); }
+      done({ n: rows.length, lines: rows.map(r => r.str), over });
+    })); });
+  });
+
   // props: per-hero and party props staged in the current room around the hero and used through World.interact like a player: a relic hoard (one taken: solo, the rest crumble), a vigor reward (claimed),
   // an untouched boon reward, another hero's forge reward (owner 'ghost'), a bought shop potion, a chest, and a co-op hoard this hero took from while a partner has not (its group in Game.s.claimed, relics untaken).
   // Counts the puffs FX.handle sees from then on.
@@ -704,7 +739,7 @@ function pageBoot(cfg) {
 
   // hits: combat cues driven through the aggregation API (A.hit, A.dot, A.bed, A.applied, A.impact, then A.flush), each in its own slot of an OfflineAudioContext (dur + 0.5 s; lo: at Low quality).
   // Specs: { f: 'hit', crit, w, el, m, h, n hits in one frame } | { f: 'dot', el, a afflicted, n ticks in one frame, v } | { f: 'bed', el, a } | { f: 'apply', el } | { f: 'impact', key, n } |
-  //   { f: 'loop', el, a, sec }: a foes ticking every 0.5 s (staggered) for sec s, one flush per 1/60 s frame, the Burn bed at a for el 1.
+  //   { f: 'loop', el, a, sec }: a foes ticking every 0.5 s (staggered) for sec s, one flush per 1/60 s frame, the Burn bed at a for el 1. | { f: 'cue', cue, v, arg, pr }: one A.play.
   // Per cue: voices alive right after it, peak, audible rms (over the samples up to the last above 1e-3), audible length, and a 16-bit WAV of the slot (base64).
   BR.hitAudio = async (list) => {
     const ED = window.__ED, A = ED.Audio, R = ED.Render, sr = 22050, q0 = R.quality;
@@ -721,6 +756,7 @@ function pageBoot(cfg) {
         else if (c.f === 'dot') { for (let j = 0; j < (c.n || 1); j++) A.dot(c.el, c.v || 1, c.a); A.flush(); }
         else if (c.f === 'bed') { A.bed(c.el, c.a); A.flush(); A.bed(c.el, 0); }
         else if (c.f === 'apply') A.applied(c.el, true);
+        else if (c.f === 'cue') A.play(c.cue, c.v === undefined ? 1 : c.v, c.arg, c.pr);
         else if (c.f === 'impact') { for (let j = 0; j < (c.n || 1); j++) A.impact(c.key, true, 0); A.flush(); }
         else if (c.f === 'loop') {
           for (let fr = 0; fr < c.sec * 60; fr++) {
@@ -1348,7 +1384,10 @@ const HIT_CUES = [].concat(
   ...Object.keys(HIT_EL).map(el => [{ label: 'dot-' + HIT_EL[el] + '-n1', f: 'dot', el: +el, a: 1 }, { label: 'dot-' + HIT_EL[el] + '-n20', f: 'dot', el: +el, a: 20, n: 6 }]),
   [{ label: 'dot-flame-n20-low', f: 'dot', el: 1, a: 20, n: 6, lo: 1 }, { label: 'bed-flame-20', f: 'bed', el: 1, a: 20 }, { label: 'bonfire-20-loop', f: 'loop', el: 1, a: 20, sec: 2 }, { label: 'bonfire-1-loop', f: 'loop', el: 1, a: 1, sec: 2 }],
   [1, 2, 3].map(el => ({ label: 'apply-' + HIT_EL[el], f: 'apply', el })),
-  ['e1', 'e2', 'e3', 'e4'].map((key, i) => ({ label: 'impact-' + HIT_EL[i + 1] + '-x4', f: 'impact', key, n: 4 })), [{ label: 'impact-knight-class', f: 'impact', key: 'knight', n: 2 }]);
+  ['e1', 'e2', 'e3', 'e4'].map((key, i) => ({ label: 'impact-' + HIT_EL[i + 1] + '-x4', f: 'impact', key, n: 4 })), [{ label: 'impact-knight-class', f: 'impact', key: 'knight', n: 2 }],
+  // run-content cues (labels 'new-*'): events, votes, relic procs, minigames
+  [['lore'], ['vtick', 'vote'], ['vtick', 5], ['vtick', 1], ['vtally'], ['rproc', 'hit'], ['rproc', 'crit'], ['rproc', 'block'], ['lifted'], ['bossrelic', null, 1.5], ['crumble'], ['crumble', null, 1, 1], ['shellswap', 1], ['shellswap', 3], ['trapsnap']]
+    .map(([cue, arg, sec, lo]) => ({ label: 'new-' + cue + (arg !== undefined && arg !== null ? '-' + arg : '') + (lo ? '-low' : ''), f: 'cue', cue, arg, sec, lo })));
 async function scenHits() {
   const o = S.opt, res = newResult('hits');
   const { ctx, page, errors } = await openPage();
@@ -1473,6 +1512,32 @@ async function scenProps() {
     const puffs = (await call(page, 'propAt', 'boon')).puffs;
     if (puffs !== 1) fail(res, 'the bought potion left ' + puffs + ' puffs (want 1)');
     notes(res, `relics ${st.relics.join(', ')}; prompts: ghost ${ghost.prompt}, claimed hoard ${rel.prompt}, boon ${boon.prompt}; puffs seen ${puffs}`);
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
+// doors: BR.doorRoom for 2 and 3 exits; the door lines of a drawn frame must not overlap and must include the dark-room rule. Shots to --outdir.
+async function scenDoors() {
+  const o = S.opt, res = newResult('doors'), q = qualitiesOr(['high'])[0];
+  const { ctx, page, errors } = await openPage();
+  try {
+    await call(page, 'profile', o.cls, o.embers);
+    await call(page, 'settings', q);
+    if ((await call(page, 'start')) !== 'run') fail(res, 'run did not start');
+    await wait(1100);
+    for (let i = 0; i < 6 && await call(page, 'offerOpen'); i++) { await call(page, 'take'); await wait(300); }
+    for (const n of [2, 3]) {
+      const st = await call(page, 'doorRoom', n);
+      if (!st) { fail(res, 'no room of the floor has ' + n + ' exits'); continue; }
+      await wait(n === 2 ? 3000 : 900); // the stratum banner fades first
+      const lb = await call(page, 'doorLabels');
+      notes(res, `${n} exits: room ${st.room}, ${st.w} tiles wide; ${lb.n} door lines: ${lb.lines.join(' | ')}`);
+      if (lb.over.length) fail(res, `${n} exits: door lines overlap: ${lb.over.join('; ')}`);
+      if (!lb.lines.some(l => /rewards/.test(l))) fail(res, n + ' exits: the dark-room rule line is missing');
+      if (!lb.lines.some(l => / this door/.test(l))) fail(res, n + ' exits: the party door line is missing');
+      await shoot(page, res, 'n' + n);
+    }
   } finally { res.errors = errors; await ctx.close(); }
   if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
   return res;
@@ -2228,7 +2293,7 @@ async function main() {
       const t0 = Date.now();
       log('scenario ' + sc + ' ...');
       let r;
-      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'boss' ? await scenBoss() : sc === 'shots' ? await scenShots() : sc === 'sheet' ? await scenSheet() : sc === 'map' ? await scenMap() : sc === 'props' ? await scenProps() : sc === 'games' ? await scenGames() : sc === 'screens' ? await scenScreens() : sc === 'wardrobe' ? await scenWardrobe() : sc === 'cosmetics' ? await scenCosmetics() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : sc === 'cards' ? await scenCards() : sc === 'bell' ? await scenBell() : sc === 'arenas' ? await scenArenas() : sc === 'verbs' ? await scenVerbs() : sc === 'portal' ? await scenPortal() : sc === 'hits' ? await scenHits() : sc === 'music' ? await scenMusic() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
+      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'boss' ? await scenBoss() : sc === 'shots' ? await scenShots() : sc === 'sheet' ? await scenSheet() : sc === 'map' ? await scenMap() : sc === 'props' ? await scenProps() : sc === 'doors' ? await scenDoors() : sc === 'games' ? await scenGames() : sc === 'screens' ? await scenScreens() : sc === 'wardrobe' ? await scenWardrobe() : sc === 'cosmetics' ? await scenCosmetics() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : sc === 'cards' ? await scenCards() : sc === 'bell' ? await scenBell() : sc === 'arenas' ? await scenArenas() : sc === 'verbs' ? await scenVerbs() : sc === 'portal' ? await scenPortal() : sc === 'hits' ? await scenHits() : sc === 'music' ? await scenMusic() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
       r.wallMs = Date.now() - t0;
       r.browserVersion = bv;
       if (S.server.missing.size) r.missing = [...S.server.missing];

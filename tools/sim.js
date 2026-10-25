@@ -1022,7 +1022,7 @@ function runBot(opts) {
   const fightRec = skip && skip.fight ? { k: skip.fight, t0: skip.fight === 'boss' ? null : w.time, t: null, kill: false, ph: 0 } : null; // --fight: { kind, start, seconds to the kill, kill, boss phase reached }
   rec.arrive = []; // per stratum (index = stratum - 1): arrivalOf at the first entry of the boss room
   rec.keyAt = null; rec.duoAt = null; // stratum when hero 0 takes its keystone / duo
-  rec.cnt = { smite: 0, reap: 0, toll: 0, lance: 0, dashHits: 0, shatter: 0, pyre: 0, holds: 0, dis: 0, reapHp: 0, kills0: 0, refunds: 0, parries: 0, staggers: 0, blocks: 0, bashes: 0, bashN: 0, casts: {} };
+  rec.cnt = { smite: 0, reap: 0, toll: 0, lance: 0, shatter: 0, pyre: 0, holds: 0, dis: 0, reapHp: 0, kills0: 0, refunds: 0, parries: 0, staggers: 0, blocks: 0, bashes: 0, bashN: 0, casts: {} };
   rec.parts = {}; rec.projDmgS = []; rec.maxHost = 0; // damage by skill part / source, hero damage taken from shots per stratum (fraction of max HP), most foes standing in the current room
   rec.smokeSeen = new Set(); rec.upt = { brace: [0, 0], sanct: [0, 0], stun: [0, 0], smoke: [0, 0, 0], mom: [0, 0] }; rec.peak = { projs: 0, zones: 0 }; // uptimes as [on, of] tick counts, peak shots and zones of hero 0
   rec.shield = { gained: {}, absorbed: {}, holyBoss: 0 }; rec.bossSecs = 0;
@@ -1040,7 +1040,6 @@ function runBot(opts) {
     const k = (src && src.kind) || 'weapon', bucket = rec.src[this.stratum - 1] || (rec.src[this.stratum - 1] = Object.fromEntries(BUCKETS.map(b => [b, 0])));
     const direct = k !== 'dot' && !PAYOFF_KINDS.has(k) && !(src && src.raw && k === 'explode');
     if (src && src.p) { bucket[dmgSource(src, k)] += d; const pn = src.part || (src.wpn ? 'weapon' : k); rec.parts[pn] = (rec.parts[pn] || 0) + d; }
-    if (k === 'dash') rec.cnt.dashHits++;
     if (!e.boss && !e.def.minion) {
       if (e._t0 === undefined) { e._t0 = this.time; e._n = 0; }
       if (direct) e._n++;
@@ -1395,7 +1394,7 @@ function summarize(results) {
   lines.push('by main path: ' + ED.PATH_IDS.map(k => `${ED.PATHS[k].name} (${grp(results.filter(r => r.main === k))})`).join(' | '));
   lines.push('by path held (hero 0): ' + ED.PATH_IDS.map(k => `${ED.PATHS[k].name} (${grp(results.filter(r => r.gates.includes(k)))})`).join(' | ') + ` | by start path: ${ED.PATH_IDS.map(k => `${ED.PATHS[k].name} ${results.filter(r => r.startPath === k).length}`).join(' ')}`);
   const per = (f) => ms(results.map(f), 1);
-  lines.push(`per run: smites ${per(r => r.cnt.smite)} reaps ${per(r => r.cnt.reap)} (${pct(results.reduce((a, r) => a + r.cnt.reap, 0), results.reduce((a, r) => a + r.kills, 0))}% of kills; reap health ${f1(avg(results.map(r => r.cnt.reapHp)))}) tolls ${per(r => r.cnt.toll)} lances ${per(r => r.cnt.lance)} dash-rider hits ${per(r => r.cnt.dashHits)} downs ${per(r => r.downedBy.length)} | chain queue peak ${f1(avg(results.map(r => r.chainPeak)))} (max ${Math.max(...results.map(r => r.chainPeak))}) hops ${f1(avg(results.map(r => r.chainHops)))} (max ${Math.max(...results.map(r => r.chainHops))})`);
+  lines.push(`per run: smites ${per(r => r.cnt.smite)} reaps ${per(r => r.cnt.reap)} (${pct(results.reduce((a, r) => a + r.cnt.reap, 0), results.reduce((a, r) => a + r.kills, 0))}% of kills; reap health ${f1(avg(results.map(r => r.cnt.reapHp)))}) tolls ${per(r => r.cnt.toll)} lances ${per(r => r.cnt.lance)} downs ${per(r => r.downedBy.length)} | chain queue peak ${f1(avg(results.map(r => r.chainPeak)))} (max ${Math.max(...results.map(r => r.chainPeak))}) hops ${f1(avg(results.map(r => r.chainHops)))} (max ${Math.max(...results.map(r => r.chainHops))})`);
   const verb = (k, label, c) => { const rs = results.filter(r => r.gates.includes(k)); return `${ED.PATHS[k].name} runs (${rs.length}) ${label} ${rs.length ? ms(rs.map(r => r.cnt[c]), 1) : '-'}`; };
   lines.push(`path verbs per run (every hero): ${verb('fire', 'death bursts', 'pyre')} | ${verb('ice', 'shatters', 'shatter')} | ${verb('lightning', 'discharges', 'dis')} | holds (hero 0) ${per(r => r.cnt.holds)}`);
   const shSum = (key) => { const o = {}; for (const r of results) for (const k in r.shield[key]) o[k] = (o[k] || 0) + r.shield[key][k] / n; return Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => k + ' ' + Math.round(v)).join(', ') || '-'; };

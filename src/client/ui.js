@@ -852,13 +852,13 @@
   // ---------------- event dialog (events.js) ----------------
   // Host messages: evOpen { k, title, text, ch: [[label, note, disabled]], v (vote seconds, 0: a personal choice), n (voters), lock }, evTally { k, n: votes per choice }, evResult { k, title, text, out, lp, o }, evClose.
   // The choices ignore input for `lock` s after opening (a bar fills across them); digits 1-4 (e.code), arrows / d-pad, the confirm key and clicks pick. A result with o (an offer opens) or in a locked room closes into a toast.
-  let evD = null, evFocus = 0, evLockT = 0, evVoteT = 0;
+  let evD = null, evFocus = 0, evLockT = 0, evVoteT = 0, evTickS = 0; // evTickS: the last countdown second that ticked
   const evParas = (t) => String(t || '').split('\n').filter(Boolean).map(l => `<p>${esc(l)}</p>`).join('');
   const evLore = (i) => { const pg = ED.LORE && ED.LORE[i]; return pg ? `<blockquote class="ev-lore"><b>${esc(pg.title)}</b><span>${esc(pg.text)}</span></blockquote>` : ''; };
   UI.evOpen = () => !!evD;
   UI.evMsg = (m) => {
     if (m.t === 'evOpen') evShow(m);
-    else if (m.t === 'evTally') { if (evD && evD.k === m.k) { evD.tally = m.n; evPaint(); } }
+    else if (m.t === 'evTally') { if (evD && evD.k === m.k) { evD.tally = m.n; evPaint(); ED.Audio.play('vtick', 1, 'vote'); } } // a vote cast: a tick
     else if (m.t === 'evResult') evResult(m);
     else if (m.t === 'evClose') { if (evD && !evD.res) UI.evClose(false); }
   };
@@ -866,7 +866,7 @@
     evD = { k: m.k, ch: m.ch, safe: m.s | 0, vote: m.v > 0, n: m.n | 0, voted: -1, wait: false, res: null, tally: null };
     evFocus = Math.max(0, m.ch.findIndex(c => !c[2]));
     const lock = (m.lock || 0.6) * 1000;
-    evLockT = performance.now() + lock; evVoteT = m.v > 0 ? performance.now() + m.v * 1000 : 0;
+    evLockT = performance.now() + lock; evVoteT = m.v > 0 ? performance.now() + m.v * 1000 : 0; evTickS = 0;
     $('ev-title').textContent = m.title;
     $('ev-text').innerHTML = evParas(m.text);
     const box = $('ev-choices'); box.innerHTML = '';
@@ -908,6 +908,7 @@
     evFocus = i; evPaint();
   }
   function evResult(m) {
+    if (evD && evD.vote && evD.n > 1 && evD.k === m.k) ED.Audio.play('vtally'); // a party vote closed: the tally
     const s = ED.Game.s, body = evParas(m.text) + (m.out && m.out.length ? `<ul class="ev-out">${m.out.map(l => `<li>${esc(l)}</li>`).join('')}</ul>` : '') + evLore(m.lp);
     if (m.o || (s && s.view && s.view.locked)) { // an offer or a fight follows: the result goes to a toast
       if (evD) UI.evClose(false);
@@ -941,7 +942,11 @@
       if (inp.right || inp.down || inp.navX > 0 || inp.navY > 0) { evFocus = (evFocus + 1) % n; evPaint(); }
       for (let d = 1; d <= 4; d++) if (evD && (I.pressed.has('Digit' + d) || I.pressed.has('Numpad' + d))) evPick(evD.res ? 0 : d - 1);
       if (evD && inp.confirm) evPick(evD.res ? 0 : evFocus);
-      if (evD && evD.vote && !evD.res) evPaint(); // the vote countdown
+      if (evD && evD.vote && !evD.res) { // the vote countdown; its last 5 s tick while this hero has not voted
+        evPaint();
+        const sec = Math.ceil((evVoteT - performance.now()) / 1000);
+        if (evD.n > 1 && evD.voted < 0 && sec >= 1 && sec <= 5 && sec !== evTickS) { evTickS = sec; ED.Audio.play('vtick', 1, sec); }
+      }
     }
     return Object.assign({}, inp, { mx: 0, my: 0, atk: false, atkPressed: false, skill: false, skill2: false, skill3: false, dash: false });
   };

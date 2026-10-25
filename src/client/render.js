@@ -1157,7 +1157,7 @@
   // the room glyph and its badge, its name and reward, threat pips (room.threat), the dark-room moon; near a hero the dark rule and "No way back" fade in.
   // In a party, the heroes who want a door are named at it.
   const DARK_COL = '#a070ff', DARK_TEXT = 'Dark room: harder foes, better rewards', BACK_TEXT = 'No way back', THREAT_COL = '#ff5a3a';
-  const dpList = [], dpPool = [];
+  const dpList = [], dpPool = [], DP_GAP = 6; // DP_GAP: world px every door line keeps from its column's edges
   // Preview anchor of door d of room: just inside the doorway (world px).
   function doorAt(room, d) {
     const r = ED.Dungeon.doorRect(room, d), h = room.h * T, w = room.w * T;
@@ -1176,19 +1176,41 @@
       if (!nb || (st && st.cleared)) continue;
       const ri = R.roomIcon(nb); if (!ri) continue;
       const at = doorAt(room, d), x = at[0], y = at[1];
-      let o = dpPool[n]; if (!o) o = dpPool[n] = { x: 0, y: 0, color: '', ri: null, d: '', sd: '', dark: false, threat: 0, oneWay: false, name: '' };
+      let o = dpPool[n]; if (!o) o = dpPool[n] = { x: 0, y: 0, color: '', ri: null, d: '', sd: '', dark: false, threat: 0, oneWay: false, name: '', cl: 0, cr: 0 };
       o.x = x; o.y = y + Math.sin(t * 2.2 + x * 0.03 + y * 0.02) * 1.8; o.color = ri.color; o.ri = ri; o.d = d; o.sd = ED.Dungeon.side(d); o.dark = !!nb.dark && !(st && st.visited);
       o.threat = U.clamp(nb.threat | 0, 0, 3); o.oneWay = true; o.name = R.roomName(nb);
       out[n++] = o;
     }
+    // Text column of each n / s preview: from the midpoint to its same-side neighbour on each side (the inner walls at the ends)
+    const W = room.w * T;
+    for (const a of out) { a.cl = T; a.cr = W - T; for (const b of out) if (b !== a && b.sd === a.sd) { const m = (a.x + b.x) / 2; if (b.x < a.x) a.cl = Math.max(a.cl, m); else a.cr = Math.min(a.cr, m); } }
     return out;
   }
+  // str broken at spaces into lines no wider than maxW (cached; a single word wider than maxW keeps its own line).
+  const wrapC = new Map();
+  function dpWrap(str, maxW) {
+    const key = (ED.Atlas.font ? 'p' : 'f') + (maxW | 0) + '|' + str;
+    let r = wrapC.get(key);
+    if (r) return r;
+    r = []; let cur = '';
+    for (const wd of str.split(' ')) { const s = cur ? cur + ' ' + wd : wd; if (cur && R.labelW(s) > maxW) { r.push(cur); cur = wd; } else cur = s; }
+    if (cur) r.push(cur);
+    if (wrapC.size > 200) wrapC.clear();
+    wrapC.set(key, r);
+    return r;
+  }
   // Text line i (0 = the label) stacked into the room from a preview: below the icon, above it at a south door; w / e lines keep inside the room.
+  // An n / s line wraps to its door's column (pv.cl..pv.cr) and slides inside it, so the labels of adjacent doors never overlap. Returns the lines drawn.
   function dpLine(c, pv, i, str, col, alpha) {
-    const lh = R.labelH(), s = pv.sd === 's' ? -1 : 1, qx = Math.round(pv.x), y = Math.round(pv.y) + s * (11 + lh / 2 + i * (lh + 2));
-    const tw = R.labelW(str), tx = pv.sd === 'w' ? qx - 8 + tw / 2 : pv.sd === 'e' ? qx + 8 - tw / 2 : qx;
-    R.label(c, str, tx, y, col, undefined, alpha);
-    labelAdd(tx, y, tw / 2, lh / 2);
+    const lh = R.labelH(), s = pv.sd === 's' ? -1 : 1, qx = Math.round(pv.x), side = pv.sd === 'w' || pv.sd === 'e';
+    const lines = side ? [str] : dpWrap(str, pv.cr - pv.cl - 2 * DP_GAP), n = lines.length;
+    for (let j = 0; j < n; j++) {
+      const k = s < 0 ? i + n - 1 - j : i + j, y = Math.round(pv.y) + s * (11 + lh / 2 + k * (lh + 2)), tw = R.labelW(lines[j]), lo = pv.cl + DP_GAP + tw / 2, hi = pv.cr - DP_GAP - tw / 2;
+      const tx = pv.sd === 'w' ? qx - 8 + tw / 2 : pv.sd === 'e' ? qx + 8 - tw / 2 : lo <= hi ? Math.round(U.clamp(qx, lo, hi)) : qx;
+      R.label(c, lines[j], tx, y, col, undefined, alpha);
+      labelAdd(tx, y, tw / 2, lh / 2);
+    }
+    return n;
   }
   // Icon pass of the door previews (screen-space-sized, unlit); the glyph fades when a hero walks up to the doorway, the label stays readable.
   function drawDoorPreviews(c, view, room, t) {
@@ -1210,15 +1232,15 @@
       c.globalAlpha = 1;
       const ta = U.clamp((90 - near) / 40, 0, 1);
       let li = 0;
-      dpLine(c, pv, li++, pv.name, pv.dark ? U.mix(pv.color, DARK_COL, 0.35) : pv.color, Math.max(a, 0.85));
+      li += dpLine(c, pv, li, pv.name, pv.dark ? U.mix(pv.color, DARK_COL, 0.35) : pv.color, Math.max(a, 0.85));
       if (alive > 1) { // party door rule: who wants this door, out of the living heroes
         let k = 0, first = null;
         for (const p of view.players.values()) if (!p.dead && !p.downed && R.doorWant(view, p) === pv.d) { k++; if (!first) first = p; }
-        if (k) dpLine(c, pv, li++, `${first.name}${k > 1 ? ' +' + (k - 1) : ''} ${k > 1 ? 'want' : 'wants'} this door (${k}/${alive})`, ED.PLAYER_COLORS[first.slot] || '#fff3c4', 1);
+        if (k) li += dpLine(c, pv, li, `${first.name}${k > 1 ? ' +' + (k - 1) : ''} ${k > 1 ? 'want' : 'wants'} this door (${k}/${alive})`, ED.PLAYER_COLORS[first.slot] || '#fff3c4', 1);
       }
       if (ta > 0) {
-        if (pv.oneWay) dpLine(c, pv, li++, BACK_TEXT, '#d8cbb8', ta);
-        if (pv.dark) dpLine(c, pv, li++, DARK_TEXT, DARK_COL, ta);
+        if (pv.oneWay) li += dpLine(c, pv, li, BACK_TEXT, '#d8cbb8', ta);
+        if (pv.dark) dpLine(c, pv, li, DARK_TEXT, DARK_COL, ta);
       }
     }
     c.globalAlpha = 1;

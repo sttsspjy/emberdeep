@@ -331,7 +331,7 @@
     const c = D.center(this.room);
     if (s === 1) for (const q of this.players.values()) this.grantOffer(q, { src: 'class' });
     else if (s === 2 || s === 3) for (const q of this.players.values()) this.grantForkRank(q);
-    if (s === 1 || s === 2) this.spawnRelicPicks(c.x, c.y + 40, 'boss');
+    if (s === 1 || s === 2) { this.spawnRelicPicks(c.x, c.y + 40, 'boss'); this.emit({ t: 'bossrelic', x: Math.round(c.x), y: Math.round(c.y + 40) }); }
     else if (s === 3) for (const p of this.players.values()) this.grantOffer(p, { src: 'epic' });
     this.props.push({ id: U.uid(), kind: 'portal', x: c.x, y: c.y - 60, state: 0 });
   };
@@ -458,10 +458,12 @@
         pr.state = 1;
         this.giveRelic(p, pr.item);
         this.msgs.push({ to: pid, t: 'claimed', group: pr.group });
-        if (pr.owner) { for (const o of this.props) if (o.group === pr.group && !o.state) o.state = 1; } // the hero's other picks crumble at once (the client draws the puff)
+        if (pr.owner) { for (const o of this.props) if (o.group === pr.group && !o.state) o.state = 1; this.emit({ t: 'crumble', pid, x: Math.round(pr.x), y: Math.round(pr.y) }); } // the hero's other picks crumble at once (the client draws the puff; the crumble sound plays for pid)
         // once every hero has chosen, the rest of the hoard crumbles
         else if ([...this.players.values()].every(q => q.claimed[pr.group])) {
-          for (const o of this.props) if (o.kind === 'relic' && o.group === pr.group && !o.state) { o.state = 1; this.emit({ t: 'puff', x: o.x, y: o.y - 20, c: ED.RARITY[ED.RELICS[o.item].rar].color }); }
+          let n = 0;
+          for (const o of this.props) if (o.kind === 'relic' && o.group === pr.group && !o.state) { o.state = 1; n++; this.emit({ t: 'puff', x: o.x, y: o.y - 20, c: ED.RARITY[ED.RELICS[o.item].rar].color }); }
+          if (n) this.emit({ t: 'crumble', x: Math.round(pr.x), y: Math.round(pr.y) });
         }
         break;
       }

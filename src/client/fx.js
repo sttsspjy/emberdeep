@@ -112,6 +112,7 @@
   // Plays a named audio cue without a world event (a dash charge refilled, a dark door, a breaking prop).
   F.cue = (name, vol, arg) => { if (ED.Audio) ED.Audio.play(name, vol, arg); };
   const SKILL_CUE = { charge: 'charge', volley: 'volley', rain: 'raincast', fireball: 'fire' }; // skill events with their own cast cue
+  const RELIC_BLOCK = { buckler: 1, aegis: 1, mirror: 1, lastbreath: 1 }; // block event kinds a relic causes
   F.update = (dt) => {
     if (ED.Audio) { ED.Audio.flush(); statusSweep(); } // the frame's hits, impacts, DoT ticks and deaths become layered cues
     F.time += dt; snapBudget = 4;
@@ -833,7 +834,11 @@
         break;
       case 'blinkfx': F.burst(ev.x0, ev.y0 - 12, 14, { color: '#b78cff', sp: 60, life: 0.5, size: 3, add: true }); F.burst(ev.x1, ev.y1 - 12, 14, { color: '#b78cff', sp: 60, life: 0.5, size: 3, add: true }); F.pop(ev.x0, ev.y0 - 12, 20, '#b78cff', 0.2); F.pop(ev.x1, ev.y1 - 12, 20, '#b78cff', 0.2); break;
       case 'deflect': F.burst(ev.x, ev.y, 8, { color: '#ffffff', sp: 120, life: 0.25, size: 2, add: true }); F.burst(ev.x, ev.y, 4, { kind: 'streak', color: '#ffffff', sp: 200, life: 0.2, size: 1.4 }); F.pop(ev.x, ev.y, 10, '#ffffff', 0.12, true); A.play('deflect', 0.6); break;
-      case 'block': if (ev.k === 'bulwark') break; F.text(ev.x, ev.y - 30, { dodge: 'Dodge', mirror: 'Blocked', aegis: 'Blocked', guard: 'Guarded' }[ev.k] || 'Blocked', '#bfe9ff', 9, { pop: true }); A.play('deflect', 0.5); break; // a Bulwark block: cls-knight.js
+      case 'block': { // a Bulwark block: cls-knight.js; a relic block (Iron Buckler, Aegis Charm, Mirror Shard, Last Breath) adds the relic chime
+        if (ev.k === 'bulwark') break;
+        F.text(ev.x, ev.y - 30, { dodge: 'Dodge', lastbreath: 'Dodge', guard: 'Guarded' }[ev.k] || 'Blocked', '#bfe9ff', 9, { pop: true }); A.play('deflect', 0.5);
+        if (RELIC_BLOCK[ev.k]) { const mine = ev.pid === local; A.play('rproc', mine ? 1 : 0.4, 'block', mine ? 2 : 0); }
+        break; }
       // Knight events (block k 'bulwark', bash, parry, deflect, ward, the boom of a shockwave) are drawn by src/client/cls-knight.js through ED.ClassFx.
       case 'spawned': F.burst(ev.x, ev.y, ev.el ? 18 : 8, { color: ev.el ? '#ffb13a' : '#b8a0ff', sp: 70, life: 0.4, size: 2.4, add: true }); F.pop(ev.x, ev.y - 8, ev.el ? 30 : 20, ev.el ? '#ffb13a' : '#b8a0ff', 0.25); A.play('spawn', 0.5); break;
       case 'raise': F.burst(ev.x, ev.y, 14, { color: '#7dffd9', sp: 60, vy: -40, life: 0.6, size: 2.4, add: true }); F.ring(ev.x, ev.y, 26, '#7dffd9', 0.4, 2); SP('fx.circle.spark', ev.x, ev.y - 2, { ramp: 'teal', add: true }); SP('fx.puff', ev.x, ev.y - 4, { ramp: 'dust' }); break;
@@ -842,6 +847,13 @@
       case 'secret': // a secret's run field turned true (pid: its hero, null: the whole party): a nameless toast and a chime for that hero (names show at the run's end)
         if ((ev.pid === null || ev.pid === undefined || ev.pid === local) && ED.UI) { ED.UI.toast('Secret found', ED.Icons ? ED.Icons.url('eye', '#b8a6ff') : '', 4); A.play('secret'); }
         break;
+      case 'lore': A.play('lore'); break; // a lore page found (events.js): the page lands in the event result
+      case 'rproc': { // an every-Nth attack relic fired (Whetstone, Metronome): a chime at the hero
+        const mine = ev.pid === local, col = ev.k === 'metronome' ? '#b86bff' : '#e8e2c8';
+        F.ring(ev.x, ev.y - 10, 22, col, 0.25, 2); A.play('rproc', mine ? 1 : 0.4, ev.k === 'metronome' ? 'crit' : 'hit', mine ? 2 : 0); break; }
+      case 'lifted': { const mine = ev.pid === local; F.burst(ev.x, ev.y - 12, 16, { color: '#e8d8ff', sp: 80, vy: -60, life: 0.8, size: 2.2, add: true }); F.ring(ev.x, ev.y - 6, 30, '#c8b8ff', 0.45, 2); A.play('lifted', mine ? 1 : 0.35); break; } // a curse lifted
+      case 'bossrelic': F.ring(ev.x, ev.y - 10, 90, '#ffb13a', 0.6, 3); F.burst(ev.x, ev.y - 16, 24, { color: '#ffd36b', sp: 110, vy: -40, life: 0.9, size: 2.4, add: true }); A.play('bossrelic'); break; // the boss relic pick appears at the end of the boss beat
+      case 'crumble': if (!ev.pid || ev.pid === local) A.play('crumble'); break; // the pedestals left of a relic pick crumble (pid: their hero, who alone sees them)
       case 'platino': F.burst(ev.x, ev.y - 8, 18, { color: '#f4f8ff', sp: 90, vy: -50, life: 0.8, size: 2, add: true }); F.ring(ev.x, ev.y, 28, '#e8f0ff', 0.5, 2); F.pop(ev.x, ev.y - 8, 22, '#ffffff', 0.3); SP('fx.circle.spark', ev.x, ev.y - 4, { ramp: 'holy', add: true }); A.play('platino'); break; // the Platino caught: a platinum sparkle
       case 'puff': F.burst(ev.x, ev.y - 8, 10, { color: ev.c || '#cccccc', sp: 50, life: 0.5, size: 3, kind: 'smoke' }); SP('fx.puff', ev.x, ev.y - 6, { ramp: ev.c || 'smoke' }); break;
       case 'thud': F.addShake(ev.big ? 9 : 3); A.play('thud', ev.big ? 1 : 0.5); dust(ev.x, ev.y, 'dust', ev.big ? 4 : 2); F.burst(ev.x, ev.y, 10, { color: '#bba98a', sp: 80, life: 0.4, size: 3, kind: 'smoke' }); if (ev.big) { F.ring(ev.x, ev.y, 60, '#c9b98f', 0.4, 4); F.punch(0.5, 0); } break;
