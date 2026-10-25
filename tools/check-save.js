@@ -278,9 +278,9 @@ const STORED_V2 = {"v":2,"news":0,"name":"Stored","embers":100,"lifetime":900,"u
 {
   const D = ED.DEEDS[ED.DEED_IDX.archivist];
   ok(ED.DEEDS.length === 26 && ED.DEED_IDX.archivist === 21 && ED.DEED_IDX.hearthkeeper === 22 && ED.DEED_IDX.cartographer === 25, 'deeds keep their positions');
-  ok(D.name === 'Relic Keeper' && D.desc === 'Hold 10 relics in one descent' && D.reward === 60, 'the repurposed deed reads Relic Keeper, 60 embers');
+  ok(D.name === 'Relic Keeper' && D.desc === 'Hold 10 relics in one run' && D.reward === 60, 'the repurposed deed reads Relic Keeper, 60 embers');
   const p = S.defaultProfile();
-  ok(!D.check(p, null) && !D.check(p, { maxRelics: 9 }) && D.check(p, { maxRelics: 10 }), 'Relic Keeper needs 10 relics in one descent');
+  ok(!D.check(p, null) && !D.check(p, { maxRelics: 9 }) && D.check(p, { maxRelics: 10 }), 'Relic Keeper needs 10 relics in one run');
   p.deeds = 1 << ED.DEED_IDX.collector; // Collector (8 relics) already earned
   const got = S.checkDeeds(p, { maxRelics: 10 });
   ok(got.some(d => d.id === 'archivist') && (p.deeds & (1 << 21)) && p.embers === 60 && p.lifetime === 60, 'Relic Keeper pays 60 embers once');
@@ -290,7 +290,7 @@ const STORED_V2 = {"v":2,"news":0,"name":"Stored","embers":100,"lifetime":900,"u
 // ---- deeds Into the Dark and Cartographer; the small Hearth keeps its save positions ----
 {
   const I = ED.DEEDS[ED.DEED_IDX.intothedark], C = ED.DEEDS[ED.DEED_IDX.cartographer], p = S.defaultProfile();
-  ok(I.desc === 'Clear 6 dark rooms in one descent' && I.reward === 50 && ED.DEED_IDX.intothedark === 24, 'Into the Dark: 6 dark rooms in one descent, 50 embers, same slot');
+  ok(I.desc === 'Clear 6 dark rooms in one run' && I.reward === 50 && ED.DEED_IDX.intothedark === 24, 'Into the Dark: 6 dark rooms in one run, 50 embers, same slot');
   ok(!I.check(p, null) && !I.check(p, {}) && !I.check(p, { darkCleared: 5 }) && I.check(p, { darkCleared: 6 }) && I.check(p, { darkCleared: 12 }) && !I.check(p, { lightlessBoss: true }), 'Into the Dark needs run.darkCleared >= 6');
   ok(/dark rooms/.test(C.desc) && C.reward === 40 && !C.check(p, {}) && C.check(p, { fullClear: true }), 'Cartographer names the dark rooms and keeps its fullClear check');
   const got = S.checkDeeds(p, { darkCleared: 7 });

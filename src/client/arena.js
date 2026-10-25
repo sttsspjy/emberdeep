@@ -171,7 +171,7 @@
       c.fillStyle = U.rgba('#ffb13a', 0.85); c.beginPath();
       for (let i = 0; i < 40; i++) if (i / 40 < k) { const a = -Math.PI / 2 + i / 40 * TAU; c.rect(s2(z.x + Math.cos(a) * 30), s2(z.y + Math.sin(a) * 30), 2, 2); }
       c.fill();
-      R.label(c, 'Rises in ' + Math.ceil(left), Math.round(z.x), Math.round(z.y - 40), '#ffb13a');
+      R.label(c, 'Revives in ' + Math.ceil(left), Math.round(z.x), Math.round(z.y - 40), '#ffb13a');
     }
   }
   AF.over = (c, view, room, t) => {
@@ -195,15 +195,15 @@
   const A = () => ED.Audio;
   const banner = (s) => F.showBanner(s, '', 'small', 1.8);
   const on = (t, f) => CFX.on(t, f);
-  on('tide', (ev) => { if (ev.st === 1) { A().play('bell', 0.8); banner('The tide is coming'); } else { A().play('whirl', 0.7); F.addShake(2); } });
+  on('tide', (ev) => { if (ev.st === 1) { A().play('bell', 0.8); banner('Tide incoming: stand on raised stone'); } else { A().play('whirl', 0.7); F.addShake(2); } });
   on('sink', (ev) => { F.ring(ev.x, ev.y, 60, FRONT, 0.6, 3); A().play('thud', 0.8); F.addShake(3); });
-  on('pool', (ev) => { F.ring(ev.x, ev.y, 120, FRONT, 0.9, 3, true); A().play('implode', 0.8); banner('The whirlpool pulls'); });
+  on('pool', (ev) => { F.ring(ev.x, ev.y, 120, FRONT, 0.9, 3, true); A().play('implode', 0.8); banner('Whirlpool: it pulls you in, its centre hurts'); });
   on('lantern', (ev) => { F.ring(ev.x, ev.y - 20, 40, LAN, 0.45, 3); F.pop(ev.x, ev.y - 20, 24, LAN, 0.2, true); A().play('bell', 0.6); });
   on('lightsout', (ev) => { A().play('dark', 1); F.addShake(5); banner('Light the lanterns'); });
-  on('dawn', (ev) => { A().play('evolve', 0.7); F.flash = { color: '#fff0d0', t: 0.3, a: 0.25 }; banner('The floor is breaking'); });
+  on('dawn', (ev) => { A().play('evolve', 0.7); F.flash = { color: '#fff0d0', t: 0.3, a: 0.25 }; banner('The edge is falling: move to the middle'); });
   on('crumble', (ev) => { if (ev.st === 0) { A().play('rupt', 0.8); F.addShake(2); } else { A().play('smash', 1); A().play('boom', 0.7); F.addShake(8); } });
   on('fall', (ev, ctx, local) => { F.burst(ev.x0, ev.y0, 10, { color: '#2a2238', sp: 80, life: 0.5, size: 2 }); if (ev.pid === local) { F.flash = { color: '#000000', t: 0.35, a: 0.5 }; banner('You fell'); } });
-  on('champ', (ev) => { A().play('roar', 0.8); F.showBanner(ev.k === 'mimic' ? 'Mimic' : 'The Twins', ev.k === 'mimic' ? 'It copies your skills' : 'Kill both within 10 s', 'boss', 2.6); });
+  on('champ', (ev) => { A().play('roar', 0.8); F.showBanner(ev.k === 'mimic' ? 'Mimic' : 'Twins', ev.k === 'mimic' ? 'It copies your skills' : 'Kill both within 10 s of each other', 'boss', 2.6); });
   on('twinfall', (ev) => { F.ring(ev.x, ev.y, 34, '#ffb13a', 0.6, 3); A().play('down', 0.8); });
   on('twinrise', (ev) => { F.ring(ev.x, ev.y, 50, '#ffb13a', 0.6, 3, true); A().play('revive', 0.9); F.addShake(3); });
   on('mimic', (ev) => { F.ring(ev.x, ev.y - 12, 24, '#e8e0ff', 0.35, 2); A().play('veil', 0.5); });

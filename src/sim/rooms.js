@@ -7,9 +7,9 @@
   // {action} tokens are replaced with the player's key bindings when the sign is drawn (ED.Input.fill); the sim never reads bindings.
   const SIGNS = [
     'Aim with {aim}. Hold {attack} to attack where you aim.',
-    '{skill1} and {skill2} cast your skills where you aim: some fly toward it, some land on it. {dash} dashes through danger.',
+    '{skill1} and {skill2} cast your skills where you aim: some fly toward it, some land on it. {dash} dashes; you cannot be hit while dashing.',
     'Clear a room to open its doors. Each door shows the next room and its reward. Doors close behind you.',
-    'A violet skull marks a dark room: harder fights, better rewards. You choose whether to enter.',
+    'A violet moon marks a dark room: harder foes, better rewards. You choose whether to enter.',
     '{map} opens your build, combat numbers and the map of every path to the boss ({skill1} / {skill2} switch tabs).',
   ];
 

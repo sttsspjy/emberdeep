@@ -1306,7 +1306,7 @@ async function scenWardrobe() {
       A.state = 'results'; UI.renderResults(run, r); UI.show('results');
     }, staged));
     const resTxt = await ev(() => document.getElementById('res-progress').textContent);
-    if (!/Secret uncovered: Exact Change/.test(resTxt) || !/Secret uncovered: Hollow Crown/.test(resTxt)) fail(res, 'results lack the secrets: ' + resTxt.replace(/\s+/g, ' ').slice(0, 200));
+    if (!/Secret found: Exact Change/.test(resTxt) || !/Secret found: Hollow Crown/.test(resTxt)) fail(res, 'results lack the secrets: ' + resTxt.replace(/\s+/g, ' ').slice(0, 200));
   } finally { res.errors = errors; await ctx.close(); }
   if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
   if (res.shots.length < 8) fail(res, 'only ' + res.shots.length + ' screenshots were taken');
@@ -1520,7 +1520,7 @@ async function scenCosmetics() {
     if (emb1 - emb0 < 3) fail(res, `Last Embers: the fallen Ranger scattered ${emb1 - emb0} ember sprites`);
     // the in-run secret toast (a world field: everyone's)
     const toast = await ev(async () => { const E = window.__ED; E.Game.localEvent({ t: 'secret', pid: null }); E.Game.localEvent({ t: 'secret', pid: 'q2' }); await new Promise(r => setTimeout(r, 120)); return [...document.querySelectorAll('#toasts .toast')].map(x => x.textContent); });
-    if (toast.filter(x => x === 'A secret is uncovered').length !== 1) fail(res, 'secret toasts (one for the party, none for another hero): ' + JSON.stringify(toast));
+    if (toast.filter(x => x === 'Secret found').length !== 1) fail(res, 'secret toasts (one for the party, none for another hero): ' + JSON.stringify(toast));
     await tryShot('c14-secret-toast', null, 200);
     // frame ms with and without the sets (High)
     const cost = await ev(async () => {
