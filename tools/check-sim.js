@@ -992,14 +992,14 @@ for (let s = 1; s <= NS; s++) {
   };
   // Ticks the boss alone for secs (each(i) runs before a tick); returns the 'fury' events seen and the tick each came at.
   const run = (w, b, secs, each) => { const ev = []; for (let i = 0, k = Math.round(secs * 60); i < k; i++) { if (each) each(i); w.updateEnemy(b, TICK); for (const e of w.fx) if (e.t === 'fury') ev.push({ e, i: i + 1, x: b.x, y: b.y }); w.fx.length = 0; } return ev; };
-  ok(FB.t.length === 6 && FB.t.slice(0, 3).every(v => v === 0) && FB.t.slice(3).every(v => v > 0) && FB.ramp > 0 && FB.max > 1 && FB.warn > 0, `BOSS_FURY: no start in strata I-III, one in IV-VI (${FB.t})`);
-  ok(W0.furyMul(4, FB.t[3]) === 1 && W0.furyMul(1, 1e6) === 1 && W0.furyMul(3, 1e6) === 1 && W0.furyMul(6, 1e6) === FB.max, 'furyMul: 1 up to the start and at strata I-III, max far past it');
-  near(W0.furyMul(5, FB.t[4] + 10), 1 + 10 * FB.ramp, 1e-12, 'furyMul ramps by BOSS_FURY.ramp per second past the start');
+  ok(FB.t.length === ED.CONST.STRATA && FB.t.slice(0, 3).every(v => v === 0) && FB.t[3] > 0 && FB.ramp > 0 && FB.max > 1 && FB.warn > 0, `BOSS_FURY: no start in strata I-III, one in IV (${FB.t})`);
+  ok(W0.furyMul(4, FB.t[3]) === 1 && W0.furyMul(1, 1e6) === 1 && W0.furyMul(3, 1e6) === 1 && W0.furyMul(4, 1e6) === FB.max, 'furyMul: 1 up to the start and at strata I-III, max far past it');
+  near(W0.furyMul(4, FB.t[3] + 10), 1 + 10 * FB.ramp, 1e-12, 'furyMul ramps by BOSS_FURY.ramp per second past the start');
   for (let s = 1; s <= 3; s++) { // no fury at strata I-III, past 200 s
     const { w, b } = fw(s), ev = run(w, b, 205);
     ok(ev.length === 0 && b.furyT === 0 && b.furyM === 1 && b.dmg === b.dmgBase && !w.fx.some(e => e.t === 'fury'), `stratum ${s}: no fury at 205 s (events ${ev.length}, clock ${b.furyT}, x${b.furyM})`);
   }
-  const M10 = 1 + 10 * FB.ramp; for (let s = 4; s <= 6; s++) { // starts at t exactly, once; x(1 + 10 ramp) ten seconds on
+  const M10 = 1 + 10 * FB.ramp; for (let s = 4; s <= ED.CONST.STRATA; s++) { // starts at t exactly, once; x(1 + 10 ramp) ten seconds on
     const t = FB.t[s - 1], { w, b } = fw(s);
     ok(b.dmgBase === b.dmg && b.furyT === 0 && b.furyM === 1, `stratum ${s}: a fresh boss holds its base damage and a zero clock`);
     const ev = run(w, b, t + 10);
@@ -1038,8 +1038,8 @@ for (let s = 1; s <= NS; s++) {
     delete Bs[ED.biomeFor(4).boss].attacks.hold;
   }
   { // the multiplier caps at max and damage with it
-    const { w, b } = fw(6);
-    b.furyT = FB.t[5] + 1e3; run(w, b, TICK);
+    const { w, b } = fw(4);
+    b.furyT = FB.t[3] + 1e3; run(w, b, TICK);
     ok(b.furyM === FB.max && Math.abs(b.dmg - b.dmgBase * FB.max) < 1e-9, `x${b.furyM} capped at ${FB.max}`);
   }
   { // the clock runs through phase changes, freezes, stuns and blinds

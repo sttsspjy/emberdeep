@@ -241,10 +241,10 @@ const hit = (w, p, e, o) => w.hitEnemy(e, 100, Object.assign({ p, kind: 'weapon'
   const bleedGain = (r) => {
     const { w, p } = stage({ s_el: 1, s_el_a: r }); const e = foe(w, p.x + 30, p.y);
     e.bsT = [1e9]; e.bsO = [p]; e.burnN = 1; e.burn = 1; e.burnTick = 99; e.chill = 30; e.stun = 1; e.sealT = 5; e.bleedPool = 0; ok(w.ailments(e) === 4, 'four ailments staged');
-    const s = { p, kind: 'skill', crit: true }; const h = e.hp; w.hitEnemy(e, 100, s); return { bleed: e.bleedPool, dealt: h - e.hp, aff: s.affMul || 1 };
+    const s = { p, kind: 'skill', crit: true }; const h = e.hp; w.hitEnemy(e, 100, s); return { bleed: e.bleedPool, dealt: h - e.hp };
   };
-  const g1 = bleedGain(1), g3 = bleedGain(2), g33 = bleedGain(3), pow = 1 + 0.15, pre = g3.dealt / g3.aff;
-  near(g1.bleed, g1.dealt / g1.aff * 0.1 * pow, 0.01, 'rank 1: Cruel Arts Bleed only (10% of the hit)'); const xs = CT('s_el_a', 2).exsang; near(g3.bleed - g3.dealt / g3.aff * 0.1 * pow, pre * xs * pow, 0.02, 'Exsanguinate adds exsang of the hit as Bleed (rank 2)'); near(g33.bleed - g33.dealt / g33.aff * 0.1 * pow, g33.dealt / g33.aff * xs * pow, 0.02, 'and at rank 3');
+  const g1 = bleedGain(1), g3 = bleedGain(2), g33 = bleedGain(3), pow = 1 + 0.15, pre = g3.dealt;
+  near(g1.bleed, g1.dealt * 0.1 * pow, 0.01, 'rank 1: Cruel Arts Bleed only (10% of the hit)'); const xs = CT('s_el_a', 2).exsang; near(g3.bleed - g3.dealt * 0.1 * pow, pre * xs * pow, 0.02, 'Exsanguinate adds exsang of the hit as Bleed (rank 2)'); near(g33.bleed - g33.dealt * 0.1 * pow, g33.dealt * xs * pow, 0.02, 'and at rank 3');
   void pow;
   const e3 = (() => { const { w, p } = stage({ s_el: 1, s_el_a: 2 }); const e = foe(w, p.x + 30, p.y); w.burnStack(e, p, 0); e.chill = 30; e.bleedPool = 0; w.hitEnemy(e, 100, { p, kind: 'skill', crit: true }); return e.bleedPool; })();
   const e3b = (() => { const { w, p } = stage({ s_el: 1, s_el_a: 1 }); const e = foe(w, p.x + 30, p.y); w.burnStack(e, p, 0); e.chill = 30; e.bleedPool = 0; w.hitEnemy(e, 100, { p, kind: 'skill', crit: true }); return e.bleedPool; })();

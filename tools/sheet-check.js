@@ -57,17 +57,6 @@ function modelOf(cls, boons, wi, o) {
   near(by(e2, 1, 'crater').here * by(e2, 1, 'crater').oneFoe, 6 * 8.1, 0.1, 'Set 2 crater, 6 ticks');
 }
 
-// ---------------- affinity chips: no stratum is weak or resists, so every listed element reads x1 ----------------
-{
-  const aff = (cls, boons, stratum) => modelOf(cls, boons, 0, { ctx: { stratum } }).aff.now.mine;
-  let a = aff('cleric', {}, 2).find(x => x.el === 'holy');
-  ok(a && a.why === 'class' && a.mul === 1 && a.skillMul === 1, 'fresh Cleric, stratum II: Holy x1');
-  a = aff('cleric', { consecrate: 1 }, 2).find(x => x.el === 'holy');
-  ok(a && a.why === 'path' && a.mul === 1 && a.skillMul === 1, 'Cleric with the Holy gate: Holy x1');
-  for (let st = 1; st <= ED.CONST.STRATA; st++) { a = aff('pyro', { kindle: 1 }, st).find(x => x.el === 'fire'); ok(a && a.mul === 1 && a.skillMul === 1, `Pyromancer with Kindle, stratum ${st}: Fire x1`); }
-  a = aff('knight', { kindle: 1 }, 3).find(x => x.el === 'fire');
-  ok(a && a.skillMul === null, 'a Knight has no class element');
-}
 // every ED.SKILL_SHEET key names a part that exists (a renamed part would silently lose its oneFoe, selfVuln or infAdd)
 for (const key in ED.SKILL_SHEET) { const [sid, pid] = key.split('.'); ok(ED.SKILLS[sid] && ED.SKILLS[sid].parts.some(q => q.id === pid), 'ED.SKILL_SHEET key ' + key + ' resolves to a skill part'); }
 
@@ -551,13 +540,13 @@ function statusRun(boons, stratum, secs, until, each) {
 }
 {
   const r = statusRun({ frostbite: 1 }, 6, 12, 'freeze'), st = r.p.stats, pow = 1 + st.statusPow; // stratum VI: a reference foe of 230 health takes several hits to freeze
-  const rate = r.m0.proc.split.weapon * st.iceInfuse * pow / r.ref.statusHp * C.CHILL_K * (1 + st.chillMul) * ED.elemMul(6, 'ice');
+  const rate = r.m0.proc.split.weapon * st.iceInfuse * pow / r.ref.statusHp * C.CHILL_K * (1 + st.chillMul);
   ok(r.t !== null && Math.abs(r.t - 100 / rate) <= 100 / rate * 0.15 + 0.35, `time to freeze a reference foe ${r.t && r.t.toFixed(2)} s vs ${(100 / rate).toFixed(2)} s from the weapon`);
   const est = r.m0.mult.status.find(s => s.el === 'ice').est; ok(est.secs > 0 && est.secs <= 100 / rate + 1e-9, 'Ice estimate counts the skills on top of the weapon');
 }
 {
   const r = statusRun({ envenom: 1 }, 6, 16, 'venom'), st = r.p.stats, pow = 1 + st.statusPow;
-  const rate = r.m0.proc.split.weapon * st.poisonInfuse * pow / r.ref.statusHp * C.VENOM_K * (1 + st.venomBuild) * ED.elemMul(6, 'poison');
+  const rate = r.m0.proc.split.weapon * st.poisonInfuse * pow / r.ref.statusHp * C.VENOM_K * (1 + st.venomBuild);
   ok(r.t !== null && Math.abs(r.t - 100 / rate) <= 100 / rate * 0.15 + 0.35, `time to full Venom ${r.t && r.t.toFixed(2)} s vs ${(100 / rate).toFixed(2)} s from the weapon`);
 }
 {
@@ -633,7 +622,7 @@ function statusRun(boons, stratum, secs, until, each) {
     const h1 = Cm({ c_atk: 1, c_atk_h: 1 }), h2 = Cm({ c_atk: 1, c_atk_h: 2 }), h3 = Cm({ c_atk: 1, c_atk_h: 3 }), wol = (m) => ex(m, 'Wave of light').perAttack;
     ok(!ex(h1, 'Solar Flare') && ex(h2, 'Solar Flare') && ex(h3, 'Solar Flare') && !ex(h2, "Dawn's Wake") && ex(h3, "Dawn's Wake"), 'Sunhammer lists Solar Flare from rank 2 and Dawn’s Wake at rank 3 only');
     rel(ex(h2, 'Solar Flare').perAttack, wol(h2) * 0.8 * 0.3, 1e-6, 'Solar Flare = wave x waveBurst (0.8) x 0.3 (the share of waves whose burst catches a foe)');
-    rel(ex(h3, "Dawn's Wake").perAttack, wol(h3) * 0.6 * 1.5 * ED.affC(4, 'holy'), 1e-6, "Dawn's Wake = wave x wake (0.6) x 1.5 s on the strip x the Holy class affinity (no crit)");
+    rel(ex(h3, "Dawn's Wake").perAttack, wol(h3) * 0.6 * 1.5, 1e-6, "Dawn's Wake = wave x wake (0.6) x 1.5 s on the strip x the Holy class affinity (no crit)");
     ok(!ex(h3, 'Solar Flare').packOnly && !ex(h3, "Dawn's Wake").packOnly && ex(h3, "Dawn's Wake").radiance > 0, 'both count on one foe; the strip also stores Radiance');
     const w0 = Cm({ c_atk: 1, c_atk_h: 3 }, { stat: { wake: 0 } });
     ok(h3.proc.rate.holy > w0.proc.rate.holy && Math.abs(h3.proc.rate.holy - w0.proc.rate.holy - ex(h3, "Dawn's Wake").radiance * h3.weapon.aps) < 1e-6, 'the strip adds a quarter of its raw damage to the Radiance income');

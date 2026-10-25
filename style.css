@@ -511,10 +511,6 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 .stratum.unseen b, .stratum.unseen small { color: var(--faint); }
 
 /* elemental affinity chips: flat tint of the path colour, 1 fine px line, hard outline; resist = dark chip */
-.aff-list { display: flex; flex-wrap: wrap; gap: calc(2 * var(--pf)); margin-top: var(--p); }
-.aff-chip { display: inline-flex; align-items: center; gap: calc(2 * var(--pf)); padding: 0 calc(3 * var(--pf)) 0 0; font: 700 var(--fs-sm)/1.25 var(--f-body); white-space: nowrap; color: var(--pc, var(--text)); border-radius: 0; border: var(--pf) solid var(--pc, var(--line-hi)); background: color-mix(in srgb, var(--pc, #999) 16%, #120c09); box-shadow: 0 0 0 var(--pf) var(--px-ol); }
-.aff-chip img { width: var(--ic-f); height: var(--ic-f); }
-.aff-chip.resist { color: var(--muted); border-style: solid; border-color: color-mix(in srgb, var(--pc, #999) 40%, var(--line)); background: #0f0a07; }
 
 /* ---------- lobby ---------- */
 .lobby-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: calc(4 * var(--p)); align-items: stretch; }
@@ -816,11 +812,7 @@ body:has(#ov-sheet:not([hidden])) #ov-boon { visibility: hidden; }
 .sh-meter.low i { --mh: #ff9a88; --mc: var(--danger); --ml: #8e3428; }
 .sh-world { grid-column: 3; grid-row: 2; justify-self: end; display: flex; align-items: center; gap: calc(3 * var(--p)); flex-wrap: wrap; justify-content: flex-end; }
 .sh-strat { font: 700 var(--fs-md)/1.25 var(--f-body); color: var(--bone); white-space: nowrap; }
-.sh-aff { display: inline-flex; gap: calc(2 * var(--p)); flex-wrap: wrap; }
 /* stratum chips inside the sheet: pixel chip (flat tint, 1 fine px line, hard outline); resists is dimmer */
-#ov-sheet .aff-chip { display: inline-flex; align-items: center; gap: calc(3 * var(--t1)); padding: 0 calc(4 * var(--t1)) 0 calc(2 * var(--t1)); margin: var(--pf); border: var(--pf) solid var(--pc); border-radius: 0; box-shadow: 0 0 0 var(--pf) var(--px-ol); background: color-mix(in srgb, var(--pc) 16%, #120c09); color: var(--pc); font: 700 var(--fs-md)/1.25 var(--f-body); white-space: nowrap; }
-#ov-sheet .aff-chip img { width: var(--fs-md); height: var(--fs-md); }
-#ov-sheet .aff-chip.resist { color: var(--muted); border-color: var(--line-hi); background: #0e0a08; }
 
 /* tab strip: framed pixel tabs on the left (display face at menu size), keys / waiting pill / viewing button on the right */
 .sh-tabs { display: flex; justify-content: flex-start; align-items: center; gap: calc(2 * var(--p)); flex-wrap: nowrap; min-width: 0; }
@@ -993,7 +985,6 @@ body:has(#ov-sheet:not([hidden])) #ov-boon { visibility: hidden; }
   .sh-foot { display: none; }
   .sh-keys { display: inline; }
   .sh-compact { display: grid; gap: calc(2 * var(--t1)); }
-  .sh-compact .sh-aff { display: flex; }
 }
 @media (max-width: 900px) {
   #ov-sheet { overflow-y: auto; }

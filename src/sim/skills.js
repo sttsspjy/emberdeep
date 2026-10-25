@@ -88,7 +88,7 @@
     return o ? Object.assign(src, o) : src;
   };
 
-  // Area hit of a skill on foes within r of (x, y): src is the hit's source fields (W.partSrc); calls onHit(e, dealt, damage before the affinity) per foe struck.
+  // Area hit of a skill on foes within r of (x, y): src is the hit's source fields (W.partSrc); calls onHit(e, dealt) per foe struck.
   W.skillBlast = function (p, x, y, r, dmg, src, onHit) {
     const q = this.foeScan(x, y, r);
     for (let k = 0; k < q.length || this.foeTail(q); k++) {
@@ -98,7 +98,7 @@
       if (d >= r + e.r) continue;
       const s = Object.assign({ kx: (e.x - x) / (d || 1), ky: (e.y - y) / (d || 1), noGuard: true, x, y }, src);
       const dealt = this.hitEnemy(e, dmg, s);
-      if (onHit) onHit(e, dealt, dealt / (s.affMul || 1));
+      if (onHit) onHit(e, dealt);
     }
     this.foeEnd();
     this.smashCircle(p, x, y, r);

@@ -31,7 +31,6 @@ const mine = (w, p) => w.allies.filter(a => a.owner === p.pid);
 const hexIt = (e, bit) => { e.hexT = 3; e.hexBy = bit === undefined ? 1 : bit; };
 const weaponHit = (w, p, e, dmg) => w.hitEnemy(e, dmg || 100, { p, kind: 'weapon', wpn: true, crit: false });
 const burstOf = (p, mul) => ED.Stats.skillNums('harvest', p.stats).p.burst.dmg * (mul || 1);
-const aff = (w) => w.affC('shadow');
 // a minion standing next to foe e, ready to strike
 const minionAt = (w, p, e, life) => { w.spawnMinion(p, e.x - 12, e.y, life || 12); const a = w.allies[w.allies.length - 1]; a.cd = 0; return a; };
 
@@ -134,13 +133,13 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
 {
   const { w, p } = stage({ n_s1: 1, n_s1_a: 1 }); const e = foe(w, p.x + 80, p.y), N = ED.Stats.skillNums('legion', p.stats);
   near(N.p.spikes.dmg, 7.5 + 0.8 * 13.5, 0.001, 'Spikes 7.5 + 0.8 x Power 13.5'); const a = minionAt(w, p, e, 0.001); a.cd = 99; w.updateAllies(1 / 60);
-  near(lost(e), 18.3 * aff(w), 0.01, 'a minion bursts on expiry for 18.3 Shadow (class affinity)'); ok(mine(w, p).length === 0, 'the burst minion is gone');
+  near(lost(e), 18.3, 0.01, 'a minion bursts on expiry for 18.3 Shadow (class affinity)'); ok(mine(w, p).length === 0, 'the burst minion is gone');
   const ba = evs(w, 'boom').filter(b => b.k === 'bone' && b.s === 1); ok(ba.length === 1 && ba[0].r === 60, 'boom event carries the Spikes flag and radius 60');
-  near(e.doom, 18.3 * 0.5 * w.elemAff('shadow'), 0.01, 'the burst marks Doom for half of its damage');
+  near(e.doom, 18.3 * 0.5, 0.01, 'the burst marks Doom for half of its damage');
   const { w: w2, p: p2 } = stage({ n_s1: 1, n_s1_a: 1 }); const e2 = foe(w2, p2.x + 80, p2.y);
   for (let i = 0; i < 4; i++) { const m = minionAt(w2, p2, e2); m.cd = 99; m.x = p2.x + 200; m.y = p2.y; m.life = 12 - i; }
   const oldest = mine(w2, p2).sort((u, v) => u.life - v.life)[0]; oldest.x = e2.x - 10; oldest.y = e2.y; w2.spawnMinion(p2, p2.x, p2.y, 12); w2.updateAllies(1 / 60);
-  near(lost(e2), 18.3 * aff(w2), 0.01, 'the replaced (oldest) minion bursts'); ok(mine(w2, p2).length === 4, 'cap 4 holds');
+  near(lost(e2), 18.3, 0.01, 'the replaced (oldest) minion bursts'); ok(mine(w2, p2).length === 4, 'cap 4 holds');
   const { w: w4, p: p4 } = stage({ n_s1: 1, n_s1_a: 2 }); near(ED.Stats.skillNums('legion', p4.stats).p.spikes.dmg, 18.3 * 1.05, 0.01, 'Spikes rank 2: +5% per rank');
   const k1 = foe(w4, p4.x + 80, p4.y), k2 = foe(w4, p4.x + 100, p4.y); k1.hp = k2.hp = 5; const m = minionAt(w4, p4, k1, 0.001); m.cd = 99; w4.updateAllies(1 / 60);
   ok(k1.hp <= 0 && k2.hp <= 0 && mine(w4, p4).length === 1, 'Boneyard: a foe the burst kills rises, at most once per 2 s (two died, one rose)');
@@ -174,7 +173,7 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
 {
   const { w, p } = stage({ n_s2: 1 }); const e = foe(w, p.x + 100, p.y); for (let i = 0; i < 3; i++) { const m = minionAt(w, p, e); m.x = p.x + 100 + i; m.y = p.y; }
   const edge = foe(w, p.x + 100 + 71, p.y); const out = foe(w, p.x + 100, p.y + 90); p.hp = 1; w.playerSkill(p, 0, {}, 1);
-  near(lost(e), 3 * burstOf(p) * aff(w), 0.05, 'each of 3 minions bursts for 56.28'); ok(lost(edge) > 0 && out.hp === 5000, 'radius 72: a foe at 71 is hit, one at 90 is not');
+  near(lost(e), 3 * burstOf(p), 0.05, 'each of 3 minions bursts for 56.28'); ok(lost(edge) > 0 && out.hp === 5000, 'radius 72: a foe at 71 is hit, one at 90 is not');
   ok(mine(w, p).length === 2, 'Harvest raises 2 after'); near(p.hp, 1 + 0.06 * p.maxHp, 0.01, 'heal 3% per minion, at most 6% per cast');
   p.hp = 1; w.healPlayer(p, 0); w.playerSkill(p, 0, {}, 1); near(p.hp, 1 + 0.06 * p.maxHp, 0.01, 'two minions heal 6%');
   w.allies.length = 0; p.hp = 1; const hp0 = p.hp; w.playerSkill(p, 0, {}, 1); ok(p.hp === hp0 && mine(w, p).length === 2, 'no minions: no heal, raises 2');
@@ -189,7 +188,7 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
   const live = pos.map(q => foe(w, q[0], q[1])); w.fx.length = 0; w.playerSkill(p, 0, {}, 1);
   const bursts = evs(w, 'boom').filter(b => b.c === 1); ok(bursts.length === 4, `Harvest detonates 4 corpses at rank 1 (got ${bursts.length})`);
   const hit = live.filter(e => lost(e) > 0); ok(hit.length >= 4, 'the corpse bursts hit the foes standing there');
-  near(Math.max(...live.map(lost)) / aff(w), burstOf(p, 0.3), 0.05, 'a corpse bursts at 30% of a minion burst'); ok(w.corpses.length === 1 && w.corpses[0].t < w.corpses[1 - 1].t + 1, 'corpses are used once (the oldest stays)');
+  near(Math.max(...live.map(lost)), burstOf(p, 0.3), 0.05, 'a corpse bursts at 30% of a minion burst'); ok(w.corpses.length === 1 && w.corpses[0].t < w.corpses[1 - 1].t + 1, 'corpses are used once (the oldest stays)');
   const { w: w2, p: p2 } = stage({ n_s2: 1, n_s2_a: 1 }); const e2 = foe(w2, p2.x + 100, p2.y); weaponHit(w2, p2, e2, 1e6); w2.time += 5; w2.playerSkill(p2, 0, {}, 1); ok(evs(w2, 'boom').filter(b => b.c === 1).length === 0, 'a corpse older than 4 s is not used');
   const { w: w3, p: p3 } = stage({ n_s2: 1, n_s2_a: 1 }); const e3 = foe(w3, p3.x + 300, p3.y); weaponHit(w3, p3, e3, 1e6); w3.playerSkill(p3, 0, {}, 1); ok(evs(w3, 'boom').filter(b => b.c === 1).length === 0, 'a corpse beyond 220 is not used');
   const { w: w4, p: p4 } = stage({ n_s2: 1, n_s2_a: 2 }); for (let i = 0; i < 7; i++) weaponHit(w4, p4, foe(w4, p4.x + 50 + i * 5, p4.y), 1e6); w4.fx.length = 0; w4.playerSkill(p4, 0, {}, 1); ok(evs(w4, 'boom').filter(b => b.c === 1).length === 5, 'rank 2 detonates 5');
@@ -199,7 +198,7 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
 }
 { // Bone Lances: each minion bursts on the foe nearest it within 200, for +37%
   const { w, p } = stage({ n_s2: 1, n_s2_a: 2 }); const e = foe(w, p.x + 160, p.y), far = foe(w, p.x - 250, p.y); const m = minionAt(w, p, e); m.x = p.x; m.y = p.y; w.fx.length = 0;
-  w.playerSkill(p, 0, {}, 1); near(lost(e), burstOf(p, 1.37) * aff(w), 0.05, 'a lance bursts on the foe for +37%'); ok(far.hp === 5000, 'a foe beyond 200 of the minion is not chosen');
+  w.playerSkill(p, 0, {}, 1); near(lost(e), burstOf(p, 1.37), 0.05, 'a lance bursts on the foe for +37%'); ok(far.hp === 5000, 'a foe beyond 200 of the minion is not chosen');
   const l = evs(w, 'blance'); ok(l.length === 1 && l[0].x1 === Math.round(e.x) && l[0].pid === 'p0', 'blance event from the minion to the foe');
   const { w: w2, p: p2 } = stage({ n_s2: 1, n_s2_a: 2 }); const f = foe(w2, p2.x + 400, p2.y); const m2 = minionAt(w2, p2, f); m2.x = p2.x; m2.y = p2.y; w2.fx.length = 0; w2.playerSkill(p2, 0, {}, 1); ok(f.hp === 5000 && evs(w2, 'blance').length === 0, 'no foe within 200: the minion bursts where it stands');
 }
@@ -231,10 +230,10 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
 {
   const { w, p } = stage({ n_el: 1 }); near(p.stats.minionInfuse, 0.25, 1e-9, 'k = 0.75');
   const e = foe(w, p.x + 100, p.y); w.spawnMinion(p, e.x, e.y, 12); w.playerSkill(p, 0, {}, 1);
-  near(lost(e), burstOf(p) * 1.25 * aff(w), 0.05, 'Grave Pact: Harvest bursts +25% Shadow'); void e;
+  near(lost(e), burstOf(p) * 1.25, 0.05, 'Grave Pact: Harvest bursts +25% Shadow'); void e;
   const f = foe(w, p.x + 100, p.y + 300), a = minionAt(w, p, f); w.updateAllies(0); const dmg = lost(f);
-  near(dmg, 17.1 * C.COMP_MUL, 0.01, 'minion hits stay physical (no class bonus)'); near(f.doom, dmg * 0.2 * w.elemAff('shadow'), 0.01, 'minions mark Doom for 20% of their damage'); void a;
-  const { w: w2, p: p2 } = stage({ n_el: 1, doommark: 1 }); near(p2.stats.shadowInfuse, 0.4, 1e-9, 'Mark of Doom 0.4'); const g = foe(w2, p2.x + 100, p2.y); const b2 = minionAt(w2, p2, g); w2.updateAllies(0); near(g.doom, lost(g) * 0.3 * w2.elemAff('shadow'), 0.01, 'Mark of Doom x k (30%) counts instead when higher');
+  near(dmg, 17.1 * C.COMP_MUL, 0.01, 'minion hits stay physical (no class bonus)'); near(f.doom, dmg * 0.2, 0.01, 'minions mark Doom for 20% of their damage'); void a;
+  const { w: w2, p: p2 } = stage({ n_el: 1, doommark: 1 }); near(p2.stats.shadowInfuse, 0.4, 1e-9, 'Mark of Doom 0.4'); const g = foe(w2, p2.x + 100, p2.y); const b2 = minionAt(w2, p2, g); w2.updateAllies(0); near(g.doom, lost(g) * 0.3, 0.01, 'Mark of Doom x k (30%) counts instead when higher');
   const { w: w3, p: p3 } = stage({}); const h = foe(w3, p3.x + 100, p3.y); minionAt(w3, p3, h); w3.updateAllies(0); near(h.doom, 0, 1e-9, 'no Doom without a gate or Grave Pact');
   void b2;
 }
@@ -298,7 +297,7 @@ const cast0 = (w, p) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x + 60, y: 
   // bombs run at a foe and explode on it
   const T = stage({ n_s1: 1, n_s1_a: 3 }); const e = foe(T.w, T.p.x + 180, T.p.y), other = foe(T.w, T.p.x + 180, T.p.y + 140), log = spy(T.w), ev = tap(T.w); cast0(T.w, T.p); T.w.allies = T.w.allies.filter(a => a.bomb); const xs = T.w.allies.map(b => b.x);
   run(T.w, 0.25, ev.step); ok(T.w.allies.every((b, i) => b.x > xs[i] + 20) && !partHits(log, 'legion.bomb').length, 'the bombs run at the foe (190 px/s) and have not burst yet'); run(T.w, 1.75, ev.step);
-  const bh = partHits(log, 'legion.bomb'), m = T.p.stats.dmg * T.w.affC('shadow');
+  const bh = partHits(log, 'legion.bomb'), m = T.p.stats.dmg;
   ok(bh.length === 2 && bh.every(h => h.e === e && Math.abs(h.d - N.p.bomb.dmg * m) < 0.05), `both bombs burst on the foe for 80% of a burst (${bh.length} hits, ${bh[0] ? bh[0].d.toFixed(1) : '-'} vs ${(N.p.bomb.dmg * m).toFixed(1)})`); ok(other.hp === 5000 && !T.w.allies.some(a => a.bomb), 'a foe 140 away is unharmed and the bombs are gone');
   ok(ev.all.filter(v => v.t === 'boom' && v.b === 1 && v.r === 60).length === 2, 'two boom events flagged b (bomb)');
   const fields = T.w.zones.filter(z => z.kind === 'shards' && z.w === 11); ok(fields.length === 2 && fields.every(z => z.r === 50 && z.dur === 2 && Math.abs(z.dps - N.p.field.dmg) < 1e-9 && z.owner === 'p0'), 'each bomb leaves a field (shards zone, w 11)');
@@ -518,7 +517,7 @@ const cast0 = (w, p) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x + 60, y: 
 { // the burst of a free minion that falls
   const { w, p } = stage({ n_el: 1, n_el_b: 3 }); w.allies.length = 0; const a = w.spawnMinion(p, p.x + 100, p.y, 10, 'again', true); a.life = 0.001; const inside = foe(w, a.x + 40, a.y), edge = foe(w, a.x + 69, a.y), out = foe(w, a.x + 90, a.y), weak = foe(w, a.x, a.y + 30); weak.hp = 5; w.fx.length = 0;
   w.updateAllies(1 / 60);
-  const doom = 2 * a.dmg * C.COMP_MUL * 1.5 * w.elemAff('shadow');
+  const doom = 2 * a.dmg * C.COMP_MUL * 1.5;
   near(inside.doom, doom, doom * 0.01, 'a falling free minion marks Doom worth 200% of its strike (x1.5 Risen Tide)'); ok(edge.doom > 0 && out.doom === 0, 'on every foe within 60 and not beyond'); ok(weak.hp <= 0, 'a foe the Doom lifts over its health is Reaped'); ok(mine(w, p).filter(m => m.life > 0).length === 1 && mine(w, p).filter(m => m.life > 0)[0].free, 'and rises as another free minion');
   const b = evs(w, 'boom').filter(v => v.k === 'shadow' && v.d === 1); ok(b.length === 1 && b[0].r === 60, 'a shadow boom event with the Doom flag and radius 60');
   const { w: w2, p: p2 } = stage({ n_el: 1, n_el_b: 2 }); const q = w2.spawnMinion(p2, p2.x + 100, p2.y, 10, 'again', true); q.life = 0.001; const f2 = foe(w2, q.x + 30, q.y); w2.updateAllies(1 / 60); ok(f2.doom === 0 && !q.free, 'a rank 2 Risen Tide minion does not burst');

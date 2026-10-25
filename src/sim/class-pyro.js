@@ -78,7 +78,7 @@
   }
 
   // ---------------- Fireball ----------------
-  // A shot toward the aim at the skill's speed for its range: it bursts (every foe within the burst radius takes the burst and a Burn add of statusAdd.burn of the damage before affinity) on the first foe it touches, on a wall or at the end of its flight.
+  // A shot toward the aim at the skill's speed for its range: it bursts (every foe within the burst radius takes the burst and a Burn add of statusAdd.burn of the damage dealt) on the first foe it touches, on a wall or at the end of its flight.
   // The shot itself deals nothing (dmg 0, a no-guard hit kind); projHit / projEnd burst it. mul: the cast's factor (spellCast).
   ED.CAST.fireball = function (p, a, data, st, N) {
     fireball(this, p, a, N, spellCast(this, p, 2));
@@ -95,12 +95,12 @@
     const fb = pr.fb, N = ED.Stats.skillNums('fireball', p.stats), q = N.p.burst, sp = Math.hypot(pr.vx, pr.vy) || 1;
     const x = pr.x - pr.vx / sp * back, y = pr.y - pr.vy / sp * back;
     pr.fb = null;
-    w.skillBlast(p, x, y, q.r, q.dmg * fb.mul, w.partSrc(p, N, 'burst'), (e, dealt, pre) => { if (e.hp > 0 && dealt > 0) w.addBurn(e, pre * q.statusAdd.burn, p); });
+    w.skillBlast(p, x, y, q.r, q.dmg * fb.mul, w.partSrc(p, N, 'burst'), (e, dealt) => { if (e.hp > 0 && dealt > 0) w.addBurn(e, dealt * q.statusAdd.burn, p); });
     w.emit({ t: 'boom', x: Math.round(x), y: Math.round(y), r: Math.round(q.r), k: 'fire' });
   }
 
   // ---------------- Flame Nova ----------------
-  // A ring of fire around the hero: every foe struck takes the blast and a Burn add (pre-affinity, the adder applies the stratum's), both x the cast's factor. Cards: the ring and Mantle (Phoenix Mantle; Phoenix Form: a ring that follows the hero),
+  // A ring of fire around the hero: every foe struck takes the blast and a Burn add, both x the cast's factor. Cards: the ring and Mantle (Phoenix Mantle; Phoenix Form: a ring that follows the hero),
   // the echo and Collapse (Twin Nova; Supernova: the echo is an expanding wave), Heat Engine's cooldown cut.
   ED.CAST.nova = function (p, a, data, st, N) {
     const m = spellCast(this, p, 0);
@@ -187,7 +187,7 @@
   }
 
   // ---------------- Meteor ----------------
-  // A friendly telegraph, then the impact (Burn add = half the impact before affinity) and a burning crater. Twin Meteor chains a second impact on the foe nearest the first; Meteor Shower rains meteorites around each impact;
+  // A friendly telegraph, then the impact (Burn add = half the impact) and a burning crater. Twin Meteor chains a second impact on the foe nearest the first; Meteor Shower rains meteorites around each impact;
   // Comet is the hero's own leap (the client moves it, the sim only times the landing and the airborne flag); Sun Dive adds a second leap toward the cursor SUN_GAP after the landing (p.diveAt).
   // Cataclysm casts five meteors instead of one: the cursor point at once, four STORM_OFF px around it STORM_GAP apart (queued in p.pyroQ). The cast's factor (spellCast) rides on its own impacts.
   ED.CAST.meteor = function (p, a, data, st, N) {
@@ -244,11 +244,11 @@
     if (storm && grp.burning === null) grp.burning = st.heatEngine > 0 ? burningSet(w) : false;
     const burn = storm ? grp.burning : own && st.heatEngine > 0 ? burningSet(w) : null, seen = storm ? grp.seen : burn ? new Set() : null;
     const src = w.partSrc(o, N, rock ? 'rocks' : twin ? 'twin' : storm ? 'storm' : 'impact', comet && st.cometStun ? { knock: im.knock * 2 } : undefined);
-    w.skillBlast(o, z.x, z.y, z.r, q.dmg * z.zm, src, (e, dealt, pre) => {
+    w.skillBlast(o, z.x, z.y, z.r, q.dmg * z.zm, src, (e, dealt) => {
       if (!(dealt > 0)) return;
       if (burn && burn.has(e.id)) seen.add(e.id);
       if (e.hp > 0) {
-        w.addBurn(e, pre * im.statusAdd.burn, o);
+        w.addBurn(e, dealt * im.statusAdd.burn, o);
         if (comet && st.cometStun) w.stunFoe(e, st.cometStun, false);
       }
     });
