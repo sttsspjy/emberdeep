@@ -205,7 +205,9 @@
       case 'block': tone('sine', 150, 70, 0.14, 0.26 * v); noise('bandpass', 900, 300, 0.1, 0.16 * v, 1.5); tone('square', 1250, 900, 0.05, 0.05 * v); break;
       case 'howl': tone('sawtooth', 300, 185, 0.9, 0.09 * v); tone('sawtooth', 312, 192, 0.9, 0.07 * v); tone('sine', 150, 90, 0.9, 0.12 * v); noise('lowpass', 600, 150, 0.8, 0.08 * v); break;
       case 'rift': tone('sine', 950, 110, 0.55, 0.1 * v); tone('triangle', 60, 40, 0.6, 0.18 * v); noise('bandpass', 200, 3200, 0.45, 0.1 * v, 4); break;
-      // Knight: the shield leaves the hand, rings off each foe (two semitones higher per ricochet; guarded strike: a dull clank), comes home with a leather thump (and a chime when it shields), a parry rings sharp
+      // Knight: a blocked attack clanks off the raised shield (two semitones higher per stored block, arg n); the bash lands with a body thump and a ring (higher with the power stored, arg n); clang: a metal strike (arg { n, g: guarded, a dull clank })
+      case 'bwblock': { const k = Math.pow(2, 2 * Math.min(6, (arg && arg.n) || 1) / 12); tone('square', 420 * k, 300 * k, 0.08, 0.08 * v); noise('bandpass', 1600 * k, 700, 0.07, 0.14 * v, 2); tone('sine', 110, 60, 0.12, 0.18 * v); break; }
+      case 'bwbash': { const k = Math.pow(2, 2 * Math.min(6, (arg && arg.n) || 0) / 12); tone('sine', 95, 38, 0.24, 0.32 * v); noise('lowpass', 800, 120, 0.18, 0.26 * v, 1); tone('square', 660 * k, 560 * k, 0.12, 0.06 * v); tone('square', 990 * k, 880 * k, 0.1, 0.04 * v); break; }
       case 'throw': noise('highpass', 1200, 4200, 0.18, 0.2 * v, 0.7); tone('sine', 260, 520, 0.12, 0.05 * v); break;
       case 'clang': {
         const n = arg && arg.n ? Math.min(6, arg.n) : 1;

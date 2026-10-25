@@ -77,7 +77,7 @@
       glacier: false, affixOff: false,
       hpLever: def.boss ? def.hp / def.refHp : def.fodder ? 1 : this.threat().hp, // HP-relative statuses (chill, Venom) ignore this stratum lever (fodder carries none)
       mark: 0, judged: 0, vulnT: 0, blind: 0, sunder: 0, sunderOwner: null, slow: 1, slowAmt: 0, slowT: 0, windMul: 1, dmgTakenMul: 1, invulnT: 0, killed: false,
-      // class-route foe states: shieldStunT (stunned by a thrown shield), staggerT / parryT (per-foe cooldowns), hexT + hexBy (slot mask), markV (mark vulnerability), sealT, weakT + weakV (Verdict weaken)
+      // class-route foe states: shieldStunT (stunned by a Bulwark bash), staggerT / parryT (per-foe cooldowns), hexT + hexBy (slot mask), markV (mark vulnerability), sealT, weakT + weakV (Verdict weaken)
       shieldStunT: 0, staggerT: 0, parryT: 0, hexT: 0, hexBy: 0, markV: 0, sealT: 0, weakT: 0, weakV: 0,
     };
     if (opts.elite && !def.fodder) this.makeElite(e, opts.affix);
@@ -646,6 +646,8 @@
     if (!p || p.downed || p.dead || this.state !== 'play') return false;
     const st = p.stats;
     if (p.invuln > 0 || p.dashing || p.dashT > 0 || p.skillIfr) { if ((p.dashing || p.dashT > 0) && st.perfectDodge) this.perfectDodge(p, src); return false; }
+    const hb = CLS[p.cls];
+    if (hb && hb.block && hb.block.call(this, p, src)) return false; // a held skill stops it (Bulwark)
     if (st.perfectDodge && src.e && !src.hazard) {
       if (p.pdT > 0 && this.perfectDodge(p, src)) return false;
       if (this.guardFront(p, src.e.x, src.e.y) && this.perfectDodge(p, src)) { this.emit({ t: 'block', x: Math.round(p.x), y: Math.round(p.y), k: 'guard' }); return false; }
@@ -729,7 +731,7 @@
   // k: the combo step of a combo weapon as the attacker's own control decided it (ED.Stats.comboNext; anything else is decided here); a repeat (twinMul) uses the step of the last attack.
   // fin: the Finisher (the General keystone's released hold): a guaranteed crit at FIN_MUL x that Bleeds for 50% of the hit, melee reach + FIN_REACH. Umbral Arms (p.behindT) makes the attack crit; Divine Riposte (p.pdStrikeT) makes its hits Smite.
   W.playerAttack = function (p, a, twinMul, k, fin) {
-    if (!p || p.downed || p.dead) return;
+    if (!p || p.downed || p.dead || p.bulwarkOn) return; // no swing behind a raised Bulwark
     const st = p.stats, wb = st.weapon, ch = CLS[p.cls], C = ED.CONST;
     if (wb.kind === 'bell') { if (ch && ch.weaponAttack && !(twinMul > 0)) ch.weaponAttack.call(this, p, a); return; } // a chained bell is not swung: the class file hauls it (class-bell.js)
     if (wb.combo && !(twinMul > 0)) { p.comboK = k === (k | 0) && k >= 0 && k < wb.combo.steps.length ? k : ED.Stats.comboNext(p, this.time); p.comboAt = this.time; }
@@ -1059,6 +1061,8 @@
           if (p.downed || p.dead) continue;
           const rr = p.r + pr.r - 3;
           if (U.dist2(pr.x, pr.y, p.x, p.y) > rr * rr) continue;
+          const hb = CLS[p.cls];
+          if (hb && hb.block && hb.block.call(this, p, { proj: true, e: pr.src, pr, x: pr.x, y: pr.y })) { dead = true; break; } // a held skill stops it, i-frames or not (Bulwark): the shot is destroyed
           if (this.guardFront(p, pr.x, pr.y)) { this.reflectShot(p, pr); if (pr.src) this.perfectDodge(p, { e: pr.src, proj: true }); dead = true; break; } // the Hallowed guard reflects it
           if (p.invuln > 0 || p.dashing || p.dashT > 0 || p.skillIfr) { if ((p.dashing || p.dashT > 0) && pr.src && p.stats.perfectDodge) this.perfectDodge(p, { e: pr.src, proj: true }); continue; } // shots pass through i-frames; a dash through one is a perfect dodge
           this.hurtPlayer(p, pr.dmg, { proj: true, e: pr.src, pr, x: pr.x, y: pr.y });

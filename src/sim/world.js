@@ -603,7 +603,7 @@
     const pos = [];
     for (const p of this.players.values()) {
       const pt = via && room.entry ? D.entryPoint(room, 's', k) : { x: D.center(room).x + (k - 1.5) * 22, y: D.center(room).y + 20 };
-      p.x = pt.x; p.y = pt.y; p.vx = 0; p.vy = 0; p.dashT = 0; p.skillMove = null; p.skillIfr = false; p.charge = null; this.clearShields(p); // a thrown shield and a charge in flight end with the room
+      p.x = pt.x; p.y = pt.y; p.vx = 0; p.vy = 0; p.dashT = 0; p.skillMove = null; p.skillIfr = false; p.charge = null; this.clearShields(p); // a raised Bulwark and a charge in flight end with the room
       p.toughRoom = room.type === 'elite' || room.type === 'champion' || room.type === 'boss'; // War Drum doubles in these rooms
       pos.push([p.pid, Math.round(p.x), Math.round(p.y)]);
       k++;
@@ -699,7 +699,7 @@
     p.invuln = Math.max(0, p.invuln - dt);
     p.hurtT -= dt;
     if (!p.remote) p.dashing = p.dashT > 0;
-    if (p.downed || p.dead) { if (p.shields.length) this.clearShields(p); const ch = ED.CLS[p.cls]; if (ch && ch.down) ch.down.call(this, p); }
+    if (p.downed || p.dead) { if (p.bulwarkOn) this.clearShields(p); const ch = ED.CLS[p.cls]; if (ch && ch.down) ch.down.call(this, p); }
     if (p.dead) return;
     if (p.downed) {
       let helpers = 0;

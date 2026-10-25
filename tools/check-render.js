@@ -465,6 +465,18 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
       if (doc0 === undefined) delete globalThis.document; if (win0 === undefined) delete globalThis.window;
     }
   }
+
+  // Bulwark through the client path: G.applyAction routes the skill press (slot 1) to the raise and the hold release (s 1) to the bash; the wire carries the raised flag (1 << 6) and the stored blocks (bits 21-23); a remote Knight in the mirror shows both
+  {
+    const w = room1(0), p = w.players.get('p0'), e = w.spawnEnemy('skeleton', p.x + 40, p.y, {}); e.spd = 0; e.cd = 9999; e.maxHp = e.hp = 5000;
+    G.applyAction(w, 'p0', { t: 'skill', slot: 1, a: 0 }); ok(p.bulwarkOn, 'a slot 1 skill action raises the Bulwark');
+    for (let i = 0; i < 3; i++) { w.time += 0.61; w.hurtPlayer(p, 20, { e }); }
+    const fl = N.encodeSnap(w, [], false).P.find(r => r[0] === 'p0')[6]; ok((fl & 64) && ((fl >> 21) & 7) === 3, `the wire carries the raised shield and 3 stored blocks (${(fl >> 21) & 7})`);
+    const m = new G.Mirror({ pact: 0, players: [{ pid: 'p0', name: 'T', slot: 0, cls: 'knight', weapon: ED.CLASSES.knight.weapons[0], meta: META() }] }, 'zz'), snap = wire(N.encodeSnap(w, [], false)); snap.T = 5; m.apply(snap, 0);
+    const mp = m.players.get('p0'); ok(mp && mp.bulwarkOn === true && mp.blocks === 3, 'a remote Knight in the mirror shows the raised shield and its blocks');
+    G.applyAction(w, 'p0', { t: 'hold', on: 0, s: 1, a: 0 }); ok(!p.bulwarkOn && e.hp < e.maxHp && e.stun > 0.9, 'a hold release with s 1 bashes');
+    const f2 = N.encodeSnap(w, [], false).P.find(r => r[0] === 'p0')[6]; ok(!(f2 & 64) && ((f2 >> 21) & 7) === 0, 'the wire clears both after the bash');
+  }
 }
 
 console.log(`${n} checks, ${fails} failed`);

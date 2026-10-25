@@ -1,5 +1,5 @@
 // Usage: node tools/check-knight.js
-// Headless checks of the Knight Attack and Element route forks (rank 2: the rider; rank 3: the transform): Earthsplitter, Thousand Edges, Doombrand, Bloodquake. Card data and text, then each mechanic in a staged room.
+// Headless checks of the Knight Attack and Element route forks (rank 2: the rider; rank 3: the transform): Earthsplitter, Thousand Edges, Doombrand, Bloodquake; the boss factors of Charge and Bulwark; Bulwark blocks, stored power, bash, hold limits and its Skill 2 cards. Card data and text, then each mechanic in a staged room.
 // Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
 let n = 0, fails = 0;
@@ -164,7 +164,7 @@ const burn1 = (e, p) => { e.bsT = [1e9]; e.bsO = [p]; e.burnN = 1; e.burn = 1; e
 
 // ---------------- Bloodquake: a strike on a foe with 3 ailments pays its Bleed pool out and bursts a share to its neighbours ----------------
 {
-  const strike = (w, p, e, part) => w.hitEnemy(e, 10, { p, kind: 'skill', part: part || 'shieldthrow.strike', noProc: true, crit: false, knock: 0 });
+  const strike = (w, p, e, part) => w.hitEnemy(e, 10, { p, kind: 'skill', part: part || 'bulwark.bash', noProc: true, crit: false, knock: 0 });
   const nBquake = (t) => hitsOf(t.log, 'bloodquake').length;
   const bq = (rank, ails) => { // x: 1000 Bleed, Burn and Chill (3 ailments); near 60 away, far 105 away, small (100 health) 70 away
     const t = stage('knight', RUIN(rank)), { w, p } = t; t.log = spy(w);
@@ -188,7 +188,8 @@ const burn1 = (e, p) => { e.bsT = [1e9]; e.bsO = [p]; e.burnN = 1; e.burn = 1; e
   { // what does not detonate
     const a = bq(3, 2); strike(a.w, a.p, a.x); ok(nBquake(a) === 0 && a.x.bleedPool === 1000, 'a foe with only 2 ailments does not detonate');
     const r = bq(2); strike(r.w, r.p, r.x); ok(nBquake(r) === 0 && r.x.bleedPool === 1000, 'rank 2 has no Bloodquake');
-    const o = bq(3); strike(o.w, o.p, o.x, 'shieldthrow.return'); ok(nBquake(o) === 0, 'only strikes detonate, not the return pass');
+    const o = bq(3); strike(o.w, o.p, o.x, 'bulwark.reflect'); ok(nBquake(o) === 0, 'only strikes detonate, not a returned shot');
+    const f = bq(3); strike(f.w, f.p, f.x, 'charge.bash'); ok(nBquake(f) === 1, 'a free Shield Bash detonates');
     const c = bq(3); strike(c.w, c.p, c.x, 'charge.impact'); ok(nBquake(c) === 1, 'a Shield Charge impact detonates');
     const b = bq(3); b.x.bleedPool = 0; strike(b.w, b.p, b.x); ok(nBquake(b) === 0 && !(b.x.bquakeT > b.w.time), 'with no Bleed pool there is nothing to detonate and no cooldown is spent');
   }
@@ -198,28 +199,27 @@ const burn1 = (e, p) => { e.bsT = [1e9]; e.bsO = [p]; e.burnN = 1; e.burn = 1; e
     ok(nBquake(t) === 0 && Math.abs(t.near.bleedPool - 1000 * (1 + p.stats.bleedMul) * (1 + p.stats.bloodquakeMul) * p.stats.bloodquakeSplash) < 1e-6, 'a dead foe pays nothing but its fodder neighbour still catches the burst');
     ok(p.shield === 0 && !(p.kWardT > 0) && !(p.critStacks > 0) && !w.msgs.some(m => m.t === 'refund'), 'no shield, ward, crit stack or refund comes of it');
   }
-  { // in play: a Shield Throw down a line of fodder holding 3 ailments detonates each of them once
-    const t = stage('knight', Object.assign({ k_s2: 1 }, RUIN(3))), { w, p } = t, log = spy(w), es = [1, 2, 3, 4].map(k => foe(w, p.x + 45 * k, p.y));
+  { // in play: a Bulwark bash into a crowd of fodder holding 3 ailments detonates each foe in the cone once
+    const t = stage('knight', Object.assign({ k_s2: 1 }, RUIN(3))), { w, p } = t, log = spy(w), es = [[50, 0], [60, 30], [60, -30], [80, 0]].map(([dx, dy]) => foe(w, p.x + dx, p.y + dy));
     const ready = () => { for (const e of es) { e.fodder = true; e.maxHp = e.hp = 50000; if (!(e.bleedPool > 0)) { e.bleedPool = 600; e.bleedOwner = p; } if (!(e.burnN > 0)) burn1(e, p); e.chill = 90; e.chillT = 99; } };
-    ready(); w.playerSkill(p, 0, { d: 280 }, 1); run(w, 3, ready);
+    ready(); w.playerSkill(p, 0, {}, 1); w.skillRelease(p, 0); run(w, 0.5, ready);
     const ch = hitsOf(log, 'bloodquake');
-    ok(ch.length >= 3 && es.filter(e => ch.some(h => h.e === e)).length >= 3, 'a Shield Throw detonates the foes it strikes (' + ch.length + ' detonations on fodder)');
-    ok(es.every(e => ch.filter(h => h.e === e).length <= 1), 'once per foe within a second');
+    ok(ch.length === 4 && es.every(e => ch.filter(h => h.e === e).length === 1), 'a Bulwark bash detonates each foe it strikes once (' + ch.length + ' detonations on fodder)');
   }
 }
 
-// ---------------- boss factors of the Knight skills: Charge impact x3, Throw strike x2 (bosses are never stunned); parts derived from them keep their own ----------------
+// ---------------- boss factors of the Knight skills: Charge impact x3, Bulwark bash x2 (bosses are never stunned); parts derived from them keep their own ----------------
 {
-  const BOSS = { charge: 3, throw: 2 };
-  const go = (boons, slot, data, boss, secs, at, behind) => { // one cast at a foe (common or boss), held in place so every pass of the shield finds it; behind: a second common foe 70 px further on, the shield's next ricochet target (its way home passes the first foe)
-    const { w, p } = stage('knight', boons), log = spy(w), e = foe(w, p.x + (at ? at[0] : 60), p.y + (at ? at[1] : 0)), f = behind ? foe(w, e.x + 70, e.y) : e; if (boss) e.boss = true;
-    w.playerSkill(p, 0, data(p), slot); let stunned = 0, shieldStun = 0;
-    run(w, secs, () => { e.kbx = 0; e.kby = 0; f.kbx = 0; f.kby = 0; stunned = Math.max(stunned, e.stun); shieldStun = Math.max(shieldStun, e.shieldStunT); });
+  const BOSS = { charge: 3, bash: 2 };
+  const go = (boons, slot, data, boss, secs, at) => { // one cast at a foe (common or boss) held in place; slot 1 is a tapped Bulwark (raise, then release at once)
+    const { w, p } = stage('knight', boons), log = spy(w), e = foe(w, p.x + (at ? at[0] : 60), p.y + (at ? at[1] : 0)); if (boss) e.boss = true;
+    w.playerSkill(p, 0, data(p), slot); if (slot === 1) w.skillRelease(p, 0); let stunned = 0, shieldStun = 0;
+    run(w, secs, () => { e.kbx = 0; e.kby = 0; stunned = Math.max(stunned, e.stun); shieldStun = Math.max(shieldStun, e.shieldStunT); });
     return { w, p, e, log, stunned, shieldStun };
   };
-  const chargeData = (p) => ({ x0: p.x, y0: p.y, x1: p.x + 150, y1: p.y }), throwData = () => ({ d: 280 });
-  const imp = ED.SKILLS.charge.parts.find(q => q.id === 'impact'), stk = ED.SKILLS.shieldthrow.parts.find(q => q.id === 'strike');
-  ok(imp.bossMul === BOSS.charge && stk.bossMul === BOSS.throw && /bosses ×3/.test(imp.note) && /bosses ×2/.test(stk.note) && /Bosses take ×3 but are never stunned/.test(ED.SKILLS.charge.desc) && /Bosses take ×2 but are never stunned/.test(ED.SKILLS.shieldthrow.desc), 'skill data and text name the boss factors (Charge x3, Throw x2)');
+  const chargeData = (p) => ({ x0: p.x, y0: p.y, x1: p.x + 150, y1: p.y }), bashData = () => ({});
+  const imp = ED.SKILLS.charge.parts.find(q => q.id === 'impact'), bsh = ED.SKILLS.bulwark.parts.find(q => q.id === 'bash');
+  ok(imp.bossMul === BOSS.charge && bsh.bossMul === BOSS.bash && /bosses ×3/.test(imp.note) && /bosses ×2/.test(bsh.note) && /Bosses take ×3 but are never stunned/.test(ED.SKILLS.charge.desc) && /Bosses take ×2 but are never stunned/.test(ED.SKILLS.bulwark.desc), 'skill data and text name the boss factors (Charge x3, Bulwark bash x2)');
   { // Charge impact
     const a = go({}, 0, chargeData, false, 0.7), b = go({}, 0, chargeData, true, 0.7), ha = hitsOf(a.log, 'charge.impact'), hb = hitsOf(b.log, 'charge.impact'), N = ED.Stats.skillNums('charge', a.p.stats);
     ok(ha.length === 1 && hb.length === 1, `the Charge strikes a common foe and a boss once each (${ha.length}, ${hb.length})`);
@@ -231,12 +231,69 @@ const burn1 = (e, p) => { e.bsT = [1e9]; e.bsO = [p]; e.burnN = 1; e.burn = 1; e
     const sh = (boss) => go({ k_s1: 1, k_s1_a: 1 }, 0, chargeData, boss, 0.9, [144, 60]), a = sh(false), b = sh(true), ha = hitsOf(a.log, 'charge.shock'), hb = hitsOf(b.log, 'charge.shock');
     ok(ha.length === 1 && hb.length === 1 && Math.abs(hb[0].d / ha[0].d - 1) < 1e-6, `Juggernaut's shockwave deals the same to a boss and a common foe (${ha.length}, ${hb.length})`);
   }
-  { // Shield Throw strike: x2 on a boss, no stun on a boss; the return pass takes no boss factor
-    const a = go({}, 1, throwData, false, 2.5, null, true), b = go({}, 1, throwData, true, 2.5, null, true), ha = hitsOf(a.log, 'shieldthrow.strike').filter(h => h.e === a.e), hb = hitsOf(b.log, 'shieldthrow.strike').filter(h => h.e === b.e), ra = hitsOf(a.log, 'shieldthrow.return').filter(h => h.e === a.e), rb = hitsOf(b.log, 'shieldthrow.return').filter(h => h.e === b.e);
-    ok(ha.length >= 1 && hb.length >= 1, 'the Throw strikes a common foe and a boss');
-    near(hb[0].d / ha[0].d, BOSS.throw, 1e-6, 'a boss takes x2 from the Throw strike');
-    ok(a.stunned > 0.5 && a.shieldStun > 0 && b.stunned === 0 && b.shieldStun === 0, `the Throw stuns a common foe (${a.stunned.toFixed(2)} s) and never a boss (${b.stunned})`);
-    ok(ra.length >= 1 && rb.length >= 1 && Math.abs(rb[0].d / ra[0].d - 1) < 1e-6, `the return pass takes no boss factor (${ra.length}, ${rb.length} passes)`);
+  { // Bulwark bash: x2 on a boss, no stun on a boss
+    const a = go({}, 1, bashData, false, 0.3), b = go({}, 1, bashData, true, 0.3), ha = hitsOf(a.log, 'bulwark.bash'), hb = hitsOf(b.log, 'bulwark.bash');
+    ok(ha.length === 1 && hb.length === 1, `the bash strikes a common foe and a boss once each (${ha.length}, ${hb.length})`);
+    near(hb[0].d / ha[0].d, BOSS.bash, 1e-6, 'a boss takes x2 from the bash');
+    ok(a.stunned > 0.9 && a.shieldStun > 0 && b.stunned === 0 && b.shieldStun === 0, `the bash stuns a common foe (${a.stunned.toFixed(2)} s) and never a boss (${b.stunned})`);
+  }
+}
+
+// ---------------- Bulwark: hold to block frontal hits and shots (storing power), release to bash ----------------
+{
+  const N0 = ED.Stats.skillNums('bulwark', stage('knight').p.stats);
+  near(N0.p.bash.dmg, 30 + 2 * 23.4, 1e-6, 'bash 30 + 2.0P'); ok(N0.blockMax === 4 && N0.blockMul === 0.25 && N0.hold === 2 && N0.p.bash.stun === 1 && N0.p.bash.r === 90, 'stores up to 4 blocks at +25% each, held at most 2 s, stuns 1 s, reach 90');
+  const shot = (w, p, dx) => w.spawnProj({ team: 1, kind: 'bone', x: p.x + dx, y: p.y, a: dx > 0 ? Math.PI : 0, speed: 200, r: 5, dmg: 10, life: 2, pierce: 0, owner: null });
+  { // raise, slow walk, frontal and rear shots
+    const { w, p } = stage('knight'); const r0 = ED.Stats.moveRate(p);
+    w.playerSkill(p, 0, {}, 1); ok(p.bulwarkOn && p.face === 0, 'the press raises the shield toward the aim');
+    near(ED.Stats.moveRate(p) / r0, 0.5, 1e-9, 'a raised shield walks at 50%');
+    const n0 = w.fx.filter(f => f.t === 'skill').length; w.playerSkill(p, 0, {}, 1); ok(w.fx.filter(f => f.t === 'skill').length === n0, 'a second press while raised does nothing');
+    const hp0 = p.hp, f1 = shot(w, p, 30); run(w, 0.3);
+    ok(p.hp === hp0 && p.blocks === 1 && !w.projs.includes(f1), `a frontal shot is blocked, destroyed and stored (${p.blocks} block)`);
+    ok(w.fx.some(f => f.t === 'block' && f.k === 'bulwark' && f.pid === p.pid), 'a block event for the viewer');
+    p.invuln = 0; const r1 = shot(w, p, -30); run(w, 0.3); ok(p.hp < hp0 && p.blocks === 1 && !w.projs.includes(r1), 'a shot from behind hits');
+    p.attackCd = 0; const s0 = swings(w, p).length; w.playerAttack(p, 0); ok(swings(w, p).length === s0, 'no swing behind a raised shield');
+  }
+  { // melee: the front blocks, one foe counts once per 0.6 s, hazards are never blocked, the cap holds
+    const { w, p } = stage('knight'), e = foe(w, p.x + 40, p.y), b = foe(w, p.x - 40, p.y); w.playerSkill(p, 0, {}, 1); const hp0 = p.hp;
+    w.hurtPlayer(p, 20, { e }); ok(p.hp === hp0 && p.blocks === 1, 'a frontal melee hit is blocked and stored');
+    w.hurtPlayer(p, 20, { e }); ok(p.hp === hp0 && p.blocks === 1, 'the same foe again within 0.6 s is blocked but not stored again');
+    w.time += 0.61; w.hurtPlayer(p, 20, { e }); ok(p.blocks === 2, 'after 0.6 s it stores again');
+    p.invuln = 0; w.hurtPlayer(p, 20, { e: b }); ok(p.hp < hp0 && p.blocks === 2, 'a melee hit from behind lands'); const hp1 = p.hp;
+    p.invuln = 0; w.hurtPlayer(p, 20, { hazard: true, x: p.x + 30, y: p.y }); ok(p.hp < hp1, 'a hazard is never blocked');
+    for (let i = 0; i < 6; i++) { w.time += 0.61; p.invuln = 0; w.hurtPlayer(p, 20, { e }); } ok(p.blocks === 4, 'stored blocks stop at 4');
+    const sm = stage('knight', { k_s2: 1 }); sm.w.playerSkill(sm.p, 0, {}, 1); const se = foe(sm.w, sm.p.x + 40, sm.p.y); for (let i = 0; i < 8; i++) { sm.w.time += 0.61; sm.w.hurtPlayer(sm.p, 20, { e: se }); } ok(sm.p.blocks === 6, 'Shieldmaster stores 2 more');
+  }
+  { // release: bash damage x stored power, stun, rear foes untouched, the full bash flag
+    const { w, p } = stage('knight'), log = spy(w), e = foe(w, p.x + 50, p.y), side = foe(w, p.x + 40, p.y + 50), back = foe(w, p.x - 50, p.y), N = ED.Stats.skillNums('bulwark', p.stats);
+    w.playerSkill(p, 0, {}, 1); for (let i = 0; i < 2; i++) { w.time += 0.61; w.hurtPlayer(p, 20, { e }); }
+    w.skillRelease(p, 0); const h = hitsOf(log, 'bulwark.bash');
+    ok(!p.bulwarkOn && p.blocks === 0, 'the release lowers the shield and spends the stored blocks');
+    near(h.find(q => q.e === e).d, N.p.bash.dmg * 1.5 * p.stats.dmg, 0.05, 'two stored blocks: the bash deals x1.5');
+    ok(h.some(q => q.e === side) && !h.some(q => q.e === back), 'the cone hits a foe ahead and to the side, never behind');
+    ok(e.stun > 0.95 && e.shieldStunT > 0 && back.stun === 0, `a struck foe is stunned 1 s and marked for Crush (${e.stun.toFixed(2)})`);
+    ok(w.fx.some(f => f.t === 'bash' && f.pid === p.pid && f.n === 2), 'a bash event carries the stored blocks');
+    const f = stage('knight'), fl = spy(f.w), fe = foe(f.w, f.p.x + 50, f.p.y); f.w.playerSkill(f.p, 0, {}, 1); for (let i = 0; i < 4; i++) { f.w.time += 0.61; f.w.hurtPlayer(f.p, 20, { e: fe }); }
+    const full = []; const oh = f.w.hitEnemy; f.w.hitEnemy = function (q, b, s) { if (s && s.part === 'bulwark.bash') full.push(!!s.full); return oh.call(this, q, b, s); }; f.w.skillRelease(f.p, 0);
+    near(hitsOf(fl, 'bulwark.bash')[0].d, ED.Stats.skillNums('bulwark', f.p.stats).p.bash.dmg * 2 * f.p.stats.dmg, 0.05, 'four stored blocks: x2'); ok(full[0] === true, 'a bash at full power is tagged full');
+  }
+  { // hold limit: auto-release at 2 s; Bastion holds up to 4 s and shields on a block; a down, a room change and a Charge lower it with no bash
+    const { w, p } = stage('knight'), e = foe(w, p.x + 50, p.y); w.playerSkill(p, 0, {}, 1); run(w, 1.9); ok(p.bulwarkOn, 'still raised at 1.9 s');
+    run(w, 0.15); ok(!p.bulwarkOn && e.hp < e.maxHp && w.fx.some(f => f.t === 'bash'), 'auto-release bashes at 2 s');
+    const b = stage('knight', { k_s2: 1, k_s2_b: 3 }), be = foe(b.w, b.p.x + 40, b.p.y); b.w.playerSkill(b.p, 0, {}, 1); run(b.w, 3.9); ok(b.p.bulwarkOn, 'Bastion: still raised at 3.9 s');
+    b.p.shield = 0; b.w.hurtPlayer(b.p, 20, { e: be }); ok(b.p.shield > 0 && b.p.shield <= 0.02 * b.p.maxHp + 1e-6, `Bastion: a block shields the Knight (${b.p.shield.toFixed(1)})`);
+    run(b.w, 0.2); ok(!b.p.bulwarkOn, 'Bastion: auto-release at 4 s');
+    const d = stage('knight'), de = foe(d.w, d.p.x + 50, d.p.y); d.w.playerSkill(d.p, 0, {}, 1); d.w.clearShields(d.p); ok(!d.p.bulwarkOn && de.hp === de.maxHp, 'clearShields lowers the shield with no bash');
+    d.w.playerSkill(d.p, 0, {}, 1); d.w.playerSkill(d.p, 0, { x0: d.p.x, y0: d.p.y, x1: d.p.x + 150, y1: d.p.y }, 0); ok(!d.p.bulwarkOn, 'a Shield Charge drops the raised shield');
+  }
+  { // Shield Wall (r1 180 deg, stun attackers), Return to Sender (r2), Shield Bash at the end of a Charge (k_s1_a r2)
+    const s = stage('knight', { k_s2: 1, k_s2_b: 2 }), { w, p } = s, e = foe(w, p.x + 30, p.y + 60); w.playerSkill(p, 0, {}, 1);
+    w.hurtPlayer(p, 20, { e }); ok(p.blocks === 1 && e.stun > 0.25, 'Shield Wall: a hit from 63 deg aside is blocked and its attacker stunned');
+    const sh = foe(w, p.x + 150, p.y), log = spy(w), pr = w.spawnProj({ team: 1, kind: 'bone', x: p.x + 30, y: p.y, a: Math.PI, speed: 200, r: 5, dmg: 10, life: 2, pierce: 0, owner: null, src: sh }); pr.src = sh; run(w, 1);
+    ok(hitsOf(log, 'bulwark.reflect').some(h => h.e === sh), 'Return to Sender: the blocked shot flies back at its shooter');
+    const c = stage('knight', { k_s1: 1, k_s1_a: 2 }), cl = spy(c.w); foe(c.w, c.p.x + 190, c.p.y); c.w.playerSkill(c.p, 0, { x0: c.p.x, y0: c.p.y, x1: c.p.x + 150, y1: c.p.y }, 0); run(c.w, 0.8);
+    ok(hitsOf(cl, 'charge.bash').length === 1 && hitsOf(cl, 'bulwark.bash').length === 0, 'Shield Bash: the Charge ends in a free bash');
   }
 }
 

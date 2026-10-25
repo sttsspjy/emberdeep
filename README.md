@@ -85,7 +85,7 @@ Boons belong to **paths**: six element paths and General. A hero follows at most
 - **Forge:** picking a forge card ranks an owned boon up by one (never a route or fork card: bosses rank those).
 - A room that rewards "a boon" offers one new element gate (while you have a free slot) and boons of the paths you follow. Level-ups offer open boons (every hero can take them), boons of your paths and keystones.
 - **Health is a small whole number.** Heroes have a few dozen points of health at most, and a foe's hit costs a few: every hit counts. A max health reward is +2.
-- **No life steal, little healing.** Hits and kills never heal you, and cleared rooms drop no hearts: hearts come from a few kills (elites more often), bosses and breakables. Healing comes from hearts, campfires, healing potions, the fountain, max health rewards, the Hearth's Provisions and the Elixir Flask, Sanctuary and Bone Harvest, and revives. **Shields** take the place of sustain: class shields give at most 3% of your max health per 10 seconds, all shield sources together at most 6%, and shields fade between fights.
+- **No life steal, little healing.** Hits and kills never heal you, and cleared rooms drop no hearts: hearts come from a few kills (elites more often), bosses and breakables. Healing comes from hearts, campfires, healing potions, the fountain, max health rewards, the Hearth's Provisions and the Elixir Flask, the Cleric's Sanctum and the Necromancer's Bone Armor route cards, and revives. **Shields** take the place of sustain: class shields give at most 3% of your max health per 10 seconds, all shield sources together at most 6%, and shields fade between fights.
 
 ### Class routes
 
@@ -101,12 +101,12 @@ You start with the **Knight**, **Ranger** and **Pyromancer**. Each hero has thre
 
 | Hero | Skill 1 (Q) | Skill 2 (E) | Unlock |
 | --- | --- | --- | --- |
-| Knight | Shield Charge, 6 s: run through a pack, untouchable, stunning what you hit | Shield Throw, 9 s: a shield that ricochets between foes, stuns them and swats arrows, then returns; catch it for a shield | Start |
+| Knight | Shield Charge, 6 s: run through a pack, untouchable, stunning what you hit | Bulwark, 9 s: hold to raise your shield and block every hit and shot from the front (up to 2 s, walking slowly); let go to bash the foes ahead and stun them. Each blocked attack makes the bash stronger | Start |
 | Ranger | Volley, 5 s | Rain of Arrows, 10 s: a storm of arrows on a point | Start |
 | Pyromancer (a caster: each Ember Bolt hit makes the spells recharge sooner; skill 3 on right mouse or `R` is Fireball, 2 charges, 2.5 s each: a shot that bursts and burns) | Flame Nova, 5 s: a fire blast around you that knocks foes back | Meteor, 8 s: telegraphed impact and burning crater | Start |
-| Shade (35% base dodge) | Shadowstep, 4.5 s | Vanish, 11 s: smoke, stealth and a guaranteed-crit ambush | Defeat the Bone Warden |
-| Cleric | Sanctuary, 11 s: heals you and allies near you, then holy ground that burns foes and cuts the damage allies take | Judgment, 9 s: a returning hammer that judges foes | Play 4 runs (clear a room in each) |
-| Necromancer | Raise Legion, 12 s | Bone Harvest, 10 s: minions explode, then rise again | Defeat the Sporemother |
+| Shade (35% base dodge) | Shadowstep, 4.5 s: blink through foes, cutting each with a crit | Vanish, 11 s: smoke that blinds, stealth and a guaranteed-crit ambush | Defeat the Bone Warden |
+| Cleric | Sanctuary, 11 s: holy ground that burns foes and cuts the damage allies take | Judgment, 9 s: a returning hammer that judges foes | Play 4 runs (clear a room in each) |
+| Necromancer (foes you kill may rise as minions) | Raise Legion, 12 s: three skeletons | Bone Harvest, 10 s: minions explode, then rise again | Defeat the Sporemother |
 | Bellwarden (hold attack to wind the bell; let go to hurl it, it glows at full wind; press again to reel it home through foes) | Anchor Leap, 5 s: to your anchored bell, or a short leap; slams where you land | Peal, 10 s: every bell rings and stuns, stronger with Resonance from hurls and reels | A secret |
 
 ## The menus

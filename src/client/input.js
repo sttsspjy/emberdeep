@@ -204,7 +204,7 @@
 
   // Snapshot of intent for this frame.
   I.read = () => {
-    const out = { mx: 0, my: 0, atk: false, skill: false, dash: false, atkPressed: false, tab: false, esc: false, confirm: false, left: false, right: false, aimX: null, aimY: null, skill2: false, skill3: false };
+    const out = { mx: 0, my: 0, atk: false, skill: false, dash: false, atkPressed: false, tab: false, esc: false, confirm: false, left: false, right: false, aimX: null, aimY: null, skill2: false, skill2Held: false, skill3: false };
     if (down('up')) out.my -= 1;
     if (down('down')) out.my += 1;
     if (down('left')) out.mx -= 1;
@@ -212,7 +212,7 @@
     out.atk = down('attack');
     out.atkPressed = hit('attack');
     out.skill = hit('skill1');
-    out.skill2 = hit('skill2');
+    out.skill2 = hit('skill2'); out.skill2Held = down('skill2'); // held: Bulwark stays raised while it is down
     out.skill3 = hit('skill3');
     out.dash = hit('dash');
     out.tab = hit('map');
@@ -246,7 +246,7 @@
       out.atk = out.atk || b(2) || b(7);
       out.atkPressed = out.atkPressed || bp(2) || bp(7);
       out.skill = out.skill || bp(5);
-      out.skill2 = out.skill2 || bp(3) || bp(6);
+      out.skill2 = out.skill2 || bp(3) || bp(6); out.skill2Held = out.skill2Held || b(3) || b(6);
       out.skill3 = out.skill3 || bp(1);
       out.dash = out.dash || bp(0) || bp(4);
       out.esc = out.esc || bp(9);

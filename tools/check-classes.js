@@ -1,6 +1,6 @@
 // Usage: node tools/check-classes.js
 // Headless checks of the class-route engine against docs/GAME-DESIGN.md section 5: fork weapon numbers, skill numbers at class Power, slot-damage compounding, the attack-interval floor,
-// the shield window, stun rules and the Knight's Shield Throw and Shield Charge in a staged room. Prints failures and exits 1 when any check fails.
+// the shield window, stun rules and the Knight's Bulwark and Shield Charge in a staged room. Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
 let n = 0, fails = 0;
 const ok = (c, msg) => { n++; if (!c) { fails++; console.log('FAIL ' + msg); } };
@@ -45,11 +45,11 @@ ok(!ED.forkWeapon('firestaff', 'p_atk_h').explode, 'Kindling adds no blast to a 
 
 // ---- skill numbers at class Power (1.3) ----
 const SK = [ // class, skill, part, dmg
-  ['knight', 'charge', 'impact', 63.44], ['knight', 'shieldthrow', 'strike', 56.42], ['knight', 'shieldthrow', 'return', 28.21],
+  ['knight', 'charge', 'impact', 63.44], ['knight', 'bulwark', 'bash', 76.8],
   ['ranger', 'volley', 'arrow', 18.4], ['ranger', 'rain', 'tick', 9.4],
   ['pyro', 'nova', 'blast', 48.6], ['pyro', 'nova', 'burn', 28.4], ['pyro', 'meteor', 'impact', 73.6], ['pyro', 'meteor', 'crater', 16.2], ['pyro', 'fireball', 'burst', 29],
-  ['shade', 'step', 'slash', 40.6], ['shade', 'vanish', 'ambush', 27.5],
-  ['cleric', 'sanctuary', 'zone', 41.1], ['cleric', 'judgment', 'leg', 56.5], ['necro', 'legion', 'minion', 17.1], ['necro', 'harvest', 'burst', 60.3],
+  ['shade', 'step', 'slash', 55], ['shade', 'vanish', 'ambush', 44],
+  ['cleric', 'sanctuary', 'zone', 47.2], ['cleric', 'judgment', 'leg', 60.5], ['necro', 'legion', 'minion', 17.1], ['necro', 'harvest', 'burst', 67],
 ];
 for (const [cls, sk, part, dmg] of SK) near(ED.Stats.skillNums(sk, build(cls)).p[part].dmg, dmg, 0.06, `${sk}.${part}`);
 { const st = build('necro', 0, { n_s1: 1, n_s1_a: 1 }); near(ED.Stats.skillNums('legion', st).p.spikes.dmg, 7.5 + 0.8 * st.power, 1e-9, 'legion.spikes (rank 1: 7.5 + 0.8 x Power)'); }
@@ -59,8 +59,8 @@ ok(!ED.Stats.skillNums('rain', build('ranger')).p.sky.on && sky.p.sky.on, 'Skyfa
 near(build('knight', 0, { k_s1: 1, k_s1_a: 1 }).s1Dmg, 0.375, 1e-9, 'slot damage compounds (Vanguard x1.25, Juggernaut x1.1)');
 near(build('cleric', 0, { c_s1: 1, c_s1_b: 1 }).s1Dmg, 1.5 * 1.3 - 1, 1e-9, 'slot damage compounds (Sanctum x1.5, Aura x1.3)');
 const jug3 = build('knight', 0, { k_s1: 1, k_s1_a: 3 });
-near(jug3.jugShock, 0.6, 1e-9, 'Juggernaut rank 3 shock (0.4 + 2 x 0.1)'); near(jug3.bash, 0.3, 1e-9, 'Juggernaut rank 3 Shield Bash');
-near(build('knight', 0, { k_s2: 1 }).skill2Cd, 9 * (1 - 0.167), 0.001, 'Shield Throw cooldown with Shieldmaster'); near(ED.Stats.skillNums('charge', build('knight', 0, { k_s1: 1, k_s1_a: 1 })).range, 240, 1e-9, 'Juggernaut Charge range');
+near(jug3.jugShock, 0.6, 1e-9, 'Juggernaut rank 3 shock (0.4 + 2 x 0.1)'); near(jug3.bash, 0.3, 1e-9, 'Juggernaut rank 3 Shield Bash (30%)');
+near(build('knight', 0, { k_s2: 1 }).skill2Cd, 9 * (1 - 0.167), 0.001, 'Bulwark cooldown with Shieldmaster'); near(ED.Stats.skillNums('charge', build('knight', 0, { k_s1: 1, k_s1_a: 1 })).range, 240, 1e-9, 'Juggernaut Charge range');
 const prs = ED.classRoute({ k_el: 1, k_el_b: 2 }, 'knight');
 ok(prs.route === 'element' && prs.fork === 'k_el_b' && prs.rank === 2, 'classRoute');
 ok(ED.CLASS_IDS.every(c => ED.ROUTES.every(r => ED.CLASS_CARDS[c][r] && ED.CLASS_CARDS[c][r].forks.length === 2)) && ED.BOON_IDS.filter(id => ED.BOONS[id].route).length === 12 * ED.CLASS_IDS.length, `${12 * ED.CLASS_IDS.length} cards, 4 routes x 2 forks per class`);
@@ -108,32 +108,14 @@ const run = (w, secs, f) => { for (let i = 0; i < Math.round(secs * 60); i++) { 
   const el = foe(w, 320, 200); el.elite = 'swift'; near(w.stunFoe(el, 1, false), 0.5, 1e-9, 'elite stun halved');
   const b = foe(w, 340, 200); b.boss = true; near(w.stunFoe(b, 1, false), 0, 1e-9, 'bosses are never stunned');
 }
-// Shield Throw: four foes in a line are struck once each and stunned, the shield returns and is caught (0.5% per foe, 2% at most), a shot in its path is swatted
+// Bulwark against a real attacker: a skeleton swinging at the raised shield from the front lands nothing and stores power; a tapped Bulwark bashes every foe in its cone once and stuns it
 {
-  const { w, p } = stage('knight'); const x0 = p.x, y0 = p.y;
-  const es = [1, 2, 3, 4, 5].map(k => foe(w, x0 + 45 * k, y0));
-  let ric = 0, catches = 0, got = 0, swat = 0; const stunned = new Set();
-  w.spawnProj({ team: 1, kind: 'bone', x: x0 + 20, y: y0 - 6, a: Math.PI, speed: 20, r: 4, dmg: 1, life: 3, owner: null, src: es[0] });
-  w.playerSkill(p, 0, { d: 280 }, 1);
-  ok(p.shields.length === 1 && w.projs.some(q => q.kind === 'shield'), 'Shield Throw spawns a shield projectile');
-  run(w, 3, () => { for (const e of es) if (e.stunCd > 0) stunned.add(e); for (const ev of w.fx) { if (ev.t === 'ric') ric++; if (ev.t === 'catch') { catches++; got += ev.v; } if (ev.t === 'deflect') swat++; } w.fx.length = 0; });
-  ok(ric === 4, `Shield Throw strikes 4 foes (got ${ric})`); ok(es.slice(0, 4).every(e => e.hp < 5000), 'foes hit');
-  ok(es.slice(0, 4).every(e => stunned.has(e)), 'struck foes stunned'); ok(catches === 1 && p.shields.length === 0, 'caught once, no shield left');
-  near(got, 0.02 * p.maxHp, 0.06, 'catch shield 4 foes x 0.5% = 2%'); ok(swat >= 1, 'enemy shot swatted');
-  ok(!w.projs.some(q => q.kind === 'shield'), 'shield projectile removed after the catch');
-  // a second catch inside KWARD_CD gives nothing
-  p.kWardT = 5; p.shield = 0; w.playerSkill(p, 0, { d: 280 }, 1); let again = 0; run(w, 3, () => { for (const ev of w.fx) if (ev.t === 'catch') again += ev.v; w.fx.length = 0; }); near(again, 0, 1e-9, 'catch shield once per 6 s');
-}
-{ // Shield Throw into a wall with no foes: no grant, nothing left
-  const { w, p } = stage('knight'); let v = 0, c = 0;
-  w.playerSkill(p, Math.PI, { d: 280 }, 1); run(w, 3, () => { for (const ev of w.fx) if (ev.t === 'catch') { c++; v += ev.v; } w.fx.length = 0; });
-  ok(c === 1 && v === 0 && p.shields.length === 0, 'a throw at nothing is caught without a shield');
-}
-{ // Shield Storm: two shields, one catch grant for the cast
-  const { w, p } = stage('knight', { k_s2: 1, k_s2_a: 1 }); const es = [1, 2, 3, 4].map(k => foe(w, p.x + 40 * k, p.y)); let c = 0, v = 0;
-  w.playerSkill(p, 0, { d: 280 }, 1); ok(p.shields.length === 2, 'Shield Storm throws two');
-  run(w, 3, () => { for (const ev of w.fx) if (ev.t === 'catch') { c++; v += ev.v; } w.fx.length = 0; });
-  ok(c === 2 && v > 0 && p.shields.length === 0, `Shield Storm: both caught, one grant (catches ${c}, shield ${v.toFixed(1)})`); void es;
+  const { w, p } = stage('knight'); const e = w.spawnEnemy('skeleton', p.x + 40, p.y); e.maxHp = e.hp = 5000; w.playerSkill(p, 0, {}, 1); const hp0 = p.hp; let most = 0;
+  run(w, 1.5, () => { most = Math.max(most, p.blocks); }); ok(p.hp === hp0 && most >= 1 && p.bulwarkOn, `a skeleton's frontal swings are blocked and stored (${most})`);
+  const t = stage('knight'); const es = [[50, 0], [55, 35], [55, -35], [85, 10]].map(([dx, dy]) => foe(t.w, t.p.x + dx, t.p.y + dy)), back = foe(t.w, t.p.x - 50, t.p.y), h = [], hit0 = t.w.hitEnemy;
+  t.w.hitEnemy = function (e, b, s) { const d = hit0.call(this, e, b, s); if (s && s.part === 'bulwark.bash') h.push({ e, d }); return d; };
+  t.w.playerSkill(t.p, 0, {}, 1); t.w.skillRelease(t.p, 0);
+  ok(h.length === 4 && es.every(q => h.filter(x => x.e === q).length === 1 && q.stun > 0.9) && back.hp === back.maxHp, `a tapped bash strikes the 4 foes in its cone once each and stuns them (${h.length} hits)`);
 }
 // Shield Charge: contact sweep hits foes on the path once, stuns them, Crush on shield-stunned foes, the hero is untouchable during the run
 {
@@ -187,9 +169,10 @@ const run = (w, secs, f) => { for (let i = 0; i < Math.round(secs * 60); i++) { 
   for (let i = 0; i < 30; i++) { ED.Sim.movePlayer(p, { mx: 0, my: 0 }, 1 / 60, w.room, w.locked, w.zones); if (i < 10) on += p.skillIfr ? 1 : 0; else if (i > 14) off += p.skillIfr ? 1 : 0; }
   ok(on === 10 && off === 0 && !p.dashing, 'skill move i-frames follow iframes, not the move length');
 }
-// a downed hero loses its thrown shields; Shield Charge sets Brace once per BRACE_CD
+// a downed hero lowers its Bulwark with no bash; Shield Charge sets Brace once per BRACE_CD
 {
-  const { w, p } = stage('knight', { k_s1: 1 }); w.playerSkill(p, 0, { d: 200 }, 1); ok(p.shields.length === 1, 'shield out'); p.downed = true; p.bleed = 99; w.update(1 / 60); ok(p.shields.length === 0 && !w.projs.some(q => q.kind === 'shield'), 'a downed hero loses its shield');
+  const { w, p } = stage('knight', { k_s1: 1 }); const e = foe(w, p.x + 50, p.y); w.playerSkill(p, 0, {}, 1); ok(p.bulwarkOn, 'shield raised'); p.downed = true; p.bleed = 99; w.update(1 / 60); ok(!p.bulwarkOn && e.hp === e.maxHp, 'a downed hero lowers the shield and bashes nothing');
+  w.skillRelease(p, 0); ok(e.hp === e.maxHp, 'a downed hero cannot release a bash');
   p.downed = false; p.braceAt = -99; w.playerSkill(p, 0, { x0: p.x, y0: p.y, x1: p.x + 50, y1: p.y }, 0); ok(p.braceT > 1.4, 'Charge starts Brace'); const t1 = p.braceT; p.braceT = 0; w.playerSkill(p, 0, { x0: p.x, y0: p.y, x1: p.x + 50, y1: p.y }, 0); ok(p.braceT === 0 && t1 > 0, 'Brace once per BRACE_CD');
 }
 // ailments, status moves and crit grants
@@ -212,22 +195,6 @@ const run = (w, secs, f) => { for (let i = 0; i < Math.round(secs * 60); i++) { 
     p.boons[o[0]] = 1; p.offers[0] = { src: 'class' }; o = w.rollOffer(p, p.offers[0]);
     ok(p.offers[0].src === 'level' && o.length === 3 && !o.some(id => ED.BOONS[id].cls), cls + ' fork held: a class spec becomes a level offer (no ctier 3)');
   }
-}
-// p.shieldOut (wire flag 1 << 6) follows the thrown shields; a new throw relaunches the orbiting shield instead of adding one
-{
-  const { w, p } = stage('knight', { k_s2: 1, k_s2_b: 1 }); const es = [1, 2].map(k => foe(w, p.x + 40 * k, p.y));
-  ok(p.shieldOut === false, 'shieldOut starts false'); w.playerSkill(p, 0, { d: 280 }, 1); ok(p.shieldOut === true, 'a throw sets shieldOut');
-  let t = 0; while (t < 4 && !(p.shields[0] && p.shields[0].leg === 'orbit')) { run(w, 0.05); t += 0.05; }
-  ok(p.shields.length === 1 && p.shields[0].leg === 'orbit' && p.shieldOut, 'caught shield orbits and shieldOut stays set');
-  const pr0 = p.shields[0].pr; w.playerSkill(p, 0, { d: 280 }, 1);
-  ok(p.shields.length === 1 && p.shields[0].leg === 'out' && p.shields[0].pr === pr0 && w.projs.filter(q => q.kind === 'shield').length === 1, 'a new throw relaunches the orbiting shield');
-  w.clearShields(p); ok(!p.shieldOut && !p.shields.length, 'clearShields clears shieldOut'); void es;
-  { // the orbit's contact stuns a non-boss foe 0.3 s (repeating: once per cooldown), bosses never
-    const o = stage('knight', { k_s2: 1, k_s2_b: 1 }); o.w.playerSkill(o.p, 0, { d: 280 }, 1); let u = 0; while (u < 4 && !(o.p.shields[0] && o.p.shields[0].leg === 'orbit')) { run(o.w, 0.05); u += 0.05; }
-    const sp = o.p.shields[0].pr, f1 = foe(o.w, sp.x, sp.y), bs = foe(o.w, sp.x, sp.y); bs.boss = true; f1.stun = 0; f1.stunCd = 0; run(o.w, 0.05);
-    ok(f1.stun > 0.2 && f1.stun <= 0.3 + 1e-9, 'Shield Orbit contact stuns 0.3 s (' + f1.stun.toFixed(2) + ')'); ok(!(bs.stun > 0), 'bosses are not stunned by the orbit'); ok(f1.stunCd > 0.5, 'the repeating stun sets the stun cooldown');
-  }
-  const sw = stage('knight'); sw.w.playerSkill(sw.p, 0, { d: 200 }, 1); sw.p.downed = true; sw.p.bleed = 99; sw.w.update(1 / 60); ok(!sw.p.shieldOut, 'a downed hero has no shieldOut');
 }
 // Stagger needs a Heavy weapon hit of kind weapon (not a cloud tick or a blast); Shadowstep knocks foes back; Rain parts carry their radius and the Second Shower a fixed 2 s
 {
@@ -271,7 +238,7 @@ const spy = (w) => { const log = [], o = w.hitEnemy; w.hitEnemy = function (e, b
 const partHits = (log, part) => log.filter(h => h.part === part);
 const charge = (w, p, len) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x1: p.x + len, y1: p.y }, 0);
 { // card text and totals of the eight skill forks: the rider joins at rank 2, the transform and its name at rank 3
-  const FORKS = { k_s1_a: ['Juggernaut', 'Shield Bash', 'Avalanche'], k_s1_b: ['Rallying Charge', 'Hold the Line', 'Iron Phalanx'], k_s2_a: ['Shield Storm', 'Gathering Force', 'Aegis Tempest'], k_s2_b: ['Shield Orbit', 'Return to Sender', 'Bastion'],
+  const FORKS = { k_s1_a: ['Juggernaut', 'Shield Bash', 'Avalanche'], k_s1_b: ['Rallying Charge', 'Hold the Line', 'Iron Phalanx'], k_s2_a: ['Shield Slam', 'Gathering Force', 'Aegis Tempest'], k_s2_b: ['Shield Wall', 'Return to Sender', 'Bastion'],
     r_s1_a: ["Hunter's Mark", 'Relentless Hunt', 'Death Mark'], r_s1_b: ['Scattershot', 'Caltrops', 'Thornburst'], r_s2_a: ['Skyfall', 'Twin Sky', 'Starfall Barrage'], r_s2_b: ['Hail of Thorns', 'Second Shower', 'Storm of Thorns'],
     b_s1_a: ['Wrecker', 'Ground Breaker', 'Wrecking Spin'], b_s1_b: ['Tether Hook', 'Reel In', 'Anchor Chain'], b_s2_a: ['Thunderclap', 'Reverberation', 'Thunder Toll'], b_s2_b: ['Warding Toll', 'Sanctus', 'Ward Bell'] };
   for (const id in FORKS) {
@@ -288,7 +255,7 @@ const charge = (w, p, len) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x1: p.x + 
   const tt = (id, r) => ED.cardTotals(ED.BOONS[id], r);
   near(tt('k_s1_a', 3).avalanche, 0.9, 1e-9, 'Avalanche slam 90% of the impact'); near(tt('k_s1_a', 3).avaStun, 0.8, 1e-9, 'Avalanche stun 0.8'); near(tt('k_s1_a', 3).avaCrack, 0.3, 1e-9, 'Avalanche cracks 30%');
   near(tt('k_s1_b', 3).bannerDur, 5, 1e-9, 'War Banner 5 s'); near(tt('k_s1_b', 3).bannerSlow, 0.4, 1e-9, 'War Banner slow 40%'); near(tt('k_s1_b', 3).bannerWeak, 0.25, 1e-9, 'War Banner weakens 25%');
-  near(tt('k_s2_a', 3).tempest, 3, 1e-9, 'Aegis Tempest three shields'); near(tt('k_s2_a', 3).vortexMul, 0.03, 1e-9, 'vortex 3% of a strike'); near(tt('k_s2_a', 3).vortexDur, 2.5, 1e-9, 'vortex 2.5 s'); near(tt('k_s2_b', 3).orbitMul, 0.15, 1e-9, 'Bastion strike 15%');
+  near(tt('k_s2_a', 3).tempest, 1, 1e-9, 'Aegis Tempest on'); near(tt('k_s2_a', 3).vortexMul, 0.03, 1e-9, 'vortex 3% of the bash per block'); near(tt('k_s2_a', 3).vortexDur, 2.5, 1e-9, 'vortex 2.5 s'); near(tt('k_s2_b', 3).bastion, 4, 1e-9, 'Bastion holds 4 s'); near(tt('k_s2_b', 3).bastionWard, 0.005, 1e-9, 'Bastion shields 0.5% per block'); near(tt('k_s2_b', 2).sendBack, 0.5, 1e-9, 'Return to Sender 50% of a bash'); near(tt('k_s2_b', 1).wallStun, 0.3, 1e-9, 'Shield Wall stuns 0.3 s');
   const N3 = ED.Stats.skillNums('charge', build('knight', 0, { k_s1: 1, k_s1_a: 3 }));
   near(N3.p.quake.dmg, N3.p.impact.dmg * 0.9, 1e-6, 'quake part: 90% of the impact'); near(N3.p.crack.dmg, N3.p.impact.dmg * 0.3, 1e-6, 'crack part: 30% of the impact');
   ok(!N3.p.shock.on && ED.Stats.skillNums('charge', build('knight', 0, { k_s1: 1, k_s1_a: 2 })).p.shock.on, 'the slam replaces the shockwave part at rank 3 only');
@@ -343,77 +310,34 @@ const charge = (w, p, len) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x1: p.x + 
   t3.ally.x = t3.end + 40; const weak = dmg(t3, t3.ally, { e: t3.in }), plain = dmg(t3, t3.ally, { e: t3.out }); near(weak / plain, 0.75, 0.05, 'a foe inside the banner hits 25% weaker');
   run(t3.w, 5.2); ok(!t3.w.zones.some(z => z.w === 7), 'the banner ends after 5 s');
 }
-{ // Aegis Tempest (k_s2_a rank 3): three shields, a vortex at the last foe struck, then the shields return; rank 2 throws two and spins nothing
-  const go = (rank, fodder) => {
-    const { w, p } = stage('knight', { k_s2: 1, k_s2_a: rank }); p.stats.crit = 0; const log = spy(w), es = [1, 2, 3, 4, 5].map(k => foe(w, p.x + 45 * k, p.y + (k % 2 ? 6 : -6)));
-    if (fodder) for (const e of es) e.fodder = true;
-    w.playerSkill(p, 0, { d: 280 }, 1); const n0 = p.shields.length, legs = new Set(), catches = []; let vz = null, pull = null;
-    run(w, 7, () => {
-      const z = w.zones.find(q => q.kind === 'vortex');
-      if (z && !vz) vz = { x: z.x, y: z.y, r: z.r, dur: z.dur, warm: z.warm, t0: z.t, at: w.time };
-      if (z && z.t >= z.warm && !pull) pull = { z, t: z.t, d: es.map(e => Math.hypot(e.x - z.x, e.y - z.y)) };
-      if (z && pull && !pull.d1 && z.t - pull.t >= 1) pull.d1 = es.map(e => Math.hypot(e.x - z.x, e.y - z.y));
-      for (const s of p.shields) legs.add(s.leg);
-      for (const f of w.fx) if (f.t === 'catch') catches.push(f);
-      w.fx.length = 0;
-    });
-    return { w, p, log, es, n0, vz, catches, legs, pull };
+{ // Aegis Tempest (k_s2_a rank 3): the bash opens a vortex (r100, 2.5 s) at the cone tip; it pulls non-boss foes in and strikes 4 times a second for 3% of the bash per stored block; rank 2 opens none
+  const go = (rank, blocks) => {
+    const { w, p } = stage('knight', { k_s2: 1, k_s2_a: rank }); p.stats.crit = 0; const log = spy(w), tipX = p.x + 90, es = [foe(w, tipX + 60, p.y), foe(w, tipX, p.y + 70)], bs = foe(w, tipX + 70, p.y - 40); bs.boss = true;
+    const at = es.map(e => Math.hypot(e.x - tipX, e.y - p.y)), b0 = Math.hypot(bs.x - tipX, bs.y - p.y);
+    const x0 = p.x; w.playerSkill(p, 0, {}, 1); p.blocks = blocks; w.skillRelease(p, 0); const z = w.zones.find(q => q.kind === 'vortex'), z0 = z && { x: z.x, y: z.y, r: z.r, dur: z.dur };
+    run(w, 1, () => { for (const e of es) { e.kbx = 0; e.kby = 0; } bs.kbx = 0; bs.kby = 0; });
+    const pulled = es.map((e, i) => at[i] - Math.hypot(e.x - tipX, e.y - p.y)), bossMove = Math.abs(b0 - Math.hypot(bs.x - tipX, bs.y - p.y));
+    run(w, 2);
+    return { w, p, x0, log, es, z0, pulled, bossMove, N: ED.Stats.skillNums('bulwark', p.stats) };
   };
-  const t3 = go(3), t2 = go(2), N = ED.Stats.skillNums('shieldthrow', t3.p.stats), strike = N.p.strike.dmg;
-  ok(t3.n0 === 3 && t2.n0 === 2, `Aegis Tempest throws three shields, Shield Storm two (${t3.n0}, ${t2.n0})`);
-  ok(t3.vz && Math.abs(t3.vz.r - 100) < 1e-9 && t3.vz.dur >= 2.5 && t3.vz.dur < 3.3 && t3.legs.has('vortex') && !t2.vz && !t2.legs.has('vortex'), `a vortex (r100, 2.5 s once the shields arrive) forms where the ricochets end; none at rank 2 (${t3.vz && t3.vz.dur.toFixed(2)})`);
-  const lastStrike = partHits(t3.log, 'shieldthrow.strike').pop();
-  ok(t3.vz && lastStrike && Math.hypot(t3.vz.x - lastStrike.px, t3.vz.y - lastStrike.py) < 1, 'the vortex forms on the last foe struck');
-  const vh = partHits(t3.log, 'shieldthrow.vortex');
-  ok(vh.length >= 20 && vh.every(h => Math.abs(h.d / strike - 0.03) < 0.01), `the vortex strikes for 3% of a strike (${vh.length} hits, ${vh[0] ? (vh[0].d / strike).toFixed(2) : '-'})`);
+  const t3 = go(3, 2), t2 = go(2, 2), t0 = go(3, 0);
+  ok(t3.z0 && Math.abs(t3.z0.x - (t3.x0 + 90)) <= 4 && t3.z0.r === 100 && t3.z0.dur === 2.5 && !t2.z0, `a vortex (r100, 2.5 s) opens at the tip of the bash cone; none at rank 2 (${JSON.stringify(t3.z0)}, hero x ${t3.x0})`);
+  const vh = partHits(t3.log, 'bulwark.vortex'), per = t3.N.p.bash.dmg * 0.03 * 2 * t3.p.stats.dmg;
+  ok(vh.length >= 10 && vh.every(h => Math.abs(h.d / per - 1) < 0.02), `two stored blocks: each vortex hit deals 3% x 2 of the bash (${vh.length} hits, ${vh[0] ? (vh[0].d / per).toFixed(3) : '-'})`);
+  const v0 = partHits(t0.log, 'bulwark.vortex'), per0 = t0.N.p.bash.dmg * 0.03 * t0.p.stats.dmg; ok(v0.length && Math.abs(v0[0].d / per0 - 1) < 0.02, 'a bash with nothing stored still counts one block for the vortex');
   const perFoe = {}; for (const h of vh) perFoe[h.e.id] = (perFoe[h.e.id] || 0) + 1; const counts = Object.values(perFoe).sort((a, b) => b - a);
-  ok(counts.length >= 2 && counts[0] >= 9 && counts[0] <= 11, `a foe inside the whole time is struck 4 times a second for 2.5 s (${counts.join(',')})`);
-  ok(t3.pull && t3.pull.d1 && t3.pull.d.some((d0, i) => d0 > 40 && d0 < 100 && d0 - t3.pull.d1[i] > 40), `foes inside are pulled in about 60 px/s (${t3.pull && t3.pull.d1 ? t3.pull.d.map((d0, i) => Math.round(d0) + '>' + Math.round(t3.pull.d1[i])).join(' ') : '-'})`);
-  ok(t3.catches.length === 3 && t3.p.shields.length === 0, `all three shields come home and are caught (${t3.catches.length})`);
-  ok(!partHits(t2.log, 'shieldthrow.vortex').length, 'rank 2 has no vortex hits');
-  { // a boss is not pulled; the vortex does not stun
-    const { w, p } = stage('knight', { k_s2: 1, k_s2_a: 3 }); const es = [1, 2].map(k => foe(w, p.x + 50 * k, p.y)), bs = foe(w, p.x + 150, p.y + 50); bs.boss = true;
-    w.playerSkill(p, 0, { d: 160 }, 1); const x0 = bs.x, y0 = bs.y; let z = null;
-    run(w, 6, () => { z = z || w.zones.find(q => q.kind === 'vortex'); });
-    ok(z && Math.hypot(bs.x - x0, bs.y - y0) < 25, 'a boss is not pulled (only knocked by the strikes)');
-  }
-  { // the catch counts the non-fodder foes struck: a throw into fodder shields nobody, the vortex still forms
-    const f = go(3, true);
-    ok(f.catches.reduce((s, c) => s + c.v, 0) === 0 && t3.catches.reduce((s, c) => s + c.v, 0) > 0, 'fodder struck by the shields does not feed the catch shield');
-    ok(f.vz && partHits(f.log, 'shieldthrow.vortex').length > 0, 'the vortex still forms on fodder and strikes it');
-  }
+  ok(counts[0] >= 9 && counts[0] <= 11, `a foe inside the whole time is struck 4 times a second for 2.5 s (${counts.join(',')})`);
+  ok(t3.pulled.every(d => d > 30) && t3.bossMove < 5, `foes inside are pulled in, a boss is not (${t3.pulled.map(Math.round).join(' ')}; boss ${t3.bossMove.toFixed(1)})`);
+  ok(!partHits(t2.log, 'bulwark.vortex').length && !t3.es.some(e => e.stun > 0 && e.stunCd > 2.5 + 1), 'rank 2 has no vortex hits; the vortex does not stun');
+  near(ED.Stats.skillNums('bulwark', build('knight', 0, { k_s2: 1, k_s2_a: 2 })).blockMul, 0.55, 1e-9, 'Gathering Force: each stored block +55%');
+  near(ED.Stats.skillNums('bulwark', build('knight', 0, { k_s2: 1, k_s2_a: 1 })).blockMul, 0.25, 1e-9, 'rank 1 keeps +25% per block');
 }
-{ // Bastion (k_s2_b rank 3): two shields orbit opposite each other (r60) until the next Throw, strike for 15%, never shortened by shots; a Throw sends one, a room change keeps the pair
-  const prime = (rank) => { const t = stage('knight', { k_s2: 1, k_s2_b: rank }); t.p.stats.crit = 0; t.es = [1, 2].map(k => foe(t.w, t.p.x + 40 * k, t.p.y)); t.w.playerSkill(t.p, 0, { d: 200 }, 1); let n = 0; while (n++ < 400 && !(t.p.shields.some(s => s.leg === 'orbit'))) run(t.w, 0.05); return t; };
-  const b = prime(3), o = prime(2), orbiting = (t) => t.p.shields.filter(s => s.leg === 'orbit');
-  b.w.enemies.length = 0; run(b.w, 0.1);
-  ok(orbiting(b).length === 2 && orbiting(o).length === 1, `Bastion keeps two shields in orbit, Shield Orbit one (${orbiting(b).length}, ${orbiting(o).length})`);
-  const [a1, a2] = orbiting(b), hx = b.p.x, hy = b.p.y - 4;
-  near(Math.hypot(a1.pr.x - hx, a1.pr.y - hy), 60, 1, 'orbit radius 60'); near(Math.hypot(a2.pr.x - hx, a2.pr.y - hy), 60, 1, 'the second shield at radius 60'); near(Math.abs(U_ang(Math.atan2(a1.pr.y - hy, a1.pr.x - hx) - Math.atan2(a2.pr.y - hy, a2.pr.x - hx))), Math.PI, 0.05, 'the two shields sit opposite each other');
-  near(Math.hypot(orbiting(o)[0].pr.x - o.p.x, orbiting(o)[0].pr.y - (o.p.y - 4)), 44, 1, 'Shield Orbit keeps radius 44');
-  ok(a1.orbitDur === Infinity, 'the orbit does not time out'); run(b.w, 12); run(o.w, 12);
-  ok(orbiting(b).length === 2 && orbiting(o).length === 0, 'after 12 s the Bastion pair still orbits, the plain orbit is over');
-  { // a shot the orbit destroys does not shorten it
-    const t = prime(3); const e = foe(t.w, t.p.x + 300, t.p.y - 150); let swat = 0;
-    for (let i = 0; i < 4; i++) { const s = orbiting(t)[0]; t.w.spawnProj({ team: 1, kind: 'bone', x: s.pr.x, y: s.pr.y, a: 0, speed: 1, r: 4, dmg: 1, life: 5, owner: null, src: e }); run(t.w, 0.1); for (const f of t.w.fx) if (f.t === 'deflect') swat++; t.w.fx.length = 0; }
-    ok(swat >= 3 && orbiting(t).length === 2 && orbiting(t)[0].orbitDur === Infinity, `shots are destroyed (${swat}) and the orbit stays`);
-  }
-  { // orbit strikes: 15% of a strike, 0.3 s stun
-    const t = prime(3), N = ED.Stats.skillNums('shieldthrow', t.p.stats), log = spy(t.w); t.w.enemies.length = 0; run(t.w, 0.1);
-    const s = orbiting(t)[0], f1 = foe(t.w, s.pr.x, s.pr.y); f1.stun = 0; f1.stunCd = 0; run(t.w, 0.06);
-    const oh = partHits(log, 'shieldthrow.orbit'); ok(oh.length >= 1 && Math.abs(oh[0].d / N.p.strike.dmg - 0.15) < 0.01, `an orbit strike deals 15% of a strike (${oh[0] ? (oh[0].d / N.p.strike.dmg).toFixed(2) : '-'})`);
-    ok(f1.stun > 0.2 && f1.stun <= 0.3 + 1e-9, 'and stuns 0.3 s');
-  }
-  { // a Throw sends one shield out, the other keeps orbiting; the sent one rejoins opposite it
-    const t = prime(3); t.w.enemies.length = 0; run(t.w, 0.1); t.w.playerSkill(t.p, 0, { d: 160 }, 1);
-    ok(t.p.shields.length === 2 && t.p.shields.filter(s => s.leg === 'orbit').length === 1 && t.p.shields.filter(s => s.leg === 'out').length === 1, 'a Throw sends one orbiting shield out and leaves the other');
-    run(t.w, 3); const [s1, s2] = orbiting(t); ok(orbiting(t).length === 2, 'the thrown shield rejoins the orbit'); near(Math.abs(U_ang(s1.orbitA - s2.orbitA)), Math.PI, 0.06, 'opposite the shield that stayed');
-  }
-  { // a room change clears every shield, the living Bastion Knight gets its pair back; a downed one does not
-    const t = prime(3); t.w.clearShields(t.p); ok(t.p.shields.length === 0 && t.p.bastionKeep, 'a room change clears the shields and remembers the orbit'); run(t.w, 0.1);
-    ok(orbiting(t).length === 2, 'the pair is back around the Knight');
-    const d = prime(3); d.p.downed = true; d.w.clearShields(d.p); ok(!d.p.bastionKeep && d.p.shields.length === 0, 'a downed Knight loses the orbit');
-  }
+{ // Bastion (k_s2_b rank 3): held up to 4 s; each block shields 0.5% max HP, 2% per raise at most, once per KWARD_CD
+  const N = ED.Stats.skillNums('bulwark', build('knight', 0, { k_s2: 1, k_s2_b: 3 })); near(N.hold, 4, 1e-9, 'Bastion holds 4 s'); near(ED.Stats.skillNums('bulwark', build('knight', 0, { k_s2: 1, k_s2_b: 2 })).hold, 2, 1e-9, 'rank 2 keeps 2 s');
+  const { w, p } = stage('knight', { k_s2: 1, k_s2_b: 3 }); w.playerSkill(p, 0, {}, 1); p.shield = 0; const e = foe(w, p.x + 40, p.y);
+  w.hurtPlayer(p, 20, { e }); near(p.shield, 0.005 * p.maxHp, 0.01, 'a block shields 0.5% max HP');
+  for (let i = 0; i < 6; i++) { w.time += 0.61; p.invuln = 0; w.hurtPlayer(p, 20, { e }); } ok(p.shield <= 0.02 * p.maxHp + 0.01, `at most 2% per raise (${(p.shield / p.maxHp * 100).toFixed(2)}%)`);
+  w.skillRelease(p, 0); w.playerSkill(p, 0, {}, 1); p.shield = 0; w.time += 0.61; w.hurtPlayer(p, 20, { e }); near(p.shield, 0, 1e-9, 'a new raise inside KWARD_CD shields nothing');
 }
 console.log(`${n} checks, ${fails} failed`);
 process.exit(fails ? 1 : 0);

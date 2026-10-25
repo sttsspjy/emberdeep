@@ -50,7 +50,7 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
   s = tot({ n_s1: 1, n_s1_b: 2 }); near(s.maxMinions, 2, 1e-9, 'Bone Knights: at most 2'); near(ED.Stats.skillNums('legion', s).p.minion.n, 2, 1e-9, 'Legion raises 2'); ok(s.knights === 1, 'knights flag');
   near(s.minionDmg, 0.1, 1e-9, 'Bone Knights +10% per rank'); near(s.knightLife, 0.5, 1e-9, 'Ironbone life +50%'); near(s.knightStun, 0.5, 1e-9, 'Ironbone stun 0.5 s');
   s = tot({ n_s2: 1 }); near(s.s2Dmg, 0.4, 1e-9, 'Grim Harvest +40%'); near(s.s2Area, 0.2, 1e-9, 'Grim Harvest +20% wider'); near(s.harvestRaise, 2, 1e-9, 'Grim Harvest raises 2');
-  near(ED.Stats.skillNums('harvest', s).p.burst.dmg, 60.3 * 1.4, 1e-6, 'Harvest burst 60.3 x 1.4'); near(ED.Stats.skillNums('harvest', s).p.burst.r, 72, 1e-9, 'Harvest radius 60 x 1.2');
+  near(ED.Stats.skillNums('harvest', s).p.burst.dmg, 67 * 1.4, 1e-6, 'Harvest burst 40 + 2P (67) x 1.4'); near(ED.Stats.skillNums('harvest', s).p.burst.r, 72, 1e-9, 'Harvest radius 60 x 1.2');
   s = tot({ n_s2: 1, n_s2_a: 2 }); near(s.corpse, 5, 1e-9, 'Corpse Explosion 4 + 1 per rank'); near(s.corpseMul, 0.3, 1e-9, 'corpse burst 30%'); near(s.boneLance, 0.37, 1e-9, 'Bone Lances +37%');
   const hp = ED.Stats.skillNums('harvest', s).p; near(hp.corpse.dmg, hp.burst.dmg * 0.3, 1e-9, 'corpse part 30% of the burst'); near(hp.lance.dmg, hp.burst.dmg * 1.37, 1e-9, 'lance part +37%'); near(hp.corpse.r, hp.burst.r, 1e-9, 'corpse radius = burst radius'); ok(hp.corpse.on && hp.lance.on, 'corpse and lance parts on');
   s = tot({ n_s2: 1, n_s2_b: 3 }); near(s.boneArmor, 0.03, 1e-9, 'Bone Armor 3% per minion'); near(s.boneCap, 0.06, 1e-9, 'Bone Armor cap 5% + 0.5% per rank'); ok(s.boneField === 1 && !tot({ n_s2: 1, n_s2_b: 1 }).boneField && tot({ n_s2: 1, n_s2_b: 2 }).boneField === 1, 'Marrow Field from rank 2');
@@ -174,8 +174,10 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
   const { w, p } = stage({ n_s2: 1 }); const e = foe(w, p.x + 100, p.y); for (let i = 0; i < 3; i++) { const m = minionAt(w, p, e); m.x = p.x + 100 + i; m.y = p.y; }
   const edge = foe(w, p.x + 100 + 71, p.y); const out = foe(w, p.x + 100, p.y + 90); p.hp = 1; w.playerSkill(p, 0, {}, 1);
   near(lost(e), 3 * burstOf(p), 0.05, 'each of 3 minions bursts for 56.28'); ok(lost(edge) > 0 && out.hp === 5000, 'radius 72: a foe at 71 is hit, one at 90 is not');
-  ok(mine(w, p).length === 2, 'Harvest raises 2 after'); near(p.hp, 1 + 0.06 * p.maxHp, 0.01, 'heal 3% per minion, at most 6% per cast');
-  p.hp = 1; w.healPlayer(p, 0); w.playerSkill(p, 0, {}, 1); near(p.hp, 1 + 0.06 * p.maxHp, 0.01, 'two minions heal 6%');
+  ok(mine(w, p).length === 2, 'Harvest raises 2 after'); near(p.hp, 1, 1e-9, 'Harvest heals nothing without Bone Armor');
+  const ba = stage({ n_s2: 1, n_s2_b: 1 }); const be = foe(ba.w, ba.p.x + 100, ba.p.y); for (let i = 0; i < 3; i++) { const m = minionAt(ba.w, ba.p, be); m.x = ba.p.x + 100 + i; m.y = ba.p.y; }
+  ba.p.hp = 1; ba.w.playerSkill(ba.p, 0, {}, 1); near(ba.p.hp, 1 + 0.06 * ba.p.maxHp, 0.01, 'Bone Armor: heal 3% per minion, at most 6% per cast');
+  ba.p.hp = 1; ba.w.healPlayer(ba.p, 0); ba.w.playerSkill(ba.p, 0, {}, 1); near(ba.p.hp, 1 + 0.06 * ba.p.maxHp, 0.01, 'two minions heal 6%');
   w.allies.length = 0; p.hp = 1; const hp0 = p.hp; w.playerSkill(p, 0, {}, 1); ok(p.hp === hp0 && mine(w, p).length === 2, 'no minions: no heal, raises 2');
   const { w: w1, p: p1 } = stage({}); w1.playerSkill(p1, 0, {}, 1); ok(mine(w1, p1).length === 2, 'base Harvest with none raises 2'); const m = minionAt(w1, p1, foe(w1, p1.x + 50, p1.y)); w1.allies = [m]; w1.playerSkill(p1, 0, {}, 1); ok(mine(w1, p1).length === 1, 'base Harvest with minions raises 1');
 }
