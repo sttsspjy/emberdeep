@@ -1152,42 +1152,66 @@ for (let s = 1; s <= NS; s++) {
     w.killEnemy(L2, null, {}); w.killEnemy(H, null, {}); go(w, 0.5);
     ok(!w.locked && w.roomState[w.roomId].cleared, 'both twins down clears the room');
   }
-  { // mimic: copies the party's classes; at SPLIT of its health it splits into two copies sharing them
-    const C = ED.Champions, { w, enc } = champRoom('mimic', ['knight', 'ranger']), m = enc.foes.m0;
-    ok(m && m.copies.join() === 'knight,ranger', `the mimic copies the party (${m && m.copies})`);
-    m.hp = m.maxHp * (C.SPLIT - 0.01); go(w, 0.1);
-    const ms = w.enemies.filter(e => e.type === 'mimic' && e.hp > 0);
-    ok(ms.length === 2 && ms.every(e => e.split && e.copies.length === 1) && ms[0].copies[0] !== ms[1].copies[0], 'it splits into two copies, one class each');
-    ok(JSON.stringify(A.encode(w.room)) === JSON.stringify([3].concat(...ms.map(e => [e.id, ED.CLASS_IDS.indexOf(e.cls)]))), 'champion arena row carries each mimic and its class');
+  { // Clockwork Colossus: four foes at fixed offsets, each part takes its own hits, the core armoured until two parts break, then open
+    const C = ED.Champions, COL = C.COL, { w, enc } = champRoom('colossus', ['knight']), col = enc.col;
+    ok(w.locked && col && col.core.type === 'colossus' && COL.PARTS.every(k => col.parts[k] && col.parts[k].type === COL.TYPE[k] && enc.foes[k] === col.parts[k]), 'the Colossus lands as the core and three parts');
+    ok(col && COL.PARTS.every(k => col.parts[k].x === col.core.x + COL.OFF[k][0] && col.parts[k].y === col.core.y + COL.OFF[k][1]), 'each part stands at its offset from the core');
+    ok(col && col.core.maxHp > ED.ENEMIES.colossus.hp * W0.ELITE.hp && col.parts.cannon.maxHp > ED.ENEMIES.colcannon.hp * W0.ELITE.hp, 'Colossus HP x the elite factor');
+    const { cannon, saw, eye } = col.parts, core = col.core, hp = () => [core, cannon, saw, eye].map(e => e.hp);
+    const h0 = hp(); w.hitEnemy(cannon, 40, {}); const h1 = hp();
+    ok(h1[1] === h0[1] - 40 && h1[0] === h0[0] && h1[2] === h0[2] && h1[3] === h0[3], 'a hit on the Cannon Arm hurts only the cannon');
+    const p = [...w.players.values()][0];
+    w.explode(saw.x + 12, saw.y, 8, 30, 0, p, 'fire', true); const h2 = hp();
+    ok(h2[2] < h1[2] && h2[0] === h1[0] && h2[1] === h1[1] && h2[3] === h1[3], 'a blast that touches the Saw Arm hurts only the saw');
+    near(w.hitEnemy(core, 100, {}), 100 * COL.ARMOR, 1e-6, 'the armoured core takes COL.ARMOR');
+    core.hp = core.maxHp * COL.FLOOR + 5; w.hitEnemy(core, 1000, {}); go(w, 2 / 60);
+    ok(core.hp >= core.maxHp * COL.FLOOR - 1e-6 && core.hp > 0, `the armoured core holds at COL.FLOOR of its health (${(core.hp / core.maxHp).toFixed(3)})`);
+    near(w.hitEnemy(core, 100, {}), 0, 1e-9, 'at the floor the armoured core takes nothing');
+    const picks = (n) => { const s = new Set(), r0 = col.runs, l0 = col.last; for (let i = 0; i < n; i++) { col.runs = []; col.last = null; const id = w.colossusPick(col); if (id) s.add(id); } col.runs = r0; col.last = l0; return s; };
+    const own = (k) => Object.keys(C.MOVES).filter(id => C.MOVES[id].part === k && !C.MOVES[id].stump), esc = (k) => Object.keys(C.MOVES).filter(id => C.MOVES[id].part === k && C.MOVES[id].stump);
+    const s0 = picks(80);
+    ok(COL.PARTS.every(k => own(k).some(id => s0.has(id))) && COL.PARTS.every(k => !esc(k).some(id => s0.has(id))), `intact: every part's moves, no escalation (${[...s0]})`);
+    core.hp = core.maxHp; w.killEnemy(cannon, p, {}); go(w, 2 / 60);
+    const s1 = picks(80);
+    ok(col.b === 1 && !col.open && core.dmgTakenMul === COL.ARMOR, 'the cannon breaks; the core stays armoured');
+    ok(!own('cannon').some(id => s1.has(id)) && esc('cannon').every(id => s1.has(id)), `a broken cannon: its moves gone, its stump vents (${[...s1]})`);
+    ok(!col.runs.some(m => m.src === cannon) && !w.zones.some(z => z.src === cannon && z.kind === 'laser'), 'the broken cannon drops its running moves');
+    w.killEnemy(saw, p, {}); go(w, 2 / 60);
+    const s2 = picks(80);
+    ok(col.open && core.dmgTakenMul === COL.OPEN, 'the second break opens the core');
+    near(w.hitEnemy(core, 100, {}), 100 * COL.OPEN, 1e-6, 'the open core takes COL.OPEN');
+    ok(!own('saw').some(id => s2.has(id)) && esc('saw').every(id => s2.has(id)) && own('eye').every(id => s2.has(id)), `final phase: the eye's moves and both stumps (${[...s2]})`);
+    ok(JSON.stringify(A.encode(w.room).slice(0, 3)) === JSON.stringify([3, 3, 1]), `the arena row carries the broken parts and the open core (${JSON.stringify(A.encode(w.room))})`);
+    ok(rt(w.room), 'the Colossus arena round-trips through the snapshot row');
   }
-  { // mimic kit: copying any class it holds its own moves plus that class's copied moves, and each starts with a telegraph
-    const C = ED.Champions, WARN = { tele: 1, teleLine: 1, teleCone: 1, spawn: 1 };
-    for (const cls of ED.CLASS_IDS) {
-      const { w, enc } = champRoom('mimic', [cls]), m = enc.foes.m0, copied = C.COPY[cls] || [], silent = [];
-      ok(m && copied.length >= 2, `${cls}: the mimic has at least two copied ${cls} moves (${copied})`);
-      if (!m) continue;
-      for (const k of C.OWN.concat(copied)) {
-        for (let g = 0; m.mode === 'atk' && g < 600; g++) go(w, 1 / 60);
-        const z0 = new Set(w.zones);
-        m.force = k; go(w, 2 / 60);
-        if (m.atk !== k || !w.zones.some(z => !z0.has(z) && z.team !== 0 && WARN[z.kind])) silent.push(k);
-      }
-      ok(!silent.length, `${cls}: every own and copied move starts with a ground or lane warning (${silent})`);
+  { // every Colossus move starts with a telegraph and deals nothing before it: no shot, beam, saw or burst in its first 0.45 s
+    const C = ED.Champions, COL = C.COL, WARN = { tele: 1, teleLine: 1, teleCone: 1 }, silent = [], early = [];
+    for (const id of Object.keys(C.MOVES)) {
+      const M = C.MOVES[id], { w, enc } = champRoom('colossus', ['knight', 'ranger']), col = enc.col;
+      if (M.stump) { w.killEnemy(col.parts[M.part], null, {}); go(w, 2 / 60); }
+      col.runs = []; col.pause = 99;
+      const pieces = new Set(col.all), p0 = w.projs.length, z0 = new Set(w.zones);
+      w.colossusStart(col, id);
+      const warn = w.zones.filter(z => !z0.has(z) && pieces.has(z.src) && (WARN[z.kind] || (z.kind === 'laser' && z.warm >= 0.5)));
+      if (!warn.length) silent.push(id);
+      let bad = false;
+      go(w, 0.45, () => { if (w.projs.length > p0 || w.zones.some(z => pieces.has(z.src) && ((z.kind === 'laser' && z.t > z.warm) || z.kind === 'gsaw'))) bad = true; });
+      if (bad || col.runs[0] && col.runs[0].at < 0.5) early.push(id);
     }
+    ok(!silent.length, `every Colossus move starts with a telegraph (${silent})`);
+    ok(!early.length, `no Colossus move hurts within 0.45 s of its start (${early})`);
   }
-  { // mimic escalation and the split pair
-    const C = ED.Champions, { w, enc } = champRoom('mimic', ['knight']), m = enc.foes.m0;
-    m.hp = m.maxHp * 0.7; go(w, 0.05);
-    ok(m.mph === 2 && m.pauseK === C.MPAUSE[1], `below MPH[0] of its health the mimic escalates (mph ${m.mph})`);
-    m.hp = m.maxHp * 0.45; go(w, 0.05);
-    const ms = w.enemies.filter(e => e.type === 'mimic' && e.hp > 0);
-    ok(ms.length === 2 && ms.every(e => e.mph === 3) && ms[0].maxHp === ms[1].maxHp && ms[0].dmgBase === ms[1].dmgBase, 'the split makes two equal halves at mph 3');
-    let joint = null;
-    go(w, 14, () => { if (!joint && ms.every(e => e.mode === 'atk' && e.vars.forced)) joint = ms.map(e => e.atk).sort().join(); });
-    ok(joint === 'cross,cross' || joint === 'glass,shatter', `the split pair attacks together (${joint})`);
-    for (const e of ms) e.hp = e.maxHp * 0.2;
-    go(w, 0.05);
-    ok(ms.every(e => e.mph === 4), 'below MPH[1] of the fight\'s health both copies reach mph 4');
+  { // the Colossus fight ends when the core falls (the parts fall with it), pays the champion room's relic and sets run.champs bit 1; a seed replays the same fight
+    const C = ED.Champions, COL = C.COL, { w, enc, room } = champRoom('colossus', ['knight']), col = enc.col;
+    room.type = 'champion'; room.reward = 'relic';
+    go(w, 6);
+    w.killEnemy(col.parts.eye, null, {}); w.killEnemy(col.parts.saw, null, {}); go(w, 2 / 60);
+    w.killEnemy(col.core, null, {}); go(w, 0.5);
+    ok(!w.locked && w.roomState[w.roomId].cleared && COL.PARTS.every(k => col.parts[k].hp <= 0) && !w.zones.some(z => col.all.includes(z.src)), 'the core down ends the fight; its parts and telegraphs go');
+    ok(w.props.some(q => q.kind === 'reward' && q.item === 'relic') && (w.run.champs & 2), 'the Colossus room pays its relic and marks run.champs bit 1');
+    const trace = () => { const r = champRoom('colossus', ['knight', 'cleric']), out = []; go(r.w, 24, (i) => { if (i % 30 === 0) out.push(r.enc.col.last + ':' + r.w.projs.length + ':' + r.w.zones.length + ':' + Math.round(r.enc.col.x)); }); return out.join(); };
+    const a = trace(), b = trace();
+    ok(a === b && /spiral|fan|ring|sweep|roll|beam|grid/.test(a), 'a seed replays the same Colossus fight');
   }
 }
 { // Mire Worm: statuses keep ticking while it is burrowed; the eruption: warned lanes, B.ring shots over B.arc (the rest is a shot-free gap) at B.speed, a telegraph of at least 1.1 s, exposed B.expose s after

@@ -20,7 +20,7 @@
 // --out=file.json writes one row per run (seed, class, depth, win, boss time to kill and HP lost per stratum, evolution stratum, main path, gates); --pair=file.json prints the mean difference to such a baseline for the same seeds.
 // --lambda: the weight of effective health against damage in --pick=smart (tools/pick.js): a number (default 2), or auto[:x0] = x0 times the foe damage lever of each stratum the pick looks ahead to (live tables).
 // --from=N: the bots start at stratum N with the build strata 1..N-1 give (skipStrata plays them without fighting); stats, wins and depth then cover strata >= N (depth counts the skipped bosses as beaten, time counts from stratum N, `entry` holds the hero state at each stratum start).
-// --fight=boss|twins|mimic (--boss = --fight=boss): one fight per run. The party is walked to stratum --from (default I) as --from does; boss also walks that stratum's rooms and enters its boss room, twins / mimic start that champion fight in one of its combat rooms.
+// --fight=boss|twins|colossus (--boss = --fight=boss): one fight per run. The party is walked to stratum --from (default I) as --from does; boss also walks that stratum's rooms and enters its boss room, twins / colossus start that champion fight in one of its combat rooms.
 //   The party starts the fight at full health; the run ends with the fight; the `fight` summary line reports kills, wipes (and the boss phase), time to kill, downs and health lost. --bosstype=<boss id> sets the boss of the --from stratum.
 // meta: none = fresh profile; mid = half the upgrade ranks, mastery 5; max = every rank, mastery 10. Every relic is always in the pool.
 const fs = require('fs');
@@ -231,6 +231,20 @@ function arenaTarget(w, foes, p) {
   }
   return best;
 }
+// Clockwork Colossus fight: the nearest standing part while the core is armoured, the core once open. null outside it.
+function colossusTarget(w, foes, p) {
+  const col = w.enc && w.enc.col;
+  if (!col || col.down) return null;
+  if (col.open && col.core.hp > 0) return col.core;
+  let best = null, bd = Infinity;
+  for (const e of foes) { if (!e.def.colo || e.def.colo === 'core') continue; const d2 = U.dist2(e.x, e.y, p.x, p.y); if (d2 < bd) { bd = d2; best = e; } }
+  return best;
+}
+// Where hero p stands to hit Colossus piece tgt from `ideal` px: on the part's outer side (its line of fire clear of the armoured core), below the core; the walls cut it short.
+function colossusStand(w, p, tgt, ideal) {
+  const o = ED.Champions.COL.OFF[tgt.def.colo], a = tgt.def.colo === 'core' ? Math.PI / 2 : Math.atan2(o[1], o[0]);
+  return ED.Sim.castMove(w.room, tgt.x, tgt.y, a, ideal, p.r, true);
+}
 // Lane charge warning (Bone Warden, zone.lane = the band in px) that holds hero p and has been seen for `react` s: the way out of the band, else null.
 function laneEscape(w, p, react) {
   for (const z of w.zones) {
@@ -241,16 +255,26 @@ function laneEscape(w, p, react) {
   return null;
 }
 // Plain bot (no --vet) in a boss fight: the way out of a hostile swing cone or strike line that holds hero p and has been seen for `react` s (out of the cone's reach, sideways off the line), else null.
+// A Colossus rolling saw counts as a line from where it rolls; a Colossus laser sweep: while it warms up, out of its sector by the nearer edge; while it turns, across the beam when it is within 0.5 rad of the hero.
 function bossDodge(w, p, react) {
   let ox = 0, oy = 0;
   for (const z of w.zones) {
     if (z.team !== 1 || z.t < react || z.lane) continue;
+    if (z.kind === 'laser' && z.neon && z.arc) {
+      const dx = p.x - z.x, dy = p.y - z.y, d = Math.hypot(dx, dy) || 1, sg = Math.sign(z.arc), arc = Math.abs(z.arc), tx = -dy / d, ty = dx / d;
+      if (d > 700) continue;
+      const u = (((Math.atan2(dy, dx) - z.a) * sg) % U.TAU + U.TAU) % U.TAU; // the hero's angle ahead of the beam along its turn
+      if (z.t < z.warm) { if (u < arc) { const s = u < arc / 2 ? -sg : sg; ox += tx * s; oy += ty * s; } }
+      else if (u < 0.5) { ox -= tx * sg; oy -= ty * sg; }
+      continue;
+    }
     if (z.kind === 'teleCone') {
       const dx = p.x - z.x, dy = p.y - z.y, d = Math.hypot(dx, dy) || 1;
       if (d < z.r + p.r + 10 && Math.abs(U.angDiff(z.a, Math.atan2(dy, dx))) < z.arc / 2 + 0.25) { ox += dx / d; oy += dy / d; }
-    } else if (z.kind === 'teleLine') {
-      const ca = Math.cos(z.a), sa = Math.sin(z.a), rx = p.x - z.x, ry = p.y - z.y, along = rx * ca + ry * sa, side = -rx * sa + ry * ca;
-      if (along > -p.r && along < z.len + p.r && Math.abs(side) < z.w / 2 + p.r + 8) { const sg = side >= 0 ? 1 : -1; ox += -sa * sg; oy += ca * sg; }
+    } else if (z.kind === 'teleLine' || z.kind === 'gsaw') {
+      const o = z.kind === 'gsaw' ? ED.Champions.gsawAt(z) : z, len = z.kind === 'gsaw' ? z.len * (1 - Math.min(1, z.t / z.dur)) : z.len;
+      const ca = Math.cos(z.a), sa = Math.sin(z.a), rx = p.x - o.x, ry = p.y - o.y, along = rx * ca + ry * sa, side = -rx * sa + ry * ca;
+      if (along > -p.r && along < len + p.r && Math.abs(side) < z.w / 2 + p.r + 8) { const sg = side >= 0 ? 1 : -1; ox += -sa * sg; oy += ca * sg; }
     }
   }
   return ox || oy ? [ox, oy] : null;
@@ -886,7 +910,7 @@ const entryOf = (w, p) => ({ level: w.level, boons: Object.values(p.boons).reduc
 // Each floor is its real Dungeon.generate floor. The rooms are the bot's exploration route (nextRoom with the --dark policy), entered with World.enterRoom;
 // every foe dies the tick it exists, so the room's own wave timers, kill drops (xp, gold, hearts), clear reward and boss reward run as in play. Between rooms the bot claims every prop wantedProp names and picks every offer with its
 // pick policy; the portal starts the next floor. Heroes are untouchable, hero 0 collects every pickup. Returns { t0 (game time at the end), from, keyAt, duoAt, evoAt (hero 0, first stratum), bad (reason the walk stopped early, or null) }.
-// fight (--fight): 'boss' also walks stratum `from` the same way and enters its boss room; 'twins' / 'mimic' enter a combat room of stratum `from` (marked cleared, so no waves) and start that champion fight there.
+// fight (--fight): 'boss' also walks stratum `from` the same way and enters its boss room; 'twins' / 'colossus' enter a combat room of stratum `from` (marked cleared, so no waves) and start that champion fight there.
 // Both heal the party to full first; out.fight names the fight started.
 function skipStrata(w, from, ctx, policy, brng, darkPolicy, fight) {
   const dt = 1 / 60, heroes = [...w.players.values()], lead = heroes[0], out = { t0: 0, from, keyAt: null, duoAt: null, evoAt: null, bad: null };
@@ -953,7 +977,7 @@ function skipStrata(w, from, ctx, policy, brng, darkPolicy, fight) {
   if (fight && !out.bad) for (const p of heroes) { p.hp = p.maxHp; p.downed = false; p.dead = false; }
   out.t0 = w.time;
   if (bossHop) { w.enterRoom(bossHop[0], bossHop[1]); out.fight = 'boss'; }
-  else if ((fight === 'twins' || fight === 'mimic') && !out.bad) {
+  else if ((fight === 'twins' || fight === 'colossus') && !out.bad) {
     const room = w.floor.rooms.find(r => r.type === 'combat' && !r.dark) || w.floor.rooms.find(r => r.type === 'elite');
     const dd = room && Object.keys(room.doors).find(k => room.doors[k] >= 0);
     if (!room || !dd) out.bad = `no combat room on stratum ${from}`;
@@ -1139,7 +1163,7 @@ function runBot(opts) {
         for (const e of foes) { const d2 = U.dist2(e.x, e.y, p.x, p.y); if (e.fodder) { if (d2 < fd) { fd = d2; nf = e; } } else if (d2 < bd) { bd = d2; tgt = e; } }
         const close = p.stats.melee || p.stats.kind === 'bell', reachW = p.stats.kind === 'bell' ? ED.Bell.orbit(p.stats.weapon) + p.stats.weapon.br + 20 : p.stats.weapon.range; // a bell fights at its orbit, like a melee weapon
         if (nf && (!tgt || Math.sqrt(bd) - (close ? tgt.r : 0) >= (close ? reachW : 380))) { tgt = nf; bd = fd; }
-        const piece = w.boss ? arenaTarget(w, foes, p) : null; // boss fights: spore buds and pods before the boss
+        const piece = w.boss ? arenaTarget(w, foes, p) : colossusTarget(w, foes, p); // boss fights: spore buds and pods before the boss; the Colossus: a standing part, then the open core
         if (piece) { tgt = piece; bd = U.dist2(piece.x, piece.y, p.x, p.y); }
         const d = Math.sqrt(bd);
         const bell = p.stats.kind === 'bell', ideal = bell ? BELL_STAND + tgt.r : p.stats.melee ? (p.stats.weapon.range * 0.6 + tgt.r) : (p.stats.deadeye ? 230 : 170); // Deadeye keeps its distance; a Bellwarden circles at hurl range
@@ -1150,6 +1174,7 @@ function runBot(opts) {
         else dir = [-(tgt.y - p.y), tgt.x - p.x];
         const ag = arenaBot(w, p, c, skill, brng); // boss arena mechanics: where to stand, a lantern to hit
         if (ag && ag.goal) { const gd = Math.hypot(ag.goal.x - p.x, ag.goal.y - p.y); dir = gd > 8 ? bfsDir(w.room, w.locked, p.x, p.y, ag.goal.x, ag.goal.y) : [0, 0]; }
+        else if (piece && piece.def.colo) { const cg = colossusStand(w, p, piece, ideal), gd = Math.hypot(cg.x - p.x, cg.y - p.y); if (gd > 12) dir = bfsDir(w.room, w.locked, p.x, p.y, cg.x, cg.y); } // the Colossus: from the part's outer side
         // dodge projectiles
         let danger = false;
         if (!vetD) { // --vet dodge: the look-ahead plan below replaces these
@@ -1280,6 +1305,7 @@ function runBot(opts) {
     if (opts.maxStratum && w.stratum > opts.maxStratum) break; // --strata=N: stop on entering stratum N+1 (strata 1..N play out exactly as in a full run)
     if (fightRec && fightRec.kill) break; // --fight: the run ends with the fight
     if (fightRec && w.boss) fightRec.ph = w.boss.phase;
+    if (fightRec && w.enc && w.enc.col) fightRec.ph = w.enc.col.nb + 1; // the Colossus: 1 + parts broken
   }
   strata.push(Math.round(w.time - stratumStart));
   rec.dealtStrata.push(Math.round(totalDealt() - dealt0));

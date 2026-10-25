@@ -3,7 +3,7 @@
 ## v6 contracts (user 2026-10-25, playtest 5; supersede v4 contracts where they clash)
 - **Branches**: integration `feat/v6` (from `feat/punish` 8b36a1b), worktree `../game-v6`; workers on `feat/v6-<area>` (map, elements2, pyro, encounters, bosses-a, bosses-b, text, balance; `docs/v6-readme`), merged by the Advisor.
 - **Strata** 4, neutral: I Ossuary, II Glowmire, III Drowned Sanctum, IV Starless Abyss (finale). No weak/resist, no `elemAff`. Per-stratum arrays have 4 entries.
-- **Map**: STS layered DAG; I–III 15 rows, IV 6 rows (combat, combat|event, champion twins, rest|shop, champion mimic, rest); one entry door, one exit per edge, no backtracking. Node types start/combat/dark/elite/champion/shop/rest/treasure/event/boss. `W.startChampion(room)`.
+- **Map**: STS layered DAG; I–III 15 rows, IV 6 rows (combat, combat|event, champion twins, rest|shop, champion colossus, rest); one entry door, one exit per edge, no backtracking. Node types start/combat/dark/elite/champion/shop/rest/treasure/event/boss. `W.startChampion(room)`.
 - **Elements**: one verb each (Fire Burn + hold flame cone · Ice freeze, skills Shatter · Lightning dash discharges · Poison weaken + clouds · Holy perfect dodge · Shadow backstab/decoy · General finisher). Keystone and evolution change a control. Ascended, duos, Mutations, Twists, Attunement and 12 open stat cards cut. Fork rank 2 boss II, rank 3 boss III; fork parity measured at III rank 2 / IV rank 3 (supersedes the v4 IV/VI bands).
 - **Burn**: one unified Burn, stacks, same per-hero value from every source; API `W.addBurn(e, amount, p)` (damage-based).
 - **Pyro**: Ember Bolt (cuts spell cooldowns), Fireball slot 2 (`skill3`, RMB/R; heroes without slot 2 cast skill 1), Nova Q, Meteor E; ~70% damage from spells.

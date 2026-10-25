@@ -22,7 +22,7 @@
   const pendingFoes = (w) => { let n = 0; for (const z of w.zones) if (z.kind === 'spawn' && !z.dead) n += z.n || 1; return n; };
 
   // ---------------- encounters ----------------
-  // A champion room (stratum IV, room.champ 'twins' | 'mimic') runs W.startChampion (champions.js); its xp budget roomXp(room, 'champion') is paid as the clear pile.
+  // A champion room (stratum IV, room.champ 'twins' | 'colossus') runs W.startChampion (champions.js); its xp budget roomXp(room, 'champion') is paid as the clear pile.
   W.beginEncounter = function (room, rs) {
     if (room.type === 'champion') {
       this.startChampion(room);
@@ -257,7 +257,7 @@
     const s = this.stratum;
     this.run.roomsCleared++;
     if (room.dark) this.run.darkCleared++;
-    if (room.type === 'champion') this.run.champs = (this.run.champs | 0) | (room.champ === 'mimic' ? 2 : 1); // bit 0 twins, bit 1 mimic (deeds)
+    if (room.type === 'champion') this.run.champs = (this.run.champs | 0) | (room.champ === 'colossus' ? 2 : 1); // bit 0 twins, bit 1 Colossus (deeds)
     if (room.bell) this.bellClear();
     this.run.embers.rooms += 1 + Math.round(s / 2);
     const c = this.alivePlayers()[0] || D.center(room);

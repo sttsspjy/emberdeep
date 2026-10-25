@@ -36,8 +36,8 @@
 //   verbs: one screenshot per path verb staged in the largest combat room (still foes in front of the hero, input through ED.Input like a player): the flame cone, Burn stacks, a death burst on Scorched Earth,
 //     the ice lance charging and flying, a Shatter, a threshold discharge, the storm call, the finisher charging and striking;
 //     fails on a page error or a verb whose zone, event or state did not appear.
-//   arenas: 18 screenshots staged through the sim (BR.arena, heroes unhurt): the Drowned King (phase 1, tide warning, tide, beam warm-up and sweep, phases 2 and 3), the Hollow King (phase 1, duel, dark phase 2, a lit lantern,
-//     phase 3, a ring warning, fallen rings) and the champion rooms (twins, a twin combo, mimic, mimic split); fails on a page error or a step without its fight.
+//   arenas: 19 screenshots staged through the sim (BR.arena, heroes unhurt): the Drowned King (phase 1, tide warning, tide, beam warm-up and sweep, phases 2 and 3), the Hollow King (phase 1, duel, dark phase 2, a lit lantern,
+//     phase 3, a ring warning, fallen rings) and the champion rooms (twins, a twin combo, the Clockwork Colossus intact, with its cannon broken, with its core open); fails on a page error or a step without its fight.
 //   portal: portal descents sampled every HUD frame (FX.fade, #hud alpha, viewed stratum): solo at each --quality (high,low), a solo pass with the sim delay held 1.5 s (a shot mid-hold), and a client of an in-page host World;
 //     fails unless the screen is black within 0.25 s of 'descend' and stays black until the new stratum has drawn, then fades in monotonically over 0.25-0.9 s.
 //   hits: combat cues rendered in an OfflineAudioContext through the per-frame aggregation (each weapon material, x6, crit, heavy, element tail, Low quality; every element's DoT at 1 and 20 foes, the Burn bed,
@@ -412,8 +412,8 @@ function pageBoot(cfg) {
   BR.offerOpen = () => { const s = window.__ED.Game.s; return !!(s && s.offerOpen); };
   BR.take = () => { const ED = window.__ED; if (ED.Game.s && ED.Game.s.offerOpen) ED.UI.boonConfirm(); return BR.offerOpen(); };
 
-  // arenas scenario: one staging step per screenshot. 'king' / 'hollow' enter that boss's room (its stratum) and wait for the boss; 'twins' / 'mimic' start that champion fight in a combat room;
-  // the other steps force a mechanic on the running fight (tide warning, beam, phases, a lit lantern, a ring warning, a mimic split). Heroes stay unhurt, the boss unkillable.
+  // arenas scenario: one staging step per screenshot. 'king' / 'hollow' enter that boss's room (its stratum) and wait for the boss; 'twins' / 'colossus' start that champion fight in a combat room;
+  // the other steps force a mechanic on the running fight (tide warning, beam, phases, a lit lantern, a ring warning, a Colossus part broken, its core opened). Heroes stay unhurt, the boss unkillable.
   let god = 0;
   setInterval(() => { const s = god && window.__ED.Game.s; if (s && s.world) for (const p of s.world.players.values()) { p.hp = p.maxHp; p.invuln = 1; p.downed = false; } }, 50);
   BR.arena = (step) => {
@@ -432,13 +432,20 @@ function pageBoot(cfg) {
     const force = (k) => { b.st = 'atk'; b.atk = k; b.t = 0; b.vars = { wm: 1 }; b.pose = 'idle'; ED.Bosses[b.type].attacks[k].start(w, b); };
     const toPhase = (f) => { b.hp = b.maxHp * f; };
     if (step === 'king' || step === 'hollow') return enter(step === 'king' ? 'drownedking' : 'hollowking');
-    if (step === 'twins' || step === 'mimic') {
+    if (step === 'twins' || step === 'colossus') {
       if (w.stratum !== 4) w.enterStratum(4);
       const room = w.floor.rooms.find(r => r.type === 'combat' && !r.dark);
       w.roomState[room.id].cleared = true; room.champ = step; w.enterRoom(room.id, null); w.startChampion(room);
       return room.id;
     }
-    if (!b && step !== 'split') return 'no boss';
+    const col = w.enc && w.enc.col;
+    if (step === 'colbreak' || step === 'colopen') { // break the cannon (and the saw: the core opens); the hero watches from below the machine
+      if (!col) return false;
+      for (const k of step === 'colbreak' ? ['cannon'] : ['cannon', 'saw']) if (col.parts[k].hp > 0) w.killEnemy(col.parts[k], null, {});
+      me.x = col.x - 40; me.y = col.y + 110; col.core.hp = col.core.maxHp = 1e7;
+      return step;
+    }
+    if (!b) return 'no boss';
     if (b && !b.staged) { b.staged = true; b.hp = b.maxHp = 1e7; }
     if (step === 'fight') { me.x = b.x + 160; me.y = b.y + 40; return b.type; }
     if (step === 'tide') { ar.next = 0; return 'tide'; }
@@ -448,7 +455,6 @@ function pageBoot(cfg) {
     if (step === 'lantern') { const L = w.room.lanterns[1]; me.x = L.x - 30; me.y = L.y + 20; w.smashCircle(me, L.x, L.y, 8); return ar.lit.join(); }
     if (step === 'ring') { ar.p3 = ED.Arena.crown.CRUMBLE.at[0] - ED.Arena.crown.CRUMBLE.warn + 0.1; return 'ring'; }
     if (step === 'fall') { ar.p3 = ED.Arena.crown.CRUMBLE.at[1] - 0.05; return 'fall'; }
-    if (step === 'split') { const m = w.enemies.find(e => e.type === 'mimic'); if (m) m.hp = m.maxHp * 0.45; return !!m; }
     if (step === 'off') { god = 0; return 0; }
     throw new Error('unknown arena step ' + step);
   };
@@ -1292,7 +1298,7 @@ async function scenArenas() {
   const o = S.opt, res = newResult('arenas'), q = qualitiesOr(['high'])[0];
   const PLAN = [['king', 6500, 'king-p1'], ['tide', 900, 'king-tide-warn'], ['', 3000, 'king-tide'], ['beam', 900, 'king-beam-warm'], ['', 1100, 'king-beam'], ['p2', 1500, 'king-p2'], ['p3', 2500, 'king-p3'],
     ['hollow', 6500, 'hollow-p1'], ['fight', 700, 'hollow-duel'], ['p2', 2500, 'hollow-p2-dark'], ['lantern', 700, 'hollow-p2-lantern'], ['p3', 1500, 'hollow-p3'], ['ring', 1200, 'hollow-p3-ring'], ['fall', 900, 'hollow-p3-fallen'],
-    ['twins', 3500, 'twins'], ['', 2500, 'twins-combo'], ['mimic', 3500, 'mimic'], ['split', 900, 'mimic-split']];
+    ['twins', 3500, 'twins'], ['', 2500, 'twins-combo'], ['colossus', 4200, 'colossus'], ['colbreak', 2600, 'colossus-broken'], ['colopen', 2600, 'colossus-open']];
   const { ctx, page, errors } = await openPage();
   try {
     await call(page, 'profile', o.cls, o.embers);

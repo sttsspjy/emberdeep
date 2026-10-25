@@ -120,7 +120,12 @@
     // HP x the elite factor of the stratum (World.ELITE); no affix, no drops of their own: the room pays an elite room's reward.
     twinlance: { name: 'Lancer', ai: 'champion', look: 'knight', art: 'voidknight', col: { a: '#d8c27a', b: '#4a3c1c', c: '#ffe08a' }, hp: 380, spd: 64, dmg: 8, r: 15, xp: 0, cost: 0, champ: 'twins' },
     twinhammer: { name: 'Hammer', ai: 'champion', look: 'knight', art: 'forgeknight', col: { a: '#9a6a44', b: '#2a1810', c: '#ff8a3a' }, hp: 380, spd: 54, dmg: 8.8, r: 17, xp: 0, cost: 0, champ: 'twins' },
-    mimic: { name: 'Mimic', ai: 'champion', look: 'shade', art: 'shade', col: { a: '#2c2440', b: '#100c1c', c: '#e8e0ff' }, hp: 900, spd: 70, dmg: 7, r: 13, xp: 0, cost: 0, champ: 'mimic' },
+    // Clockwork Colossus: the Gear Core (the machine's anchor) and three parts, each a foe with its own HP at a fixed offset (Champions.COL.OFF); colo names the piece. Drawn as one neon vector machine (client arena.js), never as sprites.
+    // Parts: minion (out of the sheet's reference roster), noLoot (no drops, never exposed).
+    colossus: { name: 'Clockwork Colossus', ai: 'champion', look: 'golem', col: { a: '#1d3a5a', b: '#0a0d1a', c: '#38f0ff' }, hp: 1050, spd: 0, dmg: 7, r: 24, xp: 0, cost: 0, champ: 'colossus', colo: 'core' },
+    colcannon: { name: 'Cannon Arm', ai: 'champion', look: 'golem', col: { a: '#5a1d4a', b: '#0a0d1a', c: '#ff3fd2' }, hp: 460, spd: 0, dmg: 7, r: 18, xp: 0, cost: 0, champ: 'colossus', colo: 'cannon', minion: true, noLoot: true },
+    colsaw: { name: 'Saw Arm', ai: 'champion', look: 'golem', col: { a: '#5a3a10', b: '#0a0d1a', c: '#ffb02e' }, hp: 460, spd: 0, dmg: 7, r: 18, xp: 0, cost: 0, champ: 'colossus', colo: 'saw', minion: true, noLoot: true },
+    coleye: { name: 'Lantern Eye', ai: 'champion', look: 'golem', col: { a: '#10485a', b: '#0a0d1a', c: '#38f0ff' }, hp: 390, spd: 0, dmg: 7, r: 15, xp: 0, cost: 0, champ: 'colossus', colo: 'eye', minion: true, noLoot: true },
   };
 
   ED.ENEMY_IDS = Object.keys(E);
@@ -139,6 +144,6 @@
 
   // Projectile kinds share one table for both teams so the renderer knows how to draw them.
   ED.PROJ_KINDS = ['bone', 'spore', 'ice', 'fire', 'water', 'void', 'arrow', 'bolt', 'firebolt', 'spark', 'fireball', 'knife', 'holy', 'soul', 'plague', 'wave', 'wisp', 'shard', 'blade', 'orb', 'trident', 'skull',
-    'hammer', 'crescent', 'iceshard', 'bloodscythe', 'spectral', 'web', 'droneshot', 'thorn', 'shield', 'boomerang']; // append only: indices are the wire format
+    'hammer', 'crescent', 'iceshard', 'bloodscythe', 'spectral', 'web', 'droneshot', 'thorn', 'shield', 'boomerang', 'cbolt', 'cspark']; // append only: indices are the wire format
   ED.PROJ_IDX = ED.U.indexer(ED.PROJ_KINDS);
 })(globalThis.ED || (globalThis.ED = {}));
