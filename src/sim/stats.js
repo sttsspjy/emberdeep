@@ -10,10 +10,10 @@
   Object.assign(ED.CONST, { ATK_FLOOR: 0.12, ATK_FLOOR_SHOT: 0.06, FLOW_SPD: 0.15, FLOW_T: 0.5, ROUTE_CDR_MAX: 0.4 });
 
   // Stat keys of the class routes (docs/GAME-DESIGN.md section 5): slot stats first, then one group per class, all 0 until a card sets them.
-  const ROUTE_KEYS = ('s1Dmg s1Area s1Dur s1N s1Cdr s1Range s2Dmg s2Area s2Dur s2N s2Cdr s2Range wDmg bleedAll'
+  const ROUTE_KEYS = ('s1Dmg s1Area s1Dur s1N s1Cdr s1Range s2Dmg s2Area s2Dur s2N s2Cdr s2Range s3Dmg s3Area s3Dur s3N s3Cdr s3Range s3Ch wDmg bleedAll'
     + ' cleave cleaveN cShock cStun chargeCleave parry riposte brace braceDR braceAura jugShock bash rally chargeStun twinShield gather orbit orbitMul orbitStun orbitReflect ruinInf carry ruinSpread brand seal'
     + ' deadeye pierceRamp splitBolt hitSlow flurry flurryMul volleySlow volleyClose volleyHop caltrops volleyMark markV markLeap skyfall skyTwin rainHail shower skillInfK festerHit contagion contagionR contagionN'
-    + ' channel chanStep chanCap aftershock lavaPool overheat novaEcho novaPull novaRing mantle mantleBurst twinMeteor meteorites comet cometStun wInfFire searSkill burnCrit heatEngine heatChain'
+    + ' emberMul spark sparkMax flashfire pyreBolt afterburn afterN chainCast stormT novaEcho novaPull novaRing mantle mantleBurst twinMeteor meteorites comet cometStun wInfFire searSkill flashT heatEngine heatChain'
     + ' momentum momMax execCrit execMom bladeStorm stepStack stackMax assassinate stepTwin afterimage afterPull smokeVuln stealthSpd stealthDur ambushMul nightsEdge ambushCleave veil veilBlind shroud veins exsang rupture bloodbloom'
     + ' supernova supernovaPull phoenixMul phoenixDur dashTrail cataclysm sunDive diveTrail blossom blossomN blossomMax mirrorHall eclipse eclipseDur umbral cloneMul'
     + ' waveEvery waveMul waveBig waveStun waveBurst waveHome litany sanctDR sanctStun sanctJudge aura auraDmg judgeDur judgeWeak twinHammer thirdLeg secondFlight verdict verdictJudge wInfHoly smiteBig guardLight smiteJudge smiteBeam beamJumps'
@@ -24,7 +24,7 @@
     + ' fissure bladeWave doombrand brandMark brandCap bloodquake bloodquakeMul bloodquakeSplash'
     + ' siege siegeMul siegeBlast ricochet flurryN hemo hemoAt hemoMul hemoBoss plague plagueBurst outbreak'
     + ' wake waveReturn sunstrike prismN prismRad'
-    + ' caldera fireDance dancerBurst whiteHot whiteT heatMax infernoMul'
+    + ' whiteHot whiteT heatMax infernoMul'
     + ' graveBolt graveN soulStorm maw mawHaste tideFree tideCap tideDoom'
     + ' guillotine cyclone arterial arterialN cascade cascadeN'
     + ' fullSwing fullR wreck wreckStun hurlCarry demolish haulAcc slipstream perpetual windCap leapR wrecker smashStun wreckSpin spinDur hookShield leapIfr hookPull shackle shackleWeak'
@@ -131,18 +131,18 @@
     const cls = ED.CLASSES[build.cls];
     const base = ED.WEAPONS[build.weapon];
     const s = BASE();
-    let m1 = 1, m2 = 1, fork = null; // slot damage compounds card by card (each card's text is its exact factor)
+    let m1 = 1, m2 = 1, m3 = 1, fork = null; // slot damage compounds card by card (each card's text is its exact factor)
     const extras = [], asc = [];
     for (const r of St.sources(build)) {
       if (!r.card) { for (const k in r.mods) s[k] = (s[k] || 0) + r.mods[k] * r.n; if (r.x) asc.push(r.x); continue; }
       const tot = r.mods;
       for (const k in tot) {
-        if (k === 's1Dmg') m1 *= 1 + tot[k]; else if (k === 's2Dmg') m2 *= 1 + tot[k]; else s[k] = (s[k] || 0) + tot[k];
+        if (k === 's1Dmg') m1 *= 1 + tot[k]; else if (k === 's2Dmg') m2 *= 1 + tot[k]; else if (k === 's3Dmg') m3 *= 1 + tot[k]; else s[k] = (s[k] || 0) + tot[k];
       }
       const b = ED.BOONS[r.id];
       if (b.weapon) { if (b.weapon.kind && !fork) fork = r.id; if (b.weapon.extra) extras.push(b.weapon.extra); }
     }
-    s.s1Dmg = m1 - 1; s.s2Dmg = m2 - 1;
+    s.s1Dmg = m1 - 1; s.s2Dmg = m2 - 1; s.s3Dmg = m3 - 1;
     for (const x of asc) for (const k in x) s[k] = (s[k] || 0) * (1 + x[k]); // Ascended bucket: after every additive source, before the derived values
     for (const x of asc) if (x.dmg) s.dmgX *= 1 + x.dmg; // dmgX: the Ascended damage factor; combat.js scales the conditional (additive) damage by it so a hit stays exactly dmgX x the same hit without the card
 
@@ -156,6 +156,7 @@
     if (w.cloud) w.cloud = Object.assign({}, w.cloud);
     for (let i = 0; i < extras.length; i++) applyExtra(w, extras[i]);
     const C = ED.CONST, shots = w.kind === 'proj' ? (w.n || 1) + s.projN : 1, floor = Math.max(C.ATK_FLOOR, C.ATK_FLOOR_SHOT * shots);
+    if (s.pyreBolt > 0 && w.kind === 'proj') w.explode = w.explode ? Object.assign({}, w.explode, { mul: w.explode.mul + s.pyreBolt }) : { r: C.PYRE_R, mul: s.pyreBolt }; // Pyre Bolt (Kindling rank 3): a shot without a blast gains one, a blast gains pyreBolt of the hit
     const raw = w.rate / Math.max(0.3, s.atk), over = Math.max(1, floor / raw);
     w.dmg = w.dmg * (1 + s.wDmg) * over;
     if (w.cloud) w.cloud.dps = w.cloud.dps * (1 + s.wDmg) * over;
@@ -166,6 +167,8 @@
     const cdr = St.cdrEff(s.cdr), rc = (n) => 1 - Math.min(C.ROUTE_CDR_MAX, s['s' + n + 'Cdr']);
     out.skillCd = ED.SKILLS[cls.skill].cd * (1 - cdr) * rc(1);
     out.skill2Cd = cls.skill2 && ED.SKILLS[cls.skill2] ? ED.SKILLS[cls.skill2].cd * (1 - cdr) * rc(2) : 0;
+    const k3 = cls.skill3 && ED.SKILLS[cls.skill3]; // skill 3: recharge seconds per charge and its charges (0 for a class without one)
+    out.skill3Cd = k3 ? k3.cd * (1 - cdr) * rc(3) : 0; out.skill3Charges = k3 ? (k3.charges || 1) + s.s3Ch : 0;
     out.dashCd = Math.max(1, 1.5 * (1 - s.dashcdr)); out.dashCharges = Math.min(3, 1 + s.dashN); // recharge seconds per charge (base 1.5, floor 1.0), max charges (base 1, cap 3)
     out.pickupR = 46 * (1 + s.pickup);
     out.critMult = 1.75 + s.critDmg;

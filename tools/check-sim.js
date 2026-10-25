@@ -125,7 +125,7 @@ for (const s of [1, 2]) {
     const want = cls === 'bell' ? (hv ? [1.2, 1.32] : [0.6, 0.66]) : hv ? [1.8, 1.98] : [0.55, 0.605];
     ok(nom && +nom[1] === want[0] && +nom[2] === want[1], `${id} without a hero shows the nominal factors`);
   }
-  ok(/×1\.3 attack time, ×1\.43 damage per hit/.test(ED.cardParts('p_atk_h', 1, { weaponId: 'inferno' }).text), 'Tome of Ruin shows the capped heavy factors');
+  ok(/×1\.733 attack time, ×1\.907 damage per hit/.test(ED.cardParts('p_atk_h', 1, { weaponId: 'inferno' }).text), 'Tome of Ruin shows the capped heavy factors');
   ok(/×0\.8 attack time, ×0\.88 damage per hit/.test(ED.cardParts('p_atk_s', 1, { weaponId: 'emberwand' }).text), 'Flicker Wand shows the floored swift factors');
   ok(/×0\.8 attack time/.test(ED.cardParts('p_atk_s', 1, { weaponId: 'emberwand@swift' }).text), 'a forked weaponId reads its base');
   const de = (st) => ED.Sheet.text('deathsedge', 1, st);

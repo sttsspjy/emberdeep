@@ -951,7 +951,7 @@
           break;
         }
         case 'fire': case 'pfire': {
-          if (z.w === 9 && ED.ClassFx.lava) { ED.ClassFx.lava(c, z, pass, t); break; } // a Lava Pool (Magma Heart) and the Cataclysm field draw their own molten ground
+          if (z.w === 9 && ED.ClassFx.lava) { ED.ClassFx.lava(c, z, pass, t); break; } // the Cataclysm field draws its own molten ground
           if (z.w === 10 && ED.ClassFx.zone.phoenix) { ED.ClassFx.zone.phoenix(c, z, pass, t); break; } // the Phoenix Form ring that follows its hero (cls-pyro.js)
           const fade = Math.min(1, (z.dur - z.t) * 2, z.t * 5), pf = z.kind === 'pfire';
           if (pass === 0) {

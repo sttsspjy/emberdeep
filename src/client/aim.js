@@ -133,12 +133,32 @@
     c.setLineDash([]); c.globalAlpha = 1;
   }
 
-  // Landing preview of each ready ground skill (and the Shadowstep diamond). The area equals the real one (ED.skillRadius).
+  // Fireball: a faint line along the aim from the shot's spawn point to where it bursts (the first foe it would touch, a wall or its range) and the burst ring there.
+  function shotLine(c, view, me, a, g, uw, S) {
+    const ca = Math.cos(a.a), sa = Math.sin(a.a), x0 = me.x + ca * 10, y0 = me.y - 4 + sa * 10, rr = ED.CONST.FB_R || 7;
+    const end = Sim.castMove(view.room, x0, y0 + 4, a.a, g.range, 2, view.locked);
+    let len = Math.hypot(end.x - x0, end.y - 4 - y0);
+    for (const e of view.enemies) {
+      if (e.hp <= 0 || e.burrowed || e.spawnT > 0) continue;
+      const t = (e.x - x0) * ca + (e.y - y0) * sa;
+      if (t <= 0 || t >= len) continue;
+      const px = x0 + ca * t - e.x, py = y0 + sa * t - e.y, rs = e.r + rr;
+      if (px * px + py * py <= rs * rs) len = Math.max(0, t - Math.sqrt(Math.max(0, rs * rs - px * px - py * py)));
+    }
+    const ex = Math.round((x0 + ca * len) * S) / S, ey = Math.round((y0 + sa * len) * S) / S;
+    c.setLineDash([0.3 * uw, 0.35 * uw]); c.globalAlpha = 0.3; c.lineWidth = lineW(0.08 * uw); c.strokeStyle = '#ff8a3d';
+    c.beginPath(); c.moveTo(Math.round(x0 * S) / S, Math.round(y0 * S) / S); c.lineTo(ex, ey); c.stroke(); c.setLineDash([]); c.globalAlpha = 1;
+    dashed(c, ex, ey, g.r, [0.3 * uw, 0.25 * uw], lineW(0.08 * uw), '#ffb56b', 0.4);
+  }
+
+  const SLOT_KEY = ['skill1', 'skill2', 'skill3'];
+  // Landing preview of each ready ground skill (and the Shadowstep diamond, the Fireball line). The area equals the real one (ED.skillRadius).
   function preview(c, view, me, a, uw, S) {
     let grounds = 0;
-    for (let i = 0; i < a.ground.length; i++) if (!a.ground[i].move) grounds++;
+    for (let i = 0; i < a.ground.length; i++) if (!a.ground[i].move && !a.ground[i].line) grounds++;
     for (let i = 0; i < a.ground.length; i++) {
       const g = a.ground[i];
+      if (g.line) { shotLine(c, view, me, a, g, uw, S); continue; }
       if (g.move) {
         const l = A.stepLand(view, me, a), x = Math.round(l.x * S) / S, y = Math.round(l.y * S) / S, d = 0.4 * uw;
         c.globalAlpha = 0.4; c.lineWidth = lineW(0.1 * uw); c.strokeStyle = '#ffb56b'; c.fillStyle = 'rgba(255,181,107,0.25)';
@@ -161,7 +181,7 @@
         }
       }
       if (grounds > 1) // several ground skills ready: label each landing with its key in the HUD's pixel font (1 buffer px per font px, outlined)
-        ED.HUD.pixText(c, ED.Input.label(g.slot ? 'skill2' : 'skill1'), lx + g.r + 4, ly, 1, '#ffd9a8', 'b', 'left', 700, 1);
+        ED.HUD.pixText(c, ED.Input.label(SLOT_KEY[g.slot] || 'skill1'), lx + g.r + 4, ly, 1, '#ffd9a8', 'b', 'left', 700, 1);
     }
   }
 

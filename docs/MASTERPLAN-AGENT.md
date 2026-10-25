@@ -11,7 +11,7 @@
 - **Text**: plain wording, no flavour lines or titles.
 - **Main merged** (playstyle + Bellwarden, `main` 3da391b): the v6 map replaces the route lattice; kept: door consent (`P[26]` = `Dungeon.doorWant`: 1 + exit index), threat pips, `ED.Icons` glyphs, heal trim, Twists, Mutations, Bellwarden, secrets, Wardrobe. Drowned Bell in the dark rooms of stratum III. Element triggers, Mutations, Ascended and duos stay as main built them until the elements rework.
 - **Arenas**: one state `room.arena = {k}` in `src/sim/arena.js` (kinds field 4: Bone Warden walls + Sporemother carpet · tide 1 Drowned King · crown 2 Hollow King · champ 3 champions), one snapshot row `AR`, cleared on room change; client `src/client/arena.js`; one `Bosses.lib`. Fury only on IV.
-- **Versions**: `N.VERSION` 14, `CODE_VERSION` 8.
+- **Versions**: `N.VERSION` 14, `CODE_VERSION` 8. Hero row: `P[24]` bells, `P[26]` door want, `P[27]` Pyro Sparks.
 
 ## v4 contracts (all advisors; change only by agreement)
 - **Branches**: integration `feat/v4` (game-f1 merges). Each advisor works in its own worktree `../game-<area>` on `feat/v4-<area>` cut from `feat/v4`, merges into it (merge only). Branches that touch `combat.js` are cut after the spatial grid is merged.

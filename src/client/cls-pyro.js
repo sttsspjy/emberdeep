@@ -1,9 +1,9 @@
 // pyro route-card visuals, client only: registers ED.ClassFx hooks (event, zone, hero and foe-mark hooks; contract in fx.js).
-// Events of src/sim/class-pyro.js: pyAfter (aftershock queued), pyLava (a Lava Pool begins), pyEcho (Nova echo queued / erupting), pyPull (Collapse), pyMantle (Mantle shield), pyRebirth (Rebirth Flare),
-// pyTwin (second Meteor queued), pyComet (Comet leap), pyFlash (Flashpoint crit), pyHeat (cooldown cut / Chain Reaction). Hero state shown from the hero hook: Channel heat, the echo ring, the Comet flight, the Mantle overlay.
-// Skill forms: pyWave (Supernova front; sparks ride it from the hero hook), pyPull with sn (its collapse), pyPhoenix and the Phoenix ring zone (pfire tag 10: orbiting flames), pyStorm and pyField (Cataclysm cast and lava field, the big look of CF.lava),
+// Events of src/sim/class-pyro.js: pyEcho (Nova echo queued / erupting), pyPull (Collapse), pyMantle (Mantle shield), pyRebirth (Rebirth Flare), pyTwin (second Meteor queued), pyComet (Comet leap),
+// pyFlash (Flashpoint crit), pyHeat (cooldown cut / Chain Reaction), the Fireball cast ('skill' k fireball: a hand flash). Hero state shown from the hero hook: the Kindling Sparks, the echo ring, the Comet flight, the Mantle overlay.
+// Skill forms: pyWave (Supernova front; sparks ride it from the hero hook), pyPull with sn (its collapse), pyPhoenix and the Phoenix ring zone (pfire tag 10: orbiting flames), pyStorm and pyField (Cataclysm cast and lava field, the look of CF.lava),
 // pyComet with sd and pyDive (Sun Dive: a golden flight with rays, a golden landing).
-// Route forms: pyGeyser (Caldera: the geyser column and the widened Lava Pool), pyRing (Fire Dancer: the ring of flame where a dash began; the Channel crown trails sparks while the hero moves),
+// Attack route: pySpark (the Sparks a spell spent), pyFlare (Flashfire: a Fireball charge back), pyChain (Chain Cast); a Pyre Bolt is a weapon blast (the plain fire boom).
 // White Flame (white sparks rise from foes the hero's Burn has held for whiteT seconds, estimated from the foe's burning flag, plus a white flame glyph in their mark row),
 // pyEng (Inferno Engine: n / mx the Heat count, shown as embers circling the hero; go 1 an Inferno cast: a Nova blast at the hero, or a Meteor's heated telegraph (k 1); go 2 the Meteor landing).
 (function (ED) {
@@ -14,15 +14,14 @@
   const lowFx = () => R().quality === 'low';
 
   // Events a busy fight can send many of per snapshot are capped like the built-in ones.
-  Object.assign(N.CAPS, { pyAfter: 6, pyFlash: 6, pyLava: 4, pyPull: 2, pyEcho: 3, pyTwin: 3, pyWave: 3, pyPhoenix: 3, pyStorm: 3, pyField: 3, pyDive: 4, pyGeyser: 6, pyRing: 3, pyEng: 4 });
-  Object.assign(N.CAPS_LOCAL, { pyAfter: 3, pyFlash: 3, pyLava: 2, pyPull: 1, pyEcho: 2, pyTwin: 2, pyWave: 2, pyPhoenix: 2, pyStorm: 2, pyField: 2, pyDive: 2, pyGeyser: 3, pyRing: 2, pyEng: 2 });
+  Object.assign(N.CAPS, { pyFlash: 6, pyPull: 2, pyEcho: 3, pyTwin: 3, pyWave: 3, pyPhoenix: 3, pyStorm: 3, pyField: 3, pyDive: 4, pyEng: 4, pySpark: 4, pyFlare: 3, pyChain: 3 });
+  Object.assign(N.CAPS_LOCAL, { pyFlash: 3, pyPull: 1, pyEcho: 2, pyTwin: 2, pyWave: 2, pyPhoenix: 2, pyStorm: 2, pyField: 2, pyDive: 2, pyEng: 2, pySpark: 2, pyFlare: 2, pyChain: 2 });
 
-  // Per-hero client state: chan (Channel estimate for heroes whose sim value this viewer does not own), lastAtk (event clock), t (last frame), steps / full (Channel shown last frame), echo / comet (running timelines),
+  // Per-hero client state: t (last frame), sparks (Sparks shown last frame), echo / comet (running timelines),
   // cmUp (the hero's cometT was positive last frame), predAt (F.time a Comet arc was started from the local cast, so the host's pyComet of that cast is not played twice),
   // heat / heatMax / heatAt (Inferno Engine: the Heat count of the last pyEng and when it came; it counts as 0 once no event has refreshed it for 3.5 s).
   const hs = {};
-  const stateOf = (pid) => hs[pid] || (hs[pid] = { chan: 0, lastAtk: -9, t: 0, steps: 0, full: false, echo: null, comet: null, trail: 0, orb: 0, cmUp: false, predAt: -9, heat: 0, heatMax: 0, heatAt: -9 });
-  CF.on('atk', (ev) => { stateOf(ev.pid).lastAtk = F.time; });
+  const stateOf = (pid) => hs[pid] || (hs[pid] = { t: 0, sparks: 0, echo: null, comet: null, trail: 0, orb: 0, cmUp: false, predAt: -9, heat: 0, heatMax: 0, heatAt: -9 });
 
   const pick = (a) => a[(Math.random() * a.length) | 0];
   const wt = (ev, local, k) => (ev.pid === local ? 1 : k === undefined ? 0.45 : k); // sound weight: your own hero full, allies softer
@@ -33,7 +32,7 @@
     F.stains.push({ x, y, r, key: 'st|' + col + '|' + v + '|' + W, col, v, W, a: a || 0.5, life: life || 6, max: life || 6 });
   }
 
-  // ---------------- molten ground of a Lava Pool ----------------
+  // ---------------- molten ground of the Cataclysm field ----------------
   // 4 baked frames per radius: a dark crust over a Worley cell net, the cracks glowing red to yellow with a phase per cell; a ragged darker rim.
   function lavaSprite(rA, f) {
     const W = rA * 2, H = Math.max(4, Math.round(rA * 1.5));
@@ -55,7 +54,7 @@
       }
     });
   }
-  // Called by render.js for a pfire zone tagged as a Lava Pool: pass 0 the ground under the actors, pass 1 the same ground again additively (the cracks glow) with a halo and rising sparks.
+  // Called by render.js for a pfire zone tagged LAVA_TAG (the Cataclysm field): pass 0 the ground under the actors, pass 1 the same ground again additively (the cracks glow) with a halo and rising sparks.
   CF.lava = (c, z, pass, t) => {
     const fade = Math.min(1, (z.dur - z.t) * 2, z.t * 5), rA = Math.max(3, Math.round(z.r / 2)), f = ((t * 4) | 0) & 3, x = s2(z.x), y = s2(z.y);
     if (fade <= 0.01) return;
@@ -98,40 +97,19 @@
     if (rows >= 4) { c.fillStyle = hot ? rp[4] : rp[3]; c.fillRect(x - 1, y - 8, 2, 2); }
   }
 
-  // Channel: the hero's heat, one flame tongue per step in a crown over the head, a glow and a dashed ring at the feet that grow to the cap; a full cap blazes white; losing it snaps a burst of embers.
-  function channel(c, p, st, s, t, dt, low) {
-    if (!(st.channel > 0)) { s.steps = 0; s.full = false; return; }
-    const ch = typeof p.chanT === 'number' ? p.chanT : (s.chan = F.time - s.lastAtk < ED.chanWindow(p) ? (!p.moving ? s.chan + dt : st.fireDance > 0 ? s.chan : 0) : 0);
-    const max = Math.max(1, Math.round(st.chanCap / st.channel)), steps = Math.min(max, Math.floor(ch / Math.max(0.05, st.chanStep))), fr = steps / max, full = steps >= max;
-    const mine = R() && p.pid === R().local;
-    if (s.steps >= 2 && steps === 0) { // the heat is lost
-      F.burst(p.x, p.y - 16, 4 + 2 * s.steps, { kind: 'ember', color: '#ff9a3a', a: -1.57, spread: 3.4, sp: 70, life: 0.7, size: 2, drag: 1.3, lt: '#ff8a2a', ltr: 22 });
-      F.ring(p.x, p.y - 6, 20 + 3 * s.steps, '#ff7a2a', 0.25, 2);
-      SP('fx.puff', p.x, p.y - 18, { ramp: 'smoke', a: 0.7 });
-      if (mine && s.steps >= 3) A().play('fire', 0.25);
-    }
-    if (full && !s.full) { // the cap: a flare (Overheat: a blast of light)
-      F.ring(p.x, p.y - 8, st.overheat ? 34 : 24, '#ffc24a', 0.35, 3);
-      F.pop(p.x, p.y - 16, st.overheat ? 28 : 20, '#fff4c0', 0.22, true);
-      SP('fx.spark.magic', p.x, p.y - 14, { ramp: 'fire', add: true, a: 0.9 });
-      if (st.overheat) { SP('fx.blast.red', p.x, p.y - 12, { add: true, a: 0.8 }); F.burst(p.x, p.y - 14, 10, { kind: 'spark', color: '#ffe9a0', sp: 150, life: 0.3, size: 1.5, drag: 4 }); }
-      if (mine) A().play(st.overheat ? 'skill' : 'magic', 0.5);
-    }
-    if (mine && steps > s.steps && !full) A().play('magic', 0.08 + 0.04 * steps); // a soft tick per step, louder as the heat builds (the cap has its own flare sound)
-    s.steps = steps; s.full = full;
-    if (steps <= 0) return;
-    if (st.fireDance > 0 && p.moving && !low && Math.random() < 0.35) F.part(p.x + (Math.random() - 0.5) * 8, p.y - 2, { kind: 'ember', color: pick([FIRE[2], FIRE[3], FIRE[4]]), a: -1.57, spread: 1.2, sp: 30, life: 0.45, size: 2, drag: 1.4, lt: '#ff8a2a', ltr: 14 }); // Fire Dancer: the held heat sheds sparks as the hero moves
-    const an = R().actorAnchor(p), top = s2(an ? an.top : -26), rp = FIRE;
-    Pix.put(c, Pix.ell(8, 4, rp[2], false, 2, (t * 8) & 7), 0, 2, 0.2 + 0.55 * fr);
-    const tg = low ? Math.min(steps, 3) : steps, hot = full ? 1 : 0;
+  // Kindling: one small flame tongue per stored Spark in a crown over the head (p.sparks: the sim's count, a joined client's from the snapshot); a full store burns white-tipped with a soft glow; the store filling ticks softly.
+  function sparkCrown(c, p, st, s, t, low) {
+    if (!(st.spark > 0)) { s.sparks = 0; return; }
+    const n = Math.min(p.sparks | 0, 8), mx = Math.max(1, st.sparkMax | 0), full = n >= mx, mine = R() && p.pid === R().local;
+    if (mine && full && s.sparks < mx) A().play('magic', 0.25);
+    s.sparks = n;
+    if (n <= 0) return;
+    const an = R().actorAnchor(p), top = s2((an ? an.top : -26) - (p.lift || 0)), tg = low ? Math.min(n, 3) : n;
     for (let i = 0; i < tg; i++) {
-      const th = -Math.PI + (i + 0.5) / Math.max(tg, 1) * Math.PI, x = s2(Math.cos(th) * 11 * (0.7 + 0.3 * fr)), y = s2(top + 8 + Math.sin(th) * 6);
-      const rows = 2 + Math.floor(Pix.hash(i * 3.7 + Math.floor(t * 9)) * (full ? 3 : 2.4));
-      tongue(c, x, y, Math.min(4, rows + (fr >= 0.6 ? 1 : 0)), hot, fr >= 0.6);
+      const th = -Math.PI + (i + 0.5) / Math.max(tg, 1) * Math.PI, x = s2(Math.cos(th) * 9), y = s2(top + 6 + Math.sin(th) * 5);
+      tongue(c, x, y, 2 + (Pix.hash(i * 3.7 + Math.floor(t * 9)) > 0.5 ? 1 : 0) + (full ? 1 : 0), full, false);
     }
-    if (full) { c.fillStyle = rp[4]; for (let i = 0; i < 3; i++) { const a = t * 3 + i * TAU / 3; c.fillRect(s2(Math.cos(a) * 13), s2(top + 12 + Math.sin(a) * 6), 2, 2); } }
-    R().emit(p.x, p.y + top * 0.55, 16 + 20 * fr, '#ff7a2a', 0.2 + 0.45 * fr);
-    R().light(p.x, p.y - 14, 36 + 40 * fr, '#ff8a2a', 0.2 + 0.5 * fr);
+    if (full) R().light(p.x, p.y - 14, 40, '#ff8a2a', 0.45);
   }
 
   // Twin Nova: a dotted ring closing on the hero over the echo's delay (it erupts where the hero then stands).
@@ -191,10 +169,10 @@
   CF.hero.push((c, p, t, low) => {
     const st = p.stats;
     if (p.cls !== 'pyro' || !st || p.dead) return;
-    const s = stateOf(p.pid), dt = U.clamp(t - s.t, 0, 0.1);
+    const s = stateOf(p.pid);
     s.t = t;
-    if (p.downed) { s.steps = 0; s.full = false; return; }
-    channel(c, p, st, s, t, dt, low);
+    if (p.downed) { s.sparks = 0; return; }
+    sparkCrown(c, p, st, s, t, low);
     echoRing(c, p, s, t);
     flight(c, p, s, t, low);
     mantleOverlay(c, p, st, t, low);
@@ -214,27 +192,26 @@
   }
 
   // ---------------- events ----------------
-  // Aftershock queued: a spark circle spans the delay at the blast, a ring closes on it, embers lift off the ground and a scorch mark stays.
-  CF.on('pyAfter', (ev, ctx, local) => {
-    const m = ev.pid === local;
-    SP('fx.circle.spark', ev.x, ev.y - 2, { ramp: 'fire', add: true, a: m ? 0.9 : 0.55 });
-    F.ring(ev.x, ev.y, Math.max(16, ev.r), '#ff7a2a', ev.d, 2, true);
-    F.burst(ev.x, ev.y, 3, { kind: 'ember', color: '#ff9a3a', a: -1.57, spread: 3, sp: 26, life: 0.5, size: 1.6, drag: 1.2 });
-    stain(ev.x, ev.y, ev.r * 0.55, '#1c0a06', 0.55, 4);
+  // Fireball cast: a small flash at the hand along the aim (the shot and its burst are the built-in fireball projectile and fire boom).
+  CF.on('skill', (ev, ctx) => {
+    if (ev.k !== 'fireball') return;
+    const a = ev.a || 0, x = ev.x + Math.cos(a) * 12, y = ev.y - 6 + Math.sin(a) * 12;
+    F.pop(x, y, 10, '#ffb347', 0.12, true);
+    F.burst(x, y, lowFx() ? 2 : 4, { kind: 'ember', color: '#ff9a3a', a, spread: 0.8, sp: 60, life: 0.25, size: 1.6, drag: 3 });
   });
-  // Magma blast (the aftershock): chunks of molten rock fly out and embers rise, with a heavy thud under the boom.
-  CF.on('boom', (ev, ctx, local) => {
-    if (ev.k !== 'magma') return;
-    F.burst(ev.x, ev.y, 7, { kind: 'shard', color: '#ff6a1a', sp: ev.r * 2.2, life: 0.7, size: 2.8, vz: 110, z: 6, add: true });
-    F.burst(ev.x, ev.y, 6, { kind: 'ember', color: '#ffb347', a: -1.57, spread: 3.4, sp: 70, life: 0.9, size: 2, drag: 1.3, lt: '#ff8a2a', ltr: 22 });
-    SP('fx.glint', ev.x, ev.y - 6, { ramp: 'fire', add: true, speed: 1.2 });
-    stain(ev.x, ev.y, ev.r * 0.7, '#120503', 0.7, 8);
-    A().play('thud', 0.3);
+  // Kindling: the spent Sparks flare off the crown; Flashfire pulses the Fireball slot it refilled.
+  CF.on('pySpark', (ev, ctx) => {
+    const p = ctx.player(ev.pid); if (!p) return;
+    F.burst(p.x, p.y - 22, Math.min(8, 2 + (ev.n | 0)), { kind: 'spark', color: '#ffb347', a: -1.57, spread: 2.4, sp: 90, life: 0.3, size: 1.5, drag: 3 });
   });
-  CF.on('pyLava', (ev) => {
-    F.burst(ev.x, ev.y, 4, { kind: 'ember', color: '#ff7a2a', a: -1.57, spread: 3.4, sp: 40, life: 0.8, size: 2, drag: 1.3, lt: '#ff6a1a', ltr: 22 });
-    SP('fx.puff', ev.x, ev.y - 4, { ramp: 'dust', a: 0.6 });
+  CF.on('pyFlare', (ev, ctx, local) => {
+    const p = ctx.player(ev.pid); if (!p) return;
+    if (ev.pid === local && ED.HUD && ED.HUD.flashSlot) ED.HUD.flashSlot(2, 0.45);
+    F.ring(p.x, p.y - 8, 20, '#ffc24a', 0.25, 2);
+    A().play('click', ev.pid === local ? 0.4 : 0.15);
   });
+  // Chain Cast: a quick gold ring on the hero.
+  CF.on('pyChain', (ev, ctx) => { const p = ctx.player(ev.pid); if (p) F.ring(p.x, p.y - 6, 24, '#ffd36b', 0.22, 2); });
 
   // Twin Nova: the echo is announced by the ring closing on the hero; Collapse sucks streaks in; the second eruption is a thinner, paler ring.
   CF.on('pyEcho', (ev, ctx, local) => {
@@ -424,7 +401,7 @@
   CF.on('pyHeat', (ev, ctx, local) => {
     const p = ctx.player(ev.pid); if (!p) return;
     const m = ev.pid === local, g = ED.Game && ED.Game.s, ctl = g && g.ctl;
-    const cooling = !ctl || !m || (ev.slot === 1 ? ctl.skill2Cd > 0.05 : ctl.charges < g.me.stats.maxCharges);
+    const cooling = !ctl || !m || (ev.slot === 1 ? ctl.skill2Cd > 0.05 : ev.slot === 2 ? ctl.charges3 < g.me.stats.skill3Charges : ctl.charges < g.me.stats.maxCharges);
     if (m && cooling && ED.HUD && ED.HUD.flashSlot) ED.HUD.flashSlot(ev.slot, ev.full ? 0.7 : 0.35);
     F.burst(p.x, p.y - 18, ev.full ? 14 : Math.min(8, 2 + ev.n), { kind: 'ember', color: '#ffb347', a: -1.57, spread: 1.2, sp: 90, life: 0.6, size: 1.8, drag: 1.1, lt: '#ff8a2a', ltr: 18 });
     if (ev.full) {
@@ -435,32 +412,6 @@
   });
 
   // ---------------- route forms ----------------
-  // Caldera: a column of molten streaks and shards shoots up from the geyser, a pale ring spreads, and the Lava Pool's ring swells from its old radius (pr / 1.2) to the new one.
-  CF.on('pyGeyser', (ev, ctx, local) => {
-    const m = ev.pid === local, n = lowFx() ? 6 : 12;
-    F.ring(ev.px, ev.py, ev.pr, '#ff5a1a', 0.5, 3, false, ev.pr / 1.2);
-    F.ring(ev.x, ev.y, ev.r, '#ffb347', 0.3, 4); F.ring(ev.x, ev.y, ev.r * 0.55, '#fff4c0', 0.22, 2);
-    F.burst(ev.x, ev.y - 4, n, { kind: 'streak', color: '#ffb347', a: -1.57, spread: 0.3, sp: 330, life: 0.45, size: 2.2, drag: 2.2 });
-    F.burst(ev.x, ev.y - 2, n, { kind: 'shard', color: '#ff6a1a', a: -1.57, spread: 1.1, sp: ev.r * 1.2, life: 0.85, size: 3, vz: 250, z: 4, add: true });
-    F.burst(ev.x, ev.y - 6, 5, { kind: 'ember', color: '#ffe9a0', a: -1.57, spread: 0.6, sp: 120, life: 0.9, size: 2, drag: 1.1, lt: '#ff8a2a', ltr: 22 });
-    SP('fx.explosion', ev.x, ev.y - 8, { ramp: 'fire' }); SP('fx.ring.shock', ev.x, ev.y - 4, { add: true, ramp: 'fire', a: 0.7 });
-    F.pop(ev.x, ev.y - 12, ev.r * 0.45, '#fff4c0', 0.2, true);
-    stain(ev.x, ev.y, ev.r * 0.7, '#120503', 0.7, 8);
-    if (m) F.addShake(2.5);
-    A().play('thud', m ? 0.6 : 0.3); A().play('fire', m ? 0.35 : 0.15);
-  });
-
-  // Fire Dancer: two rings spread from where the dash began and a circle of flame tongues rises on the ring's edge.
-  CF.on('pyRing', (ev, ctx, local) => {
-    const m = ev.pid === local, n = lowFx() ? 10 : 20;
-    F.ring(ev.x, ev.y, ev.r, '#ffc24a', 0.45, 5); F.ring(ev.x, ev.y, ev.r * 0.7, '#ff7a2a', 0.35, 3);
-    for (let i = 0; i < n; i++) { const a = i * TAU / n + Math.random() * 0.2; F.part(ev.x + Math.cos(a) * ev.r * 0.9, ev.y + Math.sin(a) * ev.r * 0.7 - 2, { kind: 'ember', color: pick([FIRE[2], FIRE[3], FIRE[4]]), a: -1.57, spread: 0.5, sp: 55, life: 0.7, size: 2, drag: 1.3, add: true, lt: '#ff8a2a', ltr: 20 }); }
-    F.burst(ev.x, ev.y, lowFx() ? 6 : 12, { color: '#ffb347', sp: ev.r * 2.2, life: 0.35, size: 2.4, add: true });
-    SP('fx.circle.spark', ev.x, ev.y - 2, { ramp: 'fire', add: true, a: 0.9 });
-    stain(ev.x, ev.y, ev.r * 0.6, '#1c0a06', 0.5, 5);
-    A().play('fire', m ? 0.5 : 0.25); A().play('dash', m ? 0.3 : 0.12);
-  });
-
   // White Flame: the white glyph of a white-hot foe (the hero hook marks the foe e.pyWhiteT each frame it is white-hot).
   const WHITE = { id: 'fx.glyph.whiteflame', ramp: '', stub: '' };
   let whiteOk = false;

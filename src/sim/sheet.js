@@ -32,6 +32,7 @@
     bleed: SI('Bleed on crits', 'pct', 'general'), bleedAll: SI('Bleed on hits', 'pct', 'general'), bleedMul: SI('Bleed damage', 'pct', 'general'), lacerate: SI('Damage to bleeding', 'pct', 'general'), sunder: SI('Sunder', 'flat', 'general'), opportunist: SI('Opportunist', 'pct', 'general'),
     s1Dmg: SI('Skill 1 damage', 'pct', 'offense'), s1Area: SI('Skill 1 area', 'pct', 'offense'), s1Dur: SI('Skill 1 duration', 'sec', 'offense'), s1N: SI('Skill 1 count', 'flat', 'offense'), s1Cdr: SI('Skill 1 cooldown', 'pct', 'offense'),
     s2Dmg: SI('Skill 2 damage', 'pct', 'offense'), s2Area: SI('Skill 2 area', 'pct', 'offense'), s2Dur: SI('Skill 2 duration', 'sec', 'offense'), s2N: SI('Skill 2 count', 'flat', 'offense'), s2Cdr: SI('Skill 2 cooldown', 'pct', 'offense'),
+    s3Dmg: SI('Skill 3 damage', 'pct', 'offense'), s3Area: SI('Skill 3 area', 'pct', 'offense'), s3Dur: SI('Skill 3 duration', 'sec', 'offense'), s3N: SI('Skill 3 count', 'flat', 'offense'), s3Cdr: SI('Skill 3 cooldown', 'pct', 'offense'), s3Ch: SI('Skill 3 charges', 'flat', 'offense'),
     statusPow: SI('Status strength', 'pct', 'offense'), classElMul: SI('Class-element damage', 'pct', 'offense'),
   };
   const SIF = (key) => Sh.STAT_INFO[key] || { label: key, fmt: 'pct', group: 'offense' };
@@ -224,19 +225,8 @@
   const FLARE_HIT = 0.3, WAKE_ON = 1.5, RET_HIT = 0.75;
   // TRAIL_PACK: share of the other pack foes the trail clouds of a shot that strikes the first foe reach (those beside it, not those behind the strike point; the tight pack of 4 of tools/sheet-check.js puts two of three there).
   const TRAIL_PACK = 2 / 3;
-  // Pyromancer assumptions (class-pyro.js). CHAN_MOVE: share of the weapon's attacks made while moving (Channel 0 unless Fire Dancer holds it); CHAN_SEG: seconds of one standing stretch; CHAN_PAUSE: seconds of attacking between the pauses that end Channel even under Fire Dancer (it builds only while standing).
-  // LAVA_UP: share of the time a foe in the line of fire stands in a Lava Pool; LAVA_PACK: pack foes one pool covers (Caldera widens it by one). CALDERA_IN: share of aftershocks that land in a live pool. DANCE_EVERY: seconds between dashes made at full Channel (one flame ring each).
-  // OVERHEAT_LINE: share of shots that find a second foe in line; OVERHEAT_BLASTS: pack foes the second blast of a piercing shot reaches. HE_USE: share of a cut or refund that counts (a skill is recast about half a second after it comes up, and a cut on a ready skill is lost; fitted to a time-stepped cast simulation). BURN_HIT: share of foes a cast finds burning.
-  const CHAN_MOVE = 0.3, CHAN_SEG = 3, CHAN_PAUSE = 8, LAVA_UP = 0.7, LAVA_PACK = 2, CALDERA_IN = 0.7, DANCE_EVERY = 4, OVERHEAT_LINE = 0.7, OVERHEAT_BLASTS = 2, HE_USE = 0.6, BURN_HIT = 0.8;
-  // Average Channel bonus added to the weapon's hit multiplier and the share of hits at the cap, for attacks iv seconds apart: a standing stretch of CHAN_SEG s builds from 0 (moving attacks get 0);
-  // Fire Dancer keeps it through moving, so it builds on the standing share of CHAN_PAUSE s of attacking.
-  function channelAvg(st, iv) {
-    const step = Math.max(0.05, st.chanStep), f = (t) => Math.min(st.chanCap, st.channel * Math.floor(t / step + 1e-9)), dance = st.fireDance > 0, stand = 1 - CHAN_MOVE, span = dance ? CHAN_PAUSE : CHAN_SEG;
-    let sum = 0, full = 0, n = 0;
-    for (let t = 0; t < span - 1e-9; t += iv, n++) { const v = f(dance ? stand * t : t); sum += v; if (v >= st.chanCap - 1e-9) full++; }
-    const k = dance ? 1 : stand;
-    return { avg: sum / n * k, full: full / n * k };
-  }
+  // Pyromancer assumptions (class-pyro.js). HE_USE: share of a cut or refund that counts (a skill is recast about half a second after it comes up, and a cut on a ready skill is lost; fitted to a time-stepped cast simulation). BURN_HIT: share of foes a cast finds burning.
+  const HE_USE = 0.6, BURN_HIT = 0.8;
   // Damage numbers are per landed hit before the stratum affinity and any status; dps counts every attack landing on one foe (a fan: the shots that reach it at REF).
   // extras: damage each attack adds besides the main hits (blasts, shocks, waves, clouds, evolution strikes, relics): { label, perAttack, perSec, proc (feeds statuses), el?, note? }.
   // A bell (class-bell.js): an attack is one wind -> hurl -> reel loop (ED.Bell.cycle); the hit is its hurl strike, the reel strike and the winding strikes of the loop are extras, as are the route riders (Wrecking shock, Chain Toll, Lightning Rod, Skybreaker, live wire, the ring).
@@ -264,7 +254,7 @@
     const aps = bell ? cy.nb * BELL_EFF.one / cy.T : 1 / St.attackInterval(p), apsBase = bell ? cy.nb * BELL_EFF.one / ED.Bell.cycle(st, 1, st.atkInterval, w.rate / st.atkInterval).T : 1 / st.atkInterval;
     const n = melee || bell ? 1 : (w.n || 1) + st.projN, sp = n > 1 ? Math.max(w.spread || 0, 0.13) : 0, offs = [];
     for (let i = 0; i < n; i++) offs.push((i - (n - 1) / 2) * sp);
-    const chan = st.channel > 0 ? channelAvg(st, 1 / aps) : null, Mw = M + (chan ? chan.avg : 0); // Mw: the multiplier of a weapon hit (Pyromancer Channel at its assumed average)
+    const Mw = M; // the multiplier of a weapon hit
     // Flight shapes (combat.js): a boomerang strikes a foe at REF on both legs; a lobbed shell never strikes directly (its blast is the hit, it crits); a beam or a boomerang leg strikes every foe on its line.
     const legs = !melee && w.ret && w.speed * w.life > Sh.REF.d ? 2 : 1, fan1 = melee || bell ? 1 : fanHits(offs, w.r), one = fan1 * legs, direct = w.lob ? 0 : one, hit = Wd * Mw, avg = hit * EC;
     const extras = [], add = (label, perAttack, o) => { if (perAttack > 0) extras.push(Object.assign({ label, perAttack, proc: false }, o)); };
@@ -274,16 +264,9 @@
     if (cleaveEvery && st.cShock) add('Cleave shock', Wd * st.cShock * M / cleaveEvery, { r: Math.round(72 * area), stun: st.cStun, note: 'each Cleave, no crit' });
     if (cleaveEvery && st.fissure) add('Fissure', Wd * st.fissure * M / cleaveEvery, { stun: st.cStun, note: 'each Cleave: a fissure 180 long strikes every foe on it once, no crit' }); // Earthsplitter (class-knight.js fissure)
     if (cleaveEvery && st.bladeWave) add('Blade wave', Wd * st.bladeWave * M * EC / cleaveEvery, { proc: true, crit: true, note: 'each Cleave: a wave 180 long pierces every foe on it (a Parry fans three)' }); // Thousand Edges (class-knight.js bladeWaves)
-    // the blast of a shot (its own, or the Cinder Arms blast of a plain shot), its aftershock, its cloud
+    // the blast of a shot (its own, or the Cinder Arms blast of a plain shot), its cloud
     const blast = !melee && !bell && w.explode ? { r: w.explode.r * area, mul: w.explode.mul } : null;
     if (blast) add('Blast', Wd * blast.mul * Mw * one * (w.lob ? EC : 1), { proc: true, crit: !!w.lob, r: Math.round(blast.r), note: w.lob ? 'the shell lands on the cursor, every foe in it, may crit' : 'each shot that lands, no crit' });
-    if (blast && st.aftershock) add('Aftershock', Wd * blast.mul * Mw * st.aftershock * one, { r: Math.round(blast.r), note: '0.4 s after each blast' });
-    // Pyromancer Attack forks (class-pyro.js). Lava Pools: untagged burning ground, one pool per spot, so a foe takes lavaPool x the shot a second whatever the shot count. Caldera: the share CALDERA_IN of aftershocks becomes a geyser (caldera x the shot, 1.5 x the radius) instead.
-    // Overheat: at full Channel a shot pierces overheat more foes (its direct hit and a second blast that reaches OVERHEAT_BLASTS pack foes): no gain on one foe. Fire Dancer: a ring of dancerBurst x the weapon at full Channel on every dash made at full Channel (one per DANCE_EVERY s).
-    if (blast && st.lavaPool) add('Lava Pools', Wd * st.lavaPool * M / aps * LAVA_UP, { pack: LAVA_PACK + (st.caldera > 0 ? 1 : 0), r: Math.round(blast.r * 0.6), note: `burning ground under a foe in the line of fire about ${Math.round(LAVA_UP * 100)}% of the time; a pool covers about ${LAVA_PACK + (st.caldera > 0 ? 1 : 0)} foes of a pack` });
-    if (blast && st.caldera) add('Geyser', CALDERA_IN * Wd * Mw * (st.caldera - blast.mul * st.aftershock) * one, { r: Math.round(blast.r * 1.5), note: `${Math.round(CALDERA_IN * 100)}% of aftershocks land in a pool and erupt as a geyser instead` });
-    if (!melee && !w.lob && !w.beam && chan && st.overheat) add('Overheat', chan.full * st.overheat * OVERHEAT_LINE * (Wd * (M + st.chanCap) * EC + OVERHEAT_BLASTS * (blast ? Wd * blast.mul * (M + st.chanCap) : 0)), { packOnly: true, pack: 1, proc: false, note: 'at full Channel a shot pierces one more foe: its direct hit and a second blast, in a pack' });
-    if (chan && st.fireDance && st.dancerBurst) add('Flame ring', chan.full * Wd * st.dancerBurst * (M + st.chanCap) / aps / DANCE_EVERY, { r: Math.round(80 * area), note: `a dash at full Channel (about every ${DANCE_EVERY} s) leaves a ring of flame where it started` });
     if (!melee && w.cloud) { const ticks = w.cloud.dur / 0.5; add('Plague cloud', ticks * w.cloud.dps * 0.5 * M * one, { r: Math.round(w.cloud.r * area), note: `about ${n1(ticks)} ticks over ${n1(w.cloud.dur)}s per shot (clouds that merge tick on one 0.5 s grid), no crit` }); }
     if (!melee && w.pool) add('Pool of light', w.pool.dur * Wd * w.pool.mul * M * one, { r: Math.round(w.pool.r * area), note: `where each orb ends: ${n1(w.pool.dur)} s, ticks every 0.5 s, no crit${w.pool.ally ? '; shields allies inside' : ''}` });
     if (!melee && w.trail) { // trail clouds: one every `every` px from the shot's launch 10 px out, the last where it strikes the foe at REF; those within reach of that foe tick on it, and on the foes beside it in a pack (TRAIL_PACK of the others)
@@ -318,7 +301,7 @@
     // evolution strikes (data on the evolution boon)
     const evoBoon = evo && ED.BOONS['evo_' + evo], attackTotal = avg * direct + (blast ? Wd * blast.mul * M * one * (w.lob ? EC : 1) : 0);
     for (const s of (evoBoon && evoBoon.strikes) || []) {
-      if ((s.on === 'melee' && !melee) || (s.on === 'proj' && melee) || (s.ifNoBlast && (w.explode || melee)) || (s.ifBlast && !w.explode)) continue;
+      if ((s.on === 'melee' && !melee) || (s.on === 'proj' && melee) || (s.ifNoBlast && (w.explode || melee || blast)) || (s.ifBlast && !w.explode)) continue;
       let per;
       if (s.perSec) per = s.perSec * s.dur * Wd * M * one;
       else if (s.fan) { const o = []; for (let i = 0; i < s.fan.n; i++) o.push((i - (s.fan.n - 1) / 2) * s.fan.step); per = s.mul * Wd * M * (s.crit ? EC : 1) * fanHits(o, s.fan.r) / s.every; }
@@ -358,7 +341,6 @@
     const dps = (avg * direct + sum) * aps, dpsAll = (avg * (w.lob ? 0 : n * legs) + sum) * aps;
     const notes = [];
     if (st.atkOver > 1.0001) notes.push(`Attack speed cap ${n1(1 / st.atkFloor)}/s: the excess adds +${Math.round((st.atkOver - 1) * 100)}% damage`);
-    if (chan) notes.push(`Channel averages +${Math.round(chan.avg * 100)}% damage on the weapon's hits, taking ${Math.round(CHAN_MOVE * 100)}% of the attacks as made on the move${st.fireDance ? ' (Fire Dancer holds it through moving)' : ''}`);
     if (w.combo) notes.push(`Combo of ${w.combo.steps.length} attacks (the interval and hit are their means); it restarts after ${n1(w.combo.reset)} s without attacking`);
     if (w.ahead) notes.push(`Slams the ground ${Math.round(w.range * (1 + 0.5 * st.area + st.meleeReach))} px ahead: every foe within ${Math.round(w.ahead.r * area)} of that point`);
     if (w.pull) notes.push(`Hits pull foes ${w.pull} px toward you (elites half, bosses never)`);
@@ -477,7 +459,7 @@
   }
 
   const ROCK_SCATTER = 80; // px a Meteor Shower meteorite may land from its impact (class-pyro.js)
-  const AIM_TEXT = { dir: 'toward the cursor', ground: 'lands on the cursor', move: 'toward the cursor', self: 'around you' };
+  const AIM_TEXT = { dir: 'toward the cursor', ground: 'lands on the cursor', move: 'toward the cursor', self: 'around you' }, SLOT_KEYS = ['skill1', 'skill2', 'skill3'];
   function skillModel(id, slot, p, st, ctx, wpn, R) {
     const sk = ED.SKILLS[id], N = St.skillNums(id, st), parts = [];
     let perCast = 0, perCastAll = 0;
@@ -494,7 +476,7 @@
       else if (h.perMinion) heals.push({ label: h.note || 'heals on cast', perMinion: h.perMinion, cap: h.cap });
     }
     return {
-      id, slot, name: sk.name, icon: sk.icon, key: slot ? 'skill2' : 'skill1', cd: R.x(cd), cdBase: sk.cd, charges: slot === 0 ? st.maxCharges : 1, aim: N.aim, aimText: AIM_TEXT[N.aim] || '', range: N.range, rangeMin: N.rangeMin,
+      id, slot, name: sk.name, icon: sk.icon, key: SLOT_KEYS[slot] || 'skill1', cd: R.x(cd), cdBase: sk.cd, charges: slot === 0 ? st.maxCharges : slot === 2 ? st.skill3Charges : 1, aim: N.aim, aimText: AIM_TEXT[N.aim] || '', range: N.range, rangeMin: N.rangeMin,
       parts, perCast: R.n(perCast), perCastAll: R.n(perCastAll), dpsCd: R.n(perCast / cd), heals, _cd: cd,
     };
   }
@@ -516,7 +498,8 @@
     const ref = Sh.refFoe(ctx), s = ctx.stratum || 1, thr = W.THREAT[clampI(s - 1, 0, W.THREAT.length - 1)];
     const wpn = weaponModel(p, st, ctx, R);
     const skills = [];
-    for (const [i, id] of [cls.skill, cls.skill2].entries()) if (id && ED.SKILLS[id]) skills.push(skillModel(id, i, p, st, ctx, wpn, R));
+    for (const [i, id] of [cls.skill, cls.skill2, cls.skill3].entries()) if (id && ED.SKILLS[id]) skills.push(skillModel(id, i, p, st, ctx, wpn, R));
+    if (p.cls === 'pyro') pyroKit(st, wpn, skills, R);
     if (st.nightsEdge > 0 && skills.length > 1) { // Night's Edge: every Ambush refunds Shadowstep, so it casts once more per Vanish cooldown
       const k = skills[0];
       k._cd = 1 / (1 / k._cd + 1 / skills[1]._cd); k.dpsCd = R.n(k.perCast / k._cd);
@@ -558,7 +541,7 @@
       mult.cond.push({ id: r.key || r.id, label: r.key === 'brand' && st.brandCap > 4 ? r.label.replace('up to 4', 'up to ' + st.brandCap) : r.label, v: R.f(v * X), live: live === null ? null : R.f(live * X), per: r.per || null }); // Doombrand raises Brand's cap
     }
     mult.slots = [];
-    for (const k of ['s1Dmg', 's1Area', 's1Dur', 's1N', 's1Cdr', 's2Dmg', 's2Area', 's2Dur', 's2N', 's2Cdr']) if (st[k]) mult.slots.push({ key: k, label: SIF(k).label, v: R.f(st[k]), fmt: SIF(k).fmt, rows: build ? St.breakdown(build, k).map(r => ({ label: r.label, kind: r.kind, v: r.v })) : [] });
+    for (const k of ['s1Dmg', 's1Area', 's1Dur', 's1N', 's1Cdr', 's2Dmg', 's2Area', 's2Dur', 's2N', 's2Cdr', 's3Dmg', 's3Area', 's3Dur', 's3N', 's3Cdr', 's3Ch']) if (st[k]) mult.slots.push({ key: k, label: SIF(k).label, v: R.f(st[k]), fmt: SIF(k).fmt, rows: build ? St.breakdown(build, k).map(r => ({ label: r.label, kind: r.kind, v: r.v })) : [] });
     mult.status = [];
     const statusEls = ED.ELEMENT_IDS.filter(el => st[ED.ELEMENTS[el].inf] > 0 || st.element === el).concat(st.bleed > 0 || st.bleedAll > 0 || st.masterstroke ? ['general'] : []);
     for (const el of statusEls) {
@@ -773,10 +756,52 @@
     if (any) refit(wpn, R);
   }
 
+  // ---------------- Pyromancer kit and Attack forks (class-pyro.js) ----------------
+  // Ember Bolt: every direct weapon hit (a shot, a beam, a lobbed landing; Afterburn's bolts too) on the foe cuts every spell cooldown EMBER_PS x the attack interval / the shots per attack x (1 + emberMul) s, at most EMBER_CAP s a second:
+  // a spell recharges (1 + cut per second) times as fast (the bolts land all the time the hero attacks, as the weapon's dps assumes). Spell casts per second S = the sum of 1 / cooldown.
+  // Kindling: the direct hits between two spells store Sparks (up to sparkMax); each spell spends them for +spark each. Flashfire: every flashfire-th Spark spent gives back a Fireball, one more Fireball cast with the Sparks' bonus.
+  // Pyre Bolt: the blast stats.js gives the bolt (the weapon's Blast extra).
+  // Afterburn: each spell arms 2 extra bolts on the next afterN attacks (Spell Storm: 4 on every attack for stormT s) at afterburn of a bolt, those within the fan that reach the foe. Chain Cast: a spell whose last spell was another one
+  // (1 - its share of the casts) within CHAIN_T s (1 - e^(-S x CHAIN_T)) deals +chainCast. The cooldown cut and the casts depend on each other: the loop runs to its fixed point.
+  function pyroKit(st, wpn, skills, R) {
+    const aps = wpn._aps, w = st.weapon, shots = Math.max(1, (w.n || 1) + st.projN), per = C.EMBER_PS * st.atkInterval / shots * (1 + st.emberMul), hb = (wpn.lob ? 1 : wpn.oneFoe) * aps;
+    const cd0 = skills.map(k => k._cd), fb = skills.find(k => k.id === 'fireball'), storm = st.stormT > 0;
+    const fo = storm ? [-2, -1, 1, 2].map(i => i * C.AFTER_FAN) : [-C.AFTER_FAN, C.AFTER_FAN], fh = st.afterburn > 0 ? fanHits(fo, w.r || 4) : 0;
+    let cut = 0, S = 0, ha = 0, armed = 0, n = 0, flare = 0;
+    for (let it = 0; it < 30; it++) {
+      cut = Math.min(C.EMBER_CAP, per * (hb + ha));
+      S = 0; for (let i = 0; i < skills.length; i++) S += (1 + cut) / cd0[i];
+      S += flare;
+      armed = st.afterburn > 0 ? (storm ? aps * Math.min(1, S * st.stormT) : Math.min(aps, S * Math.round(st.afterN))) : 0;
+      ha = armed * fh;
+      if (st.spark > 0) {
+        const between = hb / Math.max(1e-6, S);
+        n = Math.min(st.sparkMax, between);
+        flare = st.flashfire > 0 && fb ? S * n / Math.max(1, Math.round(st.flashfire)) : 0;
+      }
+    }
+    for (let i = 0; i < skills.length; i++) {
+      const k = skills[i]; k._cd = cd0[i] / (1 + cut); k.cd = R.x(k._cd);
+      const fl = k.id === 'nova' && k.parts.find(q => q.id === 'flare'); // Rebirth Flare: still one burst per MANTLE_CD, so a faster Nova pays it in fewer casts
+      if (fl && fl.oneFoe > 0) { const f = Math.min(1, k._cd / C.MANTLE_CD) / fl.oneFoe, d = fl._r.total * (f - 1); fl.oneFoe *= f; fl._r.total *= f; fl.total = R.n(fl._r.total); k.perCast = R.n(k.perCast + d); k.perCastAll = R.n(k.perCastAll + d); }
+      k.dpsCd = R.n(k.perCast / k._cd);
+    }
+    const sd = skills.map(k => skillDps(k, PACK)), push = (label, one, pk, note, o) => { if (one > 0) wpn._extras.push(Object.assign({ label, perAttack: one / aps, proc: false, packMul: pk / one, note }, o)); };
+    const sum = (f) => { let one = 0, pk = 0; for (let i = 0; i < skills.length; i++) { const m = f(skills[i], i); one += sd[i][0] * m; pk += sd[i][1] * m; } return [one, pk]; };
+    const fbCast = fb ? skillDps(fb, PACK).map(v => v * fb._cd) : [0, 0]; // one Fireball's damage on one foe and per foe of a pack
+    wpn.notes.push(`Ember Bolt: your bolt hits cut every spell cooldown ${n1(Math.min(C.EMBER_CAP, per * (hb + ha)))} s a second (at most ${C.EMBER_CAP} s; horde foes count half), so the spells come back ${Math.round(cut * 100)}% sooner`);
+    if (st.spark > 0) { const g = sum(() => st.spark * n); push('Sparks', g[0], g[1], `about ${n1(n)} Sparks a spell, +${Math.round(st.spark * 100)}% each`); }
+    if (flare > 0) push('Flashfire', flare * fbCast[0] * (1 + st.spark * n), flare * fbCast[1] * (1 + st.spark * n), `a Fireball back about every ${n1(1 / flare)} s from the Sparks the spells spend`);
+    if (ha > 0) push('Afterburn', ha * wpn._avg * st.afterburn, ha * wpn._avg * st.afterburn, storm ? `4 extra bolts on every attack for ${n1(st.stormT)} s after each spell (about ${Math.round(armed / aps * 100)}% of the attacks)` : `2 extra bolts on ${Math.round(st.afterN)} attacks after each spell (about ${Math.round(armed / aps * 100)}% of the attacks)`, { proc: true, crit: true });
+    if (st.chainCast > 0 && S > 0) { const within = 1 - Math.exp(-S * C.CHAIN_T), g = sum((k, i) => st.chainCast * within * (1 - (1 + cut) / cd0[i] / S)); push('Chain Cast', g[0], g[1], `about ${Math.round(within * 100)}% of the spells follow another within ${C.CHAIN_T} s`); }
+    wpn._spells = S;
+    refit(wpn, R);
+  }
+
   // ---------------- Pyromancer Element forks: Flashpoint, White Flame, Heat Engine, Chain Reaction, Inferno Engine ----------------
   // Each adds a weapon extra built from the damage per attack the weapon and the skills already deal; packMul turns its value on one foe into the value per foe of a pack of PACK (tools/model.js packWeapon).
-  // Flashpoint: a foe's Burn pool settles at 2.5 s of its Burn income (the pool drains 40% a second), so it is over burnCrit x the foe's health P / (P + burnCrit x health) of the time; a Nova or Meteor hit then crits for sure.
-  // White Flame: a foe that burned WHITE_T s in a row takes whiteHot more from every hit and meets Flashpoint for sure; a fight lasts FIGHT_ONE s on one foe and FIGHT_PACK s on each foe of a pack, and the foe keeps burning WHITE_KEEP of it.
+  // Burning time: a fight lasts FIGHT_ONE s on one foe and FIGHT_PACK s on each foe of a pack, and the foe keeps burning WHITE_KEEP of it, so a foe has burned t s in a row WHITE_KEEP x (1 - t / fight) of the fight.
+  // Flashpoint: a spell hit on a foe that has burned flashT s in a row crits for sure. White Flame: a foe that burned whiteT s in a row takes whiteHot more from every hit.
   // Heat Engine / Chain Reaction: a cast finds BURN_HIT of its foes burning, cuts min(HEAT_MAX, burning x heatEngine) s from the other skill (HE_USE of it counts) and, with heatChain burning foes, refunds it (once per HEAT_CD, saving half its cooldown); both skills are cast on cooldown.
   // Inferno Engine: a cast stores one Heat per burning foe it hits; every ceil(heatMax / stored)th cast is an Inferno that deals infernoMul x.
   const FIGHT_ONE = 12, FIGHT_PACK = 6, WHITE_KEEP = 0.85;
@@ -797,24 +822,26 @@
   const skillDps = (k, n, only) => { let one = 0, pk = 0; for (const q of k.parts) { if (q.kind === 'zone' || (only && only.indexOf(q.id) < 0)) continue; one += q._r.total / k._cd; pk += q._r.total * (q.r > 0 ? n : 1) / k._cd / n; } return [one, pk]; };
   const INFERNO_PARTS = [['blast', 'burn'], ['impact']]; // the parts an Inferno scales: the Nova blast and Burn add, the Meteor impact (its Burn add rides on it)
   function pyroForms(st, wpn, skills, proc, ref, stratum, R) {
-    if (!(st.burnCrit > 0 || st.whiteHot > 0 || st.heatEngine > 0) || skills.length < 2) return;
+    if (!(st.flashT > 0 || st.whiteHot > 0 || st.heatEngine > 0 || st.searSkill > 0) || skills.length < 2) return;
     const aps = wpn._aps, M = Math.max(0.1, st.dmg), Mw = wpn._hit > 0 ? wpn._hit / st.weapon.dmg : M, c = st.crit, cm = st.critMult, cds = [skills[0]._cd, skills[1]._cd];
-    const sk = skills.map(k => skillDps(k, PACK)), skAll = sk[0][0] + sk[1][0];
+    const sk = skills.map(k => skillDps(k, PACK)), skAll = sk.reduce((a, v) => a + v[0], 0);
+    const burnedFor = (t, fight) => WHITE_KEEP * Math.max(0, 1 - t / fight);
     const push = (label, one, pk, note) => { if (one > 0) wpn._extras.push({ label, perAttack: one, proc: false, packMul: pk / one, note }); };
     let wh1 = 0, whP = 0;
     if (st.whiteHot > 0) { // White Flame: the share of the damage dealt while the foe is white-hot. Its value on one foe is an extra; in a pack it scales the whole pack damage (m.boost.pack, read by tools/model.js directDamage), not one foe's.
-      wh1 = WHITE_KEEP * Math.max(0, 1 - st.whiteT / FIGHT_ONE); whP = WHITE_KEEP * Math.max(0, 1 - st.whiteT / FIGHT_PACK);
+      wh1 = burnedFor(st.whiteT, FIGHT_ONE); whP = burnedFor(st.whiteT, FIGHT_PACK);
       let w1 = wpn._avg * wpn.oneFoe;
       for (const e of wpn._extras) if (!e.packOnly) w1 += e.perAttack;
       const sw = w1 * aps / (w1 * aps + skAll), rel = sw / Mw + (1 - sw) / M;
       push('White Flame', wh1 * st.whiteHot * rel * (w1 + skAll / aps), 0, `a foe that burned ${n1(st.whiteT)} s in a row (about ${Math.round(wh1 * 100)}% of a fight on one foe, ${Math.round(whP * 100)}% in a pack) takes +${Math.round(st.whiteHot * 100)}% from every hit`);
       wpn._boostPack = whP * st.whiteHot * rel;
     }
-    if (st.burnCrit > 0) { // Flashpoint
-      const income = ((proc.rate.fire || 0) + (proc.pool.fire || 0)) * ED.elemMul(stratum, 'fire'), P = income / 0.4, u0 = P / (P + st.burnCrit * ref.hp);
+    if (st.searSkill > 0) { const pk = sk.reduce((a, v) => a + v[1], 0); push('Searing spells', BURN_HIT * st.searSkill * st.dmgX / (M + st.classElMul * st.dmgX) * skAll / aps, BURN_HIT * st.searSkill * st.dmgX / (M + st.classElMul * st.dmgX) * pk / aps, `spell hits on burning foes (about ${Math.round(BURN_HIT * 100)}% of them) deal +${Math.round(st.searSkill * 100)}%`); }
+    if (st.flashT > 0) { // Flashpoint
+      const u1 = burnedFor(st.flashT, FIGHT_ONE), uP = burnedFor(st.flashT, FIGHT_PACK);
       let g = 0;
-      for (let i = 0; i < 2; i++) for (const q of skills[i].parts) if (q.kind === 'hit' && !q.noCrit && !q.alwaysCrit) g += q._r.hit * (1 + q.selfVuln) * q.aff * q.oneFoe * (1 - c) * (cm - 1) / skills[i]._cd;
-      push('Flashpoint', (wh1 + (1 - wh1) * u0) * g / aps, (whP + (1 - whP) * u0) * g / aps, `Nova and Meteor crit for sure while the foe's Burn is over ${Math.round(st.burnCrit * 100)}% of its health (about ${Math.round(u0 * 100)}% of the time${st.whiteHot > 0 ? ', and when it is white-hot' : ''})`);
+      for (const k of skills) for (const q of k.parts) if (q.kind === 'hit' && !q.noCrit && !q.alwaysCrit) g += q._r.hit * (1 + q.selfVuln) * q.aff * q.oneFoe * (1 - c) * (cm - 1) / k._cd;
+      push('Flashpoint', u1 * g / aps, uP * g / aps, `your spells crit for sure on a foe that has burned ${n1(st.flashT)} s in a row (about ${Math.round(u1 * 100)}% of a fight on one foe, ${Math.round(uP * 100)}% in a pack)`);
     }
     if (st.heatEngine > 0) {
       const nb1 = BURN_HIT, nbP = BURN_HIT * PACK, g1 = engineGain(st, cds, nb1, st.heatChain > 1 ? 0 : BURN_HIT), gP = engineGain(st, cds, nbP, st.heatChain > 0 ? atLeastBinom(PACK, BURN_HIT, st.heatChain) : 0);
@@ -1104,12 +1131,12 @@
       if (rel >= 0.005) cands.push({ label, from, to, unit, better: lowerBetter ? to < from : to > from, rel });
     };
     push('Weapon', a.weapon.dps, b.weapon.dps, 'dps');
-    for (let i = 0; i < 2; i++) if (a.skills[i] && b.skills[i]) push(a.skills[i].name, a.skills[i].perCast, b.skills[i].perCast, 'per cast');
+    for (let i = 0; i < 3; i++) if (a.skills[i] && b.skills[i]) push(a.skills[i].name, a.skills[i].perCast, b.skills[i].perCast, 'per cast');
     const sumDps = (m) => m.mult.status.reduce((s, x) => s + (x.est && x.est.dps || 0), 0);
     push('Status damage', sumDps(a), sumDps(b), 'dps');
     push('Effective health', a.def.ehp, b.def.ehp, '');
     push('Max health', a.def.maxHp, b.def.maxHp, '');
-    for (let i = 0; i < 2; i++) if (a.skills[i] && b.skills[i]) push(a.skills[i].name + ' cooldown', a.skills[i].cd, b.skills[i].cd, 's', true);
+    for (let i = 0; i < 3; i++) if (a.skills[i] && b.skills[i]) push(a.skills[i].name + ' cooldown', a.skills[i].cd, b.skills[i].cd, 's', true);
     cands.sort((x, y) => y.rel - x.rel);
     return cands.slice(0, 2).map(d => ({ label: d.label, from: d.from, to: d.to, unit: d.unit, better: d.better }));
   };

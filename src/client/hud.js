@@ -247,7 +247,7 @@
     return w ? (ep ? ep.evo + ' ' : '') + w.name : ED.CLASSES[p.cls].name;
   };
 
-  // Hero status chips as a flat [label, colour, ...] list shared by the redraw signature and the drawing: item states, Brace, Momentum, Channel, Hexed foes, the next Cleave.
+  // Hero status chips as a flat [label, colour, ...] list shared by the redraw signature and the drawing: item states, Brace, Momentum, Kindling Sparks, Hexed foes, the next Cleave.
   const CHIPS = [];
   const cleaveNext = (me, st, view) => st.cleave > 0 && st.weapon.kind === 'melee' && ((view.time || 0) < (me.cleaveNext || 0) || ((me.atkCount | 0) + 1) % (3 + st.cleaveN) === 0);
   function chipList(view, me) {
@@ -264,7 +264,7 @@
     }
     if (st.cleave > 0 && cleaveNext(me, st, view)) o.push('Cleave next', '#ffd36b');
     if ((me.momN | 0) > 0) o.push('Momentum ×' + me.momN, '#b78cff');
-    if (st.channel > 0 && (me.chanT || 0) > 0) o.push('Channel +' + Math.round(100 * Math.min(st.chanCap, st.channel * Math.floor(me.chanT / Math.max(0.05, st.chanStep)))) + '%', '#ff9a3a');
+    if (st.spark > 0 && (me.sparks | 0) > 0) o.push('Sparks ' + (me.sparks | 0) + '/' + st.sparkMax, '#ff9a3a'); // Kindling: Sparks the next spell spends
     if (st.hex > 0) { let n = 0; for (const e of view.enemies) if (e.hexed || e.hexT > 0) n++; if (n) o.push('Hexed ' + n, '#7dffd9'); }
     if (me.boons && me.boons.capacitor > 0) { let n = 0; for (const e of view.enemies) if (e.charge > 0 && e.hp > 0) n++; if (n) o.push('Charged ' + n, '#ffe66b'); } // Capacitor: foes your next cast detonates
     if (me.glBuff || (me.glT || 0) > 0) o.push('Guardian Light', '#ffcf5a'); // Cleric buffs on any hero: Guardian Light, Embolden
@@ -410,6 +410,8 @@
     sp(sid(I.label('skill1'))); spCd(scd, st ? st.skillCd : 1); sp(ctl.charges | 0); sp(st ? st.maxCharges | 0 : 1); sp(st ? Math.round(st.skillCd * 100) : 0);
     const s2 = cls.skill2 && ED.SKILLS[cls.skill2], cd2 = ctl.skill2Cd > 0 ? ctl.skill2Cd : 0;
     if (s2) { sp(sid(I.label('skill2'))); spCd(cd2, Math.max(0.1, (st && st.skill2Cd) || s2.cd)); sp(shieldOut(me) ? 1 : 0); sp(Math.round(((st && st.skill2Cd) || s2.cd) * 100)); }
+    const s3 = cls.skill3 && ED.SKILLS[cls.skill3], cd3 = ctl.skill3Cd > 0 && ctl.charges3 <= 0 ? ctl.skill3Cd : 0;
+    if (s3) { sp(sid(I.label('skill3'))); spCd(cd3, Math.max(0.1, (st && st.skill3Cd) || s3.cd)); sp(ctl.charges3 | 0); sp(st ? st.skill3Charges | 0 : 1); sp(Math.round(((st && st.skill3Cd) || s3.cd) * 100)); }
     const dmx = st ? st.dashCharges | 0 : 1, dsw = ctl.dashN < dmx && ctl.dashT > 0 ? ctl.dashT : 0; // dash recharge wedge: seconds to the next charge
     sp(sid(I.label('dash'))); sp(ctl.dashN | 0); sp(dmx); spCd(dsw, st ? st.dashCd : 1); sp(st ? Math.round(st.dashCd * 100) : 0);
     for (const fx of slotFx) if (fx && fx.t > 0) anim = true; // ready flash
@@ -537,6 +539,11 @@
     if (s2) {
       const tot = Math.max(0.1, (st && st.skill2Cd) || s2.cd), up = shieldOut(me), cd2 = ctl.skill2Cd > 0 ? ctl.skill2Cd : 0; // a thrown shield lights the slot until it is caught
       slot(i++, I.label('skill2'), cd2, tot, cd2 <= 0 && !up, s2.icon, up ? '#ffe9a0' : cls.col.c, 0, 1);
+    }
+    const s3 = cls.skill3 && ED.SKILLS[cls.skill3];
+    if (s3) { // skill 3 (only a hero that has one): charges like skill 1, the wedge is the next charge while none is left
+      const n3 = ctl.charges3 | 0, cd3 = ctl.skill3Cd > 0 && n3 <= 0 ? ctl.skill3Cd : 0;
+      slot(i++, I.label('skill3'), cd3, Math.max(0.1, (st && st.skill3Cd) || s3.cd), n3 > 0, s3.icon, cls.col.c, n3, st ? st.skill3Charges : s3.charges || 1);
     }
     const dmx = st ? st.dashCharges | 0 : 1, dcd = ctl.dashN < dmx && ctl.dashT > 0 ? ctl.dashT : 0; // the wedge is the next charge; the slot is lit while one is left
     slot(i++, I.label('dash'), dcd, st ? st.dashCd : 1, ctl.dashN > 0, 'wing', '#bfe9ff', ctl.dashN, dmx);

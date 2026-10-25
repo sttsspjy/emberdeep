@@ -540,10 +540,10 @@ function botBell(w, p, c, foes, tgt, inRange, skill, brng) {
   p.face = a; p.aimX = p.x + Math.cos(a) * k; p.aimY = p.y + Math.sin(a) * k;
   p.haulIn = false; c.bellRel = true;
 }
-// Casts slot 0 or 1 of hero p at foe tgt (distance d, angle a) when the skill's aim allows it; returns whether it was cast. Route stats shape the choice: Scattershot casts Volley at close range, Assassinate steps to a wounded foe.
+// Casts slot 0, 1 or 2 of hero p at foe tgt (distance d, angle a) when the skill's aim allows it; returns whether it was cast. Route stats shape the choice: Scattershot casts Volley at close range, Assassinate steps to a wounded foe.
 // force (Capacitor detonation): a 'dir' or 'self' skill casts at any distance, a 'ground' skill lands at its range toward the foe; 'move' skills keep their range.
 function botCast(w, p, slot, tgt, d, a, foes, brng, skill, force) {
-  const st = p.stats, id = slot ? ED.CLASSES[p.cls].skill2 : ED.CLASSES[p.cls].skill;
+  const st = p.stats, cls = ED.CLASSES[p.cls], id = slot === 2 ? cls.skill3 : slot ? cls.skill2 : cls.skill;
   if (!id || !ED.CAST[id]) return false;
   const N = ED.Stats.skillNums(id, st), sA = AIM[0] * (1 - skill), sP = AIM[1] * (1 - skill);
   let data = null, ang = a;
@@ -565,7 +565,7 @@ function botCast(w, p, slot, tgt, d, a, foes, brng, skill, force) {
   }
   switch (N.aim) {
     case 'dir':
-      if (id === 'shieldthrow') { if (d >= 240 && !force) return false; data = { d: Math.hypot(tgt.x - p.x, tgt.y - (p.y - 4)) }; } else if (!force && d >= (id === 'volley' ? (st.volleyClose ? 110 : 160) : 220)) return false;
+      if (id === 'shieldthrow') { if (d >= 240 && !force) return false; data = { d: Math.hypot(tgt.x - p.x, tgt.y - (p.y - 4)) }; } else if (!force && d >= (id === 'volley' ? (st.volleyClose ? 110 : 160) : id === 'fireball' ? N.range - 20 : 220)) return false;
       ang = a + gauss(brng) * sA;
       break;
     case 'ground': {
@@ -1029,7 +1029,7 @@ function runBot(opts) {
     return r;
   };
   const ctl = {};
-  for (const p of w.players.values()) ctl[p.pid] = { atk: 0, skill: 0, skill2: 0, dashN: p.stats.dashCharges, dashT: 0, goal: null, attn: true, attnT: 0, chg: p.stats.maxCharges, mchg: p.stats.maxCharges, vgap: 0, appT: 0 };
+  for (const p of w.players.values()) ctl[p.pid] = { atk: 0, skill: 0, skill2: 0, skill3: 0, chg3: p.stats.skill3Charges, dashN: p.stats.dashCharges, dashT: 0, goal: null, attn: true, attnT: 0, chg: p.stats.maxCharges, mchg: p.stats.maxCharges, vgap: 0, appT: 0 };
   const dt = 1 / 60, touch = [], crowd = [];
   let steps = 0;
   const maxSteps = 60 * MAX_SECONDS;
@@ -1050,6 +1050,7 @@ function runBot(opts) {
         c.mchg = mc; c.chg = Math.min(c.chg, mc); c.vgap -= dt;
         if (c.chg < mc) { c.skill -= dt; while (c.skill <= 0 && c.chg < mc) { c.chg++; c.skill = c.chg < mc ? c.skill + botCd(p, 0) : 0; } }
       } else c.skill -= dt;
+      { const m3 = p.stats.skill3Charges; c.chg3 = Math.min(c.chg3, m3); if (c.chg3 < m3) { c.skill3 -= dt; while (c.skill3 <= 0 && c.chg3 < m3) { c.chg3++; c.skill3 = c.chg3 < m3 ? c.skill3 + p.stats.skill3Cd : 0; } } } // skill 3 charges as the client keeps them
       if (p.offer) takeOffer(w, p, policy, brng, ctx);
       if (p.downed || p.dead) continue;
       let mx = 0, my = 0;
@@ -1100,8 +1101,6 @@ function runBot(opts) {
         const inRange = bell ? d < BELL_HAUL : st.melee ? d - tgt.r < st.weapon.range : d < 380; // a bell: wind (attack held) while a foe is near
         let atkA = a, atkIn = inRange, atkD = d;
         if (ag && ag.light) { atkD = Math.hypot(ag.light.x - p.x, ag.light.y - p.y); atkA = Math.atan2(ag.light.y - p.y, ag.light.x - p.x); atkIn = st.melee ? atkD < st.weapon.range + 8 : atkD < 320; } // swings and shots go at the lantern
-        if (st.channel && (c.holdT = (c.holdT || 0) - dt) <= 0) { c.hold = brng.next() < skill; c.holdT = 0.5; } // Pyroclast: the choice to stand still is renewed every 0.5 s (a roll per tick would break Channel within a few ticks)
-        if (st.channel && !danger && inRange && c.hold) { mx = 0; my = 0; } // plant the feet while nothing threatens
         if (bell) botBell(w, p, c, foes, tgt, inRange, skill, brng);
         else if (c.atk <= 0 && atkIn) {
           p.atkD = atkD; // the cursor on the target (a lobbed weapon lands there)
@@ -1113,6 +1112,7 @@ function runBot(opts) {
         if (vetC) { if (c.chg > 0 && c.vgap <= 0 && !p.skillMove && botCast(w, p, 0, tgt, d, a, foes, brng, skill, det)) { if (c.chg === st.maxCharges) c.skill = botCd(p, 0); c.chg--; c.vgap = 0.35; cast = true; } }
         else if (c.skill <= 0 && botCast(w, p, 0, tgt, d, a, foes, brng, skill, det)) { c.skill = botCd(p, 0); cast = true; }
         if (c.skill2 <= 0 && st.skill2Cd && botCast(w, p, 1, tgt, d, a, foes, brng, skill, det && !cast)) { c.skill2 = botCd(p, 1); cast = true; }
+        if (c.chg3 > 0 && !p.skillMove && botCast(w, p, 2, tgt, d, a, foes, brng, skill)) { if (c.chg3 === st.skill3Charges) c.skill3 = st.skill3Cd; c.chg3--; } // skill 3 (Fireball): charges like skill 1
         if (det && cast) c.capT = CAP_GAP;
         let dd = null; // --vet: the dash heading of the dodge plan, else of a rider dash through a pack
         if (forced && forced.tl < 0.3 && c.dashN >= 1 && !(p.dashT > 0) && !p.skillMove) dd = forced.d;
@@ -1165,7 +1165,13 @@ function runBot(opts) {
       if (np > rec.peak.projs) rec.peak.projs = np; if (nz > rec.peak.zones) rec.peak.zones = nz;
     }
     for (const m of w.msgs) if (m.t === 'dashRefund' && ctl[m.to]) { const k = ctl[m.to]; k.dashN = Math.min(w.players.get(m.to).stats.dashCharges | 0, k.dashN + ((m.n | 0) || 1)); } // dash charges back { n } (Umbral Arms), as game.js
-    for (const m of w.msgs) if (m.t === 'refund' && ctl[m.to]) { const k = ctl[m.to]; rec.cnt.refunds++; if (m.slot === 1) k.skill2 = m.s ? k.skill2 - m.s : 0; else if (vetC && !m.s) k.chg = Math.min(k.mchg, k.chg + 1); else k.skill = m.s ? k.skill - m.s : 0; } // cooldown refunds { slot, s }
+    for (const m of w.msgs) if (m.t === 'refund' && ctl[m.to]) { // cooldown refunds { slot, s } as the client applies them (slot -1: the Ember cut on every slot, not counted as a refund)
+      const k = ctl[m.to], hp = w.players.get(m.to), sl = m.slot;
+      if (sl !== -1) rec.cnt.refunds++;
+      if (sl === 1 || sl === -1) k.skill2 = m.s ? k.skill2 - m.s : 0;
+      if (sl === 0 || sl === -1) { if (vetC && !m.s) k.chg = Math.min(k.mchg, k.chg + 1); else if (!vetC || k.chg < k.mchg) k.skill = m.s ? k.skill - m.s : 0; }
+      if ((sl === 2 || sl === -1) && hp) { if (!m.s) k.chg3 = Math.min(hp.stats.skill3Charges, k.chg3 + 1); else if (k.chg3 < hp.stats.skill3Charges) k.skill3 -= m.s; }
+    }
     for (const ev of w.fx) {
       if (ev.t === 'smite') rec.cnt.smite++; else if (ev.t === 'reap') rec.cnt.reap++; else if (ev.t === 'toll') rec.cnt.toll++; else if (ev.t === 'lance') rec.cnt.lance++;
       else if (ev.t === 'parry') rec.cnt.parries++;

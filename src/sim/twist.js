@@ -1,6 +1,6 @@
 // Twist runtime (numbers: ED.TWIST_C, src/data/twists.js). combat.js and skills.js call the hooks for a hero with p.twist set (truthy while the hero holds any Twist); this = world.
 // hitMul(p, e, src) -> damage factor of one hit; onAttack(p) -> the attack's damage factor, after a weapon attack counts; onCast(p, slot) after a skill cast;
-// pyreHit(p, e, dmg, crit, comp, src) -> 0: a Pacifist's Pyre weapon hit builds statuses only; cd(st, slot) -> seconds a cast of skill slot puts on that slot (client control and bots).
+// pyreHit(p, e, dmg, crit, comp, src) -> 0: a Pacifist's Pyre weapon hit builds statuses only; cd(st, slot) -> seconds a cast of skill slot (0-2) puts on that slot (client control and bots).
 (function (ED) {
   'use strict';
   const C = ED.TWIST_C;
@@ -31,6 +31,6 @@
       if (e.hp > 0 && e.doom > 0) this.checkReap(e);
       return 0;
     },
-    cd(st, slot) { return st.twBlood ? C.GAP : slot ? st.skill2Cd : st.skillCd; },
+    cd(st, slot) { return slot === 2 ? st.skill3Cd : st.twBlood ? C.GAP : slot ? st.skill2Cd : st.skillCd; }, // skill 3 keeps its own cooldown (no Bloodprice)
   };
 })(globalThis.ED || (globalThis.ED = {}));
