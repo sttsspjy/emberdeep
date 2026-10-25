@@ -421,7 +421,7 @@
     const fl = view.floor;
     if (fl) {
       let id = floorIds.get(fl); if (!id) floorIds.set(fl, id = ++floorN);
-      sp(id); sp(view.roomId | 0);
+      sp(id); sp(view.roomId | 0); sp(view.locked ? 1 : 0);
       const rs = view.roomState || {}; let h = 0;
       for (const r of fl.rooms) { const s = rs[r.id]; h = (h * 7 + (s ? (s.known ? 1 : 0) | (s.visited ? 2 : 0) | (s.cleared ? 4 : 0) : 0)) | 0; }
       sp(h);
@@ -601,32 +601,32 @@
     }
   }
 
-  // ---------------- map + stratum (top-right) ----------------
-  // The panel height follows the floor: cells are as large as the panel width allows (at most 4.2u, grid height within 17u). Weak / resists share a row when both fit, else stack.
+  // ---------------- stratum + next rooms (top-right) ----------------
+  // Stratum name, number, map row ('Room r / rows') and Pact; below, the rooms the exit doors lead to, left to right as the doors stand (dimmed while the room is locked; a violet skull on dark rooms). The full map is on the Tab sheet.
   function mapBlock(view, biome, t) {
-    const x = L.mx, y = L.my, w = L.mw, fl = view.floor, G = fl && gridOf(fl), ix = x + q(u * 1.1), iw = w - 2 * q(u * 1.1);
-    const ty = y + q(u * 1.6), ry = ty + q(u * 1.45), wkE = ED.PATHS[biome.weak], rsE = ED.PATHS[biome.resist], js = Math.max(1, Math.round(1.4 * u / 16)), Z = 16 * js;
-    const grp = (lab, P) => adv(lab, tS) + 2 * f + Z + 2 * f + adv(P.name, tS); // label, icon, element name
-    const two = wkE && rsE && grp('Weak', wkE) + q(u * 1) + grp('Resists', rsE) > iw, rowH = Math.max(Z, FM.b.cap * tS) + q(u * 0.5);
-    const ay = ry + q(u * 1.5), top = (wkE && rsE ? ay + (two ? rowH : 0) + q(u * 1.1) : ry + q(u * 1.2)) - y, mw = w - q(u * 1.2);
-    const hCap = Math.max(u * 6, Math.min(u * 17, Hh - 2 * L.m - top - u * 1.3)), cell = G ? Math.min(mw / G.cols, hCap / G.rows, 4.2 * u) : 0, mh = G ? Math.ceil(G.rows * cell) : u * 4;
-    L.mh = q(top + mh + u * 0.7);
+    const x = L.mx, y = L.my, w = L.mw, fl = view.floor, room = view.room, ix = x + q(u * 1.1), iw = w - 2 * q(u * 1.1);
+    const ty = y + q(u * 1.6), ry = ty + q(u * 1.45), js = Math.max(1, Math.round(1.6 * u / 16)), Z = 16 * js, gap = q(u * 0.6);
+    const exits = fl && room && room.exits ? room.exits : [], ny = ry + q(u * 1.3), top = exits.length ? ny + Z + q(u * 0.9) : ry + q(u * 1.2);
+    L.mh = q(top - y);
     fadeStart('map', x, y, w, L.mh);
     frame(c, 'hpanel', 'base', x, y, w, L.mh, k);
     T(biome.name, x + w / 2, ty, tT, biome.pal.ui, 'b', 'center', 700);
-    T('Stratum ' + U.roman(view.stratum), ix, ry, tS, K.muted, 'b', 'left', 700);
+    const row = room ? room.row | 0 : 0, rows = fl ? fl.rows | 0 : 0;
+    T('Stratum ' + U.roman(view.stratum) + (rows && row >= 1 && row <= rows ? '  Room ' + row + ' / ' + rows : room && room.type === 'boss' ? '  Boss' : ''), ix, ry, tS, K.muted, 'b', 'left', 700);
     if (view.pact > 0) T('Pact ' + view.pact, ix + iw, ry, tS, '#ff7a56', 'b', 'right', 700);
-    // stratum affinity: foes are weak to one element and resist another
-    if (wkE && rsE) {
-      for (let kk = 0; kk < 2; kk++) {
-        const P = kk ? rsE : wkE, lab = kk ? 'Resists' : 'Weak', gy = ay + (two && kk ? rowH : 0), ax = two || !kk ? ix : ix + iw - grp(lab, P);
-        T(lab, ax, gy, tS, K.faint, 'b', 'left', 700);
-        const lx = ax + adv(lab, tS) + 2 * f;
-        icon(c, P.icon, P.color, lx, gy - Z / 2, js);
-        T(P.name, lx + Z + 2 * f, gy, tS, P.color, 'b', 'left', 700);
-      }
+    if (exits.length) {
+      const lab = 'Next', lw = adv(lab, tS) + gap, n = exits.length, sx = ix + lw + Math.max(0, Math.floor((iw - lw - n * Z - (n - 1) * gap) / 2)), cy = ny + Z / 2;
+      T(lab, ix, cy, tS, K.faint, 'b', 'left', 700);
+      const me = view.players && view.players.get(ED.Render.local), cls = me ? me.cls : null;
+      c.globalAlpha = ga * (view.locked ? 0.45 : 1);
+      exits.forEach((id, i) => {
+        const nb = fl.rooms[id], ri = ED.Render.roomIcon(nb, cls), ex = sx + i * (Z + gap);
+        if (ri) icon(c, ri.icon, ri.color, ex, ny, js);
+        const mark = nb.dark ? '#a070ff' : ri && ri.badge ? '#ff7a3a' : null; // a bar under the icon: violet = dark room, red = elite or champion
+        if (mark) { c.fillStyle = K.ol; c.fillRect(ex, ny + Z + f, Z, 3 * f); c.fillStyle = mark; c.fillRect(ex + f, ny + Z + 2 * f, Z - 2 * f, f); }
+      });
+      c.globalAlpha = ga;
     }
-    H.drawMap(c, view, x + q(u * 0.6), y + top, mw, mh, u, t, f);
     endFade();
   }
 
@@ -771,48 +771,4 @@
     }
     c.globalAlpha = 1;
   }
-
-  // ---------------- minimap / full map of the current floor ----------------
-  // Room-grid bounds of the whole floor (known or not, so the scale holds for the stratum), cached per floor.
-  const grids = new WeakMap();
-  function gridOf(fl) {
-    let G = grids.get(fl); if (G) return G;
-    let minX = 99, maxX = -99, minY = 99, maxY = -99;
-    for (const r of fl.rooms) { minX = Math.min(minX, r.gx); maxX = Math.max(maxX, r.gx); minY = Math.min(minY, r.gy); maxY = Math.max(maxY, r.gy); }
-    G = { minX, minY, cols: maxX - minX + 1, rows: maxY - minY + 1 }; grids.set(fl, G); return G;
-  }
-  // g: target context; un: text unit in px of g (cells scale with it); pk: pixel size of lines and rims (default from the cell). The grid is centred in the w x h box; every rect is whole px,
-  // icons are drawn at whole multiples of 16 px (nearest), smaller ones at their size.
-  H.drawMap = (g, view, x, y, w, h, un, t, pk) => {
-    const fl = view.floor; if (!fl) return;
-    const rs = view.roomState || {}, G = gridOf(fl), minX = G.minX, minY = G.minY, cols = G.cols, rows = G.rows;
-    const cell = Math.max(4, Math.floor(Math.min(w / cols, h / rows, 4.2 * un))), px = pk || Math.max(1, Math.round(cell / 16));
-    const ox = Math.round(x + (w - cols * cell) / 2), oy = Math.round(y + (h - rows * cell) / 2), s = Math.max(2 * px, Math.round(cell * 0.8 / px) * px), so = Math.floor((cell - s) / 2);
-    const rx0 = (r) => ox + (r.gx - minX) * cell + so, ry0 = (r) => oy + (r.gy - minY) * cell + so, th = Math.max(px, Math.round(cell * 0.1 / px) * px);
-    const sm = g.imageSmoothingEnabled; g.imageSmoothingEnabled = false;
-    const ic2 = (name, col, ix, iy, z) => { const j = Math.min(Math.floor((z + 2 * px) / 16), Math.round(z / 16)); if (j >= 1) icon(g, name, col, ix + (z - 16 * j) / 2, iy + (z - 16 * j) / 2, j); else g.drawImage(ED.Icons.canvas(name, col, 64), Math.round(ix), Math.round(iy), Math.round(z), Math.round(z)); };
-    g.fillStyle = '#6b5a48';
-    for (const r of fl.rooms) {
-      const st = rs[r.id]; if (!st || !st.known) continue;
-      const n1 = r.doors.e, n2 = r.doors.s, c0x = rx0(r) + (s - th) / 2, c0y = ry0(r) + (s - th) / 2;
-      if (n1 >= 0 && rs[n1] && rs[n1].known) g.fillRect(Math.round(c0x), Math.round(c0y), rx0(fl.rooms[n1]) - rx0(r), th);
-      if (n2 >= 0 && rs[n2] && rs[n2].known) g.fillRect(Math.round(c0x), Math.round(c0y), th, ry0(fl.rooms[n2]) - ry0(r));
-    }
-    const ICON = { boss: ['skull', '#ff5a3a'], shop: ['coin', '#ffd36b'], treasure: ['chest', '#ffd36b'], event: ['star', '#7dffd9'], elite: ['skull', '#ff7a3a'], rest: ['campfire', '#ff9a3a'] };
-    const meP = ED.Game.s && ED.Game.s.me, cls = meP ? meP.cls : null;
-    for (const r of fl.rooms) {
-      const st = rs[r.id]; if (!st || !st.known) continue;
-      const rx = rx0(r), ry = ry0(r), cur = r.id === view.roomId;
-      g.fillStyle = cur ? '#fff3c4' : K.ol; g.fillRect(rx, ry, s, s);
-      g.fillStyle = cur ? '#e6c27a' : st.visited ? (st.cleared ? '#5a4a3c' : '#8a3a2a') : '#3c3028'; g.fillRect(rx + px, ry + px, s - 2 * px, s - 2 * px);
-      const icn = ICON[r.type], open = !st.cleared, z = s - 2 * px; // utility rooms keep their glyph; a cleared elite room loses it
-      if (icn && (open || r.type !== 'elite')) ic2(icn[0], icn[1], rx + px, ry + px, z);
-      if (open && r.reward && (r.type === 'combat' || r.type === 'elite')) { // reward preview: whole icon in plain combat rooms, a corner badge in elite rooms
-        const ri = ED.Render.rewardIcon((r.dark && ED.World.REWARD_UP[r.reward]) || r.reward, cls), big = r.type === 'combat', zb = big ? z : Math.max(16, Math.floor(s * 0.5)); // a dark room previews its stepped-up reward
-        ic2(ri[0], ri[1], big ? rx + px : rx + s - zb, big ? ry + px : ry + s - zb, zb);
-      }
-      if (r.dark && !st.visited) { const zd = Math.max(16, Math.floor(s * 0.5)); ic2('skull', '#a070ff', rx + s - zd, ry + s - zd, zd); } // dark-room mark, bottom-right of its cell
-    }
-    g.imageSmoothingEnabled = sm;
-  };
 })(globalThis.ED || (globalThis.ED = {}));

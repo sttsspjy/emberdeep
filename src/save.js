@@ -91,7 +91,7 @@
     d.pactMax = int(p.pactMax, 0, 10);
     d.pactWin = p.pactWin === undefined ? -1 : int(p.pactWin, -1, 10);
     const st = obj(p.stats);
-    for (const k in d.stats) d.stats[k] = int(st[k], 0, k === 'deepest' ? 6 : BIG);
+    for (const k in d.stats) d.stats[k] = int(st[k], 0, k === 'deepest' ? ED.CONST.STRATA : BIG); // an older six-stratum profile caps at the last stratum
     const played = d.stats.runs > 0 || d.refunded > 0;
     d.news = old ? (played ? 1 : 0) : (p.v | 0) < 5 ? (int(p.news, 0, 3) || (played ? 3 : 0)) : int(p.news, 0, 3);
     const sel = obj(p.sel);
@@ -408,7 +408,7 @@
       for (let i = 0; i < nd; i++) if (r.get(1)) deeds |= (1 << i);
       p.deeds = deeds;
       p.pactMax = Math.min(10, r.get(4)); p.pactWin = Math.min(10, r.get(4) - 1);
-      p.stats.runs = r.varint(); p.stats.wins = r.varint(); p.stats.deepest = Math.min(6, r.get(3));
+      p.stats.runs = r.varint(); p.stats.wins = r.varint(); p.stats.deepest = Math.min(ED.CONST.STRATA, r.get(3));
       p.stats.kills = r.varint(); p.stats.bestTime = r.varint(); p.stats.bossKills = r.varint();
       p.embers += refund; p.refunded = refund;
       const played = p.stats.runs > 0 || refund > 0;

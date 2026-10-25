@@ -298,17 +298,18 @@
   }
 
   // ---------------- Map tab ----------------
+  // Stratum card (map row, the rooms behind the exit doors), dark-room rules (with the dark rooms still reachable), party.
   function renderMapSide(m) {
-    const K = m.dark, A = m.aff, biome = ED.biomeFor(m.ctx.stratum);
-    let h = `<div class="sh-stat sh-f" data-k="m:strat"><div class="sh-sl"><span class="sh-l">${U.roman(m.ctx.stratum)} ${esc(biome.name)}</span></div><div class="sh-aff2">${affChips(A.now)}</div>`;
-    const cls = A.now.mine.filter(x => x.skillMul !== null && x.skillMul !== x.mul);
-    if (cls.length) h += `<div class="sh-sub">Your class skills take half the affinity: ${cls.map(x => `${esc(x.name)} ${X(x.skillMul)}`).join(', ')}.</div>`;
-    if (A.next) h += `<div class="sh-sub">Next, ${esc(A.next.short)}:</div><div class="sh-aff2">${affChips(A.next)}</div>`;
+    const K = m.dark, biome = ED.biomeFor(m.ctx.stratum), v = ED.Game.s.view, fl = v.floor, cur = fl && fl.rooms[v.roomId];
+    const rows = fl ? fl.rows | 0 : 0, row = cur ? cur.row | 0 : 0, where = !cur ? '' : cur.type === 'boss' ? 'Boss room' : cur.type === 'start' ? 'Camp' : `Room ${row} of ${rows}`;
+    let h = `<div class="sh-stat sh-f" data-k="m:strat"><div class="sh-sl"><span class="sh-l">${U.roman(m.ctx.stratum)} ${esc(biome.name)}</span><span class="sh-v">${live('row', where)}</span></div><div class="sh-sub">${esc(biome.blurb || '')}</div>`;
+    const exits = cur && cur.exits ? cur.exits : [];
+    if (exits.length) h += `<div class="sh-sub">${v.locked ? 'Doors open when the room is clear. ' : ''}Doors, left to right:</div>` + exits.map(id => `<div class="sh-cond">${esc(ED.Render.roomName(fl.rooms[id]))}</div>`).join('');
     h += '</div>';
-    h += `<div class="sh-stat sh-f" data-k="m:dark"><div class="sh-sl"><span class="sh-l">Dark rooms</span><span class="sh-v">${live('dark', `${K.left} left`)}</span></div>`
-      + `<div class="sh-sub">${K.left} of ${K.total} unvisited${K.here ? ' · you are in one' : ''}. They are optional dead ends, marked on doors and the map.</div>`
-      + `<div class="sh-cond">Foes hit ${X(K.dmg)} · the last wave brings one more elite · the reward goes up one step · gold and experience dropped there ${X(K.loot)}</div>`
-      + `<div class="sh-cond">Rooms explored ${live('rooms', `${K.rooms.seen} / ${K.rooms.total}`)}</div></div>`;
+    const ahead = fl && cur ? [...reachFrom(fl, cur.id)].filter(id => id !== cur.id && fl.rooms[id].dark).length : 0;
+    h += `<div class="sh-stat sh-f" data-k="m:dark"><div class="sh-sl"><span class="sh-l">Dark rooms</span><span class="sh-v">${live('dark', `${ahead} ahead`)}</span></div>`
+      + `<div class="sh-sub">Marked violet on the map and doors${K.here ? ' · you are in one' : ''}.</div>`
+      + `<div class="sh-cond">Foes hit ${X(K.dmg)} · the last wave brings one more elite · the reward goes up one step · gold and experience dropped there ${X(K.loot)}</div></div>`;
     h += `<div class="sh-stat sh-f" data-k="m:party"><div class="sh-sl"><span class="sh-l">Party</span></div>${m.partyRows}</div>`;
     return h;
   }
@@ -452,63 +453,70 @@
   }
 
   // ---------------- map canvas ----------------
-  // Room grid at whole UI art px (PixUI.k device px each): a cell pitch of whole art px, rooms as outlined squares with a 1 art px bevel, corridors 2 art px wide,
-  // room icons at whole multiples of 16 device px (ED.Icons draws them crisp at their own size). Redrawn when the box, the room or the room-state hash change.
-  const MAP_C = { here: '#e6c27a', cleared: '#5a4a3c', fight: '#8a3a2a', known: '#2c231c', dark: '#a070ff' };
-  const MAP_ICON = { boss: ['skull', '#ff5a3a'], shop: ['coin', '#ffd36b'], treasure: ['chest', '#ffd36b'], event: ['star', '#7dffd9'], elite: ['skull', '#ff7a3a'], rest: ['campfire', '#ff9a3a'] };
+  // The stratum map as a vertical node graph (start at the bottom, the boss at the top, LANES columns), in whole UI art px (PixUI.k device px each): paths as 2 art px stepped lines
+  // (visited brass, the current room's exits ember, the rest dim), rooms as outlined squares with a 1 art px bevel and their icon at whole multiples of 16 device px.
+  // Rooms off every path from the current room dim. Redrawn when the box, the room, the lock or the room-state hash change.
+  const MAP_C = { here: '#e6c27a', visited: '#5a4a3c', next: '#ff8a3d', ahead: '#2c231c', gone: '#17110d', dark: '#a070ff', elite: '#ff7a3a' };
   function mapLegend() {
     const el = $('sh-legend'); if (!el || el.firstChild) return;
-    el.innerHTML = [['here', 'you are here'], ['cleared', 'cleared'], ['fight', 'not cleared'], ['known', 'seen, not visited'], ['dark', 'dark room']].map(([k, t]) => `<span><i style="--c:${MAP_C[k]}"></i>${t}</span>`).join('');
+    el.innerHTML = [['here', 'you are here'], ['visited', 'visited'], ['next', 'next doors'], ['ahead', 'ahead'], ['gone', 'out of reach'], ['dark', 'dark room'], ['elite', 'elite or champion']].map(([k, t]) => `<span><i style="--c:${MAP_C[k]}"></i>${t}</span>`).join('');
+  }
+  // Room ids reachable from room id through exits (id included).
+  function reachFrom(fl, id) {
+    const seen = new Set([id]), q = [id];
+    while (q.length) for (const n of fl.rooms[q.pop()].exits || []) if (!seen.has(n)) { seen.add(n); q.push(n); }
+    return seen;
   }
   function mapDraw(force) {
     const v = ED.Game.s.view, fl = v.floor, box = $('sh-mapbox'), cv = $('map-canvas');
-    if (!fl) return;
+    if (!fl || !fl.rows) return;
     const dpr = window.devicePixelRatio || 1, W = Math.floor(box.clientWidth * dpr), H = Math.floor(box.clientHeight * dpr);
     if (W < 16 || H < 16) return; // a hidden tab measures 0 and draws nothing
-    let rs = ''; for (const id in v.roomState) { const q = v.roomState[id]; rs += (q.visited ? 1 : 0) + (q.known ? 2 : 0) + (q.cleared ? 4 : 0); }
-    const k = PX ? PX.k : Math.max(1, Math.round(2 * dpr)), key = [W, H, k, v.roomId, rs, v.floorSeed].join('|');
+    let rs = ''; for (const id in v.roomState) { const q = v.roomState[id]; rs += (q.visited ? 1 : 0) + (q.cleared ? 4 : 0); }
+    const k = PX ? PX.k : Math.max(1, Math.round(2 * dpr)), key = [W, H, k, v.roomId, v.locked ? 1 : 0, rs, v.floorSeed].join('|');
     if (!force && key === SH.mapKey) return;
     SH.mapKey = key;
     cv.style.width = (W / dpr) + 'px'; cv.style.height = (H / dpr) + 'px';
     if (cv.width !== W) cv.width = W;
     if (cv.height !== H) cv.height = H;
-    const c = cv.getContext('2d'), st = v.roomState || {};
+    const c = cv.getContext('2d'), st = v.roomState || {}, R = fl.rows, lanes = ED.Dungeon.LANES;
     c.clearRect(0, 0, W, H); c.imageSmoothingEnabled = false;
-    let x0 = 99, x1 = -99, y0 = 99, y1 = -99;
-    for (const r of fl.rooms) { x0 = Math.min(x0, r.gx); x1 = Math.max(x1, r.gx); y0 = Math.min(y0, r.gy); y1 = Math.max(y1, r.gy); }
-    const cols = x1 - x0 + 1, rows = y1 - y0 + 1, pitch = Math.max(8, Math.min(Math.floor(W / k / cols), Math.floor(H / k / rows), 44)); // art px per cell
-    const gap = Math.max(3, Math.round(pitch * 0.2)), side = pitch - gap, P = pitch * k, S = side * k;
-    const ox = Math.floor((W - cols * P) / 2 + gap * k / 2), oy = Math.floor((H - rows * P) / 2 + gap * k / 2);
-    const at = (r) => [ox + (r.gx - x0) * P, oy + (r.gy - y0) * P];
+    const px = Math.max(8, Math.min(Math.floor(W / k / lanes), 40)), py = Math.max(8, Math.min(Math.floor(H / k / (R + 2)), 40)); // art px per lane and per row
+    const side = Math.max(6, Math.min(px, py) - Math.max(3, Math.round(Math.min(px, py) * 0.25))), S = side * k;
+    const ox = Math.floor((W - lanes * px * k) / 2 / k) * k, oy = Math.floor((H - (R + 2) * py * k) / 2 / k) * k; // whole art px
+    const at = (r) => [ox + Math.floor((r.lane + 0.5) * px - side / 2) * k, oy + Math.floor((R + 1 - r.row + 0.5) * py - side / 2) * k]; // top-left of a room's square
     const rect = (col, x, y, w, h) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
-    const mid = Math.floor(side / 2) * k;
-    for (const r of fl.rooms) { // corridors: a 2 art px brass line in a 1 art px outline between known neighbours
-      const q = st[r.id]; if (!q || !q.known) continue;
-      for (const d of ['e', 's']) {
-        const n = r.doors[d]; if (!(n >= 0) || !st[n] || !st[n].known) continue;
-        const [ax, ay] = at(r), [bx, by] = at(fl.rooms[n]);
-        if (d === 'e') { rect('#222222', ax + S, ay + mid - 2 * k, bx - ax - S, 4 * k); rect('#6f5338', ax + S, ay + mid - k, bx - ax - S, 2 * k); }
-        else { rect('#222222', ax + mid - 2 * k, ay + S, 4 * k, by - ay - S); rect('#6f5338', ax + mid - k, ay + S, 2 * k, by - ay - S); }
+    const cur = fl.rooms[v.roomId], reach = cur ? reachFrom(fl, cur.id) : new Set(), half = Math.floor(side / 2) * k;
+    // a path: a 2 art px stepped line between the centres of two squares, in art px steps (Bresenham), drawn under the rooms
+    const line = (a, b, col) => {
+      const [ax, ay] = at(a), [bx, by] = at(b), x0 = (ax + half) / k | 0, y0 = (ay + half) / k | 0, x1 = (bx + half) / k | 0, y1 = (by + half) / k | 0;
+      let x = x0, y = y0; const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1; let e = dx + dy;
+      c.fillStyle = col;
+      for (let g = 0; g < 4096; g++) {
+        c.fillRect((x - 1) * k, (y - 1) * k, 2 * k, 2 * k);
+        if (x === x1 && y === y1) break;
+        const e2 = 2 * e; if (e2 >= dy) { e += dy; x += sx; } if (e2 <= dx) { e += dx; y += sy; }
       }
+    };
+    const walked = (a, b) => st[a.id] && st[a.id].visited && st[b.id] && st[b.id].visited;
+    for (const pass of [0, 1, 2]) for (const r of fl.rooms) for (const n of r.exits || []) { // dim, then walked, then the current room's exits on top
+      const b = fl.rooms[n], kind = walked(r, b) ? 1 : r === cur ? 2 : 0;
+      if (kind !== pass) continue;
+      line(r, b, kind === 1 ? '#c9a063' : kind === 2 ? (v.locked ? '#8a5a32' : MAP_C.next) : reach.has(r.id) ? '#4a3626' : '#2a1f17');
     }
-    const meP = ED.Game.s && ED.Game.s.me, cls = meP ? meP.cls : null, icoPx = (n) => Math.floor(n / 16) * 16; // whole 16 device px
+    const meP = ED.Game.s && ED.Game.s.me, cls = meP ? meP.cls : null, ico = Math.floor((S - 2 * k) / 16) * 16; // icons at whole 16 device px
+    const next = new Set(cur && cur.exits ? cur.exits : []);
     for (const r of fl.rooms) {
-      const q = st[r.id]; if (!q || !q.known) continue;
-      const [x, y] = at(r), cur = r.id === v.roomId, fill = cur ? MAP_C.here : q.visited ? (q.cleared ? MAP_C.cleared : MAP_C.fight) : MAP_C.known;
-      rect(cur ? '#fff3c4' : '#222222', x, y, S, S);
+      const q = st[r.id] || {}, [x, y] = at(r), here = r === cur, gone = !q.visited && !reach.has(r.id);
+      const fill = here ? MAP_C.here : q.visited ? MAP_C.visited : gone ? MAP_C.gone : MAP_C.ahead;
+      rect(here ? '#fff3c4' : next.has(r.id) && !v.locked ? MAP_C.next : '#222222', x, y, S, S);
       rect(fill, x + k, y + k, S - 2 * k, S - 2 * k);
       rect(U.shade(fill, 0.22), x + k, y + k, S - 2 * k, k);
       rect(U.shade(fill, -0.35), x + k, y + S - 2 * k, S - 2 * k, k);
-      const inner = S - 4 * k, big = icoPx(inner), small = icoPx(inner / 2) || Math.min(16, big);
-      const draw = (name, color, z, cx, cy) => { if (z >= 16) c.drawImage(ED.Icons.canvas(name, color, z), cx, cy, z, z); };
-      const centre = (z) => [x + Math.floor((S - z) / 2), y + Math.floor((S - z) / 2)], corner = (z) => [x + S - z - k, y + S - z - k];
-      const icn = MAP_ICON[r.type], open = !q.cleared; // utility rooms keep their glyph; a cleared elite room loses it
-      if (icn && (open || r.type !== 'elite')) draw(icn[0], icn[1], big, ...centre(big));
-      if (open && r.reward && (r.type === 'combat' || r.type === 'elite') && ED.Render.rewardIcon) { // reward preview: whole icon in plain combat rooms, a corner badge in elite rooms
-        const ri = ED.Render.rewardIcon((r.dark && ED.World.REWARD_UP[r.reward]) || r.reward, cls);
-        if (r.type === 'combat') draw(ri[0], ri[1], big, ...centre(big)); else draw(ri[0], ri[1], small, ...corner(small));
-      }
-      if (r.dark && !q.visited) draw('skull', MAP_C.dark, small, ...corner(small)); // dark-room mark, bottom-right of its cell
+      const ri = r.type === 'start' ? { icon: 'campfire', color: '#c9a063' } : ED.Render.roomIcon ? ED.Render.roomIcon(r, cls) : null;
+      if (ri && ico >= 16) { c.globalAlpha = gone ? 0.35 : 1; c.drawImage(ED.Icons.canvas(ri.icon, ri.color, ico), x + Math.floor((S - ico) / 2), y + Math.floor((S - ico) / 2), ico, ico); c.globalAlpha = 1; }
+      const mark = r.dark ? MAP_C.dark : r.type === 'elite' || r.type === 'champion' ? MAP_C.elite : null; // a 1 art px bar under the square: dark (violet), elite or champion (red)
+      if (mark) { rect('#222222', x, y + S, S, 2 * k); rect(gone ? U.shade(mark, -0.5) : mark, x + k, y + S, S - 2 * k, k); }
     }
   }
 

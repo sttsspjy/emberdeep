@@ -80,10 +80,10 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
   const f3 = stage({ c_atk: 1, c_atk_h: 2 }), flare = (S, x, y, why) => { const pr = { kind: 'wave', x, y, dmg: 100, infAdd: null }; ED.CLS.cleric.projEnd.call(S.w, pr, S.p, why); };
   const fin = foe(f3.w, f3.p.x + 40, f3.p.y), fout = foe(f3.w, f3.p.x + 70, f3.p.y + 1); flare(f3, f3.p.x, f3.p.y, 'life'); // 40 px from the burst: inside; 70 px: outside r50 + the foe's radius 11
   const sol = evs(f3.w, 'solar')[0]; ok(sol && sol.r === 50, 'Solar Flare event r50'); near(lost(fin), 100 * 0.8 * f3.p.stats.dmg, 0.05, 'Solar Flare deals 80% of the wave to a foe in r50'); ok(lost(fout) === 0, 'Solar Flare does not reach past r50');
-  // end to end: a wave that runs into the east wall bursts there (the room is too small for the full range)
-  const ew = stage({ c_atk: 1, c_atk_h: 2 }); let wall = ew.p.x; while (!ED.Dungeon.blocksShots(ED.Dungeon.tileAt(ew.w.room, wall, ew.p.y), false)) wall += 2;
+  // end to end: a wave that runs into the east wall bursts there (the hero stands 6 tiles from it, closer than the full range)
+  const ew = stage({ c_atk: 1, c_atk_h: 2 }); ew.p.x = (ew.w.room.w - 7) * ED.CONST.TILE; let wall = ew.p.x; while (!ED.Dungeon.blocksShots(ED.Dungeon.tileAt(ew.w.room, wall, ew.p.y), false)) wall += 2;
   const bf = foe(ew.w, wall - 24, ew.p.y); ew.w.playerAttack(ew.p, 0); ew.w.projs.length = 0; ew.w.playerAttack(ew.p, 0); const wd = waves(ew.w)[0].dmg; let sn = 0; run(ew.w, 1.2, () => { sn += evs(ew.w, 'solar').length; ew.w.fx.length = 0; });
-  ok(sn === 1 && lost(bf) > wd * ew.p.stats.dmg * 1.3, `a wave that ends at a wall bursts once, the foe there takes wave + burst (${lost(bf).toFixed(1)} of ${(wd * ew.p.stats.dmg).toFixed(1)} + 80%)`);
+  ok(sn === 1 && lost(bf) > wd * ew.p.stats.dmg * 1.3, `a wave that ends at a wall bursts once, the foe there takes wave + burst (${sn} bursts, ${lost(bf).toFixed(1)} of ${(wd * ew.p.stats.dmg).toFixed(1)} + 80%)`);
   const wa = stage({ c_atk: 1, c_atk_h: 2 }); wa.p.stats.area = 1; flare(wa, wa.p.x, wa.p.y, 'life'); ok(evs(wa.w, 'solar')[0].r === 50, 'Solar Flare radius is fixed at 50 whatever the area stat');
   const nf = stage({ c_atk: 1, c_atk_h: 1 }); flare(nf, nf.p.x, nf.p.y, 'life'); ok(evs(nf.w, 'solar').length === 0, 'no Solar Flare below rank 2');
 }

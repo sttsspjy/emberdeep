@@ -48,8 +48,6 @@
   // Evolved weapon name from a weapon name (the fork's name after an Attack fork: 'Cinder Greatsword').
   UI.evoName = (path, weaponName) => (ED.PATHS[path] ? ED.PATHS[path].evo : '') + ' ' + (weaponName || 'Arms');
   const heroWeaponName = (p) => (p && p.stats && p.stats.weapon ? p.stats.weapon.name : p && ED.WEAPONS[p.weapon] ? ED.WEAPONS[p.weapon].name : '');
-  const affChip = (el, kind) => (el && ED.PATHS[el] ? `<span class="aff-chip ${kind}" style="--pc:${ED.PATHS[el].color}"><img alt="" src="${pathIcon(el)}">${kind === 'weak' ? 'Weak to' : 'Resists'} ${ED.PATHS[el].name}</span>` : '');
-  const affChips = (biome) => affChip(biome.weak, 'weak') + affChip(biome.resist, 'resist');
 
   // Roster keys: arrows move between menu entries and tabs.
   const arrowNav = (root, sel, prev, next) => root.addEventListener('keydown', (e) => {
@@ -95,10 +93,10 @@
       `<b>Paths:</b> follow up to ${ED.MAX_ELEMENTS} of ${ED.ELEMENT_IDS.map(k => pathName(k, true)).join(', ')}, or take the ${pathName('general', true)} path alone as a Generalist. Blood and Spirit are gone.`,
       '<b>No life steal:</b> hits do not heal you any more. Shields take their place.',
       '<b>Knight:</b> Shield Throw replaces Bulwark.',
-      '<b>Dark rooms:</b> the lantern, the Gloom and oil are gone. Each floor has two optional dark rooms: harder fights, richer rewards.',
+      '<b>Map:</b> each stratum is a map of branching paths to the boss. Every door shows the next room and its reward; doors close behind you. Dark rooms on the map: harder fights, richer rewards.',
       '<b>Hordes:</b> fight rooms are about twice as big and scroll with you, and packs of weak fodder pour in beside the foes that matter.',
       '<b>Dash:</b> dashing uses charges that refill one at a time; Light Step adds charges.',
-      '<b>Late power:</b> your route fork gains rank 2 at the stratum II boss and transforms at rank 3 at the stratum IV boss, skill forks included. From stratum IV, Ascended boons multiply a boon you have maxed.',
+      '<b>Late power:</b> your route fork gains rank 2 at the stratum II boss and transforms at rank 3 at the stratum III boss, skill forks included.',
       '<b>Bosses:</b> from stratum IV a boss that lives too long grows furious and hits harder and faster; its bar shows when.',
       '<b>Sound:</b> every stratum has its own music, and it swells as a fight grows.',
     ])).filter(Boolean).map(t => `<p>${t}</p>`).join('');
@@ -245,7 +243,7 @@
     if (p.stats.runs < 2) {
       const gen = ED.CLASS_IDS.filter(c => !ED.CLASSES[c].element).map(c => ED.CLASSES[c].name); // heroes without a class element can go Generalist
       lines.push('<b>Aim:</b> aim with the mouse; skills go to the cursor. At level 3 you choose a class route.');
-      lines.push(`<b>Paths:</b> follow up to ${ED.MAX_ELEMENTS} of ${ED.ELEMENT_IDS.map(k => pathName(k, true)).join(', ')}, or, as ${gen.slice(0, -1).join(', ')} or ${gen[gen.length - 1]}, take the ${pathName('general', true)} path alone as a Generalist. Each stratum is weak to one element.`);
+      lines.push(`<b>Paths:</b> follow up to ${ED.MAX_ELEMENTS} of ${ED.ELEMENT_IDS.map(k => pathName(k, true)).join(', ')}, or, as ${gen.slice(0, -1).join(', ')} or ${gen[gen.length - 1]}, take the ${pathName('general', true)} path alone as a Generalist.`);
       lines.push('<b>Dark rooms:</b> a door marked dark leads to an optional dead end: foes hit harder and an extra elite joins, but the reward is a step richer and gold and experience drop in larger piles.');
     }
     if (p.stats.runs === 0) lines.push('<b>First goal:</b> reach the Bone Warden at the end of the Ossuary. Every descent pays embers, win or lose.');
@@ -422,7 +420,7 @@
     const sl = $('strata-list'); sl.innerHTML = '';
     ED.BIOMES.forEach((b, i) => {
       const seen = st.deepest > i, slain = !!(p.bosses & (1 << i));
-      sl.insertAdjacentHTML('beforeend', `<div class="stratum${seen ? '' : ' unseen'}"><i style="--sa:${b.pal.accent};--sb:${b.pal.floorA}"></i><div><b>${U.roman(i + 1)}. ${seen ? b.name : '???'}</b><small>${seen ? esc(slain ? ED.LORE[i] : b.blurb) : 'Undiscovered'}</small><div class="aff-list">${affChips(b)}</div></div></div>`);
+      sl.insertAdjacentHTML('beforeend', `<div class="stratum${seen ? '' : ' unseen'}"><i style="--sa:${b.pal.accent};--sb:${b.pal.floorA}"></i><div><b>${U.roman(i + 1)}. ${seen ? b.name : '???'}</b><small>${seen ? esc(b.blurb) + (slain ? ` Boss defeated: ${esc(ED.ENEMIES[b.boss] ? ED.ENEMIES[b.boss].name : '')}.` : '') : 'Undiscovered'}</small></div></div>`);
     });
   }
 
@@ -504,7 +502,7 @@
     if (src === 'class') {
       const cn = me && ED.CLASSES[me.cls] ? ED.CLASSES[me.cls].name : 'Class', rt = me && me.boons ? ED.classRoute(me.boons, me.cls) : null;
       if (offer.ctier === 1) return ['Choose your route', `It shapes how ${cn} fights`, null];
-      return [`${rt && rt.route ? ED.routeLabel(me.cls, rt.route) : 'Route'}: choose your fork`, 'A fork changes how the route plays; the second and fourth bosses rank it up', null];
+      return [`${rt && rt.route ? ED.routeLabel(me.cls, rt.route) : 'Route'}: choose your fork`, 'A fork changes how the route plays; the second and third bosses rank it up', null];
     }
     if (src === 'start') { // only heroes without a class element are offered the General gate
       const cl = me && ED.CLASSES[me.cls];

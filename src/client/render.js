@@ -424,6 +424,7 @@
   }
 
   function drawDoors(c, view, room, P, t) {
+    if (room.entry) drawGate(c, view, room, P, t, 's', false); // the door the party came through never opens again
     if (!view.locked) {
       // open exits: a soft biome-coloured pool beckons from each doorway
       for (const d in room.doors) {
@@ -434,12 +435,14 @@
       for (const pv of doorPreviews(view, room, t)) { R.light(pv.x, pv.y, 62, pv.color, 0.55); R.emit(pv.x, pv.y, 22, pv.color, 0.32 + Math.sin(t * 2.4 + pv.x * 0.02) * 0.08); }
       return;
     }
-    for (const d in room.doors) {
-      if (room.doors[d] < 0) continue;
-      const r = ED.Dungeon.doorRect(room, d);
-      const x0 = r.x0 * T, y0 = r.y0 * T, x1 = (r.x1 + 1) * T, y1 = (r.y1 + 1) * T;
-      const pulse = 0.55 + Math.sin(t * 4) * 0.2, w = x1 - x0, h = y1 - y0, ns = d === 'n' || d === 's';
-      if (ED.Tiles.drawGate(c, room, ED.biomeFor(view.stratum || 1), d)) { R.light((x0 + x1) / 2, (y0 + y1) / 2, 70, P.accent, 0.35 * pulse); R.emit((x0 + x1) / 2, (y0 + y1) / 2, 42, P.accent, 0.5 * pulse); continue; }
+    for (const d in room.doors) if (room.doors[d] >= 0) drawGate(c, view, room, P, t, d, true);
+  }
+  // Closed door d: the atlas gate (ED.Tiles.drawGate) or baked iron bars; lit = the pulsing accent light of a locked exit (the sealed entry has none).
+  function drawGate(c, view, room, P, t, d, lit) {
+    const r = ED.Dungeon.doorRect(room, d), sd = ED.Dungeon.side(d);
+    const x0 = r.x0 * T, y0 = r.y0 * T, x1 = (r.x1 + 1) * T, y1 = (r.y1 + 1) * T;
+    const pulse = 0.55 + Math.sin(t * 4) * 0.2, w = x1 - x0, h = y1 - y0, ns = sd === 'n' || sd === 's';
+    if (!ED.Tiles.drawGate(c, room, ED.biomeFor(view.stratum || 1), d)) {
       const ds = sprite('dr' + (ns ? 'h' : 'v') + w + '|' + h, 0, 0, w, h, false, (g) => { // dark gate with iron bars, baked per size
         g.fillStyle = 'rgba(14,8,6,0.92)'; g.fillRect(0, 0, w, h);
         const bar = (a, b, c2, d2) => {
@@ -450,9 +453,8 @@
         if (ns) { for (let x = 8; x < w; x += 12) bar(x, 0, x, h); } else { for (let y = 8; y < h; y += 12) bar(0, y, w, y); }
       });
       c.drawImage(ds.cv, x0, y0, ds.w, ds.h);
-      R.light((x0 + x1) / 2, (y0 + y1) / 2, 70, P.accent, 0.35 * pulse);
-      R.emit((x0 + x1) / 2, (y0 + y1) / 2, 42, P.accent, 0.5 * pulse);
     }
+    if (lit) { R.light((x0 + x1) / 2, (y0 + y1) / 2, 70, P.accent, 0.35 * pulse); R.emit((x0 + x1) / 2, (y0 + y1) / 2, 42, P.accent, 0.5 * pulse); }
   }
 
   // ---------------- baked sprites ----------------
@@ -1111,9 +1113,17 @@
     if (!rm) return null;
     const T2 = { boss: ['skull', '#ff5a3a'], shop: ['coin', '#ffd36b'], treasure: ['chest', '#ffd36b'], event: ['star', '#7dffd9'], rest: ['campfire', '#ff9a3a'] }[rm.type];
     if (T2) return { icon: T2[0], color: T2[1] };
-    if (!rm.reward) return rm.type === 'elite' ? { icon: 'skull', color: '#ff7a3a' } : null;
+    const tough = rm.type === 'elite' || rm.type === 'champion';
+    if (!rm.reward) return tough ? { icon: 'skull', color: '#ff7a3a' } : null;
     const ri = R.rewardIcon((rm.dark && ED.World.REWARD_UP[rm.reward]) || rm.reward, cls); // a dark room shows the reward it pays after its guaranteed step up
-    return { icon: ri[0], color: ri[1], badge: rm.type === 'elite' ? 'skull' : null };
+    return { icon: ri[0], color: ri[1], badge: tough ? 'skull' : null };
+  };
+  const ROOM_NAME = { start: 'Camp', combat: 'Fight', elite: 'Elite fight', champion: 'Champion fight', shop: 'Shop', rest: 'Rest site', treasure: 'Treasure', event: 'Shrine', boss: 'Boss' };
+  // Plain name of a map room with its reward: 'Elite fight: Relic hoard', 'Dark fight: Epic boon', 'Rest site'.
+  R.roomName = (rm) => {
+    if (!rm) return '';
+    const n = rm.dark ? 'Dark fight' : ROOM_NAME[rm.type] || 'Room', rw = rm.reward ? (rm.dark && ED.World.REWARD_UP[rm.reward]) || rm.reward : null;
+    return rw ? n + ': ' + R.rewardLabel(rw) : n;
   };
 
   // Reward previews over the doors of the current room: neighbours not yet cleared, bobbing in front of each doorway; an unvisited dark room carries a purple skull.
@@ -1131,9 +1141,10 @@
       const ri = R.roomIcon(nb, cls); if (!ri) continue;
       const r = ED.Dungeon.doorRect(room, d), cx = (r.x0 + r.x1 + 1) / 2 * T, cy = (r.y0 + r.y1 + 1) / 2 * T;
       let x = cx, y = cy;
-      if (d === 'n') y = T - 2; else if (d === 's') y = h - T - 6; else if (d === 'w') x = T * 0.5 + 6; else x = w - T * 0.5 - 6;
-      let o = dpPool[n]; if (!o) o = dpPool[n] = { x: 0, y: 0, color: '', ri: null, d: '', dark: false };
-      o.x = x; o.y = y + Math.sin(t * 2.2 + x * 0.03 + y * 0.02) * 1.8; o.color = ri.color; o.ri = ri; o.d = d; o.dark = !!nb.dark && !(st && st.visited);
+      const sd = ED.Dungeon.side(d);
+      if (sd === 'n') y = T - 2; else if (sd === 's') y = h - T - 6; else if (sd === 'w') x = T * 0.5 + 6; else x = w - T * 0.5 - 6;
+      let o = dpPool[n]; if (!o) o = dpPool[n] = { x: 0, y: 0, color: '', ri: null, d: '', dark: false, name: '' };
+      o.x = x; o.y = y + Math.sin(t * 2.2 + x * 0.03 + y * 0.02) * 1.8; o.color = ri.color; o.ri = ri; o.d = sd; o.dark = !!nb.dark && !(st && st.visited); o.name = R.roomName(nb);
       out[n++] = o;
     }
     return out;
@@ -1147,11 +1158,12 @@
       c.globalAlpha = a;
       c.drawImage(ED.Icons.canvas(pv.ri.icon, pv.color, 22), qx - 11, qy - 11); // icons are drawn at their cached size: 1 texel = 1 buffer px
       if (pv.ri.badge) c.drawImage(ED.Icons.canvas('skull', '#ff7a3a', 12), qx + 3, qy + 2);
+      const ta = U.clamp((90 - near) / 40, 0, 1);
+      if (!pv.dark && ta > 0 && pv.d === 'n') R.label(c, pv.name, qx, qy + 20, pv.color, undefined, ta); // the room's name and reward, inside the room under the icon
       if (pv.dark) { // dark-room mark on the room side of the icon (stays readable up close); the rule text fades in as a hero nears, kept inside the room
         c.globalAlpha = Math.max(a, 0.7);
         const sy = Math.round(pv.d === 's' ? pv.y - 18 : pv.y + 18);
         c.drawImage(ED.Icons.canvas('skull', DARK_COL, 11), qx - 5, sy - 5);
-        const ta = U.clamp((90 - near) / 40, 0, 1);
         if (ta > 0) {
           const tw = R.labelW(DARK_TEXT), tx = pv.d === 'w' ? qx - 8 + tw / 2 : pv.d === 'e' ? qx + 8 - tw / 2 : qx;
           R.label(c, DARK_TEXT, tx, sy + (pv.d === 's' ? -12 : 12), DARK_COL, undefined, ta);

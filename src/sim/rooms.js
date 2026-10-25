@@ -8,9 +8,9 @@
   const SIGNS = [
     'Aim with {aim}. Hold {attack} to attack where you aim.',
     '{skill1} and {skill2} cast your skills where you aim: some fly toward it, some land on it. {dash} dashes through danger.',
-    'Clear a room to open its doors. The reward inside is shown on the door.',
-    'Some doors are marked dark: harder fights, richer rewards. You choose whether to enter.',
-    'The skull on your map marks the stratum boss. {map} opens your build, combat numbers and the map ({skill1} / {skill2} switch tabs).',
+    'Clear a room to open its doors. Each door shows the next room and its reward. Doors close behind you.',
+    'A violet skull marks a dark room: harder fights, better rewards. You choose whether to enter.',
+    '{map} opens your build, combat numbers and the map of every path to the boss ({skill1} / {skill2} switch tabs).',
   ];
 
   // Regular foes of a biome that exist in the enemy table (rosters may name foes whose definitions land later).
@@ -22,8 +22,15 @@
   const pendingFoes = (w) => { let n = 0; for (const z of w.zones) if (z.kind === 'spawn') n += z.n || 1; return n; };
 
   // ---------------- encounters ----------------
+  // A champion room (stratum IV, room.champ 'twins' | 'mimic') runs W.startChampion (bosses.js); without it the room plays as an elite fight.
   W.beginEncounter = function (room, rs) {
-    if (room.type === 'combat' || room.type === 'elite') {
+    if (room.type === 'champion' && this.startChampion) {
+      this.locked = true;
+      this.emit({ t: 'lock' });
+      for (const p of this.players.values()) if (!p.downed && !p.dead) this.onRoomLockBuild(p, room);
+      this.startChampion(room);
+    } else if (room.type === 'combat' || room.type === 'elite' || room.type === 'champion') {
+      if (room.type === 'champion') room = Object.assign({}, room, { type: 'elite' }); // TODO(W5b): startChampion replaces this stand-in
       this.locked = true;
       this.enc = { kind: 'waves', waves: this.planWaves(room), wave: -1, t: ED.World.PACE.first };
       this.planHorde(room, this.enc);
@@ -248,6 +255,7 @@
     const s = this.stratum;
     this.run.roomsCleared++;
     if (room.dark) this.run.darkCleared++;
+    if (room.type === 'champion') this.run.champs = (this.run.champs | 0) | (room.champ === 'mimic' ? 2 : 1); // bit 0 twins, bit 1 mimic (deeds)
     this.run.embers.rooms += 1 + Math.round(s / 2);
     const c = this.alivePlayers()[0] || D.center(room);
     const enc = this.enc;
@@ -264,7 +272,7 @@
       if (up) { item = up; this.emit({ t: 'upgrade', to: up, x: Math.round(m.x), y: Math.round(m.y) }); }
       this.props.push({ id: U.uid(), kind: 'reward', x: m.x, y: m.y, item, group: U.uid(), state: 0 });
     }
-    this.checkFullClear();
+    this.checkFullClear(room);
     this.computeFlow();
     this.emit({ t: 'clear' });
   };
@@ -286,15 +294,15 @@
     this.spawnPickup('heart', e.x, e.y, 1); this.spawnPickup('heart', e.x, e.y, 1);
     for (const q of this.players.values()) q.mantleAmt = 0;
     if (s === 1) for (const q of this.players.values()) this.grantOffer(q, { src: 'class' }); // the fork offer at the first boss (downed heroes get it when they are back up)
-    else if (s === 2 || s === 4) for (const q of this.players.values()) this.grantForkRank(q); // fork rank 2 and 3 at once, downed and dead heroes too
+    else if (s === 2 || s === 3) for (const q of this.players.values()) this.grantForkRank(q); // fork rank 2 and 3 at once, downed and dead heroes too
     if (s >= ED.CONST.STRATA) {
       this.run.embers.victory = 60;
       this.endRun(true);
       return;
     }
     const c = D.center(this.room);
-    if (s % 2 === 0) this.spawnRelicChoices(c.x, c.y + 40, 'r'); // even strata: relic hoard; strata III and V: epic offer; stratum I: none
-    else if (s > 1) for (const p of this.players.values()) this.grantOffer(p, { src: 'epic' });
+    if (s === 2) this.spawnRelicChoices(c.x, c.y + 40, 'r'); // boss II: relic hoard; boss III: epic offer; boss I: the class offer only
+    else if (s === 3) for (const p of this.players.values()) this.grantOffer(p, { src: 'epic' });
     this.props.push({ id: U.uid(), kind: 'portal', x: c.x, y: c.y - 60, state: 0 });
   };
 
@@ -327,17 +335,15 @@
     } else if (room.type === 'treasure') {
       props.push({ id: id(), kind: 'chest', x: c.x, y: c.y, state: 0 });
     } else if (room.type === 'rest') {
-      const group = U.uid();
-      const anvil = s % 2 === 1; // the anvil stands at rest sites of odd strata only
-      props.push({ id: id(), kind: 'campfire', x: c.x - (anvil ? 44 : 0), y: c.y, group, state: 0 });
-      if (anvil) props.push({ id: id(), kind: 'anvil', x: c.x + 44, y: c.y, group, state: 0 });
+      const group = U.uid(); // each hero uses one of the two
+      props.push({ id: id(), kind: 'campfire', x: c.x - 44, y: c.y, group, state: 0 });
+      props.push({ id: id(), kind: 'anvil', x: c.x + 44, y: c.y, group, state: 0 });
     } else if (room.type === 'shop') {
       props.push({ id: id(), kind: 'merchant', x: c.x, y: c.y - 70, state: 0 });
       const items = [];
       const taken = new Set();
       for (let i = 0; i < 2; i++) { const r = this.rollRelic('c', taken); taken.add(r); items.push({ type: 'relic', item: r }); }
-      items.push({ type: s % 2 ? 'boon' : 'forge' }); // one build item per shop: epic boon on odd strata, forge on even
-      items.push({ type: 'potion' });
+      items.push({ type: 'boon' }, { type: 'forge' }, { type: 'potion' }); // build items: an epic boon and a forge
       items.forEach((it, i) => {
         props.push({ id: id(), kind: 'shop', x: c.x + (i - (items.length - 1) / 2) * 62, y: c.y + 24, item: it.item || it.type, stype: it.type, price: this.priceOf(it), state: 0 });
       });

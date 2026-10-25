@@ -42,19 +42,20 @@ const GOLD2 = {
   code: 'WD1-ENRDZ-330MV-D9HWH-D9BTC-FCJSD-W3C0A-VE1AJ-4KEM9-7QGQH-MR5TQ-6KQ5D-4KBFM-6HGC9-3EX0V-E2',
   name: 'Old Hand', embers: 1234, lifetime: 98765, up: [1, 4, 3, 2, 1, 0, 3, 2, 1, 1, 3, 1, 2, 1, 1, 2],
   relicsNonStart: [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0], mastery: [0, 120, 5000, 33, 0, 777],
-  bosses: 22, deeds: 665, pactMax: 3, pactWin: 1, stats: { runs: 41, wins: 2, deepest: 5, kills: 9001, bestTime: 1432, bossKills: 17 },
+  bosses: 22, deeds: 665, pactMax: 3, pactWin: 1, stats: { runs: 41, wins: 2, deepest: 4, kills: 9001, bestTime: 1432, bossKills: 17 },
 };
 const GOLD3 = {
   code: 'WD1-EJ093-0BSWA-2P3J7-S2ZAE-ZBARV-HDNKQ-3JFCZ-4HY5P-M6FQQ-ZP935-NPF59-3H142-C67AZ-K7Z5G-MT',
   name: 'Preview', embers: 777, lifetime: 4242, up: [2, 1, 0, 1, 1, 3, 0, 1, 2, 2, 0, 0, 2, 1, 0, 1],
   relicsNonStart: [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], mastery: [10, 0, 4000, 0, 250, 9],
-  bosses: 53, deeds: 196613, pactMax: 2, pactWin: 0, stats: { runs: 12, wins: 1, deepest: 6, kills: 3100, bestTime: 1111, bossKills: 8 },
+  bosses: 53, deeds: 196613, pactMax: 2, pactWin: 0, stats: { runs: 12, wins: 1, deepest: 4, kills: 3100, bestTime: 1111, bossKills: 8 },
 };
+// Golden codes stored deepest 5-6 under six strata; decode clamps it to ED.CONST.STRATA (4).
 const GOLD4 = {
   code: 'WD1-EE328-KKBMV-C43P2-M2F3B-S8FTJ-XZ8FY-8FDGW-WNP41-MTJM8-XTYWR-0EWE4-7H98P-NB46M-D596S-RWPC',
   name: 'Veteran', embers: 321, lifetime: 12345, up: [1, 0, 3, 0, 0, 2, 3, 0, 1, 1, 3, 2, 1, 0, 2, 0],
   relicsNonStart: [1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1], mastery: [10, 0, 4000, 0, 250, 9],
-  bosses: 21, deeds: 1234567, pactMax: 3, pactWin: 1, stats: { runs: 30, wins: 2, deepest: 5, kills: 8000, bestTime: 1500, bossKills: 12 },
+  bosses: 21, deeds: 1234567, pactMax: 3, pactWin: 1, stats: { runs: 30, wins: 2, deepest: 4, kills: 8000, bestTime: 1500, bossKills: 12 },
 };
 ok(refundOf(GOLD4.relicsNonStart) === 570, 'GOLD4: its Codex relics cost 570 embers');
 function checkGolden(g, label) {

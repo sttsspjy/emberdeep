@@ -446,7 +446,7 @@ const wShots = (w) => w.projs.filter(q => q.team === 0 && q.wpn);
 // ---- Plaguebearer (r_el_b rank 3): a dying foe with 2+ ailments bursts (r90): 85% of its Bleed and Burn to every foe inside, its other statuses spread ----
 {
   const mk = (rank, cfg) => {
-    const { w, p } = stage({ r_el: 1, r_el_b: rank }), a = foe(w, 200, 212), n1 = foe(w, 240, 212), n2 = foe(w, 200, 285), outside = foe(w, 200, 312), evs = tap(w);
+    const { w, p } = stage({ r_el: 1, r_el_b: rank }), a = foe(w, 200, 212), n1 = foe(w, 240, 212), n2 = foe(w, 200, 285), outside = foe(w, 200, 112), evs = tap(w);
     a.burnPool = 600; a.burnOwner = p; a.bleedPool = 400; a.bleedOwner = p; a.chill = 40; a.chillOwner = p; if (cfg) cfg(a);
     return { w, p, a, n1, n2, outside, evs };
   };

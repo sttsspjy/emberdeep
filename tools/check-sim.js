@@ -145,27 +145,27 @@ for (const s of [1, 2]) {
   ok(!ED.ENEMIES.gloom && !ED.AI.gloom && ['flare', 'addLight', 'banishGloom', 'updateLantern', 'bossLantern', 'lanternMax', 'updateDread', 'spawnGloom'].every(k => w[k] === undefined), 'the lantern, flare and Gloom code is gone');
   ok(!('roomCost' in ED.World) && !('DREAD' in ED.World) && !('FLARE' in ED.World), 'no room cost, dread table or flare table');
   ok(ED.World.DARK_DMG === 1.3 && ED.World.DARK_LOOT === 1.5 && ED.World.DARK_FODDER === 1.5, 'dark-room constants');
-  const plain = w.floor.rooms.find(r => r.type === 'combat' && !r.dark), dark = w.floor.rooms.find(r => r.dark);
-  ok(w.floor.rooms.filter(r => r.dark).length === 2 && !!plain && dark.type === 'combat', 'a floor has exactly two dark combat rooms');
+  const plain = w.floor.rooms.find(r => r.type === 'combat' && !r.dark), dark = w.floor.rooms.find(r => r.dark), nDark = w.floor.rooms.filter(r => r.dark).length;
+  ok(nDark >= 1 && !!plain && w.floor.rooms.every(r => !r.dark || (r.type === 'combat' && r.row >= 3)), `dark rooms are combat rooms from map row 3 (${nDark} on the floor)`);
   const sc = ED.Sheet.compute(p, ED.Sheet.ctx(w, p), { raw: true });
-  ok(sc.dark.total === 2 && sc.dark.left === 2 && !sc.dark.here && sc.def.foeParts.dark === null, 'the sheet counts the two unvisited dark rooms');
-  const dir = Object.keys(dark.doors).find(k => dark.doors[k] >= 0);
+  ok(sc.dark.total === nDark && sc.dark.left === nDark && !sc.dark.here && sc.def.foeParts.dark === null, 'the sheet counts the unvisited dark rooms');
   w.fx.length = 0;
-  w.enterRoom(dark.id, ED.Dungeon.OPP[dir]);
+  w.enterRoom(dark.id, 's');
   ok(w.room === dark && w.fx.filter(e => e.t === 'dark').length === 1, 'entering a dark room emits one dark event');
   const sd = ED.Sheet.compute(p, ED.Sheet.ctx(w, p), { raw: true });
-  ok(sd.dark.left === 1 && sd.dark.here && Math.abs(sd.def.foeParts.dark - 1.3) < 1e-9, 'the sheet shows the dark room the hero stands in');
+  ok(sd.dark.left === nDark - 1 && sd.dark.here && Math.abs(sd.def.foeParts.dark - 1.3) < 1e-9, 'the sheet shows the dark room the hero stands in');
   w.fx.length = 0;
-  w.enterRoom(plain.id, ED.Dungeon.OPP[Object.keys(plain.doors).find(k => plain.doors[k] >= 0)]);
+  w.enterRoom(plain.id, 's');
   ok(!w.fx.some(e => e.t === 'dark'), 'a plain room emits no dark event');
 }
 { // the extra elite of the last wave, with an affix from DARK_AFFIXES
   const { w } = stage('knight', {});
-  let darkSeen = 0, plainSeen = 0;
-  for (let s = 1; s <= 6; s++) {
+  let darkSeen = 0, plainSeen = 0, darkRooms = 0;
+  for (let s = 1; s <= ED.CONST.STRATA; s++) {
     w.enterStratum(s);
     for (const room of w.floor.rooms) {
       if (room.type !== 'combat') continue;
+      if (room.dark) darkRooms++;
       for (let k = 0; k < 6; k++) {
         const waves = w.planWaves(room), last = waves[waves.length - 1], tagged = last.filter(it => it.affix);
         if (room.dark) { darkSeen++; ok(tagged.length === 1 && tagged[0].elite && ED.World.DARK_AFFIXES.includes(tagged[0].affix), `stratum ${s} dark room: one extra elite in the last wave with a dark affix`); }
@@ -173,7 +173,7 @@ for (const s of [1, 2]) {
       }
     }
   }
-  ok(darkSeen === 6 * 2 * 6 && plainSeen > 0, `dark rooms planned ${darkSeen}`);
+  ok(darkRooms > 0 && darkSeen === darkRooms * 6 && plainSeen > 0, `dark rooms planned ${darkSeen}`);
 }
 { // foe damage x1.3 in a dark room; minions and allies are not foes
   const { w, p } = stage('knight', {});
@@ -188,9 +188,9 @@ for (const s of [1, 2]) {
   for (const [from, to] of [['gold', 'vigor'], ['vigor', 'forge'], ['forge', 'epic'], ['boon', 'epic']]) {
     for (const dark of [true, false]) {
       const { w } = stage('knight', {});
-      const room = w.floor.rooms.find(r => r.type === 'combat' && !!r.dark === dark), dir = Object.keys(room.doors).find(k => room.doors[k] >= 0);
+      const room = w.floor.rooms.find(r => r.type === 'combat' && !!r.dark === dark);
       room.reward = from;
-      w.enterRoom(room.id, ED.Dungeon.OPP[dir]); w.enemies.length = 0; w.zones.length = 0; w.fx.length = 0;
+      w.enterRoom(room.id, 's'); w.enemies.length = 0; w.zones.length = 0; w.fx.length = 0;
       w.roomCleared();
       const rw = w.props.find(q => q.kind === 'reward');
       ok(rw && rw.item === (dark ? to : from), `${dark ? 'dark' : 'plain'} room reward ${from} -> ${rw && rw.item}`);
@@ -268,14 +268,25 @@ for (const s of [1, 2]) {
   const price = (r) => mk([{ favor: r }]).priceOf({ type: 'boon' });
   ok(price(0) === 75 && price(1) === 70 && price(2) === 70, "Merchant's Favor: 4% cheaper per rank (the 75-gold epic boon: 75, 70, 70)");
 }
-{ // bot exploration: --dark=never visits every non-dark room, --dark=always also the two dark rooms
+{ // bot map walk (fully upgraded heroes): one room per map row from the start camp to the boss; --dark=never takes a path with the fewest dark rooms, --dark=always enters at least one per stratum
   for (const [seed, cls] of [[1000, 'knight'], [1028, 'ranger'], [1015, 'pyro']]) {
     for (const dark of ['never', 'always']) {
-      const r = runBot({ seed, n: 1, cls: [cls], skill: 0.75, up: ED.UPGRADES.map(() => 0), mastery: 1, relics: ED.RELIC_IDS.filter(id => ED.RELICS[id].start), pick: 'smart', dark, maxStratum: 2 });
-      ok(r.left.length >= 1 && r.left.every(f => f.missed === 0), `${cls} ${dark}: every non-dark room visited (left ${JSON.stringify(r.left)})`);
-      ok(r.left.length >= 1 && r.dark.slice(0, r.left.length).every(v => (dark === 'never' ? v === 0 : v === 2)), `${cls} ${dark}: dark rooms entered ${r.dark.join(',')}`);
+      const r = runBot({ seed, n: 1, cls: [cls], skill: 0.75, up: ED.UPGRADES.map(u => u.costs.length), mastery: 10, relics: ED.RELIC_IDS.filter(id => ED.RELICS[id].start), pick: 'smart', dark, maxStratum: 2 });
+      ok(r.left.length >= 1 && r.left.every(f => f.visited === f.rows + 2), `${cls} ${dark}: one room per row, start to boss (${JSON.stringify(r.left)})`);
+      ok(r.left.length >= 1 && r.left.every(f => (dark === 'never' ? f.dark === f.minDark : f.dark >= 1)), `${cls} ${dark}: dark rooms entered ${r.left.map(f => f.dark + '/' + f.minDark).join(',')}`);
     }
   }
+}
+{ // Cartographer: two dark rooms and an elite room cleared on one stratum
+  const { w } = stage('knight', {});
+  const clear = (room) => { w.enterRoom(room.id, 's'); w.enemies.length = 0; w.zones.length = 0; w.roomCleared(); };
+  for (let s = 1; s <= 3 && !(w.floor.rooms.filter(r => r.dark).length >= 2 && w.floor.rooms.some(r => r.type === 'elite')); s++) w.enterStratum(s);
+  const darks = w.floor.rooms.filter(r => r.dark), elite = w.floor.rooms.find(r => r.type === 'elite');
+  if (darks.length >= 2 && elite) {
+    clear(darks[0]); clear(elite); ok(!w.run.fullClear, 'one dark room and an elite: not yet');
+    clear(darks[1]); ok(w.run.fullClear && w.summary().fullClear, 'two dark rooms and an elite: Cartographer');
+    w.run.fullClear = false; w.enterStratum(w.stratum === 1 ? 2 : 1); clear(w.floor.rooms.find(r => r.dark)); ok(!w.run.fullClear, 'the count starts over on a new stratum');
+  } else ok(false, 'stage floor has two dark rooms and an elite');
 }
 // ---- fodder hordes: quota, drops, health, damage cap, xp budget, crowd slow, per-foe exposure, pack spots, live cap ----
 const W0 = ED.World, TICK = 1 / 60;
@@ -305,8 +316,8 @@ function hordeWorld(s, classes, tutorial) {
 }
 // Enters a room of w and plays it: each tick the heroes are invulnerable; kill 'all' slays every live foe after the update, 'threat' only the non-fodder, 'none' nothing. Ends when the room clears or after secs; returns the encounter (kept before it is nulled).
 function playRoom(w, room, kill, secs) {
-  const dir = Object.keys(room.doors).find(k => room.doors[k] >= 0), log = w.log;
-  w.enterRoom(room.id, ED.Dungeon.OPP[dir]);
+  const log = w.log;
+  w.enterRoom(room.id, 's');
   log.xp = 0; log.gold = 0; log.hearts = 0; log.fodGold = 0; log.fodHearts = 0; log.packs.length = 0;
   return stepRoom(w, w.enc, kill, secs);
 }
@@ -322,12 +333,20 @@ function stepRoom(w, enc, kill, secs) {
   }
   return { enc, t, peak, cleared: w.enc !== enc };
 }
-const roomOf = (w, kind) => w.floor.rooms.find(r => (kind === 'dark' ? r.dark : kind === 'elite' ? r.type === 'elite' : r.type === 'combat' && !r.dark));
+// A room of that kind on w's floor; on a floor without one (the finale map has no elite or dark rooms) a plain combat room is turned into one.
+const roomOf = (w, kind) => {
+  const r = w.floor.rooms.find(q => (kind === 'dark' ? q.dark : kind === 'elite' ? q.type === 'elite' : q.type === 'combat' && !q.dark));
+  if (r || kind === 'combat') return r;
+  const c = w.floor.rooms.find(q => q.type === 'combat' && !q.dark);
+  if (kind === 'dark') c.dark = true; else c.type = 'elite';
+  return c;
+};
 const budgetOf = (s, kind) => Math.round(W0.ROOM_XP[kind === 'elite' ? 'elite' : 'combat'][s - 1] * (kind === 'dark' ? W0.DARK_LOOT : 1));
 { // fodder data: one per biome, in no roster, appended after every other entry
   const ids = ED.BIOMES.map(b => b.fodder), idx = ids.map(id => ED.ENEMY_IDX[id]);
-  ok(ids.length === 6 && new Set(ids).size === 6 && ids.every(id => ED.ENEMIES[id] && ED.ENEMIES[id].fodder && ED.ENEMIES[id].ai === 'swarm' && ED.ENEMIES[id].cost === 0 && ED.ENEMIES[id].xp === 0 && ED.ENEMIES[id].hp === 7 && ED.ENEMIES[id].dmg === 1.5), 'six fodder defs, one per biome, hp 7 dmg 1.5 xp 0');
-  ok(idx.join() === [...Array(6)].map((_, i) => ED.ENEMY_IDS.length - 6 + i).join(), `fodder are the last six wire indices (${idx})`);
+  const NB = ED.BIOMES.length;
+  ok(ids.length === NB && new Set(ids).size === NB && ids.every(id => ED.ENEMIES[id] && ED.ENEMIES[id].fodder && ED.ENEMIES[id].ai === 'swarm' && ED.ENEMIES[id].cost === 0 && ED.ENEMIES[id].xp === 0 && ED.ENEMIES[id].hp === 7 && ED.ENEMIES[id].dmg === 1.5), 'one fodder def per biome, hp 7 dmg 1.5 xp 0');
+  ok(idx.join() === [...Array(NB)].map((_, i) => ED.ENEMY_IDS.length - NB + i).join(), `fodder are the last wire indices (${idx})`);
   ok(ED.BIOMES.every(b => !b.enemies.some(r => ED.ENEMIES[r[0]].fodder)), 'fodder are in no roster');
   ok(ids.every(id => { const d = ED.ENEMIES[id], a = ED.ENEMIES[d.art]; return d.r >= 6 && d.r <= 8 && d.spd >= 62 && d.spd <= 90 && !!a && !a.fodder && !!d.fly === !!a.fly && d.look === a.look; }), 'fodder: radius 6-8, speed 62-90, art names an existing non-fodder type with the same flight and look');
 }
@@ -335,7 +354,7 @@ const budgetOf = (s, kind) => Math.round(W0.ROOM_XP[kind === 'elite' ? 'elite' :
   const { w } = stage('knight', {});
   const w2 = new ED.World({ seed: 7, pact: 0, players: [0, 1].map(i => ({ pid: 'p' + i, name: 'T', slot: i, cls: 'knight', weapon: ED.CLASSES.knight.weapons[0], meta: META() })) });
   w2.startRun();
-  for (let s = 1; s <= 6; s++) {
+  for (let s = 1; s <= ED.CONST.STRATA; s++) {
     w.stratum = s; w2.stratum = s;
     const e = w.spawnEnemy(fodderId(s), 0, 0), f = w2.spawnEnemy(fodderId(s), 0, 0), g = w.spawnEnemy(fodderId(s), 0, 0, { elite: true, affix: 'brutal' });
     near(e.maxHp, 7 * (1 + 0.25 * (s - 1)), 1e-9, `fodder health at stratum ${s}`);
@@ -357,7 +376,7 @@ const budgetOf = (s, kind) => Math.round(W0.ROOM_XP[kind === 'elite' ? 'elite' :
 }
 { // a touch in the sim: fodder next to a hero hurts it by the cap at most
   const { w, p } = stage('knight', {});
-  w.stratum = 6; p.invuln = 0; const f = w.spawnEnemy('voidmote', p.x + 4, p.y); f.cd = 99; w.enc = {}; const hp0 = p.hp;
+  w.stratum = ED.CONST.STRATA; p.invuln = 0; const f = w.spawnEnemy('voidmote', p.x + 4, p.y); f.cd = 99; w.enc = {}; const hp0 = p.hp;
   w.updateEnemy(f, TICK);
   const cap = Math.max(1, Math.round(0.03 * p.maxHp));
   ok(hp0 - p.hp >= 1 && hp0 - p.hp <= cap && f.st === 'move', `touch damage ${hp0 - p.hp} within 1..${cap} and untelegraphed (state ${f.st})`);
@@ -365,12 +384,12 @@ const budgetOf = (s, kind) => Math.round(W0.ROOM_XP[kind === 'elite' ? 'elite' :
 { // fodder kills: no gold, heart or Grail growth, no split; run counts; hit events carry fd
   const { w, p } = stage('knight', {});
   w.stratum = 3; p.stats.chalice = 1; p.chaliceKills = 0; w.pickups.length = 0;
-  for (let i = 0; i < 300; i++) { const e = w.spawnEnemy('rimemote', p.x + 40, p.y); w.killEnemy(e, p, {}); }
+  for (let i = 0; i < 300; i++) { const e = w.spawnEnemy('brinepolyp', p.x + 40, p.y); w.killEnemy(e, p, {}); }
   ok(!w.pickups.some(k => k.kind === 'gold' || k.kind === 'heart' || k.kind === 'xp') && p.chaliceKills === 0 && p.chaliceHp === 0, 'fodder kills drop no gold, heart or xp (outside a budgeted room) and do not grow the Grail');
   ok(w.run.fodderKills === 300 && w.run.kills >= 300 && p.kills === 300, `fodder kills are counted (${w.run.fodderKills}/${w.run.kills}/${p.kills})`);
   let g = 0; for (let i = 0; i < 300; i++) { const e = w.spawnEnemy('frozenskel', p.x + 40, p.y); w.killEnemy(e, p, {}); } for (const k of w.pickups) if (k.kind === 'gold' || k.kind === 'heart') g++;
   ok(g > 0, 'regular foes still drop gold or hearts (control)');
-  const e = w.spawnEnemy('rimemote', p.x + 40, p.y), r = w.spawnEnemy('skeleton', p.x + 40, p.y); w.fx.length = 0;
+  const e = w.spawnEnemy('brinepolyp', p.x + 40, p.y), r = w.spawnEnemy('skeleton', p.x + 40, p.y); w.fx.length = 0;
   w.hitEnemy(e, 1, { p, kind: 'weapon' }); w.hitEnemy(r, 1, { p, kind: 'weapon' });
   const hits = w.fx.filter(v => v.t === 'hit');
   ok(hits.length === 2 && hits[0].fd === 1 && hits[1].fd === undefined, 'the hit event of fodder carries fd');
@@ -413,7 +432,7 @@ const budgetOf = (s, kind) => Math.round(W0.ROOM_XP[kind === 'elite' ? 'elite' :
 }
 { // quotas: FODDER_Q by stratum, x0.6 elite, x1.5 dark, x(1 + 0.5 (n - 1)) party, x0.6 tutorial stratum I
   const Q = (w, room) => { const enc = { waves: [] }; w.planHorde(room, enc); return enc.q; };
-  for (let s = 1; s <= 6; s++) {
+  for (let s = 1; s <= ED.CONST.STRATA; s++) {
     const w = hordeWorld(s, ['knight']), w2 = hordeWorld(s, ['knight', 'ranger']), w4 = hordeWorld(s, ['knight', 'ranger', 'pyro', 'shade']), base = W0.FODDER_Q[s - 1];
     ok(Q(w, { type: 'combat', dark: false }) === base && Q(w, { type: 'combat', dark: true }) === Math.round(base * 1.5) && Q(w, { type: 'elite', dark: false }) === Math.round(base * 0.6), `stratum ${s} quota ${base} / dark / elite`);
     ok(Q(w2, { type: 'combat', dark: false }) === Math.round(base * 1.5) && Q(w4, { type: 'combat', dark: false }) === Math.round(base * 2.5), `stratum ${s} party quota`);
@@ -423,7 +442,7 @@ const budgetOf = (s, kind) => Math.round(W0.ROOM_XP[kind === 'elite' ? 'elite' :
   ok(W0.LIVE_CAP[0] === 120 && W0.LIVE_CAP[1] === 180 && W0.FODDER_XP_SHARE === 0.5 && W0.ROOM_XP.combat.join() === '24,38,60,84,107,122' && W0.ROOM_XP.elite.join() === '44,64,86,116,159,180', 'horde and xp constants');
 }
 // Every room kind of every stratum, played out by killing everything: the quota spawns, the room clears, fodder drop no gold or hearts, and the xp dropped is the budget
-for (let s = 1; s <= 6; s++) {
+for (let s = 1; s <= ED.CONST.STRATA; s++) {
   for (const kind of ['combat', 'elite', 'dark']) {
     const w = hordeWorld(s, ['knight']), room = roomOf(w, kind);
     if (!room) { ok(false, `stratum ${s} has a ${kind} room`); continue; }
@@ -489,7 +508,7 @@ for (let s = 1; s <= 6; s++) {
   const T = ED.CONST.TILE;
   for (const [s, near] of [[1, 'w'], [2, 'e'], [3, 'n'], [4, 's']]) {
     const w = hordeWorld(s, ['knight']), room = roomOf(w, 'combat'), p = w.players.get('p0');
-    const dir = Object.keys(room.doors).find(k => room.doors[k] >= 0); w.enterRoom(room.id, ED.Dungeon.OPP[dir]);
+    w.enterRoom(room.id, 's');
     w.enc.edges = [near]; w.log.packs.length = 0; w.log.sides.clear(); w.log.packDist = Infinity;
     p.x = near === 'w' ? 7.5 * T : near === 'e' ? (room.w - 7.5) * T : room.w * T / 2; p.y = near === 'n' ? 8.5 * T : near === 's' ? (room.h - 7.5) * T : room.h * T / 2 + T;
     stepRoom(w, w.enc, 'none', 25);
@@ -498,7 +517,7 @@ for (let s = 1; s <= 6; s++) {
 }
 { // one run through the start-of-room rules: the first pack comes with the first threat wave, the next 2-3 s later
   const w = hordeWorld(2, ['knight']), room = roomOf(w, 'combat');
-  const dir = Object.keys(room.doors).find(k => room.doors[k] >= 0); w.enterRoom(room.id, ED.Dungeon.OPP[dir]);
+  w.enterRoom(room.id, 's');
   const times = [], p = w.players.get('p0');
   for (let i = 0; i < 60 * 14; i++) { p.invuln = 1e9; const n0 = w.log.packs.length, wv = w.enc.wave; w.update(TICK); if (w.log.packs.length > n0) times.push([w.time, w.enc.wave]); }
   ok(times.length >= 4 && times[0][1] === 0, `the first pack comes with wave 1 (${JSON.stringify(times[0])})`);
@@ -692,7 +711,7 @@ for (let s = 1; s <= 6; s++) {
     ok(!b.vol && b.st === 'idle', `phase ${ph}: the main state resumes after the volley (${b.st})`);
     ok(w.zones.every(z => !(z.kind === 'teleLine' && z.src === b)), `phase ${ph}: the warn line is gone`);
   }
-  for (let s = 1; s <= 6; s++) { // flight speed 320 + 20 per stratum, the biome's kind, damage x0.6, the angle led by the stratum's share of a walking hero's velocity at the release
+  for (let s = 1; s <= ED.CONST.STRATA; s++) { // flight speed 320 + 20 per stratum, the biome's kind, damage x0.6, the angle led by the stratum's share of a walking hero's velocity at the release
     const { w, b, ps } = bossWorld(s, ['knight']), p = ps[0];
     p.y -= 60; startVol(w, b, 1);
     go(w, 1.1, () => { p.y += 90 * TICK; });
@@ -703,9 +722,10 @@ for (let s = 1; s <= 6; s++) {
     const v = w.vs[2], off = Math.abs(angD(v.a, Math.atan2(v.hs[0].y - (v.y - 4), v.hs[0].x - v.x)));
     ok(Lof(s) === 0 ? off < 1e-9 : off > 0.03 * Lof(s), `stratum ${s}: aim ${Lof(s) ? 'leads by ' + off.toFixed(3) + ' rad' : 'is straight'}`);
   }
-  { const { w, b } = bossWorld(6, ['knight']); w.pact = 8; startVol(w, b, 1); go(w, 1.1); ok(w.vs.length === 3 && w.vs.every(v => Math.abs(Math.hypot(v.q.vx, v.q.vy) - finalSp(6) * 1.2) < 1e-6), 'Pact 8: volley shots fly x1.2 like every foe shot'); }
+  { const S4 = ED.CONST.STRATA, { w, b } = bossWorld(S4, ['knight']); w.pact = 8; startVol(w, b, 1); go(w, 1.1); ok(w.vs.length === 3 && w.vs.every(v => Math.abs(Math.hypot(v.q.vx, v.q.vy) - finalSp(S4) * 1.2) < 1e-6), 'Pact 8: volley shots fly x1.2 like every foe shot'); }
+  const B4 = B[ED.biomeFor(4).boss]; // the stratum IV boss
   { // the phase-3 overlap: a volley every 5 s on top of whatever the main state runs, never two at once; phase 2 has none
-    B.forgelord.attacks.hold = { update: () => false };
+    B4.attacks.hold = { update: () => false };
     for (const ph of [2, 3]) {
       const { w, b } = bossWorld(4, ['knight']);
       b.phase = ph; b.st = 'atk'; b.atk = 'hold'; b.t = 0; b.vars = { wm: 1 };
@@ -721,10 +741,10 @@ for (let s = 1; s <= 6; s++) {
       ok(mainKept && b.st === 'atk' && b.atk === 'hold', 'phase 3: the volley overlaps a running main attack and leaves it alone');
       ok(w.vs.length === 3 * BV.n[2], `phase 3: ${w.vs.length} shots (want ${3 * BV.n[2]})`);
       ok(lines[0] === 1, `phase 3: never two volleys at once (${lines[0]} warn lines at most, one hero)`);
-      const vol = B.forgelord.attacks.volley; vol.start(w, b); const run = b.vol; vol.start(w, b);
+      const vol = B4.attacks.volley; vol.start(w, b); const run = b.vol; vol.start(w, b);
       ok(run && b.vol === run && !vol.ok(w, b), 'a running volley is neither restarted nor chosen again');
     }
-    delete B.forgelord.attacks.hold;
+    delete B4.attacks.hold;
   }
   { // frozen: the sub-machine and its warn line stall; blindness and a phase change drop it
     const { w, b } = bossWorld(4, ['knight']);
@@ -791,6 +811,7 @@ for (let s = 1; s <= 6; s++) {
   const all = parseVet('1');
   ok(parseVet(undefined) === null && parseVet('0') === null && all.size === 4 && all.has('charges') && all.has('hazard') && parseVet('dodge,rider').has('rider') && !parseVet('dodge,rider').has('hazard'), '--vet parses to a feature set, off when absent or 0');
   const { w, p } = stage('knight', {});
+  p.x = 160; // 5 tiles from the west wall: walking west the hero stops at the wall in the shot's line
   const t0 = w.time, c = { dashN: 1 }, SPD = 200, REACT = 0.18;
   w.spawnProj({ team: 1, kind: 'arrow', x: p.x + 150, y: p.y, a: Math.PI, speed: 300, r: 6, dmg: 20, life: 4 });
   ok(vetThreats(w, p, SPD, REACT) === null, 'a shot the hero has not yet had the reaction time to see is not dodged');
@@ -825,13 +846,13 @@ for (let s = 1; s <= 6; s++) {
 }
 { // breakable props: floor gen (kinds, counts, spots, determinism), hero hits break them and foes, foe shots and hazards never do, drops
   const D = ED.Dungeon, T = ED.CONST.TILE;
-  const laneOf = (r, x, y) => { const cx = Math.floor(r.w / 2), cy = Math.floor(r.h / 2) + 1; return (Math.abs(x - cx) <= 2 && (y <= 4 || y >= r.h - 4)) || (Math.abs(y - cy) <= 2 && (x <= 3 || x >= r.w - 4)); };
+  const laneOf = (r, x, y) => { const cx = Math.floor(r.w / 2), cy = Math.floor(r.h / 2) + 1; return (Math.abs(x - cx) <= 2 && y >= r.h - 4) || (y <= 4 && Object.keys(r.doors).some(d => Math.abs(x - r.doorX[d]) <= 2)) || (Math.abs(y - cy) <= 2 && (x <= 3 || x >= r.w - 4)); };
   let bad = [], fights = 0, others = 0, same = true;
-  for (let s = 1; s <= 6; s++) for (let seed = 1; seed <= 24; seed++) {
+  for (let s = 1; s <= ED.CONST.STRATA; s++) for (let seed = 1; seed <= 24; seed++) {
     const fl = D.generate(s, seed * 7919 + 13), again = D.generate(s, seed * 7919 + 13), brk = ED.biomeFor(s).breakable;
     for (const r of fl.rooms) {
       if (JSON.stringify(r.breakables) !== JSON.stringify(again.rooms[r.id].breakables) || JSON.stringify(r.decor) !== JSON.stringify(again.rooms[r.id].decor)) same = false;
-      const fight = r.type === 'combat' || r.type === 'elite' || r.type === 'boss', c = D.center(r);
+      const fight = r.type === 'combat' || r.type === 'elite' || r.type === 'champion' || r.type === 'boss', c = D.center(r);
       if (fight) { fights++; if (r.breakables.length < 4 || r.breakables.length > 8) bad.push(`${s}/${seed} ${r.type} holds ${r.breakables.length}`); } else { others++; if (r.breakables.length > 3) bad.push(`${s}/${seed} ${r.type} holds ${r.breakables.length}`); }
       for (const d of r.decor) if (brk.includes(d.k)) bad.push(`${s}/${seed} ${d.k} baked into decor`);
       for (const b of r.breakables) {
@@ -845,7 +866,7 @@ for (let s = 1; s <= 6; s++) {
   }
   ok(same, 'floor gen is deterministic per (stratum, seed): breakables and decor');
   ok(!bad.length, `${fights} combat, elite and boss rooms hold 4-8 breakables and the ${others} others at most 3, none baked into decor, none on a door lane, a hazard or the centre${bad.length ? ': ' + bad.slice(0, 4).join('; ') : ''}`);
-  ok(ED.BIOMES.map((b) => b.breakable.join()).join() === 'urn,mushroom,crystal,crate,coral,shard', `breakable kinds by stratum (${ED.BIOMES.map((b) => b.breakable.join())})`);
+  ok(ED.BIOMES.map((b) => b.breakable.join()).join() === 'urn,mushroom,coral,shard', `breakable kinds by stratum (${ED.BIOMES.map((b) => b.breakable.join())})`);
   ok(ED.BIOMES.every((b) => b.breakable.every((k) => b.decor.includes(k))), 'every breakable kind is a decor kind of its stratum');
 
   const arena = (cls) => { // a combat room with its breakables, no foes, the hero 40 px west of breakable 0
@@ -970,7 +991,7 @@ for (let s = 1; s <= 6; s++) {
     ok(sk.dmgBase === undefined && sk.furyM === undefined && sk.furyT === undefined, 'a summon during fury carries no fury state');
   }
   { // the pause after an attack divides by the multiplier (windups and attack lengths are untouched)
-    Bs.forgelord.attacks.hold = { update: () => true };
+    Bs[ED.biomeFor(4).boss].attacks.hold = { update: () => true };
     const { w, b } = fw(4), after = () => { b.st = 'atk'; b.atk = 'hold'; b.t = 0; b.vars = { wm: 1 }; run(w, b, TICK); return b.t; };
     b.furyT = 10; const t1 = after();
     near(t1, 1.05 * w.threat().pause, 1e-9, 'before the start the phase-1 pause is 1.05 x the stratum pause');
@@ -978,7 +999,7 @@ for (let s = 1; s <= 6; s++) {
     near(t2 * M10, t1, 0.003, `ten seconds into fury the pause is divided by 1 + 10 ramp (${t2.toFixed(4)} vs ${t1.toFixed(4)})`);
     b.furyT = 1e4; const t3 = after();
     near(t3, t1 / FB.max, 1e-9, 'at the cap the pause is divided by max');
-    delete Bs.forgelord.attacks.hold;
+    delete Bs[ED.biomeFor(4).boss].attacks.hold;
   }
   { // the multiplier caps at max and damage with it
     const { w, b } = fw(6);
@@ -988,11 +1009,11 @@ for (let s = 1; s <= 6; s++) {
   { // the clock runs through phase changes, freezes, stuns and blinds
     const { w, b } = fw(4);
     const ev = run(w, b, 24, (i) => {
-      if (i === 5 * 60) b.hp = b.maxHp * 0.6;
+      if (i === 5 * 60) b.hp = b.maxHp * 0.55; // below every boss's first phase line (66% or 60%)
       if (i === 8 * 60) b.frozen = 2;
       if (i === 11 * 60) b.stun = 2;
       if (i === 14 * 60) b.blind = 2;
-      if (i === 17 * 60) b.hp = b.maxHp * 0.3;
+      if (i === 17 * 60) b.hp = b.maxHp * 0.25; // and the second (33% or 30%)
     });
     ok(b.phase === 3, `both phase changes ran (phase ${b.phase})`);
     near(b.furyT, 24, 2 * TICK, 'the clock read 24 s after 24 s of phases, a freeze, a stun and a blind');

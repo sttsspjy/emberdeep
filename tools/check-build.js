@@ -1,5 +1,5 @@
 // Usage: node tools/check-build.js
-// Headless checks of the build engine: auto-granted fork ranks (bosses II and IV), the class and forge offer rules, the Ascended framework (eligibility, slot-1 pin, multiplicative bucket, sheet rows) and the offer-pool hygiene
+// Headless checks of the build engine: auto-granted fork ranks (bosses II and III), the class and forge offer rules, the Ascended framework (eligibility, slot-1 pin, multiplicative bucket, sheet rows) and the offer-pool hygiene
 // (Opportunist gate, utility weights). Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
 let n = 0, fails = 0;
@@ -39,25 +39,26 @@ const ranks = (w, pid) => w.msgs.filter(m => m.t === 'forkRank' && m.to === pid)
   w.grantForkRank(p); ok(p.boons.r_atk_h === 3, 'rank 2 -> 3');
   w.msgs.length = 0; w.grantForkRank(p); ok(p.boons.r_atk_h === 3 && !w.msgs.length && p.forkDue === 0, 'a rank-3 fork takes no more ranks');
 }
-{ // bosses II and IV rank every hero up (downed and dead too); boss I offers the fork; no class offer from II and IV; the other boss rewards stay
+{ // bosses II and III rank every hero up (downed and dead too); boss I offers the fork; no class offer from II and III; boss III leaves the epic offer and the portal; boss IV ends the run
   const { w, p } = stage('ranger', { r_atk: 1, r_atk_h: 1 }, { allies: ['knight', 'cleric'] });
   const a = w.players.get('p1'), d = w.players.get('p2');
   a.boons.k_s1 = 1; a.boons.k_s1_a = 1; d.boons.c_atk = 1; d.boons.c_atk_h = 1; w.recalc(a, true); w.recalc(d, true); a.downed = true; d.dead = true;
-  for (const s of [1, 2, 3, 4, 5]) {
+  for (const s of [1, 2, 3, 4]) {
     w.msgs.length = 0; for (const q of w.players.values()) q.offers.length = 0;
     bossDown(w, s);
-    const want = s === 1 ? [1, 1, 1] : s === 2 ? [2, 2, 2] : s === 3 ? [2, 2, 2] : [3, 3, 3];
+    const want = s === 1 ? [1, 1, 1] : s === 2 ? [2, 2, 2] : [3, 3, 3];
     ok(['p0', 'p1', 'p2'].every((pid, i) => w.players.get(pid).boons[['r_atk_h', 'k_s1_a', 'c_atk_h'][i]] === want[i]), `boss ${s}: fork ranks ${want}`);
     ok([...w.players.values()].every(q => q.offers.some(o => o.src === 'class') === (s === 1)), `boss ${s}: class offer only at boss I`);
-    ok(s === 2 || s === 4 ? ['p0', 'p1', 'p2'].every(pid => ranks(w, pid).length === 1) : ['p0', 'p1', 'p2'].every(pid => !ranks(w, pid).length), `boss ${s}: one forkRank message per hero at II and IV only`);
-    if (s === 5) ok(w.props.some(o => o.kind === 'portal') && [...w.players.values()].every(q => q.offers.some(o => o.src === 'epic')), 'boss rewards stay (epic offer, portal)');
+    ok(s === 2 || s === 3 ? ['p0', 'p1', 'p2'].every(pid => ranks(w, pid).length === 1) : ['p0', 'p1', 'p2'].every(pid => !ranks(w, pid).length), `boss ${s}: one forkRank message per hero at II and III only`);
+    if (s === 3) ok(w.props.some(o => o.kind === 'portal') && [...w.players.values()].every(q => q.offers.some(o => o.src === 'epic')), 'boss III leaves the epic offer and the portal');
+    if (s === 4) ok(w.state === 'ending' && w.victory === true, 'boss IV ends the run in victory');
   }
 }
 { // ranks that come due before the fork is taken wait in forkDue and apply when the fork card is picked
   const { w, p } = stage('ranger', { r_atk: 1 });
-  bossDown(w, 2); bossDown(w, 4);
+  bossDown(w, 2); bossDown(w, 3);
   ok(p.forkDue === 2 && !p.boons.r_atk_h && !ranks(w, 'p0').length, 'no fork yet: both ranks are banked');
-  w.grantOffer(p, { src: 'class' }); p.offer = w.rollOffer(p, p.offers[0]);
+  p.offers.length = 0; w.grantOffer(p, { src: 'class' }); p.offer = w.rollOffer(p, p.offers[0]); // boss III's epic offer set aside
   ok(p.offers[0].ctier === 2 && p.offer.length === 2, 'the fork offer lists the two forks');
   w.pickBoon('p0', p.offer.indexOf('r_atk_h'));
   ok(p.boons.r_atk_h === 3 && p.forkDue === 0 && ranks(w, 'p0').join() === '2,3', 'picking the fork applies the banked ranks (2 then 3)');
