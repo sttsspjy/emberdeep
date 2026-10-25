@@ -91,6 +91,27 @@ const refunds = (w) => w.msgs.filter(m => m.t === 'refund');
   ok(!H.kill, 'the Pyromancer holds no kill hook: a kill refunds, shields and raises nothing');
 }
 
+// ---- Cinder Arms: a flame cone tick cuts EMBER_PS x CONE_TICK per foe (horde foes half, Spellweaver +50%), inside the same bucket, and adds CONE_TICK / the attack interval of a Spark; the cut reaches the client as slot -1 refunds ----
+{
+  const s = stage({ kindle: 1, evo_fire: 1 }), { w, p } = s, e = foe(w, p.x + 80, p.y), cone = (who) => H.hitDone.call(w, p, who, 10, false, { p, kind: 'weapon', wpn: true, part: 'cone' });
+  p.emberT = 99; cone(e); near(p.emberAcc, C.EMBER_PS * C.CONE_TICK, 1e-9, `a cone tick cuts ${(C.EMBER_PS * C.CONE_TICK).toFixed(3)} s`);
+  const fd = foe(w, p.x + 80, p.y + 30); fd.fodder = true; cone(fd); near(p.emberAcc, C.EMBER_PS * C.CONE_TICK * 1.5, 1e-9, 'a horde foe in the cone cuts half');
+  for (let i = 0; i < 40; i++) cone(e); near(p.emberAcc, C.EMBER_CAP, 1e-9, 'the cone fills the same bucket, at most EMBER_CAP s');
+  const sw = stage({ p_atk: 1, evo_fire: 1 }), se = foe(sw.w, sw.p.x + 80, sw.p.y); sw.p.emberT = 99; H.hitDone.call(sw.w, sw.p, se, 10, false, { p: sw.p, kind: 'weapon', wpn: true, part: 'cone' });
+  near(sw.p.emberAcc, C.EMBER_PS * C.CONE_TICK * 1.5, 1e-9, 'Spellweaver: a cone tick cuts +50%');
+  // a held channel on one foe: the cut per second matches bolting it (EMBER_PS), and the refund goes out for every slot
+  const h = stage({ evo_fire: 1 }), he = foe(h.w, h.p.x + 80, h.p.y); h.w.msgs.length = 0; h.w.playerHold(h.p, true, 0); run(h, 1);
+  const ticks = parts(h, 'cone').filter(x => x.e === he).length, got = refunds(h.w).reduce((a, m) => a + (m.slot === -1 ? m.s : 0), 0) + h.p.emberAcc;
+  ok(ticks >= 6, `the channel ticks the foe (${ticks} ticks in 1 s)`); near(got, ticks * C.EMBER_PS * C.CONE_TICK, 0.011, 'one second of the cone cuts EMBER_PS x CONE_TICK per tick, as slot -1 refunds');
+  ok(refunds(h.w).length > 0 && refunds(h.w).every(m => m.slot === -1), 'the cone cut reaches the client as slot -1 refunds');
+  // Kindling: a Spark per attack interval of channel (not per tick)
+  const k = stage({ p_atk: 1, p_atk_h: 1, evo_fire: 1 }), ke = foe(k.w, k.p.x + 80, k.p.y), n = Math.ceil(k.p.stats.atkInterval / C.CONE_TICK);
+  ok(k.p.stats.spark > 0, 'Kindling stores Sparks');
+  for (let i = 0; i < n - 1; i++) H.hitDone.call(k.w, k.p, ke, 10, false, { p: k.p, kind: 'weapon', wpn: true, part: 'cone' });
+  ok(k.p.sparks === 0, `no Spark before an attack interval of channel (${n - 1} ticks)`);
+  H.hitDone.call(k.w, k.p, ke, 10, false, { p: k.p, kind: 'weapon', wpn: true, part: 'cone' }); ok(k.p.sparks === 1, `one Spark after ${n} ticks (${k.p.stats.atkInterval} s / ${C.CONE_TICK} s)`);
+}
+
 // ---- Fireball (skill 3): a shot that bursts on the first foe, a wall or at the end of its flight; the burst strikes every foe within 36 and adds Burn for 30% ----
 {
   const s = stage({}), { w, p } = s, a = foe(w, p.x + 150, p.y), b = foe(w, p.x + 170, p.y + 18), far = foe(w, p.x + 230, p.y), N = ED.Stats.skillNums('fireball', p.stats);

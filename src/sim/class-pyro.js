@@ -373,7 +373,7 @@
   ED.CLS.pyro = {
     init(p) {
       p.bonT = 0; p.pyroQ = []; p.waves = []; p.phoenixT = 0; p.diveAt = 0; p.diveRoom = null; p.trailAt = null; p.burnAcc = 0; p.heat = 0; p.heatPing = 0;
-      p.emberB = C.EMBER_CAP; p.emberAcc = 0; p.emberT = 0; p.sparks = 0; p.sparkUse = 0; p.afterN = 0; p.stormT = 0; p.spellSlot = -1; p.spellAt = -99;
+      p.emberB = C.EMBER_CAP; p.emberAcc = 0; p.emberT = 0; p.sparks = 0; p.sparkAcc = 0; p.sparkUse = 0; p.afterN = 0; p.stormT = 0; p.spellSlot = -1; p.spellAt = -99;
     },
 
     // The Ember bucket refills and the cut it gathered goes to the client every EMBER_FLUSH s (whole hundredths; the rest waits). Rebirth Flare watches mantleAmt; a decaying shield lowers it without a flare.
@@ -409,11 +409,15 @@
     },
 
     // Ember Bolt: a direct weapon hit (a shot, a beam, a lobbed landing; never a blast) cuts every spell cooldown, at most EMBER_CAP s per second; Kindling stores a Spark.
+    // A flame cone tick (Cinder Arms) counts as CONE_TICK s of bolting that foe: it cuts EMBER_PS x CONE_TICK and adds CONE_TICK / the attack interval of a Spark (p.sparkAcc).
     hitDone(p, e, dmg, crit, src) {
       if (!src.wpn || src.kind !== 'weapon') return;
-      const st = p.stats, cut = C.EMBER_PS * st.atkInterval / Math.max(1, (st.weapon.n || 1) + st.projN) * (1 + st.emberMul) * (e.fodder ? C.EMBER_FODDER : 1), got = Math.min(p.emberB, cut);
+      const st = p.stats, cone = src.part === 'cone', per = cone ? C.EMBER_PS * C.CONE_TICK : C.EMBER_PS * st.atkInterval / Math.max(1, (st.weapon.n || 1) + st.projN);
+      const cut = per * (1 + st.emberMul) * (e.fodder ? C.EMBER_FODDER : 1), got = Math.min(p.emberB, cut);
       if (got > 0) { p.emberB -= got; p.emberAcc += got; }
-      if (st.spark > 0 && p.sparks < st.sparkMax) p.sparks++;
+      if (!(st.spark > 0 && p.sparks < st.sparkMax)) return;
+      if (!cone) p.sparks++;
+      else if ((p.sparkAcc += C.CONE_TICK / st.atkInterval) >= 1) { p.sparkAcc -= 1; p.sparks++; }
     },
 
     // White Heat adds to spell hits on burning foes; White Flame adds whiteHot to every hit on a white-hot foe.
