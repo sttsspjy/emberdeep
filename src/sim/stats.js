@@ -32,31 +32,24 @@
 
   const BASE = () => {
     const s = {
-      hp: 0, hpMul: 1, armor: 0, spd: 1, dmg: 1, dmgX: 1, atk: 1, crit: 0, critDmg: 0, cdr: 0,
+      hp: 0, hpMul: 1, armor: 0, spd: 1, dmg: 1, atk: 1, crit: 0, critDmg: 0, cdr: 0,
       pickup: 0, xp: 0, gold: 0, luck: 0, heal: 0, projN: 0, pierce: 0, area: 0, dodge: 0, thorns: 0,
       dashcdr: 0, dashN: 0, dashDmg: 0, dashFire: 0, dashBomb: 0, execute: 0,
-      overcharge: 0, guardian: 0, trance: 0, forager: 0, roomWard: 0, openRank: 0,
+      guardian: 0, trance: 0, forager: 0, roomWard: 0, openRank: 0,
       charges: 0,
       minions: 0, minionDmg: 0, boneSpikes: 0, phoenix: 0, strataHeal: 0, wardrum: 0,
-      homing: 0, meleeReach: 0, mirror: 0, choices: 0, idol: 0, vuln: 0, banner: 0, angel: 0, gauntlet: 0,
-      frozenHeart: 0, chalice: 0, emberBonus: 0, discount: 0, stone: 0, cloverRerolls: 0, aegis: 0, light: 0,
+      homing: 0, meleeReach: 0, mirror: 0, choices: 0, idol: 0, vuln: 0, banner: 0, angel: 0,
+      chalice: 0, emberBonus: 0, discount: 0, stone: 0, cloverRerolls: 0, aegis: 0, light: 0,
       // status route hooks (+X% to every status amount the hero applies; +X% to class-element skill hits)
       statusPow: 0, classElMul: 0,
-      // element infusions and their payoffs: Fire, Ice, Lightning, Poison, Holy, Shadow, General (Bleed)
-      fireInfuse: 0, burnMul: 0, searing: 0, wildfire: 0, conflag: 0, brushfire: 0, firebreak: 0,
-      iceInfuse: 0, chillMul: 0, shatter: 0, brittle: 0, dashFrost: 0, freezeDur: 0, chillWeaken: 0, frostNova: 0, glacier: 0, refreeze: 0,
-      lightningInfuse: 0, arcs: 0, arcRange: 0, shockMul: 0, shortCircuit: 0, arcStun: 0, critCharge: 0, ionize: 0, conduct: 0, anchor: 0, capacitor: 0,
-      poisonInfuse: 0, venomBuild: 0, venomHold: 0, venomSlow: 0, corrode: 0, fester: 0, sporeBurst: 0, dashVenom: 0, pandemic: 0, neuro: 0, hexStrong: 0,
-      holyInfuse: 0, smiteMul: 0, smiteShield: 0.01, holyCap: 0.06, beacon: 0, dashBlind: 0, radiantAegis: 0, hallow: 0, rebuke: 0, vigil: 0, // smiteShield and holyCap start at the base every hero smites with
-      shadowInfuse: 0, doomMul: 0, doomTough: 0, malice: 0, knell: 0, deathsEdge: 0, dashDoom: 0, reaper: 0, reapChain: 0, quarry: 0, dashReap: 0,
+      // element verbs (src/sim/elements.js): Fire, Ice, Lightning, Poison, Holy, Shadow, General (Bleed and the finisher)
+      fireInfuse: 0, burnMul: 0, burnCap: 0, wildfire: 0, smother: 0, firebreak: 0, firewalk: 0,
+      iceInfuse: 0, chillMul: 0, shatter: 0, shatterSplash: 0, freezeDur: 0, chillWeaken: 0, glacier: 0, coldCycle: 0, iceWall: 0,
+      lightningInfuse: 0, shockMul: 0, arcs: 0, arcStun: 0, chargeHold: 0, dashCharge: 0, stormStep: 0,
+      poisonInfuse: 0, venomBuild: 0, venomHold: 0, venomWeak: 0, corrode: 0, cloudR: 0, cloudT: 0, dashCloud: 0, neuro: 0, toxicWake: 0,
+      holyInfuse: 0, smiteMul: 0, smiteShield: 0.01, holyCap: 0.06, beacon: 0, perfectDodge: 0, pdWin: 0, pdPow: 0, pdRefund: 0, pdStrike: 0, // smiteShield and holyCap start at the base every hero smites with
+      shadowInfuse: 0, backstab: 0, doomMul: 0, doomTough: 0, deathsEdge: 0, dashBack: 0, decoy: 0, stepBehind: 0,
       bleed: 0, bleedMul: 0, lacerate: 0, sunder: 0, opportunist: 0, masterstroke: 0, twinEvery: 0,
-      // Mutations (src/data/mutations.js): 1 while held (chargeSlow: the share of charge build-up lost)
-      conflagSpread: 0, scorchEarth: 0, iceLattice: 0, flashFreeze: 0, capMul: 0, chargeSlow: 0, capArc: 0, miasma: 0, virulence: 0, aegisNova: 0, penitent: 0, singularity: 0, grimHarvest: 0, msOpen: 0, msKill: 0,
-      cinderBlock: 0, cinderWalk: 0, pillarWall: 0, pillarMine: 0, liveWire: 0, snareLine: 0, doseLong: 0, doseCat: 0, twinLance: 0, haloRing: 0, deathSpiral: 0, shadowRelay: 0, echoEdge: 0, mirrorEdge: 0,
-      // Twists (src/data/twists.js, src/sim/twist.js): 1 while held
-      twBlood: 0, twMetro: 0, twPacifist: 0, twHunted: 0,
-      // duos
-      thermal: 0, plasma: 0, supercond: 0, firedamp: 0, sunfire: 0, blackflame: 0, cryotoxin: 0, hoarlight: 0, blackice: 0, galvanic: 0, heavenwrath: 0, blackLight: 0, purge: 0, necrosis: 0, twilight: 0,
     };
     for (let i = 0; i < ROUTE_KEYS.length; i++) s[ROUTE_KEYS[i]] = 0;
     return s;
@@ -75,7 +68,7 @@
 
   // Every source of a stat block, in the order the stat block adds them: [{ kind, id, label, mods, n, rank?, card?, x? }]; a source adds mods[key] x n to its key.
   // Order: class, Hearth upgrades, mastery levels, pacts, boons (insertion order), relics, Philosopher's Stone per relic held, reward health, a full Grail. A class card (card: true) carries its totals at `rank`
-  // (n is 1) and compounds slot damage. An Ascended boon (kind 'asc') adds its mods like a boon and carries x { key: f }: St.compute multiplies s[key] by 1 + f once every additive source is summed. build: { cls, weapon, boons: {id: n}, relics: [id], meta: { up: [], mastery }, pact, chaliceHp, bonusHp }.
+  // (n is 1) and compounds slot damage. build: { cls, weapon, boons: {id: n}, relics: [id], meta: { up: [], mastery }, pact, chaliceHp, bonusHp }.
   St.sources = (build) => {
     const cls = ED.CLASSES[build.cls], meta = build.meta || { up: [], mastery: 1 }, out = [];
     out.push({ kind: 'class', id: build.cls, label: cls.name, mods: { hp: cls.hp, armor: cls.armor, crit: cls.crit, dodge: cls.dodge || 0 }, n: 1 });
@@ -91,7 +84,6 @@
     for (const id in boons) {
       const b = ED.BOONS[id], n = boons[id];
       if (!b || !(n > 0)) continue;
-      if (b.asc) { out.push({ kind: 'asc', id, label: b.name, mods: b.mods, n: 1, x: b.x }); continue; }
       if (!b.route) { out.push({ kind: 'boon', id, label: b.name + (n > 1 ? ' ×' + n : ''), mods: b.mods, n }); continue; }
       if (b.cls !== build.cls) continue;
       out.push({ kind: 'card', id, label: ED.cardName(id, n) + (n > 1 ? ' ×' + n : ''), mods: ED.cardTotals(b, n), n: 1, rank: n, card: true }); // card total per rank: mods + up x (rank - 1) + r2 + r3
@@ -105,8 +97,7 @@
     return out;
   };
 
-  // The contributions to stat `key` of every source: [{ kind, id, label, v, rank?, mul? }], preceded by a Base row (v 1) for the multiplicative stats. Slot damage (s1Dmg, s2Dmg) lists each card's factor part; the stat compounds them.
-  // Additive rows come first; an Ascended multiplier row (mul: true) has v = f and multiplies the sum of the rows before it by 1 + f.
+  // The contributions to stat `key` of every source: [{ kind, id, label, v, rank? }], preceded by a Base row (v 1) for the multiplicative stats. Slot damage (s1Dmg, s2Dmg) lists each card's factor part; the stat compounds them.
   const BASE_ONE = { dmg: 1, atk: 1, spd: 1, hpMul: 1 };
   St.breakdown = (build, key) => {
     const rows = [], src = St.sources(build);
@@ -115,7 +106,6 @@
       const m = r.mods[key];
       if (m) rows.push({ kind: r.kind, id: r.id, label: r.label, v: m * r.n, rank: r.rank });
     }
-    for (const r of src) if (r.x && r.x[key]) rows.push({ kind: r.kind, id: r.id, label: r.label, v: r.x[key], mul: true });
     return rows;
   };
 
@@ -132,9 +122,10 @@
     const base = ED.WEAPONS[build.weapon];
     const s = BASE();
     let m1 = 1, m2 = 1, m3 = 1, fork = null; // slot damage compounds card by card (each card's text is its exact factor)
-    const extras = [], asc = [];
+    const extras = [];
+    let hold = null;
     for (const r of St.sources(build)) {
-      if (!r.card) { for (const k in r.mods) s[k] = (s[k] || 0) + r.mods[k] * r.n; if (r.x) asc.push(r.x); continue; }
+      if (!r.card) { for (const k in r.mods) s[k] = (s[k] || 0) + r.mods[k] * r.n; if (r.kind === 'boon' && ED.BOONS[r.id].hold) hold = ED.BOONS[r.id].hold; continue; }
       const tot = r.mods;
       for (const k in tot) {
         if (k === 's1Dmg') m1 *= 1 + tot[k]; else if (k === 's2Dmg') m2 *= 1 + tot[k]; else if (k === 's3Dmg') m3 *= 1 + tot[k]; else s[k] = (s[k] || 0) + tot[k];
@@ -143,11 +134,10 @@
       if (b.weapon) { if (b.weapon.kind && !fork) fork = r.id; if (b.weapon.extra) extras.push(b.weapon.extra); }
     }
     s.s1Dmg = m1 - 1; s.s2Dmg = m2 - 1; s.s3Dmg = m3 - 1;
-    for (const x of asc) for (const k in x) s[k] = (s[k] || 0) * (1 + x[k]); // Ascended bucket: after every additive source, before the derived values
-    for (const x of asc) if (x.dmg) s.dmgX *= 1 + x.dmg; // dmgX: the Ascended damage factor; combat.js scales the conditional (additive) damage by it so a hit stays exactly dmgX x the same hit without the card
 
     const out = s;
     out.power = cls.power; out.element = cls.element || null; // Class Power scales every non-attack proc (ED.procDmg)
+    out.hold = hold; // the hold-attack verb of an owned card (St.HOLD), or null
     out.maxHp = Math.max(5, Math.round(s.hp * Math.max(0.3, s.hpMul)));
     out.moveSpeed = cls.spd * U.clamp(s.spd, 0.5, 2.2);
     // weapon: the fork transform of an owned attack fork, card extras, wDmg, and the attack-interval floor (speed beyond the floor becomes damage)
@@ -214,11 +204,16 @@
     return p.comboAt === undefined || now - p.comboAt > idle ? 0 : ((p.comboK | 0) + 1) % c.steps.length;
   };
   St.stepInterval = (p) => { const c = p.stats.weapon.combo; return St.attackInterval(p) * (c ? c.iv[p.comboK | 0] || 1 : 1); };
-  // Move rate: Flow (Swift forks, p.flowT) and the unseen speed of Nightfall (stealthSpd while p.stealthT).
+  // Move rate: Flow (Swift forks, p.flowT) and the unseen speed of Nightfall (stealthSpd while p.stealthT), times the slow of a held verb (p.holdOn: St.HOLD[st.hold].slow).
   St.moveRate = (p) => {
-    const s = p.stats;
-    return 1 + (p.flowT > 0 ? ED.CONST.FLOW_SPD : 0) + (p.stealthT > 0 ? s.stealthSpd : 0);
+    const s = p.stats, h = p.holdOn && s.hold ? St.HOLD[s.hold] : null;
+    return (1 + (p.flowT > 0 ? ED.CONST.FLOW_SPD : 0) + (p.stealthT > 0 ? s.stealthSpd : 0)) * (h && h.slow ? 1 - h.slow : 1);
   };
+  // Hold-attack verbs (stats.hold, set by a card's hold field): the client starts one once attack is held `at` s (normal attacks stop) and ends it on release. max: the verb ends itself after max s (0: until release);
+  // full: seconds of holding (from the start) to a full charge (lance, flask, finisher; the finisher's full is FULL_EVO with Masterwork Arms); slow: share of move speed lost while it runs. Bell weapons fire them on a full-wind hurl (class-bell.js).
+  St.HOLD = { cone: { at: 0.35, max: 2, slow: 0.4 }, lance: { at: 0.35, full: 0.6 }, flask: { at: 0.35, full: 0.25 }, guard: { at: 0.35, max: 2.5, slow: 0.5 }, finisher: { at: 0.35, full: 0.6 } };
+  St.FULL_EVO = 0.3;
+  St.holdFull = (st) => (st.hold === 'finisher' && st.evo === 'general' ? St.FULL_EVO : (St.HOLD[st.hold] && St.HOLD[st.hold].full) || 0);
 
   // Numbers of a skill for a stat block, the one source for the sim, the sheet and the bots. Returns
   // { id, slot, aim, range, rangeMin, move, cd, cdEff, parts: [{id, label, on, dmg, r, dur, n, count, ...the part's data}], p: {partId: part} } (cached on st).
