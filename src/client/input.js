@@ -21,7 +21,7 @@
     { id: 'left', label: 'Move left', group: 'Movement' }, { id: 'right', label: 'Move right', group: 'Movement' },
     { id: 'attack', label: 'Attack', group: 'Combat' }, { id: 'skill1', label: 'Skill 1', group: 'Combat' },
     { id: 'skill2', label: 'Skill 2', group: 'Combat' }, { id: 'skill3', label: 'Skill 3', group: 'Combat' }, { id: 'dash', label: 'Dash', group: 'Combat' },
-    { id: 'map', label: 'Map and build', group: 'Interface' }, { id: 'pause', label: 'Pause', group: 'Interface' },
+    { id: 'map', label: 'Character sheet', group: 'Interface' }, { id: 'pause', label: 'Pause', group: 'Interface' },
   ];
   I.DEFAULTS = {
     up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'],

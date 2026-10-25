@@ -55,7 +55,7 @@
       orbit: { r: 160 }, burst: { cd: 2.6, windup: 0.5, n: 3, gap: 0.13, speed: 270, mul: 0.65, kind: 'droneshot' } },
 
     // ---------------- Stratum III: Drowned Sanctum ----------------
-    drowned: { name: 'The Drowned', ai: 'chaser', look: 'zombie', col: { a: '#6f9a8a', b: '#2f5249', c: '#e8c66b' }, hp: 42, spd: 54, dmg: 3.25, r: 11, xp: 3, cost: 2,
+    drowned: { name: 'Drowned', ai: 'chaser', look: 'zombie', col: { a: '#6f9a8a', b: '#2f5249', c: '#e8c66b' }, hp: 42, spd: 54, dmg: 3.25, r: 11, xp: 3, cost: 2,
       lunge: { range: 48, windup: 0.42, speed: 250, dur: 0.2, cd: 1.5 } },
     eel: { name: 'Gloom Eel', ai: 'charger', look: 'eel', col: { a: '#2a6a7a', b: '#123540', c: '#e8ff6a' }, hp: 30, spd: 76, dmg: 3.25, r: 10, xp: 3, cost: 2,
       charge: { range: 240, windup: 0.5, speed: 400, dur: 0.36, cd: 1.9 } },
@@ -91,16 +91,16 @@
     minion: { name: 'Risen Bones', ai: 'ally', look: 'skeleton', col: { a: '#b6ffe0', b: '#4c8f78', c: '#7dffd9' }, hp: 40, spd: 95, dmg: 10, r: 9, xp: 0, cost: 0, ally: true },
 
     // ---------------- Bosses (absolute HP, scaled by party and pact; refHp = design HP that chill, Conflagration and Wildfire measure against) ----------------
-    bonewarden: { name: 'The Bone Warden', title: 'After his slam he is stuck: +50% damage', ai: 'boss', look: 'b_warden', col: { a: '#ece4cc', b: '#7d745f', c: '#ff5a3a' },
+    bonewarden: { name: 'Bone Warden', title: 'After a slam his sword is stuck: he takes +50% damage', ai: 'boss', look: 'b_warden', col: { a: '#ece4cc', b: '#7d745f', c: '#ff5a3a' },
       hp: 4350, refHp: 800, spd: 80, dmg: 2.4, r: 24, xp: 40, boss: true },
-    sporemother: { name: 'The Sporemother', title: 'Break the pods to clear the spore carpet', ai: 'boss', look: 'b_spore', col: { a: '#c86bff', b: '#5b2a7a', c: '#7dffd9' },
+    sporemother: { name: 'Sporemother', title: 'Break the pods to clear the spore carpet', ai: 'boss', look: 'b_spore', col: { a: '#c86bff', b: '#5b2a7a', c: '#7dffd9' },
       hp: 3700, refHp: 1500, spd: 34, dmg: 2.4, r: 32, xp: 60, boss: true },
     // arena: the boss room's fixed layout (boss-king.js, boss-hollow.js; src/sim/arena.js lays it). Offsets in tiles from the room centre (floor(w / 2), floor(h / 2) + 1): pillars and dais [dx, dy, w, h], lanterns [dx, dy].
-    drownedking: { name: 'The Drowned King', title: 'Stand on raised stone when the tide comes. Hide behind pillars from the beam.', ai: 'boss', look: 'b_king', col: { a: '#3f8f88', b: '#173d3b', c: '#e8c66b' },
+    drownedking: { name: 'Drowned King', title: 'Stand on raised stone when the tide comes. Hide behind pillars from the beam.', ai: 'boss', look: 'b_king', col: { a: '#3f8f88', b: '#173d3b', c: '#e8c66b' },
       hp: 17000, refHp: 4200, spd: 62, dmg: 3.6, r: 26, xp: 120, boss: true, quote: '',
       arena: { kind: 'tide', pillars: [[-9, -4, 2, 2], [7, -4, 2, 2], [-9, 3, 2, 2], [7, 3, 2, 2], [-4, -1, 2, 2], [2, -1, 2, 2], [-1, -5, 2, 2], [-1, 2, 2, 2]],
         dais: [[-13, -7, 3, 3], [10, -7, 3, 3], [-13, 5, 3, 3], [10, 5, 3, 3], [-1, -7, 3, 2], [-1, 5, 3, 3]] } },
-    hollowking: { name: 'The Hollow King', title: 'Light the lanterns in the dark. Leave the floor before it falls.', ai: 'boss', look: 'b_hollow', col: { a: '#2a1f44', b: '#0e0820', c: '#ff7ad9' },
+    hollowking: { name: 'Hollow King', title: 'Light the lanterns in the dark. Move to the middle when the edge cracks.', ai: 'boss', look: 'b_hollow', col: { a: '#2a1f44', b: '#0e0820', c: '#ff7ad9' },
       hp: 84000, refHp: 7000, spd: 70, dmg: 3.3, r: 24, xp: 160, boss: true, quote: '',
       arena: { kind: 'crown', lanterns: [[-11, -5], [11, -5], [-11, 4], [11, 4], [-5, 0], [5, 0]] } },
 
@@ -132,7 +132,7 @@
     brutal: { name: 'Brutal', color: '#ff6a4a', desc: 'hits much harder' },
     warded: { name: 'Warded', color: '#7fc8ff', desc: 'shielded until the ward breaks' },
     volatile: { name: 'Volatile', color: '#ffb13a', desc: 'explodes on death' },
-    vampiric: { name: 'Vampiric', color: '#d43a5a', desc: 'heals when it hurts you' },
+    vampiric: { name: 'Vampiric', color: '#d43a5a', desc: 'heals when it hits you' },
   };
   ED.AFFIX_IDS = Object.keys(ED.AFFIXES);
   ED.hasAffix = (e, id) => !e.affixOff && (e.elite === id || e.elite2 === id); // either affix slot; none while Hex the Strong suppresses them (e.affixOff)

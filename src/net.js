@@ -165,7 +165,7 @@
       if (!joined) {
         if (d.t !== 'hello') return;
         if (d.ver !== N.VERSION) { c.send({ t: 'reject', reason: 'Your game version differs from the host. Refresh the page.' }); setTimeout(() => c.close(), 300); return; }
-        if (this.started) { c.send({ t: 'reject', reason: 'That descent has already begun.' }); setTimeout(() => c.close(), 300); return; }
+        if (this.started) { c.send({ t: 'reject', reason: 'That run has already started.' }); setTimeout(() => c.close(), 300); return; }
         if (this.members.length >= ED.CONST.MAX_PLAYERS) { c.send({ t: 'reject', reason: 'That party is full (4 heroes).' }); setTimeout(() => c.close(), 300); return; }
         joined = true;
         const used = new Set(this.members.map(m => m.slot));

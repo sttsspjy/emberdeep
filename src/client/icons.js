@@ -1389,8 +1389,8 @@
   // ---------------- floor-map glyphs (minimap, Tab map, door previews, reward props) ----------------
   // Reward kind -> [glyph, colour, short label, long name]. 'boon' wears the colour of the viewing hero's deepest path.
   const RW = {
-    gold: ['coins', '#ffd36b', 'Gold'], boon: ['card', '#ffe9a0', 'Boon'], epic: ['cardepic', '#c98bff', 'Epic', 'Epic boon'], relic: ['amulet', '#ffb02e', 'Relic', 'Relic hoard'],
-    forge: ['anvil', '#aab4c8', 'Forge'], vigor: ['heart', '#ff4a5a', 'Vigor'], twist: ['cardtwist', '#e8344e', 'Twist'], campfire: ['campfire', '#ff9a3a', 'Rest'], anvil: ['anvil', '#ffb066', 'Temper'],
+    gold: ['coins', '#ffd36b', 'Gold'], boon: ['card', '#ffe9a0', 'Boon'], epic: ['cardepic', '#c98bff', 'Epic', 'Epic boon'], relic: ['amulet', '#ffb02e', 'Relic', 'Relics'],
+    forge: ['anvil', '#aab4c8', 'Forge'], vigor: ['heart', '#ff4a5a', 'Health', 'Max health'], twist: ['cardtwist', '#e8344e', 'Twist'], campfire: ['campfire', '#ff9a3a', 'Rest'], anvil: ['anvil', '#ffb066', 'Forge'],
   };
   const RW_NONE = ['star', '#ffe9a0', 'Reward'];
   // Room type -> [glyph, colour, label]; event rooms by their event kind.

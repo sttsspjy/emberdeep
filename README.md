@@ -1,6 +1,6 @@
 # Wickdeep
 
-A cooperative roguelite that runs in the browser. Descend through six strata of the Deep, alone or with up to three friends. Builds are chosen, not rolled: pick your paths, read each stratum's weakness, choose a route for your hero, and choose your way through each floor: the route map makes every room a choice. Carry embers back to the Hearth to grow stronger between descents.
+A cooperative roguelite that runs in the browser. Fight down through the strata, alone or with up to three friends. Builds are chosen, not rolled: pick your paths, read each stratum's weakness, choose a route for your hero, and choose your way through each floor: the route map makes every room a choice. Carry embers back to the Hearth to grow stronger between runs.
 
 No build step, no backend, no install. It is a static site: open it from any web host and play.
 
@@ -37,26 +37,26 @@ The interface scales with your window (larger on big and 4K screens). Bottom-lef
 - **Combat:** your weapon and each skill with the damage per hit and per cast, how it is built (every multiplier with its sources), your defence (armor, dodge, shields, healing) and what the foes of this stratum do to you.
 - **Map:** the stratum's weakness, the dark rooms left on the floor and the route map: the whole floor with a label on every room, threat pips, the path you walked in gold and the rooms you can no longer reach dimmed.
 
-Playing alone, the world waits while the sheet is open; in a party the descent goes on.
+Playing alone, the world waits while the sheet is open; in a party the run goes on.
 
-## A descent
+## A run
 
 - Six strata in a fixed order: the Ossuary, Glowmire Grotto, Rimefrost Halls, the Cinderforge, the Drowned Sanctum and the Starless Abyss. Each has its own palette, lighting, hazards, composed music (it thickens as the room fills and a boss brings its own variant of the theme), enemy roster, boss and elemental weakness.
-- **The route map.** Each stratum is a floor of 12 rooms laid out in layers from the start to the boss, and doors only lead forward: a route crosses about six rooms, and the way back closes behind you. Fight rooms, an elite room (two in strata V and VI), two dark rooms, a treasure room (strata I, III, V) or an event shrine (fountain, altar, gamble shrine or champion's trial; strata II, IV, VI), a shop and a rest site share the floor, so each fork asks what you need: a safe shop or rest, or a fight for its reward. Every door shows the room's icon and label, its reward and threat pips (more for elite rooms, dark rooms and deeper layers); "The way back closes" reminds you when you near one. Fight rooms are wide and the camera scrolls with you.
-- **Every room has its own icon:** a stall for the shop, coins for gold, a chest, an amulet for a relic, a violet card for an epic boon, a card in your path colour for a boon, a red card for a Twist, an anvil for a forge, a heart for Vigor, a campfire for rest, a fountain, altar, crossed swords or "?" for the shrines, a horned skull for elites and a crowned skull for the boss.
-- **Room rewards.** A normal fight pays a boon (drawn from your own paths), gold, a Vigor blessing (+max health) or a forge (rank up one boon). Elite rooms pay a relic, an epic boon or, from stratum III, a Twist. Rewards appear in the middle of the room once it is clear; boons and forges are claimed by each hero, gold and relics are shared. A hero who has maxed every boon on offer is offered a Purse of gold instead (the same gold as a gold reward), never a boon above its top rank.
+- **The route map.** Each stratum is a floor of 12 rooms laid out in layers from the start to the boss, and doors only lead forward: a route crosses about six rooms, and there is no way back. Fight rooms, an elite room (two in strata V and VI), two dark rooms, a treasure room (strata I, III, V) or an event shrine (fountain, altar, gamble shrine or champion's trial; strata II, IV, VI), a shop and a rest site share the floor, so each fork asks what you need: a safe shop or rest, or a fight for its reward. Every door shows the room's icon and label, its reward and threat pips (more for elite rooms, dark rooms and deeper layers); "No way back" reminds you when you near one. Fight rooms are wide and the camera scrolls with you.
+- **Every room has its own icon:** a stall for the shop, coins for gold, a chest, an amulet for a relic, a violet card for an epic boon, a card in your path colour for a boon, a red card for a Twist, an anvil for a forge, a heart for max health, a campfire for rest, a fountain, altar, crossed swords or "?" for the shrines, a horned skull for elites and a crowned skull for the boss.
+- **Room rewards.** A normal fight pays a boon (drawn from your own paths), gold, max health (+2 for the run) or a forge (rank up one boon). Elite rooms pay a relic, an epic boon or, from stratum III, a Twist. Rewards appear in the middle of the room once it is clear; boons and forges are claimed by each hero, gold and relics are shared. A hero who has maxed every boon on offer is offered a Purse of gold instead (the same gold as a gold reward), never a boon above its top rank.
 - **Breakables.** Urns, glowing mushrooms, crystals, crates, coral and void shards break when your attacks, shots, blasts or dashes hit them; now and then one hides a few coins or, rarely, a heart.
-- **Rest sites** have a campfire (heal 35%) and, in strata I, III and V, an anvil (forge one boon); each hero uses one of them. **Shops** sell relics, a healing draught and one build item: an epic boon in strata I, III and V, a forge in strata II, IV and VI. The bosses of strata III and V also grant an epic boon.
-- **Relics** are run-long items from elite rooms, chests, shops, shrines and bosses. All 31 can drop from your first descent and none belongs to an element.
+- **Rest sites** have a campfire (heal 35%) and, in strata I, III and V, an anvil (forge one boon); each hero uses one of them. **Shops** sell relics, a healing potion and one build item: an epic boon in strata I, III and V, a forge in strata II, IV and VI. The bosses of strata III and V also grant an epic boon.
+- **Relics** are run-long items from elite rooms, chests, shops, shrines and bosses. All 31 can drop from your first run and none belongs to an element.
 - **Hordes.** Beside the foes that matter, every fight pours in packs of weak fodder from the room's edges: about 70 kills a fight in stratum I, up to 210 in stratum VI, more in dark rooms. Fodder dies in a hit or two, nips for at most 3% of your health and slows you while it clings to you (down to half speed), so keep moving and dash out. It drops only experience motes, and every fight pays a fixed amount of experience however it goes (summoned and split foes pay nothing). Kill effects that spread, chain or explode trigger on fodder; cooldown refunds, shields, healing, stacks and raised minions come only from the foes that matter. A foe still standing 45 seconds after it appeared weakens and starts to wither.
 - **Deeper strata fight smarter.** From stratum III ranged foes aim where you are heading (more so the deeper you go), shots fly faster, rooms mix in foes from the stratum above, and from stratum IV elites can carry two affixes. Every boss fires aimed volleys at each hero (a warning line shows the path; change direction after it locks), adds one on top of everything else in its last phase, and fodder keeps trickling in during the fight. From stratum IV a boss that lives too long flies into a **fury**: the track under its health bar fills toward a notch, and past it the boss hits harder and attacks faster every second.
 - You level up from experience and gain a boon at every second level (2, 4, 6, ...) and your class route card at level 3. Offers open only when the room is safe. Playing alone, the world waits while the boon cards are open (and while paused).
 - A boon card shows what it is at a glance: its frame and icon wear its path (flame crown for Fire, ice shards, a lightning zigzag, dripping Poison, a Holy cathedral, torn Shadow, riveted steel for General), class route cards fly your hero's banner, duos split two frames, Ascended cards are gilded with wings, Mutations grow in a copper helix frame, Twists wear barbed iron with a wax seal and a red cost line, and the frame metal and the gem at the bottom show the rarity (iron common, silver rare, violet epic, gold legendary). Keystones, evolutions and path gates get a gold trim and a bigger gem. Taking a card plays its own animation and sound.
-- A winning descent takes about 30 to 40 minutes.
+- A winning run takes about 30 to 40 minutes.
 
 ### Dark rooms
 
-Every floor has two **dark rooms**: combat rooms on their own branches, marked with a violet moon on the door and the map. They are optional: one route always skips both. Inside, foes hit 30% harder and the last wave brings an extra elite with a nasty affix; in return gold and experience pay 50% more (the Hearth's **Deep Wick** adds 10% of that per rank) and the room's reward is always one step better (gold becomes Vigor, Vigor a forge, a forge or a boon an epic boon). The door already shows the better reward.
+Every floor has two **dark rooms**: combat rooms on their own branches, marked with a violet moon on the door and the map. They are optional: one route always skips both. Inside, foes hit 30% harder and the last wave brings an extra elite with a nasty affix; in return gold and experience pay 50% more (the Hearth's **Deep Wick** adds 10% of that per rank) and the room's reward is always one step better (gold becomes max health, max health a forge, a forge or a boon an epic boon). The door already shows the better reward.
 
 ## Builds: paths, routes, weaknesses, evolutions
 
@@ -74,7 +74,7 @@ Boons belong to **paths**: six element paths and General. A hero follows at most
 | **Shadow** | Doom | Kills and the dash: Reaps chain their Doom on (Reaper's Chain), your skills mark a Quarry, a dash through a weakened foe Reaps it (Umbral Step). |
 | **General** | Bleed (physical) | Generalist only: critical hits, bleeding foes and finishing blows. No elements and no element boons, but stronger open boons. |
 
-- **Start offer:** a descent begins with a choice of four gates. The Pyromancer, Cleric and Necromancer always find their own element on it. The Knight, Ranger and Shade may instead take the Generalist.
+- **Start offer:** a run begins with a choice of four gates. The Pyromancer, Cleric and Necromancer always find their own element on it. The Knight, Ranger and Shade may instead take the Generalist.
 - **Keystone:** at affinity 5 (General 6) a path can offer its keystone, a build-defining epic boon.
 - **Evolution:** at affinity 10 (General 12) with the keystone, your next offers include the path's legendary weapon evolution. A path holds 12 ranks (General 15), so this takes a real commitment. One evolution per run. Each element path also has one **Attunement** common (more build-up and more damage to foes carrying its status).
 - **Duo boons:** two element paths that both reach affinity 4 offer a duo that combines them: Thermal Shock (Fire and Ice), Plasma (Fire and Lightning), Firedamp (Fire and Poison), Sunfire (Fire and Holy), Black Flame (Fire and Shadow), Superconductor (Ice and Lightning), Cryotoxin (Ice and Poison), Hoarlight (Ice and Holy), Black Ice (Ice and Shadow), Galvanic Venom (Lightning and Poison), Wrath of Heaven (Lightning and Holy), Black Lightning (Lightning and Shadow), Purge (Poison and Holy), Necrosis (Poison and Shadow) and Twilight (Holy and Shadow).
@@ -84,8 +84,8 @@ Boons belong to **paths**: six element paths and General. A hero follows at most
 - **Late picks:** from stratum III the flat-stat commons (Plating, Thornmail, Evasion, Stalwart, Fleet Foot, Lodestar, Bounty, Forager, Mending) leave level-up and room offers (forges, shops and epic offers keep them); from stratum IV an offer short of cards fills with Mutations and rank-ups of your path boons.
 - **Ascended boons:** from stratum IV, a boon you have taken to its top rank can offer its **Ascended** upgrade (Honed Edge, Blur, Arrow Storm, Impaler, Hawk Eye, Savage, Vast, Titan; Hemorrhage, Headsman and Bloodletting for Generalists). It sits first on a boon offer when no Mutation does, takes no path, and multiplies the bonus you already hold instead of adding to it. At most two per stratum.
 - A room that rewards "a boon" offers one new element gate (while you have a free slot) and boons of the paths you follow. Level-ups offer open boons, boons of your paths, keystones and duos.
-- **Health is a small whole number.** A Knight starts at 40, a Necromancer at 14, and a foe's hit costs 2 to 4 from the first stratum: every hit counts. A Vigor blessing is +2, a Heartstone +4, a Hearth Vitality rank +2.
-- **No life steal, little healing.** Hits and kills never heal you, and cleared rooms drop no hearts: hearts come from a few kills (elites more often), bosses and breakables. Healing comes from hearts, campfires, healing draughts, the fountain, Vigor, the Hearth's Provisions and the Elixir Flask, Sanctuary and Bone Harvest, and revives; Forager makes hearts, campfires, fountains, draughts and Vigor rewards heal 8% more of your max health per rank. **Shields** take the place of sustain: class shields give at most 3% of your max health per 10 seconds, all shield sources together at most 6% (the Battle Ward an elite room grants is exempt), and shields fade between fights.
+- **Health is a small whole number.** A Knight starts at 40, a Necromancer at 14, and a foe's hit costs 2 to 4 from the first stratum: every hit counts. A max health reward is +2, a Heartstone +4, a Hearth Vitality rank +2.
+- **No life steal, little healing.** Hits and kills never heal you, and cleared rooms drop no hearts: hearts come from a few kills (elites more often), bosses and breakables. Healing comes from hearts, campfires, healing potions, the fountain, max health rewards, the Hearth's Provisions and the Elixir Flask, Sanctuary and Bone Harvest, and revives; Forager makes hearts, campfires, fountains, potions and max health rewards heal 8% more of your max health per rank. **Shields** take the place of sustain: class shields give at most 3% of your max health per 10 seconds, all shield sources together at most 6% (the Battle Ward an elite room grants is exempt), and shields fade between fights.
 
 ### Class routes
 
@@ -97,7 +97,7 @@ Every hero also chooses a **route**: how their kit grows.
 
 ### Elemental weaknesses
 
-Every stratum is **weak** to one element (your damage and status build-up with it are x1.5) and **resists** another (÷1.5, about x0.67). General and physical hits ignore this. The Chronicle tab in the Hearth lists it too.
+Every stratum is **weak** to one element (your damage and status build-up with it are x1.5) and **resists** another (÷1.5, about x0.67). General and physical hits ignore this. The Records tab in the Hearth lists it too.
 
 | Stratum | Weak to | Resists |
 | --- | --- | --- |
@@ -132,22 +132,22 @@ You start with the **Knight**, **Ranger** and **Pyromancer**. Each hero has thre
 | Ranger | Volley, 5 s | Rain of Arrows, 10 s: a storm of arrows on a point | Start |
 | Pyromancer | Flame Nova, 7 s | Meteor, 12 s: telegraphed impact and burning crater | Start |
 | Shade (35% base dodge) | Shadowstep, 4.5 s | Vanish, 11 s: smoke, stealth and a guaranteed-crit ambush | Defeat the Bone Warden |
-| Cleric | Sanctuary, 11 s: heals you and allies near you, then holy ground that burns foes and cuts the damage allies take | Judgment, 9 s: a returning hammer that judges foes | Complete 4 descents |
+| Cleric | Sanctuary, 11 s: heals you and allies near you, then holy ground that burns foes and cuts the damage allies take | Judgment, 9 s: a returning hammer that judges foes | Play 4 runs |
 | Necromancer | Raise Legion, 12 s | Bone Harvest, 10 s: minions explode, then rise again | Defeat the Sporemother |
 | Bellwarden (hold attack to wind the bell; let go to hurl it, it glows at full wind; press again to reel it home through foes) | Anchor Leap, 5 s: to your anchored bell, or a short leap; slams where you land | Peal, 10 s: every bell rings and stuns, stronger with Resonance from hurls and reels | A secret |
 
 ## The menus
 
-The main menu has five entries. **Descend** picks your hero, weapon and pact, then starts a solo descent or opens a party (**Host a party**, or **Join a party** with a code). **Hearth** holds the upgrades, the Wardrobe and the chronicle. **Heroes** shows every hero's stats and mastery rewards. **Settings** holds Sound, Display (visual quality, frame cap, screen shake, damage numbers), Controls (cursor, cursor size, cursor colour, skill aim preview, key bindings) and your profile (name, save code, erase). **Credits** lists the art that Wickdeep is built from. `Esc` steps back out of a menu.
+The main menu has five entries. **Play** picks your hero, weapon and pact, then starts a solo run or opens a party (**Host a party**, or **Join a party** with a code). **Hearth** holds the upgrades, the Wardrobe and the chronicle. **Heroes** shows every hero's stats and mastery rewards. **Settings** holds Sound, Display (visual quality, frame cap, screen shake, damage numbers), Controls (cursor, cursor size, cursor colour, skill aim preview, key bindings) and your profile (name, save code, erase). **Credits** lists the art that Wickdeep is built from. `Esc` steps back out of a menu.
 
-## Between descents (the Hearth)
+## Between runs (the Hearth)
 
-- **Embers** are earned on every descent that clears at least one room, win or lose. Spend them on 16 permanent upgrades. They matter (two points of health, 3% damage, three points of armor, a boon reroll, a few gold per rank), and hero mastery adds more up to level 10: a fully upgraded Hearth roughly doubles your odds over a half-upgraded one, but the build still decides a descent. **Deep Wick** adds 10% gold and experience in dark rooms per rank, **Head Start** begins the descent with a little experience, the **Stash** with a little gold, and **Second Wind** revives you once at a sliver of health if you fall outside a boss fight. Deeper strata reveal new upgrades.
+- **Embers** are earned on every run that clears at least one room, win or lose. Spend them on 16 permanent upgrades. They matter (two points of health, 3% damage, three points of armor, a boon reroll, a few gold per rank), and hero mastery adds more up to level 10: a fully upgraded Hearth roughly doubles your odds over a half-upgraded one, but the build still decides a run. **Deep Wick** adds 10% gold and experience in dark rooms per rank, **Head Start** starts the run with a little experience, the **Stash** with a little gold, and **Second Wind** revives you once at a sliver of health if you fall outside a boss fight. Deeper strata reveal new upgrades.
 - **Refunds are free:** every upgrade rank has a **Refund** button that returns its full cost, and **Reset all** (press it twice to confirm) returns every rank at once, so you can rebuild the Hearth for a new path.
-- **Armory:** each hero's weapon variants, listed under the upgrades: an alternative version of a weapon with the same power and a different shape (the Arming Sword's slash-slash-lunge combo, the Earthbreaker's slam ahead, the Hooked Glaive's pull, the Radiant Mace's ring of light, the Sunlance's instant beam, the Mortar Tome's lobbed shell, the Shade's Boomerang Blades, the Votive Lamp's shielding pools of light, the Miasma Staff's trail of plague clouds, and more). A variant costs 40, 60 or 80 embers (for the first, second or third weapon), can be bought once its base weapon is unlocked, and refunds in full. An owned variant shows under its base weapon in the weapon picker of Descend and the party lobby.
-- **Heroes:** every descent trains the hero you took, up to mastery 10. Mastery unlocks weapons and tiny permanent bonuses.
-- **Deeds:** 26 achievements with ember rewards, including Evolved, **Into the Dark** (clear 6 dark rooms in one descent) and **Cartographer** (clear both dark rooms and every elite room of one stratum).
-- **Wardrobe:** looks for your heroes in the Hearth (and the lobby's Hearth): skins bought with embers at mastery 4 and 7, a weapon tint for each weapon you evolve in three descents, a golden aura at mastery 10, and more for those who find the Deep's secrets. Hover an item to preview it on your hero. Your party sees what you wear. Looks never change how a hero fights, and Wardrobe embers are not refunded.
+- **Armory:** each hero's weapon variants, listed under the upgrades: an alternative version of a weapon with the same power and a different shape (the Arming Sword's slash-slash-lunge combo, the Earthbreaker's slam ahead, the Hooked Glaive's pull, the Radiant Mace's ring of light, the Sunlance's instant beam, the Mortar Tome's lobbed shell, the Shade's Boomerang Blades, the Votive Lamp's shielding pools of light, the Miasma Staff's trail of plague clouds, and more). A variant costs 40, 60 or 80 embers (for the first, second or third weapon), can be bought once its base weapon is unlocked, and refunds in full. An owned variant shows under its base weapon in the weapon picker of Play and the party lobby.
+- **Heroes:** every run trains the hero you took, up to mastery 10. Mastery unlocks weapons and tiny permanent bonuses.
+- **Deeds:** 26 achievements with ember rewards, including Evolved, **Into the Dark** (clear 6 dark rooms in one run) and **Cartographer** (clear both dark rooms and every elite room of one stratum).
+- **Wardrobe:** looks for your heroes in the Hearth (and the lobby's Hearth): skins bought with embers at mastery 4 and 7, a weapon tint for each weapon you evolve in three runs, a golden aura at mastery 10, and more for those who find the secrets. Hover an item to preview it on your hero. Your party sees what you wear. Looks never change how a hero fights, and Wardrobe embers are not refunded.
 - **Pacts:** ten optional difficulty tiers unlocked by winning, each paying more embers. They stack: the first three (tougher foes, harder hits, more elites) are gentle, the next two (scarce healing and less health, stronger bosses) are steep, then speed, prices, shots, frailty and an extra wave.
 - The Hearth camp changes as you progress: more tents and lanterns, a banner per slain boss, a gate that glows with the colour of the deepest stratum you have reached, and a blood moon under a pact.
 
@@ -157,20 +157,20 @@ Progress autosaves to the browser. **Settings > Profile** shows a portable save 
 
 Wickdeep starts fresh profiles: saves and codes from Emberdeep (`ED1-…`) do not carry over, and the game says so if you paste one.
 
-If you played an earlier version of Wickdeep, the first launch shows a one-time **"The Deep has changed"** notice. It lists what is different (the relic Codex is gone and every relic drops from the start, the element relics became path boons, free Hearth refunds and smaller upgrades, smaller generic health boons, a per-hero Armory list, kill effects on fodder, mouse aim, the new paths, shields instead of life steal, the Knight's Shield Throw, optional dark rooms in place of the lantern, bigger rooms with hordes, dash charges, rank 2 and rank 3 transforms at the bosses, Ascended boons, boss fury, music per stratum) and how many embers the Codex refunded. A profile from v4 or v4.1 sees only the newest part: small health numbers and harder hits, a stronger Hearth, the Armory weapon variants and the new melee swing.
+If you played an earlier version of Wickdeep, the first launch shows a one-time **"What changed"** notice. It lists what is different (the relic Codex is gone and every relic drops from the start, the element relics became path boons, free Hearth refunds and smaller upgrades, smaller generic health boons, a per-hero Armory list, kill effects on fodder, mouse aim, the new paths, shields instead of life steal, the Knight's Shield Throw, optional dark rooms in place of the lantern, bigger rooms with hordes, dash charges, rank 2 and rank 3 transforms at the bosses, Ascended boons, boss fury, music per stratum) and how many embers the Codex refunded. A profile from v4 or v4.1 sees only the newest part: small health numbers and harder hits, a stronger Hearth, the Armory weapon variants and the new melee swing.
 
 Two tabs open on the same profile stay in step: each adopts the other's saved progress instead of overwriting it.
 
 ## Multiplayer
 
-1. One player presses **Host a party** on the Descend screen and shares the 5-character code, or the invite link.
+1. One player presses **Host a party** on the Play screen and shares the 5-character code, or the invite link.
 2. Friends press **Join a party** and enter the code (or just open the link), pick a hero and press Ready. Everyone sees the pact the host has chosen.
 3. The host presses **Begin**.
 
 How it works:
 - The host's browser runs the authoritative simulation. Friends connect peer-to-peer over WebRTC.
 - The free public PeerJS broker handles the initial handshake. Its bundled STUN/TURN servers help connections get through home routers. There is no game server to run or maintain.
-- Both ends exchange a heartbeat. A friend who goes silent for about 6 seconds (closed tab, crash, lost network) is removed from the descent so the party is never left waiting; if the host goes silent, friends return to the results screen with the embers earned so far.
+- Both ends exchange a heartbeat. A friend who goes silent for about 6 seconds (closed tab, crash, lost network) is removed from the run so the party is never left waiting; if the host goes silent, friends return to the results screen with the embers earned so far.
 
 > **Note:** multiplayer depends on the free public PeerJS broker (`0.peerjs.com`) and its STUN/TURN servers. They are community services with no uptime guarantee. If the broker is down, solo play still works and parties can be tried again later. Some strict corporate or school networks block peer connections entirely.
 
@@ -181,7 +181,7 @@ The party shares in-run progression:
 
 At the end of the run everyone gets the embers, mastery and boss milestones from it (plus a party bonus). For example, a friend who helps beat the Bone Warden unlocks the Shade too.
 
-Downed heroes can be revived by standing next to them. A hero who bleeds out returns at the next stratum. The run ends only when the whole party is down. After a run, the party returns to the lobby together; the lobby's **Hearth** button opens the upgrades and hero mastery so everyone can spend their embers before the next descent.
+Downed heroes can be revived by standing next to them. A hero who bleeds out returns at the next stratum. The run ends only when the whole party is down. After a run, the party returns to the lobby together; the lobby's **Hearth** button opens the upgrades and hero mastery so everyone can spend their embers before the next run.
 
 The host should keep the game tab open. The simulation keeps ticking when the tab is in the background, but closing it ends the run for everyone; friends keep the embers earned so far. Everyone in a party needs the same version of the game: refresh if the host reports a mismatch.
 

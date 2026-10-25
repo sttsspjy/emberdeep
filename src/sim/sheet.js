@@ -585,7 +585,7 @@
     if (st.rebuke) row("Martyr's Rebuke", ED.BOONS.martyr, `when your shield breaks, r ${Math.round(C.REBUKE_R * A)}, x0.5 to x2 by the shield's size, Holy`, { el: 'holy' });
     if (st.firebreak) row('Firebreak', ED.BOONS.firebreak, `per second on burning ground a burning death leaves (r ${C.FIREBREAK_R}, ${C.FIREBREAK_T} s)`, { el: 'fire' });
     if (st.dashBomb) row('Bomb Satchel', ED.RELICS.satchel, 'where you dash from, r 60');
-    if (st.phoenix) row('Phoenix Feather', ED.RELICS.phoenix, 'once per descent when you fall, r 110');
+    if (st.phoenix) row('Phoenix Feather', ED.RELICS.phoenix, 'once per run when you go down, r 110');
     return out;
   }
 

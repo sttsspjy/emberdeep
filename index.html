@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Wickdeep</title>
-<meta name="description" content="Wickdeep — a cooperative roguelite descent where you choose your build. Six paths, elemental weaknesses and dark rooms you dare to enter. Play solo or with up to 3 friends in your browser.">
+<meta name="description" content="Wickdeep: a co-op roguelite dungeon where you choose your build. Six element paths, four strata and optional dark rooms. Play solo or with up to 3 friends in your browser.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Cpath d=%22M16 2c6 7 10 11 10 18a10 10 0 0 1-20 0c0-5 3-8 5-11 0 4 2 6 4 6-2-5 0-9 1-13z%22 fill=%22%23ff8a3d%22/%3E%3C/svg%3E">
 <link rel="stylesheet" href="src/art/fonts.css">
 <link rel="stylesheet" href="style.css">
@@ -20,14 +20,14 @@
       <header class="logo">
         <h1 class="logo-word">Wickdeep</h1>
         <div class="logo-rule"><span></span><i></i><span></span></div>
-        <p class="logo-kicker">A cooperative descent</p>
+        <p class="logo-kicker">Co-op roguelite</p>
       </header>
 
       <div class="plate title-card" id="title-new" hidden>
-        <label for="inp-name" class="card-title">What should the Deep call you?</label>
+        <label for="inp-name" class="card-title">Your name</label>
         <input id="inp-name" maxlength="12" autocomplete="off" spellcheck="false" placeholder="Wanderer" aria-describedby="name-msg">
         <div class="msg name-msg" id="name-msg"></div>
-        <button class="btn btn-primary btn-xl" id="btn-begin">Light the Hearth</button>
+        <button class="btn btn-primary btn-xl" id="btn-begin">Start</button>
         <button class="btn btn-ghost" id="btn-have-code">I have a save code</button>
         <div class="title-load" id="title-load" hidden>
           <textarea id="inp-title-code" rows="3" placeholder="Paste your save code (WD1-…)" spellcheck="false" aria-label="Save code"></textarea>
@@ -37,14 +37,14 @@
       </div>
 
       <nav class="menu" id="title-menu" aria-label="Main menu" hidden>
-        <button class="menu-btn menu-primary" id="mm-descend" data-focus>Descend</button>
-        <button class="menu-btn" id="mm-hearth">Hearth<span class="dot" id="dot-hearth" hidden title="You can afford something"></span></button>
+        <button class="menu-btn menu-primary" id="mm-descend" data-focus>Play</button>
+        <button class="menu-btn" id="mm-hearth">Hearth<span class="dot" id="dot-hearth" hidden title="You can buy an upgrade"></span></button>
         <button class="menu-btn" id="mm-heroes">Heroes</button>
         <button class="menu-btn" id="mm-settings">Settings</button>
         <button class="menu-btn" id="mm-credits">Credits</button>
       </nav>
       <div class="title-profile" id="title-profile" hidden><span class="pp-name" id="title-name">Wanderer</span><span class="pp-embers"><span class="ember-ico" aria-hidden="true"></span><b id="title-embers">0</b> embers</span></div>
-      <div class="title-join" id="title-join" hidden>You were invited to party <b id="title-join-code"></b>. Choose Descend to join.</div>
+      <div class="title-join" id="title-join" hidden>You were invited to party <b id="title-join-code"></b>. Choose Play to join.</div>
     </div>
     <a class="title-home" href="https://sttsspjy.github.io/emberdeep/" target="_blank" rel="noopener">Play online and invite friends: <b>sttsspjy.github.io/emberdeep</b></a>
   </section>
@@ -54,13 +54,13 @@
     <div class="stage">
       <header class="sec-head">
         <button class="btn btn-ghost sec-back" id="btn-back" type="button">Back</button>
-        <h2 class="sec-title" id="sec-title">Descend</h2>
+        <h2 class="sec-title" id="sec-title">Play</h2>
         <div class="purse" title="Embers"><span class="ember-ico" aria-hidden="true"></span><b id="hearth-embers">0</b><small>embers</small></div>
       </header>
       <nav class="tabs" id="hearth-tabs" role="tablist" hidden>
         <button role="tab" data-tab="upgrades" class="tab on">Upgrades<span class="dot" id="dot-upgrades" hidden></span></button>
         <button role="tab" data-tab="wardrobe" class="tab">Wardrobe<span class="dot" id="dot-wardrobe" hidden></span></button>
-        <button role="tab" data-tab="chronicle" class="tab">Chronicle</button>
+        <button role="tab" data-tab="chronicle" class="tab">Records</button>
       </nav>
 
       <div class="sec-body">
@@ -73,7 +73,7 @@
               <h3 class="plate-h">Weapon</h3>
               <div class="weapon-row" id="weapon-row"></div>
               <div class="pact-block" id="asc-row" hidden>
-                <h3 class="plate-h">Pact of the Deep <span class="pact-val" id="asc-val">0</span></h3>
+                <h3 class="plate-h">Pact <span class="pact-val" id="asc-val">0</span></h3>
                 <div class="pact-steps" id="asc-steps" role="radiogroup" aria-label="Pact level"></div>
                 <div class="pact-desc" id="asc-desc"></div>
               </div>
@@ -82,7 +82,7 @@
           </div>
           <div class="go-bar">
             <button class="btn btn-lg" id="btn-host" type="button">Host a party</button>
-            <button class="btn btn-primary btn-xl" id="btn-solo" type="button" data-focus>Descend alone</button>
+            <button class="btn btn-primary btn-xl" id="btn-solo" type="button" data-focus>Play solo</button>
             <button class="btn btn-lg" id="btn-join" type="button">Join a party</button>
           </div>
           <div class="join-row" id="join-row" hidden>
@@ -93,7 +93,7 @@
         </div>
         <!-- UPGRADES -->
         <div class="pane" data-pane="upgrades" hidden>
-          <p class="sub">Permanent strength, paid for in embers carried up from the Deep. Deeper strata reveal new upgrades. Every rank can be refunded for its full cost.</p>
+          <p class="sub">Permanent upgrades, bought with embers. Reaching deeper strata reveals more. Every rank can be refunded for its full cost.</p>
           <div class="up-grid" id="up-grid"></div>
         </div>
         <!-- HEROES -->
@@ -102,7 +102,7 @@
         </div>
         <!-- WARDROBE -->
         <div class="pane" data-pane="wardrobe" hidden>
-          <p class="sub">Looks for your heroes. Nothing here changes how a hero fights. Embers spent here are never refunded.</p>
+          <p class="sub">Cosmetics for your heroes. They do not change how a hero fights. Embers spent here are never refunded.</p>
           <div class="heroes-view wardrobe" id="wardrobe-view"></div>
         </div>
         <!-- CHRONICLE -->
@@ -115,7 +115,7 @@
               <div class="deed-list" id="secret-list"></div>
             </div>
             <div>
-              <h3 class="plate-h">Records</h3>
+              <h3 class="plate-h">Stats</h3>
               <dl class="records plate" id="records"></dl>
               <h3 class="plate-h">Strata</h3>
               <div class="strata-list" id="strata-list"></div>
@@ -152,7 +152,7 @@
           <h3 class="plate-h">Weapon</h3>
           <div class="weapon-row" id="lobby-weapons"></div>
           <div class="pact-block" id="lobby-asc" hidden>
-            <h3 class="plate-h"><span id="lobby-asc-lbl">Pact of the Deep</span> <span class="pact-val" id="lobby-asc-val">0</span></h3>
+            <h3 class="plate-h"><span id="lobby-asc-lbl">Pact</span> <span class="pact-val" id="lobby-asc-val">0</span></h3>
             <div class="pact-steps" id="lobby-asc-steps" role="radiogroup" aria-label="Pact level"></div>
             <div class="pact-desc" id="lobby-asc-desc"></div>
           </div>
@@ -167,16 +167,16 @@
   <!-- ============ RESULTS ============ -->
   <section id="scr-results" class="screen" hidden>
     <div class="stage results-wrap">
-      <div class="res-flag"><div class="res-banner" id="res-banner">Fallen</div></div>
+      <div class="res-flag"><div class="res-banner" id="res-banner">Defeat</div></div>
       <div class="res-sub" id="res-sub"></div>
       <div class="res-evo" id="res-evo" hidden></div>
       <div class="res-grid">
         <div class="plate res-card">
-          <h3 class="plate-h">Descent</h3>
+          <h3 class="plate-h">Run</h3>
           <dl class="res-stats" id="res-stats"></dl>
         </div>
         <div class="plate res-card">
-          <h3 class="plate-h">Embers gathered</h3>
+          <h3 class="plate-h">Embers earned</h3>
           <dl class="res-stats" id="res-embers"></dl>
           <div class="res-total"><span class="ember-ico"></span><b id="res-ember-total">0</b></div>
         </div>
@@ -208,10 +208,10 @@
   <div id="ov-hearth" class="overlay sheet" hidden>
     <div class="plate party-hearth" role="dialog" aria-labelledby="ph-title">
       <header class="sec-head">
-        <h2 class="sec-title" id="ph-title">The Hearth</h2>
+        <h2 class="sec-title" id="ph-title">Hearth</h2>
         <div class="purse"><span class="ember-ico" aria-hidden="true"></span><b id="ph-embers">0</b><small>embers</small></div>
       </header>
-      <p class="sub">Purchases count from the next descent; friends who buy something press Ready again.</p>
+      <p class="sub">Purchases apply from the next run. After buying something, press Ready again.</p>
       <nav class="tabs" id="ph-tabs" role="tablist">
         <button role="tab" data-tab="upgrades" class="tab on">Upgrades<span class="dot" id="ph-dot-upgrades" hidden></span></button>
         <button role="tab" data-tab="heroes" class="tab">Heroes</button>
@@ -263,7 +263,7 @@
       <nav class="menu" aria-label="Pause menu">
         <button class="menu-btn menu-primary" id="btn-resume" type="button" data-focus>Resume</button>
         <button class="menu-btn" id="btn-pause-settings" type="button">Settings</button>
-        <button class="menu-btn menu-danger" id="btn-abandon" type="button">Abandon descent</button>
+        <button class="menu-btn menu-danger" id="btn-abandon" type="button">Abandon run</button>
       </nav>
     </div>
   </div>
@@ -297,7 +297,7 @@
           <div class="set-row"><label for="set-reticle">Cursor size</label>
             <select id="set-reticle"><option value="s">Small</option><option value="m">Medium</option><option value="l">Large</option></select></div>
           <div class="set-row"><label for="set-retcol">Cursor colour</label>
-            <select id="set-retcol"><option value="ember">Ember</option><option value="bone">Bone</option><option value="frost">Frost</option></select></div>
+            <select id="set-retcol"><option value="ember">Orange</option><option value="bone">White</option><option value="frost">Blue</option></select></div>
           <div class="set-row"><label for="set-aimprev">Skill aim preview</label><input type="checkbox" class="switch" id="set-aimprev"></div>
           <div class="bind-head"><span>Click a key, then press the new key or mouse button. Esc cancels, Backspace clears.</span><button class="btn btn-small" id="btn-bind-reset" type="button">Reset to defaults</button></div>
           <div class="bind-msg" id="bind-msg" role="status"></div>
@@ -337,9 +337,9 @@
 
   <div id="ov-news" class="overlay" hidden>
     <div class="plate credits-wrap" role="dialog" aria-labelledby="news-title">
-      <h2 class="sec-title" id="news-title">The Deep has changed</h2>
+      <h2 class="sec-title" id="news-title">What changed</h2>
       <div class="credits-body" id="news-body"></div>
-      <div class="row end"><button class="btn btn-primary btn-lg" id="btn-news-close" type="button" data-focus>Understood</button></div>
+      <div class="row end"><button class="btn btn-primary btn-lg" id="btn-news-close" type="button" data-focus>OK</button></div>
     </div>
   </div>
 
@@ -353,7 +353,7 @@
 
   <div id="toasts" aria-live="polite"></div>
   <div id="ov-fork" class="fork-reveal" hidden aria-live="polite"></div>
-  <div id="loading" class="loading">Kindling…</div>
+  <div id="loading" class="loading">Loading…</div>
 </div>
 
 <script src="vendor/peerjs.min.js" defer></script>

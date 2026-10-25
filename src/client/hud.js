@@ -614,7 +614,7 @@
       frame(c, 'hpanel', 'dim', x, ty, w, h, k);
       c.fillStyle = col; c.fillRect(x + 3 * k, ty + 3 * k, k, h - 6 * k);
       const ny = ty + q(u * 1.0);
-      const label = p.dead ? 'Fallen' : p.downed ? 'DOWN' : ED.CLASSES[p.cls].name, psg = routeIcon(p), js = Math.max(1, Math.round(1.6 * u / 16));
+      const label = p.dead ? 'Dead' : p.downed ? 'Down' : ED.CLASSES[p.cls].name, psg = routeIcon(p), js = Math.max(1, Math.round(1.6 * u / 16));
       const rx = x + w - Math.max(7 * k, q(u * 1.1)); // clear of the frame's corner bracket
       const full = ED.Cos ? ED.Cos.nameOf(p) : p.name, room = rx - adv(label, tS) - (psg && !out ? 16 * js + 2 * f : 0) - 4 * f - (x + q(u * 1.1)); // the Wardrobe title rides the name when it fits
       T(full !== p.name && adv(full, tS) > room ? p.name : full, x + q(u * 1.1), ny, tS, col, 'b', 'left', 700);
@@ -748,15 +748,15 @@
     for (let i = 0; i < lines.length; i++) T(lines[i], x + w / 2, y + (h - lines.length * lh) / 2 + lh * (i + 0.5), tS, '#efe3cd', 'b', 'center', 400);
   }
 
-  // ---------------- centre notes: down / fallen ----------------
+  // ---------------- centre notes: down / dead ----------------
   function centerNotes(view, me) {
     const y = q(Hh * 0.32), sy = y + q(FM.b.cap * tJ2 / 2 + u * 1.6);
     if (me.downed) {
       T('You are down', W / 2, y, tJ2, '#ff8a7a', 'b', 'center', 700, 1);
-      if (view.players.size > 1) T('Stay calm. An ally can revive you by standing close.', W / 2, sy, tS, K.bone, 'b', 'center', 700, 1);
+      if (view.players.size > 1) T('An ally can revive you by standing next to you.', W / 2, sy, tS, K.bone, 'b', 'center', 700, 1);
     } else if (me.dead) {
-      T('Fallen', W / 2, y, tJ2, '#cfc6b6', 'b', 'center', 700, 1);
-      T('You will rise again when your party reaches the next stratum.', W / 2, sy, tS, K.bone, 'b', 'center', 700, 1);
+      T('You are dead', W / 2, y, tJ2, '#cfc6b6', 'b', 'center', 700, 1);
+      T('You return when your party reaches the next stratum.', W / 2, sy, tS, K.bone, 'b', 'center', 700, 1);
     }
   }
 

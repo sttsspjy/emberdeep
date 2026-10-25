@@ -420,7 +420,7 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     // fury event: shake, burst, message with the boss name
     const fxCtx = { localPid: 'p0', player: () => ({ x: 0, y: 0, pid: 'p0', cls: 'knight', name: 'T' }), players: () => [], stratum: () => 4 };
     F.reset(); const B4 = ED.biomeFor(4).boss; F.handle({ t: 'fury', type: B4, x: 200, y: 200 }, fxCtx);
-    ok(F.parts.length > 0 && F.rings.length > 0 && F.shake > 0 && F.msgs.some((q) => q.text === ED.ENEMIES[B4].name + ' is enraged!'), `the fury event bursts, rings, shakes and posts the message (${F.parts.length} particles, ${F.rings.length} rings, shake ${F.shake})`);
+    ok(F.parts.length > 0 && F.rings.length > 0 && F.shake > 0 && F.msgs.some((q) => q.text === ED.ENEMIES[B4].name + ' is furious: faster and harder hits'), `the fury event bursts, rings, shakes and posts the message (${F.parts.length} particles, ${F.rings.length} rings, shake ${F.shake})`);
     F.reset();
 
     // boss bar through the real hud.js over a recording canvas

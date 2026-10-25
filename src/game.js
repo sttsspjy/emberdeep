@@ -502,7 +502,7 @@
       const text = ED.Render.propPrompt(near, view);
       let desc = null, color = null;
       if (near.kind === 'relic' || near.stype === 'relic') { const r = ED.RELICS[near.item]; desc = r.desc; color = ED.RARITY[r.rar].color; }
-      else if (near.kind === 'portal') desc = 'Step down into ' + ED.biomeFor(view.stratum + 1).name + '.';
+      else if (near.kind === 'portal') desc = 'Go to stratum ' + ED.U.roman(view.stratum + 1) + ': ' + ED.biomeFor(view.stratum + 1).name + '.';
       else { desc = ED.Render.propDesc(near, view); if (near.kind === 'reward') color = ED.Render.rewardColor(near.item); }
       s.prompt = { x: near.x, y: near.y, text, desc, color, can: near.kind === 'shop' || near.kind === 'gamble' ? view.gold >= near.price : true };
     }
