@@ -103,7 +103,7 @@ const RAD = (a) => a * Math.PI / 180;
   for (let i = 0; i < 8; i++) { w.projs.length = 0; w.playerAttack(p, 0.3); const sh = w.projs.filter(q => q.team === 0); counts.push(sh.length); if (i === 3) for (const q of sh) ang.push(Math.atan2(q.vy, q.vx)); }
   ok(counts.join() === '1,1,1,3,1,1,1,3', `Flurry fires 2 extra arrows on every 4th shot (got ${counts.join()})`);
   ang.sort((a, b) => a - b); near(ang[0], 0.18, 1e-6, 'Flurry: -0.12 rad'); near(ang[1], 0.3, 1e-6, 'Flurry: the aimed arrow'); near(ang[2], 0.42, 1e-6, 'Flurry: +0.12 rad');
-  w.projs.length = 0; p.atkCount = 3; w.playerAttack(p, 0); const sh = w.projs.filter(q => q.team === 0); ok(sh.every(q => Math.abs(q.dmg - p.stats.weapon.dmg) < 1e-9 && q.wpn), 'Flurry arrows are weapon arrows'); near(p.stats.flurryMul, 0.3, 1e-9, 'Flurry arrows deal 30% of a shot'); ok(sh.filter(q => Math.abs((q.mul || 1) - 0.3) < 1e-9).length === 2 && sh.filter(q => !q.mul).length === 1, 'the two extra arrows carry the 25% multiplier, the aimed arrow none');
+  w.projs.length = 0; p.atkCount = 3; w.playerAttack(p, 0); const sh = w.projs.filter(q => q.team === 0); ok(sh.every(q => Math.abs(q.dmg - p.stats.weapon.dmg) < 1e-9 && q.wpn), 'Flurry arrows are weapon arrows'); near(p.stats.flurryMul, 0.45, 1e-9, 'Flurry arrows deal 45% of a shot'); ok(sh.filter(q => Math.abs((q.mul || 1) - 0.45) < 1e-9).length === 2 && sh.filter(q => !q.mul).length === 1, 'the two extra arrows carry the 45% multiplier, the aimed arrow none');
   const tb = stage({ r_atk_s: 2 }, 2); tb.p.atkCount = 3; tb.w.projs.length = 0; tb.w.playerAttack(tb.p, 0); ok(tb.w.projs.filter(q => q.team === 0).length === 4, 'Twin Flatbows: the pair plus two Flurry arrows');
   const noF = stage({ r_atk_s: 1 }); noF.p.atkCount = 3; noF.w.projs.length = 0; noF.w.playerAttack(noF.p, 0); ok(noF.w.projs.filter(q => q.team === 0).length === 1, 'no Flurry at rank 1');
 }
@@ -241,11 +241,11 @@ const RAD = (a) => a * Math.PI / 180;
   near(bn({ r_el_a: 1 }) / bn({}), 1.2, 1e-6, 'Burn ticks 20% harder');
 }
 { // Gangrene (rank 2)
-  const { w, p } = stage({ r_el_a: 2 }); near(p.stats.festerHit, 0.7, 1e-9, 'rank 2: Gangrene 70%'); near(stage({ r_el_a: 3 }).p.stats.festerHit, 0.7, 1e-9, 'rank 3 keeps Gangrene');
+  const { w, p } = stage({ r_el_a: 2 }); near(p.stats.festerHit, 0.9, 1e-9, 'rank 2: Gangrene 90%'); near(stage({ r_el_a: 3 }).p.stats.festerHit, 0.9, 1e-9, 'rank 3 keeps Gangrene');
   const mk = (n) => { const e = foe(w, 200, 212); if (n >= 1) w.burnStack(e, p, 0); if (n >= 2) e.bleedPool = 400; if (n >= 3) e.chill = 30; return e; };
   const base = hit(w, p, mk(0), 100, { kind: 'skill', part: 'volley.arrow', noGuard: true });
-  near(hit(w, p, mk(3), 100, { kind: 'skill', part: 'volley.arrow' }) / base, 1.7, 1e-6, 'Volley +70% on a foe with 3 ailments'); near(hit(w, p, mk(3), 100, { kind: 'skill', part: 'rain.tick' }) / base, 1.7, 1e-6, 'Rain +70% on a foe with 3 ailments');
-  near(hit(w, p, mk(3), 100, { kind: 'skill', part: 'rain.sky' }) / base, 1.7, 1e-6, 'Skyfall +70% too'); near(hit(w, p, mk(2), 100, { kind: 'skill', part: 'volley.arrow' }) / base, 1, 1e-6, 'no bonus with 2 ailments');
+  near(hit(w, p, mk(3), 100, { kind: 'skill', part: 'volley.arrow' }) / base, 1.9, 1e-6, 'Volley +90% on a foe with 3 ailments'); near(hit(w, p, mk(3), 100, { kind: 'skill', part: 'rain.tick' }) / base, 1.9, 1e-6, 'Rain +90% on a foe with 3 ailments');
+  near(hit(w, p, mk(3), 100, { kind: 'skill', part: 'rain.sky' }) / base, 1.9, 1e-6, 'Skyfall +90% too'); near(hit(w, p, mk(2), 100, { kind: 'skill', part: 'volley.arrow' }) / base, 1, 1e-6, 'no bonus with 2 ailments');
   near(hit(w, p, mk(3), 100, { kind: 'weapon', wpn: true }) / base, 1, 1e-6, 'weapon shots get no Gangrene'); ok(w.ailments(mk(3)) === 3, 'three ailments counted');
   const lo = stage({ r_el_a: 1 }); const e = foe(lo.w, 200, 212); lo.w.burnStack(e, lo.p, 0); e.bleedPool = 400; e.chill = 30; near(hit(lo.w, lo.p, e, 100, { kind: 'skill', part: 'volley.arrow' }), 100, 1e-6, 'no Gangrene at rank 1');
 }
@@ -265,7 +265,7 @@ const RAD = (a) => a * Math.PI / 180;
   s = spread({ r_el_b: 2 }); ok(s.got.filter(v => v > 0).length === 3 && s.got[1] > 0 && s.got[3] > 0 && s.got[0] > 0 && s.got[2] === 0 && s.got[4] === 0, 'rank 2 (reach 120): Outbreak passes to the three nearest, not the fourth (95)');
   const far = stage({ r_el_b: 1 }); const a = foe(far.w, 200, 212), f = foe(far.w, 200 + 118, 212); burn6(far.w, a, far.p); a.bleedPool = 400; a.bleedOwner = far.p; hit(far.w, far.p, a, 1e9, { kind: 'weapon' }); run(far.w, 0.4); ok(!(f.burnN > 0), 'a foe at 118 is out of reach at rank 1');
   const r2 = stage({ r_el_b: 2 }); const a2 = foe(r2.w, 200, 212), f2 = foe(r2.w, 200 + 118, 212); burn6(r2.w, a2, r2.p); a2.bleedPool = 400; a2.bleedOwner = r2.p; hit(r2.w, r2.p, a2, 1e9, { kind: 'weapon' }); run(r2.w, 0.4); ok(f2.burnN > 0, 'and in reach at rank 2 (120)');
-  s = spread({ r_el_b: 2 }); near(s.got[1], 6, 0, 'Outbreak: every Burn stack to each'); near(s.bl[1], 400 * 1.2, 1e-6, 'of the Bleed too'); ok(s.evs.filter(v => v.t === 'chain' && v.k === 'c').length === 3, 'three threads'); near(stage({ r_el_b: 1 }).p.stats.outbreak, 0, 0, 'no Outbreak at rank 1');
+  s = spread({ r_el_b: 2 }); near(s.got[1], 5, 0, 'Outbreak: 90% of the Burn stacks to each (6 x 0.9, rounded down)'); near(s.bl[1], 400 * 0.9, 1e-6, 'and 90% of the Bleed'); ok(s.evs.filter(v => v.t === 'chain' && v.k === 'c').length === 3, 'three threads'); near(stage({ r_el_b: 1 }).p.stats.outbreak, 0, 0, 'no Outbreak at rank 1');
   // someone else's kill, or a kill by a hero without the card, does not spread
   const o = stage({ r_el_b: 1 }, 0, [{ pid: 'p1' }]); const b = foe(o.w, 200, 212), g = foe(o.w, 240, 212); burn6(o.w, b, o.p); b.bleedPool = 400; hit(o.w, o.w.players.get('p1'), b, 1e9, { kind: 'weapon' }); run(o.w, 0.4); ok(!(g.burnN > 0), 'a kill by a hero without Contagion does not spread');
   const dead = stage({ r_el_b: 1 }); const d1 = foe(dead.w, 200, 212), d2 = foe(dead.w, 230, 212); d2.hp = 0; d2.killed = true; burn6(dead.w, d1, dead.p); d1.bleedPool = 400; d1.bleedOwner = dead.p; hit(dead.w, dead.p, d1, 1e9, { kind: 'weapon' }); run(dead.w, 0.3); ok(!(d2.burnN > 0), 'dead foes receive nothing');

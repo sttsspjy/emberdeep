@@ -38,7 +38,7 @@ const smiteIt = (w, p, e, amt) => w.smite(e, p, amt);
     [{ c_atk: 1, c_atk_h: 1 }, { waveBig: 1, waveStun: 0.4, waveMul: 0.3, waveBurst: 0, wake: 0 }], [{ c_atk: 1, c_atk_h: 2 }, { waveMul: 0.4, waveBurst: 0.8, wake: 0 }], [{ c_atk: 1, c_atk_h: 3 }, { waveMul: 0.5, waveBurst: 0.8, wake: 0.6 }],
     [{ c_atk: 1, c_atk_s: 1 }, { waveHome: 2, waveMul: 0.35, litany: 0, waveReturn: 0 }], [{ c_atk: 1, c_atk_s: 2 }, { waveMul: 0.4, litany: 16, waveReturn: 0 }], [{ c_atk: 1, c_atk_s: 3 }, { waveMul: 0.45, litany: 16, waveReturn: 0.55 }],
     [{ c_s1: 1 }, { s1Area: 0.3, s1Dur: 2, sanctDR: 0.1, s1Dmg: 0.5 }],
-    [{ c_s1: 1, c_s1_a: 1 }, { sanctStun: 0.5, s1Dmg: 1.5 * 1.2 - 1, sanctJudge: 0, wrath: 0 }], [{ c_s1: 1, c_s1_a: 2 }, { s1Dmg: 1.5 * 1.4 - 1, sanctJudge: 1, wrath: 0 }], [{ c_s1: 1, c_s1_a: 3 }, { s1Dmg: 1.5 * 1.6 - 1, sanctJudge: 1, wrath: 1, wrathNova: 1.4, wrathPillar: 0.15 }],
+    [{ c_s1: 1, c_s1_a: 1 }, { sanctStun: 0.5, s1Dmg: 1.5 * 1.2 - 1, sanctJudge: 0, wrath: 0 }], [{ c_s1: 1, c_s1_a: 2 }, { s1Dmg: 1.5 * 1.4 - 1, sanctJudge: 1, wrath: 0 }], [{ c_s1: 1, c_s1_a: 3 }, { s1Dmg: 1.5 * 1.6 - 1, sanctJudge: 1, wrath: 1, wrathNova: 0.9, wrathPillar: 0.15 }],
     [{ c_s1: 1, c_s1_b: 1 }, { aura: 1, s1Dmg: 1.5 * 1.3 - 1, sanctDR: 0.2, auraDmg: 0, dawn: 0 }], [{ c_s1: 1, c_s1_b: 2 }, { s1Dmg: 1.5 * 1.6 - 1, sanctDR: 0.22, auraDmg: 0.1, dawn: 0 }], [{ c_s1: 1, c_s1_b: 3 }, { s1Dmg: 1.5 * 1.9 - 1, sanctDR: 0.24, auraDmg: 0.1, dawn: 1, aegisR: 40, aegisDR: 0.1, aegisStun: 0.3, aegisMul: 1 }],
     [{ c_s2: 1 }, { s2Dmg: 0.25, s2Range: 0.4, judgeDur: 1, s2Cdr: 0.167 }],
     [{ c_s2: 1, c_s2_a: 1 }, { twinHammer: 0.55, thirdLeg: 0, storm: 0 }], [{ c_s2: 1, c_s2_a: 2 }, { s2Dmg: 1.25 * 1.1 - 1, thirdLeg: 1, secondFlight: 0.55, storm: 0 }], [{ c_s2: 1, c_s2_a: 3 }, { thirdLeg: 1, secondFlight: 0.55, s2Dmg: 1.25 * 1.2 - 1, storm: 5, stormMul: 0.4 }],
@@ -288,7 +288,7 @@ const castSanct = (w, p, dx) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x +
     for (const k in b.r3) ok(t3[k] > 0 && (k in b.mods || k in (b.up || {}) ? t3[k] > t2[k] : !t2[k] && !t1[k]), id + ' stat ' + k + ' (rank 3 transform)');
   }
 }
-{ // Wrath of Heaven (c_s1_a rank 3): a nova over the whole circle at 140% of a second of Sanctuary damage, then a pillar every 0.5 s on a random foe inside at 15% of a tick, preferring foes not struck in the last second
+{ // Wrath of Heaven (c_s1_a rank 3): a nova over the whole circle at 90% of a second of Sanctuary damage, then a pillar every 0.5 s on a random foe inside at 15% of a tick, preferring foes not struck in the last second
   const setup = (rank, seed, crit) => {
     const S = stage({ c_s1: 1, c_s1_a: rank }, 0, seed); S.p.stats.crit = crit || 0; S.N = ED.Stats.skillNums('sanctuary', S.p.stats); S.log = spy(S.w); S.ev = tap(S.w);
     const cx = S.p.x + 60;
@@ -296,7 +296,7 @@ const castSanct = (w, p, dx) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x +
     return S;
   };
   const S = setup(3, 7), N = S.N, m = S.p.stats.dmg;
-  near(N.p.nova.dmg, N.p.zone.dmg * 1.4, 1e-9, 'Wrath: the nova is 140% of one second of Sanctuary damage'); near(N.p.pillar.dmg, N.p.zone.dmg * 0.075, 1e-9, 'a pillar is 15% of a half-second tick'); near(N.p.nova.r, N.p.zone.r, 1e-9, 'the nova covers the whole circle');
+  near(N.p.nova.dmg, N.p.zone.dmg * 0.9, 1e-9, 'Wrath: the nova is 90% of one second of Sanctuary damage'); near(N.p.pillar.dmg, N.p.zone.dmg * 0.075, 1e-9, 'a pillar is 15% of a half-second tick'); near(N.p.nova.r, N.p.zone.r, 1e-9, 'the nova covers the whole circle');
   ok(N.p.pillar.count === 11 && N.p.pillar.every === 0.5, `a pillar every 0.5 s of the 5.5 s Sanctuary (${N.p.pillar.count})`);
   S.a.fodder = true; castSanct(S.w, S.p);
   const sk = S.w.fx.find(v => v.t === 'skill'); ok(sk && sk.wr === 1 && sk.hf === 1, 'the skill event carries wr (Wrath) and hf (Holy Fury)');

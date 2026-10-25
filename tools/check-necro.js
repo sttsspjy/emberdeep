@@ -46,7 +46,7 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
   s = tot({ n_atk: 1, n_atk_s: 2 }); near(s.hexHaste, 0.25, 1e-9, 'Quickened Dead from rank 2'); ok(!s.soulStorm, 'no Soul Storm at rank 2'); ok(!tot({ n_atk: 1, n_atk_s: 1 }).hexHaste, 'no Quickened Dead at rank 1');
 
   s = tot({ n_s1: 1 }); near(s.s1Dmg, 0, 1e-9, 'Endless Legion adds no damage of its own'); near(s.maxMinions, 4, 1e-9, 'Endless Legion: 4 minions'); near(ED.Stats.skillNums('legion', s).p.minion.n, 4, 1e-9, 'Legion raises 4');
-  s = tot({ n_s1: 1, n_s1_a: 2 }); ok(s.boneSpikes === 1 && s.spikeRaise === 1, 'Bone Spikes + Boneyard'); near(s.s1Dmg, 0.05, 1e-9, 'Bone Spikes +5% per rank'); ok(!tot({ n_s1: 1, n_s1_a: 1 }).spikeRaise, 'no Boneyard at rank 1');
+  s = tot({ n_s1: 1, n_s1_a: 2 }); ok(s.boneSpikes === 1 && s.spikeRaise === 1, 'Bone Spikes + Boneyard'); near(s.s1Dmg, 0.04, 1e-9, 'Bone Spikes +4% per rank'); ok(!tot({ n_s1: 1, n_s1_a: 1 }).spikeRaise, 'no Boneyard at rank 1');
   s = tot({ n_s1: 1, n_s1_b: 2 }); near(s.maxMinions, 2, 1e-9, 'Bone Knights: at most 2'); near(ED.Stats.skillNums('legion', s).p.minion.n, 2, 1e-9, 'Legion raises 2'); ok(s.knights === 1, 'knights flag');
   near(s.minionDmg, 0.1, 1e-9, 'Bone Knights +10% per rank'); near(s.knightLife, 0.5, 1e-9, 'Ironbone life +50%'); near(s.knightStun, 0.5, 1e-9, 'Ironbone stun 0.5 s');
   s = tot({ n_s2: 1 }); near(s.s2Dmg, 0.4, 1e-9, 'Grim Harvest +40%'); near(s.s2Area, 0.2, 1e-9, 'Grim Harvest +20% wider'); near(s.harvestRaise, 2, 1e-9, 'Grim Harvest raises 2');
@@ -55,9 +55,9 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
   const hp = ED.Stats.skillNums('harvest', s).p; near(hp.corpse.dmg, hp.burst.dmg * 0.3, 1e-9, 'corpse part 30% of the burst'); near(hp.lance.dmg, hp.burst.dmg * 1.37, 1e-9, 'lance part +37%'); near(hp.corpse.r, hp.burst.r, 1e-9, 'corpse radius = burst radius'); ok(hp.corpse.on && hp.lance.on, 'corpse and lance parts on');
   s = tot({ n_s2: 1, n_s2_b: 3 }); near(s.boneArmor, 0.03, 1e-9, 'Bone Armor 3% per minion'); near(s.boneCap, 0.06, 1e-9, 'Bone Armor cap 5% + 0.5% per rank'); ok(s.boneField === 1 && !tot({ n_s2: 1, n_s2_b: 1 }).boneField && tot({ n_s2: 1, n_s2_b: 2 }).boneField === 1, 'Marrow Field from rank 2');
   s = tot({ n_el: 1 }); near(s.classElMul, 0.25, 1e-9, 'Grave Pact +25% Shadow skills'); near(s.minionInfuse, 0.25, 1e-9, 'minion infusion 0.75'); near(s.mInfShadow, 0.2, 1e-9, 'minion Doom 20%');
-  s = tot({ n_el: 1, n_el_a: 3 }); near(s.tollMul, 0.4 + 0.2 + 0.75, 1e-9, 'Abyssal Toll +40%, +10% per rank, +75% from rank 2'); near(s.abyssMin, 0.25, 1e-9, 'empower +25%'); ok(s.abyssDoom === 1, 'Abyssal Hunger at rank 3'); near(s.maw, 0.2, 1e-9, 'Maw 20% of the Toll per second'); near(s.mawHaste, 0.3, 1e-9, 'Maw haste 30%');
-  s = tot({ n_el: 1, n_el_a: 2 }); ok(s.abyssDoom === 1 && !s.maw && !s.mawHaste, 'Abyssal Hunger from rank 2, no Maw yet'); near(s.tollMul, 0.4 + 0.1 + 0.75, 1e-9, 'rank 2 Toll bonus'); ok(!tot({ n_el: 1, n_el_a: 1 }).abyssDoom && tot({ n_el: 1, n_el_a: 1 }).tollMul === 0.4, 'no Hunger and no extra Toll bonus at rank 1');
-  s = tot({ n_el: 1, n_el_b: 3 }); ok(s.reapRaise === 1, 'Rise Again'); near(s.minionDmg, 0.26, 1e-9, 'Rise Again +13% minions per rank'); near(s.tideMul, 0.5, 1e-9, 'Risen Tide +50%'); ok(s.tideFree === 1 && s.tideCap === 2 && s.tideDoom === 2, 'Tide of the Dead: free minions, cap 2, Doom 200% of a strike');
+  s = tot({ n_el: 1, n_el_a: 3 }); near(s.tollMul, 0.4 + 0.2 + 0.35, 1e-9, 'Abyssal Toll +40%, +10% per rank, +35% from rank 2'); near(s.abyssMin, 0.25, 1e-9, 'empower +25%'); ok(s.abyssDoom === 1, 'Abyssal Hunger at rank 3'); near(s.maw, 0.2, 1e-9, 'Maw 20% of the Toll per second'); near(s.mawHaste, 0.3, 1e-9, 'Maw haste 30%');
+  s = tot({ n_el: 1, n_el_a: 2 }); ok(s.abyssDoom === 1 && !s.maw && !s.mawHaste, 'Abyssal Hunger from rank 2, no Maw yet'); near(s.tollMul, 0.4 + 0.1 + 0.35, 1e-9, 'rank 2 Toll bonus'); ok(!tot({ n_el: 1, n_el_a: 1 }).abyssDoom && tot({ n_el: 1, n_el_a: 1 }).tollMul === 0.4, 'no Hunger and no extra Toll bonus at rank 1');
+  s = tot({ n_el: 1, n_el_b: 3 }); ok(s.reapRaise === 1, 'Rise Again'); near(s.minionDmg, 0.16, 1e-9, 'Rise Again +8% minions per rank'); near(s.tideMul, 0.5, 1e-9, 'Risen Tide +50%'); ok(s.tideFree === 1 && s.tideCap === 2 && s.tideDoom === 2, 'Tide of the Dead: free minions, cap 2, Doom 200% of a strike');
   s = tot({ n_el: 1, n_el_b: 2 }); near(s.tideMul, 0.5, 1e-9, 'Risen Tide from rank 2'); ok(!s.tideFree && !s.tideCap, 'no free minions at rank 2'); ok(!tot({ n_el: 1, n_el_b: 1 }).tideMul, 'no Risen Tide at rank 1');
   for (const id of ED.BOON_IDS.filter(i => ED.BOONS[i].cls === 'necro')) for (const r of [1, 2, 3]) ok(!/[{}\[\]]/.test(ED.boonText(id, r, { critK: 1 })), `card text ${id} rank ${r} has no raw tokens`);
 }
@@ -140,7 +140,7 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
   for (let i = 0; i < 4; i++) { const m = minionAt(w2, p2, e2); m.cd = 99; m.x = p2.x + 200; m.y = p2.y; m.life = 12 - i; }
   const oldest = mine(w2, p2).sort((u, v) => u.life - v.life)[0]; oldest.x = e2.x - 10; oldest.y = e2.y; w2.spawnMinion(p2, p2.x, p2.y, 12); w2.updateAllies(1 / 60);
   near(lost(e2), 18.3, 0.01, 'the replaced (oldest) minion bursts'); ok(mine(w2, p2).length === 4, 'cap 4 holds');
-  const { w: w4, p: p4 } = stage({ n_s1: 1, n_s1_a: 2 }); near(ED.Stats.skillNums('legion', p4.stats).p.spikes.dmg, 18.3 * 1.05, 0.01, 'Spikes rank 2: +5% per rank');
+  const { w: w4, p: p4 } = stage({ n_s1: 1, n_s1_a: 2 }); near(ED.Stats.skillNums('legion', p4.stats).p.spikes.dmg, 18.3 * 1.04, 0.01, 'Spikes rank 2: +4% per rank');
   const k1 = foe(w4, p4.x + 80, p4.y), k2 = foe(w4, p4.x + 100, p4.y); k1.hp = k2.hp = 5; const m = minionAt(w4, p4, k1, 0.001); m.cd = 99; w4.updateAllies(1 / 60);
   ok(k1.hp <= 0 && k2.hp <= 0 && mine(w4, p4).length === 1, 'Boneyard: a foe the burst kills rises, at most once per 2 s (two died, one rose)');
   ok(evs(w4, 'raise').some(r => r.k === 'yard'), 'Boneyard raise event');
@@ -260,7 +260,7 @@ const tot = (cards) => { const st = {}; for (const id in cards) st[id] = cards[i
 for (const rank of [2, 3]) {
   const { w, p } = stage({ n_el: 1, n_el_b: rank }); const e = foe(w, p.x + 100, p.y); e.hp = 100; w.addDoom(e, 900, p); const a = mine(w, p)[0];
   ok(a && a.tide && Math.abs(a.life - 14) < 1e-9, `rank ${rank} Risen Tide: a Reaped minion lasts 14 s`); ok(evs(w, 'raise').some(r => r.k === 'tide'), `rank ${rank} Risen Tide raise event kind tide`); const f = foe(w, p.x + 100, p.y + 300); a.x = f.x - 12; a.y = f.y; a.cd = 0; w.updateAllies(0);
-  near(lost(f), ED.Stats.skillNums('legion', p.stats).p.minion.dmg * (1 + 0.13 * (rank - 1)) * C.COMP_MUL * 1.5, 0.01, `rank ${rank} Risen Tide minions hit +50% (and minions +13% per rank)`);
+  near(lost(f), ED.Stats.skillNums('legion', p.stats).p.minion.dmg * (1 + 0.08 * (rank - 1)) * C.COMP_MUL * 1.5, 0.01, `rank ${rank} Risen Tide minions hit +50% (and minions +8% per rank)`);
   w.spawnMinion(p, p.x, p.y, 10); const plain = mine(w, p).find(m => !m.tide); ok(plain && Math.abs(plain.life - 10) < 1e-9, `rank ${rank}: other minions are unchanged`);
   const bos = foe(w, p.x + 200, p.y); bos.boss = true; bos.maxHp = bos.hp = 5000; bos.doomOwner = p; w.allies.length = 0; w.addDoom(bos, 800, p); const t = mine(w, p)[0]; ok(t && t.tide && Math.abs(t.life - 14) < 1e-9, `rank ${rank}: a Toll raise is a Risen Tide minion too`);
   ok(!a.free && !t.free && a.k === 0 || rank === 3, 'at rank 2 the risen minions count against the cap (not free)');
@@ -285,9 +285,9 @@ const cast0 = (w, p) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x + 60, y: 
     for (const k in b.r3) ok(t3[k] > 0 && (k in b.mods || k in (b.up || {}) ? t3[k] > t2[k] : !t2[k] && !t1[k]), id + ' stat ' + k + ' (rank 3 transform)');
   }
 }
-{ // Ossuary Bloom (n_s1_a rank 3): every burst (expiry, replacement, Harvest) leaves a bone field (r50, 2 s, 30% of the burst per second); Raise Legion raises 2 bone bombs (5 s) that run at the nearest foe and explode (r60, 80% of a burst)
+{ // Ossuary Bloom (n_s1_a rank 3): every burst (expiry, replacement, Harvest) leaves a bone field (r50, 2 s, 30% of the burst per second); Raise Legion raises 2 bone bombs (5 s) that run at the nearest foe and explode (r60, 110% of a burst)
   const S = stage({ n_s1: 1, n_s1_a: 3 }), N = ED.Stats.skillNums('legion', S.p.stats), sp = N.p.spikes;
-  near(N.p.field.dmg, sp.dmg * 0.3, 1e-9, 'the field deals 30% of the burst per second'); near(N.p.field.r, 50, 1e-9, 'field radius 50'); near(N.p.field.dur, 2, 1e-9, 'field lasts 2 s'); near(N.p.bomb.dmg, sp.dmg * 0.8, 1e-9, 'a bomb is 80% of a burst'); near(N.p.bomb.r, sp.r, 1e-9, 'bomb radius 60 (the burst radius)');
+  near(N.p.field.dmg, sp.dmg * 0.3, 1e-9, 'the field deals 30% of the burst per second'); near(N.p.field.r, 50, 1e-9, 'field radius 50'); near(N.p.field.dur, 2, 1e-9, 'field lasts 2 s'); near(N.p.bomb.dmg, sp.dmg * 1.1, 1e-9, 'a bomb is 110% of a burst'); near(N.p.bomb.r, sp.r, 1e-9, 'bomb radius 60 (the burst radius)');
   ok(N.p.field.on && N.p.bomb.on && !ED.Stats.skillNums('legion', stage({ n_s1: 1, n_s1_a: 2 }).p.stats).p.field.on, 'the field and bomb parts are rank 3');
   cast0(S.w, S.p); const bombs = S.w.allies.filter(a => a.bomb), mins = S.w.allies.filter(a => !a.bomb);
   ok(mins.length === 4 && bombs.length === 2 && bombs.every(b => b.k === 2 && b.life === 5 && !b.knight && b.owner === 'p0') && mins.every(m => m.k === 0), `Legion raises 4 minions and 2 bombs (${mins.length}, ${bombs.length})`);
@@ -298,7 +298,7 @@ const cast0 = (w, p) => w.playerSkill(p, 0, { x0: p.x, y0: p.y, x: p.x + 60, y: 
   const T = stage({ n_s1: 1, n_s1_a: 3 }); const e = foe(T.w, T.p.x + 180, T.p.y), other = foe(T.w, T.p.x + 180, T.p.y + 140), log = spy(T.w), ev = tap(T.w); cast0(T.w, T.p); T.w.allies = T.w.allies.filter(a => a.bomb); const xs = T.w.allies.map(b => b.x);
   run(T.w, 0.25, ev.step); ok(T.w.allies.every((b, i) => b.x > xs[i] + 20) && !partHits(log, 'legion.bomb').length, 'the bombs run at the foe (190 px/s) and have not burst yet'); run(T.w, 1.75, ev.step);
   const bh = partHits(log, 'legion.bomb'), m = T.p.stats.dmg;
-  ok(bh.length === 2 && bh.every(h => h.e === e && Math.abs(h.d - N.p.bomb.dmg * m) < 0.05), `both bombs burst on the foe for 80% of a burst (${bh.length} hits, ${bh[0] ? bh[0].d.toFixed(1) : '-'} vs ${(N.p.bomb.dmg * m).toFixed(1)})`); ok(other.hp === 5000 && !T.w.allies.some(a => a.bomb), 'a foe 140 away is unharmed and the bombs are gone');
+  ok(bh.length === 2 && bh.every(h => h.e === e && Math.abs(h.d - N.p.bomb.dmg * m) < 0.05), `both bombs burst on the foe for 110% of a burst (${bh.length} hits, ${bh[0] ? bh[0].d.toFixed(1) : '-'} vs ${(N.p.bomb.dmg * m).toFixed(1)})`); ok(other.hp === 5000 && !T.w.allies.some(a => a.bomb), 'a foe 140 away is unharmed and the bombs are gone');
   ok(ev.all.filter(v => v.t === 'boom' && v.b === 1 && v.r === 60).length === 2, 'two boom events flagged b (bomb)');
   const fields = T.w.zones.filter(z => z.kind === 'shards' && z.w === 11); ok(fields.length === 2 && fields.every(z => z.r === 50 && z.dur === 2 && Math.abs(z.dps - N.p.field.dmg) < 1e-9 && z.owner === 'p0'), 'each bomb leaves a field (shards zone, w 11)');
   run(T.w, 2.2, ev.step); const fh = partHits(log, 'legion.field'); ok(fh.length === 8 && fh.every(h => Math.abs(h.d - N.p.field.dmg * 0.5 * m) < 0.05), `two fields tick 4 times each at half the field damage per second (${fh.length} ticks)`); ok(!T.w.zones.some(z => z.w === 11), 'the fields end after 2 s');
