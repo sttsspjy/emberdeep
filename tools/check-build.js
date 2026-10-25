@@ -233,13 +233,16 @@ const ranks = (w, pid) => w.msgs.filter(m => m.t === 'forkRank' && m.to === pid)
     const d = stage('knight', { generalist: 1 }); const pr = d.w.rollOffer(d.p, { src: 'room', path: 'lightning' });
     ok(pr[0] === 'staticcharge', `room Storm boon with one path and a free slot: the Storm gate first (${pr})`);
   }
-  { // floor gen: about 70% of boon rooms name a path, deterministic per seed
+  { // floor gen: about 70% of lit boon rooms name a path (dark rooms and other rewards none), deterministic per seed
     let n = 0, pth = 0, same = true;
     for (let seed = 1; seed <= 40; seed++) for (let s = 1; s <= 3; s++) {
       const f = ED.Dungeon.generate(s, seed), g = ED.Dungeon.generate(s, seed);
-      for (let i = 0; i < f.rooms.length; i++) { const r = f.rooms[i]; if (r.rewardPath !== g.rooms[i].rewardPath) same = false; if (r.reward === 'boon') { n++; if (r.rewardPath) pth++; } else if (r.rewardPath) same = false; }
+      for (let i = 0; i < f.rooms.length; i++) { const r = f.rooms[i]; if (r.rewardPath !== g.rooms[i].rewardPath) same = false; if (r.reward === 'boon' && !r.dark) { n++; if (r.rewardPath) pth++; } else if (r.rewardPath) same = false; }
     }
-    ok(same && n > 50 && pth / n > 0.6 && pth / n < 0.8, `room path boons: ${pth} of ${n} boon rooms name a path, deterministic`);
+    ok(same && n > 50 && pth / n > 0.6 && pth / n < 0.8, `room path boons: ${pth} of ${n} lit boon rooms name a path, none elsewhere, deterministic`);
+    const fl = ED.Dungeon.generate(1, 3), b = fl.rooms.find(r => r.rewardPath);
+    ED.Dungeon.patchRoom(fl, b.id, { reward: 'epic' });
+    ok(b.reward === 'epic' && b.rewardPath === null, 'a patch that changes the reward of a path boon room drops its path');
   }
 }
 

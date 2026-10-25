@@ -35,7 +35,7 @@
     if (rm.type === 'start') return 'Start';
     const q = plain(rm), p = MV.rewardPath(rm), g = glyph(rm), rw = g && g.reward;
     let n = ED.Render.roomName(q);
-    if (p && (rw === 'boon' || rw === 'epic')) n = n.replace(/: .*$/, '') + ': ' + ED.PATHS[p].name + (rw === 'epic' ? ' epic boon' : ' boon');
+    if (p && rw === 'boon') n = n.replace(/: .*$/, '') + ': ' + ED.PATHS[p].name + ' boon';
     if (rm.type === 'event' && g && g.label) n += ': ' + g.label;
     return n;
   };

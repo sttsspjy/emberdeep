@@ -140,7 +140,7 @@
   }
 
   // Rewards are fixed per floor and shown before entry. Combat (dark included): boon, gold, vigor, forge, each kind getting its REWARD_ODDS share of the floor's combat rooms (rounded by weighted draw on the remainders).
-  // A boon reward names a path (room.rewardPath, PATH_BOON of them, a path drawn evenly; own RNG stream) or none (any boon). Elite: epic at ELITE_EPIC, else relic. Champion: relic.
+  // A boon reward of a lit room names a path (room.rewardPath, PATH_BOON of them, a path drawn evenly; own RNG stream) or none (any boon); a dark room's boon steps up to an epic offer and names none. Elite: epic at ELITE_EPIC, else relic. Champion: relic.
   function assignRewards(rooms, stratum, seed) {
     const rng = U.RNG((seed ^ 0x5bd1e995) + stratum * 15485863);
     const combat = rooms.filter(r => r.type === 'combat');
@@ -156,7 +156,7 @@
     combat.forEach((r, i) => { r.reward = bag[i]; });
     for (const r of rooms) if (r.type === 'elite') r.reward = rng.next() < ELITE_EPIC ? 'epic' : 'relic'; else if (r.type === 'champion') r.reward = 'relic';
     const pr = U.RNG((seed ^ 0x2f6a3b1d) + stratum * 7919);
-    for (const r of combat) if (r.reward === 'boon') r.rewardPath = pr.next() < PATH_BOON ? pr.pick(ED.PATH_IDS) : null;
+    for (const r of combat) if (r.reward === 'boon' && !r.dark) r.rewardPath = pr.next() < PATH_BOON ? pr.pick(ED.PATH_IDS) : null;
   }
 
   // A room is wide enough for its north doors: n doors need 6n + 5 tiles (odd widths keep the centre door on the middle tile).
@@ -202,7 +202,7 @@
     const r = fl && fl.rooms[id];
     if (!r || !patch) return null;
     if (patch.type && RETYPE[patch.type] && patch.type !== r.type) retype(fl, r, patch.type);
-    if ('reward' in patch) r.reward = patch.reward || null;
+    if ('reward' in patch) { r.reward = patch.reward || null; if (r.reward !== 'boon') r.rewardPath = null; } // a path names only a boon reward
     if (patch.event) r.event = patch.event;
     if (patch.reveal) r.reveal = true;
     return r;
