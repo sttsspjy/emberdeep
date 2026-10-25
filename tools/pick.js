@@ -1,9 +1,9 @@
 // Bot card choice by marginal value (tools/sim.js --pick=smart). Factory: require('./pick.js')(ED, model) with model = require('./model.js')(ED).
-// Value of a hero build: V = sum over the strata t = s, s+1, s+2 (weights 0.5 / 0.3 / 0.2, capped at VI) of w_t (ln D_t + lambda_t ln E_t) + bonus, where D_t = sqrt(damage on one foe x damage on a pack) at stratum t
-// (ED.Sheet.compute through the model, the stratum affinity included), E = effective health and bonus = the meta stats (gold, experience, offers).
+// Value of a hero build: V = sum over the strata t = s, s+1, s+2 (weights 0.5 / 0.3 / 0.2, capped at IV) of w_t (ln D_t + lambda_t ln E_t) + bonus, where D_t = sqrt(damage on one foe x damage on a pack) at stratum t
+// (ED.Sheet.compute through the model), E = effective health and bonus = the meta stats (gold, experience, offers).
 // lambda_t (setLambda, --lambda=<x>|auto[:<x0>]): a fixed x for every stratum, or auto = x0 times the foe damage lever of stratum t over LEVER_REF, read from the live World.THREAT, World.dmgScale, biome rosters and boss damage (a harder table raises the weight of effective health).
 // The sheet leaves many mechanics out; fold() adds them from the stat block (formulas below, assumptions in the constants) so a card's value follows the build it joins.
-// Gain(card) = V(after) - V(before) + F(after) - F(before) + X(card); F = discounted value of the milestones a card brings closer (keystone, evolution), X = a flat prior for effects with no stat.
+// Gain(card) = V(after) - V(before) + F(after) - F(before) + X(card); F = discounted value of the milestones a card brings closer (keystone, evolution), X = a flat prior for effects with no stat plus the path calibration PATH_CAL.
 // Deterministic: no Math.random; ties break on the bot rng passed in.
 module.exports = (ED, model) => {
   const C = ED.CONST, St = ED.Stats, PACK = model.pack;
@@ -86,6 +86,8 @@ module.exports = (ED, model) => {
     deathsedge: ['shadow', 0.05], // a Reap readies guaranteed crits
     stormstep: ['lightning', 0.05], // guess: a dash aimed at a charged foe blinks into the pack first
   };
+  // Path calibration (ln-V units) on every card of a path (gate, pool, keystone, evolution; open General cards only for a Generalist): the fold's error per path, fitted on bot batches so smart bots take each of the 7 paths as main path in a fair share of runs.
+  const PATH_CAL = { fire: 0.02, ice: -0.05, lightning: -0.02, poison: 0.01, holy: 0.01, shadow: -0.01, general: 0.11 };
   const PURSE_X = 0.01; // guess: the Purse's gold, a gold room's reward
   // Element terms the sheet leaves out (guesses): GLACIER_E E per pack freeze share; SHATTER_NEAR neighbours a Shatterpoint burst reaches; NEURO_RED foe damage removed at full Venom; HEAL_E: E per max HP healed a stratum.
   // WILD_K pack Burn per Wildfire stack; FIREWALK_K pack Burn per dash share; GROUND_STACKS stacks a dash's burning ground leaves on a pack foe; CONE_UP Burn factor of a channel; TEMPEST_K lightning factor of Tempest Arms;
@@ -324,12 +326,12 @@ module.exports = (ED, model) => {
   }
 
   // ---------------- priors and milestones ----------------
-  // Flat prior of card id for hero h (after the card) in decision context dc: zero when the card's path is not active; the Purse has its own.
+  // Flat prior of card id for hero h (after the card) in decision context dc: PATH_CAL plus the PRIOR entry while its path is active; the Purse has its own.
   function prior(id, h, dc) {
     const b = ED.BOONS[id], st = h.stats;
     if (b.purse) return PURSE_X;
-    const pr = PRIOR[id];
-    return pr && PRESENT_EL(st, pr[0]) ? pr[1] : 0;
+    const pr = PRIOR[id], cal = b.path && (b.path !== 'general' || b.gate || ED.isGeneralist(h.boons)) ? PATH_CAL[b.path] || 0 : 0;
+    return cal + (pr && PRESENT_EL(st, pr[0]) ? pr[1] : 0);
   }
   function cardGain0(h, id, dc, v0) {
     const key = heroKey(h, dc.pact) + '>' + id;
@@ -381,6 +383,7 @@ module.exports = (ED, model) => {
   }
 
   const RANDOM_UNIT = 1e-7;
+  const START_T = 0.04; // the start offer is a draw weighted exp(gain / START_T): a veteran varies the first path among near-equal ones (ln-V units)
   // Index of the card to take from offer p.offer (spec = the offer's head spec), or -1: reroll. ctx.gatesCap limits element gates; noReroll forbids returning -1.
   function chooseIndex(w, p, spec, rng, ctx, noReroll) {
     const offer = p.offer, dc = decision(w, p), before = valueOf(p, dc), fb = future(p, dc, null), gen = ED.isGeneralist(p.boons), els = ED.elementGates(p.boons);
@@ -394,6 +397,10 @@ module.exports = (ED, model) => {
       rows.push(r);
       const g = r.gain + rng.next() * RANDOM_UNIT;
       if (g > bg) { bg = g; best = i; }
+    }
+    if (src === 'start' && rows.length > 1) { // weighted draw over the start cards
+      const top = rows[best].gain, wt = rows.map(r => Math.exp((r.gain - top) / START_T)), sum = wt.reduce((a, b) => a + b, 0);
+      let u = rng.next() * sum; best = 0; while (best < wt.length - 1 && u >= wt[best]) u -= wt[best++];
     }
     const rerollable = src !== 'forge' && src !== 'class';
     const reroll = !noReroll && rerollable && p.rerolls > 0 && rows[best].gain < REROLL_MIN;
