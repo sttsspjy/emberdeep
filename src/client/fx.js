@@ -7,7 +7,7 @@
   const U = ED.U, TAU = U.TAU, Pix = ED.Pix, s2 = Pix.s2;
   let hsUntil = 0; // wall-clock end of the current hit-stop
   const F = ED.FX = {
-    parts: [], texts: [], slashes: [], rings: [], bolts: [], pops: [], ghosts: [], stains: [], sheets: [], beams: [], holyT: {}, msgs: [], hurtAt: {}, banner: null, shake: 0, flash: null, fade: 0, anim: {}, hitstop: 0, time: 0, aberr: 0, kick: 0, addK: 1, crowd: 1, // crowd: burst-count factor, set by the renderer (below 1 with many live foes)
+    parts: [], texts: [], slashes: [], rings: [], bolts: [], pops: [], ghosts: [], stains: [], sheets: [], beams: [], holyT: {}, msgs: [], hurtAt: {}, banner: null, shake: 0, flash: null, fade: 0, anim: {}, hitstop: 0, time: 0, aberr: 0, kick: 0,crowd: 1, // crowd: burst-count factor, set by the renderer (below 1 with many live foes)
     // 1 normally, ~0.06 during a hit-stop; consumers (game loop) multiply their dt by it. Wall-clock based, so it is safe however dt is scaled.
     get timeScale() { return performance.now() / 1000 < hsUntil ? 0.06 : 1; },
     set timeScale(v) { /* derived value; assignments are ignored */ },
@@ -997,7 +997,6 @@
     if (s.t < 0) return;
     const f = s.fixed >= 0 ? s.fixed : s.loop ? ((s.t * s.fps) | 0) % s.n : Math.min(s.n - 1, (s.t * s.fps) | 0);
     let a = s.a; if (s.fade && s.life) a *= Math.max(0.25, Math.ceil((1 - s.t / s.life) * 4) / 4);
-    if (s.add) a *= F.addK;
     Pix.draw(c, s.id, s.ramp, f, s2(s.x), s2(s.y + s.dy), a, s.flip, s.rot + s.spin * s.t);
   }
   // Unlit pass (after the lighting multiply, before the additive one): opaque sprite effects keep their colours in any light.
@@ -1031,16 +1030,15 @@
       const k = 1 - r.life / r.max, rr = r.r0 !== undefined ? r.r0 + (r.r - r.r0) * k : r.inv ? r.r * (1 - 0.75 * U.easeOut(k)) : r.r * (0.3 + 0.7 * U.easeOut(k)), ra =Math.max(2, Math.round(rr / 4) * 2), tn = Math.max(1, Math.min(3, Math.round(r.w * (1 - k) * 0.5 + 0.5))), rp = Pix.ramp(r.color);
       Pix.put(c, Pix.ring(ra, tn, rp[2], rp[3], rp[4]), s2(r.x), s2(r.y), Math.max(0.25, Math.ceil((1 - k) * 4) / 4));
     }
-    const ak = F.addK; // additive strength set by the renderer per biome
     for (const p of F.pops) {
-      const k = p.life / p.max, e = 1 - k, sz = p.r * (0.5 + 0.8 * U.easeOut(e)), pa = p.al * ak;
+      const k = p.life / p.max, e = 1 - k, sz = p.r * (0.5 + 0.8 * U.easeOut(e)), pa = p.al;
       Rn.glow(c, p.x, p.y, sz * 1.6, p.color, 0.85 * k * pa);
       const d = k > 0.55 ? 4 : 2, o = d >> 1 & ~1; c.globalAlpha = 0.95 * k * pa; c.fillStyle = p.core; c.fillRect(s2(p.x) - o, s2(p.y) - o, d, d);
       if (p.star) { const L = Math.max(4, s2(sz * 1.5)); c.globalAlpha = 0.9 * k * pa; c.fillRect(s2(p.x) - L, s2(p.y), L * 2, 2); c.fillRect(s2(p.x), s2(p.y) - L, 2, L * 2); }
       c.globalAlpha = 1;
     }
     for (const b of F.beams) { // light pillar: element edge, light body, core stripe (white unless b.core says otherwise); narrows and fades in quarter steps
-      const k = b.life / b.max, w = Math.max(4, s2(b.w * (0.35 + 0.65 * k))), x = s2(b.x), top = s2(b.y - b.h), h = s2(b.h), a = Math.max(0.25, Math.ceil(k * 4) / 4) * b.al * ak, rp = Pix.ramp(b.col);
+      const k = b.life / b.max, w = Math.max(4, s2(b.w * (0.35 + 0.65 * k))), x = s2(b.x), top = s2(b.y - b.h), h = s2(b.h), a = Math.max(0.25, Math.ceil(k * 4) / 4) * b.al, rp = Pix.ramp(b.col);
       c.globalAlpha = 0.7 * a; c.fillStyle = rp[2]; c.fillRect(x - w / 2, top, w, h);
       c.globalAlpha = a; c.fillStyle = rp[3]; c.fillRect(x - w / 2 + 2, top, Math.max(2, w - 4), h);
       c.fillStyle = b.core; c.fillRect(x - Math.max(1, (w - 8) / 2), top, Math.max(2, w - 8), h);

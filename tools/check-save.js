@@ -42,20 +42,20 @@ const GOLD2 = {
   code: 'WD1-ENRDZ-330MV-D9HWH-D9BTC-FCJSD-W3C0A-VE1AJ-4KEM9-7QGQH-MR5TQ-6KQ5D-4KBFM-6HGC9-3EX0V-E2',
   name: 'Old Hand', embers: 1234, lifetime: 98765, up: [1, 4, 3, 2, 1, 0, 3, 2, 1, 1, 3, 1, 2, 1, 1, 2],
   relicsNonStart: [0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0], mastery: [0, 120, 5000, 33, 0, 777],
-  bosses: 22, deeds: 665, pactMax: 3, pactWin: 1, stats: { runs: 41, wins: 2, deepest: 4, kills: 9001, bestTime: 1432, bossKills: 17 },
+  bosses: 6, deeds: 665, pactMax: 3, pactWin: 1, stats: { runs: 41, wins: 2, deepest: 3, kills: 9001, bestTime: 1432, bossKills: 17 }, // stored six-stratum bosses 22 (bits 1, 2, 4), deepest 5
 };
 const GOLD3 = {
   code: 'WD1-EJ093-0BSWA-2P3J7-S2ZAE-ZBARV-HDNKQ-3JFCZ-4HY5P-M6FQQ-ZP935-NPF59-3H142-C67AZ-K7Z5G-MT',
   name: 'Preview', embers: 777, lifetime: 4242, up: [2, 1, 0, 1, 1, 3, 0, 1, 2, 2, 0, 0, 2, 1, 0, 1],
   relicsNonStart: [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1], mastery: [10, 0, 4000, 0, 250, 9],
-  bosses: 53, deeds: 196613, pactMax: 2, pactWin: 0, stats: { runs: 12, wins: 1, deepest: 4, kills: 3100, bestTime: 1111, bossKills: 8 },
+  bosses: 13, deeds: 196613, pactMax: 2, pactWin: 0, stats: { runs: 12, wins: 1, deepest: 4, kills: 3100, bestTime: 1111, bossKills: 8 }, // stored bosses 53 (bits 0, 2, 4, 5), deepest 6
 };
-// Golden codes stored deepest 5-6 under six strata; decode clamps it to ED.CONST.STRATA (4).
+// Golden codes hold six-stratum boss bits and deepest; decode remaps them by stratum name (old boss bits 0, 1, 4, 5 -> 0-3; deepest 1-2 kept, 3-4 -> 2, 5 -> 3, 6 -> 4).
 const GOLD4 = {
   code: 'WD1-EE328-KKBMV-C43P2-M2F3B-S8FTJ-XZ8FY-8FDGW-WNP41-MTJM8-XTYWR-0EWE4-7H98P-NB46M-D596S-RWPC',
   name: 'Veteran', embers: 321, lifetime: 12345, up: [1, 0, 3, 0, 0, 2, 3, 0, 1, 1, 3, 2, 1, 0, 2, 0],
   relicsNonStart: [1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1], mastery: [10, 0, 4000, 0, 250, 9],
-  bosses: 21, deeds: 1234567, pactMax: 3, pactWin: 1, stats: { runs: 30, wins: 2, deepest: 4, kills: 8000, bestTime: 1500, bossKills: 12 },
+  bosses: 5, deeds: 1234567, pactMax: 3, pactWin: 1, stats: { runs: 30, wins: 2, deepest: 3, kills: 8000, bestTime: 1500, bossKills: 12 }, // stored bosses 21 (bits 0, 2, 4), deepest 5
 };
 ok(refundOf(GOLD4.relicsNonStart) === 570, 'GOLD4: its Codex relics cost 570 embers');
 function checkGolden(g, label) {
@@ -168,7 +168,7 @@ ok(typeof S.encode(S.defaultProfile()) === 'string', 'encode works again after t
   const bits27 = new Array(27).fill(0); [0, 7, 19, 26].forEach(i => { bits27[i] = 1; }); // axe 50, crown 105, stone 130, venomgland 70
   const p = S.decode(build(bits27));
   ok(p.embers === 500 + 355 && p.refunded === 355 && p.lifetime === 2000 && p.news === 1 && p.name === 'Tester', `hand-built v4 code: embers ${p.embers}, refunded ${p.refunded}, lifetime ${p.lifetime}`);
-  ok(p.mastery[1] === 300 && p.deeds === 8 && p.bosses === 5 && p.pactMax === 2 && p.pactWin === 0 && p.stats.runs === 5 && p.stats.kills === 400 && p.stats.bossKills === 1, 'hand-built v4 code: the fields after the Codex bits are read from the right place');
+  ok(p.mastery[1] === 300 && p.deeds === 8 && p.bosses === 1 && p.stats.deepest === 2 && p.pactMax === 2 && p.pactWin === 0 && p.stats.runs === 5 && p.stats.kills === 400 && p.stats.bossKills === 1, 'hand-built v4 code: the fields after the Codex bits are read from the right place');
   const longer = bits27.concat([1, 1, 1]); // three relics this build has never heard of
   ok(S.decode(build(longer)).embers === 855, 'hand-built v4 code: Codex bits beyond the frozen list add nothing');
   ok(S.decode(build(bits27.slice(0, 20))).refunded === 50 + 105 + 130, 'hand-built v4 code: a shorter Codex list refunds what it holds');
@@ -197,6 +197,11 @@ const GOLD5 = 'WD1-EAS1G-HKDDH-N6AHN-1JB2A-9A3RT-T7RH2-975RT-4KPS8-46JHN-HR4MV-3
   const seen = S.normalize({ v: 1, stats: { runs: 3 } }); seen.news = 0;
   ok(S.normalize(JSON.parse(JSON.stringify(seen))).news === 0, 'once cleared and stored the notice does not return');
   ok(S.decode(S.encode(Object.assign(randomProfile(), { news: 1 }))).news === 0, 'a v9 code carries no news');
+  // six-stratum profiles: boss bits and deepest by stratum name
+  same([0, 1, 2, 3, 4, 5, 6].map(d => S.normalize({ v: 5, stats: { deepest: d } }).stats.deepest), [0, 1, 2, 2, 2, 3, 4], 'era-5 deepest 0-6 -> 0, 1, 2, 2, 2, 3, 4');
+  same([1, 2, 4, 8, 16, 32, 63].map(b => S.normalize({ v: 5, bosses: b }).bosses), [1, 2, 0, 0, 4, 8, 15], 'era-5 boss bits 0, 1, 4, 5 -> 0-3, the cut bits 2 and 3 dropped');
+  ok(S.normalize({ v: 6, bosses: 4, stats: { deepest: 3 } }).bosses === 4 && S.normalize({ v: 6, stats: { deepest: 3 } }).stats.deepest === 3, 'era-6 boss bits and deepest are kept');
+  { const q = S.normalize({ v: 5, bosses: 63, stats: { deepest: 6, runs: 1 } }); const r = S.normalize(JSON.parse(JSON.stringify(q))); ok(r.bosses === 15 && r.stats.deepest === 4, 'a remapped profile is not remapped again'); ok(S.decode(S.encode(q)).bosses === 15 && S.decode(S.encode(q)).stats.deepest === 4, 'a v9 code is not remapped'); }
   const g5 = S.decode(GOLD5);
   ok(g5.news === 2 && g5.name === 'Five' && g5.stats.runs === 12 && g5.armory.knight[0] === 1, `a v5 code with runs gets the v5 and v6 changes, got news ${g5.news}`);
 }

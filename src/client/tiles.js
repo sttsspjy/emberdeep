@@ -10,7 +10,7 @@
   let NOISE = null;
   // Painted canvases are swapped for ImageBitmaps once ready (a bitmap keeps the canvas's .px); evicted entries release theirs.
   const release = (e) => { e.dead = true; Bmp.free(e.canvas); Bmp.free(e.emis); Bmp.free(e.glowmap); Bmp.free(e.hz); };
-  const LIFT = { ossuary: 0.55, glowmire: 0.55, rimefrost: 0, cinderforge: 0.55, sanctum: 0.5, abyss: 0.6 };
+  const LIFT = { ossuary: 0.55, glowmire: 0.55, sanctum: 0.5, abyss: 0.6 };
 
   Tl.clear = () => { for (const e of cache.values()) release(e); cache.clear(); };
 
@@ -157,23 +157,6 @@
       }
       if (v3 > 0.9) { crack(c, x, y, rng, 'rgba(0,0,0,0.45)'); }
       if (v4 > 0.94) { for (let i = 0; i < 2; i++) { const px = x + 3 + hash(tx, ty, 10 + i) * 26, py = y + 3 + hash(tx, ty, 20 + i) * 26; c.fillStyle = U.rgba(P.accent, 0.5); c.fillRect(px, py, 1.6, 1.6); glow(e, px + 0.8, py + 0.8, 4, P.accent, 0.4); } }
-    } else if (id === 'rimefrost') {
-      c.fillStyle = 'rgba(255,255,255,0.09)'; c.beginPath(); c.moveTo(x + 2, y + 30); c.lineTo(x + 12, y + 30); c.lineTo(x + 30, y + 12); c.lineTo(x + 30, y + 3); c.closePath(); c.fill();
-      if (v > 0.72) { crack(c, x, y, rng, 'rgba(70,110,150,0.45)', 'rgba(255,255,255,0.5)'); }
-      if (v2 > 0.86) { // frost crystal
-        const cx = x + 6 + v3 * 20, cy = y + 6 + v4 * 20; c.strokeStyle = 'rgba(255,255,255,0.7)'; c.lineWidth = 0.9; c.beginPath();
-        for (let i = 0; i < 3; i++) { const a = i * 1.047 + v; c.moveTo(cx - Math.cos(a) * 3.5, cy - Math.sin(a) * 3.5); c.lineTo(cx + Math.cos(a) * 3.5, cy + Math.sin(a) * 3.5); } c.stroke();
-        glow(e, cx, cy, 5, '#bff0ff', 0.4);
-      }
-    } else if (id === 'cinderforge') {
-      c.fillStyle = 'rgba(0,0,0,0.38)'; for (const [a, b] of [[4, 4], [T - 6, 4], [4, T - 6], [T - 6, T - 6]]) { c.beginPath(); c.arc(x + a + 1, y + b + 1, 1.5, 0, 7); c.fill(); }
-      c.fillStyle = 'rgba(255,255,255,0.13)'; for (const [a, b] of [[4, 4], [T - 6, 4], [4, T - 6], [T - 6, T - 6]]) c.fillRect(x + a, y + b, 1, 1);
-      if (v > 0.9) { // glowing crack
-        const pts = crack(c, x, y, rng, 'rgba(20,6,2,0.8)');
-        c.strokeStyle = 'rgba(255,110,40,0.55)'; c.lineWidth = 0.8; c.beginPath(); pts.forEach((p, i) => i ? c.lineTo(p[0], p[1]) : c.moveTo(p[0], p[1])); c.stroke();
-        e.strokeStyle = 'rgba(255,140,50,0.8)'; e.lineWidth = 1.2; e.beginPath(); pts.forEach((p, i) => i ? e.lineTo(p[0], p[1]) : e.moveTo(p[0], p[1])); e.stroke();
-        glow(e, pts[2][0], pts[2][1], 12, '#ff7a2a', 0.22);
-      } else if (v2 > 0.8) { c.fillStyle = 'rgba(0,0,0,0.22)'; c.beginPath(); c.ellipse(x + 8 + v3 * 16, y + 8 + v4 * 16, 7, 5, v, 0, 7); c.fill(); }
     } else if (id === 'sanctum') {
       // gold inlay: an inset frame and a central cross, with a diamond where lines meet
       const mx = room.w >> 1, my = (room.h >> 1) + 1;
@@ -207,7 +190,7 @@
   // Large soft colour blotches over the whole floor so the slab grid never reads as a repeating tile.
   function mottle(c, room, biome, P, rng) {
     const area = room.w * room.h * T * T, n = Math.min(90, Math.round(area / 8000));
-    const tint = { ossuary: ['#6a7a4a', '#000000', '#d8d0b8'], glowmire: [P.accent, '#1a0f30', P.accent2], rimefrost: ['#ffffff', '#4a6a8a', P.accent], cinderforge: ['#000000', '#ff6a2a', '#3a0e06'], sanctum: ['#0a3a40', P.accent2, '#000000'], abyss: [P.accent, '#000000', '#3a1a6a'] }[biome.id] || ['#000000', '#ffffff', '#000000'];
+    const tint = { ossuary: ['#6a7a4a', '#000000', '#d8d0b8'], glowmire: [P.accent, '#1a0f30', P.accent2], sanctum: ['#0a3a40', P.accent2, '#000000'], abyss: [P.accent, '#000000', '#3a1a6a'] }[biome.id] || ['#000000', '#ffffff', '#000000'];
     for (let i = 0; i < n; i++) {
       const x = rng.next() * room.w * T, y = rng.next() * room.h * T, r = 28 + rng.next() * 60;
       c.globalAlpha = 0.09 + rng.next() * 0.08; c.drawImage(ED.Render.glowSprite(tint[i % 3]), x - r, y - r, r * 2, r * 2);
@@ -276,7 +259,7 @@
     const g = c.createLinearGradient(0, y, 0, y + T); g.addColorStop(0, P.chasm); g.addColorStop(1, U.shade(P.chasm, -0.5));
     c.fillStyle = g; c.fillRect(x, y, T, T);
     grain(c, x, y, T, T, 0.6, rng);
-    const glowCol = { cinderforge: '#ff4a1a', abyss: '#7a3aff', sanctum: '#0a6a8a', glowmire: '#2a8a6a' }[biome.id];
+    const glowCol = { abyss: '#7a3aff', sanctum: '#0a6a8a', glowmire: '#2a8a6a' }[biome.id];
     if (glowCol) glow(gm, x + 16, y + 20, 22, glowCol, 0.24 + hash(tx, ty, 9) * 0.12);
     if (tileAt(room, tx, ty - 1) !== 3) {
       const g2 = c.createLinearGradient(0, y, 0, y + T * 0.85); g2.addColorStop(0, U.shade(P.wallFace, 0.05)); g2.addColorStop(1, P.chasm);
@@ -295,7 +278,6 @@
   // ---------- ambient occlusion on the floor ----------
   function occlusion(c, room, biome, ao, tx, ty, t) {
     const x = tx * T, y = ty * T, n = tileAt(room, tx, ty - 1), w = tileAt(room, tx - 1, ty), ea = tileAt(room, tx + 1, ty), s = tileAt(room, tx, ty + 1);
-    const frost = biome.id === 'rimefrost';
     const strip = (x0, y0, x1, y1, rx, ry, rw, rh, a) => {
       const g = c.createLinearGradient(x0, y0, x1, y1);
       g.addColorStop(0, U.rgba(ao, a)); g.addColorStop(0.45, U.rgba(ao, a * 0.4)); g.addColorStop(1, U.rgba(ao, 0));
@@ -309,7 +291,6 @@
     // tighter corner darkening where two occluders meet
     if ((isWall(n) || n === 2) && (isWall(w) || w === 2)) { const g = c.createRadialGradient(x, y, 0, x, y, 16); g.addColorStop(0, U.rgba(ao, 0.45)); g.addColorStop(1, U.rgba(ao, 0)); c.fillStyle = g; c.fillRect(x, y, 16, 16); }
     if ((isWall(n) || n === 2) && (isWall(ea) || ea === 2)) { const g = c.createRadialGradient(x + T, y, 0, x + T, y, 16); g.addColorStop(0, U.rgba(ao, 0.45)); g.addColorStop(1, U.rgba(ao, 0)); c.fillStyle = g; c.fillRect(x + T - 16, y, 16, 16); }
-    if (frost && (isWall(n) || isWall(w) || isWall(ea))) { c.fillStyle = 'rgba(255,255,255,0.18)'; if (isWall(n)) c.fillRect(x, y + 14, T, 1); }
     if (t === 4) return;
     // chasm lip highlight on the floor side
     if (tileAt(room, tx, ty + 1) === 3) { c.fillStyle = 'rgba(255,255,255,0.06)'; c.fillRect(x, y + T - 2, T, 2); }
@@ -355,14 +336,6 @@
       } else if (id === 'glowmire') {
         if (v > 0.5) { const px = x + 4 + v * 20; c.fillStyle = U.rgba(P.accent, 0.4); c.beginPath(); c.moveTo(px - 6, y + 7); c.quadraticCurveTo(px, y + 14 + v2 * 10, px + 6, y + 7); c.fill(); glow(e, px, y + 12, 12, P.accent, 0.5); }
         if (v2 > 0.7) { c.fillStyle = U.rgba(P.accent2, 0.7); c.beginPath(); c.arc(x + 6 + v * 20, y + 22 + v2 * 6, 1.6, 0, 7); c.fill(); glow(e, x + 6 + v * 20, y + 22 + v2 * 6, 6, P.accent2, 0.6); }
-      } else if (id === 'rimefrost') {
-        c.fillStyle = 'rgba(255,255,255,0.8)';
-        for (let i = 0; i < 3; i++) { const h = 3 + hash(tx, ty, 30 + i) * 8, px = x + 3 + i * 10 + hash(tx, ty, 33 + i) * 3; c.beginPath(); c.moveTo(px, y + 7); c.lineTo(px + 3.5, y + 7); c.lineTo(px + 1.7, y + 7 + h); c.fill(); }
-        c.fillStyle = 'rgba(255,255,255,0.2)'; c.fillRect(x, y + 15, T, 1);
-        if (v > 0.7) glow(e, x + 16, y + 14, 14, '#bff0ff', 0.15);
-      } else if (id === 'cinderforge') {
-        const sg = c.createLinearGradient(0, y + 7, 0, y + T); sg.addColorStop(0, 'rgba(0,0,0,0.25)'); sg.addColorStop(1, 'rgba(0,0,0,0.05)'); c.fillStyle = sg; c.fillRect(x, y + 7, T, T - 7);
-        if (v > 0.45) { c.fillStyle = 'rgba(255,100,30,0.6)'; const ry = 7 + Math.floor(v2 * 3) * 8; c.fillRect(x + 4 + v * 12, y + ry + 6, 12, 1.4); e.fillStyle = 'rgba(255,130,40,0.65)'; e.fillRect(x + 4 + v * 12, y + ry + 5.6, 12, 2); glow(e, x + 10 + v * 12, y + ry + 6, 10, '#ff6a2a', 0.3); }
       } else if (id === 'sanctum') {
         c.fillStyle = 'rgba(232,198,107,0.75)'; c.fillRect(x, y + 6, T, 1.5); e.fillStyle = 'rgba(255,214,110,0.3)'; e.fillRect(x, y + 6, T, 1.5);
         if (v > 0.5) { c.fillStyle = 'rgba(95,242,224,0.16)'; c.fillRect(x + v * 10, y + 24, 14 + v2 * 10, 8); }
@@ -400,8 +373,6 @@
     if (hash(tx, ty, 24) > 0.6) { c.fillStyle = 'rgba(0,0,0,0.25)'; c.beginPath(); c.moveTo(x + T - 7, y0); c.lineTo(x + T, y0); c.lineTo(x + T, y0 + 7); c.fill(); }
     if (hasBelow) bricks(c, P, x, y + topH, T, T - topH, tx, ty, rng, true);
     c.strokeStyle = P.wallShadow; c.lineWidth = 1.2; c.strokeRect(x + 0.5, y0 + 0.5, T - 1, h0 + (hasBelow ? T - topH : 0) - 1);
-    if (id === 'rimefrost') { c.fillStyle = 'rgba(255,255,255,0.8)'; c.fillRect(x + 2, y0, T - 4, 4); c.fillStyle = 'rgba(190,230,255,0.9)'; for (let i = 0; i < 3; i++) { c.beginPath(); c.moveTo(x + 5 + i * 10, y0 + 4); c.lineTo(x + 9 + i * 10, y0 + 4); c.lineTo(x + 7 + i * 10, y0 + 8 + hash(tx, ty, 40 + i) * 5); c.fill(); } }
-    if (id === 'cinderforge' && hasBelow && hash(tx, ty, 25) > 0.4) { c.fillStyle = 'rgba(255,106,42,0.65)'; c.fillRect(x + 6, y + topH + 5, T - 12, 1.5); e.fillStyle = 'rgba(255,130,50,0.65)'; e.fillRect(x + 6, y + topH + 4.6, T - 12, 2.2); glow(e, x + 16, y + topH + 6, 14, '#ff6a2a', 0.3); }
     if (id === 'glowmire' && hash(tx, ty, 26) > 0.5) { c.fillStyle = U.rgba(P.accent, 0.4); c.beginPath(); c.ellipse(x + 8 + hash(tx, ty, 27) * 16, y0 + 3, 7, 3, 0, 0, 7); c.fill(); glow(e, x + 16, y0 + 3, 12, P.accent, 0.3); }
     if (id === 'ossuary' && hash(tx, ty, 28) > 0.7) { c.fillStyle = U.rgba(P.accent, 0.4); c.beginPath(); c.ellipse(x + 8 + hash(tx, ty, 29) * 16, y0 + 3, 7, 2.6, 0, 0, 7); c.fill(); }
     if (id === 'sanctum') { c.fillStyle = 'rgba(232,198,107,0.6)'; c.fillRect(x + 2, y0 + 2, T - 4, 1.3); }
@@ -529,9 +500,9 @@
     };
   }
   // Highlight colour of wall caps per stratum (mixed into the top stop).
-  const RIM = { ossuary: 'accent2', glowmire: 'accent', rimefrost: 'accent2', cinderforge: 'accent2', sanctum: 'accent', abyss: 'accent' };
-  const RIM_K = { ossuary: 0.35, glowmire: 0.3, rimefrost: 0.9, cinderforge: 0.3, sanctum: 0.55, abyss: 0.4 };
-  const ART_LIFT = { ossuary: 0.6, glowmire: 0.7, rimefrost: 0, cinderforge: 0.7, sanctum: 0.6, abyss: 1.0 }; // floor brightness boost (the lighting multiply only darkens)
+  const RIM = { ossuary: 'accent2', glowmire: 'accent', sanctum: 'accent', abyss: 'accent' };
+  const RIM_K = { ossuary: 0.35, glowmire: 0.3, sanctum: 0.55, abyss: 0.4 };
+  const ART_LIFT = { ossuary: 0.6, glowmire: 0.7, sanctum: 0.6, abyss: 1.0 }; // floor brightness boost (the lighting multiply only darkens)
   // Per-stratum stone ramps: floor, wall (cap, brick, mortar, outline) and the flame ramp of torches.
   const rampCache = new Map();
   function rampsFor(biome) {
@@ -544,7 +515,7 @@
     o = {
       floor: ramp5([mixA(mulA(gr, lift * 0.9), fl, 0.35), fl, mixA(fl, mulA(fb, lift), 0.5), mixA(fl, wt, 0.5), wt]),
       wall: ramp5([ws, mixA(ws, wf, 0.6), mixA(wf, wt, 0.28), wt, rim]),
-      flame: ((fb) => [mulA(fb, 0.3), mulA(fb, 0.62), fb, mixA(fb, [255, 255, 255], 0.5), [255, 255, 255]])(biome.id === 'ossuary' || biome.id === 'cinderforge' ? li : mixA(rgbOf(P.accent), li, 0.3)), // warm strata keep their light colour; the cold ones a saturated flame
+      flame: ((fb) => [mulA(fb, 0.3), mulA(fb, 0.62), fb, mixA(fb, [255, 255, 255], 0.5), [255, 255, 255]])(biome.id === 'ossuary' ? li : mixA(rgbOf(P.accent), li, 0.3)), // warm strata keep their light colour; the cold ones a saturated flame
     };
     rampCache.set(biome.id, o);
     return o;
@@ -563,7 +534,6 @@
       }
       if ((cat === 'goo' || cat === 'splash') && g > r + 25 && g > b - 10 && Math.max(r, g, b) - Math.min(r, g, b) > 50) { const L = lumOf(r, g, b); return packA(mixA(mulA(acc, 0.45), mixA(acc, [255, 255, 255], 0.4), Math.min(1, L * 1.25))); }
       if (cat === 'splash') return 0; // only the slime of the sprite: the drip landing on the floor
-      if (cat === 'grate' && b > r + 20) { const L = lumOf(r, g, b); return packA(L < 0.3 ? [90, 28, 10] : [255, 122, 42]); } // sewer grate becomes a furnace vent
       if (cat === 'gate') { const L = lumOf(r, g, b); if (Math.max(r, g, b) - Math.min(r, g, b) > 40 && b > r) return packA(mixA(rp.wall(0.58), rp.wall(0.76), 0.5)); if (L > 0.15) return packA(rp.wall(L * 1.1)); return px; }
       if (cat === 'carpet') return carpetPx(px, r, g, b);
       if (stone(r, g, b)) return packA(ramp(lumOf(r, g, b)));
@@ -585,11 +555,11 @@
     for (const s of ['left', 'mid', 'right']) { add('wall', 'tile.wall.cap.' + s); add('wall', 'tile.wall.face.' + s); }
     for (const s of ['left', 'right']) { add('wall', 'tile.wall.side.' + s); add('wall', 'tile.door.frame.' + s); }
     for (const s of ['left', 'right']) { add('wall', 'tile.wall.outer.front.' + s); add('wall', 'tile.wall.outer.top.' + s); }
-    add('wall', 'tile.wall.hole.1'); add('wall', 'tile.wall.hole.2'); add('goo', 'tile.wall.goo'); add('splash', 'tile.wall.goo.base'); add('grate', 'tile.wall.grate');
+    add('wall', 'tile.wall.hole.1'); add('wall', 'tile.wall.hole.2'); add('goo', 'tile.wall.goo'); add('splash', 'tile.wall.goo.base');
     add('wall', 'tile.door.leaf.closed'); add('wall', 'tile.door.leaf.open');
     add('gate', 'tile.gate.bars'); add('gate', 'tile.gate.bars.side');
     for (let i = 1; i <= 3; i++) add('wall', 'tile.fountain.top.' + i);
-    for (const c of ['red', 'blue']) add('wall', 'tile.fountain.mid.' + c);
+    add('wall', 'tile.fountain.mid.blue');
     for (const c of ['red', 'blue', 'green', 'yellow']) add('wall', 'deco.banner.' + c);
     add('torch', 'tile.torch.wall'); add('torch', 'tile.torch.floor');
     for (const s of ['run.fill', 'run.top', 'run.bot']) add('carpet', 'tile.carpet.red.' + s);
@@ -835,8 +805,8 @@
       const top = T_(x, y - 1) !== 3;
       fill(g, x * AT, y * AT, AT, AT, P.chasm);
       if (top) { sblit(g, sh, 'tile.wall.face.mid', 0, x * AT, y * AT); fill(g, x * AT, y * AT, AT, AT, 'rgba(0,0,0,0.5)'); }
-      else if (hashS(x, y, 8, s) < 0.3) fill(g, x * AT + Math.floor(hashS(x, y, 11, s) * 15), y * AT + Math.floor(hashS(x, y, 12, s) * 15), 1, 1, bid === 'cinderforge' ? 'rgba(255,120,50,0.35)' : bid === 'abyss' ? 'rgba(200,170,255,0.3)' : 'rgba(255,255,255,0.08)'); // faint specks keep a pit from reading as a flat hole
-      const gc = { cinderforge: '#ff4a1a', abyss: '#7a3aff', sanctum: '#0a6a8a', glowmire: '#2a8a6a' }[bid];
+      else if (hashS(x, y, 8, s) < 0.3) fill(g, x * AT + Math.floor(hashS(x, y, 11, s) * 15), y * AT + Math.floor(hashS(x, y, 12, s) * 15), 1, 1, bid === 'abyss' ? 'rgba(200,170,255,0.3)' : 'rgba(255,255,255,0.08)'); // faint specks keep a pit from reading as a flat hole
+      const gc = { abyss: '#7a3aff', sanctum: '#0a6a8a', glowmire: '#2a8a6a' }[bid];
       if (gc) glowAt(gm, (x + 0.5) * T, (y + 0.65) * T, 22, gc, 0.24 + hashS(x, y, 9, s) * 0.12);
       for (const [dx, dy, ex, ey, ew, eh] of [[0, 1, 0, 15, 16, 1], [-1, 0, 0, 0, 1, 16], [1, 0, 15, 0, 1, 16]]) if (T_(x + dx, y + dy) !== 3) { fill(g, x * AT + ex, y * AT + ey, ew, eh, 'rgba(0,0,0,0.85)'); }
     }
@@ -939,7 +909,7 @@
     for (const tc of room.torches) blocked.add(Math.floor(tc.x));
     for (const d in room.doors) { const r = ED.Dungeon.doorRect(room, d); for (let x = r.x0 - 2; x <= r.x1 + 2; x++) blocked.add(x); }
     const fxs = [];
-    if (bid === 'cinderforge' || bid === 'sanctum') { // wall fountains on the top wall, clear of torches and the door
+    if (bid === 'sanctum') { // wall fountains on the top wall, clear of torches and the door
       const cand = []; for (let x = 3; x <= W - 4; x++) if (!blocked.has(x) && !room.torches.some((tc) => Math.abs(tc.x - 0.5 - x) < 2)) cand.push(x);
       cand.sort((a, b) => hashS(a, 0, 50, s) - hashS(b, 0, 50, s));
       for (const x of cand) { if (fxs.length >= (W >= 21 ? 2 : 1)) break; if (fxs.every((q) => Math.abs(q - x) >= 6)) fxs.push(x); }
@@ -967,7 +937,6 @@
         const r = hashS(x, y, 2, s);
         if (bid === 'ossuary') special = r < 0.06 ? 'tile.wall.hole.1' : r < 0.1 ? 'tile.wall.hole.2' : r < 0.17 ? 'deco.banner.' + ['red', 'green', 'blue', 'yellow'][Math.floor(r * 100) % 4] : null;
         else if (bid === 'glowmire') special = r < 0.14 ? 'tile.wall.goo' : null;
-        else if (bid === 'cinderforge') special = r < 0.12 ? 'tile.wall.grate' : null;
         else if (bid === 'sanctum') special = r < 0.07 ? 'deco.banner.' + (r < 0.035 ? 'yellow' : 'blue') : null;
       }
       if (special === 'tile.wall.goo') gooX.push(x);
@@ -976,14 +945,10 @@
       else sblit(g, sh, 'tile.wall.face.' + (!cl ? 'left' : !cr ? 'right' : 'mid'), 0, ox, oy);
       const cap = 'tile.wall.cap.' + (!cl && !cr ? 'mid' : !cl ? 'left' : !cr ? 'right' : 'mid');
       if (isM(x, y - 1)) sblit(g, sh, cap, 0, ox, oy - AT); else sblit(g, sh, cap, 0, ox, oy - 12); // strip above the face; a one-row run carries it in its own top rows
-      if (bid === 'rimefrost' && y === 1 && cl && cr) { // icicles under the cap
-        for (let k = 0; k < 3; k++) { const hh = hashS(x, k, 60, s); if (hh < 0.45) continue; const ix = ox + 2 + k * 5 + Math.floor(hh * 3), len = 2 + Math.floor(hashS(x, k, 61, s) * 5); fill(g, ix, oy + 2, 1, len, '#f2fbff'); fill(g, ix + 1, oy + 2, 1, Math.max(1, len - 2), '#9fc8e0'); fill(g, ix, oy + 2 + len, 1, 1, '#cfeeff'); }
-      }
       if (bid === 'abyss' && y === 1 && cl && cr && hashS(x, y, 70, s) < 0.12) { // glowing rune on the face
         const c1 = U.rgba(P.accent, 0.75); for (const [dx, dy, w, h] of [[5, 5, 6, 1], [5, 5, 1, 6], [10, 5, 1, 6], [5, 10, 6, 1], [7, 7, 2, 2]]) { fill(g, ox + dx, oy + dy, w, h, c1); fill(e, ox + dx, oy + dy, w, h, U.rgba(P.accent, 0.8)); }
         glowAt(e, (ox + 8) * K, (oy + 8) * K, 18, P.accent, 0.3);
       }
-      if (bid === 'cinderforge' && special === 'tile.wall.grate') { glowAt(e, (ox + 8) * K, (oy + 13) * K, 16, '#ff7a2a', 0.35); fill(e, ox + 3, oy + 11, 10, 3, 'rgba(255,110,30,0.45)'); }
     }
     for (const x of gooX) if (T_(x, 2) === 0) sblit(g, sh, 'tile.wall.goo.base', 0, x * AT, 2 * AT);
     // ---- standing torches flanking the north wall of rooms people linger in (boss rooms also get the south corners) ----
@@ -1013,13 +978,12 @@
     }
     // ---- wall fountains (top piece baked, the water frames animate) and their pools ----
     for (const x of fxs) {
-      const lava = bid === 'cinderforge';
       sblit(g, sh, 'tile.fountain.top.' + (1 + Math.floor(hashS(x, 3, 52, s) * 3)), 0, x * AT, 0);
-      out.fountains.push({ x, c: lava ? 'red' : 'blue' });
-      const pc = lava ? ['#2a0f08', '#d8480c', '#f58a22'] : ['#0a2f42', '#1b6b84', '#5fc6dc'];
+      out.fountains.push({ x, c: 'blue' });
+      const pc = ['#0a2f42', '#1b6b84', '#5fc6dc'];
       for (const [dx, dy, w, c] of [[2, 33, 12, pc[0]], [3, 34, 10, pc[1]], [5, 34, 6, pc[2]]]) fill(g, x * AT + dx, dy, w, 1, c);
-      glowAt(e, (x + 0.5) * T, 40, 24, lava ? '#ff6a2a' : '#6fe6ff', lava ? 0.4 : 0.22);
-      glowAt(gm, (x + 0.5) * T, 40, 28, lava ? '#ff5a1a' : '#4fd0ff', lava ? 0.3 : 0.14);
+      glowAt(e, (x + 0.5) * T, 40, 24, '#6fe6ff', 0.22);
+      glowAt(gm, (x + 0.5) * T, 40, 28, '#4fd0ff', 0.14);
     }
     return out;
   }
@@ -1055,7 +1019,6 @@
         const fl = Math.sin(t * 13 + ft.x) * 1.2 + Math.sin(t * 23 + ft.x * 1.7) * 0.7;
         R_.glow(c, ft.x, ft.y - 32, 22 + fl * 2, P.light, 0.5);
       }
-      for (const fo of e.fountains) if (fo.c === 'red') { c.globalAlpha = 0.4; sblit(c, sh, 'tile.fountain.mid.red', loopF(t, 6, 3, fo.x), fo.x * AT, AT); c.globalAlpha = 1; }
       for (const d of Tl.dynamics(room)) { // glow pools of room lights (fungus, lava, candles...)
         if (d.k === 'torch') continue;
         const fl = d.k === 'hz' ? 0.55 + Math.sin(t * 1.6 + d.x * 0.07 + d.y * 0.05) * 0.25 : 0.7 + Math.sin(t * 2 + d.x) * 0.2;
@@ -1139,7 +1102,7 @@
     for (const tc of room.torches) out.push(art ? { k: 'torch', x: (Math.floor(tc.x) + 0.5) * T, y: 34, r: 120, color: P.light } : { k: 'torch', x: tc.x * T, y: tc.y * T - 4, r: 120, color: P.light });
     if (art) {
       const e = entry(room, bqOf());
-      for (const fo of e.fountains || []) out.push({ k: 'glow', x: (fo.x + 0.5) * T, y: 44, r: 60, color: fo.c === 'red' ? '#ff6a2a' : '#6fe6ff' });
+      for (const fo of e.fountains || []) out.push({ k: 'glow', x: (fo.x + 0.5) * T, y: 44, r: 60, color: '#6fe6ff' });
       for (const ft of e.ftorches || []) out.push({ k: 'torch', x: ft.x, y: ft.y - 34, r: 110, color: P.light });
     }
     const glowK = { glowcap: P.accent2, mushroom: P.accent, crystal: P.accent, lavacrack: '#ff6a2a', rune: P.accent, voidcrack: P.accent, candle: '#ffb35c', grate: '#ff7a2a', cinders: '#ff8a3a', goldtile: '#ffd36b', shard: P.accent };

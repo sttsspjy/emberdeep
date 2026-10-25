@@ -77,16 +77,6 @@
   };
 
   // ---------------- header ----------------
-  // "Weak: Fire → your Fire ×1.50" and "Resists: Ice → your Ice ×0.67" chips of a stratum (the multiplier only for elements the hero uses); the class element lists its skills (half the affinity) before its statuses.
-  function affChips(a) {
-    const one = (el, kind) => {
-      if (!el || !ED.PATHS[el]) return '';
-      const mm = a.mine.find(x => x.el === el), nm = ED.PATHS[el].name;
-      const mine = !mm ? '' : mm.skillMul !== null ? ` → your ${nm} skills ${X(mm.skillMul)} · statuses ${X(mm.mul)}` : ` → your ${nm} ${X(mm.mul)}`;
-      return `<span class="aff-chip ${kind}" style="--pc:${colorOf(el)}"><img alt="" src="${pathIco(el)}">${kind === 'weak' ? 'Weak' : 'Resists'}: ${nm}${mine}</span>`;
-    };
-    return one(a.weak, 'weak') + one(a.resist, 'resist');
-  }
   function paintHeader(m) {
     const h = m.hero, biome = ED.biomeFor(m.ctx.stratum), color = ED.PLAYER_COLORS[h.slot] || '#ff8a3d';
     const key = h.pid + '|' + h.cls + '|' + m.weapon.base + '|' + (ED.Actors && ED.Actors.on() ? 1 : 0);
@@ -106,7 +96,6 @@
     $('sh-gold').textContent = String(h.gold);
     if (!$('sh-coin').getAttribute('src')) $('sh-coin').src = ico('coin', '#ffd36b');
     $('sh-strat').textContent = `Stratum ${U.roman(m.ctx.stratum)} · ${biome.name}`;
-    $('sh-aff').innerHTML = affChips(m.aff.now);
   }
 
   // ---------------- Build tab ----------------
@@ -277,7 +266,7 @@
   }
   function renderCombat(m) {
     const color = ED.PLAYER_COLORS[m.hero.slot] || '#ff8a3d', stratum = m.ctx.stratum, rt = m.build.route;
-    let atk = `<div class="sh-compact"><div class="sh-subl">${esc(m.weapon.name)}${rt.route ? ' · ' + esc(ED.routeLabel(m.hero.cls, rt.route)) + ' route' : ''}</div><div class="sh-aff">${affChips(m.aff.now)}</div></div>`;
+    let atk = `<div class="sh-compact"><div class="sh-subl">${esc(m.weapon.name)}${rt.route ? ' · ' + esc(ED.routeLabel(m.hero.cls, rt.route)) + ' route' : ''}</div></div>`;
     atk += weaponCard(m, color);
     for (const k of m.skills) atk += skillCard(m, k, color, stratum);
     atk += dashCard(m, color) + procsCard(m);
