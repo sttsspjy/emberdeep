@@ -16,9 +16,9 @@ const FORKS = [ // base, kind, dmg, rate, {field: value}
   ['longbow', 'heavy', 21.78, 0.612, { r: 4.8, speed: 396, life: 0.94, knock: 80 }], ['longbow', 'swift', 6.655, 0.187, { speed: 528, life: 0.72 }],
   ['crossbow', 'heavy', 43.76, 1.296, { r: 6, speed: 504, life: 0.88, pierce: 2, knock: 240 }], ['crossbow', 'swift', 13.37, 0.396, { speed: 672, life: 0.68, pierce: 2, knock: 60 }],
   ['twinbows', 'heavy', 8.118, 0.45, { r: 4.8, speed: 378, life: 0.77, knock: 80 }], ['twinbows', 'swift', 2.481, 0.1375, { speed: 504, life: 0.6, spread: 0.12 }],
-  ['firestaff', 'heavy', 29.7, 0.9, { r: 7.2, speed: 279 }], ['firestaff', 'swift', 9.08, 0.275, { speed: 372 }],
-  ['emberwand', 'heavy', 11.9, 0.27, { r: 4.8, speed: 351 }], ['emberwand', 'swift', 5.28, 0.12, { speed: 468 }],
-  ['inferno', 'heavy', 42.9, 1.3, { r: 10.8, speed: 225 }], ['inferno', 'swift', 18.2, 0.55, { speed: 300 }],
+  ['firestaff', 'heavy', 17.82, 0.72, { r: 6, speed: 396 }], ['firestaff', 'swift', 5.445, 0.22, { speed: 528 }],
+  ['emberwand', 'heavy', 6.732, 0.27, { r: 4.8, speed: 360 }], ['emberwand', 'swift', 2.992, 0.12, { speed: 480 }],
+  ['inferno', 'heavy', 22.88, 1.3, { r: 8.4, speed: 270 }], ['inferno', 'swift', 7.26, 0.413, { speed: 360 }],
   ['daggers', 'heavy', 21.78, 0.378, { range: 46.2, arc: 1.43, knock: 78 }], ['daggers', 'swift', 6.91, 0.12, { range: 42, knock: 30 }],
   ['knives', 'heavy', 13.9, 0.648, { r: 4.8, speed: 432, knock: 80 }], ['knives', 'swift', 4.24, 0.198, { speed: 576, spread: 0.19 }],
   ['scythes', 'heavy', 31.68, 0.864, { range: 57.2, arc: 6.3, knock: 117 }], ['scythes', 'swift', 9.68, 0.264, { range: 52, knock: 45 }],
@@ -38,13 +38,13 @@ for (const [base, kind, dmg, rate, f] of FORKS) {
 }
 const pt = ED.forkWeapon('plaguestaff', 'n_atk_h'), pr = ED.forkWeapon('plaguestaff', 'n_atk_s');
 near(pt.cloud.r, 50.6, 0.05, 'Plague Totem cloud r'); near(pt.cloud.dps, 19.8, 0.05, 'Plague Totem cloud dps'); near(pr.cloud.r, 44, 0.05, 'Plague Rod cloud r'); near(pr.cloud.dps, 6.05, 0.05, 'Plague Rod cloud dps');
-near(ED.forkWeapon('firestaff', 'p_atk_h').explode.r, 46, 0.05, 'Magma Staff blast r'); near(ED.forkWeapon('inferno', 'p_atk_h').explode.r, 82.8, 0.05, 'Tome of Ruin blast r'); near(ED.forkWeapon('warhammer', 'k_atk_h').shock.r, 82.8, 0.05, 'Maul shock r');
+ok(!ED.forkWeapon('firestaff', 'p_atk_h').explode, 'Kindling adds no blast to a blast-less bolt'); near(ED.forkWeapon('inferno', 'p_atk_h').explode.r, 39.1, 0.05, 'Tome of Ruin blast r'); near(ED.forkWeapon('warhammer', 'k_atk_h').shock.r, 82.8, 0.05, 'Maul shock r');
 
 // ---- skill numbers at class Power (1.3) ----
 const SK = [ // class, skill, part, dmg
   ['knight', 'charge', 'impact', 63.44], ['knight', 'shieldthrow', 'strike', 56.42], ['knight', 'shieldthrow', 'return', 28.21],
   ['ranger', 'volley', 'arrow', 18.4], ['ranger', 'rain', 'tick', 9.4],
-  ['pyro', 'nova', 'blast', 64.5], ['pyro', 'nova', 'burn', 52.8], ['pyro', 'meteor', 'impact', 89.5], ['pyro', 'meteor', 'crater', 21.6],
+  ['pyro', 'nova', 'blast', 48.6], ['pyro', 'nova', 'burn', 28.4], ['pyro', 'meteor', 'impact', 73.6], ['pyro', 'meteor', 'crater', 16.2], ['pyro', 'fireball', 'burst', 29],
   ['shade', 'step', 'slash', 40.6], ['shade', 'vanish', 'ambush', 27.5],
   ['cleric', 'sanctuary', 'zone', 41.1], ['cleric', 'judgment', 'leg', 56.5], ['necro', 'legion', 'minion', 17.1], ['necro', 'harvest', 'burst', 60.3],
 ];
@@ -69,7 +69,7 @@ for (const id of ED.BOON_IDS) { const b = ED.BOONS[id]; if (!b.route) continue; 
 // ---- attack-interval floor (3.3) ----
 ED.BOONS.test_fast = { name: 't', rar: 'c', icon: 'star', mods: { atk: 1 }, max: 1 };
 const ew = build('pyro', 1, { test_fast: 1 }); // Ember Wand at attack speed x2: raw 0.075 s, floor 0.12 s, damage x1.6
-near(ew.atkInterval, 0.12, 1e-9, 'floored interval'); near(ew.weapon.dmg, 6 * 1.6, 1e-9, 'floor turns speed into damage'); near(ew.atkFloor, 0.12, 1e-9, 'atkFloor');
+near(ew.atkInterval, 0.12, 1e-9, 'floored interval'); near(ew.weapon.dmg, ED.WEAPONS.emberwand.dmg * 1.6, 1e-9, 'floor turns speed into damage'); near(ew.atkFloor, 0.12, 1e-9, 'atkFloor');
 const tb = build('ranger', 2, { test_fast: 1, split: 1 }); // Twin Shortbows + Split Shot: 3 shots, floor 0.18
 near(tb.atkFloor, 0.18, 1e-9, 'shots raise the floor');
 delete ED.BOONS.test_fast; ED.BOON_IDS = Object.keys(ED.BOONS);

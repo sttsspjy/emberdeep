@@ -4,7 +4,7 @@
 // Mechanism: headless only (no headed option, no window calls); one browser per invocation, one fresh context per scenario page, all closed at exit, on error and on SIGINT.
 //   A read-only node http server on 127.0.0.1 (random port) serves --root (default: this repo). Playwright resolves via require('playwright'), else %LOCALAPPDATA%\npm-cache\_npx\*\node_modules (best match for the installed browsers).
 //   The game runs under window.__ED with a seeded Math.random (--seed) and frameCap off; scripted input goes through ED.Input (keys, pressed, mouse) like a player.
-//   smoke: profile -> menu shot -> solo run of --cls (wielding the first --weapon, an Armory variant included) -> key-event check -> --seconds (20) of circling, attacking the nearest foe, both skills, dash, boon picks, room hops -> run shot; fails on any pageerror or console error.
+//   smoke: profile -> menu shot -> solo run of --cls (wielding the first --weapon, an Armory variant included) -> key-event check -> --seconds (20) of circling, attacking the nearest foe, every skill (skill 3 too), dash, boon picks, room hops -> run shot; fails on any pageerror or console error.
 //   crowdN: N live foes staged in the largest combat room through World.spawnEnemy / enterRoom (room cleared, held locked, topped up to N), hero kept alive; after --warm (2.5) s
 //     measures --seconds (6) of main-thread ms per frame (Game.update, Game.render, Render.frame, HUD.draw, Post.render, whole rAF callback; busy% = rAF callback time over wall time, sys% = whole-machine CPU use during the window) at each --quality (low,high);
 //     --ops adds a 3 s pass counting canvas/WebGL calls per frame by target (buf = world buffer, screen = visible canvas, other = offscreen bakes).
@@ -122,7 +122,7 @@ function pageBoot(cfg) {
     return { n, mean: r3(sum / n), p50: r3(q(0.5)), p95: r3(q(0.95)), max: r3(s[n - 1]) };
   };
   const M = { on: false, upd: [], rnd: [], wld: [], hud: [], post: [], frm: [], foes: [], ts: [] };
-  const D = { on: false, flow: false, t0: 0, tq: 0, te: 0, td: 0, hops: 0, offers: 0, picks: 0, room: -1, epoch: -1, roomAt: 0, acts: { atk: 0, skill: 0, skill2: 0, dash: 0, interact: 0 } };
+  const D = { on: false, flow: false, t0: 0, tq: 0, te: 0, tr: 0, td: 0, hops: 0, offers: 0, picks: 0, room: -1, epoch: -1, roomAt: 0, acts: { atk: 0, skill: 0, skill2: 0, skill3: 0, dash: 0, interact: 0 } };
   const ST = { n: 0, t: 0, burst: true, rng: null, roster: [], k: 0, spawned: 0 };
   let ops = null, hooked = false;
 
@@ -206,7 +206,7 @@ function pageBoot(cfg) {
     ED.UI.pickBoon = function () { D.picks++; return pb.apply(this, arguments); };
     const act = ED.Game.act;
     ED.Game.act = function (a) {
-      if (a) { const k = a.t === 'skill' ? (a.slot ? 'skill2' : 'skill') : a.t; if (k in D.acts) D.acts[k]++; }
+      if (a) { const k = a.t === 'skill' ? (a.slot === 2 ? 'skill3' : a.slot ? 'skill2' : 'skill') : a.t; if (k in D.acts) D.acts[k]++; }
       return act.apply(this, arguments);
     };
   };
@@ -268,7 +268,7 @@ function pageBoot(cfg) {
 
   // scripted hero: orbits the nearest foe (the room centre when none), attacks it, casts both skills, dashes, takes boon offers, hops combat rooms when `flow`
   BR.drive = (on, flow) => {
-    D.on = !!on; D.flow = !!flow; D.t0 = performance.now(); D.tq = D.te = D.td = 0;
+    D.on = !!on; D.flow = !!flow; D.t0 = performance.now(); D.tq = D.te = D.tr = D.td = 0;
     if (!on) { const I = window.__ED.Input; for (const k of ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Mouse0']) I.keys.delete(k); }
   };
   setInterval(() => {
@@ -312,6 +312,7 @@ function pageBoot(cfg) {
     if (tgt) I.keys.add('Mouse0'); else I.keys.delete('Mouse0');
     if (t >= D.tq) { I.pressed.add('KeyQ'); D.tq = t + 1.3; }
     if (t >= D.te) { I.pressed.add('KeyE'); D.te = t + 1.9; }
+    if (t >= D.tr) { I.pressed.add('KeyR'); D.tr = t + 0.7; } // skill 3 (a hero without one casts skill 1)
     if (t >= D.td) { I.pressed.add('Space'); D.td = t + 2.4; }
   }, 33);
 
@@ -364,7 +365,7 @@ function pageBoot(cfg) {
     return {
       app: A.state, world: w ? w.state : null, time: w ? r3(w.time) : 0, stratum: w ? w.stratum : 0, room: w && w.room ? w.room.type : null, roomId: w ? w.roomId : -1,
       kills: w ? w.run.kills : 0, roomsCleared: w ? w.run.roomsCleared : 0, level: w ? w.level : 0, hp: me ? Math.round(me.hp) : 0, dead: me ? !!me.dead : null,
-      foes: w ? w.hostiles() : 0, offers: D.offers, picks: D.picks, hops: D.hops, acts: Object.assign({}, D.acts), cls: me ? me.cls : null, skill2: me ? !!ED.CLASSES[me.cls].skill2 : false,
+      foes: w ? w.hostiles() : 0, offers: D.offers, picks: D.picks, hops: D.hops, acts: Object.assign({}, D.acts), cls: me ? me.cls : null, skill2: me ? !!ED.CLASSES[me.cls].skill2 : false, skill3: me ? !!ED.CLASSES[me.cls].skill3 : false,
     };
   };
 
@@ -635,6 +636,12 @@ async function scenSmoke() {
     await wait(secs * 400);
     await call(page, 'drive', false, false);
     const rs = await call(page, 'runState');
+    { // the skills recharge with the script idle, the cursor 150 px right of the hero: a 640 x 440 crop of the aim previews
+      await wait(3000);
+      const hc = await page.evaluate(() => { const ED = window.__ED, me = ED.Game.s && ED.Game.s.me, R = ED.Render, I = ED.Input; if (!me) return null; const p = R.toScreen(me.x, me.y), q = R.toScreen(me.x + 150, me.y), d = R.dpr || 1; I.mouse.x = q.x / d; I.mouse.y = q.y / d; I.mouse.moved = performance.now(); I.mouse.inside = true; return { x: p.x / d, y: p.y / d }; });
+      await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+      if (hc) { const file = path.join(S.opt.outdir, [res.name, tag(), S.opt.cls, 'aim'].join('-') + '.png'); await page.screenshot({ path: file, clip: { x: Math.max(0, hc.x - 320), y: Math.max(0, hc.y - 220), width: 640, height: 440 } }); res.shots.push(file); }
+    }
     res.run = rs;
     if (rs.app !== 'run') notes(res, 'run ended before the script did (app ' + rs.app + ')');
     if (rs.time < secs * 0.5) fail(res, 'world time advanced ' + rs.time + ' s in ' + secs + ' s of wall time');
@@ -642,6 +649,7 @@ async function scenSmoke() {
     if (rs.cls !== o.cls) fail(res, 'ran as ' + rs.cls + ', not ' + o.cls);
     if (secs >= 10) for (const k of ['atk', 'skill', 'dash']) if (!rs.acts[k]) fail(res, 'scripted input never produced a ' + k + ' action');
     if (secs >= 10 && rs.skill2 && !rs.acts.skill2) fail(res, 'scripted input never produced a skill2 action');
+    if (secs >= 10 && rs.skill3 && !rs.acts.skill3) fail(res, 'scripted input never produced a skill3 action');
     res.rows.push({ quality: q, ...rs });
   } finally { res.errors = errors; await ctx.close(); }
   if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');

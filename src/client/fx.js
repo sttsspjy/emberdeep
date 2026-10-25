@@ -107,7 +107,7 @@
 
   // Plays a named audio cue without a world event (a dash charge refilled, a dark door, a breaking prop).
   F.cue = (name, vol, arg) => { if (ED.Audio) ED.Audio.play(name, vol, arg); };
-  const SKILL_CUE = { charge: 'charge', volley: 'volley', rain: 'raincast' }; // skill events with their own cast cue
+  const SKILL_CUE = { charge: 'charge', volley: 'volley', rain: 'raincast', fireball: 'fire' }; // skill events with their own cast cue
   F.update = (dt) => {
     if (ED.Audio) ED.Audio.flush(); // the frame's hits, impacts and deaths become layered cues
     F.time += dt; snapBudget = 4;

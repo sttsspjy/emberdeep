@@ -23,9 +23,9 @@
     },
     pyro: {
       name: 'Pyromancer', title: 'Keeper of the Flame', icon: 'flame',
-      desc: 'Fragile but devastating. Exploding fire clears whole rooms.',
+      desc: 'Fragile caster. Weave Fireball, Flame Nova and Meteor; ember bolts bring the spells back sooner.',
       hp: 21, armor: 4, spd: 120, crit: 0.05, power: 17, element: 'fire',
-      weapons: ['firestaff', 'emberwand', 'inferno'], skill: 'nova', skill2: 'meteor',
+      weapons: ['firestaff', 'emberwand', 'inferno'], skill: 'nova', skill2: 'meteor', skill3: 'fireball',
       col: { a: '#9a2f2a', b: '#5a1714', c: '#ffb347', d: '#2a0c0a' }, unlock: null,
     },
     shade: {
@@ -72,10 +72,10 @@
     longbow: { name: 'Longbow', desc: 'Fast, accurate arrows.', kind: 'proj', dmg: 11, rate: 0.34, speed: 440, n: 1, spread: 0, pierce: 0, r: 4, life: 0.85, proj: 'arrow', look: 'bow' },
     crossbow: { name: 'Heavy Crossbow', desc: 'Slow bolts that pierce two foes.', kind: 'proj', dmg: 22.1, rate: 0.72, speed: 560, n: 1, spread: 0, pierce: 2, r: 5, life: 0.8, proj: 'bolt', look: 'crossbow', knock: 120 },
     twinbows: { name: 'Twin Shortbows', desc: 'Two arrows at a time, very fast.', kind: 'proj', dmg: 4.1, rate: 0.25, speed: 420, n: 2, spread: 0.14, pierce: 0, r: 4, life: 0.7, proj: 'arrow', look: 'bow' },
-    // Pyromancer
-    firestaff: { name: 'Fire Staff', desc: 'Firebolts that explode on impact.', kind: 'proj', dmg: 15, rate: 0.5, speed: 310, n: 1, spread: 0, pierce: 0, r: 6, life: 1.0, proj: 'firebolt', explode: { r: 40, mul: 0.6 }, look: 'staff' },
-    emberwand: { name: 'Ember Wand', desc: 'A torrent of sparks that often ignite.', kind: 'proj', dmg: 6, rate: 0.15, speed: 390, n: 1, spread: 0, jitter: 0.12, pierce: 0, r: 4, life: 0.6, proj: 'spark', burn: 0.15, look: 'wand' },
-    inferno: { name: 'Inferno Tome', desc: 'Slow fireballs with huge blasts.', kind: 'proj', dmg: 30, rate: 1.0, speed: 250, n: 1, spread: 0, pierce: 0, r: 9, life: 1.3, proj: 'fireball', explode: { r: 72, mul: 0.8 }, look: 'tome' },
+    // Pyromancer: Ember Bolt weapons (low damage; each hit cuts the spell cooldowns, class-pyro.js)
+    firestaff: { name: 'Fire Staff', desc: 'Fast ember bolts. Each hit cuts your spell cooldowns.', kind: 'proj', dmg: 9, rate: 0.4, speed: 440, n: 1, spread: 0, pierce: 0, r: 5, life: 0.75, proj: 'firebolt', look: 'staff' },
+    emberwand: { name: 'Ember Wand', desc: 'A stream of small sparks. Each hit cuts your spell cooldowns a little.', kind: 'proj', dmg: 3.4, rate: 0.15, speed: 400, n: 1, spread: 0, jitter: 0.1, pierce: 0, r: 4, life: 0.6, proj: 'spark', look: 'wand' },
+    inferno: { name: 'Inferno Tome', desc: 'Slow, heavy embers that burst small on impact. Each hit cuts your spell cooldowns a lot.', kind: 'proj', dmg: 12, rate: 0.75, speed: 300, n: 1, spread: 0, pierce: 0, r: 7, life: 1.0, proj: 'firebolt', explode: { r: 34, mul: 0.4 }, look: 'tome' },
     // Shade
     daggers: { name: 'Twin Daggers', desc: 'Lightning-fast stabs.', kind: 'melee', dmg: 11, rate: 0.21, range: 42, arc: 1.3, knock: 60, look: 'dagger' },
     knives: { name: 'Throwing Knives', desc: 'Fans of three short-range knives.', kind: 'proj', dmg: 7, rate: 0.36, speed: 480, n: 3, spread: 0.22, pierce: 0, r: 4, life: 0.42, proj: 'knife', look: 'dagger' },
@@ -91,9 +91,9 @@
     // Armory variants: projectile shapes
     seekerbow: { name: 'Seeker Bow', desc: 'Arrows that gently home on foes.', kind: 'proj', dmg: 10.2, rate: 0.34, speed: 400, n: 1, spread: 0, pierce: 0, r: 4, life: 0.95, proj: 'arrow', homing: 2.5, look: 'bow', variant: 'longbow' },
     boltthrower: { name: 'Bolt Thrower', desc: 'Three bolts in a wide spread, short range.', kind: 'proj', dmg: 16, rate: 0.72, speed: 520, n: 3, spread: 0.32, pierce: 0, r: 5, life: 0.42, proj: 'bolt', look: 'crossbow', knock: 80, variant: 'crossbow' },
-    sunlance: { name: 'Sunlance', desc: 'An instant beam of fire that pierces every foe on its line.', kind: 'proj', dmg: 25, rate: 0.5, speed: 460, n: 1, spread: 0, pierce: 0, r: 6, life: 0.5, proj: 'firebolt', beam: true, look: 'staff', variant: 'firestaff' },
-    cinderscatter: { name: 'Cinder Scatter', desc: 'Sprays five short-lived sparks that often ignite.', kind: 'proj', dmg: 4.5, rate: 0.45, speed: 360, n: 5, spread: 0.14, pierce: 0, r: 4, life: 0.4, proj: 'spark', burn: 0.15, look: 'wand', variant: 'emberwand' },
-    mortar: { name: 'Mortar Tome', desc: 'Lobs a fireball over foes onto the cursor; a wide blast where it lands.', kind: 'proj', dmg: 36, rate: 1.0, speed: 520, n: 1, spread: 0, pierce: 0, r: 9, life: 0.5, proj: 'fireball', lob: { t: 0.55 }, explode: { r: 80, mul: 1 }, look: 'tome', variant: 'inferno' },
+    sunlance: { name: 'Sunlance', desc: 'An instant ember beam that pierces every foe on its line. Each hit cuts your spell cooldowns.', kind: 'proj', dmg: 8, rate: 0.4, speed: 460, n: 1, spread: 0, pierce: 0, r: 6, life: 0.5, proj: 'firebolt', beam: true, look: 'staff', variant: 'firestaff' },
+    cinderscatter: { name: 'Cinder Scatter', desc: 'Sprays five short-lived sparks. Each hit cuts your spell cooldowns a little.', kind: 'proj', dmg: 2.3, rate: 0.4, speed: 360, n: 5, spread: 0.14, pierce: 0, r: 4, life: 0.4, proj: 'spark', look: 'wand', variant: 'emberwand' },
+    mortar: { name: 'Mortar Tome', desc: 'Lobs an ember over foes onto the cursor; a blast where it lands. Each hit cuts your spell cooldowns a lot.', kind: 'proj', dmg: 16, rate: 0.75, speed: 520, n: 1, spread: 0, pierce: 0, r: 7, life: 0.5, proj: 'firebolt', lob: { t: 0.55 }, explode: { r: 50, mul: 1 }, look: 'tome', variant: 'inferno' },
     boomerang: { name: 'Boomerang Blades', desc: 'A spinning blade flies out and back, cutting every foe on each leg.', kind: 'proj', dmg: 6.5, rate: 0.5, speed: 420, n: 1, spread: 0, pierce: 0, r: 6, life: 0.4, proj: 'boomerang', ret: true, look: 'dagger', variant: 'knives' },
     votive: { name: 'Votive Lamp', desc: 'Holy orbs that end in a small pool of light; allies standing in it are shielded (1.5% max health, at most once per 1.5 s per ally, up to 8%; class shields are limited to 3% of max health per 10 s).', kind: 'proj', dmg: 12, rate: 0.42, speed: 300, n: 1, spread: 0, pierce: 0, r: 6, life: 0.9, proj: 'holy', pool: { r: 36, dur: 2, mul: 0.22, zk: 'holypool', ally: 0.015 }, look: 'lantern', variant: 'lantern' },
     splinter: { name: 'Bone Splinter', desc: 'Three bone shards in a spread.', kind: 'proj', dmg: 7, rate: 0.4, speed: 350, n: 3, spread: 0.26, pierce: 0, r: 5, life: 1.0, proj: 'bone', look: 'wand', variant: 'bonewand' },
@@ -121,7 +121,7 @@
   ED.weaponBase = (id) => { const w = ED.WEAPONS[id]; return w && w.variant ? w.variant : id; };
   ED.weaponIndex = (cls, id) => (ED.CLASSES[cls] ? ED.CLASSES[cls].weapons.indexOf(ED.weaponBase(id)) : -1);
 
-  // Skills. slot 0 = K, 1 = L. aim: 'dir' flies toward the cursor, 'ground' lands on it (clamped to range; walk: on a standable spot), 'move' travels toward it (rangeMin..range, + the stat in rangeAdd), 'self' ignores it.
+  // Skills. slot 0 = skill 1, 1 = skill 2, 2 = skill 3 (only a class with skill3; for the others the skill 3 binding casts skill 1); charges: charges of a slot-2 skill (the stat s3Ch adds to it). aim: 'dir' flies toward the cursor, 'ground' lands on it (clamped to range; walk: on a standable spot), 'move' travels toward it (rangeMin..range, + the stat in rangeAdd), 'self' ignores it.
   // aimIf { stat: aim } overrides aim while the stat is set; moveIf { stat: { k: 'charge' | 'hop' | 'leap', ... } } moves the caster with the cast (iframes seconds untouchable, default = the move time).
   // parts feed ED.Stats.skillNums (the one source for sim, sheet and bots): dmg = (base + pow x X) x (1 + slot damage), X = Power (on 'P'), the equipped weapon's dmg ('W') or the unforked weapon ('B');
   // powKey adds a stat to pow; of + mul / mul1 derive a part from another (mul1: x (1 + stat); times 'ticks': x the tick count); if = the stat that enables the part; mulIf = { stat: factor };
@@ -157,11 +157,11 @@
         { id: 'burst', label: 'Death burst', if: 'deathMark', of: 'arrow', mul: 'deathMark', per: 'hit', n: 4, nFix: true, proc: true },
         { id: 'caltrops', label: 'Caltrops', if: 'caltrops', of: 'arrow', mul: 'caltrops', per: 'sec', r: 50, rAddKey: 'thornR', dur: 2.5, durFix: true, noCrit: true, note: 'per second to every foe inside the patch the hop leaves' },
       ] },
-    nova: { name: 'Flame Nova', slot: 0, cd: 7, icon: 'flame', aim: 'self',
-      desc: 'Erupt in a ring of fire that burns everything nearby.',
+    nova: { name: 'Flame Nova', slot: 0, cd: 5, icon: 'flame', aim: 'self',
+      desc: 'Erupt in a ring of fire around you. It knocks foes back and burns them.',
       parts: [
-        { id: 'blast', label: 'Blast', base: 22, pow: 2.5, per: 'hit', r: 105, knock: 200, el: 'class', proc: true },
-        { id: 'burn', label: 'Burn', base: 12, pow: 2.4, per: 'status', status: 'burn', mulStat: 'supernova' },
+        { id: 'blast', label: 'Blast', base: 18, pow: 1.8, per: 'hit', r: 105, knock: 200, el: 'class', proc: true },
+        { id: 'burn', label: 'Burn', base: 8, pow: 1.2, per: 'status', status: 'burn', mulStat: 'supernova' },
         { id: 'ring', label: 'Ring of fire', if: 'novaRing', ifNot: 'phoenixMul', base: 8, pow: 1, per: 'sec', rOf: 'blast', rMul: 0.8, dur: 3, el: 'class' },
         { id: 'echo', label: 'Second eruption', if: 'novaEcho', ifNot: 'supernova', of: 'blast', mul: 'novaEcho', per: 'hit', delay: 0.6, rOf: 'blast', rMul: 1, el: 'class', proc: true },
         { id: 'wave', label: 'Supernova wave', if: 'supernova', of: 'blast', mul: 'novaEcho', per: 'hit', delay: 0.6, dur: 0.5, durFix: true, rOf: 'blast', rMul: 220 / 105, el: 'class', proc: true },
@@ -205,16 +205,22 @@
         { id: 'shower', label: 'Second Shower', if: 'shower', of: 'tick', mul: 'shower', per: 'tick', every: 0.25, dur: 2, durFix: true, rOf: 'tick', rMul: 1, proc: true },
         { id: 'bramble', label: 'Bramble patches', if: 'thornstorm', per: 'zone', r: 40, dur: 3, durFix: true, slow: 0.3 },
       ] },
-    meteor: { name: 'Meteor', slot: 1, cd: 12, icon: 'meteor', aim: 'ground', range: 300, moveIf: { comet: { k: 'leap', t: 0.6, iframes: 0.35 }, sunDive: { k: 'leap', t: 0.6, iframes: 0.6 } },
+    meteor: { name: 'Meteor', slot: 1, cd: 8, icon: 'meteor', aim: 'ground', range: 300, moveIf: { comet: { k: 'leap', t: 0.6, iframes: 0.35 }, sunDive: { k: 'leap', t: 0.6, iframes: 0.6 } },
       desc: 'Call a meteor down on the cursor. It knocks foes back, burns them and leaves a burning crater.',
       parts: [
-        { id: 'impact', label: 'Impact', ifNot: 'cataclysm', base: 30, pow: 3.5, per: 'hit', r: 95, delay: 0.9, knock: 220, el: 'class', statusAdd: { burn: 0.5 }, proc: true },
+        { id: 'impact', label: 'Impact', ifNot: 'cataclysm', base: 26, pow: 2.8, per: 'hit', r: 95, delay: 0.9, knock: 220, el: 'class', statusAdd: { burn: 0.5 }, proc: true },
         { id: 'storm', label: 'Cataclysm meteors', if: 'cataclysm', of: 'impact', mul: 'cataclysm', per: 'hit', n: 5, nFix: true, rOf: 'impact', rMul: 1, delay: 0.9, knock: 220, el: 'class', statusAdd: { burn: 0.5 }, proc: true },
-        { id: 'crater', label: 'Crater', ifNot: 'cataclysm', base: 8, pow: 0.8, per: 'sec', r: 60, dur: 3, el: 'class', mulStat: 'craterMul' },
+        { id: 'crater', label: 'Crater', ifNot: 'cataclysm', base: 6, pow: 0.6, per: 'sec', r: 60, dur: 3, el: 'class', mulStat: 'craterMul' },
         { id: 'field', label: 'Lava field', if: 'cataclysm', of: 'crater', per: 'sec', r: 140, dur: 3, el: 'class' },
         { id: 'twin', label: 'Twin Meteor', if: 'twinMeteor', ifNot: 'cataclysm', of: 'impact', mul: 'twinMeteor', per: 'hit', r: 95, delay: 0.6, el: 'class', statusAdd: { burn: 0.5 }, proc: true },
         { id: 'rocks', label: 'Meteorites', if: 'meteorites', ifNot: 'cataclysm', of: 'impact', mul: 'meteorites', per: 'hit', n: 3, r: 45, delay: 0.3, el: 'class', statusAdd: { burn: 0.5 }, proc: true },
         { id: 'trail', label: 'Burning trail', if: 'sunDive', of: 'crater', mul: 'diveTrail', per: 'sec', r: 30, dur: 2, durFix: true, el: 'class' },
+      ] },
+    // Third skill (skill3 binding): the Pyromancer's Fireball, charges that recharge one at a time; speed: its flight in px/s (range / speed seconds).
+    fireball: { name: 'Fireball', slot: 2, cd: 2.5, charges: 2, icon: 'ember', aim: 'dir', range: 300, speed: 440,
+      desc: 'Hurl a fireball toward the cursor. It bursts on the first foe or wall it meets, or at the end of its flight, and burns the foes in the burst. Holds 2 charges.',
+      parts: [
+        { id: 'burst', label: 'Burst', base: 12, pow: 1.0, per: 'hit', r: 36, knock: 140, el: 'class', statusAdd: { burn: 0.3 }, proc: true },
       ] },
     vanish: { name: 'Vanish', slot: 1, cd: 11, icon: 'vanish', aim: 'self',
       desc: 'Drop smoke that slows and blinds foes. You vanish from their sight; your next attack is an Ambush, a guaranteed critical hit.',

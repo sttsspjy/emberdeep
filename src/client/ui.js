@@ -211,7 +211,7 @@
     const cls = A.sel.cls, c = ED.CLASSES[cls];
     rosterTiles($('class-list'), cls, (id) => { A.selectClass(id); renderDescend(); });
     const st = ED.Stats.compute({ cls, weapon: A.sel.weapon, boons: {}, relics: [], meta: S.metaBundle(p, cls), pact: A.sel.pact });
-    const skills = [[c.skill, 'skill1', st.skillCd], [c.skill2, 'skill2', st.skill2Cd]].filter(x => ED.SKILLS[x[0]]);
+    const skills = [[c.skill, 'skill1', st.skillCd], [c.skill2, 'skill2', st.skill2Cd], [c.skill3, 'skill3', st.skill3Cd]].filter(x => ED.SKILLS[x[0]]);
     const facts = skillFacts(cls, st);
     $('hero-detail').innerHTML = `
       <div class="hd-top"><div id="hd-port"></div><div><div class="hd-name">${c.name}</div><div class="hd-title">${c.title}</div><p class="hd-desc">${esc(c.desc)}</p></div></div>
@@ -673,7 +673,7 @@
     if (!boonOffer) return;
     const id = boonOffer.boons[i];
     boonOffer = null;
-    ED.Input.mask(['attack', 'skill1', 'skill2', 'dash']); // the pick press (or a held attack) must not reach the hero; movement keys stay live
+    ED.Input.mask(['attack', 'skill1', 'skill2', 'skill3', 'dash']); // the pick press (or a held attack) must not reach the hero; movement keys stay live
     const PF = ED.PickFx;
     if (PF && ED.BOONS[id]) PF.play(PF.kind(id), PF.big(id), id);
     ED.Game.act({ t: 'pick', i });

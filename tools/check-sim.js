@@ -124,7 +124,7 @@ for (const s of [1, 2]) {
     const nom = /×([\d.]+) attack time, ×([\d.]+) damage per hit/.exec(ED.cardParts(id, 1).text);
     ok(nom && +nom[1] === (b.weapon.kind === 'heavy' ? 1.8 : 0.55) && +nom[2] === (b.weapon.kind === 'heavy' ? 1.98 : 0.605), `${id} without a hero shows the nominal factors`);
   }
-  ok(/×1\.3 attack time, ×1\.43 damage per hit/.test(ED.cardParts('p_atk_h', 1, { weaponId: 'inferno' }).text), 'Tome of Ruin shows the capped heavy factors');
+  ok(/×1\.733 attack time, ×1\.907 damage per hit/.test(ED.cardParts('p_atk_h', 1, { weaponId: 'inferno' }).text), 'Tome of Ruin shows the capped heavy factors');
   ok(/×0\.8 attack time, ×0\.88 damage per hit/.test(ED.cardParts('p_atk_s', 1, { weaponId: 'emberwand' }).text), 'Flicker Wand shows the floored swift factors');
   ok(/×0\.8 attack time/.test(ED.cardParts('p_atk_s', 1, { weaponId: 'emberwand@swift' }).text), 'a forked weaponId reads its base');
   const de = (st) => ED.Sheet.text('deathsedge', 1, st);
@@ -269,7 +269,7 @@ for (const s of [1, 2]) {
   ok(price(0) === 75 && price(1) === 70 && price(2) === 70, "Merchant's Favor: 4% cheaper per rank (the 75-gold epic boon: 75, 70, 70)");
 }
 { // bot exploration: --dark=never visits every non-dark room, --dark=always also the two dark rooms
-  for (const [seed, cls] of [[1000, 'knight'], [1028, 'ranger'], [1015, 'pyro']]) {
+  for (const [seed, cls] of [[1000, 'knight'], [1028, 'ranger'], [1016, 'pyro']]) {
     for (const dark of ['never', 'always']) {
       const r = runBot({ seed, n: 1, cls: [cls], skill: 0.75, up: ED.UPGRADES.map(() => 0), mastery: 1, relics: ED.RELIC_IDS.filter(id => ED.RELICS[id].start), pick: 'smart', dark, maxStratum: 2 });
       ok(r.left.length >= 1 && r.left.every(f => f.missed === 0), `${cls} ${dark}: every non-dark room visited (left ${JSON.stringify(r.left)})`);

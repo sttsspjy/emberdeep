@@ -1,7 +1,7 @@
 // Keyboard, mouse and gamepad. One binding table maps every action to two slots, each a KeyboardEvent.code or Mouse0..Mouse4.
-// Defaults: WASD move (arrows alternate), attack LMB / J, skill 1 Q / RMB, skill 2 E, dash Space, map Tab, pause Esc.
+// Defaults: WASD move (arrows alternate), attack LMB / J, skill 1 Q, skill 2 E, skill 3 RMB / R (a hero without a skill 3 casts skill 1 with it), dash Space, map Tab, pause Esc.
 // Aim is the mouse cursor (I.mouse, CSS px; moved = time of the last pointer event, 0 before the first). Gamepad (fixed): left stick move,
-// right stick aim (latched 0.35 s after release), X / RT attack, B / RB skill 1, Y / LT skill 2, A / LB dash, Start pause, Back map.
+// right stick aim (latched 0.35 s after release), X / RT attack, RB skill 1, Y / LT skill 2, B skill 3, A / LB dash, Start pause, Back map.
 // I.device ('mouse' | 'pad') says which of the two currently aims. Menus read tabPrev / tabNext (Q / E, LB / RB), tabN (1-3), up / down / left / right (keys, d-pad), navX / navY (left stick, repeating), scrollY (right stick), back (B), reroll (Q, Y), cycle (Y).
 // I.mask([actions]) makes every key, mouse button and pad button held right now (only the keys of the listed actions, when given; pad buttons always) read as up until released (an overlay that closes must not pass its closing press to the game).
 (function (ED) {
@@ -20,12 +20,12 @@
     { id: 'up', label: 'Move up', group: 'Movement' }, { id: 'down', label: 'Move down', group: 'Movement' },
     { id: 'left', label: 'Move left', group: 'Movement' }, { id: 'right', label: 'Move right', group: 'Movement' },
     { id: 'attack', label: 'Attack', group: 'Combat' }, { id: 'skill1', label: 'Skill 1', group: 'Combat' },
-    { id: 'skill2', label: 'Skill 2', group: 'Combat' }, { id: 'dash', label: 'Dash', group: 'Combat' },
+    { id: 'skill2', label: 'Skill 2', group: 'Combat' }, { id: 'skill3', label: 'Skill 3', group: 'Combat' }, { id: 'dash', label: 'Dash', group: 'Combat' },
     { id: 'map', label: 'Map and build', group: 'Interface' }, { id: 'pause', label: 'Pause', group: 'Interface' },
   ];
   I.DEFAULTS = {
     up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'],
-    attack: ['Mouse0', 'KeyJ'], skill1: ['KeyQ', 'Mouse2'], skill2: ['KeyE', null], dash: ['Space', null],
+    attack: ['Mouse0', 'KeyJ'], skill1: ['KeyQ', null], skill2: ['KeyE', null], skill3: ['Mouse2', 'KeyR'], dash: ['Space', null],
     map: ['Tab', null], pause: ['Escape', null],
   };
   const ACTION = {}; for (const a of I.ACTIONS) ACTION[a.id] = a;
@@ -43,8 +43,15 @@
   const clone = (o) => { const r = {}; for (const k in o) r[k] = o[k].slice(); return r; };
 
   // Load saved bindings: unknown actions, malformed or duplicate codes and actions left without a key fall back to defaults.
+  // A table saved before skill 3 existed (no skill3 entry) moves RMB from skill 1 to skill 3; skill 3's defaults yield to any code the table already uses.
   I.setBinds = (saved) => {
     const b = clone(I.DEFAULTS), used = new Set();
+    let order = I.ACTIONS;
+    if (saved && typeof saved === 'object' && !Array.isArray(saved.skill3)) {
+      saved = Object.assign({}, saved);
+      if (Array.isArray(saved.skill1) && saved.skill1.indexOf('Mouse2') >= 0) { saved.skill1 = saved.skill1.map(c => (c === 'Mouse2' ? null : c)); if (!saved.skill1.some(Boolean)) saved.skill1 = I.DEFAULTS.skill1.slice(); }
+      order = I.ACTIONS.filter(a => a.id !== 'skill3').concat(ACTION.skill3);
+    }
     if (saved && typeof saved === 'object') {
       for (const a of I.ACTIONS) {
         const s = saved[a.id];
@@ -55,7 +62,7 @@
         if (pair.some(Boolean)) b[a.id] = pair;
       }
     }
-    for (const a of I.ACTIONS) for (let i = 0; i < 2; i++) { const c = b[a.id][i]; if (c && used.has(c)) b[a.id][i] = null; else if (c) used.add(c); }
+    for (const a of order) for (let i = 0; i < 2; i++) { const c = b[a.id][i]; if (c && used.has(c)) b[a.id][i] = null; else if (c) used.add(c); }
     for (const a of I.ACTIONS) if (!b[a.id][0] && !b[a.id][1]) b[a.id] = I.DEFAULTS[a.id].slice();
     I.binds = b; rebuild();
   };
@@ -112,7 +119,7 @@
   const isMouse = (c) => /^Mouse/.test(c);
   I.labels = (action) => (codes[action] || []).map(I.keyName);
   // Gamepad button names (fixed layout, see I.poll): what HUD keycaps, prompts and signs show while I.device is 'pad'.
-  const PAD = { attack: 'X / RT', skill1: 'RB / B', skill2: 'LT / Y', dash: 'A / LB', map: 'Back', pause: 'Start' };
+  const PAD = { attack: 'X / RT', skill1: 'RB', skill2: 'LT / Y', skill3: 'B', dash: 'A / LB', map: 'Back', pause: 'Start' };
   // Primary label for HUD hints: the first keyboard binding, else the first mouse button; the pad button names on a pad.
   I.label = (action) => {
     if (I.device === 'pad' && PAD[action]) return PAD[action];
@@ -197,7 +204,7 @@
 
   // Snapshot of intent for this frame.
   I.read = () => {
-    const out = { mx: 0, my: 0, atk: false, skill: false, dash: false, atkPressed: false, tab: false, esc: false, confirm: false, left: false, right: false, aimX: null, aimY: null, skill2: false };
+    const out = { mx: 0, my: 0, atk: false, skill: false, dash: false, atkPressed: false, tab: false, esc: false, confirm: false, left: false, right: false, aimX: null, aimY: null, skill2: false, skill3: false };
     if (down('up')) out.my -= 1;
     if (down('down')) out.my += 1;
     if (down('left')) out.mx -= 1;
@@ -206,6 +213,7 @@
     out.atkPressed = hit('attack');
     out.skill = hit('skill1');
     out.skill2 = hit('skill2');
+    out.skill3 = hit('skill3');
     out.dash = hit('dash');
     out.tab = hit('map');
     out.esc = hit('pause') || hitCode('Escape'); // Esc always backs out of a menu, whatever pause is bound to
@@ -237,8 +245,9 @@
       if (touch) I.device = 'pad';
       out.atk = out.atk || b(2) || b(7);
       out.atkPressed = out.atkPressed || bp(2) || bp(7);
-      out.skill = out.skill || bp(1) || bp(5);
+      out.skill = out.skill || bp(5);
       out.skill2 = out.skill2 || bp(3) || bp(6);
+      out.skill3 = out.skill3 || bp(1);
       out.dash = out.dash || bp(0) || bp(4);
       out.esc = out.esc || bp(9);
       out.tab = out.tab || bp(8);

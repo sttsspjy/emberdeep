@@ -95,21 +95,17 @@ for (const id of VARIANTS) {
   const bev = ev.find(e => e.t === 'beam');
   ok(!!bev && Math.abs(bev.x1 - (p.x + 230)) <= 10, `Sunlance: a beam event to the end of its ${ED.WEAPONS.sunlance.speed * ED.WEAPONS.sunlance.life} px (${bev && bev.x1 - p.x})`);
 }
-{ // the beam's blast (Magma Heart gains one) lands at the last foe struck and erupts again
-  const { w, p } = stage('sunlance', { p_atk: 1, p_atk_h: 2 });
-  const a = dummy(w, p.x + 60, p.y - 4), b = dummy(w, p.x + 120, p.y - 4);
-  ok(!!p.stats.weapon.explode, 'Magma Heart gives the Sunlance a blast');
-  w.playerAttack(p, 0);
-  ok(p.pyroQ.some(q => q.k === 'after' && Math.abs(q.x - b.x) < 1), 'Magma Heart: the aftershock is queued at the last foe the beam struck');
-  run(w, 0.6);
-  ok(hits.some(h => h.part === 'aftershock'), 'Magma Heart: the aftershock erupts');
-  void a;
+{ // Ember Bolt: every foe the beam strikes cuts the spell cooldowns (one cut per foe struck)
+  const { w, p } = stage('sunlance');
+  dummy(w, p.x + 60, p.y - 4); dummy(w, p.x + 120, p.y - 4);
+  p.emberAcc = 0; p.emberB = ED.CONST.EMBER_CAP; w.playerAttack(p, 0);
+  const one = ED.CONST.EMBER_PS * p.stats.atkInterval;
+  ok(Math.abs(p.emberAcc - 2 * one) < 1e-9, `Ember Bolt: a beam through two foes cuts twice (${p.emberAcc.toFixed(3)} s)`);
 }
-{ // Overheat at full Channel widens the beam
-  const { w, p } = stage('sunlance', { p_atk: 1, p_atk_s: 2 }), ev = events(w);
-  w.playerAttack(p, 0); const w0 = ev.filter(e => e.t === 'beam').pop().w;
-  p.chanT = 99; p.lastAtkT = w.time; w.playerAttack(p, 0); const w1 = ev.filter(e => e.t === 'beam').pop().w;
-  ok(w1 > w0, `Overheat: a full-Channel beam is wider (${w0} -> ${w1})`);
+{ // Afterburn: after a spell the Sunlance fires two more beams in a fan
+  const { w, p } = stage('sunlance', { p_atk: 1, p_atk_s: 1 }), ev = events(w);
+  w.playerSkill(p, 0, {}, 2); w.playerAttack(p, 0);
+  ok(ev.filter(e => e.t === 'beam').length === 3, `Afterburn: one attack after a spell fires 3 beams (${ev.filter(e => e.t === 'beam').length})`);
 }
 { // a wall cuts the beam
   const { w, p } = stage('sunlance'), ev = events(w), room = w.room, T = ED.CONST.TILE;
@@ -125,7 +121,7 @@ for (const id of VARIANTS) {
   const near = dummy(w, p.x + 50, p.y - 4), tgt = dummy(w, p.x + 180, p.y - 4);
   p.atkD = 180; w.playerAttack(p, 0);
   const z = w.zones.find(q => q.kind === 'tele' && q.team === 0 && q.lob);
-  ok(!!z && Math.abs(z.x - (p.x + 180)) < 1 && z.r === 80, 'Mortar: a friendly telegraph with the lob arc at the cursor distance, blast radius 80');
+  ok(!!z && Math.abs(z.x - (p.x + 180)) < 1 && z.r === ED.WEAPONS.mortar.explode.r, `Mortar: a friendly telegraph with the lob arc at the cursor distance, blast radius ${ED.WEAPONS.mortar.explode.r}`);
   run(w, 0.5);
   ok(!hits.length, 'Mortar: nothing is hit before the shell lands');
   run(w, 0.1);
@@ -141,11 +137,13 @@ for (const id of VARIANTS) {
   const t2 = stage('mortar', {}, { crit: 0.3 }); dummy(t2.w, t2.p.x + 150, t2.p.y - 4); t2.p.atkD = 150; for (let i = 0; i < 5; i++) { t2.w.playerAttack(t2.p, 0); run(t2.w, 1); } const s2 = hits.reduce((s, h) => s + h.d, 0);
   ok(s1 > 0 && s1 === s2, 'Mortar: deterministic per seed');
 }
-{ // Magma Heart and Living Flame on the shell
-  const { w, p } = stage('mortar', { p_atk: 1, p_atk_h: 2, p_el: 1 });
-  const e = dummy(w, p.x + 150, p.y - 4); p.atkD = 150;
-  w.playerAttack(p, 0); run(w, 1.2);
-  ok(hits.some(h => h.part === 'aftershock'), 'Magma Heart: the Mortar blast erupts again');
+{ // Ember Bolt and Living Flame on the shell: the landing is a weapon hit, so it cuts the spell cooldowns and adds Burn
+  const { w, p } = stage('mortar', { p_el: 1 });
+  const e = dummy(w, p.x + 150, p.y - 4); p.atkD = 150; p.emberAcc = 0; p.emberT = 99; // no flush to the client during the check
+  w.playerAttack(p, 0); run(w, 0.1); ok(p.emberAcc === 0, 'Ember Bolt: nothing is cut before the shell lands');
+  run(w, 0.55);
+  ok(Math.abs(p.emberAcc - ED.CONST.EMBER_PS * p.stats.atkInterval) < 0.02, `Ember Bolt: the Mortar landing cuts the spell cooldowns (${p.emberAcc.toFixed(3)} s)`);
+  run(w, 0.6);
   ok(e.burnPool > 0 || hits.some(h => h.kind === 'dot'), 'Living Flame: the Mortar blast sets the foe alight');
 }
 
@@ -250,7 +248,7 @@ for (const id of VARIANTS) {
 {
   const { w, p } = stage('cinderscatter');
   w.playerAttack(p, 0);
-  ok(w.projs.length === 5 && w.projs.every(q => q.burn === ED.WEAPONS.cinderscatter.burn), 'Cinder Scatter: five sparks that build Burn from damage');
+  ok(w.projs.length === 5 && w.projs.every(q => q.kind === 'spark' && !q.burn), 'Cinder Scatter: five plain sparks');
 }
 
 console.log(`${n - fails}/${n} armory-b checks passed`);

@@ -93,22 +93,22 @@
     rider2: 'Outbreak: it passes to the 3 nearest foes ({outbreak} each).', mods: { contagion: 0.5 }, up: { contagionR: 20 }, r2: { contagionN: 1, outbreak: 1.2 }, r3: { plague: 1, plagueBurst: 0.85 },
     form: { name: 'Plaguebearer', desc: 'A foe with 2 or more ailments that dies to your damage bursts (radius 90): every foe inside takes {plagueBurst} of its remaining Bleed and Burn at once and catches its other statuses.' } });
 
-  // ---------------- Pyromancer (Flame Nova · Meteor) ----------------
-  card('pyro', 'attack', 1, 'p_atk', { name: 'Pyroclast', icon: 'flame', forks: ['p_atk_h', 'p_atk_s'], plays: 'plant your feet and pour fire; choose when to move.',
-    desc: 'Standing still while attacking builds Channel: your weapon deals +{channel} every {chanStep:s}, up to +{chanCap}. Moving, or a pause longer than 0.6 s (1.25 attacks for slow weapons), resets it.', mods: { channel: 0.1, chanStep: 0.3, chanCap: 0.5 } });
-  card('pyro', 'attack', 2, 'p_atk_h', { name: 'Magma Heart', icon: 'ember', tag: 'Heavy', weapon: { kind: 'heavy', extra: { ifNone: { explode: { r: 40, mul: 0.5 } } } },
-    desc: 'Heavy shots (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit, Stagger, 15% bigger blasts). Shots that have no blast gain one (radius 40, 50%), and every blast erupts again 0.4 s later at {aftershock}.',
-    rider2: 'Lava Pools: each aftershock leaves burning ground (2 s, {lavaPool} of the shot per second; a new pool on the same spot refreshes the old one).', mods: { aftershock: 0.18 }, up: { aftershock: 0.1 }, r2: { lavaPool: 0.5 }, r3: { caldera: 0.9 },
-    form: { name: 'Caldera', desc: 'An aftershock that lands inside one of your Lava Pools erupts as a geyser instead: 1.5 times the radius, {caldera} of the shot, knocking foes back (not bosses). The pool refreshes and grows 20% wider (at most twice its first radius).' } });
-  card('pyro', 'attack', 2, 'p_atk_s', { name: 'Ember Rush', icon: 'bolt', tag: 'Swift', weapon: { kind: 'swift' },
-    desc: 'Swift shots (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit, Flow). Channel builds twice as fast (every 0.15 s) and caps {chanCap} higher.',
-    rider2: 'Overheat: at full Channel your shots pierce 1 more foe and their blasts are 20% wider.', mods: { chanStep: -0.15, chanCap: 0.1 }, up: { chanCap: 0.05 }, r2: { overheat: 1 }, r3: { fireDance: 1, dancerBurst: 2 },
-    form: { name: 'Fire Dancer', desc: 'Moving no longer ends Channel: it holds while you move (and stops building), and only a pause in attacking longer than its window ends it. A dash at full Channel leaves a ring of flame (radius 80) where it started, striking foes for {dancerBurst} weapon damage.' } });
+  // ---------------- Pyromancer (Flame Nova · Meteor · Fireball) ----------------
+  card('pyro', 'attack', 1, 'p_atk', { name: 'Spellweaver', icon: 'flame', forks: ['p_atk_h', 'p_atk_s'], plays: 'bolt between spells; every hit brings the next spell sooner.',
+    desc: 'Your bolt hits cut your spell cooldowns {emberMul} more (still at most 0.8 s per second), and Fireball holds {s3Ch:n} more charge.', mods: { emberMul: 0.5, s3Ch: 1 } });
+  card('pyro', 'attack', 2, 'p_atk_h', { name: 'Kindling', icon: 'ember', tag: 'Heavy', weapon: { kind: 'heavy' },
+    desc: 'Heavy bolts (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit, Stagger). Each bolt hit stores a Spark, up to {sparkMax:n}. Your next Nova, Meteor or Fireball spends them all: +{spark} damage per Spark.',
+    rider2: 'Flashfire: every {flashfire:n}th Spark your spells spend gives back a Fireball charge.', mods: { spark: 0.12, sparkMax: 3 }, up: { spark: 0.04 }, r2: { flashfire: 6 }, r3: { pyreBolt: 0.6 },
+    form: { name: 'Pyre Bolt', desc: 'Your bolts burst where they hit (radius 36) for {pyreBolt} of the hit.' } });
+  card('pyro', 'attack', 2, 'p_atk_s', { name: 'Quickcast', icon: 'bolt', tag: 'Swift', weapon: { kind: 'swift' },
+    desc: 'Swift bolts (×{fkRate:x} attack time, ×{fkDmg:x} damage per hit, Flow). Afterburn: after each Nova, Meteor or Fireball, your next {afterN:n} attacks fire 2 extra bolts in a narrow fan, each at {afterburn} of a bolt.',
+    rider2: 'Chain Cast: a spell cast within 1.5 s of a different spell deals +{chainCast}.', mods: { afterburn: 0.25, afterN: 3 }, up: { afterburn: 0.05 }, r2: { chainCast: 0.05 }, r3: { stormT: 2, afterburn: 0.25 },
+    form: { name: 'Spell Storm', desc: 'For {stormT:s} after each spell, every attack fires 4 extra bolts in a fan instead (no 3-attack limit).' } });
   card('pyro', 'skill1', 1, 'p_s1', { name: 'Firestorm', icon: 'flame', forks: ['p_s1_a', 'p_s1_b'], plays: 'dive into packs and erupt.',
-    desc: 'Flame Nova: +{s1Area} radius, +{s1Dmg} damage, recharges {s1Cdr} faster.', mods: { s1Area: 0.25, s1Dmg: 0.2, s1Cdr: 0.21 } });
+    desc: 'Flame Nova: +{s1Area} radius, +{s1Dmg} damage, recharges {s1Cdr} faster.', mods: { s1Area: 0.25, s1Dmg: 0.2, s1Cdr: 0.2 } });
   card('pyro', 'skill1', 2, 'p_s1_a', { name: 'Twin Nova', icon: 'twin', tag: 'Burst',
     desc: 'Nova erupts a second time 0.6 s later around you at {novaEcho}.',
-    rider2: 'Collapse: before the second eruption, foes within its radius are pulled {novaPull:n} px toward you.', mods: { novaEcho: 0.65 }, up: { novaEcho: 0.35 }, r2: { novaPull: 40 }, r3: { supernova: 1.2, novaEcho: 0.2, supernovaPull: 30 },
+    rider2: 'Collapse: before the second eruption, foes within its radius are pulled {novaPull:n} px toward you.', mods: { novaEcho: 0.5 }, up: { novaEcho: 0.2 }, r2: { novaPull: 40 }, r3: { supernova: 1.2, novaEcho: 0.3, supernovaPull: 30 },
     form: { name: 'Supernova', desc: "The second eruption becomes a shockwave that grows from the Nova's radius to radius 220 over 0.5 s, striking every foe it crosses for {novaEcho} of the Nova. Then the centre collapses and pulls foes {supernovaPull:n} px inward (not bosses). The Nova's Burn is {supernova:n} times as strong." } });
   card('pyro', 'skill1', 2, 'p_s1_b', { name: 'Phoenix Mantle', icon: 'feather', tag: 'Guard',
     desc: 'Nova leaves a ring of fire (3 s), and if it hits a foe it shields you for {mantle} max health (at most once per 10 s).[ Nova deals +{s1Dmg}.]',
@@ -118,21 +118,21 @@
     desc: 'Meteor: +{s2Dmg} damage; its crater lasts {s2Dur:s} longer.', mods: { s2Dmg: 0.15, s2Dur: 2 } });
   card('pyro', 'skill2', 2, 'p_s2_a', { name: 'Twin Meteor', icon: 'star', tag: 'Burst',
     desc: 'A second Meteor lands 0.6 s later on the foe nearest the impact (within 300) at {twinMeteor}. Meteor deals +{s2Dmg}.',
-    rider2: 'Meteor Shower: 0.3 s after each Meteor lands, 3 meteorites strike within 80 of it (radius 45, {meteorites} of the impact each).', mods: { twinMeteor: 0.3, s2Dmg: 0.3 }, up: { twinMeteor: 0.1, s2Dmg: 0.075 }, r2: { meteorites: 0.18 }, r3: { cataclysm: 0.48 },
+    rider2: 'Meteor Shower: 0.3 s after each Meteor lands, 3 meteorites strike within 80 of it (radius 45, {meteorites} of the impact each).', mods: { twinMeteor: 0.3, s2Dmg: 0.15 }, up: { twinMeteor: 0.1, s2Dmg: 0.05 }, r2: { meteorites: 0.06 }, r3: { cataclysm: 0.42 },
     form: { name: 'Cataclysm', desc: "Meteor falls as five: one on the cursor and four around it at 80 px, 0.1 s apart, each for {cataclysm} of an impact (they replace the second Meteor and the Shower). Their craters merge into one lava field (radius 140) that burns for the crater's duration." } });
   card('pyro', 'skill2', 2, 'p_s2_b', { name: 'Comet', icon: 'wing', tag: 'Guard',
     desc: 'You ride the Meteor: leap to the target point in 0.6 s (untouchable for the first 0.35 s) and land as the impact (+{comet}). Meteor deals +{s2Dmg}.',
     rider2: 'Impact Crater: landing knocks foes back twice as far, stuns them {cometStun:s} (not bosses) and leaves a crater that burns {craterMul:n} times as hard.', mods: { comet: 0.1, s2Dmg: 0.2 }, up: { comet: 0.05, s2Dmg: 0.1 }, r2: { cometStun: 0.5, craterMul: 2 }, r3: { sunDive: 0.6, diveTrail: 0.3 },
     form: { name: 'Sun Dive', desc: "You are untouchable for the whole leap and for 0.6 s after each landing. 0.5 s after you land you leap again toward the cursor (as far as the Meteor reaches) and land as a second impact at {sunDive} of the first. Both flights leave a burning trail that deals {diveTrail} of the crater's damage per second." } });
-  card('pyro', 'element', 1, 'p_el', { name: 'Living Flame', icon: 'ember', forks: ['p_el_a', 'p_el_b'], plays: 'everything burns; weak and resisted strata matter.',
-    desc: "Your skills deal +{classElMul} Fire damage, and your weapon sets foes alight for {wInfFire} of each hit (Kindle's rate counts instead when it is higher).", mods: { classElMul: 0.25, wInfFire: 0.15 } });
+  card('pyro', 'element', 1, 'p_el', { name: 'Living Flame', icon: 'ember', forks: ['p_el_a', 'p_el_b'], plays: 'everything burns; keep the fire going.',
+    desc: "Your spells deal +{classElMul} Fire damage, and your bolts add Burn for {wInfFire} of each hit (the Fire path's rate counts instead when it is higher).", mods: { classElMul: 0.25, wInfFire: 0.15 } });
   card('pyro', 'element', 2, 'p_el_a', { name: 'White Heat', icon: 'flame', tag: 'Focus',
-    desc: 'Your Burn deals +{burnMul}, and burning foes take +{searSkill} from your skills.',
-    rider2: 'Flashpoint: Nova and Meteor always crit foes whose Burn exceeds {burnCrit} of their health.', mods: { burnMul: 0.53, searSkill: 0.1 }, up: { burnMul: 0.1 }, r2: { burnCrit: 0.05 }, r3: { whiteHot: 0.3, whiteT: 2 },
-    form: { name: 'White Flame', desc: 'A foe that has kept burning for {whiteT:s} without a break turns white-hot: it takes +{whiteHot} damage from your hits, and Flashpoint always counts it.' } });
+    desc: 'Your Burn deals +{burnMul}, and burning foes take +{searSkill} from your spells.',
+    rider2: 'Flashpoint: your spells always crit a foe that has burned for {flashT:s} without a break.', mods: { burnMul: 0.25, searSkill: 0.1 }, up: { burnMul: 0.05 }, r2: { flashT: 6 }, r3: { whiteHot: 0.4, whiteT: 3 },
+    form: { name: 'White Flame', desc: 'A foe that has burned for {whiteT:s} without a break turns white-hot: it takes +{whiteHot} damage from all your hits.' } });
   card('pyro', 'element', 2, 'p_el_b', { name: 'Heat Engine', icon: 'hourglass', tag: 'Spread',
     desc: "Each burning foe your Nova or Meteor hits cuts {heatEngine:s} from the other skill's cooldown (up to 1.5 s per cast).[ Nova and Meteor deal +{s1Dmg}.]",
-    rider2: 'Chain Reaction: hitting {heatChain:n} or more burning foes with one cast refunds the other skill fully (at most once per 6 s).', mods: { heatEngine: 0.15 }, up: { heatEngine: 0.05 }, r2: { heatChain: 2, s1Dmg: 0.45, s2Dmg: 0.45 }, r3: { heatMax: 4, infernoMul: 2 },
+    rider2: 'Chain Reaction: hitting {heatChain:n} or more burning foes with one cast refunds the other skill fully (at most once per 6 s).', mods: { heatEngine: 0.15 }, up: { heatEngine: 0.05 }, r2: { heatChain: 2, s1Dmg: 0.15, s2Dmg: 0.15 }, r3: { heatMax: 4, infernoMul: 2 },
     form: { name: 'Inferno Engine', desc: 'Each burning foe your Nova or Meteor hits stores 1 Heat (a boss 3), up to {heatMax:n}. At full Heat your next Nova or Meteor is an Inferno: radius ×1.4, ×{infernoMul:x} damage and Burn, and the Heat empties.' } });
 
   // ---------------- Shade (Shadowstep · Vanish) ----------------
