@@ -22,10 +22,16 @@
       if (d2 >= r * r) continue;
       hit = true;
       if (d2 > 1e-4) { const d = Math.sqrt(d2), push = r - d; e.x += dx / d * push; e.y += dy / d * push; }
-      else {
+      else { // the centre is inside the tile: out through the nearest side whose neighbour is open floor (the nearest side when none is), so a body never tunnels on through a block or out of the room
         const l = e.x - tx * T, rr = tx * T + T - e.x, u = e.y - ty * T, dd = ty * T + T - e.y;
-        const m = Math.min(l, rr, u, dd);
-        if (m === l) e.x = tx * T - r; else if (m === rr) e.x = tx * T + T + r; else if (m === u) e.y = ty * T - r; else e.y = ty * T + T + r;
+        const open = (x, y) => x >= 0 && y >= 0 && x < room.w && y < room.h && !solidFor(room.tiles[y * room.w + x], locked, fly);
+        let m = Infinity, k = -1;
+        if (open(tx - 1, ty) && l < m) { m = l; k = 0; }
+        if (open(tx + 1, ty) && rr < m) { m = rr; k = 1; }
+        if (open(tx, ty - 1) && u < m) { m = u; k = 2; }
+        if (open(tx, ty + 1) && dd < m) { m = dd; k = 3; }
+        if (k < 0) { m = Math.min(l, rr, u, dd); k = m === l ? 0 : m === rr ? 1 : m === u ? 2 : 3; }
+        if (k === 0) e.x = tx * T - r; else if (k === 1) e.x = tx * T + T + r; else if (k === 2) e.y = ty * T - r; else e.y = ty * T + T + r;
       }
     }
     return hit;
@@ -184,19 +190,25 @@
     for (const pd of opts.players) this.addPlayer(pd);
   };
   W.xpFor = (L) => Math.round(30 + 3 * (L - 1) + 6 * (L - 1) * (L - 1)); // xp from level L to L+1
-  W.ELITE = { hp: 2.4, hpStep: 0.4, dmg: 0.9 }; // elite HP multiplier at stratum I (+ hpStep per stratum) and damage multiplier
+  // Depth: stratum s sits at D = 1 + DEPTH_STEP (s - 1) on the foe curves (I 1, II 2.67, III 4.33, IV 6); a room adds ROW_DEPTH x its row fraction (W.prototype.rowFrac: 0 on the start row, 1 on the last row).
+  W.DEPTH_STEP = 5 / 3; W.ROW_DEPTH = 0.5;
+  W.depth = (s, f) => 1 + W.DEPTH_STEP * (Math.max(1, s) - 1) + W.ROW_DEPTH * (f || 0);
+  // Entry of a per-stratum array for stratum s (the last entry past its end).
+  W.perStratum = (a, s) => a[Math.max(0, Math.min(a.length - 1, s - 1))];
+  W.ELITE = { hp: 2.4, hpStep: 0.4, dmg: 0.9 }; // elite HP multiplier at depth 1 (+ hpStep per depth step of 1) and damage multiplier
   W.HAZARD_MUL = 0.5; // floor hazard damage multiplier
   // Dark rooms (room.dark, set by floor gen: 2 opt-in combat dead ends per floor): foe damage multiplier, gold and xp multiplier of everything dropped there, multiplier of the fodder quota.
   W.DARK_DMG = 1.3; W.DARK_LOOT = 1.5; W.DARK_FODDER = 1.5;
   W.DARK_AFFIXES = ['brutal', 'vampiric', 'warded', 'swift']; // affix pool of the extra elite of a dark room's last wave (the volatile affix is left out)
   W.REWARD_UP = { gold: 'vigor', vigor: 'forge', forge: 'epic', boon: 'epic' }; // a dark room's reward goes up one step
   // Stratum behaviour (index s - 1): the share of its target's velocity a foe leads an aimed shot by; foe and boss shot speed factors; non-boss, non-fodder ground speed factor.
-  W.LEAD = [0, 0, 0.35, 0.5, 0.7, 0.85];
-  W.shotSpd = (s) => 1 + 0.08 * (s - 1);
-  W.bossShotSpd = (s) => 1 + 0.1 * (s - 1);
-  W.foeSpd = (s) => 1 + 0.04 * (s - 1);
+  W.LEAD = [0, 0.25, 0.6, 0.85];
+  W.leadAt = (s) => W.perStratum(W.LEAD, s);
+  W.shotSpd = (s) => 1 + 0.08 * (W.depth(s) - 1);
+  W.bossShotSpd = (s) => 1 + 0.1 * (W.depth(s) - 1);
+  W.foeSpd = (s) => 1 + 0.04 * (W.depth(s) - 1);
   // Mixed rosters (s >= 2): chance a room's roster also holds the previous biome's foes (at weight 0.35 each); AFFIX2 = chance (index s - 1) that an elite rolls a second affix.
-  W.MIX_PREV = 0.6; W.AFFIX2 = [0, 0, 0, 0.35, 0.6, 0.85];
+  W.MIX_PREV = 0.6; W.AFFIX2 = [0, 0, 0.45, 0.85];
   // Angle from (x, y) toward where target t stands when a shot of this speed reaches it, leading by share L of t's measured velocity (t.lvx / t.lvy; 0 for targets without one); flight time from two refinements, capped at 1.2 s. L 0 aims straight at t.
   W.leadAngle = (x, y, t, speed, L) => {
     let ax = t.x, ay = t.y;
@@ -205,38 +217,54 @@
     return Math.atan2(ay - y, ax - x);
   };
   // Per-stratum threat on top of the base scales: foe HP, wave budget, `cdRate` = extra cooldown recovery (0.2 = attack timers tick 20% faster, -0.2 = 20% slower) and the boss pause between attacks (x).
-  W.THREAT = [{ hp: 2.2, dmg: 1, wave: 0.8, cdRate: -0.4, pause: 2 }, { hp: 1.62, dmg: 1, wave: 0.75, cdRate: -0.3, pause: 1.7 }, { hp: 1.3, dmg: 1, wave: 0.7, cdRate: -0.1, pause: 1.4 }, { hp: 1, dmg: 0.84, wave: 0.66, cdRate: 0, pause: 0.75 }, { hp: 1.07, dmg: 1.19, wave: 0.62, cdRate: 0.15, pause: 0.6 }, { hp: 1.02, dmg: 1.39, wave: 0.6, cdRate: 0.3, pause: 0.6 }];
-  // Foe HP multiplier of stratum s: the depth curve times the threat HP.
-  W.hpScale = (s) => (1 + 0.65 * (s - 1) + 0.08 * (s - 1) * (s - 1)) * W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, s - 1))].hp;
-  // Wave pacing of combat rooms: seconds before the first wave, spawn telegraph (+ random extra), minimum gap before the next wave, the share of a wave that may still stand when the next one is called, the seconds after which the next wave comes regardless, and the minimum spawn distance from heroes (turrets keep more).
-  W.PACE = { first: 0.5, spawn: 0.7, spawnVar: 0.25, gap: 0.9, nextAt: 0.45, maxAge: 6, avoid: 100, avoidTurret: 130 };
-  // Horde of a combat or elite room (fodder beside the threat waves): kills to spawn by stratum (x0.6 in an elite room, x(1 + 0.5 (n - 1)) per party, x0.6 at stratum I of the tutorial, x DARK_FODDER in a dark room),
-  // fodder per pack, seconds between packs, minimum pack distance from every hero (relaxed in 40 px steps once a pack has waited PACK_WAIT s), live-foe cap (solo, 2+ heroes).
-  W.FODDER_Q = [40, 55, 70, 85, 100, 120]; W.PACK_N = [6, 12]; W.PACK_GAP = [2.0, 3.0]; W.PACK_AVOID = 220; W.PACK_WAIT = 4; W.LIVE_CAP = [120, 180];
+  W.THREAT = [{ hp: 2.2, dmg: 1, wave: 0.8, cdRate: -0.4, pause: 2 }, { hp: 1.41, dmg: 1, wave: 0.72, cdRate: -0.18, pause: 1.5 }, { hp: 1.02, dmg: 1.05, wave: 0.64, cdRate: 0.05, pause: 0.7 }, { hp: 1.02, dmg: 1.39, wave: 0.6, cdRate: 0.3, pause: 0.6 }];
+  // Foe HP multiplier of stratum s at row fraction f: the depth curve at W.depth(s, f) times the stratum's threat HP.
+  W.hpScale = (s, f) => { const d = W.depth(s, f) - 1; return (1 + 0.65 * d + 0.08 * d * d) * W.perStratum(W.THREAT, s).hp; };
+  // Wave pacing of combat rooms: seconds before the first wave, spawn telegraph (+ random extra), the reinforcement's telegraph, minimum gap before the next wave, the share of a wave that may still stand when the next one is called,
+  // the seconds after which the next wave comes regardless, and the minimum spawn distance from heroes (turrets keep more).
+  W.PACE = { first: 0.5, spawn: 0.7, spawnVar: 0.25, reinf: 1.6, gap: 0.9, nextAt: 0.34, maxAge: 15, avoid: 100, avoidTurret: 130 };
+  // Threat waves of a combat or elite room (+1 under Pact 10); the last wave's reinforcement lands at least REINF_AVOID from every hero.
+  W.WAVES = 4; W.REINF_AVOID = 160;
+  // Horde of a combat or elite room: fodder by stratum (x0.6 in an elite room, x(1 + 0.5 (n - 1)) per party, x0.6 at stratum I of the tutorial, x DARK_FODDER in a dark room), shared out over the threat waves:
+  // each wave brings its share as packs of at most PACK_MAX at room edges at least PACK_AVOID from every hero (PACE.avoid when no edge is that far); a pack shrinks so live foes + pending spawns stay under LIVE_CAP (solo, 2+ heroes).
+  W.FODDER_Q = [28, 34, 40, 46]; W.PACK_MAX = 8; W.PACK_AVOID = 220; W.LIVE_CAP = [60, 90];
   // Boss fights. Aimed volley (every boss, bosses.js): shots by phase I-III, telegraph s (x the boss's windMul), s before the first release at which the warn line locks, s between shots, s between the heroes' sequences,
-  // flight speed at stratum I (+ step per stratum) and damage x boss damage; in phase 3 a volley also starts every BOSS_OV_GAP s. Fodder trickle after the boss spawns: pack size, s between packs, live-fodder cap (solo, 2+ heroes).
+  // flight speed at stratum I (+ step per stratum) and damage x boss damage; in phase 3 a volley also starts every BOSS_OV_GAP s.
   W.BOSS_VOL = { n: [3, 4, 5], tele: 0.5, lock: 0.15, gap: 0.12, seq: 0.15, speed: 320, step: 20, dmg: 0.6 }; W.BOSS_OV_GAP = 5;
-  W.BOSS_PACK_N = [4, 6]; W.BOSS_PACK_GAP = 7; W.BOSS_FODDER_CAP = [20, 30];
   // Boss fury (soft enrage): t = fight seconds at which it starts, by stratum (0 = never), ramp = boss damage multiplier gained per second past t (the pause between attacks divides by the same factor), max = its cap, warn = seconds before t that the boss bar starts warning.
   W.BOSS_FURY = { t: [0, 0, 0, 95, 95, 90], ramp: 0.12, max: 4, warn: 10 };
   W.furyAt = (s) => W.BOSS_FURY.t[Math.max(0, Math.min(W.BOSS_FURY.t.length - 1, s - 1))];
   // Fury multiplier at stratum s after ft fight seconds: 1 while t is 0 or ft <= t, then 1 + ramp x (ft - t) up to max (pure; the client mirror derives it from the synced clock).
   W.furyMul = (s, ft) => { const t = W.furyAt(s); return t > 0 && ft > t ? Math.min(W.BOSS_FURY.max, 1 + W.BOSS_FURY.ramp * (ft - t)) : 1; };
-  // Fodder max HP: depth (+25% per stratum) and pact only, no threat lever, party multiplier or elite (pure; the client mirror rebuilds it from the wire fraction).
-  W.fodderHp = (def, s, pact) => def.hp * (1 + 0.25 * (s - 1)) * ED.pactMul(pact, 'foeHp');
+  // Fodder max HP: + FODDER_STEP per depth step of the stratum (no row factor) and pact only, no threat lever, party multiplier or elite (pure; the client mirror rebuilds it from the wire fraction).
+  // A hero takes at most one fodder touch per FODDER_TOUCH_CD s.
+  W.FODDER_STEP = 0.3; W.FODDER_TOUCH_CD = 1.5;
+  W.fodderHp = (def, s, pact) => def.hp * (1 + W.FODDER_STEP * (W.depth(s) - 1)) * ED.pactMul(pact, 'foeHp');
   // Xp a threat foe is worth before the dark-room multiplier and the room's budget scale (enc.xpK).
-  W.threatXp = (def, s, elite) => (def.xp || 0) * (1 + 0.35 * (s - 1)) * (elite ? 3 : 1);
+  W.threatXp = (def, s, elite) => (def.xp || 0) * (1 + 0.35 * (W.depth(s) - 1)) * (elite ? 3 : 1);
   // Room xp budget by stratum (solo, per room; x DARK_LOOT in a dark room, not scaled by the party): threat drops, fodder motes (FODDER_XP_SHARE of it, spread over the quota) and the clear pile together drop exactly this.
-  W.ROOM_XP = { combat: [24, 38, 60, 84, 107, 122], elite: [44, 64, 86, 116, 159, 180] }; W.FODDER_XP_SHARE = 0.5;
+  // champion: the stratum IV champion rooms.
+  W.ROOM_XP = { combat: [24, 50, 104, 120], elite: [38, 80, 166, 190], champion: [100, 100, 100, 100] }; W.FODDER_XP_SHARE = 0.5;
   // Gold dropped by a 'gold' room reward (shared with the UI): 15 + 8 per stratum, times the global gold multiplier.
   W.rewardGold = (stratum) => Math.round((15 + 8 * stratum) * W.GOLD_MUL);
   W.GOLD_MUL = 0.65; // every gold drop (kills, rooms, chests, rewards) is scaled by this; shops sell at full price
-  W.prototype.threat = function () { return W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, this.stratum - 1))]; };
+  W.prototype.threat = function () { return W.perStratum(W.THREAT, this.stratum); };
+  // Row fraction of a room (default the current one) on its floor: room.row (else room.dist) over the floor's largest; 0 for the start and boss rooms (bosses keep the stratum's depth).
+  W.prototype.rowFrac = function (room) {
+    room = room || this.room;
+    const fl = this.floor;
+    if (!room || !fl || room.type === 'boss' || room.type === 'start') return 0;
+    const key = typeof room.row === 'number' ? 'row' : 'dist';
+    if (fl.rowKey !== key) { let m = 0; for (const r of fl.rooms) if (r.type !== 'boss' && typeof r[key] === 'number') m = Math.max(m, r[key]); fl.rowKey = key; fl.rowMax = m; }
+    return fl.rowMax > 0 ? Math.max(0, Math.min(1, (room[key] || 0) / fl.rowMax)) : 0;
+  };
+  // Xp budget of a room of kind ('combat', 'elite', 'champion') at stratum s (x darkLoot() in a dark room).
+  W.prototype.roomXp = function (room, kind) { return Math.round(W.perStratum(W.ROOM_XP[kind], this.stratum) * (room.dark ? this.darkLoot() : 1)); };
   W.prototype.emit = function (ev) { this.fx.push(ev); };
   W.prototype.partySize = function () { return Math.max(1, this.players.size); };
   W.partyHpMul = (size) => { const n = size - 1; return 1 + 0.45 * n + 0.1 * n * (n - 1); }; // foe HP factor of a party of `size` (pure; the sheet reads it too)
   W.FOE_DMG = 1.5; // every foe's damage (hits, shots, zones, bosses) x this
-  W.dmgScale = (s) => W.FOE_DMG * (1 + 0.22 * (s - 1) + 0.03 * (s - 1) * (s - 1)); // foe damage factor of stratum s
+  W.dmgScale = (s, f) => { const d = W.depth(s, f) - 1; return W.FOE_DMG * (1 + 0.22 * d + 0.03 * d * d); }; // foe damage factor of stratum s at row fraction f
   W.prototype.partyHpMul = function () { return W.partyHpMul(this.partySize()); };
   W.prototype.alive = function (p) { return p && !p.downed && !p.dead; };
   W.prototype.alivePlayers = function () { const out = []; for (const p of this.players.values()) if (!p.downed && !p.dead) out.push(p); return out; };

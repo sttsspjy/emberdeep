@@ -121,13 +121,13 @@
 
     // ---------------- Fodder (one per biome, appended last: the wire index follows the order; never in a roster) ----------------
     // Horde filler: untelegraphed touch damage capped at FODDER_CAP of the victim's max health, no drops of their own (the room's xp budget pays through motes), never elite or exposed.
-    // art names the foe type whose animations the renderer reuses, tinted with col; hp scales 1 + 0.25 per stratum only.
-    bonemite: { name: 'Bone Mite', ai: 'swarm', look: 'bat', art: 'bat', col: { a: '#4a4150', b: '#2a2430', c: '#b8503f' }, hp: 7, spd: 84, dmg: 1.5, r: 6, xp: 0, cost: 0, fodder: true, fly: true },
-    sporeling: { name: 'Sporeling', ai: 'swarm', look: 'slime', art: 'glowlet', col: { a: '#5c8f86', b: '#2c4f49', c: '#0a1f1b' }, hp: 7, spd: 66, dmg: 1.5, r: 7, xp: 0, cost: 0, fodder: true },
-    rimemote: { name: 'Rime Mote', ai: 'swarm', look: 'wisp', art: 'frostwisp', col: { a: '#8aa6b8', b: '#4a6578', c: '#d6e6ee' }, hp: 7, spd: 78, dmg: 1.5, r: 6, xp: 0, cost: 0, fodder: true, fly: true },
-    ashimp: { name: 'Ash Imp', ai: 'swarm', look: 'bat', art: 'cinderbat', col: { a: '#4a3a35', b: '#241815', c: '#c98a3a' }, hp: 7, spd: 80, dmg: 1.5, r: 7, xp: 0, cost: 0, fodder: true, fly: true },
-    brinepolyp: { name: 'Brine Polyp', ai: 'swarm', look: 'jelly', art: 'jellet', col: { a: '#8f6f88', b: '#5a3a55', c: '#d8c4d4' }, hp: 7, spd: 70, dmg: 1.5, r: 7, xp: 0, cost: 0, fodder: true, fly: true },
-    voidmote: { name: 'Void Mote', ai: 'swarm', look: 'star', art: 'starspawn', col: { a: '#6f6585', b: '#352c4d', c: '#b8a8d8' }, hp: 7, spd: 90, dmg: 1.5, r: 6, xp: 0, cost: 0, fodder: true, fly: true },
+    // art names the foe type whose animations the renderer reuses, tinted with col; hp (World.fodderHp: + 30% per depth step of the stratum) takes 3+ hits of every hero's stratum I weapon (2 of a heavy one); their deaths fire no on-death effect (World.onDeathFx).
+    bonemite: { name: 'Bone Mite', ai: 'swarm', look: 'bat', art: 'bat', col: { a: '#4a4150', b: '#2a2430', c: '#b8503f' }, hp: 50, spd: 84, dmg: 1.5, r: 6, xp: 0, cost: 0, fodder: true, fly: true },
+    sporeling: { name: 'Sporeling', ai: 'swarm', look: 'slime', art: 'glowlet', col: { a: '#5c8f86', b: '#2c4f49', c: '#0a1f1b' }, hp: 50, spd: 66, dmg: 1.5, r: 7, xp: 0, cost: 0, fodder: true },
+    rimemote: { name: 'Rime Mote', ai: 'swarm', look: 'wisp', art: 'frostwisp', col: { a: '#8aa6b8', b: '#4a6578', c: '#d6e6ee' }, hp: 50, spd: 78, dmg: 1.5, r: 6, xp: 0, cost: 0, fodder: true, fly: true },
+    ashimp: { name: 'Ash Imp', ai: 'swarm', look: 'bat', art: 'cinderbat', col: { a: '#4a3a35', b: '#241815', c: '#c98a3a' }, hp: 50, spd: 80, dmg: 1.5, r: 7, xp: 0, cost: 0, fodder: true, fly: true },
+    brinepolyp: { name: 'Brine Polyp', ai: 'swarm', look: 'jelly', art: 'jellet', col: { a: '#8f6f88', b: '#5a3a55', c: '#d8c4d4' }, hp: 50, spd: 70, dmg: 1.5, r: 7, xp: 0, cost: 0, fodder: true, fly: true },
+    voidmote: { name: 'Void Mote', ai: 'swarm', look: 'star', art: 'starspawn', col: { a: '#6f6585', b: '#352c4d', c: '#b8a8d8' }, hp: 50, spd: 90, dmg: 1.5, r: 6, xp: 0, cost: 0, fodder: true, fly: true },
   };
 
   ED.ENEMY_IDS = Object.keys(E);

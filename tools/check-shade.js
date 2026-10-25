@@ -521,9 +521,9 @@ function U_ang(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
     ok(s3.critOut === true && s3.exec === true && !s2.critOut, 'the execution line is higher at rank 3 than at rank 2'); }
   // rank 2: Killing Rhythm only, no chain
   { const k = mk({ s_atk: 1, s_atk_h: 2 }); k.w.playerAttack(k.p, 0); ok(k.A.hp <= 0 && k.ch.every(e => e.hp === 5) && !evs(k.w, 'gill').length, 'rank 2 carries nothing'); }
-  // horde foes carry the chain on (a chain, not a refund) but grant no Rhythm; the strikes crit and stack Momentum like any crit
+  /// a horde foe's death carries no chain (fodder deaths fire no on-death effect) and grants no Rhythm; its execution crit stacks Momentum like any crit
   { const k = mk({ s_atk: 1, s_atk_h: 3 }, (w, p, A, ch) => { p.stats.momMax = 20; for (const e of [A].concat(ch)) e.fodder = true; }); k.w.playerAttack(k.p, 0);
-    ok(k.A.hp <= 0 && k.ch.slice(0, 3).every(e => e.hp <= 0) && k.ch[3].hp === 5, "a horde foe's execution kill carries the chain too"); ok(k.p.momN === 4, 'but grants no Killing Rhythm: 4 crit stacks only (got ' + k.p.momN + ')'); }
+    ok(k.A.hp <= 0 && k.ch.every(e => e.hp === 5), "a horde foe's execution kill carries no chain"); ok(k.p.momN === 1, 'and grants no Killing Rhythm: 1 crit stack only (got ' + k.p.momN + ')'); }
   { const k = mk({ s_atk: 1, s_atk_h: 3 }, (w, p, A, ch) => { p.stats.momMax = 20; }); k.w.playerAttack(k.p, 0); ok(k.p.momN === 16, 'normal foes: 4 crits + 4 kills x 3 (got ' + k.p.momN + ')'); }
 }
 
@@ -594,7 +594,7 @@ function U_ang(a) { return Math.atan2(Math.sin(a), Math.cos(a)); }
   ok(t.f.slice(0, CN + 1).every(e => e.hp <= 0) && t.f[CN + 1].hp === 5 && t.f[CN + 1].bleedPool === 400, 'the rupture kills the first foe and cascadeN leaps kill the next ones; the one after is untouched (' + t.f.map(e => e.hp <= 0 ? 'x' : 'o').join('') + ')');
   const cs = evs(t.w, 'casc'); ok(cs.length === CN && cs.map(c => c.n).join() === Array.from({ length: CN }, (_, i) => i + 1).join() && cs[0].x0 === X0 && cs[0].x1 === X0 + 75 && cs[CN - 1].x1 === X0 + CN * 75 && cs.every(c => c.pid === 'p0'), 'a casc event per leap, numbered');
   ok(evs(t.w, 'rupt').length === CN + 1, 'a rupture for the first foe and one per leap');
-  const c1 = cs.length; run(t.w, 0.05); t.w.rupture(t.f[CN + 1], t.p, 0.7, 'test.rupture', false); const c2 = evs(t.w, 'casc').length - c1; ok(c2 >= CN - 3 && c2 <= CN, 'the next cast has its own leaps (' + c2 + ')'); // the foes drift a little apart while the world runs, a splash may kill one between two leaps
+  const c1 = cs.length; t.w.time += 0.05; t.w.rupture(t.f[CN + 1], t.p, 0.7, 'test.rupture', false); const c2 = evs(t.w, 'casc').length - c1; ok(c2 >= CN - 3 && c2 <= CN, 'the next cast has its own leaps (' + c2 + ')'); // a later time is a new cast (the row runs past the room, so the world is not stepped: wall resolution would move the foes); a splash may kill one between two leaps
   { const s = row({ s_el: 1, s_el_b: 3 }, 3, 100, { setup: (t2) => { t2.f[1].hp = 5000; } }); s.w.rupture(s.f[0], s.p, 0.7, 'x', false); near(lost(s.f[1]), 400 * 1.5, 0.01, 'a leap ruptures 100% of the pool at 150%'); near(s.f[1].bleedPool, 0, 1e-9, 'and empties it'); ok(s.f[2].bleedPool === 400, 'a leap that does not kill goes no further'); }
   { const s = row({ s_el: 1, s_el_b: 3 }, 3, 100, { setup: (t2) => { t2.f[1].x = 200 + 130; t2.f[1].hp = 5000; t2.f[2].x = 300; t2.f[2].hp = 5000; } }); s.w.rupture(s.f[0], s.p, 0.7, 'x', false); ok(s.f[1].bleedPool === 400 && s.f[2].bleedPool === 0 && s.f[2].hp < 5000 && evs(s.w, 'casc').length === 1 && evs(s.w, 'casc')[0].x1 === 300, 'a foe 130 px away is out of reach, one at 100 is the target'); }
   { const s = row({ s_el: 1, s_el_b: 3 }, 3, 100, { setup: (t2) => { t2.f[1].bleedPool = 0; t2.f[1].hp = 5000; t2.f[2].x = 200 + 115; } }); s.w.rupture(s.f[0], s.p, 0.7, 'x', false); ok(s.f[2].hp <= 0 && evs(s.w, 'casc')[0].x1 === 315, 'a foe without a pool is passed over for the nearest one with a pool'); }

@@ -1,15 +1,15 @@
 // Usage: node tools/check-fodder.js
-// Headless checks of the fodder kill-hook contract in combat.js: a fodder death still runs chains and explosions (Reaper, Spore Burst, Wildfire, Short Circuit) but grants no Death Knell or Death's Edge stack and no Grail growth;
-// every kill still counts for the run (run.kills, p.kills, summary.kills), and the lifetime kill stat behind the First Blood, Slayer and Legend deeds counts foes that are not fodder.
-// Prints failures and exits 1 when any check fails.
+// Headless checks of the fodder contract in combat.js: a fodder death fires no on-death effect (World.onDeathFx: no class kill hook, Reaper, Spore Burst, Wildfire, Short Circuit, Death Knell or Death's Edge stack) and no Grail growth,
+// while the same deaths of a foe that is not fodder still pay out; every kill still counts for the run (run.kills, p.kills, summary.kills), and the lifetime kill stat behind the First Blood, Slayer and Legend deeds counts foes that are not fodder;
+// a stratum I fodder foe takes at least 3 attacks of every hero's first weapon at base stats (no crits; 2 for a heavy weapon). Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
 const S = ED.Save;
 let n = 0, fails = 0;
 const ok = (c, msg) => { n++; if (!c) { fails++; console.log('FAIL ' + msg); } };
 const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
 
-function stage(cls, boons, relics) {
-  const w = new ED.World({ seed: 7, pact: 0, players: [{ pid: 'p0', name: 'T', slot: 0, cls, weapon: ED.CLASSES[cls].weapons[0], meta: META() }] });
+function stage(cls, boons, relics, weapon) {
+  const w = new ED.World({ seed: 7, pact: 0, players: [{ pid: 'p0', name: 'T', slot: 0, cls, weapon: weapon || ED.CLASSES[cls].weapons[0], meta: META() }] });
   w.startRun();
   const p = w.players.get('p0');
   for (const id in (boons || {})) p.boons[id] = boons[id];
@@ -21,7 +21,9 @@ function stage(cls, boons, relics) {
 const FODDER = 'bonemite', THREAT = 'skeleton';
 const mk = (w, p, type, dx) => { const e = w.spawnEnemy(type, p.x + (dx || 60), p.y); e.spd = 0; e.cd = 9999; return e; };
 
-// ---- a Reap: Death Knell and Death's Edge stack only from a foe that is not fodder; the Reaper blast is queued for both ----
+ok(ED.World.prototype.onDeathFx.call(null, { fodder: true }) === false && ED.World.prototype.onDeathFx.call(null, { fodder: false }) === true, 'onDeathFx: false for fodder, true otherwise');
+
+// ---- a Reap: a fodder death grants no Death Knell or Death's Edge stack and queues no Reaper implosion; a threat foe's does ----
 for (const type of [FODDER, THREAT]) {
   const { w, p } = stage('shade', { deathknell: 1, deathsedge: 1, reaper: 1 });
   const e = mk(w, p, type); e.hp = 5; e.doom = 10; e.doomOwner = p;
@@ -30,18 +32,33 @@ for (const type of [FODDER, THREAT]) {
   ok(e.killed && w.run.fodderKills === (fod ? 1 : 0), `${type}: the Reap killed it`);
   ok(fod ? p.knellN === 0 && p.knellT === 0 : p.knellN === 1 && p.knellT > 0, `${type}: Death Knell stacks ${p.knellN}`);
   ok(fod ? !(p.critStacks | 0) : p.critStacks > 0, `${type}: Death's Edge crits ${p.critStacks | 0}`);
-  ok(w.chainQ.some(q => q.kind === 'reaper'), `${type}: the Reaper implosion is queued either way`);
+  ok(w.chainQ.some(q => q.kind === 'reaper') === !fod, `${type}: the Reaper implosion is ${fod ? 'not ' : ''}queued`);
 }
 
-// ---- explosions and chains run on a fodder death ----
-{
+// ---- explosions, spreads and chains: none on a fodder death, all on a threat foe's ----
+for (const type of [FODDER, THREAT]) {
   const { w, p } = stage('ranger', { sporeburst: 1, wildfire: 1, shortcircuit: 1 });
-  const e = mk(w, p, FODDER), nb = mk(w, p, THREAT, 40);
+  const e = mk(w, p, type), nb = mk(w, p, THREAT, 40), fod = type === FODDER;
   e.venom = 60; e.venomOwner = p; e.venomBy = 1; e.burnPool = 30; e.burnOwner = p; e.charge = 20; e.chargeOwner = p;
+  w.fx.length = 0; w.killEnemy(e, p, {});
+  ok((nb.venom > 0) === !fod, `${type}: Spore Burst ${fod ? 'stays out' : 'gives the neighbour Venom'}`);
+  ok((nb.burnPool > 0) === !fod, `${type}: Wildfire ${fod ? 'stays out' : 'sets the neighbour alight'}`);
+  ok(w.chainQ.some(q => q.kind === 'sc') === !fod, `${type}: Short Circuit ${fod ? 'queues nothing' : 'queues its discharge'}`);
+  ok(fod ? !w.fx.some(v => v.t === 'boom') : w.fx.some(v => v.t === 'boom'), `${type}: ${fod ? 'no' : 'a'} death burst`);
+}
+
+// ---- class kill hooks never run for fodder: Death Mark (Ranger), Corpse Explosion corpses (Necromancer) ----
+{
+  const { w, p } = stage('ranger', {});
+  p.stats.deathMark = 0.5;
+  const e = mk(w, p, FODDER); e.mark = 5; e.markBy = p.pid; w.projs.length = 0;
   w.killEnemy(e, p, {});
-  ok(nb.venom > 0, 'Spore Burst: a fodder death gives its neighbours Venom');
-  ok(nb.burnPool > 0, 'Wildfire: a burning fodder death sets its neighbours alight');
-  ok(w.chainQ.some(q => q.kind === 'sc'), 'Short Circuit: a charged fodder death queues its discharge');
+  ok(w.projs.length === 0, `a marked fodder death fires no Death Mark arrows (${w.projs.length})`);
+  const t = mk(w, p, THREAT); t.mark = 5; t.markBy = p.pid; w.killEnemy(t, p, {});
+  ok(w.projs.length > 0, `a marked threat death does (${w.projs.length})`);
+  const { w: wn, p: pn } = stage('necro', {}); pn.stats.corpse = 1;
+  wn.killEnemy(mk(wn, pn, FODDER), pn, {}); ok(wn.corpses.length === 0, 'a fodder death leaves no corpse for Corpse Explosion');
+  wn.killEnemy(mk(wn, pn, THREAT), pn, {}); ok(wn.corpses.length === 1, 'a threat death does');
 }
 
 // ---- Grail of Ages grows from kills that are not fodder ----
@@ -69,6 +86,36 @@ for (const type of [FODDER, THREAT]) {
   ok(prof2.stats.kills === 50 && res2.deeds.some(d => d.id === 'firstblood'), `50 non-fodder kills unlock First Blood (${prof2.stats.kills})`);
   const prof3 = S.defaultProfile(); S.applyRun(prof3, { cls: 'knight', kills: 30, stratum: 1 });
   ok(prof3.stats.kills === 30, 'a partial summary without fodderKills counts every kill');
+}
+
+// ---- a fodder touch: one per hero per FODDER_TOUCH_CD, whatever the number of fodder on it ----
+{
+  const { w, p } = stage('knight', {});
+  p.invuln = 0; w.enc = {};
+  const fs = []; for (let i = 0; i < 6; i++) { const f = w.spawnEnemy(FODDER, p.x + 2, p.y); f.cd = 99; fs.push(f); }
+  const hp0 = p.hp; let t = 0;
+  for (; t < 3; t += 1 / 60) { w.time += 1 / 60; p.invuln = 0; for (const f of fs) { f.x = p.x + 2; f.y = p.y; f.recoil = 0; w.updateEnemy(f, 1 / 60); } }
+  const hits = hp0 - p.hp, want = Math.ceil(3 / ED.World.FODDER_TOUCH_CD);
+  ok(hits >= 1 && hits <= want, `6 fodder on a hero for 3 s: ${hits} touch damage (at most ${want})`);
+}
+
+// ---- hits to kill: a stratum I fodder foe takes at least 3 attacks of every hero's first weapon at base stats (no crits), 2 for a heavy weapon ----
+const hitsToKill = (cls, weapon) => {
+  const { w, p } = stage(cls, {}, [], weapon);
+  p.stats.crit = 0; p.critStacks = 0; w.allies.length = 0;
+  const wd = ED.WEAPONS[p.weapon], d = wd.kind === 'melee' ? Math.min(30, (wd.range || 40) * 0.6) : 110;
+  const e = w.spawnEnemy(FODDER, p.x + d, p.y); e.spd = 0; e.cd = 9999; e.spawnT = 0;
+  let k = 0;
+  for (; k < 30 && e.hp > 0; k++) {
+    w.time += 2; w.playerAttack(p, 0);
+    for (let i = 0; i < 90 && e.hp > 0; i++) { w.time += 1 / 60; w.updateProjectiles(1 / 60); w.updateZones(1 / 60); w.updateChains(); e.x = p.x + d; e.y = p.y; }
+  }
+  return { k, hp: e.maxHp, heavy: !!p.stats.heavy };
+};
+for (const cls of ED.CLASS_IDS) {
+  const wpn = ED.CLASSES[cls].weapons[0], r = hitsToKill(cls, wpn);
+  console.log(`hits to kill a stratum I fodder (${r.hp} hp): ${cls} ${wpn} ${r.k}`);
+  ok(r.k >= (r.heavy ? 2 : 3) && r.k < 30, `${cls} ${wpn}: ${r.k} attacks kill a stratum I fodder foe (at least ${r.heavy ? 2 : 3})`);
 }
 
 console.log(`${n} checks, ${fails} failed`);

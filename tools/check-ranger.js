@@ -276,7 +276,7 @@ const RAD = (a) => a * Math.PI / 180;
 const spy = (w) => { const log = [], o = w.hitEnemy; w.hitEnemy = function (e, b, s) { const d = o.call(this, e, b, s); if (s && s.part) log.push({ part: s.part, e, d, t: this.time }); return d; }; return log; };
 const partHits = (log, part) => log.filter(h => h.part === part);
 const arrowsOf = (w, part) => w.projs.filter(q => q.team === 0 && q.part === part);
-{ // Death Mark (r_s1_a rank 3): three waves 0.12 s apart (2 and 3 at 60%), arrows steer toward marked foes, a dying marked foe (fodder too) bursts into 4 piercing arrows at 50%
+{ // Death Mark (r_s1_a rank 3): three waves 0.12 s apart (2 and 3 at 60%), arrows steer toward marked foes, a dying marked foe (never fodder) bursts into 4 piercing arrows at 50%
   const waves = (rank) => {
     const { w, p } = stage({ r_s1: 1, r_s1_a: rank }); const seen = new Set(), got = []; w.playerSkill(p, 0.2, {}, 0); const t0 = w.time;
     for (let i = 0; i < 40; i++) { for (const q of w.projs.filter(r => r.team === 0 && r.part && r.part.indexOf('volley.') === 0)) if (!seen.has(q.id)) { seen.add(q.id); got.push({ t: w.time - t0, dmg: q.dmg, x: q.x }); } w.update(1 / 60); }
@@ -298,11 +298,12 @@ const arrowsOf = (w, part) => w.projs.filter(q => q.team === 0 && q.part === par
   ok(heading(3, false, [330, 120]) < 1e-6 && heading(2, true, [330, 120]) < 1e-6, 'they ignore unmarked foes, and rank 2 does not steer');
   { // the burst
     const bw = (rank, marked) => { const { w, p } = stage({ r_s1: 1, r_s1_a: rank }); const f = foe(w, 250, 212); if (marked !== false) { f.mark = 5; f.markV = 0.12; f.markBy = 'p0'; } return { w, p, f }; };
-    const a = bw(3), N = ED.Stats.skillNums('volley', a.p.stats), evs = tap(a.w); a.f.fodder = true; hit(a.w, a.p, a.f, 1e9, { kind: 'weapon' }); const bursts = arrowsOf(a.w, 'volley.burst'); evs.step();
-    ok(bursts.length === 4, `a marked foe (fodder too) bursts into 4 arrows (${bursts.length})`);
+    const a = bw(3), N = ED.Stats.skillNums('volley', a.p.stats), evs = tap(a.w); hit(a.w, a.p, a.f, 1e9, { kind: 'weapon' }); const bursts = arrowsOf(a.w, 'volley.burst'); evs.step();
+    ok(bursts.length === 4, `a marked foe bursts into 4 arrows (${bursts.length})`);
     ok(bursts.every(q => Math.abs(q.dmg - N.p.arrow.dmg * 0.2) < 1e-9 && q.pierce === 3 && q.hk === 'skill'), 'each at 20% of a Volley arrow, piercing 3');
     const angs = bursts.map(q => Math.atan2(q.vy, q.vx)).sort((x, y) => x - y); near(angs[1] - angs[0], Math.PI / 2, 1e-6, 'a cross, 90 degrees apart'); ok(evs.all.some(v => v.t === 'dmburst'), 'a burst event for the viewer');
     const b = bw(3, false); hit(b.w, b.p, b.f, 1e9, { kind: 'weapon' }); ok(arrowsOf(b.w, 'volley.burst').length === 0, 'an unmarked foe bursts nothing');
+    const fd = bw(3); fd.f.fodder = true; hit(fd.w, fd.p, fd.f, 1e9, { kind: 'weapon' }); ok(arrowsOf(fd.w, 'volley.burst').length === 0, 'a marked fodder foe bursts nothing (fodder deaths fire no on-death effect)');
     const c = bw(2); hit(c.w, c.p, c.f, 1e9, { kind: 'weapon' }); ok(arrowsOf(c.w, 'volley.burst').length === 0, 'rank 2 has no burst');
     // burst arrows hit and do not mark
     const d = bw(3), other = foe(d.w, 350, 312); hit(d.w, d.p, d.f, 1e9, { kind: 'weapon' }); run(d.w, 0.9); ok(other.hp < 5000 && !(other.mark > 0), 'burst arrows hit a foe past the mark leap (r120) and do not mark it');
@@ -457,7 +458,7 @@ const wShots = (w) => w.projs.filter(q => q.team === 0 && q.wpn);
   ok(s.evs.all.filter(v => v.t === 'chain' && v.k === 'g').length === 1, 'one burst event'); near(s.a.bleedPool + s.a.burnPool, 0, 1e-9, 'the corpse gives up both pools');
   ok(s.n1.chill > 0 && s.n2.chill > 0, 'the other statuses (Chill) spread to every foe inside'); ok(s.n1.burnPool === 0 && s.n1.bleedPool === 0, 'Burn and Bleed do not spread as pools'); ok(s.outside.chill === 0, 'nor to a foe outside');
   s = mk(3, a => { a.bleedPool = 0; a.chill = 0; }); hit(s.w, s.p, s.a, 1e9, { kind: 'weapon' }); run(s.w, 0.3); ok(s.n1.hp === 5000, 'a foe with one ailment bursts nothing');
-  s = mk(3); s.a.fodder = true; hit(s.w, s.p, s.a, 1e9, { kind: 'weapon' }); run(s.w, 0.3); near(5000 - s.n1.hp, 850, 1e-6, 'a fodder foe bursts too');
+  s = mk(3); s.a.fodder = true; hit(s.w, s.p, s.a, 1e9, { kind: 'weapon' }); run(s.w, 0.3); ok(s.n1.hp === 5000, 'a fodder foe bursts nothing (fodder deaths fire no on-death effect)');
   s = mk(2); hit(s.w, s.p, s.a, 1e9, { kind: 'weapon' }); run(s.w, 0.3); ok(s.n1.hp === 5000 && s.n1.burnPool > 0, 'at rank 2 the pools spread as pools (Outbreak) and nothing bursts');
   const o2 = stage({ r_el: 1, r_el_b: 3 }, 0, [{ pid: 'p1' }]), b = foe(o2.w, 200, 212), g = foe(o2.w, 240, 212); b.burnPool = 600; b.bleedPool = 400; hit(o2.w, o2.w.players.get('p1'), b, 1e9, { kind: 'weapon' }); run(o2.w, 0.3); ok(g.hp === 5000, 'a kill by a hero without the card bursts nothing');
   const { w, p } = stage({ r_el: 1, r_el_b: 3 }), a = foe(w, 200, 212), c1 = foe(w, 270, 212), c2 = foe(w, 340, 212); a.burnPool = 600; a.burnOwner = p; a.bleedPool = 400; a.bleedOwner = p; // a chain of deaths
