@@ -689,6 +689,7 @@
   };
 
   W.playerLethal = function (p) {
+    if (this.duelSave && this.duelSave(p)) return; // a running Wager Duel never downs a hero (minigames.js); no save is spent
     if (p.rh && p.rh.lethal && this.relicAny(p, 'lethal')) return; // Phoenix Feather, Guardian Angel (relics.js)
     if (p.secondWind > 0 && !this.boss) { p.secondWind--; p.hp = Math.round(p.maxHp * p.swPct); p.invuln = 2.2; this.emit({ t: 'rise', pid: p.pid, k: 'wind', x: p.x, y: p.y }); return; }
     p.hp = 0; p.downed = true; p.bleed = this.partySize() > 1 ? 18 : 0.01; p.revive = 0;

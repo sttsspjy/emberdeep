@@ -163,13 +163,23 @@ for (const id of IDS) {
   use(w, p, prop(w, 'mg_herald'));
   const tEnd = run(w, 61, true, () => g.ph === 4);
   ok(g.ph === 4 && tEnd <= M.GAME_MAX && !w.locked && !w.enemies.some(x => x.hp > 0), 'duel: times out in ' + tEnd.toFixed(1) + ' s; the champion vanishes, doors open');
-  // lost: a hero goes down
-  w = stage('duel', 43, { cls: ['knight', 'cleric'] }); g = g0(w);
+  // lost: a lethal hit leaves the hero at 1 health (solo, holding Phoenix Feather and Guardian Angel: neither is spent) and the run goes on
+  w = stage('duel', 43); g = g0(w); p = hero(w);
+  w.giveRelic(p, 'phoenix'); w.giveRelic(p, 'angel');
+  use(w, p, prop(w, 'mg_herald'));
+  run(w, 3, true, () => g.ph === 2);
+  p.invuln = 0; p.dashT = 0; p.shield = 0;
+  const sw = p.secondWind | 0, hurt = w.hurtPlayer(p, p.maxHp * 50, { hazard: true });
+  run(w, 0.5);
+  ok(hurt && g.ph === 4 && !w.locked && p.hp === 1 && !p.downed && !p.dead && w.state === 'play', 'duel: a lethal hit leaves 1 health and loses the wager; the run goes on (hp ' + p.hp + ', ph ' + g.ph + ', ' + w.state + ')');
+  ok(!p.phoenixUsed && !p.angelUsed && (p.secondWind | 0) === sw, 'duel: no relic or Second Wind save is spent');
+  // co-op: the same for a second hero
+  w = stage('duel', 47, { cls: ['knight', 'cleric'] }); g = g0(w);
   use(w, hero(w), prop(w, 'mg_herald'));
   run(w, 3, true, () => g.ph === 2);
   w.playerLethal(hero(w, 1));
   run(w, 0.2);
-  ok(g.ph === 4 && !w.locked, 'duel: a hero down loses the wager');
+  ok(g.ph === 4 && !w.locked && hero(w, 1).hp === 1 && !hero(w, 1).downed, 'duel: a co-op hero is not downed either, the wager is lost');
   // a hero down before the bet does not count
   w = stage('duel', 44, { cls: ['knight', 'cleric'] }); g = g0(w);
   w.playerLethal(hero(w, 1));

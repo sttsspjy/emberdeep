@@ -254,8 +254,17 @@
   // ================= 3. Wager duel (party stake and prize) =================
   // A herald offers a duel for stake S: the doors lock and a champion (the biome's elite with two rolled affixes, DUEL_HP x health) forms under a reinforcement telegraph. Kill it within dur s of its arrival
   // with no hero going down (heroes already down at the bet do not count) for round(S x mul) gold; otherwise it vanishes (no drops), every foe shot and zone goes with it, the stake is lost. The doors open either way.
+  // Non-lethal: a hit that would down a hero while it runs leaves that hero at 1 health and loses the duel (duelSave).
   const DUEL_HP = 1.25;
   M.DUEL_HP = DUEL_HP;
+  // combat.js playerLethal, before relic and Second Wind saves: true while the duel of this room runs (bet placed); p keeps 1 health and the duel is lost.
+  W.duelSave = function (p) {
+    const g = game(this);
+    if (!g || g.id !== 'duel' || (g.ph !== 1 && g.ph !== 2)) return false;
+    p.hp = 1; p.invuln = Math.max(p.invuln, 1);
+    duelEnd(this, g, false);
+    return true;
+  };
   function duelEnd(w, g, win) {
     g.ph = win ? 3 : 4;
     const h = byId(w, g.herald);
@@ -301,11 +310,11 @@
       if (!(g.foe.hp > 0)) duelEnd(w, g, !fell);
       else if (fell || w.time >= g.end) duelEnd(w, g, false);
     },
-    // The lead hero bets while every living hero holds 75% of max health and the party keeps the stake + 10 gold (the fight itself is the bot's normal play); otherwise the party leaves.
+    // The lead hero bets while every living hero holds 70% of max health and the party keeps the stake + 10 gold (the fight itself is the bot's normal play); otherwise the party leaves.
     bot(w, p) {
       const g = game(w);
       if (g.ph !== 0) return null;
-      if (w.gold < g.stake + 10 || w.alivePlayers().some(q => q.hp < q.maxHp * 0.75)) return null;
+      if (w.gold < g.stake + 10 || w.alivePlayers().some(q => q.hp < q.maxHp * 0.7)) return null;
       if (lead(w) !== p) return { stop: true };
       const h = byId(w, g.herald);
       return { go: { x: h.x, y: h.y + 22 }, use: h.id };
