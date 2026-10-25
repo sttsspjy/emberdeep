@@ -19,6 +19,8 @@
 // --out=file.json writes one row per run (seed, class, depth, win, boss time to kill and HP lost per stratum, evolution stratum, main path, gates); --pair=file.json prints the mean difference to such a baseline for the same seeds.
 // --lambda: the weight of effective health against damage in --pick=smart (tools/pick.js): a number (default 2), or auto[:x0] = x0 times the foe damage lever of each stratum the pick looks ahead to (live tables).
 // --from=N: the bots start at stratum N with the build strata 1..N-1 give (skipStrata plays them without fighting); stats, wins and depth then cover strata >= N (depth counts the skipped bosses as beaten, time counts from stratum N, `entry` holds the hero state at each stratum start).
+// --fight=boss|twins|mimic: one fight per run. The party is walked to stratum --from (default I) as --from does; boss also walks that stratum's rooms and enters its boss room, twins / mimic start that champion fight in one of its combat rooms.
+//   The party starts the fight at full health; the run ends with the fight; the `fight` summary line reports kills, wipes (and the boss phase), time to kill, downs and health lost. --bosstype=<boss id> sets the boss of the --from stratum.
 // meta: none = fresh profile; mid = half the upgrade ranks, mastery 5; max = every rank, mastery 10. Every relic is always in the pool.
 const fs = require('fs');
 const vm = require('vm');
@@ -26,7 +28,7 @@ const path = require('path');
 const ROOT = path.join(__dirname, '..', 'src') + '/';
 const files = ['util.js', 'data/biomes.js', 'data/enemies.js', 'data/classes.js', 'data/boons.js', 'data/classboons.js', 'data/ascended.js', 'data/relics.js', 'data/meta.js', 'save.js',
   'sim/dungeon.js', 'sim/stats.js', 'sim/world.js', 'sim/combat.js', 'sim/build.js', 'sim/skills.js', 'sim/class-knight.js', 'sim/class-ranger.js', 'sim/class-pyro.js', 'sim/class-shade.js', 'sim/class-cleric.js', 'sim/class-necro.js',
-  'sim/ai.js', 'sim/bosses.js', 'sim/rooms.js', 'sim/sheet.js'];
+  'sim/ai.js', 'sim/bosses.js', 'sim/rooms.js', 'sim/arena.js', 'sim/boss-king.js', 'sim/boss-hollow.js', 'sim/champions.js', 'sim/sheet.js'];
 // Main context, not vm.createContext: inside a vm context every global read (Math, Object, ...) goes through the context interceptor and the sim runs ~3x slower.
 for (const f of files) vm.runInThisContext(fs.readFileSync(ROOT + f, 'utf8'), { filename: f });
 const ED = globalThis.ED;
@@ -54,9 +56,10 @@ const NEUTRAL_PREF = ['edge', 'quick', 'keen', 'brutal', 'vigor', 'stalwart', 'p
 // First step toward (tx, ty): the shortest path that stays off floor hazards, else the shortest path (a hero walks around hazards when it can).
 function bfsDir(room, locked, sx, sy, tx, ty) { return bfsStep(room, locked, sx, sy, tx, ty, true) || bfsStep(room, locked, sx, sy, tx, ty, false); }
 // Walking distance to goal tile g (-1: unreachable) over the tiles a hero may enter (safe: hazards excluded); cached per room, lock state and goal (room tiles never change after floor generation).
-const fields = new Map(); let fieldRoom = null;
+const fields = new Map(); let fieldRoom = null, fieldFall = 0;
 function goalField(room, locked, g, safe) {
-  if (room !== fieldRoom) { fields.clear(); fieldRoom = room; }
+  const fall = room.arena ? room.arena.fallen | 0 : 0; // a collapsing arena (boss-hollow.js) turns floor into chasm: its fields are rebuilt per fallen ring
+  if (room !== fieldRoom || fall !== fieldFall) { fields.clear(); fieldRoom = room; fieldFall = fall; }
   const key = g * 4 + (locked ? 2 : 0) + (safe ? 1 : 0);
   let f = fields.get(key);
   if (f) return f;
@@ -184,7 +187,7 @@ function vetThreats(w, p, speed, react) {
       if (k === 'teleLine' ? U.segDist2(p.x, p.y, z.x, z.y, x1, y1) > (z.w / 2 + R) ** 2 : U.dist2(z.x, z.y, p.x, p.y) > (z.r + R) ** 2) continue;
       const s = z.src, laser = !!s && !!s.def && !!s.def.pattern && s.def.pattern.type === 'laser'; // a warn-only line is the caster's aimed shot, dive, charge or beam (4 ticks): weighed by the caster's damage
       get().zn.push({ z, tl: Math.max(0, tl), x1, y1, ext: laser ? 0.4 : 0, wt: z.dmg > 0 ? wt(z.dmg) : s && s.dmg > 0 ? wt(s.dmg * (laser ? 4 : 1)) : 0.35 * low });
-    } else if ((k === 'poison' || k === 'fire' || k === 'mire') && U.dist2(z.x, z.y, p.x, p.y) < (z.r + R) ** 2) get().ar.push({ x: z.x, y: z.y, r: z.r + p.r * 0.5, wt: k === 'mire' ? 0.12 : 0.5 * low });
+    } else if ((k === 'poison' || k === 'fire' || k === 'mire' || k === 'bind') && U.dist2(z.x, z.y, p.x, p.y) < (z.r + R) ** 2) get().ar.push({ x: z.x, y: z.y, r: z.r + p.r * 0.5, wt: k === 'mire' ? 0.12 : k === 'bind' ? 0.35 : 0.5 * low });
     else if (k === 'laser' && z.t < z.dur && U.segDist2(p.x, p.y, z.x, z.y, z.x + Math.cos(z.a) * z.len, z.y + Math.sin(z.a) * z.len) < (z.w / 2 + R) ** 2) get().ln.push({ z, x1: z.x + Math.cos(z.a) * z.len, y1: z.y + Math.sin(z.a) * z.len, left: z.dur - z.t, wt: wt(z.dmg) });
   }
   for (const e of w.enemies) {
@@ -316,6 +319,109 @@ function vetRider(w, p, c, foes, T, speed) {
     bs = n; best = [ux, uy];
   }
   return best;
+}
+
+// ---------------- boss and champion arenas (room.arena, src/sim/arena.js) ----------------
+// The bot reads an arena mechanic after its reaction time plus (1 - skill) x MECH_LAG s and misreads it (ignores it) with chance (1 - skill) x MECH_MISS; per mechanic instance (a beam zone, a tide, a lantern need, a ring).
+// Drowned King: hides behind a pillar from a Tidal Beam (the King's ray to it stops short), stands where the tide will not reach (unsunk dais or beyond the water's reach), keeps out of the whirlpool core.
+// Hollow King: in the dark keeps within a lit lantern's light, walks to the nearest unlit one and hits it when none burns long enough; before a ring falls walks inside the ring that stays.
+// Returns null or { goal: {x, y} (where to stand), light: {x, y} (a lantern to hit) }.
+const MECH_LAG = 0.8, MECH_MISS = 0.4;
+function mechSeen(w, c, key, skill, brng) {
+  const m = c.mech || (c.mech = new Map());
+  let s = m.get(key);
+  if (!s) { if (m.size > 64) m.clear(); m.set(key, s = { t: w.time, ok: brng.next() >= (1 - skill) * MECH_MISS }); }
+  return s.ok && w.time - s.t >= VR + (1 - skill) * MECH_LAG;
+}
+// Pillar blocks of the room (tile 2 clusters inside the walls) as centres and half-diagonals, cached per room.
+const PILLARS = new WeakMap();
+function pillarsOf(room) {
+  let ps = PILLARS.get(room);
+  if (ps) return ps;
+  ps = [];
+  const seen = new Uint8Array(room.w * room.h);
+  for (let y = 2; y < room.h - 1; y++) for (let x = 1; x < room.w - 1; x++) {
+    const i = y * room.w + x;
+    if (seen[i] || room.tiles[i] !== 2) continue;
+    let x0 = x, x1 = x, y0 = y, y1 = y; const q = [i]; seen[i] = 1;
+    while (q.length) { const j = q.pop(), jx = j % room.w, jy = (j / room.w) | 0; x0 = Math.min(x0, jx); x1 = Math.max(x1, jx); y0 = Math.min(y0, jy); y1 = Math.max(y1, jy); for (const k of [j - 1, j + 1, j - room.w, j + room.w]) if (!seen[k] && room.tiles[k] === 2) { seen[k] = 1; q.push(k); } }
+    ps.push({ x: (x0 + x1 + 1) / 2 * T, y: (y0 + y1 + 1) / 2 * T, h: Math.hypot(x1 - x0 + 1, y1 - y0 + 1) / 2 * T });
+  }
+  PILLARS.set(room, ps);
+  return ps;
+}
+const floorAt = (room, x, y) => D.tileAt(room, x, y) === 0;
+// Nearest of the candidate points (Euclidean), or null.
+const nearestPt = (p, pts) => { let b = null, bd = Infinity; for (const q of pts) { const d = U.dist2(q.x, q.y, p.x, p.y); if (d < bd) { bd = d; b = q; } } return b; };
+function arenaBot(w, p, c, skill, brng) {
+  const room = w.room, ar = room && room.arena, boss = w.boss;
+  if (!ar || !boss || boss.hp <= 0) return null;
+  if (ar.k === 'tide') return tideBot(w, p, c, skill, brng, room, ar, boss);
+  if (ar.k === 'crown') return crownBot(w, p, c, skill, brng, room, ar);
+  return null;
+}
+function tideBot(w, p, c, skill, brng, room, ar, boss) {
+  const Tm = ED.Arena.tide, TD = Tm.TIDE;
+  // where the water of the current tide reaches at its full extent
+  const wet = (x, y) => { if (!(ar.st >= 1 && ar.st <= 3)) return false; for (let i = 0; i < 4; i++) if (((ar.m >> i) & 1) && Tm.depth(room, i, x, y) < ar.reach * Tm.span(room, i) + 14) return Tm.daisAt(room, ar, x, y) < 0; return false; };
+  const tideOn = ar.st >= 1 && ar.st <= 3 && mechSeen(w, c, 'tide' + ar.n, skill, brng);
+  const beam = w.zones.find(z => z.tidal && !z.dead && z.t < z.dur);
+  const ox = boss.x, oy = boss.y - 6, hid = (x, y) => ED.Arena.ray(room, ox, oy, Math.atan2(y - oy, x - ox), 2000) < Math.hypot(x - ox, y - oy) - p.r;
+  const cc = D.center(room), coreR = Tm.POOL.core + p.r + 16, inCore = (x, y) => ar.pool && Math.hypot(x - cc.x, y - cc.y) < coreR;
+  const ok = (x, y) => hid(x, y) && !(tideOn && wet(x, y)) && !inCore(x, y);
+  let goal = null;
+  const h = c.hide, seen = beam && mechSeen(w, c, 'beam' + beam.id, skill, brng);
+  if (seen && h && h.id === beam.id && ok(h.x, h.y)) goal = h; // hold the chosen cover while it still hides from the King
+  else if (seen && ok(p.x, p.y)) goal = c.hide = { id: beam.id, x: p.x, y: p.y };
+  else if (seen) {
+    const spots = [];
+    for (const q of pillarsOf(room)) {
+      const d = Math.hypot(q.x - ox, q.y - oy) || 1, ux = (q.x - ox) / d, uy = (q.y - oy) / d, k = q.h + p.r + 12;
+      for (const s of [0, -0.35, 0.35]) {
+        const x = q.x + (ux * Math.cos(s) - uy * Math.sin(s)) * k, y = q.y + (uy * Math.cos(s) + ux * Math.sin(s)) * k;
+        if (floorAt(room, x, y) && hid(x, y) && !inCore(x, y)) spots.push({ x, y, wet: tideOn && wet(x, y) });
+      }
+    }
+    const dry = spots.filter(q => !q.wet);
+    goal = nearestPt(p, dry.length ? dry : spots);
+    if (goal) c.hide = { id: beam.id, x: goal.x, y: goal.y };
+  }
+  if (!goal && tideOn && wet(p.x, p.y)) {
+    if (!c.dry || c.dryT !== ar.n) { // safe spots of this tide: unsunk dais centres and floor beyond the water's reach
+      const pts = (room.dais || []).filter((d, i) => !((ar.sunk >> i) & 1)).map(d => ({ x: (d.x + d.w / 2) * T, y: (d.y + d.h / 2) * T }));
+      for (let ty = 2; ty < room.h - 1; ty += 2) for (let tx = 1; tx < room.w - 1; tx += 2) { const x = (tx + 0.5) * T, y = (ty + 0.5) * T; if (floorAt(room, x, y) && !wet(x, y)) pts.push({ x, y }); }
+      c.dry = pts; c.dryT = ar.n;
+    }
+    goal = nearestPt(p, c.dry);
+  }
+  if (ar.pool) { // out of the whirlpool core
+    const d = Math.hypot(p.x - cc.x, p.y - cc.y);
+    if (d < coreR && mechSeen(w, c, 'pool', skill, brng)) goal = goal || { x: cc.x + (p.x - cc.x) / (d || 1) * (coreR + 20), y: cc.y + (p.y - cc.y) / (d || 1) * (coreR + 20) };
+  }
+  return goal ? { goal } : null;
+}
+function crownBot(w, p, c, skill, brng, room, ar) {
+  const Cm = ED.Arena.crown, DK = Cm.DARK, ls = room.lanterns || [];
+  if (ar.dark && ls.length && mechSeen(w, c, 'dark', skill, brng)) {
+    let best = null, bd = Infinity;
+    for (let i = 0; i < ls.length; i++) if (ar.lit[i] > 2.5) { const d = U.dist2(ls[i].x, ls[i].y, p.x, p.y); if (d < bd) { bd = d; best = ls[i]; } }
+    if (best && bd < (DK.lanR * 0.7) ** 2) return null; // standing in good light: fight on
+    if (best && bd < 360 * 360) return { goal: best };
+    let un = null; bd = Infinity;
+    for (let i = 0; i < ls.length; i++) if (ar.lit[i] >= 0 && ar.lit[i] <= 2.5) { const d = U.dist2(ls[i].x, ls[i].y, p.x, p.y); if (d < bd) { bd = d; un = ls[i]; } }
+    if (un) return { goal: un, light: un };
+    return best ? { goal: best } : null;
+  }
+  if (ar.warn >= 0 && mechSeen(w, c, 'ring' + ar.warn, skill, brng)) {
+    const lim = Cm.CRUMBLE.fall[ar.warn] - 0.07, q = (x, y) => Cm.qOf(room, Math.floor(x / T), Math.floor(y / T));
+    if (q(p.x, p.y) > lim) {
+      const pts = [];
+      for (let ty = 2; ty < room.h - 1; ty++) for (let tx = 1; tx < room.w - 1; tx++) if (room.tiles[ty * room.w + tx] === 0 && Cm.qOf(room, tx, ty) <= lim) pts.push({ x: (tx + 0.5) * T, y: (ty + 0.5) * T });
+      const g = nearestPt(p, pts);
+      if (g) return { goal: g };
+    }
+  }
+  return null;
 }
 
 // Aim noise: Gaussian draws from the bot rng (Box-Muller), sigma = AIM_SIGMA x (1 - bot skill).
@@ -569,7 +675,9 @@ const entryOf = (w, p) => ({ level: w.level, boons: Object.values(p.boons).reduc
 // Each floor is its real Dungeon.generate floor. The rooms are the bot's exploration route (nextRoom with the --dark policy), entered with World.enterRoom;
 // every foe dies the tick it exists, so the room's own wave timers, kill drops (xp, gold, hearts), clear reward and boss reward run as in play. Between rooms the bot claims every prop wantedProp names and picks every offer with its
 // pick policy; the portal starts the next floor. Heroes are untouchable, hero 0 collects every pickup. Returns { t0 (game time at the end), from, keyAt, duoAt, evoAt (hero 0, first stratum), bad (reason the walk stopped early, or null) }.
-function skipStrata(w, from, ctx, policy, brng, darkPolicy) {
+// fight (--fight): 'boss' also walks stratum `from` the same way and enters its boss room; 'twins' / 'mimic' enter a combat room of stratum `from` (marked cleared, so no waves) and start that champion fight there.
+// Both heal the party to full first; out.fight names the fight started.
+function skipStrata(w, from, ctx, policy, brng, darkPolicy, fight) {
   const dt = 1 / 60, heroes = [...w.players.values()], lead = heroes[0], out = { t0: 0, from, keyAt: null, duoAt: null, evoAt: null, bad: null };
   const tick = () => {
     for (const p of heroes) { if (p.offer) takeOffer(w, p, policy, brng, ctx); p.invuln = 1; }
@@ -613,11 +721,33 @@ function skipStrata(w, from, ctx, policy, brng, darkPolicy) {
     for (let i = 0; i < 600 && w.stratum === s && w.state === 'play'; i++) tick();
     if (w.stratum === s) out.bad = `stuck on stratum ${s}`;
   }
+  let bossHop = null;
+  if (fight === 'boss' && w.state === 'play' && !out.bad) {
+    settle();
+    claim();
+    for (let rooms = 0; rooms < 40 && w.state === 'play'; rooms++) {
+      const h = hop();
+      if (!h) break;
+      if (w.floor.rooms[h[0]].type === 'boss') { bossHop = h; break; }
+      w.enterRoom(h[0], h[1]);
+      for (let i = 0; i < 60 * 150 && w.locked && w.state === 'play'; i++) tick();
+      claim();
+    }
+    if (!bossHop) out.bad = `no way to the boss of stratum ${from}`;
+  }
   for (const p of heroes) p.invuln = 0;
   settle();
   w.fx.length = 0; w.msgs.length = 0;
   w.run.kills = 0; w.run.fodderKills = 0; w.run.roomsVisited = 1; w.run.roomsTotal = w.floor.rooms.length; // the run's stats start at stratum N
+  if (fight && !out.bad) for (const p of heroes) { p.hp = p.maxHp; p.downed = false; p.dead = false; }
   out.t0 = w.time;
+  if (bossHop) { w.enterRoom(bossHop[0], bossHop[1]); out.fight = 'boss'; }
+  else if ((fight === 'twins' || fight === 'mimic') && !out.bad) {
+    const room = w.floor.rooms.find(r => r.type === 'combat' && !r.dark) || w.floor.rooms.find(r => r.type === 'elite');
+    const dd = room && Object.keys(room.doors).find(k => room.doors[k] >= 0);
+    if (!room || !dd) out.bad = `no combat room on stratum ${from}`;
+    else { w.roomState[room.id].cleared = true; room.champ = fight; w.enterRoom(room.id, D.OPP[dd]); w.startChampion(room); out.fight = fight; }
+  }
   return out;
 }
 
@@ -636,6 +766,8 @@ function runBot(opts) {
     players.push({ pid: 'p' + i, name: 'Bot' + i, slot: i, cls, weapon: typeof opts.weapon === 'string' && ED.weaponIndex(cls, opts.weapon) >= 0 ? opts.weapon : ED.CLASSES[cls].weapons[opts.weapon || 0], // a weapon index, or a weapon id of the hero (an Armory variant)
       meta: { up: opts.up || ED.UPGRADES.map(() => 0), mastery: opts.mastery || 1 } });
   }
+  const bossS = Math.max(1, Math.min(opts.from | 0, ED.CONST.STRATA)), boss0 = ED.BIOMES[bossS - 1].boss; // --bosstype: the boss of the --from stratum for this run (restored at the end)
+  if (opts.bosstype && ED.ENEMIES[opts.bosstype] && ED.ENEMIES[opts.bosstype].boss) ED.BIOMES[bossS - 1].boss = opts.bosstype;
   const w = new ED.World({ seed: opts.seed, pact: opts.pact || 0, players, tutorial: opts.tutorial });
   ctx.w = w; w.botSmart = policy === 'smart';
   w.startRun();
@@ -668,9 +800,11 @@ function runBot(opts) {
       }
     }
   }
-  const skip = opts.from > 1 ? skipStrata(w, Math.min(opts.from | 0, ED.CONST.STRATA), ctx, policy, brng, opts.dark) : null; // --from: strata 1..N-1 are played before the recorders below are installed
+  const skip = opts.from > 1 || opts.fight ? skipStrata(w, Math.max(1, Math.min(opts.from | 0, ED.CONST.STRATA)), ctx, policy, brng, opts.dark, opts.fight) : null; // --from: strata 1..N-1 are played before the recorders below are installed
   const rec = { dark: [0, 0, 0, 0, 0, 0], left: [], clears: [], bossTimes: [], dmgBy: {}, downedBy: [], dealtStrata: [], heal: {}, dmgByS: {}, spawns: {}, offers: {}, relicsBy: {}, goldIn: 0, roomDmg: 0, dmgStrata: [], hpFrac: [], healSrc: 'other' };
   rec.evoAt = null; // { s: stratum, lvl: team level } when hero 0 takes its evolution
+  rec.dmgByHero = {}; // health lost per hero (pid)
+  const fightRec = skip && skip.fight ? { k: skip.fight, t0: skip.fight === 'boss' ? null : w.time, t: null, kill: false, ph: 0 } : null; // --fight: { kind, start, seconds to the kill, kill, boss phase reached }
   rec.arrive = []; // per stratum (index = stratum - 1): arrivalOf at the first entry of the boss room
   rec.keyAt = null; rec.duoAt = null; // stratum when hero 0 takes its keystone / duo
   rec.cnt = { smite: 0, reap: 0, toll: 0, lance: 0, dashHits: 0, reapHp: 0, kills0: 0, refunds: 0, parries: 0, staggers: 0, rics: 0, gRics: 0, catches: 0, casts: {} };
@@ -712,7 +846,7 @@ function runBot(opts) {
     const r = hurt0.call(this, p, amount, src);
     const e = src && (src.e || (src.pr && src.pr.src));
     const who = e ? e.type : src && src.hazard ? (src.x !== undefined ? 'zone' : 'tile') : 'other';
-    for (let i = n0; i < this.fx.length; i++) if (this.fx[i].t === 'hurt') { rec.dmgBy[who] = (rec.dmgBy[who] || 0) + this.fx[i].v; const bs = rec.dmgByS[this.stratum] || (rec.dmgByS[this.stratum] = {}); bs[who] = (bs[who] || 0) + this.fx[i].v; rec.roomDmg += this.fx[i].v; rec.dmgStrata[this.stratum - 1] = (rec.dmgStrata[this.stratum - 1] || 0) + this.fx[i].v; rec.hpFrac[this.stratum - 1] = (rec.hpFrac[this.stratum - 1] || 0) + this.fx[i].v / p.maxHp; if (src && (src.proj || src.pr)) rec.projDmgS[this.stratum - 1] = (rec.projDmgS[this.stratum - 1] || 0) + this.fx[i].v / p.maxHp; }
+    for (let i = n0; i < this.fx.length; i++) if (this.fx[i].t === 'hurt') { rec.dmgByHero[p.pid] = (rec.dmgByHero[p.pid] || 0) + this.fx[i].v; rec.dmgBy[who] = (rec.dmgBy[who] || 0) + this.fx[i].v; const bs = rec.dmgByS[this.stratum] || (rec.dmgByS[this.stratum] = {}); bs[who] = (bs[who] || 0) + this.fx[i].v; rec.roomDmg += this.fx[i].v; rec.dmgStrata[this.stratum - 1] = (rec.dmgStrata[this.stratum - 1] || 0) + this.fx[i].v; rec.hpFrac[this.stratum - 1] = (rec.hpFrac[this.stratum - 1] || 0) + this.fx[i].v / p.maxHp; if (src && (src.proj || src.pr)) rec.projDmgS[this.stratum - 1] = (rec.projDmgS[this.stratum - 1] || 0) + this.fx[i].v / p.maxHp; }
     if (sh0 > p.shield) { // shield absorbed this hit: attribute it to the sources in the shield's make-up
       const ab = sh0 - p.shield, mix = shMix.get(p.pid);
       let tot = 0; for (const k in mix) tot += mix[k];
@@ -794,6 +928,8 @@ function runBot(opts) {
         if (d > ideal + 10) dir = bfsDir(w.room, w.locked, p.x, p.y, tgt.x, tgt.y);
         else if (d < ideal - 20) dir = [p.x - tgt.x, p.y - tgt.y];
         else dir = [-(tgt.y - p.y), tgt.x - p.x];
+        const ag = arenaBot(w, p, c, skill, brng); // boss arena mechanics: where to stand, a lantern to hit
+        if (ag && ag.goal) { const gd = Math.hypot(ag.goal.x - p.x, ag.goal.y - p.y); dir = gd > 8 ? bfsDir(w.room, w.locked, p.x, p.y, ag.goal.x, ag.goal.y) : [0, 0]; }
         // dodge projectiles
         let danger = false;
         if (!vetD) { // --vet dodge: the look-ahead plan below replaces these
@@ -811,11 +947,13 @@ function runBot(opts) {
         if (vetD && T) { plan = vetPlan(w, p, c, mx, my, spd, T); mx = plan.mx; my = plan.my; danger = plan.risk > 0.02; }
         const a = Math.atan2(tgt.y - p.y, tgt.x - p.x), st = p.stats;
         const inRange = st.melee ? d - tgt.r < st.weapon.range : d < 380;
+        let atkA = a, atkIn = inRange, atkD = d;
+        if (ag && ag.light) { atkD = Math.hypot(ag.light.x - p.x, ag.light.y - p.y); atkA = Math.atan2(ag.light.y - p.y, ag.light.x - p.x); atkIn = st.melee ? atkD < st.weapon.range + 8 : atkD < 320; } // swings and shots go at the lantern
         if (st.channel && (c.holdT = (c.holdT || 0) - dt) <= 0) { c.hold = brng.next() < skill; c.holdT = 0.5; } // Pyroclast: the choice to stand still is renewed every 0.5 s (a roll per tick would break Channel within a few ticks)
         if (st.channel && !danger && inRange && c.hold) { mx = 0; my = 0; } // plant the feet while nothing threatens
-        if (c.atk <= 0 && inRange) {
-          p.atkD = d; // the cursor on the target (a lobbed weapon lands there)
-          w.playerAttack(p, a + gauss(brng) * AIM[0] * (1 - skill));
+        if (c.atk <= 0 && atkIn) {
+          p.atkD = atkD; // the cursor on the target (a lobbed weapon lands there)
+          w.playerAttack(p, atkA + gauss(brng) * AIM[0] * (1 - skill));
           c.atk = Math.max(c.atk, -dt) + ED.Stats.stepInterval(p); // carries the overshoot of this tick, as the client does
         }
         if (vetC) { if (c.chg > 0 && c.vgap <= 0 && !p.skillMove && botCast(w, p, 0, tgt, d, a, foes, brng, skill)) { if (c.chg === st.maxCharges) c.skill = st.skillCd; c.chg--; c.vgap = 0.35; } }
@@ -884,6 +1022,10 @@ function runBot(opts) {
       if (ev.t === 'descend') rec.left.push({ s: w.stratum, missed: w.floor.rooms.filter(r => !w.roomState[r.id].visited && !r.dark).length, dark: w.floor.rooms.filter(r => r.dark).length }); // rooms left unvisited (dark rooms apart) when the party takes the portal
       if (ev.t === 'bossSpawn') { bossStart = w.time; rec.bossTry.push({ s: w.stratum, kill: false, fury: false, m: 1 }); }
       if (ev.t === 'fury') rec.bossTry[rec.bossTry.length - 1].fury = true;
+      if (fightRec) { // --fight: the fight's clock and its end
+        if (ev.t === 'bossSpawn' && fightRec.t0 === null) fightRec.t0 = w.time;
+        if (fightRec.t0 !== null && fightRec.t === null && ((ev.t === 'bossDown' && fightRec.k === 'boss') || (ev.t === 'clear' && fightRec.k !== 'boss'))) { fightRec.kill = true; fightRec.t = w.time - fightRec.t0; }
+      }
       if (ev.t === 'bossDown') { rec.bossTry[rec.bossTry.length - 1].kill = true; rec.bossTimes[w.stratum] = Math.round(w.time - bossStart); log.push(`  boss ${ev.type} down in ${(w.time - bossStart).toFixed(0)}s (t=${U.fmtTime(w.time)}, lvl ${w.level})`); }
       if (ev.t === 'clear' && !ev.trial && w.room && (w.room.type === 'combat' || w.room.type === 'elite')) rec.clears.push({ s: w.stratum, type: w.room.type, dark: !!w.room.dark, t: Math.round(w.roomTime * 10) / 10, d: Math.round(1000 * rec.roomDmg / Math.max(1, w.players.values().next().value.maxHp)) / 1000, n: rec.maxHost,
         th: rec.room.th, fo: rec.room.fo, xp: rec.room.xp, clip: rec.room.clip, bud: ED.World.ROOM_XP ? Math.round(ED.World.ROOM_XP[w.room.type][w.stratum - 1] * (w.room.dark ? w.darkLoot() : 1)) : null });
@@ -897,12 +1039,16 @@ function runBot(opts) {
     if (w.roomTime > 150 && w.locked && !w.boss) { log.push('  STUCK in room ' + w.roomId + ' type ' + w.room.type + ' hostiles ' + w.hostiles()); break; }
     if (w.roomTime > 420 && !w.locked && w.state === 'play') { log.push('  IDLE in room ' + w.roomId + ' type ' + w.room.type); break; }
     if (opts.maxStratum && w.stratum > opts.maxStratum) break; // --strata=N: stop on entering stratum N+1 (strata 1..N play out exactly as in a full run)
+    if (fightRec && fightRec.kill) break; // --fight: the run ends with the fight
+    if (fightRec && w.boss) fightRec.ph = w.boss.phase;
   }
   strata.push(Math.round(w.time - stratumStart));
   rec.dealtStrata.push(Math.round(totalDealt() - dealt0));
+  if (fightRec) Object.assign(fightRec, { downs: rec.downedBy.length, hp: [...w.players.values()].reduce((a, q) => a + (rec.dmgByHero[q.pid] || 0) / q.maxHp, 0) / w.players.size, s: w.stratum, type: fightRec.k === 'boss' ? ED.biomeFor(w.stratum).boss : fightRec.k });
+  ED.BIOMES[bossS - 1].boss = boss0;
   const p0 = [...w.players.values()][0];
   const sum = w.summary ? w.summary() : null;
-  return { dark: rec.dark, left: rec.left, state: w.state, victory: w.victory, stratum: w.stratum, time: w.time - (skip ? skip.t0 : 0), from: skip ? skip.from : 0, entry: rec.entry, level: w.level, kills: w.run.kills, relics: p0.relics.length, log, sum, hp: p0.hp | 0, maxHp: p0.maxHp,
+  return { fight: fightRec, dark: rec.dark, left: rec.left, state: w.state, victory: w.victory, stratum: w.stratum, time: w.time - (skip ? skip.t0 : 0), from: skip ? skip.from : 0, entry: rec.entry, level: w.level, kills: w.run.kills, relics: p0.relics.length, log, sum, hp: p0.hp | 0, maxHp: p0.maxHp,
     rooms: { visited: w.run.roomsVisited, total: w.run.roomsTotal }, strata,
     arrive: rec.arrive, clears: rec.clears, dmgByS: rec.dmgByS, spawns: rec.spawns, heal: rec.heal, offers: rec.offers, relicsBy: rec.relicsBy, goldIn: rec.goldIn, dmgStrata: rec.dmgStrata, bossTimes: rec.bossTimes.slice(), dmgBy: rec.dmgBy, downedBy: rec.downedBy, dealtStrata: rec.dealtStrata,
     evoAt: rec.evoAt, aff: ED.PATH_IDS.map(k => ED.pathAffinity(p0.boons, k)).sort((a, b) => b - a),
@@ -1092,8 +1238,18 @@ const optsFromFlags = (flags) => ({
   weapon: flags.weapon === undefined || isNaN(+flags.weapon) ? flags.weapon : +flags.weapon, explain: !!flags.explain,
   aimNoise: flags.aimnoise === undefined ? undefined : flags.aimnoise.split(',').map(Number).concat([0]).slice(0, 2).map(v => (Number.isFinite(v) ? v : 0)),
   force: flags.force ? flags.force.split(',') : [], dark: flags.dark, maxStratum: flags.strata === undefined ? undefined : +flags.strata, vet: flags.vet, vetReact: flags.vetreact === undefined ? undefined : +flags.vetreact,
-  from: flags.from === undefined ? undefined : +flags.from, lambda: flags.lambda,
+  from: flags.from === undefined ? undefined : +flags.from, lambda: flags.lambda, fight: flags.fight, bosstype: flags.bosstype,
 });
+
+// --fight summary: per fight type the fights, kills, party wipes (and the boss phase they died in), seconds to the kill (mean +-se, median), hero downs per fight and health lost per hero (fraction of max HP).
+function fightLine(results) {
+  const by = {};
+  for (const r of results) if (r.fight) (by[r.fight.type] || (by[r.fight.type] = [])).push(r.fight);
+  return Object.entries(by).map(([type, fs]) => {
+    const kills = fs.filter(f => f.kill), wipes = fs.filter(f => !f.kill), ph = [1, 2, 3].map(k => wipes.filter(f => f.ph === k).length);
+    return `fight ${type} (stratum ${fs[0].s}): ${fs.length} fights, ${kills.length} kills, wipes ${pctOf(wipes.length, fs.length)}% (in phase 1/2/3: ${ph.join('/')}) | time to kill ${ms(kills.map(f => f.t))} s median ${f1(median(kills.map(f => f.t)))} | downs per fight ${f2(avg(fs.map(f => f.downs)))} | hp lost per hero ${f2(avg(fs.map(f => f.hp)))}`;
+  }).join('\n');
+}
 
 // Heroes of run i over the class list cls (n heroes): the lead is cls[i mod L]; partners are the other heroes in list order rotated by floor(i / L) mod (L - 1), so over L x (L - 1) runs every lead meets every partner in each slot.
 // A solo run keeps [lead].concat(cls) (its seeds and rows are unchanged).
@@ -1126,7 +1282,7 @@ function pairReport(rows, base) {
   }).join('\n');
 }
 
-module.exports = { partyOf, runBot, summarize, classLines, metaProfile, rowOf, optsFromFlags, jobOpts, pairReport, ED, parseVet, vetThreats, vetRisk, vetPlan, vetRider, arrivalStats, fmtPow, ROMAN, PICK_SRC };
+module.exports = { fightLine, arenaBot, partyOf, runBot, summarize, classLines, metaProfile, rowOf, optsFromFlags, jobOpts, pairReport, ED, parseVet, vetThreats, vetRisk, vetPlan, vetRider, arrivalStats, fmtPow, ROMAN, PICK_SRC };
 if (require.main === module) {
   const flags = {}, args = [];
   for (const a of process.argv.slice(2)) { const m = /^--([a-z0-9]+)(?:=(.*))?$/i.exec(a); if (m) flags[m[1]] = m[2] === undefined ? '1' : m[2]; else args.push(a); }
@@ -1145,6 +1301,7 @@ if (require.main === module) {
     }
   }
   console.log(`\npick=${pick}${o.vet && o.vet !== '0' ? ' vet=' + o.vet + (o.vetReact >= 0 ? ' react=' + o.vetReact : '') : ''}${o.start ? ' start=' + o.start : ''}${o.gates ? ' gates=' + o.gates : ''}${force.length ? ' force=' + force.join(',') : ''}${flags.strata ? ' strata<=' + flags.strata + ' (capped runs: win, depth and death lines do not apply)' : ''}${o.from > 1 ? ' from=' + o.from : ''}\n` + summarize(results));
+  if (o.fight) console.log(fightLine(results));
   const rows = results.map((r, i) => rowOf(r, meta, seed0 + i * 7));
   if (flags.out) fs.writeFileSync(flags.out, JSON.stringify(rows));
   if (flags.pair) console.log(pairReport(rows, JSON.parse(fs.readFileSync(flags.pair, 'utf8'))));

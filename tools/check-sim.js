@@ -327,7 +327,8 @@ const budgetOf = (s, kind) => Math.round(W0.ROOM_XP[kind === 'elite' ? 'elite' :
 { // fodder data: one per biome, in no roster, appended after every other entry
   const ids = ED.BIOMES.map(b => b.fodder), idx = ids.map(id => ED.ENEMY_IDX[id]);
   ok(ids.length === 6 && new Set(ids).size === 6 && ids.every(id => ED.ENEMIES[id] && ED.ENEMIES[id].fodder && ED.ENEMIES[id].ai === 'swarm' && ED.ENEMIES[id].cost === 0 && ED.ENEMIES[id].xp === 0 && ED.ENEMIES[id].hp === 7 && ED.ENEMIES[id].dmg === 1.5), 'six fodder defs, one per biome, hp 7 dmg 1.5 xp 0');
-  ok(idx.join() === [...Array(6)].map((_, i) => ED.ENEMY_IDS.length - 6 + i).join(), `fodder are the last six wire indices (${idx})`);
+  const tail = ED.ENEMY_IDS.length - ED.ENEMY_IDS.filter(id => ED.ENEMIES[id].champ).length; // champions are appended after the fodder
+  ok(idx.join() === [...Array(6)].map((_, i) => tail - 6 + i).join() && ED.ENEMY_IDS.slice(tail).every(id => ED.ENEMIES[id].champ), `fodder are the six wire indices before the champions (${idx})`);
   ok(ED.BIOMES.every(b => !b.enemies.some(r => ED.ENEMIES[r[0]].fodder)), 'fodder are in no roster');
   ok(ids.every(id => { const d = ED.ENEMIES[id], a = ED.ENEMIES[d.art]; return d.r >= 6 && d.r <= 8 && d.spd >= 62 && d.spd <= 90 && !!a && !a.fodder && !!d.fly === !!a.fly && d.look === a.look; }), 'fodder: radius 6-8, speed 62-90, art names an existing non-fodder type with the same flight and look');
 }
@@ -997,6 +998,91 @@ for (let s = 1; s <= 6; s++) {
     ok(b.phase === 3, `both phase changes ran (phase ${b.phase})`);
     near(b.furyT, 24, 2 * TICK, 'the clock read 24 s after 24 s of phases, a freeze, a stun and a blind');
     ok(ev.length === 0, 'no fury inside the first 24 s');
+  }
+}
+{ // boss arenas (arena.js, boss-king.js, boss-hollow.js) and champion rooms (champions.js)
+  const A = ED.Arena, Dn = ED.Dungeon, T = ED.CONST.TILE;
+  const sOf = (id) => ED.BIOMES.findIndex(b => b.boss === id) + 1;
+  const go = (w, secs, each) => { for (let i = 0, k = Math.round(secs * 60); i < k; i++) { for (const p of w.players.values()) { p.invuln = 1e9; p.hp = p.maxHp; } if (each) each(i); w.update(TICK); } };
+  const bossFight = (id, classes) => { // heroes at the boss room's centre right, the boss spawned and stalled (huge HP, no attacks)
+    const w = hordeWorld(sOf(id), classes), room = w.floor.rooms.find(r => r.type === 'boss');
+    const d = Object.keys(room.doors).find(k => room.doors[k] >= 0);
+    w.enterRoom(room.id, Dn.OPP[d]);
+    for (let i = 0; i < 60 * 12 && !w.boss; i++) w.update(TICK);
+    const b = w.boss; if (b) { b.hp = b.maxHp = 1e9; b.cd = 1e9; b.spd = 0; }
+    return { w, room: w.room, b };
+  };
+  const rt = (room) => { const r2 = { w: room.w, h: room.h, tiles: room.tiles.slice(), dais: room.dais, lanterns: room.lanterns }; A.decode(r2, A.encode(room)); return JSON.stringify(A.encode(r2)) === JSON.stringify(A.encode(room)) && r2.tiles.join() === room.tiles.join(); };
+  { // Drowned King: pillars and dais laid at floor gen, the beam stops at a pillar, the tide floods an edge and keeps the dais dry, phase 2 sinks the middle dais, phase 3 opens the whirlpool
+    const { w, room, b } = bossFight('drownedking', ['knight']), K = A.tide;
+    ok(b && b.type === 'drownedking', 'Drowned King spawns in its arena');
+    ok(room.pattern === 'arena' && room.tiles.filter(t => t === 2).length === 32 && room.dais.length === 6, `tide arena: 32 pillar tiles, 6 dais (${room.tiles.filter(t => t === 2).length}, ${(room.dais || []).length})`);
+    const g = Dn.generate(w.stratum, w.floor.seed), r0 = g.rooms.find(r => r.type === 'boss');
+    ok(r0.pattern === 'arena' && r0.tiles.filter(t => t === 2).length === 32 && r0.dais.length === 6, 'arena layout is floor gen (clients build it too)');
+    const cx = A.cx(room), cy = A.cy(room), px = (cx - 4 + 1) * T, py = (cy - 1 + 1) * T, ox = (cx - 10) * T, oy = py; // pillar [-4,-1,2,2]: a ray from its left hits it
+    ok(A.ray(room, ox + T * 2, oy, 0, 2000) < px - ox, 'Tidal Beam ray stops at a pillar');
+    go(w, K.TIDE.first + K.TIDE.warn + 4);
+    const ar = room.arena;
+    ok(ar && ar.k === 'tide' && ar.n >= 1 && ar.st >= 2 && ar.front > 0, `a tide rises after ${K.TIDE.first + K.TIDE.warn} s (state ${ar && ar.st}, front ${ar && ar.front.toFixed(2)})`);
+    const edge = [0, 1, 2, 3].find(i => (ar.m >> i) & 1), ex = edge === 2 ? (room.w - 1.5) * T : edge === 3 ? 1.5 * T : (cx + 0.5) * T, ey = edge === 0 ? 2.5 * T : edge === 1 ? (room.h - 1.5) * T : (cy + 0.5) * T;
+    ok(K.flooded(room, ar, ex, ey) && A.slow(room, ex, ey) === K.TIDE.slow, 'water at the flooding edge slows heroes');
+    const di = room.dais.findIndex(d => K.depth(room, edge, (d.x + 1) * T, (d.y + 1) * T) < ar.front * K.span(room, edge));
+    ok(di < 0 || !K.flooded(room, ar, (room.dais[di].x + 1) * T, (room.dais[di].y + 1) * T), 'a dais in the water stays dry');
+    ok(rt(room), 'tide arena round-trips through the snapshot row');
+    b.hp = b.maxHp * 0.5; go(w, 0.1);
+    ok(b.phase === 2 && (ar.sunk & 0x30) === 0x30, 'phase 2 sinks the middle dais');
+    b.hp = b.maxHp * 0.2; go(w, 0.1);
+    ok(b.phase === 3 && ar.pool && w.zones.some(z => z.kind === 'pull' && z.str === K.POOL.str) && b.noFodder, 'phase 3: whirlpool pull, no fodder trickle');
+    w.enterRoom(w.floor.start, null); ok(!room.arena, 'leaving the room ends the arena');
+  }
+  { // Hollow King: lanterns, phase 2 darkness (shroud outside light, a hero hit lights a lantern), phase 3 rings fall into the void outside-in and come back on clear
+    const { w, room, b } = bossFight('hollowking', ['knight']), H = A.crown, p = [...w.players.values()][0];
+    ok(b && b.type === 'hollowking' && room.lanterns.length === 6, 'Hollow King spawns among 6 lanterns');
+    const tiles0 = room.tiles.slice();
+    go(w, 0.5); b.hp = b.maxHp * 0.5; go(w, 0.1);
+    const ar = room.arena, L = room.lanterns[0];
+    ok(b.phase === 2 && ar.dark, 'phase 2 puts the light out');
+    p.x = b.x + 300; p.y = b.y; b.x = L.x + 200; go(w, 0.1, () => { p.x = b.x + 300 > (room.w - 2) * T ? b.x - 300 : b.x + 300; });
+    ok(b.dmgTakenMul === H.DARK.shroud, `the King outside every light takes x${H.DARK.shroud} (${b.dmgTakenMul})`);
+    w.smashCircle(p, L.x, L.y, 8);
+    ok(ar.lit[0] === H.DARK.litT, 'a hero hit lights a lantern');
+    ok(rt(room), 'crown arena round-trips through the snapshot row');
+    b.hp = b.maxHp * 0.2; go(w, 0.1);
+    ok(b.phase === 3 && !ar.dark, 'phase 3 brings the light back');
+    const edgeT = room.tiles.findIndex((t, i) => t === 0 && H.qOf(room, i % room.w, (i / room.w) | 0) > H.CRUMBLE.fall[0]);
+    go(w, H.CRUMBLE.at[0] - H.CRUMBLE.warn + 0.2, (i) => { if (i === 0) { p.x = (edgeT % room.w + 0.5) * T; p.y = (((edgeT / room.w) | 0) + 0.5) * T; } });
+    ok(ar.warn === 0, 'the outer ring warns before it falls');
+    go(w, H.CRUMBLE.warn);
+    ok((ar.fallen | 0) === 1 && room.tiles[edgeT] === 3 && Dn.tileAt(room, p.x, p.y) === 0, `the outer ring falls; the hero on it climbs out (${ar.fallen}, tile ${room.tiles[edgeT]})`);
+    ok(rt(room), 'fallen rings round-trip through the snapshot row');
+    A.clear(room); ok(room.tiles.join() === tiles0.join(), 'clearing the arena restores the floor');
+  }
+  const champRoom = (kind, classes) => {
+    const w = hordeWorld(4, classes), room = w.floor.rooms.find(r => r.type === 'combat' && !r.dark);
+    const d = Object.keys(room.doors).find(k => room.doors[k] >= 0);
+    w.roomState[room.id].cleared = true; room.champ = kind; w.enterRoom(room.id, Dn.OPP[d]); w.startChampion(room);
+    go(w, 2.5);
+    return { w, room, enc: w.enc };
+  };
+  { // twins: a fallen twin rises after REVIVE s at REVIVE_HP while the other stands; both down clears the room
+    const C = ED.Champions, { w, enc } = champRoom('twins', ['knight']), L = enc.foes.lance, H = enc.foes.hammer;
+    ok(w.locked && L && H && L.type === 'twinlance' && H.type === 'twinhammer', 'twins land after the lock');
+    ok(L.maxHp > ED.ENEMIES.twinlance.hp * W0.ELITE.hp, 'twin HP x the elite factor');
+    w.killEnemy(L, null, {}); go(w, 0.1);
+    ok(enc.rev && H.rage, 'a fallen twin queues its revive; the other rages');
+    go(w, C.REVIVE + 0.2);
+    const L2 = enc.foes.lance;
+    ok(L2 !== L && L2.hp > 0 && Math.abs(L2.hp - L2.maxHp * C.REVIVE_HP) < 1 && !H.rage, 'the twin rises at half health');
+    w.killEnemy(L2, null, {}); w.killEnemy(H, null, {}); go(w, 0.5);
+    ok(!w.locked && w.roomState[w.roomId].cleared, 'both twins down clears the room');
+  }
+  { // mimic: copies the party's classes; at SPLIT of its health it splits into two copies sharing them
+    const C = ED.Champions, { w, enc } = champRoom('mimic', ['knight', 'ranger']), m = enc.foes.m0;
+    ok(m && m.copies.join() === 'knight,ranger', `the mimic copies the party (${m && m.copies})`);
+    m.hp = m.maxHp * (C.SPLIT - 0.01); go(w, 0.1);
+    const ms = w.enemies.filter(e => e.type === 'mimic' && e.hp > 0);
+    ok(ms.length === 2 && ms.every(e => e.split && e.copies.length === 1) && ms[0].copies[0] !== ms[1].copies[0], 'it splits into two copies, one class each');
+    ok(JSON.stringify(A.encode(w.room)) === JSON.stringify([3].concat(...ms.map(e => [e.id, ED.CLASS_IDS.indexOf(e.cls)]))), 'champion arena row carries each mimic and its class');
   }
 }
 console.log(`${n} checks, ${fails} failed`);

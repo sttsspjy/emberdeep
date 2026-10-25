@@ -147,6 +147,8 @@
     if (hz === 'poison') sp *= 0.85;
     if (foes) sp *= Sim.crowdMul(p, foes);
     if (zones) for (const z of zones) if (z.kind === 'mire' && z.team === 1 && U.dist2(z.x, z.y, p.x, p.y) < z.r * z.r) { sp *= 0.55; break; }
+    if (zones) for (const z of zones) if (z.kind === 'bind' && U.dist2(z.x, z.y, p.x, p.y) < z.r * z.r) { sp *= 0.12; break; } // a champion's bind (champions.js)
+    if (room.arena && ED.Arena) sp *= ED.Arena.slow(room, p.x, p.y); // boss arena floor (flooded water)
     const accel = hz === 'ice' ? 3.2 : 22;
     p.vx = (p.vx || 0) + (mx * sp - (p.vx || 0)) * Math.min(1, accel * dt);
     p.vy = (p.vy || 0) + (my * sp - (p.vy || 0)) * Math.min(1, accel * dt);
@@ -548,6 +550,7 @@
     this.enemies.length = 0; this.projs.length = 0; this.zones.length = 0; this.chainQ.length = 0; this.curChain = null; this.corpses.length = 0;
     if (this.fg) this.fg.ok = false;
     this.boss = null; this.enc = null;
+    if (this.room && ED.Arena) ED.Arena.clear(this.room); // a boss or champion arena ends with its room
     this.roomId = id;
     this.roomEpoch = (this.roomEpoch || 0) + 1;
     const room = this.room = this.floor.rooms[id];

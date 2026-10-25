@@ -114,10 +114,14 @@
       hp: 16500, refHp: 2600, spd: 44, dmg: 2.4, r: 30, xp: 80, boss: true, quote: 'THE KING SAID: HOLD THE HALL. I HOLD.' },
     forgelord: { name: 'The Forgelord', title: 'Last Smith of the Empire', ai: 'boss', look: 'b_forge', col: { a: '#6a4636', b: '#2a1810', c: '#ff8a2a' },
       hp: 26600, refHp: 4200, spd: 70, dmg: 3.3, r: 26, xp: 100, boss: true, quote: 'Steel remembers every hammer-blow. So will you.' },
-    drownedking: { name: 'The Drowned King', title: 'Tyrant Beneath the Tide', ai: 'boss', look: 'b_king', col: { a: '#3f8f88', b: '#173d3b', c: '#e8c66b' },
-      hp: 85700, refHp: 5600, spd: 62, dmg: 4.425, r: 26, xp: 120, boss: true, quote: 'Kneel. The sea has already taken your breath.' },
-    hollowking: { name: 'The Hollow King', title: 'Crown of the Starless Abyss', ai: 'boss', look: 'b_hollow', col: { a: '#2a1f44', b: '#0e0820', c: '#ff7ad9' },
-      hp: 90300, refHp: 7800, spd: 70, dmg: 3.925, r: 24, xp: 160, boss: true, quote: 'You came so far down... only to fill my empty crown.' },
+    // arena: the boss room's fixed layout (boss-king.js, boss-hollow.js; src/sim/arena.js lays it). Offsets in tiles from the room centre (floor(w / 2), floor(h / 2) + 1): pillars and dais [dx, dy, w, h], lanterns [dx, dy].
+    drownedking: { name: 'The Drowned King', title: 'Stand on raised stone when the tide comes. Hide behind pillars from the beam.', ai: 'boss', look: 'b_king', col: { a: '#3f8f88', b: '#173d3b', c: '#e8c66b' },
+      hp: 17000, refHp: 4200, spd: 62, dmg: 3.6, r: 26, xp: 120, boss: true, quote: '',
+      arena: { kind: 'tide', pillars: [[-9, -4, 2, 2], [7, -4, 2, 2], [-9, 3, 2, 2], [7, 3, 2, 2], [-4, -1, 2, 2], [2, -1, 2, 2], [-1, -5, 2, 2], [-1, 2, 2, 2]],
+        dais: [[-13, -7, 3, 3], [10, -7, 3, 3], [-13, 5, 3, 3], [10, 5, 3, 3], [-1, -7, 3, 2], [-1, 5, 3, 3]] } },
+    hollowking: { name: 'The Hollow King', title: 'Light the lanterns in the dark. Leave the floor before it falls.', ai: 'boss', look: 'b_hollow', col: { a: '#2a1f44', b: '#0e0820', c: '#ff7ad9' },
+      hp: 84000, refHp: 7000, spd: 70, dmg: 3.3, r: 24, xp: 160, boss: true, quote: '',
+      arena: { kind: 'crown', lanterns: [[-11, -5], [11, -5], [-11, 4], [11, 4], [-5, 0], [5, 0]] } },
 
     // ---------------- Fodder (one per biome, appended last: the wire index follows the order; never in a roster) ----------------
     // Horde filler: untelegraphed touch damage capped at FODDER_CAP of the victim's max health, no drops of their own (the room's xp budget pays through motes), never elite or exposed.
@@ -128,6 +132,12 @@
     ashimp: { name: 'Ash Imp', ai: 'swarm', look: 'bat', art: 'cinderbat', col: { a: '#4a3a35', b: '#241815', c: '#c98a3a' }, hp: 7, spd: 80, dmg: 1.5, r: 7, xp: 0, cost: 0, fodder: true, fly: true },
     brinepolyp: { name: 'Brine Polyp', ai: 'swarm', look: 'jelly', art: 'jellet', col: { a: '#8f6f88', b: '#5a3a55', c: '#d8c4d4' }, hp: 7, spd: 70, dmg: 1.5, r: 7, xp: 0, cost: 0, fodder: true, fly: true },
     voidmote: { name: 'Void Mote', ai: 'swarm', look: 'star', art: 'starspawn', col: { a: '#6f6585', b: '#352c4d', c: '#b8a8d8' }, hp: 7, spd: 90, dmg: 1.5, r: 6, xp: 0, cost: 0, fodder: true, fly: true },
+
+    // ---------------- Champions (stratum IV champion rooms, champions.js; appended after the fodder: the wire index follows the order; never in a roster) ----------------
+    // HP x the elite factor of the stratum (World.ELITE); no affix, no drops of their own: the room pays an elite room's reward.
+    twinlance: { name: 'Lancer', ai: 'champion', look: 'knight', art: 'voidknight', col: { a: '#d8c27a', b: '#4a3c1c', c: '#ffe08a' }, hp: 230, spd: 64, dmg: 8, r: 15, xp: 0, cost: 0, champ: 'twins' },
+    twinhammer: { name: 'Hammer', ai: 'champion', look: 'knight', art: 'forgeknight', col: { a: '#9a6a44', b: '#2a1810', c: '#ff8a3a' }, hp: 230, spd: 54, dmg: 8.8, r: 17, xp: 0, cost: 0, champ: 'twins' },
+    mimic: { name: 'Mimic', ai: 'champion', look: 'shade', art: 'shade', col: { a: '#2c2440', b: '#100c1c', c: '#e8e0ff' }, hp: 420, spd: 70, dmg: 7, r: 13, xp: 0, cost: 0, champ: 'mimic' },
   };
 
   ED.ENEMY_IDS = Object.keys(E);

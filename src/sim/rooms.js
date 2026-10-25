@@ -214,7 +214,9 @@
         for (const p of this.players.values()) p.hitThisBoss = false;
         this.emit({ t: 'bossSpawn', type });
         enc.packT = ED.World.BOSS_PACK_GAP;
-      } else if (enc.spawned && this.boss) this.updateBossFodder(enc, dt);
+      } else if (enc.spawned && this.boss && !this.boss.noFodder) this.updateBossFodder(enc, dt); // a boss script may hold the trickle (e.noFodder)
+    } else if (enc.kind === 'champ') {
+      this.updateChampion(enc, dt); // champions.js
     } else if (enc.kind === 'trial') {
       const alive = this.hostiles(), pending = pendingSpawns(this);
       if (enc.wave < enc.waves.length - 1 && enc.t <= 0 && !pending && alive === 0) {
@@ -279,6 +281,7 @@
     for (const q of this.projs) if (q.team !== 0) q.dead = true; // flagged, not refiltered: the kill may land inside the projectile/zone loops, which end by reassigning their own keep list
     for (const z of this.zones) if (z.team !== 0) z.dead = true;
     this.boss = null; this.enc = null; this.locked = false;
+    if (ED.Arena) ED.Arena.clear(this.room); // the arena (flood, darkness, collapsed floor) ends with the boss
     this.roomState[this.roomId].cleared = true;
     this.emit({ t: 'bossDown', type: e.type, x: Math.round(e.x), y: Math.round(e.y) });
     this.dropXp(e.x, e.y, e.def.xp * (1 + 0.3 * (s - 1)));

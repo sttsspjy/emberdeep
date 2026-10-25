@@ -35,6 +35,7 @@
       this.roomId = -1;
     }
     if (d.r !== this.roomId) {
+      if (this.room && ED.Arena) ED.Arena.clear(this.room); // the arena of the room left (restores collapsed floor)
       this.roomId = d.r; this.room = this.floor.rooms[d.r]; this.snaps.length = 0; this.firstInRoom = true;
       const tough = this.room.type === 'elite' || this.room.type === 'boss';
       for (const p of this.players.values()) p.toughRoom = tough; // War Drum doubles in these rooms
@@ -43,6 +44,7 @@
     if (d.O) this.props = d.O.map(a => ({ id: a[0], kind: a[1], x: a[2], y: a[3], state: a[4], item: a[5], price: a[6], group: a[7], stype: a[8], text: a[9] }));
     if (d.RS) d.RS.forEach((b, i) => { this.roomState[i] = { visited: !!(b & 1), known: !!(b & 2), cleared: !!(b & 4), broken: d.BR ? d.BR[i] | 0 : 0 }; });
     if (d.RUN) this.run = d.RUN;
+    if (ED.Arena) ED.Arena.decode(this.room, d.AR || null); // boss / champion arena (flood, darkness, lanterns, collapsed floor, mimic classes)
     const P = new Map(), E = new Map(), H = new Map(), K = new Map(), A = new Map();
     for (const a of d.P) P.set(a[0], a);
     for (const a of d.E) E.set(a[0], a);
