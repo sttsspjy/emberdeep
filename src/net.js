@@ -276,8 +276,7 @@
   // ---------------- snapshots ----------------
   const ST = ['move', 'windup', 'lunge', 'aim', 'spin', 'charge', 'fuse', 'cast', 'idle', 'atk', 'dash', 'wind', 'slam', 'air', 'roar', 'fade', 'burrow', 'erupt', 'bash', 'leap', 'dive', 'stuck']; // append only: indices are the wire format
   const ST_IDX = U.indexer(ST);
-  const ZK = ['spawn', 'tele', 'teleLine', 'teleCone', 'laser', 'poison', 'fire', 'pfire', 'plague', 'sanct', 'pull', 'bomb', 'decoy', 'mire', 'rain', 'meteor', 'smoke', 'skyfall', 'shards', 'crack', 'vortex', 'starfall', 'bramble', 'holypool', 'bward', 'cinder', 'firebreak', 'pillar', 'anchor', 'vigil', 'bind', 'icewall']; // append only: indices are the wire format
-
+  const ZK = ['spawn', 'tele', 'teleLine', 'teleCone', 'laser', 'poison', 'fire', 'pfire', 'plague', 'sanct', 'pull', 'bomb', 'decoy', 'mire', 'rain', 'meteor', 'smoke', 'skyfall', 'shards', 'crack', 'vortex', 'starfall', 'bramble', 'holypool', 'bward', 'cinder', 'firebreak', 'pillar', 'anchor', 'vigil', 'bind', 'icewall']; // append only: indices are the wire format
   const ZK_IDX = U.indexer(ZK);
   const PK = ['gold', 'xp', 'heart', 'orb'];
   const PK_IDX = U.indexer(PK);
