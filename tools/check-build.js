@@ -95,7 +95,7 @@ const ranks = (w, pid) => w.msgs.filter(m => m.t === 'forkRank' && m.to === pid)
   ok(!dz('ranger') && !dz('pyro') && !dz('cleric') && !dz('necro'), 'Ranger, Pyromancer, Cleric and Necromancer have no stun, freeze or blind in the base kit');
   ok(dz('ranger', { r_atk: 1, r_atk_h: 1 }) && !dz('ranger', { r_atk: 1, r_atk_s: 1 }), 'a Heavy fork Staggers; a Swift fork does not');
   ok(dz('ranger', { r_s2: 1, r_s2_a: 1 }), 'Skyfall stuns (skill part)');
-  for (const k of ['iceInfuse', 'arcStun', 'waveStun', 'sanctStun', 'cStun', 'chargeStun', 'orbitStun', 'knightStun', 'cometStun', 'parry']) ok(dz('ranger', {}, { [k]: 1 }), `stat ${k} counts`);
+  for (const k of ['iceInfuse', 'arcStun', 'waveStun', 'sanctStun', 'cStun', 'chargeStun', 'wallStun', 'knightStun', 'cometStun', 'parry']) ok(dz('ranger', {}, { [k]: 1 }), `stat ${k} counts`);
   ok(dz('cleric', {}, { verdict: 1 }) && !dz('cleric', {}, { verdict: 0 }), 'Verdict stuns (skill part, needs its stat)');
   ok(dz('cleric', { c_atk: 1, c_atk_h: 1 }) && dz('cleric', {}, { waveStun: 0.4 }) && dz('cleric', {}, { sanctStun: 0.5 }), 'Cleric: Heavy, Wave of light and Sanctuary stuns');
   ok(dz('necro', {}, { knightStun: 0.5 }) && dz('pyro', {}, { cometStun: 0.5 }), 'Necromancer Ironbone and Pyromancer Impact Crater stun');

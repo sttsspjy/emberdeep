@@ -135,7 +135,7 @@
   const coverage = (p, g) => (p.stats.element === g ? 2 : 1);
 
   // Stat keys that stun, freeze or blind foes (Frostbite, Overload and the route stats); the Opportunist gate also reads Heavy Stagger and the hero's skill parts.
-  const DAZE_KEYS = ['iceInfuse', 'arcStun', 'waveStun', 'sanctStun', 'cStun', 'chargeStun', 'orbitStun', 'knightStun', 'cometStun', 'parry'];
+  const DAZE_KEYS = ['iceInfuse', 'arcStun', 'waveStun', 'sanctStun', 'cStun', 'chargeStun', 'wallStun', 'knightStun', 'cometStun', 'parry'];
   // True when the hero can stun, freeze or blind a foe: a Heavy weapon fork, a DAZE_KEYS stat above 0, or a stun / blind part of its two skills (a gated part needs its stat: skyfall, verdict, afterimage).
   W.canDaze = function (p) {
     const st = p.stats, cl = ED.CLASSES[p.cls];
