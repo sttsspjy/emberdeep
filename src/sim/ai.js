@@ -479,7 +479,8 @@
     e.cd = 1;
   };
 
-  // Mire Worm: burrows (untargetable) toward the hero, marks a spot under the hero, erupts there, then stays exposed.
+  // Mire Worm: burrows (untargetable; statuses on it keep ticking) toward the hero, marks a spot under the hero, erupts there, then stays exposed B.expose s.
+  // The eruption fires B.ring shots spread evenly over B.arc rad; the rest of the circle (gap facing a rolled angle) is shot-free. Each shot lane shows as a warning line during the telegraph.
   AI.burrower = (w, e, dt) => {
     const B = e.def.burrow;
     if (e.vars.init === undefined) { e.vars.init = 1; e.st = 'erupt'; e.t = 0.6; }
@@ -499,15 +500,16 @@
     }
     e.vars.dig -= dt;
     if (distT(e) > B.near || e.vars.dig > 0 || blind(e) || !hasLos(w, e)) { toward(w, e, t.x, t.y, sp(e), dt); return; }
-    const mark = { x: t.x, y: t.y };
+    const mark = { x: t.x, y: t.y }, dur = wind(e, B.tele), a0 = w.rng.range(0, TAU) + Math.PI - B.arc / 2, as = [];
+    for (let i = 0; i < B.ring; i++) as.push(a0 + i * B.arc / Math.max(1, B.ring - 1));
     e.vars.spot = mark;
-    w.addZone({ kind: 'tele', x: mark.x, y: mark.y, r: B.radius, dur: wind(e, B.tele), dmg: e.dmg * 1.2, team: 1, src: e, boom: 'slam',
+    for (const a of as) w.addZone({ kind: 'teleLine', x: mark.x, y: mark.y, a, len: B.lane, w: 10, dur, dmg: 0, team: 1, src: e, warnOnly: true });
+    w.addZone({ kind: 'tele', x: mark.x, y: mark.y, r: B.radius, dur, dmg: e.dmg * 1.2, team: 1, src: e, boom: 'slam',
       onEnd: (ww) => {
         if (e.hp <= 0) return;
         e.x = mark.x; e.y = mark.y; Sim.resolve(e, ww.room, ww.locked, e.fly);
         e.burrowed = false; e.st = 'erupt'; e.t = B.expose; e.vars.spot = null; e.contactCd = Math.max(e.contactCd, 1);
-        const off = ww.rng.range(0, 0.4);
-        for (let i = 0; i < B.ring; i++) ww.enemyShoot(e, off + i * TAU / B.ring, 130, 'spore', 0.6, 6);
+        for (const a of as) ww.enemyShoot(e, a, B.speed, 'spore', 0.6, 6);
         ww.emit({ t: 'shoot', x: Math.round(e.x), y: Math.round(e.y), k: 'spore' });
       } });
   };

@@ -22,7 +22,7 @@
   const pendingFoes = (w) => { let n = 0; for (const z of w.zones) if (z.kind === 'spawn' && !z.dead) n += z.n || 1; return n; };
 
   // ---------------- encounters ----------------
-  // A champion room (stratum IV, room.champ 'twins' | 'mimic') runs W.startChampion (champions.js); its xp budget roomXp(room, 'champion') is paid as the clear pile.
+  // A champion room (stratum IV, room.champ 'twins' | 'colossus') runs W.startChampion (champions.js); its xp budget roomXp(room, 'champion') is paid as the clear pile.
   W.beginEncounter = function (room, rs) {
     if (room.type === 'champion') {
       this.startChampion(room);
@@ -41,6 +41,7 @@
     } else {
       rs.cleared = true;
     }
+    if (this.locked) this.relicAll('lock', room); // a fight starts (relics.js)
   };
 
   // WAVES threat waves (+1 at Pact 10), each worth (7 + 2 D) x threat wave x party (D = World.depth at the room's row), the last x1.15. Elite rooms: an elite in the first wave and one in the last.
@@ -74,6 +75,7 @@
       const first = waves[0];
       if (first.length) first[this.rng.int(0, first.length - 1)].elite = true;
       else first.push({ type: biome.elite, elite: true });
+      if (this.relicHeld('warpath')) last.push({ type: biome.elite, elite: true }); // Warpath Totem
       return waves;
     }
     let eliteCh = 0.28 + (this.pact >= 3 ? ED.PACTS[3].eliteCh : 0) + (Ds >= 4 ? 0.1 : 0);
@@ -84,6 +86,7 @@
       else if (wv.length) wv[this.rng.int(0, wv.length - 1)].elite = true;
     }
     if (Ds >= 3 && this.rng.chance(0.2 + (this.pact >= 3 ? ED.PACTS[3].eliteExtra : 0))) last.push({ type: biome.elite, elite: true });
+    if (this.relicHeld('warpath')) last.push({ type: biome.elite, elite: true }); // Warpath Totem
     if (room.dark) last.push({ type: biome.elite, elite: true, affix: this.rng.pick(Wc.DARK_AFFIXES), reinf: 1 });
     else if (own.length) last.push({ type: own.reduce((a, r) => ((ED.ENEMIES[r[0]].cost || 2) > (ED.ENEMIES[a[0]].cost || 2) ? r : a))[0], reinf: 1 });
     return waves;
@@ -228,11 +231,8 @@
         enc.wave++; this.spawnWave(enc.waves[enc.wave]); enc.t = 1.2;
       } else if (enc.wave >= enc.waves.length - 1 && alive === 0 && !pending && enc.t <= 0) {
         this.enc = null; this.locked = false;
-        this.run.embers.elites += 4 + this.stratum;
-        const c = D.center(this.room);
-        this.spawnRelicChoices(c.x, c.y + 10, 'r');
-        this.dropGold(c.x, c.y, 10 + 6 * this.stratum);
         this.emit({ t: 'clear', trial: 1 });
+        ED.Events.fightDone(this, enc); // an event fight: its embers and pay (events.js)
       }
     }
   };
@@ -257,7 +257,7 @@
     const s = this.stratum;
     this.run.roomsCleared++;
     if (room.dark) this.run.darkCleared++;
-    if (room.type === 'champion') this.run.champs = (this.run.champs | 0) | (room.champ === 'mimic' ? 2 : 1); // bit 0 twins, bit 1 mimic (deeds)
+    if (room.type === 'champion') this.run.champs = (this.run.champs | 0) | (room.champ === 'colossus' ? 2 : 1); // bit 0 twins, bit 1 Colossus (deeds)
     if (room.bell) this.bellClear();
     this.run.embers.rooms += 1 + Math.round(s / 2);
     const c = this.alivePlayers()[0] || D.center(room);
@@ -270,13 +270,14 @@
       let item = room.reward;
       const up = room.dark ? ED.World.REWARD_UP[item] : null;
       if (up) { item = up; this.emit({ t: 'upgrade', to: up, x: Math.round(m.x), y: Math.round(m.y) }); }
-      this.props.push({ id: U.uid(), kind: 'reward', x: m.x, y: m.y, item, group: U.uid(), state: 0 });
+      this.props.push({ id: U.uid(), kind: 'reward', x: m.x, y: m.y, item, path: item === 'boon' ? room.rewardPath || null : null, group: U.uid(), state: 0 }); // path: a path boon (host only: claims draw from it)
     }
     this.checkFullClear(room);
+    this.relicAll('clear', room); // a fight is won (relics.js)
     this.computeFlow();
     this.emit({ t: 'clear' });
     this.floorFights = (this.floorFights || 0) + 1;
-    if (this.floor.platino === this.floorFights) this.spawnPlatino();
+    if (this.floor.platino === this.floorFights && !this.run.platino) this.spawnPlatino(); // run.platino: once per run
   };
 
   // p, src: the killing hero and the hit's source (killEnemy). Secrets: One Face (a party of four of one hero downs a stratum boss); at the Hollow King, Thread of Life (a standing hero below THREAD_HP of max health),
@@ -307,15 +308,30 @@
     this.dropGold(e.x, e.y, 15 + 6 * s);
     this.spawnPickup('heart', e.x, e.y, 1); this.spawnPickup('heart', e.x, e.y, 1);
     for (const q of this.players.values()) q.mantleAmt = 0;
-    if (s === 1) for (const q of this.players.values()) this.grantOffer(q, { src: 'class' }); // the fork offer at the first boss (downed heroes get it when they are back up)
-    else if (s === 2 || s === 3) for (const q of this.players.values()) this.grantForkRank(q); // fork rank 2 and 3, downed and dead heroes too
+    this.relicAll('clear', this.room);
     if (s >= ED.CONST.STRATA) {
       this.run.embers.victory = 60;
       this.endRun(true);
       return;
     }
+    this.bossBeat = { t: ED.World.BOSS_BEAT, s }; // the rewards land after a beat, so a reflex never picks a card unread
+  };
+
+  // Seconds between the death of a boss of strata I-III and its rewards (boss IV ends the run at once). The beat is host world state: this.bossBeat { t, s }.
+  ED.World.BOSS_BEAT = 2;
+  W.updateBossBeat = function (dt) {
+    const b = this.bossBeat;
+    if ((b.t -= dt) > 0) return;
+    this.bossBeat = null;
+    this.bossRewards(b.s);
+  };
+  // Rewards of the boss of stratum s: I the class offer (the fork) and a boss relic pick, II a fork rank and a boss relic pick, III a fork rank and an epic offer; then the portal.
+  // Offers and ranks reach downed and dead heroes too (an offer opens once its hero stands).
+  W.bossRewards = function (s) {
     const c = D.center(this.room);
-    if (s === 2) this.spawnRelicChoices(c.x, c.y + 40, 'r'); // boss II: relic hoard; boss III: epic offer; boss I: the class offer only
+    if (s === 1) for (const q of this.players.values()) this.grantOffer(q, { src: 'class' });
+    else if (s === 2 || s === 3) for (const q of this.players.values()) this.grantForkRank(q);
+    if (s === 1 || s === 2) { this.spawnRelicPicks(c.x, c.y + 40, 'boss'); this.emit({ t: 'bossrelic', x: Math.round(c.x), y: Math.round(c.y + 40) }); }
     else if (s === 3) for (const p of this.players.values()) this.grantOffer(p, { src: 'epic' });
     this.props.push({ id: U.uid(), kind: 'portal', x: c.x, y: c.y - 60, state: 0 });
   };
@@ -356,51 +372,51 @@
       props.push({ id: id(), kind: 'merchant', x: c.x, y: c.y - 70, state: 0 });
       const items = [];
       const taken = new Set();
-      for (let i = 0; i < 2; i++) { const r = this.rollRelic('c', taken); taken.add(r); items.push({ type: 'relic', item: r }); }
+      const rars = ['c', 'r', 'e'].concat(this.relicHeld('ledger') ? ['c'] : []); // a relic of each rarity, one more of any rarity with the Ledger
+      for (const rar of rars) { const r = this.rollRelic(rar, taken); taken.add(r); items.push({ type: 'relic', item: r }); }
       items.push({ type: 'boon' }, { type: 'forge' }, { type: 'potion' }); // build items: an epic boon and a forge
       items.forEach((it, i) => {
         props.push({ id: id(), kind: 'shop', x: c.x + (i - (items.length - 1) / 2) * 62, y: c.y + 24, item: it.item || it.type, stype: it.type, price: this.priceOf(it), state: 0 });
       });
-    } else if (room.type === 'event') {
-      const ev = room.event;
-      const prop = { id: id(), kind: ev, x: c.x, y: c.y, state: 0 };
-      if (ev === 'gamble') prop.price = Math.round(35 + 18 * s);
-      props.push(prop);
-    }
+    } // an event room's props come from its event (events.js startEvent)
     return props;
   };
 
-  // A forge is 60 + 15s; everything else scales 12% per stratum. Favor (-4% per rank), the discount stat and the Pact 7 markup (x1.4) apply to all; rounded to 5, minimum 5.
+  // A forge is 60 + 15s; everything else scales 12% per stratum. Favor (-4% per rank), the discount stat, the markup stat (the highest in the party) and the Pact 7 markup (x1.4) apply to all; rounded to 5, minimum 5.
   W.priceOf = function (it) {
     const s = this.stratum;
     let base;
     if (it.type === 'forge') base = 60 + 15 * s;
-    else base = (it.type === 'relic' ? ED.RELIC_PRICE[ED.RELICS[it.item].rar] : it.type === 'boon' ? 75 : 30) * (1 + 0.12 * (s - 1));
-    let favor = 0, discount = 0;
+    else base = (it.type === 'relic' ? ED.RELIC_PRICE[ED.RELICS[it.item].rar] : it.type === 'boon' ? 65 : 30) * (1 + 0.12 * (s - 1));
+    let favor = 0, discount = 0, markup = 0;
     for (const p of this.players.values()) {
       favor = Math.max(favor, (p.meta.up && p.meta.up[ED.UPGRADE_IDX.favor]) || 0);
       discount = Math.max(discount, p.stats.discount || 0);
+      markup = Math.max(markup, p.stats.markup || 0);
     }
-    base *= (1 - ED.UPGRADES[ED.UPGRADE_IDX.favor].discount * favor) * (1 - discount) * (this.pact >= 7 ? 1.4 : 1);
+    base *= (1 - ED.UPGRADES[ED.UPGRADE_IDX.favor].discount * favor) * (1 - discount) * (1 + markup) * (this.pact >= 7 ? 1.4 : 1);
     return Math.max(5, Math.round(base / 5) * 5);
   };
 
   const PER_HERO_REWARDS = new Set(['boon', 'forge', 'epic', 'vigor']);
+  const CHEST_RELIC = 0.4; // share of treasure chests that hold a relic hoard
   const allClaimed = (w, group) => [...w.players.values()].every(q => q.dead || q.claimed[group]);
 
   W.interact = function (pid, propId) {
     const p = this.players.get(pid);
     const pr = this.props.find(x => x.id === propId);
     if (!p || !pr || p.downed || p.dead || pr.state) return;
+    if (pr.owner && pr.owner !== pid) return; // a per-hero prop (owner: pid) answers only its owner
     if (Math.hypot(p.x - pr.x, p.y - pr.y) > 56) return;
     if (this.locked && pr.kind !== 'trial') return;
+    if (pr.ev) { this.evInteract(p, pr); return; } // an event prop (events.js)
     const s = this.stratum;
     switch (pr.kind) {
-      case 'chest': {
+      case 'chest': { // CHEST_RELIC of the chests hold a relic hoard, the rest a bigger gold pile and a heart
         pr.state = 1;
         this.emit({ t: 'chest', x: pr.x, y: pr.y });
-        this.spawnRelicChoices(pr.x, pr.y + 46, 'c');
-        this.dropGold(pr.x, pr.y, 5 + 3 * s);
+        if (this.rng.chance(CHEST_RELIC)) { this.spawnRelicChoices(pr.x, pr.y + 46, 'c'); this.dropGold(pr.x, pr.y, 5 + 3 * s); }
+        else { this.dropGold(pr.x, pr.y, 20 + 8 * s); this.spawnPickup('heart', pr.x, pr.y, 1); }
         break;
       }
       case 'reward': {
@@ -409,7 +425,7 @@
           // every hero claims once; the prop stays until all have
           if (p.claimed[pr.group]) { this.msgs.push({ to: pid, t: 'toast', text: 'You already claimed this reward.' }); return; }
           p.claimed[pr.group] = true;
-          if (item === 'boon') this.grantOffer(p, { src: 'room' });
+          if (item === 'boon') this.grantOffer(p, { src: 'room', path: pr.path || null });
           else if (item === 'vigor') { p.bonusHp += 2; this.recalc(p, false); this.healPlayer(p, p.maxHp * 0.2); this.sendBuild(p); }
           else this.grantOffer(p, { src: item }); // forge, epic
           this.msgs.push({ to: pid, t: 'claimed', group: pr.group });
@@ -417,7 +433,7 @@
         } else {
           pr.state = 1;
           if (item === 'gold') this.dropGold(pr.x, pr.y + 18, ED.World.rewardGold(s), true);
-          else if (item === 'relic') this.spawnRelicChoices(pr.x, pr.y + 46, 'r');
+          else if (item === 'relic') this.spawnRelicPicks(pr.x, pr.y + 46, this.room.type === 'champion' ? 'r' : 'c'); // a pick of 3 per hero
         }
         this.emit({ t: 'claim', pid, item, x: pr.x, y: pr.y });
         break;
@@ -426,6 +442,7 @@
       case 'anvil': {
         // one use per hero across both props of the rest site
         if (p.claimed[pr.group]) { this.msgs.push({ to: pid, t: 'toast', text: 'You already used this rest site.' }); return; }
+        if (pr.kind === 'campfire' && p.stats.noRest) { this.msgs.push({ to: pid, t: 'toast', text: 'Crown of Choice: campfires cannot heal you.' }); return; }
         p.claimed[pr.group] = true;
         if (pr.kind === 'campfire') this.healPlayer(p, p.maxHp * 0.35);
         else this.grantOffer(p, { src: 'forge' });
@@ -435,14 +452,18 @@
         break;
       }
       case 'relic': {
+        if (pr.owner && pr.owner !== pid) return; // a hero's own pick (CB-5): only its owner may take it
         if (p.claimed[pr.group]) { this.msgs.push({ to: pid, t: 'toast', text: 'You already took a relic from this hoard.' }); return; }
         p.claimed[pr.group] = true;
         pr.state = 1;
         this.giveRelic(p, pr.item);
         this.msgs.push({ to: pid, t: 'claimed', group: pr.group });
+        if (pr.owner) { for (const o of this.props) if (o.group === pr.group && !o.state) o.state = 1; this.emit({ t: 'crumble', pid, x: Math.round(pr.x), y: Math.round(pr.y) }); } // the hero's other picks crumble at once (the client draws the puff; the crumble sound plays for pid)
         // once every hero has chosen, the rest of the hoard crumbles
-        if ([...this.players.values()].every(q => q.claimed[pr.group])) {
-          for (const o of this.props) if (o.kind === 'relic' && o.group === pr.group && !o.state) { o.state = 1; this.emit({ t: 'puff', x: o.x, y: o.y - 20, c: ED.RARITY[ED.RELICS[o.item].rar].color }); }
+        else if ([...this.players.values()].every(q => q.claimed[pr.group])) {
+          let n = 0;
+          for (const o of this.props) if (o.kind === 'relic' && o.group === pr.group && !o.state) { o.state = 1; n++; this.emit({ t: 'puff', x: o.x, y: o.y - 20, c: ED.RARITY[ED.RELICS[o.item].rar].color }); }
+          if (n) this.emit({ t: 'crumble', x: Math.round(pr.x), y: Math.round(pr.y) });
         }
         break;
       }
@@ -454,47 +475,13 @@
         else if (pr.stype === 'potion') this.healPlayer(p, p.maxHp * 0.4);
         else if (pr.stype === 'boon') this.grantOffer(p, { src: 'epic' });
         else if (pr.stype === 'forge') this.grantOffer(p, { src: 'forge' });
-        break;
-      }
-      case 'fountain': {
-        pr.state = 1;
-        for (const q of this.players.values()) { if (q.downed) { q.downed = false; q.hp = 1; } this.healPlayer(q, q.maxHp * 0.5); }
-        this.emit({ t: 'fountain', x: pr.x, y: pr.y });
-        break;
-      }
-      case 'altar': {
-        pr.state = 1;
-        const cost = Math.round(p.maxHp * 0.2);
-        p.hp = Math.max(1, p.hp - cost);
-        this.grantOffer(p, { src: 'epic' });
-        this.emit({ t: 'altar', pid, x: pr.x, y: pr.y, v: cost });
-        break;
-      }
-      case 'gamble': {
-        if (this.gold < pr.price) { this.msgs.push({ to: pid, t: 'toast', text: 'Not enough gold.' }); return; }
-        this.gold -= pr.price; pr.state = 1;
-        const roll = this.rng.next();
-        const rar = roll < 0.12 ? 'e' : roll < 0.5 ? 'r' : 'c';
-        this.giveRelic(p, this.rollRelic(rar));
-        this.emit({ t: 'gamble', x: pr.x, y: pr.y });
-        break;
-      }
-      case 'trial': {
-        pr.state = 1;
-        this.locked = true;
-        const biome = ED.biomeFor(s), roster = rosterOf(biome);
-        const n = this.partySize();
-        const w1 = [{ type: biome.elite, elite: true }], w2 = [{ type: biome.elite, elite: true }];
-        for (let i = 0; i < 2 + n; i++) w1.push({ type: roster[i % roster.length][0] });
-        for (let i = 0; i < 3 + n; i++) w2.push({ type: roster[(i + 1) % roster.length][0], elite: i === 0 });
-        this.enc = { kind: 'trial', waves: [w1, w2], wave: -1, t: 0.6 };
-        this.emit({ t: 'lock' });
+        if (p.rh && p.rh.shop) this.relicFire(p, 'shop', pr);
         break;
       }
       case 'portal': {
         pr.state = 1;
         this.collectAll();
-        this.pendingStratum = { s: s + 1, t: 1.4 };
+        this.pendingStratum = { s: s + 1, t: 0.3 }; // covers the client's 0.2 s fade to black (fx.js transStep)
         this.emit({ t: 'descend', s: s + 1 });
         break;
       }
@@ -523,9 +510,11 @@
   // ---------------- the Platino (floor.platino: the fight clear on the floor that lets it out) ----------------
   // Out on a floor spot (PLATINO.avoid from every hero) at the floor.platino-th fight clear of its floor: wanders at wander px/s, flees heroes within flee at speed px/s (steering at turn rad/s, probing probe px ahead for open floor), gone after life s with a puff.
   // A hero touching it (within touch of the body) catches it: { t: 'platino', pid, x, y } and p.sec.platino. Own RNG stream; never in this.enemies (no hits, no aim, no bot target), drops nothing.
+  // It comes out at most once per run (run.platino, set at its spawn): a later floor's cue is skipped, caught or not.
   const PLATINO = { speed: 130, wander: 60, flee: 190, turn: 7, probe: 24, life: 12, r: 7, touch: 6, avoid: 140 };
   ED.World.PLATINO = PLATINO;
   W.spawnPlatino = function () {
+    this.run.platino = true;
     const rng = U.RNG(((this.floorSeed ^ 0x51a7c0de) >>> 0) + this.roomId * 977);
     const pt = D.randomFloor(this.room, rng, this.alivePlayers(), PLATINO.avoid);
     this.critter = { x: pt.x, y: pt.y, r: PLATINO.r, a: rng.range(0, U.TAU), wa: 0, wt: 0, t: PLATINO.life, face: 1, rng };
@@ -571,6 +560,7 @@
   W.smashCircle = function (p, x, y, r) {
     if (this.room.arena) this.wallCircle(p, x, y, r + 4); // boss walls (arena.js)
     const bl = this.room.bell; if (bl && p && !p.bellS && U.dist2(bl.x, bl.y, x, y) <= (BELL_R + r) * (BELL_R + r)) this.ringBell(p);
+    if (this.mgTargets) this.mgCircle(p, x, y, r); // minigame targets (minigames.js)
     const bs = this.room.breakables; if (!bs.length) return;
     const rs = this.roomState[this.roomId], rr = (SMASH_R + r) * (SMASH_R + r);
     for (let i = 0; i < bs.length; i++) {
@@ -582,6 +572,7 @@
   W.smashSeg = function (p, x0, y0, x1, y1, r, noRing) {
     if (this.room.arena) this.wallSeg(p, x0, y0, x1, y1, r + 4);
     const bl = this.room.bell; if (bl && p && !p.bellS && !noRing && U.segDist2(bl.x, bl.y, x0, y0, x1, y1) <= (BELL_R + r) * (BELL_R + r)) this.ringBell(p);
+    if (this.mgTargets && !noRing) this.mgSeg(p, x0, y0, x1, y1, r);
     const bs = this.room.breakables; if (!bs.length) return;
     const rs = this.roomState[this.roomId], rr = (SMASH_R + r) * (SMASH_R + r);
     for (let i = 0; i < bs.length; i++) {
@@ -593,6 +584,7 @@
     if (this.room.arena) this.wallArc(p, a, reach, arc);
     const bl = this.room.bell;
     if (bl && p && !p.bellS) { const d = Math.hypot(bl.x - p.x, bl.y - p.y); if (d - BELL_R <= reach && (arc >= 6.2 || Math.abs(U.angDiff(a, Math.atan2(bl.y - p.y, bl.x - p.x))) <= arc / 2 + Math.atan2(BELL_R, Math.max(d, 1)))) this.ringBell(p); }
+    if (this.mgTargets) this.mgArc(p, a, reach, arc);
     const bs = this.room.breakables; if (!bs.length) return;
     const rs = this.roomState[this.roomId];
     for (let i = 0; i < bs.length; i++) {

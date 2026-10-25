@@ -247,9 +247,8 @@
     return w ? (ep ? ep.evo + ' ' : '') + w.name : ED.CLASSES[p.cls].name;
   };
 
-  // Hero status chips as a flat [label, colour, ...] list shared by the redraw signature and the drawing: item states, Brace, Momentum, Kindling Sparks, Hexed foes, the next Cleave.
+  // Hero status chips as a flat [label, colour, ...] list shared by the redraw signature and the drawing: item states, Brace, Momentum, Kindling Sparks, Hexed foes (an empowered next attack shows on the hero and the cursor: render.js, aim.js).
   const CHIPS = [];
-  const cleaveNext = (me, st, view) => st.cleave > 0 && st.weapon.kind === 'melee' && ((view.time || 0) < (me.cleaveNext || 0) || ((me.atkCount | 0) + 1) % (3 + st.cleaveN) === 0);
   function chipList(view, me) {
     const st = me.stats, o = CHIPS; o.length = 0;
     if (!st) return o;
@@ -262,7 +261,6 @@
       const t = view.time || 0, wait = (me.braceAt || -99) + ED.CONST.BRACE_CD - t;
       if ((me.braceT || 0) > 0) o.push('Braced ' + me.braceT.toFixed(1) + ' s', '#ffd36b'); else if (wait > 0) o.push('Brace ' + Math.ceil(wait) + ' s', '#8f7f6c');
     }
-    if (st.cleave > 0 && cleaveNext(me, st, view)) o.push('Cleave next', '#ffd36b');
     if ((me.momN | 0) > 0) o.push('Momentum ×' + me.momN, '#b78cff');
     if (st.spark > 0 && (me.sparks | 0) > 0) o.push('Sparks ' + (me.sparks | 0) + '/' + st.sparkMax, '#ff9a3a'); // Kindling: Sparks the next spell spends
     if (st.hex > 0) { let n = 0; for (const e of view.enemies) if (e.hexed || e.hexT > 0) n++; if (n) o.push('Hexed ' + n, '#7dffd9'); }
@@ -272,7 +270,7 @@
     return o;
   }
   H.cues = { chips: (view, me) => chipList(view, me).slice() }; // headless checks
-  const shieldOut = (p) => !!(p.shieldOut || (p.shields && p.shields.length));
+  const bwPips = (p) => (p.bulwarkOn ? 1 + (p.blocks | 0) : 0); // a raised Bulwark and the attacks it has stored (redraw signature)
   // Route sigil: the icon of the hero's route card in the class colour (nothing before the level-3 pick); returns its id for the redraw signature.
   const routeIcon = (p) => { const rt = p.boons ? ED.classRoute(p.boons, p.cls) : null; return rt && rt.t1 ? ED.BOONS[rt.t1].icon : ''; };
   // Ailment pips of a foe (the host's count, 1 to 4) for a hero who owns Brand, Open Veins, Contagion or Gangrene: small squares under the foe's bar at (x, y), drawn into the world context c.
@@ -407,7 +405,7 @@
     const scd = ctl.skillCd > 0 && ctl.charges <= 0 ? ctl.skillCd : 0;
     sp(sid(I.label('skill1'))); spCd(scd, st ? st.skillCd : 1); sp(ctl.charges | 0); sp(st ? st.maxCharges | 0 : 1); sp(st ? Math.round(st.skillCd * 100) : 0);
     const s2 = cls.skill2 && ED.SKILLS[cls.skill2], cd2 = ctl.skill2Cd > 0 ? ctl.skill2Cd : 0;
-    if (s2) { sp(sid(I.label('skill2'))); spCd(cd2, Math.max(0.1, (st && st.skill2Cd) || s2.cd)); sp(shieldOut(me) ? 1 : 0); sp(Math.round(((st && st.skill2Cd) || s2.cd) * 100)); }
+    if (s2) { sp(sid(I.label('skill2'))); spCd(cd2, Math.max(0.1, (st && st.skill2Cd) || s2.cd)); sp(bwPips(me)); sp(Math.round(((st && st.skill2Cd) || s2.cd) * 100)); }
     const s3 = cls.skill3 && ED.SKILLS[cls.skill3], cd3 = ctl.skill3Cd > 0 && ctl.charges3 <= 0 ? ctl.skill3Cd : 0;
     if (s3) { sp(sid(I.label('skill3'))); spCd(cd3, Math.max(0.1, (st && st.skill3Cd) || s3.cd)); sp(ctl.charges3 | 0); sp(st ? st.skill3Charges | 0 : 1); sp(Math.round(((st && st.skill3Cd) || s3.cd) * 100)); }
     const dmx = st ? st.dashCharges | 0 : 1, dsw = ctl.dashN < dmx && ctl.dashT > 0 ? ctl.dashT : 0; // dash recharge wedge: seconds to the next charge
@@ -534,8 +532,9 @@
     slot(i++, I.label('skill1'), scd, st ? st.skillCd : sk.cd, ctl.charges > 0, sk.icon, cls.col.c, ctl.charges, mx);
     const s2 = cls.skill2 && ED.SKILLS[cls.skill2];
     if (s2) {
-      const tot = Math.max(0.1, (st && st.skill2Cd) || s2.cd), up = shieldOut(me), cd2 = ctl.skill2Cd > 0 ? ctl.skill2Cd : 0; // a thrown shield lights the slot until it is caught
-      slot(i++, I.label('skill2'), cd2, tot, cd2 <= 0 && !up, s2.icon, up ? '#ffe9a0' : cls.col.c, 0, 1);
+      const tot = Math.max(0.1, (st && st.skill2Cd) || s2.cd), up = !!me.bulwarkOn, cd2 = ctl.skill2Cd > 0 ? ctl.skill2Cd : 0; // a raised Bulwark lights the slot gold, one pip per attack it has stored
+      const bm = up && st ? ED.Stats.skillNums(cls.skill2, st).blockMax || 1 : 1;
+      slot(i++, I.label('skill2'), cd2, tot, cd2 <= 0 || up, s2.icon, up ? '#ffe9a0' : cls.col.c, up ? me.blocks | 0 : 0, bm);
     }
     const s3 = cls.skill3 && ED.SKILLS[cls.skill3];
     if (s3) { // skill 3 (only a hero that has one): charges like skill 1, the wedge is the next charge while none is left

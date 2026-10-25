@@ -8,18 +8,17 @@
 //   toll(p, boss, dmg) after a Doom Toll landed (combat.js checkToll; a Reap arrives through kill with src.kind 'reap'); smote(boss, o) after o Smote a boss (combat.js smite; the Smiter's table)
 //   hurtMul(p, src) -> factor on the damage p takes, inside the DR_FLOOR clamp with Brace and Sanctuary (combat.js hurtPlayer, p's class)
 //   weaponAttack(p, a) replaces the weapon attack of a weapon combat.js does not swing (kind 'bell': class-bell.js winds the bell); down(p) every tick while p is downed or dead (world.js updatePlayer)
+//   block(p, src) -> true when p's held skill stops the foe attack src (combat.js hurtPlayer and the foe shot loop; a blocked shot is destroyed); release(p, a) when the held skill 2 is let go (W.skillRelease)
 (function (ED) {
   'use strict';
   const U = ED.U;
   const W = ED.World.prototype;
   const CLS = ED.CLS, CAST = ED.CAST = {};
 
-  // Sanctuary heals SANCT_HEAL of max HP. Shield Charge: CHARGE_SPEED px/s over CHARGE_MIN..range px, CRUSH extra damage on shield-stunned foes. Shield Throw: out at THROW_SPEED over THROW_MIN..THROW_MAX px, chase hops at CHASE_SPEED for at most CHASE_T s,
-  // RIC_R ricochet reach, THROW_FLIGHT longest flight; the catch shields CATCH_PER of max HP per foe struck (at most CATCH_MAX) once per KWARD_CD. BRACE_CD: seconds between Brace starts.
+  // Sanctum heals SANCT_HEAL of max HP. Shield Charge: CHARGE_SPEED px/s over CHARGE_MIN..range px, CRUSH extra damage on foes stunned by a Bulwark bash. KWARD_CD: seconds between Knight self-shields (Rallying Charge, Bastion). BRACE_CD: seconds between Brace starts.
   // Sanctuary lasts at most SANCT_UPTIME of its cooldown, Vanish's smoke blinds a foe for at most SMOKE_UPTIME of its cooldown.
   Object.assign(ED.CONST, {
-    SANCT_HEAL: 0.07, CHARGE_SPEED: 600, CHARGE_MIN: 60, CRUSH: 0.4, THROW_MIN: 120, THROW_MAX: 280, THROW_SPEED: 620, CHASE_SPEED: 760, CHASE_T: 0.35, RIC_R: 180, THROW_FLIGHT: 2.0,
-    CATCH_PER: 0.005, CATCH_MAX: 0.02, KWARD_CD: 6, BRACE_CD: 4, SANCT_UPTIME: 0.6, SMOKE_BLIND: 2, SMOKE_UPTIME: 0.5,
+    SANCT_HEAL: 0.07, CHARGE_SPEED: 600, CHARGE_MIN: 60, CRUSH: 0.4, KWARD_CD: 6, BRACE_CD: 4, SANCT_UPTIME: 0.6, SMOKE_BLIND: 2, SMOKE_UPTIME: 0.5,
   });
 
   // Aim of a skill: ED.SKILLS data (aim, range, walk), with the stat-dependent override of ED.Stats.skillNums when a stat block is given.
@@ -61,7 +60,8 @@
     p.momN = 0; p.momT = 0; p.lastAtkT = -99; p.flowT = 0; p.cometT = 0; p.stepRefT = 0; p.edgeT = 0; p.parryT = 0; p.heatT = 0;
     p.glT = 0; p.glV = 0; p.auraT = 0; p.auraV = 0; p.abyssT = 0; p.cleaveNext = 0; p.skillIfr = false;
     p.shWin = []; for (let i = 0; i < ED.CONST.SHIELD_WIN_T; i++) p.shWin.push({ sec: -99, c: 0, a: 0 }); // shield window slots (world.js addShield)
-    p.shieldClip = {}; p.shields = []; p.shieldOut = false; p.charge = null; // shieldOut: a thrown shield is away from the hero (wire flag 1 << 6)
+    p.shieldClip = {}; p.charge = null;
+    p.bulwarkOn = false; p.bulwarkT = 0; p.blocks = 0; p.blockSeen = new Map(); p.bwWard = -1; // Bulwark: raised (wire flag 1 << 6), seconds held, blocks stored (wire bits 21-23), attacker id -> world time its next block counts, shield given this raise (-1: none)
     const h = CLS[p.cls];
     if (h && h.init) h.init.call(this, p);
   };
@@ -74,7 +74,6 @@
     if (p.ambush && (p.ambushT -= dt) <= 0) p.ambush = false;
     for (let i = 0; i < TIMERS.length; i++) { const k = TIMERS[i]; if (p[k] > 0) p[k] -= dt; }
     if (p.charge) this.updateCharge(p, dt);
-    if (p.shields.length) this.updateShieldThrow(p, dt);
     const h = CLS[p.cls];
     if (h && h.tick) h.tick.call(this, p, dt);
   };
@@ -117,7 +116,14 @@
     for (const id in CLS) { const h = CLS[id].kill; if (h) h.call(this, e, p, src); }
   };
 
-  // data: { x0, y0, x1, y1 } for movement skills (performed by the hero's own client); { x0, y0, x, y } for ground skills (cast origin and aimed point, see groundTarget); { d } for Shield Throw (cursor distance).
+  // A held skill 2 let go at aim a (the 'hold' message with s 1): the class's release hook; a release with nothing held is a no-op.
+  W.skillRelease = function (p, a) {
+    if (!p || p.downed || p.dead) return;
+    const h = CLS[p.cls];
+    if (h && h.release) h.release.call(this, p, a);
+  };
+
+  // data: { x0, y0, x1, y1 } for movement skills (performed by the hero's own client); { x0, y0, x, y } for ground skills (cast origin and aimed point, see groundTarget).
   // Slot 2 (skill 3) fires no on-cast boon procs (onSkillCast: Battle Trance): it is the hero's rapid spell, cast every second or two.
   W.playerSkill = function (p, a, data, slot) {
     if (!p || p.downed || p.dead) return;
@@ -128,6 +134,7 @@
     const extra = fn.call(this, p, a, data || {}, st, ED.Stats.skillNums(skill, st));
     if (extra === false) return;
     if (slot !== 2) this.onSkillCast(p, slot); // skill 3 fires no on-cast procs
+    if (p.rh && p.rh.cast) this.relicFire(p, 'cast', slot);
     this.emit(Object.assign({ t: 'skill', pid: p.pid, k: skill, a: Math.round(a * 100) / 100, x: Math.round(p.x), y: Math.round(p.y), slot }, extra));
   };
 })(globalThis.ED || (globalThis.ED = {}));

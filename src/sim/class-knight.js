@@ -1,6 +1,6 @@
-// Knight: Shield Charge (a contact sweep at CHARGE_SPEED), Shield Throw (a thrown shield that ricochets, stuns, swats shots and returns) and the Knight route cards that act on them.
-// Cleave, Parry, Brace, Brand and the shared engines live in combat.js; this file owns the two skills, the shield's flight and the Knight hook table ED.CLS.knight.
-// Skill forms (rank 3): Avalanche (carry + slam + cracks), Iron Phalanx (wide band + War Banner), Aegis Tempest (three shields + vortex), Bastion (two orbiting shields).
+// Knight: Shield Charge (a contact sweep at CHARGE_SPEED), Bulwark (a held shield that blocks frontal attacks, then bashes a cone) and the Knight route cards that act on them.
+// Cleave, Parry, Brace, Brand and the shared engines live in combat.js; this file owns the two skills and the Knight hook table ED.CLS.knight.
+// Skill forms (rank 3): Avalanche (carry + slam + cracks), Iron Phalanx (wide band + War Banner), Aegis Tempest (a vortex at the bash tip), Bastion (a longer hold that shields).
 // Route forms (rank 3): Earthsplitter (a fissure per Cleave), Thousand Edges (blade waves per Cleave), Doombrand (Mark at 4 ailments, Brand counts 6), Bloodquake (a strike detonates the Bleed pool); they run through the hook table at the end.
 (function (ED) {
   'use strict';
@@ -9,11 +9,10 @@
   const fin = (v) => typeof v === 'number' && isFinite(v);
 
   // CARRY_STEP: px per tick a carried foe moves toward the front of the Charge. PHALANX_HALF: half width of the Iron Phalanx band.
-  // VORTEX_R / VORTEX_SPIN: spin radius and seconds per turn of the Aegis Tempest shields; VORTEX_PULL: px/s pull of the vortex. ORBIT_R / BASTION_R: orbit radius of Shield Orbit and of Bastion.
-  const CARRY_STEP = 30, PHALANX_HALF = 35, VORTEX_R = 24, VORTEX_SPIN = 0.4, ORBIT_R = 44, BASTION_R = 60;
+  const CARRY_STEP = 30, PHALANX_HALF = 35;
 
   // ---------------- Shield Charge ----------------
-  // Cast: stores the path (origin accepted within 48 px of the host's hero, length clamped to the skill's range and clipped at walls), makes the hero untouchable for the run, starts Brace (Vanguard) and recalls thrown shields.
+  // Cast: stores the path (origin accepted within 48 px of the host's hero, length clamped to the skill's range and clipped at walls), makes the hero untouchable for the run, starts Brace (Vanguard) and lowers a raised Bulwark (no bash).
   ED.CAST.charge = function (p, a, data, st, N) {
     let x0 = p.x, y0 = p.y;
     if (fin(data.x0) && fin(data.y0) && U.dist2(data.x0, data.y0, p.x, p.y) <= 48 * 48) { x0 = data.x0; y0 = data.y0; }
@@ -24,13 +23,13 @@
     p.charge = { x0, y0, x1: end.x, y1: end.y, a, t0: this.time, len, s: 0, hit: new Set(), carry: st.avalanche > 0 ? [] : null };
     p.invuln = Math.max(p.invuln, len / C.CHARGE_SPEED + 0.1);
     if (st.brace && this.time >= p.braceAt + C.BRACE_CD) { p.braceT = st.brace; p.braceAt = this.time; }
-    for (const s of p.shields) this.shieldBack(s); // a shield in flight (or spinning in a vortex) flies back through the pack; an orbiting one stays
+    this.clearShields(p);
     return { tx: Math.round(end.x), ty: Math.round(end.y) };
   };
 
   // Each tick the sweep covers the path from where it was to where the hero is by now: foes within their radius + the part's reach take the impact once (Crush on shield-stunned foes, bosses take its bossMul), then the stun (a boss is never stunned).
   // Avalanche carries the non-elite foes it hits along with the front of the run (elites are knocked sideways, bosses stand); Iron Phalanx widens the band and destroys enemy shots in it.
-  // At the end of the path: Juggernaut's shockwave or Avalanche's slam and cracks, Iron Phalanx's War Banner, Shield Bash's free shield, Rallying Charge's shields, and Follow-Through's Cleave.
+  // At the end of the path: Juggernaut's shockwave or Avalanche's slam and cracks, Iron Phalanx's War Banner, Shield Bash's free bash along the run, Rallying Charge's shields, and Follow-Through's Cleave.
   W.updateCharge = function (p, dt) {
     const c = p.charge, st = p.stats, N = ED.Stats.skillNums('charge', st), q = N.p.impact;
     const s0 = c.s, s1 = Math.min(c.len, (this.time - c.t0) * C.CHARGE_SPEED), ca = Math.cos(c.a), sa = Math.sin(c.a);
@@ -64,7 +63,7 @@
     if (sh.on) this.explode(c.x1, c.y1, sh.r, sh.dmg, 0, p, 'shock', true, { part: 'charge.shock', knock: sh.knock });
     if (N.p.quake.on) avalanche(this, p, c, N, st);
     if (st.phalanx > 0) plantBanner(this, p, c, N, st);
-    if (st.bash) this.throwShield(p, c.a, C.THROW_MAX, st.bash, { x: c.x1, y: c.y1 - 4 }, true, null);
+    if (st.bash) bash(this, p, c.a, true, c.x1, c.y1);
     if (st.rally) {
       if (p.kWardT <= 0 && this.addShield(p, st.rally * p.maxHp, C.CLASS_SHIELD_CAP * p.maxHp, 'class') > 0) p.kWardT = C.KWARD_CD;
       for (const q2 of this.players.values()) {
@@ -142,253 +141,121 @@
       } });
   }
 
-  // ---------------- Shield Throw ----------------
-  // p.shields = [{ pr (the ghost projectile), leg: 'out' | 'chase' | 'back' | 'orbit' | 'hold' | 'gather' | 'vortex', t (total flight; paused while held), legT, flown, d (straight distance), a, hit (foes struck this leg), strikes, tgt, room, mul, noStun,
-  //   grp ({ strikes (non-fodder foes struck: the catch), open, size, ended, list (the shields of one cast), any, lx, ly (the last foe struck), vz (the vortex zone) }), lastFoe, orbitA, orbitDur, orbitSeen, own, dead, vx, vy, vA }]
-  // A new throw launches the shield that is orbiting the hero (Shield Orbit) before it spawns another. Aegis Tempest shields that end their ricochets wait ('hold') for the others, then 'gather' at the last foe struck and spin ('vortex').
-  ED.CAST.shieldthrow = function (p, a, data, st, N) {
-    const d = U.clamp(fin(data.d) ? data.d : C.THROW_MAX, N.rangeMin, N.range), n = st.tempest > 0 ? Math.round(st.tempest) : st.twinShield > 0 ? 2 : 1, m = st.twinShield > 0 ? st.twinShield : 1;
-    const grp = { strikes: 0, open: n, size: n, ended: 0, list: [], any: false, lx: 0, ly: 0, vz: null };
-    let orb = p.shields.find(s => s.leg === 'orbit') || null;
-    const launch = (aa, mul) => { const re = orb; orb = null; this.throwShield(p, aa, d, mul, null, false, grp, re); };
-    if (n === 1) launch(a, 1);
-    else for (let i = 0; i < n; i++) launch(a + (i - (n - 1) / 2) * (n === 2 ? 0.44 : 0.26), m);
-    return { d: Math.round(d) };
+  // ---------------- Bulwark ----------------
+  // BW_ARC / WALL_ARC: arc (rad) the raised shield covers (Shield Wall: WALL_ARC); BW_SEEN: seconds within which one foe's melee and contact hits count as one block; BW_NEAR: an attack whose origin lies this close to the hero is placed at its attacker; BW_RECOIL: seconds a foe whose body hit was blocked backs away.
+  // BW_WARD: Bastion's shield per raise at most (share of max HP); RET_SPEED: px/s of a shot Return to Sender sends back; CARRY_R / CARRY_N: reach and receivers of Ruinous Blows' spread from each struck foe.
+  const BW_ARC = 120 * Math.PI / 180, WALL_ARC = Math.PI, BW_SEEN = 0.6, BW_NEAR = 16, BW_RECOIL = 0.35, BW_WARD = 0.02, RET_SPEED = 460, CARRY_R = 60, CARRY_N = 2;
+  const R = Math.round, r2 = (v) => Math.round(v * 100) / 100;
+
+  // The press: raises the shield toward a (rejected while it is up). The release (W.skillRelease), the hold limit (skillNums hold, Bastion's longer) or the tick at that limit bashes; p.face aims the block and the bash.
+  ED.CAST.bulwark = function (p, a) {
+    if (p.bulwarkOn) return false;
+    lower(p);
+    p.bulwarkOn = true; p.face = a;
+    return {};
   };
 
-  // Launches a shield from the hero (or origin {x, y}) along a for d px at damage factor mul; noStun: Shield Bash. grp joins the shields of one cast (their strikes count together for the catch).
-  // reuse: an orbiting shield of p that flies this throw in place of a new one.
-  W.throwShield = function (p, a, d, mul, origin, noStun, grp, reuse) {
-    const st = p.stats, N = ED.Stats.skillNums('shieldthrow', st), q = N.p.strike;
-    const x = (origin ? origin.x : p.x) + Math.cos(a) * 10, y = (origin ? origin.y : p.y - 4) + Math.sin(a) * 10;
-    let pr;
-    if (reuse) { pr = reuse.pr; pr.x = x; pr.y = y; } else pr = this.spawnProj({ team: 0, kind: 'shield', ghost: true, x, y, a, speed: C.THROW_SPEED, r: q.r, dmg: 0, life: 99, pierce: 999, owner: p.pid });
-    const g = grp || { strikes: 0, open: 1, size: 1, ended: 0, list: [], any: false, lx: 0, ly: 0, vz: null };
-    const s = { pr, leg: 'out', t: 0, legT: 0, flown: 0, d: U.clamp(d, N.rangeMin, N.range), a, hit: new Set(), strikes: 0, tgt: null, room: this.room, mul, noStun: !!noStun, grp: g, lastFoe: null, orbitA: 0, orbitDur: 0, orbitSeen: null, own: p, dead: false, vx: 0, vy: 0, vA: 0 };
-    g.list.push(s);
-    if (reuse) { reuse.dead = true; p.shields[p.shields.indexOf(reuse)] = s; } else p.shields.push(s);
-    p.shieldOut = true;
-    return s;
-  };
+  // Ends a raise with no bash and clears its state.
+  function lower(p) { p.bulwarkOn = false; p.bulwarkT = 0; p.blocks = 0; p.blockSeen.clear(); p.bwWard = -1; }
 
-  // The shield turns for home with a fresh hit set (the return part hits each foe it passes once). A shield waiting in a vortex group flies home too.
-  W.shieldBack = function (s) {
-    if (s.leg === 'back' || s.leg === 'orbit') return;
-    s.leg = 'back'; s.hit = new Set(); s.legT = 0; s.tgt = null;
-  };
+  // Ends a raised Bulwark with no bash: a down or a room change (world.js), a Shield Charge cast.
+  W.clearShields = function (p) { if (p.bulwarkOn) lower(p); };
 
-  W.dropShield = function (p, i) {
-    p.shields[i].pr.dead = true; p.shields[i].dead = true;
-    p.shields.splice(i, 1);
-    p.shieldOut = p.shields.length > 0;
-  };
-
-  // Clears every shield; a living Knight with Bastion remembers that it had an orbit (CLS.knight.tick brings the pair back, so a new room keeps it).
-  W.clearShields = function (p) {
-    p.bastionKeep = !p.downed && !p.dead && !!(p.stats && p.stats.bastion > 0) && p.shields.some(s => s.leg === 'orbit');
-    for (const s of p.shields) { s.pr.dead = true; s.dead = true; }
-    p.shields.length = 0;
-    p.shieldOut = false;
-  };
-
-  // A shield in orbit around the hero at angle A (Bastion's pair): its own cast group, no strikes of its own.
-  function spawnOrbit(w, p, A) {
-    const q = ED.Stats.skillNums('shieldthrow', p.stats).p.strike, g = { strikes: 0, open: 0, size: 1, ended: 0, list: [], any: false, lx: 0, ly: 0, vz: null };
-    const pr = w.spawnProj({ team: 0, kind: 'shield', ghost: true, x: p.x + Math.cos(A) * BASTION_R, y: p.y - 4 + Math.sin(A) * BASTION_R, a: A + Math.PI / 2, speed: C.THROW_SPEED, r: q.r, dmg: 0, life: 99, pierce: 999, owner: p.pid });
-    const s = { pr, leg: 'orbit', t: 0, legT: 0, flown: 0, d: 0, a: 0, hit: new Set(), strikes: 0, tgt: null, room: w.room, mul: 1, noStun: false, grp: g, lastFoe: null, orbitA: A, orbitDur: Infinity, orbitSeen: new Map(), own: p, dead: false, vx: 0, vy: 0, vA: 0 };
-    g.list.push(s); p.shields.push(s); p.shieldOut = true;
-    return s;
-  }
-
-  // Next ricochet target after foe e: the nearest living foe within RIC_R of it that is not in this leg's hit set and has a clear line.
-  function nextTarget(w, s, e, A) {
-    let best = null, bd = (C.RIC_R * A) ** 2;
-    for (const o of w.enemies) {
-      if (o === e || o.hp <= 0 || o.spawnT > 0 || o.def.invuln || o.burrowed || o.invulnT > 0 || s.hit.has(o.id)) continue;
-      const d2 = U.dist2(o.x, o.y, e.x, e.y);
-      if (d2 < bd && Sim.los(w.room, e.x, e.y, o.x, o.y, w.locked)) { bd = d2; best = o; }
+  // The bash from (x, y) toward a: every foe in the cone (the part's r and arc) takes the bash part x (1 + blockMul x the blocks stored) and its knockback; a struck foe left standing is stunned (not a boss, not a guarded hit; shieldStunT marks it for Crush)
+  // and sealed (Ruin Seal); Ruinous Blows moves carry of each struck foe's statuses to the CARRY_N nearest unstruck foes within CARRY_R; Aegis Tempest opens its vortex at the tip.
+  // free: Shield Bash at the end of a Charge (part 'charge.bash', bash x the part, no stored power, no stun, no vortex); a full bash (blocks at blockMax) tags its hits full.
+  function bash(w, p, a, free, x, y) {
+    const st = p.stats, N = ED.Stats.skillNums('bulwark', st), q = N.p.bash, n = free ? 0 : p.blocks, full = !free && n >= N.blockMax;
+    const mul = free ? st.bash : 1 + N.blockMul * n, half = q.arc / 2, struck = [];
+    if (!free) lower(p);
+    for (const e of w.enemies) {
+      if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed) continue;
+      const d = Math.hypot(e.x - x, e.y - y);
+      if (d >= q.r + e.r) continue;
+      const ea = Math.atan2(e.y - y, e.x - x);
+      if (d > e.r && Math.abs(U.angDiff(a, ea)) > half + Math.asin(Math.min(1, e.r / d))) continue;
+      const src = w.partSrc(p, N, 'bash', { kx: Math.cos(ea), ky: Math.sin(ea), x, y, mul: mul === 1 ? undefined : mul, infK: 1 + st.ruinInf, full });
+      if (free) src.part = 'charge.bash';
+      w.hitEnemy(e, q.dmg, src);
+      if (e.hp <= 0) continue;
+      struck.push(e);
+      if (!free && !src.guarded) { const dur = w.stunFoe(e, q.stun, false); if (dur > 0) e.shieldStunT = dur; }
+      if (st.seal) e.sealT = Math.max(e.sealT, st.seal);
     }
-    return best;
+    if (st.carry > 0 && struck.length) {
+      const hit = new Set(struck);
+      for (const e of struck) {
+        const near = [];
+        for (const o of w.enemies) { if (hit.has(o) || o.hp <= 0 || o.spawnT > 0) continue; const d2 = U.dist2(o.x, o.y, e.x, e.y); if (d2 < (CARRY_R + o.r) ** 2) near.push({ o, d2 }); }
+        near.sort((u, v) => u.d2 - v.d2 || u.o.id - v.o.id);
+        for (let i = 0; i < CARRY_N && i < near.length; i++) w.moveStatuses(e, near[i].o, st.carry);
+      }
+    }
+    w.smashCircle(p, x + Math.cos(a) * q.r * 0.5, y + Math.sin(a) * q.r * 0.5, q.r * 0.5);
+    if (!free && N.p.vortex.on) { const tip = Sim.castMove(w.room, x, y, a, q.r, 4, w.locked); vortex(w, p, tip.x, tip.y, Math.max(1, n)); }
+    w.emit({ t: 'bash', pid: p.pid, x: R(x), y: R(y), a: r2(a), r: R(q.r), arc: r2(q.arc), n, f: free ? 1 : 0 });
   }
 
-  // The end of a shield's ricochets: Aegis Tempest shields wait for their group (when a foe was struck), every other shield turns for home.
-  function chainEnd(w, p, s) {
-    const g = s.grp;
-    if (p.stats.tempest > 0 && g.size > 1 && g.any && !g.vz) { s.leg = 'hold'; s.legT = 0; s.hit = new Set(); s.tgt = null; tryVortex(w, p, g); } else w.shieldBack(s);
-  }
-
-  // The vortex starts once every shield of the cast is waiting or already flying home.
-  function tryVortex(w, p, g) {
-    if (g.vz || !g.any) return;
-    let hold = 0;
-    for (const x of g.list) { if (x.dead) continue; if (x.leg === 'hold') hold++; else if (x.leg !== 'back') return; }
-    if (hold) startVortex(w, p, g);
-  }
-
-  // The waiting shields fly to the last foe struck and spin there for the vortex part's duration. The zone (kind 'vortex', warm = seconds until the shields arrive) pulls non-boss foes toward its centre
-  // and strikes every foe inside each q.every seconds; when it ends the shields fly home. It ends early when no shield spins any more.
-  function startVortex(w, p, g) {
-    const q = ED.Stats.skillNums('shieldthrow', p.stats).p.vortex, px = g.lx, py = g.ly, hold = g.list.filter(x => !x.dead && x.leg === 'hold'), pid = p.pid, pull = q.pull;
-    let gather = 0;
-    hold.forEach((s, k) => {
-      const A0 = k * U.TAU / hold.length;
-      s.leg = 'gather'; s.legT = 0; s.vx = px + Math.cos(A0) * VORTEX_R; s.vy = py + Math.sin(A0) * VORTEX_R; s.vA = A0;
-      gather = Math.max(gather, Math.hypot(s.vx - s.pr.x, s.vy - s.pr.y) / C.CHASE_SPEED);
-    });
-    g.vz = w.addZone({ kind: 'vortex', x: px, y: py, r: q.r, dur: gather + q.dur, warm: Math.round(gather * 100) / 100, team: 0, owner: pid, custom: true, acc: 0,
+  // Aegis Tempest: a 'vortex' zone at (x, y) for the vortex part's duration; it pulls non-boss foes toward its centre at the part's pull px/s and strikes every foe inside each `every` s for the part's damage x k (the blocks the bash stored, at least 1).
+  function vortex(w, p, x, y, k) {
+    const q = ED.Stats.skillNums('bulwark', p.stats).p.vortex, pid = p.pid;
+    w.addZone({ kind: 'vortex', x, y, r: q.r, dur: q.dur, warm: 0, team: 0, owner: pid, custom: true, acc: 0,
       update: (world, z, dt) => {
         const ow = world.players.get(pid);
-        if (!ow || !g.list.some(x => !x.dead && (x.leg === 'gather' || x.leg === 'vortex'))) { z.dur = z.t; return; }
-        if (z.t < gather) return;
-        const N = ED.Stats.skillNums('shieldthrow', ow.stats), v = N.p.vortex, hitNow = (z.acc += dt) >= v.every;
+        if (!ow) { z.dur = z.t; return; }
+        const N = ED.Stats.skillNums('bulwark', ow.stats), v = N.p.vortex, hitNow = (z.acc += dt) >= v.every - 1e-9;
         if (hitNow) z.acc -= v.every;
         for (const e of world.enemies) {
           if (e.hp <= 0 || e.spawnT > 0) continue;
           const dx = z.x - e.x, dy = z.y - e.y, d2 = dx * dx + dy * dy;
           if (d2 >= (z.r + e.r) ** 2) continue;
           const d = Math.sqrt(d2);
-          if (hitNow) world.hitEnemy(e, v.dmg, world.partSrc(ow, N, 'vortex', { x: z.x, y: z.y, kx: -dx / (d || 1), ky: -dy / (d || 1), noGuard: true, infK: 1 + ow.stats.ruinInf }));
-          if (!e.boss && e.hp > 0 && d > 6) { const stp = Math.min(d - 4, pull * dt); Sim.moveCircle(e, dx / d * stp, dy / d * stp, world.room, world.locked, e.fly); }
+          if (hitNow) world.hitEnemy(e, v.dmg * k, world.partSrc(ow, N, 'vortex', { x: z.x, y: z.y, kx: -dx / (d || 1), ky: -dy / (d || 1), noGuard: true, infK: 1 + ow.stats.ruinInf }));
+          if (!e.boss && e.hp > 0 && d > 6) { const stp = Math.min(d - 4, v.pull * dt); Sim.moveCircle(e, dx / d * stp, dy / d * stp, world.room, world.locked, e.fly); }
         }
-      },
-      onEnd: (world) => { for (const x of g.list) if (!x.dead && (x.leg === 'gather' || x.leg === 'vortex')) { x.t = Math.min(x.t, C.THROW_FLIGHT - 1.2); world.shieldBack(x); } } });
+      } });
   }
 
-  // A strike on foe e: damage and stun (a guarded strike does neither the stun nor the Crush mark but still counts), Brand's seal, the carried statuses, then the ricochet or the end of the chain.
-  // The catch counts the non-fodder foes struck; the vortex centres on the last foe struck (fodder too).
-  function strike(w, p, s, e, N, A) {
-    const st = p.stats, q = N.p.strike, pr = s.pr, d = Math.hypot(e.x - pr.x, e.y - pr.y) || 1;
-    s.hit.add(e.id); s.strikes++;
-    if (!e.fodder) s.grp.strikes++;
-    s.grp.any = true; s.grp.lx = e.x; s.grp.ly = e.y;
-    if (st.carry && s.lastFoe && s.lastFoe !== e) w.moveStatuses(s.lastFoe, e, st.carry);
-    const mul = s.mul * (1 + st.gather * (s.strikes - 1));
-    const src = w.partSrc(p, N, 'strike', { x: pr.x, y: pr.y, kx: (e.x - pr.x) / d, ky: (e.y - pr.y) / d, mul: mul === 1 ? undefined : mul, infK: 1 + st.ruinInf });
-    w.hitEnemy(e, q.dmg, src);
-    if (e.hp > 0) {
-      if (!src.guarded && !s.noStun && !e.boss) { const dur = w.stunFoe(e, q.stun, false); if (dur > 0) e.shieldStunT = dur; }
-      if (st.seal) e.sealT = Math.max(e.sealT, st.seal);
+  // True when p's raised shield stops the foe attack src: its origin (a moving shot: back along its flight; else src.x/y, else its foe; an origin within BW_NEAR of the hero is placed at the attacker) lies within the covered arc of p.face. Hazards are never blocked.
+  // Every shot counts; one foe's melee and contact hits count once per BW_SEEN (its contact clock is pushed back as well). A counted block stores power (up to blockMax), Shield Wall stuns the attacker (a repeating stun),
+  // Return to Sender sends a blocked shot back at its shooter, Bastion shields the hero.
+  function block(w, p, src) {
+    if (!p.bulwarkOn || !src || src.hazard) return false;
+    const e = src.e && src.e.def ? src.e : null, pr = src.pr || null, st = p.stats;
+    let ox, oy;
+    if (pr && (pr.vx || pr.vy)) { ox = p.x - pr.vx; oy = p.y - pr.vy; } // a shot comes from where it flies from
+    else if (fin(src.x) && fin(src.y)) { ox = src.x; oy = src.y; } else if (pr) { ox = pr.x; oy = pr.y; } else if (e) { ox = e.x; oy = e.y; } else return false;
+    if (U.dist2(ox, oy, p.x, p.y) < BW_NEAR * BW_NEAR) { if (!e) return false; ox = e.x; oy = e.y; }
+    if (Math.abs(U.angDiff(p.face || 0, Math.atan2(oy - p.y, ox - p.x))) > (st.shieldWall > 0 ? WALL_ARC : BW_ARC) / 2) return false;
+    if (!pr && !src.proj && e) {
+      e.contactCd = Math.max(e.contactCd || 0, BW_SEEN);
+      if (src.contact) e.recoil = Math.max(e.recoil || 0, BW_RECOIL); // a body blocked by the shield backs off instead of walking through
+      if ((p.blockSeen.get(e.id) || -1) > w.time) return true;
+      p.blockSeen.set(e.id, w.time + BW_SEEN);
     }
-    s.lastFoe = e;
-    const next = s.strikes < q.n ? nextTarget(w, s, e, A) : null;
-    w.emit({ t: 'ric', x0: Math.round(pr.x), y0: Math.round(pr.y), x1: Math.round(next ? next.x : pr.x), y1: Math.round(next ? next.y : pr.y), n: s.strikes, g: src.guarded ? 1 : 0, pid: p.pid });
-    if (next) { s.leg = 'chase'; s.legT = 0; s.tgt = next; } else chainEnd(w, p, s);
+    const N = ED.Stats.skillNums('bulwark', st);
+    if (p.blocks < N.blockMax) p.blocks++;
+    if (st.wallStun > 0 && e && e.hp > 0) w.stunFoe(e, st.wallStun, true);
+    if (st.sendBack > 0 && pr && e && e.hp > 0) sendBack(w, p, e, N);
+    if (st.bastionWard > 0) ward(w, p, st);
+    w.emit({ t: 'block', k: 'bulwark', pid: p.pid, x: R(p.x), y: R(p.y), n: p.blocks });
+    return true;
   }
 
-  // The catch: the shield of the last shield of a cast to come home shields the hero (CATCH_PER of max HP per foe struck of the whole cast, at most CATCH_MAX, once per KWARD_CD); Shield Orbit keeps it circling.
-  // Bastion: the orbit never times out, and the shield takes the place opposite the one already orbiting (the first catch also spawns the second shield).
-  function catchShield(w, p, s, i) {
-    const st = p.stats;
-    s.grp.open--;
-    let v = 0;
-    if (s.grp.open <= 0 && s.grp.strikes > 0 && p.kWardT <= 0) {
-      v = w.addShield(p, Math.min(C.CATCH_MAX, C.CATCH_PER * s.grp.strikes) * p.maxHp, C.CLASS_SHIELD_CAP * p.maxHp, 'class');
-      if (v > 0) p.kWardT = C.KWARD_CD;
-    }
-    w.emit({ t: 'catch', pid: p.pid, x: Math.round(p.x), y: Math.round(p.y - 4), v: Math.round(v * 10) / 10 });
-    if (st.orbit > 0) {
-      s.leg = 'orbit'; s.legT = 0; s.orbitA = Math.atan2(s.pr.y - (p.y - 4), s.pr.x - p.x); s.orbitDur = st.bastion > 0 ? Infinity : st.orbit; s.orbitSeen = new Map(); s.hit = new Set();
-      if (st.bastion > 0) {
-        const other = p.shields.find(x => x !== s && x.leg === 'orbit');
-        if (other) s.orbitA = other.orbitA + Math.PI; else spawnOrbit(w, p, s.orbitA + Math.PI);
-      }
-    } else w.dropShield(p, i);
+  // Return to Sender: a shard flies from the shield at the shooter for the reflect part (a hero shot: it can crit and builds statuses).
+  function sendBack(w, p, e, N) {
+    const a = Math.atan2(e.y - p.y, e.x - p.x), d = Math.hypot(e.x - p.x, e.y - p.y);
+    w.spawnProj({ team: 0, kind: 'shard', x: p.x + Math.cos(a) * 12, y: p.y - 4 + Math.sin(a) * 12, a, speed: RET_SPEED, r: 5, dmg: N.p.reflect.dmg, life: Math.min(1.5, d / RET_SPEED + 0.25), pierce: 0, owner: p.pid, knock: 60, hk: 'skill', part: 'bulwark.reflect' });
   }
 
-  // Flight of every shield of p: legs, strikes, the swat of enemy shots, the catch. The ghost projectile is moved here (pr.x/y and the current velocity for clients), updateProjectiles skips it.
-  W.updateShieldThrow = function (p, dt) {
-    const st = p.stats, N = ED.Stats.skillNums('shieldthrow', st), room = this.room, locked = this.locked, A = 1 + 0.5 * st.area;
-    const hx = p.x, hy = p.y - 4;
-    for (let i = p.shields.length - 1; i >= 0; i--) {
-      const s = p.shields[i], pr = s.pr;
-      if (s.room !== room) { if (s.leg === 'orbit' && st.bastion > 0) s.room = room; else { this.dropShield(p, i); continue; } }
-      if (s.leg !== 'hold' && s.leg !== 'gather' && s.leg !== 'vortex') s.t += dt;
-      s.legT += dt;
-      if (s.t >= C.THROW_FLIGHT - 0.4 && (s.leg === 'out' || s.leg === 'chase')) chainEnd(this, p, s); // the catch is forced at THROW_FLIGHT: head home early enough to arrive
-      let nx = pr.x, ny = pr.y, sp = 0, ang = s.a;
-      if (s.leg === 'out') {
-        sp = C.THROW_SPEED; const stp = sp * dt;
-        nx += Math.cos(s.a) * stp; ny += Math.sin(s.a) * stp; s.flown += stp;
-        if (D.blocksShots(D.tileAt(room, nx, ny), locked)) { nx = pr.x; ny = pr.y; chainEnd(this, p, s); } else if (s.flown >= s.d) chainEnd(this, p, s);
-      } else if (s.leg === 'chase') {
-        const t = s.tgt;
-        if (!t || t.hp <= 0 || s.legT > C.CHASE_T) chainEnd(this, p, s);
-        else {
-          sp = C.CHASE_SPEED; const dx = t.x - pr.x, dy = t.y - pr.y, dist = Math.hypot(dx, dy) || 1, stp = sp * dt;
-          ang = Math.atan2(dy, dx);
-          if (dist <= stp) { nx = t.x; ny = t.y; } else { nx += dx / dist * stp; ny += dy / dist * stp; }
-          if (D.blocksShots(D.tileAt(room, nx, ny), locked)) { nx = pr.x; ny = pr.y; chainEnd(this, p, s); }
-        }
-      }
-      if (s.leg === 'gather') {
-        sp = C.CHASE_SPEED; const dx = s.vx - pr.x, dy = s.vy - pr.y, dist = Math.hypot(dx, dy) || 1, stp = sp * dt;
-        ang = Math.atan2(dy, dx);
-        if (dist <= stp) { nx = s.vx; ny = s.vy; s.leg = 'vortex'; s.legT = 0; s.orbitA = s.vA; sp = 0; } else { nx += dx / dist * stp; ny += dy / dist * stp; }
-      } else if (s.leg === 'vortex') {
-        const vz = s.grp.vz;
-        s.orbitA += dt * (U.TAU / VORTEX_SPIN);
-        nx = (vz ? vz.x : pr.x) + Math.cos(s.orbitA) * VORTEX_R; ny = (vz ? vz.y : pr.y) + Math.sin(s.orbitA) * VORTEX_R; ang = s.orbitA + Math.PI / 2; sp = VORTEX_R * U.TAU / VORTEX_SPIN;
-      }
-      if (s.leg === 'back') {
-        sp = C.CHASE_SPEED; const dx = hx - pr.x, dy = hy - pr.y, dist = Math.hypot(dx, dy) || 1, stp = sp * dt;
-        ang = Math.atan2(dy, dx);
-        if (dist <= p.r + 10 || s.t >= C.THROW_FLIGHT) { pr.x = hx; pr.y = hy; catchShield(this, p, s, i); if (s.leg !== 'orbit') continue; sp = 0; }
-        else if (dist <= stp) { nx = hx; ny = hy; } else { nx = pr.x + dx / dist * stp; ny = pr.y + dy / dist * stp; }
-      }
-      if (s.leg === 'orbit') {
-        const R = st.bastion > 0 ? BASTION_R : ORBIT_R;
-        s.orbitA += dt * (U.TAU / 0.9);
-        nx = hx + Math.cos(s.orbitA) * R; ny = hy + Math.sin(s.orbitA) * R; ang = s.orbitA + Math.PI / 2; sp = R * U.TAU / 0.9;
-        if (s.legT >= s.orbitDur) { this.dropShield(p, i); continue; }
-      }
-      pr.x = nx; pr.y = ny; pr.vx = Math.cos(ang) * sp; pr.vy = Math.sin(ang) * sp;
-      this.smashCircle(p, nx, ny, pr.r);
-      // foes touched
-      if (s.leg === 'out' || s.leg === 'chase') {
-        let hit = null, bd = Infinity;
-        for (const e of this.enemies) {
-          if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed || e.invulnT > 0 || s.hit.has(e.id)) continue;
-          const d2 = U.dist2(pr.x, pr.y, e.x, e.y);
-          if (d2 <= (e.r + pr.r) ** 2 && d2 < bd) { bd = d2; hit = e; }
-        }
-        if (hit) strike(this, p, s, hit, N, A);
-      } else if (s.leg === 'back' || s.leg === 'orbit') {
-        const rq = s.leg === 'back' ? N.p.return : N.p.orbit;
-        if (s.leg === 'back' || rq.on) {
-          for (const e of this.enemies) {
-            if (e.hp <= 0 || e.spawnT > 0 || e.def.invuln || e.burrowed || e.invulnT > 0) continue;
-            if (U.dist2(pr.x, pr.y, e.x, e.y) > (e.r + pr.r) ** 2) continue;
-            if (s.leg === 'back') { if (s.hit.has(e.id)) continue; s.hit.add(e.id); } else { if ((s.orbitSeen.get(e.id) || -9) > this.time - rq.every) continue; s.orbitSeen.set(e.id, this.time); }
-            const d = Math.hypot(e.x - pr.x, e.y - pr.y) || 1;
-            this.hitEnemy(e, rq.dmg, this.partSrc(p, N, s.leg === 'back' ? 'return' : 'orbit', { x: pr.x, y: pr.y, kx: (e.x - pr.x) / d, ky: (e.y - pr.y) / d, mul: s.leg === 'back' && s.mul !== 1 ? s.mul : undefined, infK: 1 + st.ruinInf, knock: s.leg === 'back' ? rq.knock : 40 }));
-            if (s.leg === 'orbit' && st.orbitStun && e.hp > 0) this.stunFoe(e, st.orbitStun, true); // the orbit's contact stuns (repeating: skipped on a stun cooldown)
-          }
-        }
-      }
-      // shot swat: enemy projectiles within the shield's radius + 4 are destroyed on every leg
-      for (const o of this.projs) {
-        if (o.team !== 1 || o.life <= 0 || U.dist2(o.x, o.y, pr.x, pr.y) > (pr.r + 4) ** 2) continue;
-        o.life = 0;
-        this.emit({ t: 'deflect', x: Math.round(o.x), y: Math.round(o.y) });
-        if (s.leg === 'orbit') {
-          if (!(st.bastion > 0)) s.orbitDur -= 0.75;
-          const rf = N.p.reflect;
-          if (rf.on) {
-            const tg = this.nearestEnemy(pr.x, pr.y, rf.range);
-            if (tg) this.spawnProj({ team: 0, kind: 'shard', x: pr.x, y: pr.y, a: Math.atan2(tg.y - pr.y, tg.x - pr.x), speed: 420, r: 5, dmg: rf.dmg, life: 0.8, pierce: 0, owner: p.pid, knock: 60, hk: 'skill', part: 'shieldthrow.reflect' });
-          }
-        }
-      }
-    }
-    if (st.bastion > 0) { // the pair keeps exactly opposite, whichever of the two the loop moved first
-      const o = p.shields.filter(x => x.leg === 'orbit');
-      if (o.length === 2) {
-        const b = o[1], pr = b.pr;
-        b.orbitA = o[0].orbitA + Math.PI;
-        pr.x = hx + Math.cos(b.orbitA) * BASTION_R; pr.y = hy + Math.sin(b.orbitA) * BASTION_R; pr.vx = Math.cos(b.orbitA + Math.PI / 2) * BASTION_R * U.TAU / 0.9; pr.vy = Math.sin(b.orbitA + Math.PI / 2) * BASTION_R * U.TAU / 0.9;
-      }
-    }
-  };
+  // Bastion: each block shields the hero bastionWard of max HP, at most BW_WARD per raise (class window); a raise shields only when the self-shield clock kWardT (KWARD_CD) had run out at its first block.
+  function ward(w, p, st) {
+    if (p.bwWard < 0) { if (p.kWardT > 0) return; p.bwWard = 0; p.kWardT = C.KWARD_CD; }
+    const v = Math.min(st.bastionWard, BW_WARD - p.bwWard);
+    if (!(v > 1e-9)) return;
+    p.bwWard += v;
+    w.addShield(p, v * p.maxHp, C.CLASS_SHIELD_CAP * p.maxHp, 'class');
+  }
 
   // ---------------- route forms: Earthsplitter, Thousand Edges, Doombrand, Bloodquake ----------------
   // Fodder: these only damage, spread statuses and mark; none grants a refund, a shield or a stack, so a fodder foe takes part like any other.
@@ -396,7 +263,7 @@
   // DOOM_AT / DOOM_T / DOOM_EVERY: ailments that Doombrand a foe, seconds it stays Marked, seconds between scans. BQUAKE_AT / BQUAKE_R / BQUAKE_CD: ailments, burst radius and per-foe cooldown of Bloodquake.
   const FISSURE_LEN = 180, FISSURE_W = 36, FISSURE_T = 0.25, BLADE_LEN = 180, BLADE_R = 12, BLADE_SPEED = 480, FAN = 0.35;
   const DOOM_AT = 4, DOOM_T = 4, DOOM_EVERY = 0.1, BQUAKE_AT = 3, BQUAKE_R = 80, BQUAKE_CD = 1;
-  const BQUAKE_PARTS = new Set(['charge.impact', 'shieldthrow.strike']);
+  const BQUAKE_PARTS = new Set(['charge.impact', 'bulwark.bash', 'charge.bash']), BASH_PARTS = new Set(['bulwark.bash', 'charge.bash']);
 
   // True when the attack whose events began at w.fx[p.fx0] swung a Cleave (meleeSwing emits one 'swing' event with k 'cleave' per Cleave).
   function cleaved(w, p) {
@@ -440,7 +307,7 @@
     }
   }
 
-  // Bloodquake: a Charge impact or Throw strike on a foe with BQUAKE_AT ailments and a Bleed pool pays the pool x (1 + bleedMul) x (1 + bloodquakeMul) at once (a foe the strike just killed takes nothing) and bursts bloodquakeSplash of the amount paid to foes within BQUAKE_R as new Bleed (SPREAD_CAP of their HP at most).
+  // Bloodquake: a Charge impact or a bash on a foe with BQUAKE_AT ailments and a Bleed pool pays the pool x (1 + bleedMul) x (1 + bloodquakeMul) at once (a foe the strike just killed takes nothing) and bursts bloodquakeSplash of the amount paid to foes within BQUAKE_R as new Bleed (SPREAD_CAP of their HP at most).
   function bloodquake(w, p, e) {
     const st = p.stats, pool = e.bleedPool;
     if (!(pool > 0)) return;
@@ -458,14 +325,15 @@
   // ---------------- Knight hook table ----------------
   ED.CLS.knight = {
     // fx0 / parry0: where the attack's events began and Parry's clock before it (attackOpts and attack pair up); doomT: seconds to the next Doombrand scan; bquakeFxT: world time of the last Bloodquake cue.
-    init(p) { p.bastionKeep = false; p.fx0 = 0; p.parry0 = 0; p.doomT = 0; p.bquakeFxT = -99; },
-    // Bastion: after a room change the orbiting pair returns to the hero. Doombrand scans the foes every DOOM_EVERY s.
+    init(p) { p.fx0 = 0; p.parry0 = 0; p.doomT = 0; p.bquakeFxT = -99; },
+    // Doombrand scans the foes every DOOM_EVERY s. A raised Bulwark counts its seconds and bashes at its hold limit.
     tick(p, dt) {
       if (p.stats.doombrand > 0 && (p.doomT -= dt) <= 0) { p.doomT = DOOM_EVERY; doombrand(this, p); }
-      if (!p.bastionKeep) return;
-      p.bastionKeep = false;
-      if (p.stats.bastion > 0 && !p.shields.length) { spawnOrbit(this, p, 0); spawnOrbit(this, p, Math.PI); }
+      if (p.bulwarkOn && (p.bulwarkT += dt) >= ED.Stats.skillNums('bulwark', p.stats).hold - 1e-9) bash(this, p, p.face || 0, false, p.x, p.y);
     },
+    // The Bulwark release bashes toward a; with the shield already down it does nothing (the host's hold limit may have bashed first).
+    release(p, a) { if (p.bulwarkOn) bash(this, p, fin(a) ? a : p.face || 0, false, p.x, p.y); },
+    block(p, src) { return block(this, p, src); },
     // Earthsplitter and Thousand Edges follow the Cleave of the attack just made, and a Parry in it: attackOpts notes the start, attack reads what the swing did.
     attackOpts(p, st) {
       if (st.fissure > 0 || st.bladeWave > 0) { p.fx0 = this.fx.length; p.parry0 = p.parryT; }
@@ -483,15 +351,15 @@
       const n = this.ailments(e);
       return n > 4 ? st.brand * (Math.min(st.brandCap, n) - 4) : 0;
     },
-    // Bloodquake: a Charge or Throw strike on a foe with enough ailments (once per BQUAKE_CD per foe).
+    // Bloodquake: a Charge impact or a bash on a foe with enough ailments (once per BQUAKE_CD per foe).
     hitDone(p, e, dmg, crit, src) {
       if (p.stats.bloodquake > 0 && src.part && BQUAKE_PARTS.has(src.part) && !(e.bquakeT > this.time) && this.ailments(e) >= BQUAKE_AT) bloodquake(this, p, e);
     },
-    // Ruin Spreads: a foe killed by a shield strike hands its statuses on (queued, one hop at a time; see runPayoff 'spread')
-    // Return to Sender (secret): a boss felled by the returning leg of a thrown shield.
+    // Ruin Spreads: a foe killed by a bash hands its statuses on (queued, one hop at a time; see runPayoff 'spread')
+    // Unbroken (secret): a boss felled by a Bulwark bash with full stored power.
     kill(e, p, src) {
-      if (e.boss && p && p.cls === 'knight' && src && src.part === 'shieldthrow.return') this.secretP(p, 'heroSecret');
-      if (!p || p.cls !== 'knight' || !p.stats.ruinSpread || !src || !src.part || src.part.indexOf('shieldthrow.') !== 0) return;
+      if (e.boss && p && p.cls === 'knight' && src && src.part === 'bulwark.bash' && src.full) this.secretP(p, 'heroSecret');
+      if (!p || p.cls !== 'knight' || !p.stats.ruinSpread || !src || !BASH_PARTS.has(src.part)) return;
       this.queuePayoff(p, { kind: 'spread', e, x: e.x, y: e.y, f: p.stats.ruinSpread, n: 2, r: 80 });
     },
   };

@@ -1,6 +1,6 @@
 // Boss and champion arena drawing (ED.ArenaFx; room.arena, src/sim/arena.js): Drowned King dais, water, tide warning and whirlpool; Hollow King darkness, lanterns and falling rings;
 // Tidal Beam sweep preview, champion labels, revive countdown, bind ground; arena event effects and sounds. render.js calls ground (lit pass), over (after lighting) and the light hooks.
-// The second block draws the field kind: the Sporemother's spore carpet, the Bone Warden's wall blocks and spectral swords.
+// The second block draws the field kind: the Sporemother's spore carpet, the Bone Warden's wall blocks and spectral swords; the third the Clockwork Colossus.
 (function (ED) {
   'use strict';
   const U = ED.U, T = ED.CONST.TILE, TAU = U.TAU, R = ED.Render, F = ED.FX, CFX = ED.ClassFx, Pix = ED.Pix;
@@ -146,7 +146,7 @@
   // Tidal Beam warm-up: a dotted arc and a faint end lane show the sweep (laser zones with arc; spin beams draw a full ring).
   function sweeps(c, view, t) {
     for (const z of view.zones) {
-      if (z.kind !== 'laser' || !z.arc || z.t >= (z.warm || 0)) continue;
+      if (z.kind !== 'laser' || !z.arc || z.neon || z.t >= (z.warm || 0)) continue; // a Colossus sweep draws its own (neonZone)
       const r = 70, n = Math.ceil(Math.abs(z.arc) * r / 6), a1 = z.a + z.arc;
       c.fillStyle = U.rgba(WARN, 0.7); c.beginPath();
       for (let i = 0; i <= n; i++) if ((i + ((t * 12) | 0)) % 3 < 2) { const a = z.a + z.arc * i / n; c.rect(s2(z.x + Math.cos(a) * r), s2(z.y + Math.sin(a) * r), 2, 2); }
@@ -156,14 +156,11 @@
       c.fillStyle = U.rgba(WARN, 0.95); c.beginPath(); c.rect(s2(z.x + Math.cos(ah) * r - 2), s2(z.y + Math.sin(ah) * r - 2), 4, 4); c.fill();
     }
   }
-  // Champion labels (name, the copied class on a mimic) and the revive countdown of a fallen twin (a long spawn zone).
+  // Champion labels (the twins; the Colossus labels itself in colBars) and the revive countdown of a fallen twin (a long spawn zone).
   function champs(c, view, room, t) {
-    const ar = room.arena, cls = {};
-    if (ar && ar.k === 'champ' && ar.m) for (const [id, ci] of ar.m) cls[id] = ED.CLASS_IDS[ci];
     for (const e of view.enemies) {
-      if (e.hp <= 0 || !e.def || !e.def.champ) continue;
-      const k = cls[e.id], str = k ? e.def.name + ' (' + ED.CLASSES[k].name + ')' : e.def.name;
-      R.label(c, str, Math.round(e.x), Math.round(e.y - e.r * 2.6 - 18), k ? ED.CLASSES[k].color || '#ffd36b' : '#ffd36b');
+      if (e.hp <= 0 || !e.def || !e.def.champ || e.def.colo) continue;
+      R.label(c, e.def.name, Math.round(e.x), Math.round(e.y - e.r * 2.6 - 18), '#ffd36b');
     }
     for (const z of view.zones) {
       if (z.kind !== 'spawn' || !(z.dur > 3)) continue;
@@ -180,6 +177,7 @@
     else if (ar && ar.k === 'crown') crownOver(c, room, ar, t);
     sweeps(c, view, t);
     champs(c, view, room, t);
+    if (ar && ar.k === 'champ' && ar.c) AF.colBars(c, view);
   };
 
   // Bind ground (Lancer): a chained circle that slows.
@@ -203,12 +201,10 @@
   on('dawn', (ev) => { A().play('evolve', 0.7); F.flash = { color: '#fff0d0', t: 0.3, a: 0.25 }; banner('The edge is falling: move to the middle'); });
   on('crumble', (ev) => { if (ev.st === 0) { A().play('rupt', 0.8); F.addShake(2); } else { A().play('smash', 1); A().play('boom', 0.7); F.addShake(8); } });
   on('fall', (ev, ctx, local) => { F.burst(ev.x0, ev.y0, 10, { color: '#2a2238', sp: 80, life: 0.5, size: 2 }); if (ev.pid === local) { F.flash = { color: '#000000', t: 0.35, a: 0.5 }; banner('You fell'); } });
-  on('champ', (ev) => { A().play('roar', 0.8); F.showBanner(ev.k === 'mimic' ? 'Mimic' : 'Twins', ev.k === 'mimic' ? 'It copies your skills' : 'Kill both within 10 s of each other', 'boss', 2.6); });
+  on('champ', (ev) => { A().play(ev.k === 'colossus' ? 'alarm' : 'roar', 0.8); F.showBanner(ev.k === 'colossus' ? 'Clockwork Colossus' : 'Twins', ev.k === 'colossus' ? 'Break two of its parts to open the core' : 'Kill both within 10 s of each other', 'boss', 2.6); });
   on('twinfall', (ev) => { F.ring(ev.x, ev.y, 34, '#ffb13a', 0.6, 3); A().play('down', 0.8); });
   on('twinrise', (ev) => { F.ring(ev.x, ev.y, 50, '#ffb13a', 0.6, 3, true); A().play('revive', 0.9); F.addShake(3); });
-  on('mimic', (ev) => { F.ring(ev.x, ev.y - 12, 24, '#e8e0ff', 0.35, 2); A().play('veil', 0.5); });
-  on('msplit', (ev) => { F.ring(ev.x, ev.y, 40, '#e8e0ff', 0.5, 3); A().play('shatter', 0.8); F.addShake(3); });
-  const TELL = { beam: 'charge', stalk: 'ambush', combo: 'clang', crown: 'throw', blink: 'veil', orbs: 'magic', nova: 'magic', laser: 'charge', starfall: 'raincast', reel: 'howl', bind: 'clang', meteor: 'fire' };
+  const TELL = { beam: 'charge', stalk: 'ambush', combo: 'clang', crown: 'throw', blink: 'veil', orbs: 'magic', nova: 'magic', laser: 'charge', starfall: 'raincast', reel: 'howl', bind: 'clang' };
   on('tell', (ev) => { const s = TELL[ev.k]; if (s) A().play(s, ev.k === 'stalk' ? 1 : 0.6); if (ev.k === 'stalk') F.ring(ev.x, ev.y, 36, '#ffffff', 0.5, 3, true); });
 })(globalThis.ED || (globalThis.ED = {}));
 
@@ -312,4 +308,243 @@
     }
     c.globalAlpha = 1;
   };
+})(globalThis.ED || (globalThis.ED = {}));
+// Clockwork Colossus (room.arena k 'champ' with c, champions.js): a machine of neon vector lines, unlike anything else in the pixel world. Its four foes never draw as sprites (render.js skips def.colo);
+// drawColossus (lit pass, y-sorted with the actors at the feet): dark body fills and the floor light; neon (emissive pass, additive): every outline as a wide faint stroke under a thin bright one (low quality: the thin one),
+// the turning gears and saw, pistons, the flickering lantern eye, sparks at stumps and part-break debris as line fragments; neonZone: its telegraphs, beams and rolling saws in the part colours; bars and name in over.
+(function (ED) {
+  'use strict';
+  const U = ED.U, TAU = U.TAU, AF = ED.ArenaFx, R = ED.Render, F = ED.FX, CFX = ED.ClassFx;
+  const PC = { cannon: '#ff3fd2', saw: '#ffb02e', eye: '#38f0ff' }, BODY = '#38f0ff', ARMOR = '#7aa8ff', HOT = '#ffe9a8', STUMP = '#ff4a3a', FROST = '#cfefff';
+  const ZC = [null, PC.cannon, PC.saw, PC.eye, '#ff5a4a']; // z.neon: cannon, saw, eye, core
+  const FILL = '#060912', PANEL = '#0c1428';
+  const lo = () => R.quality === 'low';
+  const NODASH = [], dash = (c, d, off) => { if (c.setLineDash) { c.setLineDash(d); c.lineDashOffset = off; } };
+  const COL = () => ED.Champions.COL;
+  const M = { core: null, cannon: null, saw: null, eye: null, x: 0, y: 0, c: null, t: 0 };
+  // The machine of the view, or null: the core foe, the standing parts and the arena row (ar.c).
+  function machine(view) {
+    const ar = view.room && view.room.arena;
+    if (!ar || ar.k !== 'champ' || !ar.c) return null;
+    M.core = M.cannon = M.saw = M.eye = null;
+    for (const e of view.enemies) if (e.hp > 0 && e.def && e.def.colo) M[e.def.colo] = e;
+    if (!M.core) return null;
+    M.x = M.core.x; M.y = M.core.y; M.c = ar.c;
+    return M;
+  }
+  const broken = (m, k) => !!(m.c.b & ({ cannon: 1, saw: 2, eye: 4 })[k]);
+  const stateOf = (m, i) => (m.c.s >> (2 * i)) & 3; // 0 idle, 1 winding up, 2 firing (i: cannon 0, saw 1, eye 2, core 3)
+  const partCol = (e, base) => (!e ? base : e.flash > 0 ? '#ffffff' : e.frozen > 0 ? FROST : base);
+  // A path drawn twice: wide and faint, then thin and bright (additive); low quality only the thin one.
+  function neon(c, col, w, a, build) {
+    c.beginPath(); build(c); c.strokeStyle = col;
+    if (!lo()) { c.globalAlpha = 0.22 * a; c.lineWidth = w + 3.5; c.stroke(); }
+    c.globalAlpha = a; c.lineWidth = w; c.stroke();
+    c.globalAlpha = 1;
+  }
+  const poly = (c, x, y, pts) => { c.moveTo(x + pts[0], y + pts[1]); for (let i = 2; i < pts.length; i += 2) c.lineTo(x + pts[i], y + pts[i + 1]); c.closePath(); };
+  const circ = (c, x, y, r) => { c.moveTo(x + r, y); c.arc(x, y, r, 0, TAU); };
+  const seg = (c, x0, y0, x1, y1) => { c.moveTo(x0, y0); c.lineTo(x1, y1); };
+  const gear = (c, x, y, r, n, rot, tooth) => { for (let i = 0; i <= n * 2; i++) { const a = rot + i * Math.PI / n, rr = i % 2 ? r : r + tooth; if (i) c.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); else c.moveTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } c.closePath(); };
+  const CHASSIS = [-50, -30, 50, -30, 40, -4, 30, 16, -30, 16, -40, -4], HEX = (r) => { const o = []; for (let i = 0; i < 6; i++) o.push(Math.cos(i * TAU / 6 + Math.PI / 6) * r, Math.sin(i * TAU / 6 + Math.PI / 6) * r); return o; }, CORE = HEX(20);
+  // Foot lift of a leg (side -1 left, 1 right) while the core winds up a stomp.
+  const lift = (m, side, t) => (side < 0 && stateOf(m, 3) === 1 ? 7 : 0) + (stateOf(m, 3) ? 0 : Math.max(0, Math.sin(t * 2.2 + (side < 0 ? 0 : Math.PI))) * 1.5);
+  function legs(c, x, y, t, m) {
+    for (const s of [-1, 1]) { const ly = lift(m, s, t); seg(c, x + s * 24, y + 14, x + s * 40, y + 28 - ly * 0.5); seg(c, x + s * 40, y + 28 - ly * 0.5, x + s * 36, y + 40 - ly); c.rect(x + s * 37 - 11, y + 38 - ly, 22, 6); }
+  }
+  const elbowOf = (s) => [s * 62, -8];
+  // Cannon barrel corners from the part centre along aim a.
+  const barrel = (c, x, y, a) => { const ca = Math.cos(a), sa = Math.sin(a), h = 7, L = 30; c.moveTo(x - sa * h, y + ca * h); c.lineTo(x + ca * L - sa * h, y + sa * L + ca * h); c.lineTo(x + ca * L + sa * h, y + sa * L - ca * h); c.lineTo(x + sa * h, y - ca * h); c.closePath(); };
+
+  // ---------- lit pass: body fills and floor light ----------
+  AF.colossus = (view, q) => { const m = machine(view); if (m) q(m.y + 40, m); };
+  AF.drawColossus = (c, m, t) => {
+    const x = m.x, y = m.y, O = COL().OFF;
+    c.globalAlpha = 0.45; c.fillStyle = '#000000'; c.beginPath(); c.ellipse(x, y + 42, 78, 10, 0, 0, TAU); c.fill();
+    c.globalAlpha = 1; c.fillStyle = FILL; c.beginPath();
+    poly(c, x, y, CHASSIS); legs(c, x, y, t, m);
+    if (!broken(m, 'eye')) circ(c, x + O.eye[0], y + O.eye[1], 16);
+    if (!broken(m, 'cannon')) { const px = x + O.cannon[0], py = y + O.cannon[1]; circ(c, px, py, 11); barrel(c, px, py, m.c.a[0]); }
+    if (!broken(m, 'saw')) { const a = m.c.a[1], px = x + O.saw[0] + Math.cos(a) * 12, py = y + O.saw[1] + Math.sin(a) * 12; circ(c, px, py, 17); }
+    c.fill();
+    c.fillStyle = PANEL; c.beginPath(); poly(c, x, y - 4, CORE); c.fill();
+    const open = m.c.o, pulse = 0.6 + 0.4 * Math.sin(t * 6);
+    R.light(x, y, open ? 120 : 80, open ? HOT : BODY, open ? 0.7 + 0.3 * pulse : 0.45);
+    if (!broken(m, 'eye')) R.light(x + O.eye[0], y + O.eye[1], 70, PC.eye, 0.5 + 0.2 * Math.sin(t * 17));
+    for (const k of ['cannon', 'saw']) if (!broken(m, k)) R.light(x + O[k][0], y + O[k][1], 60, PC[k], 0.35 + 0.35 * (stateOf(m, k === 'cannon' ? 0 : 1) ? 1 : 0));
+  };
+
+  // ---------- emissive pass: the neon machine, sparks, debris ----------
+  const deb = []; // line fragments { x, y, vx, vy, a, va, len, col, life, max }
+  const addDeb = (x, y, n, cols, sp) => { for (let i = 0; i < n && deb.length < (lo() ? 40 : 120); i++) { const a = Math.random() * TAU, v = sp * (0.4 + Math.random() * 0.8); deb.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - sp * 0.3, a: Math.random() * TAU, va: (Math.random() - 0.5) * 18, len: 4 + Math.random() * 10, col: cols[i % cols.length], life: 0.7 + Math.random() * 0.6, max: 1.3 }); } };
+  let lastT = 0;
+  function debris(c, dt) {
+    let n = 0;
+    for (let i = 0; i < deb.length; i++) {
+      const d = deb[i];
+      d.life -= dt; if (d.life <= 0) continue;
+      d.x += d.vx * dt; d.y += d.vy * dt; d.vy += 260 * dt; d.vx *= 1 - 1.5 * dt; d.a += d.va * dt;
+      const ca = Math.cos(d.a) * d.len / 2, sa = Math.sin(d.a) * d.len / 2;
+      neon(c, d.col, 1.3, Math.min(1, d.life * 1.6), (g) => seg(g, d.x - ca, d.y - sa, d.x + ca, d.y + sa));
+      deb[n++] = d;
+    }
+    deb.length = n;
+  }
+  // Sparks spitting from a stump at (x, y): short random line flicks this frame.
+  function sparks(c, x, y, t) {
+    if (Math.random() < (lo() ? 0.5 : 0.25)) return;
+    c.beginPath();
+    for (let i = 0; i < (lo() ? 1 : 3); i++) { const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.4, r0 = 3 + Math.random() * 4, r1 = r0 + 5 + Math.random() * 9; seg(c, x + Math.cos(a) * r0, y + Math.sin(a) * r0, x + Math.cos(a) * r1, y + Math.sin(a) * r1); }
+    c.strokeStyle = Math.random() < 0.5 ? '#fff2a0' : STUMP; c.lineWidth = 1.2; c.globalAlpha = 0.9; c.stroke(); c.globalAlpha = 1;
+    if (!lo()) R.glow(c, x, y, 10, STUMP, 0.35 + 0.25 * Math.sin(t * 31));
+  }
+  AF.neon = (c, view, t) => {
+    const dt = U.clamp(t - lastT, 0, 0.1); lastT = t;
+    const m = machine(view);
+    if (m) drawNeon(c, m, t);
+    if (deb.length) debris(c, dt);
+  };
+  function drawNeon(c, m, t) {
+    const x = m.x, y = m.y, O = COL().OFF, open = m.c.o, core = m.core, hot = 0.6 + 0.4 * Math.sin(t * 6);
+    c.lineJoin = 'round'; c.lineCap = 'round';
+    // chassis, legs, shoulders, neck
+    neon(c, partCol(core, BODY), 1.4, 0.9, (g) => {
+      poly(g, x, y, CHASSIS); legs(g, x, y, t, m);
+      seg(g, x - 36, y - 22, x - 18, y + 8); seg(g, x + 36, y - 22, x + 18, y + 8); // ribs
+      circ(g, x - 50, y - 24, 8); circ(g, x + 50, y - 24, 8);
+      if (!broken(m, 'eye')) { seg(g, x - 10, y - 30, x - 8, y - 40); seg(g, x + 10, y - 30, x + 8, y - 40); }
+    });
+    // core: armour plates over a gear, or the open gear burning
+    const gr = t * (open ? 2.4 : 0.6);
+    neon(c, open ? HOT : partCol(core, ARMOR), open ? 1.6 : 1.2, open ? 0.6 + 0.4 * hot : 0.8, (g) => gear(g, x, y - 4, 11, 8, gr, 3));
+    if (!open) neon(c, partCol(core, ARMOR), 1.4, 0.95, (g) => { for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4, ca = Math.cos(a), sa = Math.sin(a); g.moveTo(x + ca * 6, y - 4 + sa * 6); g.lineTo(x + Math.cos(a - 0.6) * 19, y - 4 + Math.sin(a - 0.6) * 19); g.lineTo(x + Math.cos(a + 0.6) * 19, y - 4 + Math.sin(a + 0.6) * 19); g.closePath(); } });
+    else { neon(c, HOT, 1.2, 0.8, (g) => poly(g, x, y - 4, CORE)); if (!lo()) R.glow(c, x, y - 4, 34 + 6 * hot, '#ffcf6a', 0.55); }
+    // pistons: a sleeve and a sliding rod per arm
+    for (const s of [-1, 1]) {
+      const k = s < 0 ? 'cannon' : 'saw', e = M[k], br = broken(m, k), slide = 4 * Math.sin(t * (stateOf(m, s < 0 ? 0 : 1) ? 9 : 2) + (s < 0 ? 0 : 1.7)), el = elbowOf(s);
+      neon(c, br ? STUMP : partCol(e, BODY), 1.2, br ? 0.6 : 0.85, (g) => { seg(g, x + s * 50, y - 24, x + el[0], y + el[1]); seg(g, x + s * 40, y - 6, x + s * (52 + slide), y - 2); circ(g, x + el[0], y + el[1], 3); });
+      if (br) { sparks(c, x + el[0], y + el[1], t); continue; }
+      const px = x + O[k][0], py = y + O[k][1], st = stateOf(m, s < 0 ? 0 : 1), col = partCol(e, PC[k]), glow = st === 1 ? 0.55 + 0.45 * Math.sin(t * 20) : st === 2 ? 1 : 0.75;
+      if (k === 'cannon') {
+        const a = m.c.a[0], spin = t * (st === 2 ? 14 : st === 1 ? 6 : 1);
+        neon(c, col, 1.4, glow, (g) => { barrel(g, px, py, a); circ(g, px + Math.cos(a) * 30, py + Math.sin(a) * 30, 5); circ(g, px, py, 10); for (let i = 0; i < 6; i++) { const b = spin + i * TAU / 6; seg(g, px, py, px + Math.cos(b) * 10, py + Math.sin(b) * 10); } });
+        if (st && !lo()) R.glow(c, px + Math.cos(a) * 30, py + Math.sin(a) * 30, 12 + 6 * glow, PC.cannon, 0.6 * glow);
+      } else {
+        const a = m.c.a[1], hx = px + Math.cos(a) * 12, hy = py + Math.sin(a) * 12, spin = t * (st === 2 ? 26 : st === 1 ? 12 : 3);
+        neon(c, col, 1.4, glow, (g) => { seg(g, px, py, hx, hy); gear(g, hx, hy, 14, 12, spin, 4); circ(g, hx, hy, 4); });
+        if (st && !lo()) R.glow(c, hx, hy, 22, PC.saw, 0.45 * glow);
+      }
+    }
+    // the lantern eye: housing, iris, a pupil looking down its aim; a flicker
+    const ex = x + O.eye[0], ey = y + O.eye[1];
+    if (broken(m, 'eye')) { neon(c, STUMP, 1.2, 0.5 + 0.3 * Math.random(), (g) => circ(g, ex, ey, 9)); sparks(c, ex, ey, t); }
+    else {
+      const e = M.eye, a = m.c.a[2], st = stateOf(m, 2), fl = 0.75 + 0.15 * Math.sin(t * 17) + 0.1 * Math.sin(t * 43), col = partCol(e, PC.eye);
+      neon(c, col, 1.4, fl, (g) => { circ(g, ex, ey, 15); circ(g, ex, ey, 8); for (let i = 0; i < 4; i++) { const b = i * Math.PI / 2 + t * 0.8; seg(g, ex + Math.cos(b) * 10, ey + Math.sin(b) * 10, ex + Math.cos(b) * 14, ey + Math.sin(b) * 14); } });
+      const pxl = ex + Math.cos(a) * 4, pyl = ey + Math.sin(a) * 4;
+      c.fillStyle = st ? '#ffffff' : '#bff8ff'; c.globalAlpha = fl; c.beginPath(); c.arc(pxl, pyl, st === 1 ? 3.5 : 2.5, 0, TAU); c.fill(); c.globalAlpha = 1;
+      if (!lo()) R.glow(c, pxl, pyl, st ? 26 : 16, PC.eye, (st ? 0.8 : 0.45) * fl);
+    }
+  }
+
+  // ---------- telegraphs, beams and saws (render.js drawZones calls neonZone for zones with z.neon) ----------
+  const lane = (g, x, y, a, len, w) => { const ca = Math.cos(a), sa = Math.sin(a), h = w / 2; g.moveTo(x - sa * h, y + ca * h); g.lineTo(x + ca * len - sa * h, y + sa * len + ca * h); g.lineTo(x + ca * len + sa * h, y + sa * len - ca * h); g.lineTo(x + sa * h, y - ca * h); g.closePath(); };
+  const fan = (g, x, y, a, r, arc) => { g.moveTo(x, y); g.arc(x, y, r, a - arc / 2, a + arc / 2); g.closePath(); };
+  AF.neonZone = (c, z, pass, t, k) => {
+    const col = ZC[z.neon] || BODY, kind = z.kind;
+    if (kind !== 'tele' && kind !== 'teleLine' && kind !== 'teleCone' && kind !== 'laser' && kind !== 'gsaw') return false;
+    if (pass === 2) return true;
+    const hot = k > 0.82 ? 0.5 + 0.5 * Math.sin(t * 40) : 0;
+    if (kind === 'laser') {
+      const active = z.t > (z.warm || 0), ca = Math.cos(z.a), sa = Math.sin(z.a), x1 = z.x + ca * z.len, y1 = z.y + sa * z.len;
+      if (pass === 0) { if (active) for (let i = 0; i < 3; i++) R.light(z.x + ca * z.len * (i + 0.5) / 3, z.y + sa * z.len * (i + 0.5) / 3, 80, col, 0.7); return true; }
+      if (!active) { // warming: a dashed aim line and, for a sweep, the dotted arc it will turn through
+        const kw = U.clamp(z.t / Math.max(0.01, z.warm), 0, 1);
+        dash(c, [6, 6], -t * 40);
+        neon(c, col, 1, 0.4 + 0.5 * kw, (g) => seg(g, z.x, z.y, x1, y1));
+        if (z.arc) neon(c, col, 1, 0.7, (g) => { g.moveTo(z.x + Math.cos(z.a) * 60, z.y + Math.sin(z.a) * 60); g.arc(z.x, z.y, 60, z.a, z.a + z.arc, z.arc < 0); });
+        dash(c, NODASH, 0);
+        if (z.arc) { const ae = z.a + z.arc, ax = z.x + Math.cos(ae) * 60, ay = z.y + Math.sin(ae) * 60; c.fillStyle = col; c.beginPath(); c.arc(ax, ay, 2.5, 0, TAU); c.fill(); }
+        if (!lo()) R.glow(c, z.x, z.y, 10 + 14 * kw, col, 0.4 + 0.5 * kw);
+        return true;
+      }
+      const fl = 0.85 + 0.15 * Math.sin(t * 60);
+      c.lineCap = 'round';
+      if (!lo()) { c.globalAlpha = 0.3 * fl; c.strokeStyle = col; c.lineWidth = z.w * 1.8; c.beginPath(); seg(c, z.x, z.y, x1, y1); c.stroke(); }
+      c.globalAlpha = 0.9; c.strokeStyle = col; c.lineWidth = Math.max(2, z.w * 0.7); c.beginPath(); seg(c, z.x, z.y, x1, y1); c.stroke();
+      c.globalAlpha = fl; c.strokeStyle = '#ffffff'; c.lineWidth = Math.max(1, z.w * 0.25); c.stroke(); c.globalAlpha = 1;
+      if (!lo()) { R.glow(c, z.x, z.y, z.w * 2.5, col, 0.9); R.glow(c, x1, y1, z.w * 2, col, 0.7); }
+      return true;
+    }
+    if (kind === 'gsaw') {
+      const q = ED.Champions.gsawAt(z), left = z.len * (1 - Math.min(1, z.t / z.dur)), spin = t * 30;
+      if (pass === 0) { R.light(q.x, q.y, 70, col, 0.8); return true; }
+      dash(c, [4, 8], -t * 60);
+      neon(c, col, 1, 0.5, (g) => lane(g, q.x, q.y, z.a, left, z.w));
+      dash(c, NODASH, 0);
+      neon(c, col, 1.5, 1, (g) => { gear(g, q.x, q.y - 4, z.r - 3, 12, spin, 4); circ(g, q.x, q.y - 4, 4); });
+      if (!lo()) R.glow(c, q.x, q.y - 4, z.r * 1.8, col, 0.6);
+      return true;
+    }
+    const build = kind === 'tele' ? (g, s) => circ(g, z.x, z.y, Math.max(1, z.r * s)) : kind === 'teleLine' ? (g, s) => lane(g, z.x, z.y, z.a, z.len * s, z.w) : (g, s) => fan(g, z.x, z.y, z.a, Math.max(1, z.r * s), Math.min(TAU, z.arc));
+    if (pass === 0) { // a faint fill of the whole shape and a brighter one growing to the moment it hits
+      c.fillStyle = col; c.globalAlpha = 0.1; c.beginPath(); build(c, 1); c.fill();
+      if (k > 0) { c.globalAlpha = 0.16 + 0.1 * hot; c.beginPath(); build(c, k); c.fill(); }
+      c.globalAlpha = 1;
+      const lx = kind === 'teleLine' ? z.x + Math.cos(z.a) * z.len / 2 : z.x, ly = kind === 'teleLine' ? z.y + Math.sin(z.a) * z.len / 2 : z.y;
+      R.light(lx, ly, Math.max(40, (kind === 'teleLine' ? z.len : z.r) * 0.6), col, 0.35);
+      return true;
+    }
+    neon(c, hot ? '#ffffff' : col, 1.2, 0.85, (g) => build(g, 1));
+    if (k > 0.02) neon(c, col, 1, 0.5 + 0.4 * k, (g) => build(g, k));
+    return true;
+  };
+
+  // ---------- over: part health and the name ----------
+  AF.colBars = (c, view) => {
+    const m = machine(view); if (!m) return;
+    const O = COL().OFF;
+    for (const k of ['core', 'cannon', 'saw', 'eye']) {
+      const e = M[k]; if (!e || e.hp <= 0) continue;
+      const w = k === 'core' ? 44 : 26, bx = Math.round(m.x + O[k][0] - w / 2), by = Math.round(m.y + O[k][1] + (k === 'core' ? 52 : k === 'eye' ? -24 : 22)), f = U.clamp(e.hp / e.maxHp, 0, 1);
+      const col = k === 'core' ? (m.c.o ? HOT : ARMOR) : PC[k];
+      c.fillStyle = 'rgba(0,0,0,0.75)'; c.fillRect(bx - 1, by - 1, w + 2, 4);
+      c.fillStyle = U.shade(col, -0.6); c.fillRect(bx, by, w, 2);
+      c.fillStyle = col; c.fillRect(bx, by, Math.round(w * f), 2);
+      if (k === 'core' && !m.c.o) { c.fillStyle = '#0a0d1a'; for (let i = 1; i < 4; i++) c.fillRect(bx + Math.round(w * i / 4), by, 1, 2); } // armour notches
+    }
+    R.label(c, m.core.def.name, Math.round(m.x), Math.round(m.y - 78), m.c.o ? HOT : BODY);
+  };
+
+  // ---------- shots: neon bolts (cannon) and sparks (stomp shockwaves) ----------
+  const bolt = (col) => (c, pr, t, x, y) => {
+    const a = Math.atan2(pr.vy, pr.vx), ca = Math.cos(a), sa = Math.sin(a), L = 7, h = 3.5;
+    c.lineJoin = 'round';
+    neon(c, col, 1.3, 1, (g) => { g.moveTo(x + ca * L, y + sa * L); g.lineTo(x - sa * h, y + ca * h); g.lineTo(x - ca * L * 0.6, y - sa * L * 0.6); g.lineTo(x + sa * h, y - ca * h); g.closePath(); });
+    c.fillStyle = '#ffffff'; c.fillRect(Math.round(x) - 1, Math.round(y) - 1, 2, 2);
+    return true;
+  };
+  const SB = CFX.shotBody || (CFX.shotBody = {});
+  SB.cbolt = bolt(PC.cannon); SB.cspark = bolt(PC.saw);
+
+  // ---------- events ----------
+  const A = () => ED.Audio, on = (k, f) => CFX.on(k, f);
+  const NAME = ['Cannon Arm', 'Saw Arm', 'Lantern Eye'], PK = ['cannon', 'saw', 'eye'];
+  on('colmv', () => A().play('servo', 0.6));
+  on('colhum', () => A().play('lhum', 0.7));
+  on('colsaw', (ev) => { A().play('gearsaw', 0.7); F.addShake(1.5); F.ring(ev.x, ev.y, 26, PC.saw, 0.3, 2); });
+  on('colstomp', (ev) => { A().play('stomp', 0.9); F.addShake(5); F.ring(ev.x, ev.y, 110, '#ff5a4a', 0.45, 3, false, 20); });
+  on('colbreak', (ev) => {
+    const k = PK[ev.k] || 'cannon';
+    A().play('colbreak', 1); F.addShake(7); F.flash = { color: '#ffffff', t: 0.12, a: 0.25 };
+    addDeb(ev.x, ev.y, 26, [PC[k], BODY, '#ffffff', STUMP], 220);
+    F.ring(ev.x, ev.y, 70, PC[k], 0.5, 3); F.pop(ev.x, ev.y, 34, PC[k], 0.25, true);
+    F.showBanner(NAME[ev.k] + ' broken', '', 'small', 1.6);
+  });
+  on('colopen', (ev) => { A().play('alarm', 1); F.addShake(4); F.ring(ev.x, ev.y, 90, HOT, 0.7, 3, true); F.showBanner('The core is open', 'It takes full damage now. The machine goes wild.', 'small', 2.4); });
+  on('coldown', (ev) => {
+    A().play('colbreak', 1); A().play('boom', 0.9); F.addShake(12); F.flash = { color: '#bff8ff', t: 0.35, a: 0.4 };
+    const O = COL().OFF; for (const k of ['core', 'cannon', 'saw', 'eye']) addDeb(ev.x + O[k][0], ev.y + O[k][1], 22, [k === 'core' ? HOT : PC[k] || BODY, BODY, '#ffffff'], 260);
+    F.ring(ev.x, ev.y, 150, BODY, 0.8, 4); F.ring(ev.x, ev.y, 90, HOT, 0.6, 3);
+  });
 })(globalThis.ED || (globalThis.ED = {}));

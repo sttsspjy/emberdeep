@@ -64,7 +64,7 @@
     return (P.frames[name] = rec);
   };
   // Variants mapping char to every path colour: { fire: { [ch]: '--path-fire' }, ... } (merge into variants).
-  P.PATHS = ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general'];
+  P.PATHS = ['fire', 'ice', 'lightning', 'holy', 'shadow', 'general']; // the four paths plus the class-only elements (ED.pathInfo)
   P.pathVariants = (ch, prefix) => { const o = {}; for (const p of P.PATHS) o[(prefix || '') + p] = { [ch]: '--path-' + p }; return o; };
   // Rebakes every frame (after a colour token changed).
   P.rebake = () => { for (const name in P.frames) P.frame(name, P.frames[name].def); };

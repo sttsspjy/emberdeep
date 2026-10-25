@@ -13,19 +13,20 @@
   const SIZE = { start: [15, 11], treasure: [13, 11], shop: [17, 13], event: [15, 11], rest: [15, 11], boss: [31, 19] };
   const FIGHT_ROOM = { combat: 1, elite: 1, champion: 1 }; // node types that draw a combat room size
   const PATTERN_AREA = 294; // tile area the base pool and scatter counts are written for: both scale by room area / PATTERN_AREA
-  const EVENTS = ['fountain', 'altar', 'gamble', 'trial'];
   const REWARD_ODDS = [['boon', 55], ['gold', 15], ['vigor', 10], ['forge', 20]]; // normal combat reward weights
+  const ELITE_EPIC = 0.25; // share of elite rooms whose reward is an epic offer (the rest: a relic pick)
+  const PATH_BOON = 0.7; // share of boon rewards that name a path (the rest offer any boon)
   const MIN_FIGHTS = 3; // the Platino's cue is one of the first MIN_FIGHTS fight clears of a floor
 
   // ---------------- map (Slay-the-Spire layered graph) ----------------
   // Rows of rooms between the start camp (row 0) and the boss (row ROWS + 1), by stratum; LANES columns; MAP_PATHS paths drawn bottom to top; a row holds ROW_N nodes; the start camp leads to START_N row-1 rooms.
   const ROWS = [15, 15, 15, 6], LANES = 7, MAP_PATHS = [5, 6], ROW_N = [2, 5], START_N = [3, 4], MAP_TRIES = 80;
   // Node type weights of rows without a fixed type (strata I-III) and the first row each may appear on. dark = a harder combat node (§7).
-  const NODE_W = { combat: 43, dark: 18, elite: 25, event: 10, shop: 5, rest: 4 };
+  const NODE_W = { combat: 42, dark: 18, elite: 27, event: 15, shop: 5, rest: 4 };
   const NODE_FROM = { combat: 1, dark: 3, elite: 5, event: 2, shop: 5, rest: 6 };
   const NO_REPEAT = { dark: 1, elite: 1, shop: 1, rest: 1 }; // never on two rows in a row of one path
   // Stratum IV (finale) rows: each node draws from its row's list (both kinds appear in a row of two or more nodes); champion rows name the champion.
-  const FINALE = [['combat'], ['combat', 'event'], ['champion:twins'], ['rest', 'shop'], ['champion:mimic'], ['rest']];
+  const FINALE = [['combat'], ['combat', 'event'], ['champion:twins'], ['rest', 'shop'], ['champion:colossus'], ['rest']];
   D.ROWS = ROWS; D.LANES = LANES;
   D.rowsOf = (stratum) => ROWS[Math.max(0, Math.min(ROWS.length - 1, stratum - 1))];
 
@@ -138,8 +139,8 @@
     return rng.int(1, MIN_FIGHTS);
   }
 
-  // Rewards are fixed per floor and shown before entry. Combat (dark included): boon (drawn from the claiming hero's own paths), gold, vigor, forge,
-  // each kind getting its REWARD_ODDS share of the floor's combat rooms (rounded by weighted draw on the remainders). Elite: epic at 25%, else relic. Champion: relic.
+  // Rewards are fixed per floor and shown before entry. Combat (dark included): boon, gold, vigor, forge, each kind getting its REWARD_ODDS share of the floor's combat rooms (rounded by weighted draw on the remainders).
+  // A boon reward of a lit room names a path (room.rewardPath, PATH_BOON of them, a path drawn evenly; own RNG stream) or none (any boon); a dark room's boon steps up to an epic offer and names none. Elite: epic at ELITE_EPIC, else relic. Champion: relic.
   function assignRewards(rooms, stratum, seed) {
     const rng = U.RNG((seed ^ 0x5bd1e995) + stratum * 15485863);
     const combat = rooms.filter(r => r.type === 'combat');
@@ -153,7 +154,9 @@
     counts.forEach((c, i) => { for (let k = 0; k < c; k++) bag.push(REWARD_ODDS[i][0]); });
     rng.shuffle(bag);
     combat.forEach((r, i) => { r.reward = bag[i]; });
-    for (const r of rooms) if (r.type === 'elite') r.reward = rng.next() < 0.25 ? 'epic' : 'relic'; else if (r.type === 'champion') r.reward = 'relic';
+    for (const r of rooms) if (r.type === 'elite') r.reward = rng.next() < ELITE_EPIC ? 'epic' : 'relic'; else if (r.type === 'champion') r.reward = 'relic';
+    const pr = U.RNG((seed ^ 0x2f6a3b1d) + stratum * 7919);
+    for (const r of combat) if (r.reward === 'boon' && !r.dark) r.rewardPath = pr.next() < PATH_BOON ? pr.pick(ED.PATH_IDS) : null;
   }
 
   // A room is wide enough for its north doors: n doors need 6n + 5 tiles (odd widths keep the centre door on the middle tile).
@@ -171,13 +174,48 @@
     if (c.row > 0) doorX.s = Math.floor(w / 2);
     return {
       id: c.id, row: c.row, lane: c.lane, type: c.type, w, h, tiles, seed, stratum,
-      dist: c.row / 2, danger: 1 + 0.025 * c.row, reward: null, threat: 0, // dist: depth for the encounter budget (half the map row)
+      dist: c.row / 2, danger: 1 + 0.025 * c.row, reward: null, rewardPath: null, threat: 0, // dist: depth for the encounter budget (half the map row)
       exits: c.children.map(o => o.id), doors, doorX, entry: c.row > 0, // entry: the sealed south door the party came through
       decor: [], breakables: [], torches: [], dark: !!c.dark, champ: c.champ || null,
-      event: c.type === 'event' ? EVENTS[seed % EVENTS.length] : null,
+      event: null, // an event room's identity: drawn by the host on first entry or a reveal (events.js), carried to clients as a room patch
       pattern: 'open',
     };
   }
+
+  // ---------------- room patches (World.patchRoom, events.js) ----------------
+  // A patch ⊂ { type, reward, event, reveal } on room id of floor fl. The host and every client apply the same merged patch to the generated floor and get the same room.
+  // A new type rebuilds the room on its own seed (the generated seed ^ the type's hash): size, doors, interior, decor; never dark; reward the type's default (elite: epic at ELITE_EPIC else relic, combat: boon, others none); event unresolved.
+  const RETYPE = { combat: 1, elite: 2, shop: 3, rest: 4, event: 5, treasure: 6 };
+  D.RETYPE = Object.keys(RETYPE);
+  function retype(fl, r, type) {
+    const seed0 = r.seed0 !== undefined ? r.seed0 : r.seed, seed = (seed0 ^ Math.imul(RETYPE[type], 0x9e3779b1)) >>> 0, rng = U.RNG(seed);
+    const n = buildRoom({ id: r.id, row: r.row, lane: r.lane, type, children: r.exits.map(x => fl.rooms[x]) }, r.stratum, seed, rng);
+    n.seed0 = seed0;
+    n.reward = type === 'elite' ? (rng.next() < ELITE_EPIC ? 'epic' : 'relic') : type === 'combat' ? 'boon' : null;
+    n.threat = threatOf(n, fl.rows);
+    carveDoors(n); finalizeInterior(n, r.stratum); decorate(n, r.stratum);
+    for (const k of Object.keys(r)) delete r[k]; // the room object keeps its identity (floor.rooms, references)
+    Object.assign(r, n);
+  }
+  // Applies patch to room id; returns the room (null when there is none).
+  D.patchRoom = (fl, id, patch) => {
+    const r = fl && fl.rooms[id];
+    if (!r || !patch) return null;
+    if (patch.type && RETYPE[patch.type] && patch.type !== r.type) retype(fl, r, patch.type);
+    if ('reward' in patch) { r.reward = patch.reward || null; if (r.reward !== 'boon') r.rewardPath = null; } // a path names only a boon reward
+    if (patch.event) r.event = patch.event;
+    if (patch.reveal) r.reveal = true;
+    return r;
+  };
+  // Client side: applies each [id, merged patch] of a full snapshot (net.js RP) whose patch changed since the last one applied (room.psig).
+  D.applyPatches = (fl, list) => {
+    if (!fl) return;
+    for (const [id, p] of list) {
+      const r = fl.rooms[id], sig = JSON.stringify(p);
+      if (!r || r.psig === sig) continue;
+      D.patchRoom(fl, id, p).psig = sig;
+    }
+  };
 
   // Tile rect of door d: 'n<i>' on the north wall at room.doorX[d] (2 rows deep), 's' on the south wall.
   D.doorRect = (room, d) => {

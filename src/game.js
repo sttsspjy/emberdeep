@@ -4,7 +4,6 @@
   'use strict';
   const U = ED.U, Sim = ED.Sim, N = ED.Net;
   const G = ED.Game = { s: null };
-  const HERO_REWARD = /^(boon$|forge$|epic$|vigor$)/; // reward items every hero claims separately
 
   // ---------------- client-side mirror of the host's world ----------------
   function Mirror(cfg, localPid) {
@@ -42,10 +41,12 @@
       for (const p of this.players.values()) p.toughRoom = tough; // War Drum doubles in these rooms
     }
     this.locked = !!d.L; this.gold = d.g; this.xp = d.x; this.xpNext = d.n; this.level = d.l; this.waitMsg = d.wm; this.time = d.T;
-    if (d.O) this.props = d.O.map(a => ({ id: a[0], kind: a[1], x: a[2], y: a[3], state: a[4], item: a[5], price: a[6], group: a[7], stype: a[8], text: a[9] }));
+    if (d.O) this.props = d.O.map(a => ({ id: a[0], kind: a[1], x: a[2], y: a[3], state: a[4], item: a[5], price: a[6], group: a[7], stype: a[8], text: a[9], owner: a[10] || '' }));
+    if (d.O) d.O.forEach((a, i) => { if (a[11]) this.props[i].ev = a[11]; if (a[12]) this.props[i].g = a[12]; }); // an event prop's def id (net.js O[11]); a minigame prop's payload (O[12], minigames.js)
+    if (d.RP) ED.Dungeon.applyPatches(this.floor, d.RP); // room patches of this floor (events.js)
     if (d.RS) d.RS.forEach((b, i) => { this.roomState[i] = { visited: !!(b & 1), known: !!(b & 2), cleared: !!(b & 4), broken: d.BR ? d.BR[i] | 0 : 0 }; });
     if (d.RUN) this.run = d.RUN;
-    if (ED.Arena) ED.Arena.decode(this.room, d.AR || null); // boss / champion arena (flood, darkness, lanterns, collapsed floor, mimic classes)
+    if (ED.Arena) ED.Arena.decode(this.room, d.AR || null); // boss / champion arena (flood, darkness, lanterns, collapsed floor, Colossus parts)
     const P = new Map(), E = new Map(), H = new Map(), K = new Map(), A = new Map();
     for (const a of d.P) P.set(a[0], a);
     for (const a of d.E) E.set(a[0], a);
@@ -60,12 +61,12 @@
       p.hp = a[4]; p.maxHp = a[5]; const fl = a[6];
       p.downed = !!(fl & 4); p.dead = !!(fl & 8); p.invuln = fl & 16 ? 0.2 : 0; p.revive = a[7];
       p.critStacks = a[8]; p.aegisT = a[9] ? 1 : 0; p.guardT = a[10] ? 1 : 0; p.secondWind = a[11]; p.phoenixUsed = !!a[12]; p.picks = a[13]; p.rerolls = a[14];
-      p.shield = a[15] || 0; p.rdy = a[16] | 0; p.stealthT = fl & 128 ? 1 : 0; p.ambush = !!(fl & 256); p.shieldOut = !!(fl & 64); p.airborne = !!(fl & 512); p.momN = a[17] | 0; p.shwC = a[18] || 0; p.shwA = a[19] || 0;
+      p.shield = a[15] || 0; p.rdy = a[16] | 0; p.stealthT = fl & 128 ? 1 : 0; p.ambush = !!(fl & 256); p.blocks = (fl >> 21) & 7; p.airborne = !!(fl & 512); p.momN = a[17] | 0; p.shwC = a[18] || 0; p.shwA = a[19] || 0;
       if ((a[20] | 0) !== (p.chaliceHp | 0)) { p.chaliceHp = a[20] | 0; this.recalc(p); }
       p.glBuff = !!(fl & 1024); p.embolden = !!(fl & 2048); // Cleric buffs: Guardian Light, Embolden
       p.glT = p.glBuff ? 1 : 0; p.glV = a[22] || 0; p.auraT = p.embolden ? 1 : 0; p.auraV = a[23] || 0; // timed damage bonuses the Tab sheet and Stats read
-      p.doorWant = a[26] | 0; p.sparks = a[27] | 0; // the door the hero waits in, Kindling Sparks (the HUD chip)
-      if (p.pid !== this.localPid) { p.moving = !!(fl & 1); p.dashing = !!(fl & 2); p.face = a[3]; p.braceT = fl & 1048576 ? 1 : 0; p.tranceT = fl & 4096 ? 1 : 0; p.holdOn = !!(fl & 8192); } // the local hero predicts its own Trance and hold
+      p.doorWant = a[26] | 0; p.sparks = a[27] | 0; p.emp = a[28] | 0; // the door the hero waits in, Kindling Sparks (the HUD chip), empowered next attack (ED.EMPOWER index + 1)
+      if (p.pid !== this.localPid) { p.moving = !!(fl & 1); p.dashing = !!(fl & 2); p.face = a[3]; p.braceT = fl & 1048576 ? 1 : 0; p.tranceT = fl & 4096 ? 1 : 0; p.holdOn = !!(fl & 8192); p.bulwarkOn = !!(fl & 64); } // the local hero predicts its own Trance, hold and raised Bulwark
       else if (this.firstInRoom) { p.x = a[1]; p.y = a[2]; }
     }
     this.firstInRoom = false;
@@ -105,7 +106,7 @@
       const fl = rb[7];
       e.flash = fl & 1 ? 0.05 : 0; e.frozen = fl & 2 ? 1 : 0; e.stun = fl & 4 ? 1 : 0; e.burnLvl = (fl >> 11) & 3; e.burn = e.burnPool = e.burnLvl > 0 ? 1 : 0; e.chill = rb[16] || 0; e.exposed = !!(fl & 32);
       e.charge = fl & 64 ? 1 : 0; e.bleedPool = fl & 128 ? 1 : 0; e.judged = fl & 256 ? 1 : 0; e.blind = fl & 512 ? 1 : 0; e.vulnT = fl & 1024 ? 1 : 0;
-      e.venomLvl = (fl >> 13) & 7; e.radLvl = (fl >> 16) & 3; e.doomLine = rb[17] || 0; // Venom pips (5 = Corroded), Radiance fill, Reap line (bosses: the Toll gauge)
+      e.radLvl = (fl >> 16) & 3; e.doomLine = rb[17] || 0; // Radiance fill, Reap line (bosses: the Toll gauge)
       e.hexed = !!(fl & (1 << 18)); e.marked = !!(fl & (1 << 19)); e.sealed = !!(fl & (1 << 20)); e.ailN = (fl >> 21) & 7; // route states: Hexed, Marked, Sealed, ailment count
       e.burnN = (fl >> 24) & 15; // Burn stacks (the count drawn on the foe)
       e.boss = !!e.def.boss;
@@ -148,7 +149,7 @@
     const zb = this.zoneBase;
     if (zb) {
       const el = now - zb.recv;
-      this.zones = zb.list.map(z => ({ id: z[0], kind: N.ZK[z[1]], x: z[2], y: z[3], r: z[4], t: z[5] + el, dur: z[6], a: z[7], len: z[8], w: z[9], arc: z[10], team: z[11], elite: z[12] === 1, big: z[12] === 2, lob: z[13] > -99999 ? [z[13], z[14]] : null, warm: z[15], str: z[16] || 0, fol: z[17] | 0 }));
+      this.zones = zb.list.map(z => ({ id: z[0], kind: N.ZK[z[1]], x: z[2], y: z[3], r: z[4], t: z[5] + el, dur: z[6], a: z[7], len: z[8], w: z[9], arc: z[10], team: z[11], elite: z[12] === 1, big: z[12] === 2, neon: z[12] > 2 ? z[12] - 2 : 0, lob: z[13] > -99999 ? [z[13], z[14]] : null, warm: z[15], str: z[16] || 0, fol: z[17] | 0 }));
       for (const z of this.zones) if (z.fol) for (const p of this.players.values()) if (p.slot === z.fol - 1) { z.x = p.x; z.y = p.y; break; } // a zone that follows its hero is drawn on the hero's smoothed position
     }
   };
@@ -328,7 +329,7 @@
       for (const pd of cfg.players) { const p = s.world.players.get(pd.pid); if (p) p.wear = N.cleanWear(pd.wear, p.cls); } // Wardrobe sets (client only: the sim never reads them)
     }
     s.view.pact = cfg.pact;
-    s.ctl = { atkCd: 0, skillCd: 0, skill2Cd: 0, skill3Cd: 0, charges: s.me.stats.maxCharges, charges3: s.me.stats.skill3Charges, dashN: s.me.stats.dashCharges, dashT: 0, tranceT: 0, latch: false, aimA: 0, holdT: 0, holding: false };
+    s.ctl = { atkCd: 0, skillCd: 0, skill2Cd: 0, skill3Cd: 0, charges: s.me.stats.maxCharges, charges3: s.me.stats.skill3Charges, dashN: s.me.stats.dashCharges, dashT: 0, tranceT: 0, latch: false, aimA: 0, holdT: 0, holding: false, bwOn: false, bwT: 0 }; // bwOn / bwT: the Bulwark is raised, seconds held
     // Aim state read by ED.AimFx: cursor in CSS px (sx, sy) and world (wx, wy), device, angle, push fraction (frac) for stick or keyboard-only ground skills, ready ground skills, cooldown fraction, pulse/crit timestamps.
     s.aim = { sx: 0, sy: 0, wx: 0, wy: 0, a: 0, device: 'mouse', pointer: false, show: false, dead: false, foe: false, frac: 0.6, cd: 0, ground: [], pulseT: -9, critT: -9 };
     if (ED.AimFx) ED.AimFx.applyCursor();
@@ -343,7 +344,7 @@
     return s;
   };
 
-  G.stop = () => { G.s = null; if (ED.AimFx) ED.AimFx.hover(false, false); };
+  G.stop = () => { G.s = null; if (ED.AimFx) ED.AimFx.hover(false, false); if (ED.UI.evOpen()) ED.UI.evClose(false); }; // an open event dialog closes with the run
   // No one else is in this world (solo, or a hosted party whose friends have all left): it may wait for us.
   G.alone = () => { const s = G.s; return !!s && (s.mode === 'solo' || (s.mode === 'host' && s.world.players.size <= 1)); };
 
@@ -354,13 +355,12 @@
     switch (a.t) {
       case 'atk': p.atkD = +a.d; w.playerAttack(p, +a.a || 0, 0, a.k); break; // d: the cursor distance of the attack (a lobbed weapon lands there)
       case 'skill': if ((a.slot | 0) >= 0 && (a.slot | 0) <= 2) w.playerSkill(p, +a.a || 0, a.data, a.slot | 0); break;
-      case 'dash': // blink: Umbral Arms put the hero behind a foe; ox, oy: where the dash began; bx, by: where a Storm Step / Umbral Arms blink landed (fx only)
-        if (Number.isFinite(a.bx) && Number.isFinite(a.by) && Number.isFinite(a.ox) && Number.isFinite(a.oy)) w.emit({ t: 'blink', pid, x0: +a.ox, y0: +a.oy, x1: +a.bx, y1: +a.by, k: a.blink ? 'behind' : 'storm' });
-        w.playerDash(p, +a.dx || 0, +a.dy || 0, !!a.blink, +a.ox, +a.oy); break;
-      case 'hold': w.playerHold(p, !!a.on, +a.a || 0, +a.d || 0); break; // the held-attack verb starts (on) or is released
+      case 'dash': w.playerDash(p, +a.dx || 0, +a.dy || 0); break;
+      case 'hold': if (a.s === 1) w.skillRelease(p, +a.a || 0); else w.playerHold(p, !!a.on, +a.a || 0, +a.d || 0); break; // s 1: the held skill 2 (Bulwark) is let go; else the held-attack verb starts (on) or is released
       case 'interact': w.interact(pid, a.id); break;
       case 'pick': w.pickBoon(pid, a.i | 0); break;
       case 'reroll': w.reroll(pid); break;
+      case 'evChoice': w.evChoice(pid, a.i | 0, a.k | 0); break; // an event dialog choice (events.js)
       default: break;
     }
   };
@@ -388,6 +388,8 @@
   G.localEvent = (ev) => {
     const s = G.s; if (!s) return;
     if (SHEET_EVENTS[ev.t]) ED.UI.sheetDirty();
+    if (ev.t === 'victory' || ev.t === 'defeat') s.musEnd = true; // the run's music is over: the stinger plays alone
+    if (ev.t === 'lock' && ED.UI.evOpen()) ED.UI.evClose(true); // a fight starts: an open event dialog closes (its result as a toast)
     if (ev.t === 'room') {
       s.epoch = ev.ep;
       if (s.mode === 'client') {
@@ -401,7 +403,7 @@
       const p = s.mirror.players.get(ev.b.pid);
       if (p) {
         const hadEcho = p.stats.maxCharges;
-        p.boons = ev.b.boons; p.relics = ev.b.relics; p.chaliceHp = ev.b.chaliceHp; p.bonusHp = ev.b.bonusHp || 0; s.mirror.recalc(p);
+        p.boons = ev.b.boons; p.relics = ev.b.relics; p.chaliceHp = ev.b.chaliceHp; p.bonusHp = ev.b.bonusHp || 0; p.rs = ev.b.rs || {}; s.mirror.recalc(p);
         if (p === s.me && p.stats.maxCharges > hadEcho) s.ctl.charges++;
       }
     } else if (ev.t === 'boon' && s.mode !== 'client' && ev.pid === s.localPid) {
@@ -429,6 +431,7 @@
     }
     else if (m.t === 'offerDone') { s.offer = null; s.offerOpen = false; ED.UI.hideBoons(); }
     else if (m.t === 'claimed') s.claimed[m.group] = true;
+    else if (m.t === 'evOpen' || m.t === 'evResult' || m.t === 'evTally' || m.t === 'evClose') ED.UI.evMsg(m); // event dialog (ui.js)
     else if (m.t === 'toast') { ED.UI.toast(m.text); if (!m.info) ED.Audio.play('deny'); } // info toasts are not refusals
     else if (m.t === 'forkRank') ED.UI.forkReveal(m); // a fork rank granted at a boss { id, rank }: the reveal card
     else if (m.t === 'blink' && s.me) { s.me.x = m.x; s.me.y = m.y; s.me.vx = 0; s.me.vy = 0; } // a Death Blossom blink of a hero the host does not move (a joined client): its place
@@ -436,7 +439,6 @@
       s.me.skillMove = ED.leapMove(s.view.room, s.view.locked, s.me, m.x, m.y, { t: m.d, iframes: m.i });
       if (s.me.skillMove) s.me.cometT = m.d;
     }
-    else if (m.t === 'dashRefund' && s.me) { const c = s.ctl, st = s.me.stats; c.dashN = Math.min(st.dashCharges | 0, c.dashN + ((m.n | 0) || 1)); } // dash charges back { n } (Umbral Arms)
     else if (m.t === 'refund') { // cooldown refund { slot, s }: s seconds off (a charge returns when the cooldown reaches 0), no s = in full (slots 0 and 2: one charge); slot -1: s off every slot
       const c = s.ctl, st = s.me.stats;
       if (m.slot === 1 || m.slot === -1) c.skill2Cd = m.s ? Math.max(0, c.skill2Cd - m.s) : 0;
@@ -465,7 +467,8 @@
       bellReconcile(s, d);
       for (const ev of fx) G.localEvent(ev);
     } else if (d.t === 'end') G.localEvent({ t: 'end', summary: d.summary });
-    else if (d.t === 'offer' || d.t === 'offerDone' || d.t === 'claimed' || d.t === 'toast' || d.t === 'refund' || d.t === 'dashRefund' || d.t === 'forkRank' || d.t === 'blink' || d.t === 'leap') G.message(d);
+    else if (d.t === 'offer' || d.t === 'offerDone' || d.t === 'claimed' || d.t === 'toast' || d.t === 'refund' || d.t === 'forkRank' || d.t === 'blink' || d.t === 'leap') G.message(d);
+    else if (d.t === 'evOpen' || d.t === 'evResult' || d.t === 'evTally' || d.t === 'evClose') G.message(d);
   };
   G.onPeerLeft = (pid) => { const s = G.s; if (s && s.mode === 'host') { s.world.removePlayer(pid); } };
 
@@ -482,6 +485,7 @@
     if (me.downed || me.dead || !view.room) {
       s.prompt = null; if (s.mode !== 'client') me.dashing = false;
       if (me.haulIn) me.haulIn = false;
+      if (ctl.bwOn) bulwarkDown(s, me, cd1); // the host lowers it with the down
       s.aim.show = false; s.aim.ground.length = 0; ED.AimFx.hover(ED.Input.device === 'pad', false);
       return;
     }
@@ -496,7 +500,7 @@
     for (const p of view.props) {
       if (!ED.Render.interactable(p)) continue;
       if (view.locked && p.kind !== 'trial') continue;
-      if (s.claimed[p.group] && (p.kind === 'relic' || p.kind === 'campfire' || p.kind === 'anvil' || (p.kind === 'reward' && HERO_REWARD.test(p.item)))) continue;
+      if (!ED.Render.mine(p, s.localPid, s.claimed)) continue; // another hero's prop, or one this hero already claimed
       const d = U.dist2(p.x, p.y, me.x, me.y);
       if (d < nd) { nd = d; near = p; }
     }
@@ -525,7 +529,7 @@
         ctl.holding = false; ctl.holdT = 0;
       }
       if (s.mode === 'client') me.holdOn = ctl.holding && !(H && H.max > 0 && ctl.holdT - H.at >= H.max); // the walk slows while the verb runs (ED.Stats.moveRate)
-      if (inp.atk && !ctl.latch && ctl.atkCd <= 0 && !near && !ctl.holding) {
+      if (inp.atk && !ctl.latch && ctl.atkCd <= 0 && !near && !ctl.holding && !ctl.bwOn) { // no swing behind a raised Bulwark
         const k = ED.Stats.comboNext(me, view.time), w = ED.Stats.stepWeapon(st, k), cl = isCleave(me, st, w, view.time); // decided before the act: the sim spends the Follow-Through; k: the combo step this attack plays (the host takes it)
         G.act({ t: 'atk', a: aim, k, d: Math.round(Math.hypot(me.aimX - me.x, me.aimY - me.y)) });
         if (s.mode === 'client') { me.atkCount = (me.atkCount | 0) + 1; if (st.swift) me.flowT = ED.CONST.FLOW_T; if (cl) me.cleaveNext = 0; if (st.weapon.combo) { me.comboK = k; me.comboAt = view.time; } } // the host spends Follow-Through on the Cleave it grants
@@ -550,6 +554,7 @@
           const ww = ED.AimFx.want(me, s.aim, N.range), end = Sim.castMove(view.room, me.x, me.y, aim, U.clamp(ww.d, N.rangeMin, N.range), me.r, view.locked), len = Math.max(1, Math.hypot(end.x - me.x, end.y - me.y));
           data = { x0: Math.round(me.x), y0: Math.round(me.y), x1: Math.round(end.x), y1: Math.round(end.y) };
           me.skillMove = { dx: Math.cos(aim), dy: Math.sin(aim), speed: C.CHARGE_SPEED, t: len / C.CHARGE_SPEED, iframes: len / C.CHARGE_SPEED, age: 0 };
+          if (ctl.bwOn) bulwarkDown(s, me, cd1); // the Charge lowers a raised Bulwark (no bash)
           if (s.mode === 'client') { // local estimates of what the host decides: Brace for the chip, Follow-Through for the Cleave smear
             if (st.brace && view.time >= (me.braceAt || -99) + C.BRACE_CD) { me.braceT = st.brace; me.braceAt = view.time; }
             if (st.chargeCleave) me.cleaveNext = view.time + len / C.CHARGE_SPEED + 1.5;
@@ -572,10 +577,20 @@
         ctl.charges3--;
       }
       const sk2 = cls.skill2;
-      if (inp.skill2 && sk2 && ctl.skill2Cd <= 0) {
+      if (sk2 === 'bulwark') { // held: the press raises it, the release (or its hold limit) bashes toward the aim; the cooldown starts at the release. A host that lowered or bashed first makes the release a no-op.
+        if (ctl.bwOn) {
+          ctl.bwT += dt;
+          if (s.mode !== 'client' && !me.bulwarkOn) bulwarkDown(s, me, cd1); // the sim's hold limit bashed (or a room change lowered it)
+          else if (!inp.skill2Held || ctl.bwT >= ED.Stats.skillNums(sk2, st).hold) { G.act({ t: 'hold', on: 0, s: 1, a: aim }); bulwarkDown(s, me, cd1); }
+        } else if (inp.skill2 && ctl.skill2Cd <= 0) {
+          G.act({ t: 'skill', a: aim, data: null, slot: 1 });
+          ctl.bwOn = true; ctl.bwT = 0;
+          if (s.mode === 'client') me.bulwarkOn = true;
+          if (st.trance) { ctl.tranceT = 4; if (s.mode === 'client') me.tranceT = 4; }
+        }
+      } else if (inp.skill2 && sk2 && ctl.skill2Cd <= 0) {
         const N2 = ED.Stats.skillNums(sk2, st);
-        let data = groundData(view, me, s.aim, sk2, st);
-        if (sk2 === 'shieldthrow') { const ww = ED.AimFx.want(me, s.aim, N2.range); data = { d: Math.round(Math.hypot(ww.x - me.x, ww.y - (me.y - 4))) }; } // cursor distance: how far the shield flies
+        const data = groundData(view, me, s.aim, sk2, st);
         G.act({ t: 'skill', a: aim, data, slot: 1 });
         bellCast(s, sk2, aim, data, N2);
         castMove(view, me, N2, aim, data);
@@ -588,10 +603,8 @@
         let dx = mx, dy = my;
         if (Math.hypot(dx, dy) < 0.2) { dx = Math.cos(aim); dy = Math.sin(aim); }
         const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
-        const ox = me.x, oy = me.y, b = Sim.dashBlink(view.room, view.locked, me, st, view.enemies, Math.atan2(dy, dx)); // Storm Step / Umbral Arms: the hero blinks first (behind a foe the dash is spent there)
-        if (b) { me.x = b.x; me.y = b.y; if (b.behind) { dx = 0; dy = 0; me.face = b.face; } else { dx = b.dx; dy = b.dy; } }
         me.dashT = ED.CONST.DASH.t; me.dashDx = dx; me.dashDy = dy;
-        G.act(b ? { t: 'dash', dx, dy, blink: b.behind ? 1 : 0, ox: Math.round(ox), oy: Math.round(oy), bx: Math.round(b.x), by: Math.round(b.y) } : { t: 'dash', dx, dy, ox: Math.round(ox), oy: Math.round(oy) });
+        G.act({ t: 'dash', dx, dy });
       }
     }
     Sim.movePlayer(me, { mx, my }, dt, view.room, view.locked, view.zones, view.enemies); // a crowd of foes touching the hero slows the walk
@@ -600,6 +613,11 @@
   }
 
   const MIRROR_TIMERS = ['braceT', 'flowT', 'tranceT', 'stealthT', 'cometT'];
+  // The local Bulwark ends: its cooldown cd starts; a joined client drops its own raised flag (the host's comes with the snapshot).
+  function bulwarkDown(s, me, cd) {
+    s.ctl.bwOn = false; s.ctl.bwT = 0; s.ctl.skill2Cd = cd;
+    if (s.mode === 'client') me.bulwarkOn = false;
+  }
   // True when the next melee swing is a Cleave (Oath of Steel: every (3 + cleaveN)th attack, or the first after a Charge with Follow-Through): the viewer draws its own smear, the host decides the damage.
   function isCleave(me, st, w, now) {
     return st.cleave > 0 && w.kind === 'melee' && (now < (me.cleaveNext || 0) || ((me.atkCount | 0) + 1) % (3 + st.cleaveN) === 0);
@@ -701,14 +719,23 @@
   const unterp = (w) => { for (const k of MOVERS) { const a = w[k]; for (let i = 0; i < a.length; i++) { const o = a[i]; if (o.rx !== undefined) { o.x = o.rx; o.y = o.ry; } } } };
   // Mirrors World.isSafe: calm room, no live foe, no descent pending (clients see no pendingStratum).
   const isSafe = (v) => !v.locked && !v.pendingStratum && !v.enemies.some(e => e.hp > 0);
-  // Music level from the viewed foe list (host, solo and client alike): 0 calm, 1 foes alive or the room locked, 2 heavy at 25 live foes (held until fewer than 12);
-  // a boss piece plays its phase (1 -> 0 .. 3 -> 2), lifted to 1 by 8 or more summons.
-  const musicLevel = (v, prev) => {
-    let n = 0, boss = null;
+  // Music track and level from the view (host, solo and client alike; every 0.1 s): a fight (room locked or live foes, spawning ones not counted) plays the room's fight track
+  // (champion, elite, dark, else combat; level 1, 2 at 25 live foes held until fewer than 12) and keeps it MUS_HOLD s after it ends in the same room (the clear stinger plays over it);
+  // the boss room plays its boss track while locked or the boss lives (level = phase 1 -> 0 .. 3 -> 2, lifted to 1 by 8 or more summons), explore at once after it;
+  // otherwise shop, rest, dark explore (a dark room) or explore. Nothing after the run's victory or defeat (s.musEnd).
+  const MUS_HOLD = 2.5;
+  const musicPick = (s, dt) => {
+    const v = s.view, rm = v.room, m = s.mus || (s.mus = { c: '', lv: 0, hold: 0, room: -1 });
+    if (s.musEnd || !rm) return;
+    if (m.room !== v.roomId) { m.room = v.roomId; m.hold = 0; }
+    let n = 0, boss = null, c, lv = 0;
     for (const e of v.enemies) { if (e.hp <= 0 || e.spawnT > 0) continue; if (e.boss) boss = e; else n++; }
-    if (boss) return Math.max(Math.min(2, (boss.phase | 0) - 1), n >= 8 ? 1 : 0);
-    if (n >= 25 || (prev === 2 && n >= 12)) return 2;
-    return v.locked || n > 0 ? 1 : 0;
+    if (rm.type === 'boss') { c = boss || v.locked ? 'boss' : 'explore'; if (boss) lv = Math.max(Math.min(2, (boss.phase | 0) - 1), n >= 8 ? 1 : 0); m.hold = 0; }
+    else if (v.locked || n > 0) { c = rm.type === 'champion' ? 'champ' : rm.type === 'elite' ? 'elite' : rm.dark ? 'dark' : 'combat'; lv = n >= 25 || (m.lv === 2 && n >= 12) ? 2 : 1; m.hold = MUS_HOLD; }
+    else if (m.hold > 0) { m.hold -= dt; c = m.c; lv = 1; }
+    else c = rm.type === 'shop' ? 'shop' : rm.type === 'rest' ? 'rest' : rm.dark ? 'darkx' : 'explore';
+    m.c = c; m.lv = lv;
+    ED.Audio.music({ s: v.stratum || 1, c }, lv); ED.Audio.setIntensity(lv);
   };
   G.update = (dt, inp) => {
     const s = G.s; if (!s) return;
@@ -729,7 +756,7 @@
         if (inp.right || inp.down) ED.UI.boonMove(1);
         if (inp.confirm) ED.UI.boonConfirm();
         if (inp.reroll) ED.UI.boonReroll(true);
-      }
+      } else if (ED.UI.evOpen()) inp = ED.UI.evInput(inp); // the event dialog takes the menu keys and holds the hero still (ui.js)
       control(s, inp, sdt);
       if (s.mode !== 'client') {
         const w = s.world;
@@ -768,7 +795,7 @@
       }
     }
     ED.FX.update(frozen ? 0 : dt);
-    if ((s.musT = (s.musT || 0) - dt) <= 0) { s.musT = 0.1; s.musLv = musicLevel(s.view, s.musLv); ED.Audio.setIntensity(s.musLv); }
+    if ((s.musT = (s.musT || 0) - dt) <= 0) { s.musT = 0.1; musicPick(s, 0.1); }
     ED.Render.updateCamera(s.view, s.me.dead ? ([...s.view.players.values()].find(p => !p.dead) || s.me) : s.me, dt, false);
   };
 

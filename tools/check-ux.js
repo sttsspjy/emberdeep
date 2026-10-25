@@ -1,6 +1,6 @@
 // Usage: node tools/check-ux.js
 // Headless checks of player-facing text and layout data: the tutorial signs near the spawn, no developer units or stale fixed multipliers in card texts, the Doom/Toll wording,
-// Shield Storm and Comet in the sheet model, the Sundered status, the floor-map glyph table and route bits (src/client/icons.js). Prints failures and exits 1 when any check fails.
+// Shield Slam and Comet in the sheet model, the Sundered status, the floor-map glyph table and route bits (src/client/icons.js), the map key (src/client/input.js), the offer lock gates (src/client/ui.js). Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
 let n = 0, fails = 0;
 const ok = (c, msg) => { n++; if (!c) { fails++; console.log('FAIL ' + msg); } };
@@ -36,11 +36,12 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     ok(!/Skill recharges/.test(t), `${src}: "Skills recharge": ${t.slice(0, 80)}`);
     ok(!/\{|\}|\[|\]/.test(t), `${src}: no left-over token: ${t.slice(0, 80)}`);
   }
-  ok(/never Reaped/.test(ED.BOONS.doommark.desc) && /Tolls/.test(ED.BOONS.doommark.desc) && /never Reaped/.test(ED.STATUS.doom.rule), 'Doom: a boss is never Reaped, it Tolls');
-  ok(/Open boons can rank 1 higher/.test(ED.BOONS.generalist.desc) && /Your Backstabs mark 20% more Doom/.test(ED.Sheet.text('souljar', 1, st)) && /Your Backstabs mark 40% more Doom/.test(ED.Sheet.text('souljar', 2, st)), 'Generalist and Soul Jar wording');
+  ok(/never Reaped/.test(ED.STATUS.doom.rule) && /Tolls/.test(ED.STATUS.doom.rule), 'Doom: a boss is never Reaped, it Tolls');
+  ok(!/rank 1 higher/.test(ED.BOONS.generalist.desc) && /Bleed/.test(ED.Sheet.text('generalist', 1, st)), 'Tempered Steel wording: no extra open rank');
   ok(/foes inside take Holy damage/.test(ED.SKILLS.sanctuary.desc) && !/burn/i.test(ED.SKILLS.sanctuary.desc), 'Sanctuary does not burn');
   ok(/does not stack with other \+20% vulnerabilities/.test(ED.boonText('r_s2_b', 1, null)) && !/Judged/.test(ED.boonText('r_s2_b', 1, null)), 'Hail of Thorns does not lean on the Cleric term');
-  ok(/Crush/.test(ED.SKILLS.charge.desc) && /never stunned/.test(ED.SKILLS.shieldthrow.desc), 'Shield Charge and Shield Throw name Crush and the boss rule');
+  ok(/Crush/.test(ED.SKILLS.charge.desc) && /never stunned/.test(ED.SKILLS.bulwark.desc), 'Shield Charge and Bulwark name Crush and the boss rule');
+  for (const id in ED.SKILLS) ok(ED.SKILLS[id].desc.length <= 230, `skill ${id}: a short description (${ED.SKILLS[id].desc.length} chars)`);
   ok(/class shields are limited to 3% of max health per 10 s/.test(ED.WEAPONS.lantern.desc) && !/once per 1\.5s each/.test(ED.WEAPONS.lantern.desc), 'Sacred Lantern names the class-shield window');
   ok(ED.boonText('r_el_b', 2, null).indexOf('within 120') >= 0 && ED.boonText('r_el_b', 1, null).indexOf('within 100') >= 0, 'Contagion shows its total radius per rank');
 }
@@ -57,13 +58,13 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   const sunder = model('shade', { sunder: 1 }).mult.debuffs.find(d => /Sunder|critical hit/.test(d.text));
   ok(sunder && sunder.id === 'sundered' && sunder.name === 'Sundered', 'Sunder files under Sundered, not Marked: ' + (sunder && sunder.id));
   const part = (m, s, id) => m.skills[s].parts.find(q => q.id === id);
-  const k0 = model('knight', { k_s2: 1 }), k1 = model('knight', { k_s2: 1, k_s2_a: 1 });
-  ok(Math.abs(part(k1, 1, 'strike').raw - 0.7 * part(k0, 1, 'strike').raw) < 1e-6 && part(k1, 1, 'strike').oneFoe === 2, 'Shield Storm: two shields at 70% each in the strike part');
-  ok(k1.skills[1].perCast > k0.skills[1].perCast * 1.2, 'Shield Storm raises the Shield Throw per cast: ' + k0.skills[1].perCast.toFixed(1) + ' -> ' + k1.skills[1].perCast.toFixed(1));
+  const k0 = model('knight', { k_s2: 1 }), k1 = model('knight', { k_s2: 1, k_s2_a: 1 }), k3 = model('knight', { k_s2: 1, k_s2_a: 3 });
+  ok(Math.abs(part(k1, 1, 'bash').raw / part(k0, 1, 'bash').raw - 1.35) < 1e-6, 'Shield Slam: the bash part x1.35: ' + (part(k1, 1, 'bash').raw / part(k0, 1, 'bash').raw).toFixed(3));
+  ok(!part(k1, 1, 'vortex') && part(k3, 1, 'vortex') && k3.skills[1].perCast > k1.skills[1].perCast, 'Aegis Tempest adds the vortex part at rank 3: ' + k1.skills[1].perCast.toFixed(1) + ' -> ' + k3.skills[1].perCast.toFixed(1));
   const m0 = model('pyro', { p_s2: 1 }), m3 = model('pyro', { p_s2: 1, p_s2_b: 3 });
   ok(Math.abs(part(m3, 1, 'impact').raw / part(m0, 1, 'impact').raw - 1.2 * 1.4 * 0.8) < 1e-6, 'Sun Dive (Comet rank 3): the impact part is the mean of the two landings (+20% each, the second at 60%) and the card Meteor damage +40%: x1.344: ' + (part(m3, 1, 'impact').raw / part(m0, 1, 'impact').raw).toFixed(3));
   ok(part(m3, 1, 'impact').oneFoe === 2 && part(m0, 1, 'impact').oneFoe === 1, 'Sun Dive lands twice: the impact part counts two hits on one foe');
-  ok(part(model('knight', {}), 1, 'strike').r === 0 && part(model('knight', {}), 1, 'return').r === 0, 'projectile hit radii stay out of the sheet parts');
+  ok(part(model('knight', { k_s2: 1, k_s2_b: 2 }), 1, 'reflect').r === 0, 'projectile hit radii stay out of the sheet parts');
 }
 
 // ---------------- dash charges: the shared constant, the stat block, the sheet row and the charge model of Sim.dashTick / Sim.dashTry ----------------
@@ -73,15 +74,14 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   const base = { cls: 'knight', weapon: 'longsword', boons: {}, relics: [], meta: META(), pact: 0 };
   const st0 = ED.Stats.compute(base);
   ok(st0.dashCd === 1.5 && st0.dashCharges === 1, 'a fresh hero has 1 dash charge, 1.5 s each: ' + st0.dashCd + ' / ' + st0.dashCharges);
-  { // Light Step: +1 charge per rank; Shadow Cloak: a 1.0 s recharge; the recharge floors at 1.0 s and the charges cap at 3
+  { // Light Step: +1 charge (one rank); the recharge is a fixed 1.5 s and the charges cap at 2
     const dash = (boons, relics) => { const s = ED.Stats.compute(Object.assign({}, base, { boons, relics: relics || [] })); return s.dashCharges + ' / ' + s.dashCd; };
-    ok(dash({ lightstep: 1 }) === '2 / 1.5' && dash({ lightstep: 2 }) === '3 / 1.5', 'Light Step: ranks 1 and 2 give 2 and 3 charges, recharge unchanged: ' + dash({ lightstep: 1 }) + ', ' + dash({ lightstep: 2 }));
-    ok(dash({}, ['cloak']) === '1 / 1', 'Shadow Cloak: 1 charge, recharge 1.0 s: ' + dash({}, ['cloak']));
-    ok(dash({ lightstep: 2 }, ['cloak']) === '3 / 1', 'Light Step 2 + Shadow Cloak: 3 charges, 1.0 s each: ' + dash({ lightstep: 2 }, ['cloak']));
-    ED.RELICS.zzdash = { name: 'T', rar: 'c', icon: 'coin', desc: '', mods: { dashcdr: 0.9 } };
-    ok(dash({ lightstep: 5 }, ['zzdash']) === '3 / 1', 'the recharge floors at 1.0 s and the charges cap at 3: ' + dash({ lightstep: 5 }, ['zzdash']));
+    ok(ED.BOONS.lightstep.max === 1 && dash({ lightstep: 1 }) === '2 / 1.5', 'Light Step: one rank, 2 charges, recharge unchanged: ' + dash({ lightstep: 1 }));
+    ok(dash({}, ['cloak']) === '1 / 1.5' && dash({ lightstep: 1 }, ['cloak']) === '2 / 1.5', 'Shadow Cloak no longer shortens the recharge: ' + dash({}, ['cloak']));
+    ED.RELICS.zzdash = { name: 'T', rar: 'c', icon: 'coin', desc: '', mods: { dashN: 5 } };
+    ok(dash({ lightstep: 1 }, ['zzdash']) === '2 / 1.5', 'the charges cap at 2: ' + dash({ lightstep: 1 }, ['zzdash']));
     delete ED.RELICS.zzdash;
-    ok(ED.Sheet.text('lightstep', 1) === 'Dash: +1 charge.' && ED.Sheet.text('lightstep', 2) === 'Dash: +2 charges.' && ED.Sheet.nextText('lightstep', 1) === '+2 charges' && ED.Sheet.STAT_INFO.dashN.label === 'Dash charges' && ED.Sheet.STAT_INFO.dashcdr.label === 'Dash recharge', 'Light Step card text and the sheet labels: ' + ED.Sheet.text('lightstep', 2));
+    ok(ED.Sheet.text('lightstep', 1) === 'Dash: +1 charge.' && ED.Sheet.STAT_INFO.dashN.label === 'Dash charges' && !ED.Sheet.STAT_INFO.dashcdr, 'Light Step card text and the sheet label: ' + ED.Sheet.text('lightstep', 1));
   }
   const stats = ED.Stats.compute(base); stats.sn = {};
   const p = { pid: 'p', name: 'T', cls: 'knight', weapon: base.weapon, boons: {}, relics: [], meta: base.meta, stats, hp: stats.maxHp, maxHp: stats.maxHp, shield: 0, picks: 0, slot: 0 };
@@ -136,10 +136,10 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   const G = {};
   for (const rw of ['gold', 'boon', 'epic', 'relic', 'forge', 'vigor']) { const r = Ic.reward(rw, null); G[rw] = [r[0], r[1], r[2]]; }
   for (const t of ['shop', 'treasure', 'rest', 'elite', 'boss']) { const r = room(t); G[t] = [r.icon, r.color, r.label]; }
-  for (const ev of ['fountain', 'altar', 'trial', 'gamble']) { const r = room('event', { event: ev }); G['event:' + ev] = [r.icon, r.color, r.label]; }
+  for (const ev of [null, 'fountain', 'altar', 'trial', 'gamble']) { const r = room('event', { event: ev }); G[ev ? 'event:' + ev : 'event'] = [r.icon, r.color, r.label]; } // null: not yet drawn (events.js)
   G.dark = Ic.DARK.slice();
   const want = { shop: ['stall', 'Shop'], gold: ['coins', 'Gold'], treasure: ['chest', 'Treasure'], relic: ['amulet', 'Relic'], epic: ['cardepic', 'Epic'], boon: ['card', 'Boon'], forge: ['anvil', 'Forge'], vigor: ['heart', 'Health'],
-    rest: ['campfire', 'Rest'], 'event:fountain': ['fountain', 'Fountain'], 'event:altar': ['altar', 'Altar'], 'event:trial': ['swords', 'Trial'], 'event:gamble': ['question', 'Gamble'], elite: ['skullhorn', 'Elite'], boss: ['skullcrown', 'Boss'], dark: ['moon', 'Dark'] };
+    rest: ['campfire', 'Rest'], event: ['question', 'Event'], 'event:fountain': ['fountain', 'Still Fountain'], 'event:altar': ['altar', 'Blood Altar'], 'event:trial': ['swords', "Champion's Trial"], 'event:gamble': ['coin', "Gambler's Shrine"], elite: ['skullhorn', 'Elite'], boss: ['skullcrown', 'Boss'], dark: ['moon', 'Dark'] };
   for (const id in want) ok(G[id] && G[id][0] === want[id][0] && G[id][2] === want[id][1] && valid(G[id][0]), `map glyph ${id}: ${want[id][0]} "${want[id][1]}" (16x16 mask): ${G[id] && G[id].join(' ')}`);
   const ids = Object.keys(want), sil = (g) => mask(g).map(r => r.replace(/[^.]/g, '#')).join('');
   const diff = (a, b) => { const x = sil(a), y = sil(b); let d = 0; for (let i = 0; i < 256; i++) if (x[i] !== y[i]) d++; return d; };
@@ -152,6 +152,8 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   for (const [a, b] of [['skullhorn', 'skullcrown'], ['skullhorn', 'skull'], ['skullcrown', 'skull'], ['chest', 'stall'], ['coins', 'coin'], ['amulet', 'chest']]) ok(diff(a, b) >= 12, `${a} and ${b} silhouettes differ: ${diff(a, b)} cells`);
   ok(dist(G.epic[1], G.boon[1]) >= 60, 'boon and epic cards differ in colour');
   ok(Ic.reward('boon', 'fire')[1] === ED.PATHS.fire.color && Ic.reward('relic', null)[3] === 'Relics' && Ic.reward('nope', null)[2] === 'Reward', 'boon card wears the path colour; long names; unknown rewards read "Reward"');
+  { const pb = room('combat', { reward: 'boon', rewardPath: 'fire' }), db = room('combat', { reward: 'boon', rewardPath: 'fire', dark: true }), gb = room('combat', { reward: 'gold', rewardPath: 'fire' });
+    ok(pb.label === ED.PATHS.fire.name + ' boon' && pb.color === ED.PATHS.fire.color && db.reward === 'epic' && db.label !== pb.label && gb.label === G.gold[2], `a path boon room reads "<Path> boon" in its colour; a dark or non-boon room ignores the path: ${pb.label}, ${db.label}, ${gb.label}`); }
   // every generated room has a glyph and a label (start excepted); a dark room previews its stepped-up reward; elite labels name the reward
   let rooms = 0; const bad = [];
   for (let s = 1; s <= ED.CONST.STRATA; s++) for (let seed = 1; seed <= 6; seed++) {
@@ -178,6 +180,31 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   ok(rt2[3] === 0 && rt2[2] === 7, 'the branch not taken closes once its sibling is entered: ' + Array.from(rt2).join());
   const sheetSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'sheetui.js'), 'utf8');
   ok(!/dead end/.test(sheetSrc), 'the sheet never calls dark rooms dead ends');
+}
+
+// ---------------- the floor map key (src/client/input.js) and the map view (src/client/mapview.js) ----------------
+{
+  const fs = require('fs'), path = require('path'), vm = require('vm');
+  if (!ED.Input) vm.runInThisContext(fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'input.js'), 'utf8'), { filename: 'input.js' }); // the binding table (its listeners attach only in init)
+  const I = ED.Input, dup = () => { const all = [].concat(...I.ACTIONS.map(a => I.binds[a.id].filter(Boolean))); return all.length !== new Set(all).size; };
+  ok(I.ACTIONS.some(a => a.id === 'mapview' && a.label === 'Map') && I.DEFAULTS.mapview[0] === 'KeyM' && I.DEFAULTS.map[0] === 'Tab', 'Map action on M; the character sheet stays on Tab');
+  I.setBinds({ skill1: ['KeyQ', null], skill3: ['Mouse2', 'KeyR'], skill2: ['KeyM', null] });
+  ok(I.binds.skill2[0] === 'KeyM' && !I.binds.mapview[0] && !I.binds.mapview[1] && !dup(), 'a table saved before the map key keeps its M: the map stays unbound, no code twice');
+  I.setBinds({ skill1: ['KeyQ', null], skill3: ['Mouse2', 'KeyR'] }); ok(I.binds.mapview[0] === 'KeyM' && !dup(), 'a table saved before the map key gets M when free');
+  I.setBinds({ skill3: ['Mouse2', 'KeyR'], mapview: ['KeyN', null] }); ok(I.binds.mapview[0] === 'KeyN', 'a saved map key is kept');
+  I.setBinds(null); ok(I.isDefault() && !dup(), 'no table: the defaults, no code twice');
+  const mv = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'mapview.js'), 'utf8');
+  ok(!/['"](fire|ice|lightning|poison|holy|shadow|general)['"]/.test(mv), 'the map view names no path id (it reads ED.PATHS)');
+}
+
+// ---------------- offer lock (ui.js; the live timing runs in tools/browse.js --scen=cards) ----------------
+{
+  const ui = require('fs').readFileSync(require('path').join(__dirname, '..', 'src', 'client', 'ui.js'), 'utf8').replace(/\r\n/g, '\n');
+  ok(/const BOON_LOCK_MS = UI\.OFFER_LOCK_MS = 600;/.test(ui), 'the offer lock is 600 ms');
+  ok(/el\.onclick = \(\) => \{ if \(performance\.now\(\) >= boonLock\)/.test(ui), 'a card click waits for the lock');
+  ok(/UI\.boonConfirm = \(\) => \{ if \(!boonOffer \|\| performance\.now\(\) < boonLock\) return;/.test(ui), 'the confirm key and pad wait for the lock');
+  ok(/UI\.boonReroll = [^\n]*\n[^\n]*performance\.now\(\) < boonLock\) return;/.test(ui), 'the reroll waits for the lock');
+  ok(/boonLock = performance\.now\(\) \+ BOON_LOCK_MS;[^\n]*\n[^\n]*\n\s*wrap\.style\.setProperty\('--lock'[^\n]*classList\.add\('locking'\)/.test(ui), 'each hand restarts the lock and its fill sweep');
 }
 
 console.log(`${n} checks, ${fails} failed`);

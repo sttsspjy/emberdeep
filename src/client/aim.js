@@ -34,29 +34,37 @@
   // ---------------- procedural CSS cursor ----------------
   const COL = { ember: '#ffb56b', bone: '#f6ecda', frost: '#7fe3ff' }, SZ = { s: 0.8, m: 1, l: 1.3 };
   const unit = () => U.clamp(Math.min(window.innerWidth / 110, window.innerHeight / 62), 13, 36); // the HUD unit, CSS px
-  let curKey = '';
+  let curKey = '', curSz = 28, empCol = null;
 
   // One reticle bitmap, `sz` CSS px drawn at k device px per CSS px: dark underlay, ring, 4 ticks (rotated 45 degrees over a foe), centre dot.
-  function reticle(sz, k, col, foe) {
+  // burst (the empowered reticle): the ring in `col` over a foe too, 4 short rays between the ticks and a white centre dot.
+  function reticle(sz, k, col, foe, burst) {
     const cv = document.createElement('canvas'); cv.width = cv.height = sz * k;
     const g = cv.getContext('2d'), uu = sz * k / 2.1;
     g.translate(sz * k / 2, sz * k / 2); g.lineCap = 'butt';
     const lw = Math.max(0.12 * uu, 1.5), dot = Math.max(0.09 * uu, 1), rot = foe ? Math.PI / 4 : 0;
-    const pass = (w, ringCol, tickCol, dotR) => {
+    const pass = (w, ringCol, tickCol, dotR, dotCol) => {
       g.lineWidth = w;
       g.strokeStyle = ringCol; g.beginPath(); g.arc(0, 0, 0.6 * uu, 0, TAU); g.stroke();
       g.strokeStyle = tickCol; g.beginPath();
       for (let i = 0; i < 4; i++) {
         const an = i * Math.PI / 2 + rot, co = Math.cos(an), si = Math.sin(an);
         g.moveTo(co * 0.72 * uu, si * 0.72 * uu); g.lineTo(co * 0.98 * uu, si * 0.98 * uu);
+        if (burst) { const bc = Math.cos(an + Math.PI / 4), bs = Math.sin(an + Math.PI / 4); g.moveTo(bc * 0.74 * uu, bs * 0.74 * uu); g.lineTo(bc * 0.9 * uu, bs * 0.9 * uu); }
       }
       g.stroke();
-      g.fillStyle = tickCol; g.beginPath(); g.arc(0, 0, dotR, 0, TAU); g.fill();
+      g.fillStyle = dotCol; g.beginPath(); g.arc(0, 0, dotR, 0, TAU); g.fill();
     };
     const dark = 'rgba(10,7,6,0.75)';
-    pass(lw + 0.14 * uu, dark, dark, dot + 0.07 * uu);
-    pass(lw, foe ? COL.bone : col, col, dot);
+    pass(lw + 0.14 * uu, dark, dark, dot + 0.07 * uu, dark);
+    pass(lw, foe && !burst ? COL.bone : col, col, dot, burst ? '#ffffff' : col);
     return cv.toDataURL('image/png');
+  }
+  // CSS cursor value of a reticle (1x and 2x bitmaps, hot spot at the centre).
+  function cursorOf(sz, col, foe, burst) {
+    const one = reticle(sz, 1, col, foe, burst), two = reticle(sz, 2, col, foe, burst), h = sz / 2;
+    const hd = `image-set(url(${one}) 1x, url(${two}) 2x) ${h} ${h}, crosshair`;
+    return window.CSS && CSS.supports && CSS.supports('cursor', hd) ? hd : `url(${one}) ${h} ${h}, crosshair`;
   }
 
   // Applies the Cursor settings: `syscursor` on the body for the OS crosshair, else the two reticle bitmaps as CSS variables (style.css owns the rules).
@@ -65,19 +73,14 @@
     const sys = set.cursor === 'system';
     document.body.classList.toggle('syscursor', sys);
     const sz = Math.min(64, Math.ceil(unit() * 1.05 * (SZ[set.reticle] || 1)) * 2); // even, so the hot spot sits on a pixel centre
-    A.uCss = sz / 2.1;
+    A.uCss = sz / 2.1; curSz = sz; empCol = null; // the empowered reticle is rebuilt at this size on the next frame
     if (sys) return;
     const key = sz + '|' + (set.reticleCol || 'ember');
     if (key === curKey) return;
     curKey = key;
     try {
-      const col = COL[set.reticleCol] || COL.ember, h = sz / 2;
-      const make = (foe) => {
-        const one = reticle(sz, 1, col, foe), two = reticle(sz, 2, col, foe);
-        const hd = `image-set(url(${one}) 1x, url(${two}) 2x) ${h} ${h}, crosshair`;
-        return window.CSS && CSS.supports && CSS.supports('cursor', hd) ? hd : `url(${one}) ${h} ${h}, crosshair`;
-      };
-      root.setProperty('--aim-cur', make(false)); root.setProperty('--aim-cur-foe', make(true));
+      const col = COL[set.reticleCol] || COL.ember;
+      root.setProperty('--aim-cur', cursorOf(sz, col, false)); root.setProperty('--aim-cur-foe', cursorOf(sz, col, true));
     } catch (e) { root.setProperty('--aim-cur', 'crosshair'); root.setProperty('--aim-cur-foe', 'crosshair'); curKey = ''; }
   };
   window.addEventListener('resize', () => A.applyCursor());
@@ -91,10 +94,27 @@
     if (foe !== foeOn) { foeOn = foe; cl.toggle('aim-foe', foe); }
   };
 
+  // Empowered reticle while the local hero's next attack is empowered (col: its ED.EMPOWER colour, '' off): body.aim-emp over the --aim-cur-emp(-foe) bitmaps, cached per (size, colour).
+  // Never with the system crosshair or a gamepad (the more specific emp rules would beat theirs).
+  const empCache = new Map();
+  function setEmp(col) {
+    const set = (ED.App && ED.App.settings) || {};
+    if (set.cursor === 'system' || padOn) col = '';
+    if (col === empCol) return;
+    empCol = col;
+    document.body.classList.toggle('aim-emp', !!col);
+    if (!col) return;
+    const key = curSz + '|' + col;
+    let v = empCache.get(key);
+    if (!v) { try { v = [cursorOf(curSz, col, false, true), cursorOf(curSz, col, true, true)]; } catch (e) { v = ['crosshair', 'crosshair']; } empCache.set(key, v); }
+    const root = document.documentElement.style;
+    root.setProperty('--aim-cur-emp', v[0]); root.setProperty('--aim-cur-emp-foe', v[1]);
+  }
+
   // ---------------- world-space extras ----------------
   let ovs = null;
   const overlayOpen = () => {
-    if (!ovs) ovs = ['ov-pause', 'ov-settings', 'modal', 'ov-sheet', 'ov-boon'].map(id => document.getElementById(id));
+    if (!ovs) ovs = ['ov-pause', 'ov-settings', 'modal', 'ov-sheet', 'ov-map', 'ov-boon'].map(id => document.getElementById(id));
     for (const o of ovs) if (o && !o.hidden) return true;
     return false;
   };
@@ -113,12 +133,12 @@
     if (ct >= 0 && ct < 1) { c.globalAlpha = 1 - ct; c.lineWidth = lineW(0.16 * uw); c.strokeStyle = '#f0cf8a'; c.beginPath(); c.arc(cx, cy, 0.6 * uw, 0, TAU); c.stroke(); c.globalAlpha = 1; }
   }
 
-  // Gamepad aim indicator: an ember chevron 26 world px from the aim origin along the aim.
-  function chevron(c, me, a, uw, S) {
+  // Gamepad aim indicator: an ember chevron 26 world px from the aim origin along the aim (col: the empower colour of the next attack, else ember).
+  function chevron(c, me, a, uw, S, col) {
     const s = 0.9 * uw, x = Math.round((me.x + Math.cos(a.a) * 26) * S) / S, y = Math.round((me.y - 4 + Math.sin(a.a) * 26) * S) / S;
     c.save(); c.translate(x, y); c.rotate(a.a); c.lineJoin = 'miter';
     for (let i = 0; i < 2; i++) {
-      c.lineWidth = i ? lineW(0.22 * uw) : lineW(0.22 * uw) + 1; c.strokeStyle = i ? 'rgba(255,181,107,0.85)' : 'rgba(10,7,6,0.7)';
+      c.lineWidth = i ? lineW(0.22 * uw) : lineW(0.22 * uw) + 1; c.strokeStyle = i ? col || 'rgba(255,181,107,0.85)' : 'rgba(10,7,6,0.7)';
       c.beginPath(); c.moveTo(-s * 0.5, -s * 0.7); c.lineTo(s * 0.5, 0); c.lineTo(-s * 0.5, s * 0.7); c.stroke();
     }
     c.restore();
@@ -188,13 +208,15 @@
   // Draws the extras with the world transform active (called by the renderer after the overhead labels).
   A.draw = (c, view) => {
     const G = ED.Game, s = G && G.s, a = s && s.aim;
-    if (!a || !a.show || !view.room || overlayOpen()) return;
+    const open = !a || !a.show || !view.room || overlayOpen(), em = !open && s.me && ED.Render.empower ? ED.Render.empower(s.me) : null; // the local hero's empowered next attack (render.js R.empower)
+    setEmp(em ? em.col : '');
+    if (open) return;
     const R = ED.Render, set = (ED.App && ED.App.settings) || {}, me = s.me, m = ED.Input.mouse;
     const k0 = R.dpr / R.scale, uw = A.uCss * k0, S = R.scale, now = performance.now(); // k0: world px per CSS px
     if (a.pointer) { const w = R.toWorld(m.x * R.dpr, m.y * R.dpr); a.wx = w.x; a.wy = w.y; } // the camera has moved since control()
     c.save();
     c.lineCap = 'butt';
-    if (a.device === 'pad') chevron(c, me, a, uw, S);
+    if (a.device === 'pad') chevron(c, me, a, uw, S, em ? em.col : '');
     else if (a.pointer && m.inside) cursorExtras(c, a, uw, S, now);
     if (set.aimPreview !== false && a.ground.length) preview(c, view, me, a, uw, S);
     c.restore();

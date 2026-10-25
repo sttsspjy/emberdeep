@@ -42,7 +42,7 @@
   const portrait = (cls, size, slot, weapon, skin) => { const cv = document.createElement('canvas'); cv.width = cv.height = size * 2; ED.Sprites.portrait(cv, cls, slot || 0, weapon, skin); if (ED.Actors && ED.Actors.on()) ED.Actors.fit(cv, () => ED.Sprites.portrait(cv, cls, slot || 0, weapon, skin)); return cv; }; // skin: a Wardrobe skin suffix (ED.Cos.skinKey)
   UI.portrait = portrait;
 
-  // Path helpers: elements share ids with their paths (fire, ice, lightning, poison, holy, shadow).
+  // Path helpers: the elemental paths share ids with their elements (fire, ice, lightning).
   const pathIcon = (k) => ED.Icons.url(ED.PATHS[k].icon, ED.PATHS[k].color);
   const pathName = (k, wrap) => (ED.PATHS[k] ? (wrap ? `<i style="color:${ED.PATHS[k].color}">${ED.PATHS[k].name}</i>` : ED.PATHS[k].name) : '');
   // Evolved weapon name from a weapon name (the fork's name after an Attack fork: 'Cinder Greatsword').
@@ -72,14 +72,24 @@
     if (jc) $('title-join-code').textContent = jc;
   };
 
-  // One-time notice for a profile made before the current rules (profile.news = the oldest part not yet seen): 3 the v6 changes, 2 also the v5 changes, 1 also relic and Hearth changes, the v3 rules and the embers the Codex refunded. Closing it clears the flag.
-  const NEWEST = [
+  // One-time notice for a profile made before the current rules (profile.news = the oldest part not yet seen): 4 the v7 changes, 3 also the v6 changes, 2 also the v5 changes, 1 also relic and Hearth changes, the v3 rules and the embers the Codex refunded. Closing it clears the flag.
+  const V7 = [
+    '<b>Paths:</b> four paths, follow up to two. Steel sharpens your weapon, Flame spreads Burn when a burning foe dies, Frost freezes foes for any hit to Shatter, Storm charges foes until they discharge into each other. A run starts with a pick of the four. Poison, Holy and Shadow are no longer paths (the Cleric and the Necromancer keep Radiance and Doom). Most boon rooms name a path on their door ("Flame boon").',
+    '<b>Dash:</b> the dash is only a dash: at most 2 charges, and no path rides it.',
+    '<b>Knight:</b> Bulwark replaces Shield Throw: hold to raise the shield and block every hit and shot from the front, release to bash the foes ahead and stun them. Each block makes the bash stronger.',
+    '<b>Skills:</b> every hero skill does one clear thing and hits harder; heals and extra effects moved to the route cards (Ghost Walk, Sanctum, Verdict, Bone Armor).',
+    '<b>Relics:</b> 63 relics that each change a rule or make a trade, 10 boss relics with a big upside and a real cost, and curses that lift after a while. Elite and champion fights give each hero a pick of three relics, the first two bosses a pick of three boss relics, and shops sell three relics. Stratum I pays double gold.',
+    '<b>Events:</b> 36 event rooms with a story and 2 to 4 choices (a party votes), 5 minigames, and 26 lore pages to find for the Hearth\'s Codex.',
+    '<b>Map key:</b> M opens the whole stratum\'s map, from the start at the bottom to the boss at the top.',
+    '<b>Clockwork Colossus:</b> the second champion of stratum IV is a huge neon machine: break two of its arms or its eye to open its core.',
+    '<b>Sound:</b> new music for every stratum and room (exploring, fights, elites, dark rooms, bosses, shop and rest), and hits that sound like your weapon.',
+  ];
+  const V6 = [
     '<b>Map:</b> each stratum is a map of rooms in rows from the start to the boss. Paths split and merge, every door shows the room behind it and its reward, and there is no way back. Tab shows the whole map.',
     '<b>Strata:</b> there are four: Ossuary, Glowmire, Drowned Sanctum and the Starless Abyss, the last. Rimefrost Halls and the Cinderforge are gone, and no stratum is weak to or resists an element.',
-    '<b>Elements:</b> each element is one way to play. Fire stacks Burn and lays burning ground, Ice freezes foes for a skill to Shatter, Lightning charges foes for your dash to set off, Poison weakens foes with Venom and clouds, Holy Smites a foe whose attack you dash through at the last moment, Shadow pays for hits from behind. Keystones and evolutions change how you attack, dash or move.',
     '<b>Removed:</b> Ascended boons, duo boons, Mutations, Twists, the Attunement boons and twelve plain stat boons (Fleet Foot, Lodestar, Sharpened Edge, Quickened Hands, Bounty, Stalwart, Mending, Forager, Thornmail, Battle Ward, Glass Heart, Overcharge).',
     '<b>Pyromancer:</b> a caster now. Ember Bolt hits make your spells recharge sooner, and Fireball (2 charges) is a third skill on right mouse or R (B on a pad). Skill 1 is Q alone (RB on a pad); heroes without a third skill cast skill 1 on its key.',
-    '<b>Bosses:</b> new fights. The Bone Warden duels and raises bone walls, the Sporemother spreads spores from her pods, the Drowned King floods the room, and stratum IV ends with two champion fights (the twins, the mimic) before the Hollow King.',
+    '<b>Bosses:</b> new fights. The Bone Warden duels and raises bone walls, the Sporemother spreads spores from her pods, the Drowned King floods the room, and stratum IV ends with two champion fights (the twins, the Clockwork Colossus) before the Hollow King.',
     '<b>Fights:</b> fodder takes a few hits and sets off no kill effects. Every wave is marked before it arrives, the room clears when the last wave falls, and damage over time shows its numbers and makes a sound.',
   ];
   const V5 = [
@@ -91,21 +101,19 @@
   UI.maybeNews = () => {
     const A = ED.App, p = A.profile;
     if (!A.hasProfile || !p.news) return;
-    $('news-body').innerHTML = (p.news === 3 ? NEWEST : p.news === 2 ? NEWEST.concat(V5) : NEWEST.concat(V5, [
+    $('news-body').innerHTML = (p.news === 4 ? V7 : p.news === 3 ? V7.concat(V6) : p.news === 2 ? V7.concat(V6, V5) : V7.concat(V6, V5, [
       '<b>Relics:</b> the Codex is gone. Every relic can drop from your first run, and relics no longer belong to an element.',
       p.refunded > 0 ? `<b>Refunded:</b> the ${p.refunded} embers you spent on the Codex are back in your purse.` : '',
       '<b>Hearth:</b> every upgrade rank can be refunded for its full cost, and Reset all returns everything at once. Upgrades are small now, so your build choices decide a run. The Reliquary became the Stash (starting gold), Head Start starts the run with some experience and Deep Wick boosts the gold and experience of dark rooms.',
       '<b>Builds:</b> generic health and armor boons are smaller; a path (its boons, keystone and weapon evolution) is what makes a build strong.',
       '<b>Aim:</b> attacks and ground skills go toward the mouse cursor (right stick on a pad). The Auto-aim setting is gone.',
-      `<b>Paths:</b> follow up to ${ED.MAX_ELEMENTS} of ${ED.ELEMENT_IDS.map(k => pathName(k, true)).join(', ')}, or take the ${pathName('general', true)} path alone as a Generalist. Blood and Spirit are gone.`,
+      `<b>Paths:</b> follow up to ${ED.MAX_PATHS} of ${ED.PATH_IDS.map(k => pathName(k, true)).join(', ')}. Blood and Spirit are gone.`,
       '<b>No life steal:</b> hits do not heal you any more. Shields take their place.',
-      '<b>Knight:</b> Shield Throw replaces Bulwark.',
       '<b>Dark rooms:</b> optional rooms marked with a violet moon: harder foes, better rewards. They replace the lantern.',
       '<b>Hordes:</b> fight rooms are about twice as big and scroll with you, and packs of weak fodder pour in beside the foes that matter.',
       '<b>Dash:</b> dashing uses charges that refill one at a time; Light Step adds charges.',
       '<b>Late power:</b> your route fork gains rank 2 at the stratum II boss and transforms at rank 3 at the stratum III boss, skill forks included.',
       '<b>Fury:</b> the stratum IV boss grows furious when it lives too long and hits harder and faster; its bar shows when.',
-      '<b>Sound:</b> every stratum has its own music, and it swells as a fight grows.',
     ])).filter(Boolean).map(t => `<p>${t}</p>`).join('');
     $('ov-news').hidden = false;
     requestAnimationFrame(() => $('btn-news-close').focus({ preventScroll: true })); // after the screen's own focus
@@ -113,7 +121,7 @@
 
   // ---------------- sections ----------------
   UI.tab = 'descend';
-  const SECTION = { descend: 'Play', upgrades: 'Hearth', wardrobe: 'Hearth', chronicle: 'Hearth', heroes: 'Heroes' };
+  const SECTION = { descend: 'Play', upgrades: 'Hearth', wardrobe: 'Hearth', chronicle: 'Hearth', codex: 'Hearth', heroes: 'Heroes' };
   UI.setTab = (t) => {
     UI.tab = t;
     $('sec-title').textContent = SECTION[t] || 'Play';
@@ -142,6 +150,7 @@
     else if (UI.tab === 'heroes') renderHeroes($('heroes-view'));
     else if (UI.tab === 'wardrobe') renderWardrobe($('wardrobe-view'));
     else if (UI.tab === 'chronicle') renderChronicle();
+    else if (UI.tab === 'codex') renderCodex();
   };
 
   // A locked hero whose unlock is a riddle (unlock.hint) shows as a silhouette named "???" with the hint, never its condition.
@@ -264,9 +273,8 @@
     const tierNext = ED.UPGRADES.find(u => u.tier > p.stats.deepest);
     const lines = [];
     if (p.stats.runs < 2) {
-      const gen = ED.CLASS_IDS.filter(c => !ED.CLASSES[c].element).map(c => ED.CLASSES[c].name); // heroes without a class element can go Generalist
       lines.push('<b>Aim:</b> aim with the mouse; skills go to the cursor. At level 3 you choose a class route.');
-      lines.push(`<b>Paths:</b> follow up to ${ED.MAX_ELEMENTS} of ${ED.ELEMENT_IDS.map(k => pathName(k, true)).join(', ')}, or, as ${gen.slice(0, -1).join(', ')} or ${gen[gen.length - 1]}, take the ${pathName('general', true)} path alone as a Generalist.`);
+      lines.push(`<b>Paths:</b> follow up to ${ED.MAX_PATHS} of ${ED.PATH_IDS.map(k => pathName(k, true)).join(', ')}. A path's boons, keystone and weapon evolution make the build; a door may promise a path boon.`);
       lines.push('<b>Dark rooms:</b> a door marked with a violet moon leads to a dark room: foes hit harder and an extra elite joins, but the reward is one step better and foes drop more gold and experience.');
     }
     if (p.stats.runs === 0) lines.push('<b>First goal:</b> reach the Bone Warden at the end of the Ossuary. Every run pays embers, win or lose.');
@@ -517,6 +525,13 @@
     restoreFocus(detail, fk);
   }
 
+  // Codex: every lore page the profile found (S.loreHas), unfound ones as "???".
+  function renderCodex() {
+    const p = ED.App.profile, L = ED.LORE || [], n = L.filter((pg, i) => S.loreHas(p, i)).length;
+    $('codex-count').textContent = `${n} / ${L.length} pages found`;
+    $('codex-list').innerHTML = L.map((pg, i) => (S.loreHas(p, i) ? `<details class="codex-page"><summary>${esc(pg.title)}</summary><p>${esc(pg.text)}</p></details>` : '<div class="codex-page none">???</div>')).join('');
+  }
+
   function renderChronicle() {
     const p = ED.App.profile;
     const dl = $('deed-list'); dl.innerHTML = '';
@@ -603,28 +618,27 @@
   };
 
   // ---------------- boon picker ----------------
-  // Cards ignore input for a moment after they appear, so a key or click meant for combat never picks one.
-  let boonFocus = 0, boonOffer = null, boonLock = 0;
-  const BOON_LOCK_MS = 700;
+  // Cards ignore every pick input (click, confirm key, pad, reroll) for OFFER_LOCK_MS after a hand opens, so a press meant for combat never picks one; #boon-cards.locking sweeps a fill across each card (.bc-lock) meanwhile.
+  let boonFocus = 0, boonOffer = null, boonLock = 0, lockT = 0;
+  const BOON_LOCK_MS = UI.OFFER_LOCK_MS = 600;
+  UI.offerLocked = () => !!boonOffer && performance.now() < boonLock;
   const OFFER_HEAD = { start: 'Choose your first path', level: 'Choose a boon', epic: 'Choose an epic boon', forge: 'Forge: rank up a boon' };
 
-  // [header, subtitle, path colour key] for an offer message { src, forge }.
+  // [header, subtitle, path colour key] for an offer message { src, forge, path (a room's path boon) }.
   function offerHead(offer, me) {
     const src = offer.forge ? 'forge' : (offer.src || 'level');
     const boons = me && me.boons ? me.boons : {}, main = ED.mainPath(boons);
     if (src === 'room') {
-      const els = ED.elementGates(boons).length;
-      return [OFFER_HEAD.level, ED.isGeneralist(boons) ? 'Boons of your General path' : els < ED.MAX_ELEMENTS ? `A new path may be offered (${els}/${ED.MAX_ELEMENTS} used)` : 'Boons of your paths', main];
+      const n = ED.gatePaths(boons).length, pk = offer.path && ED.PATHS[offer.path] ? offer.path : null;
+      if (pk && (n < ED.MAX_PATHS || ED.gatePaths(boons).includes(pk))) return [`${ED.PATHS[pk].name} boon`, `Boons of the ${ED.PATHS[pk].name} path`, pk];
+      return [OFFER_HEAD.level, n < ED.MAX_PATHS ? `A new path may be offered (${n}/${ED.MAX_PATHS} used)` : 'Boons of your paths', main];
     }
     if (src === 'class') {
       const cn = me && ED.CLASSES[me.cls] ? ED.CLASSES[me.cls].name : 'Class', rt = me && me.boons ? ED.classRoute(me.boons, me.cls) : null;
       if (offer.ctier === 1) return ['Choose your route', `It shapes how ${cn} fights`, null];
       return [`${rt && rt.route ? ED.routeLabel(me.cls, rt.route) : 'Route'}: choose your fork`, 'A fork changes how the route plays; the second and third bosses rank it up', null];
     }
-    if (src === 'start') { // only heroes without a class element are offered the General gate
-      const cl = me && ED.CLASSES[me.cls];
-      return [OFFER_HEAD.start, cl && cl.element ? `Your paths decide your boons: pick up to ${ED.MAX_ELEMENTS} element paths` : `Your paths decide your boons: up to ${ED.MAX_ELEMENTS} element paths, or Generalist`, null];
-    }
+    if (src === 'start') return [OFFER_HEAD.start, `Your paths decide your boons: up to ${ED.MAX_PATHS} of ${ED.PATH_IDS.length}`, null];
     if (src === 'forge') return [OFFER_HEAD.forge, 'The boon you pick gains one rank.', null];
     return [OFFER_HEAD[src] || OFFER_HEAD.level, '', null];
   }
@@ -632,10 +646,11 @@
   // Path or owner line in the card header, ribbon for the card's role (gate, keystone, evolution, route).
   function boonPathLine(b) {
     if (b.path) return [`<span class="bc-path">${ED.PATHS[b.path].name}</span>`, false];
+    if (b.cross) return [`<span class="bc-path">${b.cross.map(k => ED.PATHS[k].name).join(' + ')}</span>`, false];
     if (b.cls) return [`<span class="bc-path">${esc(b.route ? ED.routeLabel(b.cls, b.route) : ED.CLASSES[b.cls].name)}</span>`, false];
     return ['<span class="bc-path">Open</span>', false];
   }
-  const boonRibbon = (b, id) => (b.evo ? 'Evolution' : b.key ? 'Keystone' : id === 'generalist' ? 'Forsake the elements' : b.gate ? 'Path gate' : b.route ? (b.tag ? b.tag + (b.coop ? ' · co-op' : '') : 'Route') : '');
+  const boonRibbon = (b, id) => (b.evo ? 'Evolution' : b.key ? 'Keystone' : b.gate ? 'Path gate' : b.cross ? 'Cross-path' : b.route ? (b.tag ? b.tag + (b.coop ? ' · co-op' : '') : 'Route') : '');
   // The fork weapon of a class card as a small canvas drawn from the pixel atlas (null without art): tilted up-right about its grip.
   function weaponThumb(wid) {
     const A = ED.Atlas, id = ED.Sprites.forkAnim(wid); // the baked fork look: the same sprite the hero holds
@@ -677,7 +692,7 @@
   // Card identity of boon `id`: kind (ED.PickFx), big (keystone, evolution, path gate), frame metal (rarity), the frame CSS value, identity colours and icon colour.
   // Identity hue of boon `id` (card kind per ED.PickFx): pc = the card's path colour (route: class colour, purse gold), icol = its icon colour (the same).
   function boonHue(id, b) {
-    const kind = ED.PickFx ? ED.PickFx.kind(id) : 'general', path = b.path || null, cl = b.cls ? ED.CLASSES[b.cls] : null;
+    const kind = ED.PickFx ? ED.PickFx.kind(id) : 'general', path = b.path || (b.cross ? b.cross[1] : null), cl = b.cls ? ED.CLASSES[b.cls] : null;
     const pc = kind === 'route' && cl ? cl.col.c : kind === 'purse' ? '#ffd36b' : path && ED.PATHS[path] ? ED.PATHS[path].color : ED.PATHS.general.color;
     return { kind, path, pc, icol: pc }; // the icon wears the card's identity hue; rarity lives in the frame metal and the socket gem
   }
@@ -692,9 +707,6 @@
     fire: '<i class="ca-spark s1"></i><i class="ca-spark s2"></i><i class="ca-spark s3"></i>',
     ice: '<i class="ca-frost f1"></i><i class="ca-frost f2"></i>',
     lightning: '<i class="ca-zap"></i>',
-    poison: '<i class="ca-bubble b1"></i><i class="ca-bubble b2"></i><i class="ca-drip d1"></i><i class="ca-drip d2"></i>',
-    holy: '<i class="ca-arch"></i><i class="ca-sweep"></i>',
-    shadow: '<i class="ca-eye"></i><i class="ca-wisp w1"></i><i class="ca-wisp w2"></i><i class="ca-wisp w3"></i>',
     general: '', purse: '<i class="ca-knot"></i><i class="ca-glint"></i>',
   };
   function cardArt(L, b, have, max) {
@@ -720,7 +732,7 @@
     const rank = have ? (have < max ? `Rank ${have} → ${have + 1} (max ${max})` : `Rank ${have} (max)`) : max > 1 ? `Max rank ${max}` : '';
     const ribbon = boonRibbon(b, id), [line] = boonPathLine(b);
     const icon = ED.CardArt ? ED.CardArt.icon(b.icon, L.icol) : ED.Icons.boonUrl(id);
-    el.innerHTML = `${cardArt(L, b, have, max)}${ribbon ? `<span class="bc-ribbon">${ribbon}</span>` : ''}<div class="bc-top">${line}<span class="bc-rar">${ED.RARITY[b.rar].name}</span></div><img class="bc-icon" alt="" src="${icon}"><div class="bn">${esc(b.name)}</div>${b.evo ? `<div class="bsub">${esc(UI.evoName(b.evo, heroWeaponName(me)))}</div>` : ''}${b.route ? classBody(b, id, have, me) : `<div class="bd">${esc(ED.Sheet.text(id, Math.min(max, have + 1), me && me.stats, ED.Game.s && ED.Game.s.view && ED.Game.s.view.stratum))}</div>`}${deltaHtml(deltas)}${rank ? `<div class="bk${have ? ' own' : ''}">${rank}</div>` : ''}`;
+    el.innerHTML = `<i class="bc-lock" aria-hidden="true"></i>${cardArt(L, b, have, max)}${ribbon ? `<span class="bc-ribbon">${ribbon}</span>` : ''}<div class="bc-top">${line}<span class="bc-rar">${ED.RARITY[b.rar].name}</span></div><img class="bc-icon" alt="" src="${icon}"><div class="bn">${esc(b.name)}</div>${b.evo ? `<div class="bsub">${esc(UI.evoName(b.evo, heroWeaponName(me)))}</div>` : ''}${b.route ? classBody(b, id, have, me) : `<div class="bd">${esc(ED.Sheet.text(id, Math.min(max, have + 1), me && me.stats, ED.Game.s && ED.Game.s.view && ED.Game.s.view.stratum))}</div>`}${deltaHtml(deltas)}${rank ? `<div class="bk${have ? ' own' : ''}">${rank}</div>` : ''}`;
     const wb = el.querySelector('.bweap');
     if (wb) { const th = weaponThumb(wb.dataset.w); if (th) wb.insertBefore(th, wb.firstChild); }
     el.onclick = () => { if (performance.now() >= boonLock) UI.pickBoon(i); };
@@ -740,6 +752,8 @@
     if (pickT) { pickNext = offer; return; } // the pick animation of the last hand finishes first
     boonOffer = offer; boonFocus = 0; boonLock = performance.now() + BOON_LOCK_MS;
     const wrap = $('boon-cards'); wrap.innerHTML = ''; wrap.classList.remove('picking');
+    wrap.style.setProperty('--lock', BOON_LOCK_MS + 'ms'); wrap.classList.add('locking'); // the fresh cards start their sweep
+    clearTimeout(lockT); lockT = setTimeout(() => wrap.classList.remove('locking'), BOON_LOCK_MS);
     $('ov-boon').classList.toggle('low', lowFx());
     const me = ED.Game.s && ED.Game.s.me;
     const dl = offerDeltas(offer, me);
@@ -797,7 +811,7 @@
   // Effect layer of the picked card (fixed over its box, so the card itself may clip, scale or fade): sprites per kind, CSS-animated.
   const FX = {
     fire: '<i class="pf-burn"></i>', ice: '<i class="pf-flash"></i>' + [0, 1, 2, 3, 4, 5, 6, 7].map(k => { const a = (k * 45 + 20) * Math.PI / 180; return `<i class="pf-shard" style="--dx:${Math.round(Math.cos(a) * 40)};--dy:${Math.round(Math.sin(a) * 48)};--sv:${k % 3}"></i>`; }).join(''),
-    lightning: '<i class="pf-flash"></i><i class="pf-bolt"></i>', poison: '<i class="pf-melt"></i>', holy: '<i class="pf-pillar"></i>', shadow: '<i class="pf-vortex"></i>',
+    lightning: '<i class="pf-flash"></i><i class="pf-bolt"></i>',
     general: '<i class="pf-anvil"></i><i class="pf-flash"></i>', route: '<i class="pf-banner"></i>',
     purse: [0, 1, 2, 3, 4, 5].map(k => `<i class="pf-coin" style="--cx:${12 + k * 15}%;--cd:${(k % 3) * 0.04}s"></i>`).join(''),
   };
@@ -839,6 +853,108 @@
     el.hidden = true; void el.offsetWidth; el.hidden = false; // restarts the animation of a card that is still up
     clearTimeout(forkTimer);
     forkTimer = setTimeout(() => { el.hidden = true; }, FORK_REVEAL_MS);
+  };
+
+  // ---------------- event dialog (events.js) ----------------
+  // Host messages: evOpen { k, title, text, ch: [[label, note, disabled]], v (vote seconds, 0: a personal choice), n (voters), lock }, evTally { k, n: votes per choice }, evResult { k, title, text, out, lp, o }, evClose.
+  // The choices ignore input for `lock` s after opening (a bar fills across them); digits 1-4 (e.code), arrows / d-pad, the confirm key and clicks pick. A result with o (an offer opens) or in a locked room closes into a toast.
+  let evD = null, evFocus = 0, evLockT = 0, evVoteT = 0, evTickS = 0; // evTickS: the last countdown second that ticked
+  const evParas = (t) => String(t || '').split('\n').filter(Boolean).map(l => `<p>${esc(l)}</p>`).join('');
+  const evLore = (i) => { const pg = ED.LORE && ED.LORE[i]; return pg ? `<blockquote class="ev-lore"><b>${esc(pg.title)}</b><span>${esc(pg.text)}</span></blockquote>` : ''; };
+  UI.evOpen = () => !!evD;
+  UI.evMsg = (m) => {
+    if (m.t === 'evOpen') evShow(m);
+    else if (m.t === 'evTally') { if (evD && evD.k === m.k) { evD.tally = m.n; evPaint(); ED.Audio.play('vtick', 1, 'vote'); } } // a vote cast: a tick
+    else if (m.t === 'evResult') evResult(m);
+    else if (m.t === 'evClose') { if (evD && !evD.res) UI.evClose(false); }
+  };
+  function evShow(m) {
+    evD = { k: m.k, ch: m.ch, safe: m.s | 0, vote: m.v > 0, n: m.n | 0, voted: -1, wait: false, res: null, tally: null };
+    evFocus = Math.max(0, m.ch.findIndex(c => !c[2]));
+    const lock = (m.lock || 0.6) * 1000;
+    evLockT = performance.now() + lock; evVoteT = m.v > 0 ? performance.now() + m.v * 1000 : 0; evTickS = 0;
+    $('ev-title').textContent = m.title;
+    $('ev-text').innerHTML = evParas(m.text);
+    const box = $('ev-choices'); box.innerHTML = '';
+    box.style.setProperty('--lock', lock + 'ms');
+    m.ch.forEach((c, i) => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'ev-ch'; b.disabled = !!c[2];
+      b.innerHTML = `<kbd>${i + 1}</kbd><span class="ev-l">${esc(c[0])}</span>${c[1] ? `<small>${esc(c[1])}</small>` : ''}<b class="ev-n"></b>`;
+      b.onclick = () => evPick(i);
+      box.appendChild(b);
+    });
+    box.classList.remove('locking'); void box.offsetWidth; box.classList.add('locking'); // restarts the fill
+    const pad = ED.Input.device === 'pad';
+    $('ev-hint').innerHTML = pad ? '<kbd>D-pad</kbd> select · <kbd>X</kbd> choose' : `<kbd>1</kbd>-<kbd>${m.ch.length}</kbd> or <kbd>${esc(ED.Input.label('up'))}</kbd><kbd>${esc(ED.Input.label('down'))}</kbd> and <kbd>${esc(ED.Input.label('attack'))}</kbd> / <kbd>Enter</kbd> choose`;
+    $('ov-event').hidden = false;
+    evPaint();
+    ED.Audio.play('hover');
+  }
+  function evPaint() {
+    if (!evD) return;
+    const sub = $('ev-sub');
+    if (evD.res) sub.textContent = '';
+    else if (evD.vote && evD.n > 1) sub.textContent = `Party vote · ${Math.max(0, Math.ceil((evVoteT - performance.now()) / 1000))} s` + (evD.voted >= 0 ? ' · waiting for the others' : '') + ` · no vote counts as ${(evD.ch[evD.safe] || evD.ch[0])[0]}`;
+    else sub.textContent = evD.wait ? '…' : '';
+    [...$('ev-choices').children].forEach((b, i) => {
+      b.classList.toggle('focus', i === evFocus);
+      b.classList.toggle('picked', evD.voted === i);
+      const n = b.querySelector('.ev-n'); if (n) n.textContent = evD.tally && evD.tally[i] ? '×' + evD.tally[i] : '';
+    });
+  }
+  function evPick(i) {
+    if (!evD) return;
+    if (evD.res) { if (performance.now() >= evLockT) UI.evClose(false); return; }
+    if (performance.now() < evLockT || evD.wait || (evD.vote && evD.voted >= 0)) return;
+    const c = evD.ch[i]; if (!c || c[2]) return;
+    ED.Input.mask(['attack', 'skill1', 'skill2', 'skill3', 'dash']);
+    ED.Audio.play('click');
+    ED.Game.act({ t: 'evChoice', i, k: evD.k });
+    if (evD.vote) evD.voted = i; else evD.wait = true;
+    evFocus = i; evPaint();
+  }
+  function evResult(m) {
+    if (evD && evD.vote && evD.n > 1 && evD.k === m.k) ED.Audio.play('vtally'); // a party vote closed: the tally
+    const s = ED.Game.s, body = evParas(m.text) + (m.out && m.out.length ? `<ul class="ev-out">${m.out.map(l => `<li>${esc(l)}</li>`).join('')}</ul>` : '') + evLore(m.lp);
+    if (m.o || (s && s.view && s.view.locked)) { // an offer or a fight follows: the result goes to a toast
+      if (evD) UI.evClose(false);
+      UI.toast(`<b>${esc(m.title)}</b> ${esc((m.out || []).join(' · '))}`, null, 5);
+      return;
+    }
+    evD = { k: m.k, ch: [], vote: false, voted: -1, res: m, tally: null };
+    evFocus = 0; evLockT = performance.now() + 300;
+    $('ev-title').textContent = m.title;
+    $('ev-text').innerHTML = body;
+    const box = $('ev-choices'); box.innerHTML = ''; box.classList.remove('locking');
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'ev-ch'; b.innerHTML = '<span class="ev-l">Continue</span>';
+    b.onclick = () => UI.evClose(false);
+    box.appendChild(b);
+    $('ev-hint').innerHTML = '';
+    $('ov-event').hidden = false;
+    evPaint();
+  }
+  // Closes the dialog; toast: a shown result's outcome lines go to a toast (a fight started under it).
+  UI.evClose = (toast) => {
+    if (toast && evD && evD.res && evD.res.out && evD.res.out.length) UI.toast(`<b>${esc(evD.res.title)}</b> ${esc(evD.res.out.join(' · '))}`, null, 5);
+    evD = null;
+    $('ov-event').hidden = true;
+    ED.Input.mask(['attack', 'skill1', 'skill2', 'skill3', 'dash']);
+  };
+  // Menu input while the dialog is open (game.js): focus moves, digit picks, confirm; returns the frame's input with the hero held still.
+  UI.evInput = (inp) => {
+    if (evD) {
+      const n = evD.res ? 1 : evD.ch.length, I = ED.Input;
+      if (inp.left || inp.up || inp.navX < 0 || inp.navY < 0) { evFocus = (evFocus + n - 1) % n; evPaint(); }
+      if (inp.right || inp.down || inp.navX > 0 || inp.navY > 0) { evFocus = (evFocus + 1) % n; evPaint(); }
+      for (let d = 1; d <= 4; d++) if (evD && (I.pressed.has('Digit' + d) || I.pressed.has('Numpad' + d))) evPick(evD.res ? 0 : d - 1);
+      if (evD && inp.confirm) evPick(evD.res ? 0 : evFocus);
+      if (evD && evD.vote && !evD.res) { // the vote countdown; its last 5 s tick while this hero has not voted
+        evPaint();
+        const sec = Math.ceil((evVoteT - performance.now()) / 1000);
+        if (evD.n > 1 && evD.voted < 0 && sec >= 1 && sec <= 5 && sec !== evTickS) { evTickS = sec; ED.Audio.play('vtick', 1, sec); }
+      }
+    }
+    return Object.assign({}, inp, { mx: 0, my: 0, atk: false, atkPressed: false, skill: false, skill2: false, skill3: false, dash: false });
   };
 
   // ---------------- results ----------------

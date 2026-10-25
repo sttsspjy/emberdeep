@@ -35,7 +35,7 @@
     shroomhulk: { name: 'Shroom Hulk', ai: 'tank', look: 'hulk', col: { a: '#a356d6', b: '#52286e', c: '#9cff6a' }, hp: 90, spd: 40, dmg: 4, r: 16, xp: 10, cost: 5,
       slam: { range: 52, radius: 66, windup: 0.85, cd: 2.6, cloud: true } },
     mireworm: { name: 'Mire Worm', ai: 'burrower', look: 'worm', col: { a: '#6aa67f', b: '#2c4f3f', c: '#e8ff9a' }, hp: 46, spd: 90, dmg: 3.75, r: 12, xp: 6, cost: 4,
-      burrow: { near: 80, dig: 1.2, tele: 0.8, radius: 46, expose: 2.2, ring: 8 } },
+      burrow: { near: 80, dig: 1.2, tele: 1.2, radius: 46, expose: 3.5, ring: 6, arc: 4.2, speed: 95, lane: 170 } }, // ring: shots spread over arc rad, the rest of the circle is the safe gap
 
     // ---------------- Kept from cut strata (ids are art keys): reskins in the rosters (I icewolf, II frostwisp, III drone, IV sentinel), the rest for bosses and checks only ----------------
     icewolf: { name: 'Grave Hound', ai: 'charger', look: 'wolf', col: { a: '#9a917b', b: '#4f4a3e', c: '#ff5a3a' }, hp: 26, spd: 80, dmg: 2.75, r: 11, xp: 3, cost: 2,
@@ -92,16 +92,16 @@
 
     // ---------------- Bosses (absolute HP, scaled by party and pact; refHp = design HP that chill, Conflagration and Wildfire measure against) ----------------
     bonewarden: { name: 'Bone Warden', title: 'After a slam his sword is stuck: he takes +50% damage', ai: 'boss', look: 'b_warden', col: { a: '#ece4cc', b: '#7d745f', c: '#ff5a3a' },
-      hp: 9200, refHp: 800, spd: 80, dmg: 2.4, r: 24, xp: 40, boss: true },
+      hp: 11600, refHp: 800, spd: 80, dmg: 2.4, r: 24, xp: 40, boss: true },
     sporemother: { name: 'Sporemother', title: 'Break the pods to clear the spore carpet', ai: 'boss', look: 'b_spore', col: { a: '#c86bff', b: '#5b2a7a', c: '#7dffd9' },
-      hp: 12600, refHp: 1500, spd: 34, dmg: 2.4, r: 32, xp: 60, boss: true },
+      hp: 24000, refHp: 1500, spd: 34, dmg: 2.4, r: 32, xp: 60, boss: true },
     // arena: the boss room's fixed layout (boss-king.js, boss-hollow.js; src/sim/arena.js lays it). Offsets in tiles from the room centre (floor(w / 2), floor(h / 2) + 1): pillars and dais [dx, dy, w, h], lanterns [dx, dy].
     drownedking: { name: 'Drowned King', title: 'Stand on raised stone when the tide comes. Hide behind pillars from the beam.', ai: 'boss', look: 'b_king', col: { a: '#3f8f88', b: '#173d3b', c: '#e8c66b' },
-      hp: 17000, refHp: 4200, spd: 62, dmg: 3.6, r: 26, xp: 120, boss: true, quote: '',
+      hp: 34800, refHp: 4200, spd: 62, dmg: 3.6, r: 26, xp: 120, boss: true, quote: '',
       arena: { kind: 'tide', pillars: [[-9, -4, 2, 2], [7, -4, 2, 2], [-9, 3, 2, 2], [7, 3, 2, 2], [-4, -1, 2, 2], [2, -1, 2, 2], [-1, -5, 2, 2], [-1, 2, 2, 2]],
         dais: [[-13, -7, 3, 3], [10, -7, 3, 3], [-13, 5, 3, 3], [10, 5, 3, 3], [-1, -7, 3, 2], [-1, 5, 3, 3]] } },
     hollowking: { name: 'Hollow King', title: 'Light the lanterns in the dark. Move to the middle when the edge cracks.', ai: 'boss', look: 'b_hollow', col: { a: '#2a1f44', b: '#0e0820', c: '#ff7ad9' },
-      hp: 66000, refHp: 7000, spd: 70, dmg: 2.9, r: 24, xp: 160, boss: true, quote: '',
+      hp: 118800, refHp: 7000, spd: 70, dmg: 2.9, r: 24, xp: 160, boss: true, quote: '',
       arena: { kind: 'crown', lanterns: [[-11, -5], [11, -5], [-11, 4], [11, 4], [-5, 0], [5, 0]] } },
 
     // ---------------- Boss arena pieces (minion: never in a roster; noLoot: no xp, gold or hearts) ----------------
@@ -118,9 +118,14 @@
 
     // ---------------- Champions (stratum IV champion rooms, champions.js; appended after the fodder: the wire index follows the order; never in a roster) ----------------
     // HP x the elite factor of the stratum (World.ELITE); no affix, no drops of their own: the room pays an elite room's reward.
-    twinlance: { name: 'Lancer', ai: 'champion', look: 'knight', art: 'voidknight', col: { a: '#d8c27a', b: '#4a3c1c', c: '#ffe08a' }, hp: 380, spd: 64, dmg: 8, r: 15, xp: 0, cost: 0, champ: 'twins' },
-    twinhammer: { name: 'Hammer', ai: 'champion', look: 'knight', art: 'forgeknight', col: { a: '#9a6a44', b: '#2a1810', c: '#ff8a3a' }, hp: 380, spd: 54, dmg: 8.8, r: 17, xp: 0, cost: 0, champ: 'twins' },
-    mimic: { name: 'Mimic', ai: 'champion', look: 'shade', art: 'shade', col: { a: '#2c2440', b: '#100c1c', c: '#e8e0ff' }, hp: 700, spd: 70, dmg: 7, r: 13, xp: 0, cost: 0, champ: 'mimic' },
+    twinlance: { name: 'Lancer', ai: 'champion', look: 'knight', art: 'voidknight', col: { a: '#d8c27a', b: '#4a3c1c', c: '#ffe08a' }, hp: 684, spd: 64, dmg: 8, r: 15, xp: 0, cost: 0, champ: 'twins' },
+    twinhammer: { name: 'Hammer', ai: 'champion', look: 'knight', art: 'forgeknight', col: { a: '#9a6a44', b: '#2a1810', c: '#ff8a3a' }, hp: 684, spd: 54, dmg: 8.8, r: 17, xp: 0, cost: 0, champ: 'twins' },
+    // Clockwork Colossus: the Gear Core (the machine's anchor) and three parts, each a foe with its own HP at a fixed offset (Champions.COL.OFF); colo names the piece. Drawn as one neon vector machine (client arena.js), never as sprites.
+    // Parts: minion (out of the sheet's reference roster), noLoot (no drops, never exposed).
+    colossus: { name: 'Clockwork Colossus', ai: 'champion', look: 'golem', col: { a: '#1d3a5a', b: '#0a0d1a', c: '#38f0ff' }, hp: 1890, spd: 0, dmg: 7, r: 24, xp: 0, cost: 0, champ: 'colossus', colo: 'core' },
+    colcannon: { name: 'Cannon Arm', ai: 'champion', look: 'golem', col: { a: '#5a1d4a', b: '#0a0d1a', c: '#ff3fd2' }, hp: 828, spd: 0, dmg: 7, r: 18, xp: 0, cost: 0, champ: 'colossus', colo: 'cannon', minion: true, noLoot: true },
+    colsaw: { name: 'Saw Arm', ai: 'champion', look: 'golem', col: { a: '#5a3a10', b: '#0a0d1a', c: '#ffb02e' }, hp: 828, spd: 0, dmg: 7, r: 18, xp: 0, cost: 0, champ: 'colossus', colo: 'saw', minion: true, noLoot: true },
+    coleye: { name: 'Lantern Eye', ai: 'champion', look: 'golem', col: { a: '#10485a', b: '#0a0d1a', c: '#38f0ff' }, hp: 702, spd: 0, dmg: 7, r: 15, xp: 0, cost: 0, champ: 'colossus', colo: 'eye', minion: true, noLoot: true },
   };
 
   ED.ENEMY_IDS = Object.keys(E);
@@ -139,6 +144,6 @@
 
   // Projectile kinds share one table for both teams so the renderer knows how to draw them.
   ED.PROJ_KINDS = ['bone', 'spore', 'ice', 'fire', 'water', 'void', 'arrow', 'bolt', 'firebolt', 'spark', 'fireball', 'knife', 'holy', 'soul', 'plague', 'wave', 'wisp', 'shard', 'blade', 'orb', 'trident', 'skull',
-    'hammer', 'crescent', 'iceshard', 'bloodscythe', 'spectral', 'web', 'droneshot', 'thorn', 'shield', 'boomerang']; // append only: indices are the wire format
+    'hammer', 'crescent', 'iceshard', 'bloodscythe', 'spectral', 'web', 'droneshot', 'thorn', 'shield', 'boomerang', 'cbolt', 'cspark']; // append only: indices are the wire format
   ED.PROJ_IDX = ED.U.indexer(ED.PROJ_KINDS);
 })(globalThis.ED || (globalThis.ED = {}));

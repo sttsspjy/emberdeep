@@ -1,5 +1,5 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it.
-// Usage: node tools/browse.js [--scen=smoke,crowd70,boss,shots,sheet,screens,wardrobe,cosmetics,swing,picks,cards,bell,arenas,verbs] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
+// Usage: node tools/browse.js [--scen=smoke,crowd70,boss,shots,sheet,map,screens,wardrobe,cosmetics,swing,picks,cards,bell,arenas,verbs,props,doors,games,portal,hits,music] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
 //   [--quality=low,high] [--ops] [--json] [--seed=1] [--strat=1] [--embers=N] [--mortal] [--software] [--forcepost] [--sync] [--warm=2.5] [--timeout=300]
 // Mechanism: headless only (no headed option, no window calls); one browser per invocation, one fresh context per scenario page, all closed at exit, on error and on SIGINT.
 //   A read-only node http server on 127.0.0.1 (random port) serves --root (default: this repo). Playwright resolves via require('playwright'), else %LOCALAPPDATA%\npm-cache\_npx\*\node_modules (best match for the installed browsers).
@@ -16,23 +16,37 @@
 //   cosmetics: Hearthsitter counts only on the Hearth section; every Wardrobe item owned; 9 preview shots (one hovered item per slot; fails on a blank preview, a wrong title caption or a loop that keeps running once hidden);
 //     the camp and Hearth with the Blue Hearth and its ghost; a 4-hero party in different sets in a staged fight at High and Low (pets, coin trails, titles, crowns, sheens, auras, skins), Last Embers, the in-run secret toast; Game.render ms with and without the sets.
 //   shots: 16 screenshots: boot name screen, menu, Descend, Hearth tabs (the Armory scrolled into view), Heroes, Settings, Credits, boon offer, a run in combat, the Tab sheet tabs, the pause menu (profile gets 400 embers unless --embers).
+//   map: the M floor map overlay on the sheet stage (half the map walked): open (current room on screen, solo paused), hover tooltip, wheel to the top, End to the bottom, W focus, M closes; the Map tab; screenshots open, hover, top, bottom, sheet.
 //   sheet: a late build staged through the sim (BR.sheetStage: stratum --strat or III, two element paths (one evolved, one at its keystone), open boons, a fork at rank 3, six relics, a shield, an ally hero, half the map walked):
 //     the Tab sheet Build, Build scrolled to the end, Combat, Map, and Build viewing the ally, then the cleared room of the floor with the most exit doors (BR.doorStage);
 //     fails on a page error, when a sheet column overflows its panel sideways, or when no room has 3 exit doors.
 //   swing: one contact-sheet PNG per melee weapon of --cls, its Armory variants included (or per --weapon id, forks as id@fork, ranged ones too) (aimed --aim degrees, 0 = right, 90 = down, drawn at --zoom canvas px per world px, 2): frames at fixed times over two consecutive attacks (a combo weapon: one per step), the hold and the ease back to idle, hero and smear drawn by the game's own renderer.
-//   picks: every boon id resolves to a PickFx card kind; one PNG per pick burst (each kind, fire-big, holy-ally) on the solo hero about 0.25 s after FX.handle gets the 'boon' / 'relic' event;
+//   picks: every boon id resolves to a PickFx card kind; one PNG per pick burst (each kind, fire-big, fire-ally) on the solo hero about 0.25 s after FX.handle gets the 'boon' / 'relic' event;
 //     each pick cue (and the Hearth 'buy') rendered in an OfflineAudioContext: voices, peak, rms, audible length; fails on a throw, a silent cue or one longer than 0.9 s.
 //   cards: a frame sheet PNG (every card frame mask at 6 x) and one PNG per boon hand staged through the sim (the hero's boons set so the cards are eligible): path gates,
 //     every element, open and General, purse, keystones, an evolution, the --cls route and fork offers, a 6-card dense hand; mid-pick frames (110 and 230 ms,
-//     the hide timer held, animations paused) for poison, holy, ice, lightning, shadow, general, fire-big and route; the fork reveal at rank 2 and 3; a Low quality hand and pick.
-//     Fails on a missing card, a card whose kind differs from ED.PickFx.kind, a frame that did not resolve, equal path gate icons, a pick without an effect layer, or Low quality leftovers.
+//     the hide timer held, animations paused) for lightning, ice, general, fire-big and route; the fork reveal at rank 2 and 3; a Low quality hand and pick.
+//     The first hand also checks the offer lock (a confirm and a click 150 ms in pick nothing, the fill sweeps; a shot lock-150ms; released by 750 ms).
+//     Fails on a missing card, a card whose kind differs from ED.PickFx.kind, a frame that did not resolve, equal path gate icons, a pick without an effect layer, Low quality leftovers or an offer lock that does not hold or release.
+//   props: per-hero and party props staged around the hero and used like a player (see scenProps): another hero's prop and a claimed co-op hoard prompt nothing, taken props vanish with a puff; one shot.
+//   doors: a 2- and a 3-exit room at the narrowest width (6n + 5 tiles: retyped to rest rooms), every exit a dark fight, a hero at each door (one in a doorway: a party door line); one shot each;
+//     fails when two door preview lines overlap or the dark-room rule line is missing.
 //   bell: the hero, Anchor Leap and Peal icons and screenshots of the Bellwarden (unlocked for the run; --weapon picks the bell): winding in a staged fight with Full Swing, a hurl in flight, the bell anchored, a reel, an Anchor Leap, a Peal, four Bellwardens in the crowd at High and Low quality,
 //     and a client's view from a two-peer net check in the same page (host World + client Game, JSON snapshots, 50 ms each way); fails on bad bells, missing bell events or a client that drifts from the host (see scenBell).
-//   verbs: one screenshot per element verb staged in the largest combat room (still foes in front of the hero, input through ED.Input like a player): the flame cone, burning ground, Burn stacks, the ice wall,
-//     the ice lance charging and flying, a dash discharge, Storm Step, a toxic cloud, the flask, a perfect dodge, the guard, the Phantom decoy, a Backstab, Umbral Arms, the finisher charging and striking;
+//   verbs: one screenshot per path verb staged in the largest combat room (still foes in front of the hero, input through ED.Input like a player): the flame cone, Burn stacks, a death burst on Scorched Earth,
+//     the ice lance charging and flying, a Shatter, a threshold discharge, the storm call, the finisher charging and striking;
 //     fails on a page error or a verb whose zone, event or state did not appear.
-//   arenas: 18 screenshots staged through the sim (BR.arena, heroes unhurt): the Drowned King (phase 1, tide warning, tide, beam warm-up and sweep, phases 2 and 3), the Hollow King (phase 1, duel, dark phase 2, a lit lantern,
-//     phase 3, a ring warning, fallen rings) and the champion rooms (twins, a twin combo, mimic, mimic split); fails on a page error or a step without its fight.
+//   arenas: 19 screenshots staged through the sim (BR.arena, heroes unhurt): the Drowned King (phase 1, tide warning, tide, beam warm-up and sweep, phases 2 and 3), the Hollow King (phase 1, duel, dark phase 2, a lit lantern,
+//     phase 3, a ring warning, fallen rings) and the champion rooms (twins, a twin combo, the Clockwork Colossus intact, with its cannon broken, with its core open); fails on a page error or a step without its fight.
+//   portal: portal descents sampled every HUD frame (FX.fade, #hud alpha, viewed stratum): solo at each --quality (high,low), a solo pass with the sim delay held 1.5 s (a shot mid-hold), and a client of an in-page host World;
+//     fails unless the screen is black within 0.25 s of 'descend' and stays black until the new stratum has drawn, then fades in monotonically over 0.25-0.9 s.
+//   hits: combat cues rendered in an OfflineAudioContext through the per-frame aggregation (each weapon material, x6, crit, heavy, element tail, Low quality; every element's DoT at 1 and 20 foes, the Burn bed,
+//     a 2 s bonfire of 20 and of 1 burning foes; each application cue; element and class skill impacts; the run-content cues 'new-*': lore, vote tick and tally, relic procs, curse lifted, boss relic, crumble, shell swap, trap snap), a WAV per cue in --outdir; fails on a throw, a silent cue, peak > 0.99, a cue filling its voice budget or a DoT not louder at 20 foes.
+//   music: every score track (24 s: a fight at level 1 then heavy, a boss through its three levels), the four stingers, a Low quality fight and a transition demo bounced in an OfflineAudioContext, a WAV each in --outdir;
+//     the track switching rules (BR.musicSwitch) and 25 s of a solo run's context picker; fails on a throw, a silent mix, peak > 0.99, a silent bass layer, no drums or perc, quiet drums or bass or drums thin above 150 Hz
+//     in a fight or boss, Low quality playing pad, arp or lead, a broken switching rule, or a fight without fight music.
+//   games: 13 screenshots of the minigames staged through the sim (BR.game, the hero unhurt): the trap gauntlet idle and running, the shell game idle, showing, shuffling, open to a pick and found,
+//     the wager duel idle and fighting, the lantern chase idle and running, the echo bells idle, ringing and answering; fails on a page error or a game that misses its phase.
 // Output: compact table (or --json on stdout, logs on stderr); result-<browser>.json and the PNGs in --outdir (default <tmp>/wickdeep-browse). Exit 0 pass, 1 scenario failure, 2 harness error.
 // Notes: Chromium runs headless on the real GPU (ANGLE D3D11, no window); --software forces SwiftShader, where the game reports Post.soft and skips post at 'high' unless --forcepost. Firefox uses its own headless GL.
 //   --sync forces each frame's raster/GPU work to finish before the timer stops. Every external host is blocked (fonts and art are embedded data URIs).
@@ -66,7 +80,7 @@ function parseArgs(argv) {
   if (!vp) throw new Fail('--viewport is WxH, e.g. 1920x1080');
   o.vw = +vp[1]; o.vh = +vp[2];
   o.scens = o.scen.split(',').map(s => s.trim()).filter(Boolean);
-  for (const s of o.scens) if (!/^(smoke|boss|shots|sheet|screens|wardrobe|cosmetics|swing|picks|cards|bell|arenas|verbs|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, boss, shots, sheet, screens, wardrobe, cosmetics, swing, picks, cards, bell, arenas, verbs, crowdN)');
+  for (const s of o.scens) if (!/^(smoke|boss|shots|sheet|map|screens|wardrobe|cosmetics|swing|picks|cards|bell|arenas|verbs|props|doors|games|portal|hits|music|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, boss, shots, sheet, map, screens, wardrobe, cosmetics, swing, picks, cards, bell, arenas, verbs, props, doors, games, portal, hits, music, crowdN)');
   if (!o.scens.length) throw new Fail('--scen is empty');
   o.qualities = o.quality ? o.quality.split(',').map(s => s.trim()) : null;
   if (o.qualities && o.qualities.some(q => q !== 'low' && q !== 'high')) throw new Fail('--quality is low, high or low,high');
@@ -398,8 +412,8 @@ function pageBoot(cfg) {
   BR.offerOpen = () => { const s = window.__ED.Game.s; return !!(s && s.offerOpen); };
   BR.take = () => { const ED = window.__ED; if (ED.Game.s && ED.Game.s.offerOpen) ED.UI.boonConfirm(); return BR.offerOpen(); };
 
-  // arenas scenario: one staging step per screenshot. 'king' / 'hollow' enter that boss's room (its stratum) and wait for the boss; 'twins' / 'mimic' start that champion fight in a combat room;
-  // the other steps force a mechanic on the running fight (tide warning, beam, phases, a lit lantern, a ring warning, a mimic split). Heroes stay unhurt, the boss unkillable.
+  // arenas scenario: one staging step per screenshot. 'king' / 'hollow' enter that boss's room (its stratum) and wait for the boss; 'twins' / 'colossus' start that champion fight in a combat room;
+  // the other steps force a mechanic on the running fight (tide warning, beam, phases, a lit lantern, a ring warning, a Colossus part broken, its core opened). Heroes stay unhurt, the boss unkillable.
   let god = 0;
   setInterval(() => { const s = god && window.__ED.Game.s; if (s && s.world) for (const p of s.world.players.values()) { p.hp = p.maxHp; p.invuln = 1; p.downed = false; } }, 50);
   BR.arena = (step) => {
@@ -418,13 +432,20 @@ function pageBoot(cfg) {
     const force = (k) => { b.st = 'atk'; b.atk = k; b.t = 0; b.vars = { wm: 1 }; b.pose = 'idle'; ED.Bosses[b.type].attacks[k].start(w, b); };
     const toPhase = (f) => { b.hp = b.maxHp * f; };
     if (step === 'king' || step === 'hollow') return enter(step === 'king' ? 'drownedking' : 'hollowking');
-    if (step === 'twins' || step === 'mimic') {
+    if (step === 'twins' || step === 'colossus') {
       if (w.stratum !== 4) w.enterStratum(4);
       const room = w.floor.rooms.find(r => r.type === 'combat' && !r.dark);
       w.roomState[room.id].cleared = true; room.champ = step; w.enterRoom(room.id, null); w.startChampion(room);
       return room.id;
     }
-    if (!b && step !== 'split') return 'no boss';
+    const col = w.enc && w.enc.col;
+    if (step === 'colbreak' || step === 'colopen') { // break the cannon (and the saw: the core opens); the hero watches from below the machine
+      if (!col) return false;
+      for (const k of step === 'colbreak' ? ['cannon'] : ['cannon', 'saw']) if (col.parts[k].hp > 0) w.killEnemy(col.parts[k], null, {});
+      me.x = col.x - 40; me.y = col.y + 110; col.core.hp = col.core.maxHp = 1e7;
+      return step;
+    }
+    if (!b) return 'no boss';
     if (b && !b.staged) { b.staged = true; b.hp = b.maxHp = 1e7; }
     if (step === 'fight') { me.x = b.x + 160; me.y = b.y + 40; return b.type; }
     if (step === 'tide') { ar.next = 0; return 'tide'; }
@@ -434,9 +455,33 @@ function pageBoot(cfg) {
     if (step === 'lantern') { const L = w.room.lanterns[1]; me.x = L.x - 30; me.y = L.y + 20; w.smashCircle(me, L.x, L.y, 8); return ar.lit.join(); }
     if (step === 'ring') { ar.p3 = ED.Arena.crown.CRUMBLE.at[0] - ED.Arena.crown.CRUMBLE.warn + 0.1; return 'ring'; }
     if (step === 'fall') { ar.p3 = ED.Arena.crown.CRUMBLE.at[1] - 0.05; return 'fall'; }
-    if (step === 'split') { const m = w.enemies.find(e => e.type === 'mimic'); if (m) m.hp = m.maxHp * 0.45; return !!m; }
     if (step === 'off') { god = 0; return 0; }
     throw new Error('unknown arena step ' + step);
+  };
+
+  // games scenario: 'stage:<id>' puts the solo hero in an event room (of the first stratum that has one) with minigame <id> as its event (patchRoom, then the real startEvent on entry; the world tick runs def.update),
+  // the hero beside its first prop; 'go' interacts with that prop; 'pick' moves to and picks the pearl's cup; 'chase' puts the hero near a wisp; 'off' ends god mode. Returns the game's phase.
+  BR.game = (step) => {
+    const ED = window.__ED, s = ED.Game.s, w = s && s.world, me = s && s.me;
+    if (!w) throw new Error('no run');
+    god = 1;
+    const g = () => ED.Minigames.game(w), first = () => w.props.find(x => x.ev);
+    if (step.indexOf('stage:') === 0) {
+      const id = step.slice(6);
+      let room = null;
+      for (let st = w.stratum; st <= 3 && !room; st++) { if (st !== w.stratum) w.enterStratum(st); room = w.floor.rooms.find(r => r.type === 'event' && !w.roomState[r.id].visited); }
+      if (!room) return 'no event room';
+      if (!w.patchRoom(room.id, { event: id })) return 'no patch';
+      w.enterRoom(room.id, 's'); w.gold = 400;
+      if (!g() || g().id !== id) return 'not started';
+      const pr = first(); me.x = pr.x; me.y = pr.y + 26;
+      return g().ph;
+    }
+    if (step === 'go') { const pr = first(); me.x = pr.x; me.y = pr.y + 26; w.interact(me.pid, pr.id); return g().ph; }
+    if (step === 'pick') { const c = w.props.find(x => x.kind === 'mg_cup' && x.g.c === g().pearl); me.x = c.x; me.y = c.y + 22; w.interact(me.pid, c.id); return g().ph; }
+    if (step === 'chase') { const z = w.zones.find(q => q.kind === 'wisp' && !q.dead); if (z) { me.x = z.x + 40; me.y = z.y; } return g().ph; }
+    if (step === 'off') { god = 0; return 0; }
+    throw new Error('unknown game step ' + step);
   };
 
   // late build on the solo hero at stratum `strat`: two element paths (the first evolved, the second at its keystone), open boons, the first route with its first fork at rank 3,
@@ -486,6 +531,75 @@ function pageBoot(cfg) {
     return { room: best.id, type: best.type, row: best.row, exits: best.exits.length, names: best.exits.map(id => ED.Render.roomName ? ED.Render.roomName(w.floor.rooms[id]) : w.floor.rooms[id].type) };
   };
 
+  // doors: a room of the current floor with n exits (none of them the boss) retyped to a rest room (the narrowest width for n exits, 6n + 5 tiles), every exit a dark room not yet visited, the room cleared and entered;
+  // a hero under each door (ally heroes added; the first door's hero stands in its doorway, a party door line). Wraps ED.Render.label once so BR.doorLabels can record a frame. Returns { room, w, exits } or null.
+  BR.doorRoom = (n) => {
+    const ED = window.__ED, s = ED.Game.s, w = s && s.world, D = ED.Dungeon, T = ED.CONST.TILE, R = ED.Render;
+    if (!w) throw new Error('no run to stage the doors in');
+    const r0 = w.floor.rooms.find(r => r.exits.length === n && r.type !== 'boss' && r.exits.every(id => w.floor.rooms[id].type !== 'boss'));
+    if (!r0) return null;
+    D.patchRoom(w.floor, r0.id, { type: 'rest' });
+    for (const id of r0.exits) { const nb = w.floor.rooms[id]; nb.dark = true; if (!nb.reward) nb.reward = 'boon'; w.roomState[id].cleared = w.roomState[id].visited = false; }
+    w.roomState[r0.id].cleared = true; w.enterRoom(r0.id, 's');
+    const heroes = [s.me], keys = Object.keys(w.room.doors);
+    for (let i = 1; i < n; i++) { const pid = 'door' + i, c = ED.CLASS_IDS[i % ED.CLASS_IDS.length]; heroes.push(w.players.get(pid) || w.addPlayer({ pid, name: ['Wren', 'Ash', 'Moss'][i - 1], slot: i, cls: c, weapon: ED.weaponChoices(c)[0] })); }
+    keys.forEach((d, i) => { const r = D.doorRect(w.room, d), q = heroes[(i + 1) % n]; q.x = (r.x0 + r.x1 + 1) / 2 * T; q.y = i === 0 ? 1.2 * T : 2.6 * T; });
+    if (!R.label0) { R.label0 = R.label; R.label = function (c, str, x, y) { if (BR.labs) BR.labs.push([String(str), x, y]); return R.label0.apply(this, arguments); }; }
+    return { room: r0.id, w: w.room.w, exits: n };
+  };
+  // The door preview lines of the next drawn frame (labels that are a piece of an exit's name, 'No way back', the dark-room rule or a party door line, one per text and x) and every overlapping pair.
+  BR.doorLabels = () => new Promise((done) => {
+    const ED = window.__ED, R = ED.Render, w = ED.Game.s.world;
+    requestAnimationFrame(() => { BR.labs = []; requestAnimationFrame(() => requestAnimationFrame(() => {
+      const L = BR.labs; BR.labs = null;
+      const texts = w.room.exits.map(id => R.roomName(w.floor.rooms[id])).concat(['No way back', 'Dark room: harder foes, better rewards']), seen = new Set(), lh = R.labelH(), rows = [];
+      for (const [str, x, y] of L) {
+        const key = str + '|' + Math.round(x);
+        if (seen.has(key) || !(texts.some(t => t.indexOf(str) >= 0) || / this door/.test(str) || /^\(\d+\/\d+\)$/.test(str))) continue;
+        seen.add(key); rows.push({ str, x, y, hw: R.labelW(str) / 2 });
+      }
+      const over = [];
+      for (let i = 0; i < rows.length; i++) for (let j = i + 1; j < rows.length; j++) { const a = rows[i], b = rows[j]; if (Math.abs(a.x - b.x) < a.hw + b.hw && Math.abs(a.y - b.y) < lh * 0.95) over.push(a.str + ' / ' + b.str); }
+      done({ n: rows.length, lines: rows.map(r => r.str), over });
+    })); });
+  });
+
+  // props: per-hero and party props staged in the current room around the hero and used through World.interact like a player: a relic hoard (one taken: solo, the rest crumble), a vigor reward (claimed),
+  // an untouched boon reward, another hero's forge reward (owner 'ghost'), a bought shop potion, a chest, and a co-op hoard this hero took from while a partner has not (its group in Game.s.claimed, relics untaken).
+  // Counts the puffs FX.handle sees from then on.
+  BR.propStage = () => {
+    const ED = window.__ED, s = ED.Game.s, w = s.world, p = s.me, U = ED.U;
+    for (const q of w.players.values()) { q.offers.length = 0; q.picks = 0; q.offer = null; }
+    w.enemies.length = 0; w.enc = null; w.locked = false; w.props.length = 0; w.gold = 999;
+    const x = p.x, y = p.y, out = {};
+    const mk = (o) => { const pr = Object.assign({ id: U.uid(), state: 0 }, o); w.props.push(pr); return pr; };
+    const use = (pr) => { const ox = p.x, oy = p.y; p.x = pr.x; p.y = pr.y; w.interact(p.pid, pr.id); p.x = ox; p.y = oy; };
+    const hoard = U.uid(), taken = new Set(), rel = [];
+    for (let i = 0; i < 3; i++) { const id = w.rollRelic('c', taken); taken.add(id); rel.push(mk({ kind: 'relic', x: x - 200 + i * 56, y: y - 110, item: id, group: hoard })); }
+    use(rel[1]);
+    const coop = U.uid(), crel = [];
+    for (let i = 0; i < 2; i++) { const id = w.rollRelic('c', taken); taken.add(id); crel.push(mk({ kind: 'relic', x: x - 200 + i * 56, y: y + 90, item: id, group: coop })); }
+    s.claimed[coop] = true;
+    out.vigor = mk({ kind: 'reward', x: x + 60, y: y - 110, item: 'vigor', group: U.uid() }); use(out.vigor);
+    out.boon = mk({ kind: 'reward', x: x + 140, y: y - 110, item: 'boon', group: U.uid() });
+    out.ghost = mk({ kind: 'reward', x: x - 60, y: y + 90, item: 'forge', group: U.uid(), owner: 'ghost' });
+    out.shop = mk({ kind: 'shop', x: x + 60, y: y + 90, item: 'potion', stype: 'potion', price: 5 });
+    out.chest = mk({ kind: 'chest', x: x + 160, y: y + 90 });
+    const F = ED.FX, h = F.handle; BR._puffs = 0; F.handle = function (ev) { if (ev && ev.t === 'puff') BR._puffs++; return h.apply(this, arguments); };
+    BR._props = { ghost: out.ghost.id, boon: out.boon.id, coop: crel[0].id, hoard: coop };
+    BR._buy = () => { BR._puffs = 0; use(out.shop); return out.shop.state === 1; };
+    return { relics: rel.map(r => r.item), taken: rel[1].state === 1, claimedHoard: !!p.claimed[hoard], vigor: !!p.claimed[out.vigor.group], ghostOpen: out.ghost.state === 0 };
+  };
+  // props: buys the staged potion on a later frame (its vanishing puff comes from the renderer); true when bought
+  BR.propBuy = () => BR._buy();
+  // props: the hero stood on prop `key` of BR._props (ghost, boon, coop); returns whether the client still lists the co-op hoard as claimed and the puffs seen
+  BR.propAt = (key) => {
+    const ED = window.__ED, s = ED.Game.s, p = s.me, w = s.world, P = BR._props, pr = w.props.find(o => o.id === P[key]);
+    p.x = pr.x; p.y = pr.y + 4;
+    return { claimed: !!s.claimed[P.hoard], puffs: BR._puffs };
+  };
+  BR.prompt = () => { const s = window.__ED.Game.s; return s.prompt ? s.prompt.text : null; };
+
   // cards: a boon offer staged through the sim (the hero's boons set so the cards are eligible, the hand sent as the sim's own offer message); returns each card's kind
   BR.cardHand = (boons, ids, spec) => {
     const ED = window.__ED, s = ED.Game.s, w = s && s.world, p = s && s.me;
@@ -523,10 +637,9 @@ function pageBoot(cfg) {
     return { shown: !el.hidden, x: r.left, y: r.top, w: r.width, h: r.height };
   };
   // verbs: step 'room' enters the largest combat room (cleared, hero centred); any other step sets the step's boons, lines up still foes to the hero's right and starts the verb
-  // (keys: Mouse0 held for holds, Space for dashes; 'release' lets go of Mouse0); returns { ok, what } read back from the sim
-  const VB = { cone: { kindle: 1, evo_fire: 1 }, ground: { kindle: 1, firebreak: 1 }, stacks: { kindle: 1 }, icewall: { frostbite: 1, glacierstep: 1 }, lance: { frostbite: 1, evo_ice: 1 }, discharge: { staticcharge: 1, conductor: 1 },
-    storm: { staticcharge: 1, stormstep: 1 }, cloud: { envenom: 1, miasma: 1 }, flask: { envenom: 1, evo_poison: 1 }, pdodge: { consecrate: 1 }, guard: { consecrate: 1, evo_holy: 1 }, decoy: { doommark: 1, phantom: 1 },
-    backstab: { doommark: 1 }, behind: { doommark: 1, evo_shadow: 1 }, finisher: { generalist: 1, masterstroke: 1 } };
+  // (keys: Mouse0 held for holds; 'release' lets go of Mouse0); returns { ok, what } read back from the sim
+  const VB = { cone: { kindle: 1, evo_fire: 1 }, stacks: { kindle: 1 }, burst: { kindle: 1, scorched: 1 }, lance: { frostbite: 1, evo_ice: 1 }, shatter: { frostbite: 1 }, discharge: { staticcharge: 1, conductor: 1 },
+    storm: { staticcharge: 1, evo_lightning: 1 }, finisher: { generalist: 1, masterstroke: 1 } };
   BR.verb = (step) => {
     const ED = window.__ED, s = ED.Game.s, w = s && s.world, I = ED.Input, R = ED.Render, T = ED.CONST.TILE;
     if (!w) throw new Error('no run');
@@ -549,21 +662,16 @@ function pageBoot(cfg) {
     me.x = cx - 90; me.y = cy; me.vx = me.vy = 0;
     const foes = [70, 120, 170].map((dx, i) => { const e = w.spawnEnemy(ED.biomeFor(w.stratum).enemies[0][0], me.x + dx, me.y + (i - 1) * 28); e.spawnT = 0; e.spd = 0; e.cd = 9999; e.hp = e.maxHp = 1e6; e.target = me; return e; });
     const e0 = foes[0];
-    if (step === 'discharge') me.y = cy - 30;
-    if (step === 'storm') e0.x = me.x + 160;
     const charge = () => { for (const e of foes) { e.charge = 60; e.chargeOwner = me; e.chargeT = 3; } };
     BR._go = () => { // after the camera has followed the hero: aim (screen coordinates) and act
       aimAt(e0.x + 40, e0.y);
       s.ctl.dashN = me.stats.dashCharges; s.ctl.dashT = 0; s.ctl.atkCd = 0;
       switch (step) {
-        case 'cone': case 'lance': case 'flask': case 'guard': case 'finisher': I.keys.add('Mouse0'); break;
-        case 'ground': case 'icewall': case 'cloud': case 'decoy': I.pressed.add('Space'); break;
+        case 'cone': case 'lance': case 'storm': case 'finisher': I.keys.add('Mouse0'); break;
         case 'stacks': for (const e of foes) for (let i = 0; i < 3 + foes.indexOf(e) * 3; i++) w.burnStack(e, me, 0); break;
-        case 'discharge': charge(); aimAt(e0.x + 200, me.y); I.pressed.add('Space'); break;
-        case 'storm': charge(); aimAt(e0.x, e0.y); I.pressed.add('Space'); break;
-        case 'pdodge': w.perfectDodge(me, { e: e0 }); break;
-        case 'backstab': e0.faceA = 0; e0.target = null; w.hitEnemy(e0, 20, { p: me, kind: 'weapon' }); break;
-        case 'behind': aimAt(e0.x, e0.y); I.pressed.add('Space'); break;
+        case 'burst': for (let i = 0; i < 6; i++) w.burnStack(e0, me, 0); w.killEnemy(e0, me, {}); break;
+        case 'shatter': w.freezeEnemy(e0, me); e0.frozenAt = w.time - 1; w.hitEnemy(e0, 20, { p: me, kind: 'weapon' }); break;
+        case 'discharge': charge(); w.addCharge(e0, e0.maxHp, me); break;
       }
       return true;
     };
@@ -574,15 +682,11 @@ function pageBoot(cfg) {
   BR.verbSeen = (step) => {
     const ED = window.__ED, s = ED.Game.s, w = s.world, me = s.me, z = (k) => w.zones.some(q => q.kind === k && !q.dead), f = (t) => (BR._fx || []).some(v => v.t === t);
     switch (step) {
-      case 'cone': case 'guard': case 'finisher': case 'lance': case 'flask': return !!me.holdOn;
-      case 'ground': return z('pfire');
+      case 'cone': case 'storm': case 'finisher': case 'lance': return !!me.holdOn;
       case 'stacks': return w.enemies.some(e => e.burnN >= 6);
-      case 'icewall': return z('icewall');
-      case 'cloud': return z('plague');
-      case 'decoy': return z('decoy');
-      case 'discharge': case 'storm': case 'pdodge': case 'backstab': case 'behind': return f({ discharge: 'chain', storm: 'blink', pdodge: 'pdodge', backstab: 'hit', behind: 'blink' }[step]);
+      case 'burst': return f('boom') && z('pfire');
+      case 'shatter': case 'discharge': return f({ shatter: 'shatter', discharge: 'chain' }[step]);
       case 'lance-shot': return w.projs.some(q => q.kind === 'iceshard' && q.team === 0) || f('lance');
-      case 'flask-shot': return z('tele') || z('plague');
       case 'finisher-hit': return f('finisher');
     }
     return false;
@@ -590,7 +694,7 @@ function pageBoot(cfg) {
   // every card frame mask (kinds x metals, the big trims, a route frame per hero) drawn at 6 x on one sheet: PNG data URL
   BR.cardSheet = (cls) => {
     const ED = window.__ED, CA = ED.CardArt, PU = ED.PixUI, Z = 5, M = ['iron', 'silver', 'violet', 'gold'], rows = [];
-    for (const k of ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'purse']) rows.push([k, M.map(m => CA.frame(k, m, {})).concat(k === 'purse' ? [] : [CA.frame(k, 'gold', { big: true })])]);
+    for (const k of ['fire', 'ice', 'lightning', 'general', 'purse']) rows.push([k, M.map(m => CA.frame(k, m, {})).concat(k === 'purse' ? [] : [CA.frame(k, 'gold', { big: true })])]);
     rows.push(['route', M.map(m => CA.frame('route', m, { cls }))]);
     const cw = CA.N * Z + 12, cv = document.createElement('canvas'); cv.width = 90 + cw * 5; cv.height = rows.length * cw + 12;
     const g = cv.getContext('2d'); g.imageSmoothingEnabled = false; g.fillStyle = '#15100d'; g.fillRect(0, 0, cv.width, cv.height);
@@ -637,6 +741,125 @@ function pageBoot(cfg) {
       r.peak = r3(pk); r.rms = Math.round(1e4 * Math.sqrt(ss / Math.max(1, b - a))) / 1e4; r.len = r3((last - a) / sr);
     });
     return rows;
+  };
+
+  // hits: combat cues driven through the aggregation API (A.hit, A.dot, A.bed, A.applied, A.impact, then A.flush), each in its own slot of an OfflineAudioContext (dur + 0.5 s; lo: at Low quality).
+  // Specs: { f: 'hit', crit, w, el, m, h, n hits in one frame } | { f: 'dot', el, a afflicted, n ticks in one frame, v } | { f: 'bed', el, a } | { f: 'apply', el } | { f: 'impact', key, n } |
+  //   { f: 'loop', el, a, sec }: a foes ticking every 0.5 s (staggered) for sec s, one flush per 1/60 s frame, the Burn bed at a for el 1. | { f: 'cue', cue, v, arg, pr }: one A.play.
+  // Per cue: voices alive right after it, peak, audible rms (over the samples up to the last above 1e-3), audible length, and a 16-bit WAV of the slot (base64).
+  BR.hitAudio = async (list) => {
+    const ED = window.__ED, A = ED.Audio, R = ED.Render, sr = 22050, q0 = R.quality;
+    let at = 0;
+    const slots = list.map((c) => { const s = at; at += (c.sec || 1) + 0.5; return s; });
+    const oc = new OfflineAudioContext(1, Math.ceil(sr * at), sr), rows = [];
+    A.attach(oc, { offline: true }); A.last = {};
+    list.forEach((c, i) => {
+      const t0 = slots[i] + 0.05;
+      A.clock = t0; R.quality = c.lo ? 'low' : q0;
+      let err = null, vmax = 0;
+      try {
+        if (c.f === 'hit') { for (let j = 0; j < (c.n || 1); j++) A.hit(!!c.crit, true, c.w, c.el | 0, c.m, c.h | 0); A.flush(); }
+        else if (c.f === 'dot') { for (let j = 0; j < (c.n || 1); j++) A.dot(c.el, c.v || 1, c.a); A.flush(); }
+        else if (c.f === 'bed') { A.bed(c.el, c.a); A.flush(); A.bed(c.el, 0); }
+        else if (c.f === 'apply') A.applied(c.el, true);
+        else if (c.f === 'cue') A.play(c.cue, c.v === undefined ? 1 : c.v, c.arg, c.pr);
+        else if (c.f === 'impact') { for (let j = 0; j < (c.n || 1); j++) A.impact(c.key, true, 0); A.flush(); }
+        else if (c.f === 'loop') {
+          for (let fr = 0; fr < c.sec * 60; fr++) {
+            A.clock = t0 + fr / 60;
+            for (let k = 0; k < c.a; k++) if ((fr + Math.round(k * 30 / c.a)) % 30 === 0) A.dot(c.el, 1, c.a);
+            if (c.el === 1) A.bed(1, c.a);
+            A.flush(); vmax = Math.max(vmax, A.voices());
+          }
+          A.bed(1, 0);
+        }
+      } catch (e) { err = String((e && e.message) || e); }
+      rows.push({ label: c.label, voices: Math.max(vmax, A.voices()), err });
+    });
+    A.ready = false; A.clock = null; R.quality = q0;
+    const d = (await oc.startRendering()).getChannelData(0);
+    rows.forEach((r, i) => {
+      const a = Math.floor(slots[i] * sr), b = Math.min(d.length, Math.floor((slots[i] + (list[i].sec || 1) + 0.5) * sr));
+      let pk = 0, last = a, ss = 0;
+      for (let j = a; j < b; j++) { const x = Math.abs(d[j]); if (x > pk) pk = x; if (x > 1e-3) last = j; }
+      for (let j = a; j <= last; j++) ss += d[j] * d[j];
+      r.peak = r3(pk); r.rms = Math.round(1e4 * Math.sqrt(ss / Math.max(1, last - a))) / 1e4; r.len = r3((last - a) / sr);
+      const n = b - a, buf = new DataView(new ArrayBuffer(44 + n * 2)), str = (o, s) => { for (let k = 0; k < s.length; k++) buf.setUint8(o + k, s.charCodeAt(k)); };
+      str(0, 'RIFF'); buf.setUint32(4, 36 + n * 2, true); str(8, 'WAVEfmt '); buf.setUint32(16, 16, true); buf.setUint16(20, 1, true); buf.setUint16(22, 1, true);
+      buf.setUint32(24, sr, true); buf.setUint32(28, sr * 2, true); buf.setUint16(32, 2, true); buf.setUint16(34, 16, true); str(36, 'data'); buf.setUint32(40, n * 2, true);
+      for (let j = 0; j < n; j++) buf.setInt16(44 + j * 2, Math.max(-1, Math.min(1, d[a + j])) * 32767, true);
+      const u8 = new Uint8Array(buf.buffer); let bin = '';
+      for (let j = 0; j < u8.length; j += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(j, j + 0x8000));
+      r.wav = btoa(bin);
+    });
+    return rows;
+  };
+
+  // ---- music: the adaptive score bounced offline ----
+  // ED.Score.TRACKS with each piece's signature, kind, bpm and root
+  BR.musicTracks = () => { const Sc = window.__ED.Score; return Sc.TRACKS().map(k => { const P = Sc.piece(k); return { key: k, sig: Sc.sig(k), id: P.id, kind: P.kind || 'calm', bpm: P.bpm, root: P.root, S: P.S }; }); };
+  // spec { secs, ev: [[t, 'play', track, lv] | [t, 'level', lv] | [t, 'sting', kind] | [t, 'stop']], lite, sr }: score.js rendered in an OfflineAudioContext straight into the destination (a stinger ducks the music as A.duck does; no music bus, no master limiter);
+  // channels 0-1 the mix, 2-7 the layers (ED.Score.LAYERS, tapped at each layer gain). Returns the mix peak and rms, over (share of samples above 0.6, where the score's soft clipper bends), rms per layer (lay) and above 150 Hz (hi), a throw, and the mix as a 16-bit stereo WAV (base64).
+  BR.musicBounce = async (spec) => {
+    const Sc = window.__ED.Score, sr = spec.sr || 44100, n = Math.ceil(sr * spec.secs), oc = new OfflineAudioContext(8, n, sr), LAY = Sc.LAYERS;
+    const mg = oc.createChannelMerger(8); mg.connect(oc.destination);
+    const out = oc.createGain(), sp = oc.createChannelSplitter(2), duck = oc.createGain(); out.connect(sp); sp.connect(mg, 0, 0); sp.connect(mg, 1, 1); duck.connect(out);
+    const eng = Sc.create(oc, duck, { sting: out, lite: () => !!spec.lite, tap: (k, node) => node.connect(mg, 0, 2 + LAY.indexOf(k)) });
+    const sting = (kind, at) => { const d = eng.sting(kind, at + 0.02), g = duck.gain, c = kind === 'clear'; g.setTargetAtTime(kind === 'defeat' ? 0.2 : c ? 0.45 : 0.3, at, 0.08); g.setTargetAtTime(1, at + d * (c ? 0.6 : 0.75), 0.7); }; // as audio.js: the stinger 20 ms after the music ducks
+    let err = null, t = 0;
+    const pumpTo = (x) => { while (t < x) { t = Math.min(x, t + 0.25); eng.pump(t, null); } };
+    try {
+      for (const e of spec.ev) {
+        pumpTo(e[0]);
+        if (e[1] === 'play') eng.play(e[2], e[0], e[3]); else if (e[1] === 'level') eng.level(e[2], e[0]); else if (e[1] === 'sting') sting(e[2], e[0]); else if (e[1] === 'stop') eng.stop(e[0]);
+      }
+      pumpTo(spec.secs);
+    } catch (e) { err = String((e && e.stack) || e).slice(0, 300); }
+    const buf = await oc.startRendering(), L = buf.getChannelData(0), R = buf.getChannelData(1);
+    let pk = 0, ss = 0, ov = 0;
+    for (let i = 0; i < n; i++) { const a = Math.abs(L[i]), b = Math.abs(R[i]); if (a > pk) pk = a; if (b > pk) pk = b; ss += L[i] * L[i] + R[i] * R[i]; if (a > 0.6 || b > 0.6) ov++; }
+    const lay = {};
+    const hi = {}, ka = 1 / (1 + 2 * Math.PI * 150 / sr); // hi: layer rms above 150 Hz (one-pole high-pass), what laptop speakers play
+    LAY.forEach((k, j) => {
+      const d = buf.getChannelData(2 + j); let s2 = 0, h2 = 0, y = 0, x0 = 0;
+      for (let i = 0; i < n; i++) { const x = d[i]; s2 += x * x; y = ka * (y + x - x0); x0 = x; h2 += y * y; }
+      lay[k] = Math.round(1e5 * Math.sqrt(s2 / n)) / 1e5; hi[k] = Math.round(1e5 * Math.sqrt(h2 / n)) / 1e5;
+    });
+    const wb = new DataView(new ArrayBuffer(44 + n * 4)), str = (o, x) => { for (let i = 0; i < x.length; i++) wb.setUint8(o + i, x.charCodeAt(i)); };
+    str(0, 'RIFF'); wb.setUint32(4, 36 + n * 4, true); str(8, 'WAVEfmt '); wb.setUint32(16, 16, true); wb.setUint16(20, 1, true); wb.setUint16(22, 2, true);
+    wb.setUint32(24, sr, true); wb.setUint32(28, sr * 4, true); wb.setUint16(32, 4, true); wb.setUint16(34, 16, true); str(36, 'data'); wb.setUint32(40, n * 4, true);
+    for (let i = 0; i < n; i++) { wb.setInt16(44 + i * 4, Math.max(-1, Math.min(1, L[i])) * 32767, true); wb.setInt16(46 + i * 4, Math.max(-1, Math.min(1, R[i])) * 32767, true); }
+    const u8 = new Uint8Array(wb.buffer); let bin = '';
+    for (let j = 0; j < u8.length; j += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(j, j + 0x8000));
+    return { peak: Math.round(1e3 * pk) / 1e3, rms: Math.round(1e4 * Math.sqrt(ss / (2 * n))) / 1e4, over: Math.round(1e4 * ov / n) / 1e4, lay, hi, err, wav: btoa(bin) };
+  };
+
+  // track switching rules on an unrendered OfflineAudioContext: the same track is a no-op; a switch starts on the playing run's bar grid (half bar when the bar is over 1.9 s) within one grid step
+  // and fades that run from the same instant; asking for the old track before the downbeat drops the pending run and revives the old one; a running fight switches on its own bar; stop fades at once
+  BR.musicSwitch = () => {
+    const Sc = window.__ED.Score, oc = new OfflineAudioContext(2, 44100, 44100), eng = Sc.create(oc, oc.destination, {}), o = {};
+    const step = (r) => (r.bar > 1.9 ? r.bar / 2 : r.bar), on = (r, t) => { const k = (t - r.t0) / step(r); return Math.abs(k - Math.round(k)) < 1e-6; };
+    eng.play({ s: 1, c: 'explore' }, 0, 0); eng.pump(3.3, null);
+    const a = eng.run; eng.play({ s: 1, c: 'explore' }, 3.3, 0); o.same = eng.run === a && eng.runs.length === 1;
+    eng.play({ s: 1, c: 'combat' }, 3.3, 1); const b = eng.run;
+    o.onGrid = b !== a && on(a, b.t0) && b.t0 >= 3.3 && b.t0 - 3.3 <= step(a) + 0.07; o.fades = a.dead && a.fadeAt === b.t0 && a.until > b.t0;
+    eng.play({ s: 1, c: 'explore' }, 3.35, 0); o.revived = eng.run === a && !a.dead && b.until <= 3.35 + 1e-9;
+    eng.play({ s: 1, c: 'combat' }, 3.4, 1); const c = eng.run; eng.pump(c.t0 + 0.7, null);
+    eng.play({ s: 1, c: 'elite' }, c.t0 + 0.7, 1); const d = eng.run; o.fightGrid = d !== c && on(c, d.t0) && Math.abs(step(c) - c.bar) < 1e-9;
+    eng.pump(d.t0 + 0.5, null); eng.stop(d.t0 + 0.5); o.stops = !eng.run && eng.cur === null && d.dead && d.until <= d.t0 + 0.5 + 1.6 + 1e-9;
+    // main-thread cost of scheduling the densest track (Hollow King, heavy) at High and Low quality: ms per 0.1 s pump tick (cheap: under 4 ms)
+    for (const lt of [false, true]) {
+      const c2 = new OfflineAudioContext(2, 44100 * 12, 44100), e2 = Sc.create(c2, c2.destination, { lite: () => lt }); e2.play({ s: 4, c: 'boss' }, 0, 2);
+      const t0 = performance.now(); e2.pump(10, null); const ms = (performance.now() - t0) / 100;
+      o[lt ? 'pumpLowMs' : 'pumpMs'] = Math.round(ms * 100) / 100; o[lt ? 'cheapLow' : 'cheap'] = ms < 4;
+    }
+    return o;
+  };
+  // the solo run's requested music track and its viewed room: a fight = the room locked or a live foe (not spawning)
+  BR.musicNow = () => {
+    const ED = window.__ED, s = ED.Game.s, v = s && s.view; if (!v || !v.room) return null;
+    const live = v.enemies.some(e => e.hp > 0 && !(e.spawnT > 0));
+    return { sig: ED.Score.sig(ED.Audio.track), room: v.room.type, dark: !!v.room.dark, fight: !!v.locked || live, hold: s.mus ? Math.round(s.mus.hold * 10) / 10 : 0, cur: ED.Audio.score ? ED.Audio.score.cur : null, ctx: ED.Audio.ctx ? ED.Audio.ctx.state : null };
   };
 
   // ---- bell: the Bellwarden ----
@@ -759,6 +982,67 @@ function pageBoot(cfg) {
     return cv.toDataURL('image/png');
   };
   BR.bellNetEnd = () => { clearInterval(BR._bellHost); BR._bellHost = null; window.__ED.Game.stop(); return true; };
+
+  // Portal descent sampler: after each HUD.draw while on, a row [ms since t0, FX.fade, FX.trans phase (-1 none), viewed stratum, #hud alpha at the top centre (-1 no canvas)];
+  // ev: ms of the first 'descend' and 'stratum' events handled.
+  const trHook = () => {
+    if (BR._tr) return BR._tr;
+    const ED = window.__ED, H = ED.HUD, F = ED.FX, hd = H.draw, fh = F.handle, T = BR._tr = { on: false, t0: 0, s: [], ev: {} };
+    let hc = null;
+    H.draw = function () {
+      const r = hd.apply(this, arguments);
+      if (T.on) {
+        const g = ED.Game.s, cv = document.getElementById('hud'); if (!hc && cv) hc = cv.getContext('2d');
+        T.s.push([Math.round(performance.now() - T.t0), +F.fade.toFixed(3), F.trans ? F.trans.ph : -1, g && g.view ? g.view.stratum | 0 : 0, hc ? hc.getImageData(cv.width >> 1, 1, 1, 1).data[3] : -1]);
+      }
+      return r;
+    };
+    F.handle = function (ev) { if (T.on && ev && (ev.t === 'descend' || ev.t === 'stratum') && T.ev[ev.t] === undefined) T.ev[ev.t] = Math.round(performance.now() - T.t0); return fh.apply(this, arguments); };
+    return T;
+  };
+  const trRun = async (w, pid, done, slow) => {
+    const T = trHook(), p = w.players.get(pid), pr = { id: window.__ED.U.uid(), kind: 'portal', x: p.x, y: p.y, state: 0 };
+    w.locked = false; w.props.push(pr);
+    T.s = []; T.ev = {}; T.t0 = performance.now(); T.on = true;
+    w.interact(pid, pr.id);
+    const ps = w.pendingStratum;
+    if (ps && slow) ps.t = slow;
+    while (ps && performance.now() - T.t0 < 4000 + slow * 1000 && !done()) await sleep(16);
+    await sleep(150);
+    T.on = false;
+    return { delay: ps ? (slow || 0) : -1, ev: T.ev, samples: T.s };
+  };
+  // Solo/host: a portal at the hero in a calm room, taken at once; slow: the sim's descent delay held at that many s. Returns { s0, s1, delay, ev, samples }.
+  BR.portalSolo = async (slow) => {
+    const ED = window.__ED, s = ED.Game.s, w = s.world, s0 = w.stratum;
+    while (s.offerOpen) { ED.UI.boonConfirm(); await sleep(450); }
+    if (w.room.type !== 'start') w.enterRoom(w.floor.start, null);
+    await sleep(300);
+    const r = await trRun(w, s.me.pid, () => w.stratum !== s0 && !ED.FX.trans, slow || 0);
+    return Object.assign({ s0, s1: w.stratum }, r);
+  };
+  // Client: a host World (heroes h0, c1) steps at 60 Hz in this page and sends a full JSON snapshot every 3 steps, delayed lat s; Game runs as c1's client; after 1.2 s h0 takes a portal.
+  BR.portalNet = async (lat) => {
+    const ED = window.__ED, G = ED.Game, N = ED.Net, wp = ED.weaponChoices('knight')[0], meta = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
+    const players = [{ pid: 'h0', name: 'Host', slot: 0, cls: 'knight', weapon: wp, meta: meta() }, { pid: 'c1', name: 'Client', slot: 1, cls: 'knight', weapon: wp, meta: meta() }];
+    const w = new ED.World({ seed: cfg.seed, pact: 0, players: players.map(p => Object.assign({ remote: p.pid !== 'h0' }, p)) });
+    w.startRun();
+    G.start('client', { localPid: 'c1', players, pact: 0, net: { send: () => {}, sendTo: () => {}, broadcast: () => {} } });
+    let steps = 0;
+    const hz0 = performance.now(), host = setInterval(() => {
+      while (steps < (performance.now() - hz0) * 0.06) {
+        for (const p of w.players.values()) { p.hp = p.maxHp; p.downed = false; }
+        w.update(1 / 60); steps++; w.msgs.length = 0;
+        if (steps % 3 === 0) { const d = JSON.parse(JSON.stringify(N.encodeSnap(w, w.fx, true))); w.fx.length = 0; setTimeout(() => G.onClientData(d), lat * 1000); }
+      }
+    }, 8);
+    try {
+      await sleep(1200);
+      const s0 = G.s.view.stratum;
+      const r = await trRun(w, 'h0', () => G.s && G.s.view.stratum !== s0 && !ED.FX.trans, 0);
+      return Object.assign({ s0, s1: G.s ? G.s.view.stratum : 0, hostS: w.stratum }, r);
+    } finally { clearInterval(host); G.stop(); }
+  };
 
   BR.measure = async (n) => {
     for (const k in M) if (Array.isArray(M[k])) M[k] = [];
@@ -955,9 +1239,8 @@ async function scenCrowd(name) {
 async function scenVerbs() {
   const o = S.opt, res = newResult('verbs'), q = qualitiesOr(['high'])[0];
   // [step, ms before the shot, shot name, state to check (default the step)]
-  const PLAN = [['cone', 900, 'flame-cone'], ['release', 300, ''], ['ground', 260, 'burning-ground'], ['stacks', 500, 'burn-stacks'], ['icewall', 300, 'ice-wall'], ['lance', 800, 'lance-charge'], ['release', 90, 'lance-flight', 'lance-shot'],
-    ['discharge', 160, 'discharge'], ['storm', 140, 'storm-step'], ['cloud', 450, 'toxic-cloud'], ['flask', 800, 'flask-ready'], ['release', 700, 'flask-landed', 'flask-shot'], ['pdodge', 120, 'perfect-dodge'],
-    ['guard', 800, 'guard'], ['release', 300, ''], ['decoy', 350, 'phantom-decoy'], ['backstab', 80, 'backstab'], ['behind', 160, 'umbral-arms'], ['finisher', 1200, 'finisher-charge'], ['release', 90, 'finisher-strike', 'finisher-hit']];
+  const PLAN = [['cone', 900, 'flame-cone'], ['release', 300, ''], ['stacks', 500, 'burn-stacks'], ['burst', 260, 'death-burst'], ['lance', 800, 'lance-charge'], ['release', 90, 'lance-flight', 'lance-shot'],
+    ['shatter', 120, 'shatter'], ['discharge', 200, 'discharge'], ['storm', 800, 'storm-call'], ['release', 300, ''], ['finisher', 1200, 'finisher-charge'], ['release', 90, 'finisher-strike', 'finisher-hit']];
   const { ctx, page, errors } = await openPage();
   try {
     await call(page, 'profile', o.cls, o.embers);
@@ -985,11 +1268,37 @@ async function scenVerbs() {
   return res;
 }
 
+// games: screenshots of the five minigames staged through BR.game (an event room, the game set up and started, the hero unhurt); fails on a page error or a game that does not reach its phase.
+async function scenGames() {
+  const o = S.opt, res = newResult('games'), q = qualitiesOr(['high'])[0];
+  // [step, expected phase (null: any), ms before the shot, shot name ('' = none)]
+  const PLAN = [['stage:gauntlet', 0, 400, 'gauntlet-idle'], ['go', 1, 1400, 'gauntlet-traps'], ['stage:shells', 0, 400, 'shells-idle'], ['go', 1, 500, 'shells-show'], ['', 2, 900, 'shells-shuffle'], ['', 3, 3200, 'shells-pick'], ['pick', 4, 300, 'shells-found'],
+    ['stage:duel', 0, 400, 'duel-idle'], ['go', 2, 2600, 'duel-fight'], ['stage:wisps', 0, 400, 'wisps-idle'], ['go', 1, 600, ''], ['chase', 1, 400, 'wisps-chase'], ['stage:echo', 0, 400, 'echo-idle'], ['go', 1, 900, 'echo-listen'], ['', 2, 2600, 'echo-answer']];
+  const { ctx, page, errors } = await openPage();
+  try {
+    await call(page, 'profile', o.cls, o.embers);
+    await call(page, 'settings', q);
+    await call(page, 'install');
+    if ((await call(page, 'start')) !== 'run') fail(res, 'run did not start');
+    await wait(600);
+    for (let i = 0; i < 6 && await call(page, 'offerOpen'); i++) { await call(page, 'take'); await wait(500); } // the start offer holds the world
+    for (const [step, ph, ms, name] of PLAN) {
+      if (step) { const r = await call(page, 'game', step); notes(res, step + ' -> ' + r); if (typeof r === 'string') fail(res, step + ': ' + r); }
+      await wait(ms);
+      if (ph !== null) { const now = await page.evaluate(() => { const ED = window.__ED, g = ED.Minigames.game(ED.Game.s.world); return g ? g.ph : -1; }); if (now !== ph) fail(res, `${name || step}: phase ${now}, wanted ${ph}`); }
+      if (name) await shoot(page, res, name);
+    }
+    await call(page, 'game', 'off');
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
 async function scenArenas() {
   const o = S.opt, res = newResult('arenas'), q = qualitiesOr(['high'])[0];
   const PLAN = [['king', 6500, 'king-p1'], ['tide', 900, 'king-tide-warn'], ['', 3000, 'king-tide'], ['beam', 900, 'king-beam-warm'], ['', 1100, 'king-beam'], ['p2', 1500, 'king-p2'], ['p3', 2500, 'king-p3'],
     ['hollow', 6500, 'hollow-p1'], ['fight', 700, 'hollow-duel'], ['p2', 2500, 'hollow-p2-dark'], ['lantern', 700, 'hollow-p2-lantern'], ['p3', 1500, 'hollow-p3'], ['ring', 1200, 'hollow-p3-ring'], ['fall', 900, 'hollow-p3-fallen'],
-    ['twins', 3500, 'twins'], ['', 2500, 'twins-combo'], ['mimic', 3500, 'mimic'], ['split', 900, 'mimic-split']];
+    ['twins', 3500, 'twins'], ['', 2500, 'twins-combo'], ['colossus', 4200, 'colossus'], ['colbreak', 2600, 'colossus-broken'], ['colopen', 2600, 'colossus-open']];
   const { ctx, page, errors } = await openPage();
   try {
     await call(page, 'profile', o.cls, o.embers);
@@ -1030,10 +1339,10 @@ async function scenSwing() {
   return res;
 }
 
-const PICK_SHOTS = ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'route', 'relic', 'purse', 'fire-big', 'holy-ally'];
-const PICK_CUES = ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'route', 'relic', 'purse'].map(k => ({ label: k, cue: 'pick', arg: k }))
+const PICK_SHOTS = ['fire', 'ice', 'lightning', 'general', 'route', 'relic', 'purse', 'fire-big', 'fire-ally'];
+const PICK_CUES = ['fire', 'ice', 'lightning', 'general', 'route', 'relic', 'purse'].map(k => ({ label: k, cue: 'pick', arg: k }))
   .concat([{ label: 'fire big', cue: 'pick', arg: { k: 'fire', big: true } },
-    { label: 'holy big', cue: 'pick', arg: { k: 'holy', big: true } }, { label: 'buy (hearth)', cue: 'buy' }]);
+    { label: 'ice big', cue: 'pick', arg: { k: 'ice', big: true } }, { label: 'buy (hearth)', cue: 'buy' }]);
 async function scenPicks() {
   const o = S.opt, res = newResult('picks'), q = qualitiesOr(['high'])[0];
   const { ctx, page, errors } = await openPage();
@@ -1071,20 +1380,175 @@ async function scenPicks() {
   return res;
 }
 
+// hits: BR.hitAudio specs (labels double as WAV names). DoT pairs (n1 / n20) must grow louder with the afflicted count.
+const HIT_EL = { 1: 'flame', 2: 'frost', 3: 'storm', 4: 'bleed', 5: 'poison', 6: 'holy', 7: 'shadow' };
+const HIT_CUES = [].concat(
+  ['blade', 'blunt', 'arrow', 'magic'].map(m => ({ label: 'hit-' + m, f: 'hit', w: 0.6, m })),
+  ['blade', 'blunt'].map(m => ({ label: 'hit-' + m + '-x6', f: 'hit', w: 0.5, m, n: 6 })),
+  [{ label: 'hit-blade-crit', f: 'hit', crit: 1, w: 0.8, m: 'blade' }, { label: 'hit-blunt-heavy', f: 'hit', w: 1.2, m: 'blunt', h: 1 }, { label: 'hit-arrow-fire', f: 'hit', w: 0.6, m: 'arrow', el: 1 },
+    { label: 'hit-blunt-heavy-low', f: 'hit', w: 1.2, m: 'blunt', h: 1, lo: 1 }, { label: 'hit-magic-low', f: 'hit', w: 0.6, m: 'magic', lo: 1 }],
+  ...Object.keys(HIT_EL).map(el => [{ label: 'dot-' + HIT_EL[el] + '-n1', f: 'dot', el: +el, a: 1 }, { label: 'dot-' + HIT_EL[el] + '-n20', f: 'dot', el: +el, a: 20, n: 6 }]),
+  [{ label: 'dot-flame-n20-low', f: 'dot', el: 1, a: 20, n: 6, lo: 1 }, { label: 'bed-flame-20', f: 'bed', el: 1, a: 20 }, { label: 'bonfire-20-loop', f: 'loop', el: 1, a: 20, sec: 2 }, { label: 'bonfire-1-loop', f: 'loop', el: 1, a: 1, sec: 2 }],
+  [1, 2, 3].map(el => ({ label: 'apply-' + HIT_EL[el], f: 'apply', el })),
+  ['e1', 'e2', 'e3', 'e4'].map((key, i) => ({ label: 'impact-' + HIT_EL[i + 1] + '-x4', f: 'impact', key, n: 4 })), [{ label: 'impact-knight-class', f: 'impact', key: 'knight', n: 2 }],
+  // run-content cues (labels 'new-*'): events, votes, relic procs, minigames
+  [['lore'], ['vtick', 'vote'], ['vtick', 5], ['vtick', 1], ['vtally'], ['rproc', 'hit'], ['rproc', 'crit'], ['rproc', 'block'], ['lifted'], ['bossrelic', null, 1.5], ['crumble'], ['crumble', null, 1, 1], ['shellswap', 1], ['shellswap', 3], ['trapsnap']]
+    .map(([cue, arg, sec, lo]) => ({ label: 'new-' + cue + (arg !== undefined && arg !== null ? '-' + arg : '') + (lo ? '-low' : ''), f: 'cue', cue, arg, sec, lo })));
+async function scenHits() {
+  const o = S.opt, res = newResult('hits');
+  const { ctx, page, errors } = await openPage();
+  try {
+    const rows = await call(page, 'hitAudio', HIT_CUES), by = {};
+    for (const r of rows) {
+      by[r.label] = r;
+      fs.writeFileSync(path.join(o.outdir, r.label + '.wav'), Buffer.from(r.wav, 'base64')); delete r.wav;
+      notes(res, `cue ${r.label}: ${r.voices} voices, peak ${r.peak}, rms ${r.rms}, ${r.len} s${r.err ? ', error ' + r.err : ''}`);
+      if (r.err) fail(res, 'cue ' + r.label + ' threw: ' + r.err);
+      else if (!(r.peak > 0.003)) fail(res, 'cue ' + r.label + ' rendered silent');
+      else if (r.peak > 0.99) fail(res, 'cue ' + r.label + ' peaks at ' + r.peak);
+      if (r.voices >= (/crit/.test(r.label) ? 40 : 32)) fail(res, `cue ${r.label}: ${r.voices} voices fill its budget`);
+    }
+    for (const k of Object.values(HIT_EL)) { const a = by['dot-' + k + '-n1'], b = by['dot-' + k + '-n20']; if (a && b && !(b.rms > a.rms * 1.3)) fail(res, `dot ${k}: 20 foes (rms ${b.rms}) not louder than 1 (rms ${a.rms})`); }
+    notes(res, 'WAVs in ' + o.outdir);
+    res.rows = rows;
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
 // cards: hands staged through the sim that show every card kind; boons = the hero's build for the hand (so the cards are eligible), pick = [card index, kind] for mid-pick frames
 const R = (ids, n) => Object.fromEntries(ids.map((id, i) => [id, Array.isArray(n) ? n[i] : n || 1]));
 const CARD_HANDS = (cls) => [
-  { name: 'gates', spec: { src: 'start' }, boons: {}, ids: ['kindle', 'frostbite', 'staticcharge', 'envenom'], distinctIcons: true, pick: [3, 'poison'] },
-  { name: 'gates2', spec: { src: 'start' }, boons: {}, ids: ['consecrate', 'doommark', 'generalist'], distinctIcons: true, pick: [0, 'holy'] },
-  { name: 'fire-ice', spec: { src: 'room' }, boons: R(['kindle', 'stoke', 'kindling', 'frostbite', 'deepcold', 'glacier'], [1, 2, 1, 1, 1, 1]), ids: ['firebreak', 'shatterpoint', 'wildfire', 'permafrost'], pick: [1, 'ice'] },
-  { name: 'storm', spec: { src: 'room' }, boons: R(['staticcharge', 'conductor', 'highvoltage', 'envenom', 'potency', 'caustic'], [1, 1, 1, 1, 2, 1]), ids: ['overload', 'longfuse', 'miasma', 'neurotoxin'], pick: [0, 'lightning'] },
-  { name: 'light', spec: { src: 'room' }, boons: R(['consecrate', 'zealotry', 'sanctity', 'doommark', 'cutthroat'], [1, 2, 1, 1, 2]), ids: ['grace', 'beacon', 'souljar', 'inevitable'], pick: [2, 'shadow'] },
+  { name: 'gates', spec: { src: 'start' }, boons: {}, ids: ['generalist', 'kindle', 'frostbite', 'staticcharge'], distinctIcons: true, pick: [3, 'lightning'] },
+  { name: 'fire-ice', spec: { src: 'room' }, boons: R(['kindle', 'stoke', 'kindling', 'frostbite', 'deepcold', 'glacier'], [1, 2, 1, 1, 1, 1]), ids: ['fanflames', 'shatterpoint', 'wildfire', 'thermal'], pick: [1, 'ice'] },
+  { name: 'storm', spec: { src: 'room' }, boons: R(['staticcharge', 'conductor', 'highvoltage', 'kindle', 'stoke'], [1, 1, 1, 1, 1]), ids: ['overload', 'longfuse', 'plasma', 'smother'] },
+  { name: 'cross', spec: { src: 'room' }, boons: R(['generalist', 'keen', 'frostbite', 'deepcold'], [1, 1, 1, 1]), ids: ['icebreaker', 'brutal', 'permafrost', 'glacier'] },
   { name: 'open', spec: { src: 'epic' }, boons: { generalist: 1, keen: 1 }, ids: ['brutal', 'focus', 'wide', 'purse'], pick: [0, 'general'] },
-  { name: 'evo', spec: { src: 'room' }, boons: R(['kindle', 'stoke', 'kindling', 'wildfire', 'smother'], [1, 3, 2, 1, 1]), ids: ['evo_fire', 'firewalk', 'vigor'], pick: [0, 'fire-big'] },
+  { name: 'evo', spec: { src: 'room' }, boons: R(['kindle', 'stoke', 'kindling', 'wildfire', 'smother'], [1, 3, 2, 1, 1]), ids: ['evo_fire', 'fanflames', 'vigor'], pick: [0, 'fire-big'] },
   { name: 'route', spec: { src: 'class', ctier: 1 }, boons: {}, ids: ['atk', 's1', 's2', 'el'].map(k => cls[0] + '_' + k), pick: [0, 'route'] },
   { name: 'fork', spec: { src: 'class', ctier: 2 }, boons: { [cls[0] + '_atk']: 1 }, ids: [cls[0] + '_atk_h', cls[0] + '_atk_s'] },
   { name: 'dense6', spec: { src: 'epic' }, boons: R(['kindle', 'stoke', 'frostbite', 'deepcold'], [1, 2, 1, 2]), ids: ['wildfire', 'permafrost', 'coldcycle', 'focus', 'plating', 'purse'], pick: [2, 'ice'] },
 ];
+// music: every track bounced 24 s (a fight at level 1, heavy from 12 s; a boss at phase levels 0, 1, 2 for 8 s each), each stinger, a Low quality fight and a transition demo; a WAV each in --outdir.
+// Then the switching rules and the context picker of a solo run. Fails on a throw, a silent mix, peak > 0.99 (the demo sums two capped chains for the master limiter: not checked), a silent bass layer, silent drums and perc,
+// a fight or boss whose drums are quiet or whose bass or drums are thin above 150 Hz, Low quality playing pad, arp or lead, a broken switching rule, or a fight without fight music.
+async function scenMusic() {
+  const o = S.opt, res = newResult('music'), dir = o.outdir, LOUD = 2e-3;
+  const { ctx, page, errors } = await openPage();
+  const bounce = async (name, label, spec, chk) => {
+    const r = await call(page, 'musicBounce', spec), file = path.join(dir, 'music-' + name + '.wav');
+    fs.writeFileSync(file, Buffer.from(r.wav, 'base64')); res.shots.push(file); delete r.wav;
+    notes(res, `${label}: peak ${r.peak}, rms ${r.rms}, over ${r.over}, layers ` + Object.entries(r.lay).map(([k, v]) => k + ' ' + v).join(' ') + ', bass/drums above 150 Hz ' + r.hi.bass + '/' + r.hi.drums + (r.err ? ', error ' + r.err : ''));
+    if (r.err) fail(res, name + ' threw: ' + r.err);
+    else if (!(r.peak > 0.01)) fail(res, name + ' rendered silent');
+    else if (r.peak > 0.99 && !spec.mixed) fail(res, name + ' clips (peak ' + r.peak + ')');
+    if (chk) chk(r);
+    res.rows.push(Object.assign({ name }, r));
+    return r;
+  };
+  try {
+    const list = await call(page, 'musicTracks');
+    for (const tr of list) {
+      const ev = tr.kind === 'fight' ? [[0, 'play', tr.key, 1], [12, 'level', 2]] : tr.kind === 'boss' ? [[0, 'play', tr.key, 0], [8, 'level', 1], [16, 'level', 2]] : [[0, 'play', tr.key, 0]];
+      await bounce(tr.sig, `${tr.sig} (${tr.id}, ${tr.kind}, ${tr.bpm} bpm, ${tr.S} steps, root ${tr.root})`, { secs: 24, ev }, (r) => {
+        if (!(r.lay.bass > LOUD)) fail(res, tr.sig + ': bass layer silent');
+        if (!(r.lay.drums + r.lay.perc > LOUD)) fail(res, tr.sig + ': no drums or perc');
+        if (tr.kind !== 'calm' && !(r.lay.drums > 4 * LOUD)) fail(res, tr.sig + ': drums too quiet at combat level (' + r.lay.drums + ')');
+        if (tr.kind !== 'calm' && !(r.hi.bass > 0.02 && r.hi.drums > 0.03)) fail(res, tr.sig + ': bass or drums thin above 150 Hz (laptop speakers): ' + r.hi.bass + '/' + r.hi.drums);
+      });
+    }
+    for (const [k, secs] of [['clear', 3], ['boss', 6], ['victory', 8], ['defeat', 9.5]]) await bounce('sting-' + k, 'sting ' + k, { secs, ev: [[0.05, 'sting', k]] });
+    await bounce('lite-s1combat', 'Low quality s1combat', { secs: 12, lite: true, ev: [[0, 'play', { s: 1, c: 'combat' }, 2]] }, (r) => {
+      for (const k of ['pad', 'arp', 'lead']) if (r.lay[k] > 1e-4) fail(res, 'Low quality plays ' + k);
+      if (!(r.lay.drums > 4 * LOUD && r.lay.bass > LOUD)) fail(res, 'Low quality lost drums or bass');
+    });
+    // explore -> combat -> heavy -> clear stinger over the held fight -> explore -> combat, elite and combat again within one explore bar (the last request lands on the downbeat) -> boss
+    await bounce('demo-transitions', 'transition demo', { secs: 46, mixed: true, ev: [[0, 'play', { s: 1, c: 'explore' }, 0], [7, 'play', { s: 1, c: 'combat' }, 1], [15, 'level', 2], [21, 'sting', 'clear'], [23.5, 'play', { s: 1, c: 'explore' }, 0],
+      [30, 'play', { s: 1, c: 'combat' }, 1], [30.3, 'play', { s: 1, c: 'elite' }, 1], [30.6, 'play', { s: 1, c: 'combat' }, 1], [37, 'play', { s: 1, c: 'boss' }, 0]] });
+    const sw = await call(page, 'musicSwitch');
+    notes(res, 'switching: ' + JSON.stringify(sw));
+    for (const k in sw) if (sw[k] === false) fail(res, 'switch rule broken: ' + k);
+    // the context picker in a solo run (the bot fights and hops rooms): every 0.25 s the requested track against the viewed room
+    await call(page, 'profile', o.cls, o.embers); await call(page, 'settings', 'high'); await call(page, 'install'); await page.evaluate(() => window.__ED.Audio.init()); // the score engine plays (the context may stay suspended without a gesture)
+    if ((await call(page, 'start')) !== 'run') fail(res, 'run did not start');
+    await call(page, 'drive', true, true);
+    const seen = {}, bad = [];
+    let off = 0, ac = null;
+    for (let i = 0; i < 100; i++) {
+      await wait(250);
+      const m = await call(page, 'musicNow');
+      if (!m) continue;
+      seen[m.sig] = (seen[m.sig] || 0) + 1; ac = m.ctx;
+      if (m.fight && !/(combat|elite|dark|champ|boss)$/.test(m.sig)) bad.push(m);
+      if (m.cur !== m.sig) off++; // the engine plays (or has pending) exactly the requested track
+    }
+    await call(page, 'drive', false, false);
+    notes(res, 'picked: ' + JSON.stringify(seen) + ', engine off the request ' + off + ' of 100 samples, audio context ' + ac);
+    if (bad.length > 2) fail(res, 'fight without fight music: ' + JSON.stringify(bad.slice(0, 3)));
+    if (off > 2) fail(res, 'the score engine is not playing the requested track (' + off + ' samples)');
+    if (!Object.keys(seen).some(k => /combat|elite|dark/.test(k))) fail(res, 'no fight track picked in 25 s of play');
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
+// props: BR.propStage, then the hero stands on each staged prop: another hero's prop and an untaken relic of a co-op hoard this hero took from show no prompt, an untouched reward does;
+// the taken relics vanish; a potion bought on a later frame vanishes with one puff; shots of the room before and after the buy. Fails on a page error, a wrong prompt or a puff count other than 1.
+async function scenProps() {
+  const o = S.opt, res = newResult('props'), q = qualitiesOr(['high'])[0];
+  const { ctx, page, errors } = await openPage();
+  try {
+    await call(page, 'profile', o.cls, o.embers);
+    await call(page, 'settings', q);
+    if ((await call(page, 'start')) !== 'run') fail(res, 'run did not start');
+    await wait(1100);
+    for (let i = 0; i < 6 && await call(page, 'offerOpen'); i++) { await call(page, 'take'); await wait(300); }
+    const st = await call(page, 'propStage');
+    if (!st.taken || !st.claimedHoard || !st.vigor || !st.ghostOpen) fail(res, 'staging: ' + JSON.stringify(st));
+    await wait(500);
+    await shoot(page, res, 'room');
+    if (!(await call(page, 'propBuy'))) fail(res, 'the potion was not bought');
+    await wait(60);
+    await shoot(page, res, 'bought');
+    const at = async (key) => { const r = await call(page, 'propAt', key); await wait(250); return Object.assign(r, { prompt: await call(page, 'prompt') }); };
+    const ghost = await at('ghost'), rel = await at('coop'), boon = await at('boon');
+    if (ghost.prompt) fail(res, "another hero's prop prompts: " + ghost.prompt);
+    if (!rel.claimed || rel.prompt) fail(res, `a relic of a co-op hoard this hero took from: claimed ${rel.claimed}, prompt ${rel.prompt}`);
+    if (!boon.prompt) fail(res, 'an untouched reward shows no prompt');
+    const puffs = (await call(page, 'propAt', 'boon')).puffs;
+    if (puffs !== 1) fail(res, 'the bought potion left ' + puffs + ' puffs (want 1)');
+    notes(res, `relics ${st.relics.join(', ')}; prompts: ghost ${ghost.prompt}, claimed hoard ${rel.prompt}, boon ${boon.prompt}; puffs seen ${puffs}`);
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
+// doors: BR.doorRoom for 2 and 3 exits; the door lines of a drawn frame must not overlap and must include the dark-room rule. Shots to --outdir.
+async function scenDoors() {
+  const o = S.opt, res = newResult('doors'), q = qualitiesOr(['high'])[0];
+  const { ctx, page, errors } = await openPage();
+  try {
+    await call(page, 'profile', o.cls, o.embers);
+    await call(page, 'settings', q);
+    if ((await call(page, 'start')) !== 'run') fail(res, 'run did not start');
+    await wait(1100);
+    for (let i = 0; i < 6 && await call(page, 'offerOpen'); i++) { await call(page, 'take'); await wait(300); }
+    for (const n of [2, 3]) {
+      const st = await call(page, 'doorRoom', n);
+      if (!st) { fail(res, 'no room of the floor has ' + n + ' exits'); continue; }
+      await wait(n === 2 ? 3000 : 900); // the stratum banner fades first
+      const lb = await call(page, 'doorLabels');
+      notes(res, `${n} exits: room ${st.room}, ${st.w} tiles wide; ${lb.n} door lines: ${lb.lines.join(' | ')}`);
+      if (lb.over.length) fail(res, `${n} exits: door lines overlap: ${lb.over.join('; ')}`);
+      if (!lb.lines.some(l => /rewards/.test(l))) fail(res, n + ' exits: the dark-room rule line is missing');
+      if (!lb.lines.some(l => / this door/.test(l))) fail(res, n + ' exits: the party door line is missing');
+      await shoot(page, res, 'n' + n);
+    }
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
 async function scenCards() {
   const o = S.opt, res = newResult('cards'), q = qualitiesOr(['high'])[0], cls = o.cls;
   const { ctx, page, errors } = await openPage();
@@ -1100,6 +1564,16 @@ async function scenCards() {
     const seen = new Set();
     for (const h of CARD_HANDS(cls)) {
       const kinds = await call(page, 'cardHand', h.boons, h.ids, h.spec);
+      if (!seen.size) { // the offer lock on the first hand: a confirm and a click 150 ms in pick nothing while the fill sweeps; 750 ms in the lock is over
+        await wait(150);
+        const lk = await page.evaluate(() => { const E = window.__ED, c = document.querySelector('#boon-cards .boon-card'); E.UI.boonConfirm(); if (c) c.click(); const f = document.querySelector('#boon-cards .bc-lock'); return { ms: E.UI.OFFER_LOCK_MS, locked: E.UI.offerLocked(), sweep: document.getElementById('boon-cards').classList.contains('locking') && !!f && getComputedStyle(f).display !== 'none', open: !!(E.Game.s && E.Game.s.offerOpen) }; });
+        if (!lk.locked || !lk.sweep || !lk.open) fail(res, `offer lock 150 ms in: locked ${lk.locked}, fill ${lk.sweep}, still open ${lk.open}`);
+        await shoot(page, res, 'lock-150ms');
+        await wait(600);
+        const un = await page.evaluate(() => ({ locked: window.__ED.UI.offerLocked(), sweep: document.getElementById('boon-cards').classList.contains('locking') }));
+        if (un.locked || un.sweep) fail(res, `offer lock 750 ms in: locked ${un.locked}, fill ${un.sweep}`);
+        notes(res, `offer lock: ${lk.ms} ms, input ignored at 150 ms, released by 750 ms`);
+      }
       await wait(900);
       const d = await call(page, 'cardDom');
       if (!d.open || d.cards.length !== h.ids.length) { fail(res, `hand ${h.name}: overlay ${d.open ? 'open' : 'closed'} with ${d.cards.length} of ${h.ids.length} cards`); continue; }
@@ -1118,7 +1592,7 @@ async function scenCards() {
         await wait(300);
       }
     }
-    for (const k of ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'route', 'purse', 'fire+big']) if (![...seen].some(s => s === k || (k === 'fire+big' && /\+big$/.test(s)))) fail(res, 'no hand showed a ' + k + ' card');
+    for (const k of ['fire', 'ice', 'lightning', 'general', 'route', 'purse', 'fire+big']) if (![...seen].some(s => s === k || (k === 'fire+big' && /\+big$/.test(s)))) fail(res, 'no hand showed a ' + k + ' card');
     // fork reveal: rank 2 (small, silver) and rank 3 (big, gold)
     await page.evaluate(() => window.__ED.UI.hideBoons());
     for (const rank of [2, 3]) {
@@ -1272,6 +1746,92 @@ async function scenSheet() {
     notes(res, `doors: room ${ds.room} (${ds.type}, row ${ds.row}), ${ds.exits} exits: ${ds.names.join(' | ')}`);
     if (ds.exits < 3) fail(res, 'no room of the floor has 3 exit doors');
     await wait(900); await shoot(page, res, 'doors');
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
+// map: the floor map overlay on a staged mid floor (BR.sheetStage: half the map walked): KeyM opens it (the current room inside the viewport, solo paused), a next room hovered (tooltip),
+// the wheel scrolls to the top, End to the bottom, W moves the focus up a row, M closes it; then the Tab sheet's Map tab (same renderer);
+// fails on a page error, sideways overflow, a map that does not scroll, or the current room off-screen after opening.
+async function scenMap() {
+  const o = S.opt, res = newResult('map'), q = qualitiesOr(['high'])[0];
+  const { ctx, page, errors } = await openPage();
+  const ev = (fn, arg) => page.evaluate(fn, arg);
+  try {
+    await call(page, 'profile', o.cls, o.embers);
+    await call(page, 'settings', q);
+    if ((await call(page, 'start')) !== 'run') fail(res, 'run did not start');
+    await wait(1100);
+    for (let i = 0; i < 6 && await call(page, 'offerOpen'); i++) { await call(page, 'take'); await wait(300); }
+    const st = await call(page, 'sheetStage', o.strat > 1 ? o.strat : 3);
+    notes(res, `staged ${st.cls} on stratum ${st.stratum}`);
+    // a boon room ahead carries a reward path (room.rewardPath, the Paths stream's contract): the map badges it in the path's colour, the tooltip names it
+    const pr = await ev(() => {
+      const E = window.__ED, v = E.Game.s.view, fl = v.floor, cur = fl.rooms[v.roomId], reach = E.MapView.reach(fl, cur.id), pid = E.PATH_IDS.find(id => E.PATHS[id].element) || E.PATH_IDS[0];
+      const rm = fl.rooms.find(r => r.id !== cur.id && reach.has(r.id) && r.reward === 'boon' && !r.dark); if (!rm) return null;
+      rm.rewardPath = pid; return { id: rm.id, name: E.MapView.roomName(rm), want: E.PATHS[pid].name + ' boon' };
+    });
+    notes(res, 'path boon: ' + (pr ? 'room ' + pr.id + ' "' + pr.name + '"' : 'no boon room ahead'));
+    if (pr && pr.name.indexOf(pr.want) < 0) fail(res, 'a path boon room is not named "' + pr.want + '": ' + pr.name);
+    await wait(300);
+    // the view in vp: open, current room rect (viewport CSS px), scroll range, focus, tooltip, pause
+    const probe = (vpId) => ev((id) => {
+      const E = window.__ED, v = E.Game.s.view, vp = document.getElementById(id), M = id === 'mv-vp' ? E.MapView.over : E.UI.sheetState.mv, r = M && M.rectOf(v.roomId);
+      return { open: E.MapView.open(), room: v.roomId, row: v.floor.rooms[v.roomId].row, rect: r, top: Math.round(vp.scrollTop), max: vp.scrollHeight - vp.clientHeight, sw: vp.scrollWidth, cw: vp.clientWidth,
+        focus: M ? M.focus : -1, frow: M && v.floor.rooms[M.focus] ? v.floor.rooms[M.focus].row : -1, tip: !document.getElementById(id === 'mv-vp' ? 'mv-tip' : 'sh-maptip').hidden, paused: E.Game.s.paused };
+    }, vpId);
+    const onScreen = (a) => a.rect && a.rect.y >= 0 && a.rect.y + a.rect.h <= a.rect.vh;
+    await page.keyboard.press('KeyM'); await wait(500);
+    const a = await probe('mv-vp');
+    notes(res, `open: ${a.open}, room ${a.room} row ${a.row}, rect y ${a.rect && Math.round(a.rect.y)} of ${a.rect && a.rect.vh}, scroll ${a.top} / ${a.max}, paused ${a.paused}`);
+    if (!a.open) fail(res, 'KeyM did not open the map');
+    if (!onScreen(a)) fail(res, 'the current room is off-screen after opening: ' + JSON.stringify(a.rect));
+    if (a.max <= 0) fail(res, 'the map does not scroll (scroll range ' + a.max + ')');
+    if (a.sw > a.cw + 1) fail(res, 'the map overflows sideways: ' + a.sw + ' > ' + a.cw);
+    if (!a.paused) fail(res, 'the solo world is not paused under the map');
+    await shoot(page, res, 'open');
+    const nextAt = await ev(() => { const E = window.__ED, v = E.Game.s.view, cur = v.floor.rooms[v.roomId], id = cur.exits[0], vp = document.getElementById('mv-vp').getBoundingClientRect(), r = E.MapView.over.rectOf(id); return r ? { id, x: vp.left + r.x + r.w / 2, y: vp.top + r.y + r.h / 2 } : null; });
+    if (nextAt) {
+      await page.mouse.move(nextAt.x, nextAt.y); await wait(300);
+      const h = await probe('mv-vp'), txt = await ev(() => document.getElementById('mv-tip').textContent);
+      notes(res, `hover room ${nextAt.id}: focus ${h.focus}, tooltip "${txt}"`);
+      if (h.focus !== nextAt.id || !h.tip || !/Next door/.test(txt)) fail(res, 'hovering a next room shows no tooltip');
+      await shoot(page, res, 'hover');
+    } else fail(res, 'the current room has no exit to hover');
+    if (pr) { // the path boon room, hovered
+      const at = await ev((id) => { const M = window.__ED.MapView.over; M.reveal(id, false); const vp = document.getElementById('mv-vp').getBoundingClientRect(), r = M.rectOf(id); return { x: vp.left + r.x + r.w / 2, y: vp.top + r.y + r.h / 2 }; }, pr.id);
+      await page.mouse.move(at.x, at.y); await wait(300);
+      const txt = await ev(() => document.getElementById('mv-tip').textContent);
+      if (txt.indexOf(pr.want) < 0) fail(res, 'the path boon tooltip does not name the path: ' + txt);
+      await shoot(page, res, 'path');
+    }
+    await page.mouse.wheel(0, -50000); await wait(700);
+    const t = await probe('mv-vp');
+    if (t.top !== 0) fail(res, 'the wheel did not scroll to the top: ' + t.top);
+    await shoot(page, res, 'top');
+    await page.keyboard.press('End'); await wait(400);
+    const b = await probe('mv-vp');
+    if (Math.abs(b.top - b.max) > 1) fail(res, 'End did not scroll to the bottom: ' + b.top + ' / ' + b.max);
+    await shoot(page, res, 'bottom');
+    await page.mouse.move(2, 2); await wait(150);
+    await page.keyboard.press('KeyW'); await wait(150); // the first press puts the focus on the current room
+    await page.keyboard.press('KeyW'); await wait(500);
+    const w = await probe('mv-vp');
+    notes(res, `W W: focus room ${w.focus} row ${w.frow} (current row ${w.row}), scroll ${w.top}`);
+    if (w.frow !== w.row + 1) fail(res, 'W did not move the focus one row up');
+    await page.keyboard.press('KeyM'); await wait(300);
+    const c = await probe('mv-vp');
+    if (c.open || c.paused) fail(res, 'M did not close the map (or the world stayed paused)');
+    await ev(() => { const UI = window.__ED.UI; UI.toggleSheet(true); UI.sheetTab('map'); }); await wait(700);
+    const s = await probe('sh-mapvp');
+    notes(res, `sheet Map tab: rect y ${s.rect && Math.round(s.rect.y)} of ${s.rect && s.rect.vh}, scroll ${s.top} / ${s.max}`);
+    if (!onScreen(s)) fail(res, 'the Map tab does not show the current room: ' + JSON.stringify(s.rect));
+    if (s.sw > s.cw + 1) fail(res, 'the Map tab overflows sideways');
+    await shoot(page, res, 'sheet');
+    await ev(() => document.getElementById('sh-mapbtn').click()); await wait(400);
+    const m = await probe('mv-vp');
+    if (!m.open || await ev(() => !document.getElementById('ov-sheet').hidden)) fail(res, 'the Map tab button did not swap to the map overlay');
   } finally { res.errors = errors; await ctx.close(); }
   if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
   return res;
@@ -1519,6 +2079,55 @@ async function scenBell() {
   return res;
 }
 
+// Checks one sampled descent (BR.portalSolo / BR.portalNet rows): black (fade and #hud alpha >= 0.98) within 0.25 s of 'descend', never lighter until the viewed stratum switched
+// and its first frame drew black, then a monotonic fade-in of 0.25-0.9 s; with a held sim delay the black lasts through it.
+function portalCheck(res, tag, r) {
+  if (!r || r.delay < 0) { fail(res, tag + ': the portal did not start a descent'); return; }
+  const S = r.samples, tD = r.ev.descend, blk = (x) => x[1] >= 0.98 && (x[4] < 0 || x[4] >= 250);
+  if (tD === undefined) { fail(res, tag + ': no descend event'); return; }
+  if (r.s1 !== r.s0 + 1) { fail(res, `${tag}: stratum ${r.s0} -> ${r.s1}`); return; }
+  const i0 = S.findIndex(x => x[0] >= tD), iB = S.findIndex(x => x[0] >= tD && blk(x)), iS = S.findIndex(x => x[3] === r.s1);
+  if (iB < 0 || iS < 0) { fail(res, `${tag}: never black (${iB}) or never drawn on the new stratum (${iS})`); return; }
+  const tB = S[iB][0] - tD;
+  if (tB > 260) fail(res, `${tag}: black ${tB} ms after descend (at most 250)`);
+  for (let i = Math.max(1, i0); i < iB; i++) if (S[i][1] < S[i - 1][1] - 1e-3) { fail(res, `${tag}: the fade-out went lighter at ${S[i][0] - tD} ms`); break; }
+  let iE = Math.max(iS, iB); while (iE < S.length && blk(S[iE])) iE++; // the first frame lighter than black after the switch
+  for (let i = iB; i < iE; i++) if (!blk(S[i])) { fail(res, `${tag}: lighter than black at ${S[i][0] - tD} ms during the hold (fade ${S[i][1]}, alpha ${S[i][4]})`); break; }
+  if (iE <= iS) fail(res, tag + ': the first frame of the new stratum was not black');
+  const iZ = S.findIndex((x, i) => i >= iE && x[1] <= 0), end = iZ < 0 ? S.length : iZ + 1;
+  for (let i = iE + 1; i < end; i++) if (S[i][1] > S[i - 1][1] + 1e-3) { fail(res, `${tag}: the fade-in went darker at ${S[i][0] - tD} ms`); break; }
+  const fin = iZ < 0 ? -1 : S[iZ][0] - S[iE - 1][0], hold = S[iE - 1][0] - S[iB][0];
+  if (fin < 250 || fin > 900) fail(res, `${tag}: fade-in ${fin} ms (0.25-0.9 s)`);
+  if (r.delay && hold < r.delay * 1000 - 300) fail(res, `${tag}: black held ${hold} ms through a ${r.delay} s descent delay`);
+  notes(res, `${tag}: stratum ${r.s0} -> ${r.s1}; black at +${tB} ms, switch drawn at +${S[iS][0] - tD} ms, black held ${hold} ms (${iE - iS} frames on the new stratum), fade-in ${fin} ms`);
+  res.rows.push({ pass: tag, blackMs: tB, switchMs: S[iS][0] - tD, holdMs: hold, newFrames: iE - iS, fadeInMs: fin });
+}
+
+// Portal descent: solo at the first quality, again with the sim's delay held 1.5 s (a shot mid-hold), solo at the other qualities, then a client of an in-page host World (50 ms each way).
+async function scenPortal() {
+  const o = S.opt, res = newResult('portal'), qs = qualitiesOr(['high', 'low']);
+  const { ctx, page, errors } = await openPage();
+  try {
+    await call(page, 'profile', o.cls, o.embers);
+    res.info = await call(page, 'settings', qs[0]);
+    await call(page, 'install');
+    if ((await call(page, 'start')) !== 'run') throw new Error('run did not start');
+    await wait(900);
+    portalCheck(res, qs[0], await call(page, 'portalSolo', 0));
+    const slow = call(page, 'portalSolo', 1.5);
+    for (let i = 0; i < 80 && !(await page.evaluate(() => { const t = window.__ED.FX.trans; return !!t && t.ph === 1; })); i++) await wait(50);
+    await shoot(page, res, 'hold');
+    portalCheck(res, qs[0] + '-slow', await slow);
+    for (const q of qs.slice(1, 2)) { await call(page, 'settings', q); await wait(300); portalCheck(res, q, await call(page, 'portalSolo', 0)); }
+    await call(page, 'settings', qs[0]);
+    const n = await call(page, 'portalNet', 0.05);
+    portalCheck(res, 'client', n);
+    if (n.hostS !== n.s1) fail(res, `client on stratum ${n.s1}, host on ${n.hostS}`);
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
 // Wardrobe cosmetics in play: Hearthsitter counts on the Hearth section only; every item owned; the Wardrobe preview per hovered item (a non-blank canvas, its loop stops when the pane hides);
 // the camp with the Blue Hearth and its ghost; a 4-hero party (Knight, Ranger, Pyromancer, Bellwarden), each in a different set, in a staged fight at High and Low quality (pets, coin trails, titles,
 // crowns, sheens, auras, skins), Last Embers on a fallen hero, the in-run secret toast; frame ms of the party with and without the sets.
@@ -1690,7 +2299,7 @@ async function main() {
       const t0 = Date.now();
       log('scenario ' + sc + ' ...');
       let r;
-      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'boss' ? await scenBoss() : sc === 'shots' ? await scenShots() : sc === 'sheet' ? await scenSheet() : sc === 'screens' ? await scenScreens() : sc === 'wardrobe' ? await scenWardrobe() : sc === 'cosmetics' ? await scenCosmetics() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : sc === 'cards' ? await scenCards() : sc === 'bell' ? await scenBell() : sc === 'arenas' ? await scenArenas() : sc === 'verbs' ? await scenVerbs() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
+      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'boss' ? await scenBoss() : sc === 'shots' ? await scenShots() : sc === 'sheet' ? await scenSheet() : sc === 'map' ? await scenMap() : sc === 'props' ? await scenProps() : sc === 'doors' ? await scenDoors() : sc === 'games' ? await scenGames() : sc === 'screens' ? await scenScreens() : sc === 'wardrobe' ? await scenWardrobe() : sc === 'cosmetics' ? await scenCosmetics() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : sc === 'cards' ? await scenCards() : sc === 'bell' ? await scenBell() : sc === 'arenas' ? await scenArenas() : sc === 'verbs' ? await scenVerbs() : sc === 'portal' ? await scenPortal() : sc === 'hits' ? await scenHits() : sc === 'music' ? await scenMusic() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
       r.wallMs = Date.now() - t0;
       r.browserVersion = bv;
       if (S.server.missing.size) r.missing = [...S.server.missing];

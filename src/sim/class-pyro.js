@@ -1,6 +1,6 @@
 // Pyromancer: Ember Bolt (every weapon hit cuts the spell cooldowns), Fireball (skill 3), Flame Nova and Meteor, the route cards that act on them and the hook table ED.CLS.pyro.
 // Attack route: Spellweaver (a larger cut, a Fireball charge), Kindling (bolt hits store Sparks the next spell spends; Flashfire; Pyre Bolt: stats.js gives the bolt a blast), Quickcast (Afterburn bolts after each spell; Chain Cast; Spell Storm).
-// Skill forms (rank 3): Supernova (an expanding wave and a collapse), Phoenix Form (a ring that follows the hero and a dash trail), Cataclysm (five meteors and one lava field), Sun Dive (a second Comet leap and a trail).
+// Skill forms (rank 3): Supernova (an expanding wave and a collapse), Phoenix Form (a ring that follows the hero and a fire trail), Cataclysm (five meteors and one lava field), Sun Dive (a second Comet leap and a trail).
 // Element: Living Flame (spell Fire damage, bolt Burn), White Heat (Flashpoint and White Flame by burning time), Heat Engine (cooldown cuts from burning foes; Chain Reaction; Inferno Engine).
 // Delayed effects (Collapse pull, the Nova echo and wave start, the Cataclysm meteors) wait in the hero's queue p.pyroQ and run from the tick hook; Meteors are 'meteor' zones that land through their onEnd; a Fireball is a hero shot that bursts through projHit / projEnd.
 (function (ED) {
@@ -15,8 +15,8 @@
   Object.assign(C, { EMBER_PS: 0.5, EMBER_CAP: 0.8, EMBER_FODDER: 0.5, EMBER_FLUSH: 0.2, FB_R: 7, CHAIN_T: 1.5, AFTER_FAN: 0.12, STORM_N: 4, PYRE_R: 36 });
   // PULL_LEAD: Collapse pulls this long before the echo. MANTLE_CD: seconds between Mantle shields. HEAT_MAX: most cooldown one cast cuts. HEAT_CD: seconds between Chain Reactions. LAVA_TAG: zone field w of the Cataclysm field, COMET_TAG: of the Meteor a Comet rides,
   // PHOENIX_TAG: of the Phoenix Form ring (the tags only tell the renderer which look to draw). SUN_GAP: seconds between the landing and the second Sun Dive leap. STORM_GAP / STORM_OFF: seconds between the Cataclysm meteors and px from the cursor point of the four outer ones.
-  // TRAIL_STEP / DIVE_STEP: px between two trail patches of a dash and of a Sun Dive flight. SUN_GRACE: seconds the hero stays untouchable after a Sun Dive landing.
-  Object.assign(C, { PULL_LEAD: 0.15, MANTLE_CD: 10, HEAT_MAX: 1.5, HEAT_CD: 6, LAVA_TAG: 9, COMET_TAG: 1, PHOENIX_TAG: 10, SUN_GAP: 0.5, SUN_GRACE: 0.6, STORM_GAP: 0.1, STORM_OFF: 80, TRAIL_STEP: 20, DIVE_STEP: 28 });
+  // TRAIL_STEP / DIVE_STEP: px between two trail patches of Phoenix Form (as the hero moves) and of a Sun Dive flight. SUN_GRACE: seconds the hero stays untouchable after a Sun Dive landing.
+  Object.assign(C, { PULL_LEAD: 0.15, MANTLE_CD: 10, HEAT_MAX: 1.5, HEAT_CD: 6, LAVA_TAG: 9, COMET_TAG: 1, PHOENIX_TAG: 10, SUN_GAP: 0.5, SUN_GRACE: 0.6, STORM_GAP: 0.1, STORM_OFF: 80, TRAIL_STEP: 40, DIVE_STEP: 28 });
   // WHITE_EVERY: seconds between burning-time scans (a scan adds that long to every burning foe). INFERNO_R: Inferno radius factor. BOSS_HEAT: Heat one burning boss stores. HEAT_PING: seconds between Heat refresh events.
   Object.assign(C, { WHITE_EVERY: 0.1, INFERNO_R: 1.4, BOSS_HEAT: 3, HEAT_PING: 2 });
 
@@ -126,7 +126,7 @@
     return {};
   };
 
-  // Phoenix Form: the ring of fire is a 'pfire' zone that follows its owner (w PHOENIX_TAG); a second Nova inside its life renews it instead of adding a second ring. p.phoenixT times the dash trail.
+  // Phoenix Form: the ring of fire is a 'pfire' zone that follows its owner (w PHOENIX_TAG); a second Nova inside its life renews it instead of adding a second ring. p.phoenixT times the fire trail.
   function phoenixRing(w, p, ph, st) {
     p.phoenixT = ph.dur;
     for (const z of w.zones) if (z.w === C.PHOENIX_TAG && z.owner === p.pid && z.t < z.dur) { z.t = 0; z.dur = ph.dur; z.r = ph.r; z.dps = ph.dmg; return; }
@@ -145,7 +145,7 @@
     w.foeEnd();
   }
 
-  // A patch of burning ground on the path of a dash or a Sun Dive flight, one per `step` px of travel (p.trailAt remembers the last one; null when the hero is not moving that way).
+  // A patch of burning ground on the hero's path (Phoenix Form) or a Sun Dive flight, one per `step` px of travel (p.trailAt remembers the last one; null when the hero is not moving that way).
   function layTrail(w, p, q, step) {
     if (p.trailAt && U.dist2(p.trailAt[0], p.trailAt[1], p.x, p.y) < step * step) return;
     p.trailAt = [p.x, p.y];
@@ -377,7 +377,7 @@
     },
 
     // The Ember bucket refills and the cut it gathered goes to the client every EMBER_FLUSH s (whole hundredths; the rest waits). Rebirth Flare watches mantleAmt; a decaying shield lowers it without a flare.
-    // White Heat times the burning foes, Inferno Engine refreshes the Heat count for the viewers every HEAT_PING s. The Supernova waves expand; Phoenix Form lays a trail patch every TRAIL_STEP px of a dash while its ring burns;
+    // White Heat times the burning foes, Inferno Engine refreshes the Heat count for the viewers every HEAT_PING s. The Supernova waves expand; Phoenix Form lays a trail patch every TRAIL_STEP px the hero moves while its ring burns;
     // Sun Dive lays one every DIVE_STEP px of a flight and starts its second leap when SUN_GAP has passed.
     tick(p, dt) {
       const st = p.stats;
@@ -392,7 +392,7 @@
       if (p.waves.length) stepWaves(this, p);
       if (p.phoenixT > 0) p.phoenixT -= dt;
       if (p.phoenixT > 0 && st.phoenixSlow > 0) phoenixSlow(this, p, st);
-      if (p.phoenixT > 0 && st.phoenixMul > 0 && (p.dashing || p.dashT > 0)) layTrail(this, p, ED.Stats.skillNums('nova', st).p.trail, C.TRAIL_STEP);
+      if (p.phoenixT > 0 && st.phoenixMul > 0) layTrail(this, p, ED.Stats.skillNums('nova', st).p.trail, C.TRAIL_STEP);
       else if (p.cometT > 0 && st.sunDive > 0) layTrail(this, p, ED.Stats.skillNums('meteor', st).p.trail, C.DIVE_STEP);
       else p.trailAt = null;
       if (p.diveAt > 0 && this.time >= p.diveAt) { p.diveAt = 0; if (p.diveRoom === this.room) diveAgain(this, p); }

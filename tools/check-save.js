@@ -1,5 +1,5 @@
 // Usage: node tools/check-save.js
-// Headless checks of the profile and save code: golden v2 (main era), v3 and v4 codes still load with their Codex embers refunded, v9 round trips (also with Armory entries and Wardrobe fields) and survives appended upgrades/heroes/Armory entries/deeds/secrets/Wardrobe items in both directions,
+// Headless checks of the profile and save code: golden v2 (main era), v3 and v4 codes still load with their Codex embers refunded, v10 round trips (also with Armory entries, Wardrobe fields and Codex pages; v9 codes decode with none) and survives appended upgrades/heroes/Armory entries/deeds/secrets/Wardrobe items in both directions,
 // a code from a newer build and an Armory overflow report clearly, the one-time news flag and the stored-profile Codex migration, upgrade refunds, Reset all and Armory buy/refund, the repurposed deed, the relic pool and the moved element relics,
 // the per-hero deed counters (maxRelics, revivesGiven) in the run summary, and secrets and the Wardrobe (v5/v7 codes decode empty with Gilded on mastery 10 heroes, junk sanitised, grants once, purchase gates, wearing, run-end secrets, evolutions, the Bellwarden flag). Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
@@ -75,7 +75,7 @@ checkGolden(GOLD2, 'v2 code from main');
 checkGolden(GOLD3, 'v3 code');
 checkGolden(GOLD4, 'v4 code');
 
-// ---- v9 round trips ----
+// ---- v10 round trips ----
 const rnd = U.RNG(4242);
 const ri = (a, b) => a + Math.floor(rnd.next() * (b - a + 1));
 function randomProfile() {
@@ -95,6 +95,7 @@ function randomProfile() {
     const h = p.wear[c] = { tints: ED.CLASSES[c].weapons.filter(w => ED.cosOwned(p, 'tint.' + w, c) && rnd.next() < 0.6) };
     for (const k of ED.WEAR_SLOTS) h[k] = pickOwned(c, k);
   }
+  p.lore = ri(0, 2 ** ED.LORE.length - 1); // Codex pages (v10)
   return S.normalize(p);
 }
 const tripDiffs = (count) => {
@@ -107,9 +108,9 @@ const tripDiffs = (count) => {
 };
 {
   const rt = tripDiffs(300);
-  ok(rt === 0, `v9 round trip: ${rt} of 300 profiles differ`);
+  ok(rt === 0, `v10 round trip: ${rt} of 300 profiles differ`);
   const ra = withArmory(() => tripDiffs(300));
-  ok(ra === 0, `v9 round trip with Armory entries: ${ra} of 300 profiles differ`);
+  ok(ra === 0, `v10 round trip with Armory entries: ${ra} of 300 profiles differ`);
   ok(withArmory(() => { const p = randomProfile(); p.armory.knight = [1, 0, 1]; p.armory.pyro = [0, 1]; p.armory.necro = [1]; return JSON.stringify(S.decode(S.encode(p)).armory) === JSON.stringify(p.armory); }), 'Armory bits land on the right hero and entry');
 }
 
@@ -140,7 +141,7 @@ function withAppended(f) {
 }
 
 // ---- clear errors ----
-throws(() => S.decode(pack(bitsOf(10, 8).concat(bitsOf(0, 120)))), /newer Wickdeep.*Reload/, 'code from a newer version');
+throws(() => S.decode(pack(bitsOf(11, 8).concat(bitsOf(0, 120)))), /newer Wickdeep.*Reload/, 'code from a newer version');
 throws(() => S.decode(pack(bitsOf(1, 8).concat(bitsOf(0, 120)))), /unknown version or is damaged/, 'version 1 code');
 throws(() => S.decode(pack(bitsOf(4, 8).concat(bitsOf(0, 4), bitsOf(0xffffffff, 32), bitsOf(0xffffffff, 32), bitsOf(0xffffffff, 32)))), /unknown version or is damaged/, 'v4 code with a damaged body');
 throws(() => S.decode(pack(bitsOf(5, 8).concat(bitsOf(0, 4), bitsOf(0xffffffff, 32), bitsOf(0xffffffff, 32), bitsOf(0xffffffff, 32)))), /unknown version or is damaged/, 'v5 code with a damaged body');
@@ -178,7 +179,7 @@ ok(typeof S.encode(S.defaultProfile()) === 'string', 'encode works again after t
 const GOLD5 = 'WD1-EAS1G-HKDDH-N6AHN-1JB2A-9A3RT-T7RH2-975RT-4KPS8-46JHN-HR4MV-3PQ5D-761ZP-WJ4AN-B6Q3S-V784'; // v5: Five, 12 runs, the first Knight Armory entry
 {
   const base = S.defaultProfile();
-  ok(base.news === 0 && base.v === 6 && base.refunded === 0 && base.relics === undefined, 'a new profile starts at era 6 with no news, no refund and no relics array');
+  ok(base.news === 0 && base.v === 7 && base.refunded === 0 && base.relics === undefined, 'a new profile starts at era 7 with no news, no refund and no relics array');
   ok(S.normalize({ v: 1, stats: { runs: 3 } }).news === 1, 'era-1 profile with runs gets the news');
   ok(S.normalize({ stats: { runs: 3 } }).news === 1, 'profile with no era and runs gets the news');
   ok(S.normalize({ v: 1, stats: { runs: 0 } }).news === 0, 'era-1 profile without runs gets none');
@@ -192,7 +193,9 @@ const GOLD5 = 'WD1-EAS1G-HKDDH-N6AHN-1JB2A-9A3RT-T7RH2-975RT-4KPS8-46JHN-HR4MV-3
   ok(S.normalize({ v: 5, news: 0, stats: { runs: 3 } }).news === 3 && S.normalize({ v: 5, news: 0, stats: { runs: 0 } }).news === 0, 'era-5 profile with runs gets the v6 changes, none without runs');
   ok(S.normalize({ v: 5, news: 1, stats: { runs: 3 } }).news === 1 && S.normalize({ v: 5, news: 3, stats: { runs: 3 } }).news === 2, 'era-5 profile: a pending notice keeps its older parts');
   ok(S.normalize({ v: 6, news: 1, stats: { runs: 3 } }).news === 1 && S.normalize({ v: 6, news: 2, stats: { runs: 3 } }).news === 2 && S.normalize({ v: 6, news: 3, stats: { runs: 3 } }).news === 3, 'pending news survives a reload');
-  ok(S.normalize({ v: 6, news: 0, stats: { runs: 3 } }).news === 0, 'cleared news stays cleared');
+  ok(S.normalize({ v: 6, news: 0, stats: { runs: 3 } }).news === 4 && S.normalize({ v: 6, news: 0, stats: { runs: 0 } }).news === 0, 'era-6 profile with runs gets the v7 changes, none without runs');
+  ok(S.normalize({ v: 6, news: 3, stats: { runs: 3 } }).news === 3 && S.normalize({ v: 7, news: 4, stats: { runs: 3 } }).news === 4, 'era-6 profile: a pending v6 notice keeps its v6 part; a pending v7 notice survives a reload');
+  ok(S.normalize({ v: 7, news: 0, stats: { runs: 3 } }).news === 0, 'cleared news stays cleared');
   ok(S.normalize(JSON.parse(JSON.stringify(S.normalize({ v: 1, stats: { runs: 3 } })))).news === 1, 'stored news round-trips through JSON');
   const seen = S.normalize({ v: 1, stats: { runs: 3 } }); seen.news = 0;
   ok(S.normalize(JSON.parse(JSON.stringify(seen))).news === 0, 'once cleared and stored the notice does not return');
@@ -212,7 +215,7 @@ const STORED_V2 = {"v":2,"news":0,"name":"Stored","embers":100,"lifetime":900,"u
   // axe 50, crown 105, wispjar 70, gauntlet 85, stone 130, bloodstone 60, venomgland 70 are the Codex relics held; halo and gravecandle are start relics
   const p = S.normalize(JSON.parse(JSON.stringify(STORED_V2)));
   ok(p.embers === 100 + 570 && p.refunded === 570 && p.lifetime === 900, `stored v2 profile: embers ${p.embers}, refunded ${p.refunded}, lifetime ${p.lifetime}`);
-  ok(p.v === 6 && p.news === 1 && p.relics === undefined, 'stored v2 profile: era 6, news pending, no relics array');
+  ok(p.v === 7 && p.news === 1 && p.relics === undefined, 'stored v2 profile: era 7, news pending, no relics array');
   same(p.up, STORED_V2.up, 'stored v2 profile: upgrade ranks kept');
   const again = S.normalize(JSON.parse(JSON.stringify(p)));
   ok(again.embers === p.embers && again.refunded === 570, 'a migrated profile is never refunded twice');
@@ -225,7 +228,7 @@ const STORED_V2 = {"v":2,"news":0,"name":"Stored","embers":100,"lifetime":900,"u
   try {
     mem[S.KEY] = JSON.stringify(STORED_V2);
     const a = S.load(), stored = JSON.parse(mem[S.KEY]);
-    ok(a.embers === 670 && stored.v === 6 && stored.relics === undefined && stored.embers === 670 && stored.refunded === 570, 'S.load: refunded, and the stored copy is migrated');
+    ok(a.embers === 670 && stored.v === 7 && stored.relics === undefined && stored.embers === 670 && stored.refunded === 570, 'S.load: refunded, and the stored copy is migrated');
     const b = S.load();
     ok(b.embers === 670 && b.news === 1 && b.refunded === 570, 'S.load again: no second refund, the notice still pending');
     b.news = 0; b.refunded = 0; S.store(b);
@@ -233,9 +236,12 @@ const STORED_V2 = {"v":2,"news":0,"name":"Stored","embers":100,"lifetime":900,"u
     ok(c.embers === 670 && c.news === 0 && c.refunded === 0, 'S.load after the notice was closed: nothing pending');
     mem[S.KEY] = JSON.stringify(Object.assign(JSON.parse(JSON.stringify(c)), { v: 5 })); // an era-5 profile with runs, its notices seen
     const d = S.load(), st5 = JSON.parse(mem[S.KEY]);
-    ok(d.news === 3 && st5.v === 6 && st5.news === 3, 'S.load of an era-5 profile: the v6 notice pending, stored as era 6');
+    ok(d.news === 3 && st5.v === 7 && st5.news === 3, 'S.load of an era-5 profile: the v6 and v7 notice pending, stored as era 7');
     d.news = 0; S.store(d);
-    ok(S.load().news === 0, 'S.load after the v6 notice was closed: it does not return');
+    ok(S.load().news === 0, 'S.load after the notice was closed: it does not return');
+    mem[S.KEY] = JSON.stringify(Object.assign(JSON.parse(JSON.stringify(d)), { v: 6, news: 0 })); // an era-6 profile with runs, its notices seen
+    const e = S.load(), st6 = JSON.parse(mem[S.KEY]);
+    ok(e.news === 4 && st6.v === 7 && st6.news === 4 && e.bosses === d.bosses && e.stats.deepest === d.stats.deepest, 'S.load of an era-6 profile: the v7 notice pending, stored as era 7, boss bits and deepest not remapped');
   } finally { delete globalThis.localStorage; }
 }
 
@@ -322,34 +328,35 @@ const STORED_V2 = {"v":2,"news":0,"name":"Stored","embers":100,"lifetime":900,"u
     `full Hearth + mastery 10: +24% damage, +15 health, +9% crit, +10% recharge, +9 armor, +3% speed, +6% xp, +6% gold (got ${['dmg', 'hp', 'crit', 'cdr', 'armor', 'spd', 'xp', 'gold'].map(k => d(k).toFixed(3))})`);
 }
 
-// ---- relics: the whole list is in the pool, no element tag, 14 removed ----
+// ---- relics: the v7 table (c / r / e drop, boss picks, curses), no element tag, the 14 element relics gone ----
 {
   const gone = ['fang', 'embercharm', 'frostshard', 'stormidol', 'halo', 'gravecandle', 'wispjar', 'crest', 'gauntlet', 'frozenheart', 'brazier', 'glaciercore', 'lightningrod', 'venomgland'];
   ok(gone.every(id => !ED.RELICS[id]), 'the 14 element relics are gone');
-  ok(ED.RELIC_IDS.length === 31 && ED.RELIC_IDS.every(id => { const r = ED.RELICS[id]; return !('start' in r) && !('cost' in r) && !('req' in r) && !('el' in r) && ED.RELIC_PRICE[r.rar]; }), 'every remaining relic is a plain pool entry with a shop price');
+  const sold = { c: 1, r: 1, e: 1 };
+  ok(ED.RELIC_IDS.every(id => { const r = ED.RELICS[id]; return !('start' in r) && !('cost' in r) && !('req' in r) && !('el' in r) && (sold[r.rar] ? ED.RELIC_PRICE[r.rar] > 0 : ED.RELIC_PRICE[r.rar] === undefined); }), 'every relic is a plain pool entry; c / r / e have a shop price, boss relics and curses none');
   const byRar = {}; for (const id of ED.RELIC_IDS) byRar[ED.RELICS[id].rar] = (byRar[ED.RELICS[id].rar] || 0) + 1;
-  same(['c', 'r', 'e', 'l'].map(k => byRar[k]), [8, 12, 6, 5], 'relics per rarity (common, rare, epic, legendary)');
+  same(['c', 'r', 'e', 'boss', 'curse'].map(k => byRar[k]), [28, 23, 12, 10, 10], 'relics per rarity (common, rare, epic, boss, curse)');
   ok(ED.relicFits === undefined && S.relicUnlocked === undefined && S.unlockRelic === undefined && S.relicReqMet === undefined, 'the Codex API is gone');
-  // Soul Jar lives on as a Shadow path boon and reads the same stat
-  const stats = (boons) => ED.Stats.compute({ cls: 'knight', weapon: 'longsword', boons, relics: [], meta: META(), pact: 0 });
-  ok(stats({ souljar: 2 }).doomMul === 0.4 && ED.BOONS.souljar.path === 'shadow' && ED.BOONS.souljar.max === 2, 'Soul Jar sets its stat and sits in the Shadow path');
-  ok(ED.pathAffinity({ doommark: 1, souljar: 1, cutthroat: 1 }, 'shadow') === 3, 'and counts toward its path');
   // the pool in a world
   const w = new ED.World({ seed: 5, pact: 0, players: [{ pid: 'a', name: 'A', slot: 0, cls: 'knight', weapon: 'longsword', meta: META() }] });
   w.startRun();
-  const seen = new Set(), RAR = { c: 0, r: 1, e: 2, l: 3 };
-  for (let i = 0; i < 6000; i++) seen.add(w.rollRelic('c'));
-  ok(seen.size === ED.RELIC_IDS.length, `a roll reaches every relic (${seen.size} of ${ED.RELIC_IDS.length})`);
+  const drop = ED.RELIC_IDS.filter(id => sold[ED.RELICS[id].rar]), seen = new Set(), RAR = { c: 0, r: 1, e: 2 };
+  for (let i = 0; i < 8000; i++) seen.add(w.rollRelic('c'));
+  ok(seen.size === drop.length && [...seen].every(id => sold[ED.RELICS[id].rar]), `a roll reaches every c / r / e relic and never a boss relic or a curse (${seen.size} of ${drop.length})`);
   let low = 0; for (let i = 0; i < 400; i++) if (RAR[ED.RELICS[w.rollRelic('e')].rar] < 2) low++;
   ok(low === 0, 'a minimum rarity is respected');
-  const rest = new Set(ED.RELIC_IDS); rest.delete('mask');
+  let boss = 0, curse = 0; for (let i = 0; i < 200; i++) { if (ED.RELICS[w.rollRelic('boss')].rar === 'boss') boss++; if (ED.RELICS[w.rollRelic('curse')].rar === 'curse') curse++; }
+  ok(boss === 200 && curse === 200, 'boss relics and curses roll only when asked for exactly');
+  const rest = new Set(drop); rest.delete('mask');
   ok(w.rollRelic('c', rest) === 'mask', 'an exclude set is respected');
-  const hero = w.players.get('a'); for (const id of ED.RELIC_IDS) hero.relics.push(id);
-  ok(ED.RELIC_IDS.includes(w.rollRelic('c')), 'with every relic held a roll still returns one');
+  const hero = w.players.get('a'); for (const id of drop) hero.relics.push(id);
+  ok(drop.includes(w.rollRelic('c')), 'with every relic held a roll still returns one');
   hero.relics.length = 0;
   hero.relics.push('mask');
   let mask = 0; for (let i = 0; i < 400; i++) if (w.rollRelic('c') === 'mask') mask++;
   ok(mask === 0, 'a relic a hero holds does not drop again');
+  const W1 = ED.World.RELIC_W(1), W4 = ED.World.RELIC_W(4);
+  ok(W1.c > W4.c && W1.r < W4.r && W1.e < W4.e, 'deeper strata weigh rare and epic relics up, commons down');
 }
 
 // ---- per-hero deed counters in the run summary ----
@@ -397,7 +404,10 @@ const STORED_V2 = {"v":2,"news":0,"name":"Stored","embers":100,"lifetime":900,"u
   const v8 = head(8).concat(bitsOf(0, 6), bitsOf(0, 4), [0], bitsOf(0, 4), bitsOf(0, 6), bitsOf(0, 4), varint(0), bitsOf(0, 4)); // empty secrets, wins, flag, evolutions, purchases, worn items
   const p8 = S.decode(pack(v8));
   ok(p8.name === 'Seven' && p8.stats.runs === 9 && p8.news === 3, `hand-built v8 code with runs (made before v6): the v6 notice pending, got news ${p8.news}`);
-  ok(S.decode(pack([...bitsOf(9, 8)].concat(v8.slice(8)))).news === 0, 'the same body as a v9 code: no news');
+  ok(S.decode(pack([...bitsOf(9, 8)].concat(v8.slice(8)))).news === 4, 'the same body as a v9 code (made before v7): the v7 notice pending');
+  ok(S.decode(pack([...bitsOf(9, 8)].concat(v8.slice(8)))).lore === 0, 'a v9 code: no Codex pages');
+  const l10 = S.decode(pack([...bitsOf(10, 8)].concat(v8.slice(8), bitsOf(ED.LORE.length + 2, 6), bitsOf(0, ED.LORE.length - 3), [1, 0, 1, 1, 1])));
+  ok(l10.lore === 2 ** (ED.LORE.length - 3) + 2 ** (ED.LORE.length - 1) && l10.name === 'Seven' && l10.news === 0, `a v10 code with 2 pages more than this build: its known pages read, the rest skipped, no news (${l10.lore})`);
   ok(p.secrets === 0 && p.heroWins === 0 && p.bellUnlocked === false && JSON.stringify(p.evo) === '{}' && p.cos.length === 0, 'hand-built v7 code: no secrets, wins, Bellwarden, evolutions or purchases');
   ok(p.wear.knight.aura === 'aura.gilded' && p.wear.pyro.aura === null && p.wear.camp === null, 'hand-built v7 code: the mastery 10 Knight wears Gilded, the others nothing');
   const g5 = S.decode(GOLD5);

@@ -21,16 +21,17 @@ const foe = (w, x, y, o) => { const e = w.spawnEnemy('skeleton', x, y, o); e.spd
 
 // ---- grantCrits: an 'add' source never lowers a count that a 'set' source raised past its own cap ----
 {
-  const { w, p } = stage('shade', { s_s1: 1, s_atk: 1, s_atk_s: 1, deathsedge: 1, doommark: 1 });
+  const { w, p } = stage('shade', { s_s1: 1, s_atk: 1, s_atk_s: 1 });
   ok(p.stats.critK > 1.5, `Swift Shade critK ${p.stats.critK}`);
   w.grantCrits(p, 3 + p.stats.stepStack * 3, 3 + p.stats.stackMax, 'set');
   const before = p.critStacks;
-  w.onDoomPayoff(p);
-  ok(before > Math.round(3 * p.stats.critK) && p.critStacks === before, `Death's Edge keeps ${before} stacks (got ${p.critStacks})`);
-  p.critStacks = 0; w.onDoomPayoff(p);
-  ok(p.critStacks === Math.round(p.stats.critK), `Death's Edge adds ${Math.round(p.stats.critK)} from empty (got ${p.critStacks})`);
-  p.critStacks = Math.round(3 * p.stats.critK) - 1; w.onDoomPayoff(p);
-  ok(p.critStacks === Math.round(3 * p.stats.critK), `Death's Edge stops at its cap (got ${p.critStacks})`);
+  const add = () => w.grantCrits(p, 1, 3, 'add'); // an 'add' source: 1 crit (x critK) up to 3 (x critK)
+  add();
+  ok(before > Math.round(3 * p.stats.critK) && p.critStacks === before, `an add grant keeps ${before} stacks (got ${p.critStacks})`);
+  p.critStacks = 0; add();
+  ok(p.critStacks === Math.round(p.stats.critK), `an add grant adds ${Math.round(p.stats.critK)} from empty (got ${p.critStacks})`);
+  p.critStacks = Math.round(3 * p.stats.critK) - 1; add();
+  ok(p.critStacks === Math.round(3 * p.stats.critK), `an add grant stops at its cap (got ${p.critStacks})`);
   const k = stage('knight', { k_atk: 1, k_atk_s: 1 });
   k.p.critStacks = 9; k.w.grantCrits(k.p, 2, 5, 'add');
   ok(k.p.critStacks === 9, `Riposte keeps 9 stacks (got ${k.p.critStacks})`);
@@ -74,15 +75,15 @@ for (const mode of ['proj', 'zone', 'tick']) {
   ok(a.freezeRes === 1 && w.fx.some(ev => ev.t === 'freeze'), 'a freeze counts freeze resistance and emits the freeze event');
 }
 
-// ---- a departed Knight leaves no thrown shield ----
+// ---- a departed Knight lowers its raised Bulwark ----
 {
   const w = new ED.World({ seed: 7, pact: 0, players: [{ pid: 'p0', name: 'K', slot: 0, cls: 'knight', weapon: ED.CLASSES.knight.weapons[0], meta: META() }, { pid: 'p1', name: 'R', slot: 1, cls: 'ranger', weapon: ED.CLASSES.ranger.weapons[0], meta: META() }] });
   w.startRun(); w.enemies.length = 0; w.enc = null; w.projs.length = 0; w.zones.length = 0;
-  const k = w.players.get('p0'); w.playerSkill(k, 0, { d: 280 }, 1);
-  ok(k.shields.length === 1 && w.projs.some(q => q.ghost), 'the Knight threw a shield');
+  const k = w.players.get('p0'); w.playerSkill(k, 0, {}, 1);
+  ok(k.bulwarkOn, 'the Knight raised its shield');
   w.removePlayer('p0');
   w.update(1 / 60);
-  ok(!w.projs.some(q => q.ghost), 'the shield of a departed Knight is gone');
+  ok(!k.bulwarkOn && !w.fx.some(f => f.t === 'bash'), 'a departed Knight lowers it with no bash');
 }
 
 // ---- card text follows the hero's weapon ----
@@ -105,11 +106,11 @@ for (const mode of ['proj', 'zone', 'tick']) {
   ok(/×1\.733 attack time, ×1\.907 damage per hit/.test(ED.cardParts('p_atk_h', 1, { weaponId: 'inferno' }).text), 'Tome of Ruin shows the capped heavy factors');
   ok(/×0\.8 attack time, ×0\.88 damage per hit/.test(ED.cardParts('p_atk_s', 1, { weaponId: 'emberwand' }).text), 'Flicker Wand shows the floored swift factors');
   ok(/×0\.8 attack time/.test(ED.cardParts('p_atk_s', 1, { weaponId: 'emberwand@swift' }).text), 'a forked weaponId reads its base');
-  const de = (st) => ED.Sheet.text('deathsedge', 1, st);
-  ok(de({ critK: 1 }).indexOf('readies 1 guaranteed crit (up to 3 stored)') >= 0, "Death's Edge text at critK 1: " + de({ critK: 1 }));
-  ok(de(null).indexOf('readies 1 guaranteed crit (up to 3 stored)') >= 0, "Death's Edge text without a hero");
-  ok(de({ critK: 0.556 }).indexOf('1 guaranteed crit (up to 2 stored)') >= 0, "Death's Edge text on a Heavy weapon: " + de({ critK: 0.556 }));
-  ok(de({ critK: 1.8 }).indexOf('2 guaranteed crits (up to 5 stored)') >= 0, "Death's Edge text on a Swift weapon: " + de({ critK: 1.8 }));
+  const de = (st) => ED.Sheet.text('killingedge', 1, st);
+  ok(de({ critK: 1 }).indexOf('readies 1 guaranteed crit (up to 3 stored)') >= 0, "Killing Edge text at critK 1: " + de({ critK: 1 }));
+  ok(de(null).indexOf('readies 1 guaranteed crit (up to 3 stored)') >= 0, "Killing Edge text without a hero");
+  ok(de({ critK: 0.556 }).indexOf('1 guaranteed crit (up to 2 stored)') >= 0, "Killing Edge text on a Heavy weapon: " + de({ critK: 0.556 }));
+  ok(de({ critK: 1.8 }).indexOf('2 guaranteed crits (up to 5 stored)') >= 0, "Killing Edge text on a Swift weapon: " + de({ critK: 1.8 }));
   ok(/elites 0\.5 s, not bosses/.test(ED.cardParts('s_s1_b', 1).text), 'Afterimage text states the elite blind');
 }
 
@@ -190,16 +191,20 @@ for (const mode of ['proj', 'zone', 'tick']) {
     const rs = w.run.embers.rooms; w.enc = { kind: 'waves' }; w.roomState[w.roomId].cleared = false; w.room.reward = null; w.roomCleared(); out.clear = sum(w, 'gold'); out.embers = w.run.embers.rooms - rs;
     return out;
   };
-  const n = run(false), d = run(true), L = ED.World.DARK_LOOT, G = ED.World.GOLD_MUL;
+  const n = run(false), d = run(true), L = ED.World.DARK_LOOT, G = ED.World.goldMul(1);
   ok(n.gold === Math.round(100 * G) && d.gold === Math.round(100 * G * L), `foe gold x1.5 (${n.gold} -> ${d.gold})`);
   ok(n.exact === 20 && d.exact === 30, `exact gold x1.5 (${n.exact} -> ${d.exact})`);
   ok(n.xp === 40 && d.xp === 60, `xp x1.5 (${n.xp} -> ${d.xp})`);
   ok(n.kill > 0 && d.kill === Math.round(n.kill * L), `a kill's xp x1.5 (${n.kill} -> ${d.kill})`);
   ok(n.reward === ED.World.rewardGold(1) && d.reward === Math.round(ED.World.rewardGold(1) * L), `a claimed gold reward x1.5 (${n.reward} -> ${d.reward})`);
   ok(d.clear > n.clear && d.embers === n.embers, `the room-clear gold x1.5 (${n.clear} -> ${d.clear}), embers unchanged`);
+  // stratum I pays GOLD_S[0] (x2) on every scaled drop and the gold reward; strata II-IV x1
+  const WD = ED.World;
+  ok(WD.goldMul(1) === WD.GOLD_MUL * 2 && [2, 3, 4].every(s => WD.goldMul(s) === WD.GOLD_MUL), `gold multiplier by stratum ${[1, 2, 3, 4].map(s => WD.goldMul(s)).join(' / ')}`);
+  ok(n.clear === 7 && WD.rewardGold(1) === 30 && WD.rewardGold(2) === Math.round(31 * WD.GOLD_MUL), `stratum I room clear ${n.clear}, gold reward ${WD.rewardGold(1)}; stratum II gold reward ${WD.rewardGold(2)}`);
 }
 { // Deep Wick: darkLoot() = DARK_LOOT x (1 + 0.1 x the highest rank in the party), used by drops, the xp budget and the Tab sheet; clearing a dark room counts in run.darkCleared (summary and snapshot)
-  const L = ED.World.DARK_LOOT, G = ED.World.GOLD_MUL, up = (r) => ED.UPGRADES.map(u => (u.id === 'deepwick' ? r : 0));
+  const L = ED.World.DARK_LOOT, G = ED.World.goldMul(1), up = (r) => ED.UPGRADES.map(u => (u.id === 'deepwick' ? r : 0));
   const mk = (ranks) => {
     const w = new ED.World({ seed: 7, pact: 0, players: ranks.map((r, i) => ({ pid: 'p' + i, name: 'T' + i, slot: i, cls: 'knight', weapon: 'longsword', meta: { up: up(r), mastery: 1, relics: [] } })) });
     w.startRun(); for (const p of w.players.values()) { p.offers.length = 0; p.picks = 0; p.offer = null; }
@@ -244,7 +249,7 @@ for (const mode of ['proj', 'zone', 'tick']) {
   near(q3.hp, Math.round(q3.maxHp * 0.5) + 0.04 * q3.maxHp, 1, 'Provisions 2 heals 4% of max health at stratum II');
   q3.hp = Math.round(q3.maxHp * 0.5); w3.onStratumBuild(q3, 1); ok(q3.hp === Math.round(q3.maxHp * 0.5), 'and nothing at stratum I');
   const price = (r) => mk([{ favor: r }]).priceOf({ type: 'boon' });
-  ok(price(0) === 75 && price(1) === 70 && price(2) === 70, "Merchant's Favor: 4% cheaper per rank (the 75-gold epic boon: 75, 70, 70)");
+  ok(price(0) === 65 && price(1) === 60 && price(2) === 60, "Merchant's Favor: 4% cheaper per rank (the 65-gold epic boon: 65, 60, 60)");
 }
 // ---- stratum maps: layered graph, forward exits, threat pips, rewards, deterministic per seed ----
 {
@@ -295,7 +300,7 @@ for (const mode of ['proj', 'zone', 'tick']) {
   ok(w3.room.id === r3.doors[d] && s0.doorWant === 0, 'solo: the door takes the hero at once');
 }
 { // bot map walk (fully upgraded heroes): one room per map row from the start camp to the boss; --dark=never takes a path with the fewest dark rooms, --dark=always enters at least one per stratum
-  for (const [seed, cls] of [[1000, 'knight'], [1008, 'ranger'], [1015, 'pyro']]) {
+  for (const [seed, cls] of [[1000, 'knight'], [1009, 'ranger'], [1015, 'pyro']]) {
     for (const dark of ['never', 'always']) {
       const r = runBot({ seed, n: 1, cls: [cls], skill: 0.75, up: ED.UPGRADES.map(u => u.costs.length), mastery: 10, relics: ED.RELIC_IDS.filter(id => ED.RELICS[id].start), pick: 'smart', dark, maxStratum: 2 });
       ok(r.left.length >= 1 && r.left.every(f => f.visited === f.rows + 2), `${cls} ${dark}: one room per row, start to boss (${JSON.stringify(r.left)})`);
@@ -868,9 +873,10 @@ for (let s = 1; s <= NS; s++) {
   const Td = vetThreats(w, p, SPD, REACT), pd = vetPlan(w, p, c, 0, 0, SPD, Td), pn = vetPlan(w, p, { dashN: 0 }, 0, 0, SPD, Td);
   ok(pd.dash && vetRisk(Td, p, pd.dash[0], pd.dash[1], 72, SPD, true) < 0.05 && pn.dash === null, 'with 0.1 s left a dash heading clears the cone; without a charge there is none');
   w.zones.length = 0; w.enemies.length = 0;
-  const r = stage('ranger', { bladedash: 1 }), row = [30, 55, 80].map(d => foe(r.w, r.p.x + d, r.p.y));
+  const r = stage('ranger', {}), row = [20, 35, 50].map(d => foe(r.w, r.p.x + d, r.p.y));
+  r.p.stats.dashBomb = 1; // Bomb Satchel: the dash drops a bomb where it starts
   const hd = vetRider(r.w, r.p, { dashN: 1 }, row, null, SPD);
-  ok(hd && hd[0] > 0.9, `a row of 3 foes ahead: the rider dash goes through them (${hd && hd.map(v => v.toFixed(2))})`);
+  ok(hd && hd[0] < -0.5, `a row of 3 foes ahead: the bomb dash leaves them behind (${hd && hd.map(v => v.toFixed(2))})`);
   ok(vetRider(r.w, r.p, { dashN: 0 }, row, null, SPD) === null && vetRider(r.w, r.p, { dashN: 1 }, row.slice(0, 2), null, SPD) === null, 'no rider dash without a charge or with 2 foes');
   const nr = stage('ranger', {}); ok(vetRider(nr.w, nr.p, { dashN: 1 }, [30, 55, 80].map(d => foe(nr.w, nr.p.x + d, nr.p.y)), null, SPD) === null, 'no rider dash without a dash rider');
   const run = (o) => runBot(Object.assign({ seed: 1000, n: 1, cls: ['ranger'], skill: 0.75, up: ED.UPGRADES.map(() => 0), mastery: 1, pick: 'smart', force: ['echo'], maxStratum: 1 }, o));
@@ -941,13 +947,12 @@ for (let s = 1; s <= NS; s++) {
     d.p.x = d.bx + 90; d.w.updatePlayerCombat(d.p, 1 / 60); ok(d.rs.broken === 1, 'a dash breaks a breakable on the path it covered since the last tick');
     d.p.dashing = false; d.w.updatePlayerCombat(d.p, 1 / 60); ok(d.p.dashFx < 0, 'the dash path restarts with the next dash');
   }
-  { // the movement and throw skills: Shield Charge, Shield Throw, Shadowstep
+  { // the movement and shield skills: Shield Charge, the Bulwark bash, Shadowstep
     const c = arena('knight'); c.p.x = c.bx - 80; c.w.playerSkill(c.p, 0, { x0: c.p.x, y0: c.p.y, x1: c.bx + 60, y1: c.by }, 0);
     for (let i = 0; i < 40; i++) c.w.update(1 / 60);
     ok(c.rs.broken === 1, `Shield Charge breaks a breakable on its run (mask ${c.rs.broken})`);
-    const t = arena('knight'); t.p.x = t.bx - 80; t.w.playerSkill(t.p, 0, { d: 200 }, 1);
-    for (let i = 0; i < 40; i++) t.w.update(1 / 60);
-    ok(t.rs.broken === 1, `a thrown shield breaks a breakable on its flight (mask ${t.rs.broken})`);
+    const t = arena('knight'); t.p.x = t.bx - 60; t.p.y = t.by; t.w.playerSkill(t.p, 0, {}, 1); t.w.skillRelease(t.p, 0);
+    ok(t.rs.broken === 1, `a Bulwark bash breaks a breakable in its cone (mask ${t.rs.broken})`);
     const s = arena('shade'); s.p.x = s.bx - 70; s.w.playerSkill(s.p, 0, { x0: s.p.x, y0: s.p.y, x1: s.bx + 60, y1: s.by }, 0);
     ok(s.rs.broken === 1, `Shadowstep breaks a breakable on its path (mask ${s.rs.broken})`);
   }
@@ -1147,14 +1152,88 @@ for (let s = 1; s <= NS; s++) {
     w.killEnemy(L2, null, {}); w.killEnemy(H, null, {}); go(w, 0.5);
     ok(!w.locked && w.roomState[w.roomId].cleared, 'both twins down clears the room');
   }
-  { // mimic: copies the party's classes; at SPLIT of its health it splits into two copies sharing them
-    const C = ED.Champions, { w, enc } = champRoom('mimic', ['knight', 'ranger']), m = enc.foes.m0;
-    ok(m && m.copies.join() === 'knight,ranger', `the mimic copies the party (${m && m.copies})`);
-    m.hp = m.maxHp * (C.SPLIT - 0.01); go(w, 0.1);
-    const ms = w.enemies.filter(e => e.type === 'mimic' && e.hp > 0);
-    ok(ms.length === 2 && ms.every(e => e.split && e.copies.length === 1) && ms[0].copies[0] !== ms[1].copies[0], 'it splits into two copies, one class each');
-    ok(JSON.stringify(A.encode(w.room)) === JSON.stringify([3].concat(...ms.map(e => [e.id, ED.CLASS_IDS.indexOf(e.cls)]))), 'champion arena row carries each mimic and its class');
+  { // Clockwork Colossus: four foes at fixed offsets, each part takes its own hits, the core armoured until two parts break, then open
+    const C = ED.Champions, COL = C.COL, { w, enc } = champRoom('colossus', ['knight']), col = enc.col;
+    ok(w.locked && col && col.core.type === 'colossus' && COL.PARTS.every(k => col.parts[k] && col.parts[k].type === COL.TYPE[k] && enc.foes[k] === col.parts[k]), 'the Colossus lands as the core and three parts');
+    ok(col && COL.PARTS.every(k => col.parts[k].x === col.core.x + COL.OFF[k][0] && col.parts[k].y === col.core.y + COL.OFF[k][1]), 'each part stands at its offset from the core');
+    ok(col && col.core.maxHp > ED.ENEMIES.colossus.hp * W0.ELITE.hp && col.parts.cannon.maxHp > ED.ENEMIES.colcannon.hp * W0.ELITE.hp, 'Colossus HP x the elite factor');
+    const { cannon, saw, eye } = col.parts, core = col.core, hp = () => [core, cannon, saw, eye].map(e => e.hp);
+    const h0 = hp(); w.hitEnemy(cannon, 40, {}); const h1 = hp();
+    ok(h1[1] === h0[1] - 40 && h1[0] === h0[0] && h1[2] === h0[2] && h1[3] === h0[3], 'a hit on the Cannon Arm hurts only the cannon');
+    const p = [...w.players.values()][0];
+    w.explode(saw.x + 12, saw.y, 8, 30, 0, p, 'fire', true); const h2 = hp();
+    ok(h2[2] < h1[2] && h2[0] === h1[0] && h2[1] === h1[1] && h2[3] === h1[3], 'a blast that touches the Saw Arm hurts only the saw');
+    near(w.hitEnemy(core, 100, {}), 100 * COL.ARMOR, 1e-6, 'the armoured core takes COL.ARMOR');
+    core.hp = core.maxHp * COL.FLOOR + 5; w.hitEnemy(core, 1000, {}); go(w, 2 / 60);
+    ok(core.hp >= core.maxHp * COL.FLOOR - 1e-6 && core.hp > 0, `the armoured core holds at COL.FLOOR of its health (${(core.hp / core.maxHp).toFixed(3)})`);
+    near(w.hitEnemy(core, 100, {}), 0, 1e-9, 'at the floor the armoured core takes nothing');
+    const picks = (n) => { const s = new Set(), r0 = col.runs, l0 = col.last; for (let i = 0; i < n; i++) { col.runs = []; col.last = null; const id = w.colossusPick(col); if (id) s.add(id); } col.runs = r0; col.last = l0; return s; };
+    const own = (k) => Object.keys(C.MOVES).filter(id => C.MOVES[id].part === k && !C.MOVES[id].stump), esc = (k) => Object.keys(C.MOVES).filter(id => C.MOVES[id].part === k && C.MOVES[id].stump);
+    const s0 = picks(80);
+    ok(COL.PARTS.every(k => own(k).some(id => s0.has(id))) && COL.PARTS.every(k => !esc(k).some(id => s0.has(id))), `intact: every part's moves, no escalation (${[...s0]})`);
+    core.hp = core.maxHp; w.killEnemy(cannon, p, {}); go(w, 2 / 60);
+    const s1 = picks(80);
+    ok(col.b === 1 && !col.open && core.dmgTakenMul === COL.ARMOR, 'the cannon breaks; the core stays armoured');
+    ok(!own('cannon').some(id => s1.has(id)) && esc('cannon').every(id => s1.has(id)), `a broken cannon: its moves gone, its stump vents (${[...s1]})`);
+    ok(!col.runs.some(m => m.src === cannon) && !w.zones.some(z => z.src === cannon && z.kind === 'laser'), 'the broken cannon drops its running moves');
+    w.killEnemy(saw, p, {}); go(w, 2 / 60);
+    const s2 = picks(80);
+    ok(col.open && core.dmgTakenMul === COL.OPEN, 'the second break opens the core');
+    near(w.hitEnemy(core, 100, {}), 100 * COL.OPEN, 1e-6, 'the open core takes COL.OPEN');
+    ok(!own('saw').some(id => s2.has(id)) && esc('saw').every(id => s2.has(id)) && own('eye').every(id => s2.has(id)), `final phase: the eye's moves and both stumps (${[...s2]})`);
+    ok(JSON.stringify(A.encode(w.room).slice(0, 3)) === JSON.stringify([3, 3, 1]), `the arena row carries the broken parts and the open core (${JSON.stringify(A.encode(w.room))})`);
+    ok(rt(w.room), 'the Colossus arena round-trips through the snapshot row');
   }
+  { // every Colossus move starts with a telegraph and deals nothing before it: no shot, beam, saw or burst in its first 0.45 s
+    const C = ED.Champions, COL = C.COL, WARN = { tele: 1, teleLine: 1, teleCone: 1 }, silent = [], early = [];
+    for (const id of Object.keys(C.MOVES)) {
+      const M = C.MOVES[id], { w, enc } = champRoom('colossus', ['knight', 'ranger']), col = enc.col;
+      if (M.stump) { w.killEnemy(col.parts[M.part], null, {}); go(w, 2 / 60); }
+      col.runs = []; col.pause = 99;
+      const pieces = new Set(col.all), p0 = w.projs.length, z0 = new Set(w.zones);
+      w.colossusStart(col, id);
+      const warn = w.zones.filter(z => !z0.has(z) && pieces.has(z.src) && (WARN[z.kind] || (z.kind === 'laser' && z.warm >= 0.5)));
+      if (!warn.length) silent.push(id);
+      let bad = false;
+      go(w, 0.45, () => { if (w.projs.length > p0 || w.zones.some(z => pieces.has(z.src) && ((z.kind === 'laser' && z.t > z.warm) || z.kind === 'gsaw'))) bad = true; });
+      if (bad || col.runs[0] && col.runs[0].at < 0.5) early.push(id);
+    }
+    ok(!silent.length, `every Colossus move starts with a telegraph (${silent})`);
+    ok(!early.length, `no Colossus move hurts within 0.45 s of its start (${early})`);
+  }
+  { // the Colossus fight ends when the core falls (the parts fall with it), pays the champion room's relic and sets run.champs bit 1; a seed replays the same fight
+    const C = ED.Champions, COL = C.COL, { w, enc, room } = champRoom('colossus', ['knight']), col = enc.col;
+    room.type = 'champion'; room.reward = 'relic';
+    go(w, 6);
+    w.killEnemy(col.parts.eye, null, {}); w.killEnemy(col.parts.saw, null, {}); go(w, 2 / 60);
+    w.killEnemy(col.core, null, {}); go(w, 0.5);
+    ok(!w.locked && w.roomState[w.roomId].cleared && COL.PARTS.every(k => col.parts[k].hp <= 0) && !w.zones.some(z => col.all.includes(z.src)), 'the core down ends the fight; its parts and telegraphs go');
+    ok(w.props.some(q => q.kind === 'reward' && q.item === 'relic') && (w.run.champs & 2), 'the Colossus room pays its relic and marks run.champs bit 1');
+    const trace = () => { const r = champRoom('colossus', ['knight', 'cleric']), out = []; go(r.w, 24, (i) => { if (i % 30 === 0) out.push(r.enc.col.last + ':' + r.w.projs.length + ':' + r.w.zones.length + ':' + Math.round(r.enc.col.x)); }); return out.join(); };
+    const a = trace(), b = trace();
+    ok(a === b && /spiral|fan|ring|sweep|roll|beam|grid/.test(a), 'a seed replays the same Colossus fight');
+  }
+}
+{ // Mire Worm: statuses keep ticking while it is burrowed; the eruption: warned lanes, B.ring shots over B.arc (the rest is a shot-free gap) at B.speed, a telegraph of at least 1.1 s, exposed B.expose s after
+  const w = hordeWorld(2, ['knight']), p = [...w.players.values()][0], B = ED.ENEMIES.mireworm.burrow;
+  const e = w.spawnEnemy('mireworm', p.x + 200, p.y); e.spawnT = 0; e.maxHp = e.hp = 1e4;
+  w.burnStack(e, p); w.burnStack(e, p); w.addBleed(e, 400, p);
+  e.vars.init = 1; e.st = 'burrow'; e.burrowed = true; e.vars.dig = 99; e.vars.spot = null;
+  const hp0 = e.hp;
+  ok(w.hitEnemy(e, 50, { p }) === 0, 'a burrowed worm takes no hits');
+  for (let i = 0; i < 90; i++) { p.invuln = 1e9; w.update(TICK); }
+  ok(e.burrowed && hp0 - e.hp > 1, `Burn and Bleed keep ticking on a burrowed worm (${(hp0 - e.hp).toFixed(1)} damage in 1.5 s)`);
+  e.vars.dig = 0; e.x = p.x + 40; e.y = p.y;
+  for (let i = 0; i < 2; i++) { p.invuln = 1e9; w.update(TICK); }
+  const lanes = w.zones.filter(z => z.src === e && z.kind === 'teleLine' && z.warnOnly), circ = w.zones.find(z => z.src === e && z.kind === 'tele');
+  ok(lanes.length === B.ring && circ && circ.dur >= 1.1, `the eruption warns ${lanes.length} shot lanes and a ${circ && circ.dur.toFixed(2)} s circle`);
+  const p0 = new Set(w.projs);
+  for (let i = 0, k = Math.round(((circ ? circ.dur : 1) + 0.05) * 60); i < k; i++) { p.invuln = 1e9; w.update(TICK); }
+  const shots = w.projs.filter(q => !p0.has(q) && q.src === e), as = shots.map(q => Math.atan2(q.vy, q.vx)).sort((a, b) => a - b);
+  const gap = as.length ? Math.max(...as.map((a, i) => (i ? a - as[i - 1] : a + ED.U.TAU - as[as.length - 1]))) : 0, sp = ED.World.shotSpd(w.stratum) * B.speed;
+  ok(shots.length === B.ring && shots.every(q => Math.abs(Math.hypot(q.vx, q.vy) - sp) < 1), `the eruption fires ${shots.length} shots at ${B.speed} x the stratum shot speed`);
+  ok(gap >= ED.U.TAU - B.arc - 0.01, `the ring leaves a shot-free gap of ${gap.toFixed(2)} rad`);
+  ok(!e.burrowed && e.st === 'erupt' && e.t > B.expose - 0.2, `then it stays exposed ${B.expose} s`);
 }
 console.log(`${n} checks, ${fails} failed`);
 process.exit(fails ? 1 : 0);

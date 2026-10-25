@@ -210,7 +210,7 @@
     w.emit({ t: 'split', x: Math.round(pr.x), y: Math.round(pr.y), a: Math.round(h * 100) / 100, pid: pr.owner });
   }
 
-  // Flurry: 2 + flurryN extra weapon arrows beside the aimed one, fired by W.fireWeapon so they carry everything the aimed arrow does (evolution blast and spectral copies, cloud, homing, burn).
+  // Flurry: 2 + flurryN extra weapon arrows beside the aimed one, fired by W.fireWeapon so they carry everything the aimed arrow does (evolution blast, cloud, homing, burn).
   // The extras alternate left and right of the aim at FLURRY_A steps (FLURRY_B above two extras); an odd count puts its last arrow on the side that alternates with each Flurry.
   // fireWeapon shoots w.n + st.projN arrows: the one-arrow copy of the weapon has n = 1 - projN (cached per weapon object and projN).
   const ONE_ARROW = new WeakMap();

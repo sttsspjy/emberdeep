@@ -1,13 +1,13 @@
 // Pick feedback (client only): the card kind of a boon or relic, its synthesized pick cue (audio.js 'pick') and its themed burst on the picking hero in the world (fx.js 'boon' and 'relic' events).
-// Kinds: the six elements, general, route, relic, purse. Bursts last at most 1.2 s, never flash the screen, run lighter on Low quality and dimmer for an ally's pick.
+// Kinds: the four paths (fire, ice, lightning, general), route, relic, purse. Bursts last at most 1.2 s, never flash the screen, run lighter on Low quality and dimmer for an ally's pick.
 (function (ED) {
   'use strict';
   const U = ED.U, TAU = U.TAU;
   const P = ED.PickFx = {};
-  P.KINDS = ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'route', 'relic', 'purse'];
-  const ELEM = { fire: 1, ice: 1, lightning: 1, poison: 1, holy: 1, shadow: 1, general: 1 };
-  // Kind of boon id (total): purse > route (any cls card) > its path > 'general' (open boons, unknown ids).
-  P.kind = (id) => { const b = ED.BOONS[id]; return !b ? 'general' : b.purse ? 'purse' : b.cls ? 'route' : ELEM[b.path] ? b.path : 'general'; };
+  P.KINDS = ['fire', 'ice', 'lightning', 'general', 'route', 'relic', 'purse'];
+  const ELEM = { fire: 1, ice: 1, lightning: 1, general: 1 };
+  // Kind of boon id (total): purse > route (any cls card) > its path (a cross-path card: its second path) > 'general' (open boons, unknown ids).
+  P.kind = (id) => { const b = ED.BOONS[id], pk = b && (b.path || (b.cross && b.cross[1])); return !b ? 'general' : b.purse ? 'purse' : b.cls ? 'route' : ELEM[pk] ? pk : 'general'; };
   P.kindRelic = () => 'relic';
   // Keystones, evolutions and path gates take the bigger, longer version of their path's feedback.
   P.big = (id) => { const b = ED.BOONS[id]; return !!(b && (b.key || b.evo || b.gate)); };
@@ -52,44 +52,6 @@
       SP(o, 'fx.blast.blue', x, y - 8, { add: true, ramp: 'lightning', a: o.al, keep: true });
       F.ring(x, y, 36, rc(o, c), 0.3, 3);
       if (o.big) { F.zap(x - 4, y - 120, x - 34, y + 4, c, 0.3); F.zap(x + 4, y - 110, x + 32, y + 2, c, 0.3); SP(o, 'fx.thunder', x, y - 30, { add: true, ramp: 'lightning', keep: true }); }
-    },
-    poison(o) { // bubbles rise off the hero at their own speeds and pop one after another at their tops; drips fall onto a ring around the hero, splash, and the ring sinks inward
-      const F = o.F, x = o.x, y = o.y, c = '#9be33c', R = o.big ? 40 : 30, k = (o.low ? 0.5 : 1) * F.crowd;
-      const nb = Math.max(3, Math.ceil(8 * o.n * k));
-      for (let i = 0; i < nb; i++) { // bubble i: a green body with a shine pixel rising v px/s for tr s (no drag, so both stay together), then a pop where it ends
-        const bx = x + ((i * 5) % 7 - 3) * 5, by = y - 8 - (i % 3) * 5, tr = (0.22 + ((i * 3) % 8) * 0.07) * o.L, v = 60 + (i % 3) * 20, big = i % 3 === 0;
-        F.part(bx, by, { kind: 'dot', color: big ? '#5fbf1f' : '#7fd02a', size: big ? 6 : 4.5, a: -1.57, drag: 0, add: false }, v, tr);
-        F.part(bx - 2, by - 2, { kind: 'dot', color: '#e4ffa8', size: 1.6, a: -1.57, drag: 0, add: true }, v, tr);
-        SP(o, big ? 'fx.circle.white' : 'fx.hit.spark', bx, by - v * tr, { ramp: 'poison', add: !big, a: o.al, delay: tr, speed: big ? 1.5 : 1, keep: i < 3 });
-      }
-      F.burst(x, y - 10, nn(o, 8), { color: '#9be33c', a: -1.57, spread: 1.4, sp: 36, vy: -40, life: 0.6 * o.L, size: 2, add: true, drag: 1.2 }); // fizz
-      for (let i = 0; i < 3; i++) SP(o, 'fx.puff', x + (i - 1) * 10, y - 4, { ramp: 'poison', vy: -18, delay: i * 0.07, speed: 0.7, a: 0.85 * o.al, keep: i === 1 }); // a toxic cloud lifting off the feet
-      const nd = Math.max(4, Math.ceil(10 * o.n * k));
-      for (let i = 0; i < nd; i++) { const q = i * TAU / nd + 0.2; F.part(x + Math.cos(q) * R, y + Math.sin(q) * R * 0.6, { kind: 'drop', color: i & 1 ? '#3f8a18' : '#5fbf1f', size: 4, z: 34 + (i % 3) * 8, vz: 0, drag: 0 }, 0, 0.9 * o.L); } // drips falling onto the ring
-      SP(o, 'fx.smoke.ring', x, y + 2, { ramp: 'poison', delay: 0.42, keep: true }); // the drips splash down
-      F.ring(x, y, R + 8, rc(o, '#4f9a1a'), 0.9 * o.L, 3, true); F.ring(x, y, R - 4, rc(o, '#2f6a10'), 0.75 * o.L, 3, true);
-      F.pop(x, y - 10, 14, c, 0.2, false, o.al * 0.6, '#d2ff82');
-      if (o.big) F.ring(x, y, 62, rc(o, '#d2ff82'), 0.8, 3, true);
-    },
-    holy(o) { // a light pillar beams up, a halo over the head, motes rise
-      const F = o.F, x = o.x, y = o.y;
-      F.beam(x, y, o.big ? 140 : 110, o.big ? 22 : 18, '#ffcf5a', 0.6 * o.L, o.al, '#ffffff');
-      F.ring(x, y - 34, 12, rc(o, '#fff0c2'), 0.7 * o.L, 2, false, 10); F.ring(x, y, 40, rc(o, '#ffcf5a'), 0.5 * o.L, 3);
-      SP(o, 'fx.circle.spark', x, y - 4, { ramp: 'holy', add: true, a: o.al, keep: true });
-      F.burst(x, y - 6, nn(o, 14), { color: '#fff0c2', a: -1.57, spread: 0.8, sp: 70, vy: -40, life: 0.8 * o.L, size: 2, add: true, drag: 1.2 });
-      F.pop(x, y - 30, 20, '#fff0c2', 0.3, true, o.al);
-    },
-    shadow(o) { // smoke and motes implode into the hero, a shrinking ring, a collapse flash
-      const F = o.F, x = o.x, y = o.y, R = o.big ? 64 : 46, T = 0.45, k = Math.ceil(12 * o.n * (o.low ? 0.5 : 1) * F.crowd);
-      for (let i = 0; i < k; i++) {
-        const q = i * TAU / k + Math.random() * 0.4, cx = Math.cos(q) * R, cy = Math.sin(q) * R * 0.7, sm = i % 3 === 0;
-        F.part(x + cx, y - 10 + cy, { kind: sm ? 'smoke' : 'dot', color: sm ? '#5a2fb0' : (i & 1 ? '#a070ff' : '#c9b3ff'), size: sm ? 5 : 2.4, add: !sm, drag: 0, vx: -cx / T, vy: -cy / T }, 0, T);
-      }
-      for (let i = 0, m = o.low ? 3 : 6; i < m; i++) { const q = i * TAU / m + 0.4, cx = Math.cos(q) * R, cy = Math.sin(q) * R * 0.7; SP(o, 'fx.puff', x + cx, y - 8 + cy, { ramp: '#5a2fb0', a: 0.8 * o.al, vx: -cx / T, vy: -cy / T, speed: 0.33 / T, keep: true }); } // smoke puffs drawn into the hero
-      F.ring(x, y - 6, R, rc(o, '#a070ff'), T, 3, true); F.ring(x, y - 6, R * 1.4, rc(o, '#5a2fb0'), T, 2, true);
-      F.pop(x, y - 12, 14, '#5a2fb0', 0.5, false, o.al * 0.6);
-      SP(o, 'fx.circle.spark', x, y - 6, { ramp: 'shadow', add: true, delay: T - 0.05, a: o.al, keep: true });
-      if (o.big) SP(o, 'fx.soul.violet', x, y - 10, { add: true, delay: T - 0.1, keep: true });
     },
     general(o) { // anvil stamp: a short impact square at the feet, a bright steel shock ring with a second ring behind it, sparks thrown low and bouncing
       const F = o.F, x = o.x, y = o.y, R = o.big ? 52 : 40;

@@ -48,7 +48,7 @@
   const windOf = (st, b) => Math.min(1, relV(b) / windRef(st));
   const hurlK = (wind) => C.HURL_K * wind * wind; // strike factor of a hurl at this wind
   const reelSpeed = (st) => C.REEL_SPEED * (st.swift ? 1.3 : 1);
-  // The strike-speed infusion of Storm Bronze (the part of wInfLightning above Static Charge's own rate), cached on the stat block.
+  // The strike-speed infusion of Storm Bronze (the part of wInfLightning above the Storm path's own rate), cached on the stat block.
   const bellInf = (st) => { if (st.bwInf === undefined) { const r = Math.max(0, st.wInfLightning - st.lightningInfuse); st.bwInf = r > 0 ? { lightning: r } : null; } return st.bwInf || undefined; };
   const winding = (st) => (st.windCap > 0 ? st.windCap : C.WIND_CAP); // Perpetual Motion raises the cap
 
@@ -226,7 +226,7 @@
   function heavyStrike(w, p, b, e, fl, kx, ky, kn) {
     const st = p.stats, wp = st.weapon, hurl = fl.part === 'bell.hurl', charged = e.charge > 0;
     const mul = fl.k * (hurl && st.rod > 0 && charged ? 1 + st.rod : 1), infAdd = bellInf(st), knock = wp.knock * Math.min(1.5, fl.k) * kn;
-    const src = { p, kind: 'weapon', wpn: !!fl.full, mul: fl.ms ? mul * C.FIN_MUL : mul, crit: fl.crit || fl.ms || undefined, bleedMin: fl.ms ? 0.5 : undefined, infAdd, knock, kx, ky, x: b.x, y: b.y, part: fl.part }; // ms: the Finisher; wpn: a full-wind hurl (a Heavy bell's Stagger)
+    const src = { p, kind: 'weapon', wpn: !!fl.full, mul: fl.ms ? mul * C.FIN_MUL : mul, crit: fl.crit || fl.ms || undefined, bleedMin: fl.ms ? 0.5 : undefined, fin: fl.ms || undefined, infAdd, knock, kx, ky, x: b.x, y: b.y, part: fl.part }; // ms: the Finisher; wpn: a full-wind hurl (a Heavy bell's Stagger)
     w.hitEnemy(e, wp.dmg, src);
     if (fl.twin && e.hp > 0) w.hitEnemy(e, wp.dmg, { p, kind: 'weapon', mul, crit: fl.crit || undefined, infAdd, knock, kx, ky, x: b.x, y: b.y, part: fl.part });
     w.emit({ t: 'bstrike', pid: p.pid, x: Math.round(b.x), y: Math.round(b.y), v: Math.round(fl.k * C.BELL_REF), h: 0, c: 0 }); // the hurl's own weight (hit-stop, shake) rides the 'hurl' event
@@ -588,7 +588,6 @@
       p.bellPressN = pressN;
       if (haul && !p.bellHauled) p.bellSpin = spinOf(p);
       p.bellHauled = haul;
-      p.bellGuard = haul && st.hold === 'guard' && p.bells.some(b => b.s === HAND && windOf(st, b) >= 1); // Hallowed Arms: a guard while a hand bell winds at full wind (elements.js guardFront)
       if (press) for (const b of p.bells) { if (b.s === ANCHOR) startReel(this, p, b); else if (b.s === FLY) b.reelQ = true; }
       if (release && !p.bellLeap && !p.haulNear) { // the most-wound hand bell flies at WIND_GO wind or more; the other wound bells keep winding JUGGLE_T (never with an interactable in range: the attack interacts)
         let best = null, bw = -1;

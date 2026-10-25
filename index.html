@@ -61,6 +61,7 @@
         <button role="tab" data-tab="upgrades" class="tab on">Upgrades<span class="dot" id="dot-upgrades" hidden></span></button>
         <button role="tab" data-tab="wardrobe" class="tab">Wardrobe<span class="dot" id="dot-wardrobe" hidden></span></button>
         <button role="tab" data-tab="chronicle" class="tab">Records</button>
+        <button role="tab" data-tab="codex" class="tab">Codex</button>
       </nav>
 
       <div class="sec-body">
@@ -121,6 +122,12 @@
               <div class="strata-list" id="strata-list"></div>
             </div>
           </div>
+        </div>
+        <!-- CODEX -->
+        <div class="pane" data-pane="codex" hidden>
+          <p class="sub">Pages found in event rooms. Every descent can turn up more; the rarest come from rare events.</p>
+          <h3 class="plate-h" id="codex-count"></h3>
+          <div class="codex-list" id="codex-list"></div>
         </div>
       </div>
     </div>
@@ -192,6 +199,15 @@
   </section>
 
   <!-- ============ IN-RUN OVERLAYS ============ -->
+  <div id="ov-event" class="overlay" hidden>
+    <div class="plate ev-wrap" role="dialog" aria-labelledby="ev-title">
+      <h2 class="card-title" id="ev-title"></h2>
+      <div class="ev-sub" id="ev-sub"></div>
+      <div class="ev-text" id="ev-text"></div>
+      <div class="ev-choices" id="ev-choices"></div>
+      <div class="ev-hint hint" id="ev-hint"></div>
+    </div>
+  </div>
   <div id="ov-boon" class="overlay" hidden>
     <div class="boon-wrap">
       <div class="boon-title"><span id="boon-head">Choose a boon</span> <span id="boon-count"></span></div>
@@ -248,11 +264,22 @@
         <div class="sh-panel" id="shp-build" role="tabpanel" aria-labelledby="shtab-build" data-t="build"></div>
         <div class="sh-panel" id="shp-combat" role="tabpanel" aria-labelledby="shtab-combat" data-t="combat" hidden></div>
         <div class="sh-panel" id="shp-map" role="tabpanel" aria-labelledby="shtab-map" data-t="map" hidden>
-          <section class="plate sh-col" data-col="map"><div class="sh-in"><h3 class="sh-h">Map</h3><div class="sh-mapbox" id="sh-mapbox"><canvas id="map-canvas" width="360" height="300"></canvas></div><div class="sh-legend" id="sh-legend"></div></div></section>
+          <section class="plate sh-col" data-col="map"><div class="sh-in"><h3 class="sh-h">Map<button type="button" class="sh-mapbtn" id="sh-mapbtn"></button></h3><div class="sh-mapbox mv-box" id="sh-mapbox"><div class="mv-vp" id="sh-mapvp"><canvas id="map-canvas" width="360" height="300"></canvas></div><div class="mv-tip" id="sh-maptip" hidden></div></div><div class="sh-legend mv-legend" id="sh-legend"></div></div></section>
           <section class="plate sh-col" data-col="side"><div class="sh-in"><h3 class="sh-h">Stratum and dark rooms</h3><div class="sh-list" id="shp-map-side"></div></div></section>
         </div>
       </div>
       <footer class="sh-foot" id="sh-foot" data-px-snap></footer>
+    </div>
+  </div>
+
+  <div id="ov-map" class="overlay sheet" hidden>
+    <div class="mv-wrap" role="dialog" aria-label="Floor map">
+      <header class="mv-head"><span class="mv-title" id="mv-title"></span><span class="mv-where" id="mv-where"></span></header>
+      <div class="mv-body">
+        <section class="plate mv-col"><div class="mv-box" id="mv-box"><div class="mv-vp" id="mv-vp"><canvas id="mv-canvas" width="360" height="300"></canvas></div><div class="mv-tip" id="mv-tip" hidden></div></div></section>
+        <aside class="plate mv-side"><h3 class="sh-h">Legend</h3><div class="mv-legend" id="mv-legend"></div></aside>
+      </div>
+      <footer class="mv-foot" id="mv-foot"></footer>
     </div>
   </div>
 
@@ -365,6 +392,9 @@
 <script src="src/data/classboons.js" defer></script>
 <script src="src/data/relics.js" defer></script>
 <script src="src/data/meta.js" defer></script>
+<script src="src/data/empower.js" defer></script>
+<script src="src/data/lore.js" defer></script>
+<script src="src/data/events.js" defer></script>
 <script src="src/save.js" defer></script>
 <script src="src/sim/dungeon.js" defer></script>
 <script src="src/sim/stats.js" defer></script>
@@ -372,6 +402,7 @@
 <script src="src/sim/combat.js" defer></script>
 <script src="src/sim/elements.js" defer></script>
 <script src="src/sim/build.js" defer></script>
+<script src="src/sim/relics.js" defer></script>
 <script src="src/sim/skills.js" defer></script>
 <script src="src/sim/class-knight.js" defer></script>
 <script src="src/sim/class-ranger.js" defer></script>
@@ -385,10 +416,12 @@
 <script src="src/sim/boss-warden.js" defer></script>
 <script src="src/sim/boss-spore.js" defer></script>
 <script src="src/sim/rooms.js" defer></script>
+<script src="src/sim/events.js" defer></script>
 <script src="src/sim/arena.js" defer></script>
 <script src="src/sim/boss-king.js" defer></script>
 <script src="src/sim/boss-hollow.js" defer></script>
 <script src="src/sim/champions.js" defer></script>
+<script src="src/sim/minigames.js" defer></script>
 <script src="src/sim/sheet.js" defer></script>
 <script src="src/net.js" defer></script>
 <script src="src/client/input.js" defer></script>
@@ -422,10 +455,12 @@
 <script src="src/client/cls-necro.js" defer></script>
 <script src="src/client/cls-bell.js" defer></script>
 <script src="src/client/arena.js" defer></script>
+<script src="src/client/minigames.js" defer></script>
 <script src="src/client/post.js" defer></script>
 <script src="src/client/hud.js" defer></script>
 <script src="src/client/camp.js" defer></script>
 <script src="src/client/ui.js" defer></script>
+<script src="src/client/mapview.js" defer></script>
 <script src="src/client/sheetui.js" defer></script>
 <script src="src/client/cosmetics.js" defer></script>
 <script src="src/game.js" defer></script>

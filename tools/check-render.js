@@ -1,6 +1,6 @@
 // Usage: node tools/check-render.js
 // Headless checks of render review fixes: the hit-flash rules of the sim (DoT ticks never flash, a flash is 66 ms, flashes are 120 ms apart, a new foe flashes on its first hit) and the art anchors the client reads
-// (a per-frame Hollow King crown point on his head, foe and boss head lines within 3 art px of their own frames, eye points inside the anim's frames). Prints failures and exits 1 when any check fails.
+// (a per-frame Hollow King crown point on his head, foe and boss head lines within 3 art px of their own frames, eye points inside the anim's frames), per-hero props (owner, claimed groups, vanishing kinds). Prints failures and exits 1 when any check fails.
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -148,6 +148,48 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   };
   const wire = (s) => JSON.parse(JSON.stringify(s));
   const mirrorOf = (w) => new G.Mirror({ pact: w.pact, players: [{ pid: 'p0', name: 'T', slot: 0, cls: 'knight', weapon: ED.CLASSES.knight.weapons[0], meta: META() }] }, 'p0');
+
+  // empowered next attack: P[28] reaches the mirror (p.emp); R.empower reads the sim on a World view, the snapshot for an ally on a client, the client's own prediction for its hero
+  {
+    const pl = [0, 1].map((i) => ({ pid: 'p' + i, name: 'T' + i, slot: i, cls: 'knight', weapon: ED.CLASSES.knight.weapons[0], meta: META() }));
+    const w = new ED.World({ seed: 7, pact: 0, players: pl }); w.startRun(); w.enemies.length = 0; w.enc = null; w.locked = false;
+    const h0 = w.players.get('p0'), h1 = w.players.get('p1'), CL = ED.EMPOWER.findIndex((e) => e.id === 'cleave') + 1;
+    Object.assign(h0.stats, { cleave: 0.5, cleaveN: 0 }); h0.atkCount = 2; h1.atkCount = 2;
+    const m = new G.Mirror({ pact: 0, players: pl }, 'p1'), snap = wire(N.encodeSnap(w, [], false)); snap.T = 5; m.apply(snap, 0);
+    const m0 = m.players.get('p0'), m1 = m.players.get('p1');
+    ok(snap.P.find((r) => r[0] === 'p0')[28] === CL && m0.emp === CL && m1.emp === 0, `P[28] reaches the mirror (${m0.emp}, ${m1.emp})`);
+    const loc0 = R.local; R.local = 'p1';
+    R.foeArt.view(m); ok(R.empower(m0) && R.empower(m0).id === 'cleave', 'a client draws an ally empowered from the snapshot');
+    ok(!R.empower(m1), 'a client hero without Cleave: not empowered');
+    Object.assign(m1.stats, { cleave: 0.5, cleaveN: 0 }); m1.atkCount = 2; ok(R.empower(m1) && R.empower(m1).id === 'cleave', 'a client predicts its own hero (attack count ahead of the snapshot)');
+    m0.downed = true; ok(!R.empower(m0), 'a downed hero shows no empower'); m0.downed = false;
+    R.foeArt.view(w); ok(R.empower(h0) && R.empower(h0).id === 'cleave' && !R.empower(h1), 'host and solo read the sim');
+    R.local = loc0; R.foeArt.view(null);
+  }
+
+  // per-hero props: owner (only its owner sees and uses it, O[10] on the wire), claimed groups (R.mine), taken props vanish unless their kind is in KEEP_USED
+  {
+    const w = new ED.World({ seed: 7, pact: 0, players: ['p0', 'p1'].map((pid, i) => ({ pid, name: 'T' + i, slot: i, cls: 'knight', weapon: ED.CLASSES.knight.weapons[0], meta: META() })) });
+    w.startRun();
+    const [a, b] = [w.players.get('p0'), w.players.get('p1')];
+    for (const q of [a, b]) { q.offers.length = 0; q.picks = 0; q.offer = null; }
+    w.enemies.length = 0; w.enc = null; w.locked = false; w.props.length = 0;
+    const pr = { id: 9101, kind: 'reward', x: a.x, y: a.y, item: 'vigor', group: 77, owner: 'p1', state: 0 };
+    w.props.push(pr); b.x = a.x; b.y = a.y;
+    const hp0 = a.bonusHp | 0;
+    w.interact('p0', pr.id);
+    ok(!a.claimed[77] && (a.bonusHp | 0) === hp0, 'a hero cannot use another hero\'s prop (owner)');
+    w.interact('p1', pr.id);
+    ok(b.claimed[77] === true, 'its owner can');
+    const full = wire(N.encodeSnap(w, [], true)), row = full.O.find((o) => o[0] === pr.id);
+    ok(row && row[10] === 'p1', `the props row carries the owner at O[10] (${row && row[10]})`);
+    const m = mirrorOf(w); full.T = 5; m.apply(full, 0);
+    const mp = m.props.find((o) => o.id === pr.id);
+    ok(mp && mp.owner === 'p1', 'the client mirror reads the owner');
+    ok(R.mine(mp, 'p1', {}) && !R.mine(mp, 'p0', {}), 'R.mine: an owned prop is only its owner\'s');
+    ok(R.mine({ group: 5 }, 'p0', {}) && !R.mine({ group: 5 }, 'p0', { 5: true }) && R.mine({ group: 0 }, 'p0', { 0: true }), 'R.mine: a claimed group is no longer the claimer\'s');
+    ok(['chest', 'fountain', 'altar', 'campfire', 'anvil'].every((k) => R.KEEP_USED.has(k)) && !['reward', 'relic', 'shop'].some((k) => R.KEEP_USED.has(k)), 'rewards, relics and shop items vanish when taken; fixtures keep their used look');
+  }
 
   // wire size: 150 foes, 100 of them fodder
   {
@@ -337,7 +379,7 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     globalThis.document = { createElement: () => ({ width: 1, height: 1, getContext: () => rc() }) };
     const throws = (f) => { try { f(); return false; } catch (err) { console.log('  ' + err.stack.split('\n').slice(0, 3).join(' | ')); return true; } };
     try {
-      const KINDS = ['icewall', 'pfire', 'plague', 'decoy'], src = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'render.js'), 'utf8');
+      const KINDS = ['pfire', 'plague', 'decoy'], src = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'render.js'), 'utf8');
       const dz = src.slice(src.indexOf('function drawZones('), src.indexOf('default: {', src.indexOf('function drawZones(')));
       for (const kd of KINDS) ok(N.ZK.includes(kd) && dz.includes(`case '${kd}'`), `zone kind ${kd} is on the wire and has its own draw case`);
       const zrow = (kind, o) => Object.assign({ id: 3, kind, x: 200, y: 200, r: 40, t: 0.5, dur: 4, a: 0.3, len: 0, w: 0, arc: 0, team: 0, elite: false, lob: null, warm: 0, str: 0, fol: 0 }, o);
@@ -347,15 +389,13 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
         const z = zrow(kd, sh); view.zones.length = 0; view.zones.push(z);
         ok(!throws(() => { for (const pass of [0, 2, 1]) R.zoneArt.draw(ctx, view, 1.7, pass); for (let i = 0; i < 4; i++) R.zoneArt.stand(ctx, z, i, 1.7); }), `zone ${kd} ${JSON.stringify(sh)} draws all passes and its standing pieces`);
       }
-      for (const kd of KINDS) { ops.n = 0; view.zones.length = 0; view.zones.push(zrow(kd, kd === 'icewall' ? { len: 120, w: 10 } : {})); R.zoneArt.draw(ctx, view, 1, 0); R.zoneArt.draw(ctx, view, 1, 1); ok(ops.n > 0, `zone ${kd} draws (${ops.n} canvas ops)`); }
-      ok(R.zoneArt.wallN(zrow('icewall', { len: 120 })) === 10 && R.zoneArt.wallN(zrow('icewall', { len: 0 })) === 2 && R.zoneArt.wallN(zrow('icewall', { len: 9999 })) === 12, 'an ice wall stands one pillar every 14 px (2 to 12)');
-      ok(!throws(() => { R.zoneArt.pillar(4, false); R.zoneArt.pillar(5, true); }), 'the ice wall pillar sprites bake (both looks)');
+      for (const kd of KINDS) { ops.n = 0; view.zones.length = 0; view.zones.push(zrow(kd, {})); R.zoneArt.draw(ctx, view, 1, 0); R.zoneArt.draw(ctx, view, 1, 1); ok(ops.n > 0, `zone ${kd} draws (${ops.n} canvas ops)`); }
       // events
       const fctx = { localPid: 'p0', player: () => ({ x: 0, y: 0, pid: 'p0', cls: 'bell' }), players: () => [], stratum: () => 1 };
       const plays = [], A0 = ED.Audio;
-      ED.Audio = { play: (name, v, arg, pr) => plays.push({ name, v, arg, pr }), flush() {}, hit() {}, impact() {}, kill() {} };
+      ED.Audio = { play: (name, v, arg, pr) => plays.push({ name, v, arg, pr }), flush() {}, hit() {}, impact() {}, kill() {}, dot() {}, bed() {}, applied() {} };
       const good = {
-        pdodge: { pid: 'p0', x: 100, y: 100 }, blink: { pid: 'p0', x0: 100, y0: 100, x1: 180, y1: 120, k: 'storm' }, shatter: { x: 100, y: 100, r: 70 }, hurl: { pid: 'p0', x: 100, y: 100, k: 2.5 }, reel: { pid: 'p0', x0: 100, y0: 100, x1: 200, y1: 120 },
+        blink: { pid: 'p0', x0: 100, y0: 100, x1: 180, y1: 120 }, shatter: { x: 100, y: 100, r: 70 }, hurl: { pid: 'p0', x: 100, y: 100, k: 2.5 }, reel: { pid: 'p0', x0: 100, y0: 100, x1: 200, y1: 120 },
       };
       const live = () => F.parts.length + F.rings.length + F.bolts.length + F.pops.length + F.sheets.length + F.beams.length;
       for (const t of Object.keys(good)) {
@@ -365,8 +405,7 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
         const bad = [{ x: 'a', y: null }, { x: NaN, y: 5, r: 'x', k: Infinity }, { pts: 'x' }, { pts: [1, 2, 3] }, { pts: [1, 2, null, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18] }, { x0: 1, y0: 2 }, { x: 5, y: 5, r: -10, k: -3 }];
         ok(!throws(() => { for (const b of bad) F.handle(Object.assign({ t }, b), fctx); F.update(0.016); }), `${t} survives missing and malformed fields`);
       }
-      F.reset(); F.handle({ t: 'blink', pid: 'p0', x0: 0, y0: 0, x1: 90, y1: 0, k: 'behind' }, fctx); ok(F.bolts.length === 0 && live() > 0, 'an Umbral Arms blink puffs smoke, no bolt');
-      F.reset(); F.handle({ t: 'chain', k: 'd', pts: [[100, 76], [100, 100]] }, fctx); ok(F.bolts.length + F.pops.length > 0, 'a dash discharge drops a bolt on the foe');
+      F.reset(); F.handle({ t: 'chain', k: 'd', pts: [[100, 76], [100, 100]] }, fctx); ok(F.bolts.length + F.pops.length > 0, 'a discharge drops a bolt on the foe');
       F.reset(); F.handle({ t: 'chain', k: 'f', pts: [[100, 94], [130, 94]] }, fctx); ok(F.bolts.length === 1, 'Burn passed on draws one ember line');
       F.reset(); F.handle({ t: 'chain', k: 'f', pts: 'x' }, fctx); F.handle({ t: 'chain' }, fctx); ok(live() === 0, 'a malformed chain draws nothing');
       F.reset(); F.handle({ t: 'lance', pid: 'p0', x0: 0, y0: 0, x1: 300, y1: 0, k: 1 }, fctx); ok(F.bolts.length === 1, 'the ice lance leaves a frost streak');
@@ -435,6 +474,7 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
       const cv0 = { stratum: 1, enemies: [{ charge: 1, hp: 5 }, { charge: 1, hp: 5 }, { charge: 0, hp: 5 }, { charge: 1, hp: 0 }], players: new Map() };
       const chips = (me) => H.cues.chips(cv0, me).filter((x, i) => !(i & 1));
       ok(chips({ stats: { lightningInfuse: 0.5 }, boons: {} }).includes('Charged 2') && !chips({ stats: {}, boons: {} }).some((x) => /^Charged/.test(x)), 'Lightning: a chip counts the live charged foes a dash discharges');
+      ok(!chips({ stats: { cleave: 0.5, cleaveN: 0, weapon: { kind: 'melee' } }, atkCount: 2, boons: {} }).some((x) => /Cleave/.test(x)), 'no Cleave chip: the empowered next attack shows on the hero and the cursor');
       const mk = (type, furyT, extra) => Object.assign({ id: 9, type, def: ED.ENEMIES[type], boss: true, hp: 800, maxHp: 1000, exposed: false, furyT, furyM: ED.World.furyMul(ED.ENEMIES[type].stratum || 4, furyT) }, extra);
       H.draw(null, viewOf(4, mk(B4, 0)), null, {}, 0, 0.016, {}); // sets up the canvas and layout
       const bar = (s, type, furyT, extra) => {
@@ -464,6 +504,18 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
       globalThis.document = doc0; globalThis.window = win0; ED.HUD = hud0; ED.Sprites = sp0;
       if (doc0 === undefined) delete globalThis.document; if (win0 === undefined) delete globalThis.window;
     }
+  }
+
+  // Bulwark through the client path: G.applyAction routes the skill press (slot 1) to the raise and the hold release (s 1) to the bash; the wire carries the raised flag (1 << 6) and the stored blocks (bits 21-23); a remote Knight in the mirror shows both
+  {
+    const w = room1(0), p = w.players.get('p0'), e = w.spawnEnemy('skeleton', p.x + 40, p.y, {}); e.spd = 0; e.cd = 9999; e.maxHp = e.hp = 5000;
+    G.applyAction(w, 'p0', { t: 'skill', slot: 1, a: 0 }); ok(p.bulwarkOn, 'a slot 1 skill action raises the Bulwark');
+    for (let i = 0; i < 3; i++) { w.time += 0.61; w.hurtPlayer(p, 20, { e }); }
+    const fl = N.encodeSnap(w, [], false).P.find(r => r[0] === 'p0')[6]; ok((fl & 64) && ((fl >> 21) & 7) === 3, `the wire carries the raised shield and 3 stored blocks (${(fl >> 21) & 7})`);
+    const m = new G.Mirror({ pact: 0, players: [{ pid: 'p0', name: 'T', slot: 0, cls: 'knight', weapon: ED.CLASSES.knight.weapons[0], meta: META() }] }, 'zz'), snap = wire(N.encodeSnap(w, [], false)); snap.T = 5; m.apply(snap, 0);
+    const mp = m.players.get('p0'); ok(mp && mp.bulwarkOn === true && mp.blocks === 3, 'a remote Knight in the mirror shows the raised shield and its blocks');
+    G.applyAction(w, 'p0', { t: 'hold', on: 0, s: 1, a: 0 }); ok(!p.bulwarkOn && e.hp < e.maxHp && e.stun > 0.9, 'a hold release with s 1 bashes');
+    const f2 = N.encodeSnap(w, [], false).P.find(r => r[0] === 'p0')[6]; ok(!(f2 & 64) && ((f2 >> 21) & 7) === 0, 'the wire clears both after the bash');
   }
 }
 
