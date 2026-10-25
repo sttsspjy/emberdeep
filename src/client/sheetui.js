@@ -1,6 +1,6 @@
 // The Tab sheet: header, three tabs (Build, Combat, Map) rendered from ED.Sheet.compute, live refresh, spatial keyboard / mouse / gamepad focus, the pixel room map.
 // A tab is rebuilt (innerHTML) only when its markup changes apart from its live cells (data-live text), which are patched in place; only the visible tab renders, at most twice a second.
-// Pixel look: card frames baked here through ED.PixUI.frame (--fr-shcard[-variant], --fr-shduo-<a>-<b>, --fr-shdash, --fr-shmk-*, --fr-shstar-*); --tb on #ov-sheet = PixUI.bias in CSS px.
+// Pixel look: card frames baked here through ED.PixUI.frame (--fr-shcard[-variant], --fr-shdash, --fr-shmk-*, --fr-shstar-*); --tb on #ov-sheet = PixUI.bias in CSS px.
 (function (ED) {
   'use strict';
   const U = ED.U, UI = ED.UI, Sh = ED.Sheet, S = ED.Save, PX = ED.PixUI;
@@ -12,8 +12,8 @@
   UI.sheetState = SH;
 
   // ---------------- pixel frames ----------------
-  // shcard: 9 x 9, slice 3: outline o, left stripe P (H = its top pixel), top line L, right line L, bottom line D, fill f. Variants: every path (tinted fill), gold (Ascended,
-  // evolved), route (class route nodes), dim (closed), p0-p3 (hero colours). shduo: the same with a right stripe Q (one variant per ordered element pair). shdash: open nodes,
+  // shcard: 9 x 9, slice 3: outline o, left stripe P (H = its top pixel), top line L, right line L, bottom line D, fill f. Variants: every path (tinted fill), gold
+  // (evolved), route (class route nodes), dim (closed), p0-p3 (hero colours). shdash: open nodes,
   // 2-on 2-off dashes (border-image-repeat: repeat). shmk: 7 x 7 keystone diamond (off, bone, every path). shstar: 7 x 7 evolution star (off, ready, got).
   const FILL = '#120d0a';
   const tint = (c) => ({ P: c, H: U.shade(c, 0.45), L: U.mix(c, FILL, 0.62), f: U.mix(FILL, c, 0.07), D: U.mix(c, '#000000', 0.72) });
@@ -24,12 +24,6 @@
     PX.frame('shcard', {
       rows: ['.ooooooo.', 'oHHLLLLLo', 'oPPffffLo', 'oPPffffLo', 'oPPffffLo', 'oPPffffLo', 'oPPffffLo', 'oPPDDDDDo', '.ooooooo.'],
       pal: { o: '#222222', P: '--line-hi', H: '--line-hi', L: '--line', f: FILL, D: '#0b0806' }, slice: 3, variants: cardV,
-    });
-    const duoV = {};
-    for (const a of ED.ELEMENT_IDS) for (const b of ED.ELEMENT_IDS) if (a !== b) { const A = tint(ED.PATHS[a].color), B = tint(ED.PATHS[b].color); duoV[a + '-' + b] = { P: A.P, H: A.H, Q: B.P, R: B.H, L: U.mix(A.L, B.L, 0.5), f: U.mix(A.f, B.f, 0.5), D: U.mix(A.D, B.D, 0.5) }; }
-    PX.frame('shduo', {
-      rows: ['.ooooooo.', 'oHHLLLRRo', 'oPPfffQQo', 'oPPfffQQo', 'oPPfffQQo', 'oPPfffQQo', 'oPPfffQQo', 'oPPDDDQQo', '.ooooooo.'],
-      pal: { o: '#222222', P: '--line-hi', H: '--line-hi', Q: '--line-hi', R: '--line-hi', L: '--line', f: FILL, D: '#0b0806' }, slice: 3, variants: duoV,
     });
     PX.frame('shdash', {
       rows: ['..........', '.LLLL..LL.', '.L......L.', '.L......L.', '.L......L.', '..........', '..........', '.L......L.', '.LLLL..LL.', '..........'],
@@ -67,7 +61,7 @@
   const pips = (rank, max, col) => { let s = ''; for (let i = 1; i <= max; i++) s += `<i${i <= rank ? ' class="on"' : ''}></i>`; return `<span class="sh-pips"${col ? ` style="--pc:${col}"` : ''}>${s}</span>`; };
   const col = (name, body) => `<section class="plate sh-col" data-col="${name}"><div class="sh-in">${body}</div></section>`;
   const head = (title, small) => `<h3 class="sh-h">${title}${small ? `<small>${small}</small>` : ''}</h3>`;
-  // Source chips of one stat: [{ label, kind, v, mul? }] -> "Base 100%", "Might 3 +12%", "Honed Edge ×1.15" (an Ascended multiplier); a negative contribution is the only red on the sheet.
+  // Source chips of one stat: [{ label, kind, v, mul? }] -> "Base 100%", "Might 3 +12%", "Honed Edge ×1.15" (a multiplier); a negative contribution is the only red on the sheet.
   const chips = (rows, key) => rows.map(r => (r.kind === 'base' ? `<span>${esc(r.label)} <b>100%</b></span>`
     : r.mul ? `<span class="asc">${esc(r.label)} <b>${Sh.fmt(key, 1 + r.v, 'x')}</b></span>`
     : `<span class="${r.v < 0 ? 'neg' : ''}${r.kind === 'temp' ? ' tmp' : ''}">${esc(r.label)} <b>${sgn(r.v, Sh.fmt(key, Math.abs(r.v)))}</b></span>`)).join('');
@@ -83,16 +77,6 @@
   };
 
   // ---------------- header ----------------
-  // "Weak: Fire → your Fire ×1.50" and "Resists: Ice → your Ice ×0.67" chips of a stratum (the multiplier only for elements the hero uses); the class element lists its skills (half the affinity) before its statuses.
-  function affChips(a) {
-    const one = (el, kind) => {
-      if (!el || !ED.PATHS[el]) return '';
-      const mm = a.mine.find(x => x.el === el), nm = ED.PATHS[el].name;
-      const mine = !mm ? '' : mm.skillMul !== null ? ` → your ${nm} skills ${X(mm.skillMul)} · statuses ${X(mm.mul)}` : ` → your ${nm} ${X(mm.mul)}`;
-      return `<span class="aff-chip ${kind}" style="--pc:${colorOf(el)}"><img alt="" src="${pathIco(el)}">${kind === 'weak' ? 'Weak' : 'Resists'}: ${nm}${mine}</span>`;
-    };
-    return one(a.weak, 'weak') + one(a.resist, 'resist');
-  }
   function paintHeader(m) {
     const h = m.hero, biome = ED.biomeFor(m.ctx.stratum), color = ED.PLAYER_COLORS[h.slot] || '#ff8a3d';
     const key = h.pid + '|' + h.cls + '|' + m.weapon.base + '|' + (ED.Actors && ED.Actors.on() ? 1 : 0);
@@ -112,7 +96,6 @@
     $('sh-gold').textContent = String(h.gold);
     if (!$('sh-coin').getAttribute('src')) $('sh-coin').src = ico('coin', '#ffd36b');
     $('sh-strat').textContent = `Stratum ${U.roman(m.ctx.stratum)} · ${biome.name}`;
-    $('sh-aff').innerHTML = affChips(m.aff.now);
   }
 
   // ---------------- Build tab ----------------
@@ -149,10 +132,10 @@
   }
   // A boon row's icon wears its card's identity hue (UI.boonIconColor), not its rarity.
   const boonIco = (id) => (UI.boonIconColor ? ico(ED.BOONS[id].icon, UI.boonIconColor(id)) : ED.Icons.boonUrl(id));
-  const KIND_LABEL = { gate: 'gate', keystone: 'keystone', evolution: 'evolution', mutation: 'mutation', duo: 'duo', route: 'route', fork: 'fork', ascended: 'ascended', twist: 'twist' };
+  const KIND_LABEL = { gate: 'gate', keystone: 'keystone', evolution: 'evolution', route: 'route', fork: 'fork' };
   function boonRow(b) {
-    const P = b.path && ED.PATHS[b.path] ? ED.PATHS[b.path] : null, color = b.kind === 'ascended' ? 'var(--gold)' : b.kind === 'route' || b.kind === 'fork' ? 'var(--gold)' : b.kind === 'twist' ? ED.RARITY.t.color : b.kind === 'mutation' ? ED.RARITY.m.color : P ? P.color : '#b9ad9b', lab = KIND_LABEL[b.kind] || '';
-    return `<div class="sh-boon sh-f${b.kind === 'ascended' ? ' asc' : ''}" data-k="b:${b.id}" style="--pc:${color};--rc:${RAR(b.rar).color}"><img class="sh-i2" alt="" src="${boonIco(b.id)}"><div class="sh-bm">`
+    const P = b.path && ED.PATHS[b.path] ? ED.PATHS[b.path] : null, color = b.kind === 'route' || b.kind === 'fork' ? 'var(--gold)' : P ? P.color : '#b9ad9b', lab = KIND_LABEL[b.kind] || '';
+    return `<div class="sh-boon sh-f" data-k="b:${b.id}" style="--pc:${color};--rc:${RAR(b.rar).color}"><img class="sh-i2" alt="" src="${boonIco(b.id)}"><div class="sh-bm">`
       + `<div class="sh-bt"><b class="sh-bn">${esc(b.name)}</b>${lab ? chip(lab + (b.kind === 'fork' && b.tag ? ' · ' + esc(b.tag) : '')) : ''}<span class="sh-rar">${RAR(b.rar).name}</span>${b.max > 1 ? pips(b.rank, b.max) : ''}</div>`
       + `<div class="sh-btx">${esc(b.text)}</div>${b.cost ? `<div class="sh-btx sh-cost">${esc(b.cost)}</div>` : ''}${b.next ? `<div class="sh-next"><b>Next rank</b>${esc(b.next)}</div>` : ''}</div></div>`;
   }
@@ -163,19 +146,12 @@
     if (B.generalist) paths += `<div class="shc off sh-path slot">Element paths closed (Generalist)</div>`;
     for (let i = 0; i < B.slotsFree; i++) paths += `<div class="shc dash sh-path slot sh-f" data-k="slot:${i}">Open element slot (${B.slots - B.slotsFree + i + 1} of ${B.slots})</div>`;
     if (B.classElementRow) { const c = B.classElementRow, el = Object.keys(ED.PATHS).find(k => ED.PATHS[k].color === c.color); paths += `<div class="shc sh-path elem sh-f" data-k="elem" style="${el ? frc('shcard-' + el) : ''}">${img(ico(c.icon, c.color), true)}<span>${esc(c.name)} is your class element: your skills deal ${esc(c.name)} damage. Take the ${esc(c.name)} gate to infuse every hit.</span></div>`; }
-    let duos = '';
-    for (const d of B.duos) {
-      const st = d.state === 'owned' ? chip('owned', colorOf(d.duo[0])) : d.state === 'offers' ? chip('in your offers', '', 'on') : chip(`needs ${d.need} more`, 'var(--muted)');
-      duos += `<div class="shc sh-duo sh-f" data-k="d:${d.id}" style="${frc('shduo-' + d.duo[0] + '-' + d.duo[1])}"><div class="sh-rh">${img(pathIco(d.duo[0]), true)}${img(pathIco(d.duo[1]), true)}<b>${esc(d.name)}</b>${st}</div><div class="sh-btx">${esc(d.text)}</div></div>`;
-    }
-    if (B.duoWith) for (const d of B.duoWith) duos += `<div class="shc sh-duo sh-f" data-k="d:${d.id}" style="${frc('shcard-' + d.with)}"><div class="sh-rh"><span class="mut">with</span>${img(pathIco(d.with))}<b style="color:${d.withColor}">${esc(d.withName)}</b><b>${esc(d.name)}</b></div><div class="sh-btx">${esc(d.text)}</div></div>`;
     let left = head('Paths', B.generalist ? 'Generalist' : `${B.paths.filter(q => q.element).length}/${B.slots}`) + `<div class="sh-list">${paths}</div>`;
-    if (duos) left += head('Duos') + `<div class="sh-list">${duos}</div>`;
     left += head('Class route', B.route.route ? esc(ED.routeLabel(m.hero.cls, B.route.route)) : 'at level 3') + routeBlock(B.route, ED.CLASSES[m.hero.cls].col.c);
     let boons = B.groups.length ? '' : '<div class="sh-empty">No boons yet. The first pick comes from the start offer.</div>';
     for (const g of B.groups) {
-      const P = g.path ? ED.PATHS[g.path] : null, gc = g.group === 'asc' || g.group === 'route' ? 'var(--gold)' : g.group === 'twist' ? ED.RARITY.t.color : P ? P.color : '';
-      const title = g.group === 'duo' ? 'Duo' : g.group === 'route' ? 'Class route' : g.group === 'twist' ? `Twists <small>rules with a price (${g.items.length}/${ED.TWIST_MAX})</small>` : g.group === 'asc' ? 'Ascended <small>multiplies the bonuses you hold</small>' : P ? `${P.name} <small>affinity <b>${ED.pathAffinity(p.boons || {}, g.path)}</b></small>` : 'Open <small>any hero, no path</small>';
+      const P = g.path ? ED.PATHS[g.path] : null, gc = g.group === 'route' ? 'var(--gold)' : P ? P.color : '';
+      const title = g.group === 'route' ? 'Class route' : P ? `${P.name} <small>affinity <b>${ED.pathAffinity(p.boons || {}, g.path)}</b></small>` : 'Open <small>any hero, no path</small>';
       boons += `<div class="sh-bg"><div class="sh-gh"${gc ? ` style="--pc:${gc}"` : ''}>${P ? img(pathIco(g.path)) : ''}${title}</div>${g.items.map(boonRow).join('')}</div>`;
     }
     let status = '';
@@ -207,7 +183,7 @@
   function partRow(q, stratum) {
     if (q.kind === 'zone') return `<div class="sh-part"><span class="sh-plab">${esc(q.label)}</span><span class="sh-pv"></span><span class="sh-pn">${[q.r ? `radius ${q.r}` : '', q.dur ? `${Sh.secs(q.dur)}s` : '', q.note ? esc(q.note) : ''].filter(Boolean).join(' · ')}</span></div>`;
     let n = '';
-    if (q.kind === 'status') n = `${esc(q.statusName)} pool added${q.aff !== 1 ? ` · ${X(q.aff)} here` : ''}`;
+    if (q.kind === 'status') n = `${esc(q.statusName)} pool added`;
     else if (q.kind === 'minion') n = `per strike · ${q.hitsEach} ${pl(q.hitsEach, 'strike')} each in ${Sh.secs(q.dur)}s · ${q.minions} ${pl(q.minions, 'minion')}`;
     else if (q.kind === 'sec') n = `per 0.5 s · ${q.oneFoe} ${pl(q.oneFoe, 'tick')} over ${Sh.secs(q.dur)}s · radius ${q.r}`;
     else {
@@ -224,8 +200,8 @@
       if (q.note && q.oneFoe !== 0) bits.push(esc(q.note));
       n = bits.join(' · ');
     }
-    const elc = q.el ? chip(cap1(q.el) + (q.aff !== 1 ? ` ${X(q.aff)} here` : ''), colorOf(q.el), 'sh-el') : '';
-    const add = q.statusAdd ? `<div class="sh-part sub"><span class="sh-plab">+ ${esc(ED.STATUS[q.statusAdd.status].name)}</span><span class="sh-pv">${n1(q.statusAdd.here)}</span><span class="sh-pn">pool of half the hit${ED.elemMul(stratum, q.statusAdd.el) !== 1 ? ` · ${X(ED.elemMul(stratum, q.statusAdd.el))} here` : ''}</span></div>` : '';
+    const elc = q.el ? chip(cap1(q.el), colorOf(q.el), 'sh-el') : '';
+    const add = q.statusAdd ? `<div class="sh-part sub"><span class="sh-plab">+ ${esc(ED.STATUS[q.statusAdd.status].name)}</span><span class="sh-pv">${n1(q.statusAdd.here)}</span><span class="sh-pn">pool of half the hit</span></div>` : '';
     return `<div class="sh-part"><span class="sh-plab">${esc(q.label)}</span><span class="sh-pv">${n1(q.here)}</span><span class="sh-pn">${n}${elc}</span></div>${add}`;
   }
   function skillCard(m, k, color, stratum) {
@@ -261,7 +237,7 @@
     }
     for (const s of M.status) {
       const rows = s.rows.map(r => `<span>${esc(r.label)} <b>${Sh.fmt(r.key, r.v)}</b></span>`).join('');
-      h += `<div class="sh-stat sh-f st" data-k="o:st:${s.el}" style="--pc:${s.color}"><div class="sh-sl"><span class="sh-l">${img(pathIco(s.el))}${esc(ED.STATUS[s.status].name)}${s.builtin ? ' <span class="mut">from your class skills</span>' : ''}</span><span class="sh-v">${s.el === 'general' ? '' : X(s.aff) + ' here'}</span></div><div class="sh-sub">${esc(s.est.label)}</div>${rows ? `<div class="sh-src">${rows}</div>` : ''}</div>`;
+      h += `<div class="sh-stat sh-f st" data-k="o:st:${s.el}" style="--pc:${s.color}"><div class="sh-sl"><span class="sh-l">${img(pathIco(s.el))}${esc(ED.STATUS[s.status].name)}${s.builtin ? ' <span class="mut">from your class skills</span>' : ''}</span></div><div class="sh-sub">${esc(s.est.label)}</div>${rows ? `<div class="sh-src">${rows}</div>` : ''}</div>`;
     }
     if (M.debuffs.length) h += `<div class="sh-stat sh-f" data-k="o:deb"><div class="sh-sl"><span class="sh-l">Foe vulnerabilities you apply</span></div>${M.debuffs.map(d => `<div class="sh-cond"><b style="color:${d.color}">${esc(d.name)}</b>${d.v ? ` <b>+${pc(d.v)}</b>` : ''} ${esc(d.short || d.text)}</div>`).join('')}</div>`;
     if (M.cond.length) h += `<div class="sh-stat sh-f" data-k="o:cond"><div class="sh-sl"><span class="sh-l">Conditional damage</span></div>${M.cond.map(c => `<div class="sh-cond">${c.live !== null ? live('c:' + c.id, '+' + pc(c.live)) : '<b>+' + pc(c.v) + '</b>'} ${esc(c.label)}${c.live !== null ? ` <span class="mut">(+${pc(c.v)} ${c.id === 'idol' ? 'at most' : 'each'})</span>` : ''}</div>`).join('')}</div>`;
@@ -290,7 +266,7 @@
   }
   function renderCombat(m) {
     const color = ED.PLAYER_COLORS[m.hero.slot] || '#ff8a3d', stratum = m.ctx.stratum, rt = m.build.route;
-    let atk = `<div class="sh-compact"><div class="sh-subl">${esc(m.weapon.name)}${rt.route ? ' · ' + esc(ED.routeLabel(m.hero.cls, rt.route)) + ' route' : ''}</div><div class="sh-aff">${affChips(m.aff.now)}</div></div>`;
+    let atk = `<div class="sh-compact"><div class="sh-subl">${esc(m.weapon.name)}${rt.route ? ' · ' + esc(ED.routeLabel(m.hero.cls, rt.route)) + ' route' : ''}</div></div>`;
     atk += weaponCard(m, color);
     for (const k of m.skills) atk += skillCard(m, k, color, stratum);
     atk += dashCard(m, color) + procsCard(m);
@@ -298,17 +274,18 @@
   }
 
   // ---------------- Map tab ----------------
+  // Stratum card (map row, the rooms behind the exit doors), dark-room rules (with the dark rooms still reachable), party.
   function renderMapSide(m) {
-    const K = m.dark, A = m.aff, biome = ED.biomeFor(m.ctx.stratum);
-    let h = `<div class="sh-stat sh-f" data-k="m:strat"><div class="sh-sl"><span class="sh-l">${U.roman(m.ctx.stratum)} ${esc(biome.name)}</span></div><div class="sh-aff2">${affChips(A.now)}</div>`;
-    const cls = A.now.mine.filter(x => x.skillMul !== null && x.skillMul !== x.mul);
-    if (cls.length) h += `<div class="sh-sub">Your class skills take half the affinity: ${cls.map(x => `${esc(x.name)} ${X(x.skillMul)}`).join(', ')}.</div>`;
-    if (A.next) h += `<div class="sh-sub">Next, ${esc(A.next.short)}:</div><div class="sh-aff2">${affChips(A.next)}</div>`;
+    const K = m.dark, biome = ED.biomeFor(m.ctx.stratum), v = ED.Game.s.view, fl = v.floor, cur = fl && fl.rooms[v.roomId];
+    const rows = fl ? fl.rows | 0 : 0, row = cur ? cur.row | 0 : 0, where = !cur ? '' : cur.type === 'boss' ? 'Boss room' : cur.type === 'start' ? 'Start' : `Room ${row} of ${rows}`;
+    let h = `<div class="sh-stat sh-f" data-k="m:strat"><div class="sh-sl"><span class="sh-l">${U.roman(m.ctx.stratum)} ${esc(biome.name)}</span><span class="sh-v">${live('row', where)}</span></div><div class="sh-sub">${esc(biome.blurb || '')}</div>`;
+    const exits = cur && cur.exits ? cur.exits : [];
+    if (exits.length) h += `<div class="sh-sub">${v.locked ? 'Doors open when the room is clear. ' : ''}Doors, left to right:</div>` + exits.map(id => `<div class="sh-cond">${esc(ED.Render.roomName(fl.rooms[id]))}</div>`).join('');
     h += '</div>';
-    h += `<div class="sh-stat sh-f" data-k="m:dark"><div class="sh-sl"><span class="sh-l">Dark rooms</span><span class="sh-v">${live('dark', `${K.left} left`)}</span></div>`
-      + `<div class="sh-sub">${K.left} of ${K.total} unvisited${K.here ? ' · you are in one' : ''}. They are risky branches of the route, marked with a moon on doors and the map.</div>`
-      + `<div class="sh-cond">Foes hit ${X(K.dmg)} · the last wave brings one more elite · the reward goes up one step · gold and experience dropped there ${X(K.loot)}</div>`
-      + `<div class="sh-cond">Rooms explored ${live('rooms', `${K.rooms.seen} / ${K.rooms.total}`)}</div></div>`;
+    const ahead = fl && cur ? [...reachFrom(fl, cur.id)].filter(id => id !== cur.id && fl.rooms[id].dark).length : 0;
+    h += `<div class="sh-stat sh-f" data-k="m:dark"><div class="sh-sl"><span class="sh-l">Dark rooms</span><span class="sh-v">${live('dark', `${ahead} ahead`)}</span></div>`
+      + `<div class="sh-sub">Marked violet on the map and doors${K.here ? ' · you are in one' : ''}.</div>`
+      + `<div class="sh-cond">Foes hit ${X(K.dmg)} · the last wave brings one more elite · the reward goes up one step · gold and experience dropped there ${X(K.loot)}</div></div>`;
     h += `<div class="sh-stat sh-f" data-k="m:party"><div class="sh-sl"><span class="sh-l">Party</span></div>${m.partyRows}</div>`;
     return h;
   }
@@ -319,7 +296,7 @@
     m.partyRows = ctx.heroes.map(q => {
       const f = U.clamp(q.hp / Math.max(1, q.maxHp), 0, 1);
       return `<div class="sh-party${q.pid === p.pid ? ' me' : ''}${q.dead ? ' dead' : ''}" data-pid="${esc(q.pid)}"><span class="sh-pnm" style="color:${ED.PLAYER_COLORS[q.slot] || '#fff'}">${esc(q.name)} <span class="mut">${esc(ED.CLASSES[q.cls].name)}</span></span>`
-        + `<b>${q.dead ? 'fallen' : q.downed ? 'down' : q.hp + ' / ' + q.maxHp}</b><span class="sh-meter hp${f < 0.3 ? ' low' : ''}" style="--f:${q.dead ? 0 : f.toFixed(3)}"><i></i></span></div>`;
+        + `<b>${q.dead ? 'dead' : q.downed ? 'down' : q.hp + ' / ' + q.maxHp}</b><span class="sh-meter hp${f < 0.3 ? ' low' : ''}" style="--f:${q.dead ? 0 : f.toFixed(3)}"><i></i></span></div>`;
     }).join('');
     return m;
   }
@@ -452,71 +429,75 @@
   }
 
   // ---------------- map canvas ----------------
-  // The whole floor at whole UI art px (PixUI.k device px each): a cell pitch of whole art px plus a label band under each row, rooms as outlined squares with a 1 art px bevel,
-  // corridors 2 art px wide, room icons at whole multiples of 16 device px (ED.Icons draws them crisp at their own size), labels through ED.HUD.pixText.
-  // Route bits (ED.Icons.route) split rooms into here, walked, reachable and closed. Redrawn when the box, the room, the room-state hash or the boon colour change.
-  const MAP_C = { here: '#e6c27a', cleared: '#5a4a3c', fight: '#8a3a2a', known: '#4a3c30', closed: '#15100d', walk: '#e6c27a', corr: '#6f5338', corrOff: '#2e2620', threat: '#ff5a3a' };
+  // The stratum map as a vertical node graph (start at the bottom, the boss at the top, LANES columns), in whole UI art px (PixUI.k device px each): paths as 2 art px stepped lines
+  // (visited brass, the current room's exits ember, the rest dim), rooms as outlined squares with a 1 art px bevel and their icon at whole multiples of 16 device px.
+  // Rooms off every path from the current room dim. Redrawn when the box, the room, the lock or the room-state hash change.
+  const MAP_C = { here: '#e6c27a', visited: '#5a4a3c', next: '#ff8a3d', ahead: '#2c231c', gone: '#17110d', dark: '#a070ff', elite: '#ff7a3a', threat: '#ff5a3a' };
   function mapLegend() {
     const el = $('sh-legend'); if (!el || el.firstChild) return;
-    const sq = (c, t) => `<span><i style="--c:${c}"></i>${t}</span>`, ic = (g, t) => `<span><img class="sh-lgi" src="${ED.Icons.url(g[0], g[1])}" alt="">${t}</span>`;
-    el.innerHTML = sq(MAP_C.here, 'you are here') + sq(MAP_C.cleared, 'walked, cleared') + sq(MAP_C.fight, 'walked, not cleared') + sq(MAP_C.known, 'reachable') + sq(MAP_C.closed, 'closed off')
-      + ic(ED.Icons.DARK, 'dark room: harder, richer') + sq(MAP_C.threat, 'threat') + sq(MAP_C.walk, 'your path');
+    el.innerHTML = [['here', 'you are here'], ['visited', 'visited'], ['next', 'next doors'], ['ahead', 'ahead'], ['gone', 'out of reach'], ['dark', 'dark room'], ['elite', 'elite or champion'], ['threat', 'threat']].map(([k, t]) => `<span><i style="--c:${MAP_C[k]}"></i>${t}</span>`).join('');
+  }
+  // Room ids reachable from room id through exits (id included).
+  function reachFrom(fl, id) {
+    const seen = new Set([id]), q = [id];
+    while (q.length) for (const n of fl.rooms[q.pop()].exits || []) if (!seen.has(n)) { seen.add(n); q.push(n); }
+    return seen;
   }
   let lblCtx = null;
   // Advance of s in font px (Pixel Operator 700 at 16 px = 1 px per font px).
   const lblW = (s) => { if (!lblCtx) lblCtx = document.createElement('canvas').getContext('2d'); lblCtx.font = '700 16px "Pixel Operator", "Segoe UI", system-ui, sans-serif'; return Math.ceil(lblCtx.measureText(s).width); };
   function mapDraw(force) {
     const v = ED.Game.s.view, fl = v.floor, box = $('sh-mapbox'), cv = $('map-canvas');
-    if (!fl) return;
+    if (!fl || !fl.rows) return;
     const dpr = window.devicePixelRatio || 1, W = Math.floor(box.clientWidth * dpr), H = Math.floor(box.clientHeight * dpr);
     if (W < 16 || H < 16) return; // a hidden tab measures 0 and draws nothing
-    let rs = ''; for (const id in v.roomState) { const q = v.roomState[id]; rs += (q.visited ? 1 : 0) + (q.known ? 2 : 0) + (q.cleared ? 4 : 0); }
-    const k = PX ? PX.k : Math.max(1, Math.round(2 * dpr)), key = [W, H, k, v.roomId, rs, v.floorSeed, ED.Render.mainPath].join('|');
+    let rs = ''; for (const id in v.roomState) { const q = v.roomState[id]; rs += (q.visited ? 1 : 0) + (q.cleared ? 4 : 0); }
+    const k = PX ? PX.k : Math.max(1, Math.round(2 * dpr)), key = [W, H, k, v.roomId, v.locked ? 1 : 0, rs, v.floorSeed].join('|');
     if (!force && key === SH.mapKey) return;
     SH.mapKey = key;
     cv.style.width = (W / dpr) + 'px'; cv.style.height = (H / dpr) + 'px';
     if (cv.width !== W) cv.width = W;
     if (cv.height !== H) cv.height = H;
-    const c = cv.getContext('2d'), st = v.roomState || {}, rt = ED.Icons.route(fl, v.roomId, st);
+    const c = cv.getContext('2d'), st = v.roomState || {}, R = fl.rows, lanes = ED.Dungeon.LANES;
     c.clearRect(0, 0, W, H); c.imageSmoothingEnabled = false;
-    let x0 = 99, x1 = -99, y0 = 99, y1 = -99;
-    for (const r of fl.rooms) { x0 = Math.min(x0, r.gx); x1 = Math.max(x1, r.gx); y0 = Math.min(y0, r.gy); y1 = Math.max(y1, r.gy); }
-    const tn = Math.max(1, Math.round(k / 4)), lb = Math.ceil(13 * tn / k); // label text: tn device px per font px (16n device px type); lb: label band in art px
-    const cols = x1 - x0 + 1, rows = y1 - y0 + 1, pitch = Math.max(8, Math.min(Math.floor(W / k / cols), Math.floor(H / k / rows) - lb, 44)); // art px per cell
-    const gap = Math.max(3, Math.round(pitch * 0.2)), side = pitch - gap, P = pitch * k, PY = (pitch + lb) * k, S = side * k;
-    const ox = Math.floor((W - cols * P) / 2 + gap * k / 2), oy = Math.floor((H - rows * PY) / 2 + gap * k / 2);
-    const at = (r) => [ox + (r.gx - x0) * P, oy + (r.gy - y0) * PY];
+    const px = Math.max(8, Math.min(Math.floor(W / k / lanes), 40)), py = Math.max(8, Math.min(Math.floor(H / k / (R + 2)), 40)); // art px per lane and per row
+    const side = Math.max(6, Math.min(px, py) - Math.max(3, Math.round(Math.min(px, py) * 0.25))), S = side * k;
+    const ox = Math.floor((W - lanes * px * k) / 2 / k) * k, oy = Math.floor((H - (R + 2) * py * k) / 2 / k) * k; // whole art px
+    const at = (r) => [ox + Math.floor((r.lane + 0.5) * px - side / 2) * k, oy + Math.floor((R + 1 - r.row + 0.5) * py - side / 2) * k]; // top-left of a room's square
     const rect = (col, x, y, w, h) => { c.fillStyle = col; c.fillRect(x, y, w, h); };
-    const mid = Math.floor(side / 2) * k, walk = (id) => rt[id] & 6, reach = (id) => rt[id] & 5;
-    for (const r of fl.rooms) { // corridors: a 2 art px line in a 1 art px outline; gold along the walked path, brass while reachable, dark when closed
-      for (const d of ['e', 's']) {
-        const n = r.doors[d]; if (!(n >= 0)) continue;
-        const [ax, ay] = at(r), [bx, by] = at(fl.rooms[n]), col = walk(r.id) && walk(n) ? MAP_C.walk : reach(r.id) && reach(n) ? MAP_C.corr : MAP_C.corrOff;
-        if (d === 'e') { rect('#222222', ax + S, ay + mid - 2 * k, bx - ax - S, 4 * k); rect(col, ax + S, ay + mid - k, bx - ax - S, 2 * k); }
-        else { rect('#222222', ax + mid - 2 * k, ay + S, 4 * k, by - ay - S); rect(col, ax + mid - k, ay + S, 2 * k, by - ay - S); }
+    const cur = fl.rooms[v.roomId], reach = cur ? reachFrom(fl, cur.id) : new Set(), half = Math.floor(side / 2) * k;
+    // a path: a 2 art px stepped line between the centres of two squares, in art px steps (Bresenham), drawn under the rooms
+    const line = (a, b, col) => {
+      const [ax, ay] = at(a), [bx, by] = at(b), x0 = (ax + half) / k | 0, y0 = (ay + half) / k | 0, x1 = (bx + half) / k | 0, y1 = (by + half) / k | 0;
+      let x = x0, y = y0; const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0), sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1; let e = dx + dy;
+      c.fillStyle = col;
+      for (let g = 0; g < 4096; g++) {
+        c.fillRect((x - 1) * k, (y - 1) * k, 2 * k, 2 * k);
+        if (x === x1 && y === y1) break;
+        const e2 = 2 * e; if (e2 >= dy) { e += dy; x += sx; } if (e2 <= dx) { e += dx; y += sy; }
       }
+    };
+    const walked = (a, b) => st[a.id] && st[a.id].visited && st[b.id] && st[b.id].visited;
+    for (const pass of [0, 1, 2]) for (const r of fl.rooms) for (const n of r.exits || []) { // dim, then walked, then the current room's exits on top
+      const b = fl.rooms[n], kind = walked(r, b) ? 1 : r === cur ? 2 : 0;
+      if (kind !== pass) continue;
+      line(r, b, kind === 1 ? '#c9a063' : kind === 2 ? (v.locked ? '#8a5a32' : MAP_C.next) : reach.has(r.id) ? '#4a3626' : '#2a1f17');
     }
-    const icoPx = (n) => Math.floor(n / 16) * 16; // whole 16 device px
+    const ico = Math.floor((S - 2 * k) / 16) * 16; // icons at whole 16 device px
+    const next = new Set(cur && cur.exits ? cur.exits : []);
     for (const r of fl.rooms) {
-      const q = st[r.id] || {}, b = rt[r.id], closed = !b, [x, y] = at(r), cur = b & 4;
-      const fill = cur ? MAP_C.here : b & 2 ? (q.cleared ? MAP_C.cleared : MAP_C.fight) : closed ? MAP_C.closed : MAP_C.known;
-      rect(cur ? '#fff3c4' : '#222222', x, y, S, S);
+      const q = st[r.id] || {}, [x, y] = at(r), here = r === cur, gone = !q.visited && !reach.has(r.id);
+      const fill = here ? MAP_C.here : q.visited ? MAP_C.visited : gone ? MAP_C.gone : MAP_C.ahead;
+      rect(here ? '#fff3c4' : next.has(r.id) && !v.locked ? MAP_C.next : '#222222', x, y, S, S);
       rect(fill, x + k, y + k, S - 2 * k, S - 2 * k);
       rect(U.shade(fill, 0.22), x + k, y + k, S - 2 * k, k);
       rect(U.shade(fill, -0.35), x + k, y + S - 2 * k, S - 2 * k, k);
-      const ri = ED.Render.roomIcon(r);
-      if (!ri || (q.cleared && (r.type === 'combat' || r.type === 'elite'))) continue; // utility rooms keep their glyph and label; a cleared fight loses both
-      const inner = S - 4 * k, big = icoPx(inner), small = icoPx(inner / 2) || Math.min(16, big);
-      const draw = (name, color, z, cx, cy) => { if (z >= 16) c.drawImage(ED.Icons.canvas(name, color, z), cx, cy, z, z); };
-      c.globalAlpha = closed ? 0.4 : 1;
-      draw(ri.icon, ri.color, big, x + Math.floor((S - big) / 2), y + Math.floor((S - big) / 2));
-      if (ri.badge) draw(ri.badge[0], ri.badge[1], small, x + S - small - k, y + S - small - k); // elite / boss reward, bottom-right
-      if (r.dark && !q.visited) draw(ED.Icons.DARK[0], ED.Icons.DARK[1], small, x + k, y + S - small - k); // dark-room moon, bottom-left
+      const ri = r.type === 'start' ? { icon: 'campfire', color: '#c9a063' } : ED.Render.roomIcon ? ED.Render.roomIcon(r) : null; // glyphs of ED.Icons.room
+      if (ri && ico >= 16) { c.globalAlpha = gone ? 0.35 : 1; c.drawImage(ED.Icons.canvas(ri.icon, ri.color, ico), x + Math.floor((S - ico) / 2), y + Math.floor((S - ico) / 2), ico, ico); c.globalAlpha = 1; }
       const th = U.clamp(r.threat | 0, 0, 3);
-      for (let i = 0; i < th && !q.cleared; i++) { rect('#222222', x + (2 + 5 * i) * k, y + 2 * k, 4 * k, 4 * k); rect(MAP_C.threat, x + (3 + 5 * i) * k, y + 3 * k, 2 * k, 2 * k); } // threat pips, top-left
-      let lab = ri.label; if (lblW(lab) * tn > P - k && lab.indexOf(' ') > 0) lab = lab.slice(0, lab.indexOf(' ')); // "Elite Relic" -> "Elite" when the pitch is too narrow
-      ED.HUD.pixText(c, lab, x + Math.floor(S / 2), y + S + Math.round((PY - S) / 2), tn, closed ? U.mix(ri.color, '#3a302a', 0.55) : ri.color, 'b', 'center', 700, 1);
-      c.globalAlpha = 1;
+      for (let i = 0; i < th && !q.cleared && S >= 16 * k; i++) { rect('#222222', x + (2 + 5 * i) * k, y + 2 * k, 4 * k, 4 * k); rect(MAP_C.threat, x + (3 + 5 * i) * k, y + 3 * k, 2 * k, 2 * k); } // threat pips, top-left
+      const mark = r.dark ? MAP_C.dark : r.type === 'elite' || r.type === 'champion' ? MAP_C.elite : null; // a 1 art px bar under the square: dark (violet), elite or champion (red)
+      if (mark) { rect('#222222', x, y + S, S, 2 * k); rect(gone ? U.shade(mark, -0.5) : mark, x + k, y + S, S - 2 * k, k); }
     }
   }
 

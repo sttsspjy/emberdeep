@@ -26,6 +26,7 @@ function stage(boons, wi, extra) {
 }
 const foe = (w, x, y, o) => { const e = w.spawnEnemy('skeleton', x, y, o); e.spd = 0; e.cd = 9999; e.maxHp = e.hp = 5000; return e; };
 const run = (w, secs, f) => { for (let i = 0; i < Math.round(secs * 60); i++) { w.update(1 / 60); if (f) f(); } };
+const burn6 = (w, e, p) => { for (let i = 0; i < 6; i++) w.burnStack(e, p, 0); }; // six Burn stacks of p on e
 const tap = (w) => { const all = []; return { all, step() { for (const ev of w.fx) all.push(ev); w.fx.length = 0; } }; };
 const hit = (w, p, e, base, src) => { const hp = e.hp; w.hitEnemy(e, base, Object.assign({ p }, src)); return hp - e.hp; };
 const RAD = (a) => a * Math.PI / 180;
@@ -102,7 +103,7 @@ const RAD = (a) => a * Math.PI / 180;
   for (let i = 0; i < 8; i++) { w.projs.length = 0; w.playerAttack(p, 0.3); const sh = w.projs.filter(q => q.team === 0); counts.push(sh.length); if (i === 3) for (const q of sh) ang.push(Math.atan2(q.vy, q.vx)); }
   ok(counts.join() === '1,1,1,3,1,1,1,3', `Flurry fires 2 extra arrows on every 4th shot (got ${counts.join()})`);
   ang.sort((a, b) => a - b); near(ang[0], 0.18, 1e-6, 'Flurry: -0.12 rad'); near(ang[1], 0.3, 1e-6, 'Flurry: the aimed arrow'); near(ang[2], 0.42, 1e-6, 'Flurry: +0.12 rad');
-  w.projs.length = 0; p.atkCount = 3; w.playerAttack(p, 0); const sh = w.projs.filter(q => q.team === 0); ok(sh.every(q => Math.abs(q.dmg - p.stats.weapon.dmg) < 1e-9 && q.wpn), 'Flurry arrows are weapon arrows'); near(p.stats.flurryMul, 0.3, 1e-9, 'Flurry arrows deal 30% of a shot'); ok(sh.filter(q => Math.abs((q.mul || 1) - 0.3) < 1e-9).length === 2 && sh.filter(q => !q.mul).length === 1, 'the two extra arrows carry the 25% multiplier, the aimed arrow none');
+  w.projs.length = 0; p.atkCount = 3; w.playerAttack(p, 0); const sh = w.projs.filter(q => q.team === 0); ok(sh.every(q => Math.abs(q.dmg - p.stats.weapon.dmg) < 1e-9 && q.wpn), 'Flurry arrows are weapon arrows'); near(p.stats.flurryMul, 0.45, 1e-9, 'Flurry arrows deal 45% of a shot'); ok(sh.filter(q => Math.abs((q.mul || 1) - 0.45) < 1e-9).length === 2 && sh.filter(q => !q.mul).length === 1, 'the two extra arrows carry the 45% multiplier, the aimed arrow none');
   const tb = stage({ r_atk_s: 2 }, 2); tb.p.atkCount = 3; tb.w.projs.length = 0; tb.w.playerAttack(tb.p, 0); ok(tb.w.projs.filter(q => q.team === 0).length === 4, 'Twin Flatbows: the pair plus two Flurry arrows');
   const noF = stage({ r_atk_s: 1 }); noF.p.atkCount = 3; noF.w.projs.length = 0; noF.w.playerAttack(noF.p, 0); ok(noF.w.projs.filter(q => q.team === 0).length === 1, 'no Flurry at rank 1');
 }
@@ -110,9 +111,8 @@ const RAD = (a) => a * Math.PI / 180;
   const shots = (boons, setup, after) => { const s = stage(boons); setup(s.p.stats); s.p.atkCount = 3; s.w.projs.length = 0; s.w.playerAttack(s.p, 0); if (after) after(s.w); return s.w.projs.filter(q => q.team === 0); };
   const rider = (q) => JSON.stringify([!!q.explode, !!q.spec, q.homing, q.burn, q.pierce, q.dmg, q.knock, q.r, q.speed]);
   for (const evo of ['fire', 'general']) {
-    let zs = 0; const sh = shots({ r_atk_s: 2 }, (st) => { st.evo = evo; }, (w) => { zs = w.zones.filter(z => z.kind === 'cinder').length; });
+    const sh = shots({ r_atk_s: 2 }, (st) => { st.evo = evo; });
     ok(sh.length === 3 && sh.every(q => rider(q) === rider(sh[0])), `Flurry arrows carry the ${evo} evolution rider of the aimed arrow`);
-    ok(evo !== 'fire' || zs === 3, `Cinder Arms: every Flurry arrow scorches its line (${zs} cinder lines)`);
     ok(evo !== 'general' || sh.every(q => q.spec), 'Spectral Arms: every Flurry arrow can release a spectral copy');
   }
   for (const pn of [1, 2]) {
@@ -237,46 +237,46 @@ const RAD = (a) => a * Math.PI / 180;
   // Bleed and Burn tick harder
   const bl = (cards) => { const s = stage(cards); const f = foe(s.w, 200, 212); f.bleedPool = 100; f.bleedOwner = s.p; f.bleedTick = 0.1; const h0 = f.hp; run(s.w, 0.2); return h0 - f.hp; };
   near(bl({ r_el_a: 1 }) / bl({}), 1.2, 1e-6, 'Bleed ticks 20% harder'); near(stage({ r_el_a: 2 }).p.stats.bleedMul, 0.3, 1e-9, 'rank 2: Bleed +30%'); near(stage({ r_el_a: 2 }).p.stats.burnMul, 0.3, 1e-9, 'rank 2: Burn +30%');
-  const bn = (cards) => { const s = stage(cards); const f = foe(s.w, 200, 212); f.burnPool = 100; f.burnOwner = s.p; f.burnTick = 0.1; f.burn = 1; const h0 = f.hp; run(s.w, 0.2); return h0 - f.hp; };
+  const bn = (cards) => { const s = stage(cards); const f = foe(s.w, 200, 212); s.w.burnStack(f, s.p, 0); f.burnTick = 0.1; const h0 = f.hp; run(s.w, 0.2); return h0 - f.hp; };
   near(bn({ r_el_a: 1 }) / bn({}), 1.2, 1e-6, 'Burn ticks 20% harder');
 }
 { // Gangrene (rank 2)
-  const { w, p } = stage({ r_el_a: 2 }); near(p.stats.festerHit, 0.7, 1e-9, 'rank 2: Gangrene 70%'); near(stage({ r_el_a: 3 }).p.stats.festerHit, 0.7, 1e-9, 'rank 3 keeps Gangrene');
-  const mk = (n) => { const e = foe(w, 200, 212); if (n >= 1) e.burnPool = 600; if (n >= 2) e.bleedPool = 400; if (n >= 3) e.chill = 30; return e; };
+  const { w, p } = stage({ r_el_a: 2 }); near(p.stats.festerHit, 0.9, 1e-9, 'rank 2: Gangrene 90%'); near(stage({ r_el_a: 3 }).p.stats.festerHit, 0.9, 1e-9, 'rank 3 keeps Gangrene');
+  const mk = (n) => { const e = foe(w, 200, 212); if (n >= 1) w.burnStack(e, p, 0); if (n >= 2) e.bleedPool = 400; if (n >= 3) e.chill = 30; return e; };
   const base = hit(w, p, mk(0), 100, { kind: 'skill', part: 'volley.arrow', noGuard: true });
-  near(hit(w, p, mk(3), 100, { kind: 'skill', part: 'volley.arrow' }) / base, 1.7, 1e-6, 'Volley +70% on a foe with 3 ailments'); near(hit(w, p, mk(3), 100, { kind: 'skill', part: 'rain.tick' }) / base, 1.7, 1e-6, 'Rain +70% on a foe with 3 ailments');
-  near(hit(w, p, mk(3), 100, { kind: 'skill', part: 'rain.sky' }) / base, 1.7, 1e-6, 'Skyfall +70% too'); near(hit(w, p, mk(2), 100, { kind: 'skill', part: 'volley.arrow' }) / base, 1, 1e-6, 'no bonus with 2 ailments');
+  near(hit(w, p, mk(3), 100, { kind: 'skill', part: 'volley.arrow' }) / base, 1.9, 1e-6, 'Volley +90% on a foe with 3 ailments'); near(hit(w, p, mk(3), 100, { kind: 'skill', part: 'rain.tick' }) / base, 1.9, 1e-6, 'Rain +90% on a foe with 3 ailments');
+  near(hit(w, p, mk(3), 100, { kind: 'skill', part: 'rain.sky' }) / base, 1.9, 1e-6, 'Skyfall +90% too'); near(hit(w, p, mk(2), 100, { kind: 'skill', part: 'volley.arrow' }) / base, 1, 1e-6, 'no bonus with 2 ailments');
   near(hit(w, p, mk(3), 100, { kind: 'weapon', wpn: true }) / base, 1, 1e-6, 'weapon shots get no Gangrene'); ok(w.ailments(mk(3)) === 3, 'three ailments counted');
-  const lo = stage({ r_el_a: 1 }); const e = foe(lo.w, 200, 212); e.burnPool = 600; e.bleedPool = 400; e.chill = 30; near(hit(lo.w, lo.p, e, 100, { kind: 'skill', part: 'volley.arrow' }), 100, 1e-6, 'no Gangrene at rank 1');
+  const lo = stage({ r_el_a: 1 }); const e = foe(lo.w, 200, 212); lo.w.burnStack(e, lo.p, 0); e.bleedPool = 400; e.chill = 30; near(hit(lo.w, lo.p, e, 100, { kind: 'skill', part: 'volley.arrow' }), 100, 1e-6, 'no Gangrene at rank 1');
 }
 
 // ---- Contagion (r_el_b): a foe with 2+ ailments that dies to the Ranger passes 50% of each status to the 2 nearest foes within 100 (+20 per rank); Outbreak (rank 2): 3 foes at 120%; Plaguebearer (rank 3) ----
 {
   const spread = (cards, setup) => {
     const { w, p } = stage(cards); const a = foe(w, 200, 212), ring = [[90, 0], [0, 70], [-95, 0], [60, 60], [130, 0]].map(([dx, dy]) => foe(w, 200 + dx, 212 + dy)); const evs = tap(w);
-    a.burnPool = 600; a.burnOwner = p; a.bleedPool = 400; a.bleedOwner = p; a.chill = 40; a.chillOwner = p; if (setup) setup(a);
+    burn6(w, a, p); a.bleedPool = 400; a.bleedOwner = p; a.chill = 40; a.chillOwner = p; if (setup) setup(a);
     hit(w, p, a, 1e9, { kind: 'weapon' }); run(w, 0.4, evs.step);
-    return { got: ring.map(r => r.burnPool), bl: ring.map(r => r.bleedPool), chill: ring.map(r => r.chill), evs: evs.all, ring, w };
+    return { got: ring.map(r => r.burnN | 0), bl: ring.map(r => r.bleedPool), chill: ring.map(r => r.chill), evs: evs.all, ring, w };
   };
   let s = spread({ r_el_b: 1 }); // nearest are (0,70)=70, (60,60)=85, (90,0)=90, (-95,0)=95 within 100; 130 is out
   ok(s.got.filter(v => v > 0).length === 2, `two foes receive (got ${s.got.map(v => v.toFixed(0))})`); ok(s.got[1] > 0 && s.got[3] > 0 && s.got[0] === 0 && s.got[4] === 0, 'the two nearest foes within 100 receive');
-  near(s.got[1], 300, 1e-6, '50% of the Burn pool'); near(s.bl[1], 200, 1e-6, '50% of the Bleed pool'); ok(s.chill[1] > 0, 'and of the Chill gauge'); ok(s.evs.filter(v => v.t === 'chain' && v.k === 'c').length === 2, 'a chain thread per recipient');
+  near(s.got[1], 3, 0, '50% of the Burn stacks'); near(s.bl[1], 200, 1e-6, '50% of the Bleed pool'); ok(s.chill[1] > 0, 'and of the Chill gauge'); ok(s.evs.filter(v => v.t === 'chain' && v.k === 'c').length === 2, 'a chain thread per recipient');
   s = spread({ r_el_b: 1 }, a => { a.bleedPool = 0; a.chill = 0; }); ok(s.got.every(v => v === 0), 'one ailment: nothing spreads');
   s = spread({ r_el_b: 2 }); ok(s.got.filter(v => v > 0).length === 3 && s.got[1] > 0 && s.got[3] > 0 && s.got[0] > 0 && s.got[2] === 0 && s.got[4] === 0, 'rank 2 (reach 120): Outbreak passes to the three nearest, not the fourth (95)');
-  const far = stage({ r_el_b: 1 }); const a = foe(far.w, 200, 212), f = foe(far.w, 200 + 118, 212); a.burnPool = 600; a.burnOwner = far.p; a.bleedPool = 400; a.bleedOwner = far.p; hit(far.w, far.p, a, 1e9, { kind: 'weapon' }); run(far.w, 0.4); ok(f.burnPool === 0, 'a foe at 118 is out of reach at rank 1');
-  const r2 = stage({ r_el_b: 2 }); const a2 = foe(r2.w, 200, 212), f2 = foe(r2.w, 200 + 118, 212); a2.burnPool = 600; a2.burnOwner = r2.p; a2.bleedPool = 400; a2.bleedOwner = r2.p; hit(r2.w, r2.p, a2, 1e9, { kind: 'weapon' }); run(r2.w, 0.4); ok(f2.burnPool > 0, 'and in reach at rank 2 (120)');
-  s = spread({ r_el_b: 2 }); near(s.got[1], 600 * 1.2, 1e-6, 'Outbreak: 120% each'); near(s.bl[1], 400 * 1.2, 1e-6, 'of the Bleed too'); ok(s.evs.filter(v => v.t === 'chain' && v.k === 'c').length === 3, 'three threads'); near(stage({ r_el_b: 1 }).p.stats.outbreak, 0, 0, 'no Outbreak at rank 1');
+  const far = stage({ r_el_b: 1 }); const a = foe(far.w, 200, 212), f = foe(far.w, 200 + 118, 212); burn6(far.w, a, far.p); a.bleedPool = 400; a.bleedOwner = far.p; hit(far.w, far.p, a, 1e9, { kind: 'weapon' }); run(far.w, 0.4); ok(!(f.burnN > 0), 'a foe at 118 is out of reach at rank 1');
+  const r2 = stage({ r_el_b: 2 }); const a2 = foe(r2.w, 200, 212), f2 = foe(r2.w, 200 + 118, 212); burn6(r2.w, a2, r2.p); a2.bleedPool = 400; a2.bleedOwner = r2.p; hit(r2.w, r2.p, a2, 1e9, { kind: 'weapon' }); run(r2.w, 0.4); ok(f2.burnN > 0, 'and in reach at rank 2 (120)');
+  s = spread({ r_el_b: 2 }); near(s.got[1], 5, 0, 'Outbreak: 90% of the Burn stacks to each (6 x 0.9, rounded down)'); near(s.bl[1], 400 * 0.9, 1e-6, 'and 90% of the Bleed'); ok(s.evs.filter(v => v.t === 'chain' && v.k === 'c').length === 3, 'three threads'); near(stage({ r_el_b: 1 }).p.stats.outbreak, 0, 0, 'no Outbreak at rank 1');
   // someone else's kill, or a kill by a hero without the card, does not spread
-  const o = stage({ r_el_b: 1 }, 0, [{ pid: 'p1' }]); const b = foe(o.w, 200, 212), g = foe(o.w, 240, 212); b.burnPool = 600; b.bleedPool = 400; hit(o.w, o.w.players.get('p1'), b, 1e9, { kind: 'weapon' }); run(o.w, 0.4); ok(g.burnPool === 0, 'a kill by a hero without Contagion does not spread');
-  const dead = stage({ r_el_b: 1 }); const d1 = foe(dead.w, 200, 212), d2 = foe(dead.w, 230, 212); d2.hp = 0; d2.killed = true; d1.burnPool = 600; d1.bleedPool = 400; d1.burnOwner = d1.bleedOwner = dead.p; hit(dead.w, dead.p, d1, 1e9, { kind: 'weapon' }); run(dead.w, 0.3); ok(d2.burnPool === 0, 'dead foes receive nothing');
-  const cap = stage({ r_el_b: 1 }); const c1 = foe(cap.w, 200, 212), c2 = foe(cap.w, 230, 212); c2.maxHp = c2.hp = 200; c1.burnPool = 1e6; c1.burnOwner = cap.p; c1.bleedPool = 5000; c1.bleedOwner = cap.p; hit(cap.w, cap.p, c1, 1e9, { kind: 'weapon' }); run(cap.w, 0.25); ok(c2.burnPool <= 0.25 * 200 + 1e-6, 'a receiver takes at most 25% of its HP per pool');
+  const o = stage({ r_el_b: 1 }, 0, [{ pid: 'p1' }]); const b = foe(o.w, 200, 212), g = foe(o.w, 240, 212); burn6(o.w, b, o.p); b.bleedPool = 400; hit(o.w, o.w.players.get('p1'), b, 1e9, { kind: 'weapon' }); run(o.w, 0.4); ok(!(g.burnN > 0), 'a kill by a hero without Contagion does not spread');
+  const dead = stage({ r_el_b: 1 }); const d1 = foe(dead.w, 200, 212), d2 = foe(dead.w, 230, 212); d2.hp = 0; d2.killed = true; burn6(dead.w, d1, dead.p); d1.bleedPool = 400; d1.bleedOwner = dead.p; hit(dead.w, dead.p, d1, 1e9, { kind: 'weapon' }); run(dead.w, 0.3); ok(!(d2.burnN > 0), 'dead foes receive nothing');
+  const cap = stage({ r_el_b: 1 }); const c1 = foe(cap.w, 200, 212), c2 = foe(cap.w, 230, 212); c2.maxHp = c2.hp = 200; burn6(cap.w, c1, cap.p); c1.bleedPool = 5000; c1.bleedOwner = cap.p; hit(cap.w, cap.p, c1, 1e9, { kind: 'weapon' }); run(cap.w, 0.25); ok(c2.bleedPool <= 0.25 * 200 + 1e-6 && c2.burnN === 3, 'a receiver takes at most 25% of its HP of Bleed; Burn passes as stacks (3 of 6)');
 }
 
 // ---- skill forms (rank 2: the rider, rank 3: the transform) ----
 const spy = (w) => { const log = [], o = w.hitEnemy; w.hitEnemy = function (e, b, s) { const d = o.call(this, e, b, s); if (s && s.part) log.push({ part: s.part, e, d, t: this.time }); return d; }; return log; };
 const partHits = (log, part) => log.filter(h => h.part === part);
 const arrowsOf = (w, part) => w.projs.filter(q => q.team === 0 && q.part === part);
-{ // Death Mark (r_s1_a rank 3): three waves 0.12 s apart (2 and 3 at 60%), arrows steer toward marked foes, a dying marked foe (fodder too) bursts into 4 piercing arrows at 50%
+{ // Death Mark (r_s1_a rank 3): three waves 0.12 s apart (2 and 3 at 60%), arrows steer toward marked foes, a dying marked foe (never fodder) bursts into 4 piercing arrows at 50%
   const waves = (rank) => {
     const { w, p } = stage({ r_s1: 1, r_s1_a: rank }); const seen = new Set(), got = []; w.playerSkill(p, 0.2, {}, 0); const t0 = w.time;
     for (let i = 0; i < 40; i++) { for (const q of w.projs.filter(r => r.team === 0 && r.part && r.part.indexOf('volley.') === 0)) if (!seen.has(q.id)) { seen.add(q.id); got.push({ t: w.time - t0, dmg: q.dmg, x: q.x }); } w.update(1 / 60); }
@@ -298,11 +298,12 @@ const arrowsOf = (w, part) => w.projs.filter(q => q.team === 0 && q.part === par
   ok(heading(3, false, [330, 120]) < 1e-6 && heading(2, true, [330, 120]) < 1e-6, 'they ignore unmarked foes, and rank 2 does not steer');
   { // the burst
     const bw = (rank, marked) => { const { w, p } = stage({ r_s1: 1, r_s1_a: rank }); const f = foe(w, 250, 212); if (marked !== false) { f.mark = 5; f.markV = 0.12; f.markBy = 'p0'; } return { w, p, f }; };
-    const a = bw(3), N = ED.Stats.skillNums('volley', a.p.stats), evs = tap(a.w); a.f.fodder = true; hit(a.w, a.p, a.f, 1e9, { kind: 'weapon' }); const bursts = arrowsOf(a.w, 'volley.burst'); evs.step();
-    ok(bursts.length === 4, `a marked foe (fodder too) bursts into 4 arrows (${bursts.length})`);
+    const a = bw(3), N = ED.Stats.skillNums('volley', a.p.stats), evs = tap(a.w); hit(a.w, a.p, a.f, 1e9, { kind: 'weapon' }); const bursts = arrowsOf(a.w, 'volley.burst'); evs.step();
+    ok(bursts.length === 4, `a marked foe bursts into 4 arrows (${bursts.length})`);
     ok(bursts.every(q => Math.abs(q.dmg - N.p.arrow.dmg * 0.2) < 1e-9 && q.pierce === 3 && q.hk === 'skill'), 'each at 20% of a Volley arrow, piercing 3');
     const angs = bursts.map(q => Math.atan2(q.vy, q.vx)).sort((x, y) => x - y); near(angs[1] - angs[0], Math.PI / 2, 1e-6, 'a cross, 90 degrees apart'); ok(evs.all.some(v => v.t === 'dmburst'), 'a burst event for the viewer');
     const b = bw(3, false); hit(b.w, b.p, b.f, 1e9, { kind: 'weapon' }); ok(arrowsOf(b.w, 'volley.burst').length === 0, 'an unmarked foe bursts nothing');
+    const fd = bw(3); fd.f.fodder = true; hit(fd.w, fd.p, fd.f, 1e9, { kind: 'weapon' }); ok(arrowsOf(fd.w, 'volley.burst').length === 0, 'a marked fodder foe bursts nothing (fodder deaths fire no on-death effect)');
     const c = bw(2); hit(c.w, c.p, c.f, 1e9, { kind: 'weapon' }); ok(arrowsOf(c.w, 'volley.burst').length === 0, 'rank 2 has no burst');
     // burst arrows hit and do not mark
     const d = bw(3), other = foe(d.w, 350, 312); hit(d.w, d.p, d.f, 1e9, { kind: 'weapon' }); run(d.w, 0.9); ok(other.hp < 5000 && !(other.mark > 0), 'burst arrows hit a foe past the mark leap (r120) and do not mark it');
@@ -446,23 +447,23 @@ const wShots = (w) => w.projs.filter(q => q.team === 0 && q.wpn);
 // ---- Plaguebearer (r_el_b rank 3): a dying foe with 2+ ailments bursts (r90): 85% of its Bleed and Burn to every foe inside, its other statuses spread ----
 {
   const mk = (rank, cfg) => {
-    const { w, p } = stage({ r_el: 1, r_el_b: rank }), a = foe(w, 200, 212), n1 = foe(w, 240, 212), n2 = foe(w, 200, 285), outside = foe(w, 200, 312), evs = tap(w);
-    a.burnPool = 600; a.burnOwner = p; a.bleedPool = 400; a.bleedOwner = p; a.chill = 40; a.chillOwner = p; if (cfg) cfg(a);
-    return { w, p, a, n1, n2, outside, evs };
+    const { w, p } = stage({ r_el: 1, r_el_b: rank }), a = foe(w, 200, 212), n1 = foe(w, 240, 212), n2 = foe(w, 200, 285), outside = foe(w, 200, 112), evs = tap(w);
+    burn6(w, a, p); a.bleedPool = 400; a.bleedOwner = p; a.chill = 40; a.chillOwner = p; if (cfg) cfg(a);
+    return { w, p, a, n1, n2, outside, evs, due: () => 0.85 * (a.bleedPool * (1 + p.stats.bleedMul) + a.burnPool * (1 + p.stats.burnMul)) };
   };
   let s = mk(3);
   near(s.p.stats.plagueBurst, 0.85, 1e-9, 'rank 3: bursts 85%'); ok(!stage({ r_el: 1, r_el_b: 2 }).p.stats.plague, 'no Plaguebearer at rank 2');
-  hit(s.w, s.p, s.a, 1e9, { kind: 'weapon' }); run(s.w, 0.03, s.evs.step); ok(s.n1.hp === 5000 && !s.evs.all.some(v => v.k === 'g'), 'the burst waits 0.05 s');
-  run(s.w, 0.1, s.evs.step); near(5000 - s.n1.hp, 0.85 * 1000, 1e-6, 'a foe inside takes 85% of the Bleed and Burn (1000)'); near(5000 - s.n2.hp, 0.85 * 1000, 1e-6, 'every foe inside takes it (a second one 73 away too)'); ok(s.outside.hp === 5000, 'a foe 100 away does not');
-  ok(s.evs.all.filter(v => v.t === 'chain' && v.k === 'g').length === 1, 'one burst event'); near(s.a.bleedPool + s.a.burnPool, 0, 1e-9, 'the corpse gives up both pools');
-  ok(s.n1.chill > 0 && s.n2.chill > 0, 'the other statuses (Chill) spread to every foe inside'); ok(s.n1.burnPool === 0 && s.n1.bleedPool === 0, 'Burn and Bleed do not spread as pools'); ok(s.outside.chill === 0, 'nor to a foe outside');
+  const due = s.due(); hit(s.w, s.p, s.a, 1e9, { kind: 'weapon' }); run(s.w, 0.03, s.evs.step); ok(s.n1.hp === 5000 && !s.evs.all.some(v => v.k === 'g'), 'the burst waits 0.05 s');
+  run(s.w, 0.1, s.evs.step); near(5000 - s.n1.hp, due, 1e-6, `a foe inside takes 85% of the Bleed and of the Burn still due (${due.toFixed(0)})`); near(5000 - s.n2.hp, due, 1e-6, 'every foe inside takes it (a second one 73 away too)'); ok(s.outside.hp === 5000, 'a foe 100 away does not');
+  ok(s.evs.all.filter(v => v.t === 'chain' && v.k === 'g').length === 1, 'one burst event'); near(s.a.bleedPool + s.a.burnPool + (s.a.burnN | 0), 0, 1e-9, 'the corpse gives up its Bleed and its Burn stacks');
+  ok(s.n1.chill > 0 && s.n2.chill > 0, 'the other statuses (Chill) spread to every foe inside'); ok(!(s.n1.burnN > 0) && s.n1.bleedPool === 0, 'Burn and Bleed do not spread'); ok(s.outside.chill === 0, 'nor to a foe outside');
   s = mk(3, a => { a.bleedPool = 0; a.chill = 0; }); hit(s.w, s.p, s.a, 1e9, { kind: 'weapon' }); run(s.w, 0.3); ok(s.n1.hp === 5000, 'a foe with one ailment bursts nothing');
-  s = mk(3); s.a.fodder = true; hit(s.w, s.p, s.a, 1e9, { kind: 'weapon' }); run(s.w, 0.3); near(5000 - s.n1.hp, 850, 1e-6, 'a fodder foe bursts too');
-  s = mk(2); hit(s.w, s.p, s.a, 1e9, { kind: 'weapon' }); run(s.w, 0.3); ok(s.n1.hp === 5000 && s.n1.burnPool > 0, 'at rank 2 the pools spread as pools (Outbreak) and nothing bursts');
-  const o2 = stage({ r_el: 1, r_el_b: 3 }, 0, [{ pid: 'p1' }]), b = foe(o2.w, 200, 212), g = foe(o2.w, 240, 212); b.burnPool = 600; b.bleedPool = 400; hit(o2.w, o2.w.players.get('p1'), b, 1e9, { kind: 'weapon' }); run(o2.w, 0.3); ok(g.hp === 5000, 'a kill by a hero without the card bursts nothing');
-  const { w, p } = stage({ r_el: 1, r_el_b: 3 }), a = foe(w, 200, 212), c1 = foe(w, 270, 212), c2 = foe(w, 340, 212); a.burnPool = 600; a.burnOwner = p; a.bleedPool = 400; a.bleedOwner = p; // a chain of deaths
-  c1.maxHp = c1.hp = 500; c1.burnTick = c1.bleedTick = 5; c1.burnPool = 300; c1.burnOwner = p; c1.bleedPool = 200; c1.bleedOwner = p; hit(w, p, a, 1e9, { kind: 'weapon' }); run(w, 0.6);
-  ok(c1.hp <= 0, 'the burst kills a weak neighbour'); near(5000 - c2.hp, 0.85 * 500, 1e-6, 'whose own burst, at its own pools, reaches the next foe');
+  s = mk(3); s.a.fodder = true; hit(s.w, s.p, s.a, 1e9, { kind: 'weapon' }); run(s.w, 0.3); ok(s.n1.hp === 5000, 'a fodder foe bursts nothing (fodder deaths fire no on-death effect)');
+  s = mk(2); hit(s.w, s.p, s.a, 1e9, { kind: 'weapon' }); run(s.w, 0.3); ok(s.n1.hp === 5000 && s.n1.burnN > 0, 'at rank 2 the statuses spread (Outbreak) and nothing bursts');
+  const o2 = stage({ r_el: 1, r_el_b: 3 }, 0, [{ pid: 'p1' }]), b = foe(o2.w, 200, 212), g = foe(o2.w, 240, 212); burn6(o2.w, b, o2.p); b.bleedPool = 400; hit(o2.w, o2.w.players.get('p1'), b, 1e9, { kind: 'weapon' }); run(o2.w, 0.3); ok(g.hp === 5000, 'a kill by a hero without the card bursts nothing');
+  const { w, p } = stage({ r_el: 1, r_el_b: 3 }), a = foe(w, 200, 212), c1 = foe(w, 270, 212), c2 = foe(w, 340, 212); burn6(w, a, p); a.bleedPool = 400; a.bleedOwner = p; // a chain of deaths
+  c1.maxHp = c1.hp = 300; c1.bleedTick = 5; c1.bleedPool = 200; c1.bleedOwner = p; c1.chill = 40; hit(w, p, a, 1e9, { kind: 'weapon' }); run(w, 0.6);
+  ok(c1.hp <= 0, 'the burst kills a weak neighbour'); near(5000 - c2.hp, 0.85 * 200 * (1 + p.stats.bleedMul), 1e-6, 'whose own burst, at its own pools, reaches the next foe');
 }
 
 // ---- events and the wire ----

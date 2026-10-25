@@ -3,8 +3,8 @@
 //   (default)   per class: the fresh hero (weapon, skills with their parts, shares of direct damage, effective health)
 //   --routes    per class x route x fork x rank: change in hero damage (one foe | a pack of 4) against the class without the card, for a fresh and a mid build (--mid prints only the mid build),
 //               effective health with the uptime of the route's defence, shield income and stun uptime (stuns plus slows, blinds and taunts at their strength)
-//   --parity    the power-budget bands on the mid build (ignores --stratum and --rank): stratum IV with every fork at rank 2, stratum VI at rank 3. Per class one line per fork: value (mean of the 1 foe and pack columns, %), the change against the class median, EHP and stun.
-//               IV rank 2: a non-Guard fork 31.5-38.5, a Guard fork >= 28. VI rank 3: non-Guard 54-66, Guard >= 48 and EHP >= +25% or stun >= 30%. Marks the forks outside; --strict exits 1 when any fork fails
+//   --parity    the power-budget bands on the mid build (ignores --stratum and --rank): stratum III with every fork at rank 2 (boss II grants it), stratum IV at rank 3 (boss III). Per class one line per fork: value (mean of the 1 foe and pack columns, %), the change against the class median, EHP and stun.
+//               III rank 2: a non-Guard fork 31.5-38.5, a Guard fork >= 28. IV rank 3: non-Guard 54-66, Guard >= 48 and EHP >= +25% or stun >= 30%. Marks the forks outside; --strict exits 1 when any fork fails
 //   --weapons   per weapon (each base weapon, then its Armory variants indented with their change against the base): damage per second on one foe and in a pack of 4 at the class Power, and the damage factor that puts it on the median of the base weapons
 // Hero damage = (weapon dps + skill damage per cooldown) x the conditional-damage factor (ED.COND_DMG rows the build owns at assumed uptimes, see COND_NOTE) + status estimates; a pack of 4: melee arcs, blasts, sweeps, waves and ricochets hit all four foes, a fan hits as many as it has arrows; a piercing shot hits the first foe and half of the other foes it could pierce (tools/model.js PIERCE_LINE).
 // The mid build: the class element's gate (else Fire) and a second gate, Sharpened Edge x2, Quickened Hands x2, Focus and Stalwart.
@@ -83,7 +83,7 @@ if (args.routes) {
 
 // ---- parity ----
 // Fixed bands on the printed columns (whole percents): the fork value is the mean of the 1 foe and pack columns, the EHP and stun columns are read the same way.
-const PARITY = { passes: [{ stratum: 4, rank: 2, lo: 31.5, hi: 38.5, guard: 28 }, { stratum: 6, rank: 3, lo: 54, hi: 66, guard: 48, ehp: 25, stun: 30 }] };
+const PARITY = { passes: [{ stratum: 3, rank: 2, lo: 31.5, hi: 38.5, guard: 28 }, { stratum: 4, rank: 3, lo: 54, hi: 66, guard: 48, ehp: 25, stun: 30 }] };
 let parityFails = 0;
 function parityTable() {
   const col = (v) => +(v * 100).toFixed(0), cpct = (n) => (n >= 0 ? '+' : '') + n + '%';

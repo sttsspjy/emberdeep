@@ -1,4 +1,4 @@
-// Relics: run-long items from chests, shops and bosses. Every relic is in the drop pool from the first descent; element effects are path boons (boons.js).
+// Relics: run-long items from chests, shops and bosses. Every relic is in the drop pool from the first run; element effects are path boons (boons.js).
 // pw { base, k } is a proc damage of base + k x Class Power (ED.procDmg).
 (function (ED) {
   'use strict';
@@ -12,7 +12,7 @@
     lodestone: { name: 'Lodestone', rar: 'c', icon: 'magnet', desc: '+60% pickup range, +10% experience.', mods: { pickup: 0.6, xp: 0.1 } },
     pauldron: { name: 'Spiked Pauldron', rar: 'c', icon: 'thorn', desc: 'Attackers take 15 damage.', mods: { thorns: 15 } },
     wardrum: { name: 'War Drum', rar: 'r', icon: 'drum', desc: '+10% attack speed, +20% in elite and boss rooms.', mods: { wardrum: 0.1 } },
-    phoenix: { name: 'Phoenix Feather', rar: 'l', icon: 'feather', desc: 'Once per descent, rise again at 50% health in a blast of fire.', mods: { phoenix: 1 }, pw: { base: 40, k: 2 } },
+    phoenix: { name: 'Phoenix Feather', rar: 'l', icon: 'feather', desc: 'Once per run, rise again at 50% health in a blast of fire.', mods: { phoenix: 1 }, pw: { base: 40, k: 2 } },
     glasseye: { name: 'Glass Eye', rar: 'r', icon: 'eye', desc: '+10% critical chance.', mods: { crit: 0.1 } },
     elixir: { name: 'Elixir Flask', rar: 'c', icon: 'potion', desc: 'Heal 20% at the start of each stratum. +10% healing.', mods: { strataHeal: 0.2, heal: 0.1 } },
     axe: { name: "Headsman's Axe", rar: 'r', icon: 'axe', desc: '+60% damage to foes below 30% health.', mods: { execute: 0.6 } },
@@ -27,8 +27,8 @@
     mask: { name: 'Berserker Mask', rar: 'e', icon: 'mask', desc: '+40% damage, but take 15% more damage.', mods: { dmg: 0.4, vuln: 0.15 } },
     banner: { name: 'Banner of Unity', rar: 'r', icon: 'banner', desc: '+10% damage, +10% more per ally nearby.', mods: { banner: 0.1 } },
     angel: { name: 'Guardian Angel', rar: 'l', icon: 'wing', desc: 'Once per stratum, a killing blow leaves you at 1 health instead.', mods: { angel: 1 } },
-    chalice: { name: 'Grail of Ages', rar: 'l', icon: 'chalice', desc: '+1 max health per 12 kills this descent (max +8; growth does not heal). At +8: +10% damage.', mods: { chalice: 1 }, kills: 12, full: { hp: 8, mods: { dmg: 0.1 } } },
-    skull: { name: 'Cursed Skull', rar: 'l', icon: 'skull', desc: 'Take 30% more damage. Earn 50% more embers this descent.', mods: { vuln: 0.3, emberBonus: 0.5 } },
+    chalice: { name: 'Grail of Ages', rar: 'l', icon: 'chalice', desc: '+1 max health per 12 kills this run (max +8; growth does not heal). At +8: +10% damage.', mods: { chalice: 1 }, kills: 12, full: { hp: 8, mods: { dmg: 0.1 } } },
+    skull: { name: 'Cursed Skull', rar: 'l', icon: 'skull', desc: 'Take 30% more damage. Earn 50% more embers this run.', mods: { vuln: 0.3, emberBonus: 0.5 } },
     ledger: { name: "Merchant's Ledger", rar: 'r', icon: 'scroll', desc: 'Shop prices are 25% lower.', mods: { discount: 0.25 } },
     stone: { name: "Philosopher's Stone", rar: 'l', icon: 'gem', desc: '+2% damage per relic held and +1 max health per 2 relics held.', mods: { stone: 1 }, perRelic: { dmg: 0.02, hp: 0.5 } },
     clover: { name: 'Four-Leaf Clover', rar: 'r', icon: 'clover', desc: '+1 boon reroll each stratum and better rarity.', mods: { cloverRerolls: 1, luck: 0.1 } },

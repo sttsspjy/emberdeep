@@ -8,53 +8,53 @@
 
   ED.CLASSES = {
     knight: {
-      name: 'Knight', title: 'Oathsworn Shield', icon: 'shield',
-      desc: 'Sturdy frontliner. Sweeping blades cut down crowds; the thrown shield stuns whole packs and swats arrows.',
-      hp: 40, armor: 58, spd: 116, crit: 0.05, power: 23.4, element: null,
+      name: 'Knight', title: 'Melee tank', icon: 'shield',
+      desc: 'Sturdy melee hero. Wide swings hit crowds; the thrown shield stuns packs and blocks foe shots.',
+      hp: 32, armor: 58, spd: 116, crit: 0.05, power: 23.4, element: null,
       weapons: ['longsword', 'warhammer', 'glaive'], skill: 'charge', skill2: 'shieldthrow',
       col: { a: '#a7b0ba', b: '#5d6670', c: '#d6aa55', d: '#2b3038' }, unlock: null,
     },
     ranger: {
-      name: 'Ranger', title: 'Warden of the Wilds', icon: 'bow',
-      desc: 'Swift archer. Keep your distance and riddle the Deep with arrows.',
-      hp: 21, armor: 3, spd: 128, crit: 0.10, power: 12, element: null,
+      name: 'Ranger', title: 'Ranged archer', icon: 'bow',
+      desc: 'Fast archer with low health. Keep your distance and shoot.',
+      hp: 30, armor: 3, spd: 128, crit: 0.10, power: 12, element: null,
       weapons: ['longbow', 'crossbow', 'twinbows'], skill: 'volley', skill2: 'rain',
       col: { a: '#4f7a3f', b: '#2e4a25', c: '#c8a46a', d: '#1d2a17' }, unlock: null,
     },
     pyro: {
-      name: 'Pyromancer', title: 'Keeper of the Flame', icon: 'flame',
-      desc: 'Fragile but devastating. Exploding fire clears whole rooms.',
-      hp: 21, armor: 4, spd: 120, crit: 0.05, power: 17, element: 'fire',
-      weapons: ['firestaff', 'emberwand', 'inferno'], skill: 'nova', skill2: 'meteor',
+      name: 'Pyromancer', title: 'Fire caster', icon: 'flame',
+      desc: 'Caster with low health. Casts Flame Nova, Meteor and Fireball; weapon hits make the spells recharge sooner.',
+      hp: 31, armor: 4, spd: 120, crit: 0.05, power: 17, element: 'fire',
+      weapons: ['firestaff', 'emberwand', 'inferno'], skill: 'nova', skill2: 'meteor', skill3: 'fireball',
       col: { a: '#9a2f2a', b: '#5a1714', c: '#ffb347', d: '#2a0c0a' }, unlock: null,
     },
     shade: {
-      name: 'Shade', title: 'Blade in the Dark', icon: 'dagger',
-      desc: 'Fastest hero alive. Blinks through foes and lands guaranteed crits.',
-      hp: 37, armor: 28, dodge: 0.35, spd: 138, crit: 0.12, power: 13, element: null,
+      name: 'Shade', title: 'Fast melee assassin', icon: 'dagger',
+      desc: 'The fastest hero, with 35% dodge. Blinks through foes and lands guaranteed crits.',
+      hp: 46, armor: 28, dodge: 0.35, spd: 138, crit: 0.12, power: 13, element: null,
       weapons: ['daggers', 'knives', 'scythes'], skill: 'step', skill2: 'vanish',
-      col: { a: '#3a3550', b: '#1f1b2e', c: '#b78cff', d: '#121018' }, unlock: { boss: 1, text: 'Defeat The Bone Warden' },
+      col: { a: '#3a3550', b: '#1f1b2e', c: '#b78cff', d: '#121018' }, unlock: { boss: 1, text: 'Defeat the Bone Warden' },
     },
     cleric: {
-      name: 'Cleric', title: 'Lantern of the Faithful', icon: 'sun',
-      desc: 'Holy bruiser. Consecrates the ground and shields the whole party; a natural co-op anchor.',
-      hp: 40, armor: 25, spd: 114, crit: 0.05, power: 23, element: 'holy',
+      name: 'Cleric', title: 'Holy support', icon: 'sun',
+      desc: 'Sturdy holy melee hero. Sanctuary hurts foes and protects allies inside; shields the whole party. Strong in co-op.',
+      hp: 27, armor: 20, spd: 114, crit: 0.05, power: 23, element: 'holy',
       weapons: ['mace', 'dawnhammer', 'lantern'], skill: 'sanctuary', skill2: 'judgment',
-      col: { a: '#e8e0c8', b: '#a69a78', c: '#ffd36b', d: '#4a4232' }, unlock: { runs: 4, text: 'Complete 4 descents (clear a room in each)' },
+      col: { a: '#e8e0c8', b: '#a69a78', c: '#ffd36b', d: '#4a4232' }, unlock: { runs: 4, text: 'Play 4 runs (clear a room in each)' },
     },
     necro: {
-      name: 'Necromancer', title: 'Speaker for the Dead', icon: 'skull',
-      desc: 'Commands the risen. Fallen foes may rise to fight for you.',
-      hp: 14, armor: 0, spd: 120, crit: 0.05, power: 13.5, element: 'shadow',
+      name: 'Necromancer', title: 'Shadow summoner', icon: 'skull',
+      desc: 'Summoner with very low health. Raises skeleton minions; foes you kill may rise as minions too.',
+      hp: 21, armor: 0, spd: 120, crit: 0.05, power: 13.5, element: 'shadow',
       weapons: ['bonewand', 'soulscythe', 'plaguestaff'], skill: 'legion', skill2: 'harvest',
-      col: { a: '#2f4a42', b: '#17261f', c: '#7dffd9', d: '#0c1411' }, unlock: { boss: 2, text: 'Defeat The Sporemother' },
+      col: { a: '#2f4a42', b: '#17261f', c: '#7dffd9', d: '#0c1411' }, unlock: { boss: 2, text: 'Defeat the Sporemother' },
     },
     bell: {
-      name: 'Bellwarden', title: 'Keeper of the Drowned Bell', icon: 'bell',
+      name: 'Bellwarden', title: 'Lightning bell fighter', icon: 'bell',
       desc: 'Swings a temple bell on a chain. Hold attack to wind it up, let go to hurl it, press again to reel it home through everything in its way.',
       hp: 36, armor: 30, spd: 132, crit: 0.05, power: 18, element: 'lightning',
       weapons: ['bronzebell', 'greatbell', 'handbells'], skill: 'heave', skill2: 'peal',
-      col: { a: '#b08d57', b: '#6b5233', c: '#ffe66b', d: '#2a2116' }, unlock: { bell: true, text: '???', hint: 'In the drowned Sanctum, a bell waits for a hand that will not let go.' },
+      col: { a: '#b08d57', b: '#6b5233', c: '#ffe66b', d: '#2a2116' }, unlock: { bell: true, text: '???', hint: 'Find the bell in the dark rooms of the Drowned Sanctum.' },
     },
   };
   ED.CLASS_IDS = Object.keys(ED.CLASSES);
@@ -82,10 +82,10 @@
     longbow: { name: 'Longbow', desc: 'Fast, accurate arrows.', kind: 'proj', dmg: 11, rate: 0.34, speed: 440, n: 1, spread: 0, pierce: 0, r: 4, life: 0.85, proj: 'arrow', look: 'bow' },
     crossbow: { name: 'Heavy Crossbow', desc: 'Slow bolts that pierce two foes.', kind: 'proj', dmg: 22.1, rate: 0.72, speed: 560, n: 1, spread: 0, pierce: 2, r: 5, life: 0.8, proj: 'bolt', look: 'crossbow', knock: 120 },
     twinbows: { name: 'Twin Shortbows', desc: 'Two arrows at a time, very fast.', kind: 'proj', dmg: 4.1, rate: 0.25, speed: 420, n: 2, spread: 0.14, pierce: 0, r: 4, life: 0.7, proj: 'arrow', look: 'bow' },
-    // Pyromancer
-    firestaff: { name: 'Fire Staff', desc: 'Firebolts that explode on impact.', kind: 'proj', dmg: 15, rate: 0.5, speed: 310, n: 1, spread: 0, pierce: 0, r: 6, life: 1.0, proj: 'firebolt', explode: { r: 40, mul: 0.6 }, look: 'staff' },
-    emberwand: { name: 'Ember Wand', desc: 'A torrent of sparks that often ignite.', kind: 'proj', dmg: 6, rate: 0.15, speed: 390, n: 1, spread: 0, jitter: 0.12, pierce: 0, r: 4, life: 0.6, proj: 'spark', burn: 0.15, look: 'wand' },
-    inferno: { name: 'Inferno Tome', desc: 'Slow fireballs with huge blasts.', kind: 'proj', dmg: 30, rate: 1.0, speed: 250, n: 1, spread: 0, pierce: 0, r: 9, life: 1.3, proj: 'fireball', explode: { r: 72, mul: 0.8 }, look: 'tome' },
+    // Pyromancer: Ember Bolt weapons (low damage; each hit cuts the spell cooldowns, class-pyro.js)
+    firestaff: { name: 'Fire Staff', desc: 'Fast ember bolts. Each hit cuts your spell cooldowns.', kind: 'proj', dmg: 9, rate: 0.4, speed: 440, n: 1, spread: 0, pierce: 0, r: 5, life: 0.75, proj: 'firebolt', look: 'staff' },
+    emberwand: { name: 'Ember Wand', desc: 'A stream of small sparks. Each hit cuts your spell cooldowns a little.', kind: 'proj', dmg: 3.4, rate: 0.15, speed: 400, n: 1, spread: 0, jitter: 0.1, pierce: 0, r: 4, life: 0.6, proj: 'spark', look: 'wand' },
+    inferno: { name: 'Inferno Tome', desc: 'Slow, heavy embers that burst small on impact. Each hit cuts your spell cooldowns a lot.', kind: 'proj', dmg: 12, rate: 0.75, speed: 300, n: 1, spread: 0, pierce: 0, r: 7, life: 1.0, proj: 'firebolt', explode: { r: 34, mul: 0.4 }, look: 'tome' },
     // Shade
     daggers: { name: 'Twin Daggers', desc: 'Lightning-fast stabs.', kind: 'melee', dmg: 11, rate: 0.21, range: 42, arc: 1.3, knock: 60, look: 'dagger' },
     knives: { name: 'Throwing Knives', desc: 'Fans of three short-range knives.', kind: 'proj', dmg: 7, rate: 0.36, speed: 480, n: 3, spread: 0.22, pierce: 0, r: 4, life: 0.42, proj: 'knife', look: 'dagger' },
@@ -101,9 +101,9 @@
     // Armory variants: projectile shapes
     seekerbow: { name: 'Seeker Bow', desc: 'Arrows that gently home on foes.', kind: 'proj', dmg: 10.2, rate: 0.34, speed: 400, n: 1, spread: 0, pierce: 0, r: 4, life: 0.95, proj: 'arrow', homing: 2.5, look: 'bow', variant: 'longbow' },
     boltthrower: { name: 'Bolt Thrower', desc: 'Three bolts in a wide spread, short range.', kind: 'proj', dmg: 16, rate: 0.72, speed: 520, n: 3, spread: 0.32, pierce: 0, r: 5, life: 0.42, proj: 'bolt', look: 'crossbow', knock: 80, variant: 'crossbow' },
-    sunlance: { name: 'Sunlance', desc: 'An instant beam of fire that pierces every foe on its line.', kind: 'proj', dmg: 25, rate: 0.5, speed: 460, n: 1, spread: 0, pierce: 0, r: 6, life: 0.5, proj: 'firebolt', beam: true, look: 'staff', variant: 'firestaff' },
-    cinderscatter: { name: 'Cinder Scatter', desc: 'Sprays five short-lived sparks that often ignite.', kind: 'proj', dmg: 4.5, rate: 0.45, speed: 360, n: 5, spread: 0.14, pierce: 0, r: 4, life: 0.4, proj: 'spark', burn: 0.15, look: 'wand', variant: 'emberwand' },
-    mortar: { name: 'Mortar Tome', desc: 'Lobs a fireball over foes onto the cursor; a wide blast where it lands.', kind: 'proj', dmg: 36, rate: 1.0, speed: 520, n: 1, spread: 0, pierce: 0, r: 9, life: 0.5, proj: 'fireball', lob: { t: 0.55 }, explode: { r: 80, mul: 1 }, look: 'tome', variant: 'inferno' },
+    sunlance: { name: 'Sunlance', desc: 'An instant ember beam that pierces every foe on its line. Each hit cuts your spell cooldowns.', kind: 'proj', dmg: 8, rate: 0.4, speed: 460, n: 1, spread: 0, pierce: 0, r: 6, life: 0.5, proj: 'firebolt', beam: true, look: 'staff', variant: 'firestaff' },
+    cinderscatter: { name: 'Cinder Scatter', desc: 'Sprays five short-lived sparks. Each hit cuts your spell cooldowns a little.', kind: 'proj', dmg: 2.3, rate: 0.4, speed: 360, n: 5, spread: 0.14, pierce: 0, r: 4, life: 0.4, proj: 'spark', look: 'wand', variant: 'emberwand' },
+    mortar: { name: 'Mortar Tome', desc: 'Lobs an ember over foes onto the cursor; a blast where it lands. Each hit cuts your spell cooldowns a lot.', kind: 'proj', dmg: 16, rate: 0.75, speed: 520, n: 1, spread: 0, pierce: 0, r: 7, life: 0.5, proj: 'firebolt', lob: { t: 0.55 }, explode: { r: 50, mul: 1 }, look: 'tome', variant: 'inferno' },
     boomerang: { name: 'Boomerang Blades', desc: 'A spinning blade flies out and back, cutting every foe on each leg.', kind: 'proj', dmg: 6.5, rate: 0.5, speed: 420, n: 1, spread: 0, pierce: 0, r: 6, life: 0.4, proj: 'boomerang', ret: true, look: 'dagger', variant: 'knives' },
     votive: { name: 'Votive Lamp', desc: 'Holy orbs that end in a small pool of light; allies standing in it are shielded (1.5% max health, at most once per 1.5 s per ally, up to 8%; class shields are limited to 3% of max health per 10 s).', kind: 'proj', dmg: 12, rate: 0.42, speed: 300, n: 1, spread: 0, pierce: 0, r: 6, life: 0.9, proj: 'holy', pool: { r: 36, dur: 2, mul: 0.22, zk: 'holypool', ally: 0.015 }, look: 'lantern', variant: 'lantern' },
     splinter: { name: 'Bone Splinter', desc: 'Three bone shards in a spread.', kind: 'proj', dmg: 7, rate: 0.4, speed: 350, n: 3, spread: 0.26, pierce: 0, r: 5, life: 1.0, proj: 'bone', look: 'wand', variant: 'bonewand' },
@@ -139,7 +139,7 @@
   ED.weaponBase = (id) => { const w = ED.WEAPONS[id]; return w && w.variant ? w.variant : id; };
   ED.weaponIndex = (cls, id) => (ED.CLASSES[cls] ? ED.CLASSES[cls].weapons.indexOf(ED.weaponBase(id)) : -1);
 
-  // Skills. slot 0 = K, 1 = L. aim: 'dir' flies toward the cursor, 'ground' lands on it (clamped to range; walk: on a standable spot), 'move' travels toward it (rangeMin..range, + the stat in rangeAdd), 'self' ignores it.
+  // Skills. slot 0 = skill 1, 1 = skill 2, 2 = skill 3 (only a class with skill3; for the others the skill 3 binding casts skill 1); charges: charges of a slot-2 skill (the stat s3Ch adds to it). aim: 'dir' flies toward the cursor, 'ground' lands on it (clamped to range; walk: on a standable spot), 'move' travels toward it (rangeMin..range, + the stat in rangeAdd), 'self' ignores it.
   // aimIf { stat: aim } overrides aim while the stat is set; moveIf { stat: { k: 'charge' | 'hop' | 'leap', ... } } moves the caster with the cast (iframes seconds untouchable, default = the move time).
   // parts feed ED.Stats.skillNums (the one source for sim, sheet and bots): dmg = (base + pow x X) x (1 + slot damage), X = Power (on 'P'), the equipped weapon's dmg ('W') or the unforked weapon ('B');
   // powKey adds a stat to pow; of + mul / mul1 derive a part from another (mul1: x (1 + stat); times 'ticks': x the tick count); if = the stat that enables the part; mulIf = { stat: factor };
@@ -159,7 +159,7 @@
         { id: 'banner', label: 'War Banner', if: 'phalanx', of: 'impact', mul: 'bannerDmg', per: 'sec', r: 120, durKey: 'bannerDur', stun: 0.4, noCrit: true, note: 'per second to every foe inside; the planting pulse stuns' },
       ] },
     shieldthrow: { name: 'Shield Throw', slot: 1, cd: 9, icon: 'bulwark', aim: 'dir', range: 280, rangeMin: 120,
-      desc: 'Hurl your shield at the cursor. It strikes and stuns up to 4 foes as it ricochets between them, then flies back to your hand, striking again. Catching it shields you for 0.5% max health per foe struck (at most once per 6 s). In flight it swats enemy shots. Bosses take ×2 but are never stunned.',
+      desc: 'Hurl your shield at the cursor. It strikes and stuns up to 4 foes as it ricochets between them, then flies back to your hand, striking again. Catching it shields you for 0.5% max health per foe struck (at most once per 6 s). In flight it blocks foe shots. Bosses take ×2 but are never stunned.',
       parts: [
         { id: 'strike', label: 'Strike', base: 26, pow: 1.3, per: 'hit', n: 4, proc: true, stun: 0.9, knock: 140, r: 14, pRad: true, bossMul: 2, note: 'bosses ×2, never stunned' },
         { id: 'return', label: 'Return', base: 13, pow: 0.65, per: 'hit', proc: true, knock: 80, r: 14, pRad: true },
@@ -168,18 +168,18 @@
         { id: 'vortex', label: 'Vortex', if: 'tempest', of: 'strike', mul: 'vortexMul', per: 'hit', every: 0.25, durKey: 'vortexDur', r: 100, pull: 60, proc: true },
       ] },
     volley: { name: 'Volley', slot: 0, cd: 5, icon: 'arrows', aim: 'dir', moveIf: { volleyHop: { k: 'hop', dist: 70, dir: -1, t: 0.25, iframes: 0.25 } },
-      desc: 'Loose a wide fan of piercing arrows toward the cursor.',
+      desc: 'Shoot a wide fan of piercing arrows toward the cursor.',
       parts: [
         { id: 'arrow', label: 'Arrow', base: 4, pow: 1.2, per: 'hit', n: 7, fan: 1.2, ringKey: 'thornburst', ringPierce: 2, pierce: 1, speed: 480, life: 0.8, pr: 5, knock: 60, proc: true, close: 110 },
         { id: 'wave', label: 'Waves 2 and 3', if: 'deathMark', of: 'arrow', mul: 'deathWave', per: 'hit', nOf: 'arrow', fan: 1.2, waves: 2, pr: 5, proc: true },
         { id: 'burst', label: 'Death burst', if: 'deathMark', of: 'arrow', mul: 'deathMark', per: 'hit', n: 4, nFix: true, proc: true },
         { id: 'caltrops', label: 'Caltrops', if: 'caltrops', of: 'arrow', mul: 'caltrops', per: 'sec', r: 50, rAddKey: 'thornR', dur: 2.5, durFix: true, noCrit: true, note: 'per second to every foe inside the patch the hop leaves' },
       ] },
-    nova: { name: 'Flame Nova', slot: 0, cd: 7, icon: 'flame', aim: 'self',
-      desc: 'Erupt in a ring of fire that burns everything nearby.',
+    nova: { name: 'Flame Nova', slot: 0, cd: 5, icon: 'flame', aim: 'self',
+      desc: 'Release a ring of fire around you. It knocks foes back and burns them.',
       parts: [
-        { id: 'blast', label: 'Blast', base: 22, pow: 2.5, per: 'hit', r: 105, knock: 200, el: 'class', proc: true },
-        { id: 'burn', label: 'Burn', base: 12, pow: 2.4, per: 'status', status: 'burn', mulStat: 'supernova' },
+        { id: 'blast', label: 'Blast', base: 18, pow: 1.8, per: 'hit', r: 105, knock: 200, el: 'class', proc: true },
+        { id: 'burn', label: 'Burn', base: 8, pow: 1.2, per: 'status', status: 'burn', mulStat: 'supernova' },
         { id: 'ring', label: 'Ring of fire', if: 'novaRing', ifNot: 'phoenixMul', base: 8, pow: 1, per: 'sec', rOf: 'blast', rMul: 0.8, dur: 3, el: 'class' },
         { id: 'echo', label: 'Second eruption', if: 'novaEcho', ifNot: 'supernova', of: 'blast', mul: 'novaEcho', per: 'hit', delay: 0.6, rOf: 'blast', rMul: 1, el: 'class', proc: true },
         { id: 'wave', label: 'Supernova wave', if: 'supernova', of: 'blast', mul: 'novaEcho', per: 'hit', delay: 0.6, dur: 0.5, durFix: true, rOf: 'blast', rMul: 220 / 105, el: 'class', proc: true },
@@ -197,7 +197,7 @@
         { id: 'mirror', label: 'Mirror burst', if: 'mirrorHall', of: 'slash', mul: 'mirrorHall', per: 'hit', n: 3, nFix: true, r: 80, delay: 1.5, blind: 1.5, proc: false },
       ] },
     sanctuary: { name: 'Sanctuary', slot: 0, cd: 11, icon: 'sun', aim: 'ground', range: 200, aimIf: { aura: 'self' },
-      desc: 'Consecrate the ground at the cursor: foes inside take Holy damage each second and allies inside take less damage. Heals the allies around you when cast.',
+      desc: 'Make holy ground at the cursor: foes inside take Holy damage each second and allies inside take less damage. Heals the allies around you when cast.',
       parts: [
         { id: 'zone', label: 'Holy ground', base: 13.5, pow: 1.2, per: 'sec', r: 100, rAddKey: 'aegisR', dur: 3.5, capCd: 0.6, el: 'class' },
         { id: 'nova', label: 'Wrath nova', if: 'wrath', of: 'zone', mul: 'wrathNova', per: 'hit', rOf: 'zone', rMul: 1, knock: 120, el: 'class', proc: true },
@@ -205,7 +205,7 @@
         { id: 'pulse', label: 'Aegis pulse', if: 'dawn', of: 'zone', mul: 'aegisMul', per: 'hit', rOf: 'zone', rMul: 1, dur: 3.5, capCd: 0.6, every: 2, oneEvery: true, stunKey: 'aegisStun', el: 'class', proc: false },
       ] },
     legion: { name: 'Raise Legion', slot: 0, cd: 12, icon: 'skull', aim: 'ground', range: 160, walk: true, prevR: 35,
-      desc: 'Raise skeletal minions at the cursor for a time. Kills may also raise minions.',
+      desc: 'Raise 3 skeleton minions at the cursor for 12 s. Kills may also raise minions.',
       parts: [
         { id: 'minion', label: 'Minion strike', base: 9, pow: 0.6, per: 'minion', n: 3, dur: 12, every: 0.7 },
         { id: 'spikes', label: 'Bone spikes', if: 'boneSpikes', base: 7.5, pow: 0.8, per: 'hit', r: 60, el: 'class', proc: true },
@@ -223,19 +223,25 @@
         { id: 'shower', label: 'Second Shower', if: 'shower', of: 'tick', mul: 'shower', per: 'tick', every: 0.25, dur: 2, durFix: true, rOf: 'tick', rMul: 1, proc: true },
         { id: 'bramble', label: 'Bramble patches', if: 'thornstorm', per: 'zone', r: 40, dur: 3, durFix: true, slow: 0.3 },
       ] },
-    meteor: { name: 'Meteor', slot: 1, cd: 12, icon: 'meteor', aim: 'ground', range: 300, moveIf: { comet: { k: 'leap', t: 0.6, iframes: 0.35 }, sunDive: { k: 'leap', t: 0.6, iframes: 0.6 } },
+    meteor: { name: 'Meteor', slot: 1, cd: 8, icon: 'meteor', aim: 'ground', range: 300, moveIf: { comet: { k: 'leap', t: 0.6, iframes: 0.35 }, sunDive: { k: 'leap', t: 0.6, iframes: 0.6 } },
       desc: 'Call a meteor down on the cursor. It knocks foes back, burns them and leaves a burning crater.',
       parts: [
-        { id: 'impact', label: 'Impact', ifNot: 'cataclysm', base: 30, pow: 3.5, per: 'hit', r: 95, delay: 0.9, knock: 220, el: 'class', statusAdd: { burn: 0.5 }, proc: true },
+        { id: 'impact', label: 'Impact', ifNot: 'cataclysm', base: 26, pow: 2.8, per: 'hit', r: 95, delay: 0.9, knock: 220, el: 'class', statusAdd: { burn: 0.5 }, proc: true },
         { id: 'storm', label: 'Cataclysm meteors', if: 'cataclysm', of: 'impact', mul: 'cataclysm', per: 'hit', n: 5, nFix: true, rOf: 'impact', rMul: 1, delay: 0.9, knock: 220, el: 'class', statusAdd: { burn: 0.5 }, proc: true },
-        { id: 'crater', label: 'Crater', ifNot: 'cataclysm', base: 8, pow: 0.8, per: 'sec', r: 60, dur: 3, el: 'class', mulStat: 'craterMul' },
+        { id: 'crater', label: 'Crater', ifNot: 'cataclysm', base: 6, pow: 0.6, per: 'sec', r: 60, dur: 3, el: 'class', mulStat: 'craterMul' },
         { id: 'field', label: 'Lava field', if: 'cataclysm', of: 'crater', per: 'sec', r: 140, dur: 3, el: 'class' },
         { id: 'twin', label: 'Twin Meteor', if: 'twinMeteor', ifNot: 'cataclysm', of: 'impact', mul: 'twinMeteor', per: 'hit', r: 95, delay: 0.6, el: 'class', statusAdd: { burn: 0.5 }, proc: true },
         { id: 'rocks', label: 'Meteorites', if: 'meteorites', ifNot: 'cataclysm', of: 'impact', mul: 'meteorites', per: 'hit', n: 3, r: 45, delay: 0.3, el: 'class', statusAdd: { burn: 0.5 }, proc: true },
         { id: 'trail', label: 'Burning trail', if: 'sunDive', of: 'crater', mul: 'diveTrail', per: 'sec', r: 30, dur: 2, durFix: true, el: 'class' },
       ] },
+    // Third skill (skill3 binding): the Pyromancer's Fireball, charges that recharge one at a time; speed: its flight in px/s (range / speed seconds).
+    fireball: { name: 'Fireball', slot: 2, cd: 2.5, charges: 2, icon: 'ember', aim: 'dir', range: 300, speed: 440,
+      desc: 'Hurl a fireball toward the cursor. It bursts on the first foe or wall it meets, or at the end of its flight, and burns the foes in the burst. Holds 2 charges.',
+      parts: [
+        { id: 'burst', label: 'Burst', base: 12, pow: 1.0, per: 'hit', r: 36, knock: 140, el: 'class', statusAdd: { burn: 0.3 }, proc: true },
+      ] },
     vanish: { name: 'Vanish', slot: 1, cd: 11, icon: 'vanish', aim: 'self',
-      desc: 'Drop smoke that slows and blinds foes. You vanish from their sight; your next attack is an Ambush, a guaranteed critical hit.',
+      desc: 'Drop smoke that slows and blinds foes. Foes lose sight of you; your next attack is an Ambush, a guaranteed critical hit.',
       parts: [
         { id: 'ambush', label: 'Ambush', pow: 2.5, powKey: 'ambushMul', on: 'B', per: 'hit', crit: true, proc: true },
         { id: 'smoke', label: 'Smoke', ifNot: 'eclipse', per: 'zone', r: 75, dur: 3, slow: 0.4 },
@@ -246,7 +252,7 @@
         { id: 'clone', label: 'Clone attacks', if: 'umbral', pow: 0, powKey: 'cloneMul', on: 'W', per: 'hit', proc: true, dur: 4, durFix: true, perAtk: true },
       ] },
     judgment: { name: 'Judgment', slot: 1, cd: 9, icon: 'hammer', aim: 'dir',
-      desc: 'Throw a hammer toward the cursor that flies out and returns, piercing. Each leg hits a foe once and Judges it (+20% damage taken). Judgment falls hardest on the mighty: bosses take ×2 from the hammer.',
+      desc: 'Throw a hammer toward the cursor that flies out and returns, piercing. Each leg hits a foe once and Judges it (+20% damage taken). Bosses take ×2 from the hammer.',
       parts: [
         { id: 'leg', label: 'Hammer', base: 24.3, pow: 1.4, per: 'hit', r: 18, el: 'class', mulFirst: ['stormMul', 'twinHammer'], bossMul: 2, proc: true },
         { id: 'verdict', label: 'Verdict', if: 'verdict', mulStat: 'verdict', base: 27, pow: 3, per: 'hit', r: 70, rAddKey: 'fjR', el: 'class', stun: 0.4, stunKey: 'fjStun', proc: true },
@@ -286,7 +292,7 @@
     'charge.quake': { noCrit: true, note: 'bosses ×1.5, never stunned; at the end of the run' },
     'charge.crack': { noCrit: true, note: '3 cracks run outward from the slam; a foe is struck by one' },
     'shieldthrow.orbit': { oneEvery: true },
-    'shieldthrow.reflect': { oneFoe: 0, note: 'per enemy shot the orbit destroys' },
+    'shieldthrow.reflect': { oneFoe: 0, note: 'per foe shot the orbit destroys' },
     'shieldthrow.vortex': { oneEvery: true, note: 'pulls foes in; every foe inside is struck 4 times a second' },
     'volley.burst': { oneFoe: 0, note: 'when a marked foe dies: 4 piercing arrows' },
     'rain.star': { note: '5 impacts walk from you to the cursor' },

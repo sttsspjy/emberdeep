@@ -36,6 +36,7 @@
       this.roomId = -1;
     }
     if (d.r !== this.roomId) {
+      if (this.room && ED.Arena) ED.Arena.clear(this.room); // the arena of the room left (restores collapsed floor)
       this.roomId = d.r; this.room = this.floor.rooms[d.r]; this.snaps.length = 0; this.firstInRoom = true;
       const tough = this.room.type === 'elite' || this.room.type === 'boss';
       for (const p of this.players.values()) p.toughRoom = tough; // War Drum doubles in these rooms
@@ -44,6 +45,7 @@
     if (d.O) this.props = d.O.map(a => ({ id: a[0], kind: a[1], x: a[2], y: a[3], state: a[4], item: a[5], price: a[6], group: a[7], stype: a[8], text: a[9] }));
     if (d.RS) d.RS.forEach((b, i) => { this.roomState[i] = { visited: !!(b & 1), known: !!(b & 2), cleared: !!(b & 4), broken: d.BR ? d.BR[i] | 0 : 0 }; });
     if (d.RUN) this.run = d.RUN;
+    if (ED.Arena) ED.Arena.decode(this.room, d.AR || null); // boss / champion arena (flood, darkness, lanterns, collapsed floor, mimic classes)
     const P = new Map(), E = new Map(), H = new Map(), K = new Map(), A = new Map();
     for (const a of d.P) P.set(a[0], a);
     for (const a of d.E) E.set(a[0], a);
@@ -61,9 +63,9 @@
       p.shield = a[15] || 0; p.rdy = a[16] | 0; p.stealthT = fl & 128 ? 1 : 0; p.ambush = !!(fl & 256); p.shieldOut = !!(fl & 64); p.airborne = !!(fl & 512); p.momN = a[17] | 0; p.shwC = a[18] || 0; p.shwA = a[19] || 0;
       if ((a[20] | 0) !== (p.chaliceHp | 0)) { p.chaliceHp = a[20] | 0; this.recalc(p); }
       p.glBuff = !!(fl & 1024); p.embolden = !!(fl & 2048); // Cleric buffs: Guardian Light, Embolden
-      p.glT = p.glBuff ? 1 : 0; p.glV = a[22] || 0; p.auraT = p.embolden ? 1 : 0; p.auraV = a[23] || 0; p.knellN = a[21] | 0; p.knellT = p.knellN ? 1 : 0; // timed damage bonuses the Tab sheet and Stats read
-      p.metroN = a[25] | 0; p.doorWant = a[26] | 0; // Metronome beat, the door the hero waits in
-      if (p.pid !== this.localPid) { p.moving = !!(fl & 1); p.dashing = !!(fl & 2); p.face = a[3]; p.braceT = fl & 1048576 ? 1 : 0; p.tranceT = fl & 4096 ? 1 : 0; } // the local hero predicts its own Trance
+      p.glT = p.glBuff ? 1 : 0; p.glV = a[22] || 0; p.auraT = p.embolden ? 1 : 0; p.auraV = a[23] || 0; // timed damage bonuses the Tab sheet and Stats read
+      p.doorWant = a[26] | 0; p.sparks = a[27] | 0; // the door the hero waits in, Kindling Sparks (the HUD chip)
+      if (p.pid !== this.localPid) { p.moving = !!(fl & 1); p.dashing = !!(fl & 2); p.face = a[3]; p.braceT = fl & 1048576 ? 1 : 0; p.tranceT = fl & 4096 ? 1 : 0; p.holdOn = !!(fl & 8192); } // the local hero predicts its own Trance and hold
       else if (this.firstInRoom) { p.x = a[1]; p.y = a[2]; }
     }
     this.firstInRoom = false;
@@ -105,7 +107,7 @@
       e.charge = fl & 64 ? 1 : 0; e.bleedPool = fl & 128 ? 1 : 0; e.judged = fl & 256 ? 1 : 0; e.blind = fl & 512 ? 1 : 0; e.vulnT = fl & 1024 ? 1 : 0;
       e.venomLvl = (fl >> 13) & 7; e.radLvl = (fl >> 16) & 3; e.doomLine = rb[17] || 0; // Venom pips (5 = Corroded), Radiance fill, Reap line (bosses: the Toll gauge)
       e.hexed = !!(fl & (1 << 18)); e.marked = !!(fl & (1 << 19)); e.sealed = !!(fl & (1 << 20)); e.ailN = (fl >> 21) & 7; // route states: Hexed, Marked, Sealed, ailment count
-      e.quarryT = fl & (1 << 24) ? 1 : 0; e.dosed = !!(fl & (1 << 25)); e.affixOff = !!(fl & (1 << 26)); e.hunted = !!(fl & (1 << 27)); // Quarry, a Venom dose planted, affixes off (Hex the Strong), Hunted champion
+      e.burnN = (fl >> 24) & 15; // Burn stacks (the count drawn on the foe)
       e.boss = !!e.def.boss;
       const st = N.ST[rb[8]] || 'move';
       if (e.boss) { e.pose = st; e.st = 'atk'; } else e.st = st;
@@ -126,7 +128,7 @@
         }
         const xy = lerpXY(a.H.get(id), rb), fl = rb[5];
         e.x = xy[0]; e.y = xy[1]; e.maxHp = ED.World.fodderHp(e.def, s, pact); e.hp = rb[4] / 255 * e.maxHp;
-        e.flash = fl & 1 ? 0.05 : 0; e.frozen = fl & 2 ? 1 : 0; e.stun = fl & 4 ? 1 : 0; e.chill = fl & 8 ? 40 : 0; e.burnLvl = fl & 16 ? 1 : 0; e.burn = e.burnPool = e.burnLvl; e.face = fl & 32 ? -1 : 1; // the wire carries chilled and burning as flags: drawn at a mid chill and one flame
+        e.flash = fl & 1 ? 0.05 : 0; e.frozen = fl & 2 ? 1 : 0; e.stun = fl & 4 ? 1 : 0; e.chill = fl & 8 ? 40 : 0; e.burnLvl = fl & 16 ? 1 : 0; e.burn = e.burnPool = e.burnLvl; e.face = fl & 32 ? -1 : 1; e.burnN = (fl >> 6) & 15; e.charge = fl & 1024 ? 1 : 0; // the wire carries chilled and burning as flags: drawn at a mid chill and one flame
         out.push(e);
       }
     }
@@ -146,7 +148,7 @@
     const zb = this.zoneBase;
     if (zb) {
       const el = now - zb.recv;
-      this.zones = zb.list.map(z => ({ id: z[0], kind: N.ZK[z[1]], x: z[2], y: z[3], r: z[4], t: z[5] + el, dur: z[6], a: z[7], len: z[8], w: z[9], arc: z[10], team: z[11], elite: !!z[12], lob: z[13] > -99999 ? [z[13], z[14]] : null, warm: z[15], str: z[16] || 0, fol: z[17] | 0 }));
+      this.zones = zb.list.map(z => ({ id: z[0], kind: N.ZK[z[1]], x: z[2], y: z[3], r: z[4], t: z[5] + el, dur: z[6], a: z[7], len: z[8], w: z[9], arc: z[10], team: z[11], elite: z[12] === 1, big: z[12] === 2, lob: z[13] > -99999 ? [z[13], z[14]] : null, warm: z[15], str: z[16] || 0, fol: z[17] | 0 }));
       for (const z of this.zones) if (z.fol) for (const p of this.players.values()) if (p.slot === z.fol - 1) { z.x = p.x; z.y = p.y; break; } // a zone that follows its hero is drawn on the hero's smoothed position
     }
   };
@@ -154,7 +156,7 @@
   // ---------------- Bellwarden bells on the client ----------------
   // Every drawn bell carries ox / oy (its draw offset from its hero's drawn feet) and s (its state, ED.Bell.STATES). Remote heroes of a client: P[24] interpolated, a hand bell by angle about the hero (an orbit stays round
   // between snapshots), any other in the world. The local hero of a client predicts its own bells with class-bell.js itself (ED.CLS.bell.tick, ED.CAST heave / peal) on BELL_W, a world without foes, shots or effects
-  // (pred: a hurl spends no attack count, crit stack or Twist beat), in fixed 1/60 s steps; each snapshot then corrects the prediction against the host's bells at the matching local moment (the send time of the input seq
+  // (pred: a hurl spends no attack count or crit stack), in fixed 1/60 s steps; each snapshot then corrects the prediction against the host's bells at the matching local moment (the send time of the input seq
   // the host echoes plus the time the host ran on it): a hand bell by BELL_ROT of the phase and BELL_SPD of the speed difference (a snap after BELL_BAD snapshots off by a wide margin), an anchored bell to the host's spot,
   // and a bell whose state is not the host's for BELL_STATE snapshots takes the host's when that is in hand or anchored (a flight or a reel runs on its own clock). Resonance is the host's (strikes build it).
   const BELL_ROT = 0.2, BELL_SPD = 0.2, BELL_BAD = 3, BELL_STATE = 2, BELL_HIST = 90, HAND = 0, ANCHOR = 2;
@@ -326,7 +328,7 @@
       for (const pd of cfg.players) { const p = s.world.players.get(pd.pid); if (p) p.wear = N.cleanWear(pd.wear, p.cls); } // Wardrobe sets (client only: the sim never reads them)
     }
     s.view.pact = cfg.pact;
-    s.ctl = { atkCd: 0, skillCd: 0, skill2Cd: 0, charges: s.me.stats.maxCharges, dashN: s.me.stats.dashCharges, dashT: 0, tranceT: 0, latch: false, aimA: 0 };
+    s.ctl = { atkCd: 0, skillCd: 0, skill2Cd: 0, skill3Cd: 0, charges: s.me.stats.maxCharges, charges3: s.me.stats.skill3Charges, dashN: s.me.stats.dashCharges, dashT: 0, tranceT: 0, latch: false, aimA: 0, holdT: 0, holding: false };
     // Aim state read by ED.AimFx: cursor in CSS px (sx, sy) and world (wx, wy), device, angle, push fraction (frac) for stick or keyboard-only ground skills, ready ground skills, cooldown fraction, pulse/crit timestamps.
     s.aim = { sx: 0, sy: 0, wx: 0, wy: 0, a: 0, device: 'mouse', pointer: false, show: false, dead: false, foe: false, frac: 0.6, cd: 0, ground: [], pulseT: -9, critT: -9 };
     if (ED.AimFx) ED.AimFx.applyCursor();
@@ -351,8 +353,11 @@
     if (!p || !a) return;
     switch (a.t) {
       case 'atk': p.atkD = +a.d; w.playerAttack(p, +a.a || 0, 0, a.k); break; // d: the cursor distance of the attack (a lobbed weapon lands there)
-      case 'skill': if ((a.slot | 0) === 0 || (a.slot | 0) === 1) w.playerSkill(p, +a.a || 0, a.data, a.slot | 0); break;
-      case 'dash': w.playerDash(p, +a.dx || 0, +a.dy || 0); break;
+      case 'skill': if ((a.slot | 0) >= 0 && (a.slot | 0) <= 2) w.playerSkill(p, +a.a || 0, a.data, a.slot | 0); break;
+      case 'dash': // blink: Umbral Arms put the hero behind a foe; ox, oy: where the dash began; bx, by: where a Storm Step / Umbral Arms blink landed (fx only)
+        if (Number.isFinite(a.bx) && Number.isFinite(a.by) && Number.isFinite(a.ox) && Number.isFinite(a.oy)) w.emit({ t: 'blink', pid, x0: +a.ox, y0: +a.oy, x1: +a.bx, y1: +a.by, k: a.blink ? 'behind' : 'storm' });
+        w.playerDash(p, +a.dx || 0, +a.dy || 0, !!a.blink, +a.ox, +a.oy); break;
+      case 'hold': w.playerHold(p, !!a.on, +a.a || 0, +a.d || 0); break; // the held-attack verb starts (on) or is released
       case 'interact': w.interact(pid, a.id); break;
       case 'pick': w.pickBoon(pid, a.i | 0); break;
       case 'reroll': w.reroll(pid); break;
@@ -432,11 +437,11 @@
       if (s.me.skillMove) s.me.cometT = m.d;
     }
     else if (m.t === 'dashRefund' && s.me) { const c = s.ctl, st = s.me.stats; c.dashN = Math.min(st.dashCharges | 0, c.dashN + ((m.n | 0) || 1)); } // dash charges back { n } (Umbral Arms)
-    else if (m.t === 'refund') { // cooldown refund { slot, s }: s seconds off (a charge returns when the cooldown reaches 0), no s = in full
-      const c = s.ctl;
-      if (m.slot === 1) c.skill2Cd = m.s ? Math.max(0, c.skill2Cd - m.s) : 0;
-      else if (m.s) c.skillCd -= m.s;
-      else c.charges = Math.min(s.me.stats.maxCharges, c.charges + 1);
+    else if (m.t === 'refund') { // cooldown refund { slot, s }: s seconds off (a charge returns when the cooldown reaches 0), no s = in full (slots 0 and 2: one charge); slot -1: s off every slot
+      const c = s.ctl, st = s.me.stats;
+      if (m.slot === 1 || m.slot === -1) c.skill2Cd = m.s ? Math.max(0, c.skill2Cd - m.s) : 0;
+      if (m.slot === 0 || m.slot === -1) { if (m.s) { if (c.charges < st.maxCharges) c.skillCd -= m.s; } else c.charges = Math.min(st.maxCharges, c.charges + 1); }
+      if (m.slot === 2 || m.slot === -1) { if (m.s) { if (c.charges3 < st.skill3Charges) c.skill3Cd -= m.s; } else c.charges3 = Math.min(st.skill3Charges, c.charges3 + 1); }
     }
   };
 
@@ -468,12 +473,12 @@
   function control(s, inp, dt) {
     const me = s.me, view = s.view, ctl = s.ctl, st = me.stats;
     ctl.atkCd -= dt; ctl.tranceT -= dt; ctl.skill2Cd -= dt;
-    const cd0 = ED.TWIST.cd(st, 0), cd1 = ED.TWIST.cd(st, 1); // a cast's cooldown per slot (Bloodprice: TWIST_C.GAP; a cooldown running when it is taken is cut to that)
-    if (st.twBlood) { ctl.skillCd = Math.min(ctl.skillCd, cd0); ctl.skill2Cd = Math.min(ctl.skill2Cd, cd1); }
+    const cd0 = st.skillCd, cd1 = st.skill2Cd; // a cast's cooldown per slot
     if (Sim.dashTick(ctl, st, dt) && ED.FX && ED.FX.cue) ED.FX.cue('dcharge'); // a charge refilled
     if (s.mode === 'client') for (const k of MIRROR_TIMERS) if (me[k] > 0) me[k] -= dt; // a mirror hero has no world tick
-    if (s.mode === 'client') { me.atkAge = (me.atkAge === undefined ? 9 : me.atkAge) + dt; me.chanT = st.channel > 0 && !me.moving && me.atkAge < ED.chanWindow(me) ? (me.chanT || 0) + dt : 0; } // Channel (a client's chip estimates the host's value)
     if (ctl.charges < st.maxCharges) { ctl.skillCd -= dt; while (ctl.skillCd <= 0 && ctl.charges < st.maxCharges) { ctl.charges++; ctl.skillCd = ctl.charges < st.maxCharges ? ctl.skillCd + cd0 : 0; } } // a refund past the running cooldown carries into the next charge
+    if (ctl.charges3 > st.skill3Charges) ctl.charges3 = st.skill3Charges;
+    if (ctl.charges3 < st.skill3Charges) { ctl.skill3Cd -= dt; while (ctl.skill3Cd <= 0 && ctl.charges3 < st.skill3Charges) { ctl.charges3++; ctl.skill3Cd = ctl.charges3 < st.skill3Charges ? ctl.skill3Cd + st.skill3Cd : 0; } } // skill 3 charges recharge one at a time the same way
     if (me.downed || me.dead || !view.room) {
       s.prompt = null; if (s.mode !== 'client') me.dashing = false;
       if (me.haulIn) me.haulIn = false;
@@ -499,7 +504,7 @@
       const text = ED.Render.propPrompt(near, view);
       let desc = null, color = null;
       if (near.kind === 'relic' || near.stype === 'relic') { const r = ED.RELICS[near.item]; desc = r.desc; color = ED.RARITY[r.rar].color; }
-      else if (near.kind === 'portal') desc = 'Step down into ' + ED.biomeFor(view.stratum + 1).name + '.';
+      else if (near.kind === 'portal') desc = 'Go to stratum ' + ED.U.roman(view.stratum + 1) + ': ' + ED.biomeFor(view.stratum + 1).name + '.';
       else { desc = ED.Render.propDesc(near, view); if (near.kind === 'reward') color = ED.Render.rewardColor(near.item); }
       s.prompt = { x: near.x, y: near.y, text, desc, color, can: near.kind === 'shop' || near.kind === 'gamble' ? view.gold >= near.price : true };
     }
@@ -511,11 +516,19 @@
         me.haulIn = !!inp.atk && !ctl.latch; me.haulNear = !!near;
         if (inp.atkPressed && !ctl.latch) me.haulPress = (me.haulPress | 0) + 1;
       }
-      if (inp.atk && !ctl.latch && ctl.atkCd <= 0 && !near) {
+      const H = st.hold && st.weapon.kind !== 'bell' ? ED.Stats.HOLD[st.hold] : null; // a held-attack verb: after H.at s held the attacks stop and the verb runs until release (or H.max)
+      if (H && inp.atk && !ctl.latch && !near) {
+        ctl.holdT += dt;
+        if (!ctl.holding && ctl.holdT >= H.at) { ctl.holding = true; G.act({ t: 'hold', on: 1, a: aim }); }
+      } else {
+        if (ctl.holding) G.act({ t: 'hold', on: 0, a: aim, d: Math.round(Math.hypot(me.aimX - me.x, me.aimY - me.y)) });
+        ctl.holding = false; ctl.holdT = 0;
+      }
+      if (s.mode === 'client') me.holdOn = ctl.holding && !(H && H.max > 0 && ctl.holdT - H.at >= H.max); // the walk slows while the verb runs (ED.Stats.moveRate)
+      if (inp.atk && !ctl.latch && ctl.atkCd <= 0 && !near && !ctl.holding) {
         const k = ED.Stats.comboNext(me, view.time), w = ED.Stats.stepWeapon(st, k), cl = isCleave(me, st, w, view.time); // decided before the act: the sim spends the Follow-Through; k: the combo step this attack plays (the host takes it)
         G.act({ t: 'atk', a: aim, k, d: Math.round(Math.hypot(me.aimX - me.x, me.aimY - me.y)) });
         if (s.mode === 'client') { me.atkCount = (me.atkCount | 0) + 1; if (st.swift) me.flowT = ED.CONST.FLOW_T; if (cl) me.cleaveNext = 0; if (st.weapon.combo) { me.comboK = k; me.comboAt = view.time; } } // the host spends Follow-Through on the Cleave it grants
-        if (s.mode === 'client') me.atkAge = 0;
         ctl.atkCd = Math.max(ctl.atkCd, -dt) + ED.Stats.stepInterval(me); // carries the overshoot of this frame so the real rate equals the shown one
         if (w.kind === 'bell') { /* a hauled bell is not swung: no attack pose or cue (cls-bell.js sounds the swing) */ } else {
         s.aim.pulseT = performance.now();
@@ -529,8 +542,9 @@
         } else ED.Audio.play(w.proj === 'firebolt' || w.proj === 'fireball' || w.proj === 'spark' ? 'fire' : w.proj === 'soul' || w.proj === 'holy' || w.proj === 'plague' ? 'magic' : 'shoot', 0.8);
         }
       }
-      if (inp.skill && ctl.charges > 0 && !(st.twBlood && ctl.skillCd > 0)) { // Bloodprice: one cast per GAP whatever the charges
-        const skill = ED.CLASSES[me.cls].skill, N = ED.Stats.skillNums(skill, st), C = ED.CONST;
+      const cls = ED.CLASSES[me.cls];
+      if ((inp.skill || (inp.skill3 && !cls.skill3)) && ctl.charges > 0) { // a hero without a skill 3 casts skill 1 on that binding
+        const skill = cls.skill, N = ED.Stats.skillNums(skill, st), C = ED.CONST;
         let data = null;
         if (skill === 'charge') { // a run toward the cursor: clamp(cursor distance, CHARGE_MIN.., range), cut at walls, at CHARGE_SPEED, untouchable for its whole length; the sim sweeps it for contact
           const ww = ED.AimFx.want(me, s.aim, N.range), end = Sim.castMove(view.room, me.x, me.y, aim, U.clamp(ww.d, N.rangeMin, N.range), me.r, view.locked), len = Math.max(1, Math.hypot(end.x - me.x, end.y - me.y));
@@ -552,7 +566,12 @@
         ctl.charges--;
         if (st.trance) { ctl.tranceT = 4; if (s.mode === 'client') me.tranceT = 4; }
       }
-      const sk2 = ED.CLASSES[me.cls].skill2;
+      if (inp.skill3 && cls.skill3 && ctl.charges3 > 0) { // skill 3 (Fireball): flies along the aim; fires no on-cast boon procs (no Battle Trance)
+        G.act({ t: 'skill', a: aim, data: null, slot: 2 });
+        if (ctl.charges3 === st.skill3Charges) ctl.skill3Cd = st.skill3Cd;
+        ctl.charges3--;
+      }
+      const sk2 = cls.skill2;
       if (inp.skill2 && sk2 && ctl.skill2Cd <= 0) {
         const N2 = ED.Stats.skillNums(sk2, st);
         let data = groundData(view, me, s.aim, sk2, st);
@@ -569,8 +588,10 @@
         let dx = mx, dy = my;
         if (Math.hypot(dx, dy) < 0.2) { dx = Math.cos(aim); dy = Math.sin(aim); }
         const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
+        const ox = me.x, oy = me.y, b = Sim.dashBlink(view.room, view.locked, me, st, view.enemies, Math.atan2(dy, dx)); // Storm Step / Umbral Arms: the hero blinks first (behind a foe the dash is spent there)
+        if (b) { me.x = b.x; me.y = b.y; if (b.behind) { dx = 0; dy = 0; me.face = b.face; } else { dx = b.dx; dy = b.dy; } }
         me.dashT = ED.CONST.DASH.t; me.dashDx = dx; me.dashDy = dy;
-        G.act({ t: 'dash', dx, dy });
+        G.act(b ? { t: 'dash', dx, dy, blink: b.behind ? 1 : 0, ox: Math.round(ox), oy: Math.round(oy), bx: Math.round(b.x), by: Math.round(b.y) } : { t: 'dash', dx, dy, ox: Math.round(ox), oy: Math.round(oy) });
       }
     }
     Sim.movePlayer(me, { mx, my }, dt, view.room, view.locked, view.zones, view.enemies); // a crowd of foes touching the hero slows the walk
@@ -639,11 +660,12 @@
   }
 
   // After the frame's casts: ready ground/move skills for the landing preview and the attack-cooldown fraction for the cursor arc.
+  // line: a shot skill (Fireball) previewed as its flight line to the first wall and its burst ring.
   function addReady(a, n, slot, id, st) {
-    const ai = ED.skillAim(id, st);
-    if (ai.aim !== 'ground' && id !== 'step') return n;
+    const ai = ED.skillAim(id, st), line = id === 'fireball';
+    if (ai.aim !== 'ground' && id !== 'step' && !line) return n;
     const g = a.ground[n] || (a.ground[n] = {});
-    g.slot = slot; g.id = id; g.move = ai.aim !== 'ground'; g.range = ai.range || 140; g.walk = !!ai.walk;
+    g.slot = slot; g.id = id; g.move = ai.aim !== 'ground' && !line; g.line = line; g.range = ai.range || 140; g.walk = !!ai.walk;
     return n + 1;
   }
   function aimExtras(s, me, view) {
@@ -651,6 +673,7 @@
     let n = 0;
     if (ctl.charges > 0) n = addReady(a, n, 0, cls.skill, st);
     if (cls.skill2 && ctl.skill2Cd <= 0) n = addReady(a, n, 1, cls.skill2, st);
+    if (cls.skill3 && ctl.charges3 > 0) n = addReady(a, n, 2, cls.skill3, st);
     a.ground.length = n;
     for (let i = 0; i < n; i++) { const g = a.ground[i]; g.r = g.move ? 0 : ED.skillRadius(g.id, st); }
     const iv = ED.Stats.attackInterval(me);

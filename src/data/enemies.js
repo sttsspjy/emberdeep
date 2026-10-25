@@ -37,40 +37,25 @@
     mireworm: { name: 'Mire Worm', ai: 'burrower', look: 'worm', col: { a: '#6aa67f', b: '#2c4f3f', c: '#e8ff9a' }, hp: 46, spd: 90, dmg: 3.75, r: 12, xp: 6, cost: 4,
       burrow: { near: 80, dig: 1.2, tele: 0.8, radius: 46, expose: 2.2, ring: 8 } },
 
-    // ---------------- Stratum III: Rimefrost ----------------
-    icewolf: { name: 'Rime Wolf', ai: 'charger', look: 'wolf', col: { a: '#dcefff', b: '#8aa8c4', c: '#3ad1ff' }, hp: 30, spd: 82, dmg: 3.25, r: 11, xp: 3, cost: 2,
+    // ---------------- Kept from cut strata (ids are art keys): reskins in the rosters (I icewolf, II frostwisp, III drone, IV sentinel), the rest for bosses and checks only ----------------
+    icewolf: { name: 'Grave Hound', ai: 'charger', look: 'wolf', col: { a: '#9a917b', b: '#4f4a3e', c: '#ff5a3a' }, hp: 26, spd: 80, dmg: 2.75, r: 11, xp: 3, cost: 2,
       charge: { range: 230, windup: 0.5, speed: 390, dur: 0.34, cd: 2.0 }, howl: { cd: 9, windup: 0.5, r: 230, mul: 1.3, dur: 3 } },
-    frostwisp: { name: 'Frost Wisp', ai: 'swarm', look: 'wisp', col: { a: '#bff0ff', b: '#4fb7ff', c: '#ffffff' }, hp: 13, spd: 96, dmg: 1.75, r: 8, xp: 1, cost: 1, fly: true, chillHit: true,
+    frostwisp: { name: 'Mire Gnat', ai: 'swarm', look: 'wisp', col: { a: '#8f8a6a', b: '#4f4b36', c: '#e8ff9a' }, hp: 13, spd: 96, dmg: 1.75, r: 8, xp: 1, cost: 1, fly: true,
       dive: { min: 70, range: 170, hover: 115, windup: 0.55, speed: 340, dur: 0.32, cd: 4.2 } },
-    rimemage: { name: 'Rime Mage', ai: 'caster', look: 'robed', col: { a: '#3e6a9a', b: '#1d3557', c: '#9fefff' }, hp: 30, spd: 46, dmg: 2.5, r: 10, xp: 4, cost: 3,
-      cast: { type: 'ring', n: 8, speed: 150, cd: 3.0, windup: 0.8, r: 6, kind: 'ice' }, step: STEP },
-    frozenskel: { name: 'Frozen Dead', ai: 'chaser', look: 'skeleton', col: { a: '#d6f1ff', b: '#7fa3bf', c: '#3ad1ff' }, hp: 36, spd: 60, dmg: 3, r: 10, xp: 3, cost: 2,
+    frozenskel: { name: 'Pale Dead', ai: 'chaser', look: 'skeleton', col: { a: '#d6d1c4', b: '#8a8478', c: '#ff5a3a' }, hp: 36, spd: 60, dmg: 3, r: 10, xp: 3, cost: 2,
       lunge: { range: 46, windup: 0.4, speed: 260, dur: 0.18, cd: 1.4 } },
-    icegolem: { name: 'Ice Golem', ai: 'tank', look: 'golem', col: { a: '#bfe3ff', b: '#6d93b5', c: '#3ad1ff' }, hp: 78, spd: 38, dmg: 4, r: 16, xp: 8, cost: 5,
-      slam: { range: 54, radius: 70, windup: 0.9, cd: 2.8, ring: { n: 10, speed: 150, kind: 'ice' } } },
-    frostknight: { name: 'Frost Warden', ai: 'tank', look: 'knight', col: { a: '#e3f6ff', b: '#5f86a8', c: '#3ad1ff' }, hp: 95, spd: 46, dmg: 4.25, r: 15, xp: 11, cost: 5,
-      slam: { range: 54, radius: 68, windup: 0.8, cd: 2.4, ring: { n: 8, speed: 160, kind: 'ice' } } },
-    sentinel: { name: 'Frost Sentinel', ai: 'tank', look: 'sentinel', col: { a: '#b9d9f0', b: '#4d7391', c: '#7fe3ff' }, hp: 66, spd: 34, dmg: 3.75, r: 15, xp: 7, cost: 4,
+    sentinel: { name: 'Hollow Sentinel', ai: 'tank', look: 'sentinel', col: { a: '#6a5a8a', b: '#2d2445', c: '#ff7ad9' }, hp: 66, spd: 34, dmg: 3.75, r: 15, xp: 7, cost: 4,
       slam: { range: 50, radius: 58, windup: 0.8, cd: 3.0 }, guard: { arc: 2.2, mul: 0.2, turn: 1.8 },
       bash: { range: 260, min: 80, windup: 0.75, speed: 300, dur: 0.45, cd: 4 } },
-
-    // ---------------- Stratum IV: Cinderforge ----------------
-    imp: { name: 'Cinder Imp', ai: 'lobber', look: 'imp', col: { a: '#d8442a', b: '#7a1f12', c: '#ffd36b' }, hp: 20, spd: 72, dmg: 3.5, r: 9, xp: 3, cost: 2,
+    imp: { name: 'Pit Imp', ai: 'lobber', look: 'imp', col: { a: '#8a5a4a', b: '#4a2a22', c: '#ffd36b' }, hp: 20, spd: 72, dmg: 3.5, r: 9, xp: 3, cost: 2,
       keep: [90, 200], lob: { cd: 2.6, windup: 0.45, radius: 42, flight: 0.9, fire: 1.6 } },
-    lavahound: { name: 'Lava Hound', ai: 'charger', look: 'wolf', col: { a: '#4a2620', b: '#21100c', c: '#ff8a2a' }, hp: 34, spd: 80, dmg: 3.5, r: 11, xp: 3, cost: 2,
-      charge: { range: 220, windup: 0.5, speed: 380, dur: 0.34, cd: 2.1, trail: true } },
-    automaton: { name: 'Forge Automaton', ai: 'tank', look: 'golem', col: { a: '#8a6a4a', b: '#3d2c20', c: '#ff8a2a' }, hp: 88, spd: 36, dmg: 4.5, r: 16, xp: 9, cost: 5,
-      slam: { range: 54, radius: 70, windup: 0.9, cd: 2.8, ring: { n: 12, speed: 160, kind: 'fire' } } },
-    flameturret: { name: 'Flame Totem', ai: 'turret', look: 'totem', col: { a: '#5a3a2a', b: '#2b1a12', c: '#ff7a2a' }, hp: 42, spd: 0, dmg: 2.5, r: 13, xp: 4, cost: 3,
-      pattern: { type: 'spiral', cd: 3.4, windup: 0.6, dur: 2.0, rate: 0.11, arms: 2, speed: 150, r: 6, kind: 'fire', turn: 2.2 } },
-    cinderbat: { name: 'Cinder Bat', ai: 'swarm', look: 'bat', col: { a: '#6b2a1c', b: '#2d0f08', c: '#ffcf4a' }, hp: 13, spd: 108, dmg: 2, r: 8, xp: 1, cost: 1, fly: true, burnHit: true },
-    forgeknight: { name: 'Forge Knight', ai: 'tank', look: 'knight', col: { a: '#7a5a46', b: '#2e1c14', c: '#ff8a2a' }, hp: 105, spd: 46, dmg: 4.75, r: 15, xp: 12, cost: 5,
-      slam: { range: 54, radius: 70, windup: 0.8, cd: 2.4, ring: { n: 10, speed: 170, kind: 'fire' } } },
-    drone: { name: 'Ember Drone', ai: 'orbiter', look: 'drone', col: { a: '#8a7a6a', b: '#3a2c24', c: '#ff8a2a' }, hp: 22, spd: 78, dmg: 2.5, r: 9, xp: 4, cost: 3, fly: true,
+    flameturret: { name: 'Totem', ai: 'turret', look: 'totem', col: { a: '#5a4a3a', b: '#2b2218', c: '#ffb06a' }, hp: 42, spd: 0, dmg: 2.5, r: 13, xp: 4, cost: 3,
+      pattern: { type: 'spiral', cd: 3.4, windup: 0.6, dur: 2.0, rate: 0.11, arms: 2, speed: 150, r: 6, kind: 'orb', turn: 2.2 } },
+    drone: { name: 'Temple Drone', ai: 'orbiter', look: 'drone', col: { a: '#8a8a6a', b: '#3a3a2a', c: '#e8c66b' }, hp: 22, spd: 78, dmg: 2.5, r: 9, xp: 4, cost: 3, fly: true,
       orbit: { r: 160 }, burst: { cd: 2.6, windup: 0.5, n: 3, gap: 0.13, speed: 270, mul: 0.65, kind: 'droneshot' } },
 
-    // ---------------- Stratum V: Drowned Sanctum ----------------
-    drowned: { name: 'The Drowned', ai: 'chaser', look: 'zombie', col: { a: '#6f9a8a', b: '#2f5249', c: '#e8c66b' }, hp: 42, spd: 54, dmg: 3.25, r: 11, xp: 3, cost: 2,
+    // ---------------- Stratum III: Drowned Sanctum ----------------
+    drowned: { name: 'Drowned', ai: 'chaser', look: 'zombie', col: { a: '#6f9a8a', b: '#2f5249', c: '#e8c66b' }, hp: 42, spd: 54, dmg: 3.25, r: 11, xp: 3, cost: 2,
       lunge: { range: 48, windup: 0.42, speed: 250, dur: 0.2, cd: 1.5 } },
     eel: { name: 'Gloom Eel', ai: 'charger', look: 'eel', col: { a: '#2a6a7a', b: '#123540', c: '#e8ff6a' }, hp: 30, spd: 76, dmg: 3.25, r: 10, xp: 3, cost: 2,
       charge: { range: 240, windup: 0.5, speed: 400, dur: 0.36, cd: 1.9 } },
@@ -86,7 +71,7 @@
     tidecaller: { name: 'Tidecaller', ai: 'caster', look: 'robed', col: { a: '#1f6f8f', b: '#0c2f3f', c: '#ffe08a' }, hp: 110, spd: 48, dmg: 3.75, r: 13, xp: 12, cost: 5,
       cast: { type: 'ring', n: 14, speed: 160, cd: 2.6, windup: 0.8, r: 6, kind: 'water' }, step: STEP },
 
-    // ---------------- Stratum VI: Starless Abyss ----------------
+    // ---------------- Stratum IV: Starless Abyss ----------------
     shade: { name: 'Shade', ai: 'chaser', look: 'shade', col: { a: '#2a1f44', b: '#120c22', c: '#ff7ad9' }, hp: 40, spd: 78, dmg: 3.5, r: 10, xp: 3, cost: 2,
       lunge: { range: 54, windup: 0.4, speed: 300, dur: 0.2, cd: 1.3 } },
     starspawn: { name: 'Starspawn', ai: 'orbiter', look: 'star', col: { a: '#f2e6ff', b: '#9a7ad9', c: '#ffffff' }, hp: 16, spd: 102, dmg: 2, r: 8, xp: 1, cost: 1, fly: true,
@@ -106,28 +91,36 @@
     minion: { name: 'Risen Bones', ai: 'ally', look: 'skeleton', col: { a: '#b6ffe0', b: '#4c8f78', c: '#7dffd9' }, hp: 40, spd: 95, dmg: 10, r: 9, xp: 0, cost: 0, ally: true },
 
     // ---------------- Bosses (absolute HP, scaled by party and pact; refHp = design HP that chill, Conflagration and Wildfire measure against) ----------------
-    bonewarden: { name: 'The Bone Warden', title: 'Keeper of the First Graves', ai: 'boss', look: 'b_warden', col: { a: '#ece4cc', b: '#7d745f', c: '#ff5a3a' },
-      hp: 4350, refHp: 800, spd: 60, dmg: 2.4, r: 24, xp: 40, boss: true, quote: 'None leave the Ossuary. Not even the dead.' },
-    sporemother: { name: 'The Sporemother', title: 'Bloom of the Glowmire', ai: 'boss', look: 'b_spore', col: { a: '#c86bff', b: '#5b2a7a', c: '#7dffd9' },
-      hp: 5950, refHp: 1500, spd: 34, dmg: 2.4, r: 32, xp: 60, boss: true, quote: 'Rest, little ones. Become soil. Become ME.' },
-    rimeheart: { name: 'Rimeheart Colossus', title: 'The Frozen Oath', ai: 'boss', look: 'b_rime', col: { a: '#d8f0ff', b: '#6d93b5', c: '#3ad1ff' },
-      hp: 16500, refHp: 2600, spd: 44, dmg: 2.4, r: 30, xp: 80, boss: true, quote: 'THE KING SAID: HOLD THE HALL. I HOLD.' },
-    forgelord: { name: 'The Forgelord', title: 'Last Smith of the Empire', ai: 'boss', look: 'b_forge', col: { a: '#6a4636', b: '#2a1810', c: '#ff8a2a' },
-      hp: 26600, refHp: 4200, spd: 70, dmg: 3.3, r: 26, xp: 100, boss: true, quote: 'Steel remembers every hammer-blow. So will you.' },
-    drownedking: { name: 'The Drowned King', title: 'Tyrant Beneath the Tide', ai: 'boss', look: 'b_king', col: { a: '#3f8f88', b: '#173d3b', c: '#e8c66b' },
-      hp: 85700, refHp: 5600, spd: 62, dmg: 4.425, r: 26, xp: 120, boss: true, quote: 'Kneel. The sea has already taken your breath.' },
-    hollowking: { name: 'The Hollow King', title: 'Crown of the Starless Abyss', ai: 'boss', look: 'b_hollow', col: { a: '#2a1f44', b: '#0e0820', c: '#ff7ad9' },
-      hp: 90300, refHp: 7800, spd: 70, dmg: 3.925, r: 24, xp: 160, boss: true, quote: 'You came so far down... only to fill my empty crown.' },
+    bonewarden: { name: 'Bone Warden', title: 'After a slam his sword is stuck: he takes +50% damage', ai: 'boss', look: 'b_warden', col: { a: '#ece4cc', b: '#7d745f', c: '#ff5a3a' },
+      hp: 9200, refHp: 800, spd: 80, dmg: 2.4, r: 24, xp: 40, boss: true },
+    sporemother: { name: 'Sporemother', title: 'Break the pods to clear the spore carpet', ai: 'boss', look: 'b_spore', col: { a: '#c86bff', b: '#5b2a7a', c: '#7dffd9' },
+      hp: 12600, refHp: 1500, spd: 34, dmg: 2.4, r: 32, xp: 60, boss: true },
+    // arena: the boss room's fixed layout (boss-king.js, boss-hollow.js; src/sim/arena.js lays it). Offsets in tiles from the room centre (floor(w / 2), floor(h / 2) + 1): pillars and dais [dx, dy, w, h], lanterns [dx, dy].
+    drownedking: { name: 'Drowned King', title: 'Stand on raised stone when the tide comes. Hide behind pillars from the beam.', ai: 'boss', look: 'b_king', col: { a: '#3f8f88', b: '#173d3b', c: '#e8c66b' },
+      hp: 17000, refHp: 4200, spd: 62, dmg: 3.6, r: 26, xp: 120, boss: true, quote: '',
+      arena: { kind: 'tide', pillars: [[-9, -4, 2, 2], [7, -4, 2, 2], [-9, 3, 2, 2], [7, 3, 2, 2], [-4, -1, 2, 2], [2, -1, 2, 2], [-1, -5, 2, 2], [-1, 2, 2, 2]],
+        dais: [[-13, -7, 3, 3], [10, -7, 3, 3], [-13, 5, 3, 3], [10, 5, 3, 3], [-1, -7, 3, 2], [-1, 5, 3, 3]] } },
+    hollowking: { name: 'Hollow King', title: 'Light the lanterns in the dark. Move to the middle when the edge cracks.', ai: 'boss', look: 'b_hollow', col: { a: '#2a1f44', b: '#0e0820', c: '#ff7ad9' },
+      hp: 66000, refHp: 7000, spd: 70, dmg: 2.9, r: 24, xp: 160, boss: true, quote: '',
+      arena: { kind: 'crown', lanterns: [[-11, -5], [11, -5], [-11, 4], [11, 4], [-5, 0], [5, 0]] } },
+
+    // ---------------- Boss arena pieces (minion: never in a roster; noLoot: no xp, gold or hearts) ----------------
+    sporepod: { name: 'Spore Pod', ai: 'pod', look: 'spitter', art: 'spitter', col: { a: '#b45cf0', b: '#4e2370', c: '#9cff6a' }, hp: 14, spd: 0, dmg: 0, r: 13, xp: 0, cost: 0, minion: true, noLoot: true },
+    sporebud: { name: 'Spore Bud', ai: 'bud', look: 'puff', art: 'sporepuff', col: { a: '#d89cff', b: '#6b3a8a', c: '#9cff6a' }, hp: 6, spd: 46, dmg: 0, r: 8, xp: 0, cost: 0, minion: true, noLoot: true, fly: true },
 
     // ---------------- Fodder (one per biome, appended last: the wire index follows the order; never in a roster) ----------------
     // Horde filler: untelegraphed touch damage capped at FODDER_CAP of the victim's max health, no drops of their own (the room's xp budget pays through motes), never elite or exposed.
-    // art names the foe type whose animations the renderer reuses, tinted with col; hp scales 1 + 0.25 per stratum only.
-    bonemite: { name: 'Bone Mite', ai: 'swarm', look: 'bat', art: 'bat', col: { a: '#4a4150', b: '#2a2430', c: '#b8503f' }, hp: 7, spd: 84, dmg: 1.5, r: 6, xp: 0, cost: 0, fodder: true, fly: true },
-    sporeling: { name: 'Sporeling', ai: 'swarm', look: 'slime', art: 'glowlet', col: { a: '#5c8f86', b: '#2c4f49', c: '#0a1f1b' }, hp: 7, spd: 66, dmg: 1.5, r: 7, xp: 0, cost: 0, fodder: true },
-    rimemote: { name: 'Rime Mote', ai: 'swarm', look: 'wisp', art: 'frostwisp', col: { a: '#8aa6b8', b: '#4a6578', c: '#d6e6ee' }, hp: 7, spd: 78, dmg: 1.5, r: 6, xp: 0, cost: 0, fodder: true, fly: true },
-    ashimp: { name: 'Ash Imp', ai: 'swarm', look: 'bat', art: 'cinderbat', col: { a: '#4a3a35', b: '#241815', c: '#c98a3a' }, hp: 7, spd: 80, dmg: 1.5, r: 7, xp: 0, cost: 0, fodder: true, fly: true },
-    brinepolyp: { name: 'Brine Polyp', ai: 'swarm', look: 'jelly', art: 'jellet', col: { a: '#8f6f88', b: '#5a3a55', c: '#d8c4d4' }, hp: 7, spd: 70, dmg: 1.5, r: 7, xp: 0, cost: 0, fodder: true, fly: true },
-    voidmote: { name: 'Void Mote', ai: 'swarm', look: 'star', art: 'starspawn', col: { a: '#6f6585', b: '#352c4d', c: '#b8a8d8' }, hp: 7, spd: 90, dmg: 1.5, r: 6, xp: 0, cost: 0, fodder: true, fly: true },
+    // art names the foe type whose animations the renderer reuses, tinted with col; hp (World.fodderHp: + 30% per depth step of the stratum) takes 3+ hits of every hero's stratum I weapon (2 of a heavy one); their deaths fire no on-death effect (World.onDeathFx).
+    bonemite: { name: 'Bone Mite', ai: 'swarm', look: 'bat', art: 'bat', col: { a: '#4a4150', b: '#2a2430', c: '#b8503f' }, hp: 50, spd: 84, dmg: 1.5, r: 6, xp: 0, cost: 0, fodder: true, fly: true },
+    sporeling: { name: 'Sporeling', ai: 'swarm', look: 'slime', art: 'glowlet', col: { a: '#5c8f86', b: '#2c4f49', c: '#0a1f1b' }, hp: 50, spd: 66, dmg: 1.5, r: 7, xp: 0, cost: 0, fodder: true },
+    brinepolyp: { name: 'Brine Polyp', ai: 'swarm', look: 'jelly', art: 'jellet', col: { a: '#8f6f88', b: '#5a3a55', c: '#d8c4d4' }, hp: 50, spd: 70, dmg: 1.5, r: 7, xp: 0, cost: 0, fodder: true, fly: true },
+    voidmote: { name: 'Void Mote', ai: 'swarm', look: 'star', art: 'starspawn', col: { a: '#6f6585', b: '#352c4d', c: '#b8a8d8' }, hp: 50, spd: 90, dmg: 1.5, r: 6, xp: 0, cost: 0, fodder: true, fly: true },
+
+    // ---------------- Champions (stratum IV champion rooms, champions.js; appended after the fodder: the wire index follows the order; never in a roster) ----------------
+    // HP x the elite factor of the stratum (World.ELITE); no affix, no drops of their own: the room pays an elite room's reward.
+    twinlance: { name: 'Lancer', ai: 'champion', look: 'knight', art: 'voidknight', col: { a: '#d8c27a', b: '#4a3c1c', c: '#ffe08a' }, hp: 380, spd: 64, dmg: 8, r: 15, xp: 0, cost: 0, champ: 'twins' },
+    twinhammer: { name: 'Hammer', ai: 'champion', look: 'knight', art: 'forgeknight', col: { a: '#9a6a44', b: '#2a1810', c: '#ff8a3a' }, hp: 380, spd: 54, dmg: 8.8, r: 17, xp: 0, cost: 0, champ: 'twins' },
+    mimic: { name: 'Mimic', ai: 'champion', look: 'shade', art: 'shade', col: { a: '#2c2440', b: '#100c1c', c: '#e8e0ff' }, hp: 700, spd: 70, dmg: 7, r: 13, xp: 0, cost: 0, champ: 'mimic' },
   };
 
   ED.ENEMY_IDS = Object.keys(E);
@@ -139,7 +132,7 @@
     brutal: { name: 'Brutal', color: '#ff6a4a', desc: 'hits much harder' },
     warded: { name: 'Warded', color: '#7fc8ff', desc: 'shielded until the ward breaks' },
     volatile: { name: 'Volatile', color: '#ffb13a', desc: 'explodes on death' },
-    vampiric: { name: 'Vampiric', color: '#d43a5a', desc: 'heals when it hurts you' },
+    vampiric: { name: 'Vampiric', color: '#d43a5a', desc: 'heals when it hits you' },
   };
   ED.AFFIX_IDS = Object.keys(ED.AFFIXES);
   ED.hasAffix = (e, id) => !e.affixOff && (e.elite === id || e.elite2 === id); // either affix slot; none while Hex the Strong suppresses them (e.affixOff)

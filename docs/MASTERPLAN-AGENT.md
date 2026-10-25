@@ -1,5 +1,19 @@
 # Wickdeep — Agent Kanban
 
+## v6 contracts (user 2026-10-25, playtest 5; supersede v4 contracts where they clash)
+- **Branches**: integration `feat/v6` (from `feat/punish` 8b36a1b), worktree `../game-v6`; workers on `feat/v6-<area>` (map, elements2, pyro, encounters, bosses-a, bosses-b, text, balance; `docs/v6-readme`), merged by the Advisor.
+- **Strata** 4, neutral: I Ossuary, II Glowmire, III Drowned Sanctum, IV Starless Abyss (finale). No weak/resist, no `elemAff`. Per-stratum arrays have 4 entries.
+- **Map**: STS layered DAG; I–III 15 rows, IV 6 rows (combat, combat|event, champion twins, rest|shop, champion mimic, rest); one entry door, one exit per edge, no backtracking. Node types start/combat/dark/elite/champion/shop/rest/treasure/event/boss. `W.startChampion(room)`.
+- **Elements**: one verb each (Fire Burn + hold flame cone · Ice freeze, skills Shatter · Lightning dash discharges · Poison weaken + clouds · Holy perfect dodge · Shadow backstab/decoy · General finisher). Keystone and evolution change a control. Ascended, duos, Mutations, Twists, Attunement and 12 open stat cards cut. Fork rank 2 boss II, rank 3 boss III; fork parity measured at III rank 2 / IV rank 3 (supersedes the v4 IV/VI bands).
+- **Burn**: one unified Burn, stacks, same per-hero value from every source; API `W.addBurn(e, amount, p)` (damage-based).
+- **Pyro**: Ember Bolt (cuts spell cooldowns), Fireball slot 2 (`skill3`, RMB/R; heroes without slot 2 cast skill 1), Nova Q, Meteor E; ~70% damage from spells.
+- **Trash**: fodder ≥ 3 hits at I; fodder deaths fire no on-death effects; fodder only with threat waves; late spawns are dangerous; room clears when the last threat dies. DoT ticks: sound, tint, summed numbers.
+- **Text**: plain wording, no flavour lines or titles.
+- **Main merged** (playstyle + Bellwarden, `main` 3da391b): the v6 map replaces the route lattice; kept: door consent (`P[26]` = `Dungeon.doorWant`: 1 + exit index), threat pips, `ED.Icons` glyphs, heal trim, Bellwarden, secrets, Wardrobe. Drowned Bell in the dark rooms of stratum III.
+- **Arenas**: one state `room.arena = {k}` in `src/sim/arena.js` (kinds field 4: Bone Warden walls + Sporemother carpet · tide 1 Drowned King · crown 2 Hollow King · champ 3 champions), one snapshot row `AR`, cleared on room change; client `src/client/arena.js`; one `Bosses.lib`. Fury only on IV.
+- **Bots**: every batch `--nice` (idle priority), at most half the cores, one batch at a time (user: full-priority batches make the PC unusable).
+- **Versions**: `N.VERSION` 15, `CODE_VERSION` 9 (layout of 8), profile era 6 (era < 6 / code < 9 remap six-strata boss bits and deepest). Hero row: `P[24]` bells, `P[26]` door want, `P[27]` Pyro Sparks.
+
 ## v4 contracts (all advisors; change only by agreement)
 - **Branches**: integration `feat/v4` (game-f1 merges). Each advisor works in its own worktree `../game-<area>` on `feat/v4-<area>` cut from `feat/v4`, merges into it (merge only). Branches that touch `combat.js` are cut after the spatial grid is merged.
 - **Gate E1** (game-88: grid, bigger rooms, fodder, lantern → Dark doors, dash charges, crowd slow) lands before anyone tunes numbers; until then 6a and f1 build mechanics only.
@@ -18,20 +32,22 @@
 - **Evolutions**: geometry or timing only, never an extra input or an Nth-hit extra; `W.evoHit(p, e, a, src)` per landed hit or bell hurl / reel strike, `W.evoLine(p, x0, y0, x1, y1, src)` along an attack's path.
 - **One trigger per element**: Fire ground, Ice blocking + skill cash-in, Lightning skill casts, Poison cripple, Holy hit/stand still, Shadow kills + dash.
 - **Solids**: frozen foes (Glacier), pillars, Firebreak ground, Storm Anchors block foes and enemy shots only.
-- **Wire**: `N.ZK` + `cinder firebreak pillar anchor vigil`; `N.CAPS` + `detonate 16, tether 8, rebuke 6, reapchain 8, shatter 8, hurl 8, reel 8`; E flag bits 24 Quarry, 25 dose, 26 `affixOff`, 27 `hunted`; `P[25]` `metroN`, `P[26]` door want (1 + `Dungeon.DOOR_DIRS` index); `dashRefund {to, n}` msg (dash charges are client-side).
-- **Floors**: `room.layer`, `room.sealed`, `room.threat` from floor gen (no runtime door state); reward `twist`; offer src `twist`; `ED.LATE` (FLAT_S 3, MUT_S 4, FILL_S 4, TWIST_N 2).
+- **Wire**: `N.ZK` + `cinder firebreak pillar anchor vigil`; `N.CAPS` + `detonate 16, tether 8, rebuke 6, reapchain 8, shatter 8, hurl 8, reel 8`; E flag bits 24 Quarry, 25 dose, 26 `affixOff`, 27 `hunted`; `P[25]` `metroN`, `P[26]` door want (`Dungeon.doorWant`: 1 + exit index); `dashRefund {to, n}` msg (dash charges are client-side).
+- **Floors**: `room.threat` from floor gen (no runtime door state; the lattice's `room.layer` / `room.sealed` are gone with the v6 map); reward `twist`; offer src `twist`; `ED.LATE` (FLAT_S 3, MUT_S 4, FILL_S 4, TWIST_N 2).
 - **Capacitor × Peal**: a Peal detonation applies max(Resonance `p.pealResLast`, CAP_MUL), never the product.
 - **Testing**: agents never open a visible browser window (headless only, one reused browser); the user does the vsync fps check. Bot checks ≤ 3 min (`tools/bal.js`), one final confirm ≤ 15 min.
 
 ## Todo
+- Next (v6, HANDOFF-2026-10-25d): path spread (mid wins by main path: General 59%, Lightning 28, Holy 27, Poison 25, Ice 13, Shadow 4, Fire 0; Fire needs a design fix, numbers alone failed) · `--full` fails rand 2.3% (≤ 1), Pact 3 33.2% (23–31), trio5 29.6% (15–25) · Shade mid 7% · Hollow King 46% wipes, twins 21% · full-Hearth Ranger dies in stratum I on some seeds · dead duo code in `tools/sim.js`, unused `lava`/`ice` hazard pools in `tiles.js` · Tab map panel uses half its width.
 - Next (playstyle, HANDOFF-2026-10-25c): Pact ladder on route floors (P1 40.8% ≥ max, P4 12.2% < 14) · party cells (duo 27.6% > 25, trio 11.2% < 15; party foe HP / wave formula) · Bellwarden hurl share (hurl strikes 6–8% of damage; Peal, slam, procs carry it) · other heroes' forks: ≤ 8 pure "+X%" rank-3 forms get a positional or timing hook (user scope round 2) · era bump + news for returning players (ask user) · audio.js stale bell comments and dead `bstrike.h` branch · elite-room HP loss 4.4% for the Bellwarden (< 7.5% floor).
 - Next (priority order; HANDOFF-2026-10-25): Pact 3 Champions costs nothing (extra elites pay their own way) · fresh smart 5% (new players) · path payoff · boss melee windows, then take back melee EHP · deterministic Shade evasion · Armory variant art (tint only) · sheet model gaps from the audits (Bone Knights cleave, Death Blossom, Throw return, Volley pack, Burn double count, Contagion one-foe term, Siege reach) · in-class weapon spreads · bot co-op check.
 - Carried over: dead `minionBurst` guard (`class-necro.js`, `combat.js`) · two Necromancers with Soul Command show no command stream · deeds are a 31-bit mask (a 32nd deed needs new profile storage; secrets have their own mask) · aim banner for party clients · orphaned `simpool.js --worker` processes after a killed parent · Cleric Sacred Lantern ally shield gets its own allowance · optional key that opens the sheet on Map · DawnLike "Platino" sprite hidden somewhere.
 
 ## In-progress
-- Playtest of playstyle v6 (user): route map, door consent, new element verbs, Mutations, Twists, reworked Bellwarden; then PR `feat/playstyle` → `main`.
+- v6 PR to main: waits for the user's playtest of `feat/v6` (`../game-v6`).
 
 ## Done
+- v6 on `feat/v6` (2026-10-25): STS map + 4 neutral strata (W1), encounters/fodder (W4), bosses Bone Warden, Sporemother (W5a), Drowned King, Hollow King, champions (W5b), Pyro caster (W3), plain text (W6), element verbs + unified Burn + cuts (W2), README/news/era 6 + save remap (W8), balance (W7): hero HP Knight 32 / Pyro 31 / Cleric 27, `FOE_DMG` 2.15, boss HP Bone Warden 9200 / Sporemother 12600 / Hollow King 66000, 22 fork numbers, pick.js `PATH_CAL`; `--full` at `ffeea76` 8/11 (mid 20.5, max 38.7, P5 11.4).
 - Playstyle balance (2026-10-25): bot keeps hurl range (`BELL_STAND` 105 px), Bellwarden HP 44 → 36, Peal 27 + 2.7P, Thunderclap clap +50% / Peal +20%, Wrecking Ball shock 10%; `--full` at `917260b` 7/11 (rand 0.8, mid 19.0, max 39.7, P5 11.7 pass; P1 40.8, P4 12.2, duo 27.6, trio 11.2 out of band); every hero mid 13–29%, max 31–55%.
 - Bellwarden rework (W3 `feat/ps-bell`, merged into `feat/playstyle` at `e0df402`; W6 integration): bell states Hand / Fly / Anchor / Reel, wind (hold, ×0.7 move, winding strikes ≤ ×0.6, no attack), hurl (release at wind ≥ 0.5, an attack), reel (tap, drags foes), juggle, snap home (room, boss phase, downed via the class `down` hook from world.js), Resonance → Peal; Anchor Leap (id `heave`); 12 route cards rewritten; `ED.Bell.cycle` loop model, `BELL_EFF` 0.95 / 1.15; client prediction with state snaps (`bp.rss`); browse `--scen=bell` (wind, hurl, anchor, reel, leap, Peal, net); pick.js bell folds.
 - Playstyle v6 on `feat/playstyle` (2026-10-25, 7 workers; merged W4 elements → W5 late → W7 FX → W1 floors → W2 map, W6 integration): route lattice floors (layer = gx + gy, sealed back doors, ≥ 3 routes, threat pips), co-op door consent, healing trim (`HEART_KILL` 2%, no clear hearts, Forager = +8% per heal source), `ROOM_XP` / `FODDER_Q` / `WAVES` 3 rebudget · one `ED.Icons.room` glyph table, labelled map, door previews · element paths at 12 ranks with Attunement commons, 12 cards retired, Thunderhead → Capacitor, new evolutions, 15 duos audited, 28 Mutations · late pool filter, Mutation pin and late fill, 4 Twists · FX for zones, foe markers, events, Charged / Beat chips · pick.js priors and folds for every new card, bot Twist / Capacitor / dashRefund policy, Purse share line · `N.VERSION` 13.
@@ -69,7 +85,7 @@
 - `ED.ClassFx.shot[kind]` returns true to replace the projectile body; false or nothing decorates it.
 - Bot cost: small batches, one final confirm (user hates long bot runs).
 - **Retired cards** (`b.retired`): defined so saves and MOVED_RELICS keep their ids, never offered, never ranked by forge or late fill; pick.js POOL_OF and browse.js hands skip them. Do not delete an id; Thunderhead is the one deleted card.
-- **Route floors**: back doors are `doors[d] = -1` plus `room.sealed[d]`; bots and browse smoke walk forward doors only. Door consent counts living = not downed and not dead (world.js `checkDoors`, render.js `R.doorWant`).
+- **Map floors**: `room.doors` holds exits only (`n0`, `n1`, ...); the entry `s` is drawn shut and never opens; bots and browse smoke walk exits only. Door consent counts living = not downed and not dead (world.js `checkDoors`, render.js `R.doorWant`).
 - **Bloodprice** gap (0.25 s) is client-side like every cooldown; the host does not enforce it.
 - **Hunted** spawns its champion by swapping `World.AFFIX2` around `makeElite` (one affix).
 - **pick.js** values the playstyle cards with guessed coefficients (marked in the file); re-read them against bot runs before trusting a pick change.
@@ -89,3 +105,4 @@
 - 2026-10-25: playstyle v6 on `feat/playstyle`: plan v3 (A–E), W1–W5, W7 merged, W6 integration (pick.js, bots, docs, `N.VERSION` 13); Bellwarden rework (W3) and the balance phase pending.
 - 2026-10-25: Bellwarden rework (W3) merged into `feat/playstyle`; W6 Bell integration (docs, browse bell scenario, `down` hook, pick.js).
 - 2026-10-25: playstyle balance: Bellwarden bot and numbers; one `--full` at `917260b` (7/11); handoff HANDOFF-2026-10-25c.md.
+- 2026-10-25: v6 (playtest 5) on `feat/v6`: main merged in, W1–W8 merged, balance `--full` 8/11; handoff HANDOFF-2026-10-25d.md.

@@ -26,7 +26,7 @@ function journey(seed0, quiet) {
     rooms += r.rooms.visited; roomsTotal += r.rooms.total;
     const res = S.applyRun(p, sum); if (process.env.V && !quiet) console.log(`  run ${runs} ${cls} s${sum.stratum}${sum.victory ? " WIN" : ""} ${U.fmtTime(r.time)} +${res.rewards.total} embers (${res.rewards.lines.map(l => l[0].slice(0, 6) + ":" + l[1]).join(" ")}) deeds +${res.deeds.reduce((a, d) => a + d.reward, 0)} ups ${p.up.reduce((a, b) => a + b, 0)}`);
     if (sum.bosses & 1) mark('first Bone Warden kill');
-    if (sum.bosses & 4) mark('first Rimeheart kill');
+    if (sum.bosses & 4) mark('first stratum III boss kill');
     if (sum.victory) mark('first victory');
     if (p.deeds & (1 << ED.DEED_IDX.evolved)) mark('first evolution');
     if (p.deeds & (1 << ED.DEED_IDX.cartographer)) mark('first Cartographer');

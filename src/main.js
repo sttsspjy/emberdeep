@@ -166,7 +166,7 @@
     if (s.mode === 'client') {
       const partial = Object.assign(A.partialSummary(s), { abandoned: true });
       A.closeNet();
-      A.onRunEnd(partial, 'You left the descent. Embers earned so far are yours.');
+      A.onRunEnd(partial, 'You left the run. You keep the embers earned so far.');
     } else { if (s.world.state === 'play') s.world.abandoned = true; s.world.endRun(false); }
   };
 
@@ -179,7 +179,7 @@
     const s = ED.Game.s; if (!s) return;
     const on = v === undefined ? $('ov-pause').hidden : v;
     $('ov-pause').hidden = !on;
-    $('pause-note').textContent = ED.Game.alone() ? 'The Deep waits for you.' : 'Your party is still fighting. Pausing does not stop the descent.';
+    $('pause-note').textContent = ED.Game.alone() ? 'The game is paused.' : 'The game does not pause in a party: your party is still playing.';
     s.paused = on || !$('ov-sheet').hidden;
   };
 
@@ -234,7 +234,7 @@
       closed: (msg) => {
         if (cl.dead || A.client !== cl) return; // we left on purpose, or this is an old party
         cl.dead = true; A.client = null;
-        if (A.state === 'run' && ED.Game.s && !ED.Game.s.ended) A.onRunEnd(A.partialSummary(ED.Game.s), (msg || 'The host left the descent.') + ' Embers earned so far are yours.');
+        if (A.state === 'run' && ED.Game.s && !ED.Game.s.ended) A.onRunEnd(A.partialSummary(ED.Game.s), (msg || 'The host left the run.') + ' You keep the embers earned so far.');
         else if (A.state === 'lobby') { ED.UI.toast(UIe(msg || 'The party closed.')); A.enterHearth(); }
         else if (A.state === 'results') ED.UI.toast(UIe(msg || 'The party closed.'));
       },

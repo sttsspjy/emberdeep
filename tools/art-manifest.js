@@ -21,8 +21,8 @@
 // weapon.alt.<name>      Route-fork and foe weapons: big_hammer waraxe double_axe anime_sword katana duel_sword machete saw_sword throwing_axe rusty_sword cleaver
 // shield.<wood|green|gold|round|kite|buckler|tower>   16x16 guard-side shields (DawnLike); proj.shield = the thrown kite shield (centre pivot)
 // foe.<id>.<state>[.dir] all 46 foes (state walk always; idle/atk/cast/death where the source has them), direction rule above; imp/skeleton keep native colours, the rest take pal(def.col) at runtime
-// boss.<id>.<state>      bonewarden: idle walk attack(8f) shield hit death | sporemother: idle walk attack charge hit | rimeheart: idle walk hit, attack.l attack.r charge.l charge.r (own pivots; centre/top/eye copied from idle)
-//                        forgelord: idle walk hit | drownedking: idle walk attack1 attack2 attack3 hit death | hollowking: idle walk attack hit death, crown overlay boss.hollowking.crown
+// boss.<id>.<state>      bonewarden: idle walk attack(8f) shield hit death | sporemother: idle walk attack charge hit
+//                        drownedking: idle walk attack1 attack2 attack3 hit death | hollowking: idle walk attack hit death, crown overlay boss.hollowking.crown
 // tile.floor.<1..8>, tile.wall.{cap,face}.{left,mid,right}, tile.wall.side.{left,right}, tile.wall.outer.{top,front}.{left,right}, tile.wall.edge.<shape>, tile.wall.lip, tile.wall.auto.<col>.<row>,
 //   tile.wall.{hole.1,hole.2,goo,goo.base}, tile.hole, tile.spikes(4f), tile.stairs, tile.door.{frame.left,frame.right,frame.top,leaf.closed,leaf.open}, tile.gate.bars (front view) / tile.gate.bars.side (E/W), tile.wall.grate,
 //   tile.carpet.<red|beige>.{full,rug,run.fill,run.top,run.bot,band} (Sanctum),
@@ -75,16 +75,6 @@ const sheets = {
   nb_bamboo_attack: { file: NA + 'Actor/Boss/GiantBamboo/Attack.png', outline: ['#141b1b'] },
   nb_bamboo_charge: { file: NA + 'Actor/Boss/GiantBamboo/Charge.png', outline: ['#141b1b'] },
   nb_bamboo_hit: { file: NA + 'Actor/Boss/GiantBamboo/Hit.png', outline: ['#141b1b'] },
-  nb_sam_idle: { file: NA + 'Actor/Boss/GiantBlueSamurai/Idle.png', outline: ['#141b1b'] },
-  nb_sam_walk: { file: NA + 'Actor/Boss/GiantBlueSamurai/Walk.png', outline: ['#141b1b'] },
-  nb_sam_hit: { file: NA + 'Actor/Boss/GiantBlueSamurai/Hit.png', outline: ['#141b1b'] },
-  nb_sam_attackl: { file: NA + 'Actor/Boss/GiantBlueSamurai/AttackLeft.png', outline: ['#141b1b'] },
-  nb_sam_attackr: { file: NA + 'Actor/Boss/GiantBlueSamurai/AttackRight.png', outline: ['#141b1b'] },
-  nb_sam_chargel: { file: NA + 'Actor/Boss/GiantBlueSamurai/ChargeLeft.png', outline: ['#141b1b'] },
-  nb_sam_charger: { file: NA + 'Actor/Boss/GiantBlueSamurai/ChargeRight.png', outline: ['#141b1b'] },
-  nb_cyc_idle: { file: NA + 'Actor/Boss/DemonCyclop/Idle.png', outline: ['#141b1b'] },
-  nb_cyc_walk: { file: NA + 'Actor/Boss/DemonCyclop/Walk.png', outline: ['#141b1b'] },
-  nb_cyc_hit: { file: NA + 'Actor/Boss/DemonCyclop/Hit.png', outline: ['#141b1b'] },
   // Ninja fx and projectiles
   nf_cut: { file: NA + 'FX/Attack/Cut/SpriteSheet.png' },
   nf_cutx: { file: NA + 'FX/Attack/CutX/SpriteSheet.png' },
@@ -373,13 +363,6 @@ boss('hollowking', [['idle', 'lm_w_idle', 150, 150, 8, 8, true, HK([[72, 57], [7
   ['hit', 'lm_w_hit', 150, 150, 4, 12, false, HK([[72, 57], [72, 57], [68, 57], [70, 57]])], ['death', 'lm_w_death', 150, 150, 5, 8, false, HK([[70, 57], [76, 62], [79, 68], [85, 79], [84, 77]])]]);
 boss('sporemother', [['idle', 'nb_bamboo_idle', 62, 62, 6, 6, true], ['walk', 'nb_bamboo_walk', 62, 62, 12, 10, true], ['attack', 'nb_bamboo_attack', 62, 62, 5, 10, false],
   ['charge', 'nb_bamboo_charge', 62, 62, 3, 8, false], ['hit', 'nb_bamboo_hit', 62, 62, 4, 12, false]]);
-boss('forgelord', [['idle', 'nb_cyc_idle', 50, 50, 5, 6, true], ['walk', 'nb_cyc_walk', 50, 50, 6, 9, true], ['hit', 'nb_cyc_hit', 50, 50, 3, 12, false]]);
-boss('rimeheart', [['idle', 'nb_sam_idle', 96, 48, 6, 6, true], ['walk', 'nb_sam_walk', 96, 48, 6, 8, true], ['hit', 'nb_sam_hit', 96, 48, 4, 12, false]]);
-// The samurai attack and charge sheets are 96x96 and each places the body at its own height: pivots are measured per anim as the hat position (#f1c471) of the anim against idle (idle pivot [47,48]).
-// charge.l/charge.r f0 equal idle f0 shifted by (-1,+26)/(-2,+34); the crouching attacks align on the frame-mean hat (+29.75/+30.75 rows). centre/top/eye are copied from idle (translated) so the HP bar and eye glow do not move.
-const RA = { anchorsFrom: 'boss.rimeheart.idle' };
-boss('rimeheart', [['attack.l', 'nb_sam_attackl', 96, 96, 4, 10, false, Object.assign({ pivot: [45, 77] }, RA)], ['attack.r', 'nb_sam_attackr', 96, 96, 4, 10, false, Object.assign({ pivot: [47, 78] }, RA)],
-  ['charge.l', 'nb_sam_chargel', 96, 96, 3, 8, false, Object.assign({ pivot: [46, 74] }, RA)], ['charge.r', 'nb_sam_charger', 96, 96, 3, 8, false, Object.assign({ pivot: [45, 82] }, RA)]], 'boss.rimeheart.atk');
 add('boss.hollowking.crown', 'bosses', null, null, { ascii: [['y...y...y', 'yy.yyy.yy', 'yyyyyyyyy', 'yRyyBYyRy', 'ooooooooo']], pal: { y: '#ffd36b', Y: '#fff2c0', o: '#c8922a', R: '#d8442a', B: '#5fb8ff' }, stamp: true, fps: 0 });
 
 // --------------------------------------------------------------------------- world: tiles, doors, torches, props, decor (page world)

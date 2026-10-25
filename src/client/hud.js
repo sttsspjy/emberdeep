@@ -247,7 +247,7 @@
     return w ? (ep ? ep.evo + ' ' : '') + w.name : ED.CLASSES[p.cls].name;
   };
 
-  // Hero status chips as a flat [label, colour, ...] list shared by the redraw signature and the drawing: item states, Brace, Momentum, Channel, Hexed foes, the next Cleave.
+  // Hero status chips as a flat [label, colour, ...] list shared by the redraw signature and the drawing: item states, Brace, Momentum, Kindling Sparks, Hexed foes, the next Cleave.
   const CHIPS = [];
   const cleaveNext = (me, st, view) => st.cleave > 0 && st.weapon.kind === 'melee' && ((view.time || 0) < (me.cleaveNext || 0) || ((me.atkCount | 0) + 1) % (3 + st.cleaveN) === 0);
   function chipList(view, me) {
@@ -264,16 +264,14 @@
     }
     if (st.cleave > 0 && cleaveNext(me, st, view)) o.push('Cleave next', '#ffd36b');
     if ((me.momN | 0) > 0) o.push('Momentum ×' + me.momN, '#b78cff');
-    if (st.channel > 0 && (me.chanT || 0) > 0) o.push('Channel +' + Math.round(100 * Math.min(st.chanCap, st.channel * Math.floor(me.chanT / Math.max(0.05, st.chanStep)))) + '%', '#ff9a3a');
+    if (st.spark > 0 && (me.sparks | 0) > 0) o.push('Sparks ' + (me.sparks | 0) + '/' + st.sparkMax, '#ff9a3a'); // Kindling: Sparks the next spell spends
     if (st.hex > 0) { let n = 0; for (const e of view.enemies) if (e.hexed || e.hexT > 0) n++; if (n) o.push('Hexed ' + n, '#7dffd9'); }
-    if (me.boons && me.boons.capacitor > 0) { let n = 0; for (const e of view.enemies) if (e.charge > 0 && e.hp > 0) n++; if (n) o.push('Charged ' + n, '#ffe66b'); } // Capacitor: foes your next cast detonates
+    if (st.lightningInfuse > 0) { let n = 0; for (const e of view.enemies) if (e.charge > 0 && e.hp > 0) n++; if (n) o.push('Charged ' + n, '#ffe66b'); } // charged foes a dash through discharges
     if (me.glBuff || (me.glT || 0) > 0) o.push('Guardian Light', '#ffcf5a'); // Cleric buffs on any hero: Guardian Light, Embolden
     if (me.embolden || (me.auraT || 0) > 0) o.push('Emboldened', '#ffcf5a');
     return o;
   }
-  // Metronome beat shown for a hero holding the Twist: 0 = none, else 1 + attacks since the last x3 beat (0-3; net.js P[25]).
-  const metroBeat = (me) => (me.stats && me.stats.twMetro > 0 ? 1 + U.clamp(me.metroN | 0, 0, 3) : 0);
-  H.cues = { beat: metroBeat, chips: (view, me) => chipList(view, me).slice() }; // headless checks
+  H.cues = { chips: (view, me) => chipList(view, me).slice() }; // headless checks
   const shieldOut = (p) => !!(p.shieldOut || (p.shields && p.shields.length));
   // Route sigil: the icon of the hero's route card in the class colour (nothing before the level-3 pick); returns its id for the redraw signature.
   const routeIcon = (p) => { const rt = p.boons ? ED.classRoute(p.boons, p.cls) : null; return rt && rt.t1 ? ED.BOONS[rt.t1].icon : ''; };
@@ -410,12 +408,13 @@
     sp(sid(I.label('skill1'))); spCd(scd, st ? st.skillCd : 1); sp(ctl.charges | 0); sp(st ? st.maxCharges | 0 : 1); sp(st ? Math.round(st.skillCd * 100) : 0);
     const s2 = cls.skill2 && ED.SKILLS[cls.skill2], cd2 = ctl.skill2Cd > 0 ? ctl.skill2Cd : 0;
     if (s2) { sp(sid(I.label('skill2'))); spCd(cd2, Math.max(0.1, (st && st.skill2Cd) || s2.cd)); sp(shieldOut(me) ? 1 : 0); sp(Math.round(((st && st.skill2Cd) || s2.cd) * 100)); }
+    const s3 = cls.skill3 && ED.SKILLS[cls.skill3], cd3 = ctl.skill3Cd > 0 && ctl.charges3 <= 0 ? ctl.skill3Cd : 0;
+    if (s3) { sp(sid(I.label('skill3'))); spCd(cd3, Math.max(0.1, (st && st.skill3Cd) || s3.cd)); sp(ctl.charges3 | 0); sp(st ? st.skill3Charges | 0 : 1); sp(Math.round(((st && st.skill3Cd) || s3.cd) * 100)); }
     const dmx = st ? st.dashCharges | 0 : 1, dsw = ctl.dashN < dmx && ctl.dashT > 0 ? ctl.dashT : 0; // dash recharge wedge: seconds to the next charge
     sp(sid(I.label('dash'))); sp(ctl.dashN | 0); sp(dmx); spCd(dsw, st ? st.dashCd : 1); sp(st ? Math.round(st.dashCd * 100) : 0);
     for (const fx of slotFx) if (fx && fx.t > 0) anim = true; // ready flash
     const pl = pips(me); sp(pl.length); for (let i = 0; i < pl.length; i += 2) { sp(sid(pl[i])); sp(pl[i + 1]); } sp(sid(st && st.evo || ''));
     const ch = chipList(view, me); sp(ch.length); for (let i = 0; i < ch.length; i += 2) sp(sid(ch[i]));
-    const mb = metroBeat(me); sp(mb); if (mb === 4) sp(step(t, 4)); // Metronome beat and the x3 pulse
     sp(sid(routeIcon(me)));
     // party
     for (const p of view.players.values()) {
@@ -426,7 +425,7 @@
     const fl = view.floor;
     if (fl) {
       let id = floorIds.get(fl); if (!id) floorIds.set(fl, id = ++floorN);
-      sp(id); sp(view.roomId | 0);
+      sp(id); sp(view.roomId | 0); sp(view.locked ? 1 : 0);
       const rs = view.roomState || {}; let h = 0;
       for (const r of fl.rooms) { const s = rs[r.id]; h = (h * 7 + (s ? (s.known ? 1 : 0) | (s.visited ? 2 : 0) | (s.cleared ? 4 : 0) : 0)) | 0; }
       sp(h);
@@ -538,6 +537,11 @@
       const tot = Math.max(0.1, (st && st.skill2Cd) || s2.cd), up = shieldOut(me), cd2 = ctl.skill2Cd > 0 ? ctl.skill2Cd : 0; // a thrown shield lights the slot until it is caught
       slot(i++, I.label('skill2'), cd2, tot, cd2 <= 0 && !up, s2.icon, up ? '#ffe9a0' : cls.col.c, 0, 1);
     }
+    const s3 = cls.skill3 && ED.SKILLS[cls.skill3];
+    if (s3) { // skill 3 (only a hero that has one): charges like skill 1, the wedge is the next charge while none is left
+      const n3 = ctl.charges3 | 0, cd3 = ctl.skill3Cd > 0 && n3 <= 0 ? ctl.skill3Cd : 0;
+      slot(i++, I.label('skill3'), cd3, Math.max(0.1, (st && st.skill3Cd) || s3.cd), n3 > 0, s3.icon, cls.col.c, n3, st ? st.skill3Charges : s3.charges || 1);
+    }
     const dmx = st ? st.dashCharges | 0 : 1, dcd = ctl.dashN < dmx && ctl.dashT > 0 ? ctl.dashT : 0; // the wedge is the next charge; the slot is lit while one is left
     slot(i++, I.label('dash'), dcd, st ? st.dashCd : 1, ctl.dashN > 0, 'wing', '#bfe9ff', ctl.dashN, dmx);
 
@@ -560,19 +564,6 @@
     const chip = (label, col) => { const cw = adv(label, tS) + 10 * f; chipBox(sx, L.cy, cw, L.ch, col); T(label, sx + cw / 2, L.cy + L.ch / 2, tS, col, 'b', 'center', 700, 2); sx += cw + q(u * 0.4); any = true; };
     const cl = chipList(view, me);
     for (let kk = 0; kk < cl.length; kk += 2) chip(cl[kk], cl[kk + 1]);
-    const mb = metroBeat(me);
-    if (mb) { // Metronome: 'Beat' and four pips, one lit per attack since the last x3 beat; the 4th is the x3 beat, ringed gold, filled and pulsing when the next attack is it
-      const lab = 'Beat', d = Math.max(4 * f, qf(L.ch * 0.42)), gp = 2 * f, n = mb - 1, hot = n === 3, col = hot ? '#ffd36b' : K.muted;
-      const cw = adv(lab, tS) + 4 * d + 3 * gp + 16 * f, px0 = sx + adv(lab, tS) + 10 * f, py = L.cy + qf((L.ch - d) / 2);
-      chipBox(sx, L.cy, cw, L.ch, col, hot ? 0.3 : 0.12); T(lab, sx + 5 * f + adv(lab, tS) / 2, L.cy + L.ch / 2, tS, col, 'b', 'center', 700, 2);
-      for (let i = 0; i < 4; i++) {
-        const x = px0 + i * (d + gp), last = i === 3;
-        c.fillStyle = last ? '#ffd36b' : K.ol; c.fillRect(x, py, d, d);
-        c.fillStyle = last ? (hot ? (step(t, 4) ? '#fff4d6' : '#ffd36b') : '#3a2a10') : i < n ? K.bone : '#2a1d15'; c.fillRect(x + f, py + f, d - 2 * f, d - 2 * f);
-      }
-      if (hot && step(t, 4)) ring(c, px0 + 3 * (d + gp) - f, py - f, d + 2 * f, d + 2 * f, f, '#fff4d6', false);
-      sx += cw + q(u * 0.4); any = true;
-    }
     endFade();
     return any;
   }
@@ -607,7 +598,7 @@
       frame(c, 'hpanel', 'dim', x, ty, w, h, k);
       c.fillStyle = col; c.fillRect(x + 3 * k, ty + 3 * k, k, h - 6 * k);
       const ny = ty + q(u * 1.0);
-      const label = p.dead ? 'Fallen' : p.downed ? 'DOWN' : ED.CLASSES[p.cls].name, psg = routeIcon(p), js = Math.max(1, Math.round(1.6 * u / 16));
+      const label = p.dead ? 'Dead' : p.downed ? 'Down' : ED.CLASSES[p.cls].name, psg = routeIcon(p), js = Math.max(1, Math.round(1.6 * u / 16));
       const rx = x + w - Math.max(7 * k, q(u * 1.1)); // clear of the frame's corner bracket
       const full = ED.Cos ? ED.Cos.nameOf(p) : p.name, room = rx - adv(label, tS) - (psg && !out ? 16 * js + 2 * f : 0) - 4 * f - (x + q(u * 1.1)); // the Wardrobe title rides the name when it fits
       T(full !== p.name && adv(full, tS) > room ? p.name : full, x + q(u * 1.1), ny, tS, col, 'b', 'left', 700);
@@ -621,32 +612,32 @@
     }
   }
 
-  // ---------------- map + stratum (top-right) ----------------
-  // The panel height follows the floor: cells are as large as the panel width allows (at most 4.2u, grid height within 17u). Weak / resists share a row when both fit, else stack.
+  // ---------------- stratum + next rooms (top-right) ----------------
+  // Stratum name, number, map row ('Room r / rows') and Pact; below, the rooms the exit doors lead to, left to right as the doors stand (glyphs of ED.Icons.room, dimmed while the room is locked; a violet bar under dark rooms, red under elite and champion rooms). The full map is on the Tab sheet.
   function mapBlock(view, biome, t) {
-    const x = L.mx, y = L.my, w = L.mw, fl = view.floor, G = fl && gridOf(fl), ix = x + q(u * 1.1), iw = w - 2 * q(u * 1.1);
-    const ty = y + q(u * 1.6), ry = ty + q(u * 1.45), wkE = ED.PATHS[biome.weak], rsE = ED.PATHS[biome.resist], js = Math.max(1, Math.round(1.4 * u / 16)), Z = 16 * js;
-    const grp = (lab, P) => adv(lab, tS) + 2 * f + Z + 2 * f + adv(P.name, tS); // label, icon, element name
-    const two = wkE && rsE && grp('Weak', wkE) + q(u * 1) + grp('Resists', rsE) > iw, rowH = Math.max(Z, FM.b.cap * tS) + q(u * 0.5);
-    const ay = ry + q(u * 1.5), top = (wkE && rsE ? ay + (two ? rowH : 0) + q(u * 1.1) : ry + q(u * 1.2)) - y, mw = w - q(u * 1.2);
-    const hCap = Math.max(u * 6, Math.min(u * 17, Hh - 2 * L.m - top - u * 1.3)), cell = G ? Math.min(mw / G.cols, hCap / G.rows, 4.2 * u) : 0, mh = G ? Math.ceil(G.rows * cell) : u * 4;
-    L.mh = q(top + mh + u * 0.7);
+    const x = L.mx, y = L.my, w = L.mw, fl = view.floor, room = view.room, ix = x + q(u * 1.1), iw = w - 2 * q(u * 1.1);
+    const ty = y + q(u * 1.6), ry = ty + q(u * 1.45), js = Math.max(1, Math.round(1.6 * u / 16)), Z = 16 * js, gap = q(u * 0.6);
+    const exits = fl && room && room.exits ? room.exits : [], ny = ry + q(u * 1.3), top = exits.length ? ny + Z + q(u * 0.9) : ry + q(u * 1.2);
+    L.mh = q(top - y);
     fadeStart('map', x, y, w, L.mh);
     frame(c, 'hpanel', 'base', x, y, w, L.mh, k);
     T(biome.name, x + w / 2, ty, tT, biome.pal.ui, 'b', 'center', 700);
-    T('Stratum ' + U.roman(view.stratum), ix, ry, tS, K.muted, 'b', 'left', 700);
+    const row = room ? room.row | 0 : 0, rows = fl ? fl.rows | 0 : 0;
+    T('Stratum ' + U.roman(view.stratum) + (rows && row >= 1 && row <= rows ? '  Room ' + row + ' / ' + rows : room && room.type === 'boss' ? '  Boss' : ''), ix, ry, tS, K.muted, 'b', 'left', 700);
     if (view.pact > 0) T('Pact ' + view.pact, ix + iw, ry, tS, '#ff7a56', 'b', 'right', 700);
-    // stratum affinity: foes are weak to one element and resist another
-    if (wkE && rsE) {
-      for (let kk = 0; kk < 2; kk++) {
-        const P = kk ? rsE : wkE, lab = kk ? 'Resists' : 'Weak', gy = ay + (two && kk ? rowH : 0), ax = two || !kk ? ix : ix + iw - grp(lab, P);
-        T(lab, ax, gy, tS, K.faint, 'b', 'left', 700);
-        const lx = ax + adv(lab, tS) + 2 * f;
-        icon(c, P.icon, P.color, lx, gy - Z / 2, js);
-        T(P.name, lx + Z + 2 * f, gy, tS, P.color, 'b', 'left', 700);
-      }
+    if (exits.length) {
+      const lab = 'Next', lw = adv(lab, tS) + gap, n = exits.length, sx = ix + lw + Math.max(0, Math.floor((iw - lw - n * Z - (n - 1) * gap) / 2)), cy = ny + Z / 2;
+      T(lab, ix, cy, tS, K.faint, 'b', 'left', 700);
+      const me = view.players && view.players.get(ED.Render.local), cls = me ? me.cls : null;
+      c.globalAlpha = ga * (view.locked ? 0.45 : 1);
+      exits.forEach((id, i) => {
+        const nb = fl.rooms[id], ri = ED.Render.roomIcon(nb), ex = sx + i * (Z + gap);
+        if (ri) icon(c, ri.icon, ri.color, ex, ny, js);
+        const mark = nb.dark ? '#a070ff' : nb.type === 'elite' || nb.type === 'champion' ? '#ff7a3a' : null; // a bar under the icon: violet = dark room, red = elite or champion
+        if (mark) { c.fillStyle = K.ol; c.fillRect(ex, ny + Z + f, Z, 3 * f); c.fillStyle = mark; c.fillRect(ex + f, ny + Z + 2 * f, Z - 2 * f, f); }
+      });
+      c.globalAlpha = ga;
     }
-    H.drawMap(c, view, x + q(u * 0.6), y + top, mw, mh, u, t, f);
     endFade();
   }
 
@@ -741,15 +732,15 @@
     for (let i = 0; i < lines.length; i++) T(lines[i], x + w / 2, y + (h - lines.length * lh) / 2 + lh * (i + 0.5), tS, '#efe3cd', 'b', 'center', 400);
   }
 
-  // ---------------- centre notes: down / fallen ----------------
+  // ---------------- centre notes: down / dead ----------------
   function centerNotes(view, me) {
     const y = q(Hh * 0.32), sy = y + q(FM.b.cap * tJ2 / 2 + u * 1.6);
     if (me.downed) {
       T('You are down', W / 2, y, tJ2, '#ff8a7a', 'b', 'center', 700, 1);
-      if (view.players.size > 1) T('Stay calm. An ally can revive you by standing close.', W / 2, sy, tS, K.bone, 'b', 'center', 700, 1);
+      if (view.players.size > 1) T('An ally can revive you by standing next to you.', W / 2, sy, tS, K.bone, 'b', 'center', 700, 1);
     } else if (me.dead) {
-      T('Fallen', W / 2, y, tJ2, '#cfc6b6', 'b', 'center', 700, 1);
-      T('You will rise again when your party reaches the next stratum.', W / 2, sy, tS, K.bone, 'b', 'center', 700, 1);
+      T('You are dead', W / 2, y, tJ2, '#cfc6b6', 'b', 'center', 700, 1);
+      T('You return when your party reaches the next stratum.', W / 2, sy, tS, K.bone, 'b', 'center', 700, 1);
     }
   }
 
@@ -791,48 +782,4 @@
     }
     c.globalAlpha = 1;
   }
-
-  // ---------------- minimap / full map of the current floor ----------------
-  // Room-grid bounds of the whole floor (known or not, so the scale holds for the stratum), cached per floor.
-  const grids = new WeakMap();
-  function gridOf(fl) {
-    let G = grids.get(fl); if (G) return G;
-    let minX = 99, maxX = -99, minY = 99, maxY = -99;
-    for (const r of fl.rooms) { minX = Math.min(minX, r.gx); maxX = Math.max(maxX, r.gx); minY = Math.min(minY, r.gy); maxY = Math.max(maxY, r.gy); }
-    G = { minX, minY, cols: maxX - minX + 1, rows: maxY - minY + 1 }; grids.set(fl, G); return G;
-  }
-  // g: target context; un: text unit in px of g (cells scale with it); pk: pixel size of lines and rims (default from the cell). The grid is centred in the w x h box; every rect is whole px,
-  // icons are drawn at whole multiples of 16 px (nearest), smaller ones at their size.
-  H.drawMap = (g, view, x, y, w, h, un, t, pk) => {
-    const fl = view.floor; if (!fl) return;
-    const rs = view.roomState || {}, G = gridOf(fl), minX = G.minX, minY = G.minY, cols = G.cols, rows = G.rows;
-    const cell = Math.max(4, Math.floor(Math.min(w / cols, h / rows, 4.2 * un))), px = pk || Math.max(1, Math.round(cell / 16));
-    const ox = Math.round(x + (w - cols * cell) / 2), oy = Math.round(y + (h - rows * cell) / 2), s = Math.max(2 * px, Math.round(cell * 0.8 / px) * px), so = Math.floor((cell - s) / 2);
-    const rx0 = (r) => ox + (r.gx - minX) * cell + so, ry0 = (r) => oy + (r.gy - minY) * cell + so, th = Math.max(px, Math.round(cell * 0.1 / px) * px);
-    const sm = g.imageSmoothingEnabled; g.imageSmoothingEnabled = false;
-    const ic2 = (name, col, ix, iy, z) => { const j = Math.min(Math.floor((z + 2 * px) / 16), Math.round(z / 16)); if (j >= 1) icon(g, name, col, ix + (z - 16 * j) / 2, iy + (z - 16 * j) / 2, j); else g.drawImage(ED.Icons.canvas(name, col, 64), Math.round(ix), Math.round(iy), Math.round(z), Math.round(z)); };
-    // the whole floor from the start: route bits (ED.Icons.route) split rooms and corridors into here, walked, reachable and closed
-    const ga0 = g.globalAlpha, rt = ED.Icons.route(fl, view.roomId, rs), walk = (id) => rt[id] & 6, reach = (id) => rt[id] & 5;
-    for (const r of fl.rooms) {
-      const c0x = Math.round(rx0(r) + (s - th) / 2), c0y = Math.round(ry0(r) + (s - th) / 2);
-      for (const d of ['e', 's']) {
-        const nb = r.doors[d]; if (!(nb >= 0)) continue;
-        g.fillStyle = walk(r.id) && walk(nb) ? '#e6c27a' : reach(r.id) && reach(nb) ? '#6b5a48' : '#2e2620';
-        if (d === 'e') g.fillRect(c0x, c0y, rx0(fl.rooms[nb]) - rx0(r), th); else g.fillRect(c0x, c0y, th, ry0(fl.rooms[nb]) - ry0(r));
-      }
-    }
-    for (const r of fl.rooms) {
-      const st = rs[r.id] || {}, b = rt[r.id], rx = rx0(r), ry = ry0(r), cur = b & 4, closed = !b;
-      g.fillStyle = cur ? '#fff3c4' : K.ol; g.fillRect(rx, ry, s, s);
-      g.fillStyle = cur ? '#e6c27a' : b & 2 ? (st.cleared ? '#5a4a3c' : '#8a3a2a') : closed ? '#1e1814' : '#3c3028'; g.fillRect(rx + px, ry + px, s - 2 * px, s - 2 * px);
-      const ri = ED.Render.roomIcon(r), z = s - 2 * px, zb = Math.max(16, Math.floor(s * 0.5));
-      if (!ri || (st.cleared && (r.type === 'combat' || r.type === 'elite'))) continue; // utility rooms keep their glyph; a cleared fight loses it
-      if (closed) g.globalAlpha = ga0 * 0.35;
-      ic2(ri.icon, ri.color, rx + px, ry + px, z);
-      if (ri.badge) ic2(ri.badge[0], ri.badge[1], rx + s - zb, ry + s - zb, zb); // elite / boss reward, bottom-right
-      if (r.dark && !st.visited) ic2(ED.Icons.DARK[0], ED.Icons.DARK[1], rx, ry + s - zb, zb); // dark-room moon, bottom-left
-      g.globalAlpha = ga0;
-    }
-    g.imageSmoothingEnabled = sm;
-  };
 })(globalThis.ED || (globalThis.ED = {}));

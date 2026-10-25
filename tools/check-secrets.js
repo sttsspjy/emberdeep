@@ -1,6 +1,6 @@
 // Usage: node tools/check-secrets.js
 // Headless checks of the secret run fields (world.js secretP / secretW): each trigger fires in a constructed scenario and stays off in a near miss; the Drowned Bell (floor gen room.bell, rooms.js ringBell / bellClear)
-// sits only on stratum V, deterministic per seed; the Platino (floor.platino: the fight clear that lets it out, rooms.js) is deterministic, harmless and leaves the world's RNG, foes and loot untouched; net.js carries every field.
+// sits only on stratum III, deterministic per seed; the Platino (floor.platino: the fight clear that lets it out, rooms.js) is deterministic, harmless and leaves the world's RNG, foes and loot untouched; net.js carries every field.
 // Prints failures and exits 1 when any check fails.
 const { ED } = require('./sim.js');
 const fs = require('fs'), path = require('path'), vm = require('vm');
@@ -62,16 +62,17 @@ for (const [frac, downed, want] of [[0.02, false, true], [0.04, false, false], [
   ok(!p.sec.thread, 'Thread of Life: a stratum III boss does not count');
 }
 
-// ---- Against the Grain: 8 element-path cards, each of the element the stratum resists ----
+// ---- Against the Grain: 8 element-path cards, one element per stratum, a new element on every stratum ----
 {
   const shadow = Object.keys(ED.BOONS).filter(id => ED.BOONS[id].path === 'shadow'), fire = Object.keys(ED.BOONS).filter(id => ED.BOONS[id].path === 'fire');
   const general = Object.keys(ED.BOONS).filter(id => ED.BOONS[id].path === 'general');
-  ok(ED.biomeFor(1).resist === 'shadow', 'stratum I resists shadow (test premise)');
-  const run = (picks) => { const { w, p } = stage(['knight']); for (const id of picks) w.contrarianPick(p, ED.BOONS[id]); return p; };
+  const run = (picks, s2) => { const { w, p } = stage(['knight']); picks.forEach((id, i) => { if (s2 !== undefined && i === s2) w.stratum = 2; w.contrarianPick(p, ED.BOONS[id]); }); return p; };
   ok(run(shadow.slice(0, 8)).sec.contrarian, '8 shadow cards on stratum I: Against the Grain');
   ok(!run(shadow.slice(0, 7)).sec.contrarian, '7 shadow cards: not yet');
   ok(run(shadow.slice(0, 4).concat(general.slice(0, 3), shadow.slice(4, 8))).sec.contrarian, 'General cards are ignored');
-  ok(!run(shadow.slice(0, 8).concat(fire.slice(0, 1))).sec.contrarian, 'one fire card on stratum I breaks it');
+  ok(!run(shadow.slice(0, 8).concat(fire.slice(0, 1))).sec.contrarian, 'a second element on stratum I breaks it');
+  ok(run(shadow.slice(0, 4).concat(fire.slice(0, 4)), 4).sec.contrarian, 'shadow on stratum I, fire on stratum II: Against the Grain');
+  ok(!run(shadow.slice(0, 4).concat(shadow.slice(4, 8)), 4).sec.contrarian, 'the same element again on stratum II breaks it');
   const { w, p } = stage(['knight']);
   p.offer = [shadow[0]]; p.offers.push({ src: 'level' }); p.picks = 1;
   w.pickBoon('p0', 0);
@@ -140,7 +141,7 @@ for (const [elite, cls, want] of [[true, 'necro', true], [false, 'necro', false]
 
 // ---- Toll for Thee (Bellwarden): the Hollow King slain by a Peal hit (generic: src.part 'peal.*') ----
 const bellCls = (w, p) => { if (!ED.CLASSES.bell) p.cls = 'bell'; }; // until class-bell.js lands, a stand-in hero carries the id
-for (const [s, part, want] of [[ED.CONST.STRATA, 'peal.wave', true], [ED.CONST.STRATA, 'heave.strike', false], [5, 'peal.wave', false]]) {
+for (const [s, part, want] of [[ED.CONST.STRATA, 'peal.wave', true], [ED.CONST.STRATA, 'heave.strike', false], [ED.CONST.STRATA - 1, 'peal.wave', false]]) {
   const { w, p } = stage([ED.CLASSES.bell ? 'bell' : 'knight'], s);
   bellCls(w, p);
   w.killEnemy(mk(w, p, bossOf(s)), p, { p, kind: 'skill', part });
@@ -153,22 +154,22 @@ for (const [s, part, want] of [[ED.CONST.STRATA, 'peal.wave', true], [ED.CONST.S
   for (let seed = 1; seed <= 120; seed++) {
     for (let s = 1; s <= ED.CONST.STRATA; s++) {
       const f = D.generate(s, seed * 7919), bells = f.rooms.filter(r => r.bell);
-      if (s !== 5) { stray += bells.length; continue; }
-      if (bells.length !== 2 || !bells.every(r => r.dark)) { miss++; continue; }
+      if (s !== 3) { stray += bells.length; continue; }
+      if (!bells.length || bells.length !== f.rooms.filter(r => r.dark).length || !bells.every(r => r.dark)) { miss++; continue; }
       const g = D.generate(s, seed * 7919), b = bells[0], b2 = g.rooms[b.id].bell;
       if (!b2 || b2.x !== b.bell.x || b2.y !== b.bell.y) same = false;
       if (D.tileAt(b, b.bell.x, b.bell.y) !== 0) floorOk = false;
     }
   }
-  ok(stray === 0, `the Drowned Bell stands only on stratum V (${stray} elsewhere)`);
-  ok(miss === 0, `every stratum V floor holds a bell in each of its two dark rooms (${miss} without)`);
+  ok(stray === 0, `the Drowned Bell stands only on stratum III (${stray} elsewhere)`);
+  ok(miss === 0, `every stratum III floor holds a bell in each of its dark rooms (${miss} without)`);
   ok(same, 'bell placement is the same for the same seed');
   ok(floorOk, 'the bell stands on open floor');
 }
 
-// The bell room of a stratum V world, entered (its fight locks the room); heroes on the bell's spot - 40 px.
+// The bell room of a stratum III world, entered (its fight locks the room); heroes on the bell's spot - 40 px.
 function bellStage(classes) {
-  const { w, p } = stage(classes, 5);
+  const { w, p } = stage(classes, 3);
   const room = w.floor.rooms.find(r => r.bell);
   w.enterRoom(room.id, null);
   w.fx.length = 0;
@@ -258,7 +259,7 @@ function platRun(plat, ticks, moveHero) {
 
 // ---- net and summary ----
 {
-  ok(ED.Net.VERSION === 13, 'N.VERSION 13');
+  ok(ED.Net.VERSION === 15, 'N.VERSION 15');
   const { w, p } = stage(['knight', 'ranger']);
   p.sec.platino = true; w.run.gold777 = true;
   const s = ED.Net.encodeSnap(w, [], true);

@@ -12,9 +12,9 @@
     MAX_PLAYERS: 4,
     SNAP_HZ: 20,
     INPUT_HZ: 30,
-    STRATA: 6,
+    STRATA: 4,
     DASH: { t: 0.15, speed: 480 }, // seconds untouchable and px/s of a hero dash (72 px)
-    FODDER_CAP: 0.03,     // a hit from a fodder foe takes at most this share of the victim's max health (minimum 1)
+    FODDER_CAP: 0.02,     // a hit from a fodder foe takes at most this share of the victim's max health (minimum 1)
     CROWD: { per: 0.08, floor: 0.5 }, // walking-speed loss per non-boss foe touching a hero, and the lowest factor
     VERSION: '1.0.0',
   };

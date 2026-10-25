@@ -7,31 +7,34 @@
   // {action} tokens are replaced with the player's key bindings when the sign is drawn (ED.Input.fill); the sim never reads bindings.
   const SIGNS = [
     'Aim with {aim}. Hold {attack} to attack where you aim.',
-    '{skill1} and {skill2} cast your skills where you aim: some fly toward it, some land on it. {dash} dashes through danger.',
-    'Clear a room to open its doors. Each door shows the room beyond and its reward; the door you came in by stays shut, so choose your way to the boss.',
-    'Some doors are marked dark: harder fights, richer rewards. There is always a way around them.',
-    'The skull on your map marks the stratum boss. {map} opens your build, combat numbers and the map ({skill1} / {skill2} switch tabs).',
+    '{skill1} and {skill2} cast your skills where you aim: some fly toward it, some land on it. {dash} dashes; you cannot be hit while dashing.',
+    'Clear a room to open its doors. Each door shows the next room and its reward. Doors close behind you.',
+    'A violet moon marks a dark room: harder foes, better rewards. You choose whether to enter.',
+    '{map} opens your build, combat numbers and the map of every path to the boss ({skill1} / {skill2} switch tabs).',
   ];
 
   // Regular foes of a biome that exist in the enemy table (rosters may name foes whose definitions land later).
   const rosterOf = (biome) => biome.enemies.filter(r => { const d = ED.ENEMIES[r[0]]; return d && !d.boss && !d.ally && !d.minion; });
 
-  // Spawn zones still counting down: any (the room clears when none is left), threat only (a fodder pack carries n and never holds the next threat wave back), and the foes they will add; a Hunted champion's zone (z.hunt) counts in none.
-  const pendingSpawns = (w) => w.zones.some(z => z.kind === 'spawn' && !z.hunt);
-  const pendingThreat = (w) => w.zones.some(z => z.kind === 'spawn' && !z.n && !z.hunt);
-  const pendingFoes = (w) => { let n = 0; for (const z of w.zones) if (z.kind === 'spawn' && !z.hunt) n += z.n || 1; return n; };
+  // Spawn zones still counting down: any, threat only (a fodder pack carries n and never holds a threat wave or the clear back), and the foes they will add.
+  const pendingSpawns = (w) => w.zones.some(z => z.kind === 'spawn' && !z.dead);
+  const pendingThreat = (w) => w.zones.some(z => z.kind === 'spawn' && !z.n && !z.dead);
+  const pendingFoes = (w) => { let n = 0; for (const z of w.zones) if (z.kind === 'spawn' && !z.dead) n += z.n || 1; return n; };
 
   // ---------------- encounters ----------------
+  // A champion room (stratum IV, room.champ 'twins' | 'mimic') runs W.startChampion (champions.js); its xp budget roomXp(room, 'champion') is paid as the clear pile.
   W.beginEncounter = function (room, rs) {
-    if (room.type === 'combat' || room.type === 'elite') {
+    if (room.type === 'champion') {
+      this.startChampion(room);
+      Object.assign(this.enc, { xpBudget: this.roomXp(room, 'champion'), xpOut: 0, xpThr: 0, xpClip: 0, xpThrCap: 0, xpThrAcc: 0, xpK: 0 });
+    } else if (room.type === 'combat' || room.type === 'elite') {
       this.locked = true;
       this.enc = { kind: 'waves', waves: this.planWaves(room), wave: -1, t: ED.World.PACE.first };
       this.planHorde(room, this.enc);
       this.emit({ t: 'lock' });
-      for (const p of this.players.values()) if (!p.downed && !p.dead) this.onRoomLockBuild(p, room);
     } else if (room.type === 'boss') {
       this.locked = true;
-      this.enc = { kind: 'boss', t: 2.4, spawned: false, edges: ['n', 's', 'e', 'w'], packT: 0 };
+      this.enc = { kind: 'boss', t: 2.4, spawned: false };
       const def = ED.ENEMIES[ED.biomeFor(this.stratum).boss];
       this.emit({ t: 'bossIntro', type: ED.biomeFor(this.stratum).boss, name: def.name, title: def.title, quote: def.quote });
       this.emit({ t: 'lock' });
@@ -40,14 +43,16 @@
     }
   };
 
-  // World.WAVES waves (+1 at Pact 10), each of budget = base x party x room danger (1 + 0.05 x layer). Elite rooms: 2 guaranteed elites. A dark room's last wave gets one more elite with an affix from DARK_AFFIXES.
+  // WAVES threat waves (+1 at Pact 10), each worth (7 + 2 D) x threat wave x party (D = World.depth at the room's row), the last x1.15. Elite rooms: an elite in the first wave and one in the last.
+  // The last wave carries one reinforcement (reinf: a longer, bigger telegraph): the elite of an elite room, the affixed elite of a dark room (DARK_AFFIXES), else the biome roster's costliest foe.
   W.planWaves = function (room) {
-    const s = this.stratum, n = this.partySize();
+    const s = this.stratum, n = this.partySize(), Wc = ED.World, D = Wc.depth(s, this.rowFrac(room)), Ds = Wc.depth(s);
     const biome = ED.biomeFor(s), isElite = room.type === 'elite';
-    const nW = ED.World.WAVES + (this.pact >= 10 ? 1 : 0);
-    const budget = (7 + 2 * s) * this.threat().wave * (1 + 0.6 * (n - 1) + 0.2 * (n - 1) * (n - 2)) * (this.tutorial && s === 1 ? 0.75 : 1) * (room.danger || 1);
-    let roster = rosterOf(biome);
-    if (s >= 2 && this.rng.chance(ED.World.MIX_PREV)) {
+    const nW = Wc.WAVES + (this.pact >= 10 ? 1 : 0);
+    const budget = (7 + 2 * D) * this.threat().wave * (1 + 0.6 * (n - 1) + 0.2 * (n - 1) * (n - 2)) * (this.tutorial && s === 1 ? 0.75 : 1);
+    const own = rosterOf(biome);
+    let roster = own;
+    if (s >= 2 && this.rng.chance(Wc.MIX_PREV)) {
       const prev = rosterOf(ED.biomeFor(s - 1)).map(([id, w]) => [id, w * 0.35]);
       roster = roster.concat(prev);
     }
@@ -63,33 +68,38 @@
       }
       waves.push(list);
     }
+    const last = waves[nW - 1];
     if (isElite) {
-      waves[nW - 1].push({ type: biome.elite, elite: true });
+      last.push({ type: biome.elite, elite: true, reinf: 1 });
       const first = waves[0];
       if (first.length) first[this.rng.int(0, first.length - 1)].elite = true;
       else first.push({ type: biome.elite, elite: true });
       return waves;
     }
-    let eliteCh = 0.28 + (this.pact >= 3 ? ED.PACTS[3].eliteCh : 0) + (s >= 4 ? 0.1 : 0);
+    let eliteCh = 0.28 + (this.pact >= 3 ? ED.PACTS[3].eliteCh : 0) + (Ds >= 4 ? 0.1 : 0);
     if (this.tutorial && s === 1) eliteCh = 0.1;
     if (this.rng.chance(eliteCh)) {
       const wv = waves[this.rng.int(Math.min(1, nW - 1), nW - 1)];
       if (this.rng.chance(0.5)) wv.push({ type: biome.elite, elite: true });
       else if (wv.length) wv[this.rng.int(0, wv.length - 1)].elite = true;
     }
-    if (s >= 3 && this.rng.chance(0.2 + (this.pact >= 3 ? ED.PACTS[3].eliteExtra : 0))) waves[nW - 1].push({ type: biome.elite, elite: true });
-    if (room.dark) waves[nW - 1].push({ type: biome.elite, elite: true, affix: this.rng.pick(ED.World.DARK_AFFIXES) });
+    if (Ds >= 3 && this.rng.chance(0.2 + (this.pact >= 3 ? ED.PACTS[3].eliteExtra : 0))) last.push({ type: biome.elite, elite: true });
+    if (room.dark) last.push({ type: biome.elite, elite: true, affix: this.rng.pick(Wc.DARK_AFFIXES), reinf: 1 });
+    else if (own.length) last.push({ type: own.reduce((a, r) => ((ED.ENEMIES[r[0]].cost || 2) > (ED.ENEMIES[a[0]].cost || 2) ? r : a))[0], reinf: 1 });
     return waves;
   };
 
-  // Horde and xp budget of a combat or elite room, beside its threat waves: q = fodder to spawn in all, spawned so far, the pack timer and size, the 2-4 edges packs come from,
-  // and the xp ledger (budget = ROOM_XP x darkLoot() in a dark room, in the units that drop, split into fod = the fodder motes' share and thrCap = what threat drops may take; K = thrCap / the planned waves' threat xp; out = dropped so far, thr = the threat part, clip = cut away, acc / thrAcc = mote and threat fractions not yet dropped).
+  // Horde and xp budget of a combat or elite room, beside its threat waves: q = the room's fodder, fod[i] = wave i's share of it, spawned = fodder out so far, the 2-4 edges packs come from,
+  // and the xp ledger (budget = W.roomXp, in the units that drop, split into fod = the fodder motes' share and thrCap = what threat drops may take; K = thrCap / the planned waves' threat xp; out = dropped so far, thr = the threat part, clip = cut away, acc / thrAcc = mote and threat fractions not yet dropped).
   W.planHorde = function (room, enc) {
-    const s = this.stratum, n = this.partySize(), Wc = ED.World, kind = room.type === 'elite' ? 'elite' : 'combat';
-    enc.q = Math.round(Wc.FODDER_Q[s - 1] * (kind === 'elite' ? 0.6 : 1) * (1 + 0.5 * (n - 1)) * (this.tutorial && s === 1 ? 0.6 : 1) * (room.dark ? Wc.DARK_FODDER : 1));
-    enc.spawned = 0; enc.packT = 0; enc.packN = 0; enc.wait = 0;
+    const s = this.stratum, n = this.partySize(), Wc = ED.World, kind = room.type === 'elite' || room.type === 'champion' ? room.type : 'combat';
+    enc.q = Math.round(Wc.perStratum(Wc.FODDER_Q, s) * (kind === 'elite' ? 0.6 : 1) * (1 + 0.5 * (n - 1)) * (this.tutorial && s === 1 ? 0.6 : 1) * (room.dark ? Wc.DARK_FODDER : 1));
+    const nW = enc.waves.length;
+    enc.fod = [];
+    for (let i = 0; i < nW; i++) enc.fod.push(Math.round(enc.q * (i + 1) / nW) - Math.round(enc.q * i / nW));
+    enc.spawned = 0;
     enc.edges = this.rng.shuffle(['n', 's', 'e', 'w']).slice(0, this.rng.int(2, 4));
-    enc.xpBudget = Math.round(Wc.ROOM_XP[kind][s - 1] * (room.dark ? this.darkLoot() : 1));
+    enc.xpBudget = this.roomXp(room, kind);
     enc.xpFod = Math.round(Wc.FODDER_XP_SHARE * enc.xpBudget); enc.xpThrCap = enc.xpBudget - enc.xpFod;
     let plan = 0;
     for (const wv of enc.waves) for (const f of wv) plan += Wc.threatXp(ED.ENEMIES[f.type], s, f.elite);
@@ -112,7 +122,7 @@
     return null;
   };
 
-  // Where the next pack lands: one random point on each of the room's pack edges that is at least minD from every hero, one of them at random; the other edges, then any floor, when none qualifies. null when nothing does.
+  // Where a pack lands: one random point on each of the room's pack edges that is at least minD from every hero, one of them at random; the other edges, then any floor, when none qualifies. null when nothing does.
   W.packSpot = function (enc, minD) {
     const room = this.room, rng = this.rng, heroes = [];
     for (const p of this.players.values()) if (!p.dead) heroes.push(p);
@@ -133,35 +143,19 @@
     return null;
   };
 
-  // Packs of fodder from the first threat wave on: one every PACK_GAP seconds until the quota is out, as one spawn zone each. A pack waits while it would take the live foes (plus the zones' foes and the threat waves still to come) over LIVE_CAP,
-  // or while no spot is PACK_AVOID from every hero (the distance shrinks 40 px per PACK_WAIT seconds of waiting, to PACE.avoid).
-  W.updateHorde = function (enc, dt) {
-    const Wc = ED.World;
-    if (enc.packT > 0 && (enc.packT -= dt) > 0) return;
-    if (!enc.packN) enc.packN = Math.min(this.rng.int(Wc.PACK_N[0], Wc.PACK_N[1]), enc.q - enc.spawned);
-    let rest = 0;
-    for (let i = enc.wave + 1; i < enc.waves.length; i++) rest += enc.waves[i].length;
-    if (this.hostiles() + pendingFoes(this) + enc.packN + rest > Wc.LIVE_CAP[this.partySize() > 1 ? 1 : 0]) return;
-    const spot = this.packSpot(enc, Math.max(Wc.PACE.avoid, Wc.PACK_AVOID - 40 * Math.floor(enc.wait / Wc.PACK_WAIT)));
-    if (!spot) { enc.wait += dt; return; }
-    this.addZone({ kind: 'spawn', x: spot.x, y: spot.y, r: 40, dur: Wc.PACE.spawn, type: ED.biomeFor(this.stratum).fodder, n: enc.packN });
-    enc.spawned += enc.packN; enc.packN = 0; enc.wait = 0;
-    enc.packT = this.rng.range(Wc.PACK_GAP[0], Wc.PACK_GAP[1]);
-  };
-
-  // Boss-fight trickle (from the boss's spawn until it dies): every BOSS_PACK_GAP s a pack of BOSS_PACK_N biome fodder lands on a room edge PACK_AVOID from every hero; it waits while live and pending fodder plus the pack would pass BOSS_FODDER_CAP. A boss room has no xp budget, so these foes drop none.
-  W.updateBossFodder = function (enc, dt) {
-    const Wc = ED.World;
-    if (enc.packT > 0 && (enc.packT -= dt) > 0) return;
-    if (!enc.packN) enc.packN = this.rng.int(Wc.BOSS_PACK_N[0], Wc.BOSS_PACK_N[1]);
-    let live = 0;
-    for (const e of this.enemies) if (e.fodder && e.hp > 0) live++;
-    for (const z of this.zones) if (z.kind === 'spawn' && z.n) live += z.n;
-    if (live + enc.packN > Wc.BOSS_FODDER_CAP[this.partySize() > 1 ? 1 : 0]) return;
-    const spot = this.packSpot(enc, Wc.PACK_AVOID);
-    if (!spot) { enc.packT = 0.25; return; }
-    this.addZone({ kind: 'spawn', x: spot.x, y: spot.y, r: 40, dur: Wc.PACE.spawn, type: ED.biomeFor(this.stratum).fodder, n: enc.packN });
-    enc.packN = 0; enc.packT = Wc.BOSS_PACK_GAP;
+  // Wave i's fodder, out with the wave: its share (cut so live foes + pending spawns stay within LIVE_CAP) as packs of at most PACK_MAX, one spawn zone each (r 40, the spawn telegraph),
+  // at a pack spot PACK_AVOID from every hero (PACE.avoid when none is that far). A pack with no spot is dropped (the clear pile pays its xp).
+  W.spawnPacks = function (enc, i) {
+    const Wc = ED.World, type = ED.biomeFor(this.stratum).fodder;
+    const left = Math.min((enc.fod && enc.fod[i]) || 0, Wc.LIVE_CAP[this.partySize() > 1 ? 1 : 0] - this.hostiles() - pendingFoes(this));
+    if (!(left > 0) || !type) return;
+    const k = Math.ceil(left / Wc.PACK_MAX), base = Math.floor(left / k), extra = left - base * k;
+    for (let j = 0; j < k; j++) {
+      const n = base + (j < extra ? 1 : 0), spot = this.packSpot(enc, Wc.PACK_AVOID) || this.packSpot(enc, Wc.PACE.avoid);
+      if (!spot) continue;
+      this.addZone({ kind: 'spawn', x: spot.x, y: spot.y, r: 40, dur: Wc.PACE.spawn, type, n });
+      enc.spawned += n;
+    }
   };
 
   // A resolved pack zone: z.n fodder at random points within z.r that are floor tiles (the zone's centre when a point is not).
@@ -178,6 +172,16 @@
     this.emit({ t: 'spawned', x: Math.round(z.x), y: Math.round(z.y), el: 0 });
   };
 
+  // When the last threat foe falls the room's fodder crumble: no kill, drop or on-death effect ({t: 'die', fd, cr} each; the clear pile pays the xp they still owed), and pending packs are dropped.
+  W.crumbleFodder = function () {
+    for (const e of this.enemies) {
+      if (!e.fodder || e.hp <= 0) continue;
+      e.hp = 0; e.killed = true;
+      this.emit({ t: 'die', x: Math.round(e.x), y: Math.round(e.y), type: e.type, el: 0, r: e.r, fd: 1, cr: 1 });
+    }
+    for (const z of this.zones) if (z.kind === 'spawn' && z.n) z.dead = true;
+  };
+
   // A fodder kill adds its share (the fodder xp / quota) to the room's mote and drops the whole units of it at the kill spot.
   W.fodderMote = function (x, y) {
     const enc = this.enc;
@@ -187,24 +191,24 @@
     if (n >= 1) { enc.xpAcc -= n; this.dropXp(x, y, n, true); }
   };
 
+  // Waves: the next one (with its fodder) PACE.gap after the last, once no threat spawn is pending and at most nextAt of the current wave's threat foes stand, or the wave is maxAge old; fodder never holds a wave back.
+  // The room clears at once when the last wave is out and its last threat foe (summons included) falls; the fodder still standing crumble.
   W.updateEncounter = function (dt) {
     const enc = this.enc;
     if (!enc) return;
     enc.t -= dt; enc.age = (enc.age || 0) + dt;
     if (enc.kind === 'waves') {
-      if (enc.hunt && enc.hunt.killed && !enc.huntPaid) this.huntedPaid(enc);
-      const threat = this.hostiles(true), alive = this.hostiles();
+      const P = ED.World.PACE, threat = this.hostiles(true);
       const last = enc.wave >= enc.waves.length - 1;
-      if (!last && enc.t <= 0 && !pendingThreat(this) && (enc.wave < 0 || enc.age >= ED.World.PACE.maxAge || threat <= Math.max(1, Math.floor(enc.waves[enc.wave].length * ED.World.PACE.nextAt)))) {
+      if (!last && enc.t <= 0 && !pendingThreat(this) && (enc.wave < 0 || enc.age >= P.maxAge || threat <= Math.max(1, Math.floor(enc.waves[enc.wave].length * P.nextAt)))) {
         enc.wave++; enc.age = 0;
         this.spawnWave(enc.waves[enc.wave]);
-        if (enc.wave === 1 && huntedParty(this)) this.spawnHunted(enc);
-        enc.t = ED.World.PACE.gap;
-      } else if (last && alive === 0 && enc.spawned >= enc.q && !pendingSpawns(this) && enc.t <= 0) {
+        this.spawnPacks(enc, enc.wave);
+        enc.t = P.gap;
+      } else if (last && threat === 0 && !pendingThreat(this) && enc.t <= 0) {
+        this.crumbleFodder();
         this.roomCleared();
-        return;
       }
-      if (enc.wave >= 0 && enc.spawned < enc.q) this.updateHorde(enc, dt);
     } else if (enc.kind === 'boss') {
       if (!enc.spawned && enc.t <= 0) {
         enc.spawned = true;
@@ -215,8 +219,9 @@
         this.boss = e;
         for (const p of this.players.values()) p.hitThisBoss = false;
         this.emit({ t: 'bossSpawn', type });
-        enc.packT = ED.World.BOSS_PACK_GAP;
-      } else if (enc.spawned && this.boss) this.updateBossFodder(enc, dt);
+      }
+    } else if (enc.kind === 'champ') {
+      this.updateChampion(enc, dt); // champions.js
     } else if (enc.kind === 'trial') {
       const alive = this.hostiles(), pending = pendingSpawns(this);
       if (enc.wave < enc.waves.length - 1 && enc.t <= 0 && !pending && alive === 0) {
@@ -232,12 +237,14 @@
     }
   };
 
+  // A wave's threat foes, each from its own spawn zone at least PACE.avoid from every living hero (turrets avoidTurret); a reinforcement (reinf) lands REINF_AVOID away under a bigger telegraph of PACE.reinf s (zone big, {t: 'reinf'}).
   W.spawnWave = function (list) {
-    const avoid = this.alivePlayers();
+    const avoid = this.alivePlayers(), P = ED.World.PACE;
     for (const it of list) {
-      const def = ED.ENEMIES[it.type];
-      const pt = D.randomFloor(this.room, this.rng, avoid, def.ai === 'turret' ? ED.World.PACE.avoidTurret : ED.World.PACE.avoid);
-      this.addZone({ kind: 'spawn', x: pt.x, y: pt.y, r: def.r + 4, dur: ED.World.PACE.spawn + this.rng.range(0, ED.World.PACE.spawnVar), type: it.type, elite: !!it.elite, affix: it.affix, plan: 1 });
+      const def = ED.ENEMIES[it.type], big = !!it.reinf;
+      const pt = D.randomFloor(this.room, this.rng, avoid, big ? ED.World.REINF_AVOID : def.ai === 'turret' ? P.avoidTurret : P.avoid);
+      this.addZone({ kind: 'spawn', x: pt.x, y: pt.y, r: def.r + (big ? 14 : 4), dur: big ? P.reinf : P.spawn + this.rng.range(0, P.spawnVar), type: it.type, elite: !!it.elite, affix: it.affix, plan: 1, big: big ? 1 : 0 });
+      if (big) this.emit({ t: 'reinf', x: Math.round(pt.x), y: Math.round(pt.y), type: it.type, el: it.elite ? 1 : 0 });
     }
   };
 
@@ -250,8 +257,8 @@
     const s = this.stratum;
     this.run.roomsCleared++;
     if (room.dark) this.run.darkCleared++;
+    if (room.type === 'champion') this.run.champs = (this.run.champs | 0) | (room.champ === 'mimic' ? 2 : 1); // bit 0 twins, bit 1 mimic (deeds)
     if (room.bell) this.bellClear();
-    this.huntedLeave();
     this.run.embers.rooms += 1 + Math.round(s / 2);
     const c = this.alivePlayers()[0] || D.center(room);
     const enc = this.enc;
@@ -265,7 +272,7 @@
       if (up) { item = up; this.emit({ t: 'upgrade', to: up, x: Math.round(m.x), y: Math.round(m.y) }); }
       this.props.push({ id: U.uid(), kind: 'reward', x: m.x, y: m.y, item, group: U.uid(), state: 0 });
     }
-    this.checkFullClear();
+    this.checkFullClear(room);
     this.computeFlow();
     this.emit({ t: 'clear' });
     this.floorFights = (this.floorFights || 0) + 1;
@@ -293,6 +300,7 @@
     for (const q of this.projs) if (q.team !== 0) q.dead = true; // flagged, not refiltered: the kill may land inside the projectile/zone loops, which end by reassigning their own keep list
     for (const z of this.zones) if (z.team !== 0) z.dead = true;
     this.boss = null; this.enc = null; this.locked = false;
+    if (ED.Arena) ED.Arena.clear(this.room); // the arena (flood, darkness, collapsed floor) ends with the boss
     this.roomState[this.roomId].cleared = true;
     this.emit({ t: 'bossDown', type: e.type, x: Math.round(e.x), y: Math.round(e.y) });
     this.dropXp(e.x, e.y, e.def.xp * (1 + 0.3 * (s - 1)));
@@ -300,15 +308,15 @@
     this.spawnPickup('heart', e.x, e.y, 1); this.spawnPickup('heart', e.x, e.y, 1);
     for (const q of this.players.values()) q.mantleAmt = 0;
     if (s === 1) for (const q of this.players.values()) this.grantOffer(q, { src: 'class' }); // the fork offer at the first boss (downed heroes get it when they are back up)
-    else if (s === 2 || s === 4) for (const q of this.players.values()) { this.grantForkRank(q); this.grantOffer(q, { src: 'twist' }); } // fork rank 2 and 3 at once and a Twist offer, downed and dead heroes too
+    else if (s === 2 || s === 3) for (const q of this.players.values()) this.grantForkRank(q); // fork rank 2 and 3, downed and dead heroes too
     if (s >= ED.CONST.STRATA) {
       this.run.embers.victory = 60;
       this.endRun(true);
       return;
     }
     const c = D.center(this.room);
-    if (s % 2 === 0) this.spawnRelicChoices(c.x, c.y + 40, 'r'); // even strata: relic hoard; strata III and V: epic offer; stratum I: none
-    else if (s > 1) for (const p of this.players.values()) this.grantOffer(p, { src: 'epic' });
+    if (s === 2) this.spawnRelicChoices(c.x, c.y + 40, 'r'); // boss II: relic hoard; boss III: epic offer; boss I: the class offer only
+    else if (s === 3) for (const p of this.players.values()) this.grantOffer(p, { src: 'epic' });
     this.props.push({ id: U.uid(), kind: 'portal', x: c.x, y: c.y - 60, state: 0 });
   };
 
@@ -341,17 +349,15 @@
     } else if (room.type === 'treasure') {
       props.push({ id: id(), kind: 'chest', x: c.x, y: c.y, state: 0 });
     } else if (room.type === 'rest') {
-      const group = U.uid();
-      const anvil = s % 2 === 1; // the anvil stands at rest sites of odd strata only
-      props.push({ id: id(), kind: 'campfire', x: c.x - (anvil ? 44 : 0), y: c.y, group, state: 0 });
-      if (anvil) props.push({ id: id(), kind: 'anvil', x: c.x + 44, y: c.y, group, state: 0 });
+      const group = U.uid(); // each hero uses one of the two
+      props.push({ id: id(), kind: 'campfire', x: c.x - 44, y: c.y, group, state: 0 });
+      props.push({ id: id(), kind: 'anvil', x: c.x + 44, y: c.y, group, state: 0 });
     } else if (room.type === 'shop') {
       props.push({ id: id(), kind: 'merchant', x: c.x, y: c.y - 70, state: 0 });
       const items = [];
       const taken = new Set();
       for (let i = 0; i < 2; i++) { const r = this.rollRelic('c', taken); taken.add(r); items.push({ type: 'relic', item: r }); }
-      items.push({ type: s % 2 ? 'boon' : 'forge' }); // one build item per shop: epic boon on odd strata, forge on even
-      items.push({ type: 'potion' });
+      items.push({ type: 'boon' }, { type: 'forge' }, { type: 'potion' }); // build items: an epic boon and a forge
       items.forEach((it, i) => {
         props.push({ id: id(), kind: 'shop', x: c.x + (i - (items.length - 1) / 2) * 62, y: c.y + 24, item: it.item || it.type, stype: it.type, price: this.priceOf(it), state: 0 });
       });
@@ -379,8 +385,7 @@
     return Math.max(5, Math.round(base / 5) * 5);
   };
 
-  const PER_HERO_REWARDS = new Set(['boon', 'forge', 'epic', 'vigor', 'twist']);
-  const forage = (p, share) => share + ED.World.FORAGER * (p.stats.forager || 0); // a heal share of max HP plus Forager's
+  const PER_HERO_REWARDS = new Set(['boon', 'forge', 'epic', 'vigor']);
   const allClaimed = (w, group) => [...w.players.values()].every(q => q.dead || q.claimed[group]);
 
   W.interact = function (pid, propId) {
@@ -405,8 +410,8 @@
           if (p.claimed[pr.group]) { this.msgs.push({ to: pid, t: 'toast', text: 'You already claimed this reward.' }); return; }
           p.claimed[pr.group] = true;
           if (item === 'boon') this.grantOffer(p, { src: 'room' });
-          else if (item === 'vigor') { p.bonusHp += 2; this.recalc(p, false); this.healPlayer(p, p.maxHp * forage(p, 0.2)); this.sendBuild(p); }
-          else this.grantOffer(p, { src: item }); // forge, epic, twist
+          else if (item === 'vigor') { p.bonusHp += 2; this.recalc(p, false); this.healPlayer(p, p.maxHp * 0.2); this.sendBuild(p); }
+          else this.grantOffer(p, { src: item }); // forge, epic
           this.msgs.push({ to: pid, t: 'claimed', group: pr.group });
           if (allClaimed(this, pr.group)) pr.state = 1;
         } else {
@@ -422,7 +427,7 @@
         // one use per hero across both props of the rest site
         if (p.claimed[pr.group]) { this.msgs.push({ to: pid, t: 'toast', text: 'You already used this rest site.' }); return; }
         p.claimed[pr.group] = true;
-        if (pr.kind === 'campfire') this.healPlayer(p, p.maxHp * forage(p, 0.35));
+        if (pr.kind === 'campfire') this.healPlayer(p, p.maxHp * 0.35);
         else this.grantOffer(p, { src: 'forge' });
         this.msgs.push({ to: pid, t: 'claimed', group: pr.group });
         this.emit({ t: 'claim', pid, item: pr.kind, x: pr.x, y: pr.y });
@@ -446,14 +451,14 @@
         this.gold -= pr.price; pr.state = 1;
         this.emit({ t: 'buy', pid, x: pr.x, y: pr.y });
         if (pr.stype === 'relic') this.giveRelic(p, pr.item);
-        else if (pr.stype === 'potion') this.healPlayer(p, p.maxHp * forage(p, 0.4));
+        else if (pr.stype === 'potion') this.healPlayer(p, p.maxHp * 0.4);
         else if (pr.stype === 'boon') this.grantOffer(p, { src: 'epic' });
         else if (pr.stype === 'forge') this.grantOffer(p, { src: 'forge' });
         break;
       }
       case 'fountain': {
         pr.state = 1;
-        for (const q of this.players.values()) { if (q.downed) { q.downed = false; q.hp = 1; } this.healPlayer(q, q.maxHp * forage(q, 0.5)); }
+        for (const q of this.players.values()) { if (q.downed) { q.downed = false; q.hp = 1; } this.healPlayer(q, q.maxHp * 0.5); }
         this.emit({ t: 'fountain', x: pr.x, y: pr.y });
         break;
       }
@@ -515,35 +520,6 @@
     }
   };
 
-  // ---------------- Hunted (Twist: stats.twHunted) ----------------
-  // While any hero holds Hunted, a combat or elite room's second wave brings one champion: the biome elite with one affix from DARK_AFFIXES, e.hunted (snapshot flag bit 27), no xp (unplanned).
-  // It never holds the room (hostiles and the pending-spawn counts skip it). Its kill grants every Hunted holder a room offer (opens once the room is safe); at the clear it leaves with a puff, its shots and telegraphs with it.
-  const NO_AFFIX2 = [0, 0, 0, 0, 0, 0];
-  const huntedParty = (w) => { for (const p of w.players.values()) if (p.stats.twHunted > 0) return true; return false; };
-  W.spawnHunted = function (enc) {
-    const type = ED.biomeFor(this.stratum).elite, def = ED.ENEMIES[type], affix = this.rng.pick(ED.World.DARK_AFFIXES);
-    const pt = D.randomFloor(this.room, this.rng, this.alivePlayers(), ED.World.PACE.avoid);
-    this.addZone({ kind: 'spawn', x: pt.x, y: pt.y, r: def.r + 4, dur: ED.World.PACE.spawn, type, hunt: 1, after: (e) => {
-      const a2 = ED.World.AFFIX2; ED.World.AFFIX2 = NO_AFFIX2; // one affix only
-      try { this.makeElite(e, affix); } finally { ED.World.AFFIX2 = a2; }
-      e.hunted = true; enc.hunt = e;
-    } });
-  };
-  W.huntedPaid = function (enc) {
-    enc.huntPaid = true;
-    for (const p of this.players.values()) if (p.stats.twHunted > 0) this.grantOffer(p, { src: 'room' });
-  };
-  W.huntedLeave = function () {
-    for (const z of this.zones) if (z.hunt) z.dead = true;
-    for (const e of this.enemies) {
-      if (!e.hunted || e.hp <= 0) continue;
-      e.hp = 0;
-      for (const z of this.zones) if (z.src === e) z.dead = true;
-      for (const q of this.projs) if (q.src === e) q.dead = true;
-      this.emit({ t: 'puff', x: Math.round(e.x), y: Math.round(e.y), c: '#e8344e' });
-    }
-  };
-
   // ---------------- the Platino (floor.platino: the fight clear on the floor that lets it out) ----------------
   // Out on a floor spot (PLATINO.avoid from every hero) at the floor.platino-th fight clear of its floor: wanders at wander px/s, flees heroes within flee at speed px/s (steering at turn rad/s, probing probe px ahead for open floor), gone after life s with a puff.
   // A hero touching it (within touch of the body) catches it: { t: 'platino', pid, x, y } and p.sec.platino. Own RNG stream; never in this.enemies (no hits, no aim, no bot target), drops nothing.
@@ -593,6 +569,7 @@
   };
   // Hero hits on the room's unbroken breakables (at most 8, a plain loop) and on the Drowned Bell: a circle (x, y, r), the segment (x0, y0)-(x1, y1) swept by a body of radius r, or the sector of reach and arc around the hero's facing a.
   W.smashCircle = function (p, x, y, r) {
+    if (this.room.arena) this.wallCircle(p, x, y, r + 4); // boss walls (arena.js)
     const bl = this.room.bell; if (bl && p && !p.bellS && U.dist2(bl.x, bl.y, x, y) <= (BELL_R + r) * (BELL_R + r)) this.ringBell(p);
     const bs = this.room.breakables; if (!bs.length) return;
     const rs = this.roomState[this.roomId], rr = (SMASH_R + r) * (SMASH_R + r);
@@ -603,6 +580,7 @@
     }
   };
   W.smashSeg = function (p, x0, y0, x1, y1, r, noRing) {
+    if (this.room.arena) this.wallSeg(p, x0, y0, x1, y1, r + 4);
     const bl = this.room.bell; if (bl && p && !p.bellS && !noRing && U.segDist2(bl.x, bl.y, x0, y0, x1, y1) <= (BELL_R + r) * (BELL_R + r)) this.ringBell(p);
     const bs = this.room.breakables; if (!bs.length) return;
     const rs = this.roomState[this.roomId], rr = (SMASH_R + r) * (SMASH_R + r);
@@ -612,6 +590,7 @@
     }
   };
   W.smashArc = function (p, a, reach, arc) {
+    if (this.room.arena) this.wallArc(p, a, reach, arc);
     const bl = this.room.bell;
     if (bl && p && !p.bellS) { const d = Math.hypot(bl.x - p.x, bl.y - p.y); if (d - BELL_R <= reach && (arc >= 6.2 || Math.abs(U.angDiff(a, Math.atan2(bl.y - p.y, bl.x - p.x))) <= arc / 2 + Math.atan2(BELL_R, Math.max(d, 1)))) this.ringBell(p); }
     const bs = this.room.breakables; if (!bs.length) return;

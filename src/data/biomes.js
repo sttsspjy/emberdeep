@@ -1,12 +1,10 @@
-// The six strata of the Deep. Each one changes palette, lighting, decor, ambient particles,
-// hazards and enemy roster so players always see where they are in the descent.
+// The four strata of the Deep (IV is the finale). Each one sets palette, lighting, decor, ambient particles, hazard and foe roster; no stratum favours or resists an element.
 (function (ED) {
   'use strict';
   ED.BIOMES = [
     {
-      id: 'ossuary', name: 'The Ossuary', short: 'Ossuary',
-      weak: 'holy', resist: 'shadow', // elemental affinity of every foe in this stratum
-      blurb: 'Bone-lined halls where the first delvers were laid to rest. They do not rest well.',
+      id: 'ossuary', name: 'Ossuary', short: 'Ossuary',
+      blurb: 'Skeletons, bats and bone archers. Spike traps hurt while you stand on them.',
       pal: {
         void: '#090a09', floorA: '#3d3f38', floorB: '#36382f', grout: '#24261f', wallTop: '#62655a', wallFace: '#383a31',
         wallShadow: '#1a1b16', accent: '#86a35b', accent2: '#c9c1a6', light: '#ffad5a', darkness: 0.5, darkColor: '#060708',
@@ -16,69 +14,31 @@
       breakable: ['urn'], // decor kinds that stand as smashable props (room.breakables) instead of baked floor decor
       particle: { kind: 'dust', color: '#d9cfb4', rate: 6 },
       hazard: 'spikes',
-      enemies: [['skeleton', 4], ['bat', 3], ['bonearcher', 2], ['slime', 2], ['priest', 1]],
+      enemies: [['skeleton', 4], ['bat', 3], ['bonearcher', 2], ['slime', 2], ['priest', 1], ['icewolf', 1]],
       elite: 'skelknight',
       boss: 'bonewarden',
       fodder: 'bonemite', // horde filler of combat and elite rooms (never in `enemies`)
     },
     {
-      id: 'glowmire', name: 'Glowmire Grotto', short: 'Glowmire',
-      weak: 'shadow', resist: 'holy', // elemental affinity of every foe in this stratum
-      blurb: 'A drowned cave swallowed by luminous fungus. The light is pretty. The spores are not.',
+      id: 'glowmire', name: 'Glowmire', short: 'Glowmire',
+      blurb: 'Mushroom foes, spore turrets and burrowing worms. Bog pools slow you and hurt a little.',
       pal: {
         void: '#06050b', floorA: '#2d2a3a', floorB: '#272436', grout: '#1a1926', wallTop: '#4a4262', wallFace: '#2b2643',
         wallShadow: '#130f22', accent: '#4ff0c8', accent2: '#c86bff', light: '#7dffd9', darkness: 0.56, darkColor: '#04030a',
-        chasm: '#010104', hazard: '#4c7a3a', hazardGlow: '#9cff6a', ui: '#7de8cf',
+        chasm: '#010104', hazard: '#4a4232', hazardGlow: '#7d6f4f', ui: '#7de8cf',
       },
       decor: ['mushroom', 'mushroom', 'root', 'puddle', 'crack', 'glowcap'],
       breakable: ['mushroom'],
       particle: { kind: 'spore', color: '#7dffd9', color2: '#d38bff', rate: 9 },
-      hazard: 'poison',
-      enemies: [['myconid', 3], ['sporepuff', 3], ['spitter', 2], ['cavespider', 3], ['glowslime', 2], ['mireworm', 2]],
+      hazard: 'poison', // drawn as a bog: slows and hurts (world.js), no glow
+      enemies: [['myconid', 3], ['sporepuff', 3], ['spitter', 2], ['cavespider', 3], ['glowslime', 2], ['mireworm', 2], ['frostwisp', 2]],
       elite: 'shroomhulk',
       boss: 'sporemother',
       fodder: 'sporeling',
     },
     {
-      id: 'rimefrost', name: 'Rimefrost Halls', short: 'Rimefrost',
-      weak: 'fire', resist: 'ice', // elemental affinity of every foe in this stratum
-      blurb: 'A dwarven palace frozen in a single night. Every statue was once a guard.',
-      pal: {
-        void: '#0b111a', floorA: '#9fb8cc', floorB: '#94aec4', grout: '#7690a8', wallTop: '#e2f0fb', wallFace: '#7896b2',
-        wallShadow: '#45607a', accent: '#7fe3ff', accent2: '#ffffff', light: '#cdeeff', darkness: 0.28, darkColor: '#0a1524',
-        chasm: '#0a1420', hazard: '#d8f2ff', hazardGlow: '#ffffff', ui: '#b9e6ff',
-      },
-      decor: ['crystal', 'crystal', 'snow', 'frozenbones', 'crack', 'pillarstub'],
-      breakable: ['crystal'],
-      particle: { kind: 'snow', color: '#ffffff', rate: 14 },
-      hazard: 'ice',
-      enemies: [['icewolf', 3], ['frostwisp', 3], ['rimemage', 2], ['frozenskel', 3], ['icegolem', 1], ['sentinel', 1]],
-      elite: 'frostknight',
-      boss: 'rimeheart',
-      fodder: 'rimemote',
-    },
-    {
-      id: 'cinderforge', name: 'The Cinderforge', short: 'Cinderforge',
-      weak: 'ice', resist: 'fire', // elemental affinity of every foe in this stratum
-      blurb: 'The furnace-heart of a fallen empire. Its machines still work. Its masters are gone.',
-      pal: {
-        void: '#0c0504', floorA: '#30231f', floorB: '#2a1e1a', grout: '#170f0c', wallTop: '#53392f', wallFace: '#2e1c17',
-        wallShadow: '#140907', accent: '#ff6a2a', accent2: '#ffd36b', light: '#ff9a4a', darkness: 0.44, darkColor: '#0a0302',
-        chasm: '#1a0500', hazard: '#ff5a1a', hazardGlow: '#ffc04a', ui: '#ffab70',
-      },
-      decor: ['lavacrack', 'lavacrack', 'chain', 'anvil', 'grate', 'cinders', 'crate'],
-      breakable: ['crate'],
-      particle: { kind: 'ember', color: '#ff9a3a', color2: '#ffd36b', rate: 12 },
-      hazard: 'lava',
-      enemies: [['imp', 3], ['lavahound', 3], ['automaton', 1], ['flameturret', 2], ['cinderbat', 3], ['drone', 2]],
-      elite: 'forgeknight',
-      boss: 'forgelord',
-      fodder: 'ashimp',
-    },
-    {
       id: 'sanctum', name: 'Drowned Sanctum', short: 'Sanctum',
-      weak: 'lightning', resist: 'poison', // elemental affinity of every foe in this stratum
-      blurb: 'A golden temple the sea reclaimed. Its priests kept praying underwater.',
+      blurb: 'Leaping reavers, casters and drones that circle and shoot. Water slows you.',
       pal: {
         void: '#020a0d', floorA: '#214047', floorB: '#1c3940', grout: '#10252a', wallTop: '#3f7173', wallFace: '#1f4549',
         wallShadow: '#0a2125', accent: '#e8c66b', accent2: '#5ff2e0', light: '#a5f9ff', darkness: 0.45, darkColor: '#01080b',
@@ -88,15 +48,14 @@
       breakable: ['coral'],
       particle: { kind: 'bubble', color: '#bff8ff', rate: 8 },
       hazard: 'water',
-      enemies: [['drowned', 3], ['eel', 3], ['siren', 2], ['crab', 2], ['jelly', 2], ['reaver', 2]],
+      enemies: [['drowned', 3], ['eel', 3], ['siren', 2], ['crab', 2], ['jelly', 2], ['reaver', 2], ['drone', 2]],
       elite: 'tidecaller',
       boss: 'drownedking',
       fodder: 'brinepolyp',
     },
     {
-      id: 'abyss', name: 'The Starless Abyss', short: 'Abyss',
-      weak: 'poison', resist: 'lightning', // elemental affinity of every foe in this stratum
-      blurb: 'Below the world there is a sky with no stars. Something wears a hollow crown there.',
+      id: 'abyss', name: 'Starless Abyss', short: 'Abyss',
+      blurb: 'The last stratum: two champion rooms, then the final boss. Void pools hurt.',
       pal: {
         void: '#030107', floorA: '#1f1933', floorB: '#1a152b', grout: '#0f0b1d', wallTop: '#3d3060', wallFace: '#21183c',
         wallShadow: '#0d081d', accent: '#b78cff', accent2: '#ff7ad9', light: '#d4bfff', darkness: 0.6, darkColor: '#020106',
@@ -106,13 +65,12 @@
       breakable: ['shard'],
       particle: { kind: 'mote', color: '#d4bfff', color2: '#ff9be6', rate: 10 },
       hazard: 'void',
-      enemies: [['shade', 3], ['starspawn', 3], ['voideye', 2], ['voidwraith', 2], ['horror', 1], ['riftcaller', 1]],
+      enemies: [['shade', 3], ['starspawn', 3], ['voideye', 2], ['voidwraith', 2], ['horror', 1], ['riftcaller', 1], ['sentinel', 1]],
       elite: 'voidknight',
       boss: 'hollowking',
       fodder: 'voidmote',
     },
   ];
 
-  // Ascension tints: the deeper the pact, the redder the world.
   ED.biomeFor = (stratum) => ED.BIOMES[Math.max(0, Math.min(ED.BIOMES.length - 1, stratum - 1))];
 })(globalThis.ED || (globalThis.ED = {}));

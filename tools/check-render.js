@@ -265,8 +265,13 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     F.reset();
     hit({ fd: 1 }); ok(F.texts.length === 0, 'a non-crit fodder hit prints no number');
     hit({ fd: 1, v: 400 }); hit({ fd: 1, pid: 'p1' }); ok(F.texts.length === 0, 'not even a big one or one of another hero');
-    hit({ fd: 1, c: 1 }); ok(F.texts.length === 1 && F.texts[0].crit, 'a crit fodder hit prints its number');
-    hit({ fd: 1 }); ok(F.texts.length === 1 && F.texts[0].s === '30', 'a non-crit fodder hit does not add into a crit number');
+    hit({ fd: 1, c: 1 }); ok(F.texts.length === 0, 'nor a crit fodder hit');
+    hit({ fd: 1, kl: 1 }); ok(F.texts.length === 1 && F.texts[0].s === '30', 'the killing blow on a fodder foe (kl) prints its number');
+    F.reset();
+    hit({ k: 1, el: 1, v: 2.4 }); hit({ k: 1, el: 1, v: 2.4 }); hit({ k: 1, el: 1, v: 2.4 });
+    ok(F.texts.length === 1 && F.texts[0].s === '7' && F.texts[0].color === '#ff9a3a', `three Burn ticks on one foe sum into one number in the Burn colour (${F.texts.map(t => t.s + ' ' + t.color)})`);
+    hit({ k: 1, el: 5, v: 0.3 }); ok(F.texts.length === 2 && F.texts[1].s === '1', 'a Poison tick on the same foe makes its own number, at least 1');
+    hit({ k: 1, el: 1, v: 9, pid: 'p1' }); ok(F.texts.length === 2, "another hero's tick prints no number");
     F.reset();
     hit({}); ok(F.texts.length === 1 && F.texts[0].s === '30', 'a normal hit prints a number');
     hit({ fd: 1, v: 12 }); ok(F.texts.length === 1 && F.texts[0].s === '42', `a non-crit fodder hit adds into the number of its spot (${F.texts[0].s})`);
@@ -324,7 +329,7 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     ok(R.liveStatics({ roomState: {}, roomId: 3 }, rm).length === 4, 'a view without room state draws everything');
   }
 
-  // playstyle visuals: zone kinds, element and Bell events, foe markers, Capacitor and Metronome cues; every one survives missing or malformed fields
+  // playstyle visuals: zone kinds, element verb and Bell events, foe markers; every one survives missing or malformed fields
   {
     const ops = { n: 0 };
     const rc = () => new Proxy({ globalAlpha: 1 }, { get: (t, k) => (k in t ? t[k] : k === 'canvas' ? { width: 64, height: 64 } : k.startsWith('create') ? () => ({ addColorStop() {} }) : () => { ops.n++; }), set: (t, k, v) => { t[k] = v; return true; } });
@@ -332,26 +337,25 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     globalThis.document = { createElement: () => ({ width: 1, height: 1, getContext: () => rc() }) };
     const throws = (f) => { try { f(); return false; } catch (err) { console.log('  ' + err.stack.split('\n').slice(0, 3).join(' | ')); return true; } };
     try {
-      const KINDS = ['cinder', 'firebreak', 'pillar', 'anchor', 'vigil'], src = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'render.js'), 'utf8');
+      const KINDS = ['icewall', 'pfire', 'plague', 'decoy'], src = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'render.js'), 'utf8');
       const dz = src.slice(src.indexOf('function drawZones('), src.indexOf('default: {', src.indexOf('function drawZones(')));
       for (const kd of KINDS) ok(N.ZK.includes(kd) && dz.includes(`case '${kd}'`), `zone kind ${kd} is on the wire and has its own draw case`);
       const zrow = (kind, o) => Object.assign({ id: 3, kind, x: 200, y: 200, r: 40, t: 0.5, dur: 4, a: 0.3, len: 0, w: 0, arc: 0, team: 0, elite: false, lob: null, warm: 0, str: 0, fol: 0 }, o);
-      const shapes = [{}, { len: 120, w: 16 }, { arc: 2, r: 50, w: 14 }, { t: 3.9 }, { t: 0.02 }, { r: 0 }, { t: undefined, dur: 0 }, { len: NaN, a: undefined, id: undefined }, { r: -5, dur: undefined }];
+      const shapes = [{}, { len: 120, w: 10 }, { t: 3.9 }, { t: 0.02 }, { r: 0 }, { t: undefined, dur: 0 }, { len: NaN, a: undefined, id: undefined }, { r: -5, dur: undefined }];
       const ctx = rc(), view = { zones: [], players: new Map(), enemies: [] };
       for (const kd of KINDS) for (const sh of shapes) {
         const z = zrow(kd, sh); view.zones.length = 0; view.zones.push(z);
         ok(!throws(() => { for (const pass of [0, 2, 1]) R.zoneArt.draw(ctx, view, 1.7, pass); for (let i = 0; i < 4; i++) R.zoneArt.stand(ctx, z, i, 1.7); }), `zone ${kd} ${JSON.stringify(sh)} draws all passes and its standing pieces`);
       }
-      for (const kd of KINDS) { ops.n = 0; view.zones.length = 0; view.zones.push(zrow(kd, kd === 'cinder' ? { len: 120, w: 16 } : {})); R.zoneArt.draw(ctx, view, 1, 0); R.zoneArt.draw(ctx, view, 1, 1); ok(ops.n > 0, `zone ${kd} draws (${ops.n} canvas ops)`); }
-      ok(R.zoneArt.len(zrow('cinder', { len: 90 })) === 90 && R.zoneArt.len(zrow('cinder', { arc: 2, r: 50 })) === 100 && R.zoneArt.len(zrow('cinder', { r: 30 })) === 60, 'zone shape: a line by len, an arc by arc x r, else a disc by 2r');
-      ok(!throws(() => { R.zoneArt.pillar(5, false); R.zoneArt.pillar(16, true); R.zoneArt.anchor(); }), 'the pillar (both looks) and anchor sprites bake');
+      for (const kd of KINDS) { ops.n = 0; view.zones.length = 0; view.zones.push(zrow(kd, kd === 'icewall' ? { len: 120, w: 10 } : {})); R.zoneArt.draw(ctx, view, 1, 0); R.zoneArt.draw(ctx, view, 1, 1); ok(ops.n > 0, `zone ${kd} draws (${ops.n} canvas ops)`); }
+      ok(R.zoneArt.wallN(zrow('icewall', { len: 120 })) === 10 && R.zoneArt.wallN(zrow('icewall', { len: 0 })) === 2 && R.zoneArt.wallN(zrow('icewall', { len: 9999 })) === 12, 'an ice wall stands one pillar every 14 px (2 to 12)');
+      ok(!throws(() => { R.zoneArt.pillar(4, false); R.zoneArt.pillar(5, true); }), 'the ice wall pillar sprites bake (both looks)');
       // events
       const fctx = { localPid: 'p0', player: () => ({ x: 0, y: 0, pid: 'p0', cls: 'bell' }), players: () => [], stratum: () => 1 };
       const plays = [], A0 = ED.Audio;
       ED.Audio = { play: (name, v, arg, pr) => plays.push({ name, v, arg, pr }), flush() {}, hit() {}, impact() {}, kill() {} };
       const good = {
-        detonate: { pid: 'p0', x: 100, y: 100 }, tether: { pid: 'p0', pts: [100, 100, 160, 110, 220, 90] }, rebuke: { pid: 'p0', x: 100, y: 100, r: 90 },
-        reapchain: { x: 100, y: 100, x2: 180, y2: 140 }, shatter: { x: 100, y: 100, r: 70 }, hurl: { pid: 'p0', x: 100, y: 100, k: 2.5 }, reel: { pid: 'p0', x0: 100, y0: 100, x1: 200, y1: 120 },
+        pdodge: { pid: 'p0', x: 100, y: 100 }, blink: { pid: 'p0', x0: 100, y0: 100, x1: 180, y1: 120, k: 'storm' }, shatter: { x: 100, y: 100, r: 70 }, hurl: { pid: 'p0', x: 100, y: 100, k: 2.5 }, reel: { pid: 'p0', x0: 100, y0: 100, x1: 200, y1: 120 },
       };
       const live = () => F.parts.length + F.rings.length + F.bolts.length + F.pops.length + F.sheets.length + F.beams.length;
       for (const t of Object.keys(good)) {
@@ -361,37 +365,28 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
         const bad = [{ x: 'a', y: null }, { x: NaN, y: 5, r: 'x', k: Infinity }, { pts: 'x' }, { pts: [1, 2, 3] }, { pts: [1, 2, null, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18] }, { x0: 1, y0: 2 }, { x: 5, y: 5, r: -10, k: -3 }];
         ok(!throws(() => { for (const b of bad) F.handle(Object.assign({ t }, b), fctx); F.update(0.016); }), `${t} survives missing and malformed fields`);
       }
-      F.reset(); F.handle({ t: 'tether', pid: 'p0', pts: Array.from({ length: 40 }, (_, i) => i * 10) }, fctx); ok(F.bolts.length === 6, `a tether draws at most 6 links (${F.bolts.length})`);
+      F.reset(); F.handle({ t: 'blink', pid: 'p0', x0: 0, y0: 0, x1: 90, y1: 0, k: 'behind' }, fctx); ok(F.bolts.length === 0 && live() > 0, 'an Umbral Arms blink puffs smoke, no bolt');
+      F.reset(); F.handle({ t: 'chain', k: 'd', pts: [[100, 76], [100, 100]] }, fctx); ok(F.bolts.length + F.pops.length > 0, 'a dash discharge drops a bolt on the foe');
+      F.reset(); F.handle({ t: 'chain', k: 'f', pts: [[100, 94], [130, 94]] }, fctx); ok(F.bolts.length === 1, 'Burn passed on draws one ember line');
+      F.reset(); F.handle({ t: 'chain', k: 'f', pts: 'x' }, fctx); F.handle({ t: 'chain' }, fctx); ok(live() === 0, 'a malformed chain draws nothing');
+      F.reset(); F.handle({ t: 'lance', pid: 'p0', x0: 0, y0: 0, x1: 300, y1: 0, k: 1 }, fctx); ok(F.bolts.length === 1, 'the ice lance leaves a frost streak');
+      F.reset(); F.handle({ t: 'hold', pid: 'p0', k: 'cone', on: 1 }, fctx); ok(F.pops.length === 1, 'a hold start pops once'); F.reset(); F.handle({ t: 'hold', pid: 'p0', k: 'cone', on: 0 }, fctx); ok(live() === 0, 'a hold end draws nothing');
       F.reset(); plays.length = 0;
-      for (let i = 0; i < 5; i++) F.handle({ t: 'detonate', pid: 'p0', x: 100 + i * 20, y: 100 }, fctx);
-      ok(!plays.some((q) => q.name === 'detonate'), 'detonations wait for the frame end');
-      F.update(0.016); const dp = plays.filter((q) => q.name === 'detonate');
-      ok(dp.length === 1 && dp[0].arg === 5 && dp[0].v === 1, `one shared cue for the frame's 5 detonations (${JSON.stringify(dp)})`);
-      plays.length = 0; F.update(0.016); ok(!plays.some((q) => q.name === 'detonate'), 'and none on the next frame');
-      F.handle({ t: 'detonate', pid: 'p9', x: 1, y: 1 }, fctx); F.update(0.016); const op = plays.find((q) => q.name === 'detonate');
-      ok(op && op.v < 1 && op.pr === 0, 'another hero\'s detonation plays quieter at the lowest priority');
       F.reset(); plays.length = 0; const sh0 = F.shake; F.handle({ t: 'hurl', pid: 'p0', x: 0, y: 0, k: 2.5 }, fctx); const big = F.shake; F.reset(); F.handle({ t: 'hurl', pid: 'p0', x: 0, y: 0, k: 0.4 }, fctx); const small = F.shake; F.reset(); F.handle({ t: 'hurl', pid: 'p9', x: 0, y: 0, k: 2.5 }, fctx);
       ok(sh0 === 0 && big > small && small > 0 && F.shake === 0, `a hurl shakes its owner by k (k 2.5: ${big}, k 0.4: ${small}), another hero's not at all (${F.shake})`);
       ok(plays.filter((q) => q.name === 'bhurl').map((q) => q.arg).join() === '2.5,0.4,2.5', 'each hurl plays the bronze clang with its k');
-      const bctx = (tw) => ({ localPid: 'p0', player: (pid) => ({ x: 0, y: 0, pid, cls: 'knight', stats: { twBlood: tw } }), players: () => [], stratum: () => 1 });
-      plays.length = 0; F.handle({ t: 'skill', pid: 'p0', k: 'x', x: 0, y: 0 }, bctx(1)); F.handle({ t: 'skill', pid: 'p9', k: 'x', x: 0, y: 0 }, bctx(1)); F.handle({ t: 'skill', pid: 'p0', k: 'x', x: 0, y: 0 }, bctx(0));
-      ok(plays.filter((q) => q.name === 'blood').length === 1, 'Bloodprice: the own cast of a twBlood hero plays the heartbeat sting, no other cast does');
       F.reset(); ED.Audio = A0;
-      // foe markers and the Capacitor cue: host-side fields (quarryT, doses) and the mirror's decoded ones (dosed) both draw
+      // foe markers: Burn stacks (host and mirror both carry burnN), charge, stun
       const lp = { pid: 'p0', x: 0, y: 0, boons: {} }, fv = { players: new Map([['p0', lp]]), zones: [], enemies: [] };
       R.local = 'p0'; R.foeArt.view(fv);
       const mk = (o) => Object.assign({ id: 7, type: 'skeleton', def: ED.ENEMIES.skeleton, x: 100, y: 100, r: 10, hp: 50, maxHp: 60, elite: null, boss: false, ward: 0, st: 'move', t: 0, face: 1 }, o);
       const P0 = { draw: ED.Pix.draw, put: ED.Pix.put }; // the Pix stand-in counts its blits too
       const marksOps = (e) => { ops.n = 0; ED.Pix.draw = () => { ops.n++; return true; }; ED.Pix.put = () => { ops.n++; }; try { R.foeArt.marks(ctx, e, 1); R.foeArt.status(ctx, e, 1, true); } finally { ED.Pix.draw = P0.draw; ED.Pix.put = P0.put; } return ops.n; };
       const base = marksOps(mk({}));
-      for (const o of [{ quarryT: 2 }, { doses: [{ t: 1 }] }, { dosed: true }, { hunted: true }, { quarryT: 1, doses: [1], hunted: true, charge: 1, stun: 1, elite: 'swift', affixOff: true }])
+      for (const o of [{ burnN: 3 }, { burnN: 12 }, { charge: 1 }, { burnN: 5, charge: 1, stun: 1, elite: 'swift' }])
         ok(!throws(() => marksOps(mk(o))) && marksOps(mk(o)) > base, `foe marker ${JSON.stringify(o)} draws (${marksOps(mk(o))} ops over ${base})`);
-      ok(!throws(() => marksOps(mk({ doses: 'x', quarryT: NaN, hunted: 0 }))), 'malformed marker fields do not throw');
-      const chg = mk({ charge: 1 }), plain = marksOps(chg);
-      ok(!R.capOn(), 'no Capacitor: plain charge marks');
-      lp.boons = { capacitor: 1 }; R.foeArt.view(fv);
-      ok(R.capOn() && marksOps(chg) > plain, `with Capacitor a charged foe gets the stronger stored-charge marks (${marksOps(chg)} ops over ${plain})`);
-      R.foeArt.view(null); ok(!R.capOn(), 'no view: no Capacitor cue');
+      ok(!throws(() => marksOps(mk({ burnN: 'x', charge: NaN }))), 'malformed marker fields do not throw');
+      R.foeArt.view(null);
     } finally {
       if (doc0 === undefined) delete globalThis.document; else globalThis.document = doc0;
     }
@@ -414,8 +409,8 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     ok(m2.enemies.find((e) => e.boss).furyM === 1, 'a stratum II boss in the mirror is x1');
     // fury event: shake, burst, message with the boss name
     const fxCtx = { localPid: 'p0', player: () => ({ x: 0, y: 0, pid: 'p0', cls: 'knight', name: 'T' }), players: () => [], stratum: () => 4 };
-    F.reset(); F.handle({ t: 'fury', type: 'forgelord', x: 200, y: 200 }, fxCtx);
-    ok(F.parts.length > 0 && F.rings.length > 0 && F.shake > 0 && F.msgs.some((q) => q.text === 'The Forgelord is enraged!'), `the fury event bursts, rings, shakes and posts the message (${F.parts.length} particles, ${F.rings.length} rings, shake ${F.shake})`);
+    F.reset(); const B4 = ED.biomeFor(4).boss; F.handle({ t: 'fury', type: B4, x: 200, y: 200 }, fxCtx);
+    ok(F.parts.length > 0 && F.rings.length > 0 && F.shake > 0 && F.msgs.some((q) => q.text === ED.ENEMIES[B4].name + ' is furious: faster and harder hits'), `the fury event bursts, rings, shakes and posts the message (${F.parts.length} particles, ${F.rings.length} rings, shake ${F.shake})`);
     F.reset();
 
     // boss bar through the real hud.js over a recording canvas
@@ -436,15 +431,12 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     try {
       load('client/hud.js');
       const H = ED.HUD, viewOf = (s, boss) => ({ stratum: s, pact: 0, enemies: [boss], players: new Map(), pickups: [] });
-      // Metronome beat (P[25]) and the Capacitor chip
-      const bt = H.cues.beat;
-      ok(bt({ stats: { twMetro: 0 }, metroN: 2 }) === 0 && bt({ metroN: 2 }) === 0, 'no Metronome Twist: no beat cue');
-      ok(bt({ stats: { twMetro: 1 } }) === 1 && bt({ stats: { twMetro: 1 }, metroN: 3 }) === 4 && bt({ stats: { twMetro: 1 }, metroN: 9 }) === 4 && bt({ stats: { twMetro: 1 }, metroN: 'x' }) === 1, 'the beat is 1 + attacks since the x3 beat, clamped to 0-3');
+      // the Charged chip of a Lightning hero
       const cv0 = { stratum: 1, enemies: [{ charge: 1, hp: 5 }, { charge: 1, hp: 5 }, { charge: 0, hp: 5 }, { charge: 1, hp: 0 }], players: new Map() };
       const chips = (me) => H.cues.chips(cv0, me).filter((x, i) => !(i & 1));
-      ok(chips({ stats: {}, boons: { capacitor: 1 } }).includes('Charged 2') && !chips({ stats: {}, boons: {} }).some((x) => /^Charged/.test(x)), 'Capacitor: a chip counts the live charged foes a cast will detonate');
+      ok(chips({ stats: { lightningInfuse: 0.5 }, boons: {} }).includes('Charged 2') && !chips({ stats: {}, boons: {} }).some((x) => /^Charged/.test(x)), 'Lightning: a chip counts the live charged foes a dash discharges');
       const mk = (type, furyT, extra) => Object.assign({ id: 9, type, def: ED.ENEMIES[type], boss: true, hp: 800, maxHp: 1000, exposed: false, furyT, furyM: ED.World.furyMul(ED.ENEMIES[type].stratum || 4, furyT) }, extra);
-      H.draw(null, viewOf(4, mk('forgelord', 0)), null, {}, 0, 0.016, {}); // sets up the canvas and layout
+      H.draw(null, viewOf(4, mk(B4, 0)), null, {}, 0, 0.016, {}); // sets up the canvas and layout
       const bar = (s, type, furyT, extra) => {
         rec.fills.length = 0; rec.imgs.length = 0;
         const b = mk(type, furyT, Object.assign({ furyM: ED.World.furyMul(s, furyT) }, extra));
@@ -452,14 +444,14 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
         const labels = rec.imgs.filter((i) => i.im && i.im.texts && i.im.texts.length).map((i) => ({ text: i.im.texts[0], x: i.x, w: i.im.width }));
         return { track: rec.fills.filter((f) => f.style === '#26120b').length, labels, fills: rec.fills.map((f) => f.style) };
       };
-      const II = bar(2, 'sporemother', 30), IV = bar(4, 'forgelord', 10), IVw = bar(4, 'forgelord', tIV - 5), IVf = bar(4, 'forgelord', tIV + 10);
+      const II = bar(2, 'sporemother', 30), IV = bar(4, B4, 10), IVw = bar(4, B4, tIV - 5), IVf = bar(4, B4, tIV + 10);
       ok(II.track === 0 && IV.track === 1, `the bar draws the fury track for a IV boss (${IV.track}) and not for a II boss (${II.track})`);
       ok(!IV.labels.some((l) => /Fury/.test(l.text)) && !IVw.labels.some((l) => /Fury/.test(l.text)), 'no fury label before the start');
       ok(IV.fills.includes('#b88a4a') && IVw.fills.some((f) => /^rgba\(255, ?181, ?107/.test(f)) && IVf.fills.some((f) => /^rgba\(255, ?90, ?26/.test(f)), 'the track fill is amber, pulses light from the warning on, burns ember past the start');
       const lab = IVf.labels.find((l) => /^Fury/.test(l.text));
       ok(lab && lab.text === 'Fury ×' + (1 + 10 * ED.World.BOSS_FURY.ramp).toFixed(1), `the fury label reads the multiplier ten seconds in (${lab && lab.text})`);
       ok(!II.labels.some((l) => /Fury/.test(l.text)), 'no label on a II boss');
-      const both = bar(4, 'forgelord', tIV + 10, { exposed: true }), ex = both.labels.find((l) => l.text === 'Exposed'), fu = both.labels.find((l) => /^Fury/.test(l.text));
+      const both = bar(4, B4, tIV + 10, { exposed: true }), ex = both.labels.find((l) => l.text === 'Exposed'), fu = both.labels.find((l) => /^Fury/.test(l.text));
       ok(ex && fu && ex.x + ex.w <= fu.x, `Exposed and Fury sit side by side without overlap (Exposed ${ex && ex.x}+${ex && ex.w}, Fury ${fu && fu.x})`);
       const onlyEx = bar(2, 'sporemother', 5, { exposed: true });
       ok(onlyEx.labels.some((l) => l.text === 'Exposed') && !onlyEx.labels.some((l) => /Fury/.test(l.text)), 'a II boss keeps its Exposed label alone');

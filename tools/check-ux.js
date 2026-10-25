@@ -14,7 +14,7 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   ok(signs.length === 5, 'five tutorial signs: ' + signs.length);
   ok(/^Aim with \{aim\}/.test(signs[0].text) && signs[0].d <= 90, 'the sign within reach of the spawn is the mouse-aim sign: ' + signs[0].text.slice(0, 30) + ' at ' + Math.round(signs[0].d) + ' px');
   ok(signs.slice(1).every(s => s.d > 0), 'the other signs stand apart');
-  const last = signs.find(s => /skull/.test(s.text));
+  const last = signs.find(s => /\{map\}/.test(s.text));
   ok(last && /\{map\} opens your build/.test(last.text) && !/shows the map/.test(last.text), 'the map sign names the sheet: ' + (last && last.text));
 }
 
@@ -37,7 +37,7 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     ok(!/\{|\}|\[|\]/.test(t), `${src}: no left-over token: ${t.slice(0, 80)}`);
   }
   ok(/never Reaped/.test(ED.BOONS.doommark.desc) && /Tolls/.test(ED.BOONS.doommark.desc) && /never Reaped/.test(ED.STATUS.doom.rule), 'Doom: a boss is never Reaped, it Tolls');
-  ok(/Open boons can rank 1 higher/.test(ED.BOONS.generalist.desc) && /Your hits mark 20% more Doom/.test(ED.Sheet.text('souljar', 1, st)) && /Your hits mark 40% more Doom/.test(ED.Sheet.text('souljar', 2, st)), 'Generalist and Soul Jar wording');
+  ok(/Open boons can rank 1 higher/.test(ED.BOONS.generalist.desc) && /Your Backstabs mark 20% more Doom/.test(ED.Sheet.text('souljar', 1, st)) && /Your Backstabs mark 40% more Doom/.test(ED.Sheet.text('souljar', 2, st)), 'Generalist and Soul Jar wording');
   ok(/foes inside take Holy damage/.test(ED.SKILLS.sanctuary.desc) && !/burn/i.test(ED.SKILLS.sanctuary.desc), 'Sanctuary does not burn');
   ok(/does not stack with other \+20% vulnerabilities/.test(ED.boonText('r_s2_b', 1, null)) && !/Judged/.test(ED.boonText('r_s2_b', 1, null)), 'Hail of Thorns does not lean on the Cleric term');
   ok(/Crush/.test(ED.SKILLS.charge.desc) && /never stunned/.test(ED.SKILLS.shieldthrow.desc), 'Shield Charge and Shield Throw name Crush and the boss rule');
@@ -134,12 +134,12 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   // glyph identity -> [glyph, colour, label] as the map draws it
   const room = (type, extra) => Ic.room(Object.assign({ type, reward: null, dark: false, event: null }, extra || {}), null, ED.World.REWARD_UP);
   const G = {};
-  for (const rw of ['gold', 'boon', 'epic', 'relic', 'forge', 'vigor', 'twist']) { const r = Ic.reward(rw, null); G[rw] = [r[0], r[1], r[2]]; }
+  for (const rw of ['gold', 'boon', 'epic', 'relic', 'forge', 'vigor']) { const r = Ic.reward(rw, null); G[rw] = [r[0], r[1], r[2]]; }
   for (const t of ['shop', 'treasure', 'rest', 'elite', 'boss']) { const r = room(t); G[t] = [r.icon, r.color, r.label]; }
   for (const ev of ['fountain', 'altar', 'trial', 'gamble']) { const r = room('event', { event: ev }); G['event:' + ev] = [r.icon, r.color, r.label]; }
   G.dark = Ic.DARK.slice();
-  const want = { shop: ['stall', 'Shop'], gold: ['coins', 'Gold'], treasure: ['chest', 'Treasure'], relic: ['amulet', 'Relic'], epic: ['cardepic', 'Epic'], boon: ['card', 'Boon'], forge: ['anvil', 'Forge'], vigor: ['heart', 'Vigor'],
-    rest: ['campfire', 'Rest'], 'event:fountain': ['fountain', 'Fountain'], 'event:altar': ['altar', 'Altar'], 'event:trial': ['swords', 'Trial'], 'event:gamble': ['question', 'Gamble'], elite: ['skullhorn', 'Elite'], boss: ['skullcrown', 'Boss'], dark: ['moon', 'Dark'], twist: ['cardtwist', 'Twist'] };
+  const want = { shop: ['stall', 'Shop'], gold: ['coins', 'Gold'], treasure: ['chest', 'Treasure'], relic: ['amulet', 'Relic'], epic: ['cardepic', 'Epic'], boon: ['card', 'Boon'], forge: ['anvil', 'Forge'], vigor: ['heart', 'Health'],
+    rest: ['campfire', 'Rest'], 'event:fountain': ['fountain', 'Fountain'], 'event:altar': ['altar', 'Altar'], 'event:trial': ['swords', 'Trial'], 'event:gamble': ['question', 'Gamble'], elite: ['skullhorn', 'Elite'], boss: ['skullcrown', 'Boss'], dark: ['moon', 'Dark'] };
   for (const id in want) ok(G[id] && G[id][0] === want[id][0] && G[id][2] === want[id][1] && valid(G[id][0]), `map glyph ${id}: ${want[id][0]} "${want[id][1]}" (16x16 mask): ${G[id] && G[id].join(' ')}`);
   const ids = Object.keys(want), sil = (g) => mask(g).map(r => r.replace(/[^.]/g, '#')).join('');
   const diff = (a, b) => { const x = sil(a), y = sil(b); let d = 0; for (let i = 0; i < 256; i++) if (x[i] !== y[i]) d++; return d; };
@@ -150,11 +150,11 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
   }
   ok(diff('stall', 'coins') >= 40 && dist(G.shop[1], G.gold[1]) >= 120, 'shop and gold never read alike: silhouettes differ in ' + diff('stall', 'coins') + ' cells, colours ' + Math.round(dist(G.shop[1], G.gold[1])) + ' apart');
   for (const [a, b] of [['skullhorn', 'skullcrown'], ['skullhorn', 'skull'], ['skullcrown', 'skull'], ['chest', 'stall'], ['coins', 'coin'], ['amulet', 'chest']]) ok(diff(a, b) >= 12, `${a} and ${b} silhouettes differ: ${diff(a, b)} cells`);
-  ok(dist(G.epic[1], G.boon[1]) >= 60 && dist(G.twist[1], G.boon[1]) >= 60 && dist(G.twist[1], G.epic[1]) >= 60, 'boon, epic and Twist cards differ in colour');
-  ok(Ic.reward('boon', 'fire')[1] === ED.PATHS.fire.color && Ic.reward('relic', null)[3] === 'Relic hoard' && Ic.reward('nope', null)[2] === 'Reward', 'boon card wears the path colour; long names; unknown rewards read "Reward"');
+  ok(dist(G.epic[1], G.boon[1]) >= 60, 'boon and epic cards differ in colour');
+  ok(Ic.reward('boon', 'fire')[1] === ED.PATHS.fire.color && Ic.reward('relic', null)[3] === 'Relics' && Ic.reward('nope', null)[2] === 'Reward', 'boon card wears the path colour; long names; unknown rewards read "Reward"');
   // every generated room has a glyph and a label (start excepted); a dark room previews its stepped-up reward; elite labels name the reward
   let rooms = 0; const bad = [];
-  for (let s = 1; s <= 6; s++) for (let seed = 1; seed <= 6; seed++) {
+  for (let s = 1; s <= ED.CONST.STRATA; s++) for (let seed = 1; seed <= 6; seed++) {
     const fl = ED.Dungeon.generate(s, seed * 7919 + s);
     for (const r of fl.rooms) {
       if (r.type === 'start') continue;
@@ -167,17 +167,17 @@ const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
     }
   }
   ok(rooms > 100 && !bad.length, `every generated room (${rooms}) maps to a glyph and a label: ${bad.slice(0, 4).join(', ')}`);
-  // route bits: a floor without sealed doors reaches every room; sealed entry doors close the way back
+  // route bits: every room is reachable from the start; exits only lead forward, so the way back closes
   const fl0 = ED.Dungeon.generate(3, 4242), rt0 = Ic.route(fl0, fl0.start, {});
   ok(rt0[fl0.start] === 5 && fl0.rooms.every(r => rt0[r.id] & 1), 'every room is reachable from the start room');
-  const mk = (id, gx, doors, sealed) => ({ id, gx, gy: 0, type: 'combat', doors: Object.assign({ n: -1, s: -1, e: -1, w: -1 }, doors), sealed });
-  const line = { rooms: [mk(0, 0, { e: 1 }, {}), mk(1, 1, { w: 0, e: 2, s: 3 }, { w: true }), mk(2, 2, { w: 1 }, { w: true }), mk(3, 1, { n: 1 }, { n: true })] }; // 0 -> 1 -> 2 or 3
+  const mk = (id, row, doors) => ({ id, row, lane: 0, type: 'combat', doors });
+  const line = { rooms: [mk(0, 0, { n0: 1 }), mk(1, 1, { n0: 2, n1: 3 }), mk(2, 2, {}), mk(3, 2, {})] }; // 0 -> 1 -> 2 or 3
   const rt1 = Ic.route(line, 1, { 0: { visited: true }, 1: { visited: true } });
   ok(rt1[0] === 2 && rt1[1] === 7 && rt1[2] === 1 && rt1[3] === 1, 'route bits from room 1: the walked room behind is closed (2), both forward rooms reachable (1): ' + Array.from(rt1).join());
   const rt2 = Ic.route(line, 2, { 0: { visited: true }, 1: { visited: true }, 2: { visited: true } });
   ok(rt2[3] === 0 && rt2[2] === 7, 'the branch not taken closes once its sibling is entered: ' + Array.from(rt2).join());
   const sheetSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'client', 'sheetui.js'), 'utf8');
-  ok(!/dead end/.test(sheetSrc) && /risky branches/.test(sheetSrc), 'the sheet calls dark rooms risky branches, not dead ends');
+  ok(!/dead end/.test(sheetSrc), 'the sheet never calls dark rooms dead ends');
 }
 
 console.log(`${n} checks, ${fails} failed`);

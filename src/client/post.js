@@ -155,8 +155,6 @@ void main(){
   const TWEAK = {
     ossuary: { sat: 1.08, gain: [1.03, 1.0, 0.98], bloom: 0.45, thr: 0.68 },
     glowmire: { sat: 1.16, gain: [0.98, 1.02, 1.04], bloom: 0.55, thr: 0.62 },
-    rimefrost: { sat: 1.04, gain: [0.97, 1.0, 1.05], bloom: 0.34, thr: 0.84 },
-    cinderforge: { sat: 1.06, gain: [1.03, 1.0, 0.96], bloom: 0.48, thr: 0.64 },
     sanctum: { sat: 1.12, gain: [0.97, 1.02, 1.02], bloom: 0.5, thr: 0.64 },
     abyss: { sat: 1.14, gain: [1.0, 0.97, 1.06], bloom: 0.6, thr: 0.58 },
   };

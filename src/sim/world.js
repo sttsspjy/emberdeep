@@ -22,10 +22,25 @@
       if (d2 >= r * r) continue;
       hit = true;
       if (d2 > 1e-4) { const d = Math.sqrt(d2), push = r - d; e.x += dx / d * push; e.y += dy / d * push; }
-      else {
+      else { // the centre is inside the tile: out through the nearest side whose neighbour is open floor (the nearest side when none is), so a body never tunnels on through a block or out of the room
         const l = e.x - tx * T, rr = tx * T + T - e.x, u = e.y - ty * T, dd = ty * T + T - e.y;
-        const m = Math.min(l, rr, u, dd);
-        if (m === l) e.x = tx * T - r; else if (m === rr) e.x = tx * T + T + r; else if (m === u) e.y = ty * T - r; else e.y = ty * T + T + r;
+        const open = (x, y) => x >= 0 && y >= 0 && x < room.w && y < room.h && !solidFor(room.tiles[y * room.w + x], locked, fly);
+        let m = Infinity, k = -1;
+        if (open(tx - 1, ty) && l < m) { m = l; k = 0; }
+        if (open(tx + 1, ty) && rr < m) { m = rr; k = 1; }
+        if (open(tx, ty - 1) && u < m) { m = u; k = 2; }
+        if (open(tx, ty + 1) && dd < m) { m = dd; k = 3; }
+        if (k < 0) { // no open neighbour (a body inside a field of chasms): to the centre of the nearest open tile, never on through the block
+          let bd = Infinity, bx = -1, by = -1;
+          for (let y = 0; y < room.h; y++) for (let x = 0; x < room.w; x++) {
+            if (solidFor(room.tiles[y * room.w + x], locked, fly)) continue;
+            const q = (x - tx) * (x - tx) + (y - ty) * (y - ty);
+            if (q < bd) { bd = q; bx = x; by = y; }
+          }
+          if (bx >= 0) { e.x = (bx + 0.5) * T; e.y = (by + 0.5) * T; return true; }
+          m = Math.min(l, rr, u, dd); k = m === l ? 0 : m === rr ? 1 : m === u ? 2 : 3;
+        }
+        if (k === 0) e.x = tx * T - r; else if (k === 1) e.x = tx * T + T + r; else if (k === 2) e.y = ty * T - r; else e.y = ty * T + T + r;
       }
     }
     return hit;
@@ -147,6 +162,8 @@
     if (hz === 'poison') sp *= 0.85;
     if (foes) sp *= Sim.crowdMul(p, foes);
     if (zones) for (const z of zones) if (z.kind === 'mire' && z.team === 1 && U.dist2(z.x, z.y, p.x, p.y) < z.r * z.r) { sp *= 0.55; break; }
+    if (zones) for (const z of zones) if (z.kind === 'bind' && U.dist2(z.x, z.y, p.x, p.y) < z.r * z.r) { sp *= 0.12; break; } // a champion's bind (champions.js)
+    if (room.arena && ED.Arena) sp *= ED.Arena.slow(room, p.x, p.y); // boss arena floor (flooded water)
     const accel = hz === 'ice' ? 3.2 : 22;
     p.vx = (p.vx || 0) + (mx * sp - (p.vx || 0)) * Math.min(1, accel * dt);
     p.vy = (p.vy || 0) + (my * sp - (p.vy || 0)) * Math.min(1, accel * dt);
@@ -173,10 +190,10 @@
     this.time = 0; this.roomTime = 0; this.state = 'play'; this.stratum = 0; this.floorSeed = 0;
     this.locked = false; this.enc = null; this.boss = null; this.pendingStratum = null;
     this.run = { kills: 0, fodderKills: 0, roomsCleared: 0, elitesKilled: 0, bosses: 0, bossCount: 0, revives: 0, maxGold: 0, maxRelics: 0, flawlessBoss: false,
-      fullClear: false, roomsVisited: 0, roomsTotal: 0, darkCleared: 0, gold777: false, oneFace: false,
+      fullClear: false, roomsVisited: 0, roomsTotal: 0, darkCleared: 0, champs: 0, gold777: false, oneFace: false,
       embers: { rooms: 0, elites: 0, bosses: 0, victory: 0 } };
+    this.mapRun = { dark: 0, elite: 0 };
     this.critter = null; // the Platino (rooms.js) while it is out
-    this.fullClearDone = 0;
     this.roomState = {};
     this.endTimer = -1; this.result = null; this.victory = false;
     this.flowT = 0; this.flow = null; this.tick = 0; this.waitMsg = '';
@@ -185,19 +202,25 @@
     for (const pd of opts.players) this.addPlayer(pd);
   };
   W.xpFor = (L) => Math.round(30 + 3 * (L - 1) + 6 * (L - 1) * (L - 1)); // xp from level L to L+1
-  W.ELITE = { hp: 2.4, hpStep: 0.4, dmg: 0.9 }; // elite HP multiplier at stratum I (+ hpStep per stratum) and damage multiplier
+  // Depth: stratum s sits at D = 1 + DEPTH_STEP (s - 1) on the foe curves (I 1, II 2.67, III 4.33, IV 6); a room adds ROW_DEPTH x its row fraction (W.prototype.rowFrac: 0 on the start row, 1 on the last row).
+  W.DEPTH_STEP = 5 / 3; W.ROW_DEPTH = 0.5;
+  W.depth = (s, f) => 1 + W.DEPTH_STEP * (Math.max(1, s) - 1) + W.ROW_DEPTH * (f || 0);
+  // Entry of a per-stratum array for stratum s (the last entry past its end).
+  W.perStratum = (a, s) => a[Math.max(0, Math.min(a.length - 1, s - 1))];
+  W.ELITE = { hp: 2.4, hpStep: 0.4, dmg: 0.9 }; // elite HP multiplier at depth 1 (+ hpStep per depth step of 1) and damage multiplier
   W.HAZARD_MUL = 0.5; // floor hazard damage multiplier
-  // Dark rooms (room.dark, set by floor gen: 2 skippable combat rooms per floor): foe damage multiplier, gold and xp multiplier of everything dropped there, multiplier of the fodder quota.
+  // Dark rooms (room.dark: the map's dark nodes, combat rooms): foe damage multiplier, gold and xp multiplier of everything dropped there, multiplier of the fodder quota.
   W.DARK_DMG = 1.3; W.DARK_LOOT = 1.5; W.DARK_FODDER = 1.5;
   W.DARK_AFFIXES = ['brutal', 'vampiric', 'warded', 'swift']; // affix pool of the extra elite of a dark room's last wave (the volatile affix is left out)
   W.REWARD_UP = { gold: 'vigor', vigor: 'forge', forge: 'epic', boon: 'epic' }; // a dark room's reward goes up one step
   // Stratum behaviour (index s - 1): the share of its target's velocity a foe leads an aimed shot by; foe and boss shot speed factors; non-boss, non-fodder ground speed factor.
-  W.LEAD = [0, 0, 0.35, 0.5, 0.7, 0.85];
-  W.shotSpd = (s) => 1 + 0.08 * (s - 1);
-  W.bossShotSpd = (s) => 1 + 0.1 * (s - 1);
-  W.foeSpd = (s) => 1 + 0.04 * (s - 1);
+  W.LEAD = [0, 0.25, 0.6, 0.85];
+  W.leadAt = (s) => W.perStratum(W.LEAD, s);
+  W.shotSpd = (s) => 1 + 0.08 * (W.depth(s) - 1);
+  W.bossShotSpd = (s) => 1 + 0.1 * (W.depth(s) - 1);
+  W.foeSpd = (s) => 1 + 0.04 * (W.depth(s) - 1);
   // Mixed rosters (s >= 2): chance a room's roster also holds the previous biome's foes (at weight 0.35 each); AFFIX2 = chance (index s - 1) that an elite rolls a second affix.
-  W.MIX_PREV = 0.6; W.AFFIX2 = [0, 0, 0, 0.35, 0.6, 0.85];
+  W.MIX_PREV = 0.6; W.AFFIX2 = [0, 0, 0.45, 0.85];
   // Angle from (x, y) toward where target t stands when a shot of this speed reaches it, leading by share L of t's measured velocity (t.lvx / t.lvy; 0 for targets without one); flight time from two refinements, capped at 1.2 s. L 0 aims straight at t.
   W.leadAngle = (x, y, t, speed, L) => {
     let ax = t.x, ay = t.y;
@@ -206,44 +229,58 @@
     return Math.atan2(ay - y, ax - x);
   };
   // Per-stratum threat on top of the base scales: foe HP, wave budget, `cdRate` = extra cooldown recovery (0.2 = attack timers tick 20% faster, -0.2 = 20% slower) and the boss pause between attacks (x).
-  W.THREAT = [{ hp: 2.2, dmg: 1, wave: 0.8, cdRate: -0.4, pause: 2 }, { hp: 1.62, dmg: 1, wave: 0.75, cdRate: -0.3, pause: 1.7 }, { hp: 1.3, dmg: 1, wave: 0.7, cdRate: -0.1, pause: 1.4 }, { hp: 1, dmg: 0.84, wave: 0.66, cdRate: 0, pause: 0.75 }, { hp: 1.07, dmg: 1.19, wave: 0.62, cdRate: 0.15, pause: 0.6 }, { hp: 1.02, dmg: 1.39, wave: 0.6, cdRate: 0.3, pause: 0.6 }];
-  // Foe HP multiplier of stratum s: the depth curve times the threat HP.
-  W.hpScale = (s) => (1 + 0.65 * (s - 1) + 0.08 * (s - 1) * (s - 1)) * W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, s - 1))].hp;
-  // Wave pacing of combat rooms: seconds before the first wave, spawn telegraph (+ random extra), minimum gap before the next wave, the share of a wave that may still stand when the next one is called, the seconds after which the next wave comes regardless, and the minimum spawn distance from heroes (turrets keep more).
-  W.PACE = { first: 0.5, spawn: 0.7, spawnVar: 0.25, gap: 0.9, nextAt: 0.45, maxAge: 6, avoid: 100, avoidTurret: 130 };
-  W.WAVES = 3; // threat waves of a combat or elite room (+1 under Pact 10)
-  // Horde of a combat or elite room (fodder beside the threat waves): kills to spawn by stratum (x0.6 in an elite room, x(1 + 0.5 (n - 1)) per party, x0.6 at stratum I of the tutorial, x DARK_FODDER in a dark room),
-  // fodder per pack, seconds between packs, minimum pack distance from every hero (relaxed in 40 px steps once a pack has waited PACK_WAIT s), live-foe cap (solo, 2+ heroes).
-  W.FODDER_Q = [70, 96, 123, 149, 175, 210]; W.PACK_N = [6, 12]; W.PACK_GAP = [2.0, 3.0]; W.PACK_AVOID = 220; W.PACK_WAIT = 4; W.LIVE_CAP = [120, 180];
+  W.THREAT = [{ hp: 2.2, dmg: 1, wave: 0.8, cdRate: -0.4, pause: 2 }, { hp: 1.41, dmg: 1, wave: 0.72, cdRate: -0.18, pause: 1.5 }, { hp: 1.02, dmg: 1.2, wave: 0.64, cdRate: 0.05, pause: 0.7 }, { hp: 1.02, dmg: 1.6, wave: 0.6, cdRate: 0.3, pause: 0.6 }];
+  // Foe HP multiplier of stratum s at row fraction f: the depth curve at W.depth(s, f) times the stratum's threat HP.
+  W.hpScale = (s, f) => { const d = W.depth(s, f) - 1; return (1 + 0.65 * d + 0.08 * d * d) * W.perStratum(W.THREAT, s).hp; };
+  // Wave pacing of combat rooms: seconds before the first wave, spawn telegraph (+ random extra), the reinforcement's telegraph, minimum gap before the next wave, the share of a wave that may still stand when the next one is called,
+  // the seconds after which the next wave comes regardless, and the minimum spawn distance from heroes (turrets keep more).
+  W.PACE = { first: 0.5, spawn: 0.7, spawnVar: 0.25, reinf: 1.6, gap: 0.9, nextAt: 0.34, maxAge: 15, avoid: 100, avoidTurret: 130 };
+  // Threat waves of a combat or elite room (+1 under Pact 10); the last wave's reinforcement lands at least REINF_AVOID from every hero.
+  W.WAVES = 4; W.REINF_AVOID = 160;
+  // Horde of a combat or elite room: fodder by stratum (x0.6 in an elite room, x(1 + 0.5 (n - 1)) per party, x0.6 at stratum I of the tutorial, x DARK_FODDER in a dark room), shared out over the threat waves:
+  // each wave brings its share as packs of at most PACK_MAX at room edges at least PACK_AVOID from every hero (PACE.avoid when no edge is that far); a pack shrinks so live foes + pending spawns stay under LIVE_CAP (solo, 2+ heroes).
+  W.FODDER_Q = [28, 34, 40, 46]; W.PACK_MAX = 8; W.PACK_AVOID = 220; W.LIVE_CAP = [60, 90];
   // Boss fights. Aimed volley (every boss, bosses.js): shots by phase I-III, telegraph s (x the boss's windMul), s before the first release at which the warn line locks, s between shots, s between the heroes' sequences,
-  // flight speed at stratum I (+ step per stratum) and damage x boss damage; in phase 3 a volley also starts every BOSS_OV_GAP s. Fodder trickle after the boss spawns: pack size, s between packs, live-fodder cap (solo, 2+ heroes).
+  // flight speed at stratum I (+ step per stratum) and damage x boss damage; in phase 3 a volley also starts every BOSS_OV_GAP s.
   W.BOSS_VOL = { n: [3, 4, 5], tele: 0.5, lock: 0.15, gap: 0.12, seq: 0.15, speed: 320, step: 20, dmg: 0.6 }; W.BOSS_OV_GAP = 5;
-  W.BOSS_PACK_N = [4, 6]; W.BOSS_PACK_GAP = 7; W.BOSS_FODDER_CAP = [20, 30];
   // Boss fury (soft enrage): t = fight seconds at which it starts, by stratum (0 = never), ramp = boss damage multiplier gained per second past t (the pause between attacks divides by the same factor), max = its cap, warn = seconds before t that the boss bar starts warning.
-  W.BOSS_FURY = { t: [0, 0, 0, 95, 95, 90], ramp: 0.12, max: 4, warn: 10 };
+  W.BOSS_FURY = { t: [0, 0, 0, 95], ramp: 0.12, max: 4, warn: 10 };
   W.furyAt = (s) => W.BOSS_FURY.t[Math.max(0, Math.min(W.BOSS_FURY.t.length - 1, s - 1))];
   // Fury multiplier at stratum s after ft fight seconds: 1 while t is 0 or ft <= t, then 1 + ramp x (ft - t) up to max (pure; the client mirror derives it from the synced clock).
   W.furyMul = (s, ft) => { const t = W.furyAt(s); return t > 0 && ft > t ? Math.min(W.BOSS_FURY.max, 1 + W.BOSS_FURY.ramp * (ft - t)) : 1; };
-  // Fodder max HP: depth (+25% per stratum) and pact only, no threat lever, party multiplier or elite (pure; the client mirror rebuilds it from the wire fraction).
-  W.fodderHp = (def, s, pact) => def.hp * (1 + 0.25 * (s - 1)) * ED.pactMul(pact, 'foeHp');
+  // Fodder max HP: + FODDER_STEP per depth step of the stratum (no row factor) and pact only, no threat lever, party multiplier or elite (pure; the client mirror rebuilds it from the wire fraction).
+  // A hero takes at most one fodder touch per FODDER_TOUCH_CD s.
+  W.FODDER_STEP = 0.3; W.FODDER_TOUCH_CD = 2;
+  W.fodderHp = (def, s, pact) => def.hp * (1 + W.FODDER_STEP * (W.depth(s) - 1)) * ED.pactMul(pact, 'foeHp');
   // Xp a threat foe is worth before the dark-room multiplier and the room's budget scale (enc.xpK).
-  W.threatXp = (def, s, elite) => (def.xp || 0) * (1 + 0.35 * (s - 1)) * (elite ? 3 : 1);
+  W.threatXp = (def, s, elite) => (def.xp || 0) * (1 + 0.35 * (W.depth(s) - 1)) * (elite ? 3 : 1);
   // Room xp budget by stratum (solo, per room; x DARK_LOOT in a dark room, not scaled by the party): threat drops, fodder motes (FODDER_XP_SHARE of it, spread over the quota) and the clear pile together drop exactly this.
-  W.ROOM_XP = { combat: [30, 47, 74, 103, 131, 150], elite: [54, 79, 106, 143, 195, 221] }; W.FODDER_XP_SHARE = 0.5;
+  // champion: the stratum IV champion rooms.
+  W.ROOM_XP = { combat: [24, 50, 104, 120], elite: [38, 80, 166, 190], champion: [100, 100, 100, 100] }; W.FODDER_XP_SHARE = 0.5;
   // Gold dropped by a 'gold' room reward (shared with the UI): 15 + 8 per stratum, times the global gold multiplier.
   W.rewardGold = (stratum) => Math.round((15 + 8 * stratum) * W.GOLD_MUL);
   W.HEART_KILL = 0.02; // heart chance of a non-elite, non-fodder kill
-  W.FORAGER = 0.08; // per Forager rank: share of max HP added to every heart, campfire, fountain, healing draught and Vigor reward heal
   W.GOLD_MUL = 0.65; // every gold drop (kills, rooms, chests, rewards) is scaled by this; shops sell at full price
-  W.prototype.threat = function () { return W.THREAT[Math.max(0, Math.min(W.THREAT.length - 1, this.stratum - 1))]; };
+  W.prototype.threat = function () { return W.perStratum(W.THREAT, this.stratum); };
+  // Row fraction of a room (default the current one) on its floor: room.row (else room.dist) over the floor's largest; 0 for the start and boss rooms (bosses keep the stratum's depth).
+  W.prototype.rowFrac = function (room) {
+    room = room || this.room;
+    const fl = this.floor;
+    if (!room || !fl || room.type === 'boss' || room.type === 'start') return 0;
+    const key = typeof room.row === 'number' ? 'row' : 'dist';
+    if (fl.rowKey !== key) { let m = 0; for (const r of fl.rooms) if (r.type !== 'boss' && typeof r[key] === 'number') m = Math.max(m, r[key]); fl.rowKey = key; fl.rowMax = m; }
+    return fl.rowMax > 0 ? Math.max(0, Math.min(1, (room[key] || 0) / fl.rowMax)) : 0;
+  };
+  // Xp budget of a room of kind ('combat', 'elite', 'champion') at stratum s (x darkLoot() in a dark room).
+  W.prototype.roomXp = function (room, kind) { return Math.round(W.perStratum(W.ROOM_XP[kind], this.stratum) * (room.dark ? this.darkLoot() : 1)); };
   W.prototype.emit = function (ev) { this.fx.push(ev); };
   // Secret run fields (meta.js turns them into secrets): per hero p.sec[k] (build.js initBuild), world-wide run[k]. The first time one turns true it emits { t: 'secret', pid } (pid null for a world field).
   W.prototype.secretP = function (p, k) { if (!p || p.sec[k]) return; p.sec[k] = true; this.emit({ t: 'secret', pid: p.pid }); };
   W.prototype.secretW = function (k) { if (this.run[k]) return; this.run[k] = true; this.emit({ t: 'secret', pid: null }); };
   W.prototype.partySize = function () { return Math.max(1, this.players.size); };
-  W.partyHpMul = (size) => { const n = size - 1; return 1 + 0.45 * n + 0.1 * n * (n - 1); }; // foe HP factor of a party of `size` (pure; the sheet reads it too)
-  W.FOE_DMG = 1.5; // every foe's damage (hits, shots, zones, bosses) x this
-  W.dmgScale = (s) => W.FOE_DMG * (1 + 0.22 * (s - 1) + 0.03 * (s - 1) * (s - 1)); // foe damage factor of stratum s
+  W.partyHpMul = (size) => { const n = size - 1; return 1 + 0.55 * n + 0.1 * n * (n - 1); }; // foe HP factor of a party of `size` (pure; the sheet reads it too)
+  W.FOE_DMG = 2.15; // every foe's damage (hits, shots, zones, bosses) x this
+  W.dmgScale = (s, f) => { const d = W.depth(s, f) - 1; return W.FOE_DMG * (1 + 0.22 * d + 0.03 * d * d); }; // foe damage factor of stratum s at row fraction f
   W.prototype.partyHpMul = function () { return W.partyHpMul(this.partySize()); };
   W.prototype.alive = function (p) { return p && !p.downed && !p.dead; };
   W.prototype.alivePlayers = function () { const out = []; for (const p of this.players.values()) if (!p.downed && !p.dead) out.push(p); return out; };
@@ -464,25 +501,23 @@
     return v;
   };
 
-  // Every shield a hero receives except Battle Ward ('ward') passes one sliding window of SHIELD_WIN_T seconds (10 one-second slots in p.shWin): class sources (any k but 'holy' and 'bone') give at most
+  // Every shield a hero receives passes one sliding window of SHIELD_WIN_T seconds (10 one-second slots in p.shWin): class sources (any k but 'holy' and 'bone') give at most
   // SHIELD_WIN_CLASS of max HP per window, all sources together SHIELD_WIN_ALL; what the window refuses is logged in p.shieldClip[k].
   Object.assign(ED.CONST, { SHIELD_WIN_T: 10, SHIELD_WIN_CLASS: 0.03, SHIELD_WIN_ALL: 0.06 });
   // Adds amt to p's absorb shield up to cap (a shield above the cap is never lowered); k labels the source in p.shieldBy. Returns the shield gained.
   W.prototype.addShield = function (p, amt, cap, k) {
     if (!p || p.downed || p.dead || !(amt > 0) || !(p.shield < cap)) return 0;
     let gain = Math.min(cap, p.shield + amt) - p.shield;
-    if (k !== 'ward') {
-      const C = ED.CONST, win = p.shWin, now = Math.floor(this.time);
-      let c = 0, a = 0;
-      for (let i = 0; i < win.length; i++) { const s = win[i]; if (now - s.sec < C.SHIELD_WIN_T) { c += s.c; a += s.a; } }
-      const room = Math.max(0, k === 'holy' || k === 'bone' ? C.SHIELD_WIN_ALL * p.maxHp - a : Math.min(C.SHIELD_WIN_CLASS * p.maxHp - c, C.SHIELD_WIN_ALL * p.maxHp - a));
-      if (gain > room) { p.shieldClip[k] = (p.shieldClip[k] || 0) + gain - room; gain = room; }
-      if (!(gain > 0)) return 0;
-      const sl = win[now % C.SHIELD_WIN_T];
-      if (sl.sec !== now) { sl.sec = now; sl.c = 0; sl.a = 0; }
-      if (k !== 'holy' && k !== 'bone') sl.c += gain;
-      sl.a += gain;
-    }
+    const C = ED.CONST, win = p.shWin, now = Math.floor(this.time);
+    let c = 0, a = 0;
+    for (let i = 0; i < win.length; i++) { const s = win[i]; if (now - s.sec < C.SHIELD_WIN_T) { c += s.c; a += s.a; } }
+    const room = Math.max(0, k === 'holy' || k === 'bone' ? C.SHIELD_WIN_ALL * p.maxHp - a : Math.min(C.SHIELD_WIN_CLASS * p.maxHp - c, C.SHIELD_WIN_ALL * p.maxHp - a));
+    if (gain > room) { p.shieldClip[k] = (p.shieldClip[k] || 0) + gain - room; gain = room; }
+    if (!(gain > 0)) return 0;
+    const sl = win[now % C.SHIELD_WIN_T];
+    if (sl.sec !== now) { sl.sec = now; sl.c = 0; sl.a = 0; }
+    if (k !== 'holy' && k !== 'bone') sl.c += gain;
+    sl.a += gain;
     p.shield += gain;
     p.shieldBy[k] = (p.shieldBy[k] || 0) + gain;
     this.emit({ t: 'shielded', pid: p.pid, v: Math.round(gain * 10) / 10, k });
@@ -538,8 +573,9 @@
     this.floorSeed = this.rng.seed();
     this.floor = D.generate(s, this.floorSeed);
     this.roomState = {}; this.floorFights = 0; // fights cleared on this floor (the Platino's cue, rooms.js)
-    for (const r of this.floor.rooms) this.roomState[r.id] = { visited: false, known: false, cleared: false, props: null, broken: 0 };
-    this.run.roomsTotal += this.floor.rooms.length;
+    for (const r of this.floor.rooms) this.roomState[r.id] = { visited: false, known: true, cleared: false, props: null, broken: 0 }; // the whole map shows from the start
+    this.run.roomsTotal += this.floor.rows + 2; // one path: the start camp, a room per row and the boss
+    this.mapRun = { dark: 0, elite: 0 }; // dark and elite rooms cleared on this stratum (Cartographer)
     this.allies.length = 0;
     for (const p of this.players.values()) {
       if (p.dead) { p.dead = false; p.downed = false; p.hp = Math.round(p.maxHp * 0.3); p.invuln = 2; }
@@ -550,24 +586,25 @@
     this.enterRoom(this.floor.start, null);
   };
 
-  W.prototype.enterRoom = function (id, fromDir) {
+  // Puts the party in room id: at its south entry when it came through a door (via = the door key it left by), else around the centre (the start camp).
+  W.prototype.enterRoom = function (id, via) {
     this.collectAll();
     this.enemies.length = 0; this.projs.length = 0; this.zones.length = 0; this.chainQ.length = 0; this.curChain = null; this.corpses.length = 0;
     if (this.fg) this.fg.ok = false;
     this.boss = null; this.enc = null; this.critter = null;
+    if (this.room && ED.Arena) ED.Arena.clear(this.room); // a boss or champion arena ends with its room
     this.roomId = id;
     this.roomEpoch = (this.roomEpoch || 0) + 1;
     const room = this.room = this.floor.rooms[id];
     const rs = this.roomState[id];
     if (!rs.visited) this.run.roomsVisited++;
     rs.visited = true; rs.known = true;
-    for (const d in room.doors) if (room.doors[d] >= 0) this.roomState[room.doors[d]].known = true;
     let k = 0;
     const pos = [];
     for (const p of this.players.values()) {
-      const pt = fromDir ? D.entryPoint(room, D.OPP[fromDir], k) : { x: D.center(room).x + (k - 1.5) * 22, y: D.center(room).y + 20 };
+      const pt = via && room.entry ? D.entryPoint(room, 's', k) : { x: D.center(room).x + (k - 1.5) * 22, y: D.center(room).y + 20 };
       p.x = pt.x; p.y = pt.y; p.vx = 0; p.vy = 0; p.dashT = 0; p.skillMove = null; p.skillIfr = false; p.charge = null; this.clearShields(p); // a thrown shield and a charge in flight end with the room
-      p.toughRoom = room.type === 'elite' || room.type === 'boss'; // War Drum doubles in these rooms
+      p.toughRoom = room.type === 'elite' || room.type === 'champion' || room.type === 'boss'; // War Drum doubles in these rooms
       pos.push([p.pid, Math.round(p.x), Math.round(p.y)]);
       k++;
     }
@@ -577,9 +614,8 @@
     this.roomTime = 0;
     this.locked = false;
     if (!rs.cleared) this.beginEncounter(room, rs);
-    this.checkFullClear();
     this.computeFlow();
-    this.emit({ t: 'room', id, from: fromDir || '', pos, locked: this.locked, ep: this.roomEpoch });
+    this.emit({ t: 'room', id, from: via || '', pos, locked: this.locked, ep: this.roomEpoch });
     if (room.dark && !rs.cleared) this.emit({ t: 'dark' });
   };
 
@@ -610,7 +646,7 @@
       embers: Object.assign({}, this.run.embers), pact: this.pact, party: this.partySize(), level: this.level,
       revives: this.run.revives, flawlessBoss: this.run.flawlessBoss, maxGold: this.run.maxGold, maxRelics: this.run.maxRelics, players,
       evolved: [...this.players.values()].some(p => !!p.stats.evo), fullClear: this.run.fullClear,
-      roomsVisited: this.run.roomsVisited, roomsTotal: this.run.roomsTotal, darkCleared: this.run.darkCleared, gold777: !!this.run.gold777, oneFace: !!this.run.oneFace,
+      roomsVisited: this.run.roomsVisited, roomsTotal: this.run.roomsTotal, darkCleared: this.run.darkCleared, champs: this.run.champs | 0, gold777: !!this.run.gold777, oneFace: !!this.run.oneFace,
     };
   };
 
@@ -631,7 +667,8 @@
     }
     const fg = this.foeGrid(); fg.live = true; fg.qd = 0;
     this.updateShields(dt);
-    for (const p of this.players.values()) this.updatePlayer(p, dt);
+    this.faceOn = false; // foes keep a facing only while a hero can Backstab (elements.js turnFoe)
+    for (const p of this.players.values()) { this.updatePlayer(p, dt); if (p.stats.shadowInfuse > 0 || p.stats.backstab > 0) this.faceOn = true; }
     if (!fg.direct) for (let i = 0; i < fg.n; i++) this.foeDrift(i); // hero effects that carry or pull foes (Sim.moveCircle) move them outside updateEnemy
     this.flowT -= dt;
     if (this.flowT <= 0) { this.computeFlow(); this.flowT = 0.25; }
@@ -907,20 +944,22 @@
     for (const e of es) if (e.hp > 0 && e.spd > 0) Sim.resolve(e, this.room, this.locked, e.fly);
   };
 
-  // Solid zones (ice pillars, Storm Anchors: z.solid, solid radius z.sr or z.r) push every non-boss foe out of them. Returns whether any solid stands (one of those zones or a frozen Glacier foe): foe shots then test them (combat.js solidStops).
+  // Solid zones (z.solid: a disc of radius z.sr or z.r, or a segment of z.len along z.a, z.w wide: Glacier Step's ice wall) push every non-boss foe out of them. Returns whether any solid stands (one of those zones or a frozen Glacier foe): foe shots then test them (combat.js solidStops).
   W.prototype.pushSolids = function () {
     let any = false;
     for (const z of this.zones) {
       if (!z.solid || z.dead) continue;
       any = true;
-      const R = z.sr || z.r, q = this.foeScan(z.x, z.y, R);
+      const seg = z.len > 0, ux0 = seg ? Math.cos(z.a) : 0, uy0 = seg ? Math.sin(z.a) : 0, R = seg ? z.w / 2 : z.sr || z.r;
+      const q = seg ? this.foeScan(z.x + ux0 * z.len / 2, z.y + uy0 * z.len / 2, z.len / 2 + R + 30) : this.foeScan(z.x, z.y, R);
       for (let k = 0; k < q.length; k++) {
         const e = q[k];
         if (e.hp <= 0 || e.boss || !(e.spd > 0)) continue;
-        const dx = e.x - z.x, dy = e.y - z.y, d = Math.hypot(dx, dy), m = R + e.r * 0.9;
+        const t = seg ? U.clamp((e.x - z.x) * ux0 + (e.y - z.y) * uy0, 0, z.len) : 0, cx = z.x + ux0 * t, cy = z.y + uy0 * t; // the nearest point of the solid's spine
+        const dx = e.x - cx, dy = e.y - cy, d = Math.hypot(dx, dy), m = R + e.r * 0.9;
         if (d >= m) continue;
-        const ux = d > 1e-3 ? dx / d : 1, uy = d > 1e-3 ? dy / d : 0;
-        e.x = z.x + ux * m; e.y = z.y + uy * m;
+        const ux = d > 1e-3 ? dx / d : seg ? -uy0 : 1, uy = d > 1e-3 ? dy / d : seg ? ux0 : 0;
+        e.x = cx + ux * m; e.y = cy + uy * m;
       }
       this.foeEnd();
     }
@@ -931,19 +970,19 @@
   W.prototype.isSafe = function () { return !this.locked && this.hostiles() === 0 && !this.pendingStratum; };
 
   // ---------------- doors ----------------
-  // The exit door (key of room.doors) hero p stands deep in, or null.
+  // The exit door (key of room.doors) hero p stands deep in, or null. Exits open once the room is cleared; the entry never opens.
   W.prototype.doorAt = function (p) {
     const room = this.room;
-    for (const d of D.DOOR_DIRS) {
+    for (const d in room.doors) {
       if (room.doors[d] < 0) continue;
-      const r = D.doorRect(room, d);
+      const r = D.doorRect(room, d), sd = D.side(d);
       const inside = p.x > r.x0 * T - 2 && p.x < (r.x1 + 1) * T + 2 && p.y > r.y0 * T - 2 && p.y < (r.y1 + 1) * T + 2;
-      const deep = d === 'n' ? p.y < 1.6 * T : d === 's' ? p.y > (room.h - 1) * T + 4 : d === 'w' ? p.x < T - 2 : p.x > (room.w - 1) * T + 2;
+      const deep = sd === 'n' ? p.y < 1.6 * T : sd === 's' ? p.y > (room.h - 1) * T + 4 : sd === 'w' ? p.x < T - 2 : p.x > (room.w - 1) * T + 2;
       if (inside && deep) return d;
     }
     return null;
   };
-  // The party leaves through a door once every living hero stands in it (downed and dead heroes come along). With 2+ heroes p.doorWant = 1 + the DOOR_DIRS index of the door p stands in (0: none).
+  // The party leaves through a door once every living hero stands in it (downed and dead heroes come along), after every pending boon choice. With 2+ heroes p.doorWant = D.doorWant(door p stands in) (0: none).
   W.prototype.checkDoors = function () {
     this.waitMsg = '';
     const party = this.players.size > 1;
@@ -953,13 +992,13 @@
     let door = null, all = live.length > 0;
     for (const p of live) {
       const d = this.doorAt(p);
-      if (d && party) p.doorWant = 1 + D.DOOR_DIRS.indexOf(d);
+      if (d && party) p.doorWant = D.doorWant(d);
       if (!d) all = false;
       else if (!door) door = d;
       else if (d !== door) all = false;
     }
     if (!door) return;
-    if (!all) { this.waitMsg = 'Waiting for ' + live.filter(q => q.doorWant !== 1 + D.DOOR_DIRS.indexOf(door)).map(q => q.name).join(', ') + ' at the door'; return; }
+    if (!all) { this.waitMsg = 'Waiting for ' + live.filter(q => q.doorWant !== D.doorWant(door)).map(q => q.name).join(', ') + ' at the door'; return; }
     const choosing = [...this.players.values()].filter(q => q.offer);
     if (choosing.length) { this.waitMsg = 'Waiting for ' + choosing.map(q => q.name).join(', ') + ' to choose a boon'; return; }
     this.enterRoom(this.room.doors[door], door);
@@ -1035,14 +1074,16 @@
   W.prototype.collect = function (p, pk) {
     if (pk.kind === 'gold') { const v = Math.max(1, Math.round(pk.val * (1 + p.stats.gold))); this.gold += v; this.emit({ t: 'gold', v, pid: p.pid }); }
     else if (pk.kind === 'xp') { this.addXp(pk.val * (1 + p.stats.xp)); this.emit({ t: 'xp', pid: p.pid }); }
-    else if (pk.kind === 'heart') { this.healPlayer(p, p.maxHp * (0.22 + W.FORAGER * p.stats.forager) + 1.5); }
+    else if (pk.kind === 'heart') { this.healPlayer(p, p.maxHp * 0.22 + 1.5); }
   };
 
-  // Cartographer (run.fullClear): set once both dark rooms and every elite room of the stratum are cleared (floor gen keeps a route through all of them).
-  W.prototype.checkFullClear = function () {
-    if (this.fullClearDone === this.stratum) return;
-    for (const r of this.floor.rooms) if ((r.dark || r.type === 'elite') && !this.roomState[r.id].cleared) return;
-    this.fullClearDone = this.stratum; this.run.fullClear = true;
+  // Cartographer (run.fullClear): two dark rooms and an elite room cleared on one stratum. Called with each cleared combat room.
+  W.prototype.checkFullClear = function (room) {
+    const m = this.mapRun;
+    if (!m || !room) return;
+    if (room.dark) m.dark++;
+    if (room.type === 'elite') m.elite++;
+    if (m.dark >= 2 && m.elite >= 1) this.run.fullClear = true;
   };
 
 })(globalThis.ED || (globalThis.ED = {}));

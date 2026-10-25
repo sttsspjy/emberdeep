@@ -1,31 +1,38 @@
 // Headless browser harness: boots the static game in an invisible Playwright browser and runs scripted scenarios against it.
-// Usage: node tools/browse.js [--scen=smoke,crowd70,shots,sheet,screens,wardrobe,cosmetics,swing,picks,cards,bell] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
+// Usage: node tools/browse.js [--scen=smoke,crowd70,boss,shots,sheet,screens,wardrobe,cosmetics,swing,picks,cards,bell,arenas,verbs] [--cls=knight] [--aim=DEG] [--zoom=N] [--weapon=ID,..] [--browser=chromium|firefox] [--viewport=1920x1080] [--outdir=DIR] [--seconds=N] [--root=DIR]
 //   [--quality=low,high] [--ops] [--json] [--seed=1] [--strat=1] [--embers=N] [--mortal] [--software] [--forcepost] [--sync] [--warm=2.5] [--timeout=300]
 // Mechanism: headless only (no headed option, no window calls); one browser per invocation, one fresh context per scenario page, all closed at exit, on error and on SIGINT.
 //   A read-only node http server on 127.0.0.1 (random port) serves --root (default: this repo). Playwright resolves via require('playwright'), else %LOCALAPPDATA%\npm-cache\_npx\*\node_modules (best match for the installed browsers).
 //   The game runs under window.__ED with a seeded Math.random (--seed) and frameCap off; scripted input goes through ED.Input (keys, pressed, mouse) like a player.
-//   smoke: profile -> menu shot -> solo run of --cls (wielding the first --weapon, an Armory variant included) -> key-event check -> --seconds (20) of circling, attacking the nearest foe, both skills, dash, boon picks, room hops -> run shot; fails on any pageerror or console error.
+//   smoke: profile -> menu shot -> solo run of --cls (wielding the first --weapon, an Armory variant included) -> key-event check -> --seconds (20) of circling, attacking the nearest foe, every skill (skill 3 too), dash, boon picks, room hops -> run shot; fails on any pageerror or console error.
 //   crowdN: N live foes staged in the largest combat room through World.spawnEnemy / enterRoom (room cleared, held locked, topped up to N), hero kept alive; after --warm (2.5) s
 //     measures --seconds (6) of main-thread ms per frame (Game.update, Game.render, Render.frame, HUD.draw, Post.render, whole rAF callback; busy% = rAF callback time over wall time, sys% = whole-machine CPU use during the window) at each --quality (low,high);
 //     --ops adds a 3 s pass counting canvas/WebGL calls per frame by target (buf = world buffer, screen = visible canvas, other = offscreen bakes).
 //   screens: 19 screenshots of every menu screen without a run (name, menu, Descend, Hearth with a buy mid-burst, Armory, Chronicle, Heroes, a staged party lobby and its Hearth,
 //     results victory and fallen, the news notice, settings tabs, a confirm dialog, credits, pause); fails when ArrowDown / ArrowRight do not move focus on the menu / Hearth tabs.
+//   boss: the boss room of stratum --strat (the hero driven, kept alive unless --mortal): a shot per phase (HP set to 0.6 then 0.3 of max), each after the phase's arena has formed; the hero stands still through phase 1, then fights.
 //   wardrobe: 9 screenshots: the Descend roster (a riddle hero as a silhouette named ??? with its hint; a locked Knight copy stands in while the data has none), the Wardrobe (a skin bought through its chip and the confirm, worn at once;
 //     ArrowRight along a row; the Blue Hearth worn), the Chronicle secrets block, the riddle hero on the Heroes page (fails if its name shows), the party Hearth Wardrobe, results with secrets from Save.applyRun.
 //   cosmetics: Hearthsitter counts only on the Hearth section; every Wardrobe item owned; 9 preview shots (one hovered item per slot; fails on a blank preview, a wrong title caption or a loop that keeps running once hidden);
 //     the camp and Hearth with the Blue Hearth and its ghost; a 4-hero party in different sets in a staged fight at High and Low (pets, coin trails, titles, crowns, sheens, auras, skins), Last Embers, the in-run secret toast; Game.render ms with and without the sets.
 //   shots: 16 screenshots: boot name screen, menu, Descend, Hearth tabs (the Armory scrolled into view), Heroes, Settings, Credits, boon offer, a run in combat, the Tab sheet tabs, the pause menu (profile gets 400 embers unless --embers).
-//   sheet: a late build staged through the sim (BR.sheetStage: stratum --strat or V, two element paths, one evolved with a Mutation, their duo, a Twist, open and Ascended boons, a fork at rank 3, six relics, a shield, an ally hero):
-//     the Tab sheet Build, Build scrolled to the end, Combat, Map, and Build viewing the ally; fails on a page error or when a sheet column overflows its panel sideways.
+//   sheet: a late build staged through the sim (BR.sheetStage: stratum --strat or III, two element paths (one evolved, one at its keystone), open boons, a fork at rank 3, six relics, a shield, an ally hero, half the map walked):
+//     the Tab sheet Build, Build scrolled to the end, Combat, Map, and Build viewing the ally, then the cleared room of the floor with the most exit doors (BR.doorStage);
+//     fails on a page error, when a sheet column overflows its panel sideways, or when no room has 3 exit doors.
 //   swing: one contact-sheet PNG per melee weapon of --cls, its Armory variants included (or per --weapon id, forks as id@fork, ranged ones too) (aimed --aim degrees, 0 = right, 90 = down, drawn at --zoom canvas px per world px, 2): frames at fixed times over two consecutive attacks (a combo weapon: one per step), the hold and the ease back to idle, hero and smear drawn by the game's own renderer.
 //   picks: every boon id resolves to a PickFx card kind; one PNG per pick burst (each kind, fire-big, holy-ally) on the solo hero about 0.25 s after FX.handle gets the 'boon' / 'relic' event;
 //     each pick cue (and the Hearth 'buy') rendered in an OfflineAudioContext: voices, peak, rms, audible length; fails on a throw, a silent cue or one longer than 0.9 s.
 //   cards: a frame sheet PNG (every card frame mask at 6 x) and one PNG per boon hand staged through the sim (the hero's boons set so the cards are eligible): path gates,
-//     every element, open and General, purse, Ascended, keystones, duos, an evolution, a Mutation pin, a Twist offer, the --cls route and fork offers, a 6-card dense hand; mid-pick frames (110 and 230 ms,
-//     the hide timer held, animations paused) for poison, holy, ice, lightning, shadow, general, fire-big, mut, twist, route and duo; the fork reveal at rank 2 and 3; a Low quality hand and pick.
+//     every element, open and General, purse, keystones, an evolution, the --cls route and fork offers, a 6-card dense hand; mid-pick frames (110 and 230 ms,
+//     the hide timer held, animations paused) for poison, holy, ice, lightning, shadow, general, fire-big and route; the fork reveal at rank 2 and 3; a Low quality hand and pick.
 //     Fails on a missing card, a card whose kind differs from ED.PickFx.kind, a frame that did not resolve, equal path gate icons, a pick without an effect layer, or Low quality leftovers.
 //   bell: the hero, Anchor Leap and Peal icons and screenshots of the Bellwarden (unlocked for the run; --weapon picks the bell): winding in a staged fight with Full Swing, a hurl in flight, the bell anchored, a reel, an Anchor Leap, a Peal, four Bellwardens in the crowd at High and Low quality,
 //     and a client's view from a two-peer net check in the same page (host World + client Game, JSON snapshots, 50 ms each way); fails on bad bells, missing bell events or a client that drifts from the host (see scenBell).
+//   verbs: one screenshot per element verb staged in the largest combat room (still foes in front of the hero, input through ED.Input like a player): the flame cone, burning ground, Burn stacks, the ice wall,
+//     the ice lance charging and flying, a dash discharge, Storm Step, a toxic cloud, the flask, a perfect dodge, the guard, the Phantom decoy, a Backstab, Umbral Arms, the finisher charging and striking;
+//     fails on a page error or a verb whose zone, event or state did not appear.
+//   arenas: 18 screenshots staged through the sim (BR.arena, heroes unhurt): the Drowned King (phase 1, tide warning, tide, beam warm-up and sweep, phases 2 and 3), the Hollow King (phase 1, duel, dark phase 2, a lit lantern,
+//     phase 3, a ring warning, fallen rings) and the champion rooms (twins, a twin combo, mimic, mimic split); fails on a page error or a step without its fight.
 // Output: compact table (or --json on stdout, logs on stderr); result-<browser>.json and the PNGs in --outdir (default <tmp>/wickdeep-browse). Exit 0 pass, 1 scenario failure, 2 harness error.
 // Notes: Chromium runs headless on the real GPU (ANGLE D3D11, no window); --software forces SwiftShader, where the game reports Post.soft and skips post at 'high' unless --forcepost. Firefox uses its own headless GL.
 //   --sync forces each frame's raster/GPU work to finish before the timer stops. Every external host is blocked (fonts and art are embedded data URIs).
@@ -59,7 +66,7 @@ function parseArgs(argv) {
   if (!vp) throw new Fail('--viewport is WxH, e.g. 1920x1080');
   o.vw = +vp[1]; o.vh = +vp[2];
   o.scens = o.scen.split(',').map(s => s.trim()).filter(Boolean);
-  for (const s of o.scens) if (!/^(smoke|shots|sheet|screens|wardrobe|cosmetics|swing|picks|cards|bell|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, shots, sheet, screens, wardrobe, cosmetics, swing, picks, cards, bell, crowdN)');
+  for (const s of o.scens) if (!/^(smoke|boss|shots|sheet|screens|wardrobe|cosmetics|swing|picks|cards|bell|arenas|verbs|crowd\d{1,4})$/.test(s)) throw new Fail('unknown scenario ' + s + ' (smoke, boss, shots, sheet, screens, wardrobe, cosmetics, swing, picks, cards, bell, arenas, verbs, crowdN)');
   if (!o.scens.length) throw new Fail('--scen is empty');
   o.qualities = o.quality ? o.quality.split(',').map(s => s.trim()) : null;
   if (o.qualities && o.qualities.some(q => q !== 'low' && q !== 'high')) throw new Fail('--quality is low, high or low,high');
@@ -128,7 +135,7 @@ function pageBoot(cfg) {
     return { n, mean: r3(sum / n), p50: r3(q(0.5)), p95: r3(q(0.95)), max: r3(s[n - 1]) };
   };
   const M = { on: false, upd: [], rnd: [], wld: [], hud: [], post: [], frm: [], foes: [], ts: [] };
-  const D = { on: false, flow: false, t0: 0, tq: 0, te: 0, td: 0, hops: 0, offers: 0, picks: 0, room: -1, epoch: -1, roomAt: 0, acts: { atk: 0, skill: 0, skill2: 0, dash: 0, interact: 0 } };
+  const D = { on: false, flow: false, t0: 0, tq: 0, te: 0, tr: 0, td: 0, hops: 0, offers: 0, picks: 0, room: -1, epoch: -1, roomAt: 0, acts: { atk: 0, skill: 0, skill2: 0, skill3: 0, dash: 0, interact: 0 } };
   const ST = { n: 0, t: 0, burst: true, rng: null, roster: [], k: 0, spawned: 0 };
   let ops = null, hooked = false;
 
@@ -212,7 +219,7 @@ function pageBoot(cfg) {
     ED.UI.pickBoon = function () { D.picks++; return pb.apply(this, arguments); };
     const act = ED.Game.act;
     ED.Game.act = function (a) {
-      if (a) { const k = a.t === 'skill' ? (a.slot ? 'skill2' : 'skill') : a.t; if (k in D.acts) D.acts[k]++; }
+      if (a) { const k = a.t === 'skill' ? (a.slot === 2 ? 'skill3' : a.slot ? 'skill2' : 'skill') : a.t; if (k in D.acts) D.acts[k]++; }
       return act.apply(this, arguments);
     };
   };
@@ -272,9 +279,21 @@ function pageBoot(cfg) {
     return { room: best.id, w: best.w, h: best.h, stratum: w.stratum, roster: ST.roster.length };
   };
 
+  // enters the boss room of stratum strat (the boss spawns on its own); hp: set the boss to that fraction of max HP (its phase change follows); returns the boss state
+  BR.bossStage = (strat, hp) => {
+    const ED = window.__ED, w = ED.Game.s.world;
+    if (hp === undefined) {
+      if (strat !== w.stratum) w.enterStratum(strat);
+      const r = w.floor.rooms.find(q => q.type === 'boss'); if (!r) throw new Error('no boss room');
+      w.enterRoom(r.id, null);
+    } else if (w.boss) w.boss.hp = Math.min(w.boss.hp, w.boss.maxHp * hp);
+    const b = w.boss, ar = window.__ED.Arena.field(w.room);
+    return b ? { type: b.type, phase: b.phase, hp: Math.round(b.hp), walls: (ar && ar.walls ? ar.walls.filter(q => q.hp > 0).length : 0), carpet: (ar && ar.carpet ? ar.carpet.reduce((a, v) => a + v, 0) : 0) } : null;
+  };
+
   // scripted hero: orbits the nearest foe (the room centre when none), attacks it, casts both skills, dashes, takes boon offers, hops combat rooms when `flow`
   BR.drive = (on, flow) => {
-    D.on = !!on; D.flow = !!flow; D.t0 = performance.now(); D.tq = D.te = D.td = 0;
+    D.on = !!on; D.flow = !!flow; D.t0 = performance.now(); D.tq = D.te = D.tr = D.td = 0;
     if (!on) { const I = window.__ED.Input; for (const k of ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Mouse0']) I.keys.delete(k); }
   };
   setInterval(() => {
@@ -318,6 +337,7 @@ function pageBoot(cfg) {
     if (tgt) I.keys.add('Mouse0'); else I.keys.delete('Mouse0');
     if (t >= D.tq) { I.pressed.add('KeyQ'); D.tq = t + 1.3; }
     if (t >= D.te) { I.pressed.add('KeyE'); D.te = t + 1.9; }
+    if (t >= D.tr) { I.pressed.add('KeyR'); D.tr = t + 0.7; } // skill 3 (a hero without one casts skill 1)
     if (t >= D.td) { I.pressed.add('Space'); D.td = t + 2.4; }
   }, 33);
 
@@ -370,7 +390,7 @@ function pageBoot(cfg) {
     return {
       app: A.state, world: w ? w.state : null, time: w ? r3(w.time) : 0, stratum: w ? w.stratum : 0, room: w && w.room ? w.room.type : null, roomId: w ? w.roomId : -1,
       kills: w ? w.run.kills : 0, roomsCleared: w ? w.run.roomsCleared : 0, level: w ? w.level : 0, hp: me ? Math.round(me.hp) : 0, dead: me ? !!me.dead : null,
-      foes: w ? w.hostiles() : 0, offers: D.offers, picks: D.picks, hops: D.hops, acts: Object.assign({}, D.acts), cls: me ? me.cls : null, skill2: me ? !!ED.CLASSES[me.cls].skill2 : false,
+      foes: w ? w.hostiles() : 0, offers: D.offers, picks: D.picks, hops: D.hops, acts: Object.assign({}, D.acts), cls: me ? me.cls : null, skill2: me ? !!ED.CLASSES[me.cls].skill2 : false, skill3: me ? !!ED.CLASSES[me.cls].skill3 : false,
     };
   };
 
@@ -378,8 +398,49 @@ function pageBoot(cfg) {
   BR.offerOpen = () => { const s = window.__ED.Game.s; return !!(s && s.offerOpen); };
   BR.take = () => { const ED = window.__ED; if (ED.Game.s && ED.Game.s.offerOpen) ED.UI.boonConfirm(); return BR.offerOpen(); };
 
-  // late build on the solo hero at stratum `strat`: two element paths (the first evolved, the second at its keystone), their duo, open boons, two Ascended, the first route with its first fork at rank 3,
-  // six relics, level 14, a shield, half the floor explored, and an ally hero (second class) beside the hero; returns a summary
+  // arenas scenario: one staging step per screenshot. 'king' / 'hollow' enter that boss's room (its stratum) and wait for the boss; 'twins' / 'mimic' start that champion fight in a combat room;
+  // the other steps force a mechanic on the running fight (tide warning, beam, phases, a lit lantern, a ring warning, a mimic split). Heroes stay unhurt, the boss unkillable.
+  let god = 0;
+  setInterval(() => { const s = god && window.__ED.Game.s; if (s && s.world) for (const p of s.world.players.values()) { p.hp = p.maxHp; p.invuln = 1; p.downed = false; } }, 50);
+  BR.arena = (step) => {
+    const ED = window.__ED, s = ED.Game.s, w = s && s.world;
+    if (!w) throw new Error('no run');
+    god = 1;
+    const T = ED.CONST.TILE, me = s.me, b = w.boss, ar = w.room && w.room.arena;
+    const enter = (id) => {
+      const st = ED.BIOMES.findIndex(x => x.boss === id) + 1;
+      if (st !== w.stratum) w.enterStratum(st);
+      const room = w.floor.rooms.find(r => r.type === 'boss');
+      const d = Object.keys(room.doors).find(k => room.doors[k] >= 0);
+      w.enterRoom(room.id, ED.Dungeon.OPP[d]);
+      return room.id;
+    };
+    const force = (k) => { b.st = 'atk'; b.atk = k; b.t = 0; b.vars = { wm: 1 }; b.pose = 'idle'; ED.Bosses[b.type].attacks[k].start(w, b); };
+    const toPhase = (f) => { b.hp = b.maxHp * f; };
+    if (step === 'king' || step === 'hollow') return enter(step === 'king' ? 'drownedking' : 'hollowking');
+    if (step === 'twins' || step === 'mimic') {
+      if (w.stratum !== 4) w.enterStratum(4);
+      const room = w.floor.rooms.find(r => r.type === 'combat' && !r.dark);
+      w.roomState[room.id].cleared = true; room.champ = step; w.enterRoom(room.id, null); w.startChampion(room);
+      return room.id;
+    }
+    if (!b && step !== 'split') return 'no boss';
+    if (b && !b.staged) { b.staged = true; b.hp = b.maxHp = 1e7; }
+    if (step === 'fight') { me.x = b.x + 160; me.y = b.y + 40; return b.type; }
+    if (step === 'tide') { ar.next = 0; return 'tide'; }
+    if (step === 'beam') { force('beam'); return 'beam'; }
+    if (step === 'p2') { toPhase(0.5); return 2; }
+    if (step === 'p3') { toPhase(0.2); return 3; }
+    if (step === 'lantern') { const L = w.room.lanterns[1]; me.x = L.x - 30; me.y = L.y + 20; w.smashCircle(me, L.x, L.y, 8); return ar.lit.join(); }
+    if (step === 'ring') { ar.p3 = ED.Arena.crown.CRUMBLE.at[0] - ED.Arena.crown.CRUMBLE.warn + 0.1; return 'ring'; }
+    if (step === 'fall') { ar.p3 = ED.Arena.crown.CRUMBLE.at[1] - 0.05; return 'fall'; }
+    if (step === 'split') { const m = w.enemies.find(e => e.type === 'mimic'); if (m) m.hp = m.maxHp * 0.45; return !!m; }
+    if (step === 'off') { god = 0; return 0; }
+    throw new Error('unknown arena step ' + step);
+  };
+
+  // late build on the solo hero at stratum `strat`: two element paths (the first evolved, the second at its keystone), open boons, the first route with its first fork at rank 3,
+  // six relics, level 14, a shield, the first-exit path walked up to half the rows (the hero in its last room), and an ally hero (second class) beside the hero; returns a summary
   BR.sheetStage = (strat) => {
     const ED = window.__ED, s = ED.Game.s, w = s && s.world;
     if (!w) throw new Error('no run to stage the sheet in');
@@ -392,19 +453,18 @@ function pageBoot(cfg) {
       const want = i === 0 ? ED.EVO_AFFINITY : ED.KEY_AFFINITY;
       for (const id of ids) { if (B[id].gate || B[id].key || B[id].evo || B[id].need === (ED.CLASSES[cls].kind === 'melee' ? 'proj' : 'melee')) continue; if (ED.pathAffinity(boons, el) + 1 >= want) break; boons[id] = Math.min(B[id].max || 5, Math.max(1, want - 1 - ED.pathAffinity(boons, el))); }
       if (key) boons[key] = 1;
-      if (i === 0 && evo) { boons[evo] = 1; if (ED.mutsOf) { const mu = ED.mutsOf(evo)[0]; if (mu) boons[mu] = 1; } } // the evolution with its first Mutation
+      if (i === 0 && evo) boons[evo] = 1;
     }
-    if (ED.TWIST_IDS) boons[ED.TWIST_IDS.find(id => !B[id].gates) || ED.TWIST_IDS[0]] = 1; // a Twist (the sheet's Twists group)
-    const duo = ED.duoOf(els[0], els[1]); if (duo) boons[duo] = 1;
-    Object.keys(B).filter(id => B[id].open && !B[id].purse && !B[id].asc && !B[id].cls).slice(0, 4).forEach((id, i) => { boons[id] = Math.min(B[id].max || 5, i + 1); });
-    Object.keys(B).filter(id => B[id].asc).slice(0, 2).forEach(id => { boons[id] = 1; });
+    Object.keys(B).filter(id => B[id].open && !B[id].purse && !B[id].cls).slice(0, 4).forEach((id, i) => { boons[id] = Math.min(B[id].max || 5, i + 1); });
     const route = ED.CLASS_CARDS[cls][ED.ROUTES[0]]; boons[route.t1] = 1; boons[route.forks[0]] = Math.min(3, B[route.forks[0]].max || 3);
-    p.boons = boons; p.relics = Object.keys(ED.RELICS).slice(0, 6); p.twist = ED.twistCount ? ED.twistCount(boons) > 0 : false; p.twistN = ED.twistCount ? ED.twistCount(boons) : 0;
+    p.boons = boons; p.relics = Object.keys(ED.RELICS).slice(0, 6);
     w.recalc(p, true); w.sendBuild(p);
     p.shield = Math.round(p.maxHp * 0.18 * 10) / 10 + 0.4;
     w.level = Math.max(w.level | 0, 14); if (ED.World.xpFor) { w.xpNext = ED.World.xpFor(w.level); w.xp = Math.floor(w.xpNext * 0.62); } w.gold = 347;
     p.hp = Math.max(1, Math.ceil(p.maxHp * 0.7) - 0.3);
-    const rooms = w.floor.rooms; rooms.forEach((r, i) => { if (i % 2 === 0) { w.roomState[r.id].visited = true; w.roomState[r.id].known = true; w.roomState[r.id].cleared = true; } else w.roomState[r.id].known = i % 4 === 1; });
+    const rooms = w.floor.rooms; let at = rooms[w.floor.start];
+    while (at.row < (w.floor.rows / 2 | 0) && at.exits.length) { w.roomState[at.id].visited = w.roomState[at.id].cleared = true; at = rooms[at.exits[0]]; }
+    w.roomState[at.id].cleared = true; w.enterRoom(at.id, 's');
     let ally = null;
     if (!w.players.has('ally')) {
       const ac = ED.CLASS_IDS.find(c => c !== cls);
@@ -412,6 +472,18 @@ function pageBoot(cfg) {
       ally.x = p.x + 30; ally.y = p.y; ally.hp = Math.ceil(ally.maxHp * 0.6);
     }
     return { cls, els, boons: Object.keys(boons).length, relics: p.relics.length, stratum: w.stratum, ally: ally && ally.cls };
+  };
+
+  // the room of the current floor with the most exit doors (a map room before the start camp on a tie), cleared so its doors stand open; the hero 5.5 tiles below its north wall; returns a summary
+  BR.doorStage = () => {
+    const ED = window.__ED, s = ED.Game.s, w = s && s.world;
+    if (!w) throw new Error('no run to stage the doors in');
+    let best = null;
+    for (const r of w.floor.rooms) if (r.type !== 'boss' && (!best || r.exits.length > best.exits.length || (r.exits.length === best.exits.length && best.row === 0 && r.row > 0))) best = r;
+    w.roomState[best.id].cleared = true; w.enterRoom(best.id, 's');
+    const p = s.me, T = ED.CONST.TILE; p.x = best.w * T / 2; p.y = 5.5 * T;
+    for (const q of w.players.values()) if (q !== p) { q.x = p.x + 40; q.y = p.y; }
+    return { room: best.id, type: best.type, row: best.row, exits: best.exits.length, names: best.exits.map(id => ED.Render.roomName ? ED.Render.roomName(w.floor.rooms[id]) : w.floor.rooms[id].type) };
   };
 
   // cards: a boon offer staged through the sim (the hero's boons set so the cards are eligible, the hand sent as the sim's own offer message); returns each card's kind
@@ -450,12 +522,76 @@ function pageBoot(cfg) {
     const r = el.getBoundingClientRect();
     return { shown: !el.hidden, x: r.left, y: r.top, w: r.width, h: r.height };
   };
-  // every card frame mask (kinds x metals, the big trims, three duo splits, a route frame per hero) drawn at 6 x on one sheet: PNG data URL
+  // verbs: step 'room' enters the largest combat room (cleared, hero centred); any other step sets the step's boons, lines up still foes to the hero's right and starts the verb
+  // (keys: Mouse0 held for holds, Space for dashes; 'release' lets go of Mouse0); returns { ok, what } read back from the sim
+  const VB = { cone: { kindle: 1, evo_fire: 1 }, ground: { kindle: 1, firebreak: 1 }, stacks: { kindle: 1 }, icewall: { frostbite: 1, glacierstep: 1 }, lance: { frostbite: 1, evo_ice: 1 }, discharge: { staticcharge: 1, conductor: 1 },
+    storm: { staticcharge: 1, stormstep: 1 }, cloud: { envenom: 1, miasma: 1 }, flask: { envenom: 1, evo_poison: 1 }, pdodge: { consecrate: 1 }, guard: { consecrate: 1, evo_holy: 1 }, decoy: { doommark: 1, phantom: 1 },
+    backstab: { doommark: 1 }, behind: { doommark: 1, evo_shadow: 1 }, finisher: { generalist: 1, masterstroke: 1 } };
+  BR.verb = (step) => {
+    const ED = window.__ED, s = ED.Game.s, w = s && s.world, I = ED.Input, R = ED.Render, T = ED.CONST.TILE;
+    if (!w) throw new Error('no run');
+    const me = s.me, aimAt = (x, y) => { const sp = R.toScreen(x, y); I.mouse.x = sp.x / (R.dpr || 1); I.mouse.y = sp.y / (R.dpr || 1); I.mouse.moved = performance.now(); I.mouse.inside = true; };
+    if (step === 'room') {
+      god = 1;
+      let best = null;
+      for (const r of w.floor.rooms) if ((r.type === 'combat' || r.type === 'elite') && (!best || r.w * r.h > best.w * best.h)) best = r;
+      w.roomState[best.id].cleared = true; w.enterRoom(best.id, null);
+      return { ok: true, what: 'room ' + best.id };
+    }
+    if (step === 'release') { I.keys.delete('Mouse0'); return { ok: true, what: 'released' }; }
+    if (step === 'off') { I.keys.delete('Mouse0'); god = 0; return { ok: true, what: 'off' }; }
+    I.keys.delete('Mouse0');
+    me.boons = Object.assign({}, VB[step]); w.recalc(me, true); w.sendBuild(me);
+    w.enemies.length = 0; w.zones.length = 0; w.projs.length = 0;
+    const free = (x, y) => { for (let dx = -20; dx <= 300; dx += 8) for (const dy of [-44, 0, 44]) if (ED.Dungeon.tileAt(w.room, x + dx, y + dy) !== 0) return false; return true; };
+    let cx = 0, cy = 0; // a clear lane 320 px long and 88 px tall nearest the room centre: the hero at its left end
+    for (let best = Infinity, y = 3 * T; y < (w.room.h - 3) * T; y += T / 2) for (let x = 3 * T; x < w.room.w * T - 300; x += T / 2) { const d = Math.hypot(x + 120 - w.room.w * T / 2, y - w.room.h * T / 2); if (d < best && free(x, y)) { best = d; cx = x + 90; cy = y; } }
+    me.x = cx - 90; me.y = cy; me.vx = me.vy = 0;
+    const foes = [70, 120, 170].map((dx, i) => { const e = w.spawnEnemy(ED.biomeFor(w.stratum).enemies[0][0], me.x + dx, me.y + (i - 1) * 28); e.spawnT = 0; e.spd = 0; e.cd = 9999; e.hp = e.maxHp = 1e6; e.target = me; return e; });
+    const e0 = foes[0];
+    if (step === 'discharge') me.y = cy - 30;
+    if (step === 'storm') e0.x = me.x + 160;
+    const charge = () => { for (const e of foes) { e.charge = 60; e.chargeOwner = me; e.chargeT = 3; } };
+    BR._go = () => { // after the camera has followed the hero: aim (screen coordinates) and act
+      aimAt(e0.x + 40, e0.y);
+      s.ctl.dashN = me.stats.dashCharges; s.ctl.dashT = 0; s.ctl.atkCd = 0;
+      switch (step) {
+        case 'cone': case 'lance': case 'flask': case 'guard': case 'finisher': I.keys.add('Mouse0'); break;
+        case 'ground': case 'icewall': case 'cloud': case 'decoy': I.pressed.add('Space'); break;
+        case 'stacks': for (const e of foes) for (let i = 0; i < 3 + foes.indexOf(e) * 3; i++) w.burnStack(e, me, 0); break;
+        case 'discharge': charge(); aimAt(e0.x + 200, me.y); I.pressed.add('Space'); break;
+        case 'storm': charge(); aimAt(e0.x, e0.y); I.pressed.add('Space'); break;
+        case 'pdodge': w.perfectDodge(me, { e: e0 }); break;
+        case 'backstab': e0.faceA = 0; e0.target = null; w.hitEnemy(e0, 20, { p: me, kind: 'weapon' }); break;
+        case 'behind': aimAt(e0.x, e0.y); I.pressed.add('Space'); break;
+      }
+      return true;
+    };
+    return { ok: true, what: step };
+  };
+  BR.verbGo = () => { const g = BR._go; BR._go = null; return g ? g() : false; };
+  // the sim state a verb step should have left: true when its zone, event or state is there
+  BR.verbSeen = (step) => {
+    const ED = window.__ED, s = ED.Game.s, w = s.world, me = s.me, z = (k) => w.zones.some(q => q.kind === k && !q.dead), f = (t) => (BR._fx || []).some(v => v.t === t);
+    switch (step) {
+      case 'cone': case 'guard': case 'finisher': case 'lance': case 'flask': return !!me.holdOn;
+      case 'ground': return z('pfire');
+      case 'stacks': return w.enemies.some(e => e.burnN >= 6);
+      case 'icewall': return z('icewall');
+      case 'cloud': return z('plague');
+      case 'decoy': return z('decoy');
+      case 'discharge': case 'storm': case 'pdodge': case 'backstab': case 'behind': return f({ discharge: 'chain', storm: 'blink', pdodge: 'pdodge', backstab: 'hit', behind: 'blink' }[step]);
+      case 'lance-shot': return w.projs.some(q => q.kind === 'iceshard' && q.team === 0) || f('lance');
+      case 'flask-shot': return z('tele') || z('plague');
+      case 'finisher-hit': return f('finisher');
+    }
+    return false;
+  };
+  // every card frame mask (kinds x metals, the big trims, a route frame per hero) drawn at 6 x on one sheet: PNG data URL
   BR.cardSheet = (cls) => {
     const ED = window.__ED, CA = ED.CardArt, PU = ED.PixUI, Z = 5, M = ['iron', 'silver', 'violet', 'gold'], rows = [];
-    for (const k of ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'asc', 'purse']) rows.push([k, M.map(m => CA.frame(k, m, {})).concat(k === 'asc' || k === 'purse' ? [] : [CA.frame(k, 'gold', { big: true })])]);
+    for (const k of ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'purse']) rows.push([k, M.map(m => CA.frame(k, m, {})).concat(k === 'purse' ? [] : [CA.frame(k, 'gold', { big: true })])]);
     rows.push(['route', M.map(m => CA.frame('route', m, { cls }))]);
-    rows.push(['duo', [['fire', 'ice'], ['holy', 'shadow'], ['lightning', 'poison'], ['ice', 'fire']].map(([a, b]) => CA.frame('duo', 'violet', { a, b }))]);
     const cw = CA.N * Z + 12, cv = document.createElement('canvas'); cv.width = 90 + cw * 5; cv.height = rows.length * cw + 12;
     const g = cv.getContext('2d'); g.imageSmoothingEnabled = false; g.fillStyle = '#15100d'; g.fillRect(0, 0, cv.width, cv.height);
     g.font = '16px "Pixel Operator", monospace'; g.fillStyle = '#f6ecda';
@@ -763,6 +899,12 @@ async function scenSmoke() {
     await wait(secs * 400);
     await call(page, 'drive', false, false);
     const rs = await call(page, 'runState');
+    { // the skills recharge with the script idle, the cursor 150 px right of the hero: a 640 x 440 crop of the aim previews
+      await wait(3000);
+      const hc = await page.evaluate(() => { const ED = window.__ED, me = ED.Game.s && ED.Game.s.me, R = ED.Render, I = ED.Input; if (!me) return null; const p = R.toScreen(me.x, me.y), q = R.toScreen(me.x + 150, me.y), d = R.dpr || 1; I.mouse.x = q.x / d; I.mouse.y = q.y / d; I.mouse.moved = performance.now(); I.mouse.inside = true; return { x: p.x / d, y: p.y / d }; });
+      await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+      if (hc) { const file = path.join(S.opt.outdir, [res.name, tag(), S.opt.cls, 'aim'].join('-') + '.png'); await page.screenshot({ path: file, clip: { x: Math.max(0, hc.x - 320), y: Math.max(0, hc.y - 220), width: 640, height: 440 } }); res.shots.push(file); }
+    }
     res.run = rs;
     if (rs.app !== 'run') notes(res, 'run ended before the script did (app ' + rs.app + ')');
     if (rs.time < secs * 0.5) fail(res, 'world time advanced ' + rs.time + ' s in ' + secs + ' s of wall time');
@@ -770,6 +912,7 @@ async function scenSmoke() {
     if (rs.cls !== o.cls) fail(res, 'ran as ' + rs.cls + ', not ' + o.cls);
     if (secs >= 10) for (const k of ['atk', 'skill', 'dash']) if (!rs.acts[k]) fail(res, 'scripted input never produced a ' + k + ' action');
     if (secs >= 10 && rs.skill2 && !rs.acts.skill2) fail(res, 'scripted input never produced a skill2 action');
+    if (secs >= 10 && rs.skill3 && !rs.acts.skill3) fail(res, 'scripted input never produced a skill3 action');
     res.rows.push({ quality: q, ...rs });
   } finally { res.errors = errors; await ctx.close(); }
   if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
@@ -808,6 +951,63 @@ async function scenCrowd(name) {
   return res;
 }
 
+// arenas: screenshots of each Drowned King and Hollow King phase and both champion fights, staged through BR.arena (waits in ms after each step); fails on a page error or a step without its fight.
+async function scenVerbs() {
+  const o = S.opt, res = newResult('verbs'), q = qualitiesOr(['high'])[0];
+  // [step, ms before the shot, shot name, state to check (default the step)]
+  const PLAN = [['cone', 900, 'flame-cone'], ['release', 300, ''], ['ground', 260, 'burning-ground'], ['stacks', 500, 'burn-stacks'], ['icewall', 300, 'ice-wall'], ['lance', 800, 'lance-charge'], ['release', 90, 'lance-flight', 'lance-shot'],
+    ['discharge', 160, 'discharge'], ['storm', 140, 'storm-step'], ['cloud', 450, 'toxic-cloud'], ['flask', 800, 'flask-ready'], ['release', 700, 'flask-landed', 'flask-shot'], ['pdodge', 120, 'perfect-dodge'],
+    ['guard', 800, 'guard'], ['release', 300, ''], ['decoy', 350, 'phantom-decoy'], ['backstab', 80, 'backstab'], ['behind', 160, 'umbral-arms'], ['finisher', 1200, 'finisher-charge'], ['release', 90, 'finisher-strike', 'finisher-hit']];
+  const { ctx, page, errors } = await openPage();
+  try {
+    await call(page, 'profile', o.cls, o.embers);
+    await call(page, 'settings', q);
+    await call(page, 'install');
+    if ((await call(page, 'start')) !== 'run') fail(res, 'run did not start');
+    await wait(600);
+    await call(page, 'verb', 'room');
+    await wait(500);
+    await page.evaluate(() => { const ED = window.__ED, h = ED.FX.handle; window.__BR._fx = []; ED.FX.handle = function (ev) { window.__BR._fx.push(ev); if (window.__BR._fx.length > 400) window.__BR._fx.shift(); return h.apply(this, arguments); }; });
+    for (const [step, ms, name, check] of PLAN) {
+      const r = await call(page, 'verb', step);
+      if (step !== 'release') { await wait(250); await page.evaluate(() => { window.__BR._fx.length = 0; }); await call(page, 'verbGo'); }
+      await wait(ms);
+      if (name) {
+        const seen = await call(page, 'verbSeen', check || step);
+        if (!seen) fail(res, `${name}: no ${check || step} in the sim`);
+        notes(res, `${name}: ${r.what}${seen ? '' : ' (missing)'}`);
+        await shoot(page, res, name);
+      }
+    }
+    await call(page, 'verb', 'off');
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
+async function scenArenas() {
+  const o = S.opt, res = newResult('arenas'), q = qualitiesOr(['high'])[0];
+  const PLAN = [['king', 6500, 'king-p1'], ['tide', 900, 'king-tide-warn'], ['', 3000, 'king-tide'], ['beam', 900, 'king-beam-warm'], ['', 1100, 'king-beam'], ['p2', 1500, 'king-p2'], ['p3', 2500, 'king-p3'],
+    ['hollow', 6500, 'hollow-p1'], ['fight', 700, 'hollow-duel'], ['p2', 2500, 'hollow-p2-dark'], ['lantern', 700, 'hollow-p2-lantern'], ['p3', 1500, 'hollow-p3'], ['ring', 1200, 'hollow-p3-ring'], ['fall', 900, 'hollow-p3-fallen'],
+    ['twins', 3500, 'twins'], ['', 2500, 'twins-combo'], ['mimic', 3500, 'mimic'], ['split', 900, 'mimic-split']];
+  const { ctx, page, errors } = await openPage();
+  try {
+    await call(page, 'profile', o.cls, o.embers);
+    await call(page, 'settings', q);
+    await call(page, 'install');
+    if ((await call(page, 'start')) !== 'run') fail(res, 'run did not start');
+    await wait(600);
+    for (const [step, ms, name] of PLAN) {
+      if (step) { const r = await call(page, 'arena', step); if (r === 'no boss' || r === false) fail(res, step + ': ' + r); notes(res, step + ' ' + r); }
+      await wait(ms);
+      await shoot(page, res, name);
+    }
+    await call(page, 'arena', 'off');
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
 async function scenSwing() {
   const o = S.opt, res = newResult('swing'), q = qualitiesOr(['high'])[0];
   const { ctx, page, errors } = await openPage();
@@ -830,9 +1030,9 @@ async function scenSwing() {
   return res;
 }
 
-const PICK_SHOTS = ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'route', 'duo', 'asc', 'relic', 'purse', 'fire-big', 'holy-ally'];
-const PICK_CUES = ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'route', 'asc', 'relic', 'purse'].map(k => ({ label: k, cue: 'pick', arg: k }))
-  .concat([{ label: 'duo fire+ice', cue: 'pick', arg: { k: 'duo', els: ['fire', 'ice'] } }, { label: 'duo (no pair)', cue: 'pick', arg: 'duo' }, { label: 'fire big', cue: 'pick', arg: { k: 'fire', big: true } },
+const PICK_SHOTS = ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'route', 'relic', 'purse', 'fire-big', 'holy-ally'];
+const PICK_CUES = ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'route', 'relic', 'purse'].map(k => ({ label: k, cue: 'pick', arg: k }))
+  .concat([{ label: 'fire big', cue: 'pick', arg: { k: 'fire', big: true } },
     { label: 'holy big', cue: 'pick', arg: { k: 'holy', big: true } }, { label: 'buy (hearth)', cue: 'buy' }]);
 async function scenPicks() {
   const o = S.opt, res = newResult('picks'), q = qualitiesOr(['high'])[0];
@@ -876,16 +1076,14 @@ const R = (ids, n) => Object.fromEntries(ids.map((id, i) => [id, Array.isArray(n
 const CARD_HANDS = (cls) => [
   { name: 'gates', spec: { src: 'start' }, boons: {}, ids: ['kindle', 'frostbite', 'staticcharge', 'envenom'], distinctIcons: true, pick: [3, 'poison'] },
   { name: 'gates2', spec: { src: 'start' }, boons: {}, ids: ['consecrate', 'doommark', 'generalist'], distinctIcons: true, pick: [0, 'holy'] },
-  { name: 'fire-ice', spec: { src: 'room' }, boons: R(['kindle', 'fuel', 'stoke', 'brushfire', 'frostbite', 'deepcold', 'glacier', 'rime'], [1, 2, 2, 1, 1, 1, 1, 1]), ids: ['firebreak', 'shatter', 'conflag', 'thermalshock'], pick: [1, 'ice'] },
-  { name: 'storm', spec: { src: 'room' }, boons: R(['staticcharge', 'conductor', 'highvoltage', 'shortcircuit', 'envenom', 'potency', 'caustic', 'neurotoxin'], [1, 2, 1, 1, 1, 2, 1, 1]), ids: ['conduction', 'hexstrong', 'capacitor', 'galvanic'], pick: [0, 'lightning'] },
-  { name: 'light', spec: { src: 'room' }, boons: R(['consecrate', 'fervor', 'zealotry', 'sanctity', 'doommark', 'malignance', 'quarry'], [1, 2, 2, 1, 1, 2, 1]), ids: ['vigil', 'reaperschain', 'radiantaegis', 'wrathofheaven'], pick: [1, 'shadow'] },
-  { name: 'open', spec: { src: 'epic' }, boons: { generalist: 1, keen: 1 }, ids: ['asc_edge', 'edge', 'brutal', 'purse'], pick: [1, 'general'] },
-  { name: 'evo', spec: { src: 'room' }, boons: R(['kindle', 'fuel', 'stoke', 'brushfire', 'wildfire', 'conflag'], [1, 2, 3, 1, 2, 1]), ids: ['evo_fire', 'cindertrail', 'vigor'], pick: [0, 'fire-big'] },
-  { name: 'mut', spec: { src: 'level' }, boons: R(['kindle', 'fuel', 'stoke', 'wildfire', 'conflag'], [1, 2, 2, 1, 1]), ids: ['mut_firestorm', 'mut_scorchedearth', 'stoke'], pick: [0, 'mut'] },
-  { name: 'twist', spec: { src: 'twist' }, boons: R(['kindle', 'frostbite'], [1, 1]), ids: ['bloodprice', 'metronome'], pick: [1, 'twist'] },
+  { name: 'fire-ice', spec: { src: 'room' }, boons: R(['kindle', 'stoke', 'kindling', 'frostbite', 'deepcold', 'glacier'], [1, 2, 1, 1, 1, 1]), ids: ['firebreak', 'shatterpoint', 'wildfire', 'permafrost'], pick: [1, 'ice'] },
+  { name: 'storm', spec: { src: 'room' }, boons: R(['staticcharge', 'conductor', 'highvoltage', 'envenom', 'potency', 'caustic'], [1, 1, 1, 1, 2, 1]), ids: ['overload', 'longfuse', 'miasma', 'neurotoxin'], pick: [0, 'lightning'] },
+  { name: 'light', spec: { src: 'room' }, boons: R(['consecrate', 'zealotry', 'sanctity', 'doommark', 'cutthroat'], [1, 2, 1, 1, 2]), ids: ['grace', 'beacon', 'souljar', 'inevitable'], pick: [2, 'shadow'] },
+  { name: 'open', spec: { src: 'epic' }, boons: { generalist: 1, keen: 1 }, ids: ['brutal', 'focus', 'wide', 'purse'], pick: [0, 'general'] },
+  { name: 'evo', spec: { src: 'room' }, boons: R(['kindle', 'stoke', 'kindling', 'wildfire', 'smother'], [1, 3, 2, 1, 1]), ids: ['evo_fire', 'firewalk', 'vigor'], pick: [0, 'fire-big'] },
   { name: 'route', spec: { src: 'class', ctier: 1 }, boons: {}, ids: ['atk', 's1', 's2', 'el'].map(k => cls[0] + '_' + k), pick: [0, 'route'] },
   { name: 'fork', spec: { src: 'class', ctier: 2 }, boons: { [cls[0] + '_atk']: 1 }, ids: [cls[0] + '_atk_h', cls[0] + '_atk_s'] },
-  { name: 'dense6', spec: { src: 'epic' }, boons: R(['kindle', 'fuel', 'stoke', 'frostbite', 'deepcold', 'rime'], [1, 2, 2, 1, 2, 1]), ids: ['brushfire', 'permafrost', 'thermalshock', 'asc_quick', 'plating', 'purse'], pick: [2, 'duo'] },
+  { name: 'dense6', spec: { src: 'epic' }, boons: R(['kindle', 'stoke', 'frostbite', 'deepcold'], [1, 2, 1, 2]), ids: ['wildfire', 'permafrost', 'coldcycle', 'focus', 'plating', 'purse'], pick: [2, 'ice'] },
 ];
 async function scenCards() {
   const o = S.opt, res = newResult('cards'), q = qualitiesOr(['high'])[0], cls = o.cls;
@@ -920,7 +1118,7 @@ async function scenCards() {
         await wait(300);
       }
     }
-    for (const k of ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'route', 'duo', 'asc', 'mut', 'twist', 'purse', 'fire+big']) if (![...seen].some(s => s === k || (k === 'fire+big' && /\+big$/.test(s)))) fail(res, 'no hand showed a ' + k + ' card');
+    for (const k of ['fire', 'ice', 'lightning', 'poison', 'holy', 'shadow', 'general', 'route', 'purse', 'fire+big']) if (![...seen].some(s => s === k || (k === 'fire+big' && /\+big$/.test(s)))) fail(res, 'no hand showed a ' + k + ' card');
     // fork reveal: rank 2 (small, silver) and rank 3 (big, gold)
     await page.evaluate(() => window.__ED.UI.hideBoons());
     for (const rank of [2, 3]) {
@@ -935,7 +1133,7 @@ async function scenCards() {
     await page.evaluate(() => { document.getElementById('ov-fork').hidden = true; });
     // Low quality: idle sprites hidden, no effect layer, the overlay gone within 0.3 s of a pick
     await call(page, 'settings', 'low');
-    await call(page, 'cardHand', R(['kindle', 'fuel'], [1, 1]), ['stoke', 'brushfire', 'vigor'], { src: 'room' });
+    await call(page, 'cardHand', R(['kindle', 'kindling'], [1, 1]), ['stoke', 'wildfire', 'vigor'], { src: 'room' });
     await wait(900);
     const low = await page.evaluate(() => { const s = document.querySelector('#boon-cards .ca-spark'); return { low: document.getElementById('ov-boon').classList.contains('low'), spark: s ? getComputedStyle(s).display : 'none' }; });
     if (!low.low || low.spark !== 'none') fail(res, 'Low quality: overlay low ' + low.low + ', idle spark display ' + low.spark);
@@ -947,6 +1145,32 @@ async function scenCards() {
     const up = await page.evaluate(() => !document.getElementById('ov-boon').hidden);
     if (fxN) fail(res, 'Low quality made a pick effect layer');
     if (up) fail(res, 'Low quality: the overlay was still up 0.3 s after a pick');
+  } finally { res.errors = errors; await ctx.close(); }
+  if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
+  return res;
+}
+
+async function scenBoss() {
+  const o = S.opt, res = newResult('boss'), q = qualitiesOr(['high'])[0], st = Math.max(1, o.strat | 0);
+  const { ctx, page, errors } = await openPage();
+  try {
+    await call(page, 'profile', o.cls, o.embers);
+    res.info = await call(page, 'settings', q);
+    await call(page, 'install');
+    if ((await call(page, 'start')) !== 'run') throw new Error('run did not start');
+    await wait(600);
+    await call(page, 'bossStage', st);
+    for (const [ph, hp, ms] of [[1, undefined, 9000], [2, 0.6, 6000], [3, 0.3, 5000]]) {
+      if (hp !== undefined) await call(page, 'bossStage', st, hp);
+      await wait(ms);
+      const b = await call(page, 'bossStage', st, 1);
+      if (!b) { fail(res, 'no boss in phase ' + ph); break; }
+      res.rows.push(Object.assign({ shot: 'phase' + ph }, b));
+      if (b.phase !== ph) fail(res, 'boss in phase ' + b.phase + ', expected ' + ph);
+      await shoot(page, res, 's' + st + '-' + b.type + '-phase' + ph);
+      if (ph === 1) await call(page, 'drive', true, false);
+    }
+    await call(page, 'drive', false, false);
   } finally { res.errors = errors; await ctx.close(); }
   if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
   return res;
@@ -1007,7 +1231,7 @@ async function scenSheet() {
     if ((await call(page, 'start')) !== 'run') fail(res, 'run did not start');
     await wait(1100);
     for (let i = 0; i < 6 && await call(page, 'offerOpen'); i++) { await call(page, 'take'); await wait(300); }
-    const st = await call(page, 'sheetStage', o.strat > 1 ? o.strat : 5);
+    const st = await call(page, 'sheetStage', o.strat > 1 ? o.strat : 3);
     notes(res, `staged ${st.cls}: paths ${st.els.join('+')}, ${st.boons} boons, ${st.relics} relics, stratum ${st.stratum}, ally ${st.ally}`);
     await wait(300);
     // sideways overflow: a sheet element wider than its column, or text spilling past its box
@@ -1044,6 +1268,10 @@ async function scenSheet() {
     if (!n2.focus || n2.focus === n0.focus) fail(res, 'S did not move the sheet focus');
     if (n3.open) fail(res, 'Tab did not close the sheet');
     await ev(() => window.__ED.UI.toggleSheet(false));
+    const ds = await call(page, 'doorStage');
+    notes(res, `doors: room ${ds.room} (${ds.type}, row ${ds.row}), ${ds.exits} exits: ${ds.names.join(' | ')}`);
+    if (ds.exits < 3) fail(res, 'no room of the floor has 3 exit doors');
+    await wait(900); await shoot(page, res, 'doors');
   } finally { res.errors = errors; await ctx.close(); }
   if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
   return res;
@@ -1173,7 +1401,7 @@ async function scenWardrobe() {
       A.state = 'results'; UI.renderResults(run, r); UI.show('results');
     }, staged));
     const resTxt = await ev(() => document.getElementById('res-progress').textContent);
-    if (!/Secret uncovered: Exact Change/.test(resTxt) || !/Secret uncovered: Hollow Crown/.test(resTxt)) fail(res, 'results lack the secrets: ' + resTxt.replace(/\s+/g, ' ').slice(0, 200));
+    if (!/Secret found: Exact Change/.test(resTxt) || !/Secret found: Hollow Crown/.test(resTxt)) fail(res, 'results lack the secrets: ' + resTxt.replace(/\s+/g, ' ').slice(0, 200));
   } finally { res.errors = errors; await ctx.close(); }
   if (res.errors.length) fail(res, res.errors.length + ' page or console error(s)');
   if (res.shots.length < 8) fail(res, 'only ' + res.shots.length + ' screenshots were taken');
@@ -1387,7 +1615,7 @@ async function scenCosmetics() {
     if (emb1 - emb0 < 3) fail(res, `Last Embers: the fallen Ranger scattered ${emb1 - emb0} ember sprites`);
     // the in-run secret toast (a world field: everyone's)
     const toast = await ev(async () => { const E = window.__ED; E.Game.localEvent({ t: 'secret', pid: null }); E.Game.localEvent({ t: 'secret', pid: 'q2' }); await new Promise(r => setTimeout(r, 120)); return [...document.querySelectorAll('#toasts .toast')].map(x => x.textContent); });
-    if (toast.filter(x => x === 'A secret is uncovered').length !== 1) fail(res, 'secret toasts (one for the party, none for another hero): ' + JSON.stringify(toast));
+    if (toast.filter(x => x === 'Secret found').length !== 1) fail(res, 'secret toasts (one for the party, none for another hero): ' + JSON.stringify(toast));
     await tryShot('c14-secret-toast', null, 200);
     // frame ms with and without the sets (High)
     const cost = await ev(async () => {
@@ -1462,7 +1690,7 @@ async function main() {
       const t0 = Date.now();
       log('scenario ' + sc + ' ...');
       let r;
-      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'shots' ? await scenShots() : sc === 'sheet' ? await scenSheet() : sc === 'screens' ? await scenScreens() : sc === 'wardrobe' ? await scenWardrobe() : sc === 'cosmetics' ? await scenCosmetics() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : sc === 'cards' ? await scenCards() : sc === 'bell' ? await scenBell() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
+      try { r = sc === 'smoke' ? await scenSmoke() : sc === 'boss' ? await scenBoss() : sc === 'shots' ? await scenShots() : sc === 'sheet' ? await scenSheet() : sc === 'screens' ? await scenScreens() : sc === 'wardrobe' ? await scenWardrobe() : sc === 'cosmetics' ? await scenCosmetics() : sc === 'swing' ? await scenSwing() : sc === 'picks' ? await scenPicks() : sc === 'cards' ? await scenCards() : sc === 'bell' ? await scenBell() : sc === 'arenas' ? await scenArenas() : sc === 'verbs' ? await scenVerbs() : await scenCrowd(sc); } catch (e) { if (e instanceof Fail) throw e; r = newResult(sc); r.ok = false; r.notes.push('FAIL: harness error: ' + String(e && e.message || e).split(/\r?\n/)[0]); r.stack = String(e && e.stack || e); }
       r.wallMs = Date.now() - t0;
       r.browserVersion = bv;
       if (S.server.missing.size) r.missing = [...S.server.missing];

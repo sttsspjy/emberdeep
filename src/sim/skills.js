@@ -1,4 +1,4 @@
-// Hero skills: per-hero skill state, the cast dispatcher for the class skills on K (slot 0) and L (slot 1), skill moves, cooldown refunds and the hooks of the class files.
+// Hero skills: per-hero skill state, the cast dispatcher for the class skills in slot 0 (skill 1), slot 1 (skill 2) and slot 2 (skill 3, a class with skill3 only), skill moves, cooldown refunds and the hooks of the class files.
 // A skill's behaviour lives in src/sim/class-<id>.js: ED.CAST[skillId] = function (p, a, data, st, nums) (this = world) returns false to reject the cast or the extra fields of the 'skill' event.
 // A class file also registers a hook table ED.CLS[cls] (all optional; this = world; the attacker's class unless noted):
 //   init(p) / tick(p, dt): hero fields at creation / every tick (skills.js)      kill(e, killer, src): every class's table runs on every foe death (skills.js)
@@ -58,7 +58,7 @@
   W.initSkills = function (p) {
     p.stealthT = 0; p.ambush = false; p.ambushT = 0; p.critStacks = 0;
     p.braceT = 0; p.braceAt = -99; p.kWardT = 0; p.rallyT = 0; p.mantleT = 0; p.mantleAmt = 0; p.veilT = 0; p.boneT = 0; p.raiseT = 0;
-    p.momN = 0; p.momT = 0; p.chanT = 0; p.lastAtkT = -99; p.flowT = 0; p.cometT = 0; p.stepRefT = 0; p.edgeT = 0; p.parryT = 0; p.heatT = 0;
+    p.momN = 0; p.momT = 0; p.lastAtkT = -99; p.flowT = 0; p.cometT = 0; p.stepRefT = 0; p.edgeT = 0; p.parryT = 0; p.heatT = 0;
     p.glT = 0; p.glV = 0; p.auraT = 0; p.auraV = 0; p.abyssT = 0; p.cleaveNext = 0; p.skillIfr = false;
     p.shWin = []; for (let i = 0; i < ED.CONST.SHIELD_WIN_T; i++) p.shWin.push({ sec: -99, c: 0, a: 0 }); // shield window slots (world.js addShield)
     p.shieldClip = {}; p.shields = []; p.shieldOut = false; p.charge = null; // shieldOut: a thrown shield is away from the hero (wire flag 1 << 6)
@@ -88,7 +88,7 @@
     return o ? Object.assign(src, o) : src;
   };
 
-  // Area hit of a skill on foes within r of (x, y): src is the hit's source fields (W.partSrc); calls onHit(e, dealt, damage before the affinity) per foe struck.
+  // Area hit of a skill on foes within r of (x, y): src is the hit's source fields (W.partSrc); calls onHit(e, dealt) per foe struck.
   W.skillBlast = function (p, x, y, r, dmg, src, onHit) {
     const q = this.foeScan(x, y, r);
     for (let k = 0; k < q.length || this.foeTail(q); k++) {
@@ -98,13 +98,14 @@
       if (d >= r + e.r) continue;
       const s = Object.assign({ kx: (e.x - x) / (d || 1), ky: (e.y - y) / (d || 1), noGuard: true, x, y }, src);
       const dealt = this.hitEnemy(e, dmg, s);
-      if (onHit) onHit(e, dealt, dealt / (s.affMul || 1));
+      if (onHit) onHit(e, dealt);
     }
     this.foeEnd();
     this.smashCircle(p, x, y, r);
   };
 
-  // Cooldown refund for the hero's own client (cooldowns are client-authoritative): slot 0 or 1, s seconds off, or a full refund when s is omitted.
+  // Cooldown refund for the hero's own client (cooldowns are client-authoritative): slot 0, 1 or 2, s seconds off, or a full refund when s is omitted (slots 0 and 2: one charge back);
+  // slot -1: s seconds off every skill slot at once (the Pyromancer's Ember Bolt cut).
   W.refundSkill = function (p, slot, s) {
     const m = { to: p.pid, t: 'refund', slot };
     if (s) m.s = Math.round(s * 100) / 100;
@@ -117,16 +118,16 @@
   };
 
   // data: { x0, y0, x1, y1 } for movement skills (performed by the hero's own client); { x0, y0, x, y } for ground skills (cast origin and aimed point, see groundTarget); { d } for Shield Throw (cursor distance).
+  // Slot 2 (skill 3) fires no on-cast boon procs (onSkillCast: Battle Trance): it is the hero's rapid spell, cast every second or two.
   W.playerSkill = function (p, a, data, slot) {
     if (!p || p.downed || p.dead) return;
-    slot = slot === 1 ? 1 : 0;
-    const cls = ED.CLASSES[p.cls], skill = slot ? cls.skill2 : cls.skill, fn = skill && CAST[skill];
+    slot = slot === 1 || slot === 2 ? slot : 0;
+    const cls = ED.CLASSES[p.cls], skill = slot === 2 ? cls.skill3 : slot ? cls.skill2 : cls.skill, fn = skill && CAST[skill];
     if (!fn) return;
     const st = p.stats;
     const extra = fn.call(this, p, a, data || {}, st, ED.Stats.skillNums(skill, st));
     if (extra === false) return;
-    this.onSkillCast(p, slot);
-    if (p.twist) ED.TWIST.onCast.call(this, p, slot); // TWIST hook (src/sim/twist.js)
+    if (slot !== 2) this.onSkillCast(p, slot); // skill 3 fires no on-cast procs
     this.emit(Object.assign({ t: 'skill', pid: p.pid, k: skill, a: Math.round(a * 100) / 100, x: Math.round(p.x), y: Math.round(p.y), slot }, extra));
   };
 })(globalThis.ED || (globalThis.ED = {}));

@@ -510,12 +510,6 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 .stratum.unseen::before { content: ""; position: absolute; z-index: -1; inset: 0; pointer-events: none; background: var(--fr-lockdither) 0 0 / calc(2 * var(--p)) calc(2 * var(--p)); image-rendering: pixelated; }
 .stratum.unseen b, .stratum.unseen small { color: var(--faint); }
 
-/* elemental affinity chips: flat tint of the path colour, 1 fine px line, hard outline; resist = dark chip */
-.aff-list { display: flex; flex-wrap: wrap; gap: calc(2 * var(--pf)); margin-top: var(--p); }
-.aff-chip { display: inline-flex; align-items: center; gap: calc(2 * var(--pf)); padding: 0 calc(3 * var(--pf)) 0 0; font: 700 var(--fs-sm)/1.25 var(--f-body); white-space: nowrap; color: var(--pc, var(--text)); border-radius: 0; border: var(--pf) solid var(--pc, var(--line-hi)); background: color-mix(in srgb, var(--pc, #999) 16%, #120c09); box-shadow: 0 0 0 var(--pf) var(--px-ol); }
-.aff-chip img { width: var(--ic-f); height: var(--ic-f); }
-.aff-chip.resist { color: var(--muted); border-style: solid; border-color: color-mix(in srgb, var(--pc, #999) 40%, var(--line)); background: #0f0a07; }
-
 /* ---------- lobby ---------- */
 .lobby-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: calc(4 * var(--p)); align-items: stretch; }
 .lobby-party, .lobby-pick { padding: calc(7 * var(--p)) calc(8 * var(--p)); display: flex; flex-direction: column; gap: calc(2 * var(--p)); }
@@ -596,10 +590,9 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 #boon-count { font: 700 var(--fs-lg)/1 var(--f-body); color: var(--ember-hi); vertical-align: middle; }
 .boon-sub { color: var(--muted); font: 400 var(--fs-lg)/1.375 var(--f-body); text-align: center; text-shadow: 0 var(--fpx) 0 var(--px-ol); }
 /* --n cards per row; a card is a whole even number of art px wide so its 9-slice edges, crests and sprites land on the art grid.
-   --orn = the frame ornament outside a card box (8 art px; 12 with Ascended wings): the row is inset by it and cards sit 2 --orn + 4 art px apart, so ornaments never cross.
+   --orn = the frame ornament outside a card box (8 art px): the row is inset by it and cards sit 2 --orn + 4 art px apart, so ornaments never cross.
    Rows sit 28 art px apart: a crest or spark (14 art px over the box) under a drip (13 art px below the box). */
 .boon-cards { --orn: calc(8 * var(--p)); --gap: calc(2 * var(--orn) + 4 * var(--p)); --n: 4; display: flex; flex-wrap: wrap; justify-content: center; align-items: stretch; gap: calc(28 * var(--p)) var(--gap); width: 100%; padding: calc(18 * var(--p)) var(--orn) calc(10 * var(--p)); }
-.boon-cards:not(.dense):has(.k-asc) { --orn: calc(12 * var(--p)); }
 .boon-cards.n1 { --n: 1; } .boon-cards.n2 { --n: 2; } .boon-cards.n3 { --n: 3; }
 
 /* card: ::before the body (soot with stepped bands of the path hue), ::after the kind's frame (--cf, 9-slice, 8 art px of ornament outside the box), .bc-art the sprites */
@@ -617,20 +610,17 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 .boon-card:hover::after, .boon-card.focus::after { filter: brightness(1.22); }
 .boon-card:focus-visible { outline: none; }
 .boon-card.big { width: 24rem; width: round(down, min(24rem, (100% - (var(--n) - 1) * var(--gap)) / var(--n)), calc(2 * var(--p))); padding-bottom: calc(14 * var(--p)); }
-.boon-card.k-asc { margin: calc(-6 * var(--p)) 0; padding-top: calc(17 * var(--p)); padding-bottom: calc(18 * var(--p)); }
 .boon-card.k-route { padding-top: calc(13 * var(--p)); }
 .boon-card.k-route:has(.ca-pips) { padding-top: calc(18 * var(--p)); }
 .boon-card.k-holy { padding-top: calc(12 * var(--p)); }
 
 /* card text: bold body labels, the name in bold body at the xl size, hard 1 font px shadows */
 .boon-card .bc-ribbon { font: 700 var(--fs-sm)/1.25 var(--f-body); color: #15100c; background: var(--pc); padding: 0 calc(3 * var(--pf)); box-shadow: 0 0 0 var(--pf) var(--px-ol); white-space: nowrap; text-shadow: none; }
-.boon-card.k-duo .bc-ribbon { background: linear-gradient(90deg, var(--pc) 0 50%, var(--pc2) 0); }
 .boon-card.evo .bc-ribbon, .boon-card.key .bc-ribbon, .boon-card.gate .bc-ribbon { box-shadow: 0 0 0 var(--pf) var(--px-ol), 0 0 0 calc(2 * var(--pf)) #ffe08a, 0 0 0 calc(3 * var(--pf)) var(--px-ol); }
 .boon-card .bc-top { align-self: stretch; display: flex; justify-content: space-between; align-items: baseline; gap: calc(var(--fu) / 2); font: 700 var(--fs-sm)/1.25 var(--f-body); text-shadow: 0 var(--fpx) 0 var(--px-ol); }
 .boon-card .bc-path { color: var(--pc); display: inline-flex; align-items: center; gap: calc(3 * var(--pf)); text-align: left; }
 .boon-card .bc-path::before { content: ""; flex: none; width: calc(3 * var(--pf)); height: calc(3 * var(--pf)); background: var(--pc); box-shadow: 0 0 0 var(--pf) var(--px-ol); }
 .boon-card .bc-path i { font-style: normal; }
-.boon-card.k-duo .bc-path::before { background: linear-gradient(90deg, var(--pc) 0 50%, var(--pc2) 0); }
 .boon-card .bc-rar { color: var(--rc, var(--muted)); text-align: right; }
 .boon-card .bc-icon { flex: none; width: var(--ic2); height: var(--ic2); image-rendering: pixelated; }
 .boon-card .bn { font: 700 var(--fs-menu)/1.25 var(--f-body); color: var(--bone); text-shadow: 0 var(--fpx) 0 var(--px-ol); text-wrap: balance; }
@@ -648,7 +638,6 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 .boon-card .bweap small { font: 400 var(--fs-sm)/1.25 var(--f-body); color: var(--muted); display: block; }
 .boon-card .bweap > div, .boon-card .bweap > span { min-width: 0; }
 .boon-card .bc-wimg { flex: none; width: calc(44 * var(--pf)); height: calc(44 * var(--pf)); image-rendering: pixelated; } /* the 88 px canvas draws 2 canvas px per sprite px: 1 sprite px = 1 fine px */
-.bc-weak { display: inline-flex; align-items: center; padding: 0 calc(3 * var(--pf)); font: 700 var(--fs-sm)/1.25 var(--f-body); color: var(--pc); background: color-mix(in srgb, var(--pc) 16%, #120c09); border: var(--pf) solid var(--pc); box-shadow: 0 0 0 var(--pf) var(--px-ol); white-space: nowrap; }
 
 /* card art layer: sprites at 1 art px per sprite px; strips run with steps() at --sd x --spd (focus doubles the pace) */
 .bc-art { position: absolute; inset: 0; pointer-events: none; }
@@ -694,9 +683,6 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 .bc-art .ca-pips { left: 0; right: 0; top: calc(11 * var(--p)); display: flex; justify-content: center; gap: calc(2 * var(--p)); }
 .ca-pips b { width: calc(6 * var(--p)); height: calc(6 * var(--p)); background: var(--fr-cfx-pip) 0 0 / 300% 100%; image-rendering: pixelated; }
 .ca-pips b.own { background-position: 50% 0; } .ca-pips b.next { background-position: 100% 0; animation: px-pulse 1s step-end infinite; }
-/* asc: gilded wings with a prismatic shimmer */
-.ca-wing { --sw: calc(16 * var(--p)); --sn: 6; --sd: 1.2s; top: calc(14 * var(--p)); width: calc(16 * var(--p)); height: calc(20 * var(--p)); background-image: var(--fr-cfx-wing); }
-.ca-wing.l { left: calc(-12 * var(--p)); } .ca-wing.r { right: calc(-12 * var(--p)); transform: scaleX(-1); }
 /* purse: the drawstring knot on the top edge, a glint on its coin */
 .ca-knot { left: calc(50% - 8 * var(--p)); top: calc(-7 * var(--p)); width: calc(16 * var(--p)); height: calc(10 * var(--p)); background: var(--fr-cfx-knot) 0 0 / 100% 100%; }
 .ca-glint { --sw: calc(5 * var(--p)); --sn: 8; --sd: 2.8s; left: calc(50% - 2 * var(--p)); top: calc(-4 * var(--p)); width: calc(5 * var(--p)); height: calc(5 * var(--p)); background-image: var(--fr-cfx-glint); }
@@ -713,13 +699,10 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 .boon-cards.dense .boon-card { width: 30rem; width: round(down, min(30rem, (100% - (var(--n) - 1) * var(--gap)) / var(--n)), calc(2 * var(--p))); display: grid; grid-template-columns: var(--ic2) minmax(0, 1fr); column-gap: calc(var(--fu) / 2); row-gap: calc(var(--fu) / 4); align-items: start; align-content: start; text-align: left; padding: calc(10 * var(--p)) calc(8 * var(--p)) calc(11 * var(--p)); }
 .boon-cards.dense .boon-card.k-route { padding-top: calc(12 * var(--p)); }
 .boon-cards.dense .boon-card.k-route:has(.ca-pips) { padding-top: calc(17 * var(--p)); }
-.boon-cards.dense .boon-card.k-asc { margin: 0; padding-top: calc(12 * var(--p)); padding-bottom: calc(12 * var(--p)); }
-.boon-cards.dense .ca-wing { display: none; }
 .boon-cards.dense .bc-ribbon { grid-column: 1 / -1; justify-self: center; }
 .boon-cards.dense .bc-top { grid-column: 1 / -1; }
 .boon-cards.dense .bc-icon { grid-column: 1; grid-row: span 4; }
-.boon-cards.dense :is(.bn, .bsub, .bd, .bk, .bdl, .bplay, .bweap, .bc-weak) { grid-column: 2; }
-.boon-cards.dense .bc-weak { justify-self: start; }
+.boon-cards.dense :is(.bn, .bsub, .bd, .bk, .bdl, .bplay, .bweap) { grid-column: 2; }
 .boon-cards.dense .bn { font-size: var(--fs-xl); }
 .boon-cards.dense .bd { flex: none; }
 @media (max-width: 1100px) { .boon-cards:not(.n1) { --n: 2; } }
@@ -749,10 +732,6 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 @keyframes pk-stamp { 32% { transform: none; } 40% { transform: translateY(calc(2 * var(--p))) scaleY(0.95); filter: brightness(1.5); } 55% { transform: none; filter: none; opacity: 1; } 100% { opacity: 0; } }
 .boon-card.picked.k-route { animation: pk-unfurl var(--pk) steps(6) forwards; }
 @keyframes pk-unfurl { 50% { transform: none; opacity: 1; } 100% { transform: translateY(calc(-6 * var(--p))); opacity: 0; } }
-.boon-card.picked.k-duo { animation: pk-clash var(--pk) steps(4) forwards; }
-@keyframes pk-clash { 45% { opacity: 1; filter: none; } 55% { filter: brightness(2.6) saturate(0); } 100% { opacity: 0; filter: brightness(2.6) saturate(0); } }
-.boon-card.picked.k-asc { animation: pk-prism var(--pk) steps(6) forwards; }
-@keyframes pk-prism { 30% { filter: brightness(2.2); } 60% { opacity: 1; filter: brightness(2.6) hue-rotate(120deg); } 100% { opacity: 0; transform: translateY(calc(-6 * var(--p))); filter: brightness(3) hue-rotate(240deg); } }
 .boon-card.picked.k-purse { animation: pk-drop var(--pk) steps(6) forwards; }
 #ov-boon.low .boon-card.picked { animation: pk-quick 0.15s steps(3) forwards; }
 #ov-boon.low .boon-cards.picking .boon-card:not(.picked) { animation: pk-drop 0.12s steps(2) forwards; }
@@ -765,8 +744,6 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 .k-ice .pf-flash { background: #e8fbff; }
 .k-general .pf-flash { inset: auto 20% calc(100% - 4 * var(--p)); height: calc(4 * var(--p)); animation-name: pf-spark; }
 @keyframes pf-spark { 30% { opacity: 0; } 36%, 50% { opacity: 1; } 60%, 100% { opacity: 0; } }
-.pf-flash.prism { inset: 0; animation: pf-prism var(--pk) steps(1) forwards; }
-@keyframes pf-prism { 0% { opacity: 0.5; background: #ff7a2a; } 17% { background: #ffe66b; } 33% { background: #9be33c; } 50% { opacity: 0.6; background: #7fe3ff; } 67% { background: #a070ff; } 83% { background: #ff5fd2; } 100% { opacity: 0; background: #ffffff; } }
 /* fire: a burning edge climbs the card */
 .pf-burn { left: calc(-4 * var(--p)); right: calc(-4 * var(--p)); bottom: 0; height: calc(6 * var(--p)); background: var(--fr-cfx-burn) 0 0 / calc(8 * var(--p)) 100% repeat-x; animation: pf-climb var(--pk) steps(9) forwards; }
 @keyframes pf-climb { to { bottom: calc(100% - 3 * var(--p)); } }
@@ -791,44 +768,13 @@ input[type=range]::-moz-range-thumb { width: calc(7 * var(--p)); height: calc(7 
 /* route: the class banner unfurls down the card */
 .pf-banner { left: 18%; right: 18%; top: calc(-2 * var(--p)); height: 0; background: var(--pc); box-shadow: inset calc(2 * var(--p)) 0 0 rgba(255, 255, 255, 0.25), inset calc(-2 * var(--p)) 0 0 rgba(0, 0, 0, 0.35); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 10 * var(--p)), 0 100%); animation: pf-banner var(--pk) steps(6) forwards; }
 @keyframes pf-banner { 55% { height: calc(100% + 10 * var(--p)); opacity: 0.95; } 100% { height: calc(100% + 10 * var(--p)); opacity: 0; } }
-/* duo: both elements rush in from the sides and collide */
-.pf-l, .pf-r { top: 0; bottom: 0; width: 50%; opacity: 0.85; animation: pf-l var(--pk) steps(5) forwards; }
-.pf-l { left: 0; background: var(--pc); }
-.pf-r { right: 0; background: var(--pc2); animation-name: pf-r; }
-@keyframes pf-l { from { transform: translateX(-100%); opacity: 0; } 50% { transform: none; opacity: 0.85; } 100% { transform: none; opacity: 0; } }
-@keyframes pf-r { from { transform: translateX(100%); opacity: 0; } 50% { transform: none; opacity: 0.85; } 100% { transform: none; opacity: 0; } }
-.k-duo .pf-flash { animation-name: pf-clash; }
-@keyframes pf-clash { 45% { opacity: 0; } 55% { opacity: 0.9; } 80%, 100% { opacity: 0; } }
 /* purse: coins cascade out of the card */
 .pf-coin { --sw: calc(12 * var(--p)); --sn: 4; left: var(--cx); top: 0; width: calc(12 * var(--p)); height: calc(12 * var(--p)); background: var(--fr-cfx-coin) 0 0 / calc(48 * var(--p)) 100%; animation: px-strip 0.2s steps(4) infinite, pf-coin var(--pk) steps(6) var(--cd) both; }
 @keyframes pf-coin { from { top: 10%; opacity: 1; } 100% { top: calc(100% + 16 * var(--p)); opacity: 0; } }
-/* W5 card identities: Mutation (k-mut) and Twist (k-twist), the red cost line. Append as one block right after the "purse: coins cascade" pf-coin rules (before the character sheet section). */
-/* mut: cells bud and split off both sides; twist: the wax seal on the top band, blood drips off the bottom barbs; the cost line of a Twist card and sheet row */
-.bc-art :is(.ca-cell, .ca-blood) { animation: px-strip calc(var(--sd) * var(--spd)) steps(var(--sn)) infinite; background-size: calc(var(--sw) * var(--sn)) 100%; }
-.ca-cell { --sw: calc(9 * var(--p)); --sn: 8; --sd: 2.2s; width: calc(9 * var(--p)); height: calc(7 * var(--p)); background-image: var(--fr-cfx-cell); }
-.ca-cell.c1 { left: calc(-8 * var(--p)); top: 30%; } .ca-cell.c2 { right: calc(-8 * var(--p)); top: 58%; transform: scaleX(-1); animation-delay: -1.1s; }
-.ca-seal { left: calc(50% - 7 * var(--p)); top: calc(-8 * var(--p)); width: calc(14 * var(--p)); height: calc(14 * var(--p)); background: var(--fr-cfx-seal) 0 0 / 100% 100%; }
-.ca-blood { --sw: calc(4 * var(--p)); --sn: 8; --sd: 2.6s; top: calc(100% + 1 * var(--p)); width: calc(4 * var(--p)); height: calc(12 * var(--p)); background-image: var(--fr-cfx-blood); }
-.ca-blood.d1 { left: 26%; } .ca-blood.d2 { left: 72%; animation-delay: -1.4s; }
-.boon-card.k-twist { padding-top: calc(13 * var(--p)); }
-.boon-card .bc-cost, #ov-sheet .sh-cost { color: #ff6b7d; font-weight: 700; }
-.boon-card .bc-cost { align-self: stretch; font: 700 var(--fs-md)/1.375 var(--f-body); padding: calc(1 * var(--p)) calc(2 * var(--p)); background: color-mix(in srgb, #e8344e 14%, var(--cb)); box-shadow: 0 0 0 var(--pf) #5e0c1a, 0 0 0 calc(2 * var(--pf)) var(--px-ol); text-shadow: 0 var(--fpx) 0 var(--px-ol); }
-.boon-cards.dense .bc-cost { grid-column: 2; }
-#ov-boon.low :is(.ca-cell, .ca-blood) { display: none; }
-@media (prefers-reduced-motion: reduce) { :is(.ca-cell, .ca-blood) { display: none; } }
-/* pick: a Mutation warps and swells as cells fly off it; a Twist is branded red, shudders and dims under its seal */
-.boon-card.picked.k-mut { animation: pk-warp var(--pk) steps(6) forwards; }
-@keyframes pk-warp { 20% { transform: skewX(4deg) scaleY(1.04); } 40% { transform: skewX(-6deg) scaleX(1.06); filter: brightness(1.5); } 60% { opacity: 1; transform: scale(1.1, 0.92); } 100% { opacity: 0; transform: scale(1.25, 0.7); filter: brightness(2.2); } }
-.boon-card.picked.k-twist { animation: pk-brand var(--pk) steps(6) forwards; }
-@keyframes pk-brand { 20% { filter: brightness(1.6) sepia(1) saturate(4) hue-rotate(-30deg); } 30% { transform: translateX(calc(-2 * var(--p))); } 40% { transform: translateX(calc(2 * var(--p))); } 50% { transform: none; opacity: 1; } 100% { opacity: 0; transform: scale(0.94); filter: brightness(0.4); } }
-.pf-cell { left: calc(50% - 9 * var(--p)); top: calc(50% - 7 * var(--p)); width: calc(18 * var(--p)); height: calc(14 * var(--p)); background: var(--fr-cfx-cell) calc(-36 * var(--p)) 0 / calc(144 * var(--p)) 100%; opacity: 0; animation: pf-shard var(--pk) steps(6) forwards; }
-.k-twist .pf-flash { background: #e8344e; }
-.pf-seal { left: calc(50% - 14 * var(--p)); top: calc(50% - 14 * var(--p)); width: calc(28 * var(--p)); height: calc(28 * var(--p)); background: var(--fr-cfx-seal) 0 0 / 100% 100%; opacity: 0; animation: pf-seal var(--pk) steps(4) forwards; }
-@keyframes pf-seal { from { opacity: 0; transform: scale(3); } 30% { opacity: 1; transform: none; } 75% { opacity: 1; transform: none; } 100% { opacity: 0; transform: none; } }
 /* ---------- character sheet (Tab): header, three tabs, columns that scroll on their own ---------- */
 /* Pixel grid: every box offset inside .sheet-wrap is a whole device px (--p, --pf, --t1 multiples, em of 16t px, round() tracks), and .sheet-wrap sits at a whole px + --tb
    (PixUI.bias, set by sheetui.js), so every left-aligned or right-aligned glyph origin lands on the crisp fraction. Two units: --p for chrome (frames, meters, gaps),
-   --t1 (1 body font px = t device px) for sprites inside text (markers, pips). Frames shcard / shduo / shdash / shmk / shstar are baked by sheetui.js (--fr-sh*). */
+   --t1 (1 body font px = t device px) for sprites inside text (markers, pips). Frames shcard / shdash / shmk / shstar are baked by sheetui.js (--fr-sh*). */
 #ov-sheet { --t1: calc(var(--fs-md) / 16); --fill: #120d0a; --well: #0b0806; overflow: hidden; container: sheet / size; display: flex; align-items: stretch; justify-content: flex-start; padding: calc(4 * var(--p)) calc(6 * var(--p)); background: rgba(6, 4, 3, 0.95); }
 body:has(#ov-sheet:not([hidden])) #ov-boon { visibility: hidden; }
 .sheet-wrap { --sw: round(down, min(100%, 120em), calc(2 * var(--dp))); width: var(--sw); margin: 0 0 0 calc(round(down, (100% - var(--sw)) / 2, var(--dp)) + var(--tb, 0px)); height: 100%; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: calc(3 * var(--p)); min-height: 0; }
@@ -862,11 +808,7 @@ body:has(#ov-sheet:not([hidden])) #ov-boon { visibility: hidden; }
 .sh-meter.low i { --mh: #ff9a88; --mc: var(--danger); --ml: #8e3428; }
 .sh-world { grid-column: 3; grid-row: 2; justify-self: end; display: flex; align-items: center; gap: calc(3 * var(--p)); flex-wrap: wrap; justify-content: flex-end; }
 .sh-strat { font: 700 var(--fs-md)/1.25 var(--f-body); color: var(--bone); white-space: nowrap; }
-.sh-aff { display: inline-flex; gap: calc(2 * var(--p)); flex-wrap: wrap; }
 /* stratum chips inside the sheet: pixel chip (flat tint, 1 fine px line, hard outline); resists is dimmer */
-#ov-sheet .aff-chip { display: inline-flex; align-items: center; gap: calc(3 * var(--t1)); padding: 0 calc(4 * var(--t1)) 0 calc(2 * var(--t1)); margin: var(--pf); border: var(--pf) solid var(--pc); border-radius: 0; box-shadow: 0 0 0 var(--pf) var(--px-ol); background: color-mix(in srgb, var(--pc) 16%, #120c09); color: var(--pc); font: 700 var(--fs-md)/1.25 var(--f-body); white-space: nowrap; }
-#ov-sheet .aff-chip img { width: var(--fs-md); height: var(--fs-md); }
-#ov-sheet .aff-chip.resist { color: var(--muted); border-color: var(--line-hi); background: #0e0a08; }
 
 /* tab strip: framed pixel tabs on the left (display face at menu size), keys / waiting pill / viewing button on the right */
 .sh-tabs { display: flex; justify-content: flex-start; align-items: center; gap: calc(2 * var(--p)); flex-wrap: nowrap; min-width: 0; }
@@ -903,7 +845,7 @@ body:has(#ov-sheet:not([hidden])) #ov-boon { visibility: hidden; }
 .sh-f.focus { outline: var(--pf) solid var(--ember-hi); outline-offset: var(--pf); }
 .sh-sub { color: var(--muted); font: 400 var(--fs-sm)/1.375 var(--f-body); }
 .sh-empty { color: var(--muted); font: 400 var(--fs-md)/1.375 var(--f-body); padding: calc(2 * var(--p)) 0; }
-/* framed card: --frc picks the frame (var(--fr-shcard[-<path>|-gold|-route|-dim|-p0..3]), var(--fr-shduo-<a>-<b>), var(--fr-shdash)) */
+/* framed card: --frc picks the frame (var(--fr-shcard[-<path>|-gold|-route|-dim|-p0..3]), var(--fr-shdash)) */
 .shc { --frc: var(--fr-shcard); border: calc(3 * var(--p)) solid transparent; border-image: var(--frc) 3 fill / calc(3 * var(--p)); image-rendering: pixelated; padding: calc(2 * var(--t1)) calc(5 * var(--t1)) calc(4 * var(--t1)); background: none; }
 .shc.dash { --frc: var(--fr-shdash); border-image-repeat: repeat; background: rgba(0, 0, 0, 0.25) padding-box; }
 .shc.off { --frc: var(--fr-shcard-dim); color: var(--muted); }
@@ -937,7 +879,7 @@ body:has(#ov-sheet:not([hidden])) #ov-boon { visibility: hidden; }
 .sh-pl.got b { color: var(--good); }
 .sh-path.slot { color: var(--muted); font: 400 var(--fs-md)/1.375 var(--f-body); }
 .sh-path.elem { display: flex; gap: calc(5 * var(--t1)); align-items: center; font: 400 var(--fs-sm)/1.375 var(--f-body); color: var(--text); }
-/* duos and the route tree */
+/* the route tree */
 .sh-rh { display: flex; align-items: center; gap: calc(4 * var(--t1)); flex-wrap: wrap; font: 400 var(--fs-md)/1.25 var(--f-body); }
 .sh-rh b { font-weight: 700; color: var(--bone); }
 .sh-btx { font: 400 var(--fs-sm)/1.375 var(--f-body); color: var(--text); margin-top: calc(2 * var(--t1)); }
@@ -966,7 +908,6 @@ body:has(#ov-sheet:not([hidden])) #ov-boon { visibility: hidden; }
 .sh-bn { font: 700 var(--fs-md)/1.25 var(--f-body); color: var(--bone); }
 .sh-rar { font: 700 var(--fs-sm)/1.25 var(--f-body); color: var(--rc, var(--muted)); }
 .sh-boon .sh-btx { margin-top: var(--t1); }
-.sh-boon.asc .sh-bn { color: var(--gold); }
 .sh-relic { background: var(--fill); box-shadow: inset calc(2 * var(--p)) 0 0 var(--rc, var(--r-common)), 0 0 0 var(--pf) var(--px-ol); padding-left: calc(2 * var(--p) + 4 * var(--t1)); }
 .sh-live { margin-top: var(--t1); font: 700 var(--fs-sm)/1.375 var(--f-body); color: var(--ember-hi); }
 .sh-state { --pc: var(--muted); }
@@ -1040,7 +981,6 @@ body:has(#ov-sheet:not([hidden])) #ov-boon { visibility: hidden; }
   .sh-foot { display: none; }
   .sh-keys { display: inline; }
   .sh-compact { display: grid; gap: calc(2 * var(--t1)); }
-  .sh-compact .sh-aff { display: flex; }
 }
 @media (max-width: 900px) {
   #ov-sheet { overflow-y: auto; }

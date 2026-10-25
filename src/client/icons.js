@@ -1134,23 +1134,6 @@
       '...##########...',
       '................',
       '................'],
-    cardtwist: [
-      '................',
-      '...##########...',
-      '...#dddddddd#...',
-      '...#d####o#d#...',
-      '...#d###o##d#...',
-      '...#d##o###d#...',
-      '...#d###o##d#...',
-      '...#d##o###d#...',
-      '...#d#o####d#...',
-      '...#d##o###d#...',
-      '...#d#o####d#...',
-      '...#d######d#...',
-      '...#dddddddd#...',
-      '...##########...',
-      '................',
-      '................'],
     fountain: [
       '................',
       '.......hh.......',
@@ -1389,12 +1372,12 @@
   // ---------------- floor-map glyphs (minimap, Tab map, door previews, reward props) ----------------
   // Reward kind -> [glyph, colour, short label, long name]. 'boon' wears the colour of the viewing hero's deepest path.
   const RW = {
-    gold: ['coins', '#ffd36b', 'Gold'], boon: ['card', '#ffe9a0', 'Boon'], epic: ['cardepic', '#c98bff', 'Epic', 'Epic boon'], relic: ['amulet', '#ffb02e', 'Relic', 'Relic hoard'],
-    forge: ['anvil', '#aab4c8', 'Forge'], vigor: ['heart', '#ff4a5a', 'Vigor'], twist: ['cardtwist', '#e8344e', 'Twist'], campfire: ['campfire', '#ff9a3a', 'Rest'], anvil: ['anvil', '#ffb066', 'Temper'],
+    gold: ['coins', '#ffd36b', 'Gold'], boon: ['card', '#ffe9a0', 'Boon'], epic: ['cardepic', '#c98bff', 'Epic', 'Epic boon'], relic: ['amulet', '#ffb02e', 'Relic', 'Relics'],
+    forge: ['anvil', '#aab4c8', 'Forge'], vigor: ['heart', '#ff4a5a', 'Health', 'Max health'], campfire: ['campfire', '#ff9a3a', 'Rest'], anvil: ['anvil', '#ffb066', 'Forge'],
   };
   const RW_NONE = ['star', '#ffe9a0', 'Reward'];
   // Room type -> [glyph, colour, label]; event rooms by their event kind.
-  const RT = { boss: ['skullcrown', '#ff5a3a', 'Boss'], elite: ['skullhorn', '#ff7a3a', 'Elite'], shop: ['stall', '#4fb6ff', 'Shop'], treasure: ['chest', '#e0a050', 'Treasure'], rest: ['campfire', '#ff9a3a', 'Rest'] };
+  const RT = { boss: ['skullcrown', '#ff5a3a', 'Boss'], elite: ['skullhorn', '#ff7a3a', 'Elite'], champion: ['skullhorn', '#ff3a3a', 'Champion'], shop: ['stall', '#4fb6ff', 'Shop'], treasure: ['chest', '#e0a050', 'Treasure'], rest: ['campfire', '#ff9a3a', 'Rest'] };
   const EV = { fountain: ['fountain', '#7dffd9', 'Fountain'], altar: ['altar', '#7dffd9', 'Altar'], trial: ['swords', '#7dffd9', 'Trial'], gamble: ['question', '#7dffd9', 'Gamble'] };
   Ic.DARK = ['moon', '#a070ff', 'Dark'];
   Ic.SEAL = ['seal', '#8f7f6c', 'Sealed'];
@@ -1415,15 +1398,14 @@
     if (!ri) return null;
     return { icon: ri[0], color: ri[1], label: ri[2], badge: null, reward: rw };
   };
-  // Route bits of every room of floor fl seen from room `cur` (Uint8Array by room id): 1 reachable through doors that can be left (room.sealed[d] unset; cur included), 2 visited, 4 current; 0 = closed.
-  // rs: room id -> { visited }. A floor without sealed doors reaches every connected room.
+  // Route bits of every room of floor fl seen from room `cur` (Uint8Array by room id): 1 reachable through exit doors (cur included), 2 visited, 4 current; 0 = closed. rs: room id -> { visited }.
   Ic.route = (fl, cur, rs) => {
     const n = fl.rooms.length, out = new Uint8Array(n), q = [];
     if (cur >= 0 && cur < n) { out[cur] = 5; q.push(cur); }
     while (q.length) {
       const r = fl.rooms[q.pop()];
       for (const d in r.doors) {
-        const id = r.doors[d]; if (id < 0 || out[id] & 1 || (r.sealed && r.sealed[d])) continue;
+        const id = r.doors[d]; if (id < 0 || out[id] & 1) continue;
         out[id] |= 1; q.push(id);
       }
     }
