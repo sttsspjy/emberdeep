@@ -97,6 +97,20 @@ North-star: a co-op browser roguelite where builds are chosen, not rolled. Rules
 - [x] Tankier, fewer trash; no late trickle spawns; small proc effects; damage-over-time ticks you can hear
 - [x] Plain wording everywhere; README and "What changed" notice for v6; old six-strata profiles remapped
 - [x] Balance pass: half Hearth 20.5%, full Hearth 38.7%, Pact 5 11.4%, bosses 45–76 s
-- [ ] Fire and Shadow paths win too rarely, General too often
+- [x] Fire and Shadow paths win too rarely, General too often: replaced by the v7 paths
 - [ ] Pact 3 and three-hero party out of band; Shade below band
+- [x] Your playtest, then the PR to main
+
+## v7: playtest 6
+- [x] Four paths: Steel, Flame, Frost, Storm; pick one at the start, two at most; boon rooms name a path
+- [x] Steel toned down; deep and cross-path boons; dash only a dash (2 charges)
+- [x] Knight Bulwark (hold to block, release to bash) replaces Shield Throw; simpler skills
+- [x] 83 relics with picks of three, boss relics, curses; shop sells 3 relics; double gold on stratum I
+- [x] 36 events, 5 minigames, 26 lore pages in a Codex
+- [x] New music per room, weapon hit sounds, M map, portal fade, empowered-attack glow, dash pips
+- [x] Clockwork Colossus replaces the mimic
+- [x] "What changed" notice for v6 players
+- [ ] Too hard after the boss health raise: every bot band fails low (half Hearth 9%, full 17%)
+- [ ] Flame wins 1%; Ranger and Cleric weak
+- [ ] Pact 3 adds no difficulty
 - [ ] Your playtest, then the PR to main
