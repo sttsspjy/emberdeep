@@ -640,6 +640,8 @@
   const sx2 = (v) => Pix.s2(v);
   const ringPut = (c, x, y, r, th, bands, a, dash, ph) => Pix.put(c, Pix.ring(Math.max(2, Math.round(r / 2)), th, bands[0], bands[1], bands[2], dash, ph), sx2(x), sx2(y), a);
   const discPut = (c, x, y, r, col, a) => Pix.put(c, Pix.disc(Math.max(1, Math.round(r / 2)), col), sx2(x), sx2(y), a);
+  // A damage field ticks every 0.5 s from its birth (z.t 0, 0.5, ...): its rim flashes and swells for 0.18 s after each tick.
+  const tickPulse = (c, z, col, fade) => { const pu = 1 - (z.t % 0.5) / 0.18; if (pu > 0 && fade > 0.01) ringPut(c, z.x, z.y, z.r * (1.08 - 0.08 * pu), 1, gb(col), 0.8 * pu * fade); };
   const gb = (col) => { const rp = Pix.ramp(col); return [rp[2], rp[3], rp[4]]; }; // ring bands of a colour
   const poly = [];
   // Lane polygon (origin x, y; direction a; from distance off to len; width w) into `poly`; returns the vertex count.
@@ -704,12 +706,13 @@
       const k = z.dur ? U.clamp(z.t / z.dur, 0, 1) : 0, x = Math.round(z.x), y = Math.round(z.y);
       switch (z.kind) {
         case 'spawn': {
-          const col = z.elite ? '#ffb13a' : '#b8a0ff', rr = z.r || 14;
+          const col = z.big ? '#ff4a3a' : z.elite ? '#ffb13a' : '#b8a0ff', rr = z.r || 14; // big: the last wave's reinforcement forms (red, wider)
           if (pass === 0) { // ground decals: shadow, smoke ring and spark circle sit under whatever stands on the spawn point
             Pix.put(c, Pix.ell(Math.round(rr * 1.1 / 2), Math.max(2, Math.round(rr * 0.6 / 2)), '#0a0414', true), sx2(z.x), sx2(z.y), 0.4); R.light(z.x, z.y, (z.r || 16) * 2.4, col, 0.55);
-            Pix.draw(c, 'fx.smoke.ring', z.elite ? 'holy' : 'shadow', Math.min(7, (k * 8) | 0), sx2(z.x), sx2(z.y) + 2, 0.9);
+            Pix.draw(c, 'fx.smoke.ring', z.big ? 'blood' : z.elite ? 'holy' : 'shadow', Math.min(7, (k * 8) | 0), sx2(z.x), sx2(z.y) + 2, 0.9);
+            if (z.big) ringPut(c, z.x, z.y, rr * (0.6 + 0.4 * k), 1, gb(col), 0.9, 3, (t * 6) & 7);
             if (!Pix.draw(c, 'fx.circle.spark', col, Math.min(5, (k * 6) | 0), sx2(z.x), sx2(z.y) - 4)) ringPut(c, z.x, z.y - 4, rr * (0.4 + k * 0.8), 1, gb(col), 0.9);
-          } else if (pass === 1) R.glow(c, z.x, z.y, 28 * (0.4 + k), col, 0.55);
+          } else if (pass === 1) R.glow(c, z.x, z.y, (z.big ? 44 : 28) * (0.4 + k), col, 0.55);
           break;
         }
         case 'tele': {
@@ -805,6 +808,7 @@
             if (plague) discPut(c, z.x, z.y, z.r, '#9be33c', 0.25 * fade); // hero cloud: 0.25 fill, dashed bright rim
             Pix.put(c, poolSprite(plague, rA, f), sx2(z.x), sx2(z.y), fade);
             if (plague) ringPut(c, z.x, z.y, z.r, 1, gb('#9be33c'), 0.9 * fade, 3, (t * 6) & 7); else ringPut(c, z.x, z.y, z.r, 1, ['#2f5a1c', '#4a7a2a', '#6a9a3a'], 0.7 * fade);
+            tickPulse(c, z, '#9be33c', fade);
             R.light(z.x, z.y, z.r * 1.6, plague ? '#a6ff6a' : '#7ad44a', 0.34 * fade);
           } else if (pass === 1) {
             R.glow(c, z.x, z.y, z.r * 1.15, plague ? '#a6ff6a' : '#7ad44a', 0.28 * fade);
@@ -819,6 +823,7 @@
           if (pass === 0) {
             discPut(c, z.x, z.y, z.r, '#ffe9a0', 0.22 * fade);
             ringPut(c, z.x, z.y, z.r, 1, gb('#ffd36b'), 0.85 * fade, 3, (t * 5) & 7);
+            tickPulse(c, z, '#ffd36b', fade);
             R.light(z.x, z.y, z.r * 1.7, '#ffe9a0', 0.4 * fade);
           } else if (pass === 1) {
             R.glow(c, z.x, z.y, z.r, '#ffe9a0', 0.22 * fade);
@@ -848,6 +853,7 @@
             if (pf) discPut(c, z.x, z.y, z.r, '#ffb347', 0.25 * fade);
             Pix.put(c, patchSprite('#120804', Math.max(3, Math.round(z.r * 0.95 / 2))), sx2(z.x), sx2(z.y), fade * 0.9);
             if (fade > 0.01) { if (pf) ringPut(c, z.x, z.y, z.r, 1, gb('#ffb347'), 0.9 * fade, 3, (t * 6) & 7); else ringPut(c, z.x, z.y, z.r, 1, ['#8a2a10', '#ff6a1a', '#ffb070'], 0.8 * fade); }
+            tickPulse(c, z, pf ? '#ffb347' : '#ff6a1a', fade);
             R.light(z.x, z.y - 6, z.r * 2.2, pf ? '#ffb347' : '#ff6a1a', 0.85 * fade);
             break; // the flames are y-sorted with the actors (R.frame queues them, drawFlame draws them)
           }

@@ -284,8 +284,9 @@
   N.CAPS = { hit: 24, smite: 12, reap: 12, toll: 12, lance: 12, ric: 12, parry: 6, catch: 4, kblock: 6, blance: 8 };
   N.CAPS_LOCAL = { hit: 8, smite: 4, reap: 4, toll: 4, lance: 4, ric: 4, parry: 2, catch: 2, kblock: 3, blance: 4 };
   Object.assign(N.CAPS, { exec: 8, rupt: 8, bloom: 6, sweep: 6 }); Object.assign(N.CAPS_LOCAL, { exec: 3, rupt: 3, bloom: 2, sweep: 2 }); // Shade execution cuts, ruptures, Bloodbloom lines and Ambush Sweep rings
-  // Cap key of an event: a non-crit fodder hit counts as 'fhit' and a fodder death as 'fdie', so a horde never crowds out crits, threat hits and threat deaths.
-  const capKey = (ev) => (ev.fd ? (ev.t === 'hit' && !ev.c ? 'fhit' : ev.t === 'die' ? 'fdie' : ev.t) : ev.t);
+  // Cap key of an event: a non-crit fodder hit counts as 'fhit', a fodder death as 'fdie' and a damage-over-time tick (hit with k) as 'dhit', so a horde or a field of burning foes never crowds out crits, direct hits and threat deaths.
+  const capKey = (ev) => (ev.fd ? (ev.t === 'hit' && !ev.c ? 'fhit' : ev.t === 'die' ? 'fdie' : ev.t) : ev.t === 'hit' && ev.k ? 'dhit' : ev.t);
+  N.CAPS.dhit = 16; N.CAPS_LOCAL.dhit = 6;
   N.capFx = (fx, caps) => {
     let over = false, n = null;
     for (let i = 0; i < fx.length; i++) {
@@ -337,7 +338,7 @@
     }
     for (const pr of w.projs) B.push([pr.id, ED.PROJ_IDX[pr.kind] | 0, r(pr.x), r(pr.y), r(pr.vx), r(pr.vy), pr.r, pr.team]);
     for (const pk of w.pickups) K.push([pk.id, PK_IDX[pk.kind], r(pk.x), r(pk.y)]);
-    for (const z of w.zones) Z.push([z.id, ZK_IDX[z.kind] | 0, r(z.x), r(z.y), r(z.r || 0), r2(z.t), r2(z.dur), r2(z.a || 0), r(z.len || 0), r(z.w || 0), r2(z.arc || 0), z.team | 0, z.elite ? 1 : 0, z.lob ? z.lob[0] : -99999, z.lob ? z.lob[1] : 0, r2(z.warm || 0), r(z.str || 0), z.follow && w.players.has(z.follow) ? 1 + w.players.get(z.follow).slot : 0]);
+    for (const z of w.zones) Z.push([z.id, ZK_IDX[z.kind] | 0, r(z.x), r(z.y), r(z.r || 0), r2(z.t), r2(z.dur), r2(z.a || 0), r(z.len || 0), r(z.w || 0), r2(z.arc || 0), z.team | 0, z.big ? 2 : z.elite ? 1 : 0, z.lob ? z.lob[0] : -99999, z.lob ? z.lob[1] : 0, r2(z.warm || 0), r(z.str || 0), z.follow && w.players.has(z.follow) ? 1 + w.players.get(z.follow).slot : 0]);
     for (const a of w.allies) A.push([a.id, a.owner, r(a.x), r(a.y), a.face, a.k | 0]); // A[5]: 0 minion, 1 Death Knight, 2 bone bomb
     const s = { t: 's', T: r2(w.time), s: w.stratum, fs: w.floorSeed, r: w.roomId, ep: w.roomEpoch | 0, L: w.locked ? 1 : 0, g: w.gold, x: Math.floor(w.xp), n: w.xpNext, l: w.level,
       wm: w.waitMsg || '', P, E, B, K, Z, A, H, F: N.capFx(fx, N.CAPS) };

@@ -140,7 +140,7 @@
     const zb = this.zoneBase;
     if (zb) {
       const el = now - zb.recv;
-      this.zones = zb.list.map(z => ({ id: z[0], kind: N.ZK[z[1]], x: z[2], y: z[3], r: z[4], t: z[5] + el, dur: z[6], a: z[7], len: z[8], w: z[9], arc: z[10], team: z[11], elite: !!z[12], lob: z[13] > -99999 ? [z[13], z[14]] : null, warm: z[15], str: z[16] || 0, fol: z[17] | 0 }));
+      this.zones = zb.list.map(z => ({ id: z[0], kind: N.ZK[z[1]], x: z[2], y: z[3], r: z[4], t: z[5] + el, dur: z[6], a: z[7], len: z[8], w: z[9], arc: z[10], team: z[11], elite: z[12] === 1, big: z[12] === 2, lob: z[13] > -99999 ? [z[13], z[14]] : null, warm: z[15], str: z[16] || 0, fol: z[17] | 0 }));
       for (const z of this.zones) if (z.fol) for (const p of this.players.values()) if (p.slot === z.fol - 1) { z.x = p.x; z.y = p.y; break; } // a zone that follows its hero is drawn on the hero's smoothed position
     }
   };
