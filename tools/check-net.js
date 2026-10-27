@@ -5,6 +5,8 @@
 //    nearly every host foe inside the client's view is shown, own-hero prediction corrections stay small, vitals / weapons / level match, offers resolve.
 // 3. Downed / revive reach the client. 4. A late join is refused. 5. The host leaving ends the client's run with a note; a client quitting drops its hero on the host.
 // 6. Snapshot bytes at 300 / 900 foes (+600 projectiles, 400 gems, a busy event window): reported; gate <= 12 KB at 900 (ARCHITECTURE §11); decode round trip exact to 0.25 px.
+// 7. Late-game zones: 4 heroes with 6 evolved weapons each (thornwood / wrath / plague / stormcrown fields), max passives, 900 foes, 3 clients: every snapshot <= 12 KB;
+//    client 1's mirrored zones equal the host's in-rect zones at every snapshot. 8. A client's banish reaches it as a new offer.
 'use strict';
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const { load } = require('./sim.js');
@@ -270,7 +272,7 @@ for (const [n, name, sp] of [[300, 'perf layout', disc(520)], [900, 'perf layout
   if (n === 900 && name === 'all in view') {
     // decode round trip: every foe / projectile / pickup inside the rect arrives within 0.25 px
     const M = new N.Mirror({ stage: 0, seed: 42, roster: [{ pid: 'host', slot: 0, name: 'H', cls: 'ranger' }, { pid: 'c', slot: 1, name: 'C', cls: 'knight' }], myPid: 'c' });
-    r.cc.seq++; const buf = N.encodeSnap(r.W2, r.cc), T = M.apply(buf);
+    const cc1 = Object.assign({}, r.cc, { seq: r.cc.seq + 1, zc: null, evs: [], carry: [] }), buf = N.encodeSnap(r.W2, cc1), T = M.apply(buf); // fresh client: zones are sent in full
     M.frame(T);
     const byId = new Map(); for (const e of r.W2.foes) byId.set(e.id, e);
     let bad = 0; for (const e of M.view.foes) { const h = byId.get(e.id); if (!h || Math.abs(h.x - e.x) > 0.25 || Math.abs(h.y - e.y) > 0.25 || h.k !== e.k || h.elite !== e.elite) bad++; }
@@ -279,6 +281,75 @@ for (const [n, name, sp] of [[300, 'perf layout', disc(520)], [900, 'perf layout
     const h = M.view.heroes.find(x => x.pid === 'host');
     ok(h && h.weapons.length === 6 && h.weapons.every(ws => ws.lvl === 8), 'hero weapon table decodes');
   }
+}
+
+// ---------------- 7. late-game zones ----------------
+{
+  const SETS = [['stormcrown', 'plague', 'starfall', 'barrage', 'whirlwind', 'sunwheel'], ['thornwood', 'hail', 'glacier', 'avalanche', 'choir', 'impaler'],
+    ['wrath', 'inferno', 'bonestorm', 'cathedral', 'shadowfan', 'twinmoons'], ['thornwood', 'wrath', 'plague', 'stormcrown', 'starfall', 'barrage']];
+  const cls = ['knight', 'ranger', 'pyro', 'cleric'];
+  const W3 = new ED.World({ seed: 11, stage: 0, players: cls.map((c, i) => ({ pid: 'p' + i, name: 'P' + i, slot: i, cls: c, meta: { shop: {}, sigs: [] } })), cheats: { god: true } });
+  W3.heroes.forEach((p, i) => {
+    p.weapons.length = 0;
+    for (const id of SETS[i]) { const ws = W3.addWeapon(p, id); if (ws) ws.lvl = 8; }
+    for (const id of ['might', 'reach', 'duration', 'multishot', 'haste', 'velocity']) p.passives.push({ id, lvl: ED.PASSIVES[id].max });
+    W3.recalc(p, true);
+  });
+  for (const row of W3.sdef.timeline) row.rate = 0;
+  W3.sp.swarmT = W3.sp.eliteT = Infinity; W3.sdef = Object.assign({}, W3.sdef, { bosses: [] });
+  const rng = U.RNG(3), ids = W3.sdef.timeline[W3.sdef.timeline.length - 1].roster.map(r => r[0]).filter(id => ED.FOES[id] && !ED.FOES[id].boss);
+  const top = () => { let k = 0; while (W3.foes.length < 900 && k++ < 400) { const p = W3.heroes[rng.int(0, 3)], a = rng.next() * U.TAU, d = 60 + Math.sqrt(rng.next()) * 380, x = p.x + Math.cos(a) * d, y = p.y + Math.sin(a) * d; if (!ED.Arena.blocked(W3.arena, x, y, 8)) W3.spawnFoe(ids[rng.int(0, ids.length - 1)], x, y, { hpMul: 1 }); } };
+  const pidIdx = {}; W3.heroes.forEach((p, i) => { pidIdx[p.pid] = i; });
+  const ccs = [1, 2, 3].map(i => ({ idx: i, vw: 641, vh: 361, ack: 0, seq: 0, pidIdx, evs: null, carry: [] }));
+  const M = new N.Mirror({ stage: 0, seed: 11, roster: cls.map((c, i) => ({ pid: 'p' + i, slot: i, name: 'P' + i, cls: c })), myPid: 'p1' });
+  const evs = [], byId = new Map();
+  let max = 0, sum = 0, cnt = 0, zMax = 0, zSum = 0, snaps = 0, bad = 0, miss = 0, firstBad = '';
+  for (let i = 0; i < 900; i++) {
+    top();
+    W3.heroes.forEach((p, k) => { const a = i / 60 * 0.5 + k * 1.6; W3.input(p.pid, { mx: Math.cos(a) * 0.4, my: Math.sin(a) * 0.4, ax: p.x + 50, ay: p.y, pick: p.offer ? 1 : 0 }); });
+    W3.update(C.TICK);
+    for (const ev of W3.events) if (ev.t !== 'end') evs.push(ev);
+    W3.events.length = 0;
+    if (W3.tick % 3) continue;
+    for (const cc of ccs) {
+      cc.evs = evs; cc.seq++;
+      const buf = N.encodeSnap(W3, cc);
+      if (i > 180) { sum += buf.byteLength; cnt++; max = Math.max(max, buf.byteLength); }
+      if (cc.idx !== 1) continue;
+      const T = M.apply(buf); M.frame(T); snaps++;
+      byId.clear(); for (const z of W3.zones) if (!z.dead) byId.set(z.id, z);
+      const held = cc.zc.map, shown = M.view.zones;
+      zMax = Math.max(zMax, held.size); zSum += held.size;
+      for (const z of shown) {
+        const h = held.has(z.id) && byId.get(z.id);
+        const err = !h ? 'not held' : Math.abs(h.x - z.x) > 0.26 || Math.abs(h.y - z.y) > 0.26 ? 'pos' : Math.abs(h.r - z.r) > 0.26 || Math.abs(h.len - z.len) > 0.26 || Math.abs(U.angDiff(h.a, z.a)) > 0.001 ? 'shape'
+          : h.k !== z.k || h.wid !== z.wid || !!h.warn !== !!z.warn || (h.team | 0) !== (z.team | 0) ? 'style' : Math.abs(h.t - z.t) > 0.006 && !(z.t >= z.dur - 0.006 && h.t >= h.dur - 0.006) ? 't' : '';
+        if (err) { bad++; if (!firstBad) firstBad = `zone ${z.id} (${z.wid || z.k}) ${err}`; }
+      }
+      if (shown.length !== held.size) miss += Math.abs(held.size - shown.length);
+    }
+    evs.length = 0;
+  }
+  console.log(`     late game (4 x 6 evolved weapons, 900 foes): snapshot avg ${(sum / cnt / 1024).toFixed(2)} KB, max ${(max / 1024).toFixed(2)} KB; zones in client 1's rect avg ${(zSum / snaps).toFixed(0)}, max ${zMax}`);
+  ok(zMax >= 300, `late game: zone-heavy scene (${zMax} zones in one client's rect)`);
+  ok(max <= GATE, `late game: every snapshot <= 12 KB (max ${(max / 1024).toFixed(2)} KB)`);
+  ok(bad === 0 && miss === 0, `late game: client zones equal the host's at all ${snaps} snapshots (mismatches ${bad}, count diffs ${miss}${firstBad ? ', first: ' + firstBad : ''})`);
+}
+
+// ---------------- 8. banish ----------------
+{
+  const sent = [], S = new ED.Game.Session();
+  S.start({ mode: 'host', seed: 5, stage: 0, myPid: 'host', players: [{ pid: 'host', slot: 0, cls: 'knight' }, { pid: 'c1', slot: 1, cls: 'ranger' }],
+    net: { send: (pid, d) => { if (!(d instanceof ArrayBuffer)) sent.push(JSON.parse(JSON.stringify(d))); }, busy: () => false, ended() {} } });
+  const w5 = S.w, p = w5.hero('c1');
+  p.banishes = 2; w5.addXp(w5.xpNext);
+  for (let i = 0; i < 6; i++) S.update(1 / 60);
+  const n0 = sent.filter(d => d.t === 'offer').length, before = p.offer.map(c => c.id).join(',');
+  w5.input('c1', { banish: 1 });
+  for (let i = 0; i < 12; i++) S.update(1 / 60);
+  const offers = sent.filter(d => d.t === 'offer'), last = offers[offers.length - 1], now = p.offer.map(c => c.id).join(',');
+  ok(n0 === 1 && offers.length === 2 && now !== before && last.cards.map(c => c.id).join(',') === now, `banish resends the offer (${before} -> ${last && last.cards.map(c => c.id).join(',')})`);
+  S.quit();
 }
 
 console.log(`check-net: ${fails ? fails + ' failure(s)' : 'all passed'} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);

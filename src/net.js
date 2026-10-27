@@ -8,7 +8,7 @@
   const N = ED.Net = {};
   const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const PREFIX = 'wickdeep-sv-';
-  N.VERSION = ED.NET_VERSION = 3; // bump on any wire change: mixed versions would desync
+  N.VERSION = ED.NET_VERSION = 4; // bump on any wire change: mixed versions would desync
   // Heartbeat: PeerJS 'close' does not fire when a tab crashes or a network drops, so both ends ping and
   // treat a few seconds of silence as a disconnect (longer in the lobby, where little else is sent).
   const PING_MS = 2000, TIMEOUT_RUN = 6000, TIMEOUT_LOBBY = 10000;
@@ -329,7 +329,7 @@
   // ---------------- snapshot encode (host) ----------------
   // Layout: u8 SNAP, u32 seq, u32 tick, u32 ack (last input seq applied for this client), f32 xp, f32 xpNext, u16 level, u32 kills, u32 gold, u8 state (0 play, 1 won, 2 lost),
   // i16 ox, oy (cull rect origin), boss (varint id + 1 or 0; varint k, u8 hpQ, u8 flags), boss bar (u8 flags 1 on 2 final 4 enraged; if on: varint foe index, u8 q, u8 phase, u8 n, u8 rev (255 none)), braziers (u8 n + broken bitmask), u8 heroes + records,
-  // then u16-counted sections: zones, foes, projectiles, pickups, hits, deaths, misc binary events, JSON events.
+  // then u16-counted sections: zones (+ u16-counted ids of zones gone), foes, projectiles, pickups, hits, deaths, misc binary events, JSON events.
   // Foes / projectiles / pickups / positional events are kept only inside the client's view + MARGIN; their positions are 3 bytes (12 + 12 bits at 0.5 px from the rect origin).
   // Ids: arrays are in spawn order, so ids ascend: each id is written as delta from the previous (with 2 flag bits); a delta of 0 escapes to an absolute id.
   const MARGIN = 160;
@@ -347,11 +347,12 @@
   const BIN_EV = { hit: 1, die: 1, swing: 1, boom: 1, shoot: 1, eshoot: 1, pickup: 1, chain: 1, hurt: 1, dash: 1, end: 1 };
   N.isJsonEvent = (ev) => !BIN_EV[ev.t];
   const scratchA = [], scratchB = [], scratchC = [];
-  const byDmg = (a, b) => b.dmg - a.dmg, byId = (a, b) => a.id - b.id;
+  const byDmg = (a, b) => b.dmg - a.dmg, byId = (a, b) => a.id - b.id, byNum = (a, b) => a - b;
   const pidOf = (pidIdx, pid) => { const i = pidIdx[pid]; return i === undefined ? 255 : i; };
   const hasFx = (p) => p.fxf !== undefined || p.fxv !== undefined;
 
-  // w: World; cc: { idx (recipient hero index), vw, vh (its view in world px), ack, seq, pidIdx ({ pid: hero index }), evs (events since the last snapshot), carry (JSON events kept from skipped snapshots) }.
+  // w: World; cc: { idx (recipient hero index), vw, vh (its view in world px), ack, seq, pidIdx ({ pid: hero index }), evs (events since the last snapshot), carry (JSON events kept from skipped snapshots),
+  //   zc (zones this client holds; created here) }. Every returned snapshot must reach that client's Mirror (zones are sent once).
   // Returns an ArrayBuffer (a copy; the scratch is reused).
   N.encodeSnap = (w, cc) => {
     const T = tables();
@@ -385,25 +386,51 @@
       w8(p.passives.length); for (const ps of p.passives) { wstr(T.Pm, ps.id); w8(ps.lvl); }
       if (hasFx(p)) { w16(p.fxf | 0); wf32(p.fxv || 0); }
     }
-    // zones (absolute positions: lines and big circles reach far past the rect)
+    // zones: spawn-once per client (cc.zc holds what this client has; the reliable ordered channel delivers every snapshot sent).
+    // Records: head = delta << 3 | 4 rectPos | 2 sameStyle | 1 full; pos = 3-byte rect position when rectPos, else i16 x, y (lines and big circles reach far past the rect).
+    // full: [style unless sameStyle (equal to the previous full record): look, u8 flags, u16 r, [line: u16 w], [cone: u8 arc], [f32 w], varint dur ms, wid], pos, u16 a, [line: u16 len], varint t ms.
+    // moved only: pos. Zones the client holds unchanged are not written (it ages t itself). Then u16 n + ids of held zones that died or left the rect.
+    const zc = cc.zc || (cc.zc = { map: new Map(), pool: [], stamp: 0 }), ZM = zc.map, stamp = ++zc.stamp;
     let at = o; w16(0); let n = 0; prevId = 0;
+    let yk = null, ywid = '', yfl = 0, yr = 0, yw = 0, yarc = 0, ydur = 0;
     for (const z of w.zones) {
       if (z.dead) continue;
       if (z.len > 0) { const ex = z.x + Math.cos(z.a) * z.len, ey = z.y + Math.sin(z.a) * z.len, r = z.w / 2; if (Math.max(z.x, ex) + r < ox || Math.min(z.x, ex) - r >= ox + RW || Math.max(z.y, ey) + r < oy || Math.min(z.y, ey) - r >= oy + RH) continue; }
       else if (!circR(z.x, z.y, z.r)) continue;
-      wid(z.id, 0, 0);
-      wi16(z.x * 2); wi16(z.y * 2); wstr(T.Lm, z.k);
-      const line = z.len > 0, cone = z.arc > 0;
-      const zw = !line && z.w ? 16 : 0;
-      w8((z.team ? 1 : 0) | (z.warn ? 2 : 0) | (line ? 4 : 0) | (cone ? 8 : 0) | zw);
-      w16(U.clamp(Math.round(z.r * 2), 0, 65535)); w16(qa16(z.a));
-      if (line) { w16(U.clamp(Math.round(z.len * 2), 0, 65535)); w16(U.clamp(Math.round(z.w * 2), 0, 65535)); }
-      if (cone) w8(q8(z.arc, 40));
-      if (zw) wf32(z.w);
-      w16(ms16(z.t)); w16(ms16(z.dur)); wstr(T.Wm, z.wid);
-      n++; if (o > LIMIT) break;
+      let c = ZM.get(z.id);
+      if (o > LIMIT) { if (c) c.seen = stamp; continue; } // held as is; a stale record differs next time and goes out again
+      const qx = U.clamp(Math.round(z.x * 2), -32768, 32767), qy = U.clamp(Math.round(z.y * 2), -32768, 32767);
+      const rp = z.x >= ox && z.y >= oy && z.x < ox + 2047 && z.y < oy + 2047 ? 4 : 0;
+      const line = z.len > 0, cone = z.arc > 0, zw = !line && z.w ? 16 : 0;
+      const fl = (z.team ? 1 : 0) | (z.warn ? 2 : 0) | (line ? 4 : 0) | (cone ? 8 : 0) | zw;
+      if (!c || c.k !== z.k || c.wid !== z.wid || c.fl !== fl || c.r !== z.r || c.a !== z.a || c.len !== z.len || c.w !== z.w || c.arc !== z.arc || c.dur !== z.dur || Math.abs(z.t - c.t - (w.tick - c.tick) * C.TICK) > 0.004) {
+        const same = z.k === yk && z.wid === ywid && fl === yfl && z.r === yr && z.w === yw && z.arc === yarc && z.dur === ydur;
+        wid(z.id, rp | (same ? 2 : 0) | 1, 3);
+        if (!same) {
+          wstr(T.Lm, z.k); w8(fl); w16(U.clamp(Math.round(z.r * 2), 0, 65535));
+          if (line) w16(U.clamp(Math.round(z.w * 2), 0, 65535));
+          if (cone) w8(q8(z.arc, 40));
+          if (zw) wf32(z.w);
+          wv(Math.round(z.dur * 1000)); wstr(T.Wm, z.wid);
+          yk = z.k; ywid = z.wid; yfl = fl; yr = z.r; yw = z.w; yarc = z.arc; ydur = z.dur;
+        }
+        if (rp) wpos(z.x, z.y); else { w16(qx); w16(qy); }
+        w16(qa16(z.a)); if (line) w16(U.clamp(Math.round(z.len * 2), 0, 65535));
+        wv(Math.round(z.t * 1000));
+        if (!c) { c = zc.pool.pop() || {}; c.id = z.id; ZM.set(z.id, c); }
+        c.k = z.k; c.wid = z.wid; c.fl = fl; c.r = z.r; c.a = z.a; c.len = z.len; c.w = z.w; c.arc = z.arc; c.dur = z.dur; c.t = z.t; c.tick = w.tick;
+      } else if (qx !== c.qx || qy !== c.qy) { wid(z.id, rp, 3); if (rp) wpos(z.x, z.y); else { w16(qx); w16(qy); } }
+      else { c.seen = stamp; continue; }
+      c.qx = qx; c.qy = qy; c.seen = stamp;
+      n++;
     }
     wd.setUint16(at, n, true);
+    const gone = scratchA; gone.length = 0;
+    for (const c of ZM.values()) if (c.seen !== stamp) gone.push(c.id);
+    gone.sort(byNum);
+    w16(gone.length); prevId = 0;
+    for (let i = 0; i < gone.length; i++) { const id = gone[i]; wid(id, 0, 0); zc.pool.push(ZM.get(id)); ZM.delete(id); }
+    gone.length = 0;
     // foes: head = delta << 2 | sameK << 1 | hasFlags; [k]; pos; [flags: 1 flash, 2 face left, 4 elite, 8 frozen, 16 stunned, 32 burning, 64 slowed, 128 more: u8 st, u8 hpQ, u8 r, u8 scale x16, u8 (1 enraged)]
     at = o; w16(0); n = 0; prevId = 0;
     let pk = -1;
@@ -557,6 +584,7 @@
   const foeApply = (e, f, since, rt) => { e.flash = f & 1 ? 0.06 : 0; e.face = f & 2 ? -1 : 1; e.freezeT = f & 8 ? 1 : 0; e.stunT = f & 16 ? 1 : 0; e.burnT = f & 32 ? 1 : 0; e.slowT = f & 64 ? 1 : 0; const st = f >>> 8; if (st !== e.st) { e.st = st; e.st0 = rt; } e.stT = rt - e.st0; };
   const projApply = (pr, f, since, rt) => { pr.a = da8(f); pr.t = rt - pr.born; };
   const zoneApply = (z, f, since) => { z.t = Math.min(z.dur, f + Math.max(0, since)); };
+  const zoneAge = (z, T) => z.hf[z.hi] + (T - z.ht[z.hi]); // zone t at server time T from its newest sample
   const heroFields = () => ({ pid: '', slot: 0, cls: 'knight', name: '', x: 0, y: 0, r: C.HERO_R, face: 0, mdir: 0, mvx: 0, mvy: 0, moving: false, hp: 1, maxHp: 1, spd: 0, dashCd: 0, dashT: 0, dashDx: 1, dashDy: 0, invuln: 0, hurtT: 0, downed: false, bleed: 0, revive: 0, dead: false, kills: 0, rerolls: 0, skips: 0, banishes: 0, weapons: [], passives: [], skills: [], offer: null, fxf: 0, fxv: 0 });
 
   // cfg: { stage, seed, roster: [{ pid, slot, name, cls }] (World hero order), myPid }. view: the ARCHITECTURE §10 view model, arrays rebuilt by frame(rt).
@@ -573,6 +601,7 @@
     this.projs = new Tracks(() => ({ id: 0, k: '', wid: '', team: 0, x: 0, y: 0, a: 0, r: 4, t: 0 }), projApply);
     this.picks = new Tracks(() => ({ id: 0, k: 'xp1', x: 0, y: 0 }), null);
     this.zones = new Tracks(() => ({ id: 0, k: '', wid: '', team: 0, warn: false, x: 0, y: 0, r: 0, a: 0, len: 0, w: 0, arc: 0, t: 0, dur: 1 }), zoneApply);
+    this.zs = { k: '', f: 0, r: 0, w: 0, arc: 0, dur: 1, wid: '' }; // zone style of the previous full record (decode)
     this.evq = []; // { T, ev } in arrival order
     this.bytes = 0;
   };
@@ -615,17 +644,32 @@
       if (mine) { const s = this.srv; s.x = x; s.y = y; s.mdir = mdir; s.mvx = mvx; s.mvy = mvy; s.moving = !!(fl & 1); s.dashT = dashT; s.dashCd = dashCd; s.dashDx = ddx; s.dashDy = ddy; s.spd = h.spd; s.live = !h.downed && !h.dead; }
       else { h.face = face; h.mdir = mdir; h.mvx = mvx; h.mvy = mvy; h.moving = !!(fl & 1); h.dashT = dashT; h.dashCd = dashCd; h.dashDx = ddx; h.dashDy = ddy; sample(h, T, x, y, 0, seq); }
     }
-    // zones
+    // zones (spawn-once, see encodeSnap): full records, moves, then ids that died or left; held zones not written stay and age with server time
+    const ZT = this.zones, ZS = this.zs;
     let n = r16(); prevId = 0;
     for (let i = 0; i < n; i++) {
-      const z = this.zones.get(rid(0)), x = ri16() / 2, y = ri16() / 2;
-      z.k = rstr(TBL.L); const f = r8(); z.team = f & 1; z.warn = !!(f & 2);
-      z.r = r16() / 2; z.a = da16(r16());
-      if (f & 4) { z.len = r16() / 2; z.w = r16() / 2; } else { z.len = 0; z.w = 0; }
-      z.arc = f & 8 ? r8() / 40 : 0;
-      if (f & 16) z.w = rf32();
-      const t = r16() / 1000; z.dur = r16() / 1000; z.wid = rstr(TBL.W);
-      sample(z, T, x, y, t, seq);
+      const id = rid(3), bits = lastBits;
+      if (!(bits & 1)) { const p = zpos(bits), z = ZT.map.get(id); if (z && z.n && z.gone < 0) sample(z, T, p.x, p.y, zoneAge(z, T), seq); continue; }
+      if (!(bits & 2)) {
+        ZS.k = rstr(TBL.L); const f = ZS.f = r8(); ZS.r = r16() / 2;
+        ZS.w = f & 4 ? r16() / 2 : 0;
+        ZS.arc = f & 8 ? r8() / 40 : 0;
+        if (f & 16) ZS.w = rf32();
+        ZS.dur = rv() / 1000; ZS.wid = rstr(TBL.W);
+      }
+      const z = ZT.get(id), p = zpos(bits), f = ZS.f;
+      z.k = ZS.k; z.team = f & 1; z.warn = !!(f & 2); z.r = ZS.r; z.w = ZS.w; z.arc = ZS.arc; z.dur = ZS.dur; z.wid = ZS.wid;
+      z.a = da16(r16()); z.len = f & 4 ? r16() / 2 : 0;
+      sample(z, T, p.x, p.y, rv() / 1000, seq);
+    }
+    n = r16(); prevId = 0;
+    for (let i = 0; i < n; i++) { const z = ZT.map.get(rid(0)); if (z && z.gone < 0) z.gone = T; }
+    // held zones: a new sample at T keeps a zone that moved earlier from extrapolating; one far past its duration (lost state) is dropped
+    for (let i = 0, L = ZT.list; i < L.length; i++) {
+      const z = L[i];
+      if (z.seen === seq || z.gone >= 0 || !z.n) continue;
+      const age = zoneAge(z, T);
+      if (age > z.dur + 1) z.gone = T; else if (z.n >= 2) sample(z, T, z.hx[z.hi], z.hy[z.hi], age, seq);
     }
     // foes
     n = r16(); prevId = 0;
@@ -661,7 +705,7 @@
       g.k = sk;
       sample(g, T, p.x, p.y, 0, seq);
     }
-    this.zones.sweep(seq, T); this.foes.sweep(seq, T); this.projs.sweep(seq, T); this.picks.sweep(seq, T);
+    this.foes.sweep(seq, T); this.projs.sweep(seq, T); this.picks.sweep(seq, T);
     // events (released at their snapshot's time, with the entities they belong to)
     const R = this.roster, pidAt = (i) => (R[i] ? R[i].pid : '');
     n = r16(); prevId = 0;
@@ -703,6 +747,7 @@
   }
   const PT = { x: 0, y: 0 };
   function rpos() { const v = rv8[ro] | (rv8[ro + 1] << 8) | (rv8[ro + 2] << 16); ro += 3; PT.x = ox + (v & 4095) / 2; PT.y = oy + (v >>> 12) / 2; return PT; }
+  function zpos(bits) { if (bits & 4) return rpos(); PT.x = ri16() / 2; PT.y = ri16() / 2; return PT; } // zone position: rect-relative or absolute
 
   // Rebuilds the view arrays at render time rt (remote heroes interpolated; the own hero is placed by the session's prediction).
   MP.frame = function (rt) {

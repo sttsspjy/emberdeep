@@ -194,6 +194,7 @@
     const c = p.offer && p.offer[i];
     if (!c || p.banishes <= 0 || c.kind === 'gold' || c.kind === 'heal') return false;
     p.banishes--; p.banned.push(cardKey(c));
+    p.offer = p.offer.slice(); // a new array: the host resends offers when the reference changes
     const shown = p.offer.map(cardKey), pool = this.cardPool(p, shown);
     if (pool.length) p.offer[i] = this.rng.weighted(pool, x => x.w).c;
     else {
