@@ -1,11 +1,12 @@
-// WebGL present + post-process. R.frame draws the world into a small offscreen canvas (1 px = 1 world px); this uploads it as a texture, renders bloom (1/2 of
+// WebGL present + post-process. The world arrives as a small image (1 px = 1 world px): either ED.Batch's GL render target (o.tex, same context, no upload) or the 2D world buffer canvas
+// (uploaded as a texture). Post renders bloom (1/2 of
 // the buffer, 2 separable blur iterations) at buffer resolution, then composites to the screen-size WebGL canvas with a sharp-bilinear upscale (crisp art pixels at
 // non-integer scales, the fractional camera offset applied here), a per-stage colour grade (Post.grade(theme): { id, pal: { accent, light } }), vignette, film grain and FX-driven chromatic aberration. The WebGL canvas sits
 // beneath the transparent HUD canvas. Any failure leaves Post.ready false and Render falls back to the plain 2D present.
 (function (ED) {
   'use strict';
   const U = ED.U;
-  const Post = ED.Post = { ready: false, wanted: false, canvas: null, lost: false, error: '', ms: 0, frames: 0, soft: false }; // soft: the GL context is software-rasterised (no GPU)
+  const Post = ED.Post = { ready: false, wanted: false, canvas: null, lost: false, error: '', ms: 0, frames: 0, soft: false, gen: 0, gl2: false }; // soft: the GL context is software-rasterised (no GPU); gen: bumps on every (re)setup, so context users rebuild their resources
   const syncBuf = new Uint8Array(4);
   let gl = null, glc = null, quad = null, tex = null, texW = 0, texH = 0, fb = [], qW = 1, qH = 1, bufW = 1, bufH = 1, P = {};
   const grades = {};
@@ -96,6 +97,7 @@ void main(){
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
     tex = makeTex(0, 0); texW = texH = 0; fb = [];
     if (bufW > 1) allocate(bufW, bufH);
+    Post.gen++;
   }
 
   // Bloom targets for a bw x bh world buffer (half its size); the world texture itself is (re)created on the next upload.
@@ -119,7 +121,9 @@ void main(){
     try {
       glc = document.createElement('canvas'); glc.id = 'post'; glc.setAttribute('aria-hidden', 'true');
       glc.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;display:none;pointer-events:none';
-      gl = glc.getContext('webgl', { alpha: false, antialias: false, depth: false, stencil: false, premultipliedAlpha: false, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
+      const attrs = { alpha: false, antialias: false, depth: false, stencil: false, premultipliedAlpha: false, preserveDrawingBuffer: false, powerPreference: 'high-performance' };
+      gl = window.ED_GL1 ? null : glc.getContext('webgl2', attrs); Post.gl2 = !!gl; // WebGL2 gives ED.Batch native instancing; the GLSL 100 shaders here run on both (ED_GL1: checks force WebGL1)
+      if (!gl) gl = glc.getContext('webgl', attrs);
       if (!gl) throw new Error('webgl unavailable');
       let rn = String(gl.getParameter(gl.RENDERER) || ''); // Gecko reports the real renderer here; other engines mask it ('WebKit WebGL') and are asked through the debug extension
       if (!/Firefox\//.test(navigator.userAgent) && /^(WebKit WebGL|Mozilla|)$/i.test(rn.trim())) { const di = gl.getExtension('WEBGL_debug_renderer_info'); if (di) rn = String(gl.getParameter(di.UNMASKED_RENDERER_WEBGL)); }
@@ -128,7 +132,7 @@ void main(){
       Post.canvas = glc;
       glc.addEventListener('webglcontextlost', (e) => { e.preventDefault(); Post.ready = false; Post.lost = true; glc.style.display = 'none'; });
       glc.addEventListener('webglcontextrestored', () => {
-        try { setup(); Post.lost = false; Post.ready = Post.wanted; glc.style.display = Post.ready ? 'block' : 'none'; } catch (err) { Post.fail(err); }
+        try { setup(); Post.lost = false; Post.ready = true; glc.style.display = Post.wanted ? 'block' : 'none'; } catch (err) { Post.fail(err); } // ready: usable; wanted: shown (the renderer hides post while the context is lost)
       });
       setup();
       Post.ready = true; glc.style.display = 'block';
@@ -176,17 +180,25 @@ void main(){
     return g;
   };
 
-  // src: the world buffer canvas (bw x bh). o: { biome, t, aberr, flash:[r,g,b,a], lightLevel, bloom, vig, scale (screen px per buffer px), fx, fy (fractional camera offset in buffer px) }
+  // src: the world buffer canvas (bw x bh), or null with o.tex: a bw x bh texture on this context (ED.Batch.out.tex, top row first).
+  // o: { tex, biome, t, aberr, flash:[r,g,b,a], lightLevel, bloom, vig, scale (screen px per buffer px), fx, fy (fractional camera offset in buffer px) }
   Post.render = (src, o) => {
     if (!Post.ready || !gl) return false;
     if (gl.isContextLost()) { Post.ready = false; Post.lost = true; return false; }
     const t0 = performance.now();
     try {
       const w = glc.width, h = glc.height, bw = bufW, bh = bufH;
-      if (src.width !== bw || src.height !== bh) return false;
-      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex);
-      if (texW !== bw || texH !== bh) { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); texW = bw; texH = bh; }
-      else gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, src);
+      const world = o.tex || tex;
+      gl.activeTexture(gl.TEXTURE0);
+      if (o.tex) { if (ED.Batch.out.w !== bw || ED.Batch.out.h !== bh) return false; gl.bindTexture(gl.TEXTURE_2D, world); }
+      else {
+        if (src.width !== bw || src.height !== bh) return false;
+        gl.bindTexture(gl.TEXTURE_2D, tex);
+        if (texW !== bw || texH !== bh) { gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); texW = bw; texH = bh; }
+        else gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, src);
+      }
+      // the batcher shares this context: restore the full-screen quad on attribute 0 and plain blending
+      gl.bindBuffer(gl.ARRAY_BUFFER, quad); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0); gl.enableVertexAttribArray(0); gl.disable(gl.BLEND);
       const g = Post.grade(o.biome), ll = o.lightLevel === undefined ? 1 : o.lightLevel;
       // bright pass -> blur x2 (ping-pong at 1/2 of the world buffer)
       gl.bindFramebuffer(gl.FRAMEBUFFER, fb[0].fbo); gl.viewport(0, 0, qW, qH);
@@ -201,7 +213,7 @@ void main(){
       // composite
       gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, w, h);
       gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, fb[0].tex);
-      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, world);
       const u = P.comp.u, f = o.flash || [0, 0, 0, 0];
       gl.useProgram(P.comp.p);
       gl.uniform1i(u.tex, 0); gl.uniform1i(u.bloom, 1); gl.uniform2f(u.res, w, h); gl.uniform2f(u.bsz, bw, bh); gl.uniform2f(u.off, o.fx || 0, o.fy || 0); gl.uniform1f(u.scl, o.scale || 1);
