@@ -29,7 +29,7 @@ const BOSSES = [
   { id: 'weaver', stage: 2, t: 600, attacks: ['gates', 'weave', 'blink', 'adds'] },
   { id: 'wickeater', stage: 2, t: 900, final: true, attacks: ['devour', 'dark', 'lash', 'bloom', 'adds'] },
 ];
-const LEN = 90;
+const LEN = 90, ATK_SEEDS = 10;
 
 // Runs one boss fight. opt: { seed, party, enrage (time jump to ENRAGE_T at 5 s) }. Returns stats.
 function fight(b, opt) {
@@ -97,9 +97,10 @@ for (const b of BOSSES) {
   const r = fight(b), r2 = fight(b);
   ok(!r.err, `${b.id}: ${LEN} s fight throws nothing` + (r.err ? ': ' + r.err.stack : ''));
   ok(r.digest === r2.digest, `${b.id}: same seed, same digest (${r.digest} / ${r2.digest})`);
-  // attack picks are weighted random: a key missing at seed 77 must show up at a second seed
-  const atk = Object.assign({}, r.atk); if (!b.attacks.every(k => atk[k] > 0)) { const r3 = fight(b, { seed: 1 }); for (const k in r3.atk) atk[k] = (atk[k] || 0) + r3.atk[k]; }
-  ok(b.attacks.every(k => atk[k] > 0), `${b.id}: every attack runs (${Object.keys(atk).map(k => k + ' ' + (atk[k] / 60).toFixed(1) + 's').join(', ')})`);
+  // attack picks are weighted random off the shared w.rng: counts add up over seeds 77, 1, 2, ... (at most ATK_SEEDS fights) until every key has run
+  const atk = Object.assign({}, r.atk); let seeds = 1;
+  for (; seeds < ATK_SEEDS && !b.attacks.every(k => atk[k] > 0); seeds++) { const r3 = fight(b, { seed: seeds }); for (const k in r3.atk) atk[k] = (atk[k] || 0) + r3.atk[k]; }
+  ok(b.attacks.every(k => atk[k] > 0), `${b.id}: every attack runs within ${seeds} fight(s) (${Object.keys(atk).map(k => k + ' ' + (atk[k] / 60).toFixed(1) + 's').join(', ')})`);
   ok(r.phases.includes(2) && r.phases.includes(3), `${b.id}: phases 2 and 3 (${r.phases.join(',')})`);
   ok(r.minTele >= 0.6, `${b.id}: hostile telegraphs >= 0.6 s (min ${r.minTele.toFixed(2)})`);
   ok(Object.keys(r.tryBy).filter(k => !/contact/.test(k)).length >= 2, `${b.id}: its attacks reach the hero (calls ${JSON.stringify(r.tryBy)}; landed ${JSON.stringify(r.hurtBy)})`);

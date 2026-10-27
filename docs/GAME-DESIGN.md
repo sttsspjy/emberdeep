@@ -110,7 +110,7 @@ Max 6 passives. Passive cards also show a line naming the weapon they evolve.
 
 - **Spawn timeline** per stage, per minute: spawn rate (foes/s), alive cap, weighted roster. Foes spawn on a ring 380–460 px from a random living hero, never inside walls or obstacles.
 - **Alive cap**: 300 at 0:00 rising to 700 at 12:00 (solo); +25% per extra player, hard cap 900.
-- **Density floor**: while fewer foes live than the floor, the spawn rate runs ×3 (stacks with the boss halving). Floor = alive cap × min(0.6, 0.1 × minute): 0 at 0:00, 60% from 6:00. A fast-killing build still faces a full screen.
+- **Density floor**: while fewer foes live than the floor, each tick spawns up to 10% of the deficit (max 40), refilling the screen within ~0.3 s. Floor = alive cap × min(0.6, 0.1 × minute): 0 at 0:00, 60% from 6:00. A fast-killing build still faces a full screen.
 - **Foe HP**: `base × (1 + 0.18 × minute) × (1 + 0.5 × (players − 1)) × stage HP` (stage HP 1 / 1.3 / 1.6).
 - **Contact damage**: 3 at 0:00 rising to 12 at 15:00, × stage damage (1 / 1.15 / 1.3). Foe shots and blasts: base × (1 + 1.2 × min(1, t / 15:00)) × stage damage.
 - **Foe kinds**: chaser (straight line), swarmer (fast, weak; packs of 12–16 at 0:00 growing to 20–30 by 10:00), brute (slow, 8× HP, knockback-immune, telegraphed slam), ranged (stops at 160 px, shoots a telegraphed bolt, fan or ring; only from inside the target's screen), exploder (telegraphed 0.7 s burst on contact), splitter (splits in 2–3 on death), charger (telegraphed dash; packs of 2–4), diver (telegraphed dive; packs of 3–5). Every attack telegraph is ≥ 0.6 s and aimed where the target stood when the wind-up began; killing, stunning or freezing the foe cancels it.
@@ -159,5 +159,5 @@ Each boss: 2–3 telegraphed patterns, a health bar at the top, HP `= 400 × min
 
 ## 13. Performance budget
 
-- 900 foes + 600 projectiles + 400 gems: sim ≤ 2.5 ms per 60 Hz tick on the host; render ≤ 4 ms per frame (WebGL batched sprites; Canvas2D fallback with crowd LOD).
+- 900 foes + 600 projectiles + 400 gems: sim ≤ 2.5 ms per 60 Hz tick on the host; render ≤ 4 ms per frame on WebGL batched sprites, ≤ 8 ms on the Canvas2D fallback (crowd LOD).
 - Snapshots: binary, quantized, interest-culled, ≤ 12 KB per snapshot per client at 20 Hz.

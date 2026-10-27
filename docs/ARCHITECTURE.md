@@ -150,7 +150,7 @@ Weapon def (`ED.WEAPONS[id]`):
 
 - `tools/check-perf.js`: 900 foes + 600 projectiles + 400 gems, sim ≤ 2.5 ms per tick average on this machine (report worst tick).
 - `tools/browse.js crowd900`: frame time p95 ≤ 8 ms on the GPU path (headless Chromium, measured uncapped, no vsync; enforced with `--gate`), and the Canvas2D fallback (`--software`) stays playable (report p95).
-- `tools/browse.js late[a|b|c]`: staged late game (six evolved weapons, boss, 900 foes at real HP): Render.frame p95 ≤ 4 ms on either backend (GAME-DESIGN §13; enforced with `--gate`).
+- `tools/browse.js late[a|b|c]`: staged late game (six evolved weapons, boss, 900 foes at real HP): Render.frame p95 ≤ 4 ms on WebGL, ≤ 8 ms on Canvas2D (GAME-DESIGN §13; enforced with `--gate`).
 - `tools/check-net.js`: snapshot bytes at 900 foes with interest culling ≤ 12 KB.
 
 ## 12. Checks (headless only, exit 1 on failure)

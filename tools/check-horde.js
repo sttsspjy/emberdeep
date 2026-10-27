@@ -2,7 +2,7 @@
 // 1. Data: every roster / event / split id exists, has a brain and atlas art; timelines have 16 rows, caps 300 -> 700, rates rising into the mid-game; boss ids per stage.
 // 2. Brains: each attack kind (ranged, exploder, charger, diver, brute) shows a warn zone >= 0.6 s before it deals damage; a stun cancels a wind-up and drops its telegraph.
 // 3. Spawner: a weaponless god hero per stage reaches the alive cap by the mid-game, sees swarm events every 90 s, elites every 60 s from 2:00, bosses at 5/10/15 min; a missing boss script spawns a stand-in;
-//    below the density floor the rate runs x3, at or above it x1.
+//    from an empty field at 6:00 / 8:00 (solo and a party of 4) the alive count refills to the density floor within 0.5 s without passing the cap; at the floor the rate is x1.
 // 4. Recycling: a foe left 1000 px behind returns to the spawn ring. 5. Arena: deterministic, obstacle count in range, centre clear, features keep lanes.
 'use strict';
 const fs = require('fs'), vm = require('vm'), path = require('path');
@@ -137,15 +137,23 @@ for (const st of [0, 1, 2]) {
   ok(r.bosses.length === 2 && r.bosses[0].endsWith('@300') && r.bosses[1].endsWith('@600'), `${ED.STAGES[st].id}: bosses ${r.bosses.join(', ')}`);
   ok(r.capHit > 0 && r.capHit < 420 && r.over === 0, `${ED.STAGES[st].id}: alive cap reached at ${r.capHit} s (alive by minute ${Object.values(r.alive).join(' ')})`);
 }
-{ // density floor: rate x3 while alive < floor x cap (0.01 s steps keep acc < 1, so nothing spawns)
-  const acc = (fill) => {
-    const w = new ED.World({ seed: 77, stage: 0, players: players(['knight']), cheats: { god: true } }), p = w.heroes[0];
-    w.time = 480; const row = w.timelineRow(), need = Math.ceil(row.floor * w.aliveCap());
-    if (fill) for (let i = 0; i < need; i++) w.spawnFoe('skeleton', p.x + 600 + (i % 20) * 10, p.y + Math.floor(i / 20) * 10);
-    w.sp.acc = 0; w.updateSpawner(0.01); return { k: w.sp.acc / (row.rate * 0.01), need };
+{ // density floor: an empty field refills to row.floor x cap within 0.5 s, never past the cap (no swarm / elite / boss timers); at the floor the rate is x1 (0.01 s step keeps acc < 1)
+  const floorRun = (min, n, fill) => {
+    const w = new ED.World({ seed: 77, stage: 0, players: players(Array(n).fill('knight')), cheats: { god: true } }), p = w.heroes[0];
+    for (const h of w.heroes) { h.weapons.length = 0; h.skills.length = 0; }
+    w.time = min * 60; w.sp.bossI = 99; w.sp.swarmT = w.sp.eliteT = Infinity;
+    const row = w.timelineRow(), cap = w.aliveCap(), need = Math.ceil(row.floor * cap);
+    if (fill) { for (let i = 0; i < need; i++) w.spawnFoe('skeleton', p.x + 600 + (i % 20) * 10, p.y + Math.floor(i / 20) * 10); w.sp.acc = 0; w.updateSpawner(0.01); return { k: w.sp.acc / (row.rate * (1 + 0.25 * (n - 1)) * 0.01), need }; }
+    let t = -1, peak = 0;
+    for (let i = 0; i < 30; i++) { w.update(C.TICK); w.events.length = 0; peak = Math.max(peak, w.foes.length); if (t < 0 && w.foes.length >= need) t = (i + 1) * C.TICK; }
+    return { t, peak, need, cap };
   };
-  const lo = acc(false), hi = acc(true);
-  ok(Math.abs(lo.k - 3) < 1e-6 && Math.abs(hi.k - 1) < 1e-6, `density floor at 8:00 (${lo.need} foes): rate x${lo.k.toFixed(2)} below, x${hi.k.toFixed(2)} at the floor`);
+  for (const [min, n] of [[6, 1], [8, 1], [8, 4]]) {
+    const r = floorRun(min, n);
+    ok(r.t > 0 && r.t <= 0.5 + 1e-6 && r.peak <= r.cap, `density floor ${min}:00 x${n} hero(es): 0 -> ${r.need} foes in ${r.t.toFixed(2)} s (peak ${r.peak}, cap ${r.cap})`);
+  }
+  const hi = floorRun(8, 1, true);
+  ok(Math.abs(hi.k - 1) < 1e-6, `density floor at 8:00 (${hi.need} foes): rate x${hi.k.toFixed(2)} at the floor`);
 }
 { // a boss id without a script spawns a stand-in brute boss
   const r = spawnRun(0, 302, (w) => { w.sdef = Object.assign({}, w.sdef, { bosses: [{ t: 300, id: 'nobody' }] }); });

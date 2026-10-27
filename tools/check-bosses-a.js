@@ -1,5 +1,5 @@
 // Headless check for bosses warden, spore, twins (exit 1 on failure). Usage: node tools/check-bosses-a.js
-// Per boss: spawned at its stage minute over a live horde vs a scripted hero (circles it, dashes, picks cards; HP kept topped up) for 60 s, HP forced through every phase:
+// Per boss: spawned at its stage minute over a live horde vs a scripted hero (circles it, dashes, picks cards; HP kept topped up) for 60 s (keeps 220 px off the warden 8-18 s), HP forced through every phase:
 // no exceptions, every attack key used, phase events, foe telegraphs >= 0.6 s, normal spawns at 50% while it lives, deterministic digest, client draw hooks run on a mock batch.
 // Then killable with a cheat build (might x60): one 'boss' phase -1 event, a chest drops, w.boss clears. Twins: a fallen twin rises after its revive circle; both down ends the fight.
 'use strict';
@@ -27,15 +27,15 @@ function drawAll(w) {
   for (const z of w.zones) { const f = !z.dead && ED.ZoneFx[z.k]; if (f) f(mockB, z, w.time); }
 }
 
-// Scripted hero: orbits the boss at ~110 px (radius breathes), aims at it, dashes every 4 s, Q/E on timers, picks the first card.
-function drive(w, p, tick, boss) {
-  const b = boss && !boss.dead ? boss : p, t = tick / 60, ang = Math.atan2(p.y - b.y, p.x - b.x), d = Math.hypot(p.x - b.x, p.y - b.y), want = 110 + 40 * Math.sin(t * 0.4);
+// Scripted hero: orbits the boss at ~110 px (radius breathes; `far` px instead when given), aims at it, dashes every 4 s, Q/E on timers, picks the first card.
+function drive(w, p, tick, boss, far) {
+  const b = boss && !boss.dead ? boss : p, t = tick / 60, ang = Math.atan2(p.y - b.y, p.x - b.x), d = Math.hypot(p.x - b.x, p.y - b.y), want = far || 110 + 40 * Math.sin(t * 0.4);
   let mx = -Math.sin(ang), my = Math.cos(ang);
   if (d > want + 20) { mx -= Math.cos(ang); my -= Math.sin(ang); } else if (d < want - 20) { mx += Math.cos(ang); my += Math.sin(ang); }
   w.input(p.pid, { mx, my, ax: b.x, ay: b.y, dash: tick % 240 === 30 + p.slot * 9, q: tick % 420 === 60 + p.slot * 7, e: tick % 660 === 90 + p.slot * 7, pick: p.offer ? 1 : 0 });
 }
 const HUGE = 1e7;
-// One boss fight. o: { id, stage, minute, cls, cheats, len, phaseAt: [[t, frac]], script(w, ctx, tick), mortal }. Returns stats.
+// One boss fight. o: { id, stage, minute, cls, cheats, len, phaseAt: [[t, frac]], away: [t0, t1] (hero keeps 220 px off), script(w, ctx, tick), mortal }. Returns stats.
 function fight(o) {
   const w = new ED.World({ seed: o.seed || 4242, stage: o.stage, players: players(o.cls || ['knight']), cheats: o.cheats || { might: 0.05 } }); // behaviour fights: the hero chips, scripted HP drives phases
   const T = o.minute * 60, out = { w, ctx: null, err: null, minTele: Infinity, phases: [], ends: 0, falls: 0, rises: 0, hurts: 0, digest: 0, chest: false, half: null, st3: 0, carpet: 0, slowed: 0, pods: 0, boss: null, endT: -1, swords: 0, combos: 0 };
@@ -49,7 +49,8 @@ function fight(o) {
     out.half = Math.abs(w.sp.acc - Math.min(10, row.rate * (1 + 0.25 * (w.partyN - 1)) * 0.5)) < 1e-6; delete w.aliveCap; w.sp.acc = acc0;
     const start = w.time, ctx = out.ctx = { e };
     for (let tick = 0; w.time - start < (o.len || 60) && w.state === 'play'; tick++) {
-      for (const p of w.heroes) { drive(w, p, tick, w.boss || e); if (!o.mortal && !w.cheats.god && p.hp < HUGE / 2) { p.maxHp = HUGE; p.hp = HUGE; } }
+      const far = o.away && w.time - start >= o.away[0] && w.time - start < o.away[1] ? 220 : 0;
+      for (const p of w.heroes) { drive(w, p, tick, w.boss || e, far); if (!o.mortal && !w.cheats.god && p.hp < HUGE / 2) { p.maxHp = HUGE; p.hp = HUGE; } }
       if (o.phaseAt) for (const [at, f] of o.phaseAt) if (Math.abs(w.time - start - at) < 1e-6 + C.TICK / 2) for (const b of w.bossList) b.hp = Math.max(1, Math.floor(b.maxHp * f));
       if (o.script) o.script(w, ctx, tick, w.time - start);
       w.update(C.TICK);
@@ -76,29 +77,32 @@ function fight(o) {
 const slay = (w, f) => { const m = w.cheats.might; w.cheats.might = 0; w.hitFoe(f, f.hp + 1, w.src(w.heroes[0], 'test')); w.cheats.might = m; };
 const reset = () => { for (const id in used) for (const k in used[id]) used[id][k] = 0; };
 const allUsed = (id, skip) => Object.keys(used[id]).filter(k => !(skip || []).includes(k) && !used[id][k]);
+// Attack picks are weighted random off the shared w.rng: reruns fight o at seeds 1, 2, ... (at most ATK_SEEDS fights in all) until every key of ids is used. Returns the fight count.
+const ATK_SEEDS = 8;
+const cover = (o, ids) => { let n = 1; for (; n < ATK_SEEDS && ids.some(id => allUsed(id).length); n++) fight(Object.assign({}, o, { seed: n })); return n; };
 const t0 = Date.now();
 
 // ---------- Bone Warden (stage 1, 5:00) ----------
 reset();
-const wd = fight({ id: 'warden', stage: 0, minute: 5, phaseAt: [[20, 0.6], [38, 0.3]] });
+const wdO = { id: 'warden', stage: 0, minute: 5, away: [8, 18], phaseAt: [[20, 0.6], [38, 0.3]] }, wd = fight(wdO), wdN = cover(wdO, ['warden']);
 ok(!wd.err, 'warden: 60 s throws nothing' + (wd.err ? ': ' + wd.err.stack : ''));
 ok(wd.boss && wd.boss.maxHp === 2000, 'warden: HP 400 x 5 min = 2000 (' + (wd.boss && wd.boss.maxHp) + ')');
-ok(allUsed('warden').length === 0, 'warden: every attack used ' + JSON.stringify(used.warden));
+ok(allUsed('warden').length === 0, 'warden: every attack used within ' + wdN + ' fight(s) ' + JSON.stringify(used.warden));
 ok(wd.phases.join() === '2,3', 'warden: phases 2, 3 (' + wd.phases.join() + ')');
 ok(wd.st3 > 0, 'warden: punish window opened after a slam (' + wd.st3 + ' ticks)');
 ok(wd.swords > 0, 'warden: phase 3 sword lines fell (' + wd.swords + ')');
 ok(wd.hurts > 0, 'warden: attacks land on a hero (' + wd.hurts + ' hits)');
 ok(wd.minTele >= 0.6, 'warden: telegraphs >= 0.6 s (min ' + wd.minTele + ')');
 ok(wd.half, 'warden: normal spawns at 50% while it lives');
-const wd2 = fight({ id: 'warden', stage: 0, minute: 5, phaseAt: [[20, 0.6], [38, 0.3]] });
+const wd2 = fight(wdO);
 ok(wd.digest === wd2.digest, `warden: deterministic (${wd.digest} / ${wd2.digest})`);
 
 // ---------- Sporemother (stage 1, 10:00) ----------
 reset();
-const sp = fight({ id: 'spore', stage: 0, minute: 10, phaseAt: [[25, 0.6], [42, 0.3]] });
+const spO = { id: 'spore', stage: 0, minute: 10, phaseAt: [[25, 0.6], [42, 0.3]] }, sp = fight(spO), spN = cover(spO, ['spore']);
 ok(!sp.err, 'spore: 60 s throws nothing' + (sp.err ? ': ' + sp.err.stack : ''));
 ok(sp.boss && sp.boss.maxHp === 4000, 'spore: HP 400 x 10 min = 4000 (' + (sp.boss && sp.boss.maxHp) + ')');
-ok(allUsed('spore').length === 0, 'spore: every attack used ' + JSON.stringify(used.spore));
+ok(allUsed('spore').length === 0, 'spore: every attack used within ' + spN + ' fight(s) ' + JSON.stringify(used.spore));
 ok(sp.phases.join() === '2,3', 'spore: phases 2, 3 (' + sp.phases.join() + ')');
 ok(sp.pods === 4, 'spore: 4 pods rose (' + sp.pods + ')');
 ok(sp.carpet >= 8, 'spore: carpet spread (peak ' + sp.carpet + ' patches)');
@@ -120,7 +124,7 @@ ok(!sp2.err && sp2.boss.vars.patches.length > 0, 'spore: second run throws nothi
 
 // ---------- Twins (stage 2, 5:00) ----------
 reset();
-const tw = fight({
+const twO = {
   id: 'twins', stage: 1, minute: 5, len: 75, phaseAt: [[25, 0.45]],
   script: (w, ctx, tick, t) => {
     const P = ctx.P || (ctx.P = ctx.e.vars && ctx.e.vars.pair); if (!P) return;
@@ -128,11 +132,11 @@ const tw = fight({
     if (Math.abs(t - 45) < C.TICK / 2) { const h = up('H'); if (h) { ctx.revFrom = h.id; slay(w, h); } }
     if (t > 45 && !ctx.risen && up('H') && up('H').id !== ctx.revFrom) { ctx.risen = up('H'); ctx.riseT = t; ctx.riseHp = up('H').hp / up('H').maxHp; }
   },
-});
+}, tw = fight(twO), twN = cover(twO, ['twins', 'twinhammer']);
 ok(!tw.err, 'twins: 75 s throws nothing' + (tw.err ? ': ' + tw.err.stack : ''));
 ok(tw.w.bossList.length === 2 && tw.w.bossList.every(b => b.maxHp === 1000), 'twins: two bodies, 1000 HP each (400 x 5 min split)');
-ok(allUsed('twins').length === 0, 'twins: every Lancer attack used ' + JSON.stringify(used.twins));
-ok(allUsed('twinhammer').length === 0, 'twins: every Hammer attack used ' + JSON.stringify(used.twinhammer));
+ok(allUsed('twins').length === 0, 'twins: every Lancer attack used within ' + twN + ' fight(s) ' + JSON.stringify(used.twins));
+ok(allUsed('twinhammer').length === 0, 'twins: every Hammer attack used within ' + twN + ' fight(s) ' + JSON.stringify(used.twinhammer));
 ok(tw.phases.join() === '2', 'twins: one phase-2 event at half combined HP (' + tw.phases.join() + ')');
 ok(tw.falls === 1 && tw.rises === 1, `twins: a fallen twin rises (falls ${tw.falls}, rises ${tw.rises})`);
 ok(tw.ctx && tw.ctx.risen && Math.abs(tw.ctx.riseT - 45 - ED.Bosses.TWINS.revive) < 0.1 && Math.abs(tw.ctx.riseHp - ED.Bosses.TWINS.reviveHp) < 0.02, 'twins: rises ' + ED.Bosses.TWINS.revive + ' s later at half health (' + (tw.ctx && tw.ctx.riseT) + ' s, ' + (tw.ctx && tw.ctx.riseHp) + ')');

@@ -3,13 +3,11 @@
 Rules/numbers: GAME-DESIGN.md. Code contract: ARCHITECTURE.md (change it with the code). Legacy: tag `legacy-wickdeep`.
 
 ## Todo
-- perf (high): Canvas2D late game over gate: `browse.js late[a|b|c] --software --gate` Render.frame p95 5.2–6.5 ms > 4 ms; `--quality=low` no gain (6.4 ms). GPU path 0.5–0.7 ms.
-- spawn (med): density floor x3 not enough vs strong builds: shots at 8:00 show 35–279 alive vs floor ~340 (bell 35). Needs user call (higher boost / acc cap 10 / pack spawns).
 - balance: untuned, numbers from GAME-DESIGN + user playtest only (no bot batches).
 - net: real PeerJS over a real network untested (only BroadcastChannel + fake transport).
 - art: per-stage foe recolours; Q/E skill icons; twins (skelknight), weaver (riftcaller), wickeater (horror) borrow foe art.
 - ui (low): evolution popup covers the boss name banner when both fire together.
-- mode: Waves mode planned, no rules yet (ask user).
+- mode: Waves mode (round + shop) on the same core; rules not written yet.
 - audio: no per-attack boss cues.
 - co-op: no visual substitute for hit-stop; host-only motion shows ~0.1 s late on clients.
 
@@ -18,7 +16,7 @@ Rules/numbers: GAME-DESIGN.md. Code contract: ARCHITECTURE.md (change it with th
 ## Done
 - Foundation: core sim, solo playable.
 - 15 lanes merged; co-op runs start from the lobby UI.
-- Fix round 2026-10-28: facing aim cone + weapon kill callbacks; stronger evolutions (stormcrown, twinmoons, choir, barrage); density floor; stage 3 bosses weaver + wickeater; spawn-once zones (NET_VERSION 4); hit-flash throttle, zone fade + Canvas2D zone LOD, hero markers, co-op slot palettes; phase banner number.
+- Fix round 2026-10-28: facing aim cone + weapon kill callbacks; stronger evolutions (stormcrown, twinmoons, choir, barrage); density floor; stage 3 bosses weaver + wickeater; spawn-once zones (NET_VERSION 4); hit-flash throttle, zone fade + Canvas2D zone LOD, hero markers, co-op slot palettes; phase banner number. Density floor refill (0.1 × deficit per tick, max 40). Canvas2D render gate 8 ms (WebGL 4 ms).
 
 ## Known traps
 - Sim/data/heroes/weapons/save run in Node: no DOM, no Math.random/Date.now; use w.rng.

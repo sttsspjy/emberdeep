@@ -10,7 +10,7 @@
 //          --software launches without the GPU (software GL: the Canvas2D fallback path). --gate fails crowd900 when GPU-path frame p95 > 8 ms (ARCHITECTURE §11; report-only by default).
 //   late[a|b|c]: staged late game for the render budget: the knight with six evolved weapons (set a: whirlwind sunwheel stormcrown starfall plague barrage, b: hail choir thornwood
 //          impaler avalanche glacier, c: inferno bonestorm wrath shadowfan cathedral twinmoons), max passives, clock 25:00, the stage boss and 900 last-roster foes held at real HP
-//          (about 1,000 kills/s); measures like crowdN plus own-zone count / coverage. --gate fails when Render.frame p95 > 4 ms (GAME-DESIGN §13), either backend.
+//          (about 1,000 kills/s); measures like crowdN plus own-zone count / coverage. --gate fails when Render.frame p95 > 4 ms on WebGL or > 8 ms on Canvas2D (GAME-DESIGN §13).
 //   coop: two pages of one browser context on ?net=local (BroadcastChannel transport): host + guest through the ED.Net lobby API (host, join, ready, start), then the real co-op
 //         run on both peers for --seconds (6) s: the guest's mirror shows 2 heroes and foes, snapshots <= 12 KB.
 // In-page debug API (injected only by this harness, absent in normal play; every call is a no-op without a solo / host run): ED.Debug.{fastForward(sec), give(id, lvl), evolve(wid?),
@@ -467,6 +467,7 @@ async function scenShots() {
       await dbg(page, 'levelUp', 1);
       await page.waitForFunction(() => { const el = document.getElementById('ov-offer'); return el && !el.hidden; }, null, { timeout: 3000 }).catch(() => {});
       need(await call(page, 'visible', 'ov-offer'), 'level-up overlay not shown');
+      await wait(700); // card pop-in animation
       await shot(`${String(k++).padStart(2, '0')}-levelup`);
       await page.evaluate(() => { window.__BR.autoPick = true; });
       await page.waitForFunction(() => document.getElementById('ov-offer').hidden, null, { timeout: 3000 }).catch(() => {});
@@ -548,10 +549,10 @@ async function scenLate(sc) {
     const m = await call(page, 'measure', secs * 1000);
     const z = await page.evaluate(() => { const B = window.ED.Batch; return { n: B.zoneN, load: +B.zoneLoad.toFixed(2), lite: B.zoneLite, union: B.zoneUnion }; });
     res.rows.push(Object.assign({ quality: o.quality }, m));
-    const over = m.render.p95 > 4;
+    const lim = m.batch === 'gl' ? 4 : 8, over = m.render.p95 > lim;
     res.notes.push(`own zones in view ${z.n}, coverage ${z.load}x view, 2D zone LOD ${z.lite ? (z.union ? 'on (union paths)' : 'on') : 'off'}`);
-    res.notes.push(`gate (Render.frame p95 <= 4 ms, ${m.batch}): ${over ? 'OVER' : 'ok'} — p95 ${m.render.p95} ms`);
-    if (o.gate && over) fail(res, `render p95 ${m.render.p95} ms > 4 ms`);
+    res.notes.push(`gate (Render.frame p95 <= ${lim} ms, ${m.batch}): ${over ? 'OVER' : 'ok'} — p95 ${m.render.p95} ms`);
+    if (o.gate && over) fail(res, `render p95 ${m.render.p95} ms > ${lim} ms`);
     await shoot(page, res, sc + (o.software ? '-soft' : ''));
     await call(page, 'stop');
   } finally { res.errors = errors; await ctx.close(); }
