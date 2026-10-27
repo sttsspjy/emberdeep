@@ -61,26 +61,6 @@
     evs.length = 0;
   };
 
-  // Event -> audio cue (the audio lane maps these properly; hits and deaths go through the per-frame aggregation).
-  const A = () => ED.Audio;
-  function sound(ev) {
-    const a = A(); if (!a || !a.ready) return;
-    const mine = ev.pid === G.myPid;
-    switch (ev.t) {
-      case 'hit': a.hit(ev.crit, true, Math.min(1, ev.dmg / 60), 0, 'blade', false); break;
-      case 'die': a.kill(ED.FOE_IDS[ev.k] || 'x', 8, true); break;
-      case 'hurt': if (mine) a.play('hurt'); break;
-      case 'pickup': if (ev.k === 'gold') a.play('gold'); else if (ev.k === 'chest') a.play('chest'); else if (ev.k === 'food') a.play('heal'); else a.play('xp'); break;
-      case 'level': a.play('level'); break;
-      case 'skill': a.play('skill', mine ? 1 : 0.5); break;
-      case 'dash': if (mine) a.play('dash'); break;
-      case 'boom': a.play('boom', ev.r > 150 ? 1 : 0.4); break;
-      case 'swing': a.play('swing', 0.5); break;
-      case 'evolve': a.play('evolve'); break;
-      case 'boss': if (ev.phase === 0) a.play('roar'); break;
-      case 'down': a.play('down'); break;
-      case 'revive': a.play('revive'); break;
-      default: break;
-    }
-  }
+  // Event -> audio (ED.Audio.event aggregates per frame; ED.Audio.flush plays once per frame).
+  function sound(ev) { const a = ED.Audio; if (a && a.event) a.event(ev, G.myPid); }
 })(globalThis.ED || (globalThis.ED = {}));
