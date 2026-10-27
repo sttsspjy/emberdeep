@@ -11,6 +11,7 @@
   let theme = null, stageId = '', chunks = new Map(), frameN = 0, arenaRef = null, bgHex = 0, bgCss = '#000', wallRgba = 0;
   const SH = { x: 0, y: 0 };
   const PO_ARGS = { biome: null, t: 0, scale: 1, fx: 0, fy: 0, aberr: 0, flash: [0, 0, 0, 0], tex: null };
+  ED.ZoneActor = ED.ZoneActor || {}; // look -> fn(B, z, t): zones drawn as y-sorted actors (lanes register in their fx files)
 
   R.init = (canvas) => {
     R.canvas = canvas; R.ctx = canvas.getContext('2d');
@@ -186,12 +187,15 @@
     for (let i = 0; i < heroes.length; i++) { const p = heroes[i]; if (!p.dead && inView(p)) items[n++] = p; }
     for (const o of A.obstacles) if (inView(o)) items[n++] = o;
     for (const b of A.braziers) if (!b.broken && inView(b)) items[n++] = b;
+    const ZA = ED.ZoneActor;
+    for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (!z.dead && ZA[z.k] && inView(z)) items[n++] = z; } // zones with a body (minions): ED.ZoneActor[look](B, z, t)
     if (items.length > n) items.length = n;
     ysort(n);
     for (let i = 0; i < n; i++) {
       const a = items[iA[i]];
       if (a.def) ED.Actors.foe(B, a, t, heroes);
       else if (a.pid !== undefined) { ED.Actors.hero(B, a, t); const h = ED.HeroFx && ED.HeroFx[a.cls]; if (h) h(B, a, t); }
+      else if (a.dur !== undefined) ED.ZoneActor[a.k](B, a, t);
       else if (a.hp !== undefined) ED.Actors.brazier(B, a, t);
       else ED.Actors.obstacle(B, a, wallRgba);
     }
