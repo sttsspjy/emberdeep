@@ -18,7 +18,7 @@
 //
 // ----------------------------------------------------------------------------- ID LIST (one line per family)
 // hero.<knight|ranger|pyro|shade|cleric|necro|bell>.<idle|run|hit>   0x72 bodies facing right: idle 4f, run 4f, hit 1f; anchors.hand = weapon pivot on the body (feet + 3,-6),
-//                        anchors.head[frame] = hat seat; ED.ART.swaps[cls] = { base, key } player-colour recolour
+//                        anchors.head[frame] = hat seat; frames carry the SWAPS base recolour; ED.ART.swaps[cls] = { key } player-colour key colours
 // weapon.<id>            held/thrown weapon sprites (longsword warhammer glaive longbow crossbow twinbows firestaff emberwand inferno daggers knives scythes mace dawnhammer lantern bonewand soulscythe plaguestaff bronzebell greatbell handbells); anchors.grip/tip/dir
 // weapon.alt.<name>      big_hammer waraxe double_axe anime_sword katana duel_sword machete saw_sword throwing_axe rusty_sword cleaver
 // shield.<wood|green|gold|round|kite|buckler|tower>   16x16 shields (DawnLike); proj.shield = the thrown kite shield (centre pivot)
@@ -148,16 +148,6 @@ const sheets = {
 delete sheets.tileList;
 
 // --------------------------------------------------------------------------- heroes (0x72 bodies facing right)
-// Player-colour key colours and the exact palette swaps of ART-PLAN 4.1 are exported as ED.ART.swaps for the runtime recolour.
-const HEAD_SKIP = { knight: ['#da4e38', '#ee8e2e'], bell: ['#9f294e', '#da4e38'] }; // plume / crest colours the hat seat ignores
-const HEROES = { knight: 'knight_m', ranger: 'elf_f', pyro: 'wizzard_m', shade: 'elf_m', cleric: 'dwarf_m', necro: 'wizzard_f', bell: 'lizard_f' };
-for (const [id, body] of Object.entries(HEROES)) {
-  // hand = feet + (3,-6): torso height of the big-headed 0x72 bodies (the plan's -9 lands on the chin); head = per-frame hat seat (see art.js headAt)
-  const set = 'hero.' + id, base = { page: 'actors', src: 'ox', set, handRel: [3, -6], head: HEAD_SKIP[id] || true };
-  add(set + '.idle', 'actors', 'ox', oxn(body + '_idle_anim', 4), Object.assign({}, base, { fps: 6.67, loop: true }));
-  add(set + '.run', 'actors', 'ox', oxn(body + '_run_anim', 4), Object.assign({}, base, { fps: 10, loop: true }));
-  add(set + '.hit', 'actors', 'ox', [body + '_hit_anim_f0'], Object.assign({}, base, { fps: 0, loop: false }));
-}
 const SWAPS = {
   knight: { base: { '#72d6ce': '#c3ccd6', '#417089': '#5d6670' }, key: ['#da4e38', '#ee8e2e'] },
   ranger: { base: {}, key: ['#da4e38'] },
@@ -167,6 +157,16 @@ const SWAPS = {
   necro: { base: { '#5698cc': '#2f4a42', '#5956bd': '#17261f', '#fdf7ed': '#b6ffe0', '#b58057': '#8a7a6a' }, key: ['#5956bd'] },
   bell: { base: { '#49a790': '#4fb8a4', '#417089': '#2a6a70', '#314152': '#1e3a44', '#d3bfa9': '#e0b070', '#8f4029': '#b0702e', '#62232f': '#6a3f1e' }, key: ['#9f294e', '#da4e38'] }, // verdigris scales, bronze belly and belt, crest = player colour
 };
+// SWAPS[cls].base (ART-PLAN 4.1 palette swap) is baked into the hero.<cls>.* frames; ED.ART.swaps[cls].key = the player-colour key colours after that swap (co-op recolour at runtime).
+const HEAD_SKIP = { knight: ['#da4e38', '#ee8e2e'], bell: ['#9f294e', '#da4e38'] }; // plume / crest colours the hat seat ignores
+const HEROES = { knight: 'knight_m', ranger: 'elf_f', pyro: 'wizzard_m', shade: 'elf_m', cleric: 'dwarf_m', necro: 'wizzard_f', bell: 'lizard_f' };
+for (const [id, body] of Object.entries(HEROES)) {
+  // hand = feet + (3,-6): torso height of the big-headed 0x72 bodies (the plan's -9 lands on the chin); head = per-frame hat seat (see art.js headAt)
+  const sw = SWAPS[id].base, set = 'hero.' + id, base = { page: 'actors', src: 'ox', set, handRel: [3, -6], head: HEAD_SKIP[id] || true, swap: Object.keys(sw).length ? sw : undefined };
+  add(set + '.idle', 'actors', 'ox', oxn(body + '_idle_anim', 4), Object.assign({}, base, { fps: 6.67, loop: true }));
+  add(set + '.run', 'actors', 'ox', oxn(body + '_run_anim', 4), Object.assign({}, base, { fps: 10, loop: true }));
+  add(set + '.hit', 'actors', 'ox', [body + '_hit_anim_f0'], Object.assign({}, base, { fps: 0, loop: false }));
+}
 
 // --------------------------------------------------------------------------- weapons (all point up, grip near the bottom, unless dir says otherwise)
 const W = (id, src, rect, grip, o) => { o = o || {}; return add(id, 'actors', src, [rect], Object.assign({ pivot: 'grip', fps: 0 }, o, { anchors: Object.assign({ grip, dir: 0 }, o.anchors) })); };
@@ -528,4 +528,4 @@ for (let code = 0x21; code <= 0x7e; code++) { const i = code - 0x20; fontCells[S
 // 'g' sits on the x-height of 'o' with a descender (the sheet's 'g' started a row higher, level with the digits, and read as a thin 9 in prices)
 const font = { src: 'font8', page: 'fx', cw: 8, ch: 8, h: 8, gap: 1, space: 4, cells: fontCells, override: { g: ['........', '........', '.###....', '#...#...', '#...#...', '.####...', '....#...', '.###....'] } };
 
-module.exports = { pages: ['world', 'actors', 'bosses', 'fx', 'fxbig'], tileList: '0x72/tile_list_v1.7', sheets, entries: E, swaps: SWAPS, font };
+module.exports = { pages: ['world', 'actors', 'bosses', 'fx', 'fxbig'], tileList: '0x72/tile_list_v1.7', sheets, entries: E, swaps: Object.fromEntries(Object.entries(SWAPS).map(([k, v]) => [k, { key: v.key.map((c) => v.base[c] || c) }])), font };

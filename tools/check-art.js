@@ -1,4 +1,4 @@
-// Art coverage check (exit 1 on failure): the built atlas (src/art/meta.js) holds every sprite the game data and code name.
+// Art coverage check (exit 1 on failure): the built atlas (src/art/meta.js) holds every sprite the game data and code name, and hero palettes stay distinct (swap applied, key colours present).
 // Heroes (idle/run/hit + icon), weapons (def.icon, icon.w.<id> for every registered weapon and every def.evo), skills and passives (def.icon, icon.p.<id>),
 // foes and bosses (a walk/idle set for def.look), stage themes (floors, deco, obstacles, brazier), pickup kinds (pickup.<k>), icon size (<= 16 x 16),
 // and every quoted art id in src/ (except src/art), tools/ and index.html. Run node tools/art.js --check for the build itself.
@@ -19,6 +19,18 @@ for (const cls of ED.HERO_IDS) {
   const h = ED.HEROES[cls]; if (!h) { bad('hero ' + cls + ' not registered'); continue; }
   for (const st of ['idle', 'run', 'hit']) need('hero.' + cls + '.' + st, 'hero ' + cls);
   need(h.icon, 'hero ' + cls + ' icon');
+}
+// Hero palettes: every player-colour key colour is present (the co-op recolour finds pixels), and no two heroes share most of their body colours.
+const heroPal = (cls) => new Set((ED.ART.pal['hero.' + cls + '.idle'] || []).filter((h) => h !== '#222222'));
+for (const cls of ED.HERO_IDS) {
+  const sw = ED.ART.swaps && ED.ART.swaps[cls], p = heroPal(cls);
+  if (!sw || !sw.key || !sw.key.length) { bad('hero ' + cls + ': no ED.ART.swaps key colours'); continue; }
+  for (const k of sw.key) if (!p.has(k)) bad('hero ' + cls + ': key colour ' + k + ' not in hero.' + cls + '.idle');
+}
+for (let i = 0; i < ED.HERO_IDS.length; i++) for (let j = i + 1; j < ED.HERO_IDS.length; j++) {
+  const a = heroPal(ED.HERO_IDS[i]), b = heroPal(ED.HERO_IDS[j]);
+  let n = 0; for (const h of a) if (b.has(h)) n++;
+  if (n / Math.max(1, Math.min(a.size, b.size)) >= 0.5) bad('heroes ' + ED.HERO_IDS[i] + ' / ' + ED.HERO_IDS[j] + ': ' + n + ' shared body colours (palette swap missing?)');
 }
 const evos = new Set();
 for (const id of ED.WEAPON_IDS) {
