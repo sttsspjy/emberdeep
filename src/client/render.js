@@ -197,6 +197,7 @@
     }
     const prs = view.projs;
     for (let i = 0; i < prs.length; i++) { const pr = prs[i]; if (!pr.dead && inView(pr)) drawProj(B, pr, t); }
+    for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (z.dead || !zoneInView(z)) continue; const zf = ED.WeaponFx[z.wid] || ED.SkillFx[z.wid]; if (zf && zf.top) zf.top(B, z, t); } // zone overlays above actors
     ED.FX.draw(B, t);
     if (tele) for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (!z.dead && hostile(z) && zoneInView(z)) drawTele(B, z, t); }
     // overlays: hero names / revive bars (co-op), elite HP bars
