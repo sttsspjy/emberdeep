@@ -88,6 +88,7 @@
   function drawZone(B, z, t) {
     const fx = ED.WeaponFx[z.wid] || ED.SkillFx[z.wid];
     if (fx && fx.zone && fx.zone(B, z, t)) return;
+    const zf = ED.ZoneFx && ED.ZoneFx[z.k]; if (zf && zf(B, z, t)) return; // look-keyed draw (boss zones carry no weapon id)
     const k = z.dur > 0 ? U.clamp(z.t / z.dur, 0, 1) : 0;
     if (hostile(z)) {
       const pulse = 0.5 + 0.5 * Math.sin(t * 18), fill = (0xff302000 | Math.round(60 + 70 * k + 30 * pulse)) >>> 0, prog = (0xff8a5a00 | Math.round(90 + 60 * k)) >>> 0;

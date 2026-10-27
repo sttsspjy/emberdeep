@@ -6,7 +6,7 @@
   const C = ED.CONST, STEP = C.TICK, MAX_STEPS = 8;
   const G = ED.Game = { w: null, mode: 'off', myPid: 'p1', view: null, paused: false, acc: 0, onEnd: null, onEvent: null };
 
-  const blankView = () => ({ me: null, heroes: [], foes: [], projs: [], zones: [], pickups: [], props: null, stage: 0, seed: 0, time: 0, xp: 0, xpNext: 1, level: 1, kills: 0, gold: 0, boss: null, events: [] });
+  const blankView = () => ({ me: null, heroes: [], foes: [], projs: [], zones: [], pickups: [], props: null, stage: 0, seed: 0, time: 0, xp: 0, xpNext: 1, level: 1, kills: 0, gold: 0, boss: null, bossBar: null, events: [] });
 
   // cfg: { mode: 'solo' | 'host', seed, stage, players: [{ pid, name, slot, cls, meta }], myPid, cheats }
   G.start = (cfg) => {
@@ -22,7 +22,7 @@
   G.stop = () => { G.w = null; G.mode = 'off'; G.view = null; };
   G.syncView = () => {
     const w = G.w, v = G.view; if (!w || !v) return;
-    v.time = w.time; v.xp = w.xp; v.xpNext = w.xpNext; v.level = w.level; v.kills = w.kills; v.gold = w.gold; v.boss = w.boss; v.me = w.hero(G.myPid);
+    v.time = w.time; v.xp = w.xp; v.xpNext = w.xpNext; v.level = w.level; v.kills = w.kills; v.gold = w.gold; v.boss = w.boss; v.bossBar = w.bossBar; v.me = w.hero(G.myPid);
   };
 
   // Local input -> World (once per frame; edge flags latch until the next tick consumes them).
