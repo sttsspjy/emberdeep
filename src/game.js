@@ -39,6 +39,7 @@
   G.pick = (i) => { if (G.w) G.w.input(G.myPid, { pick: i + 1 }); };
   G.reroll = () => { if (G.w) G.w.input(G.myPid, { reroll: true }); };
   G.skip = () => { if (G.w) G.w.input(G.myPid, { skip: true }); };
+  G.banish = (i) => { if (G.w) G.w.input(G.myPid, { banish: i + 1 }); };
 
   // Advances the sim by real time dt (fixed steps) and routes its events. Returns the number of steps run.
   G.update = (dt) => {
