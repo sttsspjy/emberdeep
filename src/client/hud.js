@@ -160,13 +160,15 @@
     txt(cs('kills', view.kills, fmtKills), W - R(46), xh + R(8), '#f0e0c8', 22, 'right');
     icon('pickup.coin', W - R(40), xh + R(36), R(24));
     txt(cs('gold', view.gold, fmtKills), W - R(46), xh + R(36), '#ffd24a', 22, 'right');
-    // boss bar
-    const b = view.boss;
-    if (b && !b.dead) {
+    // boss bar: view.bossBar (whole fight: every body's HP, phase, revive dial), else the single boss entity
+    const bb = view.bossBar, b = view.boss;
+    if ((bb && bb.on) || (b && !b.dead)) {
       const bw = Math.round(Math.min(W * 0.5, R(620))), bx = Math.round(W / 2 - bw / 2), by = xh + R(52);
-      const en = !!b.enraged, col = en ? ((now * 6 | 0) % 2 ? '#ff2a2a' : '#ff8a3a') : '#c03ad0';
-      bar(bx, by, bw, R(18), b.hpQ / 255, col, en ? '#ffb0a0' : '#f0a0ff');
-      txt(cs('boss', (b.k << 1) | (en ? 1 : 0), bossName), W / 2, by + R(21), en ? '#ff8a7a' : '#ffd27a', 20, 'center');
+      const on = !!(bb && bb.on), en = on ? !!bb.enraged : !!b.enraged, q = on ? bb.q : b.hpQ, col = en ? ((now * 6 | 0) % 2 ? '#ff2a2a' : '#ff8a3a') : '#c03ad0';
+      bar(bx, by, bw, R(18), q / 255, col, en ? '#ffb0a0' : '#f0a0ff');
+      if (on && bb.rev >= 0) bar(bx, by + R(19), Math.round(bw * bb.rev), R(4), 1, '#7fe39a', '#7fe39a');
+      const k = on ? Math.max(0, ED.FOE_IDS.indexOf(bb.id)) : b.k;
+      txt(cs('boss', (k << 1) | (en ? 1 : 0), bossName), W / 2, by + R(21) + (on && bb.rev >= 0 ? R(4) : 0), en ? '#ff8a7a' : '#ffd27a', 20, 'center');
     }
     if (!me) { banner(dt); return; }
     // weapon and passive slots (top-left)
@@ -183,8 +185,8 @@
     const hp = Math.max(0, Math.ceil(me.hp));
     txt(cs('hp', (Math.min(hp, 4095) << 12) | Math.min(me.maxHp | 0, 4095), fmtHp), W / 2, hy + R(3), '#fff1d6', 18, 'center');
     const q = me.skills[0], e = me.skills[1], C = ED.CONST.DASH;
-    if (q) dial(0, kx, ky, ds, ED.SKILLS[q.id] ? ED.SKILLS[q.id].icon : 'fx.star', q.cd, q.cdMax, keyLbl.q, '#ffd27a');
-    if (e) dial(1, kx + ds + gap, ky, ds, ED.SKILLS[e.id] ? ED.SKILLS[e.id].icon : 'fx.star', e.cd, e.cdMax, keyLbl.e, '#ffd27a');
+    if (q) dial(0, kx, ky, ds, ED.SKILLS[q.id] ? ED.SKILLS[q.id].icon : 'fx.star.stun', q.cd, q.cdMax, keyLbl.q, '#ffd27a');
+    if (e) dial(1, kx + ds + gap, ky, ds, ED.SKILLS[e.id] ? ED.SKILLS[e.id].icon : 'fx.star.stun', e.cd, e.cdMax, keyLbl.e, '#ffd27a');
     const dx = kx + ds * 2 + gap * 2, dy = ky + ds - dd;
     dial(2, dx, dy, dd, runIcon(me.cls), me.dashCd, C.cd, keyLbl.dash, '#6ad7ff');
     // dash charge pips (one per charge; C.charges when the sim grows more)

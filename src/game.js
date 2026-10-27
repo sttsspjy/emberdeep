@@ -150,7 +150,7 @@
     rc.q.push(f);
   };
   // One sim tick of client rc's input: the next frame in sequence, else the newest input repeated (stopped after IDLE missing ticks). Presses in skipped frames carry over.
-  const RI = { mx: 0, my: 0, ax: 0, ay: 0, dash: false, q: false, e: false, pick: 0, reroll: false, skip: false };
+  const RI = { mx: 0, my: 0, ax: 0, ay: 0, dash: false, q: false, e: false, pick: 0, banish: 0, reroll: false, skip: false };
   S.feed = function (rc) {
     if (!rc.anchored) return;
     const q = rc.q;
@@ -172,7 +172,7 @@
       const idle = rc.miss > IDLE; qx = idle ? 0 : rc.lx; qy = idle ? 0 : rc.ly; RI.ax = rc.lax; RI.ay = rc.lay;
     }
     RI.mx = qx / 127; RI.my = qy / 127;
-    RI.dash = !!(ed & 1); RI.q = !!(ed & 2); RI.e = !!(ed & 4); RI.reroll = !!(ed & 8); RI.skip = !!(ed & 16); RI.pick = (ed >> 5) & 7;
+    RI.dash = !!(ed & 1); RI.q = !!(ed & 2); RI.e = !!(ed & 4); RI.reroll = !!(ed & 8); RI.skip = !!(ed & 16); RI.pick = (ed >> 5) & 7; RI.banish = (ed >> 8) & 7;
     this.w.input(rc.pid, RI);
   };
   S.sendSnaps = function () {
@@ -210,7 +210,7 @@
     const M = this.mir = new ED.Net.Mirror({ stage: cfg.stage, seed: cfg.seed, roster: cfg.roster, myPid: cfg.myPid });
     this.view = M.view;
     this.P = { x: 0, y: 0, dashT: 0, dashCd: 0, dashDx: 1, dashDy: 0, mdir: 0, mvx: 0, mvy: 0, moving: false };
-    this.L = { mx: 0, my: 0, ax: 0, ay: 0, ed: 0, pick: 0 };
+    this.L = { mx: 0, my: 0, ax: 0, ay: 0, ed: 0, pick: 0, banish: 0 };
     this.hist = []; for (let i = 0; i < HIST; i++) this.hist.push({ seq: 0, qx: 0, qy: 0, mx: 0, my: 0, ax: 0, ay: 0, ed: 0 });
     this.seq = 0; this.sent = 0; this.inT = 0; this.acc = 0;
     this.clock = 0; this.srvT = -1; this.srvAt = 0; this.rt = 0; this.rtOn = false; this.offX = 0; this.offY = 0; this.predOn = false; this.spd = 0;
@@ -238,6 +238,12 @@
     const me = this.view && this.view.me;
     if (!me || !me.offer || !me.offer[n - 1]) return;
     this.L.pick = n; this.offerKeep = me.offer; me.offer = null; this.offerHold = 1;
+  };
+  // Banish card n (1..4): sent with the next tick; the strip hides until the host's new offer arrives.
+  S.clientBanish = function (n) {
+    const me = this.view && this.view.me;
+    if (!me || !me.offer || !me.offer[n - 1] || !(me.banishes > 0)) return;
+    this.L.banish = n; this.offerKeep = me.offer; me.offer = null; this.offerHold = 1;
   };
   // Host message for this client: ArrayBuffer snapshot, { t: 'offer', cards }, { t: 'end', summary }.
   S.clientData = function (d) {
@@ -296,7 +302,7 @@
     const mx = f.qx / 127, my = f.qy / 127, l = Math.hypot(mx, my);
     f.mx = l > 1 ? mx / l : mx; f.my = l > 1 ? my / l : my;
     f.ax = U.clamp(Math.round(L.ax * 2), -32768, 32767) / 2; f.ay = U.clamp(Math.round(L.ay * 2), -32768, 32767) / 2;
-    f.ed = (L.ed & 31) | ((L.pick & 7) << 5); L.ed = 0; L.pick = 0;
+    f.ed = (L.ed & 31) | ((L.pick & 7) << 5) | ((L.banish & 7) << 8); L.ed = 0; L.pick = 0; L.banish = 0;
     if (this.predOn) this.step(f, true);
   };
   S.clientUpdate = function (dt) {

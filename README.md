@@ -6,7 +6,7 @@ No build step, no backend, no install. It is a static site: open it from any web
 
 **Play online:** https://sttsspjy.github.io/emberdeep/ (the repository keeps its old name)
 
-> The game is being rebuilt from the old dungeon roguelite. Solo play works now; online co-op, most heroes' full kits, general weapons and bosses are in progress.
+> Balance is not tuned yet: numbers will change.
 
 ## Controls
 
@@ -19,9 +19,12 @@ No build step, no backend, no install. It is a static site: open it from any web
 | Dash | Space | A |
 | Pick a level-up card | 1–4 or click | X / Y / B / RT |
 | Reroll / skip cards | R / X | |
+| Banish a card | Banish button, then click the card | |
 | Pause | Esc | Start |
 
 Weapons fire automatically. Keys follow the physical key position, so they work on any keyboard layout.
+
+Menus work with the keyboard too: arrows or WASD move between buttons, Enter presses, Esc goes back.
 
 ## A run
 
@@ -30,6 +33,15 @@ Weapons fire automatically. Keys follow the physical key position, so they work 
 3. A weapon at level 8 evolves when you also own its paired passive: open the next chest to evolve it. Elites drop chests.
 4. Bosses arrive at 5:00 and 10:00; the final boss at 15:00. Beat it to win.
 5. Break braziers for gold, food, a magnet or a holy bomb.
+6. The results screen shows how much damage each weapon and skill dealt.
+
+## Co-op (2–4 players)
+
+1. One player picks **Host co-op** and shares the 5-letter party code.
+2. The others pick **Join co-op** and enter the code.
+3. Everyone picks a hero and presses **Ready**; the host picks the stage and presses **Start run**.
+
+The host's browser runs the game, so the host needs the steadiest connection. Co-op never pauses: level-up cards appear in a strip at the bottom, pick with 1–4 while you keep moving. A downed hero is revived by a teammate standing next to them. Leaving from the pause menu ends your part of the run.
 
 ## Heroes
 
@@ -37,7 +49,7 @@ Knight, Ranger and Pyro are open from the start. Necro: survive 10 minutes. Cler
 
 ## Camp and saving
 
-Gold buys permanent ranks at Camp (damage, health, armor, regen, speed, pickup radius, XP, gold, luck, revivals, rerolls, skips). Refund all gives every coin back.
+Gold buys permanent ranks at Camp (damage, health, armor, regen, speed, pickup radius, XP, gold, luck, revivals, rerolls, skips, banishes). Refund all gives every coin back.
 
 Progress saves in the browser automatically. Camp → **Show my code** gives a save code you can paste into **Load code** on another browser or device.
 
@@ -56,7 +68,7 @@ For local play, serve the folder with any static server, for example `npx serve 
 ## Development
 
 - Code contract: `docs/ARCHITECTURE.md`. Rules and numbers: `docs/GAME-DESIGN.md`.
-- Checks (headless, exit 1 on failure): `node tools/check-sim.js`, `node tools/check-perf.js`, `node tools/art.js --check`, `node tools/browse.js smoke` (needs Playwright).
+- Checks (headless, exit 1 on failure): `node tools/check-sim.js`, `node tools/check-perf.js`, `node tools/check-*.js`, `node tools/art.js --check`, `node tools/browse.js smoke` (browser checks need Playwright).
 
 ## Credits
 

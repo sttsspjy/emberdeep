@@ -134,7 +134,8 @@
       for (const ws of p.weapons) { const wd = ED.WEAPONS[ws.id]; if (!wd.evolved && wd.evo && wd.pair === id && ws.lvl >= ED.WEAPON_MAX_LVL) { evo = true; sub = 'Ready: ' + wd.name + ' evolves'; break; } }
     }
     if (!sub) {
-      const all = ED.WEAPON_IDS.filter(w => { const wd = ED.WEAPONS[w]; return wd.pair === id && !wd.evolved && wd.evo; });
+      const sigs = (p.meta && p.meta.sigs) || [];
+      const all = ED.WEAPON_IDS.filter(w => { const wd = ED.WEAPONS[w]; return wd.pair === id && !wd.evolved && wd.evo && (!wd.sig || wd.sig === p.cls || sigs.indexOf(wd.sig) >= 0); }); // only weapons this hero can be offered
       const mine = all.filter(w => owns(p, w)), show = (mine.length ? mine : all).slice(0, 2).map(w => ED.WEAPONS[w].name);
       if (show.length) sub = 'Evolves: ' + show.join(', ');
     }
@@ -275,7 +276,7 @@
       const wd = ED.WEAPONS[id], sd = ED.SKILLS && ED.SKILLS[id];
       rows.push(wd ? { id, kind: 'weapon', name: wd.name, icon: wd.icon, dmg: Math.round(v), frac: 0 }
         : sd ? { id, kind: 'skill', name: sd.name, icon: sd.icon, dmg: Math.round(v), frac: 0 }
-          : { id, kind: 'other', name: id === 'bomb' ? 'Holy Bomb' : 'Other', icon: id === 'bomb' ? 'pickup.flask.yellow' : '', dmg: Math.round(v), frac: 0 });
+          : { id, kind: 'other', name: id === 'bomb' ? 'Holy Bomb' : 'Other', icon: id === 'bomb' ? 'pickup.bomb' : '', dmg: Math.round(v), frac: 0 });
     }
     for (const r of rows) r.frac = total > 0 ? r.dmg / total : 0;
     rows.sort((a, b) => b.dmg - a.dmg || (a.id < b.id ? -1 : 1));

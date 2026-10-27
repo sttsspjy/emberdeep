@@ -48,11 +48,15 @@
     A.togglePause(false);
     ED.Game.quit();
   };
+  // Solo: pauses the sim. Co-op: opens the same menu (Resume / Settings / Leave) while the run goes on.
   A.togglePause = (v) => {
     if (A.state !== 'run') return;
-    const on = v === undefined ? !ED.Game.paused : v;
-    if (ED.Game.mode !== 'solo' && on) return; // co-op never pauses
-    ED.Game.paused = on; $('ov-pause').hidden = !on;
+    const coop = ED.Game.mode !== 'solo', el = $('ov-pause');
+    const on = v === undefined ? (coop ? el.hidden : !ED.Game.paused) : v;
+    if (!coop) ED.Game.paused = on;
+    el.hidden = !on;
+    el.querySelector('h2').textContent = coop ? 'Menu' : 'Paused';
+    $('btn-quit').textContent = coop ? 'Leave run' : 'Quit run';
     ED.Input.mask();
   };
 

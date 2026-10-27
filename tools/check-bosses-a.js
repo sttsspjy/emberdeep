@@ -36,7 +36,7 @@ function drive(w, p, tick, boss) {
 const HUGE = 1e7;
 // One boss fight. o: { id, stage, minute, cls, cheats, len, phaseAt: [[t, frac]], script(w, ctx, tick), mortal }. Returns stats.
 function fight(o) {
-  const w = new ED.World({ seed: o.seed || 4242, stage: o.stage, players: players(o.cls || ['knight']), cheats: o.cheats || {} });
+  const w = new ED.World({ seed: o.seed || 4242, stage: o.stage, players: players(o.cls || ['knight']), cheats: o.cheats || { might: 0.05 } }); // behaviour fights: the hero chips, scripted HP drives phases
   const T = o.minute * 60, out = { w, ctx: null, err: null, minTele: Infinity, phases: [], ends: 0, falls: 0, rises: 0, hurts: 0, digest: 0, chest: false, half: null, st3: 0, carpet: 0, slowed: 0, pods: 0, boss: null, endT: -1, swords: 0, combos: 0 };
   try {
     w.time = T; w.sp.bossI = 99; w.sp.swarmT = T + 90; w.sp.eliteT = T + 60;
@@ -71,6 +71,8 @@ function fight(o) {
   } catch (err) { out.err = err; }
   return out;
 }
+// Scripted kill that ignores the behaviour fights' might cheat.
+const slay = (w, f) => { const m = w.cheats.might; w.cheats.might = 0; w.hitFoe(f, f.hp + 1, w.src(w.heroes[0], 'test')); w.cheats.might = m; };
 const reset = () => { for (const id in used) for (const k in used[id]) used[id][k] = 0; };
 const allUsed = (id, skip) => Object.keys(used[id]).filter(k => !(skip || []).includes(k) && !used[id][k]);
 const t0 = Date.now();
@@ -122,7 +124,7 @@ const tw = fight({
   script: (w, ctx, tick, t) => {
     const P = ctx.P || (ctx.P = ctx.e.vars && ctx.e.vars.pair); if (!P) return;
     const up = (k) => { const f = P[k]; return f && !f.dead && f.id === P[k + 'id'] ? f : null; };
-    if (Math.abs(t - 45) < C.TICK / 2) { const h = up('H'); if (h) { ctx.revFrom = h.id; w.hitFoe(h, h.hp + 1, w.src(w.heroes[0], 'test')); } }
+    if (Math.abs(t - 45) < C.TICK / 2) { const h = up('H'); if (h) { ctx.revFrom = h.id; slay(w, h); } }
     if (t > 45 && !ctx.risen && up('H') && up('H').id !== ctx.revFrom) { ctx.risen = up('H'); ctx.riseT = t; ctx.riseHp = up('H').hp / up('H').maxHp; }
   },
 });
@@ -149,8 +151,8 @@ for (const [id, stage, minute] of [['warden', 0, 5], ['spore', 0, 10], ['twins',
 {
   const r = fight({ id: 'twins', stage: 1, minute: 5, len: 40, script: (w, ctx, tick, t) => {
     const P = ctx.P || (ctx.P = ctx.e.vars && ctx.e.vars.pair); if (!P) return;
-    if (Math.abs(t - 5) < C.TICK / 2) { const a = P.L; w.hitFoe(a, a.hp + 1, w.src(w.heroes[0], 'test')); }
-    if (Math.abs(t - 8) < C.TICK / 2) { const b = P.H; if (!b.dead) w.hitFoe(b, b.hp + 1, w.src(w.heroes[0], 'test')); }
+    if (Math.abs(t - 5) < C.TICK / 2) { const a = P.L; slay(w, a); }
+    if (Math.abs(t - 8) < C.TICK / 2) { const b = P.H; if (!b.dead) slay(w, b); }
   } });
   ok(!r.err && r.ends === 1 && r.falls === 1 && r.rises === 0 && r.chest, `twins: both down inside the revive window ends the fight (ends ${r.ends}, falls ${r.falls}, rises ${r.rises}, chest ${r.chest})`);
 }

@@ -1,13 +1,12 @@
 // DOM screens (client only): title, hero select, stage select, Camp shop (+ save code), join, lobby, results; overlays: level-up cards, chest popup, pause, settings, credits.
 // ED.UI.show(name) shows one screen ('title' | 'hero' | 'stage' | 'camp' | 'join' | 'lobby' | 'results' | 'none'); overlays toggle separately.
 // Menus work with mouse and keyboard: arrows / WASD move focus spatially inside the top layer, Enter / Space press, Esc presses the layer's [data-back] button.
-// Meta calls go through ED.Meta[fn](profile, ...) when the progress lane provides fn, else ED.Save. Co-op goes through ED.Net.host / join / start when present,
-// else the lobby runs on the foundation ED.Net.Host / Client sessions (start then reports that co-op runs are unavailable).
+// Shop and unlock rules go through ED.Save with A.profile. Co-op goes through the ED.Net lobby API (host / join / setHero / setReady / setStage / start / leave, ED.Net.onChange).
 (function (ED) {
   'use strict';
   const U = ED.U;
   const $ = (id) => document.getElementById(id);
-  const UI = ED.UI = { offerSig: '', lastMode: 'solo', prePlayed: null };
+  const UI = ED.UI = { offerSig: '', lastMode: 'solo', banishOn: false };
   const SCREENS = ['title', 'hero', 'stage', 'camp', 'join', 'lobby', 'results'];
   const LAYERS = ['ov-settings', 'ov-credits', 'ov-pause', 'ov-offer']; // top-most first
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -15,15 +14,16 @@
   const App = () => ED.App;
 
   // ---------------- meta adapter ----------------
-  const metaFn = (k, fb) => (ED.Meta && typeof ED.Meta[k] === 'function' ? ED.Meta[k] : fb);
+  // Profile-explicit shop / unlock rules (ED.Save); ED.Meta shares the same profile object (main.js ED.Meta.use), the caller persists.
+  const SV = ED.Save;
   const M = {
-    rank: (p, id) => metaFn('rank', ED.Save.rank)(p, id),
-    cost: (p, id) => metaFn('cost', ED.Save.shopCost)(p, id),
-    buy: (p, id) => metaFn('buy', ED.Save.buy)(p, id),
-    refundTotal: (p) => metaFn('refundTotal', ED.Save.refundTotal)(p),
-    refundAll: (p) => metaFn('refundAll', ED.Save.refundAll)(p),
-    heroOpen: (p, cls) => metaFn('heroUnlocked', ED.Save.heroUnlocked)(p, cls),
-    stageOpen: (p, i) => metaFn('stageUnlocked', ED.Save.stageUnlocked)(p, i),
+    rank: (p, id) => SV.rank(p, id),
+    cost: (p, id) => SV.shopCost(p, id),
+    buy: (p, id) => SV.buy(p, id),
+    refundTotal: (p) => SV.refundTotal(p),
+    refundAll: (p) => SV.refundAll(p),
+    heroOpen: (p, cls) => SV.heroUnlocked(p, cls),
+    stageOpen: (p, i) => SV.stageUnlocked(p, i),
   };
   UI.M = M;
   // Progress toward a hero's unlock rule (0..1) from the profile records.
@@ -80,7 +80,6 @@
     $('ui').classList.toggle('in-run', name === 'none');
     if (name === 'none') {
       const A = App();
-      UI.prePlayed = A && A.profile ? A.profile.played.slice() : null;
       UI.lastMode = ED.Game.mode || 'solo';
       $('ov-settings').hidden = true; $('ov-credits').hidden = true; hideChest(true);
       return;
@@ -104,7 +103,7 @@
       if (!M.heroOpen(p, cls)) cv.classList.add('locked');
       th.appendChild(cv);
     });
-    const N = ED.Net, ok = !!(N && (N.host || N.Host));
+    const ok = netOk();
     $('btn-host').disabled = !ok; $('btn-join').disabled = !ok;
   };
 
@@ -221,8 +220,7 @@
   };
 
   // ---------------- camp ----------------
-  const SHOP_ICON = { growth: 'deco.crystal.1', greed: 'pickup.coin', revival: 'prop.trial', reroll: 'prop.portal', skip: 'prop.sign', vigor: 'pickup.heart', mending: 'pickup.flask.red', magnet: 'pickup.xp', fortune: 'fx.star.stun' };
-  const shopIcon = (s) => s.icon || SHOP_ICON[s.id] || (ED.PASSIVES[s.id] && ED.PASSIVES[s.id].icon) || 'pickup.coin';
+  const shopIcon = (s) => s.icon || (ED.PASSIVES[s.id] && ED.PASSIVES[s.id].icon) || 'pickup.coin';
   const pips = (n, max, next) => { let h = '<span class="pips">'; for (let k = 0; k < max; k++) h += `<i class="${k < n ? 'f' : k === n && next ? 'nx' : ''}"></i>`; return h + '</span>'; };
   UI.renderCamp = (flash) => {
     const A = App(), p = A.profile, list = $('shop-list');
@@ -259,7 +257,7 @@
   };
   const closeSettings = () => {
     $('ov-settings').hidden = true;
-    if (setFrom === 'pause' && App().state === 'run' && ED.Game.paused) $('ov-pause').hidden = false;
+    if (setFrom === 'pause' && App().state === 'run' && (ED.Game.paused || ED.Game.mode !== 'solo')) $('ov-pause').hidden = false;
     else refocus();
   };
   function syncSettings() {
@@ -281,7 +279,7 @@
   const pairName = (id) => (ED.PASSIVES[id] ? ED.PASSIVES[id].name : id);
   // Card face: badge, level pips, second line (evolution hint), evolution-ready flag.
   function cardInfo(me, c) {
-    const o = { badge: '', bcls: '', max: 0, lvl: c.lvl || 0, sub: c.sub || '', evo: false, ready: false };
+    const o = { badge: '', bcls: '', max: 0, lvl: c.lvl || 0, sub: c.sub || '', evo: !!c.evo, ready: !!c.evo };
     if (c.kind === 'weapon' || c.kind === 'wlvl') {
       const d = ED.WEAPONS[c.id]; if (!d) return o;
       o.max = ED.weaponMaxLvl ? ED.weaponMaxLvl(d) : 8;
@@ -310,7 +308,8 @@
   // Shows the hero's current offer; hides when there is none. Rebuilt only when the offer changes. solo: big cards (the run is paused); co-op: bottom strip.
   UI.syncOffer = (me, solo) => {
     const ov = $('ov-offer'), offer = me && !me.dead ? me.offer : null;
-    const sig = offer ? offer.map(c => c.kind + c.id + c.lvl).join('|') + '|' + me.rerolls + me.skips + (solo ? 's' : 'c') : '';
+    if (!offer || !(me.banishes > 0)) UI.banishOn = false;
+    const sig = offer ? offer.map(c => c.kind + c.id + c.lvl).join('|') + '|' + me.rerolls + me.skips + (me.banishes | 0) + (UI.banishOn ? 'b' : '') + (solo ? 's' : 'c') : '';
     if (sig === UI.offerSig) return;
     UI.offerSig = sig;
     ov.hidden = !offer;
@@ -321,18 +320,21 @@
     const box = $('offer-cards'); box.textContent = '';
     offer.forEach((c, i) => {
       const f = cardInfo(me, c), b = document.createElement('button');
-      b.className = 'offer-card k-' + c.kind + (f.ready ? ' evo-ready' : '');
+      const banOk = UI.banishOn && c.kind !== 'gold' && c.kind !== 'heal';
+      b.className = 'offer-card k-' + c.kind + (f.ready ? ' evo-ready' : '') + (banOk ? ' banish' : '');
       b.insertAdjacentHTML('beforeend', `<span class="key">${keyOf('pick' + (i + 1), String(i + 1))}</span>`);
       b.appendChild(UI.iconCanvas(c.icon, 64, 'ic'));
       b.insertAdjacentHTML('beforeend', `<b class="card-name">${esc(c.name)}</b>` + (f.badge ? `<span class="badge ${f.bcls}">${esc(f.badge)}</span>` : '') +
         `<span class="card-txt">${esc(c.txt)}</span>` + (f.sub ? `<span class="card-sub${f.evo ? ' evo' : ''}">${esc(f.sub)}</span>` : '') + (f.max > 1 ? pips(f.lvl, f.max, false) : ''));
-      b.onclick = () => ED.Game.pick(i);
+      b.onclick = () => { if (!UI.banishOn) ED.Game.pick(i); else if (banOk) { UI.banishOn = false; ED.Game.banish(i); } };
       box.appendChild(b);
     });
     const rr = $('btn-reroll'), sk = $('btn-skip');
     rr.textContent = 'Reroll (' + keyOf('reroll', 'R') + ') ' + me.rerolls; rr.disabled = !(me.rerolls > 0);
     sk.textContent = 'Skip (' + keyOf('skip', 'X') + ') ' + me.skips; sk.disabled = !(me.skips > 0);
-    $('offer-foot').hidden = !(me.rerolls > 0 || me.skips > 0);
+    const bn = $('btn-banish');
+    bn.textContent = (UI.banishOn ? 'Pick a card to banish ' : 'Banish ') + (me.banishes | 0); bn.disabled = !(me.banishes > 0); bn.classList.toggle('on', UI.banishOn);
+    $('offer-foot').hidden = !(me.rerolls > 0 || me.skips > 0 || me.banishes > 0);
   };
 
   // ---------------- chest popup ----------------
@@ -409,15 +411,15 @@
     const chart = $('res-chart');
     chart.textContent = '';
     if (me) {
-      const rows = Object.entries(me.dealt).filter(r => r[1] > 0).sort((a, b) => b[1] - a[1]).slice(0, 12);
-      let tot = 0; for (const r of rows) tot += r[1];
-      const max = rows.length ? rows[0][1] : 1;
+      const rows = ED.dmgRows(me).slice(0, 12);
+      let tot = 0; for (const r of rows) tot += r.dmg;
+      const max = rows.length ? rows[0].dmg : 1;
       chart.insertAdjacentHTML('beforeend', `<span class="ch-head">Damage dealt${rows.length ? ': ' + U.fmtNum(tot) : ''}</span>`);
-      rows.forEach(([id, v], i) => {
-        const wd = ED.WEAPONS[id], sk = ED.SKILLS[id], d = wd || sk, row = document.createElement('div');
-        row.className = 'bar-row' + (wd && wd.evolved ? ' evo' : '') + (sk && !wd ? ' skill' : '');
-        row.appendChild(UI.iconCanvas(d ? d.icon : 'fx.hit.spark', 48));
-        row.insertAdjacentHTML('beforeend', `<span class="bar-name">${esc(d ? d.name : id)}</span><span class="bar"><i style="width:${Math.max(1.5, 100 * v / max).toFixed(1)}%;animation-delay:${(i * 0.06).toFixed(2)}s"></i></span><span class="bar-v">${U.fmtNum(v)}</span><span class="bar-p">${tot ? Math.round(100 * v / tot) : 0}%</span>`);
+      rows.forEach((r, i) => {
+        const wd = ED.WEAPONS[r.id], row = document.createElement('div');
+        row.className = 'bar-row' + (wd && wd.evolved ? ' evo' : '') + (r.kind === 'skill' ? ' skill' : '');
+        row.appendChild(UI.iconCanvas(r.icon || 'fx.hit.spark', 48));
+        row.insertAdjacentHTML('beforeend', `<span class="bar-name">${esc(r.name)}</span><span class="bar"><i style="width:${Math.max(1.5, 100 * r.dmg / max).toFixed(1)}%;animation-delay:${(i * 0.06).toFixed(2)}s"></i></span><span class="bar-v">${U.fmtNum(r.dmg)}</span><span class="bar-p">${Math.round(100 * r.frac)}%</span>`);
         chart.appendChild(row);
       });
       chart.hidden = !rows.length;
@@ -431,82 +433,76 @@
     }
     const un = $('res-unlocks'); un.textContent = '';
     const add = (icon, text) => { const d = document.createElement('div'); d.className = 'unlock'; if (icon) d.appendChild(UI.iconCanvas(icon, 48)); d.insertAdjacentHTML('beforeend', `<span>${esc(text)}</span>`); un.appendChild(d); };
+    if (sum.note) add('', sum.note);
     if (gained) {
-      for (const c of gained.unlocked || []) add(heroIcon(c), 'New hero: ' + (ED.HEROES[c] ? ED.HEROES[c].name : c));
-      for (const s of gained.stages || []) add('', 'New stage: ' + (ED.STAGES[s] ? ED.STAGES[s].name : s));
+      for (const n of gained.news || []) add(n.kind === 'hero' ? heroIcon(n.id) : n.kind === 'weapon' && ED.WEAPONS[n.id] ? ED.WEAPONS[n.id].icon : '', n.txt);
+      if (gained.records && gained.records.length) add('', 'New record: ' + gained.records.join(', '));
     }
-    if (me && UI.prePlayed && UI.prePlayed.indexOf(me.cls) < 0 && A.profile.played.indexOf(me.cls) >= 0 && ED.UNLOCKS.sigAfterRun) {
-      const h = ED.HEROES[me.cls], w = h && ED.WEAPONS[h.sig];
-      if (w) add(w.icon, w.name + ' joins the weapon pool');
-    }
-    UI.prePlayed = null;
     $('btn-res-again').hidden = UI.lastMode !== 'solo';
   };
 
   // ---------------- co-op lobby ----------------
-  // Session: ED.Net.host(me, handlers) / ED.Net.join(code, me, handlers) when the net lane defines them, else new ED.Net.Host / Client (lobby only).
-  // me = { name, cls, meta }; handlers: lobby(state), status(kind, msg), code(code), welcome(d), joined(pid), left(pid, name), error(msg), closed(msg).
-  const L = UI.lobby = { sess: null, role: '', state: null, ready: false, pid: '' };
-  const myPick = () => { const A = App(); return { name: A.profile.name, cls: A.sel.cls, meta: ED.Save.metaBundle(A.profile) }; };
-  const handlers = () => ({
-    lobby: (s) => { L.state = s; if (L.role === 'guest' && !$('scr-join').hidden) UI.show('lobby'); UI.renderLobby(); },
-    status: (kind, msg) => { if (kind === 'error') say('lobby-msg', msg, true); else if (kind === 'open') say('lobby-msg', 'Party open. Share the code.'); },
-    code: () => UI.renderLobby(),
-    welcome: (d) => { L.pid = d.pid; say('join-msg', ''); UI.show('lobby'); UI.renderLobby(); },
-    joined: () => say('lobby-msg', 'A hero joined.'),
-    left: (pid, name) => say('lobby-msg', (name || 'A hero') + ' left.'),
-    error: (msg) => { if (L.role === 'guest' && !$('scr-join').hidden) { say('join-msg', msg, true); closeSess(); } else say('lobby-msg', msg, true); },
-    closed: (msg) => UI.leaveLobby(msg || 'The party closed.'),
-  });
-  const closeSess = () => { const s = L.sess; L.sess = null; L.state = null; L.ready = false; if (s && s.close) try { s.close(); } catch (e) { /* already closed */ } };
+  // Drives the ED.Net lobby API; ED.Net.lobby { role, code, me, status, stage, members, inRun, canStart } is the single source of truth, ED.Net.onChange re-renders.
+  const L = UI.lobby = { net: null };
+  const NL = () => (ED.Net && ED.Net.lobby) || { role: '', code: '', me: '', status: 'idle', stage: 0, members: [], inRun: false, canStart: false };
+  const netOk = () => !!(ED.Net && typeof ED.Net.host === 'function');
+  const onJoin = () => !$('scr-join').hidden;
+  let lastStatus = '';
+  const wireNet = () => {
+    const N = ED.Net; if (!N || L.net === N) return; L.net = N;
+    N.onChange = (lb) => {
+      if (lb.status !== lastStatus) {
+        lastStatus = lb.status;
+        if (lb.status === 'open') { if (lb.role === 'client') { say('join-msg', ''); if (onJoin()) UI.show('lobby'); } else say('lobby-msg', 'Party open. Share the code.'); }
+      }
+      if (!lb.inRun && App().state !== 'run' && !$('scr-lobby').hidden) UI.renderLobby();
+    };
+    N.onError = (msg) => { if (onJoin()) say('join-msg', msg, true); else say('lobby-msg', msg, true); };
+    N.onClosed = (msg) => { if (App().state !== 'run' && App().state !== 'results') UI.leaveLobby(msg || 'The party closed.'); };
+  };
   UI.hostParty = () => {
-    const N = ED.Net; ensureProfile();
-    if (!N || !(N.host || N.Host)) { say('title-msg', 'Co-op is not available in this build.', true); return; }
+    const N = ED.Net; ensureProfile(); wireNet();
+    if (!netOk()) { say('title-msg', 'Co-op is not available in this build.', true); return; }
     if (N.available && !N.available()) { say('title-msg', 'This browser cannot make peer connections.', true); return; }
-    closeSess();
-    L.role = 'host'; L.pid = 'host';
-    try { L.sess = typeof N.host === 'function' ? N.host(myPick(), handlers()) : new N.Host(myPick(), handlers()); } catch (e) { say('title-msg', 'Could not open a party: ' + e.message, true); return; }
-    if (!M.stageOpen(App().profile, App().sel.stage)) App().sel.stage = 0;
-    if (L.sess) L.sess.stage = App().sel.stage;
-    L.state = L.sess && L.sess.lobbyState ? L.sess.lobbyState() : null;
+    const A = App();
+    if (!M.stageOpen(A.profile, A.sel.stage)) A.sel.stage = 0;
+    try { N.host(A.profile.name, A.sel.cls); N.setStage(A.sel.stage); } catch (e) { say('title-msg', 'Could not open a party: ' + e.message, true); return; }
     say('lobby-msg', 'Opening the party...');
     UI.show('lobby'); UI.renderLobby();
   };
   UI.joinParty = () => {
-    const N = ED.Net; ensureProfile();
+    const N = ED.Net; ensureProfile(); wireNet();
     const code = N && N.cleanCode ? N.cleanCode($('inp-join').value) : String($('inp-join').value).toUpperCase();
     $('inp-join').value = code;
     if (code.length < 5) { say('join-msg', 'A party code has 5 letters.', true); return; }
-    if (!N || !(N.join || N.Client)) { say('join-msg', 'Co-op is not available in this build.', true); return; }
-    closeSess();
-    L.role = 'guest'; L.pid = '';
+    if (!netOk()) { say('join-msg', 'Co-op is not available in this build.', true); return; }
+    if (N.available && !N.available()) { say('join-msg', 'This browser cannot make peer connections.', true); return; }
     say('join-msg', 'Connecting...');
-    try { L.sess = typeof N.join === 'function' ? N.join(code, myPick(), handlers()) : new N.Client(code, myPick(), handlers()); } catch (e) { say('join-msg', 'Could not join: ' + e.message, true); }
+    const A = App();
+    try { N.join(code, A.profile.name, A.sel.cls); } catch (e) { say('join-msg', 'Could not join: ' + e.message, true); }
   };
   UI.leaveLobby = (msg) => {
-    closeSess(); L.role = '';
+    if (ED.Net && ED.Net.leave) ED.Net.leave();
+    lastStatus = '';
     UI.renderTitle(); UI.show('title'); say('title-msg', msg || '', !!msg);
   };
-  const myId = () => (L.sess && L.sess.pid) || L.pid || (L.role === 'host' ? 'host' : '');
-  const sendPick = () => {
-    const s = L.sess; if (!s) return;
-    const pk = myPick();
-    if (typeof s.setPick === 'function') s.setPick(pk);
-    else if (L.role === 'host' && s.setMe) s.setMe({ cls: pk.cls, meta: pk.meta });
-    else if (s.send) s.send({ t: 'pick', cls: pk.cls, meta: pk.meta });
-    L.ready = false;
+  // Back from results: a party still open returns to its lobby.
+  UI.backFromResults = () => {
+    const lb = NL();
+    if (lb.role && lb.status === 'open') { UI.show('lobby'); UI.renderLobby(); return; }
+    if (lb.role) UI.leaveLobby(''); else { UI.renderTitle(); UI.show('title'); }
   };
-  const sendReady = (v) => { const s = L.sess; if (!s) return; L.ready = v; if (typeof s.setReady === 'function') s.setReady(v); else if (s.send) s.send({ t: 'ready', v }); UI.renderLobby(); };
+  const myId = () => NL().me;
+  const sendPick = (cls) => { if (ED.Net) ED.Net.setHero(cls); };
   const setStage = (i) => {
-    const s = L.sess, A = App(); if (!s || L.role !== 'host' || !M.stageOpen(A.profile, i)) return;
+    const A = App(); if (NL().role !== 'host' || !M.stageOpen(A.profile, i)) return;
     A.sel.stage = i; A.saveSel();
-    if (typeof s.setStage === 'function') s.setStage(i); else { s.stage = i; if (s.broadcastLobby) s.broadcastLobby(); }
+    ED.Net.setStage(i);
     UI.renderLobby();
   };
   UI.renderLobby = (st) => {
-    if (st) L.state = st;
-    const A = App(), s = L.state || { members: [], code: L.sess && L.sess.code, stage: A.sel.stage }, host = L.role === 'host', me = myId();
-    const code = (L.sess && L.sess.code) || s.code || '-----';
+    const A = App(), s = st || NL(), host = s.role === 'host', me = myId();
+    const code = s.code || '-----';
     $('lobby-title').textContent = host ? 'Your party' : 'Party';
     $('lobby-code').textContent = code;
     $('lobby-code-lbl').textContent = host ? 'Party code' : 'Joined';
@@ -531,7 +527,7 @@
       b.className = 'pick-btn' + (cur === cls ? ' on' : ''); b.disabled = !open; b.title = h.name + (open ? '' : ' (locked)');
       b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', cur === cls ? 'true' : 'false'); b.setAttribute('aria-label', h.name);
       b.appendChild(UI.iconCanvas(heroIcon(cls), 48));
-      b.onclick = () => { if (cur === cls) return; A.sel.cls = cls; A.saveSel(); sendPick(); UI.renderLobby(); const n = $('lobby-heroes').children[ED.HERO_IDS.indexOf(cls)]; if (n) n.focus(); };
+      b.onclick = () => { if (cur === cls) return; A.sel.cls = cls; A.saveSel(); sendPick(cls); UI.renderLobby(); const n = $('lobby-heroes').children[ED.HERO_IDS.indexOf(cls)]; if (n) n.focus(); };
       hr.appendChild(b);
     }
     const sr = $('lobby-stages'); sr.textContent = '';
@@ -544,16 +540,14 @@
       sr.appendChild(b);
     });
     const go = $('btn-lobby-go');
-    if (host) {
-      const allReady = mem.length > 0 && mem.every(m => m.ready || m.isHost);
-      go.textContent = allReady ? 'Start run' : 'Waiting for ready'; go.disabled = !allReady;
-    } else { go.textContent = L.ready ? 'Cancel ready' : 'Ready'; go.disabled = !L.sess || !mine; go.classList.toggle('on', L.ready); }
+    const ready = !!(mine && mine.ready);
+    if (host) { go.textContent = s.canStart ? 'Start run' : 'Waiting for ready'; go.disabled = !s.canStart; }
+    else { go.textContent = ready ? 'Cancel ready' : 'Ready'; go.disabled = s.status !== 'open' || !mine; go.classList.toggle('on', ready); }
   };
   const lobbyGo = () => {
-    if (L.role !== 'host') { sendReady(!L.ready); return; }
-    const N = ED.Net;
-    if (N && typeof N.start === 'function') { try { N.start(L.sess, { stage: App().sel.stage }); } catch (e) { say('lobby-msg', 'Could not start: ' + e.message, true); } }
-    else say('lobby-msg', 'Co-op runs are not available in this build yet.', true);
+    const lb = NL();
+    if (lb.role !== 'host') { const mine = lb.members.find(x => x.pid === lb.me); ED.Net.setReady(!(mine && mine.ready)); return; }
+    try { if (!ED.Net.start()) say('lobby-msg', 'Everyone must be ready.', true); } catch (e) { say('lobby-msg', 'Could not start: ' + e.message, true); }
   };
 
   // ---------------- keyboard navigation ----------------
@@ -644,7 +638,7 @@
       try { A.replaceProfile(ED.Save.decode($('inp-code').value)); say('code-msg', 'Progress restored.'); UI.renderCamp(); }
       catch (e) { say('code-msg', e.message, true); }
     };
-    $('btn-join-back').onclick = () => { closeSess(); UI.renderTitle(); UI.show('title'); };
+    $('btn-join-back').onclick = () => { if (ED.Net && ED.Net.leave) ED.Net.leave(); UI.renderTitle(); UI.show('title'); };
     $('btn-join-go').onclick = () => UI.joinParty();
     $('inp-join').addEventListener('input', () => { const N = ED.Net, el = $('inp-join'); el.value = N && N.cleanCode ? N.cleanCode(el.value) : el.value.toUpperCase(); });
     $('btn-lobby-leave').onclick = () => UI.leaveLobby('');
@@ -653,10 +647,11 @@
     $('btn-resume').onclick = () => A.togglePause(false);
     $('btn-pause-settings').onclick = () => UI.openSettings('pause');
     $('btn-quit').onclick = () => A.quitRun();
-    $('btn-res-back').onclick = () => { UI.renderTitle(); UI.show('title'); };
+    $('btn-res-back').onclick = () => UI.backFromResults();
     $('btn-res-again').onclick = () => { if (M.heroOpen(A.profile, A.sel.cls) && M.stageOpen(A.profile, A.sel.stage)) A.startSolo(); else { UI.renderHeroes(); UI.show('hero'); } };
     $('btn-reroll').onclick = () => ED.Game.reroll();
     $('btn-skip').onclick = () => ED.Game.skip();
+    $('btn-banish').onclick = () => { UI.banishOn = !UI.banishOn; UI.offerSig = ''; };
     // settings
     $('btn-settings-close').onclick = closeSettings;
     for (const b of $('set-quality').children) b.onclick = () => { A.settings.quality = b.dataset.v; store(); syncSettings(); };

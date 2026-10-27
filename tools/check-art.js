@@ -38,7 +38,7 @@ for (const s of ED.STAGES) {
   const th = s.theme;
   for (const [id] of th.floor) need(id, 'stage ' + s.id + ' floor');
   for (const id of th.deco) need(id, 'stage ' + s.id + ' deco');
-  for (const o of th.obstacles) if (o.look) need(o.look, 'stage ' + s.id + ' obstacle');
+  for (const o of th.features) if (o.look) need(o.look, 'stage ' + s.id + ' obstacle');
   need(th.brazier, 'stage ' + s.id + ' brazier');
 }
 for (const k of ['xp1', 'xp5', 'xp25', 'gold', 'food', 'magnet', 'bomb', 'chest']) need('pickup.' + k, 'pickup kind ' + k);
@@ -51,8 +51,9 @@ const walk = (d) => { for (const f of fs.readdirSync(d)) { const p = path.join(d
 walk(path.join(ROOT, 'src')); walk(path.join(ROOT, 'tools')); files.push(path.join(ROOT, 'index.html'));
 let refs = 0;
 for (const f of files) {
-  if (/[\\/]tools[\\/](art|art-manifest|check-art)\.js$/.test(f)) continue;
+  if (/[\\/]tools[\\/](art|art-manifest|check-art)\.js$/.test(f) || /[\\/]client[\\/](audio|music)\.js$/.test(f)) continue; // audio cue names share the dotted form
   for (const m of fs.readFileSync(f, 'utf8').matchAll(/'((?:tile|prop|deco|pickup|icon|boss|weapon|shield|cos|fx|fxbig|proj|hero|foe)\.[a-z0-9_.]+)'/g)) {
+    if (/\.$|\.js$/.test(m[1])) continue; // id prefixes and file names
     refs++; if (!hasSet(m[1])) bad(path.relative(ROOT, f) + ': no anim ' + m[1]);
   }
 }

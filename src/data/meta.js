@@ -6,15 +6,15 @@
   'use strict';
   ED.SHOP_BASE = 200;
   ED.SHOP = [
-    { id: 'might', name: 'Might', icon: 'weapon.longsword', max: 5, stat: 'might', per: 0.05, txt: '+5% damage' },
-    { id: 'vigor', name: 'Vigor', icon: 'pickup.heart', max: 5, stat: 'maxHp', per: 10, txt: '+10 max HP' },
-    { id: 'plating', name: 'Plating', icon: 'shield.round', max: 3, stat: 'armor', per: 1, txt: '+1 armor' },
-    { id: 'mending', name: 'Mending', icon: 'pickup.flask.red', max: 5, stat: 'regen', per: 0.1, txt: '+0.1 HP/s regen' },
-    { id: 'swiftness', name: 'Swiftness', icon: 'fx.ember', max: 3, stat: 'speed', per: 0.05, txt: '+5% move speed' },
-    { id: 'magnet', name: 'Magnet', icon: 'pickup.xp', max: 3, stat: 'pickup', per: 0.1, txt: '+10% pickup radius' },
+    { id: 'might', name: 'Might', icon: 'icon.p.might', max: 5, stat: 'might', per: 0.05, txt: '+5% damage' },
+    { id: 'vigor', name: 'Vigor', icon: 'icon.p.vigor', max: 5, stat: 'maxHp', per: 10, txt: '+10 max HP' },
+    { id: 'plating', name: 'Plating', icon: 'icon.p.plating', max: 3, stat: 'armor', per: 1, txt: '+1 armor' },
+    { id: 'mending', name: 'Mending', icon: 'icon.p.mending', max: 5, stat: 'regen', per: 0.1, txt: '+0.1 HP/s regen' },
+    { id: 'swiftness', name: 'Swiftness', icon: 'icon.p.swiftness', max: 3, stat: 'speed', per: 0.05, txt: '+5% move speed' },
+    { id: 'magnet', name: 'Magnet', icon: 'icon.p.magnet', max: 3, stat: 'pickup', per: 0.1, txt: '+10% pickup radius' },
     { id: 'growth', name: 'Growth', icon: 'fx.spark.magic', max: 5, stat: 'growth', per: 0.05, txt: '+5% XP' },
     { id: 'greed', name: 'Greed', icon: 'pickup.coin', max: 5, stat: 'greed', per: 0.1, txt: '+10% gold' },
-    { id: 'fortune', name: 'Fortune', icon: 'fx.glint', max: 5, stat: 'luck', per: 0.05, txt: '+5% luck' },
+    { id: 'fortune', name: 'Fortune', icon: 'icon.p.fortune', max: 5, stat: 'luck', per: 0.05, txt: '+5% luck' },
     { id: 'revival', name: 'Revival', icon: 'fx.shield.gold', max: 2, stat: 'revival', per: 1, txt: '+1 revive per run' },
     { id: 'reroll', name: 'Reroll', icon: 'fx.ring.shock', max: 5, stat: 'rerolls', per: 1, txt: '+1 card reroll per run' },
     { id: 'skip', name: 'Skip', icon: 'fx.puff', max: 3, stat: 'skips', per: 1, txt: '+1 card skip per run' },

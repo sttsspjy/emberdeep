@@ -133,7 +133,7 @@ void main(){
     if(vx.w>.5){float l=dot(rgb,vec3(.299,.587,.114));
       if(vx.w<1.5)rgb=vec3((22.+l*190.)/255.);
       else{float q=min(1.,l*1.2);rgb=q>.82?vec3(.922,.973,1.):vec3(30.+q*190.,70.+q*170.,110.+q*145.)/255.;}}
-    rgb=mix(rgb*vcol.rgb,vec3(1.),vx.y);a=t.a*vcol.a;
+    rgb=mix(rgb,vec3(1.),vx.y)*vcol.rgb;a=t.a*vcol.a;
   }else{
     float d;rgb=vcol.rgb;
     if(k<1.5){vec2 q=vp.xy-abs(vl);d=-min(q.x,q.y);}

@@ -194,7 +194,7 @@
       case 'skill': {
         const p = heroOf(ev.pid), col = p ? heroCol(p.cls) : 0xfff1d600;
         if (p) { F.ring(p.x, p.y - 8, 34, col | 0xff, 0.3, 6, 2); F.burst(p.x, p.y - 8, 10, col, 90, 0.35, 2, 0); }
-        if (mine) { F.addShake(3, ctx.crowd); F.hitStop(0.05); F.flash(ev.x, ev.y, 18, col, 0.12, 0.6); }
+        if (mine) { F.addShake(ev.shake || 3, ctx.crowd); F.hitStop(U.clamp(ev.stop || 0.05, 0.04, 0.08)); F.flash(ev.x, ev.y, 18, col, 0.12, 0.6); } // skill events may carry shake (3-9) and stop (s)
         break;
       }
       case 'dash': F.sprite('fx.puff', ev.x, ev.y - 2, 1, 0, 0, 0.8); F.burst(ev.x, ev.y - 2, 4, 0xb4aed000, 30, 0.35, 2, 0); break;

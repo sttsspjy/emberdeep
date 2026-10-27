@@ -257,6 +257,8 @@ input[type="range"]::-moz-range-thumb { width: 0.9em; height: 1.4em; background:
 .offer-card.evo-ready { border-color: var(--gold); box-shadow: 0 0 0 3px #000, 0 0 30px rgba(255, 210, 122, 0.6); }
 .offer-card.evo-ready::after { content: 'EVOLVE'; position: absolute; top: -0.75em; right: -0.4em; background: var(--gold); color: #2a1408; padding: 0 0.4em; font-size: var(--u); border: 2px solid #000; transform: rotate(6deg); }
 .offer-foot { display: flex; gap: calc(var(--u) * 0.8); }
+.offer-card.banish { outline: 3px solid #ff5a5a; outline-offset: -3px; }
+#btn-banish.on { background: #7a2020; }
 /* co-op: compact strip at the bottom, the run keeps going */
 #ui > .overlay.offer.strip { justify-content: flex-end; background: none; pointer-events: none; padding-bottom: var(--hud-bottom, calc(var(--u) * 8.5)); gap: 6px; }
 .overlay.offer.strip h2 { font-size: calc(var(--u) * 1.2); animation: none; }

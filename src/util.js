@@ -129,9 +129,9 @@
     return h >>> 0;
   };
 
-  // Client draw hooks (optional, read by render.js / actors.js; registered from any file, no DOM at load): ED.WeaponFx[wid] = { proj(B, pr, t), zone(B, z, t) } (return true when drawn),
-  // ED.SkillFx[skillId] = { zone(B, z, t) }, ED.BossFx[id] = { draw(B, e, t) } (true replaces the default), ED.HeroFx[cls] = fn(B, p, t) (drawn right after the hero).
-  ED.WeaponFx = ED.WeaponFx || {}; ED.SkillFx = ED.SkillFx || {}; ED.BossFx = ED.BossFx || {}; ED.HeroFx = ED.HeroFx || {};
+  // Client draw hooks (optional, read by render.js / actors.js; registered from any file, no DOM at load): ED.WeaponFx[wid] = { proj(B, pr, t), zone(B, z, t), top(B, z, t) (after the actors) } (return true when drawn),
+  // ED.SkillFx[skillId] = { zone, top }, ED.ZoneFx[look] = fn(B, z, t) (zones without a weapon id), ED.BossFx[id] = { draw(B, e, t) } (true replaces the default), ED.HeroFx[cls] = fn(B, p, t) (drawn right after the hero).
+  ED.WeaponFx = ED.WeaponFx || {}; ED.SkillFx = ED.SkillFx || {}; ED.BossFx = ED.BossFx || {}; ED.HeroFx = ED.HeroFx || {}; ED.ZoneFx = ED.ZoneFx || {};
 
   // Look registry: projectile / zone look names -> wire index. Files register their looks at load time (fixed script order keeps the index identical on every peer).
   ED.LOOKS = []; ED.LOOK_IDX = {};

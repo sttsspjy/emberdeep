@@ -34,11 +34,11 @@
     {
       id: 'ossuary', name: 'The Ossuary',
       theme: {
-        floor: [['tile.floor.1', 40], ['tile.floor.2', 6], ['tile.floor.3', 6], ['tile.floor.4', 4], ['tile.floor.5', 3], ['tile.floor.6', 3], ['tile.floor.7', 2], ['tile.floor.8', 2]],
-        deco: ['deco.bones.0', 'deco.bones.1', 'deco.bones.2', 'deco.bones.3', 'deco.bones.4', 'deco.skull', 'deco.moss.0', 'deco.moss.1', 'deco.candle.0', 'deco.candle.1', 'deco.puddle.0', 'deco.grate'],
+        floor: [['tile.floor.ossuary.1', 40], ['tile.floor.ossuary.2', 6], ['tile.floor.ossuary.3', 6], ['tile.floor.ossuary.4', 4], ['tile.floor.ossuary.5', 3], ['tile.floor.ossuary.6', 3], ['tile.floor.ossuary.7', 2], ['tile.floor.ossuary.8', 2]],
+        deco: ['deco.bones.0', 'deco.bones.1', 'deco.bones.2', 'deco.bones.3', 'deco.bones.4', 'deco.skull', 'deco.moss.0', 'deco.moss.1', 'deco.candle.0', 'deco.candle.1', 'deco.puddle.0', 'deco.urn.0', 'deco.urn.1'],
         // colonnades of crypt columns (aisles the horde funnels through), lone pillar stubs, urn heaps, fallen rock
-        features: [ROW('prop.column', [12, 15], [3, 5], [34, 56], 4), ONE('deco.pillarstub', [13, 18], 2), CLUSTER('deco.urn.0', [12, 13], [2, 3], 20, 1), ONE('', [24, 38], 2)],
-        brazier: 'tile.torch.floor',
+        features: [ROW('prop.pillar', [12, 15], [3, 5], [34, 56], 4), ONE('prop.pillar.broken', [13, 16], 2), CLUSTER('prop.grave.0', [8, 10], [2, 4], 22, 1), CLUSTER('prop.grave.2', [8, 10], [2, 3], 20, 1), ONE('prop.coffin', [9, 11], 1), ONE('prop.bonepile', [12, 14], 1), ONE('prop.ruin.0', [20, 24], 1), ONE('', [24, 38], 1)],
+        brazier: 'prop.brazier',
         pal: { bg: '#0b0908', wall: '#2a2320', accent: '#ff8a3d', light: '#ffcf8a' },
       },
       arena: { size: 3200, obstacles: [30, 40], braziers: [14, 20], clear: 220 },
@@ -64,11 +64,11 @@
     {
       id: 'glowmire', name: 'The Glowmire',
       theme: {
-        floor: [['tile.dark.floor.1', 30], ['tile.dark.floor.2', 6], ['tile.dark.floor.3', 6], ['tile.dark.floor.4', 4], ['tile.dark.floor.5', 3], ['tile.dark.floor.6', 3]],
+        floor: [['tile.floor.glowmire.1', 30], ['tile.floor.glowmire.2', 6], ['tile.floor.glowmire.3', 6], ['tile.floor.glowmire.4', 4], ['tile.floor.glowmire.5', 3], ['tile.floor.glowmire.6', 3]],
         deco: ['deco.mushroom.0', 'deco.mushroom.1', 'deco.mushroom.2', 'deco.mushroom.3', 'deco.root.0', 'deco.root.1', 'deco.moss.2', 'deco.puddle.1', 'deco.puddle.2', 'deco.puddle.3'],
         // broken ruin walls (arcs with one gap), root-choked stumps, glowing crystal pairs, boulders
-        features: [ARC('deco.pillarstub', [13, 16], [4, 6], [6, 14], 4), ONE('deco.root.0', [14, 20], 1), CLUSTER('deco.crystal.0', [12, 14], [2, 3], 22, 2), ONE('', [26, 40], 2)],
-        brazier: 'tile.torch.floor',
+        features: [ARC('prop.pillar.broken', [13, 16], [4, 6], [6, 14], 4), ONE('prop.shroom.0', [14, 18], 2), CLUSTER('prop.shroom.1', [9, 11], [2, 4], 22, 1), CLUSTER('prop.crystal.0', [12, 15], [2, 3], 22, 2), ONE('prop.crystal.1', [9, 11], 1), ONE('', [26, 40], 1)],
+        brazier: 'prop.brazier',
         pal: { bg: '#07090b', wall: '#1d2a2a', accent: '#7fe39a', light: '#c9ffd9' },
       },
       arena: { size: 3200, obstacles: [30, 40], braziers: [14, 20], clear: 220 },
@@ -94,11 +94,11 @@
     {
       id: 'abyss', name: 'The Abyss',
       theme: {
-        floor: [['tile.dark.floor.1', 20], ['tile.floor.1', 10], ['tile.dark.floor.4', 4], ['tile.floor.6', 3]],
+        floor: [['tile.floor.abyss.1', 30], ['tile.floor.abyss.2', 6], ['tile.floor.abyss.3', 6], ['tile.floor.abyss.4', 4], ['tile.floor.abyss.5', 3], ['tile.floor.abyss.6', 3], ['tile.floor.abyss.7', 2], ['tile.floor.abyss.8', 2]],
         deco: ['deco.crystal.1', 'deco.crystal.2', 'deco.shard.0', 'deco.shard.1', 'deco.shard.2', 'deco.skull', 'deco.chain', 'deco.candle.2'],
         // void crystal clusters, broken colonnades, lone shards
-        features: [CLUSTER('deco.crystal.2', [12, 18], [3, 6], 34, 4), ROW('prop.column', [12, 15], [2, 4], [40, 70], 2), ONE('deco.crystal.1', [12, 16], 1), ONE('', [22, 34], 1)],
-        brazier: 'tile.torch.floor',
+        features: [CLUSTER('prop.crystal.void.0', [12, 16], [3, 6], 34, 4), ROW('prop.obelisk', [9, 11], [2, 4], [40, 70], 2), ONE('prop.crystal.void.1', [9, 11], 1), ONE('prop.ruin.void.0', [20, 24], 1), ONE('prop.ruin.void.2', [13, 15], 1), ONE('', [22, 34], 1)],
+        brazier: 'prop.brazier',
         pal: { bg: '#08060c', wall: '#241c33', accent: '#c58aff', light: '#ffc6f0' },
       },
       arena: { size: 3200, obstacles: [30, 40], braziers: [14, 20], clear: 220 },

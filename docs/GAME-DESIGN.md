@@ -101,7 +101,8 @@ Max 6 passives. Passive cards also show a line naming the weapon they evolve.
 
 - XP to the next level: `5 + 8 × (level − 1)` up to level 20, then `+15` per level.
 - Each level offers 3 cards (4 with Fortune luck), drawn from: new weapon (if a slot is free), weapon level, new passive (if a slot is free), passive level, hero skill upgrade (Q/E, 3 levels each). Gold (+25) or heal (+30 HP) when nothing is left.
-- Reroll and Skip: counts come from meta upgrades.
+- Reroll, Skip and Banish: counts come from meta upgrades. Banish removes one card's item from the run's pool and replaces that card (Gold and Meal cannot be banished).
+- Card weights: owned weapon level 4 (+2 when weapon slots are full); new weapon 3; owned passive level 3 (+1.5 when passive slots are full); new passive 2 (+1.5 if it pairs an owned weapon); skill 1.5 (+1 when all slots are full). A card that makes a weapon evolution-ready is flagged and weighted up.
 - **Solo**: the game pauses while picking. **Co-op**: no pause; cards appear in a compact strip at the bottom; pick with 1–4 while moving; 1 s of invulnerability after picking.
 - XP is shared in co-op (one bar, everyone levels together, each player picks their own card).
 
@@ -109,12 +110,12 @@ Max 6 passives. Passive cards also show a line naming the weapon they evolve.
 
 - **Spawn timeline** per stage, per minute: spawn rate (foes/s), alive cap, weighted roster. Foes spawn on a ring 380–460 px from a random living hero, never inside walls or obstacles.
 - **Alive cap**: 300 at 0:00 rising to 700 at 12:00 (solo); +25% per extra player, hard cap 900.
-- **Foe HP**: `base × (1 + 0.18 × minute) × (1 + 0.5 × (players − 1))`.
-- **Contact damage**: 3 at 0:00 rising to 12 at 15:00; ranged projectiles 6–15.
-- **Foe kinds**: chaser (straight line), swarmer (fast, weak, comes in packs of 12–30), brute (slow, 8× HP, knockback-immune), ranged (stops at 160 px, shoots a telegraphed bolt), exploder (telegraphed 0.7 s burst on contact), splitter (splits in 2–3 on death).
+- **Foe HP**: `base × (1 + 0.18 × minute) × (1 + 0.5 × (players − 1)) × stage HP` (stage HP 1 / 1.3 / 1.6).
+- **Contact damage**: 3 at 0:00 rising to 12 at 15:00, × stage damage (1 / 1.15 / 1.3). Foe shots and blasts: base × (1 + 1.2 × min(1, t / 15:00)) × stage damage.
+- **Foe kinds**: chaser (straight line), swarmer (fast, weak; packs of 12–16 at 0:00 growing to 20–30 by 10:00), brute (slow, 8× HP, knockback-immune, telegraphed slam), ranged (stops at 160 px, shoots a telegraphed bolt, fan or ring; only from inside the target's screen), exploder (telegraphed 0.7 s burst on contact), splitter (splits in 2–3 on death), charger (telegraphed dash; packs of 2–4), diver (telegraphed dive; packs of 3–5). Every attack telegraph is ≥ 0.6 s and aimed where the target stood when the wind-up began; killing, stunning or freezing the foe cancels it.
 - **Events**: a swarm wave every 90 s (a ring of 40–80 swarmers closing in, or a stampede line crossing the screen).
-- **Elites**: one every 60 s from 2:00 (a roster foe at 2× size, 25× HP, glowing outline); drops a chest.
-- **Off-screen culling**: foes farther than 900 px from every hero teleport to a fresh spawn point ahead of a hero.
+- **Elites**: one every 60 s from 2:00 (a non-exploder roster foe at 2× size, 25× HP, glowing outline); drops a chest. Elite attacks change shape: ranged fire 2 more shots (ring casters 1.5×), charges and dives last 1.35× longer, brute slams get 1.5× radius plus a shot ring, splitters split into 3 extra children.
+- **Off-screen culling**: foes farther than 900 px (elites 1300 px) from every hero teleport to a fresh spawn point ahead of a hero; bosses never.
 - **Separation**: foes push apart on the spatial grid; they flow around obstacles.
 
 ## 8. Bosses
@@ -124,11 +125,11 @@ Each boss: 2–3 telegraphed patterns, a health bar at the top, HP `= 400 × min
 ## 9. Pickups
 
 - **XP gems**: small (1), medium (5, from elites and brutes), large (25). When more than 350 gems lie on the ground, new ones merge into the nearest gem.
-- **Gold coins**: 1–5 from braziers and elites (meta currency).
+- **Gold coins**: 1–5 from braziers and elites (meta currency), worth value × (1 + greed + luck / 2).
 - **Food**: heals 30 HP; braziers only (8% chance). No default sustain.
 - **Magnet** (braziers, 3%): pulls every gem on the map.
 - **Holy Bomb** (braziers, 2%): kills every non-elite foe on screen.
-- **Chest**: from elites and bosses: evolves an evolution-ready weapon, otherwise levels 1–3 random owned items (luck adds more).
+- **Chest**: from elites and bosses: evolves the first evolution-ready weapon; otherwise 1 roll, a 2nd at 30% + luck, a 3rd at 10% + luck / 2; each roll levels a random owned item (weapons weight 2, passives 1), or pays gold when nothing can level.
 
 ## 10. Co-op
 
@@ -138,8 +139,8 @@ Each boss: 2–3 telegraphed patterns, a health bar at the top, HP `= 400 × min
 
 ## 11. Meta progression
 
-- **Gold** carries over. The Camp shop sells permanent ranks: Might (5), Vigor (5), Plating (3), Mending (5), Swiftness (3), Magnet (3), Growth (+5% XP, 5), Greed (+10% gold, 5), Fortune (5), Revival (2), Reroll (5), Skip (3). Cost: `base × (rank + 1)`, base 200; a refund button resets all.
-- **Unlocks**: start with Knight, Ranger and Pyro. Necro: survive 10 minutes. Cleric: beat stage 1. Shade: kill 3000 foes in one run. Bell: reach level 40 in one run. Each hero's signature weapon joins the general pool after the hero's first run.
+- **Gold** carries over. The Camp shop sells permanent ranks: Might (5), Vigor (5), Plating (3), Mending (5), Swiftness (3), Magnet (3), Growth (+5% XP, 5), Greed (+10% gold, 5), Fortune (5), Revival (2), Reroll (5), Skip (3), Banish (3). Cost: `base × (rank + 1)`, base 200; a refund button resets all.
+- **Unlocks**: start with Knight, Ranger and Pyro. Necro: survive 10 minutes. Cleric: beat stage 1 (also opens stage 2; beating stage 2 opens stage 3). Shade: kill 3000 foes in one run. Bell: reach level 40 in one run. Each hero's signature weapon joins the general pool after the hero's first run.
 - Profile autosaves in localStorage, plus a portable save code.
 
 ## 12. Feel (juice)

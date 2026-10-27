@@ -97,7 +97,8 @@ async function main() {
     console.log('camp');
     await page.evaluate(() => { ED.App.profile.gold = 5000; ED.App.persist(); });
     await page.locator('#btn-camp').click();
-    check(await page.locator('.shop-row').count() === 12, '12 shop ranks');
+    const nShop = await page.evaluate(() => ED.SHOP.length);
+    check(await page.locator('.shop-row').count() === nShop, nShop + ' shop ranks');
     await page.locator('.shop-row button[data-id="might"]').click();
     let pr = await page.evaluate(() => ({ g: ED.App.profile.gold, r: ED.App.profile.shop.might | 0 }));
     check(pr.g === 4800 && pr.r === 1, 'buy Might: rank 1, gold 4800');

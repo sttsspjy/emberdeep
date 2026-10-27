@@ -270,7 +270,7 @@
     if (ev.t === 'swing' && ev.pid) { const h = heroSt(ev.pid); h.swT = now; h.swA = ev.a; h.swArc = Math.min(ev.arc || 1.6, 2.6); }
     else if (ev.t === 'shoot' && ev.pid) { const w = ED.WEAPONS[ev.wid]; if (w && w.look) heroSt(ev.pid).shT = now; }
   };
-  // Held weapon of a hero: its first weapon's icon when that is a weapon sprite, else the hero's signature icon.
+  // Held weapon of a hero: its first weapon's held sprite (def.held) when that is a weapon sprite, else the hero's signature.
   const wcache = new Map();
   function heldOf(p) {
     const ws = p.weapons && p.weapons[0], wid = ws ? ws.id : (ED.HEROES[p.cls] && ED.HEROES[p.cls].sig);
@@ -278,9 +278,10 @@
     if (w !== undefined) return w;
     const def = ED.WEAPONS[wid], A = ED.Atlas;
     w = null;
-    if (def && def.icon && def.icon.startsWith('weapon.') && A.has(def.icon)) {
-      const r = A.anim(def.icon), dir = typeof r.anchors.dir === 'number' ? r.anchors.dir : 0;
-      w = { id: def.icon, src: (dir - 90) * PI / 180, ranged: !!def.look };
+    const hid = def && (def.held || def.icon);
+    if (hid && hid.startsWith('weapon.') && A.has(hid)) {
+      const r = A.anim(hid), dir = typeof r.anchors.dir === 'number' ? r.anchors.dir : 0;
+      w = { id: hid, src: (dir - 90) * PI / 180, ranged: !!def.look };
     }
     if (w || A.ok) wcache.set(wid, w);
     return w;
@@ -341,9 +342,9 @@
     B.circ(o.x, o.y, o.r, 0x00000088, 1);
     if (o.look) B.spr(o.look, 0, o.x, o.y + Math.min(6, o.r * 0.4), reset());
   };
-  // Brazier: animated torch with a warm flicker glow; nothing once broken.
+  // Brazier: animated flame bowl with a warm flicker glow; the broken bowl once smashed.
   Ac.brazier = (B, b, t) => {
-    if (b.broken) return;
+    if (b.broken) { B.spr('prop.brazier.broken', 0, b.x, b.y, reset()); return; }
     const fl = 0.5 + 0.5 * Math.sin(t * 9 + b.id) * Math.sin(t * 5.3 + b.id * 2);
     B.circ(b.x, b.y - 8, 10 + fl * 3, (0xff9a3a00 | Math.round(20 + 18 * fl)) >>> 0, 0);
     B.shadow(b.x, b.y, 6);
@@ -353,14 +354,13 @@
 
   // ---------------- pickups ----------------
   // Gems (larger tiers scaled up), coins, food, magnet, bomb, chest; a gentle bob and a periodic glint; vacuumed gems leave sparkles (FX.trail); chests pulse with a gold glow.
-  const PK = { xp1: ['pickup.xp', 1], xp5: ['pickup.xp', 1.5], xp25: ['pickup.xp', 2.2], gold: ['pickup.coin', 1], food: ['pickup.heart', 1.5], magnet: ['pickup.flask.yellow', 1.4], bomb: ['pickup.flask.red', 1.4], chest: ['prop.chest.closed', 1.2] };
+  const PK = { xp1: ['pickup.xp1', 1], xp5: ['pickup.xp5', 1.25], xp25: ['pickup.xp25', 1.5], gold: ['pickup.gold', 1], food: ['pickup.food', 1], magnet: ['pickup.magnet', 1], bomb: ['pickup.bomb', 1], chest: ['pickup.chest', 1] };
   const PKCOL = { xp1: 0x6ad7ffff, xp5: 0x8aff9aff, xp25: 0xff7ad9ff, gold: 0xffd24aff, food: 0xff5a5aff, magnet: 0xffe14aff, bomb: 0xffffffff, chest: 0xc89a4aff };
   Ac.pickup = (B, g, t) => {
     const d = PK[g.k] || PK.xp1, o = reset(), chest = g.k === 'chest', gem = g.k === 'xp1' || g.k === 'xp5' || g.k === 'xp25';
     const s = stOf(g.id, g.x, g.y, 3), pulled = now - s.mv < 0.1 && s.spd > 1.2;
     const bob = chest || pulled ? 0 : Math.round(Math.sin(t * 4 + g.id) * 1.5);
     o.sx = o.sy = d[1];
-    if (g.k === 'xp5') o.tint = 0x8aff9a; else if (g.k === 'xp25') o.tint = 0xff7ad9;
     if (chest) {
       const pu = 0.5 + 0.5 * Math.sin(t * 4);
       B.circ(g.x, g.y - 6, 14 + pu * 4, (0xffd27a00 | Math.round(30 + 30 * pu)) >>> 0, 0);

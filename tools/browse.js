@@ -8,8 +8,8 @@
 //   crowdN: a knight run (god cheat) held at N live foes; after 2 s of warm-up measures --seconds (6) s, p50 / p95 / max: frame time (rAF interval; the browser runs uncapped,
 //          no vsync, when a crowd scenario is requested), main-thread work (all rAF callbacks of a frame), sim ms per 60 Hz tick and Render.frame ms.
 //          --software launches without the GPU (software GL: the Canvas2D fallback path). --gate fails crowd900 when GPU-path frame p95 > 8 ms (ARCHITECTURE §11; report-only by default).
-//   coop: two pages of one browser context on ?net=local (BroadcastChannel transport): host + guest lobby handshake; when ED.Net.encodeSnap / decodeSnap exist, the host runs a
-//         2-hero world and streams snapshots to the guest for --seconds (6) s (decoded heroes / foes, bytes <= 12 KB); otherwise that half is skipped with a note.
+//   coop: two pages of one browser context on ?net=local (BroadcastChannel transport): host + guest through the ED.Net lobby API (host, join, ready, start), then the real co-op
+//         run on both peers for --seconds (6) s: the guest's mirror shows 2 heroes and foes, snapshots <= 12 KB.
 // In-page debug API (injected only by this harness, absent in normal play; every call is a no-op without a solo / host run): ED.Debug.{fastForward(sec), give(id, lvl), evolve(wid?),
 //   spawnBoss(id?), setTime(sec), levelUp(n), chest(), win(), lose(), god(on), state()}.
 // Mechanism: a read-only http server on 127.0.0.1 (random port) serves the repo; Playwright resolves via require('playwright'), else the npx cache (%LOCALAPPDATA%\npm-cache\_npx).
@@ -220,6 +220,10 @@ function pageBoot(cfg) {
           if (!BR.drive) return o;
           const t = performance.now() / 1000, me = E.Game.view && E.Game.view.me;
           o.mx = BR.still ? 0 : Math.cos(t * 0.9); o.my = BR.still ? 0 : Math.sin(t * 0.9);
+          if (!BR.still && me && t % 4 < 1.5) { // every 4 s, 1.5 s walking at the nearest foe (melee weapons swing along the walk)
+            let best = null, bd = 1e12; for (const f of E.Game.view.foes) { if (f.dead) continue; const d = (f.x - me.x) ** 2 + (f.y - me.y) ** 2; if (d < bd) { bd = d; best = f; } }
+            if (best) { const l = Math.sqrt(bd) || 1; o.mx = (best.x - me.x) / l; o.my = (best.y - me.y) / l; }
+          }
           o.q = Math.random() < 0.02; o.e = Math.random() < 0.015; o.dash = Math.random() < 0.01;
           o.pick = BR.autoPick && me && me.offer ? 1 : 0;
           return o;
@@ -282,60 +286,51 @@ function pageBoot(cfg) {
     requestAnimationFrame(step);
   });
 
-  // ---- co-op (two pages, ?net=local) ----
+  // ---- co-op (two pages, ?net=local): the real lobby API (ED.Net.host / join / setReady / start) and the real run session on both peers ----
   const C = BR.coop;
-  const hasNet = () => { const E = ED(); return E.Net && typeof E.Net.Host === 'function' && typeof E.Net.Client === 'function' && E.Net.mode() === 'local' && E.Net.available(); };
-  const codec = () => { const N = ED().Net; return typeof N.encodeSnap === 'function' && typeof N.decodeSnap === 'function'; };
-  const meta = () => { const E = ED(); if (!E.App.hasProfile) E.App.createProfile('Bot'); return E.Save.metaBundle(E.App.profile); };
-  BR.coopHost = (cls) => new Promise((resolve, reject) => {
-    if (!hasNet()) { resolve({ skip: 'ED.Net Host / Client or the local transport is missing' }); return; }
-    const E = ED(), to = setTimeout(() => reject(new Error('host open timeout')), 8000);
-    C.joined = 0;
-    const h = C.host = new E.Net.Host({ name: 'Host', cls, meta: meta() }, {
-      status: (s, msg) => { if (s === 'open') { clearTimeout(to); resolve({ code: h.code }); } else if (s === 'error') { clearTimeout(to); reject(new Error(msg)); } },
-      code: () => {}, joined: () => { C.joined++; }, left: () => { C.left = (C.left || 0) + 1; }, lobby: (s) => { C.lobby = s; },
-      data: (pid, d) => { if (d && d.t === 'input' && E.Game.w) E.Game.w.input(pid, d); },
-    });
+  const hasNet = () => { const E = ED(); return E.Net && typeof E.Net.host === 'function' && E.Net.mode() === 'local' && E.Net.available(); };
+  const ensure = () => { const E = ED(); if (!E.App.hasProfile) E.App.createProfile('Bot'); };
+  const until = (test, ms, what) => new Promise((resolve, reject) => {
+    const t0 = performance.now();
+    const iv = setInterval(() => { const r = test(); if (r) { clearInterval(iv); resolve(r); } else if (performance.now() - t0 > ms) { clearInterval(iv); reject(new Error(what + ' timeout (' + JSON.stringify(ED().Net.lobby) + ')')); } }, 30);
   });
-  BR.coopJoin = (code, cls) => new Promise((resolve, reject) => {
-    if (!hasNet()) { resolve({ skip: 'ED.Net Host / Client or the local transport is missing' }); return; }
-    const E = ED(), to = setTimeout(() => reject(new Error('join timeout')), 8000);
-    C.snaps = 0; C.bytes = 0; C.maxBytes = 0; C.maxHeroes = 0; C.maxFoes = 0; C.decodeErr = '';
-    C.view = { me: null, heroes: [], foes: [], projs: [], zones: [], pickups: [], props: null, stage: 0, seed: 0, time: 0, xp: 0, xpNext: 1, level: 1, kills: 0, gold: 0, boss: null, events: [] };
-    C.client = new E.Net.Client(code, { name: 'Guest', cls, meta: meta() }, {
-      welcome: (d) => { clearTimeout(to); resolve({ pid: d.pid, slot: d.slot }); },
-      error: (m) => { clearTimeout(to); reject(new Error(String(m))); },
-      lobby: (s) => { C.lobby = s; }, closed: (m) => { C.closedMsg = m || 'closed'; },
-      data: (d) => {
-        if (!d || d.t !== 'snap') return;
-        const b = d.b, n = b && (b.byteLength || 0);
-        C.snaps++; C.bytes += n; if (n > C.maxBytes) C.maxBytes = n;
-        try { E.Net.decodeSnap(b, C.view); C.maxHeroes = Math.max(C.maxHeroes, C.view.heroes.length); C.maxFoes = Math.max(C.maxFoes, C.view.foes.length); }
-        catch (e) { if (!C.decodeErr) C.decodeErr = String(e && e.stack || e).slice(0, 300); }
-      },
-    });
-  });
-  BR.coopLobby = () => ({ members: C.lobby ? C.lobby.members.length : 0, joined: C.joined || 0, codec: codec() });
-  // Host: starts a world with every lobby member (god cheat) and sends each guest a snapshot every 50 ms.
-  BR.coopStart = () => {
-    if (!codec()) return { skip: 'ED.Net.encodeSnap / decodeSnap are stubs' };
-    const E = ED(), h = C.host;
-    h.started = true;
-    const players = h.members.map(m => ({ pid: m.pid, name: m.name, slot: m.slot, cls: m.cls, meta: m.meta || { shop: {}, sigs: [] } }));
-    E.Game.start({ mode: 'host', seed: cfg.seed, stage: 0, players, myPid: 'host', cheats: { god: true } });
-    E.App.state = 'run'; E.UI.show('none');
-    BR.drive = true;
-    h.broadcast({ t: 'start', seed: cfg.seed, stage: 0 });
-    C.sent = 0; C.encMs = 0;
-    clearInterval(C.snapT);
-    C.snapT = setInterval(() => {
-      const w = E.Game.w; if (!w) return;
-      for (const pid of h.conns.keys()) { const s = performance.now(), b = E.Net.encodeSnap(w, pid); C.encMs = Math.max(C.encMs, performance.now() - s); h.sendTo(pid, { t: 'snap', b }); C.sent++; }
-    }, 50);
-    return { players: players.length };
+  BR.coopHost = async (cls) => {
+    if (!hasNet()) return { skip: 'ED.Net lobby API or the local transport is missing' };
+    const E = ED(); ensure(); E.App.sel.cls = cls;
+    E.Net.host('Host', cls);
+    await until(() => E.Net.lobby.status === 'open' || E.Net.lobby.status === 'error', 8000, 'host open');
+    if (E.Net.lobby.status === 'error') throw new Error(E.Net.lobby.error);
+    return { code: E.Net.lobby.code };
   };
-  BR.coopStats = () => ({ snaps: C.snaps || 0, sent: C.sent || 0, maxBytes: C.maxBytes || 0, avgBytes: C.snaps ? Math.round(C.bytes / C.snaps) : 0, maxHeroes: C.maxHeroes || 0, maxFoes: C.maxFoes || 0, decodeErr: C.decodeErr || '', closed: C.closedMsg || '', encMs: +(C.encMs || 0).toFixed(2) });
-  BR.coopStop = () => { clearInterval(C.snapT); try { if (C.client) C.client.close(); } catch (e) { /* gone */ } try { if (C.host) C.host.close(); } catch (e) { /* gone */ } BR.drive = false; };
+  BR.coopJoin = async (code, cls) => {
+    if (!hasNet()) return { skip: 'ED.Net lobby API or the local transport is missing' };
+    const E = ED(); ensure(); E.App.sel.cls = cls;
+    C.maxHeroes = 0; C.maxFoes = 0;
+    E.Net.join(code, 'Guest', cls);
+    await until(() => E.Net.lobby.status === 'open' || E.Net.lobby.status === 'error', 8000, 'join');
+    if (E.Net.lobby.status === 'error') throw new Error(E.Net.lobby.error);
+    E.Net.setReady(true);
+    clearInterval(C.sample);
+    C.sample = setInterval(() => { const v = E.Game.mode === 'client' && E.Game.view; if (v) { C.maxHeroes = Math.max(C.maxHeroes, v.heroes.length); C.maxFoes = Math.max(C.maxFoes, v.foes.length); } }, 100);
+    const L = E.Net.lobby, m = L.members.find(x => x.pid === L.me);
+    return { pid: L.me, slot: m ? m.slot : -1 };
+  };
+  BR.coopLobby = () => { const L = ED().Net.lobby; return { members: L.members.length, ready: L.canStart, codec: true }; };
+  // Host: starts the party's run (god cheat) once every guest is ready; both peers enter the run through ED.App.enterRun.
+  BR.coopStart = async () => {
+    const E = ED();
+    await until(() => E.Net.lobby.canStart, 5000, 'guest ready');
+    if (!E.Net.start({ god: true }, cfg.seed)) return { skip: 'ED.Net.start refused' };
+    BR.drive = true;
+    return { players: E.Game.w ? E.Game.w.heroes.length : 0 };
+  };
+  BR.coopStats = () => {
+    const E = ED(), n = E.Game.netStats ? E.Game.netStats() : {};
+    if (n.mode === 'host') return { mode: 'host', clients: n.clients.length, sent: n.clients.reduce((a, c) => a + (c.bytes ? 1 : 0), 0), encMs: 0 };
+    return { snaps: n.snaps || 0, maxBytes: n.maxBytes || 0, avgBytes: n.snaps ? Math.round(n.bytes / n.snaps) : 0, maxHeroes: C.maxHeroes || 0, maxFoes: C.maxFoes || 0,
+      corrMean: n.corrN ? +(n.corrSum / n.corrN).toFixed(2) : 0, decodeErr: '', closed: E.Game.mode === 'client' ? '' : 'guest left the run' };
+  };
+  BR.coopStop = () => { clearInterval(C.sample); BR.drive = false; try { ED().Net.leave(); } catch (e) { /* gone */ } };
 }
 
 // ---------------- run context ----------------
@@ -547,7 +542,7 @@ async function scenCoop() {
       else {
         await wait(secs * 1000);
         const s = await call(G.page, 'coopStats'), h = await call(H.page, 'coopStats');
-        res.rows.push(Object.assign({ kind: 'run' }, s, { sent: h.sent, encMs: h.encMs }));
+        res.rows.push(Object.assign({ kind: 'run' }, s));
         if (s.decodeErr) fail(res, 'decodeSnap threw: ' + s.decodeErr);
         if (s.snaps < secs * 20 * 0.5) fail(res, `guest decoded ${s.snaps} snapshots in ${secs} s (expected ~${secs * 20})`);
         if (s.maxHeroes !== 2) fail(res, 'guest view had ' + s.maxHeroes + ' heroes, expected 2');

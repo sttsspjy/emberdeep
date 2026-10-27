@@ -272,7 +272,7 @@ const W = {
     'kggGGGGggGGGGggk',
     '.kkggggggggggkk.',
     '...kkkkkkkkkk...'],
-  plaguefield: [
+  plague: [
     '..kk........kk..',
     '.kGLk.kkkk.kLGk.',
     '.kGGkkBBBBkkGGk.',
@@ -306,7 +306,7 @@ const W = {
     '.......kck......',
     '......kck.......',
     '......kk........'],
-  wispchoir: [
+  choir: [
     '.......kk.......',
     '......kCwk......',
     '.....kCwwCk.....',

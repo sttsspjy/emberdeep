@@ -187,7 +187,7 @@
     B.crowd = crowd; R.crowd = crowd;
     for (let i = 0; i < heroes.length; i++) { const p = heroes[i]; if (!p.dead && inView(p)) items[n++] = p; }
     for (const o of A.obstacles) if (inView(o)) items[n++] = o;
-    for (const b of A.braziers) if (!b.broken && inView(b)) items[n++] = b;
+    for (const b of A.braziers) if (inView(b)) items[n++] = b;
     const ZA = ED.ZoneActor;
     for (let i = 0; i < zones.length; i++) { const z = zones[i]; if (!z.dead && ZA[z.k] && inView(z)) items[n++] = z; } // zones with a body (minions): ED.ZoneActor[look](B, z, t)
     if (items.length > n) items.length = n;

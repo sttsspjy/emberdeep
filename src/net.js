@@ -8,7 +8,7 @@
   const N = ED.Net = {};
   const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   const PREFIX = 'wickdeep-sv-';
-  N.VERSION = ED.NET_VERSION = 2; // bump on any wire change: mixed versions would desync
+  N.VERSION = ED.NET_VERSION = 3; // bump on any wire change: mixed versions would desync
   // Heartbeat: PeerJS 'close' does not fire when a tab crashes or a network drops, so both ends ping and
   // treat a few seconds of silence as a disconnect (longer in the lobby, where little else is sent).
   const PING_MS = 2000, TIMEOUT_RUN = 6000, TIMEOUT_LOBBY = 10000;
@@ -328,7 +328,7 @@
 
   // ---------------- snapshot encode (host) ----------------
   // Layout: u8 SNAP, u32 seq, u32 tick, u32 ack (last input seq applied for this client), f32 xp, f32 xpNext, u16 level, u32 kills, u32 gold, u8 state (0 play, 1 won, 2 lost),
-  // i16 ox, oy (cull rect origin), boss (varint id + 1 or 0; varint k, u8 hpQ, u8 flags), braziers (u8 n + broken bitmask), u8 heroes + records,
+  // i16 ox, oy (cull rect origin), boss (varint id + 1 or 0; varint k, u8 hpQ, u8 flags), boss bar (u8 flags 1 on 2 final 4 enraged; if on: varint foe index, u8 q, u8 phase, u8 n, u8 rev (255 none)), braziers (u8 n + broken bitmask), u8 heroes + records,
   // then u16-counted sections: zones, foes, projectiles, pickups, hits, deaths, misc binary events, JSON events.
   // Foes / projectiles / pickups / positional events are kept only inside the client's view + MARGIN; their positions are 3 bytes (12 + 12 bits at 0.5 px from the rect origin).
   // Ids: arrays are in spawn order, so ids ascend: each id is written as delta from the previous (with 2 flag bits); a delta of 0 escapes to an absolute id.
@@ -365,6 +365,8 @@
     wi16(ox); wi16(oy);
     const b = w.boss;
     if (b && !b.dead) { wv(b.id + 1); wv(b.k); w8(b.hpQ); w8((b.enraged ? 1 : 0) | (b.final ? 2 : 0)); } else wv(0);
+    const bb = w.bossBar;
+    if (bb && bb.on) { w8(1 | (bb.final ? 2 : 0) | (bb.enraged ? 4 : 0)); wv(Math.max(0, ED.FOE_IDS.indexOf(bb.id))); w8(U.clamp(Math.round(bb.q), 0, 255)); w8(bb.phase | 0); w8(bb.n | 0); w8(bb.rev < 0 ? 255 : U.clamp(Math.round(bb.rev * 254), 0, 254)); } else w8(0);
     const BR = w.arena.braziers, nb = Math.min(BR.length, 255);
     w8(nb); for (let i = 0; i < nb; i += 8) { let m = 0; for (let k = 0; k < 8 && i + k < nb; k++) if (BR[i + k].broken) m |= 1 << k; w8(m); }
     // heroes (all, full)
@@ -377,7 +379,7 @@
       wf32(p.hp); w16(Math.round(p.maxHp)); wf32((st.speed || 0) * (p.slowT > 0 ? 1 - (p.slowK || 0) : 1));
       w16(ms16(p.dashCd)); w16(ms16(p.invuln)); w16(ms16(p.hurtT)); w16(ms16(p.bleed)); w8(q8(p.revive || 0, 255));
       if (dashing) { w16(ms16(p.dashT)); wf32(p.dashDx); wf32(p.dashDy); }
-      w8(p.rerolls | 0); w8(p.skips | 0); wv(p.kills | 0);
+      w8(p.rerolls | 0); w8(p.skips | 0); w8(p.banishes | 0); wv(p.kills | 0);
       w8(p.skills.length); for (const sk of p.skills) { wstr(T.Sm, sk.id); w8(sk.lvl); w16(ms16(sk.cd)); w16(ms16(sk.cdMax)); }
       w8(p.weapons.length); for (const ws of p.weapons) { wstr(T.Wm, ws.id); w8((ws.lvl & 127) | (ws.evo ? 128 : 0)); }
       w8(p.passives.length); for (const ps of p.passives) { wstr(T.Pm, ps.id); w8(ps.lvl); }
@@ -392,10 +394,12 @@
       wid(z.id, 0, 0);
       wi16(z.x * 2); wi16(z.y * 2); wstr(T.Lm, z.k);
       const line = z.len > 0, cone = z.arc > 0;
-      w8((z.team ? 1 : 0) | (z.warn ? 2 : 0) | (line ? 4 : 0) | (cone ? 8 : 0));
+      const zw = !line && z.w ? 16 : 0;
+      w8((z.team ? 1 : 0) | (z.warn ? 2 : 0) | (line ? 4 : 0) | (cone ? 8 : 0) | zw);
       w16(U.clamp(Math.round(z.r * 2), 0, 65535)); w16(qa16(z.a));
       if (line) { w16(U.clamp(Math.round(z.len * 2), 0, 65535)); w16(U.clamp(Math.round(z.w * 2), 0, 65535)); }
       if (cone) w8(q8(z.arc, 40));
+      if (zw) wf32(z.w);
       w16(ms16(z.t)); w16(ms16(z.dur)); wstr(T.Wm, z.wid);
       n++; if (o > LIMIT) break;
     }
@@ -550,10 +554,10 @@
   };
   Tracks.prototype.clear = function () { for (const e of this.list) this.pool.push(e); this.list.length = 0; this.map.clear(); };
 
-  const foeApply = (e, f) => { e.flash = f & 1 ? 0.06 : 0; e.face = f & 2 ? -1 : 1; e.freezeT = f & 8 ? 1 : 0; e.stunT = f & 16 ? 1 : 0; e.burnT = f & 32 ? 1 : 0; e.slowT = f & 64 ? 1 : 0; e.st = f >>> 8; };
+  const foeApply = (e, f, since, rt) => { e.flash = f & 1 ? 0.06 : 0; e.face = f & 2 ? -1 : 1; e.freezeT = f & 8 ? 1 : 0; e.stunT = f & 16 ? 1 : 0; e.burnT = f & 32 ? 1 : 0; e.slowT = f & 64 ? 1 : 0; const st = f >>> 8; if (st !== e.st) { e.st = st; e.st0 = rt; } e.stT = rt - e.st0; };
   const projApply = (pr, f, since, rt) => { pr.a = da8(f); pr.t = rt - pr.born; };
   const zoneApply = (z, f, since) => { z.t = Math.min(z.dur, f + Math.max(0, since)); };
-  const heroFields = () => ({ pid: '', slot: 0, cls: 'knight', name: '', x: 0, y: 0, r: C.HERO_R, face: 0, mdir: 0, mvx: 0, mvy: 0, moving: false, hp: 1, maxHp: 1, spd: 0, dashCd: 0, dashT: 0, dashDx: 1, dashDy: 0, invuln: 0, hurtT: 0, downed: false, bleed: 0, revive: 0, dead: false, kills: 0, rerolls: 0, skips: 0, weapons: [], passives: [], skills: [], offer: null, fxf: 0, fxv: 0 });
+  const heroFields = () => ({ pid: '', slot: 0, cls: 'knight', name: '', x: 0, y: 0, r: C.HERO_R, face: 0, mdir: 0, mvx: 0, mvy: 0, moving: false, hp: 1, maxHp: 1, spd: 0, dashCd: 0, dashT: 0, dashDx: 1, dashDy: 0, invuln: 0, hurtT: 0, downed: false, bleed: 0, revive: 0, dead: false, kills: 0, rerolls: 0, skips: 0, banishes: 0, weapons: [], passives: [], skills: [], offer: null, fxf: 0, fxv: 0 });
 
   // cfg: { stage, seed, roster: [{ pid, slot, name, cls }] (World hero order), myPid }. view: the ARCHITECTURE §10 view model, arrays rebuilt by frame(rt).
   N.Mirror = function (cfg) {
@@ -563,8 +567,9 @@
     this.myIdx = this.heroes.findIndex(h => h.pid === cfg.myPid);
     this.me = this.heroes[this.myIdx] || null; // view.me from the first snapshot on
     this.srv = { x: 0, y: 0, dashT: 0, dashCd: 0, dashDx: 1, dashDy: 0, mdir: 0, mvx: 0, mvy: 0, moving: false, spd: 0, live: false };
-    this.boss = { id: 0, k: 0, hpQ: 255, enraged: false, final: false, dead: false };
-    this.foes = new Tracks(() => ({ id: 0, k: 0, def: null, x: 0, y: 0, r: 7, hpQ: 255, face: 1, flash: 0, st: 0, elite: false, boss: false, scale: 1, enraged: false, freezeT: 0, stunT: 0, burnT: 0, slowT: 0 }), foeApply);
+    this.boss = { id: 0, k: 0, x: 0, y: 0, hpQ: 255, enraged: false, final: false, dead: false };
+    this.bossBar = { on: false, id: '', name: '', q: 0, phase: 0, final: false, enraged: false, n: 0, rev: -1 };
+    this.foes = new Tracks(() => ({ id: 0, k: 0, def: null, x: 0, y: 0, r: 7, hpQ: 255, face: 1, flash: 0, st: 0, stT: 0, st0: 0, elite: false, boss: false, scale: 1, enraged: false, freezeT: 0, stunT: 0, burnT: 0, slowT: 0 }), foeApply);
     this.projs = new Tracks(() => ({ id: 0, k: '', wid: '', team: 0, x: 0, y: 0, a: 0, r: 4, t: 0 }), projApply);
     this.picks = new Tracks(() => ({ id: 0, k: 'xp1', x: 0, y: 0 }), null);
     this.zones = new Tracks(() => ({ id: 0, k: '', wid: '', team: 0, warn: false, x: 0, y: 0, r: 0, a: 0, len: 0, w: 0, arc: 0, t: 0, dur: 1 }), zoneApply);
@@ -587,6 +592,9 @@
     ox = ri16(); oy = ri16();
     const bid = rv();
     if (bid) { const B = this.boss; B.id = bid - 1; B.k = rv(); B.hpQ = r8(); const f = r8(); B.enraged = !!(f & 1); B.final = !!(f & 2); B.dead = false; v.boss = B; } else v.boss = null;
+    const bf = r8(), BB = this.bossBar;
+    if (bf & 1) { const d = ED.FOES[ED.FOE_IDS[rv()]]; BB.on = true; BB.final = !!(bf & 2); BB.enraged = !!(bf & 4); BB.id = d ? d.id : ''; BB.name = d ? d.name : 'Boss'; BB.q = r8(); BB.phase = r8(); BB.n = r8(); const rv8b = r8(); BB.rev = rv8b === 255 ? -1 : rv8b / 254; } else BB.on = false;
+    v.bossBar = BB;
     const nb = r8(), BR = v.props.braziers;
     for (let i = 0; i < nb; i += 8) { const m = r8(); for (let k = 0; k < 8 && i + k < nb; k++) if (BR[i + k]) { const br = !!(m & (1 << k)); BR[i + k].broken = br; if (br) BR[i + k].hp = 0; } }
     // heroes
@@ -598,7 +606,7 @@
       const dashCd = r16() / 1000; h.invuln = r16() / 1000; h.hurtT = r16() / 1000; h.bleed = r16() / 1000; h.revive = r8() / 255;
       let dashT = 0, ddx = 1, ddy = 0;
       if (fl & 8) { dashT = r16() / 1000; ddx = rf32(); ddy = rf32(); }
-      h.rerolls = r8(); h.skips = r8(); h.kills = rv();
+      h.rerolls = r8(); h.skips = r8(); h.banishes = r8(); h.kills = rv();
       h.downed = !!(fl & 2); h.dead = !!(fl & 4);
       let n = r8(); const S = h.skills; for (let i = 0; i < n; i++) { const s = S[i] || (S[i] = { id: '', lvl: 1, cd: 0, cdMax: 1 }); s.id = rstr(TBL.S); s.lvl = r8(); s.cd = r16() / 1000; s.cdMax = r16() / 1000; } S.length = n;
       n = r8(); const Wp = h.weapons; for (let i = 0; i < n; i++) { const s = Wp[i] || (Wp[i] = { id: '', lvl: 1, evo: false }); s.id = rstr(TBL.W); const l = r8(); s.lvl = l & 127; s.evo = !!(l & 128); } Wp.length = n;
@@ -615,6 +623,7 @@
       z.r = r16() / 2; z.a = da16(r16());
       if (f & 4) { z.len = r16() / 2; z.w = r16() / 2; } else { z.len = 0; z.w = 0; }
       z.arc = f & 8 ? r8() / 40 : 0;
+      if (f & 16) z.w = rf32();
       const t = r16() / 1000; z.dur = r16() / 1000; z.wid = rstr(TBL.W);
       sample(z, T, x, y, t, seq);
     }
@@ -700,6 +709,7 @@
     const v = this.view;
     v.time = rt;
     this.zones.frame(rt, v.zones); this.foes.frame(rt, v.foes); this.projs.frame(rt, v.projs); this.picks.frame(rt, v.pickups);
+    const B = v.boss; if (B) { const f = this.foes.map.get(B.id); if (f) { B.x = f.x; B.y = f.y; } }
     v.heroes.length = 0;
     for (const h of this.heroes) { if (h !== this.me) { if (h.n) interp(h, rt); else continue; } else if (!this.ready) continue; v.heroes.push(h); }
   };
@@ -712,13 +722,13 @@
   N.decodeSnap = (buf, mirror) => mirror.apply(buf);
 
   // ---------------- input packets (client -> host) ----------------
-  // u8 INPUT, u32 first seq, u8 n, u16 view w, u16 view h, then per local tick: i8 mx, i8 my (x127), i16 ax, ay (x2), u8 edges (1 dash, 2 q, 4 e, 8 reroll, 16 skip, pick << 5).
+  // u8 INPUT, u32 first seq, u8 n, u16 view w, u16 view h, then per local tick: i8 mx, i8 my (x127), i16 ax, ay (x2), u16 edges (1 dash, 2 q, 4 e, 8 reroll, 16 skip, pick << 5, banish << 8).
   // frames: ring of { seq, qx, qy, ax, ay, ed } indexed by seq & mask.
   N.encodeInput = (ring, mask, from, to, vw, vh) => {
     o = 0;
     const n = Math.min(255, to - from + 1);
     w8(INPUT); w32(from); w8(n); w16(Math.round(vw)); w16(Math.round(vh));
-    for (let s = from; s < from + n; s++) { const f = ring[s & mask]; w8(f.qx & 255); w8(f.qy & 255); wi16(f.ax * 2); wi16(f.ay * 2); w8(f.ed); }
+    for (let s = from; s < from + n; s++) { const f = ring[s & mask]; w8(f.qx & 255); w8(f.qy & 255); wi16(f.ax * 2); wi16(f.ay * 2); w16(f.ed); }
     return wb.slice(0, o);
   };
   // Calls fn(seq, mx, my, ax, ay, ed) for each frame in the packet; returns { vw, vh } or null for a bad packet.
@@ -729,8 +739,8 @@
     if (r8() !== INPUT) return null;
     const from = r32(), n = r8();
     VIEW.vw = r16(); VIEW.vh = r16();
-    if (buf.byteLength < 10 + n * 7) return null;
-    for (let i = 0; i < n; i++) { const qx = (r8() << 24) >> 24, qy = (r8() << 24) >> 24, ax = ri16() / 2, ay = ri16() / 2; fn(from + i, qx, qy, ax, ay, r8()); }
+    if (buf.byteLength < 10 + n * 8) return null;
+    for (let i = 0; i < n; i++) { const qx = (r8() << 24) >> 24, qy = (r8() << 24) >> 24, ax = ri16() / 2, ay = ri16() / 2; fn(from + i, qx, qy, ax, ay, r16()); }
     return VIEW;
   };
 

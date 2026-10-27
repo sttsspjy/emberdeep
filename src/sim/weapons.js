@@ -7,9 +7,11 @@
   const U = ED.U, W = ED.World.prototype;
   ED.WEAPONS = {}; ED.WIMPL = {}; ED.WEAPON_IDS = [];
   ED.MAX_WEAPONS = 6; ED.MAX_PASSIVES = 6; ED.WEAPON_MAX_LVL = 8;
-  // def: { id, name, icon, look, sig, mode, base, levels, pair, evo, evolved, txt (card line for a new weapon), noAmount }. impl: { fire, tick?, init?(w, p, ws), draw? }.
+  // def: { id, name, icon (forced to the atlas icon.w.<id>; the given icon becomes held), look, sig, mode, base, levels, pair, evo, evolved, txt (card line for a new weapon), noAmount }. impl: { fire, tick?, init?(w, p, ws), draw? }.
   ED.addWeapon = (def, impl) => {
     if (!ED.WEAPONS[def.id]) ED.WEAPON_IDS.push(def.id);
+    if (!def.held) def.held = def.icon; // in-world sprite the hero holds (actors.js)
+    def.icon = 'icon.w.' + def.id;
     ED.WEAPONS[def.id] = def; ED.WIMPL[def.id] = impl;
     if (def.look) ED.regLook(def.look);
     return def;
