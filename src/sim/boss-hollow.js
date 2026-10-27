@@ -1,4 +1,4 @@
-// Boss 'hollow' (Hollow King, final boss of stages 1 and 3). A crown-blade duelist; enrages at ED.CONST.ENRAGE_T (bosses.js: x3 damage and speed; here telegraphs x0.8, floor 0.6 s, shards spin faster).
+// Boss 'hollow' (Hollow King, stage 1 final boss). A crown-blade duelist; enrages at ED.CONST.ENRAGE_T (bosses.js: x3 damage and speed; here telegraphs x0.8, floor 0.6 s, shards spin faster).
 // P1: three-swing combo (cones that step with him, a thrust lane last), crown throw (out along a warned lane and back to him), blink-and-cleave.
 // P2 (66%): 3 crown shards orbit him (harmless for their first second), crown throw sends 3 crowns, skull novas. P3 (33%): 3 more shards on a wider counter-turning ring, double blinks, starfall on every hero.
 (function (ED) {

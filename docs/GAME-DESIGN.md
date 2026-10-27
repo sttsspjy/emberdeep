@@ -16,7 +16,7 @@ Units: world px (hero sprite ≈ 16–24 px tall), seconds. HP numbers are integ
 
 ## 2. Run structure (Survival mode)
 
-- **Length**: 15:00. Bosses at 5:00 and 10:00; the final boss at 15:00. Killing the final boss wins the run. At 17:00, if it is still alive, the Wick-Eater enrages (×3 damage and speed).
+- **Length**: 15:00. Bosses at 5:00 and 10:00; the final boss at 15:00. Killing the final boss wins the run. At 17:00, if it is still alive, the final boss enrages (×3 damage and speed).
 - **Arena**: bounded 3200 × 3200 world px per stage, solid edge walls, 20–40 scattered obstacles (pillars, ruins; circle colliders, radius 12–40) that make chokepoints, 12–20 destructible braziers that drop pickups.
 - **View**: about 640 × 360 world px (integer-scaled to the canvas). Each client follows its own hero.
 - **Stages**: 3 stages (themes from the old biomes), each with its own foe roster, palette, two mid-bosses and a final boss. Stage 1 is open; beating stage N unlocks N+1. Stage choice happens before the run.
@@ -122,6 +122,10 @@ Max 6 passives. Passive cards also show a line naming the weapon they evolve.
 ## 8. Bosses
 
 Each boss: 2–3 telegraphed patterns, a health bar at the top, HP `= 400 × minute × players factor`. Mid-bosses drop a chest with evolution priority. While a boss lives, normal spawns run at 50% rate.
+
+- **Roster** (5:00 · 10:00 · final 15:00): Ossuary — Bone Warden · The Twins · Hollow King. Glowmire — Sporemother · Demon Cyclops · Drowned King. Abyss — Blue Samurai · Rift Weaver · The Wick-Eater.
+- **Rift Weaver**: rift gates around the target open into portals that shoot; warned threads cross the target (strands stay from phase 2); blink with a bolt ring; adds.
+- **The Wick-Eater**: devour (warned cone inhales heroes toward a warned bite); closing dark (a ring shrinks onto it, pass through a gap or dash); lash fans; spiralling orb bloom; adds; swells at phase 3.
 
 ## 9. Pickups
 

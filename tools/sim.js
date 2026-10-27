@@ -4,7 +4,7 @@
 'use strict';
 const fs = require('fs'), vm = require('vm'), path = require('path');
 const ROOT = path.join(__dirname, '..', 'src') + '/';
-const BOSSES = ['warden', 'spore', 'king', 'hollow', 'twins', 'cyclops', 'samurai'];
+const BOSSES = ['warden', 'spore', 'king', 'hollow', 'twins', 'cyclops', 'samurai', 'weaver', 'wickeater'];
 const HEROES = ['knight', 'ranger', 'pyro', 'necro', 'cleric', 'shade', 'bell'];
 const FILES = ['util.js', 'data/foes.js', 'data/stages.js', 'data/passives.js', 'data/meta.js', 'save.js',
   'sim/stats.js', 'sim/arena.js', 'sim/grid.js', 'sim/world.js', 'sim/combat.js', 'sim/foes.js', 'sim/ai.js', 'sim/spawner.js', 'sim/weapons.js', 'sim/skills.js', 'sim/progress.js', 'sim/bosses.js',

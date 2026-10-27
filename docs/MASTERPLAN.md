@@ -8,7 +8,7 @@ North-star: a co-op browser survivors-like (solo or up to 4 friends, zero instal
 - [ ] Horde, stages and timelines: special foe brains, events, three stages
 - [ ] 12 general weapons and their evolutions
 - [ ] 7 heroes with signature weapons, Q and E skills
-- [ ] 7 bosses
+- [ ] 9 bosses (3 per stage)
 - [ ] Co-op over the internet (host runs the game, friends join with a code)
 - [ ] HUD, menus, results screen, unlocks
 - [ ] Music and sound

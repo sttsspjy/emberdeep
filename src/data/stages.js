@@ -120,7 +120,7 @@
         { 2: { voidwraith: 3 }, 4: { eel: 4 }, 6: { gloom: 5 }, 8: { voideye: 5 }, 9: { riftcaller: 3 }, 11: { horror: 3 }, 13: { eel: 4, gloom: 4 } }),
       events: { swarm: { first: 90, every: 90, ring: ['starspawn'], stampede: ['starspawn', 'shade'], n: [40, 80] } },
       elites: { first: 120, every: 60 },
-      bosses: [{ t: 300, id: 'samurai' }, { t: 600, id: 'twins' }, { t: 900, id: 'hollow', final: true }],
+      bosses: [{ t: 300, id: 'samurai' }, { t: 600, id: 'weaver' }, { t: 900, id: 'wickeater', final: true }],
     },
   ];
   ED.STAGE_IDS = ED.STAGES.map(s => s.id);

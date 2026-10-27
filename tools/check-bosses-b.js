@@ -1,19 +1,33 @@
-// Headless check of the bosses-b lane (exit 1 on failure): Drowned King, Hollow King, Demon Cyclops, Giant Samurai. Usage: node tools/check-bosses-b.js
+// Headless check (exit 1 on failure): Drowned King, Hollow King, Demon Cyclops, Giant Samurai, Rift Weaver, Wick-Eater. Usage: node tools/check-bosses-b.js
 // Per boss: spawned directly next to a solo knight (90 s, hero kept alive, boss HP forced to each phase in turn): no exceptions, every attack runs, phases 2 and 3 fire,
 // hostile telegraphs >= 0.6 s (also enraged), its zones / shots reach the hero (hurt calls by source; landed hits share i-frames with the horde), every look it uses is registered, zones die with the boss,
 // a mid-boss drops a chest and a final boss wins the run, and two runs with the same seed give the same digest.
-// Mechanics: the King's whirlpool pulls a still hero, the Hollow King's shards orbit and the crown comes back, the Cyclops stomp wave expands, beams stop at obstacles, enrage x3 damage.
+// Mechanics: the King's whirlpool pulls a still hero, the Hollow King's shards orbit and the crown comes back, the Cyclops stomp wave expands, beams stop at obstacles, enrage x3 damage,
+// the Weaver's gates open and shoot and its strands stay, the Wick-Eater's dark ring closes in and its maw inhales.
 'use strict';
 const { load } = require('./sim.js');
 const ED = load(), U = ED.U, C = ED.CONST;
+require('vm').runInThisContext(require('fs').readFileSync(require('path').join(__dirname, '..', 'src', 'client', 'bfx-c.js'), 'utf8'), { filename: 'bfx-c.js' });
 let fails = 0;
 const ok = (cond, msg) => { if (!cond) { fails++; console.log('FAIL ' + msg); } else console.log('ok   ' + msg); };
+// Mock client for the bfx-c draw hooks (weaver, wickeater): ED.Atlas / ED.Game / Batch stand-ins; a non-finite draw argument throws.
+const draws = { n: 0 };
+const mockB = new Proxy({}, { get: (o, k) => (k === 'crowd' ? 0 : (...a) => { draws.n++; for (const v of a) if (typeof v === 'number' && !isFinite(v)) throw new Error('non-finite arg to B.' + String(k)); return true; }) });
+ED.Atlas = { ok: true, has: () => true, anim: () => ({ n: 4, fps: 8, ax: 8, ay: 16, anchors: {} }), frameAt: () => 0 };
+function drawAll(w) {
+  ED.Game = { view: { heroes: w.heroes, foes: w.foes } };
+  for (const e of w.foes) { const f = !e.dead && ED.BossFx[e.def.id]; if (f && f.draw) f.draw(mockB, e, w.time); }
+  for (const z of w.zones) { const f = !z.dead && ED.ZoneFx[z.k]; if (f) f(mockB, z, w.time); }
+  for (const pr of w.projs) { const f = !pr.dead && ED.WeaponFx[pr.wid]; if (f && f.proj) f.proj(mockB, pr, w.time); }
+}
 const players = (list) => list.map((cls, i) => ({ pid: 'p' + (i + 1), name: 'P' + (i + 1), slot: i, cls, meta: { shop: {}, sigs: [] } }));
 const BOSSES = [
   { id: 'king', stage: 1, t: 600, attacks: ['beam', 'trident', 'leap', 'whirl', 'adds'] },
   { id: 'hollow', stage: 0, t: 900, final: true, attacks: ['combo', 'crown', 'blink', 'nova', 'starfall'] },
   { id: 'cyclops', stage: 1, t: 900, final: true, attacks: ['laser', 'stomp', 'leap', 'gaze', 'adds'] },
   { id: 'samurai', stage: 2, t: 300, attacks: ['dash', 'waves', 'iaido', 'spin'] },
+  { id: 'weaver', stage: 2, t: 600, attacks: ['gates', 'weave', 'blink', 'adds'] },
+  { id: 'wickeater', stage: 2, t: 900, final: true, attacks: ['devour', 'dark', 'lash', 'bloom', 'adds'] },
 ];
 const LEN = 90;
 
@@ -21,7 +35,7 @@ const LEN = 90;
 function fight(b, opt) {
   opt = opt || {};
   const w = new ED.World({ seed: opt.seed || 77, stage: b.stage, players: players(opt.party || ['knight']) });
-  const out = { w, err: null, atk: {}, phases: [], minTele: Infinity, hurt: 0, hurtBy: {}, tryBy: {}, looks: new Set(), digest: 0, pullMoved: 0, maxShards: 0, crownOut: 0, crownMax: 0, waveMaxR: 0, beamCut: false, zonesAfter: -1, chest: false, won: false, enrDmg: 0, baseDmg: 0, addsSeen: 0 };
+  const out = { w, err: null, atk: {}, phases: [], minTele: Infinity, hurt: 0, hurtBy: {}, tryBy: {}, looks: new Set(), digest: 0, pullMoved: 0, maxShards: 0, crownOut: 0, crownMax: 0, waveMaxR: 0, beamCut: false, zonesAfter: -1, chest: false, won: false, enrDmg: 0, baseDmg: 0, addsSeen: 0, gates: 0, gateShots: 0, strands: 0, darkMin: Infinity, inhale: 0 };
   // hero stays alive and on the spot: hurt calls are counted, HP is refilled
   const hurt = w.hurtHero;
   w.hurtHero = function (p, dmg, src) { p.hp = Math.max(p.hp, 1e6); const d = hurt.call(this, p, dmg, src); const k = !src ? 'other' : src.def ? (src.boss ? 'boss contact' : 'foe contact') : String(src.k); out.tryBy[k] = (out.tryBy[k] || 0) + 1; if (d > 0) { out.hurt++; out.hurtBy[k] = (out.hurtBy[k] || 0) + 1; } p.hp = p.maxHp; return d; };
@@ -44,6 +58,7 @@ function fight(b, opt) {
       if (still && w.living.length && p.dashT <= 0) out.pullMoved += Math.hypot(p.x - px, p.y - py);
       for (const ev of w.events) if (ev.t === 'boss' && ev.fid === e.id && typeof ev.phase === 'number' && ev.phase > 0) out.phases.push(ev.phase);
       w.events.length = 0;
+      if (tick % 6 === 0) drawAll(w);
       if (e.vars && e.vars.st === 'atk') out.atk[e.vars.atk] = (out.atk[e.vars.atk] || 0) + 1;
       let shards = 0, crowns = 0;
       for (const z of w.zones) {
@@ -53,8 +68,12 @@ function fight(b, opt) {
         if (z.k === 'crownshard') shards++;
         if (z.k === 'stompwave') out.waveMaxR = Math.max(out.waveMaxR, z.r);
         if ((z.k === 'tidebeam' || z.k === 'eyelaser') && z.len < 300) out.beamCut = true;
+        if (z.k === 'riftgate') out.gates++;
+        if (z.k === 'strand') out.strands++;
+        if (z.k === 'darkring') out.darkMin = Math.min(out.darkMin, z.r);
+        if (z.k === 'inhale') out.inhale++;
       }
-      for (const pr of w.projs) if (!pr.dead && pr.team === 1) { out.looks.add(pr.k); if (pr.k === 'crown') crowns++; }
+      for (const pr of w.projs) if (!pr.dead && pr.team === 1) { out.looks.add(pr.k); if (pr.k === 'crown') crowns++; if (pr.k === 'voidbolt' && pr.t === 0) out.gateShots++; }
       out.maxShards = Math.max(out.maxShards, shards);
       if (crowns) out.crownOut++;
       out.crownMax = Math.max(out.crownMax, crowns);
@@ -90,6 +109,9 @@ for (const b of BOSSES) {
   if (b.id === 'king') { ok(r.pullMoved > 20, `king: whirlpool pulls a still hero (${r.pullMoved.toFixed(0)} px in 4 s)`); ok(r.addsSeen > 0, `king: telegraphed adds arrive (${r.addsSeen})`); }
   if (b.id === 'hollow') { ok(r.maxShards === 6, `hollow: 3 + 3 orbit shards by phase 3 (max ${r.maxShards})`); ok(r.crownOut > 0 && r.crownMax >= 3, `hollow: crowns fly (max ${r.crownMax} at once)`); }
   if (b.id === 'cyclops') ok(r.waveMaxR > 200, `cyclops: stomp wave rolls out (r ${r.waveMaxR.toFixed(0)})`);
+  if (b.id === 'weaver' || b.id === 'wickeater') ok(draws.n > 0, `${b.id}: client draw hooks run on a mock batch (${draws.n} calls so far)`);
+  if (b.id === 'weaver') { ok(r.gates > 0 && r.gateShots > 0, `weaver: rift gates open and shoot (${r.gates} gate ticks, ${r.gateShots} bolts)`); ok(r.strands > 0, `weaver: strands stay from phase 2 (${r.strands} strand ticks)`); }
+  if (b.id === 'wickeater') { ok(r.darkMin < 80, `wickeater: closing dark shrinks (min r ${r.darkMin.toFixed(0)})`); ok(r.inhale > 0, `wickeater: the maw inhales (${r.inhale} ticks)`); }
   // enraged (final bosses enrage at ENRAGE_T): x3 damage, telegraphs still >= 0.6 s
   if (b.final) {
     const en = fight(b, { enrage: true, seed: 5 });

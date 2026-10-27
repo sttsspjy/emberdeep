@@ -17,7 +17,7 @@ const ART = (() => { const g = { ED: {} }; vm.runInNewContext(fs.readFileSync(pa
 const hasArt = (look) => !!(ART[look + '.walk'] || ART[look + '.idle'] || ART[look + '.walk.d'] || ART[look + '.walk.0']);
 
 // ---------------- 1. data ----------------
-const BOSSES = [['warden', 'twins', 'hollow'], ['spore', 'cyclops', 'king'], ['samurai', 'twins', 'hollow']];
+const BOSSES = [['warden', 'twins', 'hollow'], ['spore', 'cyclops', 'king'], ['samurai', 'weaver', 'wickeater']];
 const kinds = new Set();
 ED.STAGES.forEach((sd, si) => {
   const ids = new Set();
