@@ -3,7 +3,7 @@
   'use strict';
   const U = ED.U, TAU = U.TAU, TICK = ED.CONST.TICK;
 
-  ED.regLook('arrows', 'snare');
+  ED.regLook('arrows', 'snare', 'shock');
   ED.addHero({ id: 'ranger', name: 'Ranger', hp: 90, speed: 100, crit: 0.08, sig: 'longbow', skills: ['volley', 'snare'], icon: 'hero.ranger.idle', col: '#9fd38a', txt: 'Arrows at the nearest foe. Fast feet.' });
 
   // ---------------- Longbow ----------------
@@ -92,7 +92,12 @@
     for (let k = 0; k < q.length; k++) { const e = q[k]; if (!e.dead && U.dist2(e.x, e.y, z.x, z.y) <= (z.r + e.r) ** 2) w.knock(e, z.x - e.x, z.y - e.y, 140); }
     w.foeEnd();
   };
-  const snareEnd = (w, z) => { const s = z.st; if (s.boom > 0) w.blast(s.p, 'snare', z.x, z.y, z.r * 1.3, s.boom, BOOM); };
+  const snareEnd = (w, z) => {
+    const s = z.st;
+    if (!(s.boom > 0)) return;
+    w.blast(s.p, 'snare', z.x, z.y, z.r * 1.3, s.boom, BOOM);
+    w.zone({ team: 0, p: s.p, wid: 'snare', x: z.x, y: z.y, r: z.r * 1.3, dur: 0.4, look: 'shock' });
+  };
   ED.addSkill({
     id: 'snare', name: 'Snare Trap', icon: 'proj.web', cd: 12, txt: 'Trap that roots foes in a radius',
     base: { dmg: 10, r: 75, dur: 4, boom: 0 },

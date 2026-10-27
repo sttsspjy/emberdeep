@@ -11,7 +11,9 @@
   ED.addHero({ id: 'necro', name: 'Necro', hp: 95, speed: 88, crit: 0.05, sig: 'boneshard', skills: ['raise', 'corpseblast'], icon: 'hero.necro.idle', col: '#b7a6e0', txt: 'Piercing shards. The dead rise.' });
 
   // ---------------- minions ----------------
+  // Live minion count of hero p (any hero may carry Bone Shard: the lists are created on first use).
   const liveMinions = (p) => {
+    if (!p.minions) { p.minions = []; p.minIds = []; p.minSlot = 0; }
     const M = p.minions, I = p.minIds;
     let n = 0;
     for (let i = 0; i < M.length; i++) { const z = M[i]; if (!z.dead && z.id === I[i]) { M[n] = z; I[n] = I[i]; n++; } }
@@ -145,6 +147,7 @@
     const d = Math.hypot(x - p.x, y - p.y);
     if (d > 240) { x = p.x + (x - p.x) / d * 240; y = p.y + (y - p.y) / d * 240; }
     w.blast(p, 'raise', x, y, N.r, N.dmg, ERUPT);
+    w.zone({ team: 0, p, wid: 'raise', x, y, r: N.r, dur: 0.6, look: 'raise' });
     const n = N.n | 0;
     for (let i = 0; i < n; i++) {
       const a = i / n * TAU, mx = x + Math.cos(a) * 28, my = y + Math.sin(a) * 28;
@@ -158,6 +161,8 @@
   // shards: the first 16 blasts each throw 3 bone shards; rerise: detonated minions rise again.
   const SCR = [];
   const CB = { knock: 300, look: 'corpse', kind: 'skill' }, CSHARD = { look: 'bone', speed: 280, dmg: 0, pierce: 3, r: 4, life: 0.6, knock: 40 };
+  // Detonation: the blast plus a visual-only 'corpse' zone (0.4 s).
+  const det = (w, p, x, y, r, dmg) => { w.blast(p, 'corpseblast', x, y, r, dmg, CB); w.zone({ team: 0, p, wid: 'corpseblast', x, y, r, dur: 0.4, look: 'corpse' }); };
   const cshards = (w, p, x, y, dmg, k) => { CSHARD.dmg = dmg; for (let i = 0; i < 3; i++) w.shoot(p, 'corpseblast', x, y - 4, k * 1.7 + i / 3 * TAU, null, CSHARD); };
   ED.addSkill({
     id: 'corpseblast', name: 'Corpse Blast', icon: 'fx.sigil.skull', cd: 10, txt: 'Detonate the dead around you',
@@ -170,14 +175,14 @@
   }, (w, p, x, y, N) => {
     const hw = C.VIEW_W / 2 + 24, hh = C.VIEW_H / 2 + 24;
     let k = 0;
-    w.blast(p, 'corpseblast', p.x, p.y, N.r * 1.2, N.dmg, CB);
+    det(w, p, p.x, p.y, N.r * 1.2, N.dmg);
     // detonate from a snapshot: blasts kill foes, and kill-rise edits p.minions
     const n = liveMinions(p), M = SCR;
     M.length = 0;
     for (let i = 0; i < n; i++) { const z = p.minions[i]; if (Math.abs(z.x - p.x) <= hw && Math.abs(z.y - p.y) <= hh) { z.dead = true; M.push(z.x, z.y, z.st.big ? 1 : 0, z.wid === 'raise' ? 1 : 0); } }
     for (let i = 0; i < M.length; i += 4) {
       const zx = M[i], zy = M[i + 1];
-      w.blast(p, 'corpseblast', zx, zy, N.r * 1.4, N.dmg * 1.6, CB);
+      det(w, p, zx, zy, N.r * 1.4, N.dmg * 1.6);
       if (N.shards && k < 16) cshards(w, p, zx, zy, N.dmg * 0.4, k);
       k++;
       if (N.rerise) raise(w, p, zx, zy, M[i + 3] ? 'raise' : (sigSlot(p) >= 0 ? p.weapons[sigSlot(p)].id : 'boneshard'), !!M[i + 2], M[i + 2] ? 20 : 15);
@@ -188,7 +193,7 @@
       if (now - Cp[i * 3 + 2] > CORPSE_AGE) break;
       Cp[i * 3 + 2] = -1e9;
       if (Math.abs(cx - p.x) > hw || Math.abs(cy - p.y) > hh) continue;
-      w.blast(p, 'corpseblast', cx, cy, N.r, N.dmg, CB);
+      det(w, p, cx, cy, N.r, N.dmg);
       if (N.shards && k < 16) cshards(w, p, cx, cy, N.dmg * 0.4, k);
       k++;
     }

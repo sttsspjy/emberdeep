@@ -8,6 +8,7 @@
   const CHUNK = 256, TILE = 16;
   let theme = null, stageId = '', chunks = new Map(), frameN = 0, arenaRef = null;
   const SH = { x: 0, y: 0 };
+  ED.ZoneActor = ED.ZoneActor || {}; // look -> fn(B, z, t): zones drawn as y-sorted actors (lanes register in their fx files)
 
   R.init = (canvas) => {
     R.canvas = canvas; R.ctx = canvas.getContext('2d');
@@ -132,12 +133,14 @@
     for (const p of view.heroes) if (!p.dead) sortBuf.push(p);
     for (const o of A.obstacles) if (inView(o)) sortBuf.push(o);
     for (const b of A.braziers) if (!b.broken && inView(b)) sortBuf.push(b);
+    const ZA = ED.ZoneActor; for (const z of view.zones) if (!z.dead && ZA[z.k] && inView(z)) sortBuf.push(z); // zones with a body (minions): ED.ZoneActor[look](B, z, t)
     sortBuf.sort(byY);
     const wall = (parseInt(theme.pal.wall.slice(1), 16) * 256 + 255) >>> 0;
     for (let i = 0; i < sortBuf.length; i++) {
       const a = sortBuf[i];
       if (a.def) ED.Actors.foe(B, a, t, view.heroes);
       else if (a.pid !== undefined) { ED.Actors.hero(B, a, t); const h = ED.HeroFx && ED.HeroFx[a.cls]; if (h) h(B, a, t); }
+      else if (a.dur !== undefined) ED.ZoneActor[a.k](B, a, t);
       else if (a.hp !== undefined) ED.Actors.brazier(B, a, t);
       else ED.Actors.obstacle(B, a, wall);
     }

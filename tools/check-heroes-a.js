@@ -1,7 +1,8 @@
 // Headless check for heroes Knight, Ranger, Pyro, Necro (exit 1 on failure). Usage: node tools/check-heroes-a.js
 // Per hero (god cheat, from 4:00 so the horde is dense): 4 phases of 15 s with skill level 1..4 and signature level 2/4/6/8, then 20 s evolved (pair passive owned).
-// Q and E are held every tick (cast on cooldown), aimed at the nearest foe. Each phase: no exception, both skills cast, the signature and both skills deal damage.
-// Extras: shape flags reach the effective numbers, necro minions rise / obey the cap and Corpse Blast detonates, same seed -> same digest, no NaN positions.
+// Q and E are held every tick (cast on cooldown), aimed at the nearest foe; fodder rings keep targets near the hero. Each phase: no exception, both skills cast, the signature and both skills deal damage.
+// Extras: these signatures (base and evolved) on other heroes, shape flags reach the effective numbers, necro minions rise / obey the cap and Corpse Blast detonates,
+// same seed -> same digest, no NaN positions.
 'use strict';
 const { load } = require('./sim.js');
 const ED = load(), U = ED.U, C = ED.CONST;
@@ -12,7 +13,8 @@ const HEROES = ['knight', 'ranger', 'pyro', 'necro'];
 
 function drive(w, p, tick) {
   const e = w.nearestFoe(p.x, p.y, 300), a = tick / 60 * 0.6;
-  w.input(p.pid, { mx: Math.cos(a) * 0.6, my: Math.sin(a) * 0.6, ax: e ? e.x : p.x + 80, ay: e ? e.y : p.y, q: true, e: true, pick: p.offer ? 1 : 0 });
+  p.offer = null; p.pend = 0; // no card picks: the phase setup owns the build
+  w.input(p.pid, { mx: Math.cos(a) * 0.6, my: Math.sin(a) * 0.6, ax: e ? e.x : p.x + 80, ay: e ? e.y : p.y, q: true, e: true });
 }
 // Sets skill levels to L and the signature to weapon level wl (or its evolution).
 function setup(w, p, L, wl, evo) {
@@ -25,12 +27,21 @@ function setup(w, p, L, wl, evo) {
     w.evolve(p, ws);
   }
 }
+// Keeps targets near the hero: 30 foes on a 110-200 px ring once a second while fewer than 120 are within 250 px.
+const FODDER = ED.FOE_IDS.find(id => !ED.FOES[id].boss && !ED.FOES[id].brute && !ED.FOES[id].range);
+function feed(w, p) {
+  let near = 0;
+  for (const e of w.foes) if (!e.dead && U.dist2(e.x, e.y, p.x, p.y) < 250 * 250) near++;
+  if (near >= 120) return;
+  for (let i = 0; i < 30; i++) { const a = i / 30 * U.TAU, d = 110 + (i % 4) * 30; w.spawnFoe(FODDER, p.x + Math.cos(a) * d, p.y + Math.sin(a) * d); }
+}
 function phase(w, p, secs, tag, out) {
   const before = Object.assign({}, p.dealt), casts = {};
   let err = null, nan = false, maxMin = 0;
   try {
     for (let i = 0; i < secs * 60 && w.state === 'play'; i++) {
       drive(w, p, w.tick);
+      if (i % 60 === 0) feed(w, p);
       w.update(C.TICK);
       for (const ev of w.events) if (ev.t === 'skill') casts[ev.id] = (casts[ev.id] || 0) + 1;
       w.events.length = 0;
@@ -72,6 +83,16 @@ for (const cls of HEROES) {
     const r2 = runHero(cls, 4242);
     ok(r.digest === r2.digest, `${cls}: same seed -> same digest (${r.digest} / ${r2.digest})`);
   }
+}
+// Signatures carried by other heroes (meta.sigs unlock): base and evolved forms on a cleric and a bell, 15 s, no exception, all deal damage.
+for (const [cls, ids] of [['cleric', ['longbow', 'firebolt', 'boneshard', 'cleave']], ['bell', ['hail', 'inferno', 'bonestorm', 'whirlwind']]]) {
+  const w = new ED.World({ seed: 9, stage: 0, players: [{ pid: 'p1', cls, meta: { shop: {}, sigs: [] } }], cheats: { god: true } }), p = w.heroes[0];
+  w.time = 240;
+  for (const id of ids) { const ws = w.addWeapon(p, id); if (ws) ws.lvl = 8; }
+  let err = null;
+  try { for (let i = 0; i < 900; i++) { drive(w, p, i); if (i % 60 === 0) feed(w, p); w.update(C.TICK); w.events.length = 0; } } catch (e) { err = e; }
+  const dealt = ids.map(id => id + ' ' + Math.round(p.dealt[id] || 0));
+  ok(!err && ids.every(id => p.dealt[id] > 0), `${cls} carrying ${ids.join(', ')}: ${dealt.join(', ')}` + (err ? ': ' + err.stack : ''));
 }
 // Shape flags reach the effective numbers.
 {

@@ -82,6 +82,8 @@
   // quake: ends in a shockwave (r 110); shards: the shockwave hurls that many shields outward.
   const SHARD = { look: 'shield', speed: 300, dmg: 0, pierce: 4, r: 7, life: 0.7, knock: 160 };
   const BOOM = { knock: 0, look: 'shock', kind: 'skill', stun: 0 };
+  // Visual-only shockwave zone (no damage; hfx-a.js draws an expanding ring).
+  const shockFx = (w, p, wid, x, y, r) => w.zone({ team: 0, p, wid, x, y, r, dur: 0.4, look: 'shock' });
   ED.addSkill({
     id: 'charge', name: 'Shield Charge', icon: 'shield.kite', cd: 7, txt: 'Charge through the horde',
     base: { dmg: 45, dist: 180, t: 0.32, stun: 0.7, width: 30, shards: 0 },
@@ -103,11 +105,11 @@
     const s = z.st, p = s.p;
     if (!s.pulse || !w.alive(p)) return;
     s.nt -= ED.CONST.TICK;
-    if (s.nt <= 0) { s.nt = 1; BOOM.knock = s.knock * 0.7; BOOM.stun = 0.25; w.blast(p, 'bulwark', p.x, p.y, s.r * 0.85, s.dmg * 0.6, BOOM); }
+    if (s.nt <= 0) { s.nt = 1; BOOM.knock = s.knock * 0.7; BOOM.stun = 0.25; w.blast(p, 'bulwark', p.x, p.y, s.r * 0.85, s.dmg * 0.6, BOOM); shockFx(w, p, 'bulwark', p.x, p.y, s.r * 0.85); }
   };
   const bulEnd = (w, z) => {
     const s = z.st, p = s.p;
-    if (s.end && w.alive(p)) { BOOM.knock = s.knock * 1.3; BOOM.stun = 0.8; w.blast(p, 'bulwark', p.x, p.y, s.r * 1.5, s.dmg * 3, BOOM); }
+    if (s.end && w.alive(p)) { BOOM.knock = s.knock * 1.3; BOOM.stun = 0.8; w.blast(p, 'bulwark', p.x, p.y, s.r * 1.5, s.dmg * 3, BOOM); shockFx(w, p, 'bulwark', p.x, p.y, s.r * 1.5); }
   };
   ED.addSkill({
     id: 'bulwark', name: 'Bulwark', icon: 'shield.tower', cd: 14, txt: 'Brace and push the horde back',
@@ -121,6 +123,7 @@
     p.bulT = N.dur; p.bulDr = Math.min(0.9, N.dr);
     BOOM.knock = N.knock; BOOM.stun = 0.4;
     w.blast(p, 'bulwark', p.x, p.y, N.r, N.dmg, BOOM);
+    shockFx(w, p, 'bulwark', p.x, p.y, N.r);
     w.zone({ team: 0, p, wid: 'bulwark', x: p.x, y: p.y, r: 22, dur: N.dur, follow: p.pid, look: 'bulwark',
       st: { p, r: N.r, dmg: N.dmg, knock: N.knock, pulse: !!N.pulse, end: !!N.end, nt: 1 }, onTick: bulTick, onEnd: bulEnd });
     return { shake: 6, stop: 0.06, r: Math.round(N.r) };
@@ -152,6 +155,7 @@
       if (!c.quake) return;
       BOOM.knock = 340; BOOM.stun = c.stun;
       w.blast(p, 'charge', p.x, p.y, 110, c.dmg * 0.8, BOOM);
+    shockFx(w, p, 'charge', p.x, p.y, 110);
       SHARD.dmg = c.dmg * 0.5;
       for (let i = 0; i < c.shards; i++) w.shoot(p, 'charge', p.x, p.y - 6, c.a + i / c.shards * TAU, null, SHARD);
     },
