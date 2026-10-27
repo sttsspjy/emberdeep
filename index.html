@@ -16,64 +16,117 @@
   <div id="loading">Loading...</div>
 
   <section id="scr-title" class="screen" hidden>
-    <h1 class="logo">Wickdeep</h1>
-    <p class="kicker">Survive the horde. Alone or with three friends.</p>
-    <div class="name-row" id="name-row" hidden>
-      <label for="inp-name">Your name</label>
-      <input id="inp-name" maxlength="12" autocomplete="off" spellcheck="false" placeholder="Wanderer">
+    <div class="title-wrap">
+      <h1 class="logo">Wickdeep</h1>
+      <p class="kicker">Survive the horde. Alone or with three friends.</p>
+      <div class="title-heroes" id="title-heroes" aria-hidden="true"></div>
+      <div class="name-row" id="name-row" hidden>
+        <label for="inp-name">Your name</label>
+        <input id="inp-name" maxlength="12" autocomplete="off" spellcheck="false" placeholder="Wanderer">
+      </div>
+      <nav class="menu" aria-label="Main menu">
+        <button class="btn btn-primary btn-big" id="btn-play" data-focus>Play solo</button>
+        <div class="menu-pair"><button class="btn" id="btn-host">Host co-op</button><button class="btn" id="btn-join">Join co-op</button></div>
+        <button class="btn" id="btn-camp">Camp shop</button>
+        <div class="menu-pair"><button class="btn" id="btn-settings">Settings</button><button class="btn" id="btn-credits">Credits</button></div>
+      </nav>
+      <div class="msg" id="title-msg" role="status"></div>
+      <div class="profile-line" id="profile-line"></div>
     </div>
-    <nav class="menu">
-      <button class="btn btn-primary" id="btn-play" data-focus>Play</button>
-      <button class="btn" id="btn-camp">Camp</button>
-      <button class="btn" id="btn-credits">Credits</button>
-    </nav>
-    <div class="profile-line" id="profile-line"></div>
   </section>
 
   <section id="scr-hero" class="screen" hidden>
     <h2>Choose your hero</h2>
-    <div class="cards" id="hero-list" role="radiogroup" aria-label="Hero"></div>
-    <div class="row"><button class="btn" id="btn-hero-back">Back</button><button class="btn btn-primary" id="btn-hero-next">Next</button></div>
+    <div class="hero-roster" id="hero-list" role="radiogroup" aria-label="Hero"></div>
+    <div class="hero-detail plate" id="hero-detail"></div>
+    <div class="row"><button class="btn" id="btn-hero-back" data-back>Back</button><button class="btn btn-primary" id="btn-hero-next" data-focus>Next</button></div>
   </section>
 
   <section id="scr-stage" class="screen" hidden>
     <h2>Choose a stage</h2>
-    <div class="cards" id="stage-list" role="radiogroup" aria-label="Stage"></div>
-    <div class="row"><button class="btn" id="btn-stage-back">Back</button><button class="btn btn-primary" id="btn-start">Start run</button></div>
+    <div class="stage-list" id="stage-list" role="radiogroup" aria-label="Stage"></div>
+    <div class="row"><button class="btn" id="btn-stage-back" data-back>Back</button><button class="btn btn-primary btn-big" id="btn-start" data-focus>Start run</button></div>
   </section>
 
   <section id="scr-camp" class="screen" hidden>
-    <h2>Camp</h2>
-    <p class="gold-line">Gold: <b id="camp-gold">0</b></p>
+    <div class="camp-head"><h2>Camp shop</h2><div class="gold-pill"><canvas class="icon icon-sm" id="camp-coin" width="32" height="32"></canvas><b id="camp-gold">0</b></div></div>
+    <p class="hint">Permanent ranks for every run. Refund any time.</p>
     <div class="shop" id="shop-list"></div>
-    <div class="row"><button class="btn" id="btn-refund">Refund all</button></div>
-    <div class="code-box">
-      <label for="inp-code">Save code</label>
+    <div class="row">
+      <button class="btn" id="btn-refund">Refund all</button>
+      <button class="btn" id="btn-code-toggle" aria-expanded="false">Save code</button>
+      <button class="btn btn-primary" id="btn-camp-back" data-back data-focus>Back</button>
+    </div>
+    <div class="code-box plate" id="code-box" hidden>
+      <label for="inp-code">Save code: copy it to keep your progress, paste one to restore</label>
       <textarea id="inp-code" rows="3" spellcheck="false"></textarea>
-      <div class="row"><button class="btn" id="btn-code-copy">Show my code</button><button class="btn" id="btn-code-load">Load code</button></div>
+      <div class="row"><button class="btn btn-sm" id="btn-code-copy">Show my code</button><button class="btn btn-sm" id="btn-code-load">Load code</button></div>
       <div class="msg" id="code-msg" role="status"></div>
     </div>
-    <div class="row"><button class="btn btn-primary" id="btn-camp-back">Back</button></div>
+  </section>
+
+  <section id="scr-join" class="screen" hidden>
+    <h2>Join a party</h2>
+    <p class="hint">Ask your host for the 5-letter party code.</p>
+    <input id="inp-join" class="code-input" maxlength="5" autocomplete="off" spellcheck="false" placeholder="ABCDE" aria-label="Party code">
+    <div class="msg" id="join-msg" role="status"></div>
+    <div class="row"><button class="btn" id="btn-join-back" data-back>Back</button><button class="btn btn-primary" id="btn-join-go">Join</button></div>
+  </section>
+
+  <section id="scr-lobby" class="screen" hidden>
+    <h2 id="lobby-title">Party</h2>
+    <div class="lobby-code" id="lobby-code-box"><span class="hint" id="lobby-code-lbl">Party code</span><b id="lobby-code">-----</b><button class="btn btn-sm" id="btn-lobby-copy">Copy</button></div>
+    <div class="lobby-slots" id="lobby-slots"></div>
+    <div class="lobby-pick plate">
+      <span class="hint">Your hero</span>
+      <div class="pick-row" id="lobby-heroes" role="radiogroup" aria-label="Your hero"></div>
+      <div class="lobby-stage" id="lobby-stage-row"><span class="hint">Stage</span><div class="pick-row" id="lobby-stages" role="radiogroup" aria-label="Stage"></div></div>
+    </div>
+    <div class="msg" id="lobby-msg" role="status"></div>
+    <div class="row"><button class="btn" id="btn-lobby-leave" data-back>Leave</button><button class="btn btn-primary btn-big" id="btn-lobby-go" data-focus>Ready</button></div>
   </section>
 
   <section id="scr-results" class="screen" hidden>
-    <h2 id="res-title">Victory</h2>
+    <h2 id="res-title" class="res-title">Victory</h2>
+    <p class="hint" id="res-sub"></p>
     <div class="res-stats" id="res-stats"></div>
-    <div class="res-chart" id="res-chart"></div>
+    <div class="res-chart plate" id="res-chart"></div>
+    <div class="res-party" id="res-party"></div>
     <div class="res-unlocks" id="res-unlocks"></div>
-    <div class="row"><button class="btn btn-primary" id="btn-res-back" data-focus>Continue</button></div>
+    <div class="row"><button class="btn" id="btn-res-back">Title</button><button class="btn btn-primary btn-big" id="btn-res-again" data-focus>Play again</button></div>
   </section>
 
   <div id="ov-offer" class="overlay offer" hidden>
     <h2 id="offer-title">Level up!</h2>
     <div class="offer-cards" id="offer-cards"></div>
-    <div class="offer-foot" id="offer-foot"></div>
+    <div class="offer-foot" id="offer-foot"><button class="btn btn-sm" id="btn-reroll">Reroll</button><button class="btn btn-sm" id="btn-skip">Skip</button></div>
+  </div>
+
+  <div id="ov-chest" class="chest-pop" hidden aria-live="polite">
+    <div class="chest-head" id="chest-head">Chest!</div>
+    <div class="chest-list" id="chest-list"></div>
   </div>
 
   <div id="ov-pause" class="overlay" hidden>
-    <div class="plate">
+    <div class="plate pause">
       <h2>Paused</h2>
-      <div class="col"><button class="btn btn-primary" id="btn-resume" data-focus>Resume</button><button class="btn" id="btn-quit">Quit run</button></div>
+      <div class="pause-build" id="pause-build"></div>
+      <div class="col"><button class="btn btn-primary" id="btn-resume" data-focus>Resume</button><button class="btn" id="btn-pause-settings">Settings</button><button class="btn" id="btn-quit">Quit run</button></div>
+    </div>
+  </div>
+
+  <div id="ov-settings" class="overlay" hidden>
+    <div class="plate settings">
+      <h2>Settings</h2>
+      <div class="set-grid">
+        <span class="set-lbl">Quality</span><div class="seg" id="set-quality" role="radiogroup" aria-label="Quality"><button class="btn btn-sm" data-v="auto">Auto</button><button class="btn btn-sm" data-v="high">High</button><button class="btn btn-sm" data-v="low">Low</button></div>
+        <label class="set-lbl" for="set-music">Music</label><div class="slide"><input type="range" id="set-music" min="0" max="100" step="5"><b id="set-music-v">0</b></div>
+        <label class="set-lbl" for="set-sfx">Effects</label><div class="slide"><input type="range" id="set-sfx" min="0" max="100" step="5"><b id="set-sfx-v">0</b></div>
+        <span class="set-lbl">Damage numbers</span><button class="btn btn-sm tog" id="set-numbers" aria-pressed="true">On</button>
+        <span class="set-lbl">Screen shake</span><button class="btn btn-sm tog" id="set-shake" aria-pressed="true">On</button>
+        <span class="set-lbl">Fullscreen</span><button class="btn btn-sm tog" id="set-full" aria-pressed="false">Off</button>
+      </div>
+      <div class="row"><button class="btn btn-primary" id="btn-settings-close" data-back data-focus>Done</button></div>
     </div>
   </div>
 
@@ -84,7 +137,8 @@
       <p>Free Pixel Effects Pack by CodeManu (Davit Masia), CC-BY 4.0 (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">https://creativecommons.org/licenses/by/4.0/</a> ; <a href="https://codemanu.itch.io/pixelart-effect-pack" target="_blank" rel="noopener">https://codemanu.itch.io/pixelart-effect-pack</a>). Frames subsampled and recoloured for Wickdeep.</p>
       <p class="mut">Pixel Operator font by Jayvee Enaguas (HarvettFox96), CC0.</p>
       <p class="mut">16x16 DungeonTileset II by 0x72 (Robert); Dungeon Tileset II Extended by nijikokun; 16x16 Dark Dungeon by kosinaz; Ninja Adventure by Pixel-boy and AAA; Puny Characters by Shade; LuizMelo; Kenney; o_lobster; Aim studios; ansimuz.</p>
-      <div class="row"><button class="btn btn-primary" id="btn-credits-close" data-focus>Done</button></div>
+      <p class="mut">Music and sound are synthesized in your browser.</p>
+      <div class="row"><button class="btn btn-primary" id="btn-credits-close" data-back data-focus>Done</button></div>
     </div>
   </div>
 </div>
