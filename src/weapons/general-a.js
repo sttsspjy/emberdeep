@@ -172,7 +172,7 @@
     },
   });
 
-  // Storm Crown: every 0.5 s a sky bolt strikes the nearest foe (+1 random foe per amount); from there arcs fork in two at every hop, S.depth hops deep (1 + 2 + 4 + 8 foes).
+  // Storm Crown: every 0.5 s S.n sky bolts strike (nearest foe, then random foes); from each, arcs fork in two at every hop, S.depth hops deep (1 + 2 + 4 + 8 foes).
   const SEEN = [], FR = [], NX = [];
   const seenF = (f) => SEEN.indexOf(f.id) >= 0;
   const STRIKE = { knock: 60, stun: 0.25, noEv: true };
@@ -200,7 +200,7 @@
   };
   ED.addWeapon({
     id: 'stormcrown', name: 'Storm Crown', icon: 'fx.circle.spark', look: 'spark', sig: null, mode: 'nearest', evolved: true, from: 'chainspark', txt: 'Forking storm every 0.5 s',
-    base: { dmg: 26, cd: 0.5, n: 1, pierce: 0, area: 1.2, speed: 0, dur: 0, knock: 30, range: 340, depth: 3, fork: 2, jump: 95 },
+    base: { dmg: 26, cd: 0.5, n: 3, pierce: 0, area: 1.2, speed: 0, dur: 0, knock: 30, range: 340, depth: 3, fork: 2, jump: 95 },
     levels: [],
   }, {
     tick(w, p, ws) { aura(w, p, ws, 'crown', 14); },
@@ -405,9 +405,9 @@
       return true;
     },
   });
-  // Twin Moons: 2 (+ amount) glaives orbit the hero, spiralling out to R and back in over each S.cd cycle, re-hitting every 0.25 s.
+  // Twin Moons: two counter-rotating rings of S.n glaives each (second ring offset half a gap) spiral out to R and back in over each S.cd cycle, re-hitting every 0.25 s.
   ED.addWeapon({
-    id: 'twinmoons', name: 'Twin Moons', icon: 'fxbig.midnight', look: 'moon', sig: null, mode: 'around', evolved: true, from: 'glaive', txt: 'Two glaives spiral around you',
+    id: 'twinmoons', name: 'Twin Moons', icon: 'fxbig.midnight', look: 'moon', sig: null, mode: 'around', evolved: true, from: 'glaive', txt: 'Two glaive pairs spiral both ways',
     base: { dmg: 28, cd: 2.6, n: 2, pierce: 0, area: 1.3, speed: 5.2, dur: 0, knock: 80, range: 0, rad: 150 },
     levels: [],
   }, {
@@ -415,7 +415,9 @@
       if (!w.nearestFoe(p.x, p.y, S.rad * S.area + 60)) return false;
       const st = tracked(ws.st), n = Math.max(1, S.n | 0);
       killAll(st, ORB.give);
-      orbRing(w, p, ws, S, n, S.rad * S.area, 1, 0, 'moon', S.cd, orbOpt(13 * S.area, 0.25, S.knock, 0, 0, false, S.cd));
+      const o = orbOpt(13 * S.area, 0.25, S.knock, 0, 0, false, S.cd);
+      orbRing(w, p, ws, S, n, S.rad * S.area, 1, 0, 'moon', S.cd, o);
+      orbRing(w, p, ws, S, n, S.rad * S.area, -1, Math.PI / n, 'moon', S.cd, o);
       return true;
     },
   });

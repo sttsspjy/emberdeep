@@ -1,7 +1,8 @@
-// Necro: hero data, signature Bone Shard (8 levels) + evolution Bone Storm, Q Raise Horde, E Corpse Blast (3 skill levels each), kill-rise passive, skeleton minions.
+// Necro: hero data, signature Bone Shard (8 levels) + evolution Bone Storm (both raise the slain for any hero holding them), Q Raise Horde, E Corpse Blast (3 skill levels each), skeleton minions.
 // Minions are zones (look 'minion' or 'boneknight', networked like any zone; z.a = facing, z.w = swing flash 1..0, wid = credited weapon or skill) driven by minTick
-// (grid queries: nearestFoe retarget every 0.3 s, leash 300 px to the owner). Owner lists p.minions / p.minIds (refs checked by id). Kill-rise respects the cap
-// (8, Bone Storm 16); Raise Horde may exceed it up to HARD_CAP, the oldest minion falling first. Corpses: the last CORPSES kills by this hero (ring of x, y, time).
+// (grid queries: nearestFoe retarget every 0.3 s, leash 300 px to the owner). Owner lists p.minions / p.minIds (refs checked by id, created on first use). Kill-rise
+// (weapon kill callback) respects the cap (8, Bone Storm 16); Raise Horde may exceed it up to HARD_CAP, the oldest minion falling first.
+// Corpses: the last CORPSES kills by a Necro (ring p.corpse of x, y, time, created on first use).
 (function (ED) {
   'use strict';
   const U = ED.U, C = ED.CONST, TAU = U.TAU, TICK = C.TICK;
@@ -21,7 +22,6 @@
     return n;
   };
   const sigSlot = (p) => { for (let i = 0; i < p.weapons.length; i++) { const id = p.weapons[i].id; if (id === 'boneshard' || id === 'bonestorm') return i; } return -1; };
-  const minCap = (p) => { const i = sigSlot(p); return i >= 0 && p.weapons[i].id === 'bonestorm' ? STORM_CAP : CAP; };
   // Minion hit damage: 10 (Bone Knight 26) x might x (1 + 0.1 per Bone Shard level above 1; Bone Storm x1.8).
   const minDmg = (p, big) => {
     const i = sigSlot(p), ws = i >= 0 ? p.weapons[i] : null;
@@ -65,8 +65,11 @@
 
   // ---------------- Bone Shard ----------------
   // S.n piercing shards (0.14 rad fan) at the nearest foe; homing (turn rad/s); mshot: every minion also throws one shard at its target (or the nearest foe).
-  // S.rise: chance that a foe this hero kills rises as a minion (the hero hook reads it).
+  // S.rise: chance that a non-boss foe the holder kills (by any source) rises as a minion while under the cap (8, Bone Storm 16).
   const SHARD = { look: 'bone', homing: 0 };
+  const riseKill = (w, p, ws, S, e) => {
+    if (!e.boss && w.rng.next() < S.rise && liveMinions(p) < (ws.id === 'bonestorm' ? STORM_CAP : CAP)) raise(w, p, e.x, e.y, ws.id, false, 15);
+  };
   const minionShots = (w, p, ws, S, opt) => {
     const n = liveMinions(p);
     for (let i = 0; i < n; i++) {
@@ -96,6 +99,7 @@
       if (S.mshot) minionShots(w, p, ws, S, SHARD);
       return true;
     },
+    kill: riseKill,
   });
   // Bone Storm: S.n shards orbit the hero (radius 30, S.orbit s, re-hitting foes they touch), then launch at the nearest foe (homing); minions throw shards; minion cap 16.
   const orbitTick = (w, pr) => {
@@ -129,6 +133,7 @@
       minionShots(w, p, ws, S, SHARD);
       return true;
     },
+    kill: riseKill,
   });
 
   // ---------------- skills ----------------
@@ -160,6 +165,7 @@
   // Corpse Blast: every minion (1.4 r, 1.6x damage) and every fresh corpse (killed by this hero in the last 5 s) within view detonates, plus a nova at the hero (1.2 r).
   // shards: the first 16 blasts each throw 3 bone shards; rerise: detonated minions rise again.
   const SCR = [];
+  const corpses = (p) => { if (!p.corpse) { p.corpse = new Float64Array(CORPSES * 3).fill(-1e9); p.corpI = 0; } return p.corpse; };
   const CB = { knock: 300, look: 'corpse', kind: 'skill' }, CSHARD = { look: 'bone', speed: 280, dmg: 0, pierce: 3, r: 4, life: 0.6, knock: 40 };
   // Detonation: the blast plus a visual-only 'corpse' zone (0.4 s).
   const det = (w, p, x, y, r, dmg) => { w.blast(p, 'corpseblast', x, y, r, dmg, CB); w.zone({ team: 0, p, wid: 'corpseblast', x, y, r, dur: 0.4, look: 'corpse' }); };
@@ -187,7 +193,7 @@
       k++;
       if (N.rerise) raise(w, p, zx, zy, M[i + 3] ? 'raise' : (sigSlot(p) >= 0 ? p.weapons[sigSlot(p)].id : 'boneshard'), !!M[i + 2], M[i + 2] ? 20 : 15);
     }
-    const Cp = p.corpse, now = w.time;
+    const Cp = corpses(p), now = w.time;
     for (let j = 0; j < CORPSES; j++) {
       const i = ((p.corpI - 1 - j) % CORPSES + CORPSES) % CORPSES, cx = Cp[i * 3], cy = Cp[i * 3 + 1];
       if (now - Cp[i * 3 + 2] > CORPSE_AGE) break;
@@ -200,14 +206,8 @@
     return { n: k, r: Math.round(N.r), shake: Math.min(9, 4 + k * 0.25), stop: 0.06 };
   });
 
-  // Kill hook: records the corpse, then a non-boss foe rises at the Bone Shard rise chance while under the cap.
+  // Kill hook: records the corpse for Corpse Blast.
   ED.HOOK.necro = {
-    init(w, p) { p.minions = []; p.minIds = []; p.minSlot = 0; p.corpse = new Float64Array(CORPSES * 3).fill(-1e9); p.corpI = 0; },
-    kill(w, p, e) {
-      const i = p.corpI; p.corpse[i * 3] = e.x; p.corpse[i * 3 + 1] = e.y; p.corpse[i * 3 + 2] = w.time; p.corpI = (i + 1) % CORPSES;
-      if (e.boss) return;
-      const s = sigSlot(p), ch = s >= 0 ? w.weaponS(p, s).rise : 0.06;
-      if (w.rng.next() < ch && liveMinions(p) < minCap(p)) raise(w, p, e.x, e.y, s >= 0 ? p.weapons[s].id : 'boneshard', false, 15);
-    },
+    kill(w, p, e) { const Cp = corpses(p), i = p.corpI; Cp[i * 3] = e.x; Cp[i * 3 + 1] = e.y; Cp[i * 3 + 2] = w.time; p.corpI = (i + 1) % CORPSES; },
   };
 })(globalThis.ED || (globalThis.ED = {}));

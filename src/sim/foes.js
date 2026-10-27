@@ -117,7 +117,7 @@
     }
   };
 
-  // Foe e dies: kill credit, 'die' event, drops (gem by def.xp; elites a chest, gold and a large gem; bosses via onBossKilled), splitter children, the killer's hero kill hook.
+  // Foe e dies: kill credit, 'die' event, drops (gem by def.xp; elites a chest, gold and a large gem; bosses via onBossKilled), splitter children, the killer's weapon kill callbacks, then its hero kill hook.
   W.killFoe = function (e, src) {
     if (e.dead) return;
     e.dead = true; e.hp = 0; e.hpQ = 0;
@@ -133,6 +133,6 @@
       const n = this.rng.int(sp.n[0], sp.n[1]) + (e.elite ? 3 : 0);
       for (let i = 0; i < n; i++) { const a = i / n * U.TAU + this.rng.next(), d = 8 + e.r * 0.5; this.spawnFoe(sp.id, e.x + Math.cos(a) * d, e.y + Math.sin(a) * d); }
     }
-    if (p) { const hk = ED.HOOK[p.cls]; if (hk && hk.kill) hk.kill(this, p, e); }
+    if (p) { this.weaponKill(p, e); const hk = ED.HOOK[p.cls]; if (hk && hk.kill) hk.kill(this, p, e); }
   };
 })(globalThis.ED || (globalThis.ED = {}));

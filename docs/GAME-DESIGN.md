@@ -35,7 +35,7 @@ Units: world px (hero sprite ≈ 16–24 px tall), seconds. HP numbers are integ
 | Invulnerability after a hit | 0.5 s |
 
 - **Controls**: WASD move (e.code), mouse aims skills, Space dash, Q and E hero skills, 1–4 pick a level-up card, Esc pause (solo only).
-- **Weapons fire on their own.** Targeting modes: `nearest`, `facing` (movement direction), `random` (a random foe on screen), `around` (orbit or aura), `densest` (the densest foe cluster within range).
+- **Weapons fire on their own.** Targeting modes: `nearest`, `facing` (toward the nearest foe within ±100° of the movement direction, else straight along it; Twin Daggers ±52°; Cleave holds its swing while no foe is in that cone), `random` (a random foe on screen), `around` (orbit or aura), `densest` (the densest foe cluster within range).
 - **Hero skills (Q/E)** aim at the mouse cursor, cooldowns 6–18 s, and must look and feel huge: screen-wide effects, hit-stop, shake. Skill cards in the level-up pool upgrade them (shape, not just numbers).
 - **Slots**: 6 weapons, 6 passives. The hero's signature weapon fills slot 1 at start.
 
@@ -46,7 +46,7 @@ Units: world px (hero sprite ≈ 16–24 px tall), seconds. HP numbers are integ
 | Knight | 130 | 85 | **Cleave**: a wide sword arc toward the facing direction | Shield Charge: dash forward through foes, knock all aside | Bulwark: 3 s of 60% damage reduction and a shockwave that pushes the horde back |
 | Ranger | 90 | 100 | **Longbow**: arrows at the nearest foe | Volley: a rain of arrows on a cursor area for 2 s | Snare Trap: drops a trap at the cursor that roots foes in a radius |
 | Pyro | 85 | 92 | **Fire Bolt**: a bolt that bursts into a small fire pool | Meteor: a big impact at the cursor after a 0.5 s fall, burning ground | Flame Ring: an expanding fire ring around the hero |
-| Necro | 95 | 88 | **Bone Shard**: piercing shards; killed foes have a 6% chance to rise as skeleton minions (max 8) | Raise Horde: raise 6 skeletons at once | Corpse Blast: detonates every minion and fresh corpse within view |
+| Necro | 95 | 88 | **Bone Shard**: piercing shards; foes its holder kills (any hero) have a 6% chance to rise as skeleton minions (max 8) | Raise Horde: raise 6 skeletons at once | Corpse Blast: detonates every minion and fresh corpse within view |
 | Cleric | 110 | 88 | **Smite**: holy pillars strike random foes on screen | Sanctuary: a zone at the cursor that heals allies 5 HP/s and damages foes, 4 s | Judgment: a beam toward the cursor that sweeps 90° |
 | Shade | 80 | 100 | **Twin Daggers**: fast thrown daggers in the facing direction, high crit | Shadow Step: blink to the cursor and leave a damaging afterimage | Fan of Knives: 24 daggers in a full circle |
 | Bell | 115 | 86 | **Toll**: a bell orbits the hero; each peal sends a shockwave ring that pushes foes back | Great Peal: a huge ring that stuns every foe on screen for 1.2 s | Hurl Bell: throws a bell at the cursor; it drags foes in its path, then rings |
@@ -62,15 +62,15 @@ General weapons (12):
 | Weapon | Mode | Pattern | Paired passive | Evolution |
 |---|---|---|---|---|
 | Orbit Lanterns | around | lanterns circle the hero | Duration | Sun Wheel: permanent ring of 8 lanterns, burns |
-| Chain Spark | nearest | lightning arcs foe to foe | Reach | Storm Crown: arcs fork twice, strike every 0.5 s |
+| Chain Spark | nearest | lightning arcs foe to foe | Reach | Storm Crown: 3 bolts every 0.5 s, arcs fork twice |
 | Frost Ring | around | expanding ring that slows | Reach | Glacier: ring freezes foes solid for 1.5 s |
 | Bramble Trail | facing | thorns erupt along the path walked | Duration | Thornwood: thorns persist and grab |
-| Glaive | nearest | boomerang out and back, pierces | Velocity | Twin Moons: two glaives orbit outward in spirals |
+| Glaive | nearest | boomerang out and back, pierces | Velocity | Twin Moons: two glaive pairs spiral out, counter-rotating |
 | Meteor Call | random | delayed impacts at random foes | Multishot | Starfall: constant shower |
 | Bone Spear | facing | long piercing spear line | Might | Impaler: spear pins and drags foes |
 | Blight Pool | around | poison pools dropped under the hero | Duration | Plague Field: pools spread to adjacent foes |
 | Wisp | nearest | homing spirits seek foes | Multishot | Wisp Choir: wisps split on kill |
-| Mortar | densest | lobbed bomb at the densest cluster | Reach | Barrage: 5-shell salvo |
+| Mortar | densest | lobbed bomb at the densest cluster | Reach | Barrage: 5-shell walking salvo, 5 bomblets each |
 | Censer | around | damaging aura around the hero | Mending | Holy Censer: aura heals 1 HP per 30 foes killed in it |
 | Ricochet | nearest | stones bounce between foes | Velocity | Avalanche: stones split on each bounce |
 

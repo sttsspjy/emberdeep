@@ -23,26 +23,15 @@
     pr.vx = Math.cos(a) * pr.sp; pr.vy = Math.sin(a) * pr.sp; pr.a = a;
     pr.pierce++; pr.st = BOUNCE[b - 1]; pr.life = Math.max(pr.life, 0.45);
   }
-  // Aim of a facing volley along a0: toward the nearest foe within range and AIM_CONE rad of a0, else a0 itself.
+  // Facing volleys bend toward the nearest foe within AIM_CONE rad of their direction (w.facingAim).
   const AIM_CONE = 0.9;
-  function coneAim(w, p, a0, range) {
-    const q = w.foeScan(p.x, p.y, range);
-    let best = null, bd = range * range;
-    for (let k = 0; k < q.length; k++) {
-      const e = q[k]; if (e.dead) continue;
-      const d = U.dist2(p.x, p.y, e.x, e.y);
-      if (d < bd && Math.abs(U.angDiff(a0, Math.atan2(e.y - p.y, e.x - p.x))) <= AIM_CONE) { bd = d; best = e; }
-    }
-    w.foeEnd();
-    return best ? Math.atan2(best.y - p.y, best.x - p.x) : a0;
-  }
   // S.n daggers along the facing direction, bent toward a foe inside the 0.9 rad aim cone (staggered 5 px, spread 0.06 rad); back: as many behind. Fires only when a foe is within range.
   function volley(w, p, ws, S) {
     if (!w.nearestFoe(p.x, p.y, S.range)) return false;
     const n = Math.max(1, S.n | 0), b = BOUNCE[Math.min(5, S.bounce | 0)], opt = OPT;
     opt.st = b; opt.onHit = b.b > 0 ? ricochet : null;
     for (let side = 0; side < (S.back ? 2 : 1); side++) {
-      const a0 = coneAim(w, p, p.mdir + side * Math.PI, S.range);
+      const a0 = w.facingAim(p, p.mdir + side * Math.PI, S.range, AIM_CONE);
       for (let i = 0; i < n; i++) { const o = i - (n - 1) / 2; w.shoot(p, ws.id, p.x - Math.sin(a0) * o * 5, p.y - 6 + Math.cos(a0) * o * 5, a0 + o * 0.06, S, opt); }
     }
     return true;

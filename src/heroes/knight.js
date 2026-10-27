@@ -8,8 +8,8 @@
   ED.addHero({ id: 'knight', name: 'Knight', hp: 130, speed: 85, crit: 0.05, sig: 'cleave', skills: ['charge', 'bulwark'], icon: 'hero.knight.idle', col: '#c9d4e8', txt: 'Sword and shield. Holds the line.' });
 
   // ---------------- Cleave ----------------
-  // A sword arc toward the movement direction (mode facing). Custom numbers: arc (rad), back (also swings behind), wave (each swing flings that many piercing crescents).
-  // S.n swings: the first at once, the rest 0.15 s apart, alternating 0.3 rad either side.
+  // A sword arc toward the nearest foe in reach within ED.FACING_CONE of the movement direction (with back: of either direction); holds (retry 0.1 s) while none.
+  // Custom numbers: arc (rad), back (also swings behind), wave (each swing flings that many piercing crescents). S.n swings: the first at once, the rest 0.15 s apart, alternating 0.3 rad either side.
   const WAVE = { look: 'crescent', speed: 250, dmg: 0, pierce: 999, r: 12, life: 0.5, knock: 0 };
   const wave = (w, p, ws, S, a, k) => {
     WAVE.dmg = S.dmg * (k || 0.6); WAVE.r = 11 * S.area; WAVE.knock = S.knock * 0.5; WAVE.life = 0.42 * Math.sqrt(S.area);
@@ -37,8 +37,10 @@
     pair: 'might', evo: 'whirlwind', noAmount: true,
   }, {
     fire(w, p, ws, S) {
-      if (!w.nearestFoe(p.x, p.y, S.range * S.area + 24 + ((S.wave | 0) ? 90 : 0))) return false;
-      const a = p.mdir;
+      const R = S.range * S.area + 24 + ((S.wave | 0) ? 90 : 0);
+      let a = w.coneFoe(p, p.mdir, R);
+      if (a === null && S.back) { a = w.coneFoe(p, p.mdir + Math.PI, R); if (a !== null) a += Math.PI; }
+      if (a === null) return false;
       swings(w, p, ws, S, a);
       ws.st.left = (S.n | 0) - 1; ws.st.t = 0.15; ws.st.a = a;
       return true;

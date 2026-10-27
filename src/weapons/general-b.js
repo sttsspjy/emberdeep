@@ -14,7 +14,7 @@
   };
 
   // ---------------- Bone Spear / Impaler ----------------
-  // Spears fly along the movement direction, S.n in a fan 0.16 rad apart; back / cross add the rear / side directions. shards: each spear bursts into 3 bone shards at its end.
+  // Spears fly toward the nearest foe within ED.FACING_CONE of the movement direction (else along it), S.n in a fan 0.16 rad apart; back / cross add the rear / side directions. shards: each spear bursts into 3 bone shards at its end.
   const SP = { look: 'spear', r: 5, onEnd: null };
   const SHARD = { look: 'bone', dmg: 0, pierce: 1, speed: 300, life: 0.35, r: 3, knock: 30 };
   const shardEnd = (w, pr) => {
@@ -42,7 +42,7 @@
   }, {
     fire(w, p, ws, S) {
       if (!w.nearestFoe(p.x, p.y, S.range)) return false;
-      const a = p.mdir;
+      const a = w.facingAim(p, p.mdir, S.range);
       SP.r = 5 * S.area; SP.onEnd = S.shards ? shardEnd : null;
       fan(w, p, ws, S, a, 0.16, SP);
       if (S.back || S.cross) fan(w, p, ws, S, a + PI, 0.16, SP);
@@ -87,7 +87,7 @@
   }, {
     fire(w, p, ws, S) {
       if (!w.nearestFoe(p.x, p.y, S.range)) return false;
-      const n = Math.max(1, S.n | 0), a0 = p.mdir;
+      const n = Math.max(1, S.n | 0), a0 = w.facingAim(p, p.mdir, S.range);
       IMP.r = 7 * S.area;
       for (let i = 0; i < n; i++) {
         const s = IMP.st = pinState(); s.cap = S.pin; s.dmg = S.dmg * S.boomMul; s.r = S.boom * S.area;
@@ -218,7 +218,7 @@
   }, { fire: (w, p, ws, S) => launchWisps(w, p, ws, S, 'wisp', S.burst ? wispBurst : null) });
   ED.addWeapon({
     id: 'choir', name: 'Wisp Choir', icon: 'fx.circle.spark', look: 'choir', sig: null, mode: 'nearest', evolved: true, from: 'wisp', txt: 'Wisps split on kill',
-    base: { dmg: 22, cd: 0.9, n: 4, pierce: 1, area: 1.3, speed: 200, dur: 3, knock: 30, range: 360, homing: 7 },
+    base: { dmg: 22, cd: 0.9, n: 6, pierce: 1, area: 1.5, speed: 200, dur: 3, knock: 30, range: 360, homing: 7 },
     levels: [],
   }, { fire: (w, p, ws, S) => launchWisps(w, p, ws, S, 'choir', choirHit) });
 
@@ -273,10 +273,10 @@
       return true;
     },
   });
-  // Barrage: S.n shells walk across the densest cluster along the hero's line of fire (36 px x area apart, 0.09 s apart), each with bomblets and burning ground.
+  // Barrage: S.n shells walk across the densest cluster along the hero's line of fire (36 px x area apart, 0.09 s apart), each with S.cluster bomblets and burning ground.
   ED.addWeapon({
     id: 'barrage', name: 'Barrage', icon: 'fx.blast.red', look: 'shell', sig: null, mode: 'densest', evolved: true, from: 'mortar', txt: 'A walking salvo of shells',
-    base: { dmg: 36, cd: 1.7, n: 5, pierce: 0, area: 1.2, speed: 0, dur: 2, knock: 140, range: 380, flight: 0.6, cluster: 2, fire: true },
+    base: { dmg: 36, cd: 1.7, n: 5, pierce: 0, area: 1.6, speed: 0, dur: 2, knock: 140, range: 380, flight: 0.6, cluster: 5, fire: true },
     levels: [],
   }, {
     fire(w, p, ws, S) {

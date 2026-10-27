@@ -1,7 +1,8 @@
 // Headless check for heroes Knight, Ranger, Pyro, Necro (exit 1 on failure). Usage: node tools/check-heroes-a.js
 // Per hero (god cheat, from 4:00 so the horde is dense): 4 phases of 15 s with skill level 1..4 and signature level 2/4/6/8, then 20 s evolved (pair passive owned).
 // Q and E are held every tick (cast on cooldown), aimed at the nearest foe; fodder rings keep targets near the hero. Each phase: no exception, both skills cast, the signature and both skills deal damage.
-// Extras: these signatures (base and evolved) on other heroes, shape flags reach the effective numbers, necro minions rise / obey the cap and Corpse Blast detonates,
+// Extras: these signatures (base and evolved) on other heroes (Bone Shard / Bone Storm raise minions for them too), Cleave aims inside the facing cone, shape flags reach
+// the effective numbers, necro minions rise / obey the cap and Corpse Blast detonates,
 // same seed -> same digest, no NaN positions.
 'use strict';
 const { load } = require('./sim.js');
@@ -89,10 +90,24 @@ for (const [cls, ids] of [['cleric', ['longbow', 'firebolt', 'boneshard', 'cleav
   const w = new ED.World({ seed: 9, stage: 0, players: [{ pid: 'p1', cls, meta: { shop: {}, sigs: [] } }], cheats: { god: true } }), p = w.heroes[0];
   w.time = 240;
   for (const id of ids) { const ws = w.addWeapon(p, id); if (ws) ws.lvl = 8; }
-  let err = null;
-  try { for (let i = 0; i < 900; i++) { drive(w, p, i); if (i % 60 === 0) feed(w, p); w.update(C.TICK); w.events.length = 0; } } catch (e) { err = e; }
+  let err = null, maxMin = 0;
+  try { for (let i = 0; i < 900; i++) { drive(w, p, i); if (i % 60 === 0) feed(w, p); w.update(C.TICK); w.events.length = 0; maxMin = Math.max(maxMin, ED.Necro.liveMinions(p)); } } catch (e) { err = e; }
   const dealt = ids.map(id => id + ' ' + Math.round(p.dealt[id] || 0));
   ok(!err && ids.every(id => p.dealt[id] > 0), `${cls} carrying ${ids.join(', ')}: ${dealt.join(', ')}` + (err ? ': ' + err.stack : ''));
+  ok(maxMin > 0, `${cls} carrying ${ids[2]}: the slain rise (peak ${maxMin} minions)`);
+}
+// Cleave aims at a foe inside the facing cone, holds while the only foe is behind, swings back at it once it has the back swing.
+{
+  const w = new ED.World({ seed: 3, stage: 0, players: [{ pid: 'p1', cls: 'knight' }], cheats: { god: true } }), p = w.heroes[0];
+  w.foes.length = 0; p.mdir = 0;
+  const ws = p.weapons[0], fire = () => { w.events.length = 0; const r = ED.WIMPL.cleave.fire(w, p, ws, ED.Stats.weapon(p, 0)); const ev = w.events.find(e => e.t === 'swing'); return r ? (ev ? ev.a : NaN) : null; };
+  const put = (a) => { for (const e of w.foes) e.dead = true; w.spawnFoe(FODDER, p.x + Math.cos(a) * 40, p.y - 4 + Math.sin(a) * 40); };
+  put(1.2); const a1 = fire();
+  put(Math.PI); const a2 = fire();
+  ws.lvl = 3; const a3 = fire();
+  ok(a1 !== null && Math.abs(U.angDiff(a1, 1.2)) < 0.15, `knight: Cleave swings at a foe 69 deg off its facing (a ${a1 && a1.toFixed(2)})`);
+  ok(a2 === null, 'knight: Cleave holds while the only foe is behind');
+  ok(a3 !== null, 'knight: Cleave 3 swings at a foe behind');
 }
 // Shape flags reach the effective numbers.
 {
