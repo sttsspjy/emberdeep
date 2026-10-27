@@ -1,10 +1,12 @@
 'use strict';
-// Declarative art manifest for tools/art.js: which source rects become which ED.ART anims (see ART-PLAN sections 4 and 5).
-// Units are ART pixels (1 art px = 2 world px at draw time). Source sheets live under art-src/ (see art-src/SOURCES.md).
+// Declarative art manifest for tools/art.js: which source rects become which ED.ART anims.
+// Units are ART pixels (1 art px = 1 world px; ED.Atlas K = 1). Source sheets live under art-src/ (see art-src/SOURCES.md).
+// Entry options: rects | frames [[sheet, rect]] | ascii [rows] + pal | sample | use (alias, same page) | make(H) -> bitmaps; swap / ramp (+lo, hi, skip) / stamp / flip;
+//   post(b, i, H) per-frame transform; pivot; anchors; anchorsFrom; set; core:false (pose does not move the set's shared anchor). H = helpers in art.js buildFrames.
 //
 // ED.ART = { pages, frames, anims, pal, font, swaps }
 //   anims[id] = { f: [frameId..], fps, loop, fw, fh, ax, ay, anchors: { hand, grip, tip, eye:[[x,y]..], centre, top, dir } }
-//   fw x fh = logical frame; ax/ay = pivot inside it (feet for bodies/props/pickups, grip for weapons, centre for projectiles/fx, 0,0 for tiles).
+//   fw x fh = logical frame; ax/ay = pivot inside it (feet for bodies/props/pickups, grip for weapons, centre for projectiles/fx/icons, 0,0 for tiles).
 //   frames[id] = { p: page, x, y, w, h, ox, oy }: trimmed rect in the page; ox/oy = its offset inside the logical frame.
 //   Draw: x - ax + ox, y - ay + oy (art px). All anchor coordinates are in logical-frame px (origin top-left of fw x fh).
 //   Anims of one `set` share the union bbox, so feet never jitter between idle/run/hit or between the four directions.
@@ -14,22 +16,23 @@
 //   foe.<id>.<state>.<d|u|l|r> four-way (down, up, left, right); foe.<id>.<state>.<0..7> eight-way (source rows: 0 S, 1 SE, 2 E, 3 NE, 4 N, 5 NW, 6 W, 7 SW).
 //   Every foe has `walk`; `idle` exists for 0x72 foes; `atk`/`cast`/`howl`/`death` where the source has them (howl: icewolf, lavahound).
 //
-// ----------------------------------------------------------------------------- ID LIST (one line per family; the exhaustive list is generated into ID-LIST.md)
+// ----------------------------------------------------------------------------- ID LIST (one line per family)
 // hero.<knight|ranger|pyro|shade|cleric|necro|bell>.<idle|run|hit>   0x72 bodies facing right: idle 4f, run 4f, hit 1f; anchors.hand = weapon pivot on the body (feet + 3,-6),
-//                        anchors.head[frame] = hat seat; skins are runtime swaps: ED.ART.swaps['<cls>.<a|b|secret|unkindled>'] (same shape as swaps[cls])
-// weapon.<id>            the 18 game weapons (longsword warhammer glaive longbow crossbow twinbows firestaff emberwand inferno daggers knives scythes mace dawnhammer lantern bonewand soulscythe plaguestaff) + bells bronzebell greatbell handbells; anchors.grip/tip/dir
-// weapon.alt.<name>      Route-fork and foe weapons: big_hammer waraxe double_axe anime_sword katana duel_sword machete saw_sword throwing_axe rusty_sword cleaver
-// shield.<wood|green|gold|round|kite|buckler|tower>   16x16 guard-side shields (DawnLike); proj.shield = the thrown kite shield (centre pivot)
-// foe.<id>.<state>[.dir] all 46 foes (state walk always; idle/atk/cast/death where the source has them), direction rule above; imp/skeleton keep native colours, the rest take pal(def.col) at runtime
-// boss.<id>.<state>      bonewarden: idle walk attack(8f) shield hit death | sporemother: idle walk attack charge hit
-//                        drownedking: idle walk attack1 attack2 attack3 hit death | hollowking: idle walk attack hit death, crown overlay boss.hollowking.crown
-// tile.floor.<1..8>, tile.wall.{cap,face}.{left,mid,right}, tile.wall.side.{left,right}, tile.wall.outer.{top,front}.{left,right}, tile.wall.edge.<shape>, tile.wall.lip, tile.wall.auto.<col>.<row>,
-//   tile.wall.{hole.1,hole.2,goo,goo.base}, tile.hole, tile.spikes(4f), tile.stairs, tile.door.{frame.left,frame.right,frame.top,leaf.closed,leaf.open}, tile.gate.bars (front view) / tile.gate.bars.side (E/W), tile.wall.grate,
-//   tile.carpet.<red|beige>.{full,rug,run.fill,run.top,run.bot,band} (Sanctum),
-//   tile.fountain.{top.1..3,mid.red,mid.blue,basin.red,basin.blue}(3f), tile.torch.{wall,floor}(8f), tile.torch.unlit, tile.dark.floor.<1..6>   (0x72 base set; per-biome recolour at runtime)
-// prop.<chest.closed|chest.open|chest.empty|mimic.closed|mimic.open|plinth|plinth.stone|shrine.<0..4>|merchant|crate|bag|campfire|anvil|trial|portal|sign|column|column.wall>
-// deco.<bones.0..4|skull|moss.0..2|candle.0..3|urn.0..5|mushroom.0..3|root.0..1|puddle.0..3|crystal.0..2|shard.0..2|shell.0..2|seaweed.0..1|coral.0..1|crate.0..1|pillarstub|chain|grate|banner.<blue|green|red|yellow>>
-// pickup.<coin|heart|flask.red|flask.yellow|xp>; cos.<crown|platino|ghost|coin> wardrobe sprites
+//                        anchors.head[frame] = hat seat; ED.ART.swaps[cls] = { base, key } player-colour recolour
+// weapon.<id>            held/thrown weapon sprites (longsword warhammer glaive longbow crossbow twinbows firestaff emberwand inferno daggers knives scythes mace dawnhammer lantern bonewand soulscythe plaguestaff bronzebell greatbell handbells); anchors.grip/tip/dir
+// weapon.alt.<name>      big_hammer waraxe double_axe anime_sword katana duel_sword machete saw_sword throwing_axe rusty_sword cleaver
+// shield.<wood|green|gold|round|kite|buckler|tower>   16x16 shields (DawnLike); proj.shield = the thrown kite shield (centre pivot)
+// foe.<id>.<state>[.dir] 46 foes (state walk always; idle/atk/cast/death where the source has them), direction rule above
+// boss.<id>.<state>      bonewarden: idle walk attack(8f) shield hit death | sporemother: idle walk attack charge hit | drownedking: idle walk attack1 attack2 attack3 hit death
+//                        hollowking: idle walk attack hit death, crown overlay boss.hollowking.crown | cyclops: idle walk attack hit death | samurai: idle walk charge attack hit death
+//                        (all face right; anchors centre/top/eye shared across each boss's states)
+// tile.floor.<1..8>, tile.dark.floor.<1..6> (base sets), tile.floor.<ossuary 1..8|glowmire 1..6|abyss 1..8> (per-stage recolours), tile.torch.floor (8f)
+// prop.<pillar|pillar.broken|column|ruin.0..2|ruin.void.0..2|grave.0..4|coffin|bonepile|shroom.0..1|crystal.0..1|crystal.void.0..1|obelisk>   obstacles (feet pivot)
+// prop.<brazier (8f)|brazier.broken|chest.closed|chest.open|chest.empty>
+// deco.<bones.0..4|skull|moss.0..2|candle.0..3|urn.0..5|mushroom.0..3|root.0..1|puddle.0..3|crystal.0..2|shard.0..2|shell.0..2|seaweed.0..1|coral.0..1|pillarstub|chain>
+// pickup.<xp1|xp5|xp25|gold|food|magnet|bomb (2f)|chest|chest.open (3f)> run pickups; pickup.<xp|coin|heart|flask.red|flask.yellow> base sprites; cos.platino (DawnLike's Platino)
+// icon.w.<weaponId>      16x16 weapon icons (centre pivot): 12 general + evolutions, 7 signatures + evolutions (ids in art-src/wickdeep/icons.js W)
+// icon.p.<passiveId>     16x16 passive icons: might haste reach velocity duration multishot vigor plating mending swiftness magnet fortune
 // proj.<arrow|bolt|knife|fireball|hammer|shield|bone|trident|skull|web|thorn>      hero/foe projectile sprites (the other kinds are procedural orbs)
 // fx.<cut|cutx|cslash|slash.arc|slash.small|hit.spark|explosion|flam|ice.burst|thunder|circle.spark|circle.white|shield.gold|spark.magic|smoke|smoke.ring|ember|glint|flame>
 // fx.<blast.red|blast.blue|foam|ring.shock|burst|puff>, fx.<star.stun|sigil.skull|glyph.corroded|chain> (hand-authored)
@@ -48,7 +51,6 @@ const NA = 'ninja/';
 const sheets = {
   tileList: undefined,
   ox: { file: '0x72/0x72_DungeonTilesetII_v1.7.png' },
-  ox_high: { file: '0x72/atlas_walls_high-16x32.png' },
   ext: { file: 'ext/dungeontileset-extended.png' },
   kos: { file: 'kosinaz/DarkDungeon.png', outline: ['#111111'] },
   ken: { file: 'kenney/tilemap_packed.png', outline: ['#3f2631'] },
@@ -67,14 +69,20 @@ const sheets = {
   na_book: { file: NA + 'Items/Weapons/Book/SpriteInHand.png', outline: ['#141b1b'] },
   na_wand: { file: NA + 'Items/Weapons/MagicWand/SpriteInHand.png', outline: ['#141b1b'] },
   na_bone: { file: NA + 'Items/Weapons/Bone/SpriteInHand.png', outline: ['#141b1b'] },
-  na_dungeon: { file: NA + 'Backgrounds/Tilesets/TilesetDungeon.png', outline: ['#141b1b'] },
-  na_camp: { file: NA + 'Backgrounds/Tilesets/tileset_camp.png', outline: ['#141b1b'] },
   // Ninja bosses
   nb_bamboo_idle: { file: NA + 'Actor/Boss/GiantBamboo/Idle.png', outline: ['#141b1b'] },
   nb_bamboo_walk: { file: NA + 'Actor/Boss/GiantBamboo/Walk.png', outline: ['#141b1b'] },
   nb_bamboo_attack: { file: NA + 'Actor/Boss/GiantBamboo/Attack.png', outline: ['#141b1b'] },
   nb_bamboo_charge: { file: NA + 'Actor/Boss/GiantBamboo/Charge.png', outline: ['#141b1b'] },
   nb_bamboo_hit: { file: NA + 'Actor/Boss/GiantBamboo/Hit.png', outline: ['#141b1b'] },
+  nb_cy_idle: { file: NA + 'Actor/Boss/DemonCyclop/Idle.png', outline: ['#141b1b'] },
+  nb_cy_walk: { file: NA + 'Actor/Boss/DemonCyclop/Walk.png', outline: ['#141b1b'] },
+  nb_cy_hit: { file: NA + 'Actor/Boss/DemonCyclop/Hit.png', outline: ['#141b1b'] },
+  nb_sa_idle: { file: NA + 'Actor/Boss/GiantBlueSamurai/Idle.png', outline: ['#141b1b'] },
+  nb_sa_walk: { file: NA + 'Actor/Boss/GiantBlueSamurai/Walk.png', outline: ['#141b1b'] },
+  nb_sa_attack: { file: NA + 'Actor/Boss/GiantBlueSamurai/AttackRight.png', outline: ['#141b1b'] },
+  nb_sa_charge: { file: NA + 'Actor/Boss/GiantBlueSamurai/ChargeRight.png', outline: ['#141b1b'] },
+  nb_sa_hit: { file: NA + 'Actor/Boss/GiantBlueSamurai/Hit.png', outline: ['#141b1b'] },
   // Ninja fx and projectiles
   nf_cut: { file: NA + 'FX/Attack/Cut/SpriteSheet.png' },
   nf_cutx: { file: NA + 'FX/Attack/CutX/SpriteSheet.png' },
@@ -114,8 +122,6 @@ const sheets = {
   dl_light: { file: 'dawnlike/Items/Light.png', outline: ['#140c1c'], edge: ['#452434'] },
   dl_wand: { file: 'dawnlike/Items/Wand.png', outline: ['#140c1c'], edge: ['#452434'] },
   dl_decor0: { file: 'dawnlike/Objects/Decor0.png', outline: ['#140c1c'], edge: ['#452434'] },
-  dl_door0: { file: 'dawnlike/Objects/Door0.png', outline: ['#140c1c'], edge: ['#452434'] },
-  dl_door1: { file: 'dawnlike/Objects/Door1.png', outline: ['#140c1c'], edge: ['#452434'] },
   dl_ground0: { file: 'dawnlike/Objects/Ground0.png', outline: ['#140c1c'], edge: ['#452434'] },
   dl_music: { file: 'dawnlike/Items/Music.png', outline: ['#140c1c'], edge: ['#452434'] },
   // dl_re0/dl_re1: the Platino reference cells (cos.platino is redrawn from them)
@@ -161,36 +167,6 @@ const SWAPS = {
   necro: { base: { '#5698cc': '#2f4a42', '#5956bd': '#17261f', '#fdf7ed': '#b6ffe0', '#b58057': '#8a7a6a' }, key: ['#5956bd'] },
   bell: { base: { '#49a790': '#4fb8a4', '#417089': '#2a6a70', '#314152': '#1e3a44', '#d3bfa9': '#e0b070', '#8f4029': '#b0702e', '#62232f': '#6a3f1e' }, key: ['#9f294e', '#da4e38'] }, // verdigris scales, bronze belly and belt, crest = player colour
 };
-// Wardrobe skins: swaps['<cls>.<a|b|secret>'] = the hero's base swap with these colours replaced (same key colours); swaps['<cls>.unkindled'] = every
-// non-outline, non-key colour of the hero's anims ranked by luminance onto ASH (resolved by art.js). The renderer recolours hero.<cls>.* through them.
-const SKINS = {
-  knight: { a: { '#72d6ce': '#7090e0', '#417089': '#2c3a78', '#fdf7ed': '#e6eeff' }, // cobalt
-    b: { '#72d6ce': '#c0505a', '#417089': '#5e2030', '#fdf7ed': '#ffd8c8' }, // bloodsteel
-    secret: { '#72d6ce': '#ffd36b', '#417089': '#2a2238', '#fdf7ed': '#ffffff' } }, // black and gold
-  ranger: { a: { '#4ba747': '#c8763a', '#3d734f': '#7a3e22', '#facb3e': '#9a6a44', '#ee8e2e': '#6a4430' }, // autumn leather, brown hair
-    b: { '#4ba747': '#5fa8d8', '#3d734f': '#2e5a8a', '#facb3e': '#f4f4f0', '#ee8e2e': '#b0b8c8', '#5698cc': '#7de8ff' }, // frostwood, silver hair
-    secret: { '#4ba747': '#1f8a64', '#3d734f': '#0f4a34', '#facb3e': '#fff2c0', '#ee8e2e': '#e8b84a', '#5698cc': '#7dffd9', '#1f1833': '#ffd36b' } }, // emerald and gold, glowing eyes
-  pyro: { a: { '#5698cc': '#f0a030', '#5956bd': '#a85a18' }, // saffron
-    b: { '#5698cc': '#b04ad8', '#5956bd': '#5a1e7a', '#fdf7ed': '#ffe6f4', '#d3bfa9': '#d0a8c8' }, // violet pyre
-    secret: { '#5698cc': '#fff2c0', '#5956bd': '#ff8a2a', '#fdf7ed': '#ffd36b', '#d3bfa9': '#e8641e' } }, // white-hot robe, burning beard
-  shade: { a: { '#4ba747': '#6a2a3a', '#3d734f': '#3a121e', '#facb3e': '#3a1a22', '#ee8e2e': '#6a2a3a', '#314152': '#2a0e16' }, // crimson veil
-    b: { '#4ba747': '#c8c8d8', '#3d734f': '#8a8aa8', '#facb3e': '#e8e8f0', '#ee8e2e': '#a8a8c0', '#314152': '#5a5a78' }, // ashwhite
-    secret: { '#4ba747': '#2a1a4a', '#3d734f': '#140c24', '#facb3e': '#ffffff', '#ee8e2e': '#c8b0ff', '#fccba3': '#e8e0ff', '#e2b694': '#b8a8e0', '#314152': '#b78cff' } }, // void cloth, white hair, pale skin
-  cleric: { a: { '#da4e38': '#c8ccd8', '#c38d70': '#8a96b0', '#7b8994': '#e0e8ff', '#775c55': '#5a6070' }, // silverbeard
-    b: { '#da4e38': '#4a5a9a', '#c38d70': '#ffd36b', '#7b8994': '#fff2c0', '#775c55': '#2a3050' }, // midnight and gold
-    secret: { '#da4e38': '#ffe066', '#c38d70': '#ff9a2a', '#7b8994': '#ffffff', '#775c55': '#8a3a12' } }, // sunfire beard
-  necro: { a: { '#5698cc': '#7a2a36', '#d3bfa9': '#c89090', '#fdf7ed': '#ffe0e0', '#b58057': '#a08a80' }, // bloodbound
-    b: { '#5698cc': '#cfc6a8', '#d3bfa9': '#8a8470', '#fdf7ed': '#3a3a40', '#b58057': '#9a8c80' }, // bone robe, black hair
-    secret: { '#5698cc': '#7dffd9', '#d3bfa9': '#3ad6a8', '#fdf7ed': '#ffffff', '#b58057': '#c8d8d0' } }, // spectral mint
-  bell: { a: { '#49a790': '#3a6ab0', '#417089': '#24407a', '#314152': '#162a50', '#d3bfa9': '#a8e0e8', '#8f4029': '#d8d0b0', '#62232f': '#8a8070' }, // deep sea
-    b: { '#49a790': '#c8883a', '#417089': '#7a4a1e', '#314152': '#4a2a14', '#d3bfa9': '#7dffe8', '#8f4029': '#3a8a7a', '#62232f': '#1f4a44' }, // storm bronze
-    secret: { '#49a790': '#e8f4ff', '#417089': '#8aa8d8', '#314152': '#4a5a8a', '#d3bfa9': '#ffd36b', '#8f4029': '#ffd36b', '#62232f': '#c8922a' } }, // thunderhead white and gold
-};
-const ASH = ['#3a3836', '#6a6662', '#a29d96', '#d6d0c6'];
-for (const cls of Object.keys(SKINS)) {
-  for (const s of ['a', 'b', 'secret']) SWAPS[cls + '.' + s] = { base: Object.assign({}, SWAPS[cls].base, SKINS[cls][s]), key: SWAPS[cls].key };
-  SWAPS[cls + '.unkindled'] = { ash: ASH, key: SWAPS[cls].key };
-}
 
 // --------------------------------------------------------------------------- weapons (all point up, grip near the bottom, unless dir says otherwise)
 const W = (id, src, rect, grip, o) => { o = o || {}; return add(id, 'actors', src, [rect], Object.assign({ pivot: 'grip', fps: 0 }, o, { anchors: Object.assign({ grip, dir: 0 }, o.anchors) })); };
@@ -365,48 +341,61 @@ boss('sporemother', [['idle', 'nb_bamboo_idle', 62, 62, 6, 6, true], ['walk', 'n
   ['charge', 'nb_bamboo_charge', 62, 62, 3, 8, false], ['hit', 'nb_bamboo_hit', 62, 62, 4, 12, false]]);
 add('boss.hollowking.crown', 'bosses', null, null, { ascii: [['y...y...y', 'yy.yyy.yy', 'yyyyyyyyy', 'yRyyBYyRy', 'ooooooooo']], pal: { y: '#ffd36b', Y: '#fff2c0', o: '#c8922a', R: '#d8442a', B: '#5fb8ff' }, stamp: true, fps: 0 });
 
-// --------------------------------------------------------------------------- world: tiles, doors, torches, props, decor (page world)
+// Ninja bosses with partial sheets get derived poses. crumble(keep): frames from index `keep` on turn to ash and lose pixels top-first (fixed hash dither, deterministic).
+const ASHR = ['#141010', '#3a3230', '#6a605a', '#a8a098'];
+const crumble = (keep, n) => (b, i, H) => {
+  if (i < keep) return b;
+  const t = (i - keep + 1) / (n - keep + 1), o = H.recolour(b, { ramp: ASHR }), q = H.bmp(o.w, o.h);
+  for (let y = 0; y < o.h; y++) for (let x = 0; x < o.w; x++) {
+    const s = (y * o.w + x) * 4; if (!o.data[s + 3]) continue;
+    if ((((x * 73856093) ^ (y * 19349663)) >>> 0) % 997 / 997 < t * (0.35 + 0.9 * (1 - y / o.h))) continue;
+    for (let k = 0; k < 4; k++) q.data[s + k] = o.data[s + k];
+  }
+  return q;
+};
+// Demon Cyclops (50x50 cells): attack = idle with a blazing eye winding up, then the hit-sheet roar; death = roar poses then crumble.
+const CYC = (sheet, x) => [sheet, [x * 50, 0, 50, 50]];
+const CY_RAGE = { '#c8966b': '#ffb43a', '#fce2ca': '#fff8c0', '#e0394c': '#f0442e' };
+boss('cyclops', [['idle', 'nb_cy_idle', 50, 50, 5, 6, true], ['walk', 'nb_cy_walk', 50, 50, 6, 10, true], ['hit', 'nb_cy_hit', 50, 50, 3, 12, false]]);
+add('boss.cyclops.attack', 'bosses', null, null, { frames: [CYC('nb_cy_idle', 0), CYC('nb_cy_idle', 2), CYC('nb_cy_hit', 1), CYC('nb_cy_hit', 2)], swap: CY_RAGE, set: 'boss.cyclops', fps: 8, loop: false, eye: 'auto', core: false });
+add('boss.cyclops.death', 'bosses', null, null, { frames: [CYC('nb_cy_hit', 1), CYC('nb_cy_hit', 2), CYC('nb_cy_hit', 2), CYC('nb_cy_hit', 2), CYC('nb_cy_hit', 2), CYC('nb_cy_hit', 2)], post: crumble(2, 6), set: 'boss.cyclops', fps: 8, loop: false, eye: 'auto', core: false });
+// Giant Blue Samurai (idle/walk/hit 96x48 cells; charge/attack 96x96 cells with the body 2 px left and 34 px lower: pivot [45, 82] = the idle feet).
+boss('samurai', [['idle', 'nb_sa_idle', 96, 48, 6, 8, true], ['walk', 'nb_sa_walk', 96, 48, 6, 10, true], ['hit', 'nb_sa_hit', 96, 48, 4, 12, false]]);
+const SA96 = { set: 'boss.samurai', eye: 'auto', core: false, pivot: [45, 82], anchorsFrom: 'boss.samurai.idle' };
+add('boss.samurai.charge', 'bosses', 'nb_sa_charge', strip(0, 0, 96, 96, 3), Object.assign({ fps: 6, loop: false }, SA96));
+add('boss.samurai.attack', 'bosses', 'nb_sa_attack', strip(0, 0, 96, 96, 4), Object.assign({ fps: 12, loop: false }, SA96));
+const SAH = (x) => ['nb_sa_hit', [x * 96, 0, 96, 48]];
+add('boss.samurai.death', 'bosses', null, null, { frames: [SAH(0), SAH(2), SAH(3), SAH(3), SAH(3), SAH(3)], post: crumble(2, 6), set: 'boss.samurai', fps: 8, loop: false, eye: 'auto', core: false });
+
+// --------------------------------------------------------------------------- world: floors, braziers, obstacle props, decor (page world)
+const HA = require('../art-src/wickdeep/icons.js'); // hand-authored icons, pickups and props (CC0, own work)
 const T = (id, name, o) => add(id, 'world', 'ox', [name], Object.assign({ pivot: 'tl', fps: 0 }, o || {}));
 for (let i = 1; i <= 8; i++) T('tile.floor.' + i, 'floor_' + i);
-for (const s of ['left', 'mid', 'right']) { T('tile.wall.cap.' + s, 'wall_top_' + s); T('tile.wall.face.' + s, 'wall_' + s); }
-T('tile.wall.side.left', 'wall_outer_mid_left'); T('tile.wall.side.right', 'wall_outer_mid_right');
-for (const s of ['top_left', 'top_right', 'front_left', 'front_right']) T('tile.wall.outer.' + s.replace('_', '.'), 'wall_outer_' + s);
-for (const s of ['bottom_left', 'bottom_right', 'mid_left', 'mid_right', 'top_left', 'top_right', 'left', 'right', 'tshape_bottom_right', 'tshape_bottom_left', 'tshape_right', 'tshape_left']) T('tile.wall.edge.' + s.replace(/_/g, '.'), 'wall_edge_' + s);
-add('tile.wall.lip', 'world', 'ox', [[32, 12, 16, 4]], { pivot: 'tl', fps: 0 });
-T('tile.wall.hole.1', 'wall_hole_1'); T('tile.wall.hole.2', 'wall_hole_2'); T('tile.wall.goo', 'wall_goo'); T('tile.wall.goo.base', 'wall_goo_base');
-// Autotile blocks of atlas_walls_high-16x32 (16x32 cells, left 12 columns; blank cells dropped): odd wall shapes.
-for (let r = 0; r < 4; r++) for (let c = 0; c < 12; c++) add('tile.wall.auto.' + c + '.' + r, 'world', 'ox_high', [[c * 16, r * 32, 16, 32]], { pivot: 'tl', fps: 0, optional: true });
-T('tile.hole', 'hole'); T('tile.stairs', 'floor_stairs');
-add('tile.spikes', 'world', 'ox', oxn('floor_spikes_anim', 4), { pivot: 'tl', fps: 8, loop: false });
-T('tile.door.frame.left', 'doors_frame_left'); T('tile.door.frame.right', 'doors_frame_right'); T('tile.door.frame.top', 'doors_frame_top');
-T('tile.door.leaf.closed', 'doors_leaf_closed'); T('tile.door.leaf.open', 'doors_leaf_open');
-add('tile.gate.bars', 'world', 'dl_door0', [[0, 32, 16, 16]], { pivot: 'tl', fps: 0 }); // front view (north/south gates)
-add('tile.gate.bars.side', 'world', 'dl_door0', [[16, 32, 16, 16]], { pivot: 'tl', fps: 0 }); // side view (east/west gates)
-for (const c of ['red', 'blue']) {
-  add('tile.fountain.mid.' + c, 'world', 'ox', oxn('wall_fountain_mid_' + c + '_anim', 3), { pivot: 'tl', fps: 6, loop: true });
-  add('tile.fountain.basin.' + c, 'world', 'ox', oxn('wall_fountain_basin_' + c + '_anim', 3), { pivot: 'tl', fps: 6, loop: true });
-}
-for (let i = 1; i <= 3; i++) T('tile.fountain.top.' + i, 'wall_fountain_top_' + i);
-add('tile.torch.wall', 'world', 'ext', strip(128, 354, 16, 22, 8), { pivot: 'tl', fps: 10, loop: true });
+const DARK = [[32, 112], [48, 112], [64, 112], [32, 128], [48, 128], [64, 128]];
+DARK.forEach(([x, y], i) => add('tile.dark.floor.' + (i + 1), 'world', 'kos', [[x, y, 16, 16]], { pivot: 'tl', fps: 0 }));
+// Per-stage floors: the base sets through a dark ramp in the stage's colour (kept low-contrast so the horde reads on top).
+const FLOOR_RAMP = {
+  ossuary: { ramp: ['#140f0d', '#2c221d', '#4a3a31', '#73604f'], lo: 0.08, hi: 0.45 },
+  glowmire: { ramp: ['#070d0c', '#0f1f1b', '#1a3530', '#2b5048'], lo: 0.04, hi: 0.3 },
+  abyss: { ramp: ['#0a0711', '#181029', '#271b3e', '#3c2d57'], lo: 0.08, hi: 0.45 },
+};
+for (let i = 1; i <= 8; i++) T('tile.floor.ossuary.' + i, 'floor_' + i, FLOOR_RAMP.ossuary);
+DARK.forEach(([x, y], i) => add('tile.floor.glowmire.' + (i + 1), 'world', 'kos', [[x, y, 16, 16]], Object.assign({ pivot: 'tl', fps: 0 }, FLOOR_RAMP.glowmire)));
+for (let i = 1; i <= 8; i++) T('tile.floor.abyss.' + i, 'floor_' + i, FLOOR_RAMP.abyss);
 add('tile.torch.floor', 'world', 'ext', strip(128, 400, 16, 24, 8), { fps: 10, loop: true });
-add('tile.torch.unlit', 'world', 'ext', [[256, 354, 16, 22]], { pivot: 'tl', fps: 0 });
-[[32, 112], [48, 112], [64, 112], [32, 128], [48, 128], [64, 128]].forEach(([x, y], i) => add('tile.dark.floor.' + (i + 1), 'world', 'kos', [[x, y, 16, 16]], { pivot: 'tl', fps: 0 }));
-for (const c of ['blue', 'red', 'green', 'yellow']) add('deco.banner.' + c, 'world', 'ox', ['wall_banner_' + c], { pivot: 'tl', fps: 0 });
+// Brazier (destructible, drops pickups): an iron bowl on a stand with the ext flame loop (8f) burning in it; broken = the bowl tipped over with spilled coals.
+add('prop.brazier', 'world', null, null, {
+  make: (H) => Array.from({ length: 8 }, (_, i) => { const b = H.bmp(16, 22); H.blit(b, H.grab('ext', [128 + i * 16, 340, 16, 14]), 0, 0); return H.blit(b, H.ascii(HA.PROP.brazierBowl, HA.PAL), 1, 12); }),
+  fps: 10, loop: true, set: 'prop.brazier',
+});
+add('prop.brazier.broken', 'world', null, null, { ascii: [HA.PROP.brazierBroken], pal: HA.PAL, fps: 0 });
 
 const P = (id, src, rect, o) => add(id, 'world', src, [rect], Object.assign({ fps: 0 }, o || {}));
-P('prop.column', 'ox', 'column'); P('prop.column.wall', 'ox', 'column_wall');
+P('prop.column', 'ox', 'column');
+add('prop.pillar', 'world', null, null, { use: 'prop.column', fps: 0 });
 P('prop.chest.closed', 'ox', 'chest_full_open_anim_f0');
 add('prop.chest.open', 'world', 'ox', oxn('chest_full_open_anim', 3), { fps: 8, loop: false });
 add('prop.chest.empty', 'world', 'ox', oxn('chest_empty_open_anim', 3), { fps: 8, loop: false });
-P('prop.mimic.closed', 'ox', 'chest_mimic_open_anim_f0');
-add('prop.mimic.open', 'world', 'ox', oxn('chest_mimic_open_anim', 3), { fps: 8, loop: false });
-add('prop.merchant', 'world', 'ox', oxn('doc_idle_anim', 4), { fps: 6.67, loop: true });
-P('prop.crate', 'ox', 'crate'); P('prop.bag', 'ext', [322, 306, 12, 13]); P('prop.sign', 'ext', [321, 417, 14, 15]);
-P('prop.campfire', 'na_camp', [160, 48, 32, 32]); P('prop.anvil', 'ken', [32, 96, 16, 16]); P('prop.trial', 'dl_decor0', [96, 160, 16, 16]);
-add('prop.portal', 'world', null, null, { frames: [['dl_door0', [48, 80, 16, 16]], ['dl_door1', [48, 80, 16, 16]]], fps: 4, loop: true });
-[48, 64, 80, 96, 112].forEach((x, i) => P('prop.shrine.' + i, 'na_dungeon', [x, 32, 16, 16]));
-add('prop.plinth', 'world', null, null, { use: 'prop.shrine.0', fps: 0 });
-P('prop.plinth.stone', 'na_dungeon', [32, 48, 16, 16]);
 
 const D = (id, src, rect, o) => add(id, 'world', src, [rect], Object.assign({ fps: 0 }, o || {}));
 for (let i = 0; i < 5; i++) D('deco.bones.' + i, 'dl_decor0', [i * 16, 192, 16, 16]);
@@ -428,46 +417,71 @@ CRYSTALS.forEach((rows, i) => add('deco.shard.' + i, 'world', null, null, { use:
 for (let i = 0; i < 3; i++) D('deco.shell.' + i, 'dl_ground0', [i * 16, 64, 16, 16]);
 for (let i = 0; i < 2; i++) { D('deco.seaweed.' + i, 'dl_ground0', [i * 16, 16, 16, 16]); D('deco.coral.' + i, 'dl_ground0', [32 + i * 16, 16, 16, 16]); }
 D('deco.pillarstub', 'ox', [80, 96, 16, 23]); // column rows 16-38: lower shaft plus base (rows 39-47 of the cell are empty)
-// Free-standing floor grate (the ext cell at 64,48 is a brick wall tile with a grate along its bottom: kept as tile.wall.grate).
-add('deco.grate', 'world', null, null, { ascii: [['kkkkkkkkk', 'kObObObOk', 'kObGbGbOk', 'kObGbGbOk', 'kObObObOk', 'kkkkkkkkk']], pal: { k: '#1a1210', b: '#5a463a', O: '#c8501a', G: '#ffa83a' }, fps: 0 });
-add('tile.wall.grate', 'world', 'ext', [[64, 48, 16, 16]], { pivot: 'tl', fps: 0 });
-// Sanctum carpets (ext): rug = ragged 3x2-ish rug, full = 2x3 bordered carpet, run.* = runner pieces (plain / bordered top / bordered bottom, 16x16), band = 16x32 bordered both sides.
-[['red', 16], ['beige', 64]].forEach(([c, x]) => {
-  add('tile.carpet.' + c + '.full', 'world', 'ext', [[x, 272, 32, 48]], { pivot: 'tl', fps: 0 });
-  add('tile.carpet.' + c + '.rug', 'world', 'ext', [[x, 320, 32, 48]], { pivot: 'tl', fps: 0 });
-  add('tile.carpet.' + c + '.run.fill', 'world', 'ext', [[x + 32, 272, 16, 16]], { pivot: 'tl', fps: 0 });
-  add('tile.carpet.' + c + '.run.top', 'world', 'ext', [[x + 32, 288, 16, 16]], { pivot: 'tl', fps: 0 });
-  add('tile.carpet.' + c + '.run.bot', 'world', 'ext', [[x + 32, 304, 16, 16]], { pivot: 'tl', fps: 0 });
-  add('tile.carpet.' + c + '.band', 'world', 'ext', [[x + 32, 320, 16, 32]], { pivot: 'tl', fps: 0 });
-});
-// Breakable crates (Cinderforge): iron-banded planks, an ember latch; the small one carries an X brace.
-const CRATES = [
-  ['kkkkkkkkkkk', 'kIiiiiiiiIk', 'kiWWdWWdWik', 'kiWWdWWdWik', 'kIiiioiiiIk', 'kiwwdwwdwik', 'kiwwdwwdwik', 'kiwwdwwdwik', 'kIiiiiiiiIk', 'kkkkkkkkkkk'],
-  ['kkkkkkkkk', 'kIiiiiiIk', 'kidWWWdik', 'kiWdWdWik', 'kiWWoWWik', 'kiWdWdWik', 'kidWWWdik', 'kIiiiiiIk', 'kkkkkkkkk'],
-];
-CRATES.forEach((rows, i) => add('deco.crate.' + i, 'world', null, null, { ascii: [rows], pal: { k: '#1a1210', W: '#8a603a', w: '#5e3f27', d: '#3a2616', i: '#5c6074', I: '#9aa0b8', o: '#e8641e' }, fps: 0 }));
+add('prop.pillar.broken', 'world', null, null, { use: 'deco.pillarstub', fps: 0 });
 add('deco.chain', 'world', null, null, { ascii: [['.kk.', 'kSSk', 'kSSk', '.kk.', '.kk.', 'kSSk', 'kSSk', '.kk.', '.kk.', 'kSSk', 'kSSk', '.kk.']], pal: { k: '#222222', S: '#9aa6b0' }, fps: 0 });
 
-// --------------------------------------------------------------------------- wardrobe cosmetics (page actors; cos.coin and fx.chain on the fx page)
-// cos.crown: the Hollow King's crown cut to hat size; its pivot (bottom centre) goes on a hero anim's anchors.head[frame].
-add('cos.crown', 'actors', null, null, { ascii: [['y..Y..y', 'yy.y.yy', 'yyyyyyy', 'yRyByRy', 'ooooooo']], pal: { y: '#ffd36b', Y: '#fff2c0', o: '#c8922a', R: '#d8442a', B: '#5fb8ff' }, stamp: true, fps: 0 });
-// cos.platino: derived from DawnLike's Platino (dl_re0/dl_re1 cell [48,192]), redrawn at 12x11 for a clear silhouette in its platinum, cream and cyan:
-// cyan ears and tail, one bright eye, cream belly. Frame 1 = the head and ears bob 1 px down (feet fixed).
+// Obstacle props (feet pivot; arena obstacles are circles r 12-40, the sprite stands on the disc).
+// Ossuary: graves, a coffin, a bone pile, broken walls. Glowmire: giant mushrooms, teal crystals. Abyss: violet crystals, an obelisk, void-touched ruins.
+[[0, 272], [32, 272], [16, 288]].forEach(([x, y], i) => D('prop.grave.' + i, 'dl_decor0', [x, y, 16, 16]));
+D('prop.grave.3', 'ken', [64, 80, 16, 16]);
+D('prop.grave.4', 'dl_decor0', [64, 272, 16, 16]);
+D('prop.coffin', 'dl_decor0', [96, 160, 16, 16]);
+add('prop.bonepile', 'world', null, null, { ascii: [HA.PROP.bonepile], pal: HA.PAL, fps: 0 });
+// Ruins: 0x72 wall caps over brick faces, the top broken along a jagged profile (prof(x) = rows erased from the top), re-outlined, rubble at the foot.
+const RUINS = [
+  { tiles: [['wall_top_mid', 'wall_top_mid'], ['wall_mid', 'wall_mid']], prof: (x) => (x < 14 ? 0 : 18 + ((x * 5) % 4)) },
+  { tiles: [['wall_top_mid', 'wall_top_mid', 'wall_top_mid'], ['wall_mid', 'wall_mid', 'wall_mid']], prof: (x) => (x < 16 ? 0 : x < 32 ? 21 + ((x * 3) % 5) : 14 + ((x * 7) % 3)) },
+  { tiles: [['wall_top_mid'], ['wall_mid']], prof: (x) => 15 + ((x * 3) % 4) },
+];
+const ruin = (r, ramp) => (H) => {
+  const cols = r.tiles[0].length, w = cols * 16, h = r.tiles.length * 16, wall = H.bmp(w, h);
+  r.tiles.forEach((row, j) => row.forEach((n, i) => H.blit(wall, H.grab('ox', n), i * 16, j * 16)));
+  for (let x = 0; x < w; x++) for (let y = 0; y < r.prof(x); y++) wall.data[(y * w + x) * 4 + 3] = 0;
+  let b = H.stamp(H.padBmp(wall, 1), H.OUTLINE);
+  const out = H.bmp(b.w + 8, b.h + 2), rub = H.ascii(HA.PROP.rubble, HA.PAL);
+  H.blit(out, b, 4, 0); H.blit(out, rub, 0, out.h - rub.h); H.blit(out, rub, out.w - rub.w, out.h - rub.h);
+  return [ramp ? H.recolour(out, { ramp, lo: 0.05, hi: 0.75, skip: [H.OUTLINE, '#1a1216'] }) : out];
+};
+const VOID_RAMP = ['#1a1228', '#3a2c58', '#5e4a8a', '#a090d0'];
+RUINS.forEach((r, i) => { add('prop.ruin.' + i, 'world', null, null, { make: ruin(r), fps: 0 }); add('prop.ruin.void.' + i, 'world', null, null, { make: ruin(r, VOID_RAMP), fps: 0 }); });
+const CRY = { teal: { c: '#c8ffe8', C: '#6ae0b8', D: '#2f9a88', E: '#1f5a5a' }, void: { c: '#f0d8ff', C: '#b78cff', D: '#7a4ad0', E: '#3a2270' } };
+const SHROOM = Object.assign({}, HA.PAL, { g: '#1d5a44', G: '#46c88a', L: '#c9ffd9' });
+add('prop.shroom.0', 'world', null, null, { ascii: [HA.PROP.shroomBig], pal: SHROOM, fps: 0 });
+add('prop.shroom.1', 'world', null, null, { ascii: [HA.PROP.shroomSmall], pal: SHROOM, fps: 0 });
+add('prop.crystal.0', 'world', null, null, { ascii: [HA.PROP.crystalBig], pal: Object.assign({}, HA.PAL, CRY.teal), fps: 0 });
+add('prop.crystal.1', 'world', null, null, { ascii: [HA.PROP.crystalMid], pal: Object.assign({}, HA.PAL, CRY.teal), fps: 0 });
+add('prop.crystal.void.0', 'world', null, null, { ascii: [HA.PROP.crystalBig], pal: Object.assign({}, HA.PAL, CRY.void), fps: 0 });
+add('prop.crystal.void.1', 'world', null, null, { ascii: [HA.PROP.crystalMid], pal: Object.assign({}, HA.PAL, CRY.void), fps: 0 });
+add('prop.obelisk', 'world', null, null, { ascii: [HA.PROP.obelisk], pal: HA.PAL, fps: 0 });
+
+// cos.platino: derived from DawnLike's Platino (dl_re0/dl_re1 cell [48,192]), redrawn at 12x11 in its platinum, cream and cyan (DawnLike README asks that he hide somewhere in the game).
+// Frame 1 = the head and ears bob 1 px down (feet fixed).
 add('cos.platino', 'actors', null, null, {
   ascii: [[
     '...k...k....', '..kCk.kCk...', '..kSSkSSk...', '.kSSSSSSSk..', '.kSSSSkWDk..', '.kSSSSSSSSk.', 'kCkPPPSSkk..', 'kCSPPPPSSk..', '.kSSPPSSDk..', '..kDk.kDk...', '..kk..kk....'],
     ['............', '...k...k....', '..kCk.kCk...', '.kSSSSSSSk..', '.kSSSSkWDk..', '.kSSSSSSSSk.', 'kCkPPPSSkk..', 'kCSPPPPSSk..', '.kSSPPSSDk..', '..kDk.kDk...', '..kk..kk....']],
   pal: { k: '#222222', S: '#94aabb', D: '#566676', P: '#eef8e6', C: '#5fd8e0', W: '#a8fcff' }, fps: 2.5, loop: true, eye: 'auto',
 });
-// cos.ghost: a legless spectral delver for the camp (0x72 knight_f idle cut above the legs, cold ramp; the camp draws it translucent).
-add('cos.ghost', 'actors', 'ox', strip(128, 68, 16, 26, 4), { fps: 4, loop: true, ramp: ['#2e4a7a', '#7aa8e0', '#c8e4ff', '#f4fcff'] });
 
-// --------------------------------------------------------------------------- fx page: pickups, projectiles, effects, font
+// --------------------------------------------------------------------------- fx page: pickups, icons, projectiles, effects, font
 add('pickup.coin', 'fx', 'ox', oxn('coin_anim', 4), { fps: 8, loop: true });
 add('pickup.heart', 'fx', null, null, { ascii: [['.kk.kk.', 'kwrkrRk', 'krrrrRk', '.krrRk.', '..kRk..', '...k...']], pal: { k: '#4a0a18', w: '#ffe0e0', r: '#ff5468', R: '#c8202e' }, fps: 0 }); // 7x6, the size of the coin and the xp gem
 add('pickup.flask.red', 'fx', 'ox', ['flask_big_red'], { fps: 0 }); add('pickup.flask.yellow', 'fx', 'ox', ['flask_big_yellow'], { fps: 0 });
-add('pickup.xp', 'fx', null, null, { ascii: [['.kk.', 'kwck', 'kcCk', 'kcCk', 'kcCk', '.kCk', '..k.']], pal: { k: '#12342c', w: '#ffffff', c: '#b4ffe9', C: '#34dcb0' }, fps: 0 });
-add('cos.coin', 'fx', null, null, { use: 'pickup.coin', pick: [0], fps: 0 }); // footprint coin: the gold pickup's face-on frame
+const GEM = ['.kk.', 'kwck', 'kcCk', 'kcCk', 'kcCk', '.kCk', '..k.'];
+add('pickup.xp', 'fx', null, null, { ascii: [GEM], pal: { k: '#12342c', w: '#ffffff', c: '#b4ffe9', C: '#34dcb0' }, fps: 0 });
+// Run pickups (ARCHITECTURE §4 pickup k): gem tiers xp1 blue / xp5 green / xp25 red (same cut; the renderer scales the tiers), gold, food, magnet, holy bomb, chest.
+add('pickup.xp1', 'fx', null, null, { ascii: [GEM], pal: { k: '#0e1c3a', w: '#ffffff', c: '#bce0ff', C: '#3a8cff' }, fps: 0 });
+add('pickup.xp5', 'fx', null, null, { ascii: [GEM], pal: { k: '#0e3414', w: '#ffffff', c: '#ccffb8', C: '#3adc4a' }, fps: 0 });
+add('pickup.xp25', 'fx', null, null, { ascii: [GEM], pal: { k: '#3a0e16', w: '#ffffff', c: '#ffc4cc', C: '#ff3a5a' }, fps: 0 });
+add('pickup.gold', 'fx', null, null, { use: 'pickup.coin', fps: 8, loop: true });
+add('pickup.food', 'fx', null, null, { ascii: [HA.PICK.food], pal: HA.PAL, fps: 0 });
+add('pickup.magnet', 'fx', null, null, { ascii: [HA.PICK.magnet], pal: HA.PAL, fps: 0 });
+add('pickup.bomb', 'fx', null, null, { ascii: HA.PICK.bomb, pal: HA.PAL, fps: 6, loop: true });
+add('pickup.chest', 'fx', 'ox', ['chest_full_open_anim_f0'], { fps: 0 });
+add('pickup.chest.open', 'fx', 'ox', oxn('chest_full_open_anim', 3), { fps: 8, loop: false });
+// Icons (centre pivot): icon.w.<weaponId>, icon.p.<passiveId>; the longbow is drawn pointing left and mirrored here.
+for (const [id, rows] of Object.entries(HA.W)) add('icon.w.' + id, 'fx', null, null, { ascii: [rows], pal: HA.PAL, pivot: 'centre', fps: 0, flip: id === 'longbow' });
+for (const [id, rows] of Object.entries(HA.P)) add('icon.p.' + id, 'fx', null, null, { ascii: [rows], pal: HA.PAL, pivot: 'centre', fps: 0 });
 
 const PR = (id, src, rect, dir, o) => add(id, 'fx', src, [rect], Object.assign({ pivot: 'centre', anchors: { dir }, fps: 0 }, o || {}));
 PR('proj.arrow', 'nf_arrow', [0, 0, 13, 5], 90);
