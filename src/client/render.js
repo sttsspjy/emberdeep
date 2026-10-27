@@ -74,6 +74,7 @@
   function drawZone(B, z, t) {
     const fx = ED.WeaponFx[z.wid] || ED.SkillFx[z.wid];
     if (fx && fx.zone && fx.zone(B, z, t)) return;
+    const zf = ED.ZoneFx && ED.ZoneFx[z.k]; if (zf && zf(B, z, t)) return; // look-keyed draw (boss zones carry no weapon id)
     const k = z.dur > 0 ? U.clamp(z.t / z.dur, 0, 1) : 0;
     if (z.warn && z.team === 1) { // hostile telegraph: bright outline + filling pulse
       const pulse = 0.5 + 0.5 * Math.sin(t * 18), fill = (0xff302000 | Math.round(50 + 70 * k + 30 * pulse)) >>> 0, edge = (0xff5a3a00 | Math.round(200 + 55 * pulse)) >>> 0;
@@ -90,6 +91,14 @@
     if (z.len > 0) B.line(z.x, z.y, z.x + Math.cos(z.a) * z.len, z.y + Math.sin(z.a) * z.len, z.w, ((col << 8) | a) >>> 0);
     else if (z.arc > 0) B.cone(z.x, z.y, z.r, z.a, z.arc, ((col << 8) | a) >>> 0, 0);
     else { B.circ(z.x, z.y, z.r, ((col << 8) | a) >>> 0, 0); B.circ(z.x, z.y, z.r, ((col << 8) | 140) >>> 0, 1); }
+  }
+
+  // Hostile telegraph outlines drawn again above the actors (readable over a dense horde): edge plus the filling progress.
+  function warnTop(B, z, t) {
+    const k = z.dur > 0 ? U.clamp(z.t / z.dur, 0, 1) : 0, edge = (0xff6a4a00 | Math.round(150 + 80 * (0.5 + 0.5 * Math.sin(t * 18)))) >>> 0;
+    if (z.len > 0) { const ex = z.x + Math.cos(z.a) * z.len, ey = z.y + Math.sin(z.a) * z.len, nx = -Math.sin(z.a) * z.w / 2, ny = Math.cos(z.a) * z.w / 2; B.line(z.x + nx, z.y + ny, ex + nx, ey + ny, 1, edge); B.line(z.x - nx, z.y - ny, ex - nx, ey - ny, 1, edge); }
+    else if (z.arc > 0) { B.cone(z.x, z.y, z.r, z.a, z.arc, edge, 1); B.cone(z.x, z.y, z.r * k, z.a, z.arc, 0xffd27a90, 1); }
+    else { B.circ(z.x, z.y, z.r, edge, 1); B.circ(z.x, z.y, z.r * k, 0xffd27a90, 1); }
   }
 
   // ---------------- projectiles ----------------
@@ -141,6 +150,7 @@
       else if (a.hp !== undefined) ED.Actors.brazier(B, a, t);
       else ED.Actors.obstacle(B, a, wall);
     }
+    for (const z of view.zones) if (!z.dead && z.warn && z.team === 1 && (z.len > 0 || inView(z) || z.r > 200)) warnTop(B, z, t);
     for (const pr of view.projs) if (!pr.dead && inView(pr)) drawProj(B, pr, t);
     ED.FX.draw(B, t);
     // overlays: hero names / HP / revive bars (co-op), elite HP bars
