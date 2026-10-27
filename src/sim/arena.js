@@ -1,33 +1,47 @@
 // Open arena: deterministic props from (stage, seed) and circle collision against the bounds and the obstacles. Pure; clients rebuild the same arena from the seed.
 // ED.Arena.generate(stage, seed) -> A = { size, obstacles: [{id, x, y, r, look}], braziers: [{id, x, y, r, hp, broken, look}], deco: [{x, y, look}], cell, cw, cells: [[obstacle index]] }.
-// Obstacles come in clusters of 1-4 circles (gaps 18-60 px) so the field has chokepoints; nothing within arena.clear of the centre (the party start).
+// Obstacles come from the stage theme features (ED.STAGES theme.features): colonnade rows, broken wall arcs with one gap, tight clusters, singles. Separate features keep a LANE px
+// passage (heroes and the horde pass, crowds squeeze into chokepoints); nothing within arena.clear of the centre (the party start).
 (function (ED) {
   'use strict';
   const U = ED.U;
   const Ar = ED.Arena = {};
   const CELL = 128, PAD = 40; // bucket size; obstacles are bucketed with this margin so any body up to PAD radius finds them from its own cell
+  const LANE = 30, SPACE = 140; // min surface gap between features; min gap from a feature's first member to every earlier obstacle
 
   Ar.generate = (stage, seed) => {
     const sd = ED.STAGES[stage] || ED.STAGES[0], th = sd.theme, ar = sd.arena, size = ar.size || ED.CONST.ARENA;
     const rng = U.RNG((seed ^ 0xa7e4a11) >>> 0), c = size / 2;
     const A = { size, obstacles: [], braziers: [], deco: [], cell: CELL, cw: Math.ceil(size / CELL), cells: null };
-    const free = (x, y, r, gap) => {
+    // true when circle (x, y, r) is inside the margins, outside the centre clearing and at least gap px from obstacles [0, upto)
+    const free = (x, y, r, gap, upto) => {
       if (x < r + 60 || y < r + 60 || x > size - r - 60 || y > size - r - 60) return false;
       if (Math.hypot(x - c, y - c) < ar.clear + r) return false;
-      for (const o of A.obstacles) if (Math.hypot(o.x - x, o.y - y) < o.r + r + gap) return false;
+      const O = A.obstacles, n = upto === undefined ? O.length : upto;
+      for (let i = 0; i < n; i++) { const o = O[i]; if (Math.hypot(o.x - x, o.y - y) < o.r + r + gap) return false; }
       return true;
     };
-    const nObs = rng.int(ar.obstacles[0], ar.obstacles[1]);
+    const feats = th.features || [{ f: 'single', w: 1, look: '', r: [22, 40], n: [1, 1] }];
+    const nObs = rng.int(ar.obstacles[0], ar.obstacles[1]), pts = [];
     let guard = 0;
-    while (A.obstacles.length < nObs && guard++ < 600) {
-      let x = rng.range(80, size - 80), y = rng.range(80, size - 80);
-      const members = Math.min(nObs - A.obstacles.length, rng.int(1, 4));
-      for (let m = 0; m < members; m++) {
-        const kind = th.obstacles[rng.int(0, th.obstacles.length - 1)], r = Math.round(rng.range(kind.r[0], kind.r[1]));
-        if (m > 0) { const prev = A.obstacles[A.obstacles.length - 1], a = rng.next() * U.TAU, d = prev.r + r + rng.range(18, 60); x = prev.x + Math.cos(a) * d; y = prev.y + Math.sin(a) * d; }
-        if (!free(x, y, r, m > 0 ? 16 : 120)) { if (m === 0) break; continue; }
-        A.obstacles.push({ id: A.obstacles.length, x: Math.round(x), y: Math.round(y), r, look: kind.look });
-      }
+    while (A.obstacles.length < nObs && guard++ < 800) {
+      const F = rng.weighted(feats, f => f.w || 1), n = Math.min(nObs - A.obstacles.length, rng.int(F.n[0], F.n[1])), base = A.obstacles.length;
+      const x0 = rng.range(120, size - 120), y0 = rng.range(120, size - 120), a0 = rng.next() * U.TAU;
+      pts.length = 0;
+      if (F.f === 'row') { // colonnade: members along a line, surface gap F.gap
+        let x = x0, y = y0, pr = 0;
+        for (let m = 0; m < n; m++) { const r = Math.round(rng.range(F.r[0], F.r[1])); if (m) { const d = pr + r + rng.range(F.gap[0], F.gap[1]); x += Math.cos(a0) * d; y += Math.sin(a0) * d; } pts.push(x, y, r); pr = r; }
+      } else if (F.f === 'arc') { // broken wall: members on a circle of radius R, one interior member left out as the gap
+        const rr = (F.r[0] + F.r[1]) / 2, step = 2 * rr + (F.gap[0] + F.gap[1]) / 2, R = rng.range(70, 110), skip = n > 3 ? rng.int(1, n - 2) : -1;
+        for (let m = 0; m < n; m++) { const a = a0 + m * step / R, r = Math.round(rng.range(F.r[0], F.r[1])); if (m !== skip) pts.push(x0 + Math.cos(a) * R, y0 + Math.sin(a) * R, r); }
+      } else if (F.f === 'cluster') { // clump: members may touch each other
+        for (let m = 0; m < n; m++) { const a = rng.next() * U.TAU, d = m ? rng.range(0.4, 1) * (F.spread || 30) : 0; pts.push(x0 + Math.cos(a) * d, y0 + Math.sin(a) * d, Math.round(rng.range(F.r[0], F.r[1]))); }
+      } else pts.push(x0, y0, Math.round(rng.range(F.r[0], F.r[1])));
+      if (!free(pts[0], pts[1], pts[2], SPACE)) continue;
+      let ok = true;
+      for (let k = 0; k < pts.length && ok; k += 3) ok = free(pts[k], pts[k + 1], pts[k + 2], LANE, base);
+      if (!ok) continue;
+      for (let k = 0; k < pts.length; k += 3) A.obstacles.push({ id: A.obstacles.length, x: Math.round(pts[k]), y: Math.round(pts[k + 1]), r: pts[k + 2], look: F.look });
     }
     const nBr = rng.int(ar.braziers[0], ar.braziers[1]);
     guard = 0;
