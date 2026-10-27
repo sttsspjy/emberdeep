@@ -24,6 +24,10 @@
     const cls = opt.cls || A.sel.cls, stage = opt.stage !== undefined ? opt.stage : A.sel.stage;
     const seed = opt.seed !== undefined ? opt.seed : (Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0;
     ED.Game.start({ mode: 'solo', seed, stage, players: [{ pid: 'p1', name: A.profile.name, slot: 0, cls, meta: S.metaBundle(A.profile) }], cheats: opt.cheats });
+    A.enterRun(stage);
+  };
+  // Switches the app into a run that ED.Game already holds (solo, or a co-op run built by ED.Net on every peer).
+  A.enterRun = (stage) => {
     ED.Game.onEnd = (sum) => A.onRunEnd(sum);
     A.runStage = stage;
     A.state = 'run'; ED.UI.show('none'); ED.UI.offerSig = '';
@@ -40,9 +44,8 @@
     ED.Game.stop();
   };
   A.quitRun = () => {
-    const w = ED.Game.w;
     A.togglePause(false);
-    if (w && w.state === 'play') { w.end(false); ED.Game.paused = false; ED.Game.drain(); }
+    ED.Game.quit();
   };
   A.togglePause = (v) => {
     if (A.state !== 'run') return;
@@ -58,7 +61,7 @@
     A.lastT = now;
     try {
       const inp = ED.Input.read();
-      if (A.state === 'run' && ED.Game.w) {
+      if (A.state === 'run' && ED.Game.active()) {
         if (inp.esc) A.togglePause();
         if (!ED.Game.paused) ED.Game.control(inp);
         ED.Game.update(dt);
@@ -84,7 +87,7 @@
   const onEvent = (ev) => {
     if (ev.t === 'warn') ED.HUD.show(ev.kind === 'boss' ? (ED.FOES[ev.id] ? ED.FOES[ev.id].name : 'A boss') + ' approaches!' : ev.kind === 'elite' ? 'An elite appears!' : 'A swarm closes in!', ev.kind === 'boss' ? '#ff7a6a' : '#ffd27a');
     else if (ev.t === 'evolve' && ev.pid === ED.Game.myPid) ED.HUD.show((ED.WEAPONS[ev.wid] ? ED.WEAPONS[ev.wid].name : 'Weapon') + ' evolved!', '#ffd27a');
-    else if (ev.t === 'level' && ED.Game.w && !ED.Game.w.solo()) ED.HUD.show('Level ' + ev.level, '#6ad7ff', 1.2);
+    else if (ev.t === 'level' && ED.Game.coop()) ED.HUD.show('Level ' + ev.level, '#6ad7ff', 1.2);
   };
 
   A.boot = () => {
