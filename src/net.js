@@ -1,13 +1,13 @@
-// Multiplayer without a server of our own: the host's browser runs the authoritative simulation and peers
-// connect over WebRTC data channels (PeerJS public broker for the handshake, STUN/TURN for NAT traversal).
-// A BroadcastChannel transport (?net=local) lets two tabs of one browser play together offline.
+// Multiplayer without a server of our own: the host's browser runs the authoritative World and peers connect over WebRTC data channels
+// (PeerJS public broker for the handshake). A BroadcastChannel transport (?net=local) lets two tabs of one browser play together offline.
+// Kept here: transports, lobby (Host / Client sessions, heartbeat). Snapshots (binary, interest-culled, ARCHITECTURE §9) are the net lane's: N.encodeSnap / N.decodeSnap are stubs.
 (function (ED) {
   'use strict';
   const U = ED.U;
   const N = ED.Net = {};
   const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-  const PREFIX = 'wickdeep-v1-';
-  N.VERSION = 17; // bump whenever snapshots or floor generation change: mixed versions would desync
+  const PREFIX = 'wickdeep-sv-';
+  N.VERSION = ED.NET_VERSION = 1; // bump on any wire change: mixed versions would desync
   // Heartbeat: PeerJS 'close' does not fire when a tab crashes or a network drops, so both ends ping and
   // treat a few seconds of silence as a disconnect (longer in the lobby, where little else is sent).
   const PING_MS = 2000, TIMEOUT_RUN = 6000, TIMEOUT_LOBBY = 10000;
@@ -111,26 +111,15 @@
     return 'Connection failed' + (t ? ' (' + t + ')' : '') + '.';
   };
 
-  // A guest's hero choice, made safe for the host's simulation: a malformed message must never break everyone's run.
+  // A guest's hero choice, made safe for the host's simulation: { cls, meta: { shop, sigs } } with unknown ids dropped and ranks clamped.
   const cleanPick = (d) => {
-    const cls = ED.CLASS_IDS.indexOf(d.cls) >= 0 ? d.cls : ED.CLASS_IDS[0];
-    const m = d.meta && typeof d.meta === 'object' ? d.meta : {};
-    const up = ED.UPGRADES.map((u, i) => U.clamp((Array.isArray(m.up) ? m.up[i] : 0) | 0, 0, u.costs.length));
-    const known = (ED.ARMORY[cls] || []).map(e => e.id), armory = Array.isArray(m.armory) ? m.armory.filter(id => known.indexOf(id) >= 0) : [];
-    const list = ED.CLASSES[cls].weapons, wi = typeof d.weapon === 'string' ? ED.weaponIndex(cls, d.weapon) : -1; // a variant needs its id in the member's Armory, else its base is wielded
-    const weapon = wi < 0 ? list[0] : d.weapon === list[wi] || armory.indexOf(d.weapon) >= 0 ? d.weapon : list[wi];
-    return { cls, weapon, meta: { up, mastery: U.clamp(m.mastery | 0, 1, 10), armory }, wear: cleanWear(d.wear, cls) };
+    const cls = ED.HERO_IDS.indexOf(d.cls) >= 0 ? d.cls : ED.HERO_IDS[0];
+    const m = d.meta && typeof d.meta === 'object' ? d.meta : {}, shop = {};
+    for (const s of ED.SHOP) { const r = m.shop ? Math.floor(+m.shop[s.id] || 0) : 0; if (r > 0) shop[s.id] = U.clamp(r, 0, s.max); }
+    const sigs = Array.isArray(m.sigs) ? m.sigs.filter((c, i, a) => ED.HERO_IDS.indexOf(c) >= 0 && a.indexOf(c) === i) : [];
+    return { cls, meta: { shop, sigs } };
   };
   N.cleanPick = cleanPick;
-  // A Wardrobe set { skin, aura, hat, pet, trail, death, title, tints } made safe for hero cls: each slot holds a known item of that slot that the hero may wear, or null; tints keep that hero's base weapons.
-  // Ownership is the sender's own business (cosmetics change no number).
-  const cleanWear = (w, cls) => {
-    const src = w && typeof w === 'object' ? w : {}, out = {}, cl = ED.CLASSES[cls];
-    for (const k of ED.WEAR_SLOTS) { const id = src[k], c = typeof id === 'string' ? ED.COSMETIC[id] : null; out[k] = c && c.slot === k && (c.cls === null || c.cls === cls) ? id : null; }
-    out.tints = cl && Array.isArray(src.tints) ? cl.weapons.filter(x => src.tints.indexOf(x) >= 0) : [];
-    return out;
-  };
-  N.cleanWear = cleanWear;
 
   // ---------------- host session ----------------
   N.Host = function (me, handlers) {
@@ -138,7 +127,7 @@
     this.handlers = handlers;
     this.conns = new Map();
     this.members = [Object.assign({ pid: 'host', slot: 0, ready: true, isHost: true }, me)];
-    this.pact = 0; this.pactMax = me.pactMax || 0;
+    this.stage = 0;
     this.started = false;
     this.attempts = 0;
     this.listen();
@@ -174,7 +163,7 @@
         c.pid = pid;
         this.conns.set(pid, c);
         const pk = cleanPick(d);
-        this.members.push({ pid, slot, name: ED.Save.sanitizeName(d.name), cls: pk.cls, weapon: pk.weapon, meta: pk.meta, wear: pk.wear, ready: false, isHost: false, pactMax: d.pactMax | 0 });
+        this.members.push({ pid, slot, name: ED.Save.sanitizeName(d.name), cls: pk.cls, meta: pk.meta, ready: false, isHost: false });
         c.send({ t: 'welcome', pid, slot, code: this.code });
         this.broadcastLobby();
         this.handlers.joined && this.handlers.joined(pid);
@@ -211,7 +200,7 @@
     else if (this.handlers.data) this.handlers.data(pid, d);
   };
   N.Host.prototype.setMe = function (patch) { Object.assign(this.members[0], patch); this.broadcastLobby(); };
-  N.Host.prototype.lobbyState = function () { return { t: 'lobby', code: this.code, pact: this.pact, members: this.members.map(m => ({ pid: m.pid, slot: m.slot, name: m.name, cls: m.cls, weapon: m.weapon, wear: m.wear || null, ready: m.ready, isHost: m.isHost })) }; };
+  N.Host.prototype.lobbyState = function () { return { t: 'lobby', code: this.code, stage: this.stage, members: this.members.map(m => ({ pid: m.pid, slot: m.slot, name: m.name, cls: m.cls, ready: m.ready, isHost: m.isHost })) }; };
   N.Host.prototype.broadcastLobby = function () { const s = this.lobbyState(); this.broadcast(s); this.handlers.lobby && this.handlers.lobby(s); };
   N.Host.prototype.broadcast = function (o) { for (const c of this.conns.values()) c.send(o); };
   N.Host.prototype.sendTo = function (pid, o) { const c = this.conns.get(pid); if (c) c.send(o); };
@@ -273,108 +262,9 @@
     if (this.t) this.t.close();
   };
 
-  // ---------------- snapshots ----------------
-  const ST = ['move', 'windup', 'lunge', 'aim', 'spin', 'charge', 'fuse', 'cast', 'idle', 'atk', 'dash', 'wind', 'slam', 'air', 'roar', 'fade', 'burrow', 'erupt', 'bash', 'leap', 'dive', 'stuck']; // append only: indices are the wire format
-  const ST_IDX = U.indexer(ST);
-  const ZK = ['spawn', 'tele', 'teleLine', 'teleCone', 'laser', 'poison', 'fire', 'pfire', 'plague', 'sanct', 'pull', 'bomb', 'decoy', 'mire', 'rain', 'meteor', 'smoke', 'skyfall', 'shards', 'crack', 'vortex', 'starfall', 'bramble', 'holypool', 'bward', 'cinder', 'firebreak', 'pillar', 'anchor', 'vigil', 'bind', 'icewall', 'wisp', 'gsaw']; // append only: indices are the wire format
-  const ZK_IDX = U.indexer(ZK);
-  const PK = ['gold', 'xp', 'heart', 'orb'];
-  const PK_IDX = U.indexer(PK);
-  N.ST = ST; N.ZK = ZK; N.PK = PK;
-  const r = Math.round, r2 = (v) => Math.round(v * 100) / 100;
-  // Burn flame level 0..3 from the burn pool relative to max HP (clients never see the pool); sent in flags bits 11-12.
-  N.burnLevel = (e) => {
-    if (!(e.burn > 0 || e.burnPool > 0)) return 0;
-    if (e.burnPool <= 1) return 1;
-    const k = 0.7 + e.burnPool / Math.max(1, e.maxHp) * 2.5;
-    return k < 0.95 ? 1 : k < 1.25 ? 2 : 3;
-  };
-  // FX events kept per type in one snapshot (host to client), and per rendered frame on the host or solo machine (a third of it). Extras are dropped; sim state never is.
-  N.CAPS = { hit: 24, smite: 12, reap: 12, toll: 12, lance: 12, block: 12, bash: 6, parry: 6, kblock: 6, blance: 8, shatter: 8, hurl: 8, reel: 8, blink: 6 };
-  N.CAPS_LOCAL = { hit: 8, smite: 4, reap: 4, toll: 4, lance: 4, block: 4, bash: 2, parry: 2, kblock: 3, blance: 4 };
-  Object.assign(N.CAPS, { exec: 8, rupt: 8, bloom: 6, sweep: 6 }); Object.assign(N.CAPS_LOCAL, { exec: 3, rupt: 3, bloom: 2, sweep: 2 }); // Shade execution cuts, ruptures, Bloodbloom lines and Ambush Sweep rings
-  // Cap key of an event: a non-crit fodder hit counts as 'fhit', a fodder death as 'fdie' and a damage-over-time tick (hit with k) as 'dhit', so a horde or a field of burning foes never crowds out crits, direct hits and threat deaths.
-  const capKey = (ev) => (ev.fd ? (ev.t === 'hit' && !ev.c ? 'fhit' : ev.t === 'die' ? 'fdie' : ev.t) : ev.t === 'hit' && ev.k ? 'dhit' : ev.t);
-  N.CAPS.dhit = 16; N.CAPS_LOCAL.dhit = 6;
-  N.capFx = (fx, caps) => {
-    let over = false, n = null;
-    for (let i = 0; i < fx.length; i++) {
-      const t = capKey(fx[i]), c = caps[t];
-      if (c === undefined) continue;
-      n = n || {};
-      if ((n[t] = (n[t] || 0) + 1) > c) over = true;
-    }
-    if (!over) return fx;
-    const out = []; n = {};
-    for (let i = 0; i < fx.length; i++) {
-      const t = capKey(fx[i]), c = caps[t];
-      if (c !== undefined && (n[t] = (n[t] || 0) + 1) > c) continue;
-      out.push(fx[i]);
-    }
-    return out;
-  };
-  Object.assign(N.CAPS, { skyfx: 6, hunt: 6, split: 8 }); Object.assign(N.CAPS_LOCAL, { skyfx: 2, hunt: 2, split: 3 }); // Ranger: Skyfall and Second Shower, mark leap, Splitting Bolt
-  Object.assign(N.CAPS, { quake: 4, crack: 6, banner: 4, wave: 6, dmburst: 8, forkRank: 4 }); Object.assign(N.CAPS_LOCAL, { quake: 2, crack: 3, banner: 2, wave: 3, dmburst: 3, forkRank: 2 }); // Avalanche slam and cracks, War Banner plant, Death Mark waves and bursts, fork rank grants
-  Object.assign(N.CAPS, { solar: 6, verdict: 8, hturn: 8, chain: 24 }); Object.assign(N.CAPS_LOCAL, { solar: 2, verdict: 3, hturn: 3, chain: 8 }); // Cleric events
-  Object.assign(N.CAPS, { dark: 2 }); Object.assign(N.CAPS_LOCAL, { dark: 1 }); // entering a dark room
-  Object.assign(N.CAPS, { fhit: 12, fdie: 30 }); Object.assign(N.CAPS_LOCAL, { fhit: 4, fdie: 12 }); // non-crit fodder hits and fodder deaths (capKey)
-  Object.assign(N.CAPS, { shoot: 10 }); Object.assign(N.CAPS_LOCAL, { shoot: 3 }); // foe shot sounds (boss volleys fire one per hero)
-  Object.assign(N.CAPS, { beam: 8 }); Object.assign(N.CAPS_LOCAL, { beam: 4 }); // Sunlance beams ({ pid, x0, y0, x1, y1, w })
-  Object.assign(N.CAPS, { smash: 8 }); Object.assign(N.CAPS_LOCAL, { smash: 4 }); // breakable props smashed ({ i, x, y, k, r }: room breakables index, spot, decor kind, room id)
-  Object.assign(N.CAPS, { bstrike: 16, peal: 6, bsmash: 4, bhook: 4 }); Object.assign(N.CAPS_LOCAL, { bstrike: 6, peal: 3, bsmash: 2, bhook: 2 }); // Bellwarden strikes, Peal waves, Wrecker smashes, Tether Hook landings
-  Object.assign(N.CAPS, { pillar: 4, aegispulse: 4, jecho: 10, lich: 2, dkraise: 2, dkswing: 6 }); Object.assign(N.CAPS_LOCAL, { pillar: 2, aegispulse: 2, jecho: 4, lich: 1, dkraise: 1, dkswing: 2 }); // Cleric and Necromancer skill forms: Wrath pillars, Aegis pulses, Final Judgment echoes, Lich Form, Death Knight raise and swings
-  // Radiance fill 0-3 of the Smite gauge.
-  N.radLevel = (w, e) => (e.rad > 0 ? Math.min(3, Math.floor(4 * e.rad / w.smiteAt(e))) : 0);
-  // Hero flags (bit n = 1 << n): 0 moving, 1 dashing, 2 downed, 3 dead, 4 invulnerable, 5 hurt, 6 Bulwark raised, 7 stealth, 8 ambush, 9 airborne (Comet), 10 Guardian Light buff, 11 Emboldened, 12 Battle Trance, 13 holding a hold verb (p.holdOn), 20 braced, 21-23 attacks the Bulwark has stored (0-7).
-  // P[24]: a hero's bells (class-bell.js) or 0: [last input seq of that hero (p.inSeq), ms of world time since it arrived (p.inT), haul x 100, chain length, flags (1 whirling, 2 hauled, 4 Anchor Leap in flight, 8 winding,
-  // 32 turning sense -1, 64 Wrecking Spin), Resonance; then per bell x, y, vx, vy, state (ED.Bell.STATES): a hand bell's x, y about the carried spot p.bellPx / p.bellPy, any other bell's in the world].
-  N.BELL_HEAD = 6; N.BELL_N = 5;
-  N.bellRow = (p, w) => {
-    const row = [p.inSeq | 0, p.inT === undefined ? 0 : r((w.time - p.inT) * 1000), r(p.haul * 100), r(p.bellL), (p.bellWhirl ? 1 : 0) | (p.bellHauled ? 2 : 0) | (p.bellLeap ? 4 : 0) | (p.bellWind ? 8 : 0) | (p.bellSpin < 0 ? 32 : 0) | (p.spinT > 0 ? 64 : 0), p.bellRes | 0];
-    for (const b of p.bells) { const hand = b.s === 0; row.push(r(hand ? b.x - p.bellPx : b.x), r(hand ? b.y - p.bellPy : b.y), r(b.vx), r(b.vy), b.s | 0); }
-    return row;
-  };
-  // Zone rows end with the owner slot + 1 of a zone that follows its owner (Aura of Faith), else 0. Z[12]: 2 big spawn, 1 elite spawn, 3-6 a Clockwork Colossus zone (2 + z.neon: cannon, saw, eye, core).
-  // Fodder foes (e.fodder) skip E and ride in H as [id, ENEMY_IDX, x, y, hpQ, fl]: hpQ = round(255 hp / maxHp) in 1..255; fl bits 0 flash, 1 frozen, 2 stunned, 3 chilled, 4 burning, 5 faces left, 6-9 Burn stacks (0-15), 10 charged.
-  // Foe flags: 0 flash, 1 frozen, 2 stunned, 4 chilled, 5 exposed, 6 charged, 7 bleeding, 8 judged, 9 blind, 10 vulnerable, 11-12 burn level, 13-15 unused, 16-17 Radiance fill, 18 Hexed, 19 Marked, 20 Sealed, 21-23 ailment count (0-7), 24-27 Burn stacks (0-15).
-
-  N.encodeSnap = (w, fx, full) => {
-    const P = [], E = [], H = [], B = [], K = [], Z = [], A = [];
-    for (const p of w.players.values()) {
-      const sw = ED.Sheet.shieldWindow(p, w.time);
-      const fl = (p.moving ? 1 : 0) | (p.dashing ? 2 : 0) | (p.downed ? 4 : 0) | (p.dead ? 8 : 0) | (p.invuln > 0 ? 16 : 0) | (p.hurtT > 0 ? 32 : 0) | (p.bulwarkOn ? 64 : 0) | (p.stealthT > 0 ? 128 : 0) | (p.ambush ? 256 : 0) | (p.cometT > 0 ? 512 : 0) | (p.glT > 0 ? 1024 : 0) | (p.auraT > 0 ? 2048 : 0) | (p.tranceT > 0 ? 4096 : 0) | (p.holdOn ? 8192 : 0) | (p.braceT > 0 ? 1 << 20 : 0) | (Math.min(7, p.blocks | 0) << 21);
-      P.push([p.pid, r(p.x), r(p.y), r2(p.face), Math.ceil(p.hp), p.maxHp, fl, r2(p.revive), p.critStacks | 0, p.aegisT > 0 ? 1 : 0, p.guardT > 0 ? 1 : 0, p.secondWind | 0, p.phoenixUsed ? 1 : 0, p.picks | 0, p.rerolls | 0, Math.ceil((p.shield || 0) * 10 - 1e-9) / 10, ED.Sheet.readyBits(p), p.momN | 0, r2(sw.c), r2(sw.a), p.chaliceHp | 0, 0, p.glT > 0 ? Math.round(p.glV * 1000) / 1000 : 0, p.auraT > 0 ? Math.round(p.auraV * 1000) / 1000 : 0, p.bells && p.bells.length ? N.bellRow(p, w) : 0, 0, p.doorWant | 0, p.sparks | 0, w.empowerOf(p)]); // P[15] shield rounded up to tenths (a shield is a few health points); P[16] ready-state bits of the sheet's defensive items (ED.Sheet.READY); P[17] Momentum stacks; P[18] P[19] shield received in the window: class sources, all sources (health); P[20] Grail of Ages growth; P[21] unused (0); P[22] P[23] Guardian Light and Embolden damage bonus (0 = off); P[24] bells (N.bellRow); P[25] unused (0); P[26] door the hero waits in (co-op: 0 none, else 1 + its exit index, Dungeon.doorWant); P[27] Kindling Sparks; P[28] empowered next attack (W.empowerOf: ED.EMPOWER index + 1, 0 none)
-    }
-    for (const e of w.enemies) {
-      if (e.hp <= 0) continue;
-      if (e.fodder) { H.push([e.id, ED.ENEMY_IDX[e.type], r(e.x), r(e.y), Math.max(1, Math.min(255, r(255 * e.hp / e.maxHp))), (e.flash > 0 ? 1 : 0) | (e.frozen > 0 ? 2 : 0) | (e.stun > 0 ? 4 : 0) | (e.chill > 0 ? 8 : 0) | (N.burnLevel(e) > 0 ? 16 : 0) | (e.face < 0 ? 32 : 0) | (Math.min(15, e.burnN | 0) << 6) | (e.charge > 0 ? 1024 : 0)]); continue; }
-      const fl = (e.flash > 0 ? 1 : 0) | (e.frozen > 0 ? 2 : 0) | (e.stun > 0 ? 4 : 0) | (e.chill > 0 ? 16 : 0) | (e.exposed ? 32 : 0) | (e.charge > 0 ? 64 : 0) | (e.bleedPool > 0 ? 128 : 0) | (e.judged > 0 ? 256 : 0) | (e.blind > 0 ? 512 : 0) | (e.vulnT > 0 ? 1024 : 0) | (N.burnLevel(e) << 11) | (N.radLevel(w, e) << 16) | (e.hexT > 0 ? 1 << 18 : 0) | (e.mark > 0 ? 1 << 19 : 0) | (e.sealT > 0 ? 1 << 20 : 0) | (Math.min(7, w.ailments(e)) << 21) | (Math.min(15, e.burnN | 0) << 24);
-      const row = [e.id, ED.ENEMY_IDX[e.type], r(e.x), r(e.y), Math.ceil(e.hp), r(e.maxHp), e.r, fl, ST_IDX[e.boss ? (e.pose || 'idle') : e.st] | 0, r2(e.aimA || 0), e.elite ? ED.AFFIX_IDS.indexOf(e.elite) : -1, r(e.ward || 0), r(e.wardMax || 0), e.phase | 0, e.face < 0 ? -1 : 1, r2(e.t || 0), r(e.chill || 0), e.boss ? r(e.doom || 0) : r(w.doomLine(e)), e.elite2 ? ED.AFFIX_IDS.indexOf(e.elite2) : -1];
-      if (e.furyT > 0) row.push(r(e.furyT * 10) / 10); // E[19], bosses of a stratum with fury only: the fight clock in tenths of a second
-      E.push(row);
-    }
-    for (const pr of w.projs) B.push([pr.id, ED.PROJ_IDX[pr.kind] | 0, r(pr.x), r(pr.y), r(pr.vx), r(pr.vy), pr.r, pr.team]);
-    for (const pk of w.pickups) K.push([pk.id, PK_IDX[pk.kind], r(pk.x), r(pk.y)]);
-    for (const z of w.zones) Z.push([z.id, ZK_IDX[z.kind] | 0, r(z.x), r(z.y), r(z.r || 0), r2(z.t), r2(z.dur), r2(z.a || 0), r(z.len || 0), r(z.w || 0), r2(z.arc || 0), z.team | 0, z.big ? 2 : z.elite ? 1 : z.neon ? 2 + z.neon : 0, z.lob ? z.lob[0] : -99999, z.lob ? z.lob[1] : 0, r2(z.warm || 0), r(z.str || 0), z.follow && w.players.has(z.follow) ? 1 + w.players.get(z.follow).slot : 0]);
-    for (const a of w.allies) A.push([a.id, a.owner, r(a.x), r(a.y), a.face, a.k | 0]); // A[5]: 0 minion, 1 Death Knight, 2 bone bomb
-    const s = { t: 's', T: r2(w.time), s: w.stratum, fs: w.floorSeed, r: w.roomId, ep: w.roomEpoch | 0, L: w.locked ? 1 : 0, g: w.gold, x: Math.floor(w.xp), n: w.xpNext, l: w.level,
-      wm: w.waitMsg || '', P, E, B, K, Z, A, H, F: N.capFx(fx, N.CAPS) };
-    if (w.room && w.room.arena && ED.Arena) s.AR = ED.Arena.encode(w.room); // boss / champion arena state (src/sim/arena.js), every snapshot while one runs
-    if (w.critter) s.C = [r(w.critter.x), r(w.critter.y), w.critter.face]; // the Platino while it is out: x, y, facing (1 / -1)
-    if (full) {
-      s.O = w.props.map(p => [p.id, p.kind, r(p.x), r(p.y), p.state | 0, p.item || '', p.price || 0, p.group || 0, p.stype || '', p.text || '', p.owner || '', p.ev || '', p.g || 0]); // O[10]: the pid a per-hero prop belongs to ('' = everyone); O[11]: the event def id of an event prop (events.js); O[12]: a minigame prop's payload (minigames.js)
-      s.RS = w.floor.rooms.map(rm => { const st = w.roomState[rm.id]; return (st.visited ? 1 : 0) | (st.known ? 2 : 0) | (st.cleared ? 4 : 0); });
-      s.BR = w.floor.rooms.map(rm => w.roomState[rm.id].broken | 0); // broken-breakable bit mask of every room (bit i = room.breakables[i])
-      s.RUN = { kills: w.run.kills, roomsCleared: w.run.roomsCleared, elitesKilled: w.run.elitesKilled, bosses: w.run.bosses, bossCount: w.run.bossCount, embers: w.run.embers, revives: w.run.revives, maxGold: w.run.maxGold, maxRelics: w.run.maxRelics, pact: w.pact,
-        flawlessBoss: !!w.run.flawlessBoss, roomsVisited: w.run.roomsVisited, roomsTotal: w.run.roomsTotal, fullClear: !!w.run.fullClear, darkCleared: w.run.darkCleared, champs: w.run.champs | 0, evolved: [...w.players.values()].some(p => !!p.stats.evo),
-        gold777: !!w.run.gold777, oneFace: !!w.run.oneFace, pl: {} }; // pl: pid -> that hero's secret run fields (world.js summary carries the same in players[pid])
-      for (const p of w.players.values()) s.RUN.pl[p.pid] = Object.assign({}, p.sec);
-      s.RUN.lore = (w.run.lore || []).slice(); // ED.LORE pages found this run
-      s.RP = Object.keys(w.patches || {}).map(id => [+id, w.patches[id]]); // [room id, merged room patch] of this floor (Dungeon.applyPatches)
-    }
-    return s;
-  };
-
-  // Signature used by the host to decide when props / room state must be resent.
-  N.propSig = (w) => w.roomId + '|' + w.props.map(p => p.id + ':' + (p.state | 0) + (p.v ? '.' + p.v : '')).join(',') + '|' + w.floor.rooms.map(rm => { const st = w.roomState[rm.id]; return (st.visited ? 1 : 0) + (st.known ? 2 : 0) + (st.cleared ? 4 : 0); }).join('') + '|' + (w.roomState[w.roomId].broken | 0) + '|' + (w.patchN | 0);
+  // ---------------- snapshots (net lane) ----------------
+  // Host: N.encodeSnap(w, pid) -> ArrayBuffer for that client (header, heroes, foes / projectiles / pickups / zones in its view + 160 px, quantized; that tick window's events, capped).
+  // Client: N.decodeSnap(buf, view) fills the view model arrays (render-visible fields of ARCHITECTURE §4). Stubs until the net lane lands.
+  N.encodeSnap = null;
+  N.decodeSnap = null;
 })(globalThis.ED || (globalThis.ED = {}));
