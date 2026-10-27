@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Wickdeep</title>
-<meta name="description" content="Wickdeep: a co-op roguelite dungeon where you choose your build. Six element paths, four strata and optional dark rooms. Play solo or with up to 3 friends in your browser.">
+<meta name="description" content="Wickdeep: a co-op survivors-like in your browser. Hordes pour in, your weapons fire on their own, you move, dash and unleash two hero skills. Solo or with up to 3 friends.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Cpath d=%22M16 2c6 7 10 11 10 18a10 10 0 0 1-20 0c0-5 3-8 5-11 0 4 2 6 4 6-2-5 0-9 1-13z%22 fill=%22%23ff8a3d%22/%3E%3C/svg%3E">
 <link rel="stylesheet" href="src/art/fonts.css">
 <link rel="stylesheet" href="style.css">
@@ -13,420 +13,175 @@
 <canvas id="game" aria-label="Game view"></canvas>
 
 <div id="ui">
+  <div id="loading">Loading...</div>
 
-  <!-- ============ TITLE / MAIN MENU ============ -->
   <section id="scr-title" class="screen" hidden>
-    <div class="title-stage">
-      <header class="logo">
-        <h1 class="logo-word">Wickdeep</h1>
-        <div class="logo-rule"><span></span><i></i><span></span></div>
-        <p class="logo-kicker">Co-op roguelite</p>
-      </header>
-
-      <div class="plate title-card" id="title-new" hidden>
-        <label for="inp-name" class="card-title">Your name</label>
-        <input id="inp-name" maxlength="12" autocomplete="off" spellcheck="false" placeholder="Wanderer" aria-describedby="name-msg">
-        <div class="msg name-msg" id="name-msg"></div>
-        <button class="btn btn-primary btn-xl" id="btn-begin">Start</button>
-        <button class="btn btn-ghost" id="btn-have-code">I have a save code</button>
-        <div class="title-load" id="title-load" hidden>
-          <textarea id="inp-title-code" rows="3" placeholder="Paste your save code (WD1-…)" spellcheck="false" aria-label="Save code"></textarea>
-          <button class="btn" id="btn-title-code">Load and continue</button>
-          <div class="msg" id="title-code-msg" role="status"></div>
-        </div>
+    <div class="title-wrap">
+      <h1 class="logo">Wickdeep</h1>
+      <p class="kicker">Survive the horde. Alone or with three friends.</p>
+      <div class="title-heroes" id="title-heroes" aria-hidden="true"></div>
+      <div class="name-row" id="name-row" hidden>
+        <label for="inp-name">Your name</label>
+        <input id="inp-name" maxlength="12" autocomplete="off" spellcheck="false" placeholder="Wanderer">
       </div>
-
-      <nav class="menu" id="title-menu" aria-label="Main menu" hidden>
-        <button class="menu-btn menu-primary" id="mm-descend" data-focus>Play</button>
-        <button class="menu-btn" id="mm-hearth">Hearth<span class="dot" id="dot-hearth" hidden title="You can buy an upgrade"></span></button>
-        <button class="menu-btn" id="mm-heroes">Heroes</button>
-        <button class="menu-btn" id="mm-settings">Settings</button>
-        <button class="menu-btn" id="mm-credits">Credits</button>
+      <nav class="menu" aria-label="Main menu">
+        <button class="btn btn-primary btn-big" id="btn-play" data-focus>Play solo</button>
+        <div class="menu-pair"><button class="btn" id="btn-host">Host co-op</button><button class="btn" id="btn-join">Join co-op</button></div>
+        <button class="btn" id="btn-camp">Camp shop</button>
+        <div class="menu-pair"><button class="btn" id="btn-settings">Settings</button><button class="btn" id="btn-credits">Credits</button></div>
       </nav>
-      <div class="title-profile" id="title-profile" hidden><span class="pp-name" id="title-name">Wanderer</span><span class="pp-embers"><span class="ember-ico" aria-hidden="true"></span><b id="title-embers">0</b> embers</span></div>
-      <div class="title-join" id="title-join" hidden>You were invited to party <b id="title-join-code"></b>. Choose Play to join.</div>
-    </div>
-    <a class="title-home" href="https://sttsspjy.github.io/emberdeep/" target="_blank" rel="noopener">Play online and invite friends: <b>sttsspjy.github.io/emberdeep</b></a>
-  </section>
-
-  <!-- ============ SECTIONS: DESCEND · HEARTH · HEROES ============ -->
-  <section id="scr-hearth" class="screen" hidden>
-    <div class="stage">
-      <header class="sec-head">
-        <button class="btn btn-ghost sec-back" id="btn-back" type="button">Back</button>
-        <h2 class="sec-title" id="sec-title">Play</h2>
-        <div class="purse" title="Embers"><span class="ember-ico" aria-hidden="true"></span><b id="hearth-embers">0</b><small>embers</small></div>
-      </header>
-      <nav class="tabs" id="hearth-tabs" role="tablist" hidden>
-        <button role="tab" data-tab="upgrades" class="tab on">Upgrades<span class="dot" id="dot-upgrades" hidden></span></button>
-        <button role="tab" data-tab="wardrobe" class="tab">Wardrobe<span class="dot" id="dot-wardrobe" hidden></span></button>
-        <button role="tab" data-tab="chronicle" class="tab">Records</button>
-        <button role="tab" data-tab="codex" class="tab">Codex</button>
-      </nav>
-
-      <div class="sec-body">
-        <!-- DESCEND -->
-        <div class="pane" data-pane="descend">
-          <div class="roster" id="class-list" role="radiogroup" aria-label="Hero"></div>
-          <div class="descend-detail">
-            <div class="plate hero-detail" id="hero-detail"></div>
-            <div class="plate loadout">
-              <h3 class="plate-h">Weapon</h3>
-              <div class="weapon-row" id="weapon-row"></div>
-              <div class="pact-block" id="asc-row" hidden>
-                <h3 class="plate-h">Pact <span class="pact-val" id="asc-val">0</span></h3>
-                <div class="pact-steps" id="asc-steps" role="radiogroup" aria-label="Pact level"></div>
-                <div class="pact-desc" id="asc-desc"></div>
-              </div>
-              <div class="run-goal" id="run-goal"></div>
-            </div>
-          </div>
-          <div class="go-bar">
-            <button class="btn btn-lg" id="btn-host" type="button">Host a party</button>
-            <button class="btn btn-primary btn-xl" id="btn-solo" type="button" data-focus>Play solo</button>
-            <button class="btn btn-lg" id="btn-join" type="button">Join a party</button>
-          </div>
-          <div class="join-row" id="join-row" hidden>
-            <label for="inp-join" class="lbl">Party code</label>
-            <input id="inp-join" maxlength="5" placeholder="K7QX2" autocomplete="off" spellcheck="false">
-            <button class="btn btn-primary" id="btn-join-go" type="button">Join</button>
-          </div>
-        </div>
-        <!-- UPGRADES -->
-        <div class="pane" data-pane="upgrades" hidden>
-          <p class="sub">Permanent upgrades, bought with embers. Reaching deeper strata reveals more. Every rank can be refunded for its full cost.</p>
-          <div class="up-grid" id="up-grid"></div>
-        </div>
-        <!-- HEROES -->
-        <div class="pane" data-pane="heroes" hidden>
-          <div class="heroes-view" id="heroes-view"></div>
-        </div>
-        <!-- WARDROBE -->
-        <div class="pane" data-pane="wardrobe" hidden>
-          <p class="sub">Cosmetics for your heroes. They do not change how a hero fights. Embers spent here are never refunded.</p>
-          <div class="heroes-view wardrobe" id="wardrobe-view"></div>
-        </div>
-        <!-- CHRONICLE -->
-        <div class="pane" data-pane="chronicle" hidden>
-          <div class="chron-grid">
-            <div>
-              <h3 class="plate-h">Deeds</h3>
-              <div class="deed-list" id="deed-list"></div>
-              <h3 class="plate-h">Secrets</h3>
-              <div class="deed-list" id="secret-list"></div>
-            </div>
-            <div>
-              <h3 class="plate-h">Stats</h3>
-              <dl class="records plate" id="records"></dl>
-              <h3 class="plate-h">Strata</h3>
-              <div class="strata-list" id="strata-list"></div>
-            </div>
-          </div>
-        </div>
-        <!-- CODEX -->
-        <div class="pane" data-pane="codex" hidden>
-          <p class="sub">Pages found in event rooms. Every descent can turn up more; the rarest come from rare events.</p>
-          <h3 class="plate-h" id="codex-count"></h3>
-          <div class="codex-list" id="codex-list"></div>
-        </div>
-      </div>
+      <div class="msg" id="title-msg" role="status"></div>
+      <div class="profile-line" id="profile-line"></div>
     </div>
   </section>
 
-  <!-- ============ LOBBY ============ -->
+  <section id="scr-hero" class="screen" hidden>
+    <h2>Choose your hero</h2>
+    <div class="hero-roster" id="hero-list" role="radiogroup" aria-label="Hero"></div>
+    <div class="hero-detail plate" id="hero-detail"></div>
+    <div class="row"><button class="btn" id="btn-hero-back" data-back>Back</button><button class="btn btn-primary" id="btn-hero-next" data-focus>Next</button></div>
+  </section>
+
+  <section id="scr-stage" class="screen" hidden>
+    <h2>Choose a stage</h2>
+    <div class="stage-list" id="stage-list" role="radiogroup" aria-label="Stage"></div>
+    <div class="row"><button class="btn" id="btn-stage-back" data-back>Back</button><button class="btn btn-primary btn-big" id="btn-start" data-focus>Start run</button></div>
+  </section>
+
+  <section id="scr-camp" class="screen" hidden>
+    <div class="camp-head"><h2>Camp shop</h2><div class="gold-pill"><canvas class="icon icon-sm" id="camp-coin" width="32" height="32"></canvas><b id="camp-gold">0</b></div></div>
+    <p class="hint">Permanent ranks for every run. Refund any time.</p>
+    <div class="shop" id="shop-list"></div>
+    <div class="row">
+      <button class="btn" id="btn-refund">Refund all</button>
+      <button class="btn" id="btn-code-toggle" aria-expanded="false">Save code</button>
+      <button class="btn btn-primary" id="btn-camp-back" data-back data-focus>Back</button>
+    </div>
+    <div class="code-box plate" id="code-box" hidden>
+      <label for="inp-code">Save code: copy it to keep your progress, paste one to restore</label>
+      <textarea id="inp-code" rows="3" spellcheck="false"></textarea>
+      <div class="row"><button class="btn btn-sm" id="btn-code-copy">Show my code</button><button class="btn btn-sm" id="btn-code-load">Load code</button></div>
+      <div class="msg" id="code-msg" role="status"></div>
+    </div>
+  </section>
+
+  <section id="scr-join" class="screen" hidden>
+    <h2>Join a party</h2>
+    <p class="hint">Ask your host for the 5-letter party code.</p>
+    <input id="inp-join" class="code-input" maxlength="5" autocomplete="off" spellcheck="false" placeholder="ABCDE" aria-label="Party code">
+    <div class="msg" id="join-msg" role="status"></div>
+    <div class="row"><button class="btn" id="btn-join-back" data-back>Back</button><button class="btn btn-primary" id="btn-join-go">Join</button></div>
+  </section>
+
   <section id="scr-lobby" class="screen" hidden>
-    <div class="stage lobby-stage">
-      <header class="sec-head">
-        <button class="btn btn-ghost sec-back" id="btn-lobby-leave" type="button">Leave</button>
-        <h2 class="sec-title">Party</h2>
-        <button class="btn has-dot" id="btn-lobby-hearth" type="button" title="Spend embers on upgrades">Hearth<span class="dot" id="dot-lobby-hearth" hidden></span></button>
-      </header>
-      <div class="lobby-cols">
-        <div class="plate lobby-party">
-          <div class="code-head">
-            <div>
-              <div class="lbl">Party code</div>
-              <div class="party-code" id="lobby-code">-----</div>
-            </div>
-            <button class="btn" id="btn-copy-invite" type="button">Copy invite link</button>
-          </div>
-          <div class="lobby-status" id="lobby-status">Connecting…</div>
-          <div class="lobby-members" id="lobby-members"></div>
-        </div>
-        <div class="plate lobby-pick">
-          <h3 class="plate-h">Your hero</h3>
-          <div class="roster compact" id="lobby-classes" role="radiogroup" aria-label="Hero"></div>
-          <h3 class="plate-h">Weapon</h3>
-          <div class="weapon-row" id="lobby-weapons"></div>
-          <div class="pact-block" id="lobby-asc" hidden>
-            <h3 class="plate-h"><span id="lobby-asc-lbl">Pact</span> <span class="pact-val" id="lobby-asc-val">0</span></h3>
-            <div class="pact-steps" id="lobby-asc-steps" role="radiogroup" aria-label="Pact level"></div>
-            <div class="pact-desc" id="lobby-asc-desc"></div>
-          </div>
-        </div>
-      </div>
-      <div class="lobby-actions">
-        <button class="btn btn-primary btn-xl" id="btn-lobby-go" type="button" data-focus>Ready</button>
-      </div>
+    <h2 id="lobby-title">Party</h2>
+    <div class="lobby-code" id="lobby-code-box"><span class="hint" id="lobby-code-lbl">Party code</span><b id="lobby-code">-----</b><button class="btn btn-sm" id="btn-lobby-copy">Copy</button></div>
+    <div class="lobby-slots" id="lobby-slots"></div>
+    <div class="lobby-pick plate">
+      <span class="hint">Your hero</span>
+      <div class="pick-row" id="lobby-heroes" role="radiogroup" aria-label="Your hero"></div>
+      <div class="lobby-stage" id="lobby-stage-row"><span class="hint">Stage</span><div class="pick-row" id="lobby-stages" role="radiogroup" aria-label="Stage"></div></div>
     </div>
+    <div class="msg" id="lobby-msg" role="status"></div>
+    <div class="row"><button class="btn" id="btn-lobby-leave" data-back>Leave</button><button class="btn btn-primary btn-big" id="btn-lobby-go" data-focus>Ready</button></div>
   </section>
 
-  <!-- ============ RESULTS ============ -->
   <section id="scr-results" class="screen" hidden>
-    <div class="stage results-wrap">
-      <div class="res-flag"><div class="res-banner" id="res-banner">Defeat</div></div>
-      <div class="res-sub" id="res-sub"></div>
-      <div class="res-evo" id="res-evo" hidden></div>
-      <div class="res-grid">
-        <div class="plate res-card">
-          <h3 class="plate-h">Run</h3>
-          <dl class="res-stats" id="res-stats"></dl>
-        </div>
-        <div class="plate res-card">
-          <h3 class="plate-h">Embers earned</h3>
-          <dl class="res-stats" id="res-embers"></dl>
-          <div class="res-total"><span class="ember-ico"></span><b id="res-ember-total">0</b></div>
-        </div>
-        <div class="plate res-card">
-          <h3 class="plate-h">Progress</h3>
-          <div id="res-progress"></div>
-        </div>
-      </div>
-      <div class="res-unlocks" id="res-unlocks"></div>
-      <button class="btn btn-primary btn-xl" id="btn-res-back" type="button" data-focus>Return to camp</button>
-      <div class="res-code"><span class="lbl">Updated save code</span><code id="res-code"></code><button class="btn btn-small" id="btn-res-copy" type="button">Copy</button></div>
-    </div>
+    <h2 id="res-title" class="res-title">Victory</h2>
+    <p class="hint" id="res-sub"></p>
+    <div class="res-stats" id="res-stats"></div>
+    <div class="res-chart plate" id="res-chart"></div>
+    <div class="res-party" id="res-party"></div>
+    <div class="res-unlocks" id="res-unlocks"></div>
+    <div class="row"><button class="btn" id="btn-res-back">Title</button><button class="btn btn-primary btn-big" id="btn-res-again" data-focus>Play again</button></div>
   </section>
 
-  <!-- ============ IN-RUN OVERLAYS ============ -->
-  <div id="ov-event" class="overlay" hidden>
-    <div class="plate ev-wrap" role="dialog" aria-labelledby="ev-title">
-      <h2 class="card-title" id="ev-title"></h2>
-      <div class="ev-sub" id="ev-sub"></div>
-      <div class="ev-text" id="ev-text"></div>
-      <div class="ev-choices" id="ev-choices"></div>
-      <div class="ev-hint hint" id="ev-hint"></div>
-    </div>
-  </div>
-  <div id="ov-boon" class="overlay" hidden>
-    <div class="boon-wrap">
-      <div class="boon-title"><span id="boon-head">Choose a boon</span> <span id="boon-count"></span></div>
-      <div class="boon-sub" id="boon-sub" hidden></div>
-      <div class="boon-cards" id="boon-cards"></div>
-      <div class="boon-foot">
-        <span class="hint" id="boon-hint"></span>
-        <button class="btn" id="btn-reroll" type="button">Reroll</button>
-      </div>
-    </div>
+  <div id="ov-offer" class="overlay offer" hidden>
+    <h2 id="offer-title">Level up!</h2>
+    <div class="offer-cards" id="offer-cards"></div>
+    <div class="offer-foot" id="offer-foot"><button class="btn btn-sm" id="btn-reroll">Reroll</button><button class="btn btn-sm" id="btn-skip">Skip</button><button class="btn btn-sm" id="btn-banish">Banish</button></div>
   </div>
 
-  <!-- the Hearth's shops, reachable from the party lobby -->
-  <div id="ov-hearth" class="overlay sheet" hidden>
-    <div class="plate party-hearth" role="dialog" aria-labelledby="ph-title">
-      <header class="sec-head">
-        <h2 class="sec-title" id="ph-title">Hearth</h2>
-        <div class="purse"><span class="ember-ico" aria-hidden="true"></span><b id="ph-embers">0</b><small>embers</small></div>
-      </header>
-      <p class="sub">Purchases apply from the next run. After buying something, press Ready again.</p>
-      <nav class="tabs" id="ph-tabs" role="tablist">
-        <button role="tab" data-tab="upgrades" class="tab on">Upgrades<span class="dot" id="ph-dot-upgrades" hidden></span></button>
-        <button role="tab" data-tab="heroes" class="tab">Heroes</button>
-        <button role="tab" data-tab="wardrobe" class="tab">Wardrobe</button>
-      </nav>
-      <div class="ph-body">
-        <div class="up-grid" id="ph-upgrades"></div>
-        <div class="heroes-view" id="ph-heroes" hidden></div>
-        <div class="heroes-view wardrobe" id="ph-wardrobe" hidden></div>
-      </div>
-      <div class="row end"><button class="btn btn-primary btn-lg" id="btn-ph-close" type="button">Back to the party</button></div>
-    </div>
-  </div>
-
-  <div id="ov-sheet" class="overlay sheet" hidden>
-    <div class="sheet-wrap" role="dialog" aria-label="Character sheet">
-      <header class="sh-head">
-        <div class="sh-port" id="sh-port"></div>
-        <div class="sh-id"><div class="sh-hero"><span id="sh-name">Hero</span><span id="sh-class"></span></div><div class="sh-subl" id="sh-sub"></div></div>
-        <div class="sh-vit">
-          <div class="sh-v1"><span class="sh-lvl" id="sh-lv">Lv 1</span><span class="sh-meter xp" id="sh-xpm"><i></i></span><span class="mut" id="sh-xp"></span></div>
-          <div class="sh-v1"><span class="lbl">HP</span><b id="sh-hp"></b><span class="sh-shield" id="sh-shield" hidden></span><span class="sh-meter hp" id="sh-hpm"><i></i><i class="sh"></i></span></div>
-          <div class="sh-v1" title="Gold"><img class="sh-coin" id="sh-coin" alt=""><b id="sh-gold">0</b></div>
-        </div>
-        <div class="sh-world"><span class="sh-strat" id="sh-strat"></span></div>
-      </header>
-      <nav class="sh-tabs" id="sh-tabs" role="tablist" aria-label="Sheet tabs">
-        <button type="button" role="tab" class="tab on" id="shtab-build" aria-controls="shp-build" aria-selected="true">Build</button>
-        <button type="button" role="tab" class="tab" id="shtab-combat" aria-controls="shp-combat" aria-selected="false">Combat</button>
-        <button type="button" role="tab" class="tab" id="shtab-map" aria-controls="shp-map" aria-selected="false">Map</button>
-        <div class="sh-tr"><span class="sh-keys" id="sh-keys"></span><span class="px-chip sh-pill" id="sh-pill" hidden></span><button type="button" class="btn btn-small" id="sh-view" hidden></button></div>
-      </nav>
-      <div class="sh-body">
-        <div class="sh-panel" id="shp-build" role="tabpanel" aria-labelledby="shtab-build" data-t="build"></div>
-        <div class="sh-panel" id="shp-combat" role="tabpanel" aria-labelledby="shtab-combat" data-t="combat" hidden></div>
-        <div class="sh-panel" id="shp-map" role="tabpanel" aria-labelledby="shtab-map" data-t="map" hidden>
-          <section class="plate sh-col" data-col="map"><div class="sh-in"><h3 class="sh-h">Map<button type="button" class="sh-mapbtn" id="sh-mapbtn"></button></h3><div class="sh-mapbox mv-box" id="sh-mapbox"><div class="mv-vp" id="sh-mapvp"><canvas id="map-canvas" width="360" height="300"></canvas></div><div class="mv-tip" id="sh-maptip" hidden></div></div><div class="sh-legend mv-legend" id="sh-legend"></div></div></section>
-          <section class="plate sh-col" data-col="side"><div class="sh-in"><h3 class="sh-h">Stratum and dark rooms</h3><div class="sh-list" id="shp-map-side"></div></div></section>
-        </div>
-      </div>
-      <footer class="sh-foot" id="sh-foot" data-px-snap></footer>
-    </div>
-  </div>
-
-  <div id="ov-map" class="overlay sheet" hidden>
-    <div class="mv-wrap" role="dialog" aria-label="Floor map">
-      <header class="mv-head"><span class="mv-title" id="mv-title"></span><span class="mv-where" id="mv-where"></span></header>
-      <div class="mv-body">
-        <section class="plate mv-col"><div class="mv-box" id="mv-box"><div class="mv-vp" id="mv-vp"><canvas id="mv-canvas" width="360" height="300"></canvas></div><div class="mv-tip" id="mv-tip" hidden></div></div></section>
-        <aside class="plate mv-side"><h3 class="sh-h">Legend</h3><div class="mv-legend" id="mv-legend"></div></aside>
-      </div>
-      <footer class="mv-foot" id="mv-foot"></footer>
-    </div>
+  <div id="ov-chest" class="chest-pop" hidden aria-live="polite">
+    <div class="chest-head" id="chest-head">Chest!</div>
+    <div class="chest-list" id="chest-list"></div>
   </div>
 
   <div id="ov-pause" class="overlay" hidden>
-    <div class="plate pause-wrap">
-      <h2 class="sec-title">Paused</h2>
-      <p class="sub" id="pause-note"></p>
-      <nav class="menu" aria-label="Pause menu">
-        <button class="menu-btn menu-primary" id="btn-resume" type="button" data-focus>Resume</button>
-        <button class="menu-btn" id="btn-pause-settings" type="button">Settings</button>
-        <button class="menu-btn menu-danger" id="btn-abandon" type="button">Abandon run</button>
-      </nav>
+    <div class="plate pause">
+      <h2>Paused</h2>
+      <div class="pause-build" id="pause-build"></div>
+      <div class="col"><button class="btn btn-primary" id="btn-resume" data-focus>Resume</button><button class="btn" id="btn-pause-settings">Settings</button><button class="btn" id="btn-quit">Quit run</button></div>
     </div>
   </div>
 
   <div id="ov-settings" class="overlay" hidden>
-    <div class="plate settings-wrap" role="dialog" aria-labelledby="set-title">
-      <h2 class="sec-title" id="set-title">Settings</h2>
-      <nav class="tabs" id="set-tabs" role="tablist">
-        <button role="tab" data-stab="sound" class="tab on">Sound</button>
-        <button role="tab" data-stab="display" class="tab">Display</button>
-        <button role="tab" data-stab="controls" class="tab">Controls</button>
-        <button role="tab" data-stab="profile" class="tab" id="stab-profile">Profile</button>
-      </nav>
-      <div class="set-body">
-        <div class="set-pane" data-spane="sound">
-          <div class="set-row"><label for="set-master">Master volume</label><div class="range"><input type="range" id="set-master" min="0" max="100"><output id="out-master"></output></div></div>
-          <div class="set-row"><label for="set-music">Music</label><div class="range"><input type="range" id="set-music" min="0" max="100"><output id="out-music"></output></div></div>
-          <div class="set-row"><label for="set-sfx">Sound effects</label><div class="range"><input type="range" id="set-sfx" min="0" max="100"><output id="out-sfx"></output></div></div>
-        </div>
-        <div class="set-pane" data-spane="display" hidden>
-          <div class="set-row"><label for="set-quality">Visual quality</label>
-            <select id="set-quality"><option value="high">High (lighting and particles)</option><option value="low">Low (faster)</option></select></div>
-          <div class="set-row"><label for="set-framecap">Frame cap</label>
-            <select id="set-framecap"><option value="auto">Auto (display rate)</option><option value="off">Uncapped</option><option value="144">144 fps</option><option value="120">120 fps</option><option value="60">60 fps</option></select></div>
-          <div class="set-row"><label for="set-shake">Screen shake</label><input type="checkbox" class="switch" id="set-shake"></div>
-          <div class="set-row"><label for="set-dmg">Damage numbers</label><input type="checkbox" class="switch" id="set-dmg"></div>
-        </div>
-        <div class="set-pane" data-spane="controls" hidden>
-          <div class="set-row"><label for="set-cursor">Cursor</label>
-            <select id="set-cursor"><option value="reticle">Reticle (lights up over foes)</option><option value="system">System crosshair</option></select></div>
-          <div class="set-row"><label for="set-reticle">Cursor size</label>
-            <select id="set-reticle"><option value="s">Small</option><option value="m">Medium</option><option value="l">Large</option></select></div>
-          <div class="set-row"><label for="set-retcol">Cursor colour</label>
-            <select id="set-retcol"><option value="ember">Orange</option><option value="bone">White</option><option value="frost">Blue</option></select></div>
-          <div class="set-row"><label for="set-aimprev">Skill aim preview</label><input type="checkbox" class="switch" id="set-aimprev"></div>
-          <div class="bind-head"><span>Click a key, then press the new key or mouse button. Esc cancels, Backspace clears.</span><button class="btn btn-small" id="btn-bind-reset" type="button">Reset to defaults</button></div>
-          <div class="bind-msg" id="bind-msg" role="status"></div>
-          <div class="bind-list" id="bind-list"></div>
-          <p class="bind-pad">Gamepad: left stick moves, right stick aims (let go and you aim where you walk), X / RT attacks, RB / B skill 1, LT / Y skill 2, A / LB dashes. Use RB and LT for aimed skills: your thumb stays on the stick. Ground skills land farther the harder you push the right stick. Back opens the character sheet (LB / RB switch tabs, B closes it); Start pauses. In a boon offer, X takes the card and Y rerolls.</p>
-        </div>
-        <div class="set-pane" data-spane="profile" hidden>
-          <h3 class="plate-h">Name</h3>
-          <div class="row"><input id="inp-rename" maxlength="12" autocomplete="off" spellcheck="false" aria-describedby="rename-msg"><button class="btn" id="btn-rename" type="button">Rename</button></div>
-          <div class="msg name-msg" id="rename-msg"></div>
-          <h3 class="plate-h">Your save code</h3>
-          <p class="sub">Progress lives in this browser and in this code. Copy it somewhere safe and paste it on any device to continue.</p>
-          <div class="code-box"><code id="save-code"></code><button class="btn" id="btn-copy-code" type="button">Copy</button></div>
-          <h3 class="plate-h">Load a save code</h3>
-          <textarea id="inp-code" rows="2" placeholder="Paste a save code here" spellcheck="false"></textarea>
-          <div class="row"><button class="btn" id="btn-load-code" type="button">Load code</button><span class="msg" id="load-msg"></span></div>
-          <h3 class="plate-h danger-h">Start over</h3>
-          <div class="row"><button class="btn btn-danger" id="btn-reset" type="button">Erase this profile</button></div>
-        </div>
+    <div class="plate settings">
+      <h2>Settings</h2>
+      <div class="set-grid">
+        <span class="set-lbl">Quality</span><div class="seg" id="set-quality" role="radiogroup" aria-label="Quality"><button class="btn btn-sm" data-v="auto">Auto</button><button class="btn btn-sm" data-v="high">High</button><button class="btn btn-sm" data-v="low">Low</button></div>
+        <label class="set-lbl" for="set-music">Music</label><div class="slide"><input type="range" id="set-music" min="0" max="100" step="5"><b id="set-music-v">0</b></div>
+        <label class="set-lbl" for="set-sfx">Effects</label><div class="slide"><input type="range" id="set-sfx" min="0" max="100" step="5"><b id="set-sfx-v">0</b></div>
+        <span class="set-lbl">Damage numbers</span><button class="btn btn-sm tog" id="set-numbers" aria-pressed="true">On</button>
+        <span class="set-lbl">Screen shake</span><button class="btn btn-sm tog" id="set-shake" aria-pressed="true">On</button>
+        <span class="set-lbl">Fullscreen</span><button class="btn btn-sm tog" id="set-full" aria-pressed="false">Off</button>
       </div>
-      <div class="row end"><button class="btn btn-primary btn-lg" id="btn-settings-close" type="button">Done</button></div>
+      <div class="row"><button class="btn btn-primary" id="btn-settings-close" data-back data-focus>Done</button></div>
     </div>
   </div>
 
   <div id="ov-credits" class="overlay" hidden>
-    <div class="plate credits-wrap" role="dialog" aria-labelledby="credits-title">
-      <h2 class="sec-title" id="credits-title">Credits</h2>
-      <div class="credits-body">
-        <p>DawnLike tileset by DragonDePlatino (CC-BY 4.0, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">https://creativecommons.org/licenses/by/4.0/</a> ; <a href="https://opengameart.org/content/dawnlike-16x16-universal-rogue-like-tileset-v181" target="_blank" rel="noopener">https://opengameart.org/content/dawnlike-16x16-universal-rogue-like-tileset-v181</a>), using the DawnBringer DB16 palette by DawnBringer. Cropped and recoloured for Wickdeep.</p>
-        <p>Free Pixel Effects Pack by CodeManu (Davit Masia), CC-BY 4.0 (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">https://creativecommons.org/licenses/by/4.0/</a> ; <a href="https://codemanu.itch.io/pixelart-effect-pack" target="_blank" rel="noopener">https://codemanu.itch.io/pixelart-effect-pack</a>). Frames subsampled and recoloured for Wickdeep.</p>
-        <p class="mut">Pixel Operator font by Jayvee Enaguas (HarvettFox96), CC0.</p>
-        <p class="mut">16x16 DungeonTileset II by 0x72 (Robert); Dungeon Tileset II Extended by nijikokun; 16x16 Dark Dungeon by kosinaz; Ninja Adventure by Pixel-boy and AAA; Puny Characters by Shade; LuizMelo; Kenney; o_lobster; Aim studios; ansimuz.</p>
-      </div>
-      <div class="row end"><button class="btn btn-primary btn-lg" id="btn-credits-close" type="button" data-focus>Done</button></div>
+    <div class="plate credits">
+      <h2>Credits</h2>
+      <p>DawnLike tileset by DragonDePlatino (CC-BY 4.0, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">https://creativecommons.org/licenses/by/4.0/</a> ; <a href="https://opengameart.org/content/dawnlike-16x16-universal-rogue-like-tileset-v181" target="_blank" rel="noopener">https://opengameart.org/content/dawnlike-16x16-universal-rogue-like-tileset-v181</a>), using the DawnBringer DB16 palette by DawnBringer. Cropped and recoloured for Wickdeep.</p>
+      <p>Free Pixel Effects Pack by CodeManu (Davit Masia), CC-BY 4.0 (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">https://creativecommons.org/licenses/by/4.0/</a> ; <a href="https://codemanu.itch.io/pixelart-effect-pack" target="_blank" rel="noopener">https://codemanu.itch.io/pixelart-effect-pack</a>). Frames subsampled and recoloured for Wickdeep.</p>
+      <p class="mut">Pixel Operator font by Jayvee Enaguas (HarvettFox96), CC0.</p>
+      <p class="mut">16x16 DungeonTileset II by 0x72 (Robert); Dungeon Tileset II Extended by nijikokun; 16x16 Dark Dungeon by kosinaz; Ninja Adventure by Pixel-boy and AAA; Puny Characters by Shade; LuizMelo; Kenney; o_lobster; Aim studios; ansimuz.</p>
+      <p class="mut">Music and sound are synthesized in your browser.</p>
+      <div class="row"><button class="btn btn-primary" id="btn-credits-close" data-back data-focus>Done</button></div>
     </div>
   </div>
-
-  <div id="ov-news" class="overlay" hidden>
-    <div class="plate credits-wrap" role="dialog" aria-labelledby="news-title">
-      <h2 class="sec-title" id="news-title">What changed</h2>
-      <div class="credits-body" id="news-body"></div>
-      <div class="row end"><button class="btn btn-primary btn-lg" id="btn-news-close" type="button" data-focus>OK</button></div>
-    </div>
-  </div>
-
-  <div id="modal" class="overlay" hidden>
-    <div class="plate modal-wrap" role="alertdialog" aria-labelledby="modal-title">
-      <h2 class="card-title" id="modal-title"></h2>
-      <p id="modal-text"></p>
-      <div class="row end"><button class="btn btn-ghost btn-lg" id="modal-no" type="button">Cancel</button><button class="btn btn-danger btn-lg" id="modal-yes" type="button">Confirm</button></div>
-    </div>
-  </div>
-
-  <div id="toasts" aria-live="polite"></div>
-  <div id="ov-fork" class="fork-reveal" hidden aria-live="polite"></div>
-  <div id="loading" class="loading">Loading…</div>
 </div>
 
 <script src="vendor/peerjs.min.js" defer></script>
 <script src="src/util.js" defer></script>
-<script src="src/data/biomes.js" defer></script>
-<script src="src/data/enemies.js" defer></script>
-<script src="src/data/classes.js" defer></script>
-<script src="src/data/boons.js" defer></script>
-<script src="src/data/classboons.js" defer></script>
-<script src="src/data/relics.js" defer></script>
+<script src="src/data/foes.js" defer></script>
+<script src="src/data/stages.js" defer></script>
+<script src="src/data/passives.js" defer></script>
 <script src="src/data/meta.js" defer></script>
-<script src="src/data/empower.js" defer></script>
-<script src="src/data/lore.js" defer></script>
-<script src="src/data/events.js" defer></script>
 <script src="src/save.js" defer></script>
-<script src="src/sim/dungeon.js" defer></script>
 <script src="src/sim/stats.js" defer></script>
+<script src="src/sim/arena.js" defer></script>
+<script src="src/sim/grid.js" defer></script>
 <script src="src/sim/world.js" defer></script>
 <script src="src/sim/combat.js" defer></script>
-<script src="src/sim/elements.js" defer></script>
-<script src="src/sim/build.js" defer></script>
-<script src="src/sim/relics.js" defer></script>
-<script src="src/sim/skills.js" defer></script>
-<script src="src/sim/class-knight.js" defer></script>
-<script src="src/sim/class-ranger.js" defer></script>
-<script src="src/sim/class-pyro.js" defer></script>
-<script src="src/sim/class-shade.js" defer></script>
-<script src="src/sim/class-cleric.js" defer></script>
-<script src="src/sim/class-necro.js" defer></script>
-<script src="src/sim/class-bell.js" defer></script>
+<script src="src/sim/foes.js" defer></script>
 <script src="src/sim/ai.js" defer></script>
+<script src="src/sim/spawner.js" defer></script>
+<script src="src/sim/weapons.js" defer></script>
+<script src="src/sim/skills.js" defer></script>
+<script src="src/sim/progress.js" defer></script>
 <script src="src/sim/bosses.js" defer></script>
 <script src="src/sim/boss-warden.js" defer></script>
 <script src="src/sim/boss-spore.js" defer></script>
-<script src="src/sim/rooms.js" defer></script>
-<script src="src/sim/events.js" defer></script>
-<script src="src/sim/arena.js" defer></script>
 <script src="src/sim/boss-king.js" defer></script>
 <script src="src/sim/boss-hollow.js" defer></script>
-<script src="src/sim/champions.js" defer></script>
-<script src="src/sim/minigames.js" defer></script>
-<script src="src/sim/sheet.js" defer></script>
+<script src="src/sim/boss-twins.js" defer></script>
+<script src="src/sim/boss-cyclops.js" defer></script>
+<script src="src/sim/boss-samurai.js" defer></script>
+<script src="src/sim/boss-weaver.js" defer></script>
+<script src="src/sim/boss-wickeater.js" defer></script>
+<script src="src/weapons/general-a.js" defer></script>
+<script src="src/weapons/general-b.js" defer></script>
+<script src="src/heroes/knight.js" defer></script>
+<script src="src/heroes/ranger.js" defer></script>
+<script src="src/heroes/pyro.js" defer></script>
+<script src="src/heroes/necro.js" defer></script>
+<script src="src/heroes/cleric.js" defer></script>
+<script src="src/heroes/shade.js" defer></script>
+<script src="src/heroes/bell.js" defer></script>
 <script src="src/net.js" defer></script>
-<script src="src/client/input.js" defer></script>
-<script src="src/client/audio.js" defer></script>
-<script src="src/client/score.js" defer></script>
+<script src="src/game.js" defer></script>
 <script src="src/art/meta.js" defer onerror="this.remove()"></script>
 <script src="src/art/world.js" defer onerror="this.remove()"></script>
 <script src="src/art/actors.js" defer onerror="this.remove()"></script>
@@ -434,36 +189,25 @@
 <script src="src/art/fx.js" defer onerror="this.remove()"></script>
 <script src="src/art/fxbig.js" defer onerror="this.remove()"></script>
 <script src="src/client/atlas.js" defer></script>
-<script src="src/client/icons.js" defer></script>
-<script src="src/client/pixui.js" defer></script>
-<script src="src/client/uiart.js" defer></script>
-<script src="src/client/screenart.js" defer></script>
-<script src="src/client/cardart.js" defer></script>
-<script src="src/client/sprites.js" defer></script>
-<script src="src/client/actors.js" defer></script>
-<script src="src/client/tiles.js" defer></script>
 <script src="src/client/pixfx.js" defer></script>
-<script src="src/client/fx.js" defer></script>
-<script src="src/client/pickfx.js" defer></script>
+<script src="src/client/gl.js" defer></script>
 <script src="src/client/render.js" defer></script>
-<script src="src/client/aim.js" defer></script>
-<script src="src/client/cls-knight.js" defer></script>
-<script src="src/client/cls-ranger.js" defer></script>
-<script src="src/client/cls-pyro.js" defer></script>
-<script src="src/client/cls-shade.js" defer></script>
-<script src="src/client/cls-cleric.js" defer></script>
-<script src="src/client/cls-necro.js" defer></script>
-<script src="src/client/cls-bell.js" defer></script>
-<script src="src/client/arena.js" defer></script>
-<script src="src/client/minigames.js" defer></script>
 <script src="src/client/post.js" defer></script>
+<script src="src/client/actors.js" defer></script>
+<script src="src/client/fx.js" defer></script>
+<script src="src/client/wfx-a.js" defer></script>
+<script src="src/client/wfx-b.js" defer></script>
+<script src="src/client/hfx-a.js" defer></script>
+<script src="src/client/hfx-b.js" defer></script>
+<script src="src/client/bfx-a.js" defer></script>
+<script src="src/client/bfx-b.js" defer></script>
+<script src="src/client/bfx-c.js" defer></script>
+<script src="src/client/audio.js" defer></script>
+<script src="src/client/music.js" defer></script>
+<script src="src/client/input.js" defer></script>
+<script src="src/client/aim.js" defer></script>
 <script src="src/client/hud.js" defer></script>
-<script src="src/client/camp.js" defer></script>
 <script src="src/client/ui.js" defer></script>
-<script src="src/client/mapview.js" defer></script>
-<script src="src/client/sheetui.js" defer></script>
-<script src="src/client/cosmetics.js" defer></script>
-<script src="src/game.js" defer></script>
 <script src="src/main.js" defer></script>
 </body>
 </html>

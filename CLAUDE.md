@@ -1,58 +1,59 @@
 # Wickdeep - Claude Guidelines
 
-**Docs**: [docs/](docs/) — **Game design (rules·numbers, canonical)**: [docs/GAME-DESIGN.md](docs/GAME-DESIGN.md) / **Masterplan for User (roadmap)**: [docs/MASTERPLAN.md](docs/MASTERPLAN.md) / **Masterplan for Agents (kanban)**: [docs/MASTERPLAN-AGENT.md](docs/MASTERPLAN-AGENT.md) / session handoff: `docs/HANDOFF-*.md` (Read from latest)
+**Docs**: [docs/](docs/) — **Game design (rules·numbers, canonical)**: [docs/GAME-DESIGN.md](docs/GAME-DESIGN.md) / **Architecture contract (files, registries, entities, net, perf gates)**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) / **Masterplan for User (roadmap)**: [docs/MASTERPLAN.md](docs/MASTERPLAN.md) / **Masterplan for Agents (kanban)**: [docs/MASTERPLAN-AGENT.md](docs/MASTERPLAN-AGENT.md) / session handoff: `docs/HANDOFF-*.md` (Read from latest). Legacy dungeon game: git tag `legacy-wickdeep`.
 
 ---
 
 ## north-star (Ultimate goal for all plans/tasks)
 
-A browser **co-op roguelite dungeon descent** (solo or up to 4 friends) where **builds are chosen, not rolled**: paths (Fire, Ice, Lightning, Poison, Holy, Shadow plus General) gate boons and each element changes how you play (its own verb, not more damage), commitment unlocks a keystone and a weapon evolution that change a control, a branching map lets you choose your route through four neutral strata, and every boss is its own fight. Rules: **① Zero install** (static site, no build step, no backend; opens from any static host or `file://`) **② No runtime asset files** (art is embedded as data URIs built by `tools/art.js` from vendored CC0/CC-BY sources in `art-src/`; all audio synthesized with WebAudio) **③ Host-authoritative deterministic sim** (the same `src/sim` code runs headless in Node for balance bots) **④ Every death is earned** (telegraphed attacks, readable builds, no sustain-by-default).
+A browser **co-op survivors-like** (solo or up to 4 friends) where **a strong run turns the screen into a blender**: hordes of hundreds pour into an open arena, weapons fire on their own, each hero brings a signature weapon and two big hand-fired skills, and every level-up changes the *shape* of an attack (more projectiles, area, pierce, orbitals, evolutions), never just a number. Rules: **① Zero install** (static site, no build step, no backend; opens from any static host or `file://`) **② No runtime asset files** (art is embedded as data URIs built by `tools/art.js` from vendored CC0/CC-BY sources in `art-src/`; all audio synthesized with WebAudio) **③ Host-authoritative deterministic sim** (the same sim code runs headless in Node for checks) **④ Every death is earned** (telegraphed elite and boss attacks, crowd pressure over burst damage, no sustain-by-default) **⑤ Hordes stay smooth** (900 foes on screen at 60 fps in a browser).
 
-**NO COMPROMISES. A ROGUELITE VETERAN MUST FINISH A RUN AND WANT ANOTHER WITH A DIFFERENT PATH.**
+**NO COMPROMISES. A PLAYER MUST FINISH A RUN FEELING OVERPOWERED AND WANT ANOTHER WITH A DIFFERENT HERO.**
 
 ## Abstract
 
-Vanilla JS (ES2020, no modules, global `ED` namespace) + Canvas2D with a WebGL post-process pass. Pipeline: `src/data` tables → `src/sim` World (60 Hz fixed-step, authoritative on host/solo) → `src/net.js` snapshots (20 Hz) → `src/client` renderer, HUD, DOM menus. Multiplayer: PeerJS WebRTC, host runs the sim, clients mirror snapshots and simulate only their own hero's movement. Progress: localStorage autosave + portable checksummed save code.
+Vanilla JS (ES2020, no modules, global `ED` namespace) + a WebGL sprite batcher (Canvas2D fallback) and a WebGL post pass. Pipeline: `src/data` tables → sim World (60 Hz fixed-step, authoritative on host/solo) → `src/net.js` binary snapshots (20 Hz, interest-culled) → `src/client` renderer, HUD, DOM menus. Multiplayer: PeerJS WebRTC, host runs the sim, clients predict their own hero. Progress: localStorage autosave + portable save code.
 
 - **Deployment**: GitHub Pages (static) — `index.html` at root, no build.
 - **1–4 players.** Don't design for scale.
 
 ## File map
 
+Full layout, load order and registries: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §2–3.
+
 ```
-index.html, style.css    page shell, DOM menus/overlays, styling
-src/util.js              constants, math, seeded RNG, colour helpers
-src/data/                biomes (palette, roster) · enemies · classes (heroes, weapons, skills) · boons (paths, open boons) · classboons (class routes) · relics · meta (Hearth upgrades, per-hero Armory, pacts, deeds, secrets, Wardrobe cosmetics)
+index.html, style.css    page shell, DOM screens, styling
+src/util.js              constants, math, seeded RNG
+src/data/                foes · stages (themes, timelines, bosses) · passives · meta (shop, unlocks)
 src/save.js              profile storage + save code
-src/sim/                 dungeon (floor gen) · stats (stat block) · world (run flow, rooms, dark rooms, pickups) · combat (damage, statuses, projectiles, zones) · elements (element verbs, unified Burn, hold-attack evolutions)
-                         build (offers, paths, evolutions, class routes) · skills (cast dispatcher, class hooks) · class-<hero>.js (each hero's skills and route hooks) · sheet (Tab sheet model)
-                         ai (enemy brains) · bosses (boss loop, phases, `B.lib`) · boss-<name>.js (each boss's own fight) · arena (boss and champion arena state, `AR` row) · champions (champion rooms) · rooms (encounters, rewards, props)
-src/net.js               transports, host/client sessions, snapshot encoding
-src/game.js              run session: local hero control, client mirror, network routing
-src/client/              input · aim · audio (SFX, voice budget) · score (adaptive per-stratum music) · icons · atlas (ImageBitmap + art atlas runtime) · actors · sprites · tiles · pixfx · fx · cls-<hero>.js (ED.ClassFx hooks) · cosmetics (Wardrobe drawing, pets, trails, preview) · arena (boss and champion arena drawing) · render · post (WebGL) · hud · camp · ui · sheetui
+src/sim/                 stats · arena · grid (foe grid, separation) · world · combat · foes · ai · spawner · weapons · skills · progress · bosses · boss-<id>
+src/weapons/             general weapon groups (data + impl)
+src/heroes/              one file per hero: data, signature weapon, Q/E skills
+src/net.js · src/game.js transports + snapshots · session, prediction, view model
+src/client/              atlas · pixfx · gl (ED.Batch) · render · post · actors · fx · audio · music · input · aim · hud · ui
 src/art/                 generated atlas pages (data URIs) from tools/art.js; never hand-edited
 art-src/                 vendored CC0/CC-BY source art + SOURCES.md (packs, licences, hashes)
 src/main.js              app state machine + frame loop
-tools/                   sim.js (headless bot runs) · simpool.js (parallel bot batches across worker processes at normal priority; `--nice` = idle priority) · journey.js (whole-profile simulation) · sheet.js (analytic hero numbers) · model.js (the sheet's shared damage and health model) · pick.js (smart bot card values by marginal gain) · bal.js (fixed quick balance suite, ≤ 3 min; `--full` final confirm) · browse.js (headless browser smoke, crowd perf and screenshots; never a visible window)
-                         art.js + art-manifest.js (art packer; `--check` verifies src/art) · check-*.js and sheet-check.js (headless regression checks, exit 1 on failure; check-elements.js element paths and Mutations, check-late.js late offers and Twists) · check-perf.js (sim ms per tick at 70/150/200 foes, foe-grid and separate() audit)
-docs/                    GAME-DESIGN.md · MASTERPLAN.md · MASTERPLAN-AGENT.md · HANDOFF-*.md
+tools/                   sim.js (Node loader) · check-*.js (headless checks, exit 1 on failure) · check-perf.js · browse.js (headless browser smoke, shots, crowd perf; never a visible window) · art.js + art-manifest.js
+docs/                    GAME-DESIGN.md · ARCHITECTURE.md · MASTERPLAN.md · MASTERPLAN-AGENT.md · HANDOFF-*.md
 ```
 
 ## Known default traps
 
-1. **Sim is deterministic per seed** — `Dungeon.generate(stratum, seed)` is pure (host and clients build identical floors). Never `Math.random` inside `src/sim` or `src/data`; use `w.rng` or a seeded `U.RNG`.
-2. **Clients only see what snapshots carry** — any state the renderer/HUD needs must be encoded in `net.js` (or derived from floor gen / build events). Bump `N.VERSION` when snapshots or floor generation change.
-3. **Sim and data run in Node** (`tools/sim.js` vm) — no DOM/window in `src/data`, `src/sim`, `src/util.js`, `src/save.js`.
-4. **Script order lives twice** — a new data/sim file goes into `index.html` AND the `tools/sim.js` file list (`elements.js` loads after `combat.js`, `class-*.js` after `skills.js`, `sheet.js` after `rooms.js`; the check scripts load through `tools/sim.js`).
-5. **world.js/combat.js/rooms.js ↔ build.js/skills.js/class-*.js talk through hooks** — world.js calls `initBuild`, `initSkills`, `onRunStartBuild`, `onStratumBuild`, `updatePlayerBuild` (which calls `updateSkills`, and that runs `updateCharge`, `updateShieldThrow` and the class `tick` hook, then combat.js `updatePlayerCombat`), `updateOffers`, `updateAllies`, `addXp` and `clearShields` (defined in `class-knight.js`); combat.js calls `onEnemyKilledSkill` and the per-class hook tables `ED.CLS[cls]` (listed at the top of `skills.js`), and class files call combat.js `grantCrits`; minions (`spawnMinion`, `updateAllies`) live in `class-necro.js`; each skill's cast lives in `ED.CAST[skillId]` in its class file, which calls `refundSkill` for cooldown refunds; rooms.js calls `grantOffer`. Per-hero build/skill fields are created in `initBuild`/`initSkills` (and the class `init` hook), not in `addPlayer`. Keep the boundary.
-6. **Statuses build from damage dealt, never hit count** — attack speed must not out-scale damage.
+1. **Sim is deterministic per seed** — never `Math.random`/`Date.now` in sim, data, weapons or heroes files; use `w.rng` or a seeded `U.RNG`. Arena gen is pure (clients rebuild it from the seed).
+2. **Clients only see what snapshots carry** — any state the renderer/HUD needs must be encoded in `net.js` (or derived from arena gen / events). Bump `ED.NET_VERSION` when the wire changes.
+3. **Sim runs in Node** (`tools/sim.js` vm) — no DOM/window in `src/util.js`, `src/data`, `src/sim`, `src/weapons`, `src/heroes`, `src/save.js`.
+4. **Script order lives twice** — a new sim-side file goes into `index.html` AND the `tools/sim.js` FILES list.
+5. **Plug in through registries** (`ED.WEAPONS`/`ED.WIMPL`, `ED.HEROES`, `ED.CAST`, `ED.AI`, `ED.Bosses`, `ED.HOOK`, client `ED.WeaponFx`/`ED.SkillFx`/`ED.BossFx`), not by editing core files.
+6. **No per-tick allocation in hot paths** — foes, projectiles, gems, hit sources are pooled; arrays compact in place.
 7. **All hotkeys use `e.code`** — `e.key` breaks on non-Latin layouts.
-8. **Save code is positional** (UPGRADES, CLASS_IDS, ARMORY per class, DEEDS order): append only, each list carries a count prefix (`CODE_VERSION` 5); reordering or removing bumps `CODE_VERSION`. The v4 relic table in `src/save.js` is frozen (old profiles and codes decode against it).
-9. **Balance claims need numbers** — run `tools/bal.js` (quick suite, ≤ 3 min; `--from=N` starts bots at stratum N, `--vet` is the human-proxy bot) or `tools/simpool.js` before/after and report win rate, depth, time. One `--full` confirm at the end, never repeated long batches.
-10. **Low quality must stay fast** — WebGL post-process is optional; the 2D path must work without it.
+8. **Save code is positional** (HERO_IDS, SHOP order): append only; reordering or removing bumps the code version.
+9. **No bot balance batches** — numbers come from GAME-DESIGN.md and the user's playtests. Heavy CPU jobs run at idle priority on at most half the cores.
+10. **Low quality must stay fast** — WebGL is optional; the Canvas2D fallback must stay playable.
 11. **Rules and numbers follow [docs/GAME-DESIGN.md](docs/GAME-DESIGN.md)** — change the doc and the code together.
 12. **`src/art/` is generated** — edit `art-src/` or `tools/art-manifest.js`, run `node tools/art.js`, and keep `node tools/art.js --check` passing; attribution for CC-BY packs stays in the README Credits and the in-game Credits screen.
 13. **Browser checks are headless** — `tools/browse.js` only; never open a visible browser window. The user does the vsync fps check.
+14. **Readable text** — card text ≥ 20 px CSS, HUD ≥ 16 px CSS, plain pixel font, one line per upgrade.
 
 ## Git rules
 

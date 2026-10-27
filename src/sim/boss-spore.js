@@ -1,168 +1,155 @@
-// II. The Sporemother: arena control. Rooted where she rises, she spreads a spore carpet over the floor tiles (slows, ticks while a hero stands on it); spore pods at the room's edges spread their own patches.
-// Destroying a pod clears the carpet around it; her slam (the answer to heroes in melee) blasts the carpet off the ground around her. Phase 2: buds drift from her to destroyed pods and regrow them (kill them on the way).
-// Phase 3: she uproots and walks after the heroes, leaving carpet behind her; the spreading stops. No volley.
+// Boss 'spore' (Sporemother, ED.FOES.spore): arena control. Rooted where she rises, she grows a spore carpet of circular patches (zones, look 'spore') around herself and her pods:
+// a grown patch slows a hero standing on it and ticks SM.patch.dps x her damage per second (no i-frames). Four spore pods (boss parts 'sporepod') rise around her after a telegraph and spread
+// their own patches; killing a pod clears the carpet around it. Attacks: lashes (a line per hero, a fan of three from phase 2), burst rings (waves of spores after a ring warning),
+// a slam when a hero stands close (clears the carpet around her and calms the spread). Phase 2 (66%): pods regrow faster. Phase 3 (33%): she uproots and walks after the heroes,
+// painting short-lived carpet where she goes; the spread and pod regrowth stop, bursts spiral.
 (function (ED) {
   'use strict';
-  const U = ED.U, B = ED.Bosses, L = B.lib, T = ED.CONST.TILE;
-  const { line, tele, ring, mv } = L;
+  const U = ED.U, B = ED.Bosses, L = B.lib, TAU = U.TAU;
+  const { line, tele } = L;
   const SM = B.SPORE = {
-    spread: { t: 1.4, reach: 7, pod: 3 }, // s per growth step; her reach and a pod's (tiles): one ring of carpet per step within it
-    dps: 0.25, tick: 1.0, // carpet damage per second x boss damage, applied every `tick` s to a hero standing on carpet
-    clear: 4, // tiles of carpet a destroyed pod clears around itself
-    pods: { n: 4, first: 0.8, regrow: 9, spawn: 1.0 }, // live pods at most; s to the first pods; phase 1: s between regrowths; spawn telegraph
-    buds: { gap: 9, n: 1, spawn: 0.6, reach: 14 }, // phase 2: s between launches, buds per launch, spawn telegraph, arrival distance (px)
-    lash: { len: 460, w: 28, wind: 0.9, mul: 0.8, fan: 0.3 }, // one line per hero (a fan of three from phase 2)
-    slam: { r: 130, wind: 1.0, mul: 1.3, near: 160, calm: 4 }, // only when a hero stands within `near`; clears the carpet in its radius, and the carpet stops spreading for `calm` s
-    burst: { n: 10, n2: 14, waves: 3, speed: 118, gap: 0.5, mul: 0.8 },
-    chase: 0.9, paint: 1, // phase 3: walking speed x spd; carpet painted within `paint` tiles of her
+    patch: { r: [30, 42], grow: 0.8, life: 60, max: 48, dps: 0.3, tick: 0.5, slow: 0.35 }, // radius, s to grow (harmless meanwhile), lifetime, cap (oldest dies), damage x e.dmg per s, hero slow
+    spread: { t: 1.4, reach: 240, pod: 110, cap: [22, 5] }, // s per new patch; px of carpet reach around her and around a pod; live patches at most (her, each pod)
+    pods: { n: 4, d: [170, 230], first: 0.8, warn: 1.2, regrow: [14, 9], clear: 100 }, // pod ring distance, first growth, spawn telegraph, regrowth s by phase, carpet cleared on death (px)
+    lash: { len: 440, w: 26, wind: 0.9, mul: 1.0, fan: 0.32 },
+    slam: { r: 125, wind: 1.0, mul: 1.4, near: 150, calm: 4 },
+    burst: { n: [10, 14, 16], waves: 3, speed: 115, gap: 0.5, wind: 0.75, mul: 0.7, spin: 0.27 },
+    chase: 0.9, paint: { step: 34, life: 10, r: 30 }, // phase 3: walking speed x spd; a patch every `step` px walked
   };
+  ED.addFoe('sporepod', { name: 'Spore Pod', look: 'foe.sporepuff', ai: 'boss', boss: true, hp: 60, spd: 0, dmg: 0, r: 12, xp: 5, kb: 0, noElite: true, noContact: true, scale: 2 });
 
-  // ---- carpet grid ----
-  const idx = (room, x, y) => Math.floor(y / T) * room.w + Math.floor(x / T);
-  const floorAt = (room, i) => { const t = (room.baseTiles || room.tiles)[i]; return t === 0 || t === 4; };
-  // Clears every carpet tile whose centre lies within r px of (x, y).
-  function clearAt(room, c, x, y, r) {
-    const x0 = Math.max(0, Math.floor((x - r) / T)), x1 = Math.min(room.w - 1, Math.floor((x + r) / T)), y0 = Math.max(0, Math.floor((y - r) / T)), y1 = Math.min(room.h - 1, Math.floor((y + r) / T));
-    for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) if (((tx + 0.5) * T - x) ** 2 + ((ty + 0.5) * T - y) ** 2 <= r * r) c[ty * room.w + tx] = 0;
+  // ---------- carpet ----------
+  // A patch zone (team 1, look 'spore', no direct damage) of radius r at (x, y): grows over SM.patch.grow s, dies with her.
+  const patchTick = (w, z) => { const s = z.src; if (s.dead || s.id !== z.srcId) { z.dead = true; return; } z.r = z.st.R * Math.min(1, z.t / SM.patch.grow); };
+  function addPatch(w, e, x, y, r, life, src) {
+    const v = e.vars;
+    if (v.patches.length >= SM.patch.max) { const o = v.patches.shift(); if (!o.z.dead && o.z.id === o.id) o.z.dead = true; }
+    if (ED.Arena.blocked(w.arena, x, y, 4)) return null;
+    const z = w.zone({ team: 1, look: 'spore', x, y, r: 1, dur: life, src: e, onTick: patchTick, st: { R: r } });
+    v.patches.push({ z, id: z.id, x, y, R: r, src: src | 0 });
+    return z;
   }
-  // One growth step: every floor tile within a source's reach that touches carpet (or holds the source) turns to carpet. Sources: { x, y, r } (px centre, reach in tiles).
-  function grow(room, c, srcs) {
-    const W = room.w, H = room.h, add = [];
-    for (let ty = 1; ty < H - 1; ty++) for (let tx = 1; tx < W - 1; tx++) {
-      const i = ty * W + tx;
-      if (c[i] || !floorAt(room, i)) continue;
-      let ok = false;
-      for (const s of srcs) {
-        const sx = Math.floor(s.x / T), sy = Math.floor(s.y / T), d2 = (tx - sx) ** 2 + (ty - sy) ** 2;
-        if (d2 > s.r * s.r) continue;
-        if (d2 === 0 || c[i - 1] || c[i + 1] || c[i - W] || c[i + W]) { ok = true; break; }
-      }
-      if (ok) add.push(i);
+  // Drops dead patches from the list.
+  function prune(v) { let n = 0; for (const o of v.patches) if (!o.z.dead && o.z.id === o.id) v.patches[n++] = o; v.patches.length = n; }
+  // Clears every patch whose centre lies within r of (x, y).
+  function clearAt(w, e, x, y, r) {
+    const v = e.vars;
+    for (const o of v.patches) if (U.dist2(o.x, o.y, x, y) <= r * r && !o.z.dead && o.z.id === o.id) o.z.dead = true;
+    prune(v);
+    w.emit({ t: 'boom', x: Math.round(x), y: Math.round(y), r: Math.round(r), look: 'spore', team: 1 });
+  }
+  // One growth step of source src (0 her, 1-4 a pod slot) at (sx, sy) with reach R: a patch next to a random patch of that source (or on the source), inside the reach.
+  function grow(w, e, src, sx, sy, R) {
+    const v = e.vars, own = [];
+    for (const o of v.patches) if (o.src === src) own.push(o);
+    if (own.length >= SM.spread.cap[src ? 1 : 0]) return;
+    for (let k = 0; k < 4; k++) {
+      const o = own.length ? own[w.rng.int(0, own.length - 1)] : null, r = w.rng.range(SM.patch.r[0], SM.patch.r[1]);
+      const a = w.rng.next() * TAU, d = o ? o.R + r * 0.55 : w.rng.range(0, 20), x = (o ? o.x : sx) + Math.cos(a) * d, y = (o ? o.y : sy) + Math.sin(a) * d;
+      if (U.dist2(x, y, sx, sy) > R * R) continue;
+      if (addPatch(w, e, x, y, r, SM.patch.life, src)) return;
     }
-    for (const i of add) c[i] = 1;
-    return add.length;
+  }
+  // True when hero p stands on a grown patch.
+  function onCarpet(v, p) {
+    for (const o of v.patches) { const z = o.z; if (z.dead || z.id !== o.id || z.t < SM.patch.grow) continue; const rr = z.r + p.r * 0.5; if (U.dist2(p.x, p.y, z.x, z.y) <= rr * rr) return true; }
+    return false;
   }
 
-  // ---- pods ----
-  // Six slots inset from the walls: the four corners and the middle of the left and right walls (moved to the nearest floor tile).
-  function podSlots(w) {
-    const room = w.room, pts = [[3, 3], [room.w - 3, 3], [3, room.h - 3], [room.w - 3, room.h - 3], [2.5, room.h / 2], [room.w - 2.5, room.h / 2]];
-    return pts.map(([tx, ty]) => {
-      let best = null, bd = 1e9;
-      for (let y = 1; y < room.h - 1; y++) for (let x = 1; x < room.w - 1; x++) { const i = y * room.w + x, d = (x + 0.5 - tx) ** 2 + (y + 0.5 - ty) ** 2; if (d < bd && floorAt(room, i)) { bd = d; best = { x: (x + 0.5) * T, y: (y + 0.5) * T }; } }
-      return { x: best.x, y: best.y, pod: null, pending: false, dead: false, reach: 0 };
-    });
+  // ---------- pods ----------
+  // Four slots around her (diagonals, pulled in when an obstacle sits there).
+  function podSlots(w, e) {
+    const out = [];
+    for (let i = 0; i < SM.pods.n; i++) {
+      const a = Math.PI / 4 + i * TAU / SM.pods.n;
+      let x = e.x + Math.cos(a) * SM.pods.d[1], y = e.y + Math.sin(a) * SM.pods.d[1];
+      for (let d = SM.pods.d[1]; d >= SM.pods.d[0]; d -= 15) { x = e.x + Math.cos(a) * d; y = e.y + Math.sin(a) * d; if (!ED.Arena.blocked(w.arena, x, y, 16)) break; }
+      const pt = L.inside(w, x, y, 20, {});
+      out.push({ x: pt.x, y: pt.y, pod: null, id: 0, pending: false, regrow: 0, reach: 0 });
+    }
+    return out;
   }
-  function growPod(w, e, sl, dur) {
-    sl.pending = true; sl.dead = false;
-    w.addZone({ kind: 'spawn', x: sl.x, y: sl.y, r: 16, dur, type: 'sporepod', after: (en) => { sl.pod = en; sl.pending = false; sl.reach = 0; } });
+  // Telegraphed pod growth at slot sl (a warning circle; the pod rises when it ends, unless she died).
+  function growPod(w, e, sl) {
+    sl.pending = true;
+    tele(w, e, sl.x, sl.y, 18, SM.pods.warn, 0, { look: 'spore', onEnd: (ww) => { const p = ww.spawnFoe('sporepod', sl.x, sl.y); sl.pending = false; if (p) { sl.pod = p; sl.id = p.id; sl.reach = 0; } } });
   }
 
-  // ---- attacks ----
+  // ---------- attacks ----------
   const burst = {
-    w: 2, start(w, e) { e.pose = 'cast'; },
+    w: 2, wind: SM.burst.wind,
+    start(w, e) { tele(w, e, e.x, e.y, e.r + 26, SM.burst.wind, 0, { followSrc: true, look: 'spore' }); e.vars.s.k = 0; e.vars.s.a = w.rng.next() * TAU; },
     update(w, e, dt, t) {
-      const q = SM.burst, n = e.phase >= 2 ? q.n2 : q.n, k = e.vars.k || 0;
-      if (k < q.waves && t > 0.45 * e.vars.wm + k * q.gap) { ring(w, e, n, q.speed, 'spore', k * 0.27, q.mul, 7); e.vars.k = k + 1; }
-      return t > 0.45 * e.vars.wm + q.waves * q.gap + 0.4;
+      const q = SM.burst, s = e.vars.s, ph = e.vars.phase, n = q.n[ph - 1];
+      if (s.k < q.waves && t >= q.wind + s.k * q.gap) { L.ring(w, e, n, q.speed, 'poison', s.a + s.k * q.spin * (ph >= 3 ? 2 : 1), q.mul, 6); s.k++; }
+      return t >= q.wind + q.waves * q.gap + 0.3;
     },
   };
   const lash = {
-    w: 3,
+    w: 3, wind: SM.lash.wind,
     start(w, e) {
-      const q = SM.lash, k = e.vars.wm, fan = e.phase >= 2 ? [-q.fan, 0, q.fan] : [0];
-      e.pose = 'wind';
-      const hs = w.alivePlayers().filter(p => !(p.stealthT > 0)), tg = hs.length ? hs : [e.target];
-      for (const p of tg) { const a = Math.atan2(p.y - e.y, p.x - e.x); for (const f of fan) line(w, e, e.x, e.y, a + f, q.len, q.w, q.wind * k, q.mul); }
-      e.vars.end = q.wind * k + 0.3;
+      const q = SM.lash, fan = e.vars.phase >= 2 ? 1 : 0;
+      for (const p of w.living) { const a = Math.atan2(p.y - e.y, p.x - e.x); for (let f = -fan; f <= fan; f++) line(w, e, e.x, e.y, a + f * q.fan, q.len, q.w, q.wind, q.mul, { followSrc: true }); }
     },
-    update(w, e, dt, t) { if (t > e.vars.end - 0.3) e.pose = 'slam'; return t > e.vars.end; },
+    update: (w, e, dt, t) => t >= SM.lash.wind + 0.3,
   };
   const slam = {
-    w: 4, ok: (w, e) => w.alivePlayers().some(p => U.dist2(p.x, p.y, e.x, e.y) < SM.slam.near ** 2),
+    w: 4, wind: SM.slam.wind, ok: (w, e) => L.near(w, e, SM.slam.near),
     start(w, e) {
       const q = SM.slam;
-      e.pose = 'wind';
-      tele(w, e, e.x, e.y, q.r, q.wind * e.vars.wm, q.mul, 'slam', (ww, z) => {
-        e.pose = 'slam';
-        const car = ED.Arena.field(ww.room); if (car && car.carpet) { clearAt(ww.room, car.carpet, z.x, z.y, z.r); e.spT = Math.max(e.spT, SM.slam.calm); ww.emit({ t: 'carpetclear', x: Math.round(z.x), y: Math.round(z.y), r: z.r }); }
-      });
+      tele(w, e, e.x, e.y, q.r, q.wind, q.mul, { followSrc: true, look: 'quake', onEnd: (ww, z) => { clearAt(ww, e, z.x, z.y, z.r); e.vars.spT = Math.max(e.vars.spT, q.calm); } });
     },
-    update(w, e, dt, t) { return t > SM.slam.wind * e.vars.wm + 0.45; },
+    update: (w, e, dt, t) => t >= SM.slam.wind + 0.45,
   };
 
-  // ---- the arena clock: carpet growth, its damage, pods and buds ----
+  // ---------- the arena clock: carpet growth and damage, pods ----------
   function tick(w, e, dt) {
-    const room = w.room;
-    if (!e.slots) {
-      e.slots = podSlots(w); e.spT = SM.spread.t; e.cpT = SM.tick; e.podT = SM.pods.first; e.budT = SM.buds.gap; e.buds = [];
-      const c = new Uint8Array(room.w * room.h); c[idx(room, e.x, e.y)] = 1;
-      ED.Arena.setField(room, { walls: null, carpet: c });
+    const v = e.vars;
+    if (!v.slots) { v.slots = podSlots(w, e); v.patches = []; v.spT = 0.5; v.cpT = SM.patch.tick; v.podT = SM.pods.first; v.paint = { x: e.x, y: e.y }; }
+    prune(v);
+    for (const sl of v.slots) if (sl.pod && (sl.pod.dead || sl.pod.id !== sl.id)) { // a destroyed pod clears the carpet around itself
+      sl.pod = null; sl.regrow = SM.pods.regrow[Math.min(v.phase, 2) - 1];
+      clearAt(w, e, sl.x, sl.y, SM.pods.clear);
     }
-    const ar = ED.Arena.field(w.room); if (!ar || !ar.carpet) return;
-    const c = ar.carpet;
-    for (const sl of e.slots) if (sl.pod && sl.pod.hp <= 0) { // a destroyed pod clears the carpet around itself
-      sl.pod = null; sl.dead = true;
-      clearAt(room, c, sl.x, sl.y, SM.clear * T);
-      w.emit({ t: 'podburst', x: Math.round(sl.x), y: Math.round(sl.y), r: SM.clear * T });
-    }
-    if (e.phase < 3) { // phases 1-2: the carpet spreads from her and from the live pods
-      if ((e.spT -= dt) <= 0) {
-        e.spT = SM.spread.t;
-        const srcs = [{ x: e.x, y: e.y, r: SM.spread.reach }];
-        for (const sl of e.slots) if (sl.pod) { sl.reach = Math.min(SM.spread.pod, sl.reach + 1); srcs.push({ x: sl.x, y: sl.y, r: sl.reach }); }
-        grow(room, c, srcs);
+    if (v.phase < 3) {
+      if ((v.spT -= dt) <= 0) { // one patch from her, one from every live pod
+        v.spT = SM.spread.t;
+        grow(w, e, 0, e.x, e.y, SM.spread.reach);
+        for (let i = 0; i < v.slots.length; i++) { const sl = v.slots[i]; if (sl.pod) grow(w, e, i + 1, sl.x, sl.y, SM.spread.pod); }
       }
-    } else if (e.paintAt === undefined || U.dist2(e.x, e.y, e.paintAt[0], e.paintAt[1]) > 64) { // phase 3: carpet where she walks
-      e.paintAt = [e.x, e.y];
-      const r = SM.paint, cx = Math.floor(e.x / T), cy = Math.floor(e.y / T);
-      for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) if (x > 0 && y > 0 && x < room.w - 1 && y < room.h - 1 && floorAt(room, y * room.w + x)) c[y * room.w + x] = 1;
+      if (v.podT > 0 && (v.podT -= dt) <= 0) { for (const sl of v.slots) growPod(w, e, sl); } // the first growth fills every slot
+      else if (v.podT <= 0) for (const sl of v.slots) if (!sl.pod && !sl.pending && (sl.regrow -= dt) <= 0) growPod(w, e, sl);
+    } else if (U.dist2(e.x, e.y, v.paint.x, v.paint.y) > SM.paint.step * SM.paint.step) { // phase 3: carpet where she walks
+      v.paint.x = e.x; v.paint.y = e.y;
+      addPatch(w, e, e.x, e.y, SM.paint.r, SM.paint.life);
     }
-    if ((e.cpT -= dt) <= 0) { // carpet damage
-      e.cpT = SM.tick;
-      for (const p of w.players.values()) if (w.alive(p) && c[idx(room, p.x, p.y)]) w.hurtPlayer(p, e.dmg * SM.dps * SM.tick, { hazard: true, x: p.x, y: p.y });
+    for (const p of w.living) if (onCarpet(v, p)) L.slowHero(p, SM.patch.slow, 0.15);
+    if ((v.cpT -= dt) <= 0) {
+      v.cpT += SM.patch.tick;
+      for (const p of w.living) if (onCarpet(v, p)) L.hazard(w, p, e.dmg * SM.patch.dps * SM.patch.tick, e);
     }
-    if (e.phase === 1 && (e.podT -= dt) <= 0) { // phase 1: pods regrow on their own up to SM.pods.n
-      e.podT = SM.pods.regrow;
-      const live = e.slots.filter(s => s.pod || s.pending).length, free = e.slots.filter(s => !s.pod && !s.pending);
-      const want = e.slots.some(s => s.pod || s.pending || s.dead) ? Math.min(1, SM.pods.n - live) : SM.pods.n; // the first growth fills every pod at once
-      for (let i = 0; i < want && free.length; i++) growPod(w, e, free.splice(w.rng.int(0, free.length - 1), 1)[0], SM.pods.spawn);
-    }
-    if (e.phase === 2 && (e.budT -= dt) <= 0) { // phase 2: buds drift to destroyed pods
-      e.budT = SM.buds.gap;
-      const aimed = new Set(e.buds.filter(b => b.hp > 0).map(b => b.slot));
-      const dead = e.slots.filter(s => s.dead && !s.pending && !aimed.has(s));
-      for (let i = 0; i < SM.buds.n && dead.length; i++) {
-        const sl = dead.splice(w.rng.int(0, dead.length - 1), 1)[0], a = Math.atan2(sl.y - e.y, sl.x - e.x);
-        w.addZone({ kind: 'spawn', x: e.x + Math.cos(a) * (e.r + 14), y: e.y + Math.sin(a) * (e.r + 14), r: 12, dur: SM.buds.spawn, type: 'sporebud', after: (en) => { en.dest = { x: sl.x, y: sl.y }; en.slot = sl; e.buds.push(en); } });
-      }
-    }
-    for (const b of e.buds) if (b.hp > 0 && U.dist2(b.x, b.y, b.slot.x, b.slot.y) < SM.buds.reach ** 2) { // a bud that reaches its pod regrows it
-      b.hp = 0;
-      if (!b.slot.pod && !b.slot.pending) { growPod(w, e, b.slot, SM.pods.spawn); w.emit({ t: 'regrow', x: Math.round(b.slot.x), y: Math.round(b.slot.y) }); }
-    }
-    if (e.buds.length > 8) e.buds = e.buds.filter(b => b.hp > 0);
   }
   // Rooted in phases 1-2 (turns to face the target); phase 3 walks after it.
   function idle(w, e, dt) {
-    e.pose = 'idle';
-    if (e.target) e.face = e.target.x > e.x ? 1 : -1;
-    if (e.phase < 3 || !e.target) return;
-    const d = Math.hypot(e.target.x - e.x, e.target.y - e.y);
-    if (d > e.r + 20) { const dir = w.pathDir(e, e.target.x, e.target.y); mv(w, e, dir[0], dir[1], e.spd * SM.chase * e.slow, dt); }
+    const t = e.tgt; if (!t) return;
+    e.face = t.x > e.x ? 1 : -1;
+    e.vx = e.vy = 0;
+    if (e.vars.phase < 3) return;
+    if (Math.hypot(t.x - e.x, t.y - e.y) > e.r + 24) w.steer(e, t.x, t.y, SM.chase, dt);
   }
-  function onPhase(w, e, ph) {
-    if (ph === 3) w.emit({ t: 'uproot', x: Math.round(e.x), y: Math.round(e.y) });
+  // Fight over: her pods wither.
+  function kill(w, e) {
+    const v = e.vars; if (!v || !v.slots) return true;
+    for (const sl of v.slots) if (sl.pod && !sl.pod.dead && sl.pod.id === sl.id) w.killFoe(sl.pod, null);
+    return true;
   }
+  function bar(w, e, b) { let n = 1; const v = e.vars; if (v && v.slots) for (const sl of v.slots) if (sl.pod && !sl.pod.dead && sl.pod.id === sl.id) n++; b.n = n; }
 
-  // Spore pods stand still and never touch; buds fly straight to their pod and never touch.
-  ED.AI.pod = (w, e) => { e.contactCd = 1; };
-  ED.AI.bud = (w, e, dt) => {
-    e.contactCd = 1;
-    if (!e.dest) return;
-    const dx = e.dest.x - e.x, dy = e.dest.y - e.y, d = Math.hypot(dx, dy);
-    if (d > 1) { const s = Math.min(d, e.spd * e.slow * dt); e.x += dx / d * s; e.y += dy / d * s; e.face = dx >= 0 ? 1 : -1; }
-  };
+  // Phase 3: she uproots (drawn taller: e.scale 1.15 tells clients she walks).
+  function onPhase(w, e, ph) { if (ph === 3) e.scale = 1.15; }
 
-  B.sporemother = L.runner({ burst, lash, slam }, { idle, tick, onPhase, volley: false });
+  B.spore = L.runner({ burst, lash, slam }, { idle, tick, kill, bar, onPhase, pause: [1.2, 0.9, 0.6] });
+  // Spore pods stand still; they never touch.
+  B.sporepod = (w, e) => { e.vx = e.vy = 0; };
+  B.SPORE.onCarpet = onCarpet;
 })(globalThis.ED || (globalThis.ED = {}));

@@ -1,121 +1,37 @@
-# Wickdeep — Agent Kanban
+# Wickdeep — Kanban (agents)
 
-## v7 contracts (user 2026-10-26, playtest 6; supersede v6 where they clash)
-- **Branches**: integration `feat/v7` (from `main` 42cb4a5), worktree `../game-v7`; streams A `feat/v7-paths` (`game-v7-a`), B `feat/v7-content` (`game-v7-b`), C `feat/v7-feel` (`game-v7-c`); briefs/reports `D:\codestuff\v7\`.
-- **Paths**: ids `general` Steel, `fire` Flame, `ice` Frost, `lightning` Storm; iterate `ED.PATHS`, never hard-code. Holy/shadow = Cleric/Necro class engines only. Max 2 paths; start offer = 4 gates; boon reward path `room.rewardPath`.
-- **Dash**: charges ≤ 2, no `dashcdr`, no path verb or relic on the dash.
-- **Relics**: hooks in `src/sim/relics.js` (`p.rh`, guarded call sites), element-neutral; curses `rar: 'curse'`. pick.js: A owns boon values, B the RELIC section.
-- **Empower**: every-Nth effects register in `ED.EMPOWER` (`src/data/empower.js`), tests mirror the sim with `n = atkCount + 1`.
-- **Status sound**: status damage hit events `k: 1` + `el`; path engines `k: 0, s: 1` + `el`.
-- **Versions**: `N.VERSION` 17, `CODE_VERSION` 10 (lore section), profile era 7 (news 4 = v7 part). Snapshots: `P[28]` empower, props `O[10..12]`, full `RP`.
-
-## v6 contracts (user 2026-10-25, playtest 5; supersede v4 contracts where they clash)
-- **Branches**: integration `feat/v6` (from `feat/punish` 8b36a1b), worktree `../game-v6`; workers on `feat/v6-<area>` (map, elements2, pyro, encounters, bosses-a, bosses-b, text, balance; `docs/v6-readme`), merged by the Advisor.
-- **Strata** 4, neutral: I Ossuary, II Glowmire, III Drowned Sanctum, IV Starless Abyss (finale). No weak/resist, no `elemAff`. Per-stratum arrays have 4 entries.
-- **Map**: STS layered DAG; I–III 15 rows, IV 6 rows (combat, combat|event, champion twins, rest|shop, champion colossus, rest); one entry door, one exit per edge, no backtracking. Node types start/combat/dark/elite/champion/shop/rest/treasure/event/boss. `W.startChampion(room)`.
-- **Elements**: one verb each (Fire Burn + hold flame cone · Ice freeze, skills Shatter · Lightning dash discharges · Poison weaken + clouds · Holy perfect dodge · Shadow backstab/decoy · General finisher). Keystone and evolution change a control. Ascended, duos, Mutations, Twists, Attunement and 12 open stat cards cut. Fork rank 2 boss II, rank 3 boss III; fork parity measured at III rank 2 / IV rank 3 (supersedes the v4 IV/VI bands).
-- **Burn**: one unified Burn, stacks, same per-hero value from every source; API `W.addBurn(e, amount, p)` (damage-based).
-- **Pyro**: Ember Bolt (cuts spell cooldowns), Fireball slot 2 (`skill3`, RMB/R; heroes without slot 2 cast skill 1), Nova Q, Meteor E; ~70% damage from spells.
-- **Trash**: fodder ≥ 3 hits at I; fodder deaths fire no on-death effects; fodder only with threat waves; late spawns are dangerous; room clears when the last threat dies. DoT ticks: sound, tint, summed numbers.
-- **Text**: plain wording, no flavour lines or titles.
-- **Main merged** (playstyle + Bellwarden, `main` 3da391b): the v6 map replaces the route lattice; kept: door consent (`P[26]` = `Dungeon.doorWant`: 1 + exit index), threat pips, `ED.Icons` glyphs, heal trim, Bellwarden, secrets, Wardrobe. Drowned Bell in the dark rooms of stratum III.
-- **Arenas**: one state `room.arena = {k}` in `src/sim/arena.js` (kinds field 4: Bone Warden walls + Sporemother carpet · tide 1 Drowned King · crown 2 Hollow King · champ 3 champions), one snapshot row `AR`, cleared on room change; client `src/client/arena.js`; one `Bosses.lib`. Fury only on IV.
-- **Bots**: every batch `--nice` (idle priority), at most half the cores, one batch at a time (user: full-priority batches make the PC unusable).
-- **Versions**: `N.VERSION` 15, `CODE_VERSION` 9 (layout of 8), profile era 6 (era < 6 / code < 9 remap six-strata boss bits and deepest). Hero row: `P[24]` bells, `P[26]` door want, `P[27]` Pyro Sparks.
-
-## v4 contracts (all advisors; change only by agreement)
-- **Branches**: integration `feat/v4` (game-f1 merges). Each advisor works in its own worktree `../game-<area>` on `feat/v4-<area>` cut from `feat/v4`, merges into it (merge only). Branches that touch `combat.js` are cut after the spatial grid is merged.
-- **Gate E1** (game-88: grid, bigger rooms, fodder, lantern → Dark doors, dash charges, crowd slow) lands before anyone tunes numbers; until then 6a and f1 build mechanics only.
-- **Fodder** `e.fodder = true`: no heart, gold or per-kill relic/boon drops; drops XP motes summing to the room XP budget (6a sets it). Kill hooks: chains and explosions trigger (once per foe per chain id); refunds, shields and permanent stacks never do. Each owner guards its own hooks (path boons 6a, class hooks f1).
-- **Dash**: `st.dashCharges = min(3, 1 + dashN)`, `st.dashCd = max(1.0, 1.5 × (1 − dashcdr))`, `CONST.DASH = {t: 0.15, speed: 480}`; untouchable for the whole dash. Sources: Light Step `dashN` +1/rank (max 2), Shadow Cloak `dashcdr` 1/3.
-- **Fork ranks**: `W.grantForkRank(p)` auto-grants rank 2 at boss II and rank 3 at boss IV with a reveal card; the boss reward is unchanged; forge never ranks route or fork cards. Rank 2 = a visible new behaviour, rank 3 = a transform (new form, big number). Applies to all four routes.
-- **Ascended**: rarity `a`, from stratum IV, a maxed boon's upgrade in its own multiplicative bucket; pinned to slot 1 when eligible.
-- **Power budget** (`tools/sheet.js`, packs configurable): hero DPS ÷ threat-foe HP rises 15–25% per stratum IV→VI; fork parity (`node tools/sheet.js --parity`, mid build, mean of the one-foe and pack-of-4 columns): at IV with rank 2 every non-Guard fork +31.5–38.5% and every Guard ≥ +28%; at VI with rank 3 every non-Guard fork +54–66% and every Guard ≥ +48% plus ≥ +25% effective health or ≥ 30% control (stun column: stuns, plus slows, blinds and taunts at their strength); transforms favour pack damage so bosses stay a check. **Boss time to kill** (`tools/bal.js` smart `--vet`, `--runs=144` on the smart cell, the "boss time to kill by class" line): every hero within ±25% of the six-hero median at bosses II and IV; levers: weapons and attack routes 6a, skill numbers f1.
-- **Difficulty v5** (user 2026-10-24; smart picks, `--vet`, skill 0.75): fresh random ≤ 1%; fresh smart report only; mid Hearth solo 20%; max Hearth solo 40%; max Pact 1–5 35 / 31 / 27 / 18 / 10% (Pacts 1–3 gentle, builds still being chosen; 4–5 steep); two, three, four heroes at max Pact 5 20% each (humans will do better). Every hero mid 10–30%, max 28–52%. Old Hearth rule retired. Smart picks must model synergies, so path design needs real synergies and traps.
-- **Ownership**: game-88 encounters (world.js THREAT/encounter/lantern, rooms.js waves, dungeon.js, ai.js, bosses.js, combat.js grid, game.js dash/crowd slow, hud/render/tiles/input for its features, net.js fodder row, bot movement in tools/sim.js, GAME-DESIGN §6–8). game-6a build and meta (boons.js, relics.js, meta.js, save.js, build.js, stats.js except `skillNums`, classboons attack and element routes, hero base stats and weapons in classes.js, world.js relic functions, rooms.js reward and shop tables, camp/ui upgrades pages, bot pick scoring, GAME-DESIGN §1–4 and §9). game-f1 skills, audio, tools, integration (classboons skill routes, `ED.CAST` and skill hooks in class-*.js, `St.skillNums`, cls-*.js skill fx, audio.js, fx.js sound hooks, tools/bal.js, tools/browse.js, sim CLI and stage start, GAME-DESIGN §5 skills and §11, docs). `ROUTE_KEYS`: one line per advisor. sheet.js: each models its own cards.
-- **Art**: branches edit only `tools/art-manifest.js` and `art-src/`; f1 regenerates `src/art/` once per integration (`node tools/art.js`, then `--check`). New effects prefer runtime `Pix.define` bakes.
-- **Versions**: `N.VERSION` 13, `CODE_VERSION` 8, profile era 5.
-
-## Playstyle contracts (v6, `feat/playstyle`)
-- **Files**: `src/data/mutations.js` (`ED.MUTATIONS`, ids `mut_<id>`, rar `m`, `mut` = parent) · `src/data/twists.js` (`ED.TWISTS`, rar `t`, `twist: true`, `cost`, `ED.TWIST_MAX` 2) · `src/sim/twist.js` (`ED.TWIST` hooks `hitMul`, `onAttack`, `onCast`, `pyreHit`, `cd`). Lines marked `// TWIST hook` are the Twist owner's.
-- **Evolutions**: geometry or timing only, never an extra input or an Nth-hit extra; `W.evoHit(p, e, a, src)` per landed hit or bell hurl / reel strike, `W.evoLine(p, x0, y0, x1, y1, src)` along an attack's path.
-- **One trigger per element**: Fire ground, Ice blocking + skill cash-in, Lightning skill casts, Poison cripple, Holy hit/stand still, Shadow kills + dash.
-- **Solids**: frozen foes (Glacier), pillars, Firebreak ground, Storm Anchors block foes and enemy shots only.
-- **Wire**: `N.ZK` + `cinder firebreak pillar anchor vigil`; `N.CAPS` + `detonate 16, tether 8, rebuke 6, reapchain 8, shatter 8, hurl 8, reel 8`; E flag bits 24 Quarry, 25 dose, 26 `affixOff`, 27 `hunted`; `P[25]` `metroN`, `P[26]` door want (`Dungeon.doorWant`: 1 + exit index); `dashRefund {to, n}` msg (dash charges are client-side).
-- **Floors**: `room.threat` from floor gen (no runtime door state; the lattice's `room.layer` / `room.sealed` are gone with the v6 map); reward `twist`; offer src `twist`; `ED.LATE` (FLAT_S 3, MUT_S 4, FILL_S 4, TWIST_N 2).
-- **Capacitor × Peal**: a Peal detonation applies max(Resonance `p.pealResLast`, CAP_MUL), never the product.
-- **Testing**: agents never open a visible browser window (headless only, one reused browser); the user does the vsync fps check. Bot checks ≤ 3 min (`tools/bal.js`), one final confirm ≤ 15 min.
+Rules/numbers: GAME-DESIGN.md. Code contract: ARCHITECTURE.md (change it with the code). Legacy: tag `legacy-wickdeep`.
 
 ## Todo
-- Next (v7, HANDOFF-2026-10-26): ① difficulty overshoot: `--full` at `2dbb4bc` 2/11, every banded cell low (mid 9.1, max 17.1, P5 4.4, duo 2.6, trio 7.1); boss TTK near target (non-Flame 41–47 s); candidate boss HP halfway v6→now; TTK and mid bands conflict (ask user) · ② Flame mid 1% by main path (Steel 22, Storm 16, Frost 9): suspect sim/sheet gap (bursts only from non-fodder, hordes mostly fodder); instrumented single runs first; `ED.CONST.PYRE_R` set twice (elements.js 40, class-pyro.js 36 wins) · ③ Ranger 2%, Cleric 4% mid · ④ Pact 3 costs nothing · ⑤ Bulwark bot taps (0.07 blocks/bash) · ⑥ champions after ×1.8 HP unmeasured (Colossus: Ranger weak vs parts, statuses not drawn on parts) · ⑦ late-join empty `s.claimed`; bell attacks skip relic `attack` hooks; Compass reveals spend off-path events; no pad map button; `dashTrail` stat name; dead `dash` bucket in `tools/sim.js`; `src/data/enemies.js` mixed line endings.
-- Next (v6 leftovers): Hollow King wipes, twins (re-measure on v7) · full-Hearth Ranger dies in stratum I on some seeds · dead duo code in `tools/sim.js`, unused `lava`/`ice` hazard pools in `tiles.js` · Tab map panel uses half its width.
-- Next (playstyle, HANDOFF-2026-10-25c): Pact ladder on route floors (P1 40.8% ≥ max, P4 12.2% < 14) · party cells (duo 27.6% > 25, trio 11.2% < 15; party foe HP / wave formula) · Bellwarden hurl share (hurl strikes 6–8% of damage; Peal, slam, procs carry it) · other heroes' forks: ≤ 8 pure "+X%" rank-3 forms get a positional or timing hook (user scope round 2) · era bump + news for returning players (ask user) · audio.js stale bell comments and dead `bstrike.h` branch · elite-room HP loss 4.4% for the Bellwarden (< 7.5% floor).
-- Next (priority order; HANDOFF-2026-10-25): Pact 3 Champions costs nothing (extra elites pay their own way) · fresh smart 5% (new players) · path payoff · boss melee windows, then take back melee EHP · deterministic Shade evasion · Armory variant art (tint only) · sheet model gaps from the audits (Bone Knights cleave, Death Blossom, Throw return, Volley pack, Burn double count, Contagion one-foe term, Siege reach) · in-class weapon spreads · bot co-op check.
-- Carried over: dead `minionBurst` guard (`class-necro.js`, `combat.js`) · two Necromancers with Soul Command show no command stream · deeds are a 31-bit mask (a 32nd deed needs new profile storage; secrets have their own mask) · aim banner for party clients · orphaned `simpool.js --worker` processes after a killed parent · Cleric Sacred Lantern ally shield gets its own allowance · optional key that opens the sheet on Map · DawnLike "Platino" sprite hidden somewhere.
+- balance: untuned, numbers from GAME-DESIGN + user playtest only (no bot batches).
+- net: real PeerJS over a real network untested (only BroadcastChannel + fake transport).
+- art: per-stage foe recolours; Q/E skill icons; twins (skelknight), weaver (riftcaller), wickeater (horror) borrow foe art.
+- ui (low): evolution popup covers the boss name banner when both fire together.
+- mode: Waves mode (round + shop) on the same core; rules not written yet.
+- audio: no per-attack boss cues.
+- co-op: no visual substitute for hit-stop; host-only motion shows ~0.1 s late on clients.
 
-## In-progress
-- v7 PR to main: waits for the user's playtest of `feat/v7` (`../game-v7`); user chose ship as is.
+## In progress
 
 ## Done
-- v7 on `feat/v7` (2026-10-26, streams A/B/C + polish): 4 paths, Steel nerf, deep + cross-path cards, dash cap 2, Bulwark, skill trims, 27 fork retunes (A) · 83 relics + hook engine, relic/boss-relic picks, 36 events, 5 minigames, 26 lore pages, room patches, stratum I gold ×2, boss beat, offer lock, `CODE_VERSION` 10 (B) · score.js tracks, layered hits, M map, portal blackout, `ED.EMPOWER`, dash pips, Mire Worm, Clockwork Colossus (C) · 9 cues, door label columns · tuning `BURN_BIG` 2, boss HP ×1.26/×1.9/×2.05/×1.8, champions ×1.8, `ELITE_EPIC` 0.25, `N.VERSION` 17 · era 7 v7 news.
-- v6 merged to `main` (PR #9, 42cb4a5).
-- v6 on `feat/v6` (2026-10-25): STS map + 4 neutral strata (W1), encounters/fodder (W4), bosses Bone Warden, Sporemother (W5a), Drowned King, Hollow King, champions (W5b), Pyro caster (W3), plain text (W6), element verbs + unified Burn + cuts (W2), README/news/era 6 + save remap (W8), balance (W7): hero HP Knight 32 / Pyro 31 / Cleric 27, `FOE_DMG` 2.15, boss HP Bone Warden 9200 / Sporemother 12600 / Hollow King 66000, 22 fork numbers, pick.js `PATH_CAL`; `--full` at `ffeea76` 8/11 (mid 20.5, max 38.7, P5 11.4).
-- Playstyle balance (2026-10-25): bot keeps hurl range (`BELL_STAND` 105 px), Bellwarden HP 44 → 36, Peal 27 + 2.7P, Thunderclap clap +50% / Peal +20%, Wrecking Ball shock 10%; `--full` at `917260b` 7/11 (rand 0.8, mid 19.0, max 39.7, P5 11.7 pass; P1 40.8, P4 12.2, duo 27.6, trio 11.2 out of band); every hero mid 13–29%, max 31–55%.
-- Bellwarden rework (W3 `feat/ps-bell`, merged into `feat/playstyle` at `e0df402`; W6 integration): bell states Hand / Fly / Anchor / Reel, wind (hold, ×0.7 move, winding strikes ≤ ×0.6, no attack), hurl (release at wind ≥ 0.5, an attack), reel (tap, drags foes), juggle, snap home (room, boss phase, downed via the class `down` hook from world.js), Resonance → Peal; Anchor Leap (id `heave`); 12 route cards rewritten; `ED.Bell.cycle` loop model, `BELL_EFF` 0.95 / 1.15; client prediction with state snaps (`bp.rss`); browse `--scen=bell` (wind, hurl, anchor, reel, leap, Peal, net); pick.js bell folds.
-- Playstyle v6 on `feat/playstyle` (2026-10-25, 7 workers; merged W4 elements → W5 late → W7 FX → W1 floors → W2 map, W6 integration): route lattice floors (layer = gx + gy, sealed back doors, ≥ 3 routes, threat pips), co-op door consent, healing trim (`HEART_KILL` 2%, no clear hearts, Forager = +8% per heal source), `ROOM_XP` / `FODDER_Q` / `WAVES` 3 rebudget · one `ED.Icons.room` glyph table, labelled map, door previews · element paths at 12 ranks with Attunement commons, 12 cards retired, Thunderhead → Capacitor, new evolutions, 15 duos audited, 28 Mutations · late pool filter, Mutation pin and late fill, 4 Twists · FX for zones, foe markers, events, Charged / Beat chips · pick.js priors and folds for every new card, bot Twist / Capacitor / dashRefund policy, Purse share line · `N.VERSION` 13.
-- Bellwarden, secrets, Wardrobe on `feat/bellwarden` (2026-10-25): hero `bell` (chained-bell physics `class-bell.js`, Haul, Heave, Peal, 6 bell weapons, 12 route cards, bot play, sheet uptime + `BELL_EFF`), client `cls-bell.js` with own-bell prediction on the shared tick · `ED.SECRETS` 15 (sim triggers `p.sec`, `run.gold777`, `run.oneFace`; Drowned Bell prop stratum V unlock; Platino critter) · `ED.COSMETICS` + `cosmetics.js` (runtime skin swaps, co-op `N.cleanWear`) · save `CODE_VERSION` 8, `N.VERSION` 12 · confirm `2b5263a` 10/11 (P2 24%).
-- v5 difficulty on `feat/punish` (2026-10-25): hero HP Knight 40 · Ranger 21 · Pyro 21 · Shade 37 · Cleric 40 · Necro 14, armor carries class survival (Knight 58, Shade 28, Cleric 25) · `W.FOE_DMG` 1.5 · Hearth/mastery steps larger (Vitality +2, Might +3%, Bulwark +3, mastery 9 +8% dmg, 10 +4 HP) · Pacts as data (`ED.pactMul`) · party foe HP `1+0.45n+0.1n(n−1)` · bot parties rotate partners (`sim.partyOf`) · bal.js v5 cells · era 5 / code 7 news for v4.1 players.
-- v4.1 on `feat/v4-1` (2026-10-24): melee swing from the hand (two-ended, lowered idle) · hero health ÷4 (`HP_K` 4), threat I–III damage 1.0, bosses I–III 2.4 · 18 Armory weapon variants (`combo`, `ahead`, `pull`, `ring`, `beam`, `lob`, `ret`, `pool`, `trail`) · "Deep has changed" news 3 for era-3 profiles, profile era 4, `CODE_VERSION` 6 · resisted element ÷1.5 · UI pixel overhaul merged.
-- UI pixel overhaul on `feat/ui-pixel` (2026-10-24, game-ui; merged into `feat/v4-1`): embedded pixel fonts (no Google Fonts), `ED.PixUI` integer grid + 9-slice frames (`pixui.js`, `uiart.js`, `screenart.js`, `cardart.js`), 16×16 pixel icons, 13 card identities + pick animation (`ED.PickFx` cues and hero bursts), pixel menus/Hearth plaques/Armory racks/results banner, pixel HUD (glyph-mask text, segmented health, shield plate), pixel Tab sheet; browse scenarios `sheet`, `screens`, `cards`, `picks`.
-- v4 merged to `main` (2026-10-23): Phase 0–3 and the retune: bal.js, `--from`, `--vet`, browse.js · grid, rooms, hordes, fodder, dark rooms, dash charges, crowd slow, lead aim, volleys, breakables, boss fury IV–VI · Ascended, fork ranks, attack/element/skill transforms for all six heroes, Codex removed, Armory shell, refunds, save v5 · adaptive score, hit/kill/skill SFX, fury cue · all 48 forks in the parity bands · boss TTK band · IV–VI calibration (fury as the knowledge check) · Second Wind outside bosses, Purse card · melee hero EHP, Shadowstep grace.
-- v3 merged to `main` (PR #2): art, paths, class routes, aim, Tab sheet, no life steal, save v4, Firefox perf, balance sign-off at `cd1074d`.
-- v2 (live on main): paths, statuses, lantern rooms, UI, juice, perf, bot balance; see HANDOFF-2026-10-21.
-
-## Decisions (user)
-- 2026-10-20: evolution by affinity; fast trash; Q/E + rebinding; bold dark-fantasy UI, Hades-like readability. (Lantern rules of this date are superseded on 2026-10-22.)
-- 2026-10-21: merge v2 to main without playtest 2.
-- 2026-10-22 (v3): embedded pixel art, Firefox speed, no auto-aim, Tab sheet, class routes, six elements + General, no life steal, Knight Shield Throw.
-- 2026-10-22 (playtest 3, all recommended options): lantern meter, room costs, Gloom and flare removed, 2 opt-in Dark doors per floor · ARPG hordes (about 40 kills per room at I to 120 at VI, ≤ 120 live) · rooms about 2× area with a scrolling camera, 9–10 rooms per floor, a win in 30–40 min · dash charges · crowds slow the hero (floor ×0.5) · fodder touch damage ≤ 3% max HP, untelegraphed · late power from Ascended boons, fork transforms (rank 2 and 3, auto-granted) and skill transforms, per hero and fork · about 32 boon picks per run · chains and explosions trigger on fodder, refunds, shields and stacks do not · Codex removed, non-element relics in the pool from the start, element relics become path boons, embers refunded · per-hero Armory of sidegrade unlocks inside Upgrades · free refunds and Reset all · small Hearth stats stay · dark-fantasy synth music per stratum with intensity layers and a boss theme · fodder shows only crits and summed numbers · breakable props · solo-first tuning, co-op bot-checked · mid playtest with Ranger and Knight complete · headless testing only.
-- 2026-10-23: small Hearth (full Hearth adds at most half of what smart picks add; bal.js bands: fresh random <= 1%, fresh smart 10-20%, mid 12-24%, max 15-27%, pact 5 5-15%, every cell with --vet) · boss fury (soft enrage, visible on the boss bar) on the bosses of strata IV-VI only · v4 to main by 12:06 for an office playtest.
-- 2026-10-23 (playtest 4): Armory = weapon variants (one per weapon, same power, another shape, embers) · hero health ÷4 with harder strata I–III · 2026-10-24: bosses I–III ×1.5 damage · Hearth health stays flat +1 (legibility over the Hearth rule) · Hearth gap accepted for v4.1 · resist ÷1.5 kept.
-- 2026-10-23 (UI): full pixel UI on an integer grid; titles Pixel Operator Bold (user, 2026-10-24: blackletter unreadable), body Pixel Operator (CC0), embedded, no Google Fonts; 13 card identities (6 elements, General, route, duo, Ascended, relic, Purse, Hearth) by frame, idle motion, pick animation, cue; pick feedback = card + hero burst seen by the party (existing boon/relic events, no snapshot change).
-
-- 2026-10-25: a hard-to-unlock seventh hero with a different playstyle (Bellwarden), hidden secrets that reward cosmetics, per-hero cosmetics gated by mastery + embers or secrets; README never reveals the unlock or the secret list.
-- 2026-10-25 (playstyle, all recommended): route map with longer rooms (win 30–40 min, ~32 picks) · co-op doors need every living hero in the same door · Bellwarden whirl guard removed · "mobs easy": trim hearts only, re-read after playtest · scope plan A–E + evolutions + Bellwarden cards now, other heroes' forks next round · north-star line "the route map makes every room a choice".
+- Foundation: core sim, solo playable.
+- 15 lanes merged; co-op runs start from the lobby UI.
+- Fix round 2026-10-28: facing aim cone + weapon kill callbacks; stronger evolutions (stormcrown, twinmoons, choir, barrage); density floor; stage 3 bosses weaver + wickeater; spawn-once zones (NET_VERSION 4); hit-flash throttle, zone fade + Canvas2D zone LOD, hero markers, co-op slot palettes; phase banner number. Density floor refill (0.1 × deficit per tick, max 40). Canvas2D render gate 8 ms (WebGL 4 ms).
 
 ## Known traps
-- **Pixel text**: DOM text is crisp only at font-size 16n device px and (Chromium/Windows) a .5 device-px origin (`PixUI.bias`, `PixUI.snap`, `data-px-snap`); canvas `fillText` is never crisp there, so HUD/aim text goes through `ED.HUD.pixText` (1-bit glyph masks). Never use rem font sizes; lay out in `--p`/device-px multiples.
-- **UI art**: frames are ASCII masks baked at boot (`PixUI.frame`); fonts are generated into `src/art/fonts.css` by `tools/art.js` (`--check` covers it).
-- See CLAUDE.md "Known default traps".
-- Bot results are seeded: the same simpool command prints identical numbers (also across `--jobs`).
-- Bots under-model a human: the v3 smart bot never took Split Shot (scored below Vigor), so v3 §10 rows measured a crippled projectile build.
-- Working tree files are CRLF (autocrlf=true): edit with Edit/Write, not `sed -i`; check with `git ls-files --eol`.
-- Perf: measure canvas op counts (deterministic) plus interleaved A/B timing; background bot batches add ±1 ms noise.
-- Class cards: a shield card is bounded by the class window (3% per 10 s); card text must not promise more.
-- `Atlas.anim(id)` caches a miss once the art pages have decoded; `Pix.define` drops the cached record of the id it registers (`Atlas.forget`).
-- `simpool.js` runs at normal priority; `--nice` (idle priority) crawls on an unattended Windows machine.
-- `ED.ClassFx.shot[kind]` returns true to replace the projectile body; false or nothing decorates it.
-- Bot cost: small batches, one final confirm (user hates long bot runs).
-- **Retired cards** (`b.retired`): defined so saves and MOVED_RELICS keep their ids, never offered, never ranked by forge or late fill; pick.js POOL_OF and browse.js hands skip them. Do not delete an id; Thunderhead is the one deleted card.
-- **Map floors**: `room.doors` holds exits only (`n0`, `n1`, ...); the entry `s` is drawn shut and never opens; bots and browse smoke walk exits only. Door consent counts living = not downed and not dead (world.js `checkDoors`, render.js `R.doorWant`).
-- **Bloodprice** gap (0.25 s) is client-side like every cooldown; the host does not enforce it.
-- **Hunted** spawns its champion by swapping `World.AFFIX2` around `makeElite` (one affix).
-- **pick.js** values the playstyle cards with guessed coefficients (marked in the file); re-read them against bot runs before trusting a pick change.
-- **Bells**: hand bells live in the hero frame (wire x, y about `p.bellPx` / `p.bellPy`), Fly / Anchor / Reel bells in the world frame (never carried). `P[24]` = `N.BELL_HEAD` 6 head fields + `N.BELL_N` 5 per bell (x, y, vx, vy, state). The client stub world `BELL_W` has `pred`: a predicted hurl spends no attack count, crit stack or Twist.
-- **Metronome** does not count twin-every-2nd hits, waves, rings or evolution strikes; Pacifist's Pyre zeroes twin, spectral and ring hits.
+- Sim/data/heroes/weapons/save run in Node: no DOM, no Math.random/Date.now; use w.rng.
+- Script order twice: index.html and tools/sim.js FILES.
+- Pooled entities are reused under new ids: holders keep object + id and compare.
+- w.target facing/around/densest return the shared scratch w.pt: copy before the next call.
+- Foe telegraphs: team 1 warn zones, dur ≥ 0.6 s (forced).
+- 1 art px = 1 world px (Atlas K = 1); view 640×360 integer-scaled.
+- Weapon def.icon is forced to icon.w.<id> (cards / HUD); def.held keeps the in-hand sprite.
+- Wire change (snapshot, input, look / weapon registration order) bumps ED.NET_VERSION.
+- Zones are spawn-once per client (cc.zc): every encoded snapshot must reach that client's Mirror.
+- Boss draw hooks read ED.Actors.hitFlash(e), not e.flash; headless checks stub ED.Actors.
+- Kill effects tied to a weapon go in impl.kill (any holder), not ED.HOOK[cls].kill.
+- Facing weapons aim with w.facingAim / w.coneFoe (ED.FACING_CONE).
 
 ## Logs
-- 2026-10-20: rework on `feat/wickdeep-rework`; W1–W7 + P2-A/B.
-- 2026-10-21: F1, F2 (pacing, sustain, lantern), UI, juice, perf, balance merged; v2 PR to main; handoff HANDOFF-2026-10-21.md.
-- 2026-10-22: v3 overhaul merged to main (PR #2); handoff HANDOFF-2026-10-22.md.
-- 2026-10-22: playtest 3 triage by three advisors (f1, 6a, 88); v4 on `feat/v4`.
-- 2026-10-23: v4 retune and release to main under a 3-hour deadline; handoff HANDOFF-2026-10-23.md.
-- 2026-10-24: UI pixel overhaul (game-ui) on `feat/ui-pixel`: 3 phase-1 + 4 phase-2 + 2 polish workers.
-- 2026-10-24: v4.1 (game-4a): swing, health ÷4, Armory variants, boss I–III damage, UI merge, full confirm `bba6113`; handoff HANDOFF-2026-10-24.md.
-- 2026-10-25: v5 difficulty contract on `feat/punish` (one worker, 4 fix rounds); handoff HANDOFF-2026-10-25.md.
-- 2026-10-25: Bellwarden, secrets, Wardrobe on `feat/bellwarden` (6 workers, 2 phases + fix rounds); handoff HANDOFF-2026-10-25b.md.
-- 2026-10-25: playstyle v6 on `feat/playstyle`: plan v3 (A–E), W1–W5, W7 merged, W6 integration (pick.js, bots, docs, `N.VERSION` 13); Bellwarden rework (W3) and the balance phase pending.
-- 2026-10-25: Bellwarden rework (W3) merged into `feat/playstyle`; W6 Bell integration (docs, browse bell scenario, `down` hook, pick.js).
-- 2026-10-25: playstyle balance: Bellwarden bot and numbers; one `--full` at `917260b` (7/11); handoff HANDOFF-2026-10-25c.md.
-- 2026-10-25: v6 (playtest 5) on `feat/v6`: main merged in, W1–W8 merged, balance `--full` 8/11; handoff HANDOFF-2026-10-25d.md.
-- 2026-10-26: v7 (playtest 6) on `feat/v7`: streams A paths, B content, C feel merged; `--full` at `9e6a42e` 7/11 (mid 24.7, max 38.2, P5 14.8; Flame 2%) → tuning → `--full` at `2dbb4bc` 2/11 (mid 9.1, max 17.1, P5 4.4; Flame 1%); shipped for playtest; handoff HANDOFF-2026-10-26.md.
+- 2026-10-27 foundation committed on feat/survivors.
+- 2026-10-28 all lanes merged; integration fixes; fix round committed (6 commits); all Node checks, art --check, browse smoke/shots/coop/crowd900 (GPU + software), late gates GPU pass; late gates software fail.

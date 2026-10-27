@@ -1,1239 +1,152 @@
-// Usage: node tools/check-sim.js
-// Headless regression checks of sim review fixes: crit-stack grants never lower the count, a boss kill purges hostile shots and pools whichever loop lands it,
-// freezeEnemy (elite factor), a departed hero leaves no thrown shield, fork and crit card text follows the hero's weapon, the fodder horde (quota, drops, health, damage cap, xp budget, crowd slow, exposure, pack spots, live cap) and the stratum behaviour (lead aim, ground speed, mixed rosters, two-affix elites).
-// Prints failures and exits 1 when any check fails; -v prints one line per played room.
-const { ED, runBot } = require('./sim.js');
-let n = 0, fails = 0;
-const ok = (c, msg) => { n++; if (!c) { fails++; console.log('FAIL ' + msg); } };
-const near = (a, b, tol, msg) => ok(Math.abs(a - b) <= tol, `${msg}: got ${a}, want ${b}`);
-const META = () => ({ up: ED.UPGRADES.map(() => 0), mastery: 1, relics: [] });
-const NS = ED.BIOMES.length; // strata
-function stage(cls, boons, seed, wi) {
-  const w = new ED.World({ seed: seed || 7, pact: 0, players: [{ pid: 'p0', name: 'T', slot: 0, cls, weapon: ED.CLASSES[cls].weapons[wi || 0], meta: META() }] });
-  w.startRun();
-  const p = w.players.get('p0');
-  for (const id in (boons || {})) p.boons[id] = boons[id];
-  w.recalc(p, true); p.offers.length = 0; p.picks = 0; p.offer = null;
-  w.enemies.length = 0; w.enc = null; w.locked = false; w.zones.length = 0; w.projs.length = 0;
-  return { w, p };
-}
-const foe = (w, x, y, o) => { const e = w.spawnEnemy('skeleton', x, y, o); e.spd = 0; e.cd = 9999; e.maxHp = e.hp = 1e6; return e; };
+// Headless sim regression check (exit 1 on failure). Usage: node tools/check-sim.js [--quick] (quick: 5-minute solo / 4-hero runs, the victory run on stage 1 only).
+// 1. Solo knight, 15:00 with scripted inputs (circle walk, Q / E / dash on timers, first card picked), god cheat: reaches the final boss spawn; run twice -> same digest.
+// 2. 4 heroes (knight, ranger, pyro, cleric), same script, god cheat: no exceptions, reaches the final boss; run twice -> same digest.
+// 3. Victory per stage (knight / ranger / pyro on stages 1 / 2 / 3): a cheat build (signature at max level, every general weapon at max level while slots last, paired passives
+//    at max level) with { god, might: 40 }, walking to chests: 3 bosses met, the stage's final boss dies (state 'won', one 'end' event, summary), every evolution-ready weapon
+//    evolves; the stage 3 run twice -> same digest.
+// 4. Mortal solo knight run until it ends (no cheats): state 'lost' with one 'end' event, or survives.
+// 5. Every hero x every stage, 75 s, god cheat: no exceptions, Q and E cast, the signature weapon deals damage, foes die; combined digest printed.
+// 6. Invariants on every run: hit events <= 200 per tick, foe telegraphs >= 0.6 s, alive cap respected.
+// 7. Save: code round trip, applyRun unlocks and gold.
+'use strict';
+const { load } = require('./sim.js');
+const ED = load(), U = ED.U, C = ED.CONST;
+const QUICK = process.argv.includes('--quick'), LEN = QUICK ? 300 : C.RUN_LEN;
+let fails = 0;
+const ok = (cond, msg) => { if (!cond) { fails++; console.log('FAIL ' + msg); } else console.log('ok   ' + msg); };
 
-// ---- grantCrits: an 'add' source never lowers a count that a 'set' source raised past its own cap ----
-{
-  const { w, p } = stage('shade', { s_s1: 1, s_atk: 1, s_atk_s: 1 });
-  ok(p.stats.critK > 1.5, `Swift Shade critK ${p.stats.critK}`);
-  w.grantCrits(p, 3 + p.stats.stepStack * 3, 3 + p.stats.stackMax, 'set');
-  const before = p.critStacks;
-  const add = () => w.grantCrits(p, 1, 3, 'add'); // an 'add' source: 1 crit (x critK) up to 3 (x critK)
-  add();
-  ok(before > Math.round(3 * p.stats.critK) && p.critStacks === before, `an add grant keeps ${before} stacks (got ${p.critStacks})`);
-  p.critStacks = 0; add();
-  ok(p.critStacks === Math.round(p.stats.critK), `an add grant adds ${Math.round(p.stats.critK)} from empty (got ${p.critStacks})`);
-  p.critStacks = Math.round(3 * p.stats.critK) - 1; add();
-  ok(p.critStacks === Math.round(3 * p.stats.critK), `an add grant stops at its cap (got ${p.critStacks})`);
-  const k = stage('knight', { k_atk: 1, k_atk_s: 1 });
-  k.p.critStacks = 9; k.w.grantCrits(k.p, 2, 5, 'add');
-  ok(k.p.critStacks === 9, `Riposte keeps 9 stacks (got ${k.p.critStacks})`);
-  k.p.critStacks = 2; k.w.grantCrits(k.p, 2, 5, 'set');
-  ok(k.p.critStacks === Math.min(Math.round(5 * k.p.stats.critK), Math.max(2, Math.round(2 * k.p.stats.critK))), 'set raises to its grant');
-}
-
-// ---- boss kill purges hostile shots and pools, also when the killing blow lands inside the loop that owns the list ----
-for (const mode of ['proj', 'zone', 'tick']) {
-  const { w, p } = stage('ranger', {});
-  const b = w.spawnEnemy('bonewarden', p.x + 150, p.y); b.spawnT = 0; b.hp = 1; b.spd = 0; b.cd = 9999;
-  w.boss = b; w.locked = true;
-  w.spawnProj({ team: 1, kind: 'bolt', x: p.x + 60, y: p.y, a: Math.PI / 2, speed: 1, dmg: 30, life: 4, src: b });
-  w.addZone({ kind: 'poison', x: p.x, y: p.y, r: 60, dur: 5, dps: 20, team: 1 });
-  if (mode === 'proj') w.spawnProj({ team: 0, kind: 'arrow', x: b.x, y: b.y, a: 0, speed: 10, dmg: 50, life: 1, owner: p.pid });
-  else if (mode === 'zone') w.addZone({ kind: 'fire', x: b.x, y: b.y, r: 60, dur: 2, dps: 600, team: 0, owner: p.pid });
-  else w.hitEnemy(b, 100, { p, kind: 'weapon' });
-  for (let i = 0; i < 30 && b.hp > 0; i++) { if (mode === 'proj') w.updateProjectiles(1 / 60); else if (mode === 'zone') w.updateZones(1 / 60); }
-  ok(b.hp <= 0 && !w.boss, `${mode}: boss dead`);
-  const hp0 = p.hp; w.update(1 / 60); w.update(1 / 60);
-  ok(!w.projs.some(q => q.team === 1) && !w.zones.some(z => z.team === 1), `${mode}: no hostile shot or pool left (projs ${w.projs.filter(q => q.team === 1).length}, zones ${w.zones.filter(z => z.team === 1).length})`);
-  ok(p.hp >= hp0, `${mode}: the hero is not hurt after bossDown`);
-}
-{ // a shot or pool spawned by the killing blow's own loop survives the purge (the arrays are not reassigned mid-loop)
-  const { w, p } = stage('ranger', {});
-  const b = w.spawnEnemy('bonewarden', p.x + 150, p.y); b.spawnT = 0; b.hp = 1; b.spd = 0; b.cd = 9999;
-  w.boss = b; w.locked = true;
-  w.spawnProj({ team: 0, kind: 'arrow', x: b.x, y: b.y, a: 0, speed: 10, dmg: 50, life: 1, owner: p.pid });
-  w.spawnProj({ team: 0, kind: 'arrow', x: p.x, y: p.y, a: 0, speed: 10, dmg: 50, life: 3, owner: p.pid });
-  w.updateProjectiles(1 / 60);
-  ok(w.projs.filter(q => q.team === 0).length === 1, `a hero shot after the killing one survives (${w.projs.length})`);
-}
-
-// ---- freezeEnemy: elite factor, freeze resistance, freeze event ----
-{
-  const { w, p } = stage('knight', {});
-  const a = foe(w, p.x + 50, p.y), el = foe(w, p.x - 50, p.y); el.elite = 'swift';
-  w.fx.length = 0;
-  for (const e of [a, el]) w.freezeEnemy(e, p);
-  near(a.frozen, 1.6, 1e-9, 'a freeze holds a normal foe 1.6 s'); near(el.frozen, 1.2, 1e-9, 'an elite 0.9x0.75 of 1.6 s');
-  ok(a.freezeRes === 1 && w.fx.some(ev => ev.t === 'freeze'), 'a freeze counts freeze resistance and emits the freeze event');
-}
-
-// ---- a departed Knight lowers its raised Bulwark ----
-{
-  const w = new ED.World({ seed: 7, pact: 0, players: [{ pid: 'p0', name: 'K', slot: 0, cls: 'knight', weapon: ED.CLASSES.knight.weapons[0], meta: META() }, { pid: 'p1', name: 'R', slot: 1, cls: 'ranger', weapon: ED.CLASSES.ranger.weapons[0], meta: META() }] });
-  w.startRun(); w.enemies.length = 0; w.enc = null; w.projs.length = 0; w.zones.length = 0;
-  const k = w.players.get('p0'); w.playerSkill(k, 0, {}, 1);
-  ok(k.bulwarkOn, 'the Knight raised its shield');
-  w.removePlayer('p0');
-  w.update(1 / 60);
-  ok(!k.bulwarkOn && !w.fx.some(f => f.t === 'bash'), 'a departed Knight lowers it with no bash');
-}
-
-// ---- card text follows the hero's weapon ----
-{
-  const forks = ED.BOON_IDS.filter(id => ED.BOONS[id].weapon && ED.BOONS[id].weapon.kind);
-  ok(forks.length === 2 * ED.CLASS_IDS.length, `2 fork cards per hero (${forks.length})`);
-  for (const id of forks) {
-    const b = ED.BOONS[id], cls = b.cls;
-    for (const wid of ED.CLASSES[cls].weapons) {
-      const bw = ED.WEAPONS[wid], fw = ED.forkWeapon(wid, id), st = { weaponId: wid, critK: 1 };
-      const m = /×([\d.]+) (?:attack time|lockout), ×([\d.]+) damage per (?:hit|strike)/.exec(ED.cardParts(id, 1, st).text); // a bell: lockout, damage per strike
-      ok(!!m, `${id} on ${wid} shows both factors`);
-      if (m) { near(+m[1], fw.rate / bw.rate, 0.0006, `${id} on ${wid} rate factor`); near(+m[2], fw.dmg / bw.dmg, 0.0006, `${id} on ${wid} damage factor`); }
-      ok(!/[{}\[\]]/.test(ED.cardParts(id, 3, st).text + ED.cardParts(id, 3, st).rider), `${id} on ${wid} has no raw token`);
-    }
-    const nom = /×([\d.]+) (?:attack time|lockout), ×([\d.]+) damage per (?:hit|strike)/.exec(ED.cardParts(id, 1).text), hv = b.weapon.kind === 'heavy';
-    const want = cls === 'bell' ? (hv ? [1.2, 1.32] : [0.6, 0.66]) : hv ? [1.8, 1.98] : [0.55, 0.605];
-    ok(nom && +nom[1] === want[0] && +nom[2] === want[1], `${id} without a hero shows the nominal factors`);
+// Scripted player: circles, aims 80 px ahead, Q every 7 s, E every 11 s, dash every 5 s (phase per slot), picks the first card. seek: walks to the nearest chest within 700 px first.
+function drive(w, p, tick, seek) {
+  const t = tick / 60, a = t * 0.7 + p.slot * 1.6;
+  let mx = Math.cos(a), my = Math.sin(a);
+  if (seek) {
+    let bd = 700 * 700, ch = null;
+    for (const g of w.pickups) if (!g.dead && g.k === 'chest') { const d = U.dist2(p.x, p.y, g.x, g.y); if (d < bd) { bd = d; ch = g; } }
+    if (ch) { const d = Math.sqrt(bd) || 1; mx = (ch.x - p.x) / d; my = (ch.y - p.y) / d; }
   }
-  ok(/×1\.733 attack time, ×1\.907 damage per hit/.test(ED.cardParts('p_atk_h', 1, { weaponId: 'inferno' }).text), 'Tome of Ruin shows the capped heavy factors');
-  ok(/×0\.8 attack time, ×0\.88 damage per hit/.test(ED.cardParts('p_atk_s', 1, { weaponId: 'emberwand' }).text), 'Flicker Wand shows the floored swift factors');
-  ok(/×0\.8 attack time/.test(ED.cardParts('p_atk_s', 1, { weaponId: 'emberwand@swift' }).text), 'a forked weaponId reads its base');
-  const de = (st) => ED.Sheet.text('killingedge', 1, st);
-  ok(de({ critK: 1 }).indexOf('readies 1 guaranteed crit (up to 3 stored)') >= 0, "Killing Edge text at critK 1: " + de({ critK: 1 }));
-  ok(de(null).indexOf('readies 1 guaranteed crit (up to 3 stored)') >= 0, "Killing Edge text without a hero");
-  ok(de({ critK: 0.556 }).indexOf('1 guaranteed crit (up to 2 stored)') >= 0, "Killing Edge text on a Heavy weapon: " + de({ critK: 0.556 }));
-  ok(de({ critK: 1.8 }).indexOf('2 guaranteed crits (up to 5 stored)') >= 0, "Killing Edge text on a Swift weapon: " + de({ critK: 1.8 }));
-  ok(/elites 0\.5 s, not bosses/.test(ED.cardParts('s_s1_b', 1).text), 'Afterimage text states the elite blind');
+  w.input(p.pid, { mx, my, ax: p.x + mx * 80, ay: p.y + my * 80, q: tick % 420 === 30 + p.slot * 7, e: tick % 660 === 60 + p.slot * 7, dash: tick % 300 === 90 + p.slot * 13, pick: p.offer ? 1 : 0 });
 }
-
-// ---- dark rooms: no lantern, dread or Gloom; the opt-in dark room's elite, foe damage, reward step and loot ----
-{
-  const { w, p } = stage('knight', {});
-  const stale = ['light', 'lightMax', 'dread', 'deepRooms', 'gloomT', 'gloomN', 'bossTier'];
-  ok(stale.every(k => !(k in w)), 'a World carries no lantern, dread or Gloom field');
-  for (let i = 0; i < 300; i++) w.update(1 / 60);
-  ok(stale.every(k => !(k in w)) && !w.enemies.some(e => e.type === 'gloom'), 'no lantern or Gloom field appears while time runs');
-  ok(!ED.ENEMIES.gloom && !ED.AI.gloom && ['flare', 'addLight', 'banishGloom', 'updateLantern', 'bossLantern', 'lanternMax', 'updateDread', 'spawnGloom'].every(k => w[k] === undefined), 'the lantern, flare and Gloom code is gone');
-  ok(!('roomCost' in ED.World) && !('DREAD' in ED.World) && !('FLARE' in ED.World), 'no room cost, dread table or flare table');
-  ok(ED.World.DARK_DMG === 1.3 && ED.World.DARK_LOOT === 1.5 && ED.World.DARK_FODDER === 1.5, 'dark-room constants');
-  const plain = w.floor.rooms.find(r => r.type === 'combat' && !r.dark), dark = w.floor.rooms.find(r => r.dark), nDark = w.floor.rooms.filter(r => r.dark).length;
-  ok(nDark >= 1 && !!plain && w.floor.rooms.every(r => !r.dark || (r.type === 'combat' && r.row >= 3)), `dark rooms are combat rooms from map row 3 (${nDark} on the floor)`);
-  const sc = ED.Sheet.compute(p, ED.Sheet.ctx(w, p), { raw: true });
-  ok(sc.dark.total === nDark && sc.dark.left === nDark && !sc.dark.here && sc.def.foeParts.dark === null, 'the sheet counts the unvisited dark rooms');
-  w.fx.length = 0;
-  w.enterRoom(dark.id, 's');
-  ok(w.room === dark && w.fx.filter(e => e.t === 'dark').length === 1, 'entering a dark room emits one dark event');
-  const sd = ED.Sheet.compute(p, ED.Sheet.ctx(w, p), { raw: true });
-  ok(sd.dark.left === nDark - 1 && sd.dark.here && Math.abs(sd.def.foeParts.dark - 1.3) < 1e-9, 'the sheet shows the dark room the hero stands in');
-  w.fx.length = 0;
-  w.enterRoom(plain.id, 's');
-  ok(!w.fx.some(e => e.t === 'dark'), 'a plain room emits no dark event');
+// Cheat build for hero p: owned weapons and every general weapon (non-signature, non-evolved, while slots last) at max level, their paired passives at max level.
+// Returns the ids of the evolution-ready weapons.
+function cheatBuild(w, p) {
+  const pairs = [], maxL = (id) => ED.weaponMaxLvl(ED.WEAPONS[id]);
+  for (const ws of p.weapons) { ws.lvl = maxL(ws.id); pairs.push(ED.WEAPONS[ws.id].pair); }
+  for (const id of ED.WEAPON_IDS) {
+    const d = ED.WEAPONS[id];
+    if (p.weapons.length >= ED.MAX_WEAPONS) break;
+    if (d.evolved || d.sig) continue;
+    const ws = w.addWeapon(p, id); if (ws) { ws.lvl = maxL(id); pairs.push(d.pair); }
+  }
+  for (const id of pairs) if (id && ED.PASSIVES[id] && p.passives.length < ED.MAX_PASSIVES && !p.passives.some(x => x.id === id)) p.passives.push({ id, lvl: ED.PASSIVES[id].max });
+  w.recalc(p, true);
+  return p.weapons.filter(ws => w.weaponReady(p, ws)).map(ws => ws.id);
 }
-{ // the extra elite of the last wave, with an affix from DARK_AFFIXES
-  const { w } = stage('knight', {});
-  let darkSeen = 0, plainSeen = 0, darkRooms = 0;
-  for (let s = 1; s <= NS; s++) {
-    w.enterStratum(s);
-    for (const room of w.floor.rooms) {
-      if (room.type !== 'combat') continue;
-      if (room.dark) darkRooms++;
-      for (let k = 0; k < 6; k++) {
-        const waves = w.planWaves(room), last = waves[waves.length - 1], tagged = last.filter(it => it.affix);
-        if (room.dark) { darkSeen++; ok(tagged.length === 1 && tagged[0].elite && ED.World.DARK_AFFIXES.includes(tagged[0].affix), `stratum ${s} dark room: one extra elite in the last wave with a dark affix`); }
-        else { plainSeen++; ok(tagged.length === 0, `stratum ${s} plain room: no dark elite`); }
+// Digest of the visible state: rolled over every second.
+function stateHash(w) {
+  let s = w.tick + '|' + w.kills + '|' + w.level + '|' + Math.floor(w.xp) + '|' + w.gold + '|' + w.foes.length + '|' + w.projs.length + '|' + w.pickups.length;
+  for (const p of w.heroes) s += '|' + p.x.toFixed(2) + ',' + p.y.toFixed(2) + ',' + p.hp.toFixed(2) + ',' + p.weapons.map(x => x.id + x.lvl).join('') + p.passives.map(x => x.id + x.lvl).join('');
+  let fx = 0, fy = 0; for (const e of w.foes) { fx += e.x; fy += e.y; }
+  return U.hashStr(s + '|' + fx.toFixed(1) + '|' + fy.toFixed(1));
+}
+// Runs a world to `until` s (or its end). opt: { stopAt(w), setup(w) -> stored in out.setup, seek }.
+// Returns { w, digest, maxHits, minTele, overCap, bosses, killed, evolved, ends, casts, err, setup }.
+function run(cfg, until, opt) {
+  opt = typeof opt === 'function' ? { stopAt: opt } : opt || {};
+  const w = new ED.World(cfg), out = { w, digest: 0, maxHits: 0, minTele: Infinity, overCap: 0, bosses: [], killed: [], evolved: [], ends: 0, casts: {}, err: null, setup: null };
+  try {
+    if (opt.setup) out.setup = opt.setup(w);
+    for (let tick = 0; w.time < until && w.state === 'play'; tick++) {
+      for (const p of w.heroes) drive(w, p, tick, opt.seek);
+      w.update(C.TICK);
+      let hits = 0;
+      for (const ev of w.events) {
+        if (ev.t === 'hit') hits++;
+        else if (ev.t === 'boss' && ev.phase === 0) out.bosses.push(ev.id + '@' + Math.round(w.time));
+        else if (ev.t === 'boss' && ev.phase === -1) out.killed.push(ev.id + (ev.final ? '!' : ''));
+        else if (ev.t === 'evolve') out.evolved.push(ev.from + '>' + ev.wid);
+        else if (ev.t === 'end') out.ends++;
+        else if (ev.t === 'skill') out.casts[ev.id] = (out.casts[ev.id] || 0) + 1;
       }
+      w.events.length = 0;
+      if (hits > out.maxHits) out.maxHits = hits;
+      for (const z of w.zones) if (z.team === 1 && z.warn && z.dur < out.minTele) out.minTele = z.dur;
+      if (w.foes.length > Math.max(w.aliveCap(), 900) + 200) out.overCap++;
+      if (tick % 60 === 0) out.digest = (Math.imul(out.digest, 31) + stateHash(w)) >>> 0;
+      if (opt.stopAt && opt.stopAt(w)) break;
     }
-  }
-  ok(darkRooms > 0 && darkSeen === darkRooms * 6 && plainSeen > 0, `dark rooms planned ${darkSeen}`);
+  } catch (e) { out.err = e; }
+  return out;
 }
-{ // foe damage x1.3 in a dark room; minions and allies are not foes
-  const { w, p } = stage('knight', {});
-  const room = w.room;
-  room.dark = false; const a = w.spawnEnemy('skeleton', p.x + 50, p.y), am = w.spawnEnemy('minion', p.x + 50, p.y);
-  room.dark = true; const b = w.spawnEnemy('skeleton', p.x + 50, p.y), bm = w.spawnEnemy('minion', p.x + 50, p.y), c = w.spawnEnemy('skeleton', p.x + 50, p.y, { elite: true, affix: 'swift' });
-  near(b.dmg / a.dmg, 1.3, 1e-9, 'a foe spawned in a dark room hits x1.3'); ok(bm.dmg === am.dmg, 'a minion keeps its damage in a dark room');
-  near(b.maxHp / a.maxHp, 1, 1e-9, 'a dark room adds no foe health'); near(c.dmg / b.dmg, ED.World.ELITE.dmg, 1e-9, 'the dark multiplier stacks with the elite one');
-  room.dark = false;
-}
-{ // the reward goes up one step; the upgrade event announces it
-  for (const [from, to] of [['gold', 'vigor'], ['vigor', 'forge'], ['forge', 'epic'], ['boon', 'epic']]) {
-    for (const dark of [true, false]) {
-      const { w } = stage('knight', {});
-      const room = w.floor.rooms.find(r => r.type === 'combat' && !!r.dark === dark);
-      room.reward = from;
-      w.enterRoom(room.id, 's'); w.enemies.length = 0; w.zones.length = 0; w.fx.length = 0;
-      w.roomCleared();
-      const rw = w.props.find(q => q.kind === 'reward');
-      ok(rw && rw.item === (dark ? to : from), `${dark ? 'dark' : 'plain'} room reward ${from} -> ${rw && rw.item}`);
-      ok(w.fx.some(e => e.t === 'upgrade') === dark, `${dark ? 'dark' : 'plain'} room upgrade event (${from})`);
-    }
-  }
-}
-{ // gold and xp dropped in a dark room are x1.5: room clear, a claimed gold reward, foe drops
-  const sum = (w, kind) => w.pickups.filter(k => k.kind === kind).reduce((a, k) => a + k.val, 0);
-  const run = (dark) => {
-    const { w, p } = stage('knight', {});
-    w.room.dark = dark; w.room.type = 'combat'; w.pickups.length = 0;
-    const out = {};
-    w.dropGold(p.x, p.y, 100); out.gold = sum(w, 'gold'); w.pickups.length = 0;
-    w.dropGold(p.x, p.y, 20, true); out.exact = sum(w, 'gold'); w.pickups.length = 0;
-    w.dropXp(p.x, p.y, 40); out.xp = sum(w, 'xp'); w.pickups.length = 0;
-    const e = w.spawnEnemy('skeleton', p.x + 50, p.y); w.killEnemy(e, p, {}); out.kill = sum(w, 'xp'); w.pickups.length = 0;
-    const pr = { id: 9001, kind: 'reward', x: p.x, y: p.y, item: 'gold', group: 7, state: 0 }; w.props.push(pr); w.interact(p.pid, pr.id); out.reward = sum(w, 'gold'); w.pickups.length = 0;
-    const rs = w.run.embers.rooms; w.enc = { kind: 'waves' }; w.roomState[w.roomId].cleared = false; w.room.reward = null; w.roomCleared(); out.clear = sum(w, 'gold'); out.embers = w.run.embers.rooms - rs;
-    return out;
-  };
-  const n = run(false), d = run(true), L = ED.World.DARK_LOOT, G = ED.World.goldMul(1);
-  ok(n.gold === Math.round(100 * G) && d.gold === Math.round(100 * G * L), `foe gold x1.5 (${n.gold} -> ${d.gold})`);
-  ok(n.exact === 20 && d.exact === 30, `exact gold x1.5 (${n.exact} -> ${d.exact})`);
-  ok(n.xp === 40 && d.xp === 60, `xp x1.5 (${n.xp} -> ${d.xp})`);
-  ok(n.kill > 0 && d.kill === Math.round(n.kill * L), `a kill's xp x1.5 (${n.kill} -> ${d.kill})`);
-  ok(n.reward === ED.World.rewardGold(1) && d.reward === Math.round(ED.World.rewardGold(1) * L), `a claimed gold reward x1.5 (${n.reward} -> ${d.reward})`);
-  ok(d.clear > n.clear && d.embers === n.embers, `the room-clear gold x1.5 (${n.clear} -> ${d.clear}), embers unchanged`);
-  // stratum I pays GOLD_S[0] (x2) on every scaled drop and the gold reward; strata II-IV x1
-  const WD = ED.World;
-  ok(WD.goldMul(1) === WD.GOLD_MUL * 2 && [2, 3, 4].every(s => WD.goldMul(s) === WD.GOLD_MUL), `gold multiplier by stratum ${[1, 2, 3, 4].map(s => WD.goldMul(s)).join(' / ')}`);
-  ok(n.clear === 7 && WD.rewardGold(1) === 30 && WD.rewardGold(2) === Math.round(31 * WD.GOLD_MUL), `stratum I room clear ${n.clear}, gold reward ${WD.rewardGold(1)}; stratum II gold reward ${WD.rewardGold(2)}`);
-}
-{ // Deep Wick: darkLoot() = DARK_LOOT x (1 + 0.1 x the highest rank in the party), used by drops, the xp budget and the Tab sheet; clearing a dark room counts in run.darkCleared (summary and snapshot)
-  const L = ED.World.DARK_LOOT, G = ED.World.goldMul(1), up = (r) => ED.UPGRADES.map(u => (u.id === 'deepwick' ? r : 0));
-  const mk = (ranks) => {
-    const w = new ED.World({ seed: 7, pact: 0, players: ranks.map((r, i) => ({ pid: 'p' + i, name: 'T' + i, slot: i, cls: 'knight', weapon: 'longsword', meta: { up: up(r), mastery: 1, relics: [] } })) });
-    w.startRun(); for (const p of w.players.values()) { p.offers.length = 0; p.picks = 0; p.offer = null; }
-    w.enemies.length = 0; w.enc = null; w.locked = false; w.room.type = 'combat'; w.room.reward = null; w.room.dark = true;
-    return w;
-  };
-  const sum = (w, kind) => w.pickups.filter(k => k.kind === kind).reduce((a, k) => a + k.val, 0);
-  near(mk([0]).darkLoot(), L, 1e-9, 'no Deep Wick: DARK_LOOT');
-  near(mk([3]).darkLoot(), L * 1.3, 1e-9, 'rank 3: +30%');
-  near(mk([1, 2]).darkLoot(), L * 1.2, 1e-9, 'a party takes its highest rank, not the sum');
-  const w = mk([2]), p = w.players.values().next().value;
-  w.pickups.length = 0; w.dropGold(p.x, p.y, 100); near(sum(w, 'gold'), Math.round(100 * G * L * 1.2), 0, 'foe gold uses darkLoot');
-  w.pickups.length = 0; w.dropXp(p.x, p.y, 40); near(sum(w, 'xp'), Math.round(40 * L * 1.2), 0, 'xp uses darkLoot');
-  const enc = { waves: [[]] }; w.planHorde(w.room, enc);
-  ok(enc.xpBudget === Math.round(ED.World.ROOM_XP.combat[0] * L * 1.2), `the dark room's xp budget uses darkLoot (${enc.xpBudget})`);
-  w.room.dark = false; w.pickups.length = 0; w.dropGold(p.x, p.y, 100); near(sum(w, 'gold'), Math.round(100 * G), 0, 'a normal room is unaffected');
-  w.room.dark = true; w.roomState[w.roomId].cleared = false; w.enc = { kind: 'waves' };
-  w.roomCleared();
-  if (!ED.Net) require('vm').runInThisContext(require('fs').readFileSync(require('path').join(__dirname, '..', 'src', 'net.js'), 'utf8'), { filename: 'net.js' });
-  ok(w.run.darkCleared === 1 && w.summary().darkCleared === 1 && ED.Net.encodeSnap(w, [], true).RUN.darkCleared === 1, 'a dark room clear counts in the run summary and the snapshot');
-  w.room.dark = false; w.roomState[w.roomId].cleared = false; w.enc = { kind: 'waves' }; w.roomCleared();
-  ok(w.run.darkCleared === 1, 'a normal room clear does not');
-}
-{ // Hearth effects at run start and stratum entry: Head Start xp, Stash gold (party maxima), Second Wind health, Insight rerolls, Provisions heal, Merchant's Favor prices
-  const U = ED.UPGRADES, up = (o) => U.map(u => o[u.id] || 0);
-  const mk = (metas) => {
-    const w = new ED.World({ seed: 7, pact: 0, players: metas.map((m, i) => ({ pid: 'p' + i, name: 'T' + i, slot: i, cls: 'knight', weapon: 'longsword', meta: { up: up(m), mastery: m.mastery || 1, relics: [] } })) });
-    w.startRun(); return w;
-  };
-  const w0 = mk([{}]), p0 = w0.players.get('p0');
-  ok(w0.level === 1 && w0.gold === 0 && p0.rerolls === 0 && !p0.secondWind && p0.offers.length === 1 && p0.offers[0].src === 'start', 'no upgrades: level 1, no gold, no reroll, no revive, only the start offer');
-  const w1 = mk([{ headstart: 1 }]), q1 = w1.players.get('p0');
-  ok(w1.level === 1 && w1.xp === 15 && q1.offers.map(o => o.src).join() === 'start', `Head Start 1: 15 xp, no level yet (level ${w1.level}, xp ${w1.xp})`);
-  const w2 = mk([{ headstart: 2 }, {}]);
-  ok(w2.level === 2 && w2.xp === 0 && w2.players.get('p1').offers.map(o => o.src).join() === 'start,level', 'Head Start 2 (one hero in a party): 30 xp is level 2 for the whole party, with its level offer');
-  ok(mk([{ stash: 2 }, { stash: 1 }]).gold === 10 && mk([{ stash: 1 }]).gold === 5, 'Stash: 5 gold per rank, the highest rank of the party');
-  const sw = (r) => { const q = mk([{ secondwind: r }]).players.get('p0'); return [q.secondWind, q.swPct]; };
-  ok(sw(1).join() === '1,0.05' && sw(2).join() === '1,0.1' && sw(0).join() === '0,0', 'Second Wind revives at 5% (rank 1) or 10% (rank 2); rank 0 has none');
-  const rr = (r, ml) => mk([{ insight: r, mastery: ml || 1 }]).players.get('p0').rerolls;
-  ok(rr(1) === 1 && rr(2) === 2 && rr(3) === 3 && rr(3, 8) === 4 && rr(0, 8) === 1, 'Insight gives one reroll per rank; mastery 8 adds one');
-  const w3 = mk([{ provisions: 2 }]), q3 = w3.players.get('p0'); q3.hp = Math.round(q3.maxHp * 0.5); w3.onStratumBuild(q3, 2);
-  near(q3.hp, Math.round(q3.maxHp * 0.5) + 0.04 * q3.maxHp, 1, 'Provisions 2 heals 4% of max health at stratum II');
-  q3.hp = Math.round(q3.maxHp * 0.5); w3.onStratumBuild(q3, 1); ok(q3.hp === Math.round(q3.maxHp * 0.5), 'and nothing at stratum I');
-  const price = (r) => mk([{ favor: r }]).priceOf({ type: 'boon' });
-  ok(price(0) === 65 && price(1) === 60 && price(2) === 60, "Merchant's Favor: 4% cheaper per rank (the 65-gold epic boon: 65, 60, 60)");
-}
-// ---- stratum maps: layered graph, forward exits, threat pips, rewards, deterministic per seed ----
-{
-  const D = ED.Dungeon, FIGHT = { combat: 1, elite: 1, champion: 1 };
-  const bad = {}, flag = (k) => { bad[k] = (bad[k] || 0) + 1; };
-  let floors = 0;
-  const sig = (f) => JSON.stringify(f.rooms.map(r => [r.type, r.row, r.lane, r.dark, r.reward, r.threat, r.doors, r.entry, r.event, r.w, r.h, Array.from(r.tiles).join(''), r.decor.length, !!r.bell])) + f.platino;
-  for (let seed = 1; seed <= 200; seed++) for (let s = 1; s <= ED.CONST.STRATA; s++) {
-    const f = D.generate(s, seed * 7919 + 13), rm = f.rooms, R = f.rows; floors++;
-    if (seed <= 40 && sig(f) !== sig(D.generate(s, seed * 7919 + 13))) flag('determinism');
-    if (R !== D.rowsOf(s) || rm[f.start].row !== 0 || rm[f.boss].row !== R + 1 || rm[f.start].type !== 'start' || rm[f.boss].type !== 'boss') flag('rows');
-    const seen = new Set([f.start]), q = [f.start];
-    while (q.length) for (const n of rm[q.pop()].exits) if (!seen.has(n)) { seen.add(n); q.push(n); }
-    if (seen.size !== rm.length) flag('every room reachable from the start');
-    for (const r of rm) {
-      if (r.id !== f.boss && !r.exits.length) flag('every room but the boss has an exit');
-      if (r.exits.some(n => rm[n].row !== r.row + 1)) flag('exits lead one row forward');
-      if (r.exits.some((n, i) => r.doors['n' + i] !== n)) flag('exit doors n0, n1, ... in lane order');
-      if (r.entry !== (r.row > 0)) flag('every room but the start has the sealed entry');
-      const want = r.type === 'boss' ? 3 : FIGHT[r.type] ? Math.min(3, 1 + (r.type === 'elite' || r.type === 'champion') + r.dark + (2 * r.row > R)) : 0;
-      if (r.threat !== want) flag('threat pips');
-      if (!!r.bell !== (s === 3 && r.dark)) flag('the Drowned Bell stands in the dark rooms of stratum III only');
-    }
-    if (f.platino !== -1 && !(f.platino >= 1 && f.platino <= 3)) flag('the Platino cue is a fight ordinal 1-3');
-  }
-  ok(!Object.keys(bad).length, `stratum maps (${floors}): ${JSON.stringify(bad)}`);
-}
-{ // co-op doors: the party leaves once every living hero stands in the same exit door; P[26] carries the door a hero waits in
-  const D = ED.Dungeon, T = ED.CONST.TILE;
-  const spot = (room, d) => ({ x: (room.doorX[d] + 0.5) * T, y: T });
-  const mk = (n) => { const w = new ED.World({ seed: 9, pact: 0, players: [...Array(n)].map((_, i) => ({ pid: 'p' + i, name: 'H' + i, slot: i, cls: 'knight', weapon: ED.CLASSES.knight.weapons[0], meta: META() })) }); w.startRun(); for (const p of w.players.values()) { p.offers.length = 0; p.picks = 0; p.offer = null; } return w; };
-  const put = (p, pt) => { p.x = pt.x; p.y = pt.y; };
-  const w = mk(2), room = w.room, [a, b] = [...w.players.values()], d = 'n0', d2 = 'n1';
-  ok(room.type === 'start' && !w.locked && room.doors[d] >= 0 && room.doors[d2] >= 0, 'the start room has two open exits or more');
-  put(a, spot(room, d)); w.checkDoors();
-  const want = D.doorWant(d);
-  ok(w.room === room && a.doorWant === want && want > 0 && b.doorWant === 0 && /H1/.test(w.waitMsg), `one hero in the door: the party waits (${w.waitMsg})`);
-  const row = ED.Net.encodeSnap(w, [], true).P.find(q => q[0] === 'p0');
-  ok(row[26] === want && D.wantDoor(row[26]) === d, `P[26] carries the wanted door (${row[26]})`);
-  put(b, spot(room, d2)); w.checkDoors(); ok(w.room === room && b.doorWant === D.doorWant(d2), 'two heroes in different doors: nobody moves');
-  put(b, spot(room, d)); w.checkDoors();
-  ok(w.room.id === room.doors[d], 'both heroes in the same door: the party moves');
-  const w2 = mk(2), r2 = w2.room, [c, e] = [...w2.players.values()];
-  e.downed = true; e.bleed = 10; put(c, spot(r2, d)); w2.checkDoors();
-  ok(w2.room.id === r2.doors[d] && e.downed, 'a downed hero moves with the party');
-  const w3 = mk(1), r3 = w3.room, s0 = [...w3.players.values()][0];
-  put(s0, spot(r3, d)); w3.checkDoors();
-  ok(w3.room.id === r3.doors[d] && s0.doorWant === 0, 'solo: the door takes the hero at once');
-}
-{ // bot map walk (fully upgraded heroes): one room per map row from the start camp to the boss; --dark=never takes a path with the fewest dark rooms, --dark=always enters at least one per stratum
-  for (const [seed, cls] of [[1000, 'knight'], [1009, 'ranger'], [1015, 'pyro']]) {
-    for (const dark of ['never', 'always']) {
-      const r = runBot({ seed, n: 1, cls: [cls], skill: 0.75, up: ED.UPGRADES.map(u => u.costs.length), mastery: 10, relics: ED.RELIC_IDS.filter(id => ED.RELICS[id].start), pick: 'smart', dark, maxStratum: 2 });
-      ok(r.left.length >= 1 && r.left.every(f => f.visited === f.rows + 2), `${cls} ${dark}: one room per row, start to boss (${JSON.stringify(r.left)})`);
-      ok(r.left.length >= 1 && r.left.every(f => (dark === 'never' ? f.dark === f.minDark : f.dark >= 1)), `${cls} ${dark}: dark rooms entered ${r.left.map(f => f.dark + '/' + f.minDark).join(',')}`);
-    }
-  }
-}
-{ // Cartographer: two dark rooms and an elite room cleared on one stratum
-  const { w } = stage('knight', {});
-  const clear = (room) => { w.enterRoom(room.id, 's'); w.enemies.length = 0; w.zones.length = 0; w.roomCleared(); };
-  for (let s = 1; s <= 3 && !(w.floor.rooms.filter(r => r.dark).length >= 2 && w.floor.rooms.some(r => r.type === 'elite')); s++) w.enterStratum(s);
-  const darks = w.floor.rooms.filter(r => r.dark), elite = w.floor.rooms.find(r => r.type === 'elite');
-  if (darks.length >= 2 && elite) {
-    clear(darks[0]); clear(elite); ok(!w.run.fullClear, 'one dark room and an elite: not yet');
-    clear(darks[1]); ok(w.run.fullClear && w.summary().fullClear, 'two dark rooms and an elite: Cartographer');
-    w.run.fullClear = false; w.enterStratum(w.stratum === 1 ? 2 : 1); clear(w.floor.rooms.find(r => r.dark)); ok(!w.run.fullClear, 'the count starts over on a new stratum');
-  } else ok(false, 'stage floor has two dark rooms and an elite');
-}
-// ---- fodder hordes: quota, drops, health, damage cap, xp budget, crowd slow, per-foe exposure, pack spots, live cap ----
-const W0 = ED.World, TICK = 1 / 60;
-const fodderId = (s) => ED.biomeFor(s).fodder;
-// A world of `cls` heroes (one per entry) standing in the start room of stratum s; invulnerable, every spawn and xp drop logged in w.log.
-function hordeWorld(s, classes, tutorial) {
-  const w = new ED.World({ seed: 7, pact: 0, tutorial: !!tutorial, players: classes.map((cls, i) => ({ pid: 'p' + i, name: 'T' + i, slot: i, cls, weapon: ED.CLASSES[cls].weapons[0], meta: META() })) });
-  w.startRun();
-  if (s > 1) w.enterStratum(s);
-  for (const p of w.players.values()) { p.offers.length = 0; p.picks = 0; p.offer = null; }
-  const log = w.log = { xp: 0, gold: 0, hearts: 0, fodGold: 0, fodHearts: 0, packs: [], capBad: 0, packDist: Infinity, sides: new Set() };
-  const sp0 = w.spawnPickup, az0 = w.addZone, ke0 = w.killEnemy;
-  w.spawnPickup = function (kind, x, y, v) { if (kind === 'xp') log.xp += v; else if (kind === 'gold') log.gold += v; else if (kind === 'heart') log.hearts++; return sp0.call(this, kind, x, y, v); };
-  w.killEnemy = function (e, p, src) { const g = log.gold, h = log.hearts, r = ke0.call(this, e, p, src); if (e.fodder) { log.fodGold += log.gold - g; log.fodHearts += log.hearts - h; } return r; }; // gold and hearts a fodder kill dropped
-  w.addZone = function (z) {
-    if (z.kind === 'spawn' && z.n) {
-      log.packs.push(z);
-      for (const p of this.players.values()) log.packDist = Math.min(log.packDist, Math.hypot(p.x - z.x, p.y - z.y));
-      const live = this.hostiles() + this.zones.reduce((a, q) => a + (q.kind === 'spawn' ? q.n || 1 : 0), 0) + z.n;
-      if (live > W0.LIVE_CAP[this.partySize() > 1 ? 1 : 0]) log.capBad++;
-      const T = ED.CONST.TILE, r = this.room, d = [[z.y, 'n'], [r.h * T - z.y, 's'], [z.x, 'w'], [r.w * T - z.x, 'e']].sort((a, b) => a[0] - b[0])[0][1];
-      log.sides.add(d);
-    }
-    return az0.call(this, z);
-  };
-  return w;
-}
-// Enters a room of w and plays it: each tick the heroes are invulnerable; kill 'all' slays every live foe after the update, 'threat' only the non-fodder, 'none' nothing. Ends when the room clears or after secs; returns the encounter (kept before it is nulled).
-function playRoom(w, room, kill, secs) {
-  const log = w.log;
-  w.enterRoom(room.id, 's');
-  log.xp = 0; log.gold = 0; log.hearts = 0; log.fodGold = 0; log.fodHearts = 0; log.packs.length = 0;
-  return stepRoom(w, w.enc, kill, secs);
-}
-// Continues the encounter enc for up to secs more (same kill modes); peak = most foes standing at once.
-function stepRoom(w, enc, kill, secs) {
-  const heroes = [...w.players.values()];
-  let t = 0, peak = 0;
-  while (w.enc === enc && t < secs) {
-    for (const p of heroes) p.invuln = 1e9;
-    w.update(TICK); t += TICK;
-    peak = Math.max(peak, w.hostiles());
-    if (kill !== 'none') for (const e of w.enemies.slice()) if (e.hp > 0 && e.spawnT <= 0 && !e.boss && (kill === 'all' || !e.fodder)) w.killEnemy(e, heroes[0], {});
-  }
-  return { enc, t, peak, cleared: w.enc !== enc };
-}
-// A room of that kind on w's floor; on a floor without one (the finale map has no elite or dark rooms) a plain combat room is turned into one.
-const roomOf = (w, kind) => {
-  const r = w.floor.rooms.find(q => (kind === 'dark' ? q.dark : kind === 'elite' ? q.type === 'elite' : q.type === 'combat' && !q.dark));
-  if (r || kind === 'combat') return r;
-  const c = w.floor.rooms.find(q => q.type === 'combat' && !q.dark);
-  if (kind === 'dark') c.dark = true; else c.type = 'elite';
-  return c;
+const players = (list) => list.map((cls, i) => ({ pid: 'p' + (i + 1), name: 'P' + (i + 1), slot: i, cls, meta: { shop: {}, sigs: [] } }));
+const errOf = (r) => (r.err ? ': ' + r.err.stack : '');
+// Hit-event cap, foe telegraph length and alive cap for run r.
+const invariants = (r, tag) => {
+  const bad = [];
+  if (r.maxHits > 200) bad.push('hit events per tick ' + r.maxHits + ' > 200');
+  if (r.overCap) bad.push('alive cap exceeded on ' + r.overCap + ' ticks');
+  if (!(r.minTele === Infinity || r.minTele >= 0.6)) bad.push('foe telegraph ' + r.minTele + ' s < 0.6 s');
+  ok(!bad.length, `${tag} invariants (max hits/tick ${r.maxHits}, min telegraph ${r.minTele === Infinity ? '-' : r.minTele} s)` + (bad.length ? ': ' + bad.join('; ') : ''));
 };
-const budgetOf = (s, kind) => Math.round(W0.perStratum(W0.ROOM_XP[kind === 'elite' ? 'elite' : 'combat'], s) * (kind === 'dark' ? W0.DARK_LOOT : 1));
-{ // fodder data: one per biome, in no roster, appended after every other entry
-  const ids = ED.BIOMES.map(b => b.fodder), all = ED.ENEMY_IDS.filter(id => ED.ENEMIES[id].fodder), idx = all.map(id => ED.ENEMY_IDX[id]);
-  ok(new Set(ids).size === NS && all.every(id => ED.ENEMIES[id].ai === 'swarm' && ED.ENEMIES[id].cost === 0 && ED.ENEMIES[id].xp === 0 && ED.ENEMIES[id].hp === 50 && ED.ENEMIES[id].dmg === 1.5) && ids.every(id => all.includes(id)), `${NS} biome fodder defs, hp 50 dmg 1.5 xp 0`);
-  const tail = ED.ENEMY_IDS.length - ED.ENEMY_IDS.filter(id => ED.ENEMIES[id].champ).length; // champions are appended after the fodder
-  ok(idx.join() === all.map((_, i) => tail - all.length + i).join() && ED.ENEMY_IDS.slice(tail).every(id => ED.ENEMIES[id].champ), `fodder are the wire indices before the champions (${idx})`);
-  ok(ED.BIOMES.every(b => !b.enemies.some(r => ED.ENEMIES[r[0]].fodder)), 'fodder are in no roster');
-  ok(ids.every(id => { const d = ED.ENEMIES[id], a = ED.ENEMIES[d.art]; return d.r >= 6 && d.r <= 8 && d.spd >= 62 && d.spd <= 90 && !!a && !a.fodder && !!d.fly === !!a.fly && d.look === a.look; }), 'fodder: radius 6-8, speed 62-90, art names an existing non-fodder type with the same flight and look');
-}
-{ // health curve 50 x (1 + 0.3 (depth - 1)), depth 1 + 5/3 (s - 1): 50 / 75 / 100 / 125; pact multipliers apply, the stratum lever, the row, the party multiplier and elites do not
-  const { w } = stage('knight', {});
-  const w2 = new ED.World({ seed: 7, pact: 0, players: [0, 1].map(i => ({ pid: 'p' + i, name: 'T', slot: i, cls: 'knight', weapon: ED.CLASSES.knight.weapons[0], meta: META() })) });
-  w2.startRun();
-  for (let s = 1; s <= NS; s++) {
-    w.stratum = s; w2.stratum = s;
-    const e = w.spawnEnemy(fodderId(s), 0, 0), f = w2.spawnEnemy(fodderId(s), 0, 0), g = w.spawnEnemy(fodderId(s), 0, 0, { elite: true, affix: 'brutal' });
-    near(e.maxHp, 50 * (1 + 0.3 * (5 / 3) * (s - 1)), 1e-9, `fodder health at stratum ${s}`);
-    ok(f.maxHp === e.maxHp && g.maxHp === e.maxHp && !g.elite && g.r === e.r, `stratum ${s}: no party multiplier, never elite`);
-    w.pact = 1; near(w.spawnEnemy(fodderId(s), 0, 0).maxHp, e.maxHp * ED.PACTS[1].foeHp, 1e-9, 'pact 1 health x Thicker Hides'); w.pact = 10; near(w.spawnEnemy(fodderId(s), 0, 0).maxHp, e.maxHp * ED.PACTS[1].foeHp * ED.PACTS[10].foeHp, 1e-9, 'pact 10 health x Thicker Hides x The Deep Hungers'); w.pact = 0;
-  }
-  w.stratum = 1; w.room.dark = false; const a = w.spawnEnemy('bonemite', 0, 0); w.room.dark = true; const b = w.spawnEnemy('bonemite', 0, 0); w.room.dark = false;
-  near(b.dmg / a.dmg, 1.3, 1e-9, 'fodder damage x1.3 in a dark room');
-}
-{ // a touch from fodder takes at most FODDER_CAP of max health (a fraction of a point on a low-health hero); other foes are not capped
-  const { w, p } = stage('knight', {});
-  const f = w.spawnEnemy('bonemite', p.x + 10, p.y), k = w.spawnEnemy('skeleton', p.x + 10, p.y);
-  p.maxHp = 200; p.hp = 200; p.invuln = 0; p.shield = 0;
-  const FC = ED.CONST.FODDER_CAP; w.hurtPlayer(p, 5000, { e: f }); near(200 - p.hp, FC * 200, 1e-9, 'a fodder hit takes FODDER_CAP of 200');
-  p.hp = 200; p.invuln = 0; w.hurtPlayer(p, 60, { e: k }); ok(200 - p.hp > FC * 200 && !p.downed, `another foe is not capped (${200 - p.hp})`);
-  p.maxHp = 10; p.hp = 10; p.invuln = 0; w.hurtPlayer(p, 5000, { e: f }); near(10 - p.hp, FC * 10, 1e-9, 'a fodder hit on a 10-health hero takes a fraction of a point');
-  p.maxHp = 100; p.hp = 100; p.invuln = 0; p.shield = 50; w.hurtPlayer(p, 5000, { e: f }); ok(p.hp === 100 && Math.abs(p.shield - (50 - FC * 100)) < 1e-9, `a shield absorbs the capped hit (hp ${p.hp}, shield ${p.shield})`);
-  p.shield = 0; p.hp = 100; p.invuln = 0; w.hurtPlayer(p, 1, { e: f }); near(100 - p.hp, Math.min(1, FC * 100), 1e-9, 'a weak fodder hit stays at most 1');
-}
-{ // a touch in the sim: fodder next to a hero hurts it by the cap at most
-  const { w, p } = stage('knight', {});
-  w.stratum = ED.CONST.STRATA; p.invuln = 0; const f = w.spawnEnemy('voidmote', p.x + 4, p.y); f.cd = 99; w.enc = {}; const hp0 = p.hp;
-  w.updateEnemy(f, TICK);
-  const cap = ED.CONST.FODDER_CAP * p.maxHp;
-  ok(hp0 - p.hp > 0 && hp0 - p.hp <= cap + 1e-9 && f.st === 'move', `touch damage ${hp0 - p.hp} within 0..${cap} and untelegraphed (state ${f.st})`);
-}
-{ // fodder kills: no gold, heart or Grail growth, no split; run counts; hit events carry fd
-  const { w, p } = stage('knight', {});
-  w.stratum = 3; p.stats.chalice = 1; p.chaliceKills = 0; w.pickups.length = 0;
-  for (let i = 0; i < 300; i++) { const e = w.spawnEnemy('brinepolyp', p.x + 40, p.y); w.killEnemy(e, p, {}); }
-  ok(!w.pickups.some(k => k.kind === 'gold' || k.kind === 'heart' || k.kind === 'xp') && p.chaliceKills === 0 && p.chaliceHp === 0, 'fodder kills drop no gold, heart or xp (outside a budgeted room) and do not grow the Grail');
-  ok(w.run.fodderKills === 300 && w.run.kills >= 300 && p.kills === 300, `fodder kills are counted (${w.run.fodderKills}/${w.run.kills}/${p.kills})`);
-  let g = 0; for (let i = 0; i < 300; i++) { const e = w.spawnEnemy('frozenskel', p.x + 40, p.y); w.killEnemy(e, p, {}); } for (const k of w.pickups) if (k.kind === 'gold' || k.kind === 'heart') g++;
-  ok(g > 0, 'regular foes still drop gold or hearts (control)');
-  const e = w.spawnEnemy('brinepolyp', p.x + 40, p.y), r = w.spawnEnemy('skeleton', p.x + 40, p.y); w.fx.length = 0;
-  w.hitEnemy(e, 1, { p, kind: 'weapon' }); w.hitEnemy(r, 1, { p, kind: 'weapon' });
-  const hits = w.fx.filter(v => v.t === 'hit');
-  ok(hits.length === 2 && hits[0].fd === 1 && hits[1].fd === undefined, 'the hit event of fodder carries fd');
-}
-{ // per-foe exposure: a foe is exposed after 45 s of its own life (a boss after 78), fodder never; a late spawn is not exposed by the room clock
-  const { w, p } = stage('knight', {});
-  w.enc = { kind: 'waves' }; w.roomTime = 500; p.invuln = 1e9;
-  const a = foe(w, p.x + 300, p.y), bo = w.spawnEnemy('bonewarden', p.x + 300, p.y + 60), f = w.spawnEnemy('bonemite', p.x + 300, p.y - 60);
-  bo.spd = 0; f.spd = 0; bo.cd = f.cd = 9999; f.maxHp = f.hp = 1e6;
-  w.updateEnemy(a, TICK); ok(!a.exposed && Math.abs(a.age - TICK) < 1e-9, 'a foe spawned late in the room is not exposed by the room clock');
-  a.age = 44.9; w.updateEnemy(a, TICK); ok(!a.exposed, 'not exposed at 44.9 s of age');
-  a.age = 45.01; w.updateEnemy(a, TICK); ok(a.exposed, 'exposed past 45 s of age');
-  bo.age = 77.9; w.updateEnemy(bo, TICK); ok(!bo.exposed, 'a boss is not exposed at 77.9 s'); bo.age = 78.01; w.updateEnemy(bo, TICK); ok(bo.exposed, 'a boss is exposed past 78 s');
-  f.age = 500; w.updateEnemy(f, TICK); ok(!f.exposed, 'fodder are never exposed');
-  w.stratum = 4; const b4 = w.spawnEnemy(ED.biomeFor(4).boss, p.x + 300, p.y + 120); b4.spd = 0; b4.cd = 9999; b4.age = 200; w.updateEnemy(b4, TICK); ok(!b4.exposed, 'a boss of a fury stratum (IV) is never exposed'); w.stratum = 1;
-  const sp = foe(w, p.x + 300, p.y + 100); sp.spawnT = 1; w.updateEnemy(sp, TICK); ok(sp.age === 0 && sp.spawnT < 1, 'a spawning foe does not age');
-}
-{ // crowd slow: 8% per overlapping non-boss foe, at most 50%; spawning, dead and boss foes do not count; dashes and skill moves ignore it
-  const { w, p } = stage('knight', {});
-  const mk = (k) => { const a = []; for (let i = 0; i < k; i++) a.push({ x: p.x + 5 + i, y: p.y, r: 8, hp: 5, spawnT: 0, boss: false }); return a; };
-  near(ED.Sim.crowdMul(p, mk(0)), 1, 1e-12, 'no foe: factor 1'); near(ED.Sim.crowdMul(p, undefined), 1, 1e-12, 'no list: factor 1');
-  near(ED.Sim.crowdMul(p, mk(3)), 0.76, 1e-12, '3 foes: factor 0.76'); near(ED.Sim.crowdMul(p, mk(7)), 0.5, 1e-12, '7 foes: factor 0.5 (the floor)'); near(ED.Sim.crowdMul(p, mk(30)), 0.5, 1e-12, '30 foes: still 0.5');
-  const mixed = mk(2).concat([{ x: p.x, y: p.y, r: 8, hp: 5, spawnT: 0, boss: true }, { x: p.x, y: p.y, r: 8, hp: 0, spawnT: 0 }, { x: p.x, y: p.y, r: 8, hp: 5, spawnT: 1 }, { x: p.x + 18.1, y: p.y, r: 8, hp: 5, spawnT: 0 }]);
-  near(ED.Sim.crowdMul(p, mixed), 0.84, 1e-12, 'boss, dead, spawning and out-of-reach foes do not count');
-  const walk = (foes, dash) => {
-    const q = { x: 500, y: 300, r: 10, vx: 0, vy: 0, stats: p.stats, downed: false, dead: false, dashT: dash ? 100 : 0, dashDx: 1, dashDy: 0, skillMove: null };
-    const hx = w.room.w * 16, hy = w.room.h * 16; q.x = hx - 200; q.y = hy;
-    const fs = foes.map(f => Object.assign({}, f, { dx: f.x - p.x, dy: f.y - p.y }));
-    let x40 = 0;
-    for (let i = 0; i < 60; i++) {
-      if (i === 40) x40 = q.x;
-      for (const f of fs) { f.x = q.x + f.dx; f.y = q.y + f.dy; } // the crowd keeps pace with the hero
-      ED.Sim.movePlayer(q, { mx: 1, my: 0 }, TICK, w.room, false, [], fs);
-    }
-    return q.x - x40; // distance of the last 20 ticks (the walk has settled)
-  };
-  const free = walk([], false), slow = walk(mk(7), false);
-  near(slow / free, 0.5, 0.02, `walking with 7 foes touching covers half the distance (${slow.toFixed(1)} vs ${free.toFixed(1)})`);
-  near(walk(mk(7), true), walk([], true), 1e-9, 'a dash ignores the crowd');
-}
-{ // quotas: FODDER_Q by stratum, x0.6 elite, x1.5 dark, x(1 + 0.5 (n - 1)) party, x0.6 tutorial stratum I; each wave's share sums to the quota
-  const Q = (w, room, nW) => { const enc = { waves: [...Array(nW || 0)].map(() => []) }; w.planHorde(room, enc); return enc; };
-  for (let s = 1; s <= NS; s++) {
-    const w = hordeWorld(s, ['knight']), w2 = hordeWorld(s, ['knight', 'ranger']), w4 = hordeWorld(s, ['knight', 'ranger', 'pyro', 'shade']), base = W0.perStratum(W0.FODDER_Q, s);
-    ok(Q(w, { type: 'combat', dark: false }).q === base && Q(w, { type: 'combat', dark: true }).q === Math.round(base * 1.5) && Q(w, { type: 'elite', dark: false }).q === Math.round(base * 0.6), `stratum ${s} quota ${base} / dark / elite`);
-    ok(Q(w2, { type: 'combat', dark: false }).q === Math.round(base * 1.5) && Q(w4, { type: 'combat', dark: false }).q === Math.round(base * 2.5), `stratum ${s} party quota`);
-    const e = Q(w, { type: 'combat', dark: true }, 4);
-    ok(e.fod.length === 4 && e.fod.reduce((a, v) => a + v, 0) === e.q && Math.max(...e.fod) - Math.min(...e.fod) <= 1, `stratum ${s}: the waves share the quota evenly (${e.fod})`);
-  }
-  const wt = hordeWorld(1, ['knight'], true);
-  ok(Q(wt, { type: 'combat', dark: false }).q === Math.round(W0.FODDER_Q[0] * 0.6), `tutorial stratum I quota ${Q(wt, { type: 'combat', dark: false }).q}`);
-  ok(W0.LIVE_CAP.join() === '60,90' && W0.FODDER_XP_SHARE === 0.5 && W0.FODDER_Q.length === 4 && W0.ROOM_XP.combat.length === 4 && W0.ROOM_XP.elite.length === 4 && W0.ROOM_XP.champion.length === 4 && W0.WAVES === 4 && W0.PACK_MAX === 8, 'horde and xp constants: 4 strata, 4 waves, packs of 8 at most');
-}
-// Every room kind of every stratum, played out by killing everything: each wave brings its fodder, the room clears, fodder drop no gold or hearts, and the xp dropped is the budget
-for (let s = 1; s <= NS; s++) {
-  for (const kind of ['combat', 'elite', 'dark']) {
-    const w = hordeWorld(s, ['knight']), room = roomOf(w, kind);
-    if (!room) { ok(false, `stratum ${s} has a ${kind} room`); continue; }
-    const q = Math.round(W0.perStratum(W0.FODDER_Q, s) * (kind === 'elite' ? 0.6 : kind === 'dark' ? 1.5 : 1));
-    const r = playRoom(w, room, 'all', 400), enc = r.enc, tag = `stratum ${s} ${kind}`;
-    if (process.argv.includes('-v')) console.log(`${s} ${kind}: ${r.t.toFixed(1)} s, ${w.log.packs.length} packs, fodder ${w.run.fodderKills}, threat ${w.run.kills - w.run.fodderKills}, xp ${w.log.xp}/${enc.xpBudget} (threat ${enc.xpThr}/${enc.xpThrCap}, cut ${enc.xpClip}), nearest hero ${Math.round(w.log.packDist)} px, sides ${[...w.log.sides].join('')}`);
-    ok(r.cleared && enc.q === q && enc.spawned === q && w.run.fodderKills === q, `${tag}: the quota ${q} spawned (${enc.spawned}), was killed (${w.run.fodderKills}) and the room cleared in ${r.t.toFixed(0)} s`);
-    ok(w.log.xp === budgetOf(s, kind) && enc.xpOut === budgetOf(s, kind), `${tag}: xp dropped ${w.log.xp} (ledger ${enc.xpOut}) = budget ${budgetOf(s, kind)}`);
-    ok(enc.xpClip <= 1, `${tag}: planned threat drops fill the threat cap without a cut (cut ${enc.xpClip} of a ${enc.xpThrCap} cap)`);
-    ok(enc.xpThr <= enc.xpThrCap && w.log.packs.length >= Math.ceil(q / W0.PACK_MAX) && w.log.packs.every(z => z.type === fodderId(s) && z.n >= 1 && z.n <= W0.PACK_MAX && z.r === 40 && z.dur === W0.PACE.spawn), `${tag}: ${w.log.packs.length} packs of the biome's fodder, 1-${W0.PACK_MAX} each`);
-    ok(w.log.capBad === 0 && w.log.packDist >= W0.PACE.avoid, `${tag}: packs land ${Math.round(w.log.packDist)} px from the hero, the live cap holds`);
-    ok(w.log.fodGold === 0 && w.log.fodHearts === 0 && w.log.gold > 0, `${tag}: ${w.run.fodderKills} fodder kills dropped no gold or heart (the room dropped ${w.log.gold} gold, ${w.log.hearts} hearts)`);
-  }
-}
-{ // the xp mote ledger: a fodder kill drops its share as whole units, exact in total; threat drops are scaled so the planned waves fill their cap (xpK), never past it; the pile pays the rest
-  const w = hordeWorld(1, ['knight']), room = roomOf(w, 'combat');
-  const r = playRoom(w, room, 'none', 1);
-  const enc = w.enc; ok(enc && enc.xpBudget === W0.ROOM_XP.combat[0] && enc.xpFod === W0.ROOM_XP.combat[0] * W0.FODDER_XP_SHARE && enc.xpThrCap === W0.ROOM_XP.combat[0] * (1 - W0.FODDER_XP_SHARE) && enc.q === W0.FODDER_Q[0], `ledger ${JSON.stringify({ b: enc.xpBudget, f: enc.xpFod, t: enc.xpThrCap, q: enc.q })}`);
-  const p = w.players.get('p0'); let got = 0;
-  for (let i = 0; i < enc.q; i++) { const e = w.spawnEnemy('bonemite', p.x, p.y); const before = w.log.xp; w.killEnemy(e, p, {}); got += w.log.xp - before; }
-  ok(got >= enc.xpFod - 1 && got <= enc.xpFod && enc.xpOut === got, `${enc.q} fodder kills drop ${got} of ${enc.xpFod}`);
-  let plan = 0; for (const wv of enc.waves) for (const f of wv) plan += W0.threatXp(ED.ENEMIES[f.type], 1, f.elite);
-  near(enc.xpK * plan, enc.xpThrCap, 1e-9, `xpK scales the planned threat xp (${plan.toFixed(1)}) to the threat cap ${enc.xpThrCap}`);
-  const un = w.spawnEnemy('skeleton', p.x, p.y), u0 = w.log.xp; w.killEnemy(un, p, {});
-  ok(w.log.xp === u0 && !un.plan, 'an unplanned threat foe (summon, split) drops no xp in a budgeted room');
-  const sk = w.spawnEnemy('skelknight', p.x, p.y, { elite: true, affix: 'swift', plan: 1 }), acc0 = enc.xpThrAcc, want = Math.floor(acc0 + W0.threatXp(ED.ENEMIES.skelknight, 1, true) * enc.xpK), room0 = enc.xpThrCap - enc.xpThr, b0 = w.log.xp;
-  w.killEnemy(sk, p, {});
-  ok(w.log.xp - b0 === Math.min(want, room0), `an elite's drop is scaled by xpK (whole units, the fraction carried) and cut to what is left of the threat cap (${w.log.xp - b0} of ${want}, ${room0} left)`);
-  ok(enc.xpClip === Math.max(0, want - room0), `the cut is logged (${enc.xpClip})`);
-}
-{ // the horde never holds the threat waves back: with the fodder left standing, the waves advance as the threat foes die; the last threat foe's death clears the room at once, the fodder crumble and the pile pays the budget
-  const w = hordeWorld(3, ['knight']), room = roomOf(w, 'combat');
-  const r = playRoom(w, room, 'threat', 20), enc = r.enc, standing = w.hostiles();
-  ok(r.cleared && standing === 0, `the room cleared with the last threat foe in ${r.t.toFixed(1)} s, well before the ${W0.PACE.maxAge} s wave timer`);
-  const crumbled = w.fx.filter(v => v.t === 'die' && v.cr === 1 && v.fd === 1).length;
-  ok(crumbled > 0 && w.run.fodderKills === 0 && enc.spawned > 0, `the standing fodder crumbled (${crumbled} of ${enc.spawned} out), none of it counted as a kill`);
-  ok(w.log.xp === enc.xpBudget && enc.xpOut === enc.xpBudget, `the clear pile paid the whole budget (${w.log.xp}/${enc.xpBudget})`);
-  ok(!w.zones.some(z => z.kind === 'spawn' && !z.dead), 'no spawn zone outlives the clear');
-}
-{ // a reinforcement: the last wave of every room kind carries one (a longer, bigger telegraph and a 'reinf' event): the roster's costliest foe, the dark room's affixed elite, the elite room's last elite
-  const costliest = (s) => ED.biomeFor(s).enemies.filter(r => ED.ENEMIES[r[0]] && !ED.ENEMIES[r[0]].minion).reduce((a, r) => ((ED.ENEMIES[r[0]].cost || 2) > (ED.ENEMIES[a[0]].cost || 2) ? r : a))[0];
-  for (const kind of ['combat', 'elite', 'dark']) {
-    const w = hordeWorld(2, ['knight']), room = roomOf(w, kind), waves = w.planWaves(room), last = waves[waves.length - 1];
-    const re = last.filter(f => f.reinf), earlier = waves.slice(0, -1).some(wv => wv.some(f => f.reinf));
-    ok(waves.length === W0.WAVES && re.length === 1 && !earlier, `${kind}: ${waves.length} waves, one reinforcement, in the last wave only`);
-    ok(kind === 'combat' ? re[0].type === costliest(2) && !re[0].elite : kind === 'dark' ? re[0].elite && W0.DARK_AFFIXES.includes(re[0].affix) : re[0].elite && re[0].type === ED.biomeFor(2).elite, `${kind}: the reinforcement is ${re[0].type}${re[0].elite ? ' (elite ' + (re[0].affix || '') + ')' : ''}`);
-  }
-  const w = hordeWorld(2, ['knight']); w.fx.length = 0; w.zones.length = 0;
-  w.spawnWave([{ type: 'skeleton' }, { type: 'shroomhulk', reinf: 1 }]);
-  const zr = w.zones.find(z => z.big), zn = w.zones.find(z => !z.big), ev = w.fx.find(v => v.t === 'reinf');
-  ok(zr && zr.dur === W0.PACE.reinf && zr.r > zn.r && zn.dur < W0.PACE.reinf && ev && ev.type === 'shroomhulk', 'the reinforcement spawns under a longer, bigger telegraph with its event');
-  ok([...w.players.values()].every(p => Math.hypot(p.x - zr.x, p.y - zr.y) >= W0.REINF_AVOID), 'and lands REINF_AVOID from every hero');
-}
-{ // packs: spots at least PACE.avoid (mostly PACK_AVOID) from every hero, from several sides over rooms; the live cap cuts a pack; a pack is one spawn zone and resolves into n fodder on floor tiles
-  const sides = new Set();
-  for (const [s, cls] of [[1, ['knight', 'ranger']], [3, ['knight']], [NS, ['knight']], [NS, ['knight', 'ranger']]]) {
-    const w = hordeWorld(s, cls);
-    for (const kind of ['combat', 'elite', 'dark']) {
-      const room = roomOf(w, kind), r = playRoom(w, room, 'none', 40), enc = r.enc;
-      for (const d of w.log.sides) sides.add(d);
-      ok(w.log.packs.length >= 1 && w.log.packDist >= W0.PACE.avoid && w.log.capBad === 0, `stratum ${s} ${cls.length} hero(es) ${kind}: ${w.log.packs.length} packs, nearest hero ${Math.round(w.log.packDist)} px, cap respected`);
-      const cap = W0.LIVE_CAP[cls.length > 1 ? 1 : 0], pend = w.zones.reduce((a, q) => a + (q.kind === 'spawn' ? q.n || 1 : 0), 0);
-      if (process.argv.includes('-v')) console.log(`cap run: stratum ${s}, ${cls.length} hero(es), ${kind}: ${enc.spawned}/${enc.q} fodder out in 40 s, peak ${r.peak} standing, ${w.hostiles()} + ${pend} pending, cap ${cap}`);
-    }
-  }
-  ok(sides.size >= 3, `packs come from several sides (${[...sides].join('')})`);
-  { // the cap cuts a pack: with 55 foes standing solo, a wave's share of 12 shrinks to fit 60
-    const w = hordeWorld(1, ['knight']), room = roomOf(w, 'combat'); playRoom(w, room, 'none', 0.01); const enc = w.enc, p = w.players.get('p0');
-    for (let i = 0; i < 55; i++) w.spawnEnemy('skeleton', p.x + 300, p.y);
-    w.zones.length = 0; enc.fod = [12]; enc.spawned = 0; w.spawnPacks(enc, 0);
-    ok(enc.spawned === 5 && w.zones.reduce((a, z) => a + (z.n || 0), 0) === 5, `the live cap cuts the pack to ${enc.spawned}`);
-  }
-  const w = hordeWorld(1, ['knight']), room = roomOf(w, 'combat'), r = playRoom(w, room, 'none', 3), pk = w.log.packs[0];
-  ok(!!pk && pk.kind === 'spawn' && pk.n >= 1 && pk.n <= W0.PACK_MAX && pk.type === 'bonemite', 'the first pack is one spawn zone with n and the biome fodder');
-  for (let i = 0; i < 80; i++) { w.players.get('p0').invuln = 1e9; w.update(TICK); }
-  const fod = w.enemies.filter(e => e.fodder && e.hp > 0);
-  ok(fod.length >= pk.n && fod.every(e => ED.Dungeon.tileAt(w.room, e.x, e.y) !== 1), `the pack resolved into fodder (${fod.length})`);
-}
-{ // a hero standing 6.5 tiles from the only pack edge of its room (closer than PACK_AVOID along a stretch of that edge): the packs skip that stretch, or go to another edge, and never land within 220 px
-  const T = ED.CONST.TILE;
-  for (const [s, near] of [[1, 'w'], [2, 'e'], [3, 'n'], [NS, 's']]) {
-    const w = hordeWorld(s, ['knight']), room = roomOf(w, 'combat'), p = w.players.get('p0');
-    w.enterRoom(room.id, 's');
-    w.enc.edges = [near]; w.log.packs.length = 0; w.log.sides.clear(); w.log.packDist = Infinity;
-    p.x = near === 'w' ? 7.5 * T : near === 'e' ? (room.w - 7.5) * T : room.w * T / 2; p.y = near === 'n' ? 8.5 * T : near === 's' ? (room.h - 7.5) * T : room.h * T / 2 + T;
-    stepRoom(w, w.enc, 'none', 25);
-    ok(w.log.packs.length >= 2 && w.log.packDist >= 220, `stratum ${s}: hero near the ${near} edge, ${w.log.packs.length} packs from ${[...w.log.sides].join('')}, nearest ${Math.round(w.log.packDist)} px`);
-  }
-}
-{ // one run through the room rules: packs come only on the tick a threat wave starts (no pack between waves or after the last), the next wave PACE.maxAge after the last when nothing dies
-  const w = hordeWorld(2, ['knight']), room = roomOf(w, 'combat');
-  w.enterRoom(room.id, 's');
-  const packs = [], waves = [], p = w.players.get('p0'), enc = w.enc;
-  for (let i = 0; i < 60 * 70 && w.enc === enc; i++) { p.invuln = 1e9; const n0 = w.log.packs.length, wv = enc.wave; w.update(TICK); if (w.log.packs.length > n0) packs.push([w.time, enc.wave]); if (enc.wave !== wv) waves.push(w.time); }
-  ok(waves.length === enc.waves.length && packs.length >= enc.waves.length && packs.every(([t]) => waves.some(u => Math.abs(u - t) < 1e-9)), `packs only with a wave (waves at ${waves.map(t => t.toFixed(1))}, packs at ${packs.map(q => q[0].toFixed(1))})`);
-  const gaps = waves.slice(1).map((t, i) => t - waves[i]);
-  ok(gaps.every(g => g >= W0.PACE.maxAge - 1e-9 && g <= W0.PACE.maxAge + 0.05), `untouched waves ${W0.PACE.maxAge} s apart (${gaps.map(g => g.toFixed(2)).join(' ')})`);
-}
-{ // measured hero velocity and lead aim: a hero walking at a constant velocity is led toward the intercept point; L 0 aims straight at it; a jump resets the velocity; shot speed follows the stratum
-  const { w, p } = stage('knight', {});
-  p.lpx = null; p.lpy = null; p.lvx = 0; p.lvy = 0;
-  for (let i = 0; i < 60; i++) { p.x += 100 * TICK; w.updatePlayer(p, TICK); }
-  near(p.lvx, 100, 0.5, 'a hero walking 100 px/s to the right measures lvx 100'); near(p.lvy, 0, 1e-9, 'and lvy 0');
-  near(W0.leadAngle(p.x, p.y + 300, p, 300, 0), -Math.PI / 2, 1e-9, 'L 0 aims straight at the hero');
-  near(W0.leadAngle(p.x, p.y + 300, p, 300, 1), Math.atan2(-300, 300 * Math.sqrt(1 / 8)), 0.005, 'L 1 aims at the intercept point (shot 300 px/s, hero 100 px/s across, 300 px away)');
-  near(W0.leadAngle(p.x, p.y + 300, { x: p.x, y: p.y }, 300, 1), -Math.PI / 2, 1e-9, 'a target without a measured velocity is aimed at straight');
-  p.x += 100; w.updatePlayer(p, TICK); ok(p.lvx === 0 && p.lvy === 0, 'a jump over 24 px resets the measured velocity');
-  ok(W0.LEAD.join() === '0,0.25,0.6,0.85' && W0.leadAt(1) === 0 && W0.leadAt(NS) === 0.85, 'lead 0 / 0.25 / 0.6 / 0.85 by stratum');
-  const e = w.spawnEnemy('bonearcher', p.x + 100, p.y), b = w.spawnEnemy('bonewarden', p.x + 100, p.y);
-  w.stratum = 4; const q = w.enemyShoot(e, 0, 200, 'arrow', 1, 6), qb = w.enemyShoot(b, 0, 200, 'bone', 1, 6);
-  near(Math.hypot(q.vx, q.vy), 200 * W0.shotSpd(4), 1e-6, 'a foe shot at stratum IV flies x1.4'); near(Math.hypot(qb.vx, qb.vy), 200 * W0.bossShotSpd(4), 1e-6, 'a boss shot at stratum IV flies x1.5');
-}
-{ // stratum behaviour: lead aim of every aimed foe shot, ground speed, mixed rosters, two-affix elites
-  const LD = (s) => W0.leadAt(s), U0 = ED.U, shots = (w) => w.projs.filter(q => q.team === 1);
-  const until = (w, e, f, max) => { for (let i = 0; i < (max || 600); i++) { w.updateEnemy(e, TICK); if (f()) return true; } return false; };
-  const dev = (ps, a) => ps.reduce((s, q) => s + U0.angDiff(Math.atan2(q.vy, q.vx), a), 0) / ps.length; // mean angular deviation of the shots from angle a
-  // Forces the second affix: makeElite on a normal foe with the rng stubbed so the roll succeeds and picks `second`.
-  const withAffixes = (w, e, first, second) => {
-    const c = w.rng.chance, k = w.rng.pick; w.rng.chance = () => true; w.rng.pick = (a) => (a.includes(second) ? second : a[0]);
-    try { w.makeElite(e, first); } finally { w.rng.chance = c; w.rng.pick = k; }
-    return e;
-  };
-  // A knight at stratum s measured walking at (vx, vy) and a still foe 160 px left of it that attacks at once (web ready, no retreat step).
-  const duel = (s, type, vx, vy, aff) => {
-    const { w, p } = stage('knight', {}); w.stratum = s; p.lvx = vx; p.lvy = vy;
-    const e = w.spawnEnemy(type, p.x - 160, p.y); e.spawnT = 0; e.spd = 0; e.cd = 0; e.vars.wcd = 0; e.vars.stepCd = 99;
-    if (aff) withAffixes(w, e, aff[0], aff[1]);
-    return { w, p, e };
-  };
-  const want = (e, p, spd, s) => W0.leadAngle(e.x, e.y - 4, p, spd * W0.shotSpd(s), LD(s));
-  const straight = (e, p) => Math.atan2(p.y - (e.y - 4), p.x - e.x);
-  // shooter: L 0 aims straight, L > 0 leads
-  for (const s of [1, 2, 3, 4]) {
-    const { w, p, e } = duel(s, 'bonearcher', 90, 60), S = e.def.shot;
-    ok(until(w, e, () => shots(w).length > 0), `stratum ${s}: the archer shoots`);
-    const d = dev(shots(w), want(e, p, S.speed, s));
-    ok(Math.abs(d) < 1e-9, `stratum ${s}: the archer's shots are centred on leadAngle with L ${LD(s)} (off by ${d})`);
-    if (LD(s) === 0) ok(Math.abs(dev(shots(w), straight(e, p))) < 1e-9, `stratum ${s}: no lead, aimed straight`);
-    else ok(Math.abs(dev(shots(w), straight(e, p))) > 0.03, `stratum ${s}: the shot is led away from the straight line`);
-  }
-  { // the aim is recomputed every wind-up frame; a swift second affix shortens the wind-up
-    const { w, p, e } = duel(4, 'bonearcher', 90, 0), S = e.def.shot;
-    ok(until(w, e, () => e.st === 'aim'), 'the archer winds up'); near(e.t, S.windup, 1e-9, 'plain wind-up');
-    const a1 = e.aimA; p.lvy = -90; w.updateEnemy(e, TICK);
-    near(e.aimA, want(e, p, S.speed, 4), 1e-9, 'the aim is recomputed every wind-up frame'); ok(Math.abs(e.aimA - a1) > 0.01, 'and follows the hero turning');
-    const t = duel(4, 'bonearcher', 0, 0, ['brutal', 'swift']);
-    ok(until(t.w, t.e, () => t.e.st === 'aim'), 'the swift elite winds up'); near(t.e.t, S.windup * 0.7, 1e-9, 'swift in the second slot shortens the wind-up (x0.7)');
-  }
-  { // orbiter burst: leads during the aim phase, locks for the last 0.15 s
-    const { w, p, e } = duel(4, 'drone', 80, 0), B = e.def.burst;
-    ok(until(w, e, () => e.st === 'aim' && e.t <= 0.15), 'the drone aims');
-    const lock = e.aimA;
-    near(lock, want(e, p, B.speed, 4), 1e-9, 'the drone aims at the lead point (L 0.5)'); p.lvx = -200;
-    ok(until(w, e, () => shots(w).length > 0), 'the drone fires');
-    near(Math.atan2(shots(w)[0].vy, shots(w)[0].vx), lock, 1e-9, 'the burst keeps the angle locked in the last 0.15 s');
-  }
-  // turret spread, then the lobbed glob (the spitter alternates); the glob lands lvx x flight x L ahead
-  for (const s of [2, 4]) {
-    const { w, p, e } = duel(s, 'spitter', 100, 0), P = e.def.pattern;
-    ok(until(w, e, () => shots(w).length > 0), `stratum ${s}: the spitter spreads`);
-    ok(Math.abs(dev(shots(w), want(e, p, P.speed, s))) < 1e-9, `stratum ${s}: the turret spread is centred on leadAngle`);
-    e.cd = 0; w.projs.length = 0;
-    ok(until(w, e, () => w.zones.some(z => z.lob)), `stratum ${s}: the spitter lobs a glob`);
-    const z = w.zones.find(q => q.lob);
-    near(z.x, p.x + 100 * z.dur * LD(s), 1e-6, `stratum ${s}: the glob lands ${LD(s)} x lvx x flight ahead (flight ${z.dur})`); near(z.y, p.y, 1e-6, 'and on the hero row');
-  }
-  { const { w, p, e } = duel(4, 'imp', 0, -120);
-    ok(until(w, e, () => w.zones.some(z => z.lob)), 'the imp lobs a fireball');
-    const z = w.zones.find(q => q.lob); near(z.y, p.y - 120 * z.dur * LD(4), 1e-6, 'the lobber leads by lvy x flight x L'); near(z.x, p.x, 1e-6, 'and not sideways');
-  }
-  { // a lob whose lead point lies inside a wall lands on floor, short of it
-    const { w, p, e } = duel(4, 'spitter', 400, 0), D0 = ED.Dungeon;
-    let x = p.x; while (!D0.blocksShots(D0.tileAt(w.room, x, p.y), false) && x < p.x + 2000) x += 4;
-    p.x = x - 30; e.x = p.x - 160; e.vars.n = 1;
-    ok(until(w, e, () => w.zones.some(z => z.lob)), 'the glob is lobbed at a hero by a wall');
-    const z = w.zones.find(q => q.lob);
-    ok(!D0.blocksShots(D0.tileAt(w.room, z.x, z.y), false) && z.x < x && z.x > p.x, `a glob led into a wall lands on floor in front of it (x ${Math.round(z.x)}, wall at ${x}, hero ${Math.round(p.x)})`);
-  }
-  { // web shot: led, and its flight time matches the telegraphed landing circle at the final speed
-    const { w, p, e } = duel(4, 'cavespider', 100, 0), Wb = e.def.web;
-    ok(until(w, e, () => shots(w).some(q => q.kind === 'web')), 'the spider webs');
-    const q = shots(w).find(r => r.kind === 'web'), z = w.zones.find(r => r.detached);
-    ok(Math.abs(dev([q], want(e, p, Wb.speed, 4))) < 1e-9, 'the web is aimed at the lead point');
-    near(q.life * Math.hypot(q.vx, q.vy), Math.hypot(z.x - e.x, z.y - e.y), 1e-6, 'the web flies exactly to its landing circle at the stratum shot speed');
-  }
-  { // caster wave
-    const { w, p, e } = duel(4, 'siren', 100, 30), C = e.def.cast;
-    ok(until(w, e, () => shots(w).length === C.n), 'the siren casts its wave');
-    ok(Math.abs(dev(shots(w), want(e, p, C.speed, 4))) < 1e-9, 'the wave is centred on the lead angle');
-  }
-  { // caster wind-up telegraphs: a wave shows a cone that follows the led aim, a ring or homing cast a warn circle on the caster; both belong to the caster
-    const { w, p, e } = duel(4, 'siren', 100, 30);
-    ok(until(w, e, () => e.st === 'cast'), 'the siren winds up');
-    const zc = w.zones.find(z => z.kind === 'teleCone' && z.src === e && z.warnOnly);
-    ok(zc && Math.abs(zc.dur - e.t) < 1e-9 && zc.a === e.aimA, 'a wave wind-up shows a warn cone on the led aim for the whole wind-up');
-    const r = duel(4, 'tidecaller', 100, 30);
-    ok(until(r.w, r.e, () => r.e.st === 'cast'), 'the tidecaller winds up');
-    ok(r.w.zones.some(z => z.kind === 'tele' && z.src === r.e && z.warnOnly && Math.abs(z.dur - r.e.t) < 1e-9), 'a ring wind-up shows a warn circle on the caster');
-  }
-  { // a spiral pattern starts straight at the hero (ring, laser and dive patterns are not led either)
-    const { w, p, e } = duel(4, 'flameturret', 150, 0);
-    ok(until(w, e, () => e.st === 'aim'), 'the totem winds up');
-    near(e.aimA, Math.atan2(p.y - e.y, p.x - e.x), 1e-9, 'a spiral starts straight at the hero (no lead)');
-  }
-  { // ground speed: normal foes x foeSpd; bosses and fodder keep theirs
-    const { w } = stage('knight', {});
-    for (const s of [1, 3, 4]) {
-      w.stratum = s;
-      const sk = w.spawnEnemy('skeleton', 0, 0), bs = w.spawnEnemy('bonewarden', 0, 0), fd = w.spawnEnemy(fodderId(s), 0, 0);
-      near(sk.spd, ED.ENEMIES.skeleton.spd * W0.foeSpd(s), 1e-9, `stratum ${s}: a normal foe moves x${W0.foeSpd(s)}`);
-      ok(bs.spd === ED.ENEMIES.bonewarden.spd && fd.spd === ED.ENEMIES[fodderId(s)].spd, `stratum ${s}: a boss and a fodder foe keep their speed`);
-    }
-    near(W0.foeSpd(4), 1.2, 1e-9, 'x1.2 at stratum IV');
-  }
-  { // mixed rosters: the previous biome's foes join a room at MIX_PREV
-    ok(W0.MIX_PREV === 0.6, 'MIX_PREV is 0.6');
-    const w = hordeWorld(2, ['knight']), room = roomOf(w, 'combat');
-    const only = new Set(ED.biomeFor(1).enemies.map(r => r[0]).filter(id => !ED.biomeFor(2).enemies.some(r => r[0] === id)));
-    const share = (mp, n) => { W0.MIX_PREV = mp; let m = 0; for (let i = 0; i < n; i++) { w.rng = new U0.RNG(500 + i); if (w.planWaves(room).some(wv => wv.some(f => only.has(f.type)))) m++; } return m / n; };
-    try {
-      ok(only.size > 0 && share(0, 40) === 0, 'MIX_PREV 0: no foe of the previous biome');
-      const all = share(1, 300), f = share(0.6, 300); ok(all > 0.6, `MIX_PREV 1: most rooms hold previous-biome foes (${all.toFixed(2)})`);
-      ok(Math.abs(f - 0.6 * all) < 0.12, `MIX_PREV 0.6: ${f.toFixed(2)} of rooms hold previous-biome foes, 0.6 x ${all.toFixed(2)} expected`);
-    } finally { W0.MIX_PREV = 0.6; }
-  }
-  { // two-affix elites
-    const { w } = stage('knight', {});
-    ok(W0.AFFIX2.join() === '0,0,0.45,0.85', 'AFFIX2 by stratum');
-    const roll = (s, n, first) => {
-      w.stratum = s; let two = 0, bad = 0;
-      for (let i = 0; i < n; i++) {
-        const e = { hp: 100, maxHp: 100, dmg: 10, spd: 50, r: 10, ward: 0, wardMax: 0 }; w.makeElite(e, first);
-        if (e.elite2) two++;
-        if (e.elite2 && (e.elite2 === e.elite || !ED.AFFIXES[e.elite2])) bad++;
-        if (Math.abs(e.maxHp - 100 * (2.4 + 0.4 * (W0.depth(s) - 1))) > 1e-9 || Math.abs(e.dmg - 9 * (ED.hasAffix(e, 'brutal') ? 1.4 : 1)) > 1e-9 || Math.abs(e.spd - 50 * (ED.hasAffix(e, 'swift') ? 1.4 : 1)) > 1e-9 || Math.abs(e.ward - (ED.hasAffix(e, 'warded') ? 0.45 * e.maxHp : 0)) > 1e-9) bad++;
-      }
-      return { p: two / n, bad };
-    };
-    for (const s of [1, 2]) { const r = roll(s, 500); ok(r.p === 0 && r.bad === 0, `stratum ${s}: no second affix (${r.p})`); }
-    for (const s of [3, 4]) { const r = roll(s, 1500); near(r.p, W0.perStratum(W0.AFFIX2, s), 0.06, `stratum ${s}: second affix chance`); ok(r.bad === 0, `stratum ${s}: elite2 differs from elite, HP and damage multipliers apply once, each affix effect once`); }
-    ok(roll(4, 400, 'brutal').bad === 0, 'a given first affix (dark-room elite) is never repeated in slot 2');
-    ok(ED.hasAffix({ elite: 'swift', elite2: 'brutal' }, 'brutal') && ED.hasAffix({ elite: 'swift' }, 'swift') && !ED.hasAffix({ elite: 'swift' }, 'brutal') && !ED.hasAffix({ elite: null }, 'swift'), 'hasAffix reads both slots');
-    w.stratum = 4; const base = w.spawnEnemy('skeleton', 100, 100), mk = (first, second) => withAffixes(w, w.spawnEnemy('skeleton', 100, 100), first, second);
-    const sw = mk('brutal', 'swift');
-    near(sw.spd, base.spd * 1.4, 1e-9, 'swift in slot 2: speed x1.4'); near(sw.dmg, base.dmg * 0.9 * 1.4, 1e-9, 'brutal in slot 1: damage x1.4 once'); near(sw.maxHp, base.maxHp * (2.4 + 0.4 * (W0.depth(4) - 1)), 1e-9, 'elite HP multiplier once');
-    near(mk('swift', 'brutal').dmg, base.dmg * 0.9 * 1.4, 1e-9, 'brutal in slot 2: damage x1.4');
-    const wd = mk('swift', 'warded'); near(wd.ward, wd.maxHp * 0.45, 1e-9, 'warded in slot 2: ward 45% of max HP');
-    const vo = mk('swift', 'volatile'); w.zones.length = 0; w.killEnemy(vo, null, {});
-    ok(w.zones.some(z => z.boom === 'fire' && z.r === 70), 'volatile in slot 2: explodes on death');
-    const va = mk('swift', 'vampiric'), p = w.players.get('p0'); p.invuln = 0; va.hp = va.maxHp / 2; w.hurtPlayer(p, 10, { e: va, x: va.x, y: va.y });
-    ok(va.hp > va.maxHp / 2, 'vampiric in slot 2: heals when it hurts a hero');
-  }
-}
-{ // boss fights: aimed volley (count per phase, flight speed, lead at release, projectile kind), the phase-3 overlap, one sequence per living hero, grown summon lists, the fodder trickle
-  const BV = W0.BOSS_VOL, B = ED.Bosses, Dn = ED.Dungeon, angD = ED.U.angDiff, KIND = { drownedking: 'trident', hollowking: 'void' }, VB = (s) => (B[ED.biomeFor(s).boss].attacks.volley ? undefined : 'drownedking'); // VB: a volley boss for stratum s (bosses I and II have none)
-  // A boss of stratum s's biome (or `type`) standing still left of the heroes in the start room, hp out of reach; its volley shots (damage x0.6) are logged in w.vs with the heroes' state at the release.
-  function bossWorld(s, classes, type) {
-    const w = hordeWorld(s, classes), ps = [...w.players.values()], c = Dn.center(w.room);
-    ps.forEach((p, i) => { p.x = c.x + 100; p.y = c.y + (i - (ps.length - 1) / 2) * 70; p.invuln = 1e9; });
-    const b = w.spawnEnemy(type || ED.biomeFor(s).boss, c.x - 140, c.y);
-    b.spd = 0; b.cd = 9999; b.hp = b.maxHp = 1e9; b.target = ps[0];
-    const vs = w.vs = [], es = w.enemyShoot;
-    w.enemyShoot = function (e, a, speed, kind, m, r, x) {
-      const q = es.call(this, e, a, speed, kind, m, r, x);
-      if (m === BV.dmg) vs.push({ t: this.time - w.t0, a, kind, q, x: e.x, y: e.y, hs: ps.map(p => ({ x: p.x, y: p.y, lvx: p.lvx, lvy: p.lvy, up: this.alive(p) })) });
-      return q;
-    };
-    w.t0 = w.time;
-    return { w, b, ps, c };
-  }
-  const go = (w, secs, each) => { for (let i = 0, n = Math.round(secs * 60); i < n; i++) { for (const p of w.players.values()) p.invuln = 1e9; if (each) each(i); w.update(TICK); } };
-  const startVol = (w, b, phase) => { b.phase = phase || 1; b.st = 'atk'; b.atk = 'volley'; b.t = 0; b.vars = { wm: 1 }; B[b.type].attacks.volley.start(w, b); };
-  const finalSp = (s) => BV.speed + BV.step * (s - 1), Lof = (s) => W0.leadAt(s);
-  const lead = (v, h, s) => W0.leadAngle(v.x, v.y - 4, h, finalSp(s), Lof(s)); // the angle a shot released at v should have toward hero state h
-  ok(BV.speed === 320 && BV.step === 20 && BV.n.join() === '3,4,5' && W0.BOSS_OV_GAP === 5, 'volley constants');
-  for (const type of Object.keys(KIND)) ok(B[type].attacks.volley && B[type].attacks.volley.w === 2 && !B[type].attacks.volley.phase, `${type} has the volley entry (weight 2, every phase)`);
-  for (const type of ['bonewarden', 'sporemother']) ok(!B[type].attacks.volley, `${type} has no volley`);
-  for (let ph = 1; ph <= 3; ph++) { // shots by phase, the first 0.5 s after the start, 0.12 s apart, then the main state moves on
-    const { w, b } = bossWorld(4, ['knight']);
-    startVol(w, b, ph); ok(b.vol && b.vol.n === BV.n[ph - 1], `phase ${ph}: volley of ${BV.n[ph - 1]}`);
-    go(w, 1.15);
-    ok(w.vs.length === BV.n[ph - 1], `phase ${ph}: ${w.vs.length} shots (want ${BV.n[ph - 1]})`);
-    ok(w.vs.every((v, i) => Math.abs(v.t - w.vs[0].t - i * BV.gap) <= 1.5 * TICK) && w.vs[0].t >= BV.tele - 1e-9 && w.vs[0].t <= BV.tele + 2 * TICK, `phase ${ph}: first shot at ${w.vs[0].t.toFixed(2)} s, ${BV.gap} s apart`);
-    ok(!b.vol && b.st === 'idle', `phase ${ph}: the main state resumes after the volley (${b.st})`);
-    ok(w.zones.every(z => !(z.kind === 'teleLine' && z.src === b)), `phase ${ph}: the warn line is gone`);
-  }
-  for (let s = 1; s <= ED.CONST.STRATA; s++) { // flight speed 320 + 20 per stratum, the biome's kind, damage x0.6, the angle led by the stratum's share of a walking hero's velocity at the release
-    const { w, b, ps } = bossWorld(s, ['knight'], VB(s)), p = ps[0];
-    p.y -= 60; startVol(w, b, 1);
-    go(w, 1.1, () => { p.y += 90 * TICK; });
-    ok(w.vs.length === 3, `stratum ${s}: 3 shots (${w.vs.length})`);
-    ok(w.vs.every(v => Math.abs(Math.hypot(v.q.vx, v.q.vy) - finalSp(s)) < 1e-6), `stratum ${s}: shots fly ${finalSp(s)} px/s (${w.vs.map(v => Math.hypot(v.q.vx, v.q.vy).toFixed(2))})`);
-    ok(w.vs.every(v => v.kind === KIND[b.type] && v.q.kind === KIND[b.type] && Math.abs(v.q.dmg - 0.6 * b.dmg) < 1e-9), `stratum ${s}: ${KIND[b.type]} shots at 0.6 x boss damage`);
-    ok(w.vs.every(v => Math.abs(angD(v.a, lead(v, v.hs[0], s))) < 1e-9 && Math.abs(angD(Math.atan2(v.q.vy, v.q.vx), v.a)) < 1e-9), `stratum ${s}: each shot is angled by leadAngle at its release`);
-    const v = w.vs[2], off = Math.abs(angD(v.a, Math.atan2(v.hs[0].y - (v.y - 4), v.hs[0].x - v.x)));
-    ok(Lof(s) === 0 ? off < 1e-9 : off > 0.03 * Lof(s), `stratum ${s}: aim ${Lof(s) ? 'leads by ' + off.toFixed(3) + ' rad' : 'is straight'}`);
-  }
-  { const S4 = ED.CONST.STRATA, { w, b } = bossWorld(S4, ['knight']); w.pact = 8; startVol(w, b, 1); go(w, 1.1); ok(w.vs.length === 3 && w.vs.every(v => Math.abs(Math.hypot(v.q.vx, v.q.vy) - finalSp(S4) * 1.2) < 1e-6), 'Pact 8: volley shots fly x1.2 like every foe shot'); }
-  const B4 = B[ED.biomeFor(4).boss]; // the stratum IV boss
-  { // the phase-3 overlap: a volley every 5 s on top of whatever the main state runs, never two at once; phase 2 has none
-    B4.attacks.hold = { update: () => false };
-    for (const ph of [2, 3]) {
-      const { w, b } = bossWorld(4, ['knight']);
-      b.phase = ph; b.st = 'atk'; b.atk = 'hold'; b.t = 0; b.vars = { wm: 1 };
-      const starts = [], lines = [0]; let prev = null, mainKept = true;
-      go(w, 16.2, () => {
-        if (b.vol && b.vol !== prev) starts.push(w.time - w.t0);
-        prev = b.vol;
-        lines[0] = Math.max(lines[0], w.zones.filter(z => z.kind === 'teleLine' && z.src === b && !z.dead).length);
-        if (b.vol && (b.st !== 'atk' || b.atk !== 'hold')) mainKept = false;
-      });
-      if (ph === 2) { ok(starts.length === 0 && w.vs.length === 0, `phase 2: no overlap volley (${starts.length})`); continue; }
-      ok(starts.length === 3 && Math.abs(starts[0] - 5) <= 3 * TICK && starts.every((t, i) => i === 0 || (t - starts[i - 1] >= 5 - 1e-9 && t - starts[i - 1] <= 5 + 2 * TICK)), `phase 3: volleys at ${starts.map(t => t.toFixed(2))} s (want 5, then every 5)`);
-      ok(mainKept && b.st === 'atk' && b.atk === 'hold', 'phase 3: the volley overlaps a running main attack and leaves it alone');
-      ok(w.vs.length === 3 * BV.n[2], `phase 3: ${w.vs.length} shots (want ${3 * BV.n[2]})`);
-      ok(lines[0] === 1, `phase 3: never two volleys at once (${lines[0]} warn lines at most, one hero)`);
-      const vol = B4.attacks.volley; vol.start(w, b); const run = b.vol; vol.start(w, b);
-      ok(run && b.vol === run && !vol.ok(w, b), 'a running volley is neither restarted nor chosen again');
-    }
-    delete B4.attacks.hold;
-  }
-  { // frozen: the sub-machine and its warn line stall; blindness and a phase change drop it
-    const { w, b } = bossWorld(4, ['knight']);
-    startVol(w, b, 1); go(w, 0.2); const t0 = b.vol.t; b.frozen = 5; go(w, 1); ok(b.vol && b.vol.t === t0 && w.vs.length === 0, 'a frozen boss does not tick its volley');
-    b.frozen = 0; b.blind = 3; go(w, 0.1); ok(!b.vol && w.zones.every(z => !(z.kind === 'teleLine' && z.src === b)), 'a blinded boss drops its volley and its warn line');
-    b.blind = 0; startVol(w, b, 1); go(w, 0.2); b.hp = b.maxHp * 0.5; go(w, 0.1); ok(!b.vol && b.phase === 2, 'a phase change drops the volley');
-  }
-  { // party: one sequence per living hero, each at its own hero, 0.15 s apart; a downed hero gets none
-    const { w, b, ps } = bossWorld(3, ['knight', 'ranger', 'pyro', 'shade']);
-    ps[3].downed = true; startVol(w, b, 2);
-    ok(b.vol.seqs.length === 3, `3 living heroes: ${b.vol.seqs.length} sequences`);
-    go(w, 1.6);
-    const per = [0, 0, 0, 0], first = [Infinity, Infinity, Infinity, Infinity];
-    for (const v of w.vs) { const i = v.hs.findIndex(h => h.up && Math.abs(angD(v.a, lead(v, h, 3))) < 1e-9); if (i >= 0) { per[i]++; first[i] = Math.min(first[i], v.t); } }
-    ok(per.join() === '4,4,4,0' && w.vs.length === 12, `4 shots at each living hero, none at the downed one (${per})`);
-    ok(Math.abs(first[1] - first[0] - BV.seq) <= 1.5 * TICK && Math.abs(first[2] - first[1] - BV.seq) <= 1.5 * TICK, `sequences ${BV.seq} s apart (${(first[1] - first[0]).toFixed(2)}, ${(first[2] - first[1]).toFixed(2)})`);
-    ok(w.vs.every(v => v.t - first[0] <= BV.seq * 2 + BV.gap * 3 + 1.5 * TICK), 'the whole party volley ends 0.3 + 0.36 s after its first shot');
-  }
-  { // grown summon lists: +1 per living hero beyond the first, at most +3, drawn from the list
-    const c4 = ['knight', 'ranger', 'pyro', 'shade'];
-    const count = (cls, down, list) => { // B.lib.summon queues one spawn zone per entry of the grown list
-      const { w, b, ps } = bossWorld(1, cls, 'drownedking'); for (let i = 0; i < down; i++) ps[ps.length - 1 - i].downed = true;
-      b.vars = { wm: 1 }; w.zones.length = 0; B.lib.summon(w, b, list);
-      return w.zones.filter(z => z.kind === 'spawn' && !z.n).map(z => z.type);
-    };
-    const L3 = ['skeleton', 'skeleton', 'skeleton'], L5 = ['skeleton', 'skeleton', 'bat', 'bat', 'bat'];
-    ok(count(c4.slice(0, 1), 0, L3).length === 3, 'solo: the 3-entry list stays');
-    ok(count(c4.slice(0, 2), 0, L3).length === 4, '2 heroes: 4 entries');
-    ok(count(c4, 0, L3).length === 6, '4 heroes: 6 entries (+3)');
-    ok(count(c4, 2, L3).length === 4, '4 heroes, 2 downed: 4 entries (living heroes count)');
-    const l5 = count(c4, 0, L5);
-    ok(l5.length === 8 && l5.every(t => t === 'skeleton' || t === 'bat'), `a 5-entry list, 4 heroes: 8 entries from the list (${l5})`);
-    const { w } = bossWorld(1, ['knight'], 'drownedking'), n0 = w.hostiles(true);
-    for (let i = 0; i < 12; i++) w.spawnEnemy('bonemite', 50, 50);
-    ok(w.hostiles(true) === n0, 'fodder does not count toward a boss summon guard (threat foes only)');
-    for (let i = 0; i < 6; i++) w.spawnEnemy('skeleton', 50, 50);
-    ok(w.hostiles(true) === n0 + 6, 'six regular foes do');
-  }
-  for (const heroes of [['knight'], ['knight', 'ranger']]) { // no fodder in a boss fight: no pack zone and no fodder foe for 40 s from the intro, and none after the boss dies
-    const s = 4, w = hordeWorld(s, heroes), room = w.floor.rooms.find(r => r.type === 'boss'), ps = [...w.players.values()];
-    const packs = [], az = w.addZone; let fod = 0;
-    w.addZone = function (z) { if (z.kind === 'spawn' && z.n) packs.push(z); return az.call(this, z); };
-    playRoom(w, room, 'none', 40);
-    for (const e of w.enemies) if (e.fodder) fod++;
-    ok(w.boss && w.boss.type === ED.biomeFor(s).boss && w.enc.kind === 'boss', `${heroes.length} hero(es): the boss fight runs`);
-    ok(packs.length === 0 && fod === 0, `${heroes.length} hero(es): no fodder pack in 40 s of the fight (${packs.length} packs, ${fod} fodder)`);
-    w.killEnemy(w.boss, ps[0], {});
-    ok(!w.enc && w.hostiles() === 0, 'the boss dies: the fight ends and every foe goes');
-    go(w, 10); ok(packs.length === 0 && w.hostiles() === 0 && !w.zones.some(z => z.kind === 'spawn'), 'nothing spawns after the boss dies');
-  }
-}
-{ // veteran preset (sim.js --vet): flag parsing, the dodge plan against a shot and a telegraph (reaction time, walk, dash), the rider heading, skill charges, determinism, and an unchanged bot without the flag
-  const { parseVet, vetThreats, vetRisk, vetPlan, vetRider } = require('./sim.js');
-  const all = parseVet('1');
-  ok(parseVet(undefined) === null && parseVet('0') === null && all.size === 4 && all.has('charges') && all.has('hazard') && parseVet('dodge,rider').has('rider') && !parseVet('dodge,rider').has('hazard'), '--vet parses to a feature set, off when absent or 0');
-  const { w, p } = stage('knight', {});
-  p.x = 160; // 5 tiles from the west wall: walking west the hero stops at the wall in the shot's line
-  const t0 = w.time, c = { dashN: 1 }, SPD = 200, REACT = 0.18;
-  w.spawnProj({ team: 1, kind: 'arrow', x: p.x + 150, y: p.y, a: Math.PI, speed: 300, r: 6, dmg: 20, life: 4 });
-  ok(vetThreats(w, p, SPD, REACT) === null, 'a shot the hero has not yet had the reaction time to see is not dodged');
-  w.time = t0 + 0.3;
-  const T = vetThreats(w, p, SPD, REACT);
-  ok(T && T.pj.length === 1, 'a shot older than the reaction time is a threat');
-  const plan = vetPlan(w, p, c, -1, 0, SPD, T);
-  ok(plan.risk > 0.5 && Math.abs(plan.my) > 0.3, `walking into a shot's line is risky (${plan.risk.toFixed(2)}) and the plan leaves the line (${plan.mx.toFixed(2)}, ${plan.my.toFixed(2)})`);
-  ok(vetRisk(T, p, plan.mx, plan.my, 100, SPD, false) < 0.05, 'the planned heading clears the shot');
-  const keep = vetPlan(w, p, c, 0, -1, SPD, T);
-  ok(keep.risk === 0 && keep.mx === 0 && keep.my === -1, 'a wanted heading that is safe is kept');
-  w.projs.length = 0;
-  const e = foe(w, p.x + 200, p.y), z = w.addZone({ kind: 'teleCone', x: p.x + 60, y: p.y, a: Math.PI, r: 120, arc: 1.6, dur: 0.6, dmg: 20, team: 1, src: e });
-  z.t = 0.3;
-  const Tz = vetThreats(w, p, SPD, REACT), pz = vetPlan(w, p, c, 0, 0, SPD, Tz);
-  ok(Tz && Tz.zn.length === 1 && pz.risk > 0.5 && (pz.mx || pz.my) && !pz.dash, `standing in a cone with 0.3 s left: the plan walks out (${pz.mx.toFixed(2)}, ${pz.my.toFixed(2)}), no dash`);
-  z.t = 0.5; // 0.1 s left: walking cannot clear it, a dash is untouchable through the hit
-  const Td = vetThreats(w, p, SPD, REACT), pd = vetPlan(w, p, c, 0, 0, SPD, Td), pn = vetPlan(w, p, { dashN: 0 }, 0, 0, SPD, Td);
-  ok(pd.dash && vetRisk(Td, p, pd.dash[0], pd.dash[1], 72, SPD, true) < 0.05 && pn.dash === null, 'with 0.1 s left a dash heading clears the cone; without a charge there is none');
-  w.zones.length = 0; w.enemies.length = 0;
-  const r = stage('ranger', {}), row = [20, 35, 50].map(d => foe(r.w, r.p.x + d, r.p.y));
-  r.p.stats.dashBomb = 1; // Bomb Satchel: the dash drops a bomb where it starts
-  const hd = vetRider(r.w, r.p, { dashN: 1 }, row, null, SPD);
-  ok(hd && hd[0] < -0.5, `a row of 3 foes ahead: the bomb dash leaves them behind (${hd && hd.map(v => v.toFixed(2))})`);
-  ok(vetRider(r.w, r.p, { dashN: 0 }, row, null, SPD) === null && vetRider(r.w, r.p, { dashN: 1 }, row.slice(0, 2), null, SPD) === null, 'no rider dash without a charge or with 2 foes');
-  const nr = stage('ranger', {}); ok(vetRider(nr.w, nr.p, { dashN: 1 }, [30, 55, 80].map(d => foe(nr.w, nr.p.x + d, nr.p.y)), null, SPD) === null, 'no rider dash without a dash rider');
-  const run = (o) => runBot(Object.assign({ seed: 1000, n: 1, cls: ['ranger'], skill: 0.75, up: ED.UPGRADES.map(() => 0), mastery: 1, pick: 'smart', force: ['echo'], maxStratum: 1 }, o));
-  const a = run({}), b = run({ vet: 'charges' }), id = ED.CLASSES.ranger.skill;
-  ok(b.cnt.casts[id] / b.time > a.cnt.casts[id] / a.time, `the second Echo charge is used (${a.cnt.casts[id]} casts in ${Math.round(a.time)} s -> ${b.cnt.casts[id]} in ${Math.round(b.time)} s of ${id})`);
-  const v1 = run({ vet: '1' }), v2 = run({ vet: '1' }), off = run({ vet: '0' });
-  ok(v1.time === v2.time && v1.kills === v2.kills && v1.hp === v2.hp, 'a --vet run is deterministic per seed');
-  ok(a.time === off.time && a.kills === off.kills && a.hp === off.hp, 'without --vet (or --vet=0) the bot is unchanged');
-}
-{ // breakable props: floor gen (kinds, counts, spots, determinism), hero hits break them and foes, foe shots and hazards never do, drops
-  const D = ED.Dungeon, T = ED.CONST.TILE;
-  const laneOf = (r, x, y) => { const cx = Math.floor(r.w / 2), cy = Math.floor(r.h / 2) + 1; return (Math.abs(x - cx) <= 2 && y >= r.h - 4) || (y <= 4 && Object.keys(r.doors).some(d => Math.abs(x - r.doorX[d]) <= 2)) || (Math.abs(y - cy) <= 2 && (x <= 3 || x >= r.w - 4)); };
-  let bad = [], fights = 0, others = 0, same = true;
-  for (let s = 1; s <= ED.CONST.STRATA; s++) for (let seed = 1; seed <= 24; seed++) {
-    const fl = D.generate(s, seed * 7919 + 13), again = D.generate(s, seed * 7919 + 13), brk = ED.biomeFor(s).breakable;
-    for (const r of fl.rooms) {
-      if (JSON.stringify(r.breakables) !== JSON.stringify(again.rooms[r.id].breakables) || JSON.stringify(r.decor) !== JSON.stringify(again.rooms[r.id].decor)) same = false;
-      const fight = r.type === 'combat' || r.type === 'elite' || r.type === 'champion' || r.type === 'boss', c = D.center(r);
-      if (fight) { fights++; if (r.breakables.length < 4 || r.breakables.length > 8) bad.push(`${s}/${seed} ${r.type} holds ${r.breakables.length}`); } else { others++; if (r.breakables.length > 3) bad.push(`${s}/${seed} ${r.type} holds ${r.breakables.length}`); }
-      for (const d of r.decor) if (brk.includes(d.k)) bad.push(`${s}/${seed} ${d.k} baked into decor`);
-      for (const b of r.breakables) {
-        const tx = Math.floor(b.x), ty = Math.floor(b.y);
-        if (!brk.includes(b.k)) bad.push(`${s}/${seed} kind ${b.k}`);
-        if (r.tiles[ty * r.w + tx] !== 0) bad.push(`${s}/${seed} on tile code ${r.tiles[ty * r.w + tx]} (hazard, block, chasm or door)`);
-        if (laneOf(r, tx, ty)) bad.push(`${s}/${seed} ${r.type} on a door lane`);
-        if (Math.hypot(b.x * T - c.x, b.y * T - c.y) < T) bad.push(`${s}/${seed} ${r.type} within a tile of the centre`);
-      }
-    }
-  }
-  ok(same, 'floor gen is deterministic per (stratum, seed): breakables and decor');
-  ok(!bad.length, `${fights} combat, elite and boss rooms hold 4-8 breakables and the ${others} others at most 3, none baked into decor, none on a door lane, a hazard or the centre${bad.length ? ': ' + bad.slice(0, 4).join('; ') : ''}`);
-  ok(ED.BIOMES.map((b) => b.breakable.join()).join() === 'urn,mushroom,coral,shard', `breakable kinds by stratum (${ED.BIOMES.map((b) => b.breakable.join())})`);
-  ok(ED.BIOMES.every((b) => b.breakable.every((k) => b.decor.includes(k))), 'every breakable kind is a decor kind of its stratum');
+const t0 = Date.now();
+const finalUp = (w) => w.bossList.some(e => e.final) && w.time > LEN + 3;
 
-  const arena = (cls) => { // a combat room with its breakables, no foes, the hero 40 px west of breakable 0
-    const { w, p } = stage(cls, {}, 11);
-    const rm = w.floor.rooms.find(r => r.type === 'combat' && !r.dark);
-    w.enterRoom(rm.id, null); w.enemies.length = 0; w.enc = null; w.locked = false; w.zones.length = 0; w.projs.length = 0; w.pickups.length = 0; w.fx.length = 0;
-    const b = rm.breakables[0], bx = b.x * T, by = b.y * T, rs = w.roomState[rm.id];
-    p.x = bx - 40; p.y = by;
-    return { w, p, rm, rs, b, bx, by };
-  };
-  const smashes = (w) => w.fx.filter((e) => e.t === 'smash');
-  { // a hero swing
-    const { w, p, rs, b, bx, by } = arena('knight');
-    ok(p.stats.weapon.kind === 'melee' && rs.broken === 0, 'the arena starts with every breakable whole');
-    p.x = bx - 20; w.playerAttack(p, 0);
-    ok(rs.broken === 1, `a melee swing breaks the breakable in front of it (mask ${rs.broken})`);
-    const ev = smashes(w);
-    ok(ev.length === 1 && ev[0].i === 0 && ev[0].k === b.k && ev[0].x === Math.round(bx) && ev[0].y === Math.round(by) && ev[0].r === w.roomId, `one smash event { i, x, y, k, r } (${JSON.stringify(ev)})`);
-    w.playerAttack(p, 0); ok(smashes(w).length === 1 && rs.broken === 1, 'a broken breakable breaks once');
-    const q = arena('knight'); q.p.x = q.bx - 20; q.w.playerAttack(q.p, Math.PI); ok(q.rs.broken === 0, 'a swing aimed away leaves it');
-    const r2 = arena('knight'); r2.p.x = r2.bx - 200; r2.w.playerAttack(r2.p, 0); ok(r2.rs.broken === 0, 'a swing that falls short leaves it');
+// 1. solo determinism + reaching the final boss
+const soloCfg = () => ({ seed: 1234, stage: 0, players: players(['knight']), cheats: { god: true } });
+const s1 = run(soloCfg(), LEN + 10, finalUp), s2 = run(soloCfg(), LEN + 10, finalUp);
+ok(!s1.err && !s2.err, 'solo 15:00 runs throw nothing' + errOf(s1));
+ok(s1.digest === s2.digest, `solo digest equal (${s1.digest} / ${s2.digest})`);
+ok(s1.w.bossList.some(e => e.final) || QUICK, `solo reaches the final boss (bosses ${s1.bosses.join(', ')}; t ${s1.w.time.toFixed(0)} s, kills ${s1.w.kills}, level ${s1.w.level})`);
+ok(QUICK || s1.bosses.length >= 3, 'solo meets 3 bosses');
+invariants(s1, 'solo');
+// 2. four heroes
+const quadCfg = () => ({ seed: 99, stage: 0, players: players(['knight', 'ranger', 'pyro', 'cleric']), cheats: { god: true } });
+const q1 = run(quadCfg(), LEN + 10, finalUp), q2 = run(quadCfg(), LEN + 10, finalUp);
+ok(!q1.err && !q2.err, '4-hero runs throw nothing' + errOf(q1));
+ok(q1.digest === q2.digest, `4-hero digest equal (${q1.digest} / ${q2.digest})`);
+ok(QUICK || q1.w.bossList.some(e => e.final), `4-hero reaches the final boss (bosses ${q1.bosses.join(', ')}; kills ${q1.w.kills}, level ${q1.w.level}, peak cap ${q1.w.aliveCap()})`);
+invariants(q1, '4-hero');
+// 3. victory per stage with a cheat build
+const VICTORY = [['knight', 0, 7], ['ranger', 1, 8], ['pyro', 2, 9]].slice(0, QUICK ? 1 : 3);
+const vcfg = (cls, st, seed) => ({ seed, stage: st, players: players([cls]), cheats: { god: true, might: 40 } });
+const vopt = { seek: true, setup: (w) => cheatBuild(w, w.heroes[0]) };
+let sum = null;
+for (const [cls, st, seed] of VICTORY) {
+  const v = run(vcfg(cls, st, seed), C.RUN_LEN + 150, vopt), fin = ED.STAGES[st].bosses.find(b => b.final), tag = `stage ${st + 1} ${cls}`;
+  ok(!v.err, tag + ': victory run throws nothing' + errOf(v));
+  ok(v.w.state === 'won' && v.ends === 1 && v.killed.includes(fin.id + '!'), `${tag}: victory (state ${v.w.state}, t ${v.w.time.toFixed(0)} s, level ${v.w.level}, kills ${v.w.kills}; met ${v.bosses.join(', ')}; killed ${v.killed.join(', ')}; digest ${v.digest})`);
+  ok(v.bosses.length >= 3, `${tag}: meets ${v.bosses.length} bosses`);
+  ok(v.setup.every(id => v.evolved.some(e => e.startsWith(id + '>'))), `${tag}: ready weapons evolve (ready ${v.setup.join(',') || 'none'}; evolved ${v.evolved.join(',') || 'none'}; build ${v.w.heroes[0].weapons.map(x => x.id + x.lvl).join(',')})`);
+  invariants(v, tag);
+  if (st === 0) {
+    sum = v.w.summary();
+    const dealt = sum.perHero[0].dealt;
+    ok(sum.won && sum.perHero.length === 1 && Object.keys(dealt).some(k => ED.WEAPONS[k] && dealt[k] > 0), 'summary carries per-weapon damage (' + Object.keys(dealt).join(',') + ')');
   }
-  { // a hero projectile flies on after the smash
-    const { w, p, rs, bx } = arena('ranger');
-    p.x = bx - 80; w.playerAttack(p, 0);
-    let flown = 0; for (; flown < 90 && !rs.broken; flown++) w.updateProjectiles(1 / 60);
-    ok(rs.broken === 1 && flown < 90, `an arrow breaks the breakable it passes over (after ${flown} ticks)`);
-    ok(w.projs.some(pr => pr.team === 0), 'the arrow is not consumed by it');
-  }
-  { // a blast, a skill blast, a dash
-    const a = arena('pyro'); a.w.explode(a.bx + 20, a.by, 30, 10, 0, a.p); ok(a.rs.broken === 1, 'a blast breaks a breakable within its radius');
-    const far = arena('pyro'); far.w.explode(far.bx + 80, far.by, 30, 10, 0, far.p); ok(far.rs.broken === 0, 'and leaves one outside it');
-    const s = arena('knight'); s.w.skillBlast(s.p, s.bx, s.by + 10, 20, 5, { p: s.p, kind: 'skill', part: 'test' }); ok(s.rs.broken === 1, 'a skill blast breaks a breakable');
-    const d = arena('shade'), x0 = d.bx - 90;
-    d.p.dashing = true; d.p.x = x0; d.w.updatePlayerCombat(d.p, 1 / 60); ok(d.rs.broken === 0, 'a dash that has not reached it leaves it');
-    d.p.x = d.bx + 90; d.w.updatePlayerCombat(d.p, 1 / 60); ok(d.rs.broken === 1, 'a dash breaks a breakable on the path it covered since the last tick');
-    d.p.dashing = false; d.w.updatePlayerCombat(d.p, 1 / 60); ok(d.p.dashFx < 0, 'the dash path restarts with the next dash');
-  }
-  { // the movement and shield skills: Shield Charge, the Bulwark bash, Shadowstep
-    const c = arena('knight'); c.p.x = c.bx - 80; c.w.playerSkill(c.p, 0, { x0: c.p.x, y0: c.p.y, x1: c.bx + 60, y1: c.by }, 0);
-    for (let i = 0; i < 40; i++) c.w.update(1 / 60);
-    ok(c.rs.broken === 1, `Shield Charge breaks a breakable on its run (mask ${c.rs.broken})`);
-    const t = arena('knight'); t.p.x = t.bx - 60; t.p.y = t.by; t.w.playerSkill(t.p, 0, {}, 1); t.w.skillRelease(t.p, 0);
-    ok(t.rs.broken === 1, `a Bulwark bash breaks a breakable in its cone (mask ${t.rs.broken})`);
-    const s = arena('shade'); s.p.x = s.bx - 70; s.w.playerSkill(s.p, 0, { x0: s.p.x, y0: s.p.y, x1: s.bx + 60, y1: s.by }, 0);
-    ok(s.rs.broken === 1, `Shadowstep breaks a breakable on its path (mask ${s.rs.broken})`);
-  }
-  { // never: a foe shot, a foe blast, a hazard pool, a telegraph, a foe on top of it
-    const { w, p, rs, bx, by } = arena('knight');
-    p.x = bx; p.y = by + 300; p.invuln = 99;
-    w.spawnProj({ team: 1, kind: 'bolt', x: bx - 40, y: by, a: 0, speed: 300, r: 8, dmg: 5, life: 1, src: null });
-    for (let i = 0; i < 40; i++) w.updateProjectiles(1 / 60);
-    w.explode(bx, by, 60, 5, 1, null);
-    w.addZone({ kind: 'poison', x: bx, y: by, r: 60, dur: 5, dps: 20, team: 1 });
-    w.addZone({ kind: 'tele', x: bx, y: by, r: 60, dur: 0.1, dmg: 5, team: 1 });
-    const e = foe(w, bx, by);
-    for (let i = 0; i < 90; i++) w.updateZones(1 / 60);
-    ok(rs.broken === 0 && !smashes(w).length && e.hp > 0, `a foe shot, a foe blast, a hazard pool, a telegraph and a foe over it leave it whole (mask ${rs.broken})`);
-  }
-  { // drops: 25% gold of 1-3 (exact), 1% heart, no xp
-    const { w, rs } = arena('knight');
-    const N = 20000, amt = { 1: 0, 2: 0, 3: 0 };
-    let gold = 0, hearts = 0, xp = 0, odd = 0, evs = 0;
-    for (let i = 0; i < N; i++) {
-      rs.broken = 0; w.pickups.length = 0; w.fx.length = 0;
-      w.smashBreakable(0, null); evs += smashes(w).length;
-      const g = w.pickups.filter(q => q.kind === 'gold').reduce((a, q) => a + q.val, 0);
-      if (g) { gold++; if (amt[g] === undefined) odd++; else amt[g]++; }
-      if (w.pickups.some(q => q.kind === 'heart')) hearts++;
-      if (w.pickups.some(q => q.kind === 'xp')) xp++;
-    }
-    near(gold / N, 0.25, 0.02, 'gold drop rate over 20000 smashes');
-    ok(odd === 0 && [1, 2, 3].every(v => Math.abs(amt[v] / gold - 1 / 3) < 0.04), `gold amounts are 1, 2 or 3 in equal shares (${amt[1]}/${amt[2]}/${amt[3]}, other ${odd})`);
-    near(hearts / N, 0.01, 0.004, 'heart drop rate');
-    ok(xp === 0 && evs === N, `no xp, one event per smash (xp ${xp}, events ${evs})`);
-  }
+  if (st === 2) { const v2 = run(vcfg(cls, st, seed), C.RUN_LEN + 150, vopt); ok(!v2.err && v2.digest === v.digest, `${tag}: victory digest equal (${v.digest} / ${v2.digest})`); }
 }
-{ // boss fury: only strata with a start time run the fight clock; it starts at t (one 'fury' event), scales boss damage and the attack pause, caps at max and ignores phases, freezes, stuns and blinds
-  const FB = W0.BOSS_FURY, Bs = ED.Bosses, Dn = ED.Dungeon;
-  const fw = (s, type) => {
-    const w = hordeWorld(s, ['knight']), p = w.players.values().next().value, c = Dn.center(w.room);
-    p.x = c.x + 100; p.y = c.y; p.invuln = 1e9;
-    const b = w.spawnEnemy(type || ED.biomeFor(s).boss, c.x - 140, c.y);
-    b.spd = 0; b.cd = 9999; b.hp = b.maxHp = 1e9; b.target = p;
-    return { w, b, p };
-  };
-  // Ticks the boss alone for secs (each(i) runs before a tick); returns the 'fury' events seen and the tick each came at.
-  const run = (w, b, secs, each) => { const ev = []; for (let i = 0, k = Math.round(secs * 60); i < k; i++) { if (each) each(i); w.updateEnemy(b, TICK); for (const e of w.fx) if (e.t === 'fury') ev.push({ e, i: i + 1, x: b.x, y: b.y }); w.fx.length = 0; } return ev; };
-  ok(FB.t.length === ED.CONST.STRATA && FB.t.slice(0, 3).every(v => v === 0) && FB.t[3] > 0 && FB.ramp > 0 && FB.max > 1 && FB.warn > 0, `BOSS_FURY: no start in strata I-III, one in IV (${FB.t})`);
-  ok(W0.furyMul(4, FB.t[3]) === 1 && W0.furyMul(1, 1e6) === 1 && W0.furyMul(3, 1e6) === 1 && W0.furyMul(4, 1e6) === FB.max, 'furyMul: 1 up to the start and at strata I-III, max far past it');
-  near(W0.furyMul(4, FB.t[3] + 10), 1 + 10 * FB.ramp, 1e-12, 'furyMul ramps by BOSS_FURY.ramp per second past the start');
-  for (let s = 1; s <= 3; s++) { // no fury at strata I-III, past 200 s
-    const { w, b } = fw(s), ev = run(w, b, 205);
-    ok(ev.length === 0 && b.furyT === 0 && b.furyM === 1 && b.dmg === b.dmgBase && !w.fx.some(e => e.t === 'fury'), `stratum ${s}: no fury at 205 s (events ${ev.length}, clock ${b.furyT}, x${b.furyM})`);
-  }
-  const M10 = 1 + 10 * FB.ramp; for (let s = 4; s <= ED.CONST.STRATA; s++) { // starts at t exactly, once; x(1 + 10 ramp) ten seconds on
-    const t = FB.t[s - 1], { w, b } = fw(s);
-    ok(b.dmgBase === b.dmg && b.furyT === 0 && b.furyM === 1, `stratum ${s}: a fresh boss holds its base damage and a zero clock`);
-    const ev = run(w, b, t + 10);
-    ok(ev.length === 1 && Math.abs(ev[0].i * TICK - t) <= 1.5 * TICK, `stratum ${s}: one fury event at tick ${ev.length && ev[0].i} (${ev.length && (ev[0].i * TICK).toFixed(3)} s, want ${t})`);
-    ok(ev.length === 1 && ev[0].e.type === b.type && ev[0].e.x === Math.round(ev[0].x) && ev[0].e.y === Math.round(ev[0].y), `stratum ${s}: the event names the boss and its spot`);
-    near(b.furyT, t + 10, 2 * TICK, `stratum ${s}: clock after ${t + 10} s`);
-    near(b.furyM, M10, 0.003, `stratum ${s}: x(1 + 10 ramp) ten seconds in`);
-    near(b.dmg, b.dmgBase * b.furyM, 1e-9, `stratum ${s}: boss damage = base x multiplier`);
-    ok(run(w, b, 30).length === 0, `stratum ${s}: the event never repeats`);
-  }
-  { // before the start the multiplier stays 1 and damage untouched (checked tick by tick)
-    const { w, b } = fw(4); let bad = 0;
-    for (let i = 0, k = Math.round((FB.t[3] - 0.1) * 60); i < k; i++) { w.updateEnemy(b, TICK); if (b.furyM !== 1 || b.dmg !== b.dmgBase) bad++; }
-    ok(bad === 0, `stratum IV: x1 and base damage on every tick before ${FB.t[3]} s (${bad} off)`);
-  }
-  { // new zones and shots carry the scaled damage: a telegraphed pool (x0.9, stratum IV), a shot (x0.6)
-    const { w, b } = fw(4);
-    b.furyT = FB.t[3] + 10 - TICK; run(w, b, TICK); near(b.furyM, M10, 1e-9, 'jumped ten seconds past the start: x(1 + 10 ramp)');
-    b.vars = { wm: 1 }; w.zones.length = 0; for (let i = 0; i < 4; i++) Bs.lib.drop(w, b, b.x + 40 * i, b.y, 24, 1, 0.9, 'bone');
-    const zs = w.zones.filter(z => z.src === b && z.kind === 'tele');
-    ok(zs.length > 3 && zs.every(z => Math.abs(z.dmg - b.dmgBase * M10 * 0.9) < 1e-9), `${zs.length} spike pools hit for base x(1 + 10 ramp) x0.9 (${zs[0] && zs[0].dmg.toFixed(3)} vs ${(b.dmgBase * M10 * 0.9).toFixed(3)})`);
-    const q = w.enemyShoot(b, 0, 100, 'bone', 0.6, 6);
-    near(q.dmg, b.dmgBase * M10 * 0.6, 1e-9, 'a volley shot carries base x(1 + 10 ramp) x0.6');
-    const sk = w.spawnEnemy('skeleton', b.x + 40, b.y);
-    ok(sk.dmgBase === undefined && sk.furyM === undefined && sk.furyT === undefined, 'a summon during fury carries no fury state');
-  }
-  { // the pause after an attack divides by the multiplier (windups and attack lengths are untouched)
-    Bs[ED.biomeFor(4).boss].attacks.hold = { update: () => true };
-    const { w, b } = fw(4), after = () => { b.st = 'atk'; b.atk = 'hold'; b.t = 0; b.vars = { wm: 1 }; run(w, b, TICK); return b.t; };
-    b.furyT = 10; const t1 = after();
-    near(t1, 1.05 * w.threat().pause, 1e-9, 'before the start the phase-1 pause is 1.05 x the stratum pause');
-    b.furyT = FB.t[3] + 10 - TICK; const t2 = after();
-    near(t2 * M10, t1, 0.003, `ten seconds into fury the pause is divided by 1 + 10 ramp (${t2.toFixed(4)} vs ${t1.toFixed(4)})`);
-    b.furyT = 1e4; const t3 = after();
-    near(t3, t1 / FB.max, 1e-9, 'at the cap the pause is divided by max');
-    delete Bs[ED.biomeFor(4).boss].attacks.hold;
-  }
-  { // the multiplier caps at max and damage with it
-    const { w, b } = fw(4);
-    b.furyT = FB.t[3] + 1e3; run(w, b, TICK);
-    ok(b.furyM === FB.max && Math.abs(b.dmg - b.dmgBase * FB.max) < 1e-9, `x${b.furyM} capped at ${FB.max}`);
-  }
-  { // the clock runs through phase changes, freezes, stuns and blinds
-    const { w, b } = fw(4);
-    const ev = run(w, b, 24, (i) => {
-      if (i === 5 * 60) b.hp = b.maxHp * 0.55; // below every boss's first phase line (66% or 60%)
-      if (i === 8 * 60) b.frozen = 2;
-      if (i === 11 * 60) b.stun = 2;
-      if (i === 14 * 60) b.blind = 2;
-      if (i === 17 * 60) b.hp = b.maxHp * 0.25; // and the second (33% or 30%)
-    });
-    ok(b.phase === 3, `both phase changes ran (phase ${b.phase})`);
-    near(b.furyT, 24, 2 * TICK, 'the clock read 24 s after 24 s of phases, a freeze, a stun and a blind');
-    ok(ev.length === 0, 'no fury inside the first 24 s');
-  }
+// 4. mortal run
+const m = run({ seed: 5, stage: 0, players: players(['knight']) }, LEN);
+ok(!m.err, `mortal run throws nothing (state ${m.w.state} at ${m.w.time.toFixed(0)} s, level ${m.w.level})` + errOf(m));
+ok(m.w.state !== 'lost' || m.ends === 1, 'a lost run emits one end event');
+// 5. every hero x every stage
+let mdig = 0;
+for (let st = 0; st < ED.STAGES.length; st++) for (const cls of ED.HERO_IDS) {
+  const r = run({ seed: 11 + st, stage: st, players: players([cls]), cheats: { god: true } }, 75);
+  const h = ED.HEROES[cls], dealt = r.w.heroes[0].dealt[h.sig] || 0, q = r.casts[h.skills[0]] || 0, e = r.casts[h.skills[1]] || 0;
+  mdig = (Math.imul(mdig, 31) + r.digest) >>> 0;
+  ok(!r.err && q > 0 && e > 0 && dealt > 0 && r.w.kills > 0, `stage ${st + 1} ${cls}: 75 s, Q ${q} E ${e}, ${h.sig} dealt ${Math.round(dealt)}, kills ${r.w.kills}, level ${r.w.level}` + errOf(r));
+  if (r.maxHits > 200 || r.overCap || !(r.minTele === Infinity || r.minTele >= 0.6)) invariants(r, `stage ${st + 1} ${cls}`);
 }
-{ // healing trim: no heart at a room clear, kill hearts 2%
-  ok(ED.World.HEART_KILL === 0.02, 'heart constant');
-  const { w, p } = stage('knight', {});
-  let hearts = 0;
-  for (let i = 0; i < 60; i++) { w.pickups.length = 0; w.enc = { kind: 'waves' }; w.locked = true; w.roomState[w.roomId].cleared = false; w.room.reward = null; w.roomCleared(); hearts += w.pickups.filter(k => k.kind === 'heart').length; }
-  ok(hearts === 0, `room clears drop no heart (${hearts} in 60)`);
-}
-{ // the Drowned Bell stands in every dark room of stratum III; the Platino comes out at the n-th fight clear of its floor
-  const f = ED.Dungeon.generate(3, 4242), bells = f.rooms.filter(r => r.bell);
-  ok(bells.length >= 1 && bells.length === f.rooms.filter(r => r.dark).length && bells.every(r => r.dark), `a Drowned Bell in each dark room of stratum III (${bells.length})`);
-  const { w } = stage('knight', {});
-  w.floor.platino = 2; w.floorFights = 0;
-  const clear = () => { w.enc = { kind: 'waves' }; w.locked = true; w.roomState[w.roomId].cleared = false; w.room.reward = null; w.roomCleared(); };
-  clear(); ok(!w.critter, 'first fight clear: no Platino'); clear(); ok(!!w.critter, 'second fight clear: the Platino is out');
-}
-{ // boss arenas (arena.js, boss-king.js, boss-hollow.js) and champion rooms (champions.js)
-  const A = ED.Arena, Dn = ED.Dungeon, T = ED.CONST.TILE;
-  const sOf = (id) => ED.BIOMES.findIndex(b => b.boss === id) + 1;
-  const go = (w, secs, each) => { for (let i = 0, k = Math.round(secs * 60); i < k; i++) { for (const p of w.players.values()) { p.invuln = 1e9; p.hp = p.maxHp; } if (each) each(i); w.update(TICK); } };
-  const bossFight = (id, classes) => { // heroes at the boss room's centre right, the boss spawned and stalled (huge HP, no attacks)
-    const w = hordeWorld(sOf(id), classes), room = w.floor.rooms.find(r => r.type === 'boss');
-    const d = Object.keys(room.doors).find(k => room.doors[k] >= 0);
-    w.enterRoom(room.id, Dn.OPP[d]);
-    for (let i = 0; i < 60 * 12 && !w.boss; i++) w.update(TICK);
-    const b = w.boss; if (b) { b.hp = b.maxHp = 1e9; b.cd = 1e9; b.spd = 0; }
-    return { w, room: w.room, b };
-  };
-  const rt = (room) => { const r2 = { w: room.w, h: room.h, tiles: room.tiles.slice(), dais: room.dais, lanterns: room.lanterns }; A.decode(r2, A.encode(room)); return JSON.stringify(A.encode(r2)) === JSON.stringify(A.encode(room)) && r2.tiles.join() === room.tiles.join(); };
-  { // Drowned King: pillars and dais laid at floor gen, the beam stops at a pillar, the tide floods an edge and keeps the dais dry, phase 2 sinks the middle dais, phase 3 opens the whirlpool
-    const { w, room, b } = bossFight('drownedking', ['knight']), K = A.tide;
-    ok(b && b.type === 'drownedking', 'Drowned King spawns in its arena');
-    ok(room.pattern === 'arena' && room.tiles.filter(t => t === 2).length === 32 && room.dais.length === 6, `tide arena: 32 pillar tiles, 6 dais (${room.tiles.filter(t => t === 2).length}, ${(room.dais || []).length})`);
-    const g = Dn.generate(w.stratum, w.floor.seed), r0 = g.rooms.find(r => r.type === 'boss');
-    ok(r0.pattern === 'arena' && r0.tiles.filter(t => t === 2).length === 32 && r0.dais.length === 6, 'arena layout is floor gen (clients build it too)');
-    const cx = A.cx(room), cy = A.cy(room), px = (cx - 4 + 1) * T, py = (cy - 1 + 1) * T, ox = (cx - 10) * T, oy = py; // pillar [-4,-1,2,2]: a ray from its left hits it
-    ok(A.ray(room, ox + T * 2, oy, 0, 2000) < px - ox, 'Tidal Beam ray stops at a pillar');
-    go(w, K.TIDE.first + K.TIDE.warn + 4);
-    const ar = room.arena;
-    ok(ar && ar.k === 'tide' && ar.n >= 1 && ar.st >= 2 && ar.front > 0, `a tide rises after ${K.TIDE.first + K.TIDE.warn} s (state ${ar && ar.st}, front ${ar && ar.front.toFixed(2)})`);
-    const edge = [0, 1, 2, 3].find(i => (ar.m >> i) & 1), ex = edge === 2 ? (room.w - 1.5) * T : edge === 3 ? 1.5 * T : (cx + 0.5) * T, ey = edge === 0 ? 2.5 * T : edge === 1 ? (room.h - 1.5) * T : (cy + 0.5) * T;
-    ok(K.flooded(room, ar, ex, ey) && A.slow(room, ex, ey) === K.TIDE.slow, 'water at the flooding edge slows heroes');
-    const di = room.dais.findIndex(d => K.depth(room, edge, (d.x + 1) * T, (d.y + 1) * T) < ar.front * K.span(room, edge));
-    ok(di < 0 || !K.flooded(room, ar, (room.dais[di].x + 1) * T, (room.dais[di].y + 1) * T), 'a dais in the water stays dry');
-    ok(rt(room), 'tide arena round-trips through the snapshot row');
-    b.hp = b.maxHp * 0.5; go(w, 0.1);
-    ok(b.phase === 2 && (ar.sunk & 0x30) === 0x30, 'phase 2 sinks the middle dais');
-    b.hp = b.maxHp * 0.2; go(w, 0.1);
-    ok(b.phase === 3 && ar.pool && w.zones.some(z => z.kind === 'pull' && z.str === K.POOL.str) && b.noFodder, 'phase 3: whirlpool pull, no fodder trickle');
-    w.enterRoom(w.floor.start, null); ok(!room.arena, 'leaving the room ends the arena');
-  }
-  { // Hollow King: lanterns, phase 2 darkness (shroud outside light, a hero hit lights a lantern), phase 3 rings fall into the void outside-in and come back on clear
-    const { w, room, b } = bossFight('hollowking', ['knight']), H = A.crown, p = [...w.players.values()][0];
-    ok(b && b.type === 'hollowking' && room.lanterns.length === 6, 'Hollow King spawns among 6 lanterns');
-    const tiles0 = room.tiles.slice();
-    go(w, 0.5); b.hp = b.maxHp * 0.5; go(w, 0.1);
-    const ar = room.arena, L = room.lanterns[0];
-    ok(b.phase === 2 && ar.dark, 'phase 2 puts the light out');
-    p.x = b.x + 300; p.y = b.y; b.x = L.x + 200; go(w, 0.1, () => { p.x = b.x + 300 > (room.w - 2) * T ? b.x - 300 : b.x + 300; });
-    ok(b.dmgTakenMul === H.DARK.shroud, `the King outside every light takes x${H.DARK.shroud} (${b.dmgTakenMul})`);
-    w.smashCircle(p, L.x, L.y, 8);
-    ok(ar.lit[0] === H.DARK.litT, 'a hero hit lights a lantern');
-    ok(rt(room), 'crown arena round-trips through the snapshot row');
-    b.hp = b.maxHp * 0.2; go(w, 0.1);
-    ok(b.phase === 3 && !ar.dark, 'phase 3 brings the light back');
-    const edgeT = room.tiles.findIndex((t, i) => t === 0 && H.qOf(room, i % room.w, (i / room.w) | 0) > H.CRUMBLE.fall[0]);
-    go(w, H.CRUMBLE.at[0] - H.CRUMBLE.warn + 0.2, (i) => { if (i === 0) { p.x = (edgeT % room.w + 0.5) * T; p.y = (((edgeT / room.w) | 0) + 0.5) * T; } });
-    ok(ar.warn === 0, 'the outer ring warns before it falls');
-    go(w, H.CRUMBLE.warn);
-    ok((ar.fallen | 0) === 1 && room.tiles[edgeT] === 3 && Dn.tileAt(room, p.x, p.y) === 0, `the outer ring falls; the hero on it climbs out (${ar.fallen}, tile ${room.tiles[edgeT]})`);
-    ok(rt(room), 'fallen rings round-trip through the snapshot row');
-    A.clear(room); ok(room.tiles.join() === tiles0.join(), 'clearing the arena restores the floor');
-  }
-  const champRoom = (kind, classes) => {
-    const w = hordeWorld(4, classes), room = w.floor.rooms.find(r => r.type === 'combat' && !r.dark);
-    const d = Object.keys(room.doors).find(k => room.doors[k] >= 0);
-    w.roomState[room.id].cleared = true; room.champ = kind; w.enterRoom(room.id, Dn.OPP[d]); w.startChampion(room);
-    go(w, 2.5);
-    return { w, room, enc: w.enc };
-  };
-  { // twins: a fallen twin rises after REVIVE s at REVIVE_HP while the other stands; both down clears the room
-    const C = ED.Champions, { w, enc } = champRoom('twins', ['knight']), L = enc.foes.lance, H = enc.foes.hammer;
-    ok(w.locked && L && H && L.type === 'twinlance' && H.type === 'twinhammer', 'twins land after the lock');
-    ok(L.maxHp > ED.ENEMIES.twinlance.hp * W0.ELITE.hp, 'twin HP x the elite factor');
-    w.killEnemy(L, null, {}); go(w, 0.1);
-    ok(enc.rev && H.rage, 'a fallen twin queues its revive; the other rages');
-    go(w, C.REVIVE + 0.2);
-    const L2 = enc.foes.lance;
-    ok(L2 !== L && L2.hp > 0 && Math.abs(L2.hp - L2.maxHp * C.REVIVE_HP) < 1 && !H.rage, 'the twin rises at half health');
-    w.killEnemy(L2, null, {}); w.killEnemy(H, null, {}); go(w, 0.5);
-    ok(!w.locked && w.roomState[w.roomId].cleared, 'both twins down clears the room');
-  }
-  { // Clockwork Colossus: four foes at fixed offsets, each part takes its own hits, the core armoured until two parts break, then open
-    const C = ED.Champions, COL = C.COL, { w, enc } = champRoom('colossus', ['knight']), col = enc.col;
-    ok(w.locked && col && col.core.type === 'colossus' && COL.PARTS.every(k => col.parts[k] && col.parts[k].type === COL.TYPE[k] && enc.foes[k] === col.parts[k]), 'the Colossus lands as the core and three parts');
-    ok(col && COL.PARTS.every(k => col.parts[k].x === col.core.x + COL.OFF[k][0] && col.parts[k].y === col.core.y + COL.OFF[k][1]), 'each part stands at its offset from the core');
-    ok(col && col.core.maxHp > ED.ENEMIES.colossus.hp * W0.ELITE.hp && col.parts.cannon.maxHp > ED.ENEMIES.colcannon.hp * W0.ELITE.hp, 'Colossus HP x the elite factor');
-    const { cannon, saw, eye } = col.parts, core = col.core, hp = () => [core, cannon, saw, eye].map(e => e.hp);
-    const h0 = hp(); w.hitEnemy(cannon, 40, {}); const h1 = hp();
-    ok(h1[1] === h0[1] - 40 && h1[0] === h0[0] && h1[2] === h0[2] && h1[3] === h0[3], 'a hit on the Cannon Arm hurts only the cannon');
-    const p = [...w.players.values()][0];
-    w.explode(saw.x + 12, saw.y, 8, 30, 0, p, 'fire', true); const h2 = hp();
-    ok(h2[2] < h1[2] && h2[0] === h1[0] && h2[1] === h1[1] && h2[3] === h1[3], 'a blast that touches the Saw Arm hurts only the saw');
-    near(w.hitEnemy(core, 100, {}), 100 * COL.ARMOR, 1e-6, 'the armoured core takes COL.ARMOR');
-    core.hp = core.maxHp * COL.FLOOR + 5; w.hitEnemy(core, 1000, {}); go(w, 2 / 60);
-    ok(core.hp >= core.maxHp * COL.FLOOR - 1e-6 && core.hp > 0, `the armoured core holds at COL.FLOOR of its health (${(core.hp / core.maxHp).toFixed(3)})`);
-    near(w.hitEnemy(core, 100, {}), 0, 1e-9, 'at the floor the armoured core takes nothing');
-    const picks = (n) => { const s = new Set(), r0 = col.runs, l0 = col.last; for (let i = 0; i < n; i++) { col.runs = []; col.last = null; const id = w.colossusPick(col); if (id) s.add(id); } col.runs = r0; col.last = l0; return s; };
-    const own = (k) => Object.keys(C.MOVES).filter(id => C.MOVES[id].part === k && !C.MOVES[id].stump), esc = (k) => Object.keys(C.MOVES).filter(id => C.MOVES[id].part === k && C.MOVES[id].stump);
-    const s0 = picks(80);
-    ok(COL.PARTS.every(k => own(k).some(id => s0.has(id))) && COL.PARTS.every(k => !esc(k).some(id => s0.has(id))), `intact: every part's moves, no escalation (${[...s0]})`);
-    core.hp = core.maxHp; w.killEnemy(cannon, p, {}); go(w, 2 / 60);
-    const s1 = picks(80);
-    ok(col.b === 1 && !col.open && core.dmgTakenMul === COL.ARMOR, 'the cannon breaks; the core stays armoured');
-    ok(!own('cannon').some(id => s1.has(id)) && esc('cannon').every(id => s1.has(id)), `a broken cannon: its moves gone, its stump vents (${[...s1]})`);
-    ok(!col.runs.some(m => m.src === cannon) && !w.zones.some(z => z.src === cannon && z.kind === 'laser'), 'the broken cannon drops its running moves');
-    w.killEnemy(saw, p, {}); go(w, 2 / 60);
-    const s2 = picks(80);
-    ok(col.open && core.dmgTakenMul === COL.OPEN, 'the second break opens the core');
-    near(w.hitEnemy(core, 100, {}), 100 * COL.OPEN, 1e-6, 'the open core takes COL.OPEN');
-    ok(!own('saw').some(id => s2.has(id)) && esc('saw').every(id => s2.has(id)) && own('eye').every(id => s2.has(id)), `final phase: the eye's moves and both stumps (${[...s2]})`);
-    ok(JSON.stringify(A.encode(w.room).slice(0, 3)) === JSON.stringify([3, 3, 1]), `the arena row carries the broken parts and the open core (${JSON.stringify(A.encode(w.room))})`);
-    ok(rt(w.room), 'the Colossus arena round-trips through the snapshot row');
-  }
-  { // every Colossus move starts with a telegraph and deals nothing before it: no shot, beam, saw or burst in its first 0.45 s
-    const C = ED.Champions, COL = C.COL, WARN = { tele: 1, teleLine: 1, teleCone: 1 }, silent = [], early = [];
-    for (const id of Object.keys(C.MOVES)) {
-      const M = C.MOVES[id], { w, enc } = champRoom('colossus', ['knight', 'ranger']), col = enc.col;
-      if (M.stump) { w.killEnemy(col.parts[M.part], null, {}); go(w, 2 / 60); }
-      col.runs = []; col.pause = 99;
-      const pieces = new Set(col.all), p0 = w.projs.length, z0 = new Set(w.zones);
-      w.colossusStart(col, id);
-      const warn = w.zones.filter(z => !z0.has(z) && pieces.has(z.src) && (WARN[z.kind] || (z.kind === 'laser' && z.warm >= 0.5)));
-      if (!warn.length) silent.push(id);
-      let bad = false;
-      go(w, 0.45, () => { if (w.projs.length > p0 || w.zones.some(z => pieces.has(z.src) && ((z.kind === 'laser' && z.t > z.warm) || z.kind === 'gsaw'))) bad = true; });
-      if (bad || col.runs[0] && col.runs[0].at < 0.5) early.push(id);
-    }
-    ok(!silent.length, `every Colossus move starts with a telegraph (${silent})`);
-    ok(!early.length, `no Colossus move hurts within 0.45 s of its start (${early})`);
-  }
-  { // the Colossus fight ends when the core falls (the parts fall with it), pays the champion room's relic and sets run.champs bit 1; a seed replays the same fight
-    const C = ED.Champions, COL = C.COL, { w, enc, room } = champRoom('colossus', ['knight']), col = enc.col;
-    room.type = 'champion'; room.reward = 'relic';
-    go(w, 6);
-    w.killEnemy(col.parts.eye, null, {}); w.killEnemy(col.parts.saw, null, {}); go(w, 2 / 60);
-    w.killEnemy(col.core, null, {}); go(w, 0.5);
-    ok(!w.locked && w.roomState[w.roomId].cleared && COL.PARTS.every(k => col.parts[k].hp <= 0) && !w.zones.some(z => col.all.includes(z.src)), 'the core down ends the fight; its parts and telegraphs go');
-    ok(w.props.some(q => q.kind === 'reward' && q.item === 'relic') && (w.run.champs & 2), 'the Colossus room pays its relic and marks run.champs bit 1');
-    const trace = () => { const r = champRoom('colossus', ['knight', 'cleric']), out = []; go(r.w, 24, (i) => { if (i % 30 === 0) out.push(r.enc.col.last + ':' + r.w.projs.length + ':' + r.w.zones.length + ':' + Math.round(r.enc.col.x)); }); return out.join(); };
-    const a = trace(), b = trace();
-    ok(a === b && /spiral|fan|ring|sweep|roll|beam|grid/.test(a), 'a seed replays the same Colossus fight');
-  }
-}
-{ // Mire Worm: statuses keep ticking while it is burrowed; the eruption: warned lanes, B.ring shots over B.arc (the rest is a shot-free gap) at B.speed, a telegraph of at least 1.1 s, exposed B.expose s after
-  const w = hordeWorld(2, ['knight']), p = [...w.players.values()][0], B = ED.ENEMIES.mireworm.burrow;
-  const e = w.spawnEnemy('mireworm', p.x + 200, p.y); e.spawnT = 0; e.maxHp = e.hp = 1e4;
-  w.burnStack(e, p); w.burnStack(e, p); w.addBleed(e, 400, p);
-  e.vars.init = 1; e.st = 'burrow'; e.burrowed = true; e.vars.dig = 99; e.vars.spot = null;
-  const hp0 = e.hp;
-  ok(w.hitEnemy(e, 50, { p }) === 0, 'a burrowed worm takes no hits');
-  for (let i = 0; i < 90; i++) { p.invuln = 1e9; w.update(TICK); }
-  ok(e.burrowed && hp0 - e.hp > 1, `Burn and Bleed keep ticking on a burrowed worm (${(hp0 - e.hp).toFixed(1)} damage in 1.5 s)`);
-  e.vars.dig = 0; e.x = p.x + 40; e.y = p.y;
-  for (let i = 0; i < 2; i++) { p.invuln = 1e9; w.update(TICK); }
-  const lanes = w.zones.filter(z => z.src === e && z.kind === 'teleLine' && z.warnOnly), circ = w.zones.find(z => z.src === e && z.kind === 'tele');
-  ok(lanes.length === B.ring && circ && circ.dur >= 1.1, `the eruption warns ${lanes.length} shot lanes and a ${circ && circ.dur.toFixed(2)} s circle`);
-  const p0 = new Set(w.projs);
-  for (let i = 0, k = Math.round(((circ ? circ.dur : 1) + 0.05) * 60); i < k; i++) { p.invuln = 1e9; w.update(TICK); }
-  const shots = w.projs.filter(q => !p0.has(q) && q.src === e), as = shots.map(q => Math.atan2(q.vy, q.vx)).sort((a, b) => a - b);
-  const gap = as.length ? Math.max(...as.map((a, i) => (i ? a - as[i - 1] : a + ED.U.TAU - as[as.length - 1]))) : 0, sp = ED.World.shotSpd(w.stratum) * B.speed;
-  ok(shots.length === B.ring && shots.every(q => Math.abs(Math.hypot(q.vx, q.vy) - sp) < 1), `the eruption fires ${shots.length} shots at ${B.speed} x the stratum shot speed`);
-  ok(gap >= ED.U.TAU - B.arc - 0.01, `the ring leaves a shot-free gap of ${gap.toFixed(2)} rad`);
-  ok(!e.burrowed && e.st === 'erupt' && e.t > B.expose - 0.2, `then it stays exposed ${B.expose} s`);
-}
-console.log(`${n} checks, ${fails} failed`);
-process.exit(fails ? 1 : 0);
+console.log('     hero x stage digest ' + mdig);
+// 7. save
+const S = ED.Save, p = S.defaultProfile();
+p.name = 'Tester'; p.gold = 450; S.buy(p, 'might');
+const back = S.decode(S.encode(p));
+ok(back.name === 'Tester' && back.gold === 250 && back.shop.might === 1, 'save code round trip');
+const g = S.applyRun(p, Object.assign({}, sum, { time: 700, level: 41 }), 0, 'p1');
+ok(g.unlocked.includes('necro') && g.unlocked.includes('cleric') && g.unlocked.includes('bell') && p.beat.includes(0) && S.stageUnlocked(p, 1), 'applyRun unlocks heroes and stage 2: ' + g.unlocked.join(','));
+let bad = false; try { S.decode('WK1-AAAAA-AAAAA'); bad = true; } catch (e) { /* rejected */ }
+ok(!bad, 'a broken code is rejected');
+
+console.log(`check-sim: ${fails ? fails + ' failure(s)' : 'all passed'} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+process.exitCode = fails ? 1 : 0;

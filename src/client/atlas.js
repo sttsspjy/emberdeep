@@ -1,9 +1,9 @@
 // ImageBitmap helpers (ED.Bmp) and the pixel-art atlas runtime (ED.Atlas). Client only; nothing here touches the sim.
-// ED.ART (src/art/*.js) holds data-URI pages plus frame / anim tables in art px; 1 art px = 2 world px. Pages decode once into ImageBitmaps;
+// ED.ART (src/art/*.js) holds data-URI pages plus frame / anim tables in art px; 1 art px = 1 world px. Pages decode once into ImageBitmaps;
 // recoloured variants, rotated sprites and tinted font sheets are cached ImageBitmaps built lazily (a canvas stands in until createImageBitmap resolves).
 (function (ED) {
   'use strict';
-  const K = 2; // world px per art px
+  const K = 1; // world px per art px (the view is ~640x360 world px, integer-scaled to the screen)
 
   // ---------------- ImageBitmap helper ----------------
   // Gecko pays ~13 us per distinct source canvas per drawImage; ImageBitmaps do not. Callers bake into a canvas, draw it until Bmp.from resolves, then swap it.
@@ -231,7 +231,7 @@
   };
 
   // ---------------- draw ----------------
-  // Draws frame i of anim `id` with its feet anchor (ax, ay) at world (x, y), 1 art px = 2 world px, nearest sampling.
+  // Draws frame i of anim `id` with its feet anchor (ax, ay) at world (x, y), 1 art px = 1 world px, nearest sampling.
   // o: { flip, variant (key of Atlas.variant / built-in), alpha, rot (radians, clockwise, quantised to 32 steps about the anchor), anchor (name in anim.anchors to pivot on instead of the feet) }.
   A.draw = (c, id, i, x, y, o) => {
     const r = rec(id); if (!r) return false;

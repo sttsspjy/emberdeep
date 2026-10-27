@@ -1,308 +1,120 @@
-// The Hollow King, the finale. Phase 1: a duel (crown-blade combos with telegraphed steps, the crown thrown out and back, blinks). Phase 2: the light goes out; each hero sees DARK.vis around them,
-// the star lanterns of the arena light for DARK.litT s when a hero hit reaches them, the King takes DARK.shroud damage outside every light and hunts the hero farthest from a lit lantern (an ambush from the dark).
-// Phase 3: the light returns and the arena breaks ring by ring from the outside in (each ring warns, then falls into the void); past the last ring the pause between his attacks keeps shrinking (the time check).
-// No summons and no fodder trickle. Loaded after rooms.js: lantern hits ride on the breakable-smash hooks.
+// Boss 'hollow' (Hollow King, stage 1 final boss). A crown-blade duelist; enrages at ED.CONST.ENRAGE_T (bosses.js: x3 damage and speed; here telegraphs x0.8, floor 0.6 s, shards spin faster).
+// P1: three-swing combo (cones that step with him, a thrust lane last), crown throw (out along a warned lane and back to him), blink-and-cleave.
+// P2 (66%): 3 crown shards orbit him (harmless for their first second), crown throw sends 3 crowns, skull novas. P3 (33%): 3 more shards on a wider counter-turning ring, double blinks, starfall on every hero.
 (function (ED) {
   'use strict';
-  const U = ED.U, Sim = ED.Sim, D = ED.Dungeon, T = ED.CONST.TILE, TAU = U.TAU, A = ED.Arena, B = ED.Bosses, W = ED.World.prototype;
-  const { line, cone, ring, aim, mv, approach, runner, drop } = B.lib;
+  const U = ED.U, C = ED.CONST, TAU = U.TAU, B = ED.Bosses, DT = C.TICK;
+  const { tele, line, cone, ring, aim, approach, runner } = B.lib;
+  const { T, hz, spot, shot } = B.libB;
+  ED.regLook('crown', 'crownshard', 'blinkmark', 'starfall');
 
-  // Darkness: vis = light radius around each hero (px), lanR = lantern light radius, litT = seconds a lantern burns after a hit, shroud = damage factor on the King outside every light, hitR = lantern hit radius.
-  const DARK = { vis: 72, lanR: 130, litT: 14, shroud: 0.4, hitR: 14 };
-  // Collapse: ring k falls where q = max(|dx| / half width, |dy| / half height) of the interior exceeds fall[k], at[k] s into phase 3 after warn s of warning; a hero on a falling tile drops for dmg of max health
-  // and climbs out at the nearest standing tile. late: past the last ring the pause between attacks x (1 - step) every `every` s, down to min.
-  // Phase 3 orbit: n shards circle the King at r px, spd rad/s; a touch hurts for dmg x the King's damage.
-  const SHARDS = { n: 3, r: 74, spd: 2.2, dmg: 0.45 };
-  const CRUMBLE = { fall: [0.78, 0.6, 0.44], at: [6, 19, 32], warn: 3, dmg: 0.2, late: { every: 8, step: 0.12, min: 0.5 } };
+  // Orbit shards: per ring { n, R (px), dir } added at phase 2 and 3; spd rad/s (x1.6 enraged), touch damage x boss damage, arm s harmless after appearing, r px.
+  const SHARDS = { rings: [{ n: 3, R: 62, dir: 1 }, { n: 3, R: 112, dir: -1 }], spd: 2.0, mul: 0.6, arm: 1.0, r: 8 };
+  // Crown: lane length, speed px/s, x boss damage, radius.
+  const CROWN = { len: 360, speed: 400, mul: 1.1, r: 9 };
+  ED.Bosses.HOLLOW = { SHARDS, CROWN };
 
-  // Interior ring coordinate of tile (tx, ty): 0 at the centre, near 1 at the walls.
-  const qOf = (room, tx, ty) => Math.max(Math.abs(tx + 0.5 - room.w / 2) / ((room.w - 2) / 2), Math.abs(ty + 0.5 - (room.h + 1) / 2) / ((room.h - 3) / 2));
-  // Collapses rings until n have fallen: floor and hazard tiles past the ring's limit become chasm (3); ar.orig keeps [index, tile] pairs for clear.
-  const fallTo = (room, ar, n) => {
-    if (!ar.orig) ar.orig = [];
-    while ((ar.fallen | 0) < Math.min(n, CRUMBLE.fall.length)) {
-      const lim = CRUMBLE.fall[ar.fallen | 0];
-      for (let ty = 2; ty <= room.h - 2; ty++) for (let tx = 1; tx <= room.w - 2; tx++) {
-        const i = ty * room.w + tx, t = room.tiles[i];
-        if ((t === 0 || t === 4) && qOf(room, tx, ty) > lim) { ar.orig.push(i, t); room.tiles[i] = 3; }
-      }
-      ar.fallen = (ar.fallen | 0) + 1;
+  const shardUpd = (w, z, e, st) => {
+    st.ang += st.dir * SHARDS.spd * (e.enraged ? 1.6 : 1) * DT;
+    z.x = e.x + Math.cos(st.ang) * st.R; z.y = e.y - 10 + Math.sin(st.ang) * st.R;
+  };
+  const addShards = (w, e, rg) => {
+    for (let i = 0; i < rg.n; i++) {
+      const ang = i * TAU / rg.n;
+      hz(w, e, { look: 'crownshard', x: e.x + Math.cos(ang) * rg.R, y: e.y - 10 + Math.sin(ang) * rg.R, r: SHARDS.r, dur: 1e6 }, { mul: SHARDS.mul, arm: SHARDS.arm, upd: shardUpd, ang, dir: rg.dir, R: rg.R });
     }
   };
-  // Wire: [dark, rings fallen, ring warning + 1 (0 none), warning seconds x10, then per lantern its seconds left x10 (0 unlit, -1 fallen)].
-  A.reg('crown', {
-    id: 2,
-    encode: (ar) => [ar.dark ? 1 : 0, ar.fallen | 0, ar.warn + 1, Math.round(ar.wt * 10)].concat(ar.lit.map(v => (v < 0 ? -1 : Math.ceil(v * 10)))),
-    decode: (room, r, ar) => { ar.dark = !!r[1]; fallTo(room, ar, r[2]); ar.warn = r[3] - 1; ar.wt = r[4] / 10; ar.lit = r.slice(5).map(v => (v < 0 ? -1 : v / 10)); },
-    clear: (room, ar) => { const o = ar.orig; if (o) for (let j = 0; j < o.length; j += 2) room.tiles[o[j]] = o[j + 1]; ar.orig = null; ar.fallen = 0; },
-  });
-  // A lit lantern's light reaches (x, y) (plus pad px).
-  const lit = (room, ar, x, y, pad) => {
-    const ls = room.lanterns || [];
-    for (let i = 0; i < ls.length; i++) if (ar.lit[i] > 0 && U.dist2(ls[i].x, ls[i].y, x, y) < (DARK.lanR + (pad || 0)) ** 2) return true;
-    return false;
+  // Crown flight: out for st.out s, then homes back to its King (fast) and vanishes on reaching him; gone if he dies.
+  const crownTick = (w, pr, dt) => {
+    const st = pr.st, e = st.e;
+    if (!e || e.dead || e.id !== st.id) { pr.dead = true; return; }
+    if (!st.back && pr.t >= st.out) st.back = true;
+    if (st.back) {
+      const dx = e.x - pr.x, dy = e.y - 14 - pr.y, d = Math.hypot(dx, dy) || 1, sp = CROWN.speed * 1.15;
+      pr.vx = dx / d * sp; pr.vy = dy / d * sp; pr.life = Math.max(pr.life, 0.5);
+      if (d < 16) pr.dead = true;
+    }
   };
-  A.crown = { DARK, CRUMBLE, SHARDS, qOf, lit };
 
-  // ---------- lanterns: a hero hit lights one (the breakable-smash hooks every hero hit already calls) ----------
-  const light = (w, i) => {
-    const ar = w.room.arena, L = w.room.lanterns[i];
-    if (!(ar.lit[i] > 0)) w.emit({ t: 'lantern', i, x: Math.round(L.x), y: Math.round(L.y) });
-    ar.lit[i] = DARK.litT;
-  };
-  const darkAr = (w) => { const ar = w.room && w.room.arena; return ar && ar.k === 'crown' && ar.dark ? ar : null; };
-  const lanCircle = (w, x, y, r) => { const ar = darkAr(w); if (!ar) return; const ls = w.room.lanterns || []; for (let i = 0; i < ls.length; i++) if (ar.lit[i] >= 0 && U.dist2(ls[i].x, ls[i].y, x, y) <= (DARK.hitR + r) ** 2) light(w, i); };
-  const lanSeg = (w, x0, y0, x1, y1, r) => { const ar = darkAr(w); if (!ar) return; const ls = w.room.lanterns || []; for (let i = 0; i < ls.length; i++) if (ar.lit[i] >= 0 && U.segDist2(ls[i].x, ls[i].y, x0, y0, x1, y1) <= (DARK.hitR + r) ** 2) light(w, i); };
-  const lanArc = (w, p, a, reach, arc) => {
-    const ar = darkAr(w); if (!ar) return;
-    const ls = w.room.lanterns || [];
-    for (let i = 0; i < ls.length; i++) {
-      if (ar.lit[i] < 0) continue;
-      const dx = ls[i].x - p.x, dy = ls[i].y - p.y, d = Math.hypot(dx, dy);
-      if (d - DARK.hitR > reach) continue;
-      if (arc < 6.2 && Math.abs(U.angDiff(a, Math.atan2(dy, dx))) > arc / 2 + Math.atan2(DARK.hitR, Math.max(d, 1))) continue;
-      light(w, i);
-    }
-  };
-  const sc = W.smashCircle, ss = W.smashSeg, sa = W.smashArc;
-  W.smashCircle = function (p, x, y, r) { lanCircle(this, x, y, r); return sc.call(this, p, x, y, r); };
-  W.smashSeg = function (p, x0, y0, x1, y1, r, noRing) { lanSeg(this, x0, y0, x1, y1, r); return ss.call(this, p, x0, y0, x1, y1, r, noRing); };
-  W.smashArc = function (p, a, reach, arc) { lanArc(this, p, a, reach, arc); return sa.call(this, p, a, reach, arc); };
-
-  // ---------- the arena tick ----------
-  // Nearest standing floor tile centre to (x, y) (the climb-out spot of a fall).
-  const safeSpot = (room, x, y) => {
-    let best = null, bd = Infinity;
-    for (let ty = 2; ty <= room.h - 2; ty++) for (let tx = 1; tx <= room.w - 2; tx++) {
-      if (room.tiles[ty * room.w + tx] !== 0) continue;
-      const cx = (tx + 0.5) * T, cy = (ty + 0.5) * T, d = U.dist2(cx, cy, x, y);
-      if (d < bd) { bd = d; best = { x: cx, y: cy }; }
-    }
-    return best || D.center(room);
-  };
-  // A ring fell: heroes on it drop and climb out (downed ones are carried), foes on it fall, the King steps back onto the floor, lanterns and breakables on it are gone.
-  const ringFell = (w, e, ar) => {
-    const room = w.room, rs = w.roomState[w.roomId];
-    for (const p of w.players.values()) {
-      if (p.dead || D.tileAt(room, p.x, p.y) !== 3) continue;
-      const x0 = p.x, y0 = p.y, pt = safeSpot(room, p.x, p.y);
-      p.x = pt.x; p.y = pt.y; p.vx = 0; p.vy = 0; p.dashT = 0; p.skillMove = null;
-      if (!p.downed) { w.hurtPlayer(p, p.maxHp * CRUMBLE.dmg, { hazard: true, x: x0, y: y0 }); p.invuln = Math.max(p.invuln, 1); }
-      if (p.remote) w.msgs.push({ to: p.pid, t: 'blink', x: Math.round(p.x), y: Math.round(p.y) });
-      w.emit({ t: 'fall', pid: p.pid, x0: Math.round(x0), y0: Math.round(y0), x: Math.round(p.x), y: Math.round(p.y) });
-    }
-    for (const f of w.enemies) if (f !== e && f.hp > 0 && !f.fly && D.tileAt(room, f.x, f.y) === 3) w.killEnemy(f, null, {});
-    if (D.tileAt(room, e.x, e.y) === 3) { const pt = safeSpot(room, e.x, e.y); w.emit({ t: 'blinkfx', x0: Math.round(e.x), y0: Math.round(e.y), x1: Math.round(pt.x), y1: Math.round(pt.y) }); e.x = pt.x; e.y = pt.y; }
-    (room.lanterns || []).forEach((L, i) => { if (D.tileAt(room, L.x, L.y) === 3) ar.lit[i] = -1; });
-    room.breakables.forEach((b, i) => {
-      if ((rs.broken >> i) & 1 || D.tileAt(room, b.x * T, b.y * T) !== 3) return;
-      rs.broken |= 1 << i; w.emit({ t: 'smash', i, x: Math.round(b.x * T), y: Math.round(b.y * T), k: b.k, r: w.roomId });
-    });
-  };
-  // Phase 3 orbit: the SHARDS circle the King and hurt heroes they touch.
-  const shards = (w, e) => {
-    const S = SHARDS;
-    for (let i = 0; i < S.n; i++) {
-      const a = w.time * S.spd + i * TAU / S.n, x = e.x + Math.cos(a) * S.r, y = e.y + Math.sin(a) * S.r;
-      for (const p of w.players.values()) if (U.dist2(x, y, p.x, p.y) < (p.r + 10) ** 2) w.hurtPlayer(p, e.dmg * S.dmg, { e });
-    }
-  };
-  const tick = (w, e, dt) => {
-    const room = w.room;
-    let ar = room.arena;
-    if (!ar || ar.k !== 'crown') ar = room.arena = { k: 'crown', dark: false, lit: (room.lanterns || []).map(() => 0), fallen: 0, warn: -1, wt: 0, p3: 0, orig: null };
-    e.noFodder = true; e.noTouch = !!ar.dark; // in the dark only his telegraphed attacks hurt
-    if (ar.dark) {
-      for (let i = 0; i < ar.lit.length; i++) if (ar.lit[i] > 0) ar.lit[i] = Math.max(0, ar.lit[i] - dt);
-      let seen = lit(room, ar, e.x, e.y, e.r);
-      if (!seen) for (const p of w.players.values()) if (!p.dead && U.dist2(p.x, p.y, e.x, e.y) < (DARK.vis + e.r) ** 2) { seen = true; break; }
-      e.dmgTakenMul = seen ? 1 : DARK.shroud;
-    } else e.dmgTakenMul = 1;
-    if (e.phase >= 3) {
-      ar.p3 += dt;
-      const C = CRUMBLE, k = ar.fallen | 0;
-      if (k < C.at.length) {
-        if (ar.warn < 0 && ar.p3 >= C.at[k] - C.warn) { ar.warn = k; ar.wt = 0; w.emit({ t: 'crumble', k, st: 0 }); }
-        if (ar.warn >= 0) {
-          ar.wt += dt;
-          if (ar.p3 >= C.at[k]) { fallTo(room, ar, k + 1); ar.warn = -1; ar.wt = 0; ringFell(w, e, ar); w.emit({ t: 'crumble', k, st: 1 }); }
-        }
-      }
-      shards(w, e);
-    }
-  };
-  const onPhase = (w, e, ph) => {
-    const ar = w.room.arena;
-    if (!ar) return;
-    if (ph === 2) { ar.dark = true; for (let i = 0; i < ar.lit.length; i++) if (ar.lit[i] >= 0) ar.lit[i] = 0; w.emit({ t: 'lightsout', x: Math.round(e.x), y: Math.round(e.y) }); }
-    else if (ph === 3) { ar.dark = false; ar.p3 = 0; e.dmgTakenMul = 1; w.emit({ t: 'dawn', x: Math.round(e.x), y: Math.round(e.y) }); }
-  };
-  // Pause factor: x0.9 in the dark; past the last ring x(1 - step) per `every` s, down to min.
-  const pauseMul = (w, e) => {
-    const ar = w.room.arena, L = CRUMBLE.late;
-    if (!ar) return 1;
-    if (ar.dark) return 0.9;
-    if (e.phase < 3 || (ar.fallen | 0) < CRUMBLE.at.length) return 1;
-    return Math.max(L.min, 1 - L.step * Math.floor((ar.p3 - CRUMBLE.at[CRUMBLE.at.length - 1]) / L.every + 1));
-  };
-  // The hunted hero: living, outside every lit lantern's light, the one farthest from a lit lantern (null when every hero stands in light).
-  const prey = (w) => {
-    const room = w.room, ar = room.arena, ls = room.lanterns || [];
-    let best = null, bd = -1;
-    for (const p of w.alivePlayers()) {
-      if (p.stealthT > 0 || lit(room, ar, p.x, p.y, 0)) continue;
-      let d = 1e9;
-      for (let i = 0; i < ls.length; i++) if (ar.lit[i] > 0) d = Math.min(d, U.dist2(ls[i].x, ls[i].y, p.x, p.y));
-      if (d > bd) { bd = d; best = p; }
-    }
-    return best;
-  };
-  const tell = (w, e, k, x, y) => w.emit({ t: 'tell', k, x: Math.round(x === undefined ? e.x : x), y: Math.round(y === undefined ? e.y : y) });
-
-  B.hollowking = runner({
-    // Three crown-blade swings: each a telegraphed step toward the target (warn lane, then a short dash), then a slash cone; the third is a long thrust lane.
+  B.hollow = runner({
+    // Three swings: each a cone telegraph that rides with him while he steps in (first 0.35 s); the third is a thrust lane.
     combo: {
-      w: 3, ok: (w, e) => e.phase !== 2,
-      start(w, e) { e.vars.i = 0; e.vars.next = 0; e.vars.n = 3; tell(w, e, 'combo'); },
+      w: 3, wind: 0.6,
+      start(w, e) { const s = e.vars.s; s.i = 0; s.next = 0; s.b = false; },
       update(w, e, dt, t) {
-        const v = e.vars, k = v.wm;
-        if (v.i < v.n && t >= v.next && !v.b) {
-          const a = aim(e), step = U.clamp(Math.hypot(e.target.x - e.x, e.target.y - e.y) - 70, 0, 90);
-          line(w, e, e.x, e.y, a, step + e.r, e.r * 1.4, 0.35 * k, 0, true);
-          v.b = { at: t + 0.35 * k, a, step, last: v.i === v.n - 1 };
-          e.pose = 'wind';
+        const s = e.vars.s;
+        if (s.i >= 3) return t >= s.next;
+        if (!s.b && t >= s.next) {
+          const tg = e.tgt, d = Math.hypot(tg.x - e.x, tg.y - e.y), last = s.i === 2;
+          s.b = true; s.a = aim(e); s.t0 = t; s.d = T(e, last ? 0.7 : 0.6); s.step = U.clamp(d - 50, 0, 70) / 0.35;
+          if (last) line(w, e, e.x, e.y, s.a, 230, 28, s.d, 1.5, { followSrc: true });
+          else cone(w, e, s.a, 92, 2.0, s.d, 1.3);
         }
-        const b = v.b;
-        if (!b) return v.i >= v.n;
-        if (!b.go && t >= b.at) { b.go = true; b.until = t + 0.12; e.pose = 'dash'; }
-        if (b.go && !b.swung) {
-          if (t < b.until) mv(w, e, Math.cos(b.a), Math.sin(b.a), b.step / 0.12, dt);
-          else {
-            b.swung = true; e.pose = 'wind';
-            const a2 = aim(e);
-            if (b.last) line(w, e, e.x, e.y, a2, 280, 34, 0.55 * k, 1.5);
-            else cone(w, e, a2, 118, 2.1, 0.45 * k, 1.25, () => { e.pose = 'slam'; });
-            b.end = t + (b.last ? 0.55 : 0.45) * k + 0.2;
-          }
+        if (s.b) {
+          if (t - s.t0 < 0.35) { const sp = s.step * (e.enraged ? 1.5 : 1); B.lib.mv(w, e, Math.cos(s.a), Math.sin(s.a), sp, dt); }
+          if (t - s.t0 >= s.d) { s.b = false; s.i++; s.next = t + 0.15; }
         }
-        if (b.swung && t >= b.end) { v.b = null; v.i++; v.next = t + 0.1; e.pose = 'idle'; }
-        return v.i >= v.n && !v.b;
+        return false;
       },
     },
-    // The crown flies out along a warned lane, stops at its end (or a wall) and flies back to the King.
+    // Crown throw: warned lane(s), the crown flies out over obstacles and comes back to him. P2+: three crowns in a fan.
     crown: {
-      w: 2, ok: (w, e) => e.phase !== 2,
-      start(w, e) { e.pose = 'wind'; const k = e.vars.wm; e.vars.a = aim(e); e.vars.at = 0.6 * k; line(w, e, e.x, e.y, e.vars.a, 420, 22, e.vars.at, 0, true); tell(w, e, 'crown'); },
+      w: 2, wind: 0.7,
+      start(w, e) {
+        const s = e.vars.s, n = e.vars.phase >= 2 ? 3 : 1, a0 = aim(e);
+        s.at = T(e, 0.7); s.a = [];
+        for (let i = 0; i < n; i++) { const a = a0 + (i - (n - 1) / 2) * 0.45; s.a.push(a); line(w, e, e.x, e.y, a, CROWN.len, 20, s.at, 0); }
+      },
       update(w, e, dt, t) {
-        const v = e.vars, sp = 520, life = 420 / sp;
-        if (!v.out && t >= v.at) { v.out = w.enemyShoot(e, v.a, sp, 'orb', 1.1, 10, { life }); e.pose = 'cast'; }
-        if (v.out && !v.back && t >= v.at + life) {
-          const q = v.out, a = Math.atan2(e.y - q.y, e.x - q.x), d = Math.hypot(e.x - q.x, e.y - q.y);
-          v.back = w.spawnProj({ team: 1, kind: 'orb', x: q.x, y: q.y, a, speed: q.vx || q.vy ? Math.hypot(q.vx, q.vy) : sp, r: 10, dmg: e.dmg * 1.1, life: Math.max(0.2, d / sp), src: e });
-          q.dead = true;
-        }
-        return !!v.back && t >= v.at + life + 0.6;
+        const s = e.vars.s;
+        if (!s.done && t >= s.at) { s.done = true; for (const a of s.a) shot(w, e, a, CROWN.speed, 'crown', CROWN.mul, CROWN.r, { fly: true, life: 3, tick: crownTick, st: { e, id: e.id, out: CROWN.len / CROWN.speed, back: false } }); }
+        return t >= s.at + 1.6;
       },
     },
+    // Blink: a mark beside the target (0.7 s), he appears there and cleaves toward the target (0.6 s cone). P3: twice.
     blink: {
-      w: 2, ok: (w, e) => e.phase !== 2,
-      start(w, e) { e.vars.n = e.phase >= 3 ? 2 : 1; e.vars.i = 0; e.vars.next = 0; },
+      w: 2, wind: 0.7,
+      start(w, e) { const s = e.vars.s; s.n = e.vars.phase >= 3 ? 2 : 1; s.i = 0; s.next = 0; s.pd = null; },
       update(w, e, dt, t) {
-        const k = e.vars.wm;
-        if (e.vars.i < e.vars.n && t >= e.vars.next && !e.vars.pending) {
-          const p = e.target, pt = Sim.castMove(w.room, p.x, p.y, w.rng.range(0, TAU), 70, e.r, true);
-          e.vars.pending = { x: pt.x, y: pt.y, at: t + 0.6 * k };
-          e.pose = 'fade';
-          w.addZone({ kind: 'tele', x: pt.x, y: pt.y, r: e.r + 6, dur: 0.6 * k, dmg: 0, team: 1, src: e, warnOnly: true });
-          tell(w, e, 'blink', pt.x, pt.y);
+        const s = e.vars.s;
+        if (!s.pd && s.i < s.n && t >= s.next) {
+          const tg = e.tgt, a = w.rng.range(0, TAU), pt = spot(w, tg.x + Math.cos(a) * 64, tg.y + Math.sin(a) * 64, e.r) || { x: e.x, y: e.y };
+          s.pd = { x: pt.x, y: pt.y, at: t + T(e, 0.7), done: false, end: 0 };
+          tele(w, e, pt.x, pt.y, e.r + 10, s.pd.at - t, 0, { wid: 'blinkmark' });
         }
-        const pd = e.vars.pending;
-        if (pd && t >= pd.at && !pd.done) {
-          pd.done = true;
-          w.emit({ t: 'blinkfx', x0: Math.round(e.x), y0: Math.round(e.y), x1: Math.round(pd.x), y1: Math.round(pd.y) });
-          e.x = pd.x; e.y = pd.y; e.pose = 'wind';
-          cone(w, e, aim(e), 125, 2.0, 0.55 * k, 1.4, () => { e.pose = 'slam'; });
-          pd.end = t + 0.2 + 0.55 * k;
+        const pd = s.pd;
+        if (pd && !pd.done && t >= pd.at) {
+          pd.done = true; e.x = pd.x; e.y = pd.y; e.face = e.tgt.x >= e.x ? 1 : -1;
+          const d = T(e, 0.6); cone(w, e, aim(e), 100, 2.2, d, 1.4); pd.end = t + d + 0.15;
         }
-        if (pd && pd.done && t >= pd.end) { e.vars.pending = null; e.vars.i++; e.vars.next = t + 0.2; }
-        return e.vars.i >= e.vars.n && !e.vars.pending;
+        if (pd && pd.done && t >= pd.end) { s.pd = null; s.i++; s.next = t + 0.1; }
+        return s.i >= s.n && !s.pd;
       },
     },
-    // Phase 2 hunt: the King fades out and steps from the dark beside the hunted hero (a bright ring marks the spot for the whole wind-up), then cleaves.
-    stalk: {
-      w: 4, ok: (w, e) => e.phase === 2 && !!prey(w),
-      start(w, e) {
-        const p = prey(w), k = e.vars.wm;
-        e.target = p; e.pose = 'fade';
-        const pt = Sim.castMove(w.room, p.x, p.y, Math.atan2(e.y - p.y, e.x - p.x) + w.rng.range(-0.8, 0.8), 64, e.r, true);
-        e.vars.pt = pt; e.vars.at = 0.9 * k;
-        w.addZone({ kind: 'tele', x: pt.x, y: pt.y, r: e.r + 8, dur: e.vars.at, dmg: 0, team: 1, src: e, warnOnly: true });
-        tell(w, e, 'stalk', pt.x, pt.y);
-      },
-      update(w, e, dt, t) {
-        const v = e.vars;
-        if (!v.done && t >= v.at) {
-          v.done = true;
-          w.emit({ t: 'blinkfx', x0: Math.round(e.x), y0: Math.round(e.y), x1: Math.round(v.pt.x), y1: Math.round(v.pt.y) });
-          e.x = v.pt.x; e.y = v.pt.y; e.pose = 'wind';
-          cone(w, e, aim(e), 130, 2.2, 0.5 * v.wm, 1.5, () => { e.pose = 'slam'; });
-          v.end = t + 0.5 * v.wm + 0.25;
-        }
-        return !!v.done && t >= v.end;
-      },
-    },
-    orbs: {
-      w: 2, ok: (w, e) => e.phase === 2,
-      start(w, e) { e.pose = 'cast'; tell(w, e, 'orbs'); },
-      update(w, e, dt, t) {
-        if (!e.vars.fired && t > 0.5 * e.vars.wm) {
-          e.vars.fired = true;
-          const n = 6, a0 = aim(e);
-          for (let i = 0; i < n; i++) w.enemyShoot(e, a0 + (i - (n - 1) / 2) * (TAU / n), 95, 'orb', 0.9, 9, { homing: 1.1, life: 6 });
-        }
-        return t > 0.7 + 0.5 * e.vars.wm;
-      },
-    },
+    // Skull nova (P2+): a warned pulse, then three staggered rings of skulls.
     nova: {
-      w: 1, phase: 2,
-      start(w, e) { e.pose = 'cast'; tell(w, e, 'nova'); },
+      w: 2, phase: 2, wind: 0.7,
+      start(w, e) { const s = e.vars.s; s.at = T(e, 0.7); s.k = 0; tele(w, e, e.x, e.y, e.r + 26, s.at, 0, { followSrc: true }); },
       update(w, e, dt, t) {
-        const k = e.vars.k || 0;
-        if (k < 3 && t > 0.6 * e.vars.wm + k * 0.5) { ring(w, e, 16, 110, 'void', (k % 2) * TAU / 32, 0.6, 7); e.vars.k = k + 1; }
-        return t > 2.2;
+        const s = e.vars.s;
+        if (s.k < 3 && t >= s.at + s.k * 0.45) { ring(w, e, 14, 105, 'skull', (s.k % 2) * TAU / 28, 0.7, 6); s.k++; }
+        return t >= s.at + 1.4;
       },
     },
-    // Phase 3: four beams turn around the King after a warm-up.
-    laser: {
-      w: 3, phase: 3,
-      start(w, e) {
-        e.pose = 'wind';
-        const k = e.vars.wm, warm = 1.0 * k, a0 = aim(e) + Math.PI / 4, dir = w.rng.sign();
-        e.vars.warm = warm;
-        for (let i = 0; i < 4; i++) {
-          const a = a0 + i * TAU / 4;
-          line(w, e, e.x, e.y, a, 760, 16, warm, 0, true);
-          w.addZone({ kind: 'laser', x: e.x, y: e.y, a, len: 760, w: 16, warm, dur: warm + 2.4, dmg: e.dmg * 0.7, team: 1, src: e,
-            update: (ww, z, ddt) => { z.x = e.x; z.y = e.y; if (z.t > z.warm) z.a += dir * 0.75 * ddt; } });
-        }
-        tell(w, e, 'laser');
-      },
-      update(w, e, dt, t) { if (t > e.vars.warm) e.pose = 'cast'; return t > e.vars.warm + 2.5; },
-    },
-    // Phase 3: stars fall on and around every hero (staggered landing circles), more once the last ring is gone.
+    // Starfall (P3): staggered falling stars on and around every hero.
     starfall: {
-      w: 3, phase: 3,
+      w: 2, phase: 3, wind: 0.6,
       start(w, e) {
-        e.pose = 'cast';
-        const k = e.vars.wm, ar = w.room.arena, late = ar && (ar.fallen | 0) >= CRUMBLE.at.length, n = late ? 5 : 3;
-        for (const p of w.alivePlayers()) for (let j = 0; j < n; j++) {
-          const pt = j ? Sim.castMove(w.room, p.x, p.y, w.rng.range(0, TAU), w.rng.range(40, 110), 8, true) : { x: p.x, y: p.y };
-          if (D.tileAt(w.room, pt.x, pt.y) === 3) continue;
-          drop(w, e, pt.x, pt.y, 36, (0.9 + j * 0.2) * k, 1.0, 'shadow');
+        const L = w.living;
+        for (let h = 0; h < L.length; h++) for (let j = 0; j < 3; j++) {
+          const p = L[h], a = w.rng.range(0, TAU), d = j ? w.rng.range(40, 100) : 0;
+          tele(w, e, p.x + Math.cos(a) * d, p.y + Math.sin(a) * d, 34, T(e, 0.9 + 0.25 * j), 1.0, { wid: 'starfall' });
         }
-        tell(w, e, 'starfall');
       },
-      update(w, e, dt, t) { return t > 1.9 * e.vars.wm; },
+      update: (w, e, dt, t) => t >= 1.7,
     },
-  }, { idle: approach(110), phases: [0.6, 0.3], tick, onPhase, pauseMul });
+  }, {
+    idle: approach(110),
+    onPhase(w, e, ph) { const rg = SHARDS.rings[ph - 2]; if (rg) addShards(w, e, rg); },
+  });
 })(globalThis.ED || (globalThis.ED = {}));

@@ -1,22 +1,23 @@
-// Core helpers shared by simulation, networking and rendering.
-// Every file attaches to the global ED namespace so the game runs from any static host (or file://)
-// and the simulation can be loaded headless in Node for balance testing.
+// Core helpers shared by simulation, networking and rendering: math, seeded RNG, colour helpers, uid, ED.CONST.
+// Every file attaches to the global ED namespace so the game runs from any static host (or file://) and the sim loads headless in Node.
 (function (ED) {
   'use strict';
   const U = ED.U = {};
 
   ED.CONST = {
-    TILE: 32,
-    VIEW_W: 720,          // minimum visible world width
-    VIEW_H: 420,          // minimum visible world height
+    TICK: 1 / 60,         // fixed sim step (s)
+    VIEW_W: 640,          // visible world width at the design resolution (world px)
+    VIEW_H: 360,          // visible world height
+    ARENA: 3200,          // arena side (world px)
     MAX_PLAYERS: 4,
     SNAP_HZ: 20,
     INPUT_HZ: 30,
-    STRATA: 4,
-    DASH: { t: 0.15, speed: 480 }, // seconds untouchable and px/s of a hero dash (72 px)
-    FODDER_CAP: 0.02,     // a hit from a fodder foe takes at most this share of the victim's max health (minimum 1)
-    CROWD: { per: 0.08, floor: 0.5 }, // walking-speed loss per non-boss foe touching a hero, and the lowest factor
-    VERSION: '1.0.0',
+    HERO_R: 10,           // hero collision radius
+    DASH: { t: 0.22, dist: 110, cd: 3.5 }, // dash length (s), distance (px), cooldown (s); i-frames for its whole length
+    IFRAME: 0.5,          // invulnerability after a hit (s)
+    RUN_LEN: 900,         // survival length (s): the final boss spawns here
+    ENRAGE_T: 1020,       // the final boss enrages at this time (s)
+    VERSION: '2.0.0',
   };
 
   U.TAU = Math.PI * 2;
@@ -121,4 +122,19 @@
 
   // Index lookup tables so network snapshots can send small integers instead of strings.
   U.indexer = (list) => { const m = {}; list.forEach((k, i) => { m[k] = i; }); return m; };
+  // Integer hash of up to three ints (deterministic tile / deco choice): 0 .. 2^32-1.
+  U.hash3 = (a, b, c) => {
+    let h = Math.imul((a | 0) ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul((b | 0) + 0x632be5ab, 0xc2b2ae35) ^ Math.imul((c | 0) + 0x27d4eb2f, 0x165667b1);
+    h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d); h ^= h >>> 12; h = Math.imul(h, 0x297a2d39); h ^= h >>> 15;
+    return h >>> 0;
+  };
+
+  // Client draw hooks (optional, read by render.js / actors.js; registered from any file, no DOM at load): ED.WeaponFx[wid] = { proj(B, pr, t), zone(B, z, t), top(B, z, t) (after the actors) } (return true when drawn),
+  // ED.SkillFx[skillId] = { zone, top }, ED.ZoneFx[look] = fn(B, z, t) (zones without a weapon id), ED.BossFx[id] = { draw(B, e, t) } (true replaces the default), ED.HeroFx[cls] = fn(B, p, t) (drawn right after the hero).
+  ED.WeaponFx = ED.WeaponFx || {}; ED.SkillFx = ED.SkillFx || {}; ED.BossFx = ED.BossFx || {}; ED.HeroFx = ED.HeroFx || {}; ED.ZoneFx = ED.ZoneFx || {};
+
+  // Look registry: projectile / zone look names -> wire index. Files register their looks at load time (fixed script order keeps the index identical on every peer).
+  ED.LOOKS = []; ED.LOOK_IDX = {};
+  ED.regLook = (...names) => { for (const n of names) if (ED.LOOK_IDX[n] === undefined) { ED.LOOK_IDX[n] = ED.LOOKS.length; ED.LOOKS.push(n); } };
+  ED.regLook('dot', 'arrow', 'bolt', 'knife', 'fireball', 'bone', 'skull', 'thorn', 'hammer', 'shield', 'trident', 'web', 'orb', 'tele', 'fire', 'poison', 'holy', 'frost');
 })(globalThis.ED || (globalThis.ED = {}));
