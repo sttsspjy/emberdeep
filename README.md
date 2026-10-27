@@ -22,7 +22,7 @@ No build step, no backend, no install. It is a static site: open it from any web
 | Banish a card | Banish button, then click the card | |
 | Pause | Esc | Start |
 
-Weapons fire automatically. Keys follow the physical key position, so they work on any keyboard layout.
+Weapons fire automatically. Facing weapons (Cleave, Twin Daggers, Bone Spear) swing or throw toward the nearest foe in front of you. Keys follow the physical key position, so they work on any keyboard layout.
 
 Menus work with the keyboard too: arrows or WASD move between buttons, Enter presses, Esc goes back.
 
@@ -35,13 +35,23 @@ Menus work with the keyboard too: arrows or WASD move between buttons, Enter pre
 5. Break braziers for gold, food, a magnet or a holy bomb.
 6. The results screen shows how much damage each weapon and skill dealt.
 
+## Stages and bosses
+
+| Stage | 5:00 | 10:00 | Final (15:00) |
+|---|---|---|---|
+| The Ossuary | Bone Warden | The Twins | Hollow King |
+| The Glowmire | Sporemother | Demon Cyclops | Drowned King |
+| The Abyss | Blue Samurai | Rift Weaver | The Wick-Eater |
+
+Every boss and elite attack is telegraphed: a red outline marks where it lands. A final boss still alive at 17:00 enrages. The horde never thins out: if you kill faster than it arrives, more foes pour in.
+
 ## Co-op (2–4 players)
 
 1. One player picks **Host co-op** and shares the 5-letter party code.
 2. The others pick **Join co-op** and enter the code.
 3. Everyone picks a hero and presses **Ready**; the host picks the stage and presses **Start run**.
 
-The host's browser runs the game, so the host needs the steadiest connection. Co-op never pauses: level-up cards appear in a strip at the bottom, pick with 1–4 while you keep moving. A downed hero is revived by a teammate standing next to them. Leaving from the pause menu ends your part of the run.
+The host's browser runs the game, so the host needs the steadiest connection. Co-op never pauses: level-up cards appear in a strip at the bottom, pick with 1–4 while you keep moving. Each player's hero wears their slot colour (gold, blue, green, pink); your own hero has a ring under it. A downed hero is revived by a teammate standing next to them. Leaving from the pause menu ends your part of the run.
 
 ## Heroes
 
@@ -68,7 +78,7 @@ For local play, serve the folder with any static server, for example `npx serve 
 ## Development
 
 - Code contract: `docs/ARCHITECTURE.md`. Rules and numbers: `docs/GAME-DESIGN.md`.
-- Checks (headless, exit 1 on failure): `node tools/check-sim.js`, `node tools/check-perf.js`, `node tools/check-*.js`, `node tools/art.js --check`, `node tools/browse.js smoke` (browser checks need Playwright).
+- Checks (headless, exit 1 on failure): `node tools/check-sim.js`, `node tools/check-perf.js`, `node tools/check-*.js`, `node tools/art.js --check`, `node tools/browse.js smoke|shots|coop|crowd900|late` (browser checks need Playwright; add `--software` for the Canvas2D path).
 
 ## Credits
 
