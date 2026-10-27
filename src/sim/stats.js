@@ -1,11 +1,11 @@
 // Hero stat block and effective weapon / skill numbers (ARCHITECTURE §6-7).
-// ED.Stats.compute(p) -> { maxHp, armor, regen, speed, pickup, might, haste, reach, velocity, duration, amount, luck, growth, greed, crit, critMul, revival, rerolls, skips }.
+// ED.Stats.compute(p) -> { maxHp, armor, regen, speed, pickup, might, haste, reach, velocity, duration, amount, luck, growth, greed, crit, critMul, revival, rerolls, skips, banishes }.
 // Sources: hero base + passives (ED.PASSIVES[id].per x level, or per[level-1] for arrays) + meta shop ranks (p.meta.shop) + ED.HOOK[cls].stats(p, add).
 // Additive keys add up; speed and pickup sums are fractions of the hero base; maxHp, armor, regen add flat.
 (function (ED) {
   'use strict';
   const St = ED.Stats = {};
-  const KEYS = ['maxHp', 'armor', 'regen', 'speed', 'pickup', 'might', 'haste', 'reach', 'velocity', 'duration', 'amount', 'luck', 'growth', 'greed', 'crit', 'critMul', 'revival', 'rerolls', 'skips'];
+  const KEYS = ['maxHp', 'armor', 'regen', 'speed', 'pickup', 'might', 'haste', 'reach', 'velocity', 'duration', 'amount', 'luck', 'growth', 'greed', 'crit', 'critMul', 'revival', 'rerolls', 'skips', 'banishes'];
   St.KEYS = KEYS;
   St.PICKUP = 36; // base pickup radius (px)
   St.HASTE_CAP = 0.75;
@@ -25,8 +25,8 @@
       maxHp: Math.round((h.hp || 100) + add.maxHp), armor: add.armor, regen: add.regen,
       speed: (h.speed || 90) * (1 + add.speed), pickup: St.PICKUP * (1 + add.pickup),
       might: add.might, haste: Math.min(St.HASTE_CAP, add.haste), reach: add.reach, velocity: add.velocity, duration: add.duration, amount: add.amount,
-      luck: add.luck, growth: add.growth, greed: add.greed, crit: (h.crit !== undefined ? h.crit : 0.05) + add.crit, critMul: 2 + add.critMul,
-      revival: add.revival, rerolls: add.rerolls, skips: add.skips,
+      luck: Math.max(0, add.luck), growth: add.growth, greed: add.greed, crit: (h.crit !== undefined ? h.crit : 0.05) + add.crit, critMul: 2 + add.critMul,
+      revival: add.revival, rerolls: add.rerolls, skips: add.skips, banishes: add.banishes,
     };
     return st;
   };

@@ -8,8 +8,8 @@
   A.inRun = () => A.state === 'run';
   A.persist = () => { A.storeOk = S.store(A.profile); };
   A.saveSel = () => { const s = A.settings; s.sel = { cls: A.sel.cls, stage: A.sel.stage }; S.storeSettings(s); };
-  A.createProfile = (name) => { A.profile = S.defaultProfile(); A.profile.name = S.sanitizeName(name); A.hasProfile = true; A.persist(); };
-  A.replaceProfile = (p) => { A.profile = S.normalize(p); A.hasProfile = true; A.persist(); };
+  A.createProfile = (name) => { A.profile = S.defaultProfile(); A.profile.name = S.sanitizeName(name); ED.Meta.use(A.profile); A.hasProfile = true; A.persist(); };
+  A.replaceProfile = (p) => { A.profile = S.normalize(p); ED.Meta.use(A.profile); A.hasProfile = true; A.persist(); };
   A.applySettings = () => {
     const s = A.settings;
     if (ED.Audio && ED.Audio.setVolumes) ED.Audio.setVolumes(s);
@@ -88,7 +88,7 @@
     A.settings = S.loadSettings();
     if (A.settings.sel) { A.sel.cls = ED.HEROES[A.settings.sel.cls] ? A.settings.sel.cls : 'knight'; A.sel.stage = A.settings.sel.stage | 0; }
     const p = S.load();
-    A.profile = p || S.defaultProfile(); A.hasProfile = !!p;
+    A.profile = p || S.defaultProfile(); A.hasProfile = !!p; ED.Meta.use(A.profile);
     if (!S.stageUnlocked(A.profile, A.sel.stage)) A.sel.stage = 0;
     const canvas = $('game');
     ED.Input.init(canvas);

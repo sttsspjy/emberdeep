@@ -56,7 +56,7 @@
     };
     this.heroes.push(p); this.byPid[p.pid] = p;
     this.recalc(p, true);
-    p.rerolls = p.stats.rerolls | 0; p.skips = p.stats.skips | 0;
+    this.initHeroProgress(p);
     if (h.sig && ED.WEAPONS[h.sig]) this.addWeapon(p, h.sig);
     for (const id of h.skills || []) if (ED.SKILLS[id]) p.skills.push({ id, lvl: 1, cd: 0, cdMax: ED.SKILLS[id].cd || 10, N: null });
     const hk = ED.HOOK[p.cls]; if (hk && hk.init) hk.init(this, p);
@@ -76,7 +76,7 @@
     return h;
   };
 
-  // Latches one input frame for hero pid; applied at the next tick. Edge flags (dash, q, e, reroll, skip) stay set until a tick consumes them; pick is 1..4.
+  // Latches one input frame for hero pid; applied at the next tick. Edge flags (dash, q, e, reroll, skip) stay set until a tick consumes them; pick and banish are 1..4.
   W.prototype.input = function (pid, inp) {
     const p = this.byPid[pid]; if (!p || !inp) return;
     const I = p.in;
@@ -88,6 +88,7 @@
     if (inp.reroll) I.reroll = true;
     if (inp.skip) I.skip = true;
     if (inp.pick >= 1 && inp.pick <= 4) I.pick = inp.pick | 0;
+    if (inp.banish >= 1 && inp.banish <= 4) I.banish = inp.banish | 0;
   };
 
   W.prototype.updateHeroes = function (dt) {
