@@ -15,6 +15,7 @@
     if (ED.Audio && ED.Audio.setVolumes) ED.Audio.setVolumes(s);
     ED.Render.setQuality(s.quality);
     ED.FX.numbers = s.numbers !== false;
+    ED.FX.shakeOn = s.shake !== false;
     ED.Input.setBinds(s.binds);
   };
 
@@ -61,7 +62,7 @@
       if (A.state === 'run' && ED.Game.w) {
         if (inp.esc) A.togglePause();
         if (!ED.Game.paused) ED.Game.control(inp);
-        ED.Game.update(dt);
+        ED.Game.update(ED.FX.hold > 0 ? 0 : dt); // hit-stop (FX, solo only) holds the sim
         if (!ED.Game.paused) ED.FX.update(dt);
         const v = ED.Game.view;
         if (v) {
@@ -80,12 +81,8 @@
     requestAnimationFrame(frame);
   }
 
-  // Events the shell reacts to (banners).
-  const onEvent = (ev) => {
-    if (ev.t === 'warn') ED.HUD.show(ev.kind === 'boss' ? (ED.FOES[ev.id] ? ED.FOES[ev.id].name : 'A boss') + ' approaches!' : ev.kind === 'elite' ? 'An elite appears!' : 'A swarm closes in!', ev.kind === 'boss' ? '#ff7a6a' : '#ffd27a');
-    else if (ev.t === 'evolve' && ev.pid === ED.Game.myPid) ED.HUD.show((ED.WEAPONS[ev.wid] ? ED.WEAPONS[ev.wid].name : 'Weapon') + ' evolved!', '#ffd27a');
-    else if (ev.t === 'level' && ED.Game.w && !ED.Game.w.solo()) ED.HUD.show('Level ' + ev.level, '#6ad7ff', 1.2);
-  };
+  // Events the shell reacts to (warning / evolution / level banners are drawn by ED.FX).
+  const onEvent = () => {};
 
   A.boot = () => {
     A.settings = S.loadSettings();
