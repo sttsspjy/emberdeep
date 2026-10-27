@@ -4,11 +4,12 @@
 //   feature: { f: 'row' (colonnade) | 'arc' (broken wall with one gap) | 'cluster' (tight clump) | 'single', w (pick weight), look ('' = plain rock disc), r: [min, max], n: [min, max], gap: [min, max] (px between surfaces), spread (cluster radius) }.
 // arena: { size, obstacles: [min, max] (colliders), braziers: [min, max], clear (no obstacle within this radius of the centre) }.
 // foe: { hp, dmg } stage multipliers on foe HP and contact / shot damage.
-// timeline[m] (minute m; the last entry holds for the rest of the run): { rate (spawns/s solo), cap (alive cap solo), roster: [[foeId, weight]] }.
+// timeline[m] (minute m; the last entry holds for the rest of the run): { rate (spawns/s solo), cap (alive cap solo), floor (density floor, fraction of the alive cap), roster: [[foeId, weight]] }.
 // events.swarm: { first, every, ring: [ids], stampede: [ids], n: [at first, at 12:00] } a closing ring or a stampede line of swarmers; elites: { first, every }; bosses: [{ t (s), id, final }].
 (function (ED) {
   'use strict';
   const capAt = (m) => Math.round(300 + Math.min(m, 12) * (400 / 12)); // GAME-DESIGN §7: 300 at 0:00 to 700 at 12:00
+  const floorAt = (m) => Math.min(0.6, m / 10); // GAME-DESIGN §7: density floor = alive cap x min(0.6, 0.1 x minute)
   // Weight of keyframes [[minute, weight], ...] at minute m: 0 before the first key, linear between keys, the last value after the last key.
   const keyAt = (keys, m) => {
     if (m < keys[0][0]) return 0;
@@ -21,7 +22,7 @@
     for (let m = 0; m <= 15; m++) {
       const rows = [];
       for (const id in roster) { const wt = keyAt(roster[id], m) + ((spikes[m] && spikes[m][id]) || 0); if (wt > 0) rows.push([id, Math.round(wt * 10) / 10]); }
-      out.push({ rate: rate[m], cap: capAt(m), roster: rows });
+      out.push({ rate: rate[m], cap: capAt(m), floor: floorAt(m), roster: rows });
     }
     return out;
   };

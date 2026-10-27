@@ -1,12 +1,13 @@
 // Timeline director (GAME-DESIGN §7-8): reads ED.STAGES[stage].timeline per minute (rate, cap, roster), spawns on a ring 380-460 px from a random living hero (never inside obstacles),
 // swarm events, elites and boss timers from the stage data. Party scaling: rate and cap x (1 + 0.25 per extra hero), hard cap 900; a living boss halves the rate.
+// Density floor: while alive < row.floor x alive cap the rate runs x FLOOR_BOOST (stacks with the boss halving).
 // Packs: swarm-brain roster picks spawn 12-16 at once at 0:00, 20-30 from 10:00 (each member costs 0.5 of a spawn); def.pack foes spawn [min, max] together (1 each).
 // Swarm event (every events.swarm.every s): a closing ring of swarmers rushing at one hero's spot, or a stampede line crossing that hero's screen (40 at the first event to 80 by 12:00).
 // Elites: a non-swarm, non-exploder roster foe promoted. Bosses: a 5 s 'warn' event, then w.spawnBoss; a stage boss id without an ED.Bosses script spawns the stage's brute as an elite boss stand-in.
 (function (ED) {
   'use strict';
   const U = ED.U, W = ED.World.prototype;
-  const HARD_CAP = 900, RING = [380, 460], BOSS_WARN = 5, SWARM_R = 430;
+  const HARD_CAP = 900, RING = [380, 460], BOSS_WARN = 5, SWARM_R = 430, FLOOR_BOOST = 3;
 
   W.initSpawner = function () {
     const sd = this.sdef, ev = (sd.events && sd.events.swarm) || null, el = sd.elites || null;
@@ -81,7 +82,8 @@
     const L = this.living;
     if (!L.length) return;
     const sd = this.sdef, row = this.timelineRow(), party = 1 + 0.25 * (this.partyN - 1), cap = this.aliveCap(), sp = this.sp, mk = Math.min(1, this.time / 600);
-    sp.acc = Math.min(10, sp.acc + row.rate * party * (this.boss ? 0.5 : 1) * dt);
+    const boost = this.foes.length < (row.floor || 0) * cap ? FLOOR_BOOST : 1;
+    sp.acc = Math.min(10, sp.acc + row.rate * party * (this.boss ? 0.5 : 1) * boost * dt);
     while (sp.acc >= 1 && this.foes.length < cap) {
       const id = pickRoster(this, row.roster), def = ED.FOES[id], pt = this.ringPoint(randHero(this), RING[0], RING[1], false);
       if (!pt) { sp.acc -= 1; continue; }

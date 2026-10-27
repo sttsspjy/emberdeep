@@ -110,6 +110,7 @@ Max 6 passives. Passive cards also show a line naming the weapon they evolve.
 
 - **Spawn timeline** per stage, per minute: spawn rate (foes/s), alive cap, weighted roster. Foes spawn on a ring 380–460 px from a random living hero, never inside walls or obstacles.
 - **Alive cap**: 300 at 0:00 rising to 700 at 12:00 (solo); +25% per extra player, hard cap 900.
+- **Density floor**: while fewer foes live than the floor, the spawn rate runs ×3 (stacks with the boss halving). Floor = alive cap × min(0.6, 0.1 × minute): 0 at 0:00, 60% from 6:00. A fast-killing build still faces a full screen.
 - **Foe HP**: `base × (1 + 0.18 × minute) × (1 + 0.5 × (players − 1)) × stage HP` (stage HP 1 / 1.3 / 1.6).
 - **Contact damage**: 3 at 0:00 rising to 12 at 15:00, × stage damage (1 / 1.15 / 1.3). Foe shots and blasts: base × (1 + 1.2 × min(1, t / 15:00)) × stage damage.
 - **Foe kinds**: chaser (straight line), swarmer (fast, weak; packs of 12–16 at 0:00 growing to 20–30 by 10:00), brute (slow, 8× HP, knockback-immune, telegraphed slam), ranged (stops at 160 px, shoots a telegraphed bolt, fan or ring; only from inside the target's screen), exploder (telegraphed 0.7 s burst on contact), splitter (splits in 2–3 on death), charger (telegraphed dash; packs of 2–4), diver (telegraphed dive; packs of 3–5). Every attack telegraph is ≥ 0.6 s and aimed where the target stood when the wind-up began; killing, stunning or freezing the foe cancels it.
