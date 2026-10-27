@@ -142,6 +142,7 @@
       else ED.Actors.obstacle(B, a, wall);
     }
     for (const pr of view.projs) if (!pr.dead && inView(pr)) drawProj(B, pr, t);
+    for (const z of view.zones) if (!z.dead && (z.len > 0 || inView(z) || z.r > 200)) { const zf = ED.WeaponFx[z.wid] || ED.SkillFx[z.wid]; if (zf && zf.top) zf.top(B, z, t); } // zone overlays above actors
     ED.FX.draw(B, t);
     // overlays: hero names / HP / revive bars (co-op), elite HP bars
     if (view.heroes.length > 1) for (const p of view.heroes) {
